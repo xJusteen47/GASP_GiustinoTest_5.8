@@ -13,6 +13,11 @@
 #     TL_Minion_Death (40 frames): the reaction timelines IsDataValid requires. No animation (the puppets come with G7).
 #  3. DA_Minion_Grunt (Minion.Type.Grunt, 40 HP, walk 200, one move Command.Minion.Attack.Swing -> TL_Minion_Swing) and
 #     DA_Minion_Heavy (Minion.Type.Heavy, 120 HP, walk 140, weight 200, the same swing with a longer cooldown).
+#  3b. DA_MinionWave_Test (UGSTN_MinionWaveDefinition, acceptance 3 of M8 13): 6 grunts at once plus 2 heavies 125 frames (2 s) later,
+#     spawned around the spawner actor. Play it without C++: a spawner actor with this Wave, or
+#     `gstn.Minion.Bench.WaveAsset /GSTNMinion/Test/DA_MinionWave_Test.DA_MinionWave_Test` then `gstn.Minion.Bench.Wave`.
+#     The Brain field of both definitions is left empty: the test StateTree is built in code by the editor module (transient), there is no
+#     StateTree asset. A designer assigns their own StateTree asset (schema UGSTN_MinionStateTreeSchema) in the definition.
 #  4. L_MinionYard: a flat floor (engine plane, 100 m), a PlayerStart and a directional + sky light. Only created when missing: once it
 #     exists the owner edits it by hand and this script never opens or saves it again.
 # Existing assets are copied to Saved/Backups/GAS before being changed.
@@ -160,6 +165,23 @@ def setup_definition(name, spec, timelines):
     return asset
 
 
+def setup_wave(definitions):
+    """DA_MinionWave_Test: two entries (grunts now, heavies 2 s later). Rewritten on every run (same values)"""
+    asset, _ = _get_or_create('DA_MinionWave_Test', unreal.GSTN_MinionWaveDefinition, unreal.DataAssetFactory())
+    entries = []
+    for name, count, delay in (('Grunt', 6, 0), ('Heavy', 2, 125)):
+        entry = unreal.GSTN_MinionWaveEntry()
+        entry.set_editor_property('definition', definitions[name])
+        entry.set_editor_property('count', count)
+        entry.set_editor_property('delay_frames', delay)
+        entry.set_editor_property('ring_radius', 300.0)
+        entries.append(entry)
+    asset.set_editor_property('entries', entries)
+    unreal.EditorAssetLibrary.save_loaded_asset(asset)
+    log('wave DA_MinionWave_Test written')
+    return asset
+
+
 def setup_yard():
     """L_MinionYard, created only when missing (never reopened or saved afterwards: the owner may have it open)"""
     if unreal.EditorAssetLibrary.does_asset_exist(YARD_MAP):
@@ -191,10 +213,17 @@ def setup_yard():
 
 def run():
     timelines = setup_timelines()
+    definitions = {}
     for name, spec in minion_specs().items():
-        setup_definition(name, spec, timelines)
-    setup_yard()
-    log('done')
+        definitions[name] = setup_definition(name, spec, timelines)
+    setup_wave(definitions)
+    yard = setup_yard()
+    # 5-line summary
+    log(f'1/5 timelines: {", ".join(timelines)} in {TEST_DIR}')
+    log(f'2/5 definitions: {", ".join("DA_Minion_" + n for n in definitions)} (hurtbox sets HBS_Minion_*)')
+    log(f'3/5 wave: DA_MinionWave_Test (6 Grunt now, 2 Heavy at +125 frames)')
+    log(f'4/5 Brain empty on both types: no StateTree asset exists (the test tree is transient, built by the editor module); assign one by hand')
+    log(f'5/5 yard {YARD_MAP}: {"created" if yard else "left as it is"}; backups in Saved/Backups/GAS; try gstn.Minion.Bench.WaveAsset')
 
 
 if __name__ == '__main__':

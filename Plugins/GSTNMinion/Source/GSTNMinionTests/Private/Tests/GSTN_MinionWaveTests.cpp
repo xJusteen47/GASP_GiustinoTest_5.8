@@ -13,6 +13,8 @@
 #include "Hits/GSTN_HurtboxTypes.h"
 #include "Hits/GSTN_KnockbackModel.h"
 #include "Misc/AutomationTest.h"
+#include "Misc/DataValidation.h"
+#include "Misc/PackageName.h"
 #include "Net/GSTN_MinionNetCodec.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Runtime/GSTN_MinionCombatSubsystem.h"
@@ -22,6 +24,7 @@
 #include "Spawn/GSTN_MinionSpawnerActor.h"
 #include "Timeline/GSTN_CombatTimeline.h"
 #include "UObject/Package.h"
+#include "UObject/UObjectGlobals.h"
 #include "UObject/StrongObjectPtr.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -490,6 +493,85 @@ bool FGSTN_MinionPromoteTest::RunTest(const FString& Parameters)
 	AActor* Fifth = UGSTN_MinionSpawner::Promote(Rig.World, Minions[4], Keep);
 	TestNotNull(TEXT("the fifth is allowed after one fighter is destroyed"), Fifth);
 	TestFalse(TEXT("and its minion is no longer alive"), Rig.Minions->IsAlive(Minions[4]));
+	return true;
+}
+
+// Acceptance 3 of M8 13: a type and a wave made as assets (Tools/GAS/setup_minion_assets.py, run by the desktop). Without the assets the
+// test logs it and passes, so the gate stays green until the script has run.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionWaveAssetsTest, "GSTNMinion.Runtime.Wave.TestAssetsSpawn", GSTN_MINION_WAVE_TEST_FLAGS)
+bool FGSTN_MinionWaveAssetsTest::RunTest(const FString& Parameters)
+{
+	const TCHAR* WavePackage = TEXT("/GSTNMinion/Test/DA_MinionWave_Test");
+	const TCHAR* WaveObject = TEXT("/GSTNMinion/Test/DA_MinionWave_Test.DA_MinionWave_Test");
+	if (!FPackageName::DoesPackageExist(WavePackage))
+	{
+		AddInfo(TEXT("assets not created yet (run Tools/GAS/setup_minion_assets.py): nothing to check"));
+		return true;
+	}
+	UGSTN_MinionWaveDefinition* AssetWave = LoadObject<UGSTN_MinionWaveDefinition>(nullptr, WaveObject);
+	if (!TestNotNull(TEXT("the wave asset loads"), AssetWave))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the wave has two entries"), AssetWave->Entries.Num(), 2);
+
+#if WITH_EDITOR
+	{
+		FDataValidationContext Context;
+		TestTrue(TEXT("the wave validates"), AssetWave->IsDataValid(Context) != EDataValidationResult::Invalid);
+		TestEqual(TEXT("with no error"), Context.GetNumErrors(), 0);
+	}
+#endif
+	TArray<FSoftObjectPath> Paths;
+	AssetWave->GetDefinitionPaths(Paths);
+	for (const FSoftObjectPath& Path : Paths)
+	{
+		UGSTN_MinionDefinition* Definition = Cast<UGSTN_MinionDefinition>(Path.TryLoad());
+		if (!TestNotNull(*FString::Printf(TEXT("definition %s loads"), *Path.ToString()), Definition))
+		{
+			continue;
+		}
+#if WITH_EDITOR
+		FDataValidationContext Context;
+		TestTrue(*FString::Printf(TEXT("%s validates"), *Path.ToString()), Definition->IsDataValid(Context) != EDataValidationResult::Invalid);
+		TestEqual(*FString::Printf(TEXT("%s has no error"), *Path.ToString()), Context.GetNumErrors(), 0);
+#endif
+	}
+
+	// The normal spawn path: a spawner plays the asset wave in a transient world, over the batch
+	FScopedIntCVar Budget(TEXT("gstn.Minion.SpawnsPerFrame"), 64);
+	FWaveRig Rig;
+	if (!TestNotNull(TEXT("the minion subsystem exists"), Rig.Minions))
+	{
+		return false;
+	}
+	TStrongObjectPtr<UGSTN_CombatRules> Rules(MakeRules());
+	Rig.Minions->SetCombatRules(Rules.Get());
+	AGSTN_MinionSpawnerActor* Spawner = Rig.World->SpawnActor<AGSTN_MinionSpawnerActor>();
+	if (!TestNotNull(TEXT("the spawner exists"), Spawner))
+	{
+		return false;
+	}
+	Spawner->Wave = AssetWave;
+	Spawner->bUseTrigger = false;
+	int32 Frame = 1;
+	Rig.Minions->TickBatch(Frame);
+	TestTrue(TEXT("the wave starts"), Spawner->StartWave());
+	FlushAsyncLoading();
+	const int32 Expected = AssetWave->GetTotalCount();
+	int32 MaxDelay = 0;
+	for (const FGSTN_MinionWaveEntry& Entry : AssetWave->Entries)
+	{
+		MaxDelay = FMath::Max(MaxDelay, Entry.DelayFrames);
+	}
+	for (Frame = 2; Frame <= MaxDelay + 40; ++Frame)
+	{
+		Rig.Minions->TickBatch(Frame);
+		Spawner->UpdateWave();
+	}
+	TestTrue(TEXT("the wave is preloaded"), Spawner->IsPreloaded());
+	TestEqual(TEXT("every minion of the wave spawned"), Rig.Minions->GetStore().Num(), Expected);
+	TestEqual(TEXT("and is alive"), Spawner->GetAliveCount(), Expected);
 	return true;
 }
 

@@ -76,3 +76,4 @@ what, where, cheaper alternative.
 - The horde kills minions faster than the driver tops them up (N=150 mean alive 124): the bench has no "keep N alive" mode; Report gives cumulative avg/max since spawn and no p99.
 - Real minion bytes run 20-25 % over the 20 B planning at 15 Hz (equal at 10 Hz): find the per-pack framing; the players' NP traffic is 44-50 KB/s per client, 5x the minion stream (M4/NP budget review).
 - R5 toggle rate has no runtime counter (only HeldByHysteresis in Core); over-inclusion not stressed by the harness (pawns together): needs a spread-out scenario. Puppet anim cost with a real ABP and Insights contention still unmeasured.
+- G9b item 3 (2026-11-09): `gstn.Minion.Bench.WaveAsset` loads the wave asset synchronously on first bench use (test tooling only): async-load with the bench start if the bench ever runs in a shipping-like build.

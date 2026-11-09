@@ -49,6 +49,21 @@ changes nothing until a level spawns minions; nothing in the other plugins knows
 - Bench: `gstn.Minion.Bench.Wave <N> <CorpseSeconds=1>`, `gstn.Minion.Bench.Kill`. Tests: `GSTNMinion.Core.Wave.*`,
   `GSTNMinion.Runtime.{Corpse,Wave,Promote}.*`; harness `minion_wave`.
 
+## Content without C++ (acceptance 3)
+
+- **What a designer does**: right-click > Miscellaneous > Data Asset > `GSTN_MinionDefinition` (type tag, stats, hurtbox set, an existing
+  combat timeline per move, reaction timelines, optionally a StateTree asset on `Brain`), then a `GSTN_MinionWaveDefinition` listing the
+  definitions (count, spawn point tag, delay in frames), then a `GSTN_MinionSpawnerActor` in the level with that `Wave`. No C++, no registry.
+- **The script**: `Tools/GAS/setup_minion_assets.py` (editor Python, idempotent, backs up to `Saved/Backups/GAS` first) makes
+  `DA_Minion_Grunt`, `DA_Minion_Heavy` and `DA_MinionWave_Test` (6 grunts, then 2 heavies 125 frames later) in `/GSTNMinion/Test/`, with their
+  timelines and hurtbox sets, and prints a 5-line summary. The test StateTree is transient (built by the editor module), so `Brain` stays
+  empty and the script says so; assign a StateTree asset by hand.
+- **Playing them**: `gstn.Minion.Bench.Definition <path>` (type of the bench) and `gstn.Minion.Bench.WaveAsset <path>` (wave played by
+  `gstn.Minion.Bench.Wave`; N is then the asset's total).
+- **Fallback**: an empty or unfound path logs a warning and uses the code-built definition or wave, so headless tests and the harness need no
+  assets. `GSTNMinion.Runtime.Wave.TestAssetsSpawn` checks the assets validate and spawn through the spawner when they exist, and logs
+  "assets not created yet" and passes when they do not.
+
 ## Promotion presentation and events (G9b)
 
 - **Promoting body.** A promoted minion stays for `gstn.Minion.PromoteHoldFrames` (16 frames) as a Promoting body: the wire flag is set, it is Dead, its actor collision is off and it is on the corpse list. Then it is freed. A Promoting body never shatters.

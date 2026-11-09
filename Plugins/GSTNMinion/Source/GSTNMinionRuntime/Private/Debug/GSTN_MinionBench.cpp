@@ -43,6 +43,10 @@ namespace
 
 	// G7a: the transient grunts had no hurtbox set, so no player swing could ever hit them (player -> minion scenarios). Read when a
 	// transient definition is first built, so set it before the first Spawn/Attack of the world
+	TAutoConsoleVariable<FString> CVarBenchWaveAsset(
+		TEXT("gstn.Minion.Bench.WaveAsset"), TEXT(""),
+		TEXT("Object path of a UGSTN_MinionWaveDefinition that gstn.Minion.Bench.Wave plays instead of its N transient bench grunts (empty, or not found = the code-built wave). Acceptance 3: a wave made as an asset."));
+
 	TAutoConsoleVariable<FString> CVarBenchHurtboxSet(
 		TEXT("gstn.Minion.Bench.HurtboxSet"), TEXT(""),
 		TEXT("Object path of a UGSTN_HurtboxSetDefinition the transient bench grunts get (empty = none: they cannot be hit)."));
@@ -690,15 +694,34 @@ int32 UGSTN_MinionBenchSubsystem::SpawnWave(int32 Count, float CorpseSeconds)
 		WaveSpawner->Destroy();
 		WaveSpawner = nullptr;
 	}
-	// Entries hold at most 64 minions each; a bigger wave is several entries on the same frame
-	WaveDefinition = NewObject<UGSTN_MinionWaveDefinition>(this, NAME_None, RF_Transient);
+	// A wave asset (gstn.Minion.Bench.WaveAsset) replaces the code-built wave; missing or not loadable = the code-built one (headless tests
+	// and the harness run without content). Synchronous load: a bench command, never a tick
 	const double Ring = FMath::Max(300.0, Count * 150.0 / UE_TWO_PI);
-	for (int32 Left = Count; Left > 0; Left -= GSTNMinion::MaxWaveEntryCount)
+	WaveDefinition = nullptr;
+	const FString WaveAssetPath = CVarBenchWaveAsset.GetValueOnGameThread();
+	if (!WaveAssetPath.IsEmpty())
 	{
-		FGSTN_MinionWaveEntry& Entry = WaveDefinition->Entries.AddDefaulted_GetRef();
-		Entry.Definition = Definition;
-		Entry.Count = FMath::Min(Left, GSTNMinion::MaxWaveEntryCount);
-		Entry.RingRadius = static_cast<float>(Ring);
+		WaveDefinition = LoadObject<UGSTN_MinionWaveDefinition>(nullptr, *WaveAssetPath);
+		if (WaveDefinition)
+		{
+			Count = FMath::Clamp(WaveDefinition->GetTotalCount(), 1, GSTNMinion::MaxWaveTotal);
+		}
+		else
+		{
+			UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: wave asset %s not found, using the code-built wave"), *WaveAssetPath);
+		}
+	}
+	if (!WaveDefinition)
+	{
+		// Entries hold at most 64 minions each; a bigger wave is several entries on the same frame
+		WaveDefinition = NewObject<UGSTN_MinionWaveDefinition>(this, NAME_None, RF_Transient);
+		for (int32 Left = Count; Left > 0; Left -= GSTNMinion::MaxWaveEntryCount)
+		{
+			FGSTN_MinionWaveEntry& Entry = WaveDefinition->Entries.AddDefaulted_GetRef();
+			Entry.Definition = Definition;
+			Entry.Count = FMath::Min(Left, GSTNMinion::MaxWaveEntryCount);
+			Entry.RingRadius = static_cast<float>(Ring);
+		}
 	}
 
 	bCenterResolved = false;
