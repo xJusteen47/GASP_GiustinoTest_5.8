@@ -601,3 +601,12 @@
 - Gate: 2 builds (incremental 12 s each, base up to date 1 s); headless GSTN 1455/0/0 (1 test fixed for the ini rate); play settings restored. Not run: 2 % SUITE_MINION at 10 Hz.
 - PERF-DEBT (also in perf-debt.md): see "## G12b".
 - Cost: ~$7 (my context ~130k, 2 builds, 2 headless, ~2.5 h of harness runs). Build times: full 54 s, incremental 6-21 s (12 s here), headless GSTN 54-58 s.
+
+## G9b item 3 assets (desktop, 2026-11-09): minion test assets created, wave test on real assets green
+- Branch `claude/desktop-assets` from d47c54fb. Sonnet subagent; logs in `Saved/G12c/` (`wrap.py`, `assets.log`, `wave.log`, `gstn.log`), report `Saved/Logs/g12c/minion-0pct.log`.
+- `setup_minion_assets.py` asset functions run headless (`-run=pythonscript` through `wrap.py`): DA_Minion_Grunt, DA_Minion_Heavy, DA_MinionWave_Test, HBS_Minion_Grunt/Heavy,
+  TL_Minion_Swing/Hitstun/Death saved in `Plugins/GSTNMinion/Content/Test/`. `setup_yard()` (L_MinionYard) NOT run: no map saved; the yard needs the editor run and the owner's Ctrl+S.
+- The assets are binary .uasset files that git IGNORES (`Plugins/**/Content/`): they exist only on the desktop. Rerun the script on another machine (idempotent), or add a
+  `!Plugins/GSTNMinion/Content/` rule plus LFS if they should be versioned (owner decision; not done).
+- Gate: `GSTNMinion.Runtime.Wave` 2/0 (TestAssetsSpawn loaded the real assets, no skip line); headless GSTN 1457/0/0; SUITE_MINION 0 % dedicated + 2 at 10 Hz 12/12. Play settings restored.
+- PERF-DEBT: none new. Cost: ~$1.5 (Sonnet subagent + lead).
