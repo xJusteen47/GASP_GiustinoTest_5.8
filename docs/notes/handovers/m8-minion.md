@@ -495,3 +495,19 @@
   (the open G7b case: one cancel that is not the ring flicker); lod known.
 - PERF-DEBT: none new (one small map per presentation component, entries only while a predicted hit lives).
 - Cost: ~$4 (writer ~133k tokens / 48 tool calls; 2 builds, 1 test run, 2 SUITE_MINION runs, 1 SUITE_DEFAULT).
+
+## G9b (desktop, 2026-11-09): promotion swap, health via kit, Event_Minion*, lod "no pop" DONE; gate green
+- Branch `claude/desktop-g9b` (1b01b6dc) from 441845c6; on the merge branch as 2d3f91c6 over d9a0ddd5. Scripts/logs in `Saved/G9b/` (not versioned). One Opus thread, no writer.
+- Promote: the minion holds `gstn.Minion.PromoteHoldFrames` (16) as a Promoting body (wire flag, Dead, actor collision off, corpse list), then frees.
+  Presentation: Promoting = no shatter; the fighter (`UGSTN_MinionPromotedComponent::BeginPlay` -> `NotePromotedFighter`) is hidden behind the puppet for
+  `gstn.Minion.Present.PromoteSwapSeconds` (0.1), then the puppet is pooled; held puppets give up after `PromoteHoldSeconds` (1.0). Log `MinionPromote swap|nopuppet|expired|lostpuppet`.
+- Deviation: a swap, not an opacity cross-fade (the puppet has no fade parameter). Health: new `IGSTN_StartingHealthSource` in GSTNCombatGAS, applied by
+  `UGSTN_LoadoutComponent` after the init effect (GSTNCombatNP untouched, X4 respected); the harness fighter has full health, so only built, not seen in a run.
+- Events: Spawned/Despawned queued to the flush, Promoted published in Promote (authoritative stream). Bench `gstn.Minion.Bench.Promote [class|-] [X Y Z]`.
+- lod "no pop": dead reckoning capped at the sender's own sample gap; senders slower than T1 hold (`FarDeadReckoningCapMs` 0). Far puppets now trail, never lead.
+- Spike 8 (dedicated + 2, 60/15): pop 2.1 cm, swap wait ~100 ms, first control 178-185 ms, same at 0 % and 2 %.
+- Gate: headless 1446/0/0 (merge tip 1448/0/0). SUITE_MINION + promote 0 %: 12/12 (lod green for the first time); 2 %: 11/12, red only
+  player_hits_minion "none cancelled" (the open G7b case). Acceptance item 3 (type + wave as assets) NOT done (no editor asset run).
+- Build times (desktop): full 54 s (166 actions), incremental 6-21 s, headless GSTN 56-58 s, SUITE_MINION 0 % ~460 s (12 scenarios).
+- PERF-DEBT: none new (promotion is rare: one array walk per presentation tick while a fighter waits; held body costs a slot for 16 frames).
+- Cost: ~$12 for the thread (G9b + FP G2 attempts + merge), my context ~190k, 6 builds, 4 headless, 4 suite runs, 2 video runs.

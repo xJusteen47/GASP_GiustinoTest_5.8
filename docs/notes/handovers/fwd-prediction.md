@@ -82,3 +82,12 @@
 - Left: G2 video review on the desktop; G3-G5 + G3b paused until a PvP playtest; no refused-move scenario yet.
 - Branches to merge in order: claude/fp-g1-laptop (contains plan, G0, G0b) then claude/fp-g0c-laptop (G0c + this doc).
 - Cost: FP total ~$21 (plan $3, G0 $7, G0b $2, G1 $8, G0c $2, doc ~$1); no PERF-DEBT added by G0c or the doc.
+
+## FP G2 (desktop, 2026-11-09): video NOT captured, 2 attempts used, stopped
+- Tooling ready (not versioned): `Saved/FPG2/driver.py` (rendering editor, dedicated + 2, ffmpeg gdigrab per client window, `[FPG2] rec start` lines),
+  `run.ps1`, `grids.py` (same frames around the `[FP] tap` line, on/off rows, compare mp4). Harness: `GSTN_FP_PRESENT` env + `[FP] tap` log line in
+  `_pair_move_delay` (committed with G9b).
+- Both runs: `link_pair_move_delay` and `_throw` end in `EXCEPTION IndexError('list index out of range')` before the tap (attempt 2 added
+  `prepare_editor()`, kits and pair moves loaded fine). PIE starts 3 worlds; the windows close ~4 s later, so nothing was recorded.
+- Needed: run the same scenario in the -nullrhi harness on this desktop (G1 ran it on the laptop) to see if the error is rendering-only, then
+  print the traceback (`defence_batch` swallows it: log `traceback.format_exc()` in its except). ~$2. Cost of G2 so far ~$2.
