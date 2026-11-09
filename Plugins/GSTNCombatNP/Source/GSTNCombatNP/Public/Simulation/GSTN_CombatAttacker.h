@@ -88,6 +88,9 @@ struct FGSTN_AttackerHit
 
 	bool bRicochet = false;
 
+	/** The hitbox group (index into the timeline's Tracks) of the hitbox that landed: whose strike settings and recoil a ricochet uses */
+	int32 TrackIndex = INDEX_NONE;
+
 	/** The attacker's own hitstop for this hit, 0 for none. The state carries the longest of the frame */
 	int32 AttackerHitstopFrames = 0;
 

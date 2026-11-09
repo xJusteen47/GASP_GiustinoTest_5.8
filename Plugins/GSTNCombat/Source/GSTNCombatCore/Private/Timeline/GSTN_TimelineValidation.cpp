@@ -266,22 +266,25 @@ void FGSTN_TimelineValidation::Validate(const FGSTN_CombatTimelineData& Data, co
 		}
 	}
 
-	// Plan precisione-weakpoint 2: a stab with long active frames (an aerial thrust) usually wants to finish its swing on a hard part
-	if (Data.StrikeKind == EGSTN_StrikeKind::Stab && Data.ResolveHardSurfaceBehaviour() == EGSTN_HardSurfaceBehaviour::ImmediateRecoil)
+	// Plan precisione-weakpoint 2: a stab group with long active frames (an aerial thrust) usually wants to finish its swing on a hard part.
+	// Per hitbox group: a move can slash with one group and thrust with another
+	constexpr int32 LongStabActiveFrames = 12;
+	for (int32 TrackIndex = 0; TrackIndex < Data.Tracks.Num(); ++TrackIndex)
 	{
-		constexpr int32 LongStabActiveFrames = 12;
-		int32 FirstActive = MAX_int32;
-		for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Data.Tracks)
+		const FGSTN_TimelineTrack_Hitbox* HitboxTrack = Data.GetHitboxTrack(TrackIndex);
+		if (!HitboxTrack || HitboxTrack->Hitboxes.IsEmpty())
 		{
-			if (const FGSTN_TimelineTrack_Hitbox* HitboxTrack = Track.GetPtr<FGSTN_TimelineTrack_Hitbox>(); HitboxTrack && !HitboxTrack->Hitboxes.IsEmpty())
-			{
-				FirstActive = FMath::Min(FirstActive, HitboxTrack->StartFrame);
-			}
+			continue;
 		}
-		const int32 ActiveFrames = FirstActive == MAX_int32 ? 0 : Data.GetActiveEndFrame() - FirstActive;
-		if (ActiveFrames > LongStabActiveFrames)
+		const FGSTN_StrikeSettings Strike = Data.ResolveStrike(TrackIndex);
+		const int32 ActiveFrames = HitboxTrack->EndFrame - HitboxTrack->StartFrame;
+		if (Strike.Kind == EGSTN_StrikeKind::Stab && Strike.Behaviour == EGSTN_HardSurfaceBehaviour::ImmediateRecoil && ActiveFrames > LongStabActiveFrames)
 		{
-			Add(OutMessages, false, FString::Printf(TEXT("A stab with %d active frames recoils at once on a hard part; long active stabs usually use FinishThenRecoil."), ActiveFrames));
+			Add(OutMessages, false, FString::Printf(TEXT("Hitbox group %d is a stab with %d active frames that recoils at once on a hard part; long active stabs usually use FinishThenRecoil."), TrackIndex, ActiveFrames));
+		}
+		if (HitboxTrack->bHasRicochetResponse && HitboxTrack->RicochetResponse.RecoilFrames <= 0)
+		{
+			Add(OutMessages, false, FString::Printf(TEXT("Hitbox group %d has its own recoil switched on but no recoil frames: the move's recoil is used."), TrackIndex));
 		}
 	}
 }

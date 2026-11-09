@@ -41,7 +41,7 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 	 * Ricochet (M4 H12). The recoil of the attack: its own response, else Fallback (the weapon's, else the kit's: the caller resolves which
 	 * one), null when neither is authored. A ricochet with no response changes nothing about the attacker
 	 */
-	static const FGSTN_RicochetResponse* ResolveRicochet(const FGSTN_CombatTimelineData* Data, const FGSTN_RicochetResponse* Fallback);
+	static const FGSTN_RicochetResponse* ResolveRicochet(const FGSTN_CombatTimelineData* Data, int32 StrikeTrack, const FGSTN_RicochetResponse* Fallback);
 
 	/**
 	 * The attacker side decided a ricochet on Frame: the timeline ends into the recoil, which begins on Frame + 1 (the clock step of Frame

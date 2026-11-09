@@ -60,6 +60,15 @@ void UGSTN_GA_BaseCombat::LoadTimelineContent(TArray<TObjectPtr<UObject>>& OutKe
 	{
 		LoadRecoilContent(*Recoil, OutKeep);
 	}
+	// Each hitbox group's own recoil (plan precisione-weakpoint): played from a plain pointer like the move's
+	for (int32 TrackIndex = 0; TrackIndex < Data.Tracks.Num(); ++TrackIndex)
+	{
+		const FGSTN_TimelineTrack_Hitbox* Track = Data.GetHitboxTrack(TrackIndex);
+		if (Track && Track->bHasRicochetResponse && Track->RicochetResponse.IsAuthored())
+		{
+			LoadRecoilContent(Track->RicochetResponse, OutKeep);
+		}
+	}
 }
 
 void UGSTN_GA_BaseCombat::LoadRecoilContent(const FGSTN_RicochetResponse& Response, TArray<TObjectPtr<UObject>>& OutKeep)

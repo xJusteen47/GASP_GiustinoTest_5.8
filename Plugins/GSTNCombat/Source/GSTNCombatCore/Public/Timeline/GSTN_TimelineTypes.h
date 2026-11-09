@@ -80,6 +80,24 @@ struct GSTNCOMBATCORE_API FGSTN_SweepDeflection
 	int32 MaxDeflectFrames = 8;
 };
 
+/** The strike settings one hitbox group runs with, its own or the move's (FGSTN_CombatTimelineData::ResolveStrike). Plain data, never Auto */
+struct FGSTN_StrikeSettings
+{
+	EGSTN_StrikeKind Kind = EGSTN_StrikeKind::Unspecified;
+	EGSTN_HardSurfaceBehaviour Behaviour = EGSTN_HardSurfaceBehaviour::ImmediateRecoil;
+	const FGSTN_SweepDeflection* Deflection = nullptr;
+
+	/** Auto resolved from the kind: Swing finishes then recoils, Stab and Unspecified recoil at once */
+	static EGSTN_HardSurfaceBehaviour ResolveBehaviour(EGSTN_StrikeKind InKind, EGSTN_HardSurfaceBehaviour InBehaviour)
+	{
+		if (InBehaviour != EGSTN_HardSurfaceBehaviour::Auto)
+		{
+			return InBehaviour;
+		}
+		return InKind == EGSTN_StrikeKind::Swing ? EGSTN_HardSurfaceBehaviour::FinishThenRecoil : EGSTN_HardSurfaceBehaviour::ImmediateRecoil;
+	}
+};
+
 /**
  * Condition of a cancel window. OnHit/OnBlock are false until hits exist (M4); OnWhiff is "not hit yet". OnParry is the value of the
  * defence plugin (M6): it is data only here, false in every state this module writes, so a plugin that raises the parry confirm gives it a meaning.
@@ -313,6 +331,36 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_WeaponSwitch : public FGSTN_Timeli
 };
 
 /**
+ * What the attacker does when its hit lands on a part that is too hard for the attack (a ricochet, combat-m4 3b): no
+ * hitstop, the timeline ends into this recoil. Pure data; M3 only reads the attacker-outcome flag (never set before M4).
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_RicochetResponse
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ricochet")
+	TSoftObjectPtr<UAnimMontage> RecoilMontage;
+
+	/** Length of the recoil, counted from the frame the ricochet starts. 0 = no response authored */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ricochet", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 RecoilFrames = 0;
+
+	/** Optional recoil movement; its frames count from the start of the recoil */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ricochet")
+	bool bHasMovement = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ricochet", meta = (EditCondition = "bHasMovement"))
+	FGSTN_TimelineTrack_Movement Movement;
+
+	/** Played once when the recoil starts */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ricochet", meta = (Categories = "GameplayCue"))
+	FGameplayTag CueTag;
+
+	bool IsAuthored() const { return RecoilFrames > 0; }
+};
+
+/**
  * The hitboxes of a frame range (the FGSTN_HitboxTrack of combat-m4-hits 3). The track is active for [StartFrame, EndFrame);
  * the Frame of a hitbox key counts from StartFrame. Attached to a part or group when the combatant has any, never the whole
  * body. The hits themselves are found by the attacker tick (H8); the timeline player only reports which hitboxes are open.
@@ -328,6 +376,30 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Hitbox : public FGSTN_TimelineTrac
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox")
 	TArray<FGSTN_HitboxSpec> Hitboxes;
+
+	/**
+	 * Off = the move's StrikeKind, HardSurfaceBehaviour and SweepDeflection apply to this group. On = this group's own: a move that slashes then
+	 * thrusts is two hitbox tracks, one Swing and one Stab (plan precisione-weakpoint, owner 2026-11-09). Nothing here is tied to a weapon or a
+	 * blade: a punch or a kick marked Swing slides and recoils on a hard part like a sword does
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox|Strike")
+	bool bOverrideStrike = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox|Strike", meta = (EditCondition = "bOverrideStrike"))
+	EGSTN_StrikeKind StrikeKind = EGSTN_StrikeKind::Unspecified;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox|Strike", meta = (EditCondition = "bOverrideStrike"))
+	EGSTN_HardSurfaceBehaviour HardSurfaceBehaviour = EGSTN_HardSurfaceBehaviour::Auto;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox|Strike", meta = (EditCondition = "bOverrideStrike"))
+	FGSTN_SweepDeflection SweepDeflection;
+
+	/** This group's own recoil, first in the chain: group, move, weapon, kit, project default of the strike kind (UGSTN_CombatSettings) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox|Strike")
+	bool bHasRicochetResponse = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox|Strike", meta = (EditCondition = "bHasRicochetResponse"))
+	FGSTN_RicochetResponse RicochetResponse;
 
 	virtual EGSTN_TimelineTrackKind GetKind() const override { return EGSTN_TimelineTrackKind::Hitbox; }
 };
@@ -434,36 +506,6 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTail
 		const int32 Start = ResolveStartFrame(TotalFrames, FirstActionableFrame);
 		return Start == INDEX_NONE ? 0 : FMath::Clamp(BlendOutFrames, 0, FMath::Max(TotalFrames - Start, 0));
 	}
-};
-
-/**
- * What the attacker does when its hit lands on a part that is too hard for the attack (a ricochet, combat-m4 3b): no
- * hitstop, the timeline ends into this recoil. Pure data; M3 only reads the attacker-outcome flag (never set before M4).
- */
-USTRUCT(BlueprintType)
-struct GSTNCOMBATCORE_API FGSTN_RicochetResponse
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ricochet")
-	TSoftObjectPtr<UAnimMontage> RecoilMontage;
-
-	/** Length of the recoil, counted from the frame the ricochet starts. 0 = no response authored */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ricochet", meta = (ClampMin = "0", ForceUnits = "Frames"))
-	int32 RecoilFrames = 0;
-
-	/** Optional recoil movement; its frames count from the start of the recoil */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ricochet")
-	bool bHasMovement = false;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ricochet", meta = (EditCondition = "bHasMovement"))
-	FGSTN_TimelineTrack_Movement Movement;
-
-	/** Played once when the recoil starts */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Ricochet", meta = (Categories = "GameplayCue"))
-	FGameplayTag CueTag;
-
-	bool IsAuthored() const { return RecoilFrames > 0; }
 };
 
 /**
@@ -575,7 +617,7 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ricochet", meta = (EditCondition = "bHasRicochetResponse"))
 	FGSTN_RicochetResponse RicochetResponse;
 
-	/** Cut or thrust: the default of HardSurfaceBehaviour and the key to stab-only hurtboxes */
+	/** Cut or thrust of the move: the default of every hitbox group that does not override it (FGSTN_TimelineTrack_Hitbox::bOverrideStrike) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ricochet")
 	EGSTN_StrikeKind StrikeKind = EGSTN_StrikeKind::Unspecified;
 
@@ -583,7 +625,7 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ricochet")
 	EGSTN_HardSurfaceBehaviour HardSurfaceBehaviour = EGSTN_HardSurfaceBehaviour::Auto;
 
-	/** The slide along the hard surface while FinishThenRecoil completes the swing */
+	/** The slide along the hard surface while FinishThenRecoil completes the swing; default of the groups that do not override it */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ricochet")
 	FGSTN_SweepDeflection SweepDeflection;
 
@@ -594,16 +636,43 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 		{
 			return HardSurfaceBehaviour;
 		}
-		return StrikeKind == EGSTN_StrikeKind::Swing ? EGSTN_HardSurfaceBehaviour::FinishThenRecoil : EGSTN_HardSurfaceBehaviour::ImmediateRecoil;
+		return FGSTN_StrikeSettings::ResolveBehaviour(StrikeKind, HardSurfaceBehaviour);
 	}
 
-	/** One past the last frame any hitbox track is open (0 with none): where a FinishThenRecoil recoil begins */
+	/** One past the last frame any hitbox track is open (0 with none) */
 	int32 GetActiveEndFrame() const;
+
+	/** The hitbox track at TrackIndex (an index into Tracks), null when it is not one */
+	const FGSTN_TimelineTrack_Hitbox* GetHitboxTrack(int32 TrackIndex) const
+	{
+		return Tracks.IsValidIndex(TrackIndex) ? Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack_Hitbox>() : nullptr;
+	}
+
+	/** The strike settings of a hitbox group: its own when it overrides them, the move's otherwise (also for INDEX_NONE) */
+	FGSTN_StrikeSettings ResolveStrike(int32 TrackIndex) const;
+
+	/** Where a FinishThenRecoil recoil begins: one past the last frame of the group that met the hard face (the move's active end without one) */
+	int32 GetStrikeEndFrame(int32 TrackIndex) const
+	{
+		const FGSTN_TimelineTrack_Hitbox* Track = GetHitboxTrack(TrackIndex);
+		return Track ? Track->EndFrame : GetActiveEndFrame();
+	}
 
 	/** The ricochet response of this timeline, null if none is authored */
 	const FGSTN_RicochetResponse* GetRicochetResponse() const
 	{
 		return bHasRicochetResponse && RicochetResponse.IsAuthored() ? &RicochetResponse : nullptr;
+	}
+
+	/** The response of a hitbox group: its own when authored, else the move's; null = the caller's fallbacks */
+	const FGSTN_RicochetResponse* GetRicochetResponse(int32 TrackIndex) const
+	{
+		const FGSTN_TimelineTrack_Hitbox* Track = GetHitboxTrack(TrackIndex);
+		if (Track && Track->bHasRicochetResponse && Track->RicochetResponse.IsAuthored())
+		{
+			return &Track->RicochetResponse;
+		}
+		return GetRicochetResponse();
 	}
 
 	/**

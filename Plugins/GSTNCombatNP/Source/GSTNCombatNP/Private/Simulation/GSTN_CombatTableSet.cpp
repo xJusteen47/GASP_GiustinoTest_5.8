@@ -210,6 +210,8 @@ uint32 UGSTN_CombatTableSet::ComputeChecksum() const
 		WriteRicochet(Response);
 	}
 	WriteRicochet(KitRicochet);
+	WriteRicochet(SwingRicochet);
+	WriteRicochet(StabRicochet);
 
 	uint32 ExtensionCrc = ReservedExtension.IsEmpty() ? 0 : FCrc::MemCrc32(ReservedExtension.GetData(), ReservedExtension.Num());
 	Ar << ExtensionCrc;
@@ -246,6 +248,15 @@ UGSTN_CombatTableSet* FGSTN_CombatTableConverter::Convert(UObject* Outer, const 
 	if (Set->KitRicochet.IsAuthored())
 	{
 		UGSTN_GA_BaseCombat::LoadRecoilContent(Set->KitRicochet, Set->TimelineContent);
+	}
+	Set->SwingRicochet = Input.CombatSettings->SwingRicochetDefault;
+	Set->StabRicochet = Input.CombatSettings->StabRicochetDefault;
+	for (const FGSTN_RicochetResponse* Response : { &Set->SwingRicochet, &Set->StabRicochet })
+	{
+		if (Response->IsAuthored())
+		{
+			UGSTN_GA_BaseCombat::LoadRecoilContent(*Response, Set->TimelineContent);
+		}
 	}
 	Set->ReservedExtension = Input.ReservedExtension;
 

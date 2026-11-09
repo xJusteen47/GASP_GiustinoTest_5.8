@@ -82,3 +82,20 @@ int32 FGSTN_CombatTimelineData::GetActiveEndFrame() const
 	}
 	return End;
 }
+
+FGSTN_StrikeSettings FGSTN_CombatTimelineData::ResolveStrike(int32 TrackIndex) const
+{
+	FGSTN_StrikeSettings Settings;
+	const FGSTN_TimelineTrack_Hitbox* Track = GetHitboxTrack(TrackIndex);
+	if (Track && Track->bOverrideStrike)
+	{
+		Settings.Kind = Track->StrikeKind;
+		Settings.Behaviour = FGSTN_StrikeSettings::ResolveBehaviour(Track->StrikeKind, Track->HardSurfaceBehaviour);
+		Settings.Deflection = &Track->SweepDeflection;
+		return Settings;
+	}
+	Settings.Kind = StrikeKind;
+	Settings.Behaviour = ResolveHardSurfaceBehaviour();
+	Settings.Deflection = &SweepDeflection;
+	return Settings;
+}

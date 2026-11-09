@@ -535,7 +535,9 @@ bool UGSTN_CombatSimComponent::GetRecoil(int32& OutStartFrame, const FGSTN_Ricoc
 		return false;
 	}
 	const UGSTN_CombatTableSet& Current = Tables();
-	OutResponse = FGSTN_CombatTimelineLogic::ResolveRicochet(GetRegistryTimeline(Current, Sync->Core.ActiveTimeline), Current.GetRicochetFallback(Sync->Core.ActiveWeaponIndex));
+	const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(Current, Sync->Core.ActiveTimeline);
+	const EGSTN_StrikeKind StrikeKind = Data ? Data->ResolveStrike(Sync->Core.StrikeTrack).Kind : EGSTN_StrikeKind::Unspecified;
+	OutResponse = FGSTN_CombatTimelineLogic::ResolveRicochet(Data, Sync->Core.StrikeTrack, Current.GetRicochetFallback(Sync->Core.ActiveWeaponIndex, StrikeKind));
 	OutStartFrame = Sync->Core.RecoilStartFrame;
 	return OutResponse != nullptr;
 }
@@ -865,9 +867,12 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		}
 		const bool bWasRunning = OutSync.Core.ActionState == EGSTN_ActionState::InTimeline;
 		const int32 StartBefore = OutSync.Core.TimelineStartFrame;
-		FGSTN_CombatTimelineLogic::AdvanceClock(OutSync.Core, Frame, GetRegistryTimeline(FrameSet, Running),
+		// The recoil fallback follows the strike kind of the group that ricocheted (plan precisione-weakpoint); the move's kind without one
+		const FGSTN_CombatTimelineData* RunningData = GetRegistryTimeline(FrameSet, Running);
+		const EGSTN_StrikeKind StrikeKind = RunningData ? RunningData->ResolveStrike(OutSync.Core.StrikeTrack).Kind : EGSTN_StrikeKind::Unspecified;
+		FGSTN_CombatTimelineLogic::AdvanceClock(OutSync.Core, Frame, RunningData,
 			FrameSet.TimelineDefaultOverride.IsValidIndex(Running) ? FrameSet.TimelineDefaultOverride[Running] : 0, bAbilityActive, TimelineOutput, bHitstopFrame,
-			FrameSet.GetRicochetFallback(OutSync.Core.ActiveWeaponIndex), &HookEnvironment);
+			FrameSet.GetRicochetFallback(OutSync.Core.ActiveWeaponIndex, StrikeKind), &HookEnvironment);
 		if (bWasRunning && OutSync.Core.ActionState != EGSTN_ActionState::InTimeline)
 		{
 			UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline %d (start %d) ended: timeline frame %d of %d, finished %d, ability active %d"), *GetOwner()->GetName(), Frame, Running, StartBefore,

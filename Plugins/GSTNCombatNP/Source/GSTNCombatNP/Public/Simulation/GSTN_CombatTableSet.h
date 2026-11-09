@@ -99,14 +99,29 @@ public:
 	UPROPERTY(Transient)
 	FGSTN_RicochetResponse KitRicochet;
 
-	/** The fallback for an attack that runs with the weapon at WeaponIndex: the weapon's when authored, else the kit's, null when neither is */
-	const FGSTN_RicochetResponse* GetRicochetFallback(int32 WeaponIndex) const
+	/** The project defaults per strike kind (UGSTN_CombatSettings::SwingRicochetDefault / StabRicochetDefault), copied when the set is built */
+	UPROPERTY(Transient)
+	FGSTN_RicochetResponse SwingRicochet;
+
+	UPROPERTY(Transient)
+	FGSTN_RicochetResponse StabRicochet;
+
+	/**
+	 * The fallback for an attack that runs with the weapon at WeaponIndex: the weapon's when authored, else the kit's, else the project default
+	 * of the hitbox group's strike kind; null when none is
+	 */
+	const FGSTN_RicochetResponse* GetRicochetFallback(int32 WeaponIndex, EGSTN_StrikeKind Kind = EGSTN_StrikeKind::Unspecified) const
 	{
 		if (WeaponRicochet.IsValidIndex(WeaponIndex) && WeaponRicochet[WeaponIndex].IsAuthored())
 		{
 			return &WeaponRicochet[WeaponIndex];
 		}
-		return KitRicochet.IsAuthored() ? &KitRicochet : nullptr;
+		if (KitRicochet.IsAuthored())
+		{
+			return &KitRicochet;
+		}
+		const FGSTN_RicochetResponse* KindDefault = Kind == EGSTN_StrikeKind::Swing ? &SwingRicochet : Kind == EGSTN_StrikeKind::Stab ? &StabRicochet : nullptr;
+		return KindDefault && KindDefault->IsAuthored() ? KindDefault : nullptr;
 	}
 
 	/** The loadout's reserved extension block (mods, backpacks), kept so its CRC is part of the checksum */

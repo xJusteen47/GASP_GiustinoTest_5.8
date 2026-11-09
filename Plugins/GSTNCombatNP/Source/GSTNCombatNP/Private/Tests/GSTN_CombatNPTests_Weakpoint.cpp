@@ -11,6 +11,7 @@
 #include "Serialization/BitWriter.h"
 #include "Simulation/GSTN_CombatAttacker.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
+#include "Simulation/GSTN_CombatTableSet.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelineTypes.h"
@@ -344,6 +345,117 @@ bool FGSTN_WeakpointStabOnlyTest::RunTest(const FString& Parameters)
 		FWpFixture Fixture;
 		Make(Fixture, EGSTN_StrikeKind::Stab, FVector(80.0, -40.0, 0.0), FVector(80.0, 40.0, 0.0));
 		TestEqual(TEXT("a stab that grazes it at a wide angle does not"), Fixture.RunUntilNormalHit(10, 0), static_cast<int32>(INDEX_NONE));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WeakpointPerGroupTest, "GSTNCombat.NP.Weakpoint.PerHitboxGroup", GSTN_NP_TEST_FLAGS)
+bool FGSTN_WeakpointPerGroupTest::RunTest(const FString& Parameters)
+{
+	// Strike settings per hitbox group (owner 2026-11-09): a move that slashes with one group and thrusts with another
+	{
+		FGSTN_CombatTimelineData Data;
+		Data.StrikeKind = EGSTN_StrikeKind::Swing;
+		Data.bHasRicochetResponse = true;
+		Data.RicochetResponse.RecoilFrames = 12;
+		FGSTN_TimelineTrack_Hitbox Slash;
+		Slash.StartFrame = 2;
+		Slash.EndFrame = 6;
+		Slash.Hitboxes.AddDefaulted();
+		FGSTN_TimelineTrack_Hitbox Thrust = Slash;
+		Thrust.StartFrame = 8;
+		Thrust.EndFrame = 14;
+		Thrust.bOverrideStrike = true;
+		Thrust.StrikeKind = EGSTN_StrikeKind::Stab;
+		Thrust.bHasRicochetResponse = true;
+		Thrust.RicochetResponse.RecoilFrames = 5;
+		Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Slash));
+		Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Thrust));
+		TestTrue(TEXT("the slash group inherits the move's swing"), Data.ResolveStrike(0).Kind == EGSTN_StrikeKind::Swing && Data.ResolveStrike(0).Behaviour == EGSTN_HardSurfaceBehaviour::FinishThenRecoil);
+		TestTrue(TEXT("the thrust group is its own stab"), Data.ResolveStrike(1).Kind == EGSTN_StrikeKind::Stab && Data.ResolveStrike(1).Behaviour == EGSTN_HardSurfaceBehaviour::ImmediateRecoil);
+		TestTrue(TEXT("no group = the move's"), Data.ResolveStrike(INDEX_NONE).Kind == EGSTN_StrikeKind::Swing);
+		TestEqual(TEXT("a group's recoil begins after that group"), Data.GetStrikeEndFrame(0), 6);
+		TestEqual(TEXT("the move's active end without a group"), Data.GetStrikeEndFrame(INDEX_NONE), 14);
+		TestEqual(TEXT("the thrust's own recoil"), Data.GetRicochetResponse(1)->RecoilFrames, 5);
+		TestEqual(TEXT("the slash falls to the move's recoil"), Data.GetRicochetResponse(0)->RecoilFrames, 12);
+
+		// FinishThenRecoil on the slash group: the recoil replaces the rest of the move from the end of that group, with the move's response
+		FGSTN_CombatSyncCore Core;
+		Core.ActionState = EGSTN_ActionState::InTimeline;
+		Core.ActiveTimeline = 0;
+		Core.TimelineStartFrame = 100;
+		Data.TotalFrames = 40;
+		Data.FirstActionableFrame = 30;
+		FGSTN_TimelineOutput Output;
+		Output.Reserve(Data);
+		FGSTN_CombatTimelineLogic::EvaluateStart(Core, 100, Data, 0, Output);
+		for (int32 Frame = 101; Frame <= 103; ++Frame)
+		{
+			FGSTN_CombatTimelineLogic::AdvanceClock(Core, Frame, &Data, 0, true, Output);
+		}
+		Core.HardContact.VictimId = 2;
+		Core.HardContact.TimelineFrame = 3;
+		Core.HardContact.bOpposed = true;
+		Core.HardContact.bRecoilPending = true;
+		Core.StrikeTrack = 0;
+		for (int32 Frame = 104; Frame <= 105; ++Frame)
+		{
+			FGSTN_CombatTimelineLogic::AdvanceClock(Core, Frame, &Data, 0, true, Output);
+			TestFalse(*FString::Printf(TEXT("frame %d: still the slash"), Frame), Output.bRecoil);
+		}
+		FGSTN_CombatTimelineLogic::AdvanceClock(Core, 106, &Data, 0, true, Output);
+		TestTrue(TEXT("the recoil starts past the slash group, before the thrust"), Output.bRecoil && Core.RecoilStartFrame == 106);
+		TestEqual(TEXT("with the slash's (the move's) recoil"), Output.TotalFrames, 12);
+
+		// The group goes on the wire with the recoil and is compared by reconcile
+		FGSTN_CombatSyncState State;
+		FGSTN_InputSample Sample;
+		Sample.Frame = 106;
+		State.Core.Input.History.Append(Sample);
+		State.Core.ActionState = EGSTN_ActionState::InTimeline;
+		State.Core.ActiveTimeline = 1;
+		State.Core.TimelineStartFrame = 100;
+		State.Core.RecoilStartFrame = 106;
+		State.Core.StrikeTrack = 1;
+		FBitWriter Writer(1024, true);
+		State.NetSerialize(FNetSerializeParams(Writer));
+		FBitReader Reader(Writer.GetData(), Writer.GetNumBits());
+		FGSTN_CombatSyncState Loaded;
+		Loaded.NetSerialize(FNetSerializeParams(Reader));
+		TestFalse(TEXT("the state reads back whole"), Reader.IsError() || !Reader.AtEnd());
+		TestEqual(TEXT("the group survives the wire"), static_cast<int32>(Loaded.Core.StrikeTrack), 1);
+		FGSTN_CombatSyncCore Other = State.Core;
+		Other.StrikeTrack = 0;
+		TestTrue(TEXT("a different group asks for a reconcile"), State.Core.ShouldReconcile(Other));
+	}
+
+	// A punch: a plain sphere on the root, no weapon and no blade, in an unclassified move. Its group marked Swing slides and recoils like a sword
+	{
+		FWpScopedRicochet Ricochet;
+		FWpFixture Fixture;
+		Fixture.MakeWall(FQuat::FindBetweenNormals(FVector::ZAxisVector, FVector::YAxisVector));
+		FGSTN_TimelineTrack_Hitbox& Group = Fixture.Timeline.Tracks[0].GetMutable<FGSTN_TimelineTrack_Hitbox>();
+		Group.bOverrideStrike = true;
+		Group.StrikeKind = EGSTN_StrikeKind::Swing;
+		Fixture.RunUntilNormalHit(10, 1);
+		TestTrue(TEXT("the punch keeps its swing: a hard contact, not an immediate recoil"), Fixture.Core.HardContact.IsSet());
+		TestEqual(TEXT("written by its group"), static_cast<int32>(Fixture.Core.StrikeTrack), 0);
+		TestTrue(TEXT("case A: a recoil waits for the end of the swing"), Fixture.Core.HardContact.bRecoilPending);
+	}
+
+	// The last fallback: the project default of the group's strike kind, after the weapon's and the kit's
+	{
+		FGSTN_RicochetResponse Weapon;
+		Weapon.RecoilFrames = 8;
+		UGSTN_CombatTableSet* Set = NewObject<UGSTN_CombatTableSet>(GetTransientPackage());
+		Set->WeaponRicochet = { FGSTN_RicochetResponse(), Weapon };
+		Set->KitRicochet = FGSTN_RicochetResponse();
+		Set->SwingRicochet.RecoilFrames = 20;
+		Set->StabRicochet.RecoilFrames = 9;
+		TestEqual(TEXT("a swing with nothing else gets the swing default"), Set->GetRicochetFallback(0, EGSTN_StrikeKind::Swing)->RecoilFrames, 20);
+		TestEqual(TEXT("a stab gets the stab default"), Set->GetRicochetFallback(0, EGSTN_StrikeKind::Stab)->RecoilFrames, 9);
+		TestNull(TEXT("an unclassified group has no project default"), Set->GetRicochetFallback(0, EGSTN_StrikeKind::Unspecified));
+		TestEqual(TEXT("the weapon's own still wins"), Set->GetRicochetFallback(1, EGSTN_StrikeKind::Swing)->RecoilFrames, 8);
 	}
 	return true;
 }

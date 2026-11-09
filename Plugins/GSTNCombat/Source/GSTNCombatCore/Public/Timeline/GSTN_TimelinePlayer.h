@@ -134,6 +134,9 @@ struct FGSTN_TimelineEvalParams
 	/** Fallback when the timeline has no response of its own (the weapon or kit one, M3 C5); null = none */
 	const FGSTN_RicochetResponse* RicochetFallback = nullptr;
 
+	/** With bRicochet: the hitbox group whose ricochet started the recoil (its own response first); INDEX_NONE = the move's */
+	int32 StrikeTrack = INDEX_NONE;
+
 	/** Override frames to use when the timeline says "default of the command tier" (-1) */
 	int32 DefaultOverrideFrames = 0;
 };
@@ -145,6 +148,9 @@ struct FGSTN_ActiveHitbox
 
 	/** The track that holds it (its Part selector, its range) */
 	const FGSTN_TimelineTrack_Hitbox* Track = nullptr;
+
+	/** Index of that track in the timeline's Tracks: the hitbox group the strike settings and the recoil are resolved for */
+	int32 TrackIndex = INDEX_NONE;
 
 	/** Frames since the track started: what the keys of the hitbox count in */
 	int32 TrackFrame = 0;

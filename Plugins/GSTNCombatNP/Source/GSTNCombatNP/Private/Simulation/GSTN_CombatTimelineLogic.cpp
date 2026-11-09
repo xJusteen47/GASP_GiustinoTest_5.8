@@ -37,6 +37,7 @@ namespace
 		Core.TimelinePausedFrames = 0;
 		Core.RecoilStartFrame = INDEX_NONE;
 		Core.HardContact = FGSTN_HardContactState();
+	Core.StrikeTrack = INDEX_NONE;
 		// The hits of the previous run do not count for this one; the caller writes the move origin
 		Core.Hit.ResetRun();
 	}
@@ -80,11 +81,12 @@ void FGSTN_CombatTimelineLogic::ClearTimeline(FGSTN_CombatSyncCore& Core)
 	Core.TimelinePausedFrames = 0;
 	Core.RecoilStartFrame = INDEX_NONE;
 	Core.HardContact = FGSTN_HardContactState();
+	Core.StrikeTrack = INDEX_NONE;
 }
 
 bool FGSTN_CombatTimelineLogic::StartRecoil(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FGSTN_RicochetResponse* Fallback)
 {
-	if (Core.ActionState != EGSTN_ActionState::InTimeline || Core.RecoilStartFrame != INDEX_NONE || !ResolveRicochet(Data, Fallback))
+	if (Core.ActionState != EGSTN_ActionState::InTimeline || Core.RecoilStartFrame != INDEX_NONE || !ResolveRicochet(Data, Core.StrikeTrack, Fallback))
 	{
 		return false;
 	}
@@ -93,11 +95,11 @@ bool FGSTN_CombatTimelineLogic::StartRecoil(FGSTN_CombatSyncCore& Core, int32 Fr
 	return true;
 }
 
-const FGSTN_RicochetResponse* FGSTN_CombatTimelineLogic::ResolveRicochet(const FGSTN_CombatTimelineData* Data, const FGSTN_RicochetResponse* Fallback)
+const FGSTN_RicochetResponse* FGSTN_CombatTimelineLogic::ResolveRicochet(const FGSTN_CombatTimelineData* Data, int32 StrikeTrack, const FGSTN_RicochetResponse* Fallback)
 {
 	if (Data)
 	{
-		if (const FGSTN_RicochetResponse* Own = Data->GetRicochetResponse())
+		if (const FGSTN_RicochetResponse* Own = Data->GetRicochetResponse(StrikeTrack))
 		{
 			return Own;
 		}
@@ -123,7 +125,7 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 	{
 		// The recoil replaces the timeline (the response is resolved by the attacker side before it writes the start; a response that is gone
 		// ends the recoil as if it were over). A hitstop frame moves the start a frame later, which keeps the recoil frame where it was
-		const FGSTN_RicochetResponse* Response = ResolveRicochet(Data, RicochetFallback);
+		const FGSTN_RicochetResponse* Response = ResolveRicochet(Data, Core.StrikeTrack, RicochetFallback);
 		const int32 PreviousRecoil = Frame - 1 - Core.RecoilStartFrame;
 		if (bHitstopFrame)
 		{
@@ -148,6 +150,7 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 		Params.RecoilFrame = RecoilFrame;
 		Params.PreviousRecoilFrame = PreviousRecoil >= 0 ? PreviousRecoil : INDEX_NONE;
 		Params.RicochetFallback = RicochetFallback;
+		Params.StrikeTrack = Core.StrikeTrack;
 		FGSTN_TimelinePlayer::Evaluate(*Data, Params, Output);
 		if (Output.bFinished || (Frame > Core.TimelineStartFrame && !bAbilityActive))
 		{
@@ -163,10 +166,10 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 
 	// FinishThenRecoil (plan precisione-weakpoint 2): the swing that met a hard face has played its active frames, the recoil replaces the
 	// recovery from here. A hitstop frame keeps the timeline where it is, so the check waits for a frame that advances
-	if (Core.HardContact.bRecoilPending && !bHitstopFrame && Previous + 1 >= Data->GetActiveEndFrame())
+	if (Core.HardContact.bRecoilPending && !bHitstopFrame && Previous + 1 >= Data->GetStrikeEndFrame(Core.StrikeTrack))
 	{
 		Core.HardContact.bRecoilPending = false;
-		if (ResolveRicochet(Data, RicochetFallback))
+		if (ResolveRicochet(Data, Core.StrikeTrack, RicochetFallback))
 		{
 			Core.RecoilStartFrame = Frame;
 			return AdvanceClock(Core, Frame, Data, DefaultOverrideFrames, bAbilityActive, Output, false, RicochetFallback, HookEnvironment);

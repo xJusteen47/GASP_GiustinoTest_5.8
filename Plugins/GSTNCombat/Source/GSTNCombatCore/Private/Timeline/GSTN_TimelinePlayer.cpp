@@ -106,7 +106,7 @@ void FGSTN_TimelinePlayer::Evaluate(const FGSTN_CombatTimelineData& Data, const 
 	// The recoil replaces the whole timeline: its own length, its own movement, no tail and no override window
 	if (Params.bRicochet)
 	{
-		const FGSTN_RicochetResponse* Response = Data.GetRicochetResponse();
+		const FGSTN_RicochetResponse* Response = Data.GetRicochetResponse(Params.StrikeTrack);
 		if (!Response && Params.RicochetFallback && Params.RicochetFallback->IsAuthored())
 		{
 			Response = Params.RicochetFallback;
@@ -237,9 +237,9 @@ void FGSTN_TimelinePlayer::EvaluateHits(const FGSTN_CombatTimelineData& Data, in
 	Result.Reset();
 	Result.Frame = Frame;
 
-	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instance : Data.Tracks)
+	for (int32 TrackIndex = 0; TrackIndex < Data.Tracks.Num(); ++TrackIndex)
 	{
-		const FGSTN_TimelineTrack* Track = Instance.GetPtr<FGSTN_TimelineTrack>();
+		const FGSTN_TimelineTrack* Track = Data.Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack>();
 		if (!Track || !Track->Contains(Frame))
 		{
 			continue;
@@ -252,6 +252,7 @@ void FGSTN_TimelinePlayer::EvaluateHits(const FGSTN_CombatTimelineData& Data, in
 				FGSTN_ActiveHitbox& Active = Result.Hitboxes.AddDefaulted_GetRef();
 				Active.Spec = &Spec;
 				Active.Track = HitboxTrack;
+				Active.TrackIndex = TrackIndex;
 				Active.TrackFrame = Frame - Track->StartFrame;
 			}
 		}

@@ -70,6 +70,9 @@ namespace
 		/** The shape's local Z in the world (a blade's length), for the case of a hard contact */
 		FVector BladeAxis = FVector::UpVector;
 
+		/** The hitbox group of the hitbox (FGSTN_ActiveHitbox::TrackIndex) */
+		int32 TrackIndex = INDEX_NONE;
+
 		/** What the target ring stores for this hit: the group, plus the re-hit interval's index for a hitbox that has one (S1) */
 		uint8 TargetKey = 0;
 	};
@@ -120,12 +123,17 @@ namespace
 	 * whose motion would bend more than MaxDeflectAngleDeg stops the blade: true = the hitbox is closed for the rest of the swing. Pure
 	 * function of the timeline, the frame and the quantised contact, so it gives the same path on every machine and in a resimulation
 	 */
-	bool ApplyDeflection(const FGSTN_HitboxSpec& Spec, const FGSTN_CombatTimelineData& Timeline, const FGSTN_CombatSyncCore& Core, const FTransform& Root,
+	bool ApplyDeflection(const FGSTN_HitboxSpec& Spec, int32 TrackIndex, const FGSTN_CombatTimelineData& Timeline, const FGSTN_CombatSyncCore& Core, const FTransform& Root,
 		int32 TimelineFrame, int32 TrackFrame, FTransform& InOutCarrier)
 	{
+		// Only the group that met the face slides, with its own settings; another group open at the same time keeps its authored path
 		const FGSTN_HardContactState& Contact = Core.HardContact;
-		const FGSTN_SweepDeflection& Deflection = Timeline.SweepDeflection;
-		if (!Contact.IsSet() || !Deflection.bEnabled || TimelineFrame <= Contact.TimelineFrame
+		if (!Contact.IsSet() || TrackIndex != Core.StrikeTrack)
+		{
+			return false;
+		}
+		const FGSTN_SweepDeflection& Deflection = *Timeline.ResolveStrike(Core.StrikeTrack).Deflection;
+		if (!Deflection.bEnabled || TimelineFrame <= Contact.TimelineFrame
 			|| (Spec.Space != EGSTN_HitboxSpace::Root && Spec.Space != EGSTN_HitboxSpace::BakedSocket))
 		{
 			return false;
@@ -177,8 +185,8 @@ namespace
 		return false;
 	}
 
-	/** Stab-only hurtboxes (plan precisione-weakpoint 3): a Stab timeline whose hitbox travels into the face within the hurtbox's angle */
-	bool PassesStabOnly(bool bStabOnly, float StabMaxAngleDeg, const FGSTN_CombatTimelineData& Timeline, const FGSTN_HitShape& HurtShape, const FTransform& VictimTransform,
+	/** Stab-only hurtboxes (plan precisione-weakpoint 3): a Stab hitbox group whose hitbox travels into the face within the hurtbox's angle */
+	bool PassesStabOnly(bool bStabOnly, float StabMaxAngleDeg, EGSTN_StrikeKind StrikeKind, const FGSTN_HitShape& HurtShape, const FTransform& VictimTransform,
 		const FVector& PreviousCenter, const FVector& Center)
 	{
 		if (!bStabOnly)
@@ -186,7 +194,7 @@ namespace
 			return true;
 		}
 		const FVector Travel = (Center - PreviousCenter).GetSafeNormal();
-		if (Timeline.StrikeKind != EGSTN_StrikeKind::Stab || Travel.IsZero())
+		if (StrikeKind != EGSTN_StrikeKind::Stab || Travel.IsZero())
 		{
 			return false;
 		}
@@ -238,6 +246,8 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 			continue;
 		}
 		const FGSTN_HitboxSpec& Spec = *Active.Spec;
+		// The strike settings of this hitbox's group (its own or the move's): what stab-only hurtboxes test
+		const FGSTN_StrikeSettings ActiveStrike = In.Timeline->ResolveStrike(Active.TrackIndex);
 
 		FTransform Carrier;
 		if (!BuildCarrier(Spec, *In.Timeline, Core, In.Root, In.TimelineFrame, Active.TrackFrame, Carrier))
@@ -251,11 +261,11 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 			PreviousCarrier = Carrier;
 		}
 		// The slide along a hard face; a blade the face stopped has no hitbox left
-		if (ApplyDeflection(Spec, *In.Timeline, Core, In.Root, In.TimelineFrame, Active.TrackFrame, Carrier))
+		if (ApplyDeflection(Spec, Active.TrackIndex, *In.Timeline, Core, In.Root, In.TimelineFrame, Active.TrackFrame, Carrier))
 		{
 			continue;
 		}
-		ApplyDeflection(Spec, *In.Timeline, Core, In.Root, FMath::Max(In.TimelineFrame - 1, 0), FMath::Max(Active.TrackFrame - 1, 0), PreviousCarrier);
+		ApplyDeflection(Spec, Active.TrackIndex, *In.Timeline, Core, In.Root, FMath::Max(In.TimelineFrame - 1, 0), FMath::Max(Active.TrackFrame - 1, 0), PreviousCarrier);
 
 		if (In.DebugShapes)
 		{
@@ -330,8 +340,8 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 			// 4: overlap against the hurtboxes the victim's modifiers leave hittable
 			const FGSTN_HitShape HitShape = Variant && !FMath::IsNearlyEqual(Variant->ShapeScale, 1.f) ? UGSTN_HitShapeUtils::ScaleShape(Spec.Shape, Variant->ShapeScale) : Spec.Shape;
 			const TArray<FGSTN_Hurtbox>& Hurtboxes = Victim.Hurtboxes->Hurtboxes;
-			// The hard hurtbox this swing already met is behind the blade: it slides on it, it does not hit it again
-			const int32 HardHurtbox = Core.HardContact.IsSet() && Core.HardContact.VictimId == Victim.EntityId ? Core.HardContact.Hurtbox : INDEX_NONE;
+			// The hard hurtbox this group already met is behind the blade: it slides on it, it does not hit it again (another group may ricochet on it)
+			const int32 HardHurtbox = Core.HardContact.IsSet() && Core.HardContact.VictimId == Victim.EntityId && Core.StrikeTrack == Active.TrackIndex ? Core.HardContact.Hurtbox : INDEX_NONE;
 			const FVector PreviousCenter = ShapeCenter(Spec.Shape, PreviousCarrier);
 			Overlapped.Reset();
 			for (int32 HurtIndex = 0; HurtIndex < Hurtboxes.Num(); ++HurtIndex)
@@ -340,7 +350,7 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 				{
 					continue;
 				}
-				if (!PassesStabOnly(Hurtboxes[HurtIndex].bStabOnly, Hurtboxes[HurtIndex].StabMaxAngleDeg, *In.Timeline, Hurtboxes[HurtIndex].Shape, Victim.Transform, PreviousCenter, HitboxCenter))
+				if (!PassesStabOnly(Hurtboxes[HurtIndex].bStabOnly, Hurtboxes[HurtIndex].StabMaxAngleDeg, ActiveStrike.Kind, Hurtboxes[HurtIndex].Shape, Victim.Transform, PreviousCenter, HitboxCenter))
 				{
 					continue;
 				}
@@ -360,7 +370,7 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 				const FGSTN_ExtraHurtbox& Extra = Victim.ExtraHurtboxes[ExtraPosition];
 				const FGSTN_HitShape& ExtraShape = Extra.Shape;
 				if (GSTNHurtboxIndex::FromExtraPosition(ExtraPosition) == HardHurtbox
-					|| !PassesStabOnly(Extra.bStabOnly, Extra.StabMaxAngleDeg, *In.Timeline, ExtraShape, Victim.Transform, PreviousCenter, HitboxCenter))
+					|| !PassesStabOnly(Extra.bStabOnly, Extra.StabMaxAngleDeg, ActiveStrike.Kind, ExtraShape, Victim.Transform, PreviousCenter, HitboxCenter))
 				{
 					continue;
 				}
@@ -399,6 +409,7 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 			Candidate.HitboxVelocity = HitboxVelocity;
 			Candidate.PreviousHitboxCenter = PreviousCenter;
 			Candidate.BladeAxis = (Spec.Shape.Local * Carrier).GetRotation().GetAxisZ();
+			Candidate.TrackIndex = Active.TrackIndex;
 			Candidate.TargetKey = TargetKey;
 
 			bool bReplaced = false;
@@ -500,9 +511,11 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 		// FinishThenRecoil (plan precisione-weakpoint 1-2): the first hard contact of the swing is remembered instead of ending it. The victim
 		// stays out of the target ring so a soft hurtbox or weak point of it met during the slide is still a normal hit
 		bool bStartsHardContact = false;
-		if (Hit.bRicochet && !Core.HardContact.IsSet() && In.Timeline->ResolveHardSurfaceBehaviour() == EGSTN_HardSurfaceBehaviour::FinishThenRecoil)
+		Hit.TrackIndex = Candidate.TrackIndex;
+		if (Hit.bRicochet && !Core.HardContact.IsSet() && In.Timeline->ResolveStrike(Candidate.TrackIndex).Behaviour == EGSTN_HardSurfaceBehaviour::FinishThenRecoil)
 		{
 			bStartsHardContact = true;
+			Core.StrikeTrack = static_cast<int16>(Candidate.TrackIndex);
 			const FVector Travel = Candidate.HitboxVelocity.GetSafeNormal(UE_SMALL_NUMBER, AttackerFacing);
 			const FVector WorldNormal = VictimShape ? UGSTN_HitShapeUtils::OutwardNormal(*VictimShape, Victim.Transform, Candidate.PreviousHitboxCenter, -Travel) : -Travel;
 			FGSTN_HardContactState& Contact = Core.HardContact;

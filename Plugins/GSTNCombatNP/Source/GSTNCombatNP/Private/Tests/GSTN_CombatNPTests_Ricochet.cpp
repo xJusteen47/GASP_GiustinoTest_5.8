@@ -248,9 +248,9 @@ bool FGSTN_NPRicochetFallbackTest::RunTest(const FString& Parameters)
 
 	const FGSTN_CombatTimelineData Own = RcMakeAttack();
 	const FGSTN_CombatTimelineData None = RcMakeAttack(false);
-	TestEqual(TEXT("the attack's own response wins over every fallback"), FGSTN_CombatTimelineLogic::ResolveRicochet(&Own, &Weapon)->RecoilFrames, 20);
-	TestEqual(TEXT("without one the fallback answers"), FGSTN_CombatTimelineLogic::ResolveRicochet(&None, &Weapon)->RecoilFrames, 8);
-	TestNull(TEXT("and with neither there is none"), FGSTN_CombatTimelineLogic::ResolveRicochet(&None, nullptr));
+	TestEqual(TEXT("the attack's own response wins over every fallback"), FGSTN_CombatTimelineLogic::ResolveRicochet(&Own, INDEX_NONE, &Weapon)->RecoilFrames, 20);
+	TestEqual(TEXT("without one the fallback answers"), FGSTN_CombatTimelineLogic::ResolveRicochet(&None, INDEX_NONE, &Weapon)->RecoilFrames, 8);
+	TestNull(TEXT("and with neither there is none"), FGSTN_CombatTimelineLogic::ResolveRicochet(&None, INDEX_NONE, nullptr));
 	return true;
 }
 

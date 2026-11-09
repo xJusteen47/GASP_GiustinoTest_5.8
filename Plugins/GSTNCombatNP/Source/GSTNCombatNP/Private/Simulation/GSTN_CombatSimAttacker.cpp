@@ -134,16 +134,24 @@ void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, 
 	}
 	// A ricochet ends the timeline into its recoil (M4 H12). No hitstop, confirm or meter were given to the attacker (the tick wrote none).
 	// A FinishThenRecoil timeline keeps swinging: the tick wrote the hard contact and AdvanceClock starts the recoil after the active frames
-	if (In.Timeline->ResolveHardSurfaceBehaviour() == EGSTN_HardSurfaceBehaviour::ImmediateRecoil)
+	// The behaviour is the hit's hitbox group's (plan precisione-weakpoint, owner 2026-11-09): a move can slash with one group and thrust with another
+	for (const FGSTN_AttackerHit& Hit : AttackerHits)
 	{
-		for (const FGSTN_AttackerHit& Hit : AttackerHits)
+		if (!Hit.bRicochet || Core.RecoilStartFrame != INDEX_NONE)
 		{
-			if (Hit.bRicochet)
+			continue;
+		}
+		const FGSTN_StrikeSettings Strike = In.Timeline->ResolveStrike(Hit.TrackIndex);
+		if (Strike.Behaviour == EGSTN_HardSurfaceBehaviour::ImmediateRecoil)
+		{
+			const UGSTN_CombatTableSet& Set = Tables();
+			const int16 PreviousStrike = Core.StrikeTrack;
+			Core.StrikeTrack = static_cast<int16>(Hit.TrackIndex);
+			if (!FGSTN_CombatTimelineLogic::StartRecoil(Core, Frame, GetRegistryTimeline(Set, Core.ActiveTimeline), Set.GetRicochetFallback(Core.ActiveWeaponIndex, Strike.Kind)))
 			{
-				const UGSTN_CombatTableSet& Set = Tables();
-				FGSTN_CombatTimelineLogic::StartRecoil(Core, Frame, GetRegistryTimeline(Set, Core.ActiveTimeline), Set.GetRicochetFallback(Core.ActiveWeaponIndex));
-				break;
+				Core.StrikeTrack = PreviousStrike;
 			}
+			break;
 		}
 	}
 	for (const FGSTN_AttackerHit& Hit : AttackerHits)

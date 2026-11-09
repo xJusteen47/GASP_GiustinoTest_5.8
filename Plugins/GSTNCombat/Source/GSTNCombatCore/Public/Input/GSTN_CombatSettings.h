@@ -7,6 +7,7 @@
 #include "GameplayTagContainer.h"
 #include "Input/GSTN_InputSlot.h"
 #include "Jump/GSTN_JumpTypes.h"
+#include "Timeline/GSTN_TimelineTypes.h"
 class UGSTN_CombatRules;
 
 #include "GSTN_CombatSettings.generated.h"
@@ -150,6 +151,17 @@ public:
 	/** Frames of press that turn an interact tap (grab) into a hold (pick up) in the default movement slots (UGSTN_MovementSlots) */
 	UPROPERTY(Config, EditAnywhere, Category = "Combat|Interact", meta = (ClampMin = "1", ClampMax = "120", ForceUnits = "Frames"))
 	int32 InteractHoldFrames = 12;
+
+	/**
+	 * Last fallback of the ricochet recoil of a Swing hitbox group (plan precisione-weakpoint, owner 2026-11-09): used when neither the group, the
+	 * move, the weapon nor the kit authors one. Copied into each combat table set (part of its checksum), so every machine must run the same value
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Ricochet")
+	FGSTN_RicochetResponse SwingRicochetDefault;
+
+	/** As SwingRicochetDefault, for Stab hitbox groups. Unspecified groups have no project default (the M4 behaviour) */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Ricochet")
+	FGSTN_RicochetResponse StabRicochetDefault;
 
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;

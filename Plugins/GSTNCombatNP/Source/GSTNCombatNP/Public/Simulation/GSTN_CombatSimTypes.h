@@ -151,6 +151,13 @@ struct FGSTN_CombatSyncCore
 	/** The swing's first hard contact and its pending recoil (FinishThenRecoil); unset outside one */
 	FGSTN_HardContactState HardContact;
 
+	/**
+	 * The hitbox group (index into the running timeline's Tracks) whose ricochet wrote HardContact or RecoilStartFrame: its strike settings bend
+	 * the slide, its end frame starts a FinishThenRecoil recoil and its response comes first in the recoil chain. INDEX_NONE = the move's (and
+	 * whenever neither is set). On the wire only while a hard contact or a recoil is
+	 */
+	int16 StrikeTrack = INDEX_NONE;
+
 	/** 0 = the primary weapon, 1.. = the additional weapons in loadout order */
 	uint8 ActiveWeaponIndex = 0;
 
@@ -188,7 +195,7 @@ struct FGSTN_CombatSyncCore
 	bool IsActionPartDefault() const
 	{
 		return ActionState == EGSTN_ActionState::Actionable && ActiveTimeline == INDEX_NONE && ActiveSource == EGSTN_ActivationSource::Command
-			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && PausedFramesTotal == 0 && RecoilStartFrame == INDEX_NONE && !HardContact.IsSet() && ActiveWeaponIndex == 0
+			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && PausedFramesTotal == 0 && RecoilStartFrame == INDEX_NONE && !HardContact.IsSet() && StrikeTrack == INDEX_NONE && ActiveWeaponIndex == 0
 			&& LoadoutRevision == 0 && TableRevision == 0 && Requests.IsEmpty() && Hit.IsDefault(GetHitContext());
 	}
 
@@ -233,6 +240,19 @@ struct FGSTN_CombatSyncCore
 		uint32 RecoilPlusOne = static_cast<uint32>(FMath::Max(RecoilStartFrame + 1, 0));
 		Ar.SerializeIntPacked(RecoilPlusOne);
 		HardContact.NetSerialize(Ar);
+		if (RecoilPlusOne != 0 || HardContact.IsSet())
+		{
+			uint32 StrikePlusOne = static_cast<uint32>(FMath::Max(static_cast<int32>(StrikeTrack) + 1, 0));
+			Ar.SerializeIntPacked(StrikePlusOne);
+			if (Ar.IsLoading())
+			{
+				StrikeTrack = static_cast<int16>(FMath::Min<uint32>(StrikePlusOne, 0x7FFFu) - 1);
+			}
+		}
+		else if (Ar.IsLoading())
+		{
+			StrikeTrack = INDEX_NONE;
+		}
 		Ar << ActiveWeaponIndex;
 		Ar << LoadoutRevision;
 		Ar << TableRevision;
@@ -269,6 +289,7 @@ struct FGSTN_CombatSyncCore
 		PausedFramesTotal = 0;
 		RecoilStartFrame = INDEX_NONE;
 		HardContact = FGSTN_HardContactState();
+		StrikeTrack = INDEX_NONE;
 		ActiveWeaponIndex = 0;
 		LoadoutRevision = 0;
 		TableRevision = 0;
@@ -294,6 +315,7 @@ struct FGSTN_CombatSyncCore
 		UE_NP_TRACE_RECONCILE(PausedFramesTotal != AuthorityState.PausedFramesTotal, "PausedFramesTotal:");
 		UE_NP_TRACE_RECONCILE(RecoilStartFrame != AuthorityState.RecoilStartFrame, "RecoilStartFrame:");
 		UE_NP_TRACE_RECONCILE(!(HardContact == AuthorityState.HardContact), "HardContact:");
+		UE_NP_TRACE_RECONCILE(StrikeTrack != AuthorityState.StrikeTrack, "StrikeTrack:");
 		UE_NP_TRACE_RECONCILE(ActiveWeaponIndex != AuthorityState.ActiveWeaponIndex, "ActiveWeaponIndex:");
 		UE_NP_TRACE_RECONCILE(LoadoutRevision != AuthorityState.LoadoutRevision, "LoadoutRevision:");
 		UE_NP_TRACE_RECONCILE(TableRevision != AuthorityState.TableRevision, "TableRevision:");
