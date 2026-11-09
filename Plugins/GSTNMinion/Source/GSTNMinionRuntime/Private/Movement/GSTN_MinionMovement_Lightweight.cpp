@@ -7,10 +7,17 @@
 #include "Data/GSTN_MinionDefinition.h"
 #include "Engine/OverlapResult.h"
 #include "Engine/World.h"
+#include "HAL/IConsoleManager.h"
 #include "Store/GSTN_MinionStore.h"
 
 namespace
 {
+	/** Test switch: 0 turns off the Launched landing fallback (the M8 launched hover repro test uses it) */
+	TAutoConsoleVariable<int32> CVarLaunchedLandFallback(
+		TEXT("gstn.Minion.Move.LaunchedLandFallback"), 1,
+		TEXT("1: a descending Launched minion that made no progress lands on a floor found by a thin probe (default). 0: off, for the hover repro test."),
+		ECVF_Default);
+
 	/** Distance a capsule is pulled back from a blocking hit, so the next sweep does not start touching the surface */
 	constexpr float HitPullback = 0.1f;
 	/** Moves shorter than this are skipped (a standing minion only probes its floor) */
@@ -382,6 +389,38 @@ void FGSTN_MinionMovement_Lightweight::StepSlot(FGSTN_MinionMoveContext& Ctx, in
 			// G5: a launch with the knockdown flag lands into Knockdown (and its GetUp timeline) instead of Idle
 			Mode = EGSTN_MinionKnockbackMode::None;
 			bKnockbackEnded = true;
+		}
+	}
+
+	// Launched, descending, and the frame made no progress: pinned between a floor and an overhang or lip that the full capsule
+	// cannot clear (M8 launched hover). The full-capsule probe above fails there (start touching the lip, or the floor contact
+	// reported on the rim), so look for floor under the axis with the thin probe and land on it, as FindFloor's rim branch does
+	if (CVarLaunchedLandFallback.GetValueOnAnyThread() != 0 && !State.bGrounded && Mode == EGSTN_MinionKnockbackMode::Launched && (Velocity | State.Up) <= 0.0
+		&& FVector::DistSquared(State.Centre, StartCentre) < FMath::Square(0.5))
+	{
+		const float ProbeDistance = 2.f * Skin + 1.f;
+		const float PerchRadius = State.Radius * PerchRadiusFraction;
+		FHitResult Inner;
+		Sweep(Ctx, State, State.Centre, State.Centre - State.Up * ProbeDistance, Inner, PerchRadius);
+		if (Inner.bBlockingHit && IsWalkable(State, Inner))
+		{
+			FStepState AtFloor = State;
+			if (!Inner.bStartPenetrating)
+			{
+				AtFloor.Centre = Inner.Location + State.Up * Skin;
+			}
+			// The full capsule at that height may still overlap the lip: push it out along the MTD
+			Depenetrate(Ctx, AtFloor);
+			FHitResult Check;
+			Sweep(Ctx, AtFloor, AtFloor.Centre, AtFloor.Centre - State.Up * (Skin + 1.f), Check);
+			if (!Check.bStartPenetrating)
+			{
+				State.Centre = AtFloor.Centre;
+				State.bGrounded = true;
+				Velocity = FVector::VectorPlaneProject(Velocity, State.Up);
+				Mode = EGSTN_MinionKnockbackMode::None;
+				bKnockbackEnded = true;
+			}
 		}
 	}
 

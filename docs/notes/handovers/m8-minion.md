@@ -641,3 +641,10 @@
 - Gate: build 7 s (new module only); headless `Automation RunTests GSTN` 1459/0/0 (1457 + 2), 0 ensures; SUITE_MINION dedicated + 2 clients 0 % 12/12 PASS first run (7.5 min); play settings restored.
 - PERF-DEBT: added to `docs/notes/perf-debt.md` (tint walk is O(parts x primitives); wire it on state change only).
 - Cost: ~$1.
+- Last round (2026-11-09, STOP): fallback gated by `gstn.Minion.Move.LaunchedLandFallback` (default 1); tests split (`LaunchedUnderOverhangLands`,
+  `LaunchedUnderOverhangStallsWithoutFallback`), 6 s window. Still red, again a test-rig problem: the steep variants (horizontal 450-1325 cm/s)
+  fly off the 40 m test floor and fall (Z down to -26000); the fix was never exercised on the real wedge. Branch `claude/laptop-hover` = WIP.
+- Next step (if pursued): launch the variants toward the lip from 1-2 m away with low horizontal speed (<= 300 cm/s) so they stay on the floor,
+  confirm the stall with the fallback off, then the 10-min soak. ~$2.
+- Owner option instead of the fix: DefaultLevel has a rotated cylinder (StaticMeshActor_6, roll -80, near (100,-850,240)) whose lip overhangs
+  the floor and traps launched minions at (165,-845,91); moving or reshaping that geometry removes the repro (the bug can still happen elsewhere).
