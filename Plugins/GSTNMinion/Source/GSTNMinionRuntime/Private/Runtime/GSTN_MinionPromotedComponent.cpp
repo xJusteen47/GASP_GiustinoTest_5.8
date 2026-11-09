@@ -1,8 +1,9 @@
-// Minion runtime (authority batch, M8 G9a).
+// Minion runtime (authority batch, M8 G9a; readers G9b).
 
 #include "Runtime/GSTN_MinionPromotedComponent.h"
 
 #include "Net/UnrealNetwork.h"
+#include "Present/GSTN_MinionPresentationSubsystem.h"
 
 UGSTN_MinionPromotedComponent::UGSTN_MinionPromotedComponent()
 {
@@ -20,4 +21,14 @@ void UGSTN_MinionPromotedComponent::GetLifetimeReplicatedProps(TArray<FLifetimeP
 	DOREPLIFETIME_CONDITION(UGSTN_MinionPromotedComponent, SourceTypeTag, COND_InitialOnly);
 	DOREPLIFETIME_CONDITION(UGSTN_MinionPromotedComponent, HealthFraction, COND_InitialOnly);
 	DOREPLIFETIME_CONDITION(UGSTN_MinionPromotedComponent, Team, COND_InitialOnly);
+}
+
+void UGSTN_MinionPromotedComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	// A client applies the initial bunch before BeginPlay, so the ids are there. A world without minion presentation shows the fighter as is
+	if (UGSTN_MinionPresentationSubsystem* Presentation = UGSTN_MinionPresentationSubsystem::GetActive(GetWorld()))
+	{
+		Presentation->NotePromotedFighter(this);
+	}
 }

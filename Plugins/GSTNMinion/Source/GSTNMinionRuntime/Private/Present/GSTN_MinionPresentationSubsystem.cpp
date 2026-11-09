@@ -2,6 +2,7 @@
 
 #include "Present/GSTN_MinionPresentationSubsystem.h"
 
+#include "Components/CapsuleComponent.h"
 #include "Data/GSTN_MinionDefinition.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
@@ -19,6 +20,7 @@
 #include "Present/GSTN_MinionPuppet.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "Runtime/GSTN_MinionCombatSubsystem.h"
+#include "Runtime/GSTN_MinionPromotedComponent.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Store/GSTN_MinionStore.h"
@@ -30,6 +32,17 @@ namespace
 		TEXT("gstn.Minion.Present.MaxVisible"), 60,
 		TEXT("Most minion puppets shown at once (MaxVisiblePuppets, combat-m8-minions.md 8.4), nearest to the local view first. The others keep their\n")
 		TEXT("presentation state and stay hittable, without a puppet."),
+		ECVF_Default);
+
+	TAutoConsoleVariable<float> CVarMinionPresentPromoteSwapSeconds(
+		TEXT("gstn.Minion.Present.PromoteSwapSeconds"), 0.1f,
+		TEXT("G9b: a promoted fighter stays hidden behind its minion's puppet for this long after it begins play on this machine (its first\n")
+		TEXT("interpolated transforms), then the puppet goes and the fighter shows."),
+		ECVF_Default);
+
+	TAutoConsoleVariable<float> CVarMinionPresentPromoteHoldSeconds(
+		TEXT("gstn.Minion.Present.PromoteHoldSeconds"), 1.0f,
+		TEXT("G9b: longest a Promoting minion's puppet waits for its fighter after the item left, and a hidden fighter for its swap."),
 		ECVF_Default);
 
 	TAutoConsoleVariable<int32> CVarMinionPresentLogFlash(
@@ -176,6 +189,8 @@ void UGSTN_MinionPresentationSubsystem::Deinitialize()
 	}
 	bActive = false;
 	Records.Reset();
+	HeldPuppets.Reset();
+	PendingSwaps.Reset();
 	FreePuppets.Reset();
 	FreeShatters.Reset();
 	AllPuppets.Reset();
@@ -274,9 +289,20 @@ void UGSTN_MinionPresentationSubsystem::TickPresentation(double NowSeconds)
 	}
 	for (const int32 Key : Gone)
 	{
+		FGSTN_MinionPresentRecord& Record = Records[Key];
+		if (Record.bPromoting && !Record.bPromotionSwapped && Record.Puppet.IsValid())
+		{
+			// The item left before its fighter arrived: the puppet stays where it stood (item 6 of the header)
+			FHeldPuppet& Held = HeldPuppets.AddDefaulted_GetRef();
+			Held.Key = Key;
+			Held.Puppet = Record.Puppet;
+			Held.ReleaseAtSeconds = NowSeconds + FMath::Max(CVarMinionPresentPromoteHoldSeconds.GetValueOnGameThread(), 0.f);
+			Record.Puppet = nullptr;
+		}
 		RemoveRecord(Key);
 	}
 
+	UpdatePromotionSwaps(NowSeconds);
 	UpdatePredictedHits(NowSeconds);
 	for (TPair<int32, FGSTN_MinionPresentRecord>& Pair : Records)
 	{
@@ -317,6 +343,7 @@ void UGSTN_MinionPresentationSubsystem::SyncFromStore(const UGSTN_MinionCombatSu
 		Record->Definition = Minions.GetDefinition(Record->TypeIndex);
 		Record->Tier = static_cast<EGSTN_MinionLODTier>(Store.LODTier[Slot]);
 		Record->HealthFraction = Store.MaxHealth[Slot] > 0.f ? FMath::Clamp(Store.Health[Slot] / Store.MaxHealth[Slot], 0.f, 1.f) : 1.f;
+		Record->bPromoting = (Store.Flags[Slot] & GSTNMinion::NetFlags::Promoting) != 0;
 
 		FGSTN_MinionDisplayPose& Pose = Record->Pose;
 		Pose.Position = Store.Position[Slot];
@@ -410,6 +437,7 @@ void UGSTN_MinionPresentationSubsystem::SyncFromRegistry(const UGSTN_MinionClien
 		}
 		Record->Interpolator.AddSample(Sample, NowSeconds);
 		Record->HealthFraction = State.HealthFraction;
+		Record->bPromoting = (Sample.Flags & GSTNMinion::NetFlags::Promoting) != 0;
 		Record->Flash.ObserveCounter(State.HitCounter, NowSeconds, FlashParams);
 
 		if (FallbackNewestFrame == INDEX_NONE || State.FrameStamp > FallbackNewestFrame)
@@ -572,11 +600,12 @@ void UGSTN_MinionPresentationSubsystem::UpdateVisibleSet(double NowSeconds)
 	{
 		FGSTN_MinionPresentRecord& Record = Pair.Value;
 		Record.bVisible = false;
-		if (Record.Pose.Mode == EGSTN_MinionDisplayMode::None)
+		if (Record.Pose.Mode == EGSTN_MinionDisplayMode::None || Record.bPromotionSwapped)
 		{
 			continue;
 		}
-		if (PresentIsDead(Record.Pose.ActionState))
+		// A Promoting body is not a death: its puppet stays for the fighter (item 6 of the header)
+		if (PresentIsDead(Record.Pose.ActionState) && !Record.bPromoting)
 		{
 			// Dead: the placeholder shatter takes the puppet's place once (4d.4), the minion is no longer drawn
 			if (!Record.bShattered)
@@ -760,6 +789,130 @@ void UGSTN_MinionPresentationSubsystem::RemoveRecord(int32 Key)
 			ReleasePuppet(Puppet);
 		}
 		Records.Remove(Key);
+	}
+}
+
+void UGSTN_MinionPresentationSubsystem::NotePromotedFighter(UGSTN_MinionPromotedComponent* Fighter)
+{
+	if (!Fighter || !Fighter->GetOwner())
+	{
+		return;
+	}
+	FPendingSwap& Pending = PendingSwaps.AddDefaulted_GetRef();
+	Pending.Fighter = Fighter;
+	// The records' key: the store slot on the host, the global item id on a client (the same ids the pack and the store use)
+	const bool bClient = GetWorld() && GetWorld()->GetNetMode() == NM_Client;
+	if (bClient)
+	{
+		Pending.Key = Fighter->PromotedFromPackId != INDEX_NONE && Fighter->PromotedFromMinionId != INDEX_NONE
+			? UGSTN_MinionClientRegistry::MakeGlobalId(Fighter->PromotedFromPackId, static_cast<uint8>(Fighter->PromotedFromMinionId))
+			: INDEX_NONE;
+	}
+	else
+	{
+		Pending.Key = Fighter->SourceSlot;
+	}
+}
+
+void UGSTN_MinionPresentationSubsystem::UpdatePromotionSwaps(double NowSeconds)
+{
+	const float SwapSeconds = FMath::Max(CVarMinionPresentPromoteSwapSeconds.GetValueOnGameThread(), 0.f);
+	const float HoldSeconds = FMath::Max(CVarMinionPresentPromoteHoldSeconds.GetValueOnGameThread(), 0.f);
+
+	for (int32 Index = PendingSwaps.Num() - 1; Index >= 0; --Index)
+	{
+		FPendingSwap& Pending = PendingSwaps[Index];
+		UGSTN_MinionPromotedComponent* Component = Pending.Fighter.Get();
+		AActor* Fighter = Component ? Component->GetOwner() : nullptr;
+		if (!Fighter)
+		{
+			PendingSwaps.RemoveAtSwap(Index);
+			continue;
+		}
+		if (Pending.NotedSeconds < 0.0)
+		{
+			Pending.NotedSeconds = NowSeconds;
+		}
+
+		// The puppet that shows the minion: a live record's, else one held after its item left
+		FGSTN_MinionPresentRecord* Record = Pending.Key != INDEX_NONE ? Records.Find(Pending.Key) : nullptr;
+		AGSTN_MinionPuppet* Puppet = Record && !Record->bPromotionSwapped ? Record->Puppet.Get() : nullptr;
+		int32 HeldIndex = INDEX_NONE;
+		if (!Puppet && Pending.Key != INDEX_NONE)
+		{
+			HeldIndex = HeldPuppets.IndexOfByPredicate([&Pending](const FHeldPuppet& Held) { return Held.Key == Pending.Key; });
+			Puppet = HeldIndex != INDEX_NONE ? HeldPuppets[HeldIndex].Puppet.Get() : nullptr;
+		}
+
+		if (!Pending.bHidden)
+		{
+			if (!Puppet)
+			{
+				// Nothing shows the minion here (culled, never presented, or no ids): the fighter appears as it is
+				++Stats.PromotionsWithoutPuppet;
+				UE_LOG(LogGSTNMinion, Log, TEXT("MinionPromote nopuppet key=%d fighter=%s"), Pending.Key, *GetNameSafe(Fighter));
+				PendingSwaps.RemoveAtSwap(Index);
+				continue;
+			}
+			Fighter->SetActorHiddenInGame(true);
+			Pending.bHidden = true;
+		}
+
+		const double Waited = NowSeconds - Pending.NotedSeconds;
+		if (Puppet && Waited < SwapSeconds)
+		{
+			continue;
+		}
+		if (Puppet)
+		{
+			// The pop is measured between the puppet and the fighter's feet (a pawn's origin is its capsule centre)
+			FVector FighterFeet = Fighter->GetActorLocation();
+			if (const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(Fighter->GetRootComponent()))
+			{
+				FighterFeet.Z -= Capsule->GetScaledCapsuleHalfHeight();
+			}
+			Stats.LastPromotionPopCm = static_cast<float>(FVector::Dist(Puppet->GetActorLocation(), FighterFeet));
+			Stats.LastPromotionWaitMs = static_cast<float>(Waited * 1000.0);
+			++Stats.PromotionSwaps;
+			UE_LOG(LogGSTNMinion, Log, TEXT("MinionPromote swap key=%d fighter=%s pop=%.1fcm waited=%.0fms held=%d net=%s"), Pending.Key, *GetNameSafe(Fighter),
+				Stats.LastPromotionPopCm, Stats.LastPromotionWaitMs, HeldIndex != INDEX_NONE ? 1 : 0,
+				GetWorld() && GetWorld()->GetNetMode() == NM_Client ? TEXT("client") : TEXT("host"));
+			ReleasePuppet(Puppet);
+			if (Record && Record->Puppet.Get() == Puppet)
+			{
+				Record->Puppet = nullptr;
+				Record->bPromotionSwapped = true;
+			}
+			if (HeldIndex != INDEX_NONE)
+			{
+				HeldPuppets.RemoveAtSwap(HeldIndex);
+			}
+		}
+		else if (Waited < HoldSeconds)
+		{
+			// Hidden, and its puppet is gone this frame (pooled by a cut): show it at once rather than leave a gap
+			UE_LOG(LogGSTNMinion, Log, TEXT("MinionPromote lostpuppet key=%d fighter=%s waited=%.0fms"), Pending.Key, *GetNameSafe(Fighter), Waited * 1000.0);
+		}
+		Fighter->SetActorHiddenInGame(false);
+		PendingSwaps.RemoveAtSwap(Index);
+	}
+
+	// Held puppets whose fighter never came (refused late, destroyed, culled on this machine)
+	for (int32 Index = HeldPuppets.Num() - 1; Index >= 0; --Index)
+	{
+		FHeldPuppet& Held = HeldPuppets[Index];
+		AGSTN_MinionPuppet* Puppet = Held.Puppet.Get();
+		const bool bWanted = PendingSwaps.ContainsByPredicate([&Held](const FPendingSwap& Pending) { return Pending.Key == Held.Key; });
+		if (!Puppet || (!bWanted && NowSeconds >= Held.ReleaseAtSeconds))
+		{
+			if (Puppet)
+			{
+				++Stats.PromotionPuppetsExpired;
+				UE_LOG(LogGSTNMinion, Log, TEXT("MinionPromote expired key=%d (no fighter within %.2f s)"), Held.Key, HoldSeconds);
+				ReleasePuppet(Puppet);
+			}
+			HeldPuppets.RemoveAtSwap(Index);
+		}
 	}
 }
 

@@ -23,7 +23,9 @@ public class GSTNMinionRuntime : ModuleRules
 			"NetCore",
 			// G8: the brain subsystem and the schema name StateTree types in their headers
 			"StateTreeModule",
-			"PropertyBindingUtils"
+			"PropertyBindingUtils",
+			// Combat.Event.KO (G5); public since G9b: the promoted component implements IGSTN_StartingHealthSource in its header
+			"GSTNCombatGAS"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]
@@ -32,8 +34,6 @@ public class GSTNMinionRuntime : ModuleRules
 			"NetworkPrediction",
 			// FGenericTeamId of the snapshot entry
 			"AIModule",
-			// Combat.Event.KO and Combat.KOReason.Health of the minion KO event (G5)
-			"GSTNCombatGAS",
 			// UGSTN_SimEventSubsystem: the authoritative event stream the KO goes to (G5)
 			"GSTNInputCore",
 			// G8: async navigation path of the brain (a no-op without a navmesh)

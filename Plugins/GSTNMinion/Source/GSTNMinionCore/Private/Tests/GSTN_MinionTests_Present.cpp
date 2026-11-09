@@ -100,9 +100,18 @@ bool FGSTN_MinionPresentBlendTest::RunTest(const FString& Parameters)
 	Interpolator.AddSample(MakeSample(174, FVector3f(100.f, 0.f, 0.f), 0.f, 200.f), 2.0);
 	TestTrue(TEXT("12-frame gap reads as T1"), Interpolator.GetInferredTier(Params) == EGSTN_MinionLODTier::Near);
 	Interpolator.DeadReckon(2.0, Params);
-	Pose = Interpolator.DeadReckon(2.5, Params);
-	TestTrue(FString::Printf(TEXT("500 ms at 200 cm/s ahead of the sample (got %s)"), *Pose.Position.ToString()), Pose.Position.Equals(FVector3f(200.f, 0.f, 0.f), 0.01f));
+	Pose = Interpolator.DeadReckon(2.1, Params);
+	TestTrue(FString::Printf(TEXT("100 ms at 200 cm/s ahead of the sample (got %s)"), *Pose.Position.ToString()), Pose.Position.Equals(FVector3f(120.f, 0.f, 0.f), 0.01f));
 	TestTrue(TEXT("dead reckoned"), Pose.Mode == EGSTN_MinionDisplayMode::DeadReckoned);
+	// G9b: never further than the sender's own interval (12 frames = 192 ms) when the next sample is late
+	Pose = Interpolator.DeadReckon(2.5, Params);
+	TestTrue(FString::Printf(TEXT("capped at 192 ms ahead (got %s)"), *Pose.Position.ToString()), Pose.Position.Equals(FVector3f(138.4f, 0.f, 0.f), 0.01f));
+
+	// G9b: a sender slower than T1 (62 frames) holds its newest sample (FarDeadReckoningCapMs 0), even with a speed on it
+	Interpolator.AddSample(MakeSample(236, FVector3f(300.f, 0.f, 0.f), 0.f, 200.f), 3.0);
+	Interpolator.DeadReckon(3.0, Params);
+	Pose = Interpolator.DeadReckon(3.6, Params);
+	TestTrue(FString::Printf(TEXT("a far sender is not run ahead (got %s)"), *Pose.Position.ToString()), Pose.Position.Equals(FVector3f(300.f, 0.f, 0.f), 0.01f));
 	return true;
 }
 

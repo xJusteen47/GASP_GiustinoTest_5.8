@@ -105,6 +105,13 @@ public:
 	 */
 	int32 Kill();
 
+	/**
+	 * G9b: promotes the live bench minion nearest to Near (the first one when Near is unset) to FighterClassPath (a class path; empty = the
+	 * test character of the harness), keeping its health fraction. Logs "Bench: promote ..." with the fighter, the minion's feet and the frame.
+	 * Null when refused (see UGSTN_MinionSpawner::Promote)
+	 */
+	AActor* Promote(const FString& FighterClassPath, TOptional<FVector> Near = TOptional<FVector>());
+
 	/** Despawns every bench minion */
 	void Clear();
 

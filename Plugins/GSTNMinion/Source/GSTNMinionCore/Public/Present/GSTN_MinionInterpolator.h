@@ -32,6 +32,15 @@ struct GSTNMINIONCORE_API FGSTN_MinionSmoothingParams
 	float DeadReckoningCapMs = 1100.f;
 
 	/**
+	 * M8 G9b ("no pop" at Far/Dormant): dead reckoning never runs longer than the gap between the two newest samples (the sender's own
+	 * interval), and for a sender slower than T1 (sample gap above T1MaxFrameGap: a Far minion, or one about to go Dormant, whose last
+	 * Speed is often stale because the server stops moving it) at most this long. 0 = such a minion holds its newest sample and the
+	 * correction blend carries it to the next one: behind the server by up to one interval, never ahead of it (the overshoot was 1-2 m)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Presentation", meta = (ClampMin = "0.0", ForceUnits = "ms"))
+	float FarDeadReckoningCapMs = 0.f;
+
+	/**
 	 * The wire does not carry the tier, so a client infers it from the gap between two samples: up to this many frames is T0 (15 Hz is
 	 * about 4.2 frames), up to T1MaxFrameGap is T1 (5 Hz is 12.5 frames), anything longer is T2. An idle T0 minion sends nothing and reads
 	 * as T2: harmless, dead reckoning of a still minion is a hold

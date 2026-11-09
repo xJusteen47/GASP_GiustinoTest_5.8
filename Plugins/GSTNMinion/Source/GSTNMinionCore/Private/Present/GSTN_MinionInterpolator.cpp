@@ -147,7 +147,21 @@ FGSTN_MinionDisplayPose FGSTN_MinionInterpolator::DeadReckon(double NowSeconds, 
 		return FGSTN_MinionDisplayPose();
 	}
 	const FGSTN_MinionPresentSample& Newest = At(Count - 1);
-	const double Elapsed = FMath::Clamp(NowSeconds - NewestArrivalSeconds, 0.0, Params.DeadReckoningCapMs / 1000.0);
+	// The horizon (header, FarDeadReckoningCapMs): the cap, the sender's own interval, and the far cap for senders slower than T1
+	double CapSeconds = Params.DeadReckoningCapMs / 1000.0;
+	if (Count >= 2)
+	{
+		const int32 SampleGap = Newest.Frame - At(Count - 2).Frame;
+		if (SampleGap > 0)
+		{
+			CapSeconds = FMath::Min(CapSeconds, SampleGap * FMath::Max(Params.FixedStepMs, 1.f) / 1000.0);
+		}
+		if (SampleGap > Params.T1MaxFrameGap)
+		{
+			CapSeconds = FMath::Min(CapSeconds, Params.FarDeadReckoningCapMs / 1000.0);
+		}
+	}
+	const double Elapsed = FMath::Clamp(NowSeconds - NewestArrivalSeconds, 0.0, CapSeconds);
 	FGSTN_MinionDisplayPose Raw = PoseOf(Newest, EGSTN_MinionDisplayMode::DeadReckoned);
 	Raw.Position = Advance(Newest, Elapsed);
 	Raw.Frame = Newest.Frame + Elapsed * 1000.0 / FMath::Max(Params.FixedStepMs, 1.f);

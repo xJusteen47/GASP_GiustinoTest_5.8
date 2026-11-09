@@ -17,6 +17,8 @@
 #include "Kits/GSTN_WeaponDefinition.h"
 #include "Loadout/GSTN_LoadoutExtensions.h"
 #include "Loadout/GSTN_LoadoutRules.h"
+#include "Loadout/GSTN_StartingHealthSource.h"
+#include "Attributes/GSTN_HealthAttributeSet.h"
 #include "Net/UnrealNetwork.h"
 #include "TimerManager.h"
 
@@ -290,6 +292,32 @@ void UGSTN_LoadoutComponent::ClearGranted()
 	GrantedOn.Reset();
 }
 
+void UGSTN_LoadoutComponent::ApplyStartingHealth(UAbilitySystemComponent& ASC) const
+{
+	const AActor* Owner = GetOwner();
+	if (!Owner || !ASC.HasAttributeSetForAttribute(UGSTN_HealthAttributeSet::GetHealthAttribute()))
+	{
+		return;
+	}
+	for (const UActorComponent* Component : Owner->GetComponents())
+	{
+		const IGSTN_StartingHealthSource* Source = Cast<IGSTN_StartingHealthSource>(Component);
+		if (!Source)
+		{
+			continue;
+		}
+		const float Fraction = Source->GetStartingHealthFraction();
+		if (Fraction < 1.f)
+		{
+			// Base value, like the instant init effect just before it: the start of the fighter's life, not a hit
+			const float MaxHealth = ASC.GetNumericAttribute(UGSTN_HealthAttributeSet::GetMaxHealthAttribute());
+			ASC.SetNumericAttributeBase(UGSTN_HealthAttributeSet::GetHealthAttribute(), MaxHealth * FMath::Clamp(Fraction, 0.f, 1.f));
+			UE_LOG(LogTemp, Log, TEXT("Loadout %s: starting health fraction %.2f of MaxHealth %.1f"), *GetNameSafe(Owner), Fraction, MaxHealth);
+		}
+		return;
+	}
+}
+
 void UGSTN_LoadoutComponent::GrantToAbilitySystem(UAbilitySystemComponent& ASC)
 {
 	// The fork carries abilities and effects through the simulation state and refuses a grant that is not the authority's
@@ -307,6 +335,8 @@ void UGSTN_LoadoutComponent::GrantToAbilitySystem(UAbilitySystemComponent& ASC)
 		// The instant effect overwrites the starting values; the weapon's infinite effect below stacks on top of it
 		Kit->Stats.ApplyTo(ASC, Kit->InitStatsEffect.LoadSynchronous());
 	}
+	// Every grant restarts the health like the init effect does, so a starting fraction applies on each one too
+	ApplyStartingHealth(ASC);
 
 	TArray<FSoftObjectPath> AbilityPaths = CompiledTable.GrantedAbilities;
 	const UGSTN_WeaponDefinition* Primary = Resolved.Weapons.IsValidIndex(0) ? Resolved.Weapons[0] : nullptr;

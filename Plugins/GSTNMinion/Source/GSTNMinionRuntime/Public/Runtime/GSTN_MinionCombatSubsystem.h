@@ -257,9 +257,14 @@ public:
 	 * Promotion to a fighter, server core (UGSTN_MinionSpawner::Promote; combat-m8-minions.md 10). Spawns the fighter class at the minion's
 	 * transform (lifted by the minion's capsule half height: the store holds the feet, a pawn's origin is its centre), adds a replicated
 	 * UGSTN_MinionPromotedComponent, sets the team through IGenericTeamAgentInterface when the fighter has it, broadcasts OnMinionPromoted
-	 * and frees the minion through the same path as Despawn. Null (and nothing changes) when refused: inactive, called from inside a batch
+	 * and publishes Combat.Event.MinionPromoted. Null (and nothing changes) when refused: inactive, called from inside a batch
 	 * stage, a stale handle, a minion that is Spawning, Dying or Dead (or still queued), no fighter class, or
-	 * gstn.Minion.MaxFightersFromMinions promoted fighters are alive. Health on the fighter is the kit's job (G9b)
+	 * gstn.Minion.MaxFightersFromMinions promoted fighters are alive. Health on the fighter is the kit's job (IGSTN_StartingHealthSource).
+	 *
+	 * G9b, the minion side of the swap: the minion is not freed at once. It turns Promoting (wire flag) and holds as a body: Dead state, no
+	 * collision on its server actor (the fighter spawns in its place), no token, no intent, through the corpse list, for
+	 * gstn.Minion.PromoteHoldFrames frames, then it is freed like a corpse. So the flag reaches the clients on the item before the item leaves
+	 * the pack, and a client knows to hold the puppet for the fighter instead of shattering or dropping it. 0 frames frees it at once (G9a).
 	 */
 	AActor* PromoteToFighter(const FGSTN_MinionHandle& Handle, const FGSTN_MinionPromotionParams& Params);
 
@@ -606,7 +611,8 @@ private:
 	/** A Blueprint event a stage queued; broadcast after stage 5 */
 	struct FQueuedEvent
 	{
-		enum class EKind : uint8 { Hit, Died, LODChanged, KO } Kind = EKind::Hit;
+		// Spawned and Despawned (G9b) carry the type index in OtherId: a despawned handle is already stale at the flush
+		enum class EKind : uint8 { Hit, Died, LODChanged, KO, Spawned, Despawned } Kind = EKind::Hit;
 		FGSTN_MinionHandle Handle;
 		float Damage = 0.f;
 		int32 OtherId = INDEX_NONE;

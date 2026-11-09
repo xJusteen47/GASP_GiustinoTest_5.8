@@ -39,6 +39,7 @@
 #   PIE editor tick of jitter). Above 150 ms = open a forward-prediction milestone for pair partners
 import json
 import math
+import os
 import time
 
 import unreal
@@ -691,13 +692,17 @@ def _pair_move_delay(name, pairing, move):
         st['start'] = {k: tuple(g.snap(g.worlds()[0])[k]['location']) for k in (rig.rkey, rig.ckey)}
         rig.first.clear()
         rig.watch_from = run.now()
+        # FP G2: the video capture aligns its frames on this line's log time
+        unreal.log(f'[FP] tap {move} initiator world {ini} partner world {other} present {os.environ.get("GSTN_FP_PRESENT", "1")}')
         if boost:
             return 'rider boosts', g.combat_tap(rig.ir, g.button_mask('Jump'))
         return 'carrier throws', g.combat_tap(rig.ic, g.button_mask('Special'))
 
     def cvar_on():
-        unreal.SystemLibrary.execute_console_command(g.worlds()[ini], 'gstn.Link.PredictPartnerPresentation 1')
-        return 'cvar', 'gstn.Link.PredictPartnerPresentation 1'
+        # GSTN_FP_PRESENT=0 runs the same move with the predicted presentation off (FP G2 video, the "before" side); the gates then fail by design
+        value = os.environ.get('GSTN_FP_PRESENT', '1')
+        unreal.SystemLibrary.execute_console_command(g.worlds()[ini], f'gstn.Link.PredictPartnerPresentation {value}')
+        return 'cvar', f'gstn.Link.PredictPartnerPresentation {value}'
 
     def seen():
         if ini == 0:
