@@ -57,10 +57,14 @@ struct GSTNMINIONRUNTIME_API FGSTN_MinionNetArray : public FFastArraySerializer
 	/** The pack that holds this array (set by the pack, never replicated): the client callbacks need its pack id and world */
 	AGSTN_MinionPack* OwnerPack = nullptr;
 
-	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
-	{
-		return FFastArraySerializer::FastArrayDeltaSerialize<FGSTN_MinionNetItem, FGSTN_MinionNetArray>(Items, DeltaParms, *this);
-	}
+	/**
+	 * The FastArray delta, preceded by the pack anchor (netcode lever 3): one flag bit, then when set FGSTN_MinionNetAnchor over every
+	 * item of the array, and the items in this stream send their positions relative to it. Only the sender decides (the flag is on
+	 * the wire) and it keeps the smaller of the two encodings of the stream, so the anchor never costs bytes;
+	 * gstn.Minion.Net.RelativePositions can differ between machines. When the FastArray finds nothing to send, the
+	 * engine drops the whole property payload, header included
+	 */
+	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms);
 };
 
 template<>

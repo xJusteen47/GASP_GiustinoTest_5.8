@@ -128,6 +128,34 @@ struct GSTNMINIONCORE_API FGSTN_MinionNetQuantization
 };
 
 /**
+ * Pack-relative positions (netcode lever 3). One anchor per serialized pack stream: the per-axis minimum of the quantized positions of
+ * every item in the pack, and per axis the bit width that covers the pack's extent (max - min). An item then sends each axis as
+ * (PositionQ - Min) at that width instead of the 19-bit absolute value. Lossless: the receiver rebuilds the same 19-bit PositionQ, so the
+ * decoded position, the interpolation and every check on it are unchanged. A pack spread over 10 m sends 10 bits per axis instead of 19.
+ *
+ * The anchor is computed at serialize time from the items of that same stream (never stored on an item), so an item sent earlier
+ * against another anchor can never be misread: the anchor and the items it covers always travel together.
+ */
+struct GSTNMINIONCORE_API FGSTN_MinionNetAnchor
+{
+	/** Bits of the per-axis width field: widths 0..19 */
+	static constexpr int32 WidthBits = 5;
+	/** Bits of the anchor on the wire (min + width per axis); the pack stream adds one flag bit in front */
+	static constexpr int32 HeaderBits = 3 * (GSTNMinion::NetBits::Position + WidthBits);
+
+	/** Per-axis minimum of the quantized positions (19-bit values) */
+	uint32 Min[3] = { 0, 0, 0 };
+	/** Per-axis bit width of the offsets; 0 = every item has the same value on that axis (nothing sent) */
+	uint8 Bits[3] = { 0, 0, 0 };
+
+	/** The anchor covering every position in the list (PositionQ triples); an empty list gives all zeros */
+	static FGSTN_MinionNetAnchor FromPositions(TConstArrayView<const uint32*> Positions);
+
+	/** Writes or reads the anchor (HeaderBits bits); a width read above 19 is an error */
+	static bool Serialize(FArchive& Ar, FGSTN_MinionNetAnchor& Anchor);
+};
+
+/**
  * Which optional fields are on the wire. Known to both sides without being sent: the id field is active while the re-pack
  * fallback of 8.1 is, and the extension byte is a property of the minion type (a bridge plugin owns its meaning).
  */
@@ -145,6 +173,12 @@ struct GSTNMINIONCORE_API FGSTN_MinionNetFormat
 	 * only bTypeHasExt decides. Must outlive the Serialize / GetBitSize call
 	 */
 	const TBitArray<>* ExtTypes = nullptr;
+
+	/**
+	 * Set = positions travel as offsets from this anchor at its per-axis widths (the pack stream wrote or read the anchor just before);
+	 * null = absolute 19-bit positions. Must cover the item and outlive the Serialize / GetBitSize call
+	 */
+	const FGSTN_MinionNetAnchor* Anchor = nullptr;
 
 	/** Whether an item of this type carries the extension byte under this format */
 	bool HasExtFor(uint8 TypeIndex) const
