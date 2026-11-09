@@ -641,3 +641,23 @@
 - Gate: build 7 s (new module only); headless `Automation RunTests GSTN` 1459/0/0 (1457 + 2), 0 ensures; SUITE_MINION dedicated + 2 clients 0 % 12/12 PASS first run (7.5 min); play settings restored.
 - PERF-DEBT: added to `docs/notes/perf-debt.md` (tint walk is O(parts x primitives); wire it on state change only).
 - Cost: ~$1.
+
+## Launched hover, fix attempt (laptop, 2026-11-09): NOT closed (2 attempts used), work in progress on `claude/laptop-hover`
+
+- Repro (10-min soak, `Saved/M8Trap/hover-air.txt`, `hover-airtrace.txt`): several minions (slots 9, 25, 53) end at the same point, feet
+  (165.65,-845.03,91.0), ~1 cm above the floor next to the rolled cylinder StaticMeshActor_6 whose face there points slightly down (normal
+  (0.89,-0.46,-0.04)); they stay Launched (grounded 0) until the bench relaunches them.
+- Fix written (unverified): in `GSTN_MinionMovement_Lightweight.cpp`, after the landing branch, if airborne + Launched + Velocity.Z <= 0 + moved
+  < 0.5 cm this frame: a half-radius capsule sweeps 3 cm down; on a walkable hit, depenetrate the full capsule, check clear, land. Best-reading
+  cause (unproven): the single full-capsule 3 cm FindFloor fails when the capsule is pinned between the floor and the lip.
+- Test `GSTNMinion.Runtime.Movement.LaunchedUnderOverhangLands` is RED: the rig now works (minion moves), but the 3 s window is too short
+  for Z >= ~1800 launches (still at Z ~1470-1500 after 3 s: apex ~20 m, ~4 s flight); 4 of 6 variants are not reported failing. Next:
+  give 6 s per variant, assert the lip geometry really reproduces the wedge without the fix (run with the fallback off), then a 10-min soak.
+- Not merged into j. SUITE_MINION not run on this branch. Cost: ~$3 (2 builds, 2 test runs, 1 soak).
+- Last round (2026-11-09, STOP): fallback gated by `gstn.Minion.Move.LaunchedLandFallback` (default 1); tests split (`LaunchedUnderOverhangLands`,
+  `LaunchedUnderOverhangStallsWithoutFallback`), 6 s window. Still red, again a test-rig problem: the steep variants (horizontal 450-1325 cm/s)
+  fly off the 40 m test floor and fall (Z down to -26000); the fix was never exercised on the real wedge. Branch `claude/laptop-hover` = WIP.
+- Next step (if pursued): launch the variants toward the lip from 1-2 m away with low horizontal speed (<= 300 cm/s) so they stay on the floor,
+  confirm the stall with the fallback off, then the 10-min soak. ~$2.
+- Owner option instead of the fix: DefaultLevel has a rotated cylinder (StaticMeshActor_6, roll -80, near (100,-850,240)) whose lip overhangs
+  the floor and traps launched minions at (165,-845,91); moving or reshaping that geometry removes the repro (the bug can still happen elsewhere).

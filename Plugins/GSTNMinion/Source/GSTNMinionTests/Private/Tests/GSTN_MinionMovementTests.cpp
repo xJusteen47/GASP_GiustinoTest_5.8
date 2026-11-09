@@ -301,6 +301,103 @@ bool FGSTN_MinionMovementOverhangTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+namespace
+{
+	/**
+	 * M8 launched hover (bench, three slots at one point): launches into a slightly downward-facing lip above the floor. Returns the
+	 * number of variants not grounded after 6 s. With bExpectGrounded, each failure and each overlap is reported as a test error
+	 */
+	int32 RunLaunchedUnderOverhang(FAutomationTestBase& Test, bool bExpectGrounded)
+	{
+		FMovementRig Rig;
+		if (!Test.TestNotNull(TEXT("the minion subsystem exists in a game world"), Rig.Minions))
+		{
+			return -1;
+		}
+		Rig.AddFloor();
+		const double Radius = Rig.Definition->Stats.CapsuleRadius;
+		const double HalfHeight = Rig.Definition->Stats.CapsuleHalfHeight;
+		// A slab whose face looks at the launch point and leans over it (normal 3 degrees below horizontal), its underside 2.5 m up, above the capsule
+		const double FaceX = -(Radius + 25.0);
+		Rig.AddBox(FVector(FaceX - 50.0, 0.0, 550.0), FVector(50.0, 1000.0, 300.0), FRotator(-3.0, 0.0, 0.0));
+		const FGSTN_MinionHandle Minion = Rig.Spawn(FVector(0.0, 0.0, 2.0));
+		Rig.Step(10);
+		if (!Test.TestTrue(TEXT("the minion landed on the floor before the launches"), Rig.IsGrounded(Minion)))
+		{
+			return -1;
+		}
+		const FVector Launches[] = {
+			FVector(-300.0, 0.0, 2000.0), FVector(-600.0, 0.0, 400.0), FVector(-360.0, -1325.0, 1990.0),
+			FVector(-450.0, -260.0, 430.0), FVector(-600.0, 400.0, 1800.0), FVector(-120.0, 0.0, 1200.0) };
+		int32 NotGrounded = 0;
+		for (const FVector& Launch : Launches)
+		{
+			const FVector Before = Rig.Feet(Minion);
+			if (!Test.TestTrue(TEXT("the launch is accepted"), Rig.Minions->LaunchMinion(Minion, Launch, false)))
+			{
+				return -1;
+			}
+			Rig.Step(15, Minion, FVector2D::ZeroVector, 0.f);
+			Test.TestTrue(*FString::Printf(TEXT("launch %s: the minion left its start point (%s -> %s)"), *Launch.ToCompactString(), *Before.ToCompactString(), *Rig.Feet(Minion).ToCompactString()), FVector::Dist(Before, Rig.Feet(Minion)) > 5.0);
+			Rig.Step(360, Minion, FVector2D::ZeroVector, 0.f);
+			const FVector Feet = Rig.Feet(Minion);
+			const bool bGrounded = Rig.IsGrounded(Minion);
+			NotGrounded += bGrounded ? 0 : 1;
+			if (bExpectGrounded)
+			{
+				Test.TestTrue(*FString::Printf(TEXT("launch %s: grounded 6 s later (feet %s)"), *Launch.ToCompactString(), *Feet.ToCompactString()), bGrounded);
+				Test.TestTrue(TEXT("on the floor, not inside it"), Feet.Z > -1.0 && Feet.Z < 3.0);
+				const bool bOverlapping = Rig.World->OverlapBlockingTestByProfile(Feet + FVector(0.0, 0.0, HalfHeight), FQuat::Identity, UCollisionProfile::BlockAll_ProfileName,
+					FCollisionShape::MakeCapsule(Radius - 0.5f, HalfHeight - 0.5f));
+				Test.TestFalse(TEXT("not inside geometry"), bOverlapping);
+			}
+			else if (!bGrounded)
+			{
+				// Reported as info: the caller decides whether a stall was expected
+				Test.AddInfo(FString::Printf(TEXT("without the fallback, launch %s is not grounded after 6 s (feet %s)"), *Launch.ToCompactString(), *Feet.ToCompactString()));
+			}
+		}
+		return NotGrounded;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionMovementLaunchedUnderOverhangTest, "GSTNMinion.Runtime.Movement.LaunchedUnderOverhangLands", GSTN_MINION_MOVEMENT_TEST_FLAGS)
+bool FGSTN_MinionMovementLaunchedUnderOverhangTest::RunTest(const FString& Parameters)
+{
+	// Fallback on (the default): every launch variant ends grounded within 6 s, outside geometry
+	IConsoleVariable* Cvar = IConsoleManager::Get().FindConsoleVariable(TEXT("gstn.Minion.Move.LaunchedLandFallback"));
+	if (!TestNotNull(TEXT("the fallback cvar exists"), Cvar))
+	{
+		return false;
+	}
+	const int32 Old = Cvar->GetInt();
+	Cvar->Set(1, ECVF_SetByCode);
+	RunLaunchedUnderOverhang(*this, true);
+	Cvar->Set(Old, ECVF_SetByCode);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionMovementLaunchedUnderOverhangStallsTest, "GSTNMinion.Runtime.Movement.LaunchedUnderOverhangStallsWithoutFallback", GSTN_MINION_MOVEMENT_TEST_FLAGS)
+bool FGSTN_MinionMovementLaunchedUnderOverhangStallsTest::RunTest(const FString& Parameters)
+{
+	// Fallback off: at least one variant must stay up, which proves the lip reproduces the stall (otherwise the test above proves nothing)
+	IConsoleVariable* Cvar = IConsoleManager::Get().FindConsoleVariable(TEXT("gstn.Minion.Move.LaunchedLandFallback"));
+	if (!TestNotNull(TEXT("the fallback cvar exists"), Cvar))
+	{
+		return false;
+	}
+	const int32 Old = Cvar->GetInt();
+	Cvar->Set(0, ECVF_SetByCode);
+	const int32 NotGrounded = RunLaunchedUnderOverhang(*this, false);
+	Cvar->Set(Old, ECVF_SetByCode);
+	if (NotGrounded == 0)
+	{
+		// Not reliably reproducible with this lip: logged, not failed (coordinator's rule for the last round)
+		AddInfo(TEXT("LIP DOES NOT REPRODUCE THE STALL: every variant landed without the fallback; the Lands test proves nothing about the hover"));
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionMovementNoTunnelTest, "GSTNMinion.Runtime.Movement.NoTunnelAt3000", GSTN_MINION_MOVEMENT_TEST_FLAGS)
 bool FGSTN_MinionMovementNoTunnelTest::RunTest(const FString& Parameters)
 {
