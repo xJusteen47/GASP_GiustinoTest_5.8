@@ -240,4 +240,70 @@ bool FGSTN_MinionFrameWrapTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionCodecAnchorTest, "GSTNMinion.Core.Net.PackRelativePositions", GSTNMinionTest::Flags)
+bool FGSTN_MinionCodecAnchorTest::RunTest(const FString& Parameters)
+{
+	// A pack of 16 spread over +-5 m around a far point: every item reads back bit for bit and costs less than the absolute layout
+	FGSTN_MinionNetQuantization Quant;
+	FRandomStream Random(11);
+	const FVector3f Center(150000.f, -90000.f, 1200.f);
+	TArray<FGSTN_MinionNetWireItem> Items;
+	TArray<const uint32*> Positions;
+	Items.SetNum(16);
+	for (FGSTN_MinionNetWireItem& Item : Items)
+	{
+		FGSTN_MinionNetState State = RandomState(Random, FVector3f::ZeroVector);
+		State.Position = Center + FVector3f(Random.FRandRange(-500.f, 500.f), Random.FRandRange(-500.f, 500.f), Random.FRandRange(0.f, 40.f));
+		FGSTN_MinionNetCodec::Quantize(State, Quant, Item);
+	}
+	for (const FGSTN_MinionNetWireItem& Item : Items)
+	{
+		Positions.Add(Item.PositionQ);
+	}
+	const FGSTN_MinionNetAnchor Anchor = FGSTN_MinionNetAnchor::FromPositions(Positions);
+	TestTrue(TEXT("10 m extent fits in 10 bits per horizontal axis"), Anchor.Bits[0] <= 10 && Anchor.Bits[1] <= 10);
+	TestTrue(TEXT("40 cm of height fits in 6 bits"), Anchor.Bits[2] <= 6);
+
+	FGSTN_MinionNetFormat Absolute;
+	FGSTN_MinionNetFormat Relative;
+	Relative.Anchor = &Anchor;
+	FBitWriter Writer(8192, true);
+	FGSTN_MinionNetAnchor AnchorCopy = Anchor;
+	FGSTN_MinionNetAnchor::Serialize(Writer, AnchorCopy);
+	TestEqual(TEXT("Anchor header size"), static_cast<int64>(Writer.GetNumBits()), static_cast<int64>(FGSTN_MinionNetAnchor::HeaderBits));
+	int64 ItemBits = 0;
+	for (FGSTN_MinionNetWireItem& Item : Items)
+	{
+		const int64 Before = Writer.GetNumBits();
+		FGSTN_MinionNetCodec::Serialize(Writer, Item, Relative);
+		ItemBits += Writer.GetNumBits() - Before;
+		TestEqual(TEXT("Relative bit size matches the stream"), static_cast<int64>(FGSTN_MinionNetCodec::GetBitSize(Item, Relative)), Writer.GetNumBits() - Before);
+		TestTrue(TEXT("Relative item is smaller than absolute by at least 3 x 9 bits"),
+			FGSTN_MinionNetCodec::GetBitSize(Item, Relative) + 27 <= FGSTN_MinionNetCodec::GetBitSize(Item, Absolute));
+	}
+
+	FBitReader Reader(Writer.GetData(), Writer.GetNumBits());
+	FGSTN_MinionNetAnchor ReadAnchor;
+	TestTrue(TEXT("Anchor reads back"), FGSTN_MinionNetAnchor::Serialize(Reader, ReadAnchor));
+	FGSTN_MinionNetFormat ReadFormat;
+	ReadFormat.Anchor = &ReadAnchor;
+	for (const FGSTN_MinionNetWireItem& Item : Items)
+	{
+		FGSTN_MinionNetWireItem Read;
+		FGSTN_MinionNetCodec::Serialize(Reader, Read, ReadFormat);
+		TestTrue(TEXT("Relative item reads back identical (lossless vs absolute)"), Read == Item);
+	}
+	TestTrue(TEXT("Stream consumed exactly"), Reader.AtEnd() && !Reader.IsError());
+
+	// Degenerate packs: one item (all widths 0) and a pack across the whole range (19 bits, never more)
+	const uint32 One[3] = { 7, 8, 9 };
+	const FGSTN_MinionNetAnchor Single = FGSTN_MinionNetAnchor::FromPositions({ One });
+	TestTrue(TEXT("Single item: no position bits"), Single.Bits[0] == 0 && Single.Bits[1] == 0 && Single.Bits[2] == 0 && Single.Min[2] == 9);
+	const uint32 Lo[3] = { 0, 0, 0 };
+	const uint32 Hi[3] = { GSTNMinionQuant::PositionMaxValue, 1, 0 };
+	const FGSTN_MinionNetAnchor Wide = FGSTN_MinionNetAnchor::FromPositions({ Lo, Hi });
+	TestTrue(TEXT("Full range: 19 bits, 1 bit, 0 bits"), Wide.Bits[0] == 19 && Wide.Bits[1] == 1 && Wide.Bits[2] == 0);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

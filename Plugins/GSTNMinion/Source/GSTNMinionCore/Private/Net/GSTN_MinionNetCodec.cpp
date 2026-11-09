@@ -212,9 +212,31 @@ bool FGSTN_MinionNetCodec::Serialize(FArchive& Ar, FGSTN_MinionNetWireItem& Item
 		Item.GlobalId = 0;
 	}
 
-	for (uint32& Axis : Item.PositionQ)
+	for (int32 Axis = 0; Axis < 3; ++Axis)
 	{
-		SerializeField(Ar, Axis, Bits::Position);
+		if (!Format.Anchor)
+		{
+			SerializeField(Ar, Item.PositionQ[Axis], Bits::Position);
+			continue;
+		}
+		const int32 Width = Format.Anchor->Bits[Axis];
+		const uint32 Min = Format.Anchor->Min[Axis];
+		uint32 Offset = 0;
+		if (Ar.IsSaving())
+		{
+			// The anchor was built from this stream's items, so the offset always fits; clamp only guards a misuse
+			const uint32 MaxOffset = (1u << Width) - 1u;
+			ensureMsgf(Item.PositionQ[Axis] >= Min && Item.PositionQ[Axis] - Min <= MaxOffset, TEXT("Minion item outside its pack anchor"));
+			Offset = Item.PositionQ[Axis] >= Min ? FMath::Min(Item.PositionQ[Axis] - Min, MaxOffset) : 0u;
+		}
+		if (Width > 0)
+		{
+			SerializeField(Ar, Offset, Width);
+		}
+		if (Ar.IsLoading())
+		{
+			Item.PositionQ[Axis] = FMath::Min(Min + Offset, static_cast<uint32>(GSTNMinionQuant::PositionMaxValue));
+		}
 	}
 	SerializeNarrow(Ar, Item.YawQ, Bits::Yaw);
 	SerializeNarrow(Ar, Item.ActionState, Bits::ActionState);
@@ -248,8 +270,54 @@ int32 FGSTN_MinionNetCodec::GetBitSize(const FGSTN_MinionNetWireItem& Item, cons
 	{
 		Total += 1 + (Item.bHasGlobalId ? Bits::GlobalId : 0);
 	}
-	Total += 3 * Bits::Position + Bits::Yaw + Bits::ActionState + Bits::MoveId + Bits::MoveStartFrame + Bits::FrameStamp
+	Total += Format.Anchor ? Format.Anchor->Bits[0] + Format.Anchor->Bits[1] + Format.Anchor->Bits[2] : 3 * Bits::Position;
+	Total += Bits::Yaw + Bits::ActionState + Bits::MoveId + Bits::MoveStartFrame + Bits::FrameStamp
 		+ Bits::HitCounter + Bits::Health + Bits::Speed + Bits::Flags;
 	Total += Format.HasExtFor(Item.TypeIndex) ? Bits::ExtByte : 0;
 	return Total;
+}
+
+FGSTN_MinionNetAnchor FGSTN_MinionNetAnchor::FromPositions(TConstArrayView<const uint32*> Positions)
+{
+	FGSTN_MinionNetAnchor Anchor;
+	if (Positions.IsEmpty())
+	{
+		return Anchor;
+	}
+	uint32 Max[3] = { 0, 0, 0 };
+	for (int32 Axis = 0; Axis < 3; ++Axis)
+	{
+		Anchor.Min[Axis] = MAX_uint32;
+	}
+	for (const uint32* Position : Positions)
+	{
+		for (int32 Axis = 0; Axis < 3; ++Axis)
+		{
+			// Clamp to the 19-bit domain so a stray value can never ask for a width the field cannot hold
+			const uint32 Value = FMath::Min(Position[Axis], static_cast<uint32>(GSTNMinionQuant::PositionMaxValue));
+			Anchor.Min[Axis] = FMath::Min(Anchor.Min[Axis], Value);
+			Max[Axis] = FMath::Max(Max[Axis], Value);
+		}
+	}
+	for (int32 Axis = 0; Axis < 3; ++Axis)
+	{
+		const uint32 Extent = Max[Axis] - Anchor.Min[Axis];
+		// Smallest width whose largest value (2^w - 1) reaches the extent: 0 for a flat axis, at most 19
+		Anchor.Bits[Axis] = static_cast<uint8>(Extent == 0 ? 0 : FMath::FloorLog2(Extent) + 1);
+	}
+	return Anchor;
+}
+
+bool FGSTN_MinionNetAnchor::Serialize(FArchive& Ar, FGSTN_MinionNetAnchor& Anchor)
+{
+	for (int32 Axis = 0; Axis < 3; ++Axis)
+	{
+		SerializeField(Ar, Anchor.Min[Axis], GSTNMinion::NetBits::Position);
+		SerializeNarrow(Ar, Anchor.Bits[Axis], WidthBits);
+		if (Ar.IsLoading() && Anchor.Bits[Axis] > GSTNMinion::NetBits::Position)
+		{
+			Ar.SetError();
+		}
+	}
+	return !Ar.IsError();
 }

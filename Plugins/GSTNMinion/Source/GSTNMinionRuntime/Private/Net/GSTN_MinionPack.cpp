@@ -7,12 +7,45 @@
 #include "Net/GSTN_MinionClientRegistry.h"
 #include "Net/UnrealNetwork.h"
 #include "Runtime/GSTN_MinionCombatSubsystem.h"
+#include "UObject/CoreNet.h"
 
 namespace
 {
 	/** Types with an extension byte, by type index. Empty while no type has one, which keeps the format at the v1 layout */
 	TBitArray<> GExtTypes;
 	bool GAnyExtType = false;
+
+	/** Anchor of the pack stream being (de)serialized on this thread; null outside FGSTN_MinionNetArray::NetDeltaSerialize */
+	thread_local const FGSTN_MinionNetAnchor* GStreamAnchor = nullptr;
+
+	TAutoConsoleVariable<bool> CVarRelativePositions(
+		TEXT("gstn.Minion.Net.RelativePositions"),
+		true,
+		TEXT("Sender side: minion positions travel relative to a per-pack-stream anchor (lossless, fewer bits). 0 = absolute 19-bit positions."));
+
+	/** Authority, process-wide: what the anchor saved since the last print (game thread only, like the replication that fills it) */
+	struct FAnchorStats
+	{
+		int64 Streams = 0;
+		int64 RelativeStreams = 0;
+		int64 AbsoluteBits = 0;
+		int64 SentBits = 0;
+		int64 WidthSum = 0;
+	};
+	FAnchorStats GAnchorStats;
+
+	FAutoConsoleCommand AnchorStatsCommand(
+		TEXT("gstn.Minion.Net.AnchorStats"),
+		TEXT("Prints and resets the pack-relative position stats: pack streams sent, how many used the anchor, bits sent vs all-absolute."),
+		FConsoleCommandDelegate::CreateLambda([]()
+		{
+			const FAnchorStats& S = GAnchorStats;
+			UE_LOG(LogTemp, Display, TEXT("MinionAnchor streams=%lld relative=%lld absoluteBits=%lld sentBits=%lld saved=%.1f%% avgWidthSum=%.1f"),
+				S.Streams, S.RelativeStreams, S.AbsoluteBits, S.SentBits,
+				S.AbsoluteBits > 0 ? 100.0 * (S.AbsoluteBits - S.SentBits) / S.AbsoluteBits : 0.0,
+				S.Streams > 0 ? static_cast<double>(S.WidthSum) / S.Streams : 0.0);
+			GAnchorStats = FAnchorStats();
+		}));
 
 	/** v1 wire format: no global id field (re-pack fallback off); the extension byte only for the types that own one (a bridge's) */
 	FGSTN_MinionNetFormat PackItemFormat()
@@ -37,9 +70,81 @@ void AGSTN_MinionPack::SetNetExtTypes(const TBitArray<>& InExtTypes)
 
 bool FGSTN_MinionNetItem::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
 {
-	const FGSTN_MinionNetFormat Format = PackItemFormat();
+	FGSTN_MinionNetFormat Format = PackItemFormat();
+	Format.Anchor = GStreamAnchor;
 	bOutSuccess = FGSTN_MinionNetCodec::Serialize(Ar, Wire, Format);
 	return true;
+}
+
+bool FGSTN_MinionNetArray::NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+{
+	FGSTN_MinionNetAnchor Anchor;
+	bool bRelative = false;
+	if (DeltaParms.Writer && CVarRelativePositions.GetValueOnAnyThread() && !Items.IsEmpty())
+	{
+		// Two passes, keep the smaller: the anchor header only pays off when enough items of the pack change in this stream, and only
+		// the FastArray knows which ones do. Calling it twice is safe: the write path only rebuilds the same new base state
+		TArray<const uint32*, TInlineAllocator<AGSTN_MinionPack::MaxItems>> Positions;
+		for (const FGSTN_MinionNetItem& Item : Items)
+		{
+			Positions.Add(Item.Wire.PositionQ);
+		}
+		Anchor = FGSTN_MinionNetAnchor::FromPositions(Positions);
+
+		FBitWriter* const OutWriter = DeltaParms.Writer;
+		FNetBitWriter RelativeWriter(DeltaParms.Map, 0);
+		FNetBitWriter AbsoluteWriter(DeltaParms.Map, 0);
+		DeltaParms.Writer = &RelativeWriter;
+		bool bWrote = false;
+		{
+			TGuardValue<const FGSTN_MinionNetAnchor*> AnchorGuard(GStreamAnchor, &Anchor);
+			bWrote = FFastArraySerializer::FastArrayDeltaSerialize<FGSTN_MinionNetItem, FGSTN_MinionNetArray>(Items, DeltaParms, *this);
+		}
+		if (bWrote)
+		{
+			DeltaParms.Writer = &AbsoluteWriter;
+			bWrote = FFastArraySerializer::FastArrayDeltaSerialize<FGSTN_MinionNetItem, FGSTN_MinionNetArray>(Items, DeltaParms, *this);
+		}
+		DeltaParms.Writer = OutWriter;
+		if (!bWrote)
+		{
+			return false;
+		}
+		bRelative = RelativeWriter.GetNumBits() + FGSTN_MinionNetAnchor::HeaderBits < AbsoluteWriter.GetNumBits();
+		GAnchorStats.Streams++;
+		GAnchorStats.RelativeStreams += bRelative ? 1 : 0;
+		GAnchorStats.AbsoluteBits += AbsoluteWriter.GetNumBits();
+		GAnchorStats.SentBits += 1 + (bRelative ? RelativeWriter.GetNumBits() + FGSTN_MinionNetAnchor::HeaderBits : AbsoluteWriter.GetNumBits());
+		GAnchorStats.WidthSum += Anchor.Bits[0] + Anchor.Bits[1] + Anchor.Bits[2];
+
+		OutWriter->WriteBit(bRelative ? 1 : 0);
+		if (bRelative)
+		{
+			FGSTN_MinionNetAnchor::Serialize(*OutWriter, Anchor);
+		}
+		FNetBitWriter& Chosen = bRelative ? RelativeWriter : AbsoluteWriter;
+		OutWriter->SerializeBits(Chosen.GetData(), Chosen.GetNumBits());
+		return true;
+	}
+	if (DeltaParms.Writer)
+	{
+		DeltaParms.Writer->WriteBit(0);
+	}
+	else if (DeltaParms.Reader)
+	{
+		bRelative = DeltaParms.Reader->ReadBit() != 0;
+		if (bRelative && !FGSTN_MinionNetAnchor::Serialize(*DeltaParms.Reader, Anchor))
+		{
+			return false;
+		}
+		if (DeltaParms.Reader->IsError())
+		{
+			return false;
+		}
+	}
+	// Items read the anchor through the thread-local while the FastArray (de)serializes this stream, and only then
+	TGuardValue<const FGSTN_MinionNetAnchor*> AnchorGuard(GStreamAnchor, bRelative ? &Anchor : nullptr);
+	return FFastArraySerializer::FastArrayDeltaSerialize<FGSTN_MinionNetItem, FGSTN_MinionNetArray>(Items, DeltaParms, *this);
 }
 
 void FGSTN_MinionNetItem::PostReplicatedAdd(const FGSTN_MinionNetArray& Array)
