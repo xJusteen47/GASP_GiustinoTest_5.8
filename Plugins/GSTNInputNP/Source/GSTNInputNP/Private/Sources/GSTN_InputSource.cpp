@@ -55,6 +55,17 @@ void UGSTN_PlayerInputSource::ProduceInput(const FGSTN_InputSourceContext& Conte
 		Out.StickY = FGSTN_DirectionClassifier::QuantizeStickAxis(static_cast<float>(Stick.Y));
 	}
 
+	if (const UInputAction* AimStickAction = Context.Config->GetAimStickAction())
+	{
+		FVector2D AimStick = PlayerInput->GetActionValue(AimStickAction).Get<FVector2D>();
+		if (AimStick.SizeSquared() > 1.0)
+		{
+			AimStick = AimStick.GetSafeNormal();
+		}
+		Out.AimStickX = FGSTN_DirectionClassifier::QuantizeStickAxis(static_cast<float>(AimStick.X));
+		Out.AimStickY = FGSTN_DirectionClassifier::QuantizeStickAxis(static_cast<float>(AimStick.Y));
+	}
+
 	const FRotator ControlRotation = PlayerController->GetControlRotation();
 	Out.CameraYaw = FGSTN_DirectionClassifier::QuantizeYaw(static_cast<float>(ControlRotation.Yaw));
 

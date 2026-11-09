@@ -532,6 +532,13 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (EditCondition = "AimPolicy == EGSTN_AimPolicy::Camera", ClampMin = "0", ForceUnits = "Frames"))
 	int32 TurnUntilFrame = 0;
 
+	/**
+	 * Right-stick steering during startup (plan precisione-weakpoint 5, FGSTN_StartupSteer): the most the move's direction can turn
+	 * from the facing it started with, either way. On top of AimPolicy, for every policy. 0 = the aim stick does not steer this move
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (ClampMin = "0.0", ClampMax = "90.0", ForceUnits = "deg"))
+	float MaxSteerDegrees = 20.f;
+
 	/** Startup override window (combat.md 8.3). -1 = the default of the command tier (settings), 0 = none */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Override", meta = (ClampMin = "-1", ForceUnits = "Frames"))
 	int32 OverrideFrames = -1;

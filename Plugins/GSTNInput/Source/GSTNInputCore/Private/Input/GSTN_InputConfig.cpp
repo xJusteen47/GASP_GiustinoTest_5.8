@@ -48,6 +48,7 @@ void UGSTN_InputConfig::ResolveActions()
 		ResolvedButtonActions.Add(Button.Action.IsNull() ? nullptr : Button.Action.LoadSynchronous());
 	}
 	ResolvedMoveAction = MoveAction.IsNull() ? nullptr : MoveAction.LoadSynchronous();
+	ResolvedAimStickAction = AimStickAction.IsNull() ? nullptr : AimStickAction.LoadSynchronous();
 }
 
 UInputAction* UGSTN_InputConfig::GetButtonAction(int32 ButtonIndex) const

@@ -47,6 +47,13 @@ struct FGSTN_InputCmd
 	uint16 AimYaw = 0;
 	uint16 AimPitch = 0;
 
+	/**
+	 * Aim stick (the right stick, UGSTN_InputConfig::AimStickAction) as on the controller (+Y up), 127 = 1. Steers a move during its
+	 * startup (FGSTN_StartupSteer), so the sim never reads the camera for it. Costs one bit while centred
+	 */
+	int8 AimStickX = 0;
+	int8 AimStickY = 0;
+
 	void NetSerialize(const FNetSerializeParams& P)
 	{
 		P.Ar.SerializeIntPacked(HeldButtons);
@@ -78,6 +85,19 @@ struct FGSTN_InputCmd
 		else
 		{
 			ForcedCommand = 0;
+		}
+
+		uint8 bAimStick = (AimStickX != 0 || AimStickY != 0) ? 1 : 0;
+		P.Ar.SerializeBits(&bAimStick, 1);
+		if (bAimStick)
+		{
+			P.Ar << AimStickX;
+			P.Ar << AimStickY;
+		}
+		else
+		{
+			AimStickX = 0;
+			AimStickY = 0;
 		}
 	}
 

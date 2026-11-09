@@ -75,6 +75,14 @@ public:
 	bool bSendCameraAim = false;
 
 	/**
+	 * The 2D aim action (the right stick, +Y up), sent as FGSTN_InputCmd::AimStickX/Y: it steers a move during its startup
+	 * (plan precisione-weakpoint 5). A gyro device can feed the same action; the simulation does not know where it comes from.
+	 * Unset: the aim stick is always centred and nothing steers
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	TSoftObjectPtr<UInputAction> AimStickAction;
+
+	/**
 	 * Loads the input actions (synchronously, if they are not loaded yet) and keeps them for the getters below. Call it once
 	 * when the host sets up (BeginPlay, a loadout change), never from a tick: the input source reads the resolved actions every
 	 * frame and does not resolve anything itself. Calling it again after the asset changed refreshes them.
@@ -87,6 +95,9 @@ public:
 	/** The resolved move action, null if unset or ResolveActions was not called */
 	UInputAction* GetMoveAction() const { return ResolvedMoveAction; }
 
+	/** The resolved aim stick action, null if unset or ResolveActions was not called */
+	UInputAction* GetAimStickAction() const { return ResolvedAimStickAction; }
+
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
 #endif
@@ -98,4 +109,7 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> ResolvedMoveAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> ResolvedAimStickAction;
 };

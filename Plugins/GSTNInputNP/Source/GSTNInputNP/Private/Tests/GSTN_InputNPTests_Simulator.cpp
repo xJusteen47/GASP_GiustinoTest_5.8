@@ -634,6 +634,20 @@ bool FGSTN_NPCommandAimTest::RunTest(const FString& Parameters)
 	FGSTN_InputCmd Repeated = With;
 	Repeated.PrepareRepeatedInput();
 	TestTrue(TEXT("a repeated input keeps the aim"), Repeated.bHasAim && Repeated.AimYaw == 12345 && Repeated.AimPitch == 65000);
+
+	// The aim stick (startup steering): one bit while centred, two bytes when pushed, carried over by a repeated input
+	FGSTN_InputCmd Steer = Without;
+	Steer.AimStickX = -90;
+	Steer.AimStickY = 127;
+	int64 BitsSteer = 0;
+	const FGSTN_InputCmd LoadedSteer = RoundTrip(Steer, BitsSteer);
+	TestEqual(TEXT("aim stick x"), static_cast<int32>(LoadedSteer.AimStickX), -90);
+	TestEqual(TEXT("aim stick y"), static_cast<int32>(LoadedSteer.AimStickY), 127);
+	TestEqual(TEXT("the aim stick costs two bytes"), BitsSteer - BitsWithout, static_cast<int64>(16));
+	TestEqual(TEXT("a centred aim stick reads as 0"), static_cast<int32>(LoadedWithout.AimStickX) + LoadedWithout.AimStickY, 0);
+	FGSTN_InputCmd RepeatedSteer = Steer;
+	RepeatedSteer.PrepareRepeatedInput();
+	TestTrue(TEXT("a repeated input keeps the aim stick"), RepeatedSteer.AimStickX == -90 && RepeatedSteer.AimStickY == 127);
 	return true;
 }
 
