@@ -48,6 +48,7 @@ changes nothing until a level spawns minions; nothing in the other plugins knows
   = 4 promoted fighters alive). The client swap and the wire flag are G9b (see Promotion presentation).
 - Bench: `gstn.Minion.Bench.Wave <N> <CorpseSeconds=1>`, `gstn.Minion.Bench.Kill`. Tests: `GSTNMinion.Core.Wave.*`,
   `GSTNMinion.Runtime.{Corpse,Wave,Promote}.*`; harness `minion_wave`.
+- Bench hover repro: `gstn.Minion.Bench.LaunchAt X Y Z [Count=8] [HorizSpeed=250] [VertSpeed=600] [Period=20]` (or `off`) ring-places minions around (X,Y) and relaunches them at it every Period frames; stalls show as AIR lines with `gstn.Minion.Bench.VerbosePenetration`.
 
 ## Content without C++ (acceptance 3)
 

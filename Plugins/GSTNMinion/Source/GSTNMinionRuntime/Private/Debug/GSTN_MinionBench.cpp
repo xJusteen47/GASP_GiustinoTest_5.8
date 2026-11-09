@@ -279,6 +279,32 @@ namespace
 			Bench->Promote(Path, Near);
 		}));
 
+	FAutoConsoleCommandWithWorldAndArgs BenchLaunchAtCommand(
+		TEXT("gstn.Minion.Bench.LaunchAt"),
+		TEXT("gstn.Minion.Bench.LaunchAt X Y Z [Count=8] [HorizSpeed=250] [VertSpeed=600] [Period=20] | off: minions on a 120-200 cm ring around (X,Y), relaunched at it every Period frames."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UGSTN_MinionBenchSubsystem* Bench = UGSTN_MinionBenchSubsystem::Get(World);
+			if (!Bench)
+			{
+				UE_LOG(LogGSTNMinion, Warning, TEXT("gstn.Minion.Bench.LaunchAt: no bench in this world"));
+				return;
+			}
+			if (Args.Num() > 0 && Args[0].Equals(TEXT("off"), ESearchCase::IgnoreCase))
+			{
+				Bench->StopLaunchAt();
+				return;
+			}
+			if (Args.Num() < 3)
+			{
+				UE_LOG(LogGSTNMinion, Warning, TEXT("gstn.Minion.Bench.LaunchAt X Y Z [Count=8] [HorizSpeed=250] [VertSpeed=600] [Period=20] | off"));
+				return;
+			}
+			Bench->StartLaunchAt(FVector(FCString::Atod(*Args[0]), FCString::Atod(*Args[1]), FCString::Atod(*Args[2])),
+				Args.Num() > 3 ? FCString::Atoi(*Args[3]) : 8, Args.Num() > 4 ? FCString::Atof(*Args[4]) : 250.f,
+				Args.Num() > 5 ? FCString::Atof(*Args[5]) : 600.f, Args.Num() > 6 ? FCString::Atoi(*Args[6]) : 20);
+		}));
+
 	FAutoConsoleCommandWithWorld BenchClearCommand(
 		TEXT("gstn.Minion.Bench.Clear"),
 		TEXT("Despawns every bench minion."),
@@ -833,8 +859,80 @@ AActor* UGSTN_MinionBenchSubsystem::Promote(const FString& FighterClassPath, TOp
 	return Fighter;
 }
 
+int32 UGSTN_MinionBenchSubsystem::StartLaunchAt(const FVector& Target, int32 Count, float HorizSpeed, float VertSpeed, int32 PeriodFrames)
+{
+	UWorld* World = GetWorld();
+	UGSTN_MinionCombatSubsystem* Minions = UGSTN_MinionCombatSubsystem::GetActive(World);
+	if (!Minions)
+	{
+		UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: the minion subsystem is not active here (client world?)"));
+		return 0;
+	}
+	Clear();
+	UGSTN_MinionDefinition* Definition = ResolveDefinition();
+	// Idle: the Massacre draw must not run beside the fixed relaunch
+	Scenario = EGSTN_MinionBenchScenario::Idle;
+	BenchSeconds = 0.f;
+	const FGSTN_MinionStats& Stats = Definition->Stats;
+	const double HalfHeight = FMath::Max(Stats.CapsuleHalfHeight, Stats.CapsuleRadius);
+	const FCollisionShape Capsule = FCollisionShape::MakeCapsule(Stats.CapsuleRadius, static_cast<float>(HalfHeight));
+	FCollisionObjectQueryParams ObjectQuery;
+	for (const TEnumAsByte<ECollisionChannel> Channel : Minions->GetMovementSettings().BlockingObjectTypes)
+	{
+		ObjectQuery.AddObjectTypesToQuery(Channel);
+	}
+	Count = FMath::Max(Count, 0);
+	int32 Queued = 0;
+	int32 Skipped = 0;
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		// Fixed angle per slot; radius cycles 120, 160, 200 cm
+		const double Angle = UE_TWO_PI * Index / FMath::Max(Count, 1);
+		const double Radius = 120.0 + 40.0 * (Index % 3);
+		FVector Location = FVector(Target.X + FMath::Cos(Angle) * Radius, Target.Y + FMath::Sin(Angle) * Radius, Target.Z);
+		// Capsule sweep down from 200 cm above Target.Z to 600 cm below it: the floor under the ring point
+		const FVector SweepStart = Location + FVector(0.0, 0.0, 200.0 + HalfHeight);
+		const FVector SweepEnd = Location + FVector(0.0, 0.0, HalfHeight - 600.0);
+		FHitResult Hit;
+		if (World->SweepSingleByObjectType(Hit, SweepStart, SweepEnd, FQuat::Identity, ObjectQuery, Capsule, FCollisionQueryParams(SCENE_QUERY_STAT(GSTN_MinionBenchLaunchAt), false)))
+		{
+			if (Hit.bStartPenetrating)
+			{
+				++Skipped;
+				continue;
+			}
+			Location = Hit.Location - FVector(0.0, 0.0, HalfHeight - 1.0);
+		}
+		const FRotator Facing = (Target - Location).Rotation();
+		const FGSTN_MinionHandle Handle = UGSTN_MinionSpawner::Spawn(World, Definition, FTransform(FRotator(0.0, Facing.Yaw, 0.0), Location), FGSTN_MinionSpawnParams());
+		if (!Handle.IsNull())
+		{
+			Handles.Add(Handle);
+			++Queued;
+		}
+	}
+	Minions->ResetBenchTotals();
+	ResetCounters(Minions->GetStore().Capacity());
+	BindMovementHook(Minions);
+	bLaunchAt = true;
+	LaunchAtTarget = Target;
+	LaunchAtHoriz = HorizSpeed;
+	LaunchAtVert = VertSpeed;
+	LaunchAtPeriod = FMath::Max(PeriodFrames, 1);
+	UE_LOG(LogGSTNMinion, Log, TEXT("Bench: LaunchAt %d minions queued around %s, horiz %.0f vert %.0f every %d frames, %d ring points skipped"), Queued,
+		*Target.ToCompactString(), HorizSpeed, VertSpeed, LaunchAtPeriod, Skipped);
+	return Queued;
+}
+
+void UGSTN_MinionBenchSubsystem::StopLaunchAt()
+{
+	bLaunchAt = false;
+	UE_LOG(LogGSTNMinion, Log, TEXT("Bench: LaunchAt stopped"));
+}
+
 void UGSTN_MinionBenchSubsystem::Clear()
 {
+	bLaunchAt = false;
 	if (UGSTN_MinionBrainSubsystem* Brain = UGSTN_MinionBrainSubsystem::Get(GetWorld()))
 	{
 		for (const FGSTN_MinionHandle& Handle : Handles)
@@ -1152,6 +1250,22 @@ void UGSTN_MinionBenchSubsystem::HandleMovementStepped(int32 Frame, TConstArrayV
 					*GetNameSafe(Component->GetOwner()), *Previous.ToCompactString(), *Now.ToCompactString(), Frame);
 				break;
 			}
+		}
+	}
+
+	// LaunchAt: every minion is launched at the target in handle order, no random draw (applied by the next movement step)
+	if (bLaunchAt && Frame % LaunchAtPeriod == 0)
+	{
+		for (const FGSTN_MinionHandle& Handle : Handles)
+		{
+			if (!Minions->IsValidHandle(Handle))
+			{
+				continue;
+			}
+			const FVector Position(Store.Position[Handle.Index]);
+			FVector Horizontal = LaunchAtTarget - Position;
+			Horizontal.Z = 0.0;
+			Minions->LaunchMinion(Handle, Horizontal.GetSafeNormal() * LaunchAtHoriz + FVector(0.0, 0.0, LaunchAtVert), false);
 		}
 	}
 

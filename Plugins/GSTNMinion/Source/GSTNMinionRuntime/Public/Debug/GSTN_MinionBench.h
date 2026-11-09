@@ -112,6 +112,17 @@ public:
 	 */
 	AActor* Promote(const FString& FighterClassPath, TOptional<FVector> Near = TOptional<FVector>());
 
+	/**
+	 * Hover repro (gstn.Minion.Bench.LaunchAt): clears the bench, places Count minions on a ring of 120 to 200 cm around (Target.X, Target.Y)
+	 * on the floor found by a trace down from Target.Z + 200, and every PeriodFrames fixed frames launches each of them (the same
+	 * LaunchMinion call as Massacre) horizontally at the target at HorizSpeed cm/s plus VertSpeed cm/s up. Fixed angle per slot, no
+	 * random stream. Stalls show in the AIR / stuck counters (gstn.Minion.Bench.VerbosePenetration). Returns how many were queued
+	 */
+	int32 StartLaunchAt(const FVector& Target, int32 Count, float HorizSpeed, float VertSpeed, int32 PeriodFrames);
+
+	/** Stops the relaunches of StartLaunchAt (the minions stay) */
+	void StopLaunchAt();
+
 	/** Despawns every bench minion */
 	void Clear();
 
@@ -174,6 +185,13 @@ private:
 
 	/** Massacre launches (seeded from gstn.Minion.Bench.Seed at each spawn) */
 	FRandomStream LaunchStream;
+
+	/** StartLaunchAt state: the relaunch aims at LaunchAtTarget (XY) every LaunchAtPeriod frames */
+	bool bLaunchAt = false;
+	FVector LaunchAtTarget = FVector::ZeroVector;
+	float LaunchAtHoriz = 250.f;
+	float LaunchAtVert = 600.f;
+	int32 LaunchAtPeriod = 20;
 
 	// Robustness counters and their per-slot state (store capacity entries)
 	int32 FellBelowCourse = 0;

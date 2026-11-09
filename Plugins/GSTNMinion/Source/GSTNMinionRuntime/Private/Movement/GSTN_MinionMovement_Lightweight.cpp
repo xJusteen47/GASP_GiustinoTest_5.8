@@ -14,8 +14,8 @@ namespace
 {
 	/** Test switch: 0 turns off the Launched landing fallback (the M8 launched hover repro test uses it) */
 	TAutoConsoleVariable<int32> CVarLaunchedLandFallback(
-		TEXT("gstn.Minion.Move.LaunchedLandFallback"), 1,
-		TEXT("1: a descending Launched minion that made no progress lands on a floor found by a thin probe (default). 0: off, for the hover repro test."),
+		TEXT("gstn.Minion.Move.LaunchedLandFallback"), 0,
+		TEXT("1: a descending Launched minion that made no progress lands on a floor found by a thin probe. 0: off (default: the hover was not reproduced with gstn.Minion.Bench.LaunchAt, 2026-11-09)."),
 		ECVF_Default);
 
 	/** Distance a capsule is pulled back from a blocking hit, so the next sweep does not start touching the surface */
