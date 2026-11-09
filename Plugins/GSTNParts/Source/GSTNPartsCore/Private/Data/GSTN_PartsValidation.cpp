@@ -194,6 +194,10 @@ void FGSTN_PartsValidation::ValidateParts(TConstArrayView<FGSTN_PartDefinition> 
 		{
 			Report.AddError(FString::Printf(TEXT("%s: hardness %d is outside 0..%d."), *Label, Part.Hardness, GSTN_PartsLimits::MaxHardness));
 		}
+		if (Part.WoundedHardness < -1 || Part.WoundedHardness > GSTN_PartsLimits::MaxHardness)
+		{
+			Report.AddError(FString::Printf(TEXT("%s: the wounded hardness %d is outside -1..%d (-1 = cannot be wounded)."), *Label, Part.WoundedHardness, GSTN_PartsLimits::MaxHardness));
+		}
 		for (const TPair<FName, int32>& Override : Part.HurtboxHardnessOverride)
 		{
 			if (Override.Value < 0 || Override.Value > GSTN_PartsLimits::MaxHardness)
@@ -445,6 +449,11 @@ void FGSTN_PartsValidation::ValidateForMinions(TConstArrayView<FGSTN_PartDefinit
 	}
 	for (int32 Index = 0; Index < Parts.Num(); ++Index)
 	{
+		if (Parts[Index].CanBeWounded())
+		{
+			// The minion row is 9 bytes (a uint8 broken mask and 8 damage bytes) and has no room for a wounded mask without growing every minion
+			Report.AddError(FString::Printf(TEXT("%s: a wounded hardness is set, but a minion cannot be wounded (its row has no wounded mask); leave it at -1 on a minion set."), *PartLabel(Index, Parts[Index])));
+		}
 		for (int32 EffectIndex = 0; EffectIndex < Parts[Index].OnBreak.Num(); ++EffectIndex)
 		{
 			if (!FGSTN_PartsMinionRules::CanMinionRunBreakEffect(Parts[Index].OnBreak[EffectIndex]))

@@ -147,10 +147,10 @@ bool FGSTN_PartsFragmentRoundTrip1Test::RunTest(const FString& Parameters)
 	const FGSTN_PartsFragment Sent = MakeFragment(8);
 	FGSTN_SyncFragmentList::FindOrAdd<FGSTN_PartsFragment>(State) = Sent;
 
-	// 1 flag bit, packed count (8), type id (8), packed length (8), 3 + 8 payload bytes
+	// 1 flag bit, packed count (8), type id (8), packed length (8), 5 + 8 payload bytes
 	const int64 Bits = BitsOfList(State);
 	UE_LOG(LogGSTNPartsNPTest, Display, TEXT("Fragment.RoundTrip1: %lld bits (%lld bytes) for the fragment list, N = 8 payload %d bytes"), Bits, (Bits + 7) / 8, PayloadBytesOf(Sent));
-	TestEqual(TEXT("one fragment: flag, count, id, length and payload"), Bits, static_cast<int64>(1 + 8 + 8 + 8 + 8 * 11));
+	TestEqual(TEXT("one fragment: flag, count, id, length and payload"), Bits, static_cast<int64>(1 + 8 + 8 + 8 + 8 * 13));
 
 	bool bError = false;
 	FGSTN_SyncFragmentArray Loaded = ReadBack(State, bError);
@@ -168,7 +168,7 @@ bool FGSTN_PartsFragmentRoundTrip1Test::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a damage byte that differs does"), FGSTN_SyncFragmentList::ShouldReconcile(Loaded, State));
 	TestTrue(TEXT("a fragment missing on one side does"), FGSTN_SyncFragmentList::ShouldReconcile(FGSTN_SyncFragmentArray(), State));
 
-	TestTrue(TEXT("the fragment is described in the state text"), ToText(State).Contains(TEXT("Fragments: [16: Parts mask 0x0081 serial 3 n=8 [")));
+	TestTrue(TEXT("the fragment is described in the state text"), ToText(State).Contains(TEXT("Fragments: [16: Parts mask 0x0081 wound 0x0000 serial 3 n=8 [")));
 
 	// The registry hands Interpolate a copy of the later sample: the result is that sample, never a blend
 	FGSTN_SyncFragmentArray Older = State;
@@ -195,11 +195,11 @@ bool FGSTN_PartsFragmentRoundTrip2Test::RunTest(const FString& Parameters)
 	TestEqual(TEXT("two fragments"), State.Num(), 2);
 	TestEqual(TEXT("sorted by type id: parts first"), FGSTN_SyncFragmentRegistry::FindId(State[0].GetScriptStruct()), GSTNFeatureIds::Parts);
 
-	// 1 flag bit, packed count (8), then per fragment id (8), length (8), payload: 9 bytes for N = 6, 5 for the test fragment
+	// 1 flag bit, packed count (8), then per fragment id (8), length (8), payload: 11 bytes for N = 6 (5 + N since the wounded mask), 5 for the test fragment
 	const int64 Bits = BitsOfList(State);
 	UE_LOG(LogGSTNPartsNPTest, Display, TEXT("Fragment.RoundTrip2: %lld bits (%lld bytes) for the fragment list with parts N = 6 and the test fragment"), Bits, (Bits + 7) / 8);
 	TestEqual(TEXT("two fragments: shared flag and count, then each fragment's id, length and payload"),
-		Bits, static_cast<int64>(1 + 8 + (8 + 8 + 8 * 9) + (8 + 8 + 8 * 5)));
+		Bits, static_cast<int64>(1 + 8 + (8 + 8 + 8 * 11) + (8 + 8 + 8 * 5)));
 
 	bool bError = false;
 	FGSTN_SyncFragmentArray Loaded = ReadBack(State, bError);
@@ -253,7 +253,7 @@ bool FGSTN_PartsFragmentSizesTest::RunTest(const FString& Parameters)
 		// Full: every part broken at the cap, the serial at its largest
 		const FGSTN_PartsFragment Full = MakeFull(Count);
 		FGSTN_SyncFragmentArray FullList = ListOf(Full);
-		TestEqual(*FString::Printf(TEXT("N = %d full payload"), Count), PayloadBytesOf(Full), 3 + Count);
+		TestEqual(*FString::Printf(TEXT("N = %d full payload"), Count), PayloadBytesOf(Full), 5 + Count);
 		FBitWriter Writer(256, true);
 		FGSTN_SyncFragmentList::NetSerialize(Writer, FullList);
 		FBitReader Reader(Writer.GetData(), Writer.GetNumBits());
@@ -268,13 +268,13 @@ bool FGSTN_PartsFragmentSizesTest::RunTest(const FString& Parameters)
 	FGSTN_PartsFragment Sparse;
 	Sparse.PartCount = 8;
 	Sparse.PartDamage[0] = 5;
-	TestEqual(TEXT("PartCount fixes the payload length"), PayloadBytesOf(Sparse), 11);
+	TestEqual(TEXT("PartCount fixes the payload length"), PayloadBytesOf(Sparse), 13);
 	// A fragment whose count was never set is never cut short: the bytes of the parts that hold damage are written
 	FGSTN_PartsFragment NoCount;
 	NoCount.PartDamage[4] = 7;
-	TestEqual(TEXT("a damaged part beyond PartCount is still written"), PayloadBytesOf(NoCount), 3 + 5);
+	TestEqual(TEXT("a damaged part beyond PartCount is still written"), PayloadBytesOf(NoCount), 5 + 5);
 	NoCount.BrokenMask = 1u << 9;
-	TestEqual(TEXT("so is a broken bit"), PayloadBytesOf(NoCount), 3 + 10);
+	TestEqual(TEXT("so is a broken bit"), PayloadBytesOf(NoCount), 5 + 10);
 	return true;
 }
 
@@ -304,7 +304,15 @@ bool FGSTN_PartsFragmentReconcileTest::RunTest(const FString& Parameters)
 	FGSTN_PartsFragment OtherSerial = Base;
 	OtherSerial.BreakSerial = 6;
 	TestTrue(TEXT("serial"), Base.ShouldReconcile(OtherSerial));
-	TestEqual(TEXT("33 single-field differences checked"), Checked + 1, 33);
+	// Wounds (combat-parts.md 3.4): every bit of the wounded mask is compared too
+	for (int32 Bit = 0; Bit < 16; ++Bit)
+	{
+		FGSTN_PartsFragment Other = Base;
+		Other.WoundedMask ^= static_cast<uint16>(1u << Bit);
+		TestTrue(*FString::Printf(TEXT("wounded bit %d"), Bit), Base.ShouldReconcile(Other) && Other.ShouldReconcile(Base));
+		++Checked;
+	}
+	TestEqual(TEXT("49 single-field differences checked"), Checked + 1, 49);
 
 	// The part count is not state
 	FGSTN_PartsFragment OtherCount = Base;
@@ -326,24 +334,63 @@ bool FGSTN_PartsFragmentBytesTest::RunTest(const FString& Parameters)
 {
 	FScopedFragments Registered;
 	// Spec 5.1 counts bits: 1 flag + N mask bits + 8 N damage bits + 4 serial bits. The built byte encoding is the P0c one (3 + N): at
-	// most two bytes above the bit count, and exactly the 19 bytes the spec lists for N = 16
+	// most two bytes above the bit count (the spec's 1 + N + 8 N + 4 bits plus the 16 bits of the wounded mask), 5 + N
 	for (const int32 Count : { 6, 8, 16 })
 	{
 		const FGSTN_PartsFragment Fragment = MakeFragment(Count);
 		const int32 Payload = PayloadBytesOf(Fragment);
 		FGSTN_SyncFragmentArray List = ListOf(Fragment);
 		const int64 ListBits = BitsOfList(List);
-		const int32 SpecBits = 1 + Count + 8 * Count + 4;
+		const int32 SpecBits = 1 + Count + 16 + 8 * Count + 4;
 		const int32 SpecBytes = (SpecBits + 7) / 8;
 		UE_LOG(LogGSTNPartsNPTest, Display, TEXT("Fragment bytes: N = %2d  payload %2d B (spec table %d bits = %d B)  in the list %2lld B (%lld bits, 1 flag + count + id + length + payload)"),
 			Count, Payload, SpecBits, SpecBytes, (ListBits + 7) / 8, ListBits);
-		TestEqual(*FString::Printf(TEXT("N = %d payload is 3 + N"), Count), Payload, 3 + Count);
+		TestEqual(*FString::Printf(TEXT("N = %d payload is 5 + N"), Count), Payload, 5 + Count);
 		TestTrue(*FString::Printf(TEXT("N = %d within two bytes of the spec bit count"), Count), Payload >= SpecBytes && Payload <= SpecBytes + 2);
 		TestEqual(*FString::Printf(TEXT("N = %d framing is flag + count + id + length"), Count), ListBits, static_cast<int64>(1 + 8 + 8 + 8 + 8 * Payload));
 	}
-	TestEqual(TEXT("N = 16 is the 19 byte payload of the spec table"), PayloadBytesOf(MakeFragment(16)), 19);
+	TestEqual(TEXT("N = 16 is the 21 byte payload (19 of the P0c table plus the wounded mask)"), PayloadBytesOf(MakeFragment(16)), 21);
 	FGSTN_SyncFragmentArray Sixteen = ListOf(MakeFragment(16));
-	TestEqual(TEXT("and 23 bytes in the list (P0c)"), (BitsOfList(Sixteen) + 7) / 8, static_cast<int64>(23));
+	TestEqual(TEXT("and 25 bytes in the list"), (BitsOfList(Sixteen) + 7) / 8, static_cast<int64>(25));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PartsFragmentWoundedTest, "GSTNParts.NP.Fragment.WoundedMaskRoundTrip", Flags)
+bool FGSTN_PartsFragmentWoundedTest::RunTest(const FString& Parameters)
+{
+	FScopedFragments Registered;
+
+	// A wound alone makes the fragment non-empty (a pristine, wounded part is not "no state"): the masks, the damage bytes and the serial travel
+	FGSTN_PartsFragment WoundOnly;
+	WoundOnly.PartCount = 6;
+	WoundOnly.WoundedMask = 1u << 2;
+	TestFalse(TEXT("a wound alone is not empty"), WoundOnly.IsEmpty());
+	TestEqual(TEXT("the payload is the 5 header bytes and the 6 damage bytes"), PayloadBytesOf(WoundOnly), 5 + 6);
+
+	FGSTN_SyncFragmentArray List = ListOf(WoundOnly);
+	bool bError = false;
+	FGSTN_SyncFragmentArray Loaded = ReadBack(List, bError);
+	TestFalse(TEXT("reads back without error"), bError);
+	const FGSTN_PartsFragment* Read = FGSTN_SyncFragmentList::Find<FGSTN_PartsFragment>(Loaded);
+	TestTrue(TEXT("the fragment is there with its wound"), Read && Read->WoundedMask == WoundOnly.WoundedMask && Read->BrokenMask == 0);
+	TestTrue(TEXT("the state is the same after the trip"), Read && SameState(*Read, WoundOnly));
+	TestEqual(TEXT("N is still derived from the length"), Read ? static_cast<int32>(Read->PartCount) : -1, 6);
+	TestFalse(TEXT("equal after the trip, no reconcile"), FGSTN_SyncFragmentList::ShouldReconcile(Loaded, List));
+
+	// A wound next to a break and damage, the full width
+	FGSTN_PartsFragment Mixed = MakeFragment(16);
+	Mixed.WoundedMask = 0x8001;
+	FGSTN_SyncFragmentArray MixedList = ListOf(Mixed);
+	FGSTN_SyncFragmentArray MixedLoaded = ReadBack(MixedList, bError);
+	const FGSTN_PartsFragment* MixedRead = FGSTN_SyncFragmentList::Find<FGSTN_PartsFragment>(MixedLoaded);
+	TestTrue(TEXT("both masks, damage and serial survive at N = 16"), MixedRead && SameState(*MixedRead, Mixed) && MixedRead->WoundedMask == 0x8001 && MixedRead->BrokenMask == Mixed.BrokenMask);
+	TestTrue(TEXT("a fragment without the wound reconciles against one with it"), MakeFragment(16).ShouldReconcile(Mixed));
+
+	// The state carries the mask both ways (the snapshot copies it by value)
+	TestEqual(TEXT("ToState carries the wounded mask"), Mixed.ToState().WoundedMask, static_cast<uint16>(0x8001));
+	FGSTN_PartsFragment Copy;
+	Copy.SetState(Mixed.ToState(), 16);
+	TestEqual(TEXT("SetState restores it"), Copy.WoundedMask, static_cast<uint16>(0x8001));
 	return true;
 }
 
@@ -401,7 +448,7 @@ bool FGSTN_PartsFragmentUnknownTest::RunTest(const FString& Parameters)
 
 	// A payload of a size no part set can have, or a serial that does not fit 4 bits, is dropped without moving the reader
 	AddExpectedMessage(TEXT("could not be read"), ELogVerbosity::Warning, EAutomationExpectedMessageFlags::Contains, 2);
-	for (const TArray<uint8>& Bad : { TArray<uint8>({ 0x01, 0x00 }), TArray<uint8>({ 0x00, 0x00, 0x00, 16 }) })
+	for (const TArray<uint8>& Bad : { TArray<uint8>({ 0x01, 0x00 }), TArray<uint8>({ 0x00, 0x00, 0x00, 0x00, 16 }) })
 	{
 		FBitWriter BadWriter(256, true);
 		uint8 bHas = 1;
@@ -440,8 +487,8 @@ bool FGSTN_PartsFragmentToStringTest::RunTest(const FString& Parameters)
 	Fragment.PartDamage[0] = 128;
 	Fragment.PartDamage[1] = 255;
 	Fragment.PartDamage[3] = 3;
-	TestEqual(TEXT("mask in hex, serial, count and the percent of each part"), Describe(Fragment), FString(TEXT("Parts mask 0x0005 serial 9 n=4 [0:50% 1:100% 2:0% 3:1%]")));
-	TestEqual(TEXT("the empty fragment"), Describe(FGSTN_PartsFragment()), FString(TEXT("Parts mask 0x0000 serial 0 n=0 []")));
+	TestEqual(TEXT("mask in hex, serial, count and the percent of each part"), Describe(Fragment), FString(TEXT("Parts mask 0x0005 wound 0x0000 serial 9 n=4 [0:50% 1:100% 2:0% 3:1%]")));
+	TestEqual(TEXT("the empty fragment"), Describe(FGSTN_PartsFragment()), FString(TEXT("Parts mask 0x0000 wound 0x0000 serial 0 n=0 []")));
 	TestEqual(TEXT("printing twice gives the same text"), Describe(Fragment), Describe(Fragment));
 
 	// Printing after a wire round trip gives the same text as before it
@@ -460,7 +507,7 @@ bool FGSTN_PartsFragmentToStringTest::RunTest(const FString& Parameters)
 
 	TAnsiStringBuilder<256> Whole;
 	FGSTN_SyncFragmentList::ToString(List, Whole);
-	TestTrue(TEXT("the list text names the id and the fragment"), FString(ANSI_TO_TCHAR(Whole.ToString())).Contains(TEXT("Fragments: [16: Parts mask 0x0005 serial 9 n=4 [0:50% 1:100% 2:0% 3:1%]]")));
+	TestTrue(TEXT("the list text names the id and the fragment"), FString(ANSI_TO_TCHAR(Whole.ToString())).Contains(TEXT("Fragments: [16: Parts mask 0x0005 wound 0x0000 serial 9 n=4 [0:50% 1:100% 2:0% 3:1%]]")));
 	return true;
 }
 

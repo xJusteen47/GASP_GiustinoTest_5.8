@@ -203,7 +203,13 @@ FGSTN_PartHitResult UGSTN_PartMath::ApplyHit(TConstArrayView<FGSTN_PartDefinitio
 	Result.PartIndex = PartIndex;
 	Result.bHitBrokenPart = bWasBroken;
 
-	const int32 Hardness = Hit.HardnessOverride >= 0 ? Hit.HardnessOverride : Part.Hardness;
+	int32 Hardness = Hit.HardnessOverride >= 0 ? Hit.HardnessOverride : Part.Hardness;
+	if (State.WoundedMask != 0 && Part.CanBeWounded() && State.IsWounded(PartIndex))
+	{
+		// A wounded part is as hard as its wound says, whatever hurtbox the hit came through. A caller's PreparedBandIndex is built from the unwounded
+		// hardness, so only the fighter path (which never prepares one) can see a wound; the minion store has no wounded mask
+		Hardness = Part.WoundedHardness;
+	}
 	const int32 BandIndex = Hit.PreparedBandIndex != FGSTN_PartHitInput::BandNotPrepared
 		? Hit.PreparedBandIndex
 		: LookupBand(SortedBands, Hit.Penetration, Hardness, Hit.bIgnoreHardness);
@@ -319,6 +325,11 @@ FGSTN_PartHitResult UGSTN_PartMath::ApplyHit(TConstArrayView<FGSTN_PartDefinitio
 		State.AdvanceSerial();
 		Result.NewPartDamage = State.PartDamage[PartIndex];
 		Result.bAllBrokenReached = !bWasAllBroken && IsAllBroken(Parts, State.BrokenMask);
+	}
+
+	if (Hit.bWound && !bWasBroken && Part.CanBeWounded())
+	{
+		State.WoundedMask |= BitOf(PartIndex);
 	}
 
 	Result.NewlyBrokenMask = NewlyBroken;

@@ -9,8 +9,8 @@
 #include "GSTN_PartsFragment.generated.h"
 
 /**
- * The parts of one entity as per-entity combat sync state (combat-parts.md §5.1): the broken mask, the quantised damage of every
- * part and the break serial. A sync fragment of the combat extension surface, so it rides in the combat sync state beside the
+ * The parts of one entity as per-entity combat sync state (combat-parts.md §5.1): the broken mask, the wounded mask (wounds, 3.4), the
+ * quantised damage of every part and the break serial. A sync fragment of the combat extension surface, so it rides in the combat sync state beside the
  * core, is compared and reconciled with it, and is restored by rollback. An entity without a part set has no fragment: no bytes on
  * the wire and nothing to compare. The main pool is not here, it lives in the attribute where M3 and M4 put it.
  *
@@ -18,26 +18,29 @@
  * from presentation). The members mirror FGSTN_PartsState, the plain POD the part math works on, so ToState and SetState are the
  * only conversions.
  *
- * Wire format (the byte encoding of the P0c spike, 3 + N bytes, N = the part count of the set):
+ * Wire format (the byte encoding of the P0c spike plus the wounded mask, 5 + N bytes, N = the part count of the set):
  *
  *   empty (mask 0, serial 0, every damage 0)  ->  no bytes at all; the list framing's length byte says 0
- *   otherwise    uint16 BrokenMask (little endian), N x uint8 PartDamage, uint8 BreakSerial (4 bits used, a larger value is an error)
+ *   otherwise    uint16 BrokenMask (little endian), uint16 WoundedMask, N x uint8 PartDamage, uint8 BreakSerial (4 bits used, a larger value is an error)
  *
  * N is not sent: both machines load the same part set, and the reader derives N from the payload length (the registry reads into a
  * default instance, so the count cannot be an instance field read before the bytes). A pristine entity therefore costs only the
- * list framing, 3 bytes (type id, length, count) plus the list's flag bit; N = 16 damaged is a 19 byte payload and 23 bytes with the
- * framing. Bit packing would save 0 to 2 bytes and cost the length-derived N, so it was not chosen.
+ * list framing, 3 bytes (type id, length, count) plus the list's flag bit; N = 16 damaged is a 21 byte payload and 25 bytes with the
+ * framing (the wounded mask is the 2 bytes more of a non-empty fragment; a pristine one still sends nothing). Bit packing would save 0 to 2 bytes and cost the length-derived N, so it was not chosen.
  */
 USTRUCT()
 struct GSTNPARTSNP_API FGSTN_PartsFragment : public FGSTN_SyncFragment
 {
 	GENERATED_BODY()
 
-	/** Bytes of the payload besides the damage array: the 16 bit mask and the serial */
-	static constexpr int32 HeaderBytes = 3;
+	/** Bytes of the payload besides the damage array: the two 16 bit masks and the serial */
+	static constexpr int32 HeaderBytes = 5;
 
 	/** Bit i set once part i broke; only an explicit restore clears it */
 	uint16 BrokenMask = 0;
+
+	/** Bit i set once a wound hit struck part i (combat-parts.md 3.4): the part then meets its WoundedHardness. Level 1 never clears it */
+	uint16 WoundedMask = 0;
 
 	/** Damage over cap of part i, 0..255 (0 pristine, 255 at the cap). Entries at and beyond PartCount stay 0 */
 	uint8 PartDamage[GSTN_PartsLimits::MaxParts] = {};
@@ -51,7 +54,7 @@ struct GSTNPARTSNP_API FGSTN_PartsFragment : public FGSTN_SyncFragment
 	 */
 	uint8 PartCount = 0;
 
-	/** Mask 0, serial 0 and no damage: written as zero bytes */
+	/** Both masks 0, serial 0 and no damage: written as zero bytes */
 	bool IsEmpty() const;
 
 	/** Damage bytes the payload carries: PartCount, raised to cover the highest part with damage or a broken bit so nothing is ever cut off */
@@ -68,12 +71,12 @@ struct GSTNPARTSNP_API FGSTN_PartsFragment : public FGSTN_SyncFragment
 
 	virtual void NetSerialize(FArchive& Ar) override;
 
-	/** Exact integer equality of mask, damage and serial: nothing here is a float, so there is no tolerance. PartCount is not state */
+	/** Exact integer equality of both masks, damage and serial: nothing here is a float, so there is no tolerance. PartCount is not state */
 	virtual bool ShouldReconcile(const FGSTN_SyncFragment& Authority) const override;
 
 	/** Discrete state: the copy of the later sample the registry hands over is already the result, presentation reads the mask and never a blend */
 	virtual void Interpolate(const FGSTN_SyncFragment* From, const FGSTN_SyncFragment* To, float PCT) override {}
 
-	/** "Parts mask 0x0005 serial 3 n=4 [0:12% 1:100% 2:0% 3:0%]": the mask in hex, the percent of each part rounded to the nearest integer */
+	/** "Parts mask 0x0005 wound 0x0000 serial 3 n=4 [0:12% 1:100% 2:0% 3:0%]": the masks in hex, the percent of each part rounded to the nearest integer */
 	virtual void ToString(FAnsiStringBuilderBase& Out) const override;
 };

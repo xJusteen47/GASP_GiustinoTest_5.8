@@ -27,6 +27,8 @@ void FGSTN_PartsOutcomeApplier::Apply(const FInstancedStruct& Extension, const F
 	FGSTN_PartsState State = Outcome->GetResultState();
 	// Monotonic: a break is only ever undone by an explicit restore, never by a hit built from an older view
 	State.BrokenMask |= Fragment.BrokenMask;
+	// Same for wounds (level 1 has no way to close one, so an outcome built from an older view must not drop a newer wound)
+	State.WoundedMask |= Fragment.WoundedMask;
 
 	const FGSTN_PartsSnapshotExt* Ext = FGSTN_PartsSnapshotExt::FromView(View.Victim);
 	const int32 PartCount = Ext && Ext->PartSet ? Ext->PartSet->GetParts().Num() : Fragment.PartCount;

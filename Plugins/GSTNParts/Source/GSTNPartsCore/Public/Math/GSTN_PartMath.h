@@ -41,6 +41,9 @@ struct GSTNPARTSCORE_API FGSTN_PartHitInput
 	/** Damage the main pool only, leave the part alone */
 	bool bMainOnly = false;
 
+	/** The hit carries a wound (FGSTN_PartBreakEffect_Wound): a hit that lands on a part with a WoundedHardness sets the part's wounded bit. Set by the step, never by Make */
+	bool bWound = false;
+
 	/**
 	 * The hardness of the hurtbox the hit chose when its part overrides it (FGSTN_PartDefinition::GetHardnessFor); negative = the
 	 * part's own Hardness. The damage pool and the break stay the part's whatever hurtbox the hit came through
@@ -173,6 +176,9 @@ public:
 	 * cap is not carried to the main pool. Children of a part that broke break in the same hit, in index order, and each newly
 	 * broken part adds its MainDamage effects once; only the children of the part that just broke cascade, never a child that is
 	 * intact under an older broken parent. A ricochet band changes nothing. A hit on the body is the full damage.
+	 * Wounds: a part whose wounded bit is on meets WoundedHardness instead of its hardness; a hit with bWound that lands (no ricochet, part not
+	 * already broken) on a part with a WoundedHardness sets the bit after its own damage, so it is the next hit that sees it. A state with
+	 * no wounded bit costs one mask test.
 	 * Allocation free. Two hits in one frame must be applied in the inbox's sorted order: each sees the state of the one before
 	 */
 	static FGSTN_PartHitResult ApplyHit(TConstArrayView<FGSTN_PartDefinition> Parts, TConstArrayView<FGSTN_PenetrationBand> SortedBands,

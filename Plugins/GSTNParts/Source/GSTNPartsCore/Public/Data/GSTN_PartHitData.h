@@ -54,3 +54,16 @@ struct GSTNPARTSCORE_API FGSTN_PartHitData : public FGSTN_HitExtension
 
 	bool HasFlag(EGSTN_PartHitFlags Flag) const { return (Flags & static_cast<uint8>(Flag)) != 0; }
 };
+
+/**
+ * Wounds, level 1 (combat-parts.md 3.4): a hit whose extension data carries this marks the part it landed on as wounded, so from the next hit on
+ * that part meets its WoundedHardness (a part with none is not marked). Named like the break effects because it is the same idea seen from the
+ * hit's side (a part effect a hit asks for), but it rides in the hit's ExtensionData like FGSTN_PartHitData, since it is the hit that decides
+ * where the wound goes. No fields: the part's data holds the tuning. The part is the one the hit chose (its hurtbox), a ricochet or a hit on a
+ * broken part marks nothing, and a hit that carries no part data still wounds. Level 1 has no way to close a wound.
+ */
+USTRUCT(BlueprintType)
+struct GSTNPARTSCORE_API FGSTN_PartBreakEffect_Wound : public FGSTN_HitExtension
+{
+	GENERATED_BODY()
+};

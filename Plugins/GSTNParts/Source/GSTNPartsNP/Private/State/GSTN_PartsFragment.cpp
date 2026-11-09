@@ -13,7 +13,7 @@ namespace
 
 bool FGSTN_PartsFragment::IsEmpty() const
 {
-	if (BrokenMask != 0 || BreakSerial != 0)
+	if (BrokenMask != 0 || WoundedMask != 0 || BreakSerial != 0)
 	{
 		return false;
 	}
@@ -49,6 +49,7 @@ FGSTN_PartsState FGSTN_PartsFragment::ToState() const
 {
 	FGSTN_PartsState State;
 	State.BrokenMask = BrokenMask;
+	State.WoundedMask = WoundedMask;
 	FMemory::Memcpy(State.PartDamage, PartDamage, sizeof(PartDamage));
 	State.BreakSerial = BreakSerial;
 	return State;
@@ -57,6 +58,7 @@ FGSTN_PartsState FGSTN_PartsFragment::ToState() const
 void FGSTN_PartsFragment::SetState(const FGSTN_PartsState& State, int32 InPartCount)
 {
 	BrokenMask = State.BrokenMask;
+	WoundedMask = State.WoundedMask;
 	FMemory::Memcpy(PartDamage, State.PartDamage, sizeof(PartDamage));
 	BreakSerial = static_cast<uint8>(State.BreakSerial & FGSTN_PartsState::SerialMask);
 	PartCount = static_cast<uint8>(FMath::Clamp(InPartCount, 0, GSTN_PartsLimits::MaxParts));
@@ -73,6 +75,8 @@ void FGSTN_PartsFragment::NetSerialize(FArchive& Ar)
 		const int32 Count = GetWireCount();
 		uint16 Mask = BrokenMask;
 		Ar << Mask;
+		uint16 Wounded = WoundedMask;
+		Ar << Wounded;
 		if (Count > 0)
 		{
 			Ar.Serialize(PartDamage, Count);
@@ -83,6 +87,7 @@ void FGSTN_PartsFragment::NetSerialize(FArchive& Ar)
 	}
 
 	BrokenMask = 0;
+	WoundedMask = 0;
 	FMemory::Memzero(PartDamage, sizeof(PartDamage));
 	BreakSerial = 0;
 	PartCount = 0;
@@ -100,6 +105,7 @@ void FGSTN_PartsFragment::NetSerialize(FArchive& Ar)
 	}
 	const int32 Count = static_cast<int32>(Size) - HeaderBytes;
 	Ar << BrokenMask;
+	Ar << WoundedMask;
 	if (Count > 0)
 	{
 		Ar.Serialize(PartDamage, Count);
@@ -117,13 +123,13 @@ void FGSTN_PartsFragment::NetSerialize(FArchive& Ar)
 bool FGSTN_PartsFragment::ShouldReconcile(const FGSTN_SyncFragment& Authority) const
 {
 	const FGSTN_PartsFragment& Other = static_cast<const FGSTN_PartsFragment&>(Authority);
-	return BrokenMask != Other.BrokenMask || BreakSerial != Other.BreakSerial
+	return BrokenMask != Other.BrokenMask || WoundedMask != Other.WoundedMask || BreakSerial != Other.BreakSerial
 		|| FMemory::Memcmp(PartDamage, Other.PartDamage, sizeof(PartDamage)) != 0;
 }
 
 void FGSTN_PartsFragment::ToString(FAnsiStringBuilderBase& Out) const
 {
-	Out.Appendf("Parts mask 0x%04X serial %d n=%d [", BrokenMask, BreakSerial, GetWireCount());
+	Out.Appendf("Parts mask 0x%04X wound 0x%04X serial %d n=%d [", BrokenMask, WoundedMask, BreakSerial, GetWireCount());
 	const int32 Count = GetWireCount();
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
