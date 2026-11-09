@@ -991,10 +991,40 @@ void UGSTN_MinionBenchSubsystem::Report() const
 	// connection. Includes every channel (players' NP traffic, packs), so a minion share is measured against a 0-minion window. Bench only
 	if (const UNetDriver* Driver = GetWorld() ? GetWorld()->GetNetDriver() : nullptr; Driver && Driver->IsServer())
 	{
+		// Post-handler bytes (what Oodle and the other handlers leave on the wire): OutTotalBytes is counted before the handler chain, so it is blind
+		// to compression. LowLevelSendDel exists only outside Shipping and is bound on the first Report of each connection (so Report must run once
+		// before the first measured snap); if someone else owns the delegate we do not rebind it and the field stays 0
+		static TMap<TWeakObjectPtr<UNetConnection>, uint64> LowLevelBytes;
+		static bool bWarnedForeignDelegate = false;
 		FString PerConn;
 		for (const UNetConnection* Conn : Driver->ClientConnections)
 		{
-			PerConn += FString::Printf(TEXT("%s%d/%d"), PerConn.IsEmpty() ? TEXT("") : TEXT(","), Conn->OutTotalBytes, Conn->OutBytesPerSecond);
+			uint64 LowLevel = 0;
+#if !UE_BUILD_SHIPPING
+			UNetConnection* MutableConn = const_cast<UNetConnection*>(Conn);
+			const TWeakObjectPtr<UNetConnection> Key(MutableConn);
+			if (const uint64* Found = LowLevelBytes.Find(Key))
+			{
+				LowLevel = *Found;
+			}
+			else if (!MutableConn->LowLevelSendDel.IsBound())
+			{
+				LowLevelBytes.Add(Key, 0);
+				MutableConn->LowLevelSendDel.BindLambda([Key](void*, int32 Count, bool&)
+				{
+					if (uint64* Total = LowLevelBytes.Find(Key))
+					{
+						*Total += static_cast<uint64>(Count);
+					}
+				});
+			}
+			else if (!bWarnedForeignDelegate)
+			{
+				bWarnedForeignDelegate = true;
+				UE_LOG(LogGSTNMinion, Log, TEXT("MinionBench net: LowLevelSendDel already bound by someone else, post-handler bytes not counted"));
+			}
+#endif
+			PerConn += FString::Printf(TEXT("%s%d/%d/%llu/%d"), PerConn.IsEmpty() ? TEXT("") : TEXT(","), Conn->OutTotalBytes, Conn->OutBytesPerSecond, LowLevel, Conn->OutTotalPackets);
 		}
 		UE_LOG(LogGSTNMinion, Log, TEXT("MinionBench net outBytes=%u outPerSec=%u conns=%d perConn=%s"), Driver->OutTotalBytes, Driver->OutBytesPerSecond, Driver->ClientConnections.Num(), *PerConn);
 	}

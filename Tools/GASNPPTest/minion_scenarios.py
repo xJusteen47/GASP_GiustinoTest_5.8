@@ -1143,8 +1143,11 @@ def scenario_minion_bytes(client=1, clients=2):
         """Real wire bytes of the server driver and of each client connection at the snap (cumulative OutTotalBytes of the last 'MinionBench net' line)"""
         rows = _NET_WIRE.findall(g._read_log_since(st[label + '_mark']))
         if rows:
-            total, conns = int(rows[-1][0]), [int(x) for x in re.findall(r'(\d+)/\d+', rows[-1][1])]
+            total, conns = int(rows[-1][0]), [int(e.split('/')[0]) for e in rows[-1][1].split(',') if e]
+            # per connection 'out/perSec/lowLevelBytes/packets'; old logs only have 'out/perSec' -> post-handler fields 0
+            ext = [((int(f[2]), int(f[3])) if len(f) >= 4 else (0, 0)) for f in (e.split('/') for e in rows[-1][1].split(',') if e)]
             st[label + '_wire'] = (total, conns)
+            st[label + '_post'] = ext
         return f"{label}: wire {st.get(label + '_wire')}"
 
     def wire_rate(a, b):
@@ -1155,10 +1158,22 @@ def scenario_minion_bytes(client=1, clients=2):
         (t0, c0), (t1, c1) = st[a + '_wire'], st[b + '_wire']
         return (t1 - t0) / dt, [(y - x) / dt for x, y in zip(c0, c1)]
 
+    def post_rate(a, b):
+        """[(post-handler B/s, post-handler + UDP/IP 28 B/packet B/s)] per client between two snaps, or None (old logs / no fields)"""
+        if a + '_post' not in st or b + '_post' not in st:
+            return None
+        dt = max(st[b + '_time'] - st[a + '_time'], 0.001)
+        out = [((y[0] - x[0]) / dt, (y[0] - x[0] + 28 * (y[1] - x[1])) / dt) for x, y in zip(st[a + '_post'], st[b + '_post'])]
+        return out if any(p[0] > 0 for p in out) else None
+
     def base_rate():
         r = wire_rate('z0', 'z1')
         if r:
             run.note(f'REAL wire baseline (no minions): host {r[0]:.0f} B/s, per client ' + ', '.join(f'{v:.0f}' for v in r[1]))
+        pr = post_rate('z0', 'z1')
+        if pr:
+            run.note('post-handler baseline (no minions) per client: post-handler B/s ' + ', '.join(f'{p[0]:.0f}' for p in pr)
+                     + '; post-handler+UDP/IP B/s ' + ', '.join(f'{p[1]:.0f}' for p in pr))
         return r is not None, f'baseline {r}'
 
     def read(label):
@@ -1182,6 +1197,12 @@ def scenario_minion_bytes(client=1, clients=2):
             net = [max(v - bv, 0.0) for v, bv in zip(r[1], br[1])] if br else None
             run.note(f'N={n} {kind}: REAL wire bytes/s per client {", ".join(f"{v:.0f}" for v in r[1])}, host {r[0]:.0f}'
                      + (f'; minus the no-minion baseline: per client {", ".join(f"{v:.0f}" for v in net)} (planned {top:.0f})' if net else ''))
+        pr, pb = post_rate(a, b), post_rate('z0', 'z1')
+        if pr:
+            for idx, p in enumerate(pr):
+                bp = pb[idx] if pb and idx < len(pb) else (0.0, 0.0)
+                run.note(f'N={n} {kind} client {idx}: post-handler B/s {p[0]:.0f}, post-handler+UDP/IP (28 B/packet) B/s {p[1]:.0f}'
+                         + (f'; minus baseline {max(p[0] - bp[0], 0.0):.0f} / {max(p[1] - bp[1], 0.0):.0f}' if pb else ''))
         if n == 40:
             run.note(f'M8 4d.1 planning value for 40 typical minions: 5.8 KB/s per client; measured {top / 1000.0:.1f} KB/s (chasing, so all T0)')
         return (top > 0.0), detail
@@ -1194,6 +1215,7 @@ def scenario_minion_bytes(client=1, clients=2):
 
     w = window
     steps = [(0.0, lambda: ('setup', _setup()))]
+    steps.append((0.3, lambda: ('bind post-handler counter', _cmd('gstn.Minion.Bench.Report'))))   # Report binds LowLevelSendDel on its first run per connection
     if kind == 'Massacre':
         steps.append((0.1, lambda: ('launch speed', _cmd('gstn.Minion.Bench.LaunchSpeed 800'))))
     for i, extra in enumerate(c for c in os.environ.get('GSTN_BYTES_CVARS', '').split(';') if c):   # e.g. 'gstn.Minion.T0RateHz 10' (a fallback of M8 8.3)
