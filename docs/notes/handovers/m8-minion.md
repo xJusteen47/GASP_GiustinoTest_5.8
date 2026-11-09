@@ -564,3 +564,10 @@
   for Z >= ~1800 launches (still at Z ~1470-1500 after 3 s: apex ~20 m, ~4 s flight); 4 of 6 variants are not reported failing. Next:
   give 6 s per variant, assert the lip geometry really reproduces the wedge without the fix (run with the fallback off), then a 10-min soak.
 - Not merged into j. SUITE_MINION not run on this branch. Cost: ~$3 (2 builds, 2 test runs, 1 soak).
+- Last round (2026-11-09, STOP): fallback gated by `gstn.Minion.Move.LaunchedLandFallback` (default 1); tests split (`LaunchedUnderOverhangLands`,
+  `LaunchedUnderOverhangStallsWithoutFallback`), 6 s window. Still red, again a test-rig problem: the steep variants (horizontal 450-1325 cm/s)
+  fly off the 40 m test floor and fall (Z down to -26000); the fix was never exercised on the real wedge. Branch `claude/laptop-hover` = WIP.
+- Next step (if pursued): launch the variants toward the lip from 1-2 m away with low horizontal speed (<= 300 cm/s) so they stay on the floor,
+  confirm the stall with the fallback off, then the 10-min soak. ~$2.
+- Owner option instead of the fix: DefaultLevel has a rotated cylinder (StaticMeshActor_6, roll -80, near (100,-850,240)) whose lip overhangs
+  the floor and traps launched minions at (165,-845,91); moving or reshaping that geometry removes the repro (the bug can still happen elsewhere).
