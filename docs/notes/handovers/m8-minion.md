@@ -622,3 +622,22 @@
 - PERF-DEBT: the bench check now runs an overlap-multi plus ComputePenetration per walking minion per step (bench/debug only, off in game).
 - After this no M8 item suits the laptop: the Launched hover and soaks need the desktop (PIE/rendered).
 - Build times (laptop): build + headless ~150 s. Cost: ~$1.5 (lead only, no writer).
+
+## Desktop queue (2026-11-09): P10 tint, TM3 content
+- Branch `claude/desktop-queue` (e96c489a), worktree `GASP_Giustino2_m7`; Sonnet 5.5, no commit made, nothing pushed.
+- **P10-min tint: DONE (tint part only).** There was no presentation module at all (README: "not built"), so a new module `GSTNPartsPresentation` was added
+  to the plugin (`Plugins/GSTNParts/GSTNParts.uplugin` entry, `Source/GSTNPartsPresentation/`): `UGSTN_PartsTint::{ComputeTint,GetPartTint}` (pure: 0 intact,
+  1 broken, else `PartDamage / 255`) and `UGSTN_PartsTintComponent::ApplyState(State, PartCount)` writing custom primitive data float `BaseIndex + part` on every
+  primitive of the owner (idempotent, a repeat writes nothing, follows a rollback down). No material asset, no map, nothing saved. Deps: Core, CoreUObject, Engine, GSTNPartsCore only.
+- Tests (+2): `GSTNParts.Presentation.Tint.FromState`, `GSTNParts.Presentation.Tint.ComponentIdempotent` (no rendering).
+- **Not done, owner / next session:** (a) feed the component: nothing calls `ApplyState` yet. It needs a reader of the live `FGSTN_PartsFragment::ToState()` on the
+  entity (NP half) on clients and host, skipped on a dedicated server; I did not find a cheap public getter and did not invent one. (b) A material that reads
+  `CustomPrimitiveData` index `BaseIndex..+15` (a lerp to a damage colour) on the sample enemy: needs the editor and a Ctrl+S, plus a visual check.
+  (c) Hidden bones were NOT built either (no presentation code existed); its visual check needs the owner. (d) README table still says "not built" for the module row;
+  update it when (a) lands.
+- **TM3 content: SKIPPED.** The cavity leg and the screwed plate on station 5 are actors placed in the TM3 map; that is a map edit plus Ctrl+S, forbidden here.
+  Owner / an editor session must: open the TM3 map, give the station 5 boss the P18 openings leg (armoured shell + hollow cavity, m4b-parts-plan.md ~454) and a P19 screwed
+  plate (part set DataAssets only), then save the map. No DataAsset-only part of it exists that stands alone.
+- Gate: build 7 s (new module only); headless `Automation RunTests GSTN` 1459/0/0 (1457 + 2), 0 ensures; SUITE_MINION dedicated + 2 clients 0 % 12/12 PASS first run (7.5 min); play settings restored.
+- PERF-DEBT: added to `docs/notes/perf-debt.md` (tint walk is O(parts x primitives); wire it on state change only).
+- Cost: ~$1.

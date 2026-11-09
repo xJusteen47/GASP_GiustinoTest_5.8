@@ -84,3 +84,6 @@ what, where, cheaper alternative.
 - 30 Hz T0 does not scale linearly at N=40 (8.7-10.9 KB/s vs 8.3 at 20 Hz): the pack ceiling or the net driver tick caps it; unexplained, check before shipping a rate above 15.
 - N=150 is cheaper than N=80 on the wire because the T0 cap and grants push 106 minions to T1: the per-client cost of a large crowd depends on the cap, not on N; R5 grants under a spread-out crowd are still unmeasured.
 - 10 Hz T0 adds client puppet latency; one extra cancelled flash in player_hits_minion at 0 % (flake class). Interpolation delay not re-tuned for 10 Hz.
+
+## Desktop queue (2026-11-09): P10-min tint
+- `UGSTN_PartsTintComponent::ApplyState` walks every primitive component of the owner and compares each custom primitive float before writing; it is O(parts x primitives) per call and the caller is not wired yet, so no per-frame cost today. When wired, call it only when the fragment state changed (the state is 5 + N bytes, an equality test), not every frame.

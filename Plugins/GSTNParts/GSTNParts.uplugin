@@ -32,6 +32,11 @@
 			"LoadingPhase": "Default"
 		},
 		{
+			"Name": "GSTNPartsPresentation",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
 			"Name": "GSTNPartsEditor",
 			"Type": "Editor",
 			"LoadingPhase": "PostEngineInit"
