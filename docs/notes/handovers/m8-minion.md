@@ -661,3 +661,22 @@
   confirm the stall with the fallback off, then the 10-min soak. ~$2.
 - Owner option instead of the fix: DefaultLevel has a rotated cylinder (StaticMeshActor_6, roll -80, near (100,-850,240)) whose lip overhangs
   the floor and traps launched minions at (165,-845,91); moving or reshaping that geometry removes the repro (the bug can still happen elsewhere).
+
+## Hover repro (desktop, 2026-11-09)
+
+- Worktree GASP_Giustino2_m7, f944177c (j 0cbe5572 + laptop-hover a0c0b8f3). Scripts/logs in `Saved/Hover/` (`bench.ps1`, `notes.md`). No code changed.
+- Build (editor Development): ok, ~1-2 min incremental (ended 04:43 local). Headless GSTN on the merge: 1460 success / 1 fail / 0 ensures. The one
+  fail is `LaunchedUnderOverhangLands` (still red); `LaunchedUnderOverhangStallsWithoutFallback` passes (not red). Log `Saved/G9b/headless-hov1.log`.
+- Repro on DefaultLevel (headless `-game -nullrhi`, fallback OFF via `gstn.Minion.Move.LaunchedLandFallback 0`, VerbosePenetration 400), 2 attempts,
+  both 150 s (~9375 fixed frames), both NOT reproduced:
+  1. 60 Massacre minions (ring r1432 around origin), fraction 0.5, speed 1500: stuck 0, trapped 0, AIR lines 0, blocked 4. `bench-off1.log`.
+  2. 14 minions (ring r600, so the cylinder at (165,-845) is ~250 cm outside the ring), fraction 1.0, speed 1000, launch every 20 frames, seed 7:
+     stuck 0, trapped 0, AIR 0. `bench-off2.log`.
+- So the fix (fallback ON) was not exercised and the cvar default is unchanged (1 in the WIP). Not decided on evidence: no repro, no gate run on a fix.
+- What is missing: a way to aim launches at the lip. The bench only launches from slot positions with seeded random directions around the origin/first
+  player; the earlier repro came from a 10-min, 60-minion soak (a few hits in ~10^5 launches). Needed (code, not done per the budget rule):
+  a bench command `gstn.Minion.Bench.LaunchAt <x y z>` that spawns minions 1-2 m from a point and launches them at it with low horizontal speed
+  (<= 300 cm/s), or run the 10-min soak (`bench.ps1 off3 0 600`, 60 minions, defaults) and look for `AIR slot` lines at (165,-845,91).
+- Owner alternative unchanged: move or reshape StaticMeshActor_6 (roll -80, near (100,-850,240)).
+- Test rig for the red overhang test still to be rebuilt from real geometry (capsule-shaped cylinder roll -80) once the stall is confirmed on the real map.
+- Cost: ~$1 (2 headless bench runs, 1 build, 1 headless GSTN run).
