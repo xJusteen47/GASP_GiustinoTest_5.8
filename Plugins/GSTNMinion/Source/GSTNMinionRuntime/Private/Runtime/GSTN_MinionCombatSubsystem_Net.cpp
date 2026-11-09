@@ -19,7 +19,7 @@ namespace
 {
 	TAutoConsoleVariable<int32> CVarT0RateHz(
 		TEXT("gstn.Minion.T0RateHz"), GSTNMinionNetRate::DefaultCombatRateHz,
-		TEXT("Host budget fallback 2 (M8 4d.1): replication rate of T0 Combat items in Hz, clamped to 5..15. 15 is the table (unchanged bytes); 10 trades smoothness for upload."));
+		TEXT("Host budget fallback 2 (M8 4d.1): replication rate of T0 Combat items in Hz, clamped to 5..30. 15 is the table; 10 (the project ini) trades smoothness for upload, 20-30 the reverse."));
 
 	TAutoConsoleVariable<int32> CVarHostUploadBudgetKBps(
 		TEXT("gstn.Minion.HostUploadBudgetKBps"), 40,

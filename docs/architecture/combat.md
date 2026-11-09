@@ -108,6 +108,22 @@ The piggyback plugin `Plugins/GSTNPiggyback/` (M7; usage in its README, spec [co
 | `GSTNPiggybackEditor` (Editor) | Runtime, GSTNLink*, GSTNCombatNP, DataValidation | Pair-move factories and validators, PIE debug (`gstn.Combat.Debug.Anchor`, `LinkLog`, `MeshLog`). |
 | `GSTNPiggybackTests` (DeveloperTool) | all | Automation tests `GSTNPiggyback.*`; never ships. |
 
+The minion plugin `Plugins/GSTNMinion/` (M8; usage and extension points in its README, plan [plans/m8-minion.md](plans/m8-minion.md), spec
+[combat-m8-minions.md](combat-m8-minions.md), deviations in `docs/notes/m8-doc-deltas.md`) is the server-simulated crowd of section 13. Its `.uplugin`
+lists `GSTNCombat`, `GSTNCombatGAS`, `GSTNCombatNP`, `GSTNInput`, `GSTNCore`, `StateTree` and `DataValidation`; nothing requires it, and it never
+lists `GSTNPlatform`, `GSTNParts`, `GSTNDefence` or `GSTNLink` (bridges are seams, G10). It shares the pose history and net primitives through
+`Plugins/GSTNCore/` (pure, no edge to any GSTN plugin, so every plugin may depend on it):
+
+| Module | Depends on | Contents |
+|---|---|---|
+| `GSTNMinionCore` (Runtime) | GSTNCombatCore, GSTNCore | **Pure**: tags, store and handles (capacity 160), intent, LOD logic, phase scheduler, attack tokens, 119-bit net item codec, definition and wave assets, validation rules. |
+| `GSTNMinionRuntime` (Runtime) | Core, GSTNCombatNP/GAS, StateTree, the fork | Batch subsystem (post-fixed-tick hook), pooled actors, client puppets and hit presentation, spawner and waves, brain subsystem, promotion, bridge seams, bench cvars. |
+| `GSTNMinionEditor` (Editor) | Runtime, DataValidation | Definition, registry and wave validators. |
+| `GSTNMinionTests` (DeveloperTool) | all | `GSTNMinion.Runtime.*` and harness helpers; never ships. |
+
+Fork patch (M8 G1): `OnPostFixedTick(ServerFrame, EndTimeMS, bResimulating)` on the fixed tick, inert while nothing is bound; `PostToInbox` takes a
+generation and `FindEntity` returns `FGSTN_FoundEntity`.
+
 A future `GSTNCombatStockGAS` would replace only `GSTNCombatNP` (same data, simulation through prediction keys).
 
 *Content versioning:* `.gitignore` ignores `Plugins/**/Content/`. When the plugin ships default assets (standard slot
@@ -979,6 +995,31 @@ Two paths with the same Core logic:
   players go to the player's inbox (server), so a correction on the player's client.
 - Promoting a minion to fighter = swapping the component.
 
+### As built (M8, plugin `GSTNMinion`)
+
+Details, cvars and extension points: [Plugins/GSTNMinion/README.md](../../Plugins/GSTNMinion/README.md); measurements: `docs/notes/handovers/m8-minion.md`.
+
+- **Store and batch.** Minions are rows in a store (capacity `gstn.Minion.Max`, 160), not actors with their own tick. One batch runs after the
+  fixed tick through the fork hook, on the server only: 0 spawn queue (4 a frame), 1 LOD, 2 inbox drain, 3 timelines, 4 movement (backend B, a
+  lightweight sweep and slide, no Mover), 5 publish. Pooled `AGSTN_MinionActor` carry the hurtboxes. LOD tiers T0 Combat (15 Hz on the wire),
+  T1 Near, T2 Far, Dormant; the host caps T0 at `gstn.Minion.MaxActiveT0` (48), sparing attackers and token holders.
+- **Minion -> player.** A minion's timeline hitbox resolves on the server against the player's hurtboxes and posts to the player's inbox
+  (`PostToInbox` with a generation): the player's client sees it as a correction of its NP state, like any server hit.
+- **Player -> minion.** The player's hit is resolved on the server; the minion victim is rewound from the world subsystem's pose history ring
+  through the provider snapshot (the same ring as the fighters, no second one). Clients show the hit on the puppet with a grace window and a
+  confirm window (presentation only, the server decides).
+- **Attack tokens.** A pack hands out a bounded number of attack tokens; "token holder" is approximated as "a member running a move".
+- **Promotion.** A minion becomes a fighter by a swap: the minion body holds 16 frames as Promoting, the fighter spawns hidden behind the puppet
+  for 0.1 s, then the puppet is pooled. Health passes through `IGSTN_StartingHealthSource`, applied by the loadout component.
+- **Brain.** One StateTree execution context per brained slot, run by `UGSTN_MinionBrainSubsystem`, rates per tier.
+- **X4 limits (owner OK needed to lift them; they touch `GSTNCombatNP`).** The rewind gathers every minion, not the cheap candidate query (cost
+  grows with N); meter gain on minion victims is skipped; `UGSTN_HitPresentationComponent` cannot present minion victims, so the attacker's
+  hit pause and local cue do not play on minion hits.
+- **Tests.** `GSTNMinion.Core.*` (no world) and `GSTNMinion.Runtime.*`; harness suites `SUITE_MINION`, `SUITE_MINION_NET`, `SUITE_MINION_BENCH`
+  in `Tools/GASNPPTest/minion_scenarios.py` ([testing.md](testing.md)).
+- **Measured (desktop, G11b).** Listen host that renders, Development: N = 150 requested (124 alive on average) is p95 10.5 ms, batch mean
+  0.56 ms (max 0.87); no section 11 fallback needed for the frame. Bytes in section 15.
+
 ## 13b. Held and thrown objects (later, not designed)
 
 Requirement noted, out of scope until after M7. Constraints already known, so the earlier milestones do not close
@@ -1000,7 +1041,12 @@ unless a design needs prediction.
 - `NetSerialize` delta-aware against `FNetSerializeParams::BaseDeltaStatePtr` (sim proxies already get delta frames).
 - End-frame stamps instead of countdowns (5.5) make an idle entity's state constant: about one bit per frame.
 - History serialized with saturated uint8 deltas, rings capped at 16 button and 32 stick events (D3b; 2 and 4 bytes an event on the wire).
-- Minions are outside NPP (section 13).
+- Minions are outside NPP (section 13). Their own stream (M8): a 119-bit net item (health 5 bits as fraction x 31, the 9-bit type on every
+  update, since a type on add would need a per-connection baseline), up to 16 items per pack, T0 at `gstn.Minion.T0RateHz` (C++ default 15, clamp 5..30; the project ini sets 10). A type table
+  `ExtTypes` adds the extension fields; with no type using one, the v1 layout is sent. Measured wire bytes per client (G11b, dedicated + 3
+  clients, a moving horde, players' own NP traffic subtracted): N = 40 all T0 8.1-8.4 KB/s at 15 Hz, 4.9 at 10 Hz; N = 80 (48 T0, 32 T1)
+  9.3-10.7 at 15 Hz, 7.6-7.7 at 10 Hz. The real cost is 20-25 % over the 20 B planning figure at 15 Hz, so the project runs 10 Hz (the plan's
+  step 1, owner OK 2026-11-09). The 10 / 15 / 20 / 30 Hz table at N = 40 / 80 / 150 is in `docs/notes/handovers/m8-minion.md` (G12b).
 - Defence and links (M6), asserted by the fragment tests (`GSTNDefence.NP.Fragment.*`, `GSTNLink.NP.Fragment.*`): an entity with no
   fragment writes the list's one bit; an idle fragment has a zero-byte payload (framing 25 bits); an ended link keeps its serial (3 B); a
   raised shield is 17 B (mask 2 + shield group 15); one live link channel is 1 + 22 B (21 B of fields + header), both channels 45 B; every
@@ -1112,6 +1158,6 @@ where the implementation differs. Milestones are sequential: each spec assumes t
 | M5 | Editor | Timeline editor, socket baking, validators UI, debug draw, input display. | [combat-m5-m9.md](combat-m5-m9.md) |
 | M6 | Defence and links | Shield, parry, tech, SDI; link system spike, links, grabs/throws. `Plugins/GSTNDefence`, `Plugins/GSTNLink` (Core, GAS, NP; optional), test content, harness suites, and a test-only extension plugin. **Status: done (F0-F14, HANDOVER 61); open items listed there.** | [combat-m5-m9.md](combat-m5-m9.md), the plugin READMEs, `docs/notes/m6-doc-deltas.md` |
 | M7 | Piggyback and pair moves | Mount link, riding mode, role-only bindings, carry load, pair moves. `Plugins/GSTNPiggyback` (Core, Runtime, Editor, Tests; optional). **Status: done except carry load and the rider attack binding (G12, acceptance status in the spec §13).** | [combat-m7-piggyback.md](combat-m7-piggyback.md), the plugin README, `docs/notes/m7-doc-deltas.md` |
-| M8 | Minions | Server subsystem, LOD, compact replication. | [combat-m5-m9.md](combat-m5-m9.md) |
+| M8 | Minions | Server subsystem, LOD, compact replication. `Plugins/GSTNMinion` (Core, Runtime, Editor, Tests) and `Plugins/GSTNCore`. **Status: G0-G12 done (desktop numbers G6b-G12b); open: the X4 limits of section 13 (owner OK), the T0 rate (owner), acceptance item 3 (type and wave made as assets), the Launched hover.** | [combat-m8-minions.md](combat-m8-minions.md), [plans/m8-minion.md](plans/m8-minion.md), the plugin README, `docs/notes/m8-doc-deltas.md` |
 | M9 | Stock GAS adapter | Optional. | [combat-m5-m9.md](combat-m5-m9.md) |
 

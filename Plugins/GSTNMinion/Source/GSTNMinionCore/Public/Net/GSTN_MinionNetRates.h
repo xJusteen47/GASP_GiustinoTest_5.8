@@ -33,9 +33,11 @@ namespace GSTNMinionNetRate
 	GSTNMINIONCORE_API int32 RateHz(EGSTN_MinionLODTier Tier);
 
 	constexpr int32 DefaultCombatRateHz = 15;
+	/** Ceiling of the T0 rate (G12b): above the table, for hosts that can afford smoother near minions; at most half the 62.5 Hz fixed tick */
+	constexpr int32 MaxCombatRateHz = 30;
 
 	/**
-	 * Host fallback 2 of 4d.1: the T0 send rate, clamped to 5..15 (15 = the table). Process-wide, set by the Runtime from the
+	 * Host fallback 2 of 4d.1: the T0 send rate, clamped to 5..MaxCombatRateHz (15 = the table). Process-wide, set by the Runtime from the
 	 * gstn.Minion.T0RateHz cvar (Core reads no cvar); the default leaves every byte as it was. Game thread only
 	 */
 	GSTNMINIONCORE_API void SetCombatRateHz(int32 Hz);

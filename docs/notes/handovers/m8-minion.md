@@ -573,3 +573,31 @@
 - Not done here: T0RateHz 10 default (the desktop does it on G12b). No PERF-DEBT (one branch per hit start).
 - Harness note: quote `-abslog` when the path has spaces, or every log-reading check fails ("could not find this editor process's log").
 - Build times (laptop): build + headless ~150 s. Cost: ~$3 (Sonnet writer + lead).
+
+## G12b (desktop, 2026-11-09): sweep with minions, byte tables, combat.md folds, X4 analysis; T0 at 10 Hz in the ini; gate green
+- Branch `claude/desktop-g12b`. Scripts/logs in `Saved/G12b/` (`driver.py` sweep with a population, `seq.ps1`, `notes.md`), reports `Saved/Logs/g12b/`. One Opus thread, no writer.
+- Sweep (headless, listen + 2, 60/15, fresh PIE each, `gstn.Minion.Bench.Population 40 40 6000 Idle` = 40 awake minions on a 9.5 m ring around the host's pawn):
+  SUITE_PARTS 10/10 at 0 % and 2 %; SUITE_DEFENCE 13/13 and 13/13; SUITE_LINK 18/19 at 0 % (grab_mash: one client saw the mash end at 706 vs 703; 2/2 PASS on rerun = flake) and 19/19 at 2 %.
+  SUITE_MINION 0 % dedicated + 2 at 10 Hz: 11/12, red only player_hits_minion "none cancelled" (1 of 50; 2/2 PASS on rerun, the open G7b case). Run in listen by mistake first, lagcomp and lod fail there (both are dedicated scenarios).
+- T0 rate: `gstn.Minion.T0RateHz=10` in `Config/DefaultEngine.ini` (owner OK, coordinator note 02:19Z); C++ default stays 15. The Core clamp is now 5..30 (`MaxCombatRateHz`) for the
+  20/30 Hz measurement; `MutatePackWakesBeforeMutation` reads the current T0 rate instead of 15. `minion_bytes` gains `GSTN_BYTES_N150=1` (third window, 150 moving minions; off by default).
+- Wire bytes per client from minions (dedicated + 3, -nullrhi, Massacre = moving, window 15 s, minus the no-minion baseline of ~45 KB/s per client; tiers at the end of the window):
+
+  | T0 Hz | N=40 (40 T0) KB/s | N=80 (48 T0 / 32 T1) | N=150 (~44 T0 / ~106 T1) | host upload at 80 (x3) |
+  |---|---|---|---|---|
+  | 10 (ini) | 4.9-5.0 | 7.5-8.1 | 6.3-6.4 | 23.7 KB/s |
+  | 15 (table) | 7.0 | 8.6-9.6 | 7.4-9.0 | 27.6 |
+  | 20 | 8.3-8.4 | 13.5 | 10.6-11.3 | 40.5 |
+  | 30 | 8.7-10.9 | 16.5-17.0 | 19.8-21.0 | 50.4 |
+  | G11b 10 / 15 | 4.9 / 8.1-8.4 | 7.6-7.7 / 9.3-10.7 | - | - |
+  N=150 is under N=80 at 10-20 Hz: the T0 cap (48) and relevancy grants keep most at T1 (5 Hz). The 40 KB/s host budget holds at 10/15 Hz; 20 Hz sits on it at N=80, 30 Hz breaks it.
+- CPU per N (from G11b, host alone, rendering): N=40 batch mean 0.25 ms / GT +1.1 ms; N=80 0.38 / +1.9; N=150 (124 alive) 0.56 / +2.1; p95 frame <= 10.5 ms everywhere.
+- X4 analysis (no code; owner: before PvP). Player -> minion hits ARE lag compensated today. The cost: `GSTNLagComp::BuildOverlay` (GSTNCombatNP, `GSTN_LagCompensation.cpp`) copies the
+  whole step snapshot and runs `SampleHistory` on every entry, minions included, once per remote attacker per frame its view is resolved, then rebuilds the grid: O(N) per attacker.
+  Wiring: an optional provider call on `IGSTN_HittableProvider` (`GatherRewound(Bounds, RewindMs, Out)`, default = today), used by BuildOverlay for entries of providers that implement it,
+  with Bounds = the attacker's reach box grown by MaxSpeed x rewind age; the minion subsystem answers with `GatherRewoundCandidates` (spike 5: 0.63 us a query). Estimated gain at N=150
+  ~20-40 us per remote attacker per frame (small at today's N, grows with N and players). Work: interface + BuildOverlay filter + minion override + 2 NP tests + lagcomp scenario rerun,
+  one thread, ~$4-6. Meter gain on minion victims is the other X4 item left (the attacker's hitstop and cue on minion hits landed from the laptop, 9684bb3c).
+- Gate: 2 builds (incremental 12 s each, base up to date 1 s); headless GSTN 1455/0/0 (1 test fixed for the ini rate); play settings restored. Not run: 2 % SUITE_MINION at 10 Hz.
+- PERF-DEBT (also in perf-debt.md): see "## G12b".
+- Cost: ~$7 (my context ~130k, 2 builds, 2 headless, ~2.5 h of harness runs). Build times: full 54 s, incremental 6-21 s (12 s here), headless GSTN 54-58 s.

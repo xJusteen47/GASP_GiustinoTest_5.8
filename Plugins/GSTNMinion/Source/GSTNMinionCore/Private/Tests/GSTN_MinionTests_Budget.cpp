@@ -77,7 +77,7 @@ bool FGSTN_MinionBudgetT0RateTest::RunTest(const FString& Parameters)
 	GSTNMinionNetRate::SetCombatRateHz(2);
 	TestEqual(TEXT("clamped up to 5"), GSTNMinionNetRate::GetCombatRateHz(), 5);
 	GSTNMinionNetRate::SetCombatRateHz(40);
-	TestEqual(TEXT("clamped down to 15"), GSTNMinionNetRate::GetCombatRateHz(), 15);
+	TestEqual(TEXT("clamped down to the ceiling"), GSTNMinionNetRate::GetCombatRateHz(), GSTNMinionNetRate::MaxCombatRateHz);
 	GSTNMinionNetRate::SetCombatRateHz(15);
 	TestEqual(TEXT("15 restores the old period"), GSTNMinionNetRate::PeriodMilliFrames(GSTNMinionNetRate::RateHz(EGSTN_MinionLODTier::Combat)), Period15);
 	return true;

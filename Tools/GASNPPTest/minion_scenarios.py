@@ -1216,8 +1216,21 @@ def scenario_minion_bytes(client=1, clients=2):
         (21.0 + 2 * w + o, lambda: snap('pop')), (21.8 + 2 * w + o, lambda: ('read', read('pop'))),
         (22.0 + 2 * w + o, run.at('150 population: awake (T0..T2) <= 62, the rest dormant', population)),
         (22.1 + 2 * w + o, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear') or _cmd('gstn.Minion.Bench.LaunchSpeed 3000'))),
-        (23.0 + 2 * w + o, run.finish()),
     ]
+    end = 23.0 + 2 * w + o
+    if os.environ.get('GSTN_BYTES_N150', '0') == '1':
+        # G12b: a third window with 150 moving minions (store capacity 160), for the N = 40 / 80 / 150 byte table; off by default
+        if kind == 'Massacre':
+            steps.append((22.3 + 2 * w + o, lambda: ('launch speed', _cmd('gstn.Minion.Bench.LaunchSpeed 800'))))
+        steps += [
+            (23.5 + 2 * w + o, lambda: ('spawn 150', _cmd(f'gstn.Minion.Bench.Spawn 150 {kind}'))),
+            (30.5 + 2 * w + o, lambda: snap('c0')), (31.3 + 2 * w + o, lambda: ('read', read('c0'))),
+            (30.5 + 3 * w + o, lambda: snap('c1')), (31.3 + 3 * w + o, lambda: ('read', read('c1'))),
+            (31.5 + 3 * w + o, run.at('N=150 bytes per client', lambda: rate('c0', 'c1', 150))),
+            (31.6 + 3 * w + o, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear') or _cmd('gstn.Minion.Bench.LaunchSpeed 3000'))),
+        ]
+        end = 32.5 + 3 * w + o
+    steps.append((end, run.finish()))
     run.run(steps)
 
 

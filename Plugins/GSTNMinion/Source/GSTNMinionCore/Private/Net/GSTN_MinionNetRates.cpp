@@ -13,7 +13,7 @@ namespace GSTNMinionNetRate
 
 	void SetCombatRateHz(int32 Hz)
 	{
-		CombatRateHz = FMath::Clamp(Hz, 5, DefaultCombatRateHz);
+		CombatRateHz = FMath::Clamp(Hz, 5, MaxCombatRateHz);
 	}
 
 	int32 GetCombatRateHz()

@@ -9,6 +9,7 @@
 #include "Net/GSTN_MinionClientRegistry.h"
 #include "Net/GSTN_MinionNetManager.h"
 #include "Net/GSTN_MinionNetRelevancy.h"
+#include "Net/GSTN_MinionNetRates.h"
 #include "Net/GSTN_MinionPack.h"
 #include "Runtime/GSTN_MinionCombatSubsystem.h"
 #include "UObject/Package.h"
@@ -157,7 +158,7 @@ bool FGSTN_MinionNetMutateOrderTest::RunTest(const FString& Parameters)
 	{
 		Rig.Minions->TickBatch(Frame);
 	}
-	TestEqual(TEXT("ceiling back to the T0 rate"), Pack->CeilingHz, 15);
+	TestEqual(TEXT("ceiling back to the T0 rate"), Pack->CeilingHz, GSTNMinionNetRate::RateHz(EGSTN_MinionLODTier::Combat));   // the project ini sets T0 to 10 Hz
 	TestTrue(TEXT("the pack is awake"), Pack->NetDormancy == DORM_Awake);
 	const int32 WakeIndex = Trace.Find(FName(TEXT("Wake")));
 	int32 MutateAfterWake = INDEX_NONE;

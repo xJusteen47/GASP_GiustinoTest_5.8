@@ -77,3 +77,10 @@ what, where, cheaper alternative.
 - Real minion bytes run 20-25 % over the 20 B planning at 15 Hz (equal at 10 Hz): find the per-pack framing; the players' NP traffic is 44-50 KB/s per client, 5x the minion stream (M4/NP budget review).
 - R5 toggle rate has no runtime counter (only HeldByHysteresis in Core); over-inclusion not stressed by the harness (pawns together): needs a spread-out scenario. Puppet anim cost with a real ABP and Insights contention still unmeasured.
 - G9b item 3 (2026-11-09): `gstn.Minion.Bench.WaveAsset` loads the wave asset synchronously on first bench use (test tooling only): async-load with the bench start if the bench ever runs in a shipping-like build.
+
+
+## G12b (desktop, 2026-11-09)
+- X4 rewind: `BuildOverlay` samples every snapshot entry per remote attacker per frame (O(N x attackers)); wiring plan and estimate in m8-minion.md G12b.
+- 30 Hz T0 does not scale linearly at N=40 (8.7-10.9 KB/s vs 8.3 at 20 Hz): the pack ceiling or the net driver tick caps it; unexplained, check before shipping a rate above 15.
+- N=150 is cheaper than N=80 on the wire because the T0 cap and grants push 106 minions to T1: the per-client cost of a large crowd depends on the cap, not on N; R5 grants under a spread-out crowd are still unmeasured.
+- 10 Hz T0 adds client puppet latency; one extra cancelled flash in player_hits_minion at 0 % (flake class). Interpolation delay not re-tuned for 10 Hz.
