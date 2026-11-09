@@ -1001,6 +1001,7 @@ def scenario_minion_promote(client=1):
 
 # ---- M8 G11: host budgets (MaxActiveT0, T0 rate, awake population). Numbers on a laptop with -nullrhi are provisional ----
 _BUDGET = re.compile(r'MinionBench budget activeT0=(\d+) demoted=(\d+) awake=(\d+) dormant=(\d+) t0=(\d+) t1=(\d+) t2=(\d+) t3=(\d+) alive=(\d+) t0RateHz=(\d+) maxBatchUs=([\d.]+) avgBatchUs=([\d.]+)')
+_NET_WIRE = re.compile(r'MinionBench net outBytes=(\d+) outPerSec=\d+ conns=\d+ perConn=(\S*)')   # G11b: real wire bytes (bench Report)
 _PLANNING_BYTES_PER_ITEM = 20   # GSTNMinionNetRate::PlanningBytesPerItem: planned size of one item update (R1 measures the real one)
 
 
@@ -1118,9 +1119,16 @@ def scenario_minion_bytes(client=1, clients=2):
     per second, with the per-tier counts of the server. Then the 150 population case (gstn.Minion.Bench.Population 150 60): awake (T0..T2) <= 62.
     `clients` is the number of remote clients the host serves (2 on the laptop, 3 on the desktop): the host upload is per-client x clients and
     is printed that way; the windows read every client that reports. Numbers are planning bytes, not wire bytes, and provisional (laptop,
-    -nullrhi); the 5.8 KB/s per client of M8 4d.1 for 40 typical minions is only noted, not judged."""
+    -nullrhi); the 5.8 KB/s per client of M8 4d.1 for 40 typical minions is only noted, not judged.
+    G11b: GSTN_BYTES_KIND (Chase default | Massacre: minions are launched all the time, so they keep moving) picks the horde, and the bench Report's
+    'MinionBench net' line (server UNetDriver OutTotalBytes, per client connection) gives the REAL wire bytes per window, printed next to the
+    planning bytes. GSTN_BYTES_CVARS (';' list of console commands run first) tries a fallback. GSTN_BYTES_BASE=1 (default) first measures a window with no minions: the players' own traffic (NP) is the baseline that the
+    minion bytes are read against (real minion bytes = window - baseline). The real figures are recorded, not judged"""
     run = g._Run('minion_bytes', client, judge_reconciles=False, sample=False)
     window = _env_float('GSTN_BENCH_WINDOW', 10.0)
+    kind = os.environ.get('GSTN_BYTES_KIND', 'Chase')
+    base = os.environ.get('GSTN_BYTES_BASE', '1') != '0'
+    o = (window + 2.0) if base else 0.0     # the baseline window shifts everything after it
     st = {}
 
     def snap(label):
@@ -1131,10 +1139,33 @@ def scenario_minion_bytes(client=1, clients=2):
         _cmd('gstn.Minion.Bench.Report')
         return 'snap ' + label
 
+    def wire(label):
+        """Real wire bytes of the server driver and of each client connection at the snap (cumulative OutTotalBytes of the last 'MinionBench net' line)"""
+        rows = _NET_WIRE.findall(g._read_log_since(st[label + '_mark']))
+        if rows:
+            total, conns = int(rows[-1][0]), [int(x) for x in re.findall(r'(\d+)/\d+', rows[-1][1])]
+            st[label + '_wire'] = (total, conns)
+        return f"{label}: wire {st.get(label + '_wire')}"
+
+    def wire_rate(a, b):
+        """(host B/s, [per client B/s]) between two snaps, or None"""
+        if a + '_wire' not in st or b + '_wire' not in st:
+            return None
+        dt = max(st[b + '_time'] - st[a + '_time'], 0.001)
+        (t0, c0), (t1, c1) = st[a + '_wire'], st[b + '_wire']
+        return (t1 - t0) / dt, [(y - x) / dt for x, y in zip(c0, c1)]
+
+    def base_rate():
+        r = wire_rate('z0', 'z1')
+        if r:
+            run.note(f'REAL wire baseline (no minions): host {r[0]:.0f} B/s, per client ' + ', '.join(f'{v:.0f}' for v in r[1]))
+        return r is not None, f'baseline {r}'
+
     def read(label):
         st[label + '_updates'] = {p: x['updates'] for p, x in _net_state()[3].items()}
         rows = _budget_rows(st[label + '_mark'])
         st[label + '_budget'] = rows[-1] if rows else {}
+        wire(label)
         return f"{label}: updates {st[label + '_updates']} budget {st[label + '_budget']}"
 
     def rate(a, b, n):
@@ -1145,6 +1176,12 @@ def scenario_minion_bytes(client=1, clients=2):
         detail = (f"N={n}: per-client planning bytes/s {', '.join(f'{p}:{v:.0f}' for p, v in per.items())}; host upload for {clients} clients ~{top * clients:.0f} B/s; "
                   f"tiers t0={bud.get('t0')} t1={bud.get('t1')} t2={bud.get('t2')} t3={bud.get('t3')} activeT0={bud.get('activeT0')} demoted={bud.get('demoted')} "
                   f"t0Hz={bud.get('t0Hz')} (provisional, laptop, planning size 20 B)")
+        r = wire_rate(a, b)
+        if r:
+            br = wire_rate('z0', 'z1')
+            net = [max(v - bv, 0.0) for v, bv in zip(r[1], br[1])] if br else None
+            run.note(f'N={n} {kind}: REAL wire bytes/s per client {", ".join(f"{v:.0f}" for v in r[1])}, host {r[0]:.0f}'
+                     + (f'; minus the no-minion baseline: per client {", ".join(f"{v:.0f}" for v in net)} (planned {top:.0f})' if net else ''))
         if n == 40:
             run.note(f'M8 4d.1 planning value for 40 typical minions: 5.8 KB/s per client; measured {top / 1000.0:.1f} KB/s (chasing, so all T0)')
         return (top > 0.0), detail
@@ -1156,23 +1193,30 @@ def scenario_minion_bytes(client=1, clients=2):
                                                            f"t2={bud.get('t2')} t3={bud.get('t3')} activeT0={bud.get('activeT0')} (provisional, laptop)")
 
     w = window
-    steps = [
-        (0.0, lambda: ('setup', _setup())),
-        (0.5, lambda: ('spawn 40', _cmd('gstn.Minion.Bench.Spawn 40 Chase'))),
-        (4.0, lambda: snap('a0')), (4.8, lambda: ('read', read('a0'))),
-        (4.0 + w, lambda: snap('a1')), (4.8 + w, lambda: ('read', read('a1'))),
-        (5.0 + w, run.at('N=40 bytes per client', lambda: rate('a0', 'a1', 40))),
-        (5.1 + w, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
-        (6.5 + w, lambda: ('spawn 80', _cmd('gstn.Minion.Bench.Spawn 80 Chase'))),
-        (10.5 + w, lambda: snap('b0')), (11.3 + w, lambda: ('read', read('b0'))),
-        (10.5 + 2 * w, lambda: snap('b1')), (11.3 + 2 * w, lambda: ('read', read('b1'))),
-        (11.5 + 2 * w, run.at('N=80 bytes per client', lambda: rate('b0', 'b1', 80))),
-        (11.6 + 2 * w, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
-        (13.0 + 2 * w, lambda: ('population', _cmd('gstn.Minion.Bench.Population 150 60 12000 Idle'))),
-        (21.0 + 2 * w, lambda: snap('pop')), (21.8 + 2 * w, lambda: ('read', read('pop'))),
-        (22.0 + 2 * w, run.at('150 population: awake (T0..T2) <= 62, the rest dormant', population)),
-        (22.1 + 2 * w, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
-        (23.0 + 2 * w, run.finish()),
+    steps = [(0.0, lambda: ('setup', _setup()))]
+    if kind == 'Massacre':
+        steps.append((0.1, lambda: ('launch speed', _cmd('gstn.Minion.Bench.LaunchSpeed 800'))))
+    for i, extra in enumerate(c for c in os.environ.get('GSTN_BYTES_CVARS', '').split(';') if c):   # e.g. 'gstn.Minion.T0RateHz 10' (a fallback of M8 8.3)
+        steps.append((0.2 + 0.01 * i, lambda extra=extra: ('cvar', _cmd(extra))))
+    if base:
+        steps += [(1.0, lambda: snap('z0')), (1.8, lambda: ('read', read('z0'))), (1.0 + w, lambda: snap('z1')), (1.8 + w, lambda: ('read', read('z1'))),
+                  (2.0 + w, run.at('baseline wire bytes (players only, no minions)', base_rate))]
+    steps += [
+        (0.5 + o, lambda: ('spawn 40', _cmd(f'gstn.Minion.Bench.Spawn 40 {kind}'))),
+        (4.0 + o, lambda: snap('a0')), (4.8 + o, lambda: ('read', read('a0'))),
+        (4.0 + w + o, lambda: snap('a1')), (4.8 + w + o, lambda: ('read', read('a1'))),
+        (5.0 + w + o, run.at('N=40 bytes per client', lambda: rate('a0', 'a1', 40))),
+        (5.1 + w + o, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (6.5 + w + o, lambda: ('spawn 80', _cmd(f'gstn.Minion.Bench.Spawn 80 {kind}'))),
+        (10.5 + w + o, lambda: snap('b0')), (11.3 + w + o, lambda: ('read', read('b0'))),
+        (10.5 + 2 * w + o, lambda: snap('b1')), (11.3 + 2 * w + o, lambda: ('read', read('b1'))),
+        (11.5 + 2 * w + o, run.at('N=80 bytes per client', lambda: rate('b0', 'b1', 80))),
+        (11.6 + 2 * w + o, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (13.0 + 2 * w + o, lambda: ('population', _cmd('gstn.Minion.Bench.Population 150 60 12000 Idle'))),
+        (21.0 + 2 * w + o, lambda: snap('pop')), (21.8 + 2 * w + o, lambda: ('read', read('pop'))),
+        (22.0 + 2 * w + o, run.at('150 population: awake (T0..T2) <= 62, the rest dormant', population)),
+        (22.1 + 2 * w + o, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear') or _cmd('gstn.Minion.Bench.LaunchSpeed 3000'))),
+        (23.0 + 2 * w + o, run.finish()),
     ]
     run.run(steps)
 

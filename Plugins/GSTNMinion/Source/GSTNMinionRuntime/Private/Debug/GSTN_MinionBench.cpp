@@ -12,6 +12,8 @@
 #include "Engine/CollisionProfile.h"
 #include "Engine/OverlapResult.h"
 #include "Engine/Engine.h"
+#include "Engine/NetConnection.h"
+#include "Engine/NetDriver.h"
 #include "Animation/AnimInstance.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
@@ -864,6 +866,17 @@ void UGSTN_MinionBenchSubsystem::Report() const
 	UE_LOG(LogGSTNMinion, Log, TEXT("MinionBench budget activeT0=%d demoted=%d awake=%d dormant=%d t0=%d t1=%d t2=%d t3=%d alive=%d t0RateHz=%d maxBatchUs=%.1f avgBatchUs=%.1f"),
 		Minions->GetActiveT0Count(), Minions->GetT0DemotedCount(), PerTier[0] + PerTier[1] + PerTier[2], PerTier[3], PerTier[0], PerTier[1], PerTier[2], PerTier[3],
 		Minions->GetLastBatchStats().Alive, GSTNMinionNetRate::GetCombatRateHz(), Totals.MaxBatchSeconds * 1.0e6, AvgUs);
+	// G11b: real wire bytes of the whole server driver (cumulative OutTotalBytes, so a harness window is a difference of two lines) and per client
+	// connection. Includes every channel (players' NP traffic, packs), so a minion share is measured against a 0-minion window. Bench only
+	if (const UNetDriver* Driver = GetWorld() ? GetWorld()->GetNetDriver() : nullptr; Driver && Driver->IsServer())
+	{
+		FString PerConn;
+		for (const UNetConnection* Conn : Driver->ClientConnections)
+		{
+			PerConn += FString::Printf(TEXT("%s%d/%d"), PerConn.IsEmpty() ? TEXT("") : TEXT(","), Conn->OutTotalBytes, Conn->OutBytesPerSecond);
+		}
+		UE_LOG(LogGSTNMinion, Log, TEXT("MinionBench net outBytes=%u outPerSec=%u conns=%d perConn=%s"), Driver->OutTotalBytes, Driver->OutBytesPerSecond, Driver->ClientConnections.Num(), *PerConn);
+	}
 	// Spike 5: the drain cost per hit (a 12-minion cleave costs 12 of them) and the rewound candidate query
 	const double DrainUsPerHit = Totals.DrainedHits > 0 ? Totals.DrainSeconds * 1.0e6 / static_cast<double>(Totals.DrainedHits) : 0.0;
 	const double LagCompUsPerQuery = Totals.LagCompQueries > 0 ? Totals.LagCompSeconds * 1.0e6 / static_cast<double>(Totals.LagCompQueries) : 0.0;

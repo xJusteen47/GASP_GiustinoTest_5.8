@@ -511,3 +511,25 @@
 - Build times (desktop): full 54 s (166 actions), incremental 6-21 s, headless GSTN 56-58 s, SUITE_MINION 0 % ~460 s (12 scenarios).
 - PERF-DEBT: none new (promotion is rare: one array walk per presentation tick while a fighter waits; held body costs a slot for 16 frames).
 - Cost: ~$12 for the thread (G9b + FP G2 attempts + merge), my context ~190k, 6 builds, 4 headless, 4 suite runs, 2 video runs.
+
+## G11b (desktop, 2026-11-09): host frame, real wire bytes, R4/R5 recorded; gate green
+- Branch `claude/desktop-g11b` (02d6c9a8 + this change, uncommitted). Scripts/logs in `Saved/G11b/` (`horde.py`, `runh.ps1`, `summ.py`, `h2/h3.log`, `bytesM.log`, `notes.md`). Code: `Report` prints `MinionBench net outBytes=.. outPerSec=.. conns=.. perConn=total/perSec,..` (server UNetDriver, bench only); `minion_bytes` gains `GSTN_BYTES_KIND` (Chase|Massacre), a no-minion baseline window, real wire bytes and `GSTN_BYTES_CVARS`.
+- Horde (attackers on every fighter, all swing, topped up every ~4 s; Development, rendering, Manny puppets, 30 s per N). Host alone = listen, 1 player. One process with host + 2 clients = 3 viewports, 3x the puppets: the frame is 19.95 ms at N=0 already, so the 16.6 ms gate cannot be judged there (deltas only).
+
+  | N (mean alive) | host alone frame avg/p95 ms | GT work ms | batch avg/max us | T0 / awake (end) | host+2 clients frame avg/p95 ms |
+  |---|---|---|---|---|---|
+  | 0 | 8.35 / 9.5 | 4.14 | 8 / 178 | 0 / 0 | 19.95 / 24.5 |
+  | 20 (18) | 8.51 / 10.0 | 4.77 | 137 / 402 | 14 / 14 | 21.4 / 25.5 |
+  | 40 (40) | 8.58 / 10.0 | 5.22 | 247 / 603 | 31 / 31 | 23.0 / 27.5 |
+  | 60 (68) | 8.81 / 10.0 | 5.77 | 367 / 867 | 48 / 51 | 24.5 / 28.8 |
+  | 80 (77) | 8.95 / 10.0 | 5.99 | 383 / 469 | 48 / 67 | 25.5 / 29.5 |
+  | 100 (102) | 9.09 / 10.5 | 6.13 | 452 / 692 | 48 / 83 | 26.5 / 31.0 |
+  | 120 (118) | 9.20 / 10.5 | 6.27 | 488 / 787 | 48 / 101 | 27.2 / 31.7 |
+  | 150 (124) | 9.13 / 10.5 | 6.21 | 557 / 815 | 48 / 121 | 27.6 / 32.0 |
+- Max N verdict: host alone, no limit found up to the largest tried: N = 150 (mean 124 alive, kills outpace the top-up) is p95 10.5 ms <= 16.6, batch avg 0.56 ms (max 0.87) inside §11 (host mean <= 1.0 / 1.6 / 2.0 at 40 / 60 / 80; only max, no p99). Host + 2 clients in one process: +7.6 ms avg / +7.5 p95 from N=0 to 150 (+3.0 at 40, +4.5 at 60) mostly the 2 client worlds' puppets/anim; unjudged against 16.6. No §4d.1 fallback needed for the frame (MaxActiveT0 48 was in force and held: T0 never above 48). 150 population (bytes scenario): alive 150, awake 60, dormant 90.
+- Real wire bytes (dedicated + 3, -nullrhi, window 15 s, Massacre = moving; real = window - no-minion baseline; baseline is the players' NP traffic, 44-50 KB/s per client, 5x the minions): N=40 all T0 at 15 Hz: 8.1 KB/s per client (0 %) / 8.4 (2 %) vs planned 6.5 / 6.7; N=80 (48 T0 / 32 T1): 9.3-10.7 / 8.6-9.4 vs planned 8.0-9.1 / 7.9-8.3. Host upload from minions (x3): 24-25 KB/s at 40, 27-31 at 80 (< 40 budget). Real is +20-25 % over the 20 B planning at 15 Hz; with `gstn.Minion.T0RateHz 10` (§8.3 step 1): 4.9 at 40 (planned 4.9), 7.6-7.7 at 80. All-T0 N=40 breaks the "hard <= 8" at 15 Hz, which is the §8.3 case that triggers step 1. Chase: minions stand at the target, minion bytes ~0 (inside the +-0.5 KB/s baseline noise).
+- R4: no order-option code exists (only the plan), so error and pops are unmeasured. The numbers say T1/T2 are small in a moving horde (N=80: 32 T1, 0 T2; the T0 stream, which R4 does not touch, is most of it): the 10 Hz fallback brings bytes inside the cap alone; not built.
+- R5: over-inclusion 0.000 (5.8k-83k items sent, 0 beyond 8000 cm: the harness pawns stand together, so the metric is not stressed); grants vs budget (3 clients): N=40 granted 9/9 packs, denied 0; N=80 (80 items > 64) granted 9, deniedBudget 3-6 per pass; N=150: granted 9, denied 3, outOfRange 18. Toggle rate unmeasured (no runtime counter); the 1 s hysteresis is MinToggleFrames 63 and tested in Core.
+- §8.3 re-based: N=40 all-T0 moving 8.1-8.4 KB/s per client at 15 Hz, 4.9 at 10 Hz; N=80 9.3-10.7 / 7.6-7.7. §11 re-based: host batch mean 0.25 / 0.37 / 0.38 ms at 40 / 60 / 80 (max 0.6-0.9 ms); host-alone GT work +1.1 ms at 40, +1.6 at 60, +2.1 at 150 over N=0 (batch + replication + puppets, cap 60 visible).
+- Gate: build OK (2 builds: base up to date, bench change incremental 12 s); headless GSTN 1448/0/0 before and after (no test added), 0 ensures; minion_horde PASS 5 and minion_bytes PASS 4 at 0 % and 2 % (also Massacre and Massacre + 10 Hz at 0 %/2 %). Play settings restored.
+- PERF-DEBT (also in perf-debt.md): see "## G11b". Cost: ~$5 (one thread, 3 rendering runs of 5-6 min, 6 short runs).
