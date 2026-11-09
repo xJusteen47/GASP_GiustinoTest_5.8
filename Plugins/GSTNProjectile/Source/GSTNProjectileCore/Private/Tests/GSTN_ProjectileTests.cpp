@@ -85,4 +85,54 @@ bool FGSTNProjectileGravityTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTNProjectileArcAimTest, "GSTNProjectile.Core.ArcAimReachesTarget",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FGSTNProjectileArcAimTest::RunTest(const FString& Parameters)
+{
+	// v = 1000 cm/s, g = 1000 cm/s^2, target 800 cm away at the same height. tan(theta) = (v^2 -+ sqrt(v^4 - g^2 x^2)) / (g x)
+	// = (1e6 -+ 6e5) / 8e5: 0.5 for the flat shot, 2 for the lob. Flight time x / (v cos theta): 0.894 s (55.9 frames), 1.789 s (111.8 frames)
+	const FVector Gravity(0.0, 0.0, -1000.0);
+	const FVector TargetPoint(800.0, 0.0, 0.0);
+	const FGSTN_HitShape Projectile = ProjectileTestSphere(10.0);
+	const FGSTN_HitShape Hurtbox = ProjectileTestSphere(20.0);
+
+	struct FCase { bool bHigh; double Tan; int32 MinFrame; int32 MaxFrame; };
+	for (const FCase Case : {FCase{false, 0.5, 50, 56}, FCase{true, 2.0, 104, 112}})
+	{
+		FVector Direction;
+		TestTrue(TEXT("reachable target solved"), FGSTN_BallisticMode::SolveLaunchDirection(FVector::ZeroVector, TargetPoint, 1000.0, Gravity, Case.bHigh, Direction));
+		TestTrue(TEXT("unit direction"), FMath::IsNearlyEqual(Direction.Size(), 1.0, 1e-9));
+		TestTrue(TEXT("launch tangent matches the closed form"), FMath::IsNearlyEqual(Direction.Z / Direction.X, Case.Tan, 1e-9));
+
+		FGSTN_ProjectileParams Params;
+		Params.Direction = Direction;
+		Params.Speed = 1000.f;
+		Params.GravityAccel = Gravity;
+		const FGSTN_BallisticSegment Segment = FGSTN_BallisticMode::MakeSegment(Params, 0, 0.016);
+		const int32 Contact = FGSTN_BallisticMode::FindFirstContactFrame(Segment, Projectile, Hurtbox, FTransform(TargetPoint), 200);
+		TestTrue(FString::Printf(TEXT("%s arc hits the target hurtbox near its flight time (frame %d)"), Case.bHigh ? TEXT("high") : TEXT("low"), Contact),
+			Contact >= Case.MinFrame && Contact <= Case.MaxFrame);
+		double Closest = TNumericLimits<double>::Max();
+		for (int32 Frame = 1; Frame <= 200; ++Frame)
+		{
+			Closest = FMath::Min(Closest, FVector::Dist(FGSTN_BallisticMode::PositionAt(Segment, Frame), TargetPoint));
+		}
+		TestTrue(FString::Printf(TEXT("the path passes through the target (closest frame %.2f cm, 16 cm steps)"), Closest), Closest < 10.0);
+	}
+
+	// Gravity along -Y (a wall or a tilted arena): the same solution rotated
+	FVector Sideways;
+	TestTrue(TEXT("sideways gravity solved"), FGSTN_BallisticMode::SolveLaunchDirection(FVector::ZeroVector, FVector(800.0, 0.0, 0.0), 1000.0, FVector(0.0, -1000.0, 0.0), false, Sideways));
+	TestTrue(TEXT("sideways: tangent 0.5 against gravity"), FMath::IsNearlyEqual(Sideways.Y / Sideways.X, 0.5, 1e-9));
+
+	FVector Unused = FVector::ZeroVector;
+	TestFalse(TEXT("out of range: v^2 / g = 1000 cm is the farthest flat reach"), FGSTN_BallisticMode::SolveLaunchDirection(FVector::ZeroVector, FVector(1001.0, 0.0, 0.0), 1000.0, Gravity, false, Unused));
+	TestTrue(TEXT("out of range leaves the direction untouched"), Unused.IsZero());
+	FVector Straight;
+	TestTrue(TEXT("zero gravity aims straight"), FGSTN_BallisticMode::SolveLaunchDirection(FVector::ZeroVector, FVector(3.0, 4.0, 0.0), 1000.0, FVector::ZeroVector, true, Straight)
+		&& Straight.Equals(FVector(0.6, 0.8, 0.0), 1e-12));
+	return true;
+}
+
 #endif

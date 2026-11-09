@@ -11,12 +11,12 @@ Status: **experimental (0.1), slice 1**, `EnabledByDefault: false`, enabled in `
 
 | Module | Type | What it is |
 |---|---|---|
-| `GSTNProjectileCore` | Runtime | Pure (engine + `GSTNCombatCore`). `FGSTN_ProjectileParams` (origin, direction, speed, gravity vector, lifetime frames, owner entity and team, hit shape, hit data, max hits), `FGSTN_BallisticSegment`, `FGSTN_BallisticMode` (the "ballistic" mode: `PositionAt`/`VelocityAt`/`CarrierAt` in closed form of the frame, `SweepStep`, `FindFirstContactFrame`). Tests `GSTNProjectile.Core.*`. |
-| `GSTNProjectileNP` | Runtime | World side (NP fork for the fixed tick, `GSTNCombatNP` for snapshot and inboxes). `AGSTN_Projectile` (segment replicated `COND_InitialOnly`, no movement replication, drawn at `PositionAt(last fixed frame)`), `UGSTN_ProjectileSubsystem` (host: `FireProjectile`, sweep at every non-resimulated fixed frame, `PostHit`), console `gstn.Projectile.Fire`, cvar `gstn.Projectile.MaxActive` (64). |
+| `GSTNProjectileCore` | Runtime | Pure (engine + `GSTNCombatCore`). `FGSTN_ProjectileParams` (origin, direction, speed, gravity vector, lifetime frames, owner entity and team, hit shape, hit data, max hits), `FGSTN_BallisticSegment`, `FGSTN_BallisticMode` (the "ballistic" mode: `PositionAt`/`VelocityAt`/`CarrierAt` in closed form of the frame, `SweepStep`, `FindFirstContactFrame`, `SolveLaunchDirection` = the arc variant: flat or high arc through a target under any gravity vector). Tests `GSTNProjectile.Core.*`. |
+| `GSTNProjectileNP` | Runtime | World side (NP fork for the fixed tick, `GSTNCombatNP` for snapshot and inboxes). `AGSTN_Projectile` (segment replicated `COND_InitialOnly`, no movement replication, drawn at `PositionAt(last fixed frame)`), `UGSTN_ProjectileSubsystem` (host: `FireProjectile`, sweep at every non-resimulated fixed frame, `PostHit`), `UGSTN_GA_FireProjectile` (combat ability: template params, `FireDelayFrames`, muzzle, aim Facing / CommandAim / EventTarget, launch pitch, high arc; fires on the host only, spawn once) and its ServerOnly child `UGSTN_GA_FireProjectileServer` (AI, traps, harness), consoles `gstn.Projectile.Ability` (harness path) and `gstn.Projectile.Fire` (raw), cvar `gstn.Projectile.MaxActive` (64). |
 
 ## How a hit happens
 
-1. Host: `UGSTN_ProjectileSubsystem::FireProjectile(Params)` (an ability on the host, or `gstn.Projectile.Fire [Speed] [GravityZ] [LifetimeFrames] [Damage]`).
+1. Host: `UGSTN_ProjectileSubsystem::FireProjectile(Params)` from `UGSTN_GA_FireProjectile` (on a client the fire is skipped; the host never resimulates, so it spawns once), `gstn.Projectile.Ability [Shooter] [Target] [Speed] [GravityZ] [HighArc] [LifetimeFrames]`, or raw `gstn.Projectile.Fire [Speed] [GravityZ] [LifetimeFrames] [Damage]`.
    The segment starts at the next fixed frame.
 2. After the NP fixed tick of frame F, the host sweeps each projectile from F-1 to F against the combat step snapshot S(F): relationship
    and hittable list from the combat rules, swept hurtbox overlap with the opening rule, extra hurtboxes, `PickHurtboxIndex`.
@@ -24,8 +24,10 @@ Status: **experimental (0.1), slice 1**, `EnabledByDefault: false`, enabled in `
    attacks use: the victim (fighter or minion) drains it at F+1 and runs the melee pipeline (block, parry, armour, hardness, wounds, parts).
 4. One hit per target per projectile; consumed at `MaxHits` (1 by default) or after `LifetimeFrames`.
 
-## Not in slice 1
+## Not yet (after slice 2)
 
 Predicted ghost on the shooter, world collision and bounces, projectile vs projectile and deflect, lag compensation (`PositionAt` of the
-rewound frame), a timeline track key, a sample GAS ability (the API is `FireProjectile`), pooling, VFX, minion ranged attacks, a compact
+rewound frame), a timeline track key (the ability's `FireDelayFrames` stands in), a player input binding for the ability (content), pooling, VFX, minion ranged attacks, a compact
 wire format (the actor replicates the segment as full doubles), smoothing between fixed frames on the client.
+
+Harness: `Tools/GASNPPTest/projectile_scenarios.py` (`SUITE_PROJECTILE`, dedicated server + 2 clients).

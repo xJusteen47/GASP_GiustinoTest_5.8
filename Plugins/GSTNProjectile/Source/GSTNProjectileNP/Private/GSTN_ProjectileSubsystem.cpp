@@ -8,6 +8,9 @@
 #include "GameFramework/PlayerController.h"
 #include "GenericTeamAgentInterface.h"
 #include "GSTNProjectileCoreModule.h"
+#include "AbilitySystemComponent.h"
+#include "AbilitySystemGlobals.h"
+#include "GSTN_GA_FireProjectile.h"
 #include "GSTN_ProjectileActor.h"
 #include "HAL/IConsoleManager.h"
 #include "Hits/GSTN_CombatHitTags.h"
@@ -90,6 +93,25 @@ void UGSTN_ProjectileSubsystem::HandlePostFixedTick(int32 ServerFrame, int32 End
 	{
 		StepFrame(ServerFrame);
 	}
+}
+
+int32 UGSTN_ProjectileSubsystem::FindEntityIdOf(const AActor* Actor) const
+{
+	const UGSTN_CombatWorldSubsystem* Combat = Actor ? UGSTN_CombatWorldSubsystem::Get(GetWorld()) : nullptr;
+	if (!Combat)
+	{
+		return INDEX_NONE;
+	}
+	TArray<int32> Ids;
+	Combat->GetRegisteredEntityIds(Ids);
+	for (const int32 Id : Ids)
+	{
+		if (Combat->FindOwnerActor(Id) == Actor)
+		{
+			return Id;
+		}
+	}
+	return INDEX_NONE;
 }
 
 AGSTN_Projectile* UGSTN_ProjectileSubsystem::FireProjectile(const FGSTN_ProjectileParams& InParams)
@@ -339,21 +361,83 @@ namespace
 		// Clear of the shooter's own capsule; the owner is never hit anyway
 		Params.Origin = Pawn->GetActorLocation() + Params.Direction * 80.0;
 
-		if (const UGSTN_CombatWorldSubsystem* Combat = UGSTN_CombatWorldSubsystem::Get(World))
-		{
-			TArray<int32> Ids;
-			Combat->GetRegisteredEntityIds(Ids);
-			for (const int32 Id : Ids)
-			{
-				if (Combat->FindOwnerActor(Id) == Pawn)
-				{
-					Params.OwnerEntityId = Id;
-					break;
-				}
-			}
-		}
+		Params.OwnerEntityId = Projectiles->FindEntityIdOf(Pawn);
 		Projectiles->FireProjectile(Params);
 	}
+
+	/**
+	 * The ability path the harness drives: the host grants the ServerOnly fire ability to the shooter pawn (once) and triggers it with
+	 * the target pawn as event target, so the shot goes ability -> FireProjectile -> host sweep -> PostHit -> victim drain. Pawns are
+	 * numbered by ascending combat entity id. Speed, gravity and arc are written on the shooter's ability instance: a dev command only
+	 */
+	void FireAbilityFromConsole(const TArray<FString>& Args, UWorld* InWorld)
+	{
+		UWorld* World = FindAuthorityWorld(InWorld);
+		UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(World);
+		const UGSTN_CombatWorldSubsystem* Combat = UGSTN_CombatWorldSubsystem::Get(World);
+		if (!Projectiles || !Combat)
+		{
+			UE_LOG(LogGSTNProjectile, Warning, TEXT("gstn.Projectile.Ability: no host world with projectiles and combat in this process"));
+			return;
+		}
+		TArray<int32> Ids;
+		Combat->GetRegisteredEntityIds(Ids);
+		Ids.Sort();
+		TArray<APawn*> Pawns;
+		TArray<int32> PawnIds;
+		for (const int32 Id : Ids)
+		{
+			if (APawn* Pawn = Cast<APawn>(Combat->FindOwnerActor(Id)))
+			{
+				Pawns.Add(Pawn);
+				PawnIds.Add(Id);
+			}
+		}
+		const int32 ShooterIndex = Args.IsValidIndex(0) ? FCString::Atoi(*Args[0]) : 0;
+		const int32 TargetIndex = Args.IsValidIndex(1) ? FCString::Atoi(*Args[1]) : 1;
+		if (!Pawns.IsValidIndex(ShooterIndex) || !Pawns.IsValidIndex(TargetIndex) || ShooterIndex == TargetIndex)
+		{
+			UE_LOG(LogGSTNProjectile, Warning, TEXT("gstn.Projectile.Ability: shooter %d / target %d not among %d combat pawns"), ShooterIndex, TargetIndex, Pawns.Num());
+			return;
+		}
+		UAbilitySystemComponent* AbilitySystem = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Pawns[ShooterIndex]);
+		if (!AbilitySystem)
+		{
+			UE_LOG(LogGSTNProjectile, Warning, TEXT("gstn.Projectile.Ability: the shooter has no ability system"));
+			return;
+		}
+		FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(UGSTN_GA_FireProjectileServer::StaticClass());
+		if (!Spec)
+		{
+			AbilitySystem->GiveAbility(FGameplayAbilitySpec(UGSTN_GA_FireProjectileServer::StaticClass(), 1));
+			Spec = AbilitySystem->FindAbilitySpecFromClass(UGSTN_GA_FireProjectileServer::StaticClass());
+		}
+		UGSTN_GA_FireProjectile* Instance = Spec ? Cast<UGSTN_GA_FireProjectile>(Spec->GetPrimaryInstance()) : nullptr;
+		if (!Instance)
+		{
+			UE_LOG(LogGSTNProjectile, Warning, TEXT("gstn.Projectile.Ability: no ability instance after the grant"));
+			return;
+		}
+		Instance->Aim = EGSTN_ProjectileAim::EventTarget;
+		Instance->Projectile.Speed = Args.IsValidIndex(2) ? FCString::Atof(*Args[2]) : 1500.f;
+		Instance->Projectile.GravityAccel = FVector(0.0, 0.0, Args.IsValidIndex(3) ? FCString::Atod(*Args[3]) : 0.0);
+		Instance->bHighArc = Args.IsValidIndex(4) && FCString::Atoi(*Args[4]) != 0;
+		// A lob at a near target flies longer than the default 120 frames: the template's lifetime is never stretched to the solved flight
+		Instance->Projectile.LifetimeFrames = Args.IsValidIndex(5) ? FMath::Max(FCString::Atoi(*Args[5]), 1) : 120;
+
+		FGameplayEventData Payload;
+		Payload.Instigator = Pawns[ShooterIndex];
+		Payload.Target = Pawns[TargetIndex];
+		const bool bActivated = AbilitySystem->TriggerAbilityFromGameplayEvent(Spec->Handle, AbilitySystem->AbilityActorInfo.Get(), FGameplayTag(), &Payload, *AbilitySystem);
+		UE_LOG(LogGSTNProjectile, Log, TEXT("ProjectileAbility shooter=%d target=%d speed=%.0f gravityZ=%.0f high=%d activated=%d active=%d"),
+			PawnIds[ShooterIndex], PawnIds[TargetIndex], Instance->Projectile.Speed, Instance->Projectile.GravityAccel.Z, Instance->bHighArc ? 1 : 0,
+			bActivated ? 1 : 0, Projectiles->GetNumActive());
+	}
+
+	FAutoConsoleCommandWithWorldAndArgs GProjectileAbilityCommand(
+		TEXT("gstn.Projectile.Ability"),
+		TEXT("Host: grants the ServerOnly fire ability to a combat pawn and triggers it at another (pawns by ascending entity id). Args: [Shooter=0] [Target=1] [Speed=1500] [GravityZ=0] [HighArc=0] [LifetimeFrames=120]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&FireAbilityFromConsole));
 
 	FAutoConsoleCommandWithWorldAndArgs GProjectileFireCommand(
 		TEXT("gstn.Projectile.Fire"),

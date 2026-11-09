@@ -70,6 +70,12 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "GSTN|Projectile")
 	AGSTN_Projectile* FireProjectile(const FGSTN_ProjectileParams& Params);
 
+	/** Whether FireProjectile can spawn here now: the host, with a fixed tick seen. The ability's quiet check (a client skips its fire) */
+	bool CanFire() const { return HasAuthority() && LastFrame != INDEX_NONE; }
+
+	/** The combat pipeline id Actor is registered under in this world, INDEX_NONE if none (a lookup, not simulation state) */
+	int32 FindEntityIdOf(const AActor* Actor) const;
+
 	/** Sweeps every live projectile into Frame and posts its hits; removes the consumed and expired ones. Public for tests */
 	void StepFrame(int32 Frame);
 

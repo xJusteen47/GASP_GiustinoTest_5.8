@@ -114,6 +114,14 @@ struct GSTNPROJECTILECORE_API FGSTN_BallisticMode
 	 */
 	static bool SweepStep(const FGSTN_BallisticSegment& Segment, const FGSTN_HitShape& Shape, int32 Frame, const FGSTN_HitShape& Target, const FTransform& TargetWorld);
 
+	/**
+	 * The arc variant: the launch direction that brings a body fired from Origin at Speed under GravityAccel through Target (the
+	 * classic two-solution ballistic aim, solved in the plane of gravity, so a gravity that is not -Z works too). bHighArc picks the
+	 * lob instead of the flat shot. Zero gravity gives the straight line. False (OutDirection untouched) when Speed cannot reach Target.
+	 * Pure double math on the inputs: the host and a client aiming the same shot get the same bits
+	 */
+	static bool SolveLaunchDirection(const FVector& Origin, const FVector& Target, double Speed, const FVector& GravityAccel, bool bHighArc, FVector& OutDirection);
+
 	/** The first frame in (StartFrame, LastFrame] whose SweepStep touches Target, INDEX_NONE when none does. For tests and tools */
 	static int32 FindFirstContactFrame(const FGSTN_BallisticSegment& Segment, const FGSTN_HitShape& Shape, const FGSTN_HitShape& Target, const FTransform& TargetWorld, int32 LastFrame);
 };

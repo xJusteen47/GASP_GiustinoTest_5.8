@@ -37,6 +37,22 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNCombatGAS",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInput",
+			"Enabled": true
+		},
+		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
+		},
+		{
+			"Name": "AbilitySystemSimulation",
+			"Enabled": true
+		},
+		{
 			"Name": "NetworkPrediction",
 			"Enabled": true
 		}
