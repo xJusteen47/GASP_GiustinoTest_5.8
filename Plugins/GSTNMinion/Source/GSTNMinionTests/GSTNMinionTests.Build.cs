@@ -18,6 +18,8 @@ public class GSTNMinionTests : ModuleRules
 			"GSTNMinionRuntime",
 			"GSTNCombatCore",
 			"GSTNCombatNP",
+			// FGSTN_InputHistory (exported struct) inside the fighter presentation state built by AttackerHitstopOnMinionHit
+			"GSTNInputCore",
 			// FGenericTeamId of the stub fighter in the hit tests (G5)
 			"AIModule"
 		});

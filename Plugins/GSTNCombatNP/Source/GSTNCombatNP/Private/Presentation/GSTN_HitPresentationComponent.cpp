@@ -10,6 +10,7 @@
 #include "GSTN_HitEffectContext.h"
 #include "HAL/IConsoleManager.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
+#include "Sync/GSTN_SyncFragment.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 
 namespace
@@ -182,7 +183,10 @@ void UGSTN_HitPresentationComponent::StartEffect(const FGSTN_HitPresentationKey&
 	AActor* Attacker = GetOwner();
 	UGSTN_CombatWorldSubsystem* World = UGSTN_CombatWorldSubsystem::Get(GetWorld());
 	AActor* Victim = World ? World->FindOwnerActor(Key.VictimId) : nullptr;
-	if (!Attacker || !Victim)
+	// A minion is no actor: its hit still gives the attacker its cue and hitstop (M8, same View as a fighter's); the victim-side effects (flash,
+	// victim pause, reaction offset) need a mesh and stay off. Only the attacker's presentation here, nothing the simulation reads
+	const bool bMinionVictim = !Victim && GSTNEntityKinds::IsMinionEntityId(Key.VictimId);
+	if (!Attacker || (!Victim && !bMinionVictim))
 	{
 		return;
 	}
@@ -191,7 +195,8 @@ void UGSTN_HitPresentationComponent::StartEffect(const FGSTN_HitPresentationKey&
 
 	FEffect& Effect = Effects.AddDefaulted_GetRef();
 	Effect.Key = Key;
-	Effect.HitId = MakeHitId(Attacker, Victim, View.Timeline, View.HitboxIndex);
+	Effect.HitId = Victim ? MakeHitId(Attacker, Victim, View.Timeline, View.HitboxIndex)
+		: GSTNHitPresentation::MakeHitId(Attacker->GetUniqueID(), static_cast<uint32>(Key.VictimId), View.Timeline, View.HitboxIndex);
 	Effect.Victim = Victim;
 	Effect.StartTime = Now;
 	Effect.VictimMesh = FindMesh(Victim);
@@ -211,13 +216,13 @@ void UGSTN_HitPresentationComponent::StartEffect(const FGSTN_HitPresentationKey&
 				Context->TimelineIndex = View.Timeline;
 				Context->HitboxIndex = View.HitboxIndex;
 			}
-			CueManager->HandleGameplayCue(Victim, View.CueTag, EGameplayCueEvent::Executed, Params);
+			CueManager->HandleGameplayCue(Victim ? Victim : Attacker, View.CueTag, EGameplayCueEvent::Executed, Params);
 			Dedup.NoteLocal(Effect.HitId, Frame);
 			++NumCuesPlayed;
 		}
 	}
 
-	if (!FlashParameterName.IsNone() && FlashSeconds > 0.f)
+	if (Victim && !FlashParameterName.IsNone() && FlashSeconds > 0.f)
 	{
 		Effect.bFlashing = true;
 		SetFlash(Victim, 1.f);
@@ -245,7 +250,7 @@ void UGSTN_HitPresentationComponent::StartEffect(const FGSTN_HitPresentationKey&
 	}
 
 	// The victim reacts after its hitstop; a victim that ticks here (the host's world) moves by itself and needs no extrapolation
-	if (bPredictVictimReaction && View.bHasKnockback && Victim->GetLocalRole() == ROLE_SimulatedProxy && Effect.VictimMesh.IsValid() && !View.Knockback.LaunchVelocity.IsNearlyZero())
+	if (bPredictVictimReaction && View.bHasKnockback && Victim && Victim->GetLocalRole() == ROLE_SimulatedProxy && Effect.VictimMesh.IsValid() && !View.Knockback.LaunchVelocity.IsNearlyZero())
 	{
 		Effect.bReacting = true;
 		Effect.ReactionVelocity = View.Knockback.LaunchVelocity;

@@ -562,3 +562,14 @@
   (MakeHitId ~l.194, SetFlash ~l.223), run the cue on the attacker, keep the attacker pause block. Then add
   `GSTNMinion...AttackerHitstopOnMinionHit` in GSTN_MinionHitTests.cpp. Estimated ~$2-3.
 - Cost of the diagnosis: ~$1 (Sonnet, read-only). No build.
+
+## Attacker hitstop/cue on minion hits: FIXED (laptop, 2026-11-09, branch claude/laptop-hitstop-2, GSTNCombatNP approved by coordinator)
+- `UGSTN_HitPresentationComponent::StartEffect` no longer returns for minion victim ids: a minion hit gets a hit id from the entity id, the
+  cue runs on the attacker, flash and reaction offset are null-guarded, the attacker mesh pause block is unchanged. Presentation only.
+- Test `GSTNMinion.Runtime.Hits.AttackerHitstopOnMinionHit`: same predicted hit on a minion and on a fighter; both attacker meshes pause and
+  `GetPresentationInfo()` matches (6 frames hitstop). GSTNMinionTests now lists GSTNInputCore (the test's fighter state holds FGSTN_InputHistory).
+- Gate: build ok, headless 1457/0. SUITE_MINION 0%: 10/12, then player_hits_minion and lagcomp (known "kit swing did not come out") PASS on rerun.
+- SUITE_DEFAULT: 50/50 green (the first run had 17 reds from an unquoted -abslog, not the code).
+- Not done here: T0RateHz 10 default (the desktop does it on G12b). No PERF-DEBT (one branch per hit start).
+- Harness note: quote `-abslog` when the path has spaces, or every log-reading check fails ("could not find this editor process's log").
+- Build times (laptop): build + headless ~150 s. Cost: ~$3 (Sonnet writer + lead).

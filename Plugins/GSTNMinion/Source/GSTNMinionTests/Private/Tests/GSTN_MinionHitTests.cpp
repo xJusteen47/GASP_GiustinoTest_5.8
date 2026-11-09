@@ -3,8 +3,13 @@
 // the lag compensation history. They drive TickBatch directly in a transient game world; rules, hurtboxes, timelines and a stub fighter
 // are built in code (no content).
 
+#include "Components/SkeletalMeshComponent.h"
 #include "Data/GSTN_MinionDefinition.h"
 #include "Engine/Engine.h"
+#include "GameFramework/Actor.h"
+#include "Presentation/GSTN_HitPresentationComponent.h"
+#include "Simulation/GSTN_CombatSimTypes.h"
+#include "Sync/GSTN_SyncFragment.h"
 #include "Engine/World.h"
 #include "GenericTeamAgentInterface.h"
 #include "GSTN_MinionTags.h"
@@ -623,7 +628,82 @@ bool FGSTN_MinionHitsAttackerHitstopTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionHitsTokensTest, "GSTNMinion.Runtime.Hits.TokenRelease", GSTN_MINION_HIT_TEST_FLAGS)
+// The attacker's presentation (cue and mesh pause) of a pawn hit on a minion: a minion has no actor, and the presentation used to drop the hit
+// (UGSTN_HitPresentationComponent::StartEffect). Same hit data on a minion and on a fighter: the same pause length and cue count
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionHitsAttackerPresentationTest, "GSTNMinion.Runtime.Hits.AttackerHitstopOnMinionHit", GSTN_MINION_HIT_TEST_FLAGS)
+bool FGSTN_MinionHitsAttackerPresentationTest::RunTest(const FString& Parameters)
+{
+	FHitRig Rig;
+	if (!TestNotNull(TEXT("the combat world exists"), Rig.Combat))
+	{
+		return false;
+	}
+	TStrongObjectPtr<UGSTN_HurtboxSetDefinition> Set = MakeHurtboxes();
+	constexpr int32 TimelineStart = 10;
+	constexpr int32 HitFrame = 12;
+	constexpr int32 AttackerHitstop = 6;
+	constexpr float StepMs = 1000.f / 60.f;
+	const FGameplayTag Cue = GSTNMinionTags::Entity_Minion.GetTag();
+
+	auto MakeAttacker = [&](UGSTN_HitPresentationComponent*& OutComponent, USkeletalMeshComponent*& OutMesh)
+	{
+		AActor* Actor = Rig.World->SpawnActor<AActor>();
+		OutMesh = NewObject<USkeletalMeshComponent>(Actor);
+		Actor->SetRootComponent(OutMesh);
+		OutMesh->RegisterComponent();
+		OutComponent = NewObject<UGSTN_HitPresentationComponent>(Actor);
+		OutComponent->RegisterComponent();
+		return Actor;
+	};
+	auto Present = [&](UGSTN_HitPresentationComponent& Component, int32 VictimId)
+	{
+		FGSTN_CombatSyncCore Core;
+		Core.ActionState = EGSTN_ActionState::InTimeline;
+		Core.TimelineStartFrame = TimelineStart;
+		Core.Hit.AddHitTarget(VictimId, TimelineStart, 0);
+		FGSTN_PredictedHitView View;
+		View.Frame = HitFrame;
+		View.VictimId = VictimId;
+		View.HitGroup = 0;
+		View.Timeline = 1;
+		View.HitboxIndex = 0;
+		View.AttackerHitstopFrames = AttackerHitstop;
+		View.CueTag = Cue;
+		Component.OnAttackerFrame(Core, HitFrame, 0, MakeArrayView(&View, 1), StepMs);
+	};
+
+	UGSTN_HitPresentationComponent* ForMinion = nullptr;
+	USkeletalMeshComponent* MinionAttackerMesh = nullptr;
+	MakeAttacker(ForMinion, MinionAttackerMesh);
+	UGSTN_HitPresentationComponent* ForFighter = nullptr;
+	USkeletalMeshComponent* FighterAttackerMesh = nullptr;
+	MakeAttacker(ForFighter, FighterAttackerMesh);
+	if (!TestNotNull(TEXT("the components exist"), ForMinion) || !TestNotNull(TEXT("the second component exists"), ForFighter))
+	{
+		return false;
+	}
+
+	FStubFighter Fighter;
+	AActor* FighterVictim = Rig.World->SpawnActor<AActor>();
+	TestTrue(TEXT("the stub fighter registers"), Rig.Combat->RegisterEntity(FighterId, Fighter, FighterVictim, Fighter.Team, Set.Get()));
+
+	const int32 MinionId = GSTNEntityKinds::MakeMinionEntityId(3);
+	Present(*ForMinion, MinionId);
+	Present(*ForFighter, FighterId);
+	Rig.Combat->UnregisterEntity(FighterId);
+
+	TestEqual(TEXT("the attacker's mesh is paused for the minion hit"), ForMinion->GetNumPausedMeshes(), 1);
+	TestEqual(TEXT("the attacker's mesh is paused for the fighter hit"), ForFighter->GetNumPausedMeshes(), 1);
+	TestEqual(TEXT("the pause is zero rate on the minion hit"), MinionAttackerMesh->GlobalAnimRateScale, 0.f);
+	// "started,cancelled,cuesPlayed,cuesSuppressed,active,lastHitstopMs": the same numbers for both victims
+	const FString MinionInfo = ForMinion->GetPresentationInfo();
+	TestEqual(TEXT("the presentation of a minion hit equals the fighter's (started, cue, active, hitstop ms)"), MinionInfo, ForFighter->GetPresentationInfo());
+	TestTrue(TEXT("the minion hit started an effect"), MinionInfo.StartsWith(TEXT("1,")));
+	TestTrue(TEXT("the hitstop length is the attacker's frames"), MinionInfo.EndsWith(FString::Printf(TEXT(",%.1f"), AttackerHitstop * StepMs)));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionHitsTokensTest,"GSTNMinion.Runtime.Hits.TokenRelease", GSTN_MINION_HIT_TEST_FLAGS)
 bool FGSTN_MinionHitsTokensTest::RunTest(const FString& Parameters)
 {
 	FHitRig Rig;
