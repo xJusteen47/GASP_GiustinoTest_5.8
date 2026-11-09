@@ -4,6 +4,7 @@
 
 #include "Net/UnrealNetwork.h" // For MakeRelative
 #include "NetworkPredictionCVars.h"
+#include "NetworkPredictionNetBytes.h"
 #include "NetworkPredictionReplicationProxy.h"
 #include "NetworkPredictionTickState.h"
 #include "NetworkPredictionTrace.h"
@@ -407,24 +408,19 @@ public:
 
 	static void NetSend(const FNetSerializeParams& P, TInstanceData<ModelDef>& InstanceData, typename TInstanceFrameState<ModelDef>::FFrame& FrameData, typename TInstanceFrameState<ModelDef>::FFrame* BaseDeltaFrame)
 	{
-		// ** Modified By Kai Delta Serialization Support **//
-		if (BaseDeltaFrame)
-		{
-			FNetSerializeParams DeltaSerializationParams = P;
-			DeltaSerializationParams.BaseDeltaStatePtr = (void*)(BaseDeltaFrame->SyncState.Get());
-			FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.SyncState, DeltaSerializationParams);	// 1. Sync
-			DeltaSerializationParams.BaseDeltaStatePtr = (void*) BaseDeltaFrame->AuxState.Get();
-			FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.AuxState, DeltaSerializationParams);	// 2. Aux
-		}
-		// ** End Modified By Kai Delta Serialization Support **//
-		else
-		{
-			FNetSerializeParams DeltaSerializationParams = P;
-			DeltaSerializationParams.BaseDeltaStatePtr = nullptr;
-			FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.SyncState, DeltaSerializationParams);	// 1. Sync
-			FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.AuxState, DeltaSerializationParams);	// 2. Aux
-		}
-		
+		// ** Modified By Kai Delta Serialization Support ** (GSTN: one path, BaseDeltaStatePtr null without a base; NetBytes counter) **//
+		namespace NB = UE::NetworkPrediction::NetBytes;
+		const bool bCount = NB::GEnabled != 0;
+		int64 B0 = bCount ? NB::Bits(P.Ar) : 0;
+		auto Count = [&](const TCHAR* Part) { if (bCount) { const int64 B1 = NB::Bits(P.Ar); NB::Add(ModelDef::GetName(), NB::TargetName((uint8)P.ReplicationTarget), Part, B1 - B0); B0 = B1; } };
+
+		FNetSerializeParams DeltaSerializationParams = P;
+		DeltaSerializationParams.BaseDeltaStatePtr = BaseDeltaFrame ? (void*)(BaseDeltaFrame->SyncState.Get()) : nullptr;
+		FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.SyncState, DeltaSerializationParams);	// 1. Sync
+		Count(TEXT("Sync"));
+		DeltaSerializationParams.BaseDeltaStatePtr = BaseDeltaFrame ? (void*)BaseDeltaFrame->AuxState.Get() : nullptr;
+		FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.AuxState, DeltaSerializationParams);	// 2. Aux
+		Count(TEXT("Aux"));
 	}
 };
 
@@ -542,6 +538,7 @@ public:
 	// ------------------------------------------------------------------------------------------------------------
 	static void NetSend(const FNetSerializeParams& P, FNetworkPredictionID ID, TModelDataStore<ModelDef>* DataStore, const FFixedTickState* TickState)
 	{
+		const int64 GstnNetBytesStart = UE::NetworkPrediction::NetBytes::GEnabled ? UE::NetworkPrediction::NetBytes::Bits(P.Ar) : 0;
 		// *** Modified By Kai for delta serialization , and unified input handling *** //
 		FArchive& Ar = P.Ar;
 		UPackageMapClient* PackageMapClient = Cast<UPackageMapClient>(P.Map);
@@ -617,7 +614,9 @@ public:
 
 		TCommonReplicator_AP<ModelDef>::NetSend(LocalParams, *Instance, Frames->Buffer[PendingFrame],BaseDeltaFrame); // 6. Common
 
+		const int64 GstnCueStart = UE::NetworkPrediction::NetBytes::GEnabled ? LocalNetWriter.GetNumBits() : 0;
 		Instance->CueDispatcher->NetSendSavedCues(LocalParams.Ar, ENetSimCueReplicationTarget::AutoProxy, true); // 7. NetSimCues
+		if (UE::NetworkPrediction::NetBytes::GEnabled) { UE::NetworkPrediction::NetBytes::Add(ModelDef::GetName(), UE::NetworkPrediction::NetBytes::TargetName((uint8)P.ReplicationTarget), TEXT("Cues"), LocalNetWriter.GetNumBits() - GstnCueStart); }
 		
 		// After serializing the delta frame index , we serialized all rest of data in a local archive.
 		// we now send the client the data size and add this data to main network archive.
@@ -625,6 +624,7 @@ public:
 		uint32 DataSize = (uint32)LocalNetWriter.GetNumBits();
 		P.Ar.SerializeIntPacked(DataSize);  // 3. Data Size Num (this will be read before 4+ and after delta frame num)
 		P.Ar.SerializeBits(LocalNetWriter.GetData(),LocalNetWriter.GetNumBits());
+		if (UE::NetworkPrediction::NetBytes::GEnabled) { UE::NetworkPrediction::NetBytes::Add(ModelDef::GetName(), UE::NetworkPrediction::NetBytes::TargetName((uint8)P.ReplicationTarget), TEXT("Total"), UE::NetworkPrediction::NetBytes::Bits(P.Ar) - GstnNetBytesStart); }
 	}
 };
 
@@ -727,30 +727,25 @@ public:
 		
 		TInstanceFrameState<ModelDef>* Frames = DataStore->Frames.Find(ID);
 		npCheckSlow(Frames);
-		// ** Modified By Kai Delta Serialization Support **//
+		// ** Modified By Kai Delta Serialization Support ** (GSTN: one path, BaseDeltaStatePtr null without a base; NetBytes counter) **//
+		namespace NB = UE::NetworkPrediction::NetBytes;
+		const bool bCount = NB::GEnabled != 0;
+		int64 B0 = bCount ? NB::Bits(P.Ar) : 0;
+		auto Count = [&](const TCHAR* Part) { if (bCount) { const int64 B1 = NB::Bits(P.Ar); NB::Add(ModelDef::GetName(), NB::TargetName((uint8)P.ReplicationTarget), Part, B1 - B0); B0 = B1; } };
+
 		typename TInstanceFrameState<ModelDef>::FFrame& FrameData = Frames->Buffer[PendingFrame];
-		if (BaseDeltaFrame)
-		{
-			FNetSerializeParams DeltaSerializationParams = P;
-			DeltaSerializationParams.BaseDeltaStatePtr = (void*)BaseDeltaFrame->InputCmd.Get();
-			FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.InputCmd, DeltaSerializationParams);	// 1. Input
+		FNetSerializeParams DeltaSerializationParams = P;
+		DeltaSerializationParams.BaseDeltaStatePtr = BaseDeltaFrame ? (void*)BaseDeltaFrame->InputCmd.Get() : nullptr;
+		FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.InputCmd, DeltaSerializationParams);	// 1. Input
+		Count(TEXT("Input"));
 
-			DeltaSerializationParams.BaseDeltaStatePtr = (void*)BaseDeltaFrame->SyncState.Get();
-			FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.SyncState, DeltaSerializationParams);	// 2. Sync
+		DeltaSerializationParams.BaseDeltaStatePtr = BaseDeltaFrame ? (void*)BaseDeltaFrame->SyncState.Get() : nullptr;
+		FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.SyncState, DeltaSerializationParams);	// 2. Sync
+		Count(TEXT("Sync"));
 
-			DeltaSerializationParams.BaseDeltaStatePtr = (void*)BaseDeltaFrame->AuxState.Get();
-			FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.AuxState, DeltaSerializationParams);	// 3. Aux
-		}
-		// ** End Modified By Kai Delta Serialization Support **//
-		else
-		{
-			FNetSerializeParams DeltaSerializationParams = P;
-			DeltaSerializationParams.BaseDeltaStatePtr = nullptr;
-			FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.InputCmd, DeltaSerializationParams);	// 1. Input
-			FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.SyncState, DeltaSerializationParams);	// 2. Sync
-			FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.AuxState, DeltaSerializationParams);	// 3. Aux
-		}
-		
+		DeltaSerializationParams.BaseDeltaStatePtr = BaseDeltaFrame ? (void*)BaseDeltaFrame->AuxState.Get() : nullptr;
+		FNetworkPredictionDriver<ModelDef>::NetSerialize(FrameData.AuxState, DeltaSerializationParams);	// 3. Aux
+		Count(TEXT("Aux"));
 	}
 };
 
@@ -840,6 +835,7 @@ public:
 	// ------------------------------------------------------------------------------------------------------------
 	static void NetSend(const FNetSerializeParams& P, FNetworkPredictionID ID, TModelDataStore<ModelDef>* DataStore, const FFixedTickState* TickState)
 	{
+		const int64 GstnNetBytesStart = UE::NetworkPrediction::NetBytes::GEnabled ? UE::NetworkPrediction::NetBytes::Bits(P.Ar) : 0;
 		const int32 PendingFrame = TickState->PendingFrame;
 		npEnsure(PendingFrame >= 0);
 
@@ -893,7 +889,9 @@ public:
 		TCommonReplicator_SP<ModelDef>::NetSend(LocalParams, ID, DataStore, Instance, PendingFrame,BaseDeltaFrame); // 5. Common
 
 		const bool bSerializeCueFrames = true; // Fixed tick can use Frame numbers for SP serialization
+		const int64 GstnCueStart = UE::NetworkPrediction::NetBytes::GEnabled ? LocalNetWriter.GetNumBits() : 0;
 		Instance->CueDispatcher->NetSendSavedCues(LocalParams.Ar, ENetSimCueReplicationTarget::SimulatedProxy | ENetSimCueReplicationTarget::Interpolators, bSerializeCueFrames); // 6. NetSimCues
+		if (UE::NetworkPrediction::NetBytes::GEnabled) { UE::NetworkPrediction::NetBytes::Add(ModelDef::GetName(), UE::NetworkPrediction::NetBytes::TargetName((uint8)P.ReplicationTarget), TEXT("Cues"), LocalNetWriter.GetNumBits() - GstnCueStart); }
 
 		// After serializing the delta frame index , we serialized all rest of data in a local archive.
 		// we now send the client the data size and add this data to main network archive.
@@ -901,6 +899,7 @@ public:
 		uint32 DataSize = (uint32)LocalNetWriter.GetNumBits();
 		P.Ar.SerializeIntPacked(DataSize); // 3. Data Size Num (this will be read before 4,5,6 and after delta frame num)
 		P.Ar.SerializeBits(LocalNetWriter.GetData(),LocalNetWriter.GetNumBits());
+		if (UE::NetworkPrediction::NetBytes::GEnabled) { UE::NetworkPrediction::NetBytes::Add(ModelDef::GetName(), UE::NetworkPrediction::NetBytes::TargetName((uint8)P.ReplicationTarget), TEXT("Total"), UE::NetworkPrediction::NetBytes::Bits(P.Ar) - GstnNetBytesStart); }
 	}
 };
 

@@ -286,6 +286,12 @@ struct FMoverDataCollection
 	/** Serialize all data in this collection */
 	UE_API bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);
 
+	/** GSTN fork (netcode lever 1): NetSerialize against the base state of the Network Prediction delta (the last frame the client acked).
+	*   With a Base, every element whose wire bits equal the base element's costs 1 bit, and the reader clones its own copy of the base
+	*   element (the client keeps the states it received as acked frames, so its base is exactly what the bits would have decoded to).
+	*   Base must be present on both sides or on neither: NP passes it only when the update names an acked frame. Null = NetSerialize. */
+	UE_API bool NetSerializeDelta(FArchive& Ar, UPackageMap* Map, const FMoverDataCollection* Base, bool& bOutSuccess);
+
 	/** Serializes data in this collection for debug purposes.
 	*   This is currently only usable in the context of sending mover info to the Chaos Visual Debugger
 	*/
@@ -414,7 +420,7 @@ protected:
 	static UE_API TSharedPtr<FMoverDataStructBase> CreateDataByType(const UScriptStruct* DataStructType);
 	
 	/** Helper function for serializing array of data */
-	static UE_API void NetSerializeDataArray(FArchive& Ar, UPackageMap* Map, TArray<TSharedPtr<FMoverDataStructBase>>& DataArray);
+	static UE_API void NetSerializeDataArray(FArchive& Ar, UPackageMap* Map, TArray<TSharedPtr<FMoverDataStructBase>>& DataArray, const TArray<TSharedPtr<FMoverDataStructBase>>* BaseArray = nullptr);
 
 	/** All data in this collection */
 	TArray< TSharedPtr<FMoverDataStructBase> > DataArray;
