@@ -551,3 +551,16 @@
 - Build times (laptop): build + headless tests 174 s (pre-rebase), 144 s (after the rebase).
 - PERF-DEBT (also in perf-debt.md): the bench wave asset is loaded synchronously on first use (test tooling only).
 - Cost: ~$3.
+
+## Launched hover, fix attempt (laptop, 2026-11-09): NOT closed (2 attempts used), work in progress on `claude/laptop-hover`
+
+- Repro (10-min soak, `Saved/M8Trap/hover-air.txt`, `hover-airtrace.txt`): several minions (slots 9, 25, 53) end at the same point, feet
+  (165.65,-845.03,91.0), ~1 cm above the floor next to the rolled cylinder StaticMeshActor_6 whose face there points slightly down (normal
+  (0.89,-0.46,-0.04)); they stay Launched (grounded 0) until the bench relaunches them.
+- Fix written (unverified): in `GSTN_MinionMovement_Lightweight.cpp`, after the landing branch, if airborne + Launched + Velocity.Z <= 0 + moved
+  < 0.5 cm this frame: a half-radius capsule sweeps 3 cm down; on a walkable hit, depenetrate the full capsule, check clear, land. Best-reading
+  cause (unproven): the single full-capsule 3 cm FindFloor fails when the capsule is pinned between the floor and the lip.
+- Test `GSTNMinion.Runtime.Movement.LaunchedUnderOverhangLands` is RED: the rig now works (minion moves), but the 3 s window is too short
+  for Z >= ~1800 launches (still at Z ~1470-1500 after 3 s: apex ~20 m, ~4 s flight); 4 of 6 variants are not reported failing. Next:
+  give 6 s per variant, assert the lip geometry really reproduces the wedge without the fix (run with the fallback off), then a 10-min soak.
+- Not merged into j. SUITE_MINION not run on this branch. Cost: ~$3 (2 builds, 2 test runs, 1 soak).

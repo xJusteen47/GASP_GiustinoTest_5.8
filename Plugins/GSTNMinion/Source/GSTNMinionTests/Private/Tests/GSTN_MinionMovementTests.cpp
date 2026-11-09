@@ -301,6 +301,50 @@ bool FGSTN_MinionMovementOverhangTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionMovementLaunchedUnderOverhangTest, "GSTNMinion.Runtime.Movement.LaunchedUnderOverhangLands", GSTN_MINION_MOVEMENT_TEST_FLAGS)
+bool FGSTN_MinionMovementLaunchedUnderOverhangTest::RunTest(const FString& Parameters)
+{
+	// M8 launched hover (bench, three slots at one point): a launch into a slightly downward-facing lip ~1 m above the floor left
+	// the minion Launched, about 1 cm above the floor, for 2 s or more. It must be grounded within 3 s, whatever the launch
+	FMovementRig Rig;
+	if (!TestNotNull(TEXT("the minion subsystem exists in a game world"), Rig.Minions))
+	{
+		return false;
+	}
+	Rig.AddFloor();
+	const double Radius = Rig.Definition->Stats.CapsuleRadius;
+	// A slab whose face looks at the launch point and leans over it (normal 3 degrees below horizontal), its underside 2.5 m up, above the capsule
+	const double FaceX = -(Radius + 25.0);
+	Rig.AddBox(FVector(FaceX - 50.0, 0.0, 550.0), FVector(50.0, 1000.0, 300.0), FRotator(-3.0, 0.0, 0.0));
+	const FGSTN_MinionHandle Minion = Rig.Spawn(FVector(0.0, 0.0, 2.0));
+	Rig.Step(10);
+	if (!TestTrue(TEXT("the minion landed on the floor before the launches"), Rig.IsGrounded(Minion)))
+	{
+		return false;
+	}
+	const FVector Launches[] = {
+		FVector(-300.0, 0.0, 2000.0), FVector(-600.0, 0.0, 400.0), FVector(-360.0, -1325.0, 1990.0),
+		FVector(-450.0, -260.0, 430.0), FVector(-600.0, 400.0, 1800.0), FVector(-120.0, 0.0, 1200.0) };
+	for (const FVector& Launch : Launches)
+	{
+		const FVector Before = Rig.Feet(Minion);
+		if (!TestTrue(TEXT("the launch is accepted"), Rig.Minions->LaunchMinion(Minion, Launch, false)))
+		{
+			return false;
+		}
+		Rig.Step(15, Minion, FVector2D::ZeroVector, 0.f);
+		TestTrue(*FString::Printf(TEXT("launch %s: the minion left its start point (%s -> %s)"), *Launch.ToCompactString(), *Before.ToCompactString(), *Rig.Feet(Minion).ToCompactString()), FVector::Dist(Before, Rig.Feet(Minion)) > 5.0);
+		Rig.Step(175, Minion, FVector2D::ZeroVector, 0.f);
+		const FVector Feet = Rig.Feet(Minion);
+		TestTrue(*FString::Printf(TEXT("launch %s: grounded 3 s later (feet %s)"), *Launch.ToCompactString(), *Feet.ToCompactString()), Rig.IsGrounded(Minion));
+		TestTrue(TEXT("on the floor, not inside it"), Feet.Z > -1.0 && Feet.Z < 3.0);
+		const bool bOverlapping = Rig.World->OverlapBlockingTestByProfile(Feet + FVector(0.0, 0.0, Rig.Definition->Stats.CapsuleHalfHeight), FQuat::Identity, UCollisionProfile::BlockAll_ProfileName,
+			FCollisionShape::MakeCapsule(Radius - 0.5f, Rig.Definition->Stats.CapsuleHalfHeight - 0.5f));
+		TestFalse(TEXT("not inside geometry"), bOverlapping);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionMovementNoTunnelTest, "GSTNMinion.Runtime.Movement.NoTunnelAt3000", GSTN_MINION_MOVEMENT_TEST_FLAGS)
 bool FGSTN_MinionMovementNoTunnelTest::RunTest(const FString& Parameters)
 {
