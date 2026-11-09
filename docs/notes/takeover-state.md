@@ -951,3 +951,12 @@ OPEN: owner's yes to the fast-forward push. NEXT: D9+D10.
 - Merge to feature 2026-11-08i: branch claude/merge-feature-2026-11-08i (= merge h 5b7e7fc5 + E19 hooks test, T9 platform validation tests). Handover m5-rest.md "Leftovers pass".
 - Merge to feature 2026-11-08j: branch claude/merge-feature-2026-11-08j (= merge i 441845c6 + minion part step 1.88 us). Handover parts-rest.md last section.
 - Merge j fast-forwarded 2026-11-09 with wounds level 1 (laptop, on top of the desktop G9b 68e4c776). Handover parts-rest.md last section.
+
+## State of merge j (2026-11-09)
+
+- Contents since feature 441845c6: the minion part step second perf pass (1.88 us per part hit), the desktop G9b (68e4c776: promotion swap, health via kit, Event_Minion*, LOD "no pop") and the parts leftovers pass (wounds level 1, on top of G9b).
+- Plugins enabled in `GASP_Giustino2.uproject`: GSTNParts, GSTNSpinDrill, GSTNMinion, GSTNPartsMinion (the last since P16-C). The plugin defaults stay off.
+- Known reds, SUITE_MINION: player_hits_minion and lagcomp "no swing" (flaky input, PASS on rerun); player_hits_minion "none cancelled" at 2 % (the open G7b case); reaction_tiers "still items 0" at 2 % (flaky since G8, watch). lod is green since G9b.
+- Known red, SUITE_DEFAULT: `di` flaky (passes on its single rerun).
+- Deferred to the desktop: TM3 parts content (cavity leg, screwed plate on station 5), the P10-P12 presentation (owner decision), the FP G2 video capture chain (blocked, commit 02d6c9a8), the designer scenario in the editor, M8 G11b and G12b.
+- Headless gate, merge j after the rebase on 68e4c776: all on 1455/0, 0 ensures.

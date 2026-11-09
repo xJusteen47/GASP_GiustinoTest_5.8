@@ -4,9 +4,9 @@ Bridge between [GSTNParts](../GSTNParts/README.md) and [GSTNMinion](../GSTNMinio
 hundreds of small enemies lose a head and keep fighting). Design: [combat-parts.md](../../docs/architecture/combat-parts.md) §5.5 and
 [combat-m8-minions.md](../../docs/architecture/combat-m8-minions.md) §4d.2.
 
-Status: **P16 sub-gates A and B** (0.3, `EnabledByDefault: false`, not enabled in the project): part rows and the server hit flow (A),
-the broken mask on the wire, broken parts hidden on the puppets, the promotion copy and the bench (B). Neither parts nor minion lists this
-plugin; enable it locally to run `GSTNParts.Minion.*` and `scenario_minion_parts`.
+Status: **P16 done** (sub-gates A and B, the P16-C step cache, the P16-E perf pass; 0.3, `EnabledByDefault: false`, **enabled in `GASP_Giustino2.uproject`** since 2026-11-08): part rows and the server hit flow (A),
+the broken mask on the wire, broken parts hidden on the puppets, the promotion copy and the bench (B). Neither GSTNParts nor GSTNMinion lists this
+plugin; the project enables it, so `GSTNParts.Minion.*` and the harness scenario `minion_parts` run with it on.
 
 ## What exists (pure, in GSTNPartsCore, no GSTNMinion include)
 
@@ -82,32 +82,31 @@ At 160 minions, all of a part-bearing type (sub-gate B):
   members, 4 arrays, a tag) only to read one float. After: `ResolveCached` keeps per (part set, rules) the pipeline flags, the resolved
   bands and the minimum weight scale (`FStepCacheEntry`, filled at the first hit, dropped by every bridge registration and world start),
   evaluates HealthWeight's curve inline and writes no request. What stays per hit: the part math, one `FInstancedStruct` outcome (one
-  heap allocation), `GetDamageProgress`. `gstn.PartsMinion.StepCache 0` runs the first path for an A/B on the bench. The after number is
-  measured by the next `minion_parts` run (the writer could not run the editor): see the handover.
-  P16-D (per-hurtbox table, measured `2.50 -> 2.49 us (no real gain, see perf-debt.md)` us per hit, was 2.75): the entry also holds, per hurtbox set, a row per hurtbox with the part
+  heap allocation), `GetDamageProgress`. `gstn.PartsMinion.StepCache 0` runs the first path for an A/B on the bench. The after numbers are measured: 2.75 us after P16-C and 1.88 us after P16-E (below).
+  P16-D (per-hurtbox table, measured 2.50 -> 2.49 us per hit, no real gain, see perf-debt.md; was 2.75 at P16-C): the entry also holds, per hurtbox set, a row per hurtbox with the part
   index (no `FindPartByHurtbox` name search), the effective hardness (P18 override applied) and the penetration band for each tier 0..15
   (handed to `ApplyHit` through `FGSTN_PartHitInput::PreparedBandIndex`; the fighter path leaves it unset and looks the band up as before),
   plus the per-part lost-mass factors and the clamped minimum weight scale, so the weight is a product over the broken parts only. Still
   per hit: the `ExtensionData` scan for `FGSTN_PartHitData`, `ApplyHit` (screw/held-by/cap flags are read from the part there, one cache line),
   `GetDamageProgress`. A tier above 15 or an ignore-hardness hit on a row still resolves exactly (the latter takes band 0).
-  P16-E (not yet measured, `1.88 us per part hit (from 2.50)` us per hit, was 2.49, target <= 1.8): the outcome goes through a scratch the bound bridge consumes (no
+  P16-E (measured 2026-11-09, laptop, 40 minions, 0 %: 1.88 us per part hit, from 2.50; target <= 1.8 not met, accepted as prototype): the outcome goes through a scratch the bound bridge consumes (no
   `FInstancedStruct`, no copy in the runner's merge; `AddOutcomeScratchUser`, off when no bridge is bound), and the cache is keyed by raw
   pointers and dropped after every GC (module post-GC hook), so no `TObjectKey` per hit. Tests: `CachedStepTwoTypesBackToBack`, `ScratchOutcomeSameAsArray`.
 - Memory: the A columns plus `LastBreakFrame` (4 B per slot, bench only, ~640 B) and per machine a set pointer per type; the puppet map holds
   one small entry per puppet ever used (pooled, so at most the pool size).
 
-- Per hit on a part-bearing minion (estimate, not measured): view build (a 32 B copy), a scan of the resolved pipeline (about 8 class tests),
+- Per hit on a part-bearing minion (the pre-measurement estimate, superseded by the numbers above): view build (a 32 B copy), a scan of the resolved pipeline (about 8 class tests),
   the part math, one `HealthWeight` re-run, one outcome lookup and a 9 B write: about 1 µs on the laptop, inside the 2 µs budget. Not counted:
   the pipeline's own allocations (PartResolve adds one `FInstancedStruct` to `OutcomeExtensions`, copied into the view of each later step);
-  sub-gate B measures it in the bench. A type without parts pays two delegate calls and a byte test per hit, one pointer test in the step.
+  the bench measured it, see above. A type without parts pays two delegate calls and a byte test per hit, one pointer test in the step.
 - Memory at 160 minions: rows 1440 B, type bytes 160 B, generations 320 B, view scratch 5120 B, about 7 KB, only once a part-bearing minion
   has activated. The view scratch could shrink to one entry per drain if the 5 KB ever matters.
 - The part set loads synchronously the first time its type activates (once per type per world); sub-gate B should preload the sets with the wave.
 
 ## Known limits
 
-- **Net format (open risk for P16).** `FGSTN_MinionNetFormat::ExtTypes` is filled process-wide. A pack that is decoded before the registry is filled is read with the wrong table. Not yet guarded against.
+- **Net format (open risk).** `FGSTN_MinionNetFormat::ExtTypes` is filled process-wide. A pack that is decoded before the registry is filled is read with the wrong table. Not yet guarded against.
 
 ## How to extend
 
-Make a minion type lose parts: build a `UGSTN_PartSetDefinition` with `bForMinions` on, at most 8 parts, only MainDamage, Launch, Stagger and derived break effects; list the parts whose loss kills in `FGSTN_PartsMinionExtension::LethalParts` (leave it empty to keep fighting after any loss); map the minion's type tag to that extension in `UGSTN_PartsMinionSettings::TypeExtensions`. Add a new bridge behaviour in this module, never in `GSTNMinion` or `GSTNParts`.
+Make a minion type lose parts: build a `UGSTN_PartSetDefinition` with `bForMinions` on, at most 8 parts, only MainDamage, Launch, Stagger and derived break effects; list the parts whose loss kills in `FGSTN_PartsMinionExtension::LethalParts` (leave it empty to keep fighting after any loss); map the minion's type tag to that extension in `UGSTN_PartsMinionSettings::TypeExtensions`. Add a new bridge behaviour in this module, never in `GSTNMinion` or `GSTNParts`. Wounds (P18 level 1) do not apply to minions: `ValidateForMinions` rejects a `WoundedHardness`, and the 9 B row has no mask.

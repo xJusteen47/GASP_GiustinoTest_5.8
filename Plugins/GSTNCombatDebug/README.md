@@ -1,10 +1,10 @@
 # GSTNCombatDebug
 
 Development tooling of GSTN Combat for Unreal Engine 5.8 that runs in PIE and development builds: the combat side of the input display
-and the Gameplay Debugger category (E15) and the BakeCheck overlay (E16) now, the combat state trace (E17) later. It reads combat state through const
+and the Gameplay Debugger category (E15), the BakeCheck overlay (E16) and the combat state trace (E17). It reads combat state through const
 accessors and a trace sink that the runtime modules expose; no runtime module depends on it.
 
-Status: **experimental (0.4)**, `EnabledByDefault: false`. Checkpoints E1 (skeleton), E14 (input display), E15 (Gameplay Debugger category) and E16 (BakeCheck) of
+Status: **experimental (0.5)**, `EnabledByDefault: false`. Checkpoints E1 (skeleton), E14 (input display), E15 (Gameplay Debugger category) E16 (BakeCheck) and E17 (trace) of
 [m5-editor-plan.md](../../docs/architecture/plans/m5-editor-plan.md); the design is
 [combat-m5-editor.md](../../docs/architecture/combat-m5-editor.md) §10. Disabling it removes the tools and nothing else.
 

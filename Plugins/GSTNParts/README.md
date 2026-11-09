@@ -8,8 +8,7 @@ did before the plugin.
 Status: **experimental (0.1)**, `EnabledByDefault: false`. Checkpoints P1-P6 of
 [m4b-parts-plan.md](../../docs/architecture/plans/m4b-parts-plan.md) are built (skeleton and tags, data, pure math, the pipeline
 step, the GAS half, the sync fragment); the design is
-[combat-parts.md](../../docs/architecture/combat-parts.md). The NP tick extension and applier (P7), hit feel (P8)
-and the presentation (P10-P12) are not built. Owner direction in
+[combat-parts.md](../../docs/architecture/combat-parts.md). P7 to P9 and P13 to P15 are built, and so are the P18-P19 leftovers (see the Changelog); the presentation (P10-P12) is not. Owner direction in
 [game-design-direction.md](../../docs/architecture/game-design-direction.md) wins over the spec: hardness acts on damage only
 (three bands: above, equal about 65 %, below ricochets), a player is a single part and its break is death, parts do not
 regenerate by themselves.
@@ -127,7 +126,7 @@ so the attacker's ricochet prediction stays exact. The minion attacker path (`GS
 `FGSTN_HitData::TurnSense` / `TurnSteps` (`Hit|Screw`, default 0 = turns nothing): the sense equal to `LoosenSense` adds `ceil(255 x steps / TurnsToRelease)` to the
 screw's existing damage byte, the opposite sense subtracts it (floor 0) when it tightens, and at 255 the screw breaks like any part. Turning ignores hardness,
 the cap and the damage scales; the screw's `Hardness` still decides ricochets, and ordinary damage never moves its byte. A held part comes off when its rule is met
-OR when its own damage breaks it, whichever comes first (an indestructible plate is made with its data: top hardness, `PartCap <= 0`); the moment the rule is met, in the same hit and the same pass that breaks children (`UGSTN_PartMath::ApplyHit`, in waves,
+OR when its own damage breaks it, whichever comes first (owner decision, 2026-11-08: a held plate also breaks from damage; an indestructible plate is made with its data: top hardness, `PartCap <= 0`); the moment the rule is met, in the same hit and the same pass that breaks children (`UGSTN_PartMath::ApplyHit`, in waves,
 bounded by the part count), it breaks whatever its hardness and even with `PartCap <= 0`, running its own `OnBreak`. No new fragment bytes, and the minion step
 (`UGSTN_HitStep_PartResolveMinion`) runs the same math on the minion row's 8 damage bytes, so minion sets may carry screws (`TurnsToRelease = 1` is a one-hit
 screw). The validator rejects a loosen sense other than -1/+1, `TurnsToRelease` outside 1..255, an unknown, empty or self `HeldBy` name and a cycle through
@@ -234,7 +233,7 @@ An ability can lower the hardness of the part it hits. A hit whose `ExtensionDat
 
 ## Minion parts (P15)
 
-The pure pieces for minions that lose parts live in `GSTNPartsCore`; the bridge plugin [`GSTNPartsMinion`](../GSTNPartsMinion/README.md) (interface only, disabled) carries the rest in P16. `UGSTN_PartSetDefinition::bForMinions` turns on `FGSTN_PartsValidation::ValidateForMinions` (at most 8 parts; a `Stats` break effect is rejected, not converted: a minion has no ability system). `FGSTN_PartsMinionExtension` holds the set and `LethalParts`; by default no part loss kills, so a headless minion keeps fighting (owner, 2026-11-08). `FGSTN_PartsSnapshotExt::FromMinionStore(Set, Mask, Damage[8])` builds the step's input from a store row (9 B), so the same `UGSTN_HitStep_PartResolve` runs for fighters and minions. Tests `GSTNParts.Core.Minion.*`.
+The pure pieces for minions that lose parts live in `GSTNPartsCore`; the bridge plugin [`GSTNPartsMinion`](../GSTNPartsMinion/README.md) (enabled in the project since 2026-11-08) carries the runtime part (P16). `UGSTN_PartSetDefinition::bForMinions` turns on `FGSTN_PartsValidation::ValidateForMinions` (at most 8 parts; a `Stats` break effect is rejected, not converted: a minion has no ability system). `FGSTN_PartsMinionExtension` holds the set and `LethalParts`; by default no part loss kills, so a headless minion keeps fighting (owner, 2026-11-08). `FGSTN_PartsSnapshotExt::FromMinionStore(Set, Mask, Damage[8])` builds the step's input from a store row (9 B), so the same `UGSTN_HitStep_PartResolve` runs for fighters and minions. Tests `GSTNParts.Core.Minion.*`.
 
 ## Restoring parts
 
@@ -242,6 +241,9 @@ Parts never heal by themselves; an explicit restore clears broken bits and gives
 
 ## Changelog
 
+- 0.1 (2026-11-09): wounds level 1 (`WoundedMask`, `WoundedHardness`, `FGSTN_PartBreakEffect_Wound`, the mask in the fragment and the snapshot extension); tests `GSTNParts.Core.Wounds.*` and the NP wound tests.
+- 0.1 (2026-11-08): P19 screws (`FGSTN_PartScrewRule`, `HeldBy` / `HeldByRule`, `FGSTN_HitData::TurnSense` / `TurnSteps`); tests `GSTNParts.Core.Screws.*`.
+- 0.1 (2026-11-08): P18b: the opening rule on the minion attacker path and `ValidateHurtboxOpening`; P18: hurtbox openings (`FGSTN_HurtboxOpening`) and `HurtboxHardnessOverride`; tests `GSTNParts.Core.Openings.*`.
 - 0.1 (2026-11-08): P15: `bForMinions`, `ValidateForMinions`, `FGSTN_PartsMinionExtension`, `FromMinionStore`/`ToMinionStore`, tests `GSTNParts.Core.Minion.*`; new plugin `GSTNPartsMinion` (interface only).
 - 0.1 (2026-10-26): P14: plugin-owned sample content and its setup script, full sweep (see HANDOVER 46). Presentation (P10-P12) still pending.
 - 0.1 (2026-10-26): P13: `GSTNPartsEditor` (asset validator, balance report and `GSTN.Parts.BalanceReport`, Physics Asset draft helper); tests `GSTNParts.Editor.*`. P10-P12 (presentation) are skipped for now.

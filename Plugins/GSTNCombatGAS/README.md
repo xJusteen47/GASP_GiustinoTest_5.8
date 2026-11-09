@@ -161,6 +161,8 @@ abilities and effects reach the owning client through the simulation sync state:
 `FindAbilitySpecFromClass` on the client is valid only after it (never right after the loadout changed; never for another player's pawn).
 Nobody but the server grants, because a client-side grant on an autonomous pawn is erased by the next reconcile.
 
+**Starting health (G9b).** `IGSTN_StartingHealthSource` supplies the starting health that the loadout applies to the pawn; `UGSTN_LoadoutComponent` applies it after the kit's init effect, so GSTNCombatNP is untouched. A promoted minion's health fraction is applied through it (see GSTNMinion). The harness fighter has full health, so it was built but not seen in a run.
+
 **Wiring.** (1) Add `UGSTN_LoadoutComponent` to the project's PlayerState class (component in the Blueprint, or `CreateDefaultSubobject` in C++); optionally point `Rules` at a
 `UGSTN_LoadoutRules` asset. (2) Add `UGSTN_SkinComponent` to the pawn class (`bAutoBind` on). (3) Register the primary asset types of the
 kit, weapon, super and skin (above, and the GSTNCombat README): ids resolve through the Asset Manager. (4) From the loadout UI, get the

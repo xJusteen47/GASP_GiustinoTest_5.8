@@ -3,7 +3,7 @@
 Minions for the GSTN combat: 40+ awake enemies on one host, simulated as data in a store instead of one actor each
 ([combat-m8-minions.md](../../docs/architecture/combat-m8-minions.md), [plan](../../docs/architecture/plans/m8-minion.md)).
 
-Status: **experimental (0.1)**, `EnabledByDefault: false`. Built through M8 checkpoint **G12a**; the desktop items G6b, G7b, G9b and G11b are open (see Known limits). Enabling it
+Status: **experimental (0.1)**, `EnabledByDefault: false`. Built through M8 checkpoint **G12a**; the desktop items G6b and G9b are done, G7b is done apart from one open case (see Known limits), and G11b is open. Enabling it
 changes nothing until a level spawns minions; nothing in the other plugins knows it (`Tools/Modules/check_modules.py` enforces it).
 
 ## Modules
@@ -45,9 +45,22 @@ changes nothing until a level spawns minions; nothing in the other plugins knows
 - **Promotion (server core)**: `UGSTN_MinionSpawner::Promote(World, Handle, {FighterClassOverride, bKeepHealthFraction})` spawns the
   fighter class at the minion, adds a replicated `UGSTN_MinionPromotedComponent` (item id, pack id, type tag, health fraction, team),
   sets the team and frees the minion; null when refused (not alive, Spawning/Dying/Dead, no class, or `gstn.Minion.MaxFightersFromMinions`
-  = 4 promoted fighters alive). The client cross-fade and the wire flag are G9b.
+  = 4 promoted fighters alive). The client swap and the wire flag are G9b (see Promotion presentation).
 - Bench: `gstn.Minion.Bench.Wave <N> <CorpseSeconds=1>`, `gstn.Minion.Bench.Kill`. Tests: `GSTNMinion.Core.Wave.*`,
   `GSTNMinion.Runtime.{Corpse,Wave,Promote}.*`; harness `minion_wave`.
+
+## Promotion presentation and events (G9b)
+
+- **Promoting body.** A promoted minion stays for `gstn.Minion.PromoteHoldFrames` (16 frames) as a Promoting body: the wire flag is set, it is Dead, its actor collision is off and it is on the corpse list. Then it is freed. A Promoting body never shatters.
+- **Swap, not cross-fade.** The fighter (`UGSTN_MinionPromotedComponent::BeginPlay` -> `NotePromotedFighter`) is hidden behind the puppet for `gstn.Minion.Present.PromoteSwapSeconds` (0.1 s), then the puppet is pooled. A held puppet gives up after `PromoteHoldSeconds` (1.0 s). The puppet has no fade parameter, which is why it is a swap. Log: `MinionPromote swap|nopuppet|expired|lostpuppet`.
+- **Events.** `Spawned` and `Despawned` are queued to the batch flush; `Promoted` is published inside `Promote`, on the authoritative stream (the `Event_Minion*` events).
+- **LOD "no pop".** Dead reckoning is capped at the sender's own sample gap (`FarDeadReckoningCapMs` = 0), and senders slower than T1 hold, so far puppets trail and never lead. Spike 8 (dedicated + 2, 60/15): pop 2.1 cm, swap wait about 100 ms, first control 178-185 ms, the same at 0 % and 2 %.
+- **Bench.** `gstn.Minion.Bench.Promote [class|-] [X Y Z]`.
+
+## Hit presentation grace and confirm window
+
+- **Grace.** The flicker of a predicted minion hit is Network Prediction correction of the victim's hit ring during a resimulation, not a miss. A predicted hit whose key vanishes is a cancel only after 0.25 s away; a key that comes back in that time is the same hit (no second prediction), and keys are forgotten after 2 s (`gstn.Minion.Present.LogFlash 1` logs `MinionFlash`). The pawn's `UGSTN_HitPresentationComponent` uses the same rule through the shared helper `FGSTN_HitPredictionGrace` (GSTNCombatNP; `CancelGraceSeconds` 0.25, `PredictedHitMemorySeconds` 2).
+- **Confirm window.** A minion hit confirms within 0.5 s with no ping (host and tests). With a ping from the PlayerState the window is min(1.5, max(0.75, 4 x RTT + 0.25)) s. Confirms inside 0.5 s are unchanged. Pawns have no confirm window.
 
 ## Bridge seams (G10)
 
@@ -126,19 +139,19 @@ Native: see `GSTN_MinionTags.h`. Designer vocabulary (ini only) is in `Config/Ta
 - **Attack tokens.** "Token holder" is approximated as "a member running a move".
 - **Hit flow (X4).** A minion victim is rewound from the world subsystem's history ring through the provider snapshot; the fighters use the same ring, there is no second one.
 - **Brain (G8).** Each brained slot runs one `FStateTreeExecutionContext`, driven by `UGSTN_MinionBrainSubsystem`; there is no `UStateTreeComponent` per actor. The brain's tier rates are cvars, not the LOD batch intervals.
-- **Promotion (G9a).** The promoted fighter gets no GAS attribute write: its health fraction sits on `UGSTN_MinionPromotedComponent` and the kit applies it (G9b). `Event_MinionPromoted` is only logged.
+- **Promotion (G9a).** The promoted fighter gets no GAS attribute write: its health fraction sits on `UGSTN_MinionPromotedComponent` and the kit applies it (G9b). The Promoted event is published on the authoritative stream from G9b (see Promotion presentation).
 - **Host cap (G11a).** `gstn.Minion.MaxActiveT0` (default 48) replaces the per-definition `MaxActiveCombat`, which nothing reads now.
 - **Store (G12a).** The default capacity is 160; a single wave stays capped at 128. There is no registry asset: the type table is filled in first-spawn order and checked by hash, so the registry rule is a function run over a wave's types.
 
 ## Known limits
 
-- **Movement.** Spike 3 picked backend B (lightweight sweep and slide). No Mover backend is built, and the course is built in code, not as `L_MinionCourse`. A minion can still get trapped at the side face of the stair block (open; robustness is not at zero failures).
+- **Movement.** Spike 3 picked backend B (lightweight sweep and slide). No Mover backend is built, and the course is built in code, not as `L_MinionCourse`. The overhang traps G4 saw at the stairs (in fact next to a cylinder) are fixed (2026-11-08, test `OverhangStepDownNoPenetration`); a 10-minute soak showed no penetration trap, but one Launched stall (a minion hovering about 1 cm above the floor) remains, cause not found.
 - **Rewind cost.** A cheap candidate query exists but is not wired into GSTNCombatNP, so the rewind cost still grows with N. Meter gain on minion victims is skipped.
 - **Net rate.** `MaxRelevantPerClient` is a cvar. The push-model ini and the bake-off (G6b) are not done.
-- **Presentation (G7a).** The Animation Budget Allocator is skipped (plugin not enabled). `UGSTN_HitPresentationComponent` cannot present minion victims, so the attacker's hit pause and local cue do not play on minion hits; that needs a GSTNCombatNP hook, which X4 forbids. The player-to-minion bench scenarios need `gstn.Minion.Bench.HurtboxSet` and a swinger kit. Client puppets overshoot the server path at Far and Dormant (interpolator extrapolation; open).
+- **Presentation (G7a).** The Animation Budget Allocator is skipped (plugin not enabled). `UGSTN_HitPresentationComponent` cannot present minion victims, so the attacker's hit pause and local cue do not play on minion hits; that needs a GSTNCombatNP hook, which X4 forbids. The player-to-minion bench scenarios need `gstn.Minion.Bench.HurtboxSet` and a swinger kit. Far and Dormant client puppets no longer overshoot (G9b: dead reckoning capped, see Promotion presentation).
 - **Host budget.** A demoted T0 slot is pulled back by the stepper: perf debt, not measured.
 - **Net format (G10).** `FGSTN_MinionNetFormat::ExtTypes` is filled process-wide, so a pack decoded before the registry fills it uses the wrong table. Open for P16 (see GSTNPartsMinion).
-- **Desktop items open:** G6b, G7b, G9b, G11b; the horde and bytes numbers are laptop numbers (`-nullrhi`), provisional.
+- **Desktop items open:** G7b (one case, see Status) and G11b; the horde and bytes numbers are laptop numbers (`-nullrhi`), provisional.
 
 ## Tests
 
