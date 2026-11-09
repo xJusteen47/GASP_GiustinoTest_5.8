@@ -185,3 +185,5 @@
 - Gate (before the rebase): all on 1455/0 (+7), GSTNMinion+GSTNPartsMinion off 1351/0, GSTNPlatform+Parts off 1431/0, 0 ensures; SUITE_DEFAULT 50/50.
 - Build time (laptop): build + headless tests after a GSTNParts header change 182 s.
 - PERF-DEBT: +2 B per part-bearing fighter fragment; one mask test per part hit.
+- After the rebase on 68e4c776: build + headless tests 208 s, all on 1455/0; SUITE_MINION (12 with minion_promote) 0 % 11/12 (player_hits no
+  swing), 2 % 11/12 (lagcomp no swing): lod now PASS at both (desktop G9b). Cost of this pass: ~$4.
