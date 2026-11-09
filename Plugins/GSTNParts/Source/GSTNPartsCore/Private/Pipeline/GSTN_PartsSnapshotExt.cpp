@@ -9,6 +9,7 @@ FGSTN_PartsState FGSTN_PartsSnapshotExt::ToState() const
 {
 	FGSTN_PartsState State;
 	State.BrokenMask = BrokenMask;
+	State.WoundedMask = WoundedMask;
 	FMemory::Memcpy(State.PartDamage, PartDamage, sizeof(PartDamage));
 	State.BreakSerial = BreakSerial;
 	return State;
@@ -17,6 +18,7 @@ FGSTN_PartsState FGSTN_PartsSnapshotExt::ToState() const
 void FGSTN_PartsSnapshotExt::SetState(const FGSTN_PartsState& State)
 {
 	BrokenMask = State.BrokenMask;
+	WoundedMask = State.WoundedMask;
 	FMemory::Memcpy(PartDamage, State.PartDamage, sizeof(PartDamage));
 	BreakSerial = State.BreakSerial;
 }
@@ -35,7 +37,8 @@ FGSTN_PartsSnapshotExt FGSTN_PartsSnapshotExt::FromMinionStore(const UGSTN_PartS
 
 bool FGSTN_PartsSnapshotExt::ToMinionStore(const FGSTN_PartsState& State, uint8& OutBrokenMask, uint8 (&OutDamage)[GSTN_PartsLimits::MaxMinionParts])
 {
-	bool bFits = (State.BrokenMask >> GSTN_PartsLimits::MaxMinionParts) == 0;
+	// A wound has no column in the minion row (validation rejects a wounded hardness on a minion set), so a state that carries one does not fit
+	bool bFits = (State.BrokenMask >> GSTN_PartsLimits::MaxMinionParts) == 0 && State.WoundedMask == 0;
 	for (int32 Index = GSTN_PartsLimits::MaxMinionParts; Index < GSTN_PartsLimits::MaxParts; ++Index)
 	{
 		bFits = bFits && State.PartDamage[Index] == 0;
@@ -55,6 +58,7 @@ FGSTN_PartsState FGSTN_PartHitOutcome::GetResultState() const
 {
 	FGSTN_PartsState State;
 	State.BrokenMask = ResultBrokenMask;
+	State.WoundedMask = ResultWoundedMask;
 	FMemory::Memcpy(State.PartDamage, ResultPartDamage, sizeof(ResultPartDamage));
 	State.BreakSerial = ResultBreakSerial;
 	return State;

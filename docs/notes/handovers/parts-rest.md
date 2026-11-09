@@ -166,3 +166,22 @@
 - Build times (laptop): bridge-only incremental 15 s; build + headless tests 152 s.
 - PERF-DEBT: updated (1.88 us; what is left per hit: ApplyHit 0.61, cache lookup 0.24, outcome 0.25, weight 0.16).
 - Cost: ~$3.
+
+## Parts leftovers pass (laptop, 2026-11-09): wounds level 1 DONE; TM3 content SKIPPED (desktop)
+
+- Branch `claude/parts-rest-laptop` from d9a0ddd5, rebased on merge j 68e4c776 (desktop G9b). Sonnet writer (`Saved/P16/brief-wounds.md`).
+- perf-debt.md: the 1.88 us minion part hit recorded with its residual levers (accepted as prototype).
+- TM3 parts content (cavity leg, screwed plate on station 5): skipped, needs the TM3 map and the editor (desktop).
+- Wounds level 1: `WoundedMask` (uint16) in the parts state and fragment (wire 3+N -> 5+N), `WoundedHardness` per part (-1 = cannot be
+  wounded), hit extension `FGSTN_PartBreakEffect_Wound`: sets the bit of the part the hit chose; while on, ApplyHit uses WoundedHardness instead
+  of the part's (and the P18 per-hurtbox override); the wounding hit itself meets the unwounded hardness; ricochet / broken part / body hit /
+  no WoundedHardness mark nothing. The mask is in the snapshot extension, so the attacker's ricochet prediction and rewound hits read it
+  (prerequisite met for level 1: part state is already in the lag history; only hurtbox states are missing, needed by level 2).
+- Snapshot extension kept at 32 B: its type word shrank to 16 bit (0x5254, was 0x53545250); BytesWithinBudget allows 22 B of state.
+- Minions: rejected (`ValidateForMinions` errors on WoundedHardness >= 0; the 9 B row unchanged).
+- Not done: closing a wound (none in level 1; restore does not clear it), the skin material, a harness scenario, `GetPartsStateString` (harness parses it).
+- Tests: `GSTNParts.Core.Wounds.*` 4, NP `Fragment.WoundedMaskRoundTrip`, `Snapshot.CarriesWoundedMask`, `Snapshot.RewoundHitReadsWoundStateOfItsFrame`;
+  fragment byte/ToString expectations updated (1 lead fix: RoundTrip2 bit count 153 -> 169).
+- Gate (before the rebase): all on 1455/0 (+7), GSTNMinion+GSTNPartsMinion off 1351/0, GSTNPlatform+Parts off 1431/0, 0 ensures; SUITE_DEFAULT 50/50.
+- Build time (laptop): build + headless tests after a GSTNParts header change 182 s.
+- PERF-DEBT: +2 B per part-bearing fighter fragment; one mask test per part hit.

@@ -14,6 +14,10 @@
  * events that changed the mask (a break, a restore) in 4 bits and wraps, so presentation and events can be deduplicated by
  * (entity, part index, serial) across a rollback.
  *
+ * WoundedMask bit i is set once a hit that carried a wound struck part i (combat-parts.md 3.4, "Wounds"): while it is on, the part's
+ * hit uses its WoundedHardness. Like BrokenMask it is plain state of the entity, compared, restored by rollback and kept in the lag
+ * history with the rest, so a rewound hit sees the wounds of its own frame. Nothing clears it in level 1.
+ *
  * Not a reflected struct: the arrays are fixed, the layout is the wire contract, and Blueprint reaches the state through
  * UGSTN_PartMath.
  */
@@ -23,6 +27,7 @@ struct GSTNPARTSCORE_API FGSTN_PartsState
 	static constexpr uint8 SerialMask = 15;
 
 	uint16 BrokenMask = 0;
+	uint16 WoundedMask = 0;
 	uint8 PartDamage[GSTN_PartsLimits::MaxParts] = {};
 	uint8 BreakSerial = 0;
 
@@ -31,13 +36,18 @@ struct GSTNPARTSCORE_API FGSTN_PartsState
 		return PartIndex >= 0 && PartIndex < GSTN_PartsLimits::MaxParts && (BrokenMask & (1u << PartIndex)) != 0;
 	}
 
+	bool IsWounded(int32 PartIndex) const
+	{
+		return PartIndex >= 0 && PartIndex < GSTN_PartsLimits::MaxParts && (WoundedMask & (1u << PartIndex)) != 0;
+	}
+
 	/** Moves the serial on by one, wrapping inside its 4 bits */
 	void AdvanceSerial() { BreakSerial = static_cast<uint8>((BreakSerial + 1) & SerialMask); }
 
 	/** Bitwise equality, the comparison a reconcile makes */
 	bool operator==(const FGSTN_PartsState& Other) const
 	{
-		return BrokenMask == Other.BrokenMask && BreakSerial == Other.BreakSerial
+		return BrokenMask == Other.BrokenMask && WoundedMask == Other.WoundedMask && BreakSerial == Other.BreakSerial
 			&& FMemory::Memcmp(PartDamage, Other.PartDamage, sizeof(PartDamage)) == 0;
 	}
 	bool operator!=(const FGSTN_PartsState& Other) const { return !(*this == Other); }

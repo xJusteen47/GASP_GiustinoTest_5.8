@@ -25,11 +25,13 @@ struct FGSTN_HitVictimView;
  */
 struct GSTNPARTSCORE_API FGSTN_PartsSnapshotExt
 {
-	/** 'PRTS': the word every instance starts with */
-	static constexpr uint32 TypeWord = 0x53545250u;
+	/** 'RT': the word every instance starts with */
+	static constexpr uint16 TypeWord = 0x5254u;
 
-	uint32 Type = TypeWord;
+	// 16 bit type word: the wounded mask (+2 B) must fit the 32 byte blob, and 'RT' is as unique as it needs to be among the blob's feature ids
+	uint16 Type = TypeWord;
 	uint16 BrokenMask = 0;
+	uint16 WoundedMask = 0;
 	uint8 PartDamage[GSTN_PartsLimits::MaxParts] = {};
 	uint8 BreakSerial = 0;
 

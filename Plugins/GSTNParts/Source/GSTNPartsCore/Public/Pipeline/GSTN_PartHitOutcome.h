@@ -30,7 +30,7 @@ namespace GSTNPartOutcomeFlags
  * hit on an entity that has a part set. The applier of GSTNPartsNP writes the result into the sync fragment at the victim's
  * frame F+1 and raises the events; this struct is plain data and is never a source of truth on its own.
  *
- * It carries the whole state the hit produced (ResultBrokenMask, ResultPartDamage, ResultBreakSerial) as well as the part and the
+ * It carries the whole state the hit produced (ResultBrokenMask, ResultWoundedMask, ResultPartDamage, ResultBreakSerial) as well as the part and the
  * newly broken mask, so the applier writes with one assignment and a re-simulated hit lands on the same bytes. Two entries of
  * one drain are applied in the inbox order, each built from the state the earlier one left (combat-parts.md §4.2).
  *
@@ -60,6 +60,10 @@ struct GSTNPARTSCORE_API FGSTN_PartHitOutcome : public FGSTN_HitExtension
 	/** The state after the hit */
 	UPROPERTY()
 	uint16 ResultBrokenMask = 0;
+
+	/** Wounds after the hit (combat-parts.md 3.4); like the broken mask it only grows within a hit */
+	UPROPERTY()
+	uint16 ResultWoundedMask = 0;
 
 	UPROPERTY()
 	uint8 ResultPartDamage[GSTN_PartsLimits::MaxParts] = {};

@@ -379,7 +379,7 @@ A `FGSTN_SyncFragment` (§5b) registered with a fixed type id from the central r
 carry **no fragment: zero bytes and no compare cost**.
 
 ```
-FGSTN_PartsFragment { uint16 BrokenMask; uint8 PartDamage[N]; uint8 BreakSerial (4 bits used); uint16 WoundedMask (wounds, P18, planned); }
+FGSTN_PartsFragment { uint16 BrokenMask; uint8 PartDamage[N]; uint8 BreakSerial (4 bits used); uint16 WoundedMask (wounds L1, P18, built; wire: after BrokenMask, so a non-empty payload is 5 + N); }
 ```
 
 `PartDamage[i]` = part damage / `PartCap` quantised to 8 bits (0 = pristine, 255 = at the cap). Rule: stored =

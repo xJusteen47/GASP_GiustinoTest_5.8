@@ -205,6 +205,18 @@ struct GSTNPARTSCORE_API FGSTN_PartDefinition
 	}
 
 	/**
+	 * Wounds (combat-parts.md 3.4): the hardness this part has once a hit that carries a wound (FGSTN_PartBreakEffect_Wound) has struck it,
+	 * 0..15, replacing Hardness and the hurtbox overrides while the part's bit of the wounded mask is on. Negative (the default) = the part
+	 * cannot be wounded and a wound hit leaves no mark on it. Static data, so the attacker's ricochet prediction stays exact. Not for minions
+	 * (their row has no wounded mask): validation rejects it on a minion set
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Damage", meta = (ClampMin = -1, ClampMax = 15))
+	int32 WoundedHardness = -1;
+
+	/** Whether a wound hit can mark this part */
+	bool CanBeWounded() const { return WoundedHardness >= 0; }
+
+	/**
 	 * How deep the part is, 0..1. The damage the part takes is Damage * (1 - Thickness) + DeepDamage * Thickness, where DeepDamage is the hit's own
 	 * (it defaults to Damage). Independent of Hardness: hardness decides whether a hit gets through, thickness what it does once through
 	 */

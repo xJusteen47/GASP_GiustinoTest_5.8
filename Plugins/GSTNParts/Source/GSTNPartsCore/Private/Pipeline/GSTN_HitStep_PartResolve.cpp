@@ -108,12 +108,17 @@ EGSTN_StepResult UGSTN_HitStep_PartResolve::Resolve_Implementation(const FGSTN_H
 	}
 
 	const FGSTN_PartHitData* PartHit = nullptr;
+	bool bWound = false;
 	for (const FInstancedStruct& Entry : Hit.ExtensionData)
 	{
 		if (const FGSTN_PartHitData* Found = Entry.GetPtr<FGSTN_PartHitData>())
 		{
-			PartHit = Found;
-			break;
+			// The first part data wins, as before
+			PartHit = PartHit ? PartHit : Found;
+		}
+		else if (Entry.GetScriptStruct() == FGSTN_PartBreakEffect_Wound::StaticStruct())
+		{
+			bWound = true;
 		}
 	}
 
@@ -124,6 +129,9 @@ EGSTN_StepResult UGSTN_HitStep_PartResolve::Resolve_Implementation(const FGSTN_H
 	// Screws (combat-parts.md 3.4): the hit's turn, read by a part with an enabled Screw rule only. Plain integers of the hit, no allocation
 	Input.TurnSense = FMath::Clamp(Hit.TurnSense, -1, 1);
 	Input.TurnSteps = FMath::Clamp(Hit.TurnSteps, 0, 255);
+	// Wounds (combat-parts.md 3.4): the hit asks to wound the part it landed on; ApplyHit reads the wounded bit for the hardness (the ricochet
+	// prediction of the attacker runs this same step on the snapshot's mask) and sets the bit for the hit's own part
+	Input.bWound = bWound;
 	// One part, several hardnesses (combat-parts.md §3.4): the hurtbox the attacker chose may carry its own. Static data only, so the
 	// attacker running this same step predicts the ricochet exactly; the pool and the break stay the part's
 	if (Parts.IsValidIndex(PartIndex))
@@ -142,6 +150,7 @@ EGSTN_StepResult UGSTN_HitStep_PartResolve::Resolve_Implementation(const FGSTN_H
 	Outcome.NewPartDamage = Result.NewPartDamage;
 	Outcome.NewlyBrokenMask = Result.NewlyBrokenMask;
 	Outcome.ResultBrokenMask = After.BrokenMask;
+	Outcome.ResultWoundedMask = After.WoundedMask;
 	FMemory::Memcpy(Outcome.ResultPartDamage, After.PartDamage, sizeof(Outcome.ResultPartDamage));
 	Outcome.ResultBreakSerial = After.BreakSerial;
 	Outcome.MainDelta = Result.MainDelta;
