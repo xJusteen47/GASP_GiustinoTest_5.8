@@ -8,7 +8,7 @@ Each run restarts the editor (fresh PIE, nullrhi). Reports: Saved/R31/report-{p1
 
 Why the HANDOVER 14 flakes did not show up: not diagnosed, no failure to diagnose. Likely already fixed by later harness work
 (lane reset with `lanes_settled`, apex/settle changes in M4-M7 commits). Not proven: 4 passes is evidence, not a guarantee.
-Open from the gate, NOT done: `spike_triggers` T3, O-CameraYaw (command yaw 0 vs 64 in reconcile dumps), S-MaxSpeed. Not touched; they are
+Open from the gate, NOT done: `spike_triggers` T3, O-CameraYaw (command yaw 0 vs 64 in reconcile dumps) — CLOSED 2026-11-09: harness leak, scenario_combat_main_inputs now restores yaw (Docs alignment + O-CameraYaw section), S-MaxSpeed. Not touched; they are
 diagnostics outside the 29 scenarios. R3-2 canary (`Tools/Canary/make_canary.py`) also not done.
 
 Added: `Tools/GASNPPTest/m3_suite_driver.py` (headless driver; env R31_TAG, R31_MODE=listen|dedicated, R31_ONLY=a,b).

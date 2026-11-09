@@ -19,8 +19,8 @@ Sequence and totals: [sequenza-2026-11-06.md](sequenza-2026-11-06.md).
 
 | Milestone | Done on feature | Open |
 |---|---|---|
-| M3 | C0-C19 (HANDOVER 14) | suite not "two clean passes" (30 scenarios), harness arena/lane, `spike_triggers` T3, O-CameraYaw, S-MaxSpeed, canary build |
-| M4b | P0-P9, P7b, P13, P14 | P10-P12 presentation, P15/P16 minions (need M8), P17 stations, P18 openings, P19 screws |
+| M3 | C0-C19 (HANDOVER 14) | suite not "two clean passes" (30 scenarios), harness arena/lane, `spike_triggers` T3, O-CameraYaw — CLOSED 2026-11-09: harness leak (m3-suite.md, Docs alignment + O-CameraYaw), S-MaxSpeed, canary build |
+| M4b | P0-P9, P7b, P13, P14 | P10-P12 presentation, P15/P16 minions (need M8), P17 stations, P18 openings, P19 screws — CLOSED 2026-11-09: P15, P16 (sub-gates A-C, plugin ENABLED; perf target not met, PERF-DEBT), P18 + P18b, P19 (parts-rest.md, their sections, all DONE) |
 | M5 | E1-E14, E5b | E15 Gameplay Debugger, E16 debug draw + BakeCheck, E17 trace sink, E18 Rewind Debugger (stretch), E19 closing |
 | T | T1, T3, T5; T2 paused | T2 finish, T4 launch from moving surfaces, T6 parts bridge, T7 lifecycle + lag comp, T8 platform minions, T9 content |
 

@@ -373,9 +373,9 @@
 ### M8 laptop status (2026-11-07): G0-G12a done on the laptop; desktop items left
 1. G6b / G7b: performance numbers on the desktop as listen host that renders (replication and puppets).
 2. G9b: Promoting flag on the wire, client cross-fade, fighter health from the component, `scenario_minion_promote`, spike 8, acceptance item 3 assets, Event_Minion*.
-3. G11b: rendered host frame, max N, R4/R5, §8.3/§11 re-based, moving-horde wire bytes with 3 clients, §4d.1 fallbacks if needed.
+3. G11b: rendered host frame, max N, R4/R5, §8.3/§11 re-based, moving-horde wire bytes with 3 clients, §4d.1 fallbacks if needed. — CLOSED 2026-11-09: G11b (desktop, 2026-11-09) section: host frame, real wire bytes, R4/R5 recorded; gate green
 4. G12b: listen + dedicated sweep of every §12 scenario; SUITE_PARTS/DEFENCE/LINK in three configs; byte/CPU tables; combat.md folds (m8-doc-deltas.md); §13 checklist; TM3 brief.
-5. `scenario_minion_lod` "no pop": client puppet overshoots at Far/Dormant (clamp interpolator extrapolation by tier interval).
+5. `scenario_minion_lod` "no pop": client puppet overshoots at Far/Dormant (clamp interpolator extrapolation by tier interval). — CLOSED 2026-11-09: G9b (desktop, 2026-11-09) section: lod "no pop" DONE; SUITE_MINION 0 % 12/12
 6. `scenario_minion_player_hits_minion` and `scenario_minion_lagcomp`: red since G7a, desktop queue.
 7. X4: lag-comp rewind iterates all minions (GatherRewoundCandidates not wired into GSTNCombatNP): needs an owner OK to touch GSTNCombatNP.
 8. `scenario_minion_dormancy_flush` (§12) not written yet.

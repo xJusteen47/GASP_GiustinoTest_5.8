@@ -958,5 +958,5 @@ OPEN: owner's yes to the fast-forward push. NEXT: D9+D10.
 - Plugins enabled in `GASP_Giustino2.uproject`: GSTNParts, GSTNSpinDrill, GSTNMinion, GSTNPartsMinion (the last since P16-C). The plugin defaults stay off.
 - Known reds, SUITE_MINION: player_hits_minion and lagcomp "no swing" (flaky input, PASS on rerun); player_hits_minion "none cancelled" at 2 % (the open G7b case); reaction_tiers "still items 0" at 2 % (flaky since G8, watch). lod is green since G9b.
 - Known red, SUITE_DEFAULT: `di` flaky (passes on its single rerun).
-- Deferred to the desktop: TM3 parts content (cavity leg, screwed plate on station 5), the P10-P12 presentation (owner decision), the FP G2 video capture chain (blocked, commit 02d6c9a8), the designer scenario in the editor, M8 G11b and G12b.
+- Deferred to the desktop: TM3 parts content (cavity leg, screwed plate on station 5), the P10-P12 presentation (owner decision), the FP G2 video capture chain (blocked, commit 02d6c9a8), the designer scenario in the editor, M8 G11b — CLOSED 2026-11-09: m8-minion.md G11b (desktop) section; G12b still open.
 - Headless gate, merge j after the rebase on 68e4c776: all on 1455/0, 0 ensures.
