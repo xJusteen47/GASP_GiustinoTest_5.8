@@ -610,3 +610,15 @@
   `!Plugins/GSTNMinion/Content/` rule plus LFS if they should be versioned (owner decision; not done).
 - Gate: `GSTNMinion.Runtime.Wave` 2/0 (TestAssetsSpawn loaded the real assets, no skip line); headless GSTN 1457/0/0; SUITE_MINION 0 % dedicated + 2 at 10 Hz 12/12. Play settings restored.
 - PERF-DEBT: none new. Cost: ~$1.5 (Sonnet subagent + lead).
+
+## Walking penetration (laptop, 2026-11-09, branch claude/laptop-walkpen): closed; last trap was a bench false positive
+- Diagnosis: the walking traps (cylinder underside) were fixed on 11-08 (`OverhangStepDownNoPenetration`, 0 traps in a 10-min soak). The only
+  "in penetration" left in the logs is on Landscape_0 at (1806.6,5424,327.7): the shrunk-capsule overlap test says inside, ComputePenetration
+  says no penetration (MTD 0). The minion stands on the heightfield; the bench counter is wrong, not the movement.
+- Fix (bench only, `GSTN_MinionBench.cpp`): count "in penetration after its step" only when an overlapped component confirms a penetration
+  deeper than 0.1 cm (the real cylinder traps had 0.7-1.6 cm). No simulation change. No headless test: the bench needs a level with a landscape;
+  the check is a soak on the desktop (`gstn.Minion.Bench.VerbosePenetration`), where Landscape traps should read 0.
+- Gate: build ok, headless 1457/0. SUITE_MINION 0%: 11/12, the red lagcomp (known 'kit swing did not come out') PASS on rerun. SUITE_DEFAULT 50/50.
+- PERF-DEBT: the bench check now runs an overlap-multi plus ComputePenetration per walking minion per step (bench/debug only, off in game).
+- After this no M8 item suits the laptop: the Launched hover and soaks need the desktop (PIE/rendered).
+- Build times (laptop): build + headless ~150 s. Cost: ~$1.5 (lead only, no writer).

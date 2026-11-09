@@ -1070,8 +1070,26 @@ void UGSTN_MinionBenchSubsystem::HandleMovementStepped(int32 Frame, TConstArrayV
 		{
 			const float Radius = SlotDefinition->Stats.CapsuleRadius;
 			const float HalfHeight = FMath::Max(SlotDefinition->Stats.CapsuleHalfHeight, Radius);
-			const bool bInside = World->OverlapAnyTestByObjectType(Now + FVector(0.0, 0.0, HalfHeight), FQuat::Identity, ObjectQuery,
-				FCollisionShape::MakeCapsule(Radius - 0.5f, HalfHeight - 0.5f), FCollisionQueryParams(SCENE_QUERY_STAT(GSTN_MinionBenchTrapped), false));
+			const FVector ShrunkCentre = Now + FVector(0.0, 0.0, HalfHeight);
+			const FCollisionShape ShrunkCapsule = FCollisionShape::MakeCapsule(Radius - 0.5f, HalfHeight - 0.5f);
+			bool bInside = false;
+			{
+				// The overlap test alone reports a capsule resting on a landscape heightfield as inside (seen in a soak: Landscape_0, MTD 0).
+				// Count a trap only when some overlapped component confirms a penetration deeper than 0.1 cm.
+				TArray<FOverlapResult> InsideOverlaps;
+				World->OverlapMultiByObjectType(InsideOverlaps, ShrunkCentre, FQuat::Identity, ObjectQuery, ShrunkCapsule,
+					FCollisionQueryParams(SCENE_QUERY_STAT(GSTN_MinionBenchTrapped), false));
+				for (const FOverlapResult& Overlap : InsideOverlaps)
+				{
+					FMTDResult InsideMTD;
+					UPrimitiveComponent* Component = Overlap.GetComponent();
+					if (Component && Component->ComputePenetration(InsideMTD, ShrunkCapsule, ShrunkCentre, FQuat::Identity) && InsideMTD.Distance > 0.1f)
+					{
+						bInside = true;
+						break;
+					}
+				}
+			}
 			if (bInside && CVarBenchVerbosePenetration.GetValueOnGameThread() > VerbosePenetrationLinesLogged)
 			{
 				const FVector CapsuleCentre = Now + FVector(0.0, 0.0, HalfHeight);
