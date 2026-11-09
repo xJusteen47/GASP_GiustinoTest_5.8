@@ -50,6 +50,12 @@ FORBIDDEN_EDGES = {
         "GSTNCombatGAS", "GSTNCombatNP", "GSTNLinkGAS", "GSTNLinkNP", "GSTNInputNP", "GSTNPiggybackRuntime",
         "GSTNPiggybackEditor", "GSTNPiggybackTests", "GASP_Giustino2",
     ],
+    # GSTNProjectileCore is the pure part of the projectile plugin: engine modules and GSTNCombatCore only
+    "GSTNProjectileCore.Build.cs": [
+        "GameplayAbilities", "AbilitySystemSimulation", "NetworkPrediction", "Mover", "UnrealEd", "GASP_Giustino2",
+        "GSTNCombatGAS", "GSTNCombatNP", "GSTNProjectileNP",
+    ],
+    "GSTNProjectileNP.Build.cs": ["GASP_Giustino2", "GSTNMinionCore", "GSTNMinionRuntime"],
     "GSTNPiggybackRuntime.Build.cs": ["GSTNPiggybackEditor", "GSTNPiggybackTests", "GASP_Giustino2", "GSTNDefenceCore", "GSTNDefenceGAS", "GSTNDefenceNP"],
     "GSTNExtTestLink.Build.cs": ["GSTNExtTestDefence", "GSTNDefenceCore", "GSTNDefenceGAS", "GSTNDefenceNP"],
     "GSTNExtTestDefence.Build.cs": ["GSTNExtTestLink", "GSTNLinkCore", "GSTNLinkGAS", "GSTNLinkNP"],

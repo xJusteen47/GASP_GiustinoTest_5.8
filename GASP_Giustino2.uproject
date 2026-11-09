@@ -227,6 +227,10 @@
 		{
 			"Name": "GSTNPartsMinion",
 			"Enabled": true
+		},
+		{
+			"Name": "GSTNProjectile",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"

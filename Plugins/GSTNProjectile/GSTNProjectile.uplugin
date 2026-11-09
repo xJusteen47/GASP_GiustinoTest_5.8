@@ -1,0 +1,44 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Projectile",
+	"Description": "Projectiles for the GSTN combat, deterministic first: a projectile is spawned once with its parameters (origin, direction, speed, gravity, lifetime, owner) and every machine computes its position from them with the ballistic mode (closed form, no per-tick replication). The host sweeps it against hurtboxes at the fixed tick and posts a normal hit into the victim's inbox, so the melee hit pipeline applies unchanged. GSTNProjectileCore is pure (no GAS, no Network Prediction); GSTNProjectileNP is the world side (needs the GAS-NPP fork).",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNProjectileCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNProjectileNP",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GSTNCombat",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatNP",
+			"Enabled": true
+		},
+		{
+			"Name": "NetworkPrediction",
+			"Enabled": true
+		}
+	]
+}
