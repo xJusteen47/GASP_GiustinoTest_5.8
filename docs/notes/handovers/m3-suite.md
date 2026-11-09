@@ -37,3 +37,14 @@ Next for R3-1 (cheap): decide with the owner if the three leftover diagnostics a
   (CombatGAS -> GSTNCombat.GAS, CombatNP -> GSTNCombat.NP, CombatDebug -> GSTNCombat.Debug, CombatEditor -> GSTNCombat.Editor, InputNP ->
   GSTNInput.NP, ExtensionTest -> GSTNExtTest). Checked on GSTNCombatDebug alone: build ok, 17/0 (the main project runs 34 GSTNCombat.Debug
   tests: the rest need plugins the canary does not enable, which is the point of the canary). No PERF-DEBT. Cost ~$0.5.
+
+## Docs alignment + O-CameraYaw (laptop, 2026-11-09)
+- Branch `claude/laptop-docs-m3` from merge j 03ea8334. Haiku docs pass (66ff3125): READMEs of GSTNMinion, GSTNParts, GSTNPartsMinion,
+  GSTNCombatDebug, GSTNCombatGAS aligned with today's merges (facts from the handovers), perf-debt history made consistent, takeover-state
+  "State of merge j" block.
+- O-CameraYaw closed: not an input-source bug (CameraYaw comes from ControlRotation.Yaw, serialized symmetrically; 64 = 90 deg quantised).
+  `scenario_combat_main_inputs` (gasnpp_test.py) set the client's control rotation to yaw 90 and never restored it: one step now restores yaw 0.
+  SUITE_DEFAULT on DefaultLevel after the fix: 50/50. (A different 0-vs-64 source is not excluded: the original dump was not available.)
+- Skipped: spike_triggers T3 (needs a PIE investigation; it passes today), and the movement / editor / rendering items (R3-1, S-MaxSpeed,
+  T4, T7, P10-P12, P17, TM3, E19 designer scenario).
+- Gate: no C++ changed since the rebased build (1455/0, 208 s); SUITE_DEFAULT 50/50. Cost: ~$2 (Haiku docs ~190k tokens, Sonnet ~90k, 1 suite run).
