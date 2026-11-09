@@ -117,3 +117,67 @@ Una zona di fuoco è "un proiettile fermo con durata 5 s e hitbox che pulsa": st
   proiettili su toaster (tetto + misura nel bench esistente); il rewind piattaforme dipende dal rifacimento del movimento.
 
 Costo di questa analisi: ~$3-4 (Opus, solo lettura e doc).
+
+## 8. Movement modes condivise (note dell'owner, 2026-11-09)
+
+- **Il concetto.** Fighter e minion condividono le stesse **modalità di movimento** (camminata, balistico/lanciato, hover, ecc.).
+  La modalità è il "come si muove" (regole, integrazione, transizioni); il trasporto è il "come arriva agli altri" (replica, frequenza,
+  formato sul filo). Sono due strati separati: la stessa modalità può girare dentro Mover + Network Prediction (fighter) o dentro lo
+  store dei minion sull'host (minion) senza cambiare le sue regole.
+- **Interfaccia.** Verrà definita quando il movimento dei fighter sarà rifatto come modalità propria. Fino ad allora niente interfaccia
+  comune scritta "in anticipo": la si estrae dal primo caso reale.
+- **Minion.** Restano simulati sull'host, replicati per tier (T0/T1/T2/T3, pack da 16, budget di rilevanza) come oggi. Condividere la
+  modalità non li sposta in Network Prediction.
+- **Proiettili.** Usano una modalità **"balistico"**: stessa matematica del lanciato, coerente con il principio "deterministico prima"
+  del §2 (nascita con parametri, simulazione locale).
+- **Formati sul filo attuali** (riferimento, non da cambiare per questo punto):
+  - fighter: stato Mover quantizzato e delta contro la base confermata, `docs/notes/handovers/netcode-lever1.md`;
+  - minion: item del pack con posizioni relative all'ancora del pack (leva 3), `docs/notes/handovers/m8-netcode-34.md`.
+
+## 9. Oggetti fisici (note dell'owner, 2026-11-09)
+
+Tre categorie, ognuna con la sua autorità:
+- **(a) Rilevanti per il gameplay**: simulazione deterministica, "nasce una volta con i parametri, poi si simula in locale" su ogni
+  macchina (come i proiettili del §3). In rete viaggiano solo la nascita e gli eventi.
+- **(b) Cosmetici**: solo locali, **mai replicati** (detriti, schegge, oggetti che non cambiano il gioco).
+- **(c) Pochi oggetti pesanti a fisica vera**: autorità solo dell'host, **5-10 al massimo** contemporaneamente.
+
+Regole comuni:
+- **Sleep** appena l'oggetto si ferma; un oggetto fermo non costa né CPU né banda.
+- **Rottura a eventi**: la rottura è un evento (chi, cosa, quando), non uno stato fisico replicato di continuo.
+- **Spinte come impulsi**: chi spinge applica un impulso, non una posizione.
+- **I personaggi sono cinematici**: spingono gli oggetti, **mai il contrario** (un oggetto non sposta un fighter o un minion).
+- Gli oggetti sono **ostacoli della navmesh**.
+- **Soglia di risveglio** (sotto non si sveglia) e **tetto sugli oggetti svegli** (oltre il tetto i più vecchi/lontani tornano a dormire).
+
+## 10. Confronto con Fortnite (note dell'owner, 2026-11-09)
+
+- **Fortnite (cifre dell'owner, approssimate):** aggiornamento di rete ~30 Hz; per client ~20-60 KB/s in download e ~5-10 KB/s in upload.
+- **Noi, misurato** (per client, host + 2-3 client, laptop/desktop):
+  - G12b (`docs/notes/handovers/m8-minion.md`, T0 10 Hz): minion N=40 ~5 KB/s, N=80 7.5-8.1 KB/s, N=150 ~6.4 KB/s sopra una base
+    giocatori di ~45 KB/s; upload host a N=80 con 3 client 23.7 KB/s.
+  - Leva 1 (`netcode-lever1.md`): giocatori fermi N=0 **50.2 -> 21.7 KB/s** (-57 %).
+  - Leva 2 Oodle (`m8-hover-oodle.md`): giocatori soli 35.3 -> 4.8 KB/s, N=80 totale 44.0 -> 9.7 KB/s (dizionario addestrato sullo
+    stesso scenario: ottimistico).
+  - Leva 3 (`m8-netcode-34.md`): -10.5 % dei bit degli item minion; con Oodle attivo il guadagno è nel rumore.
+  - Leva 4: punteggio host, nessun effetto sui byte.
+  In sintesi siamo sotto la fascia di download di Fortnite con 80 minion; l'upload del client resta il solo input (frequenza fissa).
+- **Cosa fa costare Network Prediction** (trovato con `np.Debug.NetBytes`, NP = 89 % del filo prima della leva 1):
+  - **float pieni**: `FSmoothWalkingState` mandava 5 double interi (128 B);
+  - **niente delta compression**: ogni update rimandava tutto lo stato sync;
+  - **reinvii ridondanti**: nome della modalità come stringa (16 B), modificatori e collection rimandati anche se uguali.
+- **Cosa ha fatto la leva 1:** quantizzazione di `FSmoothWalkingState` (128 -> ~5 B); delta contro la base confermata per nome modalità,
+  modificatori ed elementi della collection (1 bit se uguali); Mover SP 243 -> 52 B per update, AP 179 -> 26 B. Restano senza delta
+  Combat e ASS sync (43 + 42-108 B/update) e l'input SP.
+
+## 11. Frequenza di simulazione vs frequenza di invio per modalità (note dell'owner, 2026-11-09)
+
+- **Fissi, sempre** (regola da picchiaduro): simulazione a **62.5 Hz** e invio dell'input client -> host a ogni tick. Non cambiano
+  con la modalità di gioco, perché l'input e il timing dei colpi devono essere identici ovunque.
+- **Variabile per modalità**: solo la frequenza con cui l'host manda lo stato ai client (host -> client).
+  - **PvP e livelli classici**: frequenza piena.
+  - **Orde PvE**: stato ai simulated proxy **ogni 2 tick**, tramite la cvar `gstn.Net.SimProxySendEveryNTicks` (default 1 = ogni tick).
+- Stato: misura in corso sul desktop; i risultati andranno in `docs/notes/handovers/netcode-step3.md` quando arriva. Nessun aggancio alla
+  modalità di gioco finché la misura non c'è.
+
+Costo delle sezioni 8-11: ~$1 (solo doc, dalle note dell'owner e dagli handover citati).

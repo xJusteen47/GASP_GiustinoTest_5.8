@@ -20,9 +20,9 @@
   Console `gstn.Net.HostScore [UploadKBps]`. Laptop i7-10870H: bench 2.77 ms, score 66 (reference machine = 50). Test `GSTNCore.Net.HostSuitability.ScoreOrder`.
 - Lobby later: each member runs Measure() at lobby join (plus an upload probe to the session backend if available), publishes Score+bEligible
   in its session member data; the lobby leader picks the highest eligible score, ties to the current leader; re-run on member change, not mid-match.
-## Oodle CPU per packet: NOT measured
-- CsvProfile started on the command line only covers editor startup (31 s, no Oodle column) even with CsvProfile Stop before quit. Next try:
-  `CsvProfile Start` from the driver after PIE starts, column Exclusive/GameThread/Oodle_OutCompressTime / server OutTotalPackets.
+## Oodle CPU (laptop, CSV from the driver after PIE start, whole minion_bytes run 116 s, Oodle on; off = 0 by construction)
+- Process = server + 2 clients: compress 0.99 ms/s, decompress 2.41 ms/s (max frame 0.15 / 0.62 ms). ~240 packets/s out in total (N=80:
+  ~60/s per direction per client) -> ~4 us compress, ~10 us decompress per packet; host share ~1.7 ms/s, i.e. ~0.2 % of one core. Not a cost.
 ## Gate
 - Build ok, headless GSTN 1462/0/0. SUITE_MINION 0 %: 9/12 first pass; reaction_tiers PASS on rerun; player_hits_minion and lagcomp failed twice on
   the kit-swing check ("kit swing came out on the server" empty), and lagcomp failed the same way with RelativePositions=0: pre-existing flake,
