@@ -1,22 +1,25 @@
-// Minion runtime (authority batch, M8 G9a).
+// Minion runtime (authority batch, M8 G9a; readers G9b).
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "GameplayTagContainer.h"
+#include "Loadout/GSTN_StartingHealthSource.h"
 #include "GSTN_MinionPromotedComponent.generated.h"
 
 /**
  * Marks a fighter that began as a minion (UGSTN_MinionSpawner::Promote) and carries what the swap needs, replicated once at the fighter's
- * spawn. No tick, no behaviour: it is data.
+ * spawn. No tick, no behaviour of its own: it is data, plus two hand-offs (G9b).
  *
- * Two readers, both G9b: the client reads PromotedFromPackId / PromotedFromMinionId to find the puppet it shows for that item and
- * cross-fades it into this fighter, and the fighter's kit reads HealthFraction to set Health = MaxHealth x HealthFraction after its init
- * effect. G9a only writes the values; nothing reads them yet.
+ * - Presentation: at BeginPlay, on every machine, it hands the fighter to UGSTN_MinionPresentationSubsystem, which finds the puppet it shows
+ *   for PromotedFromPackId / PromotedFromMinionId (the listen host: SourceSlot), hides the fighter while the puppet is still the one shown,
+ *   and swaps them (see the subsystem, "promotion swap").
+ * - Health: the fighter's loadout asks it for the starting health (IGSTN_StartingHealthSource) right after the kit's init effect, so the
+ *   kit sets Health = MaxHealth x HealthFraction. The combat layer never names this class.
  */
 UCLASS(ClassGroup = "GSTN", meta = (BlueprintSpawnableComponent))
-class GSTNMINIONRUNTIME_API UGSTN_MinionPromotedComponent : public UActorComponent
+class GSTNMINIONRUNTIME_API UGSTN_MinionPromotedComponent : public UActorComponent, public IGSTN_StartingHealthSource
 {
 	GENERATED_BODY()
 
@@ -24,6 +27,10 @@ public:
 	UGSTN_MinionPromotedComponent();
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	virtual void BeginPlay() override;
+
+	//~ IGSTN_StartingHealthSource
+	virtual float GetStartingHealthFraction() const override { return HealthFraction; }
 
 	/** Pack-local id of the net item the minion was published as (what the clients know it by); INDEX_NONE if it never had one */
 	UPROPERTY(BlueprintReadOnly, Replicated, Category = "Minion|Promotion")
@@ -44,4 +51,7 @@ public:
 	/** Team id (FGenericTeamId value) of the minion type; 255 = none */
 	UPROPERTY(BlueprintReadOnly, Replicated, Category = "Minion|Promotion")
 	uint8 Team = 255;
+
+	/** Store slot of the minion on the authority (the listen host's puppets are keyed by slot). Not replicated: meaningless elsewhere */
+	int32 SourceSlot = INDEX_NONE;
 };

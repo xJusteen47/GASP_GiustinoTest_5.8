@@ -253,6 +253,26 @@ namespace
 			}
 		}));
 
+	FAutoConsoleCommandWithWorldAndArgs BenchPromoteCommand(
+		TEXT("gstn.Minion.Bench.Promote"),
+		TEXT("G9b: promotes a live bench minion to a fighter (UGSTN_MinionSpawner::Promote, health kept). Args: [FighterClassPath|-] [X Y Z]: the class\n")
+		TEXT("(- or none = the harness test character), and the point the nearest minion to is chosen (none = the first). Logs: Bench: promote .."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
+		{
+			UGSTN_MinionBenchSubsystem* Bench = UGSTN_MinionBenchSubsystem::Get(World);
+			if (!Bench)
+			{
+				return;
+			}
+			const FString Path = Args.Num() > 0 && Args[0] != TEXT("-") ? Args[0] : FString();
+			TOptional<FVector> Near;
+			if (Args.Num() >= 4)
+			{
+				Near = FVector(FCString::Atod(*Args[1]), FCString::Atod(*Args[2]), FCString::Atod(*Args[3]));
+			}
+			Bench->Promote(Path, Near);
+		}));
+
 	FAutoConsoleCommandWithWorld BenchClearCommand(
 		TEXT("gstn.Minion.Bench.Clear"),
 		TEXT("Despawns every bench minion."),
@@ -741,6 +761,51 @@ int32 UGSTN_MinionBenchSubsystem::Kill()
 	}
 	UE_LOG(LogGSTNMinion, Log, TEXT("Bench: kill posted=%d frame=%d"), Posted, Frame);
 	return Posted;
+}
+
+AActor* UGSTN_MinionBenchSubsystem::Promote(const FString& FighterClassPath, TOptional<FVector> Near)
+{
+	UGSTN_MinionCombatSubsystem* Minions = UGSTN_MinionCombatSubsystem::GetActive(GetWorld());
+	if (!Minions)
+	{
+		UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: promote refused (no active minion subsystem: client world?)"));
+		return nullptr;
+	}
+	const FGSTN_MinionStore& Store = Minions->GetStore();
+	FGSTN_MinionHandle Best;
+	double BestDistance = TNumericLimits<double>::Max();
+	for (const FGSTN_MinionHandle& Handle : Handles)
+	{
+		if (!Minions->IsAlive(Handle))
+		{
+			continue;
+		}
+		const double Distance = Near.IsSet() ? FVector::DistSquared(FVector(Store.Position[Handle.Index]), Near.GetValue()) : 0.0;
+		if (Distance < BestDistance)
+		{
+			Best = Handle;
+			BestDistance = Distance;
+			if (!Near.IsSet())
+			{
+				break;
+			}
+		}
+	}
+	if (Best.IsNull())
+	{
+		UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: promote refused (no live bench minion)"));
+		return nullptr;
+	}
+	const FString Path = FighterClassPath.IsEmpty() ? FString(TEXT("/Game/GASNPPTest/BP_GASNPP_TestCharacter.BP_GASNPP_TestCharacter_C")) : FighterClassPath;
+	FGSTN_MinionPromotionParams Params;
+	Params.FighterClassOverride = TSoftClassPtr<AActor>(FSoftObjectPath(Path)).LoadSynchronous();
+	const FVector Feet(Store.Position[Best.Index]);
+	const float Health = Store.MaxHealth[Best.Index] > 0.f ? Store.Health[Best.Index] / Store.MaxHealth[Best.Index] : 1.f;
+	const int32 Frame = Minions->GetLastBatchFrame();
+	AActor* Fighter = Params.FighterClassOverride ? UGSTN_MinionSpawner::Promote(GetWorld(), Best, Params) : nullptr;
+	UE_LOG(LogGSTNMinion, Log, TEXT("Bench: promote minion=%s fighter=%s feet=(%.1f,%.1f,%.1f) health=%.2f frame=%d class=%s"), *Best.ToString(), *GetNameSafe(Fighter),
+		Feet.X, Feet.Y, Feet.Z, Health, Frame, *Path);
+	return Fighter;
 }
 
 void UGSTN_MinionBenchSubsystem::Clear()

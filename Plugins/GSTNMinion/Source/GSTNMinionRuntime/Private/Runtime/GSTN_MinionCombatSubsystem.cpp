@@ -78,6 +78,11 @@ namespace
 		TEXT("gstn.Minion.MaxFightersFromMinions"), 4,
 		TEXT("Most fighters made by promoting minions that may be alive at once: each is a full Network Prediction entity (spike 1 numbers). A promotion above the cap is refused."));
 
+	TAutoConsoleVariable<int32> CVarPromoteHoldFrames(
+		TEXT("gstn.Minion.PromoteHoldFrames"), 16,
+		TEXT("Fixed frames a promoted minion stays in the store as a Promoting body before it is freed (G9b): the flag reaches the clients on the item\n")
+		TEXT("before the item leaves its pack, so they hold the puppet for the fighter. 0 frees it on the promotion frame (no flag on the wire)."));
+
 	TAutoConsoleVariable<int32> CVarMaxAttackersPerPlayer(
 		TEXT("gstn.Minion.MaxAttackersPerPlayer"), FGSTN_MinionAttackTokens::DefaultMaxPerTarget,
 		TEXT("Most minions that may start an attack against one fighter at a time (attack tokens). Read when the minion subsystem activates."));
@@ -435,10 +440,21 @@ AActor* UGSTN_MinionCombatSubsystem::PromoteToFighter(const FGSTN_MinionHandle& 
 	// The store holds the feet; a pawn's origin is its capsule centre
 	const FVector Feet(Store.Position[Slot]);
 	const FTransform Transform(FRotator(0.0, Store.YawDegrees[Slot], 0.0), Feet + FVector(0.0, 0.0, Definition->Stats.CapsuleHalfHeight));
+	// The minion's server actor stays for the hold (G9b) but must not push the fighter out of its own spot
+	AGSTN_MinionActor* MinionActor = SlotActors.IsValidIndex(Slot) ? SlotActors[Slot].Get() : nullptr;
+	const bool bMinionCollided = MinionActor && MinionActor->GetActorEnableCollision();
+	if (bMinionCollided)
+	{
+		MinionActor->SetActorEnableCollision(false);
+	}
 	AActor* Fighter = World->SpawnActorDeferred<AActor>(FighterClass, Transform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
 	if (!Fighter)
 	{
 		UE_LOG(LogGSTNMinion, Warning, TEXT("Promote failed: %s did not spawn"), *GetNameSafe(FighterClass));
+		if (bMinionCollided)
+		{
+			MinionActor->SetActorEnableCollision(true);
+		}
 		return nullptr;
 	}
 
@@ -448,6 +464,7 @@ AActor* UGSTN_MinionCombatSubsystem::PromoteToFighter(const FGSTN_MinionHandle& 
 	Promoted->SourceTypeTag = Definition->TypeTag;
 	Promoted->HealthFraction = Params.bKeepHealthFraction && Store.MaxHealth[Slot] > 0.f ? FMath::Clamp(Store.Health[Slot] / Store.MaxHealth[Slot], 0.f, 1.f) : 1.f;
 	Promoted->Team = Definition->TeamId;
+	Promoted->SourceSlot = Slot;
 	Fighter->AddInstanceComponent(Promoted);
 	Promoted->RegisterComponent();
 
@@ -460,11 +477,38 @@ AActor* UGSTN_MinionCombatSubsystem::PromoteToFighter(const FGSTN_MinionHandle& 
 	PromotedFighters.Add(Fighter);
 	UE_LOG(LogGSTNMinion, Verbose, TEXT("Minion %s promoted to %s (health fraction %.2f, tag %s)"), *Handle.ToString(), *GetNameSafe(Fighter), Promoted->HealthFraction,
 		*GSTNMinionTags::Event_MinionPromoted.GetTag().ToString());
-	// G9b: publish Event.MinionPromoted on the authority event bus (the spawn and despawn events are not published yet either)
 	OnMinionPromoted.Broadcast(Handle, Fighter);
+	// The authoritative stream: Promote runs outside the stages (checked above), so a listener may act on it at once
+	if (UGSTN_SimEventSubsystem* SimEvents = UGSTN_SimEventSubsystem::Get(this))
+	{
+		FGSTN_SimEvent Event;
+		Event.EventType = GSTNMinionTags::Event_MinionPromoted;
+		Event.Frame = LastBatchFrame;
+		Event.Target = Fighter;
+		Event.Magnitude = Promoted->HealthFraction;
+		Event.Tags.AddTag(GSTNMinionTags::Entity_Minion);
+		Event.Tags.AddTag(Definition->TypeTag);
+		SimEvents->Broadcast(Event);
+	}
 
-	// Same path as Despawn: the actor returns to the pool, the item leaves its pack, the generation is bumped. The brain drops with the slot
-	FreeSlot(Slot);
+	const int32 HoldFrames = FMath::Max(CVarPromoteHoldFrames.GetValueOnGameThread(), 0);
+	if (HoldFrames == 0)
+	{
+		// Same path as Despawn: the actor returns to the pool, the item leaves its pack, the generation is bumped. The brain drops with the slot
+		FreeSlot(Slot);
+		return Fighter;
+	}
+	// The Promoting body (header): a corpse that is not dead. The flag change forces an item send (NetRates), the corpse list frees it
+	Store.Flags[Slot] |= GSTNMinion::NetFlags::Promoting;
+	Store.ActionState[Slot] = static_cast<uint8>(EGSTN_MinionActionState::Dead);
+	Store.MoveId[Slot] = 0;
+	Store.Intent[Slot] = FGSTN_MinionIntent();
+	AttackTokens.ReleaseSlot(Slot);
+	TimelinePrevFrame[Slot] = INDEX_NONE;
+	PausedFrames[Slot] = 0;
+	AttackerHitstopEndFrame[Slot] = INDEX_NONE;
+	CorpseEndFrame[Slot] = FMath::Max(LastBatchFrame, 0) + HoldFrames;
+	Corpses.AddUnique(Slot);
 	return Fighter;
 }
 
@@ -945,7 +989,12 @@ void UGSTN_MinionCombatSubsystem::StageSpawnDrain(int32 Frame)
 			StartTimeline(Slot, GSTNMinion::ReactionMoveIds::Spawn, Frame);
 		}
 		++LastBatch.SpawnsActivated;
-		// G9: publish Event.MinionSpawned on the authority event bus
+		// Published at the flush, outside the stages (G9b)
+		FQueuedEvent& Spawned = QueuedEvents.AddDefaulted_GetRef();
+		Spawned.Kind = FQueuedEvent::EKind::Spawned;
+		Spawned.Handle = Queued.Handle;
+		Spawned.OtherId = Queued.TypeIndex;
+		Spawned.Frame = Frame;
 	}
 	SpawnQueue.RemoveAt(0, Budget, EAllowShrinking::No);
 }
@@ -2318,6 +2367,28 @@ void UGSTN_MinionCombatSubsystem::FlushEventsAndDespawns()
 	UGSTN_SimEventSubsystem* SimEvents = nullptr;
 	for (const FQueuedEvent& Event : Events)
 	{
+		if (Event.Kind == FQueuedEvent::EKind::Spawned || Event.Kind == FQueuedEvent::EKind::Despawned)
+		{
+			// The authoritative stream only (no component delegate): the subsystem exists on the authority alone
+			SimEvents = SimEvents ? SimEvents : UGSTN_SimEventSubsystem::Get(this);
+			if (SimEvents)
+			{
+				FGSTN_SimEvent Published;
+				Published.EventType = Event.Kind == FQueuedEvent::EKind::Spawned ? GSTNMinionTags::Event_MinionSpawned : GSTNMinionTags::Event_MinionDespawned;
+				Published.Frame = Event.Frame;
+				Published.Tags.AddTag(GSTNMinionTags::Entity_Minion);
+				if (const UGSTN_MinionDefinition* Definition = GetDefinition(Event.OtherId))
+				{
+					Published.Tags.AddTag(Definition->TypeTag);
+				}
+				if (Event.Kind == FQueuedEvent::EKind::Spawned && Store.IsValid(Event.Handle))
+				{
+					Published.Target = SlotActors[Event.Handle.Index].Get();
+				}
+				SimEvents->Broadcast(Published);
+			}
+			continue;
+		}
 		if (!Store.IsValid(Event.Handle))
 		{
 			continue;
@@ -2465,6 +2536,7 @@ void UGSTN_MinionCombatSubsystem::FreeSlot(int32 Slot)
 		SpawnQueue.RemoveAll([&Handle](const FQueuedSpawn& Queued) { return Queued.Handle == Handle; });
 		PendingActivation[Slot] = false;
 	}
+	const int32 TypeIndex = Store.TypeIndex[Slot];
 	ReleaseActor(Slot);
 	NetReleaseSlot(Slot);
 	CorpseEndFrame[Slot] = INDEX_NONE;
@@ -2481,7 +2553,12 @@ void UGSTN_MinionCombatSubsystem::FreeSlot(int32 Slot)
 	// Tokens, rings and history name the slot: they go with the occupant (the token goes back on death, here at the latest)
 	ResetHitColumns(Slot);
 	++LastBatch.Despawned;
-	// G9: publish Event.MinionDespawned
+	// Published at the next flush (FreeSlot runs inside stages too); the handle is stale by then, so the type travels in OtherId
+	FQueuedEvent& Despawned = QueuedEvents.AddDefaulted_GetRef();
+	Despawned.Kind = FQueuedEvent::EKind::Despawned;
+	Despawned.Handle = Handle;
+	Despawned.OtherId = TypeIndex;
+	Despawned.Frame = FMath::Max(LastBatchFrame, 0);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

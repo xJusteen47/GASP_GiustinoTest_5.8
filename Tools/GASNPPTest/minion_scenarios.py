@@ -16,7 +16,8 @@ import gasnpp_test as g
 import defence_scenarios as ds
 
 SUITE_MINION = ['minion_hits_player', 'minion_tokens', 'minion_replicate', 'minion_late_join', 'minion_player_hits_minion',
-                'minion_reaction_tiers', 'minion_lagcomp', 'minion_lod', 'minion_tokens_brain', 'minion_wave', 'minion_forced_reconcile']
+                'minion_reaction_tiers', 'minion_lagcomp', 'minion_lod', 'minion_tokens_brain', 'minion_wave', 'minion_forced_reconcile',
+                'minion_promote']
 # M8 G6: replication scenarios (packs, relevancy grants, registry check); run_batch(SUITE_MINION_NET)
 SUITE_MINION_NET = ['minion_late_join', 'minion_replicate']
 # M8 G11: host budget scenarios, a minute each so not in SUITE_MINION: run_batch(SUITE_MINION_BENCH). Laptop numbers are provisional (-nullrhi).
@@ -889,6 +890,111 @@ def scenario_minion_wave(client=1):
         (9.0, run.at('the wave cleared exactly once', cleared_once)),
         (9.1, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
         (9.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+_LOG_TS = re.compile(r'^\[(\d{4})\.(\d\d)\.(\d\d)-(\d\d)\.(\d\d)\.(\d\d):(\d{3})\]')
+_SWAP = re.compile(r'MinionPromote swap key=(-?\d+) fighter=(\S+) pop=([\d.]+)cm waited=(\d+)ms held=(\d) net=(\w+)')
+
+
+def _log_seconds(line):
+    """Seconds of the day of an engine log line (all PIE worlds share one process, so one clock)"""
+    m = _LOG_TS.search(line)
+    if not m:
+        return None
+    v = [int(x) for x in m.groups()]
+    return v[3] * 3600 + v[4] * 60 + v[5] + v[6] / 1000.0
+
+
+def _promoted_fighters(wi):
+    """Actors of world wi that carry the promoted component (the fighters made from minions)"""
+    comp_class = unreal.load_class(None, '/Script/GSTNMinionRuntime.GSTN_MinionPromotedComponent')
+    found = []
+    for a in unreal.GameplayStatics.get_all_actors_of_class(g.worlds()[wi], unreal.Actor):
+        try:
+            if a.get_component_by_class(comp_class):
+                found.append(a)
+        except Exception:
+            pass
+    return found
+
+
+def scenario_minion_promote(client=1):
+    """M8 G9b, spike 8. Three idle bench grunts; the server promotes one (gstn.Minion.Bench.Promote, the harness test character, health kept).
+    The minion holds as a Promoting body for gstn.Minion.PromoteHoldFrames (no shatter), the fighter replicates with the minion's ids, and each
+    client swaps the puppet for the fighter. PASS: the fighter exists on the server and both clients; each client logs one swap with a pop
+    <= 15 cm; the first control (the client shows the fighter, which NP then moves) <= 500 ms after the server's promote line; no 'nopuppet'
+    or 'expired' line; after the hold 2 items are left on the server and the clients. Spike 8 numbers are notes. The fighter is destroyed at the end."""
+    run = g._Run('minion_promote', client, judge_reconciles=False, sample=False)
+    st = {}
+
+    def dump():
+        _marks['log'] = g.mark_log()
+        return _net_dump()
+
+    def counts(want):
+        server, clients, grants, summaries = _net_state()
+        per_client = {p: len(clients.get(p, {})) for p in summaries}
+        ok = len(server) == want and bool(per_client) and all(n == want for n in per_client.values())
+        return ok, f'want {want}: server items {len(server)} clients {per_client}'
+
+    def promote():
+        st['t0'] = g.mark_log()
+        _cmd('gstn.Minion.Bench.Promote -')
+        return 'promote', 'gstn.Minion.Bench.Promote -'
+
+    def fighters():
+        n = [len(_promoted_fighters(wi)) for wi in range(len(g.worlds()))]
+        return all(x == 1 for x in n), f'promoted fighters per world {n}'
+
+    def swaps():
+        text = g._read_log_since(st['t0'])
+        lines = text.splitlines()
+        prom = [ln for ln in lines if 'Bench: promote minion=' in ln]
+        st['promote_line'] = prom[-1] if prom else ''
+        rows = [(ln, _SWAP.search(ln)) for ln in lines if _SWAP.search(ln)]
+        client_rows = [(ln, m) for ln, m in rows if m.group(6) == 'client']
+        t_srv = _log_seconds(st['promote_line']) if st['promote_line'] else None
+        st['spike8'] = [dict(pop=float(m.group(3)), waited=int(m.group(4)), held=int(m.group(5)),
+                             control_ms=(round((_log_seconds(ln) - t_srv) * 1000.0) if t_srv is not None and _log_seconds(ln) is not None else None))
+                        for ln, m in client_rows]
+        st['bad'] = len(re.findall(r'MinionPromote (nopuppet|expired|lostpuppet)', text))
+        run.note(f"minion_promote spike 8: {st['promote_line'][-160:]} | client swaps {st['spike8']} | nopuppet/expired/lost {st['bad']}")
+        return len(client_rows) == 2, f'{len(client_rows)} client swap lines (want 2: one per client)'
+
+    def pops():
+        worst = max([r['pop'] for r in st.get('spike8', [])], default=None)
+        return worst is not None and worst <= 15.0, f'worst pop {worst} cm (limit 15)'
+
+    def control():
+        worst = max([r['control_ms'] for r in st.get('spike8', []) if r['control_ms'] is not None], default=None)
+        return worst is not None and worst <= 500, f'worst first control {worst} ms after the server promote (limit 500)'
+
+    def clean():
+        return st.get('bad', 1) == 0, f"nopuppet/expired/lostpuppet lines {st.get('bad')}"
+
+    def destroy():
+        for a in _promoted_fighters(0):
+            a.destroy_actor()
+        return 'cleanup', 'promoted fighter destroyed on the server, bench cleared'
+
+    steps = [
+        (0.0, lambda: ('setup', st.update(t=g.mark_log()) or 'log mark')),
+        (0.5, lambda: ('spawn', _cmd('gstn.Minion.Bench.Spawn 3 Idle'))),
+        (3.0, lambda: ('dump A (spawned)', dump())),
+        (3.6, run.at('3 items on the server and on both clients', lambda: counts(3))),
+        (3.8, promote),
+        (5.0, run.at('the fighter exists on the server and on both clients', fighters)),
+        (5.0, run.at('each client swapped the puppet for the fighter once', swaps)),
+        (5.0, run.at('no pop above 15 cm at the swap', pops)),
+        (5.0, run.at('first control within 500 ms of the promotion', control)),
+        (5.0, run.at('no puppet missing, expired or lost', clean)),
+        (5.2, lambda: ('dump B (after the hold)', dump())),
+        (6.0, run.at('the promoted minion is gone after the hold (2 items left everywhere)', lambda: counts(2))),
+        (6.1, destroy),
+        (6.2, lambda: ('clear', _cmd('gstn.Minion.Bench.Clear'))),
+        (6.8, run.finish()),
     ]
     run.run(steps)
 

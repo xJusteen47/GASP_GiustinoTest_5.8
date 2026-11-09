@@ -16,6 +16,7 @@ class UGSTN_HurtboxSetDefinition;
 class UGSTN_MinionClientRegistry;
 class UGSTN_MinionCombatSubsystem;
 class UGSTN_MinionDefinition;
+class UGSTN_MinionPromotedComponent;
 
 /** Where the presentation reads minions from this frame */
 enum class EGSTN_MinionPresentSource : uint8
@@ -64,6 +65,10 @@ struct FGSTN_MinionPresentRecord
 	bool bVisible = false;
 	/** The death placeholder already played for this minion */
 	bool bShattered = false;
+	/** The latest sample carries the Promoting flag (G9b): its Dead state is a hand-over to a fighter, not a death */
+	bool bPromoting = false;
+	/** Its puppet was swapped for the promoted fighter: the record stays until the item goes, without a puppet */
+	bool bPromotionSwapped = false;
 };
 
 /** Counters of the presentation, for the dump and the harness. Not state */
@@ -82,6 +87,12 @@ struct FGSTN_MinionPresentStats
 	int32 HittableEntries = 0;
 	int32 PredictedHits = 0;
 	int32 PredictionCancels = 0;
+	/** Promotion swaps (G9b): done, fighters with no puppet to swap, puppets released with no fighter, and the last swap's numbers */
+	int32 PromotionSwaps = 0;
+	int32 PromotionsWithoutPuppet = 0;
+	int32 PromotionPuppetsExpired = 0;
+	float LastPromotionPopCm = 0.f;
+	float LastPromotionWaitMs = 0.f;
 	double RenderFrame = 0.0;
 	EGSTN_MinionRenderTimeSource RenderSource = EGSTN_MinionRenderTimeSource::None;
 	EGSTN_MinionPresentSource Source = EGSTN_MinionPresentSource::None;
@@ -106,6 +117,12 @@ struct FGSTN_MinionPresentStats
  *  4. Keeps the MaxVisiblePuppets nearest minions (gstn.Minion.Present.MaxVisible, default 60) with a pooled AGSTN_MinionPuppet each; the
  *     others are culled: no puppet, but still presented (smoothing, flash state) and still hittable.
  *  5. A minion that reaches Dead plays the pooled placeholder shatter once and loses its puppet.
+ *  6. Promotion swap (G9b, combat-m8-minions.md 10): a minion whose item carries Promoting is not a death (no shatter). Its fighter (with
+ *     UGSTN_MinionPromotedComponent) hands itself over at BeginPlay; the fighter is hidden while the puppet is still shown, and after
+ *     gstn.Minion.Present.PromoteSwapSeconds of fighter life (its first interpolated transforms) the puppet goes back to the pool and the
+ *     fighter shows: a swap at the same place, no material fade (the puppet has no opacity parameter). A puppet whose item leaves first is
+ *     held where it stood; held puppets and waiting fighters give up after gstn.Minion.Present.PromoteHoldSeconds. One "MinionPromote" log
+ *     line per swap with the distance between the puppet and the fighter's feet (the pop) and the wait.
  *
  * Client hittables (9.1): on a remote client this subsystem is the IGSTN_HittableProvider of the Minion kind (the authority's subsystem is
  * inactive there) and appends one entry per presented minion whose store slot is known, with the server's pipeline id MinionEntityBase |
@@ -169,6 +186,9 @@ public:
 	/** Log lines for the harness (gstn.Minion.Present.Dump): one per presented minion and a summary; formats in the .cpp */
 	void DumpToLog() const;
 
+	/** A promoted fighter began play on this machine (its component calls it): swap it with the puppet of its minion (item 6 above) */
+	void NotePromotedFighter(UGSTN_MinionPromotedComponent* Fighter);
+
 	// Tests and the harness
 	/** Activates without begin play (a test world has none). bAsClient registers the hittable provider like a remote client */
 	void ActivateForTests(bool bAsClient = false);
@@ -199,6 +219,7 @@ private:
 	void PlayShatter(const FGSTN_MinionPresentRecord& Record, double NowSeconds);
 	void TickShatters(double NowSeconds);
 	void RemoveRecord(int32 Key);
+	void UpdatePromotionSwaps(double NowSeconds);
 	FVector GetViewerLocation() const;
 	const UGSTN_HurtboxSetDefinition* GetHurtboxes(const UGSTN_MinionDefinition* Definition);
 
@@ -243,6 +264,25 @@ private:
 	static constexpr double PredictedHitMemorySeconds = FGSTN_HitPredictionGrace::DefaultMemorySeconds;
 
 	FGSTN_MinionPresentStats Stats;
+
+	/** A Promoting minion's puppet whose item already left: it stays where it stood for its fighter (item 6) */
+	struct FHeldPuppet
+	{
+		int32 Key = INDEX_NONE;
+		TWeakObjectPtr<AGSTN_MinionPuppet> Puppet;
+		double ReleaseAtSeconds = 0.0;
+	};
+	TArray<FHeldPuppet> HeldPuppets;
+
+	/** A promoted fighter waiting for its swap */
+	struct FPendingSwap
+	{
+		TWeakObjectPtr<UGSTN_MinionPromotedComponent> Fighter;
+		int32 Key = INDEX_NONE;
+		double NotedSeconds = -1.0;
+		bool bHidden = false;
+	};
+	TArray<FPendingSwap> PendingSwaps;
 
 	// Scratch of the visible cut
 	TArray<int32> ScratchKeys;

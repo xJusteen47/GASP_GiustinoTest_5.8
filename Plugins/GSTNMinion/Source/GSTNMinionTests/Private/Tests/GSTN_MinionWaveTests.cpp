@@ -13,6 +13,7 @@
 #include "Hits/GSTN_HurtboxTypes.h"
 #include "Hits/GSTN_KnockbackModel.h"
 #include "Misc/AutomationTest.h"
+#include "Net/GSTN_MinionNetCodec.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Runtime/GSTN_MinionCombatSubsystem.h"
 #include "Runtime/GSTN_MinionPromotedComponent.h"
@@ -392,6 +393,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MinionPromoteTest, "GSTNMinion.Runtime.Pr
 bool FGSTN_MinionPromoteTest::RunTest(const FString& Parameters)
 {
 	FScopedIntCVar Cap(TEXT("gstn.Minion.MaxFightersFromMinions"), 4);
+	FScopedIntCVar Hold(TEXT("gstn.Minion.PromoteHoldFrames"), 2);
 	FDeathKit Kit(2.f, 40);
 	Kit.Definition->PromotionFighterClass = TSoftClassPtr<AActor>(AGSTN_MinionTestFighter::StaticClass());
 
@@ -441,7 +443,10 @@ bool FGSTN_MinionPromoteTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	TestTrue(TEXT("of the definition's class"), First->GetClass() == AGSTN_MinionTestFighter::StaticClass());
-	TestFalse(TEXT("the minion handle is invalid after"), Rig.Minions->IsValidHandle(Minions[0]));
+	// G9b: the minion holds as a Promoting body (not alive, flag on the wire) for gstn.Minion.PromoteHoldFrames, then it is freed
+	TestFalse(TEXT("the promoted minion is no longer alive"), Rig.Minions->IsAlive(Minions[0]));
+	TestTrue(TEXT("it holds as a body during the hold"), Rig.Minions->IsValidHandle(Minions[0]));
+	TestTrue(TEXT("with the Promoting flag"), (Rig.Minions->GetStore().Flags[Minions[0].Index] & GSTNMinion::NetFlags::Promoting) != 0);
 	TestTrue(TEXT("the fighter stands at the minion (lifted by the capsule half height)"), FMath::IsNearlyEqual(First->GetActorLocation().X, Feet.X, 1.0));
 	const UGSTN_MinionPromotedComponent* Marker = First->FindComponentByClass<UGSTN_MinionPromotedComponent>();
 	if (TestNotNull(TEXT("the fighter carries the promoted component"), Marker))
@@ -456,6 +461,11 @@ bool FGSTN_MinionPromoteTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("the promoted event fired once"), PromotedEvents, 1);
 	TestTrue(TEXT("with the fighter"), LastEventFighter == First);
+	TestNull(TEXT("a held body is refused"), UGSTN_MinionSpawner::Promote(Rig.World, Minions[0], Keep));
+	Rig.Minions->TickBatch(5);
+	TestTrue(TEXT("still held one frame before the hold ends"), Rig.Minions->IsValidHandle(Minions[0]));
+	Rig.Minions->TickBatch(6);
+	TestFalse(TEXT("the minion handle is invalid after the hold"), Rig.Minions->IsValidHandle(Minions[0]));
 	TestNull(TEXT("a stale handle is refused"), UGSTN_MinionSpawner::Promote(Rig.World, Minions[0], Keep));
 
 	// bKeepHealthFraction false: the fraction is 1
@@ -479,7 +489,7 @@ bool FGSTN_MinionPromoteTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("three fighters live after a destroy"), Rig.Minions->GetNumPromotedFighters(), 3);
 	AActor* Fifth = UGSTN_MinionSpawner::Promote(Rig.World, Minions[4], Keep);
 	TestNotNull(TEXT("the fifth is allowed after one fighter is destroyed"), Fifth);
-	TestFalse(TEXT("and its minion is gone"), Rig.Minions->IsValidHandle(Minions[4]));
+	TestFalse(TEXT("and its minion is no longer alive"), Rig.Minions->IsAlive(Minions[4]));
 	return true;
 }
 

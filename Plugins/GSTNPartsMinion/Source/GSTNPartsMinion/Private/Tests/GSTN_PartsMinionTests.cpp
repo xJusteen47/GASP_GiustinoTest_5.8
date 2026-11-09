@@ -13,6 +13,7 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "HAL/IConsoleManager.h"
 #include "GSTN_PartsMinionSubsystem.h"
 #include "GSTN_HitStep_PartResolveMinion.h"
 #include "Hits/GSTN_HitData.h"
@@ -535,7 +536,13 @@ bool FGSTN_PartsMinionPromotionTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("one seed"), Rig.Bridge->GetStats().PromotionSeeds, 1);
 	TestTrue(TEXT("the fighter has a pending seed"), FGSTN_PartsAttach::HasPendingSeed(Fighter));
-	TestFalse(TEXT("the minion is gone"), Rig.Bridge->HasParts(Handle));
+	// M8 G9b: the minion holds as a Promoting body for gstn.Minion.PromoteHoldFrames (default 16) before its slot, and its row, are freed
+	const int32 HoldFrames = IConsoleManager::Get().FindConsoleVariable(TEXT("gstn.Minion.PromoteHoldFrames"))->GetInt();
+	for (int32 Frame = 4; Frame <= 4 + HoldFrames; ++Frame)
+	{
+		Rig.Minions->TickBatch(Frame);
+	}
+	TestFalse(TEXT("the minion is gone after the hold"), Rig.Bridge->HasParts(Handle));
 
 	// The fighter's set lists the same parts in another order: the copy goes by name (Head is index 0 here, 1 on the minion)
 	TStrongObjectPtr<UGSTN_PartSetDefinition> FighterSet(NewObject<UGSTN_PartSetDefinition>(GetTransientPackage(), NAME_None, RF_Transient));
@@ -560,7 +567,7 @@ bool FGSTN_PartsMinionPromotionTest::RunTest(const FString& Parameters)
 
 	// A pristine minion leaves no seed
 	const FGSTN_MinionHandle Pristine = Rig.Spawn(Fixture.PartDefinition.Get());
-	Rig.Minions->TickBatch(4);
+	Rig.Minions->TickBatch(5 + HoldFrames);
 	AActor* Clean = Rig.Minions->PromoteToFighter(Pristine, Params);
 	TestNotNull(TEXT("the pristine minion was promoted"), Clean);
 	TestFalse(TEXT("no seed for a pristine minion"), Clean && FGSTN_PartsAttach::HasPendingSeed(Clean));

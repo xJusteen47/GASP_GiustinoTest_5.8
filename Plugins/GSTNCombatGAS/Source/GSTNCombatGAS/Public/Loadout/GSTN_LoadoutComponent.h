@@ -167,6 +167,9 @@ private:
 	/** Applies the kit's stats, the primary weapon's stats and grants the table's abilities on ASC. Server only */
 	void GrantToAbilitySystem(UAbilitySystemComponent& ASC);
 
+	/** After the init effect: Health = MaxHealth x the fraction of the owner's IGSTN_StartingHealthSource component, if one asks for less than 1 (M8 G9b) */
+	void ApplyStartingHealth(UAbilitySystemComponent& ASC) const;
+
 	/** The loadout the server accepted. Replicated with the revision in one update, so the OnRep sees both */
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Loadout", meta = (AllowPrivateAccess = "true"))
 	int32 Revision = 0;
