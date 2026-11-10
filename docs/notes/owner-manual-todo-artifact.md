@@ -1,13 +1,13 @@
 # Cose da fare a mano (copia dell'artifact)
 
-Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-10 (M10 slice 3). L'artifact è la versione di riferimento.
+Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-10 (M10 slice 4). L'artifact è la versione di riferimento.
 
 ## 1 · Git
 
-- [ ] Porta weakpoint 3/3b e M10 slice 1, 2 e 3 (oggetti: raccogli, posa, lancia, cadono se colpito; tasti B/RT già nei kit di prova, prompt "B") su `feature/gas-npp-5.8` (tip di `claude/desktop-m10-3`, sha esatto nell'artifact, sopra `880f8c7b` e `92e9b029`), poi `git pull` e build completa da Rider:
+- [ ] Porta weakpoint 3/3b e M10 slice 1-4 (oggetti: raccogli, posa, lancia, cadono se colpito; tasti B/RT già nei kit di prova, prompt "B"; slice 4: oggetti a terra nel probe di interazione, colpi lanciati con `Combat.Source.Thrown` e credito a chi lancia) su `feature/gas-npp-5.8` (tip di `claude/desktop-m10-4`, sha esatto nell'artifact, sostituisce `82bf38b2`), poi `git pull` e build completa da Rider:
   ```
   cd "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2"
-  git fetch origin claude/desktop-m10-3
+  git fetch origin claude/desktop-m10-4
   git push origin <sha>:refs/heads/feature/gas-npp-5.8
   ```
 
@@ -30,7 +30,7 @@ Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, a
 ## 3 · Decisioni
 
 - [ ] Leve weakpoint §6 (scala hurtbox, priorità, magnetismo PvE).
-- [ ] M10: danni e archi veri per tipo di oggetto; quali kit hanno i tasti degli oggetti (ora solo i kit di prova; c'è l'opzione "tutti i kit").
+- [ ] M10: un oggetto posato o atterrato si può riprendere dopo 0,64 s (ritardo di rete dei record): va bene o lo vuoi più corto? Danni e archi veri per tipo di oggetto; quali kit hanno i tasti degli oggetti (ora solo i kit di prova; c'è l'opzione "tutti i kit").
 
 ## 4 · Animazioni
 
@@ -38,10 +38,11 @@ Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, a
 
 ## 5 · Pulizia branch
 
-- [ ] GitHub: branch vecchi elencati nell'artifact; dopo il push anche `claude/desktop-weakpoint-3` , `claude/laptop-weakpoint-3b`, `claude/desktop-m10-1`, `claude/desktop-m10-2` e `claude/desktop-m10-3`. Portatile: `git branch -d claude/laptop-projectile-1`.
+- [ ] GitHub: branch vecchi elencati nell'artifact; dopo il push anche `claude/desktop-weakpoint-3` , `claude/laptop-weakpoint-3b`, `claude/desktop-m10-1`, `claude/desktop-m10-2`, `claude/desktop-m10-3` e `claude/desktop-m10-4`. Portatile: `git branch -d claude/laptop-projectile-1`.
 
 ## Fatto
 
+- 2026-11-10 · M10 slice 4: gli oggetti a terra entrano nel probe di interazione (un solo bersaglio di B per frame, uguale su ogni macchina, anche accanto a un nemico da afferrare); i colpi degli oggetti lanciati hanno il tag `Combat.Source.Thrown` e danno il credito a chi lancia anche se il suo pawn non c'è più. Headless 1489/0, harness PASS listen 2 % e dedicato 0 %. Branch `claude/desktop-m10-4`.
 - 2026-11-10 · M10 slice 3: tasti B/RT degli oggetti collegati in automatico ai kit di prova (nessun Blueprint toccato); RT con l'oggetto in mano ora lancia davvero (prima vinceva lo smash forte); B prende solo con un oggetto vicino, altrimenti fa quello di prima; prompt "B" sopra l'oggetto. Headless 1484/0, harness PASS listen 2 % e dedicato 0 %. Branch `claude/desktop-m10-3`.
 - 2026-11-10 · M10 slice 2: l'oggetto in mano è nello stato di sync del personaggio (predetto), cade se chi lo tiene è colpito, lanciato in aria, afferrato o KO; tasti di default come dati: B prende e posa, RT tap lancia verso lo stick sinistro, RT tenuto mostra il reticolo e lancia verso la camera. Headless 1481/0, harness PASS listen 2 % e dedicato 0 %. Branch `claude/desktop-m10-2`.
 - 2026-11-10 · Decisione presa (tua): tasti degli oggetti come sopra, tutto da rivedere col playtest. Nemici presi come oggetti e lanci alla smash: design per M11.
