@@ -1,6 +1,7 @@
 // Held objects, world side (needs the GAS-NPP fork).
 
 #include "GSTN_HeldAbilities.h"
+#include "Hits/GSTN_CombatHitTags.h"
 
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
@@ -148,6 +149,8 @@ bool UGSTN_GA_HeldThrow::PrepareShot(FGSTN_ProjectileParams& InOutParams, bool b
 		return false;
 	}
 	InOutParams = Object->GetTuning().Throw;
+	// Its hits' events say a thrown object made them (M10 G3)
+	InOutParams.SourceTag = GSTNCombatHitTags::Source_Thrown;
 	return true;
 }
 

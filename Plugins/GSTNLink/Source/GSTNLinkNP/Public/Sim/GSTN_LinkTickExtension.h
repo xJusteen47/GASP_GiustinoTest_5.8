@@ -19,6 +19,22 @@ struct FGSTN_LinkSnapshotExt;
 struct FGSTN_LinkKitExtension;
 struct FGSTN_LinkState;
 struct FGSTN_SnapshotEntry;
+class FGSTN_InteractRegistry;
+
+/**
+ * Stamped records the interact probe reads beside the snapshot entities (M10 G2): a world's GSTNInteract registry, the meaning table its
+ * records index and their requirement queries. Objects at rest have no snapshot entry; their records are append-only and stamp-gated, so a
+ * frame and its re-simulation see the same set on every machine that knows the record. A record's meaning is mapped by tag into the probe's
+ * table (UGSTN_LinkRegistry::GetInteractMeanings); one the table does not know is skipped
+ */
+struct FGSTN_LinkRecordSource
+{
+	const FGSTN_InteractRegistry* Registry = nullptr;
+	const FGSTN_InteractMeaningTable* Meanings = nullptr;
+	TConstArrayView<FGameplayTagQuery> Requirements;
+
+	bool IsValid() const { return Registry != nullptr && Meanings != nullptr; }
+};
 
 /**
  * The link model's per-frame rules over the link fragment (m6 spec 5.2 steps 5 and 7, 7.4), inside the combat tick of every entity; one
@@ -253,10 +269,12 @@ public:
 
 	/**
 	 * The interact focus of an entity (M7 G1, was the grab focus): the Interact.Target meaning (or nothing) the probe projects over Snapshot,
-	 * with Self as the interactor, the offers the registry compiled for its kit and the registry's meaning table. Pure: the snapshot entries,
-	 * their link extensions, the registry and the attach table
+	 * with Self as the interactor, the offers the registry compiled for its kit and the registry's meaning table. Records (M10 G2) are candidates
+	 * too, for any kit, also one without offers: their stamps make them prediction-stable, unlike other entities' interpolated positions.
+	 * Still exactly one meaning. Pure: the snapshot entries, their link extensions, the registry, the attach table and the records
 	 */
-	FGameplayTag ResolveInteractTarget(const FGSTN_SnapshotEntry& Self, TConstArrayView<FGSTN_SnapshotEntry> Entries, int32 Frame, const FVector& StickOnPlane) const;
+	FGameplayTag ResolveInteractTarget(const FGSTN_SnapshotEntry& Self, TConstArrayView<FGSTN_SnapshotEntry> Entries, int32 Frame, const FVector& StickOnPlane,
+		const FGSTN_LinkRecordSource* Records = nullptr) const;
 
 private:
 	void ProjectTags(FGSTN_CombatTickContext& Context) const;

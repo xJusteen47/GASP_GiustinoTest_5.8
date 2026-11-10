@@ -14,6 +14,10 @@ presentation transform, the debug draw); F11 adds part 2 (the watchdog, the brea
 (F12b). The design is
 [combat-m6-defence-links.md](../../docs/architecture/combat-m6-defence-links.md).
 
+M10 G2 (generic): the interact probe also reads **stamped records** of the world's GSTNInteract registry (`FGSTN_LinkRecordSource`; objects at rest
+have no snapshot entry), for any kit; their meanings come from the GSTNInteract settings, merged into the registry's meaning table by tag. Still
+one projected `Interact.Target.*`. Tests `GSTNLink.NP.Interact.{RecordCandidate, StaleRecordIgnored, OfferAndRecordOneTag}`.
+
 M7 G1 (generic follow-ups for link types of other plugins; no type of theirs is named here): interact offers per link type compiled by the
 registry (meaning, priority, reach, required kit extension) and the probe built from them; the team and the kit's extension array on each
 request side; the optimistic initiator accept (`bInitiatorPredicts`, `PendingFrames`); a link effect per role and the rules' `Payload`

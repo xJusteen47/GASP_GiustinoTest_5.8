@@ -7,6 +7,8 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Data/GSTN_LinkKitExtension.h"
+#include "GSTN_InteractRegistry.h"
+#include "GSTN_InteractSettings.h"
 #include "GSTN_InteractTypes.h"
 #include "GSTN_LinkInteractProvider.h"
 #include "GSTN_LinkTags.h"
@@ -630,6 +632,146 @@ bool FGSTN_LinkRequestSideTest::RunTest(const FString& Parameters)
 	Entry.Team = FGenericTeamId(4);
 	const FGSTN_LinkRequestSide Side = FGSTN_LinkTickExtension::MakeRequestSide(Entry);
 	TestTrue(TEXT("snapshot side: team and kit"), Side.TeamId == 4 && Side.KitExtensions == &InitiatorKit && Side.EntityId == SelfId);
+	return true;
+}
+
+// ---- Record candidates (M10 G2)
+
+namespace
+{
+	UE_DEFINE_GAMEPLAY_TAG_STATIC(TestMeaningRecord, "Interact.Target.GSTNTestOnlyNPRecord");
+
+	/** A record meaning (priority 90) in the GSTNInteract settings for the test's life, a registry rebuilt with it, and the records' own table */
+	struct FScopedRecordMeaning
+	{
+		FGSTN_InteractMeaningTable RecordMeanings;
+		FGSTN_InteractRegistry Records;
+		FGSTN_LinkRecordSource Source;
+
+		FScopedRecordMeaning()
+		{
+			FGSTN_InteractMeaning Meaning;
+			Meaning.Tag = TestMeaningRecord;
+			Meaning.DefaultPriority = 90;
+			GetMutableDefault<UGSTN_InteractSettings>()->Meanings.Add(Meaning);
+			UGSTN_LinkRegistry::Get()->RebuildFromAssetManager();
+			// The records' table differs from the probe's (it holds only this meaning): the probe maps by tag
+			RecordMeanings.Build({ Meaning });
+			Source.Registry = &Records;
+			Source.Meanings = &RecordMeanings;
+		}
+
+		~FScopedRecordMeaning()
+		{
+			GetMutableDefault<UGSTN_InteractSettings>()->Meanings.RemoveAll([](const FGSTN_InteractMeaning& Meaning) { return Meaning.Tag == TestMeaningRecord; });
+			UGSTN_LinkRegistry::Get()->RebuildFromAssetManager();
+		}
+
+		void Add(int32 Handle, const FVector& Location, int32 FromFrame = 0, int32 ToFrame = MAX_int32, int32 RadiusCm = 0, int32 ReachCm = 0)
+		{
+			FGSTN_InteractCandidate Record;
+			Record.Id = FGSTN_InteractCandidateId(GSTNInteractProviders::Registry, static_cast<uint32>(Handle));
+			Record.PositionCm = FGSTN_InteractCandidate::QuantiseCm(Location);
+			Record.MeaningIndex = RecordMeanings.IndexOf(TestMeaningRecord);
+			Record.FromFrame = FromFrame;
+			Record.ActionableFrom = FromFrame;
+			Record.ToFrame = ToFrame;
+			Record.RadiusCm = RadiusCm;
+			Record.ReachOverrideCm = ReachCm;
+			Records.Add(Record);
+		}
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LinkInteractRecordCandidateTest, "GSTNLink.NP.Interact.RecordCandidate", Flags)
+bool FGSTN_LinkInteractRecordCandidateTest::RunTest(const FString& Parameters)
+{
+	FScopedRecordMeaning Scope;
+	const FGSTN_InteractMeaningTable& Meanings = UGSTN_LinkRegistry::Get()->GetInteractMeanings();
+	TestTrue(TEXT("the probe's table holds the settings' record meaning"), Meanings.IndexOf(TestMeaningRecord) != 0);
+	TestEqual(TEXT("at the settings' priority"), Meanings.DefaultPriorityOf(Meanings.IndexOf(TestMeaningRecord)), 90);
+
+	// A kit without a link extension and no other entity: only the record can be the focus
+	FGSTN_KitExtensionList NoLinkKit;
+	const uint16 BodyIndex = FGSTN_LinkAttach::AddForTest({}, nullptr, &NoLinkKit);
+	UGSTN_HurtboxSetDefinition* Hurtboxes = NewObject<UGSTN_HurtboxSetDefinition>(GetTransientPackage());
+	FGCObjectScopeGuard Guard(Hurtboxes);
+	const FGSTN_SnapshotEntry Self = ProbeEntry(SelfId, FVector::ZeroVector, 1, BodyIndex, Hurtboxes);
+	const TArray<FGSTN_SnapshotEntry> Entries = { Self };
+	const FGSTN_LinkTickExtension Extension;
+
+	TestFalse(TEXT("no record: nothing"), Extension.ResolveInteractTarget(Self, Entries, HitFrame, FVector::ZeroVector, &Scope.Source).IsValid());
+	Scope.Add(1, FVector(100.f, 0.f, 0.f));
+	TestEqual(TEXT("a record in front, any kit: its meaning"), Extension.ResolveInteractTarget(Self, Entries, HitFrame, FVector::ZeroVector, &Scope.Source), TestMeaningRecord.GetTag());
+	TestFalse(TEXT("without the record source: nothing (the pre-G2 probe)"), Extension.ResolveInteractTarget(Self, Entries, HitFrame, FVector::ZeroVector).IsValid());
+	Scope.Records.RemoveImmediate(FGSTN_InteractCandidateId(GSTNInteractProviders::Registry, 1u));
+	Scope.Add(2, FVector(1000.f, 0.f, 0.f));
+	TestFalse(TEXT("a record out of reach: nothing"), Extension.ResolveInteractTarget(Self, Entries, HitFrame, FVector::ZeroVector, &Scope.Source).IsValid());
+
+	// A meaning the probe's table does not know is skipped
+	FGSTN_InteractMeaningTable Unknown;
+	FGSTN_InteractMeaning Other;
+	Other.Tag = TestMeaningLow;
+	Unknown.Build({ Other });
+	FGSTN_InteractRegistry OtherRecords;
+	FGSTN_InteractCandidate Record;
+	Record.Id = FGSTN_InteractCandidateId(GSTNInteractProviders::Registry, 3u);
+	Record.PositionCm = FIntVector(100, 0, 0);
+	Record.MeaningIndex = 1;
+	OtherRecords.Add(Record);
+	FGSTN_LinkRecordSource OtherSource;
+	OtherSource.Registry = &OtherRecords;
+	OtherSource.Meanings = &Unknown;
+	TestFalse(TEXT("an unknown meaning: skipped"), Extension.ResolveInteractTarget(Self, Entries, HitFrame, FVector::ZeroVector, &OtherSource).IsValid());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LinkInteractStaleRecordTest, "GSTNLink.NP.Interact.StaleRecordIgnored", Flags)
+bool FGSTN_LinkInteractStaleRecordTest::RunTest(const FString& Parameters)
+{
+	FScopedRecordMeaning Scope;
+	FGSTN_KitExtensionList NoLinkKit;
+	const uint16 BodyIndex = FGSTN_LinkAttach::AddForTest({}, nullptr, &NoLinkKit);
+	UGSTN_HurtboxSetDefinition* Hurtboxes = NewObject<UGSTN_HurtboxSetDefinition>(GetTransientPackage());
+	FGCObjectScopeGuard Guard(Hurtboxes);
+	const FGSTN_SnapshotEntry Self = ProbeEntry(SelfId, FVector::ZeroVector, 1, BodyIndex, Hurtboxes);
+	const TArray<FGSTN_SnapshotEntry> Entries = { Self };
+	const FGSTN_LinkTickExtension Extension;
+
+	// Picked up at HitFrame - 1 (ToFrame exclusive = HitFrame), and a new rest that starts after HitFrame: neither is live at HitFrame
+	Scope.Add(1, FVector(100.f, 0.f, 0.f), 0, HitFrame);
+	Scope.Add(2, FVector(90.f, 10.f, 0.f), HitFrame + 1);
+	TestFalse(TEXT("ended and not yet started: nothing at HitFrame"), Extension.ResolveInteractTarget(Self, Entries, HitFrame, FVector::ZeroVector, &Scope.Source).IsValid());
+	TestEqual(TEXT("the ended one is still there a frame before (a re-simulated frame sees it)"), Extension.ResolveInteractTarget(Self, Entries, HitFrame - 1, FVector::ZeroVector, &Scope.Source), TestMeaningRecord.GetTag());
+	TestEqual(TEXT("the new one from its frame"), Extension.ResolveInteractTarget(Self, Entries, HitFrame + 1, FVector::ZeroVector, &Scope.Source), TestMeaningRecord.GetTag());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LinkInteractRecordTieTest, "GSTNLink.NP.Interact.OfferAndRecordOneTag", Flags)
+bool FGSTN_LinkInteractRecordTieTest::RunTest(const FString& Parameters)
+{
+	FScopedOffers Offers;
+	// High (200) refuses every candidate here; Low (40) takes an ally
+	Offers.High->RequestRequirements.RequireTags.AddTag(GSTNLinkTags::Immunity_Latch);
+	FScopedRecordMeaning Scope;
+
+	FGSTN_KitExtensionList NoLinkKit;
+	const uint16 BodyIndex = FGSTN_LinkAttach::AddForTest({}, nullptr, &NoLinkKit);
+	UGSTN_HurtboxSetDefinition* Hurtboxes = NewObject<UGSTN_HurtboxSetDefinition>(GetTransientPackage());
+	FGCObjectScopeGuard Guard(Hurtboxes);
+	const FGSTN_SnapshotEntry Self = ProbeEntry(SelfId, FVector::ZeroVector, 1, BodyIndex, Hurtboxes);
+	const TArray<FGSTN_SnapshotEntry> Entries = { Self, ProbeEntry(TargetId, FVector(80.f, 0.f, 0.f), 1, 0, Hurtboxes) };
+	const FGSTN_LinkTickExtension Extension;
+	TestEqual(TEXT("the ally alone: the low offer's meaning"), Extension.ResolveInteractTarget(Self, Entries, HitFrame, FVector::ZeroVector, &Scope.Source), TestMeaningLow.GetTag());
+
+	// A record at the same place, the same size and reach as the ally under the low offer: one tag, the higher priority (record 90 over offer 40)
+	Scope.Add(1, FVector(80.f, 0.f, 0.f), 0, MAX_int32, 30, 150);
+	TestEqual(TEXT("tie in place: the record (90) over the low offer (40)"), Extension.ResolveInteractTarget(Self, Entries, HitFrame, FVector::ZeroVector, &Scope.Source), TestMeaningRecord.GetTag());
+
+	// The high offer (200) takes the ally: it wins the same tie over the record, as the grab (100) does
+	Offers.High->RequestRequirements.RequireTags.Reset();
+	UGSTN_LinkRegistry::Get()->RebuildFromAssetManager();
+	TestEqual(TEXT("tie in place: the high offer (200) over the record (90)"), Extension.ResolveInteractTarget(Self, Entries, HitFrame, FVector::ZeroVector, &Scope.Source), TestMeaningHigh.GetTag());
 	return true;
 }
 

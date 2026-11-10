@@ -212,6 +212,11 @@ AGSTN_Projectile* UGSTN_ProjectileSubsystem::FireProjectileAtFrame(const FGSTN_P
 	Projectile.Params = Params;
 	Projectile.Segment = Segment;
 	Projectile.Serial = NextSerial++;
+	Projectile.CreditShooter = OwnerActor;
+	if (const APawn* Shooter = Cast<APawn>(OwnerActor))
+	{
+		Projectile.CreditPlayerState = Shooter->GetPlayerState();
+	}
 	UE_LOG(LogGSTNProjectile, Log, TEXT("Projectile %u fired by %d at frame %d from %s, v %s, life %d"), Projectile.Serial, Params.OwnerEntityId,
 		Segment.StartFrame, *Segment.Start.ToCompactString(), *Segment.Velocity.ToCompactString(), Params.LifetimeFrames);
 	return Actor;
@@ -476,11 +481,15 @@ bool UGSTN_ProjectileSubsystem::StepProjectile(FGSTN_ActiveProjectile& Projectil
 		Entry.HurtboxIndex = static_cast<uint8>(Picked);
 		Entry.AttackerHitboxIndex = 0;
 		Entry.HurtState = static_cast<uint8>(Victim.HurtStates.IsValidIndex(Picked) ? Victim.HurtStates[Picked].State : EGSTN_HurtState::Normal);
+		// Events only (M10 G3): the source of the hit, and who it credits when the owner id no longer resolves to an actor
+		Entry.SourceTag = Params.SourceTag.IsValid() ? Params.SourceTag : GSTNCombatHitTags::Source_Projectile.GetTag();
+		Entry.DetachedInstigator = Projectile.CreditShooter.IsValid() ? Projectile.CreditShooter : Projectile.CreditPlayerState;
 		// Into the victim's inbox (fighter or provider), stamped F: drained at F + 1, the minion attackers' path
 		if (Combat.PostHit(Victim.EntityId, Entry))
 		{
 			Projectile.HitTargets.Add(Victim.EntityId);
-			UE_LOG(LogGSTNProjectile, Log, TEXT("Projectile %u hit %d at frame %d (hurtbox %d)"), Projectile.Serial, Victim.EntityId, Frame, Picked);
+			UE_LOG(LogGSTNProjectile, Log, TEXT("Projectile %u hit %d at frame %d (hurtbox %d) source=%s credit=%s"), Projectile.Serial, Victim.EntityId, Frame, Picked,
+				*Entry.SourceTag.ToString(), *GetNameSafe(Entry.DetachedInstigator.Get()));
 			OnProjectileHit.Broadcast(Projectile.Serial, Victim.EntityId, Frame, Entry);
 			if (Projectile.HitTargets.Num() >= Params.MaxHits)
 			{

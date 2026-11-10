@@ -14,6 +14,8 @@
 #include "GSTN_HeldSettings.h"
 #include "GSTN_HeldSubsystem.h"
 #include "GSTN_HeldTags.h"
+#include "GSTN_InteractRegistry.h"
+#include "GSTN_InteractSubsystem.h"
 #include "GSTN_ProjectileActor.h"
 #include "Net/UnrealNetwork.h"
 
@@ -50,6 +52,7 @@ void UGSTN_HeldObjectComponent::GetLifetimeReplicatedProps(TArray<FLifetimePrope
 	DOREPLIFETIME(UGSTN_HeldObjectComponent, Holder);
 	DOREPLIFETIME(UGSTN_HeldObjectComponent, Flight);
 	DOREPLIFETIME(UGSTN_HeldObjectComponent, RestLocation);
+	DOREPLIFETIME(UGSTN_HeldObjectComponent, RecordStamp);
 }
 
 void UGSTN_HeldObjectComponent::BeginPlay()
@@ -57,16 +60,24 @@ void UGSTN_HeldObjectComponent::BeginPlay()
 	Super::BeginPlay();
 	if (AActor* Owner = GetOwner())
 	{
-		if (Owner->HasAuthority())
-		{
-			RestLocation = Owner->GetActorLocation();
-		}
 		// Placement is computed on every machine; the engine's movement replication would fight it
 		Owner->SetReplicatingMovement(false);
 	}
 	if (UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(GetWorld()))
 	{
 		Held->RegisterObject(*this);
+	}
+	if (AActor* Owner = GetOwner(); Owner && Owner->HasAuthority())
+	{
+		RestLocation = Owner->GetActorLocation();
+		if (State == EGSTN_HeldObjectState::Idle)
+		{
+			OpenRecord();
+		}
+	}
+	else
+	{
+		ApplyRecord();
 	}
 }
 
@@ -76,11 +87,23 @@ void UGSTN_HeldObjectComponent::EndPlay(const EEndPlayReason::Type EndPlayReason
 	{
 		Held->UnregisterObject(*this);
 	}
+	// The object is gone: its records go at once (a destroyed actor has no later stamp to send)
+	if (UGSTN_InteractSubsystem* Interact = UGSTN_InteractSubsystem::Get(GetWorld()))
+	{
+		for (const int32 Handle : { RecordStamp.Handle, RecordStamp.PreviousHandle })
+		{
+			if (Handle != 0)
+			{
+				Interact->GetRegistry().RemoveImmediate(FGSTN_InteractCandidateId(GSTNInteractProviders::Registry, static_cast<uint32>(Handle)));
+			}
+		}
+	}
 	Super::EndPlay(EndPlayReason);
 }
 
 void UGSTN_HeldObjectComponent::SetHeld(AActor* InHolder)
 {
+	CloseRecord();
 	State = EGSTN_HeldObjectState::Held;
 	Holder = InHolder;
 	++HoldSerial;
@@ -92,6 +115,7 @@ void UGSTN_HeldObjectComponent::SetHeld(AActor* InHolder)
 
 void UGSTN_HeldObjectComponent::SetFlying(AGSTN_Projectile& InFlight)
 {
+	CloseRecord();
 	State = EGSTN_HeldObjectState::Flying;
 	Holder = nullptr;
 	Flight = &InFlight;
@@ -108,6 +132,7 @@ void UGSTN_HeldObjectComponent::SetIdleAt(const FVector& Location)
 	Flight = nullptr;
 	FlightEndFrame = INDEX_NONE;
 	RestLocation = Location;
+	OpenRecord();
 	GetOwner()->ForceNetUpdate();
 	UpdatePlacement();
 }
@@ -115,6 +140,93 @@ void UGSTN_HeldObjectComponent::SetIdleAt(const FVector& Location)
 void UGSTN_HeldObjectComponent::OnRep_RestLocation()
 {
 	UpdatePlacement();
+}
+
+void UGSTN_HeldObjectComponent::OnRep_RecordStamp()
+{
+	ApplyRecord();
+}
+
+void UGSTN_HeldObjectComponent::OpenRecord()
+{
+	UGSTN_InteractSubsystem* Interact = UGSTN_InteractSubsystem::Get(GetWorld());
+	const UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(GetWorld());
+	if (!Interact || !Held)
+	{
+		return;
+	}
+	CloseRecord();
+	const int32 LastFrame = Held->GetLastFrame();
+	RecordStamp.PreviousHandle = RecordStamp.Handle;
+	RecordStamp.PreviousToFrame = RecordStamp.ToFrame;
+	RecordStamp.Handle = Interact->AllocateSpawnedHandle();
+	RecordStamp.PositionCm = FGSTN_InteractCandidate::QuantiseCm(FVector(RestLocation));
+	RecordStamp.FromFrame = LastFrame == INDEX_NONE ? 0 : LastFrame + 1 + FMath::Max(0, Interact->GetDefaultRules().MinAgeFrames);
+	RecordStamp.ToFrame = MAX_int32;
+	ApplyRecord();
+}
+
+void UGSTN_HeldObjectComponent::CloseRecord()
+{
+	const UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(GetWorld());
+	if (RecordStamp.Handle == 0 || RecordStamp.ToFrame != MAX_int32 || !Held)
+	{
+		return;
+	}
+	RecordStamp.ToFrame = FMath::Max(RecordStamp.FromFrame, Held->GetLastFrame() + 1);
+	ApplyRecord();
+}
+
+void UGSTN_HeldObjectComponent::ApplyRecord()
+{
+	UGSTN_InteractSubsystem* Interact = UGSTN_InteractSubsystem::Get(GetWorld());
+	if (!Interact)
+	{
+		return;
+	}
+	FGSTN_InteractRegistry& Registry = Interact->GetRegistry();
+	auto Close = [&Registry](int32 Handle, int32 ToFrame)
+	{
+		const FGSTN_InteractCandidateId Id(GSTNInteractProviders::Registry, static_cast<uint32>(Handle));
+		const FGSTN_InteractCandidate* Existing = Handle != 0 && ToFrame != MAX_int32 ? Registry.Find(Id) : nullptr;
+		if (Existing && Existing->ToFrame == MAX_int32)
+		{
+			Registry.Remove(Id, ToFrame);
+		}
+	};
+	Close(RecordStamp.PreviousHandle, RecordStamp.PreviousToFrame);
+	if (RecordStamp.Handle == 0)
+	{
+		return;
+	}
+	const FGSTN_InteractCandidateId Id(GSTNInteractProviders::Registry, static_cast<uint32>(RecordStamp.Handle));
+	if (Registry.Find(Id))
+	{
+		Close(RecordStamp.Handle, RecordStamp.ToFrame);
+	}
+	else
+	{
+		// Unknown here: added with every stamp it has (a closed record arrives as its tombstone), so frame F sees the same on every machine
+		const int32 Meaning = Interact->GetMeanings().IndexOf(GSTNHeldTags::Interact_Target_Pickup);
+		if (Meaning == 0)
+		{
+			UE_LOG(LogGSTNHeld, Warning, TEXT("HeldRecord %s: no Interact.Target.Pickup meaning in the GSTNInteract settings, no pickup record"), *GetNameSafe(GetOwner()));
+			return;
+		}
+		FGSTN_InteractCandidate Record;
+		Record.Id = Id;
+		Record.PositionCm = RecordStamp.PositionCm;
+		Record.MeaningIndex = Meaning;
+		Record.ReachOverrideCm = FMath::Clamp(FMath::RoundToInt32(GetTuning().PickupRadius), 0, 65535);
+		Record.FromFrame = RecordStamp.FromFrame;
+		Record.ActionableFrom = RecordStamp.FromFrame;
+		Record.ToFrame = RecordStamp.ToFrame;
+		Registry.Add(Record);
+	}
+	if (const UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(GetWorld()); Held && Held->GetLastFrame() != INDEX_NONE)
+	{
+		Registry.Purge(Held->GetLastFrame(), Interact->GetDefaultRules().TombstoneFrames);
+	}
 }
 
 void UGSTN_HeldObjectComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)

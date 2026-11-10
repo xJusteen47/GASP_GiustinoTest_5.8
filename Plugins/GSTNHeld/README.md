@@ -6,7 +6,7 @@ branch, spec [combat-m10-held-objects.md](../../docs/architecture/combat-m10-hel
 credit to the thrower and the predicted ghost come from that plugin unchanged ("deterministic first",
 [entita-dinamiche review](../../docs/notes/reviews/entita-dinamiche-2026-11-09.md) §2, §9 category (a)).
 
-Status: **experimental (0.1), slice 3**, `EnabledByDefault: false`, enabled in `GASP_Giustino2.uproject`. Nothing else knows it.
+Status: **experimental (0.1), slice 4**, `EnabledByDefault: false`, enabled in `GASP_Giustino2.uproject`. Nothing else knows it.
 
 ## Modules
 
@@ -55,20 +55,27 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
    `PickupAbility` / `DropAbility` / `ThrowAbility` (`DefaultGSTNHeld.ini`). The module also contributes the tier `Command.Held` = 360 (as
    `Command.Link`) to the input settings: without it every strong attack (200) took RT from the throw. Offsets: pickup -2 (below grab 0 and
    mount -1), drop and throw 110 (above release 100, dismount 101, carrier drop 102), so no slot is ambiguous with a link or mount slot.
-9. **Pickup target and prompt (slice 3, the plan's G2 as an interim)**: the held tick extension projects `Interact.Target.Pickup` every frame
-   (set, never added) when the hand is empty and an object at rest is in reach of the entity's snapshot position:
-   `UGSTN_HeldSubsystem::FindPickupTarget`, i.e. `FGSTN_HeldRules::FindPickupTarget` = the host's own pickup race with that one request, so it
-   names the object the host would give. The pickup binding requires it, so with nothing in reach B falls through to what the kit binds below
-   (the kit swap's hold, the movement set). It reads the host's replicated object state, not stamped records: around a pickup or a landing a
-   client may project it a round trip early or late (the pickup stays the host's decision). The plan's G2 (stamped records in GSTNLink's probe,
-   one projected `Interact.Target.*`) replaces this read later with the same rule. Prompt: a placeholder text "B" above the local player's target
-   object (`UGSTN_HeldObjectComponent::UpdatePrompt`, presentation only, never on a dedicated server). `HeldHandReport` logs `target=`.
-10. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
+9. **Pickup target and prompt (slice 4, the plan's G2)**: an object at rest is a **stamped record** in GSTNInteract's registry
+   (`FGSTN_HeldRecordStamp` on the component, replicated: handle, whole-cm anchor, server frames, and the end of the record before it). The host
+   opens one when the object comes to rest, live from the frame after the last fixed tick plus the interact rules' `MinAgeFrames` (40, 0.64 s:
+   a client holds the record before it simulates that frame), and closes it at the frame after the pickup or throw resolved; every machine adds
+   or stamps the same record (`ApplyRecord`), so a frame and its re-simulation see the same set. **GSTNLink's interact probe** reads the records
+   beside the snapshot entities and projects the one `Interact.Target.*` of the frame (for any kit, also one without link offers); this plugin
+   no longer projects the tag. The meaning `Interact.Target.Pickup` is added to the GSTNInteract settings at module startup (unless the project
+   lists it), priority `PickupMeaningPriority` (90, below the grab's 100; TEST VALUE), reach = the object's `PickupRadius`. The pickup binding
+   requires the tag, so with nothing focused B falls through to what the kit binds below. The host's race still picks the object
+   (`ResolvePickups`, nearest in radius): it can differ from the probe's focus when two objects are close (the probe weighs the stick/facing).
+   Prompt: a placeholder text "B" above the local player's nearest object while it has the tag (`UpdatePrompt`, presentation only, never on a
+   dedicated server). `HeldHandReport` logs `target=`.
+10. **Thrown hits (slice 4, the plan's G3)**: the throw's shot carries `SourceTag = Combat.Source.Thrown`; GSTNProjectile puts it on the hit
+   inbox entry with a **detached instigator** (the shooter at the release, else its player state), so the hit and KO events carry the source tag
+   and name the thrower even when its entity id no longer resolves (death, disconnect). Log `Projectile .. hit .. source= credit=`.
+11. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
    (its own ranged action) are data only; a later slice routes commands to them.
 ## Not yet (later slices of the plan)
 
-GSTNLink Hand channel with an object partner (needs M6 neutral hooks), stamped records in GSTNLink's interact probe (G2 proper; slice 3 is the interim),
-detached credit and `Combat.Source.Thrown` (G3), carry load and size classes (G6), aim policy, friendly fire by mode, impact behaviours
+GSTNLink Hand channel with an object partner (needs M6 neutral hooks), the pickup ability reading the probe's focus id (the host race decides
+today), source tags on minion victims (the minion pipeline emits its own events), carry load and size classes (G6), aim policy, friendly fire by mode, impact behaviours
 Break/Bounce/Stick, ghost blend of the object itself (the projectile's ghost is used), thrown enemies (G9), editor preview.
 
 Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`).

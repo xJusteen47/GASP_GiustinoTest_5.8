@@ -6,6 +6,8 @@
 #include "Hits/GSTN_HitData.h"
 #include "GSTN_HitInbox.generated.h"
 
+class AActor;
+
 struct FGSTN_InboxEntry;
 
 /**
@@ -60,6 +62,14 @@ struct GSTNCOMBATNP_API FGSTN_HitInboxEntry
 
 	/** Set when the attacker's outcome was a ricochet: the victim still gets the entry for its cue and event, nothing else */
 	bool bRicochet = false;
+
+	/**
+	 * M10 G3, for the outbox events only, never read by the simulation. SourceTag: added to the hit's events (Combat.Source.Thrown or
+	 * .Projectile; none for a melee hit). DetachedInstigator: the actor the events name when AttackerId no longer resolves to one (a thrower
+	 * who died, left or was never a fighter), snapshot by the poster at the release. Both empty: the events are exactly the pre-G3 ones
+	 */
+	FGameplayTag SourceTag;
+	TWeakObjectPtr<AActor> DetachedInstigator;
 
 	/** The entry as a message of kind Hit, stamped with this entry's Frame and AttackerId (the first keys of the drain order) */
 	FGSTN_InboxEntry ToInboxEntry() const;

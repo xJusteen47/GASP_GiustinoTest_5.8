@@ -202,7 +202,10 @@ public:
 	 */
 	TConstArrayView<FGSTN_LinkOfferEntry> GetInteractOffers() const { return InteractOffers; }
 
-	/** The probe's meaning table of the link offers: one meaning per distinct offer meaning, its default priority the highest of its offers */
+	/**
+	 * The probe's meaning table: one meaning per distinct offer meaning, its default priority the highest of its offers, plus every meaning of
+	 * the project's GSTNInteract settings (the meanings stamped records carry, M10 G2) that no offer uses, at its own priority
+	 */
 	const FGSTN_InteractMeaningTable& GetInteractMeanings() const { return InteractMeanings; }
 
 	/**

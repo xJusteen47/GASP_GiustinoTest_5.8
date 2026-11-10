@@ -12,6 +12,36 @@
 
 class AGSTN_Projectile;
 
+/**
+ * The replicated stamps of an object's pickup record in GSTNInteract's registry (M10 G2): the handle, the whole-centimetre anchor and the
+ * server frames it is live in, plus the end of the record before it (a client that misses a state still closes the old record by stamp).
+ * Handle 0 = none. A record is immutable: every rest is a new record, every pickup or throw closes it
+ */
+USTRUCT()
+struct FGSTN_HeldRecordStamp
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	int32 Handle = 0;
+
+	UPROPERTY()
+	FIntVector PositionCm = FIntVector::ZeroValue;
+
+	UPROPERTY()
+	int32 FromFrame = 0;
+
+	/** Exclusive; MAX_int32 while the object rests */
+	UPROPERTY()
+	int32 ToFrame = MAX_int32;
+
+	UPROPERTY()
+	int32 PreviousHandle = 0;
+
+	UPROPERTY()
+	int32 PreviousToFrame = MAX_int32;
+};
+
 /** One kind of object (crate, barrel...): shared tuning, a data asset so many placed objects use one row. Slice 1 subset of the plan's UGSTN_ObjectDefinition */
 UCLASS(BlueprintType)
 class GSTNHELDRUNTIME_API UGSTN_HeldObjectDefinition : public UPrimaryDataAsset
@@ -92,6 +122,21 @@ private:
 	UFUNCTION()
 	void OnRep_RestLocation();
 
+	UFUNCTION()
+	void OnRep_RecordStamp();
+
+	/**
+	 * Host (M10 G2): a new record at RestLocation, live from the frame after the last fixed tick plus the interact rules' MinAgeFrames (so a
+	 * client holds it before it simulates that frame; 0 before the first tick: a placed object is there from the start). Closes the open one
+	 */
+	void OpenRecord();
+
+	/** Host: ends the open record after the last fixed tick's frame (the frame a pickup resolved in still sees it) */
+	void CloseRecord();
+
+	/** Every machine: makes the world's GSTNInteract registry hold RecordStamp (adds, or stamps the end of, its two records) */
+	void ApplyRecord();
+
 	/** Places the owner from the replicated state (every machine) */
 	void UpdatePlacement();
 
@@ -112,6 +157,10 @@ private:
 
 	UPROPERTY(Replicated, VisibleInstanceOnly, BlueprintReadOnly, Category = "Held", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<AGSTN_Projectile> Flight;
+
+	/** The pickup record (M10 G2) */
+	UPROPERTY(ReplicatedUsing = OnRep_RecordStamp)
+	FGSTN_HeldRecordStamp RecordStamp;
 
 	/** Where it rests while Idle (1/10 cm on the wire) */
 	UPROPERTY(ReplicatedUsing = OnRep_RestLocation)

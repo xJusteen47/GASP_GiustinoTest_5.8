@@ -25,7 +25,9 @@ public class GSTNHeldRuntime : ModuleRules
 			"GSTNProjectileCore",
 			"GSTNProjectileNP",
 			"GSTNHeldCore",
-			"GSTNInputCore"
+			"GSTNInputCore",
+			"GSTNInteractCore",
+			"GSTNInteractRuntime"
 		});
 	}
 }

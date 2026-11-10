@@ -1,6 +1,7 @@
 // Links, ability-system half (no Network Prediction, no Mover).
 
 #include "GSTN_LinkRegistry.h"
+#include "GSTN_InteractSettings.h"
 
 #include "Engine/AssetManager.h"
 #include "Engine/Engine.h"
@@ -391,6 +392,15 @@ void UGSTN_LinkRegistry::BuildInteractOffers()
 		else
 		{
 			Existing->DefaultPriority = FMath::Max(Existing->DefaultPriority, Entry.Offer.Priority);
+		}
+	}
+	// Record meanings (M10 G2): the project's GSTNInteract meanings, the ones stamped records (objects at rest) carry, so the probe can focus a
+	// record under the same table. A tag an offer already uses keeps the offer's priority
+	for (const FGSTN_InteractMeaning& Record : UGSTN_InteractSettings::Get().Meanings)
+	{
+		if (Record.Tag.IsValid() && !Meanings.ContainsByPredicate([&Record](const FGSTN_InteractMeaning& Meaning) { return Meaning.Tag == Record.Tag; }))
+		{
+			Meanings.Add(Record);
 		}
 	}
 	InteractMeanings.Build(Meanings);

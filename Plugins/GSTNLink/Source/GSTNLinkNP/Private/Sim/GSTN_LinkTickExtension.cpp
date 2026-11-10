@@ -10,6 +10,9 @@
 #include "Data/GSTN_LinkKitExtension.h"
 #include "Data/GSTN_LinkTypeDefinition.h"
 #include "GSTN_InteractMath.h"
+#include "GSTN_InteractInterfaces.h"
+#include "GSTN_InteractRegistry.h"
+#include "GSTN_InteractSubsystem.h"
 #include "GSTN_InteractTags.h"
 #include "GSTN_LinkRegistry.h"
 #include "GSTN_LinkRequirementLibrary.h"
@@ -624,20 +627,60 @@ bool FGSTN_LinkTickExtension::StepFacing(FGSTN_LinkFragment& Fragment, const UGS
 	Body.LocalYawQ = Turn;
 	return true;
 }
+namespace GSTNLinkTickPrivate
+{
+	/** The records of a FGSTN_LinkRecordSource as probe candidates: registry ids, meanings mapped by tag into the probe's table (M10 G2) */
+	class FRecordProvider final : public IGSTN_InteractCandidateProvider
+	{
+	public:
+		FRecordProvider(const FGSTN_LinkRecordSource& InSource, const FGSTN_InteractMeaningTable& InProbeMeanings)
+			: Source(InSource), ProbeMeanings(InProbeMeanings)
+		{
+		}
+
+		virtual uint8 GetProviderId() const override { return GSTNInteractProviders::Registry; }
+
+		virtual void GatherCandidates(const FGSTN_InteractQuery& Query, TArray<FGSTN_InteractCandidate>& OutCandidates) const override
+		{
+			if (!Source.IsValid())
+			{
+				return;
+			}
+			Source.Registry->QueryAround(Query.Origin, Query.Frame, [this, &OutCandidates](const FGSTN_InteractCandidate& Record)
+			{
+				const int32 Index = ProbeMeanings.IndexOf(Source.Meanings->TagOf(Record.MeaningIndex));
+				if (Index != 0)
+				{
+					OutCandidates.Add_GetRef(Record).MeaningIndex = Index;
+				}
+			});
+		}
+
+	private:
+		const FGSTN_LinkRecordSource& Source;
+		const FGSTN_InteractMeaningTable& ProbeMeanings;
+	};
+}
+
 FGameplayTag FGSTN_LinkTickExtension::ResolveInteractTarget(const FGSTN_SnapshotEntry& Self, TConstArrayView<FGSTN_SnapshotEntry> Entries, int32 Frame,
-	const FVector& StickOnPlane) const
+	const FVector& StickOnPlane, const FGSTN_LinkRecordSource* Records) const
 {
 	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
-	const FGSTN_LinkSnapshotExt* SelfExt = Self.Extension.Get<FGSTN_LinkSnapshotExt>(GSTNFeatureIds::Link);
-	if (!Registry || !SelfExt || !SelfExt->IsValid())
+	if (!Registry)
 	{
 		return FGameplayTag();
 	}
-	// Only a kit that some offer applies to (the grab: a link extension) looks for a target: the probe reads other entities' snapshot positions,
-	// which a client knows as interpolated proxies, so its result is not prediction-stable and must not reach a pawn that never uses it (F10)
+	const bool bRecords = Records && Records->IsValid();
+	// Only a kit that some offer applies to (the grab: a link extension) looks for an entity: the probe reads other entities' snapshot positions,
+	// which a client knows as interpolated proxies, so that result is not prediction-stable and must not reach a pawn that never uses it (F10).
+	// Records are stamped, so every kit sees them
+	const FGSTN_LinkSnapshotExt* SelfExt = Self.Extension.Get<FGSTN_LinkSnapshotExt>(GSTNFeatureIds::Link);
 	TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>> Offers;
-	MakeOffersFor(*Registry, FGSTN_LinkAttach::At(SelfExt->BodyIndex), Offers);
-	if (Offers.IsEmpty())
+	if (SelfExt && SelfExt->IsValid())
+	{
+		MakeOffersFor(*Registry, FGSTN_LinkAttach::At(SelfExt->BodyIndex), Offers);
+	}
+	if (Offers.IsEmpty() && !bRecords)
 	{
 		return FGameplayTag();
 	}
@@ -645,6 +688,10 @@ FGameplayTag FGSTN_LinkTickExtension::ResolveInteractTarget(const FGSTN_Snapshot
 	TArray<FGSTN_LinkInteractEntity, TInlineAllocator<16>> Candidates;
 	for (const FGSTN_SnapshotEntry& Entry : Entries)
 	{
+		if (Offers.IsEmpty())
+		{
+			break;
+		}
 		if (Entry.EntityId == Self.EntityId || !Entry.Hurtboxes)
 		{
 			continue;
@@ -654,7 +701,7 @@ FGameplayTag FGSTN_LinkTickExtension::ResolveInteractTarget(const FGSTN_Snapshot
 		Candidate.Location = Entry.Transform.GetLocation();
 		Candidate.RadiusCm = FMath::RoundToInt32(FMath::Min(Entry.BoundRadius, 60.f));
 	}
-	if (Candidates.IsEmpty())
+	if (Candidates.IsEmpty() && !bRecords)
 	{
 		return FGameplayTag();
 	}
@@ -667,7 +714,9 @@ FGameplayTag FGSTN_LinkTickExtension::ResolveInteractTarget(const FGSTN_Snapshot
 
 	const FGSTN_InteractMeaningTable& Meanings = Registry->GetInteractMeanings();
 	static const FGSTN_InteractRules Rules;
-	const IGSTN_InteractCandidateProvider* Providers[] = { &Provider };
+	const FGSTN_LinkRecordSource NoRecords;
+	const GSTNLinkTickPrivate::FRecordProvider RecordProvider(bRecords ? *Records : NoRecords, Meanings);
+	const IGSTN_InteractCandidateProvider* Providers[] = { &Provider, &RecordProvider };
 	FGSTN_InteractQuery Query;
 	Query.Frame = Frame;
 	Query.Origin = Self.Transform.GetLocation();
@@ -678,7 +727,11 @@ FGameplayTag FGSTN_LinkTickExtension::ResolveInteractTarget(const FGSTN_Snapshot
 	Query.Tags = &Source.Interactor.Tags;
 	Query.Rules = &Rules;
 	Query.Meanings = &Meanings;
-	Query.Providers = Providers;
+	Query.Providers = TConstArrayView<const IGSTN_InteractCandidateProvider*>(Providers, bRecords ? 2 : 1);
+	if (bRecords)
+	{
+		Query.Requirements = Records->Requirements;
+	}
 	Query.HostContext = Source.ToHostContext();
 
 	// One stateless probe: the focus of this frame only (F10: no sticky focus state in the fragment)
@@ -1003,7 +1056,15 @@ void FGSTN_LinkTickExtension::ProjectTags(FGSTN_CombatTickContext& Context) cons
 	{
 		if (const FGSTN_SnapshotEntry* Self = Context.Snapshot->Find(Context.EntityId))
 		{
-			const FGameplayTag Target = ResolveInteractTarget(*Self, Context.Snapshot->Entries, Context.Frame, Context.StickOnPlane);
+			// The world's stamped records (M10 G2): objects at rest a plugin registered with GSTNInteract
+			FGSTN_LinkRecordSource Records;
+			if (const UGSTN_InteractSubsystem* Interact = UGSTN_InteractSubsystem::Get(ASC->GetWorld()))
+			{
+				Records.Registry = &Interact->GetRegistry();
+				Records.Meanings = &Interact->GetMeanings();
+				Records.Requirements = Interact->GetRequirements();
+			}
+			const FGameplayTag Target = ResolveInteractTarget(*Self, Context.Snapshot->Entries, Context.Frame, Context.StickOnPlane, &Records);
 			if (Target.IsValid())
 			{
 				Held.AddTag(Target);
@@ -1018,9 +1079,11 @@ void FGSTN_LinkTickExtension::ProjectTags(FGSTN_CombatTickContext& Context) cons
 	Projectable.AddTag(GSTNLinkTags::Interact_Target_Grab);
 	if (Registry)
 	{
-		for (const FGSTN_LinkOfferEntry& Offer : Registry->GetInteractOffers())
+		// The offers' meanings and the record meanings (M10 G2): the whole table
+		const FGSTN_InteractMeaningTable& Meanings = Registry->GetInteractMeanings();
+		for (int32 Index = 1; Index <= Meanings.Num(); ++Index)
 		{
-			Projectable.AddTag(Offer.Offer.Meaning);
+			Projectable.AddTag(Meanings.TagOf(Index));
 		}
 	}
 	for (const FGameplayTag& Tag : Projectable)

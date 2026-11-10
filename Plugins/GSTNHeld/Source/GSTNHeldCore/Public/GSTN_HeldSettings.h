@@ -63,6 +63,13 @@ public:
 	UPROPERTY(config, EditAnywhere, Category = "Input", meta = (Categories = "Command"))
 	TMap<FGameplayTag, int32> CommandTiers;
 
+	/**
+	 * Default priority of the pickup meaning (Interact.Target.Pickup) the runtime module adds to the GSTNInteract settings when the project lists
+	 * none there (M10 G2). Below the grab's 100, so a grab target wins a tie (INT.5 order). TEST VALUE
+	 */
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Interact", meta = (ClampMin = 0, ClampMax = 255))
+	int32 PickupMeaningPriority = 90;
+
 	/** Hands CommandTiers to the input settings under this plugin's contribution source */
 	void PushToInputSettings() const;
 	static void RemoveFromInputSettings();

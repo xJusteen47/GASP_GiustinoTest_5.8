@@ -4,6 +4,8 @@
 #include "Misc/AutomationTest.h"
 #include "GSTN_CombatNPTags.h"
 #include "GSTN_CombatTags.h"
+#include "GameFramework/Pawn.h"
+#include "Hits/GSTN_CombatHitTags.h"
 #include "Hits/GSTN_HitResolution.h"
 #include "Hits/GSTN_HitRunner.h"
 #include "Hits/GSTN_HitSteps.h"
@@ -146,6 +148,62 @@ bool FGSTN_CreditEventCarriesPartnerTest::RunTest(const FString& Parameters)
 		FGSTN_SimEventOutbox Outbox;
 		FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause::Zone, 6, nullptr, nullptr, Outbox, &Hit.Outcome.Credit);
 		TestEqual(TEXT("a zone KO credits nobody"), Outbox.Events.Num(), 1);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CreditDetachedInstigatorTest, "GSTNCombat.Hits.Credit.DetachedInstigator", GSTN_NP_TEST_FLAGS)
+bool FGSTN_CreditDetachedInstigatorTest::RunTest(const FString& Parameters)
+{
+	// Any live actor stands for the thrower snapshot at the release; the attacker id resolves to nothing (null Attacker)
+	AActor* Thrower = GetMutableDefault<AActor>();
+	FGSTN_VictimHit Hit;
+	Hit.Entry.Hit.Damage = 7.f;
+	Hit.Entry.SourceTag = GSTNCombatHitTags::Source_Thrown;
+	Hit.Entry.DetachedInstigator = Thrower;
+	{
+		FGSTN_SimEventOutbox Outbox;
+		FGSTN_CombatVictim::AppendHitEvents(Hit, 5, nullptr, nullptr, FGameplayTagContainer(), Outbox);
+		TestEqual(TEXT("HitLanded and HitReceived"), Outbox.Events.Num(), 2);
+		for (const FGSTN_SimEvent& Event : Outbox.Events)
+		{
+			TestTrue(TEXT("each names the detached thrower"), Event.Instigator == Thrower);
+			TestTrue(TEXT("each carries the source"), Event.Tags.HasTagExact(GSTNCombatHitTags::Source_Thrown));
+		}
+	}
+	{
+		FGSTN_SimEventOutbox Outbox;
+		FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause::Health, 6, nullptr, nullptr, Outbox, nullptr, nullptr, &Hit.Entry);
+		TestTrue(TEXT("a health KO names the thrower and carries the source"), Outbox.Events.Num() == 1 && Outbox.Events[0].Instigator == Thrower
+			&& Outbox.Events[0].Tags.HasTagExact(GSTNCombatHitTags::Source_Thrown));
+	}
+	{
+		FGSTN_SimEventOutbox Outbox;
+		FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause::Zone, 6, nullptr, nullptr, Outbox, nullptr, nullptr, &Hit.Entry);
+		TestTrue(TEXT("a zone KO still names nobody but the victim, no source"), Outbox.Events.Num() == 1 && Outbox.Events[0].Instigator == nullptr
+			&& !Outbox.Events[0].Tags.HasTagExact(GSTNCombatHitTags::Source_Thrown));
+	}
+	TestTrue(TEXT("a resolved attacker wins over the detached one"), FGSTN_CombatVictim::CreditedAttacker(GetMutableDefault<APawn>(), Hit.Entry) == GetMutableDefault<APawn>());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CreditNoSourceUnchangedTest, "GSTNCombat.Hits.Credit.NoSourceUnchanged", GSTN_NP_TEST_FLAGS)
+bool FGSTN_CreditNoSourceUnchangedTest::RunTest(const FString& Parameters)
+{
+	FGSTN_VictimHit Hit;
+	Hit.Entry.Hit.Damage = 7.f;
+	FGSTN_SimEventOutbox Before;
+	FGSTN_CombatVictim::AppendHitEvents(Hit, 5, nullptr, nullptr, FGameplayTagContainer(), Before);
+	FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause::Health, 6, nullptr, nullptr, Before);
+	FGSTN_SimEventOutbox After;
+	FGSTN_CombatVictim::AppendHitEvents(Hit, 5, nullptr, nullptr, FGameplayTagContainer(), After);
+	FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause::Health, 6, nullptr, nullptr, After, nullptr, nullptr, &Hit.Entry);
+	TestEqual(TEXT("same count"), After.Events.Num(), Before.Events.Num());
+	for (int32 Index = 0; Index < FMath::Min(Before.Events.Num(), After.Events.Num()); ++Index)
+	{
+		TestTrue(FString::Printf(TEXT("event %d: same type, tags and instigator"), Index), Before.Events[Index].EventType == After.Events[Index].EventType
+			&& Before.Events[Index].Tags == After.Events[Index].Tags && Before.Events[Index].Instigator == After.Events[Index].Instigator);
+		TestFalse(FString::Printf(TEXT("event %d: no source tag"), Index), After.Events[Index].Tags.HasTag(GSTNCombatHitTags::Source_Thrown) || After.Events[Index].Tags.HasTag(GSTNCombatHitTags::Source_Projectile));
 	}
 	return true;
 }

@@ -27,6 +27,13 @@ namespace GSTNCombatHitTags
 	/** A projectile hit. Data only until projectiles exist */
 	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(HitType_Projectile);
 
+	/**
+	 * Source of a hit made by no hitbox of the attacker's own timeline (M10 G3): its HitLanded, HitReceived and KO events carry it, so a
+	 * consumer tells a thrown object or a launched projectile from a melee hit. The poster sets it on the inbox entry (FGSTN_HitInboxEntry::SourceTag)
+	 */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Source_Thrown);
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Source_Projectile);
+
 	/** A hit that blocks and parries do not stop. Data only until shields exist */
 	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(HitType_Unblockable);
 

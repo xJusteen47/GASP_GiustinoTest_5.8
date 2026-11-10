@@ -287,6 +287,9 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 	 */
 	static void AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame, AActor* Attacker, AActor* Victim, const FGameplayTagContainer& MoveTags, FGSTN_SimEventOutbox& Outbox, AActor* CreditPartner = nullptr);
 
+	/** The actor a hit's events name (M10 G3): the resolved attacker, else the entry's detached instigator (a thrower gone since the release), else null */
+	static AActor* CreditedAttacker(AActor* Resolved, const FGSTN_HitInboxEntry& Entry);
+
 	/**
 	 * Projects the combat state onto the ability system for the frame (the pre-tick): Combat.State.Hitstun (hitstun or splat), Tumble and
 	 * Hitstop are set to what the state says, and Combat.Lock.Reaction is held while the state locks the combatant (a hit reaction or a KO),
@@ -297,7 +300,8 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 
 	/** The KO event: the instigator is the attacker for a Health KO (the victim itself for a zone), the target the combatant; KOReason as a tag. A Health KO whose
 	 * hit names a credit partner (Credit set) adds a copy instigated by CreditPartner and tagged Combat.Event.Hit.CreditPartner */
-	static void AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor* Attacker, AActor* Victim, FGSTN_SimEventOutbox& Outbox, const FGSTN_HitCredit* Credit = nullptr, AActor* CreditPartner = nullptr);
+	static void AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor* Attacker, AActor* Victim, FGSTN_SimEventOutbox& Outbox, const FGSTN_HitCredit* Credit = nullptr, AActor* CreditPartner = nullptr,
+		const FGSTN_HitInboxEntry* KOEntry = nullptr);
 
 	/** The stick on the plane normal to Up: forward is the camera's, turned about Up (never world Z) */
 	static FVector StickToPlane(const FVector2D& Stick, double CameraYawDegrees, const FVector& Up);

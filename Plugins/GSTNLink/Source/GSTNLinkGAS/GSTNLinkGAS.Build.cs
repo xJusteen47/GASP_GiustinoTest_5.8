@@ -21,6 +21,7 @@ public class GSTNLinkGAS : ModuleRules
 			"GSTNCombatCore",
 			"GSTNCombatGAS",
 			"GSTNInteractCore",
+			"GSTNInteractRuntime",
 			"GSTNLinkCore"
 		});
 	}

@@ -35,6 +35,13 @@ struct GSTNPROJECTILENP_API FGSTN_ActiveProjectile
 	/** Entities already hit (one hit per target per projectile, combat-m10 §10); consumed at Params.MaxHits */
 	UPROPERTY()
 	TArray<int32> HitTargets;
+
+	/**
+	 * Credit snapshot at the release (M10 G3): the shooter, and its player state for when the shooter is gone (death, disconnect). Its hits
+	 * carry the first that is still valid as FGSTN_HitInboxEntry::DetachedInstigator; events only, never the simulation
+	 */
+	TWeakObjectPtr<AActor> CreditShooter;
+	TWeakObjectPtr<AActor> CreditPlayerState;
 };
 
 /** A ghost the firing client draws while the host's projectile is on its way (slice 3) */

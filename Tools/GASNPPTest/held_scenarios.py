@@ -101,6 +101,13 @@ def scenario_held_pickup_throw_hit(client=1):
         ok = len(re.findall(r'HeldObject \d+ thrown by', text)) == 1 and len(fired) == 1 and int(fired[0][1]) == thrower() and len(h) == 1
         return ok, f'fired {fired} hits {h}'
 
+    def thrown_source():
+        # M10 G3: the hit is posted as a thrown-object hit, credited to the thrower's pawn (the event's instigator if its id stops resolving)
+        src = re.findall(r'Projectile \d+ hit \d+ at frame \d+ \(hurtbox -?\d+\) source=(\S+) credit=(\S+)', _log())
+        held = re.findall(r'HeldObject \d+ thrown by (\S+) at frame', _log())
+        ok = len(src) == 1 and src[0][0] == 'Combat.Source.Thrown' and bool(held) and src[0][1] == held[0]
+        return ok, f'source {src} thrower {held}'
+
     def inbox():
         key = _victim_key(thrower())
         st['key'] = key
@@ -137,6 +144,7 @@ def scenario_held_pickup_throw_hit(client=1):
         (2.5, lambda: ('throw', _cmd('gstn.Held.Throw 0 1'))),
         (5.0, run.at('one throw, one projectile from the thrower, one hit on the target entity', hit_target)),
         (5.0, run.at('target inbox (server): one row from the thrower, damage > 0', inbox)),
+        (5.0, run.at('the hit is a thrown-object hit (Combat.Source.Thrown) credited to the thrower', thrown_source)),
         (5.1, run.at('damage percent equal on every world', damage_equal)),
         (5.2, lambda: ('landed', capture('landed'))),
         (5.3, run.at('the object landed and rests at the same place in every world', landed_equal)),
@@ -214,20 +222,21 @@ def scenario_held_drop_and_break(client=1):
     steps = [
         (0.0, lambda: ('setup', _setup())),
         (0.5, lambda: ('spawn', [_cmd(f'gstn.Held.Spawn {i} 120') for i in range(npawns())])),
-        (0.7, lambda: ('free', capture('free'))),
-        (0.75, run.at('an object in reach, hand empty: every world projects Interact.Target.Pickup for every pawn', targets_free)),
-        (1.0, lambda: ('pickup', [_cmd(f'gstn.Held.Pickup {i}') for i in range(npawns())])),
-        (2.5, lambda: ('carry', capture('carry'))),
-        (2.6, run.at('every pawn holds its object; every world projects Carrying for each holder', all_carry)),
-        (2.65, run.at('holding: no pawn projects a pickup target in any world', targets_carry)),
-        (2.7, lambda: ('drop', _cmd('gstn.Held.Drop 0'))),
-        (4.0, lambda: ('dropped', capture('dropped'))),
-        (4.1, run.at('pawn 0 put it down (Dropped); its hand empty everywhere, the others still carry', dropped)),
-        (4.2, lambda: ('repick', _cmd('gstn.Held.Pickup 0'))),
-        (5.2, lambda: ('throw', _cmd('gstn.Held.Throw 0 1'))),
-        (8.0, lambda: ('after', capture('after'))),
-        (8.1, run.at('the hit holder dropped its object (HolderState, hitstun); its hand empty everywhere; others keep theirs', broke_on_hit)),
-        (8.2, run.finish()),
+        # M10 G2: an object's pickup record is live 40 frames (the interact rules' MinAgeFrames, 0.64 s) after it comes to rest
+        (1.4, lambda: ('free', capture('free'))),
+        (1.45, run.at('an object in reach, hand empty: every world projects Interact.Target.Pickup for every pawn', targets_free)),
+        (1.6, lambda: ('pickup', [_cmd(f'gstn.Held.Pickup {i}') for i in range(npawns())])),
+        (3.1, lambda: ('carry', capture('carry'))),
+        (3.2, run.at('every pawn holds its object; every world projects Carrying for each holder', all_carry)),
+        (3.25, run.at('holding: no pawn projects a pickup target in any world', targets_carry)),
+        (3.3, lambda: ('drop', _cmd('gstn.Held.Drop 0'))),
+        (4.6, lambda: ('dropped', capture('dropped'))),
+        (4.7, run.at('pawn 0 put it down (Dropped); its hand empty everywhere, the others still carry', dropped)),
+        (4.8, lambda: ('repick', _cmd('gstn.Held.Pickup 0'))),
+        (5.8, lambda: ('throw', _cmd('gstn.Held.Throw 0 1'))),
+        (8.6, lambda: ('after', capture('after'))),
+        (8.7, run.at('the hit holder dropped its object (HolderState, hitstun); its hand empty everywhere; others keep theirs', broke_on_hit)),
+        (8.8, run.finish()),
     ]
     run.run(steps)
 

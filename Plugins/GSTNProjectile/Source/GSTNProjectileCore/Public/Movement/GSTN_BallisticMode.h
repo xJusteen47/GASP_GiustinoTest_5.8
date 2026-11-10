@@ -52,6 +52,10 @@ struct GSTNPROJECTILECORE_API FGSTN_ProjectileParams
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile|Hit")
 	FGSTN_HitShape Shape;
 
+	/** The source tag of its hits' events (M10 G3): Combat.Source.Thrown for a thrown object; none = Combat.Source.Projectile */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile|Hit", meta = (Categories = "Combat.Source"))
+	FGameplayTag SourceTag;
+
 	/** What a hit carries into the victim's pipeline, exactly as a melee hitbox's data */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile|Hit")
 	FGSTN_HitData Hit;

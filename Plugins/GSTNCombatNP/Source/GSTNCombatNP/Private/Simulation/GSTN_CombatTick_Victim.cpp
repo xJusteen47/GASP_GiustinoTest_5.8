@@ -1,6 +1,7 @@
 // Combat simulation (GAS-NPP fork): the victim side of the combat tick (combat-m4-hits 7, M4 H9).
 
 #include "Simulation/GSTN_CombatVictim.h"
+#include "GameFramework/Actor.h"
 
 #include "AbilitySystemComponent.h"
 #include "GSTN_CombatNPTags.h"
@@ -506,11 +507,16 @@ void FGSTN_CombatVictim::AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame
 {
 	FGSTN_SimEvent Event;
 	Event.Frame = Frame;
-	Event.Instigator = Attacker ? Attacker : Victim;
+	AActor* Named = CreditedAttacker(Attacker, Hit.Entry);
+	Event.Instigator = Named ? Named : Victim;
 	Event.Target = Victim;
 	Event.Magnitude = Hit.Entry.Hit.Damage;
 	Event.Tags.AppendTags(MoveTags);
 	Event.Tags.AddTag(Hit.Entry.Hit.IsNormalHitType() ? GSTNCombatHitTags::HitType_Normal.GetTag() : Hit.Entry.Hit.HitType);
+	if (Hit.Entry.SourceTag.IsValid())
+	{
+		Event.Tags.AddTag(Hit.Entry.SourceTag);
+	}
 	const FGameplayTag Relationship = GSTNHitRelationship::FromIndex(Hit.Entry.Relationship);
 	if (Relationship.IsValid())
 	{
@@ -570,14 +576,25 @@ void FGSTN_CombatVictim::ProjectStateTags(UAbilitySystemComponent& ASC, const FG
 	ASC.SetLooseGameplayTagCount(GSTNCombatTags::Lock_Reaction, IsActionLocked(Core) ? 1 : 0);
 }
 
-void FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor* Attacker, AActor* Victim, FGSTN_SimEventOutbox& Outbox, const FGSTN_HitCredit* Credit, AActor* CreditPartner)
+AActor* FGSTN_CombatVictim::CreditedAttacker(AActor* Resolved, const FGSTN_HitInboxEntry& Entry)
+{
+	return Resolved ? Resolved : Entry.DetachedInstigator.Get();
+}
+
+void FGSTN_CombatVictim::AppendKOEvent(EGSTN_KOCause Cause, int32 Frame, AActor* Attacker, AActor* Victim, FGSTN_SimEventOutbox& Outbox, const FGSTN_HitCredit* Credit, AActor* CreditPartner,
+	const FGSTN_HitInboxEntry* KOEntry)
 {
 	FGSTN_SimEvent Event;
 	Event.EventType = GSTNCombatTags::Event_KO;
 	Event.Frame = Frame;
-	Event.Instigator = Cause == EGSTN_KOCause::Health && Attacker ? Attacker : Victim;
+	AActor* Named = KOEntry ? CreditedAttacker(Attacker, *KOEntry) : Attacker;
+	Event.Instigator = Cause == EGSTN_KOCause::Health && Named ? Named : Victim;
 	Event.Target = Victim;
 	Event.Tags.AddTag(Cause == EGSTN_KOCause::Zone ? GSTNCombatTags::KOReason_Zone : GSTNCombatTags::KOReason_Health);
+	if (Cause == EGSTN_KOCause::Health && KOEntry && KOEntry->SourceTag.IsValid())
+	{
+		Event.Tags.AddTag(KOEntry->SourceTag);
+	}
 	Event.Tags.AddTag(GSTNCombatTags::Entity_Fighter);
 	if (Cause == EGSTN_KOCause::Health && Credit && Credit->IsSet())
 	{

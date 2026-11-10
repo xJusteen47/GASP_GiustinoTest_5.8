@@ -9,6 +9,8 @@ namespace GSTNCombatHitTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(HitType_Normal, "Combat.HitType.Normal", "A hit that damages and moves its victim. An unset hit type means the same");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(HitType_Grab, "Combat.HitType.Grab", "A grab. Data only until a grab path exists");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(HitType_Projectile, "Combat.HitType.Projectile", "A projectile hit. Data only until projectiles exist");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Source_Thrown, "Combat.Source.Thrown", "Tag of the hit and KO events of a hit made by a thrown object (M10 G3)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Source_Projectile, "Combat.Source.Projectile", "Tag of the hit and KO events of a hit made by a launched projectile (M10 G3)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(HitType_Unblockable, "Combat.HitType.Unblockable", "A hit that blocks and parries do not stop. Data only until shields exist");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Relationship_Self, "Combat.Relationship.Self", "The victim is the attacker itself. Key of the relationship variants of a hitbox");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Relationship_Ally, "Combat.Relationship.Ally", "The victim is on the attacker's side. Key of the relationship variants of a hitbox");
@@ -17,7 +19,7 @@ namespace GSTNCombatHitTags
 
 	void GetDeclaredHitTags(TArray<FGameplayTag>& OutTags)
 	{
-		OutTags.Append({ Root_Hurtbox, Hurtbox_Feet, HitType_Normal, HitType_Grab, HitType_Projectile, HitType_Unblockable,
+		OutTags.Append({ Root_Hurtbox, Hurtbox_Feet, HitType_Normal, HitType_Grab, HitType_Projectile, HitType_Unblockable, Source_Thrown, Source_Projectile,
 			Relationship_Self, Relationship_Ally, Relationship_Enemy, Relationship_Neutral });
 	}
 }

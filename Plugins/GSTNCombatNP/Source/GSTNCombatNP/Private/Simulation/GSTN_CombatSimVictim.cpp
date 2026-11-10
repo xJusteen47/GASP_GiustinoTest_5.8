@@ -395,7 +395,8 @@ void UGSTN_CombatSimComponent::AppendVictimEvents(int32 Frame)
 	{
 		const FGSTN_VictimHit* KOHit = VictimResult.Hits.IsValidIndex(VictimResult.KOHitIndex) ? &VictimResult.Hits[VictimResult.KOHitIndex] : nullptr;
 		AActor* Attacker = KOHit ? FindAttackerActor(*KOHit) : nullptr;
-		FGSTN_CombatVictim::AppendKOEvent(VictimResult.KO, Frame, Attacker, GetOwner(), EventOutbox, KOHit ? &KOHit->Outcome.Credit : nullptr, KOHit ? FindCreditPartnerActor(*KOHit) : nullptr);
+		FGSTN_CombatVictim::AppendKOEvent(VictimResult.KO, Frame, Attacker, GetOwner(), EventOutbox, KOHit ? &KOHit->Outcome.Credit : nullptr, KOHit ? FindCreditPartnerActor(*KOHit) : nullptr,
+			KOHit ? &KOHit->Entry : nullptr);
 	}
 }
 
