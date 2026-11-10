@@ -1,6 +1,6 @@
 # Cose da fare a mano (copia dell'artifact)
 
-Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (M10 slice 9). L'artifact è la versione di riferimento.
+Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (piano M11). L'artifact è la versione di riferimento.
 
 ## 1 · Git
 
@@ -30,6 +30,7 @@ Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, a
 
 ## 3 · Decisioni
 
+- [ ] **M11 kit (piano a fette, `docs/architecture/plans/m11-kit-piano-a-fette.md` §4, entro mercoledì sera)**: 1 essenziale = scambio kit col tasto, lanci del kit stile Smash, 3 kit diversi, controllo; il resto dopo il playtest. 2 lanci: presa con speciale+accovacciato o tap, poi lo stick sceglie il lancio. 3 quattro lanci per kit con set di riserva. 4 sollevabile = peso ≤ capacità del kit + tag che lo vieta. 5 kit lasciato alla morte: sì. 6 cambio kit: vince la cosa inquadrata, hold 0,5 s. 7 RT tenuto col reticolo per i lanci prima del playtest. Rispondi "ok" o cambia i numeri.
 - [ ] Leve weakpoint §6 (scala hurtbox, priorità, magnetismo PvE).
 - [ ] M10: un oggetto posato o atterrato si può riprendere dopo 0,64 s (ritardo di rete dei record): va bene o lo vuoi più corto? Danni e archi veri per tipo di oggetto; quali kit hanno i tasti degli oggetti (ora solo i kit di prova; c'è l'opzione "tutti i kit").
 - [ ] G6 fatto con valori di prova (Leggero -10 %, Medio -30 %, Pesante -50 % senza salto, Enorme -70 % e capacità; lancio x1/0,85/0,7/0,5; capacità di default 50 kg): dimmi i valori veri e quali oggetti si sollevano. Impatti: un rimbalzo può colpire di nuovo chi ha già preso il lancio; Break si rompe anche su un nemico. Va bene?

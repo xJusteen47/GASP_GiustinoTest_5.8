@@ -14,6 +14,7 @@ Blueprint/shared-asset edits that need the owner's OK, risks and parallelisation
 | [resto-m3-m4b-m5-t.md](resto-m3-m4b-m5-t.md) (added 2026-11-06) | Open gates of M3, M4b, M5 and T, regrouped with costs | R3, P/E/T rest | the four plans above |
 | [fp-forward-prediction.md](fp-forward-prediction.md) (2026-11-06) | Forward prediction of the pair partner | G0..G4 | `../combat-m7-piggyback.md` §2 |
 | [m11-kit.md](m11-kit.md) (2026-11-06) | M11 kits in play (`GSTNPickups`, `GSTNKitMods`, `GSTNBackpack`) | G0..G8 | `../combat-loadout-mods.md` |
+| [m11-kit-piano-a-fette.md](m11-kit-piano-a-fette.md) (2026-11-11) | M11 sliced: essential before playtest (K1-K4) vs after (L1-L10), owner decisions | K1..K4, L1..L10 | `m11-kit.md` |
 | [m12-modi-livelli.md](m12-modi-livelli.md) (2026-11-06) | M12 mode framework + Levels | G0..G8 | `../game-modes.md` |
 | [m13-spedizione.md](m13-spedizione.md) (2026-11-06) | M13 Expedition | G0..G6 | `../game-modes.md` |
 | [m14-pvp.md](m14-pvp.md) (2026-11-06) | M14 Versus | G0..G5 | `../game-modes.md` |
