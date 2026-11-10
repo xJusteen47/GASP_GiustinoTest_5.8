@@ -360,6 +360,17 @@ bool FGSTN_PipelineRelationshipTest::RunTest(const FString& Parameters)
 	Rules->bFriendlyFire = false;
 	FGSTN_HitPipelineRunner::Run(*Rules, Preset);
 	TestTrue(TEXT("the preset Enemy relationship stands"), Preset.Outcome.bHit);
+
+	// M10 G7: friendly fire by hit source, with bFriendlyFire off
+	const FGameplayTag Ally = Rel(GSTNCombatHitTags::Relationship_Ally);
+	const FGameplayTag Thrown = GSTNCombatHitTags::Source_Thrown.GetTag();
+	TestFalse(TEXT("no source listed: a thrown hit spares allies"), Rules->IsRelationshipHittableBySource(Ally, Thrown));
+	Rules->FriendlyFireSources.AddTag(Thrown);
+	TestTrue(TEXT("a listed source hits allies"), Rules->IsRelationshipHittableBySource(Ally, Thrown));
+	TestFalse(TEXT("an unlisted (none) source still spares them"), Rules->IsRelationshipHittableBySource(Ally, FGameplayTag()));
+	TestFalse(TEXT("the plain check is unchanged"), Rules->IsRelationshipHittable(Ally));
+	TestTrue(TEXT("enemies stay hittable by any source"), Rules->IsRelationshipHittableBySource(Rel(GSTNCombatHitTags::Relationship_Enemy), FGameplayTag()));
+	Rules->FriendlyFireSources.Reset();
 	return true;
 }
 

@@ -129,6 +129,15 @@ bool UGSTN_CombatRules::IsRelationshipHittable(const FGameplayTag& Relationship)
 	return bListed || (bFriendlyFire && Relationship == Ally);
 }
 
+bool UGSTN_CombatRules::IsRelationshipHittableBySource(const FGameplayTag& Relationship, const FGameplayTag& SourceTag) const
+{
+	if (IsRelationshipHittable(Relationship))
+	{
+		return true;
+	}
+	return Relationship == GSTNCombatHitTags::Relationship_Ally.GetTag() && SourceTag.IsValid() && SourceTag.MatchesAny(FriendlyFireSources);
+}
+
 float UGSTN_CombatRules::GetDamageProgress(const FGSTN_HitVictimView& Victim) const
 {
 	if (MaxHealth <= 0.f)

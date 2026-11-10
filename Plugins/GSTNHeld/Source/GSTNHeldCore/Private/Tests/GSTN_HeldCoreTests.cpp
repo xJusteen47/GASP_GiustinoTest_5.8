@@ -63,6 +63,18 @@ bool FGSTN_HeldPickupRaceTest::RunTest(const FString& Parameters)
 	Missing.TargetObjectId = 9;
 	FGSTN_HeldRules::ResolvePickups({ Missing }, { Crate, Barrel }, Out);
 	TestTrue(TEXT("unknown target: the nearest"), Out.Num() == 1 && Out[0] == FGSTN_PickupAssignment{ 2, 0 });
+
+	// Slice 7 (owner's setting): no fallback = a contested or missing target closes the hand on nothing; no focus still takes the nearest
+	Late.bFallBackToNearest = false;
+	FGSTN_HeldRules::ResolvePickups({ Focused, Late }, { Crate, Barrel }, Out);
+	TestTrue(TEXT("no fallback: the later request whiffs"), Out.Num() == 1 && Out[0] == FGSTN_PickupAssignment{ 2, 0 });
+	Missing.bFallBackToNearest = false;
+	FGSTN_HeldRules::ResolvePickups({ Missing }, { Crate, Barrel }, Out);
+	TestEqual(TEXT("no fallback: an unknown target whiffs"), Out.Num(), 0);
+	FGSTN_PickupRequest Unfocused{ 2, 100, FVector::ZeroVector };
+	Unfocused.bFallBackToNearest = false;
+	FGSTN_HeldRules::ResolvePickups({ Unfocused }, { Crate, Barrel }, Out);
+	TestTrue(TEXT("no fallback, no focus: still the nearest"), Out.Num() == 1 && Out[0] == FGSTN_PickupAssignment{ 2, 0 });
 	return true;
 }
 

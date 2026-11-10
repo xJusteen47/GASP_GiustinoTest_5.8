@@ -137,6 +137,15 @@ public:
 	 */
 	bool RemoveProjectile(const AGSTN_Projectile* Projectile);
 
+	/** The entities a live projectile of this host already hit (its HitTargets). False when it is not one of this host's live projectiles */
+	bool GetHitTargets(const AGSTN_Projectile* Projectile, TArray<int32>& OutTargets) const;
+
+	/**
+	 * Host only: marks Targets as already hit by a live projectile (they count toward its MaxHits and it never hits them). For owners whose
+	 * one logical shot spans several projectiles, such as a thrown object's rebounds (GSTNHeld, one hit per target per throw)
+	 */
+	bool SeedHitTargets(const AGSTN_Projectile* Projectile, const TArray<int32>& Targets);
+
 	/** Projectiles fired on this host since the world started */
 	uint32 GetNumFired() const { return NextSerial - 1; }
 

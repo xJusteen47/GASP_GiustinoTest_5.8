@@ -99,6 +99,13 @@ public:
 	bool bFriendlyFire = false;
 
 	/**
+	 * Friendly fire by hit source (M10 G7): with bFriendlyFire off, a hit whose source tag matches one of these (hierarchical) still hits
+	 * allies, so a mode can let thrown objects hurt anyone they meet while melee stays team-safe. Empty (the default) = allies ignored
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Teams", meta = (Categories = "Combat.Source"))
+	FGameplayTagContainer FriendlyFireSources;
+
+	/**
 	 * The relationships the TeamFilter step lets through. Self is hittable only if it is listed. Empty means Enemy and Neutral (the
 	 * default is not written into the class because a class default object is built before the native tags exist)
 	 */
@@ -217,6 +224,9 @@ public:
 
 	/** True when the TeamFilter step lets a hit on this relationship through */
 	bool IsRelationshipHittable(const FGameplayTag& Relationship) const;
+
+	/** IsRelationshipHittable, plus allies when SourceTag matches FriendlyFireSources (M10 G7). Pure */
+	bool IsRelationshipHittableBySource(const FGameplayTag& Relationship, const FGameplayTag& SourceTag) const;
 
 	/**
 	 * How far the victim has come along the health weight curve, 0 to 1, from the damage taken before the current hit: Health

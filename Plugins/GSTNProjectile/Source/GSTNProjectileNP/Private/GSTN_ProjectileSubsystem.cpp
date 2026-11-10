@@ -358,6 +358,31 @@ bool UGSTN_ProjectileSubsystem::RemoveProjectile(const AGSTN_Projectile* Project
 	return true;
 }
 
+bool UGSTN_ProjectileSubsystem::GetHitTargets(const AGSTN_Projectile* Projectile, TArray<int32>& OutTargets) const
+{
+	const FGSTN_ActiveProjectile* Found = Projectile ? Active.FindByPredicate([Projectile](const FGSTN_ActiveProjectile& Each) { return Each.Actor == Projectile; }) : nullptr;
+	if (!Found)
+	{
+		return false;
+	}
+	OutTargets = Found->HitTargets;
+	return true;
+}
+
+bool UGSTN_ProjectileSubsystem::SeedHitTargets(const AGSTN_Projectile* Projectile, const TArray<int32>& Targets)
+{
+	FGSTN_ActiveProjectile* Found = Projectile && HasAuthority() ? Active.FindByPredicate([Projectile](const FGSTN_ActiveProjectile& Each) { return Each.Actor == Projectile; }) : nullptr;
+	if (!Found)
+	{
+		return false;
+	}
+	for (const int32 Each : Targets)
+	{
+		Found->HitTargets.AddUnique(Each);
+	}
+	return true;
+}
+
 void UGSTN_ProjectileSubsystem::StepFrame(int32 Frame)
 {
 	if (Active.IsEmpty())
@@ -430,7 +455,7 @@ bool UGSTN_ProjectileSubsystem::StepProjectile(FGSTN_ActiveProjectile& Projectil
 		Query.VictimEntityId = Victim.EntityId;
 		Query.VictimTeamId = Victim.Team.GetId();
 		const FGameplayTag Relationship = Rules ? Rules->ResolveRelationship(Query) : UGSTN_RelationshipResolver::DefaultRule(Query);
-		if (Rules ? !Rules->IsRelationshipHittable(Relationship)
+		if (Rules ? !Rules->IsRelationshipHittableBySource(Relationship, Params.SourceTag)
 			: (Relationship != GSTNCombatHitTags::Relationship_Enemy.GetTag() && Relationship != GSTNCombatHitTags::Relationship_Neutral.GetTag()))
 		{
 			continue;

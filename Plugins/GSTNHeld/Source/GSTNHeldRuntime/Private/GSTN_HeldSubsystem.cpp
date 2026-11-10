@@ -385,7 +385,8 @@ void UGSTN_HeldSubsystem::ResolvePickups(int32 Frame)
 		Request.CarryCapacityKg = FGSTN_HeldLoad::EffectiveCapacity(CarryCapacityOf(Holder), UGSTN_HeldSettings::Get().DefaultCarryCapacityKg);
 		// M10 slice 5: the object whose record the interact probe focused for this holder on the request's frame (or just before it)
 		FGSTN_InteractCandidateId Focus;
-		if (Interact && Interact->FindProbeFocus(Id, Queued.Frame, Focus) && Focus.Provider == GSTNInteractProviders::Registry)
+		Request.bFallBackToNearest = UGSTN_HeldSettings::Get().bFocusMissFallsBackToNearest;
+		if (UGSTN_HeldSettings::Get().bPickupTakesFocusedObject && Interact && Interact->FindProbeFocus(Id, Queued.Frame, Focus) && Focus.Provider == GSTNInteractProviders::Registry)
 		{
 			for (const TWeakObjectPtr<UGSTN_HeldObjectComponent>& Each : Objects)
 			{
@@ -513,8 +514,11 @@ void UGSTN_HeldSubsystem::StepObjects(int32 Frame)
 		const FVector To = FGSTN_BallisticMode::PositionAt(Segment, Frame);
 		if (GetWorld()->LineTraceSingleByObjectType(Hit, From, To, FCollisionObjectQueryParams(ECC_WorldStatic), Params))
 		{
+			// M10 G7: the throw's hits so far, carried into a rebound (one hit per target per throw)
+			TArray<int32> ThrowHitTargets;
 			if (Projectiles)
 			{
+				Projectiles->GetHitTargets(Shot, ThrowHitTargets);
 				Projectiles->RemoveProjectile(Shot);
 			}
 			// M10 G7: the object's impact behaviour (Land, Break, Bounce, Stick)
@@ -526,7 +530,7 @@ void UGSTN_HeldSubsystem::StepObjects(int32 Frame)
 				BreakObject(*Object, Frame, GetNameSafe(Hit.GetActor()));
 				continue;
 			}
-			if (Impact == EGSTN_HeldImpactBehaviour::Bounce && Projectiles && Rebound(*Object, Hit.ImpactPoint + Hit.ImpactNormal * HalfHeight, ReboundVelocity, Frame))
+			if (Impact == EGSTN_HeldImpactBehaviour::Bounce && Projectiles && Rebound(*Object, Hit.ImpactPoint + Hit.ImpactNormal * HalfHeight, ReboundVelocity, Frame, ThrowHitTargets))
 			{
 				continue;
 			}
@@ -551,7 +555,7 @@ void UGSTN_HeldSubsystem::BreakObject(UGSTN_HeldObjectComponent& Object, int32 F
 	UE_LOG(LogGSTNHeld, Log, TEXT("HeldImpact object=%d behaviour=Break frame=%d on=%s respawn=%d"), Object.GetObjectId(), Frame, *On, Respawn);
 }
 
-bool UGSTN_HeldSubsystem::Rebound(UGSTN_HeldObjectComponent& Object, const FVector& From, const FVector& Velocity, int32 Frame)
+bool UGSTN_HeldSubsystem::Rebound(UGSTN_HeldObjectComponent& Object, const FVector& From, const FVector& Velocity, int32 Frame, const TArray<int32>& ThrowHitTargets)
 {
 	UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(GetWorld());
 	if (!Projectiles || !Projectiles->CanFire())
@@ -571,9 +575,13 @@ bool UGSTN_HeldSubsystem::Rebound(UGSTN_HeldObjectComponent& Object, const FVect
 	{
 		return false;
 	}
+	if (Object.GetTuning().bOneHitPerTargetPerThrow && !ThrowHitTargets.IsEmpty())
+	{
+		Projectiles->SeedHitTargets(Shot, ThrowHitTargets);
+	}
 	++Object.Bounces;
 	Object.SetFlying(*Shot);
-	UE_LOG(LogGSTNHeld, Log, TEXT("HeldImpact object=%d behaviour=Bounce frame=%d bounce=%d speed=%.0f"), Object.GetObjectId(), Frame, Object.Bounces, Params.Speed);
+	UE_LOG(LogGSTNHeld, Log, TEXT("HeldImpact object=%d behaviour=Bounce frame=%d bounce=%d speed=%.0f carried=%d"), Object.GetObjectId(), Frame, Object.Bounces, Params.Speed, ThrowHitTargets.Num());
 	return true;
 }
 

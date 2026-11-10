@@ -225,6 +225,13 @@ struct GSTNHELDCORE_API FGSTN_HeldObjectTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Impact", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "ImpactBehaviour == EGSTN_HeldImpactBehaviour::Bounce"))
 	float MinBounceSpeed = 200.f;
 
+	/**
+	 * Bounce: one hit per target per throw (M10 G7): a rebound never hits a fighter the throw already hit, and the throw's hits count
+	 * toward the shot's MaxHits across rebounds. Off = each rebound is a fresh shot (slice 6 behaviour)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Impact", meta = (EditCondition = "ImpactBehaviour == EGSTN_HeldImpactBehaviour::Bounce"))
+	bool bOneHitPerTargetPerThrow = true;
+
 	/** Break: seconds before a broken object is back at its home (where it first came to rest); 0 = never. TEST VALUE */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Impact", meta = (ClampMin = "0.0", ForceUnits = "s", EditCondition = "ImpactBehaviour == EGSTN_HeldImpactBehaviour::Break"))
 	float BreakRespawnSeconds = 3.f;
@@ -250,6 +257,11 @@ struct FGSTN_PickupRequest
 	 * (taken by an earlier request, gone, out of reach) the nearest free object in reach, as without a focus; nothing in reach = a fumble
 	 */
 	int32 TargetObjectId = INDEX_NONE;
+	/**
+	 * When the focused object cannot be taken (taken, gone, out of reach): true = the nearest free object in reach, false = the hand closes on
+	 * nothing (a fumble). UGSTN_HeldSettings::bFocusMissFallsBackToNearest. No focus always takes the nearest
+	 */
+	bool bFallBackToNearest = true;
 	/** The holder's effective carry capacity (M10 G6): an object whose class requires capacity is skipped when heavier than this */
 	float CarryCapacityKg = TNumericLimits<float>::Max();
 };

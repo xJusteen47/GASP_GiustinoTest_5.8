@@ -71,6 +71,20 @@ public:
 	int32 PickupMeaningPriority = 90;
 
 	/**
+	 * Pickup target (owner, 2026-11-10: both kept as settings for playtesting). True = the object the interact probe frames for the holder;
+	 * false = simply the nearest free object in reach, the probe ignored. TEST VALUE
+	 */
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Interact")
+	bool bPickupTakesFocusedObject = true;
+
+	/**
+	 * Contested pickup (owner, 2026-11-10, a setting for playtesting): when the framed object cannot be taken (an earlier request got it, gone,
+	 * out of reach), true = the nearest other free object, false = the hand closes on nothing. TEST VALUE
+	 */
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Interact")
+	bool bFocusMissFallsBackToNearest = true;
+
+	/**
 	 * The size classes (M10 G6), at most four (FGSTN_HeldLoad packs the index in two bits); an object names one by SizeTag. TEST VALUES in
 	 * DefaultGSTNHeld.ini: Light, Medium, Heavy, Huge with the plan's rules (Light all, Medium no shield and no air attacks, Heavy walk, drop
 	 * and throw only, Huge as Heavy and only with capacity). The slowdown, the throw strength and which objects are liftable are the owner's call

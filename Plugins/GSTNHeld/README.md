@@ -70,7 +70,9 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
    requires the tag, so with nothing focused B falls through to what the kit binds below. **Slice 5**: the host gives a request the object
    whose record the probe focused for that holder on the request's frame (`UGSTN_InteractSubsystem::NoteProbeFocus`/`FindProbeFocus`, host data,
    not simulation state; `FGSTN_PickupRequest::TargetObjectId`) when it is free and in reach; else (taken by an earlier request of the frame, no focused
-   record, a console pickup) the nearest free object in radius, as before; nothing = fumble. Log `HeldPickup entity holds object (focus id)`.
+   record, a console pickup) the nearest free object in radius, as before; nothing = fumble. **Slice 7, owner's settings for playtesting**:
+   `bPickupTakesFocusedObject` (false = always the nearest, the probe ignored) and `bFocusMissFallsBackToNearest` (false = a contested or gone
+   focused object closes the hand on nothing; `FGSTN_PickupRequest::bFallBackToNearest`), both true by default in `DefaultGSTNHeld.ini`. Log `HeldPickup entity holds object (focus id)`.
    Prompt: a placeholder text "B" above the local player's nearest object while it has the tag (`UpdatePrompt`, presentation only, never on a
    dedicated server). `HeldHandReport` logs `target=`.
 10. **Thrown hits (slice 4, the plan's G3)**: the throw's shot carries `SourceTag = Combat.Source.Thrown`; GSTNProjectile puts it on the hit
@@ -94,13 +96,15 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
    the world: a new GSTNProjectile shot from the contact with the reflected velocity times `BounceRestitution`, same hit data, credited to the
    thrower; lands after `MaxBounces` or below `MinBounceSpeed`; a fighter hit lands; **Stick**: rests at the contact (a wall too), pickable there;
    a fighter hit lands. Log `HeldImpact object= behaviour= frame=`. `gstn.Held.Spawn [Pawn] [ForwardCm] [Size] [WeightKg] [Impact]` makes a
-   host-only test definition.
+   host-only test definition. **Slice 7**: one hit per target per throw (`bOneHitPerTargetPerThrow`, default on): a rebound shot is seeded with the
+   targets the throw already hit (`UGSTN_ProjectileSubsystem::GetHitTargets`/`SeedHitTargets`), which also count toward its `MaxHits`. Thrown hits
+   on allies follow the rules' `FriendlyFireSources` (see below). Log `HeldImpact .. behaviour=Bounce .. carried=`.
 13. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
    (its own ranged action) are data only; a later slice routes commands to them.
 ## Not yet (later slices of the plan)
 
-G7 rest: aim policy while aiming with the shoulder camera (the throw already aims with the camera when held or with the reticle on), friendly
-fire by game mode, a per-throw hit ring across rebounds (a rebound is a new shot: it may hit a target the throw already hit), `Explode`. G8: a
+G7 rest: aim policy while aiming with the shoulder camera (the throw already aims with the camera when held or with the reticle on), `Explode`.
+Friendly fire by mode is `UGSTN_CombatRules::FriendlyFireSources` (slice 7; projectiles only, melee keeps `bFriendlyFire`). G8: a
 ghost of the object itself on the thrower (the projectile's ghost is used; a rebound has no ghost), `scenario_throw_ghost`/`_host`. G9 thrown
 enemies; G12-G13 debug/editor (validator of missing size bindings per kit), sweep. Minion hit delegates (`OnMinionHit`) carry no source tag
 (only the KO event does).

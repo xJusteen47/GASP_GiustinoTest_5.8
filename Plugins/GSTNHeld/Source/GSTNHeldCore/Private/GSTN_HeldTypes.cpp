@@ -71,8 +71,8 @@ void FGSTN_HeldRules::ResolvePickups(TConstArrayView<FGSTN_PickupRequest> Reques
 				}
 			}
 		}
-		// No focus, or the focused object is not free: the nearest free object in reach (equal distance: lower object id)
-		if (Best == INDEX_NONE)
+		// No focus, or the focused object is not free and the settings allow it: the nearest free object in reach (equal distance: lower object id)
+		if (Best == INDEX_NONE && (Request.TargetObjectId == INDEX_NONE || Request.bFallBackToNearest))
 		{
 			for (int32 Index = 0; Index < Candidates.Num(); ++Index)
 			{

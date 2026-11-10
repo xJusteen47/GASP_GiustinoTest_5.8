@@ -106,7 +106,7 @@ private:
 	/** Host (M10 G7): the object breaks (hidden until its respawn frame) */
 	void BreakObject(UGSTN_HeldObjectComponent& Object, int32 Frame, const FString& On);
 	/** Host (M10 G7): the object rebounds as a new shot from From with Velocity (the thrower's credit). False = it could not fire: it lands */
-	bool Rebound(UGSTN_HeldObjectComponent& Object, const FVector& From, const FVector& Velocity, int32 Frame);
+	bool Rebound(UGSTN_HeldObjectComponent& Object, const FVector& From, const FVector& Velocity, int32 Frame, const TArray<int32>& ThrowHitTargets);
 
 	struct FQueuedPickup
 	{
