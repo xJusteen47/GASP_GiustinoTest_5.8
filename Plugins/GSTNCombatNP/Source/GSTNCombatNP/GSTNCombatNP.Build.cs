@@ -27,5 +27,8 @@ public class GSTNCombatNP : ModuleRules
 			"NetCore",
 			"Mover"
 		});
+
+		// The precision reticle reads its local button and the aim stick (UGSTN_PrecisionAimComponent); presentation only
+		PrivateDependencyModuleNames.Add("EnhancedInput");
 	}
 }

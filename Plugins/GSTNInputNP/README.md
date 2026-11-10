@@ -106,6 +106,15 @@ fills it when `UGSTN_InputConfig::bSendCameraAim` is on, the AI source after `Se
 costs two words more, every command (the NP input buffer gives no previous command to delta against). The simulation host
 reads it for an ability (`UGSTN_CombatSimComponent::GetAimRotation`, combat-m3 7.10).
 
+### Aim stick and the automatic right stick actions
+
+`FGSTN_InputCmd::AimStickX/Y` carries the right stick (+Y up, 127 = 1; one bit while centred): the combat model steers a move's startup with
+it (GSTNCombatNP README, "Startup steering"). The player source reads `UGSTN_InputConfig::AimStickAction`. Designers set nothing: while
+`AimStickAction` or `ReticleToggleAction` is unset and `bAutoAimActions` is on (default), `ResolveActions` makes transient actions bound to
+`AutoAimStickKey` (`Gamepad_Right2D`) and `AutoReticleToggleKey` (`Gamepad_RightThumbstick`) in a transient mapping context, which the player
+source adds to the local player at priority `AutoMappingPriority` (100). The actions do not consume their keys, so the camera's look action
+still gets the right stick. `ReticleToggleAction` is local presentation (the precision reticle), never part of the command.
+
 ### Activation context and the buttons an ability holds
 
 An ability that must end when its trigger button is released finds the component through

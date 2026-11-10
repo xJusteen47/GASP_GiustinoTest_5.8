@@ -95,4 +95,14 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 	 * the authority only, once per frame). Returns the number appended
 	 */
 	static int32 AppendOutboxEvents(const FGSTN_TimelineOutput& Output, int32 Frame, AActor* Instigator, FGSTN_SimEventOutbox& Outbox);
+
+	/**
+	 * Startup steering (plan precisione-weakpoint 5, slice 3): the yaw the attacker turns to in Frame, as the int16 of a SetFacing request
+	 * (FGSTN_StartupSteer::QuantizeYaw). True only while the running timeline is in its startup (before the first active frame, no recoil),
+	 * the move origin is stamped, the aim stick is out of the dead zone and the result differs from CurrentYawDeg (the pose of the end of the
+	 * previous frame). The start yaw is the move origin's, so the turn is a clamp against it, never accumulated: a resimulated or dropped
+	 * frame gives the same answer. Hitstop frames are the caller's to skip. Pure: reads its arguments only
+	 */
+	static bool ComputeStartupSteer(const FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FVector2D& AimStick,
+		float CameraYawDeg, float CurrentYawDeg, int16& OutYawArg);
 };

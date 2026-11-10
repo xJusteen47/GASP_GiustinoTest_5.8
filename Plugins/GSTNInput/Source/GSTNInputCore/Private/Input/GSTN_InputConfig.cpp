@@ -2,6 +2,8 @@
 
 #include "Input/GSTN_InputConfig.h"
 #include "InputAction.h"
+#include "InputMappingContext.h"
+#include "UObject/Package.h"
 #include "Misc/DataValidation.h"
 
 #define LOCTEXT_NAMESPACE "GSTNInputConfig"
@@ -49,6 +51,35 @@ void UGSTN_InputConfig::ResolveActions()
 	}
 	ResolvedMoveAction = MoveAction.IsNull() ? nullptr : MoveAction.LoadSynchronous();
 	ResolvedAimStickAction = AimStickAction.IsNull() ? nullptr : AimStickAction.LoadSynchronous();
+	ResolvedReticleToggleAction = ReticleToggleAction.IsNull() ? nullptr : ReticleToggleAction.LoadSynchronous();
+
+	// The automatic right stick actions (plan precisione-weakpoint 4-5): transient, never saved, rebuilt on every resolve so an asset edited
+	// in the editor gets its own action back. Kept by this config's transient references
+	AutoMappingContext = nullptr;
+	if (!bAutoAimActions || (ResolvedAimStickAction && ResolvedReticleToggleAction))
+	{
+		return;
+	}
+	auto MakeAction = [](const TCHAR* Name, EInputActionValueType Type)
+	{
+		UInputAction* Action = NewObject<UInputAction>(GetTransientPackage(), MakeUniqueObjectName(GetTransientPackage(), UInputAction::StaticClass(), Name), RF_Transient);
+		Action->ValueType = Type;
+		// The camera's look action shares the right stick: this one must let it through
+		Action->bConsumeInput = false;
+		return Action;
+	};
+	UInputMappingContext* Context = NewObject<UInputMappingContext>(GetTransientPackage(), MakeUniqueObjectName(GetTransientPackage(), UInputMappingContext::StaticClass(), TEXT("IMC_GSTN_AutoAim")), RF_Transient);
+	if (!ResolvedAimStickAction && AutoAimStickKey.IsValid())
+	{
+		ResolvedAimStickAction = MakeAction(TEXT("IA_GSTN_AutoAimStick"), EInputActionValueType::Axis2D);
+		Context->MapKey(ResolvedAimStickAction, AutoAimStickKey);
+	}
+	if (!ResolvedReticleToggleAction && AutoReticleToggleKey.IsValid())
+	{
+		ResolvedReticleToggleAction = MakeAction(TEXT("IA_GSTN_AutoReticleToggle"), EInputActionValueType::Boolean);
+		Context->MapKey(ResolvedReticleToggleAction, AutoReticleToggleKey);
+	}
+	AutoMappingContext = Context->GetMappings().Num() > 0 ? Context : nullptr;
 }
 
 UInputAction* UGSTN_InputConfig::GetButtonAction(int32 ButtonIndex) const

@@ -412,6 +412,16 @@ public:
 	bool bQueueStatsModifier = true;
 
 	/**
+	 * Adds a UGSTN_PrecisionAimComponent (the precision reticle and the aim arrow, local presentation) to the owner at BeginPlay, except on a
+	 * dedicated server or when the owner has one already. Off for a pawn no player ever controls
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Precision")
+	bool bAddPrecisionAim = true;
+
+	/** The input config resolved at setup (InputConfig), null before BeginPlay or without one. For presentation that reads the same actions */
+	const UGSTN_InputConfig* GetActiveInputConfig() const { return ActiveInputConfig; }
+
+	/**
 	 * The stats effect of each weapon the combatant can switch to, in loadout order (0 = primary). A weapon switch track of a
 	 * running timeline picks the next index from this list's length and the combat tick requests SwapWeaponStats; the ability
 	 * system's pre-tick then removes the old weapon's effect and applies the new one (FGSTN_WeaponStatsSwap). The primary weapon
@@ -553,6 +563,9 @@ private:
 
 	/** Applies the freeze effect for Frames frames of StepMs each. Only from the ability system's pre-tick (rule 2: Mover is moved through a queued move) */
 	void ExecuteFreeze(TSubclassOf<UGameplayEffect> Effect, int32 Frames, float StepMs);
+
+	/** Applies SetFacingEffect with the request's yaw (FGSTN_StartupSteer::QuantizeYaw). Only from the ability system's pre-tick, like the freeze */
+	void ExecuteSetFacing(int16 YawArg);
 
 	/** Montage time per frame, see GetHitstopMontageTrace. Debug only: never read by the simulation */
 	TMap<int32, float> HitstopMontageTrace;
@@ -787,6 +800,13 @@ private:
 	/** The freeze of a victim that stays in place: leaves the freeze at rest */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
 	TSubclassOf<UGameplayEffect> FreezeAtRestEffect;
+
+	/** Instant effect of a SetFacing request (startup steering, plan precisione-weakpoint 5): turns Mover to Combat.SetByCaller.FacingYaw */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
+	TSubclassOf<UGameplayEffect> SetFacingEffect;
+
+	/** Startup steering of the frame: a SetFacing request when the aim stick turns the running move (FGSTN_CombatTimelineLogic::ComputeStartupSteer) */
+	void StepStartupSteer(int32 Frame, const FGSTN_InputCmd& Cmd, FGSTN_CombatSyncCore& Core);
 
 	/** The attacker side of the combat tick for the frame being simulated (GSTN_CombatSimAttacker.cpp). Writes Core and the victims' inboxes */
 	void RunAttackerStep(const FNetSimTimeStep& TimeStep, FGSTN_CombatSyncCore& Core, const FGSTN_StepSnapshot* Snapshot, const FGSTN_HitGroupMask& GroupMask);

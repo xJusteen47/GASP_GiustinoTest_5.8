@@ -6,9 +6,11 @@
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
 #include "Input/GSTN_ButtonMap.h"
+#include "InputCoreTypes.h"
 #include "GSTN_InputConfig.generated.h"
 
 class UInputAction;
+class UInputMappingContext;
 
 /** One logical button: its identity in data (the tag) and the Enhanced Input action that drives it. */
 USTRUCT(BlueprintType)
@@ -83,6 +85,31 @@ public:
 	TSoftObjectPtr<UInputAction> AimStickAction;
 
 	/**
+	 * The precision reticle's on/off button (the right stick click, plan precisione-weakpoint 4). Local presentation only: it never enters the
+	 * command, so it costs nothing on the wire and the simulation does not know the reticle exists. Read by UGSTN_PrecisionAimComponent
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	TSoftObjectPtr<UInputAction> ReticleToggleAction;
+
+	/**
+	 * Designers set nothing for the right stick: while AimStickAction or ReticleToggleAction is unset, ResolveActions makes a transient action for
+	 * it, bound to AutoAimStickKey / AutoReticleToggleKey in a transient mapping context (GetAutoMappingContext) that the player input source
+	 * adds for the local player. The actions do not consume their keys, so the camera keeps the right stick. Off: an unset action stays unset
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Auto")
+	bool bAutoAimActions = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Auto", meta = (EditCondition = "bAutoAimActions"))
+	FKey AutoAimStickKey = EKeys::Gamepad_Right2D;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Auto", meta = (EditCondition = "bAutoAimActions"))
+	FKey AutoReticleToggleKey = EKeys::Gamepad_RightThumbstick;
+
+	/** Priority of the automatic mapping context: above the game's own, harmless because its actions let the keys through */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Auto", meta = (EditCondition = "bAutoAimActions"))
+	int32 AutoMappingPriority = 100;
+
+	/**
 	 * Loads the input actions (synchronously, if they are not loaded yet) and keeps them for the getters below. Call it once
 	 * when the host sets up (BeginPlay, a loadout change), never from a tick: the input source reads the resolved actions every
 	 * frame and does not resolve anything itself. Calling it again after the asset changed refreshes them.
@@ -98,6 +125,12 @@ public:
 	/** The resolved aim stick action, null if unset or ResolveActions was not called */
 	UInputAction* GetAimStickAction() const { return ResolvedAimStickAction; }
 
+	/** The resolved reticle toggle action, null if unset (and not made automatically) or ResolveActions was not called */
+	UInputAction* GetReticleToggleAction() const { return ResolvedReticleToggleAction; }
+
+	/** The transient mapping context of the automatic actions, null when none was made. The local player adds it once (UGSTN_PlayerInputSource) */
+	UInputMappingContext* GetAutoMappingContext() const { return AutoMappingContext; }
+
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
 #endif
@@ -112,4 +145,10 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> ResolvedAimStickAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> ResolvedReticleToggleAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputMappingContext> AutoMappingContext;
 };

@@ -36,6 +36,27 @@ bool FGSTN_StartupSteerTest::RunTest(const FString& Parameters)
 
 	// Clamp against the start, not accumulated: the same command on any startup frame gives the same yaw
 	TestEqual(TEXT("idempotent"), S::SteerYaw(0.f, FVector2D(1.0, 0.0), 0.f, 20.f), S::SteerYaw(0.f, FVector2D(1.0, 0.0), 0.f, 20.f));
+
+	// Slice 3: the steering window and the 16-bit yaw of the SetFacing request
+	TestFalse(TEXT("dead zone does not steer"), S::IsSteering(FVector2D(0.2, 0.0), 20.f));
+	TestFalse(TEXT("MaxSteerDegrees 0 does not steer"), S::IsSteering(FVector2D(1.0, 0.0), 0.f));
+	TestTrue(TEXT("a pushed stick steers"), S::IsSteering(FVector2D(0.0, 0.5), 20.f));
+	FGSTN_CombatTimelineData Data;
+	TestEqual(TEXT("no hitbox: no window"), S::GetSteerEndFrame(Data), 0);
+	FGSTN_TimelineTrack_Hitbox Late;
+	Late.StartFrame = 12;
+	Late.EndFrame = 16;
+	FGSTN_TimelineTrack_Hitbox Early;
+	Early.StartFrame = 7;
+	Early.EndFrame = 9;
+	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Late));
+	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Early));
+	TestEqual(TEXT("window ends at the first active frame"), S::GetSteerEndFrame(Data), 7);
+	for (const float Yaw : {0.f, 15.f, -90.f, 179.99f, -179.99f, 123.4f})
+	{
+		TestEqual(FString::Printf(TEXT("yaw %.2f round trip"), Yaw), FMath::FindDeltaAngleDegrees(Yaw, S::DequantizeYaw(S::QuantizeYaw(Yaw))), 0.f, 0.006f);
+	}
+	TestEqual(TEXT("180 and -180 are one value"), S::QuantizeYaw(180.f), S::QuantizeYaw(-180.f));
 	return true;
 }
 

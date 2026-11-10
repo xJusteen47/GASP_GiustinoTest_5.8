@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 
+struct FGSTN_CombatTimelineData;
+
 /**
  * Right-stick steering during a move's startup (plan precisione-weakpoint 5): the aim stick turns the move's direction, but never
  * more than the timeline's MaxSteerDegrees away from the facing the move started with. It sits on top of the aim policy (which picks
@@ -24,4 +26,17 @@ struct GSTNCOMBATCORE_API FGSTN_StartupSteer
 	 * zone, or with MaxSteerDegrees <= 0, it is StartYawDeg.
 	 */
 	static float SteerYaw(float StartYawDeg, const FVector2D& AimStick, float CameraYawDeg, float MaxSteerDegrees);
+
+	/** True when the stick is out of the dead zone and the move can steer at all: only then does a frame ask for a turn */
+	static bool IsSteering(const FVector2D& AimStick, float MaxSteerDegrees);
+
+	/**
+	 * The timeline frame the steering stops at (exclusive): the first active frame, as FGSTN_TimelinePhases counts it (hitbox windows
+	 * that hit somebody), without building the phases. 0 for a move with no hitbox: nothing to aim, nothing steers
+	 */
+	static int32 GetSteerEndFrame(const FGSTN_CombatTimelineData& Data);
+
+	/** Yaw at 65536 steps per turn, as the move origin keeps it, in the int16 a combat request carries (wraps, so -180 and 180 are one value) */
+	static int16 QuantizeYaw(float YawDeg);
+	static float DequantizeYaw(int16 Value);
 };

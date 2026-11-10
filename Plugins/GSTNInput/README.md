@@ -18,7 +18,7 @@ is built on top of this one. This README is the map; the documents hold the deci
 | `GSTNInputDebug` | exists (Runtime, Default, not in Shipping) | Development tooling: the **input display** (strip, corner overlay in PIE, editor tab), see below. Reads an input history through `IGSTN_InputHistorySource` and the `FGSTN_InputSourceRegistry`; knows no game vocabulary and no Network Prediction. Automation tests `GSTNInput.Debug.*`. |
 | `GSTNInputNP` | separate plugin | Moved to the plugin [GSTNInputNP](../GSTNInputNP/README.md) (same module name): the Network Prediction adapter (`FGSTN_InputCmd`, `FGSTN_InputSimState`, `FGSTN_InputSimulator`, binding set, sources, context providers, Mover tracker, standalone component). Automation tests `GSTNInput.NP.*`. |
 
-**Requirements.** This plugin (`GSTNInputCore`) needs only Gameplay Tags, Developer Settings and (privately) Enhanced Input; its
+**Requirements.** This plugin (`GSTNInputCore`) needs only Gameplay Tags, Developer Settings, Input Core (the `FKey` of the automatic aim actions) and (privately) Enhanced Input; its
 descriptor lists only Enhanced Input, so it works in a project without the GAS-NPP fork (NetworkPrediction, GameplayAbilities fork,
 Mover). To simulate it with Network Prediction, enable the plugin [GSTNInputNP](../GSTNInputNP/README.md), which needs the fork.
 How to wire the simulation side (embedding it in a model, the standalone component, the activation context, the Mover

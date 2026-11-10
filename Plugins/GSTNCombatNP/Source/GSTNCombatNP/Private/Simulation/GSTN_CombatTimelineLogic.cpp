@@ -3,6 +3,7 @@
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 
 #include "Simulation/GSTN_TimelineTrackHook.h"
+#include "Timeline/GSTN_StartupSteer.h"
 #include "Events/GSTN_SimEvent.h"
 #include "GameFramework/Actor.h"
 
@@ -326,4 +327,27 @@ int32 FGSTN_CombatTimelineLogic::AppendOutboxEvents(const FGSTN_TimelineOutput& 
 		++Appended;
 	}
 	return Appended;
+}
+bool FGSTN_CombatTimelineLogic::ComputeStartupSteer(const FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FVector2D& AimStick,
+	float CameraYawDeg, float CurrentYawDeg, int16& OutYawArg)
+{
+	if (!Data || Core.ActionState != EGSTN_ActionState::InTimeline || Core.RecoilStartFrame != INDEX_NONE || !Core.Hit.MoveOrigin.bSet
+		|| !FGSTN_StartupSteer::IsSteering(AimStick, Data->MaxSteerDegrees))
+	{
+		return false;
+	}
+	const int32 TimelineFrame = Frame - Core.TimelineStartFrame - Core.TimelinePausedFrames;
+	if (TimelineFrame < 0 || TimelineFrame >= FGSTN_StartupSteer::GetSteerEndFrame(*Data))
+	{
+		return false;
+	}
+	// The move origin keeps the yaw at 65536 steps per turn in a uint16: the same bits as the request's int16
+	const float StartYaw = FGSTN_StartupSteer::DequantizeYaw(static_cast<int16>(Core.Hit.MoveOrigin.RotationQ[1]));
+	const int16 Target = FGSTN_StartupSteer::QuantizeYaw(FGSTN_StartupSteer::SteerYaw(StartYaw, AimStick, CameraYawDeg, Data->MaxSteerDegrees));
+	if (Target == FGSTN_StartupSteer::QuantizeYaw(CurrentYawDeg))
+	{
+		return false;
+	}
+	OutYawArg = Target;
+	return true;
 }

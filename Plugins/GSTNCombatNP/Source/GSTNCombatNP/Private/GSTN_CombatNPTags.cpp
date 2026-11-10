@@ -12,6 +12,10 @@ namespace GSTNCombatNPTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveDecay, "Combat.SetByCaller.MoveDecay", "Decay per frame of a knockback or push back move, as a fraction");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveGravityScale, "Combat.SetByCaller.MoveGravityScale", "Gravity scale of a knockback move");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveSeconds, "Combat.SetByCaller.MoveSeconds", "Lifetime in seconds of a knockback or push back move");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_FacingYaw, "Combat.SetByCaller.FacingYaw", "World yaw in degrees of a startup steering turn, read by UGSTN_SetFacingMoveCreator");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Mode_PvE, "Combat.Mode.PvE", "Match mode: players against the game. Has the precision reticle by default");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Mode_TDM, "Combat.Mode.TDM", "Match mode: team deathmatch. Has the precision reticle by default");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Mode_Duel, "Combat.Mode.Duel", "Match mode: one against one. No precision reticle");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_LaunchResetAirJumps, "Combat.SetByCaller.LaunchResetAirJumps", "1 when a surface launch gives the air jumps back (FGSTN_LayeredMove_Launch)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_LaunchResetCoyote, "Combat.SetByCaller.LaunchResetCoyote", "1 when a surface launch restarts the coyote window (FGSTN_LayeredMove_Launch)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(EventHit_Staggered, "Combat.Event.Hit.Staggered", "Tag of a HitLanded or HitReceived event: the hit staggered the victim");

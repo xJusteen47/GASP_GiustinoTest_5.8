@@ -12,6 +12,7 @@
 #include "Input/GSTN_DirectionClassifier.h"
 #include "Input/GSTN_InputConfig.h"
 #include "InputAction.h"
+#include "InputMappingContext.h"
 
 void UGSTN_PlayerInputSource::ProduceInput(const FGSTN_InputSourceContext& Context, int32 DeltaTimeMS, FGSTN_InputCmd& Out)
 {
@@ -23,6 +24,16 @@ void UGSTN_PlayerInputSource::ProduceInput(const FGSTN_InputSourceContext& Conte
 	if (!PlayerInput || !Context.Config)
 	{
 		return;
+	}
+
+	// The automatic right stick actions of the config (UGSTN_InputConfig::bAutoAimActions) need their mapping context on this local player
+	if (UInputMappingContext* AutoContext = Context.Config->GetAutoMappingContext())
+	{
+		UEnhancedInputLocalPlayerSubsystem* MutableSubsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer);
+		if (MutableSubsystem && !MutableSubsystem->HasMappingContext(AutoContext))
+		{
+			MutableSubsystem->AddMappingContext(AutoContext, Context.Config->AutoMappingPriority);
+		}
 	}
 
 	// The input component exists only once the pawn is possessed locally; until then the held read below is all there is

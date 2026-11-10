@@ -29,6 +29,7 @@ namespace GSTNCombatNPTags
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveDecay);
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveGravityScale);
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_MoveSeconds);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_FacingYaw);
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_LaunchResetAirJumps);
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_LaunchResetCoyote);
 
@@ -47,4 +48,9 @@ namespace GSTNCombatNPTags
 	 * A listener that counts its own hits filters it out (or in, to count assists)
 	 */
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(EventHit_CreditPartner);
+
+	/** Match modes (plan precisione-weakpoint 4): what IGSTN_MatchModeSource answers and UGSTN_CombatSettings::PrecisionReticleModes lists */
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Mode_PvE);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Mode_TDM);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Mode_Duel);
 }

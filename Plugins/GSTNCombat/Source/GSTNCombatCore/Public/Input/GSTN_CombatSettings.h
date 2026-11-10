@@ -115,6 +115,17 @@ public:
 	bool bAutoAddRulesComponent = true;
 
 	/**
+	 * The match modes that have the precision reticle (plan precisione-weakpoint 4, owner 2026-11-09: PvE and TDM yes, duel no). A mode not
+	 * listed has none, so a new mode starts without it. The aim arrow and the startup steering exist in every mode
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Precision", meta = (Categories = "Combat.Mode"))
+	FGameplayTagContainer PrecisionReticleModes;
+
+	/** The mode a match is taken to be when its game state does not say (IGSTN_MatchModeSource): the sample levels play as PvE */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Precision", meta = (Categories = "Combat.Mode"))
+	FGameplayTag FallbackMatchMode;
+
+	/**
 	 * The ground speed, in cm/s, that the speeds of the character's movement modes are authored for. The stats movement modifier
 	 * scales them by the WalkSpeed stat divided by this, so a combatant whose WalkSpeed equals it moves at the authored speeds.
 	 * Equal to the WalkSpeed starting value of the combat attribute defaults unless a game changes one of them.

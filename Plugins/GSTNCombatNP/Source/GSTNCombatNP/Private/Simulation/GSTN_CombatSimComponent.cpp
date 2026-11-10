@@ -18,6 +18,9 @@
 #include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Movement/GSTN_LayeredMove_Launch.h"
 #include "Movement/GSTN_LayeredMove_PushBack.h"
+#include "Presentation/GSTN_PrecisionAimComponent.h"
+#include "Timeline/GSTN_StartupSteer.h"
+#include "Movement/GSTN_SetFacingEffect.h"
 #include "Input/GSTN_InputTags.h"
 #include "Context/GSTN_InputContextProvider.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
@@ -94,6 +97,7 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 	KnockbackEffect = UGSTN_GE_Knockback::StaticClass();
 	SurfaceLaunchEffect = UGSTN_GE_SurfaceLaunch::StaticClass();
 	PushBackEffect = UGSTN_GE_PushBack::StaticClass();
+	SetFacingEffect = UGSTN_GE_SetFacing::StaticClass();
 
 	InputSource = CreateDefaultSubobject<UGSTN_PlayerInputSource>(TEXT("InputSource"));
 	ContextProvider = CreateDefaultSubobject<UGSTN_MoverInputContextProvider>(TEXT("ContextProvider"));
@@ -137,6 +141,13 @@ void UGSTN_CombatSimComponent::BeginPlay()
 	if (ContextProvider)
 	{
 		ContextProvider->Initialize(GetOwner());
+	}
+
+	// The precision reticle and aim arrow (presentation): added here so no pawn Blueprint has to place it
+	if (bAddPrecisionAim && GetNetMode() != NM_DedicatedServer && GetOwner() && !GetOwner()->FindComponentByClass<UGSTN_PrecisionAimComponent>())
+	{
+		UGSTN_PrecisionAimComponent* Aim = NewObject<UGSTN_PrecisionAimComponent>(GetOwner(), TEXT("GSTN_PrecisionAim"));
+		Aim->RegisterComponent();
 	}
 	else
 	{
@@ -1066,6 +1077,12 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		// and every re-simulation, published by the authority only (the cue and the gameplay event of the key stay the ability's)
 		FGSTN_CombatTimelineLogic::AppendOutboxEvents(TimelineOutput, Frame, GetOwner(), EventOutbox);
 	}
+	// Startup steering (plan precisione-weakpoint 5): after the starts of this frame, so a move can steer from its first frame. A hitstop frame
+	// stands still like the timeline does
+	if (!bHitstopFrame && !bFrameGateClosed)
+	{
+		StepStartupSteer(Frame, FrameCmd, OutSync.Core);
+	}
 	Extensions.Run(EGSTN_CombatHookPoint::AfterExecute, HookContext);
 
 	// Debug hitstop, until hits replace it: a press of the test button opens a window (not while one is already open)
@@ -1428,6 +1445,44 @@ void UGSTN_CombatSimComponent::ExecuteFreeze(TSubclassOf<UGameplayEffect> Effect
 	}
 }
 
+void UGSTN_CombatSimComponent::StepStartupSteer(int32 Frame, const FGSTN_InputCmd& Cmd, FGSTN_CombatSyncCore& Core)
+{
+	if (Core.ActionState != EGSTN_ActionState::InTimeline || (Cmd.AimStickX == 0 && Cmd.AimStickY == 0))
+	{
+		return;
+	}
+	FTransform Pose;
+	FVector Up;
+	if (!ReadOwnPose(Pose, Up))
+	{
+		return;
+	}
+	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickY));
+	int16 YawArg = 0;
+	if (FGSTN_CombatTimelineLogic::ComputeStartupSteer(Core, Frame, GetRegistryTimeline(Tables(), Core.ActiveTimeline), AimStick,
+		FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), static_cast<float>(Pose.Rotator().Yaw), YawArg))
+	{
+		if (!Core.Requests.Add(EGSTN_RequestType::SetFacing, Frame, YawArg))
+		{
+			UE_LOG(LogGSTNCombatSim, Error, TEXT("%s frame %d: no room for the steering request"), *GetOwner()->GetName(), Frame);
+		}
+	}
+}
+
+void UGSTN_CombatSimComponent::ExecuteSetFacing(int16 YawArg)
+{
+	if (!AbilitySystem || !SetFacingEffect)
+	{
+		return;
+	}
+	const FGameplayEffectSpecHandle Spec = AbilitySystem->MakeOutgoingSpec(SetFacingEffect, 1.f, AbilitySystem->MakeEffectContext());
+	if (Spec.IsValid())
+	{
+		Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_FacingYaw, FGSTN_StartupSteer::DequantizeYaw(YawArg));
+		AbilitySystem->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+	}
+}
+
 void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySystemTimeStep& TimeStep)
 {
 	// The combat model ticked this frame already: its pending state is this frame's output
@@ -1528,6 +1583,9 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 			{
 				ExecuteImpactDamage(ImpactResult.Damage);
 			}
+			break;
+		case EGSTN_RequestType::SetFacing:
+			ExecuteSetFacing(Slot.Arg);
 			break;
 		case EGSTN_RequestType::Knockback:
 		case EGSTN_RequestType::PushBack:

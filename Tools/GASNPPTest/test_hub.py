@@ -4,6 +4,7 @@
 #   import sys; sys.path.insert(0, r"<project>/Tools/GASNPPTest"); import test_hub as h
 #   h.prepare()            # BEFORE Play: test content in memory (mount kits, spin bindings, shield button, link types) + PIE settings
 #   ...Play (listen, 3 players, Run Under One Process)...
+#   h.strike_kinds(0)    TEST ONLY: strike kind recoil placeholders (kit, forced ricochet, a dummy ahead); h.strike_kinds(0, False) undoes it
 #   h.kit(0, 'KIT_Test_Mount')   h.park(1, 'Z1')   h.mount(0, 1)   h.walker(2, True)   h.spin(0)   h.fighter('Z5')   h.drill_immune(1)
 #   h.selftest()           # every player in every zone, one action per zone; h.selftest_result() when it is done (also Saved/TestHub/selftest.txt)
 #   ...stop Play...
@@ -312,6 +313,19 @@ def restore(pie_settings=True):
 def kit(i, name=DEFAULT_KIT):
     """Server-side kit change of player i (the C15 test loadout path; plugin kits by name once scanned). 'OK' when accepted"""
     return g._apply_loadout(_key(i), name)
+
+
+def strike_kinds(i=0, on=True, ahead=120.0):
+    """TEST ONLY (weakpoint slice 3): the strike kind recoil placeholders. on: player i gets KIT_Test_StrikeKinds (Tools/GAS/setup_strike_kinds_test.py),
+    every hit ricochets (UGSTN_GASNPPTestComponent::SetForceRicochet, the whole process) and the first dummy stands `ahead` cm in front of i.
+    Attack: the swing meets a dummy straight ahead (recoil B_A after the swing); a dummy ahead and to the left is met by the stab only (recoil B_V
+    at once). off: the default kit back and no forced ricochet. Returns what it did"""
+    unreal.GSTN_GASNPPTestComponent.set_force_ricochet(bool(on))
+    out = {'kit': kit(i, 'KIT_Test_StrikeKinds' if on else DEFAULT_KIT), 'force_ricochet': bool(on)}
+    ds = dummies()
+    if on and ds:
+        out['dummy'] = (ds[0], _place_ahead(i, ds[0], ahead))
+    return out
 
 
 def where(i):
