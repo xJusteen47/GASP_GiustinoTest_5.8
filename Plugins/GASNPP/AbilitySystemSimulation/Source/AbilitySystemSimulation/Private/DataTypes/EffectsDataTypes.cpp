@@ -735,6 +735,28 @@ bool FAttributeSyncData::NetSerialize(const FNetSerializeParams& P)
 bool FAttributeSyncData::NetDeltaSerialize(const FNetSerializeParams& P)
 {
 	const FAttributeSyncData* BaseDeltaState = P.GetBaseDeltaState<FAttributeSyncData>();
+	// A simulated proxy never gets the base value (NetSerialize above): its delta must not refer to it either. Before this, a value whose base
+	// was unchanged and whose current came back equal to the base (a stat effect ending: M10 G6's carry load) arrived on proxies as the base
+	// the proxy never received, 0. Same cvar as NetSerialize (the spike sends the base, and then the full delta below is right)
+	const IConsoleVariable* SpikeSendBaseCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("np.Spike.SPSendAttributeBase"));
+	if (P.ReplicationTarget == EReplicationProxyTarget::SimulatedProxy && (!SpikeSendBaseCVar || SpikeSendBaseCVar->GetInt() == 0))
+	{
+		bool SameProxyCurrent = P.Ar.IsSaving() ? FMath::IsNearlyEqual(BaseDeltaState->CurrentValue, CurrentValue) : false;
+		P.Ar.SerializeBits(&SameProxyCurrent, 1);
+		if (P.Ar.IsLoading())
+		{
+			BaseValue = BaseDeltaState->BaseValue;
+		}
+		if (SameProxyCurrent)
+		{
+			CurrentValue = BaseDeltaState->CurrentValue;
+		}
+		else
+		{
+			P.Ar << CurrentValue;
+		}
+		return true;
+	}
 	bool SameCurrent = false;
 	bool SameBase = false;
 	bool SameAsBaseDelta =  false;

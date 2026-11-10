@@ -32,3 +32,27 @@ void UGSTN_HeldSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyC
 	}
 }
 #endif
+
+const FGSTN_HeldSizeClass* UGSTN_HeldSettings::FindSizeClass(const FGameplayTag& SizeTag, int32* OutIndex) const
+{
+	if (OutIndex)
+	{
+		*OutIndex = INDEX_NONE;
+	}
+	if (!SizeTag.IsValid())
+	{
+		return nullptr;
+	}
+	for (int32 Index = 0; Index < FMath::Min(SizeClasses.Num(), static_cast<int32>(FGSTN_HeldLoad::MaxSizeClasses)); ++Index)
+	{
+		if (SizeClasses[Index].SizeTag == SizeTag)
+		{
+			if (OutIndex)
+			{
+				*OutIndex = Index;
+			}
+			return &SizeClasses[Index];
+		}
+	}
+	return nullptr;
+}

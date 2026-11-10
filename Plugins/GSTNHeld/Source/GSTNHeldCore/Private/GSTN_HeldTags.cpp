@@ -5,6 +5,15 @@
 namespace GSTNHeldTags
 {
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Held_Carrying, "Combat.Held.Carrying", "The entity holds an object. Projected every frame from its Hand link of type Held, never granted");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Held_Size_Light, "Combat.Held.Size.Light", "Size class of an object: carried with every move (M10 G6)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Held_Size_Medium, "Combat.Held.Size.Medium", "Size class of an object: no shield, no air attacks while carried (M10 G6 default bans)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Held_Size_Heavy, "Combat.Held.Size.Heavy", "Size class of an object: walk, drop and throw only while carried (M10 G6 default bans)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Held_Size_Huge, "Combat.Held.Size.Huge", "Size class of an object: as Heavy, and only a holder whose carry capacity covers its weight lifts it (M10 G6)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Held_Carrying_Light, "Combat.Held.Carrying.Light", "Holds a Light object. Projected from the Held link's payload, never granted");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Held_Carrying_Medium, "Combat.Held.Carrying.Medium", "Holds a Medium object. Projected from the Held link's payload, never granted");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Held_Carrying_Heavy, "Combat.Held.Carrying.Heavy", "Holds a Heavy object. Projected from the Held link's payload, never granted");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Held_Carrying_Huge, "Combat.Held.Carrying.Huge", "Holds a Huge object. Projected from the Held link's payload, never granted");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_Held_Load, "Combat.SetByCaller.Held.Load", "Set-by-caller key of the carry load effect: the Held link's payload / 255 (size class and load ratio)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Held_Pickup, "Command.Held.Pickup", "Pick up the nearest object in reach (grab button, nothing in hand). Default slot of UGSTN_HeldSlots");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Held_Drop, "Command.Held.Drop", "Put the held object down (grab button again, requires Combat.Held.Carrying). Default slot of UGSTN_HeldSlots");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Held_Throw, "Command.Held.Throw", "Throw the held object (strong button: tap = left stick, held = camera aim on release; requires Combat.Held.Carrying)");

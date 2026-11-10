@@ -4,6 +4,8 @@
 
 #include "AbilitySystemComponent.h"
 #include "Data/GSTN_LinkTypeDefinition.h"
+#include "GSTN_HeldLoadEffect.h"
+#include "GSTN_HeldSettings.h"
 #include "GSTN_HeldTags.h"
 #include "GSTN_HeldTypes.h"
 #include "GSTN_LinkRegistry.h"
@@ -33,6 +35,9 @@ UGSTN_LinkTypeDefinition* FGSTN_HeldLinkType::Build(UObject* Outer)
 	Holder.RoleTag = GSTNHeldTags::Link_Role_Holder;
 	Holder.bActsWhileLinked = true;
 	Holder.bCollisionWithPartner = true;
+	// M10 G6: the carry load, applied and removed by GSTNLink's link tick with the hold (payload = size class and load ratio)
+	Holder.LinkEffect.Effect = FSoftClassPath(UGSTN_GE_HoldLoad::StaticClass());
+	Holder.LinkEffect.SetByCallerTag = GSTNHeldTags::SetByCaller_Held_Load;
 
 	FGSTN_LinkRoleDef& Object = Definition->TargetRole;
 	Object.RoleTag = GSTNHeldTags::Link_Role_HeldObject;
@@ -104,7 +109,7 @@ uint8 FGSTN_HeldLinkType::ToLinkReason(EGSTN_HeldBreakReason Reason)
 	}
 }
 
-FGSTN_InboxEntry FGSTN_HeldLinkType::MakeHold(uint8 TypeIndex, uint8 Serial, int32 ObjectId, uint8 ObjectSerial)
+FGSTN_InboxEntry FGSTN_HeldLinkType::MakeHold(uint8 TypeIndex, uint8 Serial, int32 ObjectId, uint8 ObjectSerial, uint8 LoadPayload)
 {
 	FGSTN_LinkCommandEntry Command;
 	Command.Kind = EGSTN_LinkCommandKind::Form;
@@ -115,6 +120,7 @@ FGSTN_InboxEntry FGSTN_HeldLinkType::MakeHold(uint8 TypeIndex, uint8 Serial, int
 	Command.PartnerId = ObjectId;
 	Command.PartnerKind = GSTNEntityKinds::Object;
 	Command.PartnerSerial = ObjectSerial;
+	Command.Payload = LoadPayload;
 	return FGSTN_LinkInboxHandlers::MakeCommand(Command);
 }
 
@@ -137,6 +143,21 @@ void FGSTN_HeldTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 	const FGSTN_LinkFragment* Links = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments);
 	const bool bHolding = Links && FGSTN_HeldLinkType::IsHolding(Links->Links.Hand, FGSTN_HeldLinkType::GetTypeIndex());
 	Context.AbilitySystem->SetLooseGameplayTagCount(GSTNHeldTags::Held_Carrying, bHolding ? 1 : 0);
+	// M10 G6: the size class of the hold from the link's payload (sync state), never from the object
+	int32 SizeIndex = INDEX_NONE;
+	if (bHolding)
+	{
+		float Ratio = 0.f;
+		FGSTN_HeldLoad::DecodePayload(Links->Links.Hand.Payload, SizeIndex, Ratio);
+	}
+	const TArray<FGSTN_HeldSizeClass>& SizeClasses = UGSTN_HeldSettings::Get().SizeClasses;
+	for (int32 Index = 0; Index < FMath::Min(SizeClasses.Num(), static_cast<int32>(FGSTN_HeldLoad::MaxSizeClasses)); ++Index)
+	{
+		if (SizeClasses[Index].CarryingTag.IsValid())
+		{
+			Context.AbilitySystem->SetLooseGameplayTagCount(SizeClasses[Index].CarryingTag, Index == SizeIndex ? 1 : 0);
+		}
+	}
 	// Interact.Target.Pickup is not projected here since M10 G2: an object at rest is a stamped GSTNInteract record and GSTNLink's interact
 	// probe projects its meaning, the one Interact.Target tag of the frame (UGSTN_HeldObjectComponent::ApplyRecord)
 }

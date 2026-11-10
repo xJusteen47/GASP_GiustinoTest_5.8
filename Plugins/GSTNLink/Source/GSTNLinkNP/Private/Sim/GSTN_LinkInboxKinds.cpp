@@ -98,6 +98,7 @@ bool FGSTN_LinkInboxHandlers::ApplyCommand(FGSTN_LinkFragment& Fragment, const F
 		Formed.Phase = EGSTN_LinkPhase::Active;
 		Formed.PartnerId = FGSTN_EntityRef(Command.PartnerKind, static_cast<uint16>(Command.PartnerId), Command.PartnerSerial);
 		Formed.Serial = Command.Serial;
+		Formed.Payload = Command.Payload;
 		Formed.LinkFrame = EntryFrame + 1;
 		State = Formed;
 		return true;

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Input/GSTN_CommandBindings.h"
 #include "Input/GSTN_InputSlot.h"
+#include "GSTN_HeldTypes.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "Loadout/GSTN_CompiledBindingTable.h"
 
@@ -65,6 +66,13 @@ public:
 	 */
 	static int32 AppendKitBindings(const FSoftObjectPath& Pickup, const FSoftObjectPath& Drop, const FSoftObjectPath& Throw,
 		TArray<FGSTN_BindingInput>& OutBindings);
+
+	/**
+	 * The size classes' command bans (M10 G6): every binding of a banned command (hierarchical match, never a Command.Held.* one) gets the class's
+	 * CarryingTag in its ignored tags, restricted to the bindings requiring the ban's OnlyBindingsRequiring when set. A binding that already
+	 * requires or ignores the tag is left alone. Returns how many bindings changed
+	 */
+	static int32 ApplySizeBans(TConstArrayView<FGSTN_HeldSizeClass> SizeClasses, TArray<FGSTN_BindingInput>& InOutBindings);
 
 #if WITH_EDITOR
 	/** Adds the slots of Build to a set asset (replacing those of the same command), for setup scripts. Null is ignored */

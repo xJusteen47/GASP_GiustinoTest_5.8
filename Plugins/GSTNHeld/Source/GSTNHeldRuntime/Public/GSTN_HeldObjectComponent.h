@@ -112,6 +112,8 @@ public:
 	void SetHeld(AActor* InHolder);
 	void SetFlying(AGSTN_Projectile& InFlight);
 	void SetIdleAt(const FVector& Location);
+	/** Host (M10 G7): broken by its impact; back at its home at RespawnFrame (INDEX_NONE = never) */
+	void SetBroken(int32 InRespawnFrame);
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void BeginPlay() override;
@@ -167,6 +169,9 @@ private:
 	/** Host only: the Hand link serial the subsystem formed the current hold with, so its release breaks that very link */
 	uint8 HandLinkSerial = 0;
 
+	/** Host only: the carry load payload of the current (or last) hold (M10 G6, FGSTN_HeldLoad), for the log and the report */
+	uint8 HoldLoadPayload = 0;
+
 	/** Where it rests while Idle (1/10 cm on the wire) */
 	UPROPERTY(ReplicatedUsing = OnRep_RestLocation)
 	FVector_NetQuantize10 RestLocation;
@@ -179,4 +184,12 @@ private:
 	/** Host: the flight's motion, kept after the projectile actor is gone (hit or expiry) to land where it ended */
 	FGSTN_BallisticSegment FlightSegment;
 	int32 FlightEndFrame = INDEX_NONE;
+
+	/** Host (M10 G7): where it first came to rest (a broken object respawns there), whether that is set, rebounds of the current throw */
+	FVector HomeLocation = FVector::ZeroVector;
+	bool bHasHome = false;
+	int32 Bounces = 0;
+	int32 RespawnFrame = INDEX_NONE;
+	/** Host: who threw the current flight (a rebound keeps the thrower's credit) */
+	TWeakObjectPtr<AActor> Thrower;
 };

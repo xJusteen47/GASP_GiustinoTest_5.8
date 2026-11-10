@@ -25,6 +25,8 @@ default Fighter, so every earlier command is unchanged) and refuses a type that 
 `UGSTN_LinkWatchdog::RegisterPartnerResolver`): partner gone -> one-sided Forced break after the orphan grace; else the own side's break rules
 with the plain root distance; no resolver -> left alone. A Hand break without a placement leaves the Body exit record alone. First user:
 GSTNHeld's Held type (tests `GSTNHeld.Runtime.{HandLink, WatchdogObjectPartner}`).
+M10 G6: a `Form` command also carries the link's `Payload` byte (default 0), as an accepted link does, so a commanded link's role effect gets its
+magnitude (GSTNHeld's carry load, test `GSTNHeld.Runtime.CarryLoad`).
 
 M7 G1 (generic follow-ups for link types of other plugins; no type of theirs is named here): interact offers per link type compiled by the
 registry (meaning, priority, reach, required kit extension) and the probe built from them; the team and the kit's extension array on each

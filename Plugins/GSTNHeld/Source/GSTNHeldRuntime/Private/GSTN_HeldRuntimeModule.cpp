@@ -70,6 +70,12 @@ public:
 				UGSTN_HeldSlots::AppendKitBindings(AbilityOrDefault(Settings.PickupAbility, UGSTN_GA_HeldPickup::StaticClass()),
 					AbilityOrDefault(Settings.DropAbility, UGSTN_GA_HeldDrop::StaticClass()),
 					AbilityOrDefault(Settings.ThrowAbility, UGSTN_GA_HeldThrow::StaticClass()), Input.Kit.Bindings);
+				// M10 G6: what each size class takes away while carrying (after the held bindings: they are never banned)
+				UGSTN_HeldSlots::ApplySizeBans(Settings.SizeClasses, Input.Kit.Bindings);
+				for (FGSTN_WeaponCompileInput& Weapon : Input.Weapons)
+				{
+					UGSTN_HeldSlots::ApplySizeBans(Settings.SizeClasses, Weapon.Bindings);
+				}
 			}
 		};
 		FGSTN_LoadoutExtensionRegistry::Register(LoadoutExtensionId, MoveTemp(Extension));

@@ -101,6 +101,12 @@ private:
 	void HandleSimEvent(const FGSTN_SimEvent& Event);
 	/** The point on the floor below Location (WorldStatic), raised by HalfHeight; Location itself without a floor within 50 m */
 	FVector FloorBelow(const FVector& Location, float HalfHeight, const AActor* Ignore) const;
+	/** The holder's MaxCarryWeight attribute (0 when it has none: FGSTN_HeldLoad::EffectiveCapacity then uses the settings' default) */
+	static float CarryCapacityOf(const AActor* Holder);
+	/** Host (M10 G7): the object breaks (hidden until its respawn frame) */
+	void BreakObject(UGSTN_HeldObjectComponent& Object, int32 Frame, const FString& On);
+	/** Host (M10 G7): the object rebounds as a new shot from From with Velocity (the thrower's credit). False = it could not fire: it lands */
+	bool Rebound(UGSTN_HeldObjectComponent& Object, const FVector& From, const FVector& Velocity, int32 Frame);
 
 	struct FQueuedPickup
 	{

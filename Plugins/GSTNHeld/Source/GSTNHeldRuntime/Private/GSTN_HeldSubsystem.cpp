@@ -12,7 +12,11 @@
 #include "GSTN_HeldObjectActor.h"
 #include "GSTN_HeldObjectComponent.h"
 #include "GSTN_HeldSim.h"
+#include "Attributes/GSTN_CombatAttributeSet.h"
+#include "GSTN_HeldSettings.h"
+#include "GSTN_HeldLoadEffect.h"
 #include "GSTN_HeldTags.h"
+#include "Hits/GSTN_CombatHitTags.h"
 #include "GSTN_InteractSubsystem.h"
 #include "Sim/GSTN_LinkFragment.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
@@ -188,6 +192,8 @@ void UGSTN_HeldSubsystem::NoteThrown(AActor* Holder, AGSTN_Projectile& Shot)
 	if (UGSTN_HeldObjectComponent* Object = FindHeldBy(Holder))
 	{
 		PostHoldCommand(Holder, *Object, false, EGSTN_HeldBreakReason::Thrown);
+		Object->Bounces = 0;
+		Object->Thrower = Holder;
 		Object->SetFlying(Shot);
 		UE_LOG(LogGSTNHeld, Log, TEXT("HeldObject %d thrown by %s at frame %d"), Object->GetObjectId(), *GetNameSafe(Holder), Shot.GetSegment().StartFrame);
 	}
@@ -229,7 +235,14 @@ void UGSTN_HeldSubsystem::PostHoldCommand(AActor* Holder, UGSTN_HeldObjectCompon
 		const uint8 Serial = FGSTN_LinkState::NextSerial(Links ? Links->Links.Hand.Serial : 0, Last ? *Last : 0);
 		LastHandSerial.Add(Holder, Serial);
 		Object.HandLinkSerial = Serial;
-		Entry = FGSTN_HeldLinkType::MakeHold(TypeIndex, Serial, Object.GetObjectId(), Object.GetHoldSerial());
+		// M10 G6: the carry load rides on the link (size class index and weight over the holder's capacity, FGSTN_HeldLoad)
+		const UGSTN_HeldSettings& Settings = UGSTN_HeldSettings::Get();
+		int32 SizeIndex = INDEX_NONE;
+		Settings.FindSizeClass(Object.GetTuning().SizeTag, &SizeIndex);
+		const uint8 Payload = SizeIndex == INDEX_NONE ? 0
+			: FGSTN_HeldLoad::EncodePayload(SizeIndex, FGSTN_HeldLoad::LoadRatio(Object.GetTuning().WeightKg, CarryCapacityOf(Holder), Settings.DefaultCarryCapacityKg));
+		Object.HoldLoadPayload = Payload;
+		Entry = FGSTN_HeldLinkType::MakeHold(TypeIndex, Serial, Object.GetObjectId(), Object.GetHoldSerial(), Payload);
 	}
 	else
 	{
@@ -238,8 +251,8 @@ void UGSTN_HeldSubsystem::PostHoldCommand(AActor* Holder, UGSTN_HeldObjectCompon
 	Entry.Frame = Sync ? Sync->Core.Input.History.GetLatestFrame() : LastFrame;
 	Entry.SenderId = EntityId;
 	const bool bPosted = Combat->PostToInbox(EntityId, Entry);
-	UE_LOG(LogGSTNHeld, Log, TEXT("HeldLink %s entity=%d object=%d serial=%d stamp=%d posted=%d"), bHold ? TEXT("hold") : TEXT("release"), EntityId,
-		Object.GetObjectId(), static_cast<int32>(Object.GetHandLinkSerial()), Entry.Frame, bPosted ? 1 : 0);
+	UE_LOG(LogGSTNHeld, Log, TEXT("HeldLink %s entity=%d object=%d serial=%d stamp=%d posted=%d load=%d"), bHold ? TEXT("hold") : TEXT("release"), EntityId,
+		Object.GetObjectId(), static_cast<int32>(Object.GetHandLinkSerial()), Entry.Frame, bPosted ? 1 : 0, bHold ? static_cast<int32>(Object.HoldLoadPayload) : -1);
 }
 
 void UGSTN_HeldSubsystem::EndHold(UGSTN_HeldObjectComponent& Object, EGSTN_HeldBreakReason Reason, int32 Frame, const FString& Detail)
@@ -369,6 +382,7 @@ void UGSTN_HeldSubsystem::ResolvePickups(int32 Frame)
 		// The pose hits are judged against: the holder's snapshot entry, the actor without one
 		const FGSTN_SnapshotEntry* Entry = Combat ? Combat->GetSnapshot().Find(Id) : nullptr;
 		FGSTN_PickupRequest& Request = Requests.Add_GetRef({ Id, Queued.Frame, Entry ? Entry->Transform.GetLocation() : Holder->GetActorLocation() });
+		Request.CarryCapacityKg = FGSTN_HeldLoad::EffectiveCapacity(CarryCapacityOf(Holder), UGSTN_HeldSettings::Get().DefaultCarryCapacityKg);
 		// M10 slice 5: the object whose record the interact probe focused for this holder on the request's frame (or just before it)
 		FGSTN_InteractCandidateId Focus;
 		if (Interact && Interact->FindProbeFocus(Id, Queued.Frame, Focus) && Focus.Provider == GSTNInteractProviders::Registry)
@@ -392,8 +406,11 @@ void UGSTN_HeldSubsystem::ResolvePickups(int32 Frame)
 	{
 		if (Each.IsValid() && Each->GetOwner())
 		{
-			Candidates.Add({ Each->GetObjectId(), Each->GetOwner()->GetActorLocation(), Each->GetTuning().PickupRadius,
+			FGSTN_PickupCandidate& Candidate = Candidates.Add_GetRef({ Each->GetObjectId(), Each->GetOwner()->GetActorLocation(), Each->GetTuning().PickupRadius,
 				Each->GetState() == EGSTN_HeldObjectState::Idle });
+			const FGSTN_HeldSizeClass* SizeClass = UGSTN_HeldSettings::Get().FindSizeClass(Each->GetTuning().SizeTag);
+			Candidate.WeightKg = Each->GetTuning().WeightKg;
+			Candidate.bRequiresCapacity = SizeClass && SizeClass->bRequiresCapacity;
 			ObjectOf.Add(Each->GetObjectId(), Each.Get());
 		}
 	}
@@ -412,6 +429,15 @@ void UGSTN_HeldSubsystem::ResolvePickups(int32 Frame)
 		PostHoldCommand(HolderOf[Won->HolderId], *ObjectOf[Won->ObjectId], true, EGSTN_HeldBreakReason::None);
 		UE_LOG(LogGSTNHeld, Log, TEXT("HeldPickup entity %d holds object %d at frame %d (focus %d)"), Won->HolderId, Won->ObjectId, Frame, Request.TargetObjectId);
 	}
+}
+
+float UGSTN_HeldSubsystem::CarryCapacityOf(const AActor* Holder)
+{
+	// The holder's own attribute (0 by default = none of its own: the settings' default applies, FGSTN_HeldLoad::EffectiveCapacity)
+	const UAbilitySystemComponent* AbilitySystem = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Holder);
+	bool bFound = false;
+	const float Capacity = AbilitySystem ? AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetMaxCarryWeightAttribute(), bFound) : 0.f;
+	return bFound ? Capacity : 0.f;
 }
 
 FVector UGSTN_HeldSubsystem::FloorBelow(const FVector& Location, float HalfHeight, const AActor* Ignore) const
@@ -443,6 +469,16 @@ void UGSTN_HeldSubsystem::StepObjects(int32 Frame)
 			EndHold(*Object, EGSTN_HeldBreakReason::HolderGone, Frame);
 			continue;
 		}
+		// M10 G7: a broken object comes back at its home once its respawn frame is reached
+		if (Object->GetState() == EGSTN_HeldObjectState::Broken)
+		{
+			if (Object->RespawnFrame != INDEX_NONE && Frame >= Object->RespawnFrame)
+			{
+				Object->SetIdleAt(Object->HomeLocation);
+				UE_LOG(LogGSTNHeld, Log, TEXT("HeldImpact object=%d respawned frame=%d at %s"), Object->GetObjectId(), Frame, *Object->HomeLocation.ToCompactString());
+			}
+			continue;
+		}
 		if (Object->GetState() != EGSTN_HeldObjectState::Flying)
 		{
 			continue;
@@ -451,8 +487,15 @@ void UGSTN_HeldSubsystem::StepObjects(int32 Frame)
 		AGSTN_Projectile* Shot = Object->GetFlight();
 		if (!IsValid(Shot) || Shot->IsActorBeingDestroyed() || Frame > Object->FlightEndFrame)
 		{
-			// The shot hit (consumed) or expired: the object falls to the floor below where the shot was last
+			// The shot hit (consumed) or expired: the object falls to the floor below where the shot was last (or breaks on the fighter, M10 G7)
 			const int32 LastFrameOfShot = FMath::Clamp(Frame - 1, Segment.StartFrame, Object->FlightEndFrame);
+			FVector Unused;
+			if (Frame <= Object->FlightEndFrame
+				&& FGSTN_HeldRules::ResolveImpact(Object->GetTuning(), false, FVector::ZeroVector, FVector::ZeroVector, 0, Unused) == EGSTN_HeldImpactBehaviour::Break)
+			{
+				BreakObject(*Object, Frame, TEXT("hit"));
+				continue;
+			}
 			const FVector Rest = FloorBelow(FGSTN_BallisticMode::PositionAt(Segment, LastFrameOfShot), HalfHeight, Owner);
 			Object->SetIdleAt(Rest);
 			UE_LOG(LogGSTNHeld, Log, TEXT("HeldObject %d landed at frame %d after its shot ended, at %s"), Object->GetObjectId(), Frame, *Rest.ToCompactString());
@@ -474,12 +517,64 @@ void UGSTN_HeldSubsystem::StepObjects(int32 Frame)
 			{
 				Projectiles->RemoveProjectile(Shot);
 			}
-			const FVector Rest = Hit.ImpactNormal.Z > 0.7 ? Hit.ImpactPoint + FVector(0.0, 0.0, HalfHeight)
+			// M10 G7: the object's impact behaviour (Land, Break, Bounce, Stick)
+			FVector ReboundVelocity;
+			const EGSTN_HeldImpactBehaviour Impact = FGSTN_HeldRules::ResolveImpact(Object->GetTuning(), true,
+				FGSTN_BallisticMode::VelocityAt(Segment, Frame), Hit.ImpactNormal, Object->Bounces, ReboundVelocity);
+			if (Impact == EGSTN_HeldImpactBehaviour::Break)
+			{
+				BreakObject(*Object, Frame, GetNameSafe(Hit.GetActor()));
+				continue;
+			}
+			if (Impact == EGSTN_HeldImpactBehaviour::Bounce && Projectiles && Rebound(*Object, Hit.ImpactPoint + Hit.ImpactNormal * HalfHeight, ReboundVelocity, Frame))
+			{
+				continue;
+			}
+			const FVector Rest = Impact == EGSTN_HeldImpactBehaviour::Stick ? Hit.ImpactPoint + Hit.ImpactNormal * HalfHeight
+				: Hit.ImpactNormal.Z > 0.7 ? Hit.ImpactPoint + FVector(0.0, 0.0, HalfHeight)
 				: FloorBelow(Hit.ImpactPoint + Hit.ImpactNormal * HalfHeight, HalfHeight, Owner);
 			Object->SetIdleAt(Rest);
+			UE_LOG(LogGSTNHeld, Log, TEXT("HeldImpact object=%d behaviour=%s frame=%d on=%s at=%s"), Object->GetObjectId(),
+				Impact == EGSTN_HeldImpactBehaviour::Stick ? TEXT("Stick") : TEXT("Land"), Frame, *GetNameSafe(Hit.GetActor()), *Rest.ToCompactString());
 			UE_LOG(LogGSTNHeld, Log, TEXT("HeldObject %d landed at frame %d on %s, at %s"), Object->GetObjectId(), Frame, *GetNameSafe(Hit.GetActor()), *Rest.ToCompactString());
 		}
 	}
+}
+
+void UGSTN_HeldSubsystem::BreakObject(UGSTN_HeldObjectComponent& Object, int32 Frame, const FString& On)
+{
+	const float Seconds = Object.GetTuning().BreakRespawnSeconds;
+	const UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(GetWorld());
+	const double Step = Projectiles && Projectiles->GetStepSeconds() > 0.0 ? Projectiles->GetStepSeconds() : 1.0 / 60.0;
+	const int32 Respawn = Seconds > 0.f ? Frame + FMath::Max(1, FMath::RoundToInt(Seconds / Step)) : INDEX_NONE;
+	Object.SetBroken(Respawn);
+	UE_LOG(LogGSTNHeld, Log, TEXT("HeldImpact object=%d behaviour=Break frame=%d on=%s respawn=%d"), Object.GetObjectId(), Frame, *On, Respawn);
+}
+
+bool UGSTN_HeldSubsystem::Rebound(UGSTN_HeldObjectComponent& Object, const FVector& From, const FVector& Velocity, int32 Frame)
+{
+	UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(GetWorld());
+	if (!Projectiles || !Projectiles->CanFire())
+	{
+		return false;
+	}
+	// The same shot as the throw (hit, shape, gravity, source), from the contact along the rebound, credited to the thrower
+	FGSTN_ProjectileParams Params = Object.GetTuning().Throw;
+	Params.SourceTag = GSTNCombatHitTags::Source_Thrown;
+	Params.Origin = From;
+	Params.Direction = Velocity.GetSafeNormal();
+	Params.Speed = Velocity.Size();
+	AActor* Thrower = Object.Thrower.Get();
+	Params.OwnerEntityId = Thrower ? Projectiles->FindEntityIdOf(Thrower) : INDEX_NONE;
+	AGSTN_Projectile* Shot = Projectiles->FireProjectileAtFrame(Params, Frame + 1, Thrower);
+	if (!Shot)
+	{
+		return false;
+	}
+	++Object.Bounces;
+	Object.SetFlying(*Shot);
+	UE_LOG(LogGSTNHeld, Log, TEXT("HeldImpact object=%d behaviour=Bounce frame=%d bounce=%d speed=%.0f"), Object.GetObjectId(), Frame, Object.Bounces, Params.Speed);
+	return true;
 }
 
 void UGSTN_HeldSubsystem::LogReport() const
@@ -508,9 +603,35 @@ void UGSTN_HeldSubsystem::LogReport() const
 		for (const int32 Id : Ids)
 		{
 			const UAbilitySystemComponent* AbilitySystem = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Combat->FindOwnerActor(Id));
-			UE_LOG(LogGSTNHeld, Log, TEXT("HeldHandReport world=%s entity=%d carrying=%d target=%d"), *GetNameSafe(GetWorld()), Id,
+			// M10 G6: the projected size class (index of the Carrying.<size> tag, -1 = none) and the walk speed the carry load leaves
+			int32 SizeIndex = INDEX_NONE;
+			const TArray<FGSTN_HeldSizeClass>& SizeClasses = UGSTN_HeldSettings::Get().SizeClasses;
+			for (int32 Index = 0; AbilitySystem && Index < SizeClasses.Num(); ++Index)
+			{
+				if (SizeClasses[Index].CarryingTag.IsValid() && AbilitySystem->HasMatchingGameplayTag(SizeClasses[Index].CarryingTag))
+				{
+					SizeIndex = Index;
+				}
+			}
+			bool bFound = false;
+			const float Walk = AbilitySystem ? AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), bFound) : 0.f;
+			// The carry load effects active on this entity and the first one's evaluated walk modifier (diagnosis of the load's removal)
+			int32 Loads = 0;
+			float LoadMagnitude = -1.f;
+			if (AbilitySystem)
+			{
+				FGameplayEffectQuery Query;
+				Query.EffectDefinition = UGSTN_GE_HoldLoad::StaticClass();
+				const TArray<FActiveGameplayEffectHandle> Handles = AbilitySystem->GetActiveEffects(Query);
+				Loads = Handles.Num();
+				const FActiveGameplayEffect* First = Loads > 0 ? AbilitySystem->GetActiveGameplayEffect(Handles[0]) : nullptr;
+				LoadMagnitude = First && First->Spec.Modifiers.Num() > 0 ? First->Spec.Modifiers[0].GetEvaluatedMagnitude() : -1.f;
+			}
+			const float WalkBase = AbilitySystem ? AbilitySystem->GetNumericAttributeBase(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute()) : -1.f;
+			UE_LOG(LogGSTNHeld, Log, TEXT("HeldHandReport world=%s entity=%d carrying=%d target=%d size=%d walk=%.1f base=%.1f loads=%d loadMag=%.3f"), *GetNameSafe(GetWorld()), Id,
 				AbilitySystem && AbilitySystem->HasMatchingGameplayTag(GSTNHeldTags::Held_Carrying) ? 1 : 0,
-				AbilitySystem && AbilitySystem->HasMatchingGameplayTag(GSTNHeldTags::Interact_Target_Pickup) ? 1 : 0);
+				AbilitySystem && AbilitySystem->HasMatchingGameplayTag(GSTNHeldTags::Interact_Target_Pickup) ? 1 : 0, SizeIndex, bFound ? Walk : -1.f,
+				WalkBase, Loads, LoadMagnitude);
 		}
 	}
 }
@@ -592,6 +713,24 @@ namespace GSTNHeldConsole
 		const APawn* Pawn = Pawns[PawnIndex];
 		FVector Location = Pawn->GetActorLocation() + Pawn->GetActorForwardVector() * Forward;
 		AGSTN_HeldObjectActor* Actor = World->SpawnActor<AGSTN_HeldObjectActor>(AGSTN_HeldObjectActor::StaticClass(), Location, FRotator::ZeroRotator);
+		// M10 G6: an optional size class (Light, Medium, Heavy, Huge) and weight, on a host-only transient definition (clients keep the test tuning:
+		// the size and the weight are read by the host alone, into the hold's payload and the throw)
+		if (Actor && Actor->GetHeldObject() && Args.IsValidIndex(2))
+		{
+			UGSTN_HeldObjectDefinition* Definition = NewObject<UGSTN_HeldObjectDefinition>(Actor);
+			Definition->Tuning.SizeTag = FGameplayTag::RequestGameplayTag(FName(*(TEXT("Combat.Held.Size.") + Args[2])), false);
+			if (Args.IsValidIndex(3))
+			{
+				Definition->Tuning.WeightKg = FCString::Atof(*Args[3]);
+			}
+			// M10 G7: an optional impact behaviour by name (Land, Break, Bounce, Stick)
+			if (Args.IsValidIndex(4))
+			{
+				const int64 Value = StaticEnum<EGSTN_HeldImpactBehaviour>()->GetValueByNameString(Args[4]);
+				Definition->Tuning.ImpactBehaviour = Value == INDEX_NONE ? EGSTN_HeldImpactBehaviour::Land : static_cast<EGSTN_HeldImpactBehaviour>(Value);
+			}
+			Actor->GetHeldObject()->Definition = Definition;
+		}
 		if (Actor && Actor->GetHeldObject())
 		{
 			const float HalfHeight = Actor->GetHeldObject()->GetTuning().RestHalfHeight;
@@ -693,7 +832,7 @@ namespace GSTNHeldConsole
 
 	FAutoConsoleCommandWithWorldAndArgs GHeldSpawnCommand(
 		TEXT("gstn.Held.Spawn"),
-		TEXT("Host: spawns a test held object in front of a combat pawn (pawns by ascending entity id), on the floor. Args: [Pawn=0] [ForwardCm=120]"),
+		TEXT("Host: spawns a test held object in front of a combat pawn (pawns by ascending entity id), on the floor. Args: [Pawn=0] [ForwardCm=120] [Size=Light|Medium|Heavy|Huge] [WeightKg] [Impact=Land|Break|Bounce|Stick]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Spawn));
 	FAutoConsoleCommandWithWorldAndArgs GHeldPickupCommand(
 		TEXT("gstn.Held.Pickup"),

@@ -70,6 +70,26 @@ public:
 	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Interact", meta = (ClampMin = 0, ClampMax = 255))
 	int32 PickupMeaningPriority = 90;
 
+	/**
+	 * The size classes (M10 G6), at most four (FGSTN_HeldLoad packs the index in two bits); an object names one by SizeTag. TEST VALUES in
+	 * DefaultGSTNHeld.ini: Light, Medium, Heavy, Huge with the plan's rules (Light all, Medium no shield and no air attacks, Heavy walk, drop
+	 * and throw only, Huge as Heavy and only with capacity). The slowdown, the throw strength and which objects are liftable are the owner's call
+	 */
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Size", meta = (TitleProperty = "SizeTag"))
+	TArray<FGSTN_HeldSizeClass> SizeClasses;
+
+	/** The carry capacity of a holder whose MaxCarryWeight attribute is 0 (its default): the load is weight / this. TEST VALUE */
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Size", meta = (ClampMin = "0.0", ForceUnits = "kg"))
+	float DefaultCarryCapacityKg = 50.f;
+
+	/** The class of SizeTag and its index (INDEX_NONE and null when none matches exactly, or beyond the four packable ones) */
+	const FGSTN_HeldSizeClass* FindSizeClass(const FGameplayTag& SizeTag, int32* OutIndex = nullptr) const;
+	/** The class at a payload's index, or null */
+	const FGSTN_HeldSizeClass* GetSizeClass(int32 Index) const
+	{
+		return Index >= 0 && Index < FMath::Min(SizeClasses.Num(), static_cast<int32>(FGSTN_HeldLoad::MaxSizeClasses)) ? &SizeClasses[Index] : nullptr;
+	}
+
 	/** Hands CommandTiers to the input settings under this plugin's contribution source */
 	void PushToInputSettings() const;
 	static void RemoveFromInputSettings();

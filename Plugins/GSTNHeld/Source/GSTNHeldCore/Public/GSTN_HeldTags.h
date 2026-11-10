@@ -14,6 +14,21 @@ namespace GSTNHeldTags
 	/** The entity holds an object. Projected every frame from its Hand link of type Held (M10 G1) by the held tick extension, never granted */
 	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Held_Carrying);
 
+	/**
+	 * Size classes of an object (M10 G6, FGSTN_HeldSizeClass) and the Carrying.<size> tag projected beside Combat.Held.Carrying while the holder
+	 * holds one of that class (decoded from the Held link's payload, so predicted and rolled back with the link). A size class's bans key on them
+	 */
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Held_Size_Light);
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Held_Size_Medium);
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Held_Size_Heavy);
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Held_Size_Huge);
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Held_Carrying_Light);
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Held_Carrying_Medium);
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Held_Carrying_Heavy);
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Held_Carrying_Huge);
+	/** Set-by-caller key of the carry load effect: the Held link's payload / 255 (size class and load ratio, FGSTN_HeldLoad) */
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_Held_Load);
+
 	/** Pick up the nearest object in reach: the grab button, with nothing in hand */
 	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Held_Pickup);
 	/** Put the held object down: the grab button again, with an object in hand */

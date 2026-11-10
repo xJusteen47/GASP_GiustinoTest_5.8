@@ -111,3 +111,35 @@ void UGSTN_HeldSlots::AddToSlotSet(UGSTN_InputSlotSet* Set)
 	Set->MarkPackageDirty();
 }
 #endif
+
+int32 UGSTN_HeldSlots::ApplySizeBans(TConstArrayView<FGSTN_HeldSizeClass> SizeClasses, TArray<FGSTN_BindingInput>& InOutBindings)
+{
+	const FGameplayTag HeldCommands = FGameplayTag::RequestGameplayTag(TEXT("Command.Held"), false);
+	int32 Changed = 0;
+	for (const FGSTN_HeldSizeClass& SizeClass : SizeClasses)
+	{
+		if (!SizeClass.CarryingTag.IsValid())
+		{
+			continue;
+		}
+		for (FGSTN_BindingInput& Binding : InOutBindings)
+		{
+			if (!Binding.Command.IsValid() || (HeldCommands.IsValid() && Binding.Command.MatchesTag(HeldCommands))
+				|| Binding.Requirements.RequireTags.HasTagExact(SizeClass.CarryingTag) || Binding.Requirements.IgnoreTags.HasTagExact(SizeClass.CarryingTag))
+			{
+				continue;
+			}
+			for (const FGSTN_HeldCommandBan& Ban : SizeClass.Bans)
+			{
+				if (Binding.Command.MatchesAny(Ban.Commands)
+					&& (!Ban.OnlyBindingsRequiring.IsValid() || Binding.Requirements.RequireTags.HasTag(Ban.OnlyBindingsRequiring)))
+				{
+					Binding.Requirements.IgnoreTags.AddTag(SizeClass.CarryingTag);
+					++Changed;
+					break;
+				}
+			}
+		}
+	}
+	return Changed;
+}

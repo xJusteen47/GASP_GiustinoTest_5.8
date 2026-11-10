@@ -44,11 +44,15 @@ struct GSTNHELDRUNTIME_API FGSTN_HeldLinkType
 	 * The host's command entries. Hold: a Form of the Held type on the holder's Hand channel with Serial, the partner ObjectId of kind Object
 	 * (ObjectSerial = the object's hold serial). Release: the Break of that serial. The caller stamps both
 	 */
-	static FGSTN_InboxEntry MakeHold(uint8 TypeIndex, uint8 Serial, int32 ObjectId, uint8 ObjectSerial);
+	static FGSTN_InboxEntry MakeHold(uint8 TypeIndex, uint8 Serial, int32 ObjectId, uint8 ObjectSerial, uint8 LoadPayload = 0);
 	static FGSTN_InboxEntry MakeRelease(uint8 Serial, uint8 LinkReason);
 };
 
-/** Projects Combat.Held.Carrying from the holder's Hand link, every frame on every machine (set, never added: a resimulated frame inherits nothing) */
+/**
+ * Projects Combat.Held.Carrying from the holder's Hand link, every frame on every machine (set, never added: a resimulated frame inherits nothing),
+ * and since M10 G6 the size class's Carrying.<size> tag decoded from the link's payload (FGSTN_HeldLoad), so a size class's command bans hold
+ * exactly while the hold does
+ */
 class GSTNHELDRUNTIME_API FGSTN_HeldTickExtension : public IGSTN_CombatTickExtension
 {
 public:

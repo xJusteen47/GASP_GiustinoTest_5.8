@@ -125,8 +125,27 @@ void UGSTN_HeldObjectComponent::SetFlying(AGSTN_Projectile& InFlight)
 	UpdatePlacement();
 }
 
+void UGSTN_HeldObjectComponent::SetBroken(int32 InRespawnFrame)
+{
+	CloseRecord();
+	State = EGSTN_HeldObjectState::Broken;
+	Holder = nullptr;
+	Flight = nullptr;
+	FlightEndFrame = INDEX_NONE;
+	RespawnFrame = InRespawnFrame;
+	GetOwner()->ForceNetUpdate();
+	UpdatePlacement();
+}
+
 void UGSTN_HeldObjectComponent::SetIdleAt(const FVector& Location)
 {
+	if (!bHasHome)
+	{
+		HomeLocation = Location;
+		bHasHome = true;
+	}
+	Bounces = 0;
+	RespawnFrame = INDEX_NONE;
 	State = EGSTN_HeldObjectState::Idle;
 	Holder = nullptr;
 	Flight = nullptr;
@@ -290,8 +309,17 @@ void UGSTN_HeldObjectComponent::UpdatePlacement()
 	{
 		return;
 	}
+	// M10 G7: a broken object is hidden and lets everything through until it respawns (every machine, from the replicated state)
+	const bool bBroken = State == EGSTN_HeldObjectState::Broken;
+	if (Owner->IsHidden() != bBroken)
+	{
+		Owner->SetActorHiddenInGame(bBroken);
+		Owner->SetActorEnableCollision(!bBroken);
+	}
 	switch (State)
 	{
+	case EGSTN_HeldObjectState::Broken:
+		break;
 	case EGSTN_HeldObjectState::Held:
 		if (IsValid(Holder))
 		{

@@ -13,10 +13,11 @@ import unreal
 import gasnpp_test as g
 import defence_scenarios as ds
 
-SUITE_HELD = ['held_pickup_throw_hit', 'held_drop_and_break']
+SUITE_HELD = ['held_pickup_throw_hit', 'held_drop_and_break', 'held_carry_load', 'held_throw_break']
 _marks = {}
 
 _HAND = re.compile(r'HeldHandReport world=(\S+) entity=(\d+) carrying=(\d) target=(\d)')
+_LOAD = re.compile(r'HeldHandReport world=(\S+) entity=(\d+) carrying=(\d) target=(\d) size=(-?\d+) walk=(-?[\d.]+)')
 _REPORT = re.compile(r'HeldObjectReport world=(\S+) name=(\S+) state=(\d) holderEntity=(-?\d+) holderDistCm=(-?[\d.]+) loc=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)')
 
 
@@ -237,6 +238,105 @@ def scenario_held_drop_and_break(client=1):
         (8.6, lambda: ('after', capture('after'))),
         (8.7, run.at('the hit holder dropped its object (HolderState, hitstun); its hand empty everywhere; others keep theirs', broke_on_hit)),
         (8.8, run.finish()),
+    ]
+    run.run(steps)
+
+
+def _loads():
+    """Per world: {entity id: (carrying, size class index, walk speed)} from one hand report per world (M10 G6)"""
+    out = []
+    for wi in range(len(g.worlds())):
+        before = len(_LOAD.findall(_log()))
+        _cmd('gstn.Held.Report', wi)
+        rows = _LOAD.findall(_log())[before:]
+        out.append({int(r[1]): (int(r[2]), int(r[4]), float(r[5])) for r in rows})
+    return out
+
+
+def scenario_held_carry_load(client=1):
+    """M10 G6. Pawn 0 lifts a Medium object of 50 kg (the default capacity: full load), pawn 1 tries a Huge one of 100 kg (needs capacity: refused,
+    nothing else in reach = a fumble). In every world pawn 0 projects Carrying and the Medium class and walks at the class's full-load speed
+    (WalkSpeed x (1 - SpeedLossAtFullLoad), 0.7 with the test values) from the carry load effect the Held link applies; after the drop every
+    world is back to the speed before the pickup (the effect is removed with the link)"""
+    run = g._Run('held_carry_load', client, judge_reconciles=False, sample=False)
+    st = {}
+
+    def capture(name):
+        st[name] = _loads()
+        return f'{name} {st[name]}'
+
+    def holder():
+        m = re.findall(r'HeldPickup entity (\d+) holds object (\d+)', _log())
+        return int(m[0][0]) if m else None
+
+    def loaded():
+        h = holder()
+        refused = re.findall(r'HeldPickup refused for entity (\d+)', _log())
+        base, rows = st.get('base', []), st.get('carry', [])
+        loads = re.findall(r'HeldLink hold entity=(\d+) object=\d+ serial=\d+ stamp=-?\d+ posted=1 load=(\d+)', _log())
+        ok = (h is not None and len(refused) == 1 and int(refused[0]) != h and len(loads) == 1 and int(loads[0][1]) == (1 << 6 | 63)
+              and len(rows) == len(base) and all(
+                  w.get(h, (0, -1, 0))[0] == 1 and w[h][1] == 1 and abs(w[h][2] - 0.7 * b[h][2]) < 1.0 for w, b in zip(rows, base) if h in b))
+        return ok, f'holder {h} refused {refused} loads {loads} base {base} carry {rows}'
+
+    def unloaded():
+        h = holder()
+        base, rows = st.get('base', []), st.get('dropped', [])
+        ok = h is not None and len(rows) == len(base) and all(
+            w.get(h, (1, 0, 0))[0] == 0 and w[h][1] == -1 and abs(w[h][2] - b[h][2]) < 0.5 for w, b in zip(rows, base) if h in b)
+        return ok, f'holder {h} base {base} dropped {rows}'
+
+    steps = [
+        (0.0, lambda: ('setup', _setup())),
+        (0.5, lambda: ('spawn', [_cmd('gstn.Held.Spawn 0 120 Medium 50'), _cmd('gstn.Held.Spawn 1 120 Huge 100')])),
+        (1.2, lambda: ('base', capture('base'))),
+        (1.6, lambda: ('pickup', [_cmd('gstn.Held.Pickup 0'), _cmd('gstn.Held.Pickup 1')])),
+        (3.1, lambda: ('carry', capture('carry'))),
+        (3.2, run.at('pawn 0 carries the Medium object at full load in every world (size 1, walk x0.7); the Huge one is refused to pawn 1', loaded)),
+        (3.3, lambda: ('drop', _cmd('gstn.Held.Drop 0'))),
+        (4.6, lambda: ('dropped', capture('dropped'))),
+        (4.7, run.at('after the drop every world walks at the speed before the pickup, no size class', unloaded)),
+        (4.8, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_held_throw_break(client=1):
+    """M10 G7. Pawn 0 throws a Break object (Light, 5 kg) at pawn 1: on the hit (or the world, if it misses) the host breaks it (HeldImpact
+    behaviour=Break): hidden in every world (state 3, Broken); after its respawn time (3 s, TEST VALUE) it is back at rest at its home (state 0)
+    in every world, within a few cm of where it first came to rest"""
+    run = g._Run('held_throw_break', client, judge_reconciles=False, sample=False)
+    st = {}
+
+    def capture(name):
+        st[name] = _reports()
+        return f'{name} {st[name]}'
+
+    def broken():
+        rows = st.get('broken', [])
+        breaks = re.findall(r'HeldImpact object=(\d+) behaviour=Break frame=(\d+) on=(\S+) respawn=(-?\d+)', _log())
+        ok = len(breaks) == 1 and int(breaks[0][3]) > int(breaks[0][1]) and rows and all(r and r[2] == '3' for r in rows)
+        return ok, f'breaks {breaks} reports {rows}'
+
+    def respawned():
+        home, rows = st.get('home', []), st.get('back', [])
+        again = re.findall(r'HeldImpact object=(\d+) respawned frame=(\d+)', _log())
+        def near(a, b):
+            return a and b and sum((float(a[i]) - float(b[i])) ** 2 for i in (5, 6, 7)) ** 0.5 < 5.0
+        ok = len(again) == 1 and rows and all(r and r[2] == '0' for r in rows) and all(near(r, h) for r, h in zip(rows, home))
+        return ok, f'respawned {again} home {home} back {rows}'
+
+    steps = [
+        (0.0, lambda: ('setup', _setup())),
+        (0.5, lambda: ('spawn', _cmd('gstn.Held.Spawn 0 120 Light 5 Break'))),
+        (1.2, lambda: ('home', capture('home'))),
+        (1.4, lambda: ('pickup', _cmd('gstn.Held.Pickup 0'))),
+        (2.4, lambda: ('throw', _cmd('gstn.Held.Throw 0 1'))),
+        (4.4, lambda: ('broken', capture('broken'))),
+        (4.5, run.at('the object broke once (hit or world) and is hidden, Broken, in every world', broken)),
+        (7.6, lambda: ('back', capture('back'))),
+        (7.7, run.at('after its respawn time it is at rest at its home in every world', respawned)),
+        (7.8, run.finish()),
     ]
     run.run(steps)
 

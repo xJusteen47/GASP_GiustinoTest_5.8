@@ -1,6 +1,8 @@
 // Held objects, simulation side tests (GSTNHeld.Runtime.*): the hold as a Hand link (M10 G1) and the watchdog's object partner.
 
 #include "Data/GSTN_LinkTypeDefinition.h"
+#include "GSTN_HeldLoadEffect.h"
+#include "GSTN_HeldSettings.h"
 #include "GSTN_HeldSim.h"
 #include "GSTN_HeldTags.h"
 #include "GSTN_HeldTypes.h"
@@ -8,6 +10,7 @@
 #include "GSTN_LinkWatchdog.h"
 #include "Misc/AutomationTest.h"
 #include "Sim/GSTN_LinkFragment.h"
+#include "Sim/GSTN_LinkEffects.h"
 #include "Sim/GSTN_LinkInboxKinds.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -117,6 +120,50 @@ bool FGSTN_HeldWatchdogPartnerTest::RunTest(const FString& Parameters)
 	FGSTN_LinkWatchdogLogic::Evaluate(Entities, 40, Params, Posts, Breaks);
 	TestTrue(TEXT("object gone: Forced orphan break of the holder's hand"), Breaks.Num() == 1 && Breaks[0].bOrphan
 		&& Breaks[0].Reason == EGSTN_LinkBreakReason::Forced && Posts.Num() == 1 && Posts[0].TargetId == 3);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_HeldCarryLoadTest, "GSTNHeld.Runtime.CarryLoad",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FGSTN_HeldCarryLoadTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNHeldRuntimeTest;
+	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+	const uint8 TypeIndex = FGSTN_HeldLinkType::GetTypeIndex(Registry);
+	const UGSTN_LinkTypeDefinition* Definition = Registry ? Registry->GetDefinition(TypeIndex) : nullptr;
+	if (!TestTrue(TEXT("the Held type is registered"), Definition != nullptr))
+	{
+		return false;
+	}
+	// The holder's role effect is the carry load; the object's side has none
+	TestTrue(TEXT("holder carries GE_HoldLoad"), FGSTN_LinkEffects::ResolveEffectClass(Definition->InitiatorRole.LinkEffect) == UGSTN_GE_HoldLoad::StaticClass()
+		&& Definition->InitiatorRole.LinkEffect.SetByCallerTag == GSTNHeldTags::SetByCaller_Held_Load);
+	TestFalse(TEXT("object role has no effect"), Definition->TargetRole.LinkEffect.IsSet());
+	TestEqual(TEXT("walk, jump, air jump"), GetDefault<UGSTN_GE_HoldLoad>()->Modifiers.Num(), 3);
+
+	// The payload rides the Form into the link state; the link tick applies the effect with it and removes it at the release
+	const uint8 Payload = FGSTN_HeldLoad::EncodePayload(1, 1.f);
+	FGSTN_LinkFragment Before;
+	FGSTN_LinkFragment Holding;
+	TestTrue(TEXT("hold forms"), FGSTN_LinkInboxHandlers::ApplyCommand(Holding, CommandOf(FGSTN_HeldLinkType::MakeHold(TypeIndex, 5, 3, 9, Payload)), 100));
+	TestEqual(TEXT("payload in the link state"), Holding.Links.Hand.Payload, Payload);
+	TArray<FGSTN_LinkEffects::FOp, TInlineAllocator<2>> Ops;
+	FGSTN_LinkEffects::ComputeOps(&Before, &Holding, Registry, Ops);
+	TestTrue(TEXT("one apply with the payload"), Ops.Num() == 1 && Ops[0].bApply && Ops[0].Payload == Payload);
+	FGSTN_LinkFragment Released = Holding;
+	FGSTN_LinkInboxHandlers::ApplyCommand(Released, CommandOf(FGSTN_HeldLinkType::MakeRelease(5, FGSTN_HeldLinkType::ToLinkReason(EGSTN_HeldBreakReason::HolderState))), 110);
+	FGSTN_LinkEffects::ComputeOps(&Holding, &Released, Registry, Ops);
+	TestTrue(TEXT("one removal at the release"), Ops.Num() == 1 && !Ops[0].bApply);
+
+	// MMC goldens against the project's default classes (Medium at full load: the class's loss)
+	const FGSTN_HeldSizeClass* Medium = UGSTN_HeldSettings::Get().GetSizeClass(1);
+	if (Medium)
+	{
+		TestTrue(TEXT("speed golden"), FMath::IsNearlyEqual(UGSTN_GE_HoldLoad::SpeedScaleOf(Payload), 1.f - Medium->SpeedLossAtFullLoad, 1.e-4f));
+		TestTrue(TEXT("jump golden"), FMath::IsNearlyEqual(UGSTN_GE_HoldLoad::JumpScaleOf(Payload), 1.f - Medium->JumpLossAtFullLoad, 1.e-4f));
+	}
+	TestEqual(TEXT("no load, no loss"), UGSTN_GE_HoldLoad::SpeedScaleOf(FGSTN_HeldLoad::EncodePayload(2, 0.f)), 1.f);
 	return true;
 }
 

@@ -6,7 +6,7 @@ branch, spec [combat-m10-held-objects.md](../../docs/architecture/combat-m10-hel
 credit to the thrower and the predicted ghost come from that plugin unchanged ("deterministic first",
 [entita-dinamiche review](../../docs/notes/reviews/entita-dinamiche-2026-11-09.md) §2, §9 category (a)).
 
-Status: **experimental (0.1), slice 5**, `EnabledByDefault: false`, enabled in `GASP_Giustino2.uproject`. Nothing else knows it.
+Status: **experimental (0.1), slice 6**, `EnabledByDefault: false`, enabled in `GASP_Giustino2.uproject`. Nothing else knows it.
 
 ## Modules
 
@@ -76,12 +76,33 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
 10. **Thrown hits (slice 4, the plan's G3)**: the throw's shot carries `SourceTag = Combat.Source.Thrown`; GSTNProjectile puts it on the hit
    inbox entry with a **detached instigator** (the shooter at the release, else its player state), so the hit and KO events carry the source tag
    and name the thrower even when its entity id no longer resolves (death, disconnect). Slice 5: a minion's KO event too (GSTNMinion). Log `Projectile .. hit .. source= credit=`.
-11. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
+11. **Carry load and size classes (slice 6, the plan's G6)**: an object names a size class (`FGSTN_HeldObjectTuning::SizeTag`, `Combat.Held.Size.*`)
+   and a weight (`WeightKg`); the classes are data (`UGSTN_HeldSettings::SizeClasses`, at most four, `DefaultGSTNHeld.ini`): loss of walk and jump
+   speed at full load, `bRequiresCapacity`, `ThrowSpeedScale`, command `Bans`. When the host forms a hold it writes the **load payload** on the Held
+   link (`FGSTN_LinkCommandEntry::Payload`, a GSTNLink addition; `FGSTN_HeldLoad`: class index in two bits, weight / capacity in six, capacity =
+   the holder's `MaxCarryWeight`, else `DefaultCarryCapacityKg` 50 kg). The Held type's holder role effect is `UGSTN_GE_HoldLoad` (infinite,
+   `MultiplyCompound` on `WalkSpeed`, `JumpVelocity`, `AirJumpVelocity` through two MMCs that decode the payload), so GSTNLink's link tick applies
+   and removes it with the hold on every machine and in every re-simulation. The tick extension projects `Combat.Held.Carrying.<size>` from the same
+   payload. Bans: the loadout extension adds the class's Carrying tag to the ignored tags of every banned binding (hierarchical match; a ban with
+   `OnlyBindingsRequiring = Input.Context.Airborne` touches only air bindings; `Command.Held.*` never). A class with `bRequiresCapacity` (Huge)
+   is skipped by a pickup whose holder is too weak (`FGSTN_PickupRequest::CarryCapacityKg`). TEST VALUES: Light -10 %, Medium -30 % (no shield,
+   no air attacks), Heavy -50 % speed, no jump (walk, drop, throw only), Huge -70 % and capacity; throw speed x1 / 0.85 / 0.7 / 0.5. Objects without
+   a definition are Light, 5 kg. `HeldHandReport` logs `size=` and `walk=`; `HeldLink hold .. load=`.
+12. **Impact behaviours (slice 6, part of the plan's G7)**: `FGSTN_HeldObjectTuning::ImpactBehaviour` (`EGSTN_HeldImpactBehaviour`), decided on the
+   host by `FGSTN_HeldRules::ResolveImpact`: **Land** (default, as before); **Break** on a world contact or a fighter hit: state `Broken` (hidden,
+   no collision, no record on every machine), back at its home (first rest point) after `BreakRespawnSeconds` (3 s; 0 = never); **Bounce** off
+   the world: a new GSTNProjectile shot from the contact with the reflected velocity times `BounceRestitution`, same hit data, credited to the
+   thrower; lands after `MaxBounces` or below `MinBounceSpeed`; a fighter hit lands; **Stick**: rests at the contact (a wall too), pickable there;
+   a fighter hit lands. Log `HeldImpact object= behaviour= frame=`. `gstn.Held.Spawn [Pawn] [ForwardCm] [Size] [WeightKg] [Impact]` makes a
+   host-only test definition.
+13. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
    (its own ranged action) are data only; a later slice routes commands to them.
 ## Not yet (later slices of the plan)
 
-Carry load and size classes (G6: the Held type's role effect is the hook), aim policy, friendly fire by mode, impact behaviours
-Break/Bounce/Stick, ghost blend of the object itself (the projectile's ghost is used), thrown enemies (G9), editor preview. Minion hit delegates
-(`OnMinionHit`) carry no source tag (only the KO event does).
+G7 rest: aim policy while aiming with the shoulder camera (the throw already aims with the camera when held or with the reticle on), friendly
+fire by game mode, a per-throw hit ring across rebounds (a rebound is a new shot: it may hit a target the throw already hit), `Explode`. G8: a
+ghost of the object itself on the thrower (the projectile's ghost is used; a rebound has no ghost), `scenario_throw_ghost`/`_host`. G9 thrown
+enemies; G12-G13 debug/editor (validator of missing size bindings per kit), sweep. Minion hit delegates (`OnMinionHit`) carry no source tag
+(only the KO event does).
 
-Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`).
+Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`, `held_carry_load`, `held_throw_break`).

@@ -149,6 +149,11 @@ bool UGSTN_GA_HeldThrow::PrepareShot(FGSTN_ProjectileParams& InOutParams, bool b
 		return false;
 	}
 	InOutParams = Object->GetTuning().Throw;
+	// M10 G6: a heavier class throws slower (TEST VALUES in the size classes)
+	if (const FGSTN_HeldSizeClass* SizeClass = UGSTN_HeldSettings::Get().FindSizeClass(Object->GetTuning().SizeTag))
+	{
+		InOutParams.Speed *= SizeClass->ThrowSpeedScale;
+	}
 	// Its hits' events say a thrown object made them (M10 G3)
 	InOutParams.SourceTag = GSTNCombatHitTags::Source_Thrown;
 	return true;

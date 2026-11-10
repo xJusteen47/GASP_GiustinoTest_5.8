@@ -136,6 +136,10 @@ struct GSTNLINKNP_API FGSTN_LinkCommandEntry
 	UPROPERTY()
 	uint8 PartnerSerial = 0;
 
+	/** Form only (M10 G6): the formed link's Payload byte (a held object's carry load), so the commanded side holds it as an accepted link does */
+	UPROPERTY()
+	uint8 Payload = 0;
+
 	/** The registry's reason index (EGSTN_LinkBreakReason or a plugin's) */
 	UPROPERTY()
 	uint8 Reason = 0;
