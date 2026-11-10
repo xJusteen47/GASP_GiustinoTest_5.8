@@ -7,6 +7,8 @@
 #include "GSTNProjectileCoreModule.h"
 #include "GSTN_ProjectileActor.h"
 #include "GSTN_ProjectileSubsystem.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
+#include "Simulation/GSTN_CombatVictim.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 #include "World/GSTN_StepSnapshot.h"
 
@@ -42,6 +44,10 @@ void UGSTN_GA_FireProjectile::ActivateAbility(const FGameplayAbilitySpecHandle H
 		}
 	}
 
+	if (DeferFire())
+	{
+		return;
+	}
 	if (FireDelayFrames <= 0)
 	{
 		Fire();
@@ -97,7 +103,8 @@ bool UGSTN_GA_FireProjectile::Fire()
 	Params.Origin = OwnerTransform.TransformPosition(MuzzleOffset);
 
 	FVector Direction = OwnerTransform.GetUnitAxis(EAxis::X);
-	const FGSTN_SnapshotEntry* TargetEntry = Aim == EGSTN_ProjectileAim::EventTarget && Combat && TargetEntityId.Value != INDEX_NONE
+	const EGSTN_ProjectileAim ShotAim = GetShotAim();
+	const FGSTN_SnapshotEntry* TargetEntry = ShotAim == EGSTN_ProjectileAim::EventTarget && Combat && TargetEntityId.Value != INDEX_NONE
 		? Combat->GetSnapshot().Find(TargetEntityId.Value) : nullptr;
 	if (TargetEntry)
 	{
@@ -114,12 +121,28 @@ bool UGSTN_GA_FireProjectile::Fire()
 	}
 	else
 	{
-		if (Aim == EGSTN_ProjectileAim::CommandAim)
+		if (ShotAim == EGSTN_ProjectileAim::CommandAim)
 		{
 			const FRotator AimRotation = GetAimRotation();
 			if (!AimRotation.IsNearlyZero())
 			{
 				Direction = AimRotation.Vector();
+			}
+		}
+		else if (ShotAim == EGSTN_ProjectileAim::Stick)
+		{
+			// The frame's stick on the shooter's plane (its snapshot up), as the stick moves the character; centred = the facing
+			const UGSTN_CombatSimComponent* CombatComponent = Avatar->FindComponentByClass<UGSTN_CombatSimComponent>();
+			if (CombatComponent)
+			{
+				FVector2D Stick;
+				float CameraYaw = 0.f;
+				CombatComponent->GetFrameStick(Stick, CameraYaw);
+				const FVector OnPlane = FGSTN_CombatVictim::StickToPlane(Stick, CameraYaw, OwnerTransform.GetUnitAxis(EAxis::Z));
+				if (OnPlane.SizeSquared() > FMath::Square(StickAimDeadzone))
+				{
+					Direction = OnPlane.GetSafeNormal();
+				}
 			}
 		}
 		FRotator Launch = Direction.Rotation();

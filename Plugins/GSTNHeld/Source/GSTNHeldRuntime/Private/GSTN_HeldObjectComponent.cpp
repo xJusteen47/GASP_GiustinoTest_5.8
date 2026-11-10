@@ -2,7 +2,9 @@
 
 #include "GSTN_HeldObjectComponent.h"
 
+#include "Abilities/GameplayAbility.h"
 #include "GameFramework/Actor.h"
+#include "GSTN_HeldSettings.h"
 #include "GSTN_HeldSubsystem.h"
 #include "GSTN_ProjectileActor.h"
 #include "Net/UnrealNetwork.h"
@@ -19,6 +21,18 @@ const FGSTN_HeldObjectTuning& UGSTN_HeldObjectComponent::GetTuning() const
 {
 	static const FGSTN_HeldObjectTuning TestTuning;
 	return Definition ? Definition->Tuning : TestTuning;
+}
+
+const FGSTN_HeldBreakRules& UGSTN_HeldObjectComponent::GetBreakRules() const
+{
+	const FGSTN_HeldObjectTuning& Tuning = GetTuning();
+	return Tuning.bOverrideBreakRules ? Tuning.BreakRules : UGSTN_HeldSettings::Get().DefaultBreakRules;
+}
+
+TSubclassOf<UGameplayAbility> UGSTN_HeldObjectComponent::FindCommandAction(const FGameplayTag& Command) const
+{
+	const TSubclassOf<UGameplayAbility>* Found = Definition ? Definition->CommandActions.Find(Command) : nullptr;
+	return Found ? *Found : nullptr;
 }
 
 void UGSTN_HeldObjectComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -61,6 +75,7 @@ void UGSTN_HeldObjectComponent::SetHeld(AActor* InHolder)
 {
 	State = EGSTN_HeldObjectState::Held;
 	Holder = InHolder;
+	++HoldSerial;
 	Flight = nullptr;
 	FlightEndFrame = INDEX_NONE;
 	GetOwner()->ForceNetUpdate();

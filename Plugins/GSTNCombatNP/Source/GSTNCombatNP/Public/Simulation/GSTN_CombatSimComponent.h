@@ -334,6 +334,16 @@ public:
 	bool HasAim() const { return FrameAim.bHasAim; }
 
 	/**
+	 * The move stick of the command of the frame being simulated (x right, y forward, -1..1, camera relative) and that command's camera yaw in
+	 * degrees: the same values the combat tick reads, kept like GetAimRotation for the ability system's tick that follows (a throw toward the
+	 * stick, M10). Turn it onto a plane with FGSTN_CombatVictim::StickToPlane
+	 */
+	void GetFrameStick(FVector2D& OutStick, float& OutCameraYawDegrees) const;
+
+	/** FGSTN_InputCmd::bPrecisionAim of the frame's command (the reticle was on), for the abilities that aim with it */
+	bool IsPrecisionAimFrame() const { return FrameAim.bPrecisionAim; }
+
+	/**
 	 * The jump state of the frame being simulated (combat-m3 7.9): phase, air jumps used, fast fall. Same contract as GetActivationContext:
 	 * a simulation read, called from an ability's activation or tick. False before the first simulated frame
 	 */
@@ -698,6 +708,11 @@ private:
 		bool bHasAim = false;
 		uint16 Yaw = 0;
 		uint16 Pitch = 0;
+		/** The move stick and camera yaw of the same command (GetFrameStick), and its precision bit (IsPrecisionAimFrame) */
+		int8 StickX = 0;
+		int8 StickY = 0;
+		uint8 CameraYaw = 0;
+		bool bPrecisionAim = false;
 	};
 	FFrameAim FrameAim;
 

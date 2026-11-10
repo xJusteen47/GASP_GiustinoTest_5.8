@@ -15,7 +15,9 @@ public class GSTNHeldCore : ModuleRules
 			"Engine",
 			"GameplayTags",
 			"GSTNCombatCore",
-			"GSTNProjectileCore"
+			"GSTNProjectileCore",
+			"GSTNInputCore",
+			"DeveloperSettings"
 		});
 	}
 }

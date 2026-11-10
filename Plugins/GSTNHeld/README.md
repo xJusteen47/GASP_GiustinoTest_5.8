@@ -6,7 +6,7 @@ branch, spec [combat-m10-held-objects.md](../../docs/architecture/combat-m10-hel
 credit to the thrower and the predicted ghost come from that plugin unchanged ("deterministic first",
 [entita-dinamiche review](../../docs/notes/reviews/entita-dinamiche-2026-11-09.md) §2, §9 category (a)).
 
-Status: **experimental (0.1), slice 1**, `EnabledByDefault: false`, enabled in `GASP_Giustino2.uproject`. Nothing else knows it.
+Status: **experimental (0.1), slice 2**, `EnabledByDefault: false`, enabled in `GASP_Giustino2.uproject`. Nothing else knows it.
 
 ## Modules
 
@@ -14,6 +14,13 @@ Status: **experimental (0.1), slice 1**, `EnabledByDefault: false`, enabled in `
 |---|---|---|
 | `GSTNHeldCore` | Runtime | Pure (engine + `GSTNCombatCore` + `GSTNProjectileCore`). `EGSTN_HeldObjectState` (Idle, Held, Flying), `FGSTN_HeldObjectTuning` (pickup radius, hold offset, rest half height, the throw as `FGSTN_ProjectileParams`; every default a test value), `FGSTN_HeldRules::ResolvePickups` (the race: earliest frame, then lower holder id, nearest object in range, lower object id on a tie), `HoldTransform`. Tests `GSTNHeld.Core.*`. |
 | `GSTNHeldRuntime` | Runtime | World side. `UGSTN_HeldObjectDefinition` (data asset with the tuning), `UGSTN_HeldObjectComponent` (replicated state, holder, flight, rest location; places its actor on every machine), `AGSTN_HeldObjectActor` (ready-made object, engine cube placeholder), `UGSTN_HeldSubsystem` (host: pickups, holder gone, flight landing), abilities `UGSTN_GA_HeldPickup` / `UGSTN_GA_HeldThrow` and their ServerOnly children, dev commands `gstn.Held.Spawn`, `Pickup`, `Throw`, `Report`. |
+
+Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN_HeldBreakReason`, `EGSTN_HeldThrowAim` and their rules
+(`BreaksOnState`, `BreaksOnEvent`, `ChooseThrowAim`, `DropPoint`), native tags `Combat.Held.Carrying` and `Command.Held.Pickup/Drop/Throw`,
+`UGSTN_HeldSlots` (default slots and bindings) and `UGSTN_HeldSettings` (`Config/DefaultGSTNHeld.ini`, every value a TEST VALUE). To the runtime:
+`FGSTN_HeldFragment` (sync fragment, feature id `Held` = 20), the `Held.Command` inbox kind (48), `FGSTN_HeldTickExtension` (projects
+`Combat.Held.Carrying`), `UGSTN_GA_HeldDrop`, the hold-to-aim throw, the object definition's `CommandActions` / `RangedAction` hooks and
+`gstn.Held.Drop`. Tests `GSTNHeld.Core.BreakRules`, `ThrowAim`, `DefaultSlots`, `GSTNHeld.Runtime.HandFragment`.
 
 ## How it works
 
@@ -28,12 +35,26 @@ Status: **experimental (0.1), slice 1**, `EnabledByDefault: false`, enabled in `
 5. **Flight and landing**: the object is drawn at its projectile. The host traces each frame's step of the segment against WorldStatic: on
    contact it removes the shot (`UGSTN_ProjectileSubsystem::RemoveProjectile`) and lands the object there; when the shot ended (hit or
    lifetime) the object drops to the floor below its last position. Landed objects are `Idle` and can be picked up again.
-
+6. **The link (slice 2)**: every hold start and end is also posted by the host to the holder's combat inbox (`Held.Command`, stamped with the
+   holder's latest frame). The holder's `FGSTN_HeldFragment` is sync state, so `Combat.Held.Carrying` (projected from it every frame) is
+   predicted and rolled back, the same on every machine for a frame; a client gets it by correction, as a grab. The held commands' bindings
+   require it. GSTNLink's Hand channel only links two fighters today; when it takes an object partner (M6 neutral hooks) this fragment folds in.
+7. **Drop and breaks**: `UGSTN_GA_HeldDrop` asks the host to put the object down; after the frame the host also ends the hold when the holder
+   has a tag of the object's break rules (default: `Combat.State.Hitstun`, `Combat.State.Tumble`, `Combat.Link.Role.Grabbed`, matched by name,
+   no dependency on GSTNLink) or gets an authoritative event of them (default `Combat.Event.KO`). The object lands `DropForwardCm` in front of the
+   holder. Log line `HeldBreak object= entity= reason= frame=`.
+8. **Buttons (owner's design 2026-11-10, defaults, subject to playtesting)**: grab button (Interact, B) = `Command.Held.Pickup` with nothing in
+   hand (one below the grab, so a grab target wins), `Command.Held.Drop` with an object; strong button (RT) = `Command.Held.Throw` above the strong
+   attacks while carrying. The throw waits for the release: a tap (shorter than `AimHoldFrames`) goes along the left stick (`EGSTN_ProjectileAim::Stick`,
+   the facing when centred); held, the reticle shows (`UGSTN_PrecisionAimComponent::SetHoldAimShown`) and it goes along the camera; with the reticle
+   toggled on (`bPrecisionAim`) a tap aims with the camera too. Kits get them with `UGSTN_HeldSlots::AddToSlotSet` and `DefaultBindings`.
+9. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
+   (its own ranged action) are data only; a later slice routes commands to them.
 ## Not yet (later slices of the plan)
 
-Hold as a Hand-channel link (G1: role tags, break rules, drop on hit per object, grabbed holder drops), interact probe and prompt (G2),
+GSTNLink Hand channel with an object partner (needs M6 neutral hooks), interact probe and prompt (G2),
 detached credit and `Combat.Source.Thrown` (G3), carry load and size classes (G6), aim policy, friendly fire by mode, impact behaviours
 Break/Bounce/Stick, ghost blend of the object itself (the projectile's ghost is used), thrown enemies (G9), editor preview, a player
-input binding (content: owner's kit Blueprints; plan: interact hold = pickup).
+input binding in the owner's kits (content: run `UGSTN_HeldSlots::AddToSlotSet` on the kit's slot set and bind the three abilities).
 
-Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`).
+Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`).

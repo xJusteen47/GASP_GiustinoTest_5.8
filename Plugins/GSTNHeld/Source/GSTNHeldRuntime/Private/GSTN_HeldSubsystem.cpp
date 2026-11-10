@@ -11,6 +11,10 @@
 #include "GSTN_HeldAbilities.h"
 #include "GSTN_HeldObjectActor.h"
 #include "GSTN_HeldObjectComponent.h"
+#include "GSTN_HeldSim.h"
+#include "GSTN_HeldTags.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
+#include "Simulation/GSTN_CombatSimTypes.h"
 #include "GSTN_ProjectileActor.h"
 #include "GSTN_ProjectileSubsystem.h"
 #include "HAL/IConsoleManager.h"
@@ -18,8 +22,6 @@
 #include "NetworkPredictionWorldManager.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 #include "World/GSTN_StepSnapshot.h"
-
-IMPLEMENT_MODULE(FDefaultModuleImpl, GSTNHeldRuntime);
 
 UGSTN_HeldSubsystem* UGSTN_HeldSubsystem::Get(const UWorld* World)
 {
@@ -38,6 +40,28 @@ void UGSTN_HeldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		PostFixedTickHandle = Manager->OnPostFixedTick.AddUObject(this, &UGSTN_HeldSubsystem::HandlePostFixedTick);
 	}
+	// The authoritative event stream (KO and the like): only the host has one, and only the host breaks holds
+	if (UGSTN_SimEventSubsystem* Events = Collection.InitializeDependency<UGSTN_SimEventSubsystem>())
+	{
+		TWeakObjectPtr<UGSTN_HeldSubsystem> WeakThis(this);
+		EventListener = Events->ListenNative(FGameplayTagQuery(), [WeakThis](const FGSTN_SimEvent& Event)
+		{
+			if (UGSTN_HeldSubsystem* This = WeakThis.Get())
+			{
+				This->HandleSimEvent(Event);
+			}
+		});
+	}
+}
+
+void UGSTN_HeldSubsystem::HandleSimEvent(const FGSTN_SimEvent& Event)
+{
+	AActor* Target = Event.Target.Get();
+	const UGSTN_HeldObjectComponent* Object = Target ? FindHeldBy(Target) : nullptr;
+	if (Object && FGSTN_HeldRules::BreaksOnEvent(Event.EventType, Object->GetBreakRules()))
+	{
+		PendingEventBreaks.Emplace(Target, Event.EventType);
+	}
 }
 
 void UGSTN_HeldSubsystem::Deinitialize()
@@ -50,8 +74,18 @@ void UGSTN_HeldSubsystem::Deinitialize()
 		}
 		PostFixedTickHandle.Reset();
 	}
+	if (EventListener.IsValid())
+	{
+		if (UGSTN_SimEventSubsystem* Events = GetWorld() ? GetWorld()->GetSubsystem<UGSTN_SimEventSubsystem>() : nullptr)
+		{
+			Events->StopListening(EventListener);
+		}
+		EventListener = FGSTN_SimEventListenerHandle();
+	}
 	Objects.Reset();
 	Pending.Reset();
+	PendingDrops.Reset();
+	PendingEventBreaks.Reset();
 	Super::Deinitialize();
 }
 
@@ -85,6 +119,14 @@ void UGSTN_HeldSubsystem::RequestPickup(AActor* Holder)
 	Pending.Add({ Holder, LastFrame + 1 });
 }
 
+void UGSTN_HeldSubsystem::RequestDrop(AActor* Holder)
+{
+	if (Holder && HasAuthority())
+	{
+		PendingDrops.AddUnique(Holder);
+	}
+}
+
 UGSTN_HeldObjectComponent* UGSTN_HeldSubsystem::FindHeldBy(const AActor* Holder) const
 {
 	if (!Holder)
@@ -109,6 +151,7 @@ void UGSTN_HeldSubsystem::NoteThrown(AActor* Holder, AGSTN_Projectile& Shot)
 	}
 	if (UGSTN_HeldObjectComponent* Object = FindHeldBy(Holder))
 	{
+		PostHoldCommand(Holder, *Object, false);
 		Object->SetFlying(Shot);
 		UE_LOG(LogGSTNHeld, Log, TEXT("HeldObject %d thrown by %s at frame %d"), Object->GetObjectId(), *GetNameSafe(Holder), Shot.GetSegment().StartFrame);
 	}
@@ -121,8 +164,106 @@ void UGSTN_HeldSubsystem::HandlePostFixedTick(int32 ServerFrame, int32 EndTimeMS
 	{
 		return;
 	}
+	// Holds end before new ones start: a holder that drops and picks up in one frame gets the new object, never loses it to its own drop
+	StepHolds(ServerFrame);
 	ResolvePickups(ServerFrame);
 	StepObjects(ServerFrame);
+}
+
+void UGSTN_HeldSubsystem::PostHoldCommand(AActor* Holder, const UGSTN_HeldObjectComponent& Object, bool bHold) const
+{
+	const UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(GetWorld());
+	UGSTN_CombatWorldSubsystem* Combat = UGSTN_CombatWorldSubsystem::Get(GetWorld());
+	const int32 EntityId = Projectiles && Holder ? Projectiles->FindEntityIdOf(Holder) : INDEX_NONE;
+	if (!Combat || EntityId == INDEX_NONE)
+	{
+		return;
+	}
+	// Stamped with the holder's own latest frame (the link watchdog's rule): the holder consumes it on its next frame on the host, and its
+	// client gets the result by correction
+	const UGSTN_CombatSimComponent* Sim = Holder->FindComponentByClass<UGSTN_CombatSimComponent>();
+	const FGSTN_CombatSyncState* Sync = Sim ? Sim->GetSyncState() : nullptr;
+	FGSTN_HeldCommandEntry Command;
+	Command.bHold = bHold;
+	Command.ObjectRef = Object.GetObjectRef();
+	Command.Serial = Object.GetHoldSerial();
+	FGSTN_InboxEntry Entry = FGSTN_HeldInbox::MakeCommand(Command);
+	Entry.Frame = Sync ? Sync->Core.Input.History.GetLatestFrame() : LastFrame;
+	Entry.SenderId = EntityId;
+	const bool bPosted = Combat->PostToInbox(EntityId, Entry);
+	UE_LOG(LogGSTNHeld, Log, TEXT("HeldLink %s entity=%d object=%d serial=%d stamp=%d posted=%d"), bHold ? TEXT("hold") : TEXT("release"), EntityId,
+		Object.GetObjectId(), static_cast<int32>(Command.Serial), Entry.Frame, bPosted ? 1 : 0);
+}
+
+void UGSTN_HeldSubsystem::EndHold(UGSTN_HeldObjectComponent& Object, EGSTN_HeldBreakReason Reason, int32 Frame, const FString& Detail)
+{
+	AActor* Owner = Object.GetOwner();
+	AActor* Holder = Object.GetHolder();
+	if (!Owner)
+	{
+		return;
+	}
+	const FGSTN_HeldBreakRules& Rules = Object.GetBreakRules();
+	FVector Point = Owner->GetActorLocation();
+	if (IsValid(Holder))
+	{
+		PostHoldCommand(Holder, Object, false);
+		// In front of the holder as hits judge it (its snapshot entry), the actor without one
+		const UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(GetWorld());
+		const UGSTN_CombatWorldSubsystem* Combat = UGSTN_CombatWorldSubsystem::Get(GetWorld());
+		const int32 Id = Projectiles ? Projectiles->FindEntityIdOf(Holder) : INDEX_NONE;
+		const FGSTN_SnapshotEntry* Entry = Combat && Id != INDEX_NONE ? Combat->GetSnapshot().Find(Id) : nullptr;
+		Point = FGSTN_HeldRules::DropPoint(Entry ? Entry->Transform : Holder->GetActorTransform(), Rules);
+	}
+	Object.SetIdleAt(FloorBelow(Point, Object.GetTuning().RestHalfHeight, Owner));
+	const UGSTN_ProjectileSubsystem* Ids = UGSTN_ProjectileSubsystem::Get(GetWorld());
+	UE_LOG(LogGSTNHeld, Log, TEXT("HeldBreak object=%d entity=%d reason=%s frame=%d %s"), Object.GetObjectId(),
+		Ids && IsValid(Holder) ? Ids->FindEntityIdOf(Holder) : INDEX_NONE,
+		*StaticEnum<EGSTN_HeldBreakReason>()->GetNameStringByValue(static_cast<int64>(Reason)), Frame, *Detail);
+}
+
+void UGSTN_HeldSubsystem::StepHolds(int32 Frame)
+{
+	TArray<TWeakObjectPtr<AActor>> Drops = MoveTemp(PendingDrops);
+	PendingDrops.Reset();
+	for (const TWeakObjectPtr<AActor>& Holder : Drops)
+	{
+		if (UGSTN_HeldObjectComponent* Object = FindHeldBy(Holder.Get()))
+		{
+			EndHold(*Object, EGSTN_HeldBreakReason::Dropped, Frame);
+		}
+	}
+	TArray<TPair<TWeakObjectPtr<AActor>, FGameplayTag>> Events = MoveTemp(PendingEventBreaks);
+	PendingEventBreaks.Reset();
+	for (const TPair<TWeakObjectPtr<AActor>, FGameplayTag>& Break : Events)
+	{
+		if (UGSTN_HeldObjectComponent* Object = FindHeldBy(Break.Key.Get()))
+		{
+			EndHold(*Object, EGSTN_HeldBreakReason::HolderEvent, Frame, Break.Value.ToString());
+		}
+	}
+	// The holder's state at the end of this frame: its tags are the combat tick's projection of its sync state
+	FGameplayTagContainer HolderTags;
+	for (const TWeakObjectPtr<UGSTN_HeldObjectComponent>& Each : Objects)
+	{
+		UGSTN_HeldObjectComponent* Object = Each.Get();
+		if (!Object || Object->GetState() != EGSTN_HeldObjectState::Held || !IsValid(Object->GetHolder()))
+		{
+			continue;
+		}
+		const UAbilitySystemComponent* AbilitySystem = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Object->GetHolder());
+		if (!AbilitySystem)
+		{
+			continue;
+		}
+		HolderTags.Reset();
+		AbilitySystem->GetOwnedGameplayTags(HolderTags);
+		const FGSTN_HeldBreakRules& Rules = Object->GetBreakRules();
+		if (FGSTN_HeldRules::BreaksOnState(HolderTags, Rules))
+		{
+			EndHold(*Object, EGSTN_HeldBreakReason::HolderState, Frame, HolderTags.Filter(Rules.DropWhenHolderHasAny).ToStringSimple());
+		}
+	}
 }
 
 void UGSTN_HeldSubsystem::ResolvePickups(int32 Frame)
@@ -178,6 +319,7 @@ void UGSTN_HeldSubsystem::ResolvePickups(int32 Frame)
 			continue;
 		}
 		ObjectOf[Won->ObjectId]->SetHeld(HolderOf[Won->HolderId]);
+		PostHoldCommand(HolderOf[Won->HolderId], *ObjectOf[Won->ObjectId], true);
 		UE_LOG(LogGSTNHeld, Log, TEXT("HeldPickup entity %d holds object %d at frame %d"), Won->HolderId, Won->ObjectId, Frame);
 	}
 }
@@ -208,8 +350,7 @@ void UGSTN_HeldSubsystem::StepObjects(int32 Frame)
 		const float HalfHeight = Object->GetTuning().RestHalfHeight;
 		if (Object->GetState() == EGSTN_HeldObjectState::Held && !IsValid(Object->GetHolder()))
 		{
-			Object->SetIdleAt(FloorBelow(Owner->GetActorLocation(), HalfHeight, Owner));
-			UE_LOG(LogGSTNHeld, Log, TEXT("HeldObject %d dropped at frame %d (holder gone)"), Object->GetObjectId(), Frame);
+			EndHold(*Object, EGSTN_HeldBreakReason::HolderGone, Frame);
 			continue;
 		}
 		if (Object->GetState() != EGSTN_HeldObjectState::Flying)
@@ -267,6 +408,19 @@ void UGSTN_HeldSubsystem::LogReport() const
 			*GetNameSafe(GetWorld()), *Each->GetOwner()->GetName(), static_cast<int32>(Each->GetState()),
 			Holder && Projectiles ? Projectiles->FindEntityIdOf(Holder) : INDEX_NONE, Holder ? FVector::Dist(Holder->GetActorLocation(), Location) : -1.0,
 			Location.X, Location.Y, Location.Z);
+	}
+	// Every combat pawn's hand in this world: the projected Combat.Held.Carrying (from its predicted or corrected fragment)
+	if (const UGSTN_CombatWorldSubsystem* Combat = UGSTN_CombatWorldSubsystem::Get(GetWorld()))
+	{
+		TArray<int32> Ids;
+		Combat->GetRegisteredEntityIds(Ids);
+		Ids.Sort();
+		for (const int32 Id : Ids)
+		{
+			const UAbilitySystemComponent* AbilitySystem = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Combat->FindOwnerActor(Id));
+			UE_LOG(LogGSTNHeld, Log, TEXT("HeldHandReport world=%s entity=%d carrying=%d"), *GetNameSafe(GetWorld()), Id,
+				AbilitySystem && AbilitySystem->HasMatchingGameplayTag(GSTNHeldTags::Held_Carrying) ? 1 : 0);
+		}
 	}
 }
 
@@ -414,6 +568,30 @@ namespace GSTNHeldConsole
 		UE_LOG(LogGSTNHeld, Log, TEXT("HeldThrowAbility thrower=%d target=%d activated=%d"), ThrowerIndex, TargetIndex, bActivated ? 1 : 0);
 	}
 
+	void Drop(const TArray<FString>& Args, UWorld* InWorld)
+	{
+		UWorld* World = FindAuthorityWorld(InWorld);
+		TArray<APawn*> Pawns;
+		CombatPawns(World, Pawns);
+		const int32 PawnIndex = Args.IsValidIndex(0) ? FCString::Atoi(*Args[0]) : 0;
+		if (!Pawns.IsValidIndex(PawnIndex))
+		{
+			UE_LOG(LogGSTNHeld, Warning, TEXT("gstn.Held.Drop: no combat pawn %d"), PawnIndex);
+			return;
+		}
+		FGameplayAbilitySpecHandle Handle;
+		UAbilitySystemComponent* AbilitySystem = nullptr;
+		if (!GrantedInstance<UGSTN_GA_HeldDropServer>(Pawns[PawnIndex], Handle, AbilitySystem))
+		{
+			UE_LOG(LogGSTNHeld, Warning, TEXT("gstn.Held.Drop: no ability system or instance on pawn %d"), PawnIndex);
+			return;
+		}
+		FGameplayEventData Payload;
+		Payload.Instigator = Pawns[PawnIndex];
+		const bool bActivated = AbilitySystem->TriggerAbilityFromGameplayEvent(Handle, AbilitySystem->AbilityActorInfo.Get(), FGameplayTag(), &Payload, *AbilitySystem);
+		UE_LOG(LogGSTNHeld, Log, TEXT("HeldDropAbility pawn=%d activated=%d"), PawnIndex, bActivated ? 1 : 0);
+	}
+
 	void Report(const TArray<FString>& Args, UWorld* InWorld)
 	{
 		if (const UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(InWorld))
@@ -434,6 +612,10 @@ namespace GSTNHeldConsole
 		TEXT("gstn.Held.Throw"),
 		TEXT("Host: grants the ServerOnly throw ability to a combat pawn and throws its held object at another pawn. Args: [Thrower=0] [Target=1]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Throw));
+	FAutoConsoleCommandWithWorldAndArgs GHeldDropCommand(
+		TEXT("gstn.Held.Drop"),
+		TEXT("Host: grants the ServerOnly drop ability to a combat pawn and activates it (puts its object down in front of it). Args: [Pawn=0]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Drop));
 	FAutoConsoleCommandWithWorldAndArgs GHeldReportCommand(
 		TEXT("gstn.Held.Report"),
 		TEXT("Logs every held object of the world it runs in (state, holder entity, location): HeldReport / HeldObjectReport lines"),

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "GameplayTagContainer.h"
 #include "Engine/DataAsset.h"
 #include "GSTN_HeldTypes.h"
 
@@ -20,6 +21,18 @@ class GSTNHELDRUNTIME_API UGSTN_HeldObjectDefinition : public UPrimaryDataAsset
 public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Held", meta = (ShowOnlyInnerProperties))
 	FGSTN_HeldObjectTuning Tuning;
+
+	/**
+	 * HOOK, not read yet (owner's design 2026-11-10: "the other attack buttons do something depending on the object"): the ability a command
+	 * starts while this object is in hand, by command tag (Command.Attack.*, Command.Special.*). Empty = the kit's own move. A later slice gives
+	 * the holder these abilities for the hold and routes the commands to them (the plan's held-weapon overlay, section 6)
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Held|Actions", meta = (Categories = "Command"))
+	TMap<FGameplayTag, TSubclassOf<class UGameplayAbility>> CommandActions;
+
+	/** HOOK, not read yet: the object's own ranged action (a gun's shot, a wand's bolt), bound by a later slice. Null = none */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Held|Actions")
+	TSubclassOf<class UGameplayAbility> RangedAction;
 };
 
 /**
@@ -45,6 +58,17 @@ public:
 	TObjectPtr<UGSTN_HeldObjectDefinition> Definition;
 
 	const FGSTN_HeldObjectTuning& GetTuning() const;
+
+	/** When its holder drops it: the tuning's own rules (bOverrideBreakRules) or the project's (UGSTN_HeldSettings) */
+	const FGSTN_HeldBreakRules& GetBreakRules() const;
+
+	/** HOOK: the ability Command starts with this object in hand (UGSTN_HeldObjectDefinition::CommandActions); null = the kit's own. Not read yet */
+	TSubclassOf<class UGameplayAbility> FindCommandAction(const FGameplayTag& Command) const;
+
+	/** Host: the serial of the current (or last) hold, carried by the holder's FGSTN_HeldFragment */
+	uint8 GetHoldSerial() const { return HoldSerial; }
+	/** The id the holder's fragment names (host object id + 1; 0 = none) */
+	uint16 GetObjectRef() const { return ObjectId == INDEX_NONE ? 0 : static_cast<uint16>(ObjectId + 1); }
 
 	EGSTN_HeldObjectState GetState() const { return State; }
 	AActor* GetHolder() const { return Holder; }
@@ -85,6 +109,9 @@ private:
 	FVector_NetQuantize10 RestLocation;
 
 	int32 ObjectId = INDEX_NONE;
+
+	/** Host: bumped by every SetHeld */
+	uint8 HoldSerial = 0;
 
 	/** Host: the flight's motion, kept after the projectile actor is gone (hit or expiry) to land where it ended */
 	FGSTN_BallisticSegment FlightSegment;

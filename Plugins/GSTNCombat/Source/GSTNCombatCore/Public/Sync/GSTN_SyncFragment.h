@@ -31,6 +31,9 @@ namespace GSTNFeatureIds
 	/** FGSTN_DrillFragment (GSTNSpinDrillNP): the spin and drill state of an entity */
 	constexpr uint8 SpinDrill = 19;
 
+	/** FGSTN_HeldFragment (GSTNHeldRuntime, M10): the object an entity holds in its hand */
+	constexpr uint8 Held = 20;
+
 	constexpr uint8 FirstGame = 128;
 	constexpr uint8 FirstTest = 240;
 	constexpr uint8 TestA = 240;
@@ -55,6 +58,9 @@ namespace GSTNInboxKinds
 	constexpr uint8 LastDefence = 31;
 	constexpr uint8 FirstLink = 32;
 	constexpr uint8 LastLink = 47;
+	/** GSTNHeld (M10): the host's hold and release of an object (FGSTN_HeldInboxKinds) */
+	constexpr uint8 FirstHeld = 48;
+	constexpr uint8 LastHeld = 55;
 	constexpr uint8 FirstGame = 128;
 	constexpr uint8 FirstTest = 240;
 	constexpr uint8 TestA = 240;

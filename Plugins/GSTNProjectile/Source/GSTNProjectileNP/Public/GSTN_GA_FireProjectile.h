@@ -17,6 +17,11 @@ enum class EGSTN_ProjectileAim : uint8
 	/** Along the camera aim of the activating command (GetAimRotation), raised by LaunchPitchDeg; the facing without an aim */
 	CommandAim,
 	/**
+	 * Along the move stick of the fire frame's command turned onto the shooter's plane (camera relative, as the stick moves the character),
+	 * raised by LaunchPitchDeg; the facing with the stick centred (M10: a tapped throw goes where the left stick points)
+	 */
+	Stick,
+	/**
 	 * At the Target actor of the triggering gameplay event (AI, traps, the harness), solved as a straight line or, with gravity, as
 	 * the flat or high arc that passes through it. Never used to steer a player's shot: the player aims (precision tools, no auto-play)
 	 */
@@ -63,6 +68,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Projectile|Aim", meta = (ClampMin = "-89.0", ClampMax = "89.0", ForceUnits = "deg"))
 	float LaunchPitchDeg = 0.f;
 
+	/** Stick: below this stick length (0..1) the stick counts as centred and the shot goes along the facing */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Projectile|Aim", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float StickAimDeadzone = 0.3f;
+
 	/** EventTarget with gravity: the high arc (lob) instead of the flat one */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Projectile|Aim")
 	bool bHighArc = false;
@@ -89,6 +98,19 @@ protected:
 	 * fired, no ghost). The default keeps the Projectile property as it is
 	 */
 	virtual bool PrepareShot(FGSTN_ProjectileParams& InOutParams, bool bHost) { return true; }
+
+	/**
+	 * Extension hook, asked once in ActivateAbility after the context is captured: true when the child fires later itself (a held button that aims
+	 * until its release calls Fire and FinishFire from its own tick); FireDelayFrames is then not used. Must be the same on every machine (read
+	 * the activation context, not the world). The default fires as usual
+	 */
+	virtual bool DeferFire() const { return false; }
+
+	/**
+	 * Extension hook: the aim of this shot, read once at the fire frame on every machine that builds it (host and ghost), so it must come from the
+	 * ability's sync state or the frame's command, never a member changed at run time. The default is the Aim property
+	 */
+	virtual EGSTN_ProjectileAim GetShotAim() const { return Aim; }
 
 	/** Extension hook, host only: the projectile this ability just spawned */
 	virtual void OnShotFired(class AGSTN_Projectile& Shot) {}

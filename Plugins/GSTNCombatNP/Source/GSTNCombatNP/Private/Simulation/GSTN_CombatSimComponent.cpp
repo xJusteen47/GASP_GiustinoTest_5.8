@@ -657,6 +657,12 @@ FRotator UGSTN_CombatSimComponent::GetAimRotation() const
 		FRotator::NormalizeAxis(FGSTN_DirectionClassifier::DequantizeAim(FrameAim.Yaw)), 0.f) : FRotator::ZeroRotator;
 }
 
+void UGSTN_CombatSimComponent::GetFrameStick(FVector2D& OutStick, float& OutCameraYawDegrees) const
+{
+	OutStick = FVector2D(FGSTN_DirectionClassifier::DequantizeStickAxis(FrameAim.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(FrameAim.StickY));
+	OutCameraYawDegrees = FGSTN_DirectionClassifier::DequantizeYaw(FrameAim.CameraYaw);
+}
+
 const FGSTN_CombatSyncState* UGSTN_CombatSimComponent::GetSyncState() const
 {
 	return NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>();
@@ -851,6 +857,10 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	FrameAim.bHasAim = Input.Cmd->bHasAim;
 	FrameAim.Yaw = Input.Cmd->AimYaw;
 	FrameAim.Pitch = Input.Cmd->AimPitch;
+	FrameAim.StickX = Input.Cmd->StickX;
+	FrameAim.StickY = Input.Cmd->StickY;
+	FrameAim.CameraYaw = Input.Cmd->CameraYaw;
+	FrameAim.bPrecisionAim = Input.Cmd->bPrecisionAim;
 
 	// Requests older than this frame are dead (the ability system executed them in their own frame's pre-tick)
 	OutSync.Core.Requests.PruneBefore(Frame);

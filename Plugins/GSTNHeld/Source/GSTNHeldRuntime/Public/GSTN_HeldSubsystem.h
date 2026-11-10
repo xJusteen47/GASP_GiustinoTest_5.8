@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GSTN_HeldTypes.h"
+#include "Events/GSTN_SimEventSubsystem.h"
 #include "Subsystems/WorldSubsystem.h"
 
 #include "GSTN_HeldSubsystem.generated.h"
@@ -20,9 +21,14 @@ class UGSTN_HeldObjectComponent;
  * - a flying object follows its GSTNProjectile shot: when the shot's segment from F - 1 to F crosses the world (WorldStatic) the shot is
  *   removed and the object lands there; when the shot ended (hit or lifetime) the object drops to the floor below where it was.
  *
- * Not simulation state: pickups and throws are host side effects of the pickup and throw abilities (like a projectile's fire), and a
- * client only reads the replicated object state to draw and to build its ghost. Hold as a Hand-channel link (plan G1) replaces the host
- * table later; the race rule and the data stay.
+ * - a held object whose holder asked to put it down (RequestDrop), got a break tag (FGSTN_HeldBreakRules::DropWhenHolderHasAny: hitstun, tumble,
+ *   grabbed) or a break event (DropOnHolderEvents: KO) is placed in front of the holder on the floor (slice 2).
+ *
+ * The link (slice 2): every start and end of a hold is also posted to the holder's combat inbox (FGSTN_HeldInbox, stamped with the holder's
+ * frame), so the holder's FGSTN_HeldFragment and its projected Combat.Held.Carrying are simulation state: predicted, rolled back, the same on
+ * every machine for a frame. The object half stays the host's: pickups and throws are host side effects of the abilities (like a projectile's
+ * fire), and a client only reads the replicated object state to draw and to build its ghost. GSTNLink's Hand channel is fighter-to-fighter
+ * only today; when it takes an object partner (M6 neutral hooks) the fragment folds into it and the rules here stay.
  */
 UCLASS()
 class GSTNHELDRUNTIME_API UGSTN_HeldSubsystem : public UWorldSubsystem
@@ -40,6 +46,9 @@ public:
 
 	/** Host only: Holder asks to pick up the nearest object; resolved after the next fixed frame, against every other request of it */
 	void RequestPickup(AActor* Holder);
+
+	/** Host only: Holder puts its object down (the grab button again); done after the next fixed frame. Nothing held: nothing happens */
+	void RequestDrop(AActor* Holder);
 
 	/** The object Holder holds, on any machine (from the replicated state); null if none */
 	UGSTN_HeldObjectComponent* FindHeldBy(const AActor* Holder) const;
@@ -64,6 +73,13 @@ private:
 	void HandlePostFixedTick(int32 ServerFrame, int32 EndTimeMS, bool bResimulating);
 	void ResolvePickups(int32 Frame);
 	void StepObjects(int32 Frame);
+	/** Host: the drops asked for and the breaks of the frame (requests, holder tags, holder events) */
+	void StepHolds(int32 Frame);
+	/** Host: Object stops being held for Reason: placed in front of its holder (or where it is without one) and the holder's hand emptied */
+	void EndHold(UGSTN_HeldObjectComponent& Object, EGSTN_HeldBreakReason Reason, int32 Frame, const FString& Detail = FString());
+	/** Host: posts the start (bHold) or the end of Object's hold to Holder's combat inbox, stamped with the holder's latest frame */
+	void PostHoldCommand(AActor* Holder, const UGSTN_HeldObjectComponent& Object, bool bHold) const;
+	void HandleSimEvent(const FGSTN_SimEvent& Event);
 	/** The point on the floor below Location (WorldStatic), raised by HalfHeight; Location itself without a floor within 50 m */
 	FVector FloorBelow(const FVector& Location, float HalfHeight, const AActor* Ignore) const;
 
@@ -75,6 +91,10 @@ private:
 
 	TArray<TWeakObjectPtr<UGSTN_HeldObjectComponent>> Objects;
 	TArray<FQueuedPickup> Pending;
+	/** Holders that asked to drop, and holders an event of the frame broke (with the event type), served by StepHolds */
+	TArray<TWeakObjectPtr<AActor>> PendingDrops;
+	TArray<TPair<TWeakObjectPtr<AActor>, FGameplayTag>> PendingEventBreaks;
+	FGSTN_SimEventListenerHandle EventListener;
 	int32 NextObjectId = 0;
 	int32 LastFrame = INDEX_NONE;
 	FDelegateHandle PostFixedTickHandle;

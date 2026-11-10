@@ -35,11 +35,42 @@ public:
 };
 
 /**
+ * Put the held object down (M10 slice 2: the grab button again, Command.Held.Drop, binding requires Combat.Held.Carrying). Like the pickup it
+ * ends at once and its only effect is a host side effect: UGSTN_HeldSubsystem::RequestDrop places the object in front of the holder after the
+ * frame and empties the holder's hand (FGSTN_HeldFragment), which the client gets by correction.
+ */
+UCLASS(Blueprintable)
+class GSTNHELDRUNTIME_API UGSTN_GA_HeldDrop : public UGSTN_GA_Base
+{
+	GENERATED_BODY()
+
+public:
+	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
+};
+
+/** The same, ServerOnly: for the harness, AI and dev commands */
+UCLASS(Blueprintable)
+class GSTNHELDRUNTIME_API UGSTN_GA_HeldDropServer : public UGSTN_GA_HeldDrop
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_HeldDropServer(const FObjectInitializer& ObjectInitializer);
+};
+
+/**
  * Throw the held object: a GSTNProjectile shot whose template is the object's throw tuning (speed, gravity, lifetime, hit shape and hit
  * data), fired by the projectile ability path, so the host sweep, PostHit into the victim's inbox, the credit to the thrower (AttackerId)
  * and the predicted ghost on the throwing client are the projectile plugin's, unchanged. On the host the object then flies with the
- * shot (UGSTN_HeldSubsystem::NoteThrown). Nothing held: no shot, no ghost. Aim, launch pitch and delay are the fire ability's fields
- * (TEST VALUES here); the plan's aim policy (stick or camera aim while aiming) comes with a later slice.
+ * shot (UGSTN_HeldSubsystem::NoteThrown). Nothing held: no shot, no ghost.
+ *
+ * Started by a button (Command.Held.Throw, the strong button by default) it fires on the button's release (owner's design 2026-11-10, TEST
+ * VALUES in UGSTN_HeldSettings::ThrowInput): released before AimHoldFrames it is a tap and goes along the left stick of the release frame
+ * (the facing with the stick centred); held longer the reticle shows (UGSTN_PrecisionAimComponent::SetHoldAimShown, local) and the throw
+ * goes along the camera of the release frame; with the reticle toggled on a tap aims with the camera too. Held MaxAimFrames, it goes on its
+ * own. The press frame and the chosen aim are sync variables, so a re-simulation fires on the same frame the same way. Started without a
+ * button (an event, the harness) it fires at once with the Aim property (EventTarget for the dev command).
  */
 UCLASS(Blueprintable)
 class GSTNHELDRUNTIME_API UGSTN_GA_HeldThrow : public UGSTN_GA_FireProjectile
@@ -49,9 +80,29 @@ class GSTNHELDRUNTIME_API UGSTN_GA_HeldThrow : public UGSTN_GA_FireProjectile
 public:
 	UGSTN_GA_HeldThrow(const FObjectInitializer& ObjectInitializer);
 
+	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
+	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
+	virtual void OnSimulationTick(const FAbilitySystemTimeStep& TimeStep) override;
+
 protected:
 	virtual bool PrepareShot(FGSTN_ProjectileParams& InOutParams, bool bHost) override;
 	virtual void OnShotFired(AGSTN_Projectile& Shot) override;
+	virtual bool DeferFire() const override;
+	virtual EGSTN_ProjectileAim GetShotAim() const override;
+
+private:
+	/** Local presentation: the reticle of a held aim on the pawn's own machine */
+	void ShowAimReticle(bool bShown) const;
+
+	/** Combat clock of the press; INDEX_NONE when not waiting for a release */
+	UPROPERTY(Transient)
+	FSyncInteger PressClock;
+
+	/** EGSTN_HeldThrowAim chosen at the release */
+	UPROPERTY(Transient)
+	FSyncByte ReleaseAim;
 };
 
 /** The same, ServerOnly: for the harness, AI and dev commands */

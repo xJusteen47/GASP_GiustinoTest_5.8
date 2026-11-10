@@ -13,9 +13,10 @@ import unreal
 import gasnpp_test as g
 import defence_scenarios as ds
 
-SUITE_HELD = ['held_pickup_throw_hit']
+SUITE_HELD = ['held_pickup_throw_hit', 'held_drop_and_break']
 _marks = {}
 
+_HAND = re.compile(r'HeldHandReport world=(\S+) entity=(\d+) carrying=(\d)')
 _REPORT = re.compile(r'HeldObjectReport world=(\S+) name=(\S+) state=(\d) holderEntity=(-?\d+) holderDistCm=(-?[\d.]+) loc=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)')
 
 
@@ -42,6 +43,17 @@ def _reports():
         _cmd('gstn.Held.Report', wi)
         rows = _REPORT.findall(_log())[before:]
         out.append(rows[-1] if rows else None)
+    return out
+
+
+def _hands():
+    """Per world: {entity id: carrying 0/1}, the projected Combat.Held.Carrying of every combat pawn (from its fragment)"""
+    out = []
+    for wi in range(len(g.worlds())):
+        before = len(_HAND.findall(_log()))
+        _cmd('gstn.Held.Report', wi)
+        rows = _HAND.findall(_log())[before:]
+        out.append({int(r[1]): int(r[2]) for r in rows})
     return out
 
 
@@ -128,6 +140,74 @@ def scenario_held_pickup_throw_hit(client=1):
         (6.5, lambda: ('repick', capture('repick'))),
         (6.6, run.at('pawn 1 picks the landed object up again', repicked)),
         (6.7, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_held_drop_and_break(client=1):
+    """Slice 2, the hold as a link. Every pawn picks up its own object; every world sees each holder carrying (Combat.Held.Carrying projected
+    from the holder's synced fragment, so a client sees it by correction). Pawn 0 puts its object down (drop command): HeldBreak reason
+    Dropped, its hand empty in every world, the others still carrying. Pawn 0 picks it up again and throws it at pawn 1: the entity the shot
+    hits (pawn 1 or a pawn in the line of fire) loses its object (HeldBreak reason HolderState, its hitstun), its hand empty in every world;
+    a holder that was not hit keeps its object"""
+    run = g._Run('held_drop_and_break', client, judge_reconciles=False, sample=False)
+    st = {}
+
+    def npawns():
+        return len(g.comps(g.worlds()[0]))
+
+    def capture(name):
+        st[name] = _hands()
+        return f'{name} {st[name]}'
+
+    def holders():
+        # entity -> object, the first pickup of each entity
+        out = {}
+        for e, o in re.findall(r'HeldPickup entity (\d+) holds object (\d+)', _log()):
+            out.setdefault(int(e), int(o))
+        return out
+
+    def all_carry():
+        h = holders()
+        rows = st.get('carry', [])
+        ok = len(h) == npawns() and rows and all(all(w.get(e) == 1 for e in h) for w in rows)
+        return ok, f'holders {h} hands {rows}'
+
+    def dropped():
+        h = holders()
+        first = min(h) if h else None
+        rows = st.get('dropped', [])
+        breaks = re.findall(r'HeldBreak object=(\d+) entity=(-?\d+) reason=(\w+)', _log())
+        st['first'] = first
+        ok = (first is not None and [b for b in breaks if b[2] == 'Dropped'] == [(str(h[first]), str(first), 'Dropped')]
+              and rows and all(w.get(first) == 0 and all(w.get(e) == 1 for e in h if e != first) for w in rows))
+        return ok, f'breaks {breaks} hands {rows}'
+
+    def broke_on_hit():
+        hits = re.findall(r'Projectile (\d+) hit (\d+) at frame (\d+)', _log())
+        breaks = re.findall(r'HeldBreak object=(\d+) entity=(-?\d+) reason=(\w+) frame=(\d+) (.*)', _log())
+        hit = int(hits[0][1]) if hits else None
+        state = [b for b in breaks if b[2] == 'HolderState']
+        rows = st.get('after', [])
+        others = [e for e in holders() if e not in (st.get('first'), hit)]
+        ok = (len(hits) == 1 and len(state) == 1 and int(state[0][1]) == hit and 'Hitstun' in state[0][4]
+              and rows and all(w.get(hit) == 0 and all(w.get(e) == 1 for e in others) for w in rows))
+        return ok, f'hit {hit} breaks {breaks} others {others} hands {rows}'
+
+    steps = [
+        (0.0, lambda: ('setup', _setup())),
+        (0.5, lambda: ('spawn', [_cmd(f'gstn.Held.Spawn {i} 120') for i in range(npawns())])),
+        (1.0, lambda: ('pickup', [_cmd(f'gstn.Held.Pickup {i}') for i in range(npawns())])),
+        (2.5, lambda: ('carry', capture('carry'))),
+        (2.6, run.at('every pawn holds its object; every world projects Carrying for each holder', all_carry)),
+        (2.7, lambda: ('drop', _cmd('gstn.Held.Drop 0'))),
+        (4.0, lambda: ('dropped', capture('dropped'))),
+        (4.1, run.at('pawn 0 put it down (Dropped); its hand empty everywhere, the others still carry', dropped)),
+        (4.2, lambda: ('repick', _cmd('gstn.Held.Pickup 0'))),
+        (5.2, lambda: ('throw', _cmd('gstn.Held.Throw 0 1'))),
+        (8.0, lambda: ('after', capture('after'))),
+        (8.1, run.at('the hit holder dropped its object (HolderState, hitstun); its hand empty everywhere; others keep theirs', broke_on_hit)),
+        (8.2, run.finish()),
     ]
     run.run(steps)
 

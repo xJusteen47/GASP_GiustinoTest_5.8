@@ -52,9 +52,17 @@ public:
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	/** True while the reticle is on and the match mode allows it */
+	/** True while the reticle is on and the match mode allows it, or while an aiming move holds it on (SetHoldAimShown) */
 	UFUNCTION(BlueprintPure, Category = "Combat|Precision")
-	bool IsReticleShown() const { return bReticleOn && bModeAllowsReticle; }
+	bool IsReticleShown() const { return (bReticleOn && bModeAllowsReticle) || bHoldAimShown; }
+
+	/**
+	 * Shows the reticle while a held button aims (M10: the strong button held with an object in hand aims the throw along the camera), in every
+	 * match mode, without touching the toggle. Local presentation: the move that sets it clears it when it ends. It also sets the command's
+	 * bPrecisionAim, so a simulation that reads it sees the same frames the player saw the reticle
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Precision")
+	void SetHoldAimShown(bool bShown) { bHoldAimShown = bShown; }
 
 	/** Turns the reticle on or off as the button does (ignored, and off, where the mode has no reticle) */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Precision")
@@ -91,4 +99,5 @@ private:
 	bool bReticleOn = false;
 	bool bModeAllowsReticle = false;
 	bool bToggleWasHeld = false;
+	bool bHoldAimShown = false;
 };

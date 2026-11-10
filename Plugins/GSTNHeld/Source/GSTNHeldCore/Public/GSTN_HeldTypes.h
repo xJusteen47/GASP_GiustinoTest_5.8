@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "Movement/GSTN_BallisticMode.h"
 
 #include "GSTN_HeldTypes.generated.h"
@@ -19,6 +20,75 @@ enum class EGSTN_HeldObjectState : uint8
 	Held,
 	/** Thrown: drawn with its projectile until the projectile hits, lands or expires */
 	Flying
+};
+
+/** Why a hold ended (logs, the harness, a later Combat.Event.Held.* event) */
+UENUM(BlueprintType)
+enum class EGSTN_HeldBreakReason : uint8
+{
+	None,
+	/** The holder put it down (the grab button again) */
+	Dropped,
+	/** The holder threw it */
+	Thrown,
+	/** The holder got a tag of the break rules (hit, launched, grabbed) */
+	HolderState,
+	/** The holder got an event of the break rules (KO) */
+	HolderEvent,
+	/** The holder is gone */
+	HolderGone
+};
+
+/**
+ * When a holder lets go of its object without wanting to (plan 7, break rules). Tags and events are matched by name on the holder, so the rules
+ * need no dependency on the plugins that project them (GSTNLink's Combat.Link.Role.Grabbed, the combat tick's hitstun): a tag no plugin
+ * projects simply never matches. Defaults in DefaultGSTNHeld.ini (UGSTN_HeldSettings), an object can override them
+ */
+USTRUCT(BlueprintType)
+struct GSTNHELDCORE_API FGSTN_HeldBreakRules
+{
+	GENERATED_BODY()
+
+	/** The holder drops the object when it has any of these tags at the end of a frame. TEST VALUES: hitstun, tumble, grabbed */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Break")
+	FGameplayTagContainer DropWhenHolderHasAny;
+
+	/** The holder drops the object when an authoritative event of one of these types names it as target. TEST VALUE: Combat.Event.KO */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Break")
+	FGameplayTagContainer DropOnHolderEvents;
+
+	/** A dropped object (put down or broken) is placed this far in front of the holder, on the floor. TEST VALUE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Break", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float DropForwardCm = 60.f;
+};
+
+/** Where a thrown object goes (the aim of UGSTN_GA_HeldThrow, chosen at its release) */
+UENUM(BlueprintType)
+enum class EGSTN_HeldThrowAim : uint8
+{
+	/** Along the left stick (the facing with the stick centred): a tap */
+	Stick,
+	/** Along the camera: the button held long enough to aim (reticle shown), or the reticle toggled on */
+	Camera
+};
+
+/** How the strong button throws a held object (owner's button design 2026-11-10, subject to playtesting). Defaults in DefaultGSTNHeld.ini */
+USTRUCT(BlueprintType)
+struct GSTNHELDCORE_API FGSTN_HeldThrowInput
+{
+	GENERATED_BODY()
+
+	/** A press shorter than this is a tap (stick throw); held this long the throw aims with the camera and the reticle shows. TEST VALUE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Throw", meta = (ClampMin = "1"))
+	int32 AimHoldFrames = 12;
+
+	/** Held this long, the throw goes on its own (an aim never blocks the holder forever). TEST VALUE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Throw", meta = (ClampMin = "1"))
+	int32 MaxAimFrames = 300;
+
+	/** With the reticle toggled on (FGSTN_InputCmd::bPrecisionAim) a tap aims with the camera too */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Throw")
+	bool bCameraAimWhenReticleOn = true;
 };
 
 /**
@@ -53,6 +123,13 @@ struct GSTNHELDCORE_API FGSTN_HeldObjectTuning
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Throw")
 	FGSTN_ProjectileParams Throw;
+
+	/** Use BreakRules instead of the project's defaults (UGSTN_HeldSettings::DefaultBreakRules): an object that survives a hit in hand, say */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Break")
+	bool bOverrideBreakRules = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Break", meta = (EditCondition = "bOverrideBreakRules"))
+	FGSTN_HeldBreakRules BreakRules;
 };
 
 /** One pickup request the host received for a frame (a holder asking, from where) */
@@ -96,4 +173,22 @@ struct GSTNHELDCORE_API FGSTN_HeldRules
 
 	/** Where a held object is drawn: the holder's transform with the hold offset applied in its space (rotation = the holder's) */
 	static FTransform HoldTransform(const FTransform& Holder, const FVector& HoldOffset);
+
+	/** Does the holder lose its object for a state it has (DropWhenHolderHasAny)? Empty rules never break */
+	static bool BreaksOnState(const FGameplayTagContainer& HolderTags, const FGSTN_HeldBreakRules& Rules);
+
+	/** Does an authoritative event of this type naming the holder break the hold (DropOnHolderEvents, hierarchical match)? */
+	static bool BreaksOnEvent(const FGameplayTag& EventType, const FGSTN_HeldBreakRules& Rules);
+
+	/**
+	 * The aim of a throw released after HeldFrames frames of the button (0 = released on the press frame): the camera once the button was held
+	 * AimHoldFrames, or with the reticle toggled on (bPrecisionAim) when the input allows it; the stick otherwise
+	 */
+	static EGSTN_HeldThrowAim ChooseThrowAim(int32 HeldFrames, bool bPrecisionAim, const FGSTN_HeldThrowInput& Input);
+
+	/** Whether a press still held after HeldFrames frames shows the aim reticle (the same threshold as the camera aim) */
+	static bool IsAiming(int32 HeldFrames, const FGSTN_HeldThrowInput& Input) { return HeldFrames >= Input.AimHoldFrames; }
+
+	/** Where a dropped object rests before the floor trace: DropForwardCm in front of the holder, at its height */
+	static FVector DropPoint(const FTransform& Holder, const FGSTN_HeldBreakRules& Rules);
 };

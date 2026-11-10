@@ -75,3 +75,27 @@ FTransform FGSTN_HeldRules::HoldTransform(const FTransform& Holder, const FVecto
 {
 	return FTransform(Holder.GetRotation(), Holder.TransformPosition(HoldOffset));
 }
+
+bool FGSTN_HeldRules::BreaksOnState(const FGameplayTagContainer& HolderTags, const FGSTN_HeldBreakRules& Rules)
+{
+	return !Rules.DropWhenHolderHasAny.IsEmpty() && HolderTags.HasAny(Rules.DropWhenHolderHasAny);
+}
+
+bool FGSTN_HeldRules::BreaksOnEvent(const FGameplayTag& EventType, const FGSTN_HeldBreakRules& Rules)
+{
+	return EventType.IsValid() && EventType.MatchesAny(Rules.DropOnHolderEvents);
+}
+
+EGSTN_HeldThrowAim FGSTN_HeldRules::ChooseThrowAim(int32 HeldFrames, bool bPrecisionAim, const FGSTN_HeldThrowInput& Input)
+{
+	if (IsAiming(HeldFrames, Input) || (bPrecisionAim && Input.bCameraAimWhenReticleOn))
+	{
+		return EGSTN_HeldThrowAim::Camera;
+	}
+	return EGSTN_HeldThrowAim::Stick;
+}
+
+FVector FGSTN_HeldRules::DropPoint(const FTransform& Holder, const FGSTN_HeldBreakRules& Rules)
+{
+	return Holder.GetLocation() + Holder.GetUnitAxis(EAxis::X) * Rules.DropForwardCm;
+}
