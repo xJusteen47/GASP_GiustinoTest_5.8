@@ -113,7 +113,8 @@ it (GSTNCombatNP README, "Startup steering"). The player source reads `UGSTN_Inp
 `AimStickAction` or `ReticleToggleAction` is unset and `bAutoAimActions` is on (default), `ResolveActions` makes transient actions bound to
 `AutoAimStickKey` (`Gamepad_Right2D`) and `AutoReticleToggleKey` (`Gamepad_RightThumbstick`) in a transient mapping context, which the player
 source adds to the local player at priority `AutoMappingPriority` (100). The actions do not consume their keys, so the camera's look action
-still gets the right stick. `ReticleToggleAction` is local presentation (the precision reticle), never part of the command.
+still gets the right stick. The toggle itself is local (the precision reticle); its result rides in the command as `bPrecisionAim` (1 bit, written by
+the combat layer, slice 3b), so the simulation can gate on it: the steer only acts while it is set.
 
 ### Activation context and the buttons an ability holds
 

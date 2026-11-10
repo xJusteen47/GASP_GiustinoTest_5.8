@@ -54,6 +54,12 @@ struct FGSTN_InputCmd
 	int8 AimStickX = 0;
 	int8 AimStickY = 0;
 
+	/**
+	 * The source's precision aim mode (the reticle of the combat layer) is on. One bit. Predicted input, so the simulation can gate on it:
+	 * the aim stick steers a move only while it is set (owner decision 2026-11-10), and moves that will aim with the reticle read it too
+	 */
+	bool bPrecisionAim = false;
+
 	void NetSerialize(const FNetSerializeParams& P)
 	{
 		P.Ar.SerializeIntPacked(HeldButtons);
@@ -99,6 +105,10 @@ struct FGSTN_InputCmd
 			AimStickX = 0;
 			AimStickY = 0;
 		}
+
+		uint8 bPrecision = bPrecisionAim ? 1 : 0;
+		P.Ar.SerializeBits(&bPrecision, 1);
+		bPrecisionAim = bPrecision != 0;
 	}
 
 	void ToString(FAnsiStringBuilderBase& Out) const
@@ -108,6 +118,10 @@ struct FGSTN_InputCmd
 		if (bHasAim)
 		{
 			Out.Appendf(" Aim: (%d, %d)", static_cast<int32>(AimYaw), static_cast<int32>(AimPitch));
+		}
+		if (bPrecisionAim)
+		{
+			Out.Append(" Precision");
 		}
 		Out.Append("\n");
 	}

@@ -37,6 +37,7 @@
 #include "Input/GSTN_InputSettings.h"
 #include "Movement/GSTN_StatsMovementModifier.h"
 #include "MoverComponent.h"
+#include "MoverDataModelTypes.h"
 #include "NetworkPredictionModelDef.h"
 #include "NetworkPredictionModelDefRegistry.h"
 #include "NetworkPredictionProxyInit.h"
@@ -690,6 +691,45 @@ void UGSTN_CombatSimComponent::ProduceInput(const int32 DeltaTimeMS, FGSTN_Input
 	}
 	Cmd->PressedButtons |= PendingTaps;
 	PendingTaps = 0;
+
+	// Precision aim (slice 3b): the local reticle goes into the predicted command, so the steer and later aimable moves read it in the sim
+	if (!CachedPrecisionAim.IsValid() && GetOwner())
+	{
+		CachedPrecisionAim = GetOwner()->FindComponentByClass<UGSTN_PrecisionAimComponent>();
+	}
+	Cmd->bPrecisionAim = CachedPrecisionAim.IsValid() && CachedPrecisionAim->IsReticleShown();
+	bLastPrecisionAim = Cmd->bPrecisionAim;
+	LastAimStickX = Cmd->AimStickX;
+	LastAimStickY = Cmd->AimStickY;
+	LastCameraYaw = Cmd->CameraYaw;
+}
+
+void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMoverInputCmdContext& InputCmdResult)
+{
+	const FGSTN_CombatSyncState* Sync = GetSyncState();
+	if (!bLastPrecisionAim || !Sync)
+	{
+		return;
+	}
+	// The frame this input is for is the one after the latest simulated frame
+	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickY));
+	float HoldYaw = 0.f;
+	if (FGSTN_CombatTimelineLogic::ResolveSteerHoldYaw(Sync->Core, GetSimulationFrame() + 1, GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline), AimStick,
+		FGSTN_DirectionClassifier::DequantizeYaw(LastCameraYaw), true, HoldYaw))
+	{
+		HoldOrientationIntent(InputCmdResult, HoldYaw);
+	}
+}
+
+bool UGSTN_CombatSimComponent::HoldOrientationIntent(FMoverInputCmdContext& InputCmd, float YawDeg)
+{
+	FCharacterDefaultInputs* Inputs = InputCmd.InputCollection.FindMutableDataByType<FCharacterDefaultInputs>();
+	if (!Inputs || Inputs->bUsingMovementBase)
+	{
+		return false;
+	}
+	Inputs->OrientationIntent = FRotator(0.0, YawDeg, 0.0).Vector();
+	return true;
 }
 
 float UGSTN_CombatSimComponent::GetFacingYaw() const
@@ -1447,7 +1487,7 @@ void UGSTN_CombatSimComponent::ExecuteFreeze(TSubclassOf<UGameplayEffect> Effect
 
 void UGSTN_CombatSimComponent::StepStartupSteer(int32 Frame, const FGSTN_InputCmd& Cmd, FGSTN_CombatSyncCore& Core)
 {
-	if (Core.ActionState != EGSTN_ActionState::InTimeline || (Cmd.AimStickX == 0 && Cmd.AimStickY == 0))
+	if (!Cmd.bPrecisionAim || Core.ActionState != EGSTN_ActionState::InTimeline || (Cmd.AimStickX == 0 && Cmd.AimStickY == 0))
 	{
 		return;
 	}
@@ -1460,7 +1500,7 @@ void UGSTN_CombatSimComponent::StepStartupSteer(int32 Frame, const FGSTN_InputCm
 	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickY));
 	int16 YawArg = 0;
 	if (FGSTN_CombatTimelineLogic::ComputeStartupSteer(Core, Frame, GetRegistryTimeline(Tables(), Core.ActiveTimeline), AimStick,
-		FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), static_cast<float>(Pose.Rotator().Yaw), YawArg))
+		FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), static_cast<float>(Pose.Rotator().Yaw), Cmd.bPrecisionAim, YawArg))
 	{
 		if (!Core.Requests.Add(EGSTN_RequestType::SetFacing, Frame, YawArg))
 		{
