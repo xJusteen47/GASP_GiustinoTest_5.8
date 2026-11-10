@@ -663,8 +663,12 @@ namespace GSTNLinkTickPrivate
 }
 
 FGameplayTag FGSTN_LinkTickExtension::ResolveInteractTarget(const FGSTN_SnapshotEntry& Self, TConstArrayView<FGSTN_SnapshotEntry> Entries, int32 Frame,
-	const FVector& StickOnPlane, const FGSTN_LinkRecordSource* Records) const
+	const FVector& StickOnPlane, const FGSTN_LinkRecordSource* Records, FGSTN_InteractCandidateId* OutFocusId) const
 {
+	if (OutFocusId)
+	{
+		OutFocusId->Reset();
+	}
 	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
 	if (!Registry)
 	{
@@ -739,6 +743,10 @@ FGameplayTag FGSTN_LinkTickExtension::ResolveInteractTarget(const FGSTN_Snapshot
 	const FGSTN_InteractFocusResult Focus = UGSTN_InteractMath::UpdateFocus(Query, State);
 	FGameplayTagContainer Projected;
 	FGSTN_LinkInteractProvider::ProjectTargetTag(Focus, Meanings, Projected);
+	if (OutFocusId && !Projected.IsEmpty())
+	{
+		*OutFocusId = Focus.FocusId;
+	}
 	// ProjectTargetTag leaves at most one Interact.Target tag: the focus meaning
 	return Projected.IsEmpty() ? FGameplayTag() : Projected.First();
 }
@@ -1058,13 +1066,20 @@ void FGSTN_LinkTickExtension::ProjectTags(FGSTN_CombatTickContext& Context) cons
 		{
 			// The world's stamped records (M10 G2): objects at rest a plugin registered with GSTNInteract
 			FGSTN_LinkRecordSource Records;
-			if (const UGSTN_InteractSubsystem* Interact = UGSTN_InteractSubsystem::Get(ASC->GetWorld()))
+			UGSTN_InteractSubsystem* Interact = UGSTN_InteractSubsystem::Get(ASC->GetWorld());
+			if (Interact)
 			{
 				Records.Registry = &Interact->GetRegistry();
 				Records.Meanings = &Interact->GetMeanings();
 				Records.Requirements = Interact->GetRequirements();
 			}
-			const FGameplayTag Target = ResolveInteractTarget(*Self, Context.Snapshot->Entries, Context.Frame, Context.StickOnPlane, &Records);
+			FGSTN_InteractCandidateId FocusId;
+			const FGameplayTag Target = ResolveInteractTarget(*Self, Context.Snapshot->Entries, Context.Frame, Context.StickOnPlane, &Records, &FocusId);
+			if (Interact)
+			{
+				// Not simulation state: the authority reads which record its own frame focused (a held object's pickup, M10 slice 5)
+				Interact->NoteProbeFocus(Context.EntityId, Context.Frame, FocusId);
+			}
 			if (Target.IsValid())
 			{
 				Held.AddTag(Target);

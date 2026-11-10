@@ -3,84 +3,129 @@
 #include "GSTN_HeldSim.h"
 
 #include "AbilitySystemComponent.h"
-#include "GSTN_HeldSubsystem.h"
+#include "Data/GSTN_LinkTypeDefinition.h"
 #include "GSTN_HeldTags.h"
-#include "World/GSTN_StepSnapshot.h"
-#include "Simulation/GSTN_CombatInbox.h"
+#include "GSTN_HeldTypes.h"
+#include "GSTN_LinkRegistry.h"
+#include "Sim/GSTN_LinkFragment.h"
+#include "Sim/GSTN_LinkInboxKinds.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
+#include "State/GSTN_LinkState.h"
+#include "UObject/Package.h"
+#include "UObject/StrongObjectPtr.h"
 
-void FGSTN_HeldFragment::NetSerialize(FArchive& Ar)
+namespace
 {
-	Ar << ObjectRef << Serial << HoldFrame;
+	/** The registered definition, rooted for the process: the registry holds code-added definitions by raw pointer */
+	TStrongObjectPtr<UGSTN_LinkTypeDefinition> GRegistered;
 }
 
-bool FGSTN_HeldFragment::ShouldReconcile(const FGSTN_SyncFragment& Authority) const
+UGSTN_LinkTypeDefinition* FGSTN_HeldLinkType::Build(UObject* Outer)
 {
-	return !(*this == static_cast<const FGSTN_HeldFragment&>(Authority));
+	UObject* Package = Outer ? Outer : GetTransientPackage();
+	UGSTN_LinkTypeDefinition* Definition = NewObject<UGSTN_LinkTypeDefinition>(Package,
+		MakeUniqueObjectName(Package, UGSTN_LinkTypeDefinition::StaticClass(), TEXT("DA_LinkType_Held")));
+	Definition->LinkType = GSTNHeldTags::Link_Type_Held;
+	Definition->Channel = EGSTN_LinkChannel::Hand;
+	Definition->DebugColor = FColor::Yellow;
+
+	FGSTN_LinkRoleDef& Holder = Definition->InitiatorRole;
+	Holder.RoleTag = GSTNHeldTags::Link_Role_Holder;
+	Holder.bActsWhileLinked = true;
+	Holder.bCollisionWithPartner = true;
+
+	FGSTN_LinkRoleDef& Object = Definition->TargetRole;
+	Object.RoleTag = GSTNHeldTags::Link_Role_HeldObject;
+
+	// The host's held break rules end a hold (they read the object's definition); GSTNLink's own rules stay off so a break has one author
+	Definition->Break.bBreakOnOwnDeath = false;
+	Definition->Break.bBreakOnPartnerDeath = false;
+	Definition->Break.MaxDistanceCm = 0.f;
+	return Definition;
 }
 
-void FGSTN_HeldFragment::ToString(FAnsiStringBuilderBase& Out) const
+void FGSTN_HeldLinkType::Register()
 {
-	if (IsHolding())
+	UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+	if (!Registry || GRegistered.IsValid())
 	{
-		Out.Appendf("Held obj %d #%d@%d", static_cast<int32>(ObjectRef) - 1, static_cast<int32>(Serial), HoldFrame);
-	}
-	else
-	{
-		Out.Appendf("Held empty #%d", static_cast<int32>(Serial));
-	}
-}
-
-bool FGSTN_HeldInbox::Register()
-{
-	const bool bFragment = FGSTN_SyncFragmentRegistry::Register<FGSTN_HeldFragment>(GSTNFeatureIds::Held);
-	const bool bKind = FGSTN_InboxKindRegistry::Get().Register(GSTNHeldInboxKinds::Command, TEXT("Held.Command"),
-		[](const FGSTN_InboxEntry& Entry, const FGSTN_InboxDispatchContext& Context)
-		{
-			const FGSTN_HeldCommandEntry* Command = Entry.Payload.GetPtr<FGSTN_HeldCommandEntry>();
-			if (!Command || !Context.Sync)
-			{
-				return;
-			}
-			// A release of a hand that never held anything adds nothing
-			FGSTN_HeldFragment* Fragment = Command->bHold ? &FGSTN_SyncFragmentList::FindOrAdd<FGSTN_HeldFragment>(Context.Sync->Fragments)
-				: FGSTN_SyncFragmentList::Find<FGSTN_HeldFragment>(Context.Sync->Fragments);
-			if (Fragment)
-			{
-				Apply(*Fragment, *Command, Context.Frame);
-			}
-		});
-	return bFragment && bKind;
-}
-
-void FGSTN_HeldInbox::Unregister()
-{
-	FGSTN_InboxKindRegistry::Get().Unregister(GSTNHeldInboxKinds::Command);
-	FGSTN_SyncFragmentRegistry::Unregister(GSTNFeatureIds::Held);
-}
-
-FGSTN_InboxEntry FGSTN_HeldInbox::MakeCommand(const FGSTN_HeldCommandEntry& Payload)
-{
-	FGSTN_InboxEntry Entry;
-	Entry.Kind = GSTNHeldInboxKinds::Command;
-	Entry.Payload = FInstancedStruct::Make(Payload);
-	return Entry;
-}
-
-void FGSTN_HeldInbox::Apply(FGSTN_HeldFragment& Fragment, const FGSTN_HeldCommandEntry& Command, int32 Frame)
-{
-	if (Command.bHold)
-	{
-		Fragment.ObjectRef = Command.ObjectRef;
-		Fragment.Serial = Command.Serial;
-		Fragment.HoldFrame = Frame;
 		return;
 	}
-	if (Fragment.ObjectRef == Command.ObjectRef && Fragment.Serial == Command.Serial)
+	GRegistered.Reset(Build(GetTransientPackage()));
+	Registry->AddDefinition(GRegistered.Get());
+}
+
+void FGSTN_HeldLinkType::Unregister()
+{
+	if (!GRegistered.IsValid())
 	{
-		Fragment.ObjectRef = 0;
-		Fragment.HoldFrame = INDEX_NONE;
+		return;
 	}
+	if (UObjectInitialized())
+	{
+		if (UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get())
+		{
+			Registry->RemoveDefinition(GRegistered.Get());
+		}
+	}
+	GRegistered.Reset();
+}
+
+const UGSTN_LinkTypeDefinition* FGSTN_HeldLinkType::Get()
+{
+	return GRegistered.Get();
+}
+
+uint8 FGSTN_HeldLinkType::GetTypeIndex(const UGSTN_LinkRegistry* Registry)
+{
+	const UGSTN_LinkRegistry* Used = Registry ? Registry : UGSTN_LinkRegistry::Get();
+	return Used ? static_cast<uint8>(Used->GetTypeIndex(GSTNHeldTags::Link_Type_Held)) : 0;
+}
+
+bool FGSTN_HeldLinkType::IsHolding(const FGSTN_LinkState& Hand, uint8 HeldTypeIndex)
+{
+	return HeldTypeIndex != 0 && Hand.IsLinked() && Hand.Role == 1 && Hand.LinkTypeIndex == HeldTypeIndex;
+}
+
+uint8 FGSTN_HeldLinkType::ToLinkReason(EGSTN_HeldBreakReason Reason)
+{
+	switch (Reason)
+	{
+	case EGSTN_HeldBreakReason::Dropped:
+		return static_cast<uint8>(EGSTN_LinkBreakReason::Release);
+	case EGSTN_HeldBreakReason::Thrown:
+		return static_cast<uint8>(EGSTN_LinkBreakReason::Throw);
+	case EGSTN_HeldBreakReason::HolderState:
+		return static_cast<uint8>(EGSTN_LinkBreakReason::Hit);
+	case EGSTN_HeldBreakReason::HolderEvent:
+		return static_cast<uint8>(EGSTN_LinkBreakReason::OwnDeath);
+	default:
+		return static_cast<uint8>(EGSTN_LinkBreakReason::Forced);
+	}
+}
+
+FGSTN_InboxEntry FGSTN_HeldLinkType::MakeHold(uint8 TypeIndex, uint8 Serial, int32 ObjectId, uint8 ObjectSerial)
+{
+	FGSTN_LinkCommandEntry Command;
+	Command.Kind = EGSTN_LinkCommandKind::Form;
+	Command.Channel = EGSTN_LinkChannel::Hand;
+	Command.Serial = Serial;
+	Command.LinkTypeIndex = TypeIndex;
+	Command.Role = 1;
+	Command.PartnerId = ObjectId;
+	Command.PartnerKind = GSTNEntityKinds::Object;
+	Command.PartnerSerial = ObjectSerial;
+	return FGSTN_LinkInboxHandlers::MakeCommand(Command);
+}
+
+FGSTN_InboxEntry FGSTN_HeldLinkType::MakeRelease(uint8 Serial, uint8 LinkReason)
+{
+	FGSTN_LinkCommandEntry Command;
+	Command.Kind = EGSTN_LinkCommandKind::Break;
+	Command.Channel = EGSTN_LinkChannel::Hand;
+	Command.Serial = Serial;
+	Command.Reason = LinkReason;
+	return FGSTN_LinkInboxHandlers::MakeCommand(Command);
 }
 
 void FGSTN_HeldTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_CombatTickContext& Context)
@@ -89,8 +134,8 @@ void FGSTN_HeldTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 	{
 		return;
 	}
-	const FGSTN_HeldFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_HeldFragment>(Context.Out.Fragments);
-	const bool bHolding = Fragment && Fragment->IsHolding();
+	const FGSTN_LinkFragment* Links = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments);
+	const bool bHolding = Links && FGSTN_HeldLinkType::IsHolding(Links->Links.Hand, FGSTN_HeldLinkType::GetTypeIndex());
 	Context.AbilitySystem->SetLooseGameplayTagCount(GSTNHeldTags::Held_Carrying, bHolding ? 1 : 0);
 	// Interact.Target.Pickup is not projected here since M10 G2: an object at rest is a stamped GSTNInteract record and GSTNLink's interact
 	// probe projects its meaning, the one Interact.Target tag of the frame (UGSTN_HeldObjectComponent::ApplyRecord)

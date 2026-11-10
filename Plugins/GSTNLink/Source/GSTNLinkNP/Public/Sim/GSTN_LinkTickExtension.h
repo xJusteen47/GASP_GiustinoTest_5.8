@@ -271,10 +271,11 @@ public:
 	 * The interact focus of an entity (M7 G1, was the grab focus): the Interact.Target meaning (or nothing) the probe projects over Snapshot,
 	 * with Self as the interactor, the offers the registry compiled for its kit and the registry's meaning table. Records (M10 G2) are candidates
 	 * too, for any kit, also one without offers: their stamps make them prediction-stable, unlike other entities' interpolated positions.
-	 * Still exactly one meaning. Pure: the snapshot entries, their link extensions, the registry, the attach table and the records
+	 * Still exactly one meaning. Pure: the snapshot entries, their link extensions, the registry, the attach table and the records.
+	 * OutFocusId (M10 slice 5): the focused candidate's id, reset when nothing is focused (a record's id names the record a pickup takes)
 	 */
 	FGameplayTag ResolveInteractTarget(const FGSTN_SnapshotEntry& Self, TConstArrayView<FGSTN_SnapshotEntry> Entries, int32 Frame, const FVector& StickOnPlane,
-		const FGSTN_LinkRecordSource* Records = nullptr) const;
+		const FGSTN_LinkRecordSource* Records = nullptr, FGSTN_InteractCandidateId* OutFocusId = nullptr) const;
 
 private:
 	void ProjectTags(FGSTN_CombatTickContext& Context) const;

@@ -43,24 +43,42 @@ void FGSTN_HeldRules::ResolvePickups(TConstArrayView<FGSTN_PickupRequest> Reques
 		}
 		Served.Add(Request.HolderId);
 
+		auto InReach = [&Request](const FGSTN_PickupCandidate& Candidate, double& OutDistSq)
+		{
+			OutDistSq = FVector::DistSquared(Request.Location, Candidate.Location);
+			return OutDistSq <= FMath::Square(static_cast<double>(Candidate.Radius));
+		};
 		int32 Best = INDEX_NONE;
 		double BestDistSq = 0.0;
-		for (int32 Index = 0; Index < Candidates.Num(); ++Index)
+		// The focused object first (M10 slice 5), when it is still free and in reach
+		if (Request.TargetObjectId != INDEX_NONE)
 		{
-			const FGSTN_PickupCandidate& Candidate = Candidates[Index];
-			if (Taken[Index] || !Candidate.bAvailable)
+			for (int32 Index = 0; Index < Candidates.Num() && Best == INDEX_NONE; ++Index)
 			{
-				continue;
+				const FGSTN_PickupCandidate& Candidate = Candidates[Index];
+				double DistSq = 0.0;
+				if (Candidate.ObjectId == Request.TargetObjectId && !Taken[Index] && Candidate.bAvailable && InReach(Candidate, DistSq))
+				{
+					Best = Index;
+				}
 			}
-			const double DistSq = FVector::DistSquared(Request.Location, Candidate.Location);
-			if (DistSq > FMath::Square(static_cast<double>(Candidate.Radius)))
+		}
+		// No focus, or the focused object is not free: the nearest free object in reach (equal distance: lower object id)
+		if (Best == INDEX_NONE)
+		{
+			for (int32 Index = 0; Index < Candidates.Num(); ++Index)
 			{
-				continue;
-			}
-			if (Best == INDEX_NONE || DistSq < BestDistSq || (DistSq == BestDistSq && Candidate.ObjectId < Candidates[Best].ObjectId))
-			{
-				Best = Index;
-				BestDistSq = DistSq;
+				const FGSTN_PickupCandidate& Candidate = Candidates[Index];
+				double DistSq = 0.0;
+				if (Taken[Index] || !Candidate.bAvailable || !InReach(Candidate, DistSq))
+				{
+					continue;
+				}
+				if (Best == INDEX_NONE || DistSq < BestDistSq || (DistSq == BestDistSq && Candidate.ObjectId < Candidates[Best].ObjectId))
+				{
+					Best = Index;
+					BestDistSq = DistSq;
+				}
 			}
 		}
 		if (Best != INDEX_NONE)

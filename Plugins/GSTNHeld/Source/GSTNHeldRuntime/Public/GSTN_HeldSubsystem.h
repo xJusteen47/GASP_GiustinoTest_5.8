@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GSTN_HeldTypes.h"
 #include "Events/GSTN_SimEventSubsystem.h"
+#include "GSTN_LinkWatchdog.h"
 #include "Subsystems/WorldSubsystem.h"
 
 #include "GSTN_HeldSubsystem.generated.h"
@@ -24,14 +25,17 @@ class UGSTN_HeldObjectComponent;
  * - a held object whose holder asked to put it down (RequestDrop), got a break tag (FGSTN_HeldBreakRules::DropWhenHolderHasAny: hitstun, tumble,
  *   grabbed) or a break event (DropOnHolderEvents: KO) is placed in front of the holder on the floor (slice 2).
  *
- * The link (slice 2): every start and end of a hold is also posted to the holder's combat inbox (FGSTN_HeldInbox, stamped with the holder's
- * frame), so the holder's FGSTN_HeldFragment and its projected Combat.Held.Carrying are simulation state: predicted, rolled back, the same on
- * every machine for a frame. The object half stays the host's: pickups and throws are host side effects of the abilities (like a projectile's
- * fire), and a client only reads the replicated object state to draw and to build its ghost. GSTNLink's Hand channel is fighter-to-fighter
- * only today; when it takes an object partner (M6 neutral hooks) the fragment folds into it and the rules here stay.
+ * The link (M10 G1): every start and end of a hold is a GSTNLink command on the holder's Hand channel (FGSTN_HeldLinkType, stamped with the
+ * holder's latest frame), so the holder's Hand link and its projected Combat.Held.Carrying are simulation state: predicted, rolled back, the
+ * same on every machine for a frame. The object half stays the host's: pickups and throws are host side effects of the abilities (like a
+ * projectile's fire), and a client only reads the replicated object state to draw and to build its ghost. The subsystem is the link watchdog's
+ * resolver for the Object kind: a hold whose object is destroyed ends there.
+ *
+ * Pickup target (M10 slice 5): a request takes the object whose record GSTNLink's interact probe focused for the holder on the request's frame
+ * (UGSTN_InteractSubsystem::FindProbeFocus); without a focused record, the nearest object in reach (the race of FGSTN_HeldRules::ResolvePickups).
  */
 UCLASS()
-class GSTNHELDRUNTIME_API UGSTN_HeldSubsystem : public UWorldSubsystem
+class GSTNHELDRUNTIME_API UGSTN_HeldSubsystem : public UWorldSubsystem, public IGSTN_LinkPartnerResolver
 {
 	GENERATED_BODY()
 
@@ -39,7 +43,11 @@ public:
 	static UGSTN_HeldSubsystem* Get(const UWorld* World);
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual void Deinitialize() override;
+
+	/** IGSTN_LinkPartnerResolver (kind Object): valid while the object exists, at its actor's location */
+	virtual bool ResolveLinkPartner(const FGSTN_EntityRef& Partner, FGSTN_LinkPartnerView& OutView) const override;
 
 	void RegisterObject(UGSTN_HeldObjectComponent& Object);
 	void UnregisterObject(UGSTN_HeldObjectComponent& Object);
@@ -85,8 +93,11 @@ private:
 	void StepHolds(int32 Frame);
 	/** Host: Object stops being held for Reason: placed in front of its holder (or where it is without one) and the holder's hand emptied */
 	void EndHold(UGSTN_HeldObjectComponent& Object, EGSTN_HeldBreakReason Reason, int32 Frame, const FString& Detail = FString());
-	/** Host: posts the start (bHold) or the end of Object's hold to Holder's combat inbox, stamped with the holder's latest frame */
-	void PostHoldCommand(AActor* Holder, const UGSTN_HeldObjectComponent& Object, bool bHold) const;
+	/**
+	 * Host: posts the start (bHold: a Form of the Held Hand link, its serial kept on the object) or the end (a Break of that serial with Reason)
+	 * of Object's hold to Holder's combat inbox, stamped with the holder's latest frame
+	 */
+	void PostHoldCommand(AActor* Holder, UGSTN_HeldObjectComponent& Object, bool bHold, EGSTN_HeldBreakReason Reason);
 	void HandleSimEvent(const FGSTN_SimEvent& Event);
 	/** The point on the floor below Location (WorldStatic), raised by HalfHeight; Location itself without a floor within 50 m */
 	FVector FloorBelow(const FVector& Location, float HalfHeight, const AActor* Ignore) const;
@@ -104,6 +115,8 @@ private:
 	TArray<TPair<TWeakObjectPtr<AActor>, FGameplayTag>> PendingEventBreaks;
 	FGSTN_SimEventListenerHandle EventListener;
 	int32 NextObjectId = 0;
+	/** Host: the last Hand link serial formed per holder, so two holds formed before the first is consumed never share a serial */
+	TMap<TWeakObjectPtr<AActor>, uint8> LastHandSerial;
 	int32 LastFrame = INDEX_NONE;
 	FDelegateHandle PostFixedTickHandle;
 };

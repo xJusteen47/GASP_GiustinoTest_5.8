@@ -37,7 +37,7 @@ public:
 /**
  * Put the held object down (M10 slice 2: the grab button again, Command.Held.Drop, binding requires Combat.Held.Carrying). Like the pickup it
  * ends at once and its only effect is a host side effect: UGSTN_HeldSubsystem::RequestDrop places the object in front of the holder after the
- * frame and empties the holder's hand (FGSTN_HeldFragment), which the client gets by correction.
+ * frame and ends the holder's Hand link (FGSTN_HeldLinkType), which the client gets by correction.
  */
 UCLASS(Blueprintable)
 class GSTNHELDRUNTIME_API UGSTN_GA_HeldDrop : public UGSTN_GA_Base

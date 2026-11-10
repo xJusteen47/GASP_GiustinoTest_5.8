@@ -7,73 +7,48 @@
 #include "Sync/GSTN_InboxEntry.h"
 #include "Sync/GSTN_SyncFragment.h"
 
-#include "GSTN_HeldSim.generated.h"
+class UGSTN_LinkTypeDefinition;
+class UGSTN_LinkRegistry;
+struct FGSTN_LinkState;
+enum class EGSTN_HeldBreakReason : uint8;
 
 /**
- * The hand of an entity in its combat sync state (M10 slice 2): which object it holds, so "holding" is predicted and rolled back like every other
- * combat state, and the held commands' bindings (Combat.Held.Carrying) agree on every machine for the same frame. Written only by the host's
- * Held inbox commands (pickup, drop, throw, break), consumed one frame after the host decided; a client gets it by correction, as a grab.
+ * The hold as a GSTNLink Hand link (M10 G1; slice 2 kept it in a fragment of its own). A Held link joins the holder (role 1, Combat.Link.Role.Holder)
+ * and the object (role 2), a partner of kind GSTNEntityKinds::Object with no snapshot entry: the host forms it with a LinkCommand Form on the
+ * holder's inbox (stamped with the holder's latest frame, consumed one frame later) and ends it with a Break of the same serial. The holder's
+ * link fragment is sync state, so "holding" is predicted and rolled back like a grab; a client gets it by correction.
  *
- * The object itself stays the host's (UGSTN_HeldObjectComponent: where it is drawn, its flight): the fragment is the holder's half of the link.
- * Added on the first hold, so an entity that never held anything carries no bytes for it.
+ * The type is made in code (no asset): Hand channel, nobody parked, the holder acts while linked, no break rule of GSTNLink's own (the host's
+ * held break rules decide, FGSTN_HeldBreakRules); the watchdog only ends a hold whose object is gone, through the held subsystem's partner
+ * resolver. Its role effects are where G6's carry load goes.
  */
-USTRUCT()
-struct GSTNHELDRUNTIME_API FGSTN_HeldFragment : public FGSTN_SyncFragment
+struct GSTNHELDRUNTIME_API FGSTN_HeldLinkType
 {
-	GENERATED_BODY()
-
-	/** The host's object id + 1; 0 = empty hand */
-	uint16 ObjectRef = 0;
-	/** The hold's serial: a release only clears the hold it names, so a late release never empties a newer hold */
-	uint8 Serial = 0;
-	/** First frame of the hold; INDEX_NONE with an empty hand */
-	int32 HoldFrame = INDEX_NONE;
-
-	bool IsHolding() const { return ObjectRef != 0; }
-	bool operator==(const FGSTN_HeldFragment& Other) const { return ObjectRef == Other.ObjectRef && Serial == Other.Serial && HoldFrame == Other.HoldFrame; }
-
-	virtual void NetSerialize(FArchive& Ar) override;
-	/** Exact equality: nothing here is a float */
-	virtual bool ShouldReconcile(const FGSTN_SyncFragment& Authority) const override;
-	/** Discrete state: the later sample is the result */
-	virtual void Interpolate(const FGSTN_SyncFragment* From, const FGSTN_SyncFragment* To, float PCT) override {}
-	virtual void ToString(FAnsiStringBuilderBase& Out) const override;
-};
-
-/** The Held inbox kinds (GSTNInboxKinds::FirstHeld..LastHeld) */
-namespace GSTNHeldInboxKinds
-{
-	/** The host's hold or release of an object (FGSTN_HeldCommandEntry) */
-	constexpr uint8 Command = GSTNInboxKinds::FirstHeld;
-}
-
-/** Payload of a Held command: the host's pickup (bHold) or the end of a hold (drop, throw, break) */
-USTRUCT()
-struct GSTNHELDRUNTIME_API FGSTN_HeldCommandEntry
-{
-	GENERATED_BODY()
-
-	UPROPERTY()
-	bool bHold = false;
-
-	UPROPERTY()
-	uint16 ObjectRef = 0;
-
-	UPROPERTY()
-	uint8 Serial = 0;
-};
-
-/** The Held command kind and its handler (writes FGSTN_HeldFragment of the receiver) */
-struct GSTNHELDRUNTIME_API FGSTN_HeldInbox
-{
-	static bool Register();
+	/** A new definition of the type (tests build their own) */
+	static UGSTN_LinkTypeDefinition* Build(UObject* Outer);
+	/** Adds the process's definition to the link registry, once (the registry is an engine subsystem: called after engine init) */
+	static void Register();
 	static void Unregister();
-	static FGSTN_InboxEntry MakeCommand(const FGSTN_HeldCommandEntry& Payload);
-	/** The handler, public for tests: a hold replaces the hand, a release clears it only when object and serial match */
-	static void Apply(FGSTN_HeldFragment& Fragment, const FGSTN_HeldCommandEntry& Command, int32 Frame);
+	/** The registered definition, or null */
+	static const UGSTN_LinkTypeDefinition* Get();
+	/** The type's wire index in Registry (the process's when null); 0 when it is not registered */
+	static uint8 GetTypeIndex(const UGSTN_LinkRegistry* Registry = nullptr);
+
+	/** Is this Hand state a live hold (a Held link, the holder's side)? */
+	static bool IsHolding(const FGSTN_LinkState& Hand, uint8 HeldTypeIndex);
+
+	/** The generic break reason a held break ends the link with (drop = Release, throw = Throw, holder state = Hit, KO = OwnDeath, gone = Forced) */
+	static uint8 ToLinkReason(EGSTN_HeldBreakReason Reason);
+
+	/**
+	 * The host's command entries. Hold: a Form of the Held type on the holder's Hand channel with Serial, the partner ObjectId of kind Object
+	 * (ObjectSerial = the object's hold serial). Release: the Break of that serial. The caller stamps both
+	 */
+	static FGSTN_InboxEntry MakeHold(uint8 TypeIndex, uint8 Serial, int32 ObjectId, uint8 ObjectSerial);
+	static FGSTN_InboxEntry MakeRelease(uint8 Serial, uint8 LinkReason);
 };
 
-/** Projects Combat.Held.Carrying from FGSTN_HeldFragment, every frame on every machine (set, never added: a resimulated frame inherits nothing) */
+/** Projects Combat.Held.Carrying from the holder's Hand link, every frame on every machine (set, never added: a resimulated frame inherits nothing) */
 class GSTNHELDRUNTIME_API FGSTN_HeldTickExtension : public IGSTN_CombatTickExtension
 {
 public:

@@ -46,6 +46,23 @@ bool FGSTN_HeldPickupRaceTest::RunTest(const FString& Parameters)
 	// A holder gets one object, even with two requests
 	FGSTN_HeldRules::ResolvePickups({ { 1, 100, FVector::ZeroVector }, { 1, 101, FVector::ZeroVector } }, { Crate, Barrel }, Out);
 	TestEqual(TEXT("one object per holder"), Out.Num(), 1);
+
+	// Slice 5: a focused target wins over the nearest; a target taken by an earlier request sends the later one to the nearest other object
+	FGSTN_PickupRequest Focused{ 2, 100, FVector(90.0, 0.0, 0.0) };
+	Focused.TargetObjectId = 0;
+	FGSTN_HeldRules::ResolvePickups({ Focused }, { Crate, Barrel }, Out);
+	TestTrue(TEXT("target: the focused object, not the nearest"), Out.Num() == 1 && Out[0] == FGSTN_PickupAssignment{ 2, 0 });
+	FGSTN_PickupRequest Late{ 5, 101, FVector(95.0, 0.0, 0.0) };
+	Late.TargetObjectId = 0;
+	FGSTN_HeldRules::ResolvePickups({ Focused, Late }, { Crate, Barrel }, Out);
+	TestTrue(TEXT("target taken: the later request gets the other object"), Out.Num() == 2 && Out[0] == FGSTN_PickupAssignment{ 2, 0 }
+		&& Out[1] == FGSTN_PickupAssignment{ 5, 1 });
+	FGSTN_HeldRules::ResolvePickups({ Focused, Late }, { Crate }, Out);
+	TestTrue(TEXT("target taken, nothing else in reach: a fumble"), Out.Num() == 1 && Out[0] == FGSTN_PickupAssignment{ 2, 0 });
+	FGSTN_PickupRequest Missing{ 2, 100, FVector::ZeroVector };
+	Missing.TargetObjectId = 9;
+	FGSTN_HeldRules::ResolvePickups({ Missing }, { Crate, Barrel }, Out);
+	TestTrue(TEXT("unknown target: the nearest"), Out.Num() == 1 && Out[0] == FGSTN_PickupAssignment{ 2, 0 });
 	return true;
 }
 

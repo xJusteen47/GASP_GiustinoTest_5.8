@@ -13,6 +13,8 @@
 #include "GSTN_HeldObjectComponent.h"
 #include "GSTN_HeldSim.h"
 #include "GSTN_HeldTags.h"
+#include "GSTN_InteractSubsystem.h"
+#include "Sim/GSTN_LinkFragment.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "GSTN_ProjectileActor.h"
@@ -54,6 +56,35 @@ void UGSTN_HeldSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 }
 
+void UGSTN_HeldSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+	if (UGSTN_LinkWatchdog* Watchdog = UGSTN_LinkWatchdog::Get(&InWorld))
+	{
+		Watchdog->RegisterPartnerResolver(GSTNEntityKinds::Object, this);
+	}
+}
+
+bool UGSTN_HeldSubsystem::ResolveLinkPartner(const FGSTN_EntityRef& Partner, FGSTN_LinkPartnerView& OutView) const
+{
+	if (Partner.Kind != GSTNEntityKinds::Object)
+	{
+		return false;
+	}
+	for (const TWeakObjectPtr<UGSTN_HeldObjectComponent>& Each : Objects)
+	{
+		if (Each.IsValid() && Each->GetOwner() && Each->GetObjectId() == static_cast<int32>(Partner.Id))
+		{
+			OutView.bValid = true;
+			OutView.Transform = Each->GetOwner()->GetActorTransform();
+			return true;
+		}
+	}
+	// Known kind, no such object: it was destroyed, the hold is an orphan
+	OutView.bValid = false;
+	return true;
+}
+
 void UGSTN_HeldSubsystem::HandleSimEvent(const FGSTN_SimEvent& Event)
 {
 	AActor* Target = Event.Target.Get();
@@ -82,7 +113,12 @@ void UGSTN_HeldSubsystem::Deinitialize()
 		}
 		EventListener = FGSTN_SimEventListenerHandle();
 	}
+	if (UGSTN_LinkWatchdog* Watchdog = UGSTN_LinkWatchdog::Get(GetWorld()))
+	{
+		Watchdog->UnregisterPartnerResolver(GSTNEntityKinds::Object, this);
+	}
 	Objects.Reset();
+	LastHandSerial.Reset();
 	Pending.Reset();
 	PendingDrops.Reset();
 	PendingEventBreaks.Reset();
@@ -151,7 +187,7 @@ void UGSTN_HeldSubsystem::NoteThrown(AActor* Holder, AGSTN_Projectile& Shot)
 	}
 	if (UGSTN_HeldObjectComponent* Object = FindHeldBy(Holder))
 	{
-		PostHoldCommand(Holder, *Object, false);
+		PostHoldCommand(Holder, *Object, false, EGSTN_HeldBreakReason::Thrown);
 		Object->SetFlying(Shot);
 		UE_LOG(LogGSTNHeld, Log, TEXT("HeldObject %d thrown by %s at frame %d"), Object->GetObjectId(), *GetNameSafe(Holder), Shot.GetSegment().StartFrame);
 	}
@@ -170,12 +206,13 @@ void UGSTN_HeldSubsystem::HandlePostFixedTick(int32 ServerFrame, int32 EndTimeMS
 	StepObjects(ServerFrame);
 }
 
-void UGSTN_HeldSubsystem::PostHoldCommand(AActor* Holder, const UGSTN_HeldObjectComponent& Object, bool bHold) const
+void UGSTN_HeldSubsystem::PostHoldCommand(AActor* Holder, UGSTN_HeldObjectComponent& Object, bool bHold, EGSTN_HeldBreakReason Reason)
 {
 	const UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(GetWorld());
 	UGSTN_CombatWorldSubsystem* Combat = UGSTN_CombatWorldSubsystem::Get(GetWorld());
 	const int32 EntityId = Projectiles && Holder ? Projectiles->FindEntityIdOf(Holder) : INDEX_NONE;
-	if (!Combat || EntityId == INDEX_NONE)
+	const uint8 TypeIndex = FGSTN_HeldLinkType::GetTypeIndex();
+	if (!Combat || EntityId == INDEX_NONE || TypeIndex == 0)
 	{
 		return;
 	}
@@ -183,16 +220,26 @@ void UGSTN_HeldSubsystem::PostHoldCommand(AActor* Holder, const UGSTN_HeldObject
 	// client gets the result by correction
 	const UGSTN_CombatSimComponent* Sim = Holder->FindComponentByClass<UGSTN_CombatSimComponent>();
 	const FGSTN_CombatSyncState* Sync = Sim ? Sim->GetSyncState() : nullptr;
-	FGSTN_HeldCommandEntry Command;
-	Command.bHold = bHold;
-	Command.ObjectRef = Object.GetObjectRef();
-	Command.Serial = Object.GetHoldSerial();
-	FGSTN_InboxEntry Entry = FGSTN_HeldInbox::MakeCommand(Command);
+	FGSTN_InboxEntry Entry;
+	if (bHold)
+	{
+		// Newer than the holder's Hand serial and than any hold formed for it that it has not consumed yet
+		const FGSTN_LinkFragment* Links = Sync ? FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Sync->Fragments) : nullptr;
+		const uint8* Last = LastHandSerial.Find(Holder);
+		const uint8 Serial = FGSTN_LinkState::NextSerial(Links ? Links->Links.Hand.Serial : 0, Last ? *Last : 0);
+		LastHandSerial.Add(Holder, Serial);
+		Object.HandLinkSerial = Serial;
+		Entry = FGSTN_HeldLinkType::MakeHold(TypeIndex, Serial, Object.GetObjectId(), Object.GetHoldSerial());
+	}
+	else
+	{
+		Entry = FGSTN_HeldLinkType::MakeRelease(Object.GetHandLinkSerial(), FGSTN_HeldLinkType::ToLinkReason(Reason));
+	}
 	Entry.Frame = Sync ? Sync->Core.Input.History.GetLatestFrame() : LastFrame;
 	Entry.SenderId = EntityId;
 	const bool bPosted = Combat->PostToInbox(EntityId, Entry);
 	UE_LOG(LogGSTNHeld, Log, TEXT("HeldLink %s entity=%d object=%d serial=%d stamp=%d posted=%d"), bHold ? TEXT("hold") : TEXT("release"), EntityId,
-		Object.GetObjectId(), static_cast<int32>(Command.Serial), Entry.Frame, bPosted ? 1 : 0);
+		Object.GetObjectId(), static_cast<int32>(Object.GetHandLinkSerial()), Entry.Frame, bPosted ? 1 : 0);
 }
 
 void UGSTN_HeldSubsystem::EndHold(UGSTN_HeldObjectComponent& Object, EGSTN_HeldBreakReason Reason, int32 Frame, const FString& Detail)
@@ -207,7 +254,7 @@ void UGSTN_HeldSubsystem::EndHold(UGSTN_HeldObjectComponent& Object, EGSTN_HeldB
 	FVector Point = Owner->GetActorLocation();
 	if (IsValid(Holder))
 	{
-		PostHoldCommand(Holder, Object, false);
+		PostHoldCommand(Holder, Object, false, Reason);
 		// In front of the holder as hits judge it (its snapshot entry), the actor without one
 		const UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(GetWorld());
 		const UGSTN_CombatWorldSubsystem* Combat = UGSTN_CombatWorldSubsystem::Get(GetWorld());
@@ -303,6 +350,7 @@ void UGSTN_HeldSubsystem::ResolvePickups(int32 Frame)
 	}
 	const UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(GetWorld());
 	const UGSTN_CombatWorldSubsystem* Combat = UGSTN_CombatWorldSubsystem::Get(GetWorld());
+	const UGSTN_InteractSubsystem* Interact = UGSTN_InteractSubsystem::Get(GetWorld());
 
 	TArray<FGSTN_PickupRequest> Requests;
 	TMap<int32, AActor*> HolderOf;
@@ -320,7 +368,20 @@ void UGSTN_HeldSubsystem::ResolvePickups(int32 Frame)
 		}
 		// The pose hits are judged against: the holder's snapshot entry, the actor without one
 		const FGSTN_SnapshotEntry* Entry = Combat ? Combat->GetSnapshot().Find(Id) : nullptr;
-		Requests.Add({ Id, Queued.Frame, Entry ? Entry->Transform.GetLocation() : Holder->GetActorLocation() });
+		FGSTN_PickupRequest& Request = Requests.Add_GetRef({ Id, Queued.Frame, Entry ? Entry->Transform.GetLocation() : Holder->GetActorLocation() });
+		// M10 slice 5: the object whose record the interact probe focused for this holder on the request's frame (or just before it)
+		FGSTN_InteractCandidateId Focus;
+		if (Interact && Interact->FindProbeFocus(Id, Queued.Frame, Focus) && Focus.Provider == GSTNInteractProviders::Registry)
+		{
+			for (const TWeakObjectPtr<UGSTN_HeldObjectComponent>& Each : Objects)
+			{
+				if (Each.IsValid() && Each->RecordStamp.Handle != 0 && Each->RecordStamp.Handle == Focus.Handle)
+				{
+					Request.TargetObjectId = Each->GetObjectId();
+					break;
+				}
+			}
+		}
 		HolderOf.Add(Id, Holder);
 	}
 	Pending.RemoveAll([Frame](const FQueuedPickup& Queued) { return Queued.Frame <= Frame; });
@@ -348,8 +409,8 @@ void UGSTN_HeldSubsystem::ResolvePickups(int32 Frame)
 			continue;
 		}
 		ObjectOf[Won->ObjectId]->SetHeld(HolderOf[Won->HolderId]);
-		PostHoldCommand(HolderOf[Won->HolderId], *ObjectOf[Won->ObjectId], true);
-		UE_LOG(LogGSTNHeld, Log, TEXT("HeldPickup entity %d holds object %d at frame %d"), Won->HolderId, Won->ObjectId, Frame);
+		PostHoldCommand(HolderOf[Won->HolderId], *ObjectOf[Won->ObjectId], true, EGSTN_HeldBreakReason::None);
+		UE_LOG(LogGSTNHeld, Log, TEXT("HeldPickup entity %d holds object %d at frame %d (focus %d)"), Won->HolderId, Won->ObjectId, Frame, Request.TargetObjectId);
 	}
 }
 

@@ -619,6 +619,9 @@ private:
 		int32 Frame = INDEX_NONE;
 		uint8 OldTier = 0;
 		uint8 NewTier = 0;
+		/** Hit and KO (M10 slice 5): the hit's source (Combat.Source.Thrown...) and who it credits when the attacker id no longer resolves; events only */
+		FGameplayTag SourceTag;
+		TWeakObjectPtr<AActor> DetachedInstigator;
 	};
 
 	/** A move a scheduled slot may start this frame, waiting for the token resolve of stage 3 */

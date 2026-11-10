@@ -1417,6 +1417,8 @@ void UGSTN_MinionCombatSubsystem::ApplyHit(int32 Slot, int32 Frame, const FGSTN_
 	HitEvent.Handle = Handle;
 	HitEvent.Damage = Damage;
 	HitEvent.OtherId = Hit.AttackerId;
+	HitEvent.SourceTag = Hit.SourceTag;
+	HitEvent.DetachedInstigator = Hit.DetachedInstigator;
 
 	if (bDies)
 	{
@@ -1444,6 +1446,8 @@ void UGSTN_MinionCombatSubsystem::ApplyHit(int32 Slot, int32 Frame, const FGSTN_
 		KOEvent.Handle = Handle;
 		KOEvent.OtherId = Hit.AttackerId;
 		KOEvent.Frame = Frame;
+		KOEvent.SourceTag = Hit.SourceTag;
+		KOEvent.DetachedInstigator = Hit.DetachedInstigator;
 	}
 }
 
@@ -2427,8 +2431,17 @@ void UGSTN_MinionCombatSubsystem::FlushEventsAndDespawns()
 				KO.Frame = Event.Frame;
 				const UGSTN_CombatWorldSubsystem* World = GetCombatWorld();
 				KO.Instigator = World ? World->FindOwnerActor(Event.OtherId) : nullptr;
+				// M10 slice 5, as the fighters' KO (G3): a thrown object or a projectile credits its thrower even when its entity id no longer resolves
+				if (!KO.Instigator.Get())
+				{
+					KO.Instigator = Event.DetachedInstigator.Get();
+				}
 				KO.Target = Actor;
 				KO.Tags.AddTag(GSTNCombatTags::KOReason_Health);
+				if (Event.SourceTag.IsValid())
+				{
+					KO.Tags.AddTag(Event.SourceTag);
+				}
 				KO.Tags.AddTag(GSTNMinionTags::Entity_Minion);
 				SimEvents->Broadcast(KO);
 			}

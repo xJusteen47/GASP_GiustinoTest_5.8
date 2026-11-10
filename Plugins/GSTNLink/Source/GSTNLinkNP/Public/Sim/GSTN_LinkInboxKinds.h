@@ -126,6 +126,16 @@ struct GSTNLINKNP_API FGSTN_LinkCommandEntry
 	UPROPERTY()
 	int32 PartnerId = INDEX_NONE;
 
+	/**
+	 * Form only (M10 G1): the partner's entity kind (a GSTNEntityKinds id) and serial. A partner that is not a fighter (a held object) has no
+	 * snapshot entry: the watchdog reads it through the partner resolver its kind registered (IGSTN_LinkPartnerResolver)
+	 */
+	UPROPERTY()
+	uint8 PartnerKind = GSTNEntityKinds::Fighter;
+
+	UPROPERTY()
+	uint8 PartnerSerial = 0;
+
 	/** The registry's reason index (EGSTN_LinkBreakReason or a plugin's) */
 	UPROPERTY()
 	uint8 Reason = 0;

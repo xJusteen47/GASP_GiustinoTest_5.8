@@ -133,7 +133,9 @@ void FGSTN_LinkWatchdogLogic::Evaluate(TConstArrayView<FGSTN_LinkWatchdogEntity>
 			{
 				continue;
 			}
-			const int32 PartnerId = State.PartnerId.IsNull() ? INDEX_NONE : static_cast<int32>(State.PartnerId.Id);
+			// M10 G1: a partner of another kind (a held object) has no entity here; its kind's resolver tells where it is and whether it lives
+			const bool bExternal = !State.PartnerId.IsNull() && State.PartnerId.Kind != GSTNEntityKinds::Fighter;
+			const int32 PartnerId = State.PartnerId.IsNull() || bExternal ? INDEX_NONE : static_cast<int32>(State.PartnerId.Id);
 			const FGSTN_LinkWatchdogEntity* Partner = FindEntity(Entities, PartnerId);
 
 			FGSTN_LinkWatchdogBreak Break;
@@ -155,7 +157,34 @@ void FGSTN_LinkWatchdogLogic::Evaluate(TConstArrayView<FGSTN_LinkWatchdogEntity>
 					EndedByPartner = &Other;
 				}
 			}
-			if (EndedByPartner)
+			if (bExternal)
+			{
+				FGSTN_LinkPartnerView View;
+				if (!Params.ExternalPartner || !Params.ExternalPartner(State.PartnerId, View) || Frame - State.LinkFrame < Params.OrphanGraceFrames)
+				{
+					continue;
+				}
+				if (!View.bValid)
+				{
+					Break.bOrphan = true;
+					Break.Reason = EGSTN_LinkBreakReason::Forced;
+				}
+				else
+				{
+					FGSTN_LinkWatchdogEntity External;
+					External.Transform = View.Transform;
+					External.bDead = View.bDead;
+					const float Distance = static_cast<float>(FVector::Dist(Entity.Transform.GetLocation(), View.Transform.GetLocation()));
+					const FGSTN_LinkBreakDecision Own = UGSTN_LinkMath::EvaluateBreak(Definition->Break, Definition->MaxFrames,
+						MakeInput(Entity, State, External, *Definition, Frame, Distance));
+					if (!Own.bBreak)
+					{
+						continue;
+					}
+					Break.Reason = Own.Reason;
+				}
+			}
+			else if (EndedByPartner)
 			{
 				Break.Reason = EndedByPartner->GetBreakReason();
 			}
@@ -341,6 +370,22 @@ void UGSTN_LinkWatchdog::Deinitialize()
 	Super::Deinitialize();
 }
 
+void UGSTN_LinkWatchdog::RegisterPartnerResolver(uint8 Kind, const IGSTN_LinkPartnerResolver* Resolver)
+{
+	if (Resolver && Kind != GSTNEntityKinds::Fighter)
+	{
+		PartnerResolvers.Add(Kind, Resolver);
+	}
+}
+
+void UGSTN_LinkWatchdog::UnregisterPartnerResolver(uint8 Kind, const IGSTN_LinkPartnerResolver* Resolver)
+{
+	if (const IGSTN_LinkPartnerResolver* const* Current = PartnerResolvers.Find(Kind); Current && *Current == Resolver)
+	{
+		PartnerResolvers.Remove(Kind);
+	}
+}
+
 bool UGSTN_LinkWatchdog::IsAuthority() const
 {
 	// The documented exception (see the class comment): the watchdog is the authority's observer, not simulation code
@@ -431,6 +476,11 @@ int32 UGSTN_LinkWatchdog::Evaluate()
 		Use(&Collision);
 	};
 	Params.Definitions = [Registry](uint8 Index) { return Registry->GetDefinition(Index); };
+	Params.ExternalPartner = [this](const FGSTN_EntityRef& Partner, FGSTN_LinkPartnerView& OutView)
+	{
+		const IGSTN_LinkPartnerResolver* const* Resolver = PartnerResolvers.Find(Partner.Kind);
+		return Resolver && *Resolver && (*Resolver)->ResolveLinkPartner(Partner, OutView);
+	};
 	Params.ActionExitPlacer = [Registry](uint8 TypeIndex, int16 ActionId) -> const UGSTN_LinkExitPlacer*
 	{
 		FGSTN_LinkActionInfo Info;

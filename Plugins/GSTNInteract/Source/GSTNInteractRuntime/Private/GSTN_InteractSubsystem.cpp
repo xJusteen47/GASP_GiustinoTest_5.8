@@ -135,3 +135,39 @@ bool UGSTN_InteractSubsystem::IsSegmentBlocked(const FVector& From, const FVecto
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNInteractLos), /*bTraceComplex*/ false);
 	return World->LineTraceTestByObjectType(From, To, FCollisionObjectQueryParams(ECC_WorldStatic), Params);
 }
+
+void UGSTN_InteractSubsystem::NoteProbeFocus(int32 EntityId, int32 Frame, const FGSTN_InteractCandidateId& Id)
+{
+	TArray<FProbeFocus, TInlineAllocator<4>>& Ring = ProbeFoci.FindOrAdd(EntityId);
+	// A re-simulated frame replaces what it wrote before, and drops the frames after it
+	Ring.RemoveAll([Frame](const FProbeFocus& Each) { return Each.Frame >= Frame; });
+	if (Ring.Num() >= 4)
+	{
+		Ring.RemoveAt(0);
+	}
+	Ring.Add({ Frame, Id });
+}
+
+bool UGSTN_InteractSubsystem::FindProbeFocus(int32 EntityId, int32 Frame, FGSTN_InteractCandidateId& OutId, int32 MaxAgeFrames) const
+{
+	OutId.Reset();
+	const TArray<FProbeFocus, TInlineAllocator<4>>* Ring = ProbeFoci.Find(EntityId);
+	if (!Ring)
+	{
+		return false;
+	}
+	for (int32 Index = Ring->Num() - 1; Index >= 0; --Index)
+	{
+		const FProbeFocus& Each = (*Ring)[Index];
+		if (Each.Frame <= Frame)
+		{
+			if (Frame - Each.Frame > MaxAgeFrames)
+			{
+				return false;
+			}
+			OutId = Each.Id;
+			return true;
+		}
+	}
+	return false;
+}

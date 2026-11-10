@@ -6,7 +6,7 @@ branch, spec [combat-m10-held-objects.md](../../docs/architecture/combat-m10-hel
 credit to the thrower and the predicted ghost come from that plugin unchanged ("deterministic first",
 [entita-dinamiche review](../../docs/notes/reviews/entita-dinamiche-2026-11-09.md) §2, §9 category (a)).
 
-Status: **experimental (0.1), slice 4**, `EnabledByDefault: false`, enabled in `GASP_Giustino2.uproject`. Nothing else knows it.
+Status: **experimental (0.1), slice 5**, `EnabledByDefault: false`, enabled in `GASP_Giustino2.uproject`. Nothing else knows it.
 
 ## Modules
 
@@ -35,10 +35,14 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
 5. **Flight and landing**: the object is drawn at its projectile. The host traces each frame's step of the segment against WorldStatic: on
    contact it removes the shot (`UGSTN_ProjectileSubsystem::RemoveProjectile`) and lands the object there; when the shot ended (hit or
    lifetime) the object drops to the floor below its last position. Landed objects are `Idle` and can be picked up again.
-6. **The link (slice 2)**: every hold start and end is also posted by the host to the holder's combat inbox (`Held.Command`, stamped with the
-   holder's latest frame). The holder's `FGSTN_HeldFragment` is sync state, so `Combat.Held.Carrying` (projected from it every frame) is
-   predicted and rolled back, the same on every machine for a frame; a client gets it by correction, as a grab. The held commands' bindings
-   require it. GSTNLink's Hand channel only links two fighters today; when it takes an object partner (M6 neutral hooks) this fragment folds in.
+6. **The link (slice 5, the plan's G1)**: the hold is a GSTNLink **Hand link** of type `Combat.Link.Type.Held` (made in code,
+   `FGSTN_HeldLinkType`: holder = role 1 `Combat.Link.Role.Holder`, object = role 2, a partner of kind `GSTNEntityKinds::Object` with no
+   snapshot entry). The host forms it with a LinkCommand `Form` on the holder's inbox (stamped with the holder's latest frame; serial newer than
+   the holder's Hand serial) and ends it with a `Break` of that serial (drop = Release, throw = Throw, holder state = Hit, KO = OwnDeath). The link
+   fragment is sync state, so `Combat.Held.Carrying` (projected from the Hand link every frame) is predicted and rolled back; a client gets it by
+   correction, as a grab. GSTNLink's own break rules stay off for this type: the held rules below end a hold; the link watchdog ends it only when
+   the object is destroyed, through the held subsystem's partner resolver (`IGSTN_LinkPartnerResolver`, kind Object). Slice 2's own fragment
+   (`FGSTN_HeldFragment`, inbox kind `Held.Command`) is gone. Log `HeldLink hold|release entity= object= serial=`.
 7. **Drop and breaks**: `UGSTN_GA_HeldDrop` asks the host to put the object down; after the frame the host also ends the hold when the holder
    has a tag of the object's break rules (default: `Combat.State.Hitstun`, `Combat.State.Tumble`, `Combat.Link.Role.Grabbed`, matched by name,
    no dependency on GSTNLink) or gets an authoritative event of them (default `Combat.Event.KO`). The object lands `DropForwardCm` in front of the
@@ -63,19 +67,21 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
    beside the snapshot entities and projects the one `Interact.Target.*` of the frame (for any kit, also one without link offers); this plugin
    no longer projects the tag. The meaning `Interact.Target.Pickup` is added to the GSTNInteract settings at module startup (unless the project
    lists it), priority `PickupMeaningPriority` (90, below the grab's 100; TEST VALUE), reach = the object's `PickupRadius`. The pickup binding
-   requires the tag, so with nothing focused B falls through to what the kit binds below. The host's race still picks the object
-   (`ResolvePickups`, nearest in radius): it can differ from the probe's focus when two objects are close (the probe weighs the stick/facing).
+   requires the tag, so with nothing focused B falls through to what the kit binds below. **Slice 5**: the host gives a request the object
+   whose record the probe focused for that holder on the request's frame (`UGSTN_InteractSubsystem::NoteProbeFocus`/`FindProbeFocus`, host data,
+   not simulation state; `FGSTN_PickupRequest::TargetObjectId`) when it is free and in reach; else (taken by an earlier request of the frame, no focused
+   record, a console pickup) the nearest free object in radius, as before; nothing = fumble. Log `HeldPickup entity holds object (focus id)`.
    Prompt: a placeholder text "B" above the local player's nearest object while it has the tag (`UpdatePrompt`, presentation only, never on a
    dedicated server). `HeldHandReport` logs `target=`.
 10. **Thrown hits (slice 4, the plan's G3)**: the throw's shot carries `SourceTag = Combat.Source.Thrown`; GSTNProjectile puts it on the hit
    inbox entry with a **detached instigator** (the shooter at the release, else its player state), so the hit and KO events carry the source tag
-   and name the thrower even when its entity id no longer resolves (death, disconnect). Log `Projectile .. hit .. source= credit=`.
+   and name the thrower even when its entity id no longer resolves (death, disconnect). Slice 5: a minion's KO event too (GSTNMinion). Log `Projectile .. hit .. source= credit=`.
 11. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
    (its own ranged action) are data only; a later slice routes commands to them.
 ## Not yet (later slices of the plan)
 
-GSTNLink Hand channel with an object partner (needs M6 neutral hooks), the pickup ability reading the probe's focus id (the host race decides
-today), source tags on minion victims (the minion pipeline emits its own events), carry load and size classes (G6), aim policy, friendly fire by mode, impact behaviours
-Break/Bounce/Stick, ghost blend of the object itself (the projectile's ghost is used), thrown enemies (G9), editor preview.
+Carry load and size classes (G6: the Held type's role effect is the hook), aim policy, friendly fire by mode, impact behaviours
+Break/Bounce/Stick, ghost blend of the object itself (the projectile's ghost is used), thrown enemies (G9), editor preview. Minion hit delegates
+(`OnMinionHit`) carry no source tag (only the KO event does).
 
 Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`).

@@ -95,8 +95,10 @@ public:
 	/** HOOK: the ability Command starts with this object in hand (UGSTN_HeldObjectDefinition::CommandActions); null = the kit's own. Not read yet */
 	TSubclassOf<class UGameplayAbility> FindCommandAction(const FGameplayTag& Command) const;
 
-	/** Host: the serial of the current (or last) hold, carried by the holder's FGSTN_HeldFragment */
+	/** Host: the serial of the current (or last) hold of this object (the Held link's partner serial) */
 	uint8 GetHoldSerial() const { return HoldSerial; }
+	/** Host: the serial of the holder's Hand link of the current (or last) hold (M10 G1), 0 before the first */
+	uint8 GetHandLinkSerial() const { return HandLinkSerial; }
 	/** The id the holder's fragment names (host object id + 1; 0 = none) */
 	uint16 GetObjectRef() const { return ObjectId == INDEX_NONE ? 0 : static_cast<uint16>(ObjectId + 1); }
 
@@ -161,6 +163,9 @@ private:
 	/** The pickup record (M10 G2) */
 	UPROPERTY(ReplicatedUsing = OnRep_RecordStamp)
 	FGSTN_HeldRecordStamp RecordStamp;
+
+	/** Host only: the Hand link serial the subsystem formed the current hold with, so its release breaks that very link */
+	uint8 HandLinkSerial = 0;
 
 	/** Where it rests while Idle (1/10 cm on the wire) */
 	UPROPERTY(ReplicatedUsing = OnRep_RestLocation)

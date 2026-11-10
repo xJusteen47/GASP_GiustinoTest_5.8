@@ -81,11 +81,22 @@ bool FGSTN_LinkInboxHandlers::ApplyCommand(FGSTN_LinkFragment& Fragment, const F
 		{
 			return false;
 		}
+		// ForbiddenWithBody (M10 G1): a commanded link never forms beside a live link of the other channel it cannot coexist with
+		if (const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get())
+		{
+			const FGSTN_LinkState& Other = Fragment.Get(Command.Channel == EGSTN_LinkChannel::Body ? EGSTN_LinkChannel::Hand : EGSTN_LinkChannel::Body);
+			const UGSTN_LinkTypeDefinition* Own = Registry->GetDefinition(Command.LinkTypeIndex);
+			const UGSTN_LinkTypeDefinition* OtherDefinition = Other.IsLinked() ? Registry->GetDefinition(Other.LinkTypeIndex) : nullptr;
+			if (Own && OtherDefinition && !Own->CanCoexistWith(*OtherDefinition))
+			{
+				return false;
+			}
+		}
 		FGSTN_LinkState Formed;
 		Formed.LinkTypeIndex = Command.LinkTypeIndex;
 		Formed.Role = Command.Role;
 		Formed.Phase = EGSTN_LinkPhase::Active;
-		Formed.PartnerId = FGSTN_EntityRef(GSTNEntityKinds::Fighter, static_cast<uint16>(Command.PartnerId));
+		Formed.PartnerId = FGSTN_EntityRef(Command.PartnerKind, static_cast<uint16>(Command.PartnerId), Command.PartnerSerial);
 		Formed.Serial = Command.Serial;
 		Formed.LinkFrame = EntryFrame + 1;
 		State = Formed;
@@ -96,17 +107,22 @@ bool FGSTN_LinkInboxHandlers::ApplyCommand(FGSTN_LinkFragment& Fragment, const F
 		return false;
 	}
 	FGSTN_LinkActions::FExit& Exit = Fragment.Actions.Exit;
-	Exit.Frame = EntryFrame + 1;
-	Exit.Position = FVector(Command.ExitPosition);
-	Exit.YawDeg = Command.ExitYawDeg;
-	Exit.Velocity = FVector(Command.ExitVelocity);
-	Exit.Flags = Command.ExitFlags;
+	// A Hand break without a placement (a held object let go, M10 G1) leaves the exit record alone: it is the Body link's
+	const bool bWritesExit = Command.Channel == EGSTN_LinkChannel::Body || Command.ExitFlags != 0;
+	if (bWritesExit)
+	{
+		Exit.Frame = EntryFrame + 1;
+		Exit.Position = FVector(Command.ExitPosition);
+		Exit.YawDeg = Command.ExitYawDeg;
+		Exit.Velocity = FVector(Command.ExitVelocity);
+		Exit.Flags = Command.ExitFlags;
+	}
 	if (Command.Kind == EGSTN_LinkCommandKind::Break)
 	{
 		const uint8 Reason = Command.Reason;
 		// Both sides apply this command on the same frame: the window of the pair's collision starts there on both (F15)
 		const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
-		FGSTN_LinkExitCollision::Begin(Fragment, State, Registry ? Registry->GetDefinition(State.LinkTypeIndex) : nullptr, Exit.Frame);
+		FGSTN_LinkExitCollision::Begin(Fragment, State, Registry ? Registry->GetDefinition(State.LinkTypeIndex) : nullptr, EntryFrame + 1);
 		State.Reset();
 		State.BreakReason = Reason;
 		// A partner move of this link ends with it (M7 G2): the outcome's break, an abort, or any other break of the link

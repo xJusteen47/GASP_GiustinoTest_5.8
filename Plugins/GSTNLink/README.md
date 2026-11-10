@@ -17,6 +17,14 @@ presentation transform, the debug draw); F11 adds part 2 (the watchdog, the brea
 M10 G2 (generic): the interact probe also reads **stamped records** of the world's GSTNInteract registry (`FGSTN_LinkRecordSource`; objects at rest
 have no snapshot entry), for any kit; their meanings come from the GSTNInteract settings, merged into the registry's meaning table by tag. Still
 one projected `Interact.Target.*`. Tests `GSTNLink.NP.Interact.{RecordCandidate, StaleRecordIgnored, OfferAndRecordOneTag}`.
+The probe notes its focus id per entity and frame in the GSTNInteract subsystem (`NoteProbeFocus`, host data, never read by the simulation).
+
+M10 G1 (generic): a link partner that is **not a fighter**. A `Form` command names the partner's kind and serial (`PartnerKind`, `PartnerSerial`;
+default Fighter, so every earlier command is unchanged) and refuses a type that cannot coexist with the other channel's live link
+(`ForbiddenWithBody`). The watchdog judges such a link through the resolver its kind registered (`IGSTN_LinkPartnerResolver`,
+`UGSTN_LinkWatchdog::RegisterPartnerResolver`): partner gone -> one-sided Forced break after the orphan grace; else the own side's break rules
+with the plain root distance; no resolver -> left alone. A Hand break without a placement leaves the Body exit record alone. First user:
+GSTNHeld's Held type (tests `GSTNHeld.Runtime.{HandLink, WatchdogObjectPartner}`).
 
 M7 G1 (generic follow-ups for link types of other plugins; no type of theirs is named here): interact offers per link type compiled by the
 registry (meaning, priority, reach, required kit extension) and the probe built from them; the team and the kit's extension array on each

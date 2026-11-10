@@ -27,7 +27,10 @@ public class GSTNHeldRuntime : ModuleRules
 			"GSTNHeldCore",
 			"GSTNInputCore",
 			"GSTNInteractCore",
-			"GSTNInteractRuntime"
+			"GSTNInteractRuntime",
+			"GSTNLinkCore",
+			"GSTNLinkGAS",
+			"GSTNLinkNP"
 		});
 	}
 }

@@ -13,6 +13,30 @@
 
 class UGSTN_LinkTypeDefinition;
 
+/** What the watchdog needs of a link partner that is not a fighter (M10 G1: a held object), from the resolver its kind registered */
+struct FGSTN_LinkPartnerView
+{
+	/** The partner still exists (false: the link is an orphan and breaks with Forced) */
+	bool bValid = false;
+	/** PartnerDeath, for a type that breaks on it */
+	bool bDead = false;
+	/** Where it is: the distance rule measures from the entity's root to this location */
+	FTransform Transform = FTransform::Identity;
+};
+
+/**
+ * A partner kind's resolver (M10 G1, plan G1): the owner of a non-fighter entity kind (GSTNEntityKinds) registers one with the world's
+ * watchdog, so links whose partner has no snapshot entry are judged too. Server only, like the watchdog. A link whose partner kind has no
+ * resolver is left alone: its kind's owner ends it with its own commands
+ */
+class IGSTN_LinkPartnerResolver
+{
+public:
+	virtual ~IGSTN_LinkPartnerResolver() = default;
+	/** False when this resolver does not know the reference at all (the link is left alone); else fills OutView */
+	virtual bool ResolveLinkPartner(const FGSTN_EntityRef& Partner, FGSTN_LinkPartnerView& OutView) const = 0;
+};
+
 /** Exit flags of a LinkCommand (FGSTN_LinkCommandEntry::ExitFlags, copied to FGSTN_LinkActions::FExit::Flags) */
 namespace GSTNLinkExitFlags
 {
@@ -132,6 +156,12 @@ struct GSTNLINKNP_API FGSTN_LinkWatchdogLogic
 		 * aborted move leaves through the default exit. Unset = the type's placer always
 		 */
 		TFunction<const UGSTN_LinkExitPlacer*(uint8 TypeIndex, int16 ActionId)> ActionExitPlacer;
+
+		/**
+		 * A partner that is not a fighter (M10 G1): its kind's resolver. Unset, or false for the reference = the link is left alone. Valid ->
+		 * the own side's break rules with the partner's view (plain root distance); invalid -> one-sided Forced break after the orphan grace
+		 */
+		TFunction<bool(const FGSTN_EntityRef& Partner, FGSTN_LinkPartnerView& OutView)> ExternalPartner;
 	};
 
 	/** Entities must be sorted by EntityId. Frame is the frame all of them are the end of (the stamp of the posts) */
@@ -192,6 +222,10 @@ public:
 	const FGSTN_LinkWatchdogBreak& GetLastBreak() const { return LastBreak; }
 	int32 GetLastBreakFrame() const { return LastBreakFrame; }
 
+	/** Registers the resolver of a non-fighter partner kind (M10 G1); one per kind, the last registration wins. Not owned */
+	void RegisterPartnerResolver(uint8 Kind, const IGSTN_LinkPartnerResolver* Resolver);
+	void UnregisterPartnerResolver(uint8 Kind, const IGSTN_LinkPartnerResolver* Resolver);
+
 private:
 	void OnPostActorTick(UWorld* World, ELevelTick TickType, float DeltaSeconds);
 	bool IsAuthority() const;
@@ -200,6 +234,8 @@ private:
 
 	/** (entity id << 8 | channel << 7 ... ) -> frame a command for that serial was posted; see Evaluate */
 	TMap<uint64, int32> PostedFrames;
+
+	TMap<uint8, const IGSTN_LinkPartnerResolver*> PartnerResolvers;
 
 	int32 NumBreaks = 0;
 	int32 NumOrphans = 0;

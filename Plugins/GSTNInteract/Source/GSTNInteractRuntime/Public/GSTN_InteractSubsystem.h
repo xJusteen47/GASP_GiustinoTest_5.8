@@ -69,7 +69,25 @@ public:
 	// block: they differ between machines, or between a frame and its resimulation
 	virtual bool IsSegmentBlocked(const FVector& From, const FVector& To) const override;
 
+	/**
+	 * The focus a probe chose for an entity on a frame (GSTNLink's interact probe calls it every frame it runs; an invalid id = nothing
+	 * focused). Not simulation state and never read by the simulation: the authority uses it to give a request the record its frame focused
+	 * (a held object's pickup, M10 slice 5). A re-simulated frame writes it again with the same result
+	 */
+	void NoteProbeFocus(int32 EntityId, int32 Frame, const FGSTN_InteractCandidateId& Id);
+
+	/** The latest focus noted for the entity on a frame at or before Frame (and no older than MaxAgeFrames). False when there is none */
+	bool FindProbeFocus(int32 EntityId, int32 Frame, FGSTN_InteractCandidateId& OutId, int32 MaxAgeFrames = 8) const;
+
 private:
+	struct FProbeFocus
+	{
+		int32 Frame = INDEX_NONE;
+		FGSTN_InteractCandidateId Id;
+	};
+	/** Per entity, the last few frames' focus (a ring, newest last) */
+	TMap<int32, TArray<FProbeFocus, TInlineAllocator<4>>> ProbeFoci;
+
 	FGSTN_InteractRegistry Registry;
 	FGSTN_InteractMeaningTable Meanings;
 	FGSTN_InteractRules DefaultRules;

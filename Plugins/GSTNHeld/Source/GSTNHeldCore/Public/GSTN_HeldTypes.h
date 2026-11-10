@@ -140,6 +140,11 @@ struct FGSTN_PickupRequest
 	/** The simulation frame the request was made on (the earliest wins) */
 	int32 Frame = INDEX_NONE;
 	FVector Location = FVector::ZeroVector;
+	/**
+	 * The object the holder's interact focus named (M10 slice 5), INDEX_NONE = none. The request takes it when it is free and in reach; else
+	 * (taken by an earlier request, gone, out of reach) the nearest free object in reach, as without a focus; nothing in reach = a fumble
+	 */
+	int32 TargetObjectId = INDEX_NONE;
 };
 
 /** One object that could be picked up */
@@ -164,8 +169,9 @@ struct FGSTN_PickupAssignment
 struct GSTNHELDCORE_API FGSTN_HeldRules
 {
 	/**
-	 * The pickup race (plan default M10.5): requests are served by earliest frame, then lower holder id; each takes the nearest available
-	 * object within that object's radius (equal distance: lower object id); a taken object is gone for the next request. A holder gets
+	 * The pickup race (plan default M10.5): requests are served by earliest frame, then lower holder id; each takes its target (TargetObjectId)
+	 * when it names one, else the nearest available object within that object's radius (equal distance: lower object id); a taken object is
+	 * gone for the next request. A holder gets
 	 * at most one object (its first request). Same inputs, same assignments, in the order served
 	 */
 	static void ResolvePickups(TConstArrayView<FGSTN_PickupRequest> Requests, TConstArrayView<FGSTN_PickupCandidate> Candidates,

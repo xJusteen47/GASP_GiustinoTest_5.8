@@ -7,6 +7,8 @@
 #include "GSTN_HeldTags.h"
 #include "GSTN_InteractSettings.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
+#include "Misc/CoreDelegates.h"
+#include "Engine/Engine.h"
 #include "Loadout/GSTN_LoadoutAssembly.h"
 #include "Loadout/GSTN_LoadoutExtensions.h"
 #include "Modules/ModuleManager.h"
@@ -23,7 +25,8 @@ namespace
 }
 
 /**
- * Registers the held fragment, its inbox kind and the tag projection before the first simulation tick, the held command tier, and the
+ * Registers the tag projection before the first simulation tick, the Held link type once the engine exists (the link registry is an engine
+ * subsystem; M10 G1: the hold is a GSTNLink Hand link), the held command tier, and the
  * loadout extension that binds pickup, drop and throw in every compiled kit (the owner's default buttons, no kit Blueprint edited by hand);
  * removes them at shutdown
  */
@@ -32,8 +35,15 @@ class FGSTNHeldRuntimeModule : public IModuleInterface
 public:
 	virtual void StartupModule() override
 	{
-		FGSTN_HeldInbox::Register();
 		FGSTN_CombatTickExtensionRegistry::Get().Register(&TickExtension);
+		if (GEngine)
+		{
+			FGSTN_HeldLinkType::Register();
+		}
+		else
+		{
+			PostEngineInitHandle = FCoreDelegates::GetOnPostEngineInit().AddStatic(&FGSTN_HeldLinkType::Register);
+		}
 		UGSTN_HeldSettings::Get().PushToInputSettings();
 
 		// The pickup meaning the objects' GSTNInteract records carry (M10 G2), unless the project's interact settings list it already. GSTNLink's
@@ -75,12 +85,14 @@ public:
 		}
 		UGSTN_HeldSettings::RemoveFromInputSettings();
 		FGSTN_CombatTickExtensionRegistry::Get().Unregister(&TickExtension);
-		FGSTN_HeldInbox::Unregister();
+		FCoreDelegates::GetOnPostEngineInit().Remove(PostEngineInitHandle);
+		FGSTN_HeldLinkType::Unregister();
 	}
 
 private:
 	FGSTN_HeldTickExtension TickExtension;
 	bool bAddedPickupMeaning = false;
+	FDelegateHandle PostEngineInitHandle;
 };
 
 IMPLEMENT_MODULE(FGSTNHeldRuntimeModule, GSTNHeldRuntime);
