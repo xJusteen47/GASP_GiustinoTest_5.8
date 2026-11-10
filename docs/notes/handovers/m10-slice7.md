@@ -13,11 +13,13 @@ Branch `claude/desktop-m10-7` from `claude/desktop-m10-6` (5f67ffb5). Brief: `m1
   Defaults keep slice 5/6 behaviour. `FGSTN_PickupRequest::bFallBackToNearest`.
 - Tests: `GSTNCombat.Core.Hits.Pipeline` (friendly fire by source), `GSTNHeld.Core` pickup race (no-fallback cases).
 
-**Gate**: RESULTS_PLACEHOLDER
+**Gate**: builds b1-b2 ok (~33 s and ~17 s, `Saved/M10g/build-b*.out`). Headless h1 GSTN 1495/0/0 ensures (`Saved/M10g/headless-h1.log`).
+Harness r1 (`Saved/Logs/m10g/`): held listen 2 % 4/4 PASS, held dedicated 0 % 4/4 PASS, SUITE_MOUNT listen 0 % 12/12 PASS (covers the slice 6
+fork fix on proxies), 0 ensures. Not run: SUITE_DEFAULT (too long for the window), mount dedicated, PIE by eye, three-config build.
 
 **Not done / M10 left**: G7 shoulder-aim AimPolicy and `Explode`; no harness scenario for a pierce-and-rebound throw (the ring is only exercised by
-code path, MaxHits 1 throws never rebound after a fighter hit); SUITE_DEFAULT/MOUNT rerun for the slice 6 fork fix (proxy attribute delta) still owed.
+code path, MaxHits 1 throws never rebound after a fighter hit); SUITE_DEFAULT rerun for the slice 6 fork fix still owed (mount listen done, green).
 Then G8 (object ghost, `scenario_throw_ghost/host`), G9 thrown enemies, G12-G13 (size-binding validator, debug/editor, sweep, three-config build).
 Slice 6 test values and the open owner questions unchanged.
 
-COST_PLACEHOLDER
+Cost: ~110k context, Opus, estimated ~$6-8. Window 17:25-17:55 Rome. Builds 2, headless 1 (~1.5 min), harness 1 run (~13 min).
