@@ -124,6 +124,12 @@ public:
 	void NoteReceivedFromHost() { ++NumReceivedFromHost; }
 	int32 GetNumReceivedFromHost() const { return NumReceivedFromHost; }
 
+	/**
+	 * Host only: ends a live projectile now (destroys its actor, no more sweeps). For owners that decide an end the sweep does not see,
+	 * such as a thrown object that lands on the world (GSTNHeld). False when it is not one of this host's live projectiles
+	 */
+	bool RemoveProjectile(const AGSTN_Projectile* Projectile);
+
 	/** Projectiles fired on this host since the world started */
 	uint32 GetNumFired() const { return NextSerial - 1; }
 

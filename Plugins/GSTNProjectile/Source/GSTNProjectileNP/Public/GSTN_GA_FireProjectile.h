@@ -83,6 +83,16 @@ protected:
 	/** Fired or skipped: the ability is done */
 	void FinishFire();
 
+	/**
+	 * Extension hook, before the origin and direction are computed: a child fills or changes the shot's template (speed, gravity, shape,
+	 * hit data). bHost is false on the predicting client, which only draws a ghost of the result. Return false to skip the shot (nothing
+	 * fired, no ghost). The default keeps the Projectile property as it is
+	 */
+	virtual bool PrepareShot(FGSTN_ProjectileParams& InOutParams, bool bHost) { return true; }
+
+	/** Extension hook, host only: the projectile this ability just spawned */
+	virtual void OnShotFired(class AGSTN_Projectile& Shot) {}
+
 private:
 	/** Combat entity id of the EventTarget's actor, read once at activation; INDEX_NONE without a target */
 	UPROPERTY(Transient)

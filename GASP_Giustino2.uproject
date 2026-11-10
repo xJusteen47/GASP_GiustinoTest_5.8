@@ -231,6 +231,10 @@
 		{
 			"Name": "GSTNProjectile",
 			"Enabled": true
+		},
+		{
+			"Name": "GSTNHeld",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"

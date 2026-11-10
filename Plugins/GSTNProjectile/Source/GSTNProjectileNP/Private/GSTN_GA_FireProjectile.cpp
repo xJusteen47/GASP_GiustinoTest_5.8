@@ -5,6 +5,7 @@
 #include "Abilities/GameplayAbilityTypes.h"
 #include "Engine/World.h"
 #include "GSTNProjectileCoreModule.h"
+#include "GSTN_ProjectileActor.h"
 #include "GSTN_ProjectileSubsystem.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 #include "World/GSTN_StepSnapshot.h"
@@ -83,6 +84,10 @@ bool UGSTN_GA_FireProjectile::Fire()
 	}
 
 	FGSTN_ProjectileParams Params = Projectile;
+	if (!PrepareShot(Params, bHost))
+	{
+		return false;
+	}
 	Params.OwnerEntityId = Projectiles->FindEntityIdOf(Avatar);
 
 	// The pose hits are judged against: the owner's entry in the combat snapshot; the actor only when it has no combat entity
@@ -127,5 +132,10 @@ bool UGSTN_GA_FireProjectile::Fire()
 		Projectiles->SpawnGhost(Params, Avatar);
 		return false;
 	}
-	return Projectiles->FireProjectileAtFrame(Params, INDEX_NONE, Avatar) != nullptr;
+	AGSTN_Projectile* Shot = Projectiles->FireProjectileAtFrame(Params, INDEX_NONE, Avatar);
+	if (Shot)
+	{
+		OnShotFired(*Shot);
+	}
+	return Shot != nullptr;
 }

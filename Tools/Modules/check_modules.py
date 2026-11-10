@@ -56,6 +56,10 @@ FORBIDDEN_EDGES = {
         "GSTNCombatGAS", "GSTNCombatNP", "GSTNProjectileNP",
     ],
     "GSTNProjectileNP.Build.cs": ["GASP_Giustino2", "GSTNMinionCore", "GSTNMinionRuntime"],
+    # GSTNHeld (M10): the core is pure; nothing of GSTNLink, minions or the project module in either
+    "GSTNHeldCore.Build.cs": ["GASP_Giustino2", "GameplayAbilities", "AbilitySystemSimulation", "NetworkPrediction", "GSTNCombatNP",
+        "GSTNCombatGAS", "GSTNProjectileNP", "GSTNHeldRuntime", "GSTNLinkCore", "GSTNLinkNP"],
+    "GSTNHeldRuntime.Build.cs": ["GASP_Giustino2", "GSTNMinionCore", "GSTNMinionRuntime", "GSTNLinkCore", "GSTNLinkNP"],
     "GSTNPiggybackRuntime.Build.cs": ["GSTNPiggybackEditor", "GSTNPiggybackTests", "GASP_Giustino2", "GSTNDefenceCore", "GSTNDefenceGAS", "GSTNDefenceNP"],
     "GSTNExtTestLink.Build.cs": ["GSTNExtTestDefence", "GSTNDefenceCore", "GSTNDefenceGAS", "GSTNDefenceNP"],
     "GSTNExtTestDefence.Build.cs": ["GSTNExtTestLink", "GSTNLinkCore", "GSTNLinkGAS", "GSTNLinkNP"],

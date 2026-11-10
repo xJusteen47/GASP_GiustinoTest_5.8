@@ -333,6 +333,26 @@ void UGSTN_ProjectileSubsystem::ExpireGhosts(int32 Frame)
 	}
 }
 
+bool UGSTN_ProjectileSubsystem::RemoveProjectile(const AGSTN_Projectile* Projectile)
+{
+	if (!Projectile || !HasAuthority())
+	{
+		return false;
+	}
+	const int32 Index = Active.IndexOfByPredicate([Projectile](const FGSTN_ActiveProjectile& Each) { return Each.Actor == Projectile; });
+	if (Index == INDEX_NONE)
+	{
+		return false;
+	}
+	if (IsValid(Active[Index].Actor))
+	{
+		Active[Index].Actor->Destroy();
+	}
+	UE_LOG(LogGSTNProjectile, Log, TEXT("Projectile %u removed by its owner system at frame %d"), Active[Index].Serial, LastFrame);
+	Active.RemoveAt(Index);
+	return true;
+}
+
 void UGSTN_ProjectileSubsystem::StepFrame(int32 Frame)
 {
 	if (Active.IsEmpty())
