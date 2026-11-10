@@ -99,10 +99,22 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 	/**
 	 * Startup steering (plan precisione-weakpoint 5, slice 3): the yaw the attacker turns to in Frame, as the int16 of a SetFacing request
 	 * (FGSTN_StartupSteer::QuantizeYaw). True only while the running timeline is in its startup (before the first active frame, no recoil),
-	 * the move origin is stamped, the aim stick is out of the dead zone and the result differs from CurrentYawDeg (the pose of the end of the
-	 * previous frame). The start yaw is the move origin's, so the turn is a clamp against it, never accumulated: a resimulated or dropped
-	 * frame gives the same answer. Hitstop frames are the caller's to skip. Pure: reads its arguments only
+	 * the move origin is stamped, the precision aim (reticle) of the frame's command is on, the aim stick is out of the dead zone and the
+	 * result differs from CurrentYawDeg (the pose of the end of the previous frame). The start yaw is the move origin's, so the turn is a
+	 * clamp against it, never accumulated: a resimulated or dropped frame gives the same answer. Hitstop frames are the caller's to skip.
+	 * Owner decision (2026-11-10, slice 3b): the right stick turns the character only while the reticle is on; with it off the right stick
+	 * is the camera's alone and the left stick keeps turning the character as before. Pure: reads its arguments only
 	 */
 	static bool ComputeStartupSteer(const FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FVector2D& AimStick,
-		float CameraYawDeg, float CurrentYawDeg, int16& OutYawArg);
+		float CameraYawDeg, float CurrentYawDeg, bool bPrecisionAim, int16& OutYawArg);
+
+	/**
+	 * The facing the running move holds in Frame while the precision aim is on (slice 3b): the steered yaw of the aim stick, or the move
+	 * origin's yaw with the stick centred or a move that cannot steer. Used to give the right stick precedence over the left: the movement
+	 * input's orientation intent is replaced with it, so the movement mode does not turn the attack toward the left stick. False (nothing
+	 * to hold) with the reticle off, outside the startup window (same window as ComputeStartupSteer), during a recoil or without a move
+	 * origin. Pure: reads its arguments only
+	 */
+	static bool ResolveSteerHoldYaw(const FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FVector2D& AimStick,
+		float CameraYawDeg, bool bPrecisionAim, float& OutYawDeg);
 };

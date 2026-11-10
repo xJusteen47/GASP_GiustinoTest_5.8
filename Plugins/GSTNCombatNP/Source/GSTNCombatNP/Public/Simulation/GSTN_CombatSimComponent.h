@@ -27,6 +27,7 @@
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 #include "World/GSTN_StepSnapshot.h"
+#include "MoverSimulationTypes.h"
 #include "GSTN_CombatSimComponent.generated.h"
 
 class UGSTN_CombatRules;
@@ -77,7 +78,8 @@ struct FGSTN_TrackHookEnvironment;
  * Add it to a pawn that also has a UNpAbilitySystemComponent. Replicated; interpolated simulated proxies do not tick it.
  */
 UCLASS(ClassGroup = (Combat), Blueprintable, meta = (BlueprintSpawnableComponent))
-class GSTNCOMBATNP_API UGSTN_CombatSimComponent : public UNetworkPredictionComponent, public IGSTN_InputSimHost, public IGSTN_CommandSourceInterface, public IGSTN_SnapshotSource, public IGSTN_CombatTickServices
+class GSTNCOMBATNP_API UGSTN_CombatSimComponent : public UNetworkPredictionComponent, public IGSTN_InputSimHost, public IGSTN_CommandSourceInterface, public IGSTN_SnapshotSource, public IGSTN_CombatTickServices,
+	public IMoverInputProducerInterface
 {
 	GENERATED_BODY()
 
@@ -93,6 +95,25 @@ public:
 	void ProduceInput(const int32 DeltaTimeMS, FGSTN_InputCmd* Cmd);
 	void SimulationTick(const FNetSimTimeStep& TimeStep, const TNetSimInput<FGSTN_CombatStateTypes>& Input, const TNetSimOutput<FGSTN_CombatStateTypes>& Output);
 	void FinalizeFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux);
+
+	/**
+	 * Mover input producer (slice 3b, owner decision 2026-11-10): while the precision aim (reticle) is on and a move is in its startup,
+	 * the right stick has precedence over the left. Mover asks the actor's own producer first and the components after it, so this
+	 * replaces the orientation intent the pawn wrote from the left stick with the facing the move holds (ResolveSteerHoldYaw); the move
+	 * input itself is kept. With the reticle off it changes nothing. It writes input, never state: the intent travels in the Mover command
+	 * like any other input, and the combat tick's SetFacing request stays the authority on the steered yaw
+	 */
+	virtual void ProduceInput_Implementation(int32 SimTimeMs, FMoverInputCmdContext& InputCmdResult) override;
+
+	/** Replaces the orientation intent of the command's character inputs with YawDeg (world). False when there are none or they are base-relative */
+	static bool HoldOrientationIntent(FMoverInputCmdContext& InputCmd, float YawDeg);
+
+	/**
+	 * True while the latest command this pawn produced had the precision aim (reticle) on. Local and presentation side; the simulation
+	 * reads FGSTN_InputCmd::bPrecisionAim of the frame instead. Kept for moves that will opt into reticle aiming (ranged strong attacks)
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Precision")
+	bool IsPrecisionAimInput() const { return bLastPrecisionAim; }
 
 	/**
 	 * Network Prediction calls it on every instance of the model, whenever the simulation rolls back to a state. Drops the hits that
@@ -807,6 +828,13 @@ private:
 
 	/** Startup steering of the frame: a SetFacing request when the aim stick turns the running move (FGSTN_CombatTimelineLogic::ComputeStartupSteer) */
 	void StepStartupSteer(int32 Frame, const FGSTN_InputCmd& Cmd, FGSTN_CombatSyncCore& Core);
+
+	// Last command this pawn produced (local only): the Mover input producer reads the aim of it, it never feeds the simulation
+	TWeakObjectPtr<class UGSTN_PrecisionAimComponent> CachedPrecisionAim;
+	bool bLastPrecisionAim = false;
+	int8 LastAimStickX = 0;
+	int8 LastAimStickY = 0;
+	uint16 LastCameraYaw = 0;
 
 	/** The attacker side of the combat tick for the frame being simulated (GSTN_CombatSimAttacker.cpp). Writes Core and the victims' inboxes */
 	void RunAttackerStep(const FNetSimTimeStep& TimeStep, FGSTN_CombatSyncCore& Core, const FGSTN_StepSnapshot* Snapshot, const FGSTN_HitGroupMask& GroupMask);

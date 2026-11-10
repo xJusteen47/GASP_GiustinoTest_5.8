@@ -328,11 +328,10 @@ int32 FGSTN_CombatTimelineLogic::AppendOutboxEvents(const FGSTN_TimelineOutput& 
 	}
 	return Appended;
 }
-bool FGSTN_CombatTimelineLogic::ComputeStartupSteer(const FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FVector2D& AimStick,
-	float CameraYawDeg, float CurrentYawDeg, int16& OutYawArg)
+bool FGSTN_CombatTimelineLogic::ResolveSteerHoldYaw(const FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FVector2D& AimStick,
+	float CameraYawDeg, bool bPrecisionAim, float& OutYawDeg)
 {
-	if (!Data || Core.ActionState != EGSTN_ActionState::InTimeline || Core.RecoilStartFrame != INDEX_NONE || !Core.Hit.MoveOrigin.bSet
-		|| !FGSTN_StartupSteer::IsSteering(AimStick, Data->MaxSteerDegrees))
+	if (!bPrecisionAim || !Data || Core.ActionState != EGSTN_ActionState::InTimeline || Core.RecoilStartFrame != INDEX_NONE || !Core.Hit.MoveOrigin.bSet)
 	{
 		return false;
 	}
@@ -343,7 +342,20 @@ bool FGSTN_CombatTimelineLogic::ComputeStartupSteer(const FGSTN_CombatSyncCore& 
 	}
 	// The move origin keeps the yaw at 65536 steps per turn in a uint16: the same bits as the request's int16
 	const float StartYaw = FGSTN_StartupSteer::DequantizeYaw(static_cast<int16>(Core.Hit.MoveOrigin.RotationQ[1]));
-	const int16 Target = FGSTN_StartupSteer::QuantizeYaw(FGSTN_StartupSteer::SteerYaw(StartYaw, AimStick, CameraYawDeg, Data->MaxSteerDegrees));
+	OutYawDeg = FGSTN_StartupSteer::SteerYaw(StartYaw, AimStick, CameraYawDeg, Data->MaxSteerDegrees);
+	return true;
+}
+
+bool FGSTN_CombatTimelineLogic::ComputeStartupSteer(const FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FVector2D& AimStick,
+	float CameraYawDeg, float CurrentYawDeg, bool bPrecisionAim, int16& OutYawArg)
+{
+	float SteerYawDeg = 0.f;
+	if (!Data || !FGSTN_StartupSteer::IsSteering(AimStick, Data->MaxSteerDegrees)
+		|| !ResolveSteerHoldYaw(Core, Frame, Data, AimStick, CameraYawDeg, bPrecisionAim, SteerYawDeg))
+	{
+		return false;
+	}
+	const int16 Target = FGSTN_StartupSteer::QuantizeYaw(SteerYawDeg);
 	if (Target == FGSTN_StartupSteer::QuantizeYaw(CurrentYawDeg))
 	{
 		return false;
