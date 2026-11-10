@@ -99,14 +99,26 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
    host-only test definition. **Slice 7**: one hit per target per throw (`bOneHitPerTargetPerThrow`, default on): a rebound shot is seeded with the
    targets the throw already hit (`UGSTN_ProjectileSubsystem::GetHitTargets`/`SeedHitTargets`), which also count toward its `MaxHits`. Thrown hits
    on allies follow the rules' `FriendlyFireSources` (see below). Log `HeldImpact .. behaviour=Bounce .. carried=`.
-13. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
+13. **Slice 8 (the plan's G7 rest and G8)**. *Shoulder aim*: `FGSTN_HeldThrowInput::AimView` (`DefaultGSTNHeld.ini`, both behaviours shipped):
+   **Shoulder** (default, TEST VALUE) = while the button is held to aim, the throw asks the camera to go over the shoulder (`AimViewRequestTags`,
+   `Camera.Request.Aim`, local, through `UGSTN_PrecisionAimComponent::SetHoldAimShownWithView` / `GetViewRequestTags`; the pawn's
+   `IGSTN_CameraTagSource` must add them, nothing in the project does yet) and the release aim is `EGSTN_HeldThrowAim::Shoulder`: the converged
+   camera aim plus `ShoulderAimPitchDeg` (0) instead of the throw's `LaunchPitchDeg`; **KeepView** = slice 5 behaviour (reticle only, camera pitch
+   plus `LaunchPitchDeg`). A tap with the reticle on stays a `Camera` aim. Hook `UGSTN_GA_FireProjectile::GetShotLaunchPitchDeg`. *Explode*
+   (`EGSTN_HeldImpactBehaviour::Explode`): on the world, and on a fighter unless `bExplodeOnFighterHit` is off, the host fires a one-step blast
+   shot of `ExplodeRadiusCm` (250) at the impact with `bRadialPush` (hits push away from the centre), the throw's hit data or `ExplodeHit`
+   (`bExplodeOwnHit`), thrown source, credited to the thrower, hitting every fighter in reach once (the direct victim too); then the object is
+   Broken and respawns as Break does. Log `HeldImpact .. behaviour=Explode .. blast=`. *Object ghost*: on the throwing client the object is drawn
+   at the throw's ghost (`UGSTN_GA_FireProjectile::OnGhostSpawned` -> `UGSTN_HeldSubsystem::NotePredictedThrow`), then at the host's projectile
+   that took the ghost over (`UGSTN_ProjectileSubsystem::OnGhostReconciled`), until the replicated state catches up; an unmatched ghost puts it
+   back in the hand. `gstn.Held.GhostThrow` (harness stand-in for a predicted throw), `gstn.Held.GhostReport`. A rebound still has no ghost.
+14. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
    (its own ranged action) are data only; a later slice routes commands to them.
 ## Not yet (later slices of the plan)
 
-G7 rest: aim policy while aiming with the shoulder camera (the throw already aims with the camera when held or with the reticle on), `Explode`.
-Friendly fire by mode is `UGSTN_CombatRules::FriendlyFireSources` (slice 7; projectiles only, melee keeps `bFriendlyFire`). G8: a
-ghost of the object itself on the thrower (the projectile's ghost is used; a rebound has no ghost), `scenario_throw_ghost`/`_host`. G9 thrown
+Friendly fire by mode is `UGSTN_CombatRules::FriendlyFireSources` (slice 7; projectiles only, melee keeps `bFriendlyFire`). The camera
+side of the shoulder aim (a pawn tag source that reports the precision aim component's view tags). G9 thrown
 enemies; G12-G13 debug/editor (validator of missing size bindings per kit), sweep. Minion hit delegates (`OnMinionHit`) carry no source tag
 (only the KO event does).
 
-Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`, `held_carry_load`, `held_throw_break`).
+Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`, `held_carry_load`, `held_throw_break`, `held_throw_explode`, `held_throw_ghost`).

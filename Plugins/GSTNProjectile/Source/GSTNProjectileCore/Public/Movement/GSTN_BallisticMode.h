@@ -63,6 +63,13 @@ struct GSTNPROJECTILECORE_API FGSTN_ProjectileParams
 	/** Distinct victims it may hit before it is consumed (1 = gone on the first hit; more pierces) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile|Hit", meta = (ClampMin = "1"))
 	uint8 MaxHits = 1;
+
+	/**
+	 * Its hits push away from the shape's centre (an exploding thrown object, M10 G7), not along the velocity: the hit's attacker yaw is
+	 * the direction from the centre to the victim. For a shot that does not move
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
+	bool bRadialPush = false;
 };
 
 /**

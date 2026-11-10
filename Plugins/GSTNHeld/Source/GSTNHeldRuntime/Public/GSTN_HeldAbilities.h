@@ -69,7 +69,9 @@ public:
  * VALUES in UGSTN_HeldSettings::ThrowInput): released before AimHoldFrames it is a tap and goes along the left stick of the release frame
  * (the facing with the stick centred); held longer the reticle shows (UGSTN_PrecisionAimComponent::SetHoldAimShown, local) and the throw
  * goes along the camera of the release frame; with the reticle toggled on a tap aims with the camera too. Held MaxAimFrames, it goes on its
- * own. The press frame and the chosen aim are sync variables, so a re-simulation fires on the same frame the same way. Started without a
+ * own. With AimView = Shoulder (slice 8, M10 G7) the held aim also asks the camera to go over the shoulder (AimViewRequestTags through the
+ * precision aim component) and the throw goes along the converged aim plus ShoulderAimPitchDeg. On the throwing client the object is drawn at
+ * the shot's ghost until the host's projectile takes over (slice 8, M10 G8). The press frame and the chosen aim are sync variables, so a re-simulation fires on the same frame the same way. Started without a
  * button (an event, the harness) it fires at once with the Aim property (EventTarget for the dev command).
  */
 UCLASS(Blueprintable)
@@ -91,6 +93,8 @@ protected:
 	virtual void OnShotFired(AGSTN_Projectile& Shot) override;
 	virtual bool DeferFire() const override;
 	virtual EGSTN_ProjectileAim GetShotAim() const override;
+	virtual float GetShotLaunchPitchDeg() const override;
+	virtual void OnGhostSpawned(AGSTN_Projectile& Ghost) override;
 
 private:
 	/** Local presentation: the reticle of a held aim on the pawn's own machine */

@@ -316,6 +316,31 @@ void UGSTN_HeldObjectComponent::UpdatePlacement()
 		Owner->SetActorHiddenInGame(bBroken);
 		Owner->SetActorEnableCollision(!bBroken);
 	}
+	// M10 G8: on the throwing client the object leaves the hand with the throw's ghost (then the host's projectile that took it over) until the
+	// replicated state catches up; an unmatched ghost puts it back where the host says it is (still in hand: the throw did not happen)
+	if (bPredicting)
+	{
+		const AGSTN_Projectile* Predicted = PredictedFlight.Get();
+		const bool bCaughtUp = State == EGSTN_HeldObjectState::Idle || State == EGSTN_HeldObjectState::Broken
+			|| (State == EGSTN_HeldObjectState::Flying && IsValid(Flight));
+		if (!IsValid(Predicted) || Predicted->IsActorBeingDestroyed() || bCaughtUp)
+		{
+			if (!bPredictionHanded && !bCaughtUp)
+			{
+				if (UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(GetWorld()))
+				{
+					Held->NoteGhostExpired(*this);
+				}
+			}
+			bPredicting = false;
+			PredictedFlight.Reset();
+		}
+		else
+		{
+			Owner->SetActorLocation(Predicted->GetActorLocation());
+			return;
+		}
+	}
 	switch (State)
 	{
 	case EGSTN_HeldObjectState::Broken:

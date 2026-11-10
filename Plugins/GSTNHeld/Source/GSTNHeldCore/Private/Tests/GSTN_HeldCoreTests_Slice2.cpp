@@ -56,12 +56,19 @@ bool FGSTN_HeldThrowAimTest::RunTest(const FString& Parameters)
 	FGSTN_HeldThrowInput Input;
 	Input.AimHoldFrames = 12;
 	Input.bCameraAimWhenReticleOn = true;
+	Input.AimView = EGSTN_HeldAimView::KeepView;
 	TestEqual(TEXT("tap = stick"), FGSTN_HeldRules::ChooseThrowAim(1, false, Input), EGSTN_HeldThrowAim::Stick);
 	TestEqual(TEXT("just under the hold = stick"), FGSTN_HeldRules::ChooseThrowAim(11, false, Input), EGSTN_HeldThrowAim::Stick);
 	TestEqual(TEXT("held = camera"), FGSTN_HeldRules::ChooseThrowAim(12, false, Input), EGSTN_HeldThrowAim::Camera);
 	TestEqual(TEXT("tap with the reticle on = camera"), FGSTN_HeldRules::ChooseThrowAim(1, true, Input), EGSTN_HeldThrowAim::Camera);
 	Input.bCameraAimWhenReticleOn = false;
 	TestEqual(TEXT("tap with the reticle on, rule off = stick"), FGSTN_HeldRules::ChooseThrowAim(1, true, Input), EGSTN_HeldThrowAim::Stick);
+	// M10 G7 shoulder aim: held = the shoulder aim; a reticle tap stays a camera aim (the view never went over the shoulder)
+	Input.AimView = EGSTN_HeldAimView::Shoulder;
+	Input.bCameraAimWhenReticleOn = true;
+	TestEqual(TEXT("held with the shoulder view = shoulder"), FGSTN_HeldRules::ChooseThrowAim(12, false, Input), EGSTN_HeldThrowAim::Shoulder);
+	TestEqual(TEXT("tap with the reticle on and the shoulder view = camera"), FGSTN_HeldRules::ChooseThrowAim(1, true, Input), EGSTN_HeldThrowAim::Camera);
+	TestEqual(TEXT("tap with the shoulder view = stick"), FGSTN_HeldRules::ChooseThrowAim(1, false, Input), EGSTN_HeldThrowAim::Stick);
 	TestFalse(TEXT("not aiming before the hold"), FGSTN_HeldRules::IsAiming(11, Input));
 	TestTrue(TEXT("aiming from the hold"), FGSTN_HeldRules::IsAiming(12, Input));
 	TestTrue(TEXT("ini values sane"), UGSTN_HeldSettings::Get().ThrowInput.AimHoldFrames > 0

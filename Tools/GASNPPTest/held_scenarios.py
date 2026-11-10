@@ -13,7 +13,7 @@ import unreal
 import gasnpp_test as g
 import defence_scenarios as ds
 
-SUITE_HELD = ['held_pickup_throw_hit', 'held_drop_and_break', 'held_carry_load', 'held_throw_break']
+SUITE_HELD = ['held_pickup_throw_hit', 'held_drop_and_break', 'held_carry_load', 'held_throw_break', 'held_throw_explode', 'held_throw_ghost']
 _marks = {}
 
 _HAND = re.compile(r'HeldHandReport world=(\S+) entity=(\d+) carrying=(\d) target=(\d)')
@@ -337,6 +337,69 @@ def scenario_held_throw_break(client=1):
         (7.6, lambda: ('back', capture('back'))),
         (7.7, run.at('after its respawn time it is at rest at its home in every world', respawned)),
         (7.8, run.finish()),
+    ]
+    run.run(steps)
+
+
+
+def scenario_held_throw_explode(client=1):
+    """M10 G7 slice 8. Pawn 0 throws an Explode object (Light, 5 kg) at pawn 1: on the hit (or the world, if it misses) the host logs one
+    HeldImpact behaviour=Explode with its blast fired (a one-step shot of ExplodeRadiusCm), the blast hits at least one fighter with the
+    thrown source and the object is hidden, Broken, in every world (it respawns as a Break object does)"""
+    run = g._Run('held_throw_explode', client, judge_reconciles=False, sample=False)
+    st = {}
+
+    def capture(name):
+        st[name] = _reports()
+        return f'{name} {st[name]}'
+
+    def exploded():
+        rows = st.get('broken', [])
+        blasts = re.findall(r'HeldImpact object=(\d+) behaviour=Explode frame=(\d+) on=(\S+) at=(\S+) radius=(\d+) blast=(\d)', _log())
+        hits = re.findall(r'Projectile \d+ hit (\d+) at frame \d+ \(hurtbox -?\d+\) source=Combat.Source.Thrown', _log())
+        ok = len(blasts) == 1 and blasts[0][5] == '1' and len(hits) >= 1 and rows and all(r and r[2] == '3' for r in rows)
+        return ok, f'blasts {blasts} thrown hits {hits} reports {rows}'
+
+    steps = [
+        (0.0, lambda: ('setup', _setup())),
+        (0.5, lambda: ('spawn', _cmd('gstn.Held.Spawn 0 120 Light 5 Explode'))),
+        (1.4, lambda: ('pickup', _cmd('gstn.Held.Pickup 0'))),
+        (2.4, lambda: ('throw', _cmd('gstn.Held.Throw 0 1'))),
+        (4.4, lambda: ('broken', capture('broken'))),
+        (4.5, run.at('one explosion with its blast fired, at least one thrown-source hit, the object Broken in every world', exploded)),
+        (4.6, run.finish()),
+    ]
+    run.run(steps)
+
+
+_GHOST = re.compile(r'HeldGhostReport world=(\S+) predicted=(\d+) handed=(\d+) snapped=(\d+) expired=(\d+) lastErrorCm=([\d.]+) maxHandedErrorCm=([\d.]+)')
+
+
+def scenario_held_throw_ghost(client=1):
+    """M10 G8 slice 8. Every pawn picks up a test object; the client's pawn throws its own through gstn.Held.GhostThrow (the stand-in for a
+    predicted throw: the ghost on the client at its next frame, the same throw on the host at that frame). On that client the object is drawn
+    at the ghost at once, then handed to the host's projectile: one predicted, one handed, none snapped or expired, handover error <= 25 cm
+    (plan §16). The host logs the throw fired"""
+    run = g._Run('held_throw_ghost', client, judge_reconciles=False, sample=False)
+    st = {}
+
+    def report():
+        _cmd('gstn.Held.GhostReport', client)
+        rows = _GHOST.findall(_log())
+        st['report'] = rows[-1] if rows else None
+        return f"report {st['report']}"
+
+    steps = [
+        (0.0, lambda: ('setup', _setup())),
+        (0.5, lambda: ('spawn', [_cmd(f'gstn.Held.Spawn {i} 120') for i in range(3)])),
+        (1.4, lambda: ('pickup', [_cmd(f'gstn.Held.Pickup {i}') for i in range(3)])),
+        (2.6, lambda: ('ghost throw', _cmd('gstn.Held.GhostThrow', client))),
+        (4.6, lambda: ('report', report())),
+        (4.7, run.at('the client ghost-threw what it held and the host fired the same throw', lambda: (
+            len(f := re.findall(r'HeldGhostThrow player=\S+ start=(-?\d+) ghost=(\d) fired=(\d)', _log())) == 1 and f[0][1:] == ('1', '1'), f'{f}'))),
+        (4.7, run.at('client object ghost: 1 predicted, 1 handed, 0 snapped, 0 expired, handover error <= 25 cm', lambda: (
+            st['report'] is not None and st['report'][1:5] == ('1', '1', '0', '0') and float(st['report'][6]) <= 25.0, f"{st['report']}"))),
+        (4.8, run.finish()),
     ]
     run.run(steps)
 

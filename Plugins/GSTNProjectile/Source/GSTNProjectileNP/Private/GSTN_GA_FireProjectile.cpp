@@ -146,13 +146,16 @@ bool UGSTN_GA_FireProjectile::Fire()
 			}
 		}
 		FRotator Launch = Direction.Rotation();
-		Launch.Pitch = FMath::Clamp(Launch.Pitch + LaunchPitchDeg, -89.0, 89.0);
+		Launch.Pitch = FMath::Clamp(Launch.Pitch + GetShotLaunchPitchDeg(), -89.0, 89.0);
 		Direction = Launch.Vector();
 	}
 	Params.Direction = Direction;
 	if (!bHost)
 	{
-		Projectiles->SpawnGhost(Params, Avatar);
+		if (AGSTN_Projectile* Ghost = Projectiles->SpawnGhost(Params, Avatar))
+		{
+			OnGhostSpawned(*Ghost);
+		}
 		return false;
 	}
 	AGSTN_Projectile* Shot = Projectiles->FireProjectileAtFrame(Params, INDEX_NONE, Avatar);

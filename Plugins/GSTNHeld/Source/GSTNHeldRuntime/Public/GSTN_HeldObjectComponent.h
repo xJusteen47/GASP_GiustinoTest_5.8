@@ -192,4 +192,12 @@ private:
 	int32 RespawnFrame = INDEX_NONE;
 	/** Host: who threw the current flight (a rebound keeps the thrower's credit) */
 	TWeakObjectPtr<AActor> Thrower;
+
+	/**
+	 * Throwing client (M10 G8): the throw's ghost, then the host's projectile that took it over; the object is drawn at it until the replicated
+	 * state catches up (Flying with that projectile, or at rest). Presentation only, never replicated
+	 */
+	TWeakObjectPtr<AGSTN_Projectile> PredictedFlight;
+	bool bPredicting = false;
+	bool bPredictionHanded = false;
 };

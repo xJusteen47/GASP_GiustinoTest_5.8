@@ -115,6 +115,18 @@ protected:
 	/** Extension hook, host only: the projectile this ability just spawned */
 	virtual void OnShotFired(class AGSTN_Projectile& Shot) {}
 
+	/**
+	 * Extension hook: the elevation added to Facing, Stick and CommandAim for this shot, read at the fire frame on every machine that builds it
+	 * (the same rule as GetShotAim). The default is LaunchPitchDeg
+	 */
+	virtual float GetShotLaunchPitchDeg() const { return LaunchPitchDeg; }
+
+	/**
+	 * Extension hook, predicting client only: the ghost just drawn for this shot (also when a re-simulated fire finds the one already drawn).
+	 * Presentation only: a thrown object follows it (M10 G8)
+	 */
+	virtual void OnGhostSpawned(class AGSTN_Projectile& Ghost) {}
+
 private:
 	/** Combat entity id of the EventTarget's actor, read once at activation; INDEX_NONE without a target */
 	UPROPERTY(Transient)

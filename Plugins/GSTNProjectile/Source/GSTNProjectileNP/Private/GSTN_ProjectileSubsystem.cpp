@@ -314,6 +314,8 @@ void UGSTN_ProjectileSubsystem::ReconcileGhostFor(AGSTN_Projectile& Authority)
 	UE_LOG(LogGSTNProjectile, Log, TEXT("Projectile ghost %s for %s: ghost start %d, host start %d, frame %d, error %.2f cm"),
 		BestResult == FGSTN_ProjectileGhostReconcile::EResult::Adopt ? TEXT("adopted") : TEXT("snapped"), *Owner->GetName(), GhostStart,
 		Authority.GetSegment().StartFrame, LastFrame, BestError);
+	// A thrown object drawn at the ghost follows the host's projectile from here (M10 G8)
+	OnGhostReconciled.Broadcast(Ghost, &Authority, BestResult == FGSTN_ProjectileGhostReconcile::EResult::Adopt);
 	Ghost->Destroy();
 	Ghosts.RemoveAt(Best);
 }
@@ -501,7 +503,9 @@ bool UGSTN_ProjectileSubsystem::StepProjectile(FGSTN_ActiveProjectile& Projectil
 		Entry.Hit = Params.Hit;
 		Entry.HitLocation = (Center + ShapeCenterOf(*PickedShape, Victim.Transform)) * 0.5;
 		Entry.HitboxVelocity = Velocity;
-		Entry.AttackerYaw = static_cast<float>(Facing.Rotation().Yaw);
+		// An explosion pushes everyone away from its centre (M10 G7); a victim right at the centre takes the shot's facing
+		const FVector Away = (Victim.Transform.GetLocation() - Center).GetSafeNormal2D();
+		Entry.AttackerYaw = static_cast<float>((Params.bRadialPush && !Away.IsNearlyZero() ? Away : Facing).Rotation().Yaw);
 		Entry.Relationship = GSTNHitRelationship::ToIndex(Relationship);
 		Entry.HurtboxIndex = static_cast<uint8>(Picked);
 		Entry.AttackerHitboxIndex = 0;

@@ -165,6 +165,15 @@ bool FGSTN_HeldImpactTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("too many bounces land"), FGSTN_HeldRules::ResolveImpact(Tuning, true, Down, Up, 2, Out), EGSTN_HeldImpactBehaviour::Land);
 	TestEqual(TEXT("too slow lands"), FGSTN_HeldRules::ResolveImpact(Tuning, true, FVector(0.0, 0.0, -300.0), Up, 0, Out), EGSTN_HeldImpactBehaviour::Land);
 	TestEqual(TEXT("a fighter hit lands"), FGSTN_HeldRules::ResolveImpact(Tuning, false, Down, Up, 0, Out), EGSTN_HeldImpactBehaviour::Land);
+
+	// M10 G7 slice 8: Explode on the world, and on a fighter unless bExplodeOnFighterHit is off
+	Tuning.ImpactBehaviour = EGSTN_HeldImpactBehaviour::Explode;
+	Tuning.bExplodeOnFighterHit = true;
+	TestEqual(TEXT("explode on the world"), FGSTN_HeldRules::ResolveImpact(Tuning, true, Down, Up, 0, Out), EGSTN_HeldImpactBehaviour::Explode);
+	TestEqual(TEXT("explode on a fighter"), FGSTN_HeldRules::ResolveImpact(Tuning, false, Down, Up, 0, Out), EGSTN_HeldImpactBehaviour::Explode);
+	Tuning.bExplodeOnFighterHit = false;
+	TestEqual(TEXT("world only: still explodes on the world"), FGSTN_HeldRules::ResolveImpact(Tuning, true, Down, Up, 0, Out), EGSTN_HeldImpactBehaviour::Explode);
+	TestEqual(TEXT("world only: a fighter hit lands"), FGSTN_HeldRules::ResolveImpact(Tuning, false, Down, Up, 0, Out), EGSTN_HeldImpactBehaviour::Land);
 	return true;
 }
 

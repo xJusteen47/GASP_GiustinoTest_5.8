@@ -8,6 +8,8 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
 #include "GSTN_HeldAbilities.h"
 #include "GSTN_HeldObjectActor.h"
 #include "GSTN_HeldObjectComponent.h"
@@ -67,6 +69,11 @@ void UGSTN_HeldSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	{
 		Watchdog->RegisterPartnerResolver(GSTNEntityKinds::Object, this);
 	}
+	// M10 G8: a client's object drawn at a throw's ghost follows the host's projectile that takes the ghost over
+	if (UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(&InWorld); Projectiles && !HasAuthority())
+	{
+		GhostReconciledHandle = Projectiles->OnGhostReconciled.AddUObject(this, &UGSTN_HeldSubsystem::HandleGhostReconciled);
+	}
 }
 
 bool UGSTN_HeldSubsystem::ResolveLinkPartner(const FGSTN_EntityRef& Partner, FGSTN_LinkPartnerView& OutView) const
@@ -120,6 +127,14 @@ void UGSTN_HeldSubsystem::Deinitialize()
 	if (UGSTN_LinkWatchdog* Watchdog = UGSTN_LinkWatchdog::Get(GetWorld()))
 	{
 		Watchdog->UnregisterPartnerResolver(GSTNEntityKinds::Object, this);
+	}
+	if (GhostReconciledHandle.IsValid())
+	{
+		if (UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(GetWorld()))
+		{
+			Projectiles->OnGhostReconciled.Remove(GhostReconciledHandle);
+		}
+		GhostReconciledHandle.Reset();
 	}
 	Objects.Reset();
 	LastHandSerial.Reset();
@@ -491,10 +506,16 @@ void UGSTN_HeldSubsystem::StepObjects(int32 Frame)
 			// The shot hit (consumed) or expired: the object falls to the floor below where the shot was last (or breaks on the fighter, M10 G7)
 			const int32 LastFrameOfShot = FMath::Clamp(Frame - 1, Segment.StartFrame, Object->FlightEndFrame);
 			FVector Unused;
-			if (Frame <= Object->FlightEndFrame
-				&& FGSTN_HeldRules::ResolveImpact(Object->GetTuning(), false, FVector::ZeroVector, FVector::ZeroVector, 0, Unused) == EGSTN_HeldImpactBehaviour::Break)
+			const EGSTN_HeldImpactBehaviour OnFighter = Frame <= Object->FlightEndFrame
+				? FGSTN_HeldRules::ResolveImpact(Object->GetTuning(), false, FVector::ZeroVector, FVector::ZeroVector, 0, Unused) : EGSTN_HeldImpactBehaviour::Land;
+			if (OnFighter == EGSTN_HeldImpactBehaviour::Break)
 			{
 				BreakObject(*Object, Frame, TEXT("hit"));
+				continue;
+			}
+			if (OnFighter == EGSTN_HeldImpactBehaviour::Explode)
+			{
+				ExplodeObject(*Object, FGSTN_BallisticMode::PositionAt(Segment, LastFrameOfShot), Frame, TEXT("hit"));
 				continue;
 			}
 			const FVector Rest = FloorBelow(FGSTN_BallisticMode::PositionAt(Segment, LastFrameOfShot), HalfHeight, Owner);
@@ -530,6 +551,11 @@ void UGSTN_HeldSubsystem::StepObjects(int32 Frame)
 				BreakObject(*Object, Frame, GetNameSafe(Hit.GetActor()));
 				continue;
 			}
+			if (Impact == EGSTN_HeldImpactBehaviour::Explode)
+			{
+				ExplodeObject(*Object, Hit.ImpactPoint + Hit.ImpactNormal * HalfHeight, Frame, GetNameSafe(Hit.GetActor()));
+				continue;
+			}
 			if (Impact == EGSTN_HeldImpactBehaviour::Bounce && Projectiles && Rebound(*Object, Hit.ImpactPoint + Hit.ImpactNormal * HalfHeight, ReboundVelocity, Frame, ThrowHitTargets))
 			{
 				continue;
@@ -553,6 +579,85 @@ void UGSTN_HeldSubsystem::BreakObject(UGSTN_HeldObjectComponent& Object, int32 F
 	const int32 Respawn = Seconds > 0.f ? Frame + FMath::Max(1, FMath::RoundToInt(Seconds / Step)) : INDEX_NONE;
 	Object.SetBroken(Respawn);
 	UE_LOG(LogGSTNHeld, Log, TEXT("HeldImpact object=%d behaviour=Break frame=%d on=%s respawn=%d"), Object.GetObjectId(), Frame, *On, Respawn);
+}
+
+void UGSTN_HeldSubsystem::ExplodeObject(UGSTN_HeldObjectComponent& Object, const FVector& At, int32 Frame, const FString& On)
+{
+	UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(GetWorld());
+	const FGSTN_HeldObjectTuning& Tuning = Object.GetTuning();
+	AActor* Thrower = Object.Thrower.Get();
+	const AGSTN_Projectile* Blast = nullptr;
+	if (Projectiles && Projectiles->CanFire())
+	{
+		// A shot that does not move and lives one step: the projectile pipeline gives relationships, friendly fire by source, the inbox and the
+		// credit as for the throw. It hits every fighter in reach once, the throw's direct victims too (a direct hit and the blast, TEST CHOICE)
+		FGSTN_ProjectileParams Params;
+		Params.Origin = At;
+		Params.Speed = 0.f;
+		Params.GravityAccel = FVector::ZeroVector;
+		Params.LifetimeFrames = 1;
+		Params.Shape.Type = EGSTN_ShapeType::Sphere;
+		Params.Shape.Extent = FVector(Tuning.ExplodeRadiusCm);
+		Params.Hit = Tuning.bExplodeOwnHit ? Tuning.ExplodeHit : Tuning.Throw.Hit;
+		Params.SourceTag = GSTNCombatHitTags::Source_Thrown;
+		Params.MaxHits = MAX_uint8;
+		Params.bRadialPush = true;
+		Params.OwnerEntityId = Thrower ? Projectiles->FindEntityIdOf(Thrower) : INDEX_NONE;
+		Blast = Projectiles->FireProjectileAtFrame(Params, Frame + 1, Thrower);
+	}
+	UE_LOG(LogGSTNHeld, Log, TEXT("HeldImpact object=%d behaviour=Explode frame=%d on=%s at=%.0f,%.0f,%.0f radius=%.0f blast=%d"), Object.GetObjectId(), Frame, *On,
+		At.X, At.Y, At.Z, Tuning.ExplodeRadiusCm, Blast ? 1 : 0);
+	BreakObject(Object, Frame, On);
+}
+
+void UGSTN_HeldSubsystem::NotePredictedThrow(AActor* Holder, AGSTN_Projectile& Ghost)
+{
+	UGSTN_HeldObjectComponent* Object = FindHeldBy(Holder);
+	if (!Object || HasAuthority())
+	{
+		return;
+	}
+	// A re-simulated release finds the ghost already drawn (SpawnGhost returns it): counted once
+	if (Object->PredictedFlight.Get() != &Ghost)
+	{
+		++GhostStats.Predicted;
+		UE_LOG(LogGSTNHeld, Log, TEXT("HeldGhost predicted object=%d start=%d"), Object->GetObjectId(), Ghost.GetSegment().StartFrame);
+	}
+	Object->PredictedFlight = &Ghost;
+	Object->bPredicting = true;
+	Object->bPredictionHanded = false;
+}
+
+void UGSTN_HeldSubsystem::HandleGhostReconciled(AGSTN_Projectile* Ghost, AGSTN_Projectile* Authority, bool bAdopted)
+{
+	const UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(GetWorld());
+	for (const TWeakObjectPtr<UGSTN_HeldObjectComponent>& Each : Objects)
+	{
+		UGSTN_HeldObjectComponent* Object = Each.Get();
+		if (!Object || !Object->bPredicting || Object->PredictedFlight.Get() != Ghost)
+		{
+			continue;
+		}
+		Object->PredictedFlight = Authority;
+		Object->bPredictionHanded = true;
+		GhostStats.LastErrorCm = Projectiles ? Projectiles->GetGhostStats().LastErrorCm : 0.0;
+		if (bAdopted)
+		{
+			++GhostStats.Handed;
+			GhostStats.MaxHandedErrorCm = FMath::Max(GhostStats.MaxHandedErrorCm, GhostStats.LastErrorCm);
+		}
+		else
+		{
+			++GhostStats.Snapped;
+		}
+		UE_LOG(LogGSTNHeld, Log, TEXT("HeldGhost handover object=%d adopted=%d errorCm=%.2f"), Object->GetObjectId(), bAdopted ? 1 : 0, GhostStats.LastErrorCm);
+	}
+}
+
+void UGSTN_HeldSubsystem::NoteGhostExpired(const UGSTN_HeldObjectComponent& Object)
+{
+	++GhostStats.Expired;
+	UE_LOG(LogGSTNHeld, Log, TEXT("HeldGhost expired object=%d"), Object.GetObjectId());
 }
 
 bool UGSTN_HeldSubsystem::Rebound(UGSTN_HeldObjectComponent& Object, const FVector& From, const FVector& Velocity, int32 Frame, const TArray<int32>& ThrowHitTargets)
@@ -830,6 +935,85 @@ namespace GSTNHeldConsole
 		UE_LOG(LogGSTNHeld, Log, TEXT("HeldDropAbility pawn=%d activated=%d"), PawnIndex, bActivated ? 1 : 0);
 	}
 
+	/**
+	 * gstn.Held.GhostThrow, run in a client world of a one-process PIE whose pawn holds an object: the harness stand-in for a predicted throw
+	 * (M10 G8), as gstn.Projectile.GhostFire is for a shot. The client draws the throw's ghost at its next frame and the object at it; the
+	 * host throws the same pawn's object with the same shot starting at that frame. Arg: [PitchDeg = the throw ability's LaunchPitchDeg]
+	 */
+	void GhostThrow(const TArray<FString>& Args, UWorld* World)
+	{
+		UGSTN_HeldSubsystem* ClientHeld = UGSTN_HeldSubsystem::Get(World);
+		UGSTN_ProjectileSubsystem* Client = UGSTN_ProjectileSubsystem::Get(World);
+		UWorld* ServerWorld = FindAuthorityWorld(nullptr);
+		UGSTN_HeldSubsystem* ServerHeld = UGSTN_HeldSubsystem::Get(ServerWorld);
+		UGSTN_ProjectileSubsystem* Server = UGSTN_ProjectileSubsystem::Get(ServerWorld);
+		const APlayerController* Controller = World ? World->GetFirstPlayerController() : nullptr;
+		APawn* Pawn = Controller ? Controller->GetPawn() : nullptr;
+		if (!ClientHeld || !Client || !ServerHeld || !Server || World == ServerWorld || !Pawn || !Pawn->GetPlayerState())
+		{
+			UE_LOG(LogGSTNHeld, Warning, TEXT("gstn.Held.GhostThrow: run it in a client world of a one-process PIE with a pawn"));
+			return;
+		}
+		APawn* ServerPawn = nullptr;
+		for (FConstPlayerControllerIterator It = ServerWorld->GetPlayerControllerIterator(); It; ++It)
+		{
+			const APlayerController* ServerController = It->Get();
+			if (ServerController && ServerController->PlayerState && ServerController->PlayerState->GetPlayerId() == Pawn->GetPlayerState()->GetPlayerId())
+			{
+				ServerPawn = ServerController->GetPawn();
+			}
+		}
+		const UGSTN_HeldObjectComponent* ClientObject = ClientHeld->FindHeldBy(Pawn);
+		const UGSTN_HeldObjectComponent* ServerObject = ServerPawn ? ServerHeld->FindHeldBy(ServerPawn) : nullptr;
+		if (!ClientObject || !ServerObject)
+		{
+			UE_LOG(LogGSTNHeld, Warning, TEXT("gstn.Held.GhostThrow: the pawn holds nothing (client %d, host %d)"), ClientObject ? 1 : 0, ServerObject ? 1 : 0);
+			return;
+		}
+		const UGSTN_GA_HeldThrow* Defaults = GetDefault<UGSTN_GA_HeldThrow>();
+		const float Pitch = Args.IsValidIndex(0) ? FCString::Atof(*Args[0]) : Defaults->LaunchPitchDeg;
+		// The same shot as the throw ability's (the object's tuning, the size class speed, from the muzzle along the facing raised by Pitch)
+		auto MakeShot = [Defaults, Pitch](const APawn& From, const UGSTN_HeldObjectComponent& Object)
+		{
+			FGSTN_ProjectileParams Params = Object.GetTuning().Throw;
+			if (const FGSTN_HeldSizeClass* SizeClass = UGSTN_HeldSettings::Get().FindSizeClass(Object.GetTuning().SizeTag))
+			{
+				Params.Speed *= SizeClass->ThrowSpeedScale;
+			}
+			Params.SourceTag = GSTNCombatHitTags::Source_Thrown;
+			Params.Origin = From.GetActorTransform().TransformPosition(Defaults->MuzzleOffset);
+			FRotator Launch = From.GetActorForwardVector().Rotation();
+			Launch.Pitch = FMath::Clamp(Launch.Pitch + Pitch, -89.0, 89.0);
+			Params.Direction = Launch.Vector();
+			return Params;
+		};
+		const int32 StartFrame = Client->GetLastFrame() + 1;
+		AGSTN_Projectile* Ghost = Client->SpawnGhost(MakeShot(*Pawn, *ClientObject), Pawn, StartFrame);
+		if (Ghost)
+		{
+			ClientHeld->NotePredictedThrow(Pawn, *Ghost);
+		}
+		FGSTN_ProjectileParams HostShot = MakeShot(*ServerPawn, *ServerObject);
+		HostShot.OwnerEntityId = Server->FindEntityIdOf(ServerPawn);
+		AGSTN_Projectile* Fired = Server->FireProjectileAtFrame(HostShot, StartFrame, ServerPawn);
+		if (Fired)
+		{
+			ServerHeld->NoteThrown(ServerPawn, *Fired);
+		}
+		UE_LOG(LogGSTNHeld, Log, TEXT("HeldGhostThrow player=%d start=%d ghost=%d fired=%d"), Pawn->GetPlayerState()->GetPlayerId(), StartFrame,
+			Ghost ? 1 : 0, Fired ? 1 : 0);
+	}
+
+	void GhostReport(const TArray<FString>& Args, UWorld* World)
+	{
+		if (const UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(World))
+		{
+			const UGSTN_HeldSubsystem::FGhostStats& Stats = Held->GetGhostStats();
+			UE_LOG(LogGSTNHeld, Log, TEXT("HeldGhostReport world=%s predicted=%d handed=%d snapped=%d expired=%d lastErrorCm=%.2f maxHandedErrorCm=%.2f"),
+				*World->GetName(), Stats.Predicted, Stats.Handed, Stats.Snapped, Stats.Expired, Stats.LastErrorCm, Stats.MaxHandedErrorCm);
+		}
+	}
+
 	void Report(const TArray<FString>& Args, UWorld* InWorld)
 	{
 		if (const UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(InWorld))
@@ -840,7 +1024,7 @@ namespace GSTNHeldConsole
 
 	FAutoConsoleCommandWithWorldAndArgs GHeldSpawnCommand(
 		TEXT("gstn.Held.Spawn"),
-		TEXT("Host: spawns a test held object in front of a combat pawn (pawns by ascending entity id), on the floor. Args: [Pawn=0] [ForwardCm=120] [Size=Light|Medium|Heavy|Huge] [WeightKg] [Impact=Land|Break|Bounce|Stick]"),
+		TEXT("Host: spawns a test held object in front of a combat pawn (pawns by ascending entity id), on the floor. Args: [Pawn=0] [ForwardCm=120] [Size=Light|Medium|Heavy|Huge] [WeightKg] [Impact=Land|Break|Bounce|Stick|Explode]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Spawn));
 	FAutoConsoleCommandWithWorldAndArgs GHeldPickupCommand(
 		TEXT("gstn.Held.Pickup"),
@@ -858,4 +1042,12 @@ namespace GSTNHeldConsole
 		TEXT("gstn.Held.Report"),
 		TEXT("Logs every held object of the world it runs in (state, holder entity, location): HeldReport / HeldObjectReport lines"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Report));
+	FAutoConsoleCommandWithWorldAndArgs GHeldGhostThrowCommand(
+		TEXT("gstn.Held.GhostThrow"),
+		TEXT("Client world of a one-process PIE: stands in for a predicted throw of what the local pawn holds (ghost here, the same throw on the host at that frame). Args: [PitchDeg]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&GhostThrow));
+	FAutoConsoleCommandWithWorldAndArgs GHeldGhostReportCommand(
+		TEXT("gstn.Held.GhostReport"),
+		TEXT("Logs what became of this world's object ghosts: HeldGhostReport predicted handed snapped expired lastErrorCm maxHandedErrorCm"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&GhostReport));
 }

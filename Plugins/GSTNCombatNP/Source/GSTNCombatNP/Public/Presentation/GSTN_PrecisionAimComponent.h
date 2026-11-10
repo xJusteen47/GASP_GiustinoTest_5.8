@@ -62,7 +62,18 @@ public:
 	 * bPrecisionAim, so a simulation that reads it sees the same frames the player saw the reticle
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Precision")
-	void SetHoldAimShown(bool bShown) { bHoldAimShown = bShown; }
+	void SetHoldAimShown(bool bShown) { bHoldAimShown = bShown; if (!bShown) { ViewRequestTags.Reset(); } }
+
+	/**
+	 * The same, with the view the aiming move asks for while it aims (M10 G7: Camera.Request.Aim puts GSTNCamera over the shoulder). The pawn's
+	 * camera tag source adds GetViewRequestTags to what it reports; cleared with the reticle. Local presentation, never read by the simulation
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Precision")
+	void SetHoldAimShownWithView(bool bShown, const FGameplayTagContainer& InViewRequestTags) { SetHoldAimShown(bShown); if (bShown) { ViewRequestTags = InViewRequestTags; } }
+
+	/** The view tags of the move that holds the reticle on (empty when none) */
+	UFUNCTION(BlueprintPure, Category = "Combat|Precision")
+	const FGameplayTagContainer& GetViewRequestTags() const { return ViewRequestTags; }
 
 	/** Turns the reticle on or off as the button does (ignored, and off, where the mode has no reticle) */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Precision")
@@ -100,4 +111,5 @@ private:
 	bool bModeAllowsReticle = false;
 	bool bToggleWasHeld = false;
 	bool bHoldAimShown = false;
+	FGameplayTagContainer ViewRequestTags;
 };

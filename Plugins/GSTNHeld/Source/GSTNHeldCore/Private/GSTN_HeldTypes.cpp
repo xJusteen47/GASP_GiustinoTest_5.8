@@ -122,7 +122,11 @@ bool FGSTN_HeldRules::BreaksOnEvent(const FGameplayTag& EventType, const FGSTN_H
 
 EGSTN_HeldThrowAim FGSTN_HeldRules::ChooseThrowAim(int32 HeldFrames, bool bPrecisionAim, const FGSTN_HeldThrowInput& Input)
 {
-	if (IsAiming(HeldFrames, Input) || (bPrecisionAim && Input.bCameraAimWhenReticleOn))
+	if (IsAiming(HeldFrames, Input))
+	{
+		return Input.AimView == EGSTN_HeldAimView::Shoulder ? EGSTN_HeldThrowAim::Shoulder : EGSTN_HeldThrowAim::Camera;
+	}
+	if (bPrecisionAim && Input.bCameraAimWhenReticleOn)
 	{
 		return EGSTN_HeldThrowAim::Camera;
 	}
@@ -182,6 +186,8 @@ EGSTN_HeldImpactBehaviour FGSTN_HeldRules::ResolveImpact(const FGSTN_HeldObjectT
 		return EGSTN_HeldImpactBehaviour::Break;
 	case EGSTN_HeldImpactBehaviour::Stick:
 		return bWorld ? EGSTN_HeldImpactBehaviour::Stick : EGSTN_HeldImpactBehaviour::Land;
+	case EGSTN_HeldImpactBehaviour::Explode:
+		return bWorld || Tuning.bExplodeOnFighterHit ? EGSTN_HeldImpactBehaviour::Explode : EGSTN_HeldImpactBehaviour::Land;
 	case EGSTN_HeldImpactBehaviour::Bounce:
 	{
 		const FVector N = Normal.GetSafeNormal();

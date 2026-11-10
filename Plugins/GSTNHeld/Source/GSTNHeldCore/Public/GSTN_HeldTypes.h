@@ -38,7 +38,12 @@ enum class EGSTN_HeldImpactBehaviour : uint8
 	/** Rebounds off the world with the restitution, as a new shot with the same hit and credit; too slow or too many bounces = Land */
 	Bounce,
 	/** Stays where it met the world (a wall too), at rest and pickable there; a fighter hit = Land */
-	Stick
+	Stick,
+	/**
+	 * Explodes (world contact, and a fighter hit unless bExplodeOnFighterHit is off): one hit on every fighter within ExplodeRadiusCm,
+	 * pushed away from the blast and credited to the thrower, then gone as Break (back at its home after BreakRespawnSeconds)
+	 */
+	Explode
 };
 
 /** Why a hold ended (logs, the harness, a later Combat.Event.Held.* event) */
@@ -88,7 +93,25 @@ enum class EGSTN_HeldThrowAim : uint8
 	/** Along the left stick (the facing with the stick centred): a tap */
 	Stick,
 	/** Along the camera: the button held long enough to aim (reticle shown), or the reticle toggled on */
-	Camera
+	Camera,
+	/**
+	 * Along the shoulder camera's aim: the button held long enough to aim with AimView = Shoulder (the camera went over the shoulder while it
+	 * aimed). The aim is the converged one the camera sends; the elevation is ShoulderAimPitchDeg, not the throw's LaunchPitchDeg
+	 */
+	Shoulder
+};
+
+/** What the view does while a held throw aims (owner line: both shipped, a setting) */
+UENUM(BlueprintType)
+enum class EGSTN_HeldAimView : uint8
+{
+	/** The camera stays as it is; only the reticle shows (slice 5 behaviour). The throw keeps the camera pitch plus its LaunchPitchDeg */
+	KeepView,
+	/**
+	 * The camera goes over the shoulder while the throw aims (AimViewRequestTags, Camera.Request.Aim by default, read by GSTNCamera's rule
+	 * table through the pawn's tag source), and the throw goes exactly along the converged aim plus ShoulderAimPitchDeg
+	 */
+	Shoulder
 };
 
 /** How the strong button throws a held object (owner's button design 2026-11-10, subject to playtesting). Defaults in DefaultGSTNHeld.ini */
@@ -108,6 +131,24 @@ struct GSTNHELDCORE_API FGSTN_HeldThrowInput
 	/** With the reticle toggled on (FGSTN_InputCmd::bPrecisionAim) a tap aims with the camera too */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Throw")
 	bool bCameraAimWhenReticleOn = true;
+
+	/** The view while the button is held to aim (M10 G7 shoulder aim). TEST VALUE: Shoulder (camera.md D2) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Throw")
+	EGSTN_HeldAimView AimView = EGSTN_HeldAimView::Shoulder;
+
+	/**
+	 * Shoulder: the elevation added to the converged aim. 0 = the object leaves exactly towards the crosshair and drops below it with its
+	 * gravity; more = a lob above it. TEST VALUE
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Throw", meta = (ClampMin = "-45.0", ClampMax = "45.0", ForceUnits = "deg", EditCondition = "AimView == EGSTN_HeldAimView::Shoulder"))
+	float ShoulderAimPitchDeg = 0.f;
+
+	/**
+	 * Shoulder: presentation tags the pawn's camera reads while the throw aims (local, never simulation; GSTNHeld names no camera module).
+	 * Set in DefaultGSTNHeld.ini to Camera.Request.Aim
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Throw", meta = (EditCondition = "AimView == EGSTN_HeldAimView::Shoulder"))
+	FGameplayTagContainer AimViewRequestTags;
 };
 
 /**
@@ -232,8 +273,24 @@ struct GSTNHELDCORE_API FGSTN_HeldObjectTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Impact", meta = (EditCondition = "ImpactBehaviour == EGSTN_HeldImpactBehaviour::Bounce"))
 	bool bOneHitPerTargetPerThrow = true;
 
-	/** Break: seconds before a broken object is back at its home (where it first came to rest); 0 = never. TEST VALUE */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Impact", meta = (ClampMin = "0.0", ForceUnits = "s", EditCondition = "ImpactBehaviour == EGSTN_HeldImpactBehaviour::Break"))
+	/** Explode: the blast's radius around the impact point. TEST VALUE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Impact", meta = (ClampMin = "1.0", ForceUnits = "cm", EditCondition = "ImpactBehaviour == EGSTN_HeldImpactBehaviour::Explode"))
+	float ExplodeRadiusCm = 250.f;
+
+	/** Explode: a fighter hit by the flying object sets it off too; off = it explodes on the world only and a fighter hit lands it. TEST VALUE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Impact", meta = (EditCondition = "ImpactBehaviour == EGSTN_HeldImpactBehaviour::Explode"))
+	bool bExplodeOnFighterHit = true;
+
+	/** Explode: the blast hits with ExplodeHit; off = with the throw's own hit data (Throw.Hit). TEST VALUE: off */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Impact", meta = (EditCondition = "ImpactBehaviour == EGSTN_HeldImpactBehaviour::Explode"))
+	bool bExplodeOwnHit = false;
+
+	/** Explode: the blast's hit data when bExplodeOwnHit (damage, knockback, hitstun; its gameplay effects ride on it as on any hit) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Impact", meta = (EditCondition = "ImpactBehaviour == EGSTN_HeldImpactBehaviour::Explode && bExplodeOwnHit"))
+	FGSTN_HitData ExplodeHit;
+
+	/** Break and Explode: seconds before the object is back at its home (where it first came to rest); 0 = never. TEST VALUE */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Impact", meta = (ClampMin = "0.0", ForceUnits = "s", EditCondition = "ImpactBehaviour == EGSTN_HeldImpactBehaviour::Break || ImpactBehaviour == EGSTN_HeldImpactBehaviour::Explode"))
 	float BreakRespawnSeconds = 3.f;
 
 	/** Use BreakRules instead of the project's defaults (UGSTN_HeldSettings::DefaultBreakRules): an object that survives a hit in hand, say */
@@ -316,7 +373,7 @@ struct GSTNHELDCORE_API FGSTN_HeldRules
 
 	/**
 	 * The aim of a throw released after HeldFrames frames of the button (0 = released on the press frame): the camera once the button was held
-	 * AimHoldFrames, or with the reticle toggled on (bPrecisionAim) when the input allows it; the stick otherwise
+	 * AimHoldFrames (Shoulder with AimView = Shoulder), or with the reticle toggled on (bPrecisionAim) when the input allows it; the stick otherwise
 	 */
 	static EGSTN_HeldThrowAim ChooseThrowAim(int32 HeldFrames, bool bPrecisionAim, const FGSTN_HeldThrowInput& Input);
 

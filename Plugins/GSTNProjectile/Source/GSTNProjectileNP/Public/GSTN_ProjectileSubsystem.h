@@ -98,6 +98,10 @@ public:
 
 	static UGSTN_ProjectileSubsystem* Get(const UWorld* World);
 
+	/** Client: a ghost met the host's projectile and is about to go (adopted: the host's one is drawn from the ghost's place; else snapped) */
+	DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnGhostReconciled, AGSTN_Projectile* /*Ghost*/, AGSTN_Projectile* /*Authority*/, bool /*bAdopted*/);
+	FOnGhostReconciled OnGhostReconciled;
+
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 

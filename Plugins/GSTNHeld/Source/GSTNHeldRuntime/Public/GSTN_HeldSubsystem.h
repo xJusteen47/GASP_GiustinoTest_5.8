@@ -72,6 +72,27 @@ public:
 	/** Host only: the throw ability fired the object Holder held as Shot; the object flies with it */
 	void NoteThrown(AActor* Holder, AGSTN_Projectile& Shot);
 
+	/**
+	 * Throwing client only (M10 G8): the throw just drew Ghost; the object Holder holds is drawn at it until the host's projectile takes over
+	 * (adopted: the object follows it with no jump) or the ghost goes unmatched (the object goes back to what the host says: still in hand)
+	 */
+	void NotePredictedThrow(AActor* Holder, AGSTN_Projectile& Ghost);
+
+	/** What became of this client's object ghosts (harness, gstn.Held.GhostReport) */
+	struct FGhostStats
+	{
+		int32 Predicted = 0;
+		int32 Handed = 0;
+		int32 Snapped = 0;
+		int32 Expired = 0;
+		/** The host's projectile against the ghost at the handover frame (the projectile plugin's reconcile error), last and worst handed */
+		double LastErrorCm = 0.0;
+		double MaxHandedErrorCm = 0.0;
+	};
+	const FGhostStats& GetGhostStats() const { return GhostStats; }
+	/** Client: Object's ghost went without a host projectile taking over */
+	void NoteGhostExpired(const UGSTN_HeldObjectComponent& Object);
+
 	bool HasAuthority() const;
 
 	/** The last fixed frame seen on this machine, INDEX_NONE before the first */
@@ -105,6 +126,13 @@ private:
 	static float CarryCapacityOf(const AActor* Holder);
 	/** Host (M10 G7): the object breaks (hidden until its respawn frame) */
 	void BreakObject(UGSTN_HeldObjectComponent& Object, int32 Frame, const FString& On);
+	/**
+	 * Host (M10 G7, slice 8): the object explodes at At: a one-frame shot of ExplodeRadiusCm that pushes away from At (every fighter in it,
+	 * through the projectile's hit pipeline, credited to the thrower), then the object breaks
+	 */
+	void ExplodeObject(UGSTN_HeldObjectComponent& Object, const FVector& At, int32 Frame, const FString& On);
+	/** Client (M10 G8): a ghost met the host's projectile; an object drawn at the ghost follows the host's one */
+	void HandleGhostReconciled(AGSTN_Projectile* Ghost, AGSTN_Projectile* Authority, bool bAdopted);
 	/** Host (M10 G7): the object rebounds as a new shot from From with Velocity (the thrower's credit). False = it could not fire: it lands */
 	bool Rebound(UGSTN_HeldObjectComponent& Object, const FVector& From, const FVector& Velocity, int32 Frame, const TArray<int32>& ThrowHitTargets);
 
@@ -125,4 +153,6 @@ private:
 	TMap<TWeakObjectPtr<AActor>, uint8> LastHandSerial;
 	int32 LastFrame = INDEX_NONE;
 	FDelegateHandle PostFixedTickHandle;
+	FDelegateHandle GhostReconciledHandle;
+	FGhostStats GhostStats;
 };

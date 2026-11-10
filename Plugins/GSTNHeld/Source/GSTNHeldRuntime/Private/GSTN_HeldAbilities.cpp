@@ -121,7 +121,26 @@ EGSTN_ProjectileAim UGSTN_GA_HeldThrow::GetShotAim() const
 	{
 		return Aim;
 	}
-	return static_cast<EGSTN_HeldThrowAim>(ReleaseAim.Value) == EGSTN_HeldThrowAim::Camera ? EGSTN_ProjectileAim::CommandAim : EGSTN_ProjectileAim::Stick;
+	return static_cast<EGSTN_HeldThrowAim>(ReleaseAim.Value) == EGSTN_HeldThrowAim::Stick ? EGSTN_ProjectileAim::Stick : EGSTN_ProjectileAim::CommandAim;
+}
+
+float UGSTN_GA_HeldThrow::GetShotLaunchPitchDeg() const
+{
+	// Shoulder: the converged aim already points at the crosshair, so only the setting's elevation is added (config, the same on every machine)
+	if (DeferFire() && static_cast<EGSTN_HeldThrowAim>(ReleaseAim.Value) == EGSTN_HeldThrowAim::Shoulder)
+	{
+		return UGSTN_HeldSettings::Get().ThrowInput.ShoulderAimPitchDeg;
+	}
+	return Super::GetShotLaunchPitchDeg();
+}
+
+void UGSTN_GA_HeldThrow::OnGhostSpawned(AGSTN_Projectile& Ghost)
+{
+	// M10 G8: the thrower sees the object leave the hand at once, drawn at the ghost until the host's projectile arrives
+	if (UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(GetWorld()))
+	{
+		Held->NotePredictedThrow(GetAvatarActorFromActorInfo(), Ghost);
+	}
 }
 
 void UGSTN_GA_HeldThrow::ShowAimReticle(bool bShown) const
@@ -131,7 +150,8 @@ void UGSTN_GA_HeldThrow::ShowAimReticle(bool bShown) const
 	{
 		if (UGSTN_PrecisionAimComponent* Reticle = Pawn->FindComponentByClass<UGSTN_PrecisionAimComponent>())
 		{
-			Reticle->SetHoldAimShown(bShown);
+			const FGSTN_HeldThrowInput& Input = UGSTN_HeldSettings::Get().ThrowInput;
+			Reticle->SetHoldAimShownWithView(bShown, Input.AimView == EGSTN_HeldAimView::Shoulder ? Input.AimViewRequestTags : FGameplayTagContainer());
 		}
 	}
 }
