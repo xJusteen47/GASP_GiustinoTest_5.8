@@ -71,6 +71,14 @@ void FGSTN_HeldRules::ResolvePickups(TConstArrayView<FGSTN_PickupRequest> Reques
 	}
 }
 
+int32 FGSTN_HeldRules::FindPickupTarget(const FVector& From, TConstArrayView<FGSTN_PickupCandidate> Candidates)
+{
+	const FGSTN_PickupRequest Request{ 0, 0, From };
+	TArray<FGSTN_PickupAssignment> Assignments;
+	ResolvePickups(MakeArrayView(&Request, 1), Candidates, Assignments);
+	return Assignments.IsEmpty() ? INDEX_NONE : Assignments[0].ObjectId;
+}
+
 FTransform FGSTN_HeldRules::HoldTransform(const FTransform& Holder, const FVector& HoldOffset)
 {
 	return FTransform(Holder.GetRotation(), Holder.TransformPosition(HoldOffset));

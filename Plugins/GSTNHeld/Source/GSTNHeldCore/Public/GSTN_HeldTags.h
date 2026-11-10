@@ -20,4 +20,10 @@ namespace GSTNHeldTags
 	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Held_Drop);
 	/** Throw the held object: the strong button (tap = stick, held = camera aim on release) */
 	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Held_Throw);
+
+	/**
+	 * An object at rest is in pickup reach and the hand is empty (M10 slice 3, the plan's G2 meaning): projected every frame by the held tick
+	 * extension, never granted. The pickup binding requires it, so with nothing in reach the grab button stays free for the slots below
+	 */
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interact_Target_Pickup);
 }

@@ -3,7 +3,9 @@
 #include "GSTN_HeldSim.h"
 
 #include "AbilitySystemComponent.h"
+#include "GSTN_HeldSubsystem.h"
 #include "GSTN_HeldTags.h"
+#include "World/GSTN_StepSnapshot.h"
 #include "Simulation/GSTN_CombatInbox.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 
@@ -88,5 +90,17 @@ void FGSTN_HeldTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 		return;
 	}
 	const FGSTN_HeldFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_HeldFragment>(Context.Out.Fragments);
-	Context.AbilitySystem->SetLooseGameplayTagCount(GSTNHeldTags::Held_Carrying, Fragment && Fragment->IsHolding() ? 1 : 0);
+	const bool bHolding = Fragment && Fragment->IsHolding();
+	Context.AbilitySystem->SetLooseGameplayTagCount(GSTNHeldTags::Held_Carrying, bHolding ? 1 : 0);
+
+	// The pickup target (slice 3): an empty hand and an object at rest in reach of the entity's snapshot position (the pose the host's
+	// pickup race uses). Set, never added, as Carrying. Interim read of the host's object state, see UGSTN_HeldSubsystem::FindPickupTarget
+	bool bTarget = false;
+	if (!bHolding && Context.Snapshot && Context.EntityId != INDEX_NONE)
+	{
+		const FGSTN_SnapshotEntry* Self = Context.Snapshot->Find(Context.EntityId);
+		const UGSTN_HeldSubsystem* Held = Self ? UGSTN_HeldSubsystem::Get(Context.AbilitySystem->GetWorld()) : nullptr;
+		bTarget = Held && Held->FindPickupTarget(Self->Transform.GetLocation()) != nullptr;
+	}
+	Context.AbilitySystem->SetLooseGameplayTagCount(GSTNHeldTags::Interact_Target_Pickup, bTarget ? 1 : 0);
 }

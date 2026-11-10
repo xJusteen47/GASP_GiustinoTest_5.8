@@ -95,6 +95,15 @@ private:
 	/** Places the owner from the replicated state (every machine) */
 	void UpdatePlacement();
 
+	/**
+	 * Presentation (slice 3, placeholder look): a text above this object while it is the local player's pickup target, i.e. the pawn has
+	 * Interact.Target.Pickup and UGSTN_HeldSubsystem::FindPickupTarget names this object. Never on a dedicated server; reads, never writes
+	 */
+	void UpdatePrompt();
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UTextRenderComponent> Prompt;
+
 	UPROPERTY(ReplicatedUsing = OnRep_RestLocation, VisibleInstanceOnly, BlueprintReadOnly, Category = "Held", meta = (AllowPrivateAccess = "true"))
 	EGSTN_HeldObjectState State = EGSTN_HeldObjectState::Idle;
 

@@ -6,6 +6,7 @@
 #include "Input/GSTN_CommandBindings.h"
 #include "Input/GSTN_InputSlot.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "Loadout/GSTN_CompiledBindingTable.h"
 
 #include "GSTN_HeldSlots.generated.h"
 
@@ -42,14 +43,28 @@ class GSTNHELDCORE_API UGSTN_HeldSlots : public UBlueprintFunctionLibrary
 	GENERATED_BODY()
 
 public:
-	/** Added to the carrying-gated slots' priority so they outrank the attack set on the same press (the link set's offset) */
-	static constexpr int32 CarrySlotPriorityOffset = 100;
+	/**
+	 * The held commands share tier 360 with Command.Link (UGSTN_HeldSettings::CommandTiers), so on a press they share with a link or mount slot
+	 * of the same specificity the manual offset decides, and the input validator refuses two such slots at one offset. Taken so far on the
+	 * interact press: grab 0, mount -1, release 100, dismount 101, carrier drop 102. Pickup goes below the grab and the mount (a grab or mount
+	 * target wins the press); drop and throw above every link role slot (exclusive by requirements anyway: carrying is not a link role)
+	 */
+	static constexpr int32 PickupSlotPriorityOffset = -2;
+	static constexpr int32 CarrySlotPriorityOffset = 110;
 
 	/** The slots listed above, in that order */
 	static TArray<FGSTN_InputSlotSpec> Build();
 
 	/** The binding requirement of each row above, in that order */
 	static TArray<FGSTN_HeldSlotBinding> DefaultBindings();
+
+	/**
+	 * The kit bindings of the rows above, each with its slot as an override (a kit's command set does not list the held commands) and the
+	 * given abilities in row order (pickup, drop, throw). A command the kit already binds is skipped, so a kit's own choice wins. Appends to
+	 * OutBindings and returns how many it added. Used by the plugin's loadout extension on every machine that compiles a kit
+	 */
+	static int32 AppendKitBindings(const FSoftObjectPath& Pickup, const FSoftObjectPath& Drop, const FSoftObjectPath& Throw,
+		TArray<FGSTN_BindingInput>& OutBindings);
 
 #if WITH_EDITOR
 	/** Adds the slots of Build to a set asset (replacing those of the same command), for setup scripts. Null is ignored */

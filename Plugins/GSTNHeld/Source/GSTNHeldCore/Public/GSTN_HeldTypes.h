@@ -171,6 +171,12 @@ struct GSTNHELDCORE_API FGSTN_HeldRules
 	static void ResolvePickups(TConstArrayView<FGSTN_PickupRequest> Requests, TConstArrayView<FGSTN_PickupCandidate> Candidates,
 		TArray<FGSTN_PickupAssignment>& OutAssignments);
 
+	/**
+	 * The object a pickup from From would take if nobody else asked in that frame: ResolvePickups with that one request, so the projected
+	 * pickup target and the prompt name exactly the object the host would give. The candidate's ObjectId, INDEX_NONE when none is in reach
+	 */
+	static int32 FindPickupTarget(const FVector& From, TConstArrayView<FGSTN_PickupCandidate> Candidates);
+
 	/** Where a held object is drawn: the holder's transform with the hold offset applied in its space (rotation = the holder's) */
 	static FTransform HoldTransform(const FTransform& Holder, const FVector& HoldOffset);
 

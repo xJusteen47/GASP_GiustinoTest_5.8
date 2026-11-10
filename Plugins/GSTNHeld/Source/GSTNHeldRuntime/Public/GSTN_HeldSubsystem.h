@@ -53,6 +53,14 @@ public:
 	/** The object Holder holds, on any machine (from the replicated state); null if none */
 	UGSTN_HeldObjectComponent* FindHeldBy(const AActor* Holder) const;
 
+	/**
+	 * The object a pickup from From would take, on any machine, from the replicated object state (FGSTN_HeldRules::FindPickupTarget with the
+	 * same candidates the host races). Read by the held tick extension for Interact.Target.Pickup and by the prompt. Interim (plan G2): the
+	 * object state is the host's, not stamped records, so around a pickup or a landing a client may project the target a round trip early or
+	 * late; the pickup itself stays the host's decision. Null when nothing is in reach
+	 */
+	UGSTN_HeldObjectComponent* FindPickupTarget(const FVector& From) const;
+
 	/** Host only: the throw ability fired the object Holder held as Shot; the object flies with it */
 	void NoteThrown(AActor* Holder, AGSTN_Projectile& Shot);
 

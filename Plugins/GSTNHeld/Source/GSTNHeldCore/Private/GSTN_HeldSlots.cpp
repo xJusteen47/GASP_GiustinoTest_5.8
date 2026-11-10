@@ -37,7 +37,7 @@ TArray<FGSTN_InputSlotSpec> UGSTN_HeldSlots::Build()
 	const FGameplayTag Interact = GSTNCombatButtonTags::Button_Interact.GetTag();
 	const FGameplayTag Strong = GSTNCombatButtonTags::Button_Strong.GetTag();
 	TArray<FGSTN_InputSlotSpec> Slots;
-	Slots.Add(MakeSlot(Command_Held_Pickup, Interact, -1));
+	Slots.Add(MakeSlot(Command_Held_Pickup, Interact, PickupSlotPriorityOffset));
 	Slots.Add(MakeSlot(Command_Held_Drop, Interact, CarrySlotPriorityOffset));
 	Slots.Add(MakeSlot(Command_Held_Throw, Strong, CarrySlotPriorityOffset));
 	return Slots;
@@ -50,6 +50,8 @@ TArray<FGSTN_HeldSlotBinding> UGSTN_HeldSlots::DefaultBindings()
 	FGSTN_HeldSlotBinding& Pickup = Bindings.AddDefaulted_GetRef();
 	Pickup.Command = Command_Held_Pickup;
 	Pickup.Requirements.IgnoreTags.AddTag(Held_Carrying);
+	// Only with an object in reach (slice 3): otherwise the press falls through to what the kit binds below (the kit swap's hold, the movement set)
+	Pickup.Requirements.RequireTags.AddTag(Interact_Target_Pickup);
 	FGSTN_HeldSlotBinding& Drop = Bindings.AddDefaulted_GetRef();
 	Drop.Command = Command_Held_Drop;
 	Drop.Requirements.RequireTags.AddTag(Held_Carrying);
@@ -57,6 +59,34 @@ TArray<FGSTN_HeldSlotBinding> UGSTN_HeldSlots::DefaultBindings()
 	Throw.Command = Command_Held_Throw;
 	Throw.Requirements.RequireTags.AddTag(Held_Carrying);
 	return Bindings;
+}
+
+int32 UGSTN_HeldSlots::AppendKitBindings(const FSoftObjectPath& Pickup, const FSoftObjectPath& Drop, const FSoftObjectPath& Throw,
+	TArray<FGSTN_BindingInput>& OutBindings)
+{
+	const TArray<FGSTN_InputSlotSpec> Slots = Build();
+	const TArray<FGSTN_HeldSlotBinding> Requirements = DefaultBindings();
+	const FSoftObjectPath* Abilities[] = { &Pickup, &Drop, &Throw };
+	check(Slots.Num() == UE_ARRAY_COUNT(Abilities) && Requirements.Num() == Slots.Num());
+
+	int32 Added = 0;
+	for (int32 Row = 0; Row < Slots.Num(); ++Row)
+	{
+		const FGameplayTag Command = Slots[Row].Command;
+		const bool bKitBindsIt = OutBindings.ContainsByPredicate([&Command](const FGSTN_BindingInput& Binding) { return Binding.Command == Command; });
+		if (bKitBindsIt || Abilities[Row]->IsNull())
+		{
+			continue;
+		}
+		FGSTN_BindingInput& Binding = OutBindings.AddDefaulted_GetRef();
+		Binding.Command = Command;
+		Binding.Requirements = Requirements[Row].Requirements;
+		Binding.Ability = *Abilities[Row];
+		Binding.bHasSlotOverride = true;
+		Binding.SlotOverride = Slots[Row];
+		++Added;
+	}
+	return Added;
 }
 
 #if WITH_EDITOR

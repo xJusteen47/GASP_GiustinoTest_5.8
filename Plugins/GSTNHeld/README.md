@@ -6,7 +6,7 @@ branch, spec [combat-m10-held-objects.md](../../docs/architecture/combat-m10-hel
 credit to the thrower and the predicted ghost come from that plugin unchanged ("deterministic first",
 [entita-dinamiche review](../../docs/notes/reviews/entita-dinamiche-2026-11-09.md) §2, §9 category (a)).
 
-Status: **experimental (0.1), slice 2**, `EnabledByDefault: false`, enabled in `GASP_Giustino2.uproject`. Nothing else knows it.
+Status: **experimental (0.1), slice 3**, `EnabledByDefault: false`, enabled in `GASP_Giustino2.uproject`. Nothing else knows it.
 
 ## Modules
 
@@ -47,14 +47,28 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
    hand (one below the grab, so a grab target wins), `Command.Held.Drop` with an object; strong button (RT) = `Command.Held.Throw` above the strong
    attacks while carrying. The throw waits for the release: a tap (shorter than `AimHoldFrames`) goes along the left stick (`EGSTN_ProjectileAim::Stick`,
    the facing when centred); held, the reticle shows (`UGSTN_PrecisionAimComponent::SetHoldAimShown`) and it goes along the camera; with the reticle
-   toggled on (`bPrecisionAim`) a tap aims with the camera too. Kits get them with `UGSTN_HeldSlots::AddToSlotSet` and `DefaultBindings`.
-9. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
+   toggled on (`bPrecisionAim`) a tap aims with the camera too. **Slice 3: the listed kits get them automatically**: the runtime module
+   registers a loadout extension (`GSTNHeld`) that appends the three bindings with their slots (`UGSTN_HeldSlots::AppendKitBindings`) on every
+   machine that compiles a kit in `KitsWithDefaultBindings` (test values: `KIT_Test_Hits`, the hub's default, and `KIT_Test_Link`), or every kit
+   with `bAddDefaultBindingsToEveryKit`; a kit that binds a held command itself keeps its own. Not every kit by default: the other kits' tables
+   (and the combat tests that count their rows) stay as authored. Other abilities with
+   `PickupAbility` / `DropAbility` / `ThrowAbility` (`DefaultGSTNHeld.ini`). The module also contributes the tier `Command.Held` = 360 (as
+   `Command.Link`) to the input settings: without it every strong attack (200) took RT from the throw. Offsets: pickup -2 (below grab 0 and
+   mount -1), drop and throw 110 (above release 100, dismount 101, carrier drop 102), so no slot is ambiguous with a link or mount slot.
+9. **Pickup target and prompt (slice 3, the plan's G2 as an interim)**: the held tick extension projects `Interact.Target.Pickup` every frame
+   (set, never added) when the hand is empty and an object at rest is in reach of the entity's snapshot position:
+   `UGSTN_HeldSubsystem::FindPickupTarget`, i.e. `FGSTN_HeldRules::FindPickupTarget` = the host's own pickup race with that one request, so it
+   names the object the host would give. The pickup binding requires it, so with nothing in reach B falls through to what the kit binds below
+   (the kit swap's hold, the movement set). It reads the host's replicated object state, not stamped records: around a pickup or a landing a
+   client may project it a round trip early or late (the pickup stays the host's decision). The plan's G2 (stamped records in GSTNLink's probe,
+   one projected `Interact.Target.*`) replaces this read later with the same rule. Prompt: a placeholder text "B" above the local player's target
+   object (`UGSTN_HeldObjectComponent::UpdatePrompt`, presentation only, never on a dedicated server). `HeldHandReport` logs `target=`.
+10. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
    (its own ranged action) are data only; a later slice routes commands to them.
 ## Not yet (later slices of the plan)
 
-GSTNLink Hand channel with an object partner (needs M6 neutral hooks), interact probe and prompt (G2),
+GSTNLink Hand channel with an object partner (needs M6 neutral hooks), stamped records in GSTNLink's interact probe (G2 proper; slice 3 is the interim),
 detached credit and `Combat.Source.Thrown` (G3), carry load and size classes (G6), aim policy, friendly fire by mode, impact behaviours
-Break/Bounce/Stick, ghost blend of the object itself (the projectile's ghost is used), thrown enemies (G9), editor preview, a player
-input binding in the owner's kits (content: run `UGSTN_HeldSlots::AddToSlotSet` on the kit's slot set and bind the three abilities).
+Break/Bounce/Stick, ghost blend of the object itself (the projectile's ghost is used), thrown enemies (G9), editor preview.
 
 Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`).

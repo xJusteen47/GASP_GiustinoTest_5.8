@@ -16,7 +16,7 @@ import defence_scenarios as ds
 SUITE_HELD = ['held_pickup_throw_hit', 'held_drop_and_break']
 _marks = {}
 
-_HAND = re.compile(r'HeldHandReport world=(\S+) entity=(\d+) carrying=(\d)')
+_HAND = re.compile(r'HeldHandReport world=(\S+) entity=(\d+) carrying=(\d) target=(\d)')
 _REPORT = re.compile(r'HeldObjectReport world=(\S+) name=(\S+) state=(\d) holderEntity=(-?\d+) holderDistCm=(-?[\d.]+) loc=(-?[\d.]+),(-?[\d.]+),(-?[\d.]+)')
 
 
@@ -46,14 +46,18 @@ def _reports():
     return out
 
 
-def _hands():
-    """Per world: {entity id: carrying 0/1}, the projected Combat.Held.Carrying of every combat pawn (from its fragment)"""
+def _hands(targets=None):
+    """Per world: {entity id: carrying 0/1}, the projected Combat.Held.Carrying of every combat pawn (from its fragment). With a list in
+    targets, also per world {entity id: Interact.Target.Pickup 0/1} (slice 3) from the same rows: one report per world, as the log reads stall
+    the game thread and shift the scenario's timeline"""
     out = []
     for wi in range(len(g.worlds())):
         before = len(_HAND.findall(_log()))
         _cmd('gstn.Held.Report', wi)
         rows = _HAND.findall(_log())[before:]
         out.append({int(r[1]): int(r[2]) for r in rows})
+        if targets is not None:
+            targets.append({int(r[1]): int(r[3]) for r in rows})
     return out
 
 
@@ -157,8 +161,21 @@ def scenario_held_drop_and_break(client=1):
         return len(g.comps(g.worlds()[0]))
 
     def capture(name):
-        st[name] = _hands()
-        return f'{name} {st[name]}'
+        st[name + '_t'] = []
+        st[name] = _hands(st[name + '_t'])
+        return f'{name} {st[name]} targets {st[name + "_t"]}'
+
+    def targets_free():
+        # Slice 3: an object at rest in reach and an empty hand project Interact.Target.Pickup, in every world
+        rows = st.get('free_t', [])
+        ok = bool(rows) and all(sum(w.values()) >= npawns() for w in rows)
+        return ok, f'targets {rows}'
+
+    def targets_carry():
+        # A full hand projects no pickup target, in every world
+        rows = st.get('carry_t', [])
+        ok = bool(rows) and all(w and all(v == 0 for v in w.values()) for w in rows)
+        return ok, f'targets {rows}'
 
     def holders():
         # entity -> object, the first pickup of each entity
@@ -197,9 +214,12 @@ def scenario_held_drop_and_break(client=1):
     steps = [
         (0.0, lambda: ('setup', _setup())),
         (0.5, lambda: ('spawn', [_cmd(f'gstn.Held.Spawn {i} 120') for i in range(npawns())])),
+        (0.7, lambda: ('free', capture('free'))),
+        (0.75, run.at('an object in reach, hand empty: every world projects Interact.Target.Pickup for every pawn', targets_free)),
         (1.0, lambda: ('pickup', [_cmd(f'gstn.Held.Pickup {i}') for i in range(npawns())])),
         (2.5, lambda: ('carry', capture('carry'))),
         (2.6, run.at('every pawn holds its object; every world projects Carrying for each holder', all_carry)),
+        (2.65, run.at('holding: no pawn projects a pickup target in any world', targets_carry)),
         (2.7, lambda: ('drop', _cmd('gstn.Held.Drop 0'))),
         (4.0, lambda: ('dropped', capture('dropped'))),
         (4.1, run.at('pawn 0 put it down (Dropped); its hand empty everywhere, the others still carry', dropped)),

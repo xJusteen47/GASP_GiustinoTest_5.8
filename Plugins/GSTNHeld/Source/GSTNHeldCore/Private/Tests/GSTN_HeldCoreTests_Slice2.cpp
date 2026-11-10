@@ -91,7 +91,9 @@ bool FGSTN_HeldSlotsTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("falls through"), Slot.bFallThroughWhenUnavailable);
 		TestEqual(TEXT("one step"), Slot.Pattern.Steps.Num(), 1);
 	}
-	TestTrue(TEXT("pickup ignores carrying"), Bindings[0].Requirements.IgnoreTags.HasTagExact(Carrying) && Bindings[0].Requirements.RequireTags.IsEmpty());
+	TestTrue(TEXT("pickup ignores carrying"), Bindings[0].Requirements.IgnoreTags.HasTagExact(Carrying));
+	TestTrue(TEXT("pickup requires an object in reach (slice 3)"), Bindings[0].Requirements.RequireTags.HasTagExact(GSTNHeldTags::Interact_Target_Pickup)
+		&& Bindings[0].Requirements.RequireTags.Num() == 1);
 	TestTrue(TEXT("drop requires carrying"), Bindings[1].Requirements.RequireTags.HasTagExact(Carrying));
 	TestTrue(TEXT("throw requires carrying"), Bindings[2].Requirements.RequireTags.HasTagExact(Carrying));
 	return true;

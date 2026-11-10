@@ -3,9 +3,17 @@
 #include "GSTN_HeldObjectComponent.h"
 
 #include "Abilities/GameplayAbility.h"
+#include "AbilitySystemComponent.h"
+#include "AbilitySystemGlobals.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Components/TextRenderComponent.h"
+#include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerController.h"
 #include "GSTN_HeldSettings.h"
 #include "GSTN_HeldSubsystem.h"
+#include "GSTN_HeldTags.h"
 #include "GSTN_ProjectileActor.h"
 #include "Net/UnrealNetwork.h"
 
@@ -115,6 +123,51 @@ void UGSTN_HeldObjectComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 	if (State != EGSTN_HeldObjectState::Idle)
 	{
 		UpdatePlacement();
+	}
+	UpdatePrompt();
+}
+
+void UGSTN_HeldObjectComponent::UpdatePrompt()
+{
+	AActor* Owner = GetOwner();
+	UWorld* World = GetWorld();
+	if (!Owner || !World || Owner->IsNetMode(NM_DedicatedServer))
+	{
+		return;
+	}
+	bool bShown = false;
+	const APlayerController* Player = World->GetFirstPlayerController();
+	const APawn* Pawn = Player && Player->IsLocalController() ? Player->GetPawn() : nullptr;
+	const UAbilitySystemComponent* Abilities = Pawn ? UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Pawn) : nullptr;
+	if (State == EGSTN_HeldObjectState::Idle && Abilities && Abilities->HasMatchingGameplayTag(GSTNHeldTags::Interact_Target_Pickup))
+	{
+		const UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(World);
+		bShown = Held && Held->FindPickupTarget(Pawn->GetActorLocation()) == this;
+	}
+	if (bShown && !Prompt)
+	{
+		Prompt = NewObject<UTextRenderComponent>(Owner, TEXT("HeldPrompt"), RF_Transient);
+		Prompt->SetupAttachment(Owner->GetRootComponent());
+		Prompt->SetText(FText::FromString(TEXT("B")));
+		Prompt->SetHorizontalAlignment(EHTA_Center);
+		Prompt->SetWorldSize(40.f);
+		Prompt->SetTextRenderColor(FColor::White);
+		Prompt->SetRelativeLocation(FVector(0.f, 0.f, 80.f));
+		Prompt->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Prompt->RegisterComponent();
+	}
+	if (Prompt)
+	{
+		Prompt->SetVisibility(bShown);
+		if (bShown)
+		{
+			// Faces the camera of the local player
+			if (const APlayerCameraManager* Camera = Player->PlayerCameraManager)
+			{
+				const FVector ToCamera = Camera->GetCameraLocation() - Prompt->GetComponentLocation();
+				Prompt->SetWorldRotation(FRotator(0.f, ToCamera.Rotation().Yaw, 0.f));
+			}
+		}
 	}
 }
 

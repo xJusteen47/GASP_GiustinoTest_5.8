@@ -266,6 +266,35 @@ void UGSTN_HeldSubsystem::StepHolds(int32 Frame)
 	}
 }
 
+UGSTN_HeldObjectComponent* UGSTN_HeldSubsystem::FindPickupTarget(const FVector& From) const
+{
+	TArray<FGSTN_PickupCandidate, TInlineAllocator<16>> Candidates;
+	for (int32 Index = 0; Index < Objects.Num(); ++Index)
+	{
+		const UGSTN_HeldObjectComponent* Each = Objects[Index].Get();
+		if (Each && Each->GetOwner())
+		{
+			// Ids are the host's; a client has none and ties on the list order instead (the same on that machine every frame)
+			const int32 Id = Each->GetObjectId() != INDEX_NONE ? Each->GetObjectId() : Index;
+			Candidates.Add({ Id, Each->GetOwner()->GetActorLocation(), Each->GetTuning().PickupRadius, Each->GetState() == EGSTN_HeldObjectState::Idle });
+		}
+	}
+	const int32 Target = FGSTN_HeldRules::FindPickupTarget(From, Candidates);
+	if (Target == INDEX_NONE)
+	{
+		return nullptr;
+	}
+	for (int32 Index = 0; Index < Objects.Num(); ++Index)
+	{
+		UGSTN_HeldObjectComponent* Each = Objects[Index].Get();
+		if (Each && (Each->GetObjectId() != INDEX_NONE ? Each->GetObjectId() : Index) == Target)
+		{
+			return Each;
+		}
+	}
+	return nullptr;
+}
+
 void UGSTN_HeldSubsystem::ResolvePickups(int32 Frame)
 {
 	if (Pending.IsEmpty())
@@ -418,8 +447,9 @@ void UGSTN_HeldSubsystem::LogReport() const
 		for (const int32 Id : Ids)
 		{
 			const UAbilitySystemComponent* AbilitySystem = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Combat->FindOwnerActor(Id));
-			UE_LOG(LogGSTNHeld, Log, TEXT("HeldHandReport world=%s entity=%d carrying=%d"), *GetNameSafe(GetWorld()), Id,
-				AbilitySystem && AbilitySystem->HasMatchingGameplayTag(GSTNHeldTags::Held_Carrying) ? 1 : 0);
+			UE_LOG(LogGSTNHeld, Log, TEXT("HeldHandReport world=%s entity=%d carrying=%d target=%d"), *GetNameSafe(GetWorld()), Id,
+				AbilitySystem && AbilitySystem->HasMatchingGameplayTag(GSTNHeldTags::Held_Carrying) ? 1 : 0,
+				AbilitySystem && AbilitySystem->HasMatchingGameplayTag(GSTNHeldTags::Interact_Target_Pickup) ? 1 : 0);
 		}
 	}
 }
