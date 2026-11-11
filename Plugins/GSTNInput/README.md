@@ -265,6 +265,19 @@ order.
   host) when the movement state changes, and list `FGSTN_BufferResetRule_OnEvent` rules that react to it (global, weapon or move level).
 - **A context provider for a non-Mover system**: see "How to extend" in the [GSTNInputNP README](../GSTNInputNP/README.md).
 
+### Per local player key bindings (IO-1)
+
+`UGSTN_KeyBindingsSubsystem` (`Bindings/`) is a `ULocalPlayerSubsystem`: every local player (split screen included) has its own physical
+key -> Input Action layout. It stops at the Input Action, so the logical buttons, the predicted input and the network are untouched; no override
+means today's mapping contexts. API for an options menu: `ListBindableMappings`, `Rebind(Action, DefaultKey, NewKey)`, `ResetBinding`,
+`ResetAllToDefault`, `SetBindings`, `Save`, `Load`, `OnBindingsChanged`. A mapping is named by its Input Action object name plus its default key.
+- Applied through the engine's Enhanced Input user settings (on by default in 5.8, nothing in Project Settings): on every key-mapping rebuild a
+  context the player has not seen yet is made rebindable (`FGSTN_KeyBindingsApply::EnsureMappable` gives an action without
+  `PlayerMappableKeySettings` a transient one named after it: identity only, never saved into the asset), registered, and the overrides applied.
+- Saved by the subsystem in its own slot `GSTNInputBindings_P<local player index>`: the engine settings use one slot name for every player and
+  the PC save system ignores the user index, so they would collide. The engine settings object is never saved.
+- Tests: `GSTNInput.Core.Bindings.{Set, TwoLocalPlayers, EnhancedInputProfiles}`. Plan: `docs/architecture/plans/input-opzioni-per-giocatore.md`.
+
 ## Conventions
 
 - Gameplay tags: the plugin declares its roots and its own vocabulary natively. Leaves that are game data (a game's buttons,
