@@ -22,4 +22,4 @@ ContributeCompileInput, Mount/Spin slots), maybe before the server picks the Gam
 multicast in GSTNCore, fired by `UGSTN_GameRulesSubsystem` (server pick) and `AGSTN_GameRulesInfo` OnRep (client); the loadout subsystem
 (GSTNCombatGAS) listens and recompiles the bound kits' tables. Only defaults are safe today.
 **Unseen**: nobody made a GameRules asset with a Button layout piece or moved a function to another button in PIE.
-Cost: ~70k context, Opus, estimated ~$3-4. Wall clock ~40 min. Tip: TIP.
+Cost: ~70k context, Opus, estimated ~$3-4. Wall clock ~40 min. Code tip `19bda380`; the branch tip is the handover commit after it.
