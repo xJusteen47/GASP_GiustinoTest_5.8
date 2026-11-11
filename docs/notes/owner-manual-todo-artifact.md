@@ -1,32 +1,32 @@
 # Cose da fare a mano (copia dell'artifact)
 
-Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (M11 slice 3b). L'artifact è la versione di riferimento.
+Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (M11 slice K4). L'artifact è la versione di riferimento.
 
 ## 1 · Git
 
-- [ ] Porta tutto su `feature/gas-npp-5.8` con un solo push: tip di `claude/desktop-m11-3b` (sha esatto nell'artifact, sostituisce `48fe6528`). Contiene tutto fino a M10 slice 10, la **M11 slice 1** (cambio kit con B tenuto), la **M11 slice 2** (lanci alla Smash) la **M11 slice 3** (tre kit di prova: leggero, medio, pesante) e la **M11 slice 3b** (tasti di oggetti e cambio kit come dati). Poi `git pull` e build completa da Rider:
+- [ ] Porta tutto su `feature/gas-npp-5.8` con un solo push: tip di `claude/desktop-m11-4` (sha esatto nell'artifact, sostituisce `253e11d2`). Contiene tutto fino a M10 slice 10, la **M11 slice 1** (cambio kit con B tenuto), la **M11 slice 2** (lanci alla Smash) la **M11 slice 3** (tre kit di prova: leggero, medio, pesante) la **M11 slice 3b** (tasti di oggetti e cambio kit come dati) e la **M11 K4** (controllo di rete, build di gioco e Shipping sistemate). Poi `git pull` e build completa da Rider:
   ```
   cd "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2"
-  git fetch origin claude/desktop-m11-3b
+  git fetch origin claude/desktop-m11-4
   git push origin <sha>:refs/heads/feature/gas-npp-5.8
   ```
 
 ## 2 · Editor (salva tu con Ctrl+S)
 
 - [ ] **Dove cambi un tasto (M11 slice 3b)**: tasto fisico o del pad → bottone logico (`Input.Button.*`) = Input Action e mapping context in `Content/Input`. Bottone logico → azione: Project Settings → Plugins → GSTN Held → Input|Buttons (`Pickup Drop Button` = B, `Throw Button` = RT, `Slot Overrides` per cambiare tutta la forma) e → Kits → `Kit Swap` → `Button` (B tenuto); i lanci della presa in Project Settings → GSTN Link → Throws. Vale dal prossimo cambio kit o Play. Default = come oggi. Nessuno l'ha provato in PIE col pad.
-- [ ] **Tre kit di prova col pad (M11 slice 3)**, nessuno li ha ancora visti in PIE:
+- [ ] **Playtest dei kit col pad (M11 K4, raccoglie slice 1, 2, 3 e 3b)**, nessuno l'ha visto in PIE né provato col pad (i test di rete premono i tasti dal codice):
   1. Dopo il push e la build: editor nella cartella principale, mappa `L_Test_Hub`, console Python `import test_hub as h` poi `h.prepare()`.
-  2. Play listen, 3 giocatori; aspetta 4 s (kit e manichini).
-  3. Davanti alla partenza, 8 m avanti, una fila nuova di tre kit (senza pedana disegnata: la mappa non è stata rifatta, il kit mostra il nome): sinistra `KIT_Test_Light`, centro `KIT_Test_Medium`, destra `KIT_Test_Heavy`.
-  4. Inquadra un kit, tieni B 0,5 s e rilascia: hai quel kit.
-  5. Muoviti e salta: leggero veloce, due salti in aria, cade piano; medio normale; pesante lento, accelera piano, cade in fretta.
-  6. Attacco (X) = jab (leggero rapido, pesante lento e lungo); Speciale = leggero lancia in alto, medio calcio laterale, pesante schianto tutto intorno.
-  7. Afferra il giocatore 1 con B (tap). Leggero e medio non lo sollevano: stick avanti o indietro = lancio, A = su, accovacciato = giù. Confronta gli archi: leggero bassi e piatti, medio classici, pesante ripidi e lontani.
-  8. Pesante: il giocatore 1 si solleva (presa più lunga, 3 s); lo stick mira il lancio come oggetto (RT), A e accovacciato fanno i lanci su e giù del pesante.
-  9. Riprendi `KIT_Test_Hits` (pedana COLPI): torni al peso e alla gravità normali. Niente da salvare.
-  Numeri e montage sono segnaposto: si cambiano in `Tools/GAS/setup_test_kit_archetypes.py` (e si rilancia) o nei Blueprint `GA_<Kit>_*` in `/Game/GASNPPTest/Combat/Archetypes`.
-- [ ] **Lanci alla Smash (M11 slice 2) in PIE col pad**: mappa `L_Test_Hub`, `h.prepare()`, Play listen 3 giocatori; giocatore 0 prende `KIT_Test_Link` (pedana PRESE, B tenuto) e afferra il giocatore 1 con B. Di default un combattente normale si solleva: stick avanti/indietro non lanciano (lo stick mira il lancio M10), A = su, accovacciato = giù, RT = lancio come oggetto. Per i lanci con lo stick: Project Settings → GSTN Held → Thrown Enemies → `Kit Throws While Lifting` = All (o `Enabled` spento), riprendi il kit: stick avanti = avanti, indietro = indietro. Speciale + accovacciato con un nemico davanti = presa. Modalità: Project Settings → GSTN Link → Throws → `Throw Input Mode` (Stick, Stick Plus Special, Buttons). Su `KIT_Test_Link` i quattro lanci sono lo stesso lancio di prova; gli archi diversi sono sui tre kit della slice 3 (voce sopra). Niente da salvare.
-- [ ] **Cambio kit con B tenuto (M11 slice 1) in PIE col pad**: mappa `L_Test_Hub`, Python `import test_hub as h` + `h.prepare()`, Play listen 3 giocatori, aspetta 4 s (kit sulle pedane). Vai verso una pedana: sopra il kit inquadrato compare "Tieni B: <kit>". B tenuto almeno 0,5 s e rilascia: hai il kit nuovo, il tuo resta a terra. B corto: niente cambio. Kit e cubo vicini (`gstn.Held.Spawn 0`): gira lo stick, vince quello inquadrato. KO di un giocatore (fallo picchiare da un'altra finestra): il kit cade dove muore, lui torna a `KIT_Test_Hits`, il kit sparisce dopo 30 s. Impostazioni in Project Settings → Plugins → GSTN Held → Kits (`Hold Seconds`, `Death Drop` DropAndLose/DropCopy/Off, `Respawn Kit`, durata). Niente da salvare.
+  2. Play listen, 3 giocatori; aspetta 4 s. Kit sulle 7 pedane; fila di tre kit 8 m davanti alla partenza: `KIT_Test_Light`, `KIT_Test_Medium`, `KIT_Test_Heavy`.
+  3. Cambio kit: pedana PRESE, a 1,5 m compare "Tieni B: KIT_Test_Link"; B corto = niente, B tenuto 0,5 s e rilasciato = kit nuovo, il tuo resta sulla pedana.
+  4. Vince l'inquadrato: `gstn.Held.Spawn 0` (console host), cubo accanto a una pedana, lo stick sceglie tra "B" del cubo e "Tieni B" del kit.
+  5. I tre kit: corsa e salto (leggero veloce e due salti in aria, pesante lento), X = jab, speciale (leggero lancia in alto, medio calcio laterale, pesante schianto).
+  6. Lanci: afferra il giocatore 1 con B corto o speciale + accovacciato. Leggero e medio: stick avanti/indietro = lancio, A = su, accovacciato = giù; confronta gli archi.
+  7. Pesante: il giocatore 1 si solleva, RT lo lancia come oggetto (tap verso lo stick, tenuto col reticolo); A e accovacciato restano su e giù. Presa 1,5 / 2 / 3 s.
+  8. Da un client (giocatore 1 contro il 2): cambio kit e un lancio, uguali e senza scatti.
+  9. KO del giocatore 0: il kit cade dove muore, lui torna a `KIT_Test_Hits`, il kit sparisce dopo 30 s.
+  10. Facoltativo: Project Settings → GSTN Held → Kits → Kit Swap → Button = `Input.Button.Special`, Play: il kit si cambia con quel tasto (parte anche lo speciale). Rimetti `Input.Button.Interact`.
+  11. Ferma il Play, `h.restore()`, niente da salvare. Riferisci: scritta e cambio chiari, archi giusti, differenza tra i kit, scatti da client.
+  Numeri e montage segnaposto: `Tools/GAS/setup_test_kit_archetypes.py` o i Blueprint `GA_<Kit>_*` in `/Game/GASNPPTest/Combat/Archetypes`. Con `KIT_Test_Link` un combattente normale si solleva: per lo stick, GSTN Held → Thrown Enemies → `Kit Throws While Lifting` = All.
 - [ ] **Recoil segnaposto in PIE** con la mossa di test `KIT_Test_StrikeKinds` (solo test: swing da destra frame 8-14, affondo dritto 22-26, nessun recoil proprio):
   1. Editor nella cartella principale, mappa `L_Test_Hub`.
   2. Console Python: `import sys; sys.path.insert(0, r"C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2\Tools\GASNPPTest"); import test_hub as h` poi `h.prepare()`.
@@ -56,10 +56,11 @@ Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, a
 
 ## 5 · Pulizia branch
 
-- [ ] GitHub: branch vecchi elencati nell'artifact; dopo il push anche `claude/desktop-weakpoint-3` , `claude/laptop-weakpoint-3b`, `claude/desktop-m10-1`, `claude/desktop-m10-2`, `claude/desktop-m10-3`, `claude/desktop-m10-4`, `claude/desktop-m10-5` e `claude/desktop-m10-6`, `claude/desktop-m11-1`, `claude/desktop-m11-2`. Portatile: `git branch -d claude/laptop-projectile-1`.
+- [ ] GitHub: branch vecchi elencati nell'artifact; dopo il push anche `claude/desktop-weakpoint-3` , `claude/laptop-weakpoint-3b`, `claude/desktop-m10-1`, `claude/desktop-m10-2`, `claude/desktop-m10-3`, `claude/desktop-m10-4`, `claude/desktop-m10-5` e `claude/desktop-m10-6`, `claude/desktop-m11-1`, `claude/desktop-m11-2`, `claude/desktop-m11-3`, `claude/desktop-m11-3b`. Portatile: `git branch -d claude/laptop-projectile-1`.
 
 ## Fatto
 
+- 2026-11-11 · M11 K4: controllo prima del playtest. Kit (scambio, lanci con lo stick, tre kit) 8/8 e oggetti 8/8 in listen 0 % e 2 % e dedicato 0 % e 2 %, suite di default 50/50, headless 1508/0, 0 ensure. Le build del gioco (Development e Shipping) non compilavano per colpa di test che usavano funzioni solo-editor: sistemato, ora le tre configurazioni compilano. Nessuno l'ha visto in PIE col pad. Branch `claude/desktop-m11-4`.
 - 2026-11-11 · M11 slice 3b: i tasti degli oggetti (B prendi/posa, RT lancia) e del cambio kit (B tenuto) non sono più fissi nel codice ma impostazioni, con gli stessi valori di oggi. Headless 1508/0, harness oggetti 8/8 e kit 8/8 listen 0 % e 2 %, dedicato 0 %, suite di default 50/50. Nessuno l'ha visto in PIE. Restano fissi nel codice alcuni tasti di altri plugin (lista nell'handover m11-slice3b). Branch `claude/desktop-m11-3b`.
 - 2026-11-11 · M11 slice 3: tre kit di prova davvero diversi (leggero, medio, pesante: velocità, salto, peso, capacità, gravità, jab, speciale, 4 lanci con archi diversi e montage GASP segnaposto), creati da uno script, nessun Blueprint toccato a mano, in fila davanti alla partenza dell'hub. Headless 1507/0, harness dei kit 4/4 listen 0 % e 2 %, dedicato 0 %, suite di default 50/50. Nessuno l'ha visto in PIE col pad. Branch `claude/desktop-m11-3`.
 - 2026-11-11 · M11 slice 2: lanci alla Smash (stick avanti/indietro, su = salto, giù = accovacciato), 4 lanci per kit con set comune di riserva, presa con speciale + accovacciato, modalità alternative come impostazioni, tasti come dati. Headless 1505/0, lanci con stick simulato PASS listen 0 % e 2 %, dedicato 0 %, prese di prima 5/5, suite di default 50/50. Nessuno l'ha visto in PIE col pad. Branch `claude/desktop-m11-2`.
