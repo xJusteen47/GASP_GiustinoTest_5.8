@@ -1,18 +1,19 @@
 # Cose da fare a mano (copia dell'artifact)
 
-Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (M10 slice 10). L'artifact è la versione di riferimento.
+Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (M11 slice 1). L'artifact è la versione di riferimento.
 
 ## 1 · Git
 
-- [ ] Porta tutto su `feature/gas-npp-5.8` con un solo push: tip di `claude/desktop-m10-10` (sha esatto nell'artifact, sostituisce `1efef002`). Contiene weakpoint 3/3b, M10 slice 1-10 (slice 10: caricamento del lancio, debug `gstn.Held.Debug 1`, validatore delle definizioni, fix del fork sulle abilità ServerOnly) e i documenti del piano M11. Poi `git pull` e build completa da Rider:
+- [ ] Porta tutto su `feature/gas-npp-5.8` con un solo push: tip di `claude/desktop-m11-1` (sha esatto nell'artifact, sostituisce `c3ffe3a0`). Contiene tutto fino a M10 slice 10 e la **M11 slice 1** (cambio kit con B tenuto). Poi `git pull` e build completa da Rider:
   ```
   cd "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2"
-  git fetch origin claude/desktop-m10-10
+  git fetch origin claude/desktop-m11-1
   git push origin <sha>:refs/heads/feature/gas-npp-5.8
   ```
 
 ## 2 · Editor (salva tu con Ctrl+S)
 
+- [ ] **Cambio kit con B tenuto (M11 slice 1) in PIE col pad**: mappa `L_Test_Hub`, Python `import test_hub as h` + `h.prepare()`, Play listen 3 giocatori, aspetta 4 s (kit sulle pedane). Vai verso una pedana: sopra il kit inquadrato compare "Tieni B: <kit>". B tenuto almeno 0,5 s e rilascia: hai il kit nuovo, il tuo resta a terra. B corto: niente cambio. Kit e cubo vicini (`gstn.Held.Spawn 0`): gira lo stick, vince quello inquadrato. KO di un giocatore (fallo picchiare da un'altra finestra): il kit cade dove muore, lui torna a `KIT_Test_Hits`, il kit sparisce dopo 30 s. Impostazioni in Project Settings → Plugins → GSTN Held → Kits (`Hold Seconds`, `Death Drop` DropAndLose/DropCopy/Off, `Respawn Kit`, durata). Niente da salvare.
 - [ ] **Recoil segnaposto in PIE** con la mossa di test `KIT_Test_StrikeKinds` (solo test: swing da destra frame 8-14, affondo dritto 22-26, nessun recoil proprio):
   1. Editor nella cartella principale, mappa `L_Test_Hub`.
   2. Console Python: `import sys; sys.path.insert(0, r"C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2\Tools\GASNPPTest"); import test_hub as h` poi `h.prepare()`.
@@ -45,6 +46,7 @@ Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, a
 
 ## Fatto
 
+- 2026-11-11 · M11 slice 1: il kit a terra è un bersaglio di B (vince la cosa inquadrata), B tenuto 0,5 s e rilasciato lo scambia, scritta "Tieni B", kit lasciato alla morte (impostazione: lascia e perdi / lascia una copia / spento). Headless 1500/0, suite di default 50/50 (una attesa aggiornata), scambio con input simulato PASS listen 0 % e 2 %, dedicato 0 %. Nessuno l'ha visto in PIE col pad. Branch `claude/desktop-m11-1`.
 - 2026-11-11 · M10 slice 10: caricamento del lancio (frame di rilascio e montage per oggetto, default e nemici; 0 = istantaneo come prima, spedito a 0), colpito durante il caricamento = niente lancio e l'oggetto cade; debug e validatore (G12 in parte); suite di default 50/50, oggetti 8/8 listen 2 % e dedicato 0 %, headless 1498/0. Nessuno l'ha visto in PIE. Branch `claude/desktop-m10-10`.
 - 2026-11-11 · Decisioni M11 1-7 approvate (tue) come consigliate; il kit si cambia con grab (B) tenuto.
 - 2026-11-10 · M10 slice 7: un rimbalzo non ricolpisce chi il lancio ha già colpito (opzione per oggetto); fuoco amico per tipo di colpo nelle regole della modalità (`Friendly Fire Sources`); le due impostazioni di raccolta decise da te (inquadrato o più vicino; conteso: mano vuota o il più vicino), accese come prima. Branch `claude/desktop-m10-7` (sha nell'artifact).
