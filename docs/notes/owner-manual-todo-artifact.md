@@ -1,18 +1,19 @@
 # Cose da fare a mano (copia dell'artifact)
 
-Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (M11 slice 3). L'artifact è la versione di riferimento.
+Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (M11 slice 3b). L'artifact è la versione di riferimento.
 
 ## 1 · Git
 
-- [ ] Porta tutto su `feature/gas-npp-5.8` con un solo push: tip di `claude/desktop-m11-3` (sha esatto nell'artifact, sostituisce `de12900b`). Contiene tutto fino a M10 slice 10, la **M11 slice 1** (cambio kit con B tenuto), la **M11 slice 2** (lanci alla Smash) e la **M11 slice 3** (tre kit di prova: leggero, medio, pesante). Poi `git pull` e build completa da Rider:
+- [ ] Porta tutto su `feature/gas-npp-5.8` con un solo push: tip di `claude/desktop-m11-3b` (sha esatto nell'artifact, sostituisce `48fe6528`). Contiene tutto fino a M10 slice 10, la **M11 slice 1** (cambio kit con B tenuto), la **M11 slice 2** (lanci alla Smash) la **M11 slice 3** (tre kit di prova: leggero, medio, pesante) e la **M11 slice 3b** (tasti di oggetti e cambio kit come dati). Poi `git pull` e build completa da Rider:
   ```
   cd "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2"
-  git fetch origin claude/desktop-m11-3
+  git fetch origin claude/desktop-m11-3b
   git push origin <sha>:refs/heads/feature/gas-npp-5.8
   ```
 
 ## 2 · Editor (salva tu con Ctrl+S)
 
+- [ ] **Dove cambi un tasto (M11 slice 3b)**: tasto fisico o del pad → bottone logico (`Input.Button.*`) = Input Action e mapping context in `Content/Input`. Bottone logico → azione: Project Settings → Plugins → GSTN Held → Input|Buttons (`Pickup Drop Button` = B, `Throw Button` = RT, `Slot Overrides` per cambiare tutta la forma) e → Kits → `Kit Swap` → `Button` (B tenuto); i lanci della presa in Project Settings → GSTN Link → Throws. Vale dal prossimo cambio kit o Play. Default = come oggi. Nessuno l'ha provato in PIE col pad.
 - [ ] **Tre kit di prova col pad (M11 slice 3)**, nessuno li ha ancora visti in PIE:
   1. Dopo il push e la build: editor nella cartella principale, mappa `L_Test_Hub`, console Python `import test_hub as h` poi `h.prepare()`.
   2. Play listen, 3 giocatori; aspetta 4 s (kit e manichini).
@@ -59,6 +60,7 @@ Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, a
 
 ## Fatto
 
+- 2026-11-11 · M11 slice 3b: i tasti degli oggetti (B prendi/posa, RT lancia) e del cambio kit (B tenuto) non sono più fissi nel codice ma impostazioni, con gli stessi valori di oggi. Headless 1508/0, harness oggetti 8/8 e kit 8/8 listen 0 % e 2 %, dedicato 0 %, suite di default 50/50. Nessuno l'ha visto in PIE. Restano fissi nel codice alcuni tasti di altri plugin (lista nell'handover m11-slice3b). Branch `claude/desktop-m11-3b`.
 - 2026-11-11 · M11 slice 3: tre kit di prova davvero diversi (leggero, medio, pesante: velocità, salto, peso, capacità, gravità, jab, speciale, 4 lanci con archi diversi e montage GASP segnaposto), creati da uno script, nessun Blueprint toccato a mano, in fila davanti alla partenza dell'hub. Headless 1507/0, harness dei kit 4/4 listen 0 % e 2 %, dedicato 0 %, suite di default 50/50. Nessuno l'ha visto in PIE col pad. Branch `claude/desktop-m11-3`.
 - 2026-11-11 · M11 slice 2: lanci alla Smash (stick avanti/indietro, su = salto, giù = accovacciato), 4 lanci per kit con set comune di riserva, presa con speciale + accovacciato, modalità alternative come impostazioni, tasti come dati. Headless 1505/0, lanci con stick simulato PASS listen 0 % e 2 %, dedicato 0 %, prese di prima 5/5, suite di default 50/50. Nessuno l'ha visto in PIE col pad. Branch `claude/desktop-m11-2`.
 - 2026-11-11 · M11 slice 1: il kit a terra è un bersaglio di B (vince la cosa inquadrata), B tenuto 0,5 s e rilasciato lo scambia, scritta "Tieni B", kit lasciato alla morte (impostazione: lascia e perdi / lascia una copia / spento). Headless 1500/0, suite di default 50/50 (una attesa aggiornata), scambio con input simulato PASS listen 0 % e 2 %, dedicato 0 %. Nessuno l'ha visto in PIE col pad. Branch `claude/desktop-m11-1`.
