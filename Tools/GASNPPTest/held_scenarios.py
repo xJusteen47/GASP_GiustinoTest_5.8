@@ -468,16 +468,17 @@ def scenario_held_throw_windup(client=1):
         m = re.findall(r'HeldPickup entity (\d+) holds object (\d+)', _log())
         return min(int(e) for e, _ in m) if m else None
 
-    def rows_of(entity):
+    def rows_of(entity, worlds=None):
+        # Each report stalls the game thread a few hundred ms: the host alone where the clients are not judged
         out = []
-        for wi in range(len(g.worlds())):
+        for wi in (worlds if worlds is not None else range(len(g.worlds()))):
             before = len(_ROWS.findall(_log()))
             _cmd('gstn.Held.Report', wi)
             out.append([r for r in _ROWS.findall(_log())[before:] if int(r[3]) == entity])
         return out
 
-    def capture(name):
-        st[name] = rows_of(holder0())
+    def capture(name, worlds=None):
+        st[name] = rows_of(holder0(), worlds)
         return f'{name} {st[name]}'
 
     def held_in_windup():
@@ -514,15 +515,15 @@ def scenario_held_throw_windup(client=1):
         (2.8, lambda: ('throw', _cmd('gstn.Held.Throw 0 2'))),
         (3.05, lambda: ('mid', capture('mid'))),
         (3.1, run.at('15 frames into a 60-frame wind-up the object is still in the hand of pawn 0 in every world', held_in_windup)),
-        (4.2, lambda: ('after', capture('after'))),
-        (4.3, run.at('the host started the wind-up with its montage and released the object exactly 60 frames later; then it left the hand on the host (clients follow by replication)', released_on_time)),
-        (4.6, lambda: ('spawn2', _cmd('gstn.Held.Spawn 0 120 Windup=120'))),
-        (5.6, lambda: ('pickup2', _cmd('gstn.Held.Pickup 0'))),
-        (6.8, lambda: ('windup2', _cmd('gstn.Held.Throw 0 2'))),
-        (7.0, lambda: ('hit pawn 0', _cmd('gstn.Projectile.Ability 2 0'))),
-        (9.6, lambda: ('late', capture('late'))),
-        (9.7, run.at('hit during the wind-up: it stopped (no release), pawn 0 dropped its object (HolderState), nothing of pawn 0 flew', stopped_by_hit)),
-        (9.8, run.finish()),
+        (5.0, lambda: ('after', capture('after', [0]))),
+        (5.1, run.at('the host started the wind-up with its montage and released the object exactly 60 frames later; then it left the hand on the host (clients follow by replication)', released_on_time)),
+        (5.4, lambda: ('spawn2', _cmd('gstn.Held.Spawn 0 120 Windup=120'))),
+        (6.4, lambda: ('pickup2', _cmd('gstn.Held.Pickup 0'))),
+        (7.6, lambda: ('windup2', _cmd('gstn.Held.Throw 0 2'))),
+        (7.8, lambda: ('hit pawn 0', _cmd('gstn.Projectile.Ability 2 0'))),
+        (10.4, lambda: ('late', capture('late', [0]))),
+        (10.5, run.at('hit during the wind-up: it stopped (no release), pawn 0 dropped its object (HolderState), nothing of pawn 0 flew', stopped_by_hit)),
+        (10.6, run.finish()),
     ]
     run.run(steps)
 

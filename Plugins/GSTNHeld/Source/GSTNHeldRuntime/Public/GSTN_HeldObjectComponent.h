@@ -63,6 +63,14 @@ public:
 	/** HOOK, not read yet: the object's own ranged action (a gun's shot, a wand's bolt), bound by a later slice. Null = none */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Held|Actions")
 	TSubclassOf<class UGameplayAbility> RangedAction;
+
+#if WITH_EDITOR
+	/**
+	 * M10 G12: errors for tuning that cannot work (no pickup reach, a throw with no speed), warnings for tuning that is probably a slip (a size
+	 * tag no size class names, a wind-up without a montage or that releases after its montage ended)
+	 */
+	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
+#endif
 };
 
 /**

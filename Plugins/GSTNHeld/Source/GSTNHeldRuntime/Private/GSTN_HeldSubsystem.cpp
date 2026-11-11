@@ -30,10 +30,16 @@
 #include "GSTN_ProjectileActor.h"
 #include "GSTN_ProjectileSubsystem.h"
 #include "HAL/IConsoleManager.h"
+#include "DrawDebugHelpers.h"
 #include "Modules/ModuleManager.h"
 #include "NetworkPredictionWorldManager.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 #include "World/GSTN_StepSnapshot.h"
+
+static TAutoConsoleVariable<int32> CVarHeldDebug(TEXT("gstn.Held.Debug"), 0,
+	TEXT("1 = draws every held object of the world each fixed frame: state (Idle green, Held yellow, Flying red, Broken grey) and id, a line to its ")
+	TEXT("holder, the flight's positions 10 frames back and ahead (white) and a blue line to the authority shot (on the thrower's client: the ghost's error)"),
+	ECVF_Cheat);
 
 UGSTN_HeldSubsystem* UGSTN_HeldSubsystem::Get(const UWorld* World)
 {
@@ -218,9 +224,54 @@ void UGSTN_HeldSubsystem::NoteThrown(AActor* Holder, AGSTN_Projectile& Shot)
 	}
 }
 
+void UGSTN_HeldSubsystem::DrawDebugFrame(int32 Frame) const
+{
+#if ENABLE_DRAW_DEBUG
+	UWorld* World = GetWorld();
+	// One fixed frame (62.5 Hz), so the drawing neither flickers nor piles up
+	const float Life = 0.016f;
+	for (const TWeakObjectPtr<UGSTN_HeldObjectComponent>& Weak : Objects)
+	{
+		const UGSTN_HeldObjectComponent* Object = Weak.Get();
+		const AActor* Actor = Object ? Object->GetOwner() : nullptr;
+		if (!Actor)
+		{
+			continue;
+		}
+		const FVector At = Actor->GetActorLocation();
+		const EGSTN_HeldObjectState State = Object->GetState();
+		const FColor Color = State == EGSTN_HeldObjectState::Idle ? FColor::Green : State == EGSTN_HeldObjectState::Held ? FColor::Yellow
+			: State == EGSTN_HeldObjectState::Flying ? FColor::Red : FColor(128, 128, 128);
+		DrawDebugSphere(World, At, Object->GetTuning().RestHalfHeight, 8, Color, false, Life);
+		DrawDebugString(World, At + FVector(0.0, 0.0, 40.0), FString::Printf(TEXT("%d %s"), Object->GetObjectId(),
+			*StaticEnum<EGSTN_HeldObjectState>()->GetNameStringByValue(static_cast<int64>(State))), nullptr, Color, Life);
+		if (State == EGSTN_HeldObjectState::Held && Object->GetHolder())
+		{
+			DrawDebugLine(World, At, Object->GetHolder()->GetActorLocation(), Color, false, Life);
+		}
+		if (const AGSTN_Projectile* Flight = State == EGSTN_HeldObjectState::Flying ? Object->GetFlight() : nullptr)
+		{
+			// The flight's closed form 10 frames back and ahead (white), and where the authority shot is now (blue line): on the throwing client
+			// the object is drawn at its ghost, so the line is the ghost's error against the server
+			for (int32 Offset = -10; Offset <= 10; Offset += 2)
+			{
+				DrawDebugPoint(World, Flight->GetDrawnPositionAt(Frame + Offset), Offset == 0 ? 10.f : 5.f, FColor::White, false, Life);
+			}
+			DrawDebugLine(World, At, Flight->GetDrawnPositionAt(Frame), FColor::Blue, false, Life, 0, 2.f);
+		}
+	}
+#endif
+}
+
 void UGSTN_HeldSubsystem::HandlePostFixedTick(int32 ServerFrame, int32 EndTimeMS, bool bResimulating)
 {
 	LastFrame = ServerFrame;
+#if ENABLE_DRAW_DEBUG
+	if (!bResimulating && CVarHeldDebug.GetValueOnGameThread() != 0)
+	{
+		DrawDebugFrame(ServerFrame);
+	}
+#endif
 	if (bResimulating || !HasAuthority())
 	{
 		return;

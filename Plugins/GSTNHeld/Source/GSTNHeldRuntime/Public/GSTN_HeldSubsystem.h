@@ -127,6 +127,9 @@ protected:
 
 private:
 	void HandlePostFixedTick(int32 ServerFrame, int32 EndTimeMS, bool bResimulating);
+
+	/** gstn.Held.Debug 1 (M10 G12, not in Shipping): draws this world's objects, holders and flights for one fixed frame */
+	void DrawDebugFrame(int32 Frame) const;
 	void ResolvePickups(int32 Frame);
 	void StepObjects(int32 Frame);
 	/** Host: the drops asked for and the breaks of the frame (requests, holder tags, holder events) */

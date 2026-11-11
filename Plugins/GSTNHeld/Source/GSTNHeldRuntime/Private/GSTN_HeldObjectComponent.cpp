@@ -18,6 +18,51 @@
 #include "GSTN_InteractSubsystem.h"
 #include "GSTN_ProjectileActor.h"
 #include "Net/UnrealNetwork.h"
+#include "Animation/AnimMontage.h"
+#if WITH_EDITOR
+#include "Misc/DataValidation.h"
+#endif
+
+#if WITH_EDITOR
+EDataValidationResult UGSTN_HeldObjectDefinition::IsDataValid(FDataValidationContext& Context) const
+{
+	EDataValidationResult Result = Super::IsDataValid(Context);
+	auto Fail = [&Context, &Result](const FString& Why)
+	{
+		Context.AddError(FText::FromString(Why));
+		Result = EDataValidationResult::Invalid;
+	};
+	if (Tuning.PickupRadius <= 0.f)
+	{
+		Fail(TEXT("PickupRadius is 0: nobody can pick this object up."));
+	}
+	if (Tuning.Throw.Speed <= 0.f)
+	{
+		Fail(TEXT("Throw.Speed is 0: the throw would never leave the hand."));
+	}
+	if (Tuning.SizeTag.IsValid() && !UGSTN_HeldSettings::Get().FindSizeClass(Tuning.SizeTag))
+	{
+		Context.AddWarning(FText::FromString(FString::Printf(TEXT("SizeTag %s is not one of the project's size classes (GSTN Held settings): no load, no bans."),
+			*Tuning.SizeTag.ToString())));
+	}
+	if (Tuning.bOverrideWindup && !Tuning.Windup.IsInstant())
+	{
+		const UAnimMontage* Montage = Tuning.Windup.Montage.LoadSynchronous();
+		// The release is counted in fixed frames at the project's 62.5 Hz; the montage only shows it
+		const float ReleaseSeconds = Tuning.Windup.ReleaseFrames / 62.5f * Tuning.Windup.MontagePlayRate;
+		if (!Montage)
+		{
+			Context.AddWarning(FText::FromString(TEXT("The wind-up has frames but no montage: the thrower holds still until the object leaves.")));
+		}
+		else if (ReleaseSeconds > Montage->GetPlayLength())
+		{
+			Context.AddWarning(FText::FromString(FString::Printf(TEXT("The wind-up releases at %.2f s into its montage, which ends at %.2f s."),
+				ReleaseSeconds, Montage->GetPlayLength())));
+		}
+	}
+	return Result;
+}
+#endif
 
 UGSTN_HeldObjectComponent::UGSTN_HeldObjectComponent()
 {

@@ -124,13 +124,30 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
    keeps the grab's kit throws on RT (M11). Log `HeldEnemyThrow holder= enemy= serial= speed= posted=`. Harness `held_throw_enemy`.
    Limits: minions cannot be grabbed yet (no G9 for them); the body flies on its own movement while the hitbox is the analytic shot, so the two
    can drift apart (same start, same velocity, gravity -980 on both); no carry load while lifting an enemy; no thrown state on the body.
-15. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
+15. **Slice 10 (owner's request 2026-11-11: a throw animation that does not release at once)**. *Wind-up*: `FGSTN_HeldThrowWindup` = `ReleaseFrames`
+   (combat frames from RT's release, or the activation without a button, to the object leaving the hand), a `Montage` played on the predicted
+   slot from that start (`PlaySyncedMontage`, placeholder `AM_M_relaxed_ragdoll_shove_stand_F_A`, GASP has no throw), `MontagePlayRate`,
+   `MontageRootMotionScale` (0 = in place). Resolved by `FGSTN_HeldRules::ResolveWindup`: the object's own (`bOverrideWindup` + `Windup` on the
+   tuning), else the project's `DefaultThrowWindup`; a lifted enemy uses `ThrownEnemies.Windup`. **0 frames = the throw of slice 9, unchanged;
+   both shipped at 0**. The start clock and the length are sync variables of `UGSTN_GA_HeldThrow`; the shot, the ghost and the host projectile
+   start at the release frame with that frame's stick or camera (the aim can still be steered during the wind-up); a camera aim keeps its reticle
+   and shoulder view until the release. The combat clock stops in hitstop, so does the wind-up. *Hit during the wind-up* (choice, recommended):
+   the holder taking any of its object's `DropWhenHolderHasAny` tags (the project's for an enemy) stops the wind-up, cancels the ability, stops the
+   montage, no throw; the host drops the object as for any hit in hand (an enemy: the grab's own rules). Dev: `gstn.Held.Windup [ObjectFrames]
+   [EnemyFrames]` (PIE only: it writes the settings object every world of the process shares), `gstn.Held.Spawn .. Windup=N` (host-only
+   definition). Log `HeldWindup phase=start|release|stop`. Harness `held_throw_windup`. The fork (`UNpAbilitySystemComponent::TickAbilities`) now
+   also ticks active **ServerOnly** instances (non-replicated, never ticked before: a dev, AI or trap ability could not wait; the server never
+   re-simulates, LocalOnly stays untouched). *Debug and editor (the plan's G12, part)*: `gstn.Held.Debug 1` draws every object of the world each
+   fixed frame (state colour and id, a line to the holder, the flight 10 frames back and ahead, a blue line to the authority shot = the ghost's
+   error on the thrower's client); `UGSTN_HeldObjectDefinition::IsDataValid` (errors: no pickup radius, throw speed 0; warnings: size tag without
+   a size class, a wind-up without montage or releasing after its montage ends).
+16. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
    (its own ranged action) are data only; a later slice routes commands to them.
 ## Not yet (later slices of the plan)
 
 Friendly fire by mode is `UGSTN_CombatRules::FriendlyFireSources` (slice 7; projectiles only, melee keeps `bFriendlyFire`). The camera
 side of the shoulder aim (a pawn tag source that reports the precision aim component's view tags). G9 thrown
-enemies are in step 14 (fighters only); G12-G13 debug/editor (validator of missing size bindings per kit), sweep. Minion hit delegates (`OnMinionHit`) carry no source tag
+enemies are in step 14 (fighters only). G12 left: hand-socket attach and release blend (spike S2), the arc preview in an editor module, the interact prompt and the HoldFrames validator; G13 left: the byte table and the 32-projectile perf run. Minion hit delegates (`OnMinionHit`) carry no source tag
 (only the KO event does).
 
-Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`, `held_carry_load`, `held_throw_break`, `held_throw_explode`, `held_throw_ghost`, `held_throw_enemy`).
+Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`, `held_carry_load`, `held_throw_break`, `held_throw_explode`, `held_throw_ghost`, `held_throw_enemy`, `held_throw_windup`).
