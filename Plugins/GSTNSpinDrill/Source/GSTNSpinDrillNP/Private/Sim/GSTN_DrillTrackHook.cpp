@@ -31,7 +31,7 @@ FGSTN_TrackHookResult FGSTN_BoreTrackHook::Evaluate(const FGSTN_TrackHookContext
 	const FGSTN_BoreTrack& Track = static_cast<const FGSTN_BoreTrack&>(Context.Track);
 	FGSTN_TrackHookResult Result;
 
-	const int32 Button = Context.Buttons ? Context.Buttons->GetIndex(Track.HoldButton) : INDEX_NONE;
+	const int32 Button = Context.Buttons ? Context.Buttons->GetIndex(Track.ResolveHoldButton()) : INDEX_NONE;
 	const bool bHeld = Button >= 0 && Button < 32 && (Context.Input.History.GetHeldButtons() & (1u << Button)) != 0;
 	const FGSTN_DrillFragment* Fragment = Context.Fragments ? FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(*Context.Fragments) : nullptr;
 

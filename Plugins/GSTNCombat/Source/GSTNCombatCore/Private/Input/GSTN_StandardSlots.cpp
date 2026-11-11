@@ -4,10 +4,18 @@
 #include "Input/GSTN_CombatCommandTags.h"
 #include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_InputConditions.h"
+#include "Layout/GSTN_ButtonLayout.h"
 
 namespace
 {
 	using FCondition = TInstancedStruct<FGSTN_InputCondition>;
+
+	// IO-2: buttons from the button layout (GameRules piece), these defaults when it does not name them. The shipped slot set assets are
+	// filled from here by Tools/GAS/setup_gas_assets.py, so they carry the layout of the editor that ran it
+	FGameplayTag LayoutButton(const TCHAR* Function, const FNativeGameplayTag& Default)
+	{
+		return UGSTN_ButtonLayout::GetButton(Function, Default.GetTag());
+	}
 
 	enum class EShape : uint8
 	{
@@ -33,7 +41,7 @@ namespace
 	FCondition MakeCrouchHeld()
 	{
 		FGSTN_InputCondition_Hold Condition;
-		Condition.Button = GSTNCombatButtonTags::Button_Crouch.GetTag();
+		Condition.Button = LayoutButton(TEXT("Combat.Crouch"), GSTNCombatButtonTags::Button_Crouch);
 		Condition.MinFrames = 0;
 		return MakeInstance(Condition);
 	}
@@ -72,13 +80,15 @@ TArray<FGSTN_InputSlotSpec> UGSTN_StandardSlots::Build()
 
 	struct FFamily
 	{
-		const FNativeGameplayTag& Button;
+		FGameplayTag Button;
 		const FNativeGameplayTag* Commands[4];
 	};
+	const FGameplayTag AttackButton = LayoutButton(TEXT("Combat.Attack"), GSTNCombatButtonTags::Button_Attack);
+	const FGameplayTag SpecialButton = LayoutButton(TEXT("Combat.Special"), GSTNCombatButtonTags::Button_Special);
 	const FFamily Families[] = {
-		{ GSTNCombatButtonTags::Button_Attack, { &Attack_Neutral, &Attack_Directional, &Attack_CrouchNeutral, &Attack_CrouchDirectional } },
-		{ GSTNCombatButtonTags::Button_Strong, { &Strong_Neutral, &Strong_Directional, &Strong_CrouchNeutral, &Strong_CrouchDirectional } },
-		{ GSTNCombatButtonTags::Button_Special, { &Special_Neutral, &Special_Directional, &Special_CrouchNeutral, &Special_CrouchDirectional } },
+		{ AttackButton, { &Attack_Neutral, &Attack_Directional, &Attack_CrouchNeutral, &Attack_CrouchDirectional } },
+		{ LayoutButton(TEXT("Combat.Strong"), GSTNCombatButtonTags::Button_Strong), { &Strong_Neutral, &Strong_Directional, &Strong_CrouchNeutral, &Strong_CrouchDirectional } },
+		{ SpecialButton, { &Special_Neutral, &Special_Directional, &Special_CrouchNeutral, &Special_CrouchDirectional } },
 	};
 	const FNativeGameplayTag* Combos[] = { &Combo_AttackSpecial_Neutral, &Combo_AttackSpecial_Directional,
 		&Combo_AttackSpecial_CrouchNeutral, &Combo_AttackSpecial_CrouchDirectional };
@@ -88,15 +98,15 @@ TArray<FGSTN_InputSlotSpec> UGSTN_StandardSlots::Build()
 	{
 		for (int32 Shape = 0; Shape < 4; ++Shape)
 		{
-			Slots.Add(MakeSlot(Family.Commands[Shape]->GetTag(), MakePress(Family.Button.GetTag()), static_cast<EShape>(Shape)));
+			Slots.Add(MakeSlot(Family.Commands[Shape]->GetTag(), MakePress(Family.Button), static_cast<EShape>(Shape)));
 		}
 	}
 
 	for (int32 Shape = 0; Shape < 4; ++Shape)
 	{
 		FGSTN_InputCondition_Chord Chord;
-		Chord.Buttons.AddTag(GSTNCombatButtonTags::Button_Attack.GetTag());
-		Chord.Buttons.AddTag(GSTNCombatButtonTags::Button_Special.GetTag());
+		Chord.Buttons.AddTag(AttackButton);
+		Chord.Buttons.AddTag(SpecialButton);
 		Chord.WithinFrames = 2;
 		Slots.Add(MakeSlot(Combos[Shape]->GetTag(), MakeInstance(Chord), static_cast<EShape>(Shape)));
 	}

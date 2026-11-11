@@ -101,6 +101,17 @@ struct GSTNSPINDRILLCORE_API FGSTN_BoreTrack : public FGSTN_TimelineTrack
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Bore", meta = (Categories = "Input.Button"))
 	FGameplayTag HoldButton;
 
+	/**
+	 * IO-2: a button layout function ("Spin.Drill"). Set, the hook reads that function's button of the active layout when it ticks, with
+	 * HoldButton as the default (the bore's timeline is built on the ability's class default object, before the GameRules are picked).
+	 * None = HoldButton as authored
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Bore")
+	FName LayoutFunction;
+
+	/** HoldButton, or LayoutFunction's button in the active layout */
+	FGameplayTag ResolveHoldButton() const;
+
 	/** The first bore track of a timeline, null when it has none */
 	static const FGSTN_BoreTrack* Find(const FGSTN_CombatTimelineData& Data);
 };

@@ -1,6 +1,7 @@
 // Links, pure part (no GAS, no Network Prediction, no Mover).
 
 #include "Input/GSTN_LinkSlots.h"
+#include "Layout/GSTN_ButtonLayout.h"
 
 #include "Data/GSTN_LinkKitExtension.h"
 #include "GSTN_LinkSettings.h"
@@ -99,25 +100,34 @@ namespace
 	}
 }
 
+namespace
+{
+	/** IO-2: the button of a link function in the active button layout, else the default */
+	FGameplayTag LinkButton(const TCHAR* Function, const FNativeGameplayTag& Default)
+	{
+		return UGSTN_ButtonLayout::GetButton(Function, Default.GetTag());
+	}
+}
+
 TArray<FGSTN_InputSlotSpec> UGSTN_LinkSlots::Build()
 {
 	using namespace GSTNLinkTags;
-	const FGameplayTag Interact = GSTNCombatButtonTags::Button_Interact.GetTag();
-	const FGameplayTag Attack = GSTNCombatButtonTags::Button_Attack.GetTag();
-	const FGameplayTag Strong = GSTNCombatButtonTags::Button_Strong.GetTag();
-	const FGameplayTag Crouch = GSTNCombatButtonTags::Button_Crouch.GetTag();
+	// IO-2: every button from the button layout (GameRules piece), these defaults when it does not name them
+	const FGameplayTag Attack = LinkButton(TEXT("Link.ThrowAttack"), GSTNCombatButtonTags::Button_Attack);
+	const FGameplayTag Strong = LinkButton(TEXT("Link.ThrowStrong"), GSTNCombatButtonTags::Button_Strong);
+	const FGameplayTag Crouch = LinkButton(TEXT("Link.Crouch"), GSTNCombatButtonTags::Button_Crouch);
 	const int32 Role = RoleSlotPriorityOffset;
 
 	TArray<FGSTN_InputSlotSpec> Slots;
-	Slots.Add(MakeSlot(Command_Link_Grab, { MakePress({ Interact }) }, 0));
-	Slots.Add(MakeSlot(Command_Link_Release, { MakePress({ Interact }) }, Role));
-	Slots.Add(MakeSlot(Command_Link_Pummel, { MakePress({ Attack }), MakeNeutralStick() }, Role));
+	Slots.Add(MakeSlot(Command_Link_Grab, { MakePress({ LinkButton(TEXT("Link.Grab"), GSTNCombatButtonTags::Button_Interact) }) }, 0));
+	Slots.Add(MakeSlot(Command_Link_Release, { MakePress({ LinkButton(TEXT("Link.Release"), GSTNCombatButtonTags::Button_Interact) }) }, Role));
+	Slots.Add(MakeSlot(Command_Link_Pummel, { MakePress({ LinkButton(TEXT("Link.Pummel"), GSTNCombatButtonTags::Button_Attack) }), MakeNeutralStick() }, Role));
 	Slots.Add(MakeSlot(Command_Link_Throw_Forward, { MakePress({ Attack, Strong }), MakeTilted(GSTN_DirectionMasks::FacingForward) }, Role));
 	Slots.Add(MakeSlot(Command_Link_Throw_Back, { MakePress({ Attack, Strong }), MakeTilted(GSTN_DirectionMasks::FacingBack) }, Role));
 	Slots.Add(MakeSlot(Command_Link_Throw_Up, { MakePress({ Strong }), MakeNeutralStick() }, Role));
 	// Crouch held outranks the plain press (the pummel), as the standard set ranks its crouch shapes above the standing ones
 	Slots.Add(MakeSlot(Command_Link_Throw_Down, { MakePress({ Attack }), MakeHold(Crouch) }, Role + 1));
-	Slots.Add(MakeSlot(Command_Link_Latch_Attack, { MakePress({ Attack }) }, Role));
+	Slots.Add(MakeSlot(Command_Link_Latch_Attack, { MakePress({ LinkButton(TEXT("Link.LatchAttack"), GSTNCombatButtonTags::Button_Attack) }) }, Role));
 	return Slots;
 }
 
@@ -157,8 +167,8 @@ FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildThrowSlot(const FGameplayTag& ThrowCom
 	const bool bBack = ThrowCommand == Command_Link_Throw_Back;
 	const bool bUp = ThrowCommand == Command_Link_Throw_Up;
 	const bool bDown = ThrowCommand == Command_Link_Throw_Down;
-	const FGameplayTag Special = GSTNCombatButtonTags::Button_Special.GetTag();
-	const FGameplayTag Crouch = GSTNCombatButtonTags::Button_Crouch.GetTag();
+	const FGameplayTag Special = LinkButton(TEXT("Link.ThrowSpecial"), GSTNCombatButtonTags::Button_Special);
+	const FGameplayTag Crouch = LinkButton(TEXT("Link.Crouch"), GSTNCombatButtonTags::Button_Crouch);
 	if (Mode == EGSTN_LinkThrowInputMode::Stick)
 	{
 		if (bForward || bBack)
@@ -167,7 +177,7 @@ FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildThrowSlot(const FGameplayTag& ThrowCom
 		}
 		if (bUp)
 		{
-			return MakeSlot(ThrowCommand, { MakePress({ GSTNCombatButtonTags::Button_Jump.GetTag() }) }, Role);
+			return MakeSlot(ThrowCommand, { MakePress({ LinkButton(TEXT("Link.ThrowJump"), GSTNCombatButtonTags::Button_Jump) }) }, Role);
 		}
 		if (bDown)
 		{
@@ -202,7 +212,8 @@ FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildThrowSlot(const FGameplayTag& ThrowCom
 FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildSpecialCrouchGrabSlot()
 {
 	return MakeSlot(GSTNLinkTags::Command_Link_Grab_Special,
-		{ MakePress({ GSTNCombatButtonTags::Button_Special.GetTag() }), MakeHold(GSTNCombatButtonTags::Button_Crouch.GetTag()) }, SpecialGrabPriorityOffset);
+		{ MakePress({ LinkButton(TEXT("Link.SpecialGrab"), GSTNCombatButtonTags::Button_Special) }),
+			MakeHold(LinkButton(TEXT("Link.Crouch"), GSTNCombatButtonTags::Button_Crouch)) }, SpecialGrabPriorityOffset);
 }
 
 bool UGSTN_LinkSlots::IsStickOnlyThrow(const FGameplayTag& ThrowCommand, EGSTN_LinkThrowInputMode Mode)

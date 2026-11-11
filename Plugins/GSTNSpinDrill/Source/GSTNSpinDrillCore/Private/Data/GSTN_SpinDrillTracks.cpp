@@ -8,6 +8,12 @@
 #include "Hits/GSTN_HitShape.h"
 #include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_CombatCommandTags.h"
+#include "Layout/GSTN_ButtonLayout.h"
+
+FGameplayTag FGSTN_BoreTrack::ResolveHoldButton() const
+{
+	return LayoutFunction.IsNone() ? HoldButton : UGSTN_ButtonLayout::GetButton(LayoutFunction, HoldButton);
+}
 
 const FGSTN_SpinTrack* FGSTN_SpinTrack::Find(const FGSTN_CombatTimelineData& Data)
 {
@@ -179,7 +185,9 @@ FGSTN_CombatTimelineData FGSTN_SpinTimelines::MakeBore(const FGSTN_BoreTimelineP
 	Bore.StartFrame = 0;
 	Bore.EndFrame = BoreFrame + 1;
 	Bore.BoreFrame = BoreFrame;
+	// IO-2: the drill's button (the dive holds the button that started it), read by the hook from the active layout
 	Bore.HoldButton = GSTNCombatButtonTags::Button_Crouch.GetTag();
+	Bore.LayoutFunction = TEXT("Spin.Drill");
 	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_BoreTrack>(Bore));
 
 	FGSTN_HitboxSpec Tip;
