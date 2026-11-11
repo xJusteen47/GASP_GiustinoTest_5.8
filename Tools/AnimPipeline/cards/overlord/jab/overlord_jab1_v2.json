@@ -1,0 +1,603 @@
+{
+ "move": "overlord_jab1_v2",
+ "class": "jab",
+ "anim": "/Game/AnimPipeline/Rig/Overlord/Jab/Jab1/AS_OverlordJab1V2_Build",
+ "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+ "fps": 60,
+ "timing_csv": "refs/ufd/OverlordJab1V2_timing.csv",
+ "anim_active": [
+  6,
+  8
+ ],
+ "faf_game": 23,
+ "effector": "hand_r",
+ "_design": "Overlord jab 1, rebuilt from zero (ANIM-JAB-1, 2026-11-11) from the owner's idea of 2026-11-08 and his reference video: a contemptuous backhand slap with the right hand (Ganondorf, Ocarina of Time), the left forearm folded flat on the belly. Startup f0-5: from the upright idle the trunk coils left and the right hand goes to the left shoulder, elbow aimed at the target (f4). The slap travels f4->f6 and lands on the first active frame (active f6-8); the arm then only drifts (no pop after a hitbox frame) and holds to f13. FAF f22, idle at f28. Feet planted. Separate asset from jab 2; the jab-2 cancel leaves from the f6-f13 hold.",
+ "_changes": "v2: new card, nothing reused from overlord_jab1 (FK deltas on a placeholder take, contact at f4).",
+ "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordJab1_V2",
+ "poses": [
+  {
+   "name": "idle",
+   "frame": 0,
+   "source": null,
+   "spacing": "arrive_1_2"
+  },
+  {
+   "name": "chamber",
+   "frame": 4,
+   "source": null,
+   "spacing": "charge_long"
+  },
+  {
+   "name": "contact",
+   "frame": 6,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "overshoot",
+   "frame": 8,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "hold_end",
+   "frame": 13,
+   "source": null,
+   "spacing": "limb_led_recovery"
+  },
+  {
+   "name": "faf",
+   "frame": 22,
+   "source": null,
+   "spacing": "limb_led_recovery"
+  },
+  {
+   "name": "idle_end",
+   "frame": 28,
+   "source": null
+  }
+ ],
+ "spacing": {
+  "startup": "arrive_1_2",
+  "active": "hold_recoil",
+  "recovery": "limb_led_recovery"
+ },
+ "part_delays": {
+  "chest": 0,
+  "head": 0,
+  "forearm": 0,
+  "hand": 0
+ },
+ "sheet_extra": {
+  "hold_window": [
+   6,
+   13
+  ],
+  "strike_limb": "arm_r",
+  "strike_side": "arm_r"
+ },
+ "planted": [
+  "foot_l_ik_ctrl",
+  "foot_r_ik_ctrl"
+ ],
+ "exemptions": [],
+ "author": {
+  "take": "AS_Pilot_OverlordJab1_V2",
+  "frames": 29,
+  "thumb": "along",
+  "poses": {
+   "0": {
+    "leg_l": {
+     "foot": [
+      17.9,
+      15.0,
+      -81.2
+     ],
+     "pole": [
+      6.0,
+      59.6,
+      -39.0
+     ],
+     "foot_rot": [
+      0.4,
+      1.2,
+      -7.7
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -16.6,
+      -17.9,
+      -81.2
+     ],
+     "pole": [
+      -44.2,
+      29.3,
+      -40.4
+     ],
+     "foot_rot": [
+      1.8,
+      2.4,
+      7.5
+     ]
+    }
+   },
+   "4": {
+    "pelvis": {
+     "loc": [
+      1.0,
+      -3.0,
+      -3.0
+     ],
+     "rot": [
+      0,
+      0,
+      -20
+     ]
+    },
+    "spine": [
+     3,
+     0,
+     -44
+    ],
+    "head": [
+     -4,
+     0,
+     48
+    ],
+    "arm_r": {
+     "hand": [
+      12,
+      17,
+      5
+     ],
+     "pole": [
+      -30,
+      35,
+      2
+     ],
+     "hand_rot": [
+      -38.3,
+      81.3,
+      -4.0
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      7,
+      15,
+      -21
+     ],
+     "pole": [
+      45,
+      -5,
+      -25
+     ]
+    },
+    "fingers": [
+     0.7,
+     0,
+     0
+    ],
+    "leg_l": {
+     "foot": [
+      9.7,
+      22.7,
+      -78.2
+     ],
+     "pole": [
+      -16.8,
+      60.5,
+      -36.0
+     ],
+     "foot_rot": [
+      2.1,
+      1.3,
+      -7.6
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -11.5,
+      -20.0,
+      -78.2
+     ],
+     "pole": [
+      -53.6,
+      14.9,
+      -37.4
+     ],
+     "foot_rot": [
+      7.7,
+      7.0,
+      5.1
+     ]
+    }
+   },
+   "6": {
+    "pelvis": {
+     "loc": [
+      0,
+      5.0,
+      -2.0
+     ],
+     "rot": [
+      0,
+      0,
+      -15
+     ]
+    },
+    "spine": [
+     2,
+     0,
+     -34
+    ],
+    "head": [
+     3,
+     0,
+     42
+    ],
+    "arm_r": {
+     "hand": [
+      -57.7,
+      11.9,
+      6.2
+     ],
+     "pole": [
+      -40,
+      -10,
+      -30
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      9,
+      14.5,
+      -20
+     ],
+     "pole": [
+      45,
+      -5,
+      -25
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ],
+    "leg_l": {
+     "foot": [
+      14.7,
+      14.3,
+      -79.2
+     ],
+     "pole": [
+      -8.4,
+      54.3,
+      -37.0
+     ],
+     "foot_rot": [
+      9.6,
+      1.5,
+      -6.7
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -10.1,
+      -26.4,
+      -79.2
+     ],
+     "pole": [
+      -49.0,
+      12.0,
+      -38.4
+     ],
+     "foot_rot": [
+      7.3,
+      2.8,
+      3.3
+     ]
+    }
+   },
+   "8": {
+    "pelvis": {
+     "loc": [
+      0,
+      6.0,
+      -2.0
+     ],
+     "rot": [
+      0,
+      0,
+      -13
+     ]
+    },
+    "spine": [
+     3,
+     0,
+     -31
+    ],
+    "head": [
+     3,
+     0,
+     38
+    ],
+    "arm_r": {
+     "hand": [
+      -60,
+      8.5,
+      5.3
+     ],
+     "pole": [
+      -42,
+      -12,
+      -30
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      8,
+      15,
+      -20.5
+     ],
+     "pole": [
+      45,
+      -5,
+      -25
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ],
+    "leg_l": {
+     "foot": [
+      15.4,
+      12.8,
+      -79.2
+     ],
+     "pole": [
+      -6.3,
+      53.6,
+      -37.0
+     ],
+     "foot_rot": [
+      10.9,
+      1.5,
+      -6.7
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -10.8,
+      -27.0,
+      -79.2
+     ],
+     "pole": [
+      -48.4,
+      12.8,
+      -38.4
+     ],
+     "foot_rot": [
+      7.2,
+      2.1,
+      3.1
+     ]
+    }
+   },
+   "13": {
+    "pelvis": {
+     "loc": [
+      0,
+      5.0,
+      -1.5
+     ],
+     "rot": [
+      0,
+      0,
+      -12
+     ]
+    },
+    "spine": [
+     2,
+     0,
+     -30
+    ],
+    "head": [
+     2,
+     0,
+     36
+    ],
+    "arm_r": {
+     "hand": [
+      -58,
+      9,
+      2
+     ],
+     "pole": [
+      -40,
+      -14,
+      -32
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      7,
+      15,
+      -21
+     ],
+     "pole": [
+      45,
+      -5,
+      -25
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ],
+    "leg_l": {
+     "foot": [
+      15.4,
+      13.5,
+      -79.7
+     ],
+     "pole": [
+      -5.5,
+      54.6,
+      -37.5
+     ],
+     "foot_rot": [
+      8.9,
+      1.4,
+      -6.8
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -11.5,
+      -25.9,
+      -79.7
+     ],
+     "pole": [
+      -48.3,
+      14.6,
+      -38.9
+     ],
+     "foot_rot": [
+      6.0,
+      1.8,
+      4.1
+     ]
+    }
+   },
+   "22": {
+    "pelvis": {
+     "loc": [
+      0,
+      1.5,
+      -1.0
+     ],
+     "rot": [
+      0,
+      0,
+      -5
+     ]
+    },
+    "spine": [
+     0,
+     0,
+     -10
+    ],
+    "head": [
+     0,
+     0,
+     12
+    ],
+    "arm_r": {
+     "hand": [
+      -38,
+      6,
+      -24
+     ],
+     "pole": [
+      -35,
+      -25,
+      -25
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      22,
+      18,
+      -30
+     ],
+     "pole": [
+      45,
+      -5,
+      -30
+     ]
+    },
+    "fingers": [
+     0.3,
+     0,
+     0
+    ],
+    "leg_l": {
+     "foot": [
+      16.6,
+      15.1,
+      -80.2
+     ],
+     "pole": [
+      0.9,
+      58.4,
+      -38.0
+     ],
+     "foot_rot": [
+      4.7,
+      1.4,
+      -7.2
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -14.9,
+      -20.8,
+      -80.2
+     ],
+     "pole": [
+      -46.5,
+      23.9,
+      -39.4
+     ],
+     "foot_rot": [
+      4.7,
+      3.6,
+      5.9
+     ]
+    }
+   },
+   "28": {
+    "leg_l": {
+     "foot": [
+      17.9,
+      15.0,
+      -81.2
+     ],
+     "pole": [
+      6.0,
+      59.6,
+      -39.0
+     ],
+     "foot_rot": [
+      0.4,
+      1.2,
+      -7.7
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -16.6,
+      -17.9,
+      -81.2
+     ],
+     "pole": [
+      -44.2,
+      29.3,
+      -40.4
+     ],
+     "foot_rot": [
+      1.8,
+      2.4,
+      7.5
+     ]
+    }
+   }
+  }
+ }
+}
