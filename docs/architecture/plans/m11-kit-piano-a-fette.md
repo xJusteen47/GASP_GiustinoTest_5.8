@@ -1,4 +1,4 @@
-# M11 "Kit in gioco": piano a fette (2026-11-11, da approvare)
+# M11 "Kit in gioco": piano a fette (2026-11-11, approvato dall'owner 07:30Z)
 
 Piano, niente codice. Base: card [m11-kit.md](m11-kit.md) (gate G0-G8), spec [combat-loadout-mods.md](../combat-loadout-mods.md),
 handover M10 [m10-slice7.md](../../notes/handovers/m10-slice7.md) (tip `f9d5e0a3`). Aggiunge le idee dell'owner del 10/11 (prese stile
@@ -62,7 +62,10 @@ harness, più attese di merge. Coda M10 prima del playtest: fetta 8, G9, G7 rima
 **M11 intero: no.** Restano 10 fette (~2-3 giorni con 2 thread): realistico la settimana dopo, ed è meglio farle dopo il playtest perché
 mod, zaini e armi di supporto dipendono da cosa piace in mano.
 
-## 4. Decisioni dell'owner (opzione consigliata in grassetto)
+## 4. Decisioni dell'owner: APPROVATE tutte e 7 come consigliate (2026-11-11 07:30Z)
+
+L'owner aggiunge: il kit si cambia col tasto di interazione, cioè grab (B) tenuto premuto (coerente con la 6).
+
 
 1. Divisione essenziale/dopo: **come §1-§2** (alternativa: armi di supporto L3 dentro l'essenziale, +1 fetta, ci sta ancora venerdì).
 2. Ingresso dei lanci del kit: **presa con speciale + accovacciato oppure tap interagisci (entrambi), poi lo stick da solo sceglie il

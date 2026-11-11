@@ -17,7 +17,9 @@ Branch `claude/laptop-m11-plan` da `claude/desktop-m10-7` (`f9d5e0a3`). Nessun c
 **Stime**: essenziale $19-30 (4 fette), dopo playtest $52-87 (10 fette), M11 totale $71-117. Essenziale pronto probabile giovedì
 12 sera, sicuro venerdì 13, se G9 non sfora e le decisioni arrivano entro mercoledì sera. M11 intero: no entro venerdì.
 
-**Prossimo**: owner risponde alle 7 decisioni (§4 del piano); poi K1 in un thread nuovo sul portatile (Opus medium) appena la
+**Decisioni**: owner ha approvato tutte e 7 (2026-11-11 07:30Z); cambio kit = interazione = grab (B) tenuto.
+
+**Prossimo**: K1 in un thread nuovo sul portatile (Opus medium) appena la
 fetta 8 di M10 è su feature. Brief di K1 = §1 riga K1 del piano + `th-1b-kit-pickup.md`.
 
 **Conflitti**: K2 tocca GSTNLink/GSTNHeld come M10 G9 (mai insieme); L1, L4, L5 toccano il loadout di GSTNCombat.
