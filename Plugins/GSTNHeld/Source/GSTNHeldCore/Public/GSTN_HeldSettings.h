@@ -96,6 +96,13 @@ public:
 	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Size", meta = (ClampMin = "0.0", ForceUnits = "kg"))
 	float DefaultCarryCapacityKg = 50.f;
 
+	/**
+	 * The throw's wind-up of every object that does not override it (slice 10): frames from the button's release to the object leaving the hand
+	 * and the placeholder montage. ReleaseFrames 0 = instant, the throw before slice 10. TEST VALUES; gstn.Held.Windup changes it in PIE
+	 */
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Throw")
+	FGSTN_HeldThrowWindup DefaultThrowWindup;
+
 	/** Thrown enemies (M10 G9): which grabbed enemies are lifted and thrown with the held throw, and the thrown body's hitbox. TEST VALUES */
 	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Enemies")
 	FGSTN_EnemyThrowTuning ThrownEnemies;

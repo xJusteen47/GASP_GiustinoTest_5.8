@@ -3,6 +3,10 @@
 #include "GSTN_HeldAbilities.h"
 #include "Hits/GSTN_CombatHitTags.h"
 
+#include "AbilitySystemComponent.h"
+#include "Abilities/NpAbilitySystemComponent.h"
+#include "Animation/AnimMontage.h"
+
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "GSTN_HeldSettings.h"
@@ -64,6 +68,8 @@ UGSTN_GA_HeldThrow::UGSTN_GA_HeldThrow(const FObjectInitializer& ObjectInitializ
 	LaunchPitchDeg = 15.f;
 	PressClock.Value = INDEX_NONE;
 	ReleaseAim.Value = static_cast<uint8>(EGSTN_HeldThrowAim::Stick);
+	WindupClock.Value = INDEX_NONE;
+	WindupFrames.Value = 0;
 }
 
 void UGSTN_GA_HeldThrow::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
@@ -71,15 +77,29 @@ void UGSTN_GA_HeldThrow::ActivateAbility(const FGameplayAbilitySpecHandle Handle
 {
 	PressClock.Value = INDEX_NONE;
 	ReleaseAim.Value = static_cast<uint8>(EGSTN_HeldThrowAim::Stick);
-	// The parent captures the context, then asks DeferFire: with a button it fires nothing now and the release fires from the tick below
+	WindupClock.Value = INDEX_NONE;
+	WindupFrames.Value = 0;
+	// The parent captures the context, then asks DeferFire (always true here): nothing fires in the parent, the throw fires from BeginWindup
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
-	if (IsActive() && DeferFire())
+	if (!IsActive())
+	{
+		return;
+	}
+	if (HasButton())
 	{
 		PressClock.Value = FMath::Max(GetCombatClock(), 0);
+		return;
 	}
+	// No button (an event, the harness): no aiming, the wind-up starts now (instant = the shot in the activation frame, as before)
+	BeginWindup();
 }
 
 bool UGSTN_GA_HeldThrow::DeferFire() const
+{
+	return true;
+}
+
+bool UGSTN_GA_HeldThrow::HasButton() const
 {
 	return GetActivationContext().Button != INDEX_NONE;
 }
@@ -87,7 +107,16 @@ bool UGSTN_GA_HeldThrow::DeferFire() const
 void UGSTN_GA_HeldThrow::OnSimulationTick(const FAbilitySystemTimeStep& TimeStep)
 {
 	Super::OnSimulationTick(TimeStep);
-	if (!IsActive() || PressClock.Value == INDEX_NONE)
+	if (!IsActive())
+	{
+		return;
+	}
+	if (WindupClock.Value != INDEX_NONE)
+	{
+		TickWindup();
+		return;
+	}
+	if (PressClock.Value == INDEX_NONE)
 	{
 		return;
 	}
@@ -102,15 +131,111 @@ void UGSTN_GA_HeldThrow::OnSimulationTick(const FAbilitySystemTimeStep& TimeStep
 	}
 	ReleaseAim.Value = static_cast<uint8>(FGSTN_HeldRules::ChooseThrowAim(HeldFrames, Combat && Combat->IsPrecisionAimFrame(), Input));
 	PressClock.Value = INDEX_NONE;
+	BeginWindup();
+}
+
+const FGSTN_HeldThrowWindup* UGSTN_GA_HeldThrow::FindWindup() const
+{
+	AActor* Avatar = GetAvatarActorFromActorInfo();
+	const UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(GetWorld());
+	const UGSTN_HeldObjectComponent* Object = Held ? Held->FindHeldBy(Avatar) : nullptr;
+	const UGSTN_HeldSettings& Settings = UGSTN_HeldSettings::Get();
+	float LoadRatio = 0.f;
+	const bool bEnemy = !Object && UGSTN_HeldSubsystem::FindLiftedEnemy(Avatar, &LoadRatio, nullptr);
+	return FGSTN_HeldRules::ResolveWindup(Object ? &Object->GetTuning() : nullptr, bEnemy ? &Settings.ThrownEnemies : nullptr, Settings.DefaultThrowWindup);
+}
+
+void UGSTN_GA_HeldThrow::BeginWindup()
+{
+	const FGSTN_HeldThrowWindup* Windup = FindWindup();
+	if (!Windup || Windup->IsInstant())
+	{
+		ShowAimReticle(false);
+		Fire();
+		FinishFire();
+		return;
+	}
+	WindupClock.Value = FMath::Max(GetCombatClock(), 0);
+	WindupFrames.Value = Windup->ReleaseFrames;
+	// A camera aim keeps its reticle (and the shoulder view) until the object leaves: the camera of the release frame aims it
+	ShowAimReticle(HasButton() && static_cast<EGSTN_HeldThrowAim>(ReleaseAim.Value) != EGSTN_HeldThrowAim::Stick);
+	// Presentation: the placeholder montage is loaded at its first wind-up
+	WindupMontage = Windup->Montage.IsNull() ? nullptr : Windup->Montage.LoadSynchronous();
+	if (UNpAbilitySystemComponent* AbilitySystem = WindupMontage ? GetNpAbilitySystemComponent() : nullptr)
+	{
+		AbilitySystem->PlaySyncedMontage(WindupMontage, 0.f, Windup->MontagePlayRate, NAME_None, Windup->MontageRootMotionScale);
+	}
+	LogWindup(TEXT("start"));
+}
+
+void UGSTN_GA_HeldThrow::TickWindup()
+{
+	if (IsWindupInterrupted())
+	{
+		LogWindup(TEXT("stop"));
+		StopWindupMontage();
+		WindupClock.Value = INDEX_NONE;
+		ShowAimReticle(false);
+		EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), true, true);
+		return;
+	}
+	if (!FGSTN_HeldRules::IsWindupReleased(WindupClock.Value, GetCombatClock(), WindupFrames.Value))
+	{
+		return;
+	}
+	LogWindup(TEXT("release"));
+	// The montage plays on into its follow-through: only a stopped wind-up cuts it
+	WindupClock.Value = INDEX_NONE;
 	ShowAimReticle(false);
 	Fire();
 	FinishFire();
 }
 
+bool UGSTN_GA_HeldThrow::IsWindupInterrupted() const
+{
+	const UAbilitySystemComponent* AbilitySystem = GetAbilitySystemComponentFromActorInfo();
+	if (!AbilitySystem)
+	{
+		return false;
+	}
+	const UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(GetWorld());
+	const UGSTN_HeldObjectComponent* Object = Held ? Held->FindHeldBy(GetAvatarActorFromActorInfo()) : nullptr;
+	const FGSTN_HeldBreakRules& Rules = Object ? Object->GetBreakRules() : UGSTN_HeldSettings::Get().DefaultBreakRules;
+	FGameplayTagContainer Owned;
+	AbilitySystem->GetOwnedGameplayTags(Owned);
+	return FGSTN_HeldRules::BreaksOnState(Owned, Rules);
+}
+
+void UGSTN_GA_HeldThrow::StopWindupMontage()
+{
+	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	float Time = 0.f;
+	if (WindupMontage && AbilitySystem && AbilitySystem->GetPlayingSyncedMontage(Time) == WindupMontage)
+	{
+		AbilitySystem->StopSyncedMontage(WindupMontage, true);
+	}
+}
+
+void UGSTN_GA_HeldThrow::LogWindup(const TCHAR* Phase) const
+{
+	const UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(GetWorld());
+	if (Held && Held->HasAuthority())
+	{
+		UE_LOG(LogGSTNHeld, Log, TEXT("HeldWindup phase=%s thrower=%s start=%d clock=%d frames=%d montage=%s"), Phase,
+			*GetNameSafe(GetAvatarActorFromActorInfo()), WindupClock.Value, GetCombatClock(), WindupFrames.Value, *GetNameSafe(WindupMontage));
+	}
+}
+
 void UGSTN_GA_HeldThrow::EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
 {
-	// Cancelled while aiming (a hit, a forced move): no throw, and the reticle goes away; a hit also breaks the hold on the host
+	// Cancelled while aiming or winding up (a hit, a forced move): no throw, the reticle goes away, a wind-up montage stops; a hit also breaks
+	// the hold on the host
+	if (WindupClock.Value != INDEX_NONE)
+	{
+		StopWindupMontage();
+		WindupClock.Value = INDEX_NONE;
+	}
 	PressClock.Value = INDEX_NONE;
 	ShowAimReticle(false);
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
@@ -118,7 +243,7 @@ void UGSTN_GA_HeldThrow::EndAbility(const FGameplayAbilitySpecHandle Handle, con
 
 EGSTN_ProjectileAim UGSTN_GA_HeldThrow::GetShotAim() const
 {
-	if (Aim == EGSTN_ProjectileAim::EventTarget || !DeferFire())
+	if (Aim == EGSTN_ProjectileAim::EventTarget || !HasButton())
 	{
 		return Aim;
 	}
@@ -128,7 +253,7 @@ EGSTN_ProjectileAim UGSTN_GA_HeldThrow::GetShotAim() const
 float UGSTN_GA_HeldThrow::GetShotLaunchPitchDeg() const
 {
 	// Shoulder: the converged aim already points at the crosshair, so only the setting's elevation is added (config, the same on every machine)
-	if (DeferFire() && static_cast<EGSTN_HeldThrowAim>(ReleaseAim.Value) == EGSTN_HeldThrowAim::Shoulder)
+	if (HasButton() && static_cast<EGSTN_HeldThrowAim>(ReleaseAim.Value) == EGSTN_HeldThrowAim::Shoulder)
 	{
 		return UGSTN_HeldSettings::Get().ThrowInput.ShoulderAimPitchDeg;
 	}

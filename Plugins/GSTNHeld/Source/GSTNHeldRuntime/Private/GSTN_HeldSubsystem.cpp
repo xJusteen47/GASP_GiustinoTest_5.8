@@ -815,8 +815,20 @@ namespace GSTNHeldConsole
 		return Cast<TAbility>(Spec->GetPrimaryInstance());
 	}
 
-	void Spawn(const TArray<FString>& Args, UWorld* InWorld)
+	void Spawn(const TArray<FString>& InArgs, UWorld* InWorld)
 	{
+		// Slice 10: a "Windup=N" anywhere gives the object its own wind-up of N frames (host-only definition, as the size)
+		TArray<FString> Args;
+		int32 WindupFrames = INDEX_NONE;
+		for (const FString& Arg : InArgs)
+		{
+			if (Arg.StartsWith(TEXT("Windup="), ESearchCase::IgnoreCase))
+			{
+				WindupFrames = FMath::Max(FCString::Atoi(*Arg.Mid(7)), 0);
+				continue;
+			}
+			Args.Add(Arg);
+		}
 		UWorld* World = FindAuthorityWorld(InWorld);
 		TArray<APawn*> Pawns;
 		CombatPawns(World, Pawns);
@@ -847,6 +859,18 @@ namespace GSTNHeldConsole
 				Definition->Tuning.ImpactBehaviour = Value == INDEX_NONE ? EGSTN_HeldImpactBehaviour::Land : static_cast<EGSTN_HeldImpactBehaviour>(Value);
 			}
 			Actor->GetHeldObject()->Definition = Definition;
+		}
+		if (Actor && Actor->GetHeldObject() && WindupFrames != INDEX_NONE)
+		{
+			UGSTN_HeldObjectDefinition* Definition = Actor->GetHeldObject()->Definition;
+			if (!Definition)
+			{
+				Definition = NewObject<UGSTN_HeldObjectDefinition>(Actor);
+				Actor->GetHeldObject()->Definition = Definition;
+			}
+			Definition->Tuning.bOverrideWindup = true;
+			Definition->Tuning.Windup = UGSTN_HeldSettings::Get().DefaultThrowWindup;
+			Definition->Tuning.Windup.ReleaseFrames = WindupFrames;
 		}
 		if (Actor && Actor->GetHeldObject())
 		{
@@ -1018,6 +1042,24 @@ namespace GSTNHeldConsole
 		}
 	}
 
+	void Windup(const TArray<FString>& Args, UWorld* InWorld)
+	{
+		// Dev, one process (PIE): the settings object is shared by every world of the process, so host and clients read the same value. Never
+		// across processes: two machines with different wind-ups would desync the throw
+		UGSTN_HeldSettings* Settings = GetMutableDefault<UGSTN_HeldSettings>();
+		if (Args.IsValidIndex(0))
+		{
+			Settings->DefaultThrowWindup.ReleaseFrames = FMath::Max(FCString::Atoi(*Args[0]), 0);
+			Settings->ThrownEnemies.Windup.ReleaseFrames = Args.IsValidIndex(1) ? FMath::Max(FCString::Atoi(*Args[1]), 0) : Settings->DefaultThrowWindup.ReleaseFrames;
+			if (Settings->ThrownEnemies.Windup.Montage.IsNull())
+			{
+				Settings->ThrownEnemies.Windup.Montage = Settings->DefaultThrowWindup.Montage;
+			}
+		}
+		UE_LOG(LogGSTNHeld, Log, TEXT("HeldWindupSettings objects=%d enemies=%d montage=%s"), Settings->DefaultThrowWindup.ReleaseFrames,
+			Settings->ThrownEnemies.Windup.ReleaseFrames, *Settings->DefaultThrowWindup.Montage.ToString());
+	}
+
 	void Report(const TArray<FString>& Args, UWorld* InWorld)
 	{
 		if (const UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(InWorld))
@@ -1054,6 +1096,10 @@ namespace GSTNHeldConsole
 		TEXT("gstn.Held.GhostReport"),
 		TEXT("Logs what became of this world's object ghosts: HeldGhostReport predicted handed snapped expired lastErrorCm maxHandedErrorCm"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&GhostReport));
+	FAutoConsoleCommandWithWorldAndArgs GHeldWindupCommand(
+		TEXT("gstn.Held.Windup"),
+		TEXT("PIE only (one process): the throw's wind-up of every object without its own, in frames (0 = instant), and of thrown enemies (default: the same). No args: logs them. Args: [ObjectFrames] [EnemyFrames]"),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Windup));
 }
 
 AActor* UGSTN_HeldSubsystem::FindLiftedEnemy(const AActor* Holder, const FGSTN_LinkState& Body, float* OutLoadRatio, FString* OutWhyNot)

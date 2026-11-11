@@ -13,7 +13,7 @@ import unreal
 import gasnpp_test as g
 import defence_scenarios as ds
 
-SUITE_HELD = ['held_pickup_throw_hit', 'held_drop_and_break', 'held_carry_load', 'held_throw_break', 'held_throw_explode', 'held_throw_ghost', 'held_throw_enemy']
+SUITE_HELD = ['held_pickup_throw_hit', 'held_drop_and_break', 'held_carry_load', 'held_throw_break', 'held_throw_explode', 'held_throw_ghost', 'held_throw_enemy', 'held_throw_windup']
 _marks = {}
 
 _HAND = re.compile(r'HeldHandReport world=(\S+) entity=(\d+) carrying=(\d) target=(\d)')
@@ -445,6 +445,85 @@ def scenario_held_throw_enemy(pairing='client_grabs_client'):
               (t + 1.6, run.at('B flew more than 1 m from where it was held', flew)),
               (t + 1.6, run.at('B took no damage from its own shot', lambda: (abs(g.damage_of(0, rig.bkey) - st['dmg']) < 0.5, f"{st['dmg']} -> {g.damage_of(0, rig.bkey)}")))]
     steps += rig.end(t + 1.8)
+    run.run(steps)
+
+
+_WINDUP = re.compile(r'HeldWindup phase=(\w+) thrower=(\S+) start=(-?\d+) clock=(-?\d+) frames=(\d+) montage=(\S+)')
+_ROWS = re.compile(r'HeldObjectReport world=(\S+) name=(\S+) state=(\d) holderEntity=(-?\d+)')
+
+
+def scenario_held_throw_windup(client=1):
+    """Slice 10, the throw's wind-up. A: pawn 0 picks up an object with its own wind-up of 60 frames and throws it at pawn 2: 15 frames in,
+    the object is still Held by pawn 0 in every world; the host logs the start (with the placeholder montage) and the release exactly 60
+    combat frames later, then the object flies. B: pawn 0 picks up an object again (a new one with 120 frames, or the first one: the interact
+    focus picks) and starts throwing it at pawn 2; a test projectile from pawn 2 hits pawn 0 during the wind-up: the wind-up stops (no
+    release), pawn 0 drops its object (HolderState). Pawn 2 is the partner because on DefaultLevel_Harness it stands between pawns 0 and 1"""
+    run = g._Run('held_throw_windup', client, judge_reconciles=False, sample=False)
+    st = {}
+
+    def windups():
+        return _WINDUP.findall(_log())
+
+    def holder0():
+        m = re.findall(r'HeldPickup entity (\d+) holds object (\d+)', _log())
+        return min(int(e) for e, _ in m) if m else None
+
+    def rows_of(entity):
+        out = []
+        for wi in range(len(g.worlds())):
+            before = len(_ROWS.findall(_log()))
+            _cmd('gstn.Held.Report', wi)
+            out.append([r for r in _ROWS.findall(_log())[before:] if int(r[3]) == entity])
+        return out
+
+    def capture(name):
+        st[name] = rows_of(holder0())
+        return f'{name} {st[name]}'
+
+    def held_in_windup():
+        rows = st.get('mid', [])
+        ok = bool(rows) and all(len(w) == 1 and w[0][2] == '1' for w in rows)
+        return ok, f'holder {holder0()} rows {rows} windups {windups()}'
+
+    def released_on_time():
+        w = windups()
+        start = [r for r in w if r[0] == 'start']
+        rel = [r for r in w if r[0] == 'release']
+        st['thrower'] = start[0][1] if start else None
+        ok = (len(start) == 1 and len(rel) == 1 and start[0][4] == '60' and start[0][5] != 'None'
+              and int(rel[0][3]) - int(rel[0][2]) == 60 and not any(r[2] == '1' for r in (st.get('after') or [[]])[0]))
+        return ok, f'windups {w} rows after {st.get("after")}'
+
+    def stopped_by_hit():
+        w = [r for r in windups() if r[1] == st.get('thrower')]
+        starts = [r for r in w if r[0] == 'start']
+        stops = [r for r in w if r[0] == 'stop']
+        rels = [r for r in w if r[0] == 'release']
+        e0 = holder0()
+        breaks = re.findall(r'HeldBreak object=(\d+) entity=(-?\d+) reason=(\w+)', _log())
+        hits = re.findall(r'Projectile (\d+) hit (\d+) at frame (\d+)', _log())
+        flying = [r for wr in st.get('late', []) for r in wr if r[2] == '2']
+        ok = (len(starts) == 2 and starts[1][4] in ('60', '120') and len(stops) == 1 and len(rels) == 1
+              and any(int(b[1]) == e0 and b[2] == 'HolderState' for b in breaks) and not flying)
+        return ok, f'pawn0 {e0} windups {w} breaks {breaks} hits {hits} rows {st.get("late")}'
+
+    steps = [
+        (0.0, lambda: ('setup', _setup())),
+        (0.5, lambda: ('spawn', _cmd('gstn.Held.Spawn 0 120 Windup=60'))),
+        (1.6, lambda: ('pickup', _cmd('gstn.Held.Pickup 0'))),
+        (2.8, lambda: ('throw', _cmd('gstn.Held.Throw 0 2'))),
+        (3.05, lambda: ('mid', capture('mid'))),
+        (3.1, run.at('15 frames into a 60-frame wind-up the object is still in the hand of pawn 0 in every world', held_in_windup)),
+        (4.2, lambda: ('after', capture('after'))),
+        (4.3, run.at('the host started the wind-up with its montage and released the object exactly 60 frames later; then it left the hand on the host (clients follow by replication)', released_on_time)),
+        (4.6, lambda: ('spawn2', _cmd('gstn.Held.Spawn 0 120 Windup=120'))),
+        (5.6, lambda: ('pickup2', _cmd('gstn.Held.Pickup 0'))),
+        (6.8, lambda: ('windup2', _cmd('gstn.Held.Throw 0 2'))),
+        (7.0, lambda: ('hit pawn 0', _cmd('gstn.Projectile.Ability 2 0'))),
+        (9.6, lambda: ('late', capture('late'))),
+        (9.7, run.at('hit during the wind-up: it stopped (no release), pawn 0 dropped its object (HolderState), nothing of pawn 0 flew', stopped_by_hit)),
+        (9.8, run.finish()),
+    ]
     run.run(steps)
 
 

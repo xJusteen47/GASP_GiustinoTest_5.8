@@ -236,3 +236,13 @@ FGSTN_EnemyThrowTuning::FGSTN_EnemyThrowTuning()
 	Throw.Hit.AngleDeg = 35.f;
 	Throw.MaxHits = 3;
 }
+
+const FGSTN_HeldThrowWindup* FGSTN_HeldRules::ResolveWindup(const FGSTN_HeldObjectTuning* Object, const FGSTN_EnemyThrowTuning* Enemy,
+	const FGSTN_HeldThrowWindup& ProjectDefault)
+{
+	if (Object)
+	{
+		return Object->bOverrideWindup ? &Object->Windup : &ProjectDefault;
+	}
+	return Enemy ? &Enemy->Windup : nullptr;
+}

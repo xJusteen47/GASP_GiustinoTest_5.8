@@ -2480,6 +2480,17 @@ void UNpAbilitySystemComponent::TickAbilities(const FAbilitySystemTimeStep& Time
 				NpAbility->SimulationTick(TimeStep);
 			}
 		}
+		// GSTN (M10 slice 10): ServerOnly instances are not replicated, so they live in NonReplicatedInstances and never ticked: an ability that
+		// waits (a delayed or wound-up shot of a dev command, AI or trap) never got its later frames. The server never re-simulates, so ticking
+		// them here runs each frame once. LocalOnly instances stay untouched (a client would tick them again in every re-simulation)
+		for (UGameplayAbility* Ability : Spec.NonReplicatedInstances)
+		{
+			UNpGameplayAbility* NpAbility = Cast<UNpGameplayAbility>(Ability);
+			if (NpAbility && NpAbility->IsActive() && NpAbility->GetNetExecutionPolicy() == EGameplayAbilityNetExecutionPolicy::ServerOnly)
+			{
+				NpAbility->SimulationTick(TimeStep);
+			}
+		}
 	}
 }
 

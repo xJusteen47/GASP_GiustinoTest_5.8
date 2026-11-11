@@ -210,6 +210,36 @@ struct GSTNHELDCORE_API FGSTN_HeldSizeClass
 };
 
 /**
+ * The throw's wind-up (owner's request 2026-11-11): the combat frames between the throw's start (the button's release, or the activation without
+ * a button) and the frame the object leaves the hand, with a montage played from the start. ReleaseFrames 0 = it leaves at once with no montage,
+ * the throw as it was before slice 10. The frame count decides the release, the montage is only its picture: place the montage's release moment
+ * at ReleaseFrames (seconds into the montage = ReleaseFrames / 62.5 x MontagePlayRate). The combat clock stands still in hitstop, so does the
+ * wind-up. TEST VALUES
+ */
+USTRUCT(BlueprintType)
+struct GSTNHELDCORE_API FGSTN_HeldThrowWindup
+{
+	GENERATED_BODY()
+
+	/** Combat frames from the throw's start to the object leaving the hand; 0 = instant */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Windup", meta = (ClampMin = "0", ClampMax = "600", ForceUnits = "frames"))
+	int32 ReleaseFrames = 0;
+
+	/** Played on the predicted montage slot from the throw's start (placeholder until the owner's throw animation); none = no animation */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Windup", meta = (EditCondition = "ReleaseFrames > 0"))
+	TSoftObjectPtr<class UAnimMontage> Montage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Windup", meta = (ClampMin = "0.05", ClampMax = "10.0", EditCondition = "ReleaseFrames > 0"))
+	float MontagePlayRate = 1.f;
+
+	/** The montage's root motion on the thrower; 0 = the wind-up never moves the thrower */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Windup", meta = (ClampMin = "0.0", ClampMax = "1.0", EditCondition = "ReleaseFrames > 0"))
+	float MontageRootMotionScale = 0.f;
+
+	bool IsInstant() const { return ReleaseFrames <= 0; }
+};
+
+/**
  * What one object is worth to a holder and a thrower (M10 slice 1 subset of the plan's UGSTN_ObjectDefinition: no size class, weight,
  * drop-on-hit rule or impact behaviour yet). Every default is a TEST VALUE until the owner sets real kits (handover m10-slice1).
  */
@@ -249,6 +279,13 @@ struct GSTNHELDCORE_API FGSTN_HeldObjectTuning
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Throw")
 	FGSTN_ProjectileParams Throw;
+
+	/** Use Windup instead of the project's (UGSTN_HeldSettings::DefaultThrowWindup): a heavy object with a longer heave, say */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Windup")
+	bool bOverrideWindup = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Windup", meta = (EditCondition = "bOverrideWindup"))
+	FGSTN_HeldThrowWindup Windup;
 
 	/** What the object does when its flight ends (M10 G7). TEST VALUE: Land */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Impact")
@@ -344,9 +381,21 @@ struct FGSTN_PickupAssignment
 	bool operator==(const FGSTN_PickupAssignment& Other) const { return HolderId == Other.HolderId && ObjectId == Other.ObjectId; }
 };
 
+struct FGSTN_EnemyThrowTuning;
+
 /** Stateless rules of held objects */
 struct GSTNHELDCORE_API FGSTN_HeldRules
 {
+	/**
+	 * The wind-up of a throw (slice 10): a held object's own when it overrides, else ProjectDefault; a lifted enemy's (Enemy, no object) from the
+	 * thrown-enemy tuning; null when there is nothing to throw (the throw then fires at once and finds nothing, as before)
+	 */
+	static const FGSTN_HeldThrowWindup* ResolveWindup(const FGSTN_HeldObjectTuning* Object, const FGSTN_EnemyThrowTuning* Enemy,
+		const FGSTN_HeldThrowWindup& ProjectDefault);
+
+	/** Whether the object leaves the hand at Clock, for a wind-up of ReleaseFrames started at StartClock (combat clocks) */
+	static bool IsWindupReleased(int32 StartClock, int32 Clock, int32 ReleaseFrames) { return Clock - StartClock >= ReleaseFrames; }
+
 	/**
 	 * The pickup race (plan default M10.5): requests are served by earliest frame, then lower holder id; each takes its target (TargetObjectId)
 	 * when it names one, else the nearest available object within that object's radius (equal distance: lower object id); a taken object is
@@ -479,6 +528,10 @@ struct GSTNHELDCORE_API FGSTN_EnemyThrowTuning
 	/** Frames after the throw during which the thrown enemy cannot be grabbed again (its grab immunity) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Held|Enemies", meta = (ClampMin = 0, ForceUnits = "frames"))
 	int32 RegrabLockFrames = 60;
+
+	/** The wind-up of an enemy throw (slice 10), the held object's setting for a lifted body. TEST VALUE: instant */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Held|Enemies")
+	FGSTN_HeldThrowWindup Windup;
 };
 
 /** The pure rules of thrown enemies (M10 G9) */
