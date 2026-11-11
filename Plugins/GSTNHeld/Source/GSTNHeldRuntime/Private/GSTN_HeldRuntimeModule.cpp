@@ -85,18 +85,20 @@ public:
 		Extension.ContributeCompileInput = [](const FGSTN_LoadoutExtensionContext& Context, FGSTN_CompileInput& Input)
 		{
 			const UGSTN_HeldSettings& Settings = UGSTN_HeldSettings::Get();
+			// Which logical buttons the held and swap slots read (M11 slice 3b): settings, every machine the same
+			const FGSTN_HeldSlotInputs SlotInputs = FGSTN_HeldSlotInputs::FromSettings();
 			const UGSTN_PrimaryKitDefinition* Kit = Context.Resolved ? Context.Resolved->Kit : nullptr;
 			// M11 K1: every kit asset can be swapped for a kit on the ground, so a kit taken from the ground can be swapped again. A kit built in
 			// memory by code (the GSTNCombat tests, which count their table rows) is never on the ground and keeps its authored table
 			if (Settings.KitSwap.bEnabled && Kit && Kit->IsAsset())
 			{
-				UGSTN_HeldSlots::AppendKitSwapBinding(FSoftObjectPath(UGSTN_GA_KitSwap::StaticClass()), Settings.KitSwap.GetHoldFrames(), Input.Kit.Bindings);
+				UGSTN_HeldSlots::AppendKitSwapBinding(FSoftObjectPath(UGSTN_GA_KitSwap::StaticClass()), Settings.KitSwap.GetHoldFrames(), Input.Kit.Bindings, SlotInputs);
 			}
 			if (Settings.WantsDefaultBindings(Kit ? FSoftObjectPath(Kit) : FSoftObjectPath()))
 			{
 				UGSTN_HeldSlots::AppendKitBindings(AbilityOrDefault(Settings.PickupAbility, UGSTN_GA_HeldPickup::StaticClass()),
 					AbilityOrDefault(Settings.DropAbility, UGSTN_GA_HeldDrop::StaticClass()),
-					AbilityOrDefault(Settings.ThrowAbility, UGSTN_GA_HeldThrow::StaticClass()), Input.Kit.Bindings);
+					AbilityOrDefault(Settings.ThrowAbility, UGSTN_GA_HeldThrow::StaticClass()), Input.Kit.Bindings, SlotInputs);
 				// M10 G6: what each size class takes away while carrying (after the held bindings: they are never banned)
 				UGSTN_HeldSlots::ApplySizeBans(Settings.SizeClasses, Input.Kit.Bindings);
 				for (FGSTN_WeaponCompileInput& Weapon : Input.Weapons)

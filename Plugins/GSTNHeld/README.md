@@ -162,6 +162,12 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
    the stick alone fires, are off, so the stick aims the held throw; the jump and crouch throws stay), `None` (only the held throw) or `All`. Handed to
    `UGSTN_LinkSlots::SetThrowBlockers` at startup (`FGSTN_EnemyLiftRules::KitThrowBlockers`). Test `GSTNHeld.Core.KitThrowBlockers`; harness
    `kit_scenarios.scenario_kit_throw_lifted`.
+19. **Buttons are data (M11 slice 3b, owner rule "no hardcoded inputs")**: the logical buttons of steps 8 and 17 come from the settings, read by
+   the loadout extension through `FGSTN_HeldSlotInputs::FromSettings` on every machine that compiles a kit: `PickupDropButton` (default
+   `Input.Button.Interact`, B), `ThrowButton` (`Input.Button.Strong`, RT, object and enemy throw), `KitSwap.Button` (`Input.Button.Interact`,
+   released after `HoldSeconds`). Empty = the same defaults. `SlotOverrides` replaces a whole slot (any pattern) of a `Command.Held.*` row or
+   `Command.Kit.Swap`, as GSTNLink's `ThrowSlotOverrides`. Which key or pad button is each logical button stays in the input config
+   (`Content/Input`). Changing a button takes effect when a kit is compiled again (take a kit, or restart PIE). Test `GSTNHeld.Core.SlotInputs`.
 
 ## Not yet (later slices of the plan)
 

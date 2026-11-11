@@ -2,6 +2,7 @@
 
 #include "GSTN_HeldSlots.h"
 
+#include "GSTN_HeldSettings.h"
 #include "GSTN_HeldTags.h"
 #include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_InputConditions.h"
@@ -31,17 +32,52 @@ namespace
 	}
 }
 
-TArray<FGSTN_InputSlotSpec> UGSTN_HeldSlots::Build()
+namespace
+{
+	FGameplayTag ButtonOr(const FGameplayTag& Chosen, const FGameplayTag& Default)
+	{
+		return Chosen.IsValid() ? Chosen : Default;
+	}
+}
+
+FGSTN_HeldSlotInputs FGSTN_HeldSlotInputs::FromSettings()
+{
+	const UGSTN_HeldSettings& Settings = UGSTN_HeldSettings::Get();
+	FGSTN_HeldSlotInputs Inputs;
+	Inputs.PickupDropButton = Settings.PickupDropButton;
+	Inputs.ThrowButton = Settings.ThrowButton;
+	Inputs.KitSwapButton = Settings.KitSwap.Button;
+	Inputs.SlotOverrides = &Settings.SlotOverrides;
+	return Inputs;
+}
+
+FGameplayTag FGSTN_HeldSlotInputs::GetPickupDropButton() const { return ButtonOr(PickupDropButton, GSTNCombatButtonTags::Button_Interact.GetTag()); }
+FGameplayTag FGSTN_HeldSlotInputs::GetThrowButton() const { return ButtonOr(ThrowButton, GSTNCombatButtonTags::Button_Strong.GetTag()); }
+FGameplayTag FGSTN_HeldSlotInputs::GetKitSwapButton() const { return ButtonOr(KitSwapButton, GSTNCombatButtonTags::Button_Interact.GetTag()); }
+
+const FGSTN_InputSlotSpec* FGSTN_HeldSlotInputs::FindOverride(const FGameplayTag& Command) const
+{
+	return SlotOverrides ? SlotOverrides->FindByPredicate([&Command](const FGSTN_InputSlotSpec& Spec) { return Spec.Command == Command; }) : nullptr;
+}
+
+TArray<FGSTN_InputSlotSpec> UGSTN_HeldSlots::Build(const FGSTN_HeldSlotInputs& Inputs)
 {
 	using namespace GSTNHeldTags;
-	const FGameplayTag Interact = GSTNCombatButtonTags::Button_Interact.GetTag();
-	const FGameplayTag Strong = GSTNCombatButtonTags::Button_Strong.GetTag();
+	const FGameplayTag PickupDrop = Inputs.GetPickupDropButton();
+	const FGameplayTag Throw = Inputs.GetThrowButton();
 	TArray<FGSTN_InputSlotSpec> Slots;
-	Slots.Add(MakeSlot(Command_Held_Pickup, Interact, PickupSlotPriorityOffset));
-	Slots.Add(MakeSlot(Command_Held_Drop, Interact, CarrySlotPriorityOffset));
-	Slots.Add(MakeSlot(Command_Held_Throw, Strong, CarrySlotPriorityOffset));
+	Slots.Add(MakeSlot(Command_Held_Pickup, PickupDrop, PickupSlotPriorityOffset));
+	Slots.Add(MakeSlot(Command_Held_Drop, PickupDrop, CarrySlotPriorityOffset));
+	Slots.Add(MakeSlot(Command_Held_Throw, Throw, CarrySlotPriorityOffset));
 	// M10 G9: one above the object throw (never both: an entity grabbing an enemy is not carrying an object), above the grab's kit throws
-	Slots.Add(MakeSlot(Command_Held_ThrowEnemy, Strong, CarrySlotPriorityOffset + 1));
+	Slots.Add(MakeSlot(Command_Held_ThrowEnemy, Throw, CarrySlotPriorityOffset + 1));
+	for (FGSTN_InputSlotSpec& Slot : Slots)
+	{
+		if (const FGSTN_InputSlotSpec* Override = Inputs.FindOverride(Slot.Command))
+		{
+			Slot = *Override;
+		}
+	}
 	return Slots;
 }
 
@@ -68,9 +104,9 @@ TArray<FGSTN_HeldSlotBinding> UGSTN_HeldSlots::DefaultBindings()
 }
 
 int32 UGSTN_HeldSlots::AppendKitBindings(const FSoftObjectPath& Pickup, const FSoftObjectPath& Drop, const FSoftObjectPath& Throw,
-	TArray<FGSTN_BindingInput>& OutBindings)
+	TArray<FGSTN_BindingInput>& OutBindings, const FGSTN_HeldSlotInputs& Inputs)
 {
-	const TArray<FGSTN_InputSlotSpec> Slots = Build();
+	const TArray<FGSTN_InputSlotSpec> Slots = Build(Inputs);
 	const TArray<FGSTN_HeldSlotBinding> Requirements = DefaultBindings();
 	// The enemy throw is the same ability as the object throw (M10 G9): it finds what the holder lifts
 	const FSoftObjectPath* Abilities[] = { &Pickup, &Drop, &Throw, &Throw };
@@ -96,10 +132,10 @@ int32 UGSTN_HeldSlots::AppendKitBindings(const FSoftObjectPath& Pickup, const FS
 	return Added;
 }
 
-FGSTN_InputSlotSpec UGSTN_HeldSlots::BuildKitSwapSlot(int32 HoldFrames)
+FGSTN_InputSlotSpec UGSTN_HeldSlots::BuildKitSwapSlot(int32 HoldFrames, const FGameplayTag& Button)
 {
 	FGSTN_InputCondition_Release Release;
-	Release.Button = GSTNCombatButtonTags::Button_Interact.GetTag();
+	Release.Button = ButtonOr(Button, GSTNCombatButtonTags::Button_Interact.GetTag());
 	Release.MinHeldFrames = FMath::Max(HoldFrames, 1);
 	FGSTN_InputSlotSpec Spec;
 	Spec.Command = GSTNHeldTags::Command_Kit_Swap;
@@ -120,7 +156,8 @@ FGSTN_TagRequirements UGSTN_HeldSlots::KitSwapRequirements()
 	return Requirements;
 }
 
-bool UGSTN_HeldSlots::AppendKitSwapBinding(const FSoftObjectPath& Ability, int32 HoldFrames, TArray<FGSTN_BindingInput>& OutBindings)
+bool UGSTN_HeldSlots::AppendKitSwapBinding(const FSoftObjectPath& Ability, int32 HoldFrames, TArray<FGSTN_BindingInput>& OutBindings,
+	const FGSTN_HeldSlotInputs& Inputs)
 {
 	const FGameplayTag Command = GSTNHeldTags::Command_Kit_Swap;
 	if (Ability.IsNull() || OutBindings.ContainsByPredicate([&Command](const FGSTN_BindingInput& Binding) { return Binding.Command == Command; }))
@@ -132,7 +169,8 @@ bool UGSTN_HeldSlots::AppendKitSwapBinding(const FSoftObjectPath& Ability, int32
 	Binding.Requirements = KitSwapRequirements();
 	Binding.Ability = Ability;
 	Binding.bHasSlotOverride = true;
-	Binding.SlotOverride = BuildKitSwapSlot(HoldFrames);
+	const FGSTN_InputSlotSpec* Override = Inputs.FindOverride(Command);
+	Binding.SlotOverride = Override ? *Override : BuildKitSwapSlot(HoldFrames, Inputs.GetKitSwapButton());
 	return true;
 }
 
@@ -144,7 +182,7 @@ void UGSTN_HeldSlots::AddToSlotSet(UGSTN_InputSlotSet* Set)
 		return;
 	}
 	Set->Modify();
-	const TArray<FGSTN_InputSlotSpec> Specs = Build();
+	const TArray<FGSTN_InputSlotSpec> Specs = Build(FGSTN_HeldSlotInputs::FromSettings());
 	Set->Slots.RemoveAll([&Specs](const FGSTN_InputSlotEntry& Entry)
 	{
 		return Specs.ContainsByPredicate([&Entry](const FGSTN_InputSlotSpec& Spec) { return Spec.Command == Entry.GetSpec().Command; });

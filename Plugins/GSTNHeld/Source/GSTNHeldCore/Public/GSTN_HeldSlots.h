@@ -27,8 +27,36 @@ struct GSTNHELDCORE_API FGSTN_HeldSlotBinding
 };
 
 /**
+ * Which logical buttons (Input.Button.*, mapped to keys and pad buttons by the input config) the held slots read, and the designer slots that
+ * replace a built shape (M11 slice 3b, owner rule "no hardcoded inputs"). Filled from UGSTN_HeldSettings (FromSettings); an empty button is the
+ * plugin default (Interact for pickup, drop and kit swap, Strong for the throws), so a default-constructed value builds the shipped design
+ */
+struct GSTNHELDCORE_API FGSTN_HeldSlotInputs
+{
+	/** Press of this button picks up (object framed) and drops (carrying) */
+	FGameplayTag PickupDropButton;
+	/** Press of this button throws the object or the lifted enemy (tap = stick, held = camera aim: the ability follows the activating button) */
+	FGameplayTag ThrowButton;
+	/** Release of this button after the hold swaps for the framed kit */
+	FGameplayTag KitSwapButton;
+	/** Slots that replace the built one of their command (any Command.Held.* row or Command.Kit.Swap), or null */
+	const TArray<FGSTN_InputSlotSpec>* SlotOverrides = nullptr;
+
+	/** The project's choice (Project Settings > Plugins > GSTN Held, Input|Buttons and Kits) */
+	static FGSTN_HeldSlotInputs FromSettings();
+
+	FGameplayTag GetPickupDropButton() const;
+	FGameplayTag GetThrowButton() const;
+	FGameplayTag GetKitSwapButton() const;
+	/** The override of Command, or null */
+	const FGSTN_InputSlotSpec* FindOverride(const FGameplayTag& Command) const;
+};
+
+/**
  * The held commands as slot specs (owner's button design 2026-11-10, subject to playtesting), beside the link set (UGSTN_LinkSlots): every row is
  * data, so a kit rebinds them without code.
+ *
+ * Default buttons below; FGSTN_HeldSlotInputs (the settings) picks others or replaces a whole slot.
  *
  *   Command.Held.Pickup   Press(Interact)   binding ignores Combat.Held.Carrying; one below the grab, so a grab target wins the press
  *   Command.Held.Drop     Press(Interact)   requires Combat.Held.Carrying (the same button puts the object down)
@@ -55,8 +83,8 @@ public:
 	/** The kit swap (M11 K1, tier Command.Kit = 360 in the settings): a release, not a press, below the pickup so no interact offset is shared */
 	static constexpr int32 KitSwapSlotPriorityOffset = -3;
 
-	/** The slots listed above, in that order */
-	static TArray<FGSTN_InputSlotSpec> Build();
+	/** The slots listed above, in that order, on the given buttons (default: the plugin's) or replaced by their override */
+	static TArray<FGSTN_InputSlotSpec> Build(const FGSTN_HeldSlotInputs& Inputs = FGSTN_HeldSlotInputs());
 
 	/** The binding requirement of each row above, in that order */
 	static TArray<FGSTN_HeldSlotBinding> DefaultBindings();
@@ -67,23 +95,25 @@ public:
 	 * OutBindings and returns how many it added. Used by the plugin's loadout extension on every machine that compiles a kit
 	 */
 	static int32 AppendKitBindings(const FSoftObjectPath& Pickup, const FSoftObjectPath& Drop, const FSoftObjectPath& Throw,
-		TArray<FGSTN_BindingInput>& OutBindings);
+		TArray<FGSTN_BindingInput>& OutBindings, const FGSTN_HeldSlotInputs& Inputs = FGSTN_HeldSlotInputs());
 
 	/**
 	 * The kit swap slot (M11 K1): Release(Interact) after at least HoldFrames frames, falling through when unavailable. It shares the release
 	 * with the movement set's hold (Command.Interact.PickUp, 12 frames) and wins it by tier while a kit is framed; with no kit framed the
 	 * release goes on to the slots below. A release, never a press: the press of the same button stays the grab's and the pickup's
 	 */
-	static FGSTN_InputSlotSpec BuildKitSwapSlot(int32 HoldFrames);
+	static FGSTN_InputSlotSpec BuildKitSwapSlot(int32 HoldFrames, const FGameplayTag& Button = FGameplayTag());
 
 	/** The swap binding's requirements: a framed kit (Interact.Target.Kit), nothing carried (B is the drop then) */
 	static FGSTN_TagRequirements KitSwapRequirements();
 
 	/**
 	 * Appends the swap binding (slot override, Ability) unless the kit binds Command.Kit.Swap itself or Ability is null. True when added.
-	 * Used by the plugin's loadout extension on every machine that compiles a kit, so every kit can swap again after a swap
+	 * Used by the plugin's loadout extension on every machine that compiles a kit, so every kit can swap again after a swap. The slot is the
+	 * override of Command.Kit.Swap in Inputs when there is one (HoldFrames is then the override's own), else the release of Inputs' swap button
 	 */
-	static bool AppendKitSwapBinding(const FSoftObjectPath& Ability, int32 HoldFrames, TArray<FGSTN_BindingInput>& OutBindings);
+	static bool AppendKitSwapBinding(const FSoftObjectPath& Ability, int32 HoldFrames, TArray<FGSTN_BindingInput>& OutBindings,
+		const FGSTN_HeldSlotInputs& Inputs = FGSTN_HeldSlotInputs());
 
 	/**
 	 * The size classes' command bans (M10 G6): every binding of a banned command (hierarchical match, never a Command.Held.* one) gets the class's
@@ -93,7 +123,7 @@ public:
 	static int32 ApplySizeBans(TConstArrayView<FGSTN_HeldSizeClass> SizeClasses, TArray<FGSTN_BindingInput>& InOutBindings);
 
 #if WITH_EDITOR
-	/** Adds the slots of Build to a set asset (replacing those of the same command), for setup scripts. Null is ignored */
+	/** Adds the slots of Build (on the project's buttons) to a set asset (replacing those of the same command), for setup scripts. Null is ignored */
 	UFUNCTION(BlueprintCallable, Category = "Held|Slots")
 	static void AddToSlotSet(UGSTN_InputSlotSet* Set);
 #endif
