@@ -1,6 +1,6 @@
 # Cose da fare a mano (copia dell'artifact)
 
-Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (piano M11). L'artifact è la versione di riferimento.
+Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (decisioni M11 approvate). L'artifact è la versione di riferimento.
 
 ## 1 · Git
 
@@ -30,7 +30,6 @@ Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, a
 
 ## 3 · Decisioni
 
-- [ ] **M11 kit (piano a fette, `docs/architecture/plans/m11-kit-piano-a-fette.md` §4, entro mercoledì sera)**: 1 essenziale = scambio kit col tasto, lanci del kit stile Smash, 3 kit diversi, controllo; il resto dopo il playtest. 2 lanci: presa con speciale+accovacciato o tap, poi lo stick sceglie il lancio. 3 quattro lanci per kit con set di riserva. 4 sollevabile = peso ≤ capacità del kit + tag che lo vieta. 5 kit lasciato alla morte: sì. 6 cambio kit: vince la cosa inquadrata, hold 0,5 s. 7 RT tenuto col reticolo per i lanci prima del playtest. Rispondi "ok" o cambia i numeri.
 - [ ] Leve weakpoint §6 (scala hurtbox, priorità, magnetismo PvE).
 - [ ] M10: un oggetto posato o atterrato si può riprendere dopo 0,64 s (ritardo di rete dei record): va bene o lo vuoi più corto? Danni e archi veri per tipo di oggetto; quali kit hanno i tasti degli oggetti (ora solo i kit di prova; c'è l'opzione "tutti i kit").
 - [ ] G6 fatto con valori di prova (Leggero -10 %, Medio -30 %, Pesante -50 % senza salto, Enorme -70 % e capacità; lancio x1/0,85/0,7/0,5; capacità di default 50 kg): dimmi i valori veri e quali oggetti si sollevano. Impatti: un rimbalzo può colpire di nuovo chi ha già preso il lancio; Break si rompe anche su un nemico. Va bene?
@@ -45,6 +44,7 @@ Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, a
 
 ## Fatto
 
+- 2026-11-11 · Decisioni M11 1-7 approvate (tue) come consigliate; il kit si cambia con grab (B) tenuto.
 - 2026-11-10 · M10 slice 7: un rimbalzo non ricolpisce chi il lancio ha già colpito (opzione per oggetto); fuoco amico per tipo di colpo nelle regole della modalità (`Friendly Fire Sources`); le due impostazioni di raccolta decise da te (inquadrato o più vicino; conteso: mano vuota o il più vicino), accese come prima. Branch `claude/desktop-m10-7` (sha nell'artifact).
 - 2026-11-10 · M10 slice 6: peso e taglie (G6: carico sul legame Hand, rallenta corsa e salto su ogni macchina, comandi tolti per taglia, Enorme solo con capacità, lancio più debole per taglie grandi) e impatti Atterra/Rompi/Rimbalza/Attacca (parte di G7); corretto un bug del fork GAS-NPP (finito un effetto su una statistica, gli altri client la vedevano a 0). Headless 1495/0, harness PASS oggetti 4/4 listen 2 % e dedicato 0 %, presa 5/5 a 2 %. Branch `claude/desktop-m10-6`. Restano: mira con la spalla e fuoco amico (G7), ghost dell'oggetto (G8), nemici lanciati (G9), debug ed editor (G12-G13).
 - 2026-11-10 · M10 slice 5: l'oggetto in mano è ora un legame Hand di GSTNLink (G1: il watchdog sa giudicare un partner che non è un combattente); B prende l'oggetto che il probe inquadra (il più vicino libero se un altro lo prende nello stesso frame); KO dei minion da oggetto lanciato con `Combat.Source.Thrown` e credito a chi lancia. Headless 1490/0, harness PASS oggetti listen 2 % e dedicato 0 %, presa 5/5 a 2 %. Branch `claude/desktop-m10-5`. M10 non è finita: restano peso e taglie (G6), impatti e mira (G7/G8), nemici lanciati (G9), debug ed editor (G12-G13).
