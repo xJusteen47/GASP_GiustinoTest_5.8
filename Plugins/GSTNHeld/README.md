@@ -147,7 +147,7 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
 
 Friendly fire by mode is `UGSTN_CombatRules::FriendlyFireSources` (slice 7; projectiles only, melee keeps `bFriendlyFire`). The camera
 side of the shoulder aim (a pawn tag source that reports the precision aim component's view tags). G9 thrown
-enemies are in step 14 (fighters only). G12 left: hand-socket attach and release blend (spike S2), the arc preview in an editor module, the interact prompt and the HoldFrames validator; G13 left: the byte table and the 32-projectile perf run. Minion hit delegates (`OnMinionHit`) carry no source tag
+enemies are in step 14 (fighters only). G12 left: hand-socket attach and release blend (spike S2), the arc preview in an editor module, the interact prompt and the HoldFrames validator; G13 left: the run with rendering and the per-update bytes of a flying object (the run above only measures totals). Minion hit delegates (`OnMinionHit`) carry no source tag
 (only the KO event does).
 
-Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`, `held_carry_load`, `held_throw_break`, `held_throw_explode`, `held_throw_ghost`, `held_throw_enemy`, `held_throw_windup`).
+Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`, `held_carry_load`, `held_throw_break`, `held_throw_explode`, `held_throw_ghost`, `held_throw_enemy`, `held_throw_windup`). `SUITE_HELD_BYTES` = `held_bytes_perf` (G13, recorded: idle objects 0 B/s within the ±1 KB/s noise of the baseline; 32-64 projectiles alive +0.75 ms on the editor's whole frame, listen and dedicated, -nullrhi).

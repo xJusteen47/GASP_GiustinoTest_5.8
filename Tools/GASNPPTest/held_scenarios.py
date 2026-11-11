@@ -528,6 +528,64 @@ def scenario_held_throw_windup(client=1):
     run.run(steps)
 
 
+SUITE_HELD_BYTES = ['held_bytes_perf']
+
+
+def scenario_held_bytes_perf(client=1):
+    """M10 G13 (recorded, not judged): host wire bytes per client and frame time over three 10 s windows. A: idle (no objects).
+    B: 16 objects at rest (plan: an idle object costs 0 B/s). C: 32 projectiles kept alive (bursts of 32 living 124 frames every 2 s,
+    the plan's 32-active perf point). Frame time is the editor's whole frame (host and both clients in one process, -nullrhi), so only
+    the difference between windows means something"""
+    import time
+    import projectile_scenarios as ps
+    run = g._Run('held_bytes_perf', client, judge_reconciles=False, sample=False)
+    st = {'perf': {}, 'active': []}
+
+    def frames():
+        try:
+            return unreal.SystemLibrary.get_frame_count()
+        except Exception:
+            return -1
+
+    def snap(label):
+        _cmd(f'gstn.Projectile.NetReport {label}')
+        st['perf'][label] = (time.time(), frames())
+        return label
+
+    def burst():
+        _cmd('gstn.Projectile.Burst 32 124')
+        m = re.findall(r'ProjectileBurst fired=(\d+) active=(\d+)', _log())
+        if m:
+            st['active'].append(int(m[-1][1]))
+        return 'burst 32'
+
+    def judge():
+        rows = {r[0]: r for r in ps._NET_ROW.findall(_log())}
+        out = {}
+        for name, a, b in (('idle', 'a0', 'a1'), ('16 objects at rest', 'b0', 'b1'), ('32 projectiles alive', 'c0', 'c1')):
+            if a not in rows or b not in rows:
+                return False, f'missing window {name}'
+            dt = float(rows[b][1]) - float(rows[a][1])
+            ca = [int(x.split('/')[0]) for x in rows[a][4].split(',') if x]
+            cb = [int(x.split('/')[0]) for x in rows[b][4].split(',') if x]
+            per = [round((y - x) / dt / 1000.0, 2) for x, y in zip(ca, cb)]
+            (ta, fa), (tb, fb) = st['perf'][a], st['perf'][b]
+            ms = round((tb - ta) * 1000.0 / (fb - fa), 2) if fb > fa >= 0 else -1
+            out[name] = (per, ms)
+            unreal.log(f'HeldBytes {name}: {per} KB/s per client, {ms} ms per frame')
+        run.note(f'{out}; alive after each burst {st["active"]}')
+        return True, f'{out} alive {st["active"]}'
+
+    steps = [(0.0, lambda: ('setup', _setup())), (1.0, lambda: ('snap', snap('a0'))), (11.0, lambda: ('snap', snap('a1')))]
+    for k in range(16):
+        steps.append((11.1 + k * 0.02, lambda k=k: ('spawn', _cmd(f'gstn.Held.Spawn {k % 3} {100 + 25 * (k // 3)}'))))
+    steps += [(13.0, lambda: ('snap', snap('b0'))), (23.0, lambda: ('snap', snap('b1'))), (23.05, lambda: ('snap', snap('c0')))]
+    for k in range(5):
+        steps.append((23.1 + 2 * k, lambda: ('burst', burst())))
+    steps += [(33.05, lambda: ('snap', snap('c1'))), (33.2, run.at('windows recorded: bytes per client and ms per frame (in the log)', judge)), (33.3, run.finish())]
+    run.run(steps)
+
+
 def run_batch(names=None, lag=60, jitter=15, loss=0, report=None):
     """Each scenario in a fresh PIE (as the editor's play settings say); poll ds.defence_batch_report()"""
     return ds.defence_batch(names or SUITE_HELD, lag=lag, jitter=jitter, loss=loss, report=report, module=__import__(__name__))
