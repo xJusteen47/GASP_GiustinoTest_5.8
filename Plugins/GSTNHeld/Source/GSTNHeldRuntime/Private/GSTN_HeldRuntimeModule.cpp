@@ -6,6 +6,7 @@
 #include "GSTN_HeldSlots.h"
 #include "GSTN_HeldTags.h"
 #include "GSTN_InteractSettings.h"
+#include "GSTN_KitInteract.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Misc/CoreDelegates.h"
 #include "Engine/Engine.h"
@@ -58,6 +59,17 @@ public:
 			Meaning.HoldVerb = NSLOCTEXT("GSTNHeld", "PickupVerb", "Pick up");
 			bAddedPickupMeaning = true;
 		}
+		// M11 K1: the kits on the ground carry Interact.Target.Kit, under the same table
+		const FGameplayTag Kit = GSTNHeldTags::Interact_Target_Kit;
+		if (UGSTN_HeldSettings::Get().KitSwap.bEnabled
+			&& !Interact->Meanings.ContainsByPredicate([&Kit](const FGSTN_InteractMeaning& Meaning) { return Meaning.Tag == Kit; }))
+		{
+			FGSTN_InteractMeaning& Meaning = Interact->Meanings.AddDefaulted_GetRef();
+			Meaning.Tag = Kit;
+			Meaning.DefaultPriority = FMath::Clamp(UGSTN_HeldSettings::Get().KitSwap.MeaningPriority, 0, 255);
+			Meaning.HoldVerb = NSLOCTEXT("GSTNHeld", "KitSwapVerb", "Swap kit");
+			bAddedKitMeaning = true;
+		}
 
 		FGSTN_LoadoutExtension Extension;
 		// Reads only the resolved kit and the project settings, which every machine of a match shares, so every machine compiles the same table
@@ -65,6 +77,12 @@ public:
 		{
 			const UGSTN_HeldSettings& Settings = UGSTN_HeldSettings::Get();
 			const UGSTN_PrimaryKitDefinition* Kit = Context.Resolved ? Context.Resolved->Kit : nullptr;
+			// M11 K1: every kit asset can be swapped for a kit on the ground, so a kit taken from the ground can be swapped again. A kit built in
+			// memory by code (the GSTNCombat tests, which count their table rows) is never on the ground and keeps its authored table
+			if (Settings.KitSwap.bEnabled && Kit && Kit->IsAsset())
+			{
+				UGSTN_HeldSlots::AppendKitSwapBinding(FSoftObjectPath(UGSTN_GA_KitSwap::StaticClass()), Settings.KitSwap.GetHoldFrames(), Input.Kit.Bindings);
+			}
 			if (Settings.WantsDefaultBindings(Kit ? FSoftObjectPath(Kit) : FSoftObjectPath()))
 			{
 				UGSTN_HeldSlots::AppendKitBindings(AbilityOrDefault(Settings.PickupAbility, UGSTN_GA_HeldPickup::StaticClass()),
@@ -89,6 +107,11 @@ public:
 			const FGameplayTag Pickup = GSTNHeldTags::Interact_Target_Pickup;
 			GetMutableDefault<UGSTN_InteractSettings>()->Meanings.RemoveAll([&Pickup](const FGSTN_InteractMeaning& Meaning) { return Meaning.Tag == Pickup; });
 		}
+		if (bAddedKitMeaning && UObjectInitialized())
+		{
+			const FGameplayTag Kit = GSTNHeldTags::Interact_Target_Kit;
+			GetMutableDefault<UGSTN_InteractSettings>()->Meanings.RemoveAll([&Kit](const FGSTN_InteractMeaning& Meaning) { return Meaning.Tag == Kit; });
+		}
 		UGSTN_HeldSettings::RemoveFromInputSettings();
 		FGSTN_CombatTickExtensionRegistry::Get().Unregister(&TickExtension);
 		FCoreDelegates::GetOnPostEngineInit().Remove(PostEngineInitHandle);
@@ -98,6 +121,7 @@ public:
 private:
 	FGSTN_HeldTickExtension TickExtension;
 	bool bAddedPickupMeaning = false;
+	bool bAddedKitMeaning = false;
 	FDelegateHandle PostEngineInitHandle;
 };
 

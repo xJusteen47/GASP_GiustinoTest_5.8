@@ -143,6 +143,21 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
    a size class, a wind-up without montage or releasing after its montage ends).
 16. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
    (its own ranged action) are data only; a later slice routes commands to them.
+17. **Kit swap on the grab button (M11 K1, owner decisions 2026-11-11, TEST VALUES in `KitSwap`)**: `GSTN_KitInteract.h`. Every
+   `AGSTN_KitPickup` gets a `UGSTN_KitInteractableComponent` (server adds it replicated to a spawned kit, every machine to a level-placed one): one
+   GSTNInteract record with the meaning `Interact.Target.Kit` (added to the interact settings at startup, priority 90 as the pickup), stamped in
+   combat frames like the objects' records. GSTNLink's probe frames one target per frame, so the framed thing wins between a kit, an object and a
+   grab target. The loadout extension gives every kit asset `Command.Kit.Swap` (tier `Command.Kit` 360, offset -3): Release(Interact) after
+   `HoldSeconds` (0.5 s = 31 frames), requiring the tag and not carrying; the press of B stays the grab's and the pickup's, and a shorter release
+   goes on to the movement set. `UGSTN_GA_KitSwap` asks the host; after the frame the host takes the kit the probe framed on the request's frame
+   (`bTakesFocusedKit`, else or on a miss the nearest, `bFocusMissFallsBackToNearest`), one swap per kit per frame, and calls
+   `UGSTN_KitSwapSubsystem::SwapWithPickup`: a new `LoadoutRevision`, swapped at one boundary on every machine, which ends a running move
+   (`FGSTN_LoadoutSwapLogic`; audited, nothing new). The TH-1b hold-near-a-kit trigger is switched off (`bSwapOnInteractHoldEvent`).
+   Prompt: placeholder text "Tieni B: <kit>" over the framed kit (local player). Death: on a host `Combat.Event.KO` of a human player,
+   `DeathDrop` DropAndLose (kit dropped under the player, player back to `RespawnKit`), DropCopy or Off; a dropped kit lasts
+   `DroppedKitLifetimeSeconds` (30). Logs `KitSwap .. took kit= left= (focus|nearest)`, `KitDrop`. Tests `GSTNHeld.Core.KitSwapSlot`,
+   `KitSwapSettings`; harness `kit_scenarios.scenario_kit_swap_hold`. Kits built in memory by code (the combat tests) get no swap binding.
+
 ## Not yet (later slices of the plan)
 
 Friendly fire by mode is `UGSTN_CombatRules::FriendlyFireSources` (slice 7; projectiles only, melee keeps `bFriendlyFire`). The camera

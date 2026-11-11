@@ -8,6 +8,71 @@
 
 #include "GSTN_HeldSettings.generated.h"
 
+/** What a player's KO does with the kit (M11 K1, owner decision 5: a dead player leaves the kit; both readings kept as a setting) */
+UENUM(BlueprintType)
+enum class EGSTN_KitDeathDrop : uint8
+{
+	/** Nothing drops */
+	Off,
+	/** The kit drops where the player fell and the player goes back to RespawnKit (the kit really changes hands) */
+	DropAndLose,
+	/** A copy drops; the player keeps the kit */
+	DropCopy
+};
+
+/**
+ * The kit swap with the grab button (M11 K1, owner decisions 2026-11-11). Every value is a TEST VALUE for playtesting. The swap itself is
+ * GSTNCombatGAS's out-of-band loadout write (UGSTN_KitSwapSubsystem::SwapWithPickup): the new kit reaches the simulation as a new
+ * LoadoutRevision, swapped at one frame boundary on every machine, which also ends a move that is running (FGSTN_LoadoutSwapLogic).
+ */
+USTRUCT(BlueprintType)
+struct GSTNHELDCORE_API FGSTN_KitSwapTuning
+{
+	GENERATED_BODY()
+
+	/** Kits on the ground are interact targets and every compiled kit gets the swap binding. False = the TH-1b behaviour (hold near a kit) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kit Swap")
+	bool bEnabled = true;
+
+	/**
+	 * How long the grab button must be held before its release swaps (decision 6: longer than the object pickup's press, so a kit is never
+	 * swapped by mistake). Rounded to combat frames (62.5 Hz)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kit Swap", meta = (ClampMin = "0.05", ClampMax = "3.0", ForceUnits = "s"))
+	float HoldSeconds = 0.5f;
+
+	/** Priority of the kit meaning (Interact.Target.Kit) beside the pickup's 90 and the grab's 100: equal to the pickup, so the framing decides */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kit Swap", meta = (ClampMin = 0, ClampMax = 255))
+	int32 MeaningPriority = 90;
+
+	/** True = the kit the interact probe framed on the release; false = simply the nearest kit in reach */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kit Swap")
+	bool bTakesFocusedKit = true;
+
+	/** When the framed kit is gone (another player took it on the same frame): true = the nearest other kit in reach, false = nothing */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kit Swap")
+	bool bFocusMissFallsBackToNearest = true;
+
+	/** What a player's KO does with the kit (decision 5). Only pawns with a human player state; dummies and minions never drop */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kit Swap|Death")
+	EGSTN_KitDeathDrop DeathDrop = EGSTN_KitDeathDrop::DropAndLose;
+
+	/** DropAndLose: the kit the player gets back (no support weapon). Empty = the player keeps the kit, as DropCopy */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kit Swap|Death", meta = (AllowedTypes = "PrimaryKit"))
+	FPrimaryAssetId RespawnKit;
+
+	/** A kit dropped on a KO disappears after this long if nobody takes it (0 = never). Kits placed in the level never expire */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kit Swap|Death", meta = (ClampMin = "0.0", ForceUnits = "s"))
+	float DroppedKitLifetimeSeconds = 30.f;
+
+	/** Prompt over the framed kit (placeholder text, local player only, never on a dedicated server) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kit Swap")
+	bool bShowPrompt = true;
+
+	/** HoldSeconds in combat frames (62.5 Hz), at least 2 so a tap can never swap */
+	int32 GetHoldFrames() const { return FMath::Max(2, FMath::RoundToInt(HoldSeconds * 62.5f)); }
+};
+
 /**
  * Project defaults of held objects (Project Settings > Plugins > GSTN Held, saved in the plugin's DefaultGSTNHeld.ini). Everything here is a TEST
  * VALUE of the owner's 2026-11-10 button design, kept as data so playtesting changes it without code.
@@ -106,6 +171,10 @@ public:
 	/** Thrown enemies (M10 G9): which grabbed enemies are lifted and thrown with the held throw, and the thrown body's hitbox. TEST VALUES */
 	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Enemies")
 	FGSTN_EnemyThrowTuning ThrownEnemies;
+
+	/** The kit swap with the grab button and the kit drop on a KO (M11 K1). TEST VALUES */
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Kits")
+	FGSTN_KitSwapTuning KitSwap;
 
 	/** The class of SizeTag and its index (INDEX_NONE and null when none matches exactly, or beyond the four packable ones) */
 	const FGSTN_HeldSizeClass* FindSizeClass(const FGameplayTag& SizeTag, int32* OutIndex = nullptr) const;

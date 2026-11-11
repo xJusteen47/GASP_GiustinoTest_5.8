@@ -66,7 +66,7 @@ void UGSTN_KitSwapSubsystem::Deinitialize()
 void UGSTN_KitSwapSubsystem::HandleCommandExecuted(const FGSTN_SimEvent& Event)
 {
 	AActor* Pawn = Event.Instigator.Get();
-	if (!Pawn || !FindPickupFor(Pawn))
+	if (!bSwapOnInteractHoldEvent || !Pawn || !FindPickupFor(Pawn))
 	{
 		// A hold of interact away from any kit: the kit's own pick-up move (if any) is all that happens
 		return;

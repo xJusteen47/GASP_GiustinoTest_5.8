@@ -68,6 +68,12 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Combat|Kit Pickup")
 	AGSTN_KitPickup* DropKit(UGSTN_LoadoutComponent* From, const FTransform& Where, TSubclassOf<AGSTN_KitPickup> PickupClass);
 
+	/**
+	 * The TH-1b trigger above (a hold of interact near a kit swaps the nearest one). A plugin that offers a better trigger turns it off for its
+	 * world: GSTNHeld's kit swap (M11 K1, the framed kit, a longer hold) does when its setting is on, so one hold never swaps twice
+	 */
+	bool bSwapOnInteractHoldEvent = true;
+
 	/** The loadout component that owns Pawn's kit: on its PlayerState (the usual place), else on the pawn itself. Null if none */
 	static UGSTN_LoadoutComponent* FindLoadoutComponent(const AActor* Pawn);
 

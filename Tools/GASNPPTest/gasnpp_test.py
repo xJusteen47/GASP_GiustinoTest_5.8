@@ -3351,7 +3351,7 @@ def scenario_super_code(client=1):
         (0.4, lambda: ('clear', combat_clear(client))),
         (0.6, _c18_apply(key, st, 'S', 'KIT_Test_Sigma', 'SUP_Test_A,SUP_Test_B')),
         (1.8, _c18_accepted(run, st, 'S')),
-        (1.9, _c18_state(run, key, client, 'KIT_Test_Sigma', base + 1, 'Sigma applied on both, same table (jump, the blade attack, two supers = 4 bindings)', bindings=4)),
+        (1.9, _c18_state(run, key, client, 'KIT_Test_Sigma', base + 1, 'Sigma applied on both, same table (jump, the blade attack, two supers, the kit swap = 5 bindings)', bindings=5)),
         (2.0, grant('g1')),
         (3.0, _c18_meter_is(run, key, client, 1, 100.0, 'the first grant landed: SuperMeter 100 on both')),
         # wrong code: neither super's pattern

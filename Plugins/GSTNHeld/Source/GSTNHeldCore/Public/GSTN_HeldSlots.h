@@ -52,6 +52,8 @@ public:
 	 */
 	static constexpr int32 PickupSlotPriorityOffset = -2;
 	static constexpr int32 CarrySlotPriorityOffset = 110;
+	/** The kit swap (M11 K1, tier Command.Kit = 360 in the settings): a release, not a press, below the pickup so no interact offset is shared */
+	static constexpr int32 KitSwapSlotPriorityOffset = -3;
 
 	/** The slots listed above, in that order */
 	static TArray<FGSTN_InputSlotSpec> Build();
@@ -66,6 +68,22 @@ public:
 	 */
 	static int32 AppendKitBindings(const FSoftObjectPath& Pickup, const FSoftObjectPath& Drop, const FSoftObjectPath& Throw,
 		TArray<FGSTN_BindingInput>& OutBindings);
+
+	/**
+	 * The kit swap slot (M11 K1): Release(Interact) after at least HoldFrames frames, falling through when unavailable. It shares the release
+	 * with the movement set's hold (Command.Interact.PickUp, 12 frames) and wins it by tier while a kit is framed; with no kit framed the
+	 * release goes on to the slots below. A release, never a press: the press of the same button stays the grab's and the pickup's
+	 */
+	static FGSTN_InputSlotSpec BuildKitSwapSlot(int32 HoldFrames);
+
+	/** The swap binding's requirements: a framed kit (Interact.Target.Kit), nothing carried (B is the drop then) */
+	static FGSTN_TagRequirements KitSwapRequirements();
+
+	/**
+	 * Appends the swap binding (slot override, Ability) unless the kit binds Command.Kit.Swap itself or Ability is null. True when added.
+	 * Used by the plugin's loadout extension on every machine that compiles a kit, so every kit can swap again after a swap
+	 */
+	static bool AppendKitSwapBinding(const FSoftObjectPath& Ability, int32 HoldFrames, TArray<FGSTN_BindingInput>& OutBindings);
 
 	/**
 	 * The size classes' command bans (M10 G6): every binding of a banned command (hierarchical match, never a Command.Held.* one) gets the class's

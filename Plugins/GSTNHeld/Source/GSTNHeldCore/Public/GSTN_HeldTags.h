@@ -50,6 +50,14 @@ namespace GSTNHeldTags
 	 */
 	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interact_Target_Pickup);
 
+	/**
+	 * A kit on the ground is the interact focus (M11 K1): projected by GSTNLink's interact probe from the kit's GSTNInteract record, never
+	 * granted. The kit swap binding requires it, so the long hold of the grab button swaps only the framed kit
+	 */
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interact_Target_Kit);
+	/** Swap the kit in hand with the framed kit on the ground (M11 K1): grab button held KitSwap.HoldSeconds, then released */
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Kit_Swap);
+
 	/** The Hand-channel link type of a hold (M10 G1): the holder (role 1) and the object (role 2, a non-fighter partner) */
 	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Link_Type_Held);
 	/** Role 1 of a Held link: projected on the holder by GSTNLink's link tick */

@@ -588,6 +588,11 @@ FGSTN_LoadoutData (what a player owns and saves)
   the published `Input.Event.CommandExecuted` of `Command.Interact.PickUp` (hold of interact; the kit must bind it) and swaps the
   player's loadout with the nearest pickup in reach through `AcceptLoadout`, so the swap reaches the simulation as a new
   `LoadoutRevision` (no new rollback state). `DropKit` is the hook of the per-mode kit drop on death (M12).
+- **Kit swap on the grab button** (M11 K1, 2026-11-11, `Plugins/GSTNHeld/README.md` step 17): each kit on the ground is a GSTNInteract
+  record (`Interact.Target.Kit`), framed by GSTNLink's probe beside objects and grab targets (the framed thing wins); every kit asset gets
+  `Command.Kit.Swap` = B held 0.5 s and released; the host swaps with the framed kit through `SwapWithPickup` (same revision boundary,
+  which ends a running move). The TH-1b trigger above is switched off while this is on. A player's KO drops the kit (`KitSwap.DeathDrop`,
+  project setting until M12 makes it a mode rule).
 - **`UGSTN_SkinDefinition`** (`GSTN_Skin`): mesh, materials, anim class, VFX overrides, tags for kit compatibility.
   Chosen per player, replicated on the PlayerState, applied by a cosmetic component; never read by the simulation
   (hurtboxes come from the kit, not the skin mesh).

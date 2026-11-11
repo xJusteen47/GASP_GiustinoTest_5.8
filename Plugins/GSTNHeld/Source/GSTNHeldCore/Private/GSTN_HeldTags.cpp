@@ -22,6 +22,8 @@ namespace GSTNHeldTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Held_NoLift, "Combat.Held.NoLift", "On an enemy: grabbable but never lifted and thrown as a held object (M10 G9)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Source_ThrownEnemy, "Combat.Source.Thrown.Enemy", "A thrown enemy made this hit (M10 G9); child of Combat.Source.Thrown");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Interact_Target_Pickup, "Interact.Target.Pickup", "An object at rest is the interact focus. Projected by GSTNLink's interact probe from the object's GSTNInteract record (M10 G2); the pickup binding requires it");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Interact_Target_Kit, "Interact.Target.Kit", "A kit on the ground is the interact focus (M11 K1). Projected by GSTNLink's interact probe from the kit's GSTNInteract record; the kit swap binding requires it");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Kit_Swap, "Command.Kit.Swap", "Swap the kit with the framed kit on the ground (M11 K1): grab button held, released after KitSwap.HoldSeconds");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Link_Type_Held, "Combat.Link.Type.Held", "A hold: the Hand-channel link of a holder and a held object (M10 G1)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Link_Role_Holder, "Combat.Link.Role.Holder", "Role 1 of a Held link, projected on the holder");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Link_Role_HeldObject, "Combat.Link.Role.HeldObject", "Role 2 of a Held link: the object's side");

@@ -96,6 +96,46 @@ int32 UGSTN_HeldSlots::AppendKitBindings(const FSoftObjectPath& Pickup, const FS
 	return Added;
 }
 
+FGSTN_InputSlotSpec UGSTN_HeldSlots::BuildKitSwapSlot(int32 HoldFrames)
+{
+	FGSTN_InputCondition_Release Release;
+	Release.Button = GSTNCombatButtonTags::Button_Interact.GetTag();
+	Release.MinHeldFrames = FMath::Max(HoldFrames, 1);
+	FGSTN_InputSlotSpec Spec;
+	Spec.Command = GSTNHeldTags::Command_Kit_Swap;
+	Spec.PriorityOffset = KitSwapSlotPriorityOffset;
+	Spec.bFallThroughWhenUnavailable = true;
+	FGSTN_InputStep Step;
+	Step.AllOf.Add(FCondition::Make<FGSTN_InputCondition_Release>(Release));
+	Spec.Pattern.Steps.Add(MoveTemp(Step));
+	return Spec;
+}
+
+FGSTN_TagRequirements UGSTN_HeldSlots::KitSwapRequirements()
+{
+	FGSTN_TagRequirements Requirements;
+	Requirements.RequireTags.AddTag(GSTNHeldTags::Interact_Target_Kit);
+	Requirements.IgnoreTags.AddTag(GSTNHeldTags::Held_Carrying);
+	Requirements.IgnoreTags.AddTag(GSTNHeldTags::Held_CarryingEnemy);
+	return Requirements;
+}
+
+bool UGSTN_HeldSlots::AppendKitSwapBinding(const FSoftObjectPath& Ability, int32 HoldFrames, TArray<FGSTN_BindingInput>& OutBindings)
+{
+	const FGameplayTag Command = GSTNHeldTags::Command_Kit_Swap;
+	if (Ability.IsNull() || OutBindings.ContainsByPredicate([&Command](const FGSTN_BindingInput& Binding) { return Binding.Command == Command; }))
+	{
+		return false;
+	}
+	FGSTN_BindingInput& Binding = OutBindings.AddDefaulted_GetRef();
+	Binding.Command = Command;
+	Binding.Requirements = KitSwapRequirements();
+	Binding.Ability = Ability;
+	Binding.bHasSlotOverride = true;
+	Binding.SlotOverride = BuildKitSwapSlot(HoldFrames);
+	return true;
+}
+
 #if WITH_EDITOR
 void UGSTN_HeldSlots::AddToSlotSet(UGSTN_InputSlotSet* Set)
 {
