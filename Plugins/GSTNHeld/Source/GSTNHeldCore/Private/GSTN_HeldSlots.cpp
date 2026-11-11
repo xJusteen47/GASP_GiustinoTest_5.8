@@ -40,6 +40,8 @@ TArray<FGSTN_InputSlotSpec> UGSTN_HeldSlots::Build()
 	Slots.Add(MakeSlot(Command_Held_Pickup, Interact, PickupSlotPriorityOffset));
 	Slots.Add(MakeSlot(Command_Held_Drop, Interact, CarrySlotPriorityOffset));
 	Slots.Add(MakeSlot(Command_Held_Throw, Strong, CarrySlotPriorityOffset));
+	// M10 G9: one above the object throw (never both: an entity grabbing an enemy is not carrying an object), above the grab's kit throws
+	Slots.Add(MakeSlot(Command_Held_ThrowEnemy, Strong, CarrySlotPriorityOffset + 1));
 	return Slots;
 }
 
@@ -58,6 +60,10 @@ TArray<FGSTN_HeldSlotBinding> UGSTN_HeldSlots::DefaultBindings()
 	FGSTN_HeldSlotBinding& Throw = Bindings.AddDefaulted_GetRef();
 	Throw.Command = Command_Held_Throw;
 	Throw.Requirements.RequireTags.AddTag(Held_Carrying);
+	FGSTN_HeldSlotBinding& ThrowEnemy = Bindings.AddDefaulted_GetRef();
+	ThrowEnemy.Command = Command_Held_ThrowEnemy;
+	ThrowEnemy.Requirements.RequireTags.AddTag(Held_CarryingEnemy);
+	ThrowEnemy.Requirements.IgnoreTags.AddTag(Held_Carrying);
 	return Bindings;
 }
 
@@ -66,7 +72,8 @@ int32 UGSTN_HeldSlots::AppendKitBindings(const FSoftObjectPath& Pickup, const FS
 {
 	const TArray<FGSTN_InputSlotSpec> Slots = Build();
 	const TArray<FGSTN_HeldSlotBinding> Requirements = DefaultBindings();
-	const FSoftObjectPath* Abilities[] = { &Pickup, &Drop, &Throw };
+	// The enemy throw is the same ability as the object throw (M10 G9): it finds what the holder lifts
+	const FSoftObjectPath* Abilities[] = { &Pickup, &Drop, &Throw, &Throw };
 	check(Slots.Num() == UE_ARRAY_COUNT(Abilities) && Requirements.Num() == Slots.Num());
 
 	int32 Added = 0;

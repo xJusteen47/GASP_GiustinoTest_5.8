@@ -112,13 +112,25 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
    at the throw's ghost (`UGSTN_GA_FireProjectile::OnGhostSpawned` -> `UGSTN_HeldSubsystem::NotePredictedThrow`), then at the host's projectile
    that took the ghost over (`UGSTN_ProjectileSubsystem::OnGhostReconciled`), until the replicated state catches up; an unmatched ghost puts it
    back in the hand. `gstn.Held.GhostThrow` (harness stand-in for a predicted throw), `gstn.Held.GhostReport`. A rebound still has no ghost.
-14. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
+14. **Slice 9 (the plan's G9, thrown enemies; owner's design 2026-11-11, subject to playtesting)**: while an entity is role 1 of a live Body link of a
+   type in `ThrownEnemies.LiftableLinkTypes` (the grab) and can lift its partner, the held tick extension projects `Combat.Held.CarryingEnemy`
+   (`UGSTN_HeldSubsystem::FindLiftedEnemy`: `FGSTN_EnemyLiftRules`, rule `WeightVsCapacity` = the enemy's `Weight` attribute, else
+   `DefaultEnemyWeight` 100, against the grabber's `MaxCarryWeight`, else `DefaultEnemyCarryCapacity` 100, in the fighters' weight units where 100 = a standard fighter, not kg; or `AnyGrabbed`; `Combat.Held.NoLift` on the enemy forbids it in both; static
+   data of the two fighters only). Then RT is `Command.Held.ThrowEnemy` (slot 111, above the grab's kit throws at 100, same ability as the
+   object throw, same tap/hold aim). The shot is `ThrownEnemies.Throw` (speed scaled by the load, `FullLoadSpeedScale`), source
+   `Combat.Source.Thrown.Enemy` (a child of `Combat.Source.Thrown`), credited to the thrower, with the enemy seeded as already hit (MaxHits + 1).
+   On the host `NoteEnemyThrown` posts a LinkCommand Break (reason Throw) to both sides: the enemy leaves the parked grab where it is with the
+   shot's velocity (Teleport exit) and `RegrabLockFrames` of grab immunity. B stays the grab's own release (the put-down). A non-liftable enemy
+   keeps the grab's kit throws on RT (M11). Log `HeldEnemyThrow holder= enemy= serial= speed= posted=`. Harness `held_throw_enemy`.
+   Limits: minions cannot be grabbed yet (no G9 for them); the body flies on its own movement while the hitbox is the analytic shot, so the two
+   can drift apart (same start, same velocity, gravity -980 on both); no carry load while lifting an enemy; no thrown state on the body.
+15. **Hooks, no content**: `UGSTN_HeldObjectDefinition::CommandActions` (what the other attack buttons do with this object) and `RangedAction`
    (its own ranged action) are data only; a later slice routes commands to them.
 ## Not yet (later slices of the plan)
 
 Friendly fire by mode is `UGSTN_CombatRules::FriendlyFireSources` (slice 7; projectiles only, melee keeps `bFriendlyFire`). The camera
 side of the shoulder aim (a pawn tag source that reports the precision aim component's view tags). G9 thrown
-enemies; G12-G13 debug/editor (validator of missing size bindings per kit), sweep. Minion hit delegates (`OnMinionHit`) carry no source tag
+enemies are in step 14 (fighters only); G12-G13 debug/editor (validator of missing size bindings per kit), sweep. Minion hit delegates (`OnMinionHit`) carry no source tag
 (only the KO event does).
 
-Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`, `held_carry_load`, `held_throw_break`, `held_throw_explode`, `held_throw_ghost`).
+Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`, `held_carry_load`, `held_throw_break`, `held_throw_explode`, `held_throw_ghost`, `held_throw_enemy`).

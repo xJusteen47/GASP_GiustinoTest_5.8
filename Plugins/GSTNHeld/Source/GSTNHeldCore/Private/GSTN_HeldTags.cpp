@@ -17,6 +17,10 @@ namespace GSTNHeldTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Held_Pickup, "Command.Held.Pickup", "Pick up the nearest object in reach (grab button, nothing in hand). Default slot of UGSTN_HeldSlots");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Held_Drop, "Command.Held.Drop", "Put the held object down (grab button again, requires Combat.Held.Carrying). Default slot of UGSTN_HeldSlots");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Held_Throw, "Command.Held.Throw", "Throw the held object (strong button: tap = left stick, held = camera aim on release; requires Combat.Held.Carrying)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Held_ThrowEnemy, "Command.Held.ThrowEnemy", "Throw the lifted enemy (M10 G9: strong button as the held throw; requires Combat.Held.CarryingEnemy)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Held_CarryingEnemy, "Combat.Held.CarryingEnemy", "The entity grabs an enemy it can lift (M10 G9). Projected every frame from its Body link and the lift rules, never granted");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Held_NoLift, "Combat.Held.NoLift", "On an enemy: grabbable but never lifted and thrown as a held object (M10 G9)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Source_ThrownEnemy, "Combat.Source.Thrown.Enemy", "A thrown enemy made this hit (M10 G9); child of Combat.Source.Thrown");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Interact_Target_Pickup, "Interact.Target.Pickup", "An object at rest is the interact focus. Projected by GSTNLink's interact probe from the object's GSTNInteract record (M10 G2); the pickup binding requires it");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Link_Type_Held, "Combat.Link.Type.Held", "A hold: the Hand-channel link of a holder and a held object (M10 G1)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Link_Role_Holder, "Combat.Link.Role.Holder", "Role 1 of a Held link, projected on the holder");

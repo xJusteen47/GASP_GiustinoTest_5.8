@@ -13,7 +13,7 @@ import unreal
 import gasnpp_test as g
 import defence_scenarios as ds
 
-SUITE_HELD = ['held_pickup_throw_hit', 'held_drop_and_break', 'held_carry_load', 'held_throw_break', 'held_throw_explode', 'held_throw_ghost']
+SUITE_HELD = ['held_pickup_throw_hit', 'held_drop_and_break', 'held_carry_load', 'held_throw_break', 'held_throw_explode', 'held_throw_ghost', 'held_throw_enemy']
 _marks = {}
 
 _HAND = re.compile(r'HeldHandReport world=(\S+) entity=(\d+) carrying=(\d) target=(\d)')
@@ -401,6 +401,50 @@ def scenario_held_throw_ghost(client=1):
             st['report'] is not None and st['report'][1:5] == ('1', '1', '0', '0') and float(st['report'][6]) <= 25.0, f"{st['report']}"))),
         (4.8, run.finish()),
     ]
+    run.run(steps)
+
+
+def scenario_held_throw_enemy(pairing='client_grabs_client'):
+    """M10 G9 slice 9. A grabs B with the real grab (link rig), then the held throw fires on the host (gstn.Held.Throw from every pawn: only the
+    one lifting an enemy throws). The host logs HeldEnemyThrow with both breaks posted and a shot with the thrown-enemy source; the grab is gone
+    on every world, B left the parked mode and flew more than 1 m from where it was held, and B took no damage from its own shot"""
+    import link_scenarios as ls
+    rig = ls._GrabRig('held_throw_enemy', pairing)
+    run = rig.run
+    st = {}
+
+    def before():
+        st['log'] = g.mark_log()
+        st['pos'] = tuple(g.snap(g.worlds()[0])[rig.bkey]['location'])
+        st['dmg'] = g.damage_of(0, rig.bkey)
+        return f"B at {st['pos']} dmg {st['dmg']}"
+
+    def throw():
+        n = len(g.comps(g.worlds()[0]))
+        return [_cmd(f'gstn.Held.Throw {i} {(i + 1) % n}') for i in range(n)]
+
+    def thrown():
+        log = g._read_log_since(st['log'])
+        rows = re.findall(r'HeldEnemyThrow holder=(\d+) enemy=(\d+) serial=(\d+) speed=(\d+) posted=(\d)(\d)', log)
+        fired = re.findall(r'source=Combat.Source.Thrown.Enemy', log)
+        return len(rows) == 1 and rows[0][4:] == ('1', '1'), f'throws {rows} thrown-enemy source lines {len(fired)}'
+
+    def flew():
+        pos, start = tuple(g.snap(g.worlds()[0])[rig.bkey]['location']), st.get('pos')
+        dist = sum((a - b) ** 2 for a, b in zip(pos, start)) ** 0.5 if pos and start else -1
+        return dist > 100.0, f'B moved {dist:.0f} cm (from {start} to {pos})'
+
+    steps = [(0.2, rig.setup())]
+    grab, t = rig.grab_steps()
+    steps += grab
+    steps += [(t + 0.2, rig.formed()), (t + 0.25, lambda: ('before', before())), (t + 0.3, lambda: ('throw', throw())),
+              (t + 1.6, run.at('the host threw the lifted enemy: one HeldEnemyThrow, the breaks of both sides posted', thrown)),
+              (t + 1.6, rig.gone('the throw ended the grab on every world')),
+              (t + 1.6, run.at('B left the parked mode everywhere', lambda: (all(ls.mover_mode(wi, rig.bkey) != ls.LINKED_MODE for wi in range(len(g.worlds()))),
+                                                                           {wi: ls.mover_mode(wi, rig.bkey) for wi in range(len(g.worlds()))}))),
+              (t + 1.6, run.at('B flew more than 1 m from where it was held', flew)),
+              (t + 1.6, run.at('B took no damage from its own shot', lambda: (abs(g.damage_of(0, rig.bkey) - st['dmg']) < 0.5, f"{st['dmg']} -> {g.damage_of(0, rig.bkey)}")))]
+    steps += rig.end(t + 1.8)
     run.run(steps)
 
 

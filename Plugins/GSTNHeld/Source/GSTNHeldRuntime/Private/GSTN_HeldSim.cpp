@@ -6,6 +6,7 @@
 #include "Data/GSTN_LinkTypeDefinition.h"
 #include "GSTN_HeldLoadEffect.h"
 #include "GSTN_HeldSettings.h"
+#include "GSTN_HeldSubsystem.h"
 #include "GSTN_HeldTags.h"
 #include "GSTN_HeldTypes.h"
 #include "GSTN_LinkRegistry.h"
@@ -143,6 +144,9 @@ void FGSTN_HeldTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 	const FGSTN_LinkFragment* Links = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments);
 	const bool bHolding = Links && FGSTN_HeldLinkType::IsHolding(Links->Links.Hand, FGSTN_HeldLinkType::GetTypeIndex());
 	Context.AbilitySystem->SetLooseGameplayTagCount(GSTNHeldTags::Held_Carrying, bHolding ? 1 : 0);
+	// M10 G9: a grabbed enemy the holder can lift (static data of the two fighters, the frame's own Body link): the enemy throw binding requires it
+	const bool bLifting = !bHolding && Links && UGSTN_HeldSubsystem::FindLiftedEnemy(Context.Owner, Links->Links.Body) != nullptr;
+	Context.AbilitySystem->SetLooseGameplayTagCount(GSTNHeldTags::Held_CarryingEnemy, bLifting ? 1 : 0);
 	// M10 G6: the size class of the hold from the link's payload (sync state), never from the object
 	int32 SizeIndex = INDEX_NONE;
 	if (bHolding)

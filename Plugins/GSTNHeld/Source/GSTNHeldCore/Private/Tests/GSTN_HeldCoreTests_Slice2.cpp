@@ -83,7 +83,7 @@ bool FGSTN_HeldSlotsTest::RunTest(const FString& Parameters)
 {
 	const TArray<FGSTN_InputSlotSpec> Slots = UGSTN_HeldSlots::Build();
 	const TArray<FGSTN_HeldSlotBinding> Bindings = UGSTN_HeldSlots::DefaultBindings();
-	if (!TestEqual(TEXT("three slots"), Slots.Num(), 3) || !TestEqual(TEXT("three bindings"), Bindings.Num(), 3))
+	if (!TestEqual(TEXT("four slots"), Slots.Num(), 4) || !TestEqual(TEXT("four bindings"), Bindings.Num(), 4))
 	{
 		return false;
 	}

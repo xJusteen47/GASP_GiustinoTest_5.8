@@ -207,3 +207,32 @@ EGSTN_HeldImpactBehaviour FGSTN_HeldRules::ResolveImpact(const FGSTN_HeldObjectT
 		return EGSTN_HeldImpactBehaviour::Land;
 	}
 }
+
+bool FGSTN_EnemyLiftRules::CanLift(const FGSTN_EnemyThrowTuning& Tuning, float EnemyWeightKg, float EffectiveCapacityKg, bool bNoLift)
+{
+	if (!Tuning.bEnabled || bNoLift)
+	{
+		return false;
+	}
+	if (Tuning.LiftRule == EGSTN_EnemyLiftRule::AnyGrabbed)
+	{
+		return true;
+	}
+	return EnemyWeight(Tuning, EnemyWeightKg) <= EffectiveCapacityKg;
+}
+
+FGSTN_EnemyThrowTuning::FGSTN_EnemyThrowTuning()
+{
+	// TEST VALUES: a body thrown at 12 m/s under earth gravity (the fighters fall with it too), a capsule-sized hitbox, a heavier hit than a
+	// light prop, up to three targets bowled over
+	LiftableLinkTypes.AddTag(FGameplayTag::RequestGameplayTag(TEXT("Combat.Link.Type.Grab"), false));
+	Throw.Speed = 1200.f;
+	Throw.GravityAccel = FVector(0.0, 0.0, -980.0);
+	Throw.LifetimeFrames = 90;
+	Throw.Shape.Type = EGSTN_ShapeType::Sphere;
+	Throw.Shape.Extent = FVector(45.0);
+	Throw.Hit.Damage = 14.f;
+	Throw.Hit.BaseKnockback = 60.f;
+	Throw.Hit.AngleDeg = 35.f;
+	Throw.MaxHits = 3;
+}

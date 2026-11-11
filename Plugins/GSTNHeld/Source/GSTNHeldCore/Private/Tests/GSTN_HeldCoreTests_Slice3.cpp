@@ -23,14 +23,15 @@ bool FGSTN_HeldKitBindingsTest::RunTest(const FString& Parameters)
 	const FSoftObjectPath Throw(TEXT("/Script/Test.Throw"));
 
 	TArray<FGSTN_BindingInput> Bindings;
-	TestEqual(TEXT("an empty kit gets the three"), UGSTN_HeldSlots::AppendKitBindings(Pickup, Drop, Throw, Bindings), 3);
-	if (!TestEqual(TEXT("three bindings"), Bindings.Num(), 3))
+	TestEqual(TEXT("an empty kit gets the four"), UGSTN_HeldSlots::AppendKitBindings(Pickup, Drop, Throw, Bindings), 4);
+	if (!TestEqual(TEXT("four bindings"), Bindings.Num(), 4))
 	{
 		return false;
 	}
 	const TArray<FGSTN_InputSlotSpec> Slots = UGSTN_HeldSlots::Build();
-	const FSoftObjectPath* Expected[] = { &Pickup, &Drop, &Throw };
-	for (int32 Row = 0; Row < 3; ++Row)
+	// M10 G9: the enemy throw is the same ability as the object throw
+	const FSoftObjectPath* Expected[] = { &Pickup, &Drop, &Throw, &Throw };
+	for (int32 Row = 0; Row < 4; ++Row)
 	{
 		TestEqual(TEXT("command in row order"), Bindings[Row].Command, Slots[Row].Command);
 		TestEqual(TEXT("ability in row order"), Bindings[Row].Ability, *Expected[Row]);
@@ -46,12 +47,12 @@ bool FGSTN_HeldKitBindingsTest::RunTest(const FString& Parameters)
 	FGSTN_BindingInput& KitThrow = Own.AddDefaulted_GetRef();
 	KitThrow.Command = Command_Held_Throw;
 	KitThrow.Ability = FSoftObjectPath(TEXT("/Script/Test.KitThrow"));
-	TestEqual(TEXT("the kit's throw wins"), UGSTN_HeldSlots::AppendKitBindings(Pickup, Drop, Throw, Own), 2);
+	TestEqual(TEXT("the kit's throw wins"), UGSTN_HeldSlots::AppendKitBindings(Pickup, Drop, Throw, Own), 3);
 	TestEqual(TEXT("one throw binding, the kit's"), Own.FilterByPredicate([](const FGSTN_BindingInput& B) { return B.Command == Command_Held_Throw; }).Num(), 1);
 	TestEqual(TEXT("and it is untouched"), Own[0].Ability, FSoftObjectPath(TEXT("/Script/Test.KitThrow")));
 
 	TArray<FGSTN_BindingInput> NoAbility;
-	TestEqual(TEXT("an empty ability path binds nothing"), UGSTN_HeldSlots::AppendKitBindings(FSoftObjectPath(), Drop, Throw, NoAbility), 2);
+	TestEqual(TEXT("an empty ability path binds nothing"), UGSTN_HeldSlots::AppendKitBindings(FSoftObjectPath(), Drop, Throw, NoAbility), 3);
 	return true;
 }
 

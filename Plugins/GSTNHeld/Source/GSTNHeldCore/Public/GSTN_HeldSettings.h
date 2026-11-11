@@ -96,6 +96,10 @@ public:
 	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Size", meta = (ClampMin = "0.0", ForceUnits = "kg"))
 	float DefaultCarryCapacityKg = 50.f;
 
+	/** Thrown enemies (M10 G9): which grabbed enemies are lifted and thrown with the held throw, and the thrown body's hitbox. TEST VALUES */
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Enemies")
+	FGSTN_EnemyThrowTuning ThrownEnemies;
+
 	/** The class of SizeTag and its index (INDEX_NONE and null when none matches exactly, or beyond the four packable ones) */
 	const FGSTN_HeldSizeClass* FindSizeClass(const FGameplayTag& SizeTag, int32* OutIndex = nullptr) const;
 	/** The class at a payload's index, or null */

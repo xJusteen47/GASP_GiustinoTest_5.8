@@ -34,6 +34,8 @@ class UGSTN_HeldObjectComponent;
  * Pickup target (M10 slice 5): a request takes the object whose record GSTNLink's interact probe focused for the holder on the request's frame
  * (UGSTN_InteractSubsystem::FindProbeFocus); without a focused record, the nearest object in reach (the race of FGSTN_HeldRules::ResolvePickups).
  */
+struct FGSTN_LinkState;
+
 UCLASS()
 class GSTNHELDRUNTIME_API UGSTN_HeldSubsystem : public UWorldSubsystem, public IGSTN_LinkPartnerResolver
 {
@@ -71,6 +73,23 @@ public:
 
 	/** Host only: the throw ability fired the object Holder held as Shot; the object flies with it */
 	void NoteThrown(AActor* Holder, AGSTN_Projectile& Shot);
+
+	/**
+	 * Any machine (M10 G9): the enemy Holder lifts, from Holder's Body link state Body: role 1 of a live link of a type in the settings'
+	 * LiftableLinkTypes (the grab), the partner a fighter that FGSTN_EnemyLiftRules lets Holder lift (its Weight attribute and Combat.Held.NoLift
+	 * against Holder's capacity). Reads static data of the two fighters only (attributes and kit tags), so the held tick extension projects the
+	 * same Combat.Held.CarryingEnemy on every machine. OutLoadRatio = enemy weight over the capacity. Null when none
+	 */
+	static AActor* FindLiftedEnemy(const AActor* Holder, const FGSTN_LinkState& Body, float* OutLoadRatio = nullptr, FString* OutWhyNot = nullptr);
+	/** The same from Holder's latest combat sync state (the throw ability) */
+	static AActor* FindLiftedEnemy(const AActor* Holder, float* OutLoadRatio = nullptr, FString* OutWhyNot = nullptr);
+
+	/**
+	 * Host only (M10 G9): the throw ability fired Holder's lifted enemy as Shot (its hitbox, credited to Holder). The grab ends on both sides
+	 * (LinkCommand Break, reason Throw, each stamped with its side's latest frame, as the watchdog posts them) and the enemy leaves the parked
+	 * grab where it is with the shot's velocity, its regrab lock set; the shot already counts it as hit, so it never hits the body it stands for
+	 */
+	void NoteEnemyThrown(AActor* Holder, AGSTN_Projectile& Shot);
 
 	/**
 	 * Throwing client only (M10 G8): the throw just drew Ghost; the object Holder holds is drawn at it until the host's projectile takes over

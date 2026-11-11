@@ -10,6 +10,7 @@
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "GSTN_HeldObjectComponent.h"
 #include "GSTN_HeldSubsystem.h"
+#include "GSTN_HeldTags.h"
 
 void UGSTN_GA_HeldPickup::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
@@ -162,9 +163,22 @@ bool UGSTN_GA_HeldThrow::PrepareShot(FGSTN_ProjectileParams& InOutParams, bool b
 	const UGSTN_HeldObjectComponent* Object = Held ? Held->FindHeldBy(GetAvatarActorFromActorInfo()) : nullptr;
 	if (!Object)
 	{
+		// M10 G9: a lifted enemy is thrown the same way; its hitbox is the shot, its body leaves the grab with the shot's velocity (host)
+		float LoadRatio = 0.f;
+		FString WhyNot;
+		if (UGSTN_HeldSubsystem::FindLiftedEnemy(GetAvatarActorFromActorInfo(), &LoadRatio, bHost ? &WhyNot : nullptr))
+		{
+			const FGSTN_EnemyThrowTuning& Enemy = UGSTN_HeldSettings::Get().ThrownEnemies;
+			InOutParams = Enemy.Throw;
+			InOutParams.Speed *= FGSTN_EnemyLiftRules::SpeedScale(Enemy, LoadRatio);
+			InOutParams.SourceTag = GSTNHeldTags::Source_ThrownEnemy;
+			// The thrown body is seeded as already hit by its own shot (NoteEnemyThrown): one more so MaxHits still counts the targets
+			InOutParams.MaxHits = static_cast<uint8>(FMath::Min(static_cast<int32>(InOutParams.MaxHits) + 1, 255));
+			return true;
+		}
 		if (bHost)
 		{
-			UE_LOG(LogGSTNHeld, Log, TEXT("HeldThrow: %s holds nothing, no throw"), *GetNameSafe(GetAvatarActorFromActorInfo()));
+			UE_LOG(LogGSTNHeld, Log, TEXT("HeldThrow: %s holds nothing, no throw (%s)"), *GetNameSafe(GetAvatarActorFromActorInfo()), *WhyNot);
 		}
 		return false;
 	}
@@ -183,7 +197,14 @@ void UGSTN_GA_HeldThrow::OnShotFired(AGSTN_Projectile& Shot)
 {
 	if (UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(GetWorld()))
 	{
-		Held->NoteThrown(GetAvatarActorFromActorInfo(), Shot);
+		if (Held->FindHeldBy(GetAvatarActorFromActorInfo()))
+		{
+			Held->NoteThrown(GetAvatarActorFromActorInfo(), Shot);
+		}
+		else
+		{
+			Held->NoteEnemyThrown(GetAvatarActorFromActorInfo(), Shot);
+		}
 	}
 }
 

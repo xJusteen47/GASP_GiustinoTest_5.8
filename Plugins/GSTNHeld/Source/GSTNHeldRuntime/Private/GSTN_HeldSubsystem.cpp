@@ -20,7 +20,11 @@
 #include "GSTN_HeldTags.h"
 #include "Hits/GSTN_CombatHitTags.h"
 #include "GSTN_InteractSubsystem.h"
+#include "GSTN_LinkRegistry.h"
+#include "GSTN_LinkWatchdog.h"
 #include "Sim/GSTN_LinkFragment.h"
+#include "Sim/GSTN_LinkInboxKinds.h"
+#include "State/GSTN_LinkState.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "GSTN_ProjectileActor.h"
@@ -1050,4 +1054,112 @@ namespace GSTNHeldConsole
 		TEXT("gstn.Held.GhostReport"),
 		TEXT("Logs what became of this world's object ghosts: HeldGhostReport predicted handed snapped expired lastErrorCm maxHandedErrorCm"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&GhostReport));
+}
+
+AActor* UGSTN_HeldSubsystem::FindLiftedEnemy(const AActor* Holder, const FGSTN_LinkState& Body, float* OutLoadRatio, FString* OutWhyNot)
+{
+	const FGSTN_EnemyThrowTuning& Tuning = UGSTN_HeldSettings::Get().ThrownEnemies;
+	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
+	if (!Tuning.bEnabled || !Holder || !Registry || !Body.IsLinked() || Body.Role != 1 || Body.PartnerId.Kind != GSTNEntityKinds::Fighter)
+	{
+		if (OutWhyNot)
+		{
+			*OutWhyNot = FString::Printf(TEXT("body linked=%d role=%d type=%d partner=%s"), Body.IsLinked() ? 1 : 0, Body.Role, Body.LinkTypeIndex, *Body.PartnerId.ToString());
+		}
+		return nullptr;
+	}
+	bool bLiftableType = false;
+	for (const FGameplayTag& Type : Tuning.LiftableLinkTypes)
+	{
+		const uint8 Index = Registry->GetTypeIndex(Type);
+		bLiftableType |= Index != 0 && Index == Body.LinkTypeIndex;
+	}
+	const UGSTN_CombatWorldSubsystem* Combat = bLiftableType ? UGSTN_CombatWorldSubsystem::Get(Holder->GetWorld()) : nullptr;
+	AActor* Enemy = Combat ? Combat->FindOwnerActor(static_cast<int32>(Body.PartnerId.Id)) : nullptr;
+	const UAbilitySystemComponent* EnemyAbilities = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Enemy);
+	if (!EnemyAbilities)
+	{
+		if (OutWhyNot)
+		{
+			*OutWhyNot = FString::Printf(TEXT("liftable type=%d type=%d partner=%s actor=%s"), bLiftableType ? 1 : 0, Body.LinkTypeIndex, *Body.PartnerId.ToString(), *GetNameSafe(Enemy));
+		}
+		return nullptr;
+	}
+	bool bFound = false;
+	const float WeightAttribute = EnemyAbilities->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetWeightAttribute(), bFound);
+	const float Weight = FGSTN_EnemyLiftRules::EnemyWeight(Tuning, bFound ? WeightAttribute : 0.f);
+	// The fighters' weight units, not the held objects' kilograms: the enemy capacity's own default
+	const float Capacity = FGSTN_HeldLoad::EffectiveCapacity(CarryCapacityOf(Holder), Tuning.DefaultEnemyCarryCapacity);
+	if (!FGSTN_EnemyLiftRules::CanLift(Tuning, Weight, Capacity, EnemyAbilities->HasMatchingGameplayTag(GSTNHeldTags::Held_NoLift)))
+	{
+		if (OutWhyNot)
+		{
+			*OutWhyNot = FString::Printf(TEXT("too heavy or no-lift: weight=%.1f capacity=%.1f"), Weight, Capacity);
+		}
+		return nullptr;
+	}
+	if (OutLoadRatio)
+	{
+		*OutLoadRatio = Capacity > 0.f ? FMath::Clamp(Weight / Capacity, 0.f, 1.f) : 1.f;
+	}
+	return Enemy;
+}
+
+AActor* UGSTN_HeldSubsystem::FindLiftedEnemy(const AActor* Holder, float* OutLoadRatio, FString* OutWhyNot)
+{
+	const UGSTN_CombatSimComponent* Sim = Holder ? Holder->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
+	const FGSTN_CombatSyncState* Sync = Sim ? Sim->GetSyncState() : nullptr;
+	const FGSTN_LinkFragment* Links = Sync ? FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Sync->Fragments) : nullptr;
+	return Links ? FindLiftedEnemy(Holder, Links->Links.Body, OutLoadRatio, OutWhyNot) : nullptr;
+}
+
+void UGSTN_HeldSubsystem::NoteEnemyThrown(AActor* Holder, AGSTN_Projectile& Shot)
+{
+	UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(GetWorld());
+	UGSTN_CombatWorldSubsystem* Combat = UGSTN_CombatWorldSubsystem::Get(GetWorld());
+	const UGSTN_CombatSimComponent* HolderSim = Holder ? Holder->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
+	const FGSTN_CombatSyncState* HolderSync = HolderSim ? HolderSim->GetSyncState() : nullptr;
+	const FGSTN_LinkFragment* Links = HolderSync ? FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(HolderSync->Fragments) : nullptr;
+	AActor* Enemy = Links ? FindLiftedEnemy(Holder, Links->Links.Body) : nullptr;
+	if (!HasAuthority() || !Projectiles || !Combat || !Enemy)
+	{
+		UE_LOG(LogGSTNHeld, Log, TEXT("HeldEnemyThrow: %s lifts no enemy, the shot flies alone"), *GetNameSafe(Holder));
+		return;
+	}
+	const int32 HolderId = Projectiles->FindEntityIdOf(Holder);
+	const int32 EnemyId = static_cast<int32>(Links->Links.Body.PartnerId.Id);
+	const uint8 Serial = Links->Links.Body.Serial;
+	// The shot stands for the body: the body counts as already hit by it (PrepareShot added one to MaxHits for it)
+	Projectiles->SeedHitTargets(&Shot, { EnemyId });
+
+	const FVector Velocity = Shot.GetSegment().Velocity;
+	const int32 RegrabLockFrames = UGSTN_HeldSettings::Get().ThrownEnemies.RegrabLockFrames;
+	auto PostBreak = [&](AActor* Side, int32 SideId, bool bThrown)
+	{
+		const UGSTN_CombatSimComponent* Sim = Side->FindComponentByClass<UGSTN_CombatSimComponent>();
+		const FGSTN_CombatSyncState* Sync = Sim ? Sim->GetSyncState() : nullptr;
+		const int32 Stamp = Sync ? Sync->Core.Input.History.GetLatestFrame() : LastFrame;
+		FGSTN_LinkCommandEntry Command;
+		Command.Kind = EGSTN_LinkCommandKind::Break;
+		Command.Channel = EGSTN_LinkChannel::Body;
+		Command.Serial = Serial;
+		Command.Reason = static_cast<uint8>(EGSTN_LinkBreakReason::Throw);
+		if (bThrown)
+		{
+			// Leaves the parked grab where it is (the grabber's socket), moving: the exit request launches it on its own movement
+			Command.ExitPosition = FVector3f(Side->GetActorLocation());
+			Command.ExitYawDeg = static_cast<float>(Side->GetActorRotation().Yaw);
+			Command.ExitVelocity = FVector3f(Velocity);
+			Command.ExitFlags = GSTNLinkExitFlags::Teleport;
+			Command.ImmunityEndFrame = Stamp + 1 + RegrabLockFrames;
+		}
+		FGSTN_InboxEntry Entry = FGSTN_LinkInboxHandlers::MakeCommand(Command);
+		Entry.Frame = Stamp;
+		Entry.SenderId = HolderId;
+		return Combat->PostToInbox(SideId, Entry);
+	};
+	const bool bHolderPosted = PostBreak(Holder, HolderId, false);
+	const bool bEnemyPosted = PostBreak(Enemy, EnemyId, true);
+	UE_LOG(LogGSTNHeld, Log, TEXT("HeldEnemyThrow holder=%d enemy=%d serial=%d speed=%.0f posted=%d%d frame=%d"), HolderId, EnemyId, static_cast<int32>(Serial),
+		Velocity.Size(), bHolderPosted ? 1 : 0, bEnemyPosted ? 1 : 0, Shot.GetSegment().StartFrame);
 }

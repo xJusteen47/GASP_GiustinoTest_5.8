@@ -35,6 +35,14 @@ namespace GSTNHeldTags
 	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Held_Drop);
 	/** Throw the held object: the strong button (tap = stick, held = camera aim on release) */
 	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Held_Throw);
+	/** Throw the lifted enemy (M10 G9): the strong button, as Command.Held.Throw; requires Combat.Held.CarryingEnemy */
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Held_ThrowEnemy);
+	/** The entity grabs an enemy it can lift (M10 G9): projected every frame from its Body link and the lift rules, never granted */
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Held_CarryingEnemy);
+	/** On an enemy: it can be grabbed but never lifted and thrown as a held object (M10 G9), whatever its weight */
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Held_NoLift);
+	/** Source of a thrown enemy's hits (M10 G9): a child of Combat.Source.Thrown, so rules matching thrown hits match it too */
+	GSTNHELDCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Source_ThrownEnemy);
 
 	/**
 	 * An object at rest is in pickup reach and the hand is empty (M10 slice 3, the plan's G2 meaning): projected every frame by the held tick

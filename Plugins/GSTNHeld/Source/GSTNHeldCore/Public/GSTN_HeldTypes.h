@@ -420,3 +420,79 @@ struct GSTNHELDCORE_API FGSTN_HeldLoad
 	static float SpeedScale(const FGSTN_HeldSizeClass* SizeClass, float LoadRatio);
 	static float JumpScale(const FGSTN_HeldSizeClass* SizeClass, float LoadRatio);
 };
+
+/** Which grabbed enemies the grabber may lift and throw like a held object (M10 G9; both shipped, owner's choice after playtesting) */
+UENUM(BlueprintType)
+enum class EGSTN_EnemyLiftRule : uint8
+{
+	/** The enemy's weight (its Weight attribute, else DefaultEnemyWeight) must not exceed the grabber's capacity (MaxCarryWeight, else DefaultEnemyCarryCapacity) */
+	WeightVsCapacity,
+	/** Every enemy the grab took can be lifted; only the no-lift tag forbids it */
+	AnyGrabbed
+};
+
+/**
+ * Thrown enemies (M10 G9, spec section 6b, owner's design 2026-11-11, subject to playtesting): a grabbed enemy that can be lifted is thrown
+ * with the held throw's buttons and aim (Command.Held.ThrowEnemy on the strong button, above the grab's own kit throws); one that cannot keeps
+ * the grab's kit throws (M11). The grab button still releases it (Command.Link.Release): that is the put-down. Every default is a TEST VALUE.
+ */
+USTRUCT(BlueprintType)
+struct GSTNHELDCORE_API FGSTN_EnemyThrowTuning
+{
+	GENERATED_BODY()
+
+	FGSTN_EnemyThrowTuning();
+
+	/** Off = grabs never turn into holds: the strong button keeps the grab's kit throws for every enemy */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Held|Enemies")
+	bool bEnabled = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Held|Enemies")
+	EGSTN_EnemyLiftRule LiftRule = EGSTN_EnemyLiftRule::WeightVsCapacity;
+
+	/**
+	 * Weights here are the fighters' Weight attribute units (the knockback weight: 100 = a standard fighter), not the kilograms of held objects.
+	 * The weight of an enemy whose Weight attribute is 0 (the attribute's default). TEST VALUE: a standard fighter
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Held|Enemies", meta = (ClampMin = "0.0"))
+	float DefaultEnemyWeight = 100.f;
+
+	/** The capacity of a grabber whose MaxCarryWeight attribute is 0. TEST VALUE: a standard fighter lifts a standard fighter, not a heavier one */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Held|Enemies", meta = (ClampMin = "0.0"))
+	float DefaultEnemyCarryCapacity = 100.f;
+
+	/** The link types whose initiator lifts its partner (role 1 of a live Body link of one of them). Default: the grab */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Held|Enemies", meta = (Categories = "Combat.Link.Type"))
+	FGameplayTagContainer LiftableLinkTypes;
+
+	/**
+	 * The thrown body's hitbox: a GSTNProjectile shot along the throw's aim, credited to the thrower (speed, gravity, lifetime, shape, hit, MaxHits
+	 * for a bowling-ball pierce). The enemy itself leaves the grab with the shot's velocity and flies on its own movement; the shot never hits it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Held|Enemies")
+	FGSTN_ProjectileParams Throw;
+
+	/** The shot's speed at full load (weight = capacity), lerped from 1 at no load: heavier enemies fly slower and shorter */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Held|Enemies", meta = (ClampMin = "0.05", ClampMax = "1.0"))
+	float FullLoadSpeedScale = 0.75f;
+
+	/** Frames after the throw during which the thrown enemy cannot be grabbed again (its grab immunity) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Held|Enemies", meta = (ClampMin = 0, ForceUnits = "frames"))
+	int32 RegrabLockFrames = 60;
+};
+
+/** The pure rules of thrown enemies (M10 G9) */
+struct GSTNHELDCORE_API FGSTN_EnemyLiftRules
+{
+	/**
+	 * Can a grabber of this effective capacity lift an enemy of this weight (0 = unknown: the tuning's default) that has (bNoLift) or not the
+	 * no-lift tag? Off in the tuning: never
+	 */
+	static bool CanLift(const FGSTN_EnemyThrowTuning& Tuning, float EnemyWeightKg, float EffectiveCapacityKg, bool bNoLift);
+
+	/** The enemy's weight the rules use: its attribute, else the tuning's default */
+	static float EnemyWeight(const FGSTN_EnemyThrowTuning& Tuning, float WeightAttributeKg) { return WeightAttributeKg > 0.f ? WeightAttributeKg : Tuning.DefaultEnemyWeight; }
+
+	/** The thrown shot's speed multiplier for a load ratio (weight / capacity, clamped 0..1) */
+	static float SpeedScale(const FGSTN_EnemyThrowTuning& Tuning, float LoadRatio) { return FMath::Lerp(1.f, Tuning.FullLoadSpeedScale, FMath::Clamp(LoadRatio, 0.f, 1.f)); }
+};

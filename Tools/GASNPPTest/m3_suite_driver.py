@@ -8,6 +8,8 @@ NAMES = g.SUITE_DEFAULT[:g.SUITE_DEFAULT.index('slide_jump') + 1] + ['loadout_ch
 if os.environ.get('R31_ONLY'):
     NAMES = os.environ['R31_ONLY'].split(',')
 OUT = os.path.join(unreal.Paths.project_dir(), 'Saved', 'R31', f'report-{TAG}.txt')
+# Without the folder the report write raised every tick and the editor never quit
+os.makedirs(os.path.dirname(OUT), exist_ok=True)
 les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
 st = {'t': time.time(), 'phase': 'start'}
 def tick(_dt):
