@@ -157,6 +157,11 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
    `DeathDrop` DropAndLose (kit dropped under the player, player back to `RespawnKit`), DropCopy or Off; a dropped kit lasts
    `DroppedKitLifetimeSeconds` (30). Logs `KitSwap .. took kit= left= (focus|nearest)`, `KitDrop`. Tests `GSTNHeld.Core.KitSwapSlot`,
    `KitSwapSettings`; harness `kit_scenarios.scenario_kit_swap_hold`. Kits built in memory by code (the combat tests) get no swap binding.
+18. **Kit throws while lifting (M11 K2)**: GSTNLink's kit throws (stick picks the throw, see its README "Kit throws") meet the thrown enemies of step 14
+   through `ThrownEnemies.KitThrowsWhileLifting`: `NotStickOnly` (default: while `Combat.Held.CarryingEnemy` the Smash forward and back throws, which
+   the stick alone fires, are off, so the stick aims the held throw; the jump and crouch throws stay), `None` (only the held throw) or `All`. Handed to
+   `UGSTN_LinkSlots::SetThrowBlockers` at startup (`FGSTN_EnemyLiftRules::KitThrowBlockers`). Test `GSTNHeld.Core.KitThrowBlockers`; harness
+   `kit_scenarios.scenario_kit_throw_lifted`.
 
 ## Not yet (later slices of the plan)
 

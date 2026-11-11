@@ -4,8 +4,29 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DeveloperSettings.h"
+#include "Data/GSTN_LinkKitExtension.h"
 #include "GameplayTagContainer.h"
+#include "Input/GSTN_InputSlot.h"
 #include "GSTN_LinkSettings.generated.h"
+
+/**
+ * How a grabber picks one of its four throws (M11 K2, owner decision 2 of 2026-11-11). Every machine of a match must use the same mode: it
+ * shapes the slots of the compiled binding table, which the prediction replays.
+ */
+UENUM(BlueprintType)
+enum class EGSTN_LinkThrowInputMode : uint8
+{
+	/**
+	 * Smash style, the default: in a grab the stick alone picks the throw. Stick pushed forward = forward throw, pulled back = back throw
+	 * (the moment it enters the sector, so a stick already held when the grab lands does not throw at once); jump = up throw, crouch = down
+	 * throw (a 3D stick has no up and down of its own). Attack is still the pummel
+	 */
+	Stick,
+	/** The stick plus the special button: special + forward / back, special alone = up, special + crouch held = down */
+	StickPlusSpecial,
+	/** The F12 shapes of the link slot set as authored (attack or strong + tilt, strong = up, crouch + attack = down): no slot is overridden */
+	Buttons
+};
 
 /**
  * Settings of the link plugin (Project Settings > Plugins > GSTN Link). Defaults ship in the plugin's Config/DefaultGSTNLink.ini;
@@ -57,6 +78,39 @@ public:
 	 */
 	UPROPERTY(Config, EditAnywhere, Category = "Link|Input", meta = (Categories = "Command"))
 	TMap<FGameplayTag, int32> CommandTiers;
+
+	/**
+	 * Kit throws (M11 K2): how the grabber picks a throw. Applied when a loadout is compiled, to every kit asset that binds the grab
+	 * (Command.Link.Grab), so no kit is edited by hand. Read at compile time: a change takes effect at the next kit swap or PIE
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Link|Throws")
+	EGSTN_LinkThrowInputMode ThrowInputMode = EGSTN_LinkThrowInputMode::Stick;
+
+	/** Off = kits keep exactly the throw rows they author (no fallback rows, no kit set, no slot override, no special grab) */
+	UPROPERTY(Config, EditAnywhere, Category = "Link|Throws")
+	bool bApplyKitThrows = true;
+
+	/**
+	 * The common throw set (owner decision 3): a grabbing kit that binds no ability to a throw, and whose link extension names none, gets
+	 * this one. The plugin's defaults are the placeholder C++ throws of GSTNLinkNP (UGSTN_GA_LinkThrowForward...)
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Link|Throws")
+	FGSTN_LinkThrowSet FallbackThrows;
+
+	/**
+	 * Owner decision 2: besides the tap of the grab button, special + crouch held grabs too, while a grab target is framed (it then wins over
+	 * the down special). Off = the grab button only
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Link|Throws")
+	bool bGrabWithSpecialCrouch = true;
+
+	/**
+	 * Designer slots that replace the mode's built shape for their command: any of Command.Link.Throw.* and Command.Link.Grab.Special (the
+	 * second grab input; the tap of the grab button stays the slot set's). Empty = the mode's shapes (UGSTN_LinkSlots::BuildThrowSlot). The
+	 * buttons in a slot are logical (Combat.Button.*): the input config maps them to keys and pad buttons
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Link|Throws")
+	TArray<FGSTN_InputSlotSpec> ThrowSlotOverrides;
 
 	/** Hands CommandTiers to the input settings under this plugin's contribution source */
 	void PushToInputSettings() const;

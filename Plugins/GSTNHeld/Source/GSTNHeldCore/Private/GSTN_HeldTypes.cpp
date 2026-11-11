@@ -208,6 +208,22 @@ EGSTN_HeldImpactBehaviour FGSTN_HeldRules::ResolveImpact(const FGSTN_HeldObjectT
 	}
 }
 
+void FGSTN_EnemyLiftRules::KitThrowBlockers(const FGSTN_EnemyThrowTuning& Tuning, FGameplayTagContainer& OutBlockAll, FGameplayTagContainer& OutBlockStickOnly)
+{
+	if (!Tuning.bEnabled)
+	{
+		return;
+	}
+	if (Tuning.KitThrowsWhileLifting == EGSTN_LiftedEnemyKitThrows::None)
+	{
+		OutBlockAll.AddTag(GSTNHeldTags::Held_CarryingEnemy);
+	}
+	else if (Tuning.KitThrowsWhileLifting == EGSTN_LiftedEnemyKitThrows::NotStickOnly)
+	{
+		OutBlockStickOnly.AddTag(GSTNHeldTags::Held_CarryingEnemy);
+	}
+}
+
 bool FGSTN_EnemyLiftRules::CanLift(const FGSTN_EnemyThrowTuning& Tuning, float EnemyWeightKg, float EffectiveCapacityKg, bool bNoLift)
 {
 	if (!Tuning.bEnabled || bNoLift)

@@ -114,7 +114,7 @@ Designer vocabulary (the `GameplayCue.Combat.Link.*`, `.Pummel` and `.Throw` cue
 | `Combat.HitType.Throw`, `Combat.HitType.Pummel` | The hit data |
 | `Combat.Mover.Linked` | The linked modifier |
 | `Interact.Target.Grab` | The link tick extension, from the interact probe |
-| `Command.Link.Grab`, `.Pummel`, `.Release`, `.Throw.Forward`, `.Back`, `.Up`, `.Down`, `.Latch.Attack` (F12), `Input.Lock.Command.Link` | The standard command set, abilities and effects |
+| `Command.Link.Grab`, `.Grab.Special` (M11 K2: special + crouch), `.Pummel`, `.Release`, `.Throw.Forward`, `.Back`, `.Up`, `.Down`, `.Latch.Attack` (F12), `Input.Lock.Command.Link` | The standard command set, abilities and effects |
 | `Combat.Event.LinkFormed`, `.LinkBroken`, `.Throw`, `.GrabEscaped` | The watchdog and the combat outbox on the authority |
 | `Combat.Event.Link.PartnerMoveAborted` | G2: the link tick's combat outbox on the authority (Magnitude = the action id) |
 
@@ -217,6 +217,31 @@ fragment, the inbox kinds, the watchdog), which stays C++.
 | `PredictedPlacementToleranceCm` | M7 G6: how far an initiator-placed exit or a per-link anchor on the player's machine may be from the authority's before it is a misprediction (5 cm; the exit's yaw within 5 degrees). |
 | `LinkTypeDirectories` | Content folders, besides the plugin's own, scanned for link type definitions (empty). Read when the asset manager is created. |
 | `CommandTiers` | Command tiers this plugin adds to the input settings at startup (source `GSTNLink`, removed at shutdown): `Command.Link` = 360, above the attack and strong tiers. |
+| `ThrowInputMode`, `bApplyKitThrows`, `FallbackThrows`, `bGrabWithSpecialCrouch`, `ThrowSlotOverrides` | M11 K2, see "Kit throws" below (Stick, on, the four `UGSTN_GA_LinkThrow*`, on, empty). |
+
+## Kit throws (M11 K2)
+
+Owner decisions 2-3 of 2026-11-11, subject to playtesting. A loadout extension of `GSTNLinkNP` (id `GSTNLinkThrows`) runs `UGSTN_LinkSlots::ApplyKitThrows`
+on every kit ASSET that binds `Command.Link.Grab` to an ability, on every machine, so no kit is edited by hand (kits built in memory by code keep their
+authored table, as with the kit swap binding):
+
+- **Four throws per kit, common fallback**: `FGSTN_LinkKitExtension::Throws` (`FGSTN_LinkThrowSet`: Forward, Back, Up, Down ability classes). Per
+  direction: the kit set's entry replaces the ability of the kit's own throw rows; with no row the kit set's entry, else `FallbackThrows`, is added
+  (requires `Role.Grabber`); a row bound to nothing hides that throw. The fallback set is `Moves/GSTN_LinkThrowMoves.h` (placeholder values, no montage:
+  forward 40 degrees, back 140 = up and behind the thrower, up 88, down 80 low; Blueprint children can add a montage).
+- **The stick picks the throw** (`ThrowInputMode`, `EGSTN_LinkThrowInputMode`): `Stick` (default) = stick entering the forward or back facing sector at
+  tilt (a one-element Motion: a stick already held when the grab lands does not throw; re-enter to throw), Jump = up, Crouch = down, Attack stays the
+  pummel; `StickPlusSpecial` = Special + tilt, Special alone = up, Special + Crouch held = down; `Buttons` = the F12 rows of the slot set, unchanged.
+  The shapes are binding slot overrides built by `BuildThrowSlot`; `ThrowSlotOverrides` replaces any of them (and the special grab's) by data. Every
+  button is a logical `Combat.Button.*`, mapped to keys and pad by the input config.
+- **Special + crouch grabs** (`bGrabWithSpecialCrouch`): a row `Command.Link.Grab.Special` (Press Special + Hold Crouch, offset 102) bound to the kit's
+  grab ability with the grab's requirement. Its own command: a second `Command.Link.Grab` row with the same requirement makes the loadout validator
+  refuse the kit's link rows (found in PIE).
+- **Blockers**: other plugins register tags that switch throws off (`SetThrowBlockers`, by source; the link plugin names none of them). GSTNHeld
+  registers `Combat.Held.CarryingEnemy` for the stick-only throws by default (a lifted enemy is thrown with the held throw, which owns the stick).
+
+Tests `GSTNLink.Core.KitThrows.{StickPicksThrow, StickPlusSpecial, Fill, ProjectSettings}`; harness `kit_scenarios.scenario_kit_throw_stick_forward`,
+`_back`, `scenario_kit_throw_lifted` (run with `Tools/GASNPPTest/batch_driver.py`, `BATCH_MODULE=kit_scenarios`).
 
 ## Predicted partner presentation (FP G1)
 

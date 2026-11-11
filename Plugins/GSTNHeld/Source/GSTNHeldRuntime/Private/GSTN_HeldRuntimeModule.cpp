@@ -7,6 +7,7 @@
 #include "GSTN_HeldTags.h"
 #include "GSTN_InteractSettings.h"
 #include "GSTN_KitInteract.h"
+#include "Input/GSTN_LinkSlots.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Misc/CoreDelegates.h"
 #include "Engine/Engine.h"
@@ -46,6 +47,14 @@ public:
 			PostEngineInitHandle = FCoreDelegates::GetOnPostEngineInit().AddStatic(&FGSTN_HeldLinkType::Register);
 		}
 		UGSTN_HeldSettings::Get().PushToInputSettings();
+
+		// M11 K2: while an enemy is lifted the held throw owns the stick, so GSTNLink drops the kit throws the settings pick (read when a kit compiles)
+		{
+			FGameplayTagContainer BlockAll;
+			FGameplayTagContainer BlockStickOnly;
+			FGSTN_EnemyLiftRules::KitThrowBlockers(UGSTN_HeldSettings::Get().ThrownEnemies, BlockAll, BlockStickOnly);
+			UGSTN_LinkSlots::SetThrowBlockers(LoadoutExtensionId, BlockAll, BlockStickOnly);
+		}
 
 		// The pickup meaning the objects' GSTNInteract records carry (M10 G2), unless the project's interact settings list it already. GSTNLink's
 		// probe reads these settings when it compiles its meaning table, so the meaning is there before any registry or world exists
@@ -102,6 +111,7 @@ public:
 	virtual void ShutdownModule() override
 	{
 		FGSTN_LoadoutExtensionRegistry::Unregister(LoadoutExtensionId);
+		UGSTN_LinkSlots::ClearThrowBlockers(LoadoutExtensionId);
 		if (bAddedPickupMeaning && UObjectInitialized())
 		{
 			const FGameplayTag Pickup = GSTNHeldTags::Interact_Target_Pickup;

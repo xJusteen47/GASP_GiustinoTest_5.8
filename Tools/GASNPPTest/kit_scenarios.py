@@ -5,7 +5,7 @@ import re
 import unreal
 import gasnpp_test as g
 
-SUITE_KIT = ['kit_swap_hold']
+SUITE_KIT = ['kit_swap_hold', 'kit_throw_stick_forward', 'kit_throw_stick_back', 'kit_throw_lifted']
 _SWAP = re.compile(r'KitSwap (\S+) frame=(\d+) (took|refused) kit=(\S+) left=(\S+) at (\S+) \((focus|nearest)\)')
 
 
@@ -70,3 +70,82 @@ def scenario_kit_swap_hold(client=1, kit='KIT_Test_Link'):
         (7.5, run.finish()),
     ]
     run.run(steps)
+
+
+# ------------------------------------------------------------------------------------------------ M11 K2: kit throws picked by the stick
+def _lifting(on):
+    """Thrown enemies (GSTNHeld ThrownEnemies.bEnabled) on or off on the settings every world of the PIE process reads, so a standard fighter is
+    grabbable but not liftable and the grab keeps the Smash throws. (A Combat.Held.NoLift loose tag added from Python does not reach the lift
+    check: tried, the pawn shows no such tag.) Restored by the scenario's end"""
+    settings = unreal.get_default_object(unreal.GSTN_HeldSettings)
+    tuning = settings.get_editor_property('thrown_enemies')
+    tuning.set_editor_property('enabled', on)
+    settings.set_editor_property('thrown_enemies', tuning)
+    return 'thrown enemies', on
+
+
+def _kit_throw(name, direction, lifted, pairing):
+    """A grabs B (the link rig: the harness kit with the link test bindings, compiled with the project's ThrowInputMode, Stick by default), then
+    pushes the stick toward B (forward) or away from B (back), with no button. Not lifted (thrown enemies off for the scenario): the stick alone throws,
+    the link ends with reason Throw on every world (no watchdog break: not the grab's timeout escape). Lifted (B liftable, the default test weights): the held
+    throw owns the stick, so the push throws nothing and the link holds (KitThrowsWhileLifting NotStickOnly); a press of Crouch then throws (the
+    Smash down throw, not stick-only)"""
+    import link_scenarios as ls
+    rig = ls._GrabRig(name, pairing)
+    run = rig.run
+    st = {}
+
+    def loc(key):
+        return ls.actor(0, key).get_actor_location()
+
+    def push():
+        a, b = loc(rig.akey), loc(rig.bkey)
+        st['a'], st['dir'] = a, unreal.Vector(b.x - a.x, b.y - a.y, 0.0).normal()
+        target = (b.x, b.y) if direction == 'forward' else (2 * a.x - b.x, 2 * a.y - b.y)
+        value = g._steer_value(rig.ia, target)
+        return 'stick', direction, value, g.hold(rig.ia, 'move', value)
+
+    def side():
+        b = loc(rig.bkey)
+        along = (b.x - st['a'].x) * st['dir'].x + (b.y - st['a'].y) * st['dir'].y
+        ok = along > 120.0 if direction == 'forward' else along < -60.0
+        return ok, f'B along the A->B line: {along:.0f} cm (stick {direction})'
+
+    steps = [(0.2, rig.setup())]
+    if not lifted:
+        steps += [(0.6, lambda: _lifting(False))]
+    grab, t = rig.grab_steps()
+    steps += grab
+    def tags():
+        rows = {wi: g._has_tag(ls.actor(wi, rig.akey), 'Combat.Held.CarryingEnemy') for wi in range(len(g.worlds()))}
+        return run.note(f'A lifting per world: {rows}')
+
+    steps += [(t + 0.1, tags), (t + 0.2, push), (t + 0.6, lambda: ('stick released', g.release(rig.ia, 'move')))]
+    if lifted:
+        steps += [(t + 1.2, rig.formed('lifted: the stick alone threw nothing, the link holds on every world')),
+                  (t + 1.3, lambda: ('crouch tap', g.combat_tap(rig.ia, g.button_mask('Crouch')))),
+                  (t + 3.2, rig.gone('lifted: crouch (the down throw) ended the link on every world')), (t + 3.2, rig.reason('Throw'))]
+        end = t + 3.3
+    else:
+        steps += [(t + 2.4, rig.gone('the stick alone threw: the link is gone on every world')), (t + 2.4, rig.reason('Throw')),
+                  # A note, not a check: the harness kit binds the same test throw to every direction and the harness pawns have no knockback move
+                  # effect, so B does not land on the stick's side; which throw a stick direction picks is GSTNLink.Core.KitThrows.StickPicksThrow
+                  (t + 2.5, lambda: run.note(side()[1])),
+                  (t + 2.6, rig.equal_texts('the link states are equal on every world after the throw')),
+                  (t + 2.7, lambda: _lifting(True))]
+        end = t + 2.8
+    steps += [(end - 0.05, lambda: ('cleared', g.release(rig.ia, 'move'), g.combat_clear(rig.ia)))]
+    steps += rig.end(end)
+    run.run(steps)
+
+
+def scenario_kit_throw_stick_forward(pairing='client_grabs_client'):
+    _kit_throw('kit_throw_stick_forward', 'forward', False, pairing)
+
+
+def scenario_kit_throw_stick_back(pairing='client_grabs_client'):
+    _kit_throw('kit_throw_stick_back', 'back', False, pairing)
+
+
+def scenario_kit_throw_lifted(pairing='client_grabs_client'):
+    _kit_throw('kit_throw_lifted', 'forward', True, pairing)

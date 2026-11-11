@@ -26,6 +26,36 @@ struct GSTNLINKCORE_API FGSTN_KitLinkAnims
 };
 
 /**
+ * A kit's four grab throws (M11 K2, Smash style: in a grab the stick picks the throw). Each entry is a timeline ability of the kit (a child of
+ * the combat base ability with a link outcome key Throw). An empty entry falls back to the project's common set (UGSTN_LinkSettings::
+ * FallbackThrows); a set entry replaces what the kit's binding table binds to that throw. Soft paths: the pure part names no GAS class.
+ */
+USTRUCT(BlueprintType)
+struct GSTNLINKCORE_API FGSTN_LinkThrowSet
+{
+	GENERATED_BODY()
+
+	/** Command.Link.Throw.Forward */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Throws", meta = (MetaClass = "/Script/GameplayAbilities.GameplayAbility"))
+	FSoftClassPath Forward;
+
+	/** Command.Link.Throw.Back */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Throws", meta = (MetaClass = "/Script/GameplayAbilities.GameplayAbility"))
+	FSoftClassPath Back;
+
+	/** Command.Link.Throw.Up */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Throws", meta = (MetaClass = "/Script/GameplayAbilities.GameplayAbility"))
+	FSoftClassPath Up;
+
+	/** Command.Link.Throw.Down */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Throws", meta = (MetaClass = "/Script/GameplayAbilities.GameplayAbility"))
+	FSoftClassPath Down;
+
+	/** The entry of a throw command (Command.Link.Throw.*), null for any other tag */
+	const FSoftClassPath* Find(const FGameplayTag& ThrowCommand) const;
+};
+
+/**
  * Gives a fighter its link behaviour, by data (m6 spec 1b). It is an entry of a kit's or weapon's extension array, so the kit asset
  * never grows a property that names links; a combat build without this plugin keeps the entry and ignores it with a warning.
  *
@@ -48,4 +78,8 @@ struct GSTNLINKCORE_API FGSTN_LinkKitExtension : public FGSTN_KitExtension
 	/** The animation layer of each role the kit can hold, by role tag. A role with no entry plays nothing extra */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Animation", meta = (ForceInlineRow))
 	TMap<FGameplayTag, FGSTN_KitLinkAnims> AnimsByRole;
+
+	/** The kit's own four throws (M11 K2); an empty entry takes the project's fallback set. A kit with this entry grabs only if it binds the grab */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Throws")
+	FGSTN_LinkThrowSet Throws;
 };

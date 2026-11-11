@@ -988,6 +988,11 @@ spec `combat-m7-piggyback.md`, deviations `docs/notes/m7-doc-deltas.md`. Where t
 - **Open.** Carry load, rider attack binding, `RefundAirJumps`, thrown land-cancel, carrier shield over the rider, remount cooldown,
   per-carrier socket/exit data (the exit query and request context carry no kit), dedicated-server runs.
 
+- **Kit throws, Smash style** (M11 K2, 2026-11-11, `Plugins/GSTNLink/README.md` "Kit throws"): every kit asset that grabs gets four throws
+  (its own `FGSTN_LinkKitExtension::Throws`, else the common `FallbackThrows`); in a grab the stick picks the throw (`ThrowInputMode`: Stick
+  default, StickPlusSpecial, Buttons), special + crouch also grabs (`Command.Link.Grab.Special`); a liftable enemy keeps the held throw on the
+  stick (`ThrownEnemies.KitThrowsWhileLifting`, GSTNHeld step 18).
+
 ## 13. Many enemies (40+)
 
 Two paths with the same Core logic:

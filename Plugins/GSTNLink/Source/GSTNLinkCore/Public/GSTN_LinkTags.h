@@ -121,6 +121,9 @@ namespace GSTNLinkTags
 	/** Grab command, a tap of the interact button. Requires Interact.Target.Grab. Part of the standard command set */
 	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Link_Grab);
 
+	/** The second grab input (M11 K2, owner decision 2): special with crouch held. Its own command (a child of the grab), bound to the grab ability: two rows of one command with the same requirement would be ambiguous to the loadout validator */
+	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Link_Grab_Special);
+
 	/** Pummel command of the grabber role. Part of the standard command set */
 	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Link_Pummel);
 

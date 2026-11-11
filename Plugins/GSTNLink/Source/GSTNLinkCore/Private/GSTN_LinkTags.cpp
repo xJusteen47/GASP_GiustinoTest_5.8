@@ -31,6 +31,7 @@ namespace GSTNLinkTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Mover_Linked, "Combat.Mover.Linked", "Mover tag carried by the linked modifier while a parked role is linked; triggers the linked mode transition. Added and removed with the modifier");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Interact_Target_Grab, "Interact.Target.Grab", "A grabbable entity is the nearest interactable in reach. Projected by the link tick extension; the grab binding requires it");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Grab, "Command.Link.Grab", "Grab command, a tap of the interact button, requiring Interact.Target.Grab. Part of the standard command set");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Grab_Special, "Command.Link.Grab.Special", "Second grab input (M11 K2): special pressed with crouch held, requiring Interact.Target.Grab, bound to the kit's grab ability by the kit throw fill");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Pummel, "Command.Link.Pummel", "Pummel command of the grabber role, an attack press with a neutral stick. Part of the standard command set");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Release, "Command.Link.Release", "Release command of the grabber role, a tap of the interact button. Part of the standard command set");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Throw_Forward, "Command.Link.Throw.Forward", "Forward throw command of the grabber role. Part of the standard command set");
@@ -56,7 +57,7 @@ UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Link_PartnerMoveAborted, "Combat.Event.Link
 			BreakReason_Hit, BreakReason_PartnerState, BreakReason_Escape, BreakReason_Release, BreakReason_Throw, BreakReason_Forced,
 			HitType_Throw, HitType_Pummel,
 			Mover_Linked, Interact_Target_Grab,
-			Command_Link_Grab, Command_Link_Pummel, Command_Link_Release,
+			Command_Link_Grab, Command_Link_Grab_Special, Command_Link_Pummel, Command_Link_Release,
 			Command_Link_Throw_Forward, Command_Link_Throw_Back, Command_Link_Throw_Up, Command_Link_Throw_Down,
 			Command_Link_Latch_Attack, Input_Lock_Command_Link,
 			Event_LinkFormed, Event_LinkBroken, Event_Throw, Event_GrabEscaped, Event_Link_PartnerMoveAborted });

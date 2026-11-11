@@ -12,7 +12,7 @@ bool FGSTN_LinkTagsDocumentedTest::RunTest(const FString& Parameters)
 {
 	TArray<FGameplayTag> Tags;
 	GSTNLinkTags::GetDeclaredTags(Tags);
-	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 40);
+	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 41);
 
 	const UGameplayTagsManager& Manager = UGameplayTagsManager::Get();
 	TSet<FGameplayTag> Seen;

@@ -480,6 +480,18 @@ enum class EGSTN_EnemyLiftRule : uint8
 	AnyGrabbed
 };
 
+/** The grab's kit throws while the grabbed enemy is lifted (M11 K2; all three shipped, owner's choice after playtesting) */
+UENUM(BlueprintType)
+enum class EGSTN_LiftedEnemyKitThrows : uint8
+{
+	/** Kit throws off only where the stick alone would fire them (Smash forward and back); the held throw owns the stick */
+	NotStickOnly,
+	/** Only the held throw: every kit throw is off while lifting */
+	None,
+	/** Every kit throw stays (the stick may fire a Smash throw while aiming) */
+	All
+};
+
 /**
  * Thrown enemies (M10 G9, spec section 6b, owner's design 2026-11-11, subject to playtesting): a grabbed enemy that can be lifted is thrown
  * with the held throw's buttons and aim (Command.Held.ThrowEnemy on the strong button, above the grab's own kit throws); one that cannot keeps
@@ -529,6 +541,13 @@ struct GSTNHELDCORE_API FGSTN_EnemyThrowTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Held|Enemies", meta = (ClampMin = 0, ForceUnits = "frames"))
 	int32 RegrabLockFrames = 60;
 
+	/**
+	 * Which of the grab's kit throws (GSTNLink, M11 K2) stay while the enemy is lifted. Default: those the stick alone does not trigger, so
+	 * the stick can aim the held throw without firing the Smash forward or back throw (owner decision 4: a liftable enemy goes the M10 way)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Held|Enemies")
+	EGSTN_LiftedEnemyKitThrows KitThrowsWhileLifting = EGSTN_LiftedEnemyKitThrows::NotStickOnly;
+
 	/** The wind-up of an enemy throw (slice 10), the held object's setting for a lifted body. TEST VALUE: instant */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Held|Enemies")
 	FGSTN_HeldThrowWindup Windup;
@@ -547,5 +566,11 @@ struct GSTNHELDCORE_API FGSTN_EnemyLiftRules
 	static float EnemyWeight(const FGSTN_EnemyThrowTuning& Tuning, float WeightAttributeKg) { return WeightAttributeKg > 0.f ? WeightAttributeKg : Tuning.DefaultEnemyWeight; }
 
 	/** The thrown shot's speed multiplier for a load ratio (weight / capacity, clamped 0..1) */
+	/**
+	 * The tags that switch the grab's kit throws off (M11 K2), handed to GSTNLink at startup: Combat.Held.CarryingEnemy in the set the tuning's
+	 * KitThrowsWhileLifting picks (every throw, or only the stick-only ones). Nothing when thrown enemies are off or the choice is All
+	 */
+	static void KitThrowBlockers(const FGSTN_EnemyThrowTuning& Tuning, FGameplayTagContainer& OutBlockAll, FGameplayTagContainer& OutBlockStickOnly);
+
 	static float SpeedScale(const FGSTN_EnemyThrowTuning& Tuning, float LoadRatio) { return FMath::Lerp(1.f, Tuning.FullLoadSpeedScale, FMath::Clamp(LoadRatio, 0.f, 1.f)); }
 };
