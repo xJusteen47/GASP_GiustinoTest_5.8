@@ -1,7 +1,7 @@
 """Tiny client for UE_MCP_Bridge: call(method, params) and py(entry, **kwargs) on capture_ue.py."""
 import base64, json, os, socket, struct, ast
 
-PORT = 55976
+PORT = 56754
 HERE = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
 
 def get_port():

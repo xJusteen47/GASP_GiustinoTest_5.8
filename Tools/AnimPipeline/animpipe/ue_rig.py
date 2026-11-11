@@ -22,11 +22,41 @@ def _rig_class(rig):
     return a.generated_class() if hasattr(a, "generated_class") else a
 
 
-def _new(name, cls, factory):
-    full = f"{DIR}/{name}"
+def _find_seq_path(name, folder=None):
+    if folder:
+        full = f"{folder}/LS_{name}"
+        if EAL.does_asset_exist(full):
+            return full
+    full = f"{DIR}/LS_{name}"
+    if EAL.does_asset_exist(full):
+        return full
+    subdirs = [
+        f"{DIR}/Overlord/Jab/Jab1", f"{DIR}/Overlord/Jab/Jab2", f"{DIR}/Overlord/Jab",
+        f"{DIR}/Overlord/Dropkick/Startup", f"{DIR}/Overlord/Dropkick/Loop", f"{DIR}/Overlord/Dropkick/Land", f"{DIR}/Overlord/Dropkick",
+        f"{DIR}/Overlord/FTilt", f"{DIR}/Overlord/DAir",
+        f"{DIR}/Pilot/Jab", f"{DIR}/Pilot/Tests"
+    ]
+    for sub in subdirs:
+        sub_full = f"{sub}/LS_{name}"
+        if EAL.does_asset_exist(sub_full):
+            return sub_full
+    try:
+        assets = EAL.list_assets(DIR, recursive=True, include_folder=False)
+        target = f"/LS_{name}."
+        for a in assets:
+            if target in str(a):
+                return str(a).split(".")[0]
+    except Exception:
+        pass
+    return full
+
+
+def _new(name, cls, factory, folder=DIR):
+    full = f"{folder}/{name}"
     if EAL.does_asset_exist(full):
         EAL.delete_asset(full)
-    return unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, DIR, cls, factory)
+    EAL.make_directory(folder)
+    return unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, folder, cls, factory)
 
 
 def _rig_section(binding):
@@ -36,12 +66,12 @@ def _rig_section(binding):
     return None, None
 
 
-def _sequence(anim, name, rate):
+def _sequence(anim, name, rate, folder=DIR):
     """Level Sequence with the mannequin as a spawnable and the source anim on it, open in Sequencer."""
     src = unreal.load_asset(anim)
     n = src.get_editor_property("number_of_sampled_frames") if hasattr(src, "number_of_sampled_frames") else None
     length = unreal.AnimationLibrary.get_sequence_length(src) if hasattr(unreal.AnimationLibrary, "get_sequence_length") else src.get_play_length()
-    seq = _new(f"LS_{name}", unreal.LevelSequence, unreal.LevelSequenceFactoryNew())
+    seq = _new(f"LS_{name}", unreal.LevelSequence, unreal.LevelSequenceFactoryNew(), folder=folder)
     seq.set_display_rate(rate)
     end = int(round(length * rate.numerator / rate.denominator))
     seq.set_playback_start(0); seq.set_playback_end(end)   # the export includes the end frame
@@ -155,10 +185,10 @@ def _additive_sections(seq):
                         yield s
 
 
-def _read_manual(name, backup=None, card_copy=None):
+def _read_manual(name, backup=None, card_copy=None, folder=None):
     """{channel: [[frame, value, interp name, tangent mode name, arrive, leave], ...]} from the additive sections of the old
     LS_<name>; without the sequence the Saved backup JSON, then the copy in the card's git folder (animpipe capture)."""
-    full = f"{DIR}/LS_{name}"
+    full = _find_seq_path(name, folder)
     if not EAL.does_asset_exist(full):
         for f in (backup, card_copy):
             try:
@@ -216,8 +246,9 @@ def build(spec):
     planted IK feet to their first key. No per-frame keys are ever written."""
     rate = unreal.FrameRate(int(spec["fps_num"]), int(spec["fps_den"]))
     name = spec["name"]
-    manual = _read_manual(name, spec.get("manual_out"), spec.get("manual_in"))
-    seq, binding, end, length = _sequence(spec["source_anim"], name, rate)
+    folder = spec.get("folder") or (spec["anim"].rsplit("/", 1)[0] if ("anim" in spec and "/" in spec["anim"]) else DIR)
+    manual = _read_manual(name, spec.get("manual_out"), spec.get("manual_in"), folder=folder)
+    seq, binding, end, length = _sequence(spec["source_anim"], name, rate, folder=folder)
     seq.set_playback_end(end + 1)        # the rig bake stops before the playback end: without this the last frame has no key
     ok = unreal.ControlRigSequencerLibrary.bake_to_control_rig(_world(), seq, _rig_class(spec["rig"]), unreal.AnimSeqExportOption(),
                                                                 False, 0.001, binding)
@@ -313,7 +344,7 @@ def build(spec):
     res["manual"] = _apply_manual(track, end, manual, spec.get("manual_out"))
     skel = unreal.load_asset(spec["source_anim"]).get_editor_property("skeleton")
     fac = unreal.AnimSequenceFactory(); fac.set_editor_property("target_skeleton", skel)
-    dst = _new(f"AS_{name}", unreal.AnimSequence, fac)
+    dst = _new(f"AS_{name}", unreal.AnimSequence, fac, folder=folder)
     eo = unreal.AnimSeqExportOption()
     eo.set_editor_property("use_custom_frame_rate", True); eo.set_editor_property("custom_frame_rate", rate)
     res["export_ok"] = bool(unreal.ControlRigSequencerLibrary.export_anim_sequence_from_sequencer(dst, eo, binding, False))
@@ -361,7 +392,7 @@ def _lock_lengths(dst, src):
 
 def probe(name, out=None):
     """Channel names, key counts and value spans on the rig track of LS_<name>, for writing card edits."""
-    seq = unreal.load_asset(f"{DIR}/LS_{name}")
+    seq = unreal.load_asset(_find_seq_path(name))
     unreal.LevelSequenceEditorBlueprintLibrary.open_level_sequence(seq)
     res = {}
     for b in seq.get_spawnables() + seq.get_possessables():
@@ -386,7 +417,7 @@ def probe(name, out=None):
 def tangent_probe(name, out=None):
     """On the rig track of LS_<name>: pick hand_l_ctrl Location X (or the first float channel with 2+ keys), set user cubic
     tangents and weights on two keys, read them back and sample the curve at 240 fps between them."""
-    seq = unreal.load_asset(f"{DIR}/LS_{name}")
+    seq = unreal.load_asset(_find_seq_path(name))
     unreal.LevelSequenceEditorBlueprintLibrary.open_level_sequence(seq)
     res = {}
     for b in seq.get_spawnables() + seq.get_possessables():

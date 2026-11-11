@@ -1,9 +1,9 @@
 import unreal
 
-path = "/Game/AnimPipeline/Rig/AM_OverlordDropkick"
-anim_startup = unreal.load_asset("/Game/AnimPipeline/Rig/AS_OverlordDropkick_Startup")
-anim_loop = unreal.load_asset("/Game/AnimPipeline/Rig/AS_OverlordDropkick_Loop")
-anim_land = unreal.load_asset("/Game/AnimPipeline/Rig/AS_OverlordDropkick_Land")
+path = "/Game/AnimPipeline/Rig/Overlord/Dropkick/AM_OverlordDropkick"
+anim_startup = unreal.load_asset("/Game/AnimPipeline/Rig/Overlord/Dropkick/Startup/AS_OverlordDropkick_Startup")
+anim_loop = unreal.load_asset("/Game/AnimPipeline/Rig/Overlord/Dropkick/Loop/AS_OverlordDropkick_Loop")
+anim_land = unreal.load_asset("/Game/AnimPipeline/Rig/Overlord/Dropkick/Land/AS_OverlordDropkick_Land")
 
 if unreal.EditorAssetLibrary.does_asset_exist(path):
     montage = unreal.load_asset(path)
@@ -12,7 +12,7 @@ else:
     fac = unreal.AnimMontageFactory()
     fac.set_editor_property("source_animation", anim_startup)
     fac.set_editor_property("target_skeleton", anim_startup.get_editor_property("skeleton"))
-    montage = unreal.AssetToolsHelpers.get_asset_tools().create_asset("AM_OverlordDropkick", "/Game/AnimPipeline/Rig", unreal.AnimMontage, fac)
+    montage = unreal.AssetToolsHelpers.get_asset_tools().create_asset("AM_OverlordDropkick", "/Game/AnimPipeline/Rig/Overlord/Dropkick", unreal.AnimMontage, fac)
     print("Created new montage:", montage)
 
 len_startup = anim_startup.get_play_length()

@@ -107,7 +107,7 @@ def build(path):
     name = c["anim"].rsplit("/", 1)[1][3:]
     num, den = (125, 2) if str(c["fps"]) == "62.5" else (int(c["fps"]), 1)
     os.makedirs(OUT, exist_ok=True)
-    spec = {"name": name, "source_anim": c["source_anim"], "rig": c.get("rig", RIG), "fps_num": num, "fps_den": den,
+    spec = {"name": name, "source_anim": c["source_anim"], "anim": c["anim"], "rig": c.get("rig", RIG), "fps_num": num, "fps_den": den,
             "poses": key_frames(c), "segments": segments(c), "part_delays": c.get("part_delays", {}),
             "planted": c.get("planted", []), "edits": c.get("edits", []), "drop": c.get("drop", []), "hitstop_blend": c.get("hitstop_blend", []),
             "ease_out": {str(q["frame"]): q["ease_out"] for q in c["poses"] if q.get("ease_out")},

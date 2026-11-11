@@ -47,7 +47,7 @@ class Stop(Exception):
 def card_path(move):
     if move.endswith(".json") or os.sep in move or "/" in move:
         raise Stop(USAGE, f"give the move name, not a path: {move}")
-    hits = glob.glob(os.path.join(K.CARDS, "*", f"{move}.json")) + glob.glob(os.path.join(K.CARDS, f"{move}.json"))
+    hits = list(dict.fromkeys(glob.glob(os.path.join(K.CARDS, "**", f"{move}.json"), recursive=True) + glob.glob(os.path.join(K.CARDS, f"{move}.json"))))
     if len(hits) != 1:
         raise Stop(USAGE, f"move {move}: {len(hits)} cards found under {K.CARDS}")
     return os.path.abspath(hits[0])
@@ -55,7 +55,7 @@ def card_path(move):
 
 def moves():
     out = []
-    for p in sorted(glob.glob(os.path.join(K.CARDS, "*", "*.json"))):
+    for p in sorted(glob.glob(os.path.join(K.CARDS, "**", "*.json"), recursive=True)):
         name = os.path.basename(p)[:-5]
         try:
             with open(p, encoding="utf-8") as f:
