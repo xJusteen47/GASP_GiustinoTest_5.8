@@ -5,7 +5,11 @@
 // The three native stand-ins sit outside the test guard because UHT reflects them whether or not tests are compiled.
 bool UGSTN_TestCondition_StrongHeld::Matches_Implementation(const FGSTN_BlueprintConditionView& View) const
 {
+#if WITH_DEV_AUTOMATION_TESTS // the test tags only exist with tests compiled in
 	return View.HeldButtons.HasTagExact(GSTNTestTags::Button_Strong.GetTag());
+#else
+	return false;
+#endif
 }
 
 int32 UGSTN_TestCriterion_TierBonus::Score_Implementation(const FGSTN_BlueprintPriorityView& View) const

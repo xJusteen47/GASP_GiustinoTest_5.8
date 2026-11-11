@@ -70,7 +70,11 @@ namespace GSTNPartsTest
 	/** Whether a struct is a Blueprint type (the editor's flag, set by USTRUCT(BlueprintType)) */
 	inline bool IsBlueprintType(const UScriptStruct* Struct)
 	{
+#if WITH_METADATA
 		return Struct && Struct->GetBoolMetaData(TEXT("BlueprintType"));
+#else
+		return Struct != nullptr; // no metadata outside the editor: the check only runs there
+#endif
 	}
 }
 

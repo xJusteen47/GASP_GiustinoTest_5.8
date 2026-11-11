@@ -28,6 +28,7 @@ bool FGSTN_LinkTagsDocumentedTest::RunTest(const FString& Parameters)
 			continue;
 		}
 
+#if WITH_EDITOR // tag comments and sources are editor-only data (a Game target has no GetTagEditorData)
 		FString Comment;
 		FName Source;
 		bool bExplicit = false;
@@ -38,6 +39,7 @@ bool FGSTN_LinkTagsDocumentedTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("%s is declared explicitly"), *TagString), bExplicit);
 		// The comment is the documentation (modularity-and-tags 4.8: at least 10 characters)
 		TestTrue(FString::Printf(TEXT("%s has a comment of at least 10 characters"), *TagString), Comment.TrimStartAndEnd().Len() >= 10);
+#endif
 	}
 
 	// Combat.HitType.Grab belongs to the combat core: this plugin reads it and never declares it

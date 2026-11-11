@@ -98,11 +98,13 @@ bool FGSTN_PartsEmptyTableTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Lookup in nothing finds nothing"), UGSTN_PenetrationTable::LookupBandIndex(TConstArrayView<FGSTN_PenetrationBand>(), 3), static_cast<int32>(INDEX_NONE));
 
 	UGSTN_PenetrationTable* Table = NewObject<UGSTN_PenetrationTable>(GetTransientPackage());
+#if WITH_EDITOR // IsDataValid is editor-only
 	FDataValidationContext Valid;
 	TestEqual(TEXT("The default table validates"), static_cast<int32>(Table->IsDataValid(Valid)), static_cast<int32>(EDataValidationResult::Valid));
 	Table->Bands.Reset();
 	FDataValidationContext Invalid;
 	TestEqual(TEXT("An emptied table is invalid"), static_cast<int32>(Table->IsDataValid(Invalid)), static_cast<int32>(EDataValidationResult::Invalid));
+#endif
 	return true;
 }
 

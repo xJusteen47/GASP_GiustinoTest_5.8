@@ -33,6 +33,7 @@ bool FGSTN_MinionTagsDeclaredTest::RunTest(const FString& Parameters)
 			continue;
 		}
 
+#if WITH_EDITOR // tag comments and sources are editor-only data (a Game target has no GetTagEditorData)
 		FString Comment;
 		FName Source;
 		bool bExplicit = false;
@@ -42,6 +43,7 @@ bool FGSTN_MinionTagsDeclaredTest::RunTest(const FString& Parameters)
 			Manager.GetTagEditorData(Tag.GetTagName(), Comment, Source, bExplicit, bRestricted, bAllowNonRestrictedChildren));
 		TestTrue(FString::Printf(TEXT("%s is declared explicitly"), *TagString), bExplicit);
 		TestTrue(FString::Printf(TEXT("%s has a comment of at least 10 characters"), *TagString), Comment.TrimStartAndEnd().Len() >= 10);
+#endif
 
 		const bool bOwned = TagString == TEXT("Combat.Entity.Minion") || TagString.StartsWith(TEXT("Combat.Event.Minion"))
 			|| TagString.StartsWith(TEXT("Minion."));

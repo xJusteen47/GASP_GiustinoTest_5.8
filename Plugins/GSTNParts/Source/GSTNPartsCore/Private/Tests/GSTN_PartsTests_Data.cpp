@@ -35,11 +35,13 @@ bool FGSTN_PartsDataSetValidTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("A well formed set has no errors"), Report.NumErrors(), 0);
 	TestEqual(TEXT("A well formed set has no warnings"), Report.NumWarnings(), 0);
 
+#if WITH_EDITOR // IsDataValid is editor-only
 	// The asset form goes through the same rules
 	UGSTN_PartSetDefinition* Set = NewObject<UGSTN_PartSetDefinition>(GetTransientPackage());
 	Set->Parts = Parts;
 	FDataValidationContext Context;
 	TestEqual(TEXT("The asset validates"), static_cast<int32>(Set->IsDataValid(Context)), static_cast<int32>(EDataValidationResult::Valid));
+#endif
 
 	// A single part is a valid set: a player's whole body
 	TArray<FGSTN_PartDefinition> Player;

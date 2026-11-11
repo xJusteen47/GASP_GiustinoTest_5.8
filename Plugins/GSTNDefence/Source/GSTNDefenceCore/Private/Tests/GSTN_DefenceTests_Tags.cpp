@@ -28,6 +28,7 @@ bool FGSTN_DefenceTagsDocumentedTest::RunTest(const FString& Parameters)
 			continue;
 		}
 
+#if WITH_EDITOR // tag comments and sources are editor-only data (a Game target has no GetTagEditorData)
 		FString Comment;
 		FName Source;
 		bool bExplicit = false;
@@ -38,6 +39,7 @@ bool FGSTN_DefenceTagsDocumentedTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("%s is declared explicitly"), *TagString), bExplicit);
 		// The comment is the documentation (modularity-and-tags 4.8: at least 10 characters)
 		TestTrue(FString::Printf(TEXT("%s has a comment of at least 10 characters"), *TagString), Comment.TrimStartAndEnd().Len() >= 10);
+#endif
 	}
 
 	// The fixed-bubble decision: no poke event or tag exists

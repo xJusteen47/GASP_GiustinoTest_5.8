@@ -25,6 +25,7 @@ bool FGSTN_CombatGASTagsTest::RunTest(const FString& Parameters)
 			continue;
 		}
 
+#if WITH_EDITOR // tag comments and sources are editor-only data (a Game target has no GetTagEditorData)
 		FString Comment;
 		FName Source;
 		bool bExplicit = false;
@@ -34,6 +35,7 @@ bool FGSTN_CombatGASTagsTest::RunTest(const FString& Parameters)
 			Manager.GetTagEditorData(Tag.GetTagName(), Comment, Source, bExplicit, bRestricted, bAllowNonRestrictedChildren));
 		TestTrue(FString::Printf(TEXT("%s is declared explicitly"), *TagString), bExplicit);
 		TestFalse(FString::Printf(TEXT("%s has a comment"), *TagString), Comment.TrimStartAndEnd().IsEmpty());
+#endif
 	}
 	return true;
 }

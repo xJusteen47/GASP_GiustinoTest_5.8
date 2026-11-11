@@ -21,9 +21,11 @@ bool FGSTN_NPGateIgnoreHitstunTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("a plain ability has no reaction flag"), UGSTN_CombatTableSet::MakeReactionFlags(Plain), static_cast<uint8>(0));
 	TestFalse(TEXT("the burst flag is off by default"), Plain->bEndReactionOnActivation);
 
+#if WITH_EDITOR // asset tags are set through an editor-only accessor
 	UGSTN_TestMontageTimelineAbility* Tagged = NewObject<UGSTN_TestMontageTimelineAbility>(GetTransientPackage());
 	Tagged->EditorGetAssetTags().AddTag(GSTNCombatTags::Ability_IgnoreHitstunOnActivation);
 	TestEqual(TEXT("the tag opens the gate and nothing else"), UGSTN_CombatTableSet::MakeReactionFlags(Tagged), UGSTN_CombatTableSet::ReactionIgnoresHitstun);
+#endif
 
 	TestEqual(TEXT("no class, no flags"), UGSTN_CombatTableSet::MakeReactionFlags(static_cast<const UClass*>(nullptr)), static_cast<uint8>(0));
 	return true;

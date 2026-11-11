@@ -71,10 +71,12 @@ bool FGSTN_TrampolineSizeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("The box extent is half the size"), Actor->GetBox()->GetUnscaledBoxExtent().Equals(FVector(150.0, 50.0, 25.0)));
 	TestTrue(TEXT("The box is the root"), Actor->GetRootComponent() == Actor->GetBox());
 
+#if WITH_EDITOR // RerunConstructionScripts is editor-only
 	// The ClampMin of the property is enforced in code too: a script or a Blueprint default cannot make a flat box
 	Actor->Size = FVector(2.0, 100.0, -5.0);
 	Actor->RerunConstructionScripts();
 	TestTrue(TEXT("Axes below 10 cm clamp to 10"), Actor->GetBox()->GetUnscaledBoxExtent().Equals(FVector(5.0, 50.0, 5.0)));
+#endif
 	TestTrue(TEXT("The pure helper agrees"), AGSTN_Trampoline::SizeToBoxExtent(FVector(0.0, 40.0, 11.0)).Equals(FVector(5.0, 20.0, 5.5)));
 	return true;
 }
@@ -96,6 +98,7 @@ bool FGSTN_TrampolineMeshFitTest::RunTest(const FString& Parameters)
 	TestNotNull(TEXT("The instance loaded the default mesh"), Actor->GetMesh()->GetStaticMesh().Get());
 	TestTrue(TEXT("The cube is stretched to the box"), Actor->GetMesh()->GetRelativeScale3D().Equals(FVector(4.0, 2.0, 0.4), 1.e-3));
 
+#if WITH_EDITOR // RerunConstructionScripts is editor-only
 	Actor->MeshFit = EGSTN_TrampolineMeshFit::Keep;
 	Actor->RerunConstructionScripts();
 	TestTrue(TEXT("Keep leaves the instance scale at 1"), Actor->GetMesh()->GetRelativeScale3D().Equals(FVector::OneVector, 1.e-3));
@@ -103,6 +106,7 @@ bool FGSTN_TrampolineMeshFitTest::RunTest(const FString& Parameters)
 	Actor->MeshAsset.Reset();
 	Actor->RerunConstructionScripts();
 	TestNull(TEXT("No mesh asset, no mesh"), Actor->GetMesh()->GetStaticMesh().Get());
+#endif
 	return true;
 }
 

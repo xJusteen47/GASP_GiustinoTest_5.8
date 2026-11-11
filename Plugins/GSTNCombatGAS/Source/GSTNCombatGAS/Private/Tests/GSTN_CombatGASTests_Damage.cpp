@@ -258,6 +258,7 @@ bool FGSTN_DamageTagsRegisteredAndDocumentedTest::RunTest(const FString& Paramet
 		TestTrue(*FString::Printf(TEXT("%s is registered"), *Name), Tag.IsValid());
 		TestTrue(*FString::Printf(TEXT("%s is listed for the tag tests"), *Name), Declared.Contains(Tag));
 
+#if WITH_EDITOR // tag comments and sources are editor-only data (a Game target has no GetTagEditorData)
 		FString Comment;
 		FName Source;
 		bool bExplicit = false;
@@ -266,6 +267,7 @@ bool FGSTN_DamageTagsRegisteredAndDocumentedTest::RunTest(const FString& Paramet
 		TestTrue(*FString::Printf(TEXT("%s is declared natively"), *Name),
 			Manager.GetTagEditorData(Tag.GetTagName(), Comment, Source, bExplicit, bRestricted, bAllowNonRestrictedChildren) && bExplicit);
 		TestFalse(*FString::Printf(TEXT("%s is documented"), *Name), Comment.TrimStartAndEnd().IsEmpty());
+#endif
 	}
 
 	// Every event tag of the module lives under Combat.Event

@@ -251,4 +251,8 @@ bool FGSTN_StatsLockMovementBrakesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+#else
+// UHT reflects the two stand-ins whether or not tests are compiled: empty constructors keep a Shipping target linking
+UGSTN_TestWeaponStatsPlus::UGSTN_TestWeaponStatsPlus() {}
+UGSTN_TestWeaponStatsMinus::UGSTN_TestWeaponStatsMinus() {}
 #endif
