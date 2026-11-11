@@ -1,19 +1,20 @@
 # Cose da fare a mano (copia dell'artifact)
 
-Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (M11 slice K4). L'artifact è la versione di riferimento.
+Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (IO-1). L'artifact è la versione di riferimento.
 
 ## 1 · Git
 
-- [ ] Porta tutto su `feature/gas-npp-5.8` con un solo push: tip di `claude/desktop-m11-4` (sha esatto nell'artifact, sostituisce `253e11d2`). Contiene tutto fino a M10 slice 10, la **M11 slice 1** (cambio kit con B tenuto), la **M11 slice 2** (lanci alla Smash) la **M11 slice 3** (tre kit di prova: leggero, medio, pesante) la **M11 slice 3b** (tasti di oggetti e cambio kit come dati) e la **M11 K4** (controllo di rete, build di gioco e Shipping sistemate). Poi `git pull` e build completa da Rider:
+- [ ] Porta tutto su `feature/gas-npp-5.8` con un solo push: tip di `claude/desktop-io-1` (sha esatto nell'artifact, sostituisce `614a0cff`). Contiene tutto fino a M10 slice 10, la **M11 slice 1** (cambio kit con B tenuto), la **M11 slice 2** (lanci alla Smash) la **M11 slice 3** (tre kit di prova: leggero, medio, pesante) la **M11 slice 3b** (tasti di oggetti e cambio kit come dati) la **M11 K4** (controllo di rete, build di gioco e Shipping sistemate) e la **IO-1** (tasti per giocatore locale, salvati per giocatore). Poi `git pull` e build completa da Rider:
   ```
   cd "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2"
-  git fetch origin claude/desktop-m11-4
+  git fetch origin claude/desktop-io-1
   git push origin <sha>:refs/heads/feature/gas-npp-5.8
   ```
 
 ## 2 · Editor (salva tu con Ctrl+S)
 
 - [ ] **Dove cambi un tasto (M11 slice 3b)**: tasto fisico o del pad → bottone logico (`Input.Button.*`) = Input Action e mapping context in `Content/Input`. Bottone logico → azione: Project Settings → Plugins → GSTN Held → Input|Buttons (`Pickup Drop Button` = B, `Throw Button` = RT, `Slot Overrides` per cambiare tutta la forma) e → Kits → `Kit Swap` → `Button` (B tenuto); i lanci della presa in Project Settings → GSTN Link → Throws. Vale dal prossimo cambio kit o Play. Default = come oggi. Nessuno l'ha provato in PIE col pad.
+- [ ] **Tasti per giocatore (IO-1)**, nessuno l'ha visto in PIE: ogni giocatore locale (anche in split screen) ha i suoi tasti fisici, salvati nel suo slot `GSTNInputBindings_P<n>`. Ancora nessun menu: si cambiano da Blueprint o Python con `UGSTN_KeyBindingsSubsystem` (`Rebind`, `ResetAllToDefault`, `Save`). Default = come oggi, la rete non cambia. Prova (facoltativa) in `docs/notes/handovers/io-1.md`.
 - [ ] **Playtest dei kit col pad (M11 K4, raccoglie slice 1, 2, 3 e 3b)**, nessuno l'ha visto in PIE né provato col pad (i test di rete premono i tasti dal codice):
   1. Dopo il push e la build: editor nella cartella principale, mappa `L_Test_Hub`, console Python `import test_hub as h` poi `h.prepare()`.
   2. Play listen, 3 giocatori; aspetta 4 s. Kit sulle 7 pedane; fila di tre kit 8 m davanti alla partenza: `KIT_Test_Light`, `KIT_Test_Medium`, `KIT_Test_Heavy`.
