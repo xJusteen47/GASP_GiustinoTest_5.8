@@ -15,6 +15,7 @@ public class GSTNCombatNP : ModuleRules
 			"Engine",
 			"AIModule",
 			"GameplayTags",
+			"GSTNCore", // IO-2b: the GameRules change serial
 			"GSTNInputCore",
 			"GSTNInputNP",
 			"GSTNCombatCore",

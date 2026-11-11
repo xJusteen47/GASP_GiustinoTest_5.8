@@ -61,6 +61,16 @@ struct GSTNCORE_API FGSTN_ActiveGameRules
 	static const UGSTN_GameRules* Get();
 	static void Set(const UGSTN_GameRules* Rules);
 
+	/**
+	 * Goes up every time Set changes the active asset. What was built from the rules before the server picked them (a kit's binding table
+	 * compiled at login, before the world began play; a client's table compiled before AGSTN_GameRulesInfo arrived) keeps the serial it was
+	 * built with and rebuilds when it differs
+	 */
+	static uint32 GetSerial();
+
+	/** Fired by Set when the active asset changes (server pick, client OnRep), outside the simulation */
+	static FSimpleMulticastDelegate& OnChanged();
+
 	/** The active asset's piece of class T, else T's class default object (the plugin's defaults) */
 	template <typename T>
 	static const T& GetPiece()

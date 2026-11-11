@@ -10,6 +10,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogGSTNGameRules, Log, All);
 namespace GSTN::GameRules::Private
 {
 	TWeakObjectPtr<const UGSTN_GameRules> GActive;
+	uint32 GSerial = 0;
 }
 
 UGSTN_GameRulesPiece* UGSTN_GameRules::FindPiece(const TSubclassOf<UGSTN_GameRulesPiece> PieceClass) const
@@ -31,8 +32,26 @@ const UGSTN_GameRules* FGSTN_ActiveGameRules::Get()
 
 void FGSTN_ActiveGameRules::Set(const UGSTN_GameRules* Rules)
 {
-	GSTN::GameRules::Private::GActive = Rules;
+	using namespace GSTN::GameRules::Private;
+	const bool bChanged = GActive.Get() != Rules;
+	GActive = Rules;
 	UE_LOG(LogGSTNGameRules, Log, TEXT("GameRulesActive %s"), Rules ? *Rules->GetPathName() : TEXT("defaults"));
+	if (bChanged)
+	{
+		++GSerial;
+		OnChanged().Broadcast();
+	}
+}
+
+uint32 FGSTN_ActiveGameRules::GetSerial()
+{
+	return GSTN::GameRules::Private::GSerial;
+}
+
+FSimpleMulticastDelegate& FGSTN_ActiveGameRules::OnChanged()
+{
+	static FSimpleMulticastDelegate Delegate;
+	return Delegate;
 }
 
 AGSTN_GameRulesInfo::AGSTN_GameRulesInfo()

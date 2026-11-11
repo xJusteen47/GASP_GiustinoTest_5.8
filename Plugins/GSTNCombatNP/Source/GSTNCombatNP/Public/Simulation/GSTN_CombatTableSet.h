@@ -39,6 +39,9 @@ public:
 	/** The loadout revision the set was built for (0 = the Blueprint binding set) */
 	int32 Revision = 0;
 
+	/** IO-2b: FGSTN_ActiveGameRules::GetSerial() when the set was built; a revision recompiled under other rules replaces it */
+	uint32 RulesSerial = 0;
+
 	/** The compiled loadout table the command table was converted from (empty for revision 0). Its Slots are what Table points into */
 	FGSTN_CompiledBindingTable Compiled;
 

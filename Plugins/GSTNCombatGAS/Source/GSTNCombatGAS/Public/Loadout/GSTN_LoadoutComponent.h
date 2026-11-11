@@ -153,6 +153,17 @@ private:
 	UFUNCTION()
 	void HandlePawnSet(APlayerState* Player, APawn* NewPawn, APawn* OldPawn);
 
+	/**
+	 * IO-2b: the GameRules asset (its button layout, its held rules) changed after this machine compiled the table: compile it again with
+	 * the same revision. Called on the active rules' change and at BeginPlay (a loadout accepted at login, before the world began play)
+	 */
+	void HandleGameRulesChanged();
+
+	/** FGSTN_ActiveGameRules::GetSerial() when CompiledTable was built */
+	uint32 CompiledRulesSerial = 0;
+
+	FDelegateHandle GameRulesChangedHandle;
+
 	bool IsServerAuthority() const;
 
 	/** The rules asset, or the built-in default */

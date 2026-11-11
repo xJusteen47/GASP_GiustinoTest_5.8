@@ -31,6 +31,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNCore",
+			"Enabled": true
+		},
+		{
 			"Name": "GameplayAbilities",
 			"Enabled": true
 		},

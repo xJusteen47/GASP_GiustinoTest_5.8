@@ -21,7 +21,9 @@ public class GSTNCombatGAS : ModuleRules
 			"DeveloperSettings",
 			"ModularGameplay",
 			"GSTNCombatCore",
-			"GSTNInputCore"
+			"GSTNInputCore",
+			// IO-2b: the GameRules change serial, to recompile a loadout built before the server picked the rules
+			"GSTNCore"
 		});
 	}
 }

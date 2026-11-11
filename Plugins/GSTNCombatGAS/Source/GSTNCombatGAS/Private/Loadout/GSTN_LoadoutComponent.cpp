@@ -7,6 +7,7 @@
 #include "Effects/GSTN_GE_WeaponStats.h"
 #include "Engine/AssetManager.h"
 #include "Engine/World.h"
+#include "GameRules/GSTN_GameRules.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "Input/GSTN_InputSettings.h"
@@ -51,6 +52,20 @@ void UGSTN_LoadoutComponent::BeginPlay()
 			PlayerState->OnPawnSet.AddDynamic(this, &UGSTN_LoadoutComponent::HandlePawnSet);
 		}
 	}
+
+	// Every machine, so the table each one compiles follows the rules the server picked (the button layout is read at compile time)
+	GameRulesChangedHandle = FGSTN_ActiveGameRules::OnChanged().AddUObject(this, &UGSTN_LoadoutComponent::HandleGameRulesChanged);
+	HandleGameRulesChanged();
+}
+
+void UGSTN_LoadoutComponent::HandleGameRulesChanged()
+{
+	// A world being torn down (another PIE world ending clears the process-wide rules) keeps what it has
+	const UWorld* World = GetWorld();
+	if (World && !World->bIsTearingDown && HasLoadout() && CompiledRulesSerial != FGSTN_ActiveGameRules::GetSerial())
+	{
+		ApplyAppliedLoadout();
+	}
 }
 
 void UGSTN_LoadoutComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -59,6 +74,8 @@ void UGSTN_LoadoutComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		PlayerState->OnPawnSet.RemoveDynamic(this, &UGSTN_LoadoutComponent::HandlePawnSet);
 	}
+	FGSTN_ActiveGameRules::OnChanged().Remove(GameRulesChangedHandle);
+	GameRulesChangedHandle.Reset();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -220,6 +237,7 @@ void UGSTN_LoadoutComponent::ApplyAppliedLoadout()
 	Resolved = NewResolved;
 
 	bool bValid = false;
+	CompiledRulesSerial = FGSTN_ActiveGameRules::GetSerial();
 	if (HasLoadout())
 	{
 		FGSTN_LoadoutRuleResult Result;

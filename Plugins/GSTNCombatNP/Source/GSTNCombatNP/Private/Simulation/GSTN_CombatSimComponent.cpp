@@ -2,6 +2,7 @@
 
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
+#include "GameRules/GSTN_GameRules.h"
 
 #include "Loadout/GSTN_LoadoutComponent.h"
 
@@ -407,9 +408,11 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: loadout revision %d has no usable table on this machine, the combat simulation stays gated"), *GetOwner()->GetName(), Revision);
 		return;
 	}
-	if (FindTableSet(Compiled.Revision))
+	const uint32 RulesSerial = FGSTN_ActiveGameRules::GetSerial();
+	if (const UGSTN_CombatTableSet* Existing = FindTableSet(Compiled.Revision); Existing && Existing->RulesSerial == RulesSerial)
 	{
-		// A revision's loadout never changes; a repeated apply (a pawn that was set again) has nothing new
+		// A revision's loadout never changes; a repeated apply (a pawn that was set again) has nothing new. Under other GameRules (IO-2b:
+		// the server's pick arrived after this table was built) the same revision compiles to other buttons and replaces the set
 		return;
 	}
 
@@ -427,6 +430,10 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 	for (const FText& Error : Report.Errors)
 	{
 		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: loadout revision %d: %s"), *GetOwner()->GetName(), Revision, *Error.ToString());
+	}
+	if (Set)
+	{
+		Set->RulesSerial = RulesSerial;
 	}
 	RegisterTableSet(Set);
 }

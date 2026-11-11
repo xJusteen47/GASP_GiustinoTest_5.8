@@ -285,8 +285,17 @@ function name -> logical button (`Input.Button.*`). A plugin reads its buttons w
 Default)`; a function missing from the layout keeps that default. The shipped layout is the class defaults, in this plugin's
 `DefaultGSTNInput.ini` (section `[/Script/GSTNInputCore.GSTN_ButtonLayout]`, not in Project Settings); a mode or level changes it by adding
 the piece to its GameRules asset. Functions today: `Held.PickupDrop`, `Held.Throw`, `Held.KitSwap`, `Mount.Interact`, `Mount.Crouch`,
-`Spin.Drill`, `Drill.Exit`, `Surface.LaunchBoost`. Per-player choices (IO-3) layer on top per local player; the key behind each logical
-button is IO-1's.
+`Spin.Drill`, `Drill.Exit`, `Surface.LaunchBoost`, `Defence.Shield` (press, hold and tech in tumble together), `Combat.Attack`,
+`Combat.Strong`, `Combat.Special`, `Combat.Crouch` (standard set), `Movement.Dash`, `Movement.Dodge`, `Movement.Interact` (movement set),
+`Link.Grab`, `Link.Release`, `Link.Pummel`, `Link.ThrowAttack`, `Link.ThrowStrong`, `Link.ThrowSpecial`, `Link.ThrowJump`, `Link.Crouch`,
+`Link.LatchAttack`, `Link.SpecialGrab`. Per-player choices (IO-3) layer on top per local player; the key behind each logical button is IO-1's.
+
+When it is read (IO-2b): kit tables compile on every machine when the loadout applies, and recompile with the same revision when the
+active GameRules change (`FGSTN_ActiveGameRules::OnChanged` / `GetSerial`), so a table built before the server's pick follows it. Timelines
+built on an ability's class default object (shield hold, drill bore) carry a `LayoutFunction` that the track hook resolves when it ticks.
+The standard and movement slot set assets are filled by `Tools/GAS/setup_gas_assets.py` from the builders: they hold the layout of the
+editor that ran it, not the GameRules of a match. The right stick (aim stick, reticle toggle) is not a logical button: its keys are
+`UGSTN_InputConfig::AutoAimStickKey` / `AutoReticleToggleKey` on the input config asset.
 
 ## Conventions
 

@@ -39,6 +39,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNCore",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNSurface",
 			"Enabled": true
 		},
