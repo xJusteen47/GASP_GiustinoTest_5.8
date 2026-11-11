@@ -16,6 +16,13 @@ void UGSTN_HeldSettings::PushToInputSettings() const
 
 void UGSTN_HeldSettings::RemoveFromInputSettings()
 {
+	// Called from the runtime module's shutdown, which at editor exit runs after the UObject system is gone: the input settings' class
+	// default object no longer exists then (access violation at every quit, IO-2c). Nothing to remove in that case, the contribution dies
+	// with the object. Same guard as GSTNCombat and GSTNLink put at their call sites
+	if (!UObjectInitialized())
+	{
+		return;
+	}
 	if (UGSTN_InputSettings* InputSettings = GetMutableDefault<UGSTN_InputSettings>())
 	{
 		InputSettings->RemoveContribution(ContributionSource);
