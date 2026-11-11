@@ -729,3 +729,39 @@ void FGSTN_InputCondition_AnyOf::GetReferencedButtons(FGameplayTagContainer& Out
 		}
 	}
 }
+
+namespace
+{
+	/** Every tag of Buttons through Map, in one pass so a swap (A -> B, B -> A) does not chain */
+	void RemapButtonContainer(FGameplayTagContainer& Buttons, const TMap<FGameplayTag, FGameplayTag>& Map)
+	{
+		FGameplayTagContainer Remapped;
+		for (const FGameplayTag& Button : Buttons)
+		{
+			const FGameplayTag* New = Map.Find(Button);
+			Remapped.AddTag(New ? *New : Button);
+		}
+		Buttons = MoveTemp(Remapped);
+	}
+}
+
+void FGSTN_InputCondition_Press::RemapButtons(const TMap<FGameplayTag, FGameplayTag>& Map)
+{
+	RemapButtonContainer(Buttons, Map);
+}
+
+void FGSTN_InputCondition_Chord::RemapButtons(const TMap<FGameplayTag, FGameplayTag>& Map)
+{
+	RemapButtonContainer(Buttons, Map);
+}
+
+void FGSTN_InputCondition_AnyOf::RemapButtons(const TMap<FGameplayTag, FGameplayTag>& Map)
+{
+	for (TInstancedStruct<FGSTN_InputCondition>& Child : Conditions)
+	{
+		if (FGSTN_InputCondition* Condition = Child.GetMutablePtr())
+		{
+			Condition->RemapButtons(Map);
+		}
+	}
+}

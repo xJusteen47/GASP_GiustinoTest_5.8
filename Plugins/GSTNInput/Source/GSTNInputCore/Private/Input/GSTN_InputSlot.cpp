@@ -3,6 +3,8 @@
 #include "Input/GSTN_InputSlot.h"
 #include "Input/GSTN_InputSettings.h"
 #include "Input/GSTN_InputSlotValidation.h"
+#include "Input/GSTN_InputConditions.h"
+#include "Layout/GSTN_ButtonLayout.h"
 #include "Misc/DataValidation.h"
 
 FGSTN_CommandPriority FGSTN_InputSlotSpec::GetPriority(const UGSTN_InputSettings& Settings) const
@@ -88,3 +90,50 @@ EDataValidationResult UGSTN_InputSlotSet::IsDataValid(FDataValidationContext& Co
 
 #undef LOCTEXT_NAMESPACE
 #endif
+
+FGameplayTag FGSTN_InputSlotSpec::AddLayoutButton(FName Function, const FGameplayTag& Default)
+{
+	if (!Function.IsNone() && Default.IsValid())
+	{
+		FGSTN_SlotLayoutButton& Entry = LayoutButtons.AddDefaulted_GetRef();
+		Entry.Button = Default;
+		Entry.Function = Function;
+	}
+	return Default;
+}
+
+void FGSTN_InputSlotSpec::ApplyButtonLayout(const UGSTN_ButtonLayout& Layout)
+{
+	if (LayoutButtons.IsEmpty())
+	{
+		return;
+	}
+	TMap<FGameplayTag, FGameplayTag> Map;
+	for (const FGSTN_SlotLayoutButton& Entry : LayoutButtons)
+	{
+		const FGameplayTag Button = Layout.FindButton(Entry.Function);
+		if (Button.IsValid() && Button != Entry.Button && !Map.Contains(Entry.Button))
+		{
+			Map.Add(Entry.Button, Button);
+		}
+	}
+	if (!Map.IsEmpty())
+	{
+		for (FGSTN_InputStep& Step : Pattern.Steps)
+		{
+			for (TInstancedStruct<FGSTN_InputCondition>& Condition : Step.AllOf)
+			{
+				if (FGSTN_InputCondition* Pointer = Condition.GetMutablePtr())
+				{
+					Pointer->RemapButtons(Map);
+				}
+			}
+		}
+	}
+	LayoutButtons.Reset();
+}
+
+void FGSTN_InputSlotSpec::ApplyActiveButtonLayout()
+{
+	ApplyButtonLayout(UGSTN_ButtonLayout::Get());
+}

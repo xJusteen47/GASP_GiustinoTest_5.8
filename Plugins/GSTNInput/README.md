@@ -293,8 +293,13 @@ the piece to its GameRules asset. Functions today: `Held.PickupDrop`, `Held.Thro
 When it is read (IO-2b): kit tables compile on every machine when the loadout applies, and recompile with the same revision when the
 active GameRules change (`FGSTN_ActiveGameRules::OnChanged` / `GetSerial`), so a table built before the server's pick follows it. Timelines
 built on an ability's class default object (shield hold, drill bore) carry a `LayoutFunction` that the track hook resolves when it ticks.
-The standard and movement slot set assets are filled by `Tools/GAS/setup_gas_assets.py` from the builders: they hold the layout of the
-editor that ran it, not the GameRules of a match. The right stick (aim stick, reticle toggle) is not a logical button: its keys are
+Slots (IO-2c): a slot spec lists its `LayoutButtons` (default button as written in the conditions -> layout function). The builders
+(standard, movement, link slots) write the defaults and record the functions; the kit compile (`FGSTN_BindingTableCompiler`) calls
+`FGSTN_InputSlotSpec::ApplyActiveButtonLayout` on its copies, which remaps the conditions (`FGSTN_InputCondition::RemapButtons`, a swap
+does not chain) and empties the list. So a slot set or kit asset never bakes a layout in. Sets filled before IO-2c are migrated by
+`Tools/GAS/migrate_slot_layout.py` (same command and pattern as today's builder; edited slots are left alone). Not covered: the M2 test
+binding set (`UGSTN_CommandBindingSet`, harness only) points into the set assets and keeps the defaults; Blueprint rule conditions keep
+their buttons. The right stick (aim stick, reticle toggle) is not a logical button: its keys are
 `UGSTN_InputConfig::AutoAimStickKey` / `AutoReticleToggleKey` on the input config asset.
 
 ## Conventions

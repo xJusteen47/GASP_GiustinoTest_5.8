@@ -8,6 +8,10 @@
 #include "Loadout/GSTN_EntrySourceMask.h"
 #include "Input/GSTN_InputTags.h"
 #include "UObject/StrongObjectPtr.h"
+#include "Input/GSTN_MovementSlots.h"
+#include "Input/GSTN_CombatButtonTags.h"
+#include "Layout/GSTN_ButtonLayout.h"
+#include "GameRules/GSTN_GameRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -558,6 +562,138 @@ bool FGSTN_TableSourceMaskLimitsTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("an out-of-range weapon is inert"), GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Weapon, GSTNEntrySourceMask::MaxWeapons), 0u);
 	TestEqual(TEXT("a negative index is inert"), GSTNEntrySourceMask::Bit(EGSTN_EntrySource::Weapon, -1), 0u);
 	TestEqual(TEXT("the layout fills 32 bits"), GSTNEntrySourceMask::MaxWeapons, 23);
+	return true;
+}
+
+namespace
+{
+	/** Every button the compiled slot of Command refers to, empty when the table has no row for it */
+	FGameplayTagContainer TblSlotButtons(const FGSTN_CompiledBindingTable& Table, const FGameplayTag& Command)
+	{
+		FGameplayTagContainer Buttons;
+		for (const FGSTN_CompiledEntry& Entry : Table.Entries)
+		{
+			if (Entry.Command == Command && Table.Slots.IsValidIndex(Entry.SlotIndex))
+			{
+				for (const FGSTN_InputStep& Step : Table.Slots[Entry.SlotIndex].Pattern.Steps)
+				{
+					for (const TInstancedStruct<FGSTN_InputCondition>& Condition : Step.AllOf)
+					{
+						if (const FGSTN_InputCondition* Pointer = Condition.GetPtr())
+						{
+							Pointer->GetReferencedButtons(Buttons);
+						}
+					}
+				}
+				break;
+			}
+		}
+		return Buttons;
+	}
+
+	FGameplayTagContainer TblTags(std::initializer_list<FGameplayTag> Tags)
+	{
+		FGameplayTagContainer Container;
+		for (const FGameplayTag& Tag : Tags)
+		{
+			Container.AddTag(Tag);
+		}
+		return Container;
+	}
+}
+
+// IO-2c: a slot set asset stores the default buttons and the layout function of each; the kit compile applies the active button layout
+// (the GameRules piece). A layout that swaps attack and special, puts crouch on jump and dash on dodge moves the compiled slots, the set
+// asset itself stays at the defaults, and with no rules the defaults come back. The pre-IO-2c migration gives old slots their functions
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_TableButtonLayoutTest, "GSTNCombat.Core.Table.ButtonLayout", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_TableButtonLayoutTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNCommandTags;
+	const FGameplayTag BtnAttack = GSTNCombatButtonTags::Button_Attack.GetTag();
+	const FGameplayTag BtnSpecial = GSTNCombatButtonTags::Button_Special.GetTag();
+	const FGameplayTag BtnCrouch = GSTNCombatButtonTags::Button_Crouch.GetTag();
+	const FGameplayTag BtnJump = GSTNCombatButtonTags::Button_Jump.GetTag();
+	const FGameplayTag BtnSprint = GSTNCombatButtonTags::Button_Sprint.GetTag();
+	const FGameplayTag BtnDodge = GSTNCombatButtonTags::Button_Dodge.GetTag();
+
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = GSTNCombatTest::MakeSettings();
+	const TStrongObjectPtr<UGSTN_InputSlotSet> Base = TblMakeStandardSet();
+	for (const FGSTN_InputSlotSpec& Spec : UGSTN_MovementSlots::Build(false))
+	{
+		Base->Slots.AddDefaulted_GetRef().Inline = Spec;
+	}
+	FGSTN_CompileInput Input = TblMakeInput(Base.Get());
+	Input.Kit.Bindings = { TblBind(Attack_Neutral, TblAbilityA()), TblBind(Special_Neutral, TblAbilityB()), TblBind(Attack_CrouchNeutral, TblAbilityC()),
+		TblBind(Combo_AttackSpecial_Neutral, TblAbilityD()), TblBind(Movement_Dash, TblAbilityA()), TblBind(Defence_Dodge, TblAbilityB()) };
+
+	const UGSTN_GameRules* Previous = FGSTN_ActiveGameRules::Get();
+	FGSTN_ActiveGameRules::Set(nullptr);
+	const FGSTN_CompiledBindingTable Defaults = FGSTN_BindingTableCompiler::Compile(Input, *Settings);
+	TestTrue(TEXT("default: attack on Attack"), TblSlotButtons(Defaults, Attack_Neutral) == TblTags({ BtnAttack }));
+	TestTrue(TEXT("default: crouch attack on Attack + Crouch"), TblSlotButtons(Defaults, Attack_CrouchNeutral) == TblTags({ BtnAttack, BtnCrouch }));
+	TestTrue(TEXT("default: dash on Sprint"), TblSlotButtons(Defaults, Movement_Dash) == TblTags({ BtnSprint }));
+
+	TStrongObjectPtr<UGSTN_GameRules> Rules(NewObject<UGSTN_GameRules>(GetTransientPackage()));
+	UGSTN_ButtonLayout* Layout = NewObject<UGSTN_ButtonLayout>(Rules.Get());
+	Layout->Assignments.Reset();
+	const auto Assign = [Layout](const TCHAR* Function, const FGameplayTag& Button)
+	{
+		FGSTN_ButtonAssignment& Assignment = Layout->Assignments.AddDefaulted_GetRef();
+		Assignment.Function = Function;
+		Assignment.Button = Button;
+	};
+	Assign(TEXT("Combat.Attack"), BtnSpecial);
+	Assign(TEXT("Combat.Special"), BtnAttack);
+	Assign(TEXT("Combat.Crouch"), BtnJump);
+	Assign(TEXT("Movement.Dash"), BtnDodge);
+	Rules->Pieces.Add(Layout);
+	FGSTN_ActiveGameRules::Set(Rules.Get());
+	const FGSTN_CompiledBindingTable Moved = FGSTN_BindingTableCompiler::Compile(Input, *Settings);
+	FGSTN_ActiveGameRules::Set(nullptr);
+
+	TestTrue(TEXT("layout: attack on Special"), TblSlotButtons(Moved, Attack_Neutral) == TblTags({ BtnSpecial }));
+	TestTrue(TEXT("layout: special on Attack (a swap does not chain)"), TblSlotButtons(Moved, Special_Neutral) == TblTags({ BtnAttack }));
+	TestTrue(TEXT("layout: crouch attack on Special + Jump"), TblSlotButtons(Moved, Attack_CrouchNeutral) == TblTags({ BtnSpecial, BtnJump }));
+	TestTrue(TEXT("layout: chord keeps both buttons"), TblSlotButtons(Moved, Combo_AttackSpecial_Neutral) == TblTags({ BtnAttack, BtnSpecial }));
+	TestTrue(TEXT("layout: dash on Dodge"), TblSlotButtons(Moved, Movement_Dash) == TblTags({ BtnDodge }));
+	TestTrue(TEXT("layout: a function it does not name keeps its default (dodge)"), TblSlotButtons(Moved, Defence_Dodge) == TblTags({ BtnDodge }));
+	bool bResolved = true;
+	for (const FGSTN_InputSlotSpec& Slot : Moved.Slots)
+	{
+		bResolved &= Slot.LayoutButtons.IsEmpty();
+	}
+	TestTrue(TEXT("compiled slots are final (no layout buttons left)"), bResolved);
+	TestTrue(TEXT("the set asset is not changed by the compile"), Base->Slots[0].Inline.Pattern.Steps[0].AllOf[0].Get<FGSTN_InputCondition_Press>().Buttons.HasTagExact(BtnAttack));
+
+	const FGSTN_CompiledBindingTable Again = FGSTN_BindingTableCompiler::Compile(Input, *Settings);
+	TestTrue(TEXT("no rules again: attack back on Attack"), TblSlotButtons(Again, Attack_Neutral) == TblTags({ BtnAttack }));
+	TestEqual(TEXT("no rules again: same slots as the first compile"), Again.Slots.Num(), Defaults.Slots.Num());
+
+#if WITH_EDITOR
+	// Migration: a set saved before IO-2c (same slots, no layout functions) gets them back and then follows the layout
+	TStrongObjectPtr<UGSTN_InputSlotSet> Old(NewObject<UGSTN_InputSlotSet>(GetTransientPackage()));
+	Old->Slots = Base->Slots;
+	for (FGSTN_InputSlotEntry& Entry : Old->Slots)
+	{
+		Entry.Inline.LayoutButtons.Reset();
+	}
+	// Attack_Directional given the neutral pattern: a designer's change, left alone (it replaces the real Attack_Directional slot)
+	FGSTN_InputSlotEntry Edited = Old->Slots[0];
+	Edited.Inline.Command = Attack_Directional.GetTag();
+	Old->Slots.RemoveAt(1);
+	Old->Slots.Add(MoveTemp(Edited));
+	TestEqual(TEXT("migration: every builder slot gets its functions, the edited one does not"), UGSTN_StandardSlots::AddLayoutFunctionsToSlotSet(Old.Get()), Base->Slots.Num() - 1);
+	TestEqual(TEXT("migration: a second run changes nothing"), UGSTN_StandardSlots::AddLayoutFunctionsToSlotSet(Old.Get()), 0);
+	TestTrue(TEXT("migration: the edited slot has no functions"), Old->Slots.Last().Inline.LayoutButtons.IsEmpty());
+	FGSTN_CompileInput OldInput = TblMakeInput(Old.Get());
+	OldInput.Kit.Bindings = Input.Kit.Bindings;
+	FGSTN_ActiveGameRules::Set(Rules.Get());
+	const FGSTN_CompiledBindingTable Migrated = FGSTN_BindingTableCompiler::Compile(OldInput, *Settings);
+	FGSTN_ActiveGameRules::Set(nullptr);
+	TestTrue(TEXT("migrated set follows the layout"), TblSlotButtons(Migrated, Attack_Neutral) == TblTags({ BtnSpecial }));
+#endif
+
+	FGSTN_ActiveGameRules::Set(Previous);
 	return true;
 }
 

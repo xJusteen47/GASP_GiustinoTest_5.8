@@ -98,6 +98,13 @@ struct GSTNINPUTCORE_API FGSTN_InputCondition
 
 	/** Adds every button tag the condition refers to (validation: the config must have them) */
 	virtual void GetReferencedButtons(FGameplayTagContainer& OutButtons) const {}
+
+	/**
+	 * IO-2c: replaces the buttons the condition refers to by Map (old -> new, applied at once so a swap works). Called on the slot
+	 * copies a kit compiles, so a slot set asset stores the default buttons and the match's button layout picks the real ones. A
+	 * condition whose buttons live in Blueprint logic keeps them
+	 */
+	virtual void RemapButtons(const TMap<FGameplayTag, FGameplayTag>& Map) {}
 };
 
 /** A set of stick directions, edited as a checklist. */
@@ -144,6 +151,7 @@ struct GSTNINPUTCORE_API FGSTN_InputCondition_Press : public FGSTN_InputConditio
 	virtual int32 GetSpecificity() const override { return 10; }
 	virtual void AppendCanonicalInput(FGSTN_InputScript& Script, const FGSTN_ButtonMap& Map, int32& Frame) const override;
 	virtual void GetReferencedButtons(FGameplayTagContainer& OutButtons) const override { OutButtons.AppendTags(Buttons); }
+	virtual void RemapButtons(const TMap<FGameplayTag, FGameplayTag>& Map) override;
 };
 
 /** The negative edge: a button released after being held long enough. Anchor. Specificity 10. */
@@ -171,6 +179,7 @@ struct GSTNINPUTCORE_API FGSTN_InputCondition_Release : public FGSTN_InputCondit
 	virtual int32 GetSpecificity() const override { return 10; }
 	virtual void AppendCanonicalInput(FGSTN_InputScript& Script, const FGSTN_ButtonMap& Map, int32& Frame) const override;
 	virtual void GetReferencedButtons(FGameplayTagContainer& OutButtons) const override { OutButtons.AddTag(Button); }
+	virtual void RemapButtons(const TMap<FGameplayTag, FGameplayTag>& Map) override { if (const FGameplayTag* New = Map.Find(Button)) { Button = *New; } }
 };
 
 /**
@@ -194,6 +203,7 @@ struct GSTNINPUTCORE_API FGSTN_InputCondition_Hold : public FGSTN_InputCondition
 	virtual int32 GetSpecificity() const override { return 5; }
 	virtual void AppendCanonicalInput(FGSTN_InputScript& Script, const FGSTN_ButtonMap& Map, int32& Frame) const override;
 	virtual void GetReferencedButtons(FGameplayTagContainer& OutButtons) const override { OutButtons.AddTag(Button); }
+	virtual void RemapButtons(const TMap<FGameplayTag, FGameplayTag>& Map) override { if (const FGameplayTag* New = Map.Find(Button)) { Button = *New; } }
 };
 
 /** Several buttons pressed together: unconsumed presses of every button, all within WithinFrames. Anchor = the newest. Specificity 10 per button. */
@@ -215,6 +225,7 @@ struct GSTNINPUTCORE_API FGSTN_InputCondition_Chord : public FGSTN_InputConditio
 	virtual int32 GetSpecificity() const override { return 10 * FMath::Max(Buttons.Num(), 1); }
 	virtual void AppendCanonicalInput(FGSTN_InputScript& Script, const FGSTN_ButtonMap& Map, int32& Frame) const override;
 	virtual void GetReferencedButtons(FGameplayTagContainer& OutButtons) const override { OutButtons.AppendTags(Buttons); }
+	virtual void RemapButtons(const TMap<FGameplayTag, FGameplayTag>& Map) override;
 };
 
 /** Pressing one button repeatedly: Count unconsumed presses within WithinFrames. Anchor = the newest. Specificity 5 per press. */
@@ -238,6 +249,7 @@ struct GSTNINPUTCORE_API FGSTN_InputCondition_Mash : public FGSTN_InputCondition
 	virtual int32 GetSpecificity() const override { return 5 * Count; }
 	virtual void AppendCanonicalInput(FGSTN_InputScript& Script, const FGSTN_ButtonMap& Map, int32& Frame) const override;
 	virtual void GetReferencedButtons(FGameplayTagContainer& OutButtons) const override { OutButtons.AddTag(Button); }
+	virtual void RemapButtons(const TMap<FGameplayTag, FGameplayTag>& Map) override { if (const FGameplayTag* New = Map.Find(Button)) { Button = *New; } }
 };
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -405,4 +417,5 @@ struct GSTNINPUTCORE_API FGSTN_InputCondition_AnyOf : public FGSTN_InputConditio
 	virtual int32 GetSpecificity() const override;
 	virtual void AppendCanonicalInput(FGSTN_InputScript& Script, const FGSTN_ButtonMap& Map, int32& Frame) const override;
 	virtual void GetReferencedButtons(FGameplayTagContainer& OutButtons) const override;
+	virtual void RemapButtons(const TMap<FGameplayTag, FGameplayTag>& Map) override;
 };

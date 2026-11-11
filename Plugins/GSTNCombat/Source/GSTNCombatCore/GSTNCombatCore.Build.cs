@@ -22,6 +22,8 @@ public class GSTNCombatCore : ModuleRules
 
 		// The module registers the plugin's tag ini folder at startup
 		PrivateDependencyModuleNames.Add("Projects");
+		// IO-2c: the layout test sets an active GameRules asset
+		PrivateDependencyModuleNames.Add("GSTNCore");
 		// E17: the GSTNCombat trace channel and events (UE_TRACE_*) live in this module
 		PrivateDependencyModuleNames.Add("TraceLog");
 	}

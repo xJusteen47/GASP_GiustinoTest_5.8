@@ -72,6 +72,10 @@ bool FGSTN_CombatInputSource::GetScriptSlots(TArray<FGSTN_InputSlotSpec>& OutSlo
 {
 	// The plugin's standard set: the kit of the character is data the debug module does not read yet
 	OutSlots = UGSTN_StandardSlots::Build();
+	for (FGSTN_InputSlotSpec& Slot : OutSlots)
+	{
+		Slot.ApplyActiveButtonLayout(); // IO-2c: the buttons of the active layout, as the kits compile them
+	}
 	return true;
 }
 

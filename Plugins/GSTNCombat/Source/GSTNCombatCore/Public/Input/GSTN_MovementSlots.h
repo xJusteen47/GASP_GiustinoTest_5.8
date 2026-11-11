@@ -21,6 +21,9 @@
  * fire the tap and a short one is not held back waiting for a hold that cannot come: both resolve on the release. Which command
  * each one yields is data: the default set maps tap to Command.Interact.Grab and hold to Command.Interact.PickUp, and the swapped
  * set exchanges the two commands (bSwapTapHold), no code involved.
+ *
+ * The buttons above are the defaults of the layout functions Movement.Dash, Movement.Dodge and Movement.Interact; each slot records
+ * them (IO-2c, FGSTN_InputSlotSpec::LayoutButtons) and the kit compile applies the match's button layout.
  */
 UCLASS()
 class GSTNCOMBATCORE_API UGSTN_MovementSlots : public UBlueprintFunctionLibrary

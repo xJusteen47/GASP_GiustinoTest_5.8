@@ -44,6 +44,10 @@ namespace
 		FGSTN_InputDisplayProfile Profile;
 		Profile.ButtonTags = FGSTN_CombatInputSource::GetCombatButtonTags();
 		Profile.Slots = UGSTN_StandardSlots::Build();
+		for (FGSTN_InputSlotSpec& Slot : Profile.Slots)
+		{
+			Slot.ApplyActiveButtonLayout(); // IO-2c: the buttons of the active layout, as the kits compile them
+		}
 		Profile.Label = LOCTEXT("CombatProfile", "Combat: the six standard buttons and the standard command set");
 		return Profile;
 	}

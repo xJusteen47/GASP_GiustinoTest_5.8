@@ -4,17 +4,42 @@
 #include "Input/GSTN_CombatCommandTags.h"
 #include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_InputConditions.h"
-#include "Layout/GSTN_ButtonLayout.h"
+#include "Input/GSTN_MovementSlots.h"
 
 namespace
 {
 	using FCondition = TInstancedStruct<FGSTN_InputCondition>;
 
-	// IO-2: buttons from the button layout (GameRules piece), these defaults when it does not name them. The shipped slot set assets are
-	// filled from here by Tools/GAS/setup_gas_assets.py, so they carry the layout of the editor that ran it
-	FGameplayTag LayoutButton(const TCHAR* Function, const FNativeGameplayTag& Default)
+	// IO-2c: the slots are written with the defaults of the layout functions and record them (FGSTN_InputSlotSpec::LayoutButtons); the
+	// kit compile swaps in the match's button layout. So the set asset filled from here follows any GameRules, not the editor's layout
+	const TPair<const TCHAR*, const FNativeGameplayTag*> LayoutFunctions[] = {
+		{ TEXT("Combat.Attack"), &GSTNCombatButtonTags::Button_Attack },
+		{ TEXT("Combat.Strong"), &GSTNCombatButtonTags::Button_Strong },
+		{ TEXT("Combat.Special"), &GSTNCombatButtonTags::Button_Special },
+		{ TEXT("Combat.Crouch"), &GSTNCombatButtonTags::Button_Crouch },
+	};
+
+	/** Records the layout function of every default button the slot uses (each default is one function in this set) */
+	void RecordLayoutFunctions(FGSTN_InputSlotSpec& Spec)
 	{
-		return UGSTN_ButtonLayout::GetButton(Function, Default.GetTag());
+		FGameplayTagContainer Used;
+		for (const FGSTN_InputStep& Step : Spec.Pattern.Steps)
+		{
+			for (const TInstancedStruct<FGSTN_InputCondition>& Condition : Step.AllOf)
+			{
+				if (const FGSTN_InputCondition* Pointer = Condition.GetPtr())
+				{
+					Pointer->GetReferencedButtons(Used);
+				}
+			}
+		}
+		for (const TPair<const TCHAR*, const FNativeGameplayTag*>& Function : LayoutFunctions)
+		{
+			if (Used.HasTagExact(Function.Value->GetTag()))
+			{
+				Spec.AddLayoutButton(Function.Key, Function.Value->GetTag());
+			}
+		}
 	}
 
 	enum class EShape : uint8
@@ -41,7 +66,7 @@ namespace
 	FCondition MakeCrouchHeld()
 	{
 		FGSTN_InputCondition_Hold Condition;
-		Condition.Button = LayoutButton(TEXT("Combat.Crouch"), GSTNCombatButtonTags::Button_Crouch);
+		Condition.Button = GSTNCombatButtonTags::Button_Crouch.GetTag();
 		Condition.MinFrames = 0;
 		return MakeInstance(Condition);
 	}
@@ -83,11 +108,11 @@ TArray<FGSTN_InputSlotSpec> UGSTN_StandardSlots::Build()
 		FGameplayTag Button;
 		const FNativeGameplayTag* Commands[4];
 	};
-	const FGameplayTag AttackButton = LayoutButton(TEXT("Combat.Attack"), GSTNCombatButtonTags::Button_Attack);
-	const FGameplayTag SpecialButton = LayoutButton(TEXT("Combat.Special"), GSTNCombatButtonTags::Button_Special);
+	const FGameplayTag AttackButton = GSTNCombatButtonTags::Button_Attack.GetTag();
+	const FGameplayTag SpecialButton = GSTNCombatButtonTags::Button_Special.GetTag();
 	const FFamily Families[] = {
 		{ AttackButton, { &Attack_Neutral, &Attack_Directional, &Attack_CrouchNeutral, &Attack_CrouchDirectional } },
-		{ LayoutButton(TEXT("Combat.Strong"), GSTNCombatButtonTags::Button_Strong), { &Strong_Neutral, &Strong_Directional, &Strong_CrouchNeutral, &Strong_CrouchDirectional } },
+		{ GSTNCombatButtonTags::Button_Strong.GetTag(), { &Strong_Neutral, &Strong_Directional, &Strong_CrouchNeutral, &Strong_CrouchDirectional } },
 		{ SpecialButton, { &Special_Neutral, &Special_Directional, &Special_CrouchNeutral, &Special_CrouchDirectional } },
 	};
 	const FNativeGameplayTag* Combos[] = { &Combo_AttackSpecial_Neutral, &Combo_AttackSpecial_Directional,
@@ -110,6 +135,10 @@ TArray<FGSTN_InputSlotSpec> UGSTN_StandardSlots::Build()
 		Chord.WithinFrames = 2;
 		Slots.Add(MakeSlot(Combos[Shape]->GetTag(), MakeInstance(Chord), static_cast<EShape>(Shape)));
 	}
+	for (FGSTN_InputSlotSpec& Spec : Slots)
+	{
+		RecordLayoutFunctions(Spec);
+	}
 	return Slots;
 }
 
@@ -130,5 +159,58 @@ void UGSTN_StandardSlots::FillSlotSet(UGSTN_InputSlotSet* Set)
 		Set->Slots.Add(MoveTemp(Entry));
 	}
 	Set->MarkPackageDirty();
+}
+
+int32 UGSTN_StandardSlots::AddLayoutFunctions(TArray<FGSTN_InputSlotEntry>& Entries)
+{
+	// Today's builders, both interact orders, with the hold length of the current settings (the one the old assets were filled with)
+	TArray<FGSTN_InputSlotSpec> Templates = Build();
+	Templates.Append(UGSTN_MovementSlots::Build(false));
+	Templates.Append(UGSTN_MovementSlots::Build(true));
+
+	const auto PatternText = [](const FGSTN_InputPattern& Pattern)
+	{
+		FString Text;
+		FGSTN_InputPattern::StaticStruct()->ExportText(Text, &Pattern, nullptr, nullptr, PPF_None, nullptr);
+		return Text;
+	};
+
+	int32 Changed = 0;
+	for (FGSTN_InputSlotEntry& Entry : Entries)
+	{
+		// Shared slot assets are migrated on their own, not through every set that lists them
+		if (Entry.Asset || !Entry.Inline.LayoutButtons.IsEmpty())
+		{
+			continue;
+		}
+		const FString Mine = PatternText(Entry.Inline.Pattern);
+		for (const FGSTN_InputSlotSpec& Template : Templates)
+		{
+			if (Template.Command == Entry.Inline.Command && !Template.LayoutButtons.IsEmpty() && PatternText(Template.Pattern) == Mine)
+			{
+				Entry.Inline.LayoutButtons = Template.LayoutButtons;
+				++Changed;
+				break;
+			}
+		}
+	}
+	return Changed;
+}
+
+int32 UGSTN_StandardSlots::AddLayoutFunctionsToSlotSet(UGSTN_InputSlotSet* Set)
+{
+	if (!Set)
+	{
+		return 0;
+	}
+	TArray<FGSTN_InputSlotEntry> Entries = Set->Slots;
+	const int32 Changed = AddLayoutFunctions(Entries);
+	if (Changed > 0)
+	{
+		Set->Modify();
+		Set->Slots = MoveTemp(Entries);
+		Set->MarkPackageDirty();
+	}
+	return Changed;
 }
 #endif

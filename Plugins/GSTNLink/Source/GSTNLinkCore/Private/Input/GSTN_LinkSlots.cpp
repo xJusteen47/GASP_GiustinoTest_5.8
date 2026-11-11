@@ -102,32 +102,45 @@ namespace
 
 namespace
 {
-	/** IO-2: the button of a link function in the active button layout, else the default */
-	FGameplayTag LinkButton(const TCHAR* Function, const FNativeGameplayTag& Default)
+	/** A layout function of a link slot and its default button */
+	using FLayoutFunction = TPair<const TCHAR*, const FNativeGameplayTag*>;
+
+	/**
+	 * IO-2c: the slot keeps its default buttons and records which layout function each one is; the kit compile resolves them with the
+	 * match's button layout (FGSTN_InputSlotSpec::ApplyButtonLayout), so slots saved on a kit asset follow the GameRules too
+	 */
+	FGSTN_InputSlotSpec WithLayout(FGSTN_InputSlotSpec Spec, std::initializer_list<FLayoutFunction> Functions)
 	{
-		return UGSTN_ButtonLayout::GetButton(Function, Default.GetTag());
+		for (const FLayoutFunction& Function : Functions)
+		{
+			Spec.AddLayoutButton(Function.Key, Function.Value->GetTag());
+		}
+		return Spec;
 	}
 }
 
 TArray<FGSTN_InputSlotSpec> UGSTN_LinkSlots::Build()
 {
 	using namespace GSTNLinkTags;
-	// IO-2: every button from the button layout (GameRules piece), these defaults when it does not name them
-	const FGameplayTag Attack = LinkButton(TEXT("Link.ThrowAttack"), GSTNCombatButtonTags::Button_Attack);
-	const FGameplayTag Strong = LinkButton(TEXT("Link.ThrowStrong"), GSTNCombatButtonTags::Button_Strong);
-	const FGameplayTag Crouch = LinkButton(TEXT("Link.Crouch"), GSTNCombatButtonTags::Button_Crouch);
+	// IO-2: the defaults of the layout functions; the kit compile swaps in the match's layout (IO-2c, WithLayout)
+	const FNativeGameplayTag& Interact = GSTNCombatButtonTags::Button_Interact;
+	const FNativeGameplayTag& Attack = GSTNCombatButtonTags::Button_Attack;
+	const FNativeGameplayTag& Strong = GSTNCombatButtonTags::Button_Strong;
+	const FNativeGameplayTag& Crouch = GSTNCombatButtonTags::Button_Crouch;
+	const FLayoutFunction ThrowAttack(TEXT("Link.ThrowAttack"), &Attack);
+	const FLayoutFunction ThrowStrong(TEXT("Link.ThrowStrong"), &Strong);
 	const int32 Role = RoleSlotPriorityOffset;
 
 	TArray<FGSTN_InputSlotSpec> Slots;
-	Slots.Add(MakeSlot(Command_Link_Grab, { MakePress({ LinkButton(TEXT("Link.Grab"), GSTNCombatButtonTags::Button_Interact) }) }, 0));
-	Slots.Add(MakeSlot(Command_Link_Release, { MakePress({ LinkButton(TEXT("Link.Release"), GSTNCombatButtonTags::Button_Interact) }) }, Role));
-	Slots.Add(MakeSlot(Command_Link_Pummel, { MakePress({ LinkButton(TEXT("Link.Pummel"), GSTNCombatButtonTags::Button_Attack) }), MakeNeutralStick() }, Role));
-	Slots.Add(MakeSlot(Command_Link_Throw_Forward, { MakePress({ Attack, Strong }), MakeTilted(GSTN_DirectionMasks::FacingForward) }, Role));
-	Slots.Add(MakeSlot(Command_Link_Throw_Back, { MakePress({ Attack, Strong }), MakeTilted(GSTN_DirectionMasks::FacingBack) }, Role));
-	Slots.Add(MakeSlot(Command_Link_Throw_Up, { MakePress({ Strong }), MakeNeutralStick() }, Role));
+	Slots.Add(WithLayout(MakeSlot(Command_Link_Grab, { MakePress({ Interact }) }, 0), { { TEXT("Link.Grab"), &Interact } }));
+	Slots.Add(WithLayout(MakeSlot(Command_Link_Release, { MakePress({ Interact }) }, Role), { { TEXT("Link.Release"), &Interact } }));
+	Slots.Add(WithLayout(MakeSlot(Command_Link_Pummel, { MakePress({ Attack }), MakeNeutralStick() }, Role), { { TEXT("Link.Pummel"), &Attack } }));
+	Slots.Add(WithLayout(MakeSlot(Command_Link_Throw_Forward, { MakePress({ Attack, Strong }), MakeTilted(GSTN_DirectionMasks::FacingForward) }, Role), { ThrowAttack, ThrowStrong }));
+	Slots.Add(WithLayout(MakeSlot(Command_Link_Throw_Back, { MakePress({ Attack, Strong }), MakeTilted(GSTN_DirectionMasks::FacingBack) }, Role), { ThrowAttack, ThrowStrong }));
+	Slots.Add(WithLayout(MakeSlot(Command_Link_Throw_Up, { MakePress({ Strong }), MakeNeutralStick() }, Role), { ThrowStrong }));
 	// Crouch held outranks the plain press (the pummel), as the standard set ranks its crouch shapes above the standing ones
-	Slots.Add(MakeSlot(Command_Link_Throw_Down, { MakePress({ Attack }), MakeHold(Crouch) }, Role + 1));
-	Slots.Add(MakeSlot(Command_Link_Latch_Attack, { MakePress({ LinkButton(TEXT("Link.LatchAttack"), GSTNCombatButtonTags::Button_Attack) }) }, Role));
+	Slots.Add(WithLayout(MakeSlot(Command_Link_Throw_Down, { MakePress({ Attack }), MakeHold(Crouch) }, Role + 1), { ThrowAttack, { TEXT("Link.Crouch"), &Crouch } }));
+	Slots.Add(WithLayout(MakeSlot(Command_Link_Latch_Attack, { MakePress({ Attack }) }, Role), { { TEXT("Link.LatchAttack"), &Attack } }));
 	return Slots;
 }
 
@@ -167,8 +180,10 @@ FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildThrowSlot(const FGameplayTag& ThrowCom
 	const bool bBack = ThrowCommand == Command_Link_Throw_Back;
 	const bool bUp = ThrowCommand == Command_Link_Throw_Up;
 	const bool bDown = ThrowCommand == Command_Link_Throw_Down;
-	const FGameplayTag Special = LinkButton(TEXT("Link.ThrowSpecial"), GSTNCombatButtonTags::Button_Special);
-	const FGameplayTag Crouch = LinkButton(TEXT("Link.Crouch"), GSTNCombatButtonTags::Button_Crouch);
+	const FNativeGameplayTag& Special = GSTNCombatButtonTags::Button_Special;
+	const FNativeGameplayTag& Crouch = GSTNCombatButtonTags::Button_Crouch;
+	const FLayoutFunction ThrowSpecial(TEXT("Link.ThrowSpecial"), &Special);
+	const FLayoutFunction LinkCrouch(TEXT("Link.Crouch"), &Crouch);
 	if (Mode == EGSTN_LinkThrowInputMode::Stick)
 	{
 		if (bForward || bBack)
@@ -177,26 +192,26 @@ FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildThrowSlot(const FGameplayTag& ThrowCom
 		}
 		if (bUp)
 		{
-			return MakeSlot(ThrowCommand, { MakePress({ LinkButton(TEXT("Link.ThrowJump"), GSTNCombatButtonTags::Button_Jump) }) }, Role);
+			return WithLayout(MakeSlot(ThrowCommand, { MakePress({ GSTNCombatButtonTags::Button_Jump }) }, Role), { { TEXT("Link.ThrowJump"), &GSTNCombatButtonTags::Button_Jump } });
 		}
 		if (bDown)
 		{
-			return MakeSlot(ThrowCommand, { MakePress({ Crouch }) }, Role + 1);
+			return WithLayout(MakeSlot(ThrowCommand, { MakePress({ Crouch }) }, Role + 1), { LinkCrouch });
 		}
 	}
 	else if (Mode == EGSTN_LinkThrowInputMode::StickPlusSpecial)
 	{
 		if (bForward || bBack)
 		{
-			return MakeSlot(ThrowCommand, { MakePress({ Special }), MakeTilted(bForward ? GSTN_DirectionMasks::FacingForward : GSTN_DirectionMasks::FacingBack) }, Role);
+			return WithLayout(MakeSlot(ThrowCommand, { MakePress({ Special }), MakeTilted(bForward ? GSTN_DirectionMasks::FacingForward : GSTN_DirectionMasks::FacingBack) }, Role), { ThrowSpecial });
 		}
 		if (bUp)
 		{
-			return MakeSlot(ThrowCommand, { MakePress({ Special }), MakeNeutralStick() }, Role);
+			return WithLayout(MakeSlot(ThrowCommand, { MakePress({ Special }), MakeNeutralStick() }, Role), { ThrowSpecial });
 		}
 		if (bDown)
 		{
-			return MakeSlot(ThrowCommand, { MakePress({ Special }), MakeHold(Crouch) }, Role + 1);
+			return WithLayout(MakeSlot(ThrowCommand, { MakePress({ Special }), MakeHold(Crouch) }, Role + 1), { ThrowSpecial, LinkCrouch });
 		}
 	}
 	for (FGSTN_InputSlotSpec& Spec : Build())
@@ -211,9 +226,9 @@ FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildThrowSlot(const FGameplayTag& ThrowCom
 
 FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildSpecialCrouchGrabSlot()
 {
-	return MakeSlot(GSTNLinkTags::Command_Link_Grab_Special,
-		{ MakePress({ LinkButton(TEXT("Link.SpecialGrab"), GSTNCombatButtonTags::Button_Special) }),
-			MakeHold(LinkButton(TEXT("Link.Crouch"), GSTNCombatButtonTags::Button_Crouch)) }, SpecialGrabPriorityOffset);
+	return WithLayout(MakeSlot(GSTNLinkTags::Command_Link_Grab_Special,
+		{ MakePress({ GSTNCombatButtonTags::Button_Special }), MakeHold(GSTNCombatButtonTags::Button_Crouch) }, SpecialGrabPriorityOffset),
+		{ { TEXT("Link.SpecialGrab"), &GSTNCombatButtonTags::Button_Special }, { TEXT("Link.Crouch"), &GSTNCombatButtonTags::Button_Crouch } });
 }
 
 bool UGSTN_LinkSlots::IsStickOnlyThrow(const FGameplayTag& ThrowCommand, EGSTN_LinkThrowInputMode Mode)

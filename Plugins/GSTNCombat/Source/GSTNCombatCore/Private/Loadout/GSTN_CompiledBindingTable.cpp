@@ -404,6 +404,9 @@ FGSTN_CompiledBindingTable FGSTN_BindingTableCompiler::Compile(const FGSTN_Compi
 	TMap<FString, int32> SlotIndexByKey;
 	for (FPendingEntry& Pending : All)
 	{
+		// IO-2c: slots store the defaults of their layout functions; the buttons come from the active button layout (the match's
+		// GameRules piece, the same on every machine), so the set and kit assets follow the rules and never bake a layout in
+		Pending.Slot.ApplyActiveButtonLayout();
 		const FString Key = SlotKey(Pending.Slot);
 		int32* Existing = SlotIndexByKey.Find(Key);
 		if (!Existing)

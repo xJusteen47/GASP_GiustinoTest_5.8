@@ -12,6 +12,7 @@
 #include "GSTN_InputSlot.generated.h"
 
 class UGSTN_InputSettings;
+class UGSTN_ButtonLayout;
 
 /**
  * The rank of a command when several match at once (input.md section 4.1): the score of each criterion of
@@ -44,6 +45,25 @@ struct FGSTN_CommandPriority
 
 	bool operator==(const FGSTN_CommandPriority& Other) const { return Compare(Other) == 0; }
 	bool operator<(const FGSTN_CommandPriority& Other) const { return Compare(Other) < 0; }
+};
+
+/**
+ * IO-2c: a button of a slot that belongs to a function of the button layout (UGSTN_ButtonLayout). The slot's conditions are written
+ * with Button, the function's default; when a kit compiles the slot, Button is replaced by the button the active layout gives the
+ * function. So a slot set asset stores functions and defaults, never the layout of the editor that saved it.
+ */
+USTRUCT(BlueprintType)
+struct GSTNINPUTCORE_API FGSTN_SlotLayoutButton
+{
+	GENERATED_BODY()
+
+	/** The button as written in the slot's conditions: the function's default */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Layout", meta = (Categories = "Input.Button"))
+	FGameplayTag Button;
+
+	/** The layout function ("Combat.Attack", "Movement.Dash"...) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Layout")
+	FName Function;
 };
 
 /**
@@ -93,6 +113,25 @@ struct GSTNINPUTCORE_API FGSTN_InputSlotSpec
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Slot|Priority")
 	bool bFallThroughWhenUnavailable = false;
+
+	/**
+	 * IO-2c: the buttons of this slot that follow the button layout, each with its function. Empty = the buttons are fixed. Within
+	 * one slot a default button stands for one function only
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Slot|Layout", meta = (TitleProperty = "Function"))
+	TArray<FGSTN_SlotLayoutButton> LayoutButtons;
+
+	/** Records that Default, as written in the conditions, is the button of Function. Returns Default, for the builders */
+	FGameplayTag AddLayoutButton(FName Function, const FGameplayTag& Default);
+
+	/**
+	 * Replaces every layout button by the one Layout gives its function (the default when Layout does not name it), then empties
+	 * LayoutButtons so the slot is final and a second call changes nothing. Compilers call it on their copy, never on an asset
+	 */
+	void ApplyButtonLayout(const UGSTN_ButtonLayout& Layout);
+
+	/** ApplyButtonLayout with the active layout (the GameRules piece, else the shipped defaults) */
+	void ApplyActiveButtonLayout();
 
 	/** Rank of the slot with the settings' tiers */
 	FGSTN_CommandPriority GetPriority(const UGSTN_InputSettings& Settings) const;

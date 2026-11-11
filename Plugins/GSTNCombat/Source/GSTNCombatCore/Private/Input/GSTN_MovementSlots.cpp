@@ -5,7 +5,6 @@
 #include "Input/GSTN_CombatCommandTags.h"
 #include "Input/GSTN_CombatSettings.h"
 #include "Input/GSTN_InputConditions.h"
-#include "Layout/GSTN_ButtonLayout.h"
 
 namespace
 {
@@ -41,19 +40,23 @@ namespace
 TArray<FGSTN_InputSlotSpec> UGSTN_MovementSlots::Build(bool bSwapTapHold, int32 HoldFrames)
 {
 	const int32 Hold = FMath::Max(HoldFrames >= 0 ? HoldFrames : UGSTN_CombatSettings::Get().InteractHoldFrames, 1);
-	// IO-2: buttons from the button layout (GameRules piece), these defaults when it does not name them. The shipped slot set assets are
-	// filled from here by Tools/GAS/setup_gas_assets.py, so they carry the layout of the editor that ran it
-	const FGameplayTag Interact = UGSTN_ButtonLayout::GetButton(TEXT("Movement.Interact"), GSTNCombatButtonTags::Button_Interact.GetTag());
-	const FGameplayTag Dash = UGSTN_ButtonLayout::GetButton(TEXT("Movement.Dash"), GSTNCombatButtonTags::Button_Sprint.GetTag());
-	const FGameplayTag Dodge = UGSTN_ButtonLayout::GetButton(TEXT("Movement.Dodge"), GSTNCombatButtonTags::Button_Dodge.GetTag());
+	// IO-2c: the defaults of the layout functions, recorded on each slot (FGSTN_InputSlotSpec::LayoutButtons); the kit compile swaps in
+	// the match's button layout, so the set asset filled from here follows any GameRules, not the layout of the editor that saved it
+	const FGameplayTag Interact = GSTNCombatButtonTags::Button_Interact.GetTag();
+	const FGameplayTag Dash = GSTNCombatButtonTags::Button_Sprint.GetTag();
+	const FGameplayTag Dodge = GSTNCombatButtonTags::Button_Dodge.GetTag();
 	const FGameplayTag TapCommand = (bSwapTapHold ? GSTNCommandTags::Interact_PickUp : GSTNCommandTags::Interact_Grab).GetTag();
 	const FGameplayTag HoldCommand = (bSwapTapHold ? GSTNCommandTags::Interact_Grab : GSTNCommandTags::Interact_PickUp).GetTag();
 
 	TArray<FGSTN_InputSlotSpec> Slots;
 	Slots.Add(MakeMovementSlot(GSTNCommandTags::Movement_Dash.GetTag(), MakeMovementPress(Dash)));
+	Slots.Last().AddLayoutButton(TEXT("Movement.Dash"), Dash);
 	Slots.Add(MakeMovementSlot(GSTNCommandTags::Defence_Dodge.GetTag(), MakeMovementPress(Dodge)));
+	Slots.Last().AddLayoutButton(TEXT("Movement.Dodge"), Dodge);
 	Slots.Add(MakeMovementSlot(TapCommand, MakeMovementRelease(Interact, 0, Hold - 1)));
+	Slots.Last().AddLayoutButton(TEXT("Movement.Interact"), Interact);
 	Slots.Add(MakeMovementSlot(HoldCommand, MakeMovementRelease(Interact, Hold, INDEX_NONE)));
+	Slots.Last().AddLayoutButton(TEXT("Movement.Interact"), Interact);
 	return Slots;
 }
 

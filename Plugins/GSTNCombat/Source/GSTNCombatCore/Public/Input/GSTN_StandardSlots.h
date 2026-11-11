@@ -23,6 +23,10 @@
  *
  * The same builder serves the tests, the validator and FillSlotSet, which creates a set asset from it, so the code and
  * the data cannot drift apart.
+ *
+ * Buttons (IO-2c): the slots are written with the defaults of the layout functions Combat.Attack, Combat.Strong, Combat.Special and
+ * Combat.Crouch and record them in FGSTN_InputSlotSpec::LayoutButtons. The kit compile (FGSTN_BindingTableCompiler) applies the
+ * match's button layout to its copies, so the asset never carries the layout of the editor that filled it.
  */
 UCLASS()
 class GSTNCOMBATCORE_API UGSTN_StandardSlots : public UBlueprintFunctionLibrary
@@ -42,5 +46,17 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Input|Slots")
 	static void FillSlotSet(UGSTN_InputSlotSet* Set);
+
+	/**
+	 * IO-2c migration: the slots of Set made by this plugin's builders before IO-2c (standard and movement sets: same command, same
+	 * pattern as today's builder, no layout buttons) get the layout functions of today's builder, so the asset follows the button
+	 * layout. Any other slot, or one a designer changed, is left as it is. Returns how many slots changed; the caller saves the
+	 * asset (Tools/GAS/migrate_slot_layout.py). Null is ignored.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Input|Slots")
+	static int32 AddLayoutFunctionsToSlotSet(UGSTN_InputSlotSet* Set);
+
+	/** AddLayoutFunctionsToSlotSet on a list of entries (a kit's added slots, a set's slots) */
+	static int32 AddLayoutFunctions(TArray<FGSTN_InputSlotEntry>& Entries);
 #endif
 };
