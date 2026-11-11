@@ -207,3 +207,13 @@ subsystem (`GSTN_LoadoutTestTypes`) that answer asset ids from a table, grant on
 `UAbilitySystemComponent` on an actor in a transient game world (effects need a world for their start time), with no Network
 Prediction or Mover, so they also run against stock GAS. Run with the same command
 as the other combat tests: `-ExecCmds="Automation RunTests GSTNInput+GSTNCombat; Quit"`.
+
+## M11 seams (L1)
+
+- `FGSTN_LoadoutExtension::Priority`: loadout extensions run by priority (lower first), then by their id (the stable source id),
+  never by module load order. `FGSTN_LoadoutExtensionRegistry::GetOrderedIds` lists that order. Test `GSTNCombat.GAS.Loadout.ExtensionPriority`.
+- `IGSTN_AttachmentProvider` and `FGSTN_AttachmentProviderRegistry` (`Cosmetics/`): an optional plugin registers a provider that
+  returns `FGSTN_AttachmentRequest`s (socket, soft static or skeletal mesh, offset, visual slot) from the pawn and its resolved
+  loadout. `UGSTN_SkinComponent` asks every provider (priority, then id) on each applied loadout and attaches the meshes to the
+  skinned mesh without collision, replacing the previous ones (`RefreshAttachments`). Presentation only; synchronous load (async
+  load is M11 G5). Test `GSTNCombat.GAS.Skin.AttachmentProviders`.

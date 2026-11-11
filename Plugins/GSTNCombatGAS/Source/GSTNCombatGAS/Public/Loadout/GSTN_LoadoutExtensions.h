@@ -29,6 +29,13 @@ struct GSTNCOMBATGAS_API FGSTN_LoadoutExtensionContext
 struct GSTNCOMBATGAS_API FGSTN_LoadoutExtension
 {
 	/**
+	 * Order among extensions: lower runs first, equal priorities run in id order (lexical). An extension that reshapes what
+	 * another one added (a mod deriving a timeline from a kit extension's binding) takes a higher number. The order is the same
+	 * on every machine because it depends only on these two values, never on module load order
+	 */
+	int32 Priority = 0;
+
+	/**
 	 * Runs at the end of FGSTN_LoadoutAssembly::BuildCompileInput, on every machine that compiles the loadout: what it adds to the
 	 * input (a binding, a triggered ability, a slot override) must depend on the resolved assets and on data every machine shares,
 	 * because the compiled table is rebuilt identically everywhere and the combat sync state carries its indices.
@@ -44,8 +51,9 @@ struct GSTNCOMBATGAS_API FGSTN_LoadoutExtension
 
 /**
  * The registered loadout extensions. An optional plugin registers one from its module startup under its own id and removes it at
- * shutdown; a disabled plugin is simply absent. Extensions run in id order (lexical), so two plugins contribute in the same
- * order on every machine. Game thread only.
+ * shutdown; a disabled plugin is simply absent. Extensions run by priority, then id order (lexical), so two plugins contribute
+ * in the same order on every machine. The id is the extension's stable source id: it names it in logs and in GetOrderedIds,
+ * and a plugin keeps it across versions. Game thread only.
  */
 struct GSTNCOMBATGAS_API FGSTN_LoadoutExtensionRegistry
 {
@@ -60,12 +68,15 @@ struct GSTNCOMBATGAS_API FGSTN_LoadoutExtensionRegistry
 	/** Whether an extension is registered under Id */
 	static bool IsRegistered(FName Id);
 
-	/** Runs every ContributeCompileInput in id order */
+	/** The registered ids in the order the callbacks run */
+	static void GetOrderedIds(TArray<FName>& OutIds);
+
+	/** Runs every ContributeCompileInput in order */
 	static void RunContributeCompileInput(const FGSTN_LoadoutExtensionContext& Context, FGSTN_CompileInput& Input);
 
-	/** Runs every OnGranted in id order */
+	/** Runs every OnGranted in order */
 	static void RunOnGranted(const FGSTN_LoadoutExtensionContext& Context, UAbilitySystemComponent& AbilitySystem);
 
-	/** Runs every OnCleared in id order */
+	/** Runs every OnCleared in order */
 	static void RunOnCleared(UAbilitySystemComponent& AbilitySystem);
 };

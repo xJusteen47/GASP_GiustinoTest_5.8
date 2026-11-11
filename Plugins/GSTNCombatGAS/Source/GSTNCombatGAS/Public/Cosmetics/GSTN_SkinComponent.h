@@ -12,6 +12,7 @@ class UGSTN_LoadoutComponent;
 class UGSTN_SkinDefinition;
 class UMaterialInterface;
 class USkeletalMesh;
+class USceneComponent;
 class USkeletalMeshComponent;
 
 /**
@@ -26,6 +27,10 @@ class USkeletalMeshComponent;
  * and put back by RestoreOriginal, so changing skins never stacks.
  *
  * The skin asset's content is soft; it is loaded here, once, when the skin is applied.
+ *
+ * It also composes the meshes registered attachment providers want from the loadout (FGSTN_AttachmentProviderRegistry: kit
+ * implants, backpacks), each on its socket of the skinned mesh, refreshed on every applied loadout. The old attachments are
+ * removed first, so a kit swap never stacks two implants.
  */
 UCLASS(ClassGroup = "GSTN Combat", BlueprintType, Blueprintable, meta = (BlueprintSpawnableComponent))
 class GSTNCOMBATGAS_API UGSTN_SkinComponent : public UActorComponent
@@ -66,6 +71,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Skin")
 	void RestoreOriginal();
 
+	/** Removes the attachments and asks the registered providers again for the bound loadout (or none) */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Skin")
+	void RefreshAttachments();
+
+	/** The mesh components the providers' requests made, in request order */
+	const TArray<TObjectPtr<USceneComponent>>& GetAttachmentComponents() const { return Attachments; }
+
 	/** The skin shown now, null for the original look */
 	UFUNCTION(BlueprintPure, Category = "Combat|Skin")
 	UGSTN_SkinDefinition* GetAppliedSkin() const { return AppliedSkin.Get(); }
@@ -101,4 +113,10 @@ private:
 
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UMaterialInterface>> OriginalOverrides;
+
+	/** Components this component created for attachment requests; destroyed on refresh and at end of play */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<USceneComponent>> Attachments;
+
+	void ClearAttachments();
 };

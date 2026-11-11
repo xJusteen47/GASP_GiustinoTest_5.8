@@ -423,7 +423,7 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 	Input.Adoptable = AdoptableTimelines;
 	Input.WeaponStats = BuildWeaponStats(Component->GetResolvedLoadout());
 	BuildRicochetFallbacks(Component->GetResolvedLoadout(), Input.WeaponRicochet, Input.KitRicochet);
-	Input.ReservedExtension = Component->GetApplied().ReservedExtension;
+	Component->GetApplied().GetExtensionBlockBytes(Input.ReservedExtension);
 
 	FGSTN_CompileReport Report;
 	UGSTN_CombatTableSet* Set = FGSTN_CombatTableConverter::Convert(this, Compiled, Input, &Report);

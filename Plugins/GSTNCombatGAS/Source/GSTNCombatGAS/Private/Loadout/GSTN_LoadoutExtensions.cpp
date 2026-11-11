@@ -10,12 +10,18 @@ namespace
 		return Extensions;
 	}
 
-	/** The ids in lexical order: the map's own order is insertion order, which follows the module load order of the machine */
-	void GetOrderedIds(TArray<FName>& OutIds)
+}
+
+/** Priority, then lexical id: the map's own order is insertion order, which follows the module load order of the machine */
+void FGSTN_LoadoutExtensionRegistry::GetOrderedIds(TArray<FName>& OutIds)
+{
+	GetExtensions().GenerateKeyArray(OutIds);
+	OutIds.Sort([](const FName& A, const FName& B)
 	{
-		GetExtensions().GenerateKeyArray(OutIds);
-		OutIds.Sort([](const FName& A, const FName& B) { return A.LexicalLess(B); });
-	}
+		const int32 PriorityA = GetExtensions()[A].Priority;
+		const int32 PriorityB = GetExtensions()[B].Priority;
+		return PriorityA != PriorityB ? PriorityA < PriorityB : A.LexicalLess(B);
+	});
 }
 
 void FGSTN_LoadoutExtensionRegistry::Register(FName Id, FGSTN_LoadoutExtension Extension)

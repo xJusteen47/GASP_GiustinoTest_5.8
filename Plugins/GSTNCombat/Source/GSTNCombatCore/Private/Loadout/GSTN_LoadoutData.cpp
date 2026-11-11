@@ -2,6 +2,7 @@
 
 #include "Loadout/GSTN_LoadoutData.h"
 #include "GameplayTagsManager.h"
+#include "Loadout/GSTN_LoadoutExtensionData.h"
 
 namespace
 {
@@ -183,30 +184,63 @@ bool FGSTN_LoadoutData::SerializeInternal(FArchive& Ar, bool bWithExtension)
 
 	if (bWithExtension)
 	{
-		// Layout version, payload length, payload. A reader that does not know the layout keeps the payload as it is
-		uint8 Layout = ExtensionLayoutVersion;
+		// Layout version, payload length, payload. Typed entries win when there are any; otherwise a block this build could not read
+		// goes back out as it came
+		TArray<uint8> Payload;
+		uint8 Layout = ReservedLayout;
+		if (Ar.IsSaving())
+		{
+			GetExtensionBlockBytes(Payload);
+			Layout = Extensions.Num() > 0 ? ExtensionLayoutVersion : ReservedLayout;
+		}
 		Ar << Layout;
-		int32 ExtensionBytes = ReservedExtension.Num();
+		int32 ExtensionBytes = Payload.Num();
 		if (!SerializeCount(Ar, ExtensionBytes, MaxExtensionBytes))
 		{
 			return false;
 		}
 		if (Ar.IsLoading())
 		{
-			ReservedExtension.SetNumUninitialized(ExtensionBytes);
+			Payload.SetNumUninitialized(ExtensionBytes);
 		}
 		if (ExtensionBytes > 0)
 		{
-			Ar.Serialize(ReservedExtension.GetData(), ExtensionBytes);
+			Ar.Serialize(Payload.GetData(), ExtensionBytes);
+		}
+		if (Ar.IsLoading() && !Ar.IsError())
+		{
+			if (Layout == ExtensionLayoutVersion)
+			{
+				// A malformed typed block costs the extensions, never the loadout: the kit and weapons still apply
+				GSTNLoadoutExtension::ReadPayload(Payload, Extensions);
+			}
+			else
+			{
+				ReservedLayout = Layout;
+				ReservedExtension = MoveTemp(Payload);
+			}
 		}
 	}
 	return !Ar.IsError();
 }
 
+void FGSTN_LoadoutData::GetExtensionBlockBytes(TArray<uint8>& OutBytes) const
+{
+	if (Extensions.Num() > 0)
+	{
+		GSTNLoadoutExtension::WritePayload(Extensions, OutBytes, MaxExtensionBytes);
+	}
+	else
+	{
+		OutBytes = ReservedExtension;
+	}
+}
+
 bool FGSTN_LoadoutData::operator==(const FGSTN_LoadoutData& Other) const
 {
 	if (PrimaryKit != Other.PrimaryKit || Skin != Other.Skin || AdditionalWeapons != Other.AdditionalWeapons
-		|| Supers != Other.Supers || SlotCustomisations != Other.SlotCustomisations || DesignerValues.Num() != Other.DesignerValues.Num())
+		|| Supers != Other.Supers || SlotCustomisations != Other.SlotCustomisations || DesignerValues.Num() != Other.DesignerValues.Num()
+		|| Extensions != Other.Extensions)
 	{
 		return false;
 	}

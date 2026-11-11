@@ -5,6 +5,8 @@
 #include "Kits/GSTN_CommandSet.h"
 #include "Kits/GSTN_DesignerIdentity.h"
 #include "Loadout/GSTN_LoadoutData.h"
+#include "Loadout/GSTN_LoadoutExtensionData.h"
+#include "Tests/GSTN_LoadoutExtensionTestTypes.h"
 #include "Serialization/BitReader.h"
 #include "Serialization/BitWriter.h"
 #include "Serialization/MemoryReader.h"
@@ -450,4 +452,138 @@ bool FGSTN_CoreDataLoadoutExtensionTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("and equals the loadout it was written from"), FromV1 == Original && FromV1.ReservedExtension.IsEmpty());
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CoreDataTypedExtensionsTest, "GSTNCombat.Core.Data.LoadoutTypedExtensions", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_CoreDataTypedExtensionsTest::RunTest(const FString& Parameters)
+{
+	// M11 L1: typed extensions travel by wire id in both formats, unknown types drop alone, the block stays bounded
+	const FName WireA(TEXT("GSTNTest.ExtA"));
+	const FName WireB(TEXT("GSTNTest.ExtB"));
+	struct FScopedTypes
+	{
+		FName A, B;
+		FScopedTypes(FName InA, FName InB) : A(InA), B(InB)
+		{
+			FGSTN_LoadoutExtensionTypes::Register(A, FGSTN_TestLoadoutExtA::StaticStruct());
+			FGSTN_LoadoutExtensionTypes::Register(B, FGSTN_TestLoadoutExtB::StaticStruct());
+		}
+		~FScopedTypes()
+		{
+			FGSTN_LoadoutExtensionTypes::Unregister(A);
+			FGSTN_LoadoutExtensionTypes::Unregister(B);
+		}
+	};
+	FScopedTypes Types(WireA, WireB);
+
+	TestFalse(TEXT("the base itself is not a type"), FGSTN_LoadoutExtensionTypes::Register(TEXT("GSTNTest.Base"), FGSTN_LoadoutExtensionData::StaticStruct()));
+	TestFalse(TEXT("a taken id is refused"), FGSTN_LoadoutExtensionTypes::Register(WireA, FGSTN_TestLoadoutExtB::StaticStruct()));
+	TestEqual(TEXT("registered wire id"), FGSTN_LoadoutExtensionTypes::GetWireId(FGSTN_TestLoadoutExtA::StaticStruct()), WireA);
+
+	FGSTN_LoadoutData Original = MakeLoadout();
+	FGSTN_TestLoadoutExtA A;
+	A.Level = 3;
+	A.Label = TEXT("long blade");
+	FGSTN_TestLoadoutExtB B;
+	B.Scale = 1.25f;
+	GSTNLoadoutExtension::Set(Original.Extensions, A);
+	GSTNLoadoutExtension::Set(Original.Extensions, B);
+	A.Level = 4;
+	GSTNLoadoutExtension::Set(Original.Extensions, A);
+	TestEqual(TEXT("one entry per type"), Original.Extensions.Num(), 2);
+	TestTrue(TEXT("Set replaced the entry"), GSTNLoadoutExtension::Find<FGSTN_TestLoadoutExtA>(Original.Extensions)->Level == 4);
+
+	// Net round trip
+	int64 Bits = 0;
+	const TArray<uint8> Bytes = WriteNet(Original, Bits);
+	FGSTN_LoadoutData Read;
+	{
+		FBitReader Reader(Bytes.GetData(), Bits);
+		bool bSuccess = false;
+		Read.NetSerialize(Reader, nullptr, bSuccess);
+		TestTrue(TEXT("the stream reads back"), bSuccess && !Reader.IsError() && Reader.AtEnd());
+	}
+	TestTrue(TEXT("net: equal with its extensions"), Read == Original);
+	const FGSTN_TestLoadoutExtA* ReadA = GSTNLoadoutExtension::Find<FGSTN_TestLoadoutExtA>(Read.Extensions);
+	const FGSTN_TestLoadoutExtB* ReadB = GSTNLoadoutExtension::Find<FGSTN_TestLoadoutExtB>(Read.Extensions);
+	TestTrue(TEXT("net: reflected entry intact"), ReadA && ReadA->Level == 4 && ReadA->Label == TEXT("long blade"));
+	TestTrue(TEXT("net: custom-format entry intact"), ReadB && ReadB->Scale == 1.25f);
+	int64 AgainBits = 0;
+	TestTrue(TEXT("net: same bytes written again"), WriteNet(Read, AgainBits) == Bytes && AgainBits == Bits);
+
+	// Equality sees the extensions
+	FGSTN_LoadoutData Other = Original;
+	GSTNLoadoutExtension::Set(Other.Extensions, FGSTN_TestLoadoutExtB());
+	TestTrue(TEXT("a different extension is a different loadout"), Other != Original);
+
+	// Save round trip
+	TArray<uint8> Saved;
+	{
+		FMemoryWriter Writer(Saved);
+		Original.Serialize(Writer);
+	}
+	FGSTN_LoadoutData Loaded;
+	{
+		FMemoryReader Reader(Saved);
+		Loaded.Serialize(Reader);
+		TestFalse(TEXT("the save reads without error"), Reader.IsError());
+	}
+	TestTrue(TEXT("save: equal with its extensions"), Loaded == Original);
+
+	// A type missing from the build (its plugin disabled): its entry drops, the next entry and the loadout stay
+	{
+		FGSTN_LoadoutExtensionTypes::Unregister(WireA);
+		AddExpectedError(TEXT("dropped: no such type in this build"), EAutomationExpectedErrorFlags::Contains, 1);
+		FGSTN_LoadoutData Partial;
+		FBitReader Reader(Bytes.GetData(), Bits);
+		bool bSuccess = false;
+		Partial.NetSerialize(Reader, nullptr, bSuccess);
+		FGSTN_LoadoutExtensionTypes::Register(WireA, FGSTN_TestLoadoutExtA::StaticStruct());
+		TestTrue(TEXT("unknown type: the stream still reads"), bSuccess && !Reader.IsError() && Reader.AtEnd());
+		TestEqual(TEXT("unknown type: only the known entry is left"), Partial.Extensions.Num(), 1);
+		TestNotNull(TEXT("unknown type: and it is the other type"), GSTNLoadoutExtension::Find<FGSTN_TestLoadoutExtB>(Partial.Extensions));
+		Partial.Extensions = Original.Extensions;
+		TestTrue(TEXT("unknown type: the rest of the loadout is intact"), Partial == Original);
+	}
+
+	// An unregistered type travels under its struct path and resolves back
+	{
+		FGSTN_LoadoutExtensionTypes::Unregister(WireB);
+		FGSTN_LoadoutData ByPath = MakeLoadout();
+		GSTNLoadoutExtension::Set(ByPath.Extensions, B);
+		int64 PathBits = 0;
+		const TArray<uint8> PathBytes = WriteNet(ByPath, PathBits);
+		FGSTN_LoadoutData PathRead;
+		FBitReader Reader(PathBytes.GetData(), PathBits);
+		bool bSuccess = false;
+		PathRead.NetSerialize(Reader, nullptr, bSuccess);
+		FGSTN_LoadoutExtensionTypes::Register(WireB, FGSTN_TestLoadoutExtB::StaticStruct());
+		TestTrue(TEXT("by path: read back equal"), bSuccess && PathRead == ByPath);
+	}
+
+	// An entry larger than the block is left out whole; the writer's stream still reads
+	{
+		FGSTN_LoadoutData Big = MakeLoadout();
+		FGSTN_TestLoadoutExtA Huge;
+		Huge.Label = FString::ChrN(FGSTN_LoadoutData::MaxExtensionBytes + 10, TEXT('x'));
+		GSTNLoadoutExtension::Set(Big.Extensions, Huge);
+		GSTNLoadoutExtension::Set(Big.Extensions, B);
+		AddExpectedError(TEXT("the extension block is full"), EAutomationExpectedErrorFlags::Contains, 1);
+		int64 BigBits = 0;
+		const TArray<uint8> BigBytes = WriteNet(Big, BigBits);
+		FGSTN_LoadoutData BigRead;
+		FBitReader Reader(BigBytes.GetData(), BigBits);
+		bool bSuccess = false;
+		BigRead.NetSerialize(Reader, nullptr, bSuccess);
+		TestTrue(TEXT("full block: the stream reads"), bSuccess && !Reader.IsError());
+		TestTrue(TEXT("full block: the entry that fits is kept"), BigRead.Extensions.Num() == 1 && GSTNLoadoutExtension::Find<FGSTN_TestLoadoutExtB>(BigRead.Extensions));
+	}
+
+	// The checksum bytes follow the typed entries
+	TArray<uint8> BlockA, BlockB;
+	Original.GetExtensionBlockBytes(BlockA);
+	Other.GetExtensionBlockBytes(BlockB);
+	TestTrue(TEXT("block bytes differ with the extensions"), BlockA.Num() > 0 && BlockA != BlockB);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

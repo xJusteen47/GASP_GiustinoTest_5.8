@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "UObject/PrimaryAssetId.h"
+#include "StructUtils/InstancedStruct.h"
 #include "GSTN_LoadoutData.generated.h"
 
 class UPackageMap;
@@ -67,8 +68,12 @@ struct GSTNCOMBATCORE_API FGSTN_LoadoutData
 	/** Version written by Serialize (2 added the extension block; 1 is still read) */
 	static constexpr int32 SaveVersion = 2;
 
-	/** Version of the extension block layout written by this build. A block of a newer layout is carried unread */
-	static constexpr uint8 ExtensionLayoutVersion = 0;
+	/**
+	 * Layout of the extension block. 0: raw bytes (the M3 reserved block, empty in every build before M11). 1: typed entries
+	 * (Extensions). A block of a layout this build does not know is carried unread in ReservedExtension
+	 */
+	static constexpr uint8 RawExtensionLayout = 0;
+	static constexpr uint8 ExtensionLayoutVersion = 1;
 
 	/** Largest extension payload a stream may carry */
 	static constexpr int32 MaxExtensionBytes = 1024;
@@ -101,11 +106,26 @@ struct GSTNCOMBATCORE_API FGSTN_LoadoutData
 	FPrimaryAssetId Skin;
 
 	/**
-	 * Reserved for typed extensions of optional plugins (M11): the payload that follows the extension layout version at the end of
-	 * both serializers. Empty today and written as such; a stream that carries bytes (a newer build) is read into this array and
-	 * written back unchanged, so a relay or a save/load cycle never drops them. Not part of the equality of two loadouts.
+	 * Data of optional plugins (combat-loadout-mods 11.1): each entry a struct derived from FGSTN_LoadoutExtensionData, one per
+	 * type by convention (GSTNLoadoutExtension::Set). Mods, backpacks and the like live here, so this struct never names them.
+	 * Serialized at the end of both formats under each type's wire id; an entry whose type is not in the build (plugin disabled)
+	 * is dropped with a warning on load. Part of the equality: a different mod is a different loadout.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Loadout", meta = (BaseStruct = "/Script/GSTNCombatCore.GSTN_LoadoutExtensionData", ExcludeBaseStruct))
+	TArray<FInstancedStruct> Extensions;
+
+	/**
+	 * An extension block this build cannot read (a newer layout, or a raw M3 block): read into this array with its layout and
+	 * written back unchanged when Extensions is empty, so a relay or a save/load cycle never drops it. Not part of the equality.
 	 */
 	TArray<uint8> ReservedExtension;
+	uint8 ReservedLayout = RawExtensionLayout;
+
+	/**
+	 * The extension block's payload as both serializers write it: the typed entries when there are any, else the carried block.
+	 * Machines that hold the same loadout get the same bytes, so a checksum over the compiled tables can include it.
+	 */
+	void GetExtensionBlockBytes(TArray<uint8>& OutBytes) const;
 
 	/** Wire format of a request or an applied loadout */
 	bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess);

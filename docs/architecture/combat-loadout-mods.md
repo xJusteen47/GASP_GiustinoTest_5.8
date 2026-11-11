@@ -230,6 +230,13 @@ These keep M11 additive. They are cheap while M3 is being written and costly aft
 | 5 Attachment providers | interface only on the skin component (C15, if it fits) | implementations; if it does not fit C15, the whole seam |
 | 6 Support weapon stats default | yes, data default (C12) | — |
 
+**M11 L1 (2026-11-12, done)**: seam 1 is `FGSTN_LoadoutData::Extensions` with base `FGSTN_LoadoutExtensionData` (the name
+`FGSTN_LoadoutExtension` was already the registry entry in GSTNCombatGAS) and wire ids in `FGSTN_LoadoutExtensionTypes`; the block
+layout byte is now 1 for typed entries, 0 and unknown layouts are still carried raw. Seam 2 already existed as
+`FGSTN_LoadoutExtensionRegistry`; L1 adds an explicit priority. Entries added by an extension still use the kit/weapon/super sources:
+a separate source kind would change the source mask bit layout, so it waits for the first plugin that needs it (G4). Seam 5 is
+`IGSTN_AttachmentProvider` on the skin component.
+
 M3 also records that the kit's primary weapon never changes mid-match, so its weapon-switch track means primary ↔ support only.
 
 ## 12. World pickups and drops (`GSTNPickups`)

@@ -3,6 +3,9 @@
 #include "Cosmetics/GSTN_SkinComponent.h"
 #include "Animation/AnimInstance.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Cosmetics/GSTN_AttachmentProvider.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
@@ -44,6 +47,7 @@ void UGSTN_SkinComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		Loadout->OnLoadoutApplied.RemoveDynamic(this, &UGSTN_SkinComponent::HandleLoadoutApplied);
 	}
 	BoundLoadout.Reset();
+	ClearAttachments();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -95,12 +99,78 @@ void UGSTN_SkinComponent::BindToLoadout(UGSTN_LoadoutComponent* Loadout)
 	if (Loadout->HasLoadout())
 	{
 		ApplySkin(Loadout->GetResolvedSkin());
+		RefreshAttachments();
 	}
 }
 
 void UGSTN_SkinComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Component, int32 Revision)
 {
 	ApplySkin(Component ? Component->GetResolvedSkin() : nullptr);
+	RefreshAttachments();
+}
+
+void UGSTN_SkinComponent::ClearAttachments()
+{
+	for (USceneComponent* Attachment : Attachments)
+	{
+		if (Attachment)
+		{
+			Attachment->DestroyComponent();
+		}
+	}
+	Attachments.Reset();
+}
+
+void UGSTN_SkinComponent::RefreshAttachments()
+{
+	ClearAttachments();
+	if (GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	USkeletalMeshComponent* Mesh = GetTargetMesh();
+	AActor* Owner = GetOwner();
+	if (!Mesh || !Owner)
+	{
+		return;
+	}
+
+	const UGSTN_LoadoutComponent* Loadout = BoundLoadout.Get();
+	FGSTN_AttachmentContext Context;
+	Context.Pawn = Owner;
+	Context.Resolved = Loadout && Loadout->HasLoadout() ? &Loadout->GetResolvedLoadout() : nullptr;
+	TArray<FGSTN_AttachmentRequest> Requests;
+	FGSTN_AttachmentProviderRegistry::Gather(Context, Requests);
+
+	for (const FGSTN_AttachmentRequest& Request : Requests)
+	{
+		// Loaded synchronously like the skin's own content; async loading that keeps the old look until ready is M11 G5
+		UObject* Asset = Request.Mesh.IsNull() ? nullptr : Request.Mesh.LoadSynchronous();
+		UMeshComponent* Attachment = nullptr;
+		if (UStaticMesh* Static = Cast<UStaticMesh>(Asset))
+		{
+			UStaticMeshComponent* Component = NewObject<UStaticMeshComponent>(Owner, NAME_None, RF_Transient);
+			Component->SetStaticMesh(Static);
+			Attachment = Component;
+		}
+		else if (USkeletalMesh* Skeletal = Cast<USkeletalMesh>(Asset))
+		{
+			USkeletalMeshComponent* Component = NewObject<USkeletalMeshComponent>(Owner, NAME_None, RF_Transient);
+			Component->SetSkeletalMeshAsset(Skeletal);
+			Attachment = Component;
+		}
+		if (!Attachment)
+		{
+			continue;
+		}
+		// Cosmetic: never collides, never blocks the camera or a hit query
+		Attachment->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Attachment->SetGenerateOverlapEvents(false);
+		Attachment->SetupAttachment(Mesh, Request.Socket);
+		Attachment->SetRelativeTransform(Request.Offset);
+		Attachment->RegisterComponent();
+		Attachments.Add(Attachment);
+	}
 }
 
 void UGSTN_SkinComponent::CaptureOriginal(const USkeletalMeshComponent& Mesh)
