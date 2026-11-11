@@ -142,6 +142,10 @@ public:
 	static bool WriteThrowMove(TSubclassOf<UGameplayAbility> ThrowClass, int32 TotalFrames, int32 FirstActionableFrame, int32 ThrowFrame, float Damage,
 		float BaseKnockback, float AngleDeg, UAnimMontage* Montage, float MontagePlayRate = 1.f);
 
+	/** M11 K3 content: the kit link extension's grab mash base frames (how long the grabbed side is held without mashing). Returns whether it changed */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool SetKitGrabMashFrames(UGSTN_PrimaryKitDefinition* Kit, int32 MashBaseFrames);
+
 	/** In memory: the kit link extension's MaxGrabWeight and MinLatchWeight (a negative value keeps the current one). False without an extension */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
 	static bool SetKitLinkWeights(UGSTN_PrimaryKitDefinition* Kit, float MaxGrabWeight, float MinLatchWeight);

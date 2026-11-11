@@ -243,6 +243,11 @@ authored table, as with the kit swap binding):
 Tests `GSTNLink.Core.KitThrows.{StickPicksThrow, StickPlusSpecial, Fill, ProjectSettings}`; harness `kit_scenarios.scenario_kit_throw_stick_forward`,
 `_back`, `scenario_kit_throw_lifted` (run with `Tools/GASNPPTest/batch_driver.py`, `BATCH_MODULE=kit_scenarios`).
 
+**Content writers (M11 K3)**: `UGSTN_LinkContentLibrary::SetKitThrows` (a kit's four classes), `WriteThrowMove` (frames, throw key, montage on the
+class default of a Blueprint child of a `UGSTN_GA_LinkThrow*`, via the shared `UGSTN_GA_LinkThrow::FillThrowTimeline`) and `SetKitGrabMashFrames`.
+The project's three hub archetypes (`KIT_Test_Light/Medium/Heavy`) are written with them by `Tools/GAS/setup_test_kit_archetypes.py`; harness
+`kit_scenarios.SUITE_ARCHETYPES`.
+
 ## Predicted partner presentation (FP G1)
 
 On the machine of the INITIATOR of a partner move (a client whose owner is locally controlled), the partner's authored reaction is shown from the initiator's own predicted fragment, about one network round trip earlier than the synced copy. `FGSTN_LinkPartnerWindow::BuildFromInitiator` (`Sim/GSTN_LinkPartnerWindow.h`, pure, deterministic) derives the window from the fragment's active move: start = S + max(PartnerStartOffsetFrames, 1), end = start + the partner timeline's TotalFrames (else MaxDurationFrames). G4 reuses the same window to promote the partner to forward prediction. The presentation component ticks an early function (TG_PrePhysics, after the Network Prediction finalize) that publishes the reaction on the partner's component (`GetPredictedPartnerMove`, `OnPredictedPartnerMove` Started / Ended / Dropped) and, when the partner timeline's montage is already loaded, leads it on the partner's mesh (the instance shows the later of its position and the predicted one; at the montage's end it is stopped and the late synced copy is kept off until the partner's shown state is past the move). A vanished initiator record before the partner's start, or an abort, drops it at once (a snap). Presentation only, no simulation state. cvar `gstn.Link.PredictPartnerPresentation` (default 1); never on a dedicated server, on the partner's own machine or on a listen host. Harness: `scenario_link_pair_move_delay` and `scenario_link_pair_move_delay_throw` in `Tools/GASNPPTest/mount_scenarios.py` (in `SUITE_MOUNT`).

@@ -5,6 +5,9 @@ sys.path.insert(0, os.path.join(unreal.Paths.project_dir(), 'Tools', 'GASNPPTest
 import gasnpp_test as g
 TAG = os.environ.get('R31_TAG', 'x')
 NAMES = g.SUITE_DEFAULT[:g.SUITE_DEFAULT.index('slide_jump') + 1] + ['loadout_change']
+# R31_ALL=1: the whole SUITE_DEFAULT in one PIE (the closing check of a slice)
+if os.environ.get('R31_ALL'):
+    NAMES = list(g.SUITE_DEFAULT)
 if os.environ.get('R31_ONLY'):
     NAMES = os.environ['R31_ONLY'].split(',')
 OUT = os.path.join(unreal.Paths.project_dir(), 'Saved', 'R31', f'report-{TAG}.txt')
@@ -25,7 +28,7 @@ def tick(_dt):
                 open(OUT, 'w').write('pawns not ready'); unreal.SystemLibrary.execute_console_command(None, 'QUIT_EDITOR'); st['phase'] = 'dead'
         elif st['phase'] == 'go':
             g.net(60, 15, 0)
-            r = g.run_suite(NAMES, timeout=120.0)
+            r = g.run_suite(NAMES, timeout=240.0 if os.environ.get('R31_ALL') else 120.0)
             st['phase'] = 'wait'
             if not str(r).startswith('suite'): open(OUT, 'w').write(str(r)); st['phase'] = 'quit'
         elif st['phase'] == 'wait':

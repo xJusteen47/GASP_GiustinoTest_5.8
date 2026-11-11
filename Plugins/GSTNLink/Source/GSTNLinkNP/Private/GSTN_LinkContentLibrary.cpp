@@ -661,6 +661,28 @@ bool UGSTN_LinkContentLibrary::SetKitThrows(UGSTN_PrimaryKitDefinition* Kit, TSu
 	return false;
 }
 
+bool UGSTN_LinkContentLibrary::SetKitGrabMashFrames(UGSTN_PrimaryKitDefinition* Kit, int32 MashBaseFrames)
+{
+	if (!Kit)
+	{
+		return false;
+	}
+	for (FInstancedStruct& Entry : Kit->Extensions.ExtensionData)
+	{
+		if (FGSTN_LinkKitExtension* Extension = Entry.GetMutablePtr<FGSTN_LinkKitExtension>())
+		{
+			if (Extension->GrabRules.Mash.BaseFrames == MashBaseFrames)
+			{
+				return false;
+			}
+			Extension->GrabRules.Mash.BaseFrames = MashBaseFrames;
+			Kit->MarkPackageDirty();
+			return true;
+		}
+	}
+	return false;
+}
+
 bool UGSTN_LinkContentLibrary::WriteThrowMove(TSubclassOf<UGameplayAbility> ThrowClass, int32 TotalFrames, int32 FirstActionableFrame, int32 ThrowFrame,
 	float Damage, float BaseKnockback, float AngleDeg, UAnimMontage* Montage, float MontagePlayRate)
 {

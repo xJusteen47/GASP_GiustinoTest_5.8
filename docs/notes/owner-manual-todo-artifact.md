@@ -1,19 +1,30 @@
 # Cose da fare a mano (copia dell'artifact)
 
-Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (M11 slice 2). L'artifact è la versione di riferimento.
+Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (M11 slice 3). L'artifact è la versione di riferimento.
 
 ## 1 · Git
 
-- [ ] Porta tutto su `feature/gas-npp-5.8` con un solo push: tip di `claude/desktop-m11-2` (sha esatto nell'artifact, sostituisce `3cbf4b68`). Contiene tutto fino a M10 slice 10, la **M11 slice 1** (cambio kit con B tenuto) e la **M11 slice 2** (lanci alla Smash). Poi `git pull` e build completa da Rider:
+- [ ] Porta tutto su `feature/gas-npp-5.8` con un solo push: tip di `claude/desktop-m11-3` (sha esatto nell'artifact, sostituisce `de12900b`). Contiene tutto fino a M10 slice 10, la **M11 slice 1** (cambio kit con B tenuto), la **M11 slice 2** (lanci alla Smash) e la **M11 slice 3** (tre kit di prova: leggero, medio, pesante). Poi `git pull` e build completa da Rider:
   ```
   cd "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2"
-  git fetch origin claude/desktop-m11-2
+  git fetch origin claude/desktop-m11-3
   git push origin <sha>:refs/heads/feature/gas-npp-5.8
   ```
 
 ## 2 · Editor (salva tu con Ctrl+S)
 
-- [ ] **Lanci alla Smash (M11 slice 2) in PIE col pad**: mappa `L_Test_Hub`, `h.prepare()`, Play listen 3 giocatori; giocatore 0 prende `KIT_Test_Link` (pedana PRESE, B tenuto) e afferra il giocatore 1 con B. Di default un combattente normale si solleva: stick avanti/indietro non lanciano (lo stick mira il lancio M10), A = su, accovacciato = giù, RT = lancio come oggetto. Per i lanci con lo stick: Project Settings → GSTN Held → Thrown Enemies → `Kit Throws While Lifting` = All (o `Enabled` spento), riprendi il kit: stick avanti = avanti, indietro = indietro. Speciale + accovacciato con un nemico davanti = presa. Modalità: Project Settings → GSTN Link → Throws → `Throw Input Mode` (Stick, Stick Plus Special, Buttons). Su `KIT_Test_Link` i quattro lanci sono lo stesso lancio di prova; gli archi diversi arrivano coi kit della slice 3. Niente da salvare.
+- [ ] **Tre kit di prova col pad (M11 slice 3)**, nessuno li ha ancora visti in PIE:
+  1. Dopo il push e la build: editor nella cartella principale, mappa `L_Test_Hub`, console Python `import test_hub as h` poi `h.prepare()`.
+  2. Play listen, 3 giocatori; aspetta 4 s (kit e manichini).
+  3. Davanti alla partenza, 8 m avanti, una fila nuova di tre kit (senza pedana disegnata: la mappa non è stata rifatta, il kit mostra il nome): sinistra `KIT_Test_Light`, centro `KIT_Test_Medium`, destra `KIT_Test_Heavy`.
+  4. Inquadra un kit, tieni B 0,5 s e rilascia: hai quel kit.
+  5. Muoviti e salta: leggero veloce, due salti in aria, cade piano; medio normale; pesante lento, accelera piano, cade in fretta.
+  6. Attacco (X) = jab (leggero rapido, pesante lento e lungo); Speciale = leggero lancia in alto, medio calcio laterale, pesante schianto tutto intorno.
+  7. Afferra il giocatore 1 con B (tap). Leggero e medio non lo sollevano: stick avanti o indietro = lancio, A = su, accovacciato = giù. Confronta gli archi: leggero bassi e piatti, medio classici, pesante ripidi e lontani.
+  8. Pesante: il giocatore 1 si solleva (presa più lunga, 3 s); lo stick mira il lancio come oggetto (RT), A e accovacciato fanno i lanci su e giù del pesante.
+  9. Riprendi `KIT_Test_Hits` (pedana COLPI): torni al peso e alla gravità normali. Niente da salvare.
+  Numeri e montage sono segnaposto: si cambiano in `Tools/GAS/setup_test_kit_archetypes.py` (e si rilancia) o nei Blueprint `GA_<Kit>_*` in `/Game/GASNPPTest/Combat/Archetypes`.
+- [ ] **Lanci alla Smash (M11 slice 2) in PIE col pad**: mappa `L_Test_Hub`, `h.prepare()`, Play listen 3 giocatori; giocatore 0 prende `KIT_Test_Link` (pedana PRESE, B tenuto) e afferra il giocatore 1 con B. Di default un combattente normale si solleva: stick avanti/indietro non lanciano (lo stick mira il lancio M10), A = su, accovacciato = giù, RT = lancio come oggetto. Per i lanci con lo stick: Project Settings → GSTN Held → Thrown Enemies → `Kit Throws While Lifting` = All (o `Enabled` spento), riprendi il kit: stick avanti = avanti, indietro = indietro. Speciale + accovacciato con un nemico davanti = presa. Modalità: Project Settings → GSTN Link → Throws → `Throw Input Mode` (Stick, Stick Plus Special, Buttons). Su `KIT_Test_Link` i quattro lanci sono lo stesso lancio di prova; gli archi diversi sono sui tre kit della slice 3 (voce sopra). Niente da salvare.
 - [ ] **Cambio kit con B tenuto (M11 slice 1) in PIE col pad**: mappa `L_Test_Hub`, Python `import test_hub as h` + `h.prepare()`, Play listen 3 giocatori, aspetta 4 s (kit sulle pedane). Vai verso una pedana: sopra il kit inquadrato compare "Tieni B: <kit>". B tenuto almeno 0,5 s e rilascia: hai il kit nuovo, il tuo resta a terra. B corto: niente cambio. Kit e cubo vicini (`gstn.Held.Spawn 0`): gira lo stick, vince quello inquadrato. KO di un giocatore (fallo picchiare da un'altra finestra): il kit cade dove muore, lui torna a `KIT_Test_Hits`, il kit sparisce dopo 30 s. Impostazioni in Project Settings → Plugins → GSTN Held → Kits (`Hold Seconds`, `Death Drop` DropAndLose/DropCopy/Off, `Respawn Kit`, durata). Niente da salvare.
 - [ ] **Recoil segnaposto in PIE** con la mossa di test `KIT_Test_StrikeKinds` (solo test: swing da destra frame 8-14, affondo dritto 22-26, nessun recoil proprio):
   1. Editor nella cartella principale, mappa `L_Test_Hub`.
@@ -33,7 +44,7 @@ Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, a
 
 ## 3 · Decisioni
 
-- [ ] Lanci alla Smash: su = salto, giù = accovacciato; con nemico sollevabile i lanci avanti/indietro del kit sono spenti (`Kit Throws While Lifting`: NotStickOnly / None / All). Con i valori di prova ogni combattente normale si solleva: abbassiamo la capacità di default?
+- [ ] Lanci alla Smash: su = salto, giù = accovacciato; con nemico sollevabile i lanci avanti/indietro del kit sono spenti (`Kit Throws While Lifting`: NotStickOnly / None / All). Slice 3: la capacità ora è per kit (leggero 60, medio 90, pesante 200 contro peso 100), quindi solo il pesante solleva: va bene così? Anche la presa dura di più col pesante (1,5 / 2 / 3 s).
 - [ ] Leve weakpoint §6 (scala hurtbox, priorità, magnetismo PvE).
 - [ ] M10: un oggetto posato o atterrato si può riprendere dopo 0,64 s (ritardo di rete dei record): va bene o lo vuoi più corto? Danni e archi veri per tipo di oggetto; quali kit hanno i tasti degli oggetti (ora solo i kit di prova; c'è l'opzione "tutti i kit").
 - [ ] G6 fatto con valori di prova (Leggero -10 %, Medio -30 %, Pesante -50 % senza salto, Enorme -70 % e capacità; lancio x1/0,85/0,7/0,5; capacità di default 50 kg): dimmi i valori veri e quali oggetti si sollevano. Impatti: un rimbalzo può colpire di nuovo chi ha già preso il lancio; Break si rompe anche su un nemico. Va bene?
@@ -44,10 +55,11 @@ Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, a
 
 ## 5 · Pulizia branch
 
-- [ ] GitHub: branch vecchi elencati nell'artifact; dopo il push anche `claude/desktop-weakpoint-3` , `claude/laptop-weakpoint-3b`, `claude/desktop-m10-1`, `claude/desktop-m10-2`, `claude/desktop-m10-3`, `claude/desktop-m10-4`, `claude/desktop-m10-5` e `claude/desktop-m10-6`, `claude/desktop-m11-1`. Portatile: `git branch -d claude/laptop-projectile-1`.
+- [ ] GitHub: branch vecchi elencati nell'artifact; dopo il push anche `claude/desktop-weakpoint-3` , `claude/laptop-weakpoint-3b`, `claude/desktop-m10-1`, `claude/desktop-m10-2`, `claude/desktop-m10-3`, `claude/desktop-m10-4`, `claude/desktop-m10-5` e `claude/desktop-m10-6`, `claude/desktop-m11-1`, `claude/desktop-m11-2`. Portatile: `git branch -d claude/laptop-projectile-1`.
 
 ## Fatto
 
+- 2026-11-11 · M11 slice 3: tre kit di prova davvero diversi (leggero, medio, pesante: velocità, salto, peso, capacità, gravità, jab, speciale, 4 lanci con archi diversi e montage GASP segnaposto), creati da uno script, nessun Blueprint toccato a mano, in fila davanti alla partenza dell'hub. Headless 1507/0, harness dei kit 4/4 listen 0 % e 2 %, dedicato 0 %, suite di default 50/50. Nessuno l'ha visto in PIE col pad. Branch `claude/desktop-m11-3`.
 - 2026-11-11 · M11 slice 2: lanci alla Smash (stick avanti/indietro, su = salto, giù = accovacciato), 4 lanci per kit con set comune di riserva, presa con speciale + accovacciato, modalità alternative come impostazioni, tasti come dati. Headless 1505/0, lanci con stick simulato PASS listen 0 % e 2 %, dedicato 0 %, prese di prima 5/5, suite di default 50/50. Nessuno l'ha visto in PIE col pad. Branch `claude/desktop-m11-2`.
 - 2026-11-11 · M11 slice 1: il kit a terra è un bersaglio di B (vince la cosa inquadrata), B tenuto 0,5 s e rilasciato lo scambia, scritta "Tieni B", kit lasciato alla morte (impostazione: lascia e perdi / lascia una copia / spento). Headless 1500/0, suite di default 50/50 (una attesa aggiornata), scambio con input simulato PASS listen 0 % e 2 %, dedicato 0 %. Nessuno l'ha visto in PIE col pad. Branch `claude/desktop-m11-1`.
 - 2026-11-11 · M10 slice 10: caricamento del lancio (frame di rilascio e montage per oggetto, default e nemici; 0 = istantaneo come prima, spedito a 0), colpito durante il caricamento = niente lancio e l'oggetto cade; debug e validatore (G12 in parte); suite di default 50/50, oggetti 8/8 listen 2 % e dedicato 0 %, headless 1498/0. Nessuno l'ha visto in PIE. Branch `claude/desktop-m10-10`.

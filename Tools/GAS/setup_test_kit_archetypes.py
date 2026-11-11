@@ -22,13 +22,14 @@ SHOVE = '/Game/Characters/UEFN_Mannequin/Animations/Interactions/Shoves/AM_M_rel
 TAKEDOWN = '/Game/Characters/UEFN_Mannequin/Animations/Interactions/Takedowns/AM_M_relaxed_takedown_stand_{}_A'
 TAKEDOWN_WALK = '/Game/Characters/UEFN_Mannequin/Animations/Interactions/Takedowns/AM_M_relaxed_takedown_walk_{}_A'
 
+# mash_frames: the grab's mash base frames (the hold without mashing; KIT_Test_Link's test value is 90).
 # Strike: (total, first actionable, active start, active end, radius, reach from, reach to, height, damage, knockback, angle, hitstop, attacker hitstop,
 #          montage, play rate)
 # Throw:  (total, first actionable, throw frame, damage, knockback, angle (above 90 = behind the thrower), montage, play rate)
 KITS = {
     # Light and fast: quick jab, a pop-up special, low flat throws that keep the partner close (combo throws); floaty double jump, carries little
     'Light': {
-        'label': 'LEGGERO', 'pad': (800.0, -350.0),
+        'label': 'LEGGERO', 'pad': (800.0, -350.0), 'mash_frames': 90,
         'stats': {'WalkSpeed': 760.0, 'JumpVelocity': 820.0, 'Weight': 80.0, 'MaxCarryWeight': 60.0, 'Acceleration': 3200.0,
                   'AirControl': 0.55, 'FallGravityScale': 1.1, 'AirJumpCount': 2.0},
         'jab': (16, 13, 3, 5, 40.0, 70.0, 140.0, 0.0, 3.0, 300.0, 30.0, 4, 3, SHOVE.format('F'), 1.8),
@@ -40,7 +41,7 @@ KITS = {
     },
     # Medium: the reference fighter (standard weight and speed), mid-range strikes, throws at classic Smash angles
     'Medium': {
-        'label': 'MEDIO', 'pad': (800.0, 0.0),
+        'label': 'MEDIO', 'pad': (800.0, 0.0), 'mash_frames': 120,
         'stats': {'WalkSpeed': 600.0, 'JumpVelocity': 720.0, 'Weight': 100.0, 'MaxCarryWeight': 90.0, 'Acceleration': 2048.0,
                   'AirControl': 0.35, 'FallGravityScale': 1.25, 'AirJumpCount': 1.0},
         'jab': (28, 24, 6, 9, 50.0, 80.0, 170.0, 0.0, 7.0, 550.0, 35.0, 6, 4, SHOVE.format('F'), 1.2),
@@ -52,7 +53,7 @@ KITS = {
     },
     # Heavy and slow: a long-startup hammer, a wide slam around itself, steep strong throws that send far; falls fast, lifts anyone
     'Heavy': {
-        'label': 'PESANTE', 'pad': (800.0, 350.0),
+        'label': 'PESANTE', 'pad': (800.0, 350.0), 'mash_frames': 180,
         'stats': {'WalkSpeed': 430.0, 'JumpVelocity': 620.0, 'Weight': 140.0, 'MaxCarryWeight': 200.0, 'Acceleration': 1200.0,
                   'AirControl': 0.2, 'FallGravityScale': 1.6, 'AirJumpCount': 1.0},
         'jab': (44, 40, 14, 18, 70.0, 90.0, 200.0, 0.0, 14.0, 900.0, 40.0, 10, 8, TAKEDOWN.format('F'), 0.85),
@@ -177,6 +178,8 @@ def run_kit(key, spec):
     kit.set_editor_property('kit_bindings', bindings)
     if not n:
         log(f'WARNING: KIT_Test_{key} has no Command.Special.Neutral binding to give the special')
+    # The grip: how long the grabbed side is held without mashing (frames at 60 Hz): the heavy's hold lasts longest
+    unreal.GSTN_LinkContentLibrary.set_kit_grab_mash_frames(kit, spec['mash_frames'])
     if not unreal.GSTN_LinkContentLibrary.set_kit_throws(kit, throws['Forward'], throws['Back'], throws['Up'], throws['Down']):
         log(f'KIT_Test_{key}: throws unchanged (or no link extension)')
     return saves + [weapon, kit]
