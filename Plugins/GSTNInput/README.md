@@ -278,6 +278,16 @@ means today's mapping contexts. API for an options menu: `ListBindableMappings`,
   the PC save system ignores the user index, so they would collide. The engine settings object is never saved.
 - Tests: `GSTNInput.Core.Bindings.{Set, TwoLocalPlayers, EnhancedInputProfiles}`. Plan: `docs/architecture/plans/input-opzioni-per-giocatore.md`.
 
+### Button layout (IO-2)
+
+`UGSTN_ButtonLayout` (`Layout/GSTN_ButtonLayout.h`) is a GameRules piece ("Button layout", GSTNCore `UGSTN_GameRules`): a list of
+function name -> logical button (`Input.Button.*`). A plugin reads its buttons with `UGSTN_ButtonLayout::GetButton(TEXT("Plugin.Function"),
+Default)`; a function missing from the layout keeps that default. The shipped layout is the class defaults, in this plugin's
+`DefaultGSTNInput.ini` (section `[/Script/GSTNInputCore.GSTN_ButtonLayout]`, not in Project Settings); a mode or level changes it by adding
+the piece to its GameRules asset. Functions today: `Held.PickupDrop`, `Held.Throw`, `Held.KitSwap`, `Mount.Interact`, `Mount.Crouch`,
+`Spin.Drill`, `Drill.Exit`, `Surface.LaunchBoost`. Per-player choices (IO-3) layer on top per local player; the key behind each logical
+button is IO-1's.
+
 ## Conventions
 
 - Gameplay tags: the plugin declares its roots and its own vocabulary natively. Leaves that are game data (a game's buttons,

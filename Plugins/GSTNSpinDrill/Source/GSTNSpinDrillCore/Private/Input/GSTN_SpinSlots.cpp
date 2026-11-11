@@ -2,6 +2,7 @@
 
 #include "Input/GSTN_SpinSlots.h"
 
+#include "Layout/GSTN_ButtonLayout.h"
 #include "GSTN_InputCoreTypes.h"
 #include "GSTN_SpinDrillTags.h"
 #include "Input/GSTN_CombatButtonTags.h"
@@ -69,7 +70,7 @@ FGSTN_InputSlotSpec FGSTN_SpinSlots::MakeDrillSlot()
 	// A press, so the drill comes when crouch goes down during the spin; its binding requires Combat.State.Spinning, and the spin's cancel
 	// window lets it through from DiveFromFrame. Holding crouch is then read by the dive ability (it ends on the release)
 	FGSTN_InputCondition_Press Press;
-	Press.Buttons.AddTag(GSTNCombatButtonTags::Button_Crouch.GetTag());
+	Press.Buttons.AddTag(UGSTN_ButtonLayout::GetButton(TEXT("Spin.Drill"), GSTNCombatButtonTags::Button_Crouch.GetTag()));
 	return MakeSlot(GSTNSpinDrillTags::Command_Movement_Drill.GetTag(), FCondition::Make<FGSTN_InputCondition_Press>(Press));
 }
 

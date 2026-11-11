@@ -1,6 +1,7 @@
 // Piggyback, runtime part (GAS and Network Prediction through GSTNLink and GSTNCombat).
 
 #include "GSTN_MountLoadout.h"
+#include "Layout/GSTN_ButtonLayout.h"
 #include "GSTN_PairMoveDefinition.h"
 #include "GSTN_PairMoveRegistry.h"
 
@@ -95,8 +96,9 @@ FGameplayTag FGSTN_MountLoadout::GetDropCommand()
 TArray<FGSTN_BindingInput> FGSTN_MountLoadout::MakeDefaultBindings(const FGSTN_MountKitExtension& MountData)
 {
 	TArray<FGSTN_BindingInput> Bindings;
-	const FGameplayTag Interact = GSTNCombatButtonTags::Button_Interact.GetTag();
-	const FGameplayTag Crouch = GSTNCombatButtonTags::Button_Crouch.GetTag();
+	// IO-2: buttons from the button layout (GameRules piece), these defaults when it does not name them
+	const FGameplayTag Interact = UGSTN_ButtonLayout::GetButton(TEXT("Mount.Interact"), GSTNCombatButtonTags::Button_Interact.GetTag());
+	const FGameplayTag Crouch = UGSTN_ButtonLayout::GetButton(TEXT("Mount.Crouch"), GSTNCombatButtonTags::Button_Crouch.GetTag());
 	const int32 RoleOffset = UGSTN_LinkSlots::RoleSlotPriorityOffset;
 
 	const FGameplayTag MountCommand = GetMountCommand();

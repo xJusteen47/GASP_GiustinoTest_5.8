@@ -2,6 +2,7 @@
 
 #include "Sim/GSTN_DrillTrackHook.h"
 
+#include "Layout/GSTN_ButtonLayout.h"
 #include "Data/GSTN_SpinDrillTracks.h"
 #include "Data/GSTN_SpinDrillTypes.h"
 #include "Input/GSTN_CombatButtonTags.h"
@@ -42,7 +43,7 @@ FGSTN_TrackHookResult FGSTN_BoreTrackHook::Evaluate(const FGSTN_TrackHookContext
 
 	// Jump boost (13b): jump held now, or a press at most the window before this frame, read from the same history as the crouch
 	bool bJumpBoost = false;
-	const int32 JumpButton = Context.Buttons ? Context.Buttons->GetIndex(GSTNCombatButtonTags::Button_Jump.GetTag()) : INDEX_NONE;
+	const int32 JumpButton = Context.Buttons ? Context.Buttons->GetIndex(UGSTN_ButtonLayout::GetButton(TEXT("Drill.Exit"), GSTNCombatButtonTags::Button_Jump.GetTag())) : INDEX_NONE;
 	if (JumpButton >= 0 && JumpButton < 32)
 	{
 		const FGSTN_InputHistory& History = Context.Input.History;
