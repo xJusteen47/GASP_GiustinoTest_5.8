@@ -97,7 +97,7 @@ public:
 
 	const FGSTN_HeldObjectTuning& GetTuning() const;
 
-	/** When its holder drops it: the tuning's own rules (bOverrideBreakRules) or the project's (UGSTN_HeldSettings) */
+	/** When its holder drops it: the tuning's own rules (bOverrideBreakRules) or the project's (UGSTN_HeldRules) */
 	const FGSTN_HeldBreakRules& GetBreakRules() const;
 
 	/** HOOK: the ability Command starts with this object in hand (UGSTN_HeldObjectDefinition::CommandActions); null = the kit's own. Not read yet */

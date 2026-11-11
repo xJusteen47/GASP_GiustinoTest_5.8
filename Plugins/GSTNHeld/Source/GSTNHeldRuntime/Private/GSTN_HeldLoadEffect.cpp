@@ -31,7 +31,7 @@ float UGSTN_GE_HoldLoad::SpeedScaleOf(uint8 Payload)
 	int32 SizeIndex = 0;
 	float Ratio = 0.f;
 	FGSTN_HeldLoad::DecodePayload(Payload, SizeIndex, Ratio);
-	return FGSTN_HeldLoad::SpeedScale(UGSTN_HeldSettings::Get().GetSizeClass(SizeIndex), Ratio);
+	return FGSTN_HeldLoad::SpeedScale(UGSTN_HeldRules::Get().GetSizeClass(SizeIndex), Ratio);
 }
 
 float UGSTN_GE_HoldLoad::JumpScaleOf(uint8 Payload)
@@ -39,7 +39,7 @@ float UGSTN_GE_HoldLoad::JumpScaleOf(uint8 Payload)
 	int32 SizeIndex = 0;
 	float Ratio = 0.f;
 	FGSTN_HeldLoad::DecodePayload(Payload, SizeIndex, Ratio);
-	return FGSTN_HeldLoad::JumpScale(UGSTN_HeldSettings::Get().GetSizeClass(SizeIndex), Ratio);
+	return FGSTN_HeldLoad::JumpScale(UGSTN_HeldRules::Get().GetSizeClass(SizeIndex), Ratio);
 }
 
 float UGSTN_HoldLoadSpeedScale::CalculateBaseMagnitude_Implementation(const FGameplayEffectSpec& Spec) const

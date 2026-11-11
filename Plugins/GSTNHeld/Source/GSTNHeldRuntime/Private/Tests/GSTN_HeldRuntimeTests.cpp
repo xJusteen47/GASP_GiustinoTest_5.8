@@ -157,7 +157,7 @@ bool FGSTN_HeldCarryLoadTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("one removal at the release"), Ops.Num() == 1 && !Ops[0].bApply);
 
 	// MMC goldens against the project's default classes (Medium at full load: the class's loss)
-	const FGSTN_HeldSizeClass* Medium = UGSTN_HeldSettings::Get().GetSizeClass(1);
+	const FGSTN_HeldSizeClass* Medium = UGSTN_HeldRules::Get().GetSizeClass(1);
 	if (Medium)
 	{
 		TestTrue(TEXT("speed golden"), FMath::IsNearlyEqual(UGSTN_GE_HoldLoad::SpeedScaleOf(Payload), 1.f - Medium->SpeedLossAtFullLoad, 1.e-4f));

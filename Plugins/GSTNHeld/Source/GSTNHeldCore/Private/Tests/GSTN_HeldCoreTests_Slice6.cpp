@@ -126,7 +126,7 @@ bool FGSTN_HeldSizeBansTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("idempotent"), UGSTN_HeldSlots::ApplySizeBans(Classes, Bindings), 0);
 
 	// The project defaults: four classes, packable, each with its carrying tag; only Huge needs capacity
-	const UGSTN_HeldSettings& Settings = UGSTN_HeldSettings::Get();
+	const UGSTN_HeldRules& Settings = UGSTN_HeldRules::Get();
 	TestEqual(TEXT("four default classes"), Settings.SizeClasses.Num(), 4);
 	int32 Index = INDEX_NONE;
 	const FGSTN_HeldSizeClass* HugeClass = Settings.FindSizeClass(Held_Size_Huge, &Index);

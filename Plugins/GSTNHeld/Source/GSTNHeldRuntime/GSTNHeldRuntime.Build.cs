@@ -13,6 +13,7 @@ public class GSTNHeldRuntime : ModuleRules
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
 			"Core",
+			"GSTNCore",
 			"CoreUObject",
 			"Engine",
 			"GameplayTags",

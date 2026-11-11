@@ -17,6 +17,7 @@ public class GSTNHeldCore : ModuleRules
 			"GSTNCombatCore",
 			"GSTNProjectileCore",
 			"GSTNInputCore",
+			"GSTNCore",
 			"DeveloperSettings"
 		});
 	}

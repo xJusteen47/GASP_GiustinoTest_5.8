@@ -40,7 +40,7 @@ EDataValidationResult UGSTN_HeldObjectDefinition::IsDataValid(FDataValidationCon
 	{
 		Fail(TEXT("Throw.Speed is 0: the throw would never leave the hand."));
 	}
-	if (Tuning.SizeTag.IsValid() && !UGSTN_HeldSettings::Get().FindSizeClass(Tuning.SizeTag))
+	if (Tuning.SizeTag.IsValid() && !UGSTN_HeldRules::Get().FindSizeClass(Tuning.SizeTag))
 	{
 		Context.AddWarning(FText::FromString(FString::Printf(TEXT("SizeTag %s is not one of the project's size classes (GSTN Held settings): no load, no bans."),
 			*Tuning.SizeTag.ToString())));
@@ -81,7 +81,7 @@ const FGSTN_HeldObjectTuning& UGSTN_HeldObjectComponent::GetTuning() const
 const FGSTN_HeldBreakRules& UGSTN_HeldObjectComponent::GetBreakRules() const
 {
 	const FGSTN_HeldObjectTuning& Tuning = GetTuning();
-	return Tuning.bOverrideBreakRules ? Tuning.BreakRules : UGSTN_HeldSettings::Get().DefaultBreakRules;
+	return Tuning.bOverrideBreakRules ? Tuning.BreakRules : UGSTN_HeldRules::Get().DefaultBreakRules;
 }
 
 TSubclassOf<UGameplayAbility> UGSTN_HeldObjectComponent::FindCommandAction(const FGameplayTag& Command) const

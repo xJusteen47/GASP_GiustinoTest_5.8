@@ -11,7 +11,10 @@ public class GSTNCore : ModuleRules
 
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
-			"Core"
+			"Core",
+			"CoreUObject",
+			"Engine",
+			"AssetRegistry"
 		});
 	}
 }

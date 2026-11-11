@@ -110,7 +110,7 @@ void UGSTN_KitInteractableComponent::UpdatePrompt()
 	const APlayerController* Player = World->GetFirstPlayerController();
 	const APawn* Pawn = Player && Player->IsLocalController() ? Player->GetPawn() : nullptr;
 	const UAbilitySystemComponent* Abilities = Pawn ? UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Pawn) : nullptr;
-	if (UGSTN_HeldSettings::Get().KitSwap.bShowPrompt && !Pickup->IsEmpty() && Abilities && Abilities->HasMatchingGameplayTag(GSTNHeldTags::Interact_Target_Kit))
+	if (UGSTN_HeldRules::Get().KitSwap.bShowPrompt && !Pickup->IsEmpty() && Abilities && Abilities->HasMatchingGameplayTag(GSTNHeldTags::Interact_Target_Kit))
 	{
 		const UGSTN_KitInteractSubsystem* Kits = UGSTN_KitInteractSubsystem::Get(this);
 		bShown = Kits && Kits->FindSwapTarget(Pawn, Kits->GetSimFrame()) == Pickup;
@@ -210,7 +210,7 @@ void UGSTN_KitInteractSubsystem::Initialize(FSubsystemCollectionBase& Collection
 void UGSTN_KitInteractSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
-	if (!UGSTN_HeldSettings::Get().KitSwap.bEnabled)
+	if (!UGSTN_HeldRules::Get().KitSwap.bEnabled)
 	{
 		return;
 	}
@@ -273,7 +273,7 @@ void UGSTN_KitInteractSubsystem::HandleActorSpawned(AActor* Actor)
 
 void UGSTN_KitInteractSubsystem::EnsureRecord(AGSTN_KitPickup* Pickup) const
 {
-	if (!IsValid(Pickup) || !UGSTN_HeldSettings::Get().KitSwap.bEnabled || Pickup->FindComponentByClass<UGSTN_KitInteractableComponent>())
+	if (!IsValid(Pickup) || !UGSTN_HeldRules::Get().KitSwap.bEnabled || Pickup->FindComponentByClass<UGSTN_KitInteractableComponent>())
 	{
 		return;
 	}
@@ -309,7 +309,7 @@ AGSTN_KitPickup* UGSTN_KitInteractSubsystem::FindSwapTarget(const AActor* Holder
 	{
 		return nullptr;
 	}
-	const FGSTN_KitSwapTuning& Tuning = UGSTN_HeldSettings::Get().KitSwap;
+	const FGSTN_KitSwapTuning& Tuning = UGSTN_HeldRules::Get().KitSwap;
 	if (Tuning.bTakesFocusedKit)
 	{
 		const UGSTN_InteractSubsystem* Interact = UGSTN_InteractSubsystem::Get(World);
@@ -392,7 +392,7 @@ void UGSTN_KitInteractSubsystem::HandleSimEvent(const FGSTN_SimEvent& Event)
 
 AGSTN_KitPickup* UGSTN_KitInteractSubsystem::DropKitOnKO(AActor* Victim)
 {
-	const FGSTN_KitSwapTuning& Tuning = UGSTN_HeldSettings::Get().KitSwap;
+	const FGSTN_KitSwapTuning& Tuning = UGSTN_HeldRules::Get().KitSwap;
 	const APawn* Pawn = Cast<APawn>(Victim);
 	const APlayerState* PlayerState = Pawn ? Pawn->GetPlayerState() : nullptr;
 	UWorld* World = GetWorld();

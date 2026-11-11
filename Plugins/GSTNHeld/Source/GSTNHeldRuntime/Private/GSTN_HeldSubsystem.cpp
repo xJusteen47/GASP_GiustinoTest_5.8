@@ -306,7 +306,7 @@ void UGSTN_HeldSubsystem::PostHoldCommand(AActor* Holder, UGSTN_HeldObjectCompon
 		LastHandSerial.Add(Holder, Serial);
 		Object.HandLinkSerial = Serial;
 		// M10 G6: the carry load rides on the link (size class index and weight over the holder's capacity, FGSTN_HeldLoad)
-		const UGSTN_HeldSettings& Settings = UGSTN_HeldSettings::Get();
+		const UGSTN_HeldRules& Settings = UGSTN_HeldRules::Get();
 		int32 SizeIndex = INDEX_NONE;
 		Settings.FindSizeClass(Object.GetTuning().SizeTag, &SizeIndex);
 		const uint8 Payload = SizeIndex == INDEX_NONE ? 0
@@ -452,11 +452,11 @@ void UGSTN_HeldSubsystem::ResolvePickups(int32 Frame)
 		// The pose hits are judged against: the holder's snapshot entry, the actor without one
 		const FGSTN_SnapshotEntry* Entry = Combat ? Combat->GetSnapshot().Find(Id) : nullptr;
 		FGSTN_PickupRequest& Request = Requests.Add_GetRef({ Id, Queued.Frame, Entry ? Entry->Transform.GetLocation() : Holder->GetActorLocation() });
-		Request.CarryCapacityKg = FGSTN_HeldLoad::EffectiveCapacity(CarryCapacityOf(Holder), UGSTN_HeldSettings::Get().DefaultCarryCapacityKg);
+		Request.CarryCapacityKg = FGSTN_HeldLoad::EffectiveCapacity(CarryCapacityOf(Holder), UGSTN_HeldRules::Get().DefaultCarryCapacityKg);
 		// M10 slice 5: the object whose record the interact probe focused for this holder on the request's frame (or just before it)
 		FGSTN_InteractCandidateId Focus;
-		Request.bFallBackToNearest = UGSTN_HeldSettings::Get().bFocusMissFallsBackToNearest;
-		if (UGSTN_HeldSettings::Get().bPickupTakesFocusedObject && Interact && Interact->FindProbeFocus(Id, Queued.Frame, Focus) && Focus.Provider == GSTNInteractProviders::Registry)
+		Request.bFallBackToNearest = UGSTN_HeldRules::Get().bFocusMissFallsBackToNearest;
+		if (UGSTN_HeldRules::Get().bPickupTakesFocusedObject && Interact && Interact->FindProbeFocus(Id, Queued.Frame, Focus) && Focus.Provider == GSTNInteractProviders::Registry)
 		{
 			for (const TWeakObjectPtr<UGSTN_HeldObjectComponent>& Each : Objects)
 			{
@@ -479,7 +479,7 @@ void UGSTN_HeldSubsystem::ResolvePickups(int32 Frame)
 		{
 			FGSTN_PickupCandidate& Candidate = Candidates.Add_GetRef({ Each->GetObjectId(), Each->GetOwner()->GetActorLocation(), Each->GetTuning().PickupRadius,
 				Each->GetState() == EGSTN_HeldObjectState::Idle });
-			const FGSTN_HeldSizeClass* SizeClass = UGSTN_HeldSettings::Get().FindSizeClass(Each->GetTuning().SizeTag);
+			const FGSTN_HeldSizeClass* SizeClass = UGSTN_HeldRules::Get().FindSizeClass(Each->GetTuning().SizeTag);
 			Candidate.WeightKg = Each->GetTuning().WeightKg;
 			Candidate.bRequiresCapacity = SizeClass && SizeClass->bRequiresCapacity;
 			ObjectOf.Add(Each->GetObjectId(), Each.Get());
@@ -773,7 +773,7 @@ void UGSTN_HeldSubsystem::LogReport() const
 			const UAbilitySystemComponent* AbilitySystem = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Combat->FindOwnerActor(Id));
 			// M10 G6: the projected size class (index of the Carrying.<size> tag, -1 = none) and the walk speed the carry load leaves
 			int32 SizeIndex = INDEX_NONE;
-			const TArray<FGSTN_HeldSizeClass>& SizeClasses = UGSTN_HeldSettings::Get().SizeClasses;
+			const TArray<FGSTN_HeldSizeClass>& SizeClasses = UGSTN_HeldRules::Get().SizeClasses;
 			for (int32 Index = 0; AbilitySystem && Index < SizeClasses.Num(); ++Index)
 			{
 				if (SizeClasses[Index].CarryingTag.IsValid() && AbilitySystem->HasMatchingGameplayTag(SizeClasses[Index].CarryingTag))
@@ -920,7 +920,7 @@ namespace GSTNHeldConsole
 				Actor->GetHeldObject()->Definition = Definition;
 			}
 			Definition->Tuning.bOverrideWindup = true;
-			Definition->Tuning.Windup = UGSTN_HeldSettings::Get().DefaultThrowWindup;
+			Definition->Tuning.Windup = UGSTN_HeldRules::Get().DefaultThrowWindup;
 			Definition->Tuning.Windup.ReleaseFrames = WindupFrames;
 		}
 		if (Actor && Actor->GetHeldObject())
@@ -1055,7 +1055,7 @@ namespace GSTNHeldConsole
 		auto MakeShot = [Defaults, Pitch](const APawn& From, const UGSTN_HeldObjectComponent& Object)
 		{
 			FGSTN_ProjectileParams Params = Object.GetTuning().Throw;
-			if (const FGSTN_HeldSizeClass* SizeClass = UGSTN_HeldSettings::Get().FindSizeClass(Object.GetTuning().SizeTag))
+			if (const FGSTN_HeldSizeClass* SizeClass = UGSTN_HeldRules::Get().FindSizeClass(Object.GetTuning().SizeTag))
 			{
 				Params.Speed *= SizeClass->ThrowSpeedScale;
 			}
@@ -1097,7 +1097,7 @@ namespace GSTNHeldConsole
 	{
 		// Dev, one process (PIE): the settings object is shared by every world of the process, so host and clients read the same value. Never
 		// across processes: two machines with different wind-ups would desync the throw
-		UGSTN_HeldSettings* Settings = GetMutableDefault<UGSTN_HeldSettings>();
+		UGSTN_HeldRules* Settings = &FGSTN_ActiveGameRules::GetMutablePieceForDev<UGSTN_HeldRules>();
 		if (Args.IsValidIndex(0))
 		{
 			Settings->DefaultThrowWindup.ReleaseFrames = FMath::Max(FCString::Atoi(*Args[0]), 0);
@@ -1155,7 +1155,7 @@ namespace GSTNHeldConsole
 
 AActor* UGSTN_HeldSubsystem::FindLiftedEnemy(const AActor* Holder, const FGSTN_LinkState& Body, float* OutLoadRatio, FString* OutWhyNot)
 {
-	const FGSTN_EnemyThrowTuning& Tuning = UGSTN_HeldSettings::Get().ThrownEnemies;
+	const FGSTN_EnemyThrowTuning& Tuning = UGSTN_HeldRules::Get().ThrownEnemies;
 	const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
 	if (!Tuning.bEnabled || !Holder || !Registry || !Body.IsLinked() || Body.Role != 1 || Body.PartnerId.Kind != GSTNEntityKinds::Fighter)
 	{
@@ -1230,7 +1230,7 @@ void UGSTN_HeldSubsystem::NoteEnemyThrown(AActor* Holder, AGSTN_Projectile& Shot
 	Projectiles->SeedHitTargets(&Shot, { EnemyId });
 
 	const FVector Velocity = Shot.GetSegment().Velocity;
-	const int32 RegrabLockFrames = UGSTN_HeldSettings::Get().ThrownEnemies.RegrabLockFrames;
+	const int32 RegrabLockFrames = UGSTN_HeldRules::Get().ThrownEnemies.RegrabLockFrames;
 	auto PostBreak = [&](AActor* Side, int32 SideId, bool bThrown)
 	{
 		const UGSTN_CombatSimComponent* Sim = Side->FindComponentByClass<UGSTN_CombatSimComponent>();

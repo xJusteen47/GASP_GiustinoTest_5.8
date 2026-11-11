@@ -46,7 +46,7 @@ FGSTN_HeldSlotInputs FGSTN_HeldSlotInputs::FromSettings()
 	FGSTN_HeldSlotInputs Inputs;
 	Inputs.PickupDropButton = Settings.PickupDropButton;
 	Inputs.ThrowButton = Settings.ThrowButton;
-	Inputs.KitSwapButton = Settings.KitSwap.Button;
+	Inputs.KitSwapButton = UGSTN_HeldRules::Get().KitSwap.Button;
 	Inputs.SlotOverrides = &Settings.SlotOverrides;
 	return Inputs;
 }

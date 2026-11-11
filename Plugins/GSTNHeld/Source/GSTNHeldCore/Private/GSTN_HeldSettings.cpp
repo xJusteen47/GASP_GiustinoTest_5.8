@@ -33,7 +33,7 @@ void UGSTN_HeldSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyC
 }
 #endif
 
-const FGSTN_HeldSizeClass* UGSTN_HeldSettings::FindSizeClass(const FGameplayTag& SizeTag, int32* OutIndex) const
+const FGSTN_HeldSizeClass* UGSTN_HeldRules::FindSizeClass(const FGameplayTag& SizeTag, int32* OutIndex) const
 {
 	if (OutIndex)
 	{

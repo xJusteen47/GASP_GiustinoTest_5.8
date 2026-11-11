@@ -17,7 +17,7 @@ Status: **experimental (0.1), slice 6**, `EnabledByDefault: false`, enabled in `
 
 Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN_HeldBreakReason`, `EGSTN_HeldThrowAim` and their rules
 (`BreaksOnState`, `BreaksOnEvent`, `ChooseThrowAim`, `DropPoint`), native tags `Combat.Held.Carrying` and `Command.Held.Pickup/Drop/Throw`,
-`UGSTN_HeldSlots` (default slots and bindings) and `UGSTN_HeldSettings` (`Config/DefaultGSTNHeld.ini`, every value a TEST VALUE). To the runtime:
+`UGSTN_HeldSlots` (default slots and bindings), `UGSTN_HeldSettings` (setup: kits with bindings, abilities, tiers, buttons; Project Settings) and `UGSTN_HeldRules` (the gameplay factors: the held piece of the game rules, GR-1; defaults in `Config/DefaultGSTNHeld.ini`, every value a TEST VALUE). To the runtime:
 `FGSTN_HeldFragment` (sync fragment, feature id `Held` = 20), the `Held.Command` inbox kind (48), `FGSTN_HeldTickExtension` (projects
 `Combat.Held.Carrying`), `UGSTN_GA_HeldDrop`, the hold-to-aim throw, the object definition's `CommandActions` / `RangedAction` hooks and
 `gstn.Held.Drop`. Tests `GSTNHeld.Core.BreakRules`, `ThrowAim`, `DefaultSlots`, `GSTNHeld.Runtime.HandFragment`.
@@ -79,7 +79,7 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
    inbox entry with a **detached instigator** (the shooter at the release, else its player state), so the hit and KO events carry the source tag
    and name the thrower even when its entity id no longer resolves (death, disconnect). Slice 5: a minion's KO event too (GSTNMinion). Log `Projectile .. hit .. source= credit=`.
 11. **Carry load and size classes (slice 6, the plan's G6)**: an object names a size class (`FGSTN_HeldObjectTuning::SizeTag`, `Combat.Held.Size.*`)
-   and a weight (`WeightKg`); the classes are data (`UGSTN_HeldSettings::SizeClasses`, at most four, `DefaultGSTNHeld.ini`): loss of walk and jump
+   and a weight (`WeightKg`); the classes are data (`UGSTN_HeldRules::SizeClasses`, at most four, `DefaultGSTNHeld.ini`): loss of walk and jump
    speed at full load, `bRequiresCapacity`, `ThrowSpeedScale`, command `Bans`. When the host forms a hold it writes the **load payload** on the Held
    link (`FGSTN_LinkCommandEntry::Payload`, a GSTNLink addition; `FGSTN_HeldLoad`: class index in two bits, weight / capacity in six, capacity =
    the holder's `MaxCarryWeight`, else `DefaultCarryCapacityKg` 50 kg). The Held type's holder role effect is `UGSTN_GE_HoldLoad` (infinite,

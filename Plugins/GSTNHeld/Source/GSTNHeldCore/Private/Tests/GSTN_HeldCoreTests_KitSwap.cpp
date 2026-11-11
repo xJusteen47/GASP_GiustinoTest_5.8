@@ -70,7 +70,7 @@ bool FGSTN_HeldKitSwapSettingsTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("never a tap"), Tuning.GetHoldFrames(), 2);
 
 	// The owner's decisions in DefaultGSTNHeld.ini (2026-11-11): on, half a second, the framed kit, the kit left on a KO
-	const FGSTN_KitSwapTuning& Project = UGSTN_HeldSettings::Get().KitSwap;
+	const FGSTN_KitSwapTuning& Project = UGSTN_HeldRules::Get().KitSwap;
 	TestTrue(TEXT("on"), Project.bEnabled);
 	TestEqual(TEXT("half a second"), Project.HoldSeconds, 0.5f);
 	TestTrue(TEXT("longer than the movement set's hold (12 frames)"), Project.GetHoldFrames() > 12);

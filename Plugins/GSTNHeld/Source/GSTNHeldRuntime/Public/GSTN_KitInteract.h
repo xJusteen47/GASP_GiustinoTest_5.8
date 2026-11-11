@@ -14,7 +14,7 @@ class UTextRenderComponent;
 struct FGSTN_SimEvent;
 
 /*
- * M11 K1, the kit swap on the grab button (owner decisions 2026-11-11, TEST VALUES in UGSTN_HeldSettings::KitSwap). It lives here, beside the
+ * M11 K1, the kit swap on the grab button (owner decisions 2026-11-11, TEST VALUES in UGSTN_HeldRules::KitSwap). It lives here, beside the
  * object pickup it shares the button with, because this plugin already joins the three sides it needs (GSTNCombatGAS's kit pickup, GSTNInteract's
  * records, GSTNLink's interact probe); the plan's L2 moves the kit pickup and this bridge into a GSTNPickups plugin.
  *

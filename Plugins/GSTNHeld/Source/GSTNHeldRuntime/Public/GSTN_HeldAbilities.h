@@ -68,7 +68,7 @@ public:
  * shot (UGSTN_HeldSubsystem::NoteThrown). Nothing held: no shot, no ghost.
  *
  * Started by a button (Command.Held.Throw, the strong button by default) it fires on the button's release (owner's design 2026-11-10, TEST
- * VALUES in UGSTN_HeldSettings::ThrowInput): released before AimHoldFrames it is a tap and goes along the left stick of the release frame
+ * VALUES in UGSTN_HeldRules::ThrowInput): released before AimHoldFrames it is a tap and goes along the left stick of the release frame
  * (the facing with the stick centred); held longer the reticle shows (UGSTN_PrecisionAimComponent::SetHoldAimShown, local) and the throw
  * goes along the camera of the release frame; with the reticle toggled on a tap aims with the camera too. Held MaxAimFrames, it goes on its
  * own. With AimView = Shoulder (slice 8, M10 G7) the held aim also asks the camera to go over the shoulder (AimViewRequestTags through the

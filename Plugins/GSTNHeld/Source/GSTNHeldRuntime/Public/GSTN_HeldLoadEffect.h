@@ -10,7 +10,7 @@
 
 /**
  * The walk speed multiplier of the carry load: decodes the Held link's payload from the set-by-caller Combat.SetByCaller.Held.Load (payload / 255)
- * and returns FGSTN_HeldLoad::SpeedScale for the payload's size class (UGSTN_HeldSettings::SizeClasses) at its load ratio. A pure read of the spec
+ * and returns FGSTN_HeldLoad::SpeedScale for the payload's size class (UGSTN_HeldRules::SizeClasses) at its load ratio. A pure read of the spec
  * and the project settings: the same link gives the same magnitude on every machine and in a re-simulation
  */
 UCLASS()

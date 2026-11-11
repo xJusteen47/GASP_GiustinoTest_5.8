@@ -154,7 +154,7 @@ void FGSTN_HeldTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 		float Ratio = 0.f;
 		FGSTN_HeldLoad::DecodePayload(Links->Links.Hand.Payload, SizeIndex, Ratio);
 	}
-	const TArray<FGSTN_HeldSizeClass>& SizeClasses = UGSTN_HeldSettings::Get().SizeClasses;
+	const TArray<FGSTN_HeldSizeClass>& SizeClasses = UGSTN_HeldRules::Get().SizeClasses;
 	for (int32 Index = 0; Index < FMath::Min(SizeClasses.Num(), static_cast<int32>(FGSTN_HeldLoad::MaxSizeClasses)); ++Index)
 	{
 		if (SizeClasses[Index].CarryingTag.IsValid())

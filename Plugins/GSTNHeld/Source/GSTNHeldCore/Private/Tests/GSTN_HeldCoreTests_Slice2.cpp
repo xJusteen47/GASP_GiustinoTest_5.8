@@ -37,7 +37,7 @@ bool FGSTN_HeldBreakRulesTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("invalid event does not"), FGSTN_HeldRules::BreaksOnEvent(FGameplayTag(), Rules));
 
 	// The project defaults from DefaultGSTNHeld.ini: hitstun and KO at least
-	const FGSTN_HeldBreakRules& Defaults = UGSTN_HeldSettings::Get().DefaultBreakRules;
+	const FGSTN_HeldBreakRules& Defaults = UGSTN_HeldRules::Get().DefaultBreakRules;
 	TestTrue(TEXT("ini: hitstun drops"), Defaults.DropWhenHolderHasAny.HasTagExact(Hitstun));
 	TestTrue(TEXT("ini: KO drops"), Defaults.DropOnHolderEvents.HasTagExact(KO));
 
@@ -71,8 +71,8 @@ bool FGSTN_HeldThrowAimTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("tap with the shoulder view = stick"), FGSTN_HeldRules::ChooseThrowAim(1, false, Input), EGSTN_HeldThrowAim::Stick);
 	TestFalse(TEXT("not aiming before the hold"), FGSTN_HeldRules::IsAiming(11, Input));
 	TestTrue(TEXT("aiming from the hold"), FGSTN_HeldRules::IsAiming(12, Input));
-	TestTrue(TEXT("ini values sane"), UGSTN_HeldSettings::Get().ThrowInput.AimHoldFrames > 0
-		&& UGSTN_HeldSettings::Get().ThrowInput.MaxAimFrames > UGSTN_HeldSettings::Get().ThrowInput.AimHoldFrames);
+	TestTrue(TEXT("ini values sane"), UGSTN_HeldRules::Get().ThrowInput.AimHoldFrames > 0
+		&& UGSTN_HeldRules::Get().ThrowInput.MaxAimFrames > UGSTN_HeldRules::Get().ThrowInput.AimHoldFrames);
 	return true;
 }
 

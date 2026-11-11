@@ -29,6 +29,10 @@
 	],
 	"Plugins": [
 		{
+			"Name": "GSTNCore",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNProjectile",
 			"Enabled": true
 		},

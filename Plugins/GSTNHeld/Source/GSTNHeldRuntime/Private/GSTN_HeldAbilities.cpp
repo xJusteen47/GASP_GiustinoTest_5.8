@@ -121,7 +121,7 @@ void UGSTN_GA_HeldThrow::OnSimulationTick(const FAbilitySystemTimeStep& TimeStep
 		return;
 	}
 	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
-	const FGSTN_HeldThrowInput& Input = UGSTN_HeldSettings::Get().ThrowInput;
+	const FGSTN_HeldThrowInput& Input = UGSTN_HeldRules::Get().ThrowInput;
 	const int32 HeldFrames = FMath::Max(GetCombatClock() - PressClock.Value, 0);
 	const bool bHeld = Combat && Combat->IsCommandButtonHeld(GetActivationContext().Button);
 	if (bHeld && HeldFrames < Input.MaxAimFrames)
@@ -139,7 +139,7 @@ const FGSTN_HeldThrowWindup* UGSTN_GA_HeldThrow::FindWindup() const
 	AActor* Avatar = GetAvatarActorFromActorInfo();
 	const UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(GetWorld());
 	const UGSTN_HeldObjectComponent* Object = Held ? Held->FindHeldBy(Avatar) : nullptr;
-	const UGSTN_HeldSettings& Settings = UGSTN_HeldSettings::Get();
+	const UGSTN_HeldRules& Settings = UGSTN_HeldRules::Get();
 	float LoadRatio = 0.f;
 	const bool bEnemy = !Object && UGSTN_HeldSubsystem::FindLiftedEnemy(Avatar, &LoadRatio, nullptr);
 	return FGSTN_HeldRules::ResolveWindup(Object ? &Object->GetTuning() : nullptr, bEnemy ? &Settings.ThrownEnemies : nullptr, Settings.DefaultThrowWindup);
@@ -200,7 +200,7 @@ bool UGSTN_GA_HeldThrow::IsWindupInterrupted() const
 	}
 	const UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(GetWorld());
 	const UGSTN_HeldObjectComponent* Object = Held ? Held->FindHeldBy(GetAvatarActorFromActorInfo()) : nullptr;
-	const FGSTN_HeldBreakRules& Rules = Object ? Object->GetBreakRules() : UGSTN_HeldSettings::Get().DefaultBreakRules;
+	const FGSTN_HeldBreakRules& Rules = Object ? Object->GetBreakRules() : UGSTN_HeldRules::Get().DefaultBreakRules;
 	FGameplayTagContainer Owned;
 	AbilitySystem->GetOwnedGameplayTags(Owned);
 	return FGSTN_HeldRules::BreaksOnState(Owned, Rules);
@@ -255,7 +255,7 @@ float UGSTN_GA_HeldThrow::GetShotLaunchPitchDeg() const
 	// Shoulder: the converged aim already points at the crosshair, so only the setting's elevation is added (config, the same on every machine)
 	if (HasButton() && static_cast<EGSTN_HeldThrowAim>(ReleaseAim.Value) == EGSTN_HeldThrowAim::Shoulder)
 	{
-		return UGSTN_HeldSettings::Get().ThrowInput.ShoulderAimPitchDeg;
+		return UGSTN_HeldRules::Get().ThrowInput.ShoulderAimPitchDeg;
 	}
 	return Super::GetShotLaunchPitchDeg();
 }
@@ -276,7 +276,7 @@ void UGSTN_GA_HeldThrow::ShowAimReticle(bool bShown) const
 	{
 		if (UGSTN_PrecisionAimComponent* Reticle = Pawn->FindComponentByClass<UGSTN_PrecisionAimComponent>())
 		{
-			const FGSTN_HeldThrowInput& Input = UGSTN_HeldSettings::Get().ThrowInput;
+			const FGSTN_HeldThrowInput& Input = UGSTN_HeldRules::Get().ThrowInput;
 			Reticle->SetHoldAimShownWithView(bShown, Input.AimView == EGSTN_HeldAimView::Shoulder ? Input.AimViewRequestTags : FGameplayTagContainer());
 		}
 	}
@@ -293,7 +293,7 @@ bool UGSTN_GA_HeldThrow::PrepareShot(FGSTN_ProjectileParams& InOutParams, bool b
 		FString WhyNot;
 		if (UGSTN_HeldSubsystem::FindLiftedEnemy(GetAvatarActorFromActorInfo(), &LoadRatio, bHost ? &WhyNot : nullptr))
 		{
-			const FGSTN_EnemyThrowTuning& Enemy = UGSTN_HeldSettings::Get().ThrownEnemies;
+			const FGSTN_EnemyThrowTuning& Enemy = UGSTN_HeldRules::Get().ThrownEnemies;
 			InOutParams = Enemy.Throw;
 			InOutParams.Speed *= FGSTN_EnemyLiftRules::SpeedScale(Enemy, LoadRatio);
 			InOutParams.SourceTag = GSTNHeldTags::Source_ThrownEnemy;
@@ -309,7 +309,7 @@ bool UGSTN_GA_HeldThrow::PrepareShot(FGSTN_ProjectileParams& InOutParams, bool b
 	}
 	InOutParams = Object->GetTuning().Throw;
 	// M10 G6: a heavier class throws slower (TEST VALUES in the size classes)
-	if (const FGSTN_HeldSizeClass* SizeClass = UGSTN_HeldSettings::Get().FindSizeClass(Object->GetTuning().SizeTag))
+	if (const FGSTN_HeldSizeClass* SizeClass = UGSTN_HeldRules::Get().FindSizeClass(Object->GetTuning().SizeTag))
 	{
 		InOutParams.Speed *= SizeClass->ThrowSpeedScale;
 	}

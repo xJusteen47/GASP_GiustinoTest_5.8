@@ -79,7 +79,7 @@ def _lifting(on):
     """Thrown enemies (GSTNHeld ThrownEnemies.bEnabled) on or off on the settings every world of the PIE process reads, so a standard fighter is
     grabbable but not liftable and the grab keeps the Smash throws. (A Combat.Held.NoLift loose tag added from Python does not reach the lift
     check: tried, the pawn shows no such tag.) Restored by the scenario's end"""
-    settings = unreal.get_default_object(unreal.GSTN_HeldSettings)
+    settings = unreal.get_default_object(unreal.GSTN_HeldRules)
     tuning = settings.get_editor_property('thrown_enemies')
     tuning.set_editor_property('enabled', on)
     settings.set_editor_property('thrown_enemies', tuning)

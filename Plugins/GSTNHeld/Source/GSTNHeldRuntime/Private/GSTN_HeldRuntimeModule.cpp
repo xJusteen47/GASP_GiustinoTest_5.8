@@ -52,7 +52,7 @@ public:
 		{
 			FGameplayTagContainer BlockAll;
 			FGameplayTagContainer BlockStickOnly;
-			FGSTN_EnemyLiftRules::KitThrowBlockers(UGSTN_HeldSettings::Get().ThrownEnemies, BlockAll, BlockStickOnly);
+			FGSTN_EnemyLiftRules::KitThrowBlockers(UGSTN_HeldRules::Get().ThrownEnemies, BlockAll, BlockStickOnly);
 			UGSTN_LinkSlots::SetThrowBlockers(LoadoutExtensionId, BlockAll, BlockStickOnly);
 		}
 
@@ -64,18 +64,18 @@ public:
 		{
 			FGSTN_InteractMeaning& Meaning = Interact->Meanings.AddDefaulted_GetRef();
 			Meaning.Tag = Pickup;
-			Meaning.DefaultPriority = FMath::Clamp(UGSTN_HeldSettings::Get().PickupMeaningPriority, 0, 255);
+			Meaning.DefaultPriority = FMath::Clamp(UGSTN_HeldRules::Get().PickupMeaningPriority, 0, 255);
 			Meaning.HoldVerb = NSLOCTEXT("GSTNHeld", "PickupVerb", "Pick up");
 			bAddedPickupMeaning = true;
 		}
 		// M11 K1: the kits on the ground carry Interact.Target.Kit, under the same table
 		const FGameplayTag Kit = GSTNHeldTags::Interact_Target_Kit;
-		if (UGSTN_HeldSettings::Get().KitSwap.bEnabled
+		if (UGSTN_HeldRules::Get().KitSwap.bEnabled
 			&& !Interact->Meanings.ContainsByPredicate([&Kit](const FGSTN_InteractMeaning& Meaning) { return Meaning.Tag == Kit; }))
 		{
 			FGSTN_InteractMeaning& Meaning = Interact->Meanings.AddDefaulted_GetRef();
 			Meaning.Tag = Kit;
-			Meaning.DefaultPriority = FMath::Clamp(UGSTN_HeldSettings::Get().KitSwap.MeaningPriority, 0, 255);
+			Meaning.DefaultPriority = FMath::Clamp(UGSTN_HeldRules::Get().KitSwap.MeaningPriority, 0, 255);
 			Meaning.HoldVerb = NSLOCTEXT("GSTNHeld", "KitSwapVerb", "Swap kit");
 			bAddedKitMeaning = true;
 		}
@@ -85,14 +85,15 @@ public:
 		Extension.ContributeCompileInput = [](const FGSTN_LoadoutExtensionContext& Context, FGSTN_CompileInput& Input)
 		{
 			const UGSTN_HeldSettings& Settings = UGSTN_HeldSettings::Get();
+			const UGSTN_HeldRules& Rules = UGSTN_HeldRules::Get();
 			// Which logical buttons the held and swap slots read (M11 slice 3b): settings, every machine the same
 			const FGSTN_HeldSlotInputs SlotInputs = FGSTN_HeldSlotInputs::FromSettings();
 			const UGSTN_PrimaryKitDefinition* Kit = Context.Resolved ? Context.Resolved->Kit : nullptr;
 			// M11 K1: every kit asset can be swapped for a kit on the ground, so a kit taken from the ground can be swapped again. A kit built in
 			// memory by code (the GSTNCombat tests, which count their table rows) is never on the ground and keeps its authored table
-			if (Settings.KitSwap.bEnabled && Kit && Kit->IsAsset())
+			if (Rules.KitSwap.bEnabled && Kit && Kit->IsAsset())
 			{
-				UGSTN_HeldSlots::AppendKitSwapBinding(FSoftObjectPath(UGSTN_GA_KitSwap::StaticClass()), Settings.KitSwap.GetHoldFrames(), Input.Kit.Bindings, SlotInputs);
+				UGSTN_HeldSlots::AppendKitSwapBinding(FSoftObjectPath(UGSTN_GA_KitSwap::StaticClass()), Rules.KitSwap.GetHoldFrames(), Input.Kit.Bindings, SlotInputs);
 			}
 			if (Settings.WantsDefaultBindings(Kit ? FSoftObjectPath(Kit) : FSoftObjectPath()))
 			{
@@ -100,10 +101,10 @@ public:
 					AbilityOrDefault(Settings.DropAbility, UGSTN_GA_HeldDrop::StaticClass()),
 					AbilityOrDefault(Settings.ThrowAbility, UGSTN_GA_HeldThrow::StaticClass()), Input.Kit.Bindings, SlotInputs);
 				// M10 G6: what each size class takes away while carrying (after the held bindings: they are never banned)
-				UGSTN_HeldSlots::ApplySizeBans(Settings.SizeClasses, Input.Kit.Bindings);
+				UGSTN_HeldSlots::ApplySizeBans(Rules.SizeClasses, Input.Kit.Bindings);
 				for (FGSTN_WeaponCompileInput& Weapon : Input.Weapons)
 				{
-					UGSTN_HeldSlots::ApplySizeBans(Settings.SizeClasses, Weapon.Bindings);
+					UGSTN_HeldSlots::ApplySizeBans(Rules.SizeClasses, Weapon.Bindings);
 				}
 			}
 		};

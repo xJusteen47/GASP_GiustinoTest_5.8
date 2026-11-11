@@ -66,7 +66,7 @@ enum class EGSTN_HeldBreakReason : uint8
 /**
  * When a holder lets go of its object without wanting to (plan 7, break rules). Tags and events are matched by name on the holder, so the rules
  * need no dependency on the plugins that project them (GSTNLink's Combat.Link.Role.Grabbed, the combat tick's hitstun): a tag no plugin
- * projects simply never matches. Defaults in DefaultGSTNHeld.ini (UGSTN_HeldSettings), an object can override them
+ * projects simply never matches. Defaults in the game rules (UGSTN_HeldRules), an object can override them
  */
 USTRUCT(BlueprintType)
 struct GSTNHELDCORE_API FGSTN_HeldBreakRules
@@ -265,7 +265,7 @@ struct GSTNHELDCORE_API FGSTN_HeldObjectTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Rest", meta = (ClampMin = "0.0", ForceUnits = "cm"))
 	float RestHalfHeight = 20.f;
 
-	/** The object's size class (Combat.Held.Size.*, UGSTN_HeldSettings::SizeClasses); none = no load, no bans, normal throw. TEST VALUE: Light */
+	/** The object's size class (Combat.Held.Size.*, UGSTN_HeldRules::SizeClasses); none = no load, no bans, normal throw. TEST VALUE: Light */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Size", meta = (Categories = "Combat.Held.Size"))
 	FGameplayTag SizeTag;
 
@@ -280,7 +280,7 @@ struct GSTNHELDCORE_API FGSTN_HeldObjectTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Throw")
 	FGSTN_ProjectileParams Throw;
 
-	/** Use Windup instead of the project's (UGSTN_HeldSettings::DefaultThrowWindup): a heavy object with a longer heave, say */
+	/** Use Windup instead of the project's (UGSTN_HeldRules::DefaultThrowWindup): a heavy object with a longer heave, say */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Windup")
 	bool bOverrideWindup = false;
 
@@ -330,7 +330,7 @@ struct GSTNHELDCORE_API FGSTN_HeldObjectTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Impact", meta = (ClampMin = "0.0", ForceUnits = "s", EditCondition = "ImpactBehaviour == EGSTN_HeldImpactBehaviour::Break || ImpactBehaviour == EGSTN_HeldImpactBehaviour::Explode"))
 	float BreakRespawnSeconds = 3.f;
 
-	/** Use BreakRules instead of the project's defaults (UGSTN_HeldSettings::DefaultBreakRules): an object that survives a hit in hand, say */
+	/** Use BreakRules instead of the project's defaults (UGSTN_HeldRules::DefaultBreakRules): an object that survives a hit in hand, say */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Break")
 	bool bOverrideBreakRules = false;
 
@@ -353,7 +353,7 @@ struct FGSTN_PickupRequest
 	int32 TargetObjectId = INDEX_NONE;
 	/**
 	 * When the focused object cannot be taken (taken, gone, out of reach): true = the nearest free object in reach, false = the hand closes on
-	 * nothing (a fumble). UGSTN_HeldSettings::bFocusMissFallsBackToNearest. No focus always takes the nearest
+	 * nothing (a fumble). UGSTN_HeldRules::bFocusMissFallsBackToNearest. No focus always takes the nearest
 	 */
 	bool bFallBackToNearest = true;
 	/** The holder's effective carry capacity (M10 G6): an object whose class requires capacity is skipped when heavier than this */
@@ -444,7 +444,7 @@ struct GSTNHELDCORE_API FGSTN_HeldRules
 /**
  * The carry load (M10 G6). The host computes it when it forms a hold and writes it as the Held link's payload byte, so it is sync state: the holder's
  * link effect (UGSTN_GE_HoldLoad, the Held type's role effect) and the projected Carrying.<size> tag read it on every machine and in every
- * re-simulation without looking at the object. Byte layout: the size class index (0..3, UGSTN_HeldSettings::SizeClasses) in the top two bits, the
+ * re-simulation without looking at the object. Byte layout: the size class index (0..3, UGSTN_HeldRules::SizeClasses) in the top two bits, the
  * load ratio (object weight / holder capacity, clamped to 0..1) in the low six (steps of 1/63). Payload 0 = class 0 with no load
  */
 struct GSTNHELDCORE_API FGSTN_HeldLoad

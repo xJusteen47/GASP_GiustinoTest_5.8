@@ -6,6 +6,7 @@
 #include "Engine/DeveloperSettings.h"
 #include "GSTN_HeldTypes.h"
 #include "Input/GSTN_InputSlot.h"
+#include "GameRules/GSTN_GameRules.h"
 
 #include "GSTN_HeldSettings.generated.h"
 
@@ -83,8 +84,9 @@ struct GSTNHELDCORE_API FGSTN_KitSwapTuning
 };
 
 /**
- * Project defaults of held objects (Project Settings > Plugins > GSTN Held, saved in the plugin's DefaultGSTNHeld.ini). Everything here is a TEST
- * VALUE of the owner's 2026-11-10 button design, kept as data so playtesting changes it without code.
+ * Setup of held objects that is not a gameplay factor (Project Settings > Plugins > GSTN Held, saved in the plugin's DefaultGSTNHeld.ini): which
+ * kits get the held bindings, their abilities, the command tiers and the buttons. The buttons move to the button-layout piece in IO-2. The
+ * gameplay factors are in UGSTN_HeldRules (GR-1).
  */
 UCLASS(config = GSTNHeld, defaultconfig, meta = (DisplayName = "GSTN Held"))
 class GSTNHELDCORE_API UGSTN_HeldSettings : public UDeveloperSettings
@@ -93,14 +95,6 @@ class GSTNHELDCORE_API UGSTN_HeldSettings : public UDeveloperSettings
 
 public:
 	static const UGSTN_HeldSettings& Get() { return *GetDefault<UGSTN_HeldSettings>(); }
-
-	/** When a holder drops what it holds without wanting to; an object's own tuning can override it (bOverrideBreakRules) */
-	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Break")
-	FGSTN_HeldBreakRules DefaultBreakRules;
-
-	/** How the strong button throws (tap = stick, held = camera aim with the reticle) */
-	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Throw")
-	FGSTN_HeldThrowInput ThrowInput;
 
 	/**
 	 * The kits that get the held bindings (pickup, drop, throw on the default buttons, UGSTN_HeldSlots) through the plugin's loadout extension
@@ -154,6 +148,40 @@ public:
 	 */
 	UPROPERTY(config, EditAnywhere, Category = "Input|Buttons")
 	TArray<FGSTN_InputSlotSpec> SlotOverrides;
+
+	/** Hands CommandTiers to the input settings under this plugin's contribution source */
+	void PushToInputSettings() const;
+	static void RemoveFromInputSettings();
+
+	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
+
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
+};
+
+/**
+ * The held objects' piece of the game rules (GR-1, owner rule 2026-11-11: no gameplay factor in Project Settings). One per GameRules asset
+ * (UGSTN_GameRules, GSTNCore), chosen by the server per mode or level. Its class defaults come from the plugin's DefaultGSTNHeld.ini (section
+ * GSTN_HeldRules, not shown in Project Settings): they are the rules when no asset is active, and the starting values of a new piece. An
+ * object's own tuning still overrides them (bOverrideBreakRules, bOverrideWindup). Read with UGSTN_HeldRules::Get(); never changed during a match.
+ */
+UCLASS(config = GSTNHeld, meta = (DisplayName = "Held objects"))
+class GSTNHELDCORE_API UGSTN_HeldRules : public UGSTN_GameRulesPiece
+{
+	GENERATED_BODY()
+
+public:
+	/** The active rules' piece, else the defaults */
+	static const UGSTN_HeldRules& Get() { return FGSTN_ActiveGameRules::GetPiece<UGSTN_HeldRules>(); }
+
+	/** When a holder drops what it holds without wanting to; an object's own tuning can override it (bOverrideBreakRules) */
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Break")
+	FGSTN_HeldBreakRules DefaultBreakRules;
+
+	/** How the strong button throws (tap = stick, held = camera aim with the reticle) */
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Throw")
+	FGSTN_HeldThrowInput ThrowInput;
 
 	/**
 	 * Default priority of the pickup meaning (Interact.Target.Pickup) the runtime module adds to the GSTNInteract settings when the project lists
@@ -210,14 +238,4 @@ public:
 	{
 		return Index >= 0 && Index < FMath::Min(SizeClasses.Num(), static_cast<int32>(FGSTN_HeldLoad::MaxSizeClasses)) ? &SizeClasses[Index] : nullptr;
 	}
-
-	/** Hands CommandTiers to the input settings under this plugin's contribution source */
-	void PushToInputSettings() const;
-	static void RemoveFromInputSettings();
-
-	virtual FName GetCategoryName() const override { return TEXT("Plugins"); }
-
-#if WITH_EDITOR
-	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
-#endif
 };

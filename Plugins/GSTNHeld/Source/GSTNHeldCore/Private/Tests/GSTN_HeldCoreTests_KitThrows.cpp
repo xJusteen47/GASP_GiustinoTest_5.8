@@ -36,7 +36,7 @@ bool FGSTN_HeldKitThrowBlockersTest::RunTest(const FString& Parameters)
 	Blockers(Tuning, All, StickOnly);
 	TestTrue(TEXT("thrown enemies off: none blocked"), All.IsEmpty() && StickOnly.IsEmpty());
 
-	TestEqual(TEXT("project: the stick-only throws (DefaultGSTNHeld.ini)"), UGSTN_HeldSettings::Get().ThrownEnemies.KitThrowsWhileLifting,
+	TestEqual(TEXT("project: the stick-only throws (DefaultGSTNHeld.ini)"), UGSTN_HeldRules::Get().ThrownEnemies.KitThrowsWhileLifting,
 		EGSTN_LiftedEnemyKitThrows::NotStickOnly);
 	return true;
 }
