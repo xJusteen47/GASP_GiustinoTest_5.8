@@ -16,7 +16,8 @@ public class GSTNInputCore : ModuleRules
 			"Engine",
 			"GameplayTags",
 			"DeveloperSettings",
-			"InputCore"
+			"InputCore",
+			"GSTNCore"
 		});
 
 		// Only for UInputAction references in the input config; the Core never reads input itself.

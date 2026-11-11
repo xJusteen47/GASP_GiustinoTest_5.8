@@ -71,13 +71,7 @@ struct GSTNHELDCORE_API FGSTN_KitSwapTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kit Swap")
 	bool bShowPrompt = true;
 
-	/**
-	 * Logical button whose release (after HoldSeconds) swaps (M11 slice 3b: data, not code). Empty = Input.Button.Interact (B). It shares the
-	 * release with the movement set's hold of that button only when it is the same one. Command.Kit.Swap in UGSTN_HeldSettings::SlotOverrides
-	 * replaces the whole slot (then HoldSeconds is not used)
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kit Swap", meta = (Categories = "Input.Button"))
-	FGameplayTag Button;
+	/* The swap button is the button layout's Held.KitSwap (UGSTN_ButtonLayout, IO-2); release after HoldSeconds */
 
 	/** HoldSeconds in combat frames (62.5 Hz), at least 2 so a tap can never swap */
 	int32 GetHoldFrames() const { return FMath::Max(2, FMath::RoundToInt(HoldSeconds * 62.5f)); }
@@ -131,16 +125,8 @@ public:
 	UPROPERTY(config, EditAnywhere, Category = "Input", meta = (Categories = "Command"))
 	TMap<FGameplayTag, int32> CommandTiers;
 
-	/**
-	 * Logical button (Input.Button.*, mapped to keys and pad buttons by the input config) whose press picks up a framed object and drops the
-	 * one carried. Empty = Input.Button.Interact (B). Read when a kit is compiled (every machine, same settings); the kit swap's is KitSwap.Button
-	 */
-	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Input|Buttons", meta = (Categories = "Input.Button"))
-	FGameplayTag PickupDropButton;
-
-	/** Logical button whose press throws the object or the lifted enemy (tap = stick, held = camera aim). Empty = Input.Button.Strong (RT) */
-	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Input|Buttons", meta = (Categories = "Input.Button"))
-	FGameplayTag ThrowButton;
+	/* The buttons (pickup/drop, throw, kit swap) are in the button layout (UGSTN_ButtonLayout, GSTNInput, IO-2): functions
+	 * Held.PickupDrop, Held.Throw, Held.KitSwap. SlotOverrides below still replaces a whole slot */
 
 	/**
 	 * Designer slots that replace the built one of their command, whole (any pattern: a hold, a release, a chord): any Command.Held.* (Pickup,

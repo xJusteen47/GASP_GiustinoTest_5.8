@@ -6,6 +6,7 @@
 #include "GSTN_HeldTags.h"
 #include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_InputConditions.h"
+#include "Layout/GSTN_ButtonLayout.h"
 
 namespace
 {
@@ -44,9 +45,11 @@ FGSTN_HeldSlotInputs FGSTN_HeldSlotInputs::FromSettings()
 {
 	const UGSTN_HeldSettings& Settings = UGSTN_HeldSettings::Get();
 	FGSTN_HeldSlotInputs Inputs;
-	Inputs.PickupDropButton = Settings.PickupDropButton;
-	Inputs.ThrowButton = Settings.ThrowButton;
-	Inputs.KitSwapButton = UGSTN_HeldRules::Get().KitSwap.Button;
+	// IO-2: the buttons come from the active button layout (GameRules piece); a missing function keeps the default in the getters below
+	const UGSTN_ButtonLayout& Layout = UGSTN_ButtonLayout::Get();
+	Inputs.PickupDropButton = Layout.FindButton(TEXT("Held.PickupDrop"));
+	Inputs.ThrowButton = Layout.FindButton(TEXT("Held.Throw"));
+	Inputs.KitSwapButton = Layout.FindButton(TEXT("Held.KitSwap"));
 	Inputs.SlotOverrides = &Settings.SlotOverrides;
 	return Inputs;
 }
