@@ -1,7 +1,7 @@
 {
  "move": "overlord_dropkick_loop",
  "class": "aerial",
- "anim": "/Game/AnimPipeline/Rig/AS_OverlordDropkick_Loop",
+ "anim": "/Game/AnimPipeline/Rig/Overlord/Dropkick/Loop/AS_OverlordDropkick_Loop",
  "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
  "fps": 60,
  "timing_csv": "refs/ufd/OverlordDropkick_loop_timing.csv",

@@ -1,0 +1,340 @@
+{
+ "move": "overlord_dropkick_loop",
+ "class": "aerial",
+ "anim": "/Game/AnimPipeline/Rig/Overlord/Dropkick/Loop/AS_OverlordDropkick_Loop",
+ "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+ "fps": 60,
+ "timing_csv": "refs/ufd/OverlordDropkick_loop_timing.csv",
+ "effector": "ball_l",
+ "_design": "Overlord Dropkick Falling Loop: seamless mid-air missile dropkick state. Knight hurtles forward horizontally, arms crossed locked across chest, feet extended, with subtle air-drag micro oscillation.",
+ "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordDropkick_Loop",
+ "poses": [
+  {
+   "name": "loop_a",
+   "frame": 0,
+   "source": null
+  },
+  {
+   "name": "loop_mid",
+   "frame": 6,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "loop_b",
+   "frame": 11,
+   "source": null,
+   "spacing": "hold_recoil"
+  }
+ ],
+ "spacing": {
+  "startup": "hold_recoil",
+  "active": "hold_recoil",
+  "recovery": "hold_recoil"
+ },
+ "part_delays": {
+  "chest": 0,
+  "head": 0,
+  "forearm": 0,
+  "hand": 0
+ },
+ "sheet_extra": {
+  "hold_window": [
+   0,
+   11
+  ],
+  "strike_limb": "leg_l",
+  "strike_side": "leg_l"
+ },
+ "planted": [],
+ "exemptions": [
+  {
+   "check": "balance",
+   "frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "why": "aerial loop"
+  },
+  {
+   "check": "planted",
+   "frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+   ],
+   "why": "aerial loop"
+  }
+ ],
+ "author": {
+  "take": "AS_Pilot_OverlordDropkick_Loop",
+  "frames": 12,
+  "poses": {
+   "0": {
+    "pelvis": {
+     "loc": [
+      0,
+      50,
+      -10
+     ],
+     "rot": [
+      80.0,
+      0,
+      0
+     ]
+    },
+    "spine": [
+     -12.0,
+     0,
+     0
+    ],
+    "head": [
+     -35.0,
+     0,
+     0
+    ],
+    "arm_l": {
+     "hand": [
+      -10.0,
+      10.0,
+      -6.0
+     ],
+     "pole": [
+      55.0,
+      25.0,
+      -8.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      6.0,
+      13.0,
+      -7.0
+     ],
+     "pole": [
+      -55.0,
+      25.0,
+      -8.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      2.0,
+      -5.0,
+      -82.0
+     ],
+     "pole": [
+      15.0,
+      15.0,
+      -45.0
+     ],
+     "foot_rot": [
+      -45.0,
+      0,
+      0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -8.0,
+      -5.0,
+      -82.0
+     ],
+     "pole": [
+      -15.0,
+      15.0,
+      -45.0
+     ],
+     "foot_rot": [
+      -45.0,
+      0,
+      0
+     ]
+    }
+   },
+   "6": {
+    "pelvis": {
+     "loc": [
+      0,
+      50.4,
+      -9.6
+     ],
+     "rot": [
+      80.5,
+      0,
+      0
+     ]
+    },
+    "spine": [
+     -11.2,
+     0,
+     0
+    ],
+    "head": [
+     -34.2,
+     0,
+     0
+    ],
+    "arm_l": {
+     "hand": [
+      -10.0,
+      10.2,
+      -5.8
+     ],
+     "pole": [
+      55.0,
+      25.0,
+      -8.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      6.0,
+      13.2,
+      -6.8
+     ],
+     "pole": [
+      -55.0,
+      25.0,
+      -8.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      2.0,
+      -4.8,
+      -82.3
+     ],
+     "pole": [
+      15.0,
+      15.0,
+      -45.0
+     ],
+     "foot_rot": [
+      -44.2,
+      0,
+      0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -8.0,
+      -4.8,
+      -82.3
+     ],
+     "pole": [
+      -15.0,
+      15.0,
+      -45.0
+     ],
+     "foot_rot": [
+      -44.2,
+      0,
+      0
+     ]
+    }
+   },
+   "12": {
+    "pelvis": {
+     "loc": [
+      0,
+      50,
+      -10
+     ],
+     "rot": [
+      80.0,
+      0,
+      0
+     ]
+    },
+    "spine": [
+     -12.0,
+     0,
+     0
+    ],
+    "head": [
+     -35.0,
+     0,
+     0
+    ],
+    "arm_l": {
+     "hand": [
+      -10.0,
+      10.0,
+      -6.0
+     ],
+     "pole": [
+      55.0,
+      25.0,
+      -8.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      6.0,
+      13.0,
+      -7.0
+     ],
+     "pole": [
+      -55.0,
+      25.0,
+      -8.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      2.0,
+      -5.0,
+      -82.0
+     ],
+     "pole": [
+      15.0,
+      15.0,
+      -45.0
+     ],
+     "foot_rot": [
+      -45.0,
+      0,
+      0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -8.0,
+      -5.0,
+      -82.0
+     ],
+     "pole": [
+      -15.0,
+      15.0,
+      -45.0
+     ],
+     "foot_rot": [
+      -45.0,
+      0,
+      0
+     ]
+    }
+   }
+  }
+ }
+}
