@@ -24,6 +24,17 @@ struct GSTNDEFENCECORE_API FGSTN_HoldWindowTrack : public FGSTN_TimelineTrack
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hold", meta = (Categories = "Input.Button"))
 	FGameplayTag HoldButton;
 
+	/**
+	 * IO-2: a button layout function ("Defence.Shield"). Set, the hook reads that function's button of the active layout when it ticks, with
+	 * HoldButton as the default; so a timeline built on an ability's class default object (before the server picked the GameRules) still
+	 * holds the button the layout names. None = HoldButton as authored
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hold")
+	FName LayoutFunction;
+
+	/** HoldButton, or LayoutFunction's button in the active layout */
+	FGameplayTag ResolveHoldButton() const;
+
 	/** The window ends when the shield value reaches zero from decay (a forced drop, never a break) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hold")
 	bool bEndOnZeroShield = false;

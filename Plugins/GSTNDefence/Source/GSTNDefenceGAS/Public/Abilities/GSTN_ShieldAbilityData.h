@@ -57,9 +57,19 @@ struct GSTNDEFENCEGAS_API FGSTN_ShieldAbilitySpec
 
 	FGSTN_ShieldAbilitySpec();
 
-	/** The button the hold window reads; Input.Button.Shield by default, the slot the shield command is anchored on */
+	/**
+	 * The button the hold window reads. Empty (the default) = the button layout's "Defence.Shield" function (Input.Button.Shield when the
+	 * layout does not name it), the same button the shield press binding and the tech in tumble read; set it only for a kit whose hold
+	 * must differ from its press
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Shield", meta = (Categories = "Input.Button"))
 	FGameplayTag HoldButton;
+
+	/** The shield button of the active button layout (function "Defence.Shield", default Input.Button.Shield) */
+	static FGameplayTag GetLayoutShieldButton();
+
+	/** HoldButton, or the layout's shield button when it is empty */
+	FGameplayTag ResolveHoldButton() const;
 
 	/**
 	 * Length of the hold window in timeline frames. The window stalls the timeline while the button is held, so its length only

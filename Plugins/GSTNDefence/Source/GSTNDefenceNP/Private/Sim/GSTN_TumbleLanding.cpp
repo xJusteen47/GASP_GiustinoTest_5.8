@@ -2,6 +2,7 @@
 
 #include "Sim/GSTN_TumbleLanding.h"
 
+#include "Abilities/GSTN_ShieldAbilityData.h"
 #include "AbilitySystemComponent.h"
 #include "Data/GSTN_DefenceRules.h"
 #include "Events/GSTN_SimEvent.h"
@@ -175,7 +176,8 @@ bool FGSTN_TumbleLanding::RegisterPresses(FGSTN_CombatTickContext& Context, cons
 	{
 		return false;
 	}
-	const int32 Button = Context.Buttons->GetIndex(GSTNCombatButtonTags::Button_Shield);
+	// IO-2: the layout's shield button, the same one the shield press and hold read
+	const int32 Button = Context.Buttons->GetIndex(FGSTN_ShieldAbilitySpec::GetLayoutShieldButton());
 	if (Button < 0)
 	{
 		return false;

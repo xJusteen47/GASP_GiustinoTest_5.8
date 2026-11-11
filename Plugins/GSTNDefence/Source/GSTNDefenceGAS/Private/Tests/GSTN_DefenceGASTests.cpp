@@ -286,7 +286,9 @@ bool FGSTN_DefenceGASShieldAbilityRefusesTest::RunTest(const FString& Parameters
 
 	// The timeline the ability runs: startup, one hold window on the shield button that ends at zero value, release; options over the hold
 	FGSTN_ShieldAbilitySpec Spec;
-	TestTrue(TEXT("the hold button defaults to the shield button"), Spec.HoldButton == GSTNCombatButtonTags::Button_Shield.GetTag());
+	// IO-2: empty by default, so the hold follows the button layout like the press binding and the tech
+	TestFalse(TEXT("the hold button is empty by default (the layout's)"), Spec.HoldButton.IsValid());
+	TestTrue(TEXT("the layout's shield button is the shield button"), FGSTN_ShieldAbilitySpec::GetLayoutShieldButton() == GSTNCombatButtonTags::Button_Shield.GetTag());
 	FGSTN_OutOfShieldOption Jump;
 	Jump.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(GSTNCommandTags::Movement_Jump.GetTag()));
 	Spec.OutOfShieldOptions.Add(Jump);
@@ -305,6 +307,7 @@ bool FGSTN_DefenceGASShieldAbilityRefusesTest::RunTest(const FString& Parameters
 		TestEqual(TEXT("from the end of startup"), Hold->StartFrame, 2);
 		TestEqual(TEXT("one frame long"), Hold->EndFrame, 3);
 		TestTrue(TEXT("on the shield button"), Hold->HoldButton == GSTNCombatButtonTags::Button_Shield.GetTag());
+		TestTrue(TEXT("read from the layout when it ticks (IO-2)"), Hold->LayoutFunction == FName(TEXT("Defence.Shield")) && Hold->ResolveHoldButton() == GSTNCombatButtonTags::Button_Shield.GetTag());
 		TestTrue(TEXT("ends when the value decays to zero"), Hold->bEndOnZeroShield);
 		TArray<FString> Errors;
 		Hold->Validate(TEXT("hold"), Errors);

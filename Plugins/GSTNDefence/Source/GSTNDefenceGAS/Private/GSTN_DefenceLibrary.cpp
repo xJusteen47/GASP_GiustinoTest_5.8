@@ -3,6 +3,7 @@
 #include "GSTN_DefenceLibrary.h"
 
 #include "Abilities/GameplayAbility.h"
+#include "Abilities/GSTN_ShieldAbilityData.h"
 #include "AbilitySystemComponent.h"
 #include "Attributes/GSTN_DefenceAttributeSet.h"
 #include "Data/GSTN_DefenceKitExtension.h"
@@ -163,7 +164,7 @@ FGSTN_BindingInput UGSTN_DefenceLibrary::MakeShieldBindingInput(const FSoftObjec
 	// hold window then ends it). A Hold condition in the same step would make the loadout validator's canonical input press a button it
 	// already holds, so the binding would be refused (found by the M6 F7 harness)
 	FGSTN_InputCondition_Press Press;
-	Press.Buttons.AddTag(GSTNCombatButtonTags::Button_Shield.GetTag());
+	Press.Buttons.AddTag(FGSTN_ShieldAbilitySpec::GetLayoutShieldButton()); // IO-2: the layout's "Defence.Shield"
 
 	FGSTN_InputStep Step;
 	Step.AllOf.Add(FCondition::Make<FGSTN_InputCondition_Press>(Press));

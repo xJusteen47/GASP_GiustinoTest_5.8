@@ -3,6 +3,12 @@
 #include "Data/GSTN_DefenceTracks.h"
 
 #include "Data/GSTN_DefenceRules.h"
+#include "Layout/GSTN_ButtonLayout.h"
+
+FGameplayTag FGSTN_HoldWindowTrack::ResolveHoldButton() const
+{
+	return LayoutFunction.IsNone() ? HoldButton : UGSTN_ButtonLayout::GetButton(LayoutFunction, HoldButton);
+}
 
 void FGSTN_HoldWindowTrack::Validate(const FString& Label, TArray<FString>& OutErrors) const
 {

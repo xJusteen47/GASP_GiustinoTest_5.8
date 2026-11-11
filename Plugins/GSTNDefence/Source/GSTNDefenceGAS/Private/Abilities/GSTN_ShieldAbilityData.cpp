@@ -5,10 +5,20 @@
 #include "Data/GSTN_DefenceRules.h"
 #include "Data/GSTN_DefenceTracks.h"
 #include "Input/GSTN_CombatButtonTags.h"
+#include "Layout/GSTN_ButtonLayout.h"
 
 FGSTN_ShieldAbilitySpec::FGSTN_ShieldAbilitySpec()
-	: HoldButton(GSTNCombatButtonTags::Button_Shield.GetTag())
 {
+}
+
+FGameplayTag FGSTN_ShieldAbilitySpec::GetLayoutShieldButton()
+{
+	return UGSTN_ButtonLayout::GetButton(TEXT("Defence.Shield"), GSTNCombatButtonTags::Button_Shield.GetTag());
+}
+
+FGameplayTag FGSTN_ShieldAbilitySpec::ResolveHoldButton() const
+{
+	return HoldButton.IsValid() ? HoldButton : GetLayoutShieldButton();
 }
 
 int32 FGSTN_ShieldAbilitySpec::HoldStartFrame(const FGSTN_ShieldRules& Rules)
@@ -31,7 +41,11 @@ FGSTN_CombatTimelineData FGSTN_ShieldAbilitySpec::BuildTimeline(const FGSTN_Shie
 	FGSTN_HoldWindowTrack Hold;
 	Hold.StartFrame = HoldStart;
 	Hold.EndFrame = HoldEnd;
-	Hold.HoldButton = HoldButton;
+	// IO-2: the timeline is built on the ability's class default object, before the server picks the GameRules, so an empty HoldButton
+	// leaves the layout function on the track and the hook reads it when it ticks: the press binding, this hold and the tech in tumble
+	// then name the same button of the active layout
+	Hold.HoldButton = ResolveHoldButton();
+	Hold.LayoutFunction = HoldButton.IsValid() ? NAME_None : FName(TEXT("Defence.Shield"));
 	Hold.bEndOnZeroShield = true;
 	Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_HoldWindowTrack>(Hold));
 
