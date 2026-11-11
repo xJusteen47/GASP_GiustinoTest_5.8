@@ -13,9 +13,16 @@ UGSTN_GA_LinkThrow::UGSTN_GA_LinkThrow(const FObjectInitializer& ObjectInitializ
 
 void UGSTN_GA_LinkThrow::BuildThrow(int32 TotalFrames, int32 FirstActionable, int32 ThrowFrame, float Damage, float BaseKnockback, float AngleDeg)
 {
-	Timeline.TotalFrames = TotalFrames;
-	Timeline.FirstActionableFrame = FirstActionable;
-	Timeline.OverrideFrames = 0;
+	FillThrowTimeline(Timeline, TotalFrames, FirstActionable, ThrowFrame, Damage, BaseKnockback, AngleDeg);
+}
+
+void UGSTN_GA_LinkThrow::FillThrowTimeline(FGSTN_CombatTimelineData& OutTimeline, int32 TotalFrames, int32 FirstActionable, int32 ThrowFrame, float Damage,
+	float BaseKnockback, float AngleDeg)
+{
+	OutTimeline.Tracks.Reset();
+	OutTimeline.TotalFrames = TotalFrames;
+	OutTimeline.FirstActionableFrame = FirstActionable;
+	OutTimeline.OverrideFrames = 0;
 
 	FGSTN_LinkOutcomeKey Key;
 	Key.Frame = ThrowFrame;
@@ -34,7 +41,7 @@ void UGSTN_GA_LinkThrow::BuildThrow(int32 TotalFrames, int32 FirstActionable, in
 	Track.StartFrame = 0;
 	Track.EndFrame = TotalFrames;
 	Track.Keys.Add(Key);
-	Timeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_LinkOutcomeTrack>(Track));
+	OutTimeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_LinkOutcomeTrack>(Track));
 }
 
 UGSTN_GA_LinkThrowForward::UGSTN_GA_LinkThrowForward(const FObjectInitializer& ObjectInitializer)

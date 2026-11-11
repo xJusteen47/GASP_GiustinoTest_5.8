@@ -3,6 +3,7 @@
 #include "GASNPPTest/GSTN_TestEffects.h"
 #include "GASNPPTest/GSTN_TestAttributeSet.h"
 #include "Attributes/GSTN_CombatAttributeSet.h"
+#include "Settings/GSTN_CombatGASSettings.h"
 #include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
 #include "DefaultMovementSet/LayeredMoves/BasicLayeredMoves.h"
 
@@ -11,6 +12,12 @@ namespace GSTNTestTags
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Dash, "Test.Cooldown.Dash");
 	UE_DEFINE_GAMEPLAY_TAG(Stat_WalkSpeed, "Combat.SetByCaller.Stat.WalkSpeed");
 	UE_DEFINE_GAMEPLAY_TAG(Stat_JumpVelocity, "Combat.SetByCaller.Stat.JumpVelocity");
+	UE_DEFINE_GAMEPLAY_TAG(Stat_Weight, "Combat.SetByCaller.Stat.Weight");
+	UE_DEFINE_GAMEPLAY_TAG(Stat_MaxCarryWeight, "Combat.SetByCaller.Stat.MaxCarryWeight");
+	UE_DEFINE_GAMEPLAY_TAG(Stat_Acceleration, "Combat.SetByCaller.Stat.Acceleration");
+	UE_DEFINE_GAMEPLAY_TAG(Stat_AirControl, "Combat.SetByCaller.Stat.AirControl");
+	UE_DEFINE_GAMEPLAY_TAG(Stat_FallGravityScale, "Combat.SetByCaller.Stat.FallGravityScale");
+	UE_DEFINE_GAMEPLAY_TAG(Stat_AirJumpCount, "Combat.SetByCaller.Stat.AirJumpCount");
 	UE_DEFINE_GAMEPLAY_TAG(Cooldown_Buff, "Test.Cooldown.Buff");
 	UE_DEFINE_GAMEPLAY_TAG(State_Dashing, "Test.State.Dashing");
 	UE_DEFINE_GAMEPLAY_TAG(State_Buffed, "Test.State.Buffed");
@@ -161,21 +168,64 @@ UGSTN_GE_TestSupportWeaponStats::UGSTN_GE_TestSupportWeaponStats()
 	Modifiers.Add(MakeAdditiveModifier(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), -300.f));
 }
 
+namespace
+{
+	FGameplayModifierInfo MakeSetByCallerOverride(const FGameplayAttribute& Attribute, const FGameplayTag& Key)
+	{
+		FGameplayModifierInfo Modifier;
+		Modifier.Attribute = Attribute;
+		Modifier.ModifierOp = EGameplayModOp::Override;
+		FSetByCallerFloat SetByCaller;
+		SetByCaller.DataTag = Key;
+		Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(SetByCaller);
+		return Modifier;
+	}
+
+	/** The stats only the archetype kits set, by attribute and set-by-caller key */
+	TArray<TPair<FGameplayAttribute, FGameplayTag>> ArchetypeOnlyStats()
+	{
+		return {
+			{ UGSTN_CombatAttributeSet::GetWeightAttribute(), GSTNTestTags::Stat_Weight },
+			{ UGSTN_CombatAttributeSet::GetMaxCarryWeightAttribute(), GSTNTestTags::Stat_MaxCarryWeight },
+			{ UGSTN_CombatAttributeSet::GetAccelerationAttribute(), GSTNTestTags::Stat_Acceleration },
+			{ UGSTN_CombatAttributeSet::GetAirControlAttribute(), GSTNTestTags::Stat_AirControl },
+			{ UGSTN_CombatAttributeSet::GetFallGravityScaleAttribute(), GSTNTestTags::Stat_FallGravityScale },
+			{ UGSTN_CombatAttributeSet::GetAirJumpCountAttribute(), GSTNTestTags::Stat_AirJumpCount },
+		};
+	}
+}
+
 UGSTN_GE_TestKitInit::UGSTN_GE_TestKitInit()
 {
 	DurationPolicy = EGameplayEffectDurationType::Instant;
-	const TPair<FGameplayAttribute, FGameplayTag> Stats[] = {
-		{ UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), GSTNTestTags::Stat_WalkSpeed },
-		{ UGSTN_CombatAttributeSet::GetJumpVelocityAttribute(), GSTNTestTags::Stat_JumpVelocity },
-	};
-	for (const TPair<FGameplayAttribute, FGameplayTag>& Stat : Stats)
+	Modifiers.Add(MakeSetByCallerOverride(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), GSTNTestTags::Stat_WalkSpeed));
+	Modifiers.Add(MakeSetByCallerOverride(UGSTN_CombatAttributeSet::GetJumpVelocityAttribute(), GSTNTestTags::Stat_JumpVelocity));
+	// The archetypes' extra stats back to the project's starting values (the settings are loaded with their class default, before this one)
+	const TArray<FGSTN_AttributeDefault>& Defaults = UGSTN_CombatGASSettings::Get().AttributeDefaults;
+	for (const TPair<FGameplayAttribute, FGameplayTag>& Stat : ArchetypeOnlyStats())
 	{
-		FGameplayModifierInfo Modifier;
-		Modifier.Attribute = Stat.Key;
-		Modifier.ModifierOp = EGameplayModOp::Override;
-		FSetByCallerFloat SetByCaller;
-		SetByCaller.DataTag = Stat.Value;
-		Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(SetByCaller);
-		Modifiers.Add(Modifier);
+		const FGSTN_AttributeDefault* Default = Defaults.FindByPredicate([&Stat](const FGSTN_AttributeDefault& Entry)
+		{
+			return Entry.Attribute == Stat.Key.GetUProperty()->GetFName();
+		});
+		if (Default)
+		{
+			FGameplayModifierInfo Modifier;
+			Modifier.Attribute = Stat.Key;
+			Modifier.ModifierOp = EGameplayModOp::Override;
+			Modifier.ModifierMagnitude = FGameplayEffectModifierMagnitude(FScalableFloat(Default->Value));
+			Modifiers.Add(Modifier);
+		}
+	}
+}
+
+UGSTN_GE_TestKitArchetypeInit::UGSTN_GE_TestKitArchetypeInit()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+	Modifiers.Add(MakeSetByCallerOverride(UGSTN_CombatAttributeSet::GetWalkSpeedAttribute(), GSTNTestTags::Stat_WalkSpeed));
+	Modifiers.Add(MakeSetByCallerOverride(UGSTN_CombatAttributeSet::GetJumpVelocityAttribute(), GSTNTestTags::Stat_JumpVelocity));
+	for (const TPair<FGameplayAttribute, FGameplayTag>& Stat : ArchetypeOnlyStats())
+	{
+		Modifiers.Add(MakeSetByCallerOverride(Stat.Key, Stat.Value));
 	}
 }

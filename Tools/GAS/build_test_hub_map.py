@@ -72,6 +72,10 @@ KIT_PADS = [
     ('KIT_Test_Alpha', '', 'KIT ALPHA', (1200.0, 350.0)),
     ('KIT_Test_Beta', '', 'ARMA: LANCIA', (1200.0, 700.0)),
     ('KIT_Test_Alpha', 'WPN_Test_Support', 'ARMA SUPPORTO', (1200.0, 1050.0)),
+    # M11 K3 archetypes (Tools/GAS/setup_test_kit_archetypes.py), a row closer to the player starts: light, medium, heavy
+    ('KIT_Test_Light', '', 'LEGGERO', (800.0, -350.0)),
+    ('KIT_Test_Medium', '', 'MEDIO', (800.0, 0.0)),
+    ('KIT_Test_Heavy', '', 'PESANTE', (800.0, 350.0)),
 ]
 PAD_RADIUS = 120.0
 # Stepping on it toggles the hitbox and hurtbox debug draw (gstn.Combat.Debug.Hitboxes / Hurtboxes, GSTNCombatNP)

@@ -21,6 +21,13 @@ class GSTNLINKNP_API UGSTN_GA_LinkThrow : public UGSTN_GA_BaseCombat
 public:
 	UGSTN_GA_LinkThrow(const FObjectInitializer& ObjectInitializer);
 
+	/**
+	 * The frame data of a throw: TotalFrames long, actionable from FirstActionable, one link outcome key Throw on ThrowFrame. Replaces the
+	 * frames and the tracks of OutTimeline, keeps its animation fields. Shared by the constructors and the content writer (M11 K3 kit throws)
+	 */
+	static void FillThrowTimeline(FGSTN_CombatTimelineData& OutTimeline, int32 TotalFrames, int32 FirstActionable, int32 ThrowFrame, float Damage,
+		float BaseKnockback, float AngleDeg);
+
 protected:
 	/**
 	 * Builds the move: TotalFrames long, actionable from FirstActionable, the throw key on ThrowFrame. AngleDeg is the launch's elevation

@@ -13,6 +13,8 @@
 #include "Sim/GSTN_LinkTickExtension.h"
 #include "GSTN_LinkTags.h"
 #include "Harness/GSTN_LinkTestAbilities.h"
+#include "Moves/GSTN_LinkThrowMoves.h"
+#include "Animation/AnimMontage.h"
 #include "Input/GSTN_LinkSlots.h"
 #include "Data/GSTN_LinkKitExtension.h"
 #include "Hits/GSTN_HitSteps.h"
@@ -628,6 +630,55 @@ bool UGSTN_LinkContentLibrary::WriteKitLinkContent(UGSTN_PrimaryKitDefinition* K
 	Kit->KitBindings = MoveTemp(KitBindings);
 	Kit->Extensions = MoveTemp(Extensions);
 	Kit->MarkPackageDirty();
+	return true;
+}
+
+bool UGSTN_LinkContentLibrary::SetKitThrows(UGSTN_PrimaryKitDefinition* Kit, TSubclassOf<UGameplayAbility> Forward, TSubclassOf<UGameplayAbility> Back,
+	TSubclassOf<UGameplayAbility> Up, TSubclassOf<UGameplayAbility> Down)
+{
+	if (!Kit)
+	{
+		return false;
+	}
+	for (FInstancedStruct& Entry : Kit->Extensions.ExtensionData)
+	{
+		if (FGSTN_LinkKitExtension* Extension = Entry.GetMutablePtr<FGSTN_LinkKitExtension>())
+		{
+			FGSTN_LinkThrowSet Throws;
+			Throws.Forward = FSoftClassPath(Forward.Get());
+			Throws.Back = FSoftClassPath(Back.Get());
+			Throws.Up = FSoftClassPath(Up.Get());
+			Throws.Down = FSoftClassPath(Down.Get());
+			if (FGSTN_LinkThrowSet::StaticStruct()->CompareScriptStruct(&Throws, &Extension->Throws, PPF_None))
+			{
+				return false;
+			}
+			Extension->Throws = Throws;
+			Kit->MarkPackageDirty();
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UGSTN_LinkContentLibrary::WriteThrowMove(TSubclassOf<UGameplayAbility> ThrowClass, int32 TotalFrames, int32 FirstActionableFrame, int32 ThrowFrame,
+	float Damage, float BaseKnockback, float AngleDeg, UAnimMontage* Montage, float MontagePlayRate)
+{
+	if (!ThrowClass || !ThrowClass->IsChildOf(UGSTN_GA_LinkThrow::StaticClass()) || ThrowClass->HasAnyClassFlags(CLASS_Native))
+	{
+		return false;
+	}
+	UGSTN_GA_LinkThrow* Defaults = GetMutableDefault<UGSTN_GA_LinkThrow>(ThrowClass.Get());
+	FGSTN_CombatTimelineData Data = Defaults->Timeline;
+	UGSTN_GA_LinkThrow::FillThrowTimeline(Data, TotalFrames, FirstActionableFrame, ThrowFrame, Damage, BaseKnockback, AngleDeg);
+	Data.Montage = Montage;
+	Data.MontagePlayRate = FMath::Max(MontagePlayRate, 0.01f);
+	if (FGSTN_CombatTimelineData::StaticStruct()->CompareScriptStruct(&Data, &Defaults->Timeline, PPF_None))
+	{
+		return false;
+	}
+	Defaults->Timeline = MoveTemp(Data);
+	Defaults->MarkPackageDirty();
 	return true;
 }
 

@@ -11,6 +11,7 @@ class AActor;
 class UGSTN_CombatRules;
 class UGSTN_PrimaryKitDefinition;
 class UGameplayAbility;
+class UAnimMontage;
 
 /**
  * Content and harness helpers of the link plugin (Tools/GASNPPTest/link_scenarios.py, the editor): the pipeline steps in a rules asset, a grab
@@ -122,6 +123,24 @@ public:
 	static bool WriteKitLinkContent(UGSTN_PrimaryKitDefinition* Kit, TSubclassOf<UGameplayAbility> Grab, TSubclassOf<UGameplayAbility> Pummel,
 		TSubclassOf<UGameplayAbility> Release, TSubclassOf<UGameplayAbility> ThrowForward, TSubclassOf<UGameplayAbility> ThrowBack,
 		TSubclassOf<UGameplayAbility> ThrowUp, TSubclassOf<UGameplayAbility> ThrowDown, TSubclassOf<UGameplayAbility> LatchAttack, int32 MashBaseFrames);
+
+	/**
+	 * M11 K3 content (Tools/GAS/setup_test_kit_archetypes.py): a kit's own four throws, written into its link extension's Throws (the loadout
+	 * extension binds them in place of the kit's rows, UGSTN_LinkSlots::ApplyKitThrows). A null class clears that entry (the fallback set plays).
+	 * Returns whether the kit changed (dirty only then); false without a link extension
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool SetKitThrows(UGSTN_PrimaryKitDefinition* Kit, TSubclassOf<UGameplayAbility> Forward, TSubclassOf<UGameplayAbility> Back,
+		TSubclassOf<UGameplayAbility> Up, TSubclassOf<UGameplayAbility> Down);
+
+	/**
+	 * M11 K3 content: the frame data and the montage of a kit throw, written on the class default object of a Blueprint child of one of the
+	 * common throws (UGSTN_GA_LinkThrow), saved with the Blueprint. Same shape as the common set (one Throw key; AngleDeg above 90 leans back
+	 * over the thrower). Native classes are refused (their defaults are code). Returns whether the defaults changed (dirty only then)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool WriteThrowMove(TSubclassOf<UGameplayAbility> ThrowClass, int32 TotalFrames, int32 FirstActionableFrame, int32 ThrowFrame, float Damage,
+		float BaseKnockback, float AngleDeg, UAnimMontage* Montage, float MontagePlayRate = 1.f);
 
 	/** In memory: the kit link extension's MaxGrabWeight and MinLatchWeight (a negative value keeps the current one). False without an extension */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")

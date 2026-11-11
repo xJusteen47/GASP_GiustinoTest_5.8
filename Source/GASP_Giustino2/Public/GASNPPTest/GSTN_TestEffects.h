@@ -19,6 +19,13 @@ namespace GSTNTestTags
 	// C15 test kits: the stat keys of the kit init effect (leaves under the plugin's stat set-by-caller root)
 	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Stat_WalkSpeed);
 	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Stat_JumpVelocity);
+	// M11 K3 kit archetypes (light / medium / heavy): the extra stat keys of UGSTN_GE_TestKitArchetypeInit
+	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Stat_Weight);
+	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Stat_MaxCarryWeight);
+	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Stat_Acceleration);
+	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Stat_AirControl);
+	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Stat_FallGravityScale);
+	GASP_GIUSTINO2_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Stat_AirJumpCount);
 
 	// M3 spike probes (see GSTN_TestProbeAbilities.h)
 	/** GameplayEvent that the event raiser sends and the event target ability is triggered by */
@@ -177,6 +184,8 @@ public:
 /**
  * Instant kit init effect of the C15 test kits (KIT_Test_*): overrides WalkSpeed and JumpVelocity with the numbers of the kit's
  * stats, read as set-by-caller magnitudes (the kit data holds the numbers, this class only names the attributes).
+ * M11 K3: it also puts back the project's starting value (DefaultGSTNCombatGAS.ini) of every extra stat the archetype kits set, so a swap
+ * from the heavy kit to an older test kit does not keep the heavy's weight, carry capacity, air control or gravity.
  */
 UCLASS()
 class GASP_GIUSTINO2_API UGSTN_GE_TestKitInit : public UGameplayEffect
@@ -184,4 +193,17 @@ class GASP_GIUSTINO2_API UGSTN_GE_TestKitInit : public UGameplayEffect
 	GENERATED_BODY()
 public:
 	UGSTN_GE_TestKitInit();
+};
+
+/**
+ * Instant kit init effect of the M11 K3 kit archetypes (KIT_Test_Light / Medium / Heavy): overrides WalkSpeed, JumpVelocity, Weight,
+ * MaxCarryWeight, Acceleration, AirControl, FallGravityScale and AirJumpCount with the kit's stats (set-by-caller). Every archetype kit must
+ * carry all eight values: a missing one would read as zero.
+ */
+UCLASS()
+class GASP_GIUSTINO2_API UGSTN_GE_TestKitArchetypeInit : public UGameplayEffect
+{
+	GENERATED_BODY()
+public:
+	UGSTN_GE_TestKitArchetypeInit();
 };
