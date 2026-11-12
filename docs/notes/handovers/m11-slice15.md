@@ -16,7 +16,7 @@ per move, vertical aim only with the reticle, plus "ergonomics" (Helldivers 2) t
    uses the same rate.
 **Gate (laptop)**: build ok. Headless GSTN **1562/0**, 0 ensures (+3: `GSTNProjectile.Core.HitscanAndReticleAim`,
 `GSTNInput.NP.Simulator.PrecisionAimBinding`, `GSTNCombat.NP.Weakpoint.SteerAimHandling`; `Saved/M11L9/headless-t1.log`).
-Suite `R31_ALL=1`: see the thread reply (`Saved/R31/report-m11l9-all.txt`).
+Suite `R31_ALL=1` **50/50**, 0 ensures (`Saved/R31/report-m11l9-all.txt`).
 **Nobody has seen in PIE**: no aimed move exists as content (no Blueprint child, no binding); no harness scenario. Game/Shipping not built.
 **Known gaps**: hitscan still spawns a 1-frame projectile actor (spawn bytes) and ignores walls like every projectile; ergonomics is yaw
 only (pitch follows the reticle at once); a timeline move that fires (track key) still does not exist, the shot ability uses FireDelayFrames.
