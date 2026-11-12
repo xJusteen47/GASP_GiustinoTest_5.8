@@ -20,7 +20,9 @@
 #include "GSTN_ProjectileSubsystem.h"
 #include "Loadout/GSTN_LoadoutComponent.h"
 #include "NetworkPredictionWorldManager.h"
+#include "Pickups/GSTN_EquipmentPickup.h"
 #include "Pickups/GSTN_KitPickup.h"
+#include "Pickups/GSTN_PickupPayload.h"
 #include "Pickups/GSTN_KitSwapSubsystem.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNKitInteract, Log, All);
@@ -45,16 +47,16 @@ void UGSTN_KitInteractableComponent::PostInitProperties()
 	if (!HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject))
 	{
 		Meaning = GSTNHeldTags::Interact_Target_Kit;
-		if (const AGSTN_KitPickup* Pickup = GetTypedOuter<AGSTN_KitPickup>())
+		if (const AGSTN_EquipmentPickup* Pickup = GetTypedOuter<AGSTN_EquipmentPickup>())
 		{
 			ReachOverrideCm = Pickup->InteractRadius;
 		}
 	}
 }
 
-AGSTN_KitPickup* UGSTN_KitInteractableComponent::GetPickup() const
+AGSTN_EquipmentPickup* UGSTN_KitInteractableComponent::GetPickup() const
 {
-	return Cast<AGSTN_KitPickup>(GetOwner());
+	return Cast<AGSTN_EquipmentPickup>(GetOwner());
 }
 
 void UGSTN_KitInteractableComponent::WithSimFrame(TFunctionRef<void()> Call)
@@ -75,9 +77,9 @@ void UGSTN_KitInteractableComponent::WithSimFrame(TFunctionRef<void()> Call)
 
 void UGSTN_KitInteractableComponent::BeginPlay()
 {
-	if (const AGSTN_KitPickup* Pickup = GetPickup())
+	if (const AGSTN_EquipmentPickup* Pickup = GetPickup())
 	{
-		DisplayName = FText::FromName(Pickup->GetLoadout().PrimaryKit.PrimaryAssetName);
+		DisplayName = FText::FromName(Pickup->GetDisplayId().PrimaryAssetName);
 	}
 	WithSimFrame([this]() { UGSTN_InteractableComponent::BeginPlay(); });
 }
@@ -100,7 +102,7 @@ void UGSTN_KitInteractableComponent::TickComponent(float DeltaTime, ELevelTick T
 
 void UGSTN_KitInteractableComponent::UpdatePrompt()
 {
-	AGSTN_KitPickup* Pickup = GetPickup();
+	AGSTN_EquipmentPickup* Pickup = GetPickup();
 	UWorld* World = GetWorld();
 	if (!Pickup || !World || Pickup->IsNetMode(NM_DedicatedServer))
 	{
@@ -132,7 +134,7 @@ void UGSTN_KitInteractableComponent::UpdatePrompt()
 		if (bShown)
 		{
 			// Placeholder text (no visual polish until the owner asks): the button and the kit that would come to hand
-			Prompt->SetText(FText::FromString(FString::Printf(TEXT("Tieni B: %s"), *Pickup->GetLoadout().PrimaryKit.PrimaryAssetName.ToString())));
+			Prompt->SetText(FText::FromString(FString::Printf(TEXT("Tieni B: %s"), *Pickup->GetDisplayId().PrimaryAssetName.ToString())));
 			if (const APlayerCameraManager* Camera = Player->PlayerCameraManager)
 			{
 				const FVector ToCamera = Camera->GetCameraLocation() - Prompt->GetComponentLocation();
@@ -219,7 +221,7 @@ void UGSTN_KitInteractSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	{
 		Legacy->bSwapOnInteractHoldEvent = false;
 	}
-	for (TActorIterator<AGSTN_KitPickup> It(&InWorld); It; ++It)
+	for (TActorIterator<AGSTN_EquipmentPickup> It(&InWorld); It; ++It)
 	{
 		EnsureRecord(*It);
 	}
@@ -265,13 +267,13 @@ int32 UGSTN_KitInteractSubsystem::GetSimFrame() const
 
 void UGSTN_KitInteractSubsystem::HandleActorSpawned(AActor* Actor)
 {
-	if (AGSTN_KitPickup* Pickup = Cast<AGSTN_KitPickup>(Actor))
+	if (AGSTN_EquipmentPickup* Pickup = Cast<AGSTN_EquipmentPickup>(Actor))
 	{
 		EnsureRecord(Pickup);
 	}
 }
 
-void UGSTN_KitInteractSubsystem::EnsureRecord(AGSTN_KitPickup* Pickup) const
+void UGSTN_KitInteractSubsystem::EnsureRecord(AGSTN_EquipmentPickup* Pickup) const
 {
 	if (!IsValid(Pickup) || !UGSTN_HeldRules::Get().KitSwap.bEnabled || Pickup->FindComponentByClass<UGSTN_KitInteractableComponent>())
 	{
@@ -298,7 +300,7 @@ void UGSTN_KitInteractSubsystem::RequestSwap(AActor* Holder)
 	}
 }
 
-AGSTN_KitPickup* UGSTN_KitInteractSubsystem::FindSwapTarget(const AActor* Holder, int32 Frame, bool* bOutFocused) const
+AGSTN_EquipmentPickup* UGSTN_KitInteractSubsystem::FindSwapTarget(const AActor* Holder, int32 Frame, bool* bOutFocused) const
 {
 	if (bOutFocused)
 	{
@@ -318,7 +320,7 @@ AGSTN_KitPickup* UGSTN_KitInteractSubsystem::FindSwapTarget(const AActor* Holder
 		FGSTN_InteractCandidateId Focus;
 		if (Interact && EntityId != INDEX_NONE && Interact->FindProbeFocus(EntityId, Frame, Focus) && Focus.Provider == GSTNInteractProviders::Registry)
 		{
-			for (TActorIterator<AGSTN_KitPickup> It(World); It; ++It)
+			for (TActorIterator<AGSTN_EquipmentPickup> It(World); It; ++It)
 			{
 				const UGSTN_KitInteractableComponent* Record = It->FindComponentByClass<UGSTN_KitInteractableComponent>();
 				if (Record && Record->GetCandidateId() == Focus && !It->IsEmpty())
@@ -346,17 +348,26 @@ void UGSTN_KitInteractSubsystem::HandlePostFixedTick(int32 ServerFrame, int32 En
 	{
 		return;
 	}
-	// Kits already swapped this pass: a second player on the same kit and frame would otherwise take the first player's old kit
-	TSet<const AGSTN_KitPickup*> Taken;
-	for (const FQueuedSwap& Queued : Pending)
+	// The race rule (GSTNPickups, spec §12): earliest request frame, then lower player id, never the order the requests reached the host.
+	// Pickups already taken this pass are refused to the rest: a second player on the same kit would otherwise take the first player's old kit
+	TArray<FGSTN_PickupClaim> Claims;
+	Claims.Reserve(Pending.Num());
+	for (int32 Index = 0; Index < Pending.Num(); ++Index)
 	{
+		Claims.Add({ Pending[Index].Frame, UGSTN_KitSwapSubsystem::GetRacePlayerId(Pending[Index].Holder.Get()), Index });
+	}
+	FGSTN_PickupClaim::SortForRace(Claims);
+	TSet<const AGSTN_EquipmentPickup*> Taken;
+	for (const FGSTN_PickupClaim& Claim : Claims)
+	{
+		const FQueuedSwap& Queued = Pending[Claim.Index];
 		AActor* Holder = Queued.Holder.Get();
 		if (!Holder || Queued.Frame > ServerFrame)
 		{
 			continue;
 		}
 		bool bFocused = false;
-		AGSTN_KitPickup* Pickup = FindSwapTarget(Holder, Queued.Frame, &bFocused);
+		AGSTN_EquipmentPickup* Pickup = FindSwapTarget(Holder, Queued.Frame, &bFocused);
 		UGSTN_LoadoutComponent* Component = UGSTN_KitSwapSubsystem::FindLoadoutComponent(Holder);
 		if (!Pickup || Taken.Contains(Pickup) || !Component)
 		{
@@ -364,7 +375,7 @@ void UGSTN_KitInteractSubsystem::HandlePostFixedTick(int32 ServerFrame, int32 En
 				!Component ? TEXT("no loadout component") : Pickup ? TEXT("kit already taken this frame") : TEXT("no kit in reach"));
 			continue;
 		}
-		const FPrimaryAssetId Offered = Pickup->GetLoadout().PrimaryKit;
+		const FPrimaryAssetId Offered = Pickup->GetDisplayId();
 		const FPrimaryAssetId Previous = Component->GetApplied().PrimaryKit;
 		TArray<FString> Errors;
 		const bool bSwapped = UGSTN_KitSwapSubsystem::SwapWithPickup(*Component, *Pickup, Errors);

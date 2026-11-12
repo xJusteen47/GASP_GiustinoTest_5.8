@@ -162,6 +162,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNPickups",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNCombatNP",
 			"Enabled": true
 		},

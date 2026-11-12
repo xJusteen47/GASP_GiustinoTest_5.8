@@ -21,6 +21,7 @@ public class GSTNHeldRuntime : ModuleRules
 			"GSTNCombatCore",
 			"GSTNCombatNP",
 			"GSTNCombatGAS",
+			"GSTNPickups",
 			"GameplayAbilities",
 			"AbilitySystemSimulation",
 			"GSTNProjectileCore",

@@ -584,7 +584,8 @@ FGSTN_LoadoutData (what a player owns and saves)
   not conflict), replicated data, applied to the pawn on possession or respawn: specs, kit init GE, primary weapon stat
   GE, meters, compiled table, new revision. Changing the loadout mid-life is not predicted.
 - **`UGSTN_LoadoutSubsystem`** (LocalPlayer) + `USaveGame` for saving and loading.
-- **Kit on the ground** (TH-1b, 2026-11-06): `AGSTN_KitPickup` holds a whole loadout; `UGSTN_KitSwapSubsystem` (server) listens for
+- **Kit on the ground** (TH-1b, 2026-11-06; since M11 L2 in the plugin `GSTNPickups`, a child of `AGSTN_EquipmentPickup` beside the support
+  weapon pickup, see its README): `AGSTN_KitPickup` holds a whole loadout; `UGSTN_KitSwapSubsystem` (server) listens for
   the published `Input.Event.CommandExecuted` of `Command.Interact.PickUp` (hold of interact; the kit must bind it) and swaps the
   player's loadout with the nearest pickup in reach through `AcceptLoadout`, so the swap reaches the simulation as a new
   `LoadoutRevision` (no new rollback state). `DropKit` is the hook of the per-mode kit drop on death (M12).

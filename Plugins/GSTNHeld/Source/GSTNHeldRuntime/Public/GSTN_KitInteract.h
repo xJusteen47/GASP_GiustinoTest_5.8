@@ -9,6 +9,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "GSTN_KitInteract.generated.h"
 
+class AGSTN_EquipmentPickup;
 class AGSTN_KitPickup;
 class UTextRenderComponent;
 struct FGSTN_SimEvent;
@@ -16,22 +17,24 @@ struct FGSTN_SimEvent;
 /*
  * M11 K1, the kit swap on the grab button (owner decisions 2026-11-11, TEST VALUES in UGSTN_HeldRules::KitSwap). It lives here, beside the
  * object pickup it shares the button with, because this plugin already joins the three sides it needs (GSTNCombatGAS's kit pickup, GSTNInteract's
- * records, GSTNLink's interact probe); the plan's L2 moves the kit pickup and this bridge into a GSTNPickups plugin.
+ * records, GSTNLink's interact probe). M11 L2 moved the kit pickup into GSTNPickups and widened this bridge to every equipment pickup (a support
+ * weapon on the ground swaps the same way); the bridge stays here because its tuning and slot are GSTNHeld's (UGSTN_HeldRules::KitSwap).
  *
  *   Focus      every kit on the ground carries a UGSTN_KitInteractableComponent: one GSTNInteract record with the meaning Interact.Target.Kit.
  *              GSTNLink's probe frames one target per frame among fighters, objects at rest and kits, so the framed thing wins (decision 6).
  *   Command    every compiled kit gets Command.Kit.Swap = Release(Interact) after HoldSeconds (0.5 s), requiring Interact.Target.Kit (loadout
  *              extension of the runtime module). The press of B stays the grab's and the pickup's; with no kit framed the release falls through.
  *   Swap       UGSTN_GA_KitSwap only asks the host; after the frame the host swaps with the kit the probe framed for that player on the
- *              request's frame (UGSTN_InteractSubsystem::FindProbeFocus), else the nearest kit in reach. The swap is GSTNCombatGAS's out-of-band
- *              loadout write: the new kit reaches the simulation as a new LoadoutRevision and FGSTN_LoadoutSwapLogic swaps it at one frame
+ *              request's frame (UGSTN_InteractSubsystem::FindProbeFocus), else the nearest kit in reach. Two players on one pickup: the
+ *              race rule of GSTNPickups (FGSTN_PickupClaim: earliest request frame, then lower player id); the loser is refused. The swap is
+ *              GSTNPickups' Take, an out-of-band loadout write: the new kit reaches the simulation as a new LoadoutRevision and FGSTN_LoadoutSwapLogic swaps it at one frame
  *              boundary on every machine, ending a running move there. Nothing here is simulation state.
  *   Death      on an authoritative Combat.Event.KO of a human player, the kit drops where the player fell (DeathDrop: drop and lose it, drop a
  *              copy, or nothing); a dropped kit expires after DroppedKitLifetimeSeconds.
  */
 
 /**
- * The GSTNInteract record of a kit on the ground (M11 K1). Added by UGSTN_KitInteractSubsystem to every AGSTN_KitPickup: the server adds it
+ * The GSTNInteract record of a kit on the ground (M11 K1). Added by UGSTN_KitInteractSubsystem to every AGSTN_EquipmentPickup: the server adds it
  * replicated to a spawned kit (the record stamp replicates as for any interactable), every machine adds it to a level-placed one. Its frames
  * are the combat simulation's (the held subsystem's last fixed-tick frame), the ones GSTNLink's probe queries with, not the interact
  * subsystem's server-time clock. Also draws the placeholder prompt over the framed kit for the local player.
@@ -49,7 +52,7 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	AGSTN_KitPickup* GetPickup() const;
+	AGSTN_EquipmentPickup* GetPickup() const;
 
 private:
 	/** Points GSTNInteract's clock at the combat frame for one register or unregister call */
@@ -95,7 +98,7 @@ public:
 	 * The kit a swap of Holder on Frame takes, per the settings: the kit the probe framed for it (FindProbeFocus), else (or when
 	 * bTakesFocusedKit is off) the nearest kit in reach when allowed. Null when none. Any machine (the prompt uses it); the host's answer decides
 	 */
-	AGSTN_KitPickup* FindSwapTarget(const AActor* Holder, int32 Frame, bool* bOutFocused = nullptr) const;
+	AGSTN_EquipmentPickup* FindSwapTarget(const AActor* Holder, int32 Frame, bool* bOutFocused = nullptr) const;
 
 	/** Host only: the KO drop of Victim's kit per DeathDrop. Returns the dropped kit or null. Public for tests and scripted flows */
 	AGSTN_KitPickup* DropKitOnKO(AActor* Victim);
@@ -104,7 +107,7 @@ public:
 	int32 GetSimFrame() const;
 
 	/** Adds the record component to Pickup if it has none (server or level-placed kits; a client gets a spawned kit's by replication) */
-	void EnsureRecord(AGSTN_KitPickup* Pickup) const;
+	void EnsureRecord(AGSTN_EquipmentPickup* Pickup) const;
 
 private:
 	void HandlePostFixedTick(int32 ServerFrame, int32 EndTimeMS, bool bResimulating);

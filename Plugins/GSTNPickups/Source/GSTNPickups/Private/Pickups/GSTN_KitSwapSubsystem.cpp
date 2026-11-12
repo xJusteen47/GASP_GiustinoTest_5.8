@@ -1,4 +1,4 @@
-// Combat vocabulary that needs the ability system (no Network Prediction, no Mover).
+// Equipment pickups (M11 G2).
 
 #include "Pickups/GSTN_KitSwapSubsystem.h"
 
@@ -9,6 +9,7 @@
 #include "Input/GSTN_CombatCommandTags.h"
 #include "Input/GSTN_InputTags.h"
 #include "Loadout/GSTN_LoadoutComponent.h"
+#include "Pickups/GSTN_EquipmentPickup.h"
 #include "Pickups/GSTN_KitPickup.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNKitSwap, Log, All);
@@ -81,7 +82,7 @@ void UGSTN_KitSwapSubsystem::HandleCommandExecuted(const FGSTN_SimEvent& Event)
 	}
 }
 
-AGSTN_KitPickup* UGSTN_KitSwapSubsystem::FindPickupFor(const AActor* Pawn) const
+AGSTN_EquipmentPickup* UGSTN_KitSwapSubsystem::FindPickupFor(const AActor* Pawn) const
 {
 	const UWorld* World = GetWorld();
 	if (!Pawn || !World)
@@ -90,11 +91,11 @@ AGSTN_KitPickup* UGSTN_KitSwapSubsystem::FindPickupFor(const AActor* Pawn) const
 	}
 	// A level holds a handful of kits and this runs on a swap, not per tick: a scan is cheaper than keeping a registry right
 	const FVector From = Pawn->GetActorLocation();
-	AGSTN_KitPickup* Best = nullptr;
+	AGSTN_EquipmentPickup* Best = nullptr;
 	double BestDistSq = TNumericLimits<double>::Max();
-	for (TActorIterator<AGSTN_KitPickup> It(World); It; ++It)
+	for (TActorIterator<AGSTN_EquipmentPickup> It(World); It; ++It)
 	{
-		AGSTN_KitPickup* Pickup = *It;
+		AGSTN_EquipmentPickup* Pickup = *It;
 		if (!IsValid(Pickup) || Pickup->IsEmpty())
 		{
 			continue;
@@ -117,7 +118,7 @@ bool UGSTN_KitSwapSubsystem::TrySwap(AActor* Pawn, TArray<FString>& OutErrors)
 		OutErrors.Add(TEXT("Kit swap: only the server swaps kits"));
 		return false;
 	}
-	AGSTN_KitPickup* Pickup = FindPickupFor(Pawn);
+	AGSTN_EquipmentPickup* Pickup = FindPickupFor(Pawn);
 	if (!Pickup)
 	{
 		OutErrors.Add(TEXT("Kit swap: no kit in reach"));
@@ -129,30 +130,23 @@ bool UGSTN_KitSwapSubsystem::TrySwap(AActor* Pawn, TArray<FString>& OutErrors)
 		OutErrors.Add(FString::Printf(TEXT("Kit swap: %s has no loadout component"), *Pawn->GetName()));
 		return false;
 	}
-	const FPrimaryAssetId OfferedKit = Pickup->GetLoadout().PrimaryKit;
+	const FPrimaryAssetId OfferedKit = Pickup->GetDisplayId();
 	const bool bSwapped = SwapWithPickup(*Component, *Pickup, OutErrors);
 	UE_LOG(LogGSTNKitSwap, Log, TEXT("%s %s kit %s at %s"), *Pawn->GetName(), bSwapped ? TEXT("took") : TEXT("was refused"),
 		*OfferedKit.ToString(), *Pickup->GetName());
 	return bSwapped;
 }
 
-bool UGSTN_KitSwapSubsystem::SwapWithPickup(UGSTN_LoadoutComponent& Component, AGSTN_KitPickup& Pickup, TArray<FString>& OutErrors)
+bool UGSTN_KitSwapSubsystem::SwapWithPickup(UGSTN_LoadoutComponent& Component, AGSTN_EquipmentPickup& Pickup, TArray<FString>& OutErrors)
 {
-	OutErrors.Reset();
-	if (Pickup.IsEmpty())
-	{
-		OutErrors.Add(TEXT("Kit swap: no kit lies here"));
-		return false;
-	}
-	// Copies: AcceptLoadout replaces the applied loadout the reference would point at
-	const FGSTN_LoadoutData Previous = Component.GetApplied();
-	const FGSTN_LoadoutData Offered = Pickup.GetLoadout();
-	if (!Component.AcceptLoadout(Offered, OutErrors))
-	{
-		return false;
-	}
-	Pickup.SetLoadout(Previous);
-	return true;
+	return Pickup.Take(Component, OutErrors);
+}
+
+int32 UGSTN_KitSwapSubsystem::GetRacePlayerId(const AActor* Pawn)
+{
+	const APawn* AsPawn = Cast<APawn>(Pawn);
+	const APlayerState* PlayerState = AsPawn ? AsPawn->GetPlayerState() : nullptr;
+	return PlayerState ? PlayerState->GetPlayerId() : INDEX_NONE;
 }
 
 AGSTN_KitPickup* UGSTN_KitSwapSubsystem::DropKit(UGSTN_LoadoutComponent* From, const FTransform& Where, TSubclassOf<AGSTN_KitPickup> PickupClass)

@@ -1,4 +1,4 @@
-// Combat vocabulary that needs the ability system (no Network Prediction, no Mover).
+// Equipment pickups (M11 G2). Moved here from GSTNCombatGAS in M11 L2 (class redirect in Config/DefaultGSTNPickups.ini).
 
 #pragma once
 
@@ -8,6 +8,7 @@
 #include "GSTN_KitSwapSubsystem.generated.h"
 
 class AActor;
+class AGSTN_EquipmentPickup;
 class AGSTN_KitPickup;
 class UGSTN_LoadoutComponent;
 struct FGSTN_SimEvent;
@@ -26,14 +27,15 @@ struct FGSTN_SimEvent;
  * resolved command into an executed one). A kit that binds it to its own pick-up move still swaps next to a kit on the ground; a kit with no
  * binding for it cannot swap.
  *
- * Swap. The nearest non-empty pickup within its InteractRadius of the pawn is taken; the pickup's loadout is validated and applied by the
- * player's loadout component (the rules can refuse it: the player is told, nothing changes), and the player's previous loadout is put in the
- * pickup. Stats, moves, weapons and skin all follow the kit because they are the loadout.
+ * Swap. The nearest non-empty equipment pickup within its InteractRadius of the pawn is taken (AGSTN_EquipmentPickup::Take): its payload
+ * builds the new loadout, the player's loadout component validates and applies it (the rules can refuse it: the player is told, nothing
+ * changes), and the payload's leftover stays in the pickup (for a kit, the player's previous loadout). Stats, moves, weapons and skin all
+ * follow the kit because they are the loadout.
  *
  * Kit drop on death (M12) is a rule of the game mode, not global: the mode calls DropKit when its rule says so. Nothing calls it here.
  */
 UCLASS()
-class GSTNCOMBATGAS_API UGSTN_KitSwapSubsystem : public UWorldSubsystem
+class GSTNPICKUPS_API UGSTN_KitSwapSubsystem : public UWorldSubsystem
 {
 	GENERATED_BODY()
 
@@ -41,11 +43,11 @@ public:
 	static UGSTN_KitSwapSubsystem* Get(const UObject* WorldContextObject);
 
 	/**
-	 * The nearest pickup with a kit whose InteractRadius reaches Pawn's location, null if none. Pure query, any machine (a client may use it
-	 * for a prompt); only the server's answer decides a swap.
+	 * The nearest non-empty equipment pickup (a kit, a support weapon...) whose InteractRadius reaches Pawn's location, null if none. Pure query,
+	 * any machine (a client may use it for a prompt); only the server's answer decides a swap.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Kit Pickup")
-	AGSTN_KitPickup* FindPickupFor(const AActor* Pawn) const;
+	AGSTN_EquipmentPickup* FindPickupFor(const AActor* Pawn) const;
 
 	/**
 	 * Server only. Swaps Pawn's loadout with the nearest pickup in reach. False (with the reason in OutErrors) when there is no pickup in reach,
@@ -56,10 +58,10 @@ public:
 	bool TrySwap(AActor* Pawn, TArray<FString>& OutErrors);
 
 	/**
-	 * Server only. The swap itself: Component takes the pickup's loadout, the pickup takes the component's previous one (empty if the player
-	 * had none). Refused when the pickup is empty or the loadout rules refuse its kit; nothing changes then.
+	 * Server only. The swap itself (AGSTN_EquipmentPickup::Take): for a kit, Component takes the pickup's loadout and the pickup takes the
+	 * component's previous one (empty if the player had none). Refused when the pickup is empty or the rules refuse; nothing changes then.
 	 */
-	static bool SwapWithPickup(UGSTN_LoadoutComponent& Component, AGSTN_KitPickup& Pickup, TArray<FString>& OutErrors);
+	static bool SwapWithPickup(UGSTN_LoadoutComponent& Component, AGSTN_EquipmentPickup& Pickup, TArray<FString>& OutErrors);
 
 	/**
 	 * Server only. The hook of the kit drop on death (M12, a per-mode rule): spawns a pickup of PickupClass (the base class if null) at Where
@@ -73,6 +75,9 @@ public:
 	 * world: GSTNHeld's kit swap (M11 K1, the framed kit, a longer hold) does when its setting is on, so one hold never swaps twice
 	 */
 	bool bSwapOnInteractHoldEvent = true;
+
+	/** The player id the race rule sorts by (FGSTN_PickupClaim): the pawn's player state id, INDEX_NONE without one */
+	static int32 GetRacePlayerId(const AActor* Pawn);
 
 	/** The loadout component that owns Pawn's kit: on its PlayerState (the usual place), else on the pawn itself. Null if none */
 	static UGSTN_LoadoutComponent* FindLoadoutComponent(const AActor* Pawn);
