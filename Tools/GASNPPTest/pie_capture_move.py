@@ -56,10 +56,17 @@ SEQUENCES = [
 # numbers compare; if the height is never reached the press is made at PRE + AIR_GIVE_UP and the log says so. trigger_h is a first guess for the
 # jump height of the test character (not measured, the rows hold 'h' per frame to retune it): high = the move finishes in the air, low = the
 # character lands in the middle of it. Order matters: the hit case comes last because its dummy stays where it was put.
+# Measured on the first run (2026-11-12, capture_v8_r2): the test character's jump peaks 233 cm above the standing height 42 frames after the press
+# and lands 37 frames after the peak, so a 43 frame move pressed on the way down always lands before its end (pressed at 136 cm it landed on
+# animation frame 12, before the strike). Hence: the whiff is pressed on the way UP ('rise_h': the first rising frame at or above that height) and
+# ends in the air; the landing case is pressed at 184 cm falling (lands about frame 20, in the hold); the hit case at 225 cm falling, so the feet are
+# at about 150 cm (the dummy's chest and head) on frame 15, with the dummy 62 cm ahead (the hitbox is a 40 cm sphere on the foot, a pawn is about
+# 30 cm wide: at 80 cm it did not reach). 'jump_only' never presses: it records where a plain jump lands (the standing height after a landing)
 DAIR_SEQUENCES = [
-    {'name': 'dair_whiff', 'taps': [], 'frames': 190, 'dummy': None, 'shoot': True, 'air': {'trigger_h': 140.0}},
-    {'name': 'dair_land', 'taps': [], 'frames': 190, 'dummy': None, 'shoot': True, 'air': {'trigger_h': 55.0}},
-    {'name': 'dair_hit', 'taps': [], 'frames': 190, 'dummy': 80.0, 'shoot': True, 'air': {'trigger_h': 140.0}},
+    {'name': 'dair_whiff', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True, 'air': {'rise_h': 150.0}},
+    {'name': 'dair_land', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True, 'air': {'trigger_h': 184.0}},
+    {'name': 'jump_only', 'taps': [], 'frames': 110, 'dummy': None, 'shoot': False, 'air': {}},
+    {'name': 'dair_hit', 'taps': [], 'frames': 130, 'dummy': 62.0, 'shoot': True, 'air': {'trigger_h': 225.0}},
 ]
 AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after the attack press
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
@@ -146,9 +153,15 @@ def _make_lights():
     return True
 
 
-def _place_cameras():
+def _place_cameras(follow=False):
+    """follow=True (aerial sequences, every frame): the cameras keep the yaw of the sequence start and move with the pawn, which stays in the
+    centre of the picture (the jump is 233 cm high, a fixed camera at 380 cm loses it); the height is in the rows ('h'), not in these pictures"""
     pawn = _pawn()
     centre, yaw = pawn.get_actor_location(), pawn.get_actor_rotation().yaw
+    if follow:
+        yaw = st.get('cam_yaw', yaw)
+    else:
+        st['cam_yaw'] = yaw
     for (az, _intensity), light in zip(FILL_LIGHTS, st['lights']):
         light.set_actor_rotation(unreal.Rotator(roll=0.0, pitch=-25.0, yaw=yaw + az + 180.0), False)   # shines from azimuth az toward the pawn
     for (name, az), cam in zip(VIEWS, st['cams']):
@@ -163,6 +176,8 @@ def _place_cameras():
 
 def _shoot(seq, frame):
     manager = g._local_pawn(0)[0].get_editor_property('player_camera_manager')
+    if seq.get('air') is not None:
+        _place_cameras(follow=True)
     for (name, az), cam, rt in zip(VIEWS, st['cams'], st['rts']):
         comp = cam.capture_component2d
         if az is None:
@@ -245,11 +260,14 @@ def _tick(_dt):
                 _log(f'dummy {keys[:1]} ahead: {h._place_ahead(0, keys[0], seq["dummy"]) if keys else "NO DUMMY"}')
                 st.update(dummy_placed=True, t=now)         # one more wait for the teleport to settle
                 return None
-            if seq.get('air'):
+            if seq.get('air') is not None:
                 z = _pawn().get_actor_location().z
-                st.setdefault('ground_z', z)                 # the first sequence starts standing: the height every 'h' is counted from
-                if abs(z - st['ground_z']) > 6.0 and now - st['t'] < 10:
+                if (st.get('rest_z') is None or abs(z - st['rest_z']) > 0.05) and now - st['t'] < 10:
+                    st['rest_z'] = z
                     return None                              # still falling or landing from the last sequence
+                # Per sequence: the standing height is not the same before and after the first landing (100 then 88 cm on the first run)
+                st['ground_z'] = z
+                _log(f'{seq["name"]}: standing height z {z:.1f}')
             _log(f'sequence {seq["name"]}: pawn at {_place_cameras()}')
             os.makedirs(os.path.join(OUT, seq['name']), exist_ok=True)
             st['rows'] = open(os.path.join(OUT, seq['name'], 'frames.jsonl'), 'w')
@@ -262,18 +280,26 @@ def _tick(_dt):
             tapped = (frame - PRE) in seq['taps']
             extra, hold_crouch = None, False
             air = seq.get('air')
-            if air:
+            if air is not None:
                 z = _pawn().get_actor_location().z
                 height = z - st.get('ground_z', z)
                 extra = {'h': round(height, 1)}
+                rising = st['prev_z'] is not None and z > st['prev_z']
+                falling = st['prev_z'] is not None and z < st['prev_z']
+                if 'rise_h' in air:
+                    reached = rising and height >= air['rise_h']
+                elif 'trigger_h' in air:
+                    reached = falling and height <= air['trigger_h']
+                else:
+                    reached = None                           # a plain jump: nothing is pressed
                 if frame == PRE:
                     st['jumped'] = frame
                     g.press(0, 'jump')
-                elif st['jumped'] is not None and st['fired'] is None and frame > PRE + 3 and (
-                        (st['prev_z'] is not None and z < st['prev_z'] and height <= air['trigger_h']) or frame - PRE >= AIR_GIVE_UP):
+                elif reached is not None and st['jumped'] is not None and st['fired'] is None and frame > PRE + 3 and (
+                        reached or frame - PRE >= AIR_GIVE_UP):
                     st['fired'] = frame + 1                  # crouch now, Attack on the next frame
                     hold_crouch = True
-                    _log(f'{seq["name"]}: crouch on v{frame} (height {height:.0f} cm, falling), attack on v{frame + 1}')
+                    _log(f'{seq["name"]}: crouch on v{frame} (height {height:.0f} cm, {"rising" if rising else "falling"}), attack on v{frame + 1}')
                 tapped = st['fired'] is not None and frame == st['fired']
                 st['prev_z'] = z
             _row(frame, tapped, extra)
@@ -281,14 +307,14 @@ def _tick(_dt):
                 g.combat_hold(0, st['crouch'])
             if tapped:
                 g.combat_tap(0, st['mask'])                 # read by the next simulation tick
-            if air and st['fired'] is not None and frame == st['fired'] + AIR_CROUCH_RELEASE:
+            if air is not None and st['fired'] is not None and frame == st['fired'] + AIR_CROUCH_RELEASE:
                 g.combat_clear(0)
             st['frame'] = frame + 1
             if st['frame'] >= PRE + seq['frames']:
                 st['rows'].close()
                 g.combat_clear(0)
                 _console('t.OverrideFPS 0')
-                _log(f'sequence {seq["name"]} done: {st["frame"]} frames')
+                _log(f'sequence {seq["name"]} done: {st["frame"]} frames, pawn z {_pawn().get_actor_location().z:.1f}')
                 st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False)
         elif phase == 'ending' and not les.is_in_play_in_editor():
             unreal.unregister_slate_post_tick_callback(st['handle'])

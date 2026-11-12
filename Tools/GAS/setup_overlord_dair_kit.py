@@ -38,6 +38,9 @@ SOURCE_KIT, SOURCE_WEAPON = 'KIT_Test_Hits', 'WPN_Test_Hits'
 COMMAND = 'Command.Attack.CrouchNeutral'      # crouch (down) held + attack
 AIRBORNE_TAG = 'Input.Context.Airborne'
 BLEND_IN_SECONDS = 2.0 / 60.0
+# Without this the montage keeps the engine default (0.25 s): it starts to blend out on animation frame 27 of 42 and the whole recovery is mixed
+# with the falling pose (seen on the first Play capture, 2026-11-12). Same provisional value as the jab kit
+BLEND_OUT_SECONDS = 4.0 / 60.0
 # Same reason as the jab kit: the montage advances one animation frame per simulation tick, so timeline frame N shows animation frame N
 SIM_HZ, ANIM_FPS = 62.5, 60.0
 MONTAGE_PLAY_RATE = SIM_HZ / ANIM_FPS
@@ -103,6 +106,7 @@ def _anim_and_montage(label, src, refresh):
             return None, None
         log(f'created {anim_path} (copy of {src})')
     anim = unreal.load_asset(anim_path)
+    _bake_ik_feet(label, anim)
     montage = unreal.load_asset(montage_path) if lib.does_asset_exist(montage_path) else None
     if not montage:
         factory = unreal.AnimMontageFactory()
@@ -113,10 +117,47 @@ def _anim_and_montage(label, src, refresh):
     blend = montage.get_editor_property('blend_in')
     blend.set_editor_property('blend_time', BLEND_IN_SECONDS)
     montage.set_editor_property('blend_in', blend)
+    blend = montage.get_editor_property('blend_out')
+    blend.set_editor_property('blend_time', BLEND_OUT_SECONDS)
+    montage.set_editor_property('blend_out', blend)
     frames = anim.get_play_length() * ANIM_FPS
     log(f'{label}: anim {frames:.1f} frames at 60 fps (card: {TOTAL_FRAMES}), skeleton {anim.get_editor_property("skeleton").get_name()}, '
         f'montage {montage.get_play_length():.3f} s')
     return anim, montage
+
+
+def _bake_ik_feet(label, anim):
+    """The anim pipeline's builds leave ik_foot_l/r at the reference pose on every frame (probe 2026-11-12: (7,-18,9) and (-24,-18,9) while foot_l
+    goes from z 91 in the tuck to z -3 in the stomp). The game's animation Blueprint places the feet on those bones, so in Play the legs hung
+    straight in the charge and squatted on the strike. Here, on the kit's COPY only, the two bones get the feet's own component-space transform on
+    every frame (local to ik_foot_root). Derived from the FK bones, so a rerun writes the same keys"""
+    try:
+        opts = unreal.AnimPoseEvaluationOptions()
+        count = int(round(anim.get_play_length() * ANIM_FPS)) + 1
+        keys = {side: ([], [], []) for side in 'lr'}
+        for i in range(count):
+            pose = unreal.AnimPoseExtensions.get_anim_pose_at_time(anim, i / ANIM_FPS, opts)
+            root = unreal.AnimPoseExtensions.get_bone_pose(pose, 'ik_foot_root', unreal.AnimPoseSpaces.WORLD)
+            for side in 'lr':
+                foot = unreal.AnimPoseExtensions.get_bone_pose(pose, f'foot_{side}', unreal.AnimPoseSpaces.WORLD)
+                local = unreal.MathLibrary.make_relative_transform(foot, root)
+                keys[side][0].append(local.translation)
+                keys[side][1].append(local.rotation)
+                keys[side][2].append(unreal.Vector(1.0, 1.0, 1.0))
+        ctrl = anim.get_editor_property('controller')
+        ctrl.open_bracket('Bake ik_foot bones from the feet', False)
+        for side in 'lr':
+            bone = f'ik_foot_{side}'
+            ctrl.remove_bone_track(bone, False)
+            ctrl.add_bone_curve(bone, False)
+            ctrl.set_bone_track_keys(bone, keys[side][0], keys[side][1], keys[side][2], False)
+        ctrl.close_bracket(False)
+        pose = unreal.AnimPoseExtensions.get_anim_pose_at_time(anim, ACTIVE[0] / ANIM_FPS, opts)
+        gap = [unreal.AnimPoseExtensions.get_bone_pose(pose, f'ik_foot_{s}', unreal.AnimPoseSpaces.WORLD).translation.distance(
+            unreal.AnimPoseExtensions.get_bone_pose(pose, f'foot_{s}', unreal.AnimPoseSpaces.WORLD).translation) for s in 'lr']
+        log(f'{label}: ik_foot bones baked from the feet on {count} frames; ik to foot distance at frame {ACTIVE[0]}: {gap[0]:.2f} / {gap[1]:.2f} cm')
+    except Exception as e:
+        log(f'ERROR: {label}: ik_foot bake failed ({e!r}): in Play the legs will not follow the animation')
 
 
 def _foot_keys(anim):
