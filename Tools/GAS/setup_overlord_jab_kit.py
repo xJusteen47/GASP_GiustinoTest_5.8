@@ -1,11 +1,11 @@
 # ANIM-JAB-3: the Overlord's two-hit jab on the light attack of a test kit, so the built animations can be watched in a real Play session.
 # Data only: no C++, no input mapping, no project setting, no Blueprint graph. Idempotent (a rerun rewrites the specs below over hand edits).
 #
-# Reads (never writes) the built animations of the anim pipeline, /Game/AnimPipeline/Rig/AS_OverlordJab{1,2}V2_Build. Content/AnimPipeline is one
+# Reads (never writes) the built animations of the anim pipeline, /Game/AnimPipeline/Rig/AS_OverlordJab{1,2}<ANIM_VERSION>_Build. Content/AnimPipeline is one
 # folder shared by every worktree through a junction and holds the owner's work in progress: this script only duplicates out of it.
 # Writes, under /Game/GASNPPTest/Combat/Overlord (new assets only; KIT_Test_Hits, WPN_Test_Hits and the test character are never edited):
-#   AS_OverlordJab{1,2}V2    copies of the built animations (versioned with the kit; rerun with refresh=True after a new `animpipe build`)
-#   AM_OverlordJab{1,2}V2    one montage each (default slot, 2 frame blend in)
+#   AS_OverlordJab{1,2}V3    copies of the built animations (versioned with the kit; rerun with refresh=True after a new `animpipe build`)
+#   AM_OverlordJab{1,2}V3    one montage each (default slot, 2 frame blend in, 4 frame blend out)
 #   TL_Overlord_Jab{1,2}     UGSTN_CombatTimeline: frames from the move cards, a PLACEHOLDER root hitbox, jab 1's cancel window into the
 #                            neutral attack and the tag window that tells the two bindings apart
 #   GA_Overlord_Jab{1,2}     thin Blueprint children of UGSTN_GA_TestKitStrike whose TimelineAsset is the timeline above (no graph)
@@ -21,7 +21,10 @@ import os
 
 import unreal
 
-SRC = '/Game/AnimPipeline/Rig/AS_OverlordJab{}V2_Build'
+# Version of the built animations. A new version makes new AS/AM copies next to the old ones (left on disk, unreferenced once the timelines,
+# which keep their names, are rewritten to point at the new montages)
+ANIM_VERSION = 'V3'
+SRC = '/Game/AnimPipeline/Rig/AS_OverlordJab{}' + ANIM_VERSION + '_Build'
 ROOT = '/Game/GASNPPTest/Combat'
 DIR = ROOT + '/Overlord'
 SOURCE_KIT, SOURCE_WEAPON = 'KIT_Test_Hits', 'WPN_Test_Hits'
@@ -30,16 +33,20 @@ COMMAND = 'Command.Attack.Neutral'
 # Up on jab 1 from the frame before its cancel window to the window's end: the jab 2 binding requires it, the jab 1 binding ignores it
 CHAIN_TAG = 'Test.State.OverlordJabChain'
 BLEND_IN_SECONDS = 2.0 / 60.0
+# PROVISIONAL, the owner decides. The engine default (0.25 s) mixes the last 15 frames of each animation with the idle and hides the authored recovery
+BLEND_OUT_SECONDS = 4.0 / 60.0
 # A timeline frame is one simulation tick (16 ms, 62.5 Hz); the cards and the animations count frames at 60 fps. At this rate the montage
 # advances one animation frame per simulation tick, so timeline frame N shows animation frame N (at 1.0 frame 9 showed a8.64: with a one-frame
 # arrival that is the hand 40 cm short of the target for the whole hitstop). Every move authored at 60 fps needs it, redone animations included
 SIM_HZ, ANIM_FPS = 62.5, 60.0
 MONTAGE_PLAY_RATE = SIM_HZ / ANIM_FPS
+# root_motion: the animation carries the lunge (+30 cm forward, frames 4-9 of jab 2) and the montage's sync sim moves the capsule with it; the
+# other moves stay in place
 # total frames, first actionable frame, active (first, last), cancel window into COMMAND (first, last) or None,
 # hit PLACEHOLDERS: radius, reach from, reach to, height, damage, knockback, angle, victim hitstop, attacker hitstop
 MOVES = {
-    1: {'total': 29, 'faf': 22, 'active': (6, 8), 'cancel': (9, 13), 'hit': (45.0, 60.0, 110.0, 30.0, 3.0, 150.0, 30.0, 4, 3)},
-    2: {'total': 53, 'faf': 26, 'active': (9, 11), 'cancel': None, 'hit': (50.0, 60.0, 120.0, 30.0, 7.0, 550.0, 35.0, 6, 4)},
+    1: {'total': 29, 'faf': 22, 'active': (6, 8), 'cancel': (9, 13), 'root_motion': False, 'hit': (45.0, 60.0, 110.0, 30.0, 3.0, 150.0, 30.0, 4, 3)},
+    2: {'total': 53, 'faf': 26, 'active': (9, 11), 'cancel': None, 'root_motion': True, 'hit': (50.0, 60.0, 120.0, 30.0, 7.0, 550.0, 35.0, 6, 4)},
 }
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'AnimJab3', 'setup_overlord_jab_kit.txt')
 _lines = []
@@ -68,9 +75,9 @@ def _tools():
     return unreal.AssetToolsHelpers.get_asset_tools()
 
 
-def _anim_and_montage(n, refresh):
+def _anim_and_montage(n, spec, refresh):
     """The versioned copy of the built animation and its montage. refresh: both are deleted and made again from the pipeline's build"""
-    anim_path, montage_path = f'{DIR}/AS_OverlordJab{n}V2', f'{DIR}/AM_OverlordJab{n}V2'
+    anim_path, montage_path = f'{DIR}/AS_OverlordJab{n}{ANIM_VERSION}', f'{DIR}/AM_OverlordJab{n}{ANIM_VERSION}'
     lib = unreal.EditorAssetLibrary
     if refresh:
         for p in (montage_path, anim_path):
@@ -83,18 +90,26 @@ def _anim_and_montage(n, refresh):
             return None, None
         log(f'created {anim_path} (copy of {SRC.format(n)})')
     anim = unreal.load_asset(anim_path)
+    # The montage plays root motion only when its animation has it on; the root lock must not zero it (force_root_lock only matters with it off)
+    anim.set_editor_property('enable_root_motion', spec['root_motion'])
+    anim.set_editor_property('force_root_lock', False)
     montage = unreal.load_asset(montage_path) if lib.does_asset_exist(montage_path) else None
     if not montage:
         factory = unreal.AnimMontageFactory()
         factory.set_editor_property('source_animation', anim)
         factory.set_editor_property('target_skeleton', anim.get_editor_property('skeleton'))
-        montage = _tools().create_asset(f'AM_OverlordJab{n}V2', DIR, unreal.AnimMontage, factory)
+        montage = _tools().create_asset(f'AM_OverlordJab{n}{ANIM_VERSION}', DIR, unreal.AnimMontage, factory)
         log(f'created {montage_path}')
     blend = montage.get_editor_property('blend_in')
     blend.set_editor_property('blend_time', BLEND_IN_SECONDS)
     montage.set_editor_property('blend_in', blend)
+    blend = montage.get_editor_property('blend_out')
+    blend.set_editor_property('blend_time', BLEND_OUT_SECONDS)
+    montage.set_editor_property('blend_out', blend)
     log(f'jab {n}: anim {anim.get_play_length() * 60.0:.1f} frames at 60 fps, skeleton {anim.get_editor_property("skeleton").get_name()}, '
-        f'montage {montage.get_play_length():.3f} s')
+        f'montage {montage.get_play_length():.3f} s, root motion {anim.get_editor_property("enable_root_motion")} '
+        f'(lock {anim.get_editor_property("root_motion_root_lock")}, force lock {anim.get_editor_property("force_root_lock")}), '
+        f'blend out {montage.get_editor_property("blend_out").get_editor_property("blend_time"):.4f} s')
     return anim, montage
 
 
@@ -251,7 +266,7 @@ def run(refresh=False):
             unreal.EditorAssetLibrary.make_directory(DIR)
         saves, classes = [], {}
         for n, spec in MOVES.items():
-            anim, montage = _anim_and_montage(n, refresh)
+            anim, montage = _anim_and_montage(n, spec, refresh)
             timeline = _timeline(n, spec, montage) if montage else None
             if not timeline:
                 raise RuntimeError(f'jab {n} not built')
