@@ -4,6 +4,7 @@
 #include "Loadout/GSTN_LoadoutData.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
+#include "Serialization/ObjectAndNameAsStringProxyArchive.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNLoadoutExtension, Log, All);
 
@@ -87,6 +88,32 @@ const UScriptStruct* FGSTN_LoadoutExtensionTypes::FindType(FName WireId)
 	return IsExtensionType(Struct) ? Struct : nullptr;
 }
 
+void GSTNLoadoutExtension::CarryOverOnKitSwap(TArray<FInstancedStruct>& Taken, TArray<FInstancedStruct>& Left)
+{
+	for (int32 LeftIndex = 0; LeftIndex < Left.Num();)
+	{
+		const FGSTN_LoadoutExtensionData* Data = Left[LeftIndex].GetPtr<FGSTN_LoadoutExtensionData>();
+		if (!Data || !Data->StaysWithPlayerOnKitSwap())
+		{
+			++LeftIndex;
+			continue;
+		}
+		const UScriptStruct* Type = Left[LeftIndex].GetScriptStruct();
+		const int32 TakenIndex = Taken.IndexOfByPredicate([Type](const FInstancedStruct& Entry) { return Entry.GetScriptStruct() == Type; });
+		if (TakenIndex != INDEX_NONE)
+		{
+			// The kit on the ground brought its own of that type: the two trade places
+			Swap(Taken[TakenIndex], Left[LeftIndex]);
+			++LeftIndex;
+		}
+		else
+		{
+			Taken.Add(MoveTemp(Left[LeftIndex]));
+			Left.RemoveAt(LeftIndex);
+		}
+	}
+}
+
 void GSTNLoadoutExtension::WritePayload(const TArray<FInstancedStruct>& Extensions, TArray<uint8>& OutBytes, int32 MaxBytes)
 {
 	OutBytes.Reset();
@@ -104,7 +131,9 @@ void GSTNLoadoutExtension::WritePayload(const TArray<FInstancedStruct>& Extensio
 		TArray<uint8> Payload;
 		{
 			FMemoryWriter PayloadWriter(Payload);
-			SerializeEntry(PayloadWriter, Struct, const_cast<uint8*>(Extension.GetMemory()));
+			// Soft paths and names as strings: a plain memory archive refuses a soft object path (fatal), and a loadout holds ids only
+			FObjectAndNameAsStringProxyArchive PayloadProxy(PayloadWriter, false);
+			SerializeEntry(PayloadProxy, Struct, const_cast<uint8*>(Extension.GetMemory()));
 		}
 		TArray<uint8> Entry;
 		{
@@ -178,7 +207,8 @@ bool GSTNLoadoutExtension::ReadPayload(const TArray<uint8>& Bytes, TArray<FInsta
 		FInstancedStruct Entry;
 		Entry.InitializeAs(Struct);
 		FMemoryReader PayloadReader(Payload);
-		if (!SerializeEntry(PayloadReader, Struct, Entry.GetMutableMemory()) || PayloadReader.Tell() != PayloadReader.TotalSize())
+		FObjectAndNameAsStringProxyArchive PayloadProxy(PayloadReader, false);
+		if (!SerializeEntry(PayloadProxy, Struct, Entry.GetMutableMemory()) || PayloadReader.IsError() || PayloadReader.Tell() != PayloadReader.TotalSize())
 		{
 			UE_LOG(LogGSTNLoadoutExtension, Warning, TEXT("Loadout extension %s dropped: its bytes do not match this build's type"), *WireId);
 			continue;

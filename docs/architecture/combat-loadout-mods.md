@@ -227,6 +227,12 @@ a jump-pack burst, a deployable shield dome, a supply drop for teammates, a guar
   another drops the current one. A kit change keeps the backpack.
 - **"No shield in PvE"** concerns the PvP shield action of M6 (`GSTNDefence`). A backpack that projects an energy dome is a
   different, item-based ability; whether such backpacks exist in PvE is the owner's call (question M11.11).
+- *Built (M11 L7)*: plugin `GSTNBackpack` (Core, GAS) and bridge `GSTNBackpackPickups` (the payload; neither plugin names the other).
+  The backpack entry is a soft path in `FGSTN_LoadoutBackpackExt`; its bindings and passives join the **kit's** at compile (no new
+  entry source, as L1 decided), from extension priority 200 so mods (100) never touch them. A kit swap keeps it through the generic
+  `FGSTN_LoadoutExtensionData::StaysWithPlayerOnKitSwap` (data: `bKeepOnKitSwap`, default true). The look is an attachment provider: a
+  part with no socket and no parent goes on `Implant.Back` / `Connector_Backpack`. Not built: death drop (`bDropOnDeath` is data only),
+  feeding a support weapon (only a rules warning), a sample jet-pack ability and asset (desktop content).
 
 ## 11. Seams M3 should prepare now (small, no new feature)
 

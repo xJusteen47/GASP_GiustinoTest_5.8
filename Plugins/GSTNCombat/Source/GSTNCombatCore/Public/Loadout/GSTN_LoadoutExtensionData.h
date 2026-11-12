@@ -28,6 +28,13 @@ struct GSTNCOMBATCORE_API FGSTN_LoadoutExtensionData
 	 * flags the archive drops the entry; it never fails the whole loadout.
 	 */
 	virtual bool SerializePayload(FArchive& Ar) { return false; }
+
+	/**
+	 * Whether the entry stays with the player when they take a whole kit from the ground (a backpack: spec §10 "a kit change keeps
+	 * the backpack"), instead of travelling with the kit they leave behind. False by default: what a kit swap carries over is open
+	 * (questions M11.2-M11.5), so only a type that answers it for itself says true. Read by GSTNLoadoutExtension::CarryOverOnKitSwap
+	 */
+	virtual bool StaysWithPlayerOnKitSwap() const { return false; }
 };
 
 /**
@@ -84,6 +91,13 @@ namespace GSTNLoadoutExtension
 		Added.InitializeAs<T>(Value);
 		return Added.GetMutable<T>();
 	}
+
+	/**
+	 * A whole-kit swap: Taken is the loadout the player picks up (becomes theirs), Left the loadout they put down. Every entry of Left
+	 * that StaysWithPlayerOnKitSwap moves into Taken; an entry of the same type already in Taken goes to Left in its place (a swap, so
+	 * nothing is lost). Order of the other entries is kept. Pure; the same answer on every machine
+	 */
+	GSTNCOMBATCORE_API void CarryOverOnKitSwap(TArray<FInstancedStruct>& Taken, TArray<FInstancedStruct>& Left);
 
 	/** Writes the entries as the loadout's extension payload (count, then wire id, length and bytes per entry). Entries of no known type are skipped */
 	GSTNCOMBATCORE_API void WritePayload(const TArray<FInstancedStruct>& Extensions, TArray<uint8>& OutBytes, int32 MaxBytes);

@@ -259,4 +259,36 @@ bool FGSTN_PickupsTakeSupportTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PickupsPayloadKitCarryOverTest, "GSTNPickups.Payload.KitCarryOver", PickupsTestFlags)
+bool FGSTN_PickupsPayloadKitCarryOverTest::RunTest(const FString& Parameters)
+{
+	auto Kept = [](int32 Value) { FGSTN_PickupsTestKeptExt Ext; Ext.Value = Value; return FInstancedStruct::Make(Ext); };
+	auto Plain = [](int32 Value) { FGSTN_PickupsTestPlainExt Ext; Ext.Value = Value; return FInstancedStruct::Make(Ext); };
+	TArray<FString> Errors;
+	FGSTN_LoadoutData New;
+	FInstancedStruct Left;
+
+	// The player carries a kept entry (a backpack) and a plain one (mods); the kit on the ground carries nothing
+	FGSTN_LoadoutData Current = Loadout(TEXT("KitA"));
+	Current.Extensions = { Kept(1), Plain(2) };
+	TestTrue(TEXT("the kit is taken"), FGSTN_KitPickupPayload(Loadout(TEXT("KitB"))).MakeChange(Current, New, Left, Errors));
+	const FGSTN_PickupsTestKeptExt* NewKept = GSTNLoadoutExtension::Find<FGSTN_PickupsTestKeptExt>(New.Extensions);
+	TestTrue(TEXT("the kept entry goes with the player"), NewKept && NewKept->Value == 1);
+	TestNull(TEXT("the plain one does not"), GSTNLoadoutExtension::Find<FGSTN_PickupsTestPlainExt>(New.Extensions));
+	const FGSTN_KitPickupPayload* LeftKit = Left.GetPtr<FGSTN_KitPickupPayload>();
+	TestTrue(TEXT("the plain one stays with the kit on the ground"), LeftKit && GSTNLoadoutExtension::Find<FGSTN_PickupsTestPlainExt>(LeftKit->Loadout.Extensions));
+	TestTrue(TEXT("the kept one is not left behind"), LeftKit && !GSTNLoadoutExtension::Find<FGSTN_PickupsTestKeptExt>(LeftKit->Loadout.Extensions));
+
+	// The kit on the ground brought its own kept entry: the two trade places, nothing is lost
+	FGSTN_LoadoutData Ground = Loadout(TEXT("KitB"));
+	Ground.Extensions = { Kept(3) };
+	TestTrue(TEXT("the kit is taken again"), FGSTN_KitPickupPayload(Ground).MakeChange(Current, New, Left, Errors));
+	NewKept = GSTNLoadoutExtension::Find<FGSTN_PickupsTestKeptExt>(New.Extensions);
+	TestTrue(TEXT("the player keeps their own"), NewKept && NewKept->Value == 1);
+	LeftKit = Left.GetPtr<FGSTN_KitPickupPayload>();
+	const FGSTN_PickupsTestKeptExt* LeftKept = LeftKit ? GSTNLoadoutExtension::Find<FGSTN_PickupsTestKeptExt>(LeftKit->Loadout.Extensions) : nullptr;
+	TestTrue(TEXT("the ground's one stays on the ground"), LeftKept && LeftKept->Value == 3);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -4,7 +4,30 @@
 
 #include "CoreMinimal.h"
 #include "Loadout/GSTN_LoadoutComponent.h"
+#include "Loadout/GSTN_LoadoutExtensionData.h"
 #include "GSTN_PickupsTestTypes.generated.h"
+
+/** A loadout extension that stays with the player through a kit swap (stands in for a backpack, M11 L7) */
+USTRUCT()
+struct FGSTN_PickupsTestKeptExt : public FGSTN_LoadoutExtensionData
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	int32 Value = 0;
+
+	virtual bool StaysWithPlayerOnKitSwap() const override { return true; }
+};
+
+/** A loadout extension that travels with the kit (the default) */
+USTRUCT()
+struct FGSTN_PickupsTestPlainExt : public FGSTN_LoadoutExtensionData
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	int32 Value = 0;
+};
 
 /** A loadout component that answers the asset ids it is told and grants into no ability system (the grant stays pending) */
 UCLASS(Hidden)

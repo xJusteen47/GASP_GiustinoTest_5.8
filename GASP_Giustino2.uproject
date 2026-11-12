@@ -170,6 +170,14 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNBackpack",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNBackpackPickups",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNCombatNP",
 			"Enabled": true
 		},

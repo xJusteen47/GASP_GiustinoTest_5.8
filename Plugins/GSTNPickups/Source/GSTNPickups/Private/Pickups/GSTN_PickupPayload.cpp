@@ -1,6 +1,7 @@
 // Equipment pickups (M11 G2).
 
 #include "Pickups/GSTN_PickupPayload.h"
+#include "Loadout/GSTN_LoadoutExtensionData.h"
 
 bool FGSTN_KitPickupPayload::MakeChange(const FGSTN_LoadoutData& Current, FGSTN_LoadoutData& OutNew, FInstancedStruct& OutLeftBehind, TArray<FString>& OutErrors) const
 {
@@ -10,8 +11,11 @@ bool FGSTN_KitPickupPayload::MakeChange(const FGSTN_LoadoutData& Current, FGSTN_
 		return false;
 	}
 	OutNew = Loadout;
-	// The previous loadout stays on the ground; a player with no kit leaves an empty pickup behind
-	OutLeftBehind = FInstancedStruct::Make(FGSTN_KitPickupPayload(Current));
+	// The previous loadout stays on the ground; a player with no kit leaves an empty pickup behind. What says it stays with the
+	// player (a backpack, M11 L7) moves to the new loadout instead; this plugin never learns which types those are
+	FGSTN_LoadoutData Left = Current;
+	GSTNLoadoutExtension::CarryOverOnKitSwap(OutNew.Extensions, Left.Extensions);
+	OutLeftBehind = FInstancedStruct::Make(FGSTN_KitPickupPayload(Left));
 	return true;
 }
 

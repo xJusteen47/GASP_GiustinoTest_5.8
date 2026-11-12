@@ -25,7 +25,7 @@ namespace
 
 	FSoftObjectPath TimelineClassPath() { return FSoftObjectPath(UGSTN_TestMontageTimelineAbility::StaticClass()); }
 
-	UClass* ResolveClass(const FSoftObjectPath& Path)
+	UClass* ResolveModTimelineClass(const FSoftObjectPath& Path)
 	{
 		return Cast<UClass>(Path.ResolveObject());
 	}
@@ -79,7 +79,7 @@ namespace
 
 	TStrongObjectPtr<UGSTN_CombatTableSet> Convert(const FGSTN_CompiledBindingTable& Compiled, FModTlSettings& Settings, FGSTN_CompileReport* Report = nullptr)
 	{
-		FGSTN_CombatTableConvertInput Input(&ResolveClass);
+		FGSTN_CombatTableConvertInput Input(&ResolveModTimelineClass);
 		// In memory only: the test timelines are transient objects, and a missing one must not try a disk load
 		Input.LoadTimeline = [](const FSoftObjectPath& Path) { return Cast<UGSTN_CombatTimeline>(Path.ResolveObject()); };
 		Input.InputSettings = Settings.Input.Get();
