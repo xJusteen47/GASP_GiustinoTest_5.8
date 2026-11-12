@@ -32,7 +32,8 @@ KIT = os.environ.get('PIE_CAPTURE_KIT', 'KIT_Test_Overlord')
 OUT = os.environ.get('PIE_CAPTURE_OUT') or os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()), 'AnimJab3',
                                                         time.strftime('capture_%Y%m%d_%H%M%S'))
 SIZE = 480
-# Review cameras around the pawn: (name, azimuth in degrees from the pawn's forward; 0 = in front of it, 90 = on its left). 'game' = the player's camera
+# Review cameras around the pawn: (name, azimuth in degrees from the pawn's forward, as a yaw: 0 = in front of it, 90 = on its RIGHT, 270 = on
+# its left, 45 = front right, 315 = front left). 'game' = the player's camera
 VIEWS = [('az0', 0.0), ('az45', 45.0), ('az90', 90.0), ('az180', 180.0), ('az270', 270.0), ('az315', 315.0), ('game', None)]
 ELEVATION, DISTANCE, FOV = 10.0, 380.0, 45.0
 FILL_LIGHTS = [(35.0, 5.0), (325.0, 5.0), (95.0, 3.0)]   # (azimuth the light comes from, as in VIEWS; intensity in lux)

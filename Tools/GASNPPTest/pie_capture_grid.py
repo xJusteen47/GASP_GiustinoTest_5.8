@@ -1,6 +1,6 @@
 """Grids and mp4 from a Play capture of Tools/GASNPPTest/pie_capture_move.py (plain Python, outside the editor; needs Pillow and ffmpeg).
     python pie_capture_grid.py video <capture_dir> <sequence> <out.mp4> [--fps=60] [--from=F] [--to=F]
-    python pie_capture_grid.py sheet <capture_dir> <sequence> <view> <out.png> --from=F --to=F [--cols=6] [--cell=256] [--step=1]
+    python pie_capture_grid.py sheet <capture_dir> <sequence> <view> <out.png> --from=F --to=F [--cols=6] [--cell=256] [--step=1] [--crop=x0,y0,x1,y1]
     python pie_capture_grid.py state <capture_dir> <sequence>          (the combat state per frame, compressed to runs, at most 40 lines)
 video: every frame as one image, the seven views side by side (4 x 2, the last cell is the frame's state), at 60 fps = real time; --fps=15 is 0.25x.
 sheet: one view, consecutive frames left to right, top to bottom; every cell carries its label.
@@ -50,11 +50,17 @@ def label(row):
     return text
 
 
-def cell(cap, seq, view, row, size):
+def cell(cap, seq, view, row, size, crop=None):
+    """One frame of one view, labelled. crop (x0, y0, x1, y1) in source pixels keeps that part at its own resolution instead of resizing"""
     path = os.path.join(cap, seq, view, f"f{row['f']:03d}.png")
-    img = Image.open(path).convert('RGB').resize((size, size), Image.LANCZOS) if os.path.exists(path) else Image.new('RGB', (size, size), (60, 0, 0))
+    if not os.path.exists(path):
+        img = Image.new('RGB', (size, size), (60, 0, 0))
+    elif crop:
+        img = Image.open(path).convert('RGB').crop(crop)
+    else:
+        img = Image.open(path).convert('RGB').resize((size, size), Image.LANCZOS)
     d = ImageDraw.Draw(img)
-    d.rectangle([0, 0, size, 13], fill=(0, 0, 0))
+    d.rectangle([0, 0, img.size[0], 13], fill=(0, 0, 0))
     d.text((3, 1), f'{view} {label(row)}', fill=(255, 255, 0))
     return img
 
@@ -85,9 +91,11 @@ def main():
     elif mode == 'sheet':
         view, out = args[3], args[4]
         cols, size = int(o.get('cols', 6)), int(o.get('cell', 256))
-        sheet = Image.new('RGB', (cols * size, ((len(rows) + cols - 1) // cols) * size), (20, 20, 20))
+        crop = tuple(int(v) for v in o['crop'].split(',')) if o.get('crop') else None
+        w, hgt = (crop[2] - crop[0], crop[3] - crop[1]) if crop else (size, size)
+        sheet = Image.new('RGB', (cols * w, ((len(rows) + cols - 1) // cols) * hgt), (20, 20, 20))
         for i, r in enumerate(rows):
-            sheet.paste(cell(cap, seq, view, r, size), ((i % cols) * size, (i // cols) * size))
+            sheet.paste(cell(cap, seq, view, r, size, crop), ((i % cols) * w, (i // cols) * hgt))
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         sheet.save(out)
         print(f'{out}: {len(rows)} frames, {sheet.size[0]}x{sheet.size[1]}')
