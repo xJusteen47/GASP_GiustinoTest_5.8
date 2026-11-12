@@ -70,7 +70,7 @@ void UGSTN_CombatBakeCheck::Tick(float DeltaTime)
 		{
 			continue;
 		}
-		const FGSTN_CombatTimelineData& Data = Set->TimelineRegistry[Core.ActiveTimeline]->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetTimelineData();
+		const FGSTN_CombatTimelineData& Data = *Set->GetTimelineData(Core.ActiveTimeline);
 		if (Data.BakedSockets.IsEmpty())
 		{
 			continue;

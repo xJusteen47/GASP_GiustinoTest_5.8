@@ -309,9 +309,13 @@ public:
 
 	/**
 	 * Whether the combat state of the frame being simulated says a timeline of exactly this ability class is running, and the
-	 * frame it started on (the ability compares it with the one it started on to notice a replacement by the same class)
+	 * frame it started on (the ability compares it with the one it started on to notice a replacement by the same class). OutEntry,
+	 * when given, receives the timeline registry entry the state runs (two entries of one class are two moves: a base and a modded one)
 	 */
-	bool IsTimelineRunning(const UClass* AbilityClass, int32& OutStartFrame) const;
+	bool IsTimelineRunning(const UClass* AbilityClass, int32& OutStartFrame, int32* OutEntry = nullptr) const;
+
+	/** The table set the simulated frame is on (Tables()): what a running ability resolves its registry entry against. Null before BeginPlay */
+	const UGSTN_CombatTableSet* GetActiveTableSet() const;
 
 	/**
 	 * Whether the combat state of the frame being simulated says the running timeline ended into a ricochet recoil (M4 H12), the frame the
@@ -683,7 +687,7 @@ private:
 	/** The set the frame is on, else the one of the latest state, else the empty one. Never null after BeginPlay */
 	const UGSTN_CombatTableSet& Tables() const;
 
-	/** The frame data of registry entry Index (its class default) of the set, null if the index is not one */
+	/** The frame data registry entry Index of the set runs (UGSTN_CombatTableSet::GetTimelineData: its override, else its class default's), null if the index is not one */
 	static const FGSTN_CombatTimelineData* GetRegistryTimeline(const UGSTN_CombatTableSet& Set, int32 Index);
 
 	/** Scratch of the combat tick, reused every frame (no allocation); the evaluation of the frame the gate and the commit read */

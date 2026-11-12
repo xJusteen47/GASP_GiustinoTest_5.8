@@ -254,8 +254,8 @@ void FGSTN_DefenceTickExtension::ResolveParryTrack(const FGSTN_CombatTickContext
 	{
 		return;
 	}
-	const UGSTN_GA_BaseCombat* Ability = Tables->TimelineRegistry[Running]->GetDefaultObject<UGSTN_GA_BaseCombat>();
-	const FGSTN_CombatTimelineData& Timeline = Ability->GetTimelineData();
+	// The entry's data (a modded move keeps its parry tracks, retimed), not the class default's
+	const FGSTN_CombatTimelineData& Timeline = *Tables->GetTimelineData(Running);
 	const FGSTN_ParryWindowTrack* Track = Timeline.Tracks.IsValidIndex(TrackIndex) ? Timeline.Tracks[TrackIndex].GetPtr<FGSTN_ParryWindowTrack>() : nullptr;
 	if (!Track)
 	{

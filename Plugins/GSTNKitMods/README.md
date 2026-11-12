@@ -39,11 +39,13 @@ No NP module: the base timeline of an ability with an inline timeline is read by
 
 ## Known gaps
 
-- **The simulation does not read `TimelineOverride` yet**: `UGSTN_CombatTableSet` keys the registry by ability class and reads the
-  class default's timeline. So move modifiers are baked and registered but have **no in-game effect until slice L5b** makes the
-  table set and the ability read the per-entry timeline. Verbs, passives, stats and unlocked alternatives work now.
-- A special chosen through `SlotCustomisations` is swapped in by the compiler after the extensions run, so it keeps its base
-  timeline (L5b).
+- Move modifiers take effect in a match since slice L5b: each timeline registry entry of the combat table set carries its own
+  timeline (`UGSTN_CombatTableSet::TimelineOverrides`, `GetTimelineData`), and the simulation, the running ability (montage, rate,
+  movement track) and the defence parry read it. A weapon row swapped by a slot customisation is baked from the alternative's
+  timeline (the compiler swaps after the extensions and keeps the row's override).
+- Supers (`FGSTN_SuperCompileInput`) are not modded: modifiers apply to kit and weapon rows only.
+- An adoption (a timeline started by a trigger, not a command) runs the first registry entry of its class: with a base and a
+  modded entry of one class, the base.
 - Mod visuals are data only; the attachment provider that shows them is not written (L7 with backpacks, or L5b).
 - No `bFixedTime` per key (spec §8): every key scales.
 

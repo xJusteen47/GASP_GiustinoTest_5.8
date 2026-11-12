@@ -92,7 +92,8 @@ void UGSTN_GA_MoveTimeline::BlockInHitReaction()
 
 const FGSTN_TimelineTrack_Movement* UGSTN_GA_MoveTimeline::FindMovementTrack() const
 {
-	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : GetTimelineData().Tracks)
+	// The running entry's data: a modded move moves with its own (baked) movement track
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : GetRunningTimelineData().Tracks)
 	{
 		const FGSTN_TimelineTrack* Base = Track.GetPtr<FGSTN_TimelineTrack>();
 		if (Base && Base->GetKind() == EGSTN_TimelineTrackKind::Movement)

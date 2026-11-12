@@ -176,6 +176,11 @@ never an error; `FGSTN_ModVisual` is not a type, a mod carries an L6 `FGSTN_Equi
 `MaxDerivedTimelines` per kit (64). **Gap found**: the NP table set ignores `TimelineOverride` (registry by class, data from the
 class default), so derived timelines have no in-game effect until slice L5b.
 
+*Built (M11 L5b)*: the gap is closed. `UGSTN_CombatTableSet` keeps one timeline per registry entry (`TimelineOverrides`, read through
+`GetTimelineData`; part of the checksum), the converter loads each entry's `TimelineOverride` (in memory first: derived timelines are
+transient), and the combat tick, the running `UGSTN_GA_BaseCombat` (sync variable `RunningEntry`: montage, rate, movement track) and
+the defence parry read the entry's data. A slot customisation's alternative is what the mod bakes from. Supers are not modded.
+
 Mods on support weapons and backpacks: not asked; the definition allows `CompatibleKits` to match a support weapon's tags, so it is
 a data choice later (question M11.10).
 

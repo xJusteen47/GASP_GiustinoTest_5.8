@@ -564,6 +564,8 @@ FGSTN_LoadoutData (what a player owns and saves)
 - **Timeline registry**: every (timeline ability class, timeline override) pair the loadout can run (bound ones, the
   kit's triggered abilities, passives), in deterministic order. Its index is what the combat sync state stores for the
   running timeline; a timeline ability outside the registry cannot be adopted (logged, validation error on the kit).
+  Each entry runs its override's frame data when it has one (M11 L5b: `UGSTN_CombatTableSet::GetTimelineData`, and the ability's
+  `GetRunningTimelineData` through the `RunningEntry` sync variable), so one class can be several moves (a base and a modded one).
 - **Weapon switching** is a kit timeline ability (`UGSTN_GA_WeaponSwitch`): at its swap frame the combat
   model sets `ActiveWeaponIndex` and requests the stat GE swap. Predicted and rollback-safe; switch slots are ordinary
   slots (cycle, or one per weapon).

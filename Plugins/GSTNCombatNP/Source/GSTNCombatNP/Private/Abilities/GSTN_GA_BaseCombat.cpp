@@ -7,6 +7,7 @@
 #include "Curves/CurveVector.h"
 #include "GSTN_CombatTags.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "Simulation/GSTN_CombatTableSet.h"
 #include "Timeline/GSTN_CombatTimeline.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNBaseCombat, Log, All);
@@ -25,6 +26,7 @@ UGSTN_GA_BaseCombat::UGSTN_GA_BaseCombat(const FObjectInitializer& ObjectInitial
 	bStarted.Value = false;
 	StartClock.Value = INDEX_NONE;
 	StartFrame.Value = INDEX_NONE;
+	RunningEntry.Value = INDEX_NONE;
 	bAwaitingAdoption.Value = false;
 	AwaitSinceFrame.Value = INDEX_NONE;
 	bRecoilPlayed.Value = false;
@@ -50,8 +52,27 @@ void UGSTN_GA_BaseCombat::LoadTimelineContent(TArray<TObjectPtr<UObject>>& OutKe
 	{
 		OutKeep.AddUnique(TimelineAsset.LoadSynchronous());
 	}
+	LoadTimelineDataContent(GetTimelineData(), OutKeep);
+}
+
+const FGSTN_CombatTimelineData& UGSTN_GA_BaseCombat::GetRunningTimelineData() const
+{
+	// The entry is checked against the class: a table set of another revision may hold another move at that index
+	const UGSTN_CombatSimComponent* Combat = RunningEntry.Value != INDEX_NONE ? GetCombatComponent() : nullptr;
+	const UGSTN_CombatTableSet* Set = Combat ? Combat->GetActiveTableSet() : nullptr;
+	if (Set && Set->TimelineRegistry.IsValidIndex(RunningEntry.Value) && Set->TimelineRegistry[RunningEntry.Value] == GetClass())
+	{
+		if (const FGSTN_CombatTimelineData* Data = Set->GetTimelineData(RunningEntry.Value))
+		{
+			return *Data;
+		}
+	}
+	return GetTimelineData();
+}
+
+void UGSTN_GA_BaseCombat::LoadTimelineDataContent(const FGSTN_CombatTimelineData& Data, TArray<TObjectPtr<UObject>>& OutKeep)
+{
 	// The synced montage is played from a plain pointer: it has to be in memory before the first frame of the timeline
-	const FGSTN_CombatTimelineData& Data = GetTimelineData();
 	if (!Data.Montage.IsNull())
 	{
 		OutKeep.AddUnique(Data.Montage.LoadSynchronous());
@@ -114,7 +135,9 @@ bool UGSTN_GA_BaseCombat::IsStillTheRunningTimeline() const
 {
 	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
 	int32 StateStart = INDEX_NONE;
-	return Combat && Combat->IsTimelineRunning(GetClass(), StateStart) && StateStart == StartFrame.Value;
+	int32 StateEntry = INDEX_NONE;
+	return Combat && Combat->IsTimelineRunning(GetClass(), StateStart, &StateEntry) && StateStart == StartFrame.Value
+		&& (RunningEntry.Value == INDEX_NONE || StateEntry == RunningEntry.Value);
 }
 
 void UGSTN_GA_BaseCombat::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
@@ -129,6 +152,7 @@ void UGSTN_GA_BaseCombat::ActivateAbility(const FGameplayAbilitySpecHandle Handl
 	bStarted.Value = false;
 	StartClock.Value = INDEX_NONE;
 	StartFrame.Value = INDEX_NONE;
+	RunningEntry.Value = INDEX_NONE;
 	AwaitSinceFrame.Value = INDEX_NONE;
 	bRecoilPlayed.Value = false;
 	RecoilStartClock.Value = INDEX_NONE;
@@ -164,9 +188,13 @@ void UGSTN_GA_BaseCombat::BeginTimeline(int32 StateStart)
 	bStarted.Value = true;
 	StartFrame.Value = StateStart;
 	StartClock.Value = Combat ? Combat->GetCombatClock() : INDEX_NONE;
+	int32 EntryStart = INDEX_NONE;
+	int32 Entry = INDEX_NONE;
+	RunningEntry.Value = Combat && Combat->IsTimelineRunning(GetClass(), EntryStart, &Entry) ? Entry : INDEX_NONE;
 
-	const FGSTN_CombatTimelineData& Data = GetTimelineData();
+	const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
 	UAnimMontage* Montage = Data.Montage.Get();
+	TimelineMontagePlayed = Montage;
 	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
 	if (Montage && AbilitySystem)
 	{
@@ -188,7 +216,7 @@ void UGSTN_GA_BaseCombat::BeginRecoil(const FGSTN_RicochetResponse& Response, fl
 	RecoilLength.Value = Response.RecoilFrames;
 
 	// The timeline's own montage gives way to the recoil's
-	UAnimMontage* TimelineMontage = GetTimelineData().Montage.Get();
+	UAnimMontage* TimelineMontage = TimelineMontagePlayed ? TimelineMontagePlayed.Get() : GetRunningTimelineData().Montage.Get();
 	float Time = 0.f;
 	if (TimelineMontage && AbilitySystem->GetPlayingSyncedMontage(Time) == TimelineMontage)
 	{
@@ -297,8 +325,8 @@ void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, co
 	if (bStarted.Value)
 	{
 		// Stop the montage only if it is still this ability's: another timeline may have started its own in the same frame
-		const FGSTN_CombatTimelineData& Data = GetTimelineData();
-		UAnimMontage* Montage = Data.Montage.Get();
+		// The montage BeginTimeline played; after a rollback that restored a started state without it, the one of the running data
+		UAnimMontage* Montage = TimelineMontagePlayed ? TimelineMontagePlayed.Get() : GetRunningTimelineData().Montage.Get();
 		UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
 		float Time = 0.f;
 		if (Montage && AbilitySystem && AbilitySystem->GetPlayingSyncedMontage(Time) == Montage)
@@ -317,6 +345,8 @@ void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, co
 			bRecoilPlayed.Value = false;
 		}
 		bStarted.Value = false;
+		RunningEntry.Value = INDEX_NONE;
+		TimelineMontagePlayed = nullptr;
 	}
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }

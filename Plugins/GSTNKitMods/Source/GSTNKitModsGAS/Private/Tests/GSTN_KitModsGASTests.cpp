@@ -152,4 +152,51 @@ bool FGSTNKitModsRulesViewTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTNKitModsCustomisedRowTest, "GSTNKitMods.GAS.CustomisedRowBakesAlternative", KitModsGASTestFlags)
+bool FGSTNKitModsCustomisedRowTest::RunTest(const FString& Parameters)
+{
+	// L5b: the compiler swaps a slot customisation's alternative into a weapon row after the extensions and keeps the row's override,
+	// so the mod must bake the alternative's timeline. A combat timeline class of the NP module, found by name (this plugin never links it)
+	UClass* Alternative = FindObject<UClass>(nullptr, TEXT("/Script/GSTNCombatNP.GSTN_TestMontageTimelineAbility"));
+	if (!Alternative)
+	{
+		AddInfo(TEXT("GSTNCombatNP is not loaded: nothing to check"));
+		return true;
+	}
+	FModFixture Fixture;
+	FGSTN_CompileInput Input = Fixture.MakeInput();
+	FGSTN_BindingInput& WeaponAttack = Input.Weapons[0].Bindings.AddDefaulted_GetRef();
+	WeaponAttack.Command = GSTNCommandTags::Attack;
+	WeaponAttack.Ability = FSoftObjectPath(UGameplayAbility::StaticClass());	// no timeline: alone it would never be modded
+	FGSTN_SlotCustomisation& Customisation = Input.Customisations.AddDefaulted_GetRef();
+	Customisation.WeaponIndex = 0;
+	Customisation.Command = GSTNCommandTags::Attack;
+	Customisation.AlternativeAbility = TSoftClassPtr<UObject>(Alternative);
+
+	FGSTN_LoadoutExtensionContext Context;
+	Context.Resolved = &Fixture.Resolved;
+	FGSTN_KitModLoadout::ContributeCompileInput(Context, Input);
+	if (!TestEqual(TEXT("The weapon keeps its attack row"), Input.Weapons[0].Bindings.Num(), 1))
+	{
+		return false;
+	}
+	const FGSTN_BindingInput& Row = Input.Weapons[0].Bindings[0];
+	TestEqual(TEXT("The row still names its own ability (the compiler swaps it)"), Row.Ability, FSoftObjectPath(UGameplayAbility::StaticClass()));
+	TestEqual(TEXT("The derived timeline is baked from the alternative"), Row.TimelineOverride.GetAssetFName(),
+		FGSTN_KitModBaking::MakeDerivedName(FSoftObjectPath(Alternative), { FSoftObjectPath(Fixture.LongBlade) }));
+
+	// Another weapon's customisation does not touch this row
+	FGSTN_CompileInput Other = Fixture.MakeInput();
+	FGSTN_BindingInput& OtherAttack = Other.Weapons[0].Bindings.AddDefaulted_GetRef();
+	OtherAttack.Command = GSTNCommandTags::Attack;
+	OtherAttack.Ability = FSoftObjectPath(UGameplayAbility::StaticClass());
+	FGSTN_SlotCustomisation& Elsewhere = Other.Customisations.AddDefaulted_GetRef();
+	Elsewhere.WeaponIndex = 1;
+	Elsewhere.Command = GSTNCommandTags::Attack;
+	Elsewhere.AlternativeAbility = TSoftClassPtr<UObject>(Alternative);
+	FGSTN_KitModLoadout::ContributeCompileInput(Context, Other);
+	TestFalse(TEXT("A row customised on another weapon is not modded"), Other.Weapons[0].Bindings.Num() == 1 && Other.Weapons[0].Bindings[0].TimelineOverride.IsValid());
+	return true;
+}
+
 #endif

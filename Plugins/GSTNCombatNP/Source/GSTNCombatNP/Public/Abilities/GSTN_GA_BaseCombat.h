@@ -51,8 +51,19 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Timeline")
 	TSoftObjectPtr<UGSTN_CombatTimeline> TimelineAsset;
 
-	/** The frame data this class runs: the asset's when it is set and loaded, else the inline one */
+	/** The frame data this class runs by default: the asset's when it is set and loaded, else the inline one */
 	const FGSTN_CombatTimelineData& GetTimelineData() const;
+
+	/**
+	 * The frame data this activation runs (M11 L5b): the one of the timeline registry entry the combat state started it with, which
+	 * may be a binding's TimelineOverride or a kit mod's derived timeline, else GetTimelineData. Everything the running ability reads
+	 * (montage, rate, movement track) goes through this, so a modded move plays its own data, the same on every machine (the entry is
+	 * a sync variable, the table set a pure function of the loadout revision)
+	 */
+	const FGSTN_CombatTimelineData& GetRunningTimelineData() const;
+
+	/** The timeline registry entry this activation started with, INDEX_NONE before it started */
+	int32 GetRunningTimelineEntry() const { return RunningEntry.Value; }
 
 	/** Loads the soft references the simulation needs (the timeline asset, the montage) and keeps them in this instance. Call outside the simulation; the avatar being set does */
 	void PreloadTimelineContent();
@@ -65,6 +76,9 @@ public:
 
 	/** The montage and the movement curve of a ricochet response, appended to OutKeep (the table set does it for the weapon and kit fallbacks). Not in a tick */
 	static void LoadRecoilContent(const FGSTN_RicochetResponse& Response, TArray<TObjectPtr<UObject>>& OutKeep);
+
+	/** The soft content of one timeline's data (montage, recoils of the move and of its hitbox groups), loaded into OutKeep. Not in a tick */
+	static void LoadTimelineDataContent(const FGSTN_CombatTimelineData& Data, TArray<TObjectPtr<UObject>>& OutKeep);
 
 	/**
 	 * The commit of a timeline that just started (cost and cooldown): when the ability refuses it (the meter dropped since the
@@ -122,6 +136,14 @@ private:
 	/** True once the ability found itself in the combat state and started (sync var: rolled back with the instance) */
 	UPROPERTY(Transient)
 	FSyncBool bStarted;
+
+	/** Timeline registry entry the combat state started this activation with (sync var), INDEX_NONE before the start */
+	UPROPERTY(Transient)
+	FSyncInteger RunningEntry;
+
+	/** The montage BeginTimeline played (kept alive by the ability or the table set), to find it on the slot later. Not state: only read to stop it */
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> TimelineMontagePlayed;
 
 	/** Combat clock at the start, the origin of GetTimelineFrame */
 	UPROPERTY(Transient)

@@ -13,6 +13,7 @@
 #include "GSTN_CombatTableSet.generated.h"
 
 class UGameplayAbility;
+class UGSTN_CombatTimeline;
 
 class UGSTN_CombatSettings;
 class UGSTN_GA_BaseCombat;
@@ -56,6 +57,20 @@ public:
 	 */
 	UPROPERTY(Transient)
 	TArray<TSubclassOf<UGSTN_GA_BaseCombat>> TimelineRegistry;
+
+	/**
+	 * Per registry entry: the timeline the entry runs instead of its class default's, null for the class default's (M11 L5b). Set from
+	 * the compiled registry's TimelineOverride: a binding's own timeline asset, or a kit mod's derived transient timeline. Two entries
+	 * of one class with different overrides are two moves with their own frame data; the sim and the ability read GetTimelineData.
+	 */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UGSTN_CombatTimeline>> TimelineOverrides;
+
+	/**
+	 * The frame data registry entry Index runs: its override's, else its class default's (UGSTN_GA_BaseCombat::GetTimelineData).
+	 * Null if the index is not an entry. The one place the simulation, the abilities and the extensions read a move's frame data from
+	 */
+	const FGSTN_CombatTimelineData* GetTimelineData(int32 Index) const;
 
 	/** The timeline assets and montages of the registry classes, loaded with the set and kept alive by it */
 	UPROPERTY(Transient)
@@ -139,12 +154,16 @@ public:
 	/** Appends the adoptable timelines after the bound ones, with no tier and no default window (combat-m3 6.3) */
 	void AppendAdoptable(TConstArrayView<TSubclassOf<UGSTN_GA_BaseCombat>> Adoptable);
 
-	/** Registers one timeline class and loads its content. Returns its registry index; with bShareExisting a class already registered is not added twice */
-	int32 AddTimelineClass(TSubclassOf<UGSTN_GA_BaseCombat> TimelineClass, int32 Tier, int32 DefaultOverrideFrames, bool bShareExisting);
+	/**
+	 * Registers one timeline class and loads its content. Returns its registry index; with bShareExisting an entry of the same class
+	 * and the same override is not added twice. Override (may be null) replaces the class default's frame data for this entry only
+	 */
+	int32 AddTimelineClass(TSubclassOf<UGSTN_GA_BaseCombat> TimelineClass, int32 Tier, int32 DefaultOverrideFrames, bool bShareExisting, UGSTN_CombatTimeline* Override = nullptr);
 
 	/**
 	 * CRC32 of the table as bytes: the compiled table, the commands by tag name, the bindings (command, source mask, class path,
-	 * registry index, jump role), the registry (class path, tier, default window, total frames), the weapon stats and the reserved
+	 * registry index, jump role), the registry (class path, override path, tier, default window, total frames of the data the entry
+	 * runs), the weapon stats and the reserved
 	 * block. No pointer and no index that depends on load order, so two machines with the same loadout get the same value.
 	 */
 	uint32 ComputeChecksum() const;
@@ -153,7 +172,7 @@ public:
 /** What a conversion reads besides the compiled table. The settings are the project's, the loader is injected so a test needs no content */
 struct GSTNCOMBATNP_API FGSTN_CombatTableConvertInput
 {
-	FGSTN_CombatTableConvertInput(TFunction<UClass*(const FSoftObjectPath&)> InLoadClass) : LoadClass(MoveTemp(InLoadClass)) {}
+	FGSTN_CombatTableConvertInput(TFunction<UClass*(const FSoftObjectPath&)> InLoadClass);
 
 	const UGSTN_InputSettings* InputSettings = nullptr;
 	const UGSTN_CombatSettings* CombatSettings = nullptr;
@@ -166,6 +185,12 @@ struct GSTNCOMBATNP_API FGSTN_CombatTableConvertInput
 
 	/** Ability class of a compiled soft path, null if it does not load. Synchronous: the converter runs outside any tick */
 	TFunction<UClass*(const FSoftObjectPath&)> LoadClass;
+
+	/**
+	 * The timeline of a registry entry's TimelineOverride, null if it does not load (the entry then runs its class default's, with an
+	 * error). Default: the object already in memory (a kit mod's derived timeline is a transient object), else a synchronous load
+	 */
+	TFunction<UGSTN_CombatTimeline*(const FSoftObjectPath&)> LoadTimeline;
 
 	TArray<FGSTN_WeaponStatsEntry> WeaponStats;
 	TArray<FGSTN_RicochetResponse> WeaponRicochet;

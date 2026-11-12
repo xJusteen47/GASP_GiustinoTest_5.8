@@ -61,11 +61,11 @@ namespace
 	}
 
 	/** Ability asset tags plus the command: what a move filter is matched against */
-	FGameplayTagContainer GetMoveTags(const FGSTN_BindingInput& Binding)
+	FGameplayTagContainer GetMoveTags(const FGSTN_BindingInput& Binding, const FSoftObjectPath& Ability)
 	{
 		FGameplayTagContainer Tags;
 		Tags.AddTag(Binding.Command);
-		if (const UClass* Class = TSoftClassPtr<UGameplayAbility>(Binding.Ability).LoadSynchronous())
+		if (const UClass* Class = TSoftClassPtr<UGameplayAbility>(Ability).LoadSynchronous())
 		{
 			if (const UGameplayAbility* Default = Class->GetDefaultObject<UGameplayAbility>())
 			{
@@ -252,13 +252,30 @@ void FGSTN_KitModLoadout::ContributeCompileInput(const FGSTN_LoadoutExtensionCon
 	const int32 MaxDerived = Resolved.KitSlots->MaxDerivedTimelines;
 	TSet<FName> Derived;
 	bool bCapWarned = false;
-	auto ModifyBinding = [&](FGSTN_BindingInput& Binding)
+	// The ability a weapon row really binds: the compiler swaps in a slot customisation's alternative after this extension and keeps
+	// the row's override, so a modded row has to be baked from the alternative's timeline (and filtered by its tags), never from the
+	// ability it replaces (L5b). The last customisation of (weapon, command) wins, as in the compiler
+	auto EffectiveAbility = [&Input](const FGSTN_BindingInput& Binding, int32 WeaponIndex) -> FSoftObjectPath
 	{
-		if (!Binding.Ability.IsValid())
+		FSoftObjectPath Ability = Binding.Ability;
+		for (const FGSTN_SlotCustomisation& Customisation : Input.Customisations)
+		{
+			const FSoftObjectPath Alternative = Customisation.AlternativeAbility.ToSoftObjectPath();
+			if (WeaponIndex != INDEX_NONE && Customisation.WeaponIndex == WeaponIndex && Customisation.Command == Binding.Command && !Alternative.IsNull())
+			{
+				Ability = Alternative;
+			}
+		}
+		return Ability;
+	};
+	auto ModifyBinding = [&](FGSTN_BindingInput& Binding, int32 WeaponIndex)
+	{
+		const FSoftObjectPath Ability = EffectiveAbility(Binding, WeaponIndex);
+		if (!Ability.IsValid())
 		{
 			return;
 		}
-		const FGameplayTagContainer MoveTags = GetMoveTags(Binding);
+		const FGameplayTagContainer MoveTags = GetMoveTags(Binding, Ability);
 		TArray<const FGSTN_MoveModifier*> Selected;
 		for (const UGSTN_KitModDefinition* Mod : Resolved.Mods)
 		{
@@ -276,11 +293,11 @@ void FGSTN_KitModLoadout::ContributeCompileInput(const FGSTN_LoadoutExtensionCon
 		}
 		const FGSTN_CombinedMoveModifier Combined = FGSTN_KitModBaking::Combine(Selected, Resolved.KitSlots->Limits);
 		FGSTN_CombatTimelineData Base;
-		if (Combined.IsIdentity() || !FindBaseTimeline(Binding.Ability, Binding.TimelineOverride, Base))
+		if (Combined.IsIdentity() || !FindBaseTimeline(Ability, Binding.TimelineOverride, Base))
 		{
 			return;
 		}
-		const FSoftObjectPath BasePath = Binding.TimelineOverride.IsValid() ? Binding.TimelineOverride : Binding.Ability;
+		const FSoftObjectPath BasePath = Binding.TimelineOverride.IsValid() ? Binding.TimelineOverride : Ability;
 		const FName Name = FGSTN_KitModBaking::MakeDerivedName(BasePath, Resolved.ModIds);
 		if (!Derived.Contains(Name) && Derived.Num() >= MaxDerived)
 		{
@@ -300,13 +317,13 @@ void FGSTN_KitModLoadout::ContributeCompileInput(const FGSTN_LoadoutExtensionCon
 	};
 	for (FGSTN_BindingInput& Binding : Input.Kit.Bindings)
 	{
-		ModifyBinding(Binding);
+		ModifyBinding(Binding, INDEX_NONE);
 	}
-	for (FGSTN_WeaponCompileInput& Weapon : Input.Weapons)
+	for (int32 WeaponIndex = 0; WeaponIndex < Input.Weapons.Num(); ++WeaponIndex)
 	{
-		for (FGSTN_BindingInput& Binding : Weapon.Bindings)
+		for (FGSTN_BindingInput& Binding : Input.Weapons[WeaponIndex].Bindings)
 		{
-			ModifyBinding(Binding);
+			ModifyBinding(Binding, WeaponIndex);
 		}
 	}
 }

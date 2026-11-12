@@ -14,6 +14,7 @@
 #include "GSTN_CombatTags.h"
 #include "Misc/Crc.h"
 #include "Serialization/MemoryWriter.h"
+#include "Timeline/GSTN_CombatTimeline.h"
 
 namespace
 {
@@ -41,7 +42,17 @@ namespace
 	}
 }
 
-int32 UGSTN_CombatTableSet::AddTimelineClass(TSubclassOf<UGSTN_GA_BaseCombat> TimelineClass, int32 Tier, int32 DefaultOverrideFrames, bool bShareExisting)
+FGSTN_CombatTableConvertInput::FGSTN_CombatTableConvertInput(TFunction<UClass*(const FSoftObjectPath&)> InLoadClass)
+	: LoadClass(MoveTemp(InLoadClass))
+	, LoadTimeline([](const FSoftObjectPath& Path) -> UGSTN_CombatTimeline*
+	{
+		UObject* Object = Path.ResolveObject();
+		return Cast<UGSTN_CombatTimeline>(Object ? Object : Path.TryLoad());
+	})
+{
+}
+
+int32 UGSTN_CombatTableSet::AddTimelineClass(TSubclassOf<UGSTN_GA_BaseCombat> TimelineClass, int32 Tier, int32 DefaultOverrideFrames, bool bShareExisting, UGSTN_CombatTimeline* Override)
 {
 	if (!TimelineClass)
 	{
@@ -49,19 +60,41 @@ int32 UGSTN_CombatTableSet::AddTimelineClass(TSubclassOf<UGSTN_GA_BaseCombat> Ti
 	}
 	if (bShareExisting)
 	{
-		const int32 Existing = TimelineRegistry.IndexOfByKey(TimelineClass);
-		if (Existing != INDEX_NONE)
+		for (int32 Existing = 0; Existing < TimelineRegistry.Num(); ++Existing)
 		{
-			return Existing;
+			if (TimelineRegistry[Existing] == TimelineClass && TimelineOverrides[Existing] == Override)
+			{
+				return Existing;
+			}
 		}
 	}
 	const int32 Index = TimelineRegistry.Add(TimelineClass);
+	TimelineOverrides.Add(Override);
 	TimelineTier.Add(Tier);
 	TimelineDefaultOverride.Add(DefaultOverrideFrames);
 
-	// Soft content the timeline needs in memory before its first frame, loaded here and never in a tick, kept by this set
+	// Soft content the timeline needs in memory before its first frame, loaded here and never in a tick, kept by this set. The class
+	// default's content is loaded even for an overridden entry: an adoption by class and the ability's own preload still read it
 	TimelineClass->GetDefaultObject<UGSTN_GA_BaseCombat>()->LoadTimelineContent(TimelineContent);
+	if (Override)
+	{
+		TimelineContent.AddUnique(Override);
+		UGSTN_GA_BaseCombat::LoadTimelineDataContent(Override->Data, TimelineContent);
+	}
 	return Index;
+}
+
+const FGSTN_CombatTimelineData* UGSTN_CombatTableSet::GetTimelineData(int32 Index) const
+{
+	if (!TimelineRegistry.IsValidIndex(Index) || !TimelineRegistry[Index])
+	{
+		return nullptr;
+	}
+	if (const UGSTN_CombatTimeline* Override = TimelineOverrides.IsValidIndex(Index) ? TimelineOverrides[Index].Get() : nullptr)
+	{
+		return &Override->Data;
+	}
+	return &TimelineRegistry[Index]->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetTimelineData();
 }
 
 uint8 UGSTN_CombatTableSet::MakeReactionFlags(const UClass* AbilityClass)
@@ -85,6 +118,7 @@ uint8 UGSTN_CombatTableSet::MakeReactionFlags(const UGameplayAbility* Default)
 void UGSTN_CombatTableSet::DeriveFromBindings(const UGSTN_InputSettings& InputSettings, const UGSTN_CombatSettings& CombatSettings)
 {
 	TimelineRegistry.Reset();
+	TimelineOverrides.Reset();
 	TimelineContent.Reset();
 	BindingTimeline.Reset();
 	BindingJumpRole.Reset();
@@ -170,11 +204,13 @@ uint32 UGSTN_CombatTableSet::ComputeChecksum() const
 	for (int32 Index = 0; Index < TimelineRegistry.Num(); ++Index)
 	{
 		WriteString(Ar, TimelineRegistry[Index] ? TimelineRegistry[Index]->GetPathName() : FString());
+		WriteString(Ar, TimelineOverrides.IsValidIndex(Index) && TimelineOverrides[Index] ? TimelineOverrides[Index]->GetPathName() : FString());
 		int32 Tier = TimelineTier.IsValidIndex(Index) ? TimelineTier[Index] : 0;
 		Ar << Tier;
 		int32 DefaultOverride = TimelineDefaultOverride.IsValidIndex(Index) ? TimelineDefaultOverride[Index] : 0;
 		Ar << DefaultOverride;
-		int32 TotalFrames = TimelineRegistry[Index] ? TimelineRegistry[Index]->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetTimelineData().TotalFrames : 0;
+		const FGSTN_CombatTimelineData* Data = GetTimelineData(Index);
+		int32 TotalFrames = Data ? Data->TotalFrames : 0;
 		Ar << TotalFrames;
 	}
 
@@ -348,10 +384,23 @@ UGSTN_CombatTableSet* FGSTN_CombatTableConverter::Convert(UObject* Outer, const 
 	}
 	for (int32 Index = 0; Index < Compiled.Registry.Num() && Index < FGSTN_CompiledBindingTable::MaxRegistryEntries; ++Index)
 	{
-		UClass* Class = Input.LoadClass(Compiled.Registry[Index].Ability);
+		const FGSTN_TimelineRegistryEntry& RegistryEntry = Compiled.Registry[Index];
+		UClass* Class = Input.LoadClass(RegistryEntry.Ability);
 		if (Class && Class->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()))
 		{
-			RegistryRemap[Index] = Set->AddTimelineClass(Class, 0, 0, false);
+			// The entry's own timeline (a binding's TimelineOverride, a kit mod's derived timeline). One that does not load keeps the
+			// entry on its class default's data: the move still exists, only its change is lost, and the report says so
+			UGSTN_CombatTimeline* Override = nullptr;
+			if (RegistryEntry.TimelineOverride.IsValid())
+			{
+				Override = Input.LoadTimeline ? Input.LoadTimeline(RegistryEntry.TimelineOverride) : nullptr;
+				if (!Override)
+				{
+					Error(FString::Printf(TEXT("Timeline registry entry %d (%s): override %s does not load, the class default's timeline is used"),
+						Index, *RegistryEntry.Ability.ToString(), *RegistryEntry.TimelineOverride.ToString()));
+				}
+			}
+			RegistryRemap[Index] = Set->AddTimelineClass(Class, 0, 0, false, Override);
 		}
 		else
 		{

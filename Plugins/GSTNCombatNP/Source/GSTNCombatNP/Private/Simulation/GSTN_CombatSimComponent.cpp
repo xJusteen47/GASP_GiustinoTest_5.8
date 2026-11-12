@@ -210,9 +210,12 @@ void UGSTN_CombatSimComponent::AdoptTableSet(UGSTN_CombatTableSet* Set)
 	TableSets.Add(Set);
 
 	// Reserve for the largest timeline, so no frame allocates (the output keeps its capacity)
-	for (const TSubclassOf<UGSTN_GA_BaseCombat>& TimelineClass : Set->TimelineRegistry)
+	for (int32 Index = 0; Index < Set->TimelineRegistry.Num(); ++Index)
 	{
-		TimelineOutput.Reserve(TimelineClass->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetTimelineData());
+		if (const FGSTN_CombatTimelineData* Data = Set->GetTimelineData(Index))
+		{
+			TimelineOutput.Reserve(*Data);
+		}
 	}
 
 	// The registry, the tiers and the window defaults come from local ini and class default data, and must be the same on every
@@ -534,7 +537,7 @@ bool UGSTN_CombatSimComponent::ServerApplyLoadoutChange(UGSTN_LoadoutComponent* 
 
 const FGSTN_CombatTimelineData* UGSTN_CombatSimComponent::GetRegistryTimeline(const UGSTN_CombatTableSet& Set, int32 Index)
 {
-	return Set.TimelineRegistry.IsValidIndex(Index) && Set.TimelineRegistry[Index] ? &Set.TimelineRegistry[Index]->GetDefaultObject<UGSTN_GA_BaseCombat>()->GetTimelineData() : nullptr;
+	return Set.GetTimelineData(Index);
 }
 
 int32 UGSTN_CombatSimComponent::GetSimulationFrame() const
@@ -543,7 +546,12 @@ int32 UGSTN_CombatSimComponent::GetSimulationFrame() const
 	return Sync ? Sync->Core.Input.History.GetLatestFrame() : INDEX_NONE;
 }
 
-bool UGSTN_CombatSimComponent::IsTimelineRunning(const UClass* AbilityClass, int32& OutStartFrame) const
+const UGSTN_CombatTableSet* UGSTN_CombatSimComponent::GetActiveTableSet() const
+{
+	return FrameTables || !TableSets.IsEmpty() || EmptyTableSet ? &Tables() : nullptr;
+}
+
+bool UGSTN_CombatSimComponent::IsTimelineRunning(const UClass* AbilityClass, int32& OutStartFrame, int32* OutEntry) const
 {
 	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
 	const UGSTN_CombatTableSet& Current = Tables();
@@ -552,6 +560,10 @@ bool UGSTN_CombatSimComponent::IsTimelineRunning(const UClass* AbilityClass, int
 		return false;
 	}
 	OutStartFrame = Sync->Core.TimelineStartFrame;
+	if (OutEntry)
+	{
+		*OutEntry = Sync->Core.ActiveTimeline;
+	}
 	return Current.TimelineRegistry[Sync->Core.ActiveTimeline] == AbilityClass;
 }
 
