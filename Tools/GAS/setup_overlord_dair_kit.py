@@ -40,7 +40,9 @@ AIRBORNE_TAG = 'Input.Context.Airborne'
 BLEND_IN_SECONDS = 2.0 / 60.0
 # Without this the montage keeps the engine default (0.25 s): it starts to blend out on animation frame 27 of 42 and the whole recovery is mixed
 # with the falling pose (seen on the first Play capture, 2026-11-12). Same provisional value as the jab kit
-BLEND_OUT_SECONDS = 4.0 / 60.0
+# OVERLORD_DAIR_BLEND_OUT_FRAMES overrides it for the kits of this run (v9 review: 8 frames, so the recovery melts into the fall instead of
+# snapping in 2 frames at f38-39); the kits not named in OVERLORD_DAIR_ANIM keep what they have
+BLEND_OUT_SECONDS = float(os.environ.get('OVERLORD_DAIR_BLEND_OUT_FRAMES', '4')) / 60.0
 # Same reason as the jab kit: the montage advances one animation frame per simulation tick, so timeline frame N shows animation frame N
 SIM_HZ, ANIM_FPS = 62.5, 60.0
 MONTAGE_PLAY_RATE = SIM_HZ / ANIM_FPS
@@ -322,4 +324,4 @@ def run(refresh=False, anims=None):
 
 
 if __name__ == '__main__':
-    run()
+    run(refresh=os.environ.get('OVERLORD_DAIR_REFRESH') == '1')   # headless rerun after a new `animpipe build`

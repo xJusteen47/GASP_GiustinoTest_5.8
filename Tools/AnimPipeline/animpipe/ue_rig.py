@@ -127,6 +127,8 @@ def roundtrip(anim, rig, name, fps_num=60, fps_den=1, keep_frames=None, out=None
     # the spawnable only exists while the sequence is open: SequencerTools.export_anim_sequence finds no skel mesh
     res["export_ok"] = bool(unreal.ControlRigSequencerLibrary.export_anim_sequence_from_sequencer(dst, eo, binding, False))
     res["out_asset"] = dst.get_path_name().split(".")[0]
+    if res["export_ok"]:
+        res["ik_feet"] = _bake_ik_feet(dst)
     try:
         res["out_frames"] = dst.get_editor_property("number_of_sampled_keys")
     except Exception:
@@ -358,6 +360,8 @@ def build(spec):
     res["out_length"] = dst.get_play_length()
     if spec.get("lock_lengths", True):
         res["lock_lengths"] = _lock_lengths(dst, unreal.load_asset(spec["source_anim"]))
+    if res["export_ok"]:
+        res["ik_feet"] = _bake_ik_feet(dst)      # after the length lock, so the ik bones match the final feet
     EAL.save_asset(seq.get_path_name().split(".")[0]); EAL.save_asset(res["out_asset"])
     unreal.LevelSequenceEditorBlueprintLibrary.close_level_sequence()
     if spec.get("out"):
@@ -394,6 +398,41 @@ def _lock_lengths(dst, src):
     ctrl.close_bracket(False)
     big = sorted(((round(v, 2), k) for k, v in per.items() if v > 0.1), reverse=True)[:8]
     return {"bones": done, "removed_max_cm": round(worst, 3), "at": wb, "over_0.1": big, "frames": n}
+
+
+def _bake_ik_feet(dst):
+    """ik_foot_l/r follow the feet on every frame of the exported clip. The body rig does not drive the ik bones, so the
+    export left them at the reference pose; the game's animation Blueprint places the feet ON those bones, so in Play the
+    legs did not follow the clip (seen 2026-11-12: dair legs hanging in the tuck, the jab's "squat"). Each ik bone gets
+    its foot's component-space transform, local to ik_foot_root. Derived from the FK bones: a rebuild writes the same keys."""
+    try:
+        n = int(dst.get_editor_property("number_of_sampled_keys"))
+        step = dst.get_play_length() / max(n - 1, 1)
+        opts = unreal.AnimPoseEvaluationOptions()
+        APE, WORLD = unreal.AnimPoseExtensions, unreal.AnimPoseSpaces.WORLD
+        keys = {s: ([], [], []) for s in "lr"}
+        for i in range(n):
+            pose = APE.get_anim_pose_at_time(dst, i * step, opts)
+            root = APE.get_bone_pose(pose, "ik_foot_root", WORLD)
+            for s in "lr":
+                local = unreal.MathLibrary.make_relative_transform(APE.get_bone_pose(pose, f"foot_{s}", WORLD), root)
+                keys[s][0].append(local.translation); keys[s][1].append(local.rotation); keys[s][2].append(unreal.Vector(1.0, 1.0, 1.0))
+        ctrl = dst.get_editor_property("controller")
+        ctrl.open_bracket(unreal.Text("animpipe bake ik_foot from the feet"), False)
+        for s in "lr":
+            ctrl.remove_bone_track(f"ik_foot_{s}", False)
+            ctrl.add_bone_curve(f"ik_foot_{s}", False)
+            ctrl.set_bone_track_keys(f"ik_foot_{s}", keys[s][0], keys[s][1], keys[s][2], False)
+        ctrl.close_bracket(False)
+        worst = 0.0
+        for i in (0, n // 2, n - 1):
+            pose = APE.get_anim_pose_at_time(dst, i * step, opts)
+            for s in "lr":
+                worst = max(worst, APE.get_bone_pose(pose, f"ik_foot_{s}", WORLD).translation.distance(
+                    APE.get_bone_pose(pose, f"foot_{s}", WORLD).translation))
+        return {"frames": n, "ik_to_foot_max_cm": round(worst, 3)}
+    except Exception as e:
+        return {"error": repr(e)[:300]}
 
 
 def probe(name, out=None):

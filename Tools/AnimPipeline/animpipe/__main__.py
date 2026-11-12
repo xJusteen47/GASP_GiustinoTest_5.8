@@ -137,7 +137,7 @@ def build(path):
     worst = max(r.get("vs_source_cm", {"-": -1}).items(), key=lambda kv: kv[1])
     wpose = max(r.get("at_poses_cm", {"-": -1}).items(), key=lambda kv: kv[1])
     print(f"build {c['move']}: bake {r.get('bake_ok')} export {r.get('export_ok')} keys {r.get('keys_before')}->{r.get('keys_after')} in {r['sec']} s")
-    print(f"vs source: worst {worst[1]} cm ({worst[0]}); at the poses {wpose[1]} cm ({wpose[0]}) [MEASURE]; manual layer {r.get('manual')}")
+    print(f"vs source: worst {worst[1]} cm ({worst[0]}); at the poses {wpose[1]} cm ({wpose[0]}) [MEASURE]; manual layer {r.get('manual')}; ik feet {r.get('ik_feet')}")
     print(path)
 
 
