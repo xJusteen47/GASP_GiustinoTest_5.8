@@ -159,6 +159,10 @@ registry stores it like any timeline override, so the rollback simulation sees o
   2026-10-23 13:48): a tip sweetspot follows the new tip and keeps its size when `bScaleExtentWithReach` is false; the
   sweet/sour choice between overlapping hitboxes of one group is M4's priority rule ([M4](combat-m4-hits.md) §3, §6 step 4). Baked socket tracks (M5) are transformed the same way. M5 validates that a mod's longer
   blade mesh and the scaled hitboxes agree (bounds check, warning).
+  *Built (M11 L4)*: `UGSTN_HitReachUtils` in GSTNCombatCore (`ScaleHitboxReach`, `ScaleTimelineReach`, `ApplyReachScale`) and three
+  timeline validator warnings (mixed group, axis that cannot move the hitbox, axis on a projectile). Baked socket tracks are NOT
+  transformed: they are bones, the blade's length lives in the hitbox offsets from the grip socket. The mod data and the derived
+  timeline that call it are L5; the M5 bounds check against the blade mesh is L8.
 - **Order and stacking.** Modifiers apply in slot order; scales multiply; results are clamped by the kit's `ModLimits`
   (`MinTimeScale`, `MaxTimeScale`, `MaxReachScale`) so no combination breaks a move. One mod per slot (question M11.13).
 - **Specials**: a mod changes a special through the same `MoveModifiers` (filter on `Ability.Combat.Special.<Name>`) or swaps the

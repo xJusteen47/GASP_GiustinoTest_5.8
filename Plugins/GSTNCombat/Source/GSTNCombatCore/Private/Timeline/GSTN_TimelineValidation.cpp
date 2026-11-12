@@ -1,4 +1,5 @@
 #include "Timeline/GSTN_TimelineValidation.h"
+#include "Hits/GSTN_HitReachUtils.h"
 #include "Animation/AnimMontage.h"
 #include "Rules/GSTN_CombatRulesValidation.h"
 
@@ -60,6 +61,50 @@ namespace
 		}
 	}
 
+	/** Reach data (M11 L4): a reach axis that can never move the shape, or one on a projectile, is a mod that silently does nothing */
+	void CheckReach(int32 Index, int32 HitboxIndex, const FGSTN_HitboxSpec& Spec, TArray<FGSTN_TimelineMessage>& Out)
+	{
+		if (Spec.ReachAxis == EGSTN_ReachAxis::None)
+		{
+			return;
+		}
+		if (Spec.Space == EGSTN_HitboxSpace::Projectile)
+		{
+			Add(Out, false, FString::Printf(TEXT("Track %d, hitbox %d: a projectile hitbox ignores its ReachAxis (the projectile owns its shape)."), Index, HitboxIndex));
+			return;
+		}
+		const FVector Axis = UGSTN_HitReachUtils::AxisVector(Spec.ReachAxis);
+		bool bMoves = false;
+		const int32 Count = FMath::Max(Spec.Keys.Num(), 1);
+		for (int32 KeyIndex = 0; KeyIndex < Count && !bMoves; ++KeyIndex)
+		{
+			const FVector Centre = UGSTN_HitReachUtils::GetCentreInSpace(Spec, Spec.Keys.IsEmpty() ? INDEX_NONE : KeyIndex);
+			bMoves = FMath::Abs(FVector::DotProduct(Centre, Axis)) > UE_KINDA_SMALL_NUMBER;
+		}
+		if (!bMoves && !Spec.bScaleExtentWithReach)
+		{
+			Add(Out, false, FString::Printf(TEXT("Track %d, hitbox %d: the reach axis cannot change this hitbox (its centre sits on the space origin along the axis and the extent is kept). Author it from the grip, along the blade."), Index, HitboxIndex));
+		}
+	}
+
+	/** Sweet and sour spots of one group must stretch together, or a longer blade leaves the sweetspot behind (combat-loadout-mods 8) */
+	void CheckReachGroups(int32 Index, const FGSTN_TimelineTrack_Hitbox& Track, TArray<FGSTN_TimelineMessage>& Out)
+	{
+		TMap<uint8, TPair<bool, bool>> Groups; // Group -> (some scale with reach, some do not)
+		for (const FGSTN_HitboxSpec& Spec : Track.Hitboxes)
+		{
+			TPair<bool, bool>& Seen = Groups.FindOrAdd(Spec.HitGroup, TPair<bool, bool>(false, false));
+			(UGSTN_HitReachUtils::IsReachScalable(Spec) ? Seen.Key : Seen.Value) = true;
+		}
+		for (const TPair<uint8, TPair<bool, bool>>& Group : Groups)
+		{
+			if (Group.Value.Key && Group.Value.Value)
+			{
+				Add(Out, false, FString::Printf(TEXT("Track %d, group %d: some hitboxes have a ReachAxis and some do not, so a reach mod moves only part of the group (a sweetspot left behind the new tip)."), Index, Group.Key));
+			}
+		}
+	}
+
 	void CheckHitboxes(int32 Index, const FGSTN_TimelineTrack_Hitbox& Track, const FGSTN_CombatTimelineData& Data, TArray<FGSTN_TimelineMessage>& Out)
 	{
 		for (int32 HitboxIndex = 0; HitboxIndex < Track.Hitboxes.Num(); ++HitboxIndex)
@@ -95,6 +140,7 @@ namespace
 					break;
 				}
 			}
+			CheckReach(Index, HitboxIndex, Spec, Out);
 			CheckHitData(TEXT("base"), Index, HitboxIndex, Spec.Data, Out);
 			for (const TPair<FGameplayTag, FGSTN_HitVariant>& Pair : Spec.RelationshipVariants)
 			{
@@ -219,6 +265,7 @@ void FGSTN_TimelineValidation::Validate(const FGSTN_CombatTimelineData& Data, co
 			const FGSTN_TimelineTrack_Hitbox* HitboxTrack = static_cast<const FGSTN_TimelineTrack_Hitbox*>(Track);
 			CheckSelector(TEXT("Hitbox"), Index, HitboxTrack->Part, Context, OutMessages);
 			CheckHitboxes(Index, *HitboxTrack, Data, OutMessages);
+			CheckReachGroups(Index, *HitboxTrack, OutMessages);
 		}
 		else if (Kind == EGSTN_TimelineTrackKind::HurtboxModifier)
 		{
