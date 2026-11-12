@@ -9,7 +9,9 @@
 #   UnrealEditor.exe <uproject> /Game/Levels/Test/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
 #   boot.py:  exec(open(r"<project>/Tools/GASNPPTest/pie_capture_move.py").read())
 # Environment (all optional): PIE_CAPTURE_KIT (KIT_Test_Overlord), PIE_CAPTURE_OUT (default Saved/AnimJab3/capture_<date>_<time>),
-# PIE_CAPTURE_SEQUENCES (default all of SEQUENCES)
+# PIE_CAPTURE_SEQUENCES (default: all of SEQUENCES, or all of DAIR_SEQUENCES when the kit's name contains DAir)
+# Down-air captures (ANIM-DAIR-1): PIE_CAPTURE_KIT=KIT_Test_OverlordDAirV8 (or ...V7, one kit per Play session) and PIE_CAPTURE_OUT=<dir>; the
+# sequences with an 'air' entry jump first and press crouch + attack on the way down, see DAIR_SEQUENCES
 # Review stage, this Play session only: the other players are parked in Z1, the kit's placeholder cube is hidden and three shadowless
 # directional fill lights shine on the pawn (the hub's sun is behind the player start, the character's front would be black).
 # Output: <out>/<sequence>/<view>/f<frame>.png, <out>/<sequence>/frames.jsonl (the host's combat state per frame), <out>/capture.log and
@@ -48,8 +50,22 @@ SEQUENCES = [
     {'name': 'chain_hit', 'taps': [0, 12], 'frames': 140, 'dummy': 95.0, 'shoot': True},
 ]
 # PIE_CAPTURE_SEQUENCES: a comma separated subset of the names above (a recheck of one case does not pay for the other captures)
+# Down-air (aerial) sequences. 'air': the pawn jumps on frame PRE (a press of Jump) and, on the way down (z falling) once its height above the
+# standing height is at most trigger_h cm, crouch is held and, the next rendered frame, Attack is tapped (command CrouchNeutral, bound while
+# Airborne by setup_overlord_dair_kit.py). The press frame is the same for the V8 and the V7 kit (the simulation is deterministic), so frame
+# numbers compare; if the height is never reached the press is made at PRE + AIR_GIVE_UP and the log says so. trigger_h is a first guess for the
+# jump height of the test character (not measured, the rows hold 'h' per frame to retune it): high = the move finishes in the air, low = the
+# character lands in the middle of it. Order matters: the hit case comes last because its dummy stays where it was put.
+DAIR_SEQUENCES = [
+    {'name': 'dair_whiff', 'taps': [], 'frames': 190, 'dummy': None, 'shoot': True, 'air': {'trigger_h': 140.0}},
+    {'name': 'dair_land', 'taps': [], 'frames': 190, 'dummy': None, 'shoot': True, 'air': {'trigger_h': 55.0}},
+    {'name': 'dair_hit', 'taps': [], 'frames': 190, 'dummy': 80.0, 'shoot': True, 'air': {'trigger_h': 140.0}},
+]
+AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after the attack press
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
-    SEQUENCES = [s for s in SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
+    SEQUENCES = [s for s in SEQUENCES + DAIR_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
+elif 'DAir' in KIT:
+    SEQUENCES = DAIR_SEQUENCES
 TIMEOUT = 900.0
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None, 'log': None, 'rows': None}
 
@@ -171,9 +187,10 @@ def _montage():
     return None
 
 
-def _row(frame, tapped):
+def _row(frame, tapped, extra=None):
     view = g._view(0, h._key(0)) or {}
     row = {'f': frame, 'tap': tapped, 'combat': view.get('combat'), 'tags': view.get('tags'), 'loc': view.get('location'), 'montage': _montage()}
+    row.update(extra or {})
     st['rows'].write(json.dumps(row) + '\n')
 
 
@@ -228,22 +245,48 @@ def _tick(_dt):
                 _log(f'dummy {keys[:1]} ahead: {h._place_ahead(0, keys[0], seq["dummy"]) if keys else "NO DUMMY"}')
                 st.update(dummy_placed=True, t=now)         # one more wait for the teleport to settle
                 return None
+            if seq.get('air'):
+                z = _pawn().get_actor_location().z
+                st.setdefault('ground_z', z)                 # the first sequence starts standing: the height every 'h' is counted from
+                if abs(z - st['ground_z']) > 6.0 and now - st['t'] < 10:
+                    return None                              # still falling or landing from the last sequence
             _log(f'sequence {seq["name"]}: pawn at {_place_cameras()}')
             os.makedirs(os.path.join(OUT, seq['name']), exist_ok=True)
             st['rows'] = open(os.path.join(OUT, seq['name'], 'frames.jsonl'), 'w')
             _console('t.OverrideFPS 60')
-            st.update(phase='seq_run', frame=0, mask=g.button_mask(BUTTON))
+            st.update(phase='seq_run', frame=0, mask=g.button_mask(BUTTON), crouch=g.button_mask('Crouch'), jumped=None, fired=None, prev_z=None)
         elif phase == 'seq_run':
             seq, frame = SEQUENCES[st['seq']], st['frame']
             if seq['shoot']:
                 _shoot(seq, frame)
             tapped = (frame - PRE) in seq['taps']
-            _row(frame, tapped)
+            extra, hold_crouch = None, False
+            air = seq.get('air')
+            if air:
+                z = _pawn().get_actor_location().z
+                height = z - st.get('ground_z', z)
+                extra = {'h': round(height, 1)}
+                if frame == PRE:
+                    st['jumped'] = frame
+                    g.press(0, 'jump')
+                elif st['jumped'] is not None and st['fired'] is None and frame > PRE + 3 and (
+                        (st['prev_z'] is not None and z < st['prev_z'] and height <= air['trigger_h']) or frame - PRE >= AIR_GIVE_UP):
+                    st['fired'] = frame + 1                  # crouch now, Attack on the next frame
+                    hold_crouch = True
+                    _log(f'{seq["name"]}: crouch on v{frame} (height {height:.0f} cm, falling), attack on v{frame + 1}')
+                tapped = st['fired'] is not None and frame == st['fired']
+                st['prev_z'] = z
+            _row(frame, tapped, extra)
+            if hold_crouch:
+                g.combat_hold(0, st['crouch'])
             if tapped:
                 g.combat_tap(0, st['mask'])                 # read by the next simulation tick
+            if air and st['fired'] is not None and frame == st['fired'] + AIR_CROUCH_RELEASE:
+                g.combat_clear(0)
             st['frame'] = frame + 1
             if st['frame'] >= PRE + seq['frames']:
                 st['rows'].close()
+                g.combat_clear(0)
                 _console('t.OverrideFPS 0')
                 _log(f'sequence {seq["name"]} done: {st["frame"]} frames')
                 st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False)
