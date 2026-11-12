@@ -12,13 +12,15 @@ Card: `Tools/AnimPipeline/cards/overlord/dair/overlord_dair_v7.json` (branch `ex
 8. Recovery e FAF f32-42: **FAIL parziale**. Tutto riparte insieme a f32-33 (gambe, braccia, busto: nessuna sequenza, doc 1 §7.2); a f41 il corpo è ancora veloce e a f42 si ferma di colpo (doc 2 §1 "al FAF velocità quasi nulla").
 9. Peso / COM: il bacino della clip scende 13,5 cm in 1 frame a f15 (doc 2 §7 "il COM non lo comanda la clip"): **non giudicabile** senza PIE con Mover.
 10. Ritmo (doc 1 §1): 3 pose ferme unite da tagli (3 f / 8 fermi / 4 / 1 / 16 fermi / 10). Il contrasto c'è, ma è tra scatto e fermo immagine: la staticità che l'owner contesta.
-## Correzioni (card v8; key sparsi + curve editate, nessun bake; chiavi owner intoccabili salvo suo OK)
-- Frame 15/17/31 | `pelvis` rot [9,-7,8]; `spine` [27,35,0]; `head` [-14,-24,-5]; `arm_l` pole [16,60,-24]; `arm_r` pole [-44,9,-48]; `leg_l` pole [37,15,-51]; `leg_r` pole [-45,19,-44] = chiave owner v4 ripristinata (variante A). Variante B "spinta" (+20-40%, doc 2 §4): spine rx 32-36, gomiti fuori dal profilo del busto visti da dietro, punte -45, un ginocchio sfasato; entrambe all'owner.
-- part_delays: 0 su tutte le parti IN ENTRATA a f15 (tutto in posa sul frame di hitstop). L'overlap va DOPO: key solo su `head`/mani con un overshoot f16-f20 (5-15% del tragitto), una volta.
-- f15→f31, solo controlli piedi: un rimbalzo, piedi +4-6 cm a f18, di nuovo giù a f22. Poi moving hold con direzione f22-f31 (arco che si chiude o bacino che affonda 3-4 cm) fatta con la curva tra due key, slow-in.
-- f3→f10: stesse key 3 e 8, ma stringimento visibile a 135 px (piedi/mani +5-8 cm, busto +6-8°), curva continua, non piatta.
-- Recovery: partenza in sequenza (bacino/ginocchia, +2 f busto, +2 f braccia, testa ultima) e tangente piatta a f42 con l'80% del tragitto entro f39.
-- Dopo il build: `check`, poi cattura PIE come sopra in `docs/notes/reviews/<variante>/` con la v7 come base. Solo dopo, revisione video.
-## Da decidere dall'owner (design della mossa)
-1. Stomp: torna la sua chiave Cascadeur (torsione 35°) e la spingiamo, o resta la posa dritta e simmetrica? 2. f14→15 in 1 frame + scia VFX, oppure scatto in 2 frame con un breakdown di stretch a f14? 3. Posa tenuta 15→31 (16 f): resta così lunga o si accorcia (es. recovery da f26)?
-Costo stimato di questo thread: ~90k token di contesto, ≈ $5-7 (Fable 5.2). Branch: `claude/project-thread-hqbako` (da `feature/gas-npp-5.8`).
+## Decisioni owner 12/11 09:09Z (approvate, non richiedere di nuovo)
+1. Stomp: torna la sua chiave Cascadeur ruotata, spinta. 2. Colpo in **2 frame**, non 1 ("anche in Smash sono 2"), e deve restare il colpo di un personaggio **pesante**. 3. Posa tenuta più corta, recovery da circa f26. Frame data invariata: attivo 15-17, FAF 42.
+## Correzioni per la card v8 (key sparsi + curve editate, nessun bake; assi card: +X sinistra, +Y avanti, +Z alto)
+- Frame 15/17 e fine tenuta | `pelvis` rot [9,-7,8]; `spine` [27,35,0]; `head` [-14,-24,-5]; `arm_l` pole [16,60,-24]; `arm_r` pole [-44,9,-48]; `leg_l` foot [-7,-16,-80] pole [37,15,-51]; `leg_r` foot [-14,-21,-81] pole [-45,19,-44] = chiave owner v4. Poi spinta +20-40% (doc 2 §4): spine rx 32-36, gomiti fuori dal profilo del busto visti da dietro, punte -45, un ginocchio sfasato.
+- Scatto in 2 frame: la key `release_start` passa da 14 a **13** (stessa posa, piedi z -37). Nuovo breakdown a **14**, solo `leg_l`/`leg_r`/`pelvis`: piedi z circa -55 (40-45% del tratto 13→15), ginocchia avanti che guidano, punte in ritardo (foot_rot circa -15, arrivano a -45 a f15), bacino z circa -4, busto ancora in parte chiuso. Spacing piedi f12→13→14→15 circa 6 / 18 / 25 cm: crescente, ultimo intervallo il più lungo, nessun rallentamento prima del contatto (doc 1 §2.1).
+- Pesante (doc 1 §4.4): partenza lenta (slow-out lungo su f11-f13, tangente ripida in entrata a f15 e spezzata in uscita), arresto secco, assestamento piccolo. Niente molle: overshoot ≤5% e una volta sola.
+- part_delays: 0 su tutte le parti IN ENTRATA a f15 (tutto in posa sul frame di hitstop). L'overlap va DOPO: key solo su `head` e mani, un overshoot f16-f19.
+- Dopo l'impatto, solo controlli piedi: un rimbalzo piccolo, piedi +3-4 cm a f18, giù a f21. Poi moving hold con direzione f21→f26 (bacino che affonda 3-4 cm, arco che si chiude), una curva tra due key con slow-in.
+- `hold_end` passa da 31 a **26**. Recovery f26→f42 in sequenza: bacino/ginocchia a f26, busto +2 f, braccia +2 f, testa ultima; pose 37 e 42 dell'owner invariate; tangente piatta a f42 con l'80% del tragitto entro f39.
+- Carica f3→f10: stesse key 3 e 8, stringimento visibile a 135 px (piedi/mani +5-8 cm, busto +6-8°), curva continua.
+- Dopo il build: `check`, poi cattura **PIE** (ability, camera di gioco, "colpisce" su bersaglio + "a vuoto" + atterraggio a metà mossa) in `docs/notes/reviews/overlord-dair-v8/` con la v7 come base, stessi frame. Solo dopo, revisione video (regola 10).
+Costo stimato di questo thread: ~110k token di contesto, ≈ $7-9 (Fable 5.2). Branch: `claude/project-thread-hqbako` (da `feature/gas-npp-5.8`).
