@@ -149,7 +149,11 @@ def _frame(k):
 
 # spacing profile -> (leave weight of the segment's first key, arrive weight of its last key) as a fraction of the
 # segment; None = smart auto tangents (no stop at the key). Weighted segments get flat tangents: their keys are pose hits.
-PROFILE_W = {"charge_long": (0.6, 0.12), "arrive_1_2": (0.12, 0.6), "hold_recoil": (1 / 3, 1 / 3), "limb_led_recovery": None}
+PROFILE_W = {"charge_long": (0.6, 0.12), "arrive_1_2": (0.12, 0.6), "hold_recoil": (1 / 3, 1 / 3), "limb_led_recovery": None,
+             # one-sided profiles (a None side leaves that key to the other segment, smart auto if both are None):
+             # ease_from = slow start out of a held key, then THROUGH the next key with no stop (heavy wind-up release);
+             # ease_into = through the first key with no stop, long soft arrival on the last one (FAF at near-zero speed).
+             "ease_from": (0.6, None), "ease_into": (None, 0.5)}
 # card part -> control name fragments (CR_Mannequin_Body); a part lags by shifting its interior keys later
 PIN_TOL = {"Location": 1.0, "Rotation": 2.0}                    # cm, degrees
 PART_CTRLS = {"chest": ("spine_05", "chest", "spine_04"), "head": ("head", "neck"), "forearm": ("lowerarm",), "hand": ("hand_",),
@@ -325,6 +329,8 @@ def build(spec):
         for i, k in enumerate(keys):
             out_w = PROFILE_W.get(_seg_profile(segs, frames[i])) if i + 1 < len(keys) else None
             in_w = PROFILE_W.get(_seg_profile(segs, frames[i - 1])) if i else None
+            out_w = out_w if out_w and out_w[0] is not None else None      # one-sided profile: this side is not shaped
+            in_w = in_w if in_w and in_w[1] is not None else None
             k.set_interpolation_mode(unreal.RichCurveInterpMode.RCIM_CUBIC)
             if out_w is None and in_w is None:
                 k.set_tangent_mode(unreal.RichCurveTangentMode.RCTM_SMART_AUTO)
