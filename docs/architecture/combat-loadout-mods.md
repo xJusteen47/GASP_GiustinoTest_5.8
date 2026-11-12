@@ -169,6 +169,13 @@ registry stores it like any timeline override, so the rollback simulation sees o
   alternatives list. Owner's example: the "long blade" mod has `ReachScale 1.3` on every sword attack and `TimeScale 1.15` on the
   heavy ones, plus a longer blade mesh.
 
+*Built (M11 L5)*: plugin `GSTNKitMods` (Core + GAS, no Editor yet), see its [README](../../Plugins/GSTNKitMods/README.md). Choices
+taken: the kit's slots and limits are a kit extension `FGSTN_KitModSlots` (no new field on the kit asset); the player's mods are
+per kit identity tag with a wildcard entry, so question M11.4 is a data choice; a mod that does not fit is skipped with a warning,
+never an error; `FGSTN_ModVisual` is not a type, a mod carries an L6 `FGSTN_EquipmentVisual`; the registry cap is
+`MaxDerivedTimelines` per kit (64). **Gap found**: the NP table set ignores `TimelineOverride` (registry by class, data from the
+class default), so derived timelines have no in-game effect until slice L5b.
+
 Mods on support weapons and backpacks: not asked; the definition allows `CompatibleKits` to match a support weapon's tags, so it is
 a data choice later (question M11.10).
 

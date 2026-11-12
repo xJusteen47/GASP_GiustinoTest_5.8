@@ -166,6 +166,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNKitMods",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNCombatNP",
 			"Enabled": true
 		},

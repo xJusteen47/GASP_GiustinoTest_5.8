@@ -58,6 +58,20 @@ void FGSTN_LoadoutExtensionRegistry::RunContributeCompileInput(const FGSTN_Loado
 	}
 }
 
+void FGSTN_LoadoutExtensionRegistry::RunContributeRulesView(const FGSTN_LoadoutExtensionContext& Context, FGSTN_LoadoutRulesView& View)
+{
+	TArray<FName> Ids;
+	GetOrderedIds(Ids);
+	for (const FName& Id : Ids)
+	{
+		const FGSTN_LoadoutExtension& Extension = GetExtensions()[Id];
+		if (Extension.ContributeRulesView)
+		{
+			Extension.ContributeRulesView(Context, View);
+		}
+	}
+}
+
 void FGSTN_LoadoutExtensionRegistry::RunOnGranted(const FGSTN_LoadoutExtensionContext& Context, UAbilitySystemComponent& AbilitySystem)
 {
 	TArray<FName> Ids;

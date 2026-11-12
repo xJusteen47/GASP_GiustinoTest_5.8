@@ -189,6 +189,11 @@ void FGSTN_LoadoutAssembly::BuildRulesView(const FGSTN_ResolvedLoadout& Resolved
 	{
 		OutView.Table.RegistryAbilities.AddUnique(Entry.Ability);
 	}
+
+	FGSTN_LoadoutExtensionContext Context;
+	Context.Resolved = &Resolved;
+	Context.WorldContext = Resolved.WorldContext;
+	FGSTN_LoadoutExtensionRegistry::RunContributeRulesView(Context, OutView);
 }
 
 bool FGSTN_LoadoutAssembly::CompileAndValidate(const FGSTN_ResolvedLoadout& Resolved, int32 Revision, const UGSTN_InputSettings& Settings, const UGSTN_LoadoutRules& Rules,

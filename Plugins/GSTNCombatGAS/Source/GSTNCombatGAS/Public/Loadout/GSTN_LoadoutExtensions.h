@@ -8,6 +8,7 @@
 class UAbilitySystemComponent;
 struct FGSTN_CompileInput;
 struct FGSTN_ResolvedLoadout;
+struct FGSTN_LoadoutRulesView;
 
 /**
  * What a loadout extension is handed: the resolved assets and, when the loadout is applied in a world, an object of that world
@@ -42,6 +43,12 @@ struct GSTNCOMBATGAS_API FGSTN_LoadoutExtension
 	 */
 	TFunction<void(const FGSTN_LoadoutExtensionContext&, FGSTN_CompileInput&)> ContributeCompileInput;
 
+	/**
+	 * Runs at the end of FGSTN_LoadoutAssembly::BuildRulesView: what the extension changes in what the rules accept (a mod that
+	 * unlocks a special alternative) and its own findings (View.Table.Errors/Warnings). Same determinism rule as ContributeCompileInput
+	 */
+	TFunction<void(const FGSTN_LoadoutExtensionContext&, FGSTN_LoadoutRulesView&)> ContributeRulesView;
+
 	/** Runs on the authority after the loadout component granted the table's abilities (an attribute set, a passive effect) */
 	TFunction<void(const FGSTN_LoadoutExtensionContext&, UAbilitySystemComponent&)> OnGranted;
 
@@ -73,6 +80,9 @@ struct GSTNCOMBATGAS_API FGSTN_LoadoutExtensionRegistry
 
 	/** Runs every ContributeCompileInput in order */
 	static void RunContributeCompileInput(const FGSTN_LoadoutExtensionContext& Context, FGSTN_CompileInput& Input);
+
+	/** Runs every ContributeRulesView in order */
+	static void RunContributeRulesView(const FGSTN_LoadoutExtensionContext& Context, FGSTN_LoadoutRulesView& View);
 
 	/** Runs every OnGranted in order */
 	static void RunOnGranted(const FGSTN_LoadoutExtensionContext& Context, UAbilitySystemComponent& AbilitySystem);

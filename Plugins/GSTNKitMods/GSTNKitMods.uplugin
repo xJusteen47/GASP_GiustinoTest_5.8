@@ -1,0 +1,52 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Kit Mods",
+	"Description": "Kit mods (M11 G4, combat-loadout-mods.md §8): mod definitions, the kit's mod slots and limits, the player's mod choices as a loadout extension, and the pure baking of derived timelines (time, reach, hitbox size, damage, knockback, hitstop, stagger, added tags) at loadout compile. Nothing runs in the simulation: the rollback tick only reads the baked data.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNKitModsCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNKitModsGAS",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GSTNCore",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInput",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombat",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatGAS",
+			"Enabled": true
+		},
+		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
+		}
+	]
+}
