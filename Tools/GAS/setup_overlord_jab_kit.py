@@ -30,6 +30,11 @@ COMMAND = 'Command.Attack.Neutral'
 # Up on jab 1 from the frame before its cancel window to the window's end: the jab 2 binding requires it, the jab 1 binding ignores it
 CHAIN_TAG = 'Test.State.OverlordJabChain'
 BLEND_IN_SECONDS = 2.0 / 60.0
+# A timeline frame is one simulation tick (16 ms, 62.5 Hz); the cards and the animations count frames at 60 fps. At this rate the montage
+# advances one animation frame per simulation tick, so timeline frame N shows animation frame N (at 1.0 frame 9 showed a8.64: with a one-frame
+# arrival that is the hand 40 cm short of the target for the whole hitstop). Every move authored at 60 fps needs it, redone animations included
+SIM_HZ, ANIM_FPS = 62.5, 60.0
+MONTAGE_PLAY_RATE = SIM_HZ / ANIM_FPS
 # total frames, first actionable frame, active (first, last), cancel window into COMMAND (first, last) or None,
 # hit PLACEHOLDERS: radius, reach from, reach to, height, damage, knockback, angle, victim hitstop, attacker hitstop
 MOVES = {
@@ -118,7 +123,7 @@ def _timeline(n, spec, montage):
     a0, a1 = spec['active']
     data = unreal.GSTN_CombatTimelineData()
     for prop, value in (('total_frames', spec['total']), ('first_actionable_frame', spec['faf']), ('override_frames', 0), ('montage', montage),
-                        ('montage_play_rate', 1.0)):
+                        ('montage_play_rate', MONTAGE_PLAY_RATE)):
         data.set_editor_property(prop, value)
     hit = unreal.GSTN_HitData()
     for prop, value in (('damage', damage), ('base_knockback', knockback), ('angle_deg', angle), ('hitstop_mode', unreal.GSTN_HitstopMode.OVERRIDE),
@@ -190,8 +195,10 @@ def _with_chain(binding, cls, required):
     """A copy of `binding` for `cls`: the chain tag joins its required tags (jab 2) or its ignored tags (jab 1), the rest is kept"""
     out = binding.copy()
     req = out.get_editor_property('requirements')
-    prop = 'require_tags' if required else 'ignore_tags'
-    req.set_editor_property(prop, _container([t for t in _names(req.get_editor_property(prop)) if t != CHAIN_TAG] + [CHAIN_TAG]))
+    # The tag is taken out of both lists first: on a rerun `binding` is the jab 1 binding of the last run, which already ignores it, and a
+    # jab 2 binding that both requires and ignores the tag can never start
+    for prop, wanted in (('require_tags', required), ('ignore_tags', not required)):
+        req.set_editor_property(prop, _container([t for t in _names(req.get_editor_property(prop)) if t != CHAIN_TAG] + [CHAIN_TAG] * wanted))
     out.set_editor_property('requirements', req)
     out.set_editor_property('ability', cls)
     return out

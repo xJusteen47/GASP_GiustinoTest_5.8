@@ -8,7 +8,8 @@
 # Launch (editor with a real renderer; the script path must have no space, so boot through a copy or a one-line exec):
 #   UnrealEditor.exe <uproject> /Game/Levels/Test/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
 #   boot.py:  exec(open(r"<project>/Tools/GASNPPTest/pie_capture_move.py").read())
-# Environment (all optional): PIE_CAPTURE_KIT (KIT_Test_Overlord), PIE_CAPTURE_OUT (default Saved/AnimJab3/capture_<date>_<time>)
+# Environment (all optional): PIE_CAPTURE_KIT (KIT_Test_Overlord), PIE_CAPTURE_OUT (default Saved/AnimJab3/capture_<date>_<time>),
+# PIE_CAPTURE_SEQUENCES (default all of SEQUENCES)
 # Review stage, this Play session only: the other players are parked in Z1, the kit's placeholder cube is hidden and three shadowless
 # directional fill lights shine on the pawn (the hub's sun is behind the player start, the character's front would be black).
 # Output: <out>/<sequence>/<view>/f<frame>.png, <out>/<sequence>/frames.jsonl (the host's combat state per frame), <out>/capture.log and
@@ -46,6 +47,9 @@ SEQUENCES = [
     {'name': 'chain_buffered', 'taps': [0, 4], 'frames': 120, 'dummy': None, 'shoot': False},
     {'name': 'chain_hit', 'taps': [0, 12], 'frames': 140, 'dummy': 95.0, 'shoot': True},
 ]
+# PIE_CAPTURE_SEQUENCES: a comma separated subset of the names above (a recheck of one case does not pay for the other captures)
+if os.environ.get('PIE_CAPTURE_SEQUENCES'):
+    SEQUENCES = [s for s in SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
 TIMEOUT = 900.0
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None, 'log': None, 'rows': None}
 
