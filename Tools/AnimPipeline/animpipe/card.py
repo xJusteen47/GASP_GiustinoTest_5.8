@@ -40,7 +40,20 @@ UNLOCK = set()    # {(part, frame)} set by `--unlock part@frame` in __main__: th
 
 
 def load(path, unlock=None):
-    c = json.load(open(path if os.path.isabs(path) else os.path.join(TOOLS, path)))
+    if os.path.isabs(path) or os.path.exists(path):
+        full = os.path.abspath(path)
+    elif os.path.exists(os.path.join(TOOLS, path)):
+        full = os.path.join(TOOLS, path)
+    else:
+        full = os.path.join(TOOLS, path)
+    if not os.path.exists(full):
+        import glob
+        from animpipe import config as _cfg
+        name = path[:-5] if path.endswith('.json') else path
+        matches = glob.glob(os.path.join(_cfg.CARDS, '**', f'{name}.json'), recursive=True)
+        if matches:
+            full = matches[0]
+    c = json.load(open(full))
     miss = [k for k in REQUIRED if k not in c]
     if miss:
         raise ValueError(f"card {path}: missing {miss}")

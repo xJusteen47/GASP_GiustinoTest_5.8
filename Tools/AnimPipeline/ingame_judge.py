@@ -6,7 +6,7 @@ sheets/ingame/<move>_ingame.mp4 (60 fps, 1x) and <move>_ingame_strip.png (startu
 Standard second output: the same move whiffing (no hitstop, the sequence plays straight through) as <move>_ingame_whiff.mp4, and
 <move>_ingame_compare.mp4 with hitstop (left) and whiff (right) side by side. --cached reuses the frames of the last capture
 (sheets/ingame/_<move>/raw) instead of driving the editor, e.g. to re-time the hitstop. --at freezes on another active frame
-(a hit can land on any of them; the frame after the freeze is what check hitstop_snap limits).
+(--raw=<dir> reads other frames, --tag=<suffix> names the outputs; a hit can land on any of them; the frame after the freeze is what check hitstop_snap limits).
 Judged by eye on the strip and the video: weight/force, smoothness, readability. Needs the editor in L_PilotCapture."""
 import json, os, sys, time
 import numpy as np
@@ -18,11 +18,13 @@ from animpipe.card import load, windows
 
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
 cached = "--cached" in sys.argv
+opts = dict((a[2:].split("=", 1) + [""])[:2] for a in sys.argv[1:] if a.startswith("--"))
+tag = opts.get("tag", "")                 # output name suffix (standalone: _az<N>)
 card, hit = load(args[0]), int(args[1])
 az = float(args[2]) if len(args) > 2 else 90.0
 anim, move = card["anim"], card["move"]
 out = os.path.join(HERE, "sheets", "ingame"); os.makedirs(out, exist_ok=True)
-rawdir = os.path.join(out, f"_{card['move']}", "raw"); os.makedirs(rawdir, exist_ok=True)
+rawdir = opts.get("raw") or os.path.join(out, f"_{card['move']}", "raw"); os.makedirs(rawdir, exist_ok=True)
 r = None if cached else ue.call("run_python_file", {"filePath": os.path.join(HERE, "ingame_ue.py").replace("\\", "/"), "entryPoint": "montage",
                                 "kwargs": {"anim_path": anim}}, timeout=300)
 w = windows(card)["anim"]
@@ -72,8 +74,9 @@ def render(frames, name, with_hit):
         os.remove(os.path.join(tmp, old))
     for i, f in enumerate(frames):
         im = imgs[f].copy(); d = ImageDraw.Draw(im)
-        tag = "HITSTOP" if with_hit and a0 < i <= a0 + hit else ("WHIFF" if not with_hit else "")
-        d.text((6, 6), f"{move} f{f} {tag}", fill=(255, 255, 0))
+        lab = "HITSTOP" if with_hit and a0 < i <= a0 + hit else ("WHIFF" if not with_hit else "")
+        # v<i> = the video frame (the owner's count, 0-based, the number he says); f<n> = the anim frame of the card
+        d.text((6, 6), f"{move} v{i} (f{f}) {lab}", fill=(255, 255, 0))
         im.save(os.path.join(tmp, f"{i:04d}.png"))
     return tmp
 
@@ -82,9 +85,9 @@ def encode(tmp, mp4):
     os.system(f'ffmpeg -y -loglevel error -framerate 60 -i "{tmp}/%04d.png" -pix_fmt yuv420p "{mp4}"')
 
 
-mp4 = os.path.join(out, f"{move}_ingame.mp4")
+mp4 = os.path.join(out, f"{move}{tag}_ingame.mp4")
 encode(render(hs_seq, "hitstop", True), mp4)
-mp4_whiff = os.path.join(out, f"{move}_ingame_whiff.mp4")
+mp4_whiff = os.path.join(out, f"{move}{tag}_ingame_whiff.mp4")
 encode(render(seq, "whiff", False), mp4_whiff)
 # Side by side: the whiff plays out its length then holds its last frame while the hitstop version finishes.
 cmp_tmp = os.path.join(out, f"_{move}", "compare"); os.makedirs(cmp_tmp, exist_ok=True)
@@ -95,14 +98,14 @@ for i in range(len(hs_seq)):
     R = Image.open(os.path.join(out, f"_{move}", "whiff", f"{min(i, len(seq) - 1):04d}.png"))
     c = Image.new("RGB", (S * 2 + 4, S), (255, 255, 255)); c.paste(L, (0, 0)); c.paste(R, (S + 4, 0))
     c.save(os.path.join(cmp_tmp, f"{i:04d}.png"))
-mp4_cmp = os.path.join(out, f"{move}_ingame_compare.mp4")
+mp4_cmp = os.path.join(out, f"{move}{tag}_ingame_compare.mp4")
 encode(cmp_tmp, mp4_cmp)
 strip_f = sorted(set([max(0, a0 - 3), a0 - 1, a0, w["active"][1], w["active"][1] + 2, w["startup"][1] + (w["active"][1] - a0) + 6,
                       (w["active"][1] + w["faf"]) // 2, w["faf"]]))
 strip_f = [f for f in strip_f if 0 <= f <= n]
 st = Image.new("RGB", (S * len(strip_f), S + 18), (20, 20, 20)); d = ImageDraw.Draw(st)
 for i, f in enumerate(strip_f):
-    st.paste(imgs[f], (i * S, 18)); d.text((i * S + 6, 3), f"f{f}" + (" contact" if w["active"][0] <= f <= w["active"][1] else ""), fill=(255, 255, 255))
-png = os.path.join(out, f"{move}_ingame_strip.png"); st.save(png)
+    st.paste(imgs[f], (i * S, 18)); d.text((i * S + 6, 3), f"v{hs_seq.index(f)} f{f}" + (" contact" if w["active"][0] <= f <= w["active"][1] else ""), fill=(255, 255, 255))
+png = os.path.join(out, f"{move}{tag}_ingame_strip.png"); st.save(png)
 print(f"{move}: montage {m['montage']} {n + 1} frames + hitstop {hit} at f{a0}")
 print(mp4); print(mp4_whiff); print(mp4_cmp); print(png)
