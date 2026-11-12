@@ -1,6 +1,7 @@
 // Equipment pickups (M11 G2).
 
 #include "Pickups/GSTN_EquipmentPickup.h"
+#include "Loadout/GSTN_LoadoutModeRules.h"
 
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -71,11 +72,28 @@ bool AGSTN_EquipmentPickup::Take(UGSTN_LoadoutComponent& Component, TArray<FStri
 	const FGSTN_LoadoutData Previous = Component.GetApplied();
 	FGSTN_LoadoutData NewLoadout;
 	FInstancedStruct LeftBehind;
-	if (!Base->MakeChange(Previous, NewLoadout, LeftBehind, OutErrors))
+	FGSTN_KitSwapCarryOver Rules = UGSTN_LoadoutModeRules::Get().MakeKitSwapCarryOver();
+	if (!Base->MakeChangeUnder(Rules, Previous, NewLoadout, LeftBehind, OutErrors))
 	{
 		return false;
 	}
-	if (!Component.AcceptLoadout(NewLoadout, OutErrors))
+	if (Base->IsWholeKit() && Rules.bSupportWeaponStaysWithPlayer)
+	{
+		// The support weapon comes along only when the new kit can carry it (M11.2): if the rules refuse the loadout with it, it stays
+		// on the ground with the old kit. The refusal of the plain swap, if any, is the one reported below
+		FGSTN_KitSwapCarryOver Without = Rules;
+		Without.bSupportWeaponStaysWithPlayer = false;
+		FGSTN_LoadoutData Plain;
+		FInstancedStruct PlainLeft;
+		TArray<FString> Ignored;
+		if (Base->MakeChangeUnder(Without, Previous, Plain, PlainLeft, Ignored) && !(Plain == NewLoadout) && !Component.ValidateLoadout(NewLoadout, Ignored))
+		{
+			NewLoadout = MoveTemp(Plain);
+			LeftBehind = MoveTemp(PlainLeft);
+		}
+	}
+	const bool bAccepted = Base->IsWholeKit() ? Component.AcceptKitSwap(NewLoadout, OutErrors) : Component.AcceptLoadout(NewLoadout, OutErrors);
+	if (!bAccepted)
 	{
 		return false;
 	}

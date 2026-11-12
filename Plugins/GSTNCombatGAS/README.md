@@ -236,6 +236,11 @@ as the other combat tests: `-ExecCmds="Automation RunTests GSTNInput+GSTNCombat;
 
 ## M11 support weapons and special swaps (L3)
 
+- Kit swap rules (M11 swap, owner answers 2026-11-12), also in `UGSTN_LoadoutModeRules`, category "Kit swap": `KitSwapSupportWeapon`
+  (`StaysWithPlayer` default / `StaysWithKit`), `KitSwapMeters` (`Keep` default / `Reset`, applied by `UGSTN_LoadoutComponent::AcceptKitSwap`
+  after the grant), `KitSwapMods` (`GroundKit` default / `PlayerSetup`). `MakeKitSwapCarryOver` hands the loadout part to the pure swap in
+  GSTNPickups. `SupportWeaponStats` default `WeaponOwn` is the owner's answer to M11.6.
+
 - `UGSTN_LoadoutModeRules` (`Loadout/`), the loadout's piece of the game rules (GSTNCore `UGSTN_GameRules`, one per mode or level; class
   defaults = no asset). `SupportWeaponStats`: `WeaponOwn` (default, the M3 behaviour: a support weapon's own stats effect applies when
   it authors one) or `KitOnly` (every weapon after the primary changes no stat, the carrier keeps the kit's stats; spec §6). Both kept

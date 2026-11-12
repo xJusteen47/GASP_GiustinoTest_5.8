@@ -158,8 +158,10 @@ struct GSTNKITMODSCORE_API FGSTN_KitModConfig
 };
 
 /**
- * The mods in a player's loadout (spec §11.1, wire id "KitMods"). Kept across a kit swap like every loadout extension; the compile
- * picks the entry of the kit in use (FGSTN_KitModBaking::SelectConfig)
+ * The mods in a player's loadout (spec §11.1, wire id "KitMods"). The compile picks the entry of the kit in use
+ * (FGSTN_KitModBaking::SelectConfig). On a whole-kit swap from the ground the entry travels with the kit by default, so the ground
+ * kit's mods apply (owner answer M11.4); a mode that keeps the player's setups (FGSTN_KitSwapCarryOver::bModsStayWithPlayer) keeps
+ * this entry with the player instead, and their saved setup for the new kit applies
  */
 USTRUCT(BlueprintType)
 struct GSTNKITMODSCORE_API FGSTN_LoadoutModsExt : public FGSTN_LoadoutExtensionData
@@ -170,4 +172,6 @@ struct GSTNKITMODSCORE_API FGSTN_LoadoutModsExt : public FGSTN_LoadoutExtensionD
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mods")
 	TArray<FGSTN_KitModConfig> Configs;
+
+	virtual bool StaysWithPlayerOnKitSwapUnder(const FGSTN_KitSwapCarryOver& Rules) const override { return Rules.bModsStayWithPlayer; }
 };

@@ -532,4 +532,39 @@ bool FGSTN_LoadoutSpecialSwapTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LoadoutKitSwapMetersTest, "GSTNCombat.GAS.Loadout.KitSwapMeters", LoadoutComponentTestFlags)
+bool FGSTN_LoadoutKitSwapMetersTest::RunTest(const FString& Parameters)
+{
+	FLoadoutFixture Fixture;
+	UGSTN_TestLoadoutComponent& Component = *Fixture.Component;
+	UAbilitySystemComponent& ASC = *Fixture.Rig.ASC;
+	const FGameplayAttribute Ex = UGSTN_MeterAttributeSet::GetExMeterAttribute();
+	UGSTN_LoadoutModeRules& Rules = FGSTN_ActiveGameRules::GetMutablePieceForDev<UGSTN_LoadoutModeRules>();
+	const EGSTN_KitSwapMeters WasRule = Rules.KitSwapMeters;
+	ON_SCOPE_EXIT { Rules.KitSwapMeters = WasRule; };
+
+	TArray<FString> Errors;
+	TestTrue(TEXT("+ kit A"), Component.AcceptLoadout(Fixture.RequestKit(TEXT("KitA")), Errors));
+	ASC.SetNumericAttributeBase(Ex, 120.f);
+
+	Rules.KitSwapMeters = EGSTN_KitSwapMeters::Keep;
+	TestTrue(TEXT("+ kit swap to B (Keep)"), Component.AcceptKitSwap(Fixture.RequestKit(TEXT("KitB")), Errors));
+	TestEqual(TEXT("the Ex meter kept its value"), ASC.GetNumericAttributeBase(Ex), 120.f);
+
+	// A smaller maximum on the new kit caps the kept value
+	Fixture.KitA->Stats.Values = { { GSTNCombatGASTest::Stat_TestSpeed, 700.f }, { GSTNCombatGASTest::Stat_TestMeterMax, 100.f } };
+	TestTrue(TEXT("+ kit swap back to A, max 100 (Keep)"), Component.AcceptKitSwap(Fixture.RequestKit(TEXT("KitA")), Errors));
+	TestEqual(TEXT("capped at the new maximum"), ASC.GetNumericAttributeBase(Ex), 100.f);
+
+	Rules.KitSwapMeters = EGSTN_KitSwapMeters::Reset;
+	TestTrue(TEXT("+ kit swap to B (Reset)"), Component.AcceptKitSwap(Fixture.RequestKit(TEXT("KitB")), Errors));
+	TestEqual(TEXT("the Ex meter starts empty"), ASC.GetNumericAttributeBase(Ex), 0.f);
+
+	// A refused swap leaves the meters alone
+	ASC.SetNumericAttributeBase(Ex, 80.f);
+	TestFalse(TEXT("- an unknown kit is refused"), Component.AcceptKitSwap(Fixture.RequestKit(TEXT("Missing")), Errors));
+	TestEqual(TEXT("the meter did not move"), ASC.GetNumericAttributeBase(Ex), 80.f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

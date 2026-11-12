@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Loadout/GSTN_LoadoutData.h"
+#include "Loadout/GSTN_LoadoutExtensionData.h"
 #include "StructUtils/InstancedStruct.h"
 #include "GSTN_PickupPayload.generated.h"
 
@@ -39,12 +40,26 @@ struct GSTNPICKUPS_API FGSTN_PickupPayload
 		OutErrors.Add(TEXT("Pickup: nothing lies here"));
 		return false;
 	}
+
+	/**
+	 * MakeChange under the mode's kit swap rules (UGSTN_LoadoutModeRules::MakeKitSwapCarryOver): what AGSTN_EquipmentPickup::Take calls.
+	 * Only a whole kit reads the rules; every other payload is MakeChange
+	 */
+	virtual bool MakeChangeUnder(const FGSTN_KitSwapCarryOver& Rules, const FGSTN_LoadoutData& Current, FGSTN_LoadoutData& OutNew, FInstancedStruct& OutLeftBehind, TArray<FString>& OutErrors) const
+	{
+		return MakeChange(Current, OutNew, OutLeftBehind, OutErrors);
+	}
+
+	/** True for a whole kit: taking it is a kit swap (the meter rule applies, and the support weapon may fall back to the ground) */
+	virtual bool IsWholeKit() const { return false; }
 };
 
 /**
  * A whole kit on the ground (TH-1b, D1): the taker plays this loadout (kit, weapons, supers, skin, extensions) and their previous loadout stays
- * here, so another player can try it. Which parts of the old loadout carry over to the new kit (the support weapon, meters, mods) is open
- * (spec §4, questions M11.2-M11.5): until the owner decides, the whole loadout is swapped, as K1 shipped it.
+ * here, so another player can try it. What carries over follows the mode's kit swap rules (owner answers 2026-11-12, defaults in brackets):
+ * the player's support weapon goes with them [yes] (M11.2, CarrySupportWeapon), the ground kit's mods apply [yes] (M11.4, the mods entry's
+ * StaysWithPlayerOnKitSwapUnder), extensions that say so stay with the player (a backpack). The meters (M11.3) are the loadout component's
+ * (AcceptKitSwap). Whether the new kit can carry the support weapon is the loadout rules' call: Take falls back to leaving it on the ground.
  */
 USTRUCT(BlueprintType, meta = (DisplayName = "Kit"))
 struct GSTNPICKUPS_API FGSTN_KitPickupPayload : public FGSTN_PickupPayload
@@ -59,7 +74,16 @@ struct GSTNPICKUPS_API FGSTN_KitPickupPayload : public FGSTN_PickupPayload
 
 	virtual bool IsEmpty() const override { return !Loadout.PrimaryKit.IsValid(); }
 	virtual FPrimaryAssetId GetDisplayId() const override { return Loadout.PrimaryKit; }
+	/** MakeChangeUnder with the default rules (the owner's answers) */
 	virtual bool MakeChange(const FGSTN_LoadoutData& Current, FGSTN_LoadoutData& OutNew, FInstancedStruct& OutLeftBehind, TArray<FString>& OutErrors) const override;
+	virtual bool MakeChangeUnder(const FGSTN_KitSwapCarryOver& Rules, const FGSTN_LoadoutData& Current, FGSTN_LoadoutData& OutNew, FInstancedStruct& OutLeftBehind, TArray<FString>& OutErrors) const override;
+	virtual bool IsWholeKit() const override { return true; }
+
+	/**
+	 * Moves Left's support weapon (its last additional weapon, with its slot customisations) to Taken. If Taken carries one, the two
+	 * trade places (nothing is lost); if Taken already carries that same weapon, nothing moves. Pure; the loadout rules judge the result
+	 */
+	static void CarrySupportWeapon(FGSTN_LoadoutData& Taken, FGSTN_LoadoutData& Left);
 };
 
 /**

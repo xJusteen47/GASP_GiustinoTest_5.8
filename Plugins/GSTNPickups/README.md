@@ -15,8 +15,10 @@ GSTNLink: the plugin that brings the trigger with the framed focus (GSTNHeld's k
 1. **Payload.** A pickup holds one `FInstancedStruct` whose base is `FGSTN_PickupPayload`. `MakeChange(Current, OutNew, OutLeftBehind)` is pure:
    it builds the loadout the taker would play and what stays on the ground. Another plugin adds a kind by deriving a struct (the backpack plugin
    of G6 will add `FGSTN_BackpackPickupPayload`); this plugin never names it.
-2. **Kit** (`FGSTN_KitPickupPayload { Loadout }`): the taker plays the whole loadout on the ground; their whole previous loadout stays there.
-   This is the K1 behaviour; which parts carry over to the new kit (support weapon, meters, mods) is open (spec questions M11.2-M11.5).
+2. **Kit** (`FGSTN_KitPickupPayload { Loadout }`): the taker plays the loadout on the ground; their previous loadout stays there. What
+   carries over follows the mode's "Kit swap" settings in `UGSTN_LoadoutModeRules` (`MakeChangeUnder` + `FGSTN_KitSwapCarryOver`): the
+   support weapon goes with the player by default (`CarrySupportWeapon`; Take falls back to leaving it with the old kit when the new kit's
+   rules refuse it), mods follow the ground kit by default, a backpack always stays with the player; meters are `AcceptKitSwap`'s.
 3. **Support weapon** (`FGSTN_SupportWeaponPickupPayload { Weapon }`): one at a time. With no additional weapon it is added and the pickup
    empties; otherwise the last additional weapon is swapped out and stays on the ground, and the player's slot customisations of that weapon are
    dropped. The kit's stats stay. The kit decides if it may carry it (`AllowedAdditionalWeapons`, `MaxAdditionalWeapons`).

@@ -18,6 +18,7 @@
 #include "Kits/GSTN_WeaponDefinition.h"
 #include "Loadout/GSTN_LoadoutExtensions.h"
 #include "Loadout/GSTN_LoadoutModeRules.h"
+#include "Attributes/GSTN_MeterAttributeSet.h"
 #include "Loadout/GSTN_LoadoutRules.h"
 #include "Loadout/GSTN_StartingHealthSource.h"
 #include "Attributes/GSTN_HealthAttributeSet.h"
@@ -305,6 +306,46 @@ bool UGSTN_LoadoutComponent::AcceptLoadout(const FGSTN_LoadoutData& Requested, T
 	++Revision;
 	// Called here and not left to OnRep_Applied: the server (a listen host included) never receives the OnRep of its own write
 	ApplyAppliedLoadout();
+	return true;
+}
+
+bool UGSTN_LoadoutComponent::AcceptKitSwap(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors)
+{
+	// The values before the swap, read from the ability system the loadout was granted on (the pawn's)
+	UAbilitySystemComponent* Before = GetTargetAbilitySystem();
+	TArray<TPair<FGameplayAttribute, float>> Meters;
+	if (Before)
+	{
+		for (const UGSTN_MeterAttributeSet::FMeterPair& Pair : UGSTN_MeterAttributeSet::GetMeterPairs())
+		{
+			if (Before->HasAttributeSetForAttribute(Pair.Value))
+			{
+				Meters.Emplace(Pair.Value, Before->GetNumericAttributeBase(Pair.Value));
+			}
+		}
+	}
+
+	if (!AcceptLoadout(Requested, OutErrors))
+	{
+		return false;
+	}
+
+	UAbilitySystemComponent* After = GrantedOn.Get();
+	if (!After || After != Before || bGrantPending)
+	{
+		return true;
+	}
+	const bool bKeep = UGSTN_LoadoutModeRules::Get().KitSwapMeters == EGSTN_KitSwapMeters::Keep;
+	for (const UGSTN_MeterAttributeSet::FMeterPair& Pair : UGSTN_MeterAttributeSet::GetMeterPairs())
+	{
+		const TPair<FGameplayAttribute, float>* Old = Meters.FindByPredicate([&Pair](const TPair<FGameplayAttribute, float>& Entry) { return Entry.Key == Pair.Value; });
+		if (!Old)
+		{
+			continue;
+		}
+		const float Max = After->GetNumericAttribute(Pair.Max);
+		After->SetNumericAttributeBase(Pair.Value, bKeep ? FMath::Clamp(Old->Value, 0.f, FMath::Max(Max, 0.f)) : 0.f);
+	}
 	return true;
 }
 

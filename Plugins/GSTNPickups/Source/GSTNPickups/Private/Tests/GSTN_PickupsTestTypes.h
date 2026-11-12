@@ -19,6 +19,18 @@ struct FGSTN_PickupsTestKeptExt : public FGSTN_LoadoutExtensionData
 	virtual bool StaysWithPlayerOnKitSwap() const override { return true; }
 };
 
+/** A loadout extension that follows the mode's mods rule (stands in for the mods, M11.4) */
+USTRUCT()
+struct FGSTN_PickupsTestModsExt : public FGSTN_LoadoutExtensionData
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	int32 Value = 0;
+
+	virtual bool StaysWithPlayerOnKitSwapUnder(const FGSTN_KitSwapCarryOver& Rules) const override { return Rules.bModsStayWithPlayer; }
+};
+
 /** A loadout extension that travels with the kit (the default) */
 USTRUCT()
 struct FGSTN_PickupsTestPlainExt : public FGSTN_LoadoutExtensionData

@@ -2,6 +2,7 @@
 
 #include "Misc/AutomationTest.h"
 #include "GSTN_KitModBaking.h"
+#include "GSTN_KitModTypes.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -134,6 +135,19 @@ bool FGSTNKitModsNamesAndConfigTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Kit entry wins over the wildcard"), FGSTN_KitModBaking::SelectConfig(Ext, KitTags) == &Ext.Configs[1]);
 	TestTrue(TEXT("Other kits get the wildcard"), FGSTN_KitModBaking::SelectConfig(Ext, FGameplayTagContainer()) == &Ext.Configs[0]);
 	TestTrue(TEXT("Wire id registered"), FGSTN_LoadoutExtensionTypes::FindType(FGSTN_LoadoutModsExt::WireId) == FGSTN_LoadoutModsExt::StaticStruct());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTNKitModsKitSwapRuleTest, "GSTNKitMods.Core.KitSwapRule", KitModsTestFlags)
+bool FGSTNKitModsKitSwapRuleTest::RunTest(const FString& Parameters)
+{
+	// Owner answer M11.4: on a kit swap from the ground the ground kit's mods apply, so the player's entry travels with the old kit
+	const FGSTN_LoadoutModsExt Mods;
+	FGSTN_KitSwapCarryOver Rules;
+	TestFalse(TEXT("default: the mods travel with the kit"), Mods.StaysWithPlayerOnKitSwapUnder(Rules));
+	TestFalse(TEXT("and the rule-free answer agrees"), Mods.StaysWithPlayerOnKitSwap());
+	Rules.bModsStayWithPlayer = true;
+	TestTrue(TEXT("PlayerSetup: the player's setups stay with them"), Mods.StaysWithPlayerOnKitSwapUnder(Rules));
 	return true;
 }
 
