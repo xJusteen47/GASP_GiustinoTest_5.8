@@ -18,11 +18,14 @@ struct GSTNCOMBATGAS_API FGSTN_AttachmentRequest
 {
 	GENERATED_BODY()
 
-	/** Socket of the pawn's mesh (Implant_Back, Weapon_Hand_R...). None or a socket the mesh lacks attaches at the mesh origin */
+	/**
+	 * Socket of the pawn's mesh (Implant_Back, Weapon_Hand_R...), or of the parent piece's mesh with ParentSlot. A standard socket the
+	 * pawn's skeleton lacks goes to a bone through the skin component's SocketFallbacks; anything else attaches at the mesh origin
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attachment")
 	FName Socket;
 
-	/** A static or a skeletal mesh; anything else is ignored. Soft: loaded when the look is applied */
+	/** A static or a skeletal mesh; anything else is ignored. Soft: loaded asynchronously, the old look stays until it is ready */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attachment", meta = (AllowedClasses = "/Script/Engine.StaticMesh,/Script/Engine.SkeletalMesh"))
 	TSoftObjectPtr<UObject> Mesh;
 
@@ -30,9 +33,41 @@ struct GSTNCOMBATGAS_API FGSTN_AttachmentRequest
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attachment")
 	FTransform Offset;
 
-	/** Name a timeline visual track shows or hides (Sword); None = always shown. The track itself is M11 G5 */
+	/**
+	 * Name of this piece of the look (Sword, Implant.Back). A timeline visual track shows or hides it by this name, a later request
+	 * attaches to it (ParentSlot), replaces it (bReplacesSlot) or recolours it (a request with no mesh). None = an anonymous piece
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attachment")
 	FName VisualSlot;
+
+	/**
+	 * Attach to the piece an earlier request made under this slot instead of the pawn's mesh; Socket is then a socket of that piece's
+	 * mesh. A backpack names Implant.Back and the Connector_Backpack socket, so it fits on top of any kit's implant. A slot nobody made
+	 * falls back to the pawn's mesh (no implant: the backpack sits on the back socket)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attachment")
+	FName ParentSlot;
+
+	/** Shown when nothing asks otherwise. A weapon's sword that only some moves show is authored false (fists-only weapons have none) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attachment")
+	bool bShownByDefault = true;
+
+	/**
+	 * Swap the mesh of the earlier piece with the same VisualSlot instead of adding one (a mod's longer blade, a gilded implant). The
+	 * piece keeps its socket and parent unless this request names its own Socket; its colours are kept, this request's win
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attachment")
+	bool bReplacesSlot = false;
+
+	/** Material vector parameters set on every material of the piece (dynamic instances). With no Mesh: recolour the slot only */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attachment|Material", meta = (ForceInlineRow))
+	TMap<FName, FLinearColor> VectorParameters;
+
+	/** Material scalar parameters, same rules as VectorParameters */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Attachment|Material", meta = (ForceInlineRow))
+	TMap<FName, float> ScalarParameters;
+
+	bool HasMaterialParameters() const { return !VectorParameters.IsEmpty() || !ScalarParameters.IsEmpty(); }
 };
 
 /** What a provider is handed: the pawn and its resolved loadout (null when the pawn has none yet) */

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Engine/TimerHandle.h"
+#include "Cosmetics/GSTN_AttachmentProvider.h"
 #include "GSTN_SkinComponent.generated.h"
 
 class UAnimInstance;
@@ -14,6 +15,7 @@ class UMaterialInterface;
 class USkeletalMesh;
 class USceneComponent;
 class USkeletalMeshComponent;
+struct FStreamableHandle;
 
 /**
  * Puts the skin of the loadout on a pawn (combat-m3 10). Presentation only: it changes a mesh, material overrides and an
@@ -28,9 +30,11 @@ class USkeletalMeshComponent;
  *
  * The skin asset's content is soft; it is loaded here, once, when the skin is applied.
  *
- * It also composes the meshes registered attachment providers want from the loadout (FGSTN_AttachmentProviderRegistry: kit
- * implants, backpacks), each on its socket of the skinned mesh, refreshed on every applied loadout. The old attachments are
- * removed first, so a kit swap never stacks two implants.
+ * It also composes the equipment look (combat-loadout-mods 9): the kit's and the primary weapon's FGSTN_EquipmentVisual, then what
+ * the registered attachment providers want (FGSTN_AttachmentProviderRegistry: backpacks, mod visuals), folded by
+ * FGSTN_EquipmentVisualUtils::Compose (slot replacements, recolours, a piece on another piece's socket such as a backpack on the
+ * implant's Connector_Backpack). Refreshed on every applied loadout. The meshes load asynchronously and the old pieces stay until the
+ * new ones are ready, then are swapped in one go, so a kit swap never stacks two implants nor shows a bare back for a frame.
  */
 UCLASS(ClassGroup = "GSTN Combat", BlueprintType, Blueprintable, meta = (BlueprintSpawnableComponent))
 class GSTNCOMBATGAS_API UGSTN_SkinComponent : public UActorComponent
@@ -71,9 +75,39 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Skin")
 	void RestoreOriginal();
 
-	/** Removes the attachments and asks the registered providers again for the bound loadout (or none) */
+	/**
+	 * A standard socket the pawn's mesh lacks goes to this bone or socket instead (placeholder content on the GASP mannequin before the
+	 * Implant_* sockets are authored). Defaults are the UE5 mannequin bones
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skin|Equipment", meta = (ForceInlineRow))
+	TMap<FName, FName> SocketFallbacks;
+
+	/**
+	 * Asks the loadout and the registered providers again for the bound loadout (or none) and rebuilds the pieces. The meshes load
+	 * asynchronously: the current pieces stay until the new ones are ready (already loaded meshes swap at once). A newer refresh
+	 * cancels a pending one
+	 */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Skin")
 	void RefreshAttachments();
+
+	/** Whether a refresh waits for meshes to load (the old look is still shown) */
+	UFUNCTION(BlueprintPure, Category = "Combat|Skin")
+	bool IsAttachmentLoadPending() const;
+
+	/**
+	 * Shows or hides every piece of a visual slot whatever its default (a timeline visual track showing the sword during a move).
+	 * Kept across refreshes until cleared
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Skin")
+	void SetVisualSlotShown(FName Slot, bool bShown);
+
+	/** Back to each piece's bShownByDefault */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Skin")
+	void ClearVisualSlotShown(FName Slot);
+
+	/** The first piece built for a visual slot, null if none */
+	UFUNCTION(BlueprintPure, Category = "Combat|Skin")
+	USceneComponent* FindVisualSlotComponent(FName Slot) const;
 
 	/** The mesh components the providers' requests made, in request order */
 	const TArray<TObjectPtr<USceneComponent>>& GetAttachmentComponents() const { return Attachments; }
@@ -118,5 +152,22 @@ private:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<USceneComponent>> Attachments;
 
+	/** The visual slot of each entry of Attachments */
+	TArray<FName> AttachmentSlots;
+
+	/** Slots shown or hidden by SetVisualSlotShown */
+	TMap<FName, bool> SlotShownOverrides;
+
+	/** The pending asynchronous load, if any; its completion builds Pending */
+	TSharedPtr<FStreamableHandle> PendingLoad;
+	TArray<FGSTN_AttachmentRequest> PendingPieces;
+
+	/** Bumped on every refresh and at end of play: a completion of an older refresh is ignored */
+	uint32 RefreshSerial = 0;
+
 	void ClearAttachments();
+	void CancelPendingLoad();
+	void BuildAttachments(const TArray<FGSTN_AttachmentRequest>& Pieces);
+	void ApplyPieceVisibility(int32 Index);
+	FName ResolveSocket(const USceneComponent& Parent, FName Socket) const;
 };

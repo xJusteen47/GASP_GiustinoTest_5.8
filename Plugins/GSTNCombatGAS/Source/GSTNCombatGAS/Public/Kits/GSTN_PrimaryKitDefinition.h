@@ -7,6 +7,7 @@
 #include "GameplayTagContainer.h"
 #include "Attributes/GSTN_KitStats.h"
 #include "Attributes/GSTN_MeterSetup.h"
+#include "Cosmetics/GSTN_EquipmentVisual.h"
 #include "Kits/GSTN_AbilityBinding.h"
 #include "Kits/GSTN_CommandSet.h"
 #include "Rules/GSTN_KitExtension.h"
@@ -108,6 +109,13 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kit|Presentation")
 	TSoftClassPtr<UAnimInstance> LocomotionAnimLayer;
+
+	/**
+	 * What shows the kit on the pawn (combat-loadout-mods 9): the back implant (a part on Implant_Back; its mesh should carry the
+	 * Connector_Backpack socket), implants on arms, hands, legs or feet. Put on by the skin component on every machine that renders
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kit|Presentation")
+	FGSTN_EquipmentVisual Visual;
 
 	/** Used when an attack's own timeline authors no ricochet response and its weapon has none (combat-m4) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Kit|Ricochet")

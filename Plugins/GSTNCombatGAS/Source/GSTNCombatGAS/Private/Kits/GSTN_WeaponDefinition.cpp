@@ -97,6 +97,8 @@ void UGSTN_WeaponDefinition::Validate(TArray<FText>& OutErrors, TArray<FText>& O
 		AddWarning(TEXT("A support weapon with a stats effect changes its carrier's stats (only in modes whose SupportWeaponStats is WeaponOwn)."));
 	}
 
+	FGSTN_EquipmentVisualUtils::Validate(Visual, TEXT("Weapon"), OutWarnings);
+
 	for (const TPair<FGameplayTag, FGSTN_AbilityClassList>& Pair : AllowedAlternatives)
 	{
 		if (!Pair.Key.IsValid())

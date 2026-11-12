@@ -83,6 +83,8 @@ bool FGSTN_LoadoutExtensionPriorityTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SkinAttachmentProvidersTest, "GSTNCombat.GAS.Skin.AttachmentProviders", SeamsTestFlags)
 bool FGSTN_SkinAttachmentProvidersTest::RunTest(const FString& Parameters)
 {
+	// In memory first: the skin component builds loaded meshes at once and streams the others (old look kept until ready)
+	TSoftObjectPtr<UObject>(FSoftObjectPath(TEXT("/Engine/BasicShapes/Cube.Cube"))).LoadSynchronous();
 	GSTNCombatGASTest::FRig Rig;
 	UWorld& World = *Rig.World;
 	AActor* Pawn = World.SpawnActor<AActor>();

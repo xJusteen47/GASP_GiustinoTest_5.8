@@ -6,6 +6,7 @@
 #include "Engine/DataAsset.h"
 #include "GameplayTagContainer.h"
 #include "Attributes/GSTN_KitStats.h"
+#include "Cosmetics/GSTN_EquipmentVisual.h"
 #include "Kits/GSTN_AbilityBinding.h"
 #include "Rules/GSTN_KitExtension.h"
 #include "Timeline/GSTN_TimelineTypes.h"
@@ -92,6 +93,13 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Presentation")
 	TSoftClassPtr<AActor> VisualActor;
+
+	/**
+	 * The weapon's meshes on the pawn: a sword on Weapon_Hand_R (VisualSlot Sword, bShownByDefault false when only some moves show
+	 * it), implants on hands or feet. Empty = the parent weapon's look. Only the primary weapon is shown for now
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Presentation")
+	FGSTN_EquipmentVisual Visual;
 
 	/** Used when an attack's own timeline authors no ricochet response (combat-m4); the kit's is the next fallback */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Ricochet")

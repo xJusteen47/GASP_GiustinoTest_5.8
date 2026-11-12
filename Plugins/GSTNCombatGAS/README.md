@@ -215,8 +215,24 @@ as the other combat tests: `-ExecCmds="Automation RunTests GSTNInput+GSTNCombat;
 - `IGSTN_AttachmentProvider` and `FGSTN_AttachmentProviderRegistry` (`Cosmetics/`): an optional plugin registers a provider that
   returns `FGSTN_AttachmentRequest`s (socket, soft static or skeletal mesh, offset, visual slot) from the pawn and its resolved
   loadout. `UGSTN_SkinComponent` asks every provider (priority, then id) on each applied loadout and attaches the meshes to the
-  skinned mesh without collision, replacing the previous ones (`RefreshAttachments`). Presentation only; synchronous load (async
-  load is M11 G5). Test `GSTNCombat.GAS.Skin.AttachmentProviders`.
+  skinned mesh without collision, replacing the previous ones (`RefreshAttachments`). Presentation only; loading is async since L6
+  (below). Test `GSTNCombat.GAS.Skin.AttachmentProviders`.
+
+## M11 equipment look (L6)
+
+- `FGSTN_EquipmentVisual` (`Cosmetics/GSTN_EquipmentVisual.h`): a list of `FGSTN_AttachmentRequest` parts, as `Visual` on the kit
+  (back implant, arm/hand/leg/foot implants) and on the weapon (sword, hand or foot implants; empty = the parent weapon's look).
+  Standard names in `GSTNEquipment`: sockets `Implant_Back`, `Implant_Hand_L/R`, `Implant_Foot_L/R`, `Weapon_Hand_R`, the connector
+  `Connector_Backpack` and the slot `Implant.Back`, which a kit part on `Implant_Back` gets by itself.
+- The request grew: `ParentSlot` (attach to an earlier piece's socket: a backpack names `Implant.Back` + `Connector_Backpack`, so any
+  backpack fits any kit), `bShownByDefault`, `bReplacesSlot` (a mod's mesh swap of a slot) and `VectorParameters`/`ScalarParameters`
+  (dynamic material instances; a request with no mesh recolours its slot). `FGSTN_EquipmentVisualUtils::Compose` folds them, pure.
+- `UGSTN_SkinComponent` builds the kit's and the primary weapon's look, then the providers', composed. Meshes load asynchronously and
+  the old pieces stay until the new ones are in (`IsAttachmentLoadPending`); a newer refresh drops a pending one. `SocketFallbacks`
+  maps a standard socket the skeleton lacks to a mannequin bone (placeholders work before the sockets exist).
+  `SetVisualSlotShown`/`ClearVisualSlotShown` are the hook for the timeline visual track (sword shown only in some moves).
+- Validation (kit and weapon `Validate`): a back implant mesh without `Connector_Backpack`, a part that does nothing, a replacement
+  without a slot. Support weapons are not shown yet (only weapon 0). Tests `GSTNCombat.GAS.Equipment.{Compose,LoadoutVisuals,SkinPieces}`.
 
 ## M11 support weapons and special swaps (L3)
 

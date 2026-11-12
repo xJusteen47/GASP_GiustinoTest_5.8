@@ -5,6 +5,12 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Cosmetics/GSTN_AttachmentProvider.h"
+#include "Cosmetics/GSTN_EquipmentVisual.h"
+#include "Engine/AssetManager.h"
+#include "Engine/StreamableManager.h"
+#include "Kits/GSTN_WeaponDefinition.h"
+#include "Loadout/GSTN_LoadoutAssembly.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
@@ -16,9 +22,28 @@
 #include "Materials/MaterialInterface.h"
 #include "TimerManager.h"
 
+namespace
+{
+	/** Marks a piece authored bShownByDefault false, so a cleared slot override goes back to hidden */
+	const FName HiddenByDefaultTag(TEXT("GSTN.HiddenByDefault"));
+}
+
 UGSTN_SkinComponent::UGSTN_SkinComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+
+	// UE5 mannequin bones (GASP): placeholder implants land on the right body part before the Implant_* sockets exist
+	SocketFallbacks.Add(GSTNEquipment::Socket_ImplantBack, TEXT("spine_05"));
+	SocketFallbacks.Add(GSTNEquipment::Socket_ImplantHandL, TEXT("hand_l"));
+	SocketFallbacks.Add(GSTNEquipment::Socket_ImplantHandR, TEXT("hand_r"));
+	SocketFallbacks.Add(GSTNEquipment::Socket_ImplantFootL, TEXT("foot_l"));
+	SocketFallbacks.Add(GSTNEquipment::Socket_ImplantFootR, TEXT("foot_r"));
+	SocketFallbacks.Add(TEXT("Implant_Arm_L"), TEXT("lowerarm_l"));
+	SocketFallbacks.Add(TEXT("Implant_Arm_R"), TEXT("lowerarm_r"));
+	SocketFallbacks.Add(TEXT("Implant_Leg_L"), TEXT("calf_l"));
+	SocketFallbacks.Add(TEXT("Implant_Leg_R"), TEXT("calf_r"));
+	SocketFallbacks.Add(GSTNEquipment::Socket_WeaponHandR, TEXT("hand_r"));
+	SocketFallbacks.Add(TEXT("Weapon_Hand_L"), TEXT("hand_l"));
 }
 
 void UGSTN_SkinComponent::BeginPlay()
@@ -47,6 +72,7 @@ void UGSTN_SkinComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		Loadout->OnLoadoutApplied.RemoveDynamic(this, &UGSTN_SkinComponent::HandleLoadoutApplied);
 	}
 	BoundLoadout.Reset();
+	CancelPendingLoad();
 	ClearAttachments();
 	Super::EndPlay(EndPlayReason);
 }
@@ -119,33 +145,123 @@ void UGSTN_SkinComponent::ClearAttachments()
 		}
 	}
 	Attachments.Reset();
+	AttachmentSlots.Reset();
+}
+
+void UGSTN_SkinComponent::CancelPendingLoad()
+{
+	++RefreshSerial;
+	if (PendingLoad.IsValid())
+	{
+		PendingLoad->CancelHandle();
+		PendingLoad.Reset();
+	}
+	PendingPieces.Reset();
+}
+
+bool UGSTN_SkinComponent::IsAttachmentLoadPending() const
+{
+	return PendingLoad.IsValid();
 }
 
 void UGSTN_SkinComponent::RefreshAttachments()
 {
-	ClearAttachments();
-	if (GetNetMode() == NM_DedicatedServer)
+	CancelPendingLoad();
+	if (GetNetMode() == NM_DedicatedServer || !GetTargetMesh() || !GetOwner())
 	{
-		return;
-	}
-	USkeletalMeshComponent* Mesh = GetTargetMesh();
-	AActor* Owner = GetOwner();
-	if (!Mesh || !Owner)
-	{
+		ClearAttachments();
 		return;
 	}
 
+	// The loadout's own look first, then the providers' (a backpack names the implant's slot, so it must come after it)
 	const UGSTN_LoadoutComponent* Loadout = BoundLoadout.Get();
 	FGSTN_AttachmentContext Context;
-	Context.Pawn = Owner;
+	Context.Pawn = GetOwner();
 	Context.Resolved = Loadout && Loadout->HasLoadout() ? &Loadout->GetResolvedLoadout() : nullptr;
 	TArray<FGSTN_AttachmentRequest> Requests;
+	if (Context.Resolved)
+	{
+		const UGSTN_WeaponDefinition* Primary = Context.Resolved->Weapons.IsValidIndex(0) ? Context.Resolved->Weapons[0] : nullptr;
+		FGSTN_EquipmentVisualUtils::GatherLoadoutVisuals(Context.Resolved->Kit, Primary, Requests);
+	}
 	FGSTN_AttachmentProviderRegistry::Gather(Context, Requests);
 
-	for (const FGSTN_AttachmentRequest& Request : Requests)
+	TArray<FGSTN_AttachmentRequest> Pieces;
+	FGSTN_EquipmentVisualUtils::Compose(Requests, Pieces);
+
+	TArray<FSoftObjectPath> ToLoad;
+	for (const FGSTN_AttachmentRequest& Piece : Pieces)
 	{
-		// Loaded synchronously like the skin's own content; async loading that keeps the old look until ready is M11 G5
-		UObject* Asset = Request.Mesh.IsNull() ? nullptr : Request.Mesh.LoadSynchronous();
+		if (!Piece.Mesh.IsNull() && !Piece.Mesh.Get())
+		{
+			ToLoad.AddUnique(Piece.Mesh.ToSoftObjectPath());
+		}
+	}
+	if (ToLoad.IsEmpty() || !UAssetManager::IsInitialized())
+	{
+		// Everything is in memory (or there is no streamer, as in a bare test world): swap now
+		BuildAttachments(Pieces);
+		return;
+	}
+
+	// The old look stays until every mesh is in; a newer refresh bumps the serial and this completion does nothing
+	PendingPieces = MoveTemp(Pieces);
+	const uint32 Serial = RefreshSerial;
+	TWeakObjectPtr<UGSTN_SkinComponent> WeakThis(this);
+	PendingLoad = UAssetManager::GetStreamableManager().RequestAsyncLoad(MoveTemp(ToLoad), FStreamableDelegate::CreateLambda([WeakThis, Serial]()
+	{
+		UGSTN_SkinComponent* This = WeakThis.Get();
+		if (!This || This->RefreshSerial != Serial)
+		{
+			return;
+		}
+		TArray<FGSTN_AttachmentRequest> Ready = MoveTemp(This->PendingPieces);
+		This->PendingPieces.Reset();
+		This->PendingLoad.Reset();
+		This->BuildAttachments(Ready);
+	}));
+	if (PendingLoad.IsValid() && PendingLoad->HasLoadCompleted() && PendingPieces.IsEmpty())
+	{
+		// The completion already ran inside the request (every path failed at once): nothing is pending any more
+		PendingLoad.Reset();
+	}
+	if (!PendingLoad.IsValid() && RefreshSerial == Serial && !PendingPieces.IsEmpty())
+	{
+		// The streamer refused the request (bad paths): build what resolves now rather than keep a stale look
+		TArray<FGSTN_AttachmentRequest> Ready = MoveTemp(PendingPieces);
+		PendingPieces.Reset();
+		BuildAttachments(Ready);
+	}
+}
+
+FName UGSTN_SkinComponent::ResolveSocket(const USceneComponent& Parent, FName Socket) const
+{
+	if (Socket.IsNone() || Parent.DoesSocketExist(Socket))
+	{
+		return Socket;
+	}
+	const FName* Fallback = SocketFallbacks.Find(Socket);
+	return Fallback && Parent.DoesSocketExist(*Fallback) ? *Fallback : Socket;
+}
+
+void UGSTN_SkinComponent::BuildAttachments(const TArray<FGSTN_AttachmentRequest>& Pieces)
+{
+	ClearAttachments();
+	USkeletalMeshComponent* Mesh = GetTargetMesh();
+	AActor* Owner = GetOwner();
+	if (!Mesh || !Owner || GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+
+	for (const FGSTN_AttachmentRequest& Piece : Pieces)
+	{
+		// Loaded by the async request; the synchronous load only covers a path the streamer did not resolve
+		UObject* Asset = Piece.Mesh.IsNull() ? nullptr : Piece.Mesh.Get();
+		if (!Asset && !Piece.Mesh.IsNull())
+		{
+			Asset = Piece.Mesh.LoadSynchronous();
+		}
 		UMeshComponent* Attachment = nullptr;
 		if (UStaticMesh* Static = Cast<UStaticMesh>(Asset))
 		{
@@ -163,14 +279,107 @@ void UGSTN_SkinComponent::RefreshAttachments()
 		{
 			continue;
 		}
+
+		// The piece made earlier under ParentSlot (Compose keeps the name only when one exists), else the pawn's mesh
+		USceneComponent* Parent = Mesh;
+		if (!Piece.ParentSlot.IsNone())
+		{
+			const int32 ParentIndex = AttachmentSlots.Find(Piece.ParentSlot);
+			if (ParentIndex != INDEX_NONE && Attachments[ParentIndex])
+			{
+				Parent = Attachments[ParentIndex];
+			}
+		}
+
 		// Cosmetic: never collides, never blocks the camera or a hit query
 		Attachment->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Attachment->SetGenerateOverlapEvents(false);
-		Attachment->SetupAttachment(Mesh, Request.Socket);
-		Attachment->SetRelativeTransform(Request.Offset);
+		Attachment->SetupAttachment(Parent, ResolveSocket(*Parent, Piece.Socket));
+		Attachment->SetRelativeTransform(Piece.Offset);
+		if (!Piece.bShownByDefault)
+		{
+			Attachment->ComponentTags.Add(HiddenByDefaultTag);
+		}
 		Attachment->RegisterComponent();
+
+		if (Piece.HasMaterialParameters())
+		{
+			for (int32 Slot = 0; Slot < Attachment->GetNumMaterials(); ++Slot)
+			{
+				if (UMaterialInstanceDynamic* Dynamic = Attachment->CreateAndSetMaterialInstanceDynamic(Slot))
+				{
+					for (const TPair<FName, FLinearColor>& Pair : Piece.VectorParameters)
+					{
+						Dynamic->SetVectorParameterValue(Pair.Key, Pair.Value);
+					}
+					for (const TPair<FName, float>& Pair : Piece.ScalarParameters)
+					{
+						Dynamic->SetScalarParameterValue(Pair.Key, Pair.Value);
+					}
+				}
+			}
+		}
+
 		Attachments.Add(Attachment);
+		AttachmentSlots.Add(Piece.VisualSlot);
 	}
+
+	// Visibility last: a parent's propagation must not undo a child's own default
+	for (int32 Index = 0; Index < Attachments.Num(); ++Index)
+	{
+		ApplyPieceVisibility(Index);
+	}
+}
+
+void UGSTN_SkinComponent::ApplyPieceVisibility(int32 Index)
+{
+	USceneComponent* Attachment = Attachments.IsValidIndex(Index) ? Attachments[Index].Get() : nullptr;
+	if (!Attachment)
+	{
+		return;
+	}
+	const FName Slot = AttachmentSlots[Index];
+	const bool* Override = Slot.IsNone() ? nullptr : SlotShownOverrides.Find(Slot);
+	const bool bDefault = !Attachment->ComponentTags.Contains(HiddenByDefaultTag);
+	// Not propagated: a backpack on a hidden piece keeps its own visibility
+	Attachment->SetVisibility(Override ? *Override : bDefault, false);
+}
+
+void UGSTN_SkinComponent::SetVisualSlotShown(FName Slot, bool bShown)
+{
+	if (Slot.IsNone())
+	{
+		return;
+	}
+	SlotShownOverrides.Add(Slot, bShown);
+	for (int32 Index = 0; Index < Attachments.Num(); ++Index)
+	{
+		if (AttachmentSlots[Index] == Slot)
+		{
+			ApplyPieceVisibility(Index);
+		}
+	}
+}
+
+void UGSTN_SkinComponent::ClearVisualSlotShown(FName Slot)
+{
+	if (SlotShownOverrides.Remove(Slot) == 0)
+	{
+		return;
+	}
+	for (int32 Index = 0; Index < Attachments.Num(); ++Index)
+	{
+		if (AttachmentSlots[Index] == Slot)
+		{
+			ApplyPieceVisibility(Index);
+		}
+	}
+}
+
+USceneComponent* UGSTN_SkinComponent::FindVisualSlotComponent(FName Slot) const
+{
+	const int32 Index = Slot.IsNone() ? INDEX_NONE : AttachmentSlots.Find(Slot);
+	return Index != INDEX_NONE ? Attachments[Index].Get() : nullptr;
 }
 
 void UGSTN_SkinComponent::CaptureOriginal(const USkeletalMeshComponent& Mesh)

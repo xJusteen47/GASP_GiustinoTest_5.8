@@ -190,6 +190,12 @@ implants reaching hands or feet; a "weapon" may use the sword mesh only in some 
   implants, weapon visuals, mod visuals and registered attachments from other plugins (backpack) through
   `RegisterAttachmentProvider` (an interface, so `GSTNCombat` never names backpacks). Applied on spawn and on every loadout
   revision; no simulation code reads it. Async-loads the soft references; shows the previous look until the new one is ready.
+- *Built (M11 L6)*: `FGSTN_EquipmentVisual` is a list of `FGSTN_AttachmentRequest` (GSTNCombatGAS `Cosmetics/`) as `Visual` on kit and
+  weapon; the request carries `ParentSlot` (the connector: backpack on `Implant.Back`), `bShownByDefault`, `bReplacesSlot` and material
+  parameters, so mod visuals are plain requests (no separate `FGSTN_ModVisual` type needed). It is not a new component: the existing
+  `UGSTN_SkinComponent` composes it (async, old look kept). The connector check is in the kit/weapon `Validate`, not a separate M5
+  validator. Not built: `FGSTN_VisualTrack` (the timeline track; the component's `SetVisualSlotShown` is its hook), support weapon
+  visuals (only weapon 0 is shown), the `Implant_*` sockets on the skeleton (mannequin bone fallbacks meanwhile).
 
 ## 10. Backpacks (`GSTNBackpack`)
 

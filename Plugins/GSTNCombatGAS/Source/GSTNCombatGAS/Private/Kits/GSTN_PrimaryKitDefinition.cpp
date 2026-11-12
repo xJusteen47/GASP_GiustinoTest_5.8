@@ -130,6 +130,8 @@ void UGSTN_PrimaryKitDefinition::Validate(TArray<FText>& OutErrors, TArray<FText
 	{
 		AddWarning(TEXT("The ricochet fallback is on but has no recoil frames, so it does nothing."));
 	}
+
+	FGSTN_EquipmentVisualUtils::Validate(Visual, TEXT("Kit"), OutWarnings);
 }
 
 #if WITH_EDITOR
