@@ -11,7 +11,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 BEGIN_DEFINE_SPEC(FAbilitySystemInspectorToolsetSpec,
-	"AI.Toolsets.GASToolsets.AbilitySystemInspectorToolset",
+	"AIAssistant.Toolsets.GASToolsets.AbilitySystemInspectorToolset",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 	AActor* TestActor = nullptr;
 END_DEFINE_SPEC(FAbilitySystemInspectorToolsetSpec)

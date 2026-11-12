@@ -2345,6 +2345,7 @@ void UGameplayAbility::Serialize(FArchive& Ar)
 {
 	Super::Serialize(Ar);
 
+#if UE_WITH_REMOTE_OBJECT_HANDLE // GAS-NPP 5.9: guard matches the 5.9 engine copy
 	if (Ar.IsMigratingRemoteObjects())
 	{
 		Ar << bHasBlueprintShouldAbilityRespondToEvent;
@@ -2354,6 +2355,7 @@ void UGameplayAbility::Serialize(FArchive& Ar)
 		Ar << CurrentSpecHandle;
 		Ar << TrackedGameplayCues;
 	}
+#endif
 }
 
 #if UE_WITH_REMOTE_OBJECT_HANDLE

@@ -2,10 +2,14 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "Containers/Array.h"
+#include "Containers/UnrealString.h"
 #include "ToolsetRegistry/ToolsetDefinition.h"
+#include "UObject/ScriptInterface.h"
 
 #include "AbilitySystemInspectorToolset.generated.h"
+
+class AActor;
 
 /// The runtime base and current value of a single gameplay attribute.
 USTRUCT(BlueprintType)
@@ -82,8 +86,6 @@ struct FGrantedAbilityInfo
 
 /**
  * Provides tools for inspecting the runtime state of an AbilitySystemComponent.
- * Each function takes a direct actor pointer and raises a script error if the
- * actor is null or has no AbilitySystemComponent.
  */
 UCLASS(BlueprintType, Hidden)
 class UAbilitySystemInspectorToolset : public UToolsetDefinition
@@ -96,9 +98,8 @@ public:
 	 * on the actor's AbilitySystemComponent.
 	 * @param Actor  The target actor.
 	 * @return A list of attribute values sorted by full name.
-	 *   Raises a script error if Actor is null or has no ASC.
 	 */
-	UFUNCTION(meta = (AICallable), Category = "AbilitySystem")
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Read"), Category = "AbilitySystem")
 	static TArray<FRuntimeAttributeValue> GetAttributeValues(AActor* Actor);
 
 	/**
@@ -106,18 +107,16 @@ public:
 	 * AbilitySystemComponent.
 	 * @param Actor  The target actor.
 	 * @return A list of active effect summaries sorted by effect name.
-	 *   Raises a script error if Actor is null or has no ASC.
 	 */
-	UFUNCTION(meta = (AICallable), Category = "AbilitySystem")
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Read"), Category = "AbilitySystem")
 	static TArray<FActiveEffectInfo> GetActiveEffects(AActor* Actor);
 
 	/**
 	 * Returns all abilities granted to the actor's AbilitySystemComponent.
 	 * @param Actor  The target actor.
 	 * @return A list of granted ability summaries sorted by ability name.
-	 *   Raises a script error if Actor is null or has no ASC.
 	 */
-	UFUNCTION(meta = (AICallable), Category = "AbilitySystem")
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Read"), Category = "AbilitySystem")
 	static TArray<FGrantedAbilityInfo> GetGrantedAbilities(AActor* Actor);
 
 	/**
@@ -125,10 +124,13 @@ public:
 	 * AbilitySystemComponent (includes loose tags, effect-granted tags, etc.).
 	 * @param Actor  The target actor.
 	 * @return A sorted list of gameplay tag name strings.
-	 *   Raises a script error if Actor is null or has no ASC.
 	 */
-	UFUNCTION(meta = (AICallable), Category = "AbilitySystem")
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Read"), Category = "AbilitySystem")
 	static TArray<FString> GetActiveTags(AActor* Actor);
 
 	friend class FAbilitySystemInspectorToolsetSpec;
+
+	//~ Begin UToolsetDefinition Interface
+	virtual bool IsToolsetHidden_Implementation(const TScriptInterface<IToolsetPermissionProvider>& Provider) const override;
+	//~ End UToolsetDefinition Interface
 };

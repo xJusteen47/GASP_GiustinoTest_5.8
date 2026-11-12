@@ -2,8 +2,10 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "Containers/Array.h"
+#include "Containers/UnrealString.h"
 #include "ToolsetRegistry/ToolsetDefinition.h"
+#include "UObject/ScriptInterface.h"
 
 #include "AttributeSetToolset.generated.h"
 
@@ -57,17 +59,20 @@ public:
 	 * Covers both native C++ subclasses and Blueprint subclasses discovered via the asset registry.
 	 * @return A list of attribute set descriptors sorted by class name.
 	 */
-	UFUNCTION(meta = (AICallable), Category = "AttributeSets")
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Read"), Category = "AttributeSets")
 	static TArray<FAttributeSetClassInfo> FindAttributeSetClasses();
 
 	/**
 	 * Returns the gameplay attributes defined on a specific AttributeSet class.
 	 * @param ClassName The UClass name to look up, e.g. "UMyHealthSet".
-	 *   Raises a script error if the class is not found or is not an AttributeSet subclass.
 	 * @return A list of attribute descriptors defined on the class.
 	 */
-	UFUNCTION(meta = (AICallable), Category = "AttributeSets")
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Read"), Category = "AttributeSets")
 	static TArray<FGameplayAttributeInfo> ListAttributes(const FString& ClassName);
 
 	friend class FAttributeSetToolsetSpec;
+
+	//~ Begin UToolsetDefinition Interface
+	virtual bool IsToolsetHidden_Implementation(const TScriptInterface<IToolsetPermissionProvider>& Provider) const override;
+	//~ End UToolsetDefinition Interface
 };

@@ -43,6 +43,10 @@
 		{
 			"Name": "DataRegistry",
 			"Enabled": true
+		},
+		{
+			"Name": "Cascade",
+			"Enabled": true
 		}
 	]
 

@@ -189,3 +189,8 @@ TArray<FString> UAbilitySystemInspectorToolset::GetActiveTags(AActor* Actor)
 	TagStrings.Sort();
 	return TagStrings;
 }
+
+bool UAbilitySystemInspectorToolset::IsToolsetHidden_Implementation(const TScriptInterface<IToolsetPermissionProvider>& Provider) const
+{
+	return Provider->IsRestricted();
+}

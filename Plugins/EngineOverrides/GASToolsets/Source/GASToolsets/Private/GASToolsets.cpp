@@ -5,6 +5,7 @@
 #include "AbilitySystemInspectorToolset.h"
 #include "AttributeSetToolset.h"
 #include "Editor.h"
+#include "GameplayAbilityToolset.h"
 #include "GameplayCueToolset.h"
 #include "Misc/CoreDelegates.h"
 #include "Modules/ModuleManager.h"
@@ -12,6 +13,7 @@
 
 /*virtual*/ void FGASToolsetsModule::StartupModule()
 {
+	UToolsetRegistry::RegisterToolsetClass(UGameplayAbilityToolset::StaticClass());
 	UToolsetRegistry::RegisterToolsetClass(UGameplayCueToolset::StaticClass());
 	UToolsetRegistry::RegisterToolsetClass(UAttributeSetToolset::StaticClass());
 	UToolsetRegistry::RegisterToolsetClass(UAbilitySystemInspectorToolset::StaticClass());
@@ -24,6 +26,7 @@
 		UToolsetRegistry::UnregisterToolsetClass(UAbilitySystemInspectorToolset::StaticClass());
 		UToolsetRegistry::UnregisterToolsetClass(UAttributeSetToolset::StaticClass());
 		UToolsetRegistry::UnregisterToolsetClass(UGameplayCueToolset::StaticClass());
+		UToolsetRegistry::UnregisterToolsetClass(UGameplayAbilityToolset::StaticClass());
 	}
 }
 

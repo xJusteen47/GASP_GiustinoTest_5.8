@@ -16,11 +16,13 @@ public class GASToolsets : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"GameplayAbilities",
+			"GameplayAbilitiesEditor",
 			"GameplayTags",
 			"GameplayTagsEditor",
 			"Kismet",
-			"KismetCompiler",
+			"BlueprintGraph",
 			"ToolsetRegistry",
+			"ToolsetRegistryEditor",
 			"UnrealEd",
 		});
 	}

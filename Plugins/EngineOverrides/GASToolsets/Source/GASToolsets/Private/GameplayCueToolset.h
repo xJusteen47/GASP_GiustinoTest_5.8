@@ -2,8 +2,11 @@
 
 #pragma once
 
-#include "CoreMinimal.h"
+#include "Containers/Array.h"
+#include "Containers/UnrealString.h"
+#include "Math/Vector.h"
 #include "ToolsetRegistry/ToolsetDefinition.h"
+#include "UObject/ScriptInterface.h"
 
 #include "GameplayCueToolset.generated.h"
 
@@ -17,37 +20,10 @@ struct FGameplayCueInfo
 	UPROPERTY(BlueprintReadWrite, Category = "GameplayCue")
 	FString Tag;
 
-	/// The object path to the associated GameplayCueNotify asset.
-	/// Empty if no notify has been found for this tag in the asset registry.
+	/// The object path of the GameplayCueNotify Blueprint asset registered for exactly this tag
+	/// (e.g. "/Game/Effects/GCN_Death.GCN_Death"). Empty if the tag has no notify of its own.
 	UPROPERTY(BlueprintReadWrite, Category = "GameplayCue")
 	FString NotifyAssetPath;
-
-	/// The notify base class: "Static", "Actor", or "None" if no notify is found.
-	UPROPERTY(BlueprintReadWrite, Category = "GameplayCue")
-	FString NotifyType;
-};
-
-/// Describes a GameplayCueNotify asset found in the project.
-USTRUCT(BlueprintType)
-struct FGameplayCueNotifyInfo
-{
-	GENERATED_BODY()
-
-	/// The gameplay cue tag this notify responds to.
-	UPROPERTY(BlueprintReadWrite, Category = "GameplayCue")
-	FString CueTag;
-
-	/// The full object path to the asset (e.g. "/Game/Effects/GCN_Death.GCN_Death").
-	UPROPERTY(BlueprintReadWrite, Category = "GameplayCue")
-	FString AssetPath;
-
-	/// The asset name without the package path (e.g. "GCN_Death").
-	UPROPERTY(BlueprintReadWrite, Category = "GameplayCue")
-	FString AssetName;
-
-	/// "Static" for UGameplayCueNotify_Static subclasses, "Actor" for AGameplayCueNotify_Actor subclasses.
-	UPROPERTY(BlueprintReadWrite, Category = "GameplayCue")
-	FString NotifyType;
 };
 
 /// Provides tools for inspecting, executing, and managing gameplay cues and their notify assets.
@@ -64,16 +40,16 @@ public:
 	 *   Pass an empty string to return all tags under the "GameplayCue" root.
 	 * @return A sorted list of fully-qualified gameplay cue tag names.
 	 */
-	UFUNCTION(meta = (AICallable), Category = "GameplayCues")
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Read"), Category = "GameplayCues")
 	static TArray<FString> ListCues(const FString& ParentTag);
 
 	/**
-	 * Returns information about a specific gameplay cue, including its notify asset.
+	 * Returns information about a specific gameplay cue, including its notify asset. Only notifies
+	 * in the project's gameplay cue notify paths are known.
 	 * @param CueTag The fully-qualified gameplay cue tag, e.g. "GameplayCue.Character.Death".
-	 * @return The cue's notify asset path and type ("Static", "Actor", or "None").
-	 *   Raises a script error if the tag does not exist.
+	 * @return The cue's tag and notify asset path.
 	 */
-	UFUNCTION(meta = (AICallable), Category = "GameplayCues")
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Read"), Category = "GameplayCues")
 	static FGameplayCueInfo GetCueInfo(const FString& CueTag);
 
 	/**
@@ -84,21 +60,11 @@ public:
 	 * @param NormalizedMagnitude A normalized (0.0-1.0) magnitude value passed to the cue.
 	 * @param Location World-space location parameter passed to the cue.
 	 * @param Normal World-space direction parameter passed to the cue.
-	 * @return True if the cue was dispatched. Raises a script error if no actor is selected
-	 *   or the tag does not exist.
+	 * @return True if the cue was dispatched.
 	 */
-	UFUNCTION(meta = (AICallable), Category = "GameplayCues")
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Execute"), Category = "GameplayCues")
 	static bool ExecuteCueOnSelectedActor(
 		const FString& CueTag, float NormalizedMagnitude, FVector Location, FVector Normal);
-
-	/**
-	 * Returns all GameplayCueNotify assets found in the project via the asset registry.
-	 * @param ParentTag If non-empty, only notifies whose cue tag descends from this tag are returned.
-	 *   Pass an empty string to return all notify assets in the project.
-	 * @return A list of notify descriptors, sorted by cue tag.
-	 */
-	UFUNCTION(meta = (AICallable), Category = "GameplayCues")
-	static TArray<FGameplayCueNotifyInfo> FindCueNotifyAssets(const FString& ParentTag);
 
 	/**
 	 * Creates a new GameplayCueNotify Blueprint asset at the specified content browser location.
@@ -106,12 +72,13 @@ public:
 	 * @param CueTag The gameplay cue tag the notify should respond to.
 	 *   The tag must already exist; create it first with AddCueTag if needed.
 	 * @param PackagePath The content browser folder for the asset, e.g. "/Game/Effects/Cues".
+	 *   Must be in one of the project's gameplay cue notify paths.
 	 * @param AssetName The file name for the new asset, e.g. "GCN_CharacterDeath".
 	 * @param bIsActor If true, creates a GameplayCueNotify_Actor (spawned actor in the world).
 	 *   If false, creates a GameplayCueNotify_Static (instant effect, no spawned actor).
 	 * @return The object path of the created asset, or an empty string on failure.
 	 */
-	UFUNCTION(meta = (AICallable), Category = "GameplayCues")
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Write"), Category = "GameplayCues")
 	static FString CreateCueNotifyAsset(
 		const FString& CueTag, const FString& PackagePath,
 		const FString& AssetName, bool bIsActor);
@@ -124,8 +91,8 @@ public:
 	 * @param Comment An optional developer comment describing the cue's purpose.
 	 * @return True if the tag was added successfully.
 	 */
-	UFUNCTION(meta = (AICallable), Category = "GameplayCues")
-	static bool AddCueTag(const FString& CueTag, const FString& Comment);
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Write"), Category = "GameplayCues")
+	static bool AddCueTag(const FString& CueTag, const FString& Comment = TEXT(""));
 
 	/**
 	 * Removes a gameplay cue tag from the project.
@@ -133,16 +100,19 @@ public:
 	 * @param CueTag The fully-qualified cue tag to remove (e.g. "GameplayCue.Character.Death").
 	 * @return True if the tag was removed successfully.
 	 */
-	UFUNCTION(meta = (AICallable), Category = "GameplayCues")
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Write"), Category = "GameplayCues")
 	static bool RemoveCueTag(const FString& CueTag);
 
 	/**
-	 * Returns gameplay cue tags that have no corresponding GameplayCueNotify asset in the project.
-	 * Tags without notifies produce no visible effect when triggered at runtime.
-	 * @return A sorted list of gameplay cue tag names with no associated notify assets.
+	 * Returns gameplay cue tags that have no GameplayCueNotify of their own.
+	 * @return A sorted list of gameplay cue tag names.
 	 */
-	UFUNCTION(meta = (AICallable), Category = "GameplayCues")
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Read"), Category = "GameplayCues")
 	static TArray<FString> FindCueTagsWithoutNotifies();
+
+	//~ Begin UToolsetDefinition Interface
+	virtual bool IsToolsetHidden_Implementation(const TScriptInterface<IToolsetPermissionProvider>& Provider) const override;
+	//~ End UToolsetDefinition Interface
 
 private:
 	friend class FGameplayCueToolsetSpec;

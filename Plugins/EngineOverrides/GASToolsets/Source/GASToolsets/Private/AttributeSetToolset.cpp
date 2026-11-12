@@ -108,3 +108,8 @@ TArray<FGameplayAttributeInfo> UAttributeSetToolset::ListAttributes(const FStrin
 
 	return Results;
 }
+
+bool UAttributeSetToolset::IsToolsetHidden_Implementation(const TScriptInterface<IToolsetPermissionProvider>& Provider) const
+{
+	return Provider->IsRestricted();
+}

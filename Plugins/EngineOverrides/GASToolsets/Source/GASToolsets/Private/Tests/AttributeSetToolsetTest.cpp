@@ -7,7 +7,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-BEGIN_DEFINE_SPEC(FAttributeSetToolsetSpec, "AI.Toolsets.GASToolsets.AttributeSetToolset",
+BEGIN_DEFINE_SPEC(FAttributeSetToolsetSpec, "AIAssistant.Toolsets.GASToolsets.AttributeSetToolset",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 END_DEFINE_SPEC(FAttributeSetToolsetSpec)
 

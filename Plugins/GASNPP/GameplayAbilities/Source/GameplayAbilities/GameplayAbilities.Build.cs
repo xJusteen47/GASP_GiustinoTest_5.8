@@ -44,6 +44,9 @@ namespace UnrealBuildTool.Rules
 			// GAS-NPP: this plugin overrides the engine one from the project, so engine "Internal" headers
 			// (only visible to engine plugins) must be added explicitly.
 			PrivateIncludePaths.Add(System.IO.Path.Combine(EngineDirectory, "Source", "Runtime", "CoreUObject", "Internal"));
+
+		// Cascade support for gameplay cue notifies (UParticleSystem moved to the Cascade plugin in 5.9).
+		PrivateDependencyModuleNames.Add("CascadeRuntime");
 		}
 	}
 }

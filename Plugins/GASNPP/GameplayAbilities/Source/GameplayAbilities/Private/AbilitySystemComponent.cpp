@@ -263,6 +263,7 @@ void UAbilitySystemComponent::Serialize(FArchive& Ar)
 {
 	Super::Serialize(Ar);
 
+#if UE_WITH_REMOTE_OBJECT_HANDLE // GAS-NPP 5.9: guard matches the 5.9 engine copy
 	if (Ar.IsMigratingRemoteObjects())
 	{
 		bool bHasAbilityActorInfo = AbilityActorInfo.IsValid();
@@ -324,6 +325,7 @@ void UAbilitySystemComponent::Serialize(FArchive& Ar)
 			LoadTagToGASpecMap(OwnedTagTriggeredAbilities);
 		}
 	}
+#endif
 }
 
 void UAbilitySystemComponent::ReadyForReplication()
