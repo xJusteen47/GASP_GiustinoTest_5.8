@@ -938,6 +938,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	// Hitstop (combat-m3 7.1): a frame inside the window of the previous state stands still on the combat clock. The window the
 	// debug button opens on frame F pauses from F+1 (F itself was simulated with the clock running when it opened)
 	const bool bHitstopFrame = OutSync.Core.AdvanceHitstopClock(Frame);
+	FrameClockStill = bHitstopFrame ? Frame : INDEX_NONE;
 
 	// What the track hooks of the plugins may read besides the input: the button map and the fragments as this frame writes them (M6 F7)
 	FGSTN_TrackHookEnvironment HookEnvironment;
@@ -1722,10 +1723,14 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 		}
 	}
 
-	// Paused on every hitstop frame with a montage (also one started during the hitstop), resumed on the first frame after.
-	// The pause flag only exists with a montage: it is not replicated otherwise
+	// Paused on every frame the move clock stands still with a montage (also one started during the hitstop), resumed on the first frame
+	// after. The frame of the hit runs on like the timeline does, so the montage holds the pose of the timeline's frame through the hitstop.
+	// The fork's legacy start tick (the montage one step ahead) is only aligned again after a hit when the pause starts on the hit frame:
+	// that pairing is kept as it was. The pause flag only exists with a montage: it is not replicated otherwise
+	const bool bPauseFromHitFrame = AbilitySystem->bAdvanceSyncedMontageOnStartTick;
+	const bool bMontageStill = bPauseFromHitFrame ? Sync->Core.IsInHitstop(Frame) : FrameClockStill == Frame;
 	float MontageTime = 0.f;
-	if (Sync->Core.IsInHitstop(Frame) && AbilitySystem->GetPlayingSyncedMontage(MontageTime))
+	if (bMontageStill && AbilitySystem->GetPlayingSyncedMontage(MontageTime))
 	{
 		AbilitySystem->PauseCurrentSyncedMontage();
 	}

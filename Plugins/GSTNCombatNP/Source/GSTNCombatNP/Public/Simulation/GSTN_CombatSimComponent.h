@@ -643,6 +643,13 @@ private:
 	/** Whether the frame ran with the gate closed. Same lifetime as FrameTables */
 	bool bFrameGateClosed = false;
 
+	/**
+	 * The frame whose move clock stood still (a hitstop frame by the window of the previous state, AdvanceHitstopClock), INDEX_NONE when
+	 * the last simulated frame ran. The ability system's pre-tick pauses the synced montage on exactly these frames, so the montage shows
+	 * the timeline frame: the hit frame itself runs on. Same lifetime as FrameTables
+	 */
+	int32 FrameClockStill = INDEX_NONE;
+
 	/** An extension's BlocksActions closed the can-act rule for this frame (a held shield): IsCommandAllowed refuses every command. Rewritten every tick, never state */
 	bool bFrameActionsBlocked = false;
 

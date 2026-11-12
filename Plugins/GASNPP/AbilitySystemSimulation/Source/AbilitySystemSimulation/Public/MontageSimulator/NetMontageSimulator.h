@@ -10,6 +10,16 @@
 
 class UNpAbilitySystemComponent;
 struct FAbilitySystemTimeStep;
+
+/** What FinalizeFrame does to the montage instance before the mesh's animation update (ESyncedMontagePresentation::LandOnSimTime) */
+struct FSyncedMontagePresentationStep
+{
+	/** Position to set on the instance, when bSetPosition (a teleport: no notifies fire for the skipped span) */
+	float Position = 0.f;
+	/** Play rate to give the instance for this frame's animation update */
+	float PlayRate = 1.f;
+	bool bSetPosition = false;
+};
 /**
  * This Class Is Used To play synced Montages in Ability System simulation using Network prediction
  * it also managed ticking and restoring synced notify states and events. and providing the root motion from the montage to mover.
@@ -42,6 +52,19 @@ public:
 	
 	static float GetMontageBlendOutTime(const UAnimMontage* Montage);
 	static bool ShouldFinalizeMontage(const FMontageSimSyncState& SyncState);
+
+	/**
+	 * LandOnSimTime: the step that makes an instance at InstancePosition show TargetTime after the coming animation update, which advances
+	 * it by AnimDeltaSeconds (the mesh's delta, already scaled by its GlobalAnimRateScale and the actor's time dilation) times its play rate.
+	 * Ahead of the target: teleport back and hold (rate 0). Behind: keep the position and pick the rate that covers the gap, up to
+	 * MaxRateScale times the nominal rate; a larger gap teleports to where the nominal rate lands on the target. No advance coming
+	 * (AnimDeltaSeconds 0, e.g. a hit pause on the mesh): teleport onto the target.
+	 */
+	static FSyncedMontagePresentationStep ComputeLandOnSimTimeStep(float InstancePosition, float TargetTime, float NominalPlayRate,
+		float AnimDeltaSeconds, float MaxRateScale = 4.f);
+
+	/** The ability system this simulator serves. Set by UNpAbilitySystemComponent when it creates it; public for tests */
+	void SetAbilitySystemComponent(UNpAbilitySystemComponent* InAbilitySystemComponent) { AbilitySystemComponent = InAbilitySystemComponent; }
 	
 	void PlayMontage(const FAbilityMontagePlayback& MontagePlayback);
 	void StopMontage(const FAbilityMontageCancel& MontageCancel, bool bInterrupted = false);
@@ -91,8 +114,18 @@ private:
 	void EndSyncedNotifies(const FAbilitySystemTimeStep& TimeStep,FMontageSimSyncState& State);
 
 	void FinalizeMontageFrame(const FMontageSimSyncState& SyncState);
+	/** LandOnSimTime on one instance: the step from ComputeLandOnSimTimeStep with this frame's animation delta */
+	void LandInstanceOnSimTime(const UAnimInstance& AnimInstance, FAnimMontageInstance& MontageInstance, const FMontageSimSyncState& SyncState,
+		float RateMultiplier) const;
 	
 	FAbilitySystemTimeStep LatestTimeStep;
+
+	/**
+	 * A montage was started (PlayMontage) since the last SimulationTick: that tick holds it at its start time instead of advancing it
+	 * (unless UNpAbilitySystemComponent::bAdvanceSyncedMontageOnStartTick). Only lives inside one simulation tick (abilities tick before
+	 * the montage), cleared by every SimulationTick and RestoreFrame, so it is never part of the rolled back state.
+	 */
+	bool bStartedSinceLastTick = false;
 
 	// This Is Used To Step Montage to support looping. doesn't really do anything else!
 	FAnimMontageInstance MontageAdvanceInstance;

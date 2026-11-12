@@ -7,6 +7,10 @@
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
 #include "Engine/SkeletalMeshSocket.h"
+#include "Engine/World.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "MontageSimulator/SyncedNotifyInterface.h"
 
 
@@ -20,11 +24,16 @@ void UNetMontageSimulator::SimulationTick(const FAbilitySystemTimeStep& TimeStep
 	const FMontageSimSyncState& InputState, FMontageSimSyncState& OutputState)
 {
 	LatestTimeStep = TimeStep;
-	
-	//OutputState = SimulationState;
+
+	// A montage started in this tick (abilities tick before the montage) holds its start time until the next tick: after the tick that is
+	// frame N of the ability it is then at N steps, the pose of that frame. Advancing it here too put it one step ahead of the ability for
+	// its whole run, and the first paused tick (a hitstop) pulled it back by that step
+	const bool bHoldStartTick = bStartedSinceLastTick
+		&& !(AbilitySystemComponent && AbilitySystemComponent->bAdvanceSyncedMontageOnStartTick);
+	bStartedSinceLastTick = false;
 
 	// now step the montage forward if we have one
-	if (SimulationState.GetPlayingMontage())
+	if (SimulationState.GetPlayingMontage() && !bHoldStartTick)
 	{
 		const float DeltaTime = TimeStep.StepMs / 1000.f;
 		const float NexTime = FMath::Clamp(SimulationState.GetCurrentTime() + DeltaTime,
@@ -47,6 +56,8 @@ void UNetMontageSimulator::SimulationTick(const FAbilitySystemTimeStep& TimeStep
 
 void UNetMontageSimulator::RestoreFrame(const FMontageSimSyncState& AuthorityState)
 {
+	// A start before the restored frame belongs to a tick that is being thrown away
+	bStartedSinceLastTick = false;
 	// First Check If Authority wants to play montage
 	if(AuthorityState.GetPlayingMontage())
 	{
@@ -176,12 +187,14 @@ void UNetMontageSimulator::PlayMontage(const FAbilityMontagePlayback& MontagePla
 				CancelSimMontage(LatestTimeStep,OldState,true);
 				SimulationState.Reset();
 				StartSimMontage(MontagePlayback, SimulationState);
+				bStartedSinceLastTick = true;
 			}
 		}
 		// we don't have a currently playing montage, just start new one
 		else
 		{
 			StartSimMontage(MontagePlayback, SimulationState);
+			bStartedSinceLastTick = true;
 		}
 	}
 }
@@ -750,10 +763,13 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 		return;
 	}
 	float RateMultiplier = 1.f;
+	ESyncedMontagePresentation Presentation = ESyncedMontagePresentation::LandOnSimTime;
 	if (UNpAbilitySystemComponent* Asc = GetNpAbilitySystemComponent())
 	{
 		RateMultiplier = Asc->GetMontagePlayRateMultiplier();
+		Presentation = Asc->SyncedMontagePresentation;
 	}
+	const bool bLandOnSimTime = Presentation == ESyncedMontagePresentation::LandOnSimTime;
 	//if we want to play a montage
 	if (UAnimMontage* DesiredMontage = SyncState.GetPlayingMontage())
 	{
@@ -765,6 +781,12 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 			{
 				// make sure the instance is past the blend out time , if it's not blend it out
 				MontageInstance->Stop(MontageInstance->GetBlend(), false);
+				return;
+			}
+			if (bLandOnSimTime)
+			{
+				LandInstanceOnSimTime(*AnimInstance, *MontageInstance, SyncState, RateMultiplier);
+				LastPlayingMontage = DesiredMontage;
 				return;
 			}
 			// if position is too far , restart the montage from desired new position, this makes it blend to target time
@@ -789,6 +811,14 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 		if (SyncState.GetCurrentTime() < GetMontageBlendOutTime(DesiredMontage))
 		{
 			AnimInstance->Montage_Play(DesiredMontage, SyncState.GetPlayRate() * RateMultiplier, EMontagePlayReturnType::MontageLength, SyncState.GetCurrentTime());
+			if (bLandOnSimTime)
+			{
+				// Started on the simulation time: hold it there through this frame's animation update instead of drawing one frame ahead
+				if (FAnimMontageInstance* NewInstance = AnimInstance->GetActiveInstanceForMontage(DesiredMontage))
+				{
+					LandInstanceOnSimTime(*AnimInstance, *NewInstance, SyncState, RateMultiplier);
+				}
+			}
 			LastPlayingMontage = DesiredMontage;
 			return;
 		}
@@ -804,4 +834,75 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 		}
 		LastPlayingMontage = nullptr;
 	}
+}
+
+FSyncedMontagePresentationStep UNetMontageSimulator::ComputeLandOnSimTimeStep(float InstancePosition, float TargetTime, float NominalPlayRate,
+	float AnimDeltaSeconds, float MaxRateScale)
+{
+	// Below this the instance is on the target: a tenth of a millisecond, far under one frame of any animation
+	constexpr float PositionTolerance = 1.e-4f;
+	FSyncedMontagePresentationStep Step;
+	Step.Position = InstancePosition;
+
+	// No advance coming (the mesh is paused, or no time passes): put it on the target. Rate 0 too, so a pause lifted later in this same frame
+	// does not let the update carry it past the target
+	if (AnimDeltaSeconds <= UE_SMALL_NUMBER)
+	{
+		Step.bSetPosition = !FMath::IsNearlyEqual(InstancePosition, TargetTime, PositionTolerance);
+		Step.Position = TargetTime;
+		Step.PlayRate = 0.f;
+		return Step;
+	}
+
+	const float Gap = TargetTime - InstancePosition;
+	// Ahead of the simulation: go back and hold. A teleport, so the notifies already passed do not fire again
+	if (Gap < -PositionTolerance)
+	{
+		Step.bSetPosition = true;
+		Step.Position = TargetTime;
+		Step.PlayRate = 0.f;
+		return Step;
+	}
+
+	// Behind (or on it): cover the gap in this update, so every notify in it fires once
+	const float NeededRate = FMath::Max(Gap, 0.f) / AnimDeltaSeconds;
+	const float MaxRate = FMath::Max(NominalPlayRate, 1.f) * MaxRateScale;
+	if (NeededRate <= MaxRate)
+	{
+		Step.PlayRate = NeededRate;
+		return Step;
+	}
+
+	// Too far behind to run there (a correction, a long hitch): skip to where the nominal rate lands on the target
+	Step.bSetPosition = true;
+	Step.Position = FMath::Max(TargetTime - FMath::Max(NominalPlayRate, 0.f) * AnimDeltaSeconds, 0.f);
+	Step.PlayRate = (TargetTime - Step.Position) / AnimDeltaSeconds;
+	return Step;
+}
+
+void UNetMontageSimulator::LandInstanceOnSimTime(const UAnimInstance& AnimInstance, FAnimMontageInstance& MontageInstance,
+	const FMontageSimSyncState& SyncState, float RateMultiplier) const
+{
+	// The delta the mesh's animation update will use this frame: FinalizeFrame runs before it (NP finalizes in the world's pre-actor tick)
+	float AnimDeltaSeconds = 0.f;
+	if (const UWorld* World = AnimInstance.GetWorld())
+	{
+		AnimDeltaSeconds = World->GetDeltaSeconds();
+	}
+	if (const USkeletalMeshComponent* Mesh = AnimInstance.GetOwningComponent())
+	{
+		AnimDeltaSeconds *= Mesh->GlobalAnimRateScale;
+		if (const AActor* Owner = Mesh->GetOwner())
+		{
+			AnimDeltaSeconds *= Owner->CustomTimeDilation;
+		}
+	}
+	const float NominalRate = SyncState.GetIsPaused() ? 0.f : SyncState.GetPlayRate() * RateMultiplier;
+	const FSyncedMontagePresentationStep Step = ComputeLandOnSimTimeStep(MontageInstance.GetPosition(), SyncState.GetCurrentTime(),
+		NominalRate, AnimDeltaSeconds);
+	if (Step.bSetPosition)
+	{
+		MontageInstance.SetPosition(Step.Position);
+	}
+	MontageInstance.SetPlayRate(Step.PlayRate);
 }
