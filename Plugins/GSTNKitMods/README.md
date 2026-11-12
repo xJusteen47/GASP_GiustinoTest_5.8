@@ -49,6 +49,11 @@ No NP module: the base timeline of an ability with an inline timeline is read by
 - Mod visuals are data only; the attachment provider that shows them is not written (L7 with backpacks, or L5b).
 - No `bFixedTime` per key (spec §8): every key scales.
 
+## Editor
+
+Rules in the M5 validation panel and the modded-move preview live in the bridge plugin [GSTNKitModsEditor](../GSTNKitModsEditor/README.md) (L8).
+`FGSTN_KitModLoadout::BuildPreview` is the compile path without registering anything: the editor calls it.
+
 ## Tests
 
 `GSTNKitMods.Core.{Combine,BakeTime,BakeHits,NamesAndConfig}`, `GSTNKitMods.GAS.{Resolve,Compile,RulesView}`.

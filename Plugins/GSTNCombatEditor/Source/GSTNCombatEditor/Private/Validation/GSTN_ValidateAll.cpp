@@ -13,6 +13,7 @@
 #include "Timeline/GSTN_CombatTimeline.h"
 #include "UObject/UObjectIterator.h"
 #include "Validation/GSTN_EditorValidators.h"
+#include "Validation/GSTN_ValidationExtensions.h"
 
 #define LOCTEXT_NAMESPACE "GSTNCombatEditor"
 
@@ -82,6 +83,14 @@ void GSTNValidateAll::CollectAssets(const FOptions& Options, TArray<FAssetData>&
 	AddByClass(Registry, UGSTN_HurtboxSetDefinition::StaticClass(), Seen, Options, OutAssets);
 	AddByClass(Registry, UGSTN_PrimaryKitDefinition::StaticClass(), Seen, Options, OutAssets);
 	AddByClass(Registry, UGSTN_WeaponDefinition::StaticClass(), Seen, Options, OutAssets);
+
+	// Asset kinds other plugins validate (FGSTN_ValidationExtensions), e.g. the kit mod definition
+	TArray<UClass*> ExtensionClasses;
+	FGSTN_ValidationExtensions::GetAssetClasses(ExtensionClasses);
+	for (const UClass* Class : ExtensionClasses)
+	{
+		AddByClass(Registry, Class, Seen, Options, OutAssets);
+	}
 
 	// Anything that holds a loadout: the preset class of a game, or its own data asset. Found by the property, as the preset validator does
 	for (TObjectIterator<UClass> It; It; ++It)

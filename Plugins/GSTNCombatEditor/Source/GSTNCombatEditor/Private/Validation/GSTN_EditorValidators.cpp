@@ -19,6 +19,7 @@
 #include "UObject/StrongObjectPtr.h"
 #include "UObject/UnrealType.h"
 #include "Validation/GSTN_CombatValidators.h"
+#include "Validation/GSTN_ValidationExtensions.h"
 #include "Validation/GSTN_ValidationMessageLog.h"
 
 #define LOCTEXT_NAMESPACE "GSTNCombatEditor"
@@ -148,7 +149,28 @@ bool UGSTN_CombatValidatorBase::BuildReportForAsset(UObject* Asset, FGSTN_Valida
 	}
 	bValidated |= ReportLoadouts(Asset, OutReport);
 	OutReport.SetAssetWhereMissing(Asset);
+
+	// Rules other plugins add (M11 L8), after the combat ones so a panel row reads combat first
+	bValidated |= FGSTN_ValidationExtensions::RunRules(*Asset, OutReport);
 	return bValidated;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+bool UGSTN_ExtensionAssetValidator::CanValidateAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext) const
+{
+	return FGSTN_ValidationExtensions::AppliesToAny(InAsset);
+}
+
+EDataValidationResult UGSTN_ExtensionAssetValidator::ValidateLoadedAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext)
+{
+	if (InAsset == nullptr)
+	{
+		return EDataValidationResult::NotValidated;
+	}
+	FGSTN_ValidationReport Report;
+	FGSTN_ValidationExtensions::RunRules(*InAsset, Report);
+	return AddReportToContext(Report, InAssetData, InContext);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

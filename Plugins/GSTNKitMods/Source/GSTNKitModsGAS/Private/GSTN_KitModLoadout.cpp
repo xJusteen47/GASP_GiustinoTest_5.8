@@ -205,57 +205,47 @@ void FGSTN_KitModLoadout::ResetDerivedCache()
 	GetKeeper().Timelines.Reset();
 }
 
-void FGSTN_KitModLoadout::ContributeCompileInput(const FGSTN_LoadoutExtensionContext& Context, FGSTN_CompileInput& Input)
+namespace
 {
-	if (!Context.Resolved)
+	/** Step 1 of the compile contribution: removed commands first (from every source), then the mods' own bindings and passives on the kit */
+	void ApplyModVerbs(const FGSTN_ResolvedMods& Resolved, FGSTN_CompileInput& Input)
 	{
-		return;
-	}
-	FGSTN_ResolvedMods Resolved;
-	ResolveMods(*Context.Resolved, Resolved);
-	if (Resolved.Mods.IsEmpty())
-	{
-		return;
-	}
-
-	// 1. Verbs: removed commands first (from every source), then the mods' own bindings and passives on the kit
-	FGameplayTagContainer Removed;
-	for (const UGSTN_KitModDefinition* Mod : Resolved.Mods)
-	{
-		Removed.AppendTags(Mod->RemovedCommands);
-	}
-	if (!Removed.IsEmpty())
-	{
-		auto IsRemoved = [&Removed](const FGSTN_BindingInput& Binding) { return Removed.HasTagExact(Binding.Command); };
-		Input.Kit.Bindings.RemoveAll(IsRemoved);
-		for (FGSTN_WeaponCompileInput& Weapon : Input.Weapons)
+		FGameplayTagContainer Removed;
+		for (const UGSTN_KitModDefinition* Mod : Resolved.Mods)
 		{
-			Weapon.Bindings.RemoveAll(IsRemoved);
+			Removed.AppendTags(Mod->RemovedCommands);
 		}
-	}
-	for (const UGSTN_KitModDefinition* Mod : Resolved.Mods)
-	{
-		for (const FGSTN_AbilityBinding& Binding : Mod->AddedBindings)
+		if (!Removed.IsEmpty())
 		{
-			Input.Kit.Bindings.Add(FGSTN_LoadoutAssembly::MakeBindingInput(Binding));
-		}
-		for (const TSoftClassPtr<UGameplayAbility>& Passive : Mod->Passives)
-		{
-			if (!Passive.IsNull())
+			auto IsRemoved = [&Removed](const FGSTN_BindingInput& Binding) { return Removed.HasTagExact(Binding.Command); };
+			Input.Kit.Bindings.RemoveAll(IsRemoved);
+			for (FGSTN_WeaponCompileInput& Weapon : Input.Weapons)
 			{
-				Input.Kit.Passives.AddUnique(Passive.ToSoftObjectPath());
+				Weapon.Bindings.RemoveAll(IsRemoved);
+			}
+		}
+		for (const UGSTN_KitModDefinition* Mod : Resolved.Mods)
+		{
+			for (const FGSTN_AbilityBinding& Binding : Mod->AddedBindings)
+			{
+				Input.Kit.Bindings.Add(FGSTN_LoadoutAssembly::MakeBindingInput(Binding));
+			}
+			for (const TSoftClassPtr<UGameplayAbility>& Passive : Mod->Passives)
+			{
+				if (!Passive.IsNull())
+				{
+					Input.Kit.Passives.AddUnique(Passive.ToSoftObjectPath());
+				}
 			}
 		}
 	}
 
-	// 2. Moves: every binding a modifier selects starts a derived timeline instead of its base
-	const int32 MaxDerived = Resolved.KitSlots->MaxDerivedTimelines;
-	TSet<FName> Derived;
-	bool bCapWarned = false;
-	// The ability a weapon row really binds: the compiler swaps in a slot customisation's alternative after this extension and keeps
-	// the row's override, so a modded row has to be baked from the alternative's timeline (and filtered by its tags), never from the
-	// ability it replaces (L5b). The last customisation of (weapon, command) wins, as in the compiler
-	auto EffectiveAbility = [&Input](const FGSTN_BindingInput& Binding, int32 WeaponIndex) -> FSoftObjectPath
+	/**
+	 * The ability a weapon row really binds: the compiler swaps in a slot customisation's alternative after this extension and keeps
+	 * the row's override, so a modded row has to be baked from the alternative's timeline (and filtered by its tags), never from the
+	 * ability it replaces (L5b). The last customisation of (weapon, command) wins, as in the compiler
+	 */
+	FSoftObjectPath EffectiveAbility(const FGSTN_CompileInput& Input, const FGSTN_BindingInput& Binding, int32 WeaponIndex)
 	{
 		FSoftObjectPath Ability = Binding.Ability;
 		for (const FGSTN_SlotCustomisation& Customisation : Input.Customisations)
@@ -267,13 +257,19 @@ void FGSTN_KitModLoadout::ContributeCompileInput(const FGSTN_LoadoutExtensionCon
 			}
 		}
 		return Ability;
-	};
-	auto ModifyBinding = [&](FGSTN_BindingInput& Binding, int32 WeaponIndex)
+	}
+
+	/**
+	 * Step 2 for one binding: what the mods do to its move. False when no modifier selects it, the combined change is the identity or the
+	 * binding has no timeline to bake from. The compile and the editor preview both call this, so the preview never shows another move
+	 */
+	bool PlanModdedMove(const FGSTN_ResolvedMods& Resolved, const FGSTN_CompileInput& Input, const FGSTN_BindingInput& Binding, int32 WeaponIndex,
+		FGSTN_ModMovePreview& Out)
 	{
-		const FSoftObjectPath Ability = EffectiveAbility(Binding, WeaponIndex);
+		const FSoftObjectPath Ability = EffectiveAbility(Input, Binding, WeaponIndex);
 		if (!Ability.IsValid())
 		{
-			return;
+			return false;
 		}
 		const FGameplayTagContainer MoveTags = GetMoveTags(Binding, Ability);
 		TArray<const FGSTN_MoveModifier*> Selected;
@@ -289,16 +285,58 @@ void FGSTN_KitModLoadout::ContributeCompileInput(const FGSTN_LoadoutExtensionCon
 		}
 		if (Selected.IsEmpty())
 		{
-			return;
+			return false;
 		}
-		const FGSTN_CombinedMoveModifier Combined = FGSTN_KitModBaking::Combine(Selected, Resolved.KitSlots->Limits);
-		FGSTN_CombatTimelineData Base;
-		if (Combined.IsIdentity() || !FindBaseTimeline(Ability, Binding.TimelineOverride, Base))
+		Out.Modifier = FGSTN_KitModBaking::Combine(Selected, Resolved.KitSlots->Limits);
+		if (Out.Modifier.IsIdentity() || !FGSTN_KitModLoadout::FindBaseTimeline(Ability, Binding.TimelineOverride, Out.Base))
+		{
+			return false;
+		}
+
+		// The same product without the kit's limits: a difference means the limits cut the mods back (the editor says so)
+		FGSTN_KitModLimits Unbounded;
+		Unbounded.MinTimeScale = UE_KINDA_SMALL_NUMBER;
+		Unbounded.MaxTimeScale = UE_BIG_NUMBER;
+		Unbounded.MaxReachScale = UE_BIG_NUMBER;
+		const FGSTN_CombinedMoveModifier Raw = FGSTN_KitModBaking::Combine(Selected, Unbounded);
+		Out.bClamped = !FMath::IsNearlyEqual(Raw.TimeScale, Out.Modifier.TimeScale) || !FMath::IsNearlyEqual(Raw.ReachScale, Out.Modifier.ReachScale);
+
+		Out.Command = Binding.Command;
+		Out.WeaponIndex = WeaponIndex;
+		Out.Ability = Ability;
+		Out.BasePath = Binding.TimelineOverride.IsValid() ? Binding.TimelineOverride : Ability;
+		return true;
+	}
+}
+
+void FGSTN_KitModLoadout::ContributeCompileInput(const FGSTN_LoadoutExtensionContext& Context, FGSTN_CompileInput& Input)
+{
+	if (!Context.Resolved)
+	{
+		return;
+	}
+	FGSTN_ResolvedMods Resolved;
+	ResolveMods(*Context.Resolved, Resolved);
+	if (Resolved.Mods.IsEmpty())
+	{
+		return;
+	}
+
+	// 1. Verbs
+	ApplyModVerbs(Resolved, Input);
+
+	// 2. Moves: every binding a modifier selects starts a derived timeline instead of its base
+	const int32 MaxDerived = Resolved.KitSlots->MaxDerivedTimelines;
+	TSet<FName> Derived;
+	bool bCapWarned = false;
+	auto ModifyBinding = [&](FGSTN_BindingInput& Binding, int32 WeaponIndex)
+	{
+		FGSTN_ModMovePreview Plan;
+		if (!PlanModdedMove(Resolved, Input, Binding, WeaponIndex, Plan))
 		{
 			return;
 		}
-		const FSoftObjectPath BasePath = Binding.TimelineOverride.IsValid() ? Binding.TimelineOverride : Ability;
-		const FName Name = FGSTN_KitModBaking::MakeDerivedName(BasePath, Resolved.ModIds);
+		const FName Name = FGSTN_KitModBaking::MakeDerivedName(Plan.BasePath, Resolved.ModIds);
 		if (!Derived.Contains(Name) && Derived.Num() >= MaxDerived)
 		{
 			if (!bCapWarned)
@@ -310,7 +348,7 @@ void FGSTN_KitModLoadout::ContributeCompileInput(const FGSTN_LoadoutExtensionCon
 			return;
 		}
 		Derived.Add(Name);
-		if (const UGSTN_CombatTimeline* Timeline = FindOrBakeDerived(BasePath, Base, Resolved.ModIds, Combined))
+		if (const UGSTN_CombatTimeline* Timeline = FindOrBakeDerived(Plan.BasePath, Plan.Base, Resolved.ModIds, Plan.Modifier))
 		{
 			Binding.TimelineOverride = FSoftObjectPath(Timeline);
 		}
@@ -324,6 +362,46 @@ void FGSTN_KitModLoadout::ContributeCompileInput(const FGSTN_LoadoutExtensionCon
 		for (FGSTN_BindingInput& Binding : Input.Weapons[WeaponIndex].Bindings)
 		{
 			ModifyBinding(Binding, WeaponIndex);
+		}
+	}
+}
+
+void FGSTN_KitModLoadout::BuildPreview(const FGSTN_ResolvedLoadout& Resolved, const FGSTN_CompileInput& BaseInput, FGSTN_KitModPreview& Out)
+{
+	Out = FGSTN_KitModPreview();
+	FGSTN_ResolvedMods Mods;
+	ResolveMods(Resolved, Mods);
+	Out.Warnings = Mods.Warnings;
+	Out.KitSlots = Mods.KitSlots;
+	Out.ModIds = Mods.ModIds;
+	if (Mods.Mods.IsEmpty())
+	{
+		return;
+	}
+	FGSTN_CompileInput Input = BaseInput;
+	ApplyModVerbs(Mods, Input);
+	Out.Input = Input;
+
+	// Every modded move, with no cap: the preview shows what the cap would cut, the validator counts it
+	auto PlanBinding = [&](const FGSTN_BindingInput& Binding, int32 WeaponIndex)
+	{
+		FGSTN_ModMovePreview Plan;
+		if (PlanModdedMove(Mods, Input, Binding, WeaponIndex, Plan))
+		{
+			FGSTN_KitModBaking::BakeTimeline(Plan.Base, Plan.Modifier, Plan.Derived);
+			Plan.DerivedName = FGSTN_KitModBaking::MakeDerivedName(Plan.BasePath, Mods.ModIds);
+			Out.Moves.Add(MoveTemp(Plan));
+		}
+	};
+	for (const FGSTN_BindingInput& Binding : Input.Kit.Bindings)
+	{
+		PlanBinding(Binding, INDEX_NONE);
+	}
+	for (int32 WeaponIndex = 0; WeaponIndex < Input.Weapons.Num(); ++WeaponIndex)
+	{
+		for (const FGSTN_BindingInput& Binding : Input.Weapons[WeaponIndex].Bindings)
+		{
+			PlanBinding(Binding, WeaponIndex);
 		}
 	}
 }

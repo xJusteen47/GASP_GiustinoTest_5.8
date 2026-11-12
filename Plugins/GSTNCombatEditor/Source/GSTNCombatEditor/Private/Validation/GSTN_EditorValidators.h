@@ -123,3 +123,18 @@ protected:
 	virtual bool CanValidateAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext) const override;
 	virtual EDataValidationResult ValidateLoadedAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext) override;
 };
+
+/**
+ * The rules other plugins register (FGSTN_ValidationExtensions, M11 L8) for Data Validation: save and Validate Assets. Only the extension
+ * rules run here; on a combat asset the combat validators above run theirs, so nothing is reported twice. The panel and Validate all get
+ * both through BuildReportForAsset.
+ */
+UCLASS()
+class UGSTN_ExtensionAssetValidator : public UGSTN_CombatValidatorBase
+{
+	GENERATED_BODY()
+
+protected:
+	virtual bool CanValidateAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext) const override;
+	virtual EDataValidationResult ValidateLoadedAsset_Implementation(const FAssetData& InAssetData, UObject* InAsset, FDataValidationContext& InContext) override;
+};

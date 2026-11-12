@@ -193,6 +193,13 @@
 			]
 		},
 		{
+			"Name": "GSTNKitModsEditor",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
 			"Name": "GSTNCombatDebug",
 			"Enabled": true
 		},
