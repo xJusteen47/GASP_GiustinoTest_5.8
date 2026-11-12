@@ -17,6 +17,7 @@
 #include "Kits/GSTN_SuperInputScheme.h"
 #include "Kits/GSTN_WeaponDefinition.h"
 #include "Loadout/GSTN_LoadoutExtensions.h"
+#include "Loadout/GSTN_LoadoutModeRules.h"
 #include "Loadout/GSTN_LoadoutRules.h"
 #include "Loadout/GSTN_StartingHealthSource.h"
 #include "Attributes/GSTN_HealthAttributeSet.h"
@@ -163,6 +164,96 @@ void UGSTN_LoadoutComponent::ServerRequestLoadout_Implementation(const FGSTN_Loa
 	{
 		ClientLoadoutRejected(Errors);
 	}
+}
+
+void UGSTN_LoadoutComponent::ServerRequestSpecialSwap_Implementation(int32 WeaponIndex, FGameplayTag Command, const TSoftClassPtr<UObject>& Alternative)
+{
+	TArray<FString> Errors;
+	if (!AcceptSpecialSwap(WeaponIndex, Command, Alternative, Errors))
+	{
+		ClientLoadoutRejected(Errors);
+	}
+}
+
+bool UGSTN_LoadoutComponent::AcceptSpecialSwap(int32 WeaponIndex, FGameplayTag Command, const TSoftClassPtr<UObject>& Alternative, TArray<FString>& OutErrors)
+{
+	OutErrors.Reset();
+	if (!HasLoadout())
+	{
+		OutErrors.Add(TEXT("There is no loadout to change a special in."));
+		return false;
+	}
+	if (!UGSTN_LoadoutModeRules::Get().bAllowSpecialSwapInMatch)
+	{
+		OutErrors.Add(TEXT("The mode does not allow changing specials during a match."));
+		return false;
+	}
+	// The loadout rules judge the alternative (one of the weapon's allowed ones, a weapon index the loadout has)
+	return AcceptLoadout(WithSpecial(Applied, WeaponIndex, Command, Alternative), OutErrors);
+}
+
+FGSTN_LoadoutData UGSTN_LoadoutComponent::WithSpecial(const FGSTN_LoadoutData& Base, int32 WeaponIndex, FGameplayTag Command, const TSoftClassPtr<UObject>& Alternative)
+{
+	FGSTN_LoadoutData Result = Base;
+	// One customisation per (weapon, command): drop every entry for the pair, then add the new one at the end
+	Result.SlotCustomisations.RemoveAll([WeaponIndex, &Command](const FGSTN_SlotCustomisation& Entry)
+	{
+		return Entry.WeaponIndex == WeaponIndex && Entry.Command == Command;
+	});
+	if (!Alternative.IsNull())
+	{
+		FGSTN_SlotCustomisation& Entry = Result.SlotCustomisations.AddDefaulted_GetRef();
+		Entry.WeaponIndex = WeaponIndex;
+		Entry.Command = Command;
+		Entry.AlternativeAbility = Alternative;
+	}
+	return Result;
+}
+
+void UGSTN_LoadoutComponent::GetSpecialChoices(int32 WeaponIndex, FGameplayTag Command, TArray<TSoftClassPtr<UObject>>& OutChoices) const
+{
+	OutChoices.Reset();
+	const UGSTN_WeaponDefinition* Weapon = Resolved.Weapons.IsValidIndex(WeaponIndex) ? Resolved.Weapons[WeaponIndex] : nullptr;
+	const FGSTN_AbilityClassList* Allowed = Weapon ? Weapon->AllowedAlternatives.Find(Command) : nullptr;
+	if (!Allowed || Allowed->Abilities.IsEmpty())
+	{
+		return;
+	}
+	OutChoices.Add(TSoftClassPtr<UObject>());
+	for (const TSoftClassPtr<UGameplayAbility>& Ability : Allowed->Abilities)
+	{
+		if (!Ability.IsNull())
+		{
+			OutChoices.AddUnique(TSoftClassPtr<UObject>(Ability.ToSoftObjectPath()));
+		}
+	}
+}
+
+TSoftClassPtr<UObject> UGSTN_LoadoutComponent::GetChosenSpecial(int32 WeaponIndex, FGameplayTag Command) const
+{
+	// The last entry, should a hand-made loadout carry two for the pair (WithSpecial never makes two)
+	for (int32 Index = Applied.SlotCustomisations.Num() - 1; Index >= 0; --Index)
+	{
+		const FGSTN_SlotCustomisation& Entry = Applied.SlotCustomisations[Index];
+		if (Entry.WeaponIndex == WeaponIndex && Entry.Command == Command)
+		{
+			return Entry.AlternativeAbility;
+		}
+	}
+	return TSoftClassPtr<UObject>();
+}
+
+TSoftClassPtr<UObject> UGSTN_LoadoutComponent::GetNextSpecial(int32 WeaponIndex, FGameplayTag Command, int32 Step) const
+{
+	TArray<TSoftClassPtr<UObject>> Choices;
+	GetSpecialChoices(WeaponIndex, Command, Choices);
+	if (Choices.IsEmpty())
+	{
+		return TSoftClassPtr<UObject>();
+	}
+	const int32 Current = FMath::Max(0, Choices.IndexOfByKey(GetChosenSpecial(WeaponIndex, Command)));
+	const int32 Count = Choices.Num();
+	return Choices[((Current + Step) % Count + Count) % Count];
 }
 
 void UGSTN_LoadoutComponent::ClientLoadoutRejected_Implementation(const TArray<FString>& Errors)

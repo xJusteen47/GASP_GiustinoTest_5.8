@@ -90,6 +90,12 @@ void UGSTN_WeaponDefinition::Validate(TArray<FText>& OutErrors, TArray<FText>& O
 	{
 		AddWarning(TEXT("The weapon names a stats effect but no stat modifiers."));
 	}
+	// combat-loadout-mods 6: a support weapon inherits the kit's stats. Its own effect is a designer knob (M11.6 open), applied only where
+	// the mode's UGSTN_LoadoutModeRules::SupportWeaponStats is WeaponOwn
+	if (!StatsEffect.IsNull() && WeaponTags.HasTagExact(GSTNCombatTags::Weapon_Role_Support.GetTag()))
+	{
+		AddWarning(TEXT("A support weapon with a stats effect changes its carrier's stats (only in modes whose SupportWeaponStats is WeaponOwn)."));
+	}
 
 	for (const TPair<FGameplayTag, FGSTN_AbilityClassList>& Pair : AllowedAlternatives)
 	{

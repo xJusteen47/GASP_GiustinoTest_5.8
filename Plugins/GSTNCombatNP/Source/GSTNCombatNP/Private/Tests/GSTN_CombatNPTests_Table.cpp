@@ -10,6 +10,7 @@
 #include "Input/GSTN_InputSettings.h"
 #include "Loadout/GSTN_EntrySourceMask.h"
 #include "Misc/AutomationTest.h"
+#include "Loadout/GSTN_LoadoutModeRules.h"
 #include "NativeGameplayTags.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "Tests/GSTN_ReviewTestTypes.h"
@@ -312,6 +313,36 @@ bool FGSTN_NPTableWeaponStatsTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("and its stat magnitudes"), Entries[0].Stats.Num(), 1);
 	TestTrue(TEXT("a support weapon ships without a stats effect"), Entries[1].Effect == nullptr && Entries[1].Stats.IsEmpty());
 	TestTrue(TEXT("an unresolved weapon is an empty entry"), Entries[2].Effect == nullptr);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPTableSupportStatsRuleTest, "GSTNCombat.NP.Table.SupportStatsRule", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPTableSupportStatsRuleTest::RunTest(const FString& Parameters)
+{
+	// M11 L3: both answers to M11.6 as a mode rule. A heavy support weapon authors its own stats effect
+	const TStrongObjectPtr<UGSTN_WeaponDefinition> Primary(NewObject<UGSTN_WeaponDefinition>(GetTransientPackage()));
+	Primary->StatsEffect = TSoftClassPtr<UGSTN_GE_WeaponStats>(UGSTN_GE_WeaponStats::StaticClass());
+	Primary->StatModifiers.AddDefaulted();
+	const TStrongObjectPtr<UGSTN_WeaponDefinition> Heavy(NewObject<UGSTN_WeaponDefinition>(GetTransientPackage()));
+	Heavy->StatsEffect = TSoftClassPtr<UGSTN_GE_WeaponStats>(UGSTN_GE_WeaponStats::StaticClass());
+	Heavy->StatModifiers.AddDefaulted();
+	Heavy->StatModifiers[0].Value = -200.f;
+
+	FGSTN_ResolvedLoadout Resolved;
+	Resolved.Weapons = { Primary.Get(), Heavy.Get() };
+
+	const TArray<FGSTN_WeaponStatsEntry> Own = UGSTN_CombatSimComponent::BuildWeaponStats(Resolved, EGSTN_SupportWeaponStats::WeaponOwn);
+	const TArray<FGSTN_WeaponStatsEntry> KitOnly = UGSTN_CombatSimComponent::BuildWeaponStats(Resolved, EGSTN_SupportWeaponStats::KitOnly);
+	if (!TestEqual(TEXT("one entry per weapon under both rules"), Own.Num() + KitOnly.Num(), 4))
+	{
+		return false;
+	}
+	TestTrue(TEXT("WeaponOwn: the support weapon's own effect"), Own[1].Effect != nullptr && Own[1].Stats.Num() == 1);
+	TestTrue(TEXT("KitOnly: the support weapon changes no stat"), KitOnly[1].Effect == nullptr && KitOnly[1].Stats.IsEmpty());
+	TestTrue(TEXT("the primary weapon keeps its effect under both"), Own[0].Effect != nullptr && KitOnly[0].Effect != nullptr);
+
+	// The one-argument form follows the active rules; with no rules asset that is the default, the behaviour before M11
+	TestEqual(TEXT("the default rule is WeaponOwn"), UGSTN_LoadoutModeRules::Get().SupportWeaponStats, EGSTN_SupportWeaponStats::WeaponOwn);
 	return true;
 }
 

@@ -30,6 +30,7 @@
 #include "MoverSimulationTypes.h"
 #include "GSTN_CombatSimComponent.generated.h"
 
+enum class EGSTN_SupportWeaponStats : uint8;
 class UGSTN_CombatRules;
 class UGSTN_CombatWorldSubsystem;
 class UGSTN_CommandBindingSet;
@@ -536,6 +537,12 @@ public:
 
 	/** The stats effect entries of a resolved loadout's weapons, in loadout order (a weapon without a stats effect leaves its Effect empty) */
 	static TArray<FGSTN_WeaponStatsEntry> BuildWeaponStats(const FGSTN_ResolvedLoadout& Resolved);
+
+	/**
+	 * The same with the support weapon rule given (M11 L3): KitOnly leaves every weapon after the primary without an effect. The one-argument
+	 * form reads it from the active game rules; a rules change re-applies the loadout, so the list is rebuilt at a revision boundary
+	 */
+	static TArray<FGSTN_WeaponStatsEntry> BuildWeaponStats(const FGSTN_ResolvedLoadout& Resolved, EGSTN_SupportWeaponStats SupportStats);
 
 	/** The ricochet fallbacks of a resolved loadout (M4 H12): one per weapon in loadout order, and the kit's. An entry with no recoil frames is not authored */
 	static void BuildRicochetFallbacks(const FGSTN_ResolvedLoadout& Resolved, TArray<FGSTN_RicochetResponse>& OutWeapons, FGSTN_RicochetResponse& OutKit);

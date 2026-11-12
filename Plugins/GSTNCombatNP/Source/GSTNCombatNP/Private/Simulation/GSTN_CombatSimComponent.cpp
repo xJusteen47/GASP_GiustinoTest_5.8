@@ -1,6 +1,7 @@
 // Combat simulation (GAS-NPP fork).
 
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "Loadout/GSTN_LoadoutModeRules.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "GameRules/GSTN_GameRules.h"
 
@@ -360,11 +361,19 @@ void UGSTN_CombatSimComponent::BindLoadoutComponent(UGSTN_LoadoutComponent* Load
 
 TArray<FGSTN_WeaponStatsEntry> UGSTN_CombatSimComponent::BuildWeaponStats(const FGSTN_ResolvedLoadout& Resolved)
 {
+	return BuildWeaponStats(Resolved, UGSTN_LoadoutModeRules::Get().SupportWeaponStats);
+}
+
+TArray<FGSTN_WeaponStatsEntry> UGSTN_CombatSimComponent::BuildWeaponStats(const FGSTN_ResolvedLoadout& Resolved, EGSTN_SupportWeaponStats SupportStats)
+{
 	TArray<FGSTN_WeaponStatsEntry> Entries;
-	for (const UGSTN_WeaponDefinition* Weapon : Resolved.Weapons)
+	for (int32 Index = 0; Index < Resolved.Weapons.Num(); ++Index)
 	{
+		const UGSTN_WeaponDefinition* Weapon = Resolved.Weapons[Index];
 		FGSTN_WeaponStatsEntry& Entry = Entries.AddDefaulted_GetRef();
-		if (Weapon)
+		// KitOnly: every weapon after the primary is an empty entry, so switching to it leaves the kit's stats (the swap only removes)
+		const bool bKitStatsOnly = Index > 0 && SupportStats == EGSTN_SupportWeaponStats::KitOnly;
+		if (Weapon && !bKitStatsOnly)
 		{
 			Entry.Effect = Weapon->StatsEffect.IsNull() ? nullptr : Weapon->StatsEffect.LoadSynchronous();
 			Entry.Stats = Weapon->StatModifiers;

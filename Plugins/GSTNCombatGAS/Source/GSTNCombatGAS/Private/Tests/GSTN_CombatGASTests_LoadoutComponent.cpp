@@ -20,6 +20,8 @@
 #include "Kits/GSTN_WeaponDefinition.h"
 #include "Loadout/GSTN_LoadoutComponent.h"
 #include "Loadout/GSTN_LoadoutExtensions.h"
+#include "Loadout/GSTN_LoadoutModeRules.h"
+#include "Misc/ScopeExit.h"
 #include "Loadout/GSTN_LoadoutSaveGame.h"
 #include "Loadout/GSTN_LoadoutSubsystem.h"
 #include "Tests/GSTN_GASTestTypes.h"
@@ -473,5 +475,61 @@ bool FGSTN_LoadoutExtensionHooksTest::RunTest(const FString& Parameters)
 }
 
 // The kit pickup swap test moved to GSTNPickups with the pickup (M11 L2): GSTNPickups.Take.*
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LoadoutSpecialSwapTest, "GSTNCombat.GAS.Loadout.SpecialSwap", LoadoutComponentTestFlags)
+bool FGSTN_LoadoutSpecialSwapTest::RunTest(const FString& Parameters)
+{
+	// M11 L3: a special changed in a match among the weapon's allowed alternatives, gated by the mode rule
+	FLoadoutFixture Fixture;
+	const FGameplayTag Special = GSTNCommandTags::Special_Neutral.GetTag();
+	Fixture.Weapon->AllowedAlternatives.Add(Special).Abilities = { AbilityB() };
+	UGSTN_TestLoadoutComponent& Component = *Fixture.Component;
+	TArray<FString> Errors;
+	const TSoftClassPtr<UObject> AltB(AbilityB().ToSoftObjectPath());
+	const TSoftClassPtr<UObject> AltC(AbilityC().ToSoftObjectPath());
+
+	// The pure edit: one entry per (weapon, command), null removes it
+	FGSTN_LoadoutData Edited = UGSTN_LoadoutComponent::WithSpecial(Fixture.RequestKit(TEXT("KitA")), 0, Special, AltB);
+	Edited = UGSTN_LoadoutComponent::WithSpecial(Edited, 0, Special, AltC);
+	TestEqual(TEXT("a second edit replaces the first"), Edited.SlotCustomisations.Num(), 1);
+	TestTrue(TEXT("with the newer alternative"), Edited.SlotCustomisations[0].AlternativeAbility == AltC);
+	TestEqual(TEXT("a null alternative removes it"), UGSTN_LoadoutComponent::WithSpecial(Edited, 0, Special, TSoftClassPtr<UObject>()).SlotCustomisations.Num(), 0);
+
+	TestFalse(TEXT("- no swap without a loadout"), Component.AcceptSpecialSwap(0, Special, AltB, Errors));
+	TestTrue(TEXT("+ kit A accepted"), Component.AcceptLoadout(Fixture.RequestKit(TEXT("KitA")), Errors));
+
+	// The choices a UI or a cycle walks: the weapon's own ability (null) first, then the allowed ones
+	TArray<TSoftClassPtr<UObject>> Choices;
+	Component.GetSpecialChoices(0, Special, Choices);
+	TestEqual(TEXT("own + one alternative"), Choices.Num(), 2);
+	TestTrue(TEXT("the next special after the weapon's own is B"), Component.GetNextSpecial(0, Special) == AltB);
+	TestTrue(TEXT("and the previous one wraps to B as well"), Component.GetNextSpecial(0, Special, -1) == AltB);
+	Component.GetSpecialChoices(0, GSTNCommandTags::Attack_Neutral.GetTag(), Choices);
+	TestEqual(TEXT("a command without alternatives offers nothing"), Choices.Num(), 0);
+
+	// Default rules: specials change in the loadout only
+	UGSTN_LoadoutModeRules& Rules = FGSTN_ActiveGameRules::GetMutablePieceForDev<UGSTN_LoadoutModeRules>();
+	const bool bWasAllowed = Rules.bAllowSpecialSwapInMatch;
+	ON_SCOPE_EXIT { Rules.bAllowSpecialSwapInMatch = bWasAllowed; };
+	Rules.bAllowSpecialSwapInMatch = false;
+	TestFalse(TEXT("- the mode refuses a swap in a match"), Component.AcceptSpecialSwap(0, Special, AltB, Errors));
+	TestTrue(TEXT("by the mode rule"), AnyContains(Errors, TEXT("does not allow changing specials")));
+	TestEqual(TEXT("the revision did not move"), Component.GetRevision(), 1);
+
+	Rules.bAllowSpecialSwapInMatch = true;
+	TestTrue(TEXT("+ the mode allows it: B accepted"), Component.AcceptSpecialSwap(0, Special, AltB, Errors));
+	TestEqual(TEXT("a new revision"), Component.GetRevision(), 2);
+	TestTrue(TEXT("B is the chosen special"), Component.GetChosenSpecial(0, Special) == AltB);
+	TestTrue(TEXT("and the cycle goes back to the weapon's own"), Component.GetNextSpecial(0, Special).IsNull());
+
+	TestFalse(TEXT("- an alternative the weapon does not allow is refused"), Component.AcceptSpecialSwap(0, Special, AltC, Errors));
+	TestTrue(TEXT("by the loadout rules"), AnyContains(Errors, TEXT("does not allow")));
+	TestTrue(TEXT("B is still chosen"), Component.GetChosenSpecial(0, Special) == AltB);
+
+	TestTrue(TEXT("+ back to the weapon's own"), Component.AcceptSpecialSwap(0, Special, TSoftClassPtr<UObject>(), Errors));
+	TestTrue(TEXT("no customisation left"), Component.GetApplied().SlotCustomisations.IsEmpty());
+	TestEqual(TEXT("revision 3"), Component.GetRevision(), 3);
+	return true;
+}
 
 #endif // WITH_DEV_AUTOMATION_TESTS

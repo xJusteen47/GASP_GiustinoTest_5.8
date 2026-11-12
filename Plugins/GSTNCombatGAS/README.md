@@ -217,3 +217,18 @@ as the other combat tests: `-ExecCmds="Automation RunTests GSTNInput+GSTNCombat;
   loadout. `UGSTN_SkinComponent` asks every provider (priority, then id) on each applied loadout and attaches the meshes to the
   skinned mesh without collision, replacing the previous ones (`RefreshAttachments`). Presentation only; synchronous load (async
   load is M11 G5). Test `GSTNCombat.GAS.Skin.AttachmentProviders`.
+
+## M11 support weapons and special swaps (L3)
+
+- `UGSTN_LoadoutModeRules` (`Loadout/`), the loadout's piece of the game rules (GSTNCore `UGSTN_GameRules`, one per mode or level; class
+  defaults = no asset). `SupportWeaponStats`: `WeaponOwn` (default, the M3 behaviour: a support weapon's own stats effect applies when
+  it authors one) or `KitOnly` (every weapon after the primary changes no stat, the carrier keeps the kit's stats; spec §6). Both kept
+  until the owner answers M11.6. `GSTNCombatNP`'s `BuildWeaponStats` reads it at loadout apply, so the predicted weapon switch
+  (`SwapWeaponStats`) needs no new state. A support weapon (`Combat.Weapon.Role.Support`) with a stats effect gets a validator warning.
+  `bAllowSpecialSwapInMatch` (default false, spec §7) gates the special swap below; the loadout screen is never gated.
+- `UGSTN_LoadoutComponent::ServerRequestSpecialSwap(WeaponIndex, Command, Alternative)` -> `AcceptSpecialSwap`: the applied loadout
+  with that one `FGSTN_SlotCustomisation` changed (`WithSpecial`, null = the weapon's own ability) through `AcceptLoadout`, so the
+  loadout rules judge the alternative and the change is a new revision like any loadout change (never predicted). For a UI or a
+  cycle command: `GetSpecialChoices` (own first, then `AllowedAlternatives`), `GetChosenSpecial`, `GetNextSpecial(Step)`. No input is
+  bound to it: the button (if any) is a designer command, not decided yet. Test `GSTNCombat.GAS.Loadout.SpecialSwap`;
+  `GSTNCombat.NP.Table.SupportStatsRule` covers the stats rule.

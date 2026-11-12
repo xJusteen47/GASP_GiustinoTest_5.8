@@ -99,6 +99,40 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
 	void ApplyAppliedLoadout();
 
+	/**
+	 * The owning client asks to change one special during the match (combat-loadout-mods 7, M11 L3): the weapon at WeaponIndex binds
+	 * Alternative to Command instead of its own ability; a null Alternative goes back to the weapon's own. Out of band like any loadout
+	 * change (a new revision, never predicted). See AcceptSpecialSwap. No input is bound to it here: a UI or a designer command calls it
+	 */
+	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Combat|Loadout")
+	void ServerRequestSpecialSwap(int32 WeaponIndex, FGameplayTag Command, const TSoftClassPtr<UObject>& Alternative);
+
+	/**
+	 * Server only. Refused when the mode does not allow special swaps in a match (UGSTN_LoadoutModeRules::bAllowSpecialSwapInMatch);
+	 * otherwise AcceptLoadout of the applied loadout with that one customisation changed, so the loadout rules judge the alternative
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Combat|Loadout")
+	bool AcceptSpecialSwap(int32 WeaponIndex, FGameplayTag Command, const TSoftClassPtr<UObject>& Alternative, TArray<FString>& OutErrors);
+
+	/** Base with the customisation of (WeaponIndex, Command) set to Alternative, or removed when Alternative is null. Pure */
+	UFUNCTION(BlueprintPure, Category = "Combat|Loadout")
+	static FGSTN_LoadoutData WithSpecial(const FGSTN_LoadoutData& Base, int32 WeaponIndex, FGameplayTag Command, const TSoftClassPtr<UObject>& Alternative);
+
+	/**
+	 * What the applied loadout's weapon at WeaponIndex offers for Command, in a fixed order for a UI or a cycle: a null entry first (the
+	 * weapon's own ability), then the weapon's AllowedAlternatives. Empty when the weapon is not resolved or allows no alternative
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
+	void GetSpecialChoices(int32 WeaponIndex, FGameplayTag Command, TArray<TSoftClassPtr<UObject>>& OutChoices) const;
+
+	/** The alternative the applied loadout binds to (WeaponIndex, Command); null = the weapon's own ability */
+	UFUNCTION(BlueprintPure, Category = "Combat|Loadout")
+	TSoftClassPtr<UObject> GetChosenSpecial(int32 WeaponIndex, FGameplayTag Command) const;
+
+	/** The choice Step places after the current one in GetSpecialChoices, wrapping around (Step -1 = previous). Null when there is no choice */
+	UFUNCTION(BlueprintPure, Category = "Combat|Loadout")
+	TSoftClassPtr<UObject> GetNextSpecial(int32 WeaponIndex, FGameplayTag Command, int32 Step = 1) const;
+
 	UFUNCTION(BlueprintPure, Category = "Combat|Loadout")
 	const FGSTN_LoadoutData& GetApplied() const { return Applied; }
 

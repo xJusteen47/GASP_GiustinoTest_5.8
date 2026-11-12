@@ -99,6 +99,8 @@ later is a rules change, not a type change.
   `Combat.Weapon.Role.Support` and `SwapWeaponStats` (M3 §7.7) changes nothing. The M3 mechanism stays as a designer knob (a very
   heavy weapon could slow the carrier), with a validator warning when a support weapon changes stats (question M11.6). M3's test
   content `WPN_Test_Support` (+40 % walk) exists to test the mechanism only; production support weapons follow the rule above.
+  *Built (M11 L3)*: both answers kept as the mode rule `UGSTN_LoadoutModeRules::SupportWeaponStats` (`WeaponOwn` default, `KitOnly`);
+  the validator warning exists (GSTNCombatGAS README).
 - Switching: M3 §7.7 (a timeline ability with a `WeaponSwitch` track, bound in the **kit**). One support weapon at a time
   (`MaxAdditionalWeapons` = 1 in the reference kits, *Proposal*).
 - Getting one: chosen in the loadout, or picked up in the world (Helldivers-style drop, spawned by the mode), same flow as §4 with
@@ -115,6 +117,8 @@ later is a rules change, not a type change.
   `Ability.Combat.Special.*` identity tag.
 - When swapping is allowed: in the loadout (pre-match, between levels) by default; mid-match only where the mode allows it (e.g.
   at a checkpoint or supply point), through the same `ServerApplyLoadoutChange` path (question M11.9).
+  *Built (M11 L3)*: `UGSTN_LoadoutComponent::ServerRequestSpecialSwap` over `AcceptLoadout`, gated by the mode rule
+  `bAllowSpecialSwapInMatch` (default off); choices and cycling helpers for a UI. No button bound yet.
 
 ## 8. Mods (`GSTNKitMods`)
 
