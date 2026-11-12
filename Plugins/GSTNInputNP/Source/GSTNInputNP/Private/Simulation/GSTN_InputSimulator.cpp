@@ -133,6 +133,11 @@ FGSTN_InputTickResult FGSTN_InputSimulator::Tick(const FGSTN_InputTickArgs& Args
 
 	FGameplayTagContainer Context = OwnerTags;
 	Host.AppendContextTags(Context);
+	// The reticle bit of the predicted command (M11 L9): the same on every machine for this frame, so the binding it picks is too
+	if (Cmd.bPrecisionAim)
+	{
+		Context.AddTag(GSTNInputTags::Context_PrecisionAim);
+	}
 
 	// The binding a command would start now: no lock holds it, the host allows it, a binding holds in this context and its
 	// ability could be activated. A command without any of these is "unavailable" to the resolver.

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Abilities/GSTN_GA_Base.h"
 #include "Movement/GSTN_BallisticMode.h"
+#include "Movement/GSTN_ShotAim.h"
 
 #include "GSTN_GA_FireProjectile.generated.h"
 
@@ -25,7 +26,13 @@ enum class EGSTN_ProjectileAim : uint8
 	 * At the Target actor of the triggering gameplay event (AI, traps, the harness), solved as a straight line or, with gravity, as
 	 * the flat or high arc that passes through it. Never used to steer a player's shot: the player aims (precision tools, no auto-play)
 	 */
-	EventTarget
+	EventTarget,
+	/**
+	 * M11 L9 (owner, 2026-11-12: vertical aim only with the reticle on). With the reticle on in the fire frame's command
+	 * (FGSTN_InputCmd::bPrecisionAim): along the camera aim of that command, up and down too, its pitch clamped to the ability's reticle
+	 * pitch limits. Off: as ReticleOffAim (Facing or Stick), flat plus LaunchPitchDeg
+	 */
+	Reticle
 };
 
 /**
@@ -80,6 +87,27 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Projectile|Aim", meta = (ForceUnits = "cm"))
 	FVector TargetAimOffset = FVector::ZeroVector;
 
+	/** Reticle with the reticle off: the flat aim used instead (Facing or Stick; anything else counts as Facing) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Projectile|Aim", meta = (EditCondition = "Aim == EGSTN_ProjectileAim::Reticle"))
+	EGSTN_ProjectileAim ReticleOffAim = EGSTN_ProjectileAim::Facing;
+
+	/** Reticle with the reticle on: the lowest the shot may point (negative = down) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Projectile|Aim", meta = (EditCondition = "Aim == EGSTN_ProjectileAim::Reticle", ClampMin = "-89.0", ClampMax = "89.0", ForceUnits = "deg"))
+	float MinReticlePitchDeg = -60.f;
+
+	/** Reticle with the reticle on: the highest the shot may point */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Projectile|Aim", meta = (EditCondition = "Aim == EGSTN_ProjectileAim::Reticle", ClampMin = "-89.0", ClampMax = "89.0", ForceUnits = "deg"))
+	float MaxReticlePitchDeg = 60.f;
+
+	/**
+	 * How the shot reaches its target (M11 L9, per move): a flying projectile (the Projectile template) or a hitscan line (Hitscan below,
+	 * nearest victim first). A hitscan keeps the template's hit data, source and MaxHits, and replaces its motion and shape
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Projectile|Shot")
+	EGSTN_ShotDelivery Delivery = EGSTN_ShotDelivery::Projectile;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Projectile|Shot", meta = (EditCondition = "Delivery == EGSTN_ShotDelivery::Hitscan"))
+	FGSTN_HitscanSpec Hitscan;
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
 

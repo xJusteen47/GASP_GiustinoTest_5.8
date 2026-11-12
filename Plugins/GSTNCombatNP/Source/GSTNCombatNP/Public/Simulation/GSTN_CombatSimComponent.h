@@ -853,7 +853,7 @@ private:
 	TSubclassOf<UGameplayEffect> SetFacingEffect;
 
 	/** Startup steering of the frame: a SetFacing request when the aim stick turns the running move (FGSTN_CombatTimelineLogic::ComputeStartupSteer) */
-	void StepStartupSteer(int32 Frame, const FGSTN_InputCmd& Cmd, FGSTN_CombatSyncCore& Core);
+	void StepStartupSteer(int32 Frame, const FGSTN_InputCmd& Cmd, FGSTN_CombatSyncCore& Core, float StepSeconds);
 
 	// Last command this pawn produced (local only): the Mover input producer reads the aim of it, it never feeds the simulation
 	TWeakObjectPtr<class UGSTN_PrecisionAimComponent> CachedPrecisionAim;

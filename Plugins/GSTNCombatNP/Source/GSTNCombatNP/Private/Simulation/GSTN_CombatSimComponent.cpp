@@ -748,9 +748,15 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 	// The frame this input is for is the one after the latest simulated frame
 	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickY));
 	float HoldYaw = 0.f;
-	if (FGSTN_CombatTimelineLogic::ResolveSteerHoldYaw(Sync->Core, GetSimulationFrame() + 1, GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline), AimStick,
+	const FGSTN_CombatTimelineData* Timeline = GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline);
+	if (FGSTN_CombatTimelineLogic::ResolveSteerHoldYaw(Sync->Core, GetSimulationFrame() + 1, Timeline, AimStick,
 		FGSTN_DirectionClassifier::DequantizeYaw(LastCameraYaw), true, HoldYaw))
 	{
+		// Aim handling (M11 L9): the intent follows the same rate as the sim's SetFacing, so the movement mode does not turn faster than the move
+		if (Timeline && Timeline->SteerRateDegPerSecond > 0.f && GetOwner())
+		{
+			HoldYaw = FGSTN_StartupSteer::RateLimitYaw(static_cast<float>(GetOwner()->GetActorRotation().Yaw), HoldYaw, Timeline->SteerRateDegPerSecond, LastStepMs * 0.001f);
+		}
 		HoldOrientationIntent(InputCmdResult, HoldYaw);
 	}
 }
@@ -1159,7 +1165,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	// stands still like the timeline does
 	if (!bHitstopFrame && !bFrameGateClosed)
 	{
-		StepStartupSteer(Frame, FrameCmd, OutSync.Core);
+		StepStartupSteer(Frame, FrameCmd, OutSync.Core, static_cast<float>(TimeStep.StepMS) * 0.001f);
 	}
 	Extensions.Run(EGSTN_CombatHookPoint::AfterExecute, HookContext);
 
@@ -1523,7 +1529,7 @@ void UGSTN_CombatSimComponent::ExecuteFreeze(TSubclassOf<UGameplayEffect> Effect
 	}
 }
 
-void UGSTN_CombatSimComponent::StepStartupSteer(int32 Frame, const FGSTN_InputCmd& Cmd, FGSTN_CombatSyncCore& Core)
+void UGSTN_CombatSimComponent::StepStartupSteer(int32 Frame, const FGSTN_InputCmd& Cmd, FGSTN_CombatSyncCore& Core, float StepSeconds)
 {
 	if (!Cmd.bPrecisionAim || Core.ActionState != EGSTN_ActionState::InTimeline || (Cmd.AimStickX == 0 && Cmd.AimStickY == 0))
 	{
@@ -1538,7 +1544,7 @@ void UGSTN_CombatSimComponent::StepStartupSteer(int32 Frame, const FGSTN_InputCm
 	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickY));
 	int16 YawArg = 0;
 	if (FGSTN_CombatTimelineLogic::ComputeStartupSteer(Core, Frame, GetRegistryTimeline(Tables(), Core.ActiveTimeline), AimStick,
-		FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), static_cast<float>(Pose.Rotator().Yaw), Cmd.bPrecisionAim, YawArg))
+		FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), static_cast<float>(Pose.Rotator().Yaw), Cmd.bPrecisionAim, YawArg, StepSeconds))
 	{
 		if (!Core.Requests.Add(EGSTN_RequestType::SetFacing, Frame, YawArg))
 		{

@@ -121,7 +121,17 @@ bool UGSTN_GA_FireProjectile::Fire()
 	}
 	else
 	{
-		if (ShotAim == EGSTN_ProjectileAim::CommandAim)
+		// Reticle (M11 L9): the fire frame's reticle bit picks the 3D reticle aim or the flat fallback; the bit is in the predicted command, so
+		// the host and the predicting client choose alike
+		const UGSTN_CombatSimComponent* AimComponent = Avatar->FindComponentByClass<UGSTN_CombatSimComponent>();
+		const bool bReticleShot = ShotAim == EGSTN_ProjectileAim::Reticle;
+		const bool bReticleOn = bReticleShot && AimComponent && AimComponent->IsPrecisionAimFrame();
+		EGSTN_ProjectileAim FlatAim = ShotAim;
+		if (bReticleShot)
+		{
+			FlatAim = ReticleOffAim == EGSTN_ProjectileAim::Stick ? EGSTN_ProjectileAim::Stick : EGSTN_ProjectileAim::Facing;
+		}
+		if (FlatAim == EGSTN_ProjectileAim::CommandAim)
 		{
 			const FRotator AimRotation = GetAimRotation();
 			if (!AimRotation.IsNearlyZero())
@@ -129,15 +139,14 @@ bool UGSTN_GA_FireProjectile::Fire()
 				Direction = AimRotation.Vector();
 			}
 		}
-		else if (ShotAim == EGSTN_ProjectileAim::Stick)
+		else if (FlatAim == EGSTN_ProjectileAim::Stick && !bReticleOn)
 		{
 			// The frame's stick on the shooter's plane (its snapshot up), as the stick moves the character; centred = the facing
-			const UGSTN_CombatSimComponent* CombatComponent = Avatar->FindComponentByClass<UGSTN_CombatSimComponent>();
-			if (CombatComponent)
+			if (AimComponent)
 			{
 				FVector2D Stick;
 				float CameraYaw = 0.f;
-				CombatComponent->GetFrameStick(Stick, CameraYaw);
+				AimComponent->GetFrameStick(Stick, CameraYaw);
 				const FVector OnPlane = FGSTN_CombatVictim::StickToPlane(Stick, CameraYaw, OwnerTransform.GetUnitAxis(EAxis::Z));
 				if (OnPlane.SizeSquared() > FMath::Square(StickAimDeadzone))
 				{
@@ -145,11 +154,14 @@ bool UGSTN_GA_FireProjectile::Fire()
 				}
 			}
 		}
-		FRotator Launch = Direction.Rotation();
-		Launch.Pitch = FMath::Clamp(Launch.Pitch + GetShotLaunchPitchDeg(), -89.0, 89.0);
-		Direction = Launch.Vector();
+		Direction = FGSTN_ShotAim::ReticleDirection(bReticleOn, bReticleOn ? GetAimRotation() : FRotator::ZeroRotator, Direction,
+			MinReticlePitchDeg, MaxReticlePitchDeg, GetShotLaunchPitchDeg());
 	}
 	Params.Direction = Direction;
+	if (Delivery == EGSTN_ShotDelivery::Hitscan)
+	{
+		FGSTN_ShotAim::MakeHitscan(Params, Hitscan);
+	}
 	if (!bHost)
 	{
 		if (AGSTN_Projectile* Ghost = Projectiles->SpawnGhost(Params, Avatar))

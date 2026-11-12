@@ -103,10 +103,12 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 	 * result differs from CurrentYawDeg (the pose of the end of the previous frame). The start yaw is the move origin's, so the turn is a
 	 * clamp against it, never accumulated: a resimulated or dropped frame gives the same answer. Hitstop frames are the caller's to skip.
 	 * Owner decision (2026-11-10, slice 3b): the right stick turns the character only while the reticle is on; with it off the right stick
-	 * is the camera's alone and the left stick keeps turning the character as before. Pure: reads its arguments only
+	 * is the camera's alone and the left stick keeps turning the character as before. Pure: reads its arguments only.
+	 * Aim handling (M11 L9): with the timeline's SteerRateDegPerSecond above 0 the yaw moves from CurrentYawDeg toward the steered one by at
+	 * most the rate times StepSeconds (the fixed step), so a heavy move follows the stick slowly inside its cone. StepSeconds 0 = at once
 	 */
 	static bool ComputeStartupSteer(const FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FVector2D& AimStick,
-		float CameraYawDeg, float CurrentYawDeg, bool bPrecisionAim, int16& OutYawArg);
+		float CameraYawDeg, float CurrentYawDeg, bool bPrecisionAim, int16& OutYawArg, float StepSeconds = 0.f);
 
 	/**
 	 * The facing the running move holds in Frame while the precision aim is on (slice 3b): the steered yaw of the aim stick, or the move

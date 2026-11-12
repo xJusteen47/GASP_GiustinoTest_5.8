@@ -581,6 +581,14 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (ClampMin = "0.0", ClampMax = "90.0", ForceUnits = "deg"))
 	float MaxSteerDegrees = 20.f;
 
+	/**
+	 * Aim handling while this move turns with the reticle on (M11 L9, the "ergonomics" of a heavy weapon, owner 2026-11-12): the fastest the
+	 * steered facing follows the aim stick, inside the MaxSteerDegrees cone. So the move's rotation limit says how far it may turn and
+	 * this says how fast. 0 = at once (every move authored before L9). The facing is Mover sync state, so stepping from it is rollback-safe
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (EditCondition = "MaxSteerDegrees > 0", ClampMin = "0.0", ForceUnits = "deg/s"))
+	float SteerRateDegPerSecond = 0.f;
+
 	/** Startup override window (combat.md 8.3). -1 = the default of the command tier (settings), 0 = none */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Override", meta = (ClampMin = "-1", ForceUnits = "Frames"))
 	int32 OverrideFrames = -1;

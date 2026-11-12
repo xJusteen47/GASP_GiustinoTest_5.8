@@ -34,6 +34,24 @@ owner at the current frame: within `GhostToleranceCm` it is drawn at the ghost's
 `GhostTimeoutFrames`. Presentation only: the spawn and the hits stay the host's. The host quantizes its segment before using it, so it
 sweeps exactly the bits the clients decode.
 
+## Aimed shots (M11 L9)
+
+Owner answers, 2026-11-12. All of it is data on the move (`UGSTN_GA_FireProjectile` and its Blueprint children):
+
+- **Delivery** per move: `Projectile` (flies, as before) or `Hitscan` (`FGSTN_HitscanSpec` range and radius). A hitscan is a projectile
+  that does not move: `FGSTN_ShotAim::MakeHitscan` gives it a capsule from the muzzle to the range, one frame of life and
+  `bHitNearestFirst`, so the host resolves it on the next fixed frame through the same pipeline, nearest victim first (`MaxHits` > 1 pierces).
+- **Aim `Reticle`**: with the reticle on in the fire frame's command (`FGSTN_InputCmd::bPrecisionAim`) the shot goes along the camera
+  aim, **up and down too**, pitch clamped to `MinReticlePitchDeg`/`MaxReticlePitchDeg`; off it uses `ReticleOffAim` (Facing or Stick),
+  flat plus `LaunchPitchDeg`. Vertical aim exists only with the reticle on.
+- **Which button does what** with the reticle on is binding data, not code: the input simulation adds `Input.Context.PrecisionAim` to the
+  binding context from the command bit, so a binding that requires it replaces the plain one (which ignores it) while the reticle shows.
+- **Aim handling** ("ergonomics") lives on the move's timeline, next to its rotation limit: `SteerRateDegPerSecond` is how fast the
+  facing follows the aim stick inside the `MaxSteerDegrees` cone (combat timeline, `FGSTN_StartupSteer::RateLimitYaw`).
+
+Tests `GSTNProjectile.Core.HitscanAndReticleAim`, `GSTNInput.NP.Simulator.PrecisionAimBinding`, `GSTNCombat.NP.Weakpoint.SteerAimHandling`.
+Not covered yet: a hitscan still spawns a one-frame projectile actor (bytes of a spawn) and, as every projectile, ignores walls.
+
 ## Not yet (after slice 3)
 
 World collision and bounces, projectile vs projectile and deflect, lag compensation (`PositionAt` of the

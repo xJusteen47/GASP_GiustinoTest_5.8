@@ -32,6 +32,13 @@ namespace GSTNInputTags
 	/** The character is in a wall movement mode; with Airborne it identifies wall bindings */
 	GSTNINPUTCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Context_OnWall);
 
+	/**
+	 * The precision aim (the reticle) is on in the frame's command (FGSTN_InputCmd::bPrecisionAim, M11 L9). Added to the binding context by
+	 * the input simulation itself, from the predicted bit, so the same button can start a different move with the reticle on (owner,
+	 * 2026-11-12): a binding that requires it wins over the plain one while the reticle shows, one that ignores it stops then. No host adds it
+	 */
+	GSTNINPUTCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Context_PrecisionAim);
+
 	// Frame events, for buffer reset rules. Other systems declare theirs under the same root.
 
 	/** Root of the frame events reset rules listen to */

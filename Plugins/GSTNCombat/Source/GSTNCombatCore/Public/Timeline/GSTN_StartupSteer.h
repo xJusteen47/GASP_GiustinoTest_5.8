@@ -31,6 +31,12 @@ struct GSTNCOMBATCORE_API FGSTN_StartupSteer
 	static bool IsSteering(const FVector2D& AimStick, float MaxSteerDegrees);
 
 	/**
+	 * Aim handling (M11 L9): TargetYawDeg reached from CurrentYawDeg by at most RateDegPerSecond * StepSeconds this frame, the short way
+	 * round. A rate or a step of 0 gives the target at once. Pure: the current yaw is the pose at the end of the previous frame (sync state)
+	 */
+	static float RateLimitYaw(float CurrentYawDeg, float TargetYawDeg, float RateDegPerSecond, float StepSeconds);
+
+	/**
 	 * The timeline frame the steering stops at (exclusive): the first active frame, as FGSTN_TimelinePhases counts it (hitbox windows
 	 * that hit somebody), without building the phases. 0 for a move with no hitbox: nothing to aim, nothing steers
 	 */

@@ -10,6 +10,7 @@ namespace GSTNInputTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Context_Grounded, "Input.Context.Grounded", "The character is on the ground");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Context_Airborne, "Input.Context.Airborne", "The character is in the air (falling or rising, not on a wall)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Context_OnWall, "Input.Context.OnWall", "The character is in a wall movement mode; with Airborne it identifies wall bindings");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Context_PrecisionAim, "Input.Context.PrecisionAim", "The frame's command has the precision aim (reticle) on: bindings that require it replace the plain ones while the reticle shows");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(BufferEvent, "Input.BufferEvent", "Root of the frame events reset rules listen to");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(BufferEvent_AbilityActivated, "Input.BufferEvent.AbilityActivated", "An ability started from a command this frame");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(BufferEvent_Landed, "Input.BufferEvent.Landed", "The character landed this frame");
