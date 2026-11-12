@@ -1,5 +1,5 @@
-﻿# M11 slice 14: kit swap rules, owner answers M11.2/3/4/6 (laptop, 2026-11-12)
-Branch `claude/laptop-m11-swap` from `095da6f3` (L8). Code `0bff9227`. Spec `combat-loadout-mods.md` Â§4 (*Built (M11 swap)* note).
+# M11 slice 14: kit swap rules, owner answers M11.2/3/4/6 (laptop, 2026-11-12)
+Branch `claude/laptop-m11-swap` from `095da6f3` (L8). Code `0bff9227`. Spec `combat-loadout-mods.md` §4 (*Built (M11 swap)* note).
 **Done** (all settings in `UGSTN_LoadoutModeRules`, GameRules piece "Combat loadout", category **Kit swap**; per mode, no Project Settings):
 1. `KitSwapSupportWeapon` = **StaysWithPlayer** (default, M11.2) / StaysWithKit. The player's last additional weapon and its slot customisations
    go to the new kit (`FGSTN_KitPickupPayload::CarrySupportWeapon`); a support weapon on the ground kit trades places with it. If the new kit's
