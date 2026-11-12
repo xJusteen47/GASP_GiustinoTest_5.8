@@ -76,6 +76,8 @@ KIT_PADS = [
     ('KIT_Test_Light', '', 'LEGGERO', (800.0, -350.0)),
     ('KIT_Test_Medium', '', 'MEDIO', (800.0, 0.0)),
     ('KIT_Test_Heavy', '', 'PESANTE', (800.0, 350.0)),
+    # ANIM-JAB-3 (Tools/GAS/setup_overlord_jab_kit.py): the Overlord's jab 1 then jab 2 on the neutral attack, to watch the animations in Play
+    ('KIT_Test_Overlord', '', 'OVERLORD JAB', (800.0, 700.0)),
 ]
 PAD_RADIUS = 120.0
 # Stepping on it toggles the hitbox and hurtbox debug draw (gstn.Combat.Debug.Hitboxes / Hurtboxes, GSTNCombatNP)
