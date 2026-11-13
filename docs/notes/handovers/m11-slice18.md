@@ -20,5 +20,5 @@ They are NOT on the known-flaky list: watch them next run (the new step is a no-
 **Not built**: push DISTANCE per dome data (needs the outcome extension to hand its own `FGSTN_RicochetResponse` to the attacker tick: core
 interface change); dome visual; nobody saw it in PIE; harness scenario `backpack_dome`; a carrier parked by Link keeps its shell at its own
 transform (inside lists use the moved one).
-**Manual steps**: artifact item `ed-m11-l7b-backpacks` updated (assets now exist; put the dome on a pickup and try it in PIE).
+**Manual steps**: artifact NOT updated (context limit): coordinator, in item `ed-m11-l7b-backpacks` drop step 1 (assets now exist) and "non blocca ancora i colpi"; owner to try the dome from a pickup in PIE.
 Cost: ~140k context main thread + subagents ~410k (Opus impl, Sonnet suite), estimated ~$18-24. Wall clock ~1.5 h.
