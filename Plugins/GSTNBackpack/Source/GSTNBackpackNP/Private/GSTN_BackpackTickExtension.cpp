@@ -4,11 +4,14 @@
 
 #include "Abilities/GSTN_GA_BaseCombat.h"
 #include "AbilitySystemComponent.h"
+#include "GSTN_BackpackDomePush.h"
+#include "Hits/GSTN_CombatHitTags.h"
 #include "GameFramework/Actor.h"
 #include "GSTN_BackpackSim.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_CombatTableSet.h"
+#include "Simulation/GSTN_CombatAttacker.h"
 #include "Sync/GSTN_SyncFragment.h"
 #include "World/GSTN_StepSnapshot.h"
 
@@ -49,6 +52,7 @@ void FGSTN_BackpackTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGST
 				FGSTN_BackpackStep::Landed(*Fragment);
 			}
 		}
+		PushBlockedAttacker(Context);
 		const FGSTN_CombatTimelineData* Started = ResolveStartedTimeline(Context);
 		const FGSTN_BackpackChargeTrack* Charge = Started ? FGSTN_BackpackChargeTrack::Find(*Started) : nullptr;
 		const FGSTN_BackpackDomeTrack* Dome = Started ? FGSTN_BackpackDomeTrack::Find(*Started) : nullptr;
@@ -103,6 +107,41 @@ const FGSTN_CombatTimelineData* FGSTN_BackpackTickExtension::ResolveStartedTimel
 	}
 	const UGSTN_GA_BaseCombat* Default = Set->TimelineRegistry[Core.ActiveTimeline]->GetDefaultObject<UGSTN_GA_BaseCombat>();
 	return Default ? &Default->GetTimelineData() : nullptr;
+}
+
+void FGSTN_BackpackTickExtension::PushBlockedAttacker(FGSTN_CombatTickContext& Context) const
+{
+	// Almost every frame stops here: no hit, or no hit that bounced
+	const FGSTN_AttackerHit* Bounced = nullptr;
+	for (const FGSTN_AttackerHit& Hit : Context.AttackerHits)
+	{
+		// A projectile is spent, never pushed (L7c); one push per frame, from the first bounced hit in the attacker step's order
+		if (Hit.bRicochet && !Hit.Entry.Hit.HitType.MatchesTag(GSTNCombatHitTags::HitType_Projectile))
+		{
+			Bounced = &Hit;
+			break;
+		}
+	}
+	// The snapshot the attacker step hit against (rewound for a remote player on the authority), else the step snapshot
+	const FGSTN_StepSnapshot* Snapshot = Context.Services ? Context.Services->GetViewSnapshot() : nullptr;
+	Snapshot = Snapshot ? Snapshot : Context.Snapshot;
+	const FGSTN_SnapshotEntry* Self = Bounced && Snapshot ? Snapshot->Find(Context.EntityId) : nullptr;
+	if (!Self)
+	{
+		return;
+	}
+	FGSTN_AttackerPushQuery Query(*Snapshot);
+	Query.VictimId = Bounced->VictimId;
+	Query.HurtboxIndex = Bounced->Entry.HurtboxIndex;
+	Query.AttackerRoot = Self->Transform.GetLocation();
+	Query.AttackerFacing = Self->Facing;
+	Query.Up = Self->Up;
+	FVector Velocity;
+	int32 Frames = 0;
+	if (FGSTN_BackpackDomePush().GetPush(Query, Velocity, Frames))
+	{
+		FGSTN_BackpackDomePush::ApplyToFighter(Context.AbilitySystem, Velocity, Frames);
+	}
 }
 
 void FGSTN_BackpackTickExtension::ProjectTags(FGSTN_CombatTickContext& Context) const

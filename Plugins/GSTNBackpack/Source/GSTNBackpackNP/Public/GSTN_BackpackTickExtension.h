@@ -15,7 +15,7 @@ struct FGSTN_CombatSyncCore;
  *  - AfterClocks: OverTime refills; a dome whose move ended (WhileHeld) or whose frames ran out (Deploy) falls.
  *  - AfterExecute: a landing of this frame (the jump state went from airborne to none) refills the OnLanding slots; a timeline that started
  *    this frame and carries a FGSTN_BackpackChargeTrack spends, one with a FGSTN_BackpackDomeTrack raises the dome where the entity stood at
- *    the end of the previous frame (its step snapshot entry).
+ *    the end of the previous frame (its step snapshot entry). Before that, a melee hit of the entity that a dome bounced pushes it back.
  *  - BeforeTagProjection: Backpack.State.Empty.Slot<N> and Backpack.State.Dome SET from the fragment, never added.
  *
  * Every rule returns the fragment to its defaults once nothing is live, so an entity whose backpack is idle costs no payload.
@@ -40,5 +40,12 @@ protected:
 	virtual const FGSTN_CombatTimelineData* ResolveStartedTimeline(const FGSTN_CombatTickContext& Context) const;
 
 private:
+	/**
+	 * M11 L7d: the entity's own melee hit of this frame bounced off a backpack dome (a Ricochet the attacker step made): the dome's push back is
+	 * queued on its Mover (FGSTN_BackpackDomePush), on top of the recoil. Read from the snapshot the attacker step hit against, so the player's
+	 * prediction and the authority push the same way; a re-simulated frame queues it again like any move of the frame
+	 */
+	void PushBlockedAttacker(FGSTN_CombatTickContext& Context) const;
+
 	void ProjectTags(FGSTN_CombatTickContext& Context) const;
 };

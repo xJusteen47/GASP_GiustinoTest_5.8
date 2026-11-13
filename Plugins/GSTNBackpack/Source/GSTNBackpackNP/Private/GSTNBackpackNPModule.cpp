@@ -1,6 +1,7 @@
 // Backpacks, Network Prediction half (M11 L7b, L7c).
 
 #include "GSTN_BackpackDomeOutcome.h"
+#include "GSTN_BackpackDomePush.h"
 #include "GSTN_BackpackDomeSnapshot.h"
 #include "GSTN_BackpackSim.h"
 #include "GSTN_BackpackTickExtension.h"
@@ -15,6 +16,8 @@
  * M11 L7c, the dome blocks hits: the snapshot contributor (the dome, its shell and who stands in it), the attacker outcome Backpack.Dome
  * (a blocked melee hit recoils) and the event applier of the block. The BackpackDome step itself enters a rules asset through
  * UGSTN_BackpackContentLibrary::AddDomeStepToRules; without it the dome is only state.
+ *
+ * M11 L7d, the dome pushes back: the attacker push extension (a minion whose hit the dome blocked); a fighter is pushed by the tick extension.
  */
 class FGSTNBackpackNPModule : public IModuleInterface
 {
@@ -26,10 +29,12 @@ public:
 		FGSTN_SnapshotContributorRegistry::Get().Register(&Contributor);
 		FGSTN_AttackerOutcomeRegistry::Get().Register(&AttackerOutcome);
 		FGSTN_OutcomeApplierRegistry::Get().Register(&EventApplier);
+		FGSTN_AttackerPushRegistry::Get().Register(&DomePush);
 	}
 
 	virtual void ShutdownModule() override
 	{
+		FGSTN_AttackerPushRegistry::Get().Unregister(&DomePush);
 		FGSTN_OutcomeApplierRegistry::Get().Unregister(&EventApplier);
 		FGSTN_AttackerOutcomeRegistry::Get().Unregister(&AttackerOutcome);
 		FGSTN_SnapshotContributorRegistry::Get().Unregister(&Contributor);
@@ -42,6 +47,7 @@ private:
 	FGSTN_BackpackSnapshotContributor Contributor;
 	FGSTN_BackpackDomeAttackerOutcome AttackerOutcome;
 	FGSTN_BackpackDomeEventApplier EventApplier;
+	FGSTN_BackpackDomePush DomePush;
 };
 
 IMPLEMENT_MODULE(FGSTNBackpackNPModule, GSTNBackpackNP)

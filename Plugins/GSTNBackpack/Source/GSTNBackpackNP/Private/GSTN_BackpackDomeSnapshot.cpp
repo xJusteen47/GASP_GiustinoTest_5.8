@@ -106,6 +106,10 @@ void FGSTN_BackpackSnapshotContributor::Contribute(const FGSTN_SnapshotContribut
 		Ext.DomeCenter[1] = static_cast<float>(Center.Y);
 		Ext.DomeCenter[2] = static_cast<float>(Center.Z);
 		Ext.DomeRadiusCm = static_cast<float>(Radius);
+		// ReadDome found the fragment
+		const FGSTN_BackpackFragment& Fragment = *FGSTN_SyncFragmentList::Find<FGSTN_BackpackFragment>(*Context.Fragments);
+		Ext.PushSpeedQ = Fragment.DomePushSpeedQ;
+		Ext.PushPacked = static_cast<uint8>((Fragment.DomePushFrames & 0x7F) | (Fragment.DomePushDirection == EGSTN_DomePushDirection::BackAlongAttack ? 0x80 : 0));
 	}
 	if (!Ext.HasDome() && Ext.NumInside == 0)
 	{

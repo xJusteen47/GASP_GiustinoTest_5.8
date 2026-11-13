@@ -35,6 +35,20 @@ enum class EGSTN_DomeLifetime : uint8
 	Deploy
 };
 
+/**
+ * Which way the dome pushes back a melee attacker whose hit it blocked (owner 2026-11-13: the dome pushes back whoever hits it from outside).
+ * Both read the snapshot of the end of the previous frame, so every machine pushes the same way.
+ */
+UENUM(BlueprintType)
+enum class EGSTN_DomePushDirection : uint8
+{
+	/** Straight out of the dome, from its centre through the attacker (on the attacker's movement plane). Recommended default */
+	AwayFromCenter,
+
+	/** Back the way the attacker faced when it struck (minus its facing), whatever side of the dome it stood on */
+	BackAlongAttack
+};
+
 /** Number of memory slots a backpack has: a fixed small array so the state is plain integers on the wire */
 namespace GSTNBackpackMemory
 {
@@ -93,6 +107,23 @@ struct GSTNBACKPACKCORE_API FGSTN_BackpackDomeTrack : public FGSTN_TimelineTrack
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Dome", meta = (ClampMin = "1", ForceUnits = "Frames", EditCondition = "Lifetime == EGSTN_DomeLifetime::Deploy"))
 	int32 DurationFrames = 500;
 
+	/**
+	 * Speed the dome gives a melee attacker whose hit it blocked from outside, cm/s, fading to zero over PushbackFrames (a slide, like the
+	 * shield's pushback). 0 = no push, the attacker only recoils. Carried in steps of 10 cm/s, at most 2550
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Dome|Pushback", meta = (ClampMin = "0", ClampMax = "2550", ForceUnits = "cm/s"))
+	float PushbackSpeed = 700.f;
+
+	/** Frames the push lasts (simulation frames, 62.5 per second) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Dome|Pushback", meta = (ClampMin = "1", ClampMax = "127", ForceUnits = "Frames"))
+	int32 PushbackFrames = 12;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Dome|Pushback")
+	EGSTN_DomePushDirection PushbackDirection = EGSTN_DomePushDirection::AwayFromCenter;
+
+	/** PushbackSpeed in the 10 cm/s steps the state carries */
+	static constexpr float PushSpeedStep = 10.f;
+
 	static const FGSTN_BackpackDomeTrack* Find(const FGSTN_CombatTimelineData& Data);
 };
 
@@ -128,7 +159,7 @@ struct FGSTN_BackpackMemorySlot
  * Integers and frames only, written by FGSTN_BackpackStep (from the NP tick extension) and nowhere else. Timers are frames against stamps.
  * Wire format: nothing at the defaults; else a 5 bit mask (bit i = memory slot i not default, bit 4 = the dome) and the groups present:
  * a slot is spent 1, charges 1, refill 1, refill frames packed, refill from + 1 packed; the dome is start + 1 packed, until + 1 packed,
- * timeline packed, radius packed, lifetime 1, centre 3 x 4 (whole cm).
+ * timeline packed, radius packed, lifetime 1, centre 3 x 4 (whole cm), push speed 1, push frames and direction 1 (7 + 1 bits).
  */
 USTRUCT()
 struct GSTNBACKPACKCORE_API FGSTN_BackpackFragment : public FGSTN_SyncFragment
@@ -154,6 +185,11 @@ struct GSTNBACKPACKCORE_API FGSTN_BackpackFragment : public FGSTN_SyncFragment
 
 	/** Whole centimetres, world space */
 	FIntVector DomeCenter = FIntVector::ZeroValue;
+
+	/** The push back of an attacker it blocks (from the track): speed in FGSTN_BackpackDomeTrack::PushSpeedStep, frames, direction */
+	uint8 DomePushSpeedQ = 0;
+	uint8 DomePushFrames = 0;
+	EGSTN_DomePushDirection DomePushDirection = EGSTN_DomePushDirection::AwayFromCenter;
 
 	bool HasDome() const { return DomeStartFrame != INDEX_NONE; }
 

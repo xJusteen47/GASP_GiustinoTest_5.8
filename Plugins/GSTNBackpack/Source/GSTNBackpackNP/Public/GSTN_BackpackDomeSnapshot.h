@@ -37,6 +37,11 @@ struct GSTNBACKPACKNP_API FGSTN_BackpackSnapshotExt
 
 	uint8 NumInside = 0;
 
+	/** The dome's push back of a blocked attacker (M11 L7d), as the fragment carries it: speed in 10 cm/s steps, frames | direction << 7.
+	 *  These two bytes were the struct's padding, so the blob stays 40 bytes */
+	uint8 PushSpeedQ = 0;
+	uint8 PushPacked = 0;
+
 	/** Owner entity ids of the domes the root is in, ascending (the snapshot order); the first NumInside are set */
 	int32 InsideDomes[MaxInsideDomes] = { INDEX_NONE, INDEX_NONE, INDEX_NONE, INDEX_NONE };
 
@@ -58,6 +63,7 @@ struct GSTNBACKPACKNP_API FGSTN_BackpackSnapshotExt
 };
 
 static_assert(sizeof(FGSTN_BackpackSnapshotExt) <= FGSTN_SnapshotExtensionBlob::MaxBytes, "the backpack snapshot extension must fit a blob");
+static_assert(sizeof(FGSTN_BackpackSnapshotExt) == 40, "the push fields must stay in the padding");
 
 /**
  * Adds the backpack dome to the combat step snapshot (M11 L7c), feature id GSTNFeatureIds::Backpack:

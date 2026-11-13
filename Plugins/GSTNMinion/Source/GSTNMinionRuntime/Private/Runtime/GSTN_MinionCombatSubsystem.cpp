@@ -9,6 +9,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GSTN_CombatTags.h"
+#include "Simulation/GSTN_AttackerPush.h"
 #include "GSTN_MinionTags.h"
 #include "GSTNMinionCoreModule.h"
 #include "HAL/IConsoleManager.h"
@@ -2119,6 +2120,9 @@ void UGSTN_MinionCombatSubsystem::RunAttackQueries(int32 Slot, int32 Frame, cons
 
 	int32 LongestHitstop = 0;
 	bool bRicochet = false;
+	// The push back of the first bounced hit an optional plugin owns (M11 L7d: a backpack dome), launched once the frame's hits are done
+	bool bPushed = false;
+	FVector PushVelocity = FVector::ZeroVector;
 	int32 CurrentEntry = INDEX_NONE;
 	int32 HitsOnVictim = 0;
 	for (const FCandidate& Candidate : Candidates)
@@ -2179,6 +2183,17 @@ void UGSTN_MinionCombatSubsystem::RunAttackQueries(int32 Slot, int32 Frame, cons
 		FGSTN_HitPipelineRunner::MakeView(Rules, Context, ContextView);
 		const bool bHitRicochet = FGSTN_AttackerOutcomeRegistry::Get().Evaluate(Rules, ContextView) == EGSTN_AttackerHitOutcome::Ricochet;
 		bRicochet |= bHitRicochet;
+		if (bHitRicochet && !bPushed && !FGSTN_AttackerPushRegistry::Get().IsEmpty())
+		{
+			FGSTN_AttackerPushQuery PushQuery(Snapshot);
+			PushQuery.VictimId = Victim.EntityId;
+			PushQuery.HurtboxIndex = Candidate.HurtboxIndex;
+			PushQuery.AttackerRoot = Root.GetLocation();
+			PushQuery.AttackerFacing = AttackerFacing;
+			PushQuery.Up = Up;
+			int32 PushFrames = 0;
+			bPushed = FGSTN_AttackerPushRegistry::Get().GetPush(PushQuery, PushVelocity, PushFrames);
+		}
 		if (!bHitRicochet && Context.Outcome.bHasKnockback)
 		{
 			LongestHitstop = FMath::Max(LongestHitstop, FMath::Max(Context.Outcome.Knockback.AttackerHitstopFrames, 0));
@@ -2217,6 +2232,11 @@ void UGSTN_MinionCombatSubsystem::RunAttackQueries(int32 Slot, int32 Frame, cons
 	{
 		// No recoil timeline for minions yet: the move just stops (its cooldown applies)
 		CancelTimeline(Slot, Frame);
+		if (bPushed && !PushVelocity.IsNearlyZero())
+		{
+			// A ground slide with the minion's own push back deceleration (the frames of the push are a fighter's: a minion's slide fades by its settings)
+			LaunchMinion(Store.HandleOfSlot(Slot), PushVelocity, true);
+		}
 	}
 }
 

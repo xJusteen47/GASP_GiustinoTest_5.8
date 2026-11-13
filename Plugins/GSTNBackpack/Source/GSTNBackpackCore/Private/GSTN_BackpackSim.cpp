@@ -48,6 +48,9 @@ namespace GSTNBackpackSim
 		Fragment.DomeRadiusCm = 0;
 		Fragment.DomeLifetime = EGSTN_DomeLifetime::WhileHeld;
 		Fragment.DomeCenter = FIntVector::ZeroValue;
+		Fragment.DomePushSpeedQ = 0;
+		Fragment.DomePushFrames = 0;
+		Fragment.DomePushDirection = EGSTN_DomePushDirection::AwayFromCenter;
 	}
 }
 
@@ -82,7 +85,8 @@ bool FGSTN_BackpackFragment::IsDefault() const
 			return false;
 		}
 	}
-	return !HasDome() && DomeUntilFrame == INDEX_NONE && DomeTimeline == 0 && DomeRadiusCm == 0 && DomeCenter == FIntVector::ZeroValue;
+	return !HasDome() && DomeUntilFrame == INDEX_NONE && DomeTimeline == 0 && DomeRadiusCm == 0 && DomeCenter == FIntVector::ZeroValue
+		&& DomePushSpeedQ == 0 && DomePushFrames == 0 && DomePushDirection == EGSTN_DomePushDirection::AwayFromCenter;
 }
 
 bool FGSTN_BackpackFragment::operator==(const FGSTN_BackpackFragment& Other) const
@@ -95,7 +99,8 @@ bool FGSTN_BackpackFragment::operator==(const FGSTN_BackpackFragment& Other) con
 		}
 	}
 	return DomeStartFrame == Other.DomeStartFrame && DomeUntilFrame == Other.DomeUntilFrame && DomeTimeline == Other.DomeTimeline
-		&& DomeRadiusCm == Other.DomeRadiusCm && DomeLifetime == Other.DomeLifetime && DomeCenter == Other.DomeCenter;
+		&& DomeRadiusCm == Other.DomeRadiusCm && DomeLifetime == Other.DomeLifetime && DomeCenter == Other.DomeCenter
+		&& DomePushSpeedQ == Other.DomePushSpeedQ && DomePushFrames == Other.DomePushFrames && DomePushDirection == Other.DomePushDirection;
 }
 
 void FGSTN_BackpackFragment::NetSerialize(FArchive& Ar)
@@ -149,8 +154,14 @@ void FGSTN_BackpackFragment::NetSerialize(FArchive& Ar)
 		Ar << DomeCenter.X;
 		Ar << DomeCenter.Y;
 		Ar << DomeCenter.Z;
+		// Frames in the low 7 bits, the direction in the top one
+		uint8 PushPacked = static_cast<uint8>((DomePushFrames & 0x7F) | (DomePushDirection == EGSTN_DomePushDirection::BackAlongAttack ? 0x80 : 0));
+		Ar << DomePushSpeedQ;
+		Ar << PushPacked;
 		if (Ar.IsLoading())
 		{
+			DomePushFrames = PushPacked & 0x7F;
+			DomePushDirection = (PushPacked & 0x80) != 0 ? EGSTN_DomePushDirection::BackAlongAttack : EGSTN_DomePushDirection::AwayFromCenter;
 			DomeTimeline = static_cast<uint16>(FMath::Min<uint32>(Timeline, MAX_uint16));
 			DomeRadiusCm = static_cast<uint16>(FMath::Min<uint32>(Radius, MAX_uint16));
 			DomeLifetime = Lifetime == static_cast<uint8>(EGSTN_DomeLifetime::Deploy) ? EGSTN_DomeLifetime::Deploy : EGSTN_DomeLifetime::WhileHeld;
@@ -261,6 +272,9 @@ void FGSTN_BackpackStep::RaiseDome(FGSTN_BackpackFragment& Fragment, int32 Frame
 	const int32 Length = Track.Lifetime == EGSTN_DomeLifetime::Deploy ? Track.DurationFrames : TimelineFrames;
 	Fragment.DomeUntilFrame = Length > 0 ? Frame + Length : INDEX_NONE;
 	Fragment.DomeCenter = FIntVector(FMath::RoundToInt32(Center.X), FMath::RoundToInt32(Center.Y), FMath::RoundToInt32(Center.Z));
+	Fragment.DomePushSpeedQ = static_cast<uint8>(FMath::Clamp(FMath::RoundToInt32(Track.PushbackSpeed / FGSTN_BackpackDomeTrack::PushSpeedStep), 0, 255));
+	Fragment.DomePushFrames = static_cast<uint8>(FMath::Clamp(Track.PushbackFrames, 1, 127));
+	Fragment.DomePushDirection = Track.PushbackDirection;
 }
 
 void FGSTN_BackpackStep::GatherStateTags(const FGSTN_BackpackFragment* Fragment, FGameplayTagContainer& OutTags)
