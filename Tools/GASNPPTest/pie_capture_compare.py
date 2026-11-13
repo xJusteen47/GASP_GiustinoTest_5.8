@@ -24,6 +24,24 @@ GRIDS = [
 ]
 
 
+# Down-air set (--set=dair): the owner judges from BEHIND (the game camera) and from the SIDE, so every case has both. The aerial captures follow
+# the pawn (it stays in the centre of the review cameras), so the crop is a fixed box round the centre, not the moved pixels (the floor moves).
+# name, sequence, timeline index, view, first and last move frame, step, columns, crop (None = the whole picture)
+BODY = (105, 60, 375, 420)
+DAIR_GRIDS = [
+    ('cmp_whiff_side', 'dair_whiff', 0, PROFILE, 0, 42, 1, 11, BODY),
+    ('cmp_whiff_behind', 'dair_whiff', 0, 'az180', 0, 42, 1, 11, BODY),
+    ('cmp_whiff_game', 'dair_whiff', 0, GAME, 0, 42, 1, 11, None),
+    ('cmp_strike_side', 'dair_whiff', 0, PROFILE, 10, 21, 1, 12, BODY),
+    ('cmp_strike_behind', 'dair_whiff', 0, 'az180', 10, 21, 1, 12, BODY),
+    ('cmp_strike_front34', 'dair_whiff', 0, 'az45', 10, 21, 1, 12, BODY),
+    ('cmp_land_side', 'dair_land', 0, PROFILE, 10, 42, 1, 11, BODY),
+    ('cmp_land_game', 'dair_land', 0, GAME, 10, 42, 1, 11, None),
+]
+# name, view, crop: video frames round the hitstop of dair_hit
+DAIR_HIT_GRIDS = [('cmp_hit_side', PROFILE, BODY), ('cmp_hit_behind', 'az180', BODY), ('cmp_hit_game', GAME, None)]
+
+
 def move_rows(cap, seq, tl, lo, hi, step):
     """One row per wanted move frame (the nearest earlier row when the simulation skipped that frame), None when the capture has none"""
     if not os.path.exists(os.path.join(cap, seq, 'frames.jsonl')):
@@ -93,11 +111,15 @@ def _cell(cap, seq, view, row, crop, cw, ch, text):
     return img
 
 
-def build(blocks, seq_view, cols, out):
-    """blocks: [(title, capture dir, sequence, [(label text, row)])]; the crop is shared by all of them"""
+def build(blocks, seq_view, cols, out, crop='moved'):
+    """blocks: [(title, capture dir, sequence, [(label text, row)])]; the crop is shared by all of them ('moved' = the box of what moves,
+    None = the whole picture, or a fixed box)"""
     seq_view_first = Image.open(os.path.join(blocks[0][1], blocks[0][2], seq_view, 'f000.png'))
     size = seq_view_first.size[0]
-    crop = _crop_box([_moved_box(cap, seq, seq_view, rows) for _, cap, seq, rows in blocks], size)
+    if crop == 'moved':
+        crop = _crop_box([_moved_box(cap, seq, seq_view, rows) for _, cap, seq, rows in blocks], size)
+    elif crop is None:
+        crop = (0, 0, size, size)
     w, h = crop[2] - crop[0], crop[3] - crop[1]
     cw = MAX_PX // cols
     ch = round(cw * h / w)
@@ -138,6 +160,27 @@ def main():
     old, new, out_dir = args
     ol, nl = o.get('old-label', 'v2'), o.get('new-label', 'v3')
     os.makedirs(out_dir, exist_ok=True)
+    if o.get('set') == 'dair':
+        for name, seq, tl, view, lo, hi, step, cols, crop in DAIR_GRIDS:
+            blocks = []
+            for title, cap in ((ol, old), (nl, new)):
+                rows = move_rows(cap, seq, tl, lo, hi, step)
+                if rows is None or not os.path.isdir(os.path.join(cap, seq, view)):
+                    print(f'{name}: no {title} frames for {seq}, grid without them')
+                    continue
+                blocks.append((title, cap, seq, [(f'{title} {_label(r, k)}' if r else f'{title} f{k} -', r) for k, r in rows]))
+            build(blocks, view, cols, os.path.join(out_dir, name + '.jpg'), crop)
+        for name, view, crop in DAIR_HIT_GRIDS:
+            blocks = []
+            for title, cap in ((ol, old), (nl, new)):
+                rows = hit_rows(cap, 'dair_hit', 0, before=5, after=8)
+                if rows:
+                    blocks.append((title, cap, 'dair_hit', [(f'{title} {_label(r, video=True)}', r) for _, r in rows]))
+            if blocks:
+                build(blocks, view, min(max(len(b[3]) for b in blocks), 12), os.path.join(out_dir, name + '.jpg'), crop)
+            else:
+                print(f'{name}: no hitstop frame in dair_hit of either capture (the hit did not connect)')
+        return
     for name, seq, tl, view, lo, hi, step, cols in GRIDS:
         blocks = []
         for title, cap in ((ol, old), (nl, new)):

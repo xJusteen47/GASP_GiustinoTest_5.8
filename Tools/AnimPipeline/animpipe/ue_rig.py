@@ -22,11 +22,41 @@ def _rig_class(rig):
     return a.generated_class() if hasattr(a, "generated_class") else a
 
 
-def _new(name, cls, factory):
-    full = f"{DIR}/{name}"
+def _find_seq_path(name, folder=None):
+    if folder:
+        full = f"{folder}/LS_{name}"
+        if EAL.does_asset_exist(full):
+            return full
+    full = f"{DIR}/LS_{name}"
+    if EAL.does_asset_exist(full):
+        return full
+    subdirs = [
+        f"{DIR}/Overlord/Jab/Jab1", f"{DIR}/Overlord/Jab/Jab2", f"{DIR}/Overlord/Jab",
+        f"{DIR}/Overlord/Dropkick/Startup", f"{DIR}/Overlord/Dropkick/Loop", f"{DIR}/Overlord/Dropkick/Land", f"{DIR}/Overlord/Dropkick",
+        f"{DIR}/Overlord/FTilt", f"{DIR}/Overlord/DAir",
+        f"{DIR}/Pilot/Jab", f"{DIR}/Pilot/Tests"
+    ]
+    for sub in subdirs:
+        sub_full = f"{sub}/LS_{name}"
+        if EAL.does_asset_exist(sub_full):
+            return sub_full
+    try:
+        assets = EAL.list_assets(DIR, recursive=True, include_folder=False)
+        target = f"/LS_{name}."
+        for a in assets:
+            if target in str(a):
+                return str(a).split(".")[0]
+    except Exception:
+        pass
+    return full
+
+
+def _new(name, cls, factory, folder=DIR):
+    full = f"{folder}/{name}"
     if EAL.does_asset_exist(full):
         EAL.delete_asset(full)
-    return unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, DIR, cls, factory)
+    EAL.make_directory(folder)
+    return unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, folder, cls, factory)
 
 
 def _rig_section(binding):
@@ -36,12 +66,12 @@ def _rig_section(binding):
     return None, None
 
 
-def _sequence(anim, name, rate):
+def _sequence(anim, name, rate, folder=DIR):
     """Level Sequence with the mannequin as a spawnable and the source anim on it, open in Sequencer."""
     src = unreal.load_asset(anim)
     n = src.get_editor_property("number_of_sampled_frames") if hasattr(src, "number_of_sampled_frames") else None
     length = unreal.AnimationLibrary.get_sequence_length(src) if hasattr(unreal.AnimationLibrary, "get_sequence_length") else src.get_play_length()
-    seq = _new(f"LS_{name}", unreal.LevelSequence, unreal.LevelSequenceFactoryNew())
+    seq = _new(f"LS_{name}", unreal.LevelSequence, unreal.LevelSequenceFactoryNew(), folder=folder)
     seq.set_display_rate(rate)
     end = int(round(length * rate.numerator / rate.denominator))
     seq.set_playback_start(0); seq.set_playback_end(end)   # the export includes the end frame
@@ -97,6 +127,8 @@ def roundtrip(anim, rig, name, fps_num=60, fps_den=1, keep_frames=None, out=None
     # the spawnable only exists while the sequence is open: SequencerTools.export_anim_sequence finds no skel mesh
     res["export_ok"] = bool(unreal.ControlRigSequencerLibrary.export_anim_sequence_from_sequencer(dst, eo, binding, False))
     res["out_asset"] = dst.get_path_name().split(".")[0]
+    if res["export_ok"]:
+        res["ik_feet"] = _bake_ik_feet(dst)
     try:
         res["out_frames"] = dst.get_editor_property("number_of_sampled_keys")
     except Exception:
@@ -119,7 +151,11 @@ def _frame(k):
 
 # spacing profile -> (leave weight of the segment's first key, arrive weight of its last key) as a fraction of the
 # segment; None = smart auto tangents (no stop at the key). Weighted segments get flat tangents: their keys are pose hits.
-PROFILE_W = {"charge_long": (0.6, 0.12), "arrive_1_2": (0.12, 0.6), "hold_recoil": (1 / 3, 1 / 3), "limb_led_recovery": None}
+PROFILE_W = {"charge_long": (0.6, 0.12), "arrive_1_2": (0.12, 0.6), "hold_recoil": (1 / 3, 1 / 3), "limb_led_recovery": None,
+             # one-sided profiles (a None side leaves that key to the other segment, smart auto if both are None):
+             # ease_from = slow start out of a held key, then THROUGH the next key with no stop (heavy wind-up release);
+             # ease_into = through the first key with no stop, long soft arrival on the last one (FAF at near-zero speed).
+             "ease_from": (0.6, None), "ease_into": (None, 0.5)}
 # card part -> control name fragments (CR_Mannequin_Body); a part lags by shifting its interior keys later
 PIN_TOL = {"Location": 1.0, "Rotation": 2.0}                    # cm, degrees
 PART_CTRLS = {"chest": ("spine_05", "chest", "spine_04"), "head": ("head", "neck"), "forearm": ("lowerarm",), "hand": ("hand_",),
@@ -155,10 +191,10 @@ def _additive_sections(seq):
                         yield s
 
 
-def _read_manual(name, backup=None, card_copy=None):
+def _read_manual(name, backup=None, card_copy=None, folder=None):
     """{channel: [[frame, value, interp name, tangent mode name, arrive, leave], ...]} from the additive sections of the old
     LS_<name>; without the sequence the Saved backup JSON, then the copy in the card's git folder (animpipe capture)."""
-    full = f"{DIR}/LS_{name}"
+    full = _find_seq_path(name, folder)
     if not EAL.does_asset_exist(full):
         for f in (backup, card_copy):
             try:
@@ -216,8 +252,9 @@ def build(spec):
     planted IK feet to their first key. No per-frame keys are ever written."""
     rate = unreal.FrameRate(int(spec["fps_num"]), int(spec["fps_den"]))
     name = spec["name"]
-    manual = _read_manual(name, spec.get("manual_out"), spec.get("manual_in"))
-    seq, binding, end, length = _sequence(spec["source_anim"], name, rate)
+    folder = spec.get("folder") or (spec["anim"].rsplit("/", 1)[0] if ("anim" in spec and "/" in spec["anim"]) else DIR)
+    manual = _read_manual(name, spec.get("manual_out"), spec.get("manual_in"), folder=folder)
+    seq, binding, end, length = _sequence(spec["source_anim"], name, rate, folder=folder)
     seq.set_playback_end(end + 1)        # the rig bake stops before the playback end: without this the last frame has no key
     ok = unreal.ControlRigSequencerLibrary.bake_to_control_rig(_world(), seq, _rig_class(spec["rig"]), unreal.AnimSeqExportOption(),
                                                                 False, 0.001, binding)
@@ -294,6 +331,8 @@ def build(spec):
         for i, k in enumerate(keys):
             out_w = PROFILE_W.get(_seg_profile(segs, frames[i])) if i + 1 < len(keys) else None
             in_w = PROFILE_W.get(_seg_profile(segs, frames[i - 1])) if i else None
+            out_w = out_w if out_w and out_w[0] is not None else None      # one-sided profile: this side is not shaped
+            in_w = in_w if in_w and in_w[1] is not None else None
             k.set_interpolation_mode(unreal.RichCurveInterpMode.RCIM_CUBIC)
             if out_w is None and in_w is None:
                 k.set_tangent_mode(unreal.RichCurveTangentMode.RCTM_SMART_AUTO)
@@ -313,7 +352,7 @@ def build(spec):
     res["manual"] = _apply_manual(track, end, manual, spec.get("manual_out"))
     skel = unreal.load_asset(spec["source_anim"]).get_editor_property("skeleton")
     fac = unreal.AnimSequenceFactory(); fac.set_editor_property("target_skeleton", skel)
-    dst = _new(f"AS_{name}", unreal.AnimSequence, fac)
+    dst = _new(f"AS_{name}", unreal.AnimSequence, fac, folder=folder)
     eo = unreal.AnimSeqExportOption()
     eo.set_editor_property("use_custom_frame_rate", True); eo.set_editor_property("custom_frame_rate", rate)
     res["export_ok"] = bool(unreal.ControlRigSequencerLibrary.export_anim_sequence_from_sequencer(dst, eo, binding, False))
@@ -321,6 +360,8 @@ def build(spec):
     res["out_length"] = dst.get_play_length()
     if spec.get("lock_lengths", True):
         res["lock_lengths"] = _lock_lengths(dst, unreal.load_asset(spec["source_anim"]))
+    if res["export_ok"]:
+        res["ik_feet"] = _bake_ik_feet(dst)      # after the length lock, so the ik bones match the final feet
     EAL.save_asset(seq.get_path_name().split(".")[0]); EAL.save_asset(res["out_asset"])
     unreal.LevelSequenceEditorBlueprintLibrary.close_level_sequence()
     if spec.get("out"):
@@ -359,9 +400,44 @@ def _lock_lengths(dst, src):
     return {"bones": done, "removed_max_cm": round(worst, 3), "at": wb, "over_0.1": big, "frames": n}
 
 
+def _bake_ik_feet(dst):
+    """ik_foot_l/r follow the feet on every frame of the exported clip. The body rig does not drive the ik bones, so the
+    export left them at the reference pose; the game's animation Blueprint places the feet ON those bones, so in Play the
+    legs did not follow the clip (seen 2026-11-12: dair legs hanging in the tuck, the jab's "squat"). Each ik bone gets
+    its foot's component-space transform, local to ik_foot_root. Derived from the FK bones: a rebuild writes the same keys."""
+    try:
+        n = int(dst.get_editor_property("number_of_sampled_keys"))
+        step = dst.get_play_length() / max(n - 1, 1)
+        opts = unreal.AnimPoseEvaluationOptions()
+        APE, WORLD = unreal.AnimPoseExtensions, unreal.AnimPoseSpaces.WORLD
+        keys = {s: ([], [], []) for s in "lr"}
+        for i in range(n):
+            pose = APE.get_anim_pose_at_time(dst, i * step, opts)
+            root = APE.get_bone_pose(pose, "ik_foot_root", WORLD)
+            for s in "lr":
+                local = unreal.MathLibrary.make_relative_transform(APE.get_bone_pose(pose, f"foot_{s}", WORLD), root)
+                keys[s][0].append(local.translation); keys[s][1].append(local.rotation); keys[s][2].append(unreal.Vector(1.0, 1.0, 1.0))
+        ctrl = dst.get_editor_property("controller")
+        ctrl.open_bracket(unreal.Text("animpipe bake ik_foot from the feet"), False)
+        for s in "lr":
+            ctrl.remove_bone_track(f"ik_foot_{s}", False)
+            ctrl.add_bone_curve(f"ik_foot_{s}", False)
+            ctrl.set_bone_track_keys(f"ik_foot_{s}", keys[s][0], keys[s][1], keys[s][2], False)
+        ctrl.close_bracket(False)
+        worst = 0.0
+        for i in (0, n // 2, n - 1):
+            pose = APE.get_anim_pose_at_time(dst, i * step, opts)
+            for s in "lr":
+                worst = max(worst, APE.get_bone_pose(pose, f"ik_foot_{s}", WORLD).translation.distance(
+                    APE.get_bone_pose(pose, f"foot_{s}", WORLD).translation))
+        return {"frames": n, "ik_to_foot_max_cm": round(worst, 3)}
+    except Exception as e:
+        return {"error": repr(e)[:300]}
+
+
 def probe(name, out=None):
     """Channel names, key counts and value spans on the rig track of LS_<name>, for writing card edits."""
-    seq = unreal.load_asset(f"{DIR}/LS_{name}")
+    seq = unreal.load_asset(_find_seq_path(name))
     unreal.LevelSequenceEditorBlueprintLibrary.open_level_sequence(seq)
     res = {}
     for b in seq.get_spawnables() + seq.get_possessables():
@@ -386,7 +462,7 @@ def probe(name, out=None):
 def tangent_probe(name, out=None):
     """On the rig track of LS_<name>: pick hand_l_ctrl Location X (or the first float channel with 2+ keys), set user cubic
     tangents and weights on two keys, read them back and sample the curve at 240 fps between them."""
-    seq = unreal.load_asset(f"{DIR}/LS_{name}")
+    seq = unreal.load_asset(_find_seq_path(name))
     unreal.LevelSequenceEditorBlueprintLibrary.open_level_sequence(seq)
     res = {}
     for b in seq.get_spawnables() + seq.get_possessables():
