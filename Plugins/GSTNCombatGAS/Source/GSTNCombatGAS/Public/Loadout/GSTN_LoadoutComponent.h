@@ -7,6 +7,7 @@
 #include "GameplayAbilitySpecHandle.h"
 #include "Loadout/GSTN_CompiledBindingTable.h"
 #include "Loadout/GSTN_LoadoutAssembly.h"
+#include "Loadout/GSTN_LoadoutChoices.h"
 #include "Loadout/GSTN_LoadoutData.h"
 #include "UObject/PrimaryAssetId.h"
 #include "UObject/StrongObjectPtr.h"
@@ -142,6 +143,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat|Loadout")
 	TSoftClassPtr<UObject> GetNextSpecial(int32 WeaponIndex, FGameplayTag Command, int32 Step = 1) const;
 
+	/**
+	 * The rows of the loadout screen for Draft (FGSTN_LoadoutChoiceRegistry: kit, specials, and what optional plugins add), each option
+	 * judged exactly as AcceptLoadout would (ValidateLoadout) when bValidate. Client or server, outside the simulation. It resolves assets
+	 * synchronously, so a screen calls it once per pick, never per tick
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
+	void GatherChoices(const FGSTN_LoadoutData& Draft, TArray<FGSTN_LoadoutChoiceRow>& OutRows, bool bValidate = true) const;
+
 	UFUNCTION(BlueprintPure, Category = "Combat|Loadout")
 	const FGSTN_LoadoutData& GetApplied() const { return Applied; }
 
@@ -182,6 +191,12 @@ protected:
 	 * a test or a game with its own content source can answer without the Asset Manager.
 	 */
 	virtual UObject* ResolveAsset(const FPrimaryAssetId& Id) const;
+
+	/** The ids of a primary asset type the loadout screen offers (GatherChoices). Default: the Asset Manager's list */
+	virtual void ListAssetIds(const FPrimaryAssetType& Type, TArray<FPrimaryAssetId>& OutIds) const;
+
+	/** Every asset of Class or a child class, for screen rows on content the Asset Manager does not scan (mods, backpacks). Default: the asset registry */
+	virtual void ListAssetsOfClass(const UClass* Class, TArray<FSoftObjectPath>& OutPaths) const;
 
 	/**
 	 * The ability system the loadout is granted on: the pawn's of the PlayerState this component sits on, or the owner's own if

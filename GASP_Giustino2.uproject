@@ -178,6 +178,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNLoadoutMenu",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNCombatNP",
 			"Enabled": true
 		},

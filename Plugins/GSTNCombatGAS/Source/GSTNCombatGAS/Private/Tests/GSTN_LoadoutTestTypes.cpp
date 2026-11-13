@@ -6,6 +6,30 @@ UObject* UGSTN_TestLoadoutComponent::ResolveAsset(const FPrimaryAssetId& Id) con
 	return Found ? *Found : nullptr;
 }
 
+void UGSTN_TestLoadoutComponent::ListAssetIds(const FPrimaryAssetType& Type, TArray<FPrimaryAssetId>& OutIds) const
+{
+	OutIds.Reset();
+	for (const TPair<FPrimaryAssetId, UObject*>& Pair : Assets)
+	{
+		if (Pair.Key.PrimaryAssetType == Type)
+		{
+			OutIds.Add(Pair.Key);
+		}
+	}
+}
+
+void UGSTN_TestLoadoutComponent::ListAssetsOfClass(const UClass* Class, TArray<FSoftObjectPath>& OutPaths) const
+{
+	OutPaths.Reset();
+	for (UObject* Object : ClassAssets)
+	{
+		if (Object && Class && Object->IsA(Class))
+		{
+			OutPaths.Add(FSoftObjectPath(Object));
+		}
+	}
+}
+
 UAbilitySystemComponent* UGSTN_TestLoadoutComponent::GetTargetAbilitySystem() const
 {
 	return Target;

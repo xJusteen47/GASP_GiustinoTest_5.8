@@ -4,6 +4,7 @@
 #include "Abilities/GameplayAbility.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
+#include "AssetRegistry/IAssetRegistry.h"
 #include "Effects/GSTN_GE_WeaponStats.h"
 #include "Engine/AssetManager.h"
 #include "Engine/World.h"
@@ -111,6 +112,66 @@ UObject* UGSTN_LoadoutComponent::ResolveAsset(const FPrimaryAssetId& Id) const
 	}
 	const FSoftObjectPath Path = UAssetManager::Get().GetPrimaryAssetPath(Id);
 	return Path.IsValid() ? Path.TryLoad() : nullptr;
+}
+
+void UGSTN_LoadoutComponent::ListAssetIds(const FPrimaryAssetType& Type, TArray<FPrimaryAssetId>& OutIds) const
+{
+	OutIds.Reset();
+	if (UAssetManager::IsInitialized())
+	{
+		UAssetManager::Get().GetPrimaryAssetIdList(Type, OutIds);
+	}
+}
+
+void UGSTN_LoadoutComponent::ListAssetsOfClass(const UClass* Class, TArray<FSoftObjectPath>& OutPaths) const
+{
+	OutPaths.Reset();
+	if (!Class)
+	{
+		return;
+	}
+	TArray<FAssetData> Assets;
+	IAssetRegistry::GetChecked().GetAssetsByClass(Class->GetClassPathName(), Assets, true);
+	for (const FAssetData& Data : Assets)
+	{
+		OutPaths.Add(Data.GetSoftObjectPath());
+	}
+	OutPaths.Sort([](const FSoftObjectPath& A, const FSoftObjectPath& B) { return A.ToString() < B.ToString(); });
+}
+
+void UGSTN_LoadoutComponent::GatherChoices(const FGSTN_LoadoutData& Draft, TArray<FGSTN_LoadoutChoiceRow>& OutRows, bool bValidate) const
+{
+	TArray<TStrongObjectPtr<UObject>> Hold;
+	FGSTN_ResolvedLoadout DraftResolved;
+	ResolveLoadout(Draft, DraftResolved, Hold);
+
+	// Named callables: the context holds references to them
+	auto ListIds = [this](const FPrimaryAssetType& Type, TArray<FPrimaryAssetId>& OutIds) { ListAssetIds(Type, OutIds); };
+	auto Resolve = [this, &Hold](const FPrimaryAssetId& Id) -> UObject*
+	{
+		UObject* Object = ResolveAsset(Id);
+		if (Object)
+		{
+			Hold.Emplace(Object);
+		}
+		return Object;
+	};
+	auto ListOfClass = [this](const UClass* Class, TArray<FSoftObjectPath>& OutPaths) { ListAssetsOfClass(Class, OutPaths); };
+	const FGSTN_LoadoutChoiceContext Context{ Draft, DraftResolved, ListIds, Resolve, ListOfClass };
+	FGSTN_LoadoutChoiceRegistry::Gather(Context, OutRows);
+	if (!bValidate)
+	{
+		return;
+	}
+	TArray<FString> Errors;
+	for (FGSTN_LoadoutChoiceRow& Row : OutRows)
+	{
+		for (FGSTN_LoadoutChoiceOption& Option : Row.Options)
+		{
+			Option.bValid = ValidateLoadout(Option.Result, Errors);
+			Option.Problem = Option.bValid || Errors.IsEmpty() ? FString() : Errors[0];
+		}
+	}
 }
 
 UAbilitySystemComponent* UGSTN_LoadoutComponent::GetTargetAbilitySystem() const

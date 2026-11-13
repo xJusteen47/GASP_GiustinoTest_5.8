@@ -28,6 +28,7 @@
 #include "Timeline/GSTN_TimelinePlayer.h"
 #include "World/GSTN_StepSnapshot.h"
 #include "MoverSimulationTypes.h"
+#include "Input/GSTN_InputConfigSource.h"
 #include "GSTN_CombatSimComponent.generated.h"
 
 enum class EGSTN_SupportWeaponStats : uint8;
@@ -80,7 +81,7 @@ struct FGSTN_TrackHookEnvironment;
  */
 UCLASS(ClassGroup = (Combat), Blueprintable, meta = (BlueprintSpawnableComponent))
 class GSTNCOMBATNP_API UGSTN_CombatSimComponent : public UNetworkPredictionComponent, public IGSTN_InputSimHost, public IGSTN_CommandSourceInterface, public IGSTN_SnapshotSource, public IGSTN_CombatTickServices,
-	public IMoverInputProducerInterface
+	public IMoverInputProducerInterface, public IGSTN_InputConfigSource
 {
 	GENERATED_BODY()
 
@@ -456,6 +457,9 @@ public:
 
 	/** The input config resolved at setup (InputConfig), null before BeginPlay or without one. For presentation that reads the same actions */
 	const UGSTN_InputConfig* GetActiveInputConfig() const { return ActiveInputConfig; }
+
+	/** IGSTN_InputConfigSource: the active config, for local presentation outside the simulation (the loadout screen) */
+	virtual const UGSTN_InputConfig* GetPlayerInputConfig() const override { return ActiveInputConfig; }
 
 	/**
 	 * The stats effect of each weapon the combatant can switch to, in loadout order (0 = primary). A weapon switch track of a

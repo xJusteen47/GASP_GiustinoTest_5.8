@@ -19,6 +19,7 @@
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Kits/GSTN_WeaponDefinition.h"
 #include "Loadout/GSTN_LoadoutComponent.h"
+#include "Loadout/GSTN_LoadoutDraft.h"
 #include "Loadout/GSTN_LoadoutExtensions.h"
 #include "Loadout/GSTN_LoadoutModeRules.h"
 #include "Misc/ScopeExit.h"
@@ -564,6 +565,69 @@ bool FGSTN_LoadoutKitSwapMetersTest::RunTest(const FString& Parameters)
 	ASC.SetNumericAttributeBase(Ex, 80.f);
 	TestFalse(TEXT("- an unknown kit is refused"), Component.AcceptKitSwap(Fixture.RequestKit(TEXT("Missing")), Errors));
 	TestEqual(TEXT("the meter did not move"), ASC.GetNumericAttributeBase(Ex), 80.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LoadoutScreenTest, "GSTNCombat.GAS.Loadout.Screen", LoadoutComponentTestFlags)
+bool FGSTN_LoadoutScreenTest::RunTest(const FString& Parameters)
+{
+	// M11 loadout screen: the rows come from data (kits, the weapon's special alternatives, registered providers), options the rules
+	// refuse are skipped, and nothing reaches the server until the screen sends the draft
+	FLoadoutFixture Fixture;
+	const FGameplayTag Special = GSTNCommandTags::Special_Neutral.GetTag();
+	Fixture.Weapon->AllowedAlternatives.Add(Special).Abilities = { AbilityB() };
+	UGSTN_TestLoadoutComponent& Component = *Fixture.Component;
+	Component.Assets.Add(KitId(TEXT("KitC")), nullptr);
+
+	TArray<FGSTN_LoadoutChoiceRow> Rows;
+	Component.GatherChoices(Fixture.RequestKit(TEXT("KitA")), Rows);
+	TestEqual(TEXT("kit A: a kit row and one special row"), Rows.Num(), 2);
+	if (Rows.Num() != 2)
+	{
+		return false;
+	}
+	TestEqual(TEXT("the kit row comes first"), Rows[0].Id, FName(TEXT("Kit")));
+	TestEqual(TEXT("three kits offered"), Rows[0].Options.Num(), 3);
+	TestEqual(TEXT("kit A is the selected kit"), Rows[0].Selected, 0);
+	TestFalse(TEXT("the missing kit C is refused by the rules"), Rows[0].Options[2].bValid);
+	TestFalse(TEXT("with a finding to show"), Rows[0].Options[2].Problem.IsEmpty());
+	TestEqual(TEXT("special row: the weapon's own and B"), Rows[1].Options.Num(), 2);
+	TestEqual(TEXT("the weapon's own is selected"), Rows[1].Selected, 0);
+
+	// A plugin's rows sit by priority between the kit (0) and the specials (100)
+	{
+		FGSTN_LoadoutChoiceRegistry::Register(TEXT("Test.Screen"), 50, [](const FGSTN_LoadoutChoiceContext& Context, TArray<FGSTN_LoadoutChoiceRow>& OutRows)
+		{
+			FGSTN_LoadoutChoiceRow& Row = OutRows.AddDefaulted_GetRef();
+			Row.Id = TEXT("Test");
+			Row.Options.AddDefaulted_GetRef().Result = Context.Draft;
+		});
+		ON_SCOPE_EXIT { FGSTN_LoadoutChoiceRegistry::Unregister(TEXT("Test.Screen")); };
+		Component.GatherChoices(Fixture.RequestKit(TEXT("KitA")), Rows, false);
+		TestEqual(TEXT("three rows with the provider"), Rows.Num(), 3);
+		TestTrue(TEXT("the provider's row is in the middle"), Rows.Num() == 3 && Rows[1].Id == FName(TEXT("Test")));
+	}
+
+	// The draft: starts on the first kit the rules accept, cycles skipping refused options
+	FGSTN_LoadoutDraft Draft;
+	Draft.Begin(Component, FGSTN_LoadoutData());
+	TestTrue(TEXT("an empty start takes kit A"), Draft.GetData().PrimaryKit == KitId(TEXT("KitA")));
+	TestTrue(TEXT("and is valid"), Draft.IsValid());
+	TestTrue(TEXT("cursor down to the special"), Draft.MoveCursor(1) && Draft.GetCursor() == 1);
+	TestTrue(TEXT("right picks B"), Draft.Cycle(1));
+	TestTrue(TEXT("B is in the draft"), Draft.GetData().SlotCustomisations.Num() == 1 && Draft.GetData().SlotCustomisations[0].AlternativeAbility == TSoftClassPtr<UObject>(AbilityB().ToSoftObjectPath()));
+	TestTrue(TEXT("right again wraps to the weapon's own"), Draft.Cycle(1) && Draft.GetData().SlotCustomisations.IsEmpty());
+	TestTrue(TEXT("cursor up wraps... to the kit row"), Draft.MoveCursor(-1) && Draft.GetCursor() == 0);
+	TestTrue(TEXT("right picks kit B"), Draft.Cycle(1) && Draft.GetData().PrimaryKit == KitId(TEXT("KitB")));
+	TestEqual(TEXT("kit B has no weapon: only the kit row"), Draft.GetRows().Num(), 1);
+	TestTrue(TEXT("right skips the refused kit C and wraps to kit A"), Draft.Cycle(1) && Draft.GetData().PrimaryKit == KitId(TEXT("KitA")));
+	TestTrue(TEXT("left goes back to kit B, skipping C"), Draft.Cycle(-1) && Draft.GetData().PrimaryKit == KitId(TEXT("KitB")));
+	TestEqual(TEXT("nothing was sent"), Component.GetRevision(), 0);
+
+	// Started from a saved loadout whose kit is gone: the first valid kit instead
+	FGSTN_LoadoutDraft Stale;
+	Stale.Begin(Component, Fixture.RequestKit(TEXT("KitC")));
+	TestTrue(TEXT("a stale start falls back to kit A"), Stale.GetData().PrimaryKit == KitId(TEXT("KitA")));
 	return true;
 }
 
