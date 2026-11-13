@@ -72,6 +72,9 @@ di una mossa con gli effetti: lato gioco, non animazione.
   3. Jab 2: sì a passo col sinistro e pugno dopo il tremore, ma "non farei il passo troppo lungo, vorrei che poi il personaggio in idle
      ritornasse indietro sufficientemente". Quindi passo di 15-20 cm (non 30) e nel recovery il corpo torna indietro: a fine mossa
      lo spostamento netto è piccolo (proposta mia: 5 cm o meno). Scrivi nell'handover i cm scelti.
+     Chiarimento 23:35Z: "non voglio che il jab avanzi troppo. Dopo la mossa il personaggio dovrebbe restare bene o male dove era
+     prima, e non troppo avanti, come fanno molti giochi con attacchi effetto magnete". Niente avanzamento che resta: la capsula a
+     fine mossa è dove era all'inizio, a meno di pochi cm. Vale come regola per tutti gli attacchi a terra, salvo sua indicazione.
 - Richiesta nuova dell'owner, lato gioco (non animazione): capsula di collisione che si restringe durante alcuni attacchi e quando si è
   lanciati, come la ECB di Smash; serve per il dropkick. Il coordinatore la passa al thread di gameplay. Le pose non la compensano.
 
