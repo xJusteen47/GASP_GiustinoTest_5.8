@@ -438,6 +438,7 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 	{
 		// A revision's loadout never changes; a repeated apply (a pawn that was set again) has nothing new. Under other GameRules (IO-2b:
 		// the server's pick arrived after this table was built) the same revision compiles to other buttons and replaces the set
+		DemandAppliedRevision(Revision);
 		return;
 	}
 
@@ -461,6 +462,24 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 		Set->RulesSerial = RulesSerial;
 	}
 	RegisterTableSet(Set);
+	DemandAppliedRevision(Revision);
+}
+
+void UGSTN_CombatSimComponent::DemandAppliedRevision(int32 Revision)
+{
+	// Every accept path ends here on the server (ServerApplyLoadoutChange, the loadout screen's request, a kit taken from the ground, a
+	// grant from the PlayerState): the simulation must be told to run the new table, or it keeps the old revision's table while the old
+	// abilities are gone and the kit does nothing (owner playtest 2026-11-13: no attack, no pickup after a kit change). The table set is
+	// registered above, so the demand never names a table this machine lacks. A write of the same value is skipped
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (Sync && Sync->Core.LoadoutRevision != static_cast<uint16>(Revision))
+	{
+		ServerWriteLoadoutRevision(static_cast<uint16>(Revision));
+	}
 }
 
 void UGSTN_CombatSimComponent::SetScriptedButtons(int32 Mask)

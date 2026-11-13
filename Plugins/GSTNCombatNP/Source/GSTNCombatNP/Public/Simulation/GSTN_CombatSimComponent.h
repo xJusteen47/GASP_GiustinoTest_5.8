@@ -525,6 +525,9 @@ public:
 	 */
 	bool ServerWriteLoadoutRevision(uint16 Revision);
 
+	/** Server: ServerWriteLoadoutRevision(Revision) unless the sync state already demands it. Called once a revision's table set is registered */
+	void DemandAppliedRevision(int32 Revision);
+
 	/**
 	 * Server only, from outside the simulation: a kit change by pickup (combat-m3 direction of 2026-10-23). Judges the loadout first
 	 * (a refused one changes nothing, the running timeline included), then ends the running timeline (its ability and the action
