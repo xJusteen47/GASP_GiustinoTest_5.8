@@ -124,6 +124,15 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Combat|Loadout")
 	bool AcceptSpecialSwap(int32 WeaponIndex, FGameplayTag Command, const TSoftClassPtr<UObject>& Alternative, TArray<FString>& OutErrors);
 
+	/**
+	 * Server: what applies a loadout a client asked for (ServerRequestLoadout, ServerRequestSpecialSwap). The combat simulation sets it when
+	 * it binds this component (UGSTN_CombatSimComponent::ServerApplyLoadoutChange): it clears the running move and moves the simulation's
+	 * demanded table revision along with the accept. Unset (no simulation on the pawn) the request goes to AcceptLoadout. Without it the
+	 * loadout screen's pick was granted but the simulation kept the old kit's table, so attacks and pickups did nothing (2026-11-13)
+	 */
+	using FServerLoadoutApplier = TFunction<bool(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors)>;
+	void SetServerLoadoutApplier(FServerLoadoutApplier InApplier) { ServerLoadoutApplier = MoveTemp(InApplier); }
+
 	/** Base with the customisation of (WeaponIndex, Command) set to Alternative, or removed when Alternative is null. Pure */
 	UFUNCTION(BlueprintPure, Category = "Combat|Loadout")
 	static FGSTN_LoadoutData WithSpecial(const FGSTN_LoadoutData& Base, int32 WeaponIndex, FGameplayTag Command, const TSoftClassPtr<UObject>& Alternative);
@@ -205,6 +214,11 @@ protected:
 	virtual UAbilitySystemComponent* GetTargetAbilitySystem() const;
 
 private:
+	/** AcceptLoadout through ServerLoadoutApplier when one is set */
+	bool ApplyRequested(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors);
+
+	FServerLoadoutApplier ServerLoadoutApplier;
+
 	UFUNCTION()
 	void OnRep_Applied();
 

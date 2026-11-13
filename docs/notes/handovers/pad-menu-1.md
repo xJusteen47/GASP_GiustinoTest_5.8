@@ -16,8 +16,13 @@ Likely the empty-context menu was already "open". `GSTN.LoadoutMenu` now prints 
 **Loadout debug pad (new)**: `AGSTN_LoadoutMenuPad` (C++, distance check, local players only), placed at Play from the rules' `Pads` list
 (`DefaultGSTNLoadoutMenu.ini`: hub (1200, 1800), next to the hitbox pad); no map saved. Opens the menu as a bare text list (rows with
 index/count, applied kit, verdict). Also `GSTN.LoadoutMenuDebug`. Screenshot checked once.
+**Menu pick not reaching the simulation (fixed, 2nd commit)**: `ServerRequestLoadout` only ran `AcceptLoadout`: abilities granted, but the
+combat sim kept the old revision's table (no `ServerWriteLoadoutRevision`), so X/Y/grab/pickup did nothing after a menu pick. The sim now
+sets `UGSTN_LoadoutComponent::SetServerLoadoutApplier` -> `ServerApplyLoadoutChange` (also for special swaps). PIE: menu-path MEDIUM X 0 -> 7.
+Light/Medium/Heavy have no RT binding (only KIT_Example, KIT_Test_Ranger with reticle): owner asked whether to add one. Hub "two rows" =
+front kit row at x 800 (no pads) behind which the pad row at x 1200 shows through; not a duplicate.
 **test_hub watcher**: `_pad_check` skips players without a snapshot entry (pawn switched, client not replicated) instead of raising each tick.
-**Gates**: build ok; headless GSTN **1584/0**, 0 ensures (`Saved/PadMenu/headless.log`). PIE checks above on standalone + listen 1 client. Harness suite not run (local input only).
+**Gates**: build ok; headless GSTN **1584/0**, 0 ensures (both commits) (`Saved/PadMenu/headless.log`). PIE checks above on standalone + listen 1 client. Harness suite not run (local input only).
 **Owner**: push this branch to feature; desktop `_ue59` needs his editor closed to pull + build (ask first).
 Not done: menu mouse/keyboard beyond the copied keys; `PM_BoostJump`/`PM_ThrowRider` show modified right after checkout (LFS), not committed.
 Cost: ~180k context, Opus, no subagents; estimated ~$15-20.

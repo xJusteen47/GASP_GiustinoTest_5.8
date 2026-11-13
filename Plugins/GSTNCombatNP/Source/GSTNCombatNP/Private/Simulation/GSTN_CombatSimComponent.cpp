@@ -351,9 +351,22 @@ void UGSTN_CombatSimComponent::BindLoadoutComponent(UGSTN_LoadoutComponent* Load
 	if (UGSTN_LoadoutComponent* Old = BoundLoadout.Get())
 	{
 		Old->OnLoadoutApplied.RemoveDynamic(this, &UGSTN_CombatSimComponent::HandleLoadoutApplied);
+		Old->SetServerLoadoutApplier(nullptr);
 	}
 	BoundLoadout = Loadout;
 	Loadout->OnLoadoutApplied.AddUniqueDynamic(this, &UGSTN_CombatSimComponent::HandleLoadoutApplied);
+	// A client's request (the loadout screen) goes through the same server path as every other change: the table revision moves with it
+	Loadout->SetServerLoadoutApplier([WeakThis = TWeakObjectPtr<UGSTN_CombatSimComponent>(this), WeakLoadout = TWeakObjectPtr<UGSTN_LoadoutComponent>(Loadout)]
+		(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors)
+	{
+		UGSTN_CombatSimComponent* This = WeakThis.Get();
+		UGSTN_LoadoutComponent* Target = WeakLoadout.Get();
+		if (!This || !Target)
+		{
+			return Target ? Target->AcceptLoadout(Requested, OutErrors) : false;
+		}
+		return This->ServerApplyLoadoutChange(Target, Requested, OutErrors);
+	});
 
 	// A loadout that was applied before this component looked (the client's OnRep ran when the component replicated in)
 	if (Loadout->HasLoadout())
