@@ -64,5 +64,16 @@ di una mossa con gli effetti: lato gioco, non animazione.
   finché non c'è, le clip si guardano nella vetrina Z6 dell'hub (`build_test_hub_map.py`, SkeletalMeshActor in loop) e con cattura.
 - Capsula: a terra il corpo è sdraiato ma la capsula resta in piedi. È lato gioco: segnalalo, non compensarlo nelle pose.
 - Scelte mie da confermare (owner): rotolata con una clip sola e personaggio girato verso lo stick (non 4 clip); a terra sempre supino.
-- Domande aperte all'owner (poste 11-13 23:33Z, se non risponde vale il consigliato): dropkick = chi lo usa atterra di schiena e resta a
-  terra (sì); jab 1 colpisce in diagonale per vedersi da dietro (sì); jab 2 passo 30 cm col sinistro e pugno dopo il tremore (tengo).
+- **Risposte dell'owner (11-13 23:34Z):**
+  1. Dropkick: sì, chi lo usa atterra di schiena e resta a terra. "Sta in Antigravity di base": pose e clip di partenza sono nel
+     worktree di Antigravity sul fisso (`C:\Users\jacop\.gemini\antigravity\worktrees\GASP_Giustino2_feature\animate_3d_moves_unreal`,
+     sola lettura: non modificarlo). Guardale prima di scrivere pose nuove.
+  2. Jab 1: sì, contatto in diagonale così il braccio si vede da dietro.
+  3. Jab 2: sì a passo col sinistro e pugno dopo il tremore, ma "non farei il passo troppo lungo, vorrei che poi il personaggio in idle
+     ritornasse indietro sufficientemente". Quindi passo di 15-20 cm (non 30) e nel recovery il corpo torna indietro: a fine mossa
+     lo spostamento netto è piccolo (proposta mia: 5 cm o meno). Scrivi nell'handover i cm scelti.
+- Richiesta nuova dell'owner, lato gioco (non animazione): capsula di collisione che si restringe durante alcuni attacchi e quando si è
+  lanciati, come la ECB di Smash; serve per il dropkick. Il coordinatore la passa al thread di gameplay. Le pose non la compensano.
+
+## Costo della preparazione (thread cloud, 11-13)
+Fable ~150k token di contesto, 1 subagente Sonnet di ricerca (~60k token). Nessun editor usato, nessuna animazione costruita.
