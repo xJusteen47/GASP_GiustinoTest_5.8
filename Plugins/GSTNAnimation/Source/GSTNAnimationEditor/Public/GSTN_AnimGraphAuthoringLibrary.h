@@ -95,6 +95,25 @@ public:
 	static bool InsertOverrideLayerBlend(UAnimBlueprint* AnimBlueprint, UAnimBlueprint* LayerInterface, FName LayerName, FName ActiveVariable,
 		FName BlendTimeVariable, bool bInertialization, const FString& InsertBeforeNodeClass);
 
+	/**
+	 * A pose node of class NodeClassPath (e.g. "/Script/ControlRigDeveloper.AnimGraphNode_ControlRig") right in front of Graph's result
+	 * (Output Pose of an anim or layer graph): whatever fed the result now feeds the new node's pose input. NodeMembers sets members of the
+	 * node's runtime struct from their text form (e.g. "ControlRigClass" -> the class path, "InputMapping" -> a map in text form),
+	 * then the node is reconstructed so pins that depend on them appear. Found by class when already there: only the members are set again.
+	 * The class is found by path, so this module does not link the node's module. Returns the node, or null on failure
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
+	static UEdGraphNode* FindOrInsertPoseNodeBeforeOutput(UEdGraph* Graph, const FString& NodeClassPath, const TMap<FString, FString>& NodeMembers);
+
+	/**
+	 * Shows the optional input pin PinName of an anim graph node (a node struct member, or a custom property such as a Control Rig's public
+	 * variable) and feeds it from a "get VariableName" of the node's Blueprint, placed left of the node. Kept when the pin is already fed by
+	 * that variable. Use it when a value must reach a node every update without a property binding: a Control Rig node's InputMapping maps
+	 * rig variables to animation curves only, so a struct variable is passed this way. Returns false if the pin or the variable is missing
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
+	static bool ExposePinFromVariable(UEdGraphNode* Node, FName PinName, FName VariableName);
+
 	//~ Child anim Blueprints (skin variants, anim-layers.md part B)
 
 	/**

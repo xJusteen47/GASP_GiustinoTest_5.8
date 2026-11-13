@@ -72,14 +72,15 @@ sits in front of the **Pose History** node, not the Output Pose:
 ... Procedural_Feet -> Procedural_FullBody --[False]--> Blend Poses by bool (bOverrideLayerActive; True/False blend time = OverrideBlendTime; inertialization)
                     Linked Anim Layer WallLayer --[True]-->        |
                                                                    v
-                                                             Inertialization -> [Control Rig of the limbs on walls goes here] -> Pose History -> Output Pose
+                                                             Inertialization -> Pose History -> Output Pose
 ```
 
 - In front of the Pose History so motion matching records the pose that was shown (otherwise the history is GASP's while the wall pose is on screen, and the first
   match after the wall is made against the wrong past); after the GASP procedural layers (foot placement, full body), which must not act on the wall pose.
 - The Inertialization node serves the blend's own request: the GASP Dead Blending node is upstream of the seam and would never see it.
-- **Control Rig for the limbs on walls (later thread)**: one node between that Inertialization node and the Pose History, gated by `bOverrideLayerActive` (or a
-  weight from the wall layer), so it sees the final wall pose and the history records its result. The layer graph and the seam do not change shape for it.
+- **Control Rig for the limbs on walls**: inside the wall layer, not here (section "Limbs on the wall" below). Its data (probed surfaces, weights) lives on
+  the layer instance, so the main graph keeps knowing nothing about walls, the node comes and goes with the layer, and a variant layer inherits it. The layer's output
+  already carries the IK, so the Pose History still records the pose that was shown.
 
 The layer class comes from data: an anim set `DA_AnimSet_Wall` (`SetTag` `Anim.Set.Wall`, `LayerClass` `ABP_GSTN_WallLayer`) in the character's default collection
 `DA_AnimSetCollection_SandboxCharacter`, on the `UGSTN_AnimSetComponent` "AnimSets" of `SandboxCharacter_Mover`; heavy or female variants are child layers in sets of
@@ -93,3 +94,9 @@ Checked headless (2026-10-26, wall slide A/B harness lanes `a_flat` and `b_conve
 client worlds), `WallAnim.Phase` goes None -> Enter -> Active -> Exit -> None with `bOverrideLayerActive` following it, `SlideState` SlideRight while the stick
 runs the character sideways at 350 cm/s; no anim Blueprint warning in the log. Not seen there: Skid (the lanes stay under 750 cm/s) and the state machine's current
 state, which Python cannot read; check both with the ABP debugger in PIE (review item 3).
+
+## Limbs on the wall (Control Rig)
+
+The layer graph ends with a Control Rig node (`CR_GSTN_WallLimbContact`) after the `WallPhases` state machine, before the layer output. It pulls the hands and feet
+the clip keeps near the wall onto it. The layer instance fills `WallLimbContact` (one probed surface per limb, hand and foot weights) from `LimbContactSettings`.
+Visual only. Details, tuning and editor steps: [limb-contact-ik.md](limb-contact-ik.md).
