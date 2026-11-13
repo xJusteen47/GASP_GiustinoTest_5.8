@@ -5,7 +5,7 @@ import re
 import unreal
 import gasnpp_test as g
 
-SUITE_KIT = ['kit_swap_hold', 'kit_throw_stick_forward', 'kit_throw_stick_back', 'kit_throw_lifted', 'kit_swap_support', 'kit_mod_swap']
+SUITE_KIT = ['kit_swap_hold', 'kit_throw_stick_forward', 'kit_throw_stick_back', 'kit_throw_lifted', 'kit_swap_support', 'kit_mod_swap', 'aimed_shot']
 # M11 K3: the three hub archetypes (Tools/GAS/setup_test_kit_archetypes.py)
 SUITE_ARCHETYPES = ['kit_archetype_stats', 'kit_archetype_throw_light', 'kit_archetype_throw_medium', 'kit_archetype_lift_heavy']
 _SWAP = re.compile(r'KitSwap (\S+) frame=(\d+) (took|refused) kit=(\S+) left=(\S+) at (\S+) \((focus|nearest)\)')
@@ -205,6 +205,56 @@ def scenario_kit_mod_swap(client=1, kit='KIT_Test_Ranger', mod='/Game/GASNPPTest
         (5.5, run.at('the kit left on the ground carries no mod', ground)),
         (5.7, lambda: ('cleanup', _cleanup(client))),
         (6.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_aimed_shot(client=1, kit='KIT_Test_Ranger'):
+    """M11 L10, the first aimed move in a match: the client plays KIT_Test_Ranger (strong + reticle = UGSTN_GA_AimedHitscanShot) with the other
+    client 300 cm ahead. Strong with the reticle off fires nothing (the kit has no plain strong move); with the reticle held on (the precision
+    component's hold flag, which sets the command's bPrecisionAim as an aiming move does) the hitscan hits: the victim's damage rises on the
+    authority and on the victim's own client. The camera aim decides the line, so the victim stands in the pawn's facing, where the PIE
+    camera looks."""
+    victim_index = 2 if client == 1 else 1
+    vkey = g.key_of_player(victim_index)
+    run = g._Run('aimed_shot', client, judge_reconciles=False)
+    key = run.key
+    strong = g.button_mask('Strong')
+    st = {}
+
+    def reticle(on):
+        _, pawn = g._local_pawn(client)
+        aim = pawn.get_component_by_class(unreal.GSTN_PrecisionAimComponent) if pawn else None
+        if aim:
+            aim.set_hold_aim_shown(on)
+        return f'reticle hold {on} ({"no component" if not aim else "ok"})'
+
+    def mark(label):
+        st[label] = (g.damage_of(0, vkey), g.damage_of(victim_index, vkey))
+        return f'damage {st[label]}'
+
+    def unchanged():
+        now = (g.damage_of(0, vkey), g.damage_of(victim_index, vkey))
+        return now == st['before'], f'damage {st["before"]} -> {now}'
+
+    def hit():
+        now = (g.damage_of(0, vkey), g.damage_of(victim_index, vkey))
+        return now[0] > st['off'][0] and now[1] > st['off'][1], f'damage {st["off"]} -> {now}'
+
+    steps = [
+        (0.2, lambda: ('hit rules', g.hit_rules_setup())),
+        (0.3, lambda: ('start kit', g._apply_loadout(key, kit))),
+        (1.5, lambda: ('place victim', g._place_near(client, vkey, (300.0, 0.0)))),
+        (2.4, lambda: ('before', mark('before'))),
+        (2.5, lambda: ('strong, reticle off', g.combat_tap(client, strong))),
+        (3.4, run.at('the reticle off fires nothing', unchanged)),
+        (3.5, lambda: ('off', mark('off'))),
+        (3.6, lambda: ('reticle on', reticle(True))),
+        (3.9, lambda: ('strong, reticle on', g.combat_tap(client, strong))),
+        (5.0, run.at('the reticle on fires the hitscan: the victim took damage (authority and its client)', hit)),
+        (5.1, lambda: ('reticle off', reticle(False))),
+        (5.3, lambda: ('clear', g.combat_clear(client))),
+        (6.0, run.finish()),
     ]
     run.run(steps)
 
