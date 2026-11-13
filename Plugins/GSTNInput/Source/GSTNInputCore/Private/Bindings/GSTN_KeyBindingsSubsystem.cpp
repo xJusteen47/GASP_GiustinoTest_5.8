@@ -81,7 +81,8 @@ TArray<FGSTN_BindableMapping> UGSTN_KeyBindingsSubsystem::ListBindableMappings()
 	{
 		for (const FEnhancedActionKeyMapping& Mapping : Context->GetMappings())
 		{
-			const FName Name = FGSTN_KeyBindingsApply::GetMappingName(Mapping);
+			// The menu names a mapping by its action and default key, whatever row the user settings keep it in
+			const FName Name = FGSTN_KeyBindingsApply::GetMappingName(Mapping).IsNone() || !Mapping.Action ? NAME_None : Mapping.Action->GetFName();
 			const bool bKnown = Result.ContainsByPredicate([&](const FGSTN_BindableMapping& Row)
 			{
 				return Row.Action == Name && Row.DefaultKey == Mapping.Key;

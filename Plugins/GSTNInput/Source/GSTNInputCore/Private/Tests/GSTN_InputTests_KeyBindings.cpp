@@ -151,4 +151,53 @@ bool FGSTN_KeyBindingsEnhancedInputTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_KeyBindingsSharedActionTest, "GSTNInput.Core.Bindings.FourKeysOneAction", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_KeyBindingsSharedActionTest::RunTest(const FString& Parameters)
+{
+	// W/A/S/D on one move action plus a pad stick, as IMC_Sandbox: one shared row gave every keyboard mapping all four keys
+	TStrongObjectPtr<UInputAction> MoveAction(NewObject<UInputAction>(GetTransientPackage(), TEXT("IA_GSTNTest_Move")));
+	MoveAction->ValueType = EInputActionValueType::Axis2D;
+	TStrongObjectPtr<UInputMappingContext> Context(NewObject<UInputMappingContext>(GetTransientPackage(), TEXT("IMC_GSTNTest_Move")));
+	const FKey Keys[] = { EKeys::W, EKeys::S, EKeys::A, EKeys::D };
+	for (const FKey& Key : Keys)
+	{
+		Context->MapKey(MoveAction.Get(), Key);
+	}
+	Context->MapKey(MoveAction.Get(), EKeys::Gamepad_Left2D);
+	FGSTN_KeyBindingsApply::EnsureMappable(Context.Get());
+	FGSTN_KeyBindingsApply::EnsureMappable(Context.Get());
+
+	TSet<FName> Rows;
+	for (const FEnhancedActionKeyMapping& Mapping : Context->GetMappings())
+	{
+		Rows.Add(Mapping.GetMappingName());
+	}
+	TestEqual(TEXT("each keyboard key its own row, the pad stick the action's row"), Rows.Num(), 5);
+	TestEqual(TEXT("the pad stick keeps the action's row"), Context->GetMappings()[4].GetMappingName(), MoveAction->GetFName());
+
+	TStrongObjectPtr<ULocalPlayer> Player(NewObject<ULocalPlayer>(GEngine));
+	TStrongObjectPtr<UEnhancedInputUserSettings> Settings(NewObject<UEnhancedInputUserSettings>(GetTransientPackage()));
+	Settings->Initialize(Player.Get());
+	Settings->RegisterInputMappingContext(Context.Get());
+	const FName Move = MoveAction->GetFName();
+	for (const FKey& Key : Keys)
+	{
+		TestEqual(*FString::Printf(TEXT("%s starts on itself"), *Key.ToString()), FGSTN_KeyBindingsApply::GetCurrentKey(*Settings, Move, Key), Key);
+		TArray<FKey> Mapped;
+		for (const FPlayerKeyMapping& Row : Settings->FindMappingsInRow(FGSTN_KeyBindingsApply::MakeRowName(Move, Key)))
+		{
+			Mapped.Add(Row.GetCurrentKey());
+		}
+		TestEqual(*FString::Printf(TEXT("%s's row holds only its key"), *Key.ToString()), Mapped.Num(), 1);
+	}
+
+	FGSTN_KeyBindingSet Layout;
+	Layout.Rebind(Move, EKeys::W, EKeys::Up);
+	TestEqual(TEXT("moving W applies"), FGSTN_KeyBindingsApply::ApplyToUserSettings(*Settings, Layout), 1);
+	TestEqual(TEXT("W's mapping now on Up"), FGSTN_KeyBindingsApply::GetCurrentKey(*Settings, Move, EKeys::W), EKeys::Up);
+	TestEqual(TEXT("S untouched"), FGSTN_KeyBindingsApply::GetCurrentKey(*Settings, Move, EKeys::S), EKeys::S);
+	TestEqual(TEXT("pad stick untouched"), FGSTN_KeyBindingsApply::GetCurrentKey(*Settings, Move, EKeys::Gamepad_Left2D), EKeys::Gamepad_Left2D);
+	return true;
+}
+
 #endif

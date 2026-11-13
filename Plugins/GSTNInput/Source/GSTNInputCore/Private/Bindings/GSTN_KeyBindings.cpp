@@ -97,6 +97,71 @@ void FGSTN_KeyBindingsApply::EnsureMappable(const UInputMappingContext* Context)
 		Settings->DisplayName = Action->ActionDescription.IsEmpty() ? FText::FromName(Action->GetFName()) : Action->ActionDescription;
 		SettingsProperty->SetObjectPropertyValue_InContainer(MutableAction, Settings);
 	}
+
+	// One user-settings row holds the alternative keys of ONE binding: when the engine rebuilds the mappings it gives every
+	// mapping of a row all the row's keys of the same kind (keyboard/mouse, pad, touch). Four keyboard mappings of one action
+	// with different modifiers (W/A/S/D on IA_Move) therefore all fired on every one of the four keys, and the first mapping
+	// to claim a key won it: every key moved the same way. Such mappings get a row of their own, "<Action>_<DefaultKey>",
+	// through the mapping's own settings (OverrideSettings); an action with one mapping per kind keeps the action-named row.
+	static FProperty* BehaviorProperty = FEnhancedActionKeyMapping::StaticStruct()->FindPropertyByName(TEXT("SettingBehavior"));
+	static FObjectPropertyBase* MappingSettingsProperty =
+		CastField<FObjectPropertyBase>(FEnhancedActionKeyMapping::StaticStruct()->FindPropertyByName(TEXT("PlayerMappableKeySettings")));
+	if (!BehaviorProperty || !MappingSettingsProperty)
+	{
+		return;
+	}
+	UInputMappingContext* MutableContext = const_cast<UInputMappingContext*>(Context);
+	const TArray<FEnhancedActionKeyMapping>& Mappings = Context->GetMappings();
+	for (int32 Index = 0; Index < Mappings.Num(); ++Index)
+	{
+		const FEnhancedActionKeyMapping& Mapping = Mappings[Index];
+		if (!Mapping.Action || !Mapping.IsPlayerMappable() || Mapping.GetMappingName() != Mapping.Action->GetFName())
+		{
+			continue; // not rebindable, an asset-made identity, or already given its own row
+		}
+		const bool bSharesRow = Mappings.ContainsByPredicate([&](const FEnhancedActionKeyMapping& Other)
+		{
+			return &Other != &Mapping && Other.Action == Mapping.Action && IsSameKeyKind(Other.Key, Mapping.Key);
+		});
+		if (!bSharesRow)
+		{
+			continue;
+		}
+		FEnhancedActionKeyMapping& Mutable = MutableContext->GetMapping(Index);
+		UPlayerMappableKeySettings* Own = NewObject<UPlayerMappableKeySettings>(MutableContext, NAME_None, RF_Transient);
+		Own->Name = MakeRowName(Mapping.Action->GetFName(), Mapping.Key);
+		Own->DisplayName = FText::Format(INVTEXT("{0} ({1})"), Mapping.Action->GetPlayerMappableKeySettings()->DisplayName, Mapping.Key.GetDisplayName());
+		MappingSettingsProperty->SetObjectPropertyValue_InContainer(&Mutable, Own);
+		const EPlayerMappableKeySettingBehaviors Override = EPlayerMappableKeySettingBehaviors::OverrideSettings;
+		BehaviorProperty->CopySingleValue(BehaviorProperty->ContainerPtrToValuePtr<void>(&Mutable), &Override);
+	}
+}
+
+bool FGSTN_KeyBindingsApply::IsSameKeyKind(const FKey& A, const FKey& B)
+{
+	// The kinds the engine's row query tells apart (bMatchBasicKeyTypes)
+	return A.IsGamepadKey() == B.IsGamepadKey() && A.IsTouch() == B.IsTouch();
+}
+
+FName FGSTN_KeyBindingsApply::MakeRowName(FName Action, const FKey& DefaultKey)
+{
+	return FName(*FString::Printf(TEXT("%s_%s"), *Action.ToString(), *DefaultKey.GetFName().ToString()));
+}
+
+const FPlayerKeyMapping* FGSTN_KeyBindingsApply::FindRowMapping(const UEnhancedInputUserSettings& Settings, FName Action, const FKey& DefaultKey)
+{
+	// A mapping with a row of its own first, then the action's shared row
+	for (const FName Row : { MakeRowName(Action, DefaultKey), Action })
+	{
+		for (const FPlayerKeyMapping& Mapping : Settings.FindMappingsInRow(Row))
+		{
+			if (Mapping.GetDefaultKey() == DefaultKey)
+			{
+				return &Mapping;
+			}
+		}
+	}
+	return nullptr;
 }
 
 FName FGSTN_KeyBindingsApply::GetMappingName(const FEnhancedActionKeyMapping& Mapping)
@@ -115,23 +180,20 @@ int32 FGSTN_KeyBindingsApply::ApplyToUserSettings(UEnhancedInputUserSettings& Se
 	int32 Applied = 0;
 	for (const FGSTN_KeyBinding& Binding : Bindings.Overrides)
 	{
-		for (const FPlayerKeyMapping& Mapping : Settings.FindMappingsInRow(Binding.Action))
+		const FPlayerKeyMapping* Mapping = FindRowMapping(Settings, Binding.Action, Binding.DefaultKey);
+		if (!Mapping)
 		{
-			if (Mapping.GetDefaultKey() != Binding.DefaultKey)
-			{
-				continue;
-			}
-			FMapPlayerKeyArgs Args;
-			Args.MappingName = Binding.Action;
-			Args.Slot = Mapping.GetSlot();
-			Args.NewKey = Binding.Key;
-			Args.HardwareDeviceId = Mapping.GetHardwareDeviceId().HardwareDeviceIdentifier;
-			Args.ProfileIdString = ProfileId;
-			Failure.Reset();
-			Settings.MapPlayerKey(Args, Failure);
-			Applied += Failure.IsEmpty() ? 1 : 0;
-			break;
+			continue;
 		}
+		FMapPlayerKeyArgs Args;
+		Args.MappingName = Mapping->GetMappingName();
+		Args.Slot = Mapping->GetSlot();
+		Args.NewKey = Binding.Key;
+		Args.HardwareDeviceId = Mapping->GetHardwareDeviceId().HardwareDeviceIdentifier;
+		Args.ProfileIdString = ProfileId;
+		Failure.Reset();
+		Settings.MapPlayerKey(Args, Failure);
+		Applied += Failure.IsEmpty() ? 1 : 0;
 	}
 
 	Settings.ApplySettings();
@@ -140,12 +202,6 @@ int32 FGSTN_KeyBindingsApply::ApplyToUserSettings(UEnhancedInputUserSettings& Se
 
 FKey FGSTN_KeyBindingsApply::GetCurrentKey(const UEnhancedInputUserSettings& Settings, FName Action, const FKey& DefaultKey)
 {
-	for (const FPlayerKeyMapping& Mapping : Settings.FindMappingsInRow(Action))
-	{
-		if (Mapping.GetDefaultKey() == DefaultKey)
-		{
-			return Mapping.GetCurrentKey();
-		}
-	}
-	return EKeys::Invalid;
+	const FPlayerKeyMapping* Mapping = FindRowMapping(Settings, Action, DefaultKey);
+	return Mapping ? Mapping->GetCurrentKey() : EKeys::Invalid;
 }

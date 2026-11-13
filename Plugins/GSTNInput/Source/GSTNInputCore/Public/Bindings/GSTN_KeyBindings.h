@@ -122,6 +122,15 @@ struct GSTNINPUTCORE_API FGSTN_KeyBindingsApply
 	/** Mapping name the user settings use for this mapping, NAME_None when it is not rebindable */
 	static FName GetMappingName(const struct FEnhancedActionKeyMapping& Mapping);
 
+	/** Row of a mapping that shares its action with another mapping of the same key kind (see EnsureMappable) */
+	static FName MakeRowName(FName Action, const FKey& DefaultKey);
+
+	/** Same kind of key for the engine's row query: keyboard and mouse, pad, touch */
+	static bool IsSameKeyKind(const FKey& A, const FKey& B);
+
+	/** The user-settings mapping of (Action, DefaultKey): its own row if it has one, else the action's row. Null if none */
+	static const struct FPlayerKeyMapping* FindRowMapping(const UEnhancedInputUserSettings& Settings, FName Action, const FKey& DefaultKey);
+
 	/**
 	 * Puts the player's active key profile on the defaults, then maps every override whose row exists. The contexts must
 	 * already be registered with Settings. Returns how many overrides were applied (the others name rows no context has).
