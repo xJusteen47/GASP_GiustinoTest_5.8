@@ -161,6 +161,20 @@ class ABILITYSYSTEMSIMULATION_API UNpAbilitySystemComponent : public UAbilitySys
 
 	// This must return 1 for no change in play rate
 	virtual float GetMontagePlayRateMultiplier() {return 1.f;}
+
+	/**
+	 * Whether a synced montage also advances in the simulation tick that started it. Off (default): the montage holds its start time in that
+	 * tick and advances from the next one, so after the tick that is frame N of an ability the montage is at N steps, the pose of frame N.
+	 * On: the fork's original behaviour, the montage is one step ahead of the ability for its whole run (and drops back by one step on the
+	 * first tick it is paused, e.g. a hitstop). Simulation behaviour: root motion, synced notifies and the montage end move by one tick, so
+	 * every machine must use the same value (it is a class default, never changed at runtime).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AbilitySimulation|Montage")
+	bool bAdvanceSyncedMontageOnStartTick = false;
+
+	/** How the simulation's montage time is shown on the anim instance (presentation only, see ESyncedMontagePresentation) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AbilitySimulation|Montage")
+	ESyncedMontagePresentation SyncedMontagePresentation = ESyncedMontagePresentation::LandOnSimTime;
 	// Anim Montage Events
 	FSyncedMontageEvent OnMontageStarted;
 	FSyncedMontageEvent OnMontageCompleted;

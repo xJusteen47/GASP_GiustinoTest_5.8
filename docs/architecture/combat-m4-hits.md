@@ -625,7 +625,7 @@ generally **not to enemies**: enemies and their parts keep hardness against pene
 - Buffer: presses during hitstop are recorded; the time-buffer age excludes hitstop frames — pass the last hitstop window as
   `FGSTN_MatchParams::PausedStart/PausedEnd` (already in M1).
   The resolver does not run during hitstop.
-- Montage: paused while a montage plays (M0 rule), resumed at `HitstopEndFrame`.
+- Montage: paused on the frames the move clock stands still (from the frame after the hit, the hit frame runs on), resumed at `HitstopEndFrame`; with the fork holding a montage on its start tick the pose is the timeline frame throughout (combat-sync-1, fork PATCHES.md section 1).
 - Mover: `FGSTN_LayeredMove_Freeze` (OverrideAll, zero velocity, keeps the incoming velocity in its state and restores it
   on finish for the attacker and for a victim that was not staggered; a staggered victim's knockback or push replaces it, and a
   `StaggerInPlace` victim's freeze ends with zero horizontal velocity, a `bZeroVelocityOnFinish` flag), plus the `Combat.Mover.Frozen` tag (spike 2.2).

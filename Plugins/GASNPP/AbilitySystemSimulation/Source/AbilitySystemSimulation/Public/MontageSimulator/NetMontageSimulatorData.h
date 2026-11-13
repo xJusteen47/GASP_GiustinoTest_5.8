@@ -465,6 +465,26 @@ struct TStructOpsTypeTraits<FRestoreNotifyData> : public TStructOpsTypeTraitsBas
 #pragma endregion
 
 #pragma region // Montage Simulation Sync State
+/**
+ * How FinalizeFrame shows the simulation's montage time on the anim instance. Presentation only: it never changes the simulation, so
+ * machines may differ without any desync.
+ */
+UENUM(BlueprintType)
+enum class ESyncedMontagePresentation : uint8
+{
+	/**
+	 * The pose drawn this frame is the (smoothed) simulation time. FinalizeFrame runs before the mesh's animation update, which then advances
+	 * the montage by its own frame delta: the instance is given the rate (or, past a limit, the start position) that makes that advance land
+	 * on the simulation time, so the notifies of the montage still fire once each over the span the pose really covered.
+	 */
+	LandOnSimTime,
+	/**
+	 * The original fork behaviour: the instance is set to the simulation time and then runs on the render clock, corrected only past 10 ms
+	 * of divergence. The pose drawn is about one render frame ahead of the simulation (plus up to 10 ms of drift).
+	 */
+	FreeRun,
+};
+
 USTRUCT(BlueprintType)
 struct ABILITYSYSTEMSIMULATION_API FMontageSimSyncState
 {
