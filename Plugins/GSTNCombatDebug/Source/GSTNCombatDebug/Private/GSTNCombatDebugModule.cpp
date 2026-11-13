@@ -1,0 +1,134 @@
+// Development tooling of GSTN Combat (PIE and development builds, never Shipping).
+
+#include "GSTNCombatDebugModule.h"
+
+#include "GSTNInputDebugModule.h"
+#include "HAL/IConsoleManager.h"
+#include "Input/GSTN_StandardSlots.h"
+#include "Modules/ModuleManager.h"
+#include "Sources/GSTN_CombatInputSource.h"
+#include "Sources/GSTN_InputSourceRegistry.h"
+#include "Trace/GSTN_CombatTraceSink.h"
+
+#if WITH_GAMEPLAY_DEBUGGER_MENU
+#include "GameplayDebugger.h"
+#include "GameplayDebugger/GSTN_GameplayDebuggerCategory_Combat.h"
+#endif
+
+DEFINE_LOG_CATEGORY(LogGSTNCombatDebug);
+
+#define LOCTEXT_NAMESPACE "GSTNCombatDebug"
+
+namespace
+{
+	const FName ModuleName(TEXT("GSTNCombatDebug"));
+
+	/** The key this module registers under in the input debug registry */
+	const FName RegistryKey(TEXT("GSTNCombatDebug"));
+
+	/** The console variable the input display had while it belonged to the combat plugin, and the one that replaced it */
+	const TCHAR* const OldInputDisplayVariable = TEXT("gstn.Combat.Debug.InputDisplay");
+	const TCHAR* const NewInputDisplayVariable = TEXT("gstn.Input.Debug.InputDisplay");
+
+	/** Setting the old name sets the new one, so a habit, a config file or a script that still uses it keeps working */
+	void ForwardInputDisplayVariable(IConsoleVariable* Old)
+	{
+		if (IConsoleVariable* Target = IConsoleManager::Get().FindConsoleVariable(NewInputDisplayVariable))
+		{
+			Target->Set(Old->GetInt(), ECVF_SetByConsole);
+		}
+	}
+
+	FGSTN_InputDisplayProfile MakeCombatProfile()
+	{
+		FGSTN_InputDisplayProfile Profile;
+		Profile.ButtonTags = FGSTN_CombatInputSource::GetCombatButtonTags();
+		Profile.Slots = UGSTN_StandardSlots::Build();
+		for (FGSTN_InputSlotSpec& Slot : Profile.Slots)
+		{
+			Slot.ApplyActiveButtonLayout(); // IO-2c: the buttons of the active layout, as the kits compile them
+		}
+		Profile.Label = LOCTEXT("CombatProfile", "Combat: the six standard buttons and the standard command set");
+		return Profile;
+	}
+}
+
+/**
+ * The debug module of the combat plugin. What the input display shows of a combat character is this module's only input job now: the
+ * display itself lives in GSTNInputDebug, and this module teaches it to read the combat component (a finder in its source registry),
+ * gives it the combat buttons and the standard command set as its default profile, and keeps the old console variable name alive. The
+ * Gameplay Debugger category (E15) is registered here and removed in ShutdownModule; the trace sink (E17, gstn.Combat.Debug.Trace) is installed and removed the same way.
+ */
+class FGSTN_CombatDebugModule : public IGSTN_CombatDebugModule
+{
+public:
+	virtual void StartupModule() override
+	{
+		FGSTN_InputSourceRegistry& Registry = FGSTN_InputSourceRegistry::Get();
+		Registry.RegisterFinder(RegistryKey, [](APawn& Pawn) { return FGSTN_CombatInputSource::Find(Pawn); });
+		Registry.RegisterDefaultProfile(RegistryKey, []() { return MakeCombatProfile(); });
+
+		OldVariable = IConsoleManager::Get().RegisterConsoleVariable(OldInputDisplayVariable, 0,
+			TEXT("The older name of gstn.Input.Debug.InputDisplay (the input display moved to the input plugin): setting this sets that. 0 = off, 1 = on."), ECVF_Default);
+		if (OldVariable)
+		{
+			OldVariable->SetOnChangedCallback(FConsoleVariableDelegate::CreateStatic(&ForwardInputDisplayVariable));
+		}
+#if WITH_GAMEPLAY_DEBUGGER_MENU
+		// E15: the combat category, enabled in game and simulate at slot 6; the debugger reads its slot and state from the ini when set there
+		IGameplayDebugger& Debugger = IGameplayDebugger::Get();
+		Debugger.RegisterCategory(FGSTN_GameplayDebuggerCategory_Combat::CategoryName,
+			IGameplayDebugger::FOnGetCategory::CreateStatic(&FGSTN_GameplayDebuggerCategory_Combat::MakeInstance),
+			EGameplayDebuggerCategoryState::EnabledInGameAndSimulate, FGSTN_GameplayDebuggerCategory_Combat::DefaultSlot);
+		Debugger.NotifyCategoriesChanged();
+#endif
+		// E17: gstn.Combat.Debug.Trace installs the trace sink while it is 1
+		FGSTN_CombatTraceController::Startup();
+		UE_LOG(LogGSTNCombatDebug, Verbose, TEXT("GSTN Combat Debug module started"));
+	}
+
+	virtual void ShutdownModule() override
+	{
+		FGSTN_CombatTraceController::Shutdown();
+#if WITH_GAMEPLAY_DEBUGGER_MENU
+		if (IGameplayDebugger::IsAvailable())
+		{
+			IGameplayDebugger& Debugger = IGameplayDebugger::Get();
+			Debugger.UnregisterCategory(FGSTN_GameplayDebuggerCategory_Combat::CategoryName);
+			Debugger.NotifyCategoriesChanged();
+		}
+#endif
+		if (OldVariable)
+		{
+			IConsoleManager::Get().UnregisterConsoleObject(OldVariable, false);
+			OldVariable = nullptr;
+		}
+		FGSTN_InputSourceRegistry& Registry = FGSTN_InputSourceRegistry::Get();
+		Registry.UnregisterFinder(RegistryKey);
+		Registry.UnregisterDefaultProfile(RegistryKey);
+	}
+
+	virtual TSharedPtr<SWidget> CreateInputDisplay() override
+	{
+		// The display is the input plugin's; the combat finder and profile are already in its registry
+		IGSTN_InputDebugModule* Input = IGSTN_InputDebugModule::Get();
+		return Input ? Input->CreateInputDisplay() : nullptr;
+	}
+
+private:
+	IConsoleVariable* OldVariable = nullptr;
+};
+
+IGSTN_CombatDebugModule* IGSTN_CombatDebugModule::Get()
+{
+	return FModuleManager::GetModulePtr<IGSTN_CombatDebugModule>(ModuleName);
+}
+
+bool IGSTN_CombatDebugModule::IsAvailable()
+{
+	return FModuleManager::Get().IsModuleLoaded(ModuleName);
+}
+
+#undef LOCTEXT_NAMESPACE
+
+IMPLEMENT_MODULE(FGSTN_CombatDebugModule, GSTNCombatDebug)

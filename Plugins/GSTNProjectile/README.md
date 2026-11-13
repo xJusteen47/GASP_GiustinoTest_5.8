@@ -1,0 +1,64 @@
+# GSTNProjectile
+
+Projectiles for the GSTN combat, **deterministic first** ([entita-dinamiche review](../../docs/notes/reviews/entita-dinamiche-2026-11-09.md)
+§2, §3, §8; design background in [combat-m10-held-objects.md](../../docs/architecture/combat-m10-held-objects.md) §9-§10).
+A projectile is spawned once with its parameters and every machine computes where it is from them; only the spawn and the
+destroy cross the wire.
+
+Status: **experimental (0.1), slice 3**, `EnabledByDefault: false`, enabled in `GASP_Giustino2.uproject`. Nothing else knows it.
+
+## Modules
+
+| Module | Type | What it is |
+|---|---|---|
+| `GSTNProjectileCore` | Runtime | Pure (engine + `GSTNCombatCore`). `FGSTN_ProjectileParams` (origin, direction, speed, gravity vector, lifetime frames, owner entity and team, hit shape, hit data, max hits), `FGSTN_BallisticSegment`, `FGSTN_BallisticMode` (the "ballistic" mode: `PositionAt`/`VelocityAt`/`CarrierAt` in closed form of the frame, `SweepStep`, `FindFirstContactFrame`, `SolveLaunchDirection` = the arc variant: flat or high arc through a target under any gravity vector, `Quantize`), the segment's wire format (`NetSerialize`: packed 1/100 units, ~20-35 bytes), `FGSTN_ProjectileGhostReconcile` (adopt / snap / no match, blend offset). Tests `GSTNProjectile.Core.*`. |
+| `GSTNProjectileNP` | Runtime | World side (NP fork for the fixed tick, `GSTNCombatNP` for snapshot and inboxes). `AGSTN_Projectile` (segment replicated `COND_InitialOnly`, no movement replication, drawn at `PositionAt(last fixed frame)`), `UGSTN_ProjectileSubsystem` (host: `FireProjectile`, sweep at every non-resimulated fixed frame, `PostHit`), `UGSTN_GA_FireProjectile` (combat ability: template params, `FireDelayFrames`, muzzle, aim Facing / CommandAim / EventTarget, launch pitch, high arc; fires on the host only, spawn once) and its ServerOnly child `UGSTN_GA_FireProjectileServer` (AI, traps, harness), consoles `gstn.Projectile.Ability` (harness path) and `gstn.Projectile.Fire` (raw), cvar `gstn.Projectile.MaxActive` (64). Predicted ghost (slice 3): `SpawnGhost`, `ReconcileGhostFor`, cvars `gstn.Projectile.PredictGhost` (1), `GhostToleranceCm` (50), `GhostMatchFrames` (3), `GhostBlendFrames` (6), `GhostTimeoutFrames` (60); dev `gstn.Projectile.GhostFire`, `GhostReport`, `Burst`, `NetReport`. |
+
+## How a hit happens
+
+1. Host: `UGSTN_ProjectileSubsystem::FireProjectile(Params)` from `UGSTN_GA_FireProjectile` (on a client the fire is skipped; the host never resimulates, so it spawns once), `gstn.Projectile.Ability [Shooter] [Target] [Speed] [GravityZ] [HighArc] [LifetimeFrames]`, or raw `gstn.Projectile.Fire [Speed] [GravityZ] [LifetimeFrames] [Damage]`.
+   The segment starts at the next fixed frame.
+2. After the NP fixed tick of frame F, the host sweeps each projectile from F-1 to F against the combat step snapshot S(F): relationship
+   and hittable list from the combat rules, swept hurtbox overlap with the opening rule, extra hurtboxes, `PickHurtboxIndex`.
+3. A hit is a normal `FGSTN_HitInboxEntry` (AttackerId = owner) posted with `UGSTN_CombatWorldSubsystem::PostHit`, the call minion
+   attacks use: the victim (fighter or minion) drains it at F+1 and runs the melee pipeline (block, parry, armour, hardness, wounds, parts).
+4. One hit per target per projectile; consumed at `MaxHits` (1 by default) or after `LifetimeFrames`.
+
+## Predicted ghost (slice 3)
+
+The client that predicts `UGSTN_GA_FireProjectile` builds the same shot from its own snapshot and draws it at once as a local, never
+replicated `AGSTN_Projectile` (`SpawnGhost`, once per owner and start frame, so a resimulation adds none). The host's projectile
+replicates its Owner (the shooter) with the quantized segment; on its `BeginPlay` the firing client compares it with its ghosts of that
+owner at the current frame: within `GhostToleranceCm` it is drawn at the ghost's place and the offset fades out over `GhostBlendFrames`
+(adopt), beyond it the ghost is dropped and the projectile shows where it is (snap). A ghost without a host projectile goes after
+`GhostTimeoutFrames`. Presentation only: the spawn and the hits stay the host's. The host quantizes its segment before using it, so it
+sweeps exactly the bits the clients decode.
+
+## Aimed shots (M11 L9)
+
+Owner answers, 2026-11-12. All of it is data on the move (`UGSTN_GA_FireProjectile` and its Blueprint children):
+
+- **Delivery** per move: `Projectile` (flies, as before) or `Hitscan` (`FGSTN_HitscanSpec` range and radius). A hitscan is a projectile
+  that does not move: `FGSTN_ShotAim::MakeHitscan` gives it a capsule from the muzzle to the range, one frame of life and
+  `bHitNearestFirst`, so the host resolves it on the next fixed frame through the same pipeline, nearest victim first (`MaxHits` > 1 pierces).
+- **Aim `Reticle`**: with the reticle on in the fire frame's command (`FGSTN_InputCmd::bPrecisionAim`) the shot goes along the camera
+  aim, **up and down too**, pitch clamped to `MinReticlePitchDeg`/`MaxReticlePitchDeg`; off it uses `ReticleOffAim` (Facing or Stick),
+  flat plus `LaunchPitchDeg`. Vertical aim exists only with the reticle on.
+- **Which button does what** with the reticle on is binding data, not code: the input simulation adds `Input.Context.PrecisionAim` to the
+  binding context from the command bit, so a binding that requires it replaces the plain one (which ignores it) while the reticle shows.
+- **Aim handling** ("ergonomics") lives on the move's timeline, next to its rotation limit: `SteerRateDegPerSecond` is how fast the
+  facing follows the aim stick inside the `MaxSteerDegrees` cone (combat timeline, `FGSTN_StartupSteer::RateLimitYaw`).
+
+Tests `GSTNProjectile.Core.HitscanAndReticleAim`, `GSTNInput.NP.Simulator.PrecisionAimBinding`, `GSTNCombat.NP.Weakpoint.SteerAimHandling`.
+Starter content (M11 L10): `UGSTN_GA_AimedHitscanShot` (hitscan, aim Reticle, Facing with it off, 5 frames to the shot, 6 damage,
+5000 cm). `KIT_Test_Ranger` (`Tools/GAS/setup_m11_ranger_content.py`) binds it to both strong commands with `Input.Context.PrecisionAim`
+required: reticle on + strong = the shot. The kit has no plain strong move, so the strong button does nothing with the reticle off.
+
+Not covered yet: a hitscan still spawns a one-frame projectile actor (bytes of a spawn) and, as every projectile, ignores walls.
+
+## Not yet (after slice 3)
+
+World collision and bounces, projectile vs projectile and deflect, lag compensation (`PositionAt` of the
+rewound frame), a timeline track key (the ability's `FireDelayFrames` stands in), a player input binding for the ability (content), pooling, VFX, minion ranged attacks, smoothing between fixed frames on the client.
+
+Harness: `Tools/GASNPPTest/projectile_scenarios.py` (`SUITE_PROJECTILE`: ability hits and ghost adopt, dedicated server + 2 clients; `SUITE_PROJECTILE_BYTES`: wire bytes with ~20 alive, listen + 2).

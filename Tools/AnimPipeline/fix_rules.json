@@ -1,0 +1,225 @@
+{
+ "_doc": "Index from flag text (substring, case-insensitive) to the rule ids in fix_rules.md. First match wins; 'escalate' = hand back to Opus.",
+ "rules": [
+  [
+   "limb cannot reach",
+   [
+    "R1 (arm)",
+    "R2 (leg)"
+   ]
+  ],
+  [
+   "knee/elbow point off its bone lengths",
+   [
+    "escalate"
+   ]
+  ],
+  [
+   "elbow direction",
+   [
+    "R4",
+    "R5 (flared out)",
+    "R6 (chicken wing back after R4)"
+   ]
+  ],
+  [
+   "support knee out of range on one foot",
+   [
+    "R8 (> 45)",
+    "R9 (< 10)"
+   ]
+  ],
+  [
+   "off balance",
+   [
+    "R10 (two feet)",
+    "R11 (one foot)"
+   ]
+  ],
+  [
+   "weight not shifted before lift-off",
+   [
+    "R12",
+    "R13 (lift-off at 0-1)"
+   ]
+  ],
+  [
+   "no foot on the ground",
+   [
+    "R13"
+   ]
+  ],
+  [
+   "hips do not drive into the kick",
+   [
+    "R14"
+   ]
+  ],
+  [
+   "no counterbalance",
+   [
+    "R15"
+   ]
+  ],
+  [
+   "ik chain",
+   [
+    "R16"
+   ]
+  ],
+  [
+   "bezier",
+   [
+    "R17"
+   ]
+  ],
+  [
+   "clamped key in mid-motion",
+   [
+    "R17"
+   ]
+  ],
+  [
+   "beat frames not keyed",
+   [
+    "R17"
+   ]
+  ],
+  [
+   "one-frame pop",
+   [
+    "R18"
+   ]
+  ],
+  [
+   "velocity reversals back and forth",
+   [
+    "R19"
+   ]
+  ],
+  [
+   "straight paths",
+   [
+    "R20 (hand/elbow)",
+    "R21 (foot/ball/knee)",
+    "R22 (head)"
+   ]
+  ],
+  [
+   "turning zig-zag",
+   [
+    "R23"
+   ]
+  ],
+  [
+   "spacing too even",
+   [
+    "R24"
+   ]
+  ],
+  [
+   "impact spacing",
+   [
+    "R24"
+   ]
+  ],
+  [
+   "speed peak not into contact",
+   [
+    "R24"
+   ]
+  ],
+  [
+   "slow out of the hold",
+   [
+    "R25"
+   ]
+  ],
+  [
+   "no slow-in to the guard",
+   [
+    "R26"
+   ]
+  ],
+  [
+   "kinetic chain out of order",
+   [
+    "R27"
+   ]
+  ],
+  [
+   "body peaks",
+   [
+    "R27"
+   ]
+  ],
+  [
+   "peak together",
+   [
+    "R27"
+   ]
+  ],
+  [
+   "simultaneous arrivals",
+   [
+    "R28"
+   ]
+  ],
+  [
+   "twinning",
+   [
+    "R29"
+   ]
+  ],
+  [
+   "head not toward the target",
+   [
+    "R30"
+   ]
+  ],
+  [
+   "planted foot slides",
+   [
+    "R31"
+   ]
+  ],
+  [
+   "unnatural joint",
+   [
+    "escalate"
+   ]
+  ],
+  [
+   "forearm over-rolled",
+   [
+    "R7"
+   ]
+  ],
+  [
+   "hand over-rolled",
+   [
+    "R7"
+   ]
+  ],
+  [
+   "sudden roll jump",
+   [
+    "R7"
+   ]
+  ],
+  [
+   "linear motion",
+   [
+    "R32"
+   ]
+  ],
+  [
+   "no landing absorption",
+   [
+    "R33"
+   ]
+  ]
+ ],
+ "max_iterations": 6,
+ "same_flag_max_fixes": 2
+}

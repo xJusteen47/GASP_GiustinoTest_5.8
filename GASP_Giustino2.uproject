@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.8",
+	"EngineAssociation": "5.9",
 	"Category": "Samples",
 	"Description": "",
 	"Modules": [
@@ -123,6 +123,140 @@
 		},
 		{
 			"Name": "GameplayAbilities",
+			"Enabled": true
+		},
+		{
+			"Name": "ModelContextProtocol",
+			"Enabled": true
+		},
+		{
+			"Name": "AllToolsets",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInput",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInputNP",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNSurface",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNLevelObjects",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNAnimation",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombat",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatGAS",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNPickups",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNKitMods",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNBackpack",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNBackpackPickups",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNLoadoutMenu",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatNP",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatEditor",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "GSTNKitModsEditor",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "GSTNCombatDebug",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNParts",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNDefence",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNLink",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNSpinDrill",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNPiggyback",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNDepthMarker",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCamera",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInteract",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNPlatform",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNPlatformParts",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNMinion",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNPartsMinion",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNProjectile",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNHeld",
 			"Enabled": true
 		}
 	],

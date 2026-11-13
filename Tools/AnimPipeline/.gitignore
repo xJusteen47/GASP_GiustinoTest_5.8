@@ -1,0 +1,35 @@
+# Data and heavy outputs live in the working folder (Saved/AnimPipeline), never in git.
+*.casc
+*.fbx
+*.mp4
+*.gif
+*.png
+*.rgb
+*.f32
+*.html
+*.tsv
+*.log
+*.bak
+__pycache__/
+sheets/
+refs/
+# Take data and one-off dumps
+*_targets.json
+*_targets_raw.json
+*_points.json
+*_overrides.json
+blockout_dump.json
+cur_dump.json
+page_files*.json
+# Handover, personal logs, token data
+handoff.md
+*_log.md
+token_costs.md
+_*.txt
+*_metrics_csc.txt
+.venv/
+venv/
+
+# Machine settings and open variants (cards/<kit>/<move>_var<A>.json, see animpipe/variants.py)
+animpipe.local.toml
+*_var[A-Z].json

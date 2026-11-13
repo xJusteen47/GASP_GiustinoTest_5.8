@@ -1,0 +1,43 @@
+﻿{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Platform Parts",
+	"Description": "Bridge between GSTNParts and GSTNPlatform: a platform shape named after a body part goes away (with its Breaking telegraph) when the confirmed broken mask breaks that part or an ancestor, and comes back when it is restored. Removing it leaves both plugins building and working.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNPlatformParts",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GSTNPlatform",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNParts",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombat",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatNP",
+			"Enabled": true
+		}
+	]
+}

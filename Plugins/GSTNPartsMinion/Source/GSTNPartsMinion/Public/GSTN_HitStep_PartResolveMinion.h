@@ -1,0 +1,86 @@
+// Bridge between parts and minions (plan P16).
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Pipeline/GSTN_HitStep_PartResolve.h"
+#include "GSTN_HitStep_PartResolveMinion.generated.h"
+
+struct FGSTN_PartHitOutcome;
+
+/** Bench counters of the step (sub-gate B per hit cost): process-wide, game thread only, debug numbers and never read by the simulation */
+struct FGSTN_PartsMinionStepTiming
+{
+	uint64 Cycles = 0;
+	int32 Count = 0;
+	/** Sub-timers of the cached path (P16-D, bench only): cache lookup, hit data scan, ApplyHit, outcome write, damage progress, weight, tail */
+	uint64 LookupCycles = 0;
+	uint64 ScanCycles = 0;
+	uint64 ApplyCycles = 0;
+	uint64 OutcomeCycles = 0;
+	uint64 ProgressCycles = 0;
+	uint64 WeightCycles = 0;
+	uint64 TailCycles = 0;
+	int32 CachedCount = 0;
+};
+
+/**
+ * The part resolve step as the minion victim pipeline runs it (combat-parts.md §5.5): the bridge puts this class in the minion
+ * subsystem's extra victim step slot, which runs it right before ComputeKnockback, on a view whose snapshot extension the bridge built
+ * from the minion's 9 byte part row. The part math is the parent's, unchanged (GSTNParts.Core.Minion.StepSameOutputAsFighter).
+ *
+ * Why a subclass and not the parent itself: the minion rules are usually the fighters' standard rules, which keep the two M4 steps
+ * that PartResolve replaces in a parts-aware pipeline (ApplyDamage and HealthWeight, see UGSTN_HitStep_PartResolve). Run as an extra
+ * step next to them, the parent would count the hit's damage twice and the health weight twice. This step makes the merged result
+ * equal to the parts-aware pipeline's: it takes back the damage ApplyDamage will add (DamageAdd minus the hit's damage, so the
+ * outcome ends at the part's MainDelta), drops the extra effects ApplyDamage appends again, and divides out the weight scale
+ * HealthWeight already merged (the parent's weight already contains the damage progress).
+ *
+ * It does nothing (one pointer test) for a victim without a parts extension, i.e. every minion type without a part set, and nothing
+ * when the rules already list PartResolve (that step ran earlier, on the same view). Pure and const like every step: the view in, the
+ * result out.
+ *
+ * Cost (plan P16-C): the first version ran the parent's whole step and then HealthWeight again into a second full step result, and
+ * scanned the rules' pipeline with class tests on every hit (4.7 us per part hit on the bench laptop). The step now keeps a small cache
+ * per (part set, rules) pair, filled at the first hit and dropped by InvalidateStepCache (every registration of the bridge calls it): the
+ * pipeline flags, the resolved penetration bands (the soft pointers are chased once) and the minimum weight scale. The hit itself runs
+ * the same part math on that cache (ResolveCached), takes back ApplyDamage's share by arithmetic instead of running HealthWeight into a
+ * scratch result, and writes no request: the minion batch never reads Requests (see ResolveCached). ResolveUncached is the first version,
+ * kept as the reference the GSTNParts.Minion.CachedStepSameOutput test compares against, and as the fallback when the rules or the cache
+ * switch (gstn.PartsMinion.StepCache 0) say so. Game thread only: the cache is process-wide static data, like the timing counters.
+ *
+ * P16-E: the cache entries are keyed by raw pointers (a TObjectKey per hit cost more than the rest of the lookup) and the whole cache is
+ * dropped after every garbage collection (the module's post-GC hook), the only moment an object is freed; and the part outcome can
+ * travel through an outcome scratch instead of an allocated FInstancedStruct (see AddOutcomeScratchUser).
+ */
+UCLASS(meta = (DisplayName = "Part Resolve (Minion)"))
+class GSTNPARTSMINION_API UGSTN_HitStep_PartResolveMinion : public UGSTN_HitStep_PartResolve
+{
+	GENERATED_BODY()
+
+public:
+	virtual EGSTN_StepResult Resolve_Implementation(const FGSTN_HitContextView& View, FGSTN_StepResult& Out) const override;
+
+	/** The first version (parent step + compensation, no cache). Same result as Resolve_Implementation except Out.Requests, which the cached path leaves empty */
+	EGSTN_StepResult ResolveUncached(const FGSTN_HitContextView& View, FGSTN_StepResult& Out) const;
+
+	/** Drops every cached (part set, rules) entry: call after changing a part set's table or parts, the rules' pipeline or the settings at run time */
+	static void InvalidateStepCache();
+
+	/** Switch of the cached path (also gstn.PartsMinion.StepCache). Tests flip it to compare both paths */
+	static void SetStepCacheEnabled(bool bEnabled);
+	static bool IsStepCacheEnabled();
+
+	/**
+	 * Outcome scratch (P16-E): while at least one user is registered (every bound UGSTN_PartsMinionSubsystem is one), the cached path writes
+	 * the part outcome into a process-wide scratch instead of an FInstancedStruct in Out.OutcomeExtensions, and the bridge's ApplyOutcome
+	 * takes it with ConsumeScratchOutcome right after the pipeline (null when this hit wrote none: read OutcomeExtensions then, as the
+	 * parts-aware rules and the uncached path still do). With no user the step behaves as before. Game thread only
+	 */
+	static void AddOutcomeScratchUser(int32 Delta);
+	static int32 GetOutcomeScratchUsers();
+	static const FGSTN_PartHitOutcome* ConsumeScratchOutcome();
+
+	/** Time spent in this step for part-bearing victims since the process started (gstn.PartsMinion.Bench.Report) */
+	static FGSTN_PartsMinionStepTiming& GetTiming();
+};

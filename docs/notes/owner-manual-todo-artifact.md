@@ -1,0 +1,81 @@
+# Cose da fare a mano (copia dell'artifact)
+
+Copia in repo dell'artifact https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk, aggiornata 2026-11-11 (IO-1). L'artifact è la versione di riferimento.
+
+## 1 · Git
+
+- [ ] Porta tutto su `feature/gas-npp-5.8` con un solo push: tip di `claude/desktop-io-1` (sha esatto nell'artifact, sostituisce `614a0cff`). Contiene tutto fino a M10 slice 10, la **M11 slice 1** (cambio kit con B tenuto), la **M11 slice 2** (lanci alla Smash) la **M11 slice 3** (tre kit di prova: leggero, medio, pesante) la **M11 slice 3b** (tasti di oggetti e cambio kit come dati) la **M11 K4** (controllo di rete, build di gioco e Shipping sistemate) e la **IO-1** (tasti per giocatore locale, salvati per giocatore). Poi `git pull` e build completa da Rider:
+  ```
+  cd "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2"
+  git fetch origin claude/desktop-io-1
+  git push origin <sha>:refs/heads/feature/gas-npp-5.8
+  ```
+
+## 2 · Editor (salva tu con Ctrl+S)
+
+- [ ] **Dove cambi un tasto (M11 slice 3b)**: tasto fisico o del pad → bottone logico (`Input.Button.*`) = Input Action e mapping context in `Content/Input`. Bottone logico → azione: Project Settings → Plugins → GSTN Held → Input|Buttons (`Pickup Drop Button` = B, `Throw Button` = RT, `Slot Overrides` per cambiare tutta la forma) e → Kits → `Kit Swap` → `Button` (B tenuto); i lanci della presa in Project Settings → GSTN Link → Throws. Vale dal prossimo cambio kit o Play. Default = come oggi. Nessuno l'ha provato in PIE col pad.
+- [ ] **Tasti per giocatore (IO-1)**, nessuno l'ha visto in PIE: ogni giocatore locale (anche in split screen) ha i suoi tasti fisici, salvati nel suo slot `GSTNInputBindings_P<n>`. Ancora nessun menu: si cambiano da Blueprint o Python con `UGSTN_KeyBindingsSubsystem` (`Rebind`, `ResetAllToDefault`, `Save`). Default = come oggi, la rete non cambia. Prova (facoltativa) in `docs/notes/handovers/io-1.md`.
+- [ ] **Playtest dei kit col pad (M11 K4, raccoglie slice 1, 2, 3 e 3b)**, nessuno l'ha visto in PIE né provato col pad (i test di rete premono i tasti dal codice):
+  1. Dopo il push e la build: editor nella cartella principale, mappa `L_Test_Hub`, console Python `import test_hub as h` poi `h.prepare()`.
+  2. Play listen, 3 giocatori; aspetta 4 s. Kit sulle 7 pedane; fila di tre kit 8 m davanti alla partenza: `KIT_Test_Light`, `KIT_Test_Medium`, `KIT_Test_Heavy`.
+  3. Cambio kit: pedana PRESE, a 1,5 m compare "Tieni B: KIT_Test_Link"; B corto = niente, B tenuto 0,5 s e rilasciato = kit nuovo, il tuo resta sulla pedana.
+  4. Vince l'inquadrato: `gstn.Held.Spawn 0` (console host), cubo accanto a una pedana, lo stick sceglie tra "B" del cubo e "Tieni B" del kit.
+  5. I tre kit: corsa e salto (leggero veloce e due salti in aria, pesante lento), X = jab, speciale (leggero lancia in alto, medio calcio laterale, pesante schianto).
+  6. Lanci: afferra il giocatore 1 con B corto o speciale + accovacciato. Leggero e medio: stick avanti/indietro = lancio, A = su, accovacciato = giù; confronta gli archi.
+  7. Pesante: il giocatore 1 si solleva, RT lo lancia come oggetto (tap verso lo stick, tenuto col reticolo); A e accovacciato restano su e giù. Presa 1,5 / 2 / 3 s.
+  8. Da un client (giocatore 1 contro il 2): cambio kit e un lancio, uguali e senza scatti.
+  9. KO del giocatore 0: il kit cade dove muore, lui torna a `KIT_Test_Hits`, il kit sparisce dopo 30 s.
+  10. Facoltativo: Project Settings → GSTN Held → Kits → Kit Swap → Button = `Input.Button.Special`, Play: il kit si cambia con quel tasto (parte anche lo speciale). Rimetti `Input.Button.Interact`.
+  11. Ferma il Play, `h.restore()`, niente da salvare. Riferisci: scritta e cambio chiari, archi giusti, differenza tra i kit, scatti da client.
+  Numeri e montage segnaposto: `Tools/GAS/setup_test_kit_archetypes.py` o i Blueprint `GA_<Kit>_*` in `/Game/GASNPPTest/Combat/Archetypes`. Con `KIT_Test_Link` un combattente normale si solleva: per lo stick, GSTN Held → Thrown Enemies → `Kit Throws While Lifting` = All.
+- [ ] **Recoil segnaposto in PIE** con la mossa di test `KIT_Test_StrikeKinds` (solo test: swing da destra frame 8-14, affondo dritto 22-26, nessun recoil proprio):
+  1. Editor nella cartella principale, mappa `L_Test_Hub`.
+  2. Console Python: `import sys; sys.path.insert(0, r"C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2\Tools\GASNPPTest"); import test_hub as h` poi `h.prepare()`.
+  3. Play (listen, 3 giocatori), aspetta i manichini.
+  4. `h.strike_kinds(0)`: kit di test, ogni colpo rimbalza, un manichino 120 cm davanti.
+  5. Attacco (tasto sinistro / X): lo swing prende il manichino, finisce lo swing, poi rinculo Swing (`…B_A…`, 30 frame).
+  6. Reticolo acceso (click stick destro), poi stick destro tutto a destra mentre attacchi (o gira di ~30° a destra): lo swing manca, l'affondo prende, rinculo Stab subito (`…B_V…`, 24 frame).
+  7. `h.strike_kinds(0, False)`, ferma il Play, `h.restore()`. Niente da salvare.
+- [ ] Prova sterzata e reticolo con un pad: reticolo spento = stick destro solo camera, il sinistro gira il personaggio; reticolo acceso = in avvio lo stick destro gira la mossa (max 20°) e vince sul sinistro. Reticolo solo PvE/TDM, freccia ai piedi, azioni automatiche.
+- [ ] Oggetti coi tasti veri (M10 slice 3) in PIE: mappa `L_Test_Hub`, Python `import test_hub as h` + `h.prepare()`, Play listen 3 giocatori (kit `KIT_Test_Hits`, ha già i tasti). Console host: `gstn.Held.Spawn 0`. Avvicinati: compare "B" sopra il cubo. B = prendi, B di nuovo = posa, RT tap = lancia verso lo stick sinistro, RT tenuto = reticolo e lancio verso la camera al rilascio. Lontano dal cubo B fa quello di prima. `gstn.Held.Report` mostra `carrying=` e `target=`. Slice 5: con due cubi vicini gira lo stick verso uno dei due: la "B" sta sopra quello e B prende proprio quello. Kit con i tasti: `KitsWithDefaultBindings` in `Plugins/GSTNHeld/Config/DefaultGSTNHeld.ini` (o Project Settings → Plugins → GSTN Held). Slice 6: `gstn.Held.Spawn 0 120 Medium 50` (Medio, corsa e salto al 70 %, niente scudo né attacchi aerei), `Heavy 50` (solo cammina, posa, lancia), `Huge 100` (B non lo prende); quinto argomento `Break`/`Bounce`/`Stick` per gli impatti (Break ricompare dopo 3 s; da slice 7 un rimbalzo non ricolpisce chi il lancio ha già colpito). Slice 7: in Project Settings → Plugins → GSTN Held (Interact) `Pickup Takes Focused Object` spento = sempre il più vicino; `Focus Miss Falls Back To Nearest` spento = mano vuota se l'inquadrato lo prende prima un altro (tutte e due accese di default). Niente da salvare.
+- [ ] **Caricamento del lancio (slice 10) in PIE**, le due modalità: mappa `L_Test_Hub`, `h.prepare()`, Play listen 3 giocatori, console host `gstn.Held.Spawn 0`, prendi il cubo con B. (1) Istantaneo: `gstn.Held.Windup 0`, RT tap: parte subito come prima. (2) Con caricamento: `gstn.Held.Windup 30` (0,48 s), RT tap: parte la montage segnaposto (spinta in avanti del sample), il cubo resta in mano e parte dopo 30 frame; con RT tenuto il reticolo resta fino al rilascio dell'oggetto. Colpito durante il caricamento (`gstn.Projectile.Ability 1 0` dalla console host mentre carichi): il lancio si annulla e il cubo cade. Vale anche per i nemici sollevati (secondo numero, es. `gstn.Held.Windup 30 20`). `gstn.Held.Debug 1` disegna oggetti, legami e traiettorie. Per un oggetto vero: nella definizione `Override Windup` + `Windup` (frame, montage). Niente da salvare.
+- [ ] Fuoco amico per modalità (slice 7): nelle regole della modalità (`UGSTN_CombatRules`, Teams) `Friendly Fire Sources` con `Combat.Source.Thrown` = gli oggetti lanciati colpiscono anche gli alleati, il corpo a corpo no. Vuoto (default) = alleati ignorati.
+- [ ] Strike Kind per gruppo di hitbox (`Override Strike`, Swing/Stab); recoil per attacco sulla traccia Hitbox; `Stab Only` sui weakpoint interni.
+- [ ] `L_MinionYard` con `setup_yard`; aggancio tinta P10; contenuto TM3; `L_Test_Combat` (facoltativo); pair-move in PIE; `gstn.Net.SimProxySendEveryNTicks 2`;
+  binding del tasto di sparo; `gstn.Projectile.Fire` / `Ability 0 1`; ghost del proiettile con lag; harness rosso su `DefaultLevel` nel worktree m7 (mappa, non codice); Oodle (facoltativo).
+
+## 3 · Decisioni
+
+- [ ] Lanci alla Smash: su = salto, giù = accovacciato; con nemico sollevabile i lanci avanti/indietro del kit sono spenti (`Kit Throws While Lifting`: NotStickOnly / None / All). Slice 3: la capacità ora è per kit (leggero 60, medio 90, pesante 200 contro peso 100), quindi solo il pesante solleva: va bene così? Anche la presa dura di più col pesante (1,5 / 2 / 3 s).
+- [ ] Leve weakpoint §6 (scala hurtbox, priorità, magnetismo PvE).
+- [ ] M10: un oggetto posato o atterrato si può riprendere dopo 0,64 s (ritardo di rete dei record): va bene o lo vuoi più corto? Danni e archi veri per tipo di oggetto; quali kit hanno i tasti degli oggetti (ora solo i kit di prova; c'è l'opzione "tutti i kit").
+- [ ] G6 fatto con valori di prova (Leggero -10 %, Medio -30 %, Pesante -50 % senza salto, Enorme -70 % e capacità; lancio x1/0,85/0,7/0,5; capacità di default 50 kg): dimmi i valori veri e quali oggetti si sollevano. Impatti: un rimbalzo può colpire di nuovo chi ha già preso il lancio; Break si rompe anche su un nemico. Va bene?
+
+## 4 · Animazioni
+
+- [ ] Rinculo Swing e Stab (oggi segnaposto `…shove_stand_B_A…` / `…B_V…`). Blend della mano per il caso "faccia di taglio" (più avanti).
+
+## 5 · Pulizia branch
+
+- [ ] GitHub: branch vecchi elencati nell'artifact; dopo il push anche `claude/desktop-weakpoint-3` , `claude/laptop-weakpoint-3b`, `claude/desktop-m10-1`, `claude/desktop-m10-2`, `claude/desktop-m10-3`, `claude/desktop-m10-4`, `claude/desktop-m10-5` e `claude/desktop-m10-6`, `claude/desktop-m11-1`, `claude/desktop-m11-2`, `claude/desktop-m11-3`, `claude/desktop-m11-3b`. Portatile: `git branch -d claude/laptop-projectile-1`.
+
+## Fatto
+
+- 2026-11-11 · M11 K4: controllo prima del playtest. Kit (scambio, lanci con lo stick, tre kit) 8/8 e oggetti 8/8 in listen 0 % e 2 % e dedicato 0 % e 2 %, suite di default 50/50, headless 1508/0, 0 ensure. Le build del gioco (Development e Shipping) non compilavano per colpa di test che usavano funzioni solo-editor: sistemato, ora le tre configurazioni compilano. Nessuno l'ha visto in PIE col pad. Branch `claude/desktop-m11-4`.
+- 2026-11-11 · M11 slice 3b: i tasti degli oggetti (B prendi/posa, RT lancia) e del cambio kit (B tenuto) non sono più fissi nel codice ma impostazioni, con gli stessi valori di oggi. Headless 1508/0, harness oggetti 8/8 e kit 8/8 listen 0 % e 2 %, dedicato 0 %, suite di default 50/50. Nessuno l'ha visto in PIE. Restano fissi nel codice alcuni tasti di altri plugin (lista nell'handover m11-slice3b). Branch `claude/desktop-m11-3b`.
+- 2026-11-11 · M11 slice 3: tre kit di prova davvero diversi (leggero, medio, pesante: velocità, salto, peso, capacità, gravità, jab, speciale, 4 lanci con archi diversi e montage GASP segnaposto), creati da uno script, nessun Blueprint toccato a mano, in fila davanti alla partenza dell'hub. Headless 1507/0, harness dei kit 4/4 listen 0 % e 2 %, dedicato 0 %, suite di default 50/50. Nessuno l'ha visto in PIE col pad. Branch `claude/desktop-m11-3`.
+- 2026-11-11 · M11 slice 2: lanci alla Smash (stick avanti/indietro, su = salto, giù = accovacciato), 4 lanci per kit con set comune di riserva, presa con speciale + accovacciato, modalità alternative come impostazioni, tasti come dati. Headless 1505/0, lanci con stick simulato PASS listen 0 % e 2 %, dedicato 0 %, prese di prima 5/5, suite di default 50/50. Nessuno l'ha visto in PIE col pad. Branch `claude/desktop-m11-2`.
+- 2026-11-11 · M11 slice 1: il kit a terra è un bersaglio di B (vince la cosa inquadrata), B tenuto 0,5 s e rilasciato lo scambia, scritta "Tieni B", kit lasciato alla morte (impostazione: lascia e perdi / lascia una copia / spento). Headless 1500/0, suite di default 50/50 (una attesa aggiornata), scambio con input simulato PASS listen 0 % e 2 %, dedicato 0 %. Nessuno l'ha visto in PIE col pad. Branch `claude/desktop-m11-1`.
+- 2026-11-11 · M10 slice 10: caricamento del lancio (frame di rilascio e montage per oggetto, default e nemici; 0 = istantaneo come prima, spedito a 0), colpito durante il caricamento = niente lancio e l'oggetto cade; debug e validatore (G12 in parte); suite di default 50/50, oggetti 8/8 listen 2 % e dedicato 0 %, headless 1498/0. Nessuno l'ha visto in PIE. Branch `claude/desktop-m10-10`.
+- 2026-11-11 · Decisioni M11 1-7 approvate (tue) come consigliate; il kit si cambia con grab (B) tenuto.
+- 2026-11-10 · M10 slice 7: un rimbalzo non ricolpisce chi il lancio ha già colpito (opzione per oggetto); fuoco amico per tipo di colpo nelle regole della modalità (`Friendly Fire Sources`); le due impostazioni di raccolta decise da te (inquadrato o più vicino; conteso: mano vuota o il più vicino), accese come prima. Branch `claude/desktop-m10-7` (sha nell'artifact).
+- 2026-11-10 · M10 slice 6: peso e taglie (G6: carico sul legame Hand, rallenta corsa e salto su ogni macchina, comandi tolti per taglia, Enorme solo con capacità, lancio più debole per taglie grandi) e impatti Atterra/Rompi/Rimbalza/Attacca (parte di G7); corretto un bug del fork GAS-NPP (finito un effetto su una statistica, gli altri client la vedevano a 0). Headless 1495/0, harness PASS oggetti 4/4 listen 2 % e dedicato 0 %, presa 5/5 a 2 %. Branch `claude/desktop-m10-6`. Restano: mira con la spalla e fuoco amico (G7), ghost dell'oggetto (G8), nemici lanciati (G9), debug ed editor (G12-G13).
+- 2026-11-10 · M10 slice 5: l'oggetto in mano è ora un legame Hand di GSTNLink (G1: il watchdog sa giudicare un partner che non è un combattente); B prende l'oggetto che il probe inquadra (il più vicino libero se un altro lo prende nello stesso frame); KO dei minion da oggetto lanciato con `Combat.Source.Thrown` e credito a chi lancia. Headless 1490/0, harness PASS oggetti listen 2 % e dedicato 0 %, presa 5/5 a 2 %. Branch `claude/desktop-m10-5`. M10 non è finita: restano peso e taglie (G6), impatti e mira (G7/G8), nemici lanciati (G9), debug ed editor (G12-G13).
+- 2026-11-10 · M10 slice 4: gli oggetti a terra entrano nel probe di interazione (un solo bersaglio di B per frame, uguale su ogni macchina, anche accanto a un nemico da afferrare); i colpi degli oggetti lanciati hanno il tag `Combat.Source.Thrown` e danno il credito a chi lancia anche se il suo pawn non c'è più. Headless 1489/0, harness PASS listen 2 % e dedicato 0 %. Branch `claude/desktop-m10-4`.
+- 2026-11-10 · M10 slice 3: tasti B/RT degli oggetti collegati in automatico ai kit di prova (nessun Blueprint toccato); RT con l'oggetto in mano ora lancia davvero (prima vinceva lo smash forte); B prende solo con un oggetto vicino, altrimenti fa quello di prima; prompt "B" sopra l'oggetto. Headless 1484/0, harness PASS listen 2 % e dedicato 0 %. Branch `claude/desktop-m10-3`.
+- 2026-11-10 · M10 slice 2: l'oggetto in mano è nello stato di sync del personaggio (predetto), cade se chi lo tiene è colpito, lanciato in aria, afferrato o KO; tasti di default come dati: B prende e posa, RT tap lancia verso lo stick sinistro, RT tenuto mostra il reticolo e lancia verso la camera. Headless 1481/0, harness PASS listen 2 % e dedicato 0 %. Branch `claude/desktop-m10-2`.
+- 2026-11-10 · Decisione presa (tua): tasti degli oggetti come sopra, tutto da rivedere col playtest. Nemici presi come oggetti e lanci alla smash: design per M11.
+- 2026-11-10 · M10 slice 1: plugin `GSTNHeld`, raccogli, tieni, lancia (colpo tramite `GSTNProjectile`, credito a chi lancia), atterraggio, di nuovo raccoglibile; headless 1477/0, harness PASS listen e dedicato a 0 % e 2 %. Branch `claude/desktop-m10-1`.
+- 2026-11-10 · Weakpoint slice 3b: stick destro gira il personaggio solo col reticolo acceso e allora vince sul sinistro (decisione presa); reticolo nell'input predetto, pronto per le mosse ranged mirabili (headless 1475/0). Branch `claude/laptop-weakpoint-3b` (`ceb9d1c2`).
+- 2026-11-10 · Weakpoint slice 3 (sterzata predetta via Mover, reticolo PvE/TDM, freccia, azioni automatiche, mossa di test per i recoil; headless 1474/0, harness PASS). Branch `claude/desktop-weakpoint-3`.
+- 2026-11-09 · Push di `92e9b029` su `feature/gas-npp-5.8` (fatto da te). Voci precedenti: vedi artifact.
