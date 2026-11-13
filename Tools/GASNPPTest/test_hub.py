@@ -145,7 +145,22 @@ def spawn_kits():
     if unreal.GameplayStatics.get_all_actors_of_class(world, unreal.GSTN_KitPickup):
         return 'already there'
     srv = g._srv(_key(0))
-    return [srv.server_spawn_kit_pickup(kit, support, unreal.Vector(x, y, 20.0), 180.0) for kit, support, _label, (x, y) in hub.KIT_PADS]
+    out = [srv.server_spawn_kit_pickup(kit, support, unreal.Vector(x, y, 20.0), 180.0) for kit, support, _label, (x, y) in hub.KIT_PADS]
+    # M11 L10: pads whose kit carries mods: the mods go into the pickup's loadout (GSTNKitMods content helper), so the swap hands them over
+    for kit, support, mods, _label, (x, y) in getattr(hub, 'MOD_PADS', []):
+        out.append(_spawn_modded_kit(srv, kit, support, mods, unreal.Vector(x, y, 20.0), 180.0))
+    return out
+
+
+def _spawn_modded_kit(srv, kit, support, mods, where, yaw):
+    """A kit pickup whose loadout carries `mods` (asset paths) in a wildcard mods config. Returns the pickup name or why it failed"""
+    name = srv.server_spawn_kit_pickup(kit, support, where, yaw)
+    lib = getattr(unreal, 'GSTN_KitModContentLibrary', None)
+    pickup = next((a for a in unreal.GameplayStatics.get_all_actors_of_class(g.worlds()[0], unreal.GSTN_KitPickup) if a.get_name() == name), None)
+    if not lib or not pickup:
+        return f'{name} (no mods: {"GSTNKitMods off" if not lib else "pickup not found"})'
+    pickup.set_loadout(lib.with_kit_mods(pickup.get_loadout(), list(mods)))
+    return f'{name} + {len(mods)} mod(s)'
 
 
 # Placeholder bounce pads (movement thread): BP_Test_BouncePad (a GSTN_Trampoline child, tuned in its Class Defaults) in the piazza. Trampolines are

@@ -43,7 +43,7 @@ un oggetto tenuto (B posa, RT tap lancia verso lo stick sinistro, RT tenuto reti
 | L7 | G6 zaini sul connettore (esempio jet-pack) | portatile, Sonnet medium | $6-10 |
 | L8 | G7 editor delle mod (anteprima nella timeline, validatori) | portatile, Sonnet medium | $4-7 |
 | L9 | Mosse a distanza mirate: attacchi forti su RT col reticolo (`bPrecisionAim`). **Fatta** (2026-11-12, `claude/laptop-m11-l9`): tasti per reticolo via `Input.Context.PrecisionAim` nei binding, consegna `Projectile`/`Hitscan` e mira `Reticle` (verticale solo col reticolo) su `UGSTN_GA_FireProjectile`, maneggevolezza `SteerRateDegPerSecond` accanto a `MaxSteerDegrees` (README di GSTNProjectile) | portatile, Opus medium | $5-8 |
-| L10 | G8 sweep: scenari harness, pedana mod/zaini nell'hub, doc | fisso, Sonnet medium | $4-7 |
+| L10 | G8 sweep: scenari harness, pedana mod/zaini nell'hub, doc. **Prima parte fatta** (2026-11-13, `claude/laptop-m11-l10`): prima mod `MOD_Test_Power`, kit `KIT_Test_Ranger` con lo sparo mirato hitscan (forte + reticolo), due pedane nell'hub, scenari `kit_swap_support` e `kit_mod_swap` (handover m11-slice17). Restano zaini nell'hub e `scenario_backpack_use` | fisso, Sonnet medium | $4-7 |
 
 Ordine: L1 → L2 → (L3, L4, L6, L9 in qualsiasi ordine) → L5 → L7 → L8 → L10. **Dopo playtest: 10 fette, $52-87.**
 Totale M11 con le aggiunte del 10/11: **$71-117** (card originale $53-92). L1 e L4/L5 toccano il loadout di GSTNCombat: mai in parallelo

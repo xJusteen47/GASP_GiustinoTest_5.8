@@ -22,6 +22,14 @@ No NP module: the base timeline of an ability with an inline timeline is read by
 3. The player's choice is `FGSTN_LoadoutModsExt` in `FGSTN_LoadoutData::Extensions`: a list of configs, each for one kit identity
    tag or for any kit (empty `Kit`). The kit-specific one wins.
 
+## Content helpers and the first mod (M11 L10)
+
+`UGSTN_KitModContentLibrary` (GSTNKitModsGAS) writes the struct-heavy parts for scripts, so Python never builds an instanced struct:
+`SetKitModSlots` (kit extension), `WriteAllMovesMod` (identity, slot, one modifier for every move), `WithKitMods` / `GetAnyKitMods`
+(a loadout's wildcard config, e.g. a kit pickup's). The first content is `Tools/GAS/setup_m11_ranger_content.py`: `MOD_Test_Power`
+(`Mod.Slot.Grip`, every move 1.4x hitbox, 1.5x reach, 1.25x damage, 1.15x knockback, 1.2x slower) and `KIT_Test_Ranger` with one grip
+slot; the test hub lays the kit with the mod on a pad (`build_test_hub_map.MOD_PADS`). Placeholder numbers for the playtest.
+
 ## What happens at compile (outside the simulation)
 
 - Mods are resolved in kit slot order (one mod per slot, first free slot of its type). A missing, incompatible or slotless mod
@@ -56,4 +64,4 @@ Rules in the M5 validation panel and the modded-move preview live in the bridge 
 
 ## Tests
 
-`GSTNKitMods.Core.{Combine,BakeTime,BakeHits,NamesAndConfig}`, `GSTNKitMods.GAS.{Resolve,Compile,RulesView}`.
+`GSTNKitMods.Core.{Combine,BakeTime,BakeHits,NamesAndConfig}`, `GSTNKitMods.GAS.{Resolve,Compile,RulesView}`, `GSTNKitMods.GAS.ContentLibrary`; harness `kit_mod_swap` (kit_scenarios).

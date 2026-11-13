@@ -50,6 +50,10 @@ Owner answers, 2026-11-12. All of it is data on the move (`UGSTN_GA_FireProjecti
   facing follows the aim stick inside the `MaxSteerDegrees` cone (combat timeline, `FGSTN_StartupSteer::RateLimitYaw`).
 
 Tests `GSTNProjectile.Core.HitscanAndReticleAim`, `GSTNInput.NP.Simulator.PrecisionAimBinding`, `GSTNCombat.NP.Weakpoint.SteerAimHandling`.
+Starter content (M11 L10): `UGSTN_GA_AimedHitscanShot` (hitscan, aim Reticle, Facing with it off, 5 frames to the shot, 6 damage,
+5000 cm). `KIT_Test_Ranger` (`Tools/GAS/setup_m11_ranger_content.py`) binds it to both strong commands with `Input.Context.PrecisionAim`
+required: reticle on + strong = the shot. The kit has no plain strong move, so the strong button does nothing with the reticle off.
+
 Not covered yet: a hitscan still spawns a one-frame projectile actor (bytes of a spawn) and, as every projectile, ignores walls.
 
 ## Not yet (after slice 3)

@@ -173,3 +173,19 @@ class GSTNPROJECTILENP_API UGSTN_GA_FireProjectileServer : public UGSTN_GA_FireP
 public:
 	UGSTN_GA_FireProjectileServer(const FObjectInitializer& ObjectInitializer);
 };
+
+/**
+ * Starter aimed move (M11 L10, the first content of L9): a rifle shot that is a hitscan line along the camera aim while the reticle is on
+ * (pitch clamped to the reticle limits) and along the facing, flat, with it off. A kit binds it to the strong commands with
+ * Input.Context.PrecisionAim required, so the same button keeps its plain move without the reticle. Every number is a placeholder for the
+ * playtest; a Blueprint child (or this class's defaults) retunes it. No recovery of its own: it ends on the fire frame, so the press rate
+ * is the fire rate (the binding's buffer and the press edge, not a cooldown)
+ */
+UCLASS(Blueprintable)
+class GSTNPROJECTILENP_API UGSTN_GA_AimedHitscanShot : public UGSTN_GA_FireProjectile
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_AimedHitscanShot(const FObjectInitializer& ObjectInitializer);
+};

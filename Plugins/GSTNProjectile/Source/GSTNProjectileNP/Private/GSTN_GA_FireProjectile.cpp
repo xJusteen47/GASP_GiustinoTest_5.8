@@ -29,6 +29,21 @@ UGSTN_GA_FireProjectileServer::UGSTN_GA_FireProjectileServer(const FObjectInitia
 	NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
 }
 
+UGSTN_GA_AimedHitscanShot::UGSTN_GA_AimedHitscanShot(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	Delivery = EGSTN_ShotDelivery::Hitscan;
+	Aim = EGSTN_ProjectileAim::Reticle;
+	ReticleOffAim = EGSTN_ProjectileAim::Facing;
+	// 5 combat frames (80 ms at 62.5 Hz): the press reads as a trigger pull, not an instant beam
+	FireDelayFrames = 5;
+	Hitscan.RangeCm = 5000.f;
+	Hitscan.RadiusCm = 5.f;
+	Projectile.Hit.Damage = 6.f;
+	Projectile.Hit.BaseKnockback = 20.f;
+	Projectile.Hit.AngleDeg = 20.f;
+}
+
 void UGSTN_GA_FireProjectile::ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 	const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData)
 {
