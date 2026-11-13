@@ -10,6 +10,7 @@ Blueprint/shared-asset edits that need the owner's OK, risks and parallelisation
 | [m4b-parts-plan.md](m4b-parts-plan.md) | M4b destructible parts (`GSTNParts*`) | P0..P16 | `../combat-parts.md` |
 | [m5-editor-plan.md](m5-editor-plan.md) | M5 editor and debug (`GSTNCombatEditor`, `GSTNCombatDebug`) | E0..E19 | `../combat-m5-editor.md` |
 | [traversal-surfaces-plan.md](traversal-surfaces-plan.md) (added 2026-10-22 evening) | Traversal surfaces: wall-slide / trampoline surfaces on level objects and enemy body parts (`GSTNSurface`, `GSTNPlatform`, `GSTNPlatformParts`) | T0..T9 | `../traversal-surfaces.md` |
+| [m7-piggyback-plan.md](m7-piggyback-plan.md) (added 2026-11-01, self-approved) | M7 piggyback and pair moves (`GSTNPiggyback`; generic follow-ups in `GSTNLink`, one neutral field in `GSTNCombat`) | G0..G12 | `../combat-m7-piggyback.md` |
 | [spin-drill-plan.md](spin-drill-plan.md) (added 2026-10-25) | Spin (3D World / air hop) and drill (latch, multi-hit, final jump) (`GSTNSpinDrill`) | D0..D13 | `../spin-drill.md` |
 | [resto-m3-m4b-m5-t.md](resto-m3-m4b-m5-t.md) (added 2026-11-06) | Open gates of M3, M4b, M5 and T, regrouped with costs | R3, P/E/T rest | the four plans above |
 | [fp-forward-prediction.md](fp-forward-prediction.md) (2026-11-06) | Forward prediction of the pair partner | G0..G4 | `../combat-m7-piggyback.md` §2 |
