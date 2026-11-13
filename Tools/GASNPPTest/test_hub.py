@@ -168,6 +168,8 @@ def _spawn_modded_kit(srv, kit, support, mods, where, yaw):
 BACKPACK_PADS = [
     ('/Game/GAS/Backpacks/DA_Backpack_JetPack.DA_Backpack_JetPack', (800.0, -1050.0)),
     ('/Game/GAS/Backpacks/DA_Backpack_ShieldDome.DA_Backpack_ShieldDome', (800.0, 1050.0)),
+    # Designer example (Tools/GAS/setup_designer_examples.py): the dome backpack with its move in a Blueprint of its own
+    ('/Game/GASNPPTest/Examples/DA_Example_Backpack_Dome.DA_Example_Backpack_Dome', (800.0, 1400.0)),
 ]
 
 

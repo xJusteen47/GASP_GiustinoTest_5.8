@@ -12,6 +12,10 @@ MODULE = importlib.import_module(os.environ.get('BATCH_MODULE', 'kit_scenarios')
 NAMES = [n for n in os.environ.get('BATCH_NAMES', '').split(',') if n] or list(getattr(MODULE, 'SUITE_KIT', []))
 REPORT = os.environ.get('BATCH_REPORT', 'k2/batch.log')
 st = {'t': time.time(), 'phase': 'start'}
+# BATCH_MAP: a level to open first (the editor starts on L_Test_Hub, whose Play setup spawns dummies; most scenarios want the harness level).
+# Loading a level never saves the one that was open
+if os.environ.get('BATCH_MAP'):
+    unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).load_level(os.environ['BATCH_MAP'])
 
 
 def tick(_dt):

@@ -10,6 +10,10 @@ if os.environ.get('R31_ALL'):
     NAMES = list(g.SUITE_DEFAULT)
 if os.environ.get('R31_ONLY'):
     NAMES = os.environ['R31_ONLY'].split(',')
+# R31_IMPORT: scenario modules to import first (comma list); a module that registers its scenarios on gasnpp_test (example_scenarios) can then
+# run in this one-PIE suite
+for _m in filter(None, os.environ.get('R31_IMPORT', '').split(',')):
+    __import__(_m)
 OUT = os.path.join(unreal.Paths.project_dir(), 'Saved', 'R31', f'report-{TAG}.txt')
 # Without the folder the report write raised every tick and the editor never quit
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
