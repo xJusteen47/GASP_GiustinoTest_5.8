@@ -14,6 +14,11 @@ OUT = os.path.join(unreal.Paths.project_dir(), 'Saved', 'R31', f'report-{TAG}.tx
 # Without the folder the report write raised every tick and the editor never quit
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+# The editor now starts on L_Test_Hub (owner, 2026-11-13); the suite is written for the harness level, so open it first.
+# R31_MAP picks another level. Loading a level never saves the one that was open.
+HARNESS_MAP = os.environ.get('R31_MAP', '/Game/Levels/DefaultLevel')
+if unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world().get_path_name().split('.')[0] != HARNESS_MAP:
+    les.load_level(HARNESS_MAP)
 st = {'t': time.time(), 'phase': 'start'}
 def tick(_dt):
     try:
