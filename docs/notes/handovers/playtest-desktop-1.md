@@ -21,6 +21,7 @@ The old ue-mcp plugin (`Plugins/UE_MCP_Bridge` 1.4.3, latest 1.4.13) is not used
 **Seen, not fixed**: loadout screen "SCEGLI IL TUO KIT" opens at spawn in L_Test_Hub and stays on screen while playing (game keys still
 work); clients' local players show no mouse mappings for Attack (only host checked in depth); log spam "Lag Compensation Rewind Exceeded"
 (43k lines in 10 min, listen 3 players).
-**Gates**: build ok (4 builds). Headless GSTN: see below. Harness suite not run (owner's editor time).
+**Gates**: build ok (4 builds). Headless GSTN **1584/0**, 0 ensures (`Saved/Playtest/headless.log`). Harness suite not run (owner's
+editor time). Fixes 4-5 are not re-checked in PIE yet (no new crash path forced, IMC count not recounted): owner's next Play is the check.
 **Owner**: push `claude/project-thread-keexim` to feature (command in the thread). Designer guide legend: separate thread.
 Cost: ~150k context, Opus, 3 small subagents (Sonnet x2 image reads, Haiku headless); estimated ~$20-25.
