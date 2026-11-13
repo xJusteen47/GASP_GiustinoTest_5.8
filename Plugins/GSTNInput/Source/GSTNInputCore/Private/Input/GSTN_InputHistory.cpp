@@ -1,6 +1,7 @@
 // Pure input logic (no GAS, no Network Prediction).
 
 #include "Input/GSTN_InputHistory.h"
+#include "GSTN_InputLog.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
 
 namespace
@@ -58,7 +59,17 @@ namespace
 void FGSTN_InputHistory::Append(const FGSTN_InputSample& Sample)
 {
 	TRACE_CPUPROFILER_EVENT_SCOPE(GSTN_InputHistory_Append);
-	checkf(Sample.Frame >= Current.Frame, TEXT("Samples must be appended in frame order (%d after %d)"), Sample.Frame, Current.Frame);
+	if (Sample.Frame < Current.Frame)
+	{
+		// The frame counter went back without a restore of this state: Network Prediction re-based the frame numbers (a
+		// ReconcileFromInputOffset after a hitch or an input gap moved them 50+ frames back in a playtest). The stored events
+		// are dated on the old numbering and would read as future frames, so the history starts over from this sample. Only
+		// the held buttons survive: a button still down is not pressed again. A rollback never gets here, it restores first
+		UE_LOG(LogGSTNInput, Warning, TEXT("Input history: frame %d after %d without a restore (frame numbers re-based), history cleared"), Sample.Frame, Current.Frame);
+		const uint32 StillHeld = HeldButtons;
+		*this = FGSTN_InputHistory();
+		HeldButtons = StillHeld;
+	}
 
 	// Press events first, then releases, each in button order: a tap leaves a press and a release on the same frame.
 	for (uint32 Mask = Sample.Pressed; Mask != 0; Mask &= Mask - 1)

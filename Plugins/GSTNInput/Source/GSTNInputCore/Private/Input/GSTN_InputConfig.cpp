@@ -50,6 +50,11 @@ void UGSTN_InputConfig::ResolveActions()
 		ResolvedButtonActions.Add(Button.Action.IsNull() ? nullptr : Button.Action.LoadSynchronous());
 	}
 	ResolvedMoveAction = MoveAction.IsNull() ? nullptr : MoveAction.LoadSynchronous();
+	// The automatic actions of the previous resolve, kept to be reused below: every pawn that runs this shared config resolves it
+	// again (each spawn, each kit swap), and a new context each time piled up on the local players (dozens seen in a playtest)
+	UInputMappingContext* const PreviousAutoContext = AutoMappingContext;
+	UInputAction* const PreviousAutoStick = AimStickAction.IsNull() ? ResolvedAimStickAction.Get() : nullptr;
+	UInputAction* const PreviousAutoToggle = ReticleToggleAction.IsNull() ? ResolvedReticleToggleAction.Get() : nullptr;
 	ResolvedAimStickAction = AimStickAction.IsNull() ? nullptr : AimStickAction.LoadSynchronous();
 	ResolvedReticleToggleAction = ReticleToggleAction.IsNull() ? nullptr : ReticleToggleAction.LoadSynchronous();
 
@@ -59,6 +64,26 @@ void UGSTN_InputConfig::ResolveActions()
 	if (!bAutoAimActions || (ResolvedAimStickAction && ResolvedReticleToggleAction))
 	{
 		return;
+	}
+	// Same keys as last time: the same context and actions (a player that already has the context keeps it, nothing is added again)
+	if (PreviousAutoContext)
+	{
+		const bool bNeedStick = !ResolvedAimStickAction && AutoAimStickKey.IsValid();
+		const bool bNeedToggle = !ResolvedReticleToggleAction && AutoReticleToggleKey.IsValid();
+		int32 Matched = 0;
+		for (const FEnhancedActionKeyMapping& Mapping : PreviousAutoContext->GetMappings())
+		{
+			const bool bStick = bNeedStick && Mapping.Action == PreviousAutoStick && Mapping.Key == AutoAimStickKey;
+			const bool bToggle = bNeedToggle && Mapping.Action == PreviousAutoToggle && Mapping.Key == AutoReticleToggleKey;
+			Matched += (bStick || bToggle) ? 1 : 0;
+		}
+		if (Matched > 0 && Matched == PreviousAutoContext->GetMappings().Num() && Matched == static_cast<int32>(bNeedStick) + static_cast<int32>(bNeedToggle))
+		{
+			ResolvedAimStickAction = bNeedStick ? PreviousAutoStick : ResolvedAimStickAction.Get();
+			ResolvedReticleToggleAction = bNeedToggle ? PreviousAutoToggle : ResolvedReticleToggleAction.Get();
+			AutoMappingContext = PreviousAutoContext;
+			return;
+		}
 	}
 	auto MakeAction = [](const TCHAR* Name, EInputActionValueType Type)
 	{
