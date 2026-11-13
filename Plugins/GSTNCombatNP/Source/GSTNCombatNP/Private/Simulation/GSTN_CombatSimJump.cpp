@@ -49,6 +49,8 @@ bool UGSTN_CombatSimComponent::BuildJumpParams(FGSTN_JumpParams& OutParams) cons
 	OutParams.MinHoldFrames = FMath::FloorToInt32(AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetMinJumpHoldFramesAttribute(), bFound));
 	OutParams.MaxHoldFrames = FMath::FloorToInt32(AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetMaxJumpHoldFramesAttribute(), bFound));
 	OutParams.AirJumpCount = FMath::FloorToInt32(AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetAirJumpCountAttribute(), bFound));
+	OutParams.GlideGravityScale = AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetGlideGravityScaleAttribute(), bFound);
+	OutParams.GlideMaxFallSpeed = AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetGlideMaxFallSpeedAttribute(), bFound);
 	const UGSTN_GA_PlatformJump* TableJumpData = Tables().TableJumpData;
 	OutParams.CoyoteFrames = TableJumpData && TableJumpData->bOverrideCoyoteFrames ? TableJumpData->CoyoteFrames : UGSTN_CombatSettings::Get().JumpCoyoteFrames;
 	OutParams.SquatFrames = TableJumpData && TableJumpData->bOverrideSquatFrames ? TableJumpData->SquatFrames : UGSTN_CombatSettings::Get().JumpSquatFrames;

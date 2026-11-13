@@ -7,6 +7,7 @@
 #include "GameplayTagContainer.h"
 #include "Cosmetics/GSTN_EquipmentVisual.h"
 #include "Kits/GSTN_AbilityBinding.h"
+#include "GSTN_BackpackTypes.h"
 #include "GSTN_BackpackDefinition.generated.h"
 
 class UGameplayAbility;
@@ -43,6 +44,13 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Backpack|Abilities")
 	TArray<FGSTN_AbilityBinding> Abilities;
 
+	/**
+	 * Movement the backpack adds to the carrier's stats while carried (the jet-pack's double jump and glide, M11 L7b): applied with the
+	 * Effects through UGSTN_GE_BackpackMovement. All zero = none
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Backpack|Movement")
+	FGSTN_BackpackMovement Movement;
+
 	/** Passive abilities granted while the backpack is carried */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Backpack|Abilities")
 	TArray<TSoftClassPtr<UGameplayAbility>> Passives;
@@ -67,4 +75,35 @@ public:
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(class FDataValidationContext& Context) const override;
 #endif
+};
+
+/**
+ * Starter backpack (owner 2026-11-12): the jet-pack. A double jump (one air jump more than the kit's, on the kit's own jump command) and a
+ * glide while the jump button is held after a jump. Make a data asset of this class: it is filled, no wiring. The numbers are a first guess
+ * for the playtest (FGSTN_BackpackMovement)
+ */
+UCLASS(BlueprintType, Const)
+class GSTNBACKPACKGAS_API UGSTN_BackpackDefinition_JetPack : public UGSTN_BackpackDefinition
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_BackpackDefinition_JetPack();
+};
+
+/**
+ * Starter backpack (owner 2026-11-12): the shield dome. One move slot, Command.Backpack.Dome: Press of the layout's dodge button with the
+ * stick neutral (so it beats the plain dodge only then, and a tilted dodge stays a dodge), grounded, gated by its memory slot 0
+ * (Backpack.State.Empty.Slot0), running UGSTN_GA_BackpackDome. Make a data asset of this class: it is filled, no wiring
+ */
+UCLASS(BlueprintType, Const)
+class GSTNBACKPACKGAS_API UGSTN_BackpackDefinition_ShieldDome : public UGSTN_BackpackDefinition
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_BackpackDefinition_ShieldDome();
+
+	/** The dome's binding as the class default holds it (soft path to the NP module's ability: this module never links it) */
+	static FGSTN_AbilityBinding MakeDomeBinding();
 };

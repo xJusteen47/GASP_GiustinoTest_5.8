@@ -97,6 +97,21 @@ struct GSTNCOMBATCORE_API FGSTN_JumpParams
 
 	/** Frames between a ground jump request and its take-off (0 = the take-off is the frame of the request) */
 	int32 SquatFrames = 0;
+
+	/**
+	 * Glide (M11 L7b, the jet-pack's slow descent): while falling with the button of the last jump still held, gravity uses GlideGravityScale
+	 * and the terminal speed GlideMaxFallSpeed. <= 0 = no glide (every kit without a glide stat, the default). Fast fall wins over the glide
+	 */
+	float GlideGravityScale = 0.f;
+
+	/**
+	 * Terminal speed along local down while gliding, cm/s (<= 0 = the plain MaxFallSpeed). Like every terminal speed here it caps the
+	 * acceleration only: a fall already faster when the glide starts keeps its speed. A brake would need a negative gravity, which flips
+	 * Mover's up (it follows the gravity), so it is not done here
+	 */
+	float GlideMaxFallSpeed = 0.f;
+
+	bool CanGlide() const { return GlideGravityScale > 0.f; }
 };
 
 /**
@@ -130,16 +145,20 @@ struct GSTNCOMBATCORE_API FGSTN_JumpState
 	/** Frames of the ground squat still to go before the take-off (0 = not squatting). Phase stays None and Button holds the jump button meanwhile */
 	uint8 SquatFramesLeft = 0;
 
+	/** Falling with the button of the last jump held and a glide stat set (FGSTN_JumpParams::CanGlide): the glide gravity applies. Written by Step */
+	bool bGliding = false;
+
 	bool IsDefault() const
 	{
 		return Phase == EGSTN_JumpPhase::None && StartFrame == INDEX_NONE && Button == INDEX_NONE && !bJumpCut && !bFastFalling && !bTakeoffWasAir
-			&& AirJumpsUsed == 0 && CoyoteFramesLeft == 0 && SquatFramesLeft == 0;
+			&& AirJumpsUsed == 0 && CoyoteFramesLeft == 0 && SquatFramesLeft == 0 && !bGliding;
 	}
 
 	bool operator==(const FGSTN_JumpState& Other) const
 	{
 		return Phase == Other.Phase && StartFrame == Other.StartFrame && Button == Other.Button && bJumpCut == Other.bJumpCut && bFastFalling == Other.bFastFalling
-			&& bTakeoffWasAir == Other.bTakeoffWasAir && AirJumpsUsed == Other.AirJumpsUsed && CoyoteFramesLeft == Other.CoyoteFramesLeft && SquatFramesLeft == Other.SquatFramesLeft;
+			&& bTakeoffWasAir == Other.bTakeoffWasAir && AirJumpsUsed == Other.AirJumpsUsed && CoyoteFramesLeft == Other.CoyoteFramesLeft && SquatFramesLeft == Other.SquatFramesLeft
+			&& bGliding == Other.bGliding;
 	}
 
 	/** One bit when default; same code for both directions */

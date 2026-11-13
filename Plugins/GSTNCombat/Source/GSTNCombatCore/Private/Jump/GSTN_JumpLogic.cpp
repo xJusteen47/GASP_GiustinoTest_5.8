@@ -32,6 +32,7 @@ FGSTN_JumpState FGSTN_JumpLogic::Step(const FGSTN_JumpState& In, int32 Frame, co
 
 	// Off the ground (knocked, pushed) the squat is over without a jump
 	Out.SquatFramesLeft = 0;
+	Out.bGliding = false;
 
 	if (Out.CoyoteFramesLeft > 0)
 	{
@@ -106,6 +107,9 @@ FGSTN_JumpState FGSTN_JumpLogic::Step(const FGSTN_JumpState& In, int32 Frame, co
 	case EGSTN_JumpPhase::Falling:
 		break;
 	}
+
+	// The glide (M11 L7b): falling, the button of the last jump still held, the stat set; a fast fall wins. A launch frame never glides (above)
+	Out.bGliding = Params.CanGlide() && Out.Phase == EGSTN_JumpPhase::Falling && !Out.bFastFalling && Out.Button != INDEX_NONE && bButtonHeld;
 	return Out;
 }
 
@@ -137,6 +141,7 @@ FGSTN_JumpState FGSTN_JumpLogic::ApplyTakeoff(const FGSTN_JumpState& In, int32 F
 	Out.bFastFalling = false;
 	Out.CoyoteFramesLeft = 0;
 	Out.bTakeoffWasAir = Kind == EGSTN_JumpKind::Air;
+	Out.bGliding = false;
 	if (Kind == EGSTN_JumpKind::Air && Out.AirJumpsUsed < 255)
 	{
 		++Out.AirJumpsUsed;
@@ -174,7 +179,7 @@ float FGSTN_JumpLogic::GravityScale(const FGSTN_JumpState& State, const FGSTN_Ju
 	case EGSTN_JumpPhase::Rising:
 		return State.bJumpCut ? Params.CutGravityScale : Params.RiseGravityScale;
 	case EGSTN_JumpPhase::Falling:
-		return Params.FallGravityScale;
+		return State.bGliding && Params.CanGlide() ? Params.GlideGravityScale : Params.FallGravityScale;
 	case EGSTN_JumpPhase::None:
 	case EGSTN_JumpPhase::Launched:
 	default:
@@ -185,7 +190,8 @@ float FGSTN_JumpLogic::GravityScale(const FGSTN_JumpState& State, const FGSTN_Ju
 float FGSTN_JumpLogic::LimitedGravityScale(const FGSTN_JumpState& State, const FGSTN_JumpParams& Params, double DownSpeed, double GravityMagnitude, double DeltaSeconds)
 {
 	const float Scale = GravityScale(State, Params);
-	const float Cap = State.bFastFalling ? Params.FastFallSpeed : Params.MaxFallSpeed;
+	const bool bGlide = State.bGliding && !State.bFastFalling && Params.CanGlide();
+	const float Cap = State.bFastFalling ? Params.FastFallSpeed : (bGlide && Params.GlideMaxFallSpeed > 0.f ? Params.GlideMaxFallSpeed : Params.MaxFallSpeed);
 	const double Step = GravityMagnitude * Scale * DeltaSeconds;
 	if (Cap <= 0.f || Step <= 0.0)
 	{

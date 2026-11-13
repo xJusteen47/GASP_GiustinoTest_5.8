@@ -34,6 +34,9 @@ namespace GSTNFeatureIds
 	/** FGSTN_HeldFragment (GSTNHeldRuntime, M10): the object an entity holds in its hand */
 	constexpr uint8 Held = 20;
 
+	/** FGSTN_BackpackFragment (GSTNBackpackCore, run by GSTNBackpackNP, M11 L7b): a backpack's memory slots and dome */
+	constexpr uint8 Backpack = 21;
+
 	constexpr uint8 FirstGame = 128;
 	constexpr uint8 FirstTest = 240;
 	constexpr uint8 TestA = 240;
