@@ -329,6 +329,19 @@ public:
 	void ExecuteRecoilMove(const FGSTN_TimelineTrack_Movement& Track, int32 RecoilFrames, float StepMs);
 
 	/**
+	 * Momentum slide (owner 2026-11-13, FGSTN_MomentumSlide): queues the slide move of a timeline that just started, through MomentumSlideEffect.
+	 * Called by the ability when its timeline begins, inside the simulation; the move decides everything else on its own first frame
+	 */
+	void ExecuteMomentumSlide();
+
+	/**
+	 * The momentum slide data of the move the combat state of the frame being simulated runs, and the frame that move started on. False
+	 * outside a timeline and once the timeline ended into a recoil. Read by the slide move from Mover's tick (the combat model ticked before
+	 * it in the same frame), like ReadJumpState
+	 */
+	bool ReadRunningSlide(int32& OutStartFrame, const FGSTN_MomentumSlide*& OutSlide) const;
+
+	/**
 	 * The camera aim of the command of the frame being simulated (UGSTN_InputConfig::bSendCameraAim, combat-m3 7.10): control
 	 * rotation pitch and yaw, roll 0. The simulation keeps it on its way past the ability system's tick of the same frame, rewritten
 	 * every simulated frame, so a re-simulation reads the command it replays. Zero when the command carries no aim (HasAim)
@@ -861,6 +874,10 @@ private:
 	/** The freeze of a victim that stays in place: leaves the freeze at rest */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
 	TSubclassOf<UGameplayEffect> FreezeAtRestEffect;
+
+	/** Instant effect that queues the momentum slide of a ground move (FGSTN_LayeredMove_MomentumSlide); replace for a game with its own */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
+	TSubclassOf<UGameplayEffect> MomentumSlideEffect;
 
 	/** Instant effect of a SetFacing request (startup steering, plan precisione-weakpoint 5): turns Mover to Combat.SetByCaller.FacingYaw */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")

@@ -20,6 +20,7 @@
 #include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Movement/GSTN_LayeredMove_Launch.h"
 #include "Movement/GSTN_LayeredMove_PushBack.h"
+#include "Movement/GSTN_LayeredMove_MomentumSlide.h"
 #include "Presentation/GSTN_PrecisionAimComponent.h"
 #include "Timeline/GSTN_StartupSteer.h"
 #include "Movement/GSTN_SetFacingEffect.h"
@@ -101,6 +102,7 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 	SurfaceLaunchEffect = UGSTN_GE_SurfaceLaunch::StaticClass();
 	PushBackEffect = UGSTN_GE_PushBack::StaticClass();
 	SetFacingEffect = UGSTN_GE_SetFacing::StaticClass();
+	MomentumSlideEffect = UGSTN_GE_MomentumSlide::StaticClass();
 
 	InputSource = CreateDefaultSubobject<UGSTN_PlayerInputSource>(TEXT("InputSource"));
 	ContextProvider = CreateDefaultSubobject<UGSTN_MoverInputContextProvider>(TEXT("ContextProvider"));
