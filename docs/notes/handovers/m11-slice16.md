@@ -23,6 +23,7 @@ of its own (kit jump + stats); dome lifetime both ways as data, WhileHeld defaul
 **Not built / gaps**: the dome **does not block hits** (next slice: extra hurtbox via the snapshot contributor + a pipeline step, owner to
 say what it blocks: ranged only like Helldivers, or everything from outside); no dome visual; memory survives a backpack swap (not reset);
 two moves sharing a slot must agree on its capacity (no validator).
-**Owner question (grouped)**: what the dome blocks (ranged only / all hits from outside / also enemies walking in), and jetpack numbers at playtest.
+**Owner answer 2026-11-13** (dome, next slice): block EVERY hit from outside and push back whoever hits it from outside; make sure a melee
+hit cannot land both inside and outside the dome at once (one hit = one side). Jetpack numbers still at playtest.
 **Manual steps**: artifact "Cose da fare a mano" item `ed-m11-l7b-backpacks` (create the two assets, put one on a hub pickup, try it).
 Cost: ~150k context, Opus, estimated ~$9-12. Wall clock ~2 h (4 builds, 2 headless runs, suite).
