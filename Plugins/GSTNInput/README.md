@@ -75,6 +75,9 @@ The dependency rule: `GSTNInputDebug` depends on `GSTNInputCore` and engine modu
 2. **Make an input config** (`UGSTN_InputConfig` data asset): the list of buttons, each with its tag and the Enhanced
    Input action that drives it (a soft reference: the host resolves the actions once at setup). The array index is the
    button's bit in every mask, so every machine of a match must use the same config and order.
+   The keys are data too: `MappingContexts` (context + priority) are put on the pawn's local player by the player input source, and
+   `ReplacedMappingContexts` are taken off it whenever they show up (the test character lists GASP's `IMC_Sandbox`, which the GASP
+   character Blueprint adds at BeginPlay, and gets `IMC_GSTN_Locomotion` instead: move, look, C crouch; `Tools/GAS/setup_player_input_contexts.py`).
 3. **Set the settings** (Project Settings > Plugins > GSTN Input). They are stored in the plugin's own config file,
    `GSTNInput.ini`: the plugin ships its defaults in `Plugins/GSTNInput/Config/DefaultGSTNInput.ini` and a project overrides
    any of them in its own `Config/DefaultGSTNInput.ini`; nothing goes in `DefaultGame.ini`. They are the buffer lengths, stick

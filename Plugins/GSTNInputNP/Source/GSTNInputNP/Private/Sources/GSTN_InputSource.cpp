@@ -27,13 +27,18 @@ void UGSTN_PlayerInputSource::ProduceInput(const FGSTN_InputSourceContext& Conte
 	}
 
 	// The automatic right stick actions of the config (UGSTN_InputConfig::bAutoAimActions) need their mapping context on this local player
+	UEnhancedInputLocalPlayerSubsystem* MutableSubsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer);
 	if (UInputMappingContext* AutoContext = Context.Config->GetAutoMappingContext())
 	{
-		UEnhancedInputLocalPlayerSubsystem* MutableSubsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(LocalPlayer);
 		if (MutableSubsystem && !MutableSubsystem->HasMappingContext(AutoContext))
 		{
 			MutableSubsystem->AddMappingContext(AutoContext, Context.Config->AutoMappingPriority);
 		}
+	}
+	// The config's own contexts on, the base game's ones it replaces off (GASP's IMC_Sandbox, re-added by its Blueprint at BeginPlay)
+	if (MutableSubsystem)
+	{
+		Context.Config->ApplyMappingContexts(*MutableSubsystem);
 	}
 
 	// The input component exists only once the pawn is possessed locally; until then the held read below is all there is

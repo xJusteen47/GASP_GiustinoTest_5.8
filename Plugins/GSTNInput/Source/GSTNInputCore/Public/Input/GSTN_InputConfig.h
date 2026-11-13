@@ -11,6 +11,7 @@
 
 class UInputAction;
 class UInputMappingContext;
+class IEnhancedInputSubsystemInterface;
 
 /** One logical button: its identity in data (the tag) and the Enhanced Input action that drives it. */
 USTRUCT(BlueprintType)
@@ -30,6 +31,20 @@ struct GSTNINPUTCORE_API FGSTN_InputButtonDef
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Button")
 	TSoftObjectPtr<UInputAction> Action;
+};
+
+/** A mapping context the player gets while this config drives their pawn, and its priority */
+USTRUCT(BlueprintType)
+struct GSTNINPUTCORE_API FGSTN_InputContextEntry
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Context")
+	TSoftObjectPtr<UInputMappingContext> Context;
+
+	/** Higher wins a key mapped by both (with a consuming action): the gameplay contexts sit low, menus far above */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Context")
+	int32 Priority = 0;
 };
 
 /**
@@ -110,6 +125,21 @@ public:
 	int32 AutoMappingPriority = 100;
 
 	/**
+	 * The mapping contexts that give the player their keys while this config drives the pawn (the keys of the buttons and of MoveAction, the
+	 * camera's look). Added to the pawn's local player by the player input source and kept there: the keys are data, per config, never code
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Contexts")
+	TArray<FGSTN_InputContextEntry> MappingContexts;
+
+	/**
+	 * Contexts of the base game that this config's own replace, removed from the local player whenever they show up (the Game Animation
+	 * Sample's IMC_Sandbox, which its character Blueprint adds at BeginPlay and which maps the pad to GASP's own actions: next pawn, ragdoll,
+	 * walk, strafe...). Removing the whole context, not single keys, keeps the base game's Blueprints untouched
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|Contexts")
+	TArray<TSoftObjectPtr<UInputMappingContext>> ReplacedMappingContexts;
+
+	/**
 	 * Loads the input actions (synchronously, if they are not loaded yet) and keeps them for the getters below. Call it once
 	 * when the host sets up (BeginPlay, a loadout change), never from a tick: the input source reads the resolved actions every
 	 * frame and does not resolve anything itself. Calling it again after the asset changed refreshes them.
@@ -131,6 +161,13 @@ public:
 	/** The transient mapping context of the automatic actions, null when none was made. The local player adds it once (UGSTN_PlayerInputSource) */
 	UInputMappingContext* GetAutoMappingContext() const { return AutoMappingContext; }
 
+	/**
+	 * Puts the resolved MappingContexts on a local player's input and takes the ReplacedMappingContexts off it, when they are not already so.
+	 * Cheap when nothing changed (lookups only), so the player input source calls it every frame: a Blueprint that adds its context later
+	 * (BeginPlay, a possess) loses it again within a frame. Local presentation, never simulation state
+	 */
+	void ApplyMappingContexts(IEnhancedInputSubsystemInterface& Input) const;
+
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
 #endif
@@ -151,4 +188,14 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputMappingContext> AutoMappingContext;
+
+	/** MappingContexts, loaded by ResolveActions, with their priorities in the same order */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UInputMappingContext>> ResolvedContexts;
+
+	TArray<int32> ResolvedContextPriorities;
+
+	/** ReplacedMappingContexts, loaded by ResolveActions */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UInputMappingContext>> ResolvedReplacedContexts;
 };

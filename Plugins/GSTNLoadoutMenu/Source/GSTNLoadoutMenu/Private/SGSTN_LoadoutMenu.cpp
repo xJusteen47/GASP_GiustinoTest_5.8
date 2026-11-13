@@ -38,13 +38,18 @@ void SGSTN_LoadoutMenu::Construct(const FArguments& InArgs)
 	];
 }
 
-void SGSTN_LoadoutMenu::Refresh(const FGSTN_LoadoutDraft& Draft, const FText& Hint, const FString& Feedback)
+void SGSTN_LoadoutMenu::Refresh(const FGSTN_LoadoutDraft& Draft, const FText& Hint, const FString& Feedback, bool bDebug, const FString& Applied)
 {
 	if (!Rows.IsValid())
 	{
 		return;
 	}
 	Rows->ClearChildren();
+	if (bDebug)
+	{
+		RefreshDebug(Draft, Hint, Feedback, Applied);
+		return;
+	}
 
 	Rows->AddSlot()
 	.AutoHeight()
@@ -123,6 +128,39 @@ void SGSTN_LoadoutMenu::Refresh(const FGSTN_LoadoutDraft& Draft, const FText& Hi
 		.Font(FCoreStyle::GetDefaultFontStyle("Regular", 16))
 		.ColorAndOpacity(FSlateColor(FLinearColor(0.8f, 0.85f, 1.f)))
 	];
+}
+
+void SGSTN_LoadoutMenu::RefreshDebug(const FGSTN_LoadoutDraft& Draft, const FText& Hint, const FString& Feedback, const FString& Applied)
+{
+	// Bare on purpose (the owner's debug pad): plain lines, the cursor as ">", every number visible
+	const FSlateFontInfo Font = FCoreStyle::GetDefaultFontStyle("Mono", 14);
+	auto Line = [this, &Font](const FString& Text, const FLinearColor& Color)
+	{
+		Rows->AddSlot()
+		.AutoHeight()
+		[
+			SNew(STextBlock)
+			.Text(FText::FromString(Text))
+			.AutoWrapText(true)
+			.Font(Font)
+			.ColorAndOpacity(FSlateColor(Color))
+		];
+	};
+	Line(TEXT("LOADOUT DEBUG"), TextLight);
+	Line(FString::Printf(TEXT("applied kit: %s"), *Applied), TextLight);
+	Line(FString::Printf(TEXT("draft kit:   %s"), *Draft.GetData().PrimaryKit.ToString()), TextLight);
+	const TArray<FGSTN_LoadoutChoiceRow>& Choices = Draft.GetRows();
+	for (int32 Index = 0; Index < Choices.Num(); ++Index)
+	{
+		const FGSTN_LoadoutChoiceRow& Row = Choices[Index];
+		const FGSTN_LoadoutChoiceOption* Current = Row.Options.IsValidIndex(Row.Selected) ? &Row.Options[Row.Selected] : nullptr;
+		Line(FString::Printf(TEXT("%s %-10s %s  [%d/%d]%s"), Index == Draft.GetCursor() ? TEXT(">") : TEXT(" "), *Row.Id.ToString(),
+			Current ? *Current->Label.ToString() : TEXT("(custom)"), Row.Selected + 1, Row.Options.Num(),
+			Current && !Current->bValid ? TEXT(" REFUSED") : TEXT("")), Index == Draft.GetCursor() ? FLinearColor(1.f, 0.85f, 0.2f) : TextLight);
+	}
+	Line(FString::Printf(TEXT("valid: %s %s"), Draft.IsValid() ? TEXT("yes") : TEXT("no"), *(!Feedback.IsEmpty() ? Feedback : Draft.GetProblem())),
+		Draft.IsValid() && Feedback.IsEmpty() ? TextLight : TextRefused);
+	Line(Hint.ToString(), FLinearColor(0.7f, 0.75f, 0.9f));
 }
 
 #undef LOCTEXT_NAMESPACE

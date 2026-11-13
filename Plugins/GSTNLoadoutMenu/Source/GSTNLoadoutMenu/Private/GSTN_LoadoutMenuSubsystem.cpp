@@ -129,23 +129,44 @@ void UGSTN_LoadoutMenuSubsystem::Tick(float DeltaTime)
 			CloseMenu();
 			return;
 		}
+		// The player's contexts changed since the copy (see the class comment): copy them again before reading the menu's actions
+		if (HasUncopiedKeys())
+		{
+			CopyPlayerKeys();
+		}
 		HandleInput(DeltaTime);
 	}
 }
 
-bool UGSTN_LoadoutMenuSubsystem::OpenMenu()
+bool UGSTN_LoadoutMenuSubsystem::OpenMenu(bool bInDebug)
 {
 	if (bOpen)
 	{
+		if (bDebug != bInDebug)
+		{
+			// The pad asks for the other look of a screen already open: same draft, redrawn
+			bDebug = bInDebug;
+			RefreshWidget();
+		}
 		return true;
 	}
 	ULocalPlayer* Player = GetLocalPlayer();
 	UGSTN_LoadoutComponent* Found = FindLoadoutComponent();
 	const UGSTN_InputConfig* Config = IGSTN_InputConfigSource::FindOn(GetPawn());
-	if (!Player || !Player->ViewportClient || !Found || !Config || !SetUpInput(*Config))
+	OpenProblem = !Player || !Player->ViewportClient ? TEXT("no local player viewport")
+		: !GetPawn() ? TEXT("no pawn")
+		: !Found ? TEXT("no loadout component on the PlayerState or the pawn")
+		: !Config ? TEXT("the pawn has no input config (IGSTN_InputConfigSource)")
+		: FString();
+	if (OpenProblem.IsEmpty() && !SetUpInput(*Config))
+	{
+		OpenProblem = TEXT("the input config has no Move action or no button for the layout function Menu.Confirm");
+	}
+	if (!OpenProblem.IsEmpty())
 	{
 		return false;
 	}
+	bDebug = bInDebug;
 	Component = Found;
 	Found->OnLoadoutRejected.AddUniqueDynamic(this, &UGSTN_LoadoutMenuSubsystem::HandleRejected);
 
@@ -174,7 +195,8 @@ bool UGSTN_LoadoutMenuSubsystem::OpenMenu()
 	{
 		RowNames.Add(FString::Printf(TEXT("%s(%d)"), *Row.Id.ToString(), Row.Options.Num()));
 	}
-	UE_LOG(LogGSTNLoadoutMenu, Log, TEXT("%s: loadout screen open, kit %s, rows: %s"), *Player->GetName(), *Draft.GetData().PrimaryKit.ToString(), *FString::Join(RowNames, TEXT(" ")));
+	UE_LOG(LogGSTNLoadoutMenu, Log, TEXT("%s: loadout screen open%s, kit %s, rows: %s"), *Player->GetName(), bDebug ? TEXT(" (debug)") : TEXT(""),
+		*Draft.GetData().PrimaryKit.ToString(), *FString::Join(RowNames, TEXT(" ")));
 	return true;
 }
 
@@ -199,16 +221,13 @@ bool UGSTN_LoadoutMenuSubsystem::SetUpInput(const UGSTN_InputConfig& Config)
 {
 	ULocalPlayer* Player = GetLocalPlayer();
 	UEnhancedInputLocalPlayerSubsystem* Input = Player ? Player->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>() : nullptr;
-	const UEnhancedPlayerInput* PlayerInput = Input ? Input->GetPlayerInput() : nullptr;
-	const UInputAction* SourceMove = Config.GetMoveAction();
-	const UInputAction* SourceConfirm = GSTNLoadoutMenu::FindFunctionAction(Config, GSTNLoadoutMenu::ConfirmFunction);
-	const UInputAction* SourceBack = GSTNLoadoutMenu::FindFunctionAction(Config, GSTNLoadoutMenu::BackFunction);
-	if (!PlayerInput || !SourceMove || !SourceConfirm)
+	SourceMove = Config.GetMoveAction();
+	SourceConfirm = GSTNLoadoutMenu::FindFunctionAction(Config, GSTNLoadoutMenu::ConfirmFunction);
+	SourceBack = GSTNLoadoutMenu::FindFunctionAction(Config, GSTNLoadoutMenu::BackFunction);
+	if (!Input || !Input->GetPlayerInput() || !SourceMove.IsValid() || !SourceConfirm.IsValid())
 	{
 		return false;
 	}
-	ConfirmHint = DescribeKeys(SourceConfirm);
-	BackHint = SourceBack ? DescribeKeys(SourceBack) : FText::GetEmpty();
 
 	auto MakeAction = [this](const TCHAR* Name, EInputActionValueType Type)
 	{
@@ -222,27 +241,79 @@ bool UGSTN_LoadoutMenuSubsystem::SetUpInput(const UGSTN_InputConfig& Config)
 	ConfirmAction = MakeAction(TEXT("IA_GSTN_MenuConfirm"), EInputActionValueType::Boolean);
 	BackAction = MakeAction(TEXT("IA_GSTN_MenuBack"), EInputActionValueType::Boolean);
 	SwallowAction = MakeAction(TEXT("IA_GSTN_MenuSwallow"), EInputActionValueType::Axis3D);
+	CopyPlayerKeys();
+	return true;
+}
 
-	// The player's keys as they are now (their remaps included), each onto a menu action; everything else is swallowed
+void UGSTN_LoadoutMenuSubsystem::CopyPlayerKeys()
+{
+	ULocalPlayer* Player = GetLocalPlayer();
+	UEnhancedInputLocalPlayerSubsystem* Input = Player ? Player->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>() : nullptr;
+	const UEnhancedPlayerInput* PlayerInput = Input ? Input->GetPlayerInput() : nullptr;
+	if (!PlayerInput || !MenuContext)
+	{
+		return;
+	}
+	// The player's mappings as they are now, without the menu's: contexts added this frame are only applied at the next rebuild, which a
+	// deferred request would leave to the end of the frame
+	FModifyContextOptions Now;
+	Now.bForceImmediately = true;
+	if (Input->HasMappingContext(MenuContext))
+	{
+		Input->RemoveMappingContext(MenuContext, Now);
+	}
+	else
+	{
+		Input->RequestRebuildControlMappings(Now);
+	}
+	MenuContext->UnmapAll();
+
+	// Every key the player has (their remaps included), each onto a menu action; everything else is swallowed
+	int32 Copied = 0;
 	for (const FEnhancedActionKeyMapping& Mapping : PlayerInput->GetEnhancedActionMappingsView())
 	{
 		if (!Mapping.Action || !Mapping.Key.IsValid())
 		{
 			continue;
 		}
-		const UInputAction* Target = Mapping.Action == SourceMove ? MoveAction.Get()
-			: Mapping.Action == SourceConfirm ? ConfirmAction.Get()
-			: Mapping.Action == SourceBack ? BackAction.Get()
+		const UInputAction* Target = Mapping.Action == SourceMove.Get() ? MoveAction.Get()
+			: Mapping.Action == SourceConfirm.Get() ? ConfirmAction.Get()
+			: Mapping.Action == SourceBack.Get() ? BackAction.Get()
 			: SwallowAction.Get();
 		FEnhancedActionKeyMapping& Copy = MenuContext->MapKey(Target, Mapping.Key);
+		++Copied;
 		if (Target == MoveAction)
 		{
 			// The modifiers make WASD a 2D axis (swizzle, negate) exactly as the player's move reads it
 			Copy.Modifiers = Mapping.Modifiers;
 		}
 	}
-	Input->AddMappingContext(MenuContext, GSTNLoadoutMenu::ContextPriority);
-	return true;
+	Input->AddMappingContext(MenuContext, GSTNLoadoutMenu::ContextPriority, Now);
+	ConfirmHint = DescribeKeys(ConfirmAction);
+	BackHint = DescribeKeys(BackAction);
+	RefreshWidget();
+	UE_LOG(LogGSTNLoadoutMenu, Log, TEXT("%s: loadout screen copied %d key mappings"), *Player->GetName(), Copied);
+}
+
+bool UGSTN_LoadoutMenuSubsystem::HasUncopiedKeys() const
+{
+	const ULocalPlayer* Player = GetLocalPlayer();
+	const UEnhancedInputLocalPlayerSubsystem* Input = Player ? Player->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>() : nullptr;
+	const UEnhancedPlayerInput* PlayerInput = Input ? Input->GetPlayerInput() : nullptr;
+	if (!PlayerInput || !MenuContext)
+	{
+		return false;
+	}
+	// The menu's actions consume their keys, so a mapping of another action that survived the rebuild is a key the copy does not have
+	for (const FEnhancedActionKeyMapping& Mapping : PlayerInput->GetEnhancedActionMappingsView())
+	{
+		if (Mapping.Action && Mapping.Key.IsValid() && Mapping.Action != MoveAction && Mapping.Action != ConfirmAction
+			&& Mapping.Action != BackAction && Mapping.Action != SwallowAction)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 void UGSTN_LoadoutMenuSubsystem::TearDownInput()
@@ -254,6 +325,9 @@ void UGSTN_LoadoutMenuSubsystem::TearDownInput()
 		Input->RemoveMappingContext(MenuContext);
 	}
 	MenuContext = nullptr;
+	SourceMove.Reset();
+	SourceConfirm.Reset();
+	SourceBack.Reset();
 }
 
 void UGSTN_LoadoutMenuSubsystem::HandleInput(float DeltaTime)
@@ -395,7 +469,13 @@ void UGSTN_LoadoutMenuSubsystem::RefreshWidget()
 	const FText Hint = BackHint.IsEmpty()
 		? FText::Format(LOCTEXT("HintConfirm", "Levetta: scegli    {0}: conferma"), ConfirmHint)
 		: FText::Format(LOCTEXT("Hint", "Levetta: scegli    {0}: conferma    {1}: esci"), ConfirmHint, BackHint);
-	Widget->Refresh(Draft, Hint, Feedback);
+	FString Applied;
+	if (bDebug)
+	{
+		const UGSTN_LoadoutComponent* Target = Component.Get();
+		Applied = Target && Target->HasLoadout() ? Target->GetApplied().PrimaryKit.ToString() : TEXT("(none)");
+	}
+	Widget->Refresh(Draft, Hint, Feedback, bDebug, Applied);
 }
 
 #undef LOCTEXT_NAMESPACE

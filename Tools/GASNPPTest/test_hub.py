@@ -233,9 +233,18 @@ def play_setup():
 
 def _pad_check():
     world = g.worlds()[0]
+    snapshot = g.snap(world)
     for i in _players():
-        key = _key(i)
-        loc = g.snap(world)[key]['location']
+        # A player between pawns (respawn, a GASP pawn switch, a client not replicated yet) or on a pawn that is not the test character has
+        # no snapshot entry: skip it this round instead of failing the whole check every tick
+        try:
+            key = _key(i)
+        except RuntimeError:
+            continue
+        if key not in snapshot:
+            _watch['on_pad'].pop(key, None)
+            continue
+        loc = snapshot[key]['location']
         dx, dy = hub.DEBUG_PAD[1]
         if math.hypot(loc[0] - dx, loc[1] - dy) < hub.PAD_RADIUS:
             if _watch['on_pad'].get(key) != 'debug':

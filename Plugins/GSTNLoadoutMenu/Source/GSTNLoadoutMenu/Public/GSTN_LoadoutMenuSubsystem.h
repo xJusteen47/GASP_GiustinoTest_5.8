@@ -25,7 +25,13 @@ class UInputMappingContext;
  * "Menu.Confirm" and "Menu.Back" (UGSTN_ButtonLayout, defaults in DefaultGSTNInput.ini), through the pawn's input config
  * (IGSTN_InputConfigSource). While open, a transient mapping context copies every key the player has mapped (their remaps included)
  * onto the menu's own actions at a high priority and consumes them, so the character neither moves nor attacks and the simulation
- * keeps getting a neutral command. Nothing here runs in the simulation; it is local presentation and one RPC.
+ * keeps getting a neutral command. The copy follows the player's contexts while the screen is open: a context added or removed after it opened
+ * (the pawn binding its ability input a few frames after spawning, the input config replacing the base game's context) is copied again, so
+ * no key is left unmapped (the first version copied once, at the first frame of the pawn, when the player had no keys yet: the screen got
+ * nothing and the character kept moving). Nothing here runs in the simulation; it is local presentation and one RPC.
+ *
+ * Debug mode (OpenMenu(true), the loadout debug pad AGSTN_LoadoutMenuPad): the same draft and input, drawn as a bare text list with every
+ * row's index and option count, the applied kit and the rules' verdict.
  */
 UCLASS()
 class GSTNLOADOUTMENU_API UGSTN_LoadoutMenuSubsystem : public ULocalPlayerSubsystem, public FTickableGameObject
@@ -33,9 +39,15 @@ class GSTNLOADOUTMENU_API UGSTN_LoadoutMenuSubsystem : public ULocalPlayerSubsys
 	GENERATED_BODY()
 
 public:
-	/** Opens the screen for this player. False while there is no pawn, loadout component or input config yet */
+	/**
+	 * Opens the screen for this player (bDebug: the bare debug list). False while there is no pawn, loadout component or input config yet;
+	 * GetOpenProblem says which
+	 */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
-	bool OpenMenu();
+	bool OpenMenu(bool bDebug = false);
+
+	/** Why the last OpenMenu returned false, empty after one that opened */
+	const FString& GetOpenProblem() const { return OpenProblem; }
 
 	/** Closes it without sending anything */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Loadout")
@@ -67,6 +79,12 @@ private:
 	bool SetUpInput(const UGSTN_InputConfig& Config);
 	void TearDownInput();
 
+	/** (Re)fills MenuContext from the player's mappings without it and applies it at once */
+	void CopyPlayerKeys();
+
+	/** True when a mapping of the player's own contexts reaches the player past the menu's copy (a context that changed after the copy) */
+	bool HasUncopiedKeys() const;
+
 	/** Stick and buttons, polled each frame while open */
 	void HandleInput(float DeltaTime);
 	void Confirm();
@@ -83,6 +101,13 @@ private:
 	TWeakObjectPtr<UWorld> AutoOpenWorld;
 	bool bAutoOpenDone = false;
 	bool bOpen = false;
+	bool bDebug = false;
+	FString OpenProblem;
+
+	/** The player's own actions the menu actions stand for (resolved from the input config at open) */
+	TWeakObjectPtr<const UInputAction> SourceMove;
+	TWeakObjectPtr<const UInputAction> SourceConfirm;
+	TWeakObjectPtr<const UInputAction> SourceBack;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputMappingContext> MenuContext;

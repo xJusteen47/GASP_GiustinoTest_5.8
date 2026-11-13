@@ -18,13 +18,22 @@ server every player does it on their own machine. Slate only, built in C++: no w
   confirm and back are the button layout functions `Menu.Confirm` (A, `Input.Button.Jump`) and `Menu.Back` (B, `Input.Button.Interact`)
   in `Plugins/GSTNInput/Config/DefaultGSTNInput.ini`. While open, a transient mapping context copies every key the player has mapped
   onto the menu's actions at priority 100000 and consumes them: the character stays still, the simulation gets a neutral command.
+  The copy reads the mappings after an immediate rebuild and is redone whenever a key of another action reaches the player (a context
+  added or removed after opening). The first version copied once, at the pawn's first frame, before the player had any key: the menu got
+  nothing and the character kept moving (owner's pad playtest, 2026-11-13).
 
 ## When it opens
 
 `UGSTN_LoadoutMenuRules` (GameRules piece "Loadout screen", defaults in `Config/DefaultGSTNLoadoutMenu.ini`): by itself once per level
 when the player's pawn first appears, only in `AutoOpenLevels` (the playtest hub `L_Test_Hub`) or everywhere with `bAutoOpenEverywhere`.
 Mods and specials change before the match only (`bAllowSpecialSwapInMatch` stays off); during the match only kit pickups change the
-kit. Console `GSTN.LoadoutMenu` opens or closes it anywhere (testing). `-GSTNNoLoadoutMenu` and automation keep it shut.
+kit. Console `GSTN.LoadoutMenu` opens or closes it anywhere (testing; when it cannot open, the reason goes to the screen and the log).
+`-GSTNNoLoadoutMenu` and automation keep it shut.
+
+**Loadout debug pad** (`AGSTN_LoadoutMenuPad`): a plate on the floor; a local player stepping on it gets the screen as a bare debug list
+(rows with index and option count, applied kit, the rules' verdict). The rules' `Pads` list puts pads in a level at Play (the hub has one
+at (1200, 1800), next to the hitbox debug pad), so the level is not saved with it; a level can also hold its own. `GSTN.LoadoutMenuDebug`
+opens the same list from the console. `GSTN.InputDump` logs each local player's mapping contexts and live key mappings.
 
 ## Not built
 

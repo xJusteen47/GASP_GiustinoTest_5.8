@@ -2,6 +2,7 @@
 
 #include "Input/GSTN_InputConfig.h"
 #include "InputAction.h"
+#include "EnhancedInputSubsystemInterface.h"
 #include "InputMappingContext.h"
 #include "UObject/Package.h"
 #include "Misc/DataValidation.h"
@@ -50,6 +51,24 @@ void UGSTN_InputConfig::ResolveActions()
 		ResolvedButtonActions.Add(Button.Action.IsNull() ? nullptr : Button.Action.LoadSynchronous());
 	}
 	ResolvedMoveAction = MoveAction.IsNull() ? nullptr : MoveAction.LoadSynchronous();
+	ResolvedContexts.Reset(MappingContexts.Num());
+	ResolvedContextPriorities.Reset(MappingContexts.Num());
+	for (const FGSTN_InputContextEntry& Entry : MappingContexts)
+	{
+		if (UInputMappingContext* Context = Entry.Context.IsNull() ? nullptr : Entry.Context.LoadSynchronous())
+		{
+			ResolvedContexts.Add(Context);
+			ResolvedContextPriorities.Add(Entry.Priority);
+		}
+	}
+	ResolvedReplacedContexts.Reset(ReplacedMappingContexts.Num());
+	for (const TSoftObjectPtr<UInputMappingContext>& Replaced : ReplacedMappingContexts)
+	{
+		if (UInputMappingContext* Context = Replaced.IsNull() ? nullptr : Replaced.LoadSynchronous())
+		{
+			ResolvedReplacedContexts.Add(Context);
+		}
+	}
 	// The automatic actions of the previous resolve, kept to be reused below: every pawn that runs this shared config resolves it
 	// again (each spawn, each kit swap), and a new context each time piled up on the local players (dozens seen in a playtest)
 	UInputMappingContext* const PreviousAutoContext = AutoMappingContext;
@@ -105,6 +124,28 @@ void UGSTN_InputConfig::ResolveActions()
 		Context->MapKey(ResolvedReticleToggleAction, AutoReticleToggleKey);
 	}
 	AutoMappingContext = Context->GetMappings().Num() > 0 ? Context : nullptr;
+}
+
+void UGSTN_InputConfig::ApplyMappingContexts(IEnhancedInputSubsystemInterface& Input) const
+{
+	for (const UInputMappingContext* Replaced : ResolvedReplacedContexts)
+	{
+		// A config that lists the same context on both sides keeps it: its own list wins
+		if (Replaced && Input.HasMappingContext(Replaced) && !ResolvedContexts.Contains(Replaced))
+		{
+			Input.RemoveMappingContext(Replaced);
+		}
+	}
+	for (int32 Index = 0; Index < ResolvedContexts.Num(); ++Index)
+	{
+		int32 Priority = 0;
+		const UInputMappingContext* Context = ResolvedContexts[Index];
+		if (Context && (!Input.HasMappingContext(Context, Priority) || Priority != ResolvedContextPriorities[Index]))
+		{
+			// Adding an applied context again only moves it to the new priority
+			Input.AddMappingContext(Context, ResolvedContextPriorities[Index]);
+		}
+	}
 }
 
 UInputAction* UGSTN_InputConfig::GetButtonAction(int32 ButtonIndex) const
