@@ -1,7 +1,10 @@
 // Combat vocabulary that needs the ability system (no Network Prediction, no Mover).
 
 #include "Cosmetics/GSTN_EquipmentVisual.h"
+#include "Components/ChildActorComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
+#include "GameFramework/Actor.h"
 #include "Engine/StaticMesh.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Kits/GSTN_WeaponDefinition.h"
@@ -166,4 +169,48 @@ void FGSTN_EquipmentVisualUtils::Validate(const FGSTN_EquipmentVisual& Visual, c
 			}
 		}
 	}
+}
+
+namespace
+{
+	/** Drawn in game: visible, not hidden in game, with a mesh asset */
+	bool IsShownInGame(const USkeletalMeshComponent* Mesh)
+	{
+		return Mesh && Mesh->GetSkeletalMeshAsset() && Mesh->IsVisible() && !Mesh->bHiddenInGame;
+	}
+
+	USkeletalMeshComponent* FindShownMesh(const AActor& Actor)
+	{
+		TInlineComponentArray<USkeletalMeshComponent*> Meshes(&Actor);
+		for (USkeletalMeshComponent* Mesh : Meshes)
+		{
+			if (IsShownInGame(Mesh))
+			{
+				return Mesh;
+			}
+		}
+		return nullptr;
+	}
+}
+
+USkeletalMeshComponent* FGSTN_EquipmentVisualUtils::FindShownBodyMesh(const AActor& Pawn, USkeletalMeshComponent* Preferred)
+{
+	if (IsShownInGame(Preferred))
+	{
+		return Preferred;
+	}
+	if (USkeletalMeshComponent* Own = FindShownMesh(Pawn))
+	{
+		return Own;
+	}
+	TInlineComponentArray<UChildActorComponent*> Children(&Pawn);
+	for (const UChildActorComponent* Child : Children)
+	{
+		const AActor* ChildActor = Child ? Child->GetChildActor() : nullptr;
+		if (USkeletalMeshComponent* Shown = ChildActor ? FindShownMesh(*ChildActor) : nullptr)
+		{
+			return Shown;
+		}
+	}
+	return Preferred;
 }

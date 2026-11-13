@@ -44,6 +44,8 @@ UGSTN_SkinComponent::UGSTN_SkinComponent()
 	SocketFallbacks.Add(TEXT("Implant_Leg_R"), TEXT("calf_r"));
 	SocketFallbacks.Add(GSTNEquipment::Socket_WeaponHandR, TEXT("hand_r"));
 	SocketFallbacks.Add(TEXT("Weapon_Hand_L"), TEXT("hand_l"));
+	// A backpack with no back implant asks the body for the implant's connector: the upper back, not the mesh origin at the feet
+	SocketFallbacks.Add(GSTNEquipment::Socket_ConnectorBackpack, TEXT("spine_05"));
 }
 
 void UGSTN_SkinComponent::BeginPlay()
@@ -66,6 +68,7 @@ void UGSTN_SkinComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(RetryHandle);
+		World->GetTimerManager().ClearTimer(MeshCheckHandle);
 	}
 	if (UGSTN_LoadoutComponent* Loadout = BoundLoadout.Get())
 	{
@@ -84,6 +87,22 @@ USkeletalMeshComponent* UGSTN_SkinComponent::GetTargetMesh() const
 		return Character->GetMesh();
 	}
 	return GetOwner() ? GetOwner()->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
+}
+
+USkeletalMeshComponent* UGSTN_SkinComponent::GetAttachmentMesh() const
+{
+	USkeletalMeshComponent* Target = GetTargetMesh();
+	const AActor* Owner = GetOwner();
+	return bFollowVisibleMesh && Owner ? FGSTN_EquipmentVisualUtils::FindShownBodyMesh(*Owner, Target) : Target;
+}
+
+void UGSTN_SkinComponent::CheckAttachmentMesh()
+{
+	// Only once pieces exist or were asked for: a pawn with no equipment look has nothing to move
+	if ((!Attachments.IsEmpty() || IsAttachmentLoadPending()) && GetAttachmentMesh() != AttachedToMesh.Get())
+	{
+		RefreshAttachments();
+	}
 }
 
 void UGSTN_SkinComponent::RetryBind()
@@ -122,6 +141,11 @@ void UGSTN_SkinComponent::BindToLoadout(UGSTN_LoadoutComponent* Loadout)
 		return;
 	}
 	Loadout->OnLoadoutApplied.AddUniqueDynamic(this, &UGSTN_SkinComponent::HandleLoadoutApplied);
+	UWorld* World = GetWorld();
+	if (bFollowVisibleMesh && World && GetNetMode() != NM_DedicatedServer && !World->GetTimerManager().IsTimerActive(MeshCheckHandle))
+	{
+		World->GetTimerManager().SetTimer(MeshCheckHandle, this, &UGSTN_SkinComponent::CheckAttachmentMesh, VisibleMeshCheckInterval, true);
+	}
 	if (Loadout->HasLoadout())
 	{
 		ApplySkin(Loadout->GetResolvedSkin());
@@ -167,7 +191,7 @@ bool UGSTN_SkinComponent::IsAttachmentLoadPending() const
 void UGSTN_SkinComponent::RefreshAttachments()
 {
 	CancelPendingLoad();
-	if (GetNetMode() == NM_DedicatedServer || !GetTargetMesh() || !GetOwner())
+	if (GetNetMode() == NM_DedicatedServer || !GetAttachmentMesh() || !GetOwner())
 	{
 		ClearAttachments();
 		return;
@@ -247,7 +271,8 @@ FName UGSTN_SkinComponent::ResolveSocket(const USceneComponent& Parent, FName So
 void UGSTN_SkinComponent::BuildAttachments(const TArray<FGSTN_AttachmentRequest>& Pieces)
 {
 	ClearAttachments();
-	USkeletalMeshComponent* Mesh = GetTargetMesh();
+	USkeletalMeshComponent* Mesh = GetAttachmentMesh();
+	AttachedToMesh = Mesh;
 	AActor* Owner = GetOwner();
 	if (!Mesh || !Owner || GetNetMode() == NM_DedicatedServer)
 	{

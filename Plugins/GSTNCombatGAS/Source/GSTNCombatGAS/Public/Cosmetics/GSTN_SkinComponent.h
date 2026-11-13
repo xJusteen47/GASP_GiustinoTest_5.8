@@ -83,6 +83,18 @@ public:
 	TMap<FName, FName> SocketFallbacks;
 
 	/**
+	 * Put the equipment pieces on the mesh the player actually sees. GASP draws the character through a visual override (a child actor
+	 * whose skeletal mesh copies the pose of the pawn's mesh) and hides the pawn's own mesh: a piece on the hidden mesh would not sit on
+	 * the visible body. When the target mesh is hidden, the pieces go on the first visible skeletal mesh of the pawn or of its child actors
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skin|Equipment")
+	bool bFollowVisibleMesh = true;
+
+	/** Seconds between two checks that the visible mesh is still the one the pieces sit on (the visual override can change in play) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skin|Equipment", meta = (ClampMin = "0.05", ForceUnits = "s", EditCondition = "bFollowVisibleMesh"))
+	float VisibleMeshCheckInterval = 0.5f;
+
+	/**
 	 * Asks the loadout and the registered providers again for the bound loadout (or none) and rebuilds the pieces. The meshes load
 	 * asynchronously: the current pieces stay until the new ones are ready (already loaded meshes swap at once). A newer refresh
 	 * cancels a pending one
@@ -123,7 +135,20 @@ protected:
 	/** The mesh the skin goes on: the Character's mesh, else the owner's first skeletal mesh component */
 	virtual USkeletalMeshComponent* GetTargetMesh() const;
 
+	/**
+	 * The mesh the equipment pieces go on: the target mesh, or with bFollowVisibleMesh and a hidden target mesh, the first visible skeletal
+	 * mesh of the pawn, then of its child actors (GASP's visual override). The skin itself stays on the target mesh, which drives the pose
+	 */
+	virtual USkeletalMeshComponent* GetAttachmentMesh() const;
+
 private:
+	/** Rebuilds the pieces when the visible mesh changed since they were built */
+	void CheckAttachmentMesh();
+
+	/** The mesh the current pieces sit on */
+	TWeakObjectPtr<USkeletalMeshComponent> AttachedToMesh;
+	FTimerHandle MeshCheckHandle;
+
 	UFUNCTION()
 	void HandleLoadoutApplied(UGSTN_LoadoutComponent* Component, int32 Revision);
 

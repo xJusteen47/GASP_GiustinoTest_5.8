@@ -2,7 +2,12 @@
 
 #include "Pickups/GSTN_KitPlaceholderLook.h"
 
+#include "AnimationRuntime.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Cosmetics/GSTN_EquipmentVisual.h"
+#include "Engine/SkeletalMesh.h"
+#include "GameFramework/Character.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "GameFramework/GameStateBase.h"
@@ -22,9 +27,43 @@ namespace GSTNKitPlaceholderLook
 	static const TCHAR* CubePath = TEXT("/Engine/BasicShapes/Cube.Cube");
 	static const TCHAR* MaterialPath = TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial");
 
-	// Upper back, relative to the pawn's root (the capsule centre, facing +X): 30 x 40 x 50 cm
+	// Upper back, relative to the pawn's root (the capsule centre, facing +X): 30 x 40 x 50 cm. This is the place in the body's rest pose;
+	// the box then rides the back bone, so it follows the animation
 	static const FVector BackOffset(-28.f, 0.f, 35.f);
 	static const FVector BackScale(0.15f, 0.4f, 0.5f);
+
+	// UE5 mannequin upper back (GASP characters and their visual overrides share the bone names)
+	static const FName BackBone(TEXT("spine_05"));
+
+	/** The skeletal mesh that draws the pawn: the one the box must follow */
+	USkeletalMeshComponent* FindBody(const APawn& Pawn)
+	{
+		const ACharacter* Character = Cast<ACharacter>(&Pawn);
+		USkeletalMeshComponent* Preferred = Character ? Character->GetMesh() : Pawn.FindComponentByClass<USkeletalMeshComponent>();
+		return FGSTN_EquipmentVisualUtils::FindShownBodyMesh(Pawn, Preferred);
+	}
+
+	/**
+	 * Puts Box on Body's back bone where BackOffset puts it relative to the pawn's root in the rest pose. The bone's rest transform comes
+	 * from the reference skeleton, not the current pose, so the place is the same whatever the pawn is doing when the box is attached,
+	 * and no bone axis convention is assumed. Without the bone (another skeleton), the box stays on the root as before
+	 */
+	void AttachToBack(UStaticMeshComponent& Box, const APawn& Pawn, USkeletalMeshComponent* Body)
+	{
+		USceneComponent* Root = Pawn.GetRootComponent();
+		const USkeletalMesh* Asset = Body ? Body->GetSkeletalMeshAsset() : nullptr;
+		const int32 Bone = Asset ? Asset->GetRefSkeleton().FindBoneIndex(BackBone) : INDEX_NONE;
+		if (!Root || Bone == INDEX_NONE)
+		{
+			Box.AttachToComponent(Root, FAttachmentTransformRules::KeepRelativeTransform);
+			Box.SetRelativeTransform(FTransform(FQuat::Identity, BackOffset, BackScale));
+			return;
+		}
+		const FTransform Wanted = FTransform(FQuat::Identity, BackOffset, BackScale) * Root->GetComponentTransform();
+		const FTransform BoneAtRest = FAnimationRuntime::GetComponentSpaceTransformRefPose(Asset->GetRefSkeleton(), Bone) * Body->GetComponentTransform();
+		Box.AttachToComponent(Body, FAttachmentTransformRules::KeepRelativeTransform, BackBone);
+		Box.SetRelativeTransform(Wanted.GetRelativeTransform(BoneAtRest));
+	}
 }
 
 FLinearColor UGSTN_KitPlaceholderLookSubsystem::ColourForKit(const FPrimaryAssetId& Kit)
@@ -136,10 +175,16 @@ void UGSTN_KitPlaceholderLookSubsystem::Refresh()
 			Box->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 			Box->SetGenerateOverlapEvents(false);
 			Box->SetupAttachment(Pawn->GetRootComponent());
-			Box->SetRelativeLocation(GSTNKitPlaceholderLook::BackOffset);
-			Box->SetRelativeScale3D(GSTNKitPlaceholderLook::BackScale);
 			Box->RegisterComponent();
 			Marker = &Markers.Add(Pawn, FMarker{Box, FPrimaryAssetId()});
+		}
+		// The body that draws the pawn can change in play (GASP's visual override spawns its child actor late, or is switched)
+		UStaticMeshComponent* Box = Marker->Component.Get();
+		USkeletalMeshComponent* Body = GSTNKitPlaceholderLook::FindBody(*Pawn);
+		if (Box && (!Marker->Body.IsValid() || Marker->Body.Get() != Body))
+		{
+			GSTNKitPlaceholderLook::AttachToBack(*Box, *Pawn, Body);
+			Marker->Body = Body;
 		}
 		if (Marker->Kit != Kit)
 		{
