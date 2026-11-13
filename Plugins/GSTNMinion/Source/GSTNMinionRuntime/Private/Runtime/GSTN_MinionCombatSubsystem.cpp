@@ -2046,6 +2046,11 @@ void UGSTN_MinionCombatSubsystem::RunAttackQueries(int32 Slot, int32 Frame, cons
 			}
 			for (int32 ExtraPosition = 0; ExtraPosition < Victim.ExtraHurtboxes.Num(); ++ExtraPosition)
 			{
+				// Same outside-only rule as the pawn attacker (M11 L7c): a minion inside a dome never touches its shell
+				if (Victim.ExtraHurtboxes[ExtraPosition].IsSkippedFrom(Root.GetLocation(), Victim.Transform))
+				{
+					continue;
+				}
 				const FGSTN_HitShape& ExtraShape = Victim.ExtraHurtboxes[ExtraPosition].Shape;
 				const bool bTouches = Spec.bSweepBetweenFrames
 					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, ExtraShape, Victim.Transform)

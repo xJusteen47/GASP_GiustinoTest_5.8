@@ -37,6 +37,9 @@ namespace GSTNBackpackTags
 	/** Projected: the entity holds a dome up */
 	GSTNBACKPACKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Dome);
 
+	/** Event (M11 L7c): a hit from outside a dome was blocked by it (the hit did nothing, a melee attacker recoiled). Published on the victim */
+	GSTNBACKPACKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_DomeBlocked);
+
 	/** The empty tag of memory slot Slot (invalid outside 0..3) */
 	GSTNBACKPACKCORE_API FGameplayTag EmptySlotTag(int32 Slot);
 }

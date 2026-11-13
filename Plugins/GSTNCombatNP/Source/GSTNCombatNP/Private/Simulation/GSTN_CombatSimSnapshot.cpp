@@ -164,6 +164,7 @@ bool UGSTN_CombatSimComponent::ReadSnapshotEntry(int32 Frame, FGSTN_SnapshotEntr
 	Contribution.Owner = Owner;
 	Contribution.Fragments = &Sync->Fragments;
 	Contribution.ActionState = Core.ActionState;
+	Contribution.Transform = Out.Transform;
 	FGSTN_SnapshotContributorRegistry::Get().Fill(Contribution, Out);
 	return true;
 }

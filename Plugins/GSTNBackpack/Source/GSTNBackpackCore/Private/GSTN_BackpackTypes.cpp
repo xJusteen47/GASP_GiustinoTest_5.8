@@ -12,6 +12,7 @@ UE_DEFINE_GAMEPLAY_TAG_COMMENT(GSTNBackpackTags::State_Empty_Slot1, "Backpack.St
 UE_DEFINE_GAMEPLAY_TAG_COMMENT(GSTNBackpackTags::State_Empty_Slot2, "Backpack.State.Empty.Slot2", "Projected: backpack memory slot 2 has no charge left");
 UE_DEFINE_GAMEPLAY_TAG_COMMENT(GSTNBackpackTags::State_Empty_Slot3, "Backpack.State.Empty.Slot3", "Projected: backpack memory slot 3 has no charge left");
 UE_DEFINE_GAMEPLAY_TAG_COMMENT(GSTNBackpackTags::State_Dome, "Backpack.State.Dome", "Projected: the entity holds a backpack dome up");
+UE_DEFINE_GAMEPLAY_TAG_COMMENT(GSTNBackpackTags::Event_DomeBlocked, "Backpack.Event.DomeBlocked", "A hit from outside a backpack dome was blocked by it");
 
 FGameplayTag GSTNBackpackTags::EmptySlotTag(int32 Slot)
 {

@@ -10,6 +10,7 @@
 #include "Rules/GSTN_CombatRules.h"
 #include "Simulation/GSTN_CombatAttacker.h"
 #include "StructUtils/InstancedStruct.h"
+#include "Sync/GSTN_SyncFragment.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "UObject/StrongObjectPtr.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
@@ -648,6 +649,43 @@ bool FGSTN_AttackerHitstopTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("no confirm"), static_cast<int32>(Fixture.Core.Hit.HitConfirmFlags), 0);
 		TestFalse(TEXT("no hitstop"), Fixture.Core.IsInHitstop(8));
 		TestTrue(TEXT("the target is still registered: one ricochet per group and run"), Fixture.Core.Hit.HasHitTarget(2, 0, 0));
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_AttackerOutsideOnlyShellTest, "GSTNCombat.NP.Hits.Attacker.OutsideOnlyShell", GSTN_NP_TEST_FLAGS)
+bool FGSTN_AttackerOutsideOnlyShellTest::RunTest(const FString& Parameters)
+{
+	// M11 L7c: a 400 cm outside-only shell around a victim at (300, 0, 0); the hitbox reaches the shell but never the body
+	auto MakeRun = [](const FVector& AttackerRoot, bool bOutsideOnly)
+	{
+		TUniquePtr<FAttackerFixture> Fixture = MakeUnique<FAttackerFixture>();
+		Fixture->AddTrack(0, 10, { FAttackerFixture::MakeSphere(50.0, 0, FVector(100.0, 0.0, 0.0)) });
+		FGSTN_SnapshotEntry& Victim = Fixture->AddEntity(2, 2, FVector(300.0, 0.0, 0.0));
+		FGSTN_ExtraHurtbox& Shell = Victim.ExtraHurtboxes.AddDefaulted_GetRef();
+		Shell.Shape.Type = EGSTN_ShapeType::Sphere;
+		Shell.Shape.Extent = FVector(400.0);
+		Shell.Priority = MAX_uint8;
+		Shell.Source = GSTNFeatureIds::Backpack;
+		Shell.bOutsideOnly = bOutsideOnly;
+		Victim.BoundRadius = FMath::Max(Victim.BoundRadius, static_cast<float>(GSTNExtraHurtboxes::ComputeBoundRadius(Victim.ExtraHurtboxes)));
+		Fixture->Root = FTransform(AttackerRoot);
+		Fixture->Finish();
+		Fixture->Run(0);
+		return Fixture;
+	};
+
+	const TUniquePtr<FAttackerFixture> Inside = MakeRun(FVector::ZeroVector, true);
+	TestEqual(TEXT("an attacker inside never touches the shell"), Inside->Hits.Num(), 0);
+
+	const TUniquePtr<FAttackerFixture> Plain = MakeRun(FVector::ZeroVector, false);
+	TestEqual(TEXT("an ordinary extra in the same place is hit"), Plain->Hits.Num(), 1);
+
+	const TUniquePtr<FAttackerFixture> Outside = MakeRun(FVector(-200.0, 0.0, 0.0), true);
+	TestEqual(TEXT("an attacker outside hits it"), Outside->Hits.Num(), 1);
+	if (Outside->Hits.Num() == 1)
+	{
+		TestEqual(TEXT("on the shell"), static_cast<int32>(Outside->Hits[0].Entry.HurtboxIndex), GSTNHurtboxIndex::FromExtraPosition(0));
 	}
 	return true;
 }

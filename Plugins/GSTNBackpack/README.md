@@ -9,7 +9,7 @@ Optional plugin, `EnabledByDefault` false. Disabled = no backpacks; a saved load
 |---|---|---|
 | `GSTNBackpackCore` | Tags (`Backpack` root, `Command.Backpack.Use`), the loadout extension `FGSTN_LoadoutBackpackExt` (wire id `Backpack`), the pure rule `FGSTN_BackpackLoadoutRules` (equip, one at a time, remove) | `GSTNCombatCore` |
 | `GSTNBackpackGAS` | The asset `UGSTN_BackpackDefinition` (+ the starters `_JetPack`, `_ShieldDome`), the movement effect `UGSTN_GE_BackpackMovement`, the loadout extension `GSTN.Backpack` (priority 200, after the mods) and the attachment provider `GSTN.Backpack` | `GSTNCombatCore`, `GSTNCombatGAS` |
-| `GSTNBackpackNP` | The combat tick extension that runs the backpack's memory and dome (feature id `Backpack` = 21), the dome move `UGSTN_GA_BackpackDome` | `GSTNCombatNP`, `GSTNBackpackCore` |
+| `GSTNBackpackNP` | The combat tick extension that runs the backpack's memory and dome (feature id `Backpack` = 21), the dome move `UGSTN_GA_BackpackDome`, the dome's snapshot contributor, hit step, attacker outcome and content helper (L7c) | `GSTNCombatNP`, `GSTNBackpackCore` |
 
 `GSTNBackpackCore` also holds the sim data (M11 L7b): the fragment `FGSTN_BackpackFragment`, the tracks `FGSTN_BackpackChargeTrack` and
 `FGSTN_BackpackDomeTrack`, the pure step `FGSTN_BackpackStep`, the movement struct `FGSTN_BackpackMovement`.
@@ -37,10 +37,22 @@ never names `GSTNPickups` and the reverse.
 - **Movement** (`FGSTN_BackpackMovement`): extra air jumps and a glide added to the carrier's combat stats while carried
   (`UGSTN_GE_BackpackMovement`). The glide itself is the jump state's (`FGSTN_JumpState::bGliding`): falling with the last jump's button held.
 - **Dome**: a `Backpack Dome` track raises a dome (centre = the carrier at the end of the previous frame, radius, `WhileHeld` or `Deploy`),
-  sync state and the tag `Backpack.State.Dome`. **It does not block hits yet** (next slice).
+  sync state and the tag `Backpack.State.Dome`. It blocks hits from outside (M11 L7c, below).
 - **Starters** (make a data asset of the class, nothing to wire): `GSTN_BackpackDefinition_JetPack` (+1 air jump, glide 0.25 g, 300 cm/s
   cap) and `GSTN_BackpackDefinition_ShieldDome` (the dome move: 400 cm, held, at most 10 s, 2 charges, one back every 20 s). First-guess
   numbers for the playtest.
+
+## Dome blocks hits (M11 L7c, owner 2026-11-13)
+
+- Every hit from outside a dome is blocked: no damage, knockback, hitstun or hitstop; a melee attacker recoils (attacker outcome
+  `Backpack.Dome` = Ricochet: the move's `RicochetResponse`, else the combat default shove), a projectile is spent. Event
+  `Backpack.Event.DomeBlocked` on the victim. A hit never counts on both sides.
+- Side = where the attacker's root was in the step snapshot (end of the previous frame); a projectile's previous position for the shell.
+- Snapshot contributor (feature id 21, the fourth blob: `FGSTN_SnapshotExtensionSet::MaxBlobs` = 4): the carrier's dome, the dome as an
+  outside-only extra hurtbox (`FGSTN_ExtraHurtbox::bOutsideOnly`, priority 255, grabs too) and, per entity, the domes its root stands in.
+- Step `UGSTN_HitStep_BackpackDome` right after TeamFilter: put it in a rules asset with
+  `UGSTN_BackpackContentLibrary::AddDomeStepToRules` (`Tools/GAS/create_backpack_assets.py` does it on the standard rules).
+- Not yet: a displacement push per dome data (the push is the recoil), the dome visual, a harness scenario.
 
 ## Rules
 

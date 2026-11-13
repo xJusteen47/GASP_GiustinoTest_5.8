@@ -491,7 +491,9 @@ bool UGSTN_ProjectileSubsystem::StepProjectile(FGSTN_ActiveProjectile& Projectil
 		}
 		for (int32 ExtraPosition = 0; ExtraPosition < Victim.ExtraHurtboxes.Num(); ++ExtraPosition)
 		{
-			if (UGSTN_HitShapeUtils::SweptOverlap(Shape, Previous, Current, Victim.ExtraHurtboxes[ExtraPosition].Shape, Victim.Transform))
+			// An outside-only shell (the backpack dome, M11 L7c) is not there for a projectile whose previous position is inside it
+			if (!Victim.ExtraHurtboxes[ExtraPosition].IsSkippedFrom(Previous.GetLocation(), Victim.Transform)
+				&& UGSTN_HitShapeUtils::SweptOverlap(Shape, Previous, Current, Victim.ExtraHurtboxes[ExtraPosition].Shape, Victim.Transform))
 			{
 				Overlapped.Add(GSTNHurtboxIndex::FromExtraPosition(ExtraPosition));
 			}

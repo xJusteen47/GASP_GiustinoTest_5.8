@@ -2,6 +2,9 @@
 
 Run in the editor (Python console or `py Tools/GAS/create_backpack_assets.py`). The classes fill everything (identity tag, movement or the
 dome move slot), so nothing is wired by hand; tune the numbers in the assets. Prints one line per asset.
+
+M11 L7c: also puts the BackpackDome step (the dome blocks hits from outside) into the standard combat rules the match plays, right after
+TeamFilter, through UGSTN_BackpackContentLibrary.AddDomeStepToRules; a rules asset that already holds it is not touched or saved.
 """
 
 import unreal
@@ -29,5 +32,22 @@ def ensure(name, class_path):
     return f"{name}: created"
 
 
+STANDARD_RULES = "/GSTNCombat/Rules/GSTN_CombatRules_Standard"
+
+
+def ensure_dome_step():
+    if not unreal.EditorAssetLibrary.does_asset_exist(STANDARD_RULES):
+        return f"{STANDARD_RULES}: missing (run setup_gas_assets.py --h13-content first)"
+    rules = unreal.load_asset(STANDARD_RULES)
+    names = " ".join(str(p) for p in rules.get_editor_property("hit_pipeline"))
+    if "HitStep_BackpackDome" in names:
+        return f"{STANDARD_RULES}: dome step present"
+    if not unreal.GSTN_BackpackContentLibrary.add_dome_step_to_rules(rules):
+        return f"{STANDARD_RULES}: dome step not added"
+    unreal.EditorAssetLibrary.save_loaded_asset(rules, False)
+    return f"{STANDARD_RULES}: dome step added after TeamFilter"
+
+
 for asset_name, path in ASSETS.items():
     unreal.log(ensure(asset_name, path))
+unreal.log(ensure_dome_step())

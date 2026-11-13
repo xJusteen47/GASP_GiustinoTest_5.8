@@ -364,12 +364,13 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 					Overlapped.Add(HurtIndex);
 				}
 			}
-			// The extras of the snapshot (a shield bubble) are tested like the body; they have no hurt state, so nothing makes them intangible
+			// The extras of the snapshot (a shield bubble) are tested like the body; they have no hurt state, so nothing makes them intangible.
+			// An outside-only shell (the backpack dome) is not there for an attacker whose root of the end of the previous frame is inside it
 			for (int32 ExtraPosition = 0; ExtraPosition < Victim.ExtraHurtboxes.Num(); ++ExtraPosition)
 			{
 				const FGSTN_ExtraHurtbox& Extra = Victim.ExtraHurtboxes[ExtraPosition];
 				const FGSTN_HitShape& ExtraShape = Extra.Shape;
-				if (GSTNHurtboxIndex::FromExtraPosition(ExtraPosition) == HardHurtbox
+				if (GSTNHurtboxIndex::FromExtraPosition(ExtraPosition) == HardHurtbox || Extra.IsSkippedFrom(In.Root.GetLocation(), Victim.Transform)
 					|| !PassesStabOnly(Extra.bStabOnly, Extra.StabMaxAngleDeg, ActiveStrike.Kind, ExtraShape, Victim.Transform, PreviousCenter, HitboxCenter))
 				{
 					continue;
