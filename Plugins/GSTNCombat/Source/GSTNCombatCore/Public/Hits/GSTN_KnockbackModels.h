@@ -9,13 +9,24 @@
 /**
  * The standard model: the victim's weight decides the strength of the knockback.
  *   K = (BaseKnockback + KnockbackGrowth x Damage) x WeightReference / EffectiveWeight
- * Damage is this hit's, the attack's power. The victim's accumulated damage enters only through WeightScale (the health weight
- * curve), so it is counted once. FixedKnockback, when used, replaces the bracket and the weight still applies.
+ *     x (1 + PercentGrowth x DamagePercent / 100)
+ * Damage is this hit's, the attack's power. The victim's accumulated damage enters through WeightScale (the health weight curve,
+ * which stops at MaxHealth) and, when PercentGrowth is above 0, through the uncapped percent factor: without it a move authored
+ * below the launch threshold (most strikes, growth 0) could never launch at any percent, it only slid further (owner, 2026-11-13).
+ * FixedKnockback, when used, replaces the bracket and the weight still applies; the percent factor applies to it too.
  */
 UCLASS(meta = (DisplayName = "Weight Driven"))
 class GSTNCOMBATCORE_API UGSTN_KnockbackModel_WeightDriven : public UGSTN_KnockbackModel
 {
 	GENERATED_BODY()
+
+public:
+	/**
+	 * Fraction of the knockback added per 100 percent of damage the victim took before this hit, without a cap (1 = double at 100 %).
+	 * 0 = the percent counts only through the health weight curve. Reads the damage percent, so it does nothing in the Health damage mode
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Knockback|Percent", meta = (ClampMin = "0.0"))
+	float PercentGrowth = 0.f;
 
 protected:
 	virtual double ComputeKnockback(const FGSTN_KnockbackInput& Input) const override;

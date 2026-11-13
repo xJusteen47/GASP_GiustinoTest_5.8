@@ -80,6 +80,8 @@ KIT_PADS = [
     ('KIT_Test_Ranger', '', 'TIRATORE: RETICOLO + FORTE', (800.0, -700.0)),
     # Designer examples (Tools/GAS/setup_designer_examples.py): light X, strong RT, special Y, made only of data
     ('KIT_Example', '', 'ESEMPIO DESIGNER', (800.0, -1400.0)),
+    # Launch impacts (Tools/GAS/setup_launch_impacts.py): X ground bounce (spike), RT wall splat
+    ('KIT_Example_Impacts', '', 'IMPATTI: X RIMBALZO, RT SPLAT', (1200.0, -1400.0)),
 ]
 # M11 L10: kits on the ground that carry mods (asset paths; the mods travel with the kit to whoever takes it, KitSwapMods = GroundKit).
 # (kit, support weapon, mods, label, (x, y)); test_hub.spawn_kits adds them to the KIT_PADS pickups

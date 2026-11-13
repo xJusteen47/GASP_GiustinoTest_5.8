@@ -188,6 +188,35 @@ bool FGSTN_ImpactResolvedOneFrameAfterTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ImpactForcedGroundBounceTest, "GSTNCombat.NP.Hits.Impact.ForcedGroundBounceOnce", GSTN_NP_TEST_FLAGS)
+bool FGSTN_ImpactForcedGroundBounceTest::RunTest(const FString& Parameters)
+{
+	// A spike that forces a bounce: an ordinary floor bounces the victim once, upward, then the next floor is a landing again
+	FImpactFixture F;
+	FGSTN_ImpactProfile Spike;
+	Spike.Force = EGSTN_ImpactOutcome::Bounce;
+	F.Core.Hit.ImpactProfileQ = Spike.Pack();
+	F.In.Velocity = FVector(200.0, 0.0, -1000.0);
+	F.SetContact(TEXT("Wall"), 1000.0, 10, EGSTN_TumbleContactKind::Floor, FVector(0.0, 0.0, 1.0));
+	const FGSTN_ImpactStepResult First = F.Step(11);
+	TestTrue(TEXT("the forced bounce resolves on a floor"), First.Outcome == EGSTN_ImpactOutcome::Bounce);
+	TestTrue(*FString::Printf(TEXT("it goes up (%s)"), *First.Move.Velocity.ToString()), First.Move.Velocity.Z > 0.0);
+	TestTrue(TEXT("the bounce is spent"), FGSTN_ImpactProfile::Unpack(F.Core.Hit.ImpactProfileQ).Force == EGSTN_ImpactOutcome::None);
+	F.SetContact(TEXT("Wall"), 600.0, 40, EGSTN_TumbleContactKind::Floor, FVector(0.0, 0.0, 1.0));
+	TestTrue(TEXT("the second floor is a landing"), F.Step(41).Outcome == EGSTN_ImpactOutcome::None);
+
+	// A splat forced by the attack still never resolves on a floor (a wall splat stays a wall splat)
+	FImpactFixture Splat;
+	FGSTN_ImpactProfile WallSplat;
+	WallSplat.Force = EGSTN_ImpactOutcome::Splat;
+	Splat.Core.Hit.ImpactProfileQ = WallSplat.Pack();
+	Splat.SetContact(TEXT("Wall"), 1000.0, 10, EGSTN_TumbleContactKind::Floor, FVector(0.0, 0.0, 1.0));
+	TestTrue(TEXT("no splat on a floor"), Splat.Step(11).Outcome == EGSTN_ImpactOutcome::None);
+	Splat.SetContact(TEXT("Wall"), 1000.0, 12, EGSTN_TumbleContactKind::Wall);
+	TestTrue(TEXT("splat on the wall"), Splat.Step(13).Outcome == EGSTN_ImpactOutcome::Splat);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ImpactSplatEndsActionableTest, "GSTNCombat.NP.Hits.Impact.SplatEndsActionable", GSTN_NP_TEST_FLAGS)
 bool FGSTN_ImpactSplatEndsActionableTest::RunTest(const FString& Parameters)
 {

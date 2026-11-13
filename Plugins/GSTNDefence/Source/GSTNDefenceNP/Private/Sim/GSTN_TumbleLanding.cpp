@@ -23,6 +23,8 @@
 #include "Sim/GSTN_DefenceAttach.h"
 #include "Sim/GSTN_DefenceFragment.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
+#include "Simulation/GSTN_CombatTimelineLogic.h"
+#include "Timeline/GSTN_TimelinePlayer.h"
 #include "Simulation/GSTN_CombatVictim.h"
 
 bool FGSTN_TumbleLanding::CanQueueMoves(const UAbilitySystemComponent* AbilitySystem)
@@ -272,21 +274,24 @@ void FGSTN_TumbleLanding::OnContactResolved(FGSTN_CombatTickContext& Context, co
 	{
 		return;
 	}
-	FGSTN_CombatSyncCore& Core = Context.Out.Core;
+	FGSTN_CombatVictim::EndReaction(Context.Out.Core, Context.Frame);
+	EnterDowned(Context, Data, Contact.ContactFrame, Data.bHasTechSet);
+}
+
+void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data, int32 LandingFrame, bool bMissedTech)
+{
 	const int32 Frame = Context.Frame;
 	const FGSTN_GroundBounceRules& Bounce = Data.Rules->GroundBounce;
-	FGSTN_CombatVictim::EndReaction(Core, Frame);
-
 	FGSTN_DefenceFragment& Fragment = FGSTN_SyncFragmentList::FindOrAdd<FGSTN_DefenceFragment>(Context.Out.Fragments);
 	int32 DownedEnd = NeverEnds;
-	if (Data.bHasTechSet)
+	if (bMissedTech)
 	{
 		// A missed tech of a kit that has one: the spec's knockdown, with the price of not teching
-		DownedEnd = Contact.ContactFrame + FMath::Max(Data.Rules->Tech.KnockdownFrames, 1) + FMath::Max(Data.Rules->Tech.NoTechKnockdownBonusFrames, 0);
+		DownedEnd = LandingFrame + FMath::Max(Data.Rules->Tech.KnockdownFrames, 1) + FMath::Max(Data.Rules->Tech.NoTechKnockdownBonusFrames, 0);
 	}
 	else if (Bounce.MaxDownedFrames > 0)
 	{
-		DownedEnd = Contact.ContactFrame + Bounce.MaxDownedFrames;
+		DownedEnd = LandingFrame + Bounce.MaxDownedFrames;
 	}
 	Fragment.KnockdownEndFrame = DownedEnd;
 
@@ -306,9 +311,65 @@ void FGSTN_TumbleLanding::OnContactResolved(FGSTN_CombatTickContext& Context, co
 	AppendEvent(Context, GSTNDefenceTags::Event_KnockedDown, 0.f);
 }
 
+bool FGSTN_TumbleLanding::IsSelfKnockdownWindowOpen(const FGSTN_CombatTickContext& Context)
+{
+	if (Context.Out.Core.ActionState != EGSTN_ActionState::InTimeline || !Context.Timeline || Context.Timeline->bRecoil)
+	{
+		return false;
+	}
+	for (const FGSTN_TimelineTrack_Tags* Window : Context.Timeline->TagWindows)
+	{
+		if (Window && Window->Tags.HasTagExact(GSTNDefenceTags::Move_KnockdownOnLanding))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data)
+{
+	if (!Data.Rules)
+	{
+		return false;
+	}
+	FGSTN_DefenceFragment* Existing = FGSTN_SyncFragmentList::Find<FGSTN_DefenceFragment>(Context.Out.Fragments);
+	const bool bArmed = Existing && (Existing->HitFlags & GSTNDefenceHitFlags::SelfKnockdownArmed) != 0;
+	if (!IsSelfKnockdownWindowOpen(Context))
+	{
+		// Outside the window (or the move is over) nothing stays armed: a later landing is an ordinary one
+		if (bArmed)
+		{
+			Existing->HitFlags &= ~GSTNDefenceHitFlags::SelfKnockdownArmed;
+		}
+		return false;
+	}
+	if (!Context.bGrounded)
+	{
+		if (!bArmed)
+		{
+			FGSTN_SyncFragmentList::FindOrAdd<FGSTN_DefenceFragment>(Context.Out.Fragments).HitFlags |= GSTNDefenceHitFlags::SelfKnockdownArmed;
+		}
+		return false;
+	}
+	if (!bArmed)
+	{
+		// Grounded without having left the ground inside the window (the window opened on the takeoff frame): not a landing yet
+		return false;
+	}
+
+	// Landed inside the window: the move ends here and its user is downed as a tumble landing downs a victim. No tech evaluation (no contact, no
+	// reaction to tech out of): the way out is the owner's one, the get-up roll from the stick or the neutral get-up
+	Existing->HitFlags &= ~GSTNDefenceHitFlags::SelfKnockdownArmed;
+	FGSTN_CombatTimelineLogic::CancelForOtherCommand(Context.Out.Core, Context.Frame);
+	EnterDowned(Context, Data, Context.Frame, false);
+	return true;
+}
+
 void FGSTN_TumbleLanding::AfterClocks(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data)
 {
 	const int32 Frame = Context.Frame;
+	SelfKnockdown(Context, Data);
 	if (FGSTN_DefenceFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DefenceFragment>(Context.Out.Fragments))
 	{
 		// What the victim step of this frame decided to start: the model starts it now that the frame's tables are known

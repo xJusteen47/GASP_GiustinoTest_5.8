@@ -128,6 +128,9 @@ struct FGSTN_CombatTickContext
 	/** The same stick as the command holds it: x right, y forward, -1..1, relative to the camera */
 	FVector2D Stick = FVector2D::ZeroVector;
 
+	/** The entity stood on a floor at the end of the previous frame (the Mover context of the input, Context.Grounded), as the victim step reads it */
+	bool bGrounded = false;
+
 	/** The button map of the entity's input config (tag -> history bit), for an extension that reads presses from the history. Null in a test */
 	const FGSTN_ButtonMap* Buttons = nullptr;
 

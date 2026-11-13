@@ -874,4 +874,36 @@ bool FGSTN_ReactionValidatorThresholdOrderTest::RunTest(const FString& Parameter
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ReactionPercentGrowthTest, "GSTNCombat.Core.Reaction.WeightDrivenPercentGrowth", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_ReactionPercentGrowthTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNReactionTest;
+	FGSTN_ReactionTuning Tuning = MakeTuning();
+	Tuning.PushBackThreshold = 540.f;
+	Tuning.LaunchThreshold = 1080.f;
+	TStrongObjectPtr<UGSTN_KnockbackModel_WeightDriven> Model = MakeModel<UGSTN_KnockbackModel_WeightDriven>(Tuning);
+	FGSTN_KnockbackInput Input = MakeInput();
+	Input.Hit.KnockbackGrowth = 0.f;
+	Input.Hit.BaseKnockback = 550.f;
+
+	// PercentGrowth 0 (the default): the percent is not read, 550 slides at any percent
+	Input.DamagePercent = 300.f;
+	TestEqual(TEXT("no growth ignores the percent"), Model->Compute(Input).Knockback, 550.f);
+	TestTrue(TEXT("no growth: a push back"), Model->Compute(Input).Reaction == EGSTN_HitReaction::PushBack);
+
+	// Growth 1: 550 x (1 + 100 / 100) = 1100 at 100 %, a launch with an upward part (the 45 degree direction of MakeInput)
+	Model->PercentGrowth = 1.f;
+	Input.DamagePercent = 0.f;
+	TestEqual(TEXT("growth at 0 %"), Model->Compute(Input).Knockback, 550.f);
+	Input.DamagePercent = 100.f;
+	const FGSTN_KnockbackResult At100 = Model->Compute(Input);
+	TestEqual(TEXT("growth at 100 %"), At100.Knockback, 1100.f);
+	TestTrue(TEXT("launches at 100 %"), At100.Reaction == EGSTN_HitReaction::Launch && At100.LaunchVelocity.Z > 0.0);
+
+	// With the standard health weight at its end (0.6) as well: 550 x 2 / 0.6 = 1833.3, a tumble
+	Input.Reaction.WeightScale = 0.6f;
+	TestTrue(TEXT("tumbles with the weight curve"), Model->Compute(Input).bTumble);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

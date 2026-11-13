@@ -31,6 +31,7 @@ void UGSTN_GA_TestKitStrike::FillStrikeTimeline(FGSTN_CombatTimelineData& OutTim
 	Hit.HitstopMode = EGSTN_HitstopMode::Override;
 	Hit.HitstopFramesOverride = Spec.HitstopFrames;
 	Hit.AttackerHitstopFramesOverride = Spec.AttackerHitstopFrames;
+	Hit.Impact = Spec.Impact;
 
 	FGSTN_HitboxSpec Box;
 	Box.Shape.Type = EGSTN_ShapeType::Sphere;
@@ -52,6 +53,15 @@ void UGSTN_GA_TestKitStrike::FillStrikeTimeline(FGSTN_CombatTimelineData& OutTim
 	Track.EndFrame = End + 1;
 	Track.Hitboxes.Add(Box);
 	OutTimeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(Track));
+
+	if (!Spec.Tags.IsEmpty())
+	{
+		FGSTN_TimelineTrack_Tags TagsTrack;
+		TagsTrack.StartFrame = FMath::Clamp(Spec.TagsFromFrame, 0, Total - 1);
+		TagsTrack.EndFrame = Total;
+		TagsTrack.Tags = Spec.Tags;
+		OutTimeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Tags>(TagsTrack));
+	}
 }
 
 bool UGSTN_TestKitContentLibrary::WriteStrikeMove(TSubclassOf<UGameplayAbility> StrikeClass, const FGSTN_TestStrikeSpec& Spec)

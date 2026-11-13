@@ -855,6 +855,11 @@ What the code does, where it differs from the design text above is listed in `do
   threshold / `MaxReaction`, which the H12 data already allows). A timeline ability replaces the action state by its own when it starts, so the tag
   alone already leaves Hitstun for a timeline ability; the flag is what also drops the pending launch and the window, and is the only one of the two
   that matters for a plain ability. Limit: a launch already handed to Mover keeps its layered move (the flag cancels the freeze, not a flying victim).
+- **Launch, ground bounce, wall splat** (2026-11-13). `UGSTN_KnockbackModel_WeightDriven::PercentGrowth` (standard rules 1.0: knockback doubles every
+  100 %, uncapped) so strikes authored below the launch threshold launch at high percent; before, the percent entered only through the health
+  weight curve (at most x1.67) and those strikes only slid (PushBack). The standard rules carry `GSTN_SurfaceImpacts_Standard` (one row for
+  `Surface.Type.Wall`, no default outcome): without a table no impact ever resolved. A floor contact resolves only when the surface forces it or
+  the hit's `Impact.Force` is `Bounce` (the ground bounce of a spike, spent on the first floor). Content: `Tools/GAS/setup_launch_impacts.py`.
 - **Tools**: `Tools/GAS/setup_gas_assets.py --combat-input --hits-content --h13-content`, `build_test_combat_map.py`, `validate_combat_content.py`,
   `bake_sockets.py`, `make_hurtbox_set.py` (command lines in `Tools/README.md`).
 - **Settings and fork requirements**: `Config/DefaultGSTNCombat.ini` (plugin) names the default rules; the lag-compensation component and the hit

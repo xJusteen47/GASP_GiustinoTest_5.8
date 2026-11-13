@@ -177,6 +177,8 @@ void UGSTN_CombatRules::FillStandard(UGSTN_CombatRules* Rules)
 	UGSTN_KnockbackModel_WeightDriven* Model = NewObject<UGSTN_KnockbackModel_WeightDriven>(Rules);
 	Model->Tuning.PushBackThreshold = 0.3f * Model->Tuning.TumbleThreshold;
 	Model->Tuning.LaunchThreshold = 0.6f * Model->Tuning.TumbleThreshold;
+	// Knockback doubles every 100 % of damage taken, uncapped: a 550 strike that slides at 0 % launches from about 60 % and tumbles at 100 %
+	Model->PercentGrowth = 1.f;
 	Rules->KnockbackModel = Model;
 
 	Rules->DamageMode = EGSTN_DamageMode::Percent;

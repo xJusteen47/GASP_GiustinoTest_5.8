@@ -401,13 +401,16 @@ void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_Comba
 		return;
 	}
 	const FGSTN_SurfaceImpactRow* Row = In.Table->GetRow(Contact.SurfaceTypeIndex);
-	if (!Row || (Contact.Kind != EGSTN_TumbleContactKind::Wall && !Row->bForceDefault))
+	FGSTN_ImpactProfile Profile = FGSTN_ImpactProfile::Unpack(Core.Hit.ImpactProfileQ);
+	// A floor ends the tumble (the landing), except where the surface forces its outcome or the attack forces a bounce: the ground bounce of
+	// a spike (owner, 2026-11-13). The attack's bounce is spent on the first floor it bounces off, so the victim bounces once and then lands
+	const bool bForcedGroundBounce = Contact.Kind == EGSTN_TumbleContactKind::Floor && Profile.Force == EGSTN_ImpactOutcome::Bounce;
+	if (!Row || (Contact.Kind != EGSTN_TumbleContactKind::Wall && !Row->bForceDefault && !bForcedGroundBounce))
 	{
 		return;
 	}
 
 	static const FGSTN_ImpactResponse AnythingGoes;
-	const FGSTN_ImpactProfile Profile = FGSTN_ImpactProfile::Unpack(Core.Hit.ImpactProfileQ);
 	const FGSTN_ImpactResult Resolved = UGSTN_ImpactMath::Resolve(FGSTN_ImpactInput::Make(Contact.SurfaceTypeIndex, Contact.ImpactSpeedQ),
 		In.Table, In.Response ? *In.Response : AnythingGoes, Profile);
 	if (Resolved.Outcome == EGSTN_ImpactOutcome::None)
@@ -449,6 +452,11 @@ void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_Comba
 		Out.Move.Frames = FMath::Max(Frames, TumbleProbeFrames);
 		Core.Hit.HitstunEndFrame = FMath::Max(Core.Hit.HitstunEndFrame, Frame + Frames);
 		Core.Hit.ImpactEndFrame = Frame + 1;
+		if (bForcedGroundBounce && !Row->bForceDefault)
+		{
+			Profile.Force = EGSTN_ImpactOutcome::None;
+			Core.Hit.ImpactProfileQ = Profile.Pack();
+		}
 		break;
 	}
 	case EGSTN_ImpactOutcome::BreakSurface:

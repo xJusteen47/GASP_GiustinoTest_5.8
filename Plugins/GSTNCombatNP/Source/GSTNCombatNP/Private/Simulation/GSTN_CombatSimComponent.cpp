@@ -1319,6 +1319,12 @@ void UGSTN_CombatSimComponent::FillHookContext(FGSTN_CombatTickContext& Context,
 	Context.Stick = FVector2D(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickY));
 	Context.StickOnPlane = FGSTN_CombatVictim::StickToPlane(Context.Stick, FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), Up);
 	Context.Buttons = &ButtonMap;
+	if (ContextProvider)
+	{
+		FGameplayTagContainer ContextTags;
+		ContextProvider->AppendContextTags(ContextTags);
+		Context.bGrounded = ContextTags.HasTagExact(GSTNInputTags::Context_Grounded);
+	}
 }
 
 bool UGSTN_CombatSimComponent::StartForcedTimeline(const UClass* AbilityClass)

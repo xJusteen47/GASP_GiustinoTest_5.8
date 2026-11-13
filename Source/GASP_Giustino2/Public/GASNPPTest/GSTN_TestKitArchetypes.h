@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Abilities/GSTN_GA_BaseCombat.h"
+#include "Hits/GSTN_ImpactTypes.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "GSTN_TestKitArchetypes.generated.h"
 
@@ -71,6 +72,17 @@ struct GASP_GIUSTINO2_API FGSTN_TestStrikeSpec
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Strike|Animation", meta = (ClampMin = "0.01"))
 	float MontagePlayRate = 1.f;
+
+	/** What the hit asks of a surface the victim flies into: Force Bounce = a ground bounce off a floor, Force Splat = a wall splat (2026-11-13) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Strike|Hit")
+	FGSTN_ImpactProfile Impact;
+
+	/** Tags the user carries from TagsFromFrame to the end of the move (a Tags track; Combat.Move.KnockdownOnLanding for a dropkick); empty = no track */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Strike|Tags")
+	FGameplayTagContainer Tags;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Strike|Tags", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 TagsFromFrame = 0;
 };
 
 /**

@@ -44,6 +44,13 @@ namespace GSTNDefenceTags
 	/** Downed after landing (the identifiers keep the name Knockdown). Projected until KnockdownEndFrame. */
 	GSTNDEFENCECORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Knockdown);
 
+	/**
+	 * In a move's Tags track: landing inside the window, after being airborne in it, ends the move and downs its own user (the landing of a tumble:
+	 * mini bounce, ground bounce ability, downed, get-up roll or neutral get-up, the tech when the kit has one). A dropkick that is not recovered
+	 * before the ground (owner, 2026-11-13). Granted by the timeline's Tags track only.
+	 */
+	GSTNDEFENCECORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Move_KnockdownOnLanding);
+
 	/** A tech press is ignored (anti-mash), for UI and AI. Projected while the frame is before TechLockoutEndFrame. */
 	GSTNDEFENCECORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Tech_Lockout);
 
