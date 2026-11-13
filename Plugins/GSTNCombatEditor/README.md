@@ -81,13 +81,16 @@ with their scrollbar or with the wheel over the name column.
 
 Double-click a `UGSTN_CombatTimeline` asset in the Content Browser (a Data Asset of that class, as before): the asset definition
 `UGSTN_AssetDefinition_CombatTimeline` (`UAssetDefinitionDefault`) opens `FGSTN_TimelineEditorToolkit`, a standalone asset editor with
-four tabs in the layout `GSTN_TimelineEditor_Layout_v1`: **Viewport** (the 3D preview, E6, below), **Timeline** (the
-panel of E4 under a warning bar), **Details** and **Frame Data**. Save is the editor's own Save; the layout is saved and restored by
-the editor. A second toolkit on an open asset is refused and the open one comes to the front (the context registry of E2).
+five tabs in the layout `GSTN_TimelineEditor_Layout_v2`: **Viewport** (the 3D preview, E6, below), **Timeline** (the
+panel of E4 under a warning bar), **Hitboxes** (the hitbox outliner), **Details** and **Frame Data**. Save is the editor's own Save; the layout is saved and restored by
+the editor. A second toolkit on an open asset is refused and the open one comes to the front (the context registry of E2). Every
+opener goes through `FGSTN_TimelineEditorToolkit::OpenFor`, which checks before it builds a toolkit: a refused toolkit destroyed
+without `InitAssetEditor` asserts in UE 5.9.
 
 | Type | File | Role |
 |---|---|---|
-| `FGSTN_TimelineEditorToolkit` | `Private/Timeline/GSTN_TimelineEditorToolkit.h` | Owns the model, the undo client and the lease of the target; spawns the four tabs. |
+| `FGSTN_TimelineEditorToolkit` | `Private/Timeline/GSTN_TimelineEditorToolkit.h` | Owns the model, the undo client and the lease of the target; spawns the five tabs. |
+| `SGSTN_HitboxOutliner`, `GSTNHitboxOutline` | `Private/Timeline/Widgets/`, `Private/Timeline/GSTN_HitboxOutline.h` | The Hitboxes tab: hitbox groups (Hitbox tracks) with their hitboxes as a tree. A row click selects it and moves the playhead into the group's frames so the shape is drawn; a viewport click selects the row. The logic is Slate-free and tested headless. |
 | `UGSTN_TimelineSelectionProxy` | `Private/Timeline/GSTN_TimelineSelectionProxy.h` | A transient copy of the selected track, shown by a structure details view. `Commit` writes it back with `ApplyTrackEdit` (one undo step; a slider drag is one step through the model's drag). |
 | `SGSTN_TimelineDetails` | `Private/Timeline/Widgets/` | The Details tab: follows the selection (one row at a time) and the data. |
 | `SGSTN_MontageLengthBar` | same | Warning bar when the montage and `TotalFrames` disagree, with **Fit Total Frames to montage** (undoable, explicit, never automatic). |

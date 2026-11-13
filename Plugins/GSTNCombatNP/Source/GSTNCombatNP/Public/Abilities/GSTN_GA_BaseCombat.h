@@ -141,6 +141,13 @@ private:
 	UPROPERTY(Transient)
 	FSyncInteger RunningEntry;
 
+	/**
+	 * How the timeline's montage leaves when this ability ends with it still on the slot: the blend-out in seconds (-1 = the montage player's
+	 * default) and whether the pose is held. The natural end uses the data's EndBlendOutFrames, a cancel inside the tail Tail.BlendOutFrames,
+	 * anything earlier (a hit, a replacing move) the default. Presentation only
+	 */
+	void ResolveMontageStop(float& OutBlendOutSeconds, bool& bOutHoldPose) const;
+
 	/** The montage BeginTimeline played (kept alive by the ability or the table set), to find it on the slot later. Not state: only read to stop it */
 	UPROPERTY(Transient)
 	TObjectPtr<UAnimMontage> TimelineMontagePlayed;

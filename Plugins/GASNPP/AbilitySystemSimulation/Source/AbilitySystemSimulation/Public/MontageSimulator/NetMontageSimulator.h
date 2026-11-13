@@ -69,6 +69,12 @@ public:
 	void PlayMontage(const FAbilityMontagePlayback& MontagePlayback);
 	void StopMontage(const FAbilityMontageCancel& MontageCancel, bool bInterrupted = false);
 	/**
+	 * StopMontage, and how the mesh shows the stop (GSTN, 2026-11-13): the instance blends out over BlendOutSeconds (0 = cut) instead of reusing
+	 * its own blend, and with bHoldPose it stops advancing, so nothing of the montage past the stop is drawn. Presentation only: the simulated
+	 * state stops exactly as StopMontage does, and a simulated proxy (which never calls this) keeps the default blend. BlendOutSeconds < 0 = StopMontage.
+	 */
+	void StopMontageWithBlend(const FAbilityMontageCancel& MontageCancel, bool bInterrupted, float BlendOutSeconds, bool bHoldPose);
+	/**
 	 * Only jumps to section if we are already playing that specific montage
 	 */
 	void MontageJumpToSection(UAnimMontage* Montage,FName SectionName);
@@ -137,6 +143,15 @@ private:
 
 	UPROPERTY()
 	TObjectPtr<UAnimMontage> LastPlayingMontage = nullptr;
+
+	/** The stop presentation StopMontageWithBlend asked for, applied by FinalizeMontageFrame when it stops that montage's instance. Not state */
+	struct FPendingStopPresentation
+	{
+		TWeakObjectPtr<UAnimMontage> Montage;
+		float BlendOutSeconds = -1.f;
+		bool bHoldPose = false;
+	};
+	FPendingStopPresentation PendingStop;
 
 	UPROPERTY()
 	FMontageSimSyncState SimulationState;

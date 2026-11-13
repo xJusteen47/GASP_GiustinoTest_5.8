@@ -147,6 +147,12 @@ class ABILITYSYSTEMSIMULATION_API UNpAbilitySystemComponent : public UAbilitySys
 	UFUNCTION(BlueprintCallable, Category = "AbilitySimulation")
 	void StopSyncedMontage(UAnimMontage* Montage, bool bInterrupted = false);
 
+	/**
+	 * StopSyncedMontage with the stop's presentation chosen by the caller: the mesh blends the montage out over BlendOutSeconds (0 = cut), holding
+	 * the pose it stopped on when bHoldPose. The simulated montage stops as StopSyncedMontage does. BlendOutSeconds < 0 = StopSyncedMontage
+	 */
+	void StopSyncedMontageWithBlend(UAnimMontage* Montage, bool bInterrupted, float BlendOutSeconds, bool bHoldPose);
+
 	UFUNCTION(BlueprintCallable, Category = "AbilitySimulation")
 	void PauseCurrentSyncedMontage();
 
