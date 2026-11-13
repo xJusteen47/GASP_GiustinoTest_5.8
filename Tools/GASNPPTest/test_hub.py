@@ -163,6 +163,40 @@ def _spawn_modded_kit(srv, kit, support, mods, where, yaw):
     return f'{name} + {len(mods)} mod(s)'
 
 
+# M11 L7b-L7d: the two starter backpacks on the ground in front of the starts (hold interact to take one, like a kit). They are kit pickups whose
+# payload is a backpack (GSTNBackpackPickups), as m11_verify_pie does. (backpack asset, (x, y))
+BACKPACK_PADS = [
+    ('/Game/GAS/Backpacks/DA_Backpack_JetPack.DA_Backpack_JetPack', (800.0, -1050.0)),
+    ('/Game/GAS/Backpacks/DA_Backpack_ShieldDome.DA_Backpack_ShieldDome', (800.0, 1050.0)),
+]
+
+
+def spawn_backpacks():
+    """One backpack pickup per BACKPACK_PADS entry, on the server through the host's test component. Skips when a backpack pickup exists or the
+    GSTNBackpackPickups plugin is off. Returns the pickup names or why one failed"""
+    if not hasattr(unreal, 'GSTN_BackpackPickupPayload'):
+        return 'GSTNBackpackPickups off'
+    world = g.worlds()[0]
+    pickups = unreal.GameplayStatics.get_all_actors_of_class(world, unreal.GSTN_KitPickup)
+    if any('GSTN_BackpackPickupPayload' in p.get_payload().export_text() for p in pickups):
+        return 'already there'
+    srv = g._srv(_key(0))
+    out = []
+    for asset, (x, y) in BACKPACK_PADS:
+        name = srv.server_spawn_kit_pickup(DEFAULT_KIT, '', unreal.Vector(x, y, 20.0), 180.0)
+        pickup = next((a for a in unreal.GameplayStatics.get_all_actors_of_class(world, unreal.GSTN_KitPickup) if a.get_name() == name), None)
+        if not pickup:
+            out.append(f'{asset}: pickup not found ({name!r})')
+            continue
+        payload = unreal.GSTN_BackpackPickupPayload()
+        payload.import_text(f'(Backpack="{asset}")')
+        inst = unreal.InstancedStruct()
+        inst.import_text('/Script/GSTNBackpackPickups.GSTN_BackpackPickupPayload' + payload.export_text())
+        pickup.set_payload(inst)
+        out.append(f'{name}: {asset.rsplit(".", 1)[-1]}')
+    return out
+
+
 # Placeholder bounce pads (movement thread): BP_Test_BouncePad (a GSTN_Trampoline child, tuned in its Class Defaults) in the piazza. Trampolines are
 # static level data, not replicated: the same pad is spawned in every world of the process, as a level would carry it. (x, y, yaw)
 BOUNCE_PAD_CLASS = '/Game/GASNPPTest/BP_Test_BouncePad'
@@ -188,7 +222,7 @@ def play_setup():
     """Run once per Play (the watcher does it 4 s after Play starts): the dummies, hit rules in memory (damage on, as the hit scenarios), the
     link steps, the default kit on every player"""
     import link_scenarios as ls
-    out = [('dummies', spawn_dummies()), ('kits', spawn_kits()), ('bounce pads', spawn_bounce_pads()), g.hit_rules_setup(), ls.link_setup()]
+    out = [('dummies', spawn_dummies()), ('kits', spawn_kits()), ('backpacks', spawn_backpacks()), ('bounce pads', spawn_bounce_pads()), g.hit_rules_setup(), ls.link_setup()]
     # Players only: a loadout change on a dummy summoned in the same tick crashed the editor in the link snapshot contributor (2026-11-06,
     # FGSTN_SyncFragmentList::Find from UGSTN_CombatSimComponent::SimulationTick). The dummies keep their default kit: being hit needs none
     out.append({_key(i): g._apply_loadout(_key(i), DEFAULT_KIT) for i in _players()})
