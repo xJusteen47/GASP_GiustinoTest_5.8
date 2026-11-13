@@ -235,7 +235,7 @@ def combat_test_specs():
             'buttons': [
                 ('Input.Button.Attack', TEST_INPUT_DIR + '/IA_GASNPP_Attack'),
                 ('Input.Button.Special', TEST_INPUT_DIR + '/IA_GASNPP_Special'),
-                ('Input.Button.Crouch', '/Game/Input/IA_Crouch'),
+                ('Input.Button.Crouch', TEST_INPUT_DIR + '/IA_GASNPP_Crouch'),  # own action (setup_player_input_contexts.py makes it)
                 # Dash/Buff buttons: tags in Config/Tags/GSTNCommands.ini. A button whose tag or action is missing is skipped
                 ('Input.Button.Dash', TEST_INPUT_DIR + '/IA_GASNPP_Dash'),
                 ('Input.Button.Buff', TEST_INPUT_DIR + '/IA_GASNPP_Buff'),

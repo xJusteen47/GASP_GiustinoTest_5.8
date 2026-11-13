@@ -20,8 +20,8 @@ written only by `ServerApplyLoadoutChange` (test path). Menu picks, kit pickups 
 and regranted abilities, but the sim kept the old table: X/Y/RT/grab/pickup did nothing. Now `HandleLoadoutApplied` on the server
 calls `DemandAppliedRevision` after registering the table set; client requests also go through `ServerApplyLoadoutChange` (applier).
 PIE: menu LIGHT/HEAVY X, RT, Y hit; B-hold swap to TIRATORE then X hits; listen client menu pick then X hits.
-**Owner asks (commit 3)**: RT for LIGHT/MEDIUM/HEAVY = KIT_Example's strong (`Tools/GAS/setup_archetype_strong.py`, kit bindings);
-pad crouch LT, dodge LB, shield moved LT -> RB (my pick, owner asked; `setup_player_input_contexts.py`, IMC_GASNPP_Test).
+**Owner asks (commits 3-4)**: RT for LIGHT/MEDIUM/HEAVY = KIT_Example's strong (`Tools/GAS/setup_archetype_strong.py`, kit bindings).
+Final pad layout X light, Y special, RT strong, RB dodge, LT crouch, A jump, B grab; shield on LB (my pick, owner asked). Crouch has its own `IA_GASNPP_Crouch` (GASP's IA_Crouch fired the GASP BP slide); harness/setup scripts updated. Hub: hit popup "COLPITO" (test_hub).
 Hub "two rows" = front kit row (x 800) over the pad row (x 1200) in perspective; not a duplicate.
 **test_hub watcher**: `_pad_check` skips players without a snapshot entry (pawn switched, client not replicated) instead of raising each tick.
 **Gates**: build ok; headless GSTN **1584/0**, 0 ensures (every commit) (`Saved/PadMenu/headless.log`). PIE checks above on standalone + listen 1 client. Harness suite not run (local input only).

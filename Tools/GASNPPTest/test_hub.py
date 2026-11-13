@@ -11,6 +11,7 @@
 #   h.restore()            # the in-memory test content and the PIE settings back as they were
 #
 # Player index i = PIE world index: 0 = listen host, 1 and 2 = clients. Zones and park spots come from Tools/GAS/build_test_hub_map.py.
+import json
 import math
 import os
 import sys
@@ -267,6 +268,26 @@ def _pad_check():
         unreal.SystemLibrary.print_string(g.worlds()[i], f'Kit: {pad[2]} ({pad[0]}) -> {result}', True, True, unreal.LinearColor(1, 1, 0, 1), 4.0)
 
 
+def _hit_feedback():
+    """Owner playtest 2026-11-13 ("I can't tell whether X hits"): every rise of a pawn's damage percent on the server is written on every
+    player's screen for 1.5 s (who, how much, total). Test tooling only: it reads the authority's snapshots, nothing in the game changes"""
+    worlds = g.worlds()
+    seen = _watch.setdefault('damage', {})
+    for key, comp in g.comps(worlds[0]).items():
+        try:
+            dmg = float(json.loads(comp.read_snapshot_entry(-1)).get('damagePercent', 0.0))
+        except Exception:
+            continue
+        before = seen.get(key)
+        seen[key] = dmg
+        if before is None or dmg <= before + 0.01:
+            continue
+        who = 'manichino' if not key.startswith('P') else key
+        # On-screen messages are shared by every PIE window: one print reaches all players
+        unreal.SystemLibrary.print_string(worlds[0], f'COLPITO {who}: +{dmg - before:.0f}%  (totale {dmg:.0f}%)', True, True,
+                                          unreal.LinearColor(1, 0.5, 0.1, 1), 2.0)
+
+
 def _watch_tick(_dt):
     now = time.time()
     if now < _watch['next']:
@@ -277,7 +298,7 @@ def _watch_tick(_dt):
     except Exception:
         running = False
     if not running:
-        _watch.update(pie=False, ready=False, on_pad={})
+        _watch.update(pie=False, ready=False, on_pad={}, damage={})
         if _watch['auto']:
             _auto_content()
         return
@@ -293,6 +314,7 @@ def _watch_tick(_dt):
             unreal.log(f'[test_hub] play setup: {play_setup()}')
         if _watch['ready']:
             _pad_check()
+            _hit_feedback()
     except Exception as e:
         unreal.log_warning(f'[test_hub] watcher: {e!r}')
 

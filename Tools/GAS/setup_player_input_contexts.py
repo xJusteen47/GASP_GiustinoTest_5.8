@@ -5,7 +5,7 @@
 # lists IMC_Sandbox in ReplacedMappingContexts (the player input source takes it off the local player whenever it shows up) and adds
 # IMC_GSTN_Locomotion, a copy of IMC_Sandbox that keeps only what the character still needs from it:
 #   IA_Move (WASD, left stick: the stick of the simulation, UGSTN_InputConfig::MoveAction), IA_Look / IA_Look_Gamepad (the camera),
-#   IA_Crouch on C (RB is in IMC_GASNPP_Test; the config's Crouch button is IA_Crouch).
+#   nothing else: crouch is our own IA_GASNPP_Crouch (below), because GASP's IA_Crouch also fires the GASP Blueprint's crouch/slide.
 # Every combat button stays in IMC_GASNPP_Test (priority 10, added by the test component).
 # Idempotent: rerun after an engine/content update. Saves only the two assets below (never a map). Output: at most 5 printed lines.
 import unreal
@@ -17,7 +17,7 @@ CONFIGS = ['/Game/GASNPPTest/Input/IC_GASNPP_Test']
 LOCOMOTION_PRIORITY = 0
 # (action asset name, key name): what IMC_GSTN_Locomotion keeps of IMC_Sandbox
 KEEP = {('IA_Move', 'W'), ('IA_Move', 'S'), ('IA_Move', 'A'), ('IA_Move', 'D'), ('IA_Move', 'Gamepad_Left2D'),
-        ('IA_Look', 'Mouse2D'), ('IA_Look_Gamepad', 'Gamepad_Right2D'), ('IA_Crouch', 'C')}
+        ('IA_Look', 'Mouse2D'), ('IA_Look_Gamepad', 'Gamepad_Right2D')}
 
 
 def _locomotion():
@@ -54,19 +54,49 @@ def _config(path, imc):
     return f'{path.rsplit("/", 1)[-1]}: contexts {len(contexts) + 1}, replaced {len(replaced) + 1}'
 
 
-# Pad layout of the combat buttons (owner, 2026-11-13): crouch on LT, dodge on LB; the shield, LT before, moves to the free RB.
-# key name -> action asset path, in IMC_GASNPP_Test; the key's other mappings in that context are removed first
+# Owner's pad layout (2026-11-13, final): X light, Y special, RT strong, RB dodge, LT crouch, A jump, B grab/interact; the shield goes to the free LB.
+# Crouch gets its own action: the config's Crouch button used GASP's IA_Crouch, which the GASP character Blueprint also answers (its crouch and
+# slide on RB, owner playtest). key name -> action asset path, in IMC_GASNPP_Test; the key's other mappings in that context are removed first.
 COMBAT_CONTEXT = '/Game/GASNPPTest/Input/IMC_GASNPP_Test'
+CROUCH_ACTION = '/Game/GASNPPTest/Input/IA_GASNPP_Crouch'
+CROUCH_TEMPLATE = '/Game/GASNPPTest/Input/IA_GASNPP_Dodge'   # a plain consuming boolean action
+GASP_CROUCH = '/Game/Input/IA_Crouch'
 PAD_LAYOUT = {
-    'Gamepad_LeftTrigger': '/Game/Input/IA_Crouch',
-    'Gamepad_LeftShoulder': '/Game/GASNPPTest/Input/IA_GASNPP_Dodge',
-    'Gamepad_RightShoulder': '/Game/GASNPPTest/Input/IA_GASNPP_Shield',
+    'Gamepad_LeftTrigger': CROUCH_ACTION,
+    'C': CROUCH_ACTION,
+    'Gamepad_RightShoulder': '/Game/GASNPPTest/Input/IA_GASNPP_Dodge',
+    'Gamepad_LeftShoulder': '/Game/GASNPPTest/Input/IA_GASNPP_Shield',
 }
+
+
+def _crouch_action():
+    eal = unreal.EditorAssetLibrary
+    if not eal.does_asset_exist(CROUCH_ACTION) and not eal.duplicate_asset(CROUCH_TEMPLATE, CROUCH_ACTION):
+        raise RuntimeError(f'could not make {CROUCH_ACTION}')
+    action = unreal.load_asset(CROUCH_ACTION)
+    eal.save_loaded_asset(action, only_if_is_dirty=True)
+    for path in CONFIGS:
+        cfg = unreal.load_asset(path)
+        buttons = list(cfg.get_editor_property('buttons'))
+        hit = False
+        for b in buttons:
+            if 'Input.Button.Crouch' in str(b.get_editor_property('tag').export_text()) and b.get_editor_property('action') != action:
+                b.set_editor_property('action', action)
+                hit = True
+        if hit:
+            cfg.set_editor_property('buttons', buttons)
+            eal.save_loaded_asset(cfg, only_if_is_dirty=False)
+    return action
 
 
 def _pad_layout():
     imc = unreal.load_asset(COMBAT_CONTEXT)
     changed = []
+    gasp_crouch = unreal.load_asset(GASP_CROUCH)
+    for m in list(imc.get_editor_property('default_key_mappings').get_editor_property('mappings')):
+        if m.action == gasp_crouch:
+            imc.unmap_key(m.action, m.key)
+            changed.append(f'-{m.key.get_editor_property("key_name")}/IA_Crouch')
     for key_name, action_path in PAD_LAYOUT.items():
         action = unreal.load_asset(action_path)
         maps = list(imc.get_editor_property('default_key_mappings').get_editor_property('mappings'))
@@ -88,6 +118,7 @@ def run():
     imc, removed, kept = _locomotion()
     out = [f'{LOCOMOTION_NAME}: removed {removed}, kept {len(kept)}: ' + ' '.join(f'{a}/{k}' for a, k in kept)]
     out += [_config(p, imc) for p in CONFIGS]
+    out.append(f'crouch action: {_crouch_action().get_name()}')
     out.append(_pad_layout())
     return '\n'.join(out)
 
