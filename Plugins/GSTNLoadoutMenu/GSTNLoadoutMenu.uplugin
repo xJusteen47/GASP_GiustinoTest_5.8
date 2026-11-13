@@ -1,0 +1,47 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Loadout Menu",
+	"Description": "Pre-mission loadout screen (M11): each local player picks kit, specials, mods and backpack with the pad before the match. Rows come from data (FGSTN_LoadoutChoiceRegistry), navigation reads the player's own buttons through the button layout, the choice goes to the server with the loadout component's request. Slate only, no Blueprint wiring.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNLoadoutMenu",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GSTNCore",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInput",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombat",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatGAS",
+			"Enabled": true
+		},
+		{
+			"Name": "EnhancedInput",
+			"Enabled": true
+		}
+	]
+}

@@ -25,5 +25,8 @@ public class GSTNCombatGAS : ModuleRules
 			// IO-2b: the GameRules change serial, to recompile a loadout built before the server picked the rules
 			"GSTNCore"
 		});
+
+		// The loadout screen's rows list content the Asset Manager does not scan (GSTN_LoadoutComponent::ListAssetsOfClass)
+		PrivateDependencyModuleNames.Add("AssetRegistry");
 	}
 }

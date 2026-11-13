@@ -58,8 +58,13 @@ public:
 	TMap<FPrimaryAssetId, UObject*> Assets;
 	UAbilitySystemComponent* Target = nullptr;
 
+	/** What ListAssetsOfClass answers (content outside the Asset Manager: mods, backpacks) */
+	TArray<UObject*> ClassAssets;
+
 protected:
 	virtual UObject* ResolveAsset(const FPrimaryAssetId& Id) const override;
+	virtual void ListAssetIds(const FPrimaryAssetType& Type, TArray<FPrimaryAssetId>& OutIds) const override;
+	virtual void ListAssetsOfClass(const UClass* Class, TArray<FSoftObjectPath>& OutPaths) const override;
 	virtual UAbilitySystemComponent* GetTargetAbilitySystem() const override;
 };
 

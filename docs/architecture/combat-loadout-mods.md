@@ -128,6 +128,8 @@ later is a rules change, not a type change.
   at a checkpoint or supply point), through the same `ServerApplyLoadoutChange` path (question M11.9).
   *Built (M11 L3)*: `UGSTN_LoadoutComponent::ServerRequestSpecialSwap` over `AcceptLoadout`, gated by the mode rule
   `bAllowSpecialSwapInMatch` (default off); choices and cycling helpers for a UI. No button bound yet.
+  *Built (M11 loadout screen)*: the pre-match screen is `GSTNLoadoutMenu` (its README): rows from `FGSTN_LoadoutChoiceRegistry` (kit,
+  specials, mod slots, backpack), the draft `FGSTN_LoadoutDraft`, sent with `ServerRequestLoadout`; it opens before the match only.
 
 ## 8. Mods (`GSTNKitMods`)
 
