@@ -23,6 +23,10 @@ class UStaticMeshComponent;
  * Presentation only, outside the simulation: a 4 Hz scan of the game state's player states on every machine that draws (not on a
  * dedicated server). It reads the replicated loadout and adds a transient, collision-free component to the pawn; nothing replicates
  * and nothing in the simulation sees it. Turned off with gstn.Combat.KitPlaceholderLook 0. A kit with a skin keeps the skin's look.
+ *
+ * The same scan gives every player pawn without a UGSTN_SkinComponent an equipment-only one (no skin, no kit or weapon Visual), so the
+ * attachment providers' pieces show: a worn backpack's Visual on the back, removed when it is dropped or swapped. Not turned off by
+ * the cvar: it is the equipment's look, not the stand-in.
  */
 UCLASS()
 class GSTNCOMBATGAS_API UGSTN_KitPlaceholderLookSubsystem : public UWorldSubsystem

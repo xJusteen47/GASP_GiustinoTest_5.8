@@ -48,6 +48,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skin")
 	bool bAutoBind = true;
 
+	/**
+	 * Put the loadout's skin on the pawn's mesh. False: this component only draws equipment pieces. The kit placeholder look adds such
+	 * an equipment-only component to every player pawn that has none, so a worn backpack shows without wiring a Blueprint
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skin")
+	bool bApplySkin = true;
+
+	/**
+	 * Draw the kit's and the primary weapon's own Visual. False: only the registered providers' pieces (backpacks, mod visuals). The
+	 * auto-added component turns it off while the kit's look is the placeholder box, so the back never shows the box and an implant
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skin|Equipment")
+	bool bIncludeLoadoutVisuals = true;
+
 	/** How many times a not-yet-replicated PlayerState is waited for before giving up */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skin", meta = (ClampMin = "0", EditCondition = "bAutoBind"))
 	int32 MaxBindAttempts = 40;

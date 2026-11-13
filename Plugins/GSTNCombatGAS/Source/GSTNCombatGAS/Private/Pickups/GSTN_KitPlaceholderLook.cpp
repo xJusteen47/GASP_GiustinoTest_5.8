@@ -6,6 +6,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Cosmetics/GSTN_EquipmentVisual.h"
+#include "Cosmetics/GSTN_SkinComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/Character.h"
 #include "Engine/StaticMesh.h"
@@ -63,6 +64,22 @@ namespace GSTNKitPlaceholderLook
 		const FTransform BoneAtRest = FAnimationRuntime::GetComponentSpaceTransformRefPose(Asset->GetRefSkeleton(), Bone) * Body->GetComponentTransform();
 		Box.AttachToComponent(Body, FAttachmentTransformRules::KeepRelativeTransform, BackBone);
 		Box.SetRelativeTransform(Wanted.GetRelativeTransform(BoneAtRest));
+	}
+}
+
+namespace GSTNKitPlaceholderLook
+{
+	/**
+	 * Gives Pawn the component that draws its equipment (backpacks, mod visuals: the attachment providers' pieces), so worn equipment
+	 * shows with no Blueprint wiring. Equipment only: it leaves the skin to a skin component a designer put on the pawn, and the kit's
+	 * and weapon's own Visual to this box until the look track replaces it. It binds to the PlayerState's loadout at begin play
+	 */
+	void AddEquipmentLook(APawn& Pawn)
+	{
+		UGSTN_SkinComponent* Look = NewObject<UGSTN_SkinComponent>(&Pawn, TEXT("GSTN_EquipmentLook"), RF_Transient);
+		Look->bApplySkin = false;
+		Look->bIncludeLoadoutVisuals = false;
+		Look->RegisterComponent();
 	}
 }
 
@@ -157,6 +174,10 @@ void UGSTN_KitPlaceholderLookSubsystem::Refresh()
 			continue;
 		}
 		const UGSTN_LoadoutComponent* Loadout = PlayerState->FindComponentByClass<UGSTN_LoadoutComponent>();
+		if (Loadout && !Pawn->FindComponentByClass<UGSTN_SkinComponent>())
+		{
+			GSTNKitPlaceholderLook::AddEquipmentLook(*Pawn);
+		}
 		if (!Loadout)
 		{
 			Loadout = Pawn->FindComponentByClass<UGSTN_LoadoutComponent>();

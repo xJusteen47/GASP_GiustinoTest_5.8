@@ -148,14 +148,20 @@ void UGSTN_SkinComponent::BindToLoadout(UGSTN_LoadoutComponent* Loadout)
 	}
 	if (Loadout->HasLoadout())
 	{
-		ApplySkin(Loadout->GetResolvedSkin());
+		if (bApplySkin)
+		{
+			ApplySkin(Loadout->GetResolvedSkin());
+		}
 		RefreshAttachments();
 	}
 }
 
 void UGSTN_SkinComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Component, int32 Revision)
 {
-	ApplySkin(Component ? Component->GetResolvedSkin() : nullptr);
+	if (bApplySkin)
+	{
+		ApplySkin(Component ? Component->GetResolvedSkin() : nullptr);
+	}
 	RefreshAttachments();
 }
 
@@ -203,7 +209,7 @@ void UGSTN_SkinComponent::RefreshAttachments()
 	Context.Pawn = GetOwner();
 	Context.Resolved = Loadout && Loadout->HasLoadout() ? &Loadout->GetResolvedLoadout() : nullptr;
 	TArray<FGSTN_AttachmentRequest> Requests;
-	if (Context.Resolved)
+	if (Context.Resolved && bIncludeLoadoutVisuals)
 	{
 		const UGSTN_WeaponDefinition* Primary = Context.Resolved->Weapons.IsValidIndex(0) ? Context.Resolved->Weapons[0] : nullptr;
 		FGSTN_EquipmentVisualUtils::GatherLoadoutVisuals(Context.Resolved->Kit, Primary, Requests);
