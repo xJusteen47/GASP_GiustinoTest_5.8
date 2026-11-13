@@ -12,22 +12,20 @@ mappa salvata, `stash@{0}` e `NewBlueprint1/2.uasset` non toccati. Editor rilasc
 - Rimbalzo: rigido fino a 17, piede sinistro +9,6 cm a 19, destro +8,5 cm a 20, ginocchia che cedono avanti e in fuori, giù entro 23.
 - Tenuta in movimento 17→26: bacino -9 cm, piedi che premono altri 4 cm, arco che si chiude di 10°; inversione sfalsata: bacino 26, busto 28, braccia 30, testa 32.
 - Carica 8→10: palla più stretta del 22% (ginocchia e gomiti 7-8 cm verso il centro, testa più bassa). Recovery: ogni parte arriva morbida sulla 37 (87% entro a34).
-- `animpipe check` v9: stessi tre bloccanti della v8 (`legibility`, `source_fidelity`, `co_motion`); `clearance` e `hitstop_snap` verdi.
+  `animpipe check`: stessi tre bloccanti della v8 (`legibility`, `source_fidelity`, `co_motion`); `clearance` e `hitstop_snap` verdi.
 ## Pipeline e kit
 - **`animpipe build` e `roundtrip` ora cuociono `ik_foot_l/r` dai piedi dopo l'export** (`_bake_ik_feet` in `animpipe/ue_rig.py`; il risultato `ik_feet`
   è nel json della build). Il thread del jab deve solo rifare `animpipe build` e rigenerare il kit: lo "squat" sparisce senza altri passaggi.
 - `setup_overlord_dair_kit.py`: `OVERLORD_DAIR_REFRESH=1` e `OVERLORD_DAIR_BLEND_OUT_FRAMES` (V9 fatto con 8; V8 e V7 non toccati).
-- `animpipe author`: la rilettura finale fallisce subito dopo il salvataggio (info asset vuota); la take è scritta giusta, verificata con `sample_pose`.
 - Il mio editor va chiuso senza `Stop-Process` (negato): mappa vuota nuova senza salvare, poi `quit_editor` dal bridge. `ue.py` senza `port.json`
   locale ripiega sull'editor dell'owner in `_feature`: impostare sempre `UE_MCP_PORT` sulla porta del proprio editor.
 ## Cosa resta imperfetto da dietro e con cosa coprirlo (proposte, niente altre pose: la chiave a15 dell'owner è chiusa)
 - Colonna nei 3 frame attivi: scia verticale sotto i piedi a13-a15, anello d'impatto e shake sul colpo a segno.
 - Contatto grigio su grigio: scintilla e flash sul bersaglio, reazione del bersaglio (oggi resta in piedi).
 - Rimbalzo a vuoto senza causa visibile: piccolo anello d'aria a15-a17. Carica debole in miniatura: bagliore che converge a8-a10, flash di un frame a12.
-- Atterraggio a metà mossa: il cedimento delle ginocchia ora legge come assorbimento, ma serve comunque un landing cancel lato gioco.
 ## Prossimo thread (lato gioco, breve; va fatto su 5.9 dopo il passaggio)
 1. Capire perché in aria l'uscita verso la posa di caduta scatta in un frame all'inizio del blend-out invece di distribuirsi (ipotesi: IK gambe o
    foot placement dell'ABP Blueprint legati al peso del montage; in `Plugins/GSTNAnimation` C++ non c'è nulla del genere). Provare blend-out che parte dopo il FAF.
 2. Ricatturare solo `dair_whiff` (`PIE_CAPTURE_SEQUENCES=dair_whiff`) e rimisurare v69-v77: nessun frame sopra 2400 px di lato. Poi PASS e all'owner.
 In gioco oggi (non approvata): `L_Test_Hub`, kit `KIT_Test_OverlordDAirV9`, salto e poi giù + attacco in aria.
-Tentativi su blocchi: clearance 2 (risolto), rilettura di `author` 2 (aggirata). Costo stimato: ~190k token di contesto Fable + revisore Fable 171k.
+Tentativi su blocchi: clearance 2 (risolto); rilettura finale di `author` 2 (fallisce dopo il salvataggio, take verificata con `sample_pose`). Costo stimato: ~190k token di contesto Fable + revisore Fable 171k.
