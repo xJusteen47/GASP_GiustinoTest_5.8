@@ -77,6 +77,15 @@ stays (it is independent of the kit); the **old kit drops as a pickup** where th
 Mods and special choices: the picked-up kit brings the **player's saved configuration for that kit** if one exists, else the
 pickup's own (question M11.4).
 
+*Built (M11 swap, owner answers 2026-11-12)*: three settings in the mode's `UGSTN_LoadoutModeRules` (category "Kit swap"), each with
+the other answer one click away. `KitSwapSupportWeapon` = `StaysWithPlayer` (M11.2: the player's last additional weapon comes along
+with its slot customisations; a support weapon on the ground kit trades places with it; if the loadout rules refuse the new kit with
+it, it stays on the ground with the old kit and the swap still happens) or `StaysWithKit`. `KitSwapMeters` = `Keep` (default, value
+capped at the new maximum) or `Reset` (M11.3, to be settled by playtest; `UGSTN_LoadoutComponent::AcceptKitSwap`). `KitSwapMods` =
+`GroundKit` (M11.4: the ground kit's mods apply, unlike the proposal above; the player's mod setups stay with their old kit) or
+`PlayerSetup`. Health progress and broken state are not touched by a swap (as before). M11.6: `SupportWeaponStats` default
+`WeaponOwn` confirmed (a heavy weapon may slow you).
+
 Prediction: the pickup ability and its animation are predicted like any timeline; the kit change itself is **server-applied**
 (out of band, M3 §7.8), never predicted, because it re-grants abilities. The client sees its new moveset one round trip after the
 host accepted, hidden by the animation. A refused pickup ends the animation with a fumble cue.

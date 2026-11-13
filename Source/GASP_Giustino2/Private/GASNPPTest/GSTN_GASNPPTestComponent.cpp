@@ -1504,6 +1504,13 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 				LoadoutJson->SetBoolField(TEXT("kitResolved"), Loadout->GetResolvedKit() != nullptr);
 				LoadoutJson->SetNumberField(TEXT("tableEntries"), Loadout->GetCompiledTable().Entries.Num());
 				LoadoutJson->SetNumberField(TEXT("grantedAbilities"), Loadout->GetCompiledTable().GrantedAbilities.Num());
+				// M11 L10: timelines a kit mod derived for this loadout (GSTNKitMods names them GSTNModTL_*): > 0 = the mods reached the table
+				int32 DerivedTimelines = 0;
+				for (const FGSTN_TimelineRegistryEntry& Entry : Loadout->GetCompiledTable().Registry)
+				{
+					DerivedTimelines += Entry.TimelineOverride.GetAssetName().StartsWith(TEXT("GSTNModTL_")) ? 1 : 0;
+				}
+				LoadoutJson->SetNumberField(TEXT("derivedTimelines"), DerivedTimelines);
 				// The table bytes are the same on every machine for the same loadout: compare the checksums
 				TArray<uint8> TableBytes;
 				Loadout->GetCompiledTable().WriteBytes(TableBytes);

@@ -2,6 +2,7 @@
 // Goldens are hand values; each test says how it was derived.
 
 #include "Movement/GSTN_BallisticMode.h"
+#include "Movement/GSTN_ShotAim.h"
 #include "Misc/AutomationTest.h"
 #include "Serialization/BitReader.h"
 #include "Serialization/BitWriter.h"
@@ -134,6 +135,46 @@ bool FGSTNProjectileArcAimTest::RunTest(const FString& Parameters)
 	FVector Straight;
 	TestTrue(TEXT("zero gravity aims straight"), FGSTN_BallisticMode::SolveLaunchDirection(FVector::ZeroVector, FVector(3.0, 4.0, 0.0), 1000.0, FVector::ZeroVector, true, Straight)
 		&& Straight.Equals(FVector(0.6, 0.8, 0.0), 1e-12));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTNProjectileHitscanTest, "GSTNProjectile.Core.HitscanAndReticleAim",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FGSTNProjectileHitscanTest::RunTest(const FString& Parameters)
+{
+	// M11 L9. A hitscan along +Y (yaw 90) from (0, 0, 100), range 3000, radius 5: the capsule must cover the line in its first frame
+	FGSTN_ProjectileParams Params;
+	Params.Origin = FVector(0.0, 0.0, 100.0);
+	Params.Direction = FVector(0.0, 1.0, 0.0);
+	Params.MaxHits = 2;
+	FGSTN_HitscanSpec Spec;
+	Spec.RangeCm = 3000.f;
+	Spec.RadiusCm = 5.f;
+	FGSTN_ShotAim::MakeHitscan(Params, Spec);
+	TestEqual(TEXT("one frame of life"), Params.LifetimeFrames, 1);
+	TestTrue(TEXT("no gravity"), Params.GravityAccel.IsZero());
+	TestTrue(TEXT("nearest first"), Params.bHitNearestFirst);
+	TestEqual(TEXT("MaxHits kept"), static_cast<int32>(Params.MaxHits), 2);
+
+	const FGSTN_BallisticSegment Segment = FGSTN_BallisticMode::Quantize(FGSTN_BallisticMode::MakeSegment(Params, 0, 0.016));
+	const FGSTN_HitShape Target = ProjectileTestSphere(20.0);
+	TestTrue(TEXT("near target on the line"), FGSTN_BallisticMode::SweepStep(Segment, Params.Shape, 1, Target, FTransform(FVector(0.0, 300.0, 100.0))));
+	TestTrue(TEXT("far target on the line"), FGSTN_BallisticMode::SweepStep(Segment, Params.Shape, 1, Target, FTransform(FVector(0.0, 2950.0, 100.0))));
+	TestFalse(TEXT("past the range"), FGSTN_BallisticMode::SweepStep(Segment, Params.Shape, 1, Target, FTransform(FVector(0.0, 3200.0, 100.0))));
+	TestFalse(TEXT("behind the muzzle"), FGSTN_BallisticMode::SweepStep(Segment, Params.Shape, 1, Target, FTransform(FVector(0.0, -200.0, 100.0))));
+	TestFalse(TEXT("off the line (30 cm aside, 20 + 5 reach)"), FGSTN_BallisticMode::SweepStep(Segment, Params.Shape, 1, Target, FTransform(FVector(30.0, 1500.0, 100.0))));
+	TestTrue(TEXT("grazing (24 cm aside)"), FGSTN_BallisticMode::SweepStep(Segment, Params.Shape, 1, Target, FTransform(FVector(24.0, 1500.0, 100.0))));
+
+	// Reticle aim: on = the camera aim with its pitch clamped; off = the flat direction plus the launch pitch, never the camera's pitch
+	const FVector Flat(1.0, 0.0, 0.0);
+	const FVector Up30 = FGSTN_ShotAim::ReticleDirection(true, FRotator(30.0, 90.0, 0.0), Flat, -60.f, 60.f, 0.f);
+	TestEqual(TEXT("on: reticle pitch"), Up30.Rotation().Pitch, 30.0, 0.01);
+	TestEqual(TEXT("on: reticle yaw"), Up30.Rotation().Yaw, 90.0, 0.01);
+	TestEqual(TEXT("on: pitch clamped"), FGSTN_ShotAim::ReticleDirection(true, FRotator(80.0, 0.0, 0.0), Flat, -60.f, 60.f, 0.f).Rotation().Pitch, 60.0, 0.01);
+	TestEqual(TEXT("on: no aim in the command = flat"), FGSTN_ShotAim::ReticleDirection(true, FRotator::ZeroRotator, Flat, -60.f, 60.f, 10.f).Rotation().Pitch, 0.0, 0.01);
+	TestEqual(TEXT("off: launch pitch only"), FGSTN_ShotAim::ReticleDirection(false, FRotator(30.0, 90.0, 0.0), Flat, -60.f, 60.f, 10.f).Rotation().Pitch, 10.0, 0.01);
+	TestEqual(TEXT("off: flat yaw"), FGSTN_ShotAim::ReticleDirection(false, FRotator(30.0, 90.0, 0.0), Flat, -60.f, 60.f, 0.f).Rotation().Yaw, 0.0, 0.01);
 	return true;
 }
 

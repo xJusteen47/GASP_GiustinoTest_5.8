@@ -4,11 +4,14 @@
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GSTN_CombatTags.h"
+#include "Input/GSTN_CombatCommandTags.h"
 #include "Input/GSTN_InputSlot.h"
 #include "Input/GSTN_StandardSlots.h"
 #include "Kits/GSTN_CombatAssetTypes.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Kits/GSTN_WeaponDefinition.h"
+#include "Loadout/GSTN_LoadoutModeRules.h"
+#include "Misc/ScopeExit.h"
 #include "Pickups/GSTN_EquipmentPickup.h"
 #include "Pickups/GSTN_KitPickup.h"
 #include "Pickups/GSTN_KitSwapSubsystem.h"
@@ -112,9 +115,18 @@ bool FGSTN_PickupsPayloadKitTest::RunTest(const FString& Parameters)
 	const FGSTN_KitPickupPayload Kit(Loadout(TEXT("KitB")));
 	TestEqual(TEXT("the label shows the kit"), Kit.GetDisplayId(), KitId(TEXT("KitB")));
 	Errors.Reset();
+	// Owner answer M11.2 (the default rules): the support weapon goes with the player; the loadout rules judge whether kit B carries it
 	TestTrue(TEXT("a kit is taken"), Kit.MakeChange(Loadout(TEXT("KitA"), { TEXT("S1") }), New, Left, Errors));
-	TestTrue(TEXT("the taker plays the whole loadout on the ground"), New == Loadout(TEXT("KitB")));
+	TestTrue(TEXT("the taker plays the loadout on the ground with their support weapon"), New == Loadout(TEXT("KitB"), { TEXT("S1") }));
 	const FGSTN_KitPickupPayload* LeftKit = Left.GetPtr<FGSTN_KitPickupPayload>();
+	TestTrue(TEXT("their old kit stays on the ground without it"), LeftKit && LeftKit->Loadout == Loadout(TEXT("KitA")));
+
+	// The other answer, kept as a mode setting: the whole loadout is swapped, as K1 shipped it
+	FGSTN_KitSwapCarryOver WholeSwap;
+	WholeSwap.bSupportWeaponStaysWithPlayer = false;
+	TestTrue(TEXT("a kit is taken under StaysWithKit"), Kit.MakeChangeUnder(WholeSwap, Loadout(TEXT("KitA"), { TEXT("S1") }), New, Left, Errors));
+	TestTrue(TEXT("the taker plays the whole loadout on the ground"), New == Loadout(TEXT("KitB")));
+	LeftKit = Left.GetPtr<FGSTN_KitPickupPayload>();
 	TestTrue(TEXT("their whole previous loadout stays on the ground"), LeftKit && LeftKit->Loadout == Loadout(TEXT("KitA"), { TEXT("S1") }));
 
 	TestTrue(TEXT("a player with no kit takes it too"), Kit.MakeChange(FGSTN_LoadoutData(), New, Left, Errors));
@@ -288,6 +300,123 @@ bool FGSTN_PickupsPayloadKitCarryOverTest::RunTest(const FString& Parameters)
 	LeftKit = Left.GetPtr<FGSTN_KitPickupPayload>();
 	const FGSTN_PickupsTestKeptExt* LeftKept = LeftKit ? GSTNLoadoutExtension::Find<FGSTN_PickupsTestKeptExt>(LeftKit->Loadout.Extensions) : nullptr;
 	TestTrue(TEXT("the ground's one stays on the ground"), LeftKept && LeftKept->Value == 3);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PickupsPayloadKitSupportCarryTest, "GSTNPickups.Payload.KitSupportCarry", PickupsTestFlags)
+bool FGSTN_PickupsPayloadKitSupportCarryTest::RunTest(const FString& Parameters)
+{
+	auto Customised = [](FGSTN_LoadoutData Data, int32 WeaponIndex, const FGameplayTag& Command)
+	{
+		FGSTN_SlotCustomisation& Entry = Data.SlotCustomisations.AddDefaulted_GetRef();
+		Entry.WeaponIndex = WeaponIndex;
+		Entry.Command = Command;
+		return Data;
+	};
+	const FGameplayTag CommandA = GSTNCommandTags::Attack_Neutral.GetTag();
+	const FGameplayTag CommandB = GSTNCommandTags::Strong_Neutral.GetTag();
+
+	// Both kits carry one: they trade places, each with its own customisations (weapon index 2 = the second additional weapon)
+	FGSTN_LoadoutData Taken = Customised(Loadout(TEXT("KitB"), { TEXT("W1"), TEXT("S2") }), 2, CommandB);
+	FGSTN_LoadoutData Left = Customised(Loadout(TEXT("KitA"), { TEXT("S1") }), 1, CommandA);
+	FGSTN_KitPickupPayload::CarrySupportWeapon(Taken, Left);
+	TestTrue(TEXT("the player's support weapon replaces the ground kit's last one"), Taken.AdditionalWeapons == Loadout(TEXT("KitB"), { TEXT("W1"), TEXT("S1") }).AdditionalWeapons);
+	TestTrue(TEXT("the ground kit's goes down with the old kit"), Left.AdditionalWeapons == Loadout(TEXT("KitA"), { TEXT("S2") }).AdditionalWeapons);
+	TestTrue(TEXT("the carried weapon's customisation moved to its new index"), Taken.SlotCustomisations.Num() == 1 && Taken.SlotCustomisations[0].WeaponIndex == 2 && Taken.SlotCustomisations[0].Command == CommandA);
+	TestTrue(TEXT("and the ground weapon's one went down with it"), Left.SlotCustomisations.Num() == 1 && Left.SlotCustomisations[0].WeaponIndex == 1 && Left.SlotCustomisations[0].Command == CommandB);
+
+	// The ground kit carries none: the weapon is added, the old kit lies there empty-handed
+	Taken = Loadout(TEXT("KitB"));
+	Left = Customised(Loadout(TEXT("KitA"), { TEXT("S1") }), 1, CommandA);
+	FGSTN_KitPickupPayload::CarrySupportWeapon(Taken, Left);
+	TestTrue(TEXT("added"), Taken.AdditionalWeapons.Num() == 1 && Taken.AdditionalWeapons[0] == WeaponId(TEXT("S1")) && Taken.SlotCustomisations.Num() == 1);
+	TestTrue(TEXT("removed from the old kit with its customisation"), Left.AdditionalWeapons.IsEmpty() && Left.SlotCustomisations.IsEmpty());
+
+	// The same weapon on both sides: nothing moves, nothing is duplicated
+	Taken = Loadout(TEXT("KitB"), { TEXT("S1") });
+	Left = Loadout(TEXT("KitA"), { TEXT("S1") });
+	FGSTN_KitPickupPayload::CarrySupportWeapon(Taken, Left);
+	TestTrue(TEXT("same weapon: both keep theirs"), Taken == Loadout(TEXT("KitB"), { TEXT("S1") }) && Left == Loadout(TEXT("KitA"), { TEXT("S1") }));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PickupsPayloadKitModsRuleTest, "GSTNPickups.Payload.KitModsRule", PickupsTestFlags)
+bool FGSTN_PickupsPayloadKitModsRuleTest::RunTest(const FString& Parameters)
+{
+	// An entry whose answer is the mode's mods rule (stands in for the mods, M11.4)
+	auto Mods = [](int32 Value) { FGSTN_PickupsTestModsExt Ext; Ext.Value = Value; return FInstancedStruct::Make(Ext); };
+	TArray<FString> Errors;
+	FGSTN_LoadoutData New;
+	FInstancedStruct Left;
+	FGSTN_LoadoutData Current = Loadout(TEXT("KitA"));
+	Current.Extensions = { Mods(1) };
+	FGSTN_LoadoutData Ground = Loadout(TEXT("KitB"));
+	Ground.Extensions = { Mods(2) };
+
+	TestTrue(TEXT("the kit is taken (default: the ground kit's mods)"), FGSTN_KitPickupPayload(Ground).MakeChange(Current, New, Left, Errors));
+	const FGSTN_PickupsTestModsExt* NewMods = GSTNLoadoutExtension::Find<FGSTN_PickupsTestModsExt>(New.Extensions);
+	TestTrue(TEXT("the ground kit's mods apply"), NewMods && NewMods->Value == 2);
+	const FGSTN_KitPickupPayload* LeftKit = Left.GetPtr<FGSTN_KitPickupPayload>();
+	const FGSTN_PickupsTestModsExt* LeftMods = LeftKit ? GSTNLoadoutExtension::Find<FGSTN_PickupsTestModsExt>(LeftKit->Loadout.Extensions) : nullptr;
+	TestTrue(TEXT("the player's go down with their old kit"), LeftMods && LeftMods->Value == 1);
+
+	FGSTN_KitSwapCarryOver PlayerSetup;
+	PlayerSetup.bModsStayWithPlayer = true;
+	TestTrue(TEXT("the kit is taken (PlayerSetup)"), FGSTN_KitPickupPayload(Ground).MakeChangeUnder(PlayerSetup, Current, New, Left, Errors));
+	NewMods = GSTNLoadoutExtension::Find<FGSTN_PickupsTestModsExt>(New.Extensions);
+	TestTrue(TEXT("the player's own setups apply"), NewMods && NewMods->Value == 1);
+	LeftKit = Left.GetPtr<FGSTN_KitPickupPayload>();
+	LeftMods = LeftKit ? GSTNLoadoutExtension::Find<FGSTN_PickupsTestModsExt>(LeftKit->Loadout.Extensions) : nullptr;
+	TestTrue(TEXT("the ground kit's stay on the ground"), LeftMods && LeftMods->Value == 2);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PickupsTakeKitSwapRulesTest, "GSTNPickups.Take.KitSwapRules", PickupsTestFlags)
+bool FGSTN_PickupsTakeKitSwapRulesTest::RunTest(const FString& Parameters)
+{
+	FWorldFixture Fixture;
+	UGSTN_PickupsTestLoadoutComponent& Component = *Fixture.Component;
+	// Kit C carries a support weapon like kit A; kit B carries none
+	TStrongObjectPtr<UGSTN_PrimaryKitDefinition> KitC(DuplicateObject(Fixture.KitA.Get(), GetTransientPackage()));
+	Component.Assets.Add(KitId(TEXT("KitC")), KitC.Get());
+	UGSTN_LoadoutModeRules& Rules = FGSTN_ActiveGameRules::GetMutablePieceForDev<UGSTN_LoadoutModeRules>();
+	const EGSTN_KitSwapSupportWeapon WasRule = Rules.KitSwapSupportWeapon;
+	ON_SCOPE_EXIT { Rules.KitSwapSupportWeapon = WasRule; };
+	Rules.KitSwapSupportWeapon = EGSTN_KitSwapSupportWeapon::StaysWithPlayer;
+
+	TArray<FString> Errors;
+	AGSTN_KitPickup* Pickup = Fixture.Spawn<AGSTN_KitPickup>(FVector(100.f, 0.f, 0.f));
+	if (!TestNotNull(TEXT("a kit pickup spawned"), Pickup))
+	{
+		return false;
+	}
+	TestTrue(TEXT("the player starts with kit A and S1"), Component.AcceptLoadout(Loadout(TEXT("KitA"), { TEXT("S1") }), Errors));
+
+	// A kit that can carry it: S1 comes along
+	Pickup->SetLoadout(Loadout(TEXT("KitC")));
+	TestTrue(FString::Printf(TEXT("kit C is taken (%s)"), *FString::Join(Errors, TEXT(" | "))), Pickup->Take(Component, Errors));
+	TestTrue(TEXT("the player plays kit C with S1"), Component.GetApplied() == Loadout(TEXT("KitC"), { TEXT("S1") }));
+	TestTrue(TEXT("kit A lies on the ground without it"), Pickup->GetLoadout() == Loadout(TEXT("KitA")));
+
+	// The ground kit carries its own: the two trade places
+	Pickup->SetLoadout(Loadout(TEXT("KitA"), { TEXT("S2") }));
+	TestTrue(TEXT("kit A with S2 is taken"), Pickup->Take(Component, Errors));
+	TestTrue(TEXT("the player keeps S1 on kit A"), Component.GetApplied() == Loadout(TEXT("KitA"), { TEXT("S1") }));
+	TestTrue(TEXT("S2 lies with kit C"), Pickup->GetLoadout() == Loadout(TEXT("KitC"), { TEXT("S2") }));
+
+	// A kit that cannot carry it: S1 stays on the ground with the old kit, the swap still happens
+	Pickup->SetLoadout(Loadout(TEXT("KitB")));
+	TestTrue(FString::Printf(TEXT("kit B is taken (%s)"), *FString::Join(Errors, TEXT(" | "))), Pickup->Take(Component, Errors));
+	TestTrue(TEXT("the player plays kit B alone"), Component.GetApplied() == Loadout(TEXT("KitB")));
+	TestTrue(TEXT("S1 lies with kit A"), Pickup->GetLoadout() == Loadout(TEXT("KitA"), { TEXT("S1") }));
+
+	// The other answer: the support weapon stays with the kit
+	Rules.KitSwapSupportWeapon = EGSTN_KitSwapSupportWeapon::StaysWithKit;
+	TestTrue(TEXT("kit A with S1 is taken back"), Pickup->Take(Component, Errors));
+	Pickup->SetLoadout(Loadout(TEXT("KitC")));
+	TestTrue(TEXT("kit C is taken under StaysWithKit"), Pickup->Take(Component, Errors));
+	TestTrue(TEXT("the player plays kit C alone"), Component.GetApplied() == Loadout(TEXT("KitC")));
+	TestTrue(TEXT("S1 stays with kit A"), Pickup->GetLoadout() == Loadout(TEXT("KitA"), { TEXT("S1") }));
 	return true;
 }
 

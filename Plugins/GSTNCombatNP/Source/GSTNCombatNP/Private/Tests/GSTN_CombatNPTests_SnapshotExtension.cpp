@@ -98,6 +98,48 @@ bool FGSTN_SnapshotExtOneTypeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SnapshotExtFourContributorsTest, "GSTNCombat.NP.SnapshotExt.FourContributors", GSTN_NP_TEST_FLAGS)
+bool FGSTN_SnapshotExtFourContributorsTest::RunTest(const FString& Parameters)
+{
+	// M11 L7c: parts, defence, link and the backpack dome contribute at once, so the entry, the victim view and the attacker refs hold four
+	static_assert(FGSTN_SnapshotExtensionSet::MaxBlobs == 4, "four snapshot contributors since M11 L7c");
+	static_assert(FGSTN_HitVictimView::MaxSnapshotExtensions == FGSTN_SnapshotExtensionSet::MaxBlobs, "the view holds one ref per blob");
+	static_assert(FGSTN_SnapshotContributorRegistry::MaxContributors == FGSTN_SnapshotExtensionSet::MaxBlobs, "the registry takes one contributor per blob");
+
+	FGSTN_SnapshotContributorRegistry Registry;
+	constexpr uint8 TestD = GSTNFeatureIds::TestC + 1;
+	FTestContributor D(TestD);
+	FTestContributor C(GSTNFeatureIds::TestC);
+	FTestContributor B(GSTNFeatureIds::TestB);
+	FTestContributor A(GSTNFeatureIds::TestA);
+	// Registered out of order: the blobs still come in ascending id
+	for (FTestContributor* Contributor : { &D, &B, &C, &A })
+	{
+		TestTrue(TEXT("each of the four registers"), Registry.Register(Contributor));
+	}
+	TestEqual(TEXT("four registered"), Registry.Num(), 4);
+
+	FGSTN_SnapshotContributorContext Context;
+	Context.Frame = 7;
+	FGSTN_SnapshotEntry Entry;
+	Registry.Fill(Context, Entry);
+	TestEqual(TEXT("four blobs"), Entry.Extension.Num(), 4);
+	const uint8 Expected[] = { GSTNFeatureIds::TestA, GSTNFeatureIds::TestB, GSTNFeatureIds::TestC, TestD };
+	for (int32 Index = 0; Index < 4; ++Index)
+	{
+		TestEqual(TEXT("in ascending id"), static_cast<int32>(Entry.Extension.Blobs[Index].TypeId), static_cast<int32>(Expected[Index]));
+	}
+	const FGSTN_HitVictimView View = FGSTN_CombatVictim::MakeVictimView(Entry, nullptr);
+	const FTestExtensionPod* Last = static_cast<const FTestExtensionPod*>(View.FindSnapshotExtension(TestD));
+	TestEqual(TEXT("the view reaches the fourth"), Last ? Last->Value : 0u, 7u);
+
+	for (FTestContributor* Contributor : { &A, &B, &C, &D })
+	{
+		Registry.Unregister(Contributor);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SnapshotExtHistoryTest, "GSTNCombat.NP.SnapshotExt.HistoryRewindsTheExtension", GSTN_NP_TEST_FLAGS)
 bool FGSTN_SnapshotExtHistoryTest::RunTest(const FString& Parameters)
 {

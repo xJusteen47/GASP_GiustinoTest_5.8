@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "Cosmetics/GSTN_AttachmentProvider.h"
+#include "GameplayEffect.h"
+#include "GSTN_BackpackLoadout.generated.h"
 
 class UAbilitySystemComponent;
 class UGSTN_BackpackDefinition;
@@ -19,6 +21,11 @@ struct FGSTN_LoadoutRulesView;
  */
 struct GSTNBACKPACKGAS_API FGSTN_BackpackLoadout
 {
+	/** Set-by-caller names of UGSTN_GE_BackpackMovement (names, not tags: no new tag for a value channel) */
+	static const FName ExtraAirJumpsName;
+	static const FName GlideGravityScaleName;
+	static const FName GlideMaxFallSpeedName;
+
 	static const FName ExtensionId;
 	static const FName AttachmentProviderId;
 	static constexpr int32 ExtensionPriority = 200;
@@ -35,7 +42,7 @@ struct GSTNBACKPACKGAS_API FGSTN_BackpackLoadout
 	/** Warnings only: a path that is not a backpack, a feeding backpack with no carried support weapon it feeds */
 	static void ContributeRulesView(const FGSTN_LoadoutExtensionContext& Context, FGSTN_LoadoutRulesView& View);
 
-	/** Applies the backpack's Effects on the authority */
+	/** Applies the backpack's Effects, and its Movement through UGSTN_GE_BackpackMovement, on the authority */
 	static void OnGranted(const FGSTN_LoadoutExtensionContext& Context, UAbilitySystemComponent& AbilitySystem);
 
 	/** Removes what OnGranted applied */
@@ -53,4 +60,18 @@ class GSTNBACKPACKGAS_API FGSTN_BackpackAttachmentProvider : public IGSTN_Attach
 {
 public:
 	virtual void GatherAttachments(const FGSTN_AttachmentContext& Context, TArray<FGSTN_AttachmentRequest>& OutRequests) const override;
+};
+
+/**
+ * Infinite: adds a backpack's FGSTN_BackpackMovement to the carrier's combat stats (M11 L7b): AirJumpCount, GlideGravityScale and
+ * GlideMaxFallSpeed, each Add (Base) by a set-by-caller value (FGSTN_BackpackLoadout::*Name), so a kit's own values stay and only the
+ * backpack's part comes and goes with it. Applied and removed by the backpack loadout extension
+ */
+UCLASS()
+class GSTNBACKPACKGAS_API UGSTN_GE_BackpackMovement : public UGameplayEffect
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GE_BackpackMovement();
 };

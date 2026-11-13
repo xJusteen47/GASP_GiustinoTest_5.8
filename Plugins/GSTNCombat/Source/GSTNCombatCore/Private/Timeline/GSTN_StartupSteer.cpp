@@ -22,6 +22,17 @@ bool FGSTN_StartupSteer::IsSteering(const FVector2D& AimStick, float MaxSteerDeg
 	return MaxSteerDegrees > 0.f && AimStick.SizeSquared() >= static_cast<double>(DeadZone * DeadZone);
 }
 
+float FGSTN_StartupSteer::RateLimitYaw(float CurrentYawDeg, float TargetYawDeg, float RateDegPerSecond, float StepSeconds)
+{
+	if (RateDegPerSecond <= 0.f || StepSeconds <= 0.f)
+	{
+		return FRotator::NormalizeAxis(TargetYawDeg);
+	}
+	const float MaxStep = RateDegPerSecond * StepSeconds;
+	const float Delta = FRotator::NormalizeAxis(TargetYawDeg - CurrentYawDeg);
+	return FRotator::NormalizeAxis(CurrentYawDeg + FMath::Clamp(Delta, -MaxStep, MaxStep));
+}
+
 int32 FGSTN_StartupSteer::GetSteerEndFrame(const FGSTN_CombatTimelineData& Data)
 {
 	int32 First = MAX_int32;

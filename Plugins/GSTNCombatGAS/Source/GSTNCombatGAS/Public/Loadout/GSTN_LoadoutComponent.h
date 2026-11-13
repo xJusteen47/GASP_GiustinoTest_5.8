@@ -108,6 +108,15 @@ public:
 	void ServerRequestSpecialSwap(int32 WeaponIndex, FGameplayTag Command, const TSoftClassPtr<UObject>& Alternative);
 
 	/**
+	 * Server only. AcceptLoadout for a whole kit taken from the ground (AGSTN_KitPickup), then the mode's meter rule
+	 * (UGSTN_LoadoutModeRules::KitSwapMeters, M11.3): Keep restores each meter's value from before the swap, capped at the new
+	 * maximum; Reset empties them. Base values, set after the grant's init effect, out of band like ApplyStartingHealth. With no
+	 * pawn to grant on (the grant waits) the meters are left alone
+	 */
+	UFUNCTION(BlueprintCallable, BlueprintAuthorityOnly, Category = "Combat|Loadout")
+	bool AcceptKitSwap(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors);
+
+	/**
 	 * Server only. Refused when the mode does not allow special swaps in a match (UGSTN_LoadoutModeRules::bAllowSpecialSwapInMatch);
 	 * otherwise AcceptLoadout of the applied loadout with that one customisation changed, so the loadout rules judge the alternative
 	 */

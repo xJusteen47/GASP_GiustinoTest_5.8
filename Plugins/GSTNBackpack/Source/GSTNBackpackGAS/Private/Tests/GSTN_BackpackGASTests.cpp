@@ -143,4 +143,37 @@ bool FGSTNBackpackRulesViewTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTNBackpackStartersTest, "GSTNBackpack.GAS.Starters", BackpackGASTestFlags)
+bool FGSTNBackpackStartersTest::RunTest(const FString& Parameters)
+{
+	// M11 L7b: the two starter backpacks are filled by their class, no wiring
+	const UGSTN_BackpackDefinition_JetPack* Jet = GetDefault<UGSTN_BackpackDefinition_JetPack>();
+	TestTrue(TEXT("jet-pack identity"), Jet->BackpackTags.HasTagExact(GSTNBackpackTags::Backpack_JetPack.GetTag()));
+	TestEqual(TEXT("jet-pack: one air jump more"), Jet->Movement.ExtraAirJumps, 1);
+	TestTrue(TEXT("jet-pack: a glide"), Jet->Movement.GlideGravityScale > 0.f && Jet->Movement.GlideGravityScale < 1.f);
+	TestEqual(TEXT("jet-pack: no move slot of its own (the kit's jump does it)"), Jet->Abilities.Num(), 0);
+
+	const UGSTN_BackpackDefinition_ShieldDome* Dome = GetDefault<UGSTN_BackpackDefinition_ShieldDome>();
+	TestTrue(TEXT("dome identity"), Dome->BackpackTags.HasTagExact(GSTNBackpackTags::Backpack_ShieldDome.GetTag()));
+	TestTrue(TEXT("dome: no movement"), Dome->Movement.IsNone());
+	if (!TestEqual(TEXT("dome: one move slot"), Dome->Abilities.Num(), 1))
+	{
+		return false;
+	}
+	const FGSTN_AbilityBinding& Binding = Dome->Abilities[0];
+	TestEqual(TEXT("its command"), Binding.Command, GSTNBackpackTags::Command_Backpack_Dome.GetTag());
+	TestTrue(TEXT("gated by its memory slot"), Binding.Requirements.IgnoreTags.HasTagExact(GSTNBackpackTags::State_Empty_Slot0.GetTag()));
+	TestTrue(TEXT("its own trigger"), Binding.HasSlotOverride());
+	const FGSTN_InputSlotSpec& Slot = Binding.SlotOverride.GetSpec();
+	TestTrue(TEXT("press and neutral stick in one step"), Slot.Pattern.Steps.Num() == 1 && Slot.Pattern.Steps[0].AllOf.Num() == 2);
+	TestTrue(TEXT("the button follows the layout's dodge"), Slot.LayoutButtons.Num() == 1 && Slot.LayoutButtons[0].Function == FName(TEXT("Movement.Dodge")));
+	TestEqual(TEXT("the NP module's dome ability"), Binding.Ability.ToSoftObjectPath().ToString(), FString(TEXT("/Script/GSTNBackpackNP.GSTN_GA_BackpackDome")));
+
+	const UGSTN_GE_BackpackMovement* Effect = GetDefault<UGSTN_GE_BackpackMovement>();
+	TestEqual(TEXT("the movement effect touches three stats"), Effect->Modifiers.Num(), 3);
+	TestTrue(TEXT("and stays while carried"), Effect->DurationPolicy == EGameplayEffectDurationType::Infinite);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

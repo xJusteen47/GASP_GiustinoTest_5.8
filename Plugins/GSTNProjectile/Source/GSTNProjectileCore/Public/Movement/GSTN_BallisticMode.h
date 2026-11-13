@@ -70,6 +70,13 @@ struct GSTNPROJECTILECORE_API FGSTN_ProjectileParams
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
 	bool bRadialPush = false;
+
+	/**
+	 * The victims one frame touches are hit nearest first (distance from where the shape was at the start of the frame, ties by entity id),
+	 * not by entity id. Set by a hitscan (FGSTN_ShotAim::MakeHitscan), so a line through two victims stops at the near one
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile|Hit")
+	bool bHitNearestFirst = false;
 };
 
 /**

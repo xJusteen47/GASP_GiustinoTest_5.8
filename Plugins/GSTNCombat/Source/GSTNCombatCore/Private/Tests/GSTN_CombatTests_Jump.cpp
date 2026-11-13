@@ -321,4 +321,65 @@ bool FGSTN_JumpSquatDelaysImpulseTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a squatting state is not default and survives NetSerialize"), !Squatting.IsDefault() && Loaded == Squatting);
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_JumpGlideTest, "GSTNCombat.Core.Jump.Glide", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_JumpGlideTest::RunTest(const FString& Parameters)
+{
+	// M11 L7b: the jet-pack's slow descent. Falling with the last jump's button held glides; release, fast fall or no stat do not
+	FGSTN_JumpParams Params;
+	Params.MaxFallSpeed = 2000.f;
+	FGSTN_JumpResetRules Rules;
+	FGSTN_JumpMoverSample Air;
+	Air.bGrounded = false;
+	Air.UpSpeed = -100.0;
+
+	FGSTN_JumpState Falling;
+	Falling.Phase = EGSTN_JumpPhase::Falling;
+	Falling.StartFrame = 10;
+	Falling.Button = 2;
+	Falling.bJumpCut = true;
+
+	FGSTN_JumpState Out = FGSTN_JumpLogic::Step(Falling, 40, Air, true, Params, Rules);
+	TestFalse(TEXT("no glide stat: no glide"), Out.bGliding);
+
+	Params.GlideGravityScale = 0.25f;
+	Params.GlideMaxFallSpeed = 300.f;
+	Out = FGSTN_JumpLogic::Step(Falling, 40, Air, true, Params, Rules);
+	TestTrue(TEXT("held while falling glides"), Out.bGliding);
+	TestEqual(TEXT("the glide scale applies"), FGSTN_JumpLogic::GravityScale(Out, Params), 0.25f);
+	TestEqual(TEXT("past the glide cap the scale is 0 (no brake)"), FGSTN_JumpLogic::LimitedGravityScale(Out, Params, 400.0, 980.0, 1.0 / 62.5), 0.f);
+	TestTrue(TEXT("under the cap the glide scale holds"), FMath::IsNearlyEqual(FGSTN_JumpLogic::LimitedGravityScale(Out, Params, 0.0, 980.0, 1.0 / 62.5), 0.25f));
+
+	TestFalse(TEXT("released: no glide"), FGSTN_JumpLogic::Step(Falling, 40, Air, false, Params, Rules).bGliding);
+
+	FGSTN_JumpState Fast = Falling;
+	Fast.bFastFalling = true;
+	TestFalse(TEXT("fast fall wins"), FGSTN_JumpLogic::Step(Fast, 40, Air, true, Params, Rules).bGliding);
+
+	FGSTN_JumpState Ledge;
+	Ledge.Phase = EGSTN_JumpPhase::Falling;
+	TestFalse(TEXT("no jump of its own (walked off a ledge): no button, no glide"), FGSTN_JumpLogic::Step(Ledge, 40, Air, true, Params, Rules).bGliding);
+
+	FGSTN_JumpState Rising = Falling;
+	Rising.Phase = EGSTN_JumpPhase::Rising;
+	FGSTN_JumpMoverSample Up = Air;
+	Up.UpSpeed = 200.0;
+	TestFalse(TEXT("rising: no glide"), FGSTN_JumpLogic::Step(Rising, 40, Up, true, Params, Rules).bGliding);
+
+	FGSTN_JumpMoverSample Ground;
+	TestFalse(TEXT("landing clears it"), FGSTN_JumpLogic::Step(Out, 41, Ground, true, Params, Rules).bGliding);
+	TestFalse(TEXT("an air jump clears it"), FGSTN_JumpLogic::ApplyTakeoff(Out, 41, 2, EGSTN_JumpKind::Air).bGliding);
+
+	// The flag rides the wire
+	TArray<uint8> Bytes;
+	FMemoryWriter Writer(Bytes);
+	FGSTN_JumpState Sent = Out;
+	Sent.NetSerialize(Writer);
+	FMemoryReader Reader(Bytes);
+	FGSTN_JumpState Received;
+	Received.NetSerialize(Reader);
+	TestTrue(TEXT("the glide flag survives the wire"), Received == Sent && Received.bGliding);
+	return true;
+}
+
 #endif

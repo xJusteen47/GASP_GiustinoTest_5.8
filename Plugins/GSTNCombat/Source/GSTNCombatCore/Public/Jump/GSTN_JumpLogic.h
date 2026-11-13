@@ -80,7 +80,7 @@ struct GSTNCOMBATCORE_API FGSTN_JumpLogic
 	 * GravityScale, lowered so that one step of gravity does not take the speed along local down past the terminal speed of the state
 	 * (FastFallSpeed while fast falling, else MaxFallSpeed; <= 0 = none). A cap on the acceleration, so nothing is written to the
 	 * velocity: DownSpeed is the speed along down at the start of the step, GravityMagnitude the authored gravity. A speed already
-	 * past the cap (a launch downwards) is kept, not reduced: the scale is 0 then.
+	 * past the cap (a launch downwards) is kept, not reduced: the scale is 0 then. Gliding (M11 L7b) uses GlideMaxFallSpeed as the cap.
 	 */
 	static float LimitedGravityScale(const FGSTN_JumpState& State, const FGSTN_JumpParams& Params, double DownSpeed, double GravityMagnitude, double DeltaSeconds);
 

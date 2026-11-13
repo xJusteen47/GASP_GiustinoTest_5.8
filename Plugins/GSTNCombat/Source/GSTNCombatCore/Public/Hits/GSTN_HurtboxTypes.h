@@ -136,6 +136,17 @@ struct GSTNCOMBATCORE_API FGSTN_ExtraHurtbox
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox|Stab", meta = (EditCondition = "bStabOnly", ClampMin = "0.0", ClampMax = "90.0", ForceUnits = "deg"))
 	float StabMaxAngleDeg = 30.f;
+
+	/**
+	 * A shell hit from outside only (M11 L7c, the backpack dome; sphere only): a melee attacker whose root, or a projectile whose previous
+	 * position, is inside the sphere never touches it, so one hit counts on one side of the shell only. Every consumer of the extras (attacker
+	 * tick, minion attacker, projectile) asks IsSkippedFrom with the point of the same snapshot, so the attacker and the victim agree
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox")
+	bool bOutsideOnly = false;
+
+	/** The extra is left out for a hit that comes from FromWorld: bOutsideOnly and FromWorld inside the sphere placed on EntityTransform. Other shapes never are */
+	bool IsSkippedFrom(const FVector& FromWorld, const FTransform& EntityTransform) const;
 };
 
 /** The extras of one entity in a snapshot or a history record: inline, because there are at most MaxExtraHurtboxes and most frames none */

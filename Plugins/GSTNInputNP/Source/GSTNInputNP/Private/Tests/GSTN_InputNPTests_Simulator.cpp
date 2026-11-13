@@ -107,10 +107,11 @@ namespace
 
 	/** Runs one frame of the simulator on State, with the buttons held as given */
 	FGSTN_InputTickResult RunFrame(FGSTN_InputSimState& State, int32 Frame, uint32 Held, const FMockHost& Host, const FGSTN_CommandTable& Table,
-		const FGSTN_ButtonMap& Buttons, const UGSTN_InputSettings& Settings, uint16 ForcedCommand = 0, FGSTN_SimEventOutbox* Outbox = nullptr, uint32 ActiveSourceMask = ~0u)
+		const FGSTN_ButtonMap& Buttons, const UGSTN_InputSettings& Settings, uint16 ForcedCommand = 0, FGSTN_SimEventOutbox* Outbox = nullptr, uint32 ActiveSourceMask = ~0u, bool bPrecisionAim = false)
 	{
 		FGSTN_InputCmd Cmd;
 		Cmd.HeldButtons = Held;
+		Cmd.bPrecisionAim = bPrecisionAim;
 		Cmd.ForcedCommand = ForcedCommand;
 
 		FGSTN_InputSimState Out = State;
@@ -224,6 +225,42 @@ bool FGSTN_NPSimulatorRequestTest::RunTest(const FString& Parameters)
 	Host.ContextTags.AddTag(GSTNInputTags::Context_Airborne);
 	const FGSTN_InputTickResult Air = RunFrame(State, 21, 1, Host, Table, Buttons, *Settings);
 	TestEqual(TEXT("the airborne binding in the air"), Air.BindingIndex, 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPPrecisionAimBindingTest, "GSTNInput.NP.Simulator.PrecisionAimBinding", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPPrecisionAimBindingTest::RunTest(const FString& Parameters)
+{
+	// M11 L9: the same press starts another move with the reticle on. The reticle binding requires the context tag the simulator adds
+	// from the command bit; the plain binding ignores it, so with the reticle off only the plain one holds and with it on only the other
+	TStrongObjectPtr<UGSTN_CommandBindingSet> Set(NewObject<UGSTN_CommandBindingSet>(GetTransientPackage()));
+	Set->Slots.Add(MakePressSlot(TestCommandAttack, TestButtonA));
+	FGSTN_CommandBinding Aimed;
+	Aimed.Command = TestCommandAttack;
+	Aimed.Requirements.RequireTags.AddTag(GSTNInputTags::Context_PrecisionAim);
+	Aimed.Ability = TSoftClassPtr<UGameplayAbility>(UGameplayAbility::StaticClass());
+	Set->Bindings.Add(Aimed);
+	FGSTN_CommandBinding Plain;
+	Plain.Command = TestCommandAttack;
+	Plain.Requirements.IgnoreTags.AddTag(GSTNInputTags::Context_PrecisionAim);
+	Plain.Ability = TSoftClassPtr<UGameplayAbility>(UGameplayAbility::StaticClass());
+	Set->Bindings.Add(Plain);
+
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = MakeNPSettings();
+	const FGSTN_CommandTable Table = Set->BuildTable();
+	const FGSTN_ButtonMap Buttons(TArray<FGameplayTag>{ TestButtonA.GetTag() });
+	FMockHost Host;
+	FGSTN_InputSimState State;
+	for (int32 Frame = 0; Frame < 5; ++Frame)
+	{
+		RunFrame(State, Frame, 0, Host, Table, Buttons, *Settings);
+	}
+	const FGSTN_InputTickResult Off = RunFrame(State, 5, 1, Host, Table, Buttons, *Settings);
+	TestEqual(TEXT("reticle off: the plain binding"), Off.BindingIndex, 1);
+	RunFrame(State, 6, 0, Host, Table, Buttons, *Settings);
+	const FGSTN_InputTickResult On = RunFrame(State, 7, 1, Host, Table, Buttons, *Settings, 0, nullptr, ~0u, true);
+	TestEqual(TEXT("reticle on: the aimed binding"), On.BindingIndex, 0);
+	TestFalse(TEXT("no host adds the tag: it comes from the command only"), Host.ContextTags.HasTagExact(GSTNInputTags::Context_PrecisionAim));
 	return true;
 }
 

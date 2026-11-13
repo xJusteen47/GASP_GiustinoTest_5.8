@@ -76,6 +76,13 @@ KIT_PADS = [
     ('KIT_Test_Light', '', 'LEGGERO', (800.0, -350.0)),
     ('KIT_Test_Medium', '', 'MEDIO', (800.0, 0.0)),
     ('KIT_Test_Heavy', '', 'PESANTE', (800.0, 350.0)),
+    # M11 L10 (Tools/GAS/setup_m11_ranger_content.py): the medium fighter plus the aimed shot (reticle on + strong = hitscan along the camera)
+    ('KIT_Test_Ranger', '', 'TIRATORE: RETICOLO + FORTE', (800.0, -700.0)),
+]
+# M11 L10: kits on the ground that carry mods (asset paths; the mods travel with the kit to whoever takes it, KitSwapMods = GroundKit).
+# (kit, support weapon, mods, label, (x, y)); test_hub.spawn_kits adds them to the KIT_PADS pickups
+MOD_PADS = [
+    ('KIT_Test_Ranger', '', ['/Game/GASNPPTest/Combat/Mods/MOD_Test_Power.MOD_Test_Power'], 'TIRATORE + MOD POTENZA', (800.0, 700.0)),
 ]
 PAD_RADIUS = 120.0
 # Stepping on it toggles the hitbox and hurtbox debug draw (gstn.Combat.Debug.Hitboxes / Hurtboxes, GSTNCombatNP)
@@ -361,7 +368,7 @@ def z6_animations():
 
 
 def kit_pads_and_dummies():
-    for kit_name, support, label, (x, y) in KIT_PADS:
+    for kit_name, support, label, (x, y) in KIT_PADS + [(k, sw, label, xy) for k, sw, _mods, label, xy in MOD_PADS]:
         box(f'Z0_Pad_{label.replace(" ", "_").replace(":", "")}', (x, y, 5.0), (PAD_RADIUS * 2.0, PAD_RADIUS * 2.0, 10.0), 'Grey', mesh=CYLINDER)
         box(f'Z0_Pad_{label.replace(" ", "_").replace(":", "")}_Item', (x, y, 60.0), (40.0, 40.0, 80.0), 'Green' if support else 'Yellow', collision=False)
         text = f'{label}\n{kit_name}' + (f'\n+ {support}' if support else '')

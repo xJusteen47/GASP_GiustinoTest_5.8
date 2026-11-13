@@ -5,7 +5,7 @@ import re
 import unreal
 import gasnpp_test as g
 
-SUITE_KIT = ['kit_swap_hold', 'kit_throw_stick_forward', 'kit_throw_stick_back', 'kit_throw_lifted']
+SUITE_KIT = ['kit_swap_hold', 'kit_throw_stick_forward', 'kit_throw_stick_back', 'kit_throw_lifted', 'kit_swap_support', 'kit_mod_swap', 'aimed_shot']
 # M11 K3: the three hub archetypes (Tools/GAS/setup_test_kit_archetypes.py)
 SUITE_ARCHETYPES = ['kit_archetype_stats', 'kit_archetype_throw_light', 'kit_archetype_throw_medium', 'kit_archetype_lift_heavy']
 _SWAP = re.compile(r'KitSwap (\S+) frame=(\d+) (took|refused) kit=(\S+) left=(\S+) at (\S+) \((focus|nearest)\)')
@@ -70,6 +70,191 @@ def scenario_kit_swap_hold(client=1, kit='KIT_Test_Link'):
         (6.6, run.at('authority and owner carry the new kit', kit_everywhere)),
         (6.7, lambda: ('cleanup', cleanup())),
         (7.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+# M11 L10: what a kit swap carries (support weapon, meters, mods)
+def _loadout_of(wi, key):
+    return g._loadout_view(wi, key)[0] or {}
+
+
+def _pickup_named(name):
+    return next((a for a in unreal.GameplayStatics.get_all_actors_of_class(g.worlds()[0], unreal.GSTN_KitPickup) if a.get_name() == name), None)
+
+
+def _pickup_view(name):
+    """(kit, additional weapons, mod paths) of a pickup on the authority"""
+    p = _pickup_named(name)
+    if not p:
+        return None, [], []
+    data = p.get_loadout()
+    kit = str(data.get_editor_property('primary_kit').get_editor_property('primary_asset_name'))
+    weapons = [str(w.get_editor_property('primary_asset_name')) for w in data.get_editor_property('additional_weapons')]
+    lib = getattr(unreal, 'GSTN_KitModContentLibrary', None)
+    mods = [str(m) for m in lib.get_any_kit_mods(data)] if lib else []
+    return kit, weapons, mods
+
+
+def _swap_rig(name, client, start_kit, start_support, ground_kit, ground_support='', ground_mods=None):
+    """Shared steps of the swap scenarios: the client's pawn carries start_kit (+ start_support), a pickup of ground_kit lies in front of it,
+    a long hold of the grab button takes it. Returns (run, key, st, steps up to the swap); st['pickup'] is the pickup's name"""
+    run = g._Run(name, client, judge_reconciles=False)
+    key = run.key
+    interact = g.button_mask('Interact')
+    st = {'log': g.mark_log()}
+
+    def spawn():
+        pawn = _host_actor(key)
+        loc, fwd = pawn.get_actor_location(), pawn.get_actor_forward_vector()
+        where = unreal.Vector(loc.x + fwd.x * 90.0, loc.y + fwd.y * 90.0, loc.z - 70.0)
+        srv = g._srv(key)
+        if ground_mods:
+            import test_hub
+            st['pickup'] = test_hub._spawn_modded_kit(srv, ground_kit, ground_support, ground_mods, where, 0.0).split(' ')[0]
+        else:
+            st['pickup'] = srv.server_spawn_kit_pickup(ground_kit, ground_support, where, 0.0)
+        return st['pickup']
+
+    def swapped():
+        swaps = _SWAP.findall(g._read_log_since(st['log']))
+        ok = len(swaps) == 1 and swaps[0][2] == 'took' and ground_kit in swaps[0][3] and start_kit in swaps[0][4]
+        return ok, f'swaps {swaps}'
+
+    steps = [
+        (0.3, lambda: ('start kit', g._apply_loadout(key, start_kit, start_support))),
+        (1.5, lambda: ('spawn kit', spawn())),
+        (3.1, lambda: ('long hold', g.combat_hold(client, interact))),
+        (3.9, lambda: ('release', g.combat_clear(client))),
+        (5.1, run.at('the long hold swapped the framed kit (host log)', swapped)),
+    ]
+    return run, key, st, steps
+
+
+def _cleanup(client):
+    for a in unreal.GameplayStatics.get_all_actors_of_class(g.worlds()[0], unreal.GSTN_KitPickup):
+        a.destroy_actor()
+    return g.combat_clear(client)
+
+
+def scenario_kit_swap_support(client=1, support='WPN_Test_Support'):
+    """M11 L10 (rules of M11 slice 14, defaults of UGSTN_LoadoutModeRules): the client plays KIT_Test_Hits + the support weapon with some Ex
+    meter; it swaps with KIT_Test_Alpha on the ground (no support weapon). KitSwapSupportWeapon = StaysWithPlayer: authority and owner end on
+    Alpha + the support weapon, the pickup holds KIT_Test_Hits without it. KitSwapMeters = Keep: the Ex meter is still there after the swap
+    (capped at the new kit's max, so judged > 0, not equal; not judged when the kit has no meter set)."""
+    run, key, st, steps = _swap_rig('kit_swap_support', client, 'KIT_Test_Hits', support, 'KIT_Test_Alpha')
+
+    def grant():
+        ok = g._srv(key).server_grant_meter(0)
+        return f'ex meter grant {ok}'
+
+    def meter_before():
+        st['meter'] = (g._loadout_view(0, key)[2] or {}).get('exMeter', 0.0)
+        return f'ex meter {st["meter"]}'
+
+    def carried():
+        views = [_loadout_of(0, key), _loadout_of(client, key)]
+        ok = all('KIT_Test_Alpha' in str(v.get('kit')) and v.get('additionalWeapons') == [support] for v in views)
+        return ok, f'authority {views[0].get("kit")} {views[0].get("additionalWeapons")}, owner {views[1].get("kit")} {views[1].get("additionalWeapons")}'
+
+    def ground():
+        kit, weapons, _mods = _pickup_view(st.get('pickup'))
+        return kit == 'KIT_Test_Hits' and not weapons, f'pickup {kit} {weapons}'
+
+    def meters():
+        after = (g._loadout_view(0, key)[2] or {}).get('exMeter', 0.0)
+        if not st.get('meter'):
+            return True, f'not judged: no Ex meter before the swap ({st.get("meter")})'
+        return after > 0.0, f'ex meter {st["meter"]} -> {after}'
+
+    steps = steps[:2] + [(2.0, lambda: ('grant meter', grant())), (2.6, lambda: ('meter', meter_before()))] + steps[2:] + [
+        (5.3, run.at('the support weapon stayed with the player (authority and owner)', carried)),
+        (5.4, run.at('the old kit on the ground has no support weapon', ground)),
+        (5.5, run.at('the Ex meter was kept (KitSwapMeters = Keep)', meters)),
+        (5.7, lambda: ('cleanup', _cleanup(client))),
+        (6.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_kit_mod_swap(client=1, kit='KIT_Test_Ranger', mod='/Game/GASNPPTest/Combat/Mods/MOD_Test_Power.MOD_Test_Power'):
+    """M11 L10, the first kit mod in a match: the client plays the plain KIT_Test_Ranger (no derived timeline); the same kit lies on the
+    ground carrying MOD_Test_Power. After the swap (KitSwapMods = GroundKit) authority and owner compile the mod: the same number of derived
+    timelines (> 0) on both and the same table checksum; the pickup holds the plain kit with no mod. Needs the content of
+    Tools/GAS/setup_m11_ranger_content.py."""
+    run, key, st, steps = _swap_rig('kit_mod_swap', client, kit, '', kit, '', [mod])
+
+    def derived(wi):
+        return int(_loadout_of(wi, key).get('derivedTimelines') or 0)
+
+    def plain_first():
+        return derived(0) == 0, f'derived timelines before the swap: {derived(0)}'
+
+    def modded():
+        views = [_loadout_of(0, key), _loadout_of(client, key)]
+        counts = [int(v.get('derivedTimelines') or 0) for v in views]
+        crcs = [v.get('tableCrc') for v in views]
+        return counts[0] > 0 and counts[0] == counts[1] and crcs[0] == crcs[1], f'derived {counts}, table crc {crcs}'
+
+    def ground():
+        gkit, _weapons, mods = _pickup_view(st.get('pickup'))
+        return kit in str(gkit) and not mods, f'pickup {gkit} mods {mods}'
+
+    steps = steps[:1] + [(1.2, run.at('the plain kit derives no timeline', plain_first))] + steps[1:] + [
+        (5.4, run.at('the mod reached both tables (derived timelines, same checksum)', modded)),
+        (5.5, run.at('the kit left on the ground carries no mod', ground)),
+        (5.7, lambda: ('cleanup', _cleanup(client))),
+        (6.5, run.finish()),
+    ]
+    run.run(steps)
+
+
+def scenario_aimed_shot(client=1, kit='KIT_Test_Ranger'):
+    """M11 L10, the first aimed move in a match: the client plays KIT_Test_Ranger (strong + reticle = UGSTN_GA_AimedHitscanShot) with the other
+    client 300 cm ahead. Strong with the reticle off fires nothing (the kit has no plain strong move); with the reticle held on (the precision
+    component's hold flag, which sets the command's bPrecisionAim as an aiming move does) the hitscan hits: the victim's damage rises on the
+    authority and on the victim's own client. The camera aim decides the line, so the victim stands in the pawn's facing, where the PIE
+    camera looks."""
+    victim_index = 2 if client == 1 else 1
+    vkey = g.key_of_player(victim_index)
+    run = g._Run('aimed_shot', client, judge_reconciles=False)
+    key = run.key
+    strong = g.button_mask('Strong')
+    st = {}
+
+    def reticle(on):
+        _, pawn = g._local_pawn(client)
+        aim = pawn.get_component_by_class(unreal.GSTN_PrecisionAimComponent) if pawn else None
+        if aim:
+            aim.set_hold_aim_shown(on)
+        return f'reticle hold {on} ({"no component" if not aim else "ok"})'
+
+    def mark(label):
+        st[label] = (g.damage_of(0, vkey), g.damage_of(victim_index, vkey))
+        return f'damage {st[label]}'
+
+    def unchanged():
+        now = (g.damage_of(0, vkey), g.damage_of(victim_index, vkey))
+        return now == st['before'], f'damage {st["before"]} -> {now}'
+
+    def hit():
+        now = (g.damage_of(0, vkey), g.damage_of(victim_index, vkey))
+        return now[0] > st['off'][0] and now[1] > st['off'][1], f'damage {st["off"]} -> {now}'
+
+    steps = [
+        (0.2, lambda: ('hit rules', g.hit_rules_setup())),
+        (0.3, lambda: ('start kit', g._apply_loadout(key, kit))),
+        (1.5, lambda: ('place victim', g._place_near(client, vkey, (300.0, 0.0)))),
+        (2.4, lambda: ('before', mark('before'))),
+        (2.5, lambda: ('strong, reticle off', g.combat_tap(client, strong))),
+        (3.4, run.at('the reticle off fires nothing', unchanged)),
+        (3.5, lambda: ('off', mark('off'))),
+        (3.6, lambda: ('reticle on', reticle(True))),
+        (3.9, lambda: ('strong, reticle on', g.combat_tap(client, strong))),
+        (5.0, run.at('the reticle on fires the hitscan: the victim took damage (authority and its client)', hit)),
+        (5.1, lambda: ('reticle off', reticle(False))),
+        (5.3, lambda: ('clear', g.combat_clear(client))),
+        (6.0, run.finish()),
     ]
     run.run(steps)
 

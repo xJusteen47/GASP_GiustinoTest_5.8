@@ -347,7 +347,7 @@ bool FGSTN_CombatTimelineLogic::ResolveSteerHoldYaw(const FGSTN_CombatSyncCore& 
 }
 
 bool FGSTN_CombatTimelineLogic::ComputeStartupSteer(const FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FVector2D& AimStick,
-	float CameraYawDeg, float CurrentYawDeg, bool bPrecisionAim, int16& OutYawArg)
+	float CameraYawDeg, float CurrentYawDeg, bool bPrecisionAim, int16& OutYawArg, float StepSeconds)
 {
 	float SteerYawDeg = 0.f;
 	if (!Data || !FGSTN_StartupSteer::IsSteering(AimStick, Data->MaxSteerDegrees)
@@ -355,6 +355,8 @@ bool FGSTN_CombatTimelineLogic::ComputeStartupSteer(const FGSTN_CombatSyncCore& 
 	{
 		return false;
 	}
+	// Aim handling (M11 L9): the cone is a clamp against the move origin, the rate a step from this frame's pose
+	SteerYawDeg = FGSTN_StartupSteer::RateLimitYaw(CurrentYawDeg, SteerYawDeg, Data->SteerRateDegPerSecond, StepSeconds);
 	const int16 Target = FGSTN_StartupSteer::QuantizeYaw(SteerYawDeg);
 	if (Target == FGSTN_StartupSteer::QuantizeYaw(CurrentYawDeg))
 	{

@@ -90,10 +90,15 @@ const UScriptStruct* FGSTN_LoadoutExtensionTypes::FindType(FName WireId)
 
 void GSTNLoadoutExtension::CarryOverOnKitSwap(TArray<FInstancedStruct>& Taken, TArray<FInstancedStruct>& Left)
 {
+	CarryOverOnKitSwap(Taken, Left, FGSTN_KitSwapCarryOver());
+}
+
+void GSTNLoadoutExtension::CarryOverOnKitSwap(TArray<FInstancedStruct>& Taken, TArray<FInstancedStruct>& Left, const FGSTN_KitSwapCarryOver& Rules)
+{
 	for (int32 LeftIndex = 0; LeftIndex < Left.Num();)
 	{
 		const FGSTN_LoadoutExtensionData* Data = Left[LeftIndex].GetPtr<FGSTN_LoadoutExtensionData>();
-		if (!Data || !Data->StaysWithPlayerOnKitSwap())
+		if (!Data || !Data->StaysWithPlayerOnKitSwapUnder(Rules))
 		{
 			++LeftIndex;
 			continue;

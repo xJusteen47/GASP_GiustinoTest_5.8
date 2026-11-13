@@ -438,6 +438,17 @@ bool UGSTN_ProjectileSubsystem::StepProjectile(FGSTN_ActiveProjectile& Projectil
 	Bounds = Bounds.ExpandBy(Shape.Extent.GetMax() + Shape.Local.GetLocation().Size());
 	CandidateScratch.Reset();
 	Snapshot.QueryCandidates(Bounds, CandidateScratch);
+	if (Params.bHitNearestFirst)
+	{
+		// A hitscan line (M11 L9): the near victim first, so MaxHits stops the line where a bullet would. Stable on the ascending ids, so
+		// equal distances keep the id order and every machine sorts the same
+		// From the carrier, not the shape's centre: a hitscan capsule's centre is halfway down the line, its carrier at the muzzle
+		const FVector From = Previous.GetLocation();
+		CandidateScratch.StableSort([&Snapshot, &From](int32 A, int32 B)
+		{
+			return FVector::DistSquared(Snapshot.Entries[A].Transform.GetLocation(), From) < FVector::DistSquared(Snapshot.Entries[B].Transform.GetLocation(), From);
+		});
+	}
 
 	const UGSTN_CombatRules* Rules = UGSTN_CombatSettings::Get().ResolveDefaultRules();
 	TArray<int32, TInlineAllocator<8>> Overlapped;
@@ -480,7 +491,9 @@ bool UGSTN_ProjectileSubsystem::StepProjectile(FGSTN_ActiveProjectile& Projectil
 		}
 		for (int32 ExtraPosition = 0; ExtraPosition < Victim.ExtraHurtboxes.Num(); ++ExtraPosition)
 		{
-			if (UGSTN_HitShapeUtils::SweptOverlap(Shape, Previous, Current, Victim.ExtraHurtboxes[ExtraPosition].Shape, Victim.Transform))
+			// An outside-only shell (the backpack dome, M11 L7c) is not there for a projectile whose previous position is inside it
+			if (!Victim.ExtraHurtboxes[ExtraPosition].IsSkippedFrom(Previous.GetLocation(), Victim.Transform)
+				&& UGSTN_HitShapeUtils::SweptOverlap(Shape, Previous, Current, Victim.ExtraHurtboxes[ExtraPosition].Shape, Victim.Transform))
 			{
 				Overlapped.Add(GSTNHurtboxIndex::FromExtraPosition(ExtraPosition));
 			}

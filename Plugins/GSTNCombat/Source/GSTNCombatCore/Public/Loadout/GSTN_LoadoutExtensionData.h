@@ -7,6 +7,19 @@
 #include "GSTN_LoadoutExtensionData.generated.h"
 
 /**
+ * What a whole-kit swap from the ground keeps with the player (owner answers to M11.2 and M11.4, 2026-11-12). Pure data, filled by the
+ * caller from the mode's rules (UGSTN_LoadoutModeRules::MakeKitSwapCarryOver in GSTNCombatGAS), so the swap itself stays a pure function.
+ * The defaults are the owner's answers; the meters (M11.3) are not loadout data and are handled where the attributes live.
+ */
+struct FGSTN_KitSwapCarryOver
+{
+	/** The player's support weapon (the last additional weapon) goes with them to the new kit, if that kit can carry it (M11.2) */
+	bool bSupportWeaponStaysWithPlayer = true;
+	/** The player's mod setups stay with them, so their saved setup for the new kit applies; false = the ground kit's mods apply (M11.4) */
+	bool bModsStayWithPlayer = false;
+};
+
+/**
  * Base of the data an optional plugin keeps in a player's loadout (combat-loadout-mods 11.1): the mods put on a kit, a backpack,
  * anything a plugin adds to what the player brings. It lives in FGSTN_LoadoutData::Extensions as an instanced struct, so the
  * loadout never names a plugin type and a disabled plugin is simply absent.
@@ -31,10 +44,16 @@ struct GSTNCOMBATCORE_API FGSTN_LoadoutExtensionData
 
 	/**
 	 * Whether the entry stays with the player when they take a whole kit from the ground (a backpack: spec §10 "a kit change keeps
-	 * the backpack"), instead of travelling with the kit they leave behind. False by default: what a kit swap carries over is open
-	 * (questions M11.2-M11.5), so only a type that answers it for itself says true. Read by GSTNLoadoutExtension::CarryOverOnKitSwap
+	 * the backpack"), instead of travelling with the kit they leave behind. False by default: an entry belongs to the kit (the ground kit's
+	 * own setup comes with it), so only a type that answers otherwise for itself says true. Read by GSTNLoadoutExtension::CarryOverOnKitSwap
 	 */
 	virtual bool StaysWithPlayerOnKitSwap() const { return false; }
+
+	/**
+	 * The same question under the mode's kit swap rules: a type whose answer is a mode choice (the mods, M11.4) overrides this one.
+	 * Defaults to the rule-free answer above
+	 */
+	virtual bool StaysWithPlayerOnKitSwapUnder(const FGSTN_KitSwapCarryOver& Rules) const { return StaysWithPlayerOnKitSwap(); }
 };
 
 /**
@@ -98,6 +117,9 @@ namespace GSTNLoadoutExtension
 	 * nothing is lost). Order of the other entries is kept. Pure; the same answer on every machine
 	 */
 	GSTNCOMBATCORE_API void CarryOverOnKitSwap(TArray<FInstancedStruct>& Taken, TArray<FInstancedStruct>& Left);
+
+	/** The same under the mode's kit swap rules: an entry stays when StaysWithPlayerOnKitSwapUnder(Rules) says so */
+	GSTNCOMBATCORE_API void CarryOverOnKitSwap(TArray<FInstancedStruct>& Taken, TArray<FInstancedStruct>& Left, const FGSTN_KitSwapCarryOver& Rules);
 
 	/** Writes the entries as the loadout's extension payload (count, then wire id, length and bytes per entry). Entries of no known type are skipped */
 	GSTNCOMBATCORE_API void WritePayload(const TArray<FInstancedStruct>& Extensions, TArray<uint8>& OutBytes, int32 MaxBytes);

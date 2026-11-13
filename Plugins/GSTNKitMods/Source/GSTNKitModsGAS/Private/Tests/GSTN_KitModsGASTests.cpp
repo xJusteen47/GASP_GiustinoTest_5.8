@@ -5,6 +5,7 @@
 #include "Misc/AutomationTest.h"
 #include "Abilities/GameplayAbility.h"
 #include "GSTN_KitModBaking.h"
+#include "GSTN_KitModContentLibrary.h"
 #include "GSTN_KitModDefinition.h"
 #include "GSTN_KitModLoadout.h"
 #include "Input/GSTN_CombatCommandTags.h"
@@ -196,6 +197,38 @@ bool FGSTNKitModsCustomisedRowTest::RunTest(const FString& Parameters)
 	Elsewhere.AlternativeAbility = TSoftClassPtr<UObject>(Alternative);
 	FGSTN_KitModLoadout::ContributeCompileInput(Context, Other);
 	TestFalse(TEXT("A row customised on another weapon is not modded"), Other.Weapons[0].Bindings.Num() == 1 && Other.Weapons[0].Bindings[0].TimelineOverride.IsValid());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTNKitModsContentLibraryTest, "GSTNKitMods.GAS.ContentLibrary", KitModsGASTestFlags)
+bool FGSTNKitModsContentLibraryTest::RunTest(const FString& Parameters)
+{
+	// M11 L10: what the setup script and the test hub write through UGSTN_KitModContentLibrary
+	UGSTN_PrimaryKitDefinition* Kit = NewObject<UGSTN_PrimaryKitDefinition>(GetTransientPackage(), NAME_None, RF_Transient);
+	TestTrue(TEXT("slots added"), UGSTN_KitModContentLibrary::SetKitModSlots(Kit, { GSTNKitModsTags::Mod_Slot }, 1.5f));
+	TestFalse(TEXT("same slots again: unchanged"), UGSTN_KitModContentLibrary::SetKitModSlots(Kit, { GSTNKitModsTags::Mod_Slot }, 1.5f));
+	TestTrue(TEXT("two slots: replaced"), UGSTN_KitModContentLibrary::SetKitModSlots(Kit, { GSTNKitModsTags::Mod_Slot, GSTNKitModsTags::Mod_Slot }, 1.5f));
+	const FGSTN_KitModSlots* Slots = Kit->Extensions.Find<FGSTN_KitModSlots>();
+	TestTrue(TEXT("one extension with two slots"), Kit->Extensions.ExtensionData.Num() == 1 && Slots && Slots->Slots.Num() == 2 && Slots->Limits.MaxReachScale == 1.5f);
+
+	UGSTN_KitModDefinition* Mod = NewObject<UGSTN_KitModDefinition>(GetTransientPackage(), NAME_None, RF_Transient);
+	TestTrue(TEXT("mod written"), UGSTN_KitModContentLibrary::WriteAllMovesMod(Mod, GSTNKitModsTags::Mod, GSTNKitModsTags::Mod_Slot, 1.2f, 1.4f, 1.5f, 1.25f, 1.15f));
+	TestFalse(TEXT("same mod again: unchanged"), UGSTN_KitModContentLibrary::WriteAllMovesMod(Mod, GSTNKitModsTags::Mod, GSTNKitModsTags::Mod_Slot, 1.2f, 1.4f, 1.5f, 1.25f, 1.15f));
+	TestTrue(TEXT("one modifier for every move"), Mod->MoveModifiers.Num() == 1 && Mod->MoveModifiers[0].MoveFilter.IsEmpty()
+		&& Mod->MoveModifiers[0].HitboxScale.Equals(FVector(1.4f)) && Mod->Slot == GSTNKitModsTags::Mod_Slot);
+
+	FGSTN_LoadoutData Loadout;
+	FGSTN_LoadoutModsExt KitSpecific;
+	KitSpecific.Configs.AddDefaulted_GetRef().Kit = GSTNKitModsTags::Mod;
+	GSTNLoadoutExtension::Set(Loadout.Extensions, KitSpecific);
+	const FString ModPath = FSoftObjectPath(Mod).ToString();
+	const FGSTN_LoadoutData WithMod = UGSTN_KitModContentLibrary::WithKitMods(Loadout, { ModPath });
+	TestTrue(TEXT("the wildcard config carries the mod"), UGSTN_KitModContentLibrary::GetAnyKitMods(WithMod) == TArray<FString>{ ModPath });
+	const FGSTN_LoadoutModsExt* Ext = GSTNLoadoutExtension::Find<FGSTN_LoadoutModsExt>(WithMod.Extensions);
+	TestTrue(TEXT("a kit-specific config is kept"), Ext && Ext->Configs.Num() == 2);
+	const FGSTN_LoadoutData Cleared = UGSTN_KitModContentLibrary::WithKitMods(WithMod, {});
+	TestTrue(TEXT("no mods: the wildcard config goes"), UGSTN_KitModContentLibrary::GetAnyKitMods(Cleared).IsEmpty()
+		&& GSTNLoadoutExtension::Find<FGSTN_LoadoutModsExt>(Cleared.Extensions)->Configs.Num() == 1);
 	return true;
 }
 

@@ -157,6 +157,38 @@ bool FGSTN_ReticleGatesSteerTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// M11 L9 (owner 2026-11-12): aim handling. The cone stays the move's MaxSteerDegrees; SteerRateDegPerSecond says how fast the facing follows
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SteerAimHandlingTest, "GSTNCombat.NP.Weakpoint.SteerAimHandling", GSTNSteerTest::Flags)
+bool FGSTN_SteerAimHandlingTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNSteerTest;
+	using S = FGSTN_StartupSteer;
+	using L = FGSTN_CombatTimelineLogic;
+	constexpr float Step = 0.016f;
+
+	TestEqual(TEXT("rate 0: at once"), S::RateLimitYaw(0.f, 40.f, 0.f, Step), 40.f, 0.001f);
+	TestEqual(TEXT("step 0: at once"), S::RateLimitYaw(0.f, 40.f, 250.f, 0.f), 40.f, 0.001f);
+	TestEqual(TEXT("250 deg/s for 16 ms is 4 degrees"), S::RateLimitYaw(0.f, 40.f, 250.f, Step), 4.f, 0.001f);
+	TestEqual(TEXT("the other way"), S::RateLimitYaw(0.f, -40.f, 250.f, Step), -4.f, 0.001f);
+	TestEqual(TEXT("the short way across the seam"), S::RateLimitYaw(178.f, -178.f, 250.f, Step), -178.f, 0.001f);
+	TestEqual(TEXT("close enough: lands on the target"), S::RateLimitYaw(38.f, 40.f, 250.f, Step), 40.f, 0.001f);
+
+	FGSTN_CombatTimelineData Heavy = MakeMove(20.f);
+	Heavy.SteerRateDegPerSecond = 250.f;
+	const FGSTN_CombatSyncCore Core = MakeCore(100, 30.f);
+	const FVector2D Right(1.0, 0.0);
+	int16 Arg = 0;
+	TestTrue(TEXT("heavy move steers"), L::ComputeStartupSteer(Core, 100, &Heavy, Right, 0.f, 30.f, true, Arg, Step));
+	TestEqual(TEXT("one step toward the cone edge"), S::DequantizeYaw(Arg), 34.f, 0.01f);
+	TestTrue(TEXT("from the pose it reached"), L::ComputeStartupSteer(Core, 101, &Heavy, Right, 0.f, 34.f, true, Arg, Step));
+	TestEqual(TEXT("next step"), S::DequantizeYaw(Arg), 38.f, 0.01f);
+	TestTrue(TEXT("never past the cone"), L::ComputeStartupSteer(Core, 102, &Heavy, Right, 0.f, 48.f, true, Arg, Step));
+	TestEqual(TEXT("the edge"), S::DequantizeYaw(Arg), 50.f, 0.01f);
+	TestTrue(TEXT("no step given: at once, as before L9"), L::ComputeStartupSteer(Core, 100, &Heavy, Right, 0.f, 30.f, true, Arg));
+	TestEqual(TEXT("the edge at once"), S::DequantizeYaw(Arg), 50.f, 0.01f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SetFacingEffectTest, "GSTNCombat.NP.Weakpoint.SetFacingEffect", GSTNSteerTest::Flags)
 bool FGSTN_SetFacingEffectTest::RunTest(const FString& Parameters)
 {

@@ -33,7 +33,7 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotExtension
  * The per-entity data of ONE optional plugin in the snapshot (combat-m4-hits 3b item 7, spec seam D9): a fixed, trivially copyable
  * buffer with the feature's type id (GSTNFeatureIds). No heap, no tag and no container, so the lag compensation history copies it with
  * the record and a rewind hands the step the extension of the rewound frame. An entry holds one blob per registered contributor
- * (FGSTN_SnapshotExtensionSet, three at most since M6 F10); the victim view exposes each by type id.
+ * (FGSTN_SnapshotExtensionSet, four at most since M11 L7c); the victim view exposes each by type id.
  *
  * MaxBytes was the smallest size that holds the parts extension (type word, mask, 16 damage bytes, serial, set pointer): 32 B. M7 G6 raised
  * it to 40 B for the link extension's per-link anchor (three int16), 48 B with the header; a blob that uses less leaves the rest zero. A pointer in it is allowed only for content that outlives every entity (a data asset kept alive by its owner).
@@ -76,14 +76,15 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotExtensionBlob
 
 /**
  * The blobs of every registered contributor for one entity, in ascending type id order (M6 F7: the parts and the defence plugin both
- * contribute; M6 F10: the link plugin is the third). A fixed array of MaxBlobs, trivially copyable like the blob, so the history record and
+ * contribute; M6 F10: the link plugin is the third; M11 L7c: the backpack dome the fourth, +48 B per entry and history record). A fixed
+ * array of MaxBlobs, trivially copyable like the blob, so the history record and
  * the victim drain copy it as they copied the single blob. The set blobs are packed at the front in ascending type id, the same slots on
  * every machine whatever the registration order. Set and Get take the type id, so a contributor never sees another's bytes; GetData keeps
  * the single-pointer reading of the victim view (the lowest id) for a step that validates the type word itself.
  */
 struct GSTNCOMBATNP_API FGSTN_SnapshotExtensionSet
 {
-	static constexpr int32 MaxBlobs = 3;
+	static constexpr int32 MaxBlobs = 4;
 
 	FGSTN_SnapshotExtensionBlob Blobs[MaxBlobs];
 
@@ -398,6 +399,12 @@ struct FGSTN_SnapshotContributorContext
 	 * (a contributor whose data exists only outside a hit reaction reads it; M6 F7). Actionable in a test that sets nothing
 	 */
 	EGSTN_ActionState ActionState = EGSTN_ActionState::Actionable;
+
+	/**
+	 * The entity's transform of the entry being filled (end of the previous frame), at the snapshot build only: an extra hurtbox fixed in the
+	 * world (the backpack dome, M11 L7c) is made root-relative from it. Identity at a rebuild in the victim drain and in a test that sets nothing
+	 */
+	FTransform Transform = FTransform::Identity;
 };
 
 /**

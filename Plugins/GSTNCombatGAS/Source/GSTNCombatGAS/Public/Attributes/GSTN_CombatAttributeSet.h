@@ -125,6 +125,19 @@ public:
 	FGameplayAttributeData JumpSquatFrames;
 	GSTN_COMBAT_ATTRIBUTE_ACCESSORS(UGSTN_CombatAttributeSet, JumpSquatFrames)
 
+	// Glide (M11 L7b, the jet-pack's slow descent: FGSTN_JumpParams). 0 everywhere = no glide, the default of every kit; a backpack or a
+	// kit stat effect raises them. Clamped at 0 like the counts, not at MinGravityScale: 0 means "off" here, never "no gravity"
+
+	/** Gravity scale while falling with the jump button held; 0 = no glide */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat|Jump|Glide")
+	FGameplayAttributeData GlideGravityScale;
+	GSTN_COMBAT_ATTRIBUTE_ACCESSORS(UGSTN_CombatAttributeSet, GlideGravityScale)
+
+	/** Terminal fall speed while gliding, in cm/s; 0 = MaxFallSpeed */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat|Jump|Glide", meta = (ForceUnits = "cm/s"))
+	FGameplayAttributeData GlideMaxFallSpeed;
+	GSTN_COMBAT_ATTRIBUTE_ACCESSORS(UGSTN_CombatAttributeSet, GlideMaxFallSpeed)
+
 	/** Frame-count readers: the stored float rounded down, which is what the simulation must use. */
 	int32 GetMinJumpHoldFrameCount() const { return FMath::FloorToInt32(GetMinJumpHoldFrames()); }
 	int32 GetMaxJumpHoldFrameCount() const { return FMath::FloorToInt32(GetMaxJumpHoldFrames()); }

@@ -20,7 +20,55 @@ namespace GSTNBackpackTags
 	 * backpack binding's slot, or the kit's command set), never fixed here (question M11.11)
 	 */
 	GSTNBACKPACKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Backpack_Use);
+
+	/** The command of the shield-dome backpack (M11 L7b): its slot is Press(dodge) with the stick neutral, so it beats the plain dodge only then */
+	GSTNBACKPACKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Backpack_Dome);
+
+	/** Identities of the two starter backpacks (UGSTN_BackpackDefinition_JetPack, _ShieldDome); other backpacks name theirs in ini */
+	GSTNBACKPACKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Backpack_JetPack);
+	GSTNBACKPACKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Backpack_ShieldDome);
+
+	/** Projected from the backpack fragment each frame (never added by hand): memory slot N has no charge left. A binding gates on it (IgnoreTags) */
+	GSTNBACKPACKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Empty_Slot0);
+	GSTNBACKPACKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Empty_Slot1);
+	GSTNBACKPACKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Empty_Slot2);
+	GSTNBACKPACKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Empty_Slot3);
+
+	/** Projected: the entity holds a dome up */
+	GSTNBACKPACKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Dome);
+
+	/** Event (M11 L7c): a hit from outside a dome was blocked by it (the hit did nothing, a melee attacker recoiled). Published on the victim */
+	GSTNBACKPACKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_DomeBlocked);
+
+	/** The empty tag of memory slot Slot (invalid outside 0..3) */
+	GSTNBACKPACKCORE_API FGameplayTag EmptySlotTag(int32 Slot);
 }
+
+/**
+ * The jet-pack's movement (owner 2026-11-12: a double jump, and a slow descent while the jump button is held). Added to the carrier's combat
+ * stats while the backpack is carried: ExtraAirJumps adds to AirJumpCount (the kit's own jump command and air jump state do the rest), the
+ * glide values set the jump state's glide (FGSTN_JumpParams). Defaults are a first guess for the playtest: the owner tunes them. All 0 = no
+ * movement change (every backpack but the jet-pack).
+ */
+USTRUCT(BlueprintType)
+struct GSTNBACKPACKCORE_API FGSTN_BackpackMovement
+{
+	GENERATED_BODY()
+
+	/** Air jumps added to the kit's */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Backpack|Movement", meta = (ClampMin = "0", ClampMax = "5"))
+	int32 ExtraAirJumps = 0;
+
+	/** Gravity scale while falling with the jump held; 0 = no glide */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Backpack|Movement", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float GlideGravityScale = 0.f;
+
+	/** Terminal fall speed while gliding; 0 = the kit's own */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Backpack|Movement", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
+	float GlideMaxFallSpeed = 0.f;
+
+	bool IsNone() const { return ExtraAirJumps == 0 && GlideGravityScale <= 0.f; }
+};
 
 /**
  * The backpack in a player's loadout (spec §11.1, wire id "Backpack"). One backpack at a time; ids only, because the loadout travels to

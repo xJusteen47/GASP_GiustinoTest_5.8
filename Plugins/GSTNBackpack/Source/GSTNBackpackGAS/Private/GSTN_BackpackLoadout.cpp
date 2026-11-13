@@ -6,6 +6,7 @@
 #include "GameplayEffect.h"
 #include "GSTN_BackpackDefinition.h"
 #include "GSTN_BackpackTypes.h"
+#include "Attributes/GSTN_CombatAttributeSet.h"
 #include "Cosmetics/GSTN_EquipmentVisual.h"
 #include "Loadout/GSTN_CompiledBindingTable.h"
 #include "Loadout/GSTN_LoadoutAssembly.h"
@@ -14,6 +15,27 @@
 
 const FName FGSTN_BackpackLoadout::ExtensionId(TEXT("GSTN.Backpack"));
 const FName FGSTN_BackpackLoadout::AttachmentProviderId(TEXT("GSTN.Backpack"));
+const FName FGSTN_BackpackLoadout::ExtraAirJumpsName(TEXT("GSTN.Backpack.ExtraAirJumps"));
+const FName FGSTN_BackpackLoadout::GlideGravityScaleName(TEXT("GSTN.Backpack.GlideGravityScale"));
+const FName FGSTN_BackpackLoadout::GlideMaxFallSpeedName(TEXT("GSTN.Backpack.GlideMaxFallSpeed"));
+
+UGSTN_GE_BackpackMovement::UGSTN_GE_BackpackMovement()
+{
+	DurationPolicy = EGameplayEffectDurationType::Infinite;
+	const auto AddByCaller = [this](const FGameplayAttribute& Attribute, FName Name)
+	{
+		FSetByCallerFloat ByCaller;
+		ByCaller.DataName = Name;
+		FGameplayModifierInfo Info;
+		Info.Attribute = Attribute;
+		Info.ModifierOp = EGameplayModOp::AddBase;
+		Info.ModifierMagnitude = FGameplayEffectModifierMagnitude(ByCaller);
+		Modifiers.Add(Info);
+	};
+	AddByCaller(UGSTN_CombatAttributeSet::GetAirJumpCountAttribute(), FGSTN_BackpackLoadout::ExtraAirJumpsName);
+	AddByCaller(UGSTN_CombatAttributeSet::GetGlideGravityScaleAttribute(), FGSTN_BackpackLoadout::GlideGravityScaleName);
+	AddByCaller(UGSTN_CombatAttributeSet::GetGlideMaxFallSpeedAttribute(), FGSTN_BackpackLoadout::GlideMaxFallSpeedName);
+}
 
 namespace
 {
@@ -86,6 +108,21 @@ void FGSTN_BackpackLoadout::OnGranted(const FGSTN_LoadoutExtensionContext& Conte
 		return;
 	}
 	TArray<FActiveGameplayEffectHandle>& Handles = GetAppliedEffects().FindOrAdd(TWeakObjectPtr<UAbilitySystemComponent>(&AbilitySystem));
+	if (!Backpack->Movement.IsNone())
+	{
+		const FGameplayEffectSpecHandle Spec = AbilitySystem.MakeOutgoingSpec(UGSTN_GE_BackpackMovement::StaticClass(), 1.f, AbilitySystem.MakeEffectContext());
+		if (Spec.IsValid())
+		{
+			Spec.Data->SetSetByCallerMagnitude(ExtraAirJumpsName, static_cast<float>(Backpack->Movement.ExtraAirJumps));
+			Spec.Data->SetSetByCallerMagnitude(GlideGravityScaleName, Backpack->Movement.GlideGravityScale);
+			Spec.Data->SetSetByCallerMagnitude(GlideMaxFallSpeedName, Backpack->Movement.GlideMaxFallSpeed);
+			const FActiveGameplayEffectHandle Handle = AbilitySystem.ApplyGameplayEffectSpecToSelf(*Spec.Data);
+			if (Handle.IsValid())
+			{
+				Handles.Add(Handle);
+			}
+		}
+	}
 	for (const TSubclassOf<UGameplayEffect>& Effect : Backpack->Effects)
 	{
 		if (!Effect)

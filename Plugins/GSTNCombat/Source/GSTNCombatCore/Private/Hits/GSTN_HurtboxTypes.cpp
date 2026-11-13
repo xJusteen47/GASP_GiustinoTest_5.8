@@ -2,6 +2,17 @@
 
 #include "Hits/GSTN_HurtboxTypes.h"
 
+bool FGSTN_ExtraHurtbox::IsSkippedFrom(const FVector& FromWorld, const FTransform& EntityTransform) const
+{
+	if (!bOutsideOnly || Shape.Type != EGSTN_ShapeType::Sphere)
+	{
+		return false;
+	}
+	const FTransform World = Shape.Local * EntityTransform;
+	const double Radius = Shape.Extent.X * World.GetScale3D().GetAbsMax();
+	return FVector::DistSquared(FromWorld, World.GetLocation()) <= Radius * Radius;
+}
+
 #if WITH_EDITOR
 #include "Input/GSTN_CombatSettings.h"
 #include "Misc/DataValidation.h"
