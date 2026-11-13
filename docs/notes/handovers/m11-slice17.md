@@ -22,5 +22,6 @@ aimed_shot PASS (`Saved/M11L10/report-kit1/3, aim1.txt`). Suite `R31_ALL=1` **50
 player toggles it with the right stick click; mods do not touch the shot (no timeline). Backpack pad and `scenario_backpack_use` still open.
 **Decisions (recommended, flag)**: aimed shot on a copy of the medium kit rather than a support weapon (kit bindings are always active);
 mod changes whole-move scales via HitboxScale too, since the test strikes have no ReachAxis.
+**Merge note**: `claude/desktop-m11-verify` already carries `MOD_Test_LongBlade` / `KIT_Test_Modded` (setup_kit_mod_test.py): other names, no clash.
 **Manual steps**: artifact item `ed-m11-l10-ranger` (try the two TIRATORE pads in PIE; rerun the hub map script for pads/signs if wanted).
 Cost: ~170k context, Opus, estimated ~$12-15. Wall clock ~1.5 h (2 builds, 2 headless runs, 4 PIE batches, suite).
