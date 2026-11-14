@@ -60,10 +60,7 @@ def log(msg):
 
 
 def _container(names):
-    c = unreal.GameplayTagContainer()
-    for n in names:
-        unreal.BlueprintGameplayTagLibrary.add_gameplay_tag(c, dl._tag(n))
-    return c
+    return unreal.GameplayTagLibrary.make_gameplay_tag_container_from_array([dl._tag(n) for n in names])
 
 
 def _anim(name):
