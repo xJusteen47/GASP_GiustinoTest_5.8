@@ -2,14 +2,12 @@
 Branch `claude/project-thread-j8zkjb` (from 0kekzb `3faa4695`), folder `GASP_Giustino2_ue59`. No C++ changed: still BUILT; editor closed,
 no map saved. Read before: `anim-finish-2.md`, reviews react-v1 / react-v2. Owner OK'd the forward rock-up roll (11-14 03:00Z).
 **Done: HitStand rebuilt, RollBack reworked, travel note, montages, Play captures of all clips. Not done: Quaternius, dropkick, dair, jab.**
-- **HitStand**: authored + built from the card of the last thread (chest twist -26, trailing right arm low), game copy replaced. Build
-  worst 1.2 cm. Seen only in the Play sheets (not by me frame by frame): the cloud review judges it.
+- **HitStand**: built from the last thread's card (chest twist -26, right arm low), game copy replaced, worst 1.2 cm. Not judged by me.
 - **RollBack**: new keys f4/f6/f8/f10 (`reaction_rollback.plan.json`): pelvis roll 12/30/42/32, chest side bend up to 15, head turned left;
   in the plan the right shoulder is the low point f6-f8 (z 4-7), head bone 19-25 cm up f6-f10 (16 at f11), both hands planted. Build worst
   4.1 cm. In the Play capture from behind the legs pass to the RIGHT of the head and the head stays visible on the left (I looked at one
   12-frame sheet from behind and one from the side of run 1, and the behind sheet of run 2).
-- **Travel note**: `docs/notes/reviews/react-v3/roll-travel.md` (Roll: 0 until f6, 0.7 by f10, 1.0 by f15; RollBack: 0 until f4, f5-f12,
-  the clip implies about 65 cm). For the code thread; the abilities are unchanged.
+- **Travel note** for the code thread: `docs/notes/reviews/react-v3/roll-travel.md` (Roll 0 until f6, 1.0 by f15; RollBack f5-f12, 65 cm).
 - **Montages** `AM_React_{GroundHit,GetUp,Roll,RollBack}` in `Content/GASNPPTest/Combat/Reaction/` (new). GroundHit blend in 4/60, out 0.
   The other three: blend in 0, blend out 8/60 with trigger time 0 (the clip plays to its last frame, then blends). With trigger -1 the
   blend started 10 frames early and the game's pose replaced the rise.
