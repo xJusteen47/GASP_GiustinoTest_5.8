@@ -242,10 +242,14 @@ def _seq_prep(seq):
     g.release(0, 'move')
     # In FRONT of the attacker and facing it (react-hook-1 placed it with its back to the attacker): a short walk toward the attacker turns it,
     # then the pawn stops about 205 cm away (the test move's reach)
-    ax, ay = g._place_near(ATTACKER, st['hkey'], (PLACE, 0.0))
+    g._place_near(ATTACKER, st['hkey'], (PLACE, 0.0))
+    return True
+
+
+def _turn_to_attacker():
+    """After the teleport has landed (react-hook-2: steering from the pre-teleport location walked the victim the wrong way)"""
     alo = g.snap(_world())[st['akey']]['location']
     g.hold(0, 'move', g._steer_value(0, (alo[0], alo[1])))
-    return True
 
 
 def _stick(direction):
@@ -360,10 +364,13 @@ def _tick(_dt):
             if st['seq'] >= len(SEQUENCES):
                 return _finish('ok')
             if _seq_prep(SEQUENCES[st['seq']]):
-                st.update(phase='seq_face', t=now)
+                st.update(phase='seq_turn', t=now)
             else:
                 _log('host still downed: jump to get up before the next sequence')
                 st.update(t=now)
+        elif phase == 'seq_turn' and now - st['t'] > 1.5:
+            _turn_to_attacker()
+            st.update(phase='seq_face', t=now)
         elif phase == 'seq_face' and now - st['t'] > FACE_SECONDS:
             g.release(0, 'move')
             st.update(phase='seq_begin', t=now)

@@ -792,8 +792,13 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 	// only with the reticle on (slice 3b, unchanged); the move stick sources hold from the first frame to the end of the last active one, so
 	// the movement mode never turns the move further than its cap, nor after the lock. The rate (M11 L9) is the sim's, so they agree
 	// A timeline that ignores the move stick (the get-ups): no walk, the facing held. Same frame rule as the steer below: the frame after the latest
-	const FGSTN_CombatTimelineData* Running = Sync->Core.ActionState == EGSTN_ActionState::InTimeline ? GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline) : nullptr;
-	if (Running && Running->bIgnoreMoveInput)
+	const bool bInTimeline = Sync->Core.ActionState == EGSTN_ActionState::InTimeline;
+	const FGSTN_CombatTimelineData* Running = bInTimeline ? GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline) : nullptr;
+	// Rooted outside a move (downed on the floor, a hit reaction): the stick must not turn the body either (react-hook-2 capture: a lying victim
+	// turned under the held stick, so the roll back read the stick as forward). Inside a move the steer below decides
+	const bool bRooted = !bInTimeline && AbilitySystem
+		&& (AbilitySystem->HasMatchingGameplayTag(GSTNCombatTags::Lock_Movement) || AbilitySystem->HasMatchingGameplayTag(GSTNCombatTags::Lock_Reaction));
+	if ((Running && Running->bIgnoreMoveInput) || bRooted)
 	{
 		if (FCharacterDefaultInputs* Inputs = InputCmdResult.InputCollection.FindMutableDataByType<FCharacterDefaultInputs>())
 		{
