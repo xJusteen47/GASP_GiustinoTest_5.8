@@ -20,14 +20,12 @@ Branch `claude/project-thread-yhnbvx`, folder `GASP_Giustino2_ue59` = comb59 `86
 - **Choices to confirm (owner)**: Roll is a BACK roll (supine -> over the shoulders -> feet): the body travels toward the character's
   BACK, so the ability must turn the character's back to the stick (or we author a second clip). Always supine. In LieUp the pelvis is
   10 cm behind the root, head toward -Y; the capsule stays standing (game side). HitStand arms are close to symmetric: first refinement.
-- **Free clips**: `_scratch\mixamo` is empty, so everything is authored by hand. Quaternius was not downloaded (a download needs the
-  owner's ok in the thread; its hit/knockdown clips are unconfirmed).
+- **Free clips**: `_scratch\mixamo` is empty and Quaternius was not downloaded (needs the owner's ok): all poses are hand-authored.
 - **Antigravity (Gemini 3.8 Flash High), what worked**: a short coding task with exact steps (`clip_video.py`, 69 lines) came back right
   at the first try and ran unchanged. What did not: one long run (write the script + 84 frames of editor captures + ffmpeg) returned
   empty after the bridge timeout with nothing written. So: give it one file or one short command per call, never a long batch; run long
   loops yourself. Pose refinement by numbered steps on a plan file was NOT tried (context ran out): try it first on HitStand.
-- **Found in passing**: opening the editor rewrites `Plugins/GSTNPiggyback/Content/Test/PM_BoostJump|PM_ThrowRider.uasset` on disk and
-  dirties `IC_GASNPP_Test` and `KIT_Test_Hits` in memory (reverted / not saved here): some startup script is not idempotent.
+- **In passing**: opening the editor rewrites two GSTNPiggyback `PM_*.uasset` and dirties `KIT_Test_Hits` (reverted, not saved).
 - **Next thread, in order**: (a) react-v1 review + in-game look, (b) dropkick (poses are in the Antigravity worktree, read-only),
   (c) down-air v9 blend-out, (d) jab v3 round 1 (jab 1 diagonal contact; jab 2 step 15-20 cm, net travel <= 5 cm, no magnet).
 - **Cost**: one Fable thread, about 150k tokens of context, 2 Antigravity calls (1 wasted), no subagents; estimate about $30.
