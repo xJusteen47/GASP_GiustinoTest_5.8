@@ -35,6 +35,9 @@ struct GSTNDEFENCEGAS_API FGSTN_ResolvedGetupSet
 	TSubclassOf<UGameplayAbility> Roll;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Getup")
+	TSubclassOf<UGameplayAbility> RollBack;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Getup")
 	TSubclassOf<UGameplayAbility> Neutral;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Getup")

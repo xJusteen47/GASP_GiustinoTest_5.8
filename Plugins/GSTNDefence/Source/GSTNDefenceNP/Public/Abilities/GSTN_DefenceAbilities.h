@@ -51,9 +51,34 @@ public:
 #endif
 };
 
+/** Which way a get-up roll travels: the clips are authored in place, the ability moves the capsule */
+UENUM(BlueprintType)
+enum class EGSTN_GetupTravelDirection : uint8
+{
+	/** Toward the feet (the forward rock-up) */
+	Facing,
+	/** Toward the head (the roll back over the shoulder) */
+	AgainstFacing,
+};
+
+/** One point of a get-up roll's travel: at this frame of the timeline the capsule has covered Fraction of TravelDistanceCm */
+USTRUCT(BlueprintType)
+struct GSTNDEFENCENP_API FGSTN_GetupTravelKey
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Travel", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 Frame = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Travel", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float Fraction = 0.f;
+};
+
 /**
- * The get-up roll of a downed entity (m6 spec 6): started Forced by the model from the stick (F8). Thin: frame data only (the roll's
- * movement track and intangible window are data of the class or its child).
+ * The get-up roll of a downed entity (m6 spec 6): started Forced by the model from the stick (F8); the kit's RollBack class instead when the
+ * stick points against the facing. The travel follows the clip (docs/notes/reviews/react-v3/roll-travel.md): TravelKeys are a piecewise-linear
+ * distance curve, so each segment between two keys is one push at constant speed over its frames, queued on the segment's first frame. No
+ * key or no distance: the roll stays in place, as before.
  */
 UCLASS(Blueprintable)
 class GSTNDEFENCENP_API UGSTN_GA_GetupRoll : public UGSTN_GA_BaseCombat
@@ -67,10 +92,36 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Timeline", meta = (ClampMin = "1", ForceUnits = "Frames"))
 	int32 TotalFrames = 30;
 
+	/** Distance the roll covers on the ground; 0 = in place */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Travel", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float TravelDistanceCm = 0.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Travel")
+	EGSTN_GetupTravelDirection TravelDirection = EGSTN_GetupTravelDirection::Facing;
+
+	/** Ascending frames (simulation frames, 62.5 per second), fractions from 0 to 1. Holds before the first key and after the last */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Travel")
+	TArray<FGSTN_GetupTravelKey> TravelKeys;
+
+	/**
+	 * The push that starts at timeline frame Frame: true with its speed (cm/s along the travel direction) and length in frames when a segment
+	 * with travel starts there. Pure, for the ability and the tests
+	 */
+	static bool SegmentStartingAt(const TArray<FGSTN_GetupTravelKey>& Keys, float DistanceCm, int32 Frame, float& OutSpeed, int32& OutFrames);
+
 	virtual void PostInitProperties() override;
+	virtual void OnSimulationTick(const FAbilitySystemTimeStep& TimeStep) override;
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
+
+protected:
+	virtual void OnTimelineBegan(int32 StateStartFrame) override;
+
+private:
+	/** The last timeline frame whose segment start was handled (sync var: a resimulation queues the same pushes again) */
+	UPROPERTY(Transient)
+	FSyncInteger LastTravelFrame;
 };
 
 /**

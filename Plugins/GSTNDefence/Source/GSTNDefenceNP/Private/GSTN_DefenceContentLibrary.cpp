@@ -125,6 +125,11 @@ bool UGSTN_DefenceContentLibrary::WriteKitDefenceExtension(UGSTN_PrimaryKitDefin
 
 	TArray<FInstancedStruct>& Data = Kit->Extensions.ExtensionData;
 	const int32 Existing = Data.IndexOfByPredicate([](const FInstancedStruct& Entry) { return Entry.GetPtr<FGSTN_DefenceKitExtension>() != nullptr; });
+	if (Existing != INDEX_NONE)
+	{
+		// The roll back is written by WriteKitGetupRollBack (a later script): this writer keeps it
+		Extension.GetupSet.RollBack = Data[Existing].GetPtr<FGSTN_DefenceKitExtension>()->GetupSet.RollBack;
+	}
 	if (Existing != INDEX_NONE && FGSTN_DefenceKitExtension::StaticStruct()->CompareScriptStruct(Data[Existing].GetPtr<FGSTN_DefenceKitExtension>(), &Extension, PPF_None))
 	{
 		return false;
@@ -328,4 +333,28 @@ void UGSTN_DefenceContentLibrary::StopDefenceEventLog(AActor* WorldContext)
 		}
 		GetDefenceLogs().Remove(World);
 	}
+}
+
+bool UGSTN_DefenceContentLibrary::WriteKitGetupRollBack(UGSTN_PrimaryKitDefinition* Kit, TSubclassOf<UObject> RollBack)
+{
+	if (!Kit)
+	{
+		return false;
+	}
+	for (FInstancedStruct& Entry : Kit->Extensions.ExtensionData)
+	{
+		if (FGSTN_DefenceKitExtension* Extension = Entry.GetMutablePtr<FGSTN_DefenceKitExtension>())
+		{
+			// Only a kit that rolls at all gets a roll back (it would be granted for nothing otherwise)
+			const TSoftClassPtr<UObject> Wanted = RollBack && !Extension->GetupSet.Roll.IsNull() ? TSoftClassPtr<UObject>(RollBack.Get()) : TSoftClassPtr<UObject>();
+			if (Extension->GetupSet.RollBack == Wanted)
+			{
+				return false;
+			}
+			Extension->GetupSet.RollBack = Wanted;
+			Kit->MarkPackageDirty();
+			return true;
+		}
+	}
+	return false;
 }

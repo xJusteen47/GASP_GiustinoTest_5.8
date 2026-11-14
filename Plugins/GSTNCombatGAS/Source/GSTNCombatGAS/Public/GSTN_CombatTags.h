@@ -104,6 +104,12 @@ namespace GSTNCombatTags
 	/** The combatant was launched hard enough to tumble. Projected by the combat tick once hits exist, never granted. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Tumble);
 
+	/**
+	 * The combatant is pinned to a surface by a splat (the action state Splat; Combat.State.Hitstun is projected with it). Projected by the combat
+	 * tick, never granted. Presentation reads it to pick the splat reaction over the plain hitstun one
+	 */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Splat);
+
 	// Cues
 
 	/** Root of the hit cues. Leaf cues are designer content in a tag ini, code never names one. */

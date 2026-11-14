@@ -574,9 +574,10 @@ void FGSTN_CombatVictim::AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame
 
 void FGSTN_CombatVictim::ProjectStateTags(UAbilitySystemComponent& ASC, const FGSTN_CombatSyncCore& Core, int32 Frame)
 {
-	// Set, not added: nothing else grants these three, and a re-simulated frame must not inherit what the predicted future left behind
+	// Set, not added: nothing else grants these four, and a re-simulated frame must not inherit what the predicted future left behind
 	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Hitstun, Core.ActionState == EGSTN_ActionState::Hitstun || Core.ActionState == EGSTN_ActionState::Splat ? 1 : 0);
 	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Tumble, Core.ActionState == EGSTN_ActionState::Tumble ? 1 : 0);
+	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Splat, Core.ActionState == EGSTN_ActionState::Splat ? 1 : 0);
 	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Hitstop, Core.IsInHitstop(Frame) ? 1 : 0);
 
 	// The reaction lock has a tag of its own, set from the state like the others: a member remembering "I hold the lock" is outside the rolled

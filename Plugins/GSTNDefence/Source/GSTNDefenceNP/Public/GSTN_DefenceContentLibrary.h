@@ -54,6 +54,13 @@ public:
 		TSubclassOf<UObject> TechInPlace, TSubclassOf<UObject> TechRoll, TSubclassOf<UObject> TechWall);
 
 	/**
+	 * Sets only the get-up roll back of the kit's existing defence extension (Tools/GAS/setup_reaction_anims.py); null clears it. False when the
+	 * kit has no defence extension or nothing changed; a kit without a Roll gets none (dirty only on a change)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Content")
+	static bool WriteKitGetupRollBack(UGSTN_PrimaryKitDefinition* Kit, TSubclassOf<UObject> RollBack);
+
+	/**
 	 * F13 content: binds Command to AbilityClass in the kit's own bindings (the first binding of that command; one is added when the kit has
 	 * none). Returns whether the kit changed (dirty only then). Used for the counter move of the PvE test kit (Command.Special.Neutral)
 	 */

@@ -7,6 +7,7 @@
 #include "GameplayTagContainer.h"
 #include "GSTN_TumbleLanding.generated.h"
 
+class AActor;
 class UAbilitySystemComponent;
 struct FGSTN_CombatTickContext;
 struct FGSTN_DefenceEntityData;
@@ -101,6 +102,9 @@ struct GSTNDEFENCENP_API FGSTN_TumbleLanding
 
 	/** Combat.State.Knockdown while the entity is downed at the frame, else none */
 	static FGameplayTag AdmitsOnly(const FGSTN_CombatTickContext& Context);
+
+	/** The facing of Owner at the end of the previous frame (Mover sim state through the tracker); forward without a Mover */
+	static FVector ReadFacing(const AActor* Owner);
 
 	/** Whether the entity's avatar has a Mover to queue a layered move on (the move effects need one) */
 	static bool CanQueueMoves(const UAbilitySystemComponent* AbilitySystem);

@@ -20,12 +20,27 @@
 #include "Movement/GSTN_LayeredMove_PushBack.h"
 #include "Movement/GSTN_TumbleContact.h"
 #include "MoverComponent.h"
+#include "MoverDataModelTypes.h"
+#include "Mover/GSTN_MoverSimStateTracker.h"
 #include "Sim/GSTN_DefenceAttach.h"
 #include "Sim/GSTN_DefenceFragment.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 #include "Simulation/GSTN_CombatVictim.h"
+
+FVector FGSTN_TumbleLanding::ReadFacing(const AActor* Owner)
+{
+	// The facing of the end of the previous frame from the Mover sim state (the same on every machine and in a resimulation), never the actor
+	UMoverComponent* Mover = Owner ? Owner->FindComponentByClass<UMoverComponent>() : nullptr;
+	if (!Mover)
+	{
+		return FVector::ForwardVector;
+	}
+	const UGSTN_MoverSimStateTracker* Tracker = UGSTN_MoverSimStateTracker::FindOrAdd(Mover);
+	const FMoverDefaultSyncState* State = Tracker ? Tracker->GetSyncState().SyncStateCollection.FindDataByType<FMoverDefaultSyncState>() : nullptr;
+	return State ? State->GetOrientation_WorldSpace().Vector() : FVector::ForwardVector;
+}
 
 bool FGSTN_TumbleLanding::CanQueueMoves(const UAbilitySystemComponent* AbilitySystem)
 {
@@ -392,12 +407,17 @@ void FGSTN_TumbleLanding::AfterClocks(FGSTN_CombatTickContext& Context, const FG
 	int32 PressFrame = INDEX_NONE;
 	RegisterPresses(Context, Data, INDEX_NONE, bSuccess, PressFrame);
 
-	// Downed and free to act (the bounce is over): holding the stick rolls up
+	// Downed and free to act (the bounce is over): holding the stick rolls up, toward the head when the stick points against the facing and
+	// the kit has a roll back
 	FGSTN_DefenceFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DefenceFragment>(Context.Out.Fragments);
 	if (Fragment && Fragment->IsKnockedDown(Frame) && Context.Out.Core.ActionState == EGSTN_ActionState::Actionable && Context.StickOnPlane.Size() >= HoldStickMagnitude
-		&& Data.GetupRoll.IsValid() && Context.Services && Context.Services->StartForcedTimeline(Data.GetupRoll.Get()))
+		&& Data.GetupRoll.IsValid() && Context.Services)
 	{
-		Fragment->KnockdownEndFrame = Frame;
+		const bool bBack = Data.GetupRollBack.IsValid() && Context.StickOnPlane.Dot(ReadFacing(Context.Owner)) < 0.0;
+		if (Context.Services->StartForcedTimeline(bBack ? Data.GetupRollBack.Get() : Data.GetupRoll.Get()))
+		{
+			Fragment->KnockdownEndFrame = Frame;
+		}
 	}
 }
 

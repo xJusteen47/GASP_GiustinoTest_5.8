@@ -60,7 +60,7 @@ otherwise be missing.
 | `FGSTN_DefenceKitExtension` | Entry of a kit's extension array: own rules, `ShieldAbility` (empty = no shield), `FGSTN_TechSet` (empty = no tech), `FGSTN_GetupSet`. Ability classes are soft `UObject` classes because Core has no GameplayAbilities dependency. |
 | `FGSTN_DefenceRulesExtension` | Entry of the combat rules asset's extension array naming the mode's `UGSTN_DefenceRules`. |
 | `FGSTN_HoldWindowTrack`, `FGSTN_ParryWindowTrack` | Timeline track structs (children of `FGSTN_TimelineTrack`). The parry track's `ProfileName` is baked to `ProfileIndex` by `Bake`; the core's closed track kind enum is untouched (the combat clock finds them by struct). |
-| `FGSTN_GetupSet` | The landing and get-up classes of a kit: `GroundBounce` (started Forced at the contact), `Roll` (Forced from the stick), `Neutral` (bound to `Command.Movement.Jump` while downed), `Attacks` (0..N, granted). |
+| `FGSTN_GetupSet` | The landing and get-up classes of a kit: `GroundBounce` (started Forced at the contact), `Roll` (Forced from the stick), `RollBack` (optional: Forced instead of `Roll` when the stick points against the facing), `Neutral` (bound to `Command.Movement.Jump` while downed), `Attacks` (0..N, granted). |
 
 ### Ability-system half (`GSTNDefenceGAS`)
 
@@ -167,7 +167,7 @@ tracks) must be pure: read its input and nothing else (no actor, component, worl
 |---|---|---|
 | Shield ability | `UGSTN_GA_Shield` | the hold window and the out-of-shield cancel windows are timeline data; the kit's `FGSTN_DefenceKitExtension` names it |
 | Counter move | `UGSTN_GA_CounterSample` or any `UGSTN_GA_BaseCombat` timeline | a `FGSTN_ParryWindowTrack` with a profile index and an `OnParry` cancel window |
-| Tech, get-up, ground bounce | `UGSTN_GA_Tech`, `UGSTN_GA_GetupNeutral`, `UGSTN_GA_GetupRoll`, `UGSTN_GA_GroundBounce` | listed in the kit's `FGSTN_TechSet` / `FGSTN_GetupSet` |
+| Tech, get-up, ground bounce | `UGSTN_GA_Tech`, `UGSTN_GA_GetupNeutral`, `UGSTN_GA_GetupRoll` (travel as data: `TravelDistanceCm`, `TravelDirection`, `TravelKeys`, a piecewise-linear distance curve played as constant-speed pushes), `UGSTN_GA_GroundBounce` | listed in the kit's `FGSTN_TechSet` / `FGSTN_GetupSet` |
 | Shield effects and cues | `UGSTN_GE_ShieldDamage`, `UGSTN_GE_ShieldBreak`, `UGSTN_GE_ShieldRestore` | the rules asset names the classes |
 | Defensive step | `UGSTN_HitResolutionStep` (GSTNCombatCore), `Resolve(FGSTN_HitContextView, FGSTN_StepResult)` | an inbox entry back to the attacker is C++ only |
 | Rules, parry profiles, DI and SDI | `UGSTN_DefenceRules` (data asset) | per mode (PvP / PvE) and per kit |
