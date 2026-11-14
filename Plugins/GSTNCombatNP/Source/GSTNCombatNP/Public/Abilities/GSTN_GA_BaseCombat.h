@@ -158,9 +158,9 @@ protected:
 	/** Every simulated frame the move runs, with bTickMoveInBlueprint */
 	virtual void OnMoveFrame(int32 TimelineFrame);
 
-	/** The timeline started (after its montage and OnTimelineBegan). StartFrame is the simulation frame the combat state started it on */
+	/** The timeline started (after its montage and OnTimelineBegan). MoveStartFrame is the simulation frame the combat state started it on */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Combat|Move", meta = (DisplayName = "On Move Started"))
-	void K2_OnMoveStarted(int32 StartFrame);
+	void K2_OnMoveStarted(int32 MoveStartFrame);
 
 	/** An Event key was crossed (once, on the frame the timeline reaches it). Compare KeyTag; Key holds the rest of the track */
 	UFUNCTION(BlueprintImplementableEvent, Category = "Combat|Move", meta = (DisplayName = "On Move Key"))
