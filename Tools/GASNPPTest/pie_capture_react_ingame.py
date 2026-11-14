@@ -7,7 +7,7 @@
 #   UnrealEditor.exe <uproject> /Game/Levels/Test/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
 #   boot.py:  exec(open(r"<project>/Tools/GASNPPTest/pie_capture_react_ingame.py").read())
 # Environment (optional): PIE_CAPTURE_OUT (default Saved/AnimReact/ingame_<date>_<time>), PIE_CAPTURE_SEQUENCES (subset of hitstand,
-# knockdown_getup, roll, rollback).
+# knockdown_getup, roll, rollback, roll_late, back_hitstand, back_knockdown).
 # Content in memory only (nothing is saved): both pawns get KIT_Test_DefenceLanding (the landing bounce, the downed state with no automatic get-up,
 # the get-up set with the roll back) through defence_scenarios.defence_setup(landing=True); hitstand uses the standard knockback thresholds at 0 %,
 # the other sequences the thresholds at 0 (every hit launches into tumble).
@@ -55,6 +55,9 @@ SEQUENCES = [
     {'name': 'roll', 'launch': True, 'getup': 'facing'},
     {'name': 'rollback', 'launch': True, 'getup': 'against'},
     {'name': 'roll_late', 'launch': True, 'getup': 'facing', 'lie': 50},   # the stick only after lying 50 frames: a roll on any frame while down
+    # react-hook-4: hit from BEHIND (the victim's back to the attacker): bTurnBackAlongKnockback turns it back first along the knockback
+    {'name': 'back_hitstand', 'launch': False, 'getup': None, 'behind': True},
+    {'name': 'back_knockdown', 'launch': True, 'getup': 'jump', 'behind': True},
 ]
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
     SEQUENCES = [s for s in SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
@@ -63,6 +66,7 @@ KIT = 'KIT_Test_DefenceLanding'
 ROLL_LIE = 4      # roll sequences: the stick is held from this many frames after the knockdown starts; the roll must wait for the landing
 FACE_SECONDS = float(os.environ.get('PIE_CAPTURE_FACE_SECONDS') or 0.3)  # the victim walks toward the attacker this long to face it, from PLACE cm away
 PLACE = 245.0
+PLACE_BEHIND = 165.0   # behind: the walk away adds about the 40 cm the walk toward takes off
 TIMEOUT = 1500.0
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None,
       'rows': None, 'aim': None, 'yaw': 0.0}
@@ -242,13 +246,17 @@ def _seq_prep(seq):
     g.release(0, 'move')
     # In FRONT of the attacker and facing it (react-hook-1 placed it with its back to the attacker): a short walk toward the attacker turns it,
     # then the pawn stops about 205 cm away (the test move's reach)
-    g._place_near(ATTACKER, st['hkey'], (PLACE, 0.0))
+    # Behind: placed closer and walks AWAY from the attacker, so it ends about as far, with its back to it
+    g._place_near(ATTACKER, st['hkey'], (PLACE_BEHIND if seq.get('behind') else PLACE, 0.0))
     return True
 
 
-def _turn_to_attacker():
+def _turn_to_attacker(behind=False):
     """After the teleport has landed (react-hook-2: steering from the pre-teleport location walked the victim the wrong way)"""
     alo = g.snap(_world())[st['akey']]['location']
+    if behind:
+        loc = _pawn().get_actor_location()
+        alo = (2.0 * loc.x - alo[0], 2.0 * loc.y - alo[1])
     g.hold(0, 'move', g._steer_value(0, (alo[0], alo[1])))
 
 
@@ -369,7 +377,7 @@ def _tick(_dt):
                 _log('host still downed: jump to get up before the next sequence')
                 st.update(t=now)
         elif phase == 'seq_turn' and now - st['t'] > 1.5:
-            _turn_to_attacker()
+            _turn_to_attacker(SEQUENCES[st['seq']].get('behind', False))
             st.update(phase='seq_face', t=now)
         elif phase == 'seq_face' and now - st['t'] > FACE_SECONDS:
             g.release(0, 'move')

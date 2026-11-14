@@ -28,6 +28,8 @@ UGSTN_ReactionAnimComponent::UGSTN_ReactionAnimComponent(const FObjectInitialize
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = true;
+	// The mesh's group (it waits for this component, see ResolveAnimInstance): a later group would push the mesh's animation tick back with it
+	PrimaryComponentTick.TickGroup = TG_PrePhysics;
 	SetIsReplicatedByDefault(false);
 }
 
@@ -48,6 +50,10 @@ void UGSTN_ReactionAnimComponent::EndPlay(const EEndPlayReason::Type EndPlayReas
 	UnbindEvents();
 	DropCm = 0.f;
 	UpdateEntryDrop(0.f);
+	if (USkeletalMeshComponent* MeshComponent = Mesh.Get())
+	{
+		MeshComponent->RemoveTickPrerequisiteComponent(this);
+	}
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -173,6 +179,10 @@ UAnimInstance* UGSTN_ReactionAnimComponent::ResolveAnimInstance()
 			if (bNamed || bFirstPlaying)
 			{
 				Mesh = Candidate;
+				// The mesh ticks after this component: a montage started here is in the pose the mesh evaluates on the same frame, so the
+				// reaction shows on the frame its state starts and the entry drop lifts the new pose, never the previous one (react-hook-3:
+				// the drop lifted the Tumble pose ~85 cm for one frame, the GroundHit pose arrived a tick later)
+				Candidate->AddTickPrerequisiteComponent(this);
 				break;
 			}
 		}
