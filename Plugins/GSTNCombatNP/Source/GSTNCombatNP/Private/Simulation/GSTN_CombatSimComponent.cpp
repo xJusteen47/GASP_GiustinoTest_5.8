@@ -802,25 +802,41 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 	// turned under the held stick, so the roll back read the stick as forward). Inside a move the steer below decides
 	const bool bRooted = !bInTimeline && AbilitySystem
 		&& (AbilitySystem->HasMatchingGameplayTag(GSTNCombatTags::Lock_Movement) || AbilitySystem->HasMatchingGameplayTag(GSTNCombatTags::Lock_Reaction));
-	if ((Running && Running->bIgnoreMoveInput) || bRooted)
+	// A hit turn the latest frame queued (the victim step's SetFacing; the state holds only that frame's requests): Mover applies it on the
+	// frame this input is for, and the walking mode orients to the command's intent on that same tick, so an intent still pointing the old way
+	// undid the turn (react-hook-5 diagnostics: SetFacing ran on the hit frame, the yaw never changed). The intent points the new way instead
+	float HoldYaw = static_cast<float>(GetOwner()->GetActorRotation().Yaw);
+	bool bHitTurn = false;
+	if (!bInTimeline)
+	{
+		for (const FGSTN_CombatRequest& Slot : Sync->Core.Requests.Slots)
+		{
+			if (Slot.Type == EGSTN_RequestType::SetFacing)
+			{
+				HoldYaw = FGSTN_StartupSteer::DequantizeYaw(Slot.Arg);
+				bHitTurn = true;
+			}
+		}
+	}
+	if ((Running && Running->bIgnoreMoveInput) || bRooted || bHitTurn)
 	{
 		if (FCharacterDefaultInputs* Inputs = InputCmdResult.InputCollection.FindMutableDataByType<FCharacterDefaultInputs>())
 		{
 			Inputs->SetMoveInput(EMoveInputType::DirectionalIntent, FVector::ZeroVector);
 		}
-		HoldOrientationIntent(InputCmdResult, static_cast<float>(GetOwner()->GetActorRotation().Yaw));
+		HoldOrientationIntent(InputCmdResult, HoldYaw);
 		bHoldFacingAfterReaction = true;
 		return;
 	}
 	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickY));
 	const FVector2D MoveStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastMoveStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastMoveStickY));
-	float HoldYaw = 0.f;
+	float SteerHoldYaw = 0.f;
 	bool bStickActive = false;
 	if (FGSTN_CombatTimelineLogic::ResolveSteerFrame(Sync->Core, GetSimulationFrame() + 1, GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline), MoveStick,
 		AimStick, bLastPrecisionAim, FGSTN_DirectionClassifier::DequantizeYaw(LastCameraYaw), static_cast<float>(GetOwner()->GetActorRotation().Yaw),
-		LastStepMs * 0.001f, HoldYaw, bStickActive) != EGSTN_SteerPhase::None)
+		LastStepMs * 0.001f, SteerHoldYaw, bStickActive) != EGSTN_SteerPhase::None)
 	{
-		HoldOrientationIntent(InputCmdResult, HoldYaw);
+		HoldOrientationIntent(InputCmdResult, SteerHoldYaw);
 		bHoldFacingAfterReaction = false;
 		return;
 	}
