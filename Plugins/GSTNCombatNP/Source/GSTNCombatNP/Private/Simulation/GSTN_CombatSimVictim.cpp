@@ -228,18 +228,27 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, co
 
 	// The turn of a staggered victim, on the hit frame (react-hook-4 review: turned at the launch, the first 7 hitstop frames showed the
 	// reaction pose the wrong way round). Queued like a steer: the pre-tick of this frame hands it to Mover before the hitstop freeze holds it
-	if (Self && bFrameInterrupted)
+	if (bFrameInterrupted)
 	{
 		float TurnYaw = 0.f;
-		if (FGSTN_CombatVictim::ResolveHitFacing(CombatRules, Result, Core, *Self, Snapshot, TurnYaw))
+		const bool bTurn = Self && FGSTN_CombatVictim::ResolveHitFacing(CombatRules, Result, Core, *Self, Snapshot, TurnYaw);
+		bool bQueued = false;
+		if (bTurn)
 		{
 			const int16 YawArg = FGSTN_StartupSteer::QuantizeYaw(TurnYaw);
-			if (YawArg != FGSTN_StartupSteer::QuantizeYaw(static_cast<float>(Self->Facing.Rotation().Yaw))
-				&& !Core.Requests.Add(EGSTN_RequestType::SetFacing, Frame, YawArg))
+			if (YawArg != FGSTN_StartupSteer::QuantizeYaw(static_cast<float>(Self->Facing.Rotation().Yaw)))
 			{
-				UE_LOG(LogGSTNCombatVictim, Error, TEXT("%s frame %d: no room for the hit turn request"), *GetOwner()->GetName(), Frame);
+				bQueued = Core.Requests.Add(EGSTN_RequestType::SetFacing, Frame, YawArg);
+				if (!bQueued)
+				{
+					UE_LOG(LogGSTNCombatVictim, Error, TEXT("%s frame %d: no room for the hit turn request (%d requests)"), *GetOwner()->GetName(), Frame, Core.Requests.Num());
+				}
 			}
 		}
+		// Diagnostics of the react-hook-5 capture (the turn did not show in game): one line per interrupting hit
+		UE_LOG(LogGSTNCombatVictim, Log, TEXT("[HitTurn] %s frame %d self=%d rules=%d pending=%d turn=%d yaw=%.0f selfYaw=%.0f queued=%d requests=%d"),
+			*GetOwner()->GetName(), Frame, Self ? 1 : 0, CombatRules ? 1 : 0, Core.Hit.HasPendingReaction() ? 1 : 0, bTurn ? 1 : 0, TurnYaw,
+			Self ? Self->Facing.Rotation().Yaw : 0.0, bQueued ? 1 : 0, Core.Requests.Num());
 	}
 
 	// The end of the hitstop and of the hitstun, by the reaction the hit chose
