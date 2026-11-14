@@ -1,0 +1,31 @@
+    0.0s driver loaded: out C:/Users/jacop/Documents/Unreal Projects/GASP_Giustino2_ue59/Saved/AnimReact/react-hook-4, sequences ['knockdown_getup', 'back_hitstand', 'back_knockdown']
+    8.0s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '3', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   21.0s review stage: parked [('Z1', (3800.0, 300.0))]; host P256, attacker P257
+   21.0s defence steps saved in the rules: True
+   21.0s kits KIT_Test_DefenceLanding: host OK, attacker OK
+   21.1s anim mesh SkeletalMesh, reaction components ['GSTN_ReactionAnimComponent']
+   27.6s sequence knockdown_getup: host at (90, -150, 88) yaw -180, attacker at [0, -150, 100] yaw 0, distance 90 cm, facing error 0 deg (0 = face to face), states []
+   29.3s knockdown_getup: v10 attack c1 (states [])
+   50.1s knockdown_getup: v136 jump (states ['Knockdown'])
+   66.5s sequence knockdown_getup done: 234 frames, run {'seg': 'game', 'seg0': 163, 'down_at': 86, 'input_at': 136, 'up_at': 137}
+   72.3s sequence back_hitstand: host at (326, -150, 88) yaw 0, attacker at [0, -150, 100] yaw 0, distance 326 cm, facing error 180 deg (0 = face to face), states []
+   74.1s back_hitstand: v10 attack c1 (states [])
+  141.3s sequence back_hitstand done: 421 frames, run {'seg': 'game', 'seg0': 0}
+  147.1s sequence back_knockdown: host at (320, -150, 88) yaw 0, attacker at [0, -150, 100] yaw 0, distance 320 cm, facing error 180 deg (0 = face to face), states []
+  148.8s back_knockdown: v10 attack c1 (states [])
+  216.0s sequence back_knockdown done: 421 frames, run {'seg': 'game', 'seg0': 0}
+  217.4s finish: ok
+    0.0s driver loaded: out C:/Users/jacop/Documents/Unreal Projects/GASP_Giustino2_ue59/Saved/AnimReact/react-hook-4-back, sequences ['back_hitstand', 'back_knockdown']
+    8.0s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '3', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   21.1s review stage: parked [('Z1', (3800.0, 300.0))]; host P256, attacker P257
+   21.1s defence steps saved in the rules: True
+   21.2s kits KIT_Test_DefenceLanding: host OK, attacker OK
+   21.2s anim mesh SkeletalMesh, reaction components ['GSTN_ReactionAnimComponent']
+   27.2s sequence back_hitstand: host at (183, 450, 88) yaw 0, attacker at [0, 450, 100] yaw 0, distance 183 cm, facing error 180 deg (0 = face to face), states []
+   29.1s back_hitstand: v10 attack c1 (states [])
+   49.9s sequence back_hitstand done: 131 frames, run {'seg': 'game', 'seg0': 60, 'hit': True, 'free_at': 60}
+   55.4s sequence back_knockdown: host at (194, 450, 88) yaw 0, attacker at [0, 450, 100] yaw 0, distance 194 cm, facing error 180 deg (0 = face to face), states []
+   56.8s back_knockdown: v10 attack c1 (states [])
+   71.4s back_knockdown: v112 jump (states ['Knockdown'])
+   85.4s sequence back_knockdown done: 210 frames, run {'seg': 'game', 'seg0': 139, 'down_at': 62, 'input_at': 112, 'up_at': 113}
+   86.8s finish: ok

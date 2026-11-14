@@ -67,6 +67,7 @@ ROLL_LIE = 4      # roll sequences: the stick is held from this many frames afte
 FACE_SECONDS = float(os.environ.get('PIE_CAPTURE_FACE_SECONDS') or 0.3)  # the victim walks toward the attacker this long to face it, from PLACE cm away
 PLACE = 245.0
 PLACE_BEHIND = 165.0   # behind: the walk away adds about the 40 cm the walk toward takes off
+BEHIND_STOP = float(os.environ.get('PIE_CAPTURE_BEHIND_STOP') or 160.0)  # behind: release the stick once turned away and this far (cm); it slides a bit on
 TIMEOUT = 1500.0
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None,
       'rows': None, 'aim': None, 'yaw': 0.0}
@@ -379,7 +380,17 @@ def _tick(_dt):
         elif phase == 'seq_turn' and now - st['t'] > 1.5:
             _turn_to_attacker(SEQUENCES[st['seq']].get('behind', False))
             st.update(phase='seq_face', t=now)
-        elif phase == 'seq_face' and now - st['t'] > FACE_SECONDS:
+        elif phase == 'seq_face' and SEQUENCES[st['seq']].get('behind') and now - st['t'] > 0.05:
+            # Behind: stop on distance and heading, not wall time (react-hook-4: under load 0.3 s walked 155 cm, the victim stood 320 cm away,
+            # out of the test move's reach, and the hit missed)
+            loc, yaw = _pawn().get_actor_location(), _pawn().get_actor_rotation().yaw
+            alo = g.snap(_world())[st['akey']]['location']
+            away = math.degrees(math.atan2(loc.y - alo[1], loc.x - alo[0]))
+            turned = abs((yaw - away + 180.0) % 360.0 - 180.0) < 15.0
+            if (turned and math.hypot(loc.x - alo[0], loc.y - alo[1]) >= BEHIND_STOP) or now - st['t'] > 3.0 * FACE_SECONDS:
+                g.release(0, 'move')
+                st.update(phase='seq_begin', t=now)
+        elif phase == 'seq_face' and not SEQUENCES[st['seq']].get('behind') and now - st['t'] > FACE_SECONDS:
             g.release(0, 'move')
             st.update(phase='seq_begin', t=now)
         elif phase == 'seq_begin' and now - st['t'] > 2.5:
