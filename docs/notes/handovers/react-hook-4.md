@@ -29,3 +29,4 @@ Date 2026-11-14, 17:35-17:46Z, worktree `GASP_Giustino2_ue59`, UE 5.9.
 - Next: rename the param in CP1, rebuild, run the 9 tests, then the capture (needs ~5 min with the desktop free).
 
 Cost: about 60k tokens, small.
+Cloud follow-up 4a8c7384: K2_OnMoveStarted pin renamed MoveStartFrame (the C4458). Unbuilt: next desktop run builds tip, runs the 9 CP1 tests, then the capture (PIE_CAPTURE_SEQUENCES=knockdown_getup,back_knockdown,back_hitstand).
