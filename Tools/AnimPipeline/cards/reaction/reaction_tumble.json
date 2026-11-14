@@ -1,0 +1,350 @@
+{
+ "move": "reaction_tumble",
+ "class": "reaction",
+ "anim": "/Game/AnimPipeline/Rig/Reaction/AS_React_Tumble",
+ "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+ "fps": 60,
+ "timing_csv": "refs/ufd/React_Tumble_timing.csv",
+ "effector": "head",
+ "_design": "Tumble (launched, airborne): body near horizontal face up, back arched so the pelvis is the highest point, head hanging back, arms and legs trailing below and uneven. Still pose.",
+ "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_React_Tumble",
+ "spacing": {
+  "startup": "limb_led_recovery",
+  "active": "limb_led_recovery",
+  "recovery": "limb_led_recovery"
+ },
+ "part_delays": {
+  "chest": 0,
+  "head": 0,
+  "forearm": 0,
+  "hand": 0
+ },
+ "author": {
+  "take": "AS_Pilot_React_Tumble",
+  "frames": 4,
+  "thumb": "along",
+  "poses": {
+   "0": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      2.0,
+      6.0
+     ],
+     "rot": [
+      77.865,
+      6.724,
+      5.445
+     ]
+    },
+    "spine": [
+     34.0,
+     6.0,
+     0.0
+    ],
+    "head": [
+     26.0,
+     0.0,
+     10.0
+    ],
+    "fingers": [
+     0.8,
+     0.0,
+     0.0
+    ],
+    "arm_l": {
+     "hand": [
+      65.91,
+      -12.07,
+      38.29
+     ],
+     "pole": [
+      40.45,
+      4.4,
+      18.38
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -79.52,
+      -31.88,
+      49.56
+     ],
+     "pole": [
+      -55.59,
+      -12.03,
+      21.53
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      25.42,
+      -36.91,
+      -66.82
+     ],
+     "pole": [
+      16.88,
+      21.54,
+      -34.82
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -11.66,
+      -7.44,
+      -76.03
+     ],
+     "pole": [
+      -14.77,
+      39.02,
+      -25.19
+     ]
+    }
+   },
+   "1": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      2.0,
+      6.0
+     ],
+     "rot": [
+      77.865,
+      6.724,
+      5.445
+     ]
+    },
+    "spine": [
+     34.0,
+     6.0,
+     0.0
+    ],
+    "head": [
+     26.0,
+     0.0,
+     10.0
+    ],
+    "fingers": [
+     0.8,
+     0.0,
+     0.0
+    ],
+    "arm_l": {
+     "hand": [
+      65.91,
+      -12.07,
+      38.29
+     ],
+     "pole": [
+      40.45,
+      4.4,
+      18.38
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -79.52,
+      -31.88,
+      49.56
+     ],
+     "pole": [
+      -55.59,
+      -12.03,
+      21.53
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      25.42,
+      -36.91,
+      -66.82
+     ],
+     "pole": [
+      16.88,
+      21.54,
+      -34.82
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -11.66,
+      -7.44,
+      -76.03
+     ],
+     "pole": [
+      -14.77,
+      39.02,
+      -25.19
+     ]
+    }
+   },
+   "2": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      2.0,
+      6.0
+     ],
+     "rot": [
+      77.865,
+      6.724,
+      5.445
+     ]
+    },
+    "spine": [
+     34.0,
+     6.0,
+     0.0
+    ],
+    "head": [
+     26.0,
+     0.0,
+     10.0
+    ],
+    "fingers": [
+     0.8,
+     0.0,
+     0.0
+    ],
+    "arm_l": {
+     "hand": [
+      65.91,
+      -12.07,
+      38.29
+     ],
+     "pole": [
+      40.45,
+      4.4,
+      18.38
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -79.52,
+      -31.88,
+      49.56
+     ],
+     "pole": [
+      -55.59,
+      -12.03,
+      21.53
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      25.42,
+      -36.91,
+      -66.82
+     ],
+     "pole": [
+      16.88,
+      21.54,
+      -34.82
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -11.66,
+      -7.44,
+      -76.03
+     ],
+     "pole": [
+      -14.77,
+      39.02,
+      -25.19
+     ]
+    }
+   },
+   "3": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      2.0,
+      6.0
+     ],
+     "rot": [
+      77.865,
+      6.724,
+      5.445
+     ]
+    },
+    "spine": [
+     34.0,
+     6.0,
+     0.0
+    ],
+    "head": [
+     26.0,
+     0.0,
+     10.0
+    ],
+    "fingers": [
+     0.8,
+     0.0,
+     0.0
+    ],
+    "arm_l": {
+     "hand": [
+      65.91,
+      -12.07,
+      38.29
+     ],
+     "pole": [
+      40.45,
+      4.4,
+      18.38
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -79.52,
+      -31.88,
+      49.56
+     ],
+     "pole": [
+      -55.59,
+      -12.03,
+      21.53
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      25.42,
+      -36.91,
+      -66.82
+     ],
+     "pole": [
+      16.88,
+      21.54,
+      -34.82
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -11.66,
+      -7.44,
+      -76.03
+     ],
+     "pole": [
+      -14.77,
+      39.02,
+      -25.19
+     ]
+    }
+   }
+  }
+ },
+ "_plan": "cards/reaction/reaction_tumble.plan.json",
+ "poses": [
+  {
+   "name": "f0",
+   "frame": 0,
+   "source": null
+  },
+  {
+   "name": "f3",
+   "frame": 3,
+   "source": null
+  }
+ ]
+}

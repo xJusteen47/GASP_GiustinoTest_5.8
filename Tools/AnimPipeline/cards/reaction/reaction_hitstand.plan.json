@@ -1,0 +1,191 @@
+{
+ "card_path": "cards/reaction/reaction_hitstand.json",
+ "take": "AS_Pilot_React_HitStand",
+ "frames": 4,
+ "card": {
+  "move": "reaction_hitstand",
+  "class": "reaction",
+  "anim": "/Game/AnimPipeline/Rig/Reaction/AS_React_HitStand",
+  "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+  "fps": 60,
+  "timing_csv": "refs/ufd/React_HitStand_timing.csv",
+  "effector": "head",
+  "_design": "Hitstun, standing (StaggerInPlace / PushBack): trunk and head thrown back, arms flung wide and uneven, right foot stepped back on the toe. Still pose.",
+  "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_React_HitStand",
+  "spacing": {
+   "startup": "limb_led_recovery",
+   "active": "limb_led_recovery",
+   "recovery": "limb_led_recovery"
+  },
+  "part_delays": {
+   "chest": 0,
+   "head": 0,
+   "forearm": 0,
+   "hand": 0
+  }
+ },
+ "keys": {
+  "0": {
+   "pelvis": {
+    "loc": [
+     0,
+     -7,
+     -4
+    ],
+    "rot_e": {
+     "pitch": 6,
+     "twist": -6
+    }
+   },
+   "spine": [
+    24,
+    0,
+    -8
+   ],
+   "head": [
+    18,
+    4,
+    6
+   ],
+   "fingers": [
+    0.8,
+    0,
+    0
+   ],
+   "arm_l": {
+    "hand_w": [
+     60,
+     -14,
+     126
+    ],
+    "pole_w": [
+     44,
+     -30,
+     112
+    ]
+   },
+   "arm_r": {
+    "hand_w": [
+     -58,
+     -24,
+     104
+    ],
+    "pole_w": [
+     -40,
+     -36,
+     104
+    ]
+   },
+   "leg_l": {
+    "foot_w": [
+     20,
+     12.5,
+     9.5
+    ],
+    "pole_w": [
+     20,
+     70,
+     50
+    ]
+   },
+   "leg_r": {
+    "foot_w": [
+     -17,
+     -44,
+     13
+    ],
+    "pole_w": [
+     -24,
+     30,
+     40
+    ],
+    "foot_rot": [
+     25,
+     0,
+     0
+    ]
+   }
+  },
+  "3": {
+   "pelvis": {
+    "loc": [
+     0,
+     -7,
+     -4
+    ],
+    "rot_e": {
+     "pitch": 6,
+     "twist": -6
+    }
+   },
+   "spine": [
+    24,
+    0,
+    -8
+   ],
+   "head": [
+    18,
+    4,
+    6
+   ],
+   "fingers": [
+    0.8,
+    0,
+    0
+   ],
+   "arm_l": {
+    "hand_w": [
+     60,
+     -14,
+     126
+    ],
+    "pole_w": [
+     44,
+     -30,
+     112
+    ]
+   },
+   "arm_r": {
+    "hand_w": [
+     -58,
+     -24,
+     104
+    ],
+    "pole_w": [
+     -40,
+     -36,
+     104
+    ]
+   },
+   "leg_l": {
+    "foot_w": [
+     20,
+     12.5,
+     9.5
+    ],
+    "pole_w": [
+     20,
+     70,
+     50
+    ]
+   },
+   "leg_r": {
+    "foot_w": [
+     -17,
+     -44,
+     13
+    ],
+    "pole_w": [
+     -24,
+     30,
+     40
+    ],
+    "foot_rot": [
+     25,
+     0,
+     0
+    ]
+   }
+  }
+ }
+}

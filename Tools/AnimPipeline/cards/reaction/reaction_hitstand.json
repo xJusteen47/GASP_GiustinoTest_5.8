@@ -1,0 +1,370 @@
+{
+ "move": "reaction_hitstand",
+ "class": "reaction",
+ "anim": "/Game/AnimPipeline/Rig/Reaction/AS_React_HitStand",
+ "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+ "fps": 60,
+ "timing_csv": "refs/ufd/React_HitStand_timing.csv",
+ "effector": "head",
+ "_design": "Hitstun, standing (StaggerInPlace / PushBack): trunk and head thrown back, arms flung wide and uneven, right foot stepped back on the toe. Still pose.",
+ "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_React_HitStand",
+ "spacing": {
+  "startup": "limb_led_recovery",
+  "active": "limb_led_recovery",
+  "recovery": "limb_led_recovery"
+ },
+ "part_delays": {
+  "chest": 0,
+  "head": 0,
+  "forearm": 0,
+  "hand": 0
+ },
+ "author": {
+  "take": "AS_Pilot_React_HitStand",
+  "frames": 4,
+  "thumb": "along",
+  "poses": {
+   "0": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      -7.0,
+      -4.0
+     ],
+     "rot": [
+      5.995,
+      0.314,
+      -5.995
+     ]
+    },
+    "spine": [
+     24.0,
+     0.0,
+     -8.0
+    ],
+    "head": [
+     18.0,
+     4.0,
+     6.0
+    ],
+    "fingers": [
+     0.8,
+     0.0,
+     0.0
+    ],
+    "arm_l": {
+     "hand": [
+      55.3,
+      20.04,
+      -3.01
+     ],
+     "pole": [
+      44.48,
+      -4.02,
+      -6.5
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -55.29,
+      -26.82,
+      -12.05
+     ],
+     "pole": [
+      -35.12,
+      -32.66,
+      -6.85
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      16.33,
+      15.62,
+      -78.97
+     ],
+     "pole": [
+      9.91,
+      76.7,
+      -44.7
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -14.64,
+      -43.77,
+      -69.58
+     ],
+     "pole": [
+      -29.58,
+      31.5,
+      -50.47
+     ],
+     "foot_rot": [
+      25.0,
+      0.0,
+      0.0
+     ]
+    }
+   },
+   "1": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      -7.0,
+      -4.0
+     ],
+     "rot": [
+      5.995,
+      0.314,
+      -5.995
+     ]
+    },
+    "spine": [
+     24.0,
+     0.0,
+     -8.0
+    ],
+    "head": [
+     18.0,
+     4.0,
+     6.0
+    ],
+    "fingers": [
+     0.8,
+     0.0,
+     0.0
+    ],
+    "arm_l": {
+     "hand": [
+      55.3,
+      20.04,
+      -3.01
+     ],
+     "pole": [
+      44.48,
+      -4.02,
+      -6.5
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -55.29,
+      -26.82,
+      -12.05
+     ],
+     "pole": [
+      -35.12,
+      -32.66,
+      -6.85
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      16.33,
+      15.62,
+      -78.97
+     ],
+     "pole": [
+      9.91,
+      76.7,
+      -44.7
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -14.64,
+      -43.77,
+      -69.58
+     ],
+     "pole": [
+      -29.58,
+      31.5,
+      -50.47
+     ],
+     "foot_rot": [
+      25.0,
+      0.0,
+      0.0
+     ]
+    }
+   },
+   "2": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      -7.0,
+      -4.0
+     ],
+     "rot": [
+      5.995,
+      0.314,
+      -5.995
+     ]
+    },
+    "spine": [
+     24.0,
+     0.0,
+     -8.0
+    ],
+    "head": [
+     18.0,
+     4.0,
+     6.0
+    ],
+    "fingers": [
+     0.8,
+     0.0,
+     0.0
+    ],
+    "arm_l": {
+     "hand": [
+      55.3,
+      20.04,
+      -3.01
+     ],
+     "pole": [
+      44.48,
+      -4.02,
+      -6.5
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -55.29,
+      -26.82,
+      -12.05
+     ],
+     "pole": [
+      -35.12,
+      -32.66,
+      -6.85
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      16.33,
+      15.62,
+      -78.97
+     ],
+     "pole": [
+      9.91,
+      76.7,
+      -44.7
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -14.64,
+      -43.77,
+      -69.58
+     ],
+     "pole": [
+      -29.58,
+      31.5,
+      -50.47
+     ],
+     "foot_rot": [
+      25.0,
+      0.0,
+      0.0
+     ]
+    }
+   },
+   "3": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      -7.0,
+      -4.0
+     ],
+     "rot": [
+      5.995,
+      0.314,
+      -5.995
+     ]
+    },
+    "spine": [
+     24.0,
+     0.0,
+     -8.0
+    ],
+    "head": [
+     18.0,
+     4.0,
+     6.0
+    ],
+    "fingers": [
+     0.8,
+     0.0,
+     0.0
+    ],
+    "arm_l": {
+     "hand": [
+      55.3,
+      20.04,
+      -3.01
+     ],
+     "pole": [
+      44.48,
+      -4.02,
+      -6.5
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -55.29,
+      -26.82,
+      -12.05
+     ],
+     "pole": [
+      -35.12,
+      -32.66,
+      -6.85
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      16.33,
+      15.62,
+      -78.97
+     ],
+     "pole": [
+      9.91,
+      76.7,
+      -44.7
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -14.64,
+      -43.77,
+      -69.58
+     ],
+     "pole": [
+      -29.58,
+      31.5,
+      -50.47
+     ],
+     "foot_rot": [
+      25.0,
+      0.0,
+      0.0
+     ]
+    }
+   }
+  }
+ },
+ "_plan": "cards/reaction/reaction_hitstand.plan.json",
+ "poses": [
+  {
+   "name": "f0",
+   "frame": 0,
+   "source": null
+  },
+  {
+   "name": "f3",
+   "frame": 3,
+   "source": null
+  }
+ ]
+}
