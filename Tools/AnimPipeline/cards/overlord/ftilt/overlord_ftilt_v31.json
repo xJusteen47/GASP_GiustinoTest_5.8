@@ -1,7 +1,7 @@
 {
  "move": "overlord_ftilt_v31",
  "class": "tilt",
- "anim": "/Game/AnimPipeline/Rig/AS_GanonFTiltV31_Build",
+ "anim": "/Game/AnimPipeline/Rig/Overlord/FTilt/AS_GanonFTiltV31_Build",
  "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
  "fps": 60,
  "timing_csv": "refs/ufd/GanondorfFTilt_timing.csv",

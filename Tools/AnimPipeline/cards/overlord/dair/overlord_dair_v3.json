@@ -1,7 +1,7 @@
 {
  "move": "overlord_dair_v3",
  "class": "tilt",
- "anim": "/Game/AnimPipeline/Rig/AS_OverlordDAirV3_Build",
+ "anim": "/Game/AnimPipeline/Rig/Overlord/DAir/AS_OverlordDAirV3_Build",
  "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
  "fps": 60,
  "timing_csv": "refs/ufd/GanondorfDAir_timing.csv",

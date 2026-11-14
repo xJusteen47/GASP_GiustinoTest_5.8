@@ -1,0 +1,33 @@
+# Overlord jab 1 / jab 2 v3: author notes (ANIM-JAB-5, 2026-11-12, offline only, nothing built)
+Built: `overlord_jab1_v3.json` (13 keys 0,2,4,5,6,7,8,12,15,17,19,22,28) and `overlord_jab2_v3.json` (17 keys 0,3,6,7,8,9,11,12,13,20,26,38,41,44,47,49,52), timing CSVs `OverlordJab{1,2}V3_timing.csv` (copies of V2, here and in `Saved/AnimPipeline/refs/ufd/`), sheets `sheets/overlord_jab{1,2}_v3_stick.png`. Poses were computed from component-space targets (wrist on the +Y line, ankle/ball on the floor) with `animpipe/author.py`'s solver, then written as card numbers. `animpipe card` and `author --no-write` pass on both.
+
+## Signs confirmed on stick_preview (throwaway card)
++rz yaws the front to the character's RIGHT (-rz = left); +rx leans back / chin up (-rx = forward lean, nod down); +ry tips the head top toward +X (right shoulder up). `arm_x` is in the CHEST frame (spine rz -90 turns chest -X into +Y), `leg_x` in the PELVIS frame (pelvis rz -40 moves a fixed foot 16.7 cm). Right clavicle: chest-local ry + = shrug, rz - = protraction. Idle shoulders are already turned 24 deg right (left shoulder 14 cm ahead): "side-on" needs about -90 of total trunk yaw, not -50.
+
+## Jab 1 numbers
+Right wrist at f6: (-2.1, 72.0, 135.9), 47.8 cm ahead of the shoulder, +8.4 cm above it, reach 48.5 of 48.75; shoulder line at -77 deg (side-on). Wrist travel f4-5-6-7-8: 36.0 / 54.1 / 4.4 / 3.8 cm (40% / 60% of the strike). Worst bone step in the active window 8.8 cm (fingertip 6->7).
+## Jab 2 numbers (world = root space + root)
+Hand f6-7-8-9: 15.3 / 47.4 / 100.4 cm (9 / 29 / 62%), f9->11 2.3 cm, f11->12 7.3 cm (fingertip 9.3), f12->13 30.3 (release). Contact wrist (-2.8, 88.9, 102.3), 13 cm below the shoulder on the diagonal.
+
+## Deviations from the plan table (and why)
+- Trunk yaws are larger than the table's numbers: the table reads them from a square idle, the idle is 24 deg bladed. Jab 1: chamber pelvis -40 + spine -80 (-120 total, back partly to the target), f5 -112 (chest lags, hips first), contact -90, f8 -85 (5 past). Jab 2: windup +55, f8 +20 (chest lags the square pelvis), contact -50.
+- The table says "rear (left) foot" in jab 1; in this idle the left foot is the FRONT one. Weight goes laterally onto the left foot (pelvis +X), the right foot draws back 8 cm on the toe, stomps 12 cm forward of idle (f5), steps back f15-19 (3 cm lift at f17).
+- Jab 1 wrist flick reduced to 12 -> 0 -> -6 deg (plan 25 deg): with 25 deg the fingertips travel 12.3 cm on 6->7 and fail hitstop_snap (R7 wins).
+- Jab 2: left foot lands 30 cm ahead in the world (plan 40): with root +30 and an exact idle at f52 a 40 cm landing would leave the left foot 10 cm off idle (a second step or a slide). Contact hand at z 102 (lunge + 28 deg forward spine), lower than "target chest height".
+- Jab 2: extra key f12 (hand 7.3 cm from f11) so 11->12 stays under 10 cm; clench keyed 38 -> 41 (fingers 0.85 -> 0.12 -> 0 at 44), foot step f41-47 as planned. f13 head [-22,0,52]: a full look-at the low hand needs 100 deg of neck.
+- part_delays all 0 (both cards): chest_ctrl and lowerarm keys place shoulder and elbow, so a delay moves the wrist off f6/f9; a head delay makes the head lag a trunk turning 30-70 deg/frame and look away at contact. The R3 chain is authored into the dense keys instead (pelvis leads, chest 1 f later, head counter-turns, off arm 1-2 f late).
+- No wrist_out (hand bends are per-key hand_rot). Claw = flat open fingers + `thumb: "open"`: finger control names are known (`index_01_r_ctrl` ...) but their curl axis is not verifiable offline, so no finger edits. The open thumb differs from jab 1's "along": the thumb pops on the cancel (pose values f0 == jab1 f12 otherwise, checked).
+- Clench f38-41: `fingers` closes BOTH hands; acceptable, because the idle hand is fingers 0 anyway (the left hand reaches idle early, hanging by the thigh). An `edits` entry could not keep it open without the unknown finger axes.
+
+## Exemptions / planted
+Jab 1: planted [foot_l]; exemption `planted` f6-16: the left heel rises 2.6 cm on the contact (ball kept on the floor) and settles by f17. Jab 2: planted [] (both feet step). Jab 2 tremor is not in the card (Manuale layer, zero at f26/f38).
+
+## Part C: root motion = option 1 (card data only, no tool change)
+`ue_rig.build` bakes every rig control and v2's build reported `root_ctrl` among the keyed controls, and `edits` adds a delta to any control's keys. Jab 2 `edits`: root_ctrl Location +Y 3 (f6), 8 (f7), 17 (f8), 30 (f9 ... f52); 0 at f0/f3 (f4 is the first frame that moves). Author poses are root-relative: the right foot is world-planted f0-41 at the jab 1 stomp spot, so its root-space Y = spot - root on the same keys; same key frames + same per-segment tangent profiles (key 3 smart auto, mirrored values) give root + foot = constant on every in-between (world ball constant at y 2.4 on all keys). Only residual: the heel lifts f8->f9 while the root moves, ~0.4 cm of arc-vs-chord at the ankle. Right foot steps up f41-47 to idle (+30 world).
+UNTESTED in Unreal, assumptions to check on the first build: root_ctrl's local Y = component +Y, body/foot controls are children of root_ctrl, and the export writes root_ctrl into the root bone track (`_lock_lengths` leaves root free). The stick sheet is drawn in root space (no root), so jab 2's lunge sits 30 cm back in its frames.
+
+## Jab 1 trunk rework (2026-11-12, owner: whole body, C curves readable from far away; Jab 2 only f0 re-copied)
+Spine lean is now a pure world-X tilt on top of the yaw (chest up-axis, side view; old: f4 +9.9 back, f6 -8.1): f2 +11.6 / pelvis [3.5,-5.3,-2.1] (70%), f4 +16.5 / [5,-7.5,-3], f5 +5 / [-1,3,-3.5] (hips lead), f6 -11.5 / [-3,9.5,-3.5]; f7/f8/f12 keep their old deltas to f6 (pelvis +[0,3.5,-1.5], same lean change), f15 -4 / [-0.5,5,-1.5]. Head keeps its old WORLD orientation on every changed key; arms, clavicle and feet re-solved from the same targets (feet world-fixed: left ball spread 0.9 cm f0-28, stomp spot unchanged).
+f6 wrist (-4.3, 76.1, 133.1): 47.8 ahead of the shoulder, +8.4, reach 48.5. Wrist f4-5-6-7-8: 40.6 / 60.0 / 4.3 / 3.9 (f5 hand target moved to (13,19,140) for the 40/60 split). Worst bone step f6-8: 8.7 (middle_03_r 6->7). Right knee 41 deg (+25 on idle 16).
+Not met: the left leg cannot read "long" at f6 (knee 50 deg, idle 20): its foot is ahead of the stomp spot in Y and under the forward, lowered pelvis; a lateral pelvis shift (x -3 to -7) only changes it 5 deg. Heel-up exemption f6-16 unchanged (pitch 12/10/6).
+Jab 2 f0 = new Jab 1 f12 (thumb "open" kept); f0->f3 hand 27/49/26 cm, pelvis <= 6.7 cm/f, right foot on the stomp spot (spread 0.9 cm). Generator: scratch gen_jab1b.py on top of gen_jab1.py.

@@ -11,6 +11,20 @@ la copia va in `casc/restored/`). Percorsi in `animpipe.toml` (+ `animpipe.local
 Skill: `.claude/skills/animpipe-move/` (segue `status`). App owner: `python -m animpipe.app` (GSTN Studio).
 I comandi più sotto (con il percorso della scheda) restano come strato interno.
 
+### Frame del video, render senza l'editor dell'owner, verify (2026-11-03)
+- **Frame del video.** L'owner conta i frame del video in-game (`v<N>`, da 0, scritto su ogni video e cella di griglia; le chiavi
+  dell'owner hanno stella e bordo rosso). La scheda conta frame anim: differiscono del freeze di hitstop (`animpipe/vframes.py`:
+  `v<=a0` → anim v; poi `a0` per `hit` frame; poi `v-hit`; a0 = primo frame attivo o `--at`, `--hitstop` default 8).
+  `render|approve --frames=..`, `interp --drop=..`, `interp --from=f.json` accettano `--video`; il risultato ha `frame_map`
+  ("v13 = anim 13: between keys 11 and 14"), calcolato prima di scrivere. Un frame dentro il freeze è rifiutato.
+- **`render <mossa> --standalone [--azs=90,0,45] [--hitstop=8] [--at=N]`**: secondo processo UnrealEditor (RenderOffScreen) sulla
+  mappa SALVATA `L_PilotCapture`; `standalone_capture.py` usa `capture_ue.py` invariato; poi PNG + `ingame_judge.py --cached`
+  → `sheets/ingame/<mossa>_az<N>_ingame{,_whiff,_compare}.mp4` + strip. Non usa UnrealMCP né l'editor aperto dell'owner, non
+  salva nulla. Limiti: serve la clip già costruita e salvata (build), `L_PilotCapture.umap` salvata, GPU (non `-nullrhi`),
+  primo avvio = shader; `engine_exe` in `animpipe.local.toml` o env `UE_EDITOR`. **Non provato su macchina con UE** (cloud).
+- **`verify <mossa> --req=file.json`**: PASS/FAIL per riga su angoli, ritardo tra picchi di due ossa, ampiezza (formato in
+  `animpipe/verify.py`); legge il dump ossa `sheets/raw/<take>_legbones.json` scritto da build/check.
+
 Working folder for the combat-move animation pilot: Cascadeur scenes, motion models, the Unreal round trip, the checks and
 the review pages. The code and settings are versioned here (`Tools/AnimPipeline/`); the data is not. Start here; the current state is in `handoff.md` and the move logs in the working folder (not in git):
 - `jab_log.md` and `ganon_ftilt_log.md` are in Italian, for the owner;

@@ -1,0 +1,1750 @@
+{
+ "move": "overlord_jab2",
+ "class": "jab",
+ "anim": "/Game/AnimPipeline/Rig/Overlord/Jab/Jab2/AS_OverlordJab2",
+ "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+ "fps": 60,
+ "timing_csv": "refs/ufd/OverlordJab2_timing.csv",
+ "effector": "middle_01_r",
+ "_design": "Overlord Jab 2: Forward lunge (+18cm pelvis translation) with brutal villain claw slap ('schiaffo con dita stile villain'). Active impact at frame 4, followthrough at 6. Character freezes in a dramatic moving hold (frames 7-14) with head turned intensely staring into the right hand ('osserva la mano'). FAF at frame 15. Aesthetic recovery (frames 16-25): right hand vibrates with high-frequency decaying power tremor (micro-oscillations decaying from +-3.0 deg to +-0.4 deg) before smoothly settling back to neutral guard at frame 31.",
+ "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordJab2",
+ "faf_game": 16,
+ "poses": [
+  {
+   "name": "entry_lunge_start",
+   "frame": 0,
+   "source": null
+  },
+  {
+   "name": "lunge_anticipation",
+   "frame": 2,
+   "source": null,
+   "spacing": "charge_long"
+  },
+  {
+   "name": "strike_contact",
+   "frame": 4,
+   "source": null,
+   "spacing": "arrive_1_2"
+  },
+  {
+   "name": "followthrough_apex",
+   "frame": 6,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "stare_hand_start",
+   "frame": 8,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "moving_hold_apex",
+   "frame": 14,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "tremor_start",
+   "frame": 16,
+   "source": null
+  },
+  {
+   "name": "tremor_osc1",
+   "frame": 17,
+   "source": null
+  },
+  {
+   "name": "tremor_osc2",
+   "frame": 18,
+   "source": null
+  },
+  {
+   "name": "tremor_osc3",
+   "frame": 19,
+   "source": null
+  },
+  {
+   "name": "tremor_mid",
+   "frame": 20,
+   "source": null
+  },
+  {
+   "name": "tremor_decay",
+   "frame": 22,
+   "source": null
+  },
+  {
+   "name": "tremor_end",
+   "frame": 24,
+   "source": null,
+   "spacing": "limb_led_recovery"
+  },
+  {
+   "name": "neutral_guard",
+   "frame": 31,
+   "source": null
+  }
+ ],
+ "spacing": {
+  "startup": "charge_long",
+  "active": "hold_recoil",
+  "recovery": "arrive_1_2"
+ },
+ "part_delays": {
+  "chest": 1,
+  "head": 1,
+  "forearm": 0,
+  "hand": 0
+ },
+ "rules": {
+  "villain_hand": {
+   "frames": [
+    4,
+    6,
+    8,
+    11,
+    14
+   ],
+   "min_deg": 25.0,
+   "sides": "r"
+  }
+ },
+ "sheet_extra": {
+  "hold_window": [
+   4,
+   14
+  ],
+  "strike_limb": "arm_r",
+  "strike_side": "arm_r"
+ },
+ "exemptions": [
+  {
+   "check": "balance",
+   "frames": [
+    2,
+    4,
+    6,
+    8,
+    11,
+    14
+   ],
+   "why": "committed forward lunge stance during villain claw strike and stare"
+  }
+ ],
+ "edits": [
+  {
+   "control": "pelvis_ctrl",
+   "attr": "Location",
+   "frames": [
+    2
+   ],
+   "delta": [
+    0.0,
+    10.0,
+    -2.0
+   ],
+   "why": "pelvis lunges forward during preparation"
+  },
+  {
+   "control": "pelvis_ctrl",
+   "attr": "Location",
+   "frames": [
+    4,
+    6,
+    8,
+    11,
+    14,
+    15
+   ],
+   "delta": [
+    0.0,
+    18.0,
+    -4.0
+   ],
+   "why": "pelvis forward +18cm in deep aggressive lunge"
+  },
+  {
+   "control": "pelvis_ctrl",
+   "attr": "Location",
+   "frames": [
+    16,
+    18,
+    20,
+    22,
+    24
+   ],
+   "delta": [
+    0.0,
+    16.0,
+    -3.5
+   ],
+   "why": "pelvis stays rooted in lunge during power tremor"
+  },
+  {
+   "control": "pelvis_ctrl",
+   "attr": "Location",
+   "frames": [
+    27
+   ],
+   "delta": [
+    0.0,
+    8.0,
+    -1.5
+   ],
+   "why": "pelvis rising back toward neutral"
+  },
+  {
+   "control": "spine_02_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    2
+   ],
+   "delta": [
+    0.0,
+    5.0,
+    15.0
+   ],
+   "why": "torso coils back, cocking the right claw"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    2
+   ],
+   "delta": [
+    25.0,
+    30.0,
+    25.0
+   ],
+   "why": "right arm drawn back and high like a coiled predator"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    2
+   ],
+   "delta": [
+    20.0,
+    -40.0,
+    15.0
+   ],
+   "why": "right elbow bent sharply ready to claw downward"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    2
+   ],
+   "delta": [
+    30.0,
+    -35.0,
+    25.0
+   ],
+   "why": "right wrist arched back ready for claw strike"
+  },
+  {
+   "control": "spine_02_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    4
+   ],
+   "delta": [
+    0.0,
+    -12.0,
+    -15.0
+   ],
+   "why": "torso drives forward and downwards into claw slap"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    4
+   ],
+   "delta": [
+    -15.0,
+    -20.0,
+    -30.0
+   ],
+   "why": "right arm slashes diagonally downward into claw impact"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    4
+   ],
+   "delta": [
+    -10.0,
+    25.0,
+    -15.0
+   ],
+   "why": "forearm drives through target"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    4
+   ],
+   "delta": [
+    35.0,
+    -25.0,
+    -25.0
+   ],
+   "why": "villain hand breaks forearm line by 35 deg: claws rake through"
+  },
+  {
+   "control": "spine_02_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    6,
+    8,
+    11,
+    14,
+    15
+   ],
+   "delta": [
+    0.0,
+    -10.0,
+    -12.0
+   ],
+   "why": "torso held forward in dramatic villain pose"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    6,
+    8,
+    11,
+    14,
+    15
+   ],
+   "delta": [
+    -10.0,
+    -15.0,
+    -25.0
+   ],
+   "why": "right arm extended in front, displaying the dark power claws"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    6,
+    8,
+    11,
+    14,
+    15
+   ],
+   "delta": [
+    -5.0,
+    20.0,
+    -10.0
+   ],
+   "why": "right elbow poised showcasing the hand"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    6,
+    8,
+    11,
+    14,
+    15
+   ],
+   "delta": [
+    32.0,
+    -22.0,
+    -20.0
+   ],
+   "why": "villain hand held proudly, fingers curled in sinister claw"
+  },
+  {
+   "control": "head_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    6
+   ],
+   "delta": [
+    0.0,
+    -12.0,
+    20.0
+   ],
+   "why": "head turns to lock eyes onto the striking hand"
+  },
+  {
+   "control": "head_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    8,
+    11,
+    14,
+    15
+   ],
+   "delta": [
+    0.0,
+    -18.0,
+    28.0
+   ],
+   "why": "character intensely stares at right hand ('osserva la mano')"
+  },
+  {
+   "control": "neck_01_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    8,
+    11,
+    14,
+    15
+   ],
+   "delta": [
+    0.0,
+    -8.0,
+    12.0
+   ],
+   "why": "neck pitches and turns supporting the intense gaze"
+  },
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    0,
+    2,
+    4,
+    6,
+    8,
+    11,
+    14,
+    15,
+    16,
+    18,
+    20,
+    22,
+    24
+   ],
+   "delta": [
+    12.0,
+    18.0,
+    28.0
+   ],
+   "why": "left arm stays tucked protectively across ribs throughout lunge"
+  },
+  {
+   "control": "lowerarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    0,
+    2,
+    4,
+    6,
+    8,
+    11,
+    14,
+    15,
+    16,
+    18,
+    20,
+    22,
+    24
+   ],
+   "delta": [
+    0.0,
+    -48.0,
+    32.0
+   ],
+   "why": "left forearm folded horizontally on ribs"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    16
+   ],
+   "delta": [
+    35.0,
+    -19.0,
+    -20.0
+   ],
+   "why": "power tremor 1 (+3.0 deg pitch vibration)"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    18
+   ],
+   "delta": [
+    29.8,
+    -24.2,
+    -20.0
+   ],
+   "why": "power tremor 2 (-2.2 deg pitch vibration)"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    20
+   ],
+   "delta": [
+    33.4,
+    -20.6,
+    -20.0
+   ],
+   "why": "power tremor 3 (+1.4 deg pitch vibration)"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    22
+   ],
+   "delta": [
+    31.2,
+    -22.8,
+    -20.0
+   ],
+   "why": "power tremor 4 (-0.8 deg pitch vibration)"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    24
+   ],
+   "delta": [
+    32.4,
+    -21.6,
+    -20.0
+   ],
+   "why": "power tremor 5 (+0.4 deg pitch vibration, decaying to zero)"
+  },
+  {
+   "control": "head_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    27
+   ],
+   "delta": [
+    0.0,
+    -5.0,
+    8.0
+   ],
+   "why": "gaze begins shifting forward as character rises"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    27
+   ],
+   "delta": [
+    -5.0,
+    -5.0,
+    10.0
+   ],
+   "why": "right arm lowering toward guard"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    27
+   ],
+   "delta": [
+    -15.0,
+    10.0,
+    5.0
+   ],
+   "why": "forearm relaxes"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    27
+   ],
+   "delta": [
+    15.0,
+    -10.0,
+    -5.0
+   ],
+   "why": "claws relax back to combat hand"
+  }
+ ],
+ "hitstop_blend": [
+  {
+   "frame": 4,
+   "toward": 6,
+   "amount": 0.15,
+   "match": [
+    "spine",
+    "pelvis"
+   ],
+   "why": "smooth entry into claw impact hold"
+  }
+ ],
+ "author": {
+  "take": "AS_Pilot_OverlordJab2",
+  "frames": 32,
+  "thumb": "open",
+  "poses": {
+   "0": {
+    "pelvis": {
+     "loc": [
+      0,
+      2.0,
+      0.0
+     ],
+     "rot": [
+      -1.0,
+      0,
+      12.0
+     ]
+    },
+    "spine": [
+     -4.0,
+     0,
+     14.0
+    ],
+    "head": [
+     4.0,
+     0,
+     -10.0
+    ],
+    "arm_l": {
+     "hand": [
+      -5.0,
+      14.0,
+      -15.0
+     ],
+     "pole": [
+      32.0,
+      12.0,
+      -25.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -40.0,
+      30.0,
+      -5.0
+     ],
+     "pole": [
+      -45.0,
+      12.0,
+      -25.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.0,
+      12.0,
+      -81.2
+     ],
+     "pole": [
+      20.0,
+      40.0,
+      -40.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.0,
+      -15.0,
+      -81.2
+     ],
+     "pole": [
+      -20.0,
+      20.0,
+      -40.0
+     ]
+    },
+    "fingers": [
+     0.3,
+     0,
+     0
+    ],
+    "wrist_out": [
+     15.0,
+     0,
+     0
+    ]
+   },
+   "2": {
+    "pelvis": {
+     "loc": [
+      0,
+      8.0,
+      -2.5
+     ],
+     "rot": [
+      -6.0,
+      0,
+      -15.0
+     ]
+    },
+    "spine": [
+     -10.0,
+     0,
+     -18.0
+    ],
+    "head": [
+     8.0,
+     0,
+     20.0
+    ],
+    "arm_l": {
+     "hand": [
+      20.0,
+      15.0,
+      -12.0
+     ],
+     "pole": [
+      45.0,
+      10.0,
+      -30.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -25.0,
+      -5.0,
+      22.0
+     ],
+     "pole": [
+      -55.0,
+      -10.0,
+      5.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.0,
+      22.0,
+      -81.2
+     ],
+     "pole": [
+      20.0,
+      50.0,
+      -35.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.0,
+      -15.0,
+      -81.2
+     ],
+     "pole": [
+      -20.0,
+      15.0,
+      -40.0
+     ]
+    },
+    "fingers": [
+     1.0,
+     0,
+     0
+    ],
+    "wrist_out": [
+     40.0,
+     0,
+     0
+    ]
+   },
+   "4": {
+    "pelvis": {
+     "loc": [
+      0,
+      18.0,
+      -3.0
+     ],
+     "rot": [
+      -8.0,
+      0,
+      18.0
+     ]
+    },
+    "spine": [
+     -12.0,
+     0,
+     24.0
+    ],
+    "head": [
+     8.0,
+     0,
+     -10.0
+    ],
+    "arm_l": {
+     "hand": [
+      25.0,
+      -5.0,
+      -15.0
+     ],
+     "pole": [
+      50.0,
+      -15.0,
+      -25.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -10.0,
+      48.0,
+      5.0
+     ],
+     "pole": [
+      -40.0,
+      20.0,
+      -10.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.0,
+      30.0,
+      -81.2
+     ],
+     "pole": [
+      20.0,
+      60.0,
+      -35.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.0,
+      -15.0,
+      -81.2
+     ],
+     "pole": [
+      -20.0,
+      10.0,
+      -42.0
+     ]
+    },
+    "fingers": [
+     1.0,
+     0,
+     0
+    ],
+    "wrist_out": [
+     45.0,
+     0,
+     0
+    ]
+   },
+   "6": {
+    "pelvis": {
+     "loc": [
+      0,
+      18.0,
+      -2.5
+     ],
+     "rot": [
+      -7.0,
+      0,
+      22.0
+     ]
+    },
+    "spine": [
+     -10.0,
+     0,
+     26.0
+    ],
+    "head": [
+     6.0,
+     0,
+     -12.0
+    ],
+    "arm_l": {
+     "hand": [
+      26.0,
+      -8.0,
+      -15.0
+     ],
+     "pole": [
+      52.0,
+      -18.0,
+      -25.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      5.0,
+      46.0,
+      -2.0
+     ],
+     "pole": [
+      -32.0,
+      18.0,
+      -15.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.0,
+      30.0,
+      -81.2
+     ],
+     "pole": [
+      20.0,
+      60.0,
+      -35.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.0,
+      -15.0,
+      -81.2
+     ],
+     "pole": [
+      -20.0,
+      10.0,
+      -42.0
+     ]
+    },
+    "fingers": [
+     1.0,
+     0,
+     0
+    ],
+    "wrist_out": [
+     40.0,
+     0,
+     0
+    ]
+   },
+   "8": {
+    "pelvis": {
+     "loc": [
+      0,
+      17.5,
+      -2.0
+     ],
+     "rot": [
+      -6.0,
+      0,
+      20.0
+     ]
+    },
+    "spine": [
+     -8.0,
+     0,
+     22.0
+    ],
+    "head": [
+     -8.0,
+     0,
+     32.0
+    ],
+    "arm_l": {
+     "hand": [
+      22.0,
+      -2.0,
+      -18.0
+     ],
+     "pole": [
+      48.0,
+      -10.0,
+      -28.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      2.0,
+      42.0,
+      4.0
+     ],
+     "pole": [
+      -28.0,
+      18.0,
+      -12.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.0,
+      30.0,
+      -81.2
+     ],
+     "pole": [
+      20.0,
+      60.0,
+      -35.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.0,
+      -15.0,
+      -81.2
+     ],
+     "pole": [
+      -20.0,
+      10.0,
+      -42.0
+     ]
+    },
+    "fingers": [
+     1.0,
+     0,
+     0
+    ],
+    "wrist_out": [
+     38.0,
+     0,
+     0
+    ]
+   },
+   "14": {
+    "pelvis": {
+     "loc": [
+      0,
+      17.0,
+      -1.8
+     ],
+     "rot": [
+      -5.0,
+      0,
+      18.0
+     ]
+    },
+    "spine": [
+     -7.0,
+     0,
+     20.0
+    ],
+    "head": [
+     -10.0,
+     0,
+     35.0
+    ],
+    "arm_l": {
+     "hand": [
+      20.0,
+      0.0,
+      -20.0
+     ],
+     "pole": [
+      45.0,
+      -8.0,
+      -30.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      1.0,
+      40.0,
+      5.0
+     ],
+     "pole": [
+      -26.0,
+      18.0,
+      -10.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.0,
+      30.0,
+      -81.2
+     ],
+     "pole": [
+      20.0,
+      60.0,
+      -35.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.0,
+      -15.0,
+      -81.2
+     ],
+     "pole": [
+      -20.0,
+      10.0,
+      -42.0
+     ]
+    },
+    "fingers": [
+     0.95,
+     0,
+     0
+    ],
+    "wrist_out": [
+     36.0,
+     0,
+     0
+    ]
+   },
+   "16": {
+    "pelvis": {
+     "loc": [
+      0,
+      16.0,
+      -1.5
+     ],
+     "rot": [
+      -4.0,
+      0,
+      16.0
+     ]
+    },
+    "spine": [
+     -6.0,
+     0,
+     17.0
+    ],
+    "head": [
+     -8.0,
+     0,
+     30.0
+    ],
+    "arm_l": {
+     "hand": [
+      18.0,
+      5.0,
+      -20.0
+     ],
+     "pole": [
+      42.0,
+      -5.0,
+      -30.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      0.0,
+      38.5,
+      5.8
+     ],
+     "pole": [
+      -28.0,
+      16.0,
+      -12.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.0,
+      30.0,
+      -81.2
+     ],
+     "pole": [
+      20.0,
+      60.0,
+      -35.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.0,
+      -15.0,
+      -81.2
+     ],
+     "pole": [
+      -20.0,
+      10.0,
+      -42.0
+     ]
+    },
+    "fingers": [
+     0.9,
+     0,
+     0
+    ],
+    "wrist_out": [
+     35.0,
+     0,
+     0
+    ]
+   },
+   "17": {
+    "pelvis": {
+     "loc": [
+      0,
+      15.0,
+      -1.4
+     ],
+     "rot": [
+      -4.0,
+      0,
+      15.0
+     ]
+    },
+    "spine": [
+     -6.0,
+     0,
+     16.0
+    ],
+    "head": [
+     -7.0,
+     0,
+     28.0
+    ],
+    "arm_l": {
+     "hand": [
+      18.0,
+      6.0,
+      -20.0
+     ],
+     "pole": [
+      42.0,
+      -5.0,
+      -30.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      2.0,
+      37.5,
+      4.2
+     ],
+     "pole": [
+      -28.0,
+      16.0,
+      -12.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.0,
+      30.0,
+      -81.2
+     ],
+     "pole": [
+      20.0,
+      60.0,
+      -35.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.0,
+      -15.0,
+      -81.2
+     ],
+     "pole": [
+      -20.0,
+      10.0,
+      -42.0
+     ]
+    },
+    "fingers": [
+     0.85,
+     0,
+     0
+    ],
+    "wrist_out": [
+     28.0,
+     0,
+     0
+    ]
+   },
+   "18": {
+    "pelvis": {
+     "loc": [
+      0,
+      14.0,
+      -1.3
+     ],
+     "rot": [
+      -3.5,
+      0,
+      14.0
+     ]
+    },
+    "spine": [
+     -5.5,
+     0,
+     15.0
+    ],
+    "head": [
+     -6.0,
+     0,
+     26.0
+    ],
+    "arm_l": {
+     "hand": [
+      17.0,
+      7.0,
+      -19.0
+     ],
+     "pole": [
+      41.0,
+      -4.0,
+      -30.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -1.0,
+      36.8,
+      5.2
+     ],
+     "pole": [
+      -29.0,
+      15.0,
+      -13.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.0,
+      28.0,
+      -81.2
+     ],
+     "pole": [
+      20.0,
+      58.0,
+      -36.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.0,
+      -15.0,
+      -81.2
+     ],
+     "pole": [
+      -20.0,
+      12.0,
+      -41.0
+     ]
+    },
+    "fingers": [
+     0.8,
+     0,
+     0
+    ],
+    "wrist_out": [
+     32.0,
+     0,
+     0
+    ]
+   },
+   "19": {
+    "pelvis": {
+     "loc": [
+      0,
+      13.0,
+      -1.2
+     ],
+     "rot": [
+      -3.5,
+      0,
+      13.0
+     ]
+    },
+    "spine": [
+     -5.5,
+     0,
+     13.5
+    ],
+    "head": [
+     -5.0,
+     0,
+     23.0
+    ],
+    "arm_l": {
+     "hand": [
+      17.0,
+      8.0,
+      -19.0
+     ],
+     "pole": [
+      41.0,
+      -3.0,
+      -30.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      1.0,
+      35.5,
+      4.4
+     ],
+     "pole": [
+      -30.0,
+      15.0,
+      -14.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.0,
+      26.0,
+      -81.2
+     ],
+     "pole": [
+      20.0,
+      55.0,
+      -37.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.0,
+      -15.0,
+      -81.2
+     ],
+     "pole": [
+      -20.0,
+      14.0,
+      -41.0
+     ]
+    },
+    "fingers": [
+     0.75,
+     0,
+     0
+    ],
+    "wrist_out": [
+     27.0,
+     0,
+     0
+    ]
+   },
+   "20": {
+    "pelvis": {
+     "loc": [
+      0,
+      12.0,
+      -1.0
+     ],
+     "rot": [
+      -3.0,
+      0,
+      12.0
+     ]
+    },
+    "spine": [
+     -5.0,
+     0,
+     12.0
+    ],
+    "head": [
+     -4.0,
+     0,
+     20.0
+    ],
+    "arm_l": {
+     "hand": [
+      16.0,
+      10.0,
+      -18.0
+     ],
+     "pole": [
+      40.0,
+      0.0,
+      -30.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -3.0,
+      34.8,
+      4.8
+     ],
+     "pole": [
+      -34.0,
+      14.0,
+      -16.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.0,
+      24.0,
+      -81.2
+     ],
+     "pole": [
+      20.0,
+      52.0,
+      -38.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.0,
+      -15.0,
+      -81.2
+     ],
+     "pole": [
+      -20.0,
+      16.0,
+      -40.0
+     ]
+    },
+    "fingers": [
+     0.65,
+     0,
+     0
+    ],
+    "wrist_out": [
+     25.0,
+     0,
+     0
+    ]
+   },
+   "22": {
+    "pelvis": {
+     "loc": [
+      0,
+      9.0,
+      -0.8
+     ],
+     "rot": [
+      -2.5,
+      0,
+      9.0
+     ]
+    },
+    "spine": [
+     -4.5,
+     0,
+     9.0
+    ],
+    "head": [
+     -1.0,
+     0,
+     14.0
+    ],
+    "arm_l": {
+     "hand": [
+      16.0,
+      13.0,
+      -15.0
+     ],
+     "pole": [
+      41.0,
+      2.0,
+      -30.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -8.0,
+      32.0,
+      1.0
+     ],
+     "pole": [
+      -36.0,
+      13.0,
+      -20.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.0,
+      20.0,
+      -81.2
+     ],
+     "pole": [
+      20.0,
+      48.0,
+      -39.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.0,
+      -15.0,
+      -81.2
+     ],
+     "pole": [
+      -20.0,
+      18.0,
+      -40.0
+     ]
+    },
+    "fingers": [
+     0.5,
+     0,
+     0
+    ],
+    "wrist_out": [
+     18.0,
+     0,
+     0
+    ]
+   },
+   "24": {
+    "pelvis": {
+     "loc": [
+      0,
+      6.0,
+      -0.5
+     ],
+     "rot": [
+      -2.0,
+      0,
+      6.0
+     ]
+    },
+    "spine": [
+     -4.0,
+     0,
+     6.0
+    ],
+    "head": [
+     2.0,
+     0,
+     8.0
+    ],
+    "arm_l": {
+     "hand": [
+      16.0,
+      16.0,
+      -12.0
+     ],
+     "pole": [
+      42.0,
+      5.0,
+      -30.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -14.0,
+      28.0,
+      -4.0
+     ],
+     "pole": [
+      -40.0,
+      12.0,
+      -24.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.0,
+      16.0,
+      -81.2
+     ],
+     "pole": [
+      20.0,
+      44.0,
+      -40.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.0,
+      -15.0,
+      -81.2
+     ],
+     "pole": [
+      -20.0,
+      19.0,
+      -40.0
+     ]
+    },
+    "fingers": [
+     0.3,
+     0,
+     0
+    ],
+    "wrist_out": [
+     10.0,
+     0,
+     0
+    ]
+   },
+   "31": {
+    "pelvis": {
+     "loc": [
+      0,
+      0,
+      0
+     ],
+     "rot": [
+      0,
+      0,
+      0
+     ]
+    },
+    "spine": [
+     -5.0,
+     0,
+     0
+    ],
+    "head": [
+     5.0,
+     0,
+     0
+    ],
+    "arm_l": {
+     "hand": [
+      20.0,
+      22.0,
+      -10.0
+     ],
+     "pole": [
+      45.0,
+      10.0,
+      -30.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -20.0,
+      25.0,
+      -12.0
+     ],
+     "pole": [
+      -45.0,
+      10.0,
+      -30.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.0,
+      12.0,
+      -81.2
+     ],
+     "pole": [
+      20.0,
+      40.0,
+      -40.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.0,
+      -15.0,
+      -81.2
+     ],
+     "pole": [
+      -20.0,
+      20.0,
+      -40.0
+     ]
+    },
+    "fingers": [
+     0,
+     0,
+     0
+    ],
+    "wrist_out": [
+     0,
+     0,
+     0
+    ]
+   }
+  }
+ }
+}

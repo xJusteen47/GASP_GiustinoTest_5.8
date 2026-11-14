@@ -6,13 +6,16 @@
              <move> --none --why="..."      record that no in-between is needed;  --drop=6,11 removes claude in-betweens
     build    <move>                         card -> rig -> clip in the engine (needs the engine)
     check    <move>                         numeric gates only (no image, no interpolation)
-    render   <move> [--force]               one composite image + manifest.json in visual/<move>/r<N>/ (refused while check fails)
+    render   <move> [--force] [--standalone [--azs=90,0,45 --hitstop=8 --at=N]]   one composite image + manifest.json in visual/<move>/r<N>/ (refused while check fails)
     verdict  <move> [--round=N]             validate visual/<move>/r<N>/verdict.json written by the reviewer
     owner-ok <move> --quote="..." [--round=N]   record the owner's own words on a round (only the owner gives an ok)
     approve  <move> [--frames=] [--parts=] [--why=]   lock poses; refused without owner-ok on the current round
     export   <move>                         card -> Cascadeur scene (needs the engine)
     variant  new|show|apply|discard <move> [--why=] [--quote=]   one variant per round, the original is never touched
                                             until the owner's "applica" (apply needs --quote)
+    (render/approve --frames, interp --drop/--from) take --video: the numbers are frames of the in-game video (v<N>); the
+    result carries frame_map: "v13 = anim 13: between keys 11 and 14", printed before anything is written.
+    verify   <move> --req=<file.json>       measurable requirements, PASS/FAIL per line (animpipe/verify.py)
     snapshot <move> [--why=] | --list       zip of card + owner keys + locks + manual layer (automatic before every write)
     restore  <move> <date>|last             put a snapshot back (snapshot of the current state first)
     revert   <move>                         = restore the snapshot taken before the last import
@@ -28,7 +31,7 @@ from animpipe import config as K
 from animpipe import snapshots as S
 
 OK, GATE, USAGE, OWNER, APP = 0, 1, 2, 3, 4
-VERBS = ("status", "import", "interp", "build", "check", "render", "verdict", "owner-ok", "approve", "export", "variant",
+VERBS = ("status", "import", "interp", "build", "check", "render", "verify", "verdict", "owner-ok", "approve", "export", "variant",
          "snapshot", "restore", "revert")
 WRITERS = {"import", "interp", "build", "variant apply", "restore", "approve", "export"}     # take a snapshot first
 MAX_FIX = 2                     # failed checks in a row before the owner is asked (token rule: max 2 attempts)
@@ -44,7 +47,7 @@ class Stop(Exception):
 def card_path(move):
     if move.endswith(".json") or os.sep in move or "/" in move:
         raise Stop(USAGE, f"give the move name, not a path: {move}")
-    hits = glob.glob(os.path.join(K.CARDS, "*", f"{move}.json")) + glob.glob(os.path.join(K.CARDS, f"{move}.json"))
+    hits = list(dict.fromkeys(glob.glob(os.path.join(K.CARDS, "**", f"{move}.json"), recursive=True) + glob.glob(os.path.join(K.CARDS, f"{move}.json"))))
     if len(hits) != 1:
         raise Stop(USAGE, f"move {move}: {len(hits)} cards found under {K.CARDS}")
     return os.path.abspath(hits[0])
@@ -52,7 +55,7 @@ def card_path(move):
 
 def moves():
     out = []
-    for p in sorted(glob.glob(os.path.join(K.CARDS, "*", "*.json"))):
+    for p in sorted(glob.glob(os.path.join(K.CARDS, "**", "*.json"), recursive=True)):
         name = os.path.basename(p)[:-5]
         try:
             with open(p, encoding="utf-8") as f:
@@ -236,6 +239,30 @@ def _app_down(e):
     return isinstance(e, OSError) and getattr(e, "winerror", None) in (10061, 10060) or "refused" in str(e).lower() and "approve" not in str(e)
 
 
+# --- video frames: the owner counts frames of the in-game video, the card counts anim frames (animpipe/vframes.py) ---
+def _vmap(move, o, frames, video):
+    """frames as given -> anim frames. With --video they are video frames (--at/--hitstop set the freeze, default: first
+    contact, 8). Stores the printed "requested frame -> key/segment touched" map in o["_fmap"] (result.frame_map)."""
+    from animpipe import card as C, vframes as V
+    c = read(card_path(move))
+    a0, hit = V.params(c, o)
+    try:
+        anim = V.to_anim_list(frames, a0, hit) if video else list(frames)
+    except ValueError as e:
+        raise Stop(USAGE, str(e))
+    rows = V.frame_map(c, anim, a0, hit, owner_frames(c, move))
+    o.setdefault("_fmap", []).extend([V.line(r) for r in rows] + ([f"hitstop {hit} at anim {a0}"] if video else []))
+    return anim
+
+
+def _timeline_opts(move, verb, o):
+    """--frames / --drop on render and approve and interp: honour --video, print the map. interp --from is done in v_interp."""
+    video = "video" in o
+    for key in ("frames", "drop"):
+        if o.get(key) and (key == "drop") == (verb == "interp"):
+            o[key] = ",".join(str(f) for f in _vmap(move, o, __import__("animpipe.vframes", fromlist=["x"]).parse(o[key]), video))
+
+
 # --- verbs ---
 def v_status(move, a, o):
     st = state(move)
@@ -321,6 +348,10 @@ def v_interp(move, a, o):
     added = []
     if o.get("from"):
         spec = read(o["from"])
+        if spec.get("poses"):
+            conv = _vmap(move, o, [p.get("frame") for p in spec["poses"] if isinstance(p.get("frame"), int)], "video" in o)
+            for p, f in zip([p for p in spec["poses"] if isinstance(p.get("frame"), int)], conv):
+                p["frame"] = f
         for p in spec.get("poses", []):
             f = p.get("frame")
             if not isinstance(f, int) or not 0 < f < n:
@@ -383,6 +414,23 @@ def v_check(move, a, o):
     return (OK if v["verdict"] == "PASS" else GATE), {"build": b["seq"], "verdict": v["verdict"], "blocking": bad}, log
 
 
+def _render_standalone(move, card, o):
+    """In-game videos from a second, separate editor process on the saved capture map (animpipe/standalone.py): no UnrealMCP,
+    nothing of the owner's editor is used or touched. Writes sheets/ingame/<move>_az<N>_ingame{,_whiff,_compare}.mp4 + strip."""
+    from animpipe import standalone as SA, vframes as V
+    c = read(card)
+    a0, hit = V.params(c, o)
+    azs = [int(x) for x in (o.get("azs") or "90,0,45").split(",")]
+    try:
+        r = SA.run(c, card, azs, hit, int(o["at"]) if o.get("at") else None)
+    except SA.Unavailable as e:
+        raise Stop(APP, f"standalone render not possible here: {e}")
+    except RuntimeError as e:
+        raise Stop(GATE, str(e)[:400])
+    return OK, {"standalone": True, "azs": azs, "hitstop": hit, "at": a0, "files": r["files"][:12], "editor_log": r["log"],
+                "video_frames": "v<N> in every video = the owner's frame count (0-based); f<n> = anim frame"}, ""
+
+
 def v_render(move, a, o):
     from animpipe import poses
     card = card_path(move)
@@ -392,6 +440,8 @@ def v_render(move, a, o):
     ch = last(move, "check", build=b["seq"])
     if (not ch or ch["exit"] != 0) and "force" not in o:
         raise Stop(GATE, "no render while the numeric gates fail on this build (check first)")
+    if "standalone" in o:
+        return _render_standalone(move, card, o)
     _, log = _need_app(poses.run, card, {k: o[k] for k in ("frames", "take", "over") if k in o})
     img = [l for l in log.splitlines() if l.strip().lower().endswith(".png")]
     if not img or not os.path.exists(img[-1].strip()):
@@ -407,6 +457,22 @@ def v_render(move, a, o):
           "image": "grid.png", "keys": key_frames(c), "owner_keys": sorted(owner_frames(c, move)),
           "inbetweens": [{"frame": q["frame"], "why": q.get("why")} for q in c["poses"] if q.get("origin") == "claude"]})
     return OK, {"round": rnd, "build": b["seq"], "image": os.path.join(d, "grid.png")}, log
+
+
+def v_verify(move, a, o):
+    """Measurable requirements -> PASS/FAIL per line (animpipe/verify.py). Read-only; exit 1 when a line fails."""
+    from animpipe import verify as VF
+    if not o.get("req") or not os.path.exists(o["req"]):
+        raise Stop(USAGE, "verify needs --req=<file.json> (format: animpipe/verify.py docstring)")
+    c = read(card_path(move))
+    try:
+        rows, take, src = VF.run(c, read(o["req"]), os.path.join(K.TOOLS, "sheets", "raw"))
+    except FileNotFoundError as e:
+        raise Stop(GATE, str(e))
+    out = os.path.join(K.OUT, f"{move}_verify.json")
+    write(out, {"take": take, "dump": src, "rows": rows})
+    bad = [r for r in rows if not r["ok"]]
+    return (OK if not bad else GATE), {"pass": len(rows) - len(bad), "fail": len(bad), "lines": [r["line"] for r in rows][:8], "file": out}, ""
 
 
 def v_verdict(move, a, o):
@@ -522,7 +588,7 @@ def v_variant(move, a, o):
 
 
 TABLE = {"status": v_status, "snapshot": v_snapshot, "restore": v_restore, "revert": v_revert, "import": v_import,
-         "interp": v_interp, "build": v_build, "check": v_check, "render": v_render, "verdict": v_verdict,
+         "interp": v_interp, "build": v_build, "check": v_check, "render": v_render, "verify": v_verify, "verdict": v_verdict,
          "owner-ok": v_owner_ok, "approve": v_approve, "export": v_export, "variant": v_variant}
 
 
@@ -543,12 +609,18 @@ def run(argv):
         if key in WRITERS:
             o["_sha_before"] = S.sha(card)
             o["_snapshot"] = S.take(move, card, f"before {key}", verb)
+        if verb in ("render", "approve", "interp"):
+            _timeline_opts(move, verb, o)
         code, result, log = TABLE[verb](move, pos[1:], o)
+        if "_fmap" in o:
+            result["frame_map"] = o["_fmap"]
         if "_snapshot" in o:
             result["snapshot"] = o["_snapshot"]
     except Stop as e:
         code, result = e.code, e.result
         log = result.pop("log", "")
+        if "_fmap" in o:
+            result["frame_map"] = o["_fmap"]
     except Exception as e:
         code, result, log = GATE, {"error": f"{type(e).__name__}: {str(e)[:300]}"}, traceback.format_exc()
     rec = None

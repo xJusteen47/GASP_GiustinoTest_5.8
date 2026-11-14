@@ -1,0 +1,1896 @@
+{
+ "move": "overlord_jab2_v3",
+ "class": "jab",
+ "anim": "/Game/AnimPipeline/Rig/AS_OverlordJab2V3_Build",
+ "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+ "fps": 60,
+ "timing_csv": "refs/ufd/OverlordJab2V3_timing.csv",
+ "anim_active": [
+  9,
+  11
+ ],
+ "faf_game": 27,
+ "effector": "hand_r",
+ "_design": "Overlord jab 2 v3 (ANIM-JAB-5, 2026-11-12) from cards/overlord/jab/overlord_jab_v3_pose_plan.md: villain claw slap with a step forward, then he looks at his hand. f0 = jab 1 f12. f3 weight onto the right foot, f6 windup (left knee up, chest 55 right, claw high behind the head), f8 left foot lands heel first, f9 contact in a deep lunge with the arm on a descending diagonal, f13 rake to low-left at the lowest point, f20 observe (forearm vertical in front of the face) held to the FAF f26; tremor f27-37 lives in the Manuale layer; clench f38-41, head up first, right foot steps up to the idle stance f41-47, idle f52 30 cm ahead of the start.",
+ "_changes": "v3: new card, nothing reused from v2 (rejected in game as static). Adds the 30 cm step as root motion.",
+ "_tremor": "Not in the card: the hand tremor f27-37 is keyed on hand_r_fk_ctrl Rotation in the additive 'Manuale' section of LS_OverlordJab2V3_Build (see v2 _tremor), zero at f26 and f38.",
+ "_root_motion": "StepForwardCm=30 as root motion: root_ctrl Location Y += the ROOT table through `edits` (0 at f0-3, 3 at f6, 8 at f7, 17 at f8, 30 from f9 to the end). Author poses are ROOT-relative: the right foot is planted in the world until f41, so its root-space Y is (stomp spot - root) on exactly the same keys and profiles; the left foot lands 30 cm ahead in the world at f8 (= its idle root-space spot from f9). Assumes root_ctrl's local Y is component +Y and that body/feet controls are children of root_ctrl (UNTESTED in Unreal).",
+ "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordJab2_V3",
+ "poses": [
+  {
+   "name": "from_jab1_f12",
+   "frame": 0,
+   "source": null,
+   "spacing": "limb_led_recovery"
+  },
+  {
+   "name": "break",
+   "frame": 3,
+   "source": null,
+   "spacing": "limb_led_recovery"
+  },
+  {
+   "name": "windup",
+   "frame": 6,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "claw_10",
+   "frame": 7,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "drive_land",
+   "frame": 8,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "contact",
+   "frame": 9,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "active_end",
+   "frame": 11,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "release_start",
+   "frame": 12,
+   "source": null,
+   "spacing": "limb_led_recovery"
+  },
+  {
+   "name": "rake_low",
+   "frame": 13,
+   "source": null,
+   "spacing": "arrive_1_2"
+  },
+  {
+   "name": "observe",
+   "frame": 20,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "faf",
+   "frame": 26,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "tremor_end_clench",
+   "frame": 38,
+   "source": null,
+   "spacing": "limb_led_recovery"
+  },
+  {
+   "name": "head_up_fist",
+   "frame": 41,
+   "source": null,
+   "spacing": "limb_led_recovery"
+  },
+  {
+   "name": "step_up",
+   "frame": 44,
+   "source": null,
+   "spacing": "limb_led_recovery"
+  },
+  {
+   "name": "step_land",
+   "frame": 47,
+   "source": null,
+   "spacing": "limb_led_recovery"
+  },
+  {
+   "name": "settle",
+   "frame": 49,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "idle_end",
+   "frame": 52,
+   "source": null
+  }
+ ],
+ "spacing": {
+  "startup": "limb_led_recovery",
+  "active": "hold_recoil",
+  "recovery": "limb_led_recovery"
+ },
+ "part_delays": {
+  "chest": 0,
+  "head": 0,
+  "forearm": 0,
+  "hand": 0
+ },
+ "_part_delays_why": "0 on purpose: chest_ctrl and lowerarm FK keys place the shoulder and the elbow, so a chest/forearm delay moves the wrist off the f9 contact; a head delay makes the head lag a trunk unwinding ~30 deg/frame and look away at contact (the head counter-turns to stay on the target); the wrist cock/flick is authored per key (7, 8, 9, 11). The chain lag (R3) is written into the dense startup keys instead.",
+ "edits": [
+  {
+   "control": "root_ctrl",
+   "attr": "Location",
+   "frames": [
+    6
+   ],
+   "delta": [
+    0,
+    3.0,
+    0
+   ],
+   "why": "root motion: the step forward StepForwardCm=30 carried by the root bone (3 cm on these keys); the body stays root-relative in the author poses (planted right foot travels back by the same amount)"
+  },
+  {
+   "control": "root_ctrl",
+   "attr": "Location",
+   "frames": [
+    7
+   ],
+   "delta": [
+    0,
+    8.0,
+    0
+   ],
+   "why": "root motion: the step forward StepForwardCm=30 carried by the root bone (8 cm on these keys); the body stays root-relative in the author poses (planted right foot travels back by the same amount)"
+  },
+  {
+   "control": "root_ctrl",
+   "attr": "Location",
+   "frames": [
+    8
+   ],
+   "delta": [
+    0,
+    17.0,
+    0
+   ],
+   "why": "root motion: the step forward StepForwardCm=30 carried by the root bone (17 cm on these keys); the body stays root-relative in the author poses (planted right foot travels back by the same amount)"
+  },
+  {
+   "control": "root_ctrl",
+   "attr": "Location",
+   "frames": [
+    9,
+    11,
+    12,
+    13,
+    20,
+    26,
+    38,
+    41,
+    44,
+    47,
+    49,
+    52
+   ],
+   "delta": [
+    0,
+    30.0,
+    0
+   ],
+   "why": "root motion: the step forward StepForwardCm=30 carried by the root bone (30 cm on these keys); the body stays root-relative in the author poses (planted right foot travels back by the same amount)"
+  }
+ ],
+ "sheet_extra": {
+  "hold_window": [
+   9,
+   26
+  ],
+  "strike_limb": "arm_r",
+  "strike_side": "arm_r"
+ },
+ "planted": [],
+ "_planted_why": "both feet step: the left foot f3-8 (lands 30 cm ahead), the right foot steps up f41-47; the right foot is world-planted f0-41 but moves in root space f3-9 with the root, so the root-space pin does not apply (plan: planted_feet exemptions)",
+ "exemptions": [],
+ "author": {
+  "take": "AS_Pilot_OverlordJab2_V3",
+  "frames": 53,
+  "thumb": "open",
+  "poses": {
+   "0": {
+    "pelvis": {
+     "loc": [
+      -3.0,
+      9.5,
+      -2.0
+     ],
+     "rot": [
+      0.0,
+      -2.0,
+      -3.0
+     ]
+    },
+    "spine": [
+     -6.5,
+     -6.1,
+     -85.8
+    ],
+    "head": [
+     21.3,
+     6.1,
+     89.5
+    ],
+    "clavicle_r": [
+     4.0,
+     -4.1,
+     -23.6
+    ],
+    "arm_r": {
+     "hand": [
+      -63.5,
+      -2.1,
+      18.4
+     ],
+     "pole": [
+      -43.6,
+      -8.5,
+      -6.2
+     ],
+     "hand_rot": [
+      -4.9,
+      17.9,
+      -3.3
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      -4.1,
+      19.4,
+      -19.9
+     ],
+     "pole": [
+      25.2,
+      28.8,
+      -27.1
+     ],
+     "hand_rot": [
+      3.0,
+      -27.1,
+      6.5
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      17.6,
+      7.8,
+      -77.4
+     ],
+     "pole": [
+      3.8,
+      49.1,
+      -39.6
+     ],
+     "foot_rot": [
+      7.9,
+      2.1,
+      -6.2
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -15.6,
+      -16.2,
+      -79.0
+     ],
+     "pole": [
+      -26.7,
+      33.3,
+      -40.4
+     ],
+     "foot_rot": [
+      9.2,
+      12.3,
+      28.5
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ]
+   },
+   "3": {
+    "pelvis": {
+     "loc": [
+      -6.0,
+      -4.0,
+      -0.5
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      12.0
+     ]
+    },
+    "spine": [
+     4.0,
+     0.0,
+     -40.0
+    ],
+    "head": [
+     -4.0,
+     0.0,
+     28.0
+    ],
+    "clavicle_r": [
+     6.4,
+     11.9,
+     6.9
+    ],
+    "arm_r": {
+     "hand": [
+      -37.7,
+      -15.7,
+      39.7
+     ],
+     "pole": [
+      -35.3,
+      -29.9,
+      14.6
+     ],
+     "hand_rot": [
+      1.6,
+      -10.6,
+      -28.0
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      -4.2,
+      35.4,
+      -21.7
+     ],
+     "pole": [
+      22.9,
+      23.1,
+      -14.6
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -10.8,
+      0.3,
+      -81.0
+     ],
+     "pole": [
+      -12.8,
+      44.0,
+      -41.9
+     ],
+     "foot_rot": [
+      -2.9,
+      10.8,
+      30.7
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      27.8,
+      18.3,
+      -72.4
+     ],
+     "pole": [
+      35.1,
+      50.8,
+      -28.7
+     ],
+     "foot_rot": [
+      -19.3,
+      0.6,
+      12.6
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ]
+   },
+   "6": {
+    "pelvis": {
+     "loc": [
+      -8.0,
+      -12.0,
+      1.0
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      22.0
+     ]
+    },
+    "spine": [
+     12.0,
+     0.0,
+     33.0
+    ],
+    "head": [
+     -12.0,
+     0.0,
+     -52.0
+    ],
+    "clavicle_r": [
+     -17.4,
+     10.3,
+     13.3
+    ],
+    "clavicle_l": [
+     4.1,
+     -5.0,
+     13.1
+    ],
+    "arm_r": {
+     "hand": [
+      -33.6,
+      -10.2,
+      48.4
+     ],
+     "pole": [
+      -32.0,
+      13.4,
+      19.8
+     ],
+     "hand_rot": [
+      -1.0,
+      3.5,
+      -4.8
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      48.0,
+      32.3,
+      -20.8
+     ],
+     "pole": [
+      36.5,
+      12.6,
+      -12.0
+     ],
+     "hand_rot": [
+      3.3,
+      -9.2,
+      2.0
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -6.8,
+      6.1,
+      -82.5
+     ],
+     "pole": [
+      -3.0,
+      46.8,
+      -42.6
+     ],
+     "foot_rot": [
+      -11.9,
+      7.8,
+      31.7
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      37.3,
+      23.2,
+      -65.6
+     ],
+     "pole": [
+      41.1,
+      48.3,
+      -13.9
+     ],
+     "foot_rot": [
+      -22.0,
+      3.5,
+      9.5
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ]
+   },
+   "7": {
+    "pelvis": {
+     "loc": [
+      -7.5,
+      -16.0,
+      0.5
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      19.0
+     ]
+    },
+    "spine": [
+     10.0,
+     0.0,
+     34.0
+    ],
+    "head": [
+     -10.0,
+     0.0,
+     -50.0
+    ],
+    "clavicle_r": [
+     -17.2,
+     12.0,
+     9.0
+    ],
+    "clavicle_l": [
+     2.9,
+     -3.4,
+     9.4
+    ],
+    "arm_r": {
+     "hand": [
+      -26.3,
+      -2.9,
+      41.7
+     ],
+     "pole": [
+      -29.5,
+      16.2,
+      15.2
+     ],
+     "hand_rot": [
+      -6.1,
+      5.7,
+      -11.2
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      43.4,
+      24.1,
+      -26.0
+     ],
+     "pole": [
+      31.6,
+      5.9,
+      -14.2
+     ],
+     "hand_rot": [
+      9.5,
+      -21.1,
+      6.3
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -7.9,
+      4.9,
+      -82.0
+     ],
+     "pole": [
+      -5.9,
+      46.4,
+      -42.4
+     ],
+     "foot_rot": [
+      -9.2,
+      8.9,
+      31.4
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      38.5,
+      33.8,
+      -71.1
+     ],
+     "pole": [
+      41.0,
+      57.1,
+      -23.8
+     ],
+     "foot_rot": [
+      -31.1,
+      4.4,
+      3.5
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ]
+   },
+   "8": {
+    "pelvis": {
+     "loc": [
+      -3.0,
+      -3.0,
+      -6.0
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      -4.0
+     ]
+    },
+    "spine": [
+     -10.0,
+     0.0,
+     24.0
+    ],
+    "head": [
+     8.0,
+     0.0,
+     -14.0
+    ],
+    "clavicle_r": [
+     -4.3,
+     10.6,
+     -16.2
+    ],
+    "clavicle_l": [
+     0.1,
+     -0.7,
+     -3.9
+    ],
+    "arm_r": {
+     "hand": [
+      -18.2,
+      -12.4,
+      25.0
+     ],
+     "pole": [
+      -28.6,
+      20.8,
+      4.0
+     ],
+     "hand_rot": [
+      -42.8,
+      41.7,
+      -5.8
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      21.3,
+      0.8,
+      -21.8
+     ],
+     "pole": [
+      23.2,
+      -18.1,
+      -16.9
+     ],
+     "hand_rot": [
+      -7.6,
+      16.7,
+      -15.5
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -12.2,
+      -20.8,
+      -75.5
+     ],
+     "pole": [
+      -25.7,
+      30.7,
+      -39.1
+     ],
+     "foot_rot": [
+      17.5,
+      16.0,
+      26.4
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      18.7,
+      32.4,
+      -75.0
+     ],
+     "pole": [
+      14.4,
+      62.2,
+      -38.7
+     ],
+     "foot_rot": [
+      3.9,
+      2.8,
+      3.8
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ]
+   },
+   "9": {
+    "pelvis": {
+     "loc": [
+      -3.0,
+      -4.0,
+      -10.0
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      -12.0
+     ]
+    },
+    "spine": [
+     -28.0,
+     0.0,
+     -38.0
+    ],
+    "head": [
+     24.0,
+     0.0,
+     48.0
+    ],
+    "clavicle_r": [
+     -7.0,
+     -13.5,
+     -21.5
+    ],
+    "arm_r": {
+     "hand": [
+      -47.4,
+      34.0,
+      11.3
+     ],
+     "pole": [
+      -44.1,
+      2.2,
+      1.7
+     ],
+     "hand_rot": [
+      -7.0,
+      -18.1,
+      4.7
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      22.9,
+      5.1,
+      -45.5
+     ],
+     "pole": [
+      24.7,
+      12.7,
+      -24.5
+     ],
+     "hand_rot": [
+      -23.7,
+      -55.8,
+      -84.5
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -10.2,
+      -31.2,
+      -65.7
+     ],
+     "pole": [
+      -28.1,
+      16.2,
+      -58.3
+     ],
+     "foot_rot": [
+      10.0,
+      8.5,
+      26.9
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      16.5,
+      23.0,
+      -71.0
+     ],
+     "pole": [
+      7.0,
+      57.2,
+      -36.7
+     ],
+     "foot_rot": [
+      10.5,
+      1.4,
+      6.3
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ]
+   },
+   "11": {
+    "pelvis": {
+     "loc": [
+      -3.0,
+      -3.5,
+      -11.5
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      -13.0
+     ]
+    },
+    "spine": [
+     -30.0,
+     0.0,
+     -39.0
+    ],
+    "head": [
+     25.0,
+     0.0,
+     48.0
+    ],
+    "clavicle_r": [
+     -7.4,
+     -14.0,
+     -21.0
+    ],
+    "arm_r": {
+     "hand": [
+      -55.2,
+      39.2,
+      16.8
+     ],
+     "pole": [
+      -44.8,
+      2.1,
+      0.5
+     ],
+     "hand_rot": [
+      -3.9,
+      -13.1,
+      2.9
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      23.0,
+      6.7,
+      -47.1
+     ],
+     "pole": [
+      24.7,
+      13.7,
+      -25.9
+     ],
+     "hand_rot": [
+      -18.0,
+      -55.3,
+      -83.8
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -9.5,
+      -31.8,
+      -64.2
+     ],
+     "pole": [
+      -28.3,
+      15.5,
+      -57.6
+     ],
+     "foot_rot": [
+      12.1,
+      9.2,
+      26.5
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      16.2,
+      22.8,
+      -69.5
+     ],
+     "pole": [
+      6.1,
+      57.1,
+      -35.9
+     ],
+     "foot_rot": [
+      12.5,
+      1.4,
+      6.7
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ]
+   },
+   "12": {
+    "pelvis": {
+     "loc": [
+      -2.5,
+      -3.3,
+      -11.8
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      -14.0
+     ]
+    },
+    "spine": [
+     -32.0,
+     0.0,
+     -42.0
+    ],
+    "head": [
+     21.0,
+     0.0,
+     47.0
+    ],
+    "clavicle_r": [
+     -8.7,
+     -14.2,
+     -19.3
+    ],
+    "arm_r": {
+     "hand": [
+      -54.4,
+      35.3,
+      10.7
+     ],
+     "pole": [
+      -45.2,
+      -1.7,
+      -2.5
+     ],
+     "hand_rot": [
+      -5.4,
+      -16.1,
+      5.8
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      21.3,
+      10.2,
+      -47.5
+     ],
+     "pole": [
+      22.8,
+      16.6,
+      -26.1
+     ],
+     "hand_rot": [
+      -17.8,
+      -55.0,
+      -88.8
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -9.6,
+      -32.2,
+      -63.8
+     ],
+     "pole": [
+      -28.9,
+      15.0,
+      -57.3
+     ],
+     "foot_rot": [
+      11.9,
+      8.4,
+      26.7
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      15.3,
+      22.7,
+      -69.2
+     ],
+     "pole": [
+      4.9,
+      56.9,
+      -35.8
+     ],
+     "foot_rot": [
+      13.1,
+      1.0,
+      6.8
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ]
+   },
+   "13": {
+    "pelvis": {
+     "loc": [
+      -1.0,
+      -3.0,
+      -12.0
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      -18.0
+     ]
+    },
+    "spine": [
+     -38.0,
+     0.0,
+     -50.0
+    ],
+    "head": [
+     -22.0,
+     0.0,
+     52.0
+    ],
+    "clavicle_r": [
+     -11.0,
+     -13.1,
+     -15.0
+    ],
+    "leg_r": {
+     "foot": [
+      -8.8,
+      -33.4,
+      -63.4
+     ],
+     "pole": [
+      -30.7,
+      12.9,
+      -57.2
+     ],
+     "foot_rot": [
+      11.8,
+      6.9,
+      27.3
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      12.4,
+      23.0,
+      -69.0
+     ],
+     "pole": [
+      0.3,
+      56.5,
+      -35.7
+     ],
+     "foot_rot": [
+      13.3,
+      -0.2,
+      6.6
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -50.5,
+      30.7,
+      -14.0
+     ],
+     "pole": [
+      -42.3,
+      -12.0,
+      -8.0
+     ],
+     "hand_rot": [
+      -19.0,
+      -27.0,
+      42.7
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      14.2,
+      21.8,
+      -47.8
+     ],
+     "pole": [
+      17.6,
+      25.0,
+      -25.3
+     ],
+     "hand_rot": [
+      -10.7,
+      -42.6,
+      -92.1
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ]
+   },
+   "20": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      -5.0,
+      -9.0
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      -14.0
+     ]
+    },
+    "spine": [
+     -25.0,
+     0.0,
+     -46.0
+    ],
+    "head": [
+     24.0,
+     8.0,
+     46.0
+    ],
+    "clavicle_r": [
+     2.5,
+     -3.5,
+     -16.5
+    ],
+    "arm_r": {
+     "hand": [
+      -23.1,
+      21.6,
+      22.6
+     ],
+     "pole": [
+      -37.0,
+      22.0,
+      2.5
+     ],
+     "hand_rot": [
+      -35.6,
+      -4.8,
+      -53.0
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      2.9,
+      29.5,
+      -66.1
+     ],
+     "pole": [
+      13.1,
+      26.5,
+      -45.8
+     ],
+     "hand_rot": [
+      -4.7,
+      -0.5,
+      -65.8
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -11.6,
+      -31.8,
+      -67.4
+     ],
+     "pole": [
+      -29.9,
+      15.2,
+      -59.2
+     ],
+     "foot_rot": [
+      11.4,
+      7.5,
+      28.6
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      12.5,
+      23.8,
+      -72.0
+     ],
+     "pole": [
+      3.5,
+      57.4,
+      -37.2
+     ],
+     "foot_rot": [
+      8.6,
+      -1.2,
+      5.9
+     ]
+    },
+    "fingers": [
+     1,
+     0,
+     0
+    ]
+   },
+   "26": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      -5.0,
+      -8.0
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      -14.0
+     ]
+    },
+    "spine": [
+     -25.0,
+     0.0,
+     -46.0
+    ],
+    "head": [
+     24.0,
+     8.0,
+     46.0
+    ],
+    "clavicle_r": [
+     2.5,
+     -3.5,
+     -16.5
+    ],
+    "arm_r": {
+     "hand": [
+      -23.1,
+      21.6,
+      22.6
+     ],
+     "pole": [
+      -37.0,
+      22.0,
+      2.5
+     ],
+     "hand_rot": [
+      -35.6,
+      -4.8,
+      -53.0
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      2.9,
+      29.5,
+      -66.1
+     ],
+     "pole": [
+      13.1,
+      26.5,
+      -45.8
+     ],
+     "hand_rot": [
+      -4.7,
+      -0.5,
+      -65.8
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -11.6,
+      -31.8,
+      -68.4
+     ],
+     "pole": [
+      -29.9,
+      15.2,
+      -59.7
+     ],
+     "foot_rot": [
+      9.9,
+      7.0,
+      29.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      12.5,
+      23.8,
+      -73.0
+     ],
+     "pole": [
+      3.5,
+      57.4,
+      -37.7
+     ],
+     "foot_rot": [
+      7.4,
+      -1.3,
+      5.8
+     ]
+    },
+    "fingers": [
+     0.85,
+     0,
+     0
+    ]
+   },
+   "38": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      -5.0,
+      -8.0
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      -14.0
+     ]
+    },
+    "spine": [
+     -25.0,
+     0.0,
+     -46.0
+    ],
+    "head": [
+     24.0,
+     8.0,
+     46.0
+    ],
+    "clavicle_r": [
+     2.5,
+     -3.5,
+     -16.5
+    ],
+    "arm_r": {
+     "hand": [
+      -23.1,
+      21.6,
+      22.6
+     ],
+     "pole": [
+      -37.0,
+      22.0,
+      2.5
+     ],
+     "hand_rot": [
+      -35.6,
+      -4.8,
+      -53.0
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      2.9,
+      29.5,
+      -66.1
+     ],
+     "pole": [
+      13.1,
+      26.5,
+      -45.8
+     ],
+     "hand_rot": [
+      -4.7,
+      -0.5,
+      -65.8
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -11.6,
+      -31.8,
+      -68.4
+     ],
+     "pole": [
+      -29.9,
+      15.2,
+      -59.7
+     ],
+     "foot_rot": [
+      9.9,
+      7.0,
+      29.0
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      12.5,
+      23.8,
+      -73.0
+     ],
+     "pole": [
+      3.5,
+      57.4,
+      -37.7
+     ],
+     "foot_rot": [
+      7.4,
+      -1.3,
+      5.8
+     ]
+    },
+    "fingers": [
+     0.85,
+     0,
+     0
+    ]
+   },
+   "41": {
+    "pelvis": {
+     "loc": [
+      3.0,
+      -3.0,
+      -7.0
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      -8.0
+     ]
+    },
+    "spine": [
+     -18.0,
+     0.0,
+     -38.0
+    ],
+    "head": [
+     20.0,
+     0.0,
+     48.0
+    ],
+    "clavicle_r": [
+     1.1,
+     -0.9,
+     -10.3
+    ],
+    "arm_r": {
+     "hand": [
+      -25.9,
+      15.0,
+      13.8
+     ],
+     "pole": [
+      -30.6,
+      11.9,
+      -11.6
+     ],
+     "hand_rot": [
+      -22.5,
+      -14.5,
+      -71.1
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      10.4,
+      25.1,
+      -67.5
+     ],
+     "pole": [
+      17.6,
+      20.7,
+      -46.8
+     ],
+     "hand_rot": [
+      -3.6,
+      1.2,
+      -59.9
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -16.7,
+      -33.5,
+      -70.5
+     ],
+     "pole": [
+      -29.0,
+      16.3,
+      -60.7
+     ],
+     "foot_rot": [
+      12.5,
+      6.4,
+      30.8
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      12.2,
+      19.9,
+      -74.0
+     ],
+     "pole": [
+      8.0,
+      56.0,
+      -38.2
+     ],
+     "foot_rot": [
+      9.9,
+      -3.6,
+      5.9
+     ]
+    },
+    "fingers": [
+     0.12,
+     0,
+     0
+    ]
+   },
+   "44": {
+    "pelvis": {
+     "loc": [
+      3.5,
+      -1.0,
+      -4.0
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      -4.0
+     ]
+    },
+    "spine": [
+     -9.0,
+     0.0,
+     -20.0
+    ],
+    "head": [
+     -2.0,
+     0.0,
+     22.0
+    ],
+    "clavicle_r": [
+     0.3,
+     0.3,
+     -4.1
+    ],
+    "arm_r": {
+     "hand": [
+      -36.9,
+      12.4,
+      -29.9
+     ],
+     "pole": [
+      -28.6,
+      -11.9,
+      -21.8
+     ],
+     "hand_rot": [
+      0.1,
+      -11.7,
+      7.7
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      23.7,
+      17.8,
+      -40.3
+     ],
+     "pole": [
+      25.9,
+      6.5,
+      -19.8
+     ],
+     "hand_rot": [
+      1.1,
+      12.0,
+      -25.3
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.3,
+      -27.2,
+      -71.5
+     ],
+     "pole": [
+      -24.8,
+      28.8,
+      -37.1
+     ],
+     "foot_rot": [
+      17.1,
+      9.6,
+      28.9
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      13.2,
+      17.0,
+      -77.0
+     ],
+     "pole": [
+      11.7,
+      54.5,
+      -39.7
+     ],
+     "foot_rot": [
+      8.2,
+      -3.8,
+      5.8
+     ]
+    },
+    "fingers": [
+     0,
+     0,
+     0
+    ]
+   },
+   "47": {
+    "pelvis": {
+     "loc": [
+      2.5,
+      -1.5,
+      -1.5
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      -1.0
+     ]
+    },
+    "spine": [
+     -3.0,
+     0.0,
+     -6.0
+    ],
+    "head": [
+     0.0,
+     0.0,
+     7.0
+    ],
+    "arm_r": {
+     "hand": [
+      -30.8,
+      -11.7,
+      -38.2
+     ],
+     "pole": [
+      -24.0,
+      -17.9,
+      -21.2
+     ],
+     "hand_rot": [
+      5.1,
+      -7.9,
+      15.4
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      19.3,
+      20.1,
+      -34.6
+     ],
+     "pole": [
+      22.2,
+      6.8,
+      -20.9
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -18.8,
+      -16.7,
+      -80.0
+     ],
+     "pole": [
+      -26.8,
+      33.5,
+      -41.4
+     ],
+     "foot_rot": [
+      7.4,
+      6.7,
+      29.1
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      15.1,
+      16.8,
+      -79.5
+     ],
+     "pole": [
+      15.0,
+      54.3,
+      -40.9
+     ],
+     "foot_rot": [
+      2.8,
+      -2.8,
+      5.2
+     ]
+    },
+    "fingers": [
+     0,
+     0,
+     0
+    ]
+   },
+   "49": {
+    "pelvis": {
+     "loc": [
+      0.5,
+      -2.2,
+      -0.3
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "spine": [
+     -0.5,
+     0.0,
+     -2.0
+    ],
+    "head": [
+     0.0,
+     0.0,
+     2.0
+    ],
+    "arm_r": {
+     "hand": [
+      -27.1,
+      -13.2,
+      -42.5
+     ],
+     "pole": [
+      -20.4,
+      -17.0,
+      -21.8
+     ]
+    },
+    "arm_l": {
+     "hand": [
+      25.0,
+      17.7,
+      -40.7
+     ],
+     "pole": [
+      24.6,
+      8.4,
+      -22.3
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      17.4,
+      17.2,
+      -80.7
+     ],
+     "pole": [
+      10.6,
+      50.8,
+      -23.5
+     ],
+     "foot_rot": [
+      -1.5,
+      -0.3,
+      -0.4
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -17.1,
+      -15.7,
+      -81.2
+     ],
+     "pole": [
+      -43.0,
+      22.2,
+      -31.1
+     ],
+     "foot_rot": [
+      0.2,
+      1.6,
+      -0.1
+     ]
+    },
+    "fingers": [
+     0,
+     0,
+     0
+    ]
+   },
+   "52": {
+    "arm_l": {
+     "hand": [
+      27.1,
+      14.1,
+      -43.1
+     ],
+     "pole": [
+      25.4,
+      5.3,
+      -22.7
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      17.9,
+      15.0,
+      -81.0
+     ],
+     "pole": [
+      10.9,
+      49.7,
+      -23.6
+     ],
+     "foot_rot": [
+      0.2,
+      0.0,
+      0.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      -26.5,
+      -15.5,
+      -43.2
+     ],
+     "pole": [
+      -20.5,
+      -18.5,
+      -21.9
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -16.6,
+      -17.9,
+      -81.5
+     ],
+     "pole": [
+      -42.7,
+      21.1,
+      -31.2
+     ],
+     "foot_rot": [
+      -0.0,
+      0.0,
+      0.0
+     ]
+    }
+   }
+  }
+ },
+ "fists": [],
+ "_fists_why": "open-hand slaps by design (owner 2026-11-08): no hand has to be a fist"
+}

@@ -82,6 +82,8 @@ KIT_PADS = [
     ('KIT_Example', '', 'ESEMPIO DESIGNER', (800.0, -1400.0)),
     # Launch impacts (Tools/GAS/setup_launch_impacts.py): X ground bounce (spike), RT wall splat
     ('KIT_Example_Impacts', '', 'IMPATTI: X RIMBALZO, RT SPLAT', (1200.0, -1400.0)),
+    # ANIM-JAB-3 (Tools/GAS/setup_overlord_jab_kit.py): the Overlord's jab 1 then jab 2 on the neutral attack, to watch the animations in Play
+    ('KIT_Test_Overlord', '', 'OVERLORD JAB', (800.0, 1050.0)),
 ]
 # M11 L10: kits on the ground that carry mods (asset paths; the mods travel with the kit to whoever takes it, KitSwapMods = GroundKit).
 # (kit, support weapon, mods, label, (x, y)); test_hub.spawn_kits adds them to the KIT_PADS pickups
