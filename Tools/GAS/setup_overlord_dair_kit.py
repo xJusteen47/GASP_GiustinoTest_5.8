@@ -43,6 +43,10 @@ BLEND_IN_SECONDS = 2.0 / 60.0
 # OVERLORD_DAIR_BLEND_OUT_FRAMES overrides it for the kits of this run (v9 review: 8 frames, so the recovery melts into the fall instead of
 # snapping in 2 frames at f38-39); the kits not named in OVERLORD_DAIR_ANIM keep what they have
 BLEND_OUT_SECONDS = float(os.environ.get('OVERLORD_DAIR_BLEND_OUT_FRAMES', '4')) / 60.0
+# Montage blend_out_trigger_time: -1 = auto (the blend starts blend-time before the montage end, the engine default), 0 = the clip plays to its last
+# frame and then blends out, > 0 = seconds from the montage end. Tried on V9 in docs/notes/reviews/overlord-dair-v9-blendout/numbers.md: it only moves
+# the jump (the jump follows the end of the timeline, not the blend), so the default stays -1
+BLEND_OUT_TRIGGER = float(os.environ.get('OVERLORD_DAIR_BLEND_OUT_TRIGGER', '-1'))
 # Same reason as the jab kit: the montage advances one animation frame per simulation tick, so timeline frame N shows animation frame N
 SIM_HZ, ANIM_FPS = 62.5, 60.0
 MONTAGE_PLAY_RATE = SIM_HZ / ANIM_FPS
@@ -122,6 +126,7 @@ def _anim_and_montage(label, src, refresh):
     blend = montage.get_editor_property('blend_out')
     blend.set_editor_property('blend_time', BLEND_OUT_SECONDS)
     montage.set_editor_property('blend_out', blend)
+    montage.set_editor_property('blend_out_trigger_time', BLEND_OUT_TRIGGER)
     frames = anim.get_play_length() * ANIM_FPS
     log(f'{label}: anim {frames:.1f} frames at 60 fps (card: {TOTAL_FRAMES}), skeleton {anim.get_editor_property("skeleton").get_name()}, '
         f'montage {montage.get_play_length():.3f} s')
