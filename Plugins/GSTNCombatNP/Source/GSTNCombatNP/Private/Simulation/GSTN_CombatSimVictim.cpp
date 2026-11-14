@@ -24,6 +24,7 @@
 #include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "Rules/GSTN_CombatRules.h"
+#include "Timeline/GSTN_StartupSteer.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 
@@ -593,6 +594,13 @@ void UGSTN_CombatSimComponent::ExecuteReactionMove(float StepMs)
 		return;
 	}
 	const bool bLaunch = ReactionMove.Kind == FGSTN_ReactionMove::EKind::Launch;
+	// Back first along the knockback (rules data, owner 2026-11-14): the facing is Mover sync state, queued as the steer's instant effect on the
+	// same pre-tick as the move, so a resimulated frame turns the same way. A vertical launch keeps the facing
+	const FVector Flat(ReactionMove.Velocity.X, ReactionMove.Velocity.Y, 0.0);
+	if (CombatRules && CombatRules->bTurnBackAlongKnockback && Flat.SizeSquared() > 1.0)
+	{
+		ExecuteSetFacing(FGSTN_StartupSteer::QuantizeYaw(static_cast<float>((-Flat).Rotation().Yaw)));
+	}
 	const TSubclassOf<UGameplayEffect> Effect = bLaunch ? KnockbackEffect : PushBackEffect;
 	if (!Effect)
 	{

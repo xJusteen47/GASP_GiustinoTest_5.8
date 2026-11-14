@@ -312,11 +312,13 @@ void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FG
 
 	// The mini bounce, steered by the frame's stick: a short launch, the knockback move's flight
 	const FVector Velocity = UGSTN_DefenceMath::GroundBounceVelocity(Bounce, Context.Up, Context.StickOnPlane);
+	// Heavier gravity makes it small AND quick (react-hook-1 review: 300 cm/s under normal gravity rose 44 cm and floated about 34 frames)
+	const float GravityScale = FMath::Max(Bounce.GroundBounceGravityScale, 0.01f);
 	const double Rise = FMath::Max(Velocity.Dot(Context.Up), 0.0);
-	const int32 FlightFrames = FMath::Max(FMath::CeilToInt32(2.0 * Rise / 980.0 / FrameSeconds), 1);
+	const int32 FlightFrames = FMath::Max(FMath::CeilToInt32(2.0 * Rise / (980.0 * GravityScale) / FrameSeconds), 1);
 	if (!Velocity.IsNearlyZero())
 	{
-		ApplyMoveEffect(Context.AbilitySystem, UGSTN_GE_Knockback::StaticClass(), Velocity, 0.f, 1.f, FlightFrames);
+		ApplyMoveEffect(Context.AbilitySystem, UGSTN_GE_Knockback::StaticClass(), Velocity, 0.f, GravityScale, FlightFrames);
 	}
 	if (Data.GroundBounce.IsValid())
 	{
@@ -407,10 +409,11 @@ void FGSTN_TumbleLanding::AfterClocks(FGSTN_CombatTickContext& Context, const FG
 	int32 PressFrame = INDEX_NONE;
 	RegisterPresses(Context, Data, INDEX_NONE, bSuccess, PressFrame);
 
-	// Downed and free to act (the bounce is over): holding the stick rolls up, toward the head when the stick points against the facing and
-	// the kit has a roll back
+	// Downed, free to act (the bounce ability is over) and lying on the floor (the bounce has landed: never a roll from the air, react-hook-1
+	// review): holding the stick rolls up on any such frame, toward the head when the stick points against the facing and the kit has a roll back
 	FGSTN_DefenceFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DefenceFragment>(Context.Out.Fragments);
-	if (Fragment && Fragment->IsKnockedDown(Frame) && Context.Out.Core.ActionState == EGSTN_ActionState::Actionable && Context.StickOnPlane.Size() >= HoldStickMagnitude
+	if (Fragment && Fragment->IsKnockedDown(Frame) && Context.Out.Core.ActionState == EGSTN_ActionState::Actionable && Context.bGrounded
+		&& Context.StickOnPlane.Size() >= HoldStickMagnitude
 		&& Data.GetupRoll.IsValid() && Context.Services)
 	{
 		const bool bBack = Data.GetupRollBack.IsValid() && Context.StickOnPlane.Dot(ReadFacing(Context.Owner)) < 0.0;

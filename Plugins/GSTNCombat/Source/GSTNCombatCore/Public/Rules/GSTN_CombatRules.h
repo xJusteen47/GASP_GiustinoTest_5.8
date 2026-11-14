@@ -139,6 +139,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits", meta = (ClampMin = "0.0"))
 	float AirborneJuggleScale = 1.f;
 
+	/**
+	 * A knocked-back victim (launch or push back) is turned so its BACK points along the knockback, on the frame the move starts (owner
+	 * 2026-11-14, as in Smash): a hit from behind or the side plays the same front-hit reactions instead of flying feet first. Off = the
+	 * victim keeps the facing it had. Later: directional reactions (back/side) that reuse the front clips with a pre-rotation can replace it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
+	bool bTurnBackAlongKnockback = true;
+
 	/** The shortest hitstun lock of a staggered victim (frames); read when the victim side applies the reaction (H9) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits", meta = (ClampMin = "0", ForceUnits = "Frames"))
 	int32 MinStaggerLockFrames = 31;

@@ -78,6 +78,12 @@ private:
 	/** A montage not started by this component is playing and not blending out */
 	bool IsOtherMontagePlaying(const UAnimInstance& Anim) const;
 
+	/** Starts the rule's entry drop when it applies (the rule shown before is in EntryDropAfterRules) */
+	void BeginEntryDrop(const FGSTN_ReactionAnimRule& Rule, FName PreviousRule);
+
+	/** Writes this frame's height of the entry drop on the mesh (0 at its end), as a difference over whatever Mover put there */
+	void UpdateEntryDrop(float DeltaTime);
+
 	UPROPERTY(Transient)
 	TObjectPtr<UGSTN_ReactionAnimSet> LoadedSet;
 
@@ -101,4 +107,16 @@ private:
 
 	/** A restart event arrived for this rule since the last tick */
 	int32 PendingRestartRule = INDEX_NONE;
+
+	/** The rule whose animation was shown last (kept after it stops, for the next rule's entry drop) */
+	FName LastShownRule;
+
+	/** The entry drop running: its height, its length and the time spent (seconds) */
+	float DropCm = 0.f;
+	float DropSeconds = 0.f;
+	float DropElapsed = 0.f;
+
+	/** The offset written on the mesh last and the relative location it gave: if the location changed since, Mover reset it and the offset is gone */
+	float AppliedDropCm = 0.f;
+	FVector LastWrittenLocation = FVector::ZeroVector;
 };

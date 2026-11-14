@@ -791,6 +791,17 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 	// The frame this input is for is the one after the latest simulated frame. Per-move steering (owner 2026-11-14): the reticle source holds
 	// only with the reticle on (slice 3b, unchanged); the move stick sources hold from the first frame to the end of the last active one, so
 	// the movement mode never turns the move further than its cap, nor after the lock. The rate (M11 L9) is the sim's, so they agree
+	// A timeline that ignores the move stick (the get-ups): no walk, the facing held. Same frame rule as the steer below: the frame after the latest
+	const FGSTN_CombatTimelineData* Running = Sync->Core.ActionState == EGSTN_ActionState::InTimeline ? GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline) : nullptr;
+	if (Running && Running->bIgnoreMoveInput)
+	{
+		if (FCharacterDefaultInputs* Inputs = InputCmdResult.InputCollection.FindMutableDataByType<FCharacterDefaultInputs>())
+		{
+			Inputs->SetMoveInput(EMoveInputType::DirectionalIntent, FVector::ZeroVector);
+		}
+		HoldOrientationIntent(InputCmdResult, static_cast<float>(GetOwner()->GetActorRotation().Yaw));
+		return;
+	}
 	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickY));
 	const FVector2D MoveStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastMoveStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastMoveStickY));
 	float HoldYaw = 0.f;

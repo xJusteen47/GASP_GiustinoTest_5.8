@@ -187,6 +187,10 @@ void UGSTN_DefenceRules::Validate(TArray<FString>& OutErrors) const
 	{
 		OutErrors.Add(TEXT("The ground bounce speed must be finite and not negative, and its steer angle between 0 and 90 degrees."));
 	}
+	if (!(GroundBounce.GroundBounceGravityScale > 0.f) || !FMath::IsFinite(GroundBounce.GroundBounceGravityScale))
+	{
+		OutErrors.Add(TEXT("The ground bounce gravity scale must be finite and above 0."));
+	}
 	if (GroundBounce.MaxDownedFrames < 0)
 	{
 		OutErrors.Add(TEXT("The maximum downed frames must not be negative (0 = never)."));

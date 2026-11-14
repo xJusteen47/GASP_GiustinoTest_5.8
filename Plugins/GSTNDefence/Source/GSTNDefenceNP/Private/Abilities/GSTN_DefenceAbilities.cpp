@@ -16,6 +16,7 @@
 #include "Sim/GSTN_DefenceTickExtension.h"
 #include "Sim/GSTN_TumbleLanding.h"
 #include "GSTN_CombatNPTags.h"
+#include "Movement/GSTN_LayeredMove_Freeze.h"
 #include "Movement/GSTN_LayeredMove_PushBack.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 
@@ -107,12 +108,16 @@ UGSTN_GA_GroundBounce::UGSTN_GA_GroundBounce(const FObjectInitializer& ObjectIni
 UGSTN_GA_GetupRoll::UGSTN_GA_GetupRoll(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	// The stick neither walks nor turns a get-up: its only motion is its own travel (react-hook-1 review)
+	Timeline.bIgnoreMoveInput = true;
 	LastTravelFrame.Value = INDEX_NONE;
 }
 
 UGSTN_GA_GetupNeutral::UGSTN_GA_GetupNeutral(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	// The stick neither walks nor turns a get-up: its only motion is its own travel (react-hook-1 review)
+	Timeline.bIgnoreMoveInput = true;
 }
 
 UGSTN_GA_CounterSample::UGSTN_GA_CounterSample(const FObjectInitializer& ObjectInitializer)
@@ -248,8 +253,20 @@ void UGSTN_GA_GetupRoll::OnSimulationTick(const FAbilitySystemTimeStep& TimeStep
 	// since LastTravelFrame is rolled back with the ability
 	const FVector Facing = FGSTN_TumbleLanding::ReadFacing(GetAvatarActorFromActorInfo());
 	const FVector Along = TravelDirection == EGSTN_GetupTravelDirection::Facing ? Facing : -Facing;
+	const int32 LastKeyFrame = TravelKeys.Last().Frame;
 	for (int32 Check = LastTravelFrame.Value + 1; Check <= Frame; ++Check)
 	{
+		// The roll starts and ends at rest (react-hook-1 review: it kept sliding after the clip): what the bounce left, or the last push, is
+		// zeroed by a one-frame freeze, so the travel is the keys' distance and nothing more
+		if (Check == 0 || Check == LastKeyFrame)
+		{
+			const FGameplayEffectSpecHandle Hold = AbilitySystem->MakeOutgoingSpec(UGSTN_GE_FreezeZeroVelocity::StaticClass(), 1.f, AbilitySystem->MakeEffectContext());
+			if (Hold.IsValid())
+			{
+				Hold.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_FreezeSeconds, FGSTN_TumbleLanding::FrameSeconds);
+				AbilitySystem->ApplyGameplayEffectSpecToSelf(*Hold.Data.Get());
+			}
+		}
 		float Speed = 0.f;
 		int32 Frames = 0;
 		if (!SegmentStartingAt(TravelKeys, TravelDistanceCm, Check, Speed, Frames))

@@ -674,6 +674,15 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	FGSTN_SteerWindow Steer;
 
 	/**
+	 * While the timeline runs the move stick neither walks nor turns the character: Mover gets no move input and the facing of the previous
+	 * frame as its orientation, so the only motion is the move's own (its pushes, root motion). For moves that must not drift or turn under
+	 * a held stick: the get-ups and get-up rolls (react-hook-1 review: the roll back turned and slid about 1 m). The stick still reaches the
+	 * combat tick (DI, the commands)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Movement")
+	bool bIgnoreMoveInput = false;
+
+	/**
 	 * What the move does with the running speed it starts with, on the ground (owner 2026-11-13): slide on the feet along the momentum,
 	 * differently when started against it. Off by default. Separate from root motion and from movement tracks; see FGSTN_MomentumSlide
 	 */

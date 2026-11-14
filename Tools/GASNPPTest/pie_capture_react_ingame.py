@@ -37,9 +37,12 @@ import defence_scenarios as ds   # noqa: E402
 OUT = os.environ.get('PIE_CAPTURE_OUT') or os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()), 'AnimReact',
                                                         time.strftime('ingame_%Y%m%d_%H%M%S'))
 SIZE = 480
-VIEWS = [('az180', 180.0), ('az90', 90.0)]
+# react-hook-2: the victim faces the attacker (it was hit from behind in react-hook-1). az45 = in front of the victim, a quarter off the attacker's
+# line (the attacker is hidden in it), az90 = its right side with both pawns in profile
+VIEWS = [('az45', 45.0), ('az90', 90.0)]
+HIDE_ATTACKER = {'az45'}
 ELEVATION, DISTANCE, FOV = 10.0, 320.0, 45.0
-DEADZONE = 120.0
+DEADZONE = 40.0   # the pawn never leaves the middle of the frame (react-hook-1: cut at the edge)
 FILL_LIGHTS = [(35.0, 5.0), (325.0, 5.0), (95.0, 3.0)]
 PRE = 10
 LIE = 50          # frames lying after the knockdown starts before the get-up input (the ground hit and the lie must read)
@@ -51,12 +54,15 @@ SEQUENCES = [
     {'name': 'knockdown_getup', 'launch': True, 'getup': 'jump'},
     {'name': 'roll', 'launch': True, 'getup': 'facing'},
     {'name': 'rollback', 'launch': True, 'getup': 'against'},
+    {'name': 'roll_late', 'launch': True, 'getup': 'facing', 'lie': 50},   # the stick only after lying 50 frames: a roll on any frame while down
 ]
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
     SEQUENCES = [s for s in SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
 ATTACKER = 1
 KIT = 'KIT_Test_DefenceLanding'
-ROLL_LIE = 4      # roll sequences: the stick is held this many frames after the knockdown starts (the roll starts at the bounce end, not later)
+ROLL_LIE = 4      # roll sequences: the stick is held from this many frames after the knockdown starts; the roll must wait for the landing
+FACE_SECONDS = 0.3  # the victim walks toward the attacker this long to face it, from PLACE cm away
+PLACE = 245.0
 TIMEOUT = 1500.0
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None,
       'rows': None, 'aim': None, 'yaw': 0.0}
@@ -150,6 +156,30 @@ def _clear_stage():
     return f'parked {parked}'
 
 
+def _hide_from(cam, view):
+    """Every pawn but the victim (and the attacker, except in the views of HIDE_ATTACKER) is hidden from this capture"""
+    victim = _pawn()
+    attacker = g._local_pawn(ATTACKER)[1] if len(g.worlds()) > ATTACKER else None
+    hidden = []
+    for p in unreal.GameplayStatics.get_all_actors_of_class(_world(), unreal.Pawn):
+        if p == victim:
+            continue
+        if attacker is not None and _same_player(p, attacker) and view not in HIDE_ATTACKER:
+            continue
+        hidden.append(p)
+    cam.capture_component2d.set_editor_property('hidden_actors', hidden)
+
+
+def _same_player(server_pawn, client_pawn):
+    """The server world's copy of a client's pawn: the attacker's location read in the server snapshot"""
+    try:
+        alo = g.snap(_world())[st['akey']]['location']
+        loc = server_pawn.get_actor_location()
+        return math.dist((loc.x, loc.y, loc.z), alo) < 5.0
+    except Exception:
+        return False
+
+
 def _aim_cameras():
     """Moves the aim point toward the pawn only past DEADZONE, then places the cameras around it at the sequence's fixed azimuths"""
     loc = _pawn().get_actor_location()
@@ -161,7 +191,7 @@ def _aim_cameras():
     if d > DEADZONE:
         k = (d - DEADZONE) / d
         ax, ay = ax + dx * k, ay + dy * k
-    az_ = az_ + (loc.z - az_) * 0.2 if abs(loc.z - az_) > 60.0 else az_
+    az_ = az_ + (loc.z - az_) * 0.3 if abs(loc.z - az_) > 30.0 else az_
     st['aim'] = [ax, ay, az_]
     centre = unreal.Vector(ax, ay, az_)
     for (name, azim), cam in zip(VIEWS, st['cams']):
@@ -179,6 +209,7 @@ def _place_lights():
 def _shoot(seq, frame):
     _aim_cameras()
     for (name, _az), cam, rt in zip(VIEWS, st['cams'], st['rts']):
+        _hide_from(cam, name)
         cam.capture_component2d.capture_scene()
         folder = os.path.join(OUT, seq['name'], name)
         os.makedirs(folder, exist_ok=True)
@@ -209,7 +240,11 @@ def _seq_prep(seq):
         g.set_tuning(push_back_threshold=0.0, launch_threshold=0.0, tumble_threshold=0.0)
     g.set_damage(st['hkey'], 0)
     g.release(0, 'move')
-    g._place_near(ATTACKER, st['hkey'], (205.0, 0.0))
+    # In FRONT of the attacker and facing it (react-hook-1 placed it with its back to the attacker): a short walk toward the attacker turns it,
+    # then the pawn stops about 205 cm away (the test move's reach)
+    ax, ay = g._place_near(ATTACKER, st['hkey'], (PLACE, 0.0))
+    alo = g.snap(_world())[st['akey']]['location']
+    g.hold(0, 'move', g._steer_value(0, (alo[0], alo[1])))
     return True
 
 
@@ -239,7 +274,7 @@ def _step(seq, frame, states):
     if down and 'down_at' not in s:
         s['down_at'] = frame
     tap = None
-    if 'down_at' in s and 'input_at' not in s and frame >= s['down_at'] + (LIE if seq['getup'] == 'jump' else ROLL_LIE):
+    if 'down_at' in s and 'input_at' not in s and frame >= s['down_at'] + seq.get('lie', LIE if seq['getup'] == 'jump' else ROLL_LIE):
         s['input_at'] = frame
         if seq['getup'] == 'jump':
             g.combat_tap(0, g.button_mask('Jump'))
@@ -325,18 +360,24 @@ def _tick(_dt):
             if st['seq'] >= len(SEQUENCES):
                 return _finish('ok')
             if _seq_prep(SEQUENCES[st['seq']]):
-                st.update(phase='seq_begin', t=now)
+                st.update(phase='seq_face', t=now)
             else:
                 _log('host still downed: jump to get up before the next sequence')
                 st.update(t=now)
+        elif phase == 'seq_face' and now - st['t'] > FACE_SECONDS:
+            g.release(0, 'move')
+            st.update(phase='seq_begin', t=now)
         elif phase == 'seq_begin' and now - st['t'] > 2.5:
             seq = SEQUENCES[st['seq']]
             st['yaw'], st['aim'], st['run'] = _pawn().get_actor_rotation().yaw, None, {}
             _place_lights()
             loc = _pawn().get_actor_location()
             alo = g.snap(_world())[st['akey']]['location']
-            _log(f'sequence {seq["name"]}: host at ({loc.x:.0f}, {loc.y:.0f}, {loc.z:.0f}) yaw {st["yaw"]:.0f}, attacker at {[round(v) for v in alo]}, '
-                 f'states {_states()}')
+            a = g.snap(_world())[st['akey']]
+            dist = math.hypot(loc.x - alo[0], loc.y - alo[1])
+            facing_err = abs((st['yaw'] - (a['yaw'] + 180.0) + 180.0) % 360.0 - 180.0)
+            _log(f'sequence {seq["name"]}: host at ({loc.x:.0f}, {loc.y:.0f}, {loc.z:.0f}) yaw {st["yaw"]:.0f}, attacker at {[round(v) for v in alo]} '
+                 f'yaw {a["yaw"]:.0f}, distance {dist:.0f} cm, facing error {facing_err:.0f} deg (0 = face to face), states {_states()}')
             os.makedirs(os.path.join(OUT, seq['name']), exist_ok=True)
             st['rows'] = open(os.path.join(OUT, seq['name'], 'frames.jsonl'), 'w')
             _console('t.OverrideFPS 60')

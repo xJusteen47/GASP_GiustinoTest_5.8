@@ -329,6 +329,13 @@ struct GSTNDEFENCECORE_API FGSTN_GroundBounceRules
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing", meta = (ClampMin = "0.0", ClampMax = "90.0", ForceUnits = "deg"))
 	float GroundBounceSteerDeg = 30.f;
 
+	/**
+	 * Gravity on the mini bounce, times the world's: the bounce is small and quick (300 cm/s at 3 = about 15 cm and 13 frames in the air, the
+	 * length of the ground hit clip) instead of 46 cm and 38 frames at 1
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing", meta = (ClampMin = "0.01"))
+	float GroundBounceGravityScale = 3.f;
+
 	/** Frames after which a downed entity gets up by itself; 0 = never (the default) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing", meta = (ClampMin = "0", ForceUnits = "Frames"))
 	int32 MaxDownedFrames = 0;

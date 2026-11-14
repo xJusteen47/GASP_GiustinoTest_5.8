@@ -9,7 +9,8 @@
 #  1. DA_ReactionAnims (UGSTN_ReactionAnimSet) in the Reaction folder, one rule per state (priority high to low):
 #       Knockdown (Combat.State.Knockdown): AS_React_GroundHit then AS_React_LieUp held (chained inside the component: no game pose between them)
 #       Splat (Combat.State.Splat): AS_React_Splat held        Tumble (Combat.State.Tumble): AS_React_Tumble looped
-#       HitStand (Combat.State.Hitstun): AS_React_HitStand, blends out at its end, restarts on Combat.Event.Hit.Received
+#       HitStand (Combat.State.Hitstun): AS_React_HitStand held for the whole stun, restarts on Combat.Event.Hit.Received
+#       Knockdown after Tumble: the mesh starts 85 cm up and falls into place over 5 frames (ENTRY_DROPS)
 #  2. UGSTN_ReactionAnimComponent on /Game/Blueprints/SandboxCharacter_Mover (BP_GASNPP_TestCharacter inherits it) with that set.
 #  3. Get-up abilities (/GSTNDefence/Test): GA_GetupNeutral_Test plays AM_React_GetUp, GA_GetupRoll_Test AM_React_Roll (80 cm toward the feet),
 #     new GA_GetupRollBack_Test AM_React_RollBack (65 cm toward the head); timelines as long as the clips; on the end the last pose is HELD
@@ -40,8 +41,12 @@ RULES = [
     ('Knockdown', 'Combat.State.Knockdown', None, 40, 'AS_React_GroundHit', 'AS_React_LieUp', 'HOLD_LAST_POSE', 1, 1, 6, None),
     ('Splat', 'Combat.State.Splat', None, 30, 'AS_React_Splat', None, 'HOLD_LAST_POSE', 0, 1, 6, None),
     ('Tumble', 'Combat.State.Tumble', None, 20, 'AS_React_Tumble', None, 'LOOP', 1, 1, 6, None),
-    ('HitStand', 'Combat.State.Hitstun', 'Combat.State.Tumble', 10, 'AS_React_HitStand', None, 'BLEND_OUT', 0, 1, 8, 'Combat.Event.Hit.Received'),
+    # Held for the whole hitstun (react-hook-1 review: it blended out after 6 frames and showed idle for 30), 5 frames out when the stun ends
+    ('HitStand', 'Combat.State.Hitstun', 'Combat.State.Tumble', 10, 'AS_React_HitStand', None, 'HOLD_LAST_POSE', 0, 1, 5, 'Combat.Event.Hit.Received'),
 ]
+# Entry drop (rule name -> cm, frames, after rules): the ground hit after a tumble starts at the tumble's height and falls into place instead of
+# dropping 85 cm in one frame (react-hook-1 review v61-v62). Presentation only; tune the cm on the video
+ENTRY_DROPS = {'Knockdown': (85.0, 5, ['Tumble'])}
 
 # ability, parent class, montage, travel cm, direction, keys (simulation frames, fraction): roll-travel.md converted from 60 to 62.5 Hz
 GETUPS = [
@@ -85,6 +90,10 @@ def reaction_set():
         r.set_editor_property('blend_out_frames', bout)
         if restart:
             r.set_editor_property('restart_event', dl._tag(restart))
+        drop_cm, drop_frames, drop_after = ENTRY_DROPS.get(name, (0.0, 5, []))
+        r.set_editor_property('entry_drop_cm', drop_cm)
+        r.set_editor_property('entry_drop_frames', drop_frames)
+        r.set_editor_property('entry_drop_after_rules', drop_after)
         rules.append(r)
     entry.array('rules', rules)
     entry.save()
@@ -124,6 +133,7 @@ def getup(name, parent, montage_name, distance, direction, keys):
     tl.set_editor_property('montage', montage)
     tl.set_editor_property('end_blend_out_frames', HOLD_BLEND_FRAMES)
     tl.set_editor_property('hold_pose_on_end', True)
+    tl.set_editor_property('ignore_move_input', True)   # the stick neither walks nor turns a get-up (react-hook-1 review)
     cdo.set_editor_property('timeline', tl)
     if direction:
         cdo.set_editor_property('travel_distance_cm', distance)

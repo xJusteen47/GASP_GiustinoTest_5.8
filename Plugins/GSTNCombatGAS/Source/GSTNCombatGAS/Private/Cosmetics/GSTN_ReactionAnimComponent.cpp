@@ -46,6 +46,8 @@ void UGSTN_ReactionAnimComponent::BeginPlay()
 void UGSTN_ReactionAnimComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	UnbindEvents();
+	DropCm = 0.f;
+	UpdateEntryDrop(0.f);
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -250,6 +252,7 @@ void UGSTN_ReactionAnimComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	{
 		return;
 	}
+	UpdateEntryDrop(DeltaTime);
 
 	FGameplayTagContainer Tags;
 	ASC->GetOwnedGameplayTags(Tags);
@@ -279,6 +282,8 @@ void UGSTN_ReactionAnimComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	if (Winner == INDEX_NONE)
 	{
 		PendingRestartRule = INDEX_NONE;
+		// The character's own pose is back: a later rule does not drop from the last reaction's height
+		LastShownRule = NAME_None;
 		return;
 	}
 	const FGSTN_ReactionAnimRule& Rule = LoadedSet->Rules[Winner];
@@ -297,8 +302,14 @@ void UGSTN_ReactionAnimComponent::TickComponent(float DeltaTime, ELevelTick Tick
 		}
 		if (PlayStage(*Anim, Rule, 0, GSTNReactionAnim::Seconds(Rule.BlendInFrames)))
 		{
+			if (!bRestart)
+			{
+				BeginEntryDrop(Rule, LastShownRule);
+			}
 			ActiveRule = Winner;
 			ConsumedRule = INDEX_NONE;
+			LastShownRule = Rule.Name;
+			UpdateEntryDrop(0.f);
 		}
 		return;
 	}
@@ -346,4 +357,52 @@ void UGSTN_ReactionAnimComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	default:
 		break;
 	}
+}
+
+void UGSTN_ReactionAnimComponent::BeginEntryDrop(const FGSTN_ReactionAnimRule& Rule, FName PreviousRule)
+{
+	if (Rule.EntryDropCm <= 0.f || (Rule.EntryDropAfterRules.Num() > 0 && !Rule.EntryDropAfterRules.Contains(PreviousRule)))
+	{
+		DropCm = 0.f;
+		return;
+	}
+	DropCm = Rule.EntryDropCm;
+	DropSeconds = GSTNReactionAnim::Seconds(FMath::Max(Rule.EntryDropFrames, 1));
+	DropElapsed = 0.f;
+}
+
+void UGSTN_ReactionAnimComponent::UpdateEntryDrop(float DeltaTime)
+{
+	USkeletalMeshComponent* MeshComponent = Mesh.Get();
+	if (!MeshComponent || (DropCm <= 0.f && AppliedDropCm == 0.f))
+	{
+		return;
+	}
+	float Height = 0.f;
+	if (DropCm > 0.f)
+	{
+		DropElapsed += DeltaTime;
+		const float Alpha = FMath::Clamp(DropElapsed / FMath::Max(DropSeconds, UE_SMALL_NUMBER), 0.f, 1.f);
+		// Accelerating, as a fall: slow at the top, fastest when it reaches the floor
+		Height = DropCm * (1.f - Alpha * Alpha);
+		if (Alpha >= 1.f)
+		{
+			DropCm = 0.f;
+			Height = 0.f;
+		}
+	}
+	// Mover writes the mesh's relative transform back to its base on its frames (FinalizeFrame) and its smoothing may move it too: the offset
+	// is added on top of what is there now, and taken off first only when nobody wrote the location since this component did
+	FVector Location = MeshComponent->GetRelativeLocation();
+	if (Location.Equals(LastWrittenLocation, 0.01))
+	{
+		Location.Z -= AppliedDropCm;
+	}
+	Location.Z += Height;
+	if (!Location.Equals(MeshComponent->GetRelativeLocation(), 0.01))
+	{
+		MeshComponent->SetRelativeLocation(Location);
+	}
+	LastWrittenLocation = Location;
+	AppliedDropCm = Height;
 }

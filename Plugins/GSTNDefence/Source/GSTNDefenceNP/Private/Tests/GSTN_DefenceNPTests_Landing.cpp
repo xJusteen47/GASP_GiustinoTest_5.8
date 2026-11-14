@@ -198,8 +198,16 @@ bool FGSTN_DefenceLandingDownedRollTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("downed: the gate admits only Combat.State.Knockdown bindings"), FGSTN_TumbleLanding::AdmitsOnly(Still) == GSTNDefenceTags::State_Knockdown.GetTag());
 	TestEqual(TEXT("nothing started"), Land.Services.Started.Num(), 0);
 
-	// Holding the stick: the get-up roll starts Forced and the downed state ends on its frame
+	// Holding the stick in the air (the bounce has not landed yet): no roll (react-hook-1 review: the rolls started at the bounce's peak)
+	FGSTN_CombatTickContext Airborne = Land.Make(141, FVector2D(0.8, 0.0));
+	Airborne.bGrounded = false;
+	FGSTN_TumbleLanding::AfterClocks(Airborne, Land.Data());
+	TestEqual(TEXT("no roll from the air"), Land.Services.Started.Num(), 0);
+	TestTrue(TEXT("still downed in the air"), Land.Fragment().IsKnockedDown(141));
+
+	// Holding the stick on the floor: the get-up roll starts Forced and the downed state ends on its frame
 	FGSTN_CombatTickContext Roll = Land.Make(141, FVector2D(0.8, 0.0));
+	Roll.bGrounded = true;
 	FGSTN_TumbleLanding::AfterClocks(Roll, Land.Data());
 	TestTrue(TEXT("the roll started Forced"), Land.Services.Started.Num() == 1 && Land.Services.Started[0] == UGSTN_GA_GetupRoll::StaticClass());
 	TestFalse(TEXT("up from the roll's frame"), Land.Fragment().IsKnockedDown(141));
@@ -211,6 +219,7 @@ bool FGSTN_DefenceLandingDownedRollTest::RunTest(const FString& Parameters)
 	FGSTN_TumbleLanding::OnContactResolved(BusyLanding, Busy.Data(), FLandRig::Contact(EGSTN_TumbleContactKind::Floor, 99, FVector::UpVector), EGSTN_ImpactOutcome::None);
 	FGSTN_CombatTimelineLogic::Start(Busy.Out.Core, 100, 0, EGSTN_ActivationSource::Forced);
 	FGSTN_CombatTickContext BusyRoll = Busy.Make(101, FVector2D(0.8, 0.0));
+	BusyRoll.bGrounded = true;
 	FGSTN_TumbleLanding::AfterClocks(BusyRoll, Busy.Data());
 	TestFalse(TEXT("no roll while the bounce plays"), Busy.Services.Started.Contains(UGSTN_GA_GetupRoll::StaticClass()));
 	TestTrue(TEXT("still downed"), Busy.Fragment().IsKnockedDown(101));

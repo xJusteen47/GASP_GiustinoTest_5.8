@@ -82,6 +82,22 @@ struct GSTNCOMBATGAS_API FGSTN_ReactionAnimRule
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction", meta = (ClampMin = "0", ForceUnits = "Frames"))
 	int32 BlendOutFrames = 6;
 
+	/**
+	 * The mesh starts this much higher than the capsule puts it and falls into place over EntryDropFrames (presentation only, the capsule never
+	 * moves). For a clip whose first pose is lower than the one before it: the ground hit after a tumble played at pelvis height (react-hook-1
+	 * review: an 85 cm drop in one frame). The first frame still shows the new pose (owner rule): only its height eases. 0 = none
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction|Entry", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float EntryDropCm = 0.f;
+
+	/** Frames (60 fps) of the fall into place: accelerating, as a body falls */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction|Entry", meta = (ClampMin = "1", ForceUnits = "Frames"))
+	int32 EntryDropFrames = 5;
+
+	/** The drop applies only when the rule shown just before is one of these (Tumble); empty = whatever was shown before */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction|Entry")
+	TArray<FName> EntryDropAfterRules;
+
 	/** Optional: a gameplay event on the owner (Combat.Event.Hit.Received) restarts the rule from its first animation while it holds */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction")
 	FGameplayTag RestartEvent;
