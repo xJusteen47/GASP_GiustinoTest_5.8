@@ -24,6 +24,8 @@ of a back hit (hitstand and knockdown), keep the facing after the get-up; tempor
    orientation (ChaosMover? GASP mode) at zero velocity; check whether the capture's `yaw` (actor rotation) lags the sync state.
 2. Likely fix shapes: apply the turn from inside the freeze layered move (it owns the frame: set orientation in its GenerateMove /
    first tick), or queue the facing as part of the freeze effect itself instead of a separate instant effect.
-3. Then remove the `[HitTurn]` logs and capture back_hitstand + back_knockdown for the rule-10 review.
+3. Owner 21:13Z: launch UnrealEditor / Play captures on Windows VIRTUAL DESKTOP 2 (his programming desktop), e.g. PowerShell
+   VirtualDesktop module or move the window after launch; max 2 tries, report. Not tried here (no desktop run after the request).
+4. Then remove the `[HitTurn]` logs and capture back_hitstand + back_knockdown for the rule-10 review.
 
 Cost: this thread ~150k tokens Opus (~$8-10) + 3 desktop runs ~150k (~$8). Total ≈ $16-18.
