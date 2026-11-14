@@ -82,6 +82,27 @@ bool UGSTN_TestKitContentLibrary::WriteStrikeMove(TSubclassOf<UGameplayAbility> 
 	return true;
 }
 
+bool UGSTN_TestKitContentLibrary::WriteStartupSteer(TSubclassOf<UGameplayAbility> StrikeClass, float MaxSteerDegrees, float SteerRateDegPerSecond,
+	const FGSTN_SteerWindow& Steer)
+{
+	if (!StrikeClass || !StrikeClass->IsChildOf(UGSTN_GA_TestKitStrike::StaticClass()) || StrikeClass->HasAnyClassFlags(CLASS_Native))
+	{
+		return false;
+	}
+	UGSTN_GA_TestKitStrike* Defaults = GetMutableDefault<UGSTN_GA_TestKitStrike>(StrikeClass.Get());
+	FGSTN_CombatTimelineData Data = Defaults->Timeline;
+	Data.MaxSteerDegrees = FMath::Clamp(MaxSteerDegrees, 0.f, 180.f);
+	Data.SteerRateDegPerSecond = FMath::Max(SteerRateDegPerSecond, 0.f);
+	Data.Steer = Steer;
+	if (FGSTN_CombatTimelineData::StaticStruct()->CompareScriptStruct(&Data, &Defaults->Timeline, PPF_None))
+	{
+		return false;
+	}
+	Defaults->Timeline = MoveTemp(Data);
+	Defaults->MarkPackageDirty();
+	return true;
+}
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/AutomationTest.h"
