@@ -1914,7 +1914,7 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 			if (VictimFrame == Frame && bFrameInterrupted)
 			{
 				// Diagnostics of the react-hook-5 capture: the hit turn reached the pre-tick
-				UE_LOG(LogGSTNCombatSim, Log, TEXT("[HitTurn] %s pre-tick frame %d SetFacing %.0f actorYaw=%.0f effect=%d"), *GetOwner()->GetName(), Frame,
+				UE_LOG(LogGSTNCombatSim, Verbose, TEXT("[HitTurn] %s pre-tick frame %d SetFacing %.0f actorYaw=%.0f effect=%d"), *GetOwner()->GetName(), Frame,
 					FGSTN_StartupSteer::DequantizeYaw(Slot.Arg), GetOwner()->GetActorRotation().Yaw, SetFacingEffect ? 1 : 0);
 			}
 			ExecuteSetFacing(Slot.Arg);

@@ -246,7 +246,7 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, co
 			}
 		}
 		// Diagnostics of the react-hook-5 capture (the turn did not show in game): one line per interrupting hit
-		UE_LOG(LogGSTNCombatVictim, Log, TEXT("[HitTurn] %s frame %d self=%d rules=%d pending=%d turn=%d yaw=%.0f selfYaw=%.0f queued=%d requests=%d"),
+		UE_LOG(LogGSTNCombatVictim, Verbose, TEXT("[HitTurn] %s frame %d self=%d rules=%d pending=%d turn=%d yaw=%.0f selfYaw=%.0f queued=%d requests=%d"),
 			*GetOwner()->GetName(), Frame, Self ? 1 : 0, CombatRules ? 1 : 0, Core.Hit.HasPendingReaction() ? 1 : 0, bTurn ? 1 : 0, TurnYaw,
 			Self ? Self->Facing.Rotation().Yaw : 0.0, bQueued ? 1 : 0, Core.Requests.Num());
 	}
