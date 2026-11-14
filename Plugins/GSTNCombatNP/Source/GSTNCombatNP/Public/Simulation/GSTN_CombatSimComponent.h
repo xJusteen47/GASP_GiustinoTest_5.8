@@ -9,6 +9,7 @@
 #include "Events/GSTN_SimEvent.h"
 #include "Input/GSTN_BufferResetRules.h"
 #include "Input/GSTN_ButtonMap.h"
+#include "GSTN_InputCoreTypes.h"
 #include "Jump/GSTN_GravityPhases.h"
 #include "Jump/GSTN_JumpLogic.h"
 #include "Loadout/GSTN_LoadoutAssembly.h"
@@ -385,6 +386,65 @@ public:
 	 * a simulation read, called from an ability's activation or tick. False before the first simulated frame
 	 */
 	bool ReadJumpState(FGSTN_JumpState& OutState) const;
+
+	// ---- Blueprint seams, CP1: input and move questions a move's graph asks. Simulation reads like GetActivationContext (call them from an
+	// ability's activation, its tick or its move events, never from presentation code): they read the combat state of the frame being
+	// simulated, so the answer is the same on every machine and in every re-simulation. Buttons and commands are named by tag (the input
+	// config and the command table resolve them), never by key. Ages count combat frames like the input buffer: hitstop frames do not count
+
+	/**
+	 * Whether Button (an Input.Button.* tag of the input config) was pressed in the last Frames frames (0 = on this frame). bIncludeUsed: a
+	 * press a command already used counts too (the press that started the move does); false = only presses still waiting in the buffer
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	bool WasButtonPressedWithin(UPARAM(meta = (Categories = "Input.Button")) const FGameplayTag& Button, int32 Frames, bool bIncludeUsed = true) const;
+
+	/** Frames since the newest press of Button (0 = this frame), -1 when the recent history holds none. bIncludeUsed as WasButtonPressedWithin */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	int32 GetFramesSinceButtonPressed(UPARAM(meta = (Categories = "Input.Button")) const FGameplayTag& Button, bool bIncludeUsed = true) const;
+
+	/** How many presses of Button the last Frames frames hold (a double press is 2) */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	int32 CountButtonPressesWithin(UPARAM(meta = (Categories = "Input.Button")) const FGameplayTag& Button, int32 Frames, bool bIncludeUsed = true) const;
+
+	/** Frames Button has been held (0 on the press frame), -1 when it is up */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	int32 GetButtonHeldFrames(UPARAM(meta = (Categories = "Input.Button")) const FGameplayTag& Button) const;
+
+	/**
+	 * Whether the input of Command (a Command.* tag of the command table: its whole pattern, a motion, a chord, a double tap) was completed in
+	 * the last Frames frames by presses no command used yet. The press that started the running move is used, so it never answers: this is
+	 * "was it entered again". The answer does not use the press either: a binding of the command can still fire on it
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	bool WasCommandEnteredWithin(UPARAM(meta = (Categories = "Command")) const FGameplayTag& Command, int32 Frames) const;
+
+	/** The move stick of the frame's command (x right, y forward, -1..1, camera relative); GetFrameStick for Blueprint */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	FVector2D GetMoveStick() const;
+
+	/** The stick direction of the frame being simulated in Space (stick, facing relative or camera relative), as the patterns read it */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	EGSTN_StickDirection GetStickDirection(EGSTN_DirectionSpace Space) const;
+
+	/**
+	 * The hit groups of the running timeline that confirmed a hit so far (bit i = the hit group i, groups past 7 share bits; a blocked hit
+	 * confirms, a parried or ricocheted one does not), 0 outside a timeline. The flags behind the OnHit cancel windows
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Hits")
+	int32 GetMoveHitConfirmGroups() const;
+
+	/**
+	 * The timeline frame the combat tick evaluated for the frame being simulated (F - start - paused frames: it stands still in hitstop and
+	 * in a hold), INDEX_NONE outside a timeline and while a ricochet recoil plays. The frame the Event keys are crossed on
+	 */
+	int32 GetEvaluatedTimelineFrame() const;
+
+private:
+	/** The bit of a button tag in the active input config (the same asset on every machine), INDEX_NONE if it has none */
+	int32 FindQueryButton(const FGameplayTag& Button) const;
+
+public:
 
 	/** The tracker of the owner's Mover component (the movement facts of the end of the previous frame: up direction, velocity, ground tag), null without a Mover component. The movement abilities read the local gravity frame from it */
 	UGSTN_MoverSimStateTracker* GetMoverTracker() { return GetJumpTracker(); }

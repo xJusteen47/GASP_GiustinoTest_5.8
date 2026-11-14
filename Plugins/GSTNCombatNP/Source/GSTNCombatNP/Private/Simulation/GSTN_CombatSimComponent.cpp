@@ -37,6 +37,10 @@
 #include "Input/GSTN_CombatSettings.h"
 #include "Input/GSTN_DirectionClassifier.h"
 #include "Input/GSTN_InputConfig.h"
+#include "Input/GSTN_InputMatcher.h"
+#include "Input/GSTN_InputQueries.h"
+#include "Input/GSTN_InputSettings.h"
+#include "Input/GSTN_InputSlot.h"
 #include "Input/GSTN_InputScript.h"
 #include "Input/GSTN_InputSettings.h"
 #include "Movement/GSTN_StatsMovementModifier.h"
@@ -937,6 +941,108 @@ bool UGSTN_CombatSimComponent::IsCommandButtonHeld(int32 Button) const
 {
 	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
 	return Sync && FGSTN_InputHostUtils::IsButtonHeld(Sync->Core.Input, Button);
+}
+
+namespace
+{
+	/** The age context of the input questions: the frame being simulated and the hitstop window of its state, the buffer's rule */
+	FGSTN_InputQueries::FAgeContext MakeQueryAgeContext(const FGSTN_CombatSyncState& Sync)
+	{
+		FGSTN_InputQueries::FAgeContext Context;
+		Context.Now = Sync.Core.Input.History.GetLatestFrame();
+		Context.PausedStart = Sync.Core.HitstopStartFrame;
+		Context.PausedEnd = Sync.Core.HitstopEndFrame;
+		return Context;
+	}
+}
+
+int32 UGSTN_CombatSimComponent::FindQueryButton(const FGameplayTag& Button) const
+{
+	return ActiveInputConfig && Button.IsValid() ? ActiveInputConfig->FindButtonIndex(Button) : INDEX_NONE;
+}
+
+bool UGSTN_CombatSimComponent::WasButtonPressedWithin(const FGameplayTag& Button, int32 Frames, bool bIncludeUsed) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	const int32 Index = FindQueryButton(Button);
+	return Sync && Index != INDEX_NONE && FGSTN_InputQueries::WasPressedWithin(Sync->Core.Input.History, Index, MakeQueryAgeContext(*Sync), Frames, bIncludeUsed);
+}
+
+int32 UGSTN_CombatSimComponent::GetFramesSinceButtonPressed(const FGameplayTag& Button, bool bIncludeUsed) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	const int32 Index = FindQueryButton(Button);
+	return Sync && Index != INDEX_NONE ? FGSTN_InputQueries::GetNewestPressAge(Sync->Core.Input.History, Index, MakeQueryAgeContext(*Sync), bIncludeUsed) : INDEX_NONE;
+}
+
+int32 UGSTN_CombatSimComponent::CountButtonPressesWithin(const FGameplayTag& Button, int32 Frames, bool bIncludeUsed) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	const int32 Index = FindQueryButton(Button);
+	return Sync && Index != INDEX_NONE ? FGSTN_InputQueries::CountPressesWithin(Sync->Core.Input.History, Index, MakeQueryAgeContext(*Sync), Frames, bIncludeUsed) : 0;
+}
+
+int32 UGSTN_CombatSimComponent::GetButtonHeldFrames(const FGameplayTag& Button) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	const int32 Index = FindQueryButton(Button);
+	return Sync && Index != INDEX_NONE ? FGSTN_InputQueries::GetHeldFrames(Sync->Core.Input.History, Index, Sync->Core.Input.History.GetLatestFrame()) : INDEX_NONE;
+}
+
+bool UGSTN_CombatSimComponent::WasCommandEnteredWithin(const FGameplayTag& Command, int32 Frames) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (!Sync || Frames < 0)
+	{
+		return false;
+	}
+	const FGSTN_CommandTable& Table = GetCommandTable();
+	const int32 Index = Table.FindCommand(Command);
+	const FGSTN_InputSlotSpec* Slot = Table.Commands.IsValidIndex(Index) ? Table.Commands[Index].Slot : nullptr;
+	if (!Slot)
+	{
+		return false;
+	}
+	// The slot's own rules (simultaneity, direction policy) with the window asked for as the time buffer and no hold buffer: "entered in the
+	// last N frames", not "still held". The matcher skips used presses, so the press that started the move never answers
+	FGSTN_MatchParams Params = Slot->MakeMatchParams(UGSTN_InputSettings::Get(), ButtonMap, Sync->Core.Input.History.GetLatestFrame());
+	Params.BufferFrames = Frames;
+	Params.bHoldBuffer = false;
+	Params.PausedStart = Sync->Core.HitstopStartFrame;
+	Params.PausedEnd = Sync->Core.HitstopEndFrame;
+	FGSTN_PatternMatch Match;
+	return FGSTN_InputMatcher::Match(Slot->Pattern, Sync->Core.Input.History, Params, Match);
+}
+
+FVector2D UGSTN_CombatSimComponent::GetMoveStick() const
+{
+	FVector2D Stick = FVector2D::ZeroVector;
+	float CameraYaw = 0.f;
+	GetFrameStick(Stick, CameraYaw);
+	return Stick;
+}
+
+EGSTN_StickDirection UGSTN_CombatSimComponent::GetStickDirection(EGSTN_DirectionSpace Space) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	return Sync ? Sync->Core.Input.History.GetCurrentStick().GetDirection(Space) : EGSTN_StickDirection::Neutral;
+}
+
+int32 UGSTN_CombatSimComponent::GetMoveHitConfirmGroups() const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	return Sync && Sync->Core.ActionState == EGSTN_ActionState::InTimeline ? static_cast<int32>(Sync->Core.Hit.HitConfirmFlags) : 0;
+}
+
+int32 UGSTN_CombatSimComponent::GetEvaluatedTimelineFrame() const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (!Sync || Sync->Core.ActionState != EGSTN_ActionState::InTimeline || Sync->Core.TimelineStartFrame == INDEX_NONE || Sync->Core.RecoilStartFrame != INDEX_NONE)
+	{
+		return INDEX_NONE;
+	}
+	// FGSTN_CombatTimelineLogic's evaluated frame (EvaluateInto): the paused frames already count this frame's own pause
+	return Sync->Core.Input.History.GetLatestFrame() - Sync->Core.TimelineStartFrame - Sync->Core.TimelinePausedFrames;
 }
 
 #if !UE_BUILD_SHIPPING

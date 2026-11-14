@@ -103,6 +103,11 @@ namespace GSTNTrackEditors
 			virtual FText GetRowLabel(const FGSTN_TimelineTrack& Track) const override
 			{
 				const FGSTN_TimelineTrack_Event& Event = static_cast<const FGSTN_TimelineTrack_Event&>(Track);
+				// A Blueprint key (CP1) is named first: it is what the move's graph listens for
+				if (Event.KeyTag.IsValid())
+				{
+					return FText::Format(LOCTEXT("EventKey", "Key {0}"), FText::FromString(LeafOf(Event.KeyTag)));
+				}
 				const bool bCue = Event.CueTag.IsValid();
 				const bool bEvent = Event.GameplayEventTag.IsValid();
 				if (bCue && bEvent)

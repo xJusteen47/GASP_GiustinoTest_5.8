@@ -542,6 +542,10 @@ void FGSTN_CombatValidators::CheckTagsTrack(const FGSTN_CombatTimelineData& Data
 			{
 				ReportTag(Event.GameplayEventTag, FText::Format(LOCTEXT("EventTagWhere", "The gameplay event of event {0}"), TrackName(Index)), Index, Track->StartFrame);
 			}
+			if (IsUnregistered(Event.KeyTag))
+			{
+				ReportTag(Event.KeyTag, FText::Format(LOCTEXT("EventKeyWhere", "The Blueprint key of event {0}"), TrackName(Index)), Index, Track->StartFrame);
+			}
 		}
 	}
 	if (Data.bHasRicochetResponse && IsUnregistered(Data.RicochetResponse.CueTag))

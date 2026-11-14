@@ -297,6 +297,14 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Event : public FGSTN_TimelineTrack
 	FGameplayTag GameplayEventTag;
 
 	/**
+	 * Names this key for the move's own Blueprint (CP1 of the Blueprint seams): UGSTN_GA_BaseCombat raises On Move Key with it on the frame
+	 * the key is crossed, once, on every machine and in every re-simulation. Every Event key raises it; an empty tag is a key the graph tells
+	 * apart by its frame. Any tag works: the graph compares it, nothing else reads it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Event")
+	FGameplayTag KeyTag;
+
+	/**
 	 * Authoritative event key (seam D-1, game-modes.md 2): when set, the combat tick posts a sim event of this type to the entity's outbox on the
 	 * frame the key is crossed, with OutboxTags and OutboxMagnitude (a spin's sense, a count). The outbox is published on the authority only,
 	 * once per frame, so level objects and modes react to the move without a server request of their own. Empty = cue and gameplay event only

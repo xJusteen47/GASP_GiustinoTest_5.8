@@ -343,3 +343,18 @@ fragment changed on the wire.
 - **Reverse deliveries.** `FGSTN_HitResolutionContext::OutgoingEntries` / `FGSTN_StepResult::OutgoingEntries` (`TArray<FGSTN_InboxEntry>`): a step queues messages to the attacker of the hit it resolves. `FGSTN_CombatVictim::Resolve` stamps `Frame` and `SenderId` for the hits that stand (not a ricochet, not a hit a step refused) into `FGSTN_VictimResult::Outgoing`, and `RunVictimStep` posts each through `PostToInbox(TargetId, Entry)` after the step, so the attacker drains it on the next frame; a target that does not tick on this machine refuses it (on a client the reply reaches only an attacker it predicts).
 - **Request kinds.** `FGSTN_CombatRequests` already has `Capacity = 8` slots (the plan asked for six); the wire is 4 bits count + per **present** request 5 bits type, packed frame, 16 bits argument, so an absent slot costs nothing. `EGSTN_RequestType` gains the data-only kinds `EnterLinked`, `ExitLink`, `ApplyLinkEffect`, `RemoveLinkEffect`, `LaunchLinked` (18 to 22, inside the 5-bit field, no handler in this module).
 - Tests: `GSTNCombat.NP.Snapshot.ExtraHurtboxInHistory`, `GSTNCombat.NP.Clock.{TrackHookStallsTimelineNotClock, HookStampsWindow}`, `GSTNCombat.NP.Tick.BlocksActionsVeto`, `GSTNCombat.NP.Victim.OutgoingEntriesPosted`, `GSTNCombat.NP.Requests.EightSlotsRoundTrip`. Core side: `GSTNCombat.Core.Hurtbox.*` (see `GSTNCombat`). Details: `docs/notes/m6-doc-deltas.md` "M6 follow-up 2 (F2)".
+
+## Blueprint move events and input questions (Blueprint seams CP1, `docs/notes/handovers/combat-plugin-bp-plan.md`)
+
+A Blueprint child of `UGSTN_GA_BaseCombat` reacts to its own move without C++: **On Move Started**, **On Move Key** (an Event key of the timeline
+crossed; the key's new `KeyTag` names it), **On Move Hit Confirmed** (new hit groups of the run; blocked counts, parry and ricochet do not),
+**On Move Ended** (`EGSTN_MoveEndReason`: Finished, TailCancelled, AfterRecoil, Interrupted) and, only with `bTickMoveInBlueprint`, **On Move Frame**.
+They are simulation events: raised on every machine and again in every re-simulation, exactly once per simulated path (the cursors
+`EvaluatedFrame`, `ReportedHitGroups`, `MoveEventsFrame` are sync variables), never while the ability system restores a frame. The rules are
+`FGSTN_MoveEventRules` (`Abilities/GSTN_MoveEvents.h`), tested in `GSTNCombat.NP.MoveEvents.*`.
+
+The combat component answers the input questions a graph asks, by tag and never by key: `WasButtonPressedWithin`, `GetFramesSinceButtonPressed`,
+`CountButtonPressesWithin`, `GetButtonHeldFrames` (an `Input.Button.*` tag of the input config), `WasCommandEnteredWithin` (a `Command.*` tag:
+its whole pattern, by presses no command used yet), `GetMoveStick`, `GetStickDirection`, `GetMoveHitConfirmGroups`. Simulation reads, like
+`GetActivationContext`; ages count combat frames like the buffer (hitstop does not age a press). The arithmetic is `FGSTN_InputQueries` in
+GSTNInputCore (`GSTNInput.Core.Input.Queries.*`).
