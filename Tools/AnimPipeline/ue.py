@@ -52,8 +52,22 @@ def _recv(s):
 
 _sock = None
 _id = 0
+def backend():
+    """'builtin' = the editor's own MCP server (owner rule 2026-11-13, see ue_builtin.py), 'bridge' = UE_MCP_Bridge.
+    UE_MCP_BACKEND forces one; UE_MCP_PORT (a bridge port) keeps meaning the bridge; otherwise built-in when it answers."""
+    b = os.environ.get("UE_MCP_BACKEND")
+    if b:
+        return b
+    if "UE_MCP_PORT" in os.environ:
+        return "bridge"
+    import ue_builtin
+    return "builtin" if ue_builtin.available() else "bridge"
+
 def call(method, params=None, timeout=300):
     global _sock, _id
+    if backend() == "builtin":
+        import ue_builtin
+        return ue_builtin.call(method, params, timeout)
     port = get_port()
     if _sock is None:
         _sock = socket.create_connection(("127.0.0.1", port), timeout=timeout)
