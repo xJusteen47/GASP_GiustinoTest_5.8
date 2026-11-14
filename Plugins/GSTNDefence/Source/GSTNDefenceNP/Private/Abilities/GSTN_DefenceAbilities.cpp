@@ -98,11 +98,15 @@ namespace
 UGSTN_GA_Tech::UGSTN_GA_Tech(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	// The stick must not turn a lying pawn: the roll-back reads the facing the knockdown left (react-hook-2 fail)
+	Timeline.bIgnoreMoveInput = true;
 }
 
 UGSTN_GA_GroundBounce::UGSTN_GA_GroundBounce(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
+	// The stick must not turn a lying pawn: the roll-back reads the facing the knockdown left (react-hook-2 fail)
+	Timeline.bIgnoreMoveInput = true;
 }
 
 UGSTN_GA_GetupRoll::UGSTN_GA_GetupRoll(const FObjectInitializer& ObjectInitializer)
