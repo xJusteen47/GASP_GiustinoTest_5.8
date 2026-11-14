@@ -5,7 +5,7 @@
 # folder shared by every worktree through a junction and holds the owner's work in progress: this script only duplicates out of it.
 # Writes, under /Game/GASNPPTest/Combat/Overlord (new assets only; KIT_Test_Hits, WPN_Test_Hits and the test character are never edited):
 #   AS_OverlordJab{1,2}V3    copies of the built animations (versioned with the kit; rerun with refresh=True after a new `animpipe build`)
-#   AM_OverlordJab{1,2}V3    one montage each (default slot, 2 frame blend in, 4 frame blend out)
+#   AM_OverlordJab{1,2}V3    one montage each (default slot, no blend in, 4 frame blend out)
 #   TL_Overlord_Jab{1,2}     UGSTN_CombatTimeline: frames from the move cards, a PLACEHOLDER root hitbox, jab 1's cancel window into the
 #                            neutral attack and the tag window that tells the two bindings apart
 #   GA_Overlord_Jab{1,2}     thin Blueprint children of UGSTN_GA_TestKitStrike whose TimelineAsset is the timeline above (no graph)
@@ -32,7 +32,8 @@ KIT, WEAPON = 'KIT_Test_Overlord', 'WPN_Test_Overlord'
 COMMAND = 'Command.Attack.Neutral'
 # Up on jab 1 from the frame before its cancel window to the window's end: the jab 2 binding requires it, the jab 1 binding ignores it
 CHAIN_TAG = 'Test.State.OverlordJabChain'
-BLEND_IN_SECONDS = 2.0 / 60.0
+# 0 (owner, ANIM-JAB round 1): the first frame of the move must already change the pose, no soft blend-in
+BLEND_IN_SECONDS = 0.0
 # PROVISIONAL, the owner decides. The engine default (0.25 s) mixes the last 15 frames of each animation with the idle and hides the authored recovery
 BLEND_OUT_SECONDS = 4.0 / 60.0
 # A timeline frame is one simulation tick (16 ms, 62.5 Hz); the cards and the animations count frames at 60 fps. At this rate the montage
@@ -40,13 +41,13 @@ BLEND_OUT_SECONDS = 4.0 / 60.0
 # arrival that is the hand 40 cm short of the target for the whole hitstop). Every move authored at 60 fps needs it, redone animations included
 SIM_HZ, ANIM_FPS = 62.5, 60.0
 MONTAGE_PLAY_RATE = SIM_HZ / ANIM_FPS
-# root_motion: the animation carries the lunge (+30 cm forward, frames 4-9 of jab 2) and the montage's sync sim moves the capsule with it; the
-# other moves stay in place
+# root_motion: off for both (owner, round 1): jab 2's 18 cm step is authored in pose space (pelvis and feet) and the clip ends on the idle at
+# the origin, so the capsule never moves (the v3 root motion dropped the capsule 12 cm, see docs/notes/handovers/anim-jab-5.md)
 # total frames, first actionable frame, active (first, last), cancel window into COMMAND (first, last) or None,
 # hit PLACEHOLDERS: radius, reach from, reach to, height, damage, knockback, angle, victim hitstop, attacker hitstop
 MOVES = {
     1: {'total': 29, 'faf': 22, 'active': (6, 8), 'cancel': (9, 13), 'root_motion': False, 'hit': (45.0, 60.0, 110.0, 30.0, 3.0, 150.0, 30.0, 4, 3)},
-    2: {'total': 53, 'faf': 26, 'active': (9, 11), 'cancel': None, 'root_motion': True, 'hit': (50.0, 60.0, 120.0, 30.0, 7.0, 550.0, 35.0, 6, 4)},
+    2: {'total': 53, 'faf': 26, 'active': (9, 11), 'cancel': None, 'root_motion': False, 'hit': (50.0, 60.0, 120.0, 30.0, 7.0, 550.0, 35.0, 6, 4)},
 }
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'AnimJab3', 'setup_overlord_jab_kit.txt')
 _lines = []
