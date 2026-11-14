@@ -17,7 +17,7 @@ Branch `claude/project-thread-2n1mrc` from ue59m1 `483c2494`. Cloud only: **NOT 
 - **Owner rule (11-14 12:41Z): first frame of a new anim/state = clear change.** Blend IN of every reaction 0-1 frame (HitStand, Splat snap;
   Tumble, Knockdown 1), GroundHit->LieUp chain 1 frame. The 20-frame blend is only the get-up's EXIT back to the game pose (anti-crouch).
 **Not done:** ECB / shrinking capsule (sim + hurtbox change, needs its own small design); GroundHit from tumble height (the 90 cm drop is in the
-clips: needs a GroundHit variant that starts at tumble height, anim job; the 4-frame blend in is data in DA_ReactionAnims).
+clips: needs a GroundHit variant that starts at tumble height, anim job; the blend in is data in DA_ReactionAnims).
 **Desktop steps (one thread, editor CLOSED):**
 1. In `GASP_Giustino2_ue59`: `git fetch origin claude/project-thread-2n1mrc` then `git merge --no-edit FETCH_HEAD`.
 2. Build the editor target (max 2 fix attempts on compile errors; the unverified engine calls are in `GSTN_ReactionAnimComponent.cpp`:
