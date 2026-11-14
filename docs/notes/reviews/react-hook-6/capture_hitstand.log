@@ -1,0 +1,13 @@
+    0.0s driver loaded: out C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_ue59\Saved\AnimReact\react-hook-6, sequences ['back_hitstand', 'back_knockdown']
+    8.0s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '3', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   22.4s review stage: parked [('Z1', (3800.0, 300.0))]; host P256, attacker P257
+   22.4s defence steps saved in the rules: True
+   22.4s kits KIT_Test_DefenceLanding: host OK, attacker OK
+   22.4s anim mesh SkeletalMesh, reaction components ['GSTN_ReactionAnimComponent']
+   29.3s sequence back_hitstand: host at (206, -510, 88) yaw 0, attacker at [0, -510, 88] yaw 0, distance 206 cm, facing error 180 deg (0 = face to face), states []
+   31.5s back_hitstand: v10 attack c1 (states [])
+   56.5s sequence back_hitstand done: 143 frames, run {'seg': 'game', 'seg0': 72, 'hit': True, 'free_at': 72}
+   62.5s sequence back_knockdown: host at (382, -510, 88) yaw 0, attacker at [0, -510, 88] yaw 0, distance 382 cm, facing error 180 deg (0 = face to face), states []
+   64.8s back_knockdown: v10 attack c1 (states [])
+  144.7s sequence back_knockdown done: 421 frames, run {'seg': 'game', 'seg0': 0}
+  146.1s finish: ok
