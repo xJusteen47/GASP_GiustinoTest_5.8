@@ -61,7 +61,7 @@ if os.environ.get('PIE_CAPTURE_SEQUENCES'):
 ATTACKER = 1
 KIT = 'KIT_Test_DefenceLanding'
 ROLL_LIE = 4      # roll sequences: the stick is held from this many frames after the knockdown starts; the roll must wait for the landing
-FACE_SECONDS = 0.3  # the victim walks toward the attacker this long to face it, from PLACE cm away
+FACE_SECONDS = float(os.environ.get('PIE_CAPTURE_FACE_SECONDS') or 0.3)  # the victim walks toward the attacker this long to face it, from PLACE cm away
 PLACE = 245.0
 TIMEOUT = 1500.0
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None,
