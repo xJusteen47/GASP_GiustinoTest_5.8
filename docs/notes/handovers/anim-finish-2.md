@@ -25,8 +25,6 @@ still BUILT; editor closed, no map saved. Brief: `anim-finish-brief.md`. Previou
 - **Subagents worked well for mechanical steps**: one Sonnet agent did editor start, author, build, blank map, captures, game copies and
   editor kill in 4.5 minutes from an exact brief. Antigravity not used this time (nothing needed it). Blank map: `ue_builtin.execute`
   with `new_blank_map(False)` (last expression must be a json string), `PYTHONPATH=Tools/AnimPipeline`.
-- In passing: editor start rewrote `PM_BoostJump`/`PM_ThrowRider` again (restored). `Apri editor 5.9.bat` is untracked on purpose.
 - **Next thread, in order**: (a) HitStand rebuild + react-v2 review fixes + in-game captures, (b) Quaternius once the zip is there,
   (c) dropkick (poses in the Antigravity worktree, read-only), (d) down-air v9 blend-out, (e) jab v3 round 1.
-- **Cost**: one Fable thread at about 150k tokens of context (most of it the fixed start-up context), 2 Sonnet subagents (about 80k and
-  86k tokens), no Antigravity calls; estimate about $25.
+- **Cost**: one Fable thread at about 150k tokens of context, 2 Sonnet subagents (about 80k and 86k tokens); estimate about $25.
