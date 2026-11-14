@@ -20,14 +20,10 @@ evidence in `docs/notes/reviews/react-hook-6/review/`. Base: react-hook-4 review
 5. Capture script must reset the victim facing between sequences (combined run missed the second hit).
 6. Animation limits unchanged: GroundHit impact pose one frame, no visible bounce, get-up soft for 3 frames, exit crouch.
 
-## Decisions taken
-- Reviewer chose PASS for the in-between frame: the first frame shows a clear change and the turn is complete one frame later,
-  against 7 wrong frames in react-hook-4. Owner can overrule after watching.
-- Looked at 5 composites instead of 2 (hit, landing and hold close-ups) because the first-frame check needed native resolution.
-
-## Next
-- Coordinator: send the two mp4 to the owner. Dedicated back-hit and launch clips stay in the queue.
-- Optional small code thread: notes 1, 3, 4, 5 (Opus medium, about $5-10).
+## Decisions taken and next
+- Reviewer chose PASS for the in-between frame (clear change on frame 1, turn done one frame later; react-hook-4 had 7 wrong frames).
+- 5 composites looked at instead of 2: the first-frame check needed native resolution.
+- Coordinator: send the two mp4 to the owner. Optional small code thread for notes 1, 3, 4, 5 (Opus medium, about $5-10).
 
 ## Cost
 One cloud thread, Fable 5.2, about 130k tokens of context at the end, 6 images viewed. Estimate $7-10.
