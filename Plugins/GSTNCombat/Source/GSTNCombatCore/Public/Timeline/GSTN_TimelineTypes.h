@@ -8,6 +8,7 @@
 #include "Hits/GSTN_HurtboxTypes.h"
 #include "Input/GSTN_BufferResetRules.h"
 #include "StructUtils/InstancedStruct.h"
+#include "Movement/GSTN_MomentumSlide.h"
 #include "GSTN_TimelineTypes.generated.h"
 
 class UAnimMontage;
@@ -604,6 +605,13 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (EditCondition = "MaxSteerDegrees > 0", ClampMin = "0.0", ForceUnits = "deg/s"))
 	float SteerRateDegPerSecond = 0.f;
+
+	/**
+	 * What the move does with the running speed it starts with, on the ground (owner 2026-11-13): slide on the feet along the momentum,
+	 * differently when started against it. Off by default. Separate from root motion and from movement tracks; see FGSTN_MomentumSlide
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Movement")
+	FGSTN_MomentumSlide MomentumSlide;
 
 	/** Startup override window (combat.md 8.3). -1 = the default of the command tier (settings), 0 = none */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Override", meta = (ClampMin = "-1", ForceUnits = "Frames"))

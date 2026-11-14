@@ -193,6 +193,17 @@ void UGSTN_GA_BaseCombat::BeginTimeline(int32 StateStart)
 	RunningEntry.Value = Combat && Combat->IsTimelineRunning(GetClass(), EntryStart, &Entry) ? Entry : INDEX_NONE;
 
 	const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
+
+	// Momentum slide (FGSTN_MomentumSlide): queued before the montage starts, so the slide move is ahead of this frame's root motion move
+	// and wins the override mix (it adds the root motion itself). The move decides on its own first frame whether there is anything to slide
+	if (Data.MomentumSlide.bEnabled)
+	{
+		if (UGSTN_CombatSimComponent* SlideCombat = GetCombatComponent())
+		{
+			SlideCombat->ExecuteMomentumSlide();
+		}
+	}
+
 	UAnimMontage* Montage = Data.Montage.Get();
 	TimelineMontagePlayed = Montage;
 	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();

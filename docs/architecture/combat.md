@@ -648,6 +648,12 @@ FGSTN_LoadoutData (what a player owns and saves)
   jump-cancel), `Movement` (velocity curves, gravity, facing lock → one queued layered move via GE), `Tags`, `Event`
   (gameplay event / projectile / cue at frame N), `Charge` (loop while held), `LandingLag`/auto-cancel for aerials,
   buffer overrides.
+- **Momentum slide** (owner 2026-11-13, `FGSTN_MomentumSlide`, timeline field `MomentumSlide`, off by default): a ground move started
+  while running keeps sliding on its feet along the running direction (never along the facing), with the montage's root motion added,
+  slowed by a Fixed deceleration or by the character's own braking (`Character`, scaled). The facing of the move's first frame against the
+  run picks `Along` or `Against` (dot below `OppositeDotThreshold`), each with `Slide`/`Stop`, speed scale, cap, friction and a frame limit.
+  Played by `FGSTN_LayeredMove_MomentumSlide` (queued by `UGSTN_GA_BaseCombat::BeginTimeline`); it ends with the move, on a hit, a cancel,
+  a recoil, leaving the ground or a ledge; hitstop pauses it. Air moves and minions are unaffected. Not the movement track (no magnet).
 - The timeline frame lives in the combat sync state (start frame + hitstop-paused frames). The ability has no timers of
   its own: it reads its frame from the combat component and ends when the timeline ends, is interrupted or replaced.
 - Animation: the timeline frame is the truth; the synced montage follows (same tick, paused in hitstop). GASP keeps
