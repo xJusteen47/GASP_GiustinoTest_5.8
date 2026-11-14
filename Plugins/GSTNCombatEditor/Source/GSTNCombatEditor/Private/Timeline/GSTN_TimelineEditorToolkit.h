@@ -17,8 +17,8 @@ class SDockTab;
 class UBlueprint;
 
 /**
- * The asset editor of a timeline (combat-m5-editor 5.1): a standalone (or world-centric) window with four tabs, Viewport, Timeline,
- * Details and Frame Data, over one FGSTN_TimelineEditorModel. It owns the model, the undo client that keeps the model honest after
+ * The asset editor of a timeline (combat-m5-editor 5.1): a standalone (or world-centric) window with five tabs, Viewport, Timeline,
+ * Hitboxes, Details and Frame Data, over one FGSTN_TimelineEditorModel. It owns the model, the undo client that keeps the model honest after
  * an undo, and the lease that makes it the only editor of its target; the widgets of the tabs only call the model.
  *
  * What the tabs hold today: Timeline is the panel of E4 with the montage-length bar and the toolbar additions; Details edits the
@@ -44,13 +44,26 @@ public:
 	static const FName TimelineTabId;
 	static const FName DetailsTabId;
 	static const FName FrameDataTabId;
+	/** The hitbox outliner: groups and hitboxes, selection shared with the viewport (owner 2026-11-13) */
+	static const FName HitboxesTabId;
 
 	FGSTN_TimelineEditorToolkit();
 	virtual ~FGSTN_TimelineEditorToolkit() override;
 
 	/**
+	 * The one way to open a timeline editor: brings the open editor of the target to the front, or builds a new toolkit and opens it.
+	 * False when nothing new opened (invalid context, or the target already had an editor, which is now in front).
+	 *
+	 * Checks before it builds: a toolkit that is refused would be destroyed without ever running InitAssetEditor, and destroying an
+	 * FAssetEditorToolkit that was never initialised asserts in UE 5.9 (PairId.IsValidId in a map of the asset editor subsystem, the
+	 * crash of a second "Open Timeline Editor" click on a Blueprint whose timeline editor was already open).
+	 */
+	static bool OpenFor(const EToolkitMode::Type Mode, const TSharedPtr<IToolkitHost>& InitToolkitHost, const FGSTN_TimelineEditContext& InContext);
+
+	/**
 	 * Opens the editor on the context. False, with nothing opened, when the context is not valid or the target already has an editor
-	 * (that editor is brought to the front: the second toolkit is refused, combat-m5-editor 4.1).
+	 * (that editor is brought to the front: the second toolkit is refused, combat-m5-editor 4.1). Call OpenFor instead: a toolkit
+	 * this refuses must not be destroyed (see OpenFor).
 	 */
 	bool InitEditor(const EToolkitMode::Type Mode, const TSharedPtr<IToolkitHost>& InitToolkitHost, const FGSTN_TimelineEditContext& InContext);
 
@@ -127,6 +140,7 @@ private:
 	TSharedRef<SDockTab> SpawnTimelineTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnDetailsTab(const FSpawnTabArgs& Args);
 	TSharedRef<SDockTab> SpawnFrameDataTab(const FSpawnTabArgs& Args);
+	TSharedRef<SDockTab> SpawnHitboxesTab(const FSpawnTabArgs& Args);
 
 	/** The data changed: the findings describe the timeline as it was, and a refresh is scheduled for after the edits settle */
 	void HandleDataChanged();

@@ -331,7 +331,11 @@ void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, co
 		float Time = 0.f;
 		if (Montage && AbilitySystem && AbilitySystem->GetPlayingSyncedMontage(Time) == Montage)
 		{
-			AbilitySystem->StopSyncedMontage(Montage, bWasCancelled);
+			// The data's blend-out on an end or a tail cancel (a recoil already took the slot, so it never gets here with the timeline's montage)
+			float BlendOutSeconds = -1.f;
+			bool bHoldPose = false;
+			ResolveMontageStop(BlendOutSeconds, bHoldPose);
+			AbilitySystem->StopSyncedMontageWithBlend(Montage, bWasCancelled, BlendOutSeconds, bHoldPose);
 		}
 		if (bRecoilPlayed.Value)
 		{
@@ -349,6 +353,39 @@ void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, co
 		TimelineMontagePlayed = nullptr;
 	}
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+}
+
+void UGSTN_GA_BaseCombat::ResolveMontageStop(float& OutBlendOutSeconds, bool& bOutHoldPose) const
+{
+	OutBlendOutSeconds = -1.f;
+	bOutHoldPose = false;
+	const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
+	const int32 Frame = GetTimelineFrame();
+	const int32 Total = Data.TotalFrames;
+	int32 BlendFrames = INDEX_NONE;
+	// The ability sees the end on the frame the combat state cleared the timeline: its last frame or the one after
+	if (Total > 0 && Frame >= Total - 1)
+	{
+		BlendFrames = Data.EndBlendOutFrames;
+	}
+	else
+	{
+		const int32 TailStart = Data.Tail.ResolveStartFrame(Total, Data.FirstActionableFrame);
+		if (TailStart != INDEX_NONE && Frame >= TailStart)
+		{
+			// The tail was cancelled (a stick move, a jump, a command): the blend its data names, until now not applied anywhere
+			BlendFrames = Data.Tail.ResolveBlendOutFrames(Total, Data.FirstActionableFrame);
+		}
+	}
+	if (BlendFrames < 0)
+	{
+		return;
+	}
+	// The fixed step of the simulation turns the data's frames into the blend's seconds
+	const UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	const float StepMs = AbilitySystem != nullptr ? AbilitySystem->GetFixedStepMs() : 16.f;
+	OutBlendOutSeconds = static_cast<float>(BlendFrames) * StepMs / 1000.f;
+	bOutHoldPose = Data.bHoldPoseOnEnd;
 }
 
 int32 UGSTN_GA_BaseCombat::GetTimelineFrame() const

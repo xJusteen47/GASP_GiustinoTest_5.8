@@ -215,6 +215,19 @@ void UNetMontageSimulator::StopMontage(const FAbilityMontageCancel& MontageCance
 	}
 }
 
+void UNetMontageSimulator::StopMontageWithBlend(const FAbilityMontageCancel& MontageCancel, bool bInterrupted, float BlendOutSeconds, bool bHoldPose)
+{
+	const bool bWasPlaying = MontageCancel.MontageToCancel != nullptr && SimulationState.GetPlayingMontage() == MontageCancel.MontageToCancel;
+	StopMontage(MontageCancel, bInterrupted);
+	// Only a stop that happened: a restore (StopMontage returned early) or another montage on the slot leaves the presentation alone
+	if (BlendOutSeconds >= 0.f && bWasPlaying && SimulationState.GetPlayingMontage() == nullptr)
+	{
+		PendingStop.Montage = MontageCancel.MontageToCancel;
+		PendingStop.BlendOutSeconds = BlendOutSeconds;
+		PendingStop.bHoldPose = bHoldPose;
+	}
+}
+
 void UNetMontageSimulator::MontageJumpToSection(UAnimMontage* Montage, FName SectionName)
 {
 	if (!GetNpAbilitySystemComponent() || GetNpAbilitySystemComponent()->GetIsRestoringFrame() || !Montage)
@@ -773,6 +786,8 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 	//if we want to play a montage
 	if (UAnimMontage* DesiredMontage = SyncState.GetPlayingMontage())
 	{
+		// A montage plays again (a new move, a rollback that restored one): a stop asked for before it no longer applies
+		PendingStop = FPendingStopPresentation();
 		// if there's an active instance of the montage (is not blending out) , end it
 		if (FAnimMontageInstance* MontageInstance = AnimInstance->GetActiveInstanceForMontage(DesiredMontage))
 		{
@@ -830,8 +845,24 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 	{
 		if (FAnimMontageInstance* LastMontageInstance = AnimInstance->GetActiveInstanceForMontage(LastPlayingMontage))
 		{
-			LastMontageInstance->Stop(LastMontageInstance->GetBlend());
+			if (PendingStop.Montage.Get() == LastPlayingMontage && PendingStop.BlendOutSeconds >= 0.f)
+			{
+				// The caller's blend (StopMontageWithBlend). Holding the pose: the instance stops advancing, so the blend fades the last pose
+				// of the move instead of the animation that follows it in the montage
+				if (PendingStop.bHoldPose)
+				{
+					LastMontageInstance->SetPlayRate(0.f);
+				}
+				FAlphaBlend BlendOut = LastMontageInstance->GetBlend();
+				BlendOut.SetBlendTime(PendingStop.BlendOutSeconds);
+				LastMontageInstance->Stop(BlendOut);
+			}
+			else
+			{
+				LastMontageInstance->Stop(LastMontageInstance->GetBlend());
+			}
 		}
+		PendingStop = FPendingStopPresentation();
 		LastPlayingMontage = nullptr;
 	}
 }

@@ -565,6 +565,22 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Animation", meta = (ClampMin = "0.01"))
 	float MontagePlayRate = 1.f;
 
+	/**
+	 * How the montage leaves when the timeline ends by itself (TotalFrames reached; owner 2026-11-13: a move cut before the second punch of its
+	 * animation must not show that punch). -1 = as before: the montage's own blend, with the animation still playing under it. 0 = cut on the
+	 * last frame. More = a blend over that many frames. A cancelled tail blends over Tail's BlendOutFrames instead. Presentation only: the
+	 * simulation ends at TotalFrames whatever this says
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Animation", meta = (ClampMin = "-1", ForceUnits = "Frames"))
+	int32 EndBlendOutFrames = -1;
+
+	/**
+	 * On: while the montage blends out (at the end, or when the tail is cancelled) the pose of the last frame is held, so nothing of the
+	 * montage past the timeline is drawn. Off: the montage keeps playing under the blend, which can show the start of what follows in it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Animation")
+	bool bHoldPoseOnEnd = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim")
 	EGSTN_AimPolicy AimPolicy = EGSTN_AimPolicy::KeepFacing;
 

@@ -18,9 +18,8 @@ bool GSTNInlineTimeline::OpenEditor(const FGSTN_TimelineEditContext& Context)
 	{
 		return false;
 	}
-	// A target that already has an editor is brought to the front by InitEditor and no second one opens
-	const TSharedRef<FGSTN_TimelineEditorToolkit> Toolkit = MakeShared<FGSTN_TimelineEditorToolkit>();
-	return Toolkit->InitEditor(EToolkitMode::Standalone, TSharedPtr<IToolkitHost>(), Context);
+	// A target that already has an editor is brought to the front and no second toolkit is built
+	return FGSTN_TimelineEditorToolkit::OpenFor(EToolkitMode::Standalone, TSharedPtr<IToolkitHost>(), Context);
 }
 
 GSTNInlineTimeline::EAfterCompile GSTNInlineTimeline::DecideAfterCompile(const FGSTN_TimelineEditContext& Context)

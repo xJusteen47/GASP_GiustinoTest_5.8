@@ -201,6 +201,15 @@ void UNpAbilitySystemComponent::StopSyncedMontage(UAnimMontage* Montage, bool bI
 	MontagePlayer->StopMontage(FAbilityMontageCancel(Montage), bInterrupted);
 }
 
+void UNpAbilitySystemComponent::StopSyncedMontageWithBlend(UAnimMontage* Montage, bool bInterrupted, float BlendOutSeconds, bool bHoldPose)
+{
+	if (!MontagePlayer)
+	{
+		return;
+	}
+	MontagePlayer->StopMontageWithBlend(FAbilityMontageCancel(Montage), bInterrupted, BlendOutSeconds, bHoldPose);
+}
+
 void UNpAbilitySystemComponent::PauseCurrentSyncedMontage()
 {
 	if (!MontagePlayer)
