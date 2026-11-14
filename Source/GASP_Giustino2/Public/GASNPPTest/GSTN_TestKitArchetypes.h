@@ -114,4 +114,11 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Test|Kits")
 	static bool WriteStrikeMove(TSubclassOf<UGameplayAbility> StrikeClass, const FGSTN_TestStrikeSpec& Spec);
+
+	/**
+	 * Writes the startup steering of a Blueprint child of UGSTN_GA_TestKitStrike (owner 2026-11-14: which stick, the window, the cap and the
+	 * rate), leaving the rest of its timeline alone. Same rules as WriteStrikeMove: native classes refused, dirty only when something changed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Test|Kits")
+	static bool WriteStartupSteer(TSubclassOf<UGameplayAbility> StrikeClass, float MaxSteerDegrees, float SteerRateDegPerSecond, const FGSTN_SteerWindow& Steer);
 };

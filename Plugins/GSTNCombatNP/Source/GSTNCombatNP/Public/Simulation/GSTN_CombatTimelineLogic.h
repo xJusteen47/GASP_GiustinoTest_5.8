@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
+#include "Timeline/GSTN_StartupSteer.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 
 struct FGSTN_TrackHookEnvironment;
@@ -119,4 +120,13 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 	 */
 	static bool ResolveSteerHoldYaw(const FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FVector2D& AimStick,
 		float CameraYawDeg, bool bPrecisionAim, float& OutYawDeg);
+
+	/**
+	 * Per-move steering (owner 2026-11-14, FGSTN_SteerWindow): FGSTN_StartupSteer::ResolveFrame for the running move of Core in Frame, with
+	 * the stick its source picks from the frame's command. None without a running move, during a recoil or without a move origin. Used by
+	 * the combat tick (a SetFacing request while Steering with the stick pushed), by the Mover input producer (the orientation intent held
+	 * at OutYawDeg for any phase but None) and by the steering arrows. Pure: reads its arguments only
+	 */
+	static EGSTN_SteerPhase ResolveSteerFrame(const FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FVector2D& MoveStick,
+		const FVector2D& AimStick, bool bPrecisionAim, float CameraYawDeg, float CurrentYawDeg, float StepSeconds, float& OutYawDeg, bool& OutStickActive);
 };

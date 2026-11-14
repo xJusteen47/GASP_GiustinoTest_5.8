@@ -7,6 +7,7 @@
 #include "Hits/GSTN_HitboxTypes.h"
 #include "Hits/GSTN_HurtboxTypes.h"
 #include "Input/GSTN_BufferResetRules.h"
+#include "Curves/CurveFloat.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Movement/GSTN_MomentumSlide.h"
 #include "GSTN_TimelineTypes.generated.h"
@@ -539,6 +540,65 @@ struct GSTNCOMBATCORE_API FGSTN_BakeInfo
 };
 
 /**
+ * Which stick turns a move during its steer window (FGSTN_SteerWindow, owner decision 2026-11-14: chosen per move). The stick is read from the
+ * frame's predicted input command, never from a fixed key: the move stick and the aim stick are whatever the player's input config maps to them.
+ */
+UENUM(BlueprintType)
+enum class EGSTN_SteerSource : uint8
+{
+	/** The aim stick, only while the precision reticle is on (plan precisione-weakpoint 5). Every move authored before 2026-11-14; for moves that need a reticle */
+	AimStickWithReticle,
+	/** The move stick, reticle or not (Monster Hunter style): the default the owner wants for new melee moves */
+	MoveStick,
+	/** The aim stick while the reticle is on and the aim stick is pushed, else the move stick */
+	MoveOrAimStick,
+};
+
+/**
+ * When and how a move turns during its startup (research handoffs/attack-aiming-research.md Â§2, owner 2026-11-14). The cap and the rate stay
+ * MaxSteerDegrees and SteerRateDegPerSecond on the timeline; this says which stick, in which frames, and how the facing is held. Pure data:
+ * FGSTN_StartupSteer::ResolveFrame turns it into a yaw per frame from the move origin, the frame's command and the facing of the previous frame.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_SteerWindow
+{
+	GENERATED_BODY()
+
+	/** Which stick steers. AimStickWithReticle keeps the behaviour of every move made before this struct existed */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer")
+	EGSTN_SteerSource Source = EGSTN_SteerSource::AimStickWithReticle;
+
+	/** First timeline frame the stick steers in (a charge that only turns from frame 6, a signature aerial from 0) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 StartFrame = 0;
+
+	/**
+	 * Frame the direction locks at (exclusive). -1 = the first active frame (the hitboxes never sweep while the stick turns them). A value past
+	 * the first active frame is honoured but tracks "for most of the animation", which players read as unfair (Absolver)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer", meta = (ClampMin = "-1", ForceUnits = "Frames"))
+	int32 EndFrame = -1;
+
+	/**
+	 * Multiplier of SteerRateDegPerSecond over the window: X = 0 at StartFrame, 1 at the lock; Y = the factor (1 = full rate). Free at the start
+	 * and heavy toward the lock, say. No keys = 1. Ignored when the rate is 0 (the turn is then immediate)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer")
+	FRuntimeFloatCurve RateScale;
+
+	/**
+	 * Move stick sources only: from the move's first frame to the end of its last active frame, the facing the move holds replaces the turn the
+	 * movement mode would make toward the move stick. Without it the stick keeps turning the character freely (the cap and the lock mean nothing)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer")
+	bool bHoldFacing = true;
+
+	/** Shows the steering arrows and the allowed arc for this move (presentation; GSTN.Combat.SteerIndicator overrides it) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer")
+	bool bShowIndicator = true;
+};
+
+/**
  * The frame-data source of truth of a combat ability, inline on the ability or in a UGSTN_CombatTimeline asset.
  */
 USTRUCT(BlueprintType)
@@ -595,7 +655,7 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	 * Right-stick steering during startup (plan precisione-weakpoint 5, FGSTN_StartupSteer): the most the move's direction can turn
 	 * from the facing it started with, either way. On top of AimPolicy, for every policy. 0 = the aim stick does not steer this move
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (ClampMin = "0.0", ClampMax = "90.0", ForceUnits = "deg"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (ClampMin = "0.0", ClampMax = "180.0", ForceUnits = "deg"))
 	float MaxSteerDegrees = 20.f;
 
 	/**
@@ -605,6 +665,13 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (EditCondition = "MaxSteerDegrees > 0", ClampMin = "0.0", ForceUnits = "deg/s"))
 	float SteerRateDegPerSecond = 0.f;
+
+	/**
+	 * Which stick steers, in which frames, and whether the facing is held (owner 2026-11-14). The default reproduces the reticle steer above.
+	 * 180 in MaxSteerDegrees with a short window is a signature move "aimable in any direction" in its first frames (Helm Breaker style)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (EditCondition = "MaxSteerDegrees > 0"))
+	FGSTN_SteerWindow Steer;
 
 	/**
 	 * What the move does with the running speed it starts with, on the ground (owner 2026-11-13): slide on the feet along the momentum,

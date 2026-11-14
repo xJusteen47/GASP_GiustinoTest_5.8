@@ -24,6 +24,7 @@
 #include "Simulation/GSTN_HitInbox.h"
 #include "Simulation/GSTN_InputSimulator.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
+#include "Timeline/GSTN_StartupSteer.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 #include "World/GSTN_StepSnapshot.h"
@@ -116,6 +117,23 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Combat|Precision")
 	bool IsPrecisionAimInput() const { return bLastPrecisionAim; }
+
+	/** What the steering arrows draw (presentation, local): the running move's steering as of the latest simulated frame */
+	struct FSteerView
+	{
+		EGSTN_SteerPhase Phase = EGSTN_SteerPhase::None;
+		/** Move origin yaw and the cap around it (the allowed arc) */
+		float StartYawDeg = 0.f;
+		float MaxSteerDegrees = 0.f;
+		/** World yaw the picked stick points at, when it is out of the dead zone */
+		bool bStickActive = false;
+		float StickYawDeg = 0.f;
+		/** The move's own data toggle (FGSTN_SteerWindow::bShowIndicator) */
+		bool bShow = false;
+	};
+
+	/** The steering of the running move from the last command this pawn produced. False (and Phase None) when nothing steers or holds */
+	bool GetSteerView(FSteerView& Out) const;
 
 	/**
 	 * Network Prediction calls it on every instance of the model, whenever the simulation rolls back to a state. Drops the hits that
@@ -467,6 +485,13 @@ public:
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Precision")
 	bool bAddPrecisionAim = true;
+
+	/**
+	 * Adds a UGSTN_SteerIndicatorComponent (the steering arrows and the allowed arc on the ground, local presentation) to the owner at BeginPlay,
+	 * except on a dedicated server or when the owner has one already. Each move says whether it shows them (FGSTN_SteerWindow::bShowIndicator)
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Precision")
+	bool bAddSteerIndicator = true;
 
 	/** The input config resolved at setup (InputConfig), null before BeginPlay or without one. For presentation that reads the same actions */
 	const UGSTN_InputConfig* GetActiveInputConfig() const { return ActiveInputConfig; }
@@ -891,6 +916,8 @@ private:
 	bool bLastPrecisionAim = false;
 	int8 LastAimStickX = 0;
 	int8 LastAimStickY = 0;
+	int8 LastMoveStickX = 0;
+	int8 LastMoveStickY = 0;
 	uint16 LastCameraYaw = 0;
 
 	/** The attacker side of the combat tick for the frame being simulated (GSTN_CombatSimAttacker.cpp). Writes Core and the victims' inboxes */

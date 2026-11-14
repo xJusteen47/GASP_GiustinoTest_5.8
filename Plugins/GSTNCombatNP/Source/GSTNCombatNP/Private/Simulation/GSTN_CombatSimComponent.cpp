@@ -23,6 +23,7 @@
 #include "Movement/GSTN_LayeredMove_MomentumSlide.h"
 #include "Presentation/GSTN_PrecisionAimComponent.h"
 #include "Timeline/GSTN_StartupSteer.h"
+#include "Presentation/GSTN_SteerIndicatorComponent.h"
 #include "Movement/GSTN_SetFacingEffect.h"
 #include "Input/GSTN_InputTags.h"
 #include "Context/GSTN_InputContextProvider.h"
@@ -157,6 +158,12 @@ void UGSTN_CombatSimComponent::BeginPlay()
 	else
 	{
 		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: no context provider, the character is taken to face yaw 0 with no movement context"), *GetPathName());
+	}
+	// The steering arrows (presentation, owner 2026-11-14), the same way
+	if (bAddSteerIndicator && GetNetMode() != NM_DedicatedServer && GetOwner() && !GetOwner()->FindComponentByClass<UGSTN_SteerIndicatorComponent>())
+	{
+		UGSTN_SteerIndicatorComponent* Arrows = NewObject<UGSTN_SteerIndicatorComponent>(GetOwner(), TEXT("GSTN_SteerIndicator"));
+		Arrows->RegisterComponent();
 	}
 }
 
@@ -769,30 +776,65 @@ void UGSTN_CombatSimComponent::ProduceInput(const int32 DeltaTimeMS, FGSTN_Input
 	bLastPrecisionAim = Cmd->bPrecisionAim;
 	LastAimStickX = Cmd->AimStickX;
 	LastAimStickY = Cmd->AimStickY;
+	LastMoveStickX = Cmd->StickX;
+	LastMoveStickY = Cmd->StickY;
 	LastCameraYaw = Cmd->CameraYaw;
 }
 
 void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMoverInputCmdContext& InputCmdResult)
 {
 	const FGSTN_CombatSyncState* Sync = GetSyncState();
-	if (!bLastPrecisionAim || !Sync)
+	if (!Sync || !GetOwner())
 	{
 		return;
 	}
-	// The frame this input is for is the one after the latest simulated frame
+	// The frame this input is for is the one after the latest simulated frame. Per-move steering (owner 2026-11-14): the reticle source holds
+	// only with the reticle on (slice 3b, unchanged); the move stick sources hold from the first frame to the end of the last active one, so
+	// the movement mode never turns the move further than its cap, nor after the lock. The rate (M11 L9) is the sim's, so they agree
 	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickY));
+	const FVector2D MoveStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastMoveStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastMoveStickY));
 	float HoldYaw = 0.f;
-	const FGSTN_CombatTimelineData* Timeline = GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline);
-	if (FGSTN_CombatTimelineLogic::ResolveSteerHoldYaw(Sync->Core, GetSimulationFrame() + 1, Timeline, AimStick,
-		FGSTN_DirectionClassifier::DequantizeYaw(LastCameraYaw), true, HoldYaw))
+	bool bStickActive = false;
+	if (FGSTN_CombatTimelineLogic::ResolveSteerFrame(Sync->Core, GetSimulationFrame() + 1, GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline), MoveStick,
+		AimStick, bLastPrecisionAim, FGSTN_DirectionClassifier::DequantizeYaw(LastCameraYaw), static_cast<float>(GetOwner()->GetActorRotation().Yaw),
+		LastStepMs * 0.001f, HoldYaw, bStickActive) != EGSTN_SteerPhase::None)
 	{
-		// Aim handling (M11 L9): the intent follows the same rate as the sim's SetFacing, so the movement mode does not turn faster than the move
-		if (Timeline && Timeline->SteerRateDegPerSecond > 0.f && GetOwner())
-		{
-			HoldYaw = FGSTN_StartupSteer::RateLimitYaw(static_cast<float>(GetOwner()->GetActorRotation().Yaw), HoldYaw, Timeline->SteerRateDegPerSecond, LastStepMs * 0.001f);
-		}
 		HoldOrientationIntent(InputCmdResult, HoldYaw);
 	}
+}
+
+bool UGSTN_CombatSimComponent::GetSteerView(FSteerView& Out) const
+{
+	Out = FSteerView();
+	const FGSTN_CombatSyncState* Sync = GetSyncState();
+	const FGSTN_CombatTimelineData* Timeline = Sync ? GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline) : nullptr;
+	if (!Timeline || !GetOwner())
+	{
+		return false;
+	}
+	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickY));
+	const FVector2D MoveStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastMoveStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastMoveStickY));
+	const float CameraYaw = FGSTN_DirectionClassifier::DequantizeYaw(LastCameraYaw);
+	float Yaw = 0.f;
+	bool bStickActive = false;
+	// The latest simulated frame, step 0: where the steering stands, not a new step of it
+	Out.Phase = FGSTN_CombatTimelineLogic::ResolveSteerFrame(Sync->Core, GetSimulationFrame(), Timeline, MoveStick, AimStick, bLastPrecisionAim, CameraYaw,
+		static_cast<float>(GetOwner()->GetActorRotation().Yaw), 0.f, Yaw, bStickActive);
+	if (Out.Phase == EGSTN_SteerPhase::None)
+	{
+		return false;
+	}
+	Out.StartYawDeg = FGSTN_StartupSteer::DequantizeYaw(static_cast<int16>(Sync->Core.Hit.MoveOrigin.RotationQ[1]));
+	Out.MaxSteerDegrees = Timeline->MaxSteerDegrees;
+	Out.bShow = Timeline->Steer.bShowIndicator;
+	FVector2D Stick;
+	if (FGSTN_StartupSteer::PickStick(Timeline->Steer.Source, MoveStick, AimStick, bLastPrecisionAim, Stick)
+		&& FGSTN_StartupSteer::IsSteering(Stick, Timeline->MaxSteerDegrees))
+	{
+		Out.bStickActive = true;
+		Out.StickYawDeg = FRotator::NormalizeAxis(CameraYaw + FMath::RadiansToDegrees(static_cast<float>(FMath::Atan2(Stick.X, Stick.Y))));
+	}
+	return true;
 }
 
 bool UGSTN_CombatSimComponent::HoldOrientationIntent(FMoverInputCmdContext& InputCmd, float YawDeg)
@@ -1572,7 +1614,7 @@ void UGSTN_CombatSimComponent::ExecuteFreeze(TSubclassOf<UGameplayEffect> Effect
 
 void UGSTN_CombatSimComponent::StepStartupSteer(int32 Frame, const FGSTN_InputCmd& Cmd, FGSTN_CombatSyncCore& Core, float StepSeconds)
 {
-	if (!Cmd.bPrecisionAim || Core.ActionState != EGSTN_ActionState::InTimeline || (Cmd.AimStickX == 0 && Cmd.AimStickY == 0))
+	if (Core.ActionState != EGSTN_ActionState::InTimeline || (Cmd.AimStickX == 0 && Cmd.AimStickY == 0 && Cmd.StickX == 0 && Cmd.StickY == 0))
 	{
 		return;
 	}
@@ -1583,9 +1625,15 @@ void UGSTN_CombatSimComponent::StepStartupSteer(int32 Frame, const FGSTN_InputCm
 		return;
 	}
 	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickY));
-	int16 YawArg = 0;
-	if (FGSTN_CombatTimelineLogic::ComputeStartupSteer(Core, Frame, GetRegistryTimeline(Tables(), Core.ActiveTimeline), AimStick,
-		FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), static_cast<float>(Pose.Rotator().Yaw), Cmd.bPrecisionAim, YawArg, StepSeconds))
+	const FVector2D MoveStick(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickY));
+	const float CurrentYaw = static_cast<float>(Pose.Rotator().Yaw);
+	float SteerYaw = 0.f;
+	bool bStickActive = false;
+	// Per-move steering (owner 2026-11-14): a turn only while the window is open and the move's stick is pushed; the holds are the input producer's
+	const EGSTN_SteerPhase Phase = FGSTN_CombatTimelineLogic::ResolveSteerFrame(Core, Frame, GetRegistryTimeline(Tables(), Core.ActiveTimeline), MoveStick,
+		AimStick, Cmd.bPrecisionAim, FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), CurrentYaw, StepSeconds, SteerYaw, bStickActive);
+	const int16 YawArg = FGSTN_StartupSteer::QuantizeYaw(SteerYaw);
+	if (Phase == EGSTN_SteerPhase::Steering && bStickActive && YawArg != FGSTN_StartupSteer::QuantizeYaw(CurrentYaw))
 	{
 		if (!Core.Requests.Add(EGSTN_RequestType::SetFacing, Frame, YawArg))
 		{

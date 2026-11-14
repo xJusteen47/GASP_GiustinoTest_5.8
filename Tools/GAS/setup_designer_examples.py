@@ -35,6 +35,14 @@ MOVES = {
         damage=8.0, base_knockback=900.0, knockback_growth=0.0, angle_deg=80.0, hitstop_frames=8, attacker_hitstop_frames=6,
         montage=TAKEDOWN.format('L'), montage_play_rate=1.2)),
 }
+# Startup steering (owner 2026-11-14, handoffs/attack-aiming-research.md): which stick turns the move, how far (cap, deg), how fast (deg/s at
+# 62.5 Hz: 450 = 7.2 deg/frame) and until which frame (-1 = the first active frame). Written on every run: these are the test profiles.
+#   Strong   left stick (Monster Hunter style), up to 90 deg, slow: the heavy charge that corrects its aim
+#   Special  "signature" profile (Helm Breaker style): either stick, any direction (180) but only in its first 6 frames, fast
+STEER = {
+    'GA_Example_Strong': dict(cap=90.0, rate=450.0, source='MOVE_STICK', start=0, end=-1),
+    'GA_Example_Special': dict(cap=180.0, rate=900.0, source='MOVE_OR_AIM_STICK', start=0, end=6),
+}
 WEAPON_MOVES = ('GA_Example_Light', 'GA_Example_Strong')   # on the weapon (they change with the weapon); the special is the kit's
 KIT_LABEL = 'ESEMPIO'
 KIT_TAG, WEAPON_TAG, BACKPACK_TAG = 'Kit.Example', 'Weapon.Example', 'Backpack.Example.Dome'
@@ -99,6 +107,16 @@ def _strike_spec(values):
     return spec
 
 
+def _write_steer(cls, values):
+    steer = unreal.GSTN_SteerWindow()
+    steer.set_editor_property('source', getattr(unreal.GSTN_SteerSource, values['source']))
+    steer.set_editor_property('start_frame', values['start'])
+    steer.set_editor_property('end_frame', values['end'])
+    changed = unreal.GSTN_TestKitContentLibrary.write_startup_steer(cls, values['cap'], values['rate'], steer)
+    log(f'steer {cls.get_name()}: {values} changed={changed}')
+    return changed
+
+
 def _command(binding):
     return str(binding.get_editor_property('command').get_editor_property('tag_name'))
 
@@ -137,6 +155,8 @@ def run(force=False):
         classes[name] = cls
         if created or force:
             unreal.GSTN_TestKitContentLibrary.write_strike_move(cls, _strike_spec(spec))
+            saves.append(bp)
+        if name in STEER and _write_steer(cls, STEER[name]) and bp not in saves:
             saves.append(bp)
 
     dome_bp, dome_new = _child_blueprint('GA_Example_BackpackDome', 'GSTN_GA_BackpackDome')
