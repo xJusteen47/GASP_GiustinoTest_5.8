@@ -34,11 +34,13 @@ SIM_HZ = 62.5
 HOLD_BLEND_FRAMES = 20      # simulation frames the held last pose of a get-up blends out over (crouch mitigation; 0-30 to tune)
 
 # name, required, blocked, priority, animation, then, end, blend in, chain blend, blend out, restart event (60 fps frames)
+# Owner rule 2026-11-14: the first frame of a new animation/state must read as a clear change (feel): blend in 0-1 frames, never soft.
+# Long blends only where a join would otherwise pop to the game pose (the end of a reaction, HOLD_BLEND_FRAMES).
 RULES = [
-    ('Knockdown', 'Combat.State.Knockdown', None, 40, 'AS_React_GroundHit', 'AS_React_LieUp', 'HOLD_LAST_POSE', 4, 2, 6, None),
-    ('Splat', 'Combat.State.Splat', None, 30, 'AS_React_Splat', None, 'HOLD_LAST_POSE', 2, 2, 6, None),
-    ('Tumble', 'Combat.State.Tumble', None, 20, 'AS_React_Tumble', None, 'LOOP', 4, 2, 6, None),
-    ('HitStand', 'Combat.State.Hitstun', 'Combat.State.Tumble', 10, 'AS_React_HitStand', None, 'BLEND_OUT', 2, 2, 8, 'Combat.Event.Hit.Received'),
+    ('Knockdown', 'Combat.State.Knockdown', None, 40, 'AS_React_GroundHit', 'AS_React_LieUp', 'HOLD_LAST_POSE', 1, 1, 6, None),
+    ('Splat', 'Combat.State.Splat', None, 30, 'AS_React_Splat', None, 'HOLD_LAST_POSE', 0, 1, 6, None),
+    ('Tumble', 'Combat.State.Tumble', None, 20, 'AS_React_Tumble', None, 'LOOP', 1, 1, 6, None),
+    ('HitStand', 'Combat.State.Hitstun', 'Combat.State.Tumble', 10, 'AS_React_HitStand', None, 'BLEND_OUT', 0, 1, 8, 'Combat.Event.Hit.Received'),
 ]
 
 # ability, parent class, montage, travel cm, direction, keys (simulation frames, fraction): roll-travel.md converted from 60 to 62.5 Hz

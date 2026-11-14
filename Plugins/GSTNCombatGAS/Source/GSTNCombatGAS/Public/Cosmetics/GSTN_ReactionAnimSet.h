@@ -64,13 +64,16 @@ struct GSTNCOMBATGAS_API FGSTN_ReactionAnimRule
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction", meta = (ClampMin = "0.01"))
 	float PlayRate = 1.f;
 
-	/** Blend from whatever was showing when the rule starts (60 fps frames) */
+	/**
+	 * Blend from whatever was showing when the rule starts (60 fps frames). Owner rule (2026-11-14): the first frame of a new state must read
+	 * as a clear change from the pose before, for feel, so keep it at 0-1; a soft blend in hides the hit
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction", meta = (ClampMin = "0", ForceUnits = "Frames"))
-	int32 BlendInFrames = 4;
+	int32 BlendInFrames = 1;
 
-	/** Cross-fade from Animation to ThenAnimation (60 fps frames) */
+	/** Cross-fade from Animation to ThenAnimation (60 fps frames): only hides the join, the second clip is part of the same reaction */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction", meta = (ClampMin = "0", ForceUnits = "Frames"))
-	int32 ChainBlendFrames = 2;
+	int32 ChainBlendFrames = 1;
 
 	/**
 	 * Blend back to the character's own animation when the rule stops holding, or at the end with EndBehaviour BlendOut (60 fps frames).
