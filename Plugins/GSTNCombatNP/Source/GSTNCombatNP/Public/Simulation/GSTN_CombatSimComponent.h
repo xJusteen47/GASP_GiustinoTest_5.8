@@ -978,6 +978,13 @@ private:
 	int8 LastAimStickY = 0;
 	int8 LastMoveStickX = 0;
 	int8 LastMoveStickY = 0;
+
+	/**
+	 * Input side only (shapes the produced command, never read by the sim): a reaction or a get-up held the facing, and the stick has not
+	 * been pushed since. While set, a neutral stick keeps holding the facing, so the movement mode does not turn the pawn back to the
+	 * orientation of the walk before the hit (react-hook-4 review: a victim turned by a hit from behind turned its back again after the get-up)
+	 */
+	bool bHoldFacingAfterReaction = false;
 	uint16 LastCameraYaw = 0;
 
 	/** The attacker side of the combat tick for the frame being simulated (GSTN_CombatSimAttacker.cpp). Writes Core and the victims' inboxes */

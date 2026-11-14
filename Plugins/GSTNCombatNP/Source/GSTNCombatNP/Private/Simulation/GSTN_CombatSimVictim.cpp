@@ -226,6 +226,22 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, co
 		Core.Requests.Add(EGSTN_RequestType::VictimFreeze, Frame, static_cast<int16>(FMath::Min(Result.FreezeFrames, 32767)));
 	}
 
+	// The turn of a staggered victim, on the hit frame (react-hook-4 review: turned at the launch, the first 7 hitstop frames showed the
+	// reaction pose the wrong way round). Queued like a steer: the pre-tick of this frame hands it to Mover before the hitstop freeze holds it
+	if (Self && bFrameInterrupted)
+	{
+		float TurnYaw = 0.f;
+		if (FGSTN_CombatVictim::ResolveHitFacing(CombatRules, Result, Core, *Self, Snapshot, TurnYaw))
+		{
+			const int16 YawArg = FGSTN_StartupSteer::QuantizeYaw(TurnYaw);
+			if (YawArg != FGSTN_StartupSteer::QuantizeYaw(static_cast<float>(Self->Facing.Rotation().Yaw))
+				&& !Core.Requests.Add(EGSTN_RequestType::SetFacing, Frame, YawArg))
+			{
+				UE_LOG(LogGSTNCombatVictim, Error, TEXT("%s frame %d: no room for the hit turn request"), *GetOwner()->GetName(), Frame);
+			}
+		}
+	}
+
 	// The end of the hitstop and of the hitstun, by the reaction the hit chose
 	FGSTN_ReactionStepInput Reaction;
 	Reaction.Frame = Frame;

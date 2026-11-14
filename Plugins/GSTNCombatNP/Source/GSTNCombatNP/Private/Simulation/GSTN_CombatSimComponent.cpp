@@ -809,6 +809,7 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 			Inputs->SetMoveInput(EMoveInputType::DirectionalIntent, FVector::ZeroVector);
 		}
 		HoldOrientationIntent(InputCmdResult, static_cast<float>(GetOwner()->GetActorRotation().Yaw));
+		bHoldFacingAfterReaction = true;
 		return;
 	}
 	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickY));
@@ -820,6 +821,20 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 		LastStepMs * 0.001f, HoldYaw, bStickActive) != EGSTN_SteerPhase::None)
 	{
 		HoldOrientationIntent(InputCmdResult, HoldYaw);
+		bHoldFacingAfterReaction = false;
+		return;
+	}
+	// Free after a reaction: the facing the hit turned to stays until the player pushes the stick
+	if (bHoldFacingAfterReaction)
+	{
+		if (MoveStick.SizeSquared() > FMath::Square(0.2))
+		{
+			bHoldFacingAfterReaction = false;
+		}
+		else
+		{
+			HoldOrientationIntent(InputCmdResult, static_cast<float>(GetOwner()->GetActorRotation().Yaw));
+		}
 	}
 }
 

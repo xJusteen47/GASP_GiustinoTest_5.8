@@ -633,6 +633,67 @@ void FGSTN_CombatVictim::EndReaction(FGSTN_CombatSyncCore& Core, int32 Frame)
 	}
 }
 
+bool FGSTN_CombatVictim::ResolveHitFacing(const UGSTN_CombatRules* Rules, const FGSTN_VictimResult& Result, const FGSTN_CombatSyncCore& Core,
+	const FGSTN_SnapshotEntry& Self, const FGSTN_StepSnapshot* Snapshot, float& OutYawDeg)
+{
+	if (!Rules || !Core.Hit.HasPendingReaction())
+	{
+		return false;
+	}
+	// The hit that wrote the pending reaction: the last staggered one of the drain
+	const FGSTN_VictimHit* Last = nullptr;
+	for (const FGSTN_VictimHit& Hit : Result.Hits)
+	{
+		if (Hit.bStaggered && !Hit.bRicochet)
+		{
+			Last = &Hit;
+		}
+	}
+	if (!Last)
+	{
+		return false;
+	}
+	// Back along the knockback: the same rule the launch applies (ExecuteReactionMove), now already on the hit frame. DI may bend it by a
+	// few degrees when the move starts; that correction stays where it was
+	const FVector Launch = Core.Hit.GetPendingLaunch();
+	const FVector Flat(Launch.X, Launch.Y, 0.0);
+	if (Rules->bTurnBackAlongKnockback && Flat.SizeSquared() > 1.0)
+	{
+		OutYawDeg = static_cast<float>((-Flat).Rotation().Yaw);
+		return true;
+	}
+	if (!Rules->bTurnToAttackerWithoutKnockback)
+	{
+		return false;
+	}
+	// No push: face the attacker. A melee attacker by its position in the step snapshot; a thrown or shot hit (or an attacker not in the
+	// snapshot) against the hitbox's travel; last, the attacker's own facing reversed
+	const FVector SelfLocation = Self.Transform.GetLocation();
+	FVector ToAttacker = FVector::ZeroVector;
+	const FGSTN_SnapshotEntry* Attacker = Snapshot && !Last->Entry.SourceTag.IsValid() ? Snapshot->Find(Last->Entry.AttackerId) : nullptr;
+	if (Attacker)
+	{
+		ToAttacker = Attacker->Transform.GetLocation() - SelfLocation;
+	}
+	ToAttacker.Z = 0.0;
+	if (ToAttacker.SizeSquared() < 1.0)
+	{
+		ToAttacker = FVector(-Last->Entry.HitboxVelocity.X, -Last->Entry.HitboxVelocity.Y, 0.0);
+	}
+	if (ToAttacker.SizeSquared() < 1.0)
+	{
+		ToAttacker = -FRotator(0.0, Last->Entry.AttackerYaw, 0.0).Vector();
+	}
+	const FVector Facing = FVector(Self.Facing.X, Self.Facing.Y, 0.0).GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
+	const double CosAngle = FVector::DotProduct(Facing, ToAttacker.GetSafeNormal());
+	if (CosAngle > FMath::Cos(FMath::DegreesToRadians(static_cast<double>(Rules->TurnToAttackerMinAngleDeg))))
+	{
+		return false;
+	}
+	OutYawDeg = static_cast<float>(ToAttacker.Rotation().Yaw);
+	return true;
+}
+
 FGSTN_ReactionMove FGSTN_CombatVictim::StepReaction(const FGSTN_ReactionStepInput& In, FGSTN_CombatSyncCore& Core)
 {
 	FGSTN_ReactionMove Move;
