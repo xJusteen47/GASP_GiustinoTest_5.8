@@ -45,6 +45,8 @@ def label(row):
         text += f" a{m[1]:.1f}"
     if row['hitstop']:
         text += ' H'
+    if row.get('seg') and row['seg'] != 'idle':   # pie_capture_react.py rows: segment and frame in it
+        text += f" {row['seg']}:{row['segf']}"
     if row.get('tap'):
         text += ' T'
     return text
@@ -63,6 +65,12 @@ def cell(cap, seq, view, row, size, crop=None):
     d.rectangle([0, 0, img.size[0], 13], fill=(0, 0, 0))
     d.text((3, 1), f'{view} {label(row)}', fill=(255, 255, 0))
     return img
+
+
+def views_of(cap, seq):
+    """The views a capture really has, in VIEWS order (a capture of pie_capture_react.py has three), then any other folder"""
+    have = [d for d in os.listdir(os.path.join(cap, seq)) if os.path.isdir(os.path.join(cap, seq, d))]
+    return [v for v in VIEWS if v in have] + sorted(d for d in have if d not in VIEWS) or VIEWS
 
 
 def opts():
@@ -101,13 +109,16 @@ def main():
         print(f'{out}: {len(rows)} frames, {sheet.size[0]}x{sheet.size[1]}')
     elif mode == 'video':
         out, size = args[3], 360
+        views = views_of(cap, seq)
+        cols = 4 if len(views) > 3 else 2          # the last cell is the frame's text
+        cells = len(views) + 1
         tmp = tempfile.mkdtemp(prefix='pie_capture_')
         for i, r in enumerate(rows):
-            frame = Image.new('RGB', (4 * size, 2 * size), (20, 20, 20))
-            for j, view in enumerate(VIEWS):
-                frame.paste(cell(cap, seq, view, r, size), ((j % 4) * size, (j // 4) * size))
+            frame = Image.new('RGB', (cols * size, ((cells + cols - 1) // cols) * size), (20, 20, 20))
+            for j, view in enumerate(views):
+                frame.paste(cell(cap, seq, view, r, size), ((j % cols) * size, (j // cols) * size))
             d = ImageDraw.Draw(frame)
-            d.text((3 * size + 12, size + 20), f'{seq}\n{label(r)}\n\nv = video frame (60 fps)\nname:N = timeline frame\nH = hitstop, T = press', fill=(255, 255, 255))
+            d.text(((cells - 1) % cols * size + 12, (cells - 1) // cols * size + 20), f'{seq}\n{label(r)}\n\nv = video frame (60 fps)\nname:N = timeline frame\nH = hitstop, T = press', fill=(255, 255, 255))
             frame.save(os.path.join(tmp, f'{i:04d}.png'))
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-framerate', o.get('fps', '60'), '-i', os.path.join(tmp, '%04d.png'), '-c:v', 'libx264',
