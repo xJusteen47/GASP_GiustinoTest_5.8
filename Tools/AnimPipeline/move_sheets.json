@@ -978,5 +978,39 @@
   ],
   "effector": "head",
   "reference": ""
+ },
+ "overlord_jab1_v3": {
+  "move": "jab",
+  "anim": "/Game/AnimPipeline/Rig/AS_OverlordJab1V3_Build",
+  "contact": [
+   6,
+   8
+  ],
+  "faf": 22,
+  "hold_window": [
+   6,
+   12
+  ],
+  "effector": "hand_r",
+  "reference": "",
+  "strike_limb": "arm_r",
+  "strike_side": "arm_r"
+ },
+ "overlord_jab2_v3": {
+  "move": "jab",
+  "anim": "/Game/AnimPipeline/Rig/AS_OverlordJab2V3_Build",
+  "contact": [
+   9,
+   11
+  ],
+  "faf": 26,
+  "hold_window": [
+   9,
+   26
+  ],
+  "effector": "hand_r",
+  "reference": "",
+  "strike_limb": "arm_r",
+  "strike_side": "arm_r"
  }
 }
