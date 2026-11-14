@@ -43,7 +43,7 @@ bool FGSTN_HitFacingBackAlongKnockbackTest::RunTest(const FString& Parameters)
 	FHitFacingFixture F(EGSTN_HitReaction::Launch, FVector(800.0, 0.0, 600.0));
 	float Yaw = 0.f;
 	TestTrue(TEXT("bTurnBackAlongKnockback turns on the hit frame"), F.Run(Yaw));
-	TestEqual(TEXT("faces against the knockback"), FMath::Abs(FRotator::NormalizeAxis(Yaw)), 180.f, 0.5f);
+	TestEqual(TEXT("faces against the knockback"), (float)FMath::Abs(FRotator::NormalizeAxis(Yaw)), 180.f, 0.5f);
 	F.Rules->bTurnBackAlongKnockback = false;
 	F.Rules->bTurnToAttackerWithoutKnockback = false;
 	TestFalse(TEXT("both flags off: no turn"), F.Run(Yaw));
@@ -57,7 +57,7 @@ bool FGSTN_HitFacingNoPushTest::RunTest(const FString& Parameters)
 	FHitFacingFixture F(EGSTN_HitReaction::StaggerInPlace, FVector::ZeroVector);
 	float Yaw = 0.f;
 	TestTrue(TEXT("a back hit with no push turns"), F.Run(Yaw));
-	TestEqual(TEXT("faces the attacker"), FMath::Abs(FRotator::NormalizeAxis(Yaw)), 180.f, 0.5f);
+	TestEqual(TEXT("faces the attacker"), (float)FMath::Abs(FRotator::NormalizeAxis(Yaw)), 180.f, 0.5f);
 	F.Rules->bTurnToAttackerWithoutKnockback = false;
 	TestFalse(TEXT("flag off: keeps its facing"), F.Run(Yaw));
 
