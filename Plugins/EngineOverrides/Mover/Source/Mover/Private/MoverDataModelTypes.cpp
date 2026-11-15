@@ -191,6 +191,16 @@ void FCharacterDefaultInputs::Decay(float DecayAmount)
 	MoveInput *= (1.0f - DecayAmount);
 }
 
+// GSTN fork (half-turn frame, 2026-11-15): an orientation change larger than this between the two states Interpolate blends is a snap (a facing set
+// by the simulation, e.g. the back-hit turn of a victim), not a turn: the blended frame takes the newer orientation instead of a pose half-way
+// round. The capture of the example kit's hit showed the victim side-on for one frame between facing away and facing the attacker. A turn at
+// 60 degrees per 16 ms tick is 3750 deg/s, far above any turn rate of the game. Presentation only (smoothing, interpolated proxies); 0 = off
+static float GSTNOrientationSnapDegrees = 60.f;
+FAutoConsoleVariableRef CVarGSTNOrientationSnapDegrees(
+	TEXT("Mover.Interpolation.OrientationSnapDegrees"),
+	GSTNOrientationSnapDegrees,
+	TEXT("GSTN: an orientation change above this many degrees between two interpolated states snaps to the newer one (0 = always blend)."));
+
 // FMoverDefaultSyncState //////////////////////////////////////////////////////////////
 
 FMoverDataStructBase* FMoverDefaultSyncState::Clone() const
@@ -342,6 +352,12 @@ void FMoverDefaultSyncState::Interpolate(const FMoverDataStructBase& From, const
 		AngularVelocityDegrees = FMath::Lerp(FromAngularVelocity_ToSpace,ToState->AngularVelocityDegrees, Pct);
 		Orientation			= FMath::Lerp(FromOrientation_ToSpace,	ToState->Orientation, Pct);
 
+		// GSTN fork (half-turn frame): a facing snap is shown as a snap
+		if (GSTNOrientationSnapDegrees > 0.f
+			&& FMath::RadiansToDegrees(FromOrientation_ToSpace.Quaternion().AngularDistance(ToState->Orientation.Quaternion())) > GSTNOrientationSnapDegrees)
+		{
+			Orientation = ToState->Orientation;
+		}
 	}
 }
 
