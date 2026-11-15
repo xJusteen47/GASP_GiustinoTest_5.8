@@ -1,0 +1,11 @@
+    0.0s driver loaded: kit KIT_Test_OverlordDropkick, out C:/Users/jacop/Documents/Unreal Projects/GASP_Giustino2_ue59/Saved/AnimR2/cp5/dropkick
+    8.0s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '3', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   20.5s kit KIT_Test_OverlordDropkick: OK
+   23.5s loadout: {"revision": 2, "kit": "KIT_Test_OverlordDropkick", "additionalWeapons": [], "kitResolved": true, "tableEntries": 18, "grantedAbilities": 20, "derivedTimelines": 0, "tableCrc": "2594b42b"}
+   23.5s review stage: parked [('Z1', (3500.0, 300.0)), ('Z1', (3800.0, 300.0))], other pawns at [300, 600, 2667, 3273] cm
+   24.0s 7 cameras, 3 fill lights
+   26.0s dropkick_whiff: standing height z 100.0
+   26.0s sequence dropkick_whiff: pawn at ((0, 150, 100), 0)
+   34.9s dropkick_whiff: crouch on v41 (height 183 cm, rising), attack on v42
+   64.8s sequence dropkick_whiff done: 170 frames, pawn z 88.2
+   66.5s finish: ok

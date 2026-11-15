@@ -39,6 +39,9 @@ SIZE = 480
 # its left, 45 = front right, 315 = front left). 'game' = the player's camera
 VIEWS = [('az0', 0.0), ('az45', 45.0), ('az90', 90.0), ('az180', 180.0), ('az270', 270.0), ('az315', 315.0), ('game', None)]
 ELEVATION, DISTANCE, FOV = 10.0, 380.0, 45.0
+# Close framing for small things (a 15 cm projectile): PIE_CAPTURE_DIST (cm, default 380) and PIE_CAPTURE_AHEAD (cm the look-at point is moved in front of the pawn, default 0); the camera is scaled, never the projectile
+DISTANCE = float(os.environ.get('PIE_CAPTURE_DIST', DISTANCE))
+AHEAD = float(os.environ.get('PIE_CAPTURE_AHEAD', 0.0))
 FILL_LIGHTS = [(35.0, 5.0), (325.0, 5.0), (95.0, 3.0)]   # (azimuth the light comes from, as in VIEWS; intensity in lux)
 PRE = 20         # idle frames shot before the first press (the captures' temporal history settles)
 BUTTON = 'Attack'
@@ -85,9 +88,11 @@ DOUBLE_SHOT_SEQUENCES = [
     {'name': 'shot_double', 'taps': [0, 8], 'frames': 90, 'dummy': None, 'shoot': True},
     {'name': 'shot_slow', 'taps': [0, 40], 'frames': 110, 'dummy': None, 'shoot': True},
 ]
+# CP4 hit cue + hitstop shake (PIE_CAPTURE_KIT=KIT_Example, PIE_CAPTURE_BUTTON=Attack): one light attack on a dummy 95 cm ahead
+CUE_SEQUENCES = [{'name': 'cue_hit', 'taps': [0], 'frames': 90, 'dummy': 95.0, 'shoot': True}]
 AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after the attack press
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
-    SEQUENCES = [s for s in SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
+    SEQUENCES = [s for s in SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
 elif 'DoubleShot' in KIT:
     SEQUENCES = DOUBLE_SHOT_SEQUENCES
 elif 'Dropkick' in KIT:
@@ -183,6 +188,8 @@ def _place_cameras(follow=False):
         yaw = st.get('cam_yaw', yaw)
     else:
         st['cam_yaw'] = yaw
+    if AHEAD:
+        centre = unreal.Vector(centre.x + AHEAD * math.cos(math.radians(yaw)), centre.y + AHEAD * math.sin(math.radians(yaw)), centre.z)
     for (az, _intensity), light in zip(FILL_LIGHTS, st['lights']):
         light.set_actor_rotation(unreal.Rotator(roll=0.0, pitch=-25.0, yaw=yaw + az + 180.0), False)   # shines from azimuth az toward the pawn
     for (name, az), cam in zip(VIEWS, st['cams']):
@@ -227,6 +234,16 @@ def _row(frame, tapped, extra=None):
     view = g._view(0, h._key(0)) or {}
     row = {'f': frame, 'tap': tapped, 'combat': view.get('combat'), 'tags': view.get('tags'), 'loc': view.get('location'), 'montage': _montage()}
     row.update(extra or {})
+    try:   # projectiles alive in the host world: [x, y, z, hidden, visual mesh set] (what a camera can see, 1 vs 2 shots)
+        cls = getattr(unreal, 'GSTN_Projectile', None)
+        if cls:
+            row['proj'] = []
+            for wi, w in enumerate(g.worlds()):   # every world: host (0) and the clients' ghosts
+                for a in unreal.GameplayStatics.get_all_actors_of_class(w, cls):
+                    l = a.get_actor_location()
+                    row['proj'].append([wi, round(l.x), round(l.y), round(l.z)])
+    except Exception as e:
+        row['proj_err'] = repr(e)[:80]
     st['rows'].write(json.dumps(row) + '\n')
 
 
