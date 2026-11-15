@@ -1,0 +1,270 @@
+<title>Guida mosse Blueprint GSTN</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: una colonna di lettura (~68 caratteri), indice in alto, tabelle e codice scorrono da sole. Colori delle fasi = quelli dell'editor timeline. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #1b2230; --muted: #5a6475; --line: #d9dee6;
+  --accent: #2f5fd0; --accent-soft: #e6edfb; --code-bg: #eef1f5;
+  --ph-startup: #3d7be0; --ph-active: #d8473d; --ph-recovery: #e08a2c; --ph-free: #3aa45c;
+  --ok: #2f8a4c; --warn: #b7791f; --err: #c0392b;
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12161d; --surface: #1a1f28; --fg: #e4e8ef; --muted: #9aa4b5; --line: #2c3442;
+  --accent: #7ea2f2; --accent-soft: #1f2a40; --code-bg: #212836;
+  --ph-startup: #5b92ec; --ph-active: #e2655c; --ph-recovery: #eaa14f; --ph-free: #5cbd7a;
+  --ok: #5cbd7a; --warn: #e0a84a; --err: #e2655c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12161d; --surface: #1a1f28; --fg: #e4e8ef; --muted: #9aa4b5; --line: #2c3442;
+  --accent: #7ea2f2; --accent-soft: #1f2a40; --code-bg: #212836;
+  --ph-startup: #5b92ec; --ph-active: #e2655c; --ph-recovery: #eaa14f; --ph-free: #5cbd7a;
+  --ok: #5cbd7a; --warn: #e0a84a; --err: #e2655c; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 16px; line-height: 1.6; }
+.wrap { max-width: 46rem; margin: 0 auto; padding-block: 2rem 4rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; line-height: 1.2; }
+h1 { font-size: 2.1rem; margin: 0 0 .4rem; }
+h2 { font-size: 1.5rem; margin: 2.6rem 0 .6rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+h3 { font-size: 1.15rem; margin: 1.6rem 0 .4rem; }
+p, li { max-width: 68ch; }
+a { color: var(--accent); }
+.lead { color: var(--muted); font-size: 1.05rem; margin: 0; }
+.meta { font-family: var(--f-mono); font-size: .8rem; color: var(--muted); margin-top: .8rem; }
+code, kbd { font-family: var(--f-mono); font-size: .88em; background: var(--code-bg); padding: .08em .35em; border-radius: 4px; }
+pre { font-family: var(--f-mono); font-size: .82rem; background: var(--code-bg); padding: .9rem 1rem; border-radius: 6px; overflow-x: auto; line-height: 1.5; }
+pre code { background: none; padding: 0; }
+.toc { display: flex; flex-wrap: wrap; gap: .4rem; margin: 1.4rem 0 0; padding: 0; list-style: none; }
+.toc a { display: inline-block; font-size: .85rem; text-decoration: none; padding: .25rem .6rem; border: 1px solid var(--line); border-radius: 999px; color: var(--fg); background: var(--surface); }
+.toc a:hover, .toc a:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+.tablebox { overflow-x: auto; margin: 1rem 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+th, td { text-align: left; vertical-align: top; padding: .55rem .7rem; border-bottom: 1px solid var(--line); min-width: 8rem; }
+th { font-family: var(--f-display); font-weight: 600; letter-spacing: .02em; background: var(--accent-soft); }
+tr:last-child td { border-bottom: 0; }
+.callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); padding: .8rem 1rem; border-radius: 4px; margin: 1rem 0; }
+.callout.rule { border-left-color: var(--err); }
+.callout p { margin: .2rem 0; }
+.sev { font-family: var(--f-mono); font-size: .78rem; font-weight: 600; padding: .05rem .4rem; border-radius: 3px; white-space: nowrap; }
+.sev.err { color: var(--err); border: 1px solid var(--err); }
+.sev.warn { color: var(--warn); border: 1px solid var(--warn); }
+.sev.done { color: var(--ok); border: 1px solid var(--ok); }
+/* Barra dei frame del timeline di partenza (30 frame) */
+.frames { margin: 1rem 0 .4rem; }
+.bar { display: grid; grid-template-columns: repeat(30, 1fr); gap: 2px; }
+.bar span { height: 22px; border-radius: 2px; }
+.s { background: var(--ph-startup); } .a { background: var(--ph-active); } .r { background: var(--ph-recovery); } .f { background: var(--ph-free); }
+.ticks { display: grid; grid-template-columns: repeat(30, 1fr); font-family: var(--f-mono); font-size: .68rem; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.ticks span { text-align: left; }
+.legend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .82rem; color: var(--muted); }
+.legend i { display: inline-block; width: .8rem; height: .8rem; border-radius: 2px; margin-right: .35rem; vertical-align: -1px; }
+.paths { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1rem; margin: 1rem 0; }
+.path { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: .9rem 1rem; min-width: 0; }
+.path h3 { margin-top: 0; }
+.path ul { padding-left: 1.1rem; margin: .4rem 0 0; }
+ol.steps { padding-left: 1.3rem; }
+ol.steps li { margin: .35rem 0; }
+.small { font-size: .85rem; color: var(--muted); }
+@media (prefers-reduced-motion: no-preference) { .toc a { transition: border-color .15s, color .15s; } }
+</style>
+
+<div class="wrap">
+<header>
+  <h1>Guida mosse Blueprint</h1>
+  <p class="lead">Come si crea, si lega al kit e si prova una mossa di combattimento GSTN senza C++ e senza cablare a mano: la strada solo dati, la strada con il grafo, i ganci visivi, le regole che il validatore controlla.</p>
+  <p class="meta">Plugin GSTN Combat · checkpoint BP CP1–CP5 · ramo claude/project-thread-fxjn45 · 2026-11-15 · da compilare sul fisso</p>
+  <ul class="toc">
+    <li><a href="#crea">Creare una mossa</a></li>
+    <li><a href="#strade">Dati o grafo</a></li>
+    <li><a href="#dati">Strada A: dati</a></li>
+    <li><a href="#grafo">Strada B: grafo</a></li>
+    <li><a href="#doppio">Esempio doppio colpo</a></li>
+    <li><a href="#visivi">Ganci visivi</a></li>
+    <li><a href="#regole">Regole del validatore</a></li>
+    <li><a href="#prova">Provarla</a></li>
+    <li><a href="#pubblico">Cosa manca per pubblicarlo</a></li>
+  </ul>
+</header>
+
+<section id="crea">
+<h2>Creare una mossa: Combat Move</h2>
+<p>Nel Content Browser: tasto destro in una cartella (o <b>Add</b>) &gt; <b>Gameplay</b> &gt; <b>Combat</b> &gt; <b>Combat Move</b>. Si apre una finestra con queste scelte; ogni valore è solo un punto di partenza che poi cambi nell'editor timeline e nel kit.</p>
+<div class="tablebox"><table>
+<tr><th>Campo</th><th>Cosa fa</th><th>Default</th></tr>
+<tr><td><code>Template</code></td><td><b>Strike</b>: una hitbox a sfera che avanza nei frame attivi (un colpo corpo a corpo). <b>Action</b>: nessuna hitbox, una chiave Event sul primo frame attivo, a cui aggiungi azioni (sparo, evento, effetto) o che il grafo legge. <b>Empty</b>: solo i frame.</td><td>Strike</td></tr>
+<tr><td><code>Parent Class</code></td><td>La classe da cui deriva: l'abilità di combattimento, o una sua figlia del gioco.</td><td>GSTN_GA_BaseCombat</td></tr>
+<tr><td><code>Total / Active Start / Active End / First Actionable</code></td><td>In frame di simulazione (62.5 Hz). Se sono fuori ordine vengono messi in ordine, mai rifiutati.</td><td>30 / 6 / 9 / 24</td></tr>
+<tr><td><code>Montage</code>, <code>Montage Play Rate</code></td><td>L'animazione, facoltativa.</td><td>vuoto, 1</td></tr>
+<tr><td><code>Key Tag</code></td><td>Solo Action: il tag della chiave, quello che On Move Key confronta (es. <code>Example.Key.Fire</code>).</td><td>vuoto</td></tr>
+<tr><td><code>Timeline As Asset</code></td><td>Spento: la timeline vive dentro la mossa (Class Defaults &gt; Timeline &gt; Open Timeline Editor). Acceso: crea anche <code>TL_&lt;nome&gt;</code> accanto, per una timeline che più mosse o armi condividono.</td><td>spento</td></tr>
+<tr><td><code>Add Move Events</code></td><td>Mette nel grafo, scollegati, On Move Started / Key / Hit Confirmed / Ended. Solo per la strada B.</td><td>spento</td></tr>
+<tr><td><code>Hookup</code>: Kit, Weapon, Command, Requirements</td><td>Facoltativo. Lega subito la mossa a un comando del kit e/o dell'arma, così è giocabile. Un binding con stesso comando e stessi requisiti viene sostituito, gli altri restano.</td><td>vuoto</td></tr>
+</table></div>
+
+<div class="frames" aria-label="Timeline di partenza: 30 frame">
+  <div class="bar">
+    <span class="s"></span><span class="s"></span><span class="s"></span><span class="s"></span><span class="s"></span><span class="s"></span>
+    <span class="a"></span><span class="a"></span><span class="a"></span><span class="a"></span>
+    <span class="r"></span><span class="r"></span><span class="r"></span><span class="r"></span><span class="r"></span><span class="r"></span><span class="r"></span><span class="r"></span><span class="r"></span><span class="r"></span><span class="r"></span><span class="r"></span><span class="r"></span><span class="r"></span>
+    <span class="f"></span><span class="f"></span><span class="f"></span><span class="f"></span><span class="f"></span><span class="f"></span>
+  </div>
+  <div class="ticks"><span>0</span><span></span><span></span><span></span><span></span><span></span><span>6</span><span></span><span></span><span>9</span><span>10</span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span>24</span><span></span><span></span><span></span><span></span><span>29</span></div>
+</div>
+<div class="legend"><span><i class="s"></i>avvio 0–5</span><span><i class="a"></i>attivi 6–9 (hitbox o chiave)</span><span><i class="r"></i>recupero 10–23</span><span><i class="f"></i>libero da 24</span></div>
+<p class="small">Il template Strike: sfera di 50 cm, da 80 a 160 cm davanti, spazzata fra i frame; danno 6, knockback base 500, angolo 30°. Sono i numeri del jab di esempio, non un bilanciamento.</p>
+
+<h3>Legare una mossa che esiste già</h3>
+<p>Tasto destro su una o più mosse &gt; <b>Add to Kit or Weapon...</b>: stessa finestra Hookup. Un solo Ctrl+Z annulla. Dopo, salva il kit e fai <b>Validate</b> su di esso: il validatore dice se il comando non è nel set di comandi del kit.</p>
+<div class="callout"><p><b>Nessun tasto, nessuna impostazione di progetto.</b> La mossa risponde a un tag di comando (<code>Command.Attack.Neutral</code>, <code>Command.Special.Directional</code>...). Quale tasto inserisce quel comando lo decide il set di comandi del kit e il plugin input, non la mossa.</p></div>
+
+<h3>Da script o da un agente</h3>
+<p>La finestra chiama la stessa libreria che usano Python e gli agenti dell'editor, così una mossa non si cabla mai a mano:</p>
+<pre><code>o = unreal.GSTN_NewCombatMoveOptions()
+o.set_editor_property('template', unreal.GSTN_CombatMoveTemplate.ACTION)
+o.set_editor_property('add_move_events', True)
+bp, report, error = unreal.GSTN_CombatMoveAuthoring.create_combat_move('/Game/Moves', 'GA_Uppercut', o)
+unreal.EditorAssetLibrary.save_loaded_asset(bp)   # la libreria non salva mai da sola</code></pre>
+<p class="small">Altre chiamate: <code>make_starter_timeline</code>, <code>sanitize_options</code>, <code>add_move_to_kit</code>, <code>add_move_to_kit_assets</code>, <code>is_combat_move_blueprint</code>. Per il grafo: <code>GSTN_MoveGraphAuthoring</code> (variabili, nodi, collegamenti, compila, controlla le regole).</p>
+</section>
+
+<section id="strade">
+<h2>Dati o grafo: quale strada</h2>
+<div class="paths">
+  <div class="path">
+    <h3>A. Solo dati</h3>
+    <p class="small">La maggior parte delle mosse.</p>
+    <ul>
+      <li>Tutto nella timeline: hitbox, chiavi Event con azioni, finestre Tags e Cancel.</li>
+      <li>Catene (jab1 → jab2) con una finestra Tags e un binding con <code>RequireTags</code>.</li>
+      <li>Zero costo di Blueprint per frame, zero regole da rispettare.</li>
+    </ul>
+  </div>
+  <div class="path">
+    <h3>B. Grafo Blueprint</h3>
+    <p class="small">Quando serve una decisione.</p>
+    <ul>
+      <li>"Se ha colpito, allora...", "se ha ripremuto entro N frame...", contatori, stati.</li>
+      <li>Si decide per chiave e per evento, non per frame (On Move Frame è opt-in).</li>
+      <li>Solo variabili Sync e nodi sicuri per il rollback: il validatore controlla.</li>
+    </ul>
+  </div>
+</div>
+<p>Regola pratica: parti dai dati. Passa al grafo solo per la parte che i dati non sanno dire, e tieni nel grafo solo quella.</p>
+</section>
+
+<section id="dati">
+<h2>Strada A: mossa solo dati</h2>
+<p>Si lavora nell'editor timeline (Open Timeline Editor nelle Class Defaults, o doppio clic su un <code>TL_</code>). Le tracce:</p>
+<div class="tablebox"><table>
+<tr><th>Traccia</th><th>A cosa serve</th></tr>
+<tr><td><b>Hitbox</b></td><td>Forme, chiavi di posizione, spazio (Root o <code>BakedSocket</code> + Bake Sockets), dati del colpo (danno, angolo, knockback, hitstop, <code>Cue Tag</code> per scintille e suono).</td></tr>
+<tr><td><b>Event</b> (chiave)</td><td>Un frame preciso. Fa partire, in quest'ordine: cue, gameplay event, <b>Actions</b>, poi On Move Key. Una volta per passaggio, anche in re-simulazione.</td></tr>
+<tr><td><b>Actions</b> della chiave</td><td><b>Fire Projectile</b> (un data asset <code>ProjectileDefinition</code> + variazione di angolo e velocità), <b>Send Event</b>, <b>Apply Effect</b> (movimento = GE con mossa Mover in coda), <b>Open Tag Window</b> (un tag per N frame o fino a fine mossa).</td></tr>
+<tr><td><b>Tags</b></td><td>Un tag sul personaggio per un tratto di frame: la base delle catene e dei follow-up.</td></tr>
+<tr><td><b>Cancel Window</b></td><td>Da quale frame a quale la mossa può essere interrotta dai comandi indicati.</td></tr>
+<tr><td><b>Movement</b>, <b>Hurtbox Modifier</b></td><td>Spinte della mossa; parti del corpo invulnerabili o corazzate per alcuni frame.</td></tr>
+</table></div>
+<h3>Catena senza grafo (come jab1 → jab2)</h3>
+<ol class="steps">
+  <li>Mossa 1: finestra Tags <code>Move.Chain.X</code> sui frame in cui si può continuare, più una Cancel Window verso lo stesso comando.</li>
+  <li>Mossa 2: una mossa normale.</li>
+  <li>Kit: il comando legato alla mossa 1 con <code>IgnoreTags = Move.Chain.X</code>, e alla mossa 2 con <code>RequireTags = Move.Chain.X</code>.</li>
+</ol>
+<p>Fuori finestra la pressione fa ripartire la mossa 1; una pressione un po' anticipata la prende il buffer.</p>
+</section>
+
+<section id="grafo">
+<h2>Strada B: mossa con grafo</h2>
+<p>Crea la mossa con <b>Add Move Events</b> acceso (o aggiungi gli eventi dal pannello Override). Gli eventi sono di <b>simulazione</b>: girano su ogni macchina, anche quando il gioco corregge e rigioca dei frame.</p>
+<div class="tablebox"><table>
+<tr><th>Evento</th><th>Quando</th></tr>
+<tr><td>On Move Started</td><td>La mossa parte (frame di inizio).</td></tr>
+<tr><td>On Move Key</td><td>La timeline passa una chiave Event. Confronta <code>KeyTag</code> per sapere quale.</td></tr>
+<tr><td>On Move Hit Confirmed</td><td>Un gruppo di hitbox ha colpito o è stato parato (bit = gruppo).</td></tr>
+<tr><td>On Move Ended</td><td>Fine, con il motivo (finita, sostituita, cancellata).</td></tr>
+<tr><td>On Move Frame</td><td>Ogni frame, solo con <code>Tick Move In Blueprint</code>. Costa su PC deboli: usalo solo se serve.</td></tr>
+<tr><td>On Combat Frames Elapsed</td><td>Dopo un <b>Wait Combat Frames</b> (al posto di Delay).</td></tr>
+</table></div>
+<h3>Cosa può fare il grafo</h3>
+<div class="tablebox"><table>
+<tr><th>Tipo</th><th>Nodi</th></tr>
+<tr><td>Azioni (richieste)</td><td>Fire Move Projectile, Send Move Event, Apply Move Effect, Open / Close Move Tag Window, Run Move Action</td></tr>
+<tr><td>Domande di input (sul componente combat)</td><td>Was Command Entered Within (per tag di comando), Was Button Pressed Within, Count Button Presses Within, Get Button Held Frames, Get Frames Since Button Pressed, Get Move Stick, Get Stick Direction</td></tr>
+<tr><td>Stato della mossa</td><td>Get Move Timeline Frame, Get Timeline Frame, Get Move Hit Confirm Groups</td></tr>
+<tr><td>Caso</td><td>Get Move Random Float / Integer (stesso numero su ogni macchina)</td></tr>
+<tr><td>Memoria</td><td>Variabili <b>Sync</b> (Sync Integer, Sync Bool...): il rollback le ripristina</td></tr>
+</table></div>
+<div class="callout"><p>Le azioni rispondono <code>false</code> e non fanno nulla fuori dal passo di simulazione di una mossa attiva: chiamarle da un evento visivo o dopo la fine non rompe niente, semplicemente non succede.</p></div>
+</section>
+
+<section id="doppio">
+<h2>Esempio: special a doppia pressione</h2>
+<p>Premi lo special: un colpo. Ripremi in tempo: un secondo colpo più veloce. Fatto due volte dallo script <code>setup_double_shot_examples.py</code>, per confrontare le strade. Pad nell'hub: "DOPPIO COLPO A (DATI)" e "DOPPIO COLPO B (GRAFO)".</p>
+<div class="tablebox"><table>
+<tr><th></th><th>A, solo dati</th><th>B, grafo</th></tr>
+<tr><td>Abilità</td><td><code>GA_Example_DoubleShot_A1</code> + <code>_A2</code></td><td><code>GA_Example_DoubleShot_B</code></td></tr>
+<tr><td>Primo colpo</td><td>Chiave al frame 8, azione Fire Projectile</td><td>Chiave "Fire" al frame 8 → On Move Key → Fire Move Projectile</td></tr>
+<tr><td>Seconda pressione</td><td>Finestra Tags 8–20 + Cancel verso lo special; il kit lega lo special ad A2 se il tag c'è</td><td>On Move Frame: <code>FollowUpState</code> (Sync Integer) = 1 e Was Command Entered Within 8 → stato 2, Open Move Tag Window, Wait Combat Frames 6</td></tr>
+<tr><td>Secondo colpo</td><td>A2 spara al frame 6, velocità ×1.5</td><td>On Combat Frames Elapsed → Fire Move Projectile ×1.5</td></tr>
+<tr><td>Recupero</td><td>Quello di A2 (è una mossa nuova)</td><td>Sempre FAF 28 della stessa mossa</td></tr>
+</table></div>
+<p class="small">I due recuperi diversi sono voluti: si sceglie il feel giocandoli. Animazione segnaposto, proiettile senza VFX.</p>
+</section>
+
+<section id="visivi">
+<h2>Ganci visivi (solo presentazione)</h2>
+<p>Non toccano la simulazione, quindi si cambiano liberamente senza cambiare come gioca la mossa.</p>
+<div class="tablebox"><table>
+<tr><th>Gancio</th><th>Dove</th><th>Cosa imposti</th></tr>
+<tr><td>Finestre cosmetiche (scia, whoosh, bagliore)</td><td>Class Defaults della mossa &gt; <code>Cosmetic Windows</code></td><td>Tag, frame inizio/fine (-1 = fino alla fine), coda, Niagara su socket, suono, ferma in hitstop, spegni se interrotta</td></tr>
+<tr><td>Cue del colpo (scintilla, suono, scossa)</td><td><code>Cue Tag</code> della hitbox → Blueprint figlio di <code>GCN Combat Hit</code></td><td>Taglie <code>GameplayCue.Hit.Light/Medium/Heavy/Finisher</code>; Burst Effects</td></tr>
+<tr><td>Colpo previsto</td><td>Componente Hit Presentation</td><td>On Hit Predicted / Cancelled, <code>Hitstop Anim Rate</code></td></tr>
+<tr><td>Reazione</td><td>Componente Reaction Anim</td><td>On Reaction Started / Ended; <code>Hitstop Shake</code> in <code>DA_ReactionAnims</code> (vittima 3 cm)</td></tr>
+</table></div>
+</section>
+
+<section id="regole">
+<h2>Regole del validatore</h2>
+<p>Al salvataggio e con Validate all, il validatore guarda tutto ciò che gli eventi di simulazione raggiungono. Il messaggio dice il nodo e la correzione.</p>
+<div class="tablebox"><table>
+<tr><th>Codice</th><th>Livello</th><th>Cosa trova</th><th>Correzione</th></tr>
+<tr><td><code>Ability.SimLatent</code></td><td><span class="sev err">errore</span></td><td>Delay, timer, nodi latenti: riprendono fuori dalla simulazione e il rollback non li annulla</td><td>Wait Combat Frames + On Combat Frames Elapsed, o una chiave Event</td></tr>
+<tr><td><code>Ability.SimNonSyncVariable</code></td><td><span class="sev warn">avviso</span></td><td>Una variabile normale scritta in un evento di simulazione</td><td>Usa un tipo Sync (Sync Integer, Sync Bool...)</td></tr>
+<tr><td><code>Ability.SimWorldRead</code></td><td><span class="sev warn">avviso</span></td><td>Letture di mondo o Mover: posizione, velocità, tempo, trace, overlap</td><td>Leggi lo stato combat e le domande di input</td></tr>
+<tr><td><code>Ability.SimRandom</code></td><td><span class="sev warn">avviso</span></td><td>Random del motore: diverso su ogni macchina</td><td>Get Move Random Float / Integer</td></tr>
+<tr><td>Async task</td><td><span class="sev warn">avviso</span></td><td>Task asincroni nell'evento</td><td>Eventi della mossa e Wait Combat Frames</td></tr>
+<tr><td><code>Timeline.MoveAction</code></td><td><span class="sev warn">avviso</span></td><td>Un'azione della chiave che non può girare (es. sparo senza definizione)</td><td>Completa l'azione nella timeline</td></tr>
+</table></div>
+<div class="callout rule"><p><b>Tre cose da non fare mai in un grafo di mossa:</b> aspettare con Delay, ricordare con una variabile non Sync, guardare il mondo invece dello stato combat. Tutto il resto si può.</p></div>
+</section>
+
+<section id="prova">
+<h2>Provare la mossa</h2>
+<ol class="steps">
+  <li>Salva la mossa (e il kit, se l'hai legata). <b>Validate</b> su entrambi: zero errori.</li>
+  <li>Nell'editor timeline guarda la barra delle fasi e la scheda Frame Data: avvio, attivi, recupero sono quelli che volevi.</li>
+  <li><code>L_Test_Hub</code>, Play, prendi il kit dal suo pad, prova il comando. Per una mossa a grafo, prova anche con due client e ritardo (harness): niente doppi colpi, niente colpi persi.</li>
+</ol>
+</section>
+
+<section id="pubblico">
+<h2>Cosa manca per pubblicare il plugin</h2>
+<p>Con CP1–CP5 un designer fa una mossa intera da Content Browser, dati e Blueprint. Restano questi punti, in ordine di peso:</p>
+<div class="tablebox"><table>
+<tr><th>Punto</th><th>Stato</th><th>Cosa serve</th></tr>
+<tr><td>Fork GAS + Network Prediction obbligatorio per il modulo NP</td><td><span class="sev err">blocca</span></td><td>Decisione: percorso con GAS standard (<code>GSTNCombatStockGAS</code>, previsto) o pubblicare il fork con le patch. Fab non accetta plugin che sostituiscono plugin del motore.</td></tr>
+<tr><td>Comandi, tracker Mover e modalità muro nel modulo di progetto</td><td><span class="sev warn">da fare</span></td><td>Spostarli in plugin o renderli opzionali; oggi Defence legge stick e faccia dal progetto.</td></tr>
+<tr><td>Tag e config del progetto (<code>Config/Tags/*.ini</code>, Asset Manager, contesti di input)</td><td><span class="sev warn">da fare</span></td><td>Tag e config dentro il plugin, o un "installer" / Game Feature che li aggiunge.</td></tr>
+<tr><td>Esempi fuori dal plugin (<code>/Game/GASNPPTest</code>, script con percorsi del progetto)</td><td><span class="sev warn">da fare</span></td><td>Cartella Content del plugin versionata, esempi e personaggio di prova dentro.</td></tr>
+<tr><td>ABP, skeleton e personaggio GASP</td><td><span class="sev warn">da fare</span></td><td>Un personaggio di esempio minimo; documentare cosa serve per uno skeleton diverso.</td></tr>
+<tr><td>Build "canary" in un progetto vuoto, CI su 5.8 / 5.9</td><td><span class="sev warn">da fare</span></td><td>Script canary (citato nel README, non esiste) e pipeline di build e test.</td></tr>
+<tr><td>Documentazione per estranei</td><td><span class="sev warn">da fare</span></td><td>README di installazione unico in inglese, guide come questa tradotte, licenza, versioni (oggi "experimental").</td></tr>
+<tr><td>Dedicated server</td><td><span class="sev warn">non provato</span></td><td>Il modello è listen server; provare o dichiararlo.</td></tr>
+<tr><td>UX dell'editor timeline e hitbox</td><td><span class="sev warn">in coda</span></td><td>Le voci UX già in coda (guida hitbox, frecce, aggancio).</td></tr>
+<tr><td>Factory "Combat Move" e guida</td><td><span class="sev done">fatto (CP5)</span></td><td>Da compilare e provare sul fisso.</td></tr>
+</table></div>
+<p>Ordine consigliato: prima la decisione sul fork (senza quella il resto non basta), poi tag ed esempi dentro il plugin, poi pulizia delle dipendenze dal progetto, infine canary, CI e documentazione. Stima del piano: CP6 da $40 in su, da decidere a parte.</p>
+</section>
+</div>
