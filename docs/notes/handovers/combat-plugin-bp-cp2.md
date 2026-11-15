@@ -1,6 +1,6 @@
 # COMBAT-PLUGIN-BP CP2 handover (cloud, 2026-11-15)
 Branch `claude/project-thread-6bl38a` from a5idak `0a546851` (contains CP1 + react-hook-6) + docs branch 0tmywc-docs merged (Artifacts/).
-Code commit `774a8fc6`. **Build: laptop Remote Control requested (needs the owner's Allow); result below when it comes.**
+Code commit `774a8fc6`. **NOT BUILT here: the desktop thread "Build plugin and recapture moves on desktop" builds + tests this branch and pushes compile fixes (laptop RC request withdrawn).**
 **Done**
 - Event keys now RUN: on the crossing frame, inside the ability's sim step, once per crossing (CP1 cursor): CueTag (fork frame-stamped cue),
   GameplayEventTag (HandleGameplayEvent on own ASC: triggered abilities start, timelines adopted), then the key's new `Actions`, then On Move Key.
