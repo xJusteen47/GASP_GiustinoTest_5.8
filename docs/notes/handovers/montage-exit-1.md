@@ -19,8 +19,7 @@ Branch `claude/project-thread-n216qs` (from anim4x `f5377ba2`, a5idak already in
   ends nearer the idle stance in its last ~5 frames (feet under hips, knees straighter), recommended; (b) take the Crouch transitions out of
   the standing choice in `CHT_MoverCharacterAnimations_PoseMatch` (sample content, NOT in git: both machines by hand).
 - **Not covered by the release**: a hit reaction, landing or walking during a released tail does not stop it (no sim hook outside abilities).
-- Fixed a pre-existing test crash: `GSTNCombat.NP.Weakpoint.SetFacingEffect` passed Mover's uninitialized `UpdatedComponent`.
-- New test `GSTNCombat.NP.MontageSync.BlendOutIsMontages`. Headless `Automation RunTests GSTN`: **1608 success / 0 fail**, then the run hung in
+- New test `MontageSync.BlendOutIsMontages`; fixed the `Weakpoint.SetFacingEffect` crash (Mover's uninitialized `UpdatedComponent`). Headless `Automation RunTests GSTN`: **1608 success / 0 fail**, then the run hung in
   `GSTNSurface.Core.TypeTableChecksum` (no output for 55 min; process 21752 left running, I could not stop it): check that test.
 - **Dropkick asks (coordinator), not done, for the next code thread**: (1) hold a montage section until Mover lands, then jump to the land
   section: generic = a timeline track "HoldUntilLanded" on a frame range that stalls the timeline through the track-hook stall (like the
@@ -28,5 +27,4 @@ Branch `claude/project-thread-n216qs` (from anim4x `f5377ba2`, a5idak already in
   already reads landing. (2) pop to standing after the land clip: same GASP pick-from-exit-pose as the jab, plus the old cut (fix 1 helps).
   (3) 53 cm pelvis drop loop->land: capsule not shrunk, needs a capsule track.
 - **Montage start jitter (desktop finding)**: captures render at 60 fps over a 62.5 Hz sim, so a render frame holds 0, 1 or 2 ticks; the
-  position on the first rendered frames varies with that phase. Not looked at; check `t.OverrideFPS` vs sim rate before blaming the player.
-- **Cost**: one Opus thread, about 170k tokens of context, no subagents; 3 Play probes, 3 builds, 2 test runs; estimate $15-20.
+  first rendered frames vary with that phase. Not looked at; check `t.OverrideFPS` vs sim rate first. **Cost**: one Opus thread, about 170k tokens of context, no subagents; 3 Play probes, 3 builds, 2 test runs; estimate $15-20.
