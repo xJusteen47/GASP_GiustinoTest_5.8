@@ -1,0 +1,11 @@
+created DA_Example_Shot: {'speed': 1800.0, 'lifetime_frames': 90, 'radius': 15.0, 'damage': 5.0, 'base_knockback': 250.0, 'angle_deg': 25.0, 'muzzle': (80.0, 0.0, 30.0)}
+TL A1: total 32, FAF 24, keys at 8, chain (8, 20), cancel (9, 20)
+created /Game/GASNPPTest/Examples/DoubleShot/GA_Example_DoubleShot_A1
+TL A2: total 30, FAF 22, keys at 6, chain None, cancel None
+created /Game/GASNPPTest/Examples/DoubleShot/GA_Example_DoubleShot_A2
+TL B: total 36, FAF 28, keys at 8/20, chain None, cancel None
+created /Game/GASNPPTest/Examples/DoubleShot/GA_Example_DoubleShot_B
+B graph built (2 old nodes removed), 0 rule finding(s)
+KIT_Example_DoubleShotA: Command.Special.Neutral +[] -> GA_Example_DoubleShot_A1_C' (0x000002A675B3C400) Class 'NpAbilityGeneratedClass'>; Command.Special.Neutral +['Example.State.DoubleShotChain'] -> GA_Example_DoubleShot_A2_C' (0x000002A5B1BECB00) Class 'NpAbilityGeneratedClass'>; Command.Special.Directional +[] -> GA_Example_DoubleShot_A1_C' (0x000002A675B3C400) Class 'NpAbilityGeneratedClass'>; Command.Special.Directional +['Example.State.DoubleShotChain'] -> GA_Example_DoubleShot_A2_C' (0x000002A5B1BECB00) Class 'NpAbilityGeneratedClass'>
+KIT_Example_DoubleShotB: Command.Special.Neutral +[] -> GA_Example_DoubleShot_B_C' (0x000002A5B97CEE00) Class 'NpAbilityGeneratedClass'>; Command.Special.Directional +[] -> GA_Example_DoubleShot_B_C' (0x000002A5B97CEE00) Class 'NpAbilityGeneratedClass'>
+saved 9: DA_Example_Shot, TL_Example_DoubleShot_A1, GA_Example_DoubleShot_A1, TL_Example_DoubleShot_A2, GA_Example_DoubleShot_A2, TL_Example_DoubleShot_B, GA_Example_DoubleShot_B, KIT_Example_DoubleShotA, KIT_Example_DoubleShotB

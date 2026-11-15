@@ -334,7 +334,8 @@ FString UGSTN_MoveGraphAuthoring::AddStructNode(UBlueprint* Blueprint, const FSt
 		OutError = FString::Printf(TEXT("no struct %s"), *StructPath);
 		return FString();
 	}
-	if (bMake ? !UK2Node_MakeStruct::CanBeMade(Struct) : !UK2Node_BreakStruct::CanBeBroken(Struct))
+	// CanBeBroken is not exported on 5.9: for Break, rely on the pin/compile checks instead.
+	if (bMake && !UK2Node_MakeStruct::CanBeMade(Struct))
 	{
 		OutError = FString::Printf(TEXT("%s cannot be %s in a graph"), *StructPath, bMake ? TEXT("made") : TEXT("broken"));
 		return FString();

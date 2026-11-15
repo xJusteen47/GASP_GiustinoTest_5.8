@@ -188,10 +188,10 @@ def _ability(name):
     path = f'{DIR}/GA_Example_DoubleShot_{name}'
     if _exists(path):
         return unreal.load_asset(path), False
-    factory = unreal.GameplayAbilitiesBlueprintFactory() if hasattr(unreal, 'GameplayAbilitiesBlueprintFactory') else unreal.BlueprintFactory()
+    # the plain Blueprint factory: on 5.9 the GameplayAbilities factory ignores parent_class (the class would not be a GSTN_GA_BaseCombat)
+    factory = unreal.BlueprintFactory()
     factory.set_editor_property('parent_class', unreal.GSTN_GA_BaseCombat.static_class())
-    asset_class = unreal.GameplayAbilityBlueprint if hasattr(unreal, 'GameplayAbilityBlueprint') else unreal.Blueprint
-    bp = _tools().create_asset(f'GA_Example_DoubleShot_{name}', DIR, asset_class, factory)
+    bp = _tools().create_asset(f'GA_Example_DoubleShot_{name}', DIR, unreal.Blueprint, factory)
     if not bp:
         raise RuntimeError(f'could not create {path}')
     unreal.BlueprintEditorLibrary.compile_blueprint(bp)
@@ -219,9 +219,11 @@ class _Graph:
 
     @staticmethod
     def _check(result, what):
+        if isinstance(result, str):  # bool function with an out error: Python returns the error text only, empty = success
+            result = (not result, result)
         value, error = (result[0], result[1]) if isinstance(result, tuple) else (result, '')
         if not value:
-            raise RuntimeError(f'graph: {what}: {error}')
+            raise RuntimeError(f'graph: {what}: {error} (raw {result!r})')
         return value
 
     def event(self, name, x, y):
@@ -296,7 +298,11 @@ def _build_graph_b(bp):
     lib = g.lib
     removed = lib.clear_event_graph(bp)
     for name, kind, default, tip in B_VARIABLES:
-        g._check(lib.set_member_variable(bp, name, kind, default, CATEGORY, tip), f'variable {name}')
+        # a bool function with an out error: Python hands back the error text only (empty = success)
+        err = lib.set_member_variable(bp, name, kind, default, CATEGORY, tip)
+        err = err[1] if isinstance(err, tuple) else err
+        if err:
+            raise RuntimeError(f'graph: variable {name}: {err}')
     errors, messages = lib.compile_and_report(bp)
     if errors:
         raise RuntimeError(f'B with variables only does not compile: {messages[:3]}')
