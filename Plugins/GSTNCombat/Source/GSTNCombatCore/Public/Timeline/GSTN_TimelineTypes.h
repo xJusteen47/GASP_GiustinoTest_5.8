@@ -318,6 +318,15 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Event : public FGSTN_TimelineTrack
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Event|Outbox", meta = (EditCondition = "OutboxEventTag.IsValid()"))
 	float OutboxMagnitude = 0.f;
 
+	/**
+	 * Move actions run on the frame the key is crossed (CP2 of the Blueprint seams), after the cue and the gameplay event, before On Move Key:
+	 * fire a projectile, send an event, apply an effect, open a tag window. The action types live in the modules that can run them (the base
+	 * FGSTN_MoveAction in GSTNCombatNP, the projectile shot in GSTNProjectileNP), so this pure module names them only by path: without those
+	 * modules the list is just data nobody runs. Each runs inside the simulation, once per crossing and again in a re-simulation
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Event|Actions", meta = (BaseStruct = "/Script/GSTNCombatNP.GSTN_MoveAction", ExcludeBaseStruct))
+	TArray<FInstancedStruct> Actions;
+
 	virtual EGSTN_TimelineTrackKind GetKind() const override { return EGSTN_TimelineTrackKind::Event; }
 };
 

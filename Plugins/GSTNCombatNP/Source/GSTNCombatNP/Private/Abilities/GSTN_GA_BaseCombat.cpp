@@ -5,6 +5,7 @@
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "Animation/AnimMontage.h"
 #include "Curves/CurveVector.h"
+#include "GameplayEffect.h"
 #include "GSTN_CombatTags.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatTableSet.h"
@@ -35,6 +36,12 @@ UGSTN_GA_BaseCombat::UGSTN_GA_BaseCombat(const FObjectInitializer& ObjectInitial
 	EvaluatedFrame.Value = INDEX_NONE;
 	ReportedHitGroups.Value = 0;
 	MoveEventsFrame.Value = INDEX_NONE;
+	for (int32 Slot = 0; Slot < MaxTagWindows; ++Slot)
+	{
+		TagWindowTag(Slot).Value = FGameplayTag();
+		TagWindowStart(Slot).Value = INDEX_NONE;
+		TagWindowFrames(Slot).Value = 0;
+	}
 }
 
 const FGSTN_CombatTimelineData& UGSTN_GA_BaseCombat::GetTimelineData() const
@@ -274,7 +281,7 @@ void UGSTN_GA_BaseCombat::RaiseMoveEvents()
 			}
 			if (const FGSTN_TimelineTrack_Event* Key = Data.Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack_Event>())
 			{
-				OnMoveKey(*Key, TrackIndex, Current);
+				RunKey(*Key, TrackIndex, Current);
 			}
 		}
 	}
@@ -292,6 +299,172 @@ void UGSTN_GA_BaseCombat::RaiseMoveEvents()
 	{
 		OnMoveFrame(EvaluatedFrame.Value);
 	}
+}
+
+void UGSTN_GA_BaseCombat::RunKey(const FGSTN_TimelineTrack_Event& Key, int32 TrackIndex, int32 TimelineFrame)
+{
+	// Until CP2 only the outbox part of a key ran (in the combat tick). The cue goes through the fork's frame-stamped cue executions (as the
+	// recoil's cue), the event to this ability system as Send Move Event does; both inside the simulation, once per crossing like the event
+	const auto IsRunning = [this]() { return IsActive() && bStarted.Value; };
+	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	if (AbilitySystem && Key.CueTag.IsValid())
+	{
+		AbilitySystem->ExecuteGameplayCue(Key.CueTag, AbilitySystem->MakeEffectContext());
+	}
+	if (Key.GameplayEventTag.IsValid())
+	{
+		SendMoveEvent(Key.GameplayEventTag, 0.f);
+	}
+	if (!IsRunning())
+	{
+		// The event started a move that replaced this one: its actions and its Blueprint event belong to a move that is over
+		return;
+	}
+	FGSTN_MoveActionContext Context;
+	Context.Ability = this;
+	Context.KeyTag = Key.KeyTag;
+	Context.TimelineFrame = TimelineFrame;
+	FGSTN_MoveActionRules::RunActions(Key.Actions, Context, IsRunning);
+	if (IsRunning())
+	{
+		OnMoveKey(Key, TrackIndex, TimelineFrame);
+	}
+}
+
+bool UGSTN_GA_BaseCombat::CanRunMoveActions() const
+{
+	return IsActive() && bStarted.Value && CanRaiseMoveEvents();
+}
+
+bool UGSTN_GA_BaseCombat::SendMoveEvent(FGameplayTag EventTag, float Magnitude)
+{
+	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	if (!EventTag.IsValid() || !AbilitySystem || !CanRunMoveActions())
+	{
+		return false;
+	}
+	AActor* Avatar = GetAvatarActorFromActorInfo();
+	FGameplayEventData Payload;
+	Payload.EventTag = EventTag;
+	Payload.Instigator = Avatar;
+	Payload.Target = Avatar;
+	Payload.EventMagnitude = Magnitude;
+	AbilitySystem->HandleGameplayEvent(EventTag, &Payload);
+	return true;
+}
+
+bool UGSTN_GA_BaseCombat::ApplyMoveEffect(TSubclassOf<UGameplayEffect> Effect, float Level)
+{
+	if (!Effect || !CanRunMoveActions())
+	{
+		return false;
+	}
+	// The ability's own apply path (the one the dash and the move timelines use): the effect is part of the ability system's rolled back state
+	ApplyGameplayEffectToOwner(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), Effect.GetDefaultObject(), Level);
+	return true;
+}
+
+bool UGSTN_GA_BaseCombat::OpenMoveTagWindow(FGameplayTag Tag, int32 Frames)
+{
+	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	const int32 Clock = GetCombatClock();
+	if (!Tag.IsValid() || Frames < 1 || !AbilitySystem || Clock < 0 || !CanRunMoveActions())
+	{
+		return false;
+	}
+	FGameplayTag Tags[MaxTagWindows];
+	int32 Remaining[MaxTagWindows];
+	for (int32 Slot = 0; Slot < MaxTagWindows; ++Slot)
+	{
+		Tags[Slot] = TagWindowTag(Slot).Value;
+		Remaining[Slot] = TagWindowFrames(Slot).Value - FGSTN_CombatClock::Elapsed(Clock, TagWindowStart(Slot).Value);
+	}
+	const int32 Slot = FGSTN_MoveActionRules::PickTagWindowSlot(MakeArrayView(Tags), MakeArrayView(Remaining), Tag);
+	if (Slot == INDEX_NONE)
+	{
+		return false;
+	}
+	// A re-armed window keeps its loose tag (one count); a replaced one gives its own back first
+	if (TagWindowTag(Slot).Value != Tag)
+	{
+		CloseTagWindowSlot(Slot);
+		AbilitySystem->AddLooseGameplayTag(Tag);
+		TagWindowTag(Slot).Value = Tag;
+	}
+	TagWindowStart(Slot).Value = Clock;
+	TagWindowFrames(Slot).Value = Frames;
+	return true;
+}
+
+bool UGSTN_GA_BaseCombat::CloseMoveTagWindow(FGameplayTag Tag)
+{
+	if (!Tag.IsValid() || !CanRunMoveActions())
+	{
+		return false;
+	}
+	for (int32 Slot = 0; Slot < MaxTagWindows; ++Slot)
+	{
+		if (TagWindowTag(Slot).Value == Tag)
+		{
+			CloseTagWindowSlot(Slot);
+			return true;
+		}
+	}
+	return false;
+}
+
+void UGSTN_GA_BaseCombat::CloseTagWindowSlot(int32 Slot)
+{
+	const FGameplayTag Tag = TagWindowTag(Slot).Value;
+	if (Tag.IsValid())
+	{
+		if (UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent())
+		{
+			AbilitySystem->RemoveLooseGameplayTag(Tag);
+		}
+	}
+	TagWindowTag(Slot).Value = FGameplayTag();
+	TagWindowStart(Slot).Value = INDEX_NONE;
+	TagWindowFrames(Slot).Value = 0;
+}
+
+void UGSTN_GA_BaseCombat::CloseTagWindows(bool bAll)
+{
+	const int32 Clock = GetCombatClock();
+	for (int32 Slot = 0; Slot < MaxTagWindows; ++Slot)
+	{
+		if (TagWindowTag(Slot).Value.IsValid() && (bAll || FGSTN_MoveActionRules::IsTagWindowOver(Clock, TagWindowStart(Slot).Value, TagWindowFrames(Slot).Value)))
+		{
+			CloseTagWindowSlot(Slot);
+		}
+	}
+}
+
+bool UGSTN_GA_BaseCombat::RunMoveAction(const FInstancedStruct& Action)
+{
+	const UScriptStruct* Type = Action.GetScriptStruct();
+	if (Type == nullptr || !Type->IsChildOf(FGSTN_MoveAction::StaticStruct()) || !CanRunMoveActions())
+	{
+		return false;
+	}
+	FGSTN_MoveActionContext Context;
+	Context.Ability = this;
+	Context.TimelineFrame = GetMoveTimelineFrame();
+	return Action.Get<FGSTN_MoveAction>().Execute(Context);
+}
+
+float UGSTN_GA_BaseCombat::GetMoveRandomFloat(int32 Salt, float Min, float Max) const
+{
+	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
+	const uint32 Seed = FGSTN_MoveActionRules::MakeSeed(Combat ? Combat->GetSimulationFrame() : 0, StartFrame.Value, Salt);
+	return FGSTN_MoveActionRules::RandomFloatInRange(Seed, Min, Max);
+}
+
+int32 UGSTN_GA_BaseCombat::GetMoveRandomInteger(int32 Salt, int32 Min, int32 Max) const
+{
+	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
+	const uint32 Seed = FGSTN_MoveActionRules::MakeSeed(Combat ? Combat->GetSimulationFrame() : 0, StartFrame.Value, Salt);
+	return FGSTN_MoveActionRules::RandomIntInRange(Seed, Min, Max);
 }
 
 void UGSTN_GA_BaseCombat::OnMoveKey(const FGSTN_TimelineTrack_Event& Key, int32 TrackIndex, int32 TimelineFrame)
@@ -429,9 +602,13 @@ void UGSTN_GA_BaseCombat::OnSimulationTick(const FAbilitySystemTimeStep& TimeSte
 		}
 	}
 
-	// The move events of the frame (CP1), while the combat state still names this timeline
+	// The move events of the frame (CP1), while the combat state still names this timeline; the tag windows that are over close first (CP2)
 	if (IsStillTheRunningTimeline())
 	{
+		if (CanRaiseMoveEvents())
+		{
+			CloseTagWindows(false);
+		}
 		RaiseMoveEvents();
 		return;
 	}
@@ -493,6 +670,8 @@ void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, co
 		EvaluatedFrame.Value = INDEX_NONE;
 		ReportedHitGroups.Value = 0;
 	}
+	// The tag windows of Open Move Tag Window last at most as long as the move (CP2)
+	CloseTagWindows(true);
 	// After the cleanup (bStarted is false, so a handler that ends the ability again does not raise it twice), before the ability system's own
 	// end: the ability is still active, so the handler may still apply an effect or send an event
 	if (bRaiseEnded)
