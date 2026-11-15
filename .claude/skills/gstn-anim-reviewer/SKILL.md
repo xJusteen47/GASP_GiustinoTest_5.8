@@ -30,7 +30,7 @@ Work from the mp4 files in `inizio/` or `fine/`: variant and base, the version t
    (variant differs from base from the first frame; the `m` and `a` labels advance every video frame); variant and base
    start the move on the same `v`; the hitstop freeze is visible in the hit version; the labels are readable. Note as a
    limit if no sequence acts at FAF. If the owner says the video does not match, re-check this before the poses.
-2. **Extract, do not scrub.** `python .claude/skills/gstn-anim-reviewer/scripts/rv_frames.py <video> --frames A-B
+2. **Extract, do not scrub.** `python .claude/skills/gstn-anim-reviewer/scripts/rv_frames.py <capture.mp4> --frames A-B
    --crop x,y,w,h --vs <base.mp4> --mark <hit frames> --out <cycle folder>/rv_<name>.jpg`. `--crop` cuts one view out of
    the multi-view capture (360 px squares in the current captures). One grid per view and moment, **looked at once**. At most 48 frames
    per grid. The script prints five lines; do not print more.
