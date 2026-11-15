@@ -45,19 +45,18 @@ pre{margin:0;padding:12px 14px;font:13px/1.5 var(--mono);background:var(--code-b
 <main>
 <header>
   <h1>Skill e libreria di riferimenti per le animazioni</h1>
-  <p>GASP Giustino · 15 novembre 2026 · solo ricerca, nessun codice toccato. I costi sono stime.</p>
+  <p>GASP Giustino · 15 novembre 2026 · versione finale dopo la review con Antigravity. Solo ricerca, nessun codice toccato. I costi sono stime.</p>
 </header>
 
 <section class="decisioni">
   <h2>Cosa consiglio, in ordine</h2>
   <ol>
-    <li><strong>Due skill piccole più un contratto comune</strong>: una per il revisore, una per l'esecutore, e tre file condivisi (rubrica unica, glossario, formato dell'istruzione). Circa <strong>$14-20</strong>. La vecchia <code>gstn-move-animation</code> va in archivio.</li>
-    <li><strong>Chiavi sempre sparse</strong>, scritto come regola dura nel contratto: l'esecutore lavora solo su chiavi, mai su curve cotte frame per frame.</li>
-    <li><strong>Modifiche tue da Unreal su una copia</strong>: modifichi chiavi e curve direttamente, un comando rilegge le differenze nella scheda e l'IA integra o uniforma. Va costruito, circa <strong>$20-35</strong> di codice.</li>
+    <li><strong>Due skill piccole più un contratto comune</strong>: revisore, esecutore, e tre file condivisi (rubrica unica, glossario con la mappa dei controlli del rig, formato dell'istruzione). Circa <strong>$14-20</strong>. La vecchia <code>gstn-move-animation</code> va in archivio.</li>
+    <li><strong>Modifiche tue da Unreal su una copia</strong>, rilette nella scheda per differenza: circa <strong>$20-35</strong> di codice. I pezzi per leggere chiavi e tangenti dal Sequencer esistono già; manca il comando che li unisce.</li>
+    <li><strong>Mossa pilota su jab 1</strong> con il ciclo completo e le cinque prove pratiche di Antigravity, partendo da una scheda riportata a chiavi sparse: circa <strong>$5-9</strong>.</li>
     <li><strong>Libreria di riferimenti fatta di soli numeri</strong> nel repo; immagini, GIF e video solo sul desktop. Pilota di 10 mosse circa <strong>$10-15</strong>.</li>
-    <li><strong>Controllo diretto con Antigravity</strong> (22 domande e 5 prove, sotto) prima di costruire le skill, poi una <strong>mossa pilota</strong> con il ciclo completo: circa <strong>$3-5</strong> più <strong>$5-9</strong>.</li>
   </ol>
-  <p class="nota" style="margin:12px 0 0">Totale: circa $52-84, di cui $20-35 per la rilettura da Unreal. Le decisioni che servono da te sono in fondo.</p>
+  <p class="nota" style="margin:12px 0 0">Totale: circa $49-79. Le decisioni che servono da te sono in fondo.</p>
 </section>
 
 <section>
@@ -79,15 +78,17 @@ pre{margin:0;padding:12px 14px;font:13px/1.5 var(--mono);background:var(--code-b
   <p>Se nessuna delle tre esiste, la mossa non parte: il revisore lo dice e chiede a te una posa o una clip.</p>
 
   <h3>Come è scritta un'istruzione</h3>
-  <p>Antigravity capiva cos'è un follow-through o un'anticipazione: conviene usarlo. L'istruzione dice quindi <em>l'intento</em> con un termine del glossario e <em>il risultato misurabile</em>; come ottenerlo sui controlli del rig lo sceglie l'esecutore. Sette campi fissi:</p>
-<pre>chiave     f9 (video v30), chiave esistente
+  <p>L'istruzione dice <em>l'intento</em> con un termine del glossario e <em>il risultato misurabile</em>. Otto campi fissi:</p>
+<pre>chiave     f9 (video v30), chiave esistente; tratto interessato f9-f12
 tipo       sposta posa   [sposta posa | sposta nel tempo | cambia tangente | aggiungi chiave | togli chiave]
 parte      braccio destro
+controllo  hand_r_fk_ctrl, spazio del personaggio   (obbligatorio al livello misurato)
 intento    posa d'impatto: il braccio deve uscire dalla sagoma in vista da dietro
 modifica   mano circa 12 cm più avanti e 6 cm più su, polso aperto verso l'esterno
 principio  silhouette e linea d'azione (principi corporei, sez. 11)
 verifica   al frame 9, da dietro, la mano è almeno 10 cm fuori dalla linea della spalla</pre>
-  <p>Regole: una sola istruzione per passo, in ordine di gravità. Sempre su una chiave, mai su un frame intermedio. <code>aggiungi chiave</code> è l'ultima scelta, dopo tangente e tempo. Senza principio o senza verifica l'istruzione non è valida. Dove si può, la verifica è scritta nel formato di <code>animpipe verify</code>, così è un PASS o FAIL e non un'opinione.</p>
+  <p>Regole: una sola istruzione per passo, in ordine di gravità. Sempre su una chiave, mai su un frame intermedio. <code>aggiungi chiave</code> è l'ultima scelta, dopo tangente e tempo. Senza verifica l'istruzione non è valida; dove si può, è scritta nel formato di <code>animpipe verify</code>, così è un PASS o FAIL e non un'opinione.</p>
+  <p class="nota">Dalla review con Antigravity: <code>controllo</code> lo ha chiesto lui ("braccio destro" da solo lo costringe a indovinare tra spalla, gomito e mano). <code>principio</code> lo considera inutile per eseguire, ma lo tengo: lui stesso dice che rilegge la teoria solo quando il revisore cita il principio, ed è la traccia per te di perché si è cambiato qualcosa.</p>
 
   <h3>Due livelli di istruzione</h3>
   <p>Dalle tue prove Antigravity esegue bene anche richieste di principio come "aggiungi più follow-through qui", purché abbia i principi di animazione e la pipeline, e una base sufficiente (con sole tre pose per jab 1 e jab 2 falliva). Quindi i livelli sono due, e il revisore sceglie:</p>
@@ -96,13 +97,15 @@ verifica   al frame 9, da dietro, la mano è almeno 10 cm fuori dalla linea dell
     <tr><td><strong>Di principio</strong> (normale)</td><td>Movimento tra le pose: follow-through, overlap, anticipazione, tenuta, rientro. L'esecutore sceglie controlli, chiavi e tangenti.</td><td><code>modifica</code> è una frase ("più follow-through sul braccio dopo il colpo, f12-f18"). <code>verifica</code> resta obbligatoria, anche semplice ("la mano supera la posa di tenuta e torna entro f18").</td></tr>
     <tr><td><strong>Misurato</strong></td><td>Posa precisa: contatto col bersaglio, parte coperta in una vista, compenetrazione. Oppure dopo un livello di principio fallito.</td><td><code>modifica</code> in cm e gradi, <code>verifica</code> numerica.</td></tr>
   </table></div>
-  <p>In tutti e due i casi valgono le stesse regole: una istruzione alla volta, chiavi sparse, le tue chiavi non si toccano. E una condizione d'ingresso: sotto un numero minimo di pose chiave la mossa non entra nel ciclo. Il numero giusto lo dice il controllo qui sotto.</p>
+  <p>In tutti e due i casi valgono le stesse regole: una istruzione alla volta, chiavi sparse, le tue chiavi non si toccano. Se un'istruzione di principio fallisce al primo tentativo, il secondo è obbligatoriamente misurato. Condizione d'ingresso: <strong>almeno cinque pose</strong> (rottura dell'idle, carica, contatto, apice del follow-through, recupero) con frame, hitstop e FAF. Con tre, dice Antigravity, mancavano proprio carica, overshoot e l'arco del braccio.</p>
 
   <h3>Quando si ferma</h3>
   <ul>
+    <li><strong>Prima di cominciare</strong>: se il video iniziale mostra un difetto del gioco (accosciata a fine montage, frame fermo, blend), il ciclo sulle pose è sospeso finché non è corretto in un thread di codice. Sul jab 1 si sono spesi due giri sulle chiavi di rientro per un difetto che era del blend-out.</li>
     <li>La stessa istruzione fallisce due volte: stop, arriva a te con il prima e dopo.</li>
+    <li>Due istruzioni di fila peggiorano la mossa: si torna all'ultimo punto buono (<code>animpipe revert</code>, esiste già).</li>
     <li>L'istruzione tocca una tua chiave: arriva a te come proposta, l'esecutore non la applica.</li>
-    <li>Tetto proposto di <strong>sei istruzioni per mossa</strong> prima della revisione video finale. La regola dei due tentativi oggi vale per l'intera mossa; qui varrebbe per singola istruzione. È una tua decisione.</li>
+    <li>Sei istruzioni per ciclo prima della revisione video finale; al massimo tre chiavi aggiunte per ciclo.</li>
   </ul>
   <p class="nota">Costo stimato per mossa: ogni passo di critica su griglia circa $0,5-1, la revisione video finale circa $2-3, l'esecutore pochi centesimi se è un modello economico. In tutto circa $5-9 a mossa con sei passi.</p>
 
@@ -119,7 +122,13 @@ verifica   al frame 9, da dietro, la mano è almeno 10 cm fuori dalla linea dell
   <h2>Review del piano: risposte, doppioni, buchi</h2>
 
   <h3>Le chiavi non dense</h3>
-  <p>Nella versione precedente non erano scritte: ora sono regola (sopra). Lo stato vero: la scheda di <code>animpipe</code> tiene pose solo sui frame chiave, e le istruzioni di Antigravity vietano già il baking denso (4-6 pose cardinali con tangenti). Resta però un percorso vecchio che scrive ogni frame (<code>DENSE=1</code>, "direct to Unreal"): va escluso dalla skill dell'esecutore. Il rischio reale è un altro: ogni correzione "al frame N" aggiunge una chiave, e dopo sei passi la mossa è densa di fatto. Per questo l'istruzione nomina sempre una chiave e propongo un tetto di <strong>8 chiavi per mossa</strong> oltre le tue.</p>
+  <p>Ora sono regola dura nel contratto. E c'è un fatto da sapere, verificato sulle schede: <strong>jab 1 e jab 2 oggi sono dense</strong>. Nel secondo giro Antigravity ha scritto una chiave per ogni frame (jab 1: 24 chiavi, frame 0-22 tutti; prima erano 13. Jab 2: 28, prima 17) per forzare la traiettoria. Lo chiama lui stesso un errore che rende la clip non modificabile da te. Quindi:</p>
+  <ul>
+    <li>Tetto legato alla durata, come propone lui: <strong>al massimo una chiave ogni 4-5 frame</strong> (circa 8 per una mossa sotto i 30 frame, 16-18 per una da 50-60), e al massimo tre chiavi aggiunte per ciclo. Un tetto fisso sarebbe troppo stretto per jab 2 o il dropkick.</li>
+    <li>Mai una chiave per frame. Se l'interpolazione in Unreal non segue il calcolo, è un difetto della pipeline da segnalare, non da coprire con chiavi.</li>
+    <li>Il gate conta le chiavi e blocca oltre il tetto. Va escluso anche il vecchio percorso <code>DENSE=1</code>.</li>
+    <li>Il pilota su jab 1 parte da una scheda riportata a chiavi sparse.</li>
+  </ul>
 
   <h3>Il controllo della silhouette</h3>
   <p>C'è, ma in quattro posti diversi: <code>legibility.py</code> (numerico, dalle camere di gioco: parte che colpisce distinta, braccio dietro che la copre), <code>tangency.py</code>, la rubrica visiva di <code>animpipe-move</code>, e l'audit a 360° di Antigravity. Più il documento di teoria sulle silhouette, che è ancora su un branch a parte. Va tenuto: il numerico lo fa girare l'esecutore, il revisore guarda solo ciò che il numero non vede.</p>
@@ -165,50 +174,38 @@ verifica   al frame 9, da dietro, la mano è almeno 10 cm fuori dalla linea dell
     <tr><td>L'istruzione tocca una tua chiave</td><td>Proposta a te, l'esecutore non applica.</td></tr>
     <tr><td>L'istruzione fallisce due volte, o sei istruzioni non bastano</td><td>Stop. Ti arriva prima e dopo con gli scarti rimasti.</td></tr>
     <tr><td>Dopo tre istruzioni il problema è l'idea della posa, non il dettaglio</td><td>Stop anticipato: serve una posa di partenza nuova. Correggere a piccoli passi non salva una base sbagliata (il jab).</td></tr>
-    <tr><td>Il difetto è del gioco (accosciata a fine montage, salto delle gambe, blend)</td><td>Il revisore lo marca "gioco" e va a un thread di codice. Mai all'esecutore.</td></tr>
+    <tr><td>Il difetto è del gioco (accosciata a fine montage, salto delle gambe, blend)</td><td>Il revisore lo marca "gioco", il ciclo sulle pose si sospende e parte un thread di codice. Mai all'esecutore.</td></tr>
     <tr><td>Serve cambiare startup, frame attivi o FAF</td><td>È design della mossa: decidi tu.</td></tr>
     <tr><td>Reazioni, pose tenute, cicli (non attacchi)</td><td>Le sei domande sono scritte per gli attacchi. Serve una seconda lista per le reazioni (primo frame, leggibilità della direzione del colpo, continuità tra clip).</td></tr>
   </table></div>
 
   <h3>Buchi e lati negativi</h3>
   <ol>
-    <li><strong>Due archivi di chiavi.</strong> Oggi <code>animpipe</code> tiene la verità nella scheda e ricostruisce la sequenza, mentre Antigravity scrive direttamente nel Sequencer: uno sovrascrive l'altro e i blocchi sulle tue chiavi non scattano. Si risolve con la regola sopra (scheda unica verità, Sequencer solo su copie che rientrano con <code>ue-import</code>), ma finché quel comando non esiste il buco resta.</li>
-    <li><strong>Claude non può avviare Antigravity.</strong> Se l'esecutore è Antigravity, ogni passo lo fai partire tu, anche da telefono. Con un esecutore Claude economico sul desktop il ciclo gira da solo, ma non è provato che esegua bene quanto Antigravity.</li>
+    <li><strong>Due archivi di chiavi.</strong> Meno grave del previsto: Antigravity dichiara di scrivere solo nella scheda. Resta vero che ogni tua modifica sulla sequenza generata viene cancellata dal build successivo, finché il comando di rilettura non esiste.</li>
+    <li><strong>Le prove pratiche di Antigravity non sono fatte.</strong> Le sue risposte sono dichiarazioni: sul lavoro da file, sul rifiuto di toccare le tue chiavi e sul follow-through senza aggiungere troppe chiavi serve la prova, che metto nel pilota.</li>
     <li><strong>Il revisore stima male i centimetri da un'immagine.</strong> Per questo conta il campo <code>verifica</code> e gli va dato il dump numerico delle ossa sulle chiavi insieme alla griglia.</li>
     <li><strong>Sei istruzioni possono non bastare per il livello tripla A.</strong> È realistico aspettarsi due cicli su molte mosse, quindi $10-18 invece di $5-9, oppure la tua mano su una posa.</li>
     <li><strong>Revisori diversi giudicano diverso.</strong> Serve una taratura fissa: due mosse note buone e una nota cattiva, da rifare quando cambia la skill.</li>
     <li><strong>Ogni passo vuole l'editor Unreal sul desktop</strong>, che usi anche tu per giocare. La cattura senza editor aperto esiste ma non è mai stata provata su una macchina con Unreal.</li>
     <li><strong>Una correzione può romperne un'altra.</strong> Il gate numerico completo gira a ogni passo; ciò che vede solo l'occhio viene ripreso solo nel video finale.</li>
-    <li><strong>La vista da dietro non ha riferimenti</strong> e il lavoro di Antigravity è in parte non committato nel suo worktree.</li>
+    <li><strong>La vista da dietro non ha riferimenti</strong>, e nella sua cartella di lavoro <code>git status</code> non funziona: cosa sia committato lì non è verificabile da lui.</li>
+    <li><strong>Coperta corta</strong>: una correzione per una vista può peggiorarne un'altra. Senza una regola di precedenza il ciclo oscilla.</li>
   </ol>
 
-  <h3>Controllo diretto con Antigravity</h3>
-  <p>Questa review è una bozza finché non l'ha criticata anche lui. Io dal cloud non posso interrogarlo: il testo pronto da incollare è in <code>docs/notes/reviews/agy-check/prompt-per-agy.md</code> (riassunto del piano in dieci righe, 22 domande, 5 prove). Risposte ed esiti vanno in <code>esito.md</code> nella stessa cartella, e con quelli chiudo la versione finale. Qui sotto le domande sulle sue capacità; nel file ci sono anche dieci domande di critica al piano (quale punto non riuscirebbe a rispettare, dove fallirebbe più spesso, quale campo dell'istruzione manca, chi vince tra scheda e Sequencer).</p>
-  <p><strong>Domande</strong> (risposte brevi, con un esempio ciascuna):</p>
-  <ol>
-    <li>Quali modifiche a una mossa esistente fai in modo affidabile, e quali no?</li>
-    <li>Di quante pose chiave e di quali informazioni hai bisogno per partire? Cosa ti mancava con le tre pose di jab 1 e jab 2?</li>
-    <li>Quando ricevi "aggiungi più follow-through qui", cosa cambi di preciso: quali controlli, quali chiavi, quali tangenti? Aggiungi chiavi nuove?</li>
-    <li>Quando ti serve un'istruzione in cm e gradi invece di una di principio?</li>
-    <li>Dove scrivi le chiavi: direttamente nel Sequencer o nella scheda di <code>animpipe</code>? Con quali comandi?</li>
-    <li>Come leggi le modifiche fatte dall'owner in Unreal? Distingui le sue chiavi dalle tue e riesci a non toccarle?</li>
-    <li>Quante chiavi usi per mossa? Scrivi mai una chiave per ogni frame?</li>
-    <li>Quali controlli lanci da solo dopo una modifica? Cosa non puoi vedere (immagini, video)?</li>
-    <li>Sai produrre una griglia prima e dopo sugli stessi frame e un PASS o FAIL per una verifica numerica?</li>
-    <li>Leggi <code>docs/notes/anim-theory/</code>? Quali principi applichi con sicurezza e quali no?</li>
-    <li>Puoi lavorare leggendo una istruzione alla volta da un file e scrivendo l'esito in un file, senza altro testo dall'owner?</li>
-    <li>Cosa c'è di non committato nel tuo worktree?</li>
-  </ol>
-  <p><strong>Prove</strong> (ognuna su una copia variante di jab 1, mai sull'originale):</p>
+  <h3>Cosa ha risposto Antigravity, e cosa ho verificato</h3>
+  <p>Ha risposto alle 22 domande (testo integrale in <code>docs/notes/reviews/agy-check/esito.md</code>, branch <code>claude/project-thread-anim-r2</code>). Le cinque prove pratiche non sono ancora state fatte. Ho controllato nel repo ciò che afferma:</p>
   <div class="scroll"><table>
-    <tr><th>Prova</th><th>Istruzione</th><th>Passa se</th></tr>
-    <tr><td>1. Principio</td><td>"Aggiungi più follow-through al braccio dopo il colpo."</td><td>Cambiano solo i frame dopo la tenuta, al massimo due chiavi nuove, gate numerici verdi.</td></tr>
-    <tr><td>2. Misurato</td><td>Lo stesso difetto scritto con i sette campi e una verifica numerica.</td><td>La verifica dà PASS e il diff non mostra altre parti cambiate.</td></tr>
-    <tr><td>3. Tempo</td><td>"Anticipa lo scatto di un frame."</td><td>Una chiave si sposta nel tempo; il numero di chiavi non cresce.</td></tr>
-    <tr><td>4. Blocco</td><td>Un'istruzione che richiederebbe di muovere una tua chiave.</td><td>Rifiuta e propone, senza applicare.</td></tr>
-    <tr><td>5. Base minima</td><td>La stessa mossa partendo da tre pose e poi da cinque o sei.</td><td>Si trova il numero di pose sotto cui il risultato non regge.</td></tr>
+    <tr><th>Dice</th><th>Verifica</th><th>Effetto sul piano</th></tr>
+    <tr><td>Scrive le chiavi solo nella scheda, mai nel Sequencer</td><td><span class="tag forse">coerente</span> le sue schede e note sono nel repo; le sue istruzioni vecchie descrivevano invece la scrittura diretta</td><td>Il buco dei due archivi è più piccolo di come l'avevo scritto. La regola resta.</td></tr>
+    <tr><td>Ha scritto una chiave per frame su jab 1 e jab 2</td><td><span class="tag si">vero</span> contate nelle schede</td><td>Tetto per durata e gate che conta le chiavi.</td></tr>
+    <tr><td>Comandi <code>author</code>, <code>build</code>, <code>check</code>, <code>fidelity</code>, <code>verify</code>, <code>poses --over</code>, <code>trails</code>, <code>revert</code>, <code>capture</code></td><td><span class="tag si">esistono</span></td><td>Griglia prima e dopo, PASS o FAIL e ritorno indietro non vanno costruiti.</td></tr>
+    <tr><td><code>animpipe ingest-owner</code> e <code>ue-import</code></td><td><span class="tag no">non esistono</span> (lui stesso segna il secondo come non provato)</td><td>Sono il comando da costruire.</td></tr>
+    <tr><td>Legge dal Sequencer chiavi, modo e tangenti; il rientro per differenza esiste già da Cascadeur</td><td><span class="tag si">vero</span> (<code>_read_manual</code>, <code>ue_dump_user_keys.py</code>, <code>casc-import</code>). La scheda però tiene profili di spacing per tratto, non le tangenti per chiave</td><td>La stima di $20-35 regge; va esteso il formato della scheda.</td></tr>
+    <tr><td>Può lavorare da file: legge un'istruzione, scrive un esito</td><td><span class="tag forse">non provato</span> ma le risposte sono state ottenute da una sessione Claude sul desktop attraverso un ponte</td><td>Claude può avviarlo: il ciclo può girare senza la tua mano a ogni passo. Correggo quanto avevo scritto.</td></tr>
+    <tr><td>Non sa giudicare silhouette, peso percepito e overlap organico; non vede video</td><td>Coerente con le review fallite</td><td>Conferma la divisione: lui esegue, il revisore guarda.</td></tr>
   </table></div>
-  <p>Per ogni prova si annotano: chiavi prima e dopo, chiavi tue toccate, esito dei gate, tempo. Le griglie prima e dopo le guarda un revisore Claude, circa $3-5 in tutto. Cosa cambia in base all'esito: se la prova 1 passa, il livello di principio è quello normale; se la 4 fallisce, la verità delle chiavi deve stare nella scheda con i blocchi di <code>animpipe</code>; se alla domanda sul lavoro da file risponde sì, tu avvii solo la sessione e il ciclo procede da file.</p>
+  <p><strong>Cose sue che ho adottato</strong>: il campo <code>controllo</code>; il tetto di chiavi per durata; le cinque pose minime; la sospensione del ciclo se il difetto è del gioco; il ritorno all'ultimo punto buono; le scie del movimento nella griglia prima e dopo; il passaggio obbligato da principio a misura al secondo tentativo. Per "uniforma" ha descritto un metodo sensato (sposta le chiavi vicine non tue dello stesso scarto, con decadimento verso la tua chiave successiva, e raccorda le tangenti): lo uso come base della funzione.</p>
+  <p><strong>Un caso di fallimento che mancava</strong>: la coperta corta. Correggere una vista ne rompe un'altra, o un vincolo ne rompe un altro (sul jab 1, far toccare il bersaglio ha piegato il ginocchio e ridotto la diagonale). Il revisore deve quindi scrivere nell'istruzione cosa ha la precedenza, e serve una tua regola generale su quale vista vince.</p>
 
   <h3>Opzioni per le skill</h3>
   <div class="scroll"><table>
@@ -242,7 +239,7 @@ verifica   al frame 9, da dietro, la mano è almeno 10 cm fuori dalla linea dell
     <tr><th>Parte</th><th>Skill?</th><th>Motivo</th></tr>
     <tr><td>Revisione video regola 10: controllo della catena di cattura, strisce delle etichette, griglie attorno a colpo e FAF, misura dei pixel cambiati, formato PASS/FAIL</td><td><span class="tag si">sì, nuova</span></td><td>È il passo più ripetuto e il più caro. Gli script per estrarre frame e comporre griglie vanno dentro la skill, così il modello non li riscrive.</td></tr>
     <tr><td>Domanda di qualità e confronto con i riferimenti</td><td><span class="tag si">sì, dentro la stessa</span></td><td>Deve essere chiesta sempre allo stesso modo, altrimenti il livello cambia da thread a thread.</td></tr>
-    <tr><td>Scrittura delle istruzioni di modifica (sette campi, una alla volta)</td><td><span class="tag si">sì, dentro la stessa</span></td><td>È il passaggio tra revisore ed esecutore: se il formato cambia, l'esecutore torna a interpretare.</td></tr>
+    <tr><td>Scrittura delle istruzioni di modifica (otto campi, una alla volta)</td><td><span class="tag si">sì, dentro la stessa</span></td><td>È il passaggio tra revisore ed esecutore: se il formato cambia, l'esecutore torna a interpretare.</td></tr>
     <tr><td><code>animpipe-move</code> (import, interp, check, render, verdetto su una griglia)</td><td><span class="tag si">già skill, tenere</span></td><td>È corta (5 KB) e guidata da <code>animpipe status</code>. Aggiungere solo il rimando ai tre documenti di teoria e al passo "riferimenti".</td></tr>
     <tr><td><code>gstn-move-animation</code></td><td><span class="tag no">in archivio</span></td><td>35 KB caricati interi, spinge il modello a costruire la mossa da solo e contiene il percorso denso. La sostituisce la skill dell'esecutore; API di Cascadeur e soglie restano come file di consultazione.</td></tr>
     <tr><td>Cattura sul desktop e consegna alla review (build, cattura, mp4 e griglie in <code>docs/notes/reviews/</code>)</td><td><span class="tag forse">sezione, non skill</span></td><td>Sono pochi comandi già coperti da <code>animpipe render --standalone</code>. Basta una sezione in <code>animpipe-move</code>.</td></tr>
@@ -298,11 +295,13 @@ classi.csv      classe, tenuta min-max, quota recupero, frame dello scatto, rinc
 <section class="decisioni">
   <h2>Decisioni che servono da te</h2>
   <ol>
-    <li><strong>Chi esegue.</strong> Antigravity (provato da te sulle modifiche di principio) oppure un Claude economico sul desktop (il ciclo gira da solo, non provato). Consiglio: prima il controllo diretto con Antigravity; se regge, esegue lui e Claude economico resta la riserva con lo stesso contratto.</li>
-    <li><strong>Rilettura da Unreal.</strong> Costruire copia e <code>ue-import</code> con le tre parole (integra, uniforma, cambia), circa $20-35. La scheda resta l'unica verità e anche Antigravity lavora su una copia. Consiglio: sì, è il pezzo che tiene insieme tutto il resto.</li>
-    <li><strong>Opzione di skill.</strong> A, B o C. Consiglio A.</li>
-    <li><strong>Tetti.</strong> Due tentativi per istruzione, sei istruzioni per ciclo, otto chiavi aggiunte per mossa.</li>
-    <li><strong>Vista da dietro.</strong> Registri tu 5-10 clip brevi dai giochi che consideri il livello giusto, oppure per ora si giudica con i principi scritti.</li>
+    <li><strong>Skill: due più contratto comune</strong>, circa $14-20. Consiglio sì. (Solo revisore: $8-12.)</li>
+    <li><strong>Rilettura da Unreal su copia</strong> con integra, uniforma, cambia: circa $20-35. Consiglio sì; supera la soglia dei $15.</li>
+    <li><strong>Pilota su jab 1</strong> con le cinque prove di Antigravity, scheda riportata a chiavi sparse: circa $5-9. Consiglio sì, prima del punto 2 se vuoi spendere per gradi.</li>
+    <li><strong>Esecutore</strong>: Antigravity avviato da Claude sul desktop, con un Claude economico come riserva sullo stesso contratto. Consiglio sì, da confermare con il pilota.</li>
+    <li><strong>Tetti</strong>: una chiave ogni 4-5 frame al massimo, tre chiavi aggiunte e sei istruzioni per ciclo, due tentativi per istruzione, almeno cinque pose per partire.</li>
+    <li><strong>Quale vista vince</strong> quando da dietro e di lato chiedono cose opposte.</li>
+    <li><strong>Libreria di riferimenti</strong>, circa $10-15, e clip da dietro registrate da te oppure solo principi scritti.</li>
   </ol>
 </section>
 </main>

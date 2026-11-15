@@ -1,37 +1,31 @@
-# Handover: skill, ciclo revisore/esecutore e libreria di riferimenti per le animazioni (2026-11-15, cloud, solo doc)
+# Handover: skill, ciclo revisore/esecutore, Unreal su copia, riferimenti (2026-11-15, cloud, solo doc) — FINALE
 
 Branch `claude/project-thread-ybl6a8` (da `claude/project-thread-0tmywc-docs`, mai su feature). Nessun codice toccato.
-Documento (v4): `Artifacts/Animazione/skill-e-riferimenti.html` = https://claude.ai/artifact/TXAt4tWjuWW5CfnjXH6o63
+Documento (v7): `Artifacts/Animazione/skill-e-riferimenti.html` = https://claude.ai/artifact/TXAt4tWjuWW5CfnjXH6o63
+Review con Antigravity: prompt `docs/notes/reviews/agy-check/prompt-per-agy.md` (qui); risposte `esito.md` su `claude/project-thread-anim-r2`
+fa79d89b (22 risposte, sezione D prove pratiche NON fatta).
 
-## Modello approvato a grandi linee dall'owner (11-15 00:58Z: "ok penso vada bene")
-REVISORE (Claude) giudica con principi + soglia "alla pari di Smash/tripla A" + riferimenti e scrive UNA istruzione alla volta.
-ESECUTORE (Antigravity o modello economico) la applica su chiavi SPARSE, fa girare i gate numerici, mostra prima/dopo.
-Pose di partenza mai da zero: pose dell'owner, clip libera, o pose chiave misurate da un riferimento (`ref_keyposes.py`).
-Istruzione a 7 campi (chiave, tipo, parte, intento, modifica, principio, verifica), due livelli: di principio (normale) o misurato.
-PROSSIMO PASSO (owner 01:00Z): interrogare Antigravity sul desktop con `docs/notes/reviews/agy-check/prompt-per-agy.md`
-(22 domande + 5 prove, anche critica del piano) → `esito.md` nella stessa cartella → versione finale del documento.
+## Piano
+- REVISORE (Claude: principi + soglia "alla pari di Smash/tripla A" + riferimenti) scrive UNA istruzione alla volta; ESECUTORE
+  (Antigravity via agy-bridge dal desktop, riserva Claude economico) la applica sulla scheda, gate numerici, griglia prima/dopo + scie.
+- Istruzione a 8 campi: chiave, tipo, parte, controllo, intento, modifica, principio, verifica. Due livelli: principio (normale),
+  misurato (obbligatorio al 2° tentativo). Ingresso: almeno 5 pose, mai da zero. Video in gioco solo inizio e fine.
+- Chiavi sparse: max 1 ogni 4-5 frame, max 3 aggiunte e 6 istruzioni per ciclo, 2 tentativi; gate che conta le chiavi.
+- Difetto lato gioco nel video iniziale → ciclo sospeso, thread di codice. `animpipe revert` se due passi peggiorano.
+- Unreal (owner: niente livello additivo): copia `LS_<mossa>_Owner` → modifica → `ue-import` con diff → integra | uniforma | cambia.
+  Scheda = unica verità.
 
-## Raccomandazioni e costi stimati
-1. Opzione A: skill revisore + skill esecutore + contratto comune (rubrica unica, glossario, formato). ~$14-20. (B solo revisore
-   $8-12; C una skill a due modi $10-14.) `gstn-move-animation` in archivio.
-2. Unreal (owner 01:13Z: il livello additivo "Manuale" NON va bene): copia `LS_<mossa>_Owner` → modifica chiavi e curve → `ue-import`
-   con diff → "integra | uniforma | cambia". Scheda unica verità; anche Antigravity su copia `_Agy`. Codice, ~$20-35, serve il sì.
-3. Libreria riferimenti solo numeri in `Tools/AnimPipeline/reflib/`; immagini/GIF/video solo sul desktop. Pilota 10 mosse ~$10-15.
-4. Mossa pilota col ciclo completo ~$5-9 (realistico $10-18 se servono due cicli).
+## Verificato nel repo (anim-r2)
+- VERO: jab1 v3 ha 24 chiavi (f0-22 tutti; r0 13), jab2 v3 28 (r0 17): schede oggi DENSE. Esistono author, build, check, fidelity,
+  verify, poses --over, trails, revert, capture, casc-import/diff, `ue_dump_user_keys.py`, `clip_grid.py`, `_read_manual` (tangenti).
+- FALSO: `animpipe ingest-owner` e `ue-import` non esistono. La scheda tiene profili di spacing, non tangenti per chiave.
+- Non verificato: che agy scriva solo nella scheda; lavoro da file; rifiuto sulle chiavi owner (servono le prove D).
 
-## Fatti verificati (branch anim4x)
-- Owner: Antigravity fa bene modifiche di principio ("più follow-through qui") con principi + pipeline; fallisce con sole 3 pose.
-- Scheda animpipe = chiavi solo sui frame chiave; skill Antigravity (`extracted_animator/smash-animator.md`) vieta il baking denso.
-  Percorso denso vecchio ancora presente (`DENSE=1`, "direct to Unreal").
-- Silhouette: `legibility.py`, `tangency.py`, rubrica `animpipe-move`, audit Antigravity; doc teoria silhouette solo su ujyw42.
-- Nessuna skill cita `docs/notes/anim-theory/`. Riferimenti: `ufd_fetch.py`, `ufd_measure.py`, `ref_*.py`, `motion_ref.py` esistono.
-
-## Buchi principali
-Due archivi di chiavi (scheda vs Sequencer scritto da Antigravity); Claude non può avviare Antigravity; stima dei cm da immagine;
-6 istruzioni possono non bastare; taratura del revisore; editor desktop conteso; lista domande solo per attacchi (manca reazioni).
+## Costi stimati
+Skill A (2 + contratto) $14-20 · `ue-import` $20-35 (codice, serve il sì) · pilota jab 1 con prove D $5-9 · libreria riferimenti $10-15.
 
 ## Decisioni aperte per l'owner
-Chi esegue; fonte di verità delle chiavi / `ue-import`; opzione A/B/C; tetti (2 tentativi, 6 istruzioni, 8 chiavi aggiunte);
-clip da dietro. Non verificato: se gli strumenti di Antigravity rileggono già le chiavi dal Sequencer; licenze delle fonti.
+Skill A; ue-import; pilota; esecutore agy; tetti; quale vista vince (dietro vs lato); libreria + clip da dietro.
+Licenze delle fonti non verificate sul web (non è un parere legale).
 
-Costo stimato del thread: ~$16-19 (Fable, ~600k token in ingresso con cache, ~30k in uscita).
+Costo stimato del thread: ~$22-26 (Fable, ~900k token in ingresso con cache, ~45k in uscita).
