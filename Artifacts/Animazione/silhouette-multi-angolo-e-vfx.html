@@ -1,0 +1,172 @@
+<title>Silhouette multi-angolo e VFX</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: una colonna da documento di lavoro; in alto le regole da applicare, sotto le prove gioco per gioco e le fonti */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --fg:#1b2230; --muted:#5d6676; --line:#dde1e8;
+  --accent:#2f5bd3; --code-bg:#eef1f6; --yes:#2f8a57; --no:#b3402f; --warn:#b26a00;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12151b; --surface:#1a1f28; --fg:#e4e8ef; --muted:#98a2b3; --line:#2b323e;
+  --accent:#86a6ff; --code-bg:#222936; --yes:#5cc58a; --no:#ee8573; --warn:#e8a447; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12151b; --surface:#1a1f28; --fg:#e4e8ef; --muted:#98a2b3; --line:#2b323e;
+  --accent:#86a6ff; --code-bg:#222936; --yes:#5cc58a; --no:#ee8573; --warn:#e8a447; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:16px/1.55 var(--body);
+  padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:30px}
+section{min-width:0}
+header p{margin:6px 0 0;color:var(--muted);font-size:14px}
+h1{font-size:27px;line-height:1.2;margin:0;font-weight:600;text-wrap:balance}
+h2{font-size:19px;margin:0 0 10px;font-weight:600;text-wrap:balance}
+h3{font-size:12px;margin:18px 0 6px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+p{margin:0 0 10px;max-width:68ch}
+ul,ol{margin:0 0 10px;padding-left:22px;max-width:68ch}
+li{margin-bottom:6px}
+a{color:var(--accent);overflow-wrap:anywhere}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.45}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+th{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;white-space:nowrap}
+td:first-child{font-weight:500}
+.tag{font:500 12px var(--mono);white-space:nowrap}
+.tag.si{color:var(--yes)} .tag.no{color:var(--no)} .tag.forse{color:var(--warn)}
+.sintesi{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px}
+.sintesi ol,.sintesi p:last-child{margin-bottom:0}
+.nota{color:var(--muted);font-size:14px}
+.ded{font:500 11px var(--mono);color:var(--warn);white-space:nowrap}
+.fonti li{font-size:14px;margin-bottom:7px}
+</style>
+
+<main>
+<header>
+  <h1>Silhouette da più angoli e ruolo dei VFX</h1>
+  <p>GASP Giustino · 15 novembre 2026 · ricerca online, nessun codice toccato. Completa <em>silhouette-multidirezionali.md</em> e non la ripete. Dove una regola è una deduzione nostra e non viene da una fonte è marcata <span class="ded">[nostra]</span>.</p>
+</header>
+
+<section class="sintesi">
+  <h2>La risposta in breve</h2>
+  <ol>
+    <li><strong>Nessuno studio risolve la silhouette da ogni angolo.</strong> Tutti scelgono una camera, posano per quella, e usano le deformazioni spinte solo quando la camera è sotto controllo (super, replay, zoom sul colpo decisivo).</li>
+    <li><strong>Dove la camera è libera, la lettura passa ad altri canali.</strong> Scia, scintilla d'impatto, hitstop, reazione del bersaglio, suono. Sono quasi tutti indipendenti dall'angolo, la posa no.</li>
+    <li><strong>La posa conta nelle fasi lunghe, i VFX in quelle corte.</strong> I frame attivi durano 1-3 f e l'occhio non li legge comunque. Carica e follow-through restano a schermo abbastanza da essere letti, e lì i VFX non sostituiscono la posa.</li>
+    <li><strong>Per noi la vista che vince dipende dalla fase</strong>, non dalla mossa: regole qui sotto.</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Regole di review: quale vista vince</h2>
+  <p>La vista di gioco è quella da dietro con pitch e distanza reali. Il lato è la vista di chi guarda o di un terzo giocatore. Il fronte a tre quarti è la vista di chi sta per essere colpito, e oggi non la controlliamo.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Fase</th><th>Vista che decide</th><th>Cosa si giudica</th><th>I VFX possono salvarla?</th></tr></thead>
+    <tbody>
+      <tr><td>Carica, mossa veloce (meno di 13 f, cioè sotto 200 ms)</td><td>Dietro</td><td>Solo la regola del primo frame: cambio netto di posa. Nessuno reagisce a una mossa così veloce, quindi non serve che l'avversario la legga.</td><td><span class="tag no">no</span>, e non servono</td></tr>
+      <tr><td>Carica, mossa lenta (13 f o più)</td><td>Fronte a 3/4, poi dietro</td><td>La sagoma della carica deve dire quale mossa arriva a chi la subisce. Da dietro basta che la mano o l'arma escano dal contorno.</td><td><span class="tag forse">in parte</span>: un bagliore o un suono di carica aiuta, ma la posa deve reggere da sola</td></tr>
+      <tr><td>Frame attivi</td><td>Nessuna, per la posa</td><td>Non si giudica la silhouette. Si giudica: scia visibile da dietro e di lato, direzione del colpo chiara, frame congelato dall'hitstop pulito.</td><td><span class="tag si">sì</span>, è il loro lavoro</td></tr>
+      <tr><td>Contatto congelato (hitstop)</td><td>Dietro</td><td>È il frame che il giocatore guarda più a lungo fra quelli veloci. Parte che colpisce fuori dal contorno, bersaglio e scintilla in vista.</td><td><span class="tag forse">in parte</span>: scintilla e reazione danno il punto e la direzione</td></tr>
+      <tr><td>Follow-through e recovery</td><td>Dietro, poi lato</td><td>È la posa che resta più a lungo (in Smash oltre metà della mossa). Deve reggere piena da dietro. Di lato basta metà dell'arto visibile.</td><td><span class="tag no">no</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Regole di spareggio</h3>
+  <ol>
+    <li><strong>La vista di gioco decide PASS o FAIL.</strong> È la camera che il giocatore ha davvero, ed è così che lavorano tutti gli studi letti.</li>
+    <li><strong>Il lato è una vista di controllo.</strong> Non deve essere bella, deve non essere rotta. FAIL di lato solo per tre cose: arto che colpisce invisibile per tutta una posa tenuta, compenetrazioni, carica e follow-through con la stessa sagoma.</li>
+    <li><strong>Se dietro e lato chiedono cose opposte, vince dietro</strong> e il lato si recupera con scia, scintilla e reazione del bersaglio. Mai una posa a metà. Questa regola risponde alla domanda 3 rimasta aperta nelle note sull'Overlord; puoi rovesciarla mossa per mossa.</li>
+    <li><strong>Ogni review guarda il video due volte.</strong> Prima con i VFX spenti: carica e follow-through devono passare da soli. Poi con i VFX accesi, a dimensione di gioco: qui si dà il verdetto finale su frame attivi e contatto.</li>
+    <li><strong>Le deformazioni che funzionano da una sola camera</strong> (arti allungati, prospettiva forzata) si usano solo dove la camera è nostra: zoom sul colpo decisivo, schermata di vittoria, trailer. In gioco restano solo scala uniforme della parte che colpisce e rotazione dell'arma per mostrare il lato largo.</li>
+  </ol>
+  <p class="nota">La soglia di 13 f viene dai 200 ms sotto cui, secondo Ubisoft per For Honor, quasi nessuno reagisce; a 62,5 Hz sono 12,5 frame. La divisione per fasi e l'aggiunta del fronte a 3/4 sono <span class="ded">[nostra]</span>: nessuna fonte tratta un platform fighter con camera libera.</p>
+</section>
+
+<section>
+  <h2>Checklist VFX</h2>
+  <p>Per ogni voce: cosa comunica, se dipende dall'angolo, e la regola da controllare nel video.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Elemento</th><th>Cosa dice al giocatore</th><th>Dipende dall'angolo?</th><th>Regola</th></tr></thead>
+    <tbody>
+      <tr><td>Scia sull'arto o sull'arma</td><td>Il percorso del colpo, quando il movimento è troppo veloce per vederlo</td><td>Poco. Sparisce solo se l'arco è di taglio alla camera.</td><td>Accesa sui frame attivi più 2-3 f di coda, vita breve (circa 0,2 s). Se da dietro è di taglio, darle spessore: due nastri incrociati o un nastro rivolto alla camera <span class="ded">[nostra]</span>.</td></tr>
+      <tr><td>Scintilla d'impatto</td><td>Dove ha colpito e quanto forte</td><td>No, se il nucleo è un'immagine rivolta alla camera</td><td>Nucleo sempre rivolto alla camera, nel punto di contatto. Tre taglie legate alla forza della mossa. Strisce nella direzione del lancio; se il lancio va in profondità aggiungere polvere o anello a terra, che da dietro si vede <span class="ded">[nostra]</span>.</td></tr>
+      <tr><td>Hitstop</td><td>Che il colpo è entrato, e il peso</td><td>No</td><td>Durata per mossa, con un tetto. Il frame congelato è la posa di contatto, non un frame di passaggio. L'attaccante continua a muoversi pochissimo.</td></tr>
+      <tr><td>Tremito del bersaglio</td><td>Lo shock del colpo</td><td>Sì, se trema lungo l'asse della camera</td><td>Trema più il colpito dell'attaccante, ampiezza che cala, hurtbox ferma. Ampiezza che cresce con la distanza della camera. Con camera libera farlo tremare di lato rispetto allo schermo, non su un asse del mondo <span class="ded">[nostra]</span>.</td></tr>
+      <tr><td>Reazione del bersaglio</td><td>Direzione e forza, da qualunque parte si guardi</td><td>Poco</td><td>Primo frame con cambio di posa enorme (regola del feel già decisa). Pose esagerate oltre il realistico.</td></tr>
+      <tr><td>Scossa della camera</td><td>Peso dei colpi forti</td><td>No</td><td>Solo colpi forti, breve, nella direzione del colpo. Mai sui jab: troppa scossa toglie leggibilità.</td></tr>
+      <tr><td>Suono e vibrazione del pad</td><td>Colpo a segno o a vuoto, ritmo</td><td>No</td><td>Suono diverso per colpo a vuoto e a segno su ogni mossa. È l'unico canale che funziona anche a personaggio coperto.</td></tr>
+      <tr><td>Bagliore di carica</td><td>Che sta arrivando una mossa forte</td><td>No</td><td>Solo mosse lente o caricate. Niente sui colpi veloci, altrimenti non segnala più nulla.</td></tr>
+      <tr><td>Zoom, rallentatore, fondo che lampeggia</td><td>Il colpo decisivo</td><td>No: la camera la scegliamo noi</td><td>Solo sul colpo che chiude, e solo in uno contro uno. È il punto dove si possono usare le pose da una sola camera.</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Tre controlli trasversali</h3>
+  <ul>
+    <li><strong>L'effetto non copre il personaggio.</strong> Picco di luminosità di 2-3 f al massimo, poi trasparente. Nel frame congelato si devono vedere ancora la parte che colpisce e la posa del bersaglio.</li>
+    <li><strong>La taglia segue l'importanza.</strong> Jab, tilt, smash, colpo finale: quattro gradini visibili. Se tutto è grande, niente è grande.</li>
+    <li><strong>Ogni effetto è un'informazione.</strong> Se non aiuta a capire cosa, dove, quanto forte o verso dove, si toglie.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Cosa fanno gli altri giochi</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Gioco</th><th>Camera</th><th>Come gestisce il problema</th></tr></thead>
+    <tbody>
+      <tr><td>Guilty Gear Xrd, Dragon Ball FighterZ</td><td>Lato, fissa</td><td>Ogni frame è posato come un disegno per quella camera: scala manuale degli arti, deformazione della mesh, prospettiva forzata, luce pensata per camera fissa. Scintille fatte di immagini 2D che cambiano ogni frame. Quando la camera si muove è una ripresa scritta a mano. [1][2]</td></tr>
+      <tr><td>Smash Ultimate</td><td>Lato, arretrata</td><td>Pose spinte per la camera ("sta benissimo da questo angolo"), scia chiara che "aiuta il cervello a riempire i dettagli", hitstop marcato. Sakurai deforma il modello oltre l'anatomia (il busto di Kazuya) e dice che il feedback del colpo conta di più proprio perché la camera è lontana. Sul colpo decisivo la camera zooma, il tempo rallenta e il fondo viene sostituito; fuori dall'uno contro uno è quasi spento. [3][4][5][6][7]</td></tr>
+      <tr><td>Overwatch</td><td>Prima persona, più riprese fisse</td><td>Gli smear con arti stirati ci sono, ma soprattutto dove la camera è fissa (azione migliore, pose di vittoria). Gibson: servono a "compensare la mancanza di motion blur". [8]</td></tr>
+      <tr><td>God of War (2018)</td><td>Dietro, vicina</td><td>Non hanno cambiato le pose: hanno cambiato le regole. Nemici disposti a mezzaluna davanti, frecce per chi è fuori schermo (rosse se attacca), il nemico colpito viene orientato verso la camera e spostato poco perché resti in vista. Hitstop sul primo frame del colpo, reazioni "libere di rompere la realtà", archi molto ampi, poca scossa di camera per non perdere leggibilità. [9][10]</td></tr>
+      <tr><td>Bayonetta</td><td>Dietro, libera</td><td>I nemici fuori schermo non attaccano. [11]</td></tr>
+      <tr><td>For Honor</td><td>Dietro la spalla, PvP</td><td>L'animazione da sola non basta per difendersi: ogni attacco ha un indicatore a schermo. Sotto i 200 ms di tempo utile Ubisoft considera l'attacco non reagibile. [12]</td></tr>
+      <tr><td>Granblue Fantasy: Relink</td><td>Libera</td><td>Il modello "deve stare al meglio da ogni angolo": partono dal disegno frontale, girano la camera e correggono. Correzioni che dipendono dalla camera fatte a runtime (giunti del viso, shader), non pose diverse. [13]</td></tr>
+      <tr><td>God of War Ragnarök, Spider-Man 2</td><td>Dietro</td><td>Avery Adams ruota l'arma perché mostri il lato largo a chi guarda, anche se fisicamente "non ha senso": in gioco si legge meglio. [14]</td></tr>
+      <tr><td>Monster Hunter, Dark Souls 3</td><td>Dietro, libera</td><td>La lettura sta nella carica: "capisco cosa arriva guardando solo l'animazione di partenza" (Yamazaki, Capcom). Animazioni rifinite in gioco insieme a design e VFX. Nei Souls molti giocatori imparano il ritmo dal suono. [15][16]</td></tr>
+      <tr><td>League of Legends</td><td>Dall'alto</td><td>Guida di stile VFX: una forma principale chiara, taglia e luminosità proporzionate al danno, effetti corti, attesa e poi scarica. Un effetto che non serve a un giocatore non gli viene mostrato. [17][18]</td></tr>
+    </tbody>
+  </table></div>
+  <p class="nota" style="margin-top:10px">La tesi di Lendenfeld sugli smear nei giochi 3D [19] arriva alla stessa conclusione: gli smear a geometria stirata "vanno puntati verso la camera" e con camera libera costano troppo; le scie sono la soluzione pratica perché non deformano il personaggio e reggono da più angoli; lo stiramento in gioco va tenuto leggero.</p>
+</section>
+
+<section>
+  <h2>Cosa cambia per noi</h2>
+  <ul>
+    <li><strong>La checklist del revisore</strong> in <em>silhouette-multidirezionali.md</em> chiede sì da dietro e di lato su carica, contatto e follow-through. Proposta: sostituirla con la tabella per fasi qui sopra, più il doppio passaggio VFX spenti e accesi.</li>
+    <li><strong>Le catture</strong> oggi sono dietro e lato. Per le sole mosse lente servirebbe anche il fronte a 3/4 sulla carica.</li>
+    <li><strong>Un kit VFX minimo</strong> (scia, scintilla in tre taglie, tremito del bersaglio rispetto allo schermo) renderebbe giudicabili i frame attivi. Non ho verificato cosa esiste già nel codice oltre all'hitstop.</li>
+  </ul>
+  <h3>Due decisioni per te</h3>
+  <ol>
+    <li>Va bene che nei conflitti <strong>vinca la vista da dietro</strong> e il lato diventi vista di controllo?</li>
+    <li>Aggiungiamo la <strong>cattura di fronte a 3/4</strong> per la carica delle mosse lente?</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Fonti e limiti</h2>
+  <ol class="fonti">
+    <li>Junya C. Motomura, <em>GuiltyGearXrd's Art Style</em>, GDC 2015. Letto un riassunto con minutaggio, non il video: <a href="https://videohighlight.com/v/yhGjCzxJV3E">videohighlight.com</a></li>
+    <li>New Frame Plus, <em>The Animation of Guilty Gear Xrd &amp; Dragon Ball FighterZ</em>, trascrizione: <a href="https://amara.org/videos/bDmpkclvfB5I/info/the-animation-of-guilty-gear-xrd-dragon-ball-fighterz">amara.org</a></li>
+    <li>New Frame Plus, <em>How to Animate a Smash Bros Attack (Link)</em>, trascrizione: <a href="https://amara.org/subtitles/I8Bnr4dEmv1u/en/1/download/How%20to%20Animate%20a%20Smash%20Bros%20Attack%20%20LINK.en.txt">amara.org</a></li>
+    <li>Masahiro Sakurai sull'hitstop, rubrica Famitsu vol. 490, traduzione: <a href="https://sourcegaming.info/2015/11/11/thoughts-on-hitstop-sakurais-famitsu-column-vol-490-1/">sourcegaming.info</a></li>
+    <li>Sakurai, video <em>Eight Hit Stop Techniques</em>, elenco delle otto tecniche: <a href="https://nintendowire.com/news/2022/12/12/this-week-in-sakurai-12-5-12-11-fine-tuning-hit-stop-and-cheating-the-system/">nintendowire.com</a></li>
+    <li>Sakurai, video <em>Too Much Is Just Right</em> e sugli effetti (hit mark, scie delle lame, effetti che non devono coprire i personaggi). Letti solo riassunti di stampa: <a href="https://tvtropes.org/pmwiki/pmwiki.php/WebVideo/MasahiroSakuraiOnCreatingGames">tvtropes.org</a>, <a href="https://www.gonintendo.com/contents/23556-masahiro-sakurai-discusses-hit-marks-in-his-latest-dev-video">hit mark</a>, <a href="https://gonintendo.com/contents/30552-masahiro-sakurai-talks-blade-trails-in-his-latest-development-video">scie</a>, <a href="https://www.gonintendo.com/contents/12076-sakurai-discusses-visual-effects-and-character-prominence-in-his-latest-video">effetti e personaggi</a></li>
+    <li>SmashWiki, <em>Special Zoom</em> e <em>Finish Zoom</em>: <a href="https://www.ssbwiki.com/Finish_Zoom">ssbwiki.com</a></li>
+    <li>David Gibson (Blizzard), talk GDC 2016 sull'animazione di Overwatch, riportato da Kotaku: <a href="https://kotaku.com/this-is-not-an-overwatch-glitch-1777612546">kotaku.com</a></li>
+    <li>Mihir Sheth, <em>Evolving Combat in God of War for a New Perspective</em>, GDC 2019. Letto un riassunto con minutaggio, non il video: <a href="https://videohighlight.com/v/hE5tWF-Ou2k">videohighlight.com</a></li>
+    <li>PlayStation Blog, sviluppatori di altri studi sul combattimento di God of War (Christian Wohlwend, Naughty Dog): <a href="https://blog.playstation.com/?p=370399">blog.playstation.com</a></li>
+    <li>Signals and Light, <em>How do enemy attacks work with the camera?</em>: <a href="https://signalsandlight.substack.com/p/how-do-enemy-attacks-work-with-the">substack.com</a></li>
+    <li>Ubisoft, For Honor, <em>Testing Grounds: how attacks are changing</em>, 2020: <a href="https://www.ubisoft.com/en-us/game/for-honor/news-updates/9OPowoU28h2YRO8zSvw5z/testing-grounds-how-attacks-are-changing">ubisoft.com</a></li>
+    <li>Cygames Magazine, <em>A Breakdown of Granblue Fantasy: Relink's Graphics</em>, parti 1 e 2, letto nel resoconto di Gematsu: <a href="https://www.gematsu.com/2020/12/granblue-fantasy-relink-staff-discuss-graphics-in-two-part-interview">gematsu.com</a></li>
+    <li>Avery Adams, serie <em>Anim Tips</em>, su 80 Level: <a href="https://80.lv/articles/tips-on-weapon-attack-animation-from-god-of-war-animator">80.lv</a></li>
+    <li>Capcom, <em>Animating the Monsters of Sunbreak</em>, intervista a Ken Yamazaki: <a href="https://news.capcomusa.com/2023/04/07/animating-the-monsters-of-sunbreak">capcomusa.com</a></li>
+    <li>Jerry Zhang, <em>Anatomy of an Enemy Attack in Dark Souls 3</em>. È un'analisi esterna, non una fonte dello studio: <a href="https://www.gamedeveloper.com/game-platforms/anatomy-of-an-enemy-attack-in-dark-souls-3">gamedeveloper.com</a></li>
+    <li>VFX Apprentice, dieci regole dalla guida di stile VFX di League of Legends: <a href="https://www.vfxapprentice.com/blog/10-league-of-legends-vfx-design-tips">vfxapprentice.com</a></li>
+    <li>Riot "Beardilocks", <em>Anatomy of a League of Legends missile, part 2</em>: <a href="https://realtimevfx.com/t/anatomy-of-a-league-of-legends-missile-part-2-what-are-we-communicating-with-our-vfx/13062">realtimevfx.com</a></li>
+    <li>Christoph Lendenfeld, <em>Smearframes in Video Games</em>, tesi magistrale, FH Hagenberg, 2018: <a href="https://theses.fh-hagenberg.at/index.php/system/files/pdf/Lendenfeld18.pdf">fh-hagenberg.at</a></li>
+  </ol>
+  <p class="nota"><strong>Limiti.</strong> Per Tekken, Street Fighter 6, Guilty Gear Strive, Elden Ring, Devil May Cry 5 e Hi-Fi Rush non ho trovato una fonte dello studio che parli di silhouette e angoli di camera: per Devil May Cry 5 c'è solo il principio di Itsuno che ogni pressione di tasto deve dare un risultato chiaro a schermo e in audio; per Hi-Fi Rush solo il talk sul rendering. I video di Sakurai su hit mark e scie li ho letti solo in riassunti di poche righe: durano pochi minuti ciascuno e conviene guardarli. Nessuna fonte tratta un platform fighter con camera libera, quindi la divisione per fasi resta una proposta da provare in gioco.</p>
+</section>
+</main>

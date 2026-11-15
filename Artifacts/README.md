@@ -9,5 +9,6 @@ Convenzione: `Artifacts/<Area>/<argomento-in-minuscolo>.html` (o `.md` se è la 
 | `Designer/mosse-di-esempio.html` | Guida "Mosse di esempio GSTN": come copiare e cambiare le mosse | https://claude.ai/artifact/DyiBrsycoRfXNSMoZUBxun |
 | `Progetto/cose-da-fare-a-mano.html` | Lista dei passi manuali dell'owner (push, prove in editor) | https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk |
 | `Animazione/skill-e-riferimenti.html` | Cosa rendere skill nella pipeline di animazione/review, nuova domanda di qualità (livello Smash/tripla A), libreria di riferimenti da altri giochi (fonti, regole legali, formato, confronto), costi | https://claude.ai/artifact/TXAt4tWjuWW5CfnjXH6o63 |
+| `Animazione/silhouette-multi-angolo-e-vfx.html` | Ricerca online: come i giochi tripla A gestiscono la leggibilità quando la silhouette non regge da ogni angolo; regole di review per fase (quale vista vince), checklist VFX, tabella gioco per gioco, fonti | https://claude.ai/artifact/MySdFXExJmvrDviYWkatdb |
 
 Aree previste: `Combattimento/`, `Designer/`, `Progetto/`, più `Animazione/` e `Input/` quando servono. Il `.html` copiato dai artifact esistenti è lo snapshot del 2026-11-14 (la guida designer non ha ancora il link alla guida hitbox, vedi memoria progetto).
