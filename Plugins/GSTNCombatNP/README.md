@@ -382,3 +382,14 @@ walks what the simulation events reach (exec links, the nodes feeding them, the 
 `Ability.SimLatent` (Delay, timers: error; async tasks: warning), `Ability.SimNonSyncVariable`, `Ability.SimWorldRead` (Mover, actor transform,
 world time, traces), `Ability.SimRandom`. An action that cannot run (no definition, no tag) is `Timeline.MoveAction`. Tests
 `GSTNCombat.Editor.SimGraph.*`.
+
+## Example moves made with the seams (Blueprint seams CP3)
+
+`Tools/GAS/setup_double_shot_examples.py` builds the owner's double-press special twice in `/Game/GASNPPTest/Examples/DoubleShot`: **A, data only**
+(`GA_Example_DoubleShot_A1`/`_A2`: an Event key with a Fire Projectile action each; A1's Tags window `Example.State.DoubleShotChain` + cancel window
+into the special, the kit binds the special to A2 while the tag is up, like jab 1 -> jab 2) and **B, one ability with a graph**
+(`GA_Example_DoubleShot_B`: On Move Key "Fire" shoots and arms the `FollowUpState` sync integer; On Move Frame asks `WasCommandEnteredWithin`; the
+follow-up opens a tag window that the timeline's `OnTagAdded` buffer reset rule turns into a flush, then Wait Combat Frames -> On Combat Frames
+Elapsed shoots the second shot). Kits `KIT_Example_DoubleShotA`/`B` (hub pads). The graph is laid down by `UGSTN_MoveGraphAuthoring`
+(GSTNCombatEditor), never by hand.
+

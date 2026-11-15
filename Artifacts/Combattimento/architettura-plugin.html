@@ -15,7 +15,7 @@ a{color:var(--accent)}li{margin:.3em 0}p,li{max-width:70ch}
 table{border-collapse:collapse;width:100%;min-width:560px;font-size:.9rem}th,td{text-align:left;vertical-align:top;padding:7px 10px;border-bottom:1px solid var(--line)}th{background:var(--code);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
 </style>
 <div class="wrap"><h1>Plugin di combattimento GSTN: architettura (per designer e per la futura versione pubblica)</h1>
-<p>Stato: 2026-11-14, ramo <code>claude/project-thread-0tmywc</code>; sezione 7 aggiornata il 2026-11-15 (CP2). Scritto da lettura del codice e degli handover (react-hook-1/2, launch-impacts), <strong>non eseguito in editor</strong>.
+<p>Stato: 2026-11-14, ramo <code>claude/project-thread-0tmywc</code>; sezione 7 aggiornata il 2026-11-15 (CP2), sezione 8 nuova (CP3). Scritto da lettura del codice e degli handover (react-hook-1/2, launch-impacts), <strong>non eseguito in editor</strong>.
 Questo documento è la mappa breve; la specifica completa è <a href="https://github.com/xJusteen47/GASP_GiustinoTest_5.8/blob/claude/project-thread-0tmywc/docs/architecture/combat.md">docs/architecture/combat.md</a> (1187 righe), l'indice dei plugin è <a href="https://github.com/xJusteen47/GASP_GiustinoTest_5.8/blob/claude/project-thread-0tmywc/Plugins/README.md">Plugins/README.md</a>, e ogni plugin ha il suo README.</p>
 <h2>1. Moduli (livelli)</h2>
 <p>Regola: un plugin <strong>Core</strong> puro (niente GAS, niente Network Prediction, niente Mover), adattatori sopra. Le dipendenze vanno solo verso il basso.</p>
@@ -130,5 +130,22 @@ Questo documento è la mappa breve; la specifica completa è <a href="https://gi
 <li><strong>Validatore</strong> dei grafi di simulazione (al salvataggio e in Validate all): Delay/timer (errore), task asincroni, variabili non sync, letture di mondo/Mover, random non deterministico (avvisi).</li>
 <li>Un plugin aggiunge azioni sue derivando <code>FGSTN_MoveAction</code> nel proprio modulo: il Core non lo nomina.</li>
 </ul>
-<p>Prossimo: CP3 mosse di esempio (special a doppia pressione con 2 proiettili, versione solo dati e versione grafo BP), CP4 ganci visivi, CP5 factory "Combat Move" e guida.</p>
+<p>Prossimo: CP4 ganci visivi, CP5 factory "Combat Move" e guida (le mosse di esempio CP3 sono nella sezione 8).</p>
+
+<h2>8. Mosse di esempio in Blueprint (CP3, 2026-11-15)</h2>
+<p>Ramo <code>claude/project-thread-p2xw3s</code> (sopra CP2), <strong>da compilare e provare sul fisso</strong>. La special a doppia pressione dell'owner (premi lo special: un colpo; ripremi in tempo: un secondo colpo) fatta due volte, stessa mossa per due strade, per confrontarle. Tutto creato dallo script <code>Tools/GAS/setup_double_shot_examples.py</code>: nessun cablaggio a mano, nessun tasto, nessuna impostazione di progetto.</p>
+<div class="tb"><table>
+<tr><th></th><th>A, solo dati</th><th>B, grafo Blueprint</th></tr>
+<tr><td>Kit (pad nell'hub)</td><td><code>KIT_Example_DoubleShotA</code>, "DOPPIO COLPO A"</td><td><code>KIT_Example_DoubleShotB</code>, "DOPPIO COLPO B"</td></tr>
+<tr><td>Abilità</td><td><code>GA_Example_DoubleShot_A1</code> + <code>_A2</code>, senza grafo</td><td><code>GA_Example_DoubleShot_B</code>, una sola</td></tr>
+<tr><td>Primo colpo</td><td>chiave Event al frame 8 con azione Fire Projectile (<code>DA_Example_Shot</code>)</td><td>chiave "Fire" al frame 8 → On Move Key → Fire Move Projectile</td></tr>
+<tr><td>Seconda pressione</td><td>finestra Tags <code>Example.State.DoubleShotChain</code> 8-20 + cancel verso lo special 9-20; il kit lega lo special ad A2 quando il tag c'è (come jab1 → jab2)</td><td>On Move Frame: se <code>FollowUpState</code> (Sync Integer) = 1 e il componente combat dice "special inserito di nuovo negli ultimi 8 frame" → stato 2, Open Move Tag Window (la regola di buffer della timeline butta quella pressione), Wait Combat Frames 6</td></tr>
+<tr><td>Secondo colpo</td><td>A2 spara al frame 6, velocità x1.5</td><td>On Combat Frames Elapsed → Fire Move Projectile, velocità x1.5</td></tr>
+<tr><td>Recupero</td><td>quello di A2 (FAF 22 dopo la seconda pressione)</td><td>sempre FAF 28 della stessa mossa, anche con un colpo solo</td></tr>
+</table></div>
+<ul>
+<li><strong>Due comportamenti di proposito</strong>: in A il secondo colpo è una mossa nuova (ha il suo recupero), in B sta dentro la stessa mossa. L'owner sceglie quale feel preferisce; i numeri sono segnaposto nelle Class Defaults e nelle timeline.</li>
+<li><strong>Nuovo strumento editor <code>UGSTN_MoveGraphAuthoring</code></strong> (GSTNCombatEditor): da Python aggiunge variabili (anche Sync), eventi della mossa, chiamate, get/set, make/break, branch, collega i pin, compila e passa il validatore dei grafi di simulazione. È la base della factory "Combat Move" di CP5. Test <code>GSTNCombat.Editor.MoveGraph.BuildsAndCompiles</code>.</li>
+<li><strong>Limiti</strong>: animazione segnaposto (spinta GASP) su tutte e tre; i pad compaiono a Play senza cartello (la mappa non si risalva); proiettile senza VFX (sfera del plugin).</li>
+</ul>
 </div>

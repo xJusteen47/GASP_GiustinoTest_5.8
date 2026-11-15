@@ -500,6 +500,14 @@ severities and colours in the settings) without C++. New tools (a track editor, 
 (`IGSTN_TrackEditor`, "Adding a track editor" above); Editor Utility Widgets will call the Blueprint-callable `UGSTN_CombatEditorUtils` (tick rate,
 validate, bake): `GetTickRateHz`, `BakeTimeline`, `IsBakeStale` (E8).
 
+**Move graph authoring (Blueprint seams CP3).** `UGSTN_MoveGraphAuthoring` (`Public/Graph/`) lays down the event graph of a move Blueprint from a
+script, so example and starter moves are never wired by hand: `SetMemberVariable` (bool, int, float, name, string, `struct:<path>` incl. the fork's
+sync variables, `object:<class path>`, with default, category and tooltip), `ClearEventGraph`, `AddEventNode` (an event of the parent class:
+`K2_OnMoveKey`...), `AddCallNode` (a class path + function name; empty path = the ability's own), `AddVariableNode` (get/set), `AddStructNode`
+(make/break), `AddBranchNode`, `ConnectPins` (through the K2 schema; an empty pin name = the only data pin of that side), `SetPinDefault`,
+`CompileAndReport`, `CheckSimulationRules` (the CP2 rules above) and `DescribeEventGraph`. Nodes are named by their GUID string. First user:
+`Tools/GAS/setup_double_shot_examples.py` (the B version of the double-press special). Test `GSTNCombat.Editor.MoveGraph.BuildsAndCompiles`.
+
 ## Replacing content
 
 The plugin ships no content and references none by path. The preview kit, skin and mesh are soft references in the settings
