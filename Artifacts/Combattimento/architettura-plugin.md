@@ -1,6 +1,6 @@
 # Plugin di combattimento GSTN: architettura (per designer e per la futura versione pubblica)
 
-Stato: 2026-11-14, ramo `claude/project-thread-0tmywc`; sezione 7 aggiornata il 2026-11-15 (CP2). Scritto da lettura del codice e degli handover (react-hook-1/2, launch-impacts), **non eseguito in editor**.
+Stato: 2026-11-14, ramo `claude/project-thread-0tmywc`; sezione 7 aggiornata il 2026-11-15 (CP2), sezione 8 nuova (CP3). Scritto da lettura del codice e degli handover (react-hook-1/2, launch-impacts), **non eseguito in editor**.
 Questo documento è la mappa breve; la specifica completa è [docs/architecture/combat.md](../../docs/architecture/combat.md) (1187 righe), l'indice dei plugin è [Plugins/README.md](../../Plugins/README.md), e ogni plugin ha il suo README.
 
 ## 1. Moduli (livelli)
@@ -92,4 +92,22 @@ Ramo `claude/project-thread-6bl38a` (CP2 sopra CP1). Il nucleo per frame resta C
 - **Validatore** dei grafi di simulazione (al salvataggio e in Validate all): Delay/timer (errore), task asincroni, variabili non sync, letture di mondo/Mover, random non deterministico (avvisi).
 - Un plugin aggiunge azioni sue derivando `FGSTN_MoveAction` nel proprio modulo: il Core non lo nomina.
 
-Prossimo: CP3 mosse di esempio (special a doppia pressione con 2 proiettili, versione solo dati e versione grafo BP), CP4 ganci visivi, CP5 factory "Combat Move" e guida.
+Prossimo: CP4 ganci visivi, CP5 factory "Combat Move" e guida (le mosse di esempio CP3 sono nella sezione 8).
+
+## 8. Mosse di esempio in Blueprint (CP3, 2026-11-15)
+
+Ramo `claude/project-thread-p2xw3s` (sopra CP2), **da compilare e provare sul fisso**. La special a doppia pressione dell'owner (premi lo special: un colpo; ripremi in tempo: un secondo colpo) fatta due volte, stessa mossa per due strade, per confrontarle. Tutto creato dallo script `Tools/GAS/setup_double_shot_examples.py`: nessun cablaggio a mano, nessun tasto, nessuna impostazione di progetto.
+
+| | A, solo dati | B, grafo Blueprint |
+|---|---|---|
+| Kit (pad nell'hub) | `KIT_Example_DoubleShotA`, "DOPPIO COLPO A" | `KIT_Example_DoubleShotB`, "DOPPIO COLPO B" |
+| Abilità | `GA_Example_DoubleShot_A1` + `_A2`, senza grafo | `GA_Example_DoubleShot_B`, una sola |
+| Primo colpo | chiave Event al frame 8 con azione Fire Projectile (`DA_Example_Shot`) | chiave "Fire" al frame 8 → On Move Key → Fire Move Projectile |
+| Seconda pressione | finestra Tags `Example.State.DoubleShotChain` 8-20 + cancel verso lo special 9-20; il kit lega lo special ad A2 quando il tag c'è (come jab1 → jab2) | On Move Frame: se `FollowUpState` (Sync Integer) = 1 e il componente combat dice "special inserito di nuovo negli ultimi 8 frame" → stato 2, Open Move Tag Window (la regola di buffer della timeline butta quella pressione), Wait Combat Frames 6 |
+| Secondo colpo | A2 spara al frame 6, velocità x1.5 | On Combat Frames Elapsed → Fire Move Projectile, velocità x1.5 |
+| Recupero | quello di A2 (FAF 22 dopo la seconda pressione) | sempre FAF 28 della stessa mossa, anche con un colpo solo |
+
+- **Due comportamenti di proposito**: in A il secondo colpo è una mossa nuova (ha il suo recupero), in B sta dentro la stessa mossa. L'owner sceglie quale feel preferisce; i numeri sono segnaposto nelle Class Defaults e nelle timeline.
+- **Nuovo strumento editor `UGSTN_MoveGraphAuthoring`** (GSTNCombatEditor): da Python aggiunge variabili (anche Sync), eventi della mossa, chiamate, get/set, make/break, branch, collega i pin, compila e passa il validatore dei grafi di simulazione. È la base della factory "Combat Move" di CP5. Test `GSTNCombat.Editor.MoveGraph.BuildsAndCompiles`.
+- **Limiti**: animazione segnaposto (spinta GASP) su tutte e tre; i pad compaiono a Play senza cartello (la mappa non si risalva); proiettile senza VFX (sfera del plugin).
+
