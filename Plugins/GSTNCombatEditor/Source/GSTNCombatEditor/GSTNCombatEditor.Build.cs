@@ -25,6 +25,9 @@ using UnrealBuildTool;
 //
 // The validation panel (E11) adds WorkspaceMenuStructure (the Window > GSTN Combat group its tab sits in).
 //
+// The Combat Move factory (CP5 of the Blueprint seams) adds ToolMenus (its Add to Kit or Weapon entry in the asset context menu of a move
+// Blueprint); GSTNInputCore becomes public because the new move options carry a binding's tag requirements.
+//
 // UMG, RenderCore and RHI are for the offscreen snapshot tests (GSTN.Visual.*, Tests/GSTN_VisualSnapshot.h): FWidgetRenderer and the read-back.
 //
 // Slate arrived with the timeline panel (E4), the toolkit (UnrealEd), the asset definition (AssetDefinition) and the details panel
@@ -47,7 +50,9 @@ public class GSTNCombatEditor : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"GameplayTags",
-			"GSTNCombatCore"
+			"GSTNCombatCore",
+			// The tag requirements of a kit binding are in a public header (Moves/GSTN_CombatMoveAuthoring.h, CP5)
+			"GSTNInputCore"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]
@@ -78,7 +83,7 @@ public class GSTNCombatEditor : ModuleRules
 			"GameplayAbilities",
 			"GSTNCombatGAS",
 			"GSTNCombatNP",
-			"GSTNInputCore"
+			"ToolMenus"
 		});
 	}
 }

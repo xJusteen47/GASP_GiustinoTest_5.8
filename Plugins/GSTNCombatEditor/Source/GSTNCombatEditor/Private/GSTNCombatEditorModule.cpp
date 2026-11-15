@@ -4,6 +4,7 @@
 
 #include "Bake/GSTN_BakeAll.h"
 #include "Modules/ModuleManager.h"
+#include "Moves/GSTN_CombatMoveFactory.h"
 #include "Preview/GSTN_GizmoEdMode.h"
 #include "Preview/GSTN_HitboxOverlay.h"
 #include "PropertyEditorModule.h"
@@ -44,12 +45,16 @@ void FGSTN_CombatEditorModule::StartupModule()
 	PropertyEditor.RegisterCustomPropertyTypeLayout(FGSTN_TimelineDataCustomization::GetStructName(), FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FGSTN_TimelineDataCustomization::MakeInstance));
 	// The groups, the angle dial and the knockback preview of a hit (E12), wherever an FGSTN_HitData is edited
 	PropertyEditor.RegisterCustomPropertyTypeLayout(FGSTN_HitDataCustomization::GetStructName(), FOnGetPropertyTypeCustomizationInstance::CreateStatic(&FGSTN_HitDataCustomization::MakeInstance));
+
+	// Add to Kit or Weapon... on a move Blueprint (CP5). The Combat Move factory itself registers by reflection, like every UFactory
+	GSTNCombatMoveMenu::Register();
 	UE_LOG(LogGSTNCombatEditor, Verbose, TEXT("GSTN Combat Editor module started"));
 }
 
 void FGSTN_CombatEditorModule::ShutdownModule()
 {
 	// Reverse order of startup
+	GSTNCombatMoveMenu::Unregister();
 	if (FPropertyEditorModule* PropertyEditor = FModuleManager::GetModulePtr<FPropertyEditorModule>(TEXT("PropertyEditor")))
 	{
 		PropertyEditor->UnregisterCustomPropertyTypeLayout(FGSTN_HitDataCustomization::GetStructName());
