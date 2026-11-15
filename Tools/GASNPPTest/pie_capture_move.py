@@ -102,6 +102,8 @@ elif 'Dropkick' in KIT:
 elif 'DAir' in KIT:
     SEQUENCES = DAIR_SEQUENCES
 TIMEOUT = 900.0
+# PIE_CAPTURE_COLLISION=1: draw collision (the pawn's movement capsule) in every view and the game viewport (DROPKICK-CAPSULE, 2026-11-15)
+COLLISION = os.environ.get('PIE_CAPTURE_COLLISION', '') == '1'
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None, 'log': None, 'rows': None}
 
 
@@ -147,6 +149,10 @@ def _make_cameras():
         for prop, value in (('capture_every_frame', False), ('capture_on_movement', False), ('always_persist_rendering_state', True),
                             ('fov_angle', FOV), ('capture_source', unreal.SceneCaptureSource.SCS_FINAL_COLOR_LDR), ('texture_target', rt)):
             comp.set_editor_property(prop, value)
+        if COLLISION:   # the movement capsule drawn in every view (ECB review): the scene captures have their own show flags
+            comp.set_editor_property('show_flag_settings', [unreal.EngineShowFlagsSetting(show_flag_name='Collision', enabled=True)])
+    if COLLISION:
+        _console('show collision')
     return True
 
 
@@ -236,6 +242,16 @@ def _row(frame, tapped, extra=None):
     view = g._view(0, h._key(0)) or {}
     row = {'f': frame, 'tap': tapped, 'combat': view.get('combat'), 'tags': view.get('tags'), 'loc': view.get('location'), 'montage': _montage()}
     row.update(extra or {})
+    try:   # body vs capsule (DROPKICK-CAPSULE): pelvis world z, capsule half height/radius, mesh z relative to the actor
+        pawn = _pawn()
+        cap = pawn.get_component_by_class(unreal.CapsuleComponent)
+        mesh = pawn.get_component_by_class(unreal.SkeletalMeshComponent)
+        row['body'] = {'pelvis_z': round(mesh.get_socket_location('pelvis').z, 1), 'actor_z': round(pawn.get_actor_location().z, 1),
+                       'cap_hh': round(cap.get_unscaled_capsule_half_height(), 1), 'cap_r': round(cap.get_unscaled_capsule_radius(), 1),
+                       'cap_bottom_z': round(pawn.get_actor_location().z - cap.get_unscaled_capsule_half_height(), 1),
+                       'mesh_rel_z': round(mesh.get_editor_property('relative_location').z, 1)}
+    except Exception as e:
+        row['body_err'] = repr(e)[:80]
     try:   # projectiles alive in the host world: [x, y, z, hidden, visual mesh set] (what a camera can see, 1 vs 2 shots)
         cls = getattr(unreal, 'GSTN_Projectile', None)
         if cls:

@@ -158,7 +158,8 @@ bool FGSTN_BodyCapsuleShiftEffect::ApplyMovementEffect(FApplyMovementEffectParam
 	USceneComponent* Updated = ApplyEffectParams.UpdatedComponent;
 	UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(Updated);
 	FMoverDefaultSyncState* Sync = OutputState.SyncStateCollection.FindMutableDataByType<FMoverDefaultSyncState>();
-	UMoverComponent* MoverComp = ApplyEffectParams.MoverComp;
+	// The params hand a const Mover component (5.9); the effect only resizes the capsule and the mesh offset it owns, as the modifier does
+	UMoverComponent* MoverComp = const_cast<UMoverComponent*>(ToRawPtr(ApplyEffectParams.MoverComp));
 	if (!Capsule || !Sync || !MoverComp)
 	{
 		return false;

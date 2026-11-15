@@ -4,7 +4,8 @@
 # run it AFTER that script, and again after any rerun of it (the kit script rewrites the timeline without the track).
 #
 # What it writes into /Game/GASNPPTest/Combat/Overlord/TL_Overlord_Dropkick (nothing else):
-#   Hold Until Landed track [startup, startup + one loop) frames, land frame = first frame of the land clip in the montage (after LOOP_REPS loops).
+#   Hold Until Landed track [startup + 6, startup + one loop) frames (decision 2A: loop f0-f5 play once as follow-through, only the loop's
+#   second half repeats; env DROPKICK_HOLD_FOLLOW_THROUGH, 0 = the old whole-loop hold), land frame = first frame of the land clip in the montage (after LOOP_REPS loops).
 #   In the air the timeline stands on the loop's last frame (the hitbox, open to the land frame, stays open) and the montage repeats its FIRST
 #   loop copy; on the first grounded frame the timeline jumps to the land frame and the montage to the land clip. The montage is not touched:
 #   the extra loop copies are simply never played. LOOP_REPS can go back to 1 later (shorter montage), this script follows it.
@@ -22,6 +23,7 @@ DIR = '/Game/GASNPPTest/Combat/Overlord'
 TIMELINE = f'{DIR}/TL_Overlord_Dropkick'
 CLIPS = {name: f'{DIR}/AS_OverlordDropkick_{name}' for name in ('Startup', 'Loop', 'Land')}
 ANIM_FPS = 60.0
+FOLLOW_THROUGH = int(os.environ.get('DROPKICK_HOLD_FOLLOW_THROUGH', '6'))   # loop frames played once before the hold
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'AnimR2', 'setup_dropkick_hold_until_landed.txt')
 _lines = []
 
@@ -48,7 +50,8 @@ def run():
                 raise RuntimeError(f'{path} missing: run Tools/GAS/setup_overlord_dropkick_kit.py first')
         lens = {name: unreal.load_asset(path).get_play_length() for name, path in CLIPS.items()}
         reps = _loop_reps()
-        start = int(round(lens['Startup'] * ANIM_FPS))
+        # Decision 2A (owner, 2026-11-15): the hold repeats only the loop's second half; loop f0..FOLLOW_THROUGH-1 play once as follow-through
+        start = int(round(lens['Startup'] * ANIM_FPS)) + FOLLOW_THROUGH
         end = int(round((lens['Startup'] + lens['Loop']) * ANIM_FPS))
         land = int(round((lens['Startup'] + reps * lens['Loop']) * ANIM_FPS))   # the kit script's loop_end: first land frame
         asset = unreal.load_asset(TIMELINE)

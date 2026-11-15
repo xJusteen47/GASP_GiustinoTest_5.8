@@ -402,7 +402,8 @@ public:
 	MOVER_API void ScheduleInstantMovementEffect(TSharedPtr<FInstantMovementEffect> InstantMovementEffect);
 
 	// Queue an instant movement effect in async mode. Do not use on the game thread.
-	void QueueInstantMovementEffect_Internal(const FMoverTimeStep& TimeStep, TSharedPtr<FInstantMovementEffect> InstantMovementEffect);
+	// GSTN: exported for FGSTN_BodyCapsuleModifier (GSTNCombatNP), which queues its shift effect on the modifier's own substep
+	MOVER_API void QueueInstantMovementEffect_Internal(const FMoverTimeStep& TimeStep, TSharedPtr<FInstantMovementEffect> InstantMovementEffect);
 
 protected:
 	// Queue a scheduled instant movement effect. Thread safe, can be used outside the game thread.
