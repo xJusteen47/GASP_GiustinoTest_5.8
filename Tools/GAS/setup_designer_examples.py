@@ -87,9 +87,10 @@ def _child_blueprint(name, parent_name):
     bp = unreal.load_asset(path)
     if bp:
         return bp, False
-    factory = unreal.GameplayAbilitiesBlueprintFactory() if hasattr(unreal, 'GameplayAbilitiesBlueprintFactory') else unreal.BlueprintFactory()
+    # UE 5.9: the GameplayAbilities BP factory ignores parent_class, so use the plain Blueprint factory
+    factory = unreal.BlueprintFactory()
     factory.set_editor_property('parent_class', getattr(unreal, parent_name).static_class())
-    asset_class = unreal.GameplayAbilityBlueprint if hasattr(unreal, 'GameplayAbilityBlueprint') else unreal.Blueprint
+    asset_class = unreal.Blueprint
     bp = unreal.AssetToolsHelpers.get_asset_tools().create_asset(name, DIR, asset_class, factory)
     unreal.BlueprintEditorLibrary.compile_blueprint(bp)
     log(f'created {name} (child of {parent_name})')

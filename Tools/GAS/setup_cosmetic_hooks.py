@@ -150,7 +150,12 @@ def example_move(name, size, tail, force):
         log(f'WARNING: {name} uses a timeline asset: set its hitboxes\' cue there')
     changed |= cue > 0
     if force or len(cdo.get_editor_property('cosmetic_windows')) == 0:
-        ok, first, last = unreal.GSTN_CosmeticAuthoring.get_active_frames(cls)
+        # 5.9 Python drops the bool return when out params exist: (first, last), or an error without hitbox
+        try:
+            first, last = unreal.GSTN_CosmeticAuthoring.get_active_frames(cls)
+            ok = True
+        except Exception:
+            ok = False
         if not ok:
             log(f'WARNING: {name} has no hitbox: no trail window')
         else:

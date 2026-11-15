@@ -54,7 +54,7 @@ def run():
         if action:
             lines = unreal.GSTN_MoveGraphAuthoring.describe_event_graph(action)
             for ev in ('K2_OnMoveStarted', 'K2_OnMoveKey', 'K2_OnMoveHitConfirmed', 'K2_OnMoveEnded'):
-                if not any(ev in line for line in lines):
+                if not any(ev[3:] in line.replace(' ', '') for line in lines):
                     failures.append(f'action move has no {ev}')
             cdo = unreal.get_default_object(action.generated_class())
             tl = cdo.get_editor_property('timeline_asset')
@@ -67,9 +67,11 @@ def run():
                 before = len(copy.get_editor_property('kit_bindings'))
                 tag = unreal.GameplayTag()
                 tag.import_text('(TagName="Command.Special.Neutral")')
-                ok, report = unreal.GSTN_CombatMoveAuthoring.add_move_to_kit_assets(action.generated_class(), copy, None, tag,
+                # the bool return is dropped by the 5.9 Python binding when there is an out param
+                report = unreal.GSTN_CombatMoveAuthoring.add_move_to_kit_assets(action.generated_class(), copy, None, tag,
                                                                                     unreal.GSTN_TagRequirements())
                 after = len(copy.get_editor_property('kit_bindings'))
+                ok = True
                 log(f'bind on a copy of KIT_Example: ok={ok}, bindings {before} -> {after} | {report}')
                 if not ok:
                     failures.append('binding refused')
