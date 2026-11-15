@@ -24,6 +24,9 @@ class UMoverComponent;
  * FGSTN_BodyCapsuleShiftEffect, queued on the same substep: Mover applies it before the movement mode generates its move and starts the
  * mode from the moved location. Mesh offset: mesh relative location = its archetype's + (standing offset - Applied.Offset), so the mesh
  * root sits at actor - Applied.Offset (Mover's base visual transform, which the smoothing uses too).
+ *
+ * Pushbox (FGSTN_Pushbox): the same substep also queues FGSTN_PushboxShiftEffect with the move the combat tick of the frame computed
+ * (UGSTN_CombatSimComponent::ReadFramePush). Fighters' capsules ignore each other, so this soft capped push is what keeps them apart.
  */
 USTRUCT()
 struct GSTNCOMBATNP_API FGSTN_BodyCapsuleModifier : public FMovementModifierBase
@@ -92,6 +95,33 @@ struct GSTNCOMBATNP_API FGSTN_BodyCapsuleShiftEffect : public FInstantMovementEf
 
 template<>
 struct TStructOpsTypeTraits<FGSTN_BodyCapsuleShiftEffect> : public TStructOpsTypeTraitsBase2<FGSTN_BodyCapsuleShiftEffect>
+{
+	enum { WithCopy = true };
+};
+
+/**
+ * Moves the actor by the frame's pushbox push (horizontal, at most FGSTN_PushboxSettings::MaxPushPerFrame), swept against the world: a wall or
+ * a corner stops it, and the partner, still overlapping, keeps being pushed out instead (Smash corner behaviour). Queued for its own substep by
+ * FGSTN_BodyCapsuleModifier. Velocity is untouched: the push is a displacement, it does not carry into the next frame
+ */
+USTRUCT()
+struct GSTNCOMBATNP_API FGSTN_PushboxShiftEffect : public FInstantMovementEffect
+{
+	GENERATED_BODY()
+
+	/** World space */
+	UPROPERTY()
+	FVector Move = FVector::ZeroVector;
+
+	virtual bool ApplyMovementEffect(FApplyMovementEffectParams& ApplyEffectParams, FMoverSyncState& OutputState) override;
+	virtual FInstantMovementEffect* Clone() const override;
+	virtual void NetSerialize(FArchive& Ar) override;
+	virtual UScriptStruct* GetScriptStruct() const override;
+	virtual FString ToSimpleString() const override;
+};
+
+template<>
+struct TStructOpsTypeTraits<FGSTN_PushboxShiftEffect> : public TStructOpsTypeTraitsBase2<FGSTN_PushboxShiftEffect>
 {
 	enum { WithCopy = true };
 };

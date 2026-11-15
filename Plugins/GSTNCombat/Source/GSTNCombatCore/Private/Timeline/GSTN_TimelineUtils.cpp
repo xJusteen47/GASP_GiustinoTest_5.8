@@ -75,3 +75,29 @@ FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemoveBodyCapsuleTracks(const FGST
 	});
 	return Result;
 }
+
+FGSTN_CombatTimelineData UGSTN_TimelineUtils::AddPushboxTrack(const FGSTN_CombatTimelineData& Data, int32 StartFrame, int32 EndFrame, bool bEnabled, float Radius,
+	float HalfHeight, bool bUseOffset, FVector Offset)
+{
+	FGSTN_CombatTimelineData Result = Data;
+	FGSTN_TimelineTrack_Pushbox Track;
+	Track.StartFrame = StartFrame;
+	Track.EndFrame = EndFrame;
+	Track.bEnabled = bEnabled;
+	Track.Radius = FMath::Max(Radius, 0.f);
+	Track.HalfHeight = FMath::Max(HalfHeight, 0.f);
+	Track.bUseOffset = bUseOffset;
+	Track.Offset = Offset;
+	Result.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Pushbox>(Track));
+	return Result;
+}
+
+FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemovePushboxTracks(const FGSTN_CombatTimelineData& Data)
+{
+	FGSTN_CombatTimelineData Result = Data;
+	Result.Tracks.RemoveAll([](const TInstancedStruct<FGSTN_TimelineTrack>& Track)
+	{
+		return Track.GetScriptStruct() == FGSTN_TimelineTrack_Pushbox::StaticStruct();
+	});
+	return Result;
+}

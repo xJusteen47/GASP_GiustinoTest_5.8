@@ -151,7 +151,23 @@ public:
 	/** The radius of a sphere around the root that holds every hurtbox of the set, 0 for none */
 	static double ComputeBoundRadius(const UGSTN_HurtboxSetDefinition* Hurtboxes);
 
+	/**
+	 * Movement capsule ignores between fighters (pushbox plan, 2026-11-15). The capsule is the ECB: it meets the world only. Every registered
+	 * entity whose owner is an actor's component (a fighter) has its root ignore every other one, both ways, from RegisterEntity to UnregisterEntity;
+	 * the pushboxes (FGSTN_Pushbox) keep fighters apart instead. Ref-counted per (owner, other): anything else that ignores a partner (the link
+	 * presentation during a grab) goes through these too, so ending a grab cannot re-enable the blocking the registration turned off
+	 */
+	void AddMoveIgnore(AActor* Owner, AActor* Other);
+	void RemoveMoveIgnore(AActor* Owner, AActor* Other);
+	int32 GetMoveIgnoreCount(const AActor* Owner, const AActor* Other) const;
+
 private:
+	/** The actor a registry owner belongs to (the component's owner, or the actor itself), null otherwise */
+	static AActor* GetOwnerActorOf(UObject* Owner);
+
+	/** Ignore references per (owner, other) */
+	TMap<TPair<TObjectKey<AActor>, TObjectKey<AActor>>, int32> MoveIgnoreCounts;
+
 	struct FRegistryEntry
 	{
 		int32 EntityId = INDEX_NONE;

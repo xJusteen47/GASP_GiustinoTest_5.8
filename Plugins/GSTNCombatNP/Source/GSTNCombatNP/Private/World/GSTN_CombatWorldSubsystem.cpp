@@ -4,7 +4,10 @@
 
 #include "Algo/BinarySearch.h"
 #include "Algo/StableSort.h"
+#include "Components/ActorComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Engine/World.h"
+#include "GameFramework/Actor.h"
 #include "Hits/GSTN_HurtboxTypes.h"
 
 const FGSTN_SnapshotEntry* FGSTN_StepSnapshot::Find(int32 EntityId) const
@@ -149,6 +152,19 @@ bool UGSTN_CombatWorldSubsystem::RegisterEntity(int32 EntityId, IGSTN_SnapshotSo
 	Entry.Team = Team;
 	Entry.Hurtboxes = Hurtboxes;
 	Registry.Insert(Entry, Index);
+	// The new fighter's capsule and every other fighter's ignore each other (the pushboxes keep them apart)
+	if (AActor* Actor = GetOwnerActorOf(Owner))
+	{
+		for (const FRegistryEntry& Other : Registry)
+		{
+			AActor* OtherActor = Other.EntityId != EntityId ? GetOwnerActorOf(Other.Owner.Get()) : nullptr;
+			if (OtherActor && OtherActor != Actor)
+			{
+				AddMoveIgnore(Actor, OtherActor);
+				AddMoveIgnore(OtherActor, Actor);
+			}
+		}
+	}
 	InvalidateSnapshot();
 	return true;
 }
@@ -158,9 +174,75 @@ void UGSTN_CombatWorldSubsystem::UnregisterEntity(int32 EntityId)
 	const int32 Index = Algo::LowerBoundBy(Registry, EntityId, &FRegistryEntry::EntityId);
 	if (Registry.IsValidIndex(Index) && Registry[Index].EntityId == EntityId)
 	{
+		if (AActor* Actor = GetOwnerActorOf(Registry[Index].Owner.Get()))
+		{
+			for (const FRegistryEntry& Other : Registry)
+			{
+				AActor* OtherActor = Other.EntityId != EntityId ? GetOwnerActorOf(Other.Owner.Get()) : nullptr;
+				if (OtherActor && OtherActor != Actor)
+				{
+					RemoveMoveIgnore(Actor, OtherActor);
+					RemoveMoveIgnore(OtherActor, Actor);
+				}
+			}
+		}
 		Registry.RemoveAt(Index);
 		InvalidateSnapshot();
 	}
+}
+
+AActor* UGSTN_CombatWorldSubsystem::GetOwnerActorOf(UObject* Owner)
+{
+	if (AActor* Actor = Cast<AActor>(Owner))
+	{
+		return Actor;
+	}
+	const UActorComponent* Component = Cast<UActorComponent>(Owner);
+	return Component ? Component->GetOwner() : nullptr;
+}
+
+void UGSTN_CombatWorldSubsystem::AddMoveIgnore(AActor* Owner, AActor* Other)
+{
+	if (!Owner || !Other || Owner == Other)
+	{
+		return;
+	}
+	int32& Count = MoveIgnoreCounts.FindOrAdd(TPair<TObjectKey<AActor>, TObjectKey<AActor>>(Owner, Other));
+	if (Count++ == 0)
+	{
+		if (UPrimitiveComponent* Root = Cast<UPrimitiveComponent>(Owner->GetRootComponent()))
+		{
+			Root->IgnoreActorWhenMoving(Other, true);
+		}
+	}
+}
+
+void UGSTN_CombatWorldSubsystem::RemoveMoveIgnore(AActor* Owner, AActor* Other)
+{
+	if (!Owner || !Other)
+	{
+		return;
+	}
+	const TPair<TObjectKey<AActor>, TObjectKey<AActor>> Key(Owner, Other);
+	int32* Count = MoveIgnoreCounts.Find(Key);
+	if (!Count)
+	{
+		return;
+	}
+	if (--(*Count) <= 0)
+	{
+		MoveIgnoreCounts.Remove(Key);
+		if (UPrimitiveComponent* Root = Cast<UPrimitiveComponent>(Owner->GetRootComponent()))
+		{
+			Root->IgnoreActorWhenMoving(Other, false);
+		}
+	}
+}
+
+int32 UGSTN_CombatWorldSubsystem::GetMoveIgnoreCount(const AActor* Owner, const AActor* Other) const
+{
+	const int32* Count = MoveIgnoreCounts.Find(TPair<TObjectKey<AActor>, TObjectKey<AActor>>(Owner, Other));
+	return Count ? *Count : 0;
 }
 
 bool UGSTN_CombatWorldSubsystem::RegisterProvider(IGSTN_HittableProvider* Provider)

@@ -12,6 +12,7 @@
 #include "Sync/GSTN_SyncFragment.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
+#include "Timeline/GSTN_Pushbox.h"
 #include "GSTN_StepSnapshot.generated.h"
 
 class AActor;
@@ -248,6 +249,12 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotEntry
 
 	/** A sphere around Transform that holds every hurtbox, for the broadphase */
 	float BoundRadius = 0.f;
+
+	/**
+	 * The fighter's pushbox at the end of the previous frame (FGSTN_Pushbox), world space. Inactive (radius 0) for an entity with none: a provider's
+	 * entities, a knocked out or parked fighter. Read by every fighter's combat tick to compute its own push (UGSTN_CombatSimComponent::ComputeFramePush)
+	 */
+	FGSTN_PushboxCylinder Pushbox;
 
 	/** In its hitstop window this frame: the one thing an attacker must not feed on */
 	bool bInHitstop = false;

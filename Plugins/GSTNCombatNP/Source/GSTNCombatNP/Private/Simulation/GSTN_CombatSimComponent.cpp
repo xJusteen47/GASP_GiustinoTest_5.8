@@ -1135,6 +1135,10 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	}
 	const FGSTN_StepSnapshot* StepSnapshot = World ? &World->EnsureSnapshot(Frame, static_cast<float>(TimeStep.TotalSimulationTime), static_cast<float>(TimeStep.StepMS)) : nullptr;
 
+	// The pushbox move of this frame, from the same end-of-previous-frame snapshot every fighter reads: a pair's shares are equal and opposite.
+	// Mover's tick of this frame applies it (FGSTN_BodyCapsuleModifier)
+	ComputeFramePush(Frame, StepSnapshot);
+
 	// The aim of this frame's command, kept for the ability system's tick that follows (GetAimRotation)
 	FrameAim.bHasAim = Input.Cmd->bHasAim;
 	FrameAim.Yaw = Input.Cmd->AimYaw;

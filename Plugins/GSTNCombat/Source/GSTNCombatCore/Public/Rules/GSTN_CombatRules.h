@@ -14,6 +14,7 @@
 #include "Hits/GSTN_ReactionTypes.h"
 #include "Hits/GSTN_RelationshipResolver.h"
 #include "Rules/GSTN_CombatStep.h"
+#include "Timeline/GSTN_Pushbox.h"
 #include "GSTN_CombatRules.generated.h"
 
 class UGSTN_SurfaceImpactTable;
@@ -123,6 +124,10 @@ public:
 	/** The most the host rewinds a victim for lag compensation; M8's snapshot ring size */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Network", meta = (ClampMin = "0", ForceUnits = "ms"))
 	int32 MaxRewindMs = 400;
+
+	/** How fighters' pushboxes push each other apart (FGSTN_TimelineTrack_Pushbox). One value for every fighter, so a pair's shares stay equal and opposite */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Pushbox")
+	FGSTN_PushboxSettings Pushbox;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
 	FGSTN_DIParams DI;

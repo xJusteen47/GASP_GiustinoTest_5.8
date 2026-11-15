@@ -121,6 +121,17 @@ void FGSTN_BodyCapsuleModifier::OnPreMovement(UMoverComponent* MoverComp, const 
 
 	int32 TimelineFrame = INDEX_NONE;
 	const UGSTN_CombatSimComponent* Combat = MoverComp->GetOwner() ? MoverComp->GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
+
+	// The pushbox push of this frame (the combat tick computed it before Mover's tick), on its own substep like the capsule shift. Queued before
+	// the capsule's early return: a fighter whose capsule does not change is pushed too
+	const FVector Push = Combat ? Combat->ReadFramePush() : FVector::ZeroVector;
+	if (!Push.IsNearlyZero(0.001))
+	{
+		TSharedPtr<FGSTN_PushboxShiftEffect> PushEffect = MakeShared<FGSTN_PushboxShiftEffect>();
+		PushEffect->Move = Push;
+		MoverComp->QueueInstantMovementEffectThisStep_Internal(TimeStep, PushEffect);
+	}
+
 	const FGSTN_CombatTimelineData* Data = Combat ? Combat->ReadEvaluatedTimeline(TimelineFrame) : nullptr;
 	const FGSTN_BodyCapsuleTarget Target = FGSTN_BodyCapsule::ResolveTarget(Data, TimelineFrame, Standing);
 	if (Target.Shape.NearlyEquals(Current))
@@ -245,4 +256,50 @@ UScriptStruct* FGSTN_BodyCapsuleShiftEffect::GetScriptStruct() const
 FString FGSTN_BodyCapsuleShiftEffect::ToSimpleString() const
 {
 	return FString::Printf(TEXT("Body Capsule shift %s hh %.1f->%.1f"), *ShiftLocal.ToCompactString(), From.HalfHeight, To.HalfHeight);
+}
+
+bool FGSTN_PushboxShiftEffect::ApplyMovementEffect(FApplyMovementEffectParams& ApplyEffectParams, FMoverSyncState& OutputState)
+{
+	USceneComponent* Updated = ApplyEffectParams.UpdatedComponent;
+	FMoverDefaultSyncState* Sync = OutputState.SyncStateCollection.FindMutableDataByType<FMoverDefaultSyncState>();
+	if (!Updated || !Sync || Move.IsNearlyZero())
+	{
+		return false;
+	}
+	// Swept: the world stops it. Other fighters are in the capsule's ignore list (UGSTN_CombatWorldSubsystem), so only the world can
+	const FVector Start = Updated->GetComponentLocation();
+	FHitResult Hit;
+	Updated->SetWorldLocation(Start + Move, /*bSweep*/ true, &Hit, ETeleportType::None);
+	if (Hit.bStartPenetrating)
+	{
+		// Started touching something (the floor under a grounded capsule sitting on it): once more from a hair above, then back down swept
+		const FVector Lift(0.0, 0.0, 0.5);
+		Updated->SetWorldLocation(Start + Lift, true, nullptr, ETeleportType::None);
+		Updated->SetWorldLocation(Updated->GetComponentLocation() + Move, true, nullptr, ETeleportType::None);
+		Updated->SetWorldLocation(Updated->GetComponentLocation() - Lift, true, nullptr, ETeleportType::None);
+	}
+	Sync->SetTransforms_WorldSpace(Updated->GetComponentLocation(), Sync->GetOrientation_WorldSpace(), Sync->GetVelocity_WorldSpace(),
+		Sync->GetAngularVelocityDegrees_WorldSpace(), Sync->GetMovementBase(), Sync->GetMovementBaseBoneName());
+	return true;
+}
+
+FInstantMovementEffect* FGSTN_PushboxShiftEffect::Clone() const
+{
+	return new FGSTN_PushboxShiftEffect(*this);
+}
+
+void FGSTN_PushboxShiftEffect::NetSerialize(FArchive& Ar)
+{
+	Super::NetSerialize(Ar);
+	Ar << Move;
+}
+
+UScriptStruct* FGSTN_PushboxShiftEffect::GetScriptStruct() const
+{
+	return FGSTN_PushboxShiftEffect::StaticStruct();
+}
+
+FString FGSTN_PushboxShiftEffect::ToSimpleString() const
+{
+	return FString::Printf(TEXT("Pushbox shift %s"), *Move.ToCompactString());
 }

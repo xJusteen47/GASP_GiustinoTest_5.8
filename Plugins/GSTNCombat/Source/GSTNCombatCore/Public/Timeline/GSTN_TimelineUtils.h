@@ -6,6 +6,7 @@
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "Timeline/GSTN_BodyCapsule.h"
+#include "Timeline/GSTN_Pushbox.h"
 #include "GSTN_TimelineUtils.generated.h"
 
 /**
@@ -57,4 +58,16 @@ public:
 	/** Authoring helper: a copy of Data without any Body Capsule track */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
 	static FGSTN_CombatTimelineData RemoveBodyCapsuleTracks(const FGSTN_CombatTimelineData& Data);
+
+	/**
+	 * Authoring helper: a copy of Data with one more Pushbox track (FGSTN_TimelineTrack_Pushbox) on [StartFrame, EndFrame). bEnabled false = no pushbox
+	 * on those frames. Radius/HalfHeight 0 = from the movement capsule; bUseOffset false = the capsule's centre. Run RemovePushboxTracks first to re-run
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
+	static FGSTN_CombatTimelineData AddPushboxTrack(const FGSTN_CombatTimelineData& Data, int32 StartFrame, int32 EndFrame, bool bEnabled = true, float Radius = 0.f,
+		float HalfHeight = 0.f, bool bUseOffset = false, FVector Offset = FVector::ZeroVector);
+
+	/** Authoring helper: a copy of Data without any Pushbox track */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
+	static FGSTN_CombatTimelineData RemovePushboxTracks(const FGSTN_CombatTimelineData& Data);
 };

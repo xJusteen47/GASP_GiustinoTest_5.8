@@ -446,6 +446,16 @@ public:
 	 */
 	const FGSTN_CombatTimelineData* ReadEvaluatedTimeline(int32& OutFrame) const;
 
+	/**
+	 * This frame's pushbox move (FGSTN_Pushbox): the world-space horizontal shift the fighter's pushbox overlaps ask for, computed by this frame's
+	 * combat tick from the step snapshot. Zero when the combat tick of the frame being simulated did not compute one. Read by the body capsule
+	 * modifier from Mover's tick (the combat model ticked before it), like ReadEvaluatedTimeline
+	 */
+	FVector ReadFramePush() const;
+
+	/** The pushbox of this fighter in the world for its snapshot entry, from the end of the previous frame. False = none */
+	bool ResolveSnapshotPushbox(int32 Frame, const FGSTN_CombatSyncCore& Core, const FTransform& CapsuleTransform, FGSTN_PushboxCylinder& Out);
+
 private:
 	/** The bit of a button tag in the active input config (the same asset on every machine), INDEX_NONE if it has none */
 	int32 FindQueryButton(const FGameplayTag& Button) const;
@@ -852,6 +862,20 @@ private:
 		bool bPrecisionAim = false;
 	};
 	FFrameAim FrameAim;
+
+	/**
+	 * The pushbox move of the frame the simulation is on (ReadFramePush). Written by every combat tick before Mover's tick of the same frame
+	 * reads it, a resimulated frame included; never a source of state, so it needs no rollback (as FrameAim)
+	 */
+	struct FFramePush
+	{
+		int32 Frame = INDEX_NONE;
+		FVector Move = FVector::ZeroVector;
+	};
+	FFramePush FramePush;
+
+	/** Fills FramePush for Frame from the snapshot (this entity's entry against every other) */
+	void ComputeFramePush(int32 Frame, const FGSTN_StepSnapshot* Snapshot);
 
 	/** The team of the owner or of its controller, NoTeam without one (read when registering and at every snapshot) */
 	FGenericTeamId ResolveTeam() const;
