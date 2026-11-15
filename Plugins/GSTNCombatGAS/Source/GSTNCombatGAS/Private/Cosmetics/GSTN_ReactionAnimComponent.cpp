@@ -8,7 +8,11 @@
 #include "Animation/AnimSequenceBase.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Cosmetics/GSTN_ReactionAnimSet.h"
+#include "Camera/PlayerCameraManager.h"
 #include "GameFramework/Actor.h"
+#include "GSTN_CombatCoreTags.h"
+#include "GSTN_CombatTags.h"
+#include "Kismet/GameplayStatics.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNReactionAnim, Log, All);
 
@@ -93,6 +97,14 @@ void UGSTN_ReactionAnimComponent::ApplySet(UGSTN_ReactionAnimSet* NewSet)
 {
 	StopActive(ResolveAnimInstance(), LoadedSet && LoadedSet->Rules.IsValidIndex(ActiveRule) ? GSTNReactionAnim::Seconds(LoadedSet->Rules[ActiveRule].BlendOutFrames) : 0.1f);
 	UnbindEvents();
+	// The rules of the old set are over for the cosmetic hooks; the new set's winner is announced on the next tick
+	if (AnnouncedRule != INDEX_NONE)
+	{
+		OnReactionEnded.Broadcast(AnnouncedRuleName);
+	}
+	AnnouncedRule = INDEX_NONE;
+	AnnouncedRuleName = NAME_None;
+	ShakeElapsed = -1.f;
 	LoadedSet = NewSet;
 	LoadedAnimations.Reset();
 	ActiveRule = INDEX_NONE;
@@ -262,11 +274,13 @@ void UGSTN_ReactionAnimComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	{
 		return;
 	}
-	UpdateEntryDrop(DeltaTime);
-
 	FGameplayTagContainer Tags;
 	ASC->GetOwnedGameplayTags(Tags);
+	ShakeOffset = ComputeHitstopShake(DeltaTime, Tags);
+	UpdateEntryDrop(DeltaTime);
+
 	const int32 Winner = LoadedSet->SelectRule(Tags);
+	AnnounceReaction(Winner, Winner != INDEX_NONE && PendingRestartRule == Winner);
 	if (Winner != ConsumedRule)
 	{
 		ConsumedRule = INDEX_NONE;
@@ -384,7 +398,7 @@ void UGSTN_ReactionAnimComponent::BeginEntryDrop(const FGSTN_ReactionAnimRule& R
 void UGSTN_ReactionAnimComponent::UpdateEntryDrop(float DeltaTime)
 {
 	USkeletalMeshComponent* MeshComponent = Mesh.Get();
-	if (!MeshComponent || (DropCm <= 0.f && AppliedDropCm == 0.f))
+	if (!MeshComponent || (DropCm <= 0.f && AppliedOffset.IsZero() && ShakeOffset.IsZero()))
 	{
 		return;
 	}
@@ -406,13 +420,65 @@ void UGSTN_ReactionAnimComponent::UpdateEntryDrop(float DeltaTime)
 	FVector Location = MeshComponent->GetRelativeLocation();
 	if (Location.Equals(LastWrittenLocation, 0.01))
 	{
-		Location.Z -= AppliedDropCm;
+		Location -= AppliedOffset;
 	}
-	Location.Z += Height;
+	const FVector Offset = ShakeOffset + FVector(0.f, 0.f, Height);
+	Location += Offset;
 	if (!Location.Equals(MeshComponent->GetRelativeLocation(), 0.01))
 	{
 		MeshComponent->SetRelativeLocation(Location);
 	}
 	LastWrittenLocation = Location;
-	AppliedDropCm = Height;
+	AppliedOffset = Offset;
+}
+
+FVector UGSTN_ReactionAnimComponent::ComputeHitstopShake(float DeltaTime, const FGameplayTagContainer& Tags)
+{
+	const FGSTN_HitstopShake* Shake = LoadedSet ? &LoadedSet->HitstopShake : nullptr;
+	USkeletalMeshComponent* MeshComponent = Mesh.Get();
+	if (!Shake || !Shake->bEnabled || !MeshComponent || !Tags.HasTagExact(GSTNCombatTags::State_Hitstop))
+	{
+		ShakeElapsed = -1.f;
+		return FVector::ZeroVector;
+	}
+	// The hit one is the one in hitstun (or tumbling); the attacker is frozen too, without either
+	const bool bVictim = Tags.HasTagExact(GSTNCombatTags::State_Hitstun) || Tags.HasTagExact(GSTNCombatTags::State_Tumble);
+	const float Amplitude = bVictim ? Shake->VictimAmplitudeCm : Shake->AttackerAmplitudeCm;
+	ShakeElapsed = ShakeElapsed < 0.f ? 0.f : ShakeElapsed + DeltaTime;
+	const APlayerCameraManager* Camera = UGameplayStatics::GetPlayerCameraManager(this, 0);
+	if (Amplitude <= 0.f || !Camera)
+	{
+		return FVector::ZeroVector;
+	}
+	const float Distance = FVector::Dist(Camera->GetCameraLocation(), MeshComponent->GetComponentLocation());
+	const float Value = FGSTN_HitstopShake::Sample(Amplitude * Shake->DistanceScale(Distance), Shake->FrequencyHz, Shake->DecaySeconds, ShakeElapsed);
+	const FVector ScreenRight = FRotationMatrix(Camera->GetCameraRotation()).GetScaledAxis(EAxis::Y).GetSafeNormal();
+	const FVector World = ScreenRight * Value;
+	const USceneComponent* Parent = MeshComponent->GetAttachParent();
+	return Parent ? Parent->GetComponentTransform().InverseTransformVectorNoScale(World) : World;
+}
+
+void UGSTN_ReactionAnimComponent::AnnounceReaction(int32 Winner, bool bRestart)
+{
+	const FName WinnerName = LoadedSet && LoadedSet->Rules.IsValidIndex(Winner) ? LoadedSet->Rules[Winner].Name : NAME_None;
+	if (Winner != AnnouncedRule)
+	{
+		const FName Ended = AnnouncedRuleName;
+		const bool bHadRule = AnnouncedRule != INDEX_NONE;
+		AnnouncedRule = Winner;
+		AnnouncedRuleName = WinnerName;
+		if (bHadRule)
+		{
+			OnReactionEnded.Broadcast(Ended);
+		}
+		if (Winner != INDEX_NONE)
+		{
+			OnReactionStarted.Broadcast(WinnerName, false);
+		}
+		return;
+	}
+	if (bRestart && Winner != INDEX_NONE)
+	{
+		OnReactionStarted.Broadcast(WinnerName, true);
+	}
 }

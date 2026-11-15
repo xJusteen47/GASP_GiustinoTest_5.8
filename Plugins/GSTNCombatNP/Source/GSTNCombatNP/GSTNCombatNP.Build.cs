@@ -31,5 +31,8 @@ public class GSTNCombatNP : ModuleRules
 
 		// The precision reticle reads its local button and the aim stick (UGSTN_PrecisionAimComponent); presentation only
 		PrivateDependencyModuleNames.Add("EnhancedInput");
+
+		// CP4 cosmetic hooks: the move's cosmetic windows spawn Niagara systems (public headers only forward declare its types); presentation only
+		PrivateDependencyModuleNames.Add("Niagara");
 	}
 }

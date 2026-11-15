@@ -508,6 +508,10 @@ sync variables, `object:<class path>`, with default, category and tooltip), `Cle
 `CompileAndReport`, `CheckSimulationRules` (the CP2 rules above) and `DescribeEventGraph`. Nodes are named by their GUID string. First user:
 `Tools/GAS/setup_double_shot_examples.py` (the B version of the double-press special). Test `GSTNCombat.Editor.MoveGraph.BuildsAndCompiles`.
 
+**Cosmetic authoring (Blueprint seams CP4).** `UGSTN_CosmeticAuthoring` (`Public/Graph/`): `SetHitCueTag` (the cue tag of every hitbox of a move's
+inline timeline, where Python cannot reach) and `GetActiveFrames` (the frames the hitboxes are open, to lay a trail window over them). User:
+`Tools/GAS/setup_cosmetic_hooks.py`.
+
 ## Replacing content
 
 The plugin ships no content and references none by path. The preview kit, skin and mesh are soft references in the settings

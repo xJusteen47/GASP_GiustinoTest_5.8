@@ -16,6 +16,9 @@ class UGSTN_ReactionAnimSet;
 struct FGameplayEventData;
 struct FGSTN_ReactionAnimRule;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGSTN_OnReactionStarted, FName, RuleName, bool, bRestarted);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FGSTN_OnReactionEnded, FName, RuleName);
+
 /**
  * Plays the victim reaction animations from data (UGSTN_ReactionAnimSet): every frame it reads the owner's gameplay tags (the combat
  * states the combat tick projects), picks the winning rule and plays its animation on the character's montage slot.
@@ -25,6 +28,10 @@ struct FGSTN_ReactionAnimRule;
  * ground bounce, the get-ups) wins over it (bYieldToOtherMontages), so the frame-synced montages of the simulation keep their timing.
  *
  * Add it to the character Blueprint with Tools/GAS/setup_reaction_anims.py (never by hand), or at run time with AddReactionComponent.
+ *
+ * Cosmetic hooks (CP4): On Reaction Started / Ended follow the rule the owner's tags select (the state, not whether its animation could
+ * play), for a Blueprint that adds dust, a hit flash or a sound to a reaction; and the set's HitstopShake trembles the mesh while the owner is
+ * frozen by hitstop. Both come from the same per-frame tag read, so a rollback only changes what the next frame shows.
  */
 UCLASS(ClassGroup = (Combat), meta = (BlueprintSpawnableComponent))
 class GSTNCOMBATGAS_API UGSTN_ReactionAnimComponent : public UActorComponent
@@ -49,6 +56,18 @@ public:
 	/** The rule playing now ("" when none), for the debugger and the harness */
 	UFUNCTION(BlueprintPure, Category = "Combat|Reaction")
 	FName GetActiveRuleName() const;
+
+	/** The rule the owner's tags select changed to RuleName (or the same rule restarted by its RestartEvent). Cosmetic only */
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Cosmetics")
+	FGSTN_OnReactionStarted OnReactionStarted;
+
+	/** The rule RuleName no longer wins (another rule does, or none) */
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Cosmetics")
+	FGSTN_OnReactionEnded OnReactionEnded;
+
+	/** The offset the hitstop shake puts on the mesh now (relative space), for the harness */
+	UFUNCTION(BlueprintPure, Category = "Combat|Debug")
+	FVector GetHitstopShakeOffset() const { return ShakeOffset; }
 
 	/** Adds the component to Actor (or returns the one it has) with Set; for scripts and tests */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Reaction")
@@ -81,8 +100,14 @@ private:
 	/** Starts the rule's entry drop when it applies (the rule shown before is in EntryDropAfterRules) */
 	void BeginEntryDrop(const FGSTN_ReactionAnimRule& Rule, FName PreviousRule);
 
-	/** Writes this frame's height of the entry drop on the mesh (0 at its end), as a difference over whatever Mover put there */
+	/** Writes this frame's height of the entry drop and the hitstop shake on the mesh (0 at their end), as a difference over whatever Mover put there */
 	void UpdateEntryDrop(float DeltaTime);
+
+	/** The hitstop shake of this frame in the mesh's parent space (zero outside hitstop): screen right, from the first local camera */
+	FVector ComputeHitstopShake(float DeltaTime, const FGameplayTagContainer& Tags);
+
+	/** Raises On Reaction Started / Ended when the selected rule changed or restarted */
+	void AnnounceReaction(int32 Winner, bool bRestart);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UGSTN_ReactionAnimSet> LoadedSet;
@@ -116,7 +141,15 @@ private:
 	float DropSeconds = 0.f;
 	float DropElapsed = 0.f;
 
-	/** The offset written on the mesh last and the relative location it gave: if the location changed since, Mover reset it and the offset is gone */
-	float AppliedDropCm = 0.f;
+	/** The offset written on the mesh last (drop + shake) and the relative location it gave: if the location changed since, Mover reset it and the offset is gone */
+	FVector AppliedOffset = FVector::ZeroVector;
+
+	/** Seconds into the current hitstop, -1 outside one; the shake of this frame */
+	float ShakeElapsed = -1.f;
+	FVector ShakeOffset = FVector::ZeroVector;
+
+	/** The rule the events last announced (INDEX_NONE: none) and its name */
+	int32 AnnouncedRule = INDEX_NONE;
+	FName AnnouncedRuleName;
 	FVector LastWrittenLocation = FVector::ZeroVector;
 };
