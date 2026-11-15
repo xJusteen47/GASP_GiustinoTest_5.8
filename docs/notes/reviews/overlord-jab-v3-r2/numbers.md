@@ -17,3 +17,9 @@ v20 none | none; v21 Jab1 0.02 | 0.00; v22 2.10 | 1.25; v23 2.10 | 1.67; v24 4.1
 v32 Jab1 10.51 | 9.04; v33 Jab2 0.00 | 0.00; v34 1.12 | 0.26; v35 1.60 | 1.17; v36 2.64 | 2.21; v37 3.68 | 3.25. v34->v35 advances 0.48 (variant), 0.91 (base): slow tick still there.
 ## Last video frame with a montage | first frame without (variant | base)
 jab1: v43 Jab1 22.93 | v44 23.35 (idle from v44 | v45). jab1_jab2: v79 Jab2 47.02 | 46.93, idle v80 both. jab1_jab2_hit: v82 47.53 | 47.10, idle v83 both. jab1_jab2_faf: v82 Jab1 23.73 | 23.79, idle v83 both.
+
+## POST-MERGE recapture (2026-11-15 night, branch claude/project-thread-anim-r2-int = anim-r2 + CP2 6bl38a + montage fix n216qs 8ba977e1)
+Variant mp4s and grids g0-g4 in this folder are now POST-MERGE (pre-merge versions: git history at 58625edb; frames in Saved/AnimR2/jab/variant_old0215). Base unchanged.
+Montage frame, jab1_jab2_hit: v21 0.00, v22 1.75, v23 1.92, v24 2.96 (no repeated frame; v22->v23 only +0.17); jab 2 v33 0.00, v34 0.75, v35 1.42, v36 2.46.
+jab1_jab2_faf: jab 2 v34 2.09 and v35 2.09 = the stalled tick is STILL there in this run. jab1: v22 0.99, v23 1.54 (slow tick). First frames still unstable between runs.
+End squat (g4_end): STILL THERE post-merge, same as base: idle from v80, deep crouch v82-v88, up by v100 (GASP pose match on the wide jab 2 exit, as the laptop thread predicted).

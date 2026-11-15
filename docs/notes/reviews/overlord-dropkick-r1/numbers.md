@@ -8,3 +8,7 @@ Check gates (recorded, not fixed), Saved/AnimPipeline/animpipe/overlord_dropkick
 - land: FAIL; legibility FAIL (fist not distinct 1), clearance FAIL (hand_r|spine_03 -4.17 cm f15), contact_faf FAIL (peak f3, window 30-30, FAF 31), fists FAIL, co_motion FAIL (arm_l, leg_l 10-30; leg_r 4-8, 11-30); bone_lengths, planted_feet, source_fidelity, hitstop_snap PASS.
 No base: new move. Loop count and press frame were tuned for this capture only; the game does not yet hold the loop until landing.
 Files: dropkick_whiff_variant.mp4 (60 fps, 7 views), dropkick_whiff_variant_slow.mp4 (15 fps = 0.25x), g1_dropkick.jpg (2 rows game/az90 x 12 columns).
+
+## POST-MERGE recapture (2026-11-15 night, branch claude/project-thread-anim-r2-int)
+mp4s and g1_dropkick.jpg are now post-merge (Saved/AnimR2/dropkick/variant; pre-merge in git at 58625edb). Same capture tuning (loop reps 4, press_delay 5).
+Grid columns v44 S f0 ... v101 L4 f10 (h -3.8), v102 LAND f0 (h -11.8): the character still lies flat on the floor through the land clip (v102-v117), no get-up.
