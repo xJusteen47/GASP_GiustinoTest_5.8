@@ -1,5 +1,5 @@
 frame,extension_pct,reach_px,active
-1,0.0,0.0,False
+1,100.0,100.0,True
 2,0.0,0.0,False
 3,0.0,0.0,False
 4,0.0,0.0,False
@@ -30,4 +30,4 @@ frame,extension_pct,reach_px,active
 29,0.0,0.0,False
 30,0.0,0.0,False
 31,0.0,0.0,False
-32,0.0,0.0,True
+32,0.0,0.0,False
