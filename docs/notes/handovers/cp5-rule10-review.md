@@ -1,6 +1,6 @@
 # Handover: rule-10 cloud review of the cp5 captures (2026-11-15, cloud, Fable, ~$18 est., not measured)
-Branch `claude/project-thread-c9tzis` = `claude/integ-cp3` 3d9567e5 + one commit (docs only: 4 `review.md`, 9 `rv_*.jpg`,
-`docs/notes/reviews/cp5-data/tools/`). Pushed here, not on integ-cp3: this session may push only to its own branch. Fast-forward merge.
+Branch `claude/project-thread-c9tzis` = `claude/integ-cp3` 3d9567e5 + docs only (4 `review.md`, 9 `rv_*.jpg`, `cp5-data/tools/`).
+Pushed here, not on integ-cp3: this session may push only to its own branch. Fast-forward merge.
 Nothing goes to the owner as PASS. 15 grids looked at (jab 4, dropkick 4, down-air 5, hit cue 2). Double-shot not reviewed (spawn bug).
 
 **Verdicts** (each `docs/notes/reviews/cp5-*/review.md`)
@@ -20,15 +20,13 @@ Nothing goes to the owner as PASS. 15 grids looked at (jab 4, dropkick 4, down-a
    for one whole down-air run. Count: `cd docs/notes/reviews/cp5-data && python tools/count_repeats.py` (jab 12/59, dair_base land 16/32,
    dropkick 5/49 outside the loop). Pixels confirm dead frames: `python tools/rv_diff.py ../cp5-jab-chain/jab_jab1_jab2_faf.mp4 14 side`
    (v23 0, v25 0). Suspect: the montage presentation clock snaps to integer sim frames that arrive two at a time. Highest priority: it is in every move.
-2. Victim one-frame pose on the hit frame.
-3. Down-air: fall pose arrives at a different frame in two runs of the same asset; land-cancel for aerials missing.
-4. Game camera cuts the body after the dropkick lands.
+2. Victim one-frame pose on the hit frame. 3. Down-air: fall pose arrives at a different frame in two runs of the same asset;
+   land-cancel for aerials missing. 4. Game camera cuts the body after the dropkick lands.
 
-**Applied choices (rule 6)**: judged the down-air as two runs instead of stopping on the void comparison; committed my grids and three
-small scripts so the numbers can be redone; reviews written in Italian as the reviewer skill template asks.
+**Applied choices (rule 6)**: down-air judged as two runs instead of stopping on the void comparison; grids and four small scripts
+committed so the numbers can be redone; reviews in Italian as the reviewer skill template asks.
 **Owner decision proposed (1)**: landing during an aerial. A) a landing section per aerial, as in Smash (recommended); B) cut the montage
 on touchdown and use the Anim BP landing. Until decided nothing changes.
 **Next**: code thread for item 1, then recapture; one pose instruction for jab 2 (hand at hip height at a10-a15, visible on the right
 from behind); fix the example attack timing in the CP3/CP5 setup script; a real down-air variant before any new comparison.
-**Limits**: jab and dropkick captures are whiff only (contact and hitstop not judged); no jab base on this branch; centroid and
-silhouette numbers of the hit-cue victim were measured inline, no committed script.
+**Limits**: jab and dropkick are whiff only (contact, hitstop not judged); no jab base; hit-cue centroid numbers measured inline.
