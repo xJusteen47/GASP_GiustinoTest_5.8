@@ -1,6 +1,6 @@
-# Handover: jab arc + dropkick r0 restore, round 1 (desktop, UE 5.9, 2026-11-15) — STOPPED, nothing for the owner
+# Handover: jab arc + dropkick r0 restore, round 1 (desktop, UE 5.9, 2026-11-15) — built, awaiting rule-10 review
 Branch `claude/desktop-jab-dropkick-r1` (from hgy214 36dcdb44), folder `GASP_Giustino2_ue59`. Model Opus (poses) + Sonnet subagent (build/capture).
-**Cards done (committed f8fb2092, a19e16a1); the build in Unreal is broken (2 attempts used, rule 5).**
+**Cards f8fb2092, a19e16a1; build fixed and variant captured in checkpoint 2 (4abaec30, +$10 extension). Next: cloud review.**
 
 ## Cards (the work to keep)
 - Dropkick 1A: `cards/overlord/dropkick/restore_r0_dropkick.py` writes startup+loop = Antigravity r0 poses (legs together, arms crossed,
@@ -16,19 +16,17 @@ Branch `claude/desktop-jab-dropkick-r1` (from hgy214 36dcdb44), folder `GASP_Giu
   `jab_r3_plans.py --restore-csv` (pose_plan overwrites timing csvs). Previews `owner_r3/*.png` (not in git), looked at by me: arc OK.
   Not done: palm/wrist orientation (`hand_rot`) not converted from the owner's direction points.
   Copies of the owner's scene: `Saved/AnimPipeline/casc/overlord_jab_{owner_base_2026-11-15,r3}.casc`; r3 copy open in Cascadeur (unsaved, range set to 0-140, one key at f140): close without saving.
-## Build: BROKEN, do not merge Content from 3ab86e0c / dc1402f3
-- Jab variant video `docs/notes/reviews/jab-dropkick-r1/jab1_base_vs_variant.png` (bottom row): the character stands still, v20-v50.
-- `animpipe check`: all 5 cards `contact_faf: reach peak at frame 0`; the subagent read the same pose on every frame of the built clips
-  (`checks.txt`, `loop_bones.txt`). Dropkick variant moves only between montage sections (suspected static clips too, not proven).
-- Jab montages play a copy (`/Game/GASNPPTest/Combat/Overlord/AS_OverlordJab{N}V3`) made by the kit script, which must not run (owner's
-  hitboxes). Used instead: duplicate `_Build` -> `consolidate_assets` -> rename; AM byte-identical to HEAD (`am_identity.txt`).
-- Next thread (code/tooling, Sonnet medium, editor): open `/Game/AnimPipeline/Rig/AS_OverlordJab1V3_Build`, compare hand_r at f0/f6;
-  if static, the bake (`animpipe/ue_rig.py` build, bake_to_control_rig) is the cause — v3 built fine on 5.9 on 11-14, so diff the card
-  shape (dense pose_plan card, `planted: []`) against `overlord_jab1_v3.r2b.backup.json`. If `_Build` animates, the consolidate is the cause.
-  Then rebuild, recapture variant (base already in `docs/notes/reviews/jab-dropkick-r1/base/`, press v20 jab / v42 dropkick), cloud review.
-- Fists check still 0.95 openness on dropkick after `fingers 0`: check `checks.py` fists source (it may read the clip, which is static).
+## Build: FIXED in checkpoint 2 (commit 4abaec30), ready for the rule-10 cloud review
+- Cause of the frozen clips: `animpipe author <card>` was skipped (build re-baked the stale source take: edited=0, hand_r 97 cm off the
+  poses). Fix: copy `sheets/raw/{idle_neutral_legbones,AS_Pilot_GanonFTilt_V2_frame0}.json` into ue59 `Saved/AnimPipeline/`, then
+  `author` + `build` per card. After: at_poses hand_r 0.8 cm (jabs), dropkick <= 7.4 cm (startup), see `*_build.json`.
+- Jab montages play `/Game/GASNPPTest/Combat/Overlord/AS_OverlordJab{N}V3`: refreshed without the kit script (duplicate `_Build` ->
+  `consolidate_assets` -> rename); AM byte-identical to HEAD. Content of 3ab86e0c/dc1402f3 (frozen) is superseded by 4abaec30.
+- Variant recaptured: `docs/notes/reviews/jab-dropkick-r1/{base,variant}/` mp4 normal + quarter, grids `*_base_vs_variant.png`.
+- Checks all FAIL (`checks.txt`), for the reviewer: dropkick crossed arms penetrate (startup hand_r/spine_05 -11.8 cm f8, loop forearms
+  -7.8 cm f5, land hand_l -9.3 cm f1) = likely `posa` on r0; jab hitstop_snap 31-48 cm; legibility tool KeyErrors on loop/land.
 ## Facts
 Base captures: jab1, jab1_jab2_faf (v14-v90), dropkick_whiff (v36-v135), mp4 normal + quarter. Video: jab1 contact v27, jab2 contact v42,
 dropkick release v55-58 (first active v58), land clip v102 (base) / v103 (variant). Tools: capture wrapper with 900 s limit (subagent
 scratch, not kept), `rv_grid.py` Windows font fallback (committed). `AM_OverlordDAirV9` still dirty, not ours.
-**Cost**: estimated $40-45 (one Opus thread ~150k context + Sonnet subagent ~360k tokens): over the $35 budget, stopped at this point.
+**Cost**: estimated $45-50 incl. checkpoint 2 (one Opus thread ~150k context + Sonnet subagent ~360k tokens): over the $35 budget, stopped at this point.
