@@ -512,6 +512,19 @@ sync variables, `object:<class path>`, with default, category and tooltip), `Cle
 inline timeline, where Python cannot reach) and `GetActiveFrames` (the frames the hitboxes are open, to lay a trail window over them). User:
 `Tools/GAS/setup_cosmetic_hooks.py`.
 
+**Combat Move factory (Blueprint seams CP5).** Content Browser > Add > Gameplay > Combat > **Combat Move** (`UGSTN_CombatMoveFactory`,
+`Private/Moves/`) opens a dialog of `FGSTN_NewCombatMoveOptions`: template (`Strike` = one swept sphere hitbox over the active frames, `Action` = one
+Event key on the first active frame for move actions or a graph, `Empty`), parent class (the combat ability or a game's child of it), total / active /
+actionable frames (put in order, never refused), montage and rate, key tag, timeline inline or as a `TL_` asset next to the move, the move events laid
+down unwired (`On Move Started/Key/Hit Confirmed/Ended`; On Move Frame stays opt-in), and an optional hookup (`FGSTN_MoveKitHookup`: kit and/or
+weapon, command, requirements). The asset is a Gameplay Ability Blueprint child of `UGSTN_GA_BaseCombat`, exactly like one made by hand. A move
+Blueprint's context menu has **Add to Kit or Weapon...** (same hookup; a binding with the same command and requirements is replaced, one undo step).
+The logic is `UGSTN_CombatMoveAuthoring` (`Public/Moves/`, Blueprint-callable, so Python and editor agents use the same path: `CreateCombatMove`,
+`MakeStarterTimeline`, `SanitizeOptions`, `AddMoveToKit`, `AddMoveToKitAssets`, `IsCombatMoveBlueprint`); nothing here saves. No input, no project
+setting: the move answers a command tag, the kit's command set decides the button. `UGSTN_MoveGraphAuthoring` now also finds the "Gameplay Ability
+Graph" page of a Blueprint made by the engine's ability factory. Tests `GSTNCombat.Editor.MoveFactory.*` (`StarterTimeline`, `BindingUpsert`,
+`CreatesAndBinds`). The dialog and the context menu are checked by hand (they need a Slate application).
+
 ## Replacing content
 
 The plugin ships no content and references none by path. The preview kit, skin and mesh are soft references in the settings
@@ -552,6 +565,7 @@ The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is n
 
 ## Changelog
 
+- 0.15.0 (2026-11-15, Blueprint seams CP5): the Combat Move factory, Add to Kit or Weapon, `UGSTN_CombatMoveAuthoring`, tests `MoveFactory.*`; module deps `ToolMenus` (private) and `GSTNInputCore` (now public).
 - 0.14.0 (2026-10-25, E7): gizmos and viewport picking: translate/rotate/scale on the hitbox key of the selection (auto-key, offset-all, mirror, Add key) and on the hurtbox shape in the hurtbox set editor, click or ray picking of shapes, the hitbox overlay with the Hitboxes toggle, `FGSTN_GizmoEdMode` (spike S4), `GSTNGizmo` maths and `GSTNCombat.Editor.Gizmo.*` (7 tests); `FGSTN_HurtboxEditModel::CancelEdit`.
 - 0.13.0 (2026-10-25, E9): the hurtbox set editor (viewport, list, details, findings), the Physics Asset generator with regeneration modes, the mirror with per-skeleton rules, `Hurtbox.BoneMissing` and `Hurtbox.Outside`, `PreviewMesh` on the hurtbox set (editor-only, `GSTNCombatCore`); the preview controller can run without a timeline; tests `Hurtbox.*`.
 - 0.12.0 (2026-10-25, E8): the socket baker, the staleness record and check, the Bake sockets button with its dot, Bake on save, `gstn.Combat.BakeAll`, `UGSTN_CombatEditorUtils`, the `BakedStale` hash rule; `FGSTN_BakeInfo` in `GSTNCombatCore`; tests `Bake.*`.

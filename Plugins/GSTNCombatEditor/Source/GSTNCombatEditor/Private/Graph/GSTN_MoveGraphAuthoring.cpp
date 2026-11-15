@@ -23,7 +23,14 @@ namespace GSTNGraphAuthoring
 {
 	UEdGraph* EventGraph(UBlueprint* Blueprint)
 	{
-		return Blueprint ? FBlueprintEditorUtils::FindEventGraph(Blueprint) : nullptr;
+		if (!Blueprint)
+		{
+			return nullptr;
+		}
+		// The standard EventGraph; else the first ubergraph page: the engine's Gameplay Ability Blueprint factory names its page "Gameplay
+		// Ability Graph", which FindEventGraph does not find (CP5: moves made by that factory, or by hand, are still scriptable)
+		UEdGraph* Graph = FBlueprintEditorUtils::FindEventGraph(Blueprint);
+		return Graph ? Graph : (Blueprint->UbergraphPages.IsEmpty() ? nullptr : Blueprint->UbergraphPages[0].Get());
 	}
 
 	FString Id(const UEdGraphNode* Node)
