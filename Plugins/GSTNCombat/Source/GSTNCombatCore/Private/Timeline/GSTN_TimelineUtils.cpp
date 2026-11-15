@@ -49,3 +49,29 @@ FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemoveHoldUntilLandedTrack(const F
 	});
 	return Result;
 }
+
+FGSTN_CombatTimelineData UGSTN_TimelineUtils::AddBodyCapsuleTrack(const FGSTN_CombatTimelineData& Data, int32 StartFrame, int32 EndFrame, float HalfHeight, float Radius,
+	FVector Offset, EGSTN_BodyCapsuleAnchor Anchor, float MaxShiftPerFrame)
+{
+	FGSTN_CombatTimelineData Result = Data;
+	FGSTN_TimelineTrack_BodyCapsule Track;
+	Track.StartFrame = StartFrame;
+	Track.EndFrame = EndFrame;
+	Track.HalfHeight = FMath::Max(HalfHeight, 1.f);
+	Track.Radius = FMath::Max(Radius, 0.f);
+	Track.Offset = Offset;
+	Track.Anchor = Anchor;
+	Track.MaxShiftPerFrame = FMath::Max(MaxShiftPerFrame, 0.f);
+	Result.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_BodyCapsule>(Track));
+	return Result;
+}
+
+FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemoveBodyCapsuleTracks(const FGSTN_CombatTimelineData& Data)
+{
+	FGSTN_CombatTimelineData Result = Data;
+	Result.Tracks.RemoveAll([](const TInstancedStruct<FGSTN_TimelineTrack>& Track)
+	{
+		return Track.GetScriptStruct() == FGSTN_TimelineTrack_BodyCapsule::StaticStruct();
+	});
+	return Result;
+}

@@ -25,6 +25,7 @@
 #include "Timeline/GSTN_StartupSteer.h"
 #include "Presentation/GSTN_SteerIndicatorComponent.h"
 #include "Movement/GSTN_SetFacingEffect.h"
+#include "Movement/GSTN_BodyCapsuleModifier.h"
 #include "Input/GSTN_InputTags.h"
 #include "Context/GSTN_InputContextProvider.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
@@ -1078,6 +1079,22 @@ int32 UGSTN_CombatSimComponent::GetEvaluatedTimelineFrame() const
 	return Sync->Core.Input.History.GetLatestFrame() - Sync->Core.TimelineStartFrame - Sync->Core.TimelinePausedFrames;
 }
 
+const FGSTN_CombatTimelineData* UGSTN_CombatSimComponent::ReadEvaluatedTimeline(int32& OutFrame) const
+{
+	OutFrame = GetEvaluatedTimelineFrame();
+	if (OutFrame == INDEX_NONE)
+	{
+		return nullptr;
+	}
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	const FGSTN_CombatTimelineData* Data = Sync ? GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline) : nullptr;
+	if (!Data)
+	{
+		OutFrame = INDEX_NONE;
+	}
+	return Data;
+}
+
 #if !UE_BUILD_SHIPPING
 namespace
 {
@@ -1601,6 +1618,12 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 	PollLoadoutComponent();
 	TryRegisterWithWorld();
 
+	// Per-move movement capsule: size and mesh offset of the presented Mover state, on every machine (simulated proxies run no modifier)
+	if (UMoverComponent* Mover = GetOwner() ? GetOwner()->FindComponentByClass<UMoverComponent>() : nullptr)
+	{
+		FGSTN_BodyCapsuleModifier::ApplyPresentation(*Mover);
+	}
+
 #if ENABLE_DRAW_DEBUG
 	if (CVarCombatDebugInput.GetValueOnGameThread() != 0)
 	{
@@ -1644,17 +1667,18 @@ void UGSTN_CombatSimComponent::TryQueueStatsModifier()
 		bStatsModifierQueued = true;
 		return;
 	}
-	if (Mover->FindMovementModifierByType<FGSTN_StatsMovementModifier>())
+	// The body capsule modifier (per-move movement capsule, FGSTN_TimelineTrack_BodyCapsule) rides along: same machines, same lifetime.
+	// An invalid handle means Mover's simulation does not exist yet (both fail together): try again next tick
+	bool bQueued = true;
+	if (!Mover->FindMovementModifierByType<FGSTN_StatsMovementModifier>())
 	{
-		bStatsModifierQueued = true;
-		return;
+		bQueued &= Mover->QueueMovementModifier(MakeShared<FGSTN_StatsMovementModifier>()).IsValid();
 	}
-
-	// An invalid handle means Mover's simulation does not exist yet: try again next tick
-	if (Mover->QueueMovementModifier(MakeShared<FGSTN_StatsMovementModifier>()).IsValid())
+	if (!Mover->FindMovementModifierByType<FGSTN_BodyCapsuleModifier>())
 	{
-		bStatsModifierQueued = true;
+		bQueued &= Mover->QueueMovementModifier(MakeShared<FGSTN_BodyCapsuleModifier>()).IsValid();
 	}
+	bStatsModifierQueued = bQueued;
 }
 
 void UGSTN_CombatSimComponent::RestoreFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux)

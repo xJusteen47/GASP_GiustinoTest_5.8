@@ -440,6 +440,12 @@ public:
 	 */
 	int32 GetEvaluatedTimelineFrame() const;
 
+	/**
+	 * The timeline data of the move the frame being simulated runs and its evaluated frame (GetEvaluatedTimelineFrame), null (OutFrame INDEX_NONE)
+	 * outside a timeline and during a recoil. Read by the body capsule modifier from Mover's tick (the combat model ticked before it), like ReadRunningSlide
+	 */
+	const FGSTN_CombatTimelineData* ReadEvaluatedTimeline(int32& OutFrame) const;
+
 private:
 	/** The bit of a button tag in the active input config (the same asset on every machine), INDEX_NONE if it has none */
 	int32 FindQueryButton(const FGameplayTag& Button) const;
@@ -534,7 +540,8 @@ public:
 	 * Queues the permanent stats movement modifier (FGSTN_StatsMovementModifier) on the owner's Mover component once its
 	 * simulation exists, on the authority and the owning client. It makes the character's speeds follow its WalkSpeed stat
 	 * and stops them under Combat.Lock.Movement; it does nothing for an ability system without the combat attribute set.
-	 * Turn it off for a pawn whose speeds the combat stats must not touch
+	 * Turn it off for a pawn whose speeds the combat stats must not touch. The body capsule modifier (FGSTN_BodyCapsuleModifier, per-move
+	 * movement capsule) is queued with it and goes with it
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Stats")
 	bool bQueueStatsModifier = true;

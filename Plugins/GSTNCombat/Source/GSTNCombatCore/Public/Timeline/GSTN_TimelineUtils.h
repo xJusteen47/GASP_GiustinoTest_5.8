@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "Timeline/GSTN_TimelineTypes.h"
+#include "Timeline/GSTN_BodyCapsule.h"
 #include "GSTN_TimelineUtils.generated.h"
 
 /**
@@ -44,4 +45,16 @@ public:
 	/** Authoring helper: a copy of Data without its Hold Until Landed track */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
 	static FGSTN_CombatTimelineData RemoveHoldUntilLandedTrack(const FGSTN_CombatTimelineData& Data);
+
+	/**
+	 * Authoring helper: a copy of Data with one more Body Capsule track (FGSTN_TimelineTrack_BodyCapsule) on [StartFrame, EndFrame). Setup scripts
+	 * call RemoveBodyCapsuleTracks first, so they can run again. Offset: the capsule centre from the mesh root, X forward, Y right, Z up
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
+	static FGSTN_CombatTimelineData AddBodyCapsuleTrack(const FGSTN_CombatTimelineData& Data, int32 StartFrame, int32 EndFrame, float HalfHeight, float Radius,
+		FVector Offset, EGSTN_BodyCapsuleAnchor Anchor = EGSTN_BodyCapsuleAnchor::Body, float MaxShiftPerFrame = 20.f);
+
+	/** Authoring helper: a copy of Data without any Body Capsule track */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
+	static FGSTN_CombatTimelineData RemoveBodyCapsuleTracks(const FGSTN_CombatTimelineData& Data);
 };
