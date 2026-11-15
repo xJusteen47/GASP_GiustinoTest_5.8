@@ -65,6 +65,14 @@ void FGSTN_SnapshotContributorRegistry::Fill(const FGSTN_SnapshotContributorCont
 	}
 }
 
+void FGSTN_SnapshotContributorRegistry::CollectStateTags(const FGSTN_SnapshotContributorContext& Context, FGSTN_PushboxStateTags& Out) const
+{
+	for (const IGSTN_SnapshotContributor* Contributor : Contributors)
+	{
+		Contributor->AppendStateTags(Context, Out);
+	}
+}
+
 double GSTNExtraHurtboxes::ComputeBoundRadius(TConstArrayView<FGSTN_ExtraHurtbox> Extras)
 {
 	double Radius = 0.0;

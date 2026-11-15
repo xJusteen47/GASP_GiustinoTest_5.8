@@ -123,4 +123,39 @@ bool FGSTN_PushboxPushTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PushboxStateRulesTest, "GSTNCombat.Core.Pushbox.StateRules", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_PushboxStateRulesTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNPushboxTests;
+	// Pushbox P2 (owner 2A): the default data takes the pushbox off for a downed and a tumbling fighter, by state tag name
+	FGSTN_PushboxSettings Settings;
+	FGSTN_BodyCapsuleShape Local;
+	const FName Knockdown(TEXT("Combat.State.Knockdown"));
+	const FName Tumble(TEXT("Combat.State.Tumble"));
+	const FName Other(TEXT("Combat.State.Hitstun"));
+
+	TestEqual(TEXT("two default rules"), Settings.StateRules.Num(), 2);
+	TestFalse(TEXT("knockdown: none"), FGSTN_Pushbox::ResolveLocal(nullptr, INDEX_NONE, Standing, Settings, TArray<FName>{ Knockdown }, Local));
+	TestFalse(TEXT("tumble: none"), FGSTN_Pushbox::ResolveLocal(nullptr, INDEX_NONE, Standing, Settings, TArray<FName>{ Tumble }, Local));
+	TestTrue(TEXT("unlisted state: the capsule"), FGSTN_Pushbox::ResolveLocal(nullptr, INDEX_NONE, Standing, Settings, TArray<FName>{ Other }, Local) && FMath::IsNearlyEqual(Local.Radius, 28.f));
+
+	// A rule that keeps a pushbox with its own size; the first matching rule wins
+	FGSTN_PushboxStateRule Small;
+	Small.StateTag = Other;
+	Small.bEnabled = true;
+	Small.Radius = 15.f;
+	Small.HalfHeight = 25.f;
+	Settings.StateRules.Insert(Small, 0);
+	TestTrue(TEXT("enabled rule"), FGSTN_Pushbox::ResolveLocal(nullptr, INDEX_NONE, Standing, Settings, TArray<FName>{ Knockdown, Other }, Local));
+	TestEqual(TEXT("rule radius"), Local.Radius, 15.f);
+	TestEqual(TEXT("rule half height"), Local.HalfHeight, 25.f);
+
+	// A move's Pushbox track wins over the state
+	FGSTN_CombatTimelineData Data;
+	Data.TotalFrames = 60;
+	Data = UGSTN_TimelineUtils::AddPushboxTrack(Data, 0, 20, true, 40.f, 30.f, false, FVector::ZeroVector);
+	TestTrue(TEXT("track over a downed state"), FGSTN_Pushbox::ResolveLocal(&Data, 5, Standing, Settings, TArray<FName>{ Knockdown }, Local) && FMath::IsNearlyEqual(Local.Radius, 40.f));
+	TestFalse(TEXT("past the track: the state"), FGSTN_Pushbox::ResolveLocal(&Data, 30, Standing, Settings, TArray<FName>{ Knockdown }, Local));
+	return true;
+}
 #endif

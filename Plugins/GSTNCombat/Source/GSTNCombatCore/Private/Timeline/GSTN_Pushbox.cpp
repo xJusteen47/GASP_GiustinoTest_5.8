@@ -21,8 +21,35 @@ const FGSTN_TimelineTrack_Pushbox* FGSTN_Pushbox::FindTrackAt(const FGSTN_Combat
 	return nullptr;
 }
 
+FGSTN_PushboxSettings::FGSTN_PushboxSettings()
+{
+	// Default data, by name like FGSTN_GrabRules::IgnoreTagNames: a downed body is crossed (owner 2A), a tumbling one only meets the world (plan 4)
+	FGSTN_PushboxStateRule& Knockdown = StateRules.AddDefaulted_GetRef();
+	Knockdown.StateTag = FName(TEXT("Combat.State.Knockdown"));
+	FGSTN_PushboxStateRule& Tumble = StateRules.AddDefaulted_GetRef();
+	Tumble.StateTag = FName(TEXT("Combat.State.Tumble"));
+}
+
 bool FGSTN_Pushbox::ResolveLocal(const FGSTN_CombatTimelineData* Data, int32 TimelineFrame, const FGSTN_BodyCapsuleShape& Capsule,
 	const FGSTN_PushboxSettings& Settings, FGSTN_BodyCapsuleShape& OutLocal)
+{
+	return ResolveLocal(Data, TimelineFrame, Capsule, Settings, TConstArrayView<FName>(), OutLocal);
+}
+
+const FGSTN_PushboxStateRule* FGSTN_Pushbox::FindStateRule(const FGSTN_PushboxSettings& Settings, TConstArrayView<FName> StateTags)
+{
+	for (const FGSTN_PushboxStateRule& Rule : Settings.StateRules)
+	{
+		if (!Rule.StateTag.IsNone() && StateTags.Contains(Rule.StateTag))
+		{
+			return &Rule;
+		}
+	}
+	return nullptr;
+}
+
+bool FGSTN_Pushbox::ResolveLocal(const FGSTN_CombatTimelineData* Data, int32 TimelineFrame, const FGSTN_BodyCapsuleShape& Capsule,
+	const FGSTN_PushboxSettings& Settings, TConstArrayView<FName> StateTags, FGSTN_BodyCapsuleShape& OutLocal)
 {
 	if (!Settings.bEnabled)
 	{
@@ -39,6 +66,15 @@ bool FGSTN_Pushbox::ResolveLocal(const FGSTN_CombatTimelineData* Data, int32 Tim
 		OutLocal.Radius = Track->Radius > 0.f ? Track->Radius : OutLocal.Radius;
 		OutLocal.HalfHeight = Track->HalfHeight > 0.f ? Track->HalfHeight : Capsule.HalfHeight;
 		OutLocal.Offset = Track->bUseOffset ? Track->Offset : Capsule.Offset;
+	}
+	else if (const FGSTN_PushboxStateRule* Rule = FindStateRule(Settings, StateTags))
+	{
+		if (!Rule->bEnabled)
+		{
+			return false;
+		}
+		OutLocal.Radius = Rule->Radius > 0.f ? Rule->Radius : OutLocal.Radius;
+		OutLocal.HalfHeight = Rule->HalfHeight > 0.f ? Rule->HalfHeight : Capsule.HalfHeight;
 	}
 	return OutLocal.Radius > 0.f && OutLocal.HalfHeight > 0.f;
 }

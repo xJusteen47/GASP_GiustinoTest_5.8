@@ -454,7 +454,7 @@ public:
 	FVector ReadFramePush() const;
 
 	/** The pushbox of this fighter in the world for its snapshot entry, from the end of the previous frame. False = none */
-	bool ResolveSnapshotPushbox(int32 Frame, const FGSTN_CombatSyncCore& Core, const FTransform& CapsuleTransform, FGSTN_PushboxCylinder& Out);
+	bool ResolveSnapshotPushbox(int32 Frame, const FGSTN_CombatSyncCore& Core, const FTransform& CapsuleTransform, TConstArrayView<FName> StateTags, FGSTN_PushboxCylinder& Out);
 
 private:
 	/** The bit of a button tag in the active input config (the same asset on every machine), INDEX_NONE if it has none */

@@ -8,6 +8,7 @@
 #include "DefaultMovementSet/LayeredMoves/LaunchMove.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/Pawn.h"
+#include "GSTN_CombatTags.h"
 #include "Hits/GSTN_HurtboxTypes.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverDataModelTypes.h"
@@ -98,7 +99,6 @@ bool UGSTN_CombatSimComponent::ReadSnapshotEntry(int32 Frame, FGSTN_SnapshotEntr
 		Out.Up = Out.Transform.GetUnitAxis(EAxis::Z);
 	}
 	Out.Facing = Out.Transform.GetUnitAxis(EAxis::X);
-	ResolveSnapshotPushbox(Frame, Core, Out.Transform, Out.Pushbox);
 	Out.Team = ResolveTeam();
 	Out.bInHitstop = Core.IsInHitstop(Frame);
 	Out.ActionState = Core.ActionState;
@@ -171,10 +171,23 @@ bool UGSTN_CombatSimComponent::ReadSnapshotEntry(int32 Frame, FGSTN_SnapshotEntr
 	Contribution.ActionState = Core.ActionState;
 	Contribution.Transform = Out.Transform;
 	FGSTN_SnapshotContributorRegistry::Get().Fill(Contribution, Out);
+
+	// The pushbox, after the contributors: the states they report (knockdown) select its StateRules entry, with the core's own action state tag
+	FGSTN_PushboxStateTags StateTags;
+	if (Core.ActionState == EGSTN_ActionState::Tumble)
+	{
+		StateTags.Add(GSTNCombatTags::State_Tumble.GetTag().GetTagName());
+	}
+	else if (Core.ActionState == EGSTN_ActionState::Splat)
+	{
+		StateTags.Add(GSTNCombatTags::State_Splat.GetTag().GetTagName());
+	}
+	FGSTN_SnapshotContributorRegistry::Get().CollectStateTags(Contribution, StateTags);
+	ResolveSnapshotPushbox(Frame, Core, Out.Transform, StateTags, Out.Pushbox);
 	return true;
 }
 
-bool UGSTN_CombatSimComponent::ResolveSnapshotPushbox(int32 Frame, const FGSTN_CombatSyncCore& Core, const FTransform& CapsuleTransform, FGSTN_PushboxCylinder& Out)
+bool UGSTN_CombatSimComponent::ResolveSnapshotPushbox(int32 Frame, const FGSTN_CombatSyncCore& Core, const FTransform& CapsuleTransform, TConstArrayView<FName> StateTags, FGSTN_PushboxCylinder& Out)
 {
 	Out = FGSTN_PushboxCylinder();
 	// A knocked out fighter is out of play: nothing pushes it, it pushes nothing
@@ -225,7 +238,7 @@ bool UGSTN_CombatSimComponent::ResolveSnapshotPushbox(int32 Frame, const FGSTN_C
 
 	const FGSTN_PushboxSettings Settings = CombatRules ? CombatRules->Pushbox : FGSTN_PushboxSettings();
 	FGSTN_BodyCapsuleShape Local;
-	if (!FGSTN_Pushbox::ResolveLocal(Timeline, TimelineFrame, Capsule, Settings, Local))
+	if (!FGSTN_Pushbox::ResolveLocal(Timeline, TimelineFrame, Capsule, Settings, StateTags, Local))
 	{
 		return false;
 	}

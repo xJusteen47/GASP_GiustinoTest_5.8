@@ -43,6 +43,36 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Pushbox : public FGSTN_TimelineTra
 };
 
 /**
+ * The pushbox of a fighter in a state with no move timeline (downed, tumbling), as data (pushbox plan 4, owner 2026-11-15: a downed victim has
+ * none, so the attacker can walk over it). Matched against the state tags the snapshot gathers for the entity (the core action state's tag and
+ * what each snapshot contributor reports, e.g. the Defence plugin's knockdown), so no code names the state. A move's Pushbox track still wins.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_PushboxStateRule
+{
+	GENERATED_BODY()
+
+	/** The state tag, by name: an optional plugin's tag may register after the rules' defaults are built (as FGSTN_GrabRules::IgnoreTagNames) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox")
+	FName StateTag;
+
+	/** False: no pushbox while in the state (neither pushes nor is pushed) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox")
+	bool bEnabled = false;
+
+	/** Cylinder radius, 0 = the movement capsule's radius scaled by CapsuleRadiusScale */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox", meta = (ClampMin = "0.0", ForceUnits = "cm", EditCondition = "bEnabled"))
+	float Radius = 0.f;
+
+	/** Cylinder half height, 0 = the movement capsule's */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox", meta = (ClampMin = "0.0", ForceUnits = "cm", EditCondition = "bEnabled"))
+	float HalfHeight = 0.f;
+};
+
+/** The state tags of an entity as the pushbox reads them, by name */
+using FGSTN_PushboxStateTags = TArray<FName, TInlineAllocator<4>>;
+
+/**
  * How hard pushboxes push, on the combat rules. One value for everyone on purpose: the two fighters of a pair compute their shares on their own
  * machines and frames, and equal settings make the shares equal and opposite with no messaging
  */
@@ -50,6 +80,9 @@ USTRUCT(BlueprintType)
 struct GSTNCOMBATCORE_API FGSTN_PushboxSettings
 {
 	GENERATED_BODY()
+
+	/** Defaults (pushbox plan 4, owner 2A): Combat.State.Knockdown and Combat.State.Tumble have no pushbox */
+	FGSTN_PushboxSettings();
 
 	/** Off: fighters overlap freely (their capsules ignore each other either way) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox")
@@ -66,6 +99,10 @@ struct GSTNCOMBATCORE_API FGSTN_PushboxSettings
 	/** Pushbox radius when no track gives one: the movement capsule's radius times this */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox", meta = (ClampMin = "0.0", ClampMax = "2.0"))
 	float CapsuleRadiusScale = 0.8f;
+
+	/** The pushbox per state with no move timeline; the first rule whose tag the entity has wins. A move's Pushbox track wins over these */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox")
+	TArray<FGSTN_PushboxStateRule> StateRules;
 };
 
 /** A pushbox in the world: vertical (along Up) cylinder. Radius 0 = none */
@@ -99,6 +136,13 @@ struct GSTNCOMBATCORE_API FGSTN_Pushbox
 	 */
 	static bool ResolveLocal(const FGSTN_CombatTimelineData* Data, int32 TimelineFrame, const FGSTN_BodyCapsuleShape& Capsule,
 		const FGSTN_PushboxSettings& Settings, FGSTN_BodyCapsuleShape& OutLocal);
+
+	/** The same with the entity's state tags: Pushbox track of the move > first matching StateRules entry > the movement capsule */
+	static bool ResolveLocal(const FGSTN_CombatTimelineData* Data, int32 TimelineFrame, const FGSTN_BodyCapsuleShape& Capsule,
+		const FGSTN_PushboxSettings& Settings, TConstArrayView<FName> StateTags, FGSTN_BodyCapsuleShape& OutLocal);
+
+	/** The first rule of Settings.StateRules whose tag is in StateTags, null when none */
+	static const FGSTN_PushboxStateRule* FindStateRule(const FGSTN_PushboxSettings& Settings, TConstArrayView<FName> StateTags);
 
 	/**
 	 * Self's share of the pair's separation, a horizontal (perpendicular to Up) move. p = rA + rB - horizontal distance when the vertical spans

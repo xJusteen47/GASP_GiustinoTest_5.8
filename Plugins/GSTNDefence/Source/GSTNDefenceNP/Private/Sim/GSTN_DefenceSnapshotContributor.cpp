@@ -127,6 +127,16 @@ void FGSTN_DefenceSnapshotContributor::Contribute(const FGSTN_SnapshotContributo
 	}
 }
 
+void FGSTN_DefenceSnapshotContributor::AppendStateTags(const FGSTN_SnapshotContributorContext& Context, FGSTN_PushboxStateTags& Out) const
+{
+	// Downed (M6 F8): the same window the gate and the projected tag use, read from the fragment of the end of the previous frame
+	const FGSTN_DefenceFragment* Fragment = Context.Fragments ? FGSTN_SyncFragmentList::Find<FGSTN_DefenceFragment>(*Context.Fragments) : nullptr;
+	if (Fragment && Fragment->IsKnockedDown(Context.Frame))
+	{
+		Out.Add(GSTNDefenceTags::State_Knockdown.GetTag().GetTagName());
+	}
+}
+
 void FGSTN_DefenceSnapshotContributor::AppendExtraHurtboxes(const FGSTN_SnapshotContributorContext& Context, FGSTN_ExtraHurtboxList& Out) const
 {
 	FGSTN_DefenceSnapshotExt Ext;

@@ -82,6 +82,8 @@ DAIR_SEQUENCES = [
 # (command Directional while Airborne, setup_overlord_dropkick_kit.py): PIE_CAPTURE_KIT=KIT_Test_OverlordDropkick. The move is 80 frames long
 DROPKICK_SEQUENCES = [
     {'name': 'dropkick_whiff', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5}},
+    # PUSHBOX-P2: the same press with a dummy ahead, so the landing and the end meet a body (dummy distance a first guess, the rows hold both places)
+    {'name': 'dropkick_hit', 'taps': [], 'frames': 150, 'dummy': 120.0, 'shoot': True, 'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5}},
 ]
 # CP3 double-shot examples (PIE_CAPTURE_KIT=KIT_Example_DoubleShotA / B, PIE_CAPTURE_BUTTON=Special): one press, two presses 8 frames apart (a double
 # press), two presses 40 frames apart (two single shots)
@@ -242,6 +244,12 @@ def _row(frame, tapped, extra=None):
     view = g._view(0, h._key(0)) or {}
     row = {'f': frame, 'tap': tapped, 'combat': view.get('combat'), 'tags': view.get('tags'), 'loc': view.get('location'), 'montage': _montage()}
     row.update(extra or {})
+    if st.get('dummy_key') is not None:   # PUSHBOX-P2: the dummy's state and place (knockdown tag, the push between the two)
+        try:
+            dv = g._view(0, st['dummy_key']) or {}
+            row['dummy'] = {'tags': dv.get('tags'), 'loc': dv.get('location'), 'combat': dv.get('combat')}
+        except Exception as e:
+            row['dummy_err'] = repr(e)[:80]
     try:   # body vs capsule (DROPKICK-CAPSULE): pelvis world z, capsule half height/radius, mesh z relative to the actor
         pawn = _pawn()
         cap = pawn.get_component_by_class(unreal.CapsuleComponent)
@@ -319,7 +327,7 @@ def _tick(_dt):
             if seq['dummy'] and not st.get('dummy_placed'):
                 keys = h.dummies()
                 _log(f'dummy {keys[:1]} ahead: {h._place_ahead(0, keys[0], seq["dummy"]) if keys else "NO DUMMY"}')
-                st.update(dummy_placed=True, t=now)         # one more wait for the teleport to settle
+                st.update(dummy_placed=True, dummy_key=keys[0] if keys else None, t=now)         # one more wait for the teleport to settle
                 return None
             if seq.get('air') is not None:
                 z = _pawn().get_actor_location().z

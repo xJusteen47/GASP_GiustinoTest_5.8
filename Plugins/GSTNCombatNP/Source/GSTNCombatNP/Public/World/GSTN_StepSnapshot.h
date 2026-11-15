@@ -447,6 +447,12 @@ public:
 	 * Deterministic: it reads the entries (their blobs and transforms) only, so every machine and a lag compensation rewind see the same result
 	 */
 	virtual void FinalizeSnapshot(int32 Frame, TArrayView<FGSTN_SnapshotEntry> Entries) const {}
+
+	/**
+	 * Appends the state tags (by name) the entity is in at the context's frame from this plugin's data (the Defence plugin's Combat.State.Knockdown),
+	 * so data keyed by state (the pushbox's StateRules) can match them without code naming the state. Same determinism as Contribute. Not called at a rebuild
+	 */
+	virtual void AppendStateTags(const FGSTN_SnapshotContributorContext& Context, FGSTN_PushboxStateTags& Out) const {}
 };
 
 /**
@@ -469,6 +475,9 @@ public:
 
 	/** The snapshot build: fills Entry.Extension (one blob per contributor), lets each contributor modify the entry and collects their extra hurtboxes. Resets both first; neutral with nothing registered */
 	void Fill(const FGSTN_SnapshotContributorContext& Context, FGSTN_SnapshotEntry& Entry) const;
+
+	/** Every contributor's AppendStateTags for the context, in type id order */
+	void CollectStateTags(const FGSTN_SnapshotContributorContext& Context, FGSTN_PushboxStateTags& Out) const;
 
 	/**
 	 * The victim drain: rebuilds every contributor's blob of Set from the fragments as they stand now, each contributor seeing its own blob
