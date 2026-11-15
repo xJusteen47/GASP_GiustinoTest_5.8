@@ -26,6 +26,15 @@ def lerp(a, b, t):
 
 def fist(pose):
     pose["fingers"] = [0.0, 0.0, 0.0]     # 0 = template fists (author.py); r1's 1.0 was the open villain hand
+    # r2b (checks of the first build): r0's crossed hands sit 10-13 cm in front of spine_05, i.e. inside the chest (hand_r/spine_05
+    # -11.8 cm, forearms -7.8 cm). Same crossed-arms read, moved out of the body: left forearm under (y 22, z -9), right over (y 31, z -3).
+    if pose["arm_l"]["hand"][0] <= 0 and pose["arm_r"]["hand"][0] >= 0:
+        for side, y, dz in (("arm_l", 22.0, -3.0), ("arm_r", 31.0, 4.0)):
+            h, p = pose[side]["hand"], pose[side]["pole"]
+            pose[side]["hand"] = [h[0], y, round(h[2] + dz, 3)]
+            pose[side]["pole"] = [p[0], max(p[1], y), p[2]]
+    elif pose["arm_r"]["hand"][1] < 20 and pose["arm_l"]["hand"][1] >= 20:   # startup f4: hands on the way in
+        pose["arm_r"]["hand"] = [pose["arm_r"]["hand"][0], 22.0, pose["arm_r"]["hand"][2]]
     return pose
 
 
