@@ -25,7 +25,7 @@ def lerp(a, b, t):
 
 
 def fist(pose):
-    pose.setdefault("fingers", [1.0, 0.0, 0.0])
+    pose["fingers"] = [0.0, 0.0, 0.0]     # 0 = template fists (author.py); r1's 1.0 was the open villain hand
     return pose
 
 
@@ -41,7 +41,14 @@ def main():
     for n in ("startup", "loop"):
         card = copy.deepcopy(r0[n])
         card["author"]["thumb"] = "along"
-        for p in card["author"]["poses"].values():
+        ps = card["author"]["poses"]
+        n_fr = card["author"]["frames"]
+        if str(n_fr) in ps:   # r0 loop keyed f12 (= f0) on a 12-frame clip (frames 0-11): key f11 on the way back instead
+            ps[str(n_fr - 1)] = lerp(ps["6"], ps.pop(str(n_fr)), 5 / 6)
+            for p in card["poses"]:
+                if p["frame"] == n_fr:
+                    p["frame"] = n_fr - 1
+        for p in ps.values():
             fist(p)
         card["_design_r1"] = r1[n].get("_design", "")
         card["_changes"] = note

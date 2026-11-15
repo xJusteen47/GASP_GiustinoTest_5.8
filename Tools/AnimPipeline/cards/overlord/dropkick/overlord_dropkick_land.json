@@ -356,7 +356,7 @@
      ]
     },
     "fingers": [
-     1.0,
+     0.0,
      0.0,
      0.0
     ],
@@ -448,7 +448,7 @@
      ]
     },
     "fingers": [
-     0.996,
+     0.329,
      0.0,
      0.0
     ],
@@ -540,7 +540,7 @@
      ]
     },
     "fingers": [
-     0.992,
+     0.659,
      0.0,
      0.0
     ],
@@ -2930,6 +2930,6 @@
    }
   }
  },
- "_changes": "r2 (2026-11-15, owner decision 1A): Antigravity r0 poses restored (legs together and straight, arms crossed on the chest). r1 (26733f24, legs staggered, arms flung) kept as *.r1.backup.json. Timing, hold-until-landed and hitbox code untouched. Land: f0 = r0 loop pose on the ground, f1-f2 blend into r1 f3 (arms open on impact), f3-f31 = r1.",
- "_plan_r1": "cards/overlord/dropkick/overlord_dropkick_land.plan.json"
+ "_plan": "cards/overlord/dropkick/overlord_dropkick_land.plan.json",
+ "_changes": "r2 (2026-11-15, owner decision 1A): Antigravity r0 poses restored (legs together and straight, arms crossed on the chest). r1 (26733f24, legs staggered, arms flung) kept as *.r1.backup.json. Timing, hold-until-landed and hitbox code untouched. Land: f0 = r0 loop pose on the ground, f1-f2 blend into r1 f3 (arms open on impact), f3-f31 = r1."
 }

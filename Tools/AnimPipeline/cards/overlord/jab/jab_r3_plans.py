@@ -160,7 +160,9 @@ def jab2():
 def plan(v, keys, name):
     card = {k: copy.deepcopy(val) for k, val in v.items() if k not in ("author", "_plan")}
     n = v["author"]["frames"]
-    card["poses"] = [{"name": f"f{f}", "frame": f, "source": None, **({"origin": "owner"} if f in owner_frames(name) else {})}
+    card["poses"] = [{"name": f"f{f}", "frame": f, "source": None, **({"origin": "claude", "why": "owner's Cascadeur Step key (owner_r3/owner_jab_casc_2026-11-15.json) converted by "
+                                  "casc_to_author.py; no Invia request exists, so it is not an animpipe owner key"}
+                                if f in owner_frames(name) else {})}
                      for f in range(n)]
     card["_changes"] = (v.get("_changes", "") + " r3 (2026-11-15): owner's Cascadeur poses are the base (owner_r3/), full arc "
                         "with follow-through past the owner's last key, built by jab_r3_plans.py + pose_plan.py. v3 r2b card "

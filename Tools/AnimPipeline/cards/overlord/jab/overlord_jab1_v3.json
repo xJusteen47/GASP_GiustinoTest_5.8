@@ -49,7 +49,8 @@
    "name": "f6",
    "frame": 6,
    "source": null,
-   "origin": "owner"
+   "origin": "claude",
+   "why": "owner's Cascadeur Step key (owner_r3/owner_jab_casc_2026-11-15.json) converted by casc_to_author.py; no Invia request exists, so it is not an animpipe owner key"
   },
   {
    "name": "f7",
@@ -60,7 +61,8 @@
    "name": "f8",
    "frame": 8,
    "source": null,
-   "origin": "owner"
+   "origin": "claude",
+   "why": "owner's Cascadeur Step key (owner_r3/owner_jab_casc_2026-11-15.json) converted by casc_to_author.py; no Invia request exists, so it is not an animpipe owner key"
   },
   {
    "name": "f9",
