@@ -309,6 +309,8 @@ void UNetMontageSimulator::ResetPresentationClock()
 	PendingAnchor = FPresentationAnchor();
 	PresentedMontage.Reset();
 	PresentedTime = 0.f;
+	CarriedStepperSeconds = 0.f;
+	CarriedStepperInstanceId = INDEX_NONE;
 }
 
 float UNetMontageSimulator::ComputePresentedTime(const FSyncedMontagePresentationClockInput& Input)
@@ -981,51 +983,58 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 }
 
 FSyncedMontagePresentationStep UNetMontageSimulator::ComputeLandOnSimTimeStep(float InstancePosition, float TargetTime, float NominalPlayRate,
-	float AnimDeltaSeconds, float MaxRateScale)
+	float AnimDeltaSeconds, float MaxRateScale, float CarriedSeconds)
 {
 	// Below this the instance is on the target: a tenth of a millisecond, far under one frame of any animation
 	constexpr float PositionTolerance = 1.e-4f;
 	FSyncedMontagePresentationStep Step;
 	Step.Position = InstancePosition;
+	const float Carried = FMath::Max(CarriedSeconds, 0.f);
 
 	// No advance coming (the mesh is paused, or no time passes): put it on the target. Rate 0 too, so a pause lifted later in this same frame
-	// does not let the update carry it past the target
+	// does not let the update carry it past the target. Nothing is added to the stepper, what it holds stays
 	if (AnimDeltaSeconds <= UE_SMALL_NUMBER)
 	{
 		Step.bSetPosition = !FMath::IsNearlyEqual(InstancePosition, TargetTime, PositionTolerance);
 		Step.Position = TargetTime;
 		Step.PlayRate = 0.f;
+		Step.CarriedSecondsAfter = Carried;
 		return Step;
 	}
 
+	// The time the coming update spends if the rate is not 0: its own delta plus what earlier holds left in the stepper
+	const float StepSeconds = AnimDeltaSeconds + Carried;
 	const float Gap = TargetTime - InstancePosition;
-	// Ahead of the simulation: go back and hold. A teleport, so the notifies already passed do not fire again
+	// Ahead of the simulation: go back and hold. A teleport, so the notifies already passed do not fire again. A hold keeps the delta
 	if (Gap < -PositionTolerance)
 	{
 		Step.bSetPosition = true;
 		Step.Position = TargetTime;
 		Step.PlayRate = 0.f;
+		Step.CarriedSecondsAfter = StepSeconds;
 		return Step;
 	}
 
-	// Behind (or on it): cover the gap in this update, so every notify in it fires once
-	const float NeededRate = FMath::Max(Gap, 0.f) / AnimDeltaSeconds;
+	// Behind (or on it): cover the gap in this update, so every notify in it fires once. On it: rate 0, the stepper keeps the delta
+	const float NeededRate = FMath::Max(Gap, 0.f) / StepSeconds;
 	const float MaxRate = FMath::Max(NominalPlayRate, 1.f) * MaxRateScale;
 	if (NeededRate <= MaxRate)
 	{
 		Step.PlayRate = NeededRate;
+		Step.CarriedSecondsAfter = NeededRate > 0.f ? 0.f : StepSeconds;
 		return Step;
 	}
 
 	// Too far behind to run there (a correction, a long hitch): skip to where the nominal rate lands on the target
 	Step.bSetPosition = true;
-	Step.Position = FMath::Max(TargetTime - FMath::Max(NominalPlayRate, 0.f) * AnimDeltaSeconds, 0.f);
-	Step.PlayRate = (TargetTime - Step.Position) / AnimDeltaSeconds;
+	Step.Position = FMath::Max(TargetTime - FMath::Max(NominalPlayRate, 0.f) * StepSeconds, 0.f);
+	Step.PlayRate = (TargetTime - Step.Position) / StepSeconds;
+	Step.CarriedSecondsAfter = Step.PlayRate > 0.f ? 0.f : StepSeconds;
 	return Step;
 }
 
 void UNetMontageSimulator::LandInstanceOnSimTime(const UAnimInstance& AnimInstance, FAnimMontageInstance& MontageInstance,
-	const FMontageSimSyncState& SyncState, float RateMultiplier, float TargetTime) const
+	const FMontageSimSyncState& SyncState, float RateMultiplier, float TargetTime)
 {
 	// The delta the mesh's animation update will use this frame: FinalizeFrame runs before it (NP finalizes in the world's pre-actor tick)
 	float AnimDeltaSeconds = 0.f;
@@ -1042,11 +1051,18 @@ void UNetMontageSimulator::LandInstanceOnSimTime(const UAnimInstance& AnimInstan
 		}
 	}
 	const float NominalRate = SyncState.GetIsPaused() ? 0.f : SyncState.GetPlayRate() * RateMultiplier;
+	// A new instance (a start, a restart after a stop) has an empty sub-stepper. SetPosition does not empty it (the dropkick loop wrap kept it)
+	if (MontageInstance.GetInstanceID() != CarriedStepperInstanceId)
+	{
+		CarriedStepperInstanceId = MontageInstance.GetInstanceID();
+		CarriedStepperSeconds = 0.f;
+	}
 	const FSyncedMontagePresentationStep Step = ComputeLandOnSimTimeStep(MontageInstance.GetPosition(), TargetTime,
-		NominalRate, AnimDeltaSeconds);
+		NominalRate, AnimDeltaSeconds, 4.f, CarriedStepperSeconds);
 	if (Step.bSetPosition)
 	{
 		MontageInstance.SetPosition(Step.Position);
 	}
 	MontageInstance.SetPlayRate(Step.PlayRate);
+	CarriedStepperSeconds = Step.CarriedSecondsAfter;
 }
