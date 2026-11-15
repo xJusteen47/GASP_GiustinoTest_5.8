@@ -25,6 +25,11 @@ Branch `claude/desktop-jab-dropkick-r1` (from hgy214 36dcdb44), folder `GASP_Giu
 - Variant recaptured: `docs/notes/reviews/jab-dropkick-r1/{base,variant}/` mp4 normal + quarter, grids `*_base_vs_variant.png`.
 - Checks all FAIL (`checks.txt`), for the reviewer: dropkick crossed arms penetrate (startup hand_r/spine_05 -11.8 cm f8, loop forearms
   -7.8 cm f5, land hand_l -9.3 cm f1) = likely `posa` on r0; jab hitstop_snap 31-48 cm; legibility tool KeyErrors on loop/land.
+## Checkpoint 3 (dropkick only; jabs STOPPED, owner edits them in Unreal) - commit d0451e46
+- Crossed arms moved out of the chest (a0c7bf9f). Game copies `GASNPPTest/Combat/Overlord/AS_OverlordDropkick_*` published by consolidate
+  (the earlier dropkick variant still played the OLD copies); game AM/TL/GA byte-identical. Recaptured: `dropkick_whiff_*` + `dropkick_whiff_air_views.png`.
+- Clearance still FAIL: startup hand_l/spine_05 -7.2 f8, forearms -6.2 f8; loop forearms -2.4; land hand_l/spine_05 -9.6 f1 (f1-f2 blend
+  opens the arms through the chest). For the reviewer: judge it on the video; a fix = land f1-f2 hands kept at y >= 22 while opening.
 ## Facts
 Base captures: jab1, jab1_jab2_faf (v14-v90), dropkick_whiff (v36-v135), mp4 normal + quarter. Video: jab1 contact v27, jab2 contact v42,
 dropkick release v55-58 (first active v58), land clip v102 (base) / v103 (variant). Tools: capture wrapper with 900 s limit (subagent
