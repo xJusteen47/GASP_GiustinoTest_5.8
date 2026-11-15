@@ -27,4 +27,4 @@ in its `_design` needs an owner decision BEFORE build; reviews compare with that
 ## Owner answers 11-15 14:19Z (msg cmsg_01CRvUdrWm1dJrM4q54YDBLN3bt1hdy2t88z79oCs9mc8a)
 1A (restore Antigravity dropkick) + "improve follow-through and secondary motion" (scope: these moves, quality goal).
 2: reference poses are open in Cascadeur (MCP, owner's machine): jab 1 slap toward the RIGHT, jab 2 palm toward the LEFT; improvable but
-the base. 3 unanswered -> 3A applied (jab hitbox stays 6-8). Next: desktop thread, brief `handoffs/jab-dropkick-r1-desktop-brief.md`.
+the base. 3 -> owner 14:19Z: jab hitbox active for most of the arc and HE places the hitboxes: threads do not author jab hitbox timing. Next: desktop thread, brief `handoffs/jab-dropkick-r1-desktop-brief.md`.
