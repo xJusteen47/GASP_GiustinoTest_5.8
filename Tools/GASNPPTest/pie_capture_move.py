@@ -76,7 +76,7 @@ DAIR_SEQUENCES = [
 # Dropkick (forward air, ANIM-R2): same 'air' mechanism, but the stick is held forward (instead of crouch) and Attack tapped the next frame
 # (command Directional while Airborne, setup_overlord_dropkick_kit.py): PIE_CAPTURE_KIT=KIT_Test_OverlordDropkick. The move is 80 frames long
 DROPKICK_SEQUENCES = [
-    {'name': 'dropkick_whiff', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'air': {'rise_h': 150.0, 'stick': True}},
+    {'name': 'dropkick_whiff', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5}},
 ]
 AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after the attack press
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
@@ -300,6 +300,9 @@ def _tick(_dt):
                 falling = st['prev_z'] is not None and z < st['prev_z']
                 if 'rise_h' in air:
                     reached = rising and height >= air['rise_h']
+                    if reached and air.get('press_delay'):   # capture tuning: press this many frames after the height was reached
+                        st.setdefault('reached_at', frame)
+                        reached = frame - st['reached_at'] >= air['press_delay']
                 elif 'trigger_h' in air:
                     reached = falling and height <= air['trigger_h']
                 else:

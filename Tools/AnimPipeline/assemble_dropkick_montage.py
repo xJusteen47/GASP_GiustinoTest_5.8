@@ -1,4 +1,6 @@
+import os
 import re
+import runpy
 import unreal
 
 
@@ -39,8 +41,8 @@ seg0.set_editor_property("anim_end_time", len_startup)
 seg0.set_editor_property("anim_play_rate", 1.0)
 seg0.set_editor_property("looping_count", 1)
 
-# Segment 1: Loop (e.g. falling missile; plays 3 cycles = ~0.55s falling before ground)
-loop_reps = 3
+# Segment 1: Loop (e.g. falling missile; plays LOOP_REPS cycles falling before ground)
+loop_reps = runpy.run_path(os.path.join(unreal.Paths.project_dir(), 'Tools/AnimPipeline/dropkick_loop_reps.py'))['LOOP_REPS']
 seg1 = unreal.AnimSegment()
 seg1.set_editor_property("anim_reference", anim_loop)
 

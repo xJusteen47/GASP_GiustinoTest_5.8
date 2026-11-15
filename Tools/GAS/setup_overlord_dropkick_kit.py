@@ -5,7 +5,7 @@
 # Reads the three built clips of the anim pipeline (Content/AnimPipeline is a junction shared by every worktree) and copies them. Writes, under
 # /Game/GASNPPTest/Combat/Overlord (new assets only):
 #   AS_OverlordDropkick_Startup / _Loop / _Land   copies of /Game/AnimPipeline/Rig/Overlord/Dropkick/{Startup,Loop,Land}/AS_OverlordDropkick_*
-#   AM_OverlordDropkick       montage of the three (startup 16 frames, loop x3, land 32 frames), 2 frame blend in, 4 frame blend out
+#   AM_OverlordDropkick       montage of the three (startup 16 frames, loop x LOOP_REPS (4 by default, Tools/AnimPipeline/dropkick_loop_reps.py), land 32 frames), 2 frame blend in, 4 frame blend out
 #                             (the loop plays 3 times: a hold until landing needs a looping section or the gameplay ability, game side)
 #   TL_Overlord_Dropkick      UGSTN_CombatTimeline: hitbox active from startup f15 (timing CSV) to the end of the loop, FAF = last frame
 #   GA_Overlord_Dropkick      thin Blueprint child of UGSTN_GA_TestKitStrike whose TimelineAsset is the timeline above (no graph)
@@ -19,13 +19,14 @@
 import csv
 import os
 import re
+import runpy
 
 import unreal
 
 SRC = '/Game/AnimPipeline/Rig/Overlord/Dropkick'
 CLIPS = [('Startup', f'{SRC}/Startup/AS_OverlordDropkick_Startup'), ('Loop', f'{SRC}/Loop/AS_OverlordDropkick_Loop'),
          ('Land', f'{SRC}/Land/AS_OverlordDropkick_Land')]
-LOOP_REPS = 3                                  # same as Tools/AnimPipeline/assemble_dropkick_montage.py
+LOOP_REPS = runpy.run_path(os.path.join(unreal.Paths.project_dir(), 'Tools/AnimPipeline/dropkick_loop_reps.py'))['LOOP_REPS']   # shared with assemble_dropkick_montage.py
 ROOT = '/Game/GASNPPTest/Combat'
 DIR = ROOT + '/Overlord'
 SOURCE_KIT, SOURCE_WEAPON = 'KIT_Test_Hits', 'WPN_Test_Hits'
