@@ -1,0 +1,141 @@
+<title>Skill e riferimenti animazione</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: una colonna da documento di lavoro; in alto le decisioni con il costo, sotto le tabelle di dettaglio */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --fg:#1b2230; --muted:#5d6676; --line:#dde1e8;
+  --accent:#2f5bd3; --code-bg:#eef1f6; --yes:#2f8a57; --no:#b3402f; --warn:#b26a00;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12151b; --surface:#1a1f28; --fg:#e4e8ef; --muted:#98a2b3; --line:#2b323e;
+  --accent:#86a6ff; --code-bg:#222936; --yes:#5cc58a; --no:#ee8573; --warn:#e8a447; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12151b; --surface:#1a1f28; --fg:#e4e8ef; --muted:#98a2b3; --line:#2b323e;
+  --accent:#86a6ff; --code-bg:#222936; --yes:#5cc58a; --no:#ee8573; --warn:#e8a447; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:16px/1.55 var(--body);
+  padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:30px}
+header p{margin:6px 0 0;color:var(--muted);font-size:14px}
+h1{font-size:27px;line-height:1.2;margin:0;font-weight:600;text-wrap:balance}
+h2{font-size:19px;margin:0 0 10px;font-weight:600;text-wrap:balance}
+h3{font-size:12px;margin:18px 0 6px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+p{margin:0 0 10px;max-width:68ch}
+ul,ol{margin:0 0 10px;padding-left:22px;max-width:68ch}
+li{margin-bottom:5px}
+code{font:13px var(--mono);background:var(--code-bg);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+a{color:var(--accent)}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.45}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+th{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;white-space:nowrap}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tag{font:500 12px var(--mono);white-space:nowrap}
+.tag.si{color:var(--yes)} .tag.no{color:var(--no)} .tag.forse{color:var(--warn)}
+.decisioni{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px}
+.decisioni ol{margin-bottom:0}
+.nota{color:var(--muted);font-size:14px}
+pre{margin:0;padding:12px 14px;font:13px/1.5 var(--mono);background:var(--code-bg);border-radius:8px;overflow-x:auto}
+</style>
+
+<main>
+<header>
+  <h1>Skill e libreria di riferimenti per le animazioni</h1>
+  <p>GASP Giustino · 15 novembre 2026 · solo ricerca, nessun codice toccato. I costi sono stime.</p>
+</header>
+
+<section class="decisioni">
+  <h2>Cosa consiglio, in ordine</h2>
+  <ol>
+    <li><strong>Una skill nuova per la revisione video</strong> (regola 10), con dentro la tua nuova domanda di qualità. Oggi il metodo vive nella memoria del progetto e ogni thread di review lo ricostruisce. Circa <strong>$6-10</strong> una volta sola.</li>
+    <li><strong>Snellire <code>gstn-move-animation</code></strong>: pesa 35 KB e viene caricata intera a ogni uso; descrive in parte il flusso vecchio. Circa <strong>$5-8</strong>.</li>
+    <li><strong>Libreria di riferimenti fatta di soli numeri</strong> nel repo (timing e curve misurate, con la fonte). Immagini, GIF e video restano solo sul desktop. Pilota di 10 mosse circa <strong>$10-15</strong>, poi circa $1 per mossa nuova.</li>
+    <li><strong>Confronto con il riferimento dentro ogni review</strong>: una griglia in più e tre numeri. Circa <strong>$0,5-1</strong> in più per review.</li>
+    <li><strong>Da non fare</strong>: estrarre animazioni o modelli dai giochi; trasformare in skill la teoria o il debug lato gioco.</li>
+  </ol>
+  <p class="nota" style="margin:12px 0 0">Totale per partire: circa $22-34. Serve un tuo sì ai punti 1-3 e una risposta alla domanda in fondo.</p>
+</section>
+
+<section>
+  <h2>La nuova domanda di qualità nella review</h2>
+  <p>«Questa animazione è alla pari di una della qualità di Smash Bros o di altri giochi tripla A simili?» Se la risposta è no, si rivede. Detta così, ogni revisore risponde a sensazione. Propongo di scomporla in sei domande con risposta sì o no, guardate sul video in gioco da dietro e di lato:</p>
+  <ol>
+    <li><strong>Posa d'impatto</strong>: fermando il frame del colpo alla distanza di gioco, si capisce cosa colpisce e dove, senza conoscere la mossa?</li>
+    <li><strong>Contrasto di tempo</strong>: lo scatto più grande cade sul primo frame attivo e subito dopo c'è una tenuta ferma?</li>
+    <li><strong>Primo frame</strong>: il frame 1 è già una posa diversa dall'idle (la tua regola)?</li>
+    <li><strong>Peso</strong>: il corpo intero partecipa (bacino, spalle, piede d'appoggio) e non solo l'arto che colpisce?</li>
+    <li><strong>Recupero</strong>: il ritorno è leggibile, senza scatti, e al FAF il corpo è dove deve essere?</li>
+    <li><strong>Pulizia</strong>: nessun frame morto, nessuna compenetrazione, nessun salto di posa all'entrata e all'uscita?</li>
+  </ol>
+  <p>Regola del verdetto: la mossa passa solo se tutte e sei sono sì <em>e</em> il confronto affiancato con due mosse di riferimento della stessa classe non la fa sembrare fuori posto. Se è no, la review elenca al massimo i <strong>tre scarti più grandi</strong>, ognuno con frame e correzione. Resta il limite di due giri: dopo il secondo, ti arriva la mossa con gli scarti rimasti scritti chiari.</p>
+  <p class="nota">Limite onesto: i riferimenti di Smash sono viste di lato. Per la vista da dietro, che è quella che tu guardi di più, il confronto con Smash non esiste: si giudica con i principi di <code>silhouette-multidirezionali.md</code> e con il tuo riferimento Kill la Kill IF.</p>
+</section>
+
+<section>
+  <h2>Cosa rendere skill e cosa no</h2>
+  <p>Criterio: diventa skill ciò che si ripete uguale almeno tre volte, ha passi stabili, può essere eseguito da un modello economico e oggi viene riscoperto ogni volta. Resta documento ciò che è conoscenza generale, e resta nel thread ciò che è un'indagine.</p>
+  <div class="scroll"><table>
+    <tr><th>Parte</th><th>Skill?</th><th>Motivo</th></tr>
+    <tr><td>Revisione video regola 10: controllo della catena di cattura, strisce delle etichette, griglie attorno a colpo e FAF, misura dei pixel cambiati, formato PASS/FAIL</td><td><span class="tag si">sì, nuova</span></td><td>È il passo più ripetuto e il più caro. Gli script per estrarre frame e comporre griglie vanno dentro la skill, così il modello non li riscrive.</td></tr>
+    <tr><td>Domanda di qualità e confronto con i riferimenti</td><td><span class="tag si">sì, dentro la stessa</span></td><td>Deve essere chiesta sempre allo stesso modo, altrimenti il livello cambia da thread a thread.</td></tr>
+    <tr><td><code>animpipe-move</code> (import, interp, check, render, verdetto su una griglia)</td><td><span class="tag si">già skill, tenere</span></td><td>È corta (5 KB) e guidata da <code>animpipe status</code>. Aggiungere solo il rimando ai tre documenti di teoria e al passo "riferimenti".</td></tr>
+    <tr><td><code>gstn-move-animation</code></td><td><span class="tag forse">sì, da snellire</span></td><td>35 KB caricati interi (circa 9 mila token a ogni uso). Tenere regole e ordine dei controlli; spostare API di Cascadeur, soglie e percorsi in file letti solo quando servono. Dice ancora "mai Fable" per le pose, mentre la regola 3 oggi assegna a Fable animazioni e review.</td></tr>
+    <tr><td>Cattura sul desktop e consegna alla review (build, cattura, mp4 e griglie in <code>docs/notes/reviews/</code>)</td><td><span class="tag forse">sezione, non skill</span></td><td>Sono pochi comandi già coperti da <code>animpipe render --standalone</code>. Basta una sezione in <code>animpipe-move</code>.</td></tr>
+    <tr><td>Raccolta di un riferimento (scarica, misura, salva i numeri)</td><td><span class="tag forse">sezione, non skill</span></td><td>Gli script esistono già (<code>ufd_fetch.py</code>, <code>ufd_measure.py</code>). Lavoro da Haiku.</td></tr>
+    <tr><td>Teoria dell'animazione (<code>docs/notes/anim-theory/</code>)</td><td><span class="tag no">no</span></td><td>È conoscenza, non procedura. Le skill la citano; duplicarla crea due versioni che divergono.</td></tr>
+    <tr><td>Le tue regole di feel e le decisioni per mossa</td><td><span class="tag no">no</span></td><td>Cambiano spesso. Un solo posto: <code>rules.md</code> e <code>kits/&lt;kit&gt;.md</code> per le regole stabili, la card per la singola mossa.</td></tr>
+    <tr><td>Diagnosi lato gioco (accosciata dopo il montage, salto delle gambe, Anim BP)</td><td><span class="tag no">no</span></td><td>Sono indagini, ogni volta diverse. Vanno in thread di codice.</td></tr>
+    <tr><td>Processo Antigravity</td><td><span class="tag no">no</span></td><td>È tuo e non va toccato.</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2>Database di riferimento da altri giochi</h2>
+  <p><strong>È fattibile, e metà esiste già.</strong> Nel repo ci sono gli script che scaricano i dati di una mossa da ultimateframedata, misurano la GIF fotogramma per fotogramma, estraggono le pose chiave in 2D e compongono l'affiancato con la nostra mossa. Finora sono state misurate cinque mosse (jab di Mario, ftilt di Terry e di Ganondorf, fsmash di Ryu e di Little Mac). Mancano tre cose: un indice, la copertura per classe di mossa e l'aggancio alla review.</p>
+
+  <h3>Fonti</h3>
+  <div class="scroll"><table>
+    <tr><th>Fonte</th><th>Cosa dà</th><th>Uso</th></tr>
+    <tr><td>ultimateframedata.com</td><td>Startup, attivi, FAF e GIF con hitbox, 1 frame GIF = 1 frame di gioco, vista di lato</td><td><span class="tag si">sì</span> Fonte principale. Numeri nel repo, GIF solo sul desktop.</td></tr>
+    <tr><td>SmashWiki, Dustloop, wiki di Skullgirls</td><td>Dati di frame e immagini di hitbox per frame (utile per il dropkick stile Big Band)</td><td><span class="tag si">sì</span> Solo numeri e link.</td></tr>
+    <tr><td>YouTube a passo di frame</td><td>La mossa in gioco, con camera vera</td><td><span class="tag forse">a mano</span> Guardare va bene. Lo scarico automatico viola le condizioni di YouTube: meglio una clip registrata da te dalla tua copia.</td></tr>
+    <tr><td>Giochi 3D con camera da dietro (Kill la Kill IF e simili)</td><td>L'unico riferimento valido per la vista da dietro</td><td><span class="tag forse">a mano</span> Tue clip brevi, tenute in locale.</td></tr>
+    <tr><td>Asset Paragon di Epic, Game Animation Sample, Quaternius (CC0), Mixamo</td><td>Animazioni vere, usabili per licenza in un progetto Unreal</td><td><span class="tag si">sì</span> Unico caso in cui il riferimento può anche diventare materiale di partenza.</td></tr>
+    <tr><td>File di animazione o modelli estratti da Smash o da altri giochi</td><td>Dati 3D originali</td><td><span class="tag no">mai</span> È copia di asset, anche solo "per studio".</td></tr>
+  </table></div>
+
+  <h3>Regole legali pratiche</h3>
+  <ul>
+    <li><strong>I numeri sono fatti</strong>: frame di startup, attivi, FAF e le curve che misuriamo noi non sono protetti. Possono stare nel repo, con la fonte accanto.</li>
+    <li><strong>Immagini, GIF e video sono di chi ha fatto il gioco</strong>. Si usano in locale per studio e confronto. Non entrano nel repo, negli artifact condivisi, né nel plugin pubblico. Oggi è già così: la cartella <code>refs/</code> è esclusa da git.</li>
+    <li><strong>Si prende la classe, non la mossa</strong>: almeno due riferimenti per mossa, da cui si ricavano intervalli (quanto dura la tenuta, dove cade lo scatto). Ricalcare posa per posa una mossa riconoscibile di un personaggio famoso è il caso rischioso, e Nintendo è nota per far valere i propri diritti.</li>
+    <li>Lo scarico resta educato come adesso: una pagina a settimana per personaggio, niente crawling.</li>
+  </ul>
+  <p class="nota">Non è un parere legale. Prima di pubblicare il plugin conviene un controllo che nel repo non ci sia materiale di terzi.</p>
+
+  <h3>Come salvarli</h3>
+  <p>Una cartella <code>Tools/AnimPipeline/reflib/</code> nel repo con un indice e un file per mossa, nello stesso formato di <code>mario_jab1_timing.csv</code>:</p>
+<pre>indice.csv      id, gioco, personaggio, mossa, classe, startup, attivi, faf, fonte, data
+&lt;id&gt;_timing.csv frame, finestra, estensione %, busto avanti %, ...
+classi.csv      classe, tenuta min-max, quota recupero, frame dello scatto, rinculo</pre>
+  <p><code>classi.csv</code> è la parte utile: per ogni classe (jab, tilt, smash, aereo, calcio in salto, reazione) gli intervalli ricavati dai riferimenti. Le GIF e le clip restano in <code>Saved/AnimPipeline/refs/</code> sul desktop, citate nell'indice solo come nome di file.</p>
+
+  <h3>Come confronta la review</h3>
+  <ol>
+    <li><strong>Struttura dei tempi</strong>: startup, attivi e recupero della nostra mossa contro l'intervallo della classe.</li>
+    <li><strong>Curva</strong>: estensione dell'arto per frame sovrapposta a quella del riferimento. Si vede subito se lo scatto è nel frame giusto e se la tenuta c'è.</li>
+    <li><strong>Affiancato di lato</strong>: stesse fasi (primo frame, carica, contatto, recupero), riferimento sopra e noi sotto. Il desktop lo compone e committa solo la nostra riga più i numeri; la riga del riferimento si guarda in locale.</li>
+    <li><strong>Le sei domande</strong> e il verdetto, con i tre scarti maggiori.</li>
+  </ol>
+  <p class="nota">Conseguenza pratica: il passo 3 richiede che il revisore veda le immagini del riferimento, quindi o la review gira sul desktop, o il desktop manda al thread cloud una griglia che non viene mai committata.</p>
+</section>
+
+<section>
+  <h2>Una domanda per te</h2>
+  <p>Per la vista da dietro servono riferimenti che Smash non può dare. Preferisci registrare tu 5-10 clip brevi dai giochi che consideri il livello giusto, oppure per ora si giudica da dietro solo con i principi scritti?</p>
+</section>
+</main>
