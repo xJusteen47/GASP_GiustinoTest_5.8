@@ -17,12 +17,12 @@ Thread cloud, solo ricerca e documento, nessun codice. Punto 5 dell'owner.
    Due passaggi sul video: VFX spenti (pose), poi accesi (verdetto su attivi e contatto).
 5. Checklist VFX di 9 voci + 3 controlli trasversali.
 
-## Aperto (owner)
-- Nei conflitti vince dietro e il lato è vista di controllo? (chiude la domanda 3 delle note Overlord)
-- Cattura fronte a 3/4 per la carica delle mosse lente?
+## Deciso dall'owner (2026-11-15 02:03Z)
+- Approvato: nei conflitti vince dietro, lato = vista di controllo; cattura fronte a 3/4 per la carica lenta.
+- Modelli per giudicare la silhouette: Monster Hunter, Dark Souls, Granblue (camera libera). Smash resta per timing e feel.
 
 ## Seguito possibile (non fatto)
-- Aggiornare §8 di `anim-theory/silhouette-multidirezionali.md` dopo l'OK. Haiku medium, ~$1-2.
+- Aggiornare §8 di `anim-theory/silhouette-multidirezionali.md` (regole ora approvate). Haiku medium, ~$1-2.
 - Kit VFX minimo (scia, scintilla 3 taglie, tremito rispetto allo schermo): non verificato cosa
   esiste nel codice oltre all'hitstop. Va con CP4 visual hooks.
 

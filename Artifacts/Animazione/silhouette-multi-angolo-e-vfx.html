@@ -47,7 +47,7 @@ td:first-child{font-weight:500}
 <main>
 <header>
   <h1>Silhouette da più angoli e ruolo dei VFX</h1>
-  <p>GASP Giustino · 15 novembre 2026 · ricerca online, nessun codice toccato. Completa <em>silhouette-multidirezionali.md</em> e non la ripete. Dove una regola è una deduzione nostra e non viene da una fonte è marcata <span class="ded">[nostra]</span>.</p>
+  <p>GASP Giustino · 15 novembre 2026 · ricerca online, nessun codice toccato. Regole di review approvate dall'owner il 15 novembre. Completa <em>silhouette-multidirezionali.md</em> e non la ripete. Dove una regola è una deduzione nostra e non viene da una fonte è marcata <span class="ded">[nostra]</span>.</p>
 </header>
 
 <section class="sintesi">
@@ -62,7 +62,7 @@ td:first-child{font-weight:500}
 
 <section>
   <h2>Regole di review: quale vista vince</h2>
-  <p>La vista di gioco è quella da dietro con pitch e distanza reali. Il lato è la vista di chi guarda o di un terzo giocatore. Il fronte a tre quarti è la vista di chi sta per essere colpito, e oggi non la controlliamo.</p>
+  <p>La vista di gioco è quella da dietro con pitch e distanza reali. Il lato è la vista di chi guarda o di un terzo giocatore. Il fronte a tre quarti è la vista di chi sta per essere colpito: si aggiunge alle catture per la carica delle mosse lente.</p>
   <div class="scroll"><table>
     <thead><tr><th>Fase</th><th>Vista che decide</th><th>Cosa si giudica</th><th>I VFX possono salvarla?</th></tr></thead>
     <tbody>
@@ -78,9 +78,16 @@ td:first-child{font-weight:500}
   <ol>
     <li><strong>La vista di gioco decide PASS o FAIL.</strong> È la camera che il giocatore ha davvero, ed è così che lavorano tutti gli studi letti.</li>
     <li><strong>Il lato è una vista di controllo.</strong> Non deve essere bella, deve non essere rotta. FAIL di lato solo per tre cose: arto che colpisce invisibile per tutta una posa tenuta, compenetrazioni, carica e follow-through con la stessa sagoma.</li>
-    <li><strong>Se dietro e lato chiedono cose opposte, vince dietro</strong> e il lato si recupera con scia, scintilla e reazione del bersaglio. Mai una posa a metà. Questa regola risponde alla domanda 3 rimasta aperta nelle note sull'Overlord; puoi rovesciarla mossa per mossa.</li>
+    <li><strong>Se dietro e lato chiedono cose opposte, vince dietro</strong> e il lato si recupera con scia, scintilla e reazione del bersaglio. Mai una posa a metà. Chiude la domanda 3 rimasta aperta nelle note sull'Overlord; l'owner può rovesciarla mossa per mossa.</li>
     <li><strong>Ogni review guarda il video due volte.</strong> Prima con i VFX spenti: carica e follow-through devono passare da soli. Poi con i VFX accesi, a dimensione di gioco: qui si dà il verdetto finale su frame attivi e contatto.</li>
     <li><strong>Le deformazioni che funzionano da una sola camera</strong> (arti allungati, prospettiva forzata) si usano solo dove la camera è nostra: zoom sul colpo decisivo, schermata di vittoria, trailer. In gioco restano solo scala uniforme della parte che colpisce e rotazione dell'arma per mostrare il lato largo.</li>
+  </ol>
+  <h3>Modelli di riferimento per la silhouette (scelta dell'owner)</h3>
+  <p>Per giudicare la silhouette i modelli sono <strong>Monster Hunter, Dark Souls e Granblue Fantasy: Relink</strong>: giochi d'azione con camera libera, come il nostro. Smash e Guilty Gear posano per una camera fissa di lato, quindi restano il riferimento per timing, peso e feel, non per la sagoma.</p>
+  <ol>
+    <li><strong>Prova della carica (Monster Hunter, Dark Souls).</strong> Fermando il video sulla carica, senza VFX, si deve capire quale mossa arriva e verso dove. La dice tutto il corpo, non solo l'arto che colpisce. Si applica alle mosse lente, dal fronte a 3/4 e da dietro.</li>
+    <li><strong>Giro di camera (Granblue Relink).</strong> La posa si costruisce dalla vista di gioco, poi si gira la camera attorno al personaggio e si corregge quello che si rompe, finché regge. Nella review: carica e follow-through si guardano da dietro, fronte a 3/4 e lato, in quest'ordine di importanza.</li>
+    <li><strong>Confronto.</strong> Quando serve un riferimento per la sagoma di una mossa, si cerca una mossa della stessa classe in questi tre giochi prima che in Smash.</li>
   </ol>
   <p class="nota">La soglia di 13 f viene dai 200 ms sotto cui, secondo Ubisoft per For Honor, quasi nessuno reagisce; a 62,5 Hz sono 12,5 frame. La divisione per fasi e l'aggiunta del fronte a 3/4 sono <span class="ded">[nostra]</span>: nessuna fonte tratta un platform fighter con camera libera.</p>
 </section>
@@ -134,13 +141,14 @@ td:first-child{font-weight:500}
   <h2>Cosa cambia per noi</h2>
   <ul>
     <li><strong>La checklist del revisore</strong> in <em>silhouette-multidirezionali.md</em> chiede sì da dietro e di lato su carica, contatto e follow-through. Proposta: sostituirla con la tabella per fasi qui sopra, più il doppio passaggio VFX spenti e accesi.</li>
-    <li><strong>Le catture</strong> oggi sono dietro e lato. Per le sole mosse lente servirebbe anche il fronte a 3/4 sulla carica.</li>
+    <li><strong>Le catture</strong> oggi sono dietro e lato. Per le sole mosse lente va aggiunto il fronte a 3/4 sulla carica.</li>
     <li><strong>Un kit VFX minimo</strong> (scia, scintilla in tre taglie, tremito del bersaglio rispetto allo schermo) renderebbe giudicabili i frame attivi. Non ho verificato cosa esiste già nel codice oltre all'hitstop.</li>
   </ul>
-  <h3>Due decisioni per te</h3>
+  <h3>Decisioni dell'owner (15 novembre)</h3>
   <ol>
-    <li>Va bene che nei conflitti <strong>vinca la vista da dietro</strong> e il lato diventi vista di controllo?</li>
-    <li>Aggiungiamo la <strong>cattura di fronte a 3/4</strong> per la carica delle mosse lente?</li>
+    <li>Nei conflitti <strong>vince la vista da dietro</strong> e il lato è vista di controllo: <span class="tag si">approvato</span></li>
+    <li><strong>Cattura di fronte a 3/4</strong> per la carica delle mosse lente: <span class="tag si">approvato</span></li>
+    <li>Modelli per giudicare la silhouette: <strong>Monster Hunter, Dark Souls, Granblue</strong>.</li>
   </ol>
 </section>
 
