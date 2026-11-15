@@ -78,9 +78,18 @@ DAIR_SEQUENCES = [
 DROPKICK_SEQUENCES = [
     {'name': 'dropkick_whiff', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5}},
 ]
+# CP3 double-shot examples (PIE_CAPTURE_KIT=KIT_Example_DoubleShotA / B, PIE_CAPTURE_BUTTON=Special): one press, two presses 8 frames apart (a double
+# press), two presses 40 frames apart (two single shots)
+DOUBLE_SHOT_SEQUENCES = [
+    {'name': 'shot_single', 'taps': [0], 'frames': 90, 'dummy': None, 'shoot': True},
+    {'name': 'shot_double', 'taps': [0, 8], 'frames': 90, 'dummy': None, 'shoot': True},
+    {'name': 'shot_slow', 'taps': [0, 40], 'frames': 110, 'dummy': None, 'shoot': True},
+]
 AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after the attack press
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
-    SEQUENCES = [s for s in SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
+    SEQUENCES = [s for s in SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
+elif 'DoubleShot' in KIT:
+    SEQUENCES = DOUBLE_SHOT_SEQUENCES
 elif 'Dropkick' in KIT:
     SEQUENCES = DROPKICK_SEQUENCES
 elif 'DAir' in KIT:

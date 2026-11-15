@@ -5,6 +5,7 @@ P = 'C:/Users/jacop/Documents/Unreal Projects/GASP_Giustino2_ue59'
 kit, out = sys.argv[1], os.path.abspath(sys.argv[2]).replace(chr(92), '/')
 seqs = sys.argv[3] if len(sys.argv) > 3 else ''
 boot = ("import os\nos.environ['PIE_CAPTURE_KIT']=%r\nos.environ['PIE_CAPTURE_OUT']=%r\n" % (kit, out)
+        + ("os.environ['PIE_CAPTURE_BUTTON']=%r\n" % os.environ['PIE_CAPTURE_BUTTON'] if os.environ.get('PIE_CAPTURE_BUTTON') else '')
         + ("os.environ['PIE_CAPTURE_SEQUENCES']=%r\n" % seqs if seqs else '')
         + "exec(open(%r).read())\n" % (P + '/Tools/GASNPPTest/pie_capture_move.py'))
 os.makedirs(out, exist_ok=True)
