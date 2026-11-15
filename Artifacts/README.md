@@ -9,3 +9,4 @@ Convenzione: `Artifacts/<Area>/<argomento-in-minuscolo>.html`, nome cartella in 
 | `Designer/guida-mosse-blueprint.html` | Guida mosse Blueprint: factory Combat Move, strada dati e grafo, ganci visivi, regole del validatore, cosa manca per pubblicare (CP5, 2026-11-15) | https://claude.ai/artifact/La2oqPzCkPdcqL2kERy9D6 |
 | `Designer/mosse-di-esempio.html` | Mosse di esempio GSTN: come copiare e cambiare le mosse | https://claude.ai/artifact/DyiBrsycoRfXNSMoZUBxun |
 | `Progetto/piano-ci-e-branch.html` | Piano CI e flusso dei branch | (vedi il file) |
+| `Progetto/branch-cleanup-2026-11-15.md` | Piano ed esito della pulizia dei branch claude/* | (vedi il file) |
