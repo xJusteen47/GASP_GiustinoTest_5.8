@@ -3,6 +3,7 @@
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 
 #include "Simulation/GSTN_TimelineTrackHook.h"
+#include "Timeline/GSTN_HoldUntilLanded.h"
 #include "Timeline/GSTN_StartupSteer.h"
 #include "Events/GSTN_SimEvent.h"
 #include "GameFramework/Actor.h"
@@ -177,20 +178,40 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 		}
 	}
 
+	// Hold Until Landed (FGSTN_TimelineTrack_HoldUntilLanded, the dropkick): in the air on the hold's last frame the timeline stands there; on the
+	// ground it jumps to the land frame. Decided before the hooks, so they see the frame the timeline is on after a jump. Not on a hitstop frame (the
+	// timeline stands already; the landing is taken on the first frame after it), and only with Mover's ground fact
+	int32 ClockPrevious = Previous;
+	bool bStall = bHitstopFrame;
+	if (!bHitstopFrame && Previous >= 0 && HookEnvironment && HookEnvironment->Ground != EGSTN_TrackHookGround::Unknown)
+	{
+		const FGSTN_HoldClockDecision Hold = FGSTN_HoldUntilLanded::ResolveClock(*Data, Previous, true, HookEnvironment->Ground == EGSTN_TrackHookGround::OnGround);
+		if (Hold.Action == EGSTN_HoldClockAction::Stall)
+		{
+			bStall = true;
+		}
+		else if (Hold.Action == EGSTN_HoldClockAction::Land)
+		{
+			// The frames in between are skipped: the paused count goes down by as many (below zero when the move lands before it ever stood), and
+			// the evaluation takes the frame before the land frame as the previous one, so nothing keyed inside the skipped frames fires
+			Core.TimelinePausedFrames -= Hold.TargetFrame - (Previous + 1);
+			ClockPrevious = Hold.TargetFrame - 1;
+		}
+	}
+
 	// The track hooks of the plugins (a hold stalls the timeline, a parry track stamps a window): asked before the pause is counted, with the frame the timeline is on.
 	// A stall is a pause like the hitstop's, but it does not touch PausedFramesTotal, so the combat clock and the buffers keep running
-	bool bStall = bHitstopFrame;
 	FGSTN_StampedWindowList Stamped;
 	const FGSTN_TimelineTrackHookRegistry& Hooks = FGSTN_TimelineTrackHookRegistry::Get();
 	if (!Hooks.IsEmpty())
 	{
-		bStall |= Hooks.Run(*Data, Frame, Core.TimelineStartFrame, FMath::Max(Previous, 0), bHitstopFrame, Core.Input, Stamped, HookEnvironment);
+		bStall |= Hooks.Run(*Data, Frame, Core.TimelineStartFrame, FMath::Max(ClockPrevious, 0), bHitstopFrame, Core.Input, Stamped, HookEnvironment);
 	}
 	if (bStall)
 	{
 		++Core.TimelinePausedFrames;
 	}
-	EvaluateInto(Core, Frame, Previous >= 0 ? Previous : INDEX_NONE, *Data, DefaultOverrideFrames, Output);
+	EvaluateInto(Core, Frame, ClockPrevious >= 0 ? ClockPrevious : INDEX_NONE, *Data, DefaultOverrideFrames, Output);
 	Output.StampedWindows = MoveTemp(Stamped);
 
 	if (Output.bFinished || (Frame > Core.TimelineStartFrame && !bAbilityActive))

@@ -237,6 +237,15 @@ void UNpAbilitySystemComponent::JumpSyncedMontageToSection(UAnimMontage* Montage
 	MontagePlayer->MontageJumpToSection(Montage,SectionName);
 }
 
+void UNpAbilitySystemComponent::SetSyncedMontageTime(UAnimMontage* Montage, float Time, bool bRestart)
+{
+	if (!MontagePlayer)
+	{
+		return;
+	}
+	MontagePlayer->SetMontageTime(Montage, Time, bRestart);
+}
+
 void UNpAbilitySystemComponent::SetCurrentMontagePlayRate(float PlayRate)
 {
 	if (!MontagePlayer)
@@ -798,8 +807,8 @@ void UNpAbilitySystemComponent::FinalizeSmoothingFrame(const FAbilitySimSyncStat
 	//Finalize Smoothed Montage for local player , this smoothes the montage playback
 	if (AbilityActorInfo && GetAvatarActor())
 	{
-		//Finalize Montage
-		MontagePlayer->FinalizeFrame(SyncState->MontageSimulatorData);
+		//Finalize Montage (GSTN fork: the state is NP's interpolated one; the montage player's presentation clock reads the latest tick itself)
+		MontagePlayer->FinalizeFrame(SyncState->MontageSimulatorData, true);
 	}
 	
 }

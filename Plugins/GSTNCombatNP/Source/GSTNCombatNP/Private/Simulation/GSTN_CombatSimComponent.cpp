@@ -46,6 +46,8 @@
 #include "Movement/GSTN_StatsMovementModifier.h"
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
+#include "MoverTypes.h"
+#include "Mover/GSTN_MoverSimStateTracker.h"
 #include "NetworkPredictionModelDef.h"
 #include "NetworkPredictionModelDefRegistry.h"
 #include "NetworkPredictionProxyInit.h"
@@ -1179,6 +1181,11 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	FGSTN_TrackHookEnvironment HookEnvironment;
 	HookEnvironment.Buttons = &ButtonMap;
 	HookEnvironment.Fragments = &OutSync.Fragments;
+	// Mover's ground as of the end of the previous frame (the tracker is rolled back with Mover): the Hold Until Landed rule of the clock reads it
+	if (const UGSTN_MoverSimStateTracker* GroundTracker = GetJumpTracker())
+	{
+		HookEnvironment.Ground = GroundTracker->HasGameplayTag(Mover_IsOnGround, true) ? EGSTN_TrackHookGround::OnGround : EGSTN_TrackHookGround::Airborne;
+	}
 	// The attacker side of hits (M4 H8) is not run on a hitstop frame either: it reads the same bHitstopFrame
 
 	// Step 2, the timeline clock: the running timeline reaches its end, or its ability is gone, and the combatant is Actionable again
@@ -1202,6 +1209,15 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		{
 			UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline %d (start %d) ended: timeline frame %d of %d, finished %d, ability active %d"), *GetOwner()->GetName(), Frame, Running, StartBefore,
 				TimelineOutput.Frame, TimelineOutput.TotalFrames, TimelineOutput.bFinished, bAbilityActive);
+
+			// A move that ended BY ITSELF links into its follow-up (FGSTN_CombatTimelineData::FollowUpTimeline: the dropkick's land into its get-up),
+			// on this same frame, before the adoption and the commands of the frame: a buffered command can still replace it by the normal rules
+			const int32 FollowUp = !bFrameGateClosed && TimelineOutput.bFinished && !TimelineOutput.bRecoil ? FrameSet.FindFollowUpEntry(Running) : INDEX_NONE;
+			if (FollowUp != INDEX_NONE)
+			{
+				StartTimelineEntry(OutSync.Core, Frame, FrameSet, FollowUp, &HookEnvironment);
+				UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline %d links into its follow-up %d"), *GetOwner()->GetName(), Frame, Running, FollowUp);
+			}
 		}
 	}
 	// Step 3, adoption (combat-m3 7.4): timeline abilities that something other than a command activated in the previous frame.
@@ -1536,17 +1552,21 @@ bool UGSTN_CombatSimComponent::StartForcedTimeline(const UClass* AbilityClass)
 	{
 		return false;
 	}
+	StartTimelineEntry(ServiceSync->Core, ServiceFrame, Set, Entry, ServiceHookEnvironment);
+	return true;
+}
+
+void UGSTN_CombatSimComponent::StartTimelineEntry(FGSTN_CombatSyncCore& Core, int32 Frame, const UGSTN_CombatTableSet& Set, int32 Entry, const FGSTN_TrackHookEnvironment* Environment)
+{
 	// What step 8 does for a command, source Forced; the ability system's pre-tick of the frame activates the ability (ActivateEntry), which finds its
 	// timeline running from this frame and begins it
-	FGSTN_CombatSyncCore& Core = ServiceSync->Core;
-	FGSTN_CombatTimelineLogic::Start(Core, ServiceFrame, Entry, EGSTN_ActivationSource::Forced);
-	StampMoveOrigin(Core, ServiceFrame);
+	FGSTN_CombatTimelineLogic::Start(Core, Frame, Entry, EGSTN_ActivationSource::Forced);
+	StampMoveOrigin(Core, Frame);
 	if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(Set, Entry))
 	{
-		FGSTN_CombatTimelineLogic::EvaluateStart(Core, ServiceFrame, *Data, Set.TimelineDefaultOverride.IsValidIndex(Entry) ? Set.TimelineDefaultOverride[Entry] : 0, TimelineOutput, ServiceHookEnvironment);
+		FGSTN_CombatTimelineLogic::EvaluateStart(Core, Frame, *Data, Set.TimelineDefaultOverride.IsValidIndex(Entry) ? Set.TimelineDefaultOverride[Entry] : 0, TimelineOutput, Environment);
 	}
-	Core.Requests.Add(EGSTN_RequestType::ActivateEntry, ServiceFrame, static_cast<int16>(Entry));
-	return true;
+	Core.Requests.Add(EGSTN_RequestType::ActivateEntry, Frame, static_cast<int16>(Entry));
 }
 
 bool UGSTN_CombatSimComponent::IsBindingAdmitted(const FGSTN_CommandTable& Table, int32 BindingIndex) const

@@ -162,6 +162,9 @@ class ABILITYSYSTEMSIMULATION_API UNpAbilitySystemComponent : public UAbilitySys
 	UFUNCTION(BlueprintCallable, Category = "AbilitySimulation")
 	void JumpSyncedMontageToSection(UAnimMontage* Montage,FName SectionName);
 
+	/** GSTN fork (2026-11-15): UNetMontageSimulator::SetMontageTime. Moves the playing Montage to Time; bRestart = a new start (held this tick, shown first) */
+	void SetSyncedMontageTime(UAnimMontage* Montage, float Time, bool bRestart);
+
 	UFUNCTION(BlueprintCallable, Category = "AbilitySimulation")
 	void SetCurrentMontagePlayRate(float PlayRate);
 

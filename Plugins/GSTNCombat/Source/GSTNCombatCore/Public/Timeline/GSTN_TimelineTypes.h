@@ -650,6 +650,16 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Animation")
 	bool bHoldPoseOnEnd = false;
 
+	/**
+	 * A timeline ability (a UGSTN_GA_BaseCombat child) the combat model starts on the frame this timeline ends BY ITSELF (TotalFrames reached; never
+	 * after a cancel, a hit or a replacing move): the move links into its recovery, e.g. the dropkick's land clip into a get-up, instead of handing
+	 * the pose back to the locomotion graph. Started like a forced timeline (source Forced), so its own frame data, cancel windows and tail apply;
+	 * the combat model adds it to the timeline registry by itself (no binding needed). None = the move ends as before. Soft: loaded with the
+	 * timeline's content, never in a tick
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Chain", meta = (AllowedClasses = "/Script/GSTNCombatNP.GSTN_GA_BaseCombat"))
+	TSoftClassPtr<UObject> FollowUpTimeline;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim")
 	EGSTN_AimPolicy AimPolicy = EGSTN_AimPolicy::KeepFacing;
 

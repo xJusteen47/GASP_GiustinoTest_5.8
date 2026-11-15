@@ -95,9 +95,9 @@ void UNetMontageSimulator::RestoreFrame(const FMontageSimSyncState& AuthoritySta
 	SimulationState = AuthorityState;
 }
 
-void UNetMontageSimulator::FinalizeFrame(const FMontageSimSyncState& SyncState)
+void UNetMontageSimulator::FinalizeFrame(const FMontageSimSyncState& SyncState, bool bSmoothedState)
 {
-	FinalizeMontageFrame(SyncState);
+	FinalizeMontageFrame(SyncState, bSmoothedState);
 }
 
 UNpAbilitySystemComponent* UNetMontageSimulator::GetNpAbilitySystemComponent() const
@@ -186,6 +186,13 @@ void UNetMontageSimulator::PlayMontage(const FAbilityMontagePlayback& MontagePla
 					// we have valid time , this would happen when we want to jump montage section for example
 					//We Are Changing current montage time, Notifies will trigger correctly in the simulation
 					SimulationState.SetCurrentTime(MontagePlayback.MontageStartTime);
+					// GSTN fork (start jitter, 2026-11-15): the same montage played again from a time is a new start (a move that cancels into
+					// itself): it holds its start tick like a new montage does, and the next rendered frame shows that start
+					if (MontagePlayback.MontageStartTime >= 0.f)
+					{
+						bStartedSinceLastTick = true;
+						RecordPresentationAnchor(MontagePlayback.MontageToPlay, MontagePlayback.MontageStartTime);
+					}
 				}
 				// time is negative , if play rate is not negative set it
 				if (MontagePlayback.MontagePlayRate >= 0)
@@ -200,6 +207,7 @@ void UNetMontageSimulator::PlayMontage(const FAbilityMontagePlayback& MontagePla
 				SimulationState.Reset();
 				StartSimMontage(MontagePlayback, SimulationState);
 				bStartedSinceLastTick = true;
+				RecordPresentationAnchor(MontagePlayback.MontageToPlay, SimulationState.GetCurrentTime());
 			}
 		}
 		// we don't have a currently playing montage, just start new one
@@ -207,6 +215,7 @@ void UNetMontageSimulator::PlayMontage(const FAbilityMontagePlayback& MontagePla
 		{
 			StartSimMontage(MontagePlayback, SimulationState);
 			bStartedSinceLastTick = true;
+			RecordPresentationAnchor(MontagePlayback.MontageToPlay, SimulationState.GetCurrentTime());
 		}
 	}
 }
@@ -259,6 +268,97 @@ void UNetMontageSimulator::MontageJumpToSection(UAnimMontage* Montage, FName Sec
 			SimulationState.SetCurrentTime(SectionStartTime);
 		}
 	}
+}
+
+void UNetMontageSimulator::SetMontageTime(UAnimMontage* Montage, float Time, bool bRestart)
+{
+	if (!GetNpAbilitySystemComponent() || GetNpAbilitySystemComponent()->GetIsRestoringFrame() || !Montage || SimulationState.GetPlayingMontage() != Montage)
+	{
+		return;
+	}
+	const float Clamped = FMath::Clamp(Time, 0.f, Montage->GetPlayLength());
+	SimulationState.SetCurrentTime(Clamped);
+	if (bRestart)
+	{
+		// The start tick rule of PlayMontage: after this tick the montage shows Clamped, the frame the caller's timeline evaluates in it
+		bStartedSinceLastTick = true;
+		RecordPresentationAnchor(Montage, Clamped);
+	}
+}
+
+void UNetMontageSimulator::RecordPresentationAnchor(UAnimMontage* Montage, float Time)
+{
+	const int32 Frame = AbilitySystemComponent ? AbilitySystemComponent->GetCurrentSimFrame() : INDEX_NONE;
+	for (const FPresentationAnchor& Consumed : ConsumedAnchors)
+	{
+		// The same start on the same frame was drawn already: a re-simulation, not a new start
+		if (Consumed.Montage.Get() == Montage && Consumed.Frame == Frame && FMath::IsNearlyEqual(Consumed.Time, Time, 1.e-4f))
+		{
+			return;
+		}
+	}
+	PendingAnchor.Montage = Montage;
+	PendingAnchor.Time = Time;
+	PendingAnchor.Frame = Frame;
+	bAnchorPending = true;
+}
+
+void UNetMontageSimulator::ResetPresentationClock()
+{
+	bAnchorPending = false;
+	PendingAnchor = FPresentationAnchor();
+	PresentedMontage.Reset();
+	PresentedTime = 0.f;
+}
+
+float UNetMontageSimulator::ComputePresentedTime(const FSyncedMontagePresentationClockInput& Input)
+{
+	constexpr float Tolerance = 1.e-4f;
+	if (Input.AnchorTime >= 0.f && Input.AnchorTime <= Input.LatestTime + Tolerance)
+	{
+		return Input.AnchorTime;
+	}
+	if (!Input.bHasPrevious || Input.LatestTime < Input.PreviousTime - Tolerance)
+	{
+		return Input.LatestTime;
+	}
+	const float Candidate = Input.PreviousTime + FMath::Max(Input.Rate, 0.f) * FMath::Max(Input.DeltaSeconds, 0.f);
+	const float MaxLag = FMath::Max(Input.MaxLagSeconds, 0.f);
+	if (Input.LatestTime - Candidate > 2.f * MaxLag + Tolerance)
+	{
+		return Input.LatestTime;
+	}
+	return FMath::Clamp(Candidate, Input.LatestTime - MaxLag, Input.LatestTime);
+}
+
+float UNetMontageSimulator::PresentMontageTime(const UAnimInstance& AnimInstance, UAnimMontage* DesiredMontage, const FMontageSimSyncState& SyncState,
+	bool bSmoothedState, float RateMultiplier)
+{
+	FSyncedMontagePresentationClockInput Clock;
+	// The latest simulated time: this simulator's own state when NP hands an interpolated one (it holds the last tick of the local simulation)
+	Clock.LatestTime = bSmoothedState && SimulationState.GetPlayingMontage() == DesiredMontage ? SimulationState.GetCurrentTime() : SyncState.GetCurrentTime();
+	Clock.bHasPrevious = PresentedMontage.Get() == DesiredMontage;
+	Clock.PreviousTime = PresentedTime;
+	const bool bAnchor = bAnchorPending && PendingAnchor.Montage.Get() == DesiredMontage;
+	Clock.AnchorTime = bAnchor ? PendingAnchor.Time : -1.f;
+	Clock.Rate = FMath::Max(SyncState.GetPlayRate() * RateMultiplier, 0.f);
+	const UWorld* World = AnimInstance.GetWorld();
+	Clock.DeltaSeconds = World ? World->GetDeltaSeconds() : 0.f;
+	const float StepSeconds = (AbilitySystemComponent ? AbilitySystemComponent->GetFixedStepMs() : 16.f) / 1000.f;
+	Clock.MaxLagSeconds = 2.f * StepSeconds * Clock.Rate;
+	const float Shown = ComputePresentedTime(Clock);
+
+	if (bAnchor && FMath::IsNearlyEqual(Shown, PendingAnchor.Time, 1.e-4f))
+	{
+		ConsumedAnchors[NextConsumedAnchor] = PendingAnchor;
+		NextConsumedAnchor = (NextConsumedAnchor + 1) % static_cast<int32>(UE_ARRAY_COUNT(ConsumedAnchors));
+	}
+	// An anchor not shown this frame is dropped: a start a rollback undid must not come back later
+	bAnchorPending = false;
+	PendingAnchor = FPresentationAnchor();
+	PresentedMontage = DesiredMontage;
+	PresentedTime = Shown;
+	return Shown;
 }
 
 void UNetMontageSimulator::PauseCurrentMontage()
@@ -780,7 +880,7 @@ void UNetMontageSimulator::EndSyncedNotifies(const FAbilitySystemTimeStep& TimeS
 	}
 }
 
-void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& SyncState)
+void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& SyncState, bool bSmoothedState)
 {
 	UAnimInstance* AnimInstance = AbilitySystemComponent->AbilityActorInfo->GetAnimInstance();
 	if (!IsValid(AnimInstance))
@@ -800,6 +900,8 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 	{
 		// A montage plays again (a new move, a rollback that restored one): a stop asked for before it no longer applies
 		PendingStop = FPendingStopPresentation();
+		// LandOnSimTime: the presentation clock picks the time this frame shows (the start on a start's first frame, then a steady advance)
+		const float ShownTime = bLandOnSimTime ? PresentMontageTime(*AnimInstance, DesiredMontage, SyncState, bSmoothedState, RateMultiplier) : SyncState.GetCurrentTime();
 		// if there's an active instance of the montage (is not blending out) , end it
 		if (FAnimMontageInstance* MontageInstance = AnimInstance->GetActiveInstanceForMontage(DesiredMontage))
 		{
@@ -812,7 +914,7 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 			}
 			if (bLandOnSimTime)
 			{
-				LandInstanceOnSimTime(*AnimInstance, *MontageInstance, SyncState, RateMultiplier);
+				LandInstanceOnSimTime(*AnimInstance, *MontageInstance, SyncState, RateMultiplier, ShownTime);
 				LastPlayingMontage = DesiredMontage;
 				return;
 			}
@@ -837,13 +939,13 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 		// there's no active instance , if our time is less than blend out time , start the montage
 		if (SyncState.GetCurrentTime() < GetMontageBlendOutTime(DesiredMontage))
 		{
-			AnimInstance->Montage_Play(DesiredMontage, SyncState.GetPlayRate() * RateMultiplier, EMontagePlayReturnType::MontageLength, SyncState.GetCurrentTime());
+			AnimInstance->Montage_Play(DesiredMontage, SyncState.GetPlayRate() * RateMultiplier, EMontagePlayReturnType::MontageLength, ShownTime);
 			if (bLandOnSimTime)
 			{
-				// Started on the simulation time: hold it there through this frame's animation update instead of drawing one frame ahead
+				// Started on the shown time: hold it there through this frame's animation update instead of drawing one frame ahead
 				if (FAnimMontageInstance* NewInstance = AnimInstance->GetActiveInstanceForMontage(DesiredMontage))
 				{
-					LandInstanceOnSimTime(*AnimInstance, *NewInstance, SyncState, RateMultiplier);
+					LandInstanceOnSimTime(*AnimInstance, *NewInstance, SyncState, RateMultiplier, ShownTime);
 				}
 			}
 			LastPlayingMontage = DesiredMontage;
@@ -853,6 +955,7 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 
 	//We Don't want to be playing any montage. check if we have a valid last playing montage
 	// if we do, and it has a valid active instance, Stop it , then invalidate it.
+	ResetPresentationClock();
 	if (LastPlayingMontage)
 	{
 		if (FAnimMontageInstance* LastMontageInstance = AnimInstance->GetActiveInstanceForMontage(LastPlayingMontage))
@@ -922,7 +1025,7 @@ FSyncedMontagePresentationStep UNetMontageSimulator::ComputeLandOnSimTimeStep(fl
 }
 
 void UNetMontageSimulator::LandInstanceOnSimTime(const UAnimInstance& AnimInstance, FAnimMontageInstance& MontageInstance,
-	const FMontageSimSyncState& SyncState, float RateMultiplier) const
+	const FMontageSimSyncState& SyncState, float RateMultiplier, float TargetTime) const
 {
 	// The delta the mesh's animation update will use this frame: FinalizeFrame runs before it (NP finalizes in the world's pre-actor tick)
 	float AnimDeltaSeconds = 0.f;
@@ -939,7 +1042,7 @@ void UNetMontageSimulator::LandInstanceOnSimTime(const UAnimInstance& AnimInstan
 		}
 	}
 	const float NominalRate = SyncState.GetIsPaused() ? 0.f : SyncState.GetPlayRate() * RateMultiplier;
-	const FSyncedMontagePresentationStep Step = ComputeLandOnSimTimeStep(MontageInstance.GetPosition(), SyncState.GetCurrentTime(),
+	const FSyncedMontagePresentationStep Step = ComputeLandOnSimTimeStep(MontageInstance.GetPosition(), TargetTime,
 		NominalRate, AnimDeltaSeconds);
 	if (Step.bSetPosition)
 	{

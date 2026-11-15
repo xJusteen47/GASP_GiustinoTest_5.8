@@ -77,6 +77,7 @@ bool FGSTN_TimelineTrackHookRegistry::Run(const FGSTN_CombatTimelineData& Data, 
 			{
 				Context.Buttons = Environment->Buttons;
 				Context.Fragments = Environment->Fragments;
+				Context.Ground = Environment->Ground;
 			}
 			const FGSTN_TrackHookResult Result = Entry.Hook->Evaluate(Context);
 			bStall |= Result.bStallThisFrame;
