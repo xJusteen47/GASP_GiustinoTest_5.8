@@ -645,7 +645,15 @@ void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, co
 		UAnimMontage* Montage = TimelineMontagePlayed ? TimelineMontagePlayed.Get() : GetRunningTimelineData().Montage.Get();
 		UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
 		float Time = 0.f;
-		if (Montage && AbilitySystem && AbilitySystem->GetPlayingSyncedMontage(Time) == Montage)
+		const bool bOnSlot = Montage && AbilitySystem && AbilitySystem->GetPlayingSyncedMontage(Time) == Montage;
+		if (bOnSlot && ShouldReleaseMontageOnEnd(bWasCancelled))
+		{
+			// Owner rule (2026-11-15): the end of the timeline is not the end of its animation. The montage plays on to its own end and
+			// blend-out; the next action stops it (StopReleasedMontages) or replaces it with its own
+			bMontageReleased.Value = true;
+			ReleasedMontage = Montage;
+		}
+		else if (bOnSlot)
 		{
 			// The data's blend-out on an end or a tail cancel (a recoil already took the slot, so it never gets here with the timeline's montage)
 			float BlendOutSeconds = -1.f;
@@ -679,6 +687,43 @@ void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, co
 		OnMoveEnded(EndReason);
 	}
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+}
+
+bool UGSTN_GA_BaseCombat::ShouldReleaseMontageOnEnd(bool bWasCancelled) const
+{
+	const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
+	// Same "ended by itself" test as ResolveMontageStop: the ability sees the end on the timeline's last frame or the one after
+	return !bWasCancelled && Data.TotalFrames > 0 && GetTimelineFrame() >= Data.TotalFrames - 1 && Data.EndBlendOutFrames < 0;
+}
+
+void UGSTN_GA_BaseCombat::StopReleasedMontages(UAbilitySystemComponent& AbilitySystem)
+{
+	UNpAbilitySystemComponent* NpAbilitySystem = Cast<UNpAbilitySystemComponent>(&AbilitySystem);
+	if (!NpAbilitySystem)
+	{
+		return;
+	}
+	float Time = 0.f;
+	UAnimMontage* Playing = NpAbilitySystem->GetPlayingSyncedMontage(Time);
+	for (const FGameplayAbilitySpec& Spec : AbilitySystem.GetActivatableAbilities())
+	{
+		for (UGameplayAbility* Instance : Spec.GetAbilityInstances())
+		{
+			UGSTN_GA_BaseCombat* Combat = Cast<UGSTN_GA_BaseCombat>(Instance);
+			if (!Combat || !Combat->bMontageReleased.Value)
+			{
+				continue;
+			}
+			Combat->bMontageReleased.Value = false;
+			// Only while it is still that montage on the slot: one that ended or was replaced since is left alone. Interrupted, so the
+			// montage's end notifies say it did not finish; the presentation leaves with the montage's own blend-out
+			if (Playing && Combat->ReleasedMontage == Playing)
+			{
+				NpAbilitySystem->StopSyncedMontage(Playing, true);
+				Playing = nullptr;
+			}
+		}
+	}
 }
 
 void UGSTN_GA_BaseCombat::ResolveMontageStop(float& OutBlendOutSeconds, bool& bOutHoldPose) const

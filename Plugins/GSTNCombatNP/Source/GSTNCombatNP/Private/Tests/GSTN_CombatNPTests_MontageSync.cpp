@@ -186,4 +186,29 @@ bool FGSTN_MontageSyncStartTickTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// montage-exit (2026-11-15): a stopped synced montage leaves with the montage's own blend-out, never with its blend-in (the instance's current
+// blend). The Overlord jab has no blend-in and a 4 frame blend-out: it was cut in one frame and the graph under it picked a crouch clip
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MontageSyncBlendOutTest, "GSTNCombat.NP.MontageSync.BlendOutIsMontages", GSTN_NP_TEST_FLAGS)
+bool FGSTN_MontageSyncBlendOutTest::RunTest(const FString& Parameters)
+{
+	UAnimMontage* Montage = NewObject<UAnimMontage>(GetTransientPackage());
+	Montage->BlendIn.SetBlendTime(0.f);
+	Montage->BlendOut.SetBlendTime(8.f / 60.f);
+	Montage->BlendOut.SetBlendOption(EAlphaBlendOption::Cubic);
+	Montage->BlendModeOut = EMontageBlendMode::Standard;
+
+	const FMontageBlendSettings Own = UNetMontageSimulator::MakeMontageBlendOut(*Montage);
+	TestEqual(TEXT("the montage's blend-out time, not its blend-in"), Own.Blend.BlendTime, 8.f / 60.f, 1.e-6f);
+	TestTrue(TEXT("the montage's blend-out curve"), Own.Blend.BlendOption == EAlphaBlendOption::Cubic);
+	TestTrue(TEXT("the montage's blend-out mode"), Own.BlendMode == EMontageBlendMode::Standard);
+
+	const FMontageBlendSettings Asked = UNetMontageSimulator::MakeMontageBlendOut(*Montage, 4.f / 60.f);
+	TestEqual(TEXT("an explicit time replaces the time"), Asked.Blend.BlendTime, 4.f / 60.f, 1.e-6f);
+	TestTrue(TEXT("and keeps the montage's curve"), Asked.Blend.BlendOption == EAlphaBlendOption::Cubic);
+
+	const FMontageBlendSettings Cut = UNetMontageSimulator::MakeMontageBlendOut(*Montage, 0.f);
+	TestEqual(TEXT("0 is a cut"), Cut.Blend.BlendTime, 0.f, 1.e-6f);
+	return true;
+}
+
 #endif

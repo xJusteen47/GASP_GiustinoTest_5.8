@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "NetMontageSimulatorData.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
+#include "Animation/AnimMontage.h"
 #include "UObject/Object.h"
 #include "NetMontageSimulator.generated.h"
 
@@ -51,6 +52,14 @@ public:
 	USkeletalMeshComponent* GetMeshComponent() const;
 	
 	static float GetMontageBlendOutTime(const UAnimMontage* Montage);
+
+	/**
+	 * GSTN fork (montage-exit, 2026-11-15): the blend a stopped synced instance leaves with is the montage's own blend-out (time, curve, mode,
+	 * profile). FAnimMontageInstance::GetBlend() is the instance's CURRENT blend, which after the start is the blend-in: stopping with it gave
+	 * every synced montage its blend-in time as blend-out (a move with no blend-in was cut in one frame, and the anim graph under it picked its
+	 * next clip from that cut pose: the squat after the Overlord jab). BlendOutSeconds >= 0 replaces the time only
+	 */
+	static FMontageBlendSettings MakeMontageBlendOut(const UAnimMontage& Montage, float BlendOutSeconds = -1.f);
 	static bool ShouldFinalizeMontage(const FMontageSimSyncState& SyncState);
 
 	/**
