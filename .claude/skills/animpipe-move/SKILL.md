@@ -10,6 +10,11 @@ The order of the steps is not in this file: `animpipe status <move>` says which 
 `{ok, verb, move, exit, result, next}`; the full detail is in the file named by `detail`. Read the line, not the detail,
 unless a step below tells you to.
 
+## 0. Roles (2026-11-15)
+This file is the manual of the commands. Who judges and who edits is in `Tools/AnimPipeline/contract/README.md`: the
+reviewer (`gstn-anim-reviewer`) looks and writes one instruction at a time, the executor (`gstn-anim-executor`) applies it
+with these commands. The rubric is `Tools/AnimPipeline/contract/rubric.md`; the theory is `docs/notes/anim-theory/`.
+
 ## 1. Setup
 Run `animpipe status <move>`. Read only: the move card (`cards/<kit>/<move>.json`: `_design`, `poses`, `approved`),
 `rules.md` and `kits/<kit>.md` in this folder, and the last result file if you need it. Never old logs, threads or chats.
