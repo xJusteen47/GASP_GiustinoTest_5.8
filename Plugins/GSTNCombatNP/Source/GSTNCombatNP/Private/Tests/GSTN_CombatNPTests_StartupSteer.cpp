@@ -202,7 +202,13 @@ bool FGSTN_SetFacingEffectTest::RunTest(const FString& Parameters)
 	Default.SetTransforms_WorldSpace(FVector(100.0, 200.0, 90.0), FRotator(0.0, 30.0, 0.0), FVector(300.0, 0.0, 0.0), FVector::ZeroVector);
 	FGSTN_SetFacingEffect Effect;
 	Effect.YawDeg = 50.f;
+	// The engine struct leaves its raw pointers uninitialized: null them, or the effect turns a garbage UpdatedComponent (crash)
 	FApplyMovementEffectParams Params;
+	Params.UpdatedComponent = nullptr;
+	Params.UpdatedPrimitive = nullptr;
+	Params.MoverComp = nullptr;
+	Params.StartState = nullptr;
+	Params.TimeStep = nullptr;
 	TestTrue(TEXT("applied"), Effect.ApplyMovementEffect(Params, State));
 	const FMoverDefaultSyncState* After = State.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
 	TestTrue(TEXT("yaw set"), After && FMath::IsNearlyEqual(After->GetOrientation_WorldSpace().Yaw, 50.0, 1e-3));
