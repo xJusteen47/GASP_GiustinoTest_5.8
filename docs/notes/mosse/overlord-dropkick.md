@@ -6,7 +6,8 @@ Stato 2026-11-15: la versione attuale (r1, gambe aperte) è PEGGIO della base; r
 |---|---|---|---|
 | 1 | GAMBE UNITE E DRITTE (piedi vicini, ~10 cm) | base Antigravity, owner 11-15 | [OWNER] |
 | 2 | BRACCIA CONSERTE sul petto (posa di potere: l'ingresso è uno snap durante il caricamento, parte da guardia) | base Antigravity; `docs/notes/anim-process.md` Pilastro D; refs Bison | [OWNER] |
-| 3 | Tenuta in aria fino all'atterraggio, poi caduta pesante con un rimbalzo e stesa; poi rialzata | `anim-process.md` §land; owner 11-15 (hitbox attiva fino a terra = corretto) | [OWNER] hitbox; rialzata [DA CONFERMARE] |
+| 3 | **Deve finire in stato GROUNDED** (a terra): il roll da lì serve per le combo extension; l'owner ne parlerà più avanti. La rialzata non deve togliere questo stato | owner 15-11 15:31Z | [OWNER] (dettagli [DA CONFERMARE]) |
+| 4 | Tenuta in aria fino all'atterraggio, poi caduta pesante con un rimbalzo e stesa; poi rialzata | `anim-process.md` §land; owner 11-15 (hitbox attiva fino a terra = corretto) | [OWNER] hitbox; hitbox [OWNER] |
 Riferimento: i file `*.r0.backup.json` e `_design_r0` in `cards/overlord/dropkick/` sono lo stato prima di r1 (la r0 aveva braccia conserte, atterraggio che non arriva a terra: difetto da correggere SENZA toccare i tratti 1-2). Regola: `memory owner-base-is-the-base`: cambiare un tratto = decisione dell'owner prima della build.
 
 ## 2. Fasi
@@ -36,8 +37,8 @@ Approvata: nessuna. Base da bloccare come `good/dropkick-1`: la versione Antigra
 | 1 | good/dropkick-1 (DA CREARE) | 26733f24^ [DA CONFERMARE] | base Antigravity (= r0) | 2026-11-15 | gambe unite, braccia conserte, struttura | atterraggio che non arriva a terra, nessuna rialzata |
 
 ## 6. Domande aperte
-1. Rialzata veloce o rialzata con animazione (domanda 4 owner)? 2. Caduta capsula 53 cm: traccia capsula (consigliata, ~$10-15) o clip che parte all'altezza del loop (domanda 5).
-3. Terzo tratto d'identità (es. linea del corpo orizzontale)?
+1. Rialzata: ora vincolata dal grounded state + roll (combo extension, dettagli dell'owner in arrivo); rialzata veloce o animata (domanda 4)? 2. Caduta capsula 53 cm: traccia capsula (consigliata, ~$10-15) o clip che parte all'altezza del loop (domanda 5).
+3. Dettagli del grounded state/roll quando l'owner li dà.
 
 ## 7. Storia
 Antigravity base → 26733f24 r1 (gambe aperte, rollio 35°, braccia lanciate: peggio, owner 11-15) → diagnosi `claude/project-thread-hgy214` → ripristino in corso. Codice: hold-until-landed (`dropkick-land-1.md`), cp5b FAIL gioco (no rialzata).

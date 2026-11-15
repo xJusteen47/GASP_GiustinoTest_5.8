@@ -18,3 +18,6 @@ Comandi da eseguire dal fisso (tag cloud = 403):
 6. Tutte: hitbox/hitstop reali sono nei dati del kit (uasset, illeggibili dal cloud): riportati come "da confermare" in ogni scheda §4.
 7. Convenzione CSV (frame da 1) contro card (da 0) dedotta da `anim_active` contro CSV.
 Costo: Sonnet, nessun subagente, ~$6 stimati (nessun log).
+## Aggiornamento 15:35Z (risposte owner)
+- Ftilt: approvata (owner: "se è l'ultima di Antigravity direi di sì"). Nel repo cloud l'unica card è la v3.1 (git corto): verificare sul fisso che sia l'ultima, poi tag `approved/ftilt-v31`. Identità: quasi clone del ftilt di Ganondorf in Smash.
+- Dropkick: deve finire GROUNDED (il roll serve alla combo extension, dettagli in arrivo). Aggiunto come tratto 3 in scheda.
