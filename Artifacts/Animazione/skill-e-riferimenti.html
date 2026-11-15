@@ -51,13 +51,13 @@ pre{margin:0;padding:12px 14px;font:13px/1.5 var(--mono);background:var(--code-b
 <section class="decisioni">
   <h2>Cosa consiglio, in ordine</h2>
   <ol>
-    <li><strong>Una skill nuova per il revisore</strong>: revisione video (regola 10), la tua domanda di qualità, e in uscita istruzioni di modifica esatte, una alla volta. Oggi il metodo vive nella memoria del progetto e ogni thread lo ricostruisce. Circa <strong>$8-12</strong> una volta sola.</li>
-    <li><strong>Ridurre <code>gstn-move-animation</code> a skill dell'esecutore</strong>: applica una istruzione, rigenera, mostra prima e dopo. Niente pose inventate. Oggi pesa 35 KB e spinge il modello a costruire la mossa da solo, cosa che nelle tue prove non ha funzionato. Circa <strong>$5-8</strong>.</li>
-    <li><strong>Libreria di riferimenti fatta di soli numeri</strong> nel repo (timing e curve misurate, con la fonte). Immagini, GIF e video restano solo sul desktop. Pilota di 10 mosse circa <strong>$10-15</strong>, poi circa $1 per mossa nuova.</li>
-    <li><strong>Confronto con il riferimento dentro ogni review</strong>: una griglia in più e tre numeri. Circa <strong>$0,5-1</strong> in più per review.</li>
-    <li><strong>Da non fare</strong>: estrarre animazioni o modelli dai giochi; trasformare in skill la teoria o il debug lato gioco.</li>
+    <li><strong>Due skill piccole più un contratto comune</strong>: una per il revisore, una per l'esecutore, e tre file condivisi (rubrica unica, glossario, formato dell'istruzione). Circa <strong>$14-20</strong>. La vecchia <code>gstn-move-animation</code> va in archivio.</li>
+    <li><strong>Chiavi sempre sparse</strong>, scritto come regola dura nel contratto: l'esecutore lavora solo su chiavi, mai su curve cotte frame per frame.</li>
+    <li><strong>Modifiche tue da Unreal</strong>: oggi funziona il livello additivo "Manuale". Per spostare, aggiungere o togliere le chiavi di base da Unreal serve un comando nuovo di rilettura, circa <strong>$15-25</strong> di codice.</li>
+    <li><strong>Libreria di riferimenti fatta di soli numeri</strong> nel repo; immagini, GIF e video solo sul desktop. Pilota di 10 mosse circa <strong>$10-15</strong>.</li>
+    <li><strong>Prima mossa pilota</strong> con il ciclo completo per misurare costo e qualità veri: circa <strong>$5-9</strong>.</li>
   </ol>
-  <p class="nota" style="margin:12px 0 0">Totale per partire: circa $24-36. Serve un tuo sì ai punti 1-3 e una risposta alla domanda in fondo.</p>
+  <p class="nota" style="margin:12px 0 0">Totale: circa $29-44 senza il comando di rilettura, $44-69 con. Le decisioni che servono da te sono in fondo.</p>
 </section>
 
 <section>
@@ -79,13 +79,15 @@ pre{margin:0;padding:12px 14px;font:13px/1.5 var(--mono);background:var(--code-b
   <p>Se nessuna delle tre esiste, la mossa non parte: il revisore lo dice e chiede a te una posa o una clip.</p>
 
   <h3>Come è scritta un'istruzione</h3>
-  <p>Deve poter essere eseguita senza interpretare. Cinque campi fissi:</p>
-<pre>frame      9 (video v30)
-parte      mano destra
-modifica   12 cm avanti, 6 cm su, polso ruotato 20° verso l'esterno
-principio  posa d'impatto leggibile (silhouette, sez. 11): da dietro il braccio è coperto dal busto
-verifica   in vista da dietro al frame 9 la mano esce dalla sagoma di almeno 10 cm</pre>
-  <p>L'esecutore applica, il campo <code>verifica</code> dice se è riuscita. Un'istruzione senza principio o senza verifica non è valida. Una sola istruzione per passo, in ordine di gravità: prima ciò che blocca, poi il resto.</p>
+  <p>Antigravity capiva cos'è un follow-through o un'anticipazione: conviene usarlo. L'istruzione dice quindi <em>l'intento</em> con un termine del glossario e <em>il risultato misurabile</em>; come ottenerlo sui controlli del rig lo sceglie l'esecutore. Sette campi fissi:</p>
+<pre>chiave     f9 (video v30), chiave esistente
+tipo       sposta posa   [sposta posa | sposta nel tempo | cambia tangente | aggiungi chiave | togli chiave]
+parte      braccio destro
+intento    posa d'impatto: il braccio deve uscire dalla sagoma in vista da dietro
+modifica   mano circa 12 cm più avanti e 6 cm più su, polso aperto verso l'esterno
+principio  silhouette e linea d'azione (principi corporei, sez. 11)
+verifica   al frame 9, da dietro, la mano è almeno 10 cm fuori dalla linea della spalla</pre>
+  <p>Regole: una sola istruzione per passo, in ordine di gravità. Sempre su una chiave, mai su un frame intermedio. <code>aggiungi chiave</code> è l'ultima scelta, dopo tangente e tempo. Senza principio o senza verifica l'istruzione non è valida. Dove si può, la verifica è scritta nel formato di <code>animpipe verify</code>, così è un PASS o FAIL e non un'opinione.</p>
 
   <h3>Quando si ferma</h3>
   <ul>
@@ -102,6 +104,74 @@ verifica   in vista da dietro al frame 9 la mano esce dalla sagoma di almeno 10 
     <li><strong>Nessuna skill li cita.</strong> Né <code>animpipe-move</code> né <code>gstn-move-animation</code> rimandano a quei documenti. La rubrica di review viene dalle tue regole, e <code>gstn-move-animation</code> ha una sua lista di fondamentali scritta prima.</li>
   </ul>
   <p>Quindi oggi l'uso dipende da chi scrive il brief. La correzione è piccola: le due skill rimandano ai tre documenti, e ogni istruzione deve nominare il principio da cui deriva (documento 1, sezione 13: intento, previsione, misura, spiegazione). I riferimenti da altri giochi servono a tarare il livello; i principi servono a spiegare cosa non va.</p>
+</section>
+
+<section>
+  <h2>Review del piano: risposte, doppioni, buchi</h2>
+
+  <h3>Le chiavi non dense</h3>
+  <p>Nella versione precedente non erano scritte: ora sono regola (sopra). Lo stato vero: la scheda di <code>animpipe</code> tiene pose solo sui frame chiave, e le istruzioni di Antigravity vietano già il baking denso (4-6 pose cardinali con tangenti). Resta però un percorso vecchio che scrive ogni frame (<code>DENSE=1</code>, "direct to Unreal"): va escluso dalla skill dell'esecutore. Il rischio reale è un altro: ogni correzione "al frame N" aggiunge una chiave, e dopo sei passi la mossa è densa di fatto. Per questo l'istruzione nomina sempre una chiave e propongo un tetto di <strong>8 chiavi per mossa</strong> oltre le tue.</p>
+
+  <h3>Il controllo della silhouette</h3>
+  <p>C'è, ma in quattro posti diversi: <code>legibility.py</code> (numerico, dalle camere di gioco: parte che colpisce distinta, braccio dietro che la copre), <code>tangency.py</code>, la rubrica visiva di <code>animpipe-move</code>, e l'audit a 360° di Antigravity. Più il documento di teoria sulle silhouette, che è ancora su un branch a parte. Va tenuto: il numerico lo fa girare l'esecutore, il revisore guarda solo ciò che il numero non vede.</p>
+
+  <h3>Chi fa cosa, una volta sola</h3>
+  <div class="scroll"><table>
+    <tr><th>Lavoro</th><th>Esecutore</th><th>Revisore</th></tr>
+    <tr><td>Controlli numerici (lunghezze ossa, compenetrazioni, equilibrio, gomiti, scatto dopo hitstop, arti incollati, silhouette numerica, fedeltà alle tue chiavi)</td><td>A ogni passo, tutti. Costa secondi.</td><td>Legge la riga del risultato. Non rimisura mai.</td></tr>
+    <tr><td>Campo <code>verifica</code> dell'istruzione</td><td>Lo esegue e scrive PASS o FAIL.</td><td>Lo scrive, non lo ricontrolla a occhio.</td></tr>
+    <tr><td>Griglia prima e dopo</td><td>La produce, solo sulle chiavi toccate e i frame vicini.</td><td>La guarda una volta.</td></tr>
+    <tr><td>Giudizio a occhio (lettura della posa, peso, livello tripla A, confronto col riferimento)</td><td>Mai. Non propone, non valuta.</td><td>Solo lui.</td></tr>
+    <tr><td>Video in gioco (regola 10)</td><td>Cattura due volte per mossa: all'inizio e alla fine.</td><td>Guarda quei due. I passi intermedi si giudicano sulla griglia.</td></tr>
+    <tr><td>Scelta di cosa correggere dopo</td><td>Mai.</td><td>Solo lui, una alla volta.</td></tr>
+  </table></div>
+  <p>Doppioni che esistono oggi e che il contratto toglie: tre rubriche diverse (quella di <code>gstn-move-animation</code>, quella di <code>animpipe-move</code>, l'audit di Antigravity) diventano un file solo; il revisore non rifà a mano misure che il gate ha già (nella review del jab v3 è successo con i pixel cambiati); il video intero non viene riguardato a ogni passo.</p>
+
+  <h3>Modificare pose e chiavi da Unreal</h3>
+  <p><strong>Oggi si può, con un limite.</strong> Ogni build crea nella sequenza <code>LS_&lt;mossa&gt;</code> una sezione additiva "Manuale" sul Control Rig. Posi un controllo, metti la chiave, salvi. Il build successivo rilegge quelle chiavi e le rimette, <code>animpipe capture</code> le salva nel repo e nella scheda, e <code>diff</code> avvisa se una modifica successiva tocca la stessa parte.</p>
+  <ul>
+    <li><strong>Limite</strong>: è un'aggiunta sopra la posa della scheda. Non puoi spostare nel tempo, togliere o riposare da capo una chiave di base, e servono chiavi a zero attorno per sfumare. Le chiavi messe sulla sezione di base si perdono al build successivo.</li>
+    <li><strong>Per avere tutto</strong> serve un comando <code>ue-import</code> che rilegga le chiavi sparse dalla sequenza e le scriva nella scheda come tue (bloccate), come già avviene da Cascadeur. È codice nuovo, circa $15-25. Non ho verificato se gli strumenti di Antigravity lo fanno già in parte: nel repo c'è un suo file di chiavi lette dal Sequencer.</li>
+    <li><strong>Come si integra col ciclo</strong>: una tua modifica diventa chiave tua, quindi bloccata. Il revisore riparte dal segmento toccato, non dall'inizio. Se una sua istruzione successiva tocca quella parte, ti arriva come proposta.</li>
+  </ul>
+
+  <h3>I casi</h3>
+  <div class="scroll"><table>
+    <tr><th>Caso</th><th>Cosa succede</th></tr>
+    <tr><td>Mossa nuova, pose tue (Cascadeur o Unreal)</td><td>Import, blocco delle tue chiavi, video iniziale, ciclo, video finale.</td></tr>
+    <tr><td>Mossa nuova, clip libera esistente</td><td>Si tengono solo le pose chiave della clip (lo strumento per ridurre a chiavi sparse esiste), poi ciclo.</td></tr>
+    <tr><td>Mossa nuova, solo riferimento di un altro gioco</td><td>Posa di partenza dagli angoli misurati di lato. È il caso più debole: prima del ciclo la posa passa da te.</td></tr>
+    <tr><td>Nessuna fonte</td><td>Non parte. Ti viene chiesta una posa o una clip.</td></tr>
+    <tr><td>Tua nota su una mossa esistente ("al frame v13 il braccio è basso")</td><td>Il revisore la traduce in una istruzione (la mappa frame video → chiave esiste). Un passo, niente review completa.</td></tr>
+    <tr><td>Modifichi tu una posa in Unreal a metà ciclo</td><td>Capture, la chiave diventa tua, il revisore riparte da quel segmento.</td></tr>
+    <tr><td>L'istruzione tocca una tua chiave</td><td>Proposta a te, l'esecutore non applica.</td></tr>
+    <tr><td>L'istruzione fallisce due volte, o sei istruzioni non bastano</td><td>Stop. Ti arriva prima e dopo con gli scarti rimasti.</td></tr>
+    <tr><td>Dopo tre istruzioni il problema è l'idea della posa, non il dettaglio</td><td>Stop anticipato: serve una posa di partenza nuova. Correggere a piccoli passi non salva una base sbagliata (il jab).</td></tr>
+    <tr><td>Il difetto è del gioco (accosciata a fine montage, salto delle gambe, blend)</td><td>Il revisore lo marca "gioco" e va a un thread di codice. Mai all'esecutore.</td></tr>
+    <tr><td>Serve cambiare startup, frame attivi o FAF</td><td>È design della mossa: decidi tu.</td></tr>
+    <tr><td>Reazioni, pose tenute, cicli (non attacchi)</td><td>Le sei domande sono scritte per gli attacchi. Serve una seconda lista per le reazioni (primo frame, leggibilità della direzione del colpo, continuità tra clip).</td></tr>
+  </table></div>
+
+  <h3>Buchi e lati negativi</h3>
+  <ol>
+    <li><strong>Due archivi di chiavi.</strong> <code>animpipe</code> tiene la verità nella scheda e ricostruisce la sequenza; Antigravity scrive direttamente nel Sequencer. Se convivono, uno dei due sovrascrive l'altro e i blocchi sulle tue chiavi non scattano. Va scelta una sola fonte di verità. È il buco più serio.</li>
+    <li><strong>Claude non può avviare Antigravity.</strong> Se l'esecutore è Antigravity, ogni passo lo fai partire tu, anche da telefono. Con un esecutore Claude economico sul desktop il ciclo gira da solo, ma non è provato che esegua bene quanto Antigravity.</li>
+    <li><strong>Il revisore stima male i centimetri da un'immagine.</strong> Per questo conta il campo <code>verifica</code> e gli va dato il dump numerico delle ossa sulle chiavi insieme alla griglia.</li>
+    <li><strong>Sei istruzioni possono non bastare per il livello tripla A.</strong> È realistico aspettarsi due cicli su molte mosse, quindi $10-18 invece di $5-9, oppure la tua mano su una posa.</li>
+    <li><strong>Revisori diversi giudicano diverso.</strong> Serve una taratura fissa: due mosse note buone e una nota cattiva, da rifare quando cambia la skill.</li>
+    <li><strong>Ogni passo vuole l'editor Unreal sul desktop</strong>, che usi anche tu per giocare. La cattura senza editor aperto esiste ma non è mai stata provata su una macchina con Unreal.</li>
+    <li><strong>Una correzione può romperne un'altra.</strong> Il gate numerico completo gira a ogni passo; ciò che vede solo l'occhio viene ripreso solo nel video finale.</li>
+    <li><strong>La vista da dietro non ha riferimenti</strong> e il lavoro di Antigravity è in parte non committato nel suo worktree.</li>
+  </ol>
+
+  <h3>Opzioni per le skill</h3>
+  <div class="scroll"><table>
+    <tr><th>Opzione</th><th>Cosa contiene</th><th>Pro e contro</th><th>Costo</th></tr>
+    <tr><td><strong>A. Due skill e un contratto</strong> <span class="tag si">consigliata</span></td><td>Revisore; esecutore; file comuni (rubrica, glossario, formato istruzione). <code>animpipe-move</code> resta il manuale dei comandi.</td><td>Ogni ruolo carica solo il suo testo. Il contratto vale anche per Antigravity, quindi l'esecutore si può cambiare senza rifare nulla.</td><td class="num">$14-20</td></tr>
+    <tr><td><strong>B. Solo il revisore</strong></td><td>Revisore e contratto. L'esecutore è Antigravity con le sue istruzioni attuali più il file del contratto.</td><td>Costa meno e usa ciò che ha già funzionato. Ogni passo passa dalle tue mani.</td><td class="num">$8-12</td></tr>
+    <tr><td><strong>C. Una skill con due modalità</strong></td><td>Tutto in un file.</td><td>Meno file, ma ogni ruolo paga il testo dell'altro e Antigravity non può caricarla.</td><td class="num">$10-14</td></tr>
+  </table></div>
+  <p class="nota">In tutte e tre: la teoria resta nei documenti, <code>gstn-move-animation</code> va in archivio, e la guida "come modificare da Unreal" è una pagina per te, non una skill.</p>
 </section>
 
 <section>
@@ -126,9 +196,9 @@ verifica   in vista da dietro al frame 9 la mano esce dalla sagoma di almeno 10 
     <tr><th>Parte</th><th>Skill?</th><th>Motivo</th></tr>
     <tr><td>Revisione video regola 10: controllo della catena di cattura, strisce delle etichette, griglie attorno a colpo e FAF, misura dei pixel cambiati, formato PASS/FAIL</td><td><span class="tag si">sì, nuova</span></td><td>È il passo più ripetuto e il più caro. Gli script per estrarre frame e comporre griglie vanno dentro la skill, così il modello non li riscrive.</td></tr>
     <tr><td>Domanda di qualità e confronto con i riferimenti</td><td><span class="tag si">sì, dentro la stessa</span></td><td>Deve essere chiesta sempre allo stesso modo, altrimenti il livello cambia da thread a thread.</td></tr>
-    <tr><td>Scrittura delle istruzioni di modifica (cinque campi, una alla volta)</td><td><span class="tag si">sì, dentro la stessa</span></td><td>È il passaggio tra revisore ed esecutore: se il formato cambia, l'esecutore torna a interpretare.</td></tr>
+    <tr><td>Scrittura delle istruzioni di modifica (sette campi, una alla volta)</td><td><span class="tag si">sì, dentro la stessa</span></td><td>È il passaggio tra revisore ed esecutore: se il formato cambia, l'esecutore torna a interpretare.</td></tr>
     <tr><td><code>animpipe-move</code> (import, interp, check, render, verdetto su una griglia)</td><td><span class="tag si">già skill, tenere</span></td><td>È corta (5 KB) e guidata da <code>animpipe status</code>. Aggiungere solo il rimando ai tre documenti di teoria e al passo "riferimenti".</td></tr>
-    <tr><td><code>gstn-move-animation</code></td><td><span class="tag forse">sì, come esecutore</span></td><td>Diventa la skill di chi applica: una istruzione, rigenera, prima e dopo. Via la modalità "da zero". 35 KB caricati interi (circa 9 mila token a ogni uso): tenere regole e ordine dei controlli; spostare API di Cascadeur, soglie e percorsi in file letti solo quando servono. Dice ancora "mai Fable" per le pose, mentre la regola 3 oggi assegna a Fable animazioni e review.</td></tr>
+    <tr><td><code>gstn-move-animation</code></td><td><span class="tag no">in archivio</span></td><td>35 KB caricati interi, spinge il modello a costruire la mossa da solo e contiene il percorso denso. La sostituisce la skill dell'esecutore; API di Cascadeur e soglie restano come file di consultazione.</td></tr>
     <tr><td>Cattura sul desktop e consegna alla review (build, cattura, mp4 e griglie in <code>docs/notes/reviews/</code>)</td><td><span class="tag forse">sezione, non skill</span></td><td>Sono pochi comandi già coperti da <code>animpipe render --standalone</code>. Basta una sezione in <code>animpipe-move</code>.</td></tr>
     <tr><td>Raccolta di un riferimento (scarica, misura, salva i numeri)</td><td><span class="tag forse">sezione, non skill</span></td><td>Gli script esistono già (<code>ufd_fetch.py</code>, <code>ufd_measure.py</code>). Lavoro da Haiku.</td></tr>
     <tr><td>Teoria dell'animazione (<code>docs/notes/anim-theory/</code>)</td><td><span class="tag no">no, ma citata</span></td><td>È conoscenza, non procedura. Le skill devono rimandarci (oggi non lo fanno); duplicarla crea due versioni che divergono.</td></tr>
@@ -179,8 +249,14 @@ classi.csv      classe, tenuta min-max, quota recupero, frame dello scatto, rinc
   <p class="nota">Conseguenza pratica: il passo 3 richiede che il revisore veda le immagini del riferimento, quindi o la review gira sul desktop, o il desktop manda al thread cloud una griglia che non viene mai committata.</p>
 </section>
 
-<section>
-  <h2>Una domanda per te</h2>
-  <p>Per la vista da dietro servono riferimenti che Smash non può dare. Preferisci registrare tu 5-10 clip brevi dai giochi che consideri il livello giusto, oppure per ora si giudica da dietro solo con i principi scritti?</p>
+<section class="decisioni">
+  <h2>Decisioni che servono da te</h2>
+  <ol>
+    <li><strong>Chi esegue.</strong> Antigravity, e ogni passo lo avvii tu; oppure un Claude economico sul desktop, e il ciclo gira da solo. Consiglio: una mossa pilota con Claude esecutore; se il risultato è peggiore si passa ad Antigravity con lo stesso contratto.</li>
+    <li><strong>Dove vive la verità delle chiavi.</strong> Nella scheda di <code>animpipe</code> (com'è oggi, tu modifichi col livello "Manuale"), oppure si costruisce <code>ue-import</code> per modificare da Unreal anche le chiavi di base, circa $15-25. Consiglio: costruirlo, visto che lo chiedi come requisito, dopo un controllo di cosa fanno già gli strumenti di Antigravity.</li>
+    <li><strong>Opzione di skill.</strong> A, B o C. Consiglio A.</li>
+    <li><strong>Tetti.</strong> Due tentativi per istruzione, sei istruzioni per ciclo, otto chiavi aggiunte per mossa.</li>
+    <li><strong>Vista da dietro.</strong> Registri tu 5-10 clip brevi dai giochi che consideri il livello giusto, oppure per ora si giudica con i principi scritti.</li>
+  </ol>
 </section>
 </main>
