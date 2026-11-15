@@ -238,9 +238,15 @@ bool UGSTN_CombatSimComponent::ResolveSnapshotPushbox(int32 Frame, const FGSTN_C
 
 	const FGSTN_PushboxSettings Settings = CombatRules ? CombatRules->Pushbox : FGSTN_PushboxSettings();
 	FGSTN_BodyCapsuleShape Local;
-	if (!FGSTN_Pushbox::ResolveLocal(Timeline, TimelineFrame, Capsule, Settings, StateTags, Local))
+	if (BodyCollision.Mode == EGSTN_BodyCollisionMode::None || !FGSTN_Pushbox::ResolveLocal(Timeline, TimelineFrame, Capsule, Settings, StateTags, Local))
 	{
 		return false;
+	}
+	// The core is the body, not the pose: from the standing capsule (a Body Capsule track grows the pushbox, never the core), and only while the
+	// frame has a pushbox at all (a disabled track or a downed state crosses both)
+	if (BodyCollision.Mode == EGSTN_BodyCollisionMode::PushboxAndCore)
+	{
+		Out.CoreRadius = BodyCollision.CoreRadius > 0.f ? BodyCollision.CoreRadius : Standing.Radius * Settings.CoreRadiusScale;
 	}
 	// The capsule centre is the actor; the mesh root sits at actor - Capsule.Offset in the yaw frame (FGSTN_BodyCapsuleShiftEffect's frame)
 	const FRotator Yaw(0.0, CapsuleTransform.Rotator().Yaw, 0.0);
@@ -255,19 +261,23 @@ void UGSTN_CombatSimComponent::ComputeFramePush(int32 Frame, const FGSTN_StepSna
 {
 	FramePush.Frame = Frame;
 	FramePush.Move = FVector::ZeroVector;
+	FramePush.bHasBodies = false;
+	FramePush.Others.Reset();
 	const FGSTN_SnapshotEntry* Self = Snapshot ? Snapshot->Find(RegisteredEntityId) : nullptr;
 	// A parked link role rides its partner (placed by a contributor): its pushbox is not where it is, and the pair must not push apart
 	if (!Self || !Self->Pushbox.IsActive() || Self->bPlacedByContributor)
 	{
 		return;
 	}
-	const FGSTN_PushboxSettings Settings = CombatRules ? CombatRules->Pushbox : FGSTN_PushboxSettings();
-	FGSTN_PushboxBody SelfBody;
+	const FGSTN_PushboxSettings& Settings = CombatRules ? CombatRules->Pushbox : GetDefault<UGSTN_CombatRules>()->Pushbox;
+	FGSTN_PushboxBody& SelfBody = FramePush.Self;
 	SelfBody.EntityId = Self->EntityId;
 	SelfBody.Cylinder = Self->Pushbox;
 	SelfBody.bFrozen = Self->bInHitstop;
+	FramePush.ActorStart = Self->Transform.GetLocation();
+	FramePush.Up = Self->Up;
 
-	TArray<FGSTN_PushboxBody, TInlineAllocator<8>> Others;
+	TArray<FGSTN_PushboxBody, TInlineAllocator<8>>& Others = FramePush.Others;
 	for (const FGSTN_SnapshotEntry& Entry : Snapshot->Entries)
 	{
 		if (Entry.EntityId == Self->EntityId || !Entry.Pushbox.IsActive() || Entry.bPlacedByContributor)
@@ -280,6 +290,19 @@ void UGSTN_CombatSimComponent::ComputeFramePush(int32 Frame, const FGSTN_StepSna
 		Body.bFrozen = Entry.bInHitstop;
 	}
 	FramePush.Move = FGSTN_Pushbox::ComputePush(SelfBody, Others, Settings, Self->Up);
+	FramePush.bHasBodies = Others.Num() > 0;
+}
+
+FVector UGSTN_CombatSimComponent::ConstrainFrameMove(const FVector& ActorEnd, FVector& InOutVelocity) const
+{
+	if (!FramePush.bHasBodies || FramePush.Frame == INDEX_NONE || FramePush.Frame != GetSimulationFrame())
+	{
+		return FVector::ZeroVector;
+	}
+	const FGSTN_PushboxSettings& Settings = CombatRules ? CombatRules->Pushbox : GetDefault<UGSTN_CombatRules>()->Pushbox;
+	const FVector Move = ActorEnd - FramePush.ActorStart;
+	const FVector Constrained = FGSTN_Pushbox::ConstrainMove(FramePush.Self, Move, FramePush.Others, Settings, FramePush.Up, &InOutVelocity);
+	return Constrained - Move;
 }
 
 FVector UGSTN_CombatSimComponent::ReadFramePush() const

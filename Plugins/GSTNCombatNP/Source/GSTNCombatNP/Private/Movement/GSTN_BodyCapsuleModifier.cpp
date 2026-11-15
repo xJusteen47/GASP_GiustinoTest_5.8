@@ -153,6 +153,51 @@ void FGSTN_BodyCapsuleModifier::OnPreMovement(UMoverComponent* MoverComp, const 
 	Applied = Step.Applied.NearlyEquals(Standing) ? FGSTN_BodyCapsuleShape() : Step.Applied;
 }
 
+namespace GSTNBodyCapsule
+{
+	/** A swept move of the updated component (only the world blocks: fighters ignore each other), once more from a hair above when it starts touching the floor */
+	static void SweptHorizontalMove(USceneComponent& Updated, const FVector& Move)
+	{
+		const FVector Start = Updated.GetComponentLocation();
+		FHitResult Hit;
+		Updated.SetWorldLocation(Start + Move, /*bSweep*/ true, &Hit, ETeleportType::None);
+		if (Hit.bStartPenetrating)
+		{
+			const FVector Lift(0.0, 0.0, 0.5);
+			Updated.SetWorldLocation(Start + Lift, true, nullptr, ETeleportType::None);
+			Updated.SetWorldLocation(Updated.GetComponentLocation() + Move, true, nullptr, ETeleportType::None);
+			Updated.SetWorldLocation(Updated.GetComponentLocation() - Lift, true, nullptr, ETeleportType::None);
+		}
+	}
+}
+
+void FGSTN_BodyCapsuleModifier::OnPostMovement(UMoverComponent* MoverComp, const FMoverTimeStep& TimeStep, const FMoverSyncState& SyncState, const FMoverAuxStateContext& AuxState)
+{
+	Super::OnPostMovement(MoverComp, TimeStep, SyncState, AuxState);
+	const AActor* Owner = MoverComp ? MoverComp->GetOwner() : nullptr;
+	const UGSTN_CombatSimComponent* Combat = Owner ? Owner->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
+	USceneComponent* Updated = MoverComp ? MoverComp->GetUpdatedComponent() : nullptr;
+	// The frame's output state (MovementModeStateMachine passes OutputState.SyncState); writing it is what makes the correction part of the frame
+	FMoverDefaultSyncState* Sync = const_cast<FMoverSyncState&>(SyncState).SyncStateCollection.FindMutableDataByType<FMoverDefaultSyncState>();
+	if (!Combat || !Updated || !Sync)
+	{
+		return;
+	}
+	FVector Velocity = Sync->GetVelocity_WorldSpace();
+	const FVector OriginalVelocity = Velocity;
+	const FVector Correction = Combat->ConstrainFrameMove(Updated->GetComponentLocation(), Velocity);
+	if (Correction.IsNearlyZero(0.001) && Velocity.Equals(OriginalVelocity, 0.001))
+	{
+		return;
+	}
+	if (!Correction.IsNearlyZero(0.001))
+	{
+		GSTNBodyCapsule::SweptHorizontalMove(*Updated, Correction);
+	}
+	Sync->SetTransforms_WorldSpace(Updated->GetComponentLocation(), Sync->GetOrientation_WorldSpace(), Velocity,
+		Sync->GetAngularVelocityDegrees_WorldSpace(), Sync->GetMovementBase(), Sync->GetMovementBaseBoneName());
+}
+
 FMovementModifierBase* FGSTN_BodyCapsuleModifier::Clone() const
 {
 	return new FGSTN_BodyCapsuleModifier(*this);
@@ -267,17 +312,7 @@ bool FGSTN_PushboxShiftEffect::ApplyMovementEffect(FApplyMovementEffectParams& A
 		return false;
 	}
 	// Swept: the world stops it. Other fighters are in the capsule's ignore list (UGSTN_CombatWorldSubsystem), so only the world can
-	const FVector Start = Updated->GetComponentLocation();
-	FHitResult Hit;
-	Updated->SetWorldLocation(Start + Move, /*bSweep*/ true, &Hit, ETeleportType::None);
-	if (Hit.bStartPenetrating)
-	{
-		// Started touching something (the floor under a grounded capsule sitting on it): once more from a hair above, then back down swept
-		const FVector Lift(0.0, 0.0, 0.5);
-		Updated->SetWorldLocation(Start + Lift, true, nullptr, ETeleportType::None);
-		Updated->SetWorldLocation(Updated->GetComponentLocation() + Move, true, nullptr, ETeleportType::None);
-		Updated->SetWorldLocation(Updated->GetComponentLocation() - Lift, true, nullptr, ETeleportType::None);
-	}
+	GSTNBodyCapsule::SweptHorizontalMove(*Updated, Move);
 	Sync->SetTransforms_WorldSpace(Updated->GetComponentLocation(), Sync->GetOrientation_WorldSpace(), Sync->GetVelocity_WorldSpace(),
 		Sync->GetAngularVelocityDegrees_WorldSpace(), Sync->GetMovementBase(), Sync->GetMovementBaseBoneName());
 	return true;

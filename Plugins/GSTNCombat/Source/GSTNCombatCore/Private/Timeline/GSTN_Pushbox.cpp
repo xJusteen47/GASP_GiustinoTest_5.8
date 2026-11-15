@@ -113,8 +113,30 @@ FVector FGSTN_Pushbox::PairShare(const FGSTN_PushboxBody& Self, const FGSTN_Push
 		}
 		Direction = Self.EntityId < Other.EntityId ? -Axis : Axis;
 	}
-	const double Share = FMath::Min(Settings.PushGainPerFrame * Penetration * 0.5, Settings.MaxPushPerFrame * 0.5);
+	// (ConstrainMove uses the same tie axis, GSTNPushboxPrivate::TieAxis)
+	const double Cap = Settings.MaxPushPerFrame + Settings.PushCapGrowth * Penetration;
+	const double Share = FMath::Min(Settings.PushGainPerFrame * Penetration * 0.5, Cap * 0.5);
 	return Direction * Share;
+}
+
+namespace GSTNPushboxPrivate
+{
+	/** The horizontal part of V (perpendicular to Up) */
+	static FVector Horizontal(const FVector& V, const FVector& Up)
+	{
+		return V - FVector::DotProduct(V, Up) * Up;
+	}
+
+	/** Coincident centres: the world-fixed in-plane axis PairShare uses, signed by id order so the pair's answers stay opposite */
+	static FVector TieAxis(int32 SelfId, int32 OtherId, const FVector& Up)
+	{
+		FVector Axis = Horizontal(FVector::ForwardVector, Up);
+		if (!Axis.Normalize())
+		{
+			Axis = Horizontal(FVector::RightVector, Up).GetSafeNormal();
+		}
+		return SelfId < OtherId ? -Axis : Axis;
+	}
 }
 
 FVector FGSTN_Pushbox::ComputePush(const FGSTN_PushboxBody& Self, TConstArrayView<FGSTN_PushboxBody> Others, const FGSTN_PushboxSettings& Settings, const FVector& Up)
@@ -124,9 +146,98 @@ FVector FGSTN_Pushbox::ComputePush(const FGSTN_PushboxBody& Self, TConstArrayVie
 		return FVector::ZeroVector;
 	}
 	FVector Push = FVector::ZeroVector;
+	double Deepest = 0.0;
 	for (const FGSTN_PushboxBody& Other : Others)
 	{
-		Push += PairShare(Self, Other, Settings, Up);
+		const FVector Share = PairShare(Self, Other, Settings, Up);
+		if (!Share.IsZero())
+		{
+			Push += Share;
+			const double Distance = GSTNPushboxPrivate::Horizontal(Self.Cylinder.Center - Other.Cylinder.Center, Up).Size();
+			Deepest = FMath::Max(Deepest, static_cast<double>(Self.Cylinder.Radius) + Other.Cylinder.Radius - Distance);
+		}
 	}
-	return Push.GetClampedToMaxSize(Settings.MaxPushPerFrame);
+	return Push.GetClampedToMaxSize(Settings.MaxPushPerFrame + Settings.PushCapGrowth * Deepest);
+}
+
+FVector FGSTN_Pushbox::ConstrainMove(const FGSTN_PushboxBody& Self, const FVector& Move, TConstArrayView<FGSTN_PushboxBody> Others,
+	const FGSTN_PushboxSettings& Settings, const FVector& Up, FVector* InOutVelocity)
+{
+	using namespace GSTNPushboxPrivate;
+	if (!Settings.bEnabled || !Self.Cylinder.IsActive())
+	{
+		return Move;
+	}
+	FVector Result = Move;
+	for (int32 Pass = 0; Pass < 2; ++Pass)
+	{
+		for (const FGSTN_PushboxBody& Other : Others)
+		{
+			if (Other.EntityId == Self.EntityId || !Other.Cylinder.IsActive())
+			{
+				continue;
+			}
+			// Vertical spans at the start of the frame: a body falling onto a head meets its core only once the spans overlap
+			const FVector Delta = Self.Cylinder.Center - Other.Cylinder.Center;
+			if (FMath::Abs(FVector::DotProduct(Delta, Up)) >= static_cast<double>(Self.Cylinder.HalfHeight) + Other.Cylinder.HalfHeight)
+			{
+				continue;
+			}
+			const FVector StartH = Horizontal(Delta, Up);
+			const double StartDistance = StartH.Size();
+			const double PushSum = static_cast<double>(Self.Cylinder.Radius) + Other.Cylinder.Radius;
+			const bool bCore = Settings.bCoreEnabled && Self.Cylinder.CoreRadius > 0.f && Other.Cylinder.CoreRadius > 0.f;
+			const double CoreSum = bCore ? static_cast<double>(Self.Cylinder.CoreRadius) + Other.Cylinder.CoreRadius : 0.0;
+			if (StartDistance >= FMath::Max(PushSum, CoreSum))
+			{
+				continue;
+			}
+			const FVector Normal = StartDistance > UE_KINDA_SMALL_NUMBER ? StartH / StartDistance : TieAxis(Self.EntityId, Other.EntityId, Up);
+
+			// Approach clamp, once: keep from 1 at the pushbox edge down to ApproachKeptAtCore at the core of the move toward the other
+			if (Pass == 0)
+			{
+				const double Inward = FVector::DotProduct(Result, Normal);
+				if (Inward < 0.0)
+				{
+					const double Span = PushSum - CoreSum;
+					const double T = Span > UE_KINDA_SMALL_NUMBER ? FMath::Clamp((StartDistance - CoreSum) / Span, 0.0, 1.0) : 0.0;
+					const double Kept = FMath::Lerp(static_cast<double>(Settings.ApproachKeptAtCore), 1.0, T);
+					Result -= (1.0 - Kept) * Inward * Normal;
+					if (InOutVelocity)
+					{
+						const double InwardVelocity = FVector::DotProduct(*InOutVelocity, Normal);
+						if (InwardVelocity < 0.0)
+						{
+							*InOutVelocity -= (1.0 - Kept) * InwardVelocity * Normal;
+						}
+					}
+				}
+			}
+
+			// Rigid core: the end of the move may close at most half the free gap to the other's start (the other may close the other half from
+			// its side in the same frame: both read the start). Already inside: no closer than where it started plus half the recovery
+			if (bCore)
+			{
+				const double MinDistance = StartDistance >= CoreSum ? CoreSum + (StartDistance - CoreSum) * 0.5
+					: StartDistance + FMath::Min(CoreSum - StartDistance, static_cast<double>(Settings.CoreRecoverPerFrame)) * 0.5;
+				const FVector EndH = StartH + Horizontal(Result, Up);
+				const double EndDistance = EndH.Size();
+				if (EndDistance < MinDistance)
+				{
+					const FVector Out = EndDistance > UE_KINDA_SMALL_NUMBER ? EndH / EndDistance : Normal;
+					Result += Out * (MinDistance - EndDistance);
+					if (InOutVelocity)
+					{
+						const double InwardVelocity = FVector::DotProduct(*InOutVelocity, Out);
+						if (InwardVelocity < 0.0)
+						{
+							*InOutVelocity -= InwardVelocity * Out;
+						}
+					}
+				}
+			}
+		}
+	}
+	return Result;
 }

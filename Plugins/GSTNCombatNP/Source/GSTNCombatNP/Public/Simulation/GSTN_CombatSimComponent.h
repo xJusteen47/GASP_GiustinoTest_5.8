@@ -453,6 +453,17 @@ public:
 	 */
 	FVector ReadFramePush() const;
 
+	/**
+	 * P4 approach clamp + rigid core (FGSTN_Pushbox::ConstrainMove): this frame's own move of the fighter, ActorEnd - its location at the start of the
+	 * frame, corrected against the other bodies of the step snapshot. Returns the correction to add to ActorEnd (zero when there is nothing to do or
+	 * the combat tick of the frame did not compute the bodies); InOutVelocity loses the inward part. Read by the body capsule modifier after the move
+	 */
+	FVector ConstrainFrameMove(const FVector& ActorEnd, FVector& InOutVelocity) const;
+
+	/** How this character type meets other fighters (pushbox P4): soft pushbox + rigid core, pushbox only, or none. Per Blueprint / character type */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Body Collision")
+	FGSTN_BodyCollisionProfile BodyCollision;
+
 	/** The pushbox of this fighter in the world for its snapshot entry, from the end of the previous frame. False = none */
 	bool ResolveSnapshotPushbox(int32 Frame, const FGSTN_CombatSyncCore& Core, const FTransform& CapsuleTransform, TConstArrayView<FName> StateTags, FGSTN_PushboxCylinder& Out);
 
@@ -871,6 +882,12 @@ private:
 	{
 		int32 Frame = INDEX_NONE;
 		FVector Move = FVector::ZeroVector;
+		/** The bodies for ConstrainFrameMove: this one at the start of the frame and every other with a pushbox. bHasBodies false = none */
+		bool bHasBodies = false;
+		FVector ActorStart = FVector::ZeroVector;
+		FVector Up = FVector::UpVector;
+		FGSTN_PushboxBody Self;
+		TArray<FGSTN_PushboxBody, TInlineAllocator<8>> Others;
 	};
 	FFramePush FramePush;
 

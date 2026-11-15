@@ -69,6 +69,35 @@ struct GSTNCOMBATCORE_API FGSTN_PushboxStateRule
 	float HalfHeight = 0.f;
 };
 
+/** How a character type meets other fighters (pushbox P4, owner 2026-11-16: data per character type) */
+UENUM(BlueprintType)
+enum class EGSTN_BodyCollisionMode : uint8
+{
+	/** Soft pushbox plus a rigid core nobody walks into (the fighter default) */
+	PushboxAndCore,
+	/** Soft pushbox only: can be walked into, slowly, and is pushed out */
+	PushboxOnly,
+	/** Neither: overlaps every fighter freely (a ghost) */
+	None,
+};
+
+/**
+ * One character type's body against other fighters, on the character (the combat component), not on the shared rules: a pair's core distance is
+ * the sum of both radii, so different radii stay symmetric. How hard and how fast stays on FGSTN_PushboxSettings (one value for everyone)
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_BodyCollisionProfile
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Body Collision")
+	EGSTN_BodyCollisionMode Mode = EGSTN_BodyCollisionMode::PushboxAndCore;
+
+	/** Rigid core radius, 0 = the standing capsule radius times FGSTN_PushboxSettings::CoreRadiusScale */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Body Collision", meta = (ClampMin = "0.0", ForceUnits = "cm", EditCondition = "Mode == EGSTN_BodyCollisionMode::PushboxAndCore"))
+	float CoreRadius = 0.f;
+};
+
 /** The state tags of an entity as the pushbox reads them, by name */
 using FGSTN_PushboxStateTags = TArray<FName, TInlineAllocator<4>>;
 
@@ -92,9 +121,32 @@ struct GSTNCOMBATCORE_API FGSTN_PushboxSettings
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float PushGainPerFrame = 0.25f;
 
-	/** The most a fighter is moved by pushes in one frame (3 cm = 187 cm/s at 62.5 Hz) */
+	/** The most a fighter is moved by pushes in one frame at a light overlap (3 cm = 187 cm/s at 62.5 Hz); grows with the overlap (PushCapGrowth) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox", meta = (ClampMin = "0.0", ForceUnits = "cm"))
 	float MaxPushPerFrame = 3.f;
+
+	/** Extra push cap per cm of overlap (P4: a deep overlap is pushed out faster). 0.25: 20 cm of overlap allows 8 cm per frame */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox", meta = (ClampMin = "0.0"))
+	float PushCapGrowth = 0.25f;
+
+	/**
+	 * Approach clamp (P4, Smash-like): the share of a fighter's own move toward an overlapping pushbox it keeps, from 1 where the pushboxes start
+	 * touching down to this at the rigid core (0 to the other's centre when either has no core). Velocity is clamped the same, so the walk slows
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float ApproachKeptAtCore = 0.2f;
+
+	/** Rigid core (P4): two cores never get closer than the sum of their radii by anyone's own move. Horizontal only; the world always wins */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox|Core")
+	bool bCoreEnabled = true;
+
+	/** Core radius when the character's profile gives none: its standing capsule radius times this (30 cm x 0.5 = 15 cm, pair 30 cm) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox|Core", meta = (ClampMin = "0.0", ClampMax = "2.0"))
+	float CoreRadiusScale = 0.5f;
+
+	/** Cores already overlapping (a spawn, a landing beside a head, a pushbox switching on) part by at most this per frame, half each: no pop */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox|Core", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float CoreRecoverPerFrame = 4.f;
 
 	/** Pushbox radius when no track gives one: the movement capsule's radius times this */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pushbox", meta = (ClampMin = "0.0", ClampMax = "2.0"))
@@ -111,6 +163,8 @@ struct FGSTN_PushboxCylinder
 	FVector Center = FVector::ZeroVector;
 	float Radius = 0.f;
 	float HalfHeight = 0.f;
+	/** Rigid core radius around the same axis, 0 = no core (soft only) */
+	float CoreRadius = 0.f;
 
 	bool IsActive() const { return Radius > 0.f && HalfHeight > 0.f; }
 };
@@ -151,6 +205,18 @@ struct GSTNCOMBATCORE_API FGSTN_Pushbox
 	 */
 	static FVector PairShare(const FGSTN_PushboxBody& Self, const FGSTN_PushboxBody& Other, const FGSTN_PushboxSettings& Settings, const FVector& Up);
 
-	/** The sum of Self's shares against every other body (Self's own id skipped), clamped to MaxPushPerFrame */
+	/** The sum of Self's shares against every other body (Self's own id skipped), clamped to MaxPushPerFrame + PushCapGrowth x the deepest overlap */
 	static FVector ComputePush(const FGSTN_PushboxBody& Self, TConstArrayView<FGSTN_PushboxBody> Others, const FGSTN_PushboxSettings& Settings, const FVector& Up);
+
+	/**
+	 * P4 approach clamp + rigid core: Self's own move of the frame (Move, from Self.Cylinder at the start of the frame), corrected against the
+	 * others where they were at the start of the frame (the step snapshot, the same on every machine and in a resim). Only the horizontal part
+	 * changes, and only along the line between the centres (never up, never sliding sideways). Per overlapping other, in the order given:
+	 * the move toward it is scaled from 1 (pushboxes touching) to ApproachKeptAtCore (cores touching); then the end may close at most half
+	 * the free gap to the core sum (the other may close the other half in the same frame), or, when already inside, must be the start distance
+	 * plus half CoreRecoverPerFrame away. Two passes. Frozen others
+	 * still block. Velocity (optional) loses the same inward part. Self with no core still gets the approach clamp
+	 */
+	static FVector ConstrainMove(const FGSTN_PushboxBody& Self, const FVector& Move, TConstArrayView<FGSTN_PushboxBody> Others,
+		const FGSTN_PushboxSettings& Settings, const FVector& Up, FVector* InOutVelocity = nullptr);
 };

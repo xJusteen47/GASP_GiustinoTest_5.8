@@ -100,9 +100,16 @@ DOUBLE_SHOT_SEQUENCES = [
 ]
 # CP4 hit cue + hitstop shake (PIE_CAPTURE_KIT=KIT_Example, PIE_CAPTURE_BUTTON=Attack): one light attack on a dummy 95 cm ahead
 CUE_SEQUENCES = [{'name': 'cue_hit', 'taps': [0], 'frames': 90, 'dummy': 95.0, 'shoot': True}]
+# PUSHBOX-P4 (rigid core): walk_into holds the stick forward from PRE into a standing dummy 200 cm ahead (P3 walked straight through it);
+# head_landing jumps at PRE with the stick forward for the first 'walk' frames toward a dummy PIE_CAPTURE_HEAD_DIST cm ahead (lands on or by its head)
+PUSHBOX_SEQUENCES = [
+    {'name': 'walk_into', 'taps': [], 'frames': 220, 'dummy': 200.0, 'shoot': True, 'walk': (0, 200)},
+    {'name': 'head_landing', 'taps': [], 'frames': 160, 'dummy': float(os.environ.get('PIE_CAPTURE_HEAD_DIST', 150.0)), 'shoot': True, 'air': {},
+     'walk': (0, int(os.environ.get('PIE_CAPTURE_HEAD_STICK', 40)))},
+]
 AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after the attack press
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
-    SEQUENCES = [s for s in SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
+    SEQUENCES = [s for s in SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES + PUSHBOX_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
 elif 'DoubleShot' in KIT:
     SEQUENCES = DOUBLE_SHOT_SEQUENCES
 elif 'Dropkick' in KIT:
@@ -400,11 +407,14 @@ def _tick(_dt):
                 if air.get('stick'):
                     g.release(0, 'move')
             walk = seq.get('walk')
-            if walk and st['fired'] is not None:
-                if frame == st['fired'] + walk[0]:
+            # From the attack press; a plain jump (no press) from the jump; a ground sequence with no air entry from PRE (pushbox P4)
+            plain_jump = air is not None and 'rise_h' not in air and 'trigger_h' not in air
+            walk_base = st['fired'] if st['fired'] is not None else (st['jumped'] if plain_jump else (PRE if air is None else None))
+            if walk and walk_base is not None:
+                if frame == walk_base + walk[0]:
                     g.hold(0, 'move', (0, 1, 0))
                     _log(f'{seq["name"]}: walk forward from v{frame}')
-                elif frame == st['fired'] + walk[0] + walk[1]:
+                elif frame == walk_base + walk[0] + walk[1]:
                     g.release(0, 'move')
             st['frame'] = frame + 1
             if st['frame'] >= PRE + seq['frames']:

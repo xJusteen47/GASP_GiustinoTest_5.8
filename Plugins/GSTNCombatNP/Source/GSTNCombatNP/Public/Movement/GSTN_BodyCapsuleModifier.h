@@ -40,6 +40,13 @@ struct GSTNCOMBATNP_API FGSTN_BodyCapsuleModifier : public FMovementModifierBase
 	FGSTN_BodyCapsuleShape Applied;
 
 	virtual void OnPreMovement(UMoverComponent* MoverComp, const FMoverTimeStep& TimeStep) override;
+	/**
+	 * Pushbox P4: after the movement mode moved the fighter, its own move is corrected against the other fighters' bodies at the start of the frame
+	 * (UGSTN_CombatSimComponent::ConstrainFrameMove: approach clamp + rigid core), as a horizontal swept move (the world wins) written into the
+	 * frame's output sync state (Mover hands it as const; this modifier lives in it, as the shift effects own the capsule). Not Mover's capsule
+	 * depenetration: nothing here slides a body up, over or sideways
+	 */
+	virtual void OnPostMovement(UMoverComponent* MoverComp, const FMoverTimeStep& TimeStep, const FMoverSyncState& SyncState, const FMoverAuxStateContext& AuxState) override;
 	virtual FMovementModifierBase* Clone() const override;
 	virtual void NetSerialize(FArchive& Ar) override;
 	virtual UScriptStruct* GetScriptStruct() const override;
