@@ -61,7 +61,7 @@ bool FGSTN_BodyCapsuleModifier::ApplyShape(UMoverComponent& MoverComp, const FGS
 	}
 
 	// Mesh root at actor - Offset: the archetype's relative location already holds the standing offset (root at the bottom)
-	const USceneComponent* Visual = MoverComp.GetPrimaryVisualComponent();
+	USceneComponent* Visual = MoverComp.GetPrimaryVisualComponent();
 	const USceneComponent* Archetype = Visual ? Cast<USceneComponent>(Visual->GetArchetype()) : nullptr;
 	if (Visual && Archetype && Archetype != Visual)
 	{
@@ -69,8 +69,16 @@ bool FGSTN_BodyCapsuleModifier::ApplyShape(UMoverComponent& MoverComp, const FGS
 		const FVector Wanted = Archetype->GetRelativeLocation() + (Standing.Offset - Shape.Offset);
 		if (!Base.GetLocation().Equals(Wanted, 0.01))
 		{
+			const FVector BaseDelta = Wanted - Base.GetLocation();
 			Base.SetLocation(Wanted);
 			MoverComp.SetBaseVisualComponentTransform(Base);
+			// The drawn mesh moves with its base now, as the stance modifier does (FStanceModifier::AdjustCapsule). Mover only re-places it from
+			// the base in its next finalize, a frame after the clip already shows the new part (dropkick landing, v106: the land pose drawn
+			// with the air offset, the body out of the picture). Shifting by the base's change keeps whatever smoothing offset the mesh has
+			if (Visual != MoverComp.GetUpdatedComponent())
+			{
+				Visual->SetRelativeLocation(Visual->GetRelativeLocation() + BaseDelta, false, nullptr, ETeleportType::TeleportPhysics);
+			}
 			bChanged = true;
 		}
 	}
@@ -126,8 +134,10 @@ void FGSTN_BodyCapsuleModifier::OnPreMovement(UMoverComponent* MoverComp, const 
 	Effect->To = Step.Applied;
 	Effect->ShiftLocal = Step.ActorShiftLocal;
 	Effect->bSweep = Target.Anchor == EGSTN_BodyCapsuleAnchor::Body;
-	// Scheduled on this substep's frame: applied after the modifiers, before the movement mode moves (MovementModeStateMachine)
-	MoverComp->QueueInstantMovementEffect_Internal(TimeStep, Effect);
+	// Scheduled on this substep's own frame: applied after the modifiers, before the movement mode moves (MovementModeStateMachine).
+	// QueueInstantMovementEffect_Internal would add Mover's network scheduling delay (0.3 s): the capsule then changed size frames before the
+	// actor moved (dropkick end, v137: grown 35 -> 86 in place, under the floor, popped out; the +51 cm arrived at v154)
+	MoverComp->QueueInstantMovementEffectThisStep_Internal(TimeStep, Effect);
 	// Stored now (this instance is the frame's output state): a resimulated frame starts again from the restored value
 	Applied = Step.Applied.NearlyEquals(Standing) ? FGSTN_BodyCapsuleShape() : Step.Applied;
 }
@@ -174,6 +184,18 @@ bool FGSTN_BodyCapsuleShiftEffect::ApplyMovementEffect(FApplyMovementEffectParam
 	const FVector ShiftWorld = FRotationMatrix(FRotator(0.0, Orientation.Yaw, 0.0)).TransformVector(ShiftLocal);
 	const bool bGrowing = To.HalfHeight > From.HalfHeight || To.Radius > From.Radius;
 
+	// Growing like the stance modifier's expand (FStanceModifier::CanExpand + its teleport): when the grown capsule fits at the destination
+	// the actor is set there directly. A sweep of the small capsule can start touching the floor (the land capsule's bottom sits on or a
+	// little in it) and then refuses to move at all. When it does not fit, the swept move (Body anchor) keeps walls and ceilings
+	bool bSweepMove = bSweep;
+	if (bGrowing && bSweep && !ShiftWorld.IsNearlyZero())
+	{
+		UPrimitiveComponent* Primitive = ApplyEffectParams.UpdatedPrimitive ? ApplyEffectParams.UpdatedPrimitive : Capsule;
+		const FCollisionShape Grown = FCollisionShape::MakeCapsule(To.Radius, To.HalfHeight);
+		const bool bEncroached = UMovementUtils::OverlapTest(Updated, Primitive, Updated->GetComponentLocation() + ShiftWorld,
+			Updated->GetComponentQuat(), Primitive->GetCollisionObjectType(), Grown, MoverComp->GetOwner());
+		bSweepMove = bEncroached;
+	}
 	auto Move = [&]()
 	{
 		if (ShiftWorld.IsNearlyZero())
@@ -181,7 +203,7 @@ bool FGSTN_BodyCapsuleShiftEffect::ApplyMovementEffect(FApplyMovementEffectParam
 			return;
 		}
 		FHitResult Hit;
-		Updated->SetWorldLocation(Updated->GetComponentLocation() + ShiftWorld, bSweep, bSweep ? &Hit : nullptr, ETeleportType::TeleportPhysics);
+		Updated->SetWorldLocation(Updated->GetComponentLocation() + ShiftWorld, bSweepMove, bSweepMove ? &Hit : nullptr, ETeleportType::TeleportPhysics);
 	};
 	if (bGrowing)
 	{

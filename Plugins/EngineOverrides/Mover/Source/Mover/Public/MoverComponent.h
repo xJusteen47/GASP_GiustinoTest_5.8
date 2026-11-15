@@ -405,6 +405,11 @@ public:
 	// GSTN: exported for FGSTN_BodyCapsuleModifier (GSTNCombatNP), which queues its shift effect on the modifier's own substep
 	MOVER_API void QueueInstantMovementEffect_Internal(const FMoverTimeStep& TimeStep, TSharedPtr<FInstantMovementEffect> InstantMovementEffect);
 
+	// GSTN: queues an instant movement effect for TimeStep's own frame, without the network scheduling delay _Internal adds. For an effect a
+	// simulation step queues for itself (FGSTN_BodyCapsuleModifier's OnPreMovement): the state machine applies it later in the same substep,
+	// before the movement mode moves. Simulation thread only
+	MOVER_API void QueueInstantMovementEffectThisStep_Internal(const FMoverTimeStep& TimeStep, TSharedPtr<FInstantMovementEffect> InstantMovementEffect);
+
 protected:
 	// Queue a scheduled instant movement effect. Thread safe, can be used outside the game thread.
 	void QueueScheduledInstantMovementEffect(const FScheduledInstantMovementEffect& ScheduledInstantMovementEffect);

@@ -61,8 +61,9 @@ struct TStructOpsTypeTraits<FGSTN_BodyCapsuleModifier> : public TStructOpsTypeTr
 /**
  * Moves the actor by the body capsule's step and gives the capsule its new shape, on the substep FGSTN_BodyCapsuleModifier queued it. A
  * growing capsule moves first then grows, a shrinking one shrinks first then moves, so the swept move never starts inside the floor. Body
- * anchor moves are swept (a wall stops the capsule; the mesh then sits that much off the body for the move); Capsule anchor moves only keep
- * the bottom and are set directly
+ * anchor moves are swept (a wall stops the capsule; the mesh then sits that much off the body for the move), except a growth whose grown
+ * capsule fits at the destination, which is set there directly as Mover's stance modifier does; Capsule anchor moves only keep the bottom
+ * and are set directly. Queued for its own substep (QueueInstantMovementEffectThisStep_Internal), never with the network scheduling delay
  */
 USTRUCT()
 struct GSTNCOMBATNP_API FGSTN_BodyCapsuleShiftEffect : public FInstantMovementEffect

@@ -20,6 +20,12 @@ namespace Mover
 	// Same as above but schedules the effect to run on the next frame. This is best used for fixed tick mode, it will add a small SchedulingDelaySeconds in the variable tick case
 	MOVER_API FScheduledInstantMovementEffect MakeScheduledEffectForNextFrame(const TScriptInterface<IMoverBackendLiaisonInterface>& Backend, const FMoverTimeStep& TimeStep, TSharedPtr<FInstantMovementEffect> InstantMovementEffect);
 
+	// GSTN: scheduling that executes on TimeStep's own frame (no network delay). For an effect a simulation step queues for itself, e.g. a
+	// movement modifier's OnPreMovement, which the state machine applies in the same substep: MakeScheduledEffect adds the backend's network
+	// scheduling delay (0.3 s by default), which would land the effect frames later
+	MOVER_API FMoverSchedulingInfo MakeSchedulingInfoForThisStep(bool bIsFixedDt, const FMoverTimeStep& TimeStep);
+	MOVER_API FScheduledInstantMovementEffect MakeScheduledEffectForThisStep(const TScriptInterface<IMoverBackendLiaisonInterface>& Backend, const FMoverTimeStep& TimeStep, TSharedPtr<FInstantMovementEffect> InstantMovementEffect);
+
 	/** Turns a FLayeredMove into a scheduled one (FScheduledLayeredMove)
 	*	The move can be scheduled to apply immediately, or scheduled to apply with a delay
 	*   @param Backend the simulation backend which implements the details of whether the simulation advances in fixed dt and how long to schedule in the future for networked events

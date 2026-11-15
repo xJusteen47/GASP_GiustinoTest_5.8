@@ -1865,6 +1865,14 @@ void UMoverComponent::QueueInstantMovementEffect_Internal(const FMoverTimeStep& 
 	}
 }
 
+void UMoverComponent::QueueInstantMovementEffectThisStep_Internal(const FMoverTimeStep& TimeStep, TSharedPtr<FInstantMovementEffect> InstantMovementEffect)
+{
+	if (ensureMsgf(BackendLiaisonComp, TEXT("UMoverComponent::QueueInstantMovementEffectThisStep_Internal was unexpectedly called with a null backend liaison component. The instant movement effect will be ignored.")))
+	{
+		QueueScheduledInstantMovementEffect(UE::Mover::MakeScheduledEffectForThisStep(BackendLiaisonComp, TimeStep, InstantMovementEffect));
+	}
+}
+
 void UMoverComponent::QueueInstantMovementEffect(TSharedPtr<FInstantMovementEffect> InstantMovementEffect)
 {
 	ensureMsgf(IsInGameThread(), TEXT("UMoverComponent::QueueInstantMovementEffect(TSharedPtr<FInstantMovementEffect>) should only be called from the game thread. Inspect code for incorrect calls."));
