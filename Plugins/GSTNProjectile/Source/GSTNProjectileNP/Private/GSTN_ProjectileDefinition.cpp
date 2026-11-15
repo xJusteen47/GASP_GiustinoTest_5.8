@@ -23,6 +23,8 @@ FGSTN_ProjectileShot::FResult FGSTN_ProjectileShot::Fire(const FGSTN_ProjectileS
 	AActor* Avatar = Ability.GetAvatarActorFromActorInfo();
 	if (!Projectiles || !Avatar || Projectiles->GetLastFrame() == INDEX_NONE)
 	{
+		UE_LOG(LogGSTNProjectile, Verbose, TEXT("Shot of %s refused: subsystem %d, avatar %d, fixed tick %d"), *Ability.GetName(), Projectiles != nullptr,
+			Avatar != nullptr, Projectiles ? Projectiles->GetLastFrame() : INDEX_NONE);
 		return Result;
 	}
 	// A client never spawns the projectile: the host's spawn is the only one, and it reaches the client once. The client that predicts
@@ -31,6 +33,7 @@ FGSTN_ProjectileShot::FResult FGSTN_ProjectileShot::Fire(const FGSTN_ProjectileS
 	const FGameplayAbilityActorInfo* Info = Ability.GetCurrentActorInfo();
 	if (!bHost && !(Info && Info->IsLocallyControlled()))
 	{
+		UE_LOG(LogGSTNProjectile, VeryVerbose, TEXT("Shot of %s skipped: a client that does not control %s"), *Ability.GetName(), *Avatar->GetName());
 		return Result;
 	}
 
@@ -137,6 +140,8 @@ bool UGSTN_ProjectileMoveLibrary::FireMoveProjectile(UGSTN_GA_BaseCombat* Move, 
 	// A request like every move action: only inside the simulation step of an active move (never in a restored frame or in presentation)
 	if (!Move || !Definition || !Move->CanRunMoveActions())
 	{
+		UE_LOG(LogGSTNProjectile, Verbose, TEXT("Fire Move Projectile refused: move %s, definition %s, can run %d"), Move ? *Move->GetName() : TEXT("none"),
+			Definition ? *Definition->GetName() : TEXT("none"), Move ? Move->CanRunMoveActions() : 0);
 		return false;
 	}
 	// A move has no event target of its own: an EventTarget shot from a move goes along the facing (TargetEntityId INDEX_NONE)

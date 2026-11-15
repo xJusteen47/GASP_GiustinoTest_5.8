@@ -44,7 +44,9 @@ DISTANCE = float(os.environ.get('PIE_CAPTURE_DIST', DISTANCE))
 AHEAD = float(os.environ.get('PIE_CAPTURE_AHEAD', 0.0))
 FILL_LIGHTS = [(35.0, 5.0), (325.0, 5.0), (95.0, 3.0)]   # (azimuth the light comes from, as in VIEWS; intensity in lux)
 PRE = 20         # idle frames shot before the first press (the captures' temporal history settles)
-BUTTON = 'Attack'
+# The button every tap presses, by its name in the input config: PIE_CAPTURE_BUTTON (default Attack; Special for the double-shot kits). It was
+# documented but never read until 2026-11-15, so every capture pressed Attack (the CP5 double-shot captures ran the base kit's light attack)
+BUTTON = os.environ.get('PIE_CAPTURE_BUTTON', 'Attack')
 # taps: rendered frames after PRE on which the button is pressed for one frame. dummy: a dummy this many cm ahead (None = whiff)
 SEQUENCES = [
     {'name': 'jab1', 'taps': [0], 'frames': 75, 'dummy': None, 'shoot': True},
@@ -242,6 +244,11 @@ def _row(frame, tapped, extra=None):
                 for a in unreal.GameplayStatics.get_all_actors_of_class(w, cls):
                     l = a.get_actor_location()
                     row['proj'].append([wi, round(l.x), round(l.y), round(l.z)])
+            # Shots the host fired in this sequence (each rise of the host's count), logged at its end: a capture of a shooting move that
+            # shows no shot says so in capture.log instead of only in the rows
+            host = sum(1 for p in row['proj'] if p[0] == 0)
+            st['shots'] = st.get('shots', 0) + max(0, host - st.get('host_proj', 0))
+            st['host_proj'] = host
     except Exception as e:
         row['proj_err'] = repr(e)[:80]
     st['rows'].write(json.dumps(row) + '\n')
@@ -310,6 +317,7 @@ def _tick(_dt):
             os.makedirs(os.path.join(OUT, seq['name']), exist_ok=True)
             st['rows'] = open(os.path.join(OUT, seq['name'], 'frames.jsonl'), 'w')
             _console('t.OverrideFPS 60')
+            st.update(shots=0, host_proj=0)
             st.update(phase='seq_run', frame=0, mask=g.button_mask(BUTTON), crouch=g.button_mask('Crouch'), jumped=None, fired=None, prev_z=None)
         elif phase == 'seq_run':
             seq, frame = SEQUENCES[st['seq']], st['frame']
@@ -360,7 +368,7 @@ def _tick(_dt):
                 st['rows'].close()
                 g.combat_clear(0)
                 _console('t.OverrideFPS 0')
-                _log(f'sequence {seq["name"]} done: {st["frame"]} frames, pawn z {_pawn().get_actor_location().z:.1f}')
+                _log(f'sequence {seq["name"]} done: {st["frame"]} frames, pawn z {_pawn().get_actor_location().z:.1f}, host shots {st.get("shots", 0)}')
                 st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False)
         elif phase == 'ending' and not les.is_in_play_in_editor():
             unreal.unregister_slate_post_tick_callback(st['handle'])
@@ -383,5 +391,5 @@ def _tick(_dt):
     return None
 
 
-_log(f'driver loaded: kit {KIT}, out {OUT}')
+_log(f'driver loaded: kit {KIT}, button {BUTTON}, out {OUT}')
 st['handle'] = unreal.register_slate_post_tick_callback(_tick)

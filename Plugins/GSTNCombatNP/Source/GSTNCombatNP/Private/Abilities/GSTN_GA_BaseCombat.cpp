@@ -282,6 +282,8 @@ void UGSTN_GA_BaseCombat::RaiseMoveEvents()
 		const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
 		FGSTN_MoveEventRules::FKeyList Keys;
 		FGSTN_MoveEventRules::CollectKeys(Data, Last, Current, Keys);
+		UE_LOG(LogGSTNBaseCombat, Verbose, TEXT("%s: move frame %d (from %d, sim frame %d, entry %d, %d tracks): %d key(s) crossed"), *GetName(), Current, Last,
+			SimFrame, RunningEntry.Value, Data.Tracks.Num(), Keys.Num());
 		for (const int32 TrackIndex : Keys)
 		{
 			if (!IsActive() || !bStarted.Value)
@@ -329,6 +331,7 @@ void UGSTN_GA_BaseCombat::RunKey(const FGSTN_TimelineTrack_Event& Key, int32 Tra
 		// The event started a move that replaced this one: its actions and its Blueprint event belong to a move that is over
 		return;
 	}
+	UE_LOG(LogGSTNBaseCombat, Verbose, TEXT("%s: key %s on move frame %d, %d action(s)"), *GetName(), *Key.KeyTag.ToString(), TimelineFrame, Key.Actions.Num());
 	FGSTN_MoveActionContext Context;
 	Context.Ability = this;
 	Context.KeyTag = Key.KeyTag;
@@ -623,6 +626,8 @@ void UGSTN_GA_BaseCombat::OnSimulationTick(const FAbilitySystemTimeStep& TimeSte
 	{
 		return;
 	}
+	UE_LOG(LogGSTNBaseCombat, VeryVerbose, TEXT("%s: sim tick, step frame %d, started %d, awaiting %d, running %d"), *GetName(), TimeStep.ServerFrame,
+		bStarted.Value, bAwaitingAdoption.Value, IsStillTheRunningTimeline());
 
 	if (bAwaitingAdoption.Value)
 	{
