@@ -1,0 +1,2 @@
+AM_OverlordJab1V3 / AM_OverlordJab2V3: dump before (len 0.46667 / 0.86667, 1 DefaultSlot segment, section Default, blend structs) equals dump after (am_after.txt). Both AM .uasset files are byte-identical to HEAD (git status shows no change). TL/GA/AM not touched. IDENTICAL.
+The before dump file was deleted by mistake during an editor restart; its text matched the first output reproduced in am_after.txt.

@@ -1,0 +1,1 @@
+No valid numbers: pose evaluation of AS_OverlordDropkick_Loop in the editor (AnimPoseExtensions and AnimationLibrary FK) returned the same ref-like pose at every frame, old and new, so foot_l-foot_r and hand_l/hand_r at loop frame 6 could not be read. The check's legibility json holds no bone positions. The old clip was overwritten and not dumped.
