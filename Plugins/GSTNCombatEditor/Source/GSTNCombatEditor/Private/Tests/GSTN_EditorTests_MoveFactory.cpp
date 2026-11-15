@@ -163,7 +163,11 @@ bool FGSTN_MoveFactoryCreateTest::RunTest(const FString& Parameters)
 	for (const TCHAR* Event : { TEXT("K2_OnMoveStarted"), TEXT("K2_OnMoveKey"), TEXT("K2_OnMoveHitConfirmed"), TEXT("K2_OnMoveEnded") })
 	{
 		TestTrue(FString::Printf(TEXT("the graph has %s: %s"), Event, *FString::Join(Graph, TEXT(" | "))),
-			Graph.ContainsByPredicate([Event](const FString& Line) { return Line.Contains(Event); }));
+			Graph.ContainsByPredicate([Event](const FString& Line)
+			{
+				// The dump shows the display name ("On Move Started"), not the K2_ function name
+				return Line.Replace(TEXT(" "), TEXT("")).Contains(FString(Event).RightChop(3));
+			}));
 	}
 	TArray<FString> Findings;
 	TestEqual(TEXT("the empty move events break no simulation rule"), UGSTN_MoveGraphAuthoring::CheckSimulationRules(Move, Findings), 0);
@@ -196,7 +200,7 @@ bool FGSTN_MoveFactoryCreateTest::RunTest(const FString& Parameters)
 
 	// The factory carries the same options for a script (no dialog unattended)
 	const UGSTN_CombatMoveFactory* Factory = GetDefault<UGSTN_CombatMoveFactory>();
-	TestTrue(TEXT("the factory makes ability Blueprints"), Factory->SupportedClass == UGameplayAbilityBlueprint::StaticClass() && Factory->bCreateNew);
+	TestTrue(TEXT("the factory makes ability Blueprints"), Factory->SupportedClass == UGameplayAbilityBlueprint::StaticClass() && Factory->CanCreateNew());
 	TestTrue(TEXT("its default parent"), Factory->Options.ParentClass.Get() == UGSTN_GA_BaseCombat::StaticClass());
 
 	Package->SetDirtyFlag(false);
