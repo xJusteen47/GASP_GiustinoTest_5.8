@@ -87,108 +87,36 @@ void UGSTN_GA_FireProjectile::FinishFire()
 	}
 }
 
+FGSTN_ProjectileShotSpec UGSTN_GA_FireProjectile::MakeShotSpec() const
+{
+	FGSTN_ProjectileShotSpec Spec;
+	Spec.Projectile = Projectile;
+	Spec.MuzzleOffset = MuzzleOffset;
+	Spec.Delivery = Delivery;
+	Spec.Hitscan = Hitscan;
+	Spec.Aim = GetShotAim();
+	Spec.LaunchPitchDeg = GetShotLaunchPitchDeg();
+	Spec.StickAimDeadzone = StickAimDeadzone;
+	Spec.bHighArc = bHighArc;
+	Spec.TargetAimOffset = TargetAimOffset;
+	Spec.ReticleOffAim = ReticleOffAim;
+	Spec.MinReticlePitchDeg = MinReticlePitchDeg;
+	Spec.MaxReticlePitchDeg = MaxReticlePitchDeg;
+	return Spec;
+}
+
 bool UGSTN_GA_FireProjectile::Fire()
 {
-	UGSTN_ProjectileSubsystem* Projectiles = UGSTN_ProjectileSubsystem::Get(GetWorld());
-	AActor* Avatar = GetAvatarActorFromActorInfo();
-	if (!Projectiles || !Avatar || Projectiles->GetLastFrame() == INDEX_NONE)
+	// The builder is shared with the move actions (CP2); the hooks of this class keep their order: the template first, then the aim
+	const FGSTN_ProjectileShot::FResult Result = FGSTN_ProjectileShot::Fire(MakeShotSpec(), *this, TargetEntityId.Value, FGSTN_ProjectileShotAdjust(),
+		[this](FGSTN_ProjectileParams& InOutParams, bool bHost) { return PrepareShot(InOutParams, bHost); });
+	if (Result.Ghost)
 	{
-		return false;
+		OnGhostSpawned(*Result.Ghost);
 	}
-	// A client never spawns the projectile: the host's spawn is the only one, and it reaches the client once. The client that predicts
-	// its own shot draws the same shot as a ghost instead (once per frame, so a resimulation does not add one), adopted on arrival
-	const bool bHost = Projectiles->CanFire();
-	const FGameplayAbilityActorInfo* Info = GetCurrentActorInfo();
-	if (!bHost && !(Info && Info->IsLocallyControlled()))
+	if (Result.Shot)
 	{
-		return false;
+		OnShotFired(*Result.Shot);
 	}
-
-	FGSTN_ProjectileParams Params = Projectile;
-	if (!PrepareShot(Params, bHost))
-	{
-		return false;
-	}
-	Params.OwnerEntityId = Projectiles->FindEntityIdOf(Avatar);
-
-	// The pose hits are judged against: the owner's entry in the combat snapshot; the actor only when it has no combat entity
-	const UGSTN_CombatWorldSubsystem* Combat = UGSTN_CombatWorldSubsystem::Get(GetWorld());
-	const FGSTN_SnapshotEntry* OwnerEntry = Combat && Params.OwnerEntityId != INDEX_NONE ? Combat->GetSnapshot().Find(Params.OwnerEntityId) : nullptr;
-	const FTransform OwnerTransform = OwnerEntry ? OwnerEntry->Transform : Avatar->GetActorTransform();
-	Params.Origin = OwnerTransform.TransformPosition(MuzzleOffset);
-
-	FVector Direction = OwnerTransform.GetUnitAxis(EAxis::X);
-	const EGSTN_ProjectileAim ShotAim = GetShotAim();
-	const FGSTN_SnapshotEntry* TargetEntry = ShotAim == EGSTN_ProjectileAim::EventTarget && Combat && TargetEntityId.Value != INDEX_NONE
-		? Combat->GetSnapshot().Find(TargetEntityId.Value) : nullptr;
-	if (TargetEntry)
-	{
-		const FVector TargetPoint = TargetEntry->Transform.TransformPosition(TargetAimOffset);
-		if (!FGSTN_BallisticMode::SolveLaunchDirection(Params.Origin, TargetPoint, Params.Speed, Params.GravityAccel, bHighArc, Direction))
-		{
-			// Out of reach: the farthest throw towards it (45 degrees against gravity in the target's direction)
-			const FVector Up = Params.GravityAccel.IsNearlyZero() ? FVector::UpVector : -Params.GravityAccel.GetSafeNormal();
-			const FVector Delta = TargetPoint - Params.Origin;
-			const FVector Across = (Delta - Up * (Delta | Up)).GetSafeNormal(UE_SMALL_NUMBER, Direction);
-			Direction = (Across + Up).GetSafeNormal();
-			UE_LOG(LogGSTNProjectile, Log, TEXT("FireProjectile ability: target %d out of reach at %.0f cm/s, farthest throw instead"), TargetEntityId.Value, Params.Speed);
-		}
-	}
-	else
-	{
-		// Reticle (M11 L9): the fire frame's reticle bit picks the 3D reticle aim or the flat fallback; the bit is in the predicted command, so
-		// the host and the predicting client choose alike
-		const UGSTN_CombatSimComponent* AimComponent = Avatar->FindComponentByClass<UGSTN_CombatSimComponent>();
-		const bool bReticleShot = ShotAim == EGSTN_ProjectileAim::Reticle;
-		const bool bReticleOn = bReticleShot && AimComponent && AimComponent->IsPrecisionAimFrame();
-		EGSTN_ProjectileAim FlatAim = ShotAim;
-		if (bReticleShot)
-		{
-			FlatAim = ReticleOffAim == EGSTN_ProjectileAim::Stick ? EGSTN_ProjectileAim::Stick : EGSTN_ProjectileAim::Facing;
-		}
-		if (FlatAim == EGSTN_ProjectileAim::CommandAim)
-		{
-			const FRotator AimRotation = GetAimRotation();
-			if (!AimRotation.IsNearlyZero())
-			{
-				Direction = AimRotation.Vector();
-			}
-		}
-		else if (FlatAim == EGSTN_ProjectileAim::Stick && !bReticleOn)
-		{
-			// The frame's stick on the shooter's plane (its snapshot up), as the stick moves the character; centred = the facing
-			if (AimComponent)
-			{
-				FVector2D Stick;
-				float CameraYaw = 0.f;
-				AimComponent->GetFrameStick(Stick, CameraYaw);
-				const FVector OnPlane = FGSTN_CombatVictim::StickToPlane(Stick, CameraYaw, OwnerTransform.GetUnitAxis(EAxis::Z));
-				if (OnPlane.SizeSquared() > FMath::Square(StickAimDeadzone))
-				{
-					Direction = OnPlane.GetSafeNormal();
-				}
-			}
-		}
-		Direction = FGSTN_ShotAim::ReticleDirection(bReticleOn, bReticleOn ? GetAimRotation() : FRotator::ZeroRotator, Direction,
-			MinReticlePitchDeg, MaxReticlePitchDeg, GetShotLaunchPitchDeg());
-	}
-	Params.Direction = Direction;
-	if (Delivery == EGSTN_ShotDelivery::Hitscan)
-	{
-		FGSTN_ShotAim::MakeHitscan(Params, Hitscan);
-	}
-	if (!bHost)
-	{
-		if (AGSTN_Projectile* Ghost = Projectiles->SpawnGhost(Params, Avatar))
-		{
-			OnGhostSpawned(*Ghost);
-		}
-		return false;
-	}
-	AGSTN_Projectile* Shot = Projectiles->FireProjectileAtFrame(Params, INDEX_NONE, Avatar);
-	if (Shot)
-	{
-		OnShotFired(*Shot);
-	}
-	return Shot != nullptr;
+	return Result.Shot != nullptr;
 }

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Abilities/GSTN_GA_Base.h"
+#include "Abilities/GSTN_MoveActions.h"
 #include "Abilities/GSTN_MoveEvents.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "GSTN_GA_BaseCombat.generated.h"
@@ -43,6 +44,11 @@ class UGSTN_CombatTimeline;
  * input questions of the combat component, write FSync* variables, wait combat frames, apply effects, send gameplay events); it must not read
  * the world, the Mover component or anything that is not rolled back, and it must not use latent nodes (Delay, timers). Presentation belongs
  * to the cosmetic hooks (CP4)
+ *
+ * Event keys and move actions (CP2): when the timeline crosses an Event key the ability fires the key's cue and gameplay event, runs its move
+ * actions (FGSTN_MoveAction: fire a projectile, send an event, apply an effect, open a tag window), then raises On Move Key, all in that order, on
+ * the same cursor and with the same once-per-crossing rule as the event. A graph runs the same actions through the request nodes below (Send
+ * Move Event, Apply Move Effect, Open Move Tag Window, Run Move Action); they do nothing outside the simulation step of an active move
  */
 UCLASS(Abstract, Blueprintable)
 class GSTNCOMBATNP_API UGSTN_GA_BaseCombat : public UGSTN_GA_Base
@@ -137,6 +143,43 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat|Timeline")
 	int32 GetMoveHitConfirmGroups() const;
 
+	// ---- Move actions (CP2): requests a move makes, never direct state writes. All of them refuse (return false) outside the simulation step
+	// of an active, started move: in a frame being restored, in presentation code, after the end
+
+	/** Whether a move action may run now: the move is active and started, and the ability system is simulating (not restoring) a frame */
+	bool CanRunMoveActions() const;
+
+	/** Sends a gameplay event to this move's own ability system (abilities triggered by it start; timelines among them are adopted) */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Move Actions", meta = (DisplayName = "Send Move Event"))
+	bool SendMoveEvent(FGameplayTag EventTag, float Magnitude = 0.f);
+
+	/** Applies an effect to the owner (a movement goes through an effect with UApplyMoveGameplayEffectComponent: a queued Mover move) */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Move Actions", meta = (DisplayName = "Apply Move Effect"))
+	bool ApplyMoveEffect(TSubclassOf<UGameplayEffect> Effect, float Level = 1.f);
+
+	/** Grants Tag for Frames combat frames or until the move ends (MaxTagWindows at a time; the same tag again re-arms it) */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Move Actions", meta = (DisplayName = "Open Move Tag Window"))
+	bool OpenMoveTagWindow(FGameplayTag Tag, int32 Frames = 10);
+
+	/** Closes the window of Tag now, if it is open */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Move Actions", meta = (DisplayName = "Close Move Tag Window"))
+	bool CloseMoveTagWindow(FGameplayTag Tag);
+
+	/** Runs any move action (Make Instanced Struct of a move action type: a projectile shot, an event...), as an Event key would */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Move Actions", meta = (DisplayName = "Run Move Action"))
+	bool RunMoveAction(UPARAM(meta = (BaseStruct = "/Script/GSTNCombatNP.GSTN_MoveAction")) const FInstancedStruct& Action);
+
+	/** A random number the same on every machine and in every re-simulation of this frame. Salt tells two draws of the same frame apart */
+	UFUNCTION(BlueprintPure, Category = "Combat|Move Actions", meta = (DisplayName = "Get Move Random Float"))
+	float GetMoveRandomFloat(int32 Salt, float Min = 0.f, float Max = 1.f) const;
+
+	/** A random integer in [Min, Max], the same on every machine and in every re-simulation of this frame */
+	UFUNCTION(BlueprintPure, Category = "Combat|Move Actions", meta = (DisplayName = "Get Move Random Integer"))
+	int32 GetMoveRandomInteger(int32 Salt, int32 Min, int32 Max) const;
+
+	/** Tag windows a move holds at a time (Open Move Tag Window) */
+	static constexpr int32 MaxTagWindows = 2;
+
 protected:
 	/**
 	 * Called once when the timeline starts: in ActivateAbility for a command, in the adoption tick for an activation that waited.
@@ -200,6 +243,20 @@ private:
 	/** Move events are simulation events: none while the ability system restores a frame */
 	bool CanRaiseMoveEvents() const;
 
+	/** An Event key was crossed: its cue, its gameplay event and its move actions (CP2), then On Move Key. Stops when the move stops running */
+	void RunKey(const FGSTN_TimelineTrack_Event& Key, int32 TrackIndex, int32 TimelineFrame);
+
+	/** The tag window slots (sync variables), by index */
+	FSyncGameplayTag& TagWindowTag(int32 Slot) { return Slot == 0 ? TagWindowTag0 : TagWindowTag1; }
+	FSyncInteger& TagWindowStart(int32 Slot) { return Slot == 0 ? TagWindowStart0 : TagWindowStart1; }
+	FSyncInteger& TagWindowFrames(int32 Slot) { return Slot == 0 ? TagWindowFrames0 : TagWindowFrames1; }
+
+	/** Removes the loose tag of a slot and frees it */
+	void CloseTagWindowSlot(int32 Slot);
+
+	/** Closes the windows whose frames are over (every simulated frame of the move), or all of them (the move ended) */
+	void CloseTagWindows(bool bAll);
+
 	/** True once the ability found itself in the combat state and started (sync var: rolled back with the instance) */
 	UPROPERTY(Transient)
 	FSyncBool bStarted;
@@ -253,6 +310,25 @@ private:
 	/** Simulation frame the move events were last raised on (sync var): ActivateAbility and the tick of one frame raise them once */
 	UPROPERTY(Transient)
 	FSyncInteger MoveEventsFrame;
+
+	/** The tag windows of Open Move Tag Window (sync vars): the tag (empty = free slot), the combat clock it opened on, its length */
+	UPROPERTY(Transient)
+	FSyncGameplayTag TagWindowTag0;
+
+	UPROPERTY(Transient)
+	FSyncGameplayTag TagWindowTag1;
+
+	UPROPERTY(Transient)
+	FSyncInteger TagWindowStart0;
+
+	UPROPERTY(Transient)
+	FSyncInteger TagWindowStart1;
+
+	UPROPERTY(Transient)
+	FSyncInteger TagWindowFrames0;
+
+	UPROPERTY(Transient)
+	FSyncInteger TagWindowFrames1;
 
 	/** True from an activation that waits for adoption until it is adopted, cancelled or ended */
 	UPROPERTY(Transient)

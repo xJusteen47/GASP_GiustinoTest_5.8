@@ -122,6 +122,14 @@ namespace GSTNTrackEditors
 				{
 					return FText::Format(LOCTEXT("EventEvent", "Event {0}"), FText::FromString(LeafOf(Event.GameplayEventTag)));
 				}
+				// Only move actions (CP2): the first one's name, and how many follow
+				const UScriptStruct* FirstAction = Event.Actions.Num() > 0 ? Event.Actions[0].GetScriptStruct() : nullptr;
+				if (FirstAction)
+				{
+					return Event.Actions.Num() == 1
+						? FText::Format(LOCTEXT("EventAction", "Action {0}"), FirstAction->GetDisplayNameText())
+						: FText::Format(LOCTEXT("EventActions", "Action {0} (+{1})"), FirstAction->GetDisplayNameText(), FText::AsNumber(Event.Actions.Num() - 1));
+				}
 				return LOCTEXT("EventEmpty", "Event (nothing set)");
 			}
 		};

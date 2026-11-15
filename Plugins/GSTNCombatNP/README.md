@@ -358,3 +358,27 @@ The combat component answers the input questions a graph asks, by tag and never 
 its whole pattern, by presses no command used yet), `GetMoveStick`, `GetStickDirection`, `GetMoveHitConfirmGroups`. Simulation reads, like
 `GetActivationContext`; ages count combat frames like the buffer (hitstop does not age a press). The arithmetic is `FGSTN_InputQueries` in
 GSTNInputCore (`GSTNInput.Core.Input.Queries.*`).
+
+## Move actions, Event keys and the simulation graph validator (Blueprint seams CP2)
+
+**Event keys now run.** When a combat timeline crosses an Event key, `UGSTN_GA_BaseCombat` fires, in this order and once per crossing (same
+sync cursor as On Move Key, again in a re-simulation, never while restoring): the key's `CueTag` (the fork's frame-stamped cue executions), its
+`GameplayEventTag` (to the own ability system: abilities triggered by it start, timelines among them are adopted), its **Actions**, then On Move
+Key. Until CP2 only the outbox part of a key ran. If the event starts a move that replaces this one, the rest is skipped.
+
+**Move actions** (`Abilities/GSTN_MoveActions.h`) are requests, never direct state writes: `FGSTN_MoveAction` instanced structs in the key's
+`Actions` list, or run from a graph. Built in: **Send Event**, **Apply Effect** (a move = an effect with `UApplyMoveGameplayEffectComponent`),
+**Open Tag Window** (a loose tag for N combat frames or until the move ends; 2 windows at a time, the slots are sync variables). The projectile
+plugin adds **Fire Projectile** (`UGSTN_ProjectileDefinition` asset + yaw/pitch/speed adjust). A plugin adds its own action by deriving from
+`FGSTN_MoveAction` in its own module; the Core track names the base only by path.
+
+Graph nodes on the ability (category *Combat|Move Actions*): Send Move Event, Apply Move Effect, Open/Close Move Tag Window, Run Move Action
+(any action struct), Get Move Random Float/Integer (the same on every machine: seed = simulation frame, move start frame, salt), and Fire Move
+Projectile (GSTNProjectileNP). All refuse outside the simulation step of an active move (`CanRunMoveActions`). Rules in `FGSTN_MoveActionRules`,
+tests `GSTNCombat.NP.MoveActions.*`.
+
+**Simulation graph validator** (GSTNCombatEditor, `FGSTN_SimGraphRules`, runs with the ability Blueprint validator on save and in Validate all):
+walks what the simulation events reach (exec links, the nodes feeding them, the Blueprint's own functions and custom events) and reports
+`Ability.SimLatent` (Delay, timers: error; async tasks: warning), `Ability.SimNonSyncVariable`, `Ability.SimWorldRead` (Mover, actor transform,
+world time, traces), `Ability.SimRandom`. An action that cannot run (no definition, no tag) is `Timeline.MoveAction`. Tests
+`GSTNCombat.Editor.SimGraph.*`.

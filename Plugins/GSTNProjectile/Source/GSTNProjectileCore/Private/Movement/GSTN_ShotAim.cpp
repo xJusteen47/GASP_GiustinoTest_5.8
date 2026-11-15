@@ -35,3 +35,26 @@ FVector FGSTN_ShotAim::ReticleDirection(bool bReticleOn, const FRotator& Reticle
 	Launch.Pitch = FMath::Clamp(Launch.Pitch + LaunchPitchDeg, -89.0, 89.0);
 	return Launch.Vector();
 }
+
+FVector FGSTN_ShotAim::ApplyAngleOffset(const FVector& Direction, const FVector& Up, float YawDeg, float PitchDeg)
+{
+	const FVector Dir = Direction.GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
+	if (FMath::IsNearlyZero(YawDeg) && FMath::IsNearlyZero(PitchDeg))
+	{
+		return Dir;
+	}
+	const FVector UpAxis = Up.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+	// Heading and elevation in the shooter's frame (its own up, so a shooter on a wall or under a gravity vector turns the same way)
+	const double Elevation = FMath::RadiansToDegrees(FMath::Asin(FMath::Clamp(Dir | UpAxis, -1.0, 1.0)));
+	FVector Heading = Dir - UpAxis * (Dir | UpAxis);
+	if (!Heading.Normalize())
+	{
+		// Straight up or down: any heading across the up axis
+		Heading = FVector::VectorPlaneProject(FVector::ForwardVector, UpAxis).GetSafeNormal(UE_SMALL_NUMBER, FVector::RightVector);
+	}
+	// A positive angle about Z turns X towards Y, which is a right turn in Unreal's frame: the yaw is used as is
+	Heading = Heading.RotateAngleAxis(YawDeg, UpAxis);
+	const double NewElevation = FMath::Clamp(Elevation + PitchDeg, -89.0, 89.0);
+	const double Rad = FMath::DegreesToRadians(NewElevation);
+	return (Heading * FMath::Cos(Rad) + UpAxis * FMath::Sin(Rad)).GetSafeNormal();
+}

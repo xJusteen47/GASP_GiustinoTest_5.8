@@ -1,0 +1,134 @@
+<title>Architettura plugin combattimento</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400&family=IBM+Plex+Sans:wght@400;600&family=Space+Grotesk:wght@600&display=swap">
+<style>
+:root{--bg:#f4f6f9;--fg:#1a2230;--muted:#586377;--line:#d8dde6;--surface:#fff;--accent:#2b5fc7;--code:#e9edf4;
+--display:"Space Grotesk",system-ui,sans-serif;--body:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",Consolas,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161d;--fg:#e4e8ef;--muted:#9aa4b5;--line:#2b3340;--surface:#1a2029;--accent:#8aa9ff;--code:#232b37;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12161d;--fg:#e4e8ef;--muted:#9aa4b5;--line:#2b3340;--surface:#1a2029;--accent:#8aa9ff;--code:#232b37;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.6}
+.wrap{max-width:820px;margin:0 auto;padding-block:32px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--display);line-height:1.2;text-wrap:balance}h1{font-size:1.7rem}h2{font-size:1.2rem;margin-top:2em;color:var(--accent)}
+code{font-family:var(--mono);font-size:.85em;background:var(--code);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+a{color:var(--accent)}li{margin:.3em 0}p,li{max-width:70ch}
+.tb{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface);margin:1em 0}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:.9rem}th,td{text-align:left;vertical-align:top;padding:7px 10px;border-bottom:1px solid var(--line)}th{background:var(--code);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+</style>
+<div class="wrap"><h1>Plugin di combattimento GSTN: architettura (per designer e per la futura versione pubblica)</h1>
+<p>Stato: 2026-11-14, ramo <code>claude/project-thread-0tmywc</code>; sezione 7 aggiornata il 2026-11-15 (CP2). Scritto da lettura del codice e degli handover (react-hook-1/2, launch-impacts), <strong>non eseguito in editor</strong>.
+Questo documento è la mappa breve; la specifica completa è <a href="https://github.com/xJusteen47/GASP_GiustinoTest_5.8/blob/claude/project-thread-0tmywc/docs/architecture/combat.md">docs/architecture/combat.md</a> (1187 righe), l'indice dei plugin è <a href="https://github.com/xJusteen47/GASP_GiustinoTest_5.8/blob/claude/project-thread-0tmywc/Plugins/README.md">Plugins/README.md</a>, e ogni plugin ha il suo README.</p>
+<h2>1. Moduli (livelli)</h2>
+<p>Regola: un plugin <strong>Core</strong> puro (niente GAS, niente Network Prediction, niente Mover), adattatori sopra. Le dipendenze vanno solo verso il basso.</p>
+<div class="tb"><table>
+<thead>
+<tr>
+<th>Plugin</th>
+<th>Livello</th>
+<th>Cosa contiene</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GSTNInput</code> / <code>GSTNInputNP</code></td>
+<td>Core / NP</td>
+<td>Comandi, buffer, priorità, lock; la simulazione input dentro il modello NP; tracker dello stato Mover.</td>
+</tr>
+<tr>
+<td><code>GSTNCombat</code></td>
+<td>Core</td>
+<td>Tag di combattimento, <code>UGSTN_CombatRules</code>, timeline (<code>FGSTN_CombatTimelineData</code>), hitbox/hurtbox, modelli di knockback, tabella impatti di superficie. Pura e deterministica.</td>
+</tr>
+<tr>
+<td><code>GSTNCombatGAS</code></td>
+<td>GAS</td>
+<td>Tag nativi, attribute set (vita, stats, meter), GE di danno, kit/armi/super (data asset), loadout, <strong>reazioni visive</strong> (<code>UGSTN_ReactionAnimSet</code> + componente). Funziona anche con il GAS standard.</td>
+</tr>
+<tr>
+<td><code>GSTNCombatNP</code></td>
+<td>Adattatore fork</td>
+<td>Modello NP del combattimento (<code>UGSTN_CombatSimComponent</code>), abilità base (<code>UGSTN_GA_Base</code>, <code>UGSTN_GA_BaseCombat</code>), risoluzione colpi, mosse a strati (<code>FGSTN_LayeredMove_Knockback</code>, Freeze). <strong>Richiede il fork GAS+NPP.</strong></td>
+</tr>
+<tr>
+<td><code>GSTNDefence</code> (Core/GAS/NP)</td>
+<td>Estensione</td>
+<td>Scudo, parry, tech, <strong>atterraggio dal tumble, rimbalzo, knockdown, rialzata/rotolata</strong>, DI/SDI.</td>
+</tr>
+<tr>
+<td><code>GSTNCombatEditor</code>, <code>GSTNCombatDebug</code></td>
+<td>Editor</td>
+<td>Editor timeline, bake socket, validatori; debug.</td>
+</tr>
+<tr>
+<td>Altri (Link, Parts, Projectile, Pickups, KitMods, Backpack, Minion...)</td>
+<td>Estensioni opzionali</td>
+<td>Si agganciano alla pipeline dei colpi senza modificarla.</td>
+</tr>
+</tbody>
+</table></div>
+<h2>2. Classi principali e data asset</h2>
+<ul>
+<li><strong><code>UGSTN_CombatRules</code></strong> (data asset, uno per modalità): catena di passi di risoluzione colpo (<code>UGSTN_HitResolutionStep</code>, istanziati), modello di knockback, tabella impatti, team/friendly fire. Esempio: <code>GSTN_CombatRules_Standard</code>.</li>
+<li><strong><code>UGSTN_KnockbackModel</code></strong> (sostituibile): Weight Driven (con <code>PercentGrowth</code>), Percent Scaling, Capped, Fixed. Decide forza di lancio e hitstun.</li>
+<li><strong><code>UGSTN_SurfaceImpactTable</code></strong>: cosa succede quando un lanciato tocca una superficie (<code>Splat</code>, <code>Bounce</code>, <code>BreakSurface</code>); l'attacco può forzare (<code>FGSTN_ImpactProfile.Force</code>).</li>
+<li><strong>Kit</strong> (<code>UGSTN_PrimaryKitDefinition</code>), <strong>arma</strong> (<code>UGSTN_WeaponDefinition</code>), <strong>super</strong>: tabelle comando -&gt; abilità. Le mosse sono sottoclassi Blueprint di <code>UGSTN_GA_BaseCombat</code> con la timeline compilata nel kit.</li>
+<li><strong><code>UGSTN_CombatTimeline</code></strong> / timeline inline: tracce (Hitbox, HurtboxModifier, CancelWindow, Movement, Tags, Event, Charge). Gli hitbox usano <code>BakedSocket</code>: il socket è campionato in editor, a runtime nessuna animazione è valutata (deterministico, anche su server dedicato).</li>
+<li><strong><code>FGSTN_DefenceKitExtension</code></strong> nel kit: <code>FGSTN_GetupSet</code> (Neutral, Roll, RollBack), <code>FGSTN_TechSet</code>, scudo.</li>
+<li><strong><code>UGSTN_ReactionAnimSet</code></strong> (data asset visivo): vedi 4.</li>
+</ul>
+<h2>3. Flusso GAS + simulazione (lancio, knockback, knockdown)</h2>
+<p>Tick fisso 62.5 Hz. Per ogni entità, ogni frame F: <strong>modello combat (47) -&gt; ASC (48) -&gt; Mover (50)</strong>; in rollback i tre vengono ripristinati e rieseguiti in quest'ordine.</p>
+<ol>
+<li><strong>Colpo.</strong> La hitbox dell'attaccante (query su snapshot di fine F-1) deposita una voce nella <strong>inbox</strong> della vittima, con timestamp. La vittima la consuma al frame successivo (reazione sempre a F+1).</li>
+<li><strong>Risoluzione.</strong> Catena di <code>UGSTN_HitResolutionStep</code>: team -&gt; intangibile -&gt; parry -&gt; scudo -&gt; armatura -&gt; clank -&gt; <em>apply</em> (GE danno con <code>UGSTN_DamageExecution</code>, evento <code>Combat.Event.Hit.Received</code>) -&gt; hitstop.</li>
+<li><strong>Scelta della reazione</strong> (<code>EGSTN_HitReaction</code>): <code>StaggerInPlace</code>, <code>PushBack</code> (scivolata a terra) o <code>Launch</code>. Il modello di knockback dà la forza; sotto <code>LaunchThreshold</code> un colpo a terra è un PushBack. Un PushBack senza terreno diventa Launch.</li>
+<li><strong>Hitstop.</strong> Congela timeline, clock, montage (pausa) e Mover (<code>FGSTN_LayeredMove_Freeze</code> via GE).</li>
+<li><strong>Lancio.</strong> Dopo l'hitstop, <code>FGSTN_LayeredMove_Knockback</code> (accodato con un GE con <code>UApplyMoveGameplayEffectComponent</code>, <strong>mai</strong> scrivendo lo stato del personaggio): velocità iniziale, decadimento, gravità scalata, forza Falling. Dopo DI/SDI e resistenza. Stesso movimento sonda i contatti: scrive la faccia toccata (muro/pavimento/soffitto) che il combat tick legge al frame dopo.</li>
+<li><strong>Impatto.</strong> Contatto con muro: la tabella impatti decide <code>Splat</code> (vittima inchiodata N frame) o <code>Bounce</code>. Contatto con il pavimento: <code>FGSTN_TumbleLanding</code> (GSTNDefenceNP) chiude il tumble.</li>
+<li><strong>Knockdown (Defence F8).</strong> Atterraggio dal tumble -&gt; mini rimbalzo (<code>UGSTN_GA_GroundBounce</code>, avviata Forced) -&gt; stato a terra <code>Combat.State.Knockdown</code> (<code>UGSTN_GE_DownedLock</code>). Da terra: stick tenuto = <code>UGSTN_GA_GetupRoll</code> (o <code>RollBack</code> se lo stick è verso la testa), salto (A) = <code>UGSTN_GA_GetupNeutral</code> (comando <code>Command.Movement.Jump</code> che richiede <code>Knockdown</code>); tech opzionale (<code>UGSTN_GA_Tech</code>). Auto-knockdown (dropkick): traccia Tags <code>Combat.Move.KnockdownOnLanding</code>.</li>
+<li><strong>Stati come tag.</strong> Il combat tick proietta <code>Combat.State.Hitstun</code>, <code>.Tumble</code>, <code>.Splat</code>, <code>.Knockdown</code>, <code>.Teching</code>, <code>Combat.Lock.Reaction</code> ecc. come conteggi assoluti sull'ASC (mai concessi da altri; niente trigger su questi tag). Le abilità li leggono solo in <code>ActivationBlockedTags</code>.</li>
+</ol>
+<p>Regola d'oro: il combat tick <strong>scrive solo il proprio stato di sync</strong>; ogni cosa per ASC/Mover è una richiesta con timestamp (<code>RequestFrame == F</code>), eseguita una sola volta anche in re-simulazione. Tutti i timer sono frame, non secondi.</p>
+<h2>4. Animazione: solo visiva, separata dalla simulazione</h2>
+<ul>
+<li><strong>Mosse del giocatore:</strong> il montage della timeline è seguito dalla timeline (pausa in hitstop); la verità è il frame della timeline.</li>
+<li><strong>Reazioni della vittima</strong> (dal 2026-11-14): <code>UGSTN_ReactionAnimComponent</code> (su <code>SandboxCharacter_Mover</code>) legge <strong>i tag dell'ASC ogni frame</strong>, solo su macchine che disegnano (mai server dedicato), e riproduce sullo slot <code>DefaultSlot</code> l'animazione scelta da <code>UGSTN_ReactionAnimSet</code>. Non scrive mai stato di simulazione; senza clip semplicemente nessuna posa di reazione.</li>
+<li>Una <strong>regola</strong> (<code>FGSTN_ReactionAnimRule</code>): <code>RequiredTags</code> (tutti) + <code>BlockedTags</code> (nessuno), <code>Priority</code> (vince la più alta: Splat &gt; Hitstun), <code>Animation</code>, <code>ThenAnimation</code> opzionale (concatenata con cross-fade, es. GroundHit -&gt; LieUp), <code>EndBehaviour</code> (HoldLastPose / Loop / BlendOut), <code>PlayRate</code>, <code>BlendInFrames</code> (regola del proprietario: 0-1, il primo frame deve cambiare chiaramente), <code>ChainBlendFrames</code>, blend out. Cede il passo ai montage delle timeline.</li>
+<li>Contenuto: <code>Tools/GAS/setup_reaction_anims.py</code> (headless) scrive <code>DA_ReactionAnims</code> e il componente. Limiti noti: crouch dopo la rialzata (causa nell'ABP, non in git), capsule/ECB che si riduce non fatto.</li>
+</ul>
+<h2>5. Come aggiungere (passi per il designer)</h2>
+<p><strong>Una mossa</strong> (oggi: duplicare un esempio)
+1. Duplica <code>GA_Example_Light</code> (o Strong/Special) in <code>Content/GASNPPTest/Examples</code> (kit e armi devono stare sotto <code>/Game/GASNPPTest</code>).
+2. Nella timeline: lunghezza, traccia Hitbox (forma, <code>Space = BakedSocket</code>, socket, anteprima mesh + montage, <strong>Bake Sockets</strong> Ctrl+B), danno, angolo, knockback base/crescita, <code>Impact.Force</code> se serve (Bounce/Splat).
+3. Aggiungi la mossa al kit/arma (<code>WPN_Example</code>, <code>KIT_Example</code>): slot comando (X leggera, RT forte, Y speciale) e contesto (Neutral/Directional/aria).
+4. Tag di identità in <code>Config/Tags/*.ini</code> (<code>Kit.*</code>, <code>Weapon.*</code>).
+5. Provala su <code>L_Test_Hub</code> (pad kit). Guida con esempi: artifact "Mosse di esempio GSTN".</p>
+<p><strong>Una reazione visiva</strong> (solo dati)
+1. Apri <code>DA_ReactionAnims</code>, aggiungi una regola: tag richiesti (es. <code>Combat.State.Tumble</code>), clip, priorità, fine (Hold/Loop/BlendOut).
+2. Per concatenare (impatto -&gt; a terra) compila <code>ThenAnimation</code>. Imposta <code>BlendInFrames</code> 0-1.
+3. Nessun codice, nessun Blueprint da cablare.</p>
+<p><strong>Cambiare come si vola</strong> (dati): <code>GSTN_CombatRules_Standard</code> &gt; Knockback Model (<code>PercentGrowth</code>, soglie), <code>GSTN_SurfaceImpacts_Standard</code> (velocità minima, restituzione, frame di splat), regole Defence (rimbalzo, rotolata <code>TravelDistanceCm</code>/<code>TravelKeys</code>), <code>bTurnBackAlongKnockback</code>.</p>
+<h2>6. Cosa è ancora solo C++ o specifico del progetto (per renderlo pubblico e solo-BP)</h2>
+<p>Oggi un designer <em>può</em> fare con soli dati: mosse da duplicati, kit, reazioni visive, regole. Non può ancora, o dipende dal progetto:
+1. <strong>Fork GAS+NPP obbligatorio</strong> per <code>GSTNCombatNP</code> (e NP di Defence/Link/Input): il plugin non è usabile con motore standard. Serve un percorso <code>GSTNCombatStockGAS</code> (previsto, non fatto) o pubblicare il fork con <code>PATCHES.md</code>.
+2. <strong>Creazione di mosse solo da script Python/duplicati</strong> (la logica di una mossa ora si può scrivere in BP: vedi 7): non c'è una procedura guidata o un asset "Move" creabile da Content Browser (factory); scrivere la timeline in BP è possibile ma l'editor timeline/hitbox ha UX ancora in coda.
+3. <strong>Nuovi passi di risoluzione colpo, tipi di link, fragment di sync</strong>: classi C++ (i passi sono Blueprintable in teoria, ma i fragment di stato NP, le tick extension e i <code>LayeredMove</code> sono solo C++). Il codice per frame caldi deve restare C++ per scelta.
+4. <strong>Contenuto e ABP del progetto</strong>: lo slot <code>DefaultSlot</code>, <code>SandboxCharacter_Mover</code>, ABP (non in git), skeleton GASP, hurtbox che dipendono dal motion matching. Il componente reazioni va montato dallo script sul BP condiviso. Un ABP o skeleton diverso richiede lavoro.
+5. <strong>Input e Mover del progetto</strong>: i comandi standard (<code>Command.*</code>), il tracker Mover e le modalità muro (<code>GASP_Giustino2</code>) sono nel modulo di progetto, non in un plugin; Defence legge la rotolata dalla faccia/stick del progetto.
+6. <strong>Tag e config</strong>: tag di progetto in <code>Config/Tags/*.ini</code> e <code>DefaultGame.ini</code> (Asset Manager, contesti di input) vanno forniti come setup; manca un "installer" o Game Feature.
+7. <strong>Contenuto di esempio</strong>: <code>Plugins/**/Content/</code> è ignorato da git; gli esempi stanno in <code>Content/GASNPPTest</code> e nei dati creati da script. Per un plugin pubblico servono esempi dentro il plugin.
+8. <strong>Ancora da progettare</strong>: ECB/capsula che si riduce, reazioni direzionali (da dietro/di lato), clip GroundHit dall'altezza del tumble, fix crouch ABP, UI loadout e tag in italiano/inglese, README unico di installazione, test automatici che non dipendano dalla mappa hub.
+9. <strong>Dedicated server</strong>: il modello di rete è listen server; reazioni visive e replica sono testate solo così.</p>
+<p>Priorità suggerita per renderlo pubblico: (a) decisione sul fork (1), (b) factory/asset "Move" e wizard (2), (c) esempi e tag dentro il plugin (6, 7), (d) pulizia dipendenze dal progetto (4, 5).</p>
+<h2>7. Estendere da Blueprint (CP1 + CP2, 2026-11-15)</h2>
+<p>Ramo <code>claude/project-thread-6bl38a</code> (CP2 sopra CP1). Il nucleo per frame resta C++ a 62.5 Hz; il Blueprint di una mossa decide <strong>per chiave e per evento</strong>, mai per frame (salvo opt-in).</p>
+<ul>
+<li><strong>Eventi di simulazione</strong> sulla mossa (<code>UGSTN_GA_BaseCombat</code>): On Move Started, On Move Key (chiave Event della timeline, nominata da <code>KeyTag</code>), On Move Hit Confirmed, On Move Ended (motivo), On Move Frame solo con <code>bTickMoveInBlueprint</code>. Una volta per percorso simulato, di nuovo in re-simulazione (cursori in variabili sync).</li>
+<li><strong>Domande di input</strong> sul componente combat, per tag (mai tasti): premuto entro N frame, quante pressioni, tenuto da, comando inserito, stick.</li>
+<li><strong>Le chiavi Event ora funzionano</strong> (prima girava solo l'outbox): al frame della chiave partono, in ordine, cue, gameplay event, <strong>azioni</strong>, poi On Move Key.</li>
+<li><strong>Azioni della mossa</strong> (richieste, mai scritture di stato): <em>Send Event</em>, <em>Apply Effect</em> (movimento = GE con mossa Mover in coda), <em>Open Tag Window</em> (tag per N frame o fino a fine mossa), <em>Fire Projectile</em> (data asset <code>UGSTN_ProjectileDefinition</code> + angolo/velocità). Si mettono nella lista Actions della chiave (solo dati) o si chiamano dal grafo (nodi <em>Combat|Move Actions</em>, più <em>Get Move Random</em> deterministico).</li>
+<li><strong>Proiettili</strong>: lo stesso costruttore per l'abilità Fire Projectile e per le mosse; spawn una volta sola sull'host, fantasma sul client che predice.</li>
+<li><strong>Validatore</strong> dei grafi di simulazione (al salvataggio e in Validate all): Delay/timer (errore), task asincroni, variabili non sync, letture di mondo/Mover, random non deterministico (avvisi).</li>
+<li>Un plugin aggiunge azioni sue derivando <code>FGSTN_MoveAction</code> nel proprio modulo: il Core non lo nomina.</li>
+</ul>
+<p>Prossimo: CP3 mosse di esempio (special a doppia pressione con 2 proiettili, versione solo dati e versione grafo BP), CP4 ganci visivi, CP5 factory "Combat Move" e guida.</p>
+</div>
