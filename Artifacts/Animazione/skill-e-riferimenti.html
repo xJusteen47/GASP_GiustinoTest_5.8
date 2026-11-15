@@ -52,12 +52,32 @@ pre{margin:0;padding:12px 14px;font:13px/1.5 var(--mono);background:var(--code-b
   <h2>Cosa consiglio, in ordine</h2>
   <ol>
     <li><strong>Una skill nuova per la revisione video</strong> (regola 10), con dentro la tua nuova domanda di qualità. Oggi il metodo vive nella memoria del progetto e ogni thread di review lo ricostruisce. Circa <strong>$6-10</strong> una volta sola.</li>
-    <li><strong>Snellire <code>gstn-move-animation</code></strong>: pesa 35 KB e viene caricata intera a ogni uso; descrive in parte il flusso vecchio. Circa <strong>$5-8</strong>.</li>
+    <li><strong>Rifare <code>gstn-move-animation</code> attorno al metodo che ti ha dato i risultati migliori</strong>: si parte dalle tue pose, una critica alla volta, una modifica alla volta. Oggi pesa 35 KB e spinge ancora il modello a costruire o rifinire da solo. Circa <strong>$6-10</strong>.</li>
     <li><strong>Libreria di riferimenti fatta di soli numeri</strong> nel repo (timing e curve misurate, con la fonte). Immagini, GIF e video restano solo sul desktop. Pilota di 10 mosse circa <strong>$10-15</strong>, poi circa $1 per mossa nuova.</li>
     <li><strong>Confronto con il riferimento dentro ogni review</strong>: una griglia in più e tre numeri. Circa <strong>$0,5-1</strong> in più per review.</li>
     <li><strong>Da non fare</strong>: estrarre animazioni o modelli dai giochi; trasformare in skill la teoria o il debug lato gioco.</li>
   </ol>
-  <p class="nota" style="margin:12px 0 0">Totale per partire: circa $22-34. Serve un tuo sì ai punti 1-3 e una risposta alla domanda in fondo.</p>
+  <p class="nota" style="margin:12px 0 0">Totale per partire: circa $23-36. Serve un tuo sì ai punti 1-3 e una risposta alla domanda in fondo.</p>
+</section>
+
+<section>
+  <h2>Il metodo di lavoro: le tue pose, critica passo passo</h2>
+  <p>Hai già provato a far generare o rifinire le mosse a Fable 5.1 e a Opus 5.5, e il risultato migliore è arrivato con Antigravity partendo da pose tue già esistenti, con critiche un passo alla volta. Le raccomandazioni seguono questo, non il contrario: nessuna skill deve riportare un modello a inventare la mossa da zero.</p>
+  <ol>
+    <li><strong>La base sono le tue pose.</strong> Le tue chiavi entrano intere e bloccate; il modello non le sposta mai da solo (la pipeline lo rifiuta già).</li>
+    <li><strong>Una critica alla volta.</strong> Ogni critica ha quattro parti: il principio violato, il frame e la parte del corpo, cosa si vede, la modifica più piccola che lo risolve.</li>
+    <li><strong>Una modifica alla volta.</strong> Si applica, si rigenera la griglia sugli stessi frame, si confronta prima e dopo. Solo dopo si passa alla critica successiva.</li>
+    <li><strong>Sulle tue chiavi decidi tu.</strong> Se la critica tocca una tua posa, arriva a te come proposta con il motivo; sugli intermedi il modello procede.</li>
+    <li><strong>Antigravity resta com'è.</strong> Il suo processo non si tocca. Claude fa la critica con i principi e i riferimenti, e la revisione video finale.</li>
+  </ol>
+
+  <h3>I principi di animazione sono usati oggi? Solo in parte</h3>
+  <ul>
+    <li><strong>Esistono</strong>: <code>principi-animazione-corporea.md</code> e <code>animazione-picchiaduro-action.md</code> sono su feature in <code>docs/notes/anim-theory/</code>. Il terzo, <code>silhouette-multidirezionali.md</code>, è ancora su un branch a parte.</li>
+    <li><strong>Vengono letti solo quando il brief li nomina.</strong> È successo per il piano del jab v3, per la review del dair v8 e per il brief delle reazioni.</li>
+    <li><strong>Nessuna skill li cita.</strong> Né <code>animpipe-move</code> né <code>gstn-move-animation</code> rimandano a quei documenti. La rubrica di review viene dalle tue regole, e <code>gstn-move-animation</code> ha una sua lista di fondamentali scritta prima.</li>
+  </ul>
+  <p>Quindi oggi l'uso dipende da chi scrive il brief. La correzione è piccola: le due skill rimandano ai tre documenti, e ogni critica deve nominare il principio da cui deriva (documento 1, sezione 13: intento, previsione, misura, spiegazione). Una critica senza principio non vale. I riferimenti da altri giochi servono a tarare il livello; i principi servono a spiegare cosa non va.</p>
 </section>
 
 <section>
@@ -83,10 +103,10 @@ pre{margin:0;padding:12px 14px;font:13px/1.5 var(--mono);background:var(--code-b
     <tr><td>Revisione video regola 10: controllo della catena di cattura, strisce delle etichette, griglie attorno a colpo e FAF, misura dei pixel cambiati, formato PASS/FAIL</td><td><span class="tag si">sì, nuova</span></td><td>È il passo più ripetuto e il più caro. Gli script per estrarre frame e comporre griglie vanno dentro la skill, così il modello non li riscrive.</td></tr>
     <tr><td>Domanda di qualità e confronto con i riferimenti</td><td><span class="tag si">sì, dentro la stessa</span></td><td>Deve essere chiesta sempre allo stesso modo, altrimenti il livello cambia da thread a thread.</td></tr>
     <tr><td><code>animpipe-move</code> (import, interp, check, render, verdetto su una griglia)</td><td><span class="tag si">già skill, tenere</span></td><td>È corta (5 KB) e guidata da <code>animpipe status</code>. Aggiungere solo il rimando ai tre documenti di teoria e al passo "riferimenti".</td></tr>
-    <tr><td><code>gstn-move-animation</code></td><td><span class="tag forse">sì, da snellire</span></td><td>35 KB caricati interi (circa 9 mila token a ogni uso). Tenere regole e ordine dei controlli; spostare API di Cascadeur, soglie e percorsi in file letti solo quando servono. Dice ancora "mai Fable" per le pose, mentre la regola 3 oggi assegna a Fable animazioni e review.</td></tr>
+    <tr><td><code>gstn-move-animation</code></td><td><span class="tag forse">sì, da rifare</span></td><td>Diventa la skill della critica passo passo sulle tue pose: una critica con il suo principio, una modifica, prima e dopo. Via la modalità "da zero" come strada normale. 35 KB caricati interi (circa 9 mila token a ogni uso): tenere regole e ordine dei controlli; spostare API di Cascadeur, soglie e percorsi in file letti solo quando servono. Dice ancora "mai Fable" per le pose, mentre la regola 3 oggi assegna a Fable animazioni e review.</td></tr>
     <tr><td>Cattura sul desktop e consegna alla review (build, cattura, mp4 e griglie in <code>docs/notes/reviews/</code>)</td><td><span class="tag forse">sezione, non skill</span></td><td>Sono pochi comandi già coperti da <code>animpipe render --standalone</code>. Basta una sezione in <code>animpipe-move</code>.</td></tr>
     <tr><td>Raccolta di un riferimento (scarica, misura, salva i numeri)</td><td><span class="tag forse">sezione, non skill</span></td><td>Gli script esistono già (<code>ufd_fetch.py</code>, <code>ufd_measure.py</code>). Lavoro da Haiku.</td></tr>
-    <tr><td>Teoria dell'animazione (<code>docs/notes/anim-theory/</code>)</td><td><span class="tag no">no</span></td><td>È conoscenza, non procedura. Le skill la citano; duplicarla crea due versioni che divergono.</td></tr>
+    <tr><td>Teoria dell'animazione (<code>docs/notes/anim-theory/</code>)</td><td><span class="tag no">no, ma citata</span></td><td>È conoscenza, non procedura. Le skill devono rimandarci (oggi non lo fanno); duplicarla crea due versioni che divergono.</td></tr>
     <tr><td>Le tue regole di feel e le decisioni per mossa</td><td><span class="tag no">no</span></td><td>Cambiano spesso. Un solo posto: <code>rules.md</code> e <code>kits/&lt;kit&gt;.md</code> per le regole stabili, la card per la singola mossa.</td></tr>
     <tr><td>Diagnosi lato gioco (accosciata dopo il montage, salto delle gambe, Anim BP)</td><td><span class="tag no">no</span></td><td>Sono indagini, ogni volta diverse. Vanno in thread di codice.</td></tr>
     <tr><td>Processo Antigravity</td><td><span class="tag no">no</span></td><td>È tuo e non va toccato.</td></tr>
