@@ -77,13 +77,19 @@ DAIR_SEQUENCES = [
     {'name': 'dair_land', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True, 'air': {'trigger_h': 184.0}},
     {'name': 'jump_only', 'taps': [], 'frames': 110, 'dummy': None, 'shoot': False, 'air': {}},
     {'name': 'dair_hit', 'taps': [], 'frames': 130, 'dummy': 62.0, 'shoot': True, 'air': {'trigger_h': 225.0}},
+    # PUSHBOX-P3: the same hit on a dummy at a high percent (test-only server write of its DamagePercent, PIE_CAPTURE_DUMMY_PERCENT, default 180: at 150 the launch, ~1700 cm/s up and forward, stayed under the 1800 cm/s tumble threshold and flew ~17 m)
+    # so the landing hit tumbles it into a knockdown; then the stick is held forward ('walk': from this many frames after the press, for this many
+    # frames) so the attacker walks over the downed body (no pushbox expected while it is down)
+    {'name': 'dair_knockdown', 'taps': [], 'frames': 520, 'dummy': 62.0, 'shoot': True, 'air': {'trigger_h': 225.0},
+     'dummy_percent': float(os.environ.get('PIE_CAPTURE_DUMMY_PERCENT', 180.0)), 'walk': (50, 400)},
 ]
 # Dropkick (forward air, ANIM-R2): same 'air' mechanism, but the stick is held forward (instead of crouch) and Attack tapped the next frame
 # (command Directional while Airborne, setup_overlord_dropkick_kit.py): PIE_CAPTURE_KIT=KIT_Test_OverlordDropkick. The move is 80 frames long
 DROPKICK_SEQUENCES = [
     {'name': 'dropkick_whiff', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5}},
-    # PUSHBOX-P2: the same press with a dummy ahead, so the landing and the end meet a body (dummy distance a first guess, the rows hold both places)
-    {'name': 'dropkick_hit', 'taps': [], 'frames': 150, 'dummy': 120.0, 'shoot': True, 'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5}},
+    # PUSHBOX-P2: the same press with a dummy ahead, so the landing and the end meet a body. P3: 120 cm let the kick pass ~230 cm over the dummy
+    # (no hit), the kick connects further out: PIE_CAPTURE_DROPKICK_DIST (default 275 cm)
+    {'name': 'dropkick_hit', 'taps': [], 'frames': 150, 'dummy': float(os.environ.get('PIE_CAPTURE_DROPKICK_DIST', 275.0)), 'shoot': True, 'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5}},
 ]
 # CP3 double-shot examples (PIE_CAPTURE_KIT=KIT_Example_DoubleShotA / B, PIE_CAPTURE_BUTTON=Special): one press, two presses 8 frames apart (a double
 # press), two presses 40 frames apart (two single shots)
@@ -248,6 +254,9 @@ def _row(frame, tapped, extra=None):
         try:
             dv = g._view(0, st['dummy_key']) or {}
             row['dummy'] = {'tags': dv.get('tags'), 'loc': dv.get('location'), 'combat': dv.get('combat')}
+            # P3: the step snapshot's action state, reaction flags and percent (tumble and knockdown are not in the GAS tags above)
+            se = json.loads(g.comps(g.worlds()[0])[st['dummy_key']].read_snapshot_entry(-1) or '{}')
+            row['dummy']['snap'] = {k: se.get(k) for k in ('actionState', 'reactionFlags', 'damagePercent', 'stateTags') if k in se}
         except Exception as e:
             row['dummy_err'] = repr(e)[:80]
     try:   # body vs capsule (DROPKICK-CAPSULE): pelvis world z, capsule half height/radius, mesh z relative to the actor
@@ -327,6 +336,9 @@ def _tick(_dt):
             if seq['dummy'] and not st.get('dummy_placed'):
                 keys = h.dummies()
                 _log(f'dummy {keys[:1]} ahead: {h._place_ahead(0, keys[0], seq["dummy"]) if keys else "NO DUMMY"}')
+                if keys and seq.get('dummy_percent') is not None:   # test harness only (server write of the health set's DamagePercent)
+                    ok = g.comps(g.worlds()[0])[keys[0]].server_set_damage_percent(seq['dummy_percent'])
+                    _log(f'dummy {keys[0]} percent {seq["dummy_percent"]}: {ok}')
                 st.update(dummy_placed=True, dummy_key=keys[0] if keys else None, t=now)         # one more wait for the teleport to settle
                 return None
             if seq.get('air') is not None:
@@ -386,6 +398,13 @@ def _tick(_dt):
             if air is not None and st['fired'] is not None and frame == st['fired'] + AIR_CROUCH_RELEASE:
                 g.combat_clear(0)
                 if air.get('stick'):
+                    g.release(0, 'move')
+            walk = seq.get('walk')
+            if walk and st['fired'] is not None:
+                if frame == st['fired'] + walk[0]:
+                    g.hold(0, 'move', (0, 1, 0))
+                    _log(f'{seq["name"]}: walk forward from v{frame}')
+                elif frame == st['fired'] + walk[0] + walk[1]:
                     g.release(0, 'move')
             st['frame'] = frame + 1
             if st['frame'] >= PRE + seq['frames']:
