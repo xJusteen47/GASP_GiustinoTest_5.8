@@ -24,3 +24,7 @@ in its `_design` needs an owner decision BEFORE build; reviews compare with that
 - Dropkick: restore r0 startup+loop poses, keep timing/hold/hitbox code; land clip re-keyed only at its start to leave from the r0
   loop pose (still ends on lieup). Desktop: build, capture, rule-10 review. ~$15-20.
 - Jab 1: keep f0-f6, contact mid-swing; f7-f10 hand keeps travelling to the right of the body, slowing; short hold at arc end; FAF 22.
+## Owner answers 11-15 14:19Z (msg cmsg_01CRvUdrWm1dJrM4q54YDBLN3bt1hdy2t88z79oCs9mc8a)
+1A (restore Antigravity dropkick) + "improve follow-through and secondary motion" (scope: these moves, quality goal).
+2: reference poses are open in Cascadeur (MCP, owner's machine): jab 1 slap toward the RIGHT, jab 2 palm toward the LEFT; improvable but
+the base. 3 unanswered -> 3A applied (jab hitbox stays 6-8). Next: desktop thread, brief `handoffs/jab-dropkick-r1-desktop-brief.md`.
