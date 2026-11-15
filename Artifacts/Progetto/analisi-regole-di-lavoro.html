@@ -1,0 +1,185 @@
+<title>Analisi regole di lavoro</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: una colonna stretta da leggere sul telefono; prima il riassunto, poi le proposte numerate (il numero serve per rispondere), poi l'elenco dei difetti */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --fg:#1b2230; --muted:#5d6676; --line:#dde1e8;
+  --accent:#2f5bd3; --code-bg:#eef1f6; --done:#2f8a57; --warn:#b26a00;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12151b; --surface:#1a1f28; --fg:#e4e8ef; --muted:#98a2b3; --line:#2b323e;
+  --accent:#86a6ff; --code-bg:#222936; --done:#5cc58a; --warn:#e8a447; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12151b; --surface:#1a1f28; --fg:#e4e8ef; --muted:#98a2b3; --line:#2b323e;
+  --accent:#86a6ff; --code-bg:#222936; --done:#5cc58a; --warn:#e8a447; color-scheme:dark}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.55}
+.wrap{max-width:760px;margin:0 auto;padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:22px}
+header{display:flex;flex-direction:column;gap:4px}
+h1{font-size:1.6rem;font-weight:600;margin:0;text-wrap:balance}
+.meta{color:var(--muted);font-size:.85rem}
+h2{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0;font-weight:600}
+h3{font-size:1.05rem;font-weight:600;margin:0;text-wrap:balance;min-width:0}
+p{margin:0}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.reply{font-family:var(--mono);font-size:.9rem;background:var(--code-bg);border-radius:6px;padding:8px 12px;overflow-wrap:anywhere}
+.group{display:flex;flex-direction:column;gap:12px}
+.prop{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.head{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:baseline}
+.num{font-family:var(--mono);font-weight:500;font-size:1.05rem;color:var(--accent);font-variant-numeric:tabular-nums}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.tag{font-size:.72rem;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 6px;white-space:nowrap}
+.tag.first{color:var(--done);border-color:currentColor}
+.part{display:flex;flex-direction:column;gap:3px;min-width:0}
+.lbl{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.rule{background:var(--code-bg);border-radius:6px;padding:10px 12px;font-size:.95rem}
+.limit{color:var(--muted);font-size:.9rem}
+ul.flaws{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:9px}
+ul.flaws li{min-width:0}
+ul.flaws b{font-weight:600}
+.ref{color:var(--accent);font-family:var(--mono);font-size:.85em;white-space:nowrap}
+.note{color:var(--muted);font-size:.86rem}
+code{font-family:var(--mono);font-size:.86em;background:var(--code-bg);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+.rule code{background:transparent;padding:0}
+</style>
+
+<div class="wrap">
+
+<header>
+  <h1>Analisi delle regole di lavoro</h1>
+  <div class="meta">15 novembre 2026. Basata sulle 10 regole di progetto, sulla memoria di progetto e su quello che il coordinatore ha osservato nelle ultime 24 ore. Nessuna regola è stata cambiata: decidi tu.</div>
+</header>
+
+<section class="box">
+  <h2>In breve</h2>
+  <p>Le regole funzionano sul punto per cui sono nate. I thread restano corti, i contesti stanno sotto il tetto e le review video hanno fermato tre varianti difettose prima che arrivassero a te. La 2, la 4 e la 10 non le toccherei.</p>
+  <p>I problemi delle ultime 24 ore vengono quasi tutti da tre buchi. Le approvazioni di macchina passano per i thread, mentre la regola 9 ti tiene fuori dai thread. Due thread finiscono sul fisso e si contendono editor e cartella <code>_ue59</code>. Il costo si scopre solo a fine thread.</p>
+  <p>Farei per prime la 1, la 2 e la 3. Per approvare scrivi al coordinatore i numeri, per esempio:</p>
+  <div class="reply">ok 1 2 3 5</div>
+</section>
+
+<div class="group">
+<h2>Proposte</h2>
+
+<article class="prop">
+  <div class="head"><span class="num">1</span><div><h3>Approvazioni di macchina: una volta per sessione</h3>
+    <div class="tags"><span class="tag first">da fare per prima</span><span class="tag">regola 9</span></div></div></div>
+  <div class="part"><span class="lbl">Problema</span>
+    <p>La regola 9 dice che scrivi solo al coordinatore. Ma il permesso per il portatile, Remote Control e agy-bridge vogliono una tua frase dentro il thread. Ieri hai dovuto scrivere "vai fisso" e premere Allow più volte, e un thread del portatile si è fermato perché non poteva raggiungere il fisso.</p></div>
+  <div class="part"><span class="lbl">Regola proposta</span>
+    <div class="rule">Eccezione alla regola 9: le approvazioni di macchina. A inizio sessione il coordinatore manda UN messaggio con l'elenco di quello che servirà (macchine, agy, chiusura forzata di editor e test del progetto) e la frase esatta da incollare. Il coordinatore allega quella risposta a ogni thread che apre. Ogni brief dichiara una sola macchina: fisso, portatile o cloud. Un thread non chiede mai l'altra macchina: il passaggio avviene solo via branch git.</div></div>
+  <div class="part"><span class="lbl">Costo e beneficio</span>
+    <p>Costo zero. Toglie la maggior parte delle interruzioni notturne.</p>
+    <p class="limit">Limiti: la scheda Allow del portatile è della piattaforma e resta. Dentro una sessione Remote Control un blocco di sicurezza si toglie solo con un tuo messaggio in quel thread. Una frase larga è una delega larga: quanto larga lo decidi tu.</p></div>
+</article>
+
+<article class="prop">
+  <div class="head"><span class="num">2</span><div><h3>Posti per macchina al posto di "2 codice + 1 animazione"</h3>
+    <div class="tags"><span class="tag first">da fare per prima</span><span class="tag">regola 7</span><span class="tag">regola _ue59 in memoria</span></div></div></div>
+  <div class="part"><span class="lbl">Problema</span>
+    <p>La regola 7 conta i thread, ma il vincolo vero sono le macchine: un solo editor per macchina. Con 2 thread di codice e 1 di animazione su due macchine, due finiscono sul fisso e si contendono editor e <code>_ue59</code>. Intanto tu hai chiesto di usare entrambe le macchine e di fare il più possibile. I thread solo cloud (review, ricerca, documenti) non usano macchine, ma oggi non si sa se contano.</p></div>
+  <div class="part"><span class="lbl">Regola proposta</span>
+    <div class="rule">Posti: 1 thread con editor per macchina (fisso 1, portatile 1), più al massimo 2 thread solo cloud. Un secondo thread sulla stessa macchina è ammesso solo se non apre l'editor e lavora in un worktree suo. La cartella <code>_ue59</code> la scrive un thread alla volta: chi la usa lo segna in <code>_ue59/IN-USO.txt</code> (nome del thread, ora di fine prevista) e alla fine la segna libera. Solo l'ultimo thread della sessione aggiorna e compila <code>_ue59</code> per il playtest.</div></div>
+  <div class="part"><span class="lbl">Costo e beneficio</span>
+    <p>Costo zero. Niente più coordinamento a mano sulla cartella condivisa, un build finale al posto di uno per thread, e la regola smette di contraddire "usa entrambe le macchine".</p>
+    <p class="limit">Rischio: se l'ultimo thread fallisce trovi <code>_ue59</code> vecchia. Il coordinatore lo deve scrivere nel riepilogo. Cambia la regola attuale "ogni thread di codice finisce con _ue59 compilata".</p></div>
+</article>
+
+<article class="prop">
+  <div class="head"><span class="num">3</span><div><h3>Budget nel brief e stop al tetto</h3>
+    <div class="tags"><span class="tag first">da fare per prima</span><span class="tag">regole 6 e 8</span></div></div></div>
+  <div class="part"><span class="lbl">Problema</span>
+    <p>Il costo si scrive solo a fine thread. Le sessioni di animazione sono arrivate a 40-45 $ contro 25-30 $ stimati e nessuno lo ha saputo prima. "Costi alti" nella regola 6 non ha un numero: la soglia di 15 $ sta solo in memoria. Nessuno somma la spesa della settimana.</p></div>
+  <div class="part"><span class="lbl">Regola proposta</span>
+    <div class="rule">Ogni brief ha un budget in dollari. Arrivato al budget il thread si ferma al primo punto stabile e scrive l'handover. Il coordinatore può concedere una sola estensione, fino a +30%. Oltre, o per più di 15 $ non previsti, decide l'owner. Un piano già approvato copre fino a +20% del suo totale. Il coordinatore tiene <code>handoffs/costi.md</code>: una riga per thread con stima, costo reale e motivo dello scarto, più il totale della settimana. Le stime nuove partono dai costi reali dei thread simili.</div></div>
+  <div class="part"><span class="lbl">Costo e beneficio</span>
+    <p>Pochi minuti del coordinatore per thread. Niente più scarti da 15 $ scoperti a cose fatte, e le stime migliorano dopo una settimana di dati.</p>
+    <p class="limit">Limite: il costo che un thread riporta è una stima sua dai token, non la fattura.</p></div>
+</article>
+
+<article class="prop">
+  <div class="head"><span class="num">4</span><div><h3>Animazioni: prova della base prima, e FAIL divisi per causa</h3>
+    <div class="tags"><span class="tag">regole 5 e 10</span></div></div></div>
+  <div class="part"><span class="lbl">Problema</span>
+    <p>La review del jab v3 ha bocciato tutto, ma il difetto bloccante era del gioco (l'accovacciata all'uscita del montage), non dell'animazione. È stato trovato dopo una sessione di animazione e una review da 10-15 $. Inoltre la regola 5 dice massimo 2 tentativi, mentre tu hai chiesto di portare le animazioni fino al PASS: le due cose si contraddicono.</p></div>
+  <div class="part"><span class="lbl">Regola proposta</span>
+    <div class="rule">Prima di lavorare una mossa si fa una cattura economica della clip BASE con lo stesso script. Se la base mostra già difetti del gioco (posa sotto il montage, scatti all'inizio o all'uscita), parte prima un thread di codice. Ogni voce di un FAIL ha un'etichetta: posa, dati del montage, gioco. Le voci "gioco" vanno subito nella coda del codice e non contano come giro di animazione. Massimo 3 giri di posa per mossa: al terzo FAIL l'owner vede lo stato con il costo e decide. Una review guarda una sola mossa.</div></div>
+  <div class="part"><span class="lbl">Costo e beneficio</span>
+    <p>La cattura della base costa circa 2-4 $ e 15 minuti di fisso (stima mia). Evita di pagare animazione e review sopra un bug del gioco: nel caso del jab erano circa 50 $.</p>
+    <p class="limit">Rischio: un passo in più anche per le mosse che non hanno problemi.</p></div>
+</article>
+
+<article class="prop">
+  <div class="head"><span class="num">5</span><div><h3>Ogni lavoro di macchina parte con un tempo massimo</h3>
+    <div class="tags"><span class="tag">regola 5</span><span class="tag">serve un piccolo script</span></div></div></div>
+  <div class="part"><span class="lbl">Problema</span>
+    <p>Un test sul portatile si è bloccato e il thread non ha potuto chiudere il processo. La macchina resta occupata finché non intervieni tu.</p></div>
+  <div class="part"><span class="lbl">Regola proposta</span>
+    <div class="rule">Build, test e catture partono solo attraverso uno script del repo che fissa un tempo massimo (proposta: build 45 minuti, test 30, cattura 15). Allo scadere lo script chiude da solo i processi che ha avviato e scrive <code>ESITO: TIMEOUT</code> nel file di log. Un timeout conta come un tentativo della regola 5.</div></div>
+  <div class="part"><span class="lbl">Costo e beneficio</span>
+    <p>Un thread piccolo di script, Sonnet, circa 3-6 $ (stima mia). Nessuna macchina bloccata per tutta la notte e nessuna richiesta di chiusura forzata.</p>
+    <p class="limit">Rischio: un tempo troppo corto uccide un build lento ma sano. I tempi vanno tarati sui log che esistono già.</p></div>
+</article>
+
+<article class="prop">
+  <div class="head"><span class="num">6</span><div><h3>Un posto solo per brief, handover e artifact</h3>
+    <div class="tags"><span class="tag">regole 1 e 2</span></div></div></div>
+  <div class="part"><span class="lbl">Problema</span>
+    <p>I brief stanno nei file di progetto (<code>handoffs/</code>, 13 file). Gli handover stanno nel repo (<code>docs/notes/handovers/</code>, 80 file su feature e 104 sul branch più recente), altri accanto alle review. Le copie degli artifact (<code>Artifacts/</code>) esistono solo sui branch dei thread e non su feature. Sul remoto ci sono 218 branch <code>claude/*</code>. Un thread nuovo non sa quale branch ha la versione buona.</p></div>
+  <div class="part"><span class="lbl">Regola proposta</span>
+    <div class="rule">Il brief (prima del lavoro) sta sempre in <code>handoffs/</code> nei file di progetto. L'handover (dopo) sta nel repo sul branch del thread, e il coordinatore ne copia una riga in <code>handoffs/INDICE.md</code>: titolo, branch, commit, esito, costo. L'indice dice anche, per ogni branch: da unire, unito, da buttare. Le copie degli artifact vanno tutte su un solo branch, <code>claude/artifacts</code>, che l'owner unisce quando vuole.</div></div>
+  <div class="part"><span class="lbl">Costo e beneficio</span>
+    <p>Una riga per thread, più un thread Haiku una volta sola per costruire l'indice dagli handover esistenti, circa 2-4 $ (stima mia). I thread partono dall'indice invece di cercare tra i branch, e la tua pulizia del weekend diventa un elenco già pronto. Se approvi anche la 3, costi e indice sono lo stesso file.</p></div>
+</article>
+
+<article class="prop">
+  <div class="head"><span class="num">7</span><div><h3>Decisioni per te: formato da telefono</h3>
+    <div class="tags"><span class="tag">regola 6</span></div></div></div>
+  <div class="part"><span class="lbl">Problema</span>
+    <p>Ieri notte ti sono arrivate molte decisioni insieme, tardi. La regola 6 dice di raggrupparle, ma non dice quante, in che forma e che cosa resta fermo intanto.</p></div>
+  <div class="part"><span class="lbl">Regola proposta</span>
+    <div class="rule">Le decisioni reversibili non si chiedono (regola 6 com'è). Quelle che restano dell'owner arrivano in un solo messaggio per sessione, al massimo 3, in ordine di quanto lavoro bloccano. Ognuna ha due o tre opzioni con una lettera, la consigliata segnata, il costo e una riga su cosa resta fermo finché manca la risposta. Si risponde con "1A 2B 3A". Le decisioni in più aspettano il messaggio dopo, e il lavoro passa alla voce successiva della coda.</div></div>
+  <div class="part"><span class="lbl">Costo e beneficio</span>
+    <p>Costo zero. Rispondi in pochi secondi e vedi subito quali risposte sbloccano lavoro.</p>
+    <p class="limit">Rischio: con il tetto di 3 una decisione poco urgente può aspettare un giorno.</p></div>
+</article>
+
+<article class="prop">
+  <div class="head"><span class="num">8</span><div><h3>Esiti con la prova</h3>
+    <div class="tags"><span class="tag">regole 3 e 4</span></div></div></div>
+  <div class="part"><span class="lbl">Problema</span>
+    <p>La regola 3 mette build e test sul modello più economico a sforzo basso, e la regola 4 limita l'output a 5 righe. È proprio il punto in cui si stabilisce se il lavoro funziona. Il 26 ottobre una sessione ha riportato conteggi di test mai eseguiti: la lezione è in memoria, ma non nelle regole.</p></div>
+  <div class="part"><span class="lbl">Regola proposta</span>
+    <div class="rule">Ogni numero in un handover (test passati, build riuscito, commit) cita il file di log e il comando che lo conta. Il thread successivo, o il coordinatore, ricontrolla un numero per handover con un comando di sola lettura prima di fidarsi. Un report arrivato molto prima del tempo normale si verifica sempre.</div></div>
+  <div class="part"><span class="lbl">Costo e beneficio</span>
+    <p>Meno di 1 $ per handover (stima mia). Evita di costruire una catena di checkpoint sopra un esito falso.</p></div>
+</article>
+</div>
+
+<section class="box">
+  <h2>Difetti e contraddizioni</h2>
+  <ul class="flaws">
+    <li><b>Regola 9 contro le approvazioni nei thread.</b> La regola ti tiene fuori dai thread, la piattaforma ti ci vuole dentro. <span class="ref">→ 1</span></li>
+    <li><b>Regola 7 contro "usa entrambe le macchine" e "fai il più possibile".</b> Il limite a numero di thread non dice niente sulle macchine. <span class="ref">→ 2</span></li>
+    <li><b>"Ogni thread di codice finisce con _ue59 compilata" non regge con due thread paralleli.</b> L'ultimo che scrive vince. <span class="ref">→ 2</span></li>
+    <li><b>Regola 5 (2 tentativi) contro "animazioni fino al PASS".</b> Non è scritto se un giro di review conta come tentativo. <span class="ref">→ 4</span></li>
+    <li><b>Regola 4 contro regola 10.</b> La 4 chiede una griglia per vista guardata una volta. La 10 chiede i frame uno per uno attorno a colpo e FAF. Le ultime due review hanno guardato 6 e 9 immagini e sono finite a 130 e 150 mila token, cioè sul tetto della regola 2. Serve un numero scritto per le review: propongo fino a 8 immagini.</li>
+    <li><b>La regola 3 non parla di animazione.</b> La memoria dice Fable per le animazioni, la regola dice Fable mai sul codice. Le sessioni di animazione contengono script e catture e sono le più care. Fable dovrebbe solo giudicare e decidere le pose. Catture, import e build vanno a subagenti Haiku o Sonnet.</li>
+    <li><b>"Non alternare modelli nello stesso thread" contro "delega a subagenti Sonnet/Haiku".</b> Stanno insieme solo se si scrive che un subagente non conta come cambio di modello.</li>
+    <li><b>La regola 6 fa applicare la consigliata senza aspettare, ma niente ti elenca le scelte già applicate.</b> Oggi sono sparse negli handover. Basta una lista "scelte applicate" nel riepilogo del coordinatore.</li>
+    <li><b>I piani in catena automatica non hanno un punto di controllo.</b> Un piano come CP2 → CP5 può correre per ore senza che tu veda lo stato. Un riepilogo di tre righe a metà catena basta. <span class="ref">→ 3</span></li>
+    <li><b>La memoria contiene regole superate che un thread può ancora leggere.</b> Tre esempi: "push su feature approvato a ogni punto stabile" (23 ottobre) contro "Claude non pusha mai su feature"; "tetto 400 mila token" contro 150/200 mila; una nota intitolata "mai Fable" mentre oggi Fable coordina e fa review. Pulizia con un thread Haiku, circa 1-3 $ (stima mia).</li>
+    <li><b>L'indice della memoria mescola regole e stato.</b> È un file solo da 6,1 KB (il limite consigliato è 4 KB) con regole stabili, stato che scade in poche ore e coda dei lavori. Lo stato dovrebbe stare nell'indice degli handover. <span class="ref">→ 6</span></li>
+    <li><b>Le regole date in chat vivono solo in memoria.</b> Regola del primo frame, regola del montage, chiavi con intenzione, soglia dei 15 $: se la memoria viene accorciata spariscono. Quelle stabili andrebbero nelle istruzioni di progetto.</li>
+    <li><b><code>CLAUDE.md</code> nel repo è vecchio.</b> Dice ancora Unreal 5.8, indica <code>takeover-state.md</code> come handover e non contiene le regole di spesa. Le sessioni sulle macchine leggono quel file. Non ho verificato se ricevono anche le istruzioni di progetto: se no, le regole arrivano solo quando il brief le ripete.</li>
+    <li><b>Video e griglie di review sono in git senza LFS.</b> 165 file e 53 MB sul branch più recente, in crescita a ogni giro. Conviene metterli in LFS o tenerli solo nei file di progetto.</li>
+    <li><b>Il costo è una stima che ogni thread fa a modo suo.</b> Due thread possono contare in modo diverso. Serve una formula sola. <span class="ref">→ 3</span></li>
+    <li><b>Regola 1: alcuni thread partono dalla nota del coordinatore senza un file di brief.</b> Questo thread è uno di quelli. Va bene se la nota è corta, ma allora la regola dovrebbe dirlo.</li>
+  </ul>
+</section>
+
+<p class="note">Cosa ho letto: le 10 regole, l'indice della memoria e quattro note, tre handover recenti (review jab v3, review react-hook-6, brief CP2/CP4), il README di <code>Artifacts/</code> e <code>CLAUDE.md</code>. I conteggi di branch, file e dimensioni sono presi dal repo il 15 novembre 2026. Non ho riletto thread vecchi. Le cifre con "stima mia" non sono misurate.</p>
+
+</div>
