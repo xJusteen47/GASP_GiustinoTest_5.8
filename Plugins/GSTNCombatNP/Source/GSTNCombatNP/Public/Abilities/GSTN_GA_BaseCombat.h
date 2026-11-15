@@ -252,6 +252,13 @@ private:
 	/** Raises the key, hit and frame events of the frame being simulated, once per simulation frame (start frame included) */
 	void RaiseMoveEvents();
 
+	/**
+	 * Hold Until Landed (FGSTN_TimelineTrack_HoldUntilLanded, the dropkick): the montage follows the clock's decision of this frame, before the
+	 * montage ticks. While the timeline is in the hold range the montage loops its loop part; once the clock jumped to the land frame the montage
+	 * jumps to its land part, as a new start (held this tick, drawn first). Stateless: the timeline frame and the synced montage time say it all
+	 */
+	void UpdateHoldUntilLandedMontage();
+
 	/** Move events are simulation events: none while the ability system restores a frame */
 	bool CanRaiseMoveEvents() const;
 
@@ -298,6 +305,9 @@ private:
 
 	/** The timeline ends by itself on this frame and its data lets the montage play on (EndBlendOutFrames < 0): the owner rule above */
 	bool ShouldReleaseMontageOnEnd(bool bWasCancelled) const;
+
+	/** The timeline frame the end rules (release, stop blend) compare with the data: the combat clock's, or for a Hold Until Landed move the last evaluated one */
+	int32 GetEndRuleFrame(const FGSTN_CombatTimelineData& Data) const;
 
 	/** Combat clock at the start, the origin of GetTimelineFrame */
 	UPROPERTY(Transient)

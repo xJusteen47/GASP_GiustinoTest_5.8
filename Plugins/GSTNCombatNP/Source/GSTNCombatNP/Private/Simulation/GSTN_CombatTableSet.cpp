@@ -159,6 +159,36 @@ void UGSTN_CombatTableSet::AppendAdoptable(TConstArrayView<TSubclassOf<UGSTN_GA_
 			AddTimelineClass(TimelineClass, 0, 0, false);
 		}
 	}
+	AppendFollowUps();
+}
+
+namespace
+{
+	/** The follow-up class of a timeline's data when it is a combat timeline ability (loaded with the timeline's content, so Get is enough) */
+	UClass* ResolveFollowUpClass(const FGSTN_CombatTimelineData* Data)
+	{
+		UClass* Class = Data && !Data->FollowUpTimeline.IsNull() ? Data->FollowUpTimeline.Get() : nullptr;
+		return Class && Class->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()) ? Class : nullptr;
+	}
+}
+
+void UGSTN_CombatTableSet::AppendFollowUps()
+{
+	// The registry grows inside the loop: a follow-up's own follow-up is reached by the same scan
+	for (int32 Index = 0; Index < TimelineRegistry.Num() && Index < FGSTN_CompiledBindingTable::MaxRegistryEntries; ++Index)
+	{
+		UClass* FollowUp = ResolveFollowUpClass(GetTimelineData(Index));
+		if (FollowUp && TimelineRegistry.IndexOfByPredicate([FollowUp](const TSubclassOf<UGSTN_GA_BaseCombat>& Class) { return Class.Get() == FollowUp; }) == INDEX_NONE)
+		{
+			AddTimelineClass(TSubclassOf<UGSTN_GA_BaseCombat>(FollowUp), 0, 0, false);
+		}
+	}
+}
+
+int32 UGSTN_CombatTableSet::FindFollowUpEntry(int32 Index) const
+{
+	const UClass* FollowUp = ResolveFollowUpClass(GetTimelineData(Index));
+	return FollowUp ? TimelineRegistry.IndexOfByPredicate([FollowUp](const TSubclassOf<UGSTN_GA_BaseCombat>& Class) { return Class.Get() == FollowUp; }) : INDEX_NONE;
 }
 
 uint32 UGSTN_CombatTableSet::ComputeChecksum() const

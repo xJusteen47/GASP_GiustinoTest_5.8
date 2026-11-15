@@ -10,6 +10,7 @@
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "Timeline/GSTN_CombatTimeline.h"
+#include "Timeline/GSTN_HoldUntilLanded.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNBaseCombat, Log, All);
 
@@ -86,6 +87,14 @@ void UGSTN_GA_BaseCombat::LoadTimelineDataContent(const FGSTN_CombatTimelineData
 	if (!Data.Montage.IsNull())
 	{
 		OutKeep.AddUnique(Data.Montage.LoadSynchronous());
+	}
+	// The follow-up's class: the table set registers it by class (UGSTN_CombatTableSet::AppendFollowUps), which needs it loaded
+	if (!Data.FollowUpTimeline.IsNull())
+	{
+		if (UClass* FollowUp = Data.FollowUpTimeline.LoadSynchronous())
+		{
+			OutKeep.AddUnique(FollowUp);
+		}
 	}
 	if (const FGSTN_RicochetResponse* Recoil = Data.GetRicochetResponse())
 	{
@@ -465,6 +474,57 @@ int32 UGSTN_GA_BaseCombat::GetMoveRandomInteger(int32 Salt, int32 Min, int32 Max
 	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
 	const uint32 Seed = FGSTN_MoveActionRules::MakeSeed(Combat ? Combat->GetSimulationFrame() : 0, StartFrame.Value, Salt);
 	return FGSTN_MoveActionRules::RandomIntInRange(Seed, Min, Max);
+
+}
+
+void UGSTN_GA_BaseCombat::UpdateHoldUntilLandedMontage()
+{
+	const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
+	const FGSTN_TimelineTrack_HoldUntilLanded* Track = FGSTN_HoldUntilLanded::FindTrack(Data);
+	if (!Track || bRecoilPlayed.Value)
+	{
+		return;
+	}
+	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
+	UAnimMontage* Montage = TimelineMontagePlayed ? TimelineMontagePlayed.Get() : Data.Montage.Get();
+	float MontageTime = 0.f;
+	if (!AbilitySystem || !Combat || !Montage || AbilitySystem->GetPlayingSyncedMontage(MontageTime) != Montage)
+	{
+		return;
+	}
+	const int32 TimelineFrame = Combat->GetEvaluatedTimelineFrame();
+	if (TimelineFrame == INDEX_NONE)
+	{
+		return;
+	}
+
+	// Timeline frame f is the montage f steps from the start of the move (the start tick holds the montage, so after the tick of frame f it is
+	// at f steps): the same mapping the frames-based loop and land times use
+	const float StepSeconds = AbilitySystem->GetFixedStepMs() / 1000.f;
+	const float SecondsPerFrame = StepSeconds * Data.MontagePlayRate * AbilitySystem->GetMontagePlayRateMultiplier();
+	float BaseTime = 0.f;
+	if (!Data.MontageSection.IsNone())
+	{
+		const int32 Section = Montage->GetSectionIndex(Data.MontageSection);
+		if (Section != INDEX_NONE)
+		{
+			float SectionEnd = 0.f;
+			Montage->GetSectionStartAndEndTime(Section, BaseTime, SectionEnd);
+		}
+	}
+	const FGSTN_HoldMontageTimes Times = FGSTN_HoldUntilLanded::ResolveMontageTimes(*Track, Montage, BaseTime, SecondsPerFrame);
+	// The advance of this tick, taken as a full step even in a hitstop pause: a wrap one tick early in a cyclic loop is the same pose
+	const FGSTN_HoldMontageDecision Decision = FGSTN_HoldUntilLanded::ResolveMontage(*Track, Times, TimelineFrame, MontageTime, SecondsPerFrame, SecondsPerFrame);
+	if (Decision.Action == EGSTN_HoldMontageAction::Wrap)
+	{
+		AbilitySystem->SetSyncedMontageTime(Montage, Decision.Time, false);
+	}
+	else if (Decision.Action == EGSTN_HoldMontageAction::Land)
+	{
+		UE_LOG(LogGSTNBaseCombat, Verbose, TEXT("%s: landed on timeline frame %d, montage %.3f -> %.3f"), *GetName(), TimelineFrame, MontageTime, Decision.Time);
+		AbilitySystem->SetSyncedMontageTime(Montage, Decision.Time, true);
+	}
 }
 
 void UGSTN_GA_BaseCombat::OnMoveKey(const FGSTN_TimelineTrack_Event& Key, int32 TrackIndex, int32 TimelineFrame)
@@ -609,6 +669,7 @@ void UGSTN_GA_BaseCombat::OnSimulationTick(const FAbilitySystemTimeStep& TimeSte
 		{
 			CloseTagWindows(false);
 		}
+		UpdateHoldUntilLandedMontage();
 		RaiseMoveEvents();
 		return;
 	}
@@ -693,7 +754,7 @@ bool UGSTN_GA_BaseCombat::ShouldReleaseMontageOnEnd(bool bWasCancelled) const
 {
 	const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
 	// Same "ended by itself" test as ResolveMontageStop: the ability sees the end on the timeline's last frame or the one after
-	return !bWasCancelled && Data.TotalFrames > 0 && GetTimelineFrame() >= Data.TotalFrames - 1 && Data.EndBlendOutFrames < 0;
+	return !bWasCancelled && Data.TotalFrames > 0 && GetEndRuleFrame(Data) >= Data.TotalFrames - 1 && Data.EndBlendOutFrames < 0;
 }
 
 void UGSTN_GA_BaseCombat::StopReleasedMontages(UAbilitySystemComponent& AbilitySystem)
@@ -731,7 +792,7 @@ void UGSTN_GA_BaseCombat::ResolveMontageStop(float& OutBlendOutSeconds, bool& bO
 	OutBlendOutSeconds = -1.f;
 	bOutHoldPose = false;
 	const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
-	const int32 Frame = GetTimelineFrame();
+	const int32 Frame = GetEndRuleFrame(Data);
 	const int32 Total = Data.TotalFrames;
 	int32 BlendFrames = INDEX_NONE;
 	// The ability sees the end on the frame the combat state cleared the timeline: its last frame or the one after
@@ -757,6 +818,17 @@ void UGSTN_GA_BaseCombat::ResolveMontageStop(float& OutBlendOutSeconds, bool& bO
 	const float StepMs = AbilitySystem != nullptr ? AbilitySystem->GetFixedStepMs() : 16.f;
 	OutBlendOutSeconds = static_cast<float>(BlendFrames) * StepMs / 1000.f;
 	bOutHoldPose = Data.bHoldPoseOnEnd;
+}
+
+int32 UGSTN_GA_BaseCombat::GetEndRuleFrame(const FGSTN_CombatTimelineData& Data) const
+{
+	// A Hold Until Landed move stands on a frame for the whole fall and skips frames on the touchdown: the combat clock (which runs through a
+	// stall) says nothing about where its timeline is. The frame the clock last evaluated does. Every other move keeps the combat clock
+	if (EvaluatedFrame.Value != INDEX_NONE && FGSTN_HoldUntilLanded::FindTrack(Data))
+	{
+		return EvaluatedFrame.Value;
+	}
+	return GetTimelineFrame();
 }
 
 int32 UGSTN_GA_BaseCombat::GetTimelineFrame() const

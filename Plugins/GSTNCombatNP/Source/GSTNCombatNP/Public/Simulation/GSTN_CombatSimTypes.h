@@ -133,7 +133,7 @@ struct FGSTN_CombatSyncCore
 	int16 ActiveTimeline = INDEX_NONE;
 	EGSTN_ActivationSource ActiveSource = EGSTN_ActivationSource::Command;
 
-	/** Timeline frame = F - TimelineStartFrame - TimelinePausedFrames (the paused frames grow in hitstop) */
+	/** Timeline frame = F - TimelineStartFrame - TimelinePausedFrames (the paused frames grow in hitstop and stalls; a Hold Until Landed jump subtracts the frames it skips, so it can be negative) */
 	int32 TimelineStartFrame = INDEX_NONE;
 	int32 TimelinePausedFrames = 0;
 
@@ -233,7 +233,8 @@ struct FGSTN_CombatSyncCore
 		Ar.SerializeIntPacked(TimelinePlusOne);
 		uint32 StartPlusOne = static_cast<uint32>(FMath::Max(TimelineStartFrame + 1, 0));
 		Ar.SerializeIntPacked(StartPlusOne);
-		uint32 Paused = static_cast<uint32>(FMath::Max(TimelinePausedFrames, 0));
+		// Zigzag: a Hold Until Landed jump skips frames, which makes the count negative when the move lands before it ever stood still
+		uint32 Paused = (static_cast<uint32>(TimelinePausedFrames) << 1) ^ static_cast<uint32>(TimelinePausedFrames >> 31);
 		Ar.SerializeIntPacked(Paused);
 		uint32 PausedTotal = static_cast<uint32>(FMath::Max(PausedFramesTotal, 0));
 		Ar.SerializeIntPacked(PausedTotal);
@@ -270,7 +271,7 @@ struct FGSTN_CombatSyncCore
 			ActiveSource = static_cast<EGSTN_ActivationSource>(Source);
 			ActiveTimeline = static_cast<int16>(static_cast<int32>(TimelinePlusOne) - 1);
 			TimelineStartFrame = static_cast<int32>(StartPlusOne) - 1;
-			TimelinePausedFrames = static_cast<int32>(Paused);
+			TimelinePausedFrames = static_cast<int32>(Paused >> 1) ^ -static_cast<int32>(Paused & 1u);
 			PausedFramesTotal = static_cast<int32>(PausedTotal);
 			RecoilStartFrame = static_cast<int32>(RecoilPlusOne) - 1;
 		}

@@ -211,4 +211,98 @@ bool FGSTN_MontageSyncBlendOutTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// montage start jitter (2026-11-15): captures at 60 fps over the 62.5 Hz simulation showed the first frames of a move at different montage times
+// from run to run (0.00 then 0.18 or 1.25 animation frames) and dead frames later. The presentation clock shows the start on the first rendered
+// frame whatever the phase of the press, then advances every frame, never ahead of the latest tick and never more than two ticks behind it
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MontageSyncPresentationClockTest, "GSTNCombat.NP.MontageSync.PresentationClock", GSTN_NP_TEST_FLAGS)
+bool FGSTN_MontageSyncPresentationClockTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNMontageSyncTests;
+	constexpr float Tolerance = 1.e-5f;
+	const float RenderDt = 1.f / 60.f;
+	const float TickMontage = Step * CardRate;     // one animation frame per tick
+	const float MaxLag = 2.f * TickMontage;
+
+	bool bFirstAlwaysStart = true;
+	bool bNeverAhead = true;
+	bool bNeverTooLate = true;
+	bool bNoDeadFrame = true;
+	bool bNoBigSkip = true;
+	// Every phase of the start tick inside a render frame, one millisecond apart
+	for (int32 PhaseMs = 0; PhaseMs < 17; ++PhaseMs)
+	{
+		const double StartTick = 1.0 + PhaseMs / 1000.0;
+		FSyncedMontagePresentationClockInput Clock;
+		Clock.Rate = CardRate;
+		Clock.DeltaSeconds = RenderDt;
+		Clock.MaxLagSeconds = MaxLag;
+		bool bStarted = false;
+		float Previous = 0.f;
+		for (int32 Frame = 0; Frame < 120; ++Frame)
+		{
+			const double RenderTime = 1.0 + Frame * RenderDt;
+			if (RenderTime < StartTick)
+			{
+				continue;
+			}
+			// Ticks since the start tick that ran by this render frame; the start tick holds the montage at 0
+			const int32 Ticks = FMath::FloorToInt32(static_cast<float>((RenderTime - StartTick) / Step + 1.e-6));
+			Clock.LatestTime = Ticks * TickMontage;
+			Clock.AnchorTime = bStarted ? -1.f : 0.f;
+			Clock.bHasPrevious = bStarted;
+			Clock.PreviousTime = Previous;
+			const float Shown = UNetMontageSimulator::ComputePresentedTime(Clock);
+			if (!bStarted)
+			{
+				bFirstAlwaysStart &= FMath::IsNearlyEqual(Shown, 0.f, Tolerance);
+			}
+			else
+			{
+				const float Advance = Shown - Previous;
+				bNoDeadFrame &= Advance > 0.9f * TickMontage;
+				bNoBigSkip &= Advance < 2.05f * TickMontage;
+			}
+			bNeverAhead &= Shown <= Clock.LatestTime + Tolerance;
+			bNeverTooLate &= Shown >= Clock.LatestTime - MaxLag - Tolerance;
+			Previous = Shown;
+			bStarted = true;
+		}
+	}
+	TestTrue(TEXT("the first rendered frame of a start shows the start, at every phase"), bFirstAlwaysStart);
+	TestTrue(TEXT("never ahead of the latest tick"), bNeverAhead);
+	TestTrue(TEXT("never more than two ticks behind"), bNeverTooLate);
+	TestTrue(TEXT("no dead frame (every frame advances about one animation frame)"), bNoDeadFrame);
+	TestTrue(TEXT("no frame skips more than two animation frames"), bNoBigSkip);
+
+	// Discontinuities follow the simulation at once
+	FSyncedMontagePresentationClockInput Jump;
+	Jump.Rate = CardRate;
+	Jump.DeltaSeconds = RenderDt;
+	Jump.MaxLagSeconds = MaxLag;
+	Jump.bHasPrevious = true;
+	Jump.PreviousTime = 0.40f;
+	Jump.LatestTime = 0.27f;
+	TestEqual(TEXT("a loop going back shows the latest tick"), UNetMontageSimulator::ComputePresentedTime(Jump), 0.27f, Tolerance);
+	Jump.LatestTime = 1.00f;
+	TestEqual(TEXT("a jump forward shows the latest tick"), UNetMontageSimulator::ComputePresentedTime(Jump), 1.00f, Tolerance);
+	Jump.AnchorTime = 0.95f;
+	TestEqual(TEXT("unless it is a restart: then its first frame (the land clip's frame 0)"), UNetMontageSimulator::ComputePresentedTime(Jump), 0.95f, Tolerance);
+	Jump.AnchorTime = 1.20f;
+	TestEqual(TEXT("an anchor past the latest tick (undone by a rollback) is ignored"), UNetMontageSimulator::ComputePresentedTime(Jump), 1.00f, Tolerance);
+
+	// A paused simulation (hitstop): the clock runs up to the frozen time and stays there
+	FSyncedMontagePresentationClockInput Still;
+	Still.Rate = CardRate;
+	Still.DeltaSeconds = RenderDt;
+	Still.MaxLagSeconds = MaxLag;
+	Still.bHasPrevious = true;
+	Still.LatestTime = 0.30f;
+	Still.PreviousTime = 0.30f - TickMontage;
+	const float FirstStill = UNetMontageSimulator::ComputePresentedTime(Still);
+	TestEqual(TEXT("hitstop: reaches the hit frame's pose"), FirstStill, 0.30f, Tolerance);
+	Still.PreviousTime = FirstStill;
+	TestEqual(TEXT("and holds it"), UNetMontageSimulator::ComputePresentedTime(Still), 0.30f, Tolerance);
+	return true;
+}
+
 #endif

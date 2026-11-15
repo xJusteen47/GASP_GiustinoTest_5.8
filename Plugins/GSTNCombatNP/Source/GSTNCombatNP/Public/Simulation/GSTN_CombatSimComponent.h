@@ -784,6 +784,13 @@ private:
 	const FGSTN_StepSnapshot* ServiceView = nullptr;
 	bool bServiceViewResolved = false;
 
+	/**
+	 * Starts registry entry Entry of Set on Frame as a forced timeline (source Forced): the state, the move origin, the evaluation of its first
+	 * frame and the ActivateEntry request the ability system's pre-tick turns into the activation. Shared by StartForcedTimeline and the
+	 * follow-up of a move that ended by itself (FGSTN_CombatTimelineData::FollowUpTimeline)
+	 */
+	void StartTimelineEntry(FGSTN_CombatSyncCore& Core, int32 Frame, const UGSTN_CombatTableSet& Set, int32 Entry, const FGSTN_TrackHookEnvironment* Environment);
+
 	// IGSTN_CombatTickServices
 	virtual bool StartForcedTimeline(const UClass* AbilityClass) override;
 	virtual const FGSTN_StepSnapshot* GetViewSnapshot() override;
