@@ -19,3 +19,8 @@ Jab 2 fine di spalle e accovacciata: voluta? Passo 15-20 cm ancora valido? Jab 1
 ## Non fatto
 Nessuna clip per l'owner (nessun PASS). Primo frame e FAF non guardati a fondo sul jab 2. Check numerici non rifatti.
 **Costo** stimato ~$6 (budget $8).
+
+## Seconda review, solo dropkick (16:30Z, desktop 07b0ab3a) — PASS posa
+`docs/notes/reviews/jab-dropkick-r1/review-dropkick-2.md` + `rv2_*.jpg`. Tre tratti d'identità SÌ, meglio della base r1, compenetrazione non visibile a occhio.
+Resta `gioco` già noto: salto di mezzo metro v102->v103 (capsula, domanda 5), nessuna rialzata v126->v133 (domanda 4). Proposta `good/dropkick-2` (tag sul fisso).
+Clip owner in project files `reviews/jab-dropkick-r1/dropkick_r1_owner{,_quarter}.mp4` (ffmpeg crop az90|az45|game). Costo stimato ~$3 (totale thread ~$9).
