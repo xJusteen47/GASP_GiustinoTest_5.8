@@ -6,6 +6,7 @@
 #include "Abilities/GSTN_GA_Base.h"
 #include "Abilities/GSTN_MoveActions.h"
 #include "Abilities/GSTN_MoveEvents.h"
+#include "Presentation/GSTN_MoveCosmetics.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "GSTN_GA_BaseCombat.generated.h"
 
@@ -43,7 +44,7 @@ class UGSTN_CombatTimeline;
  * per simulated path, because their cursors are sync variables. A handler may do what simulation code may do (read the combat state and the
  * input questions of the combat component, write FSync* variables, wait combat frames, apply effects, send gameplay events); it must not read
  * the world, the Mover component or anything that is not rolled back, and it must not use latent nodes (Delay, timers). Presentation belongs
- * to the cosmetic hooks (CP4)
+ * to the cosmetic hooks (CP4): the move's CosmeticWindows, the hit cue (UGSTN_GCN_CombatHit) and the events of the presentation components
  *
  * Event keys and move actions (CP2): when the timeline crosses an Event key the ability fires the key's cue and gameplay event, runs its move
  * actions (FGSTN_MoveAction: fire a projectile, send an event, apply an effect, open a tag window), then raises On Move Key, all in that order, on
@@ -131,6 +132,14 @@ public:
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Blueprint")
 	bool bTickMoveInBlueprint = false;
+
+	/**
+	 * Cosmetic windows of the move (CP4): trails, whooshes, glows, in timeline frames. Played by UGSTN_MoveCosmeticsComponent on the machines that
+	 * draw, from the presented combat state; the simulation never reads them, so they can be changed freely without touching how the move plays.
+	 * The hit itself (spark, hit sound, shake, rumble) is the hitbox's cue: a UGSTN_GCN_CombatHit
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Cosmetics")
+	TArray<FGSTN_MoveCosmeticWindow> CosmeticWindows;
 
 	/**
 	 * The timeline frame the combat tick evaluated for this frame (it stands still in hitstop and in a hold, unlike GetTimelineFrame, which

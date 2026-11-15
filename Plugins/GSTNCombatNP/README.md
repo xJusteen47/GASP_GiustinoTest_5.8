@@ -393,3 +393,23 @@ follow-up opens a tag window that the timeline's `OnTagAdded` buffer reset rule 
 Elapsed shoots the second shot). Kits `KIT_Example_DoubleShotA`/`B` (hub pads). The graph is laid down by `UGSTN_MoveGraphAuthoring`
 (GSTNCombatEditor), never by hand.
 
+
+## Cosmetic hooks (Blueprint seams CP4)
+
+Presentation only: driven by the presented state or by cues, never fed back into the simulation, safe under rollback (a correction changes what the
+next frame shows; nothing fires twice). Owner-approved VFX checklist: `Artifacts/Animazione/silhouette-multi-angolo-e-vfx.html`.
+- **Move cosmetic windows** (`Presentation/GSTN_MoveCosmetics.h`, `GSTN_MoveCosmeticsComponent.h`): `UGSTN_GA_BaseCombat::CosmeticWindows`, each a
+  tag, timeline frames (start, end or -1 = until the move ends, tail), a Niagara system on a mesh socket (attached or left in the world), a sound,
+  freeze in hitstop, kill when interrupted. `UGSTN_MoveCosmeticsComponent` (on the character, added by `Tools/GAS/setup_cosmetic_hooks.py`) reads
+  the latest presented combat state every drawn frame and diffs the live windows with `FGSTN_MoveCosmeticTracker` (pure): a window that began is
+  never replayed for the same run (a correction flicker), windows skipped between two drawn frames still play (a slow screen), an end is natural
+  when the window's frames ran out and interrupted when the move was cut during them. Blueprint: On Move Cosmetic Begin/End (overridable events
+  of a Blueprint child, and assignable delegates). Off on a dedicated server. Niagara is a private dependency (pooled components, ManualRelease).
+- **Hit cue** (`Presentation/GSTN_GCN_CombatHit.h`): `UGSTN_GCN_CombatHit`, a GCN Burst for the hitbox `CueTag` (`GameplayCue.Hit.Light/Medium/
+  Heavy/Finisher` in the examples): placed at the hit context's location, turned along the hit, and played once on the attacker's machine (the
+  prediction's local cue plays, the real cue of the same hit asks `ShouldPlayAuthoritativeCue` and is skipped). `UGSTN_CombatCueLibrary::
+  GetCombatHitInfo` reads the hit (location, direction, reaction, KO reason) in a Blueprint cue.
+- **Predicted hit events** on `UGSTN_HitPresentationComponent`: `OnHitPredicted` / `OnHitPredictionCancelled` (`FGSTN_PredictedHitEvent`), and
+  `HitstopAnimRate` (0 freezes; 0.03-0.1 keeps the frozen character moving a little). The predicted cue's context now carries the reaction.
+- Victim side lives in GSTNCombatGAS (`UGSTN_ReactionAnimComponent`: On Reaction Started/Ended, hitstop shake).
+- Tests `GSTNCombat.NP.MoveCosmetics.*` (tracker: windows and tail, hitstop, cancel and correction, slow screen; hit cue parameters).

@@ -51,3 +51,19 @@ EDataValidationResult UGSTN_ReactionAnimSet::IsDataValid(FDataValidationContext&
 	return Result == EDataValidationResult::NotValidated ? EDataValidationResult::Valid : Result;
 }
 #endif
+
+float FGSTN_HitstopShake::Sample(float AmplitudeCm, float FrequencyHz, float DecaySeconds, float ElapsedSeconds)
+{
+	if (AmplitudeCm <= 0.f || ElapsedSeconds < 0.f || DecaySeconds <= 0.f || ElapsedSeconds >= DecaySeconds)
+	{
+		return 0.f;
+	}
+	const float Fade = 1.f - ElapsedSeconds / DecaySeconds;
+	return AmplitudeCm * Fade * FMath::Cos(UE_TWO_PI * FrequencyHz * ElapsedSeconds);
+}
+
+float FGSTN_HitstopShake::DistanceScale(float CameraDistanceCm) const
+{
+	const float Reference = FMath::Max(ReferenceCameraDistanceCm, 1.f);
+	return FMath::Clamp(CameraDistanceCm / Reference, 1.f, FMath::Max(MaxDistanceScale, 1.f));
+}

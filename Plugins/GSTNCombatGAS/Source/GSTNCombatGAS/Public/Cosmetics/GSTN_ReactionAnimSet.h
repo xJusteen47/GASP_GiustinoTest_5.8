@@ -107,6 +107,51 @@ struct GSTNCOMBATGAS_API FGSTN_ReactionAnimRule
 };
 
 /**
+ * The tremble of a character frozen by hitstop (CP4, VFX checklist approved by the owner 2026-11-15): the victim shakes more than the attacker,
+ * side to side RELATIVE TO THE SCREEN (with a free camera a shake along a world axis can point into the camera and vanish), with an amplitude
+ * that fades out and grows with the camera distance. Only the mesh moves, as an offset on top of what Mover writes: hurtboxes and the capsule
+ * stay where the simulation put them. Presentation only.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATGAS_API FGSTN_HitstopShake
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitstop Shake")
+	bool bEnabled = true;
+
+	/** Amplitude of the hit character (Combat.State.Hitstop with Hitstun or Tumble) at the reference camera distance. 0 = none */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitstop Shake", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float VictimAmplitudeCm = 3.f;
+
+	/** Amplitude of the attacker (in hitstop without hitstun). 0 = none (the attacker's weight reads from the hitstop anim rate instead) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitstop Shake", meta = (ClampMin = "0.0", ForceUnits = "cm"))
+	float AttackerAmplitudeCm = 0.f;
+
+	/** Side swaps per second over two (30 Hz at 60 fps = one side per drawn frame, the classic fighting game shake) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitstop Shake", meta = (ClampMin = "1.0", ForceUnits = "Hz"))
+	float FrequencyHz = 30.f;
+
+	/** The amplitude falls linearly to zero over this time from the start of the hitstop (it ends anyway when the hitstop ends) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitstop Shake", meta = (ClampMin = "0.01", ForceUnits = "s"))
+	float DecaySeconds = 0.2f;
+
+	/** The camera distance the amplitudes are authored at; farther cameras scale them up (a small shake far away reads as nothing) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitstop Shake", meta = (ClampMin = "1.0", ForceUnits = "cm"))
+	float ReferenceCameraDistanceCm = 400.f;
+
+	/** Cap of the distance scale */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitstop Shake", meta = (ClampMin = "1.0"))
+	float MaxDistanceScale = 3.f;
+
+	/** Signed offset (cm, along screen right) Elapsed seconds into the hitstop. Pure: starts at +Amplitude (the first frame visibly moves) */
+	static float Sample(float AmplitudeCm, float FrequencyHz, float DecaySeconds, float ElapsedSeconds);
+
+	/** The amplitude scale at a camera distance: 1 up to the reference distance, then linear, capped */
+	float DistanceScale(float CameraDistanceCm) const;
+};
+
+/**
  * The victim reactions of a character, a kit or a skin (owner 2026-11-14: "state -> montage via data, not hardcoded"). Read by
  * UGSTN_ReactionAnimComponent. Swapping the asset swaps every reaction; the simulation never sees it.
  */
@@ -129,6 +174,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction")
 	TArray<FGSTN_ReactionAnimRule> Rules;
+
+	/** The tremble while frozen by hitstop (victim and attacker), see FGSTN_HitstopShake */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitstop")
+	FGSTN_HitstopShake HitstopShake;
 
 	/** The index of the rule that wins for these tags, INDEX_NONE when none holds. Pure: highest Priority, then the first listed */
 	UFUNCTION(BlueprintPure, Category = "Combat|Reaction")

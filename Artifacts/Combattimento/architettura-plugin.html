@@ -15,7 +15,7 @@ a{color:var(--accent)}li{margin:.3em 0}p,li{max-width:70ch}
 table{border-collapse:collapse;width:100%;min-width:560px;font-size:.9rem}th,td{text-align:left;vertical-align:top;padding:7px 10px;border-bottom:1px solid var(--line)}th{background:var(--code);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
 </style>
 <div class="wrap"><h1>Plugin di combattimento GSTN: architettura (per designer e per la futura versione pubblica)</h1>
-<p>Stato: 2026-11-14, ramo <code>claude/project-thread-0tmywc</code>; sezione 7 aggiornata il 2026-11-15 (CP2), sezione 8 nuova (CP3). Scritto da lettura del codice e degli handover (react-hook-1/2, launch-impacts), <strong>non eseguito in editor</strong>.
+<p>Stato: 2026-11-14, ramo <code>claude/project-thread-0tmywc</code>; sezione 7 aggiornata il 2026-11-15 (CP2), sezione 8 (CP3), sezione 9 nuova (CP4). Scritto da lettura del codice e degli handover (react-hook-1/2, launch-impacts), <strong>non eseguito in editor</strong>.
 Questo documento è la mappa breve; la specifica completa è <a href="https://github.com/xJusteen47/GASP_GiustinoTest_5.8/blob/claude/project-thread-0tmywc/docs/architecture/combat.md">docs/architecture/combat.md</a> (1187 righe), l'indice dei plugin è <a href="https://github.com/xJusteen47/GASP_GiustinoTest_5.8/blob/claude/project-thread-0tmywc/Plugins/README.md">Plugins/README.md</a>, e ogni plugin ha il suo README.</p>
 <h2>1. Moduli (livelli)</h2>
 <p>Regola: un plugin <strong>Core</strong> puro (niente GAS, niente Network Prediction, niente Mover), adattatori sopra. Le dipendenze vanno solo verso il basso.</p>
@@ -130,7 +130,7 @@ Questo documento è la mappa breve; la specifica completa è <a href="https://gi
 <li><strong>Validatore</strong> dei grafi di simulazione (al salvataggio e in Validate all): Delay/timer (errore), task asincroni, variabili non sync, letture di mondo/Mover, random non deterministico (avvisi).</li>
 <li>Un plugin aggiunge azioni sue derivando <code>FGSTN_MoveAction</code> nel proprio modulo: il Core non lo nomina.</li>
 </ul>
-<p>Prossimo: CP4 ganci visivi, CP5 factory "Combat Move" e guida (le mosse di esempio CP3 sono nella sezione 8).</p>
+<p>Prossimo: CP5 factory "Combat Move" e guida (le mosse di esempio CP3 sono nella sezione 8, i ganci visivi CP4 nella sezione 9).</p>
 
 <h2>8. Mosse di esempio in Blueprint (CP3, 2026-11-15)</h2>
 <p>Ramo <code>claude/project-thread-p2xw3s</code> (sopra CP2), <strong>da compilare e provare sul fisso</strong>. La special a doppia pressione dell'owner (premi lo special: un colpo; ripremi in tempo: un secondo colpo) fatta due volte, stessa mossa per due strade, per confrontarle. Tutto creato dallo script <code>Tools/GAS/setup_double_shot_examples.py</code>: nessun cablaggio a mano, nessun tasto, nessuna impostazione di progetto.</p>
@@ -147,5 +147,21 @@ Questo documento è la mappa breve; la specifica completa è <a href="https://gi
 <li><strong>Due comportamenti di proposito</strong>: in A il secondo colpo è una mossa nuova (ha il suo recupero), in B sta dentro la stessa mossa. L'owner sceglie quale feel preferisce; i numeri sono segnaposto nelle Class Defaults e nelle timeline.</li>
 <li><strong>Nuovo strumento editor <code>UGSTN_MoveGraphAuthoring</code></strong> (GSTNCombatEditor): da Python aggiunge variabili (anche Sync), eventi della mossa, chiamate, get/set, make/break, branch, collega i pin, compila e passa il validatore dei grafi di simulazione. È la base della factory "Combat Move" di CP5. Test <code>GSTNCombat.Editor.MoveGraph.BuildsAndCompiles</code>.</li>
 <li><strong>Limiti</strong>: animazione segnaposto (spinta GASP) su tutte e tre; i pad compaiono a Play senza cartello (la mappa non si risalva); proiettile senza VFX (sfera del plugin).</li>
+</ul>
+
+<h2>9. Ganci visivi (CP4, 2026-11-15)</h2>
+<p>Ramo <code>claude/project-thread-ckzv21</code> (sopra CP3), <strong>da compilare e provare sul fisso</strong>. Solo presentazione: leggono lo stato mostrato o i cue, non scrivono mai nella simulazione, e reggono il rollback (una correzione cambia cosa mostra il frame dopo; niente parte due volte). Regole dalla checklist VFX approvata dall'owner (artifact silhouette e VFX).</p>
+<div class="tb"><table>
+<tr><th>Gancio</th><th>Dove</th><th>Cosa fa il designer</th><th>Rollback</th></tr>
+<tr><td><strong>Finestre cosmetiche della mossa</strong> (scia, whoosh, bagliore)</td><td><code>Cosmetic Windows</code> nelle Class Defaults della mossa; le gioca <code>UGSTN_MoveCosmeticsComponent</code> sul personaggio</td><td>tag, frame inizio/fine (-1 = fino alla fine della mossa), coda, sistema Niagara su un socket, suono, "ferma in hitstop", "spegni subito se interrotta"</td><td>differenza dello stato mostrato: una finestra già partita non riparte per la stessa esecuzione; finestre saltate fra due frame disegnati partono lo stesso; tagliata durante i suoi frame = interrotta</td></tr>
+<tr><td><strong>Cue del colpo</strong> (scintilla, suono, scossa, vibrazione)</td><td><code>Cue Tag</code> della hitbox → Blueprint figlio di <code>GCN Combat Hit</code> (<code>UGSTN_GCN_CombatHit</code>, un GCN Burst)</td><td>4 taglie: <code>GameplayCue.Hit.Light/Medium/Heavy/Finisher</code>; riempie Burst Effects (con condizioni "solo giocatore locale" per scossa e vibrazione)</td><td>sulla macchina dell'attaccante il cue previsto suona subito e quello vero dello stesso colpo viene saltato; un cue già partito non si ritira (dura pochi frame)</td></tr>
+<tr><td><strong>Eventi del colpo previsto</strong></td><td><code>UGSTN_HitPresentationComponent</code>: On Hit Predicted / On Hit Prediction Cancelled; <code>Hitstop Anim Rate</code></td><td>collega gli eventi nel Blueprint del personaggio; 0.03-0.1 = l'attaccante si muove pochissimo nel congelamento</td><td>l'annullamento arriva quando l'autorità non conferma</td></tr>
+<tr><td><strong>Eventi della reazione</strong></td><td><code>UGSTN_ReactionAnimComponent</code>: On Reaction Started (regola, ripartita) / On Reaction Ended</td><td>polvere, flash o suono su una reazione</td><td>seguono i tag dell'ASC frame per frame</td></tr>
+<tr><td><strong>Tremito in hitstop</strong></td><td><code>Hitstop Shake</code> in <code>DA_ReactionAnims</code></td><td>ampiezza vittima (3 cm) e attaccante (0), frequenza, decadimento, scala con la distanza della camera</td><td>solo offset della mesh, laterale rispetto allo schermo; hurtbox e capsula ferme</td></tr>
+</table></div>
+<ul>
+<li><strong>Script</strong> <code>Tools/GAS/setup_cosmetic_hooks.py</code> (headless, idempotente): monta il componente sul personaggio, crea <code>GCN_Example_Hit_Light/Medium/Heavy/Finisher</code> in <code>/Game/GASNPPTest/Examples/Cosmetics</code>, dà alle tre mosse di esempio il cue e due finestre (scia sui frame attivi + coda su <code>hand_r</code>, whoosh 2 frame prima). Strumento editor <code>UGSTN_CosmeticAuthoring</code> (cue delle hitbox, frame attivi).</li>
+<li><strong>Limite</strong>: nel progetto non ci sono ancora VFX di colpo né scie: gli slot Niagara e suono restano vuoti (lo script elenca nel log i sistemi Niagara trovati). Prossimo passo di contenuto: kit VFX minimo (scia, scintilla in tre taglie, una scossa camera per i colpi forti), poi rerun con <code>force=True</code>.</li>
+<li>Test: <code>GSTNCombat.NP.MoveCosmetics.*</code> (5) e <code>GSTNCombat.GAS.ReactionAnim.HitstopShake</code>.</li>
 </ul>
 </div>

@@ -11,6 +11,43 @@
 class USkeletalMeshComponent;
 struct FGSTN_CombatSyncCore;
 
+/** A hit the attacker's machine predicted, for a Blueprint (CP4) */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATNP_API FGSTN_PredictedHitEvent
+{
+	GENERATED_BODY()
+
+	/** The victim; None for a minion (no actor) */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat Hit")
+	TObjectPtr<AActor> Victim = nullptr;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Combat Hit")
+	FVector Location = FVector::ZeroVector;
+
+	/** The hitbox's cue (the predicted cue already ran when bExecuteCueLocal is on) */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat Hit")
+	FGameplayTag CueTag;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Combat Hit")
+	int32 AttackerHitstopFrames = 0;
+
+	/** 0 when the attacker's pipeline gave no knockback */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat Hit")
+	int32 VictimHitstopFrames = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Combat Hit")
+	EGSTN_HitReaction Reaction = EGSTN_HitReaction::StaggerInPlace;
+
+	/** Without the victim's DI */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat Hit")
+	FVector LaunchVelocity = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Combat Hit")
+	bool bRicochet = false;
+};
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FGSTN_OnPredictedHit, const FGSTN_PredictedHitEvent&, Hit);
+
 /**
  * Shows a hit the moment the attacker's machine predicts it, instead of one round trip plus the interpolation buffer later when the
  * authority's confirmation and the victim's reaction arrive. Add it to a pawn that carries a UGSTN_CombatSimComponent; it works on the
@@ -56,6 +93,21 @@ public:
 	/** Pause the attacker's and the victim's meshes for their hitstop */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit Presentation|Hitstop")
 	bool bPauseMeshes = true;
+
+	/**
+	 * The animation rate of a mesh held by the hitstop: 0 freezes it; a little above (0.03-0.1) keeps the character moving very slightly, which
+	 * reads as weight (VFX checklist: "the attacker keeps moving a tiny bit"). Presentation only: the timeline and the montage time are the simulation's
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit Presentation|Hitstop", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float HitstopAnimRate = 0.f;
+
+	/** A hit predicted on this machine (the locally controlled attacker), after its cue, flash and pause started. Cosmetic only */
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Cosmetics")
+	FGSTN_OnPredictedHit OnHitPredicted;
+
+	/** A predicted hit the authority did not confirm: everything it started is cancelled (a cue already played cannot be) */
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Cosmetics")
+	FGSTN_OnPredictedHit OnHitPredictionCancelled;
 
 	/** Move the mesh of an interpolated victim along its predicted reaction until the authoritative motion takes over */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit Presentation|Reaction")
@@ -130,6 +182,8 @@ private:
 		double ReactionStart = 0.0;
 		FVector AppliedOffset = FVector::ZeroVector;
 		bool bReacting = false;
+		/** What the Blueprint events say about it */
+		FGSTN_PredictedHitEvent Event;
 	};
 
 	void StartEffect(const FGSTN_HitPresentationKey& Key, const FGSTN_PredictedHitView& View, int32 Frame, int32 AttackerId, float StepMs);
