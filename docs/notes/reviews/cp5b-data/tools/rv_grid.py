@@ -14,7 +14,11 @@ out,cols,cell=args[0],int(args[1]),int(args[2])
 marks=set()
 for a in sys.argv:
     if a.startswith('--mark='): marks=set(int(x) for x in a[7:].split(','))
-font=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',14)
+def _font(n=14):
+    for f in ('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf','C:/Windows/Fonts/arialbd.ttf','C:/Windows/Fonts/arial.ttf'):
+        if os.path.exists(f): return ImageFont.truetype(f,n)
+    return ImageFont.load_default()
+font=_font(14)
 def frames(s):
     o=[]
     for p in s.split(','):
