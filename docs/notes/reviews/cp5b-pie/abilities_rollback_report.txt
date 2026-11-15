@@ -1,0 +1,36 @@
+=== abilities
+mode=listen worlds=3
+w0 P256 host-local  rb=0   rbMs=0      ticks=876   resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w0 P257 server-copy rb=0   rbMs=0      ticks=876   resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w0 P258 server-copy rb=0   rbMs=0      ticks=876   resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w1 P256 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w1 P257 autonomous  rb=1   rbMs=0      ticks=891   resim=10   abResim=2    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w1 P258 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w2 P256 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w2 P257 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w2 P258 autonomous  rb=2   rbMs=0      ticks=900   resim=19   abResim=2    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+CMP P256 host-local(w0) vs simulated(w1): OK
+CMP P256 host-local(w0) vs simulated(w2): OK
+CMP P257 server-copy(w0) vs autonomous(w1): OK
+CMP P257 server-copy(w0) vs simulated(w2): OK
+CMP P258 server-copy(w0) vs simulated(w1): OK
+CMP P258 server-copy(w0) vs autonomous(w2): OK
+CMP RESULT: 6/6 OK
+=== forced_rollback
+mode=listen worlds=3
+w0 P259 host-local  rb=0   rbMs=0      ticks=1563  resim=0    abResim=0    hp=50 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w0 P260 server-copy rb=0   rbMs=0      ticks=1563  resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w0 P261 server-copy rb=0   rbMs=0      ticks=1563  resim=0    abResim=0    hp=50 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w1 P259 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=50 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w1 P260 autonomous  rb=2   rbMs=0      ticks=1586  resim=24   abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w1 P261 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=50 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w2 P259 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=50 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w2 P260 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w2 P261 autonomous  rb=4   rbMs=0      ticks=1628  resim=64   abResim=0    hp=50 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+CMP P259 host-local(w0) vs simulated(w1): OK
+CMP P259 host-local(w0) vs simulated(w2): OK
+CMP P260 server-copy(w0) vs autonomous(w1): OK
+CMP P260 server-copy(w0) vs simulated(w2): OK
+CMP P261 server-copy(w0) vs simulated(w1): OK
+CMP P261 server-copy(w0) vs autonomous(w2): OK
+CMP RESULT: 6/6 OK
