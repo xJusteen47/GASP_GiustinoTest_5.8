@@ -48,6 +48,11 @@ SEQUENCES = [
     {'name': 'chain', 'taps': [0, 12], 'frames': 120, 'dummy': None, 'shoot': True},
     {'name': 'chain_buffered', 'taps': [0, 4], 'frames': 120, 'dummy': None, 'shoot': False},
     {'name': 'chain_hit', 'taps': [0, 12], 'frames': 140, 'dummy': 95.0, 'shoot': True},
+    # Same as chain / chain_hit under the names of the review notes. jab1_jab2_faf: a third press at the first actionable frame of jab 2
+    # (timeline 26; jab 2 starts on the video frame after the press, so 12 + 1 + 26 = tap 38 puts the new jab 1 at timeline 26 of jab 2)
+    {'name': 'jab1_jab2', 'taps': [0, 12], 'frames': 120, 'dummy': None, 'shoot': True},
+    {'name': 'jab1_jab2_hit', 'taps': [0, 12], 'frames': 140, 'dummy': 95.0, 'shoot': True},
+    {'name': 'jab1_jab2_faf', 'taps': [0, 12, 38], 'frames': 130, 'dummy': None, 'shoot': True},
 ]
 # PIE_CAPTURE_SEQUENCES: a comma separated subset of the names above (a recheck of one case does not pay for the other captures)
 # Down-air (aerial) sequences. 'air': the pawn jumps on frame PRE (a press of Jump) and, on the way down (z falling) once its height above the
@@ -68,9 +73,16 @@ DAIR_SEQUENCES = [
     {'name': 'jump_only', 'taps': [], 'frames': 110, 'dummy': None, 'shoot': False, 'air': {}},
     {'name': 'dair_hit', 'taps': [], 'frames': 130, 'dummy': 62.0, 'shoot': True, 'air': {'trigger_h': 225.0}},
 ]
+# Dropkick (forward air, ANIM-R2): same 'air' mechanism, but the stick is held forward (instead of crouch) and Attack tapped the next frame
+# (command Directional while Airborne, setup_overlord_dropkick_kit.py): PIE_CAPTURE_KIT=KIT_Test_OverlordDropkick. The move is 80 frames long
+DROPKICK_SEQUENCES = [
+    {'name': 'dropkick_whiff', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'air': {'rise_h': 150.0, 'stick': True}},
+]
 AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after the attack press
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
-    SEQUENCES = [s for s in SEQUENCES + DAIR_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
+    SEQUENCES = [s for s in SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
+elif 'Dropkick' in KIT:
+    SEQUENCES = DROPKICK_SEQUENCES
 elif 'DAir' in KIT:
     SEQUENCES = DAIR_SEQUENCES
 TIMEOUT = 900.0
@@ -304,11 +316,16 @@ def _tick(_dt):
                 st['prev_z'] = z
             _row(frame, tapped, extra)
             if hold_crouch:
-                g.combat_hold(0, st['crouch'])
+                if air.get('stick'):
+                    g.hold(0, 'move', (0, 1, 0))            # stick forward (relative to the camera, as in scenario_combat_main_inputs)
+                else:
+                    g.combat_hold(0, st['crouch'])
             if tapped:
                 g.combat_tap(0, st['mask'])                 # read by the next simulation tick
             if air is not None and st['fired'] is not None and frame == st['fired'] + AIR_CROUCH_RELEASE:
                 g.combat_clear(0)
+                if air.get('stick'):
+                    g.release(0, 'move')
             st['frame'] = frame + 1
             if st['frame'] >= PRE + seq['frames']:
                 st['rows'].close()
