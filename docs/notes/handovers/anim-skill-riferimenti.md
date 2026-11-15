@@ -4,10 +4,10 @@ Branch `claude/project-thread-ybl6a8` (da `claude/project-thread-0tmywc-docs`, m
 Documento: `Artifacts/Animazione/skill-e-riferimenti.html` = https://claude.ai/artifact/TXAt4tWjuWW5CfnjXH6o63
 
 ## Raccomandazioni (in attesa del sì dell'owner)
-1. Skill nuova per la revisione video regola 10 (catena di cattura, strisce etichette, griglie, misura pixel, PASS/FAIL), con script
-   inclusi. Oggi il metodo sta solo nella memoria `jab-v3-r1-dair-blendout-review` e in anim-theory doc 2 §10. ~$6-10.
-2. Rifare `gstn-move-animation` (35 KB, "mai Fable" contro la regola 3) attorno al metodo dell'owner (11-15 00:46Z): base = le SUE pose,
-   una critica alla volta (principio, frame, cosa si vede, modifica minima), una modifica, prima/dopo. Niente "da zero". ~$6-10.
+Modello (owner 11-15 00:49Z): REVISORE (Claude) giudica e scrive UNA istruzione esatta alla volta; ESECUTORE (Antigravity o modello
+economico) la applica e mostra prima/dopo. Antigravity non crea pose buone da testo né da pose minime. Pose di partenza mai da zero.
+1. Skill del revisore: video regola 10 + domanda di qualità + istruzioni a 5 campi (frame, parte, modifica, principio, verifica). ~$8-12.
+2. `gstn-move-animation` (35 KB) ridotta a skill dell'esecutore. ~$5-8. Da decidere: 2 tentativi per istruzione, tetto 6 per mossa.
 3. Libreria riferimenti "solo numeri" in `Tools/AnimPipeline/reflib/` (indice.csv, <id>_timing.csv, classi.csv); immagini/GIF/video
    solo in `Saved/AnimPipeline/refs/` sul desktop (già escluso da git). Pilota 10 mosse ~$10-15, poi ~$1 a mossa.
 4. Confronto nella review: tempi contro la classe, curva di estensione, affiancato di lato, sei domande. +$0,5-1 a review.
@@ -30,4 +30,4 @@ riferimenti della stessa classe; se no, max tre scarti con frame e correzione; r
 - Sì dell'owner ai punti 1-3. Domanda: registra lui 5-10 clip da dietro, o da dietro si giudica solo con i principi?
 - Licenze delle fonti non verificate sul web (conoscenza generale; non è un parere legale).
 
-Costo stimato del thread: ~$6-8 (Fable, ~200k token in ingresso con cache, ~12k in uscita).
+Costo stimato del thread: ~$8-10 (Fable, ~260k token in ingresso con cache, ~12k in uscita).

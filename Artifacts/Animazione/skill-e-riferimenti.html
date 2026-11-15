@@ -51,25 +51,49 @@ pre{margin:0;padding:12px 14px;font:13px/1.5 var(--mono);background:var(--code-b
 <section class="decisioni">
   <h2>Cosa consiglio, in ordine</h2>
   <ol>
-    <li><strong>Una skill nuova per la revisione video</strong> (regola 10), con dentro la tua nuova domanda di qualità. Oggi il metodo vive nella memoria del progetto e ogni thread di review lo ricostruisce. Circa <strong>$6-10</strong> una volta sola.</li>
-    <li><strong>Rifare <code>gstn-move-animation</code> attorno al metodo che ti ha dato i risultati migliori</strong>: si parte dalle tue pose, una critica alla volta, una modifica alla volta. Oggi pesa 35 KB e spinge ancora il modello a costruire o rifinire da solo. Circa <strong>$6-10</strong>.</li>
+    <li><strong>Una skill nuova per il revisore</strong>: revisione video (regola 10), la tua domanda di qualità, e in uscita istruzioni di modifica esatte, una alla volta. Oggi il metodo vive nella memoria del progetto e ogni thread lo ricostruisce. Circa <strong>$8-12</strong> una volta sola.</li>
+    <li><strong>Ridurre <code>gstn-move-animation</code> a skill dell'esecutore</strong>: applica una istruzione, rigenera, mostra prima e dopo. Niente pose inventate. Oggi pesa 35 KB e spinge il modello a costruire la mossa da solo, cosa che nelle tue prove non ha funzionato. Circa <strong>$5-8</strong>.</li>
     <li><strong>Libreria di riferimenti fatta di soli numeri</strong> nel repo (timing e curve misurate, con la fonte). Immagini, GIF e video restano solo sul desktop. Pilota di 10 mosse circa <strong>$10-15</strong>, poi circa $1 per mossa nuova.</li>
     <li><strong>Confronto con il riferimento dentro ogni review</strong>: una griglia in più e tre numeri. Circa <strong>$0,5-1</strong> in più per review.</li>
     <li><strong>Da non fare</strong>: estrarre animazioni o modelli dai giochi; trasformare in skill la teoria o il debug lato gioco.</li>
   </ol>
-  <p class="nota" style="margin:12px 0 0">Totale per partire: circa $23-36. Serve un tuo sì ai punti 1-3 e una risposta alla domanda in fondo.</p>
+  <p class="nota" style="margin:12px 0 0">Totale per partire: circa $24-36. Serve un tuo sì ai punti 1-3 e una risposta alla domanda in fondo.</p>
 </section>
 
 <section>
-  <h2>Il metodo di lavoro: le tue pose, critica passo passo</h2>
-  <p>Hai già provato a far generare o rifinire le mosse a Fable 5.1 e a Opus 5.5, e il risultato migliore è arrivato con Antigravity partendo da pose tue già esistenti, con critiche un passo alla volta. Le raccomandazioni seguono questo, non il contrario: nessuna skill deve riportare un modello a inventare la mossa da zero.</p>
+  <h2>Il metodo di lavoro: un revisore che giudica, un esecutore che applica</h2>
+  <p>Punto di partenza, dalle tue prove: Antigravity funziona quando gli si dice <em>esattamente</em> cosa fare. Non riesce a creare pose buone da zero dal solo testo, e nemmeno da poche pose minime di riferimento (il jab). Fable 5.1 e Opus 5.5 nel ruolo di animatore non hanno fatto meglio. Quindi il giudizio e la mano vanno separati.</p>
+  <div class="scroll"><table>
+    <tr><th>Ruolo</th><th>Chi</th><th>Cosa fa</th></tr>
+    <tr><td><strong>Revisore</strong></td><td>Claude (Fable), cloud</td><td>Guarda griglia o video, applica principi, soglia di qualità e riferimenti. Non tocca le pose. Scrive <strong>una istruzione esatta alla volta</strong>.</td></tr>
+    <tr><td><strong>Esecutore</strong></td><td>Antigravity, o un modello economico con <code>animpipe</code></td><td>Applica quella sola istruzione, rigenera la griglia sugli stessi frame, restituisce prima e dopo. Non decide niente.</td></tr>
+    <tr><td><strong>Tu</strong></td><td></td><td>Dai le pose di partenza quando sono tue, decidi quando l'istruzione tocca una tua chiave, guardi solo ciò che ha passato la review.</td></tr>
+  </table></div>
+
+  <h3>Da dove vengono le pose di partenza: mai da zero</h3>
   <ol>
-    <li><strong>La base sono le tue pose.</strong> Le tue chiavi entrano intere e bloccate; il modello non le sposta mai da solo (la pipeline lo rifiuta già).</li>
-    <li><strong>Una critica alla volta.</strong> Ogni critica ha quattro parti: il principio violato, il frame e la parte del corpo, cosa si vede, la modifica più piccola che lo risolve.</li>
-    <li><strong>Una modifica alla volta.</strong> Si applica, si rigenera la griglia sugli stessi frame, si confronta prima e dopo. Solo dopo si passa alla critica successiva.</li>
-    <li><strong>Sulle tue chiavi decidi tu.</strong> Se la critica tocca una tua posa, arriva a te come proposta con il motivo; sugli intermedi il modello procede.</li>
-    <li><strong>Antigravity resta com'è.</strong> Il suo processo non si tocca. Claude fa la critica con i principi e i riferimenti, e la revisione video finale.</li>
+    <li><strong>Le tue pose</strong> in Cascadeur. Restano la fonte migliore; entrano intere e bloccate.</li>
+    <li><strong>Una clip esistente e libera</strong> (Quaternius, Game Animation Sample, Paragon, Mixamo), da cui si tengono le pose chiave e si rifà il tempo.</li>
+    <li><strong>Un riferimento misurato</strong>: <code>ref_keyposes.py</code> ricava già da una GIF di lato gli angoli di ogni segmento per le pose chiave. Dà una posa di partenza con numeri, da correggere poi per la vista da dietro. Si prende la classe della mossa, non la mossa.</li>
   </ol>
+  <p>Se nessuna delle tre esiste, la mossa non parte: il revisore lo dice e chiede a te una posa o una clip.</p>
+
+  <h3>Come è scritta un'istruzione</h3>
+  <p>Deve poter essere eseguita senza interpretare. Cinque campi fissi:</p>
+<pre>frame      9 (video v30)
+parte      mano destra
+modifica   12 cm avanti, 6 cm su, polso ruotato 20° verso l'esterno
+principio  posa d'impatto leggibile (silhouette, sez. 11): da dietro il braccio è coperto dal busto
+verifica   in vista da dietro al frame 9 la mano esce dalla sagoma di almeno 10 cm</pre>
+  <p>L'esecutore applica, il campo <code>verifica</code> dice se è riuscita. Un'istruzione senza principio o senza verifica non è valida. Una sola istruzione per passo, in ordine di gravità: prima ciò che blocca, poi il resto.</p>
+
+  <h3>Quando si ferma</h3>
+  <ul>
+    <li>La stessa istruzione fallisce due volte: stop, arriva a te con il prima e dopo.</li>
+    <li>L'istruzione tocca una tua chiave: arriva a te come proposta, l'esecutore non la applica.</li>
+    <li>Tetto proposto di <strong>sei istruzioni per mossa</strong> prima della revisione video finale. La regola dei due tentativi oggi vale per l'intera mossa; qui varrebbe per singola istruzione. È una tua decisione.</li>
+  </ul>
+  <p class="nota">Costo stimato per mossa: ogni passo di critica su griglia circa $0,5-1, la revisione video finale circa $2-3, l'esecutore pochi centesimi se è un modello economico. In tutto circa $5-9 a mossa con sei passi.</p>
 
   <h3>I principi di animazione sono usati oggi? Solo in parte</h3>
   <ul>
@@ -77,7 +101,7 @@ pre{margin:0;padding:12px 14px;font:13px/1.5 var(--mono);background:var(--code-b
     <li><strong>Vengono letti solo quando il brief li nomina.</strong> È successo per il piano del jab v3, per la review del dair v8 e per il brief delle reazioni.</li>
     <li><strong>Nessuna skill li cita.</strong> Né <code>animpipe-move</code> né <code>gstn-move-animation</code> rimandano a quei documenti. La rubrica di review viene dalle tue regole, e <code>gstn-move-animation</code> ha una sua lista di fondamentali scritta prima.</li>
   </ul>
-  <p>Quindi oggi l'uso dipende da chi scrive il brief. La correzione è piccola: le due skill rimandano ai tre documenti, e ogni critica deve nominare il principio da cui deriva (documento 1, sezione 13: intento, previsione, misura, spiegazione). Una critica senza principio non vale. I riferimenti da altri giochi servono a tarare il livello; i principi servono a spiegare cosa non va.</p>
+  <p>Quindi oggi l'uso dipende da chi scrive il brief. La correzione è piccola: le due skill rimandano ai tre documenti, e ogni istruzione deve nominare il principio da cui deriva (documento 1, sezione 13: intento, previsione, misura, spiegazione). I riferimenti da altri giochi servono a tarare il livello; i principi servono a spiegare cosa non va.</p>
 </section>
 
 <section>
@@ -102,8 +126,9 @@ pre{margin:0;padding:12px 14px;font:13px/1.5 var(--mono);background:var(--code-b
     <tr><th>Parte</th><th>Skill?</th><th>Motivo</th></tr>
     <tr><td>Revisione video regola 10: controllo della catena di cattura, strisce delle etichette, griglie attorno a colpo e FAF, misura dei pixel cambiati, formato PASS/FAIL</td><td><span class="tag si">sì, nuova</span></td><td>È il passo più ripetuto e il più caro. Gli script per estrarre frame e comporre griglie vanno dentro la skill, così il modello non li riscrive.</td></tr>
     <tr><td>Domanda di qualità e confronto con i riferimenti</td><td><span class="tag si">sì, dentro la stessa</span></td><td>Deve essere chiesta sempre allo stesso modo, altrimenti il livello cambia da thread a thread.</td></tr>
+    <tr><td>Scrittura delle istruzioni di modifica (cinque campi, una alla volta)</td><td><span class="tag si">sì, dentro la stessa</span></td><td>È il passaggio tra revisore ed esecutore: se il formato cambia, l'esecutore torna a interpretare.</td></tr>
     <tr><td><code>animpipe-move</code> (import, interp, check, render, verdetto su una griglia)</td><td><span class="tag si">già skill, tenere</span></td><td>È corta (5 KB) e guidata da <code>animpipe status</code>. Aggiungere solo il rimando ai tre documenti di teoria e al passo "riferimenti".</td></tr>
-    <tr><td><code>gstn-move-animation</code></td><td><span class="tag forse">sì, da rifare</span></td><td>Diventa la skill della critica passo passo sulle tue pose: una critica con il suo principio, una modifica, prima e dopo. Via la modalità "da zero" come strada normale. 35 KB caricati interi (circa 9 mila token a ogni uso): tenere regole e ordine dei controlli; spostare API di Cascadeur, soglie e percorsi in file letti solo quando servono. Dice ancora "mai Fable" per le pose, mentre la regola 3 oggi assegna a Fable animazioni e review.</td></tr>
+    <tr><td><code>gstn-move-animation</code></td><td><span class="tag forse">sì, come esecutore</span></td><td>Diventa la skill di chi applica: una istruzione, rigenera, prima e dopo. Via la modalità "da zero". 35 KB caricati interi (circa 9 mila token a ogni uso): tenere regole e ordine dei controlli; spostare API di Cascadeur, soglie e percorsi in file letti solo quando servono. Dice ancora "mai Fable" per le pose, mentre la regola 3 oggi assegna a Fable animazioni e review.</td></tr>
     <tr><td>Cattura sul desktop e consegna alla review (build, cattura, mp4 e griglie in <code>docs/notes/reviews/</code>)</td><td><span class="tag forse">sezione, non skill</span></td><td>Sono pochi comandi già coperti da <code>animpipe render --standalone</code>. Basta una sezione in <code>animpipe-move</code>.</td></tr>
     <tr><td>Raccolta di un riferimento (scarica, misura, salva i numeri)</td><td><span class="tag forse">sezione, non skill</span></td><td>Gli script esistono già (<code>ufd_fetch.py</code>, <code>ufd_measure.py</code>). Lavoro da Haiku.</td></tr>
     <tr><td>Teoria dell'animazione (<code>docs/notes/anim-theory/</code>)</td><td><span class="tag no">no, ma citata</span></td><td>È conoscenza, non procedura. Le skill devono rimandarci (oggi non lo fanno); duplicarla crea due versioni che divergono.</td></tr>
