@@ -250,3 +250,11 @@ Regola applicata: merged = cancellato (i commit sono in feature). Non merged con
 - claude/project-thread-woqa0y (17bb8400, 2026-11-12)
 - claude/project-thread-wzb12r (fb4bd361, 2026-11-01)
 - claude/project-thread-yhnbvx (bf82599d, 2026-11-14)
+
+## Stato esecuzione (2026-11-15, thread "Pulizia branch")
+
+- Tag archive/<branch> per i 5 non merged: NON creati sul remoto. Il push dei tag torna HTTP 403 (rifiuto della policy di rete, non un errore di rete).
+- Cancellazione dei 146 merged e dei 5 non merged: NON eseguita. Il push di cancellazione torna HTTP 403. Test su claude/desktop-assets: ancora presente sul remoto.
+- Nessun branch cancellato. Nessun force-push. I 5 branch non merged restano finché il tag non esiste.
+- Il solo push riuscito: questo file su claude/artifacts (commit e412a602).
+- Riprova da fare, con l'accesso GitHub corretto: vedi la lista nelle sezioni sopra. Verifica con `git merge-base --is-ancestor <branch> origin/feature/gas-npp-5.8`.
