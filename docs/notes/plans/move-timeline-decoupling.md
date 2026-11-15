@@ -34,10 +34,24 @@ passo dei binding: stesso buffer, stesso determinismo, nessun input hardcoded.
 Giudizio: il disaccoppiamento proposto è esattamente lo schema Epic (abilità = logica, timeline = asset riprodotto da task); Epic non avrebbe un buffer di
 comandi in engine, ma lo esporrebbe come "InputTag" con un task di attesa: è la §1 "Wait Command".
 
+## 2b. Sembrare parte dell'engine (obiettivo owner, tutto il plugin)
+Già nativo: asset con `UAssetDefinition` sotto Add > Gameplay > Combat (`GSTN_AssetDefinition_CombatTimeline.cpp`), factory CP5, Data Validation, tag nativi,
+input sopra Enhanced Input (i comandi riferiscono `UInputAction`, `docs/architecture/input.md:29`), GA normali ereditabili in BP.
+**Scostamenti oggi** (ordine di quanto si notano):
+1. Le mosse usano eventi di classe (On Move Key/Hit/Ended) invece del nodo-task con pin stile `PlayMontageAndWait`: è proprio il gap di §1.
+2. Prefisso `GSTN` visibile nei picker e nei nodi (`UCLASS(Abstract, Blueprintable)` senza `DisplayName`, `GSTN_GA_BaseCombat.h:54`); categorie "Combat|Move Actions" invece di "Ability|Tasks|Combat".
+3. Editor timeline in Slate proprio (`Private/Timeline/`), non con le righe/notify del Montage né il time slider di Sequencer: aspetto, righello e scorciatoie diversi.
+4. Nessuna icona di classe/thumbnail (GAS ne ha uno style set, `GameplayAbilitiesEditorModule.cpp:129`); tempi solo in frame (l'engine mostra frame E secondi).
+5. "Command" e "Input.Button" dove Lyra usa "InputTag": stesso concetto, nome diverso (va spiegato nel doc, non rinominato).
+**Regole per i nodi nuovi**: `Play Combat Timeline And Wait` e `Wait Command` come task latenti con pin (nome "Verbo...AndWait", categoria Ability|Tasks), input e
+uscite come i task GAS, tooltips stile engine; il validatore li riconosce come sicuri. **Passata "aspetto nativo"** separata (2-5): DisplayName senza prefisso,
+icone, righello frame+secondi e scorciatoie del Montage editor (spazio, frecce, zoom) sull'editor esistente, senza riscriverlo su Sequencer (riscrittura = 60 $+, non vale).
+**Effetto sulle decisioni**: nessuna opzione consigliata cambia; 1A diventa task con pin (+3-5 $, ~30-40 $). La passata nativa (~10-15 $) va con CP6 (pubblicazione), nessuna decisione ora.
+
 ## 3. Proposta (chiude il gap, mosse standard invariate)
 1. **Abilità ospite**: qualunque `UGSTN_GA_Base` può dichiarare `Timelines` (lista soft di TL_ sul CDO). Il registro le compila come voci (classe ospite, TL):
    resta funzione pura del loadout → deterministico, nessuna project setting.
-2. **Nodo "Play Combat Timeline (TL_)"** con pin On Key / On Hit / On Ended(motivo) / On Interrupted: richiesta al tick di combattimento, avvio **nello stesso
+2. **Nodo "Play Combat Timeline And Wait (TL_)"** con pin On Key / On Hit / On Ended(motivo) / On Interrupted: richiesta al tick di combattimento, avvio **nello stesso
    frame** (come il FollowUp, non via adozione); lo stato salva voce + slot dell'ospite. L'ospite **non termina** a fine timeline: decide lui (un'altra, nessuna, End Ability).
    Sequenze, scelta a runtime e "nessuna timeline" diventano normale grafo GAS.
 3. **Nodo "Wait Command"** (comando, finestra, consumo, priorità, condizione opz.) → evento On Command; risolto con i binding.
@@ -47,7 +61,7 @@ comandi in engine, ma lo esporrebbe come "InputTag" con un task di attesa: è la
 6. Esempio + test: stance (tieni Y: entra, X/RT in stance, rilascio esce) e una mossa a 3 fasi con scelta a input; review regola 10 sulla cattura.
 
 ## 4. Decisioni per l'owner (risposta tipo "1A 2A 3A")
-1. **Architettura timeline** — A) ospite + Play Combat Timeline, GA_BaseCombat come scorciatoia (**consigliata**, ~25-35 $ cloud Opus + build/test fisso ~5 $);
+1. **Architettura timeline** — A) ospite + Play Combat Timeline, GA_BaseCombat come scorciatoia (**consigliata**, ~30-40 $ cloud Opus con nodo-task stile engine + build/test fisso ~5 $);
    B) solo nodo "Start Timeline Move (classe)" che avvia nello stesso frame un'altra GA-con-TL (~8-12 $, ma il grafo non sopravvive fra le fasi); C) nulla, si usano FollowUp/eventi.
    Fermo intanto: niente.
 2. **Attesa input** — A) Wait Command integrato col buffer (comando+finestra+consumo+priorità+condizione) (**consigliata**, ~12-18 $); B) permettere il task del fork
