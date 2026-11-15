@@ -18,7 +18,9 @@ Se una cosa non la sai o non l'hai mai provata, scrivi "non provato" invece di s
 6. Le pose di partenza non nascono mai dal solo testo: pose dell'owner, una clip libera esistente, o pose chiave misurate.
 7. Stop: stessa istruzione fallita due volte; sei istruzioni per ciclo; dopo tre istruzioni, se il problema è l'idea della posa.
 8. Video in gioco solo all'inizio e alla fine; in mezzo si giudica la griglia.
-9. L'owner deve poter modificare pose e chiavi da Unreal (Sequencer, Control Rig) e ritrovarle rispettate al passo dopo.
+9. L'owner modifica chiavi e curve in Unreal su una COPIA della sequenza (`LS_<mossa>_Owner`, non additiva); un comando
+   `ue-import` rilegge le differenze nella scheda di `animpipe`, che è l'unica verità. Anche tu lavoreresti su una copia
+   (`LS_<mossa>_Agy`) che rientra dallo stesso comando; nessuno scrive nella sequenza generata dal build.
 10. Lo scambio avviene per file: un file con l'istruzione corrente, un file con l'esito.
 
 ## A. Cosa sai eseguire
@@ -44,10 +46,13 @@ Se una cosa non la sai o non l'hai mai provata, scrivi "non provato" invece di s
 14. Dove fallirebbe più spesso questo ciclo? Indica i tre casi peggiori, con una mossa di esempio.
 15. I sette campi dell'istruzione: quale ti manca per eseguire senza interpretare, e quale è inutile?
 16. Chiavi sparse e tetto di 8 chiavi aggiunte: è realistico per follow-through, overlap e rientro? Che numero proporresti?
-17. Modifiche dell'owner da Unreal: qual è il modo più sicuro per rileggerle e non sovrascriverle? Cosa si rompe oggi?
+17. Modifiche dell'owner da Unreal: cosa si rompe oggi quando lui tocca chiavi e curve nel Sequencer?
 18. Se `animpipe build` ricostruisce la sequenza dalla scheda e tu scrivi nel Sequencer, chi vince? Come eviteresti il conflitto?
 19. Quali controlli faresti tu e quali lasceresti al revisore, per non fare lo stesso lavoro due volte?
 20. Che cosa aggiungeresti al piano che qui manca?
+21. Punto 9: puoi lavorare solo su una copia della sequenza e lasciare che le tue modifiche rientrino per differenza? Sai leggere
+    da una sequenza chiavi sparse e tangenti per controllo e dire cosa è cambiato rispetto a un'altra? Cosa fai già di simile?
+22. "Uniforma": l'owner ha cambiato una chiave e una curva; ti si chiede di adattare solo le chiavi vicine non sue. Come lo faresti?
 
 ## D. Prove pratiche (solo dopo le risposte, ognuna su una COPIA variante di jab 1, mai sull'originale)
 Per ogni prova annota in `esito.md`: chiavi prima e dopo, chiavi dell'owner toccate (sì/no), esito dei controlli, tempo,

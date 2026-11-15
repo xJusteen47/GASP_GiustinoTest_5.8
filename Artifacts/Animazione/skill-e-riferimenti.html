@@ -53,11 +53,11 @@ pre{margin:0;padding:12px 14px;font:13px/1.5 var(--mono);background:var(--code-b
   <ol>
     <li><strong>Due skill piccole più un contratto comune</strong>: una per il revisore, una per l'esecutore, e tre file condivisi (rubrica unica, glossario, formato dell'istruzione). Circa <strong>$14-20</strong>. La vecchia <code>gstn-move-animation</code> va in archivio.</li>
     <li><strong>Chiavi sempre sparse</strong>, scritto come regola dura nel contratto: l'esecutore lavora solo su chiavi, mai su curve cotte frame per frame.</li>
-    <li><strong>Modifiche tue da Unreal</strong>: oggi funziona il livello additivo "Manuale". Per spostare, aggiungere o togliere le chiavi di base da Unreal serve un comando nuovo di rilettura, circa <strong>$15-25</strong> di codice.</li>
+    <li><strong>Modifiche tue da Unreal su una copia</strong>: modifichi chiavi e curve direttamente, un comando rilegge le differenze nella scheda e l'IA integra o uniforma. Va costruito, circa <strong>$20-35</strong> di codice.</li>
     <li><strong>Libreria di riferimenti fatta di soli numeri</strong> nel repo; immagini, GIF e video solo sul desktop. Pilota di 10 mosse circa <strong>$10-15</strong>.</li>
-    <li><strong>Controllo diretto con Antigravity</strong> (20 domande e 5 prove, sotto) prima di costruire le skill, poi una <strong>mossa pilota</strong> con il ciclo completo: circa <strong>$3-5</strong> più <strong>$5-9</strong>.</li>
+    <li><strong>Controllo diretto con Antigravity</strong> (22 domande e 5 prove, sotto) prima di costruire le skill, poi una <strong>mossa pilota</strong> con il ciclo completo: circa <strong>$3-5</strong> più <strong>$5-9</strong>.</li>
   </ol>
-  <p class="nota" style="margin:12px 0 0">Totale: circa $32-49 senza il comando di rilettura, $47-74 con. Le decisioni che servono da te sono in fondo.</p>
+  <p class="nota" style="margin:12px 0 0">Totale: circa $52-84, di cui $20-35 per la rilettura da Unreal. Le decisioni che servono da te sono in fondo.</p>
 </section>
 
 <section>
@@ -136,13 +136,22 @@ verifica   al frame 9, da dietro, la mano è almeno 10 cm fuori dalla linea dell
   </table></div>
   <p>Doppioni che esistono oggi e che il contratto toglie: tre rubriche diverse (quella di <code>gstn-move-animation</code>, quella di <code>animpipe-move</code>, l'audit di Antigravity) diventano un file solo; il revisore non rifà a mano misure che il gate ha già (nella review del jab v3 è successo con i pixel cambiati); il video intero non viene riguardato a ogni passo.</p>
 
-  <h3>Modificare pose e chiavi da Unreal</h3>
-  <p><strong>Oggi si può, con un limite.</strong> Ogni build crea nella sequenza <code>LS_&lt;mossa&gt;</code> una sezione additiva "Manuale" sul Control Rig. Posi un controllo, metti la chiave, salvi. Il build successivo rilegge quelle chiavi e le rimette, <code>animpipe capture</code> le salva nel repo e nella scheda, e <code>diff</code> avvisa se una modifica successiva tocca la stessa parte.</p>
-  <ul>
-    <li><strong>Limite</strong>: è un'aggiunta sopra la posa della scheda. Non puoi spostare nel tempo, togliere o riposare da capo una chiave di base, e servono chiavi a zero attorno per sfumare. Le chiavi messe sulla sezione di base si perdono al build successivo.</li>
-    <li><strong>Per avere tutto</strong> serve un comando <code>ue-import</code> che rilegga le chiavi sparse dalla sequenza e le scriva nella scheda come tue (bloccate), come già avviene da Cascadeur. È codice nuovo, circa $15-25. Non ho verificato se gli strumenti di Antigravity lo fanno già in parte: nel repo c'è un suo file di chiavi lette dal Sequencer.</li>
-    <li><strong>Come si integra col ciclo</strong>: una tua modifica diventa chiave tua, quindi bloccata. Il revisore riparte dal segmento toccato, non dall'inizio. Se una sua istruzione successiva tocca quella parte, ti arriva come proposta.</li>
-  </ul>
+  <h3>Modificare pose e chiavi da Unreal: una copia, poi rilettura</h3>
+  <p>Il livello additivo "Manuale" che esiste oggi non è la strada: aggiunge sopra la posa, non lascia spostare o togliere chiavi né toccare le curve. Il percorso che chiedi è questo, e va costruito:</p>
+  <ol>
+    <li><strong>Copia.</strong> Un comando crea <code>LS_&lt;mossa&gt;_Owner</code>: la stessa mossa con le chiavi sparse sulla sezione normale, non additiva. Il build non la sovrascrive mai.</li>
+    <li><strong>Modifichi tu</strong> in Sequencer come vuoi: pose, chiavi spostate nel tempo, aggiunte o tolte, tangenti e curve.</li>
+    <li><strong>Rilettura con differenze.</strong> <code>ue-import</code> confronta la copia con la scheda e stampa cosa è cambiato, per chiave e per parte (soglia 0,5 cm e 1°, come già avviene da Cascadeur). Prima di scrivere fa uno snapshot.</li>
+    <li><strong>Dici cosa farne</strong>, con una di tre parole:
+      <ul>
+        <li><strong>integra</strong>: le tue modifiche entrano nella scheda così come sono, come chiavi tue, bloccate;</li>
+        <li><strong>uniforma</strong>: entrano, e il revisore scrive istruzioni per adattare le chiavi e le tangenti <em>vicine</em> (non tue) al tuo cambio, così il resto della mossa non stona;</li>
+        <li><strong>cambia…</strong>: aggiungi a parole cosa vuoi oltre a ciò che hai fatto; il revisore lo traduce in istruzioni.</li>
+      </ul></li>
+    <li><strong>Build</strong> dalla scheda, griglia prima e dopo sul segmento toccato, e il ciclo riparte da lì.</li>
+  </ol>
+  <p><strong>Questo chiude anche il buco dei due archivi.</strong> La scheda resta l'unica verità. Nessuno scrive nella sequenza generata dal build. Chi lavora nel Sequencer, tu o Antigravity, lo fa su una copia (<code>_Owner</code> o <code>_Agy</code>) che rientra dallo stesso <code>ue-import</code>: le tue chiavi rientrano bloccate, le sue no, e se la sua copia tocca una tua chiave la rilettura la rifiuta.</p>
+  <p class="nota">Costo stimato: circa <strong>$20-35</strong> di codice più una prova sul desktop. Supera la soglia dei $15, quindi serve il tuo sì. Da verificare prima: se la scheda sa già conservare le tangenti per chiave del Sequencer (leggerle e scriverle da Python è già stato provato) e cosa fanno già gli strumenti di Antigravity, che nel repo hanno un file di chiavi lette dal Sequencer.</p>
 
   <h3>I casi</h3>
   <div class="scroll"><table>
@@ -152,7 +161,7 @@ verifica   al frame 9, da dietro, la mano è almeno 10 cm fuori dalla linea dell
     <tr><td>Mossa nuova, solo riferimento di un altro gioco</td><td>Posa di partenza dagli angoli misurati di lato. È il caso più debole: prima del ciclo la posa passa da te.</td></tr>
     <tr><td>Nessuna fonte</td><td>Non parte. Ti viene chiesta una posa o una clip.</td></tr>
     <tr><td>Tua nota su una mossa esistente ("al frame v13 il braccio è basso")</td><td>Il revisore la traduce in una istruzione (la mappa frame video → chiave esiste). Un passo, niente review completa.</td></tr>
-    <tr><td>Modifichi tu una posa in Unreal a metà ciclo</td><td>Capture, la chiave diventa tua, il revisore riparte da quel segmento.</td></tr>
+    <tr><td>Modifichi tu chiavi o curve in Unreal a metà ciclo</td><td>Lavori sulla copia, rilettura con differenze, dici integra, uniforma o cambia. Le chiavi diventano tue e il revisore riparte da quel segmento.</td></tr>
     <tr><td>L'istruzione tocca una tua chiave</td><td>Proposta a te, l'esecutore non applica.</td></tr>
     <tr><td>L'istruzione fallisce due volte, o sei istruzioni non bastano</td><td>Stop. Ti arriva prima e dopo con gli scarti rimasti.</td></tr>
     <tr><td>Dopo tre istruzioni il problema è l'idea della posa, non il dettaglio</td><td>Stop anticipato: serve una posa di partenza nuova. Correggere a piccoli passi non salva una base sbagliata (il jab).</td></tr>
@@ -163,7 +172,7 @@ verifica   al frame 9, da dietro, la mano è almeno 10 cm fuori dalla linea dell
 
   <h3>Buchi e lati negativi</h3>
   <ol>
-    <li><strong>Due archivi di chiavi.</strong> <code>animpipe</code> tiene la verità nella scheda e ricostruisce la sequenza; Antigravity scrive direttamente nel Sequencer. Se convivono, uno dei due sovrascrive l'altro e i blocchi sulle tue chiavi non scattano. Va scelta una sola fonte di verità. È il buco più serio.</li>
+    <li><strong>Due archivi di chiavi.</strong> Oggi <code>animpipe</code> tiene la verità nella scheda e ricostruisce la sequenza, mentre Antigravity scrive direttamente nel Sequencer: uno sovrascrive l'altro e i blocchi sulle tue chiavi non scattano. Si risolve con la regola sopra (scheda unica verità, Sequencer solo su copie che rientrano con <code>ue-import</code>), ma finché quel comando non esiste il buco resta.</li>
     <li><strong>Claude non può avviare Antigravity.</strong> Se l'esecutore è Antigravity, ogni passo lo fai partire tu, anche da telefono. Con un esecutore Claude economico sul desktop il ciclo gira da solo, ma non è provato che esegua bene quanto Antigravity.</li>
     <li><strong>Il revisore stima male i centimetri da un'immagine.</strong> Per questo conta il campo <code>verifica</code> e gli va dato il dump numerico delle ossa sulle chiavi insieme alla griglia.</li>
     <li><strong>Sei istruzioni possono non bastare per il livello tripla A.</strong> È realistico aspettarsi due cicli su molte mosse, quindi $10-18 invece di $5-9, oppure la tua mano su una posa.</li>
@@ -174,7 +183,7 @@ verifica   al frame 9, da dietro, la mano è almeno 10 cm fuori dalla linea dell
   </ol>
 
   <h3>Controllo diretto con Antigravity</h3>
-  <p>Questa review è una bozza finché non l'ha criticata anche lui. Io dal cloud non posso interrogarlo: il testo pronto da incollare è in <code>docs/notes/reviews/agy-check/prompt-per-agy.md</code> (riassunto del piano in dieci righe, 20 domande, 5 prove). Risposte ed esiti vanno in <code>esito.md</code> nella stessa cartella, e con quelli chiudo la versione finale. Qui sotto le domande sulle sue capacità; nel file ci sono anche otto domande di critica al piano (quale punto non riuscirebbe a rispettare, dove fallirebbe più spesso, quale campo dell'istruzione manca, chi vince tra scheda e Sequencer).</p>
+  <p>Questa review è una bozza finché non l'ha criticata anche lui. Io dal cloud non posso interrogarlo: il testo pronto da incollare è in <code>docs/notes/reviews/agy-check/prompt-per-agy.md</code> (riassunto del piano in dieci righe, 22 domande, 5 prove). Risposte ed esiti vanno in <code>esito.md</code> nella stessa cartella, e con quelli chiudo la versione finale. Qui sotto le domande sulle sue capacità; nel file ci sono anche dieci domande di critica al piano (quale punto non riuscirebbe a rispettare, dove fallirebbe più spesso, quale campo dell'istruzione manca, chi vince tra scheda e Sequencer).</p>
   <p><strong>Domande</strong> (risposte brevi, con un esempio ciascuna):</p>
   <ol>
     <li>Quali modifiche a una mossa esistente fai in modo affidabile, e quali no?</li>
@@ -290,7 +299,7 @@ classi.csv      classe, tenuta min-max, quota recupero, frame dello scatto, rinc
   <h2>Decisioni che servono da te</h2>
   <ol>
     <li><strong>Chi esegue.</strong> Antigravity (provato da te sulle modifiche di principio) oppure un Claude economico sul desktop (il ciclo gira da solo, non provato). Consiglio: prima il controllo diretto con Antigravity; se regge, esegue lui e Claude economico resta la riserva con lo stesso contratto.</li>
-    <li><strong>Dove vive la verità delle chiavi.</strong> Nella scheda di <code>animpipe</code> (com'è oggi, tu modifichi col livello "Manuale"), oppure si costruisce <code>ue-import</code> per modificare da Unreal anche le chiavi di base, circa $15-25. Consiglio: costruirlo, visto che lo chiedi come requisito, dopo un controllo di cosa fanno già gli strumenti di Antigravity.</li>
+    <li><strong>Rilettura da Unreal.</strong> Costruire copia e <code>ue-import</code> con le tre parole (integra, uniforma, cambia), circa $20-35. La scheda resta l'unica verità e anche Antigravity lavora su una copia. Consiglio: sì, è il pezzo che tiene insieme tutto il resto.</li>
     <li><strong>Opzione di skill.</strong> A, B o C. Consiglio A.</li>
     <li><strong>Tetti.</strong> Due tentativi per istruzione, sei istruzioni per ciclo, otto chiavi aggiunte per mossa.</li>
     <li><strong>Vista da dietro.</strong> Registri tu 5-10 clip brevi dai giochi che consideri il livello giusto, oppure per ora si giudica con i principi scritti.</li>

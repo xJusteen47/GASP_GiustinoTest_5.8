@@ -9,13 +9,13 @@ ESECUTORE (Antigravity o modello economico) la applica su chiavi SPARSE, fa gira
 Pose di partenza mai da zero: pose dell'owner, clip libera, o pose chiave misurate da un riferimento (`ref_keyposes.py`).
 Istruzione a 7 campi (chiave, tipo, parte, intento, modifica, principio, verifica), due livelli: di principio (normale) o misurato.
 PROSSIMO PASSO (owner 01:00Z): interrogare Antigravity sul desktop con `docs/notes/reviews/agy-check/prompt-per-agy.md`
-(20 domande + 5 prove, anche critica del piano) → `esito.md` nella stessa cartella → versione finale del documento.
+(22 domande + 5 prove, anche critica del piano) → `esito.md` nella stessa cartella → versione finale del documento.
 
 ## Raccomandazioni e costi stimati
 1. Opzione A: skill revisore + skill esecutore + contratto comune (rubrica unica, glossario, formato). ~$14-20. (B solo revisore
    $8-12; C una skill a due modi $10-14.) `gstn-move-animation` in archivio.
-2. `ue-import`: rileggere da Unreal le chiavi di base nella scheda come chiavi owner. Codice, ~$15-25. Oggi c'è solo il livello
-   additivo "Manuale" (cards/README §"Hand tweaks in Unreal") + `animpipe capture`.
+2. Unreal (owner 01:13Z: il livello additivo "Manuale" NON va bene): copia `LS_<mossa>_Owner` → modifica chiavi e curve → `ue-import`
+   con diff → "integra | uniforma | cambia". Scheda unica verità; anche Antigravity su copia `_Agy`. Codice, ~$20-35, serve il sì.
 3. Libreria riferimenti solo numeri in `Tools/AnimPipeline/reflib/`; immagini/GIF/video solo sul desktop. Pilota 10 mosse ~$10-15.
 4. Mossa pilota col ciclo completo ~$5-9 (realistico $10-18 se servono due cicli).
 
@@ -34,4 +34,4 @@ Due archivi di chiavi (scheda vs Sequencer scritto da Antigravity); Claude non p
 Chi esegue; fonte di verità delle chiavi / `ue-import`; opzione A/B/C; tetti (2 tentativi, 6 istruzioni, 8 chiavi aggiunte);
 clip da dietro. Non verificato: se gli strumenti di Antigravity rileggono già le chiavi dal Sequencer; licenze delle fonti.
 
-Costo stimato del thread: ~$14-17 (Fable, ~520k token in ingresso con cache, ~30k in uscita).
+Costo stimato del thread: ~$16-19 (Fable, ~600k token in ingresso con cache, ~30k in uscita).
