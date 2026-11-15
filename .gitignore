@@ -24,3 +24,4 @@ Plugins/*/Content/
 
 # Local Claude Code settings and tooling
 .claude/
+.agy-jobs/
