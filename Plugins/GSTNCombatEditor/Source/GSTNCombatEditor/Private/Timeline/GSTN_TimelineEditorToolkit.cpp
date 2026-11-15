@@ -486,7 +486,7 @@ FGSTN_BakeResult FGSTN_TimelineEditorToolkit::BakeSockets()
 
 void FGSTN_TimelineEditorToolkit::SaveAsset_Execute()
 {
-	// Preference "Bake on save" (off by default): a stale bake is refreshed on the way to disk, so what is saved is current
+	// Preference "Bake on save" (on by default, plugin ini): a stale bake is refreshed on the way to disk, so what is saved is current
 	if (UGSTN_CombatEditorSettings::Get().bBakeOnSave && Model.IsValid() && Preview.IsValid())
 	{
 		RefreshBakeStatus();

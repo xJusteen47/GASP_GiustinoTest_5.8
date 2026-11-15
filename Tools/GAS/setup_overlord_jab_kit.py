@@ -1,5 +1,7 @@
 # ANIM-JAB-3: the Overlord's two-hit jab on the light attack of a test kit, so the built animations can be watched in a real Play session.
-# Data only: no C++, no input mapping, no project setting, no Blueprint graph. Idempotent (a rerun rewrites the specs below over hand edits).
+# Data only: no C++, no input mapping, no project setting, no Blueprint graph. Idempotent on its own assets; never overwrites hand edits:
+# AS/AM/TL edited by hand (or saved by anything but this script) are KEPT, see Tools/GAS/setup_guard.py; run(force=True) or
+# run(force=['TL_Overlord_Jab1']) (env SETUP_FORCE) replaces them after a backup in Saved/Backups/SetupGuard.
 #
 # Reads (never writes) the built animations of the anim pipeline, /Game/AnimPipeline/Rig/AS_OverlordJab{1,2}<ANIM_VERSION>_Build. Content/AnimPipeline is one
 # folder shared by every worktree through a junction and holds the owner's work in progress: this script only duplicates out of it.
@@ -18,8 +20,12 @@
 # Editor:    import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import setup_overlord_jab_kit as s; s.run()
 # Output:    Saved/AnimJab3/setup_overlord_jab_kit.txt, at most 5 printed lines.
 import os
+import sys
 
 import unreal
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import setup_guard  # noqa: E402
 
 # Version of the built animations. A new version makes new AS/AM copies next to the old ones (left on disk, unreferenced once the timelines,
 # which keep their names, are rewritten to point at the new montages)
@@ -51,6 +57,7 @@ MOVES = {
 }
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'AnimJab3', 'setup_overlord_jab_kit.txt')
 _lines = []
+_guard = None   # setup_guard.Guard of the current run
 
 
 def log(msg):
@@ -82,7 +89,7 @@ def _anim_and_montage(n, spec, refresh):
     lib = unreal.EditorAssetLibrary
     if refresh:
         for p in (montage_path, anim_path):
-            if lib.does_asset_exist(p):
+            if lib.does_asset_exist(p) and _guard.may_write(p):
                 lib.delete_asset(p)
                 log(f'refresh: deleted {p}')
     if not lib.does_asset_exist(anim_path):
@@ -92,8 +99,9 @@ def _anim_and_montage(n, spec, refresh):
         log(f'created {anim_path} (copy of {SRC.format(n)})')
     anim = unreal.load_asset(anim_path)
     # The montage plays root motion only when its animation has it on; the root lock must not zero it (force_root_lock only matters with it off)
-    anim.set_editor_property('enable_root_motion', spec['root_motion'])
-    anim.set_editor_property('force_root_lock', False)
+    if _guard.may_write(anim_path):
+        anim.set_editor_property('enable_root_motion', spec['root_motion'])
+        anim.set_editor_property('force_root_lock', False)
     montage = unreal.load_asset(montage_path) if lib.does_asset_exist(montage_path) else None
     if not montage:
         factory = unreal.AnimMontageFactory()
@@ -101,12 +109,13 @@ def _anim_and_montage(n, spec, refresh):
         factory.set_editor_property('target_skeleton', anim.get_editor_property('skeleton'))
         montage = _tools().create_asset(f'AM_OverlordJab{n}{ANIM_VERSION}', DIR, unreal.AnimMontage, factory)
         log(f'created {montage_path}')
-    blend = montage.get_editor_property('blend_in')
-    blend.set_editor_property('blend_time', BLEND_IN_SECONDS)
-    montage.set_editor_property('blend_in', blend)
-    blend = montage.get_editor_property('blend_out')
-    blend.set_editor_property('blend_time', BLEND_OUT_SECONDS)
-    montage.set_editor_property('blend_out', blend)
+    if _guard.may_write(montage_path):
+        blend = montage.get_editor_property('blend_in')
+        blend.set_editor_property('blend_time', BLEND_IN_SECONDS)
+        montage.set_editor_property('blend_in', blend)
+        blend = montage.get_editor_property('blend_out')
+        blend.set_editor_property('blend_time', BLEND_OUT_SECONDS)
+        montage.set_editor_property('blend_out', blend)
     log(f'jab {n}: anim {anim.get_play_length() * 60.0:.1f} frames at 60 fps, skeleton {anim.get_editor_property("skeleton").get_name()}, '
         f'montage {montage.get_play_length():.3f} s, root motion {anim.get_editor_property("enable_root_motion")} '
         f'(lock {anim.get_editor_property("root_motion_root_lock")}, force lock {anim.get_editor_property("force_root_lock")}), '
@@ -176,6 +185,9 @@ def _timeline(n, spec, montage):
     if not asset:
         asset = _tools().create_asset(name, DIR, unreal.GSTN_CombatTimeline, unreal.DataAssetFactory())
         log(f'created {DIR}/{name}')
+    if not _guard.may_write(f'{DIR}/{name}'):
+        _guard.relink_montage(f'{DIR}/{name}', asset, montage)
+        return asset
     asset.set_editor_property('data', data)
     log(f'jab {n}: timeline total {spec["total"]}, FAF {spec["faf"]}, active {a0}-{a1}, cancel {spec["cancel"]}, tracks {kinds}')
     return asset
@@ -259,10 +271,19 @@ def _weapon_and_kit(classes):
     return [weapon, kit]
 
 
-def run(refresh=False):
+def _guarded_paths():
+    return [f'{DIR}/{kind}{n}{v}' for n in MOVES for kind, v in (('AS_OverlordJab', ANIM_VERSION), ('AM_OverlordJab', ANIM_VERSION),
+                                                                  ('TL_Overlord_Jab', ''))]
+
+
+def run(refresh=False, force=False):
+    """force: True, or asset names (['TL_Overlord_Jab1']) to overwrite even if edited by hand (backed up first); default keeps them"""
+    global _guard
     del _lines[:]
     ok = False
     try:
+        _guard = setup_guard.Guard.for_unreal('setup_overlord_jab_kit', force=force, log=log)
+        _guard.precheck(_guarded_paths())
         if not unreal.EditorAssetLibrary.does_directory_exist(DIR):
             unreal.EditorAssetLibrary.make_directory(DIR)
         saves, classes = [], {}
@@ -276,16 +297,15 @@ def run(refresh=False):
         tail = _weapon_and_kit(classes)
         if not tail:
             raise RuntimeError('weapon or kit not built')
-        for asset in saves + tail:
-            unreal.EditorAssetLibrary.save_loaded_asset(asset, False)
-        log(f'saved {len(saves + tail)} assets: ' + ', '.join(a.get_name() for a in saves + tail))
+        _guard.save_and_record(saves + tail, unreal.EditorAssetLibrary.save_loaded_asset)
+        log(f'saved: ' + ', '.join(a.get_name() for a in saves + tail) + '; ' + _guard.summary())
         ok = True
     except Exception as e:
         log(f'ERROR: {e!r}')
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, 'w') as f:
         f.write('\n'.join(_lines) + '\n')
-    for line in [l for l in _lines if 'WARNING' in l or 'ERROR' in l][:4] + [_lines[-1][:300]]:
+    for line in [l for l in _lines if any(w in l for w in ('WARNING', 'ERROR', 'KEPT', 'FORCE', 'MERGE'))][:4] + [_lines[-1][:300]]:
         print(line)
     return ok
 

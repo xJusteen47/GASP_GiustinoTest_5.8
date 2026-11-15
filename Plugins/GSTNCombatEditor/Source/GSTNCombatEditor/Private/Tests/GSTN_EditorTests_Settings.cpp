@@ -24,7 +24,7 @@ bool FGSTN_EditorSettingsDefaultsTest::RunTest(const FString& Parameters)
 	const UGSTN_CombatEditorSettings& Settings = UGSTN_CombatEditorSettings::Get();
 
 	// Values that only the plugin's Config/DefaultGSTNCombatEditor.ini sets (the C++ defaults differ or are empty)
-	TestFalse(TEXT("baking on save is off by default"), Settings.bBakeOnSave);
+	TestTrue(TEXT("baking on save is on by default"), Settings.bBakeOnSave);
 	TestTrue(TEXT("auto-key is on by default"), Settings.bAutoKeyDefault);
 	TestEqual(TEXT("fallback tick rate"), Settings.FallbackTickRateHz, 62.5f);
 	TestTrue(TEXT("debugger key"), Settings.DebuggerKey == FKey(TEXT("NumPadFive")));
