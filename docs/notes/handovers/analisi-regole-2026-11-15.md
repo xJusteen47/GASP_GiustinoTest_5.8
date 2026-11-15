@@ -4,7 +4,7 @@ Branch `claude/project-thread-na8pct` (base `claude/project-thread-tvze3n` dc820
 Artifact: https://claude.ai/artifact/1LEUDPK4VjC1bRgKj8qYqP, copia in `Artifacts/Progetto/analisi-regole-di-lavoro.html`,
 riga aggiunta in `Artifacts/README.md`. Nessun codice, nessuna regola o istruzione di progetto cambiata.
 ## Esito
-8 proposte, ognuna con problema, testo della regola e costo/beneficio. L'owner approva per numero ("ok 1 2 3 5").
+8 proposte con problema, testo della regola e costo/beneficio. L'owner approva per numero ("ok 1 2 3 5"); prime: 1, 2, 3.
 1. Approvazioni di macchina una volta per sessione (eccezione alla regola 9; un brief = una macchina).
 2. Posti per macchina al posto di "2 codice + 1 anim" (1 editor per macchina + 2 cloud; `_ue59` un thread alla volta,
    compilata solo dall'ultimo thread della sessione). Cambia la regola in memoria "ogni thread finisce con _ue59 compilata".
@@ -14,7 +14,6 @@ riga aggiunta in `Artifacts/README.md`. Nessun codice, nessuna regola o istruzio
 6. Brief in `handoffs/`, handover nel repo, indice unico `handoffs/INDICE.md`, artifact su un branch `claude/artifacts`.
 7. Decisioni per l'owner: un messaggio per sessione, max 3, risposta "1A 2B 3A".
 8. Ogni numero di un handover cita log e comando; un controllo a campione prima di fidarsi.
-Consigliate per prime: 1, 2, 3.
 ## Difetti trovati (16 nell'artifact), i meno ovvi
 - Regola 4 contro regola 10: le review guardano 6-9 immagini e finiscono a 130-150k token. Proposto tetto di 8 immagini.
 - Memoria con regole superate: push su feature "approvato" (10-23), tetto 400k token, nota "mai Fable".
