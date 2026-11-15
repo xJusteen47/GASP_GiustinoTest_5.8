@@ -186,9 +186,80 @@ a { color: var(--accent); }
     </table></div>
   </section>
 
+  <section id="plugin-bp">
+    <h2>Novità del plugin: tutto da Blueprint, senza cablaggi a mano</h2>
+    <p>Il plugin di combattimento si usa solo con Blueprint e dati. Regole fisse: <b>nessun cablaggio a mano</b> (le mosse nascono già collegate), <b>nessun tasto scritto nel codice</b> (una mossa risponde a un <i>comando</i>, vedi la sezione sul tasto) e <b>nessuna impostazione di progetto</b> per input o gioco: tutto sta negli asset.</p>
+
+    <h3>1 · Il pulsante «Combat Move»</h3>
+    <ol>
+      <li>Nel Content Browser: <b>Add › Gameplay › Combat › Combat Move</b>.</li>
+      <li>Si apre una finestra con i campi: <code>Template</code> (Strike colpo, Action azione, Empty vuoto), <code>Parent Class</code>, frame (se sbagliati vengono corretti, mai rifiutati), <code>Montage</code>, <code>Key Tag</code> (chiave per azioni, può restare vuota), timeline dentro la mossa o in un asset <code>TL_</code>, eventi di mossa, e il <b>collegamento al kit o all'arma</b> su un comando.</li>
+      <li>Conferma: la mossa esce con la timeline di partenza e, se hai scelto il collegamento, già legata.</li>
+      <li>Su una mossa che hai già: tasto destro › <b>Add to Kit or Weapon...</b>. Se la riga comando+requisiti esiste, viene aggiornata invece di duplicata. È un unico passo annullabile con <span class="btn">Ctrl</span>+<span class="btn">Z</span>.</li>
+    </ol>
+    <p class="note">Stato: scritto e provato con i test automatici (3 test del factory, controllo headless superato). La finestra e il menu a tendina <b>non sono ancora stati provati da un designer nell'editor</b>: se qualcosa non torna, dimmelo.</p>
+
+    <h3>2 · Eventi, azioni e domande sugli input</h3>
+    <p>Nel Blueprint di una mossa (figlia di <code>GSTN_GA_BaseCombat</code>) trovi nuovi nodi. Tutti girano dentro la simulazione, quindi restano uguali in rete e con i rollback.</p>
+    <div class="tablebox"><table>
+      <thead><tr><th>Cosa</th><th>Nodi</th><th>Quando serve</th></tr></thead>
+      <tbody>
+        <tr><td>Eventi di mossa</td><td><code>On Move Started</code>, <code>On Move Key</code>, <code>On Move Hit Confirmed</code>, <code>On Move Ended</code> (con il motivo di fine); <code>On Move Frame</code> solo se attivi <code>bTickMoveInBlueprint</code></td><td>Reagire a inizio, a una chiave della timeline, al colpo andato a segno, alla fine.</td></tr>
+        <tr><td>Azioni sulle chiavi</td><td>chiave Event con <code>Cue Tag</code>, <code>Gameplay Event Tag</code> e lista <code>Actions</code>: Send Event, Apply Effect, Open Tag Window, Fire Projectile</td><td>Cose che succedono a un frame preciso senza grafo.</td></tr>
+        <tr><td>Azioni in grafo</td><td><code>Send Move Event</code>, <code>Apply Move Effect</code>, <code>Open / Close Move Tag Window</code>, <code>Fire Move Projectile</code>, <code>Get Move Random Float / Integer</code></td><td>Le stesse azioni, ma decise dal grafo. Rifiutate fuori da una mossa attiva.</td></tr>
+        <tr><td>Domande sugli input</td><td><code>Was Button Pressed Within</code>, <code>Get Frames Since Button Pressed</code>, <code>Count Button Presses Within</code>, <code>Get Button Held Frames</code>, <code>Was Command Entered Within</code>, <code>Get Move Stick</code>, <code>Get Stick Direction</code></td><td>Doppia pressione, tenuto premuto, direzione dello stick. Si chiede per <b>tag</b>, mai per tasto fisico. I frame contano il tempo di combattimento (la pausa dell'impatto non conta).</td></tr>
+      </tbody>
+    </table></div>
+    <p>Un controllo automatico (validatore) segnala nel grafo di simulazione variabili non sincronizzate o nodi che aspettano nel tempo: così non si rompe la rete senza accorgersene. Le regole sono nella <a href="https://claude.ai/artifact/La2oqPzCkPdcqL2kERy9D6">Guida mosse Blueprint</a>.</p>
+
+    <h3>3 · Ganci visivi: scie, scintille, eventi</h3>
+    <ul>
+      <li><b>Finestre estetiche di mossa</b> (<code>Cosmetic Windows</code> sulla mossa): una scia Niagara su un socket dall'inizio alla fine di un intervallo di frame, più un suono, con fermo durante l'hitstop. Se la mossa viene interrotta nei frame attivi la scia si spegne subito, nella coda sfuma. Eventi Blueprint <code>On Move Cosmetic Begin / End</code>.</li>
+      <li><b>Effetto di colpo a 4 intensità</b>: <code>GCN_Example_Hit_*</code> in <span class="path">Content/GASNPPTest/Examples/Cosmetics/</span>, quattro versioni (dal colpo piccolo al pesante). Nasce nel punto del colpo, orientato lungo il colpo, senza doppioni per chi colpisce. Il tag dell'effetto si sceglie sulla hitbox.</li>
+      <li><b>Eventi Blueprint di colpo e reazione</b>: <code>On Hit Predicted</code>, <code>On Hit Prediction Cancelled</code>, <code>On Reaction Started / Ended</code>.</li>
+      <li><b>Tremolio nell'hitstop</b>: chi subisce trema di 3 cm da un lato all'altro per 0,2 s (chi colpisce no). È <b>acceso di default</b>; per spegnerlo metti <code>HitstopShake</code> a 0 in <code>DA_ReactionAnims</code>.</li>
+    </ul>
+    <p class="note">Attenzione: nel progetto <b>non esistono ancora</b> scie, scintille o suoni veri: gli slot Niagara e suono degli esempi sono vuoti. I ganci funzionano, manca il contenuto. Serve un piccolo kit di effetti (scia, scintilla in 3 grandezze, un camera shake per i colpi pesanti).</p>
+
+    <h3>4 · Speciale a doppia pressione: due esempi</h3>
+    <p>Cartella <span class="path">Content/GASNPPTest/Examples/DoubleShot</span>, proiettile <code>DA_Example_Shot</code> (sfera da 15 cm, 1800 cm/s). Per provarli, nel livello L_Test_Hub ci sono due pedane: <b>A</b> a (1600, −1400) e <b>B</b> a (1600, −1050). Premi <span class="btn">Y</span>.</p>
+    <div class="tablebox"><table>
+      <thead><tr><th></th><th>A · solo dati</th><th>B · con grafo Blueprint</th></tr></thead>
+      <tbody>
+        <tr><td>Asset</td><td><code>GA_Example_DoubleShot_A1</code> e <code>_A2</code>, kit <code>KIT_Example_DoubleShotA</code></td><td>Una sola mossa <code>GA_Example_DoubleShot_B</code>, kit <code>KIT_Example_DoubleShotB</code></td></tr>
+        <tr><td>Come funziona</td><td>A1 spara a f8 e apre per f8–20 un tag; col tag acceso il kit lega lo speciale ad A2 (stesso schema della catena di jab). Il secondo colpo è una mossa a sé, con un suo recupero.</td><td>Nel grafo: <code>On Move Key</code> spara; <code>On Move Frame</code> controlla con <code>Was Command Entered Within</code> (8 frame) la seconda pressione, apre una finestra tag, aspetta 6 frame e spara. Tutto dentro una mossa (primo frame libero 28).</td></tr>
+        <tr><td>Quando scegliere</td><td>Quando basta una catena e vuoi lavorare solo con dati.</td><td>Quando serve logica (condizioni, casualità, più passi).</td></tr>
+        <tr><td>Prova fatta</td><td>Dai numeri dei frame in PIE: singola = 1 mossa (17 f), doppia (8 f) = una sequenza da 31 f, lenta (40 f) = due mosse separate.</td><td>Dai numeri dei frame in PIE: singola 17 f, doppia 30 f, lenta = due singole.</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">Nessuno ha ancora <b>guardato</b> il video di queste due pedane: il proiettile è piccolo e non è confermato che si vedano 1 contro 2 colpi, né che il secondo sia più veloce. È la prima cosa da guardare.</p>
+
+    <h3>5 · Campi nuovi, in breve</h3>
+    <div class="tablebox"><table>
+      <thead><tr><th>Dove</th><th>Campo</th><th>Cosa fa</th></tr></thead>
+      <tbody>
+        <tr><td>Chiave Event della timeline</td><td><code>Key Tag</code>, <code>Actions</code></td><td>Nome della chiave (arriva a <code>On Move Key</code>) e azioni da eseguire a quel frame.</td></tr>
+        <tr><td>Mossa (Class Defaults)</td><td><code>Cosmetic Windows</code>, <code>bTickMoveInBlueprint</code></td><td>Scie e suoni a frame; abilita <code>On Move Frame</code> (spento di default, costa).</td></tr>
+        <tr><td>Hitbox</td><td>tag dell'effetto di colpo</td><td>Sceglie quale <code>GCN_Example_Hit_*</code> suona.</td></tr>
+        <tr><td>Asset <code>ProjectileDefinition</code></td><td>dati del proiettile</td><td>Raggio, velocità, mira: si spara da azione o da nodo, con correzione di angolo e velocità.</td></tr>
+        <tr><td><code>DA_ReactionAnims</code></td><td><code>HitstopShake</code></td><td>Tremolio di chi subisce (3 cm, di default acceso).</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3>6 · Editor delle hitbox</h3>
+    <p>Le hitbox si spostano col mouse nell'<b>Open Timeline Editor</b> (vedi «Le tre mosse d'attacco»). Il funzionamento passo per passo è nel <a href="https://github.com/xJusteen47/GASP_GiustinoTest_5.8/blob/claude/integ-cp3/Plugins/GSTNCombatEditor/README.md">README dell'editor</a> (sul ramo del plugin). Renderlo più comodo è in coda e non è ancora fatto.</p>
+
+    <h3>Cosa non è ancora pronto</h3>
+    <ul>
+      <li>La finestra Combat Move non è stata provata a mano nell'editor.</li>
+      <li>Effetti e suoni veri mancano (vedi sopra).</li>
+      <li>Il plugin non è ancora pubblico: la confezione per pubblicarlo è una decisione a parte (prima si sceglie tra fork e GAS standard).</li>
+    </ul>
+  </section>
+
   <section>
     <h2>Fare una mossa nuova</h2>
-    <p class="note"><b>Nuovo (CP5, da compilare sul fisso):</b> nel Content Browser <b>Add › Gameplay › Combat › Combat Move</b> crea la mossa già pronta (colpo, chiave per azioni o vuota), con la timeline di partenza e, se vuoi, già legata al kit o all'arma su un comando. Su una mossa esistente: tasto destro › <b>Add to Kit or Weapon...</b>. Tutti i passi, la strada con il grafo Blueprint e le regole sono nella <a href="https://claude.ai/artifact/La2oqPzCkPdcqL2kERy9D6">Guida mosse Blueprint</a>. La strada qui sotto (duplicare un esempio) resta valida.</p>
+    <p class="note"><b>Nuovo:</b> la strada più corta ora è il pulsante <b>Combat Move</b> (sezione qui sopra). Duplicare un esempio, come descritto sotto, resta valido.</p>
     <ol>
       <li>Nel Content Browser, tasto destro su <code>GA_Example_Light</code> (o la mossa più vicina a quella che vuoi) › <b>Duplicate</b>. Chiamala come vuoi, per esempio <code>GA_MioCalcio</code>.</li>
       <li>Aprila, <b>Class Defaults › Timeline</b>: cambia frame, danno, hitbox e montage come nella tabella sopra. Compila e salva.</li>
@@ -207,6 +278,7 @@ a { color: var(--accent); }
       <li>Il forte non si carica tenendo il tasto: è un colpo singolo più lento.</li>
       <li>Leggero, forte e speciale sono stati provati in gioco (host e due client): ognuno toglie al bersaglio esattamente il danno scritto. La cupola dello zaino d'esempio non è ancora stata provata col pad: è la cupola standard con i suoi numeri in un Blueprint proprio.</li>
       <li>Lo zaino a volte non segue la schiena del personaggio: è un problema noto, aperto a parte.</li>
+      <li>Il plugin e i suoi campi nuovi sono provati con 579 test automatici (0 falliti) e con la prova in gioco di host e client; la prova da designer nell'editor è ancora da fare.</li>
       <li>Gli esempi sono stati creati da <code>Tools/GAS/setup_designer_examples.py</code>. Rilanciarlo non tocca le tue modifiche: crea solo ciò che manca.</li>
     </ul>
   </section>
