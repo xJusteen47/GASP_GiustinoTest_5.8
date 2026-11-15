@@ -1,6 +1,6 @@
 # Plugin di combattimento GSTN: architettura (per designer e per la futura versione pubblica)
 
-Stato: 2026-11-14, ramo `claude/project-thread-0tmywc`. Scritto da lettura del codice e degli handover (react-hook-1/2, launch-impacts), **non eseguito in editor**.
+Stato: 2026-11-14, ramo `claude/project-thread-0tmywc`; sezione 7 aggiornata il 2026-11-15 (CP2). Scritto da lettura del codice e degli handover (react-hook-1/2, launch-impacts), **non eseguito in editor**.
 Questo documento è la mappa breve; la specifica completa è [docs/architecture/combat.md](../../docs/architecture/combat.md) (1187 righe), l'indice dei plugin è [Plugins/README.md](../../Plugins/README.md), e ogni plugin ha il suo README.
 
 ## 1. Moduli (livelli)
@@ -69,7 +69,7 @@ Regola d'oro: il combat tick **scrive solo il proprio stato di sync**; ogni cosa
 
 Oggi un designer *può* fare con soli dati: mosse da duplicati, kit, reazioni visive, regole. Non può ancora, o dipende dal progetto:
 1. **Fork GAS+NPP obbligatorio** per `GSTNCombatNP` (e NP di Defence/Link/Input): il plugin non è usabile con motore standard. Serve un percorso `GSTNCombatStockGAS` (previsto, non fatto) o pubblicare il fork con `PATCHES.md`.
-2. **Creazione di mosse solo da script Python/duplicati**: non c'è una procedura guidata o un asset "Move" creabile da Content Browser (factory); scrivere la timeline in BP è possibile ma l'editor timeline/hitbox ha UX ancora in coda.
+2. **Creazione di mosse solo da script Python/duplicati** (la logica di una mossa ora si può scrivere in BP: vedi 7): non c'è una procedura guidata o un asset "Move" creabile da Content Browser (factory); scrivere la timeline in BP è possibile ma l'editor timeline/hitbox ha UX ancora in coda.
 3. **Nuovi passi di risoluzione colpo, tipi di link, fragment di sync**: classi C++ (i passi sono Blueprintable in teoria, ma i fragment di stato NP, le tick extension e i `LayeredMove` sono solo C++). Il codice per frame caldi deve restare C++ per scelta.
 4. **Contenuto e ABP del progetto**: lo slot `DefaultSlot`, `SandboxCharacter_Mover`, ABP (non in git), skeleton GASP, hurtbox che dipendono dal motion matching. Il componente reazioni va montato dallo script sul BP condiviso. Un ABP o skeleton diverso richiede lavoro.
 5. **Input e Mover del progetto**: i comandi standard (`Command.*`), il tracker Mover e le modalità muro (`GASP_Giustino2`) sono nel modulo di progetto, non in un plugin; Defence legge la rotolata dalla faccia/stick del progetto.
@@ -79,3 +79,17 @@ Oggi un designer *può* fare con soli dati: mosse da duplicati, kit, reazioni vi
 9. **Dedicated server**: il modello di rete è listen server; reazioni visive e replica sono testate solo così.
 
 Priorità suggerita per renderlo pubblico: (a) decisione sul fork (1), (b) factory/asset "Move" e wizard (2), (c) esempi e tag dentro il plugin (6, 7), (d) pulizia dipendenze dal progetto (4, 5).
+
+## 7. Estendere da Blueprint (CP1 + CP2, 2026-11-15)
+
+Ramo `claude/project-thread-6bl38a` (CP2 sopra CP1). Il nucleo per frame resta C++ a 62.5 Hz; il Blueprint di una mossa decide **per chiave e per evento**, mai per frame (salvo opt-in).
+
+- **Eventi di simulazione** sulla mossa (`UGSTN_GA_BaseCombat`): On Move Started, On Move Key (chiave Event della timeline, nominata da `KeyTag`), On Move Hit Confirmed, On Move Ended (motivo), On Move Frame solo con `bTickMoveInBlueprint`. Una volta per percorso simulato, di nuovo in re-simulazione (cursori in variabili sync).
+- **Domande di input** sul componente combat, per tag (mai tasti): premuto entro N frame, quante pressioni, tenuto da, comando inserito, stick.
+- **Le chiavi Event ora funzionano** (prima girava solo l'outbox): al frame della chiave partono, in ordine, cue, gameplay event, **azioni**, poi On Move Key.
+- **Azioni della mossa** (richieste, mai scritture di stato): *Send Event*, *Apply Effect* (movimento = GE con mossa Mover in coda), *Open Tag Window* (tag per N frame o fino a fine mossa), *Fire Projectile* (data asset `UGSTN_ProjectileDefinition` + angolo/velocità). Si mettono nella lista Actions della chiave (solo dati) o si chiamano dal grafo (nodi *Combat|Move Actions*, più *Get Move Random* deterministico).
+- **Proiettili**: lo stesso costruttore per l'abilità Fire Projectile e per le mosse; spawn una volta sola sull'host, fantasma sul client che predice.
+- **Validatore** dei grafi di simulazione (al salvataggio e in Validate all): Delay/timer (errore), task asincroni, variabili non sync, letture di mondo/Mover, random non deterministico (avvisi).
+- Un plugin aggiunge azioni sue derivando `FGSTN_MoveAction` nel proprio modulo: il Core non lo nomina.
+
+Prossimo: CP3 mosse di esempio (special a doppia pressione con 2 proiettili, versione solo dati e versione grafo BP), CP4 ganci visivi, CP5 factory "Combat Move" e guida.

@@ -15,7 +15,7 @@ a{color:var(--accent)}li{margin:.3em 0}p,li{max-width:70ch}
 table{border-collapse:collapse;width:100%;min-width:560px;font-size:.9rem}th,td{text-align:left;vertical-align:top;padding:7px 10px;border-bottom:1px solid var(--line)}th{background:var(--code);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
 </style>
 <div class="wrap"><h1>Plugin di combattimento GSTN: architettura (per designer e per la futura versione pubblica)</h1>
-<p>Stato: 2026-11-14, ramo <code>claude/project-thread-0tmywc</code>. Scritto da lettura del codice e degli handover (react-hook-1/2, launch-impacts), <strong>non eseguito in editor</strong>.
+<p>Stato: 2026-11-14, ramo <code>claude/project-thread-0tmywc</code>; sezione 7 aggiornata il 2026-11-15 (CP2). Scritto da lettura del codice e degli handover (react-hook-1/2, launch-impacts), <strong>non eseguito in editor</strong>.
 Questo documento è la mappa breve; la specifica completa è <a href="https://github.com/xJusteen47/GASP_GiustinoTest_5.8/blob/claude/project-thread-0tmywc/docs/architecture/combat.md">docs/architecture/combat.md</a> (1187 righe), l'indice dei plugin è <a href="https://github.com/xJusteen47/GASP_GiustinoTest_5.8/blob/claude/project-thread-0tmywc/Plugins/README.md">Plugins/README.md</a>, e ogni plugin ha il suo README.</p>
 <h2>1. Moduli (livelli)</h2>
 <p>Regola: un plugin <strong>Core</strong> puro (niente GAS, niente Network Prediction, niente Mover), adattatori sopra. Le dipendenze vanno solo verso il basso.</p>
@@ -110,7 +110,7 @@ Questo documento è la mappa breve; la specifica completa è <a href="https://gi
 <h2>6. Cosa è ancora solo C++ o specifico del progetto (per renderlo pubblico e solo-BP)</h2>
 <p>Oggi un designer <em>può</em> fare con soli dati: mosse da duplicati, kit, reazioni visive, regole. Non può ancora, o dipende dal progetto:
 1. <strong>Fork GAS+NPP obbligatorio</strong> per <code>GSTNCombatNP</code> (e NP di Defence/Link/Input): il plugin non è usabile con motore standard. Serve un percorso <code>GSTNCombatStockGAS</code> (previsto, non fatto) o pubblicare il fork con <code>PATCHES.md</code>.
-2. <strong>Creazione di mosse solo da script Python/duplicati</strong>: non c'è una procedura guidata o un asset "Move" creabile da Content Browser (factory); scrivere la timeline in BP è possibile ma l'editor timeline/hitbox ha UX ancora in coda.
+2. <strong>Creazione di mosse solo da script Python/duplicati</strong> (la logica di una mossa ora si può scrivere in BP: vedi 7): non c'è una procedura guidata o un asset "Move" creabile da Content Browser (factory); scrivere la timeline in BP è possibile ma l'editor timeline/hitbox ha UX ancora in coda.
 3. <strong>Nuovi passi di risoluzione colpo, tipi di link, fragment di sync</strong>: classi C++ (i passi sono Blueprintable in teoria, ma i fragment di stato NP, le tick extension e i <code>LayeredMove</code> sono solo C++). Il codice per frame caldi deve restare C++ per scelta.
 4. <strong>Contenuto e ABP del progetto</strong>: lo slot <code>DefaultSlot</code>, <code>SandboxCharacter_Mover</code>, ABP (non in git), skeleton GASP, hurtbox che dipendono dal motion matching. Il componente reazioni va montato dallo script sul BP condiviso. Un ABP o skeleton diverso richiede lavoro.
 5. <strong>Input e Mover del progetto</strong>: i comandi standard (<code>Command.*</code>), il tracker Mover e le modalità muro (<code>GASP_Giustino2</code>) sono nel modulo di progetto, non in un plugin; Defence legge la rotolata dalla faccia/stick del progetto.
@@ -118,4 +118,17 @@ Questo documento è la mappa breve; la specifica completa è <a href="https://gi
 7. <strong>Contenuto di esempio</strong>: <code>Plugins/**/Content/</code> è ignorato da git; gli esempi stanno in <code>Content/GASNPPTest</code> e nei dati creati da script. Per un plugin pubblico servono esempi dentro il plugin.
 8. <strong>Ancora da progettare</strong>: ECB/capsula che si riduce, reazioni direzionali (da dietro/di lato), clip GroundHit dall'altezza del tumble, fix crouch ABP, UI loadout e tag in italiano/inglese, README unico di installazione, test automatici che non dipendano dalla mappa hub.
 9. <strong>Dedicated server</strong>: il modello di rete è listen server; reazioni visive e replica sono testate solo così.</p>
-<p>Priorità suggerita per renderlo pubblico: (a) decisione sul fork (1), (b) factory/asset "Move" e wizard (2), (c) esempi e tag dentro il plugin (6, 7), (d) pulizia dipendenze dal progetto (4, 5).</p></div>
+<p>Priorità suggerita per renderlo pubblico: (a) decisione sul fork (1), (b) factory/asset "Move" e wizard (2), (c) esempi e tag dentro il plugin (6, 7), (d) pulizia dipendenze dal progetto (4, 5).</p>
+<h2>7. Estendere da Blueprint (CP1 + CP2, 2026-11-15)</h2>
+<p>Ramo <code>claude/project-thread-6bl38a</code> (CP2 sopra CP1). Il nucleo per frame resta C++ a 62.5 Hz; il Blueprint di una mossa decide <strong>per chiave e per evento</strong>, mai per frame (salvo opt-in).</p>
+<ul>
+<li><strong>Eventi di simulazione</strong> sulla mossa (<code>UGSTN_GA_BaseCombat</code>): On Move Started, On Move Key (chiave Event della timeline, nominata da <code>KeyTag</code>), On Move Hit Confirmed, On Move Ended (motivo), On Move Frame solo con <code>bTickMoveInBlueprint</code>. Una volta per percorso simulato, di nuovo in re-simulazione (cursori in variabili sync).</li>
+<li><strong>Domande di input</strong> sul componente combat, per tag (mai tasti): premuto entro N frame, quante pressioni, tenuto da, comando inserito, stick.</li>
+<li><strong>Le chiavi Event ora funzionano</strong> (prima girava solo l'outbox): al frame della chiave partono, in ordine, cue, gameplay event, <strong>azioni</strong>, poi On Move Key.</li>
+<li><strong>Azioni della mossa</strong> (richieste, mai scritture di stato): <em>Send Event</em>, <em>Apply Effect</em> (movimento = GE con mossa Mover in coda), <em>Open Tag Window</em> (tag per N frame o fino a fine mossa), <em>Fire Projectile</em> (data asset <code>UGSTN_ProjectileDefinition</code> + angolo/velocità). Si mettono nella lista Actions della chiave (solo dati) o si chiamano dal grafo (nodi <em>Combat|Move Actions</em>, più <em>Get Move Random</em> deterministico).</li>
+<li><strong>Proiettili</strong>: lo stesso costruttore per l'abilità Fire Projectile e per le mosse; spawn una volta sola sull'host, fantasma sul client che predice.</li>
+<li><strong>Validatore</strong> dei grafi di simulazione (al salvataggio e in Validate all): Delay/timer (errore), task asincroni, variabili non sync, letture di mondo/Mover, random non deterministico (avvisi).</li>
+<li>Un plugin aggiunge azioni sue derivando <code>FGSTN_MoveAction</code> nel proprio modulo: il Core non lo nomina.</li>
+</ul>
+<p>Prossimo: CP3 mosse di esempio (special a doppia pressione con 2 proiettili, versione solo dati e versione grafo BP), CP4 ganci visivi, CP5 factory "Combat Move" e guida.</p>
+</div>
