@@ -1,0 +1,144 @@
+<title>Piano CI GSTN</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@500;600&display=swap">
+<style>
+/* Layout: una colonna di lettura, tabelle in contenitori scorrevoli, box "consigliata" in evidenza ambra */
+:root{
+  --bg:#f6f7f8; --surface:#ffffff; --fg:#1b2329; --muted:#5b6770; --line:#d9dee2;
+  --accent:#0f6e74; --rec:#b4690e; --rec-bg:#fff4e2; --ok:#2f7d4a; --bad:#a83a32;
+  --f-display:"Space Grotesk",system-ui,sans-serif; --f-body:"IBM Plex Sans",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12171b; --surface:#1a2126; --fg:#e4e9ec; --muted:#9aa6ae; --line:#2e3840;
+  --accent:#5cc3c9; --rec:#f0a944; --rec-bg:#2a2115; --ok:#6cc58b; --bad:#ef8a80; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12171b; --surface:#1a2126; --fg:#e4e9ec; --muted:#9aa6ae; --line:#2e3840;
+  --accent:#5cc3c9; --rec:#f0a944; --rec-bg:#2a2115; --ok:#6cc58b; --bad:#ef8a80; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 56px}
+main{max-width:780px;margin:0 auto;display:grid;gap:30px}
+h1,h2{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:1.9rem} h2{font-size:1.25rem;color:var(--accent)}
+section{display:grid;gap:10px;min-width:0}
+p,ul,ol{margin:0} ul,ol{padding-left:1.2em;display:grid;gap:4px}
+.meta{color:var(--muted);font-size:.85rem;letter-spacing:.02em}
+.rec{background:var(--rec-bg);border:1px solid var(--rec);border-radius:8px;padding:14px 16px;display:grid;gap:8px}
+.rec b.tag{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--rec)}
+code,.mono{font-family:var(--f-mono);font-size:.86em}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:.88rem}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--line)}
+th{font-weight:600;color:var(--muted);font-size:.75rem;letter-spacing:.06em;text-transform:uppercase}
+tr:last-child td{border-bottom:0}
+tr.pick td{background:var(--rec-bg)} tr.pick td:first-child{box-shadow:inset 3px 0 0 var(--rec)}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-family:var(--f-mono);font-size:.82rem}
+.flow span{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:4px 8px}
+.flow i{color:var(--muted);font-style:normal}
+.dec{display:grid;gap:12px}
+.dec div{border-left:3px solid var(--accent);padding-left:12px;display:grid;gap:2px}
+.small{font-size:.85rem;color:var(--muted)}
+.good{color:var(--ok)} .warn{color:var(--bad)}
+</style>
+<main>
+<header style="display:grid;gap:6px">
+  <h1>Piano CI e flusso dei branch</h1>
+  <p class="meta">GASP GiustinoTest 5.8 · 15 nov 2026 · solo piano, nessuna implementazione · prezzi esterni da riverificare al momento dell'acquisto</p>
+</header>
+
+<div class="rec">
+  <b class="tag">Consigliata</b>
+  <p><b>Runner GitHub self-hosted sul portatile.</b> Su ogni PR verso <code>feature/gas-npp-5.8</code>: build dell'editor + un sottoinsieme “smoke” dei test GSTN (≤ 15 min). Ogni notte: suite GSTN completa a blocchi da ≤ 30 min. Tutto passa dal nuovo script a tempo massimo (regola 5).</p>
+  <p><b>Soldi:</b> 0 $/mese. <b>Claude per costruirlo:</b> ~15–25 $ una volta. <b>Tu:</b> ~30 min una volta per installare il runner (passi numerati in un brief). <b>Macchina:</b> il portatile lavora ~1–2 h a notte e ~20–40 min per PR, solo quando nessun editor è aperto lì.</p>
+</div>
+
+<section>
+  <h2>Le quattro opzioni</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Opzione</th><th>Soldi</th><th>Tempo macchina</th><th>Rischio / limite</th></tr></thead>
+    <tbody>
+      <tr><td><b>A. Runner GitHub ospitati</b></td><td class="num">~0,06 $/min (Windows 8 core) + piano Team</td><td>nessuna tua macchina</td><td class="warn">UE 5.9 installato pesa ~50+ GB; i runner standard hanno ~14 GB. Servirebbe un'immagine custom con l'engine: lavoro grosso, build da zero ogni volta (lente). Non pratico.</td></tr>
+      <tr class="pick"><td><b>B. Self-hosted sul portatile</b></td><td class="num">0 $</td><td>~1–2 h/notte + 20–40 min/PR</td><td>Conflitto con un thread editor sul portatile: il job aspetta il lock o salta. Prestazioni del portatile da misurare al primo giro.</td></tr>
+      <tr><td><b>C. Self-hosted sul fisso</b></td><td class="num">0 $</td><td>uguale, più veloce</td><td>Il fisso è la macchina del playtest e di <code>_ue59</code>: la CI ruberebbe slot e RAM proprio dove lavori. Buona come riserva.</td></tr>
+      <tr><td><b>D. VM Windows in cloud</b> (AWS/Azure, 16 vCPU)</td><td class="num">~50–70 $/mese</td><td>nessuna tua macchina</td><td>~1,4 $/h di calcolo + ~20 $/mese di disco per engine e cache. Setup più lungo (~20–30 $ di Claude). Ha senso solo se le tue macchine non bastano.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="small">I runner self-hosted oggi non costano minuti GitHub. GitHub aveva annunciato una piccola tariffa (~0,002 $/min) per i self-hosted sui repo privati e poi l'ha rinviata: anche se arrivasse, 2 h a notte farebbero ~4 $/mese.</p>
+</section>
+
+<section>
+  <h2>Cosa gira e quando</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Quando</th><th>Cosa</th><th>Limite</th><th>Blocca il merge?</th></tr></thead>
+    <tbody>
+      <tr><td>PR verso feature</td><td>Build <code>GASP_Giustino2Editor Win64 Development</code> (incrementale, workspace che resta) + smoke GSTN</td><td class="num">45 + 15 min</td><td>Sì: è il “check verde” che guardi</td></tr>
+      <tr><td>Ogni notte 03:00</td><td>Suite GSTN completa (~1615 test) sul ramo di integrazione del giorno, a blocchi per plugin</td><td class="num">30 min/blocco</td><td>No: report la mattina</td></tr>
+      <tr><td>A mano</td><td>Stessi job, avviabili da un thread o dal tasto “Run workflow”</td><td class="num">come sopra</td><td>No</td></tr>
+    </tbody>
+  </table></div>
+  <p>Lo smoke si sceglie misurando: il primo run notturno salva la durata di ogni test, poi prendiamo i più veloci che toccano ogni plugin (Input, Combat, Defence, Link, Parts, Pickups) fino a 10 minuti. Su GitHub finisce solo il riassunto e i log per 7 giorni, così lo spazio gratuito (500 MB) basta.</p>
+</section>
+
+<section>
+  <h2>Flusso dei branch, ogni giorno</h2>
+  <div class="flow"><span>claude/project-thread-*</span><i>→ merge del thread di integrazione →</i><span>claude/integ-AAAA-MM-GG</span><i>→ PR →</i><span>feature/gas-npp-5.8</span><i>← merge solo tuo</i></div>
+  <ol>
+    <li>Ogni thread lavora sul suo branch e chiude con l'handover; in <code>handoffs/INDICE.md</code> il suo stato diventa “pronto”.</li>
+    <li>A fine sessione un thread cloud piccolo (Haiku/Sonnet, ~1–3 $) crea <code>claude/integ-AAAA-MM-GG</code> da feature e ci fonde i branch “pronti”, uno alla volta, in ordine di INDICE.</li>
+    <li>Conflitto su codice semplice: lo risolve. Conflitto su <code>.uasset</code>/<code>.umap</code> (binari LFS, non fondibili): si ferma, lascia fuori quel branch e lo scrive nella PR. Regola pratica: un asset ha un solo thread proprietario al giorno.</li>
+    <li>Apre la PR verso feature con: elenco dei branch fusi, righe INDICE, scelte applicate senza di te, cosa è rimasto fuori. La CI parte da sola.</li>
+    <li>Tu, anche dal telefono: check verde? leggi il riassunto, tocchi <b>Merge pull request</b> (“Create a merge commit”, così la storia dei thread resta). Claude non fonde mai su feature.</li>
+    <li>Lo stesso ramo integ è quello che l'ultimo thread porta in <code>_ue59</code> per il tuo playtest.</li>
+  </ol>
+  <p class="small">Proteggere davvero feature (PR obbligatoria, check obbligatorio) su un repo privato richiede GitHub Pro (~4 $/mese). Non serve subito: la regola “Claude non spinge su feature” c'è già; il check verde resta visibile anche senza.</p>
+</section>
+
+<section>
+  <h2>Script a tempo massimo (regola 5)</h2>
+  <p>Un solo script, <code>Tools/CI/Run-Timed.ps1</code>, usato sia dai thread sia dalla CI:</p>
+  <ul>
+    <li><code>-Kind build|test|capture</code> fissa il limite: 45, 30, 15 minuti.</li>
+    <li>Avvia il comando dentro un Windows Job Object: alla fine o allo scadere chiude tutto l'albero (<code>UnrealEditor-Cmd</code>, <code>ShaderCompileWorker</code>, UBT), anche i processi figli rimasti appesi.</li>
+    <li>Blocco silenzioso: se il log non cresce per 10 minuti chiude prima, con <code>ESITO: BLOCCATO</code>. Così il caso del test fermo su TypeTableChecksum non tiene la macchina per ore.</li>
+    <li>Scrive tutto su <code>Saved/Timed/&lt;ora&gt;-&lt;kind&gt;.log</code> e stampa al massimo 5 righe, l'ultima sempre <code>ESITO: OK | FALLITO | TIMEOUT | BLOCCATO</code>.</li>
+    <li>Prima di partire controlla il lock della macchina (editor aperto o <code>_ue59/IN-USO.txt</code>): aspetta fino a 30 minuti, poi <code>ESITO: SALTATO</code>.</li>
+  </ul>
+  <p>Serve comunque, anche senza CI: è il primo pezzo da costruire.</p>
+</section>
+
+<section>
+  <h2>Pulizia dei branch</h2>
+  <p>Oggi su GitHub ci sono <b class="num">221</b> branch <code>claude/*</code>: <b class="num">146</b> sono già interamente dentro feature, <b class="num">75</b> no.</p>
+  <ul>
+    <li><b>Già fusi in feature:</b> si cancellano. Niente si perde, i commit sono in feature.</li>
+    <li><b>Non fusi e fermi da più di 14 giorni:</b> prima un tag <code>archivio/&lt;nome&gt;</code> (il lavoro resta recuperabile), poi si cancella il branch.</li>
+    <li><b>Sempre tenuti:</b> <code>main</code>, <code>feature/*</code>, <code>experiment/*</code>, <code>claude/artifacts</code>, gli integ degli ultimi 7 giorni e i branch “aperti” in INDICE.</li>
+    <li>Da ora: nelle impostazioni del repo attivi “Automatically delete head branches”, e ogni sabato uno script prepara la lista (prova a secco) e la cancella dopo il tuo ok.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Costo per costruirlo</h2>
+  <div class="tw"><table>
+    <thead><tr><th>Passo</th><th>Modello</th><th>Stima</th><th>Ti serve?</th></tr></thead>
+    <tbody>
+      <tr><td>1. <code>Run-Timed.ps1</code> + prova su build e 1 test</td><td>Sonnet medium</td><td class="num">5–8 $</td><td>No</td></tr>
+      <tr><td>2. Workflow <code>.github/workflows</code> + brief di installazione runner</td><td>Sonnet medium</td><td class="num">5–8 $</td><td>Sì, ~30 min una volta</td></tr>
+      <tr><td>3. Primo run notturno, durate, scelta dello smoke</td><td>Haiku low</td><td class="num">2–4 $</td><td>No</td></tr>
+      <tr><td>4. Script di pulizia branch (prova a secco)</td><td>Haiku low</td><td class="num">1–2 $</td><td>Sì, un ok</td></tr>
+      <tr><td><b>Totale una tantum</b></td><td></td><td class="num"><b>~15–25 $</b></td><td></td></tr>
+      <tr><td>Poi: thread di integrazione giornaliero</td><td>Haiku/Sonnet</td><td class="num">1–3 $/giorno</td><td>Solo il merge</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Le tue decisioni (rispondi tipo “1A 2A 3A”)</h2>
+  <div class="dec">
+    <div><b>1. Dove gira la CI</b><span>A: portatile (consigliata, 0 $) · B: fisso (0 $, ruba slot al playtest) · C: VM cloud (~50–70 $/mese)</span></div>
+    <div><b>2. Cosa deve essere verde prima del tuo merge</b><span>A: build + smoke ≤ 15 min (consigliata) · B: solo build · C: build + suite completa (PR ferme 1–2 h)</span></div>
+    <div><b>3. Pulizia branch questo weekend</b><span>A: cancella i 146 già fusi + tag-archivio per i non fusi fermi da &gt;14 giorni (consigliata) · B: solo i 146 già fusi · C: niente per ora</span></div>
+  </div>
+  <p class="small">Senza risposta, si parte comunque dal passo 1 (lo script a tempo serve in ogni caso). Restano fermi solo il runner e la pulizia.</p>
+</section>
+</main>
