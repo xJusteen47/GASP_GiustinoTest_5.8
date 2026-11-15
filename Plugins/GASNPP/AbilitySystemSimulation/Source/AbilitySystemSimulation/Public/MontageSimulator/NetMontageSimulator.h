@@ -20,6 +20,12 @@ struct FSyncedMontagePresentationStep
 	/** Play rate to give the instance for this frame's animation update */
 	float PlayRate = 1.f;
 	bool bSetPosition = false;
+	/**
+	 * GSTN fork (half-rate montage, 2026-11-15): the time the instance's montage sub-stepper still holds after the coming update. The engine adds
+	 * every update's delta to it and only spends it while the play rate is not 0, all of it at once: an update at rate 0 (a hold) keeps its delta
+	 * for the next update that moves (see ComputeLandOnSimTimeStep)
+	 */
+	float CarriedSecondsAfter = 0.f;
 };
 
 /**
@@ -96,9 +102,13 @@ public:
 	 * Ahead of the target: teleport back and hold (rate 0). Behind: keep the position and pick the rate that covers the gap, up to
 	 * MaxRateScale times the nominal rate; a larger gap teleports to where the nominal rate lands on the target. No advance coming
 	 * (AnimDeltaSeconds 0, e.g. a hit pause on the mesh): teleport onto the target.
+	 * CarriedSeconds (GSTN fork, half-rate montage, 2026-11-15): time the instance's sub-stepper kept from earlier updates at rate 0. The
+	 * coming update moves the instance by rate * (CarriedSeconds + AnimDeltaSeconds), not rate * AnimDeltaSeconds: ignoring it drew every move
+	 * at 30 Hz for its first frames (start = a hold, the next frame moved two frames, landed on the target, held again: 0 2 2 4 4 6 in the
+	 * captures) and for the whole dropkick hold loop. The returned step carries the stepper time left after the update (CarriedSecondsAfter)
 	 */
 	static FSyncedMontagePresentationStep ComputeLandOnSimTimeStep(float InstancePosition, float TargetTime, float NominalPlayRate,
-		float AnimDeltaSeconds, float MaxRateScale = 4.f);
+		float AnimDeltaSeconds, float MaxRateScale = 4.f, float CarriedSeconds = 0.f);
 
 	/**
 	 * GSTN fork (montage start jitter, 2026-11-15): the montage time a rendered frame shows (LandOnSimTime then lands the instance on it). An anchor
@@ -175,7 +185,7 @@ private:
 	void FinalizeMontageFrame(const FMontageSimSyncState& SyncState, bool bSmoothedState);
 	/** LandOnSimTime on one instance: the step from ComputeLandOnSimTimeStep with this frame's animation delta, onto TargetTime (the presented time) */
 	void LandInstanceOnSimTime(const UAnimInstance& AnimInstance, FAnimMontageInstance& MontageInstance, const FMontageSimSyncState& SyncState,
-		float RateMultiplier, float TargetTime) const;
+		float RateMultiplier, float TargetTime);
 
 	/** The presentation clock of this frame for DesiredMontage (ComputePresentedTime with this simulator's anchor and previous frame), and its bookkeeping */
 	float PresentMontageTime(const UAnimInstance& AnimInstance, UAnimMontage* DesiredMontage, const FMontageSimSyncState& SyncState, bool bSmoothedState,
@@ -233,6 +243,13 @@ private:
 	int32 NextConsumedAnchor = 0;
 	TWeakObjectPtr<UAnimMontage> PresentedMontage;
 	float PresentedTime = 0.f;
+	/**
+	 * GSTN fork (half-rate montage): the sub-stepper time the presented instance still holds (ComputeLandOnSimTimeStep's CarriedSeconds), and
+	 * the instance it belongs to (FAnimMontageInstance::GetInstanceID; a new instance starts with none). Presentation only, not state.
+	 * Estimated, not read (the engine keeps it private): the instance is assumed to update once per world tick by this frame's animation delta
+	 */
+	float CarriedStepperSeconds = 0.f;
+	int32 CarriedStepperInstanceId = INDEX_NONE;
 
 	UPROPERTY()
 	FMontageSimSyncState SimulationState;
