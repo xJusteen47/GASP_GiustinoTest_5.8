@@ -106,6 +106,18 @@ public:
 	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 		const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
 
+	/**
+	 * Owner rule (2026-11-15, all moves): when a timeline ends by itself the rest of its montage keeps playing until the montage ends (with its
+	 * own blend-out) or a new action takes over; the ability only RELEASES it (data with EndBlendOutFrames >= 0 still stops it, see
+	 * ResolveMontageStop). A new action is any UGSTN_GA_Base activation, which calls this before it does anything else, or any synced montage,
+	 * which replaces the slot by itself. Stops the released montage of every combat ability of AbilitySystem that still plays one (the montage's
+	 * own blend-out). Simulation code: the released flag is a sync variable and the playing montage is the montage player's synced state
+	 */
+	static void StopReleasedMontages(UAbilitySystemComponent& AbilitySystem);
+
+	/** True while the montage this ability released at its natural end may still be on the synced slot (sync variable) */
+	bool HasReleasedMontage() const { return bMontageReleased.Value; }
+
 	/** Combat frames since the timeline started (the clock minus the clock of its start), 0 when not started */
 	UFUNCTION(BlueprintPure, Category = "Combat|Timeline")
 	int32 GetTimelineFrame() const;
@@ -218,6 +230,17 @@ private:
 	/** The montage BeginTimeline played (kept alive by the ability or the table set), to find it on the slot later. Not state: only read to stop it */
 	UPROPERTY(Transient)
 	TObjectPtr<UAnimMontage> TimelineMontagePlayed;
+
+	/** The timeline ended by itself and left its montage playing (StopReleasedMontages). Sync variable: a rollback restores whether a release is pending */
+	UPROPERTY(Transient)
+	FSyncBool bMontageReleased;
+
+	/** The montage of the last release. Not state: only compared with the synced slot's montage before it is stopped, so a stale one stops nothing */
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> ReleasedMontage;
+
+	/** The timeline ends by itself on this frame and its data lets the montage play on (EndBlendOutFrames < 0): the owner rule above */
+	bool ShouldReleaseMontageOnEnd(bool bWasCancelled) const;
 
 	/** Combat clock at the start, the origin of GetTimelineFrame */
 	UPROPERTY(Transient)

@@ -203,6 +203,8 @@ bool FGSTN_SetFacingEffectTest::RunTest(const FString& Parameters)
 	FGSTN_SetFacingEffect Effect;
 	Effect.YawDeg = 50.f;
 	FApplyMovementEffectParams Params;
+	// Mover leaves UpdatedComponent uninitialized: the effect turns the component when there is one, so the test says there is none
+	Params.UpdatedComponent = nullptr;
 	TestTrue(TEXT("applied"), Effect.ApplyMovementEffect(Params, State));
 	const FMoverDefaultSyncState* After = State.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
 	TestTrue(TEXT("yaw set"), After && FMath::IsNearlyEqual(After->GetOrientation_WorldSpace().Yaw, 50.0, 1e-3));

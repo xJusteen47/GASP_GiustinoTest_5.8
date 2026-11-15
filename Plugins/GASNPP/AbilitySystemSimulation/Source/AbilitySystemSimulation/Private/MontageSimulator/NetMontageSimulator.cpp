@@ -125,6 +125,18 @@ USkeletalMeshComponent* UNetMontageSimulator::GetMeshComponent() const
 	return AnimInst ? AnimInst->GetOwningComponent() : nullptr;
 }
 
+FMontageBlendSettings UNetMontageSimulator::MakeMontageBlendOut(const UAnimMontage& Montage, float BlendOutSeconds)
+{
+	FMontageBlendSettings Settings(FAlphaBlendArgs(Montage.BlendOut));
+	Settings.BlendMode = Montage.BlendModeOut;
+	Settings.BlendProfile = Montage.BlendProfileOut;
+	if (BlendOutSeconds >= 0.f)
+	{
+		Settings.Blend.BlendTime = BlendOutSeconds;
+	}
+	return Settings;
+}
+
 float UNetMontageSimulator::GetMontageBlendOutTime(const UAnimMontage* Montage)
 {
 	if (!Montage)
@@ -794,8 +806,8 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 			// if time is past the blend out time, we active montage instance
 			if (SyncState.GetCurrentTime() >= GetMontageBlendOutTime(DesiredMontage))
 			{
-				// make sure the instance is past the blend out time , if it's not blend it out
-				MontageInstance->Stop(MontageInstance->GetBlend(), false);
+				// make sure the instance is past the blend out time , if it's not blend it out (with the montage's blend-out, see MakeMontageBlendOut)
+				MontageInstance->Stop(MakeMontageBlendOut(*DesiredMontage), false);
 				return;
 			}
 			if (bLandOnSimTime)
@@ -853,13 +865,11 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 				{
 					LastMontageInstance->SetPlayRate(0.f);
 				}
-				FAlphaBlend BlendOut = LastMontageInstance->GetBlend();
-				BlendOut.SetBlendTime(PendingStop.BlendOutSeconds);
-				LastMontageInstance->Stop(BlendOut);
+				LastMontageInstance->Stop(MakeMontageBlendOut(*LastPlayingMontage, PendingStop.BlendOutSeconds));
 			}
 			else
 			{
-				LastMontageInstance->Stop(LastMontageInstance->GetBlend());
+				LastMontageInstance->Stop(MakeMontageBlendOut(*LastPlayingMontage));
 			}
 		}
 		PendingStop = FPendingStopPresentation();
