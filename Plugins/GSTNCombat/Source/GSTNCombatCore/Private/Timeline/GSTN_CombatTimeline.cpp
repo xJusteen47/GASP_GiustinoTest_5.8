@@ -39,7 +39,7 @@ EDataValidationResult UGSTN_CombatTimeline::IsDataValid(FDataValidationContext& 
 	TArray<FGSTN_ReactionMatrixHit> Columns;
 	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Data.Tracks)
 	{
-		const FGSTN_TimelineTrack_Hitbox* HitboxTrack = Track.GetPtr<FGSTN_TimelineTrack_Hitbox>();
+		const FGSTN_TimelineTrack_Hitbox* HitboxTrack = GSTNTimelineTracks::AsAttackHitbox(Track);
 		for (int32 Index = 0; HitboxTrack != nullptr && Index < HitboxTrack->Hitboxes.Num(); ++Index)
 		{
 			FGSTN_ReactionMatrixHit& Column = Columns.AddDefaulted_GetRef();
@@ -75,7 +75,7 @@ int32 FGSTN_CombatTimelineData::GetActiveEndFrame() const
 	int32 End = 0;
 	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Tracks)
 	{
-		if (const FGSTN_TimelineTrack_Hitbox* HitboxTrack = Track.GetPtr<FGSTN_TimelineTrack_Hitbox>(); HitboxTrack && !HitboxTrack->Hitboxes.IsEmpty())
+		if (const FGSTN_TimelineTrack_Hitbox* HitboxTrack = GSTNTimelineTracks::AsAttackHitbox(Track); HitboxTrack && !HitboxTrack->Hitboxes.IsEmpty())
 		{
 			End = FMath::Max(End, HitboxTrack->EndFrame);
 		}

@@ -102,11 +102,16 @@ bool UGSTN_CombatSimComponent::ReadSnapshotEntry(int32 Frame, FGSTN_SnapshotEntr
 	// has not advanced the timeline, so it reads the frame before
 	const UGSTN_HurtboxSetDefinition* Set = Out.Hurtboxes;
 	Out.HurtStates.Reset();
+	Out.HurtPose.Reset();
 	if (Set)
 	{
 		Out.HurtStates.SetNum(Set->Hurtboxes.Num());
 		const UGSTN_CombatTableSet* Tables = FindTableSet(Core.TableRevision);
 		const FGSTN_CombatTimelineData* Timeline = Core.ActionState == EGSTN_ActionState::InTimeline && Core.RecoilStartFrame == INDEX_NONE && Tables ? GetRegistryTimeline(*Tables, Core.ActiveTimeline) : nullptr;
+		FGSTN_HurtboxPoseInput PoseInput;
+		PoseInput.Set = Set;
+		// The kit's movement hurtbox comes with the table of the loadout revision the state names, so a rollback across a kit swap reads the old kit's
+		PoseInput.KitMovement = Tables && Tables->bHasKitMovementHurtbox ? &Tables->KitMovementHurtbox : nullptr;
 		if (Timeline)
 		{
 			const int32 EvaluatedFrame = Core.IsInHitstop(Frame) ? Frame - 1 : Frame;
@@ -117,7 +122,11 @@ bool UGSTN_CombatSimComponent::ReadSnapshotEntry(int32 Frame, FGSTN_SnapshotEntr
 			{
 				Out.HurtStates[Index] = FGSTN_TimelinePlayer::ResolveHurtState(Result, Set->Hurtboxes[Index]);
 			}
+			PoseInput.Timeline = Timeline;
+			PoseInput.TimelineFrame = TimelineFrame;
 		}
+		// Where the hurtboxes are: the same timeline frame as the states (a hitstop frame holds the pose of the frame before, like the montage)
+		FGSTN_HurtboxPose::Build(PoseInput, Out.HurtPose);
 	}
 
 	// The compact reaction state: the damage percent is the health set's, the weight scale the identity until the victim side writes one
@@ -125,8 +134,14 @@ bool UGSTN_CombatSimComponent::ReadSnapshotEntry(int32 Frame, FGSTN_SnapshotEntr
 	FGSTN_StaggerThreshold Threshold = Set ? Set->StaggerThreshold : FGSTN_StaggerThreshold();
 	bool bAllIntangible = Out.HurtStates.Num() > 0;
 	bool bAllInvincible = Out.HurtStates.Num() > 0;
-	for (const FGSTN_HurtboxFrameState& Hurt : Out.HurtStates)
+	for (int32 Index = 0; Index < Out.HurtStates.Num(); ++Index)
 	{
+		const FGSTN_HurtboxFrameState& Hurt = Out.HurtStates[Index];
+		// A hurtbox left out by the detail level does not decide "all intangible" (unless something counts as it, it cannot be touched at all)
+		if (!Out.IsHurtboxPresent(Index) && !Out.HurtPose.Extensions.ContainsByPredicate([Index](const FGSTN_PosedHurtboxExtension& Extension) { return Extension.HurtboxIndex == Index; }))
+		{
+			continue;
+		}
 		bAllIntangible &= Hurt.State == EGSTN_HurtState::Intangible;
 		bAllInvincible &= Hurt.State == EGSTN_HurtState::Intangible || Hurt.State == EGSTN_HurtState::Invincible;
 		if (Hurt.State == EGSTN_HurtState::Armor)

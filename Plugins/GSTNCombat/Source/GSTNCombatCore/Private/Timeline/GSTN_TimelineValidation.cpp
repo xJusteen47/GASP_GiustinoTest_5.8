@@ -275,6 +275,33 @@ void FGSTN_TimelineValidation::Validate(const FGSTN_CombatTimelineData& Data, co
 			CheckHitboxes(Index, *HitboxTrack, Data, OutMessages);
 			CheckReachGroups(Index, *HitboxTrack, OutMessages);
 		}
+		else if (Kind == EGSTN_TimelineTrackKind::Hurtbox)
+		{
+			// The move's own hurtboxes (owner 2026-11-16): only the placement matters, the hit data of its shapes is never read
+			const FGSTN_TimelineTrack_Hurtbox* HurtTrack = static_cast<const FGSTN_TimelineTrack_Hurtbox*>(Track);
+			if (HurtTrack->Hitboxes.IsEmpty())
+			{
+				Add(OutMessages, false, FString::Printf(TEXT("Track %d (Hurtbox) has no shape: it adds nothing."), Index));
+			}
+			for (int32 ShapeIndex = 0; ShapeIndex < HurtTrack->Hitboxes.Num(); ++ShapeIndex)
+			{
+				const FGSTN_HitboxSpec& Spec = HurtTrack->Hitboxes[ShapeIndex];
+				const EGSTN_HitboxSpace Space = HurtTrack->GetEffectiveSpace(Spec);
+				if (Space == EGSTN_HitboxSpace::WorldAtMoveStart || Space == EGSTN_HitboxSpace::Projectile)
+				{
+					Add(OutMessages, true, FString::Printf(TEXT("Track %d (Hurtbox), shape %d: a hurtbox lives on the body, use Root or BakedSocket (this one is never placed)."), Index, ShapeIndex));
+				}
+				else if (Space == EGSTN_HitboxSpace::BakedSocket)
+				{
+					const FName Socket = HurtTrack->GetEffectiveSocket(Spec);
+					const FGSTN_BakedSocketFrames* Baked = Data.BakedSockets.Find(Socket);
+					if (Socket.IsNone() || !Baked || Baked->Frames.IsEmpty())
+					{
+						Add(OutMessages, false, FString::Printf(TEXT("Track %d (Hurtbox), shape %d: socket '%s' is not baked, so the shape is not placed. Bake the timeline."), Index, ShapeIndex, *Socket.ToString()));
+					}
+				}
+			}
+		}
 		else if (Kind == EGSTN_TimelineTrackKind::HurtboxModifier)
 		{
 			const FGSTN_TimelineTrack_HurtboxModifier* Modifier = static_cast<const FGSTN_TimelineTrack_HurtboxModifier*>(Track);

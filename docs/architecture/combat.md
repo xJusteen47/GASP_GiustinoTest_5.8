@@ -759,6 +759,15 @@ FGSTN_LoadoutData (what a player owns and saves)
 - Hurtboxes: `UGSTN_HurtboxSetDefinition` (capsules on bones in ref pose, can be generated from the Physics Asset),
   relative to the root; per-timeline overrides in the `HurtboxModifier` track (bakeable). `UGSTN_CombatWorldSubsystem`
   registers hittable entities and owns the spatial broadphase.
+- **Hurtbox pose** (owner 2026-11-16, `FGSTN_HurtboxPose`, `Hits/GSTN_HurtboxPose.h`): a hurtbox with `bFollowBone` follows its
+  bone through the running move (the bone is baked into the timeline's `BakedSockets` next to the hitbox sockets; shape =
+  `Shape.Local * BoneReference^-1 * baked bone`). Detail levels: the set's `MovementDetail` (default Simple: the "body" capsule,
+  no gap between the legs) outside moves, `MoveDetail` (default Detailed: per-limb, following) during a move; a timeline's
+  `HurtboxDetail` overrides it, a kit's `FGSTN_MovementHurtboxExtension` replaces the movement body. A move's **Hurtbox track**
+  (`FGSTN_TimelineTrack_Hurtbox`, a hitbox track by inheritance, so the editor edits it like one) adds shapes that count as a set
+  hurtbox (`CountsAs`), or replace it (`bReplaceCountsAs`, the hand-made feet of a move). The pose is in the snapshot entry and the
+  lag-compensation record; the attacker, minions and projectiles read shapes through `GetHurtShape`/`IsHurtboxPresent`/extensions.
+  A set of `Both`, non-following hurtboxes gives the default pose: the old behaviour.
 
 ### 12.2 Queries
 

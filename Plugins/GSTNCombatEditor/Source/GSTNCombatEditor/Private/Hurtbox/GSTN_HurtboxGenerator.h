@@ -98,6 +98,24 @@ namespace GSTNHurtboxGenerator
 	/** The same over a skeletal mesh's reference skeleton */
 	FGSTN_HurtboxGenResult FromPhysicsAsset(const UPhysicsAsset& PhysicsAsset, const USkeletalMesh& Mesh, const FGSTN_HurtboxGenOptions& Options);
 
+	/**
+	 * The Simple-level body volume of a set (owner 2026-11-16: idle and movement use one simple volume that also covers the gap between the legs): a
+	 * vertical capsule on the root axis from the lowest to the highest point of the given hurtboxes, radius RadiusFraction of that height (0.22 is a
+	 * Smash-like body for a person; arms spread in a T reference pose do not widen it). DetailUse SimpleOnly, not following a bone, named "body".
+	 * No bone or tag name is assumed. False when there is nothing to measure
+	 */
+	bool MakeSimpleBody(TConstArrayView<FGSTN_Hurtbox> Hurtboxes, FGSTN_Hurtbox& OutBody, double RadiusFraction = 0.22);
+
+	/**
+	 * Makes the hurtboxes at Targets (all with none) follow their bones (owner 2026-11-16): BoneReference = the bone's reference pose in component space
+	 * then MeshToRoot (the frame the socket baker samples in), bFollowBone on. SimpleOnly hurtboxes (the body) are left alone; a bone the skeleton
+	 * lacks is added to OutMissing. Returns how many follow
+	 */
+	int32 FollowBones(TArray<FGSTN_Hurtbox>& Hurtboxes, const FReferenceSkeleton& RefSkeleton, const FTransform& MeshToRoot, TConstArrayView<int32> Targets, TArray<FName>* OutMissing = nullptr);
+
+	/** Adds or remakes the "body" of MakeSimpleBody in Hurtboxes and moves the other Both hurtboxes to DetailedOnly. False when there is nothing to measure */
+	bool ApplySimpleBody(TArray<FGSTN_Hurtbox>& Hurtboxes, const FGameplayTag& BodyTag);
+
 	/** The zone tag the rules suggest for a bone name: the first rule whose fragment the name contains (case-insensitive). Invalid when none does */
 	FGameplayTag SuggestZone(TConstArrayView<FGSTN_HurtboxZoneRule> Rules, FName BoneName);
 

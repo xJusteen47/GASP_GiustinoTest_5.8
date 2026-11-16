@@ -168,7 +168,19 @@ enum class EGSTN_TimelineTrackKind : uint8
 	Event,
 	WeaponSwitch,
 	Hitbox,
-	HurtboxModifier
+	HurtboxModifier,
+	/** FGSTN_TimelineTrack_Hurtbox: a hitbox track's shapes used as extra hurtboxes of the one who plays the move */
+	Hurtbox
+};
+
+/** Which hurtbox detail level a move asks for while it runs (FGSTN_CombatTimelineData::HurtboxDetail) */
+UENUM(BlueprintType)
+enum class EGSTN_HurtboxDetailOverride : uint8
+{
+	/** The level of the character's hurtbox set (Simple unless the set says otherwise) */
+	UseSet,
+	Simple,
+	Detailed
 };
 
 /**
@@ -461,6 +473,52 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Hitbox : public FGSTN_TimelineTrac
 	 */
 	const FTransform& GetParentOffset(const FGSTN_HitboxSpec& Spec) const { return IsParentedToGroup(Spec) ? GroupOffset : FTransform::Identity; }
 };
+
+/**
+ * Extra hurtboxes of the character playing the move, for a frame range (owner 2026-11-16): the leg stretched by a kick, the arm of a long punch, so
+ * the attack can be hit back where it reaches (Smash-like extended hurtboxes). It IS a hitbox track for everything but the hit: same shapes, keys,
+ * spaces (Root and BakedSocket; WorldAtMoveStart and Projectile are not hurtbox spaces and place nothing), group transform, names, so the timeline
+ * editor edits it exactly like a hitbox group. Nothing of its hitboxes' hit data is read, and the attacker never sees it: the only readers are
+ * FGSTN_HurtboxPose (the victim side) and the editor.
+ *
+ * A hit on one of its shapes counts as a hit on the set hurtbox named CountsAs (the torso, the leg it extends): that hurtbox's priority, reaction
+ * scale, tags, part and state (a Hurtbox Modifier on it applies to its extension too). None = the set's first hurtbox.
+ * Kept by the derived struct, so every reader of hitbox tracks that filters by GetKind (the player, the phases) or by GetHitboxTrack skips it.
+ */
+USTRUCT(BlueprintType, meta = (DisplayName = "Hurtbox"))
+struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Hurtbox : public FGSTN_TimelineTrack_Hitbox
+{
+	GENERATED_BODY()
+
+	/** The hurtbox of the character's set this group's shapes count as. None = the set's first one */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtbox")
+	FName CountsAs = NAME_None;
+
+	/**
+	 * On = while the track is open, this group's shapes REPLACE the CountsAs hurtbox instead of adding to it: the hand-made feet of a move (owner
+	 * 2026-11-16, "the feet need care in some moves, I will do those by hand"). Off = they add to it (a stretched limb)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtbox")
+	bool bReplaceCountsAs = false;
+
+	virtual EGSTN_TimelineTrackKind GetKind() const override { return EGSTN_TimelineTrackKind::Hurtbox; }
+};
+
+namespace GSTNTimelineTracks
+{
+	/** The attack hitbox track of a track instance: null for anything else, including a Hurtbox track (a hitbox track by inheritance, never an attack) */
+	inline const FGSTN_TimelineTrack_Hitbox* AsAttackHitbox(const TInstancedStruct<FGSTN_TimelineTrack>& Instance)
+	{
+		const FGSTN_TimelineTrack_Hitbox* Track = Instance.GetPtr<FGSTN_TimelineTrack_Hitbox>();
+		return Track && Track->GetKind() == EGSTN_TimelineTrackKind::Hitbox ? Track : nullptr;
+	}
+
+	inline FGSTN_TimelineTrack_Hitbox* AsAttackHitboxMutable(TInstancedStruct<FGSTN_TimelineTrack>& Instance)
+	{
+		FGSTN_TimelineTrack_Hitbox* Track = Instance.GetMutablePtr<FGSTN_TimelineTrack_Hitbox>();
+		return Track && Track->GetKind() == EGSTN_TimelineTrackKind::Hitbox ? Track : nullptr;
+	}
+}
 
 /**
  * Changes how the addressed hurtboxes take hits for a frame range (the feet of a dodge, an armored arm). Which hurtboxes,
@@ -771,9 +829,23 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Tracks")
 	TArray<TInstancedStruct<FGSTN_TimelineTrack>> Tracks;
 
-	/** Root-relative transform of every socket a BakedSocket hitbox uses, one per timeline frame. Written by the baking tool */
+	/**
+	 * Root-relative transform of every socket a BakedSocket hitbox uses, and of every bone a hurtbox follows (FGSTN_Hurtbox::bFollowBone), one per
+	 * timeline frame. Written by the baking tool
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Tracks")
 	TMap<FName, FGSTN_BakedSocketFrames> BakedSockets;
+
+	/**
+	 * Bones baked for the hurtboxes of whoever plays this move, on top of the ones the editor finds by itself (the bones followed by every hurtbox set
+	 * of the project that the bake mesh has). Usually empty; add a bone here when a set the editor cannot find (made at run time) follows it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Hurtboxes")
+	TArray<FName> HurtboxBones;
+
+	/** The hurtbox detail level while this move runs (owner 2026-11-16). UseSet = the set's own (Simple unless it says otherwise) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Hurtboxes")
+	EGSTN_HurtboxDetailOverride HurtboxDetail = EGSTN_HurtboxDetailOverride::UseSet;
 
 #if WITH_EDITORONLY_DATA
 	/**
@@ -816,10 +888,10 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	/** One past the last frame any hitbox track is open (0 with none) */
 	int32 GetActiveEndFrame() const;
 
-	/** The hitbox track at TrackIndex (an index into Tracks), null when it is not one */
+	/** The hitbox track at TrackIndex (an index into Tracks), null when it is not one (a Hurtbox track is not) */
 	const FGSTN_TimelineTrack_Hitbox* GetHitboxTrack(int32 TrackIndex) const
 	{
-		return Tracks.IsValidIndex(TrackIndex) ? Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack_Hitbox>() : nullptr;
+		return Tracks.IsValidIndex(TrackIndex) ? GSTNTimelineTracks::AsAttackHitbox(Tracks[TrackIndex]) : nullptr;
 	}
 
 	/** The strike settings of a hitbox group: its own when it overrides them, the move's otherwise (also for INDEX_NONE) */

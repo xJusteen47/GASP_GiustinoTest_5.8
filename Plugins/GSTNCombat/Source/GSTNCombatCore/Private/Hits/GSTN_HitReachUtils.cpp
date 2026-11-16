@@ -95,7 +95,7 @@ int32 UGSTN_HitReachUtils::ApplyReachScale(FGSTN_CombatTimelineData& Data, float
 	int32 Scaled = 0;
 	for (TInstancedStruct<FGSTN_TimelineTrack>& Instance : Data.Tracks)
 	{
-		FGSTN_TimelineTrack_Hitbox* Track = Instance.GetMutablePtr<FGSTN_TimelineTrack_Hitbox>();
+		FGSTN_TimelineTrack_Hitbox* Track = GSTNTimelineTracks::AsAttackHitboxMutable(Instance);
 		if (!Track)
 		{
 			continue;

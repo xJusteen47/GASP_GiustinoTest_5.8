@@ -256,6 +256,42 @@ namespace GSTNTrackEditors
 			}
 		};
 
+		/**
+		 * Hurtbox (owner 2026-11-16): the move's own hurtboxes. A hitbox track by inheritance, so the lanes, keys, gizmo, Details, rename and group
+		 * parenting are the hitbox ones (the keyed-access adapter and the selection walk up to the hitbox struct). Green like the hurtbox set editor
+		 */
+		class FHurtboxTrackEditor final : public IGSTN_TrackEditor
+		{
+		public:
+			virtual const UScriptStruct* GetTrackStruct() const override { return StructOf<FGSTN_TimelineTrack_Hurtbox>(); }
+			virtual FText GetDisplayName() const override { return LOCTEXT("HurtboxName", "Hurtbox"); }
+			virtual FName GetIconBrushName() const override { return TEXT("Icons.User"); }
+			virtual int32 GetDefaultLength() const override { return 6; }
+
+			virtual FLinearColor GetTrackColor(const FGSTN_TimelineTrack& Track) const override
+			{
+				return FLinearColor(0.2f, 0.8f, 0.4f, 1.f);
+			}
+
+			virtual void InitNewTrack(FGSTN_TimelineTrack& Track, int32 AddedAtFrame, const FGSTN_CombatTimelineData& Data) const override
+			{
+				// Starts with one shape so there is a lane to key; the designer moves it onto the limb (BakedSocket on a bone makes it follow)
+				FGSTN_TimelineTrack_Hurtbox& Hurtbox = static_cast<FGSTN_TimelineTrack_Hurtbox&>(Track);
+				FGSTN_HitboxSpec Spec = FGSTN_HitboxKeyedAccess::MakeDefaultSpec();
+				Spec.Name = TEXT("Hurtbox");
+				Hurtbox.Hitboxes.Add(Spec);
+			}
+
+			virtual FText GetRowLabel(const FGSTN_TimelineTrack& Track) const override
+			{
+				const FGSTN_TimelineTrack_Hurtbox& Hurtbox = static_cast<const FGSTN_TimelineTrack_Hurtbox&>(Track);
+				const FText Group = Hurtbox.GroupName.IsNone() ? LOCTEXT("HurtboxGroupDefault", "Hurtbox") : FText::FromName(Hurtbox.GroupName);
+				const FText CountsAs = Hurtbox.CountsAs.IsNone() ? LOCTEXT("HurtboxCountsFirst", "first hurtbox") : FText::FromName(Hurtbox.CountsAs);
+				return FText::Format(Hurtbox.bReplaceCountsAs ? LOCTEXT("HurtboxReplaces", "{0}: replaces {1} ({2})") : LOCTEXT("HurtboxAdds", "{0}: counts as {1} ({2})"),
+					Group, CountsAs, FText::AsNumber(Hurtbox.Hitboxes.Num()));
+			}
+		};
+
 		/** HurtboxModifier: a window coloured by the state it gives, labelled with the state and the hurtboxes it addresses */
 		class FHurtboxModifierTrackEditor final : public IGSTN_TrackEditor
 		{
@@ -350,6 +386,7 @@ namespace GSTNTrackEditors
 		// The tracks of M4 (E5b). The hitbox track keeps its keys in lanes, one per hitbox: the model reaches them through this adapter
 		RegisterOne(MakeShared<FHitboxTrackEditor>());
 		RegisterOne(MakeShared<FHurtboxModifierTrackEditor>());
+		RegisterOne(MakeShared<FHurtboxTrackEditor>());
 		FGSTN_KeyedTrackAccessRegistry::Register(FGSTN_TimelineTrack_Hitbox::StaticStruct(), MakeShared<FGSTN_HitboxKeyedAccess>());
 	}
 

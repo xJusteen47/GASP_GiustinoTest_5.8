@@ -169,7 +169,7 @@ int32 UGSTN_LinkContentLibrary::SetKitMoveHitType(UGSTN_PrimaryKitDefinition* Ki
 	int32 Changed = 0;
 	for (TInstancedStruct<FGSTN_TimelineTrack>& Track : Timeline->Tracks)
 	{
-		if (FGSTN_TimelineTrack_Hitbox* Hitboxes = Track.GetMutablePtr<FGSTN_TimelineTrack_Hitbox>())
+		if (FGSTN_TimelineTrack_Hitbox* Hitboxes = GSTNTimelineTracks::AsAttackHitboxMutable(Track))
 		{
 			for (FGSTN_HitboxSpec& Spec : Hitboxes->Hitboxes)
 			{
@@ -191,7 +191,7 @@ bool UGSTN_LinkContentLibrary::GetKitMoveHitType(UGSTN_PrimaryKitDefinition* Kit
 	}
 	for (TInstancedStruct<FGSTN_TimelineTrack>& Track : Timeline->Tracks)
 	{
-		if (const FGSTN_TimelineTrack_Hitbox* Hitboxes = Track.GetPtr<FGSTN_TimelineTrack_Hitbox>())
+		if (const FGSTN_TimelineTrack_Hitbox* Hitboxes = GSTNTimelineTracks::AsAttackHitbox(Track))
 		{
 			if (!Hitboxes->Hitboxes.IsEmpty())
 			{

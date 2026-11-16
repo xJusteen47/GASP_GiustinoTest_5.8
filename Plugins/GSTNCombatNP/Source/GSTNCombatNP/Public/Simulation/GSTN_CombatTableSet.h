@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Bindings/GSTN_CommandBindingSet.h"
+#include "Hits/GSTN_HurtboxPose.h"
 #include "Input/GSTN_BufferResetRules.h"
 #include "Loadout/GSTN_CompiledBindingTable.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
@@ -116,6 +117,16 @@ public:
 
 	UPROPERTY(Transient)
 	FGSTN_RicochetResponse KitRicochet;
+
+	/**
+	 * The kit's own movement hurtbox (FGSTN_MovementHurtboxExtension, owner 2026-11-16), copied when the set is built: the simulation reads it from the
+	 * table of the revision it runs, never from the kit asset, so a rollback across a kit swap places the hurtboxes of the kit of that frame
+	 */
+	UPROPERTY(Transient)
+	bool bHasKitMovementHurtbox = false;
+
+	UPROPERTY(Transient)
+	FGSTN_MovementHurtboxExtension KitMovementHurtbox;
 
 	/** The project defaults per strike kind (UGSTN_CombatSettings::SwingRicochetDefault / StabRicochetDefault), copied when the set is built */
 	UPROPERTY(Transient)

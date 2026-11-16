@@ -734,10 +734,13 @@ bool UGSTN_MinionCombatSubsystem::FillSnapshotEntry(int32 Slot, int32 Frame, FGS
 	// How each hurtbox takes hits: the hurtbox modifier tracks of the running timeline at the frame it last evaluated (the end of the
 	// previous frame, like the fighter's), so a dodge's intangible feet or an armored windup work on minions with the same data
 	Out.HurtStates.Reset();
+	Out.HurtPose.Reset();
 	if (Set)
 	{
 		Out.HurtStates.SetNum(Set->Hurtboxes.Num());
 		const UGSTN_CombatTimeline* Timeline = Store.MoveId[Slot] != 0 && TimelinePrevFrame[Slot] != INDEX_NONE ? TimelineOfMoveId(Slot, Store.MoveId[Slot]) : nullptr;
+		FGSTN_HurtboxPoseInput PoseInput;
+		PoseInput.Set = Set;
 		if (Timeline)
 		{
 			FGSTN_TimelinePlayer::EvaluateHits(Timeline->Data, TimelinePrevFrame[Slot], HurtScratch);
@@ -745,6 +748,15 @@ bool UGSTN_MinionCombatSubsystem::FillSnapshotEntry(int32 Slot, int32 Frame, FGS
 			{
 				Out.HurtStates[Index] = FGSTN_TimelinePlayer::ResolveHurtState(HurtScratch, Set->Hurtboxes[Index]);
 			}
+			PoseInput.Timeline = &Timeline->Data;
+			PoseInput.TimelineFrame = TimelinePrevFrame[Slot];
+		}
+		// Same pose as a fighter's (owner 2026-11-16): bones of the running move, detail level, the move's Hurtbox tracks. A set of Both, non-following
+		// hurtboxes (every minion set so far) gives the default pose and costs nothing
+		FGSTN_HurtboxPose::Build(PoseInput, Out.HurtPose);
+		if (!Out.HurtPose.IsDefault())
+		{
+			Out.BoundRadius = FMath::Max(Out.BoundRadius, static_cast<float>(Out.HurtPose.ComputeBoundRadius(Set)));
 		}
 	}
 
@@ -2037,19 +2049,29 @@ void UGSTN_MinionCombatSubsystem::RunAttackQueries(int32 Slot, int32 Frame, cons
 			Overlapped.Reset();
 			for (int32 HurtIndex = 0; HurtIndex < Hurtboxes.Num(); ++HurtIndex)
 			{
-				if (Victim.HurtStates.IsValidIndex(HurtIndex) && Victim.HurtStates[HurtIndex].State == EGSTN_HurtState::Intangible)
+				if (!Victim.IsHurtboxPresent(HurtIndex) || (Victim.HurtStates.IsValidIndex(HurtIndex) && Victim.HurtStates[HurtIndex].State == EGSTN_HurtState::Intangible))
 				{
 					continue;
 				}
+				// The fighter's posed hurtbox (bones, detail level: owner 2026-11-16), the same shape the pawn attacker tests
+				const FGSTN_HitShape& HurtShape = Victim.GetHurtShape(HurtIndex);
 				const bool bTouches = Spec.bSweepBetweenFrames
-					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, Hurtboxes[HurtIndex].Shape, Victim.Transform)
-					: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, Hurtboxes[HurtIndex].Shape, Victim.Transform);
+					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, HurtShape, Victim.Transform)
+					: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, HurtShape, Victim.Transform);
 				// Same opening rule as the pawn attacker (P18): a hurtbox with an opening counts only through its mouth. No opening: one bool
 				if (bTouches && (!Hurtboxes[HurtIndex].Opening.bEnabled || UGSTN_HitShapeUtils::PassesOpening(Hurtboxes[HurtIndex].Opening, HitShape, PreviousCarrier, Carrier, Spec.bSweepBetweenFrames, Victim.Transform)))
 				{
 					Overlapped.Add(HurtIndex);
 				}
 			}
+			Victim.AppendExtensionOverlaps(Overlapped,
+				[&](const FGSTN_HitShape& Shape)
+				{
+					return Spec.bSweepBetweenFrames
+						? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, Shape, Victim.Transform)
+						: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, Shape, Victim.Transform);
+				},
+				[&](int32 HurtIndex) { return Victim.HurtStates.IsValidIndex(HurtIndex) && Victim.HurtStates[HurtIndex].State == EGSTN_HurtState::Intangible; });
 			for (int32 ExtraPosition = 0; ExtraPosition < Victim.ExtraHurtboxes.Num(); ++ExtraPosition)
 			{
 				// Same outside-only rule as the pawn attacker (M11 L7c): a minion inside a dome never touches its shell

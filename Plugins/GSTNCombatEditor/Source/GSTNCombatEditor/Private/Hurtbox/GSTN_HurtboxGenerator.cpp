@@ -2,6 +2,7 @@
 
 #include "Hurtbox/GSTN_HurtboxGenerator.h"
 
+#include "AnimationRuntime.h"
 #include "Engine/SkeletalMesh.h"
 #include "PhysicsEngine/AggregateGeom.h"
 #include "PhysicsEngine/PhysicsAsset.h"
@@ -283,6 +284,14 @@ FGSTN_HurtboxGenResult GSTNHurtboxGenerator::FromPhysicsAsset(const UPhysicsAsse
 			Hurtbox.Shape.Local = ToRoot;
 			Hurtbox.Shape.Extent *= Margin;
 
+			// Per limb, following its bone through every move (owner 2026-11-16); the Simple level uses the body made below instead
+			FTransform BoneToRoot = ComponentPose[BoneIndex] * Options.MeshToRoot;
+			BoneToRoot.SetScale3D(FVector::OneVector);
+			BoneToRoot.NormalizeRotation();
+			Hurtbox.bFollowBone = true;
+			Hurtbox.BoneReference = BoneToRoot;
+			Hurtbox.DetailUse = EGSTN_HurtboxDetailUse::DetailedOnly;
+
 			const FGameplayTag Zone = SuggestZone(Options.ZoneRules, Body->BoneName);
 			if (Zone.IsValid())
 			{
@@ -360,6 +369,100 @@ FGSTN_HurtboxGenResult GSTNHurtboxGenerator::FromPhysicsAsset(const UPhysicsAsse
 	return Result;
 }
 
+bool GSTNHurtboxGenerator::MakeSimpleBody(TConstArrayView<FGSTN_Hurtbox> Hurtboxes, FGSTN_Hurtbox& OutBody, double RadiusFraction)
+{
+	double MinZ = TNumericLimits<double>::Max();
+	double MaxZ = -TNumericLimits<double>::Max();
+	for (const FGSTN_Hurtbox& Hurtbox : Hurtboxes)
+	{
+		if (Hurtbox.DetailUse == EGSTN_HurtboxDetailUse::SimpleOnly)
+		{
+			continue;
+		}
+		const double Z = Hurtbox.Shape.Local.GetLocation().Z;
+		const double Reach = GetBoundingRadius(Hurtbox.Shape) * Hurtbox.Shape.Local.GetScale3D().GetAbsMax();
+		MinZ = FMath::Min(MinZ, Z - Reach);
+		MaxZ = FMath::Max(MaxZ, Z + Reach);
+	}
+	if (MaxZ <= MinZ)
+	{
+		return false;
+	}
+	const double HalfHeight = (MaxZ - MinZ) * 0.5;
+	const double Radius = FMath::Min(FMath::Max((MaxZ - MinZ) * RadiusFraction, 1.0), HalfHeight);
+	OutBody = FGSTN_Hurtbox();
+	OutBody.Name = TEXT("body");
+	OutBody.Shape.Type = EGSTN_ShapeType::Capsule;
+	OutBody.Shape.Extent = FVector(Radius, Radius, HalfHeight);
+	OutBody.Shape.Local = FTransform(FVector(0.0, 0.0, MinZ + HalfHeight));
+	OutBody.DetailUse = EGSTN_HurtboxDetailUse::SimpleOnly;
+	return true;
+}
+
+int32 GSTNHurtboxGenerator::FollowBones(TArray<FGSTN_Hurtbox>& Hurtboxes, const FReferenceSkeleton& RefSkeleton, const FTransform& MeshToRoot, TConstArrayView<int32> Targets, TArray<FName>* OutMissing)
+{
+	int32 Following = 0;
+	const int32 Count = Targets.IsEmpty() ? Hurtboxes.Num() : Targets.Num();
+	for (int32 Position = 0; Position < Count; ++Position)
+	{
+		const int32 Index = Targets.IsEmpty() ? Position : Targets[Position];
+		if (!Hurtboxes.IsValidIndex(Index) || Hurtboxes[Index].DetailUse == EGSTN_HurtboxDetailUse::SimpleOnly)
+		{
+			continue;
+		}
+		FGSTN_Hurtbox& Hurtbox = Hurtboxes[Index];
+		const int32 BoneIndex = RefSkeleton.FindBoneIndex(Hurtbox.Bone);
+		if (BoneIndex == INDEX_NONE)
+		{
+			if (OutMissing != nullptr)
+			{
+				OutMissing->Add(Hurtbox.Name);
+			}
+			continue;
+		}
+		FTransform Reference = FAnimationRuntime::GetComponentSpaceTransformRefPose(RefSkeleton, BoneIndex) * MeshToRoot;
+		Reference.SetScale3D(FVector::OneVector);
+		Reference.NormalizeRotation();
+		Hurtbox.BoneReference = Reference;
+		Hurtbox.bFollowBone = true;
+		++Following;
+	}
+	return Following;
+}
+
+bool GSTNHurtboxGenerator::ApplySimpleBody(TArray<FGSTN_Hurtbox>& Hurtboxes, const FGameplayTag& BodyTag)
+{
+	FGSTN_Hurtbox Body;
+	if (!MakeSimpleBody(Hurtboxes, Body))
+	{
+		return false;
+	}
+	const int32 Existing = Hurtboxes.IndexOfByPredicate([](const FGSTN_Hurtbox& Hurtbox) { return Hurtbox.Name == TEXT("body"); });
+	if (Existing != INDEX_NONE)
+	{
+		// Remake the shape only: the tags, priority and reaction scale the designer gave the body stay
+		Hurtboxes[Existing].Shape = Body.Shape;
+		Hurtboxes[Existing].DetailUse = EGSTN_HurtboxDetailUse::SimpleOnly;
+		Hurtboxes[Existing].bFollowBone = false;
+	}
+	else
+	{
+		if (BodyTag.IsValid())
+		{
+			Body.Tags.AddTag(BodyTag);
+		}
+		Hurtboxes.Add(Body);
+	}
+	for (FGSTN_Hurtbox& Hurtbox : Hurtboxes)
+	{
+		if (Hurtbox.Name != TEXT("body") && Hurtbox.DetailUse == EGSTN_HurtboxDetailUse::Both)
+		{
+			Hurtbox.DetailUse = EGSTN_HurtboxDetailUse::DetailedOnly;
+		}
+	}
+	return true;
+}
+
 TArray<FGSTN_Hurtbox> GSTNHurtboxGenerator::Merge(const TArray<FGSTN_Hurtbox>& Existing, const TArray<FGSTN_Hurtbox>& Generated, EGSTN_RegenerateMode Mode, FGSTN_RegenerateSummary* OutSummary)
 {
 	FGSTN_RegenerateSummary Summary;
@@ -400,6 +503,9 @@ TArray<FGSTN_Hurtbox> GSTNHurtboxGenerator::Merge(const TArray<FGSTN_Hurtbox>& E
 				{
 					Old.Shape = Generated[*Match].Shape;
 					Old.Bone = Generated[*Match].Bone;
+					// The shape is authored against the bone's reference: they change together
+					Old.bFollowBone = Generated[*Match].bFollowBone;
+					Old.BoneReference = Generated[*Match].BoneReference;
 					++Summary.Updated;
 				}
 				else

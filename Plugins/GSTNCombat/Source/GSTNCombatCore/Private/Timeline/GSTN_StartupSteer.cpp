@@ -39,7 +39,7 @@ int32 FGSTN_StartupSteer::GetSteerEndFrame(const FGSTN_CombatTimelineData& Data)
 	int32 First = MAX_int32;
 	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instance : Data.Tracks)
 	{
-		const FGSTN_TimelineTrack_Hitbox* Track = Instance.GetPtr<FGSTN_TimelineTrack_Hitbox>();
+		const FGSTN_TimelineTrack_Hitbox* Track = GSTNTimelineTracks::AsAttackHitbox(Instance);
 		if (Track != nullptr && Track->EndFrame > Track->StartFrame && FGSTN_TimelinePhases::CountsAsActive(*Track))
 		{
 			First = FMath::Min(First, FMath::Max(Track->StartFrame, 0));
@@ -82,7 +82,7 @@ int32 FGSTN_StartupSteer::GetHoldEndFrame(const FGSTN_CombatTimelineData& Data)
 	int32 Last = 0;
 	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instance : Data.Tracks)
 	{
-		const FGSTN_TimelineTrack_Hitbox* Track = Instance.GetPtr<FGSTN_TimelineTrack_Hitbox>();
+		const FGSTN_TimelineTrack_Hitbox* Track = GSTNTimelineTracks::AsAttackHitbox(Instance);
 		if (Track != nullptr && Track->EndFrame > Track->StartFrame && FGSTN_TimelinePhases::CountsAsActive(*Track))
 		{
 			Last = FMath::Max(Last, Track->EndFrame);

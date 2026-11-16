@@ -3,6 +3,8 @@
 #include "Bake/GSTN_SocketBaker.h"
 
 #include "Animation/AnimMontage.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "Hits/GSTN_HurtboxTypes.h"
 #include "Animation/DebugSkelMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/SkeletalMeshSocket.h"
@@ -29,7 +31,33 @@ FText FGSTN_BakeResult::DescribeProblems() const
 	return FText::FromString(Text);
 }
 
-void FGSTN_SocketBaker::CollectUses(const FGSTN_CombatTimelineData& Data, TArray<FGSTN_BakeSocketUse>& OutUses)
+TArray<FName> FGSTN_SocketBaker::CollectProjectHurtboxBones(const USkeletalMesh& Mesh)
+{
+	TArray<FName> Bones;
+	IAssetRegistry& Registry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
+	TArray<FAssetData> Assets;
+	Registry.GetAssetsByClass(UGSTN_HurtboxSetDefinition::StaticClass()->GetClassPathName(), Assets, true);
+	for (const FAssetData& Asset : Assets)
+	{
+		const UGSTN_HurtboxSetDefinition* Set = Cast<UGSTN_HurtboxSetDefinition>(Asset.GetAsset());
+		if (Set == nullptr)
+		{
+			continue;
+		}
+		for (const FGSTN_Hurtbox& Hurtbox : Set->Hurtboxes)
+		{
+			// Only bones the mesh has: a set made for another skeleton (a minion, a turret) asks this mesh for nothing
+			if (Hurtbox.bFollowBone && !Hurtbox.Bone.IsNone() && MeshHasSocket(Mesh, Hurtbox.Bone))
+			{
+				Bones.AddUnique(Hurtbox.Bone);
+			}
+		}
+	}
+	Bones.Sort(FNameLexicalLess());
+	return Bones;
+}
+
+void FGSTN_SocketBaker::CollectUses(const FGSTN_CombatTimelineData& Data, TArray<FGSTN_BakeSocketUse>& OutUses, const USkeletalMesh* Mesh)
 {
 	for (int32 TrackIndex = 0; TrackIndex < Data.Tracks.Num(); ++TrackIndex)
 	{
@@ -51,6 +79,26 @@ void FGSTN_SocketBaker::CollectUses(const FGSTN_CombatTimelineData& Data, TArray
 				Use.HitboxIndex = HitboxIndex;
 				OutUses.Add(Use);
 			}
+		}
+	}
+
+	// The bones the wearer's hurtboxes follow (owner 2026-11-16), after the hitboxes: a bone of the explicit list the mesh lacks is reported by the
+	// bake like a hitbox socket; the project's sets are already filtered by the mesh
+	TArray<FName> HurtBones = Data.HurtboxBones;
+	if (Mesh != nullptr)
+	{
+		for (const FName Bone : CollectProjectHurtboxBones(*Mesh))
+		{
+			HurtBones.AddUnique(Bone);
+		}
+	}
+	for (const FName Bone : HurtBones)
+	{
+		if (!Bone.IsNone())
+		{
+			FGSTN_BakeSocketUse Use;
+			Use.Socket = Bone;
+			OutUses.Add(Use);
 		}
 	}
 }
@@ -89,7 +137,7 @@ FGSTN_BakeResult FGSTN_SocketBaker::Bake(const FGSTN_CombatTimelineData& Data, F
 
 	// 1. The sockets the hitboxes ask for. None: the bake is an empty one and the frames of an earlier bake go
 	TArray<FGSTN_BakeSocketUse> Uses;
-	CollectUses(Data, Uses);
+	CollectUses(Data, Uses, Inputs.Mesh);
 	const TArray<FName> Sockets = GetDistinctSockets(Uses);
 	if (Sockets.IsEmpty())
 	{
@@ -128,7 +176,12 @@ FGSTN_BakeResult FGSTN_SocketBaker::Bake(const FGSTN_CombatTimelineData& Data, F
 	{
 		for (const FGSTN_BakeSocketUse& Use : Uses)
 		{
-			if (!MeshHasSocket(*Inputs.Mesh, Use.Socket))
+			if (!MeshHasSocket(*Inputs.Mesh, Use.Socket) && Use.TrackIndex == INDEX_NONE)
+			{
+				AddProblem(FText::Format(LOCTEXT("BakeMissingHurtBone", "Hurtbox Bones lists '{0}', which {1} does not have as a bone or a socket. The previous bake was kept."),
+					FText::FromName(Use.Socket), FText::FromString(Inputs.Mesh->GetName())), &Use);
+			}
+			else if (!MeshHasSocket(*Inputs.Mesh, Use.Socket))
 			{
 				AddProblem(FText::Format(LOCTEXT("BakeMissingSocket", "Track {0}, hitbox {1} uses the socket '{2}', which {3} does not have as a bone or a socket. The previous bake was kept."),
 					FText::AsNumber(Use.TrackIndex), FText::AsNumber(Use.HitboxIndex), FText::FromName(Use.Socket), FText::FromString(Inputs.Mesh->GetName())), &Use);

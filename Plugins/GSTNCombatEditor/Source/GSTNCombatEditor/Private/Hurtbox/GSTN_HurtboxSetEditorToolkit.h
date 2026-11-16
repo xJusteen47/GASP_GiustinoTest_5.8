@@ -66,6 +66,18 @@ public:
 	/** Adds a small sphere at the root, named Hurtbox (unique), and selects it */
 	void AddHurtbox();
 
+	/**
+	 * Adds (or remakes) the Simple-level "body" volume (GSTNHurtboxGenerator::MakeSimpleBody) and moves every other Both hurtbox to DetailedOnly, so idle
+	 * and movement use the body and moves the per-limb set (owner 2026-11-16). One undo step. False when there is nothing to measure
+	 */
+	bool AddSimpleBody();
+
+	/**
+	 * The selected hurtboxes (all of them with no selection) follow their bones: BoneReference from the preview mesh's reference pose in root space,
+	 * bFollowBone on. A hurtbox whose bone the mesh lacks is left as it is and named. One undo step. Returns how many follow now
+	 */
+	int32 FollowBones();
+
 	/** Removes the selected hurtboxes after a confirmation */
 	void RemoveSelected();
 

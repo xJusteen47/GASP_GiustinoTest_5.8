@@ -479,16 +479,20 @@ bool UGSTN_ProjectileSubsystem::StepProjectile(FGSTN_ActiveProjectile& Projectil
 		Overlapped.Reset();
 		for (int32 HurtIndex = 0; HurtIndex < Hurtboxes.Num(); ++HurtIndex)
 		{
-			if (Victim.HurtStates.IsValidIndex(HurtIndex) && Victim.HurtStates[HurtIndex].State == EGSTN_HurtState::Intangible)
+			if (!Victim.IsHurtboxPresent(HurtIndex) || (Victim.HurtStates.IsValidIndex(HurtIndex) && Victim.HurtStates[HurtIndex].State == EGSTN_HurtState::Intangible))
 			{
 				continue;
 			}
-			if (UGSTN_HitShapeUtils::SweptOverlap(Shape, Previous, Current, Hurtboxes[HurtIndex].Shape, Victim.Transform)
+			if (UGSTN_HitShapeUtils::SweptOverlap(Shape, Previous, Current, Victim.GetHurtShape(HurtIndex), Victim.Transform)
 				&& (!Hurtboxes[HurtIndex].Opening.bEnabled || UGSTN_HitShapeUtils::PassesOpening(Hurtboxes[HurtIndex].Opening, Shape, Previous, Current, true, Victim.Transform)))
 			{
 				Overlapped.Add(HurtIndex);
 			}
 		}
+		// The posed extensions (a move's Hurtbox track, a kit's movement body) count as the set hurtbox they name, as for a melee hitbox
+		Victim.AppendExtensionOverlaps(Overlapped,
+			[&](const FGSTN_HitShape& HurtShape) { return UGSTN_HitShapeUtils::SweptOverlap(Shape, Previous, Current, HurtShape, Victim.Transform); },
+			[&](int32 HurtIndex) { return Victim.HurtStates.IsValidIndex(HurtIndex) && Victim.HurtStates[HurtIndex].State == EGSTN_HurtState::Intangible; });
 		for (int32 ExtraPosition = 0; ExtraPosition < Victim.ExtraHurtboxes.Num(); ++ExtraPosition)
 		{
 			// An outside-only shell (the backpack dome, M11 L7c) is not there for a projectile whose previous position is inside it
