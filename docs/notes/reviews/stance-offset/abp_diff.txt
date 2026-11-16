@@ -1,0 +1,5 @@
+=>     in  InPose_ [struct:PoseLink] -> GSTN_AnimGraphNode_StanceOffset_0.Pose
+=>     out Pose [struct:PoseLink] -> GSTN_AnimGraphNode_StanceOffset_0.Source
+=>   GSTN_AnimGraphNode_StanceOffset "GSTN Stance Offset" (GSTN_AnimGraphNode_StanceOffset_0)
+=>     in  Source [struct:PoseLink] = (LinkID=-1,SourceLinkID=-1) -> GSTN_AnimGraphNode_BlendOutFootLock_0.Pose
+<=     in  InPose_ [struct:PoseLink] -> GSTN_AnimGraphNode_BlendOutFootLock_0.Pose

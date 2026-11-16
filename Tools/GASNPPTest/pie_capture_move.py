@@ -50,6 +50,8 @@ BUTTON = os.environ.get('PIE_CAPTURE_BUTTON', 'Attack')
 # taps: rendered frames after PRE on which the button is pressed for one frame. dummy: a dummy this many cm ahead (None = whiff)
 SEQUENCES = [
     {'name': 'jab1', 'taps': [0], 'frames': 75, 'dummy': None, 'shoot': True},
+    # STANCE-OFFSET: the same jab, long enough to see the upper-body stance come back after the feet step (~frame 106 with the default timing)
+    {'name': 'jab1_long', 'taps': [0], 'frames': 140, 'dummy': None, 'shoot': True},
     {'name': 'chain', 'taps': [0, 12], 'frames': 120, 'dummy': None, 'shoot': True},
     {'name': 'chain_buffered', 'taps': [0, 4], 'frames': 120, 'dummy': None, 'shoot': False},
     {'name': 'chain_hit', 'taps': [0, 12], 'frames': 140, 'dummy': 95.0, 'shoot': True},
@@ -279,6 +281,13 @@ def _fl_row(mesh, body):
                       round(float(ai.get_editor_property('foot_lock_montage_weight')), 2)]
     except Exception as e:
         body['fl_err'] = repr(e)[:60]
+    # STANCE-OFFSET: [debug state (0 none, 1 hidden, 2 delay, 3 returning/shown, 4 moving), seconds since the return started, rest alpha, montage scale]
+    try:
+        ai = mesh.get_anim_instance()
+        body['st'] = [int(ai.get_editor_property('stance_debug_state')), round(float(ai.get_editor_property('stance_return_time')), 3),
+                      round(float(ai.get_editor_property('stance_rest_alpha')), 2), round(float(ai.get_editor_property('stance_montage_scale')), 2)]
+    except Exception as e:
+        body['st_err'] = repr(e)[:60]
 
 
 def _row(frame, tapped, extra=None):
@@ -304,7 +313,7 @@ def _row(frame, tapped, extra=None):
                        'mesh_rel_z': round(mesh.get_editor_property('relative_location').z, 1)}
         # NIGHT-ROOT: root bone and feet, world, against the actor (root-capsule offset, foot creep)
         _al = pawn.get_actor_location()
-        for _b in ('root', 'foot_l', 'foot_r', 'pelvis'):
+        for _b in ('root', 'foot_l', 'foot_r', 'pelvis', 'head', 'hand_l', 'hand_r'):   # STANCE-OFFSET: head and hands (upper-body stance)
             _v = mesh.get_socket_location(_b)
             row['body'][_b] = [round(_v.x - _al.x, 1), round(_v.y - _al.y, 1), round(_v.z - _al.z, 1)]
         row['body']['actor'] = [round(_al.x, 1), round(_al.y, 1), round(_al.z, 1)]

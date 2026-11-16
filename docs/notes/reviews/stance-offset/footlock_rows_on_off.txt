@@ -1,0 +1,2 @@
+cap_on/jab1 f44 n51 slide L 0.4 R 0.0  step L 11.7 R 7.4  end L 12.1 R 7.4
+cap_off/jab1 f45 n50 slide L 0.0 R 0.5  step L 7.6 R 12.5  end L 7.6 R 13.0

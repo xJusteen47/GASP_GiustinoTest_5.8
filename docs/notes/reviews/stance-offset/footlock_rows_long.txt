@@ -1,0 +1,2 @@
+long_on/jab1_long f45 n80 slide L 0.3 R 0.6  step L 11.0 R 12.8  end L 11.1 R 13.1
+long_off/jab1_long f45 n80 slide L 0.3 R 0.6  step L 11.0 R 12.8  end L 11.1 R 13.1
