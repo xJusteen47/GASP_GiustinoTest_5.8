@@ -48,6 +48,7 @@
 #include "Input/GSTN_InputScript.h"
 #include "Input/GSTN_InputSettings.h"
 #include "Movement/GSTN_StatsMovementModifier.h"
+#include "Movement/GSTN_RunStageSyncState.h"
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverTypes.h"
@@ -1850,6 +1851,8 @@ void UGSTN_CombatSimComponent::TryQueueStatsModifier()
 		bStatsModifierQueued = true;
 		return;
 	}
+	// The run stages' state rides in Mover's sync state; the modes never write it, so it must be persistent to survive them
+	FGSTN_RunStageMover::RegisterPersistentState(*Mover);
 	// The body capsule modifier (per-move movement capsule, FGSTN_TimelineTrack_BodyCapsule) rides along: same machines, same lifetime.
 	// An invalid handle means Mover's simulation does not exist yet (both fail together): try again next tick
 	bool bQueued = true;

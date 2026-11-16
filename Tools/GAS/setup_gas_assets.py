@@ -245,6 +245,8 @@ def combat_test_specs():
                 ('Input.Button.Dodge', TEST_INPUT_DIR + '/IA_GASNPP_Dodge'),
                 ('Input.Button.Interact', TEST_INPUT_DIR + '/IA_GASNPP_Interact'),
                 ('Input.Button.Sprint', TEST_INPUT_DIR + '/IA_GASNPP_Sprint'),
+                # Mario run P1: after Sprint, so the bits above stay. The action is made by setup_player_input_contexts.py (pad L3)
+                ('Input.Button.RunBoost', TEST_INPUT_DIR + '/IA_GASNPP_RunBoost'),
             ],
             'move_action': IA_MOVE,
         },
@@ -253,7 +255,9 @@ def combat_test_specs():
         # Plain button-press slots added to that set (command, button): the harness' own commands. Not added twice.
         'press_slots': [('Command.Dash', 'Input.Button.Dash'), ('Command.Buff', 'Input.Button.Buff'),
                         # C13: the default proposal of the jump kit: Press(Jump), and a down press (Crouch) for the fast fall
-                        ('Command.Movement.Jump', 'Input.Button.Jump'), ('Command.Movement.FastFall', 'Input.Button.Crouch')],
+                        ('Command.Movement.Jump', 'Input.Button.Jump'), ('Command.Movement.FastFall', 'Input.Button.Crouch'),
+                        # Mario run P1: the boost to the last run stage, read by the kit's locomotion profile (no ability binds it)
+                        ('Command.Movement.RunBoost', 'Input.Button.RunBoost')],
         # C14: the default movement slots of the plugin (UGSTN_MovementSlots): dash, dodge, interact tap = grab and hold = pick up.
         # The swapped data set (tap = pick up, hold = grab) is a Core test; the PIE scenario runs the default one
         'movement_slots': {'swap_tap_hold': False},

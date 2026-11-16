@@ -9,6 +9,8 @@
 #include "GSTN_CombatTags.h"
 #include "Input/GSTN_CombatSettings.h"
 #include "MoverComponent.h"
+#include "Movement/GSTN_RunStageSyncState.h"
+#include "MoverSimulationTypes.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Stats/GSTN_StatsScaling.h"
 
@@ -90,12 +92,29 @@ void FGSTN_StatsMovementModifier::OnPreMovement(UMoverComponent* MoverComp, cons
 	if (ASC && ResolveSpeedFactor(*ASC, Factor))
 	{
 		ApplySpeedFactor(*MoverComp, Factor);
+		// After the stats, so the stage values win on the properties both write
+		FGSTN_RunStageMover::PreMovement(*MoverComp, Factor);
 	}
 
 	// The gravity phase of the jump state of this frame (the combat model ticked before Mover): hold, cut, fall, fast fall
 	if (UGSTN_CombatSimComponent* Combat = MoverComp->GetOwner() ? MoverComp->GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr)
 	{
 		Combat->ApplyJumpGravity(*MoverComp, TimeStep.StepMs * 0.001);
+	}
+}
+
+void FGSTN_StatsMovementModifier::OnPostMovement(UMoverComponent* MoverComp, const FMoverTimeStep& TimeStep, const FMoverSyncState& SyncState, const FMoverAuxStateContext& AuxState)
+{
+	if (!MoverComp)
+	{
+		return;
+	}
+	const UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(MoverComp->GetOwner());
+	float Factor = 1.f;
+	if (ASC && ResolveSpeedFactor(*ASC, Factor))
+	{
+		// See the header: SyncState is the state machine's mutable output of this substep
+		FGSTN_RunStageMover::PostMovement(*MoverComp, TimeStep, const_cast<FMoverSyncState&>(SyncState), Factor);
 	}
 }
 
