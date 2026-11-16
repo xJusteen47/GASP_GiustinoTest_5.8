@@ -39,7 +39,7 @@ function Get-Token([string]$kind) {
 }
 
 if ($Remove) {
-    schtasks /Delete /TN $task /F 2>>$log | Out-Null
+    Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue
     Get-Process Runner.Listener -ErrorAction SilentlyContinue | Stop-Process -Force
     Push-Location $RunnerDir; & .\config.cmd remove --token (Get-Token 'remove') *>> $log; Pop-Location
     Write-Output "Runner rimosso (cartella $RunnerDir lasciata: cancellala a mano se vuoi)."; exit 0
@@ -76,9 +76,13 @@ if (-not (Test-Path "$RunnerDir\.runner")) {
 }
 
 # 4. start at logon, hidden, as the current user
-$cmd = "powershell -NoProfile -WindowStyle Hidden -Command `"Set-Location '$RunnerDir'; .\run.cmd *>> '$RunnerDir\runner.log'`""
-schtasks /Create /TN $task /TR $cmd /SC ONLOGON /RL LIMITED /F 2>>$log | Out-Null
-schtasks /Run /TN $task 2>>$log | Out-Null
+# a small start script, so the scheduled task has no nested quotes (schtasks /TR broke on them)
+Set-Content "$RunnerDir\start-hidden.ps1" "Set-Location '$RunnerDir'`n& .\run.cmd *>> '$RunnerDir\runner.log'" -Encoding UTF8
+$act = New-ScheduledTaskAction -Execute 'powershell.exe' -WorkingDirectory $RunnerDir -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$RunnerDir\start-hidden.ps1`""
+$trg = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
+$set = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+Register-ScheduledTask -TaskName $task -Action $act -Trigger $trg -Settings $set -Force | Out-Null
+Start-ScheduledTask -TaskName $task
 
 Write-Output "OK: runner '$Name' registrato su $Repo, engine $Engine"
 Write-Output "Avvio automatico al login (attivita' '$task'). Controlla: https://github.com/$Repo/settings/actions/runners"
