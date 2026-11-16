@@ -5,6 +5,7 @@
 #include "Simulation/GSTN_TimelineTrackHook.h"
 #include "Timeline/GSTN_HoldUntilLanded.h"
 #include "Timeline/GSTN_Landing.h"
+#include "Timeline/GSTN_Ledge.h"
 #include "Timeline/GSTN_StartupSteer.h"
 #include "Events/GSTN_SimEvent.h"
 #include "GameFramework/Actor.h"
@@ -42,6 +43,7 @@ namespace
 		Core.HardContact = FGSTN_HardContactState();
 	Core.StrikeTrack = INDEX_NONE;
 		Core.bAirborneOk = false;
+		Core.bLedgeStop = false;
 		// The hits of the previous run do not count for this one; the caller writes the move origin
 		Core.Hit.ResetRun();
 	}
@@ -87,6 +89,7 @@ void FGSTN_CombatTimelineLogic::ClearTimeline(FGSTN_CombatSyncCore& Core)
 	Core.HardContact = FGSTN_HardContactState();
 	Core.StrikeTrack = INDEX_NONE;
 	Core.bAirborneOk = false;
+	Core.bLedgeStop = false;
 }
 
 bool FGSTN_CombatTimelineLogic::StartRecoil(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FGSTN_RicochetResponse* Fallback)
@@ -116,6 +119,8 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 	bool bAbilityActive, FGSTN_TimelineOutput& Output, bool bHitstopFrame, const FGSTN_RicochetResponse* RicochetFallback, const FGSTN_TrackHookEnvironment* HookEnvironment)
 {
 	Output.Reset();
+	// The Ledge Check's Stop holds only for the tick that saw the ledge (below)
+	Core.bLedgeStop = false;
 	if (Core.ActionState != EGSTN_ActionState::InTimeline)
 	{
 		return false;
@@ -216,6 +221,45 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 				Output.LandingContinueTrack = Ground.TrackIndex;
 			}
 			return false;
+		}
+	}
+
+	// Ledge Check (owner 2026-11-16, FGSTN_LedgeRules): on the ground inside a ledge window with no floor ahead, the move stops in place (the ledge
+	// guard move reads bLedgeStop in Mover's tick of this frame), ends, recoils into the track's response or hands over to its continuation.
+	// Cleared at the top of every tick, so Stop lasts exactly as long as the void is ahead inside the window. Not on a hitstop frame (the freeze
+	// holds the pawn)
+	if (!bHitstopFrame && Previous >= 0 && HookEnvironment && HookEnvironment->Ground == EGSTN_TrackHookGround::OnGround && HookEnvironment->HasFloorAhead
+		&& FGSTN_LedgeRules::HasLedgeTracks(*Data))
+	{
+		int32 LedgeTrack = INDEX_NONE;
+		const FGSTN_TimelineTrack_LedgeCheck* Ledge = FGSTN_LedgeRules::FindWindow(*Data, Previous + 1, &LedgeTrack);
+		if (Ledge && !HookEnvironment->HasFloorAhead(Ledge->ProbeAhead, Ledge->ProbeDepth))
+		{
+			UE_LOG(LogGSTNCombatTimeline, Verbose, TEXT("Frame %d: move %d sees a ledge at timeline frame %d, action %d"), Frame, static_cast<int32>(Core.ActiveTimeline), Previous + 1,
+				static_cast<int32>(Ledge->Action));
+			if (Ledge->Action == EGSTN_LedgeAction::Stop)
+			{
+				Core.bLedgeStop = true;
+			}
+			else if (Ledge->Action == EGSTN_LedgeAction::Recoil && Ledge->Response.IsAuthored())
+			{
+				// The response replaces the rest of the move from this frame, like a landing lag (GetRicochetResponse of the track's index)
+				Core.HardContact = FGSTN_HardContactState();
+				Core.StrikeTrack = static_cast<int16>(LedgeTrack);
+				Core.RecoilStartFrame = Frame;
+				return AdvanceClock(Core, Frame, Data, DefaultOverrideFrames, bAbilityActive, Output, false, RicochetFallback, HookEnvironment);
+			}
+			else
+			{
+				// EndMove, an unauthored Recoil, or the continuation (the combat model starts it on this frame; one it cannot find ends like EndMove)
+				const bool bContinue = Ledge->Action == EGSTN_LedgeAction::ContinueWithMove;
+				ClearTimeline(Core);
+				if (bContinue)
+				{
+					Output.LandingContinueTrack = LedgeTrack;
+				}
+				return false;
+			}
 		}
 	}
 

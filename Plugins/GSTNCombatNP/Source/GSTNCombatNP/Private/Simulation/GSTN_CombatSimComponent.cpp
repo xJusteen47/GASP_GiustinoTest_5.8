@@ -23,6 +23,7 @@
 #include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Movement/GSTN_LayeredMove_Launch.h"
 #include "Movement/GSTN_LayeredMove_PushBack.h"
+#include "Movement/GSTN_LayeredMove_LedgeGuard.h"
 #include "Movement/GSTN_LayeredMove_MomentumSlide.h"
 #include "Presentation/GSTN_PrecisionAimComponent.h"
 #include "Timeline/GSTN_StartupSteer.h"
@@ -114,6 +115,7 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 	PushBackEffect = UGSTN_GE_PushBack::StaticClass();
 	SetFacingEffect = UGSTN_GE_SetFacing::StaticClass();
 	MomentumSlideEffect = UGSTN_GE_MomentumSlide::StaticClass();
+	LedgeGuardEffect = UGSTN_GE_LedgeGuard::StaticClass();
 
 	InputSource = CreateDefaultSubobject<UGSTN_PlayerInputSource>(TEXT("InputSource"));
 	ContextProvider = CreateDefaultSubobject<UGSTN_MoverInputContextProvider>(TEXT("ContextProvider"));
@@ -1315,6 +1317,8 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	{
 		HookEnvironment.Ground = GroundTracker->HasGameplayTag(Mover_IsOnGround, true) ? EGSTN_TrackHookGround::OnGround : EGSTN_TrackHookGround::Airborne;
 	}
+	// The Ledge Check rule's floor probe (FGSTN_LedgeRules): called by the clock only inside a ledge window, on the ground
+	HookEnvironment.HasFloorAhead = [this](float AheadCm, float DepthCm) { return ProbeFloorAhead(AheadCm, DepthCm); };
 	// The attacker side of hits (M4 H8) is not run on a hitstop frame either: it reads the same bHitstopFrame
 
 	// Step 2, the timeline clock: the running timeline reaches its end, or its ability is gone, and the combatant is Actionable again

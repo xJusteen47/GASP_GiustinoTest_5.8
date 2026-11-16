@@ -12,6 +12,8 @@
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "Timeline/GSTN_CombatTimeline.h"
 #include "Timeline/GSTN_HoldUntilLanded.h"
+#include "Timeline/GSTN_Landing.h"
+#include "Timeline/GSTN_Ledge.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNBaseCombat, Log, All);
 
@@ -118,6 +120,28 @@ void UGSTN_GA_BaseCombat::LoadTimelineDataContent(const FGSTN_CombatTimelineData
 		if (Track && Track->bHasRicochetResponse && Track->RicochetResponse.IsAuthored())
 		{
 			LoadRecoilContent(Track->RicochetResponse, OutKeep);
+		}
+		// The Landing and Ledge Check tracks: their lag / recoil is played from a plain pointer like the move's (GetRicochetResponse of their index
+		// is their own response or null, never the move's), and their ContinueMove is registered by class (AppendFollowUps), which needs it loaded
+		const TInstancedStruct<FGSTN_TimelineTrack>& Any = Data.Tracks[TrackIndex];
+		const FGSTN_TimelineTrack_Landing* Landing = Any.GetPtr<FGSTN_TimelineTrack_Landing>();
+		if (!Landing && !Any.GetPtr<FGSTN_TimelineTrack_LedgeCheck>())
+		{
+			continue;
+		}
+		if (const FGSTN_RicochetResponse* TrackRecoil = Data.GetRicochetResponse(TrackIndex))
+		{
+			LoadRecoilContent(*TrackRecoil, OutKeep);
+		}
+		const TSoftClassPtr<UObject>* Continue = Landing
+			? (Landing->Action == EGSTN_LandingAction::ContinueWithMove ? &Landing->ContinueMove : nullptr)
+			: FGSTN_LedgeRules::GetContinueMove(Data, TrackIndex);
+		if (Continue && !Continue->IsNull())
+		{
+			if (UClass* ContinueClass = Continue->LoadSynchronous())
+			{
+				OutKeep.AddUnique(ContinueClass);
+			}
 		}
 	}
 }
@@ -249,6 +273,14 @@ void UGSTN_GA_BaseCombat::BeginTimeline(int32 StateStart)
 		if (UGSTN_CombatSimComponent* SlideCombat = GetCombatComponent())
 		{
 			SlideCombat->ExecuteMomentumSlide();
+		}
+	}
+	// Ledge Check, Stop action (FGSTN_TimelineTrack_LedgeCheck): the guard is queued with the move and does nothing until the clock sees a ledge
+	if (FGSTN_LedgeRules::HasStopTracks(Data))
+	{
+		if (UGSTN_CombatSimComponent* LedgeCombat = GetCombatComponent())
+		{
+			LedgeCombat->ExecuteLedgeGuard();
 		}
 	}
 

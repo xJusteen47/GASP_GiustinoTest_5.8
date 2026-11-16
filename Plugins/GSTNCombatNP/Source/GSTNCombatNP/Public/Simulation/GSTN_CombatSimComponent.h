@@ -391,6 +391,18 @@ public:
 	void ExecuteMomentumSlide();
 
 	/**
+	 * Ledge Check, Stop action (owner 2026-11-16, FGSTN_TimelineTrack_LedgeCheck): queues the ledge guard move of a timeline that just started,
+	 * through LedgeGuardEffect. Called by the ability when its timeline begins and it has a Stop ledge window, inside the simulation
+	 */
+	void ExecuteLedgeGuard();
+
+	/**
+	 * For the ledge guard move, from Mover's tick: the start frame of the timeline the combat state of the frame being simulated runs, and whether
+	 * its clock saw a ledge in a Stop window this frame (FGSTN_CombatSyncCore::bLedgeStop). False outside a timeline and in a recoil
+	 */
+	bool ReadLedgeStop(int32& OutStartFrame, bool& bOutStop) const;
+
+	/**
 	 * The momentum slide data of the move the combat state of the frame being simulated runs, and the frame that move started on. False
 	 * outside a timeline and once the timeline ended into a recoil. Read by the slide move from Mover's tick (the combat model ticked before
 	 * it in the same frame), like ReadJumpState
@@ -1068,6 +1080,10 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
 	TSubclassOf<UGameplayEffect> MomentumSlideEffect;
 
+	/** Instant effect that queues the ledge guard of a move with a Stop ledge window (FGSTN_LayeredMove_LedgeGuard); replace for a game with its own */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
+	TSubclassOf<UGameplayEffect> LedgeGuardEffect;
+
 	/** Instant effect of a SetFacing request (startup steering, plan precisione-weakpoint 5): turns Mover to Combat.SetByCaller.FacingYaw */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
 	TSubclassOf<UGameplayEffect> SetFacingEffect;
@@ -1102,6 +1118,12 @@ private:
 
 	/** The attacker's pose at the end of the previous frame from the Mover tracker (the actor's own without one). False without an owner */
 	bool ReadOwnPose(FTransform& OutTransform, FVector& OutUp);
+
+	/**
+	 * The Ledge Check probe (FGSTN_LedgeRules, owner 2026-11-16): true when there is floor AheadCm in front of the pose of ReadOwnPose (along its
+	 * flat facing) within DepthCm under the feet, traced on the root body's own channel. True (no ledge) without a body. Called by the clock only
+	 */
+	bool ProbeFloorAhead(float AheadCm, float DepthCm);
 
 	/**
 	 * What the attacker side predicted about each hit of the last frames, for the presentation component of this pawn (M4 H10). Local data

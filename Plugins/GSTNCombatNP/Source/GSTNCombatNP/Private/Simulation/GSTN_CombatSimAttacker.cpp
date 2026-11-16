@@ -2,7 +2,10 @@
 
 #include "Simulation/GSTN_CombatSimComponent.h"
 
+#include "Components/CapsuleComponent.h"
+
 #include "Debug/GSTN_CombatDebugDraw.h"
+#include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverDataModelTypes.h"
@@ -55,6 +58,30 @@ bool UGSTN_CombatSimComponent::ReadOwnPose(FTransform& OutTransform, FVector& Ou
 		OutUp = OutTransform.GetUnitAxis(EAxis::Z);
 	}
 	return true;
+}
+
+bool UGSTN_CombatSimComponent::ProbeFloorAhead(float AheadCm, float DepthCm)
+{
+	FTransform Pose;
+	FVector Up;
+	const UPrimitiveComponent* Body = GetOwner() ? Cast<UPrimitiveComponent>(GetOwner()->GetRootComponent()) : nullptr;
+	if (!Body || !Body->GetWorld() || !ReadOwnPose(Pose, Up))
+	{
+		// No body to probe with: no ledge, the move plays as it would without the track
+		return true;
+	}
+	// The feet: the capsule's current half height (it may be shrunk by the body capsule modifier), else the bounds'
+	const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(Body);
+	const double HalfHeight = Capsule ? Capsule->GetScaledCapsuleHalfHeight() : Body->Bounds.BoxExtent.Z;
+	const FVector Forward = FVector::VectorPlaneProject(Pose.GetRotation().GetForwardVector(), Up).GetSafeNormal();
+	const FVector Feet = Pose.GetLocation() + Forward * AheadCm - Up * HalfHeight;
+	// From a little above the feet (a slope going up still counts as floor) to DepthCm below them, on the body's own channel and responses
+	const FVector Start = Feet + Up * 10.0;
+	const FVector End = Feet - Up * DepthCm;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNLedgeProbe), false, GetOwner());
+	FCollisionResponseParams Responses;
+	Body->InitSweepCollisionParams(Params, Responses);
+	return Body->GetWorld()->LineTraceTestByChannel(Start, End, Body->GetCollisionObjectType(), Params, Responses);
 }
 
 void UGSTN_CombatSimComponent::StampMoveOrigin(FGSTN_CombatSyncCore& Core, int32 Frame)
