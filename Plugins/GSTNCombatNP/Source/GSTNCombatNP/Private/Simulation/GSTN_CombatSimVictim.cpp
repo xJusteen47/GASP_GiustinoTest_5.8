@@ -23,6 +23,8 @@
 #include "Movement/GSTN_LayeredMove_Freeze.h"
 #include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
+#include "MoverTypes.h"
+#include "Rules/GSTN_AirCrouch.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Timeline/GSTN_StartupSteer.h"
 #include "Simulation/GSTN_CombatTableSet.h"
@@ -485,7 +487,37 @@ void UGSTN_CombatSimComponent::ProjectStateTags(const FGSTN_CombatSyncCore& Core
 	if (AbilitySystem)
 	{
 		FGSTN_CombatVictim::ProjectStateTags(*AbilitySystem, Core, Frame);
+		ProjectAirCrouchTag(Core);
 	}
+}
+
+void UGSTN_CombatSimComponent::ProjectAirCrouchTag(const FGSTN_CombatSyncCore& Core)
+{
+	// Set, not added, like the reaction states: a function of this frame's state only. The kit's data comes from the table of the revision the
+	// state runs (a rollback across a kit swap reads the kit of that frame); the ground from the Mover tracker, which is rolled back with Mover and
+	// still holds the end of the previous frame here (the ability system ticks before Mover); the button from this frame's held buttons
+	const UGSTN_CombatTableSet* Set = FindTableSet(Core.TableRevision);
+	bool bAirCrouch = false;
+	if (Set && Set->bHasKitAirCrouch)
+	{
+		const FGSTN_AirCrouchKitExtension& AirCrouch = Set->KitAirCrouch;
+		const int32 Button = ButtonMap.GetIndex(AirCrouch.ResolveHoldButton());
+		const bool bHeld = Button >= 0 && Button < 32 && (Core.Input.History.GetHeldButtons() & (1u << Button)) != 0;
+		const UGSTN_MoverSimStateTracker* Tracker = bHeld ? GetJumpTracker() : nullptr;
+		// In air means Mover's air modes (falling, flying): a wall mode is neither ground nor air, so a wall slide never air-crouches (crouch
+		// detaches from the wall there, and the air crouch starts on the next frame in the air)
+		const bool bAirborne = Tracker && Tracker->HasGameplayTag(Mover_IsInAir, true);
+		if (bAirborne)
+		{
+			FGameplayTagContainer OwnerTags;
+			if (!AirCrouch.BlockedTags.IsEmpty())
+			{
+				AbilitySystem->GetOwnedGameplayTags(OwnerTags);
+			}
+			bAirCrouch = AirCrouch.Holds(true, true, Core.ActionState == EGSTN_ActionState::InTimeline, FGSTN_CombatVictim::IsActionLocked(Core), OwnerTags);
+		}
+	}
+	AbilitySystem->SetLooseGameplayTagCount(GSTNCombatTags::State_AirCrouch, bAirCrouch ? 1 : 0);
 }
 
 AActor* UGSTN_CombatSimComponent::FindAttackerActor(const FGSTN_VictimHit& Hit) const

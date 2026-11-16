@@ -95,6 +95,9 @@ def reaction_set():
         r.set_editor_property('entry_drop_frames', drop_frames)
         r.set_editor_property('entry_drop_after_rules', drop_after)
         rules.append(r)
+    # Rules other scripts own (setup_air_crouch.py's AirCrouch) are kept, after these: this script rewrites only its own
+    own = {spec[0] for spec in RULES}
+    rules += [r for r in entry.asset.get_editor_property('rules') if str(r.get_editor_property('name')) not in own]
     entry.array('rules', rules)
     entry.save()
     log(f'{SET_NAME}: {len(rules)} rules')
