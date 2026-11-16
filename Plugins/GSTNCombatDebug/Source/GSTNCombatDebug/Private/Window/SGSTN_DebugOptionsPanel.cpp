@@ -1,0 +1,365 @@
+// Development tooling of GSTN Combat (PIE and development builds, never Shipping).
+
+#include "Window/SGSTN_DebugOptionsPanel.h"
+
+#include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerController.h"
+#include "HAL/IConsoleManager.h"
+#include "Styling/AppStyle.h"
+#include "Widgets/Input/SButton.h"
+#include "Widgets/Input/SCheckBox.h"
+#include "Widgets/Input/SEditableTextBox.h"
+#include "Widgets/Input/SSearchBox.h"
+#include "Widgets/Input/SSpinBox.h"
+#include "Widgets/Layout/SBorder.h"
+#include "Widgets/Layout/SBox.h"
+#include "Widgets/Layout/SExpandableArea.h"
+#include "Widgets/Layout/SScrollBox.h"
+#include "Widgets/SBoxPanel.h"
+#include "Widgets/Text/STextBlock.h"
+
+#define LOCTEXT_NAMESPACE "GSTNCombatDebug"
+
+namespace
+{
+	const TCHAR* const VariablePrefix = TEXT("gstn.");
+
+	/** The variable by name, looked up each time: a module that unloads takes its variables with it, a stored pointer would dangle */
+	IConsoleVariable* FindVariable(const FString& Name)
+	{
+		return IConsoleManager::Get().FindConsoleVariable(*Name);
+	}
+
+	/** The first local player controller of a play session (PIE or a game), or null in the editor world */
+	APlayerController* FindPlayController()
+	{
+		if (!GEngine)
+		{
+			return nullptr;
+		}
+		for (const FWorldContext& Context : GEngine->GetWorldContexts())
+		{
+			UWorld* World = Context.World();
+			if (World && (Context.WorldType == EWorldType::PIE || Context.WorldType == EWorldType::Game))
+			{
+				if (APlayerController* Controller = World->GetFirstPlayerController())
+				{
+					return Controller;
+				}
+			}
+		}
+		return nullptr;
+	}
+
+	/** The part of the name after the group, which is what a row shows (gstn.Combat.Debug.Hitboxes -> Debug.Hitboxes) */
+	FString ShortName(const FString& Name)
+	{
+		int32 First = INDEX_NONE;
+		if (!Name.FindChar(TEXT('.'), First))
+		{
+			return Name;
+		}
+		const int32 Second = Name.Find(TEXT("."), ESearchCase::CaseSensitive, ESearchDir::FromStart, First + 1);
+		return Second == INDEX_NONE ? Name : Name.Mid(Second + 1);
+	}
+}
+
+TArray<FString> SGSTN_DebugOptionsPanel::CollectVariableNames()
+{
+	TArray<FString> Names;
+	IConsoleManager::Get().ForEachConsoleObjectThatStartsWith(FConsoleObjectVisitor::CreateLambda(
+		[&Names](const TCHAR* Name, IConsoleObject* Object)
+		{
+			if (Object == nullptr || Object->AsVariable() == nullptr || Object->TestFlags(ECVF_Unregistered))
+			{
+				return;
+			}
+			const FString NameString(Name);
+			if (NameString.Contains(TEXT("Debug"), ESearchCase::IgnoreCase))
+			{
+				Names.Add(NameString);
+			}
+		}), VariablePrefix);
+	Names.Sort();
+	return Names;
+}
+
+FString SGSTN_DebugOptionsPanel::GroupOf(const FString& VariableName)
+{
+	TArray<FString> Parts;
+	VariableName.ParseIntoArray(Parts, TEXT("."));
+	return Parts.Num() >= 3 ? Parts[1] : FString(TEXT("Other"));
+}
+
+void SGSTN_DebugOptionsPanel::Construct(const FArguments& InArgs)
+{
+	ChildSlot
+	[
+		SNew(SVerticalBox)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(6.f)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.f)
+			[
+				SNew(SSearchBox)
+				.HintText(LOCTEXT("FilterHint", "Filter (e.g. Hitbox, Minion)"))
+				.OnTextChanged(this, &SGSTN_DebugOptionsPanel::OnFilterChanged)
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(6.f, 0.f, 0.f, 0.f)
+			[
+				SNew(SButton)
+				.Text(LOCTEXT("GameplayDebugger", "Gameplay Debugger"))
+				.ToolTipText(LOCTEXT("GameplayDebuggerTip", "Opens or closes the Gameplay Debugger in the running play session (the same as its key). Needs a play session."))
+				.IsEnabled(this, &SGSTN_DebugOptionsPanel::HasPlayWorld)
+				.OnClicked(this, &SGSTN_DebugOptionsPanel::OnToggleGameplayDebugger)
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(6.f, 0.f, 0.f, 0.f)
+			[
+				SNew(SButton)
+				.Text(LOCTEXT("Refresh", "Refresh"))
+				.ToolTipText(LOCTEXT("RefreshTip", "Lists the debug variables again (a plugin loaded after the window opened adds its own)."))
+				.OnClicked(this, &SGSTN_DebugOptionsPanel::OnRefresh)
+			]
+		]
+		+ SVerticalBox::Slot()
+		.FillHeight(1.f)
+		[
+			SNew(SScrollBox)
+			+ SScrollBox::Slot()
+			[
+				SAssignNew(Rows, SVerticalBox)
+			]
+		]
+	];
+	Rebuild();
+}
+
+void SGSTN_DebugOptionsPanel::Rebuild()
+{
+	Rows->ClearChildren();
+
+	// Group the names, keeping the alphabetical order inside each group; Combat first, then the others alphabetically
+	TMap<FString, TArray<FString>> Groups;
+	for (const FString& Name : CollectVariableNames())
+	{
+		if (Filter.IsEmpty() || Name.Contains(Filter, ESearchCase::IgnoreCase))
+		{
+			Groups.FindOrAdd(GroupOf(Name)).Add(Name);
+		}
+	}
+	TArray<FString> GroupNames;
+	Groups.GetKeys(GroupNames);
+	GroupNames.Sort([](const FString& A, const FString& B)
+	{
+		const bool bA = A == TEXT("Combat");
+		const bool bB = B == TEXT("Combat");
+		return bA != bB ? bA : A < B;
+	});
+
+	if (GroupNames.Num() == 0)
+	{
+		Rows->AddSlot()
+		.AutoHeight()
+		.Padding(8.f)
+		[
+			SNew(STextBlock)
+			.Text(LOCTEXT("Empty", "No gstn.*Debug* variable matches. Clear the filter, or press Refresh after enabling a plugin."))
+			.AutoWrapText(true)
+		];
+		return;
+	}
+
+	for (const FString& GroupName : GroupNames)
+	{
+		TSharedRef<SVerticalBox> Body = SNew(SVerticalBox);
+		for (const FString& Name : Groups[GroupName])
+		{
+			if (IConsoleVariable* Variable = FindVariable(Name))
+			{
+				Body->AddSlot()
+				.AutoHeight()
+				.Padding(4.f, 2.f)
+				[
+					MakeRow(Name, Variable)
+				];
+			}
+		}
+
+		Rows->AddSlot()
+		.AutoHeight()
+		.Padding(4.f, 2.f)
+		[
+			SNew(SExpandableArea)
+			.InitiallyCollapsed(false)
+			.HeaderContent()
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(GroupName))
+				.Font(FAppStyle::GetFontStyle("BoldFont"))
+			]
+			.BodyContent()
+			[
+				Body
+			]
+		];
+	}
+}
+
+TSharedRef<SWidget> SGSTN_DebugOptionsPanel::MakeRow(const FString& Name, IConsoleVariable* Variable)
+{
+	const FText Tooltip = FText::FromString(FString::Printf(TEXT("%s\n\n%s"), *Name, Variable->GetHelp()));
+	const bool bReadOnly = Variable->TestFlags(ECVF_ReadOnly);
+
+	TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox).ToolTipText(Tooltip);
+
+	if (Variable->IsVariableBool() || Variable->IsVariableInt())
+	{
+		// A check box for on (anything but 0) and off; an int keeps its exact value next to it, for the levels some variables have (2 = also log)
+		Row->AddSlot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		[
+			SNew(SCheckBox)
+			.IsEnabled(!bReadOnly)
+			.IsChecked_Lambda([Name]()
+			{
+				const IConsoleVariable* V = FindVariable(Name);
+				return V && V->GetInt() != 0 ? ECheckBoxState::Checked : ECheckBoxState::Unchecked;
+			})
+			.OnCheckStateChanged_Lambda([Name](ECheckBoxState State)
+			{
+				if (IConsoleVariable* V = FindVariable(Name))
+				{
+					V->Set(State == ECheckBoxState::Checked ? 1 : 0, ECVF_SetByConsole);
+				}
+			})
+		];
+	}
+
+	Row->AddSlot()
+	.FillWidth(1.f)
+	.VAlign(VAlign_Center)
+	.Padding(6.f, 0.f)
+	[
+		SNew(STextBlock)
+		.Text(FText::FromString(ShortName(Name)))
+	];
+
+	if (Variable->IsVariableInt())
+	{
+		Row->AddSlot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		[
+			SNew(SBox)
+			.WidthOverride(70.f)
+			[
+				SNew(SSpinBox<int32>)
+				.IsEnabled(!bReadOnly)
+				.MinValue(TOptional<int32>())
+				.MaxValue(TOptional<int32>())
+				.Delta(1)
+				.Value_Lambda([Name]()
+				{
+					const IConsoleVariable* V = FindVariable(Name);
+					return V ? V->GetInt() : 0;
+				})
+				.OnValueCommitted_Lambda([Name](int32 Value, ETextCommit::Type)
+				{
+					if (IConsoleVariable* V = FindVariable(Name))
+					{
+						V->Set(Value, ECVF_SetByConsole);
+					}
+				})
+			]
+		];
+	}
+	else if (Variable->IsVariableFloat())
+	{
+		Row->AddSlot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		[
+			SNew(SBox)
+			.WidthOverride(90.f)
+			[
+				SNew(SSpinBox<float>)
+				.IsEnabled(!bReadOnly)
+				.MinValue(TOptional<float>())
+				.MaxValue(TOptional<float>())
+				.Value_Lambda([Name]()
+				{
+					const IConsoleVariable* V = FindVariable(Name);
+					return V ? V->GetFloat() : 0.f;
+				})
+				.OnValueCommitted_Lambda([Name](float Value, ETextCommit::Type)
+				{
+					if (IConsoleVariable* V = FindVariable(Name))
+					{
+						V->Set(Value, ECVF_SetByConsole);
+					}
+				})
+			]
+		];
+	}
+	else if (Variable->IsVariableString())
+	{
+		Row->AddSlot()
+		.FillWidth(1.f)
+		.VAlign(VAlign_Center)
+		[
+			SNew(SEditableTextBox)
+			.IsReadOnly(bReadOnly)
+			.Text_Lambda([Name]()
+			{
+				const IConsoleVariable* V = FindVariable(Name);
+				return V ? FText::FromString(V->GetString()) : FText::GetEmpty();
+			})
+			.OnTextCommitted_Lambda([Name](const FText& Text, ETextCommit::Type)
+			{
+				if (IConsoleVariable* V = FindVariable(Name))
+				{
+					V->Set(*Text.ToString(), ECVF_SetByConsole);
+				}
+			})
+		];
+	}
+
+	return Row;
+}
+
+FReply SGSTN_DebugOptionsPanel::OnRefresh()
+{
+	Rebuild();
+	return FReply::Handled();
+}
+
+bool SGSTN_DebugOptionsPanel::HasPlayWorld() const
+{
+	return FindPlayController() != nullptr;
+}
+
+FReply SGSTN_DebugOptionsPanel::OnToggleGameplayDebugger()
+{
+	if (APlayerController* Controller = FindPlayController())
+	{
+		Controller->ConsoleCommand(TEXT("EnableGDT"));
+	}
+	return FReply::Handled();
+}
+
+void SGSTN_DebugOptionsPanel::OnFilterChanged(const FText& Text)
+{
+	Filter = Text.ToString().TrimStartAndEnd();
+	Rebuild();
+}
+
+#undef LOCTEXT_NAMESPACE
