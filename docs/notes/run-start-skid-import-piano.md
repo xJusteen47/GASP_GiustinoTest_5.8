@@ -43,7 +43,7 @@ Controllo nel codice: nessuno legge le soglie degli attacchi (StickDeadZone/AimZ
 
 ## 1d. Principio owner (21:10Z, ambito: sensazione dell'input in PvP) e proposte (NON in questo piano)
 "In PvP le impostazioni di sensazione dell'input devono essere regolabili dal giocatore" (es. Street Fighter: negative edge disattivabile). Regola tecnica: cio' che legge la sim passa dal loadout (IO-3), cio' che e' locale resta nel sottosistema opzioni (IO-1).
-Proposte da portare all'owner: tap jump on/off (salto con lo stick su); stick destro = attacchi forti / tilt / niente; scudo tenuto vs toggle; corsa sprint 2 con L3 vs automatica; sensibilita' del reverse come moltiplicatore per giocatore sopra il dato della mossa; vibrazione. Stima ~1-2 $ ciascuna dopo R1a/R1c (il percorso c'e').
+Proposte da portare all'owner (tap jump scartato: in 3D lo stick su e' avanti, owner 21:12Z): stick destro = attacchi forti / tilt / niente; scudo tenuto vs toggle; corsa sprint 2 con L3 vs automatica; sensibilita' del reverse come moltiplicatore per giocatore sopra il dato della mossa; vibrazione. Stima ~1-2 $ ciascuna dopo R1a/R1c (il percorso c'e').
 
 ## 2. Vincoli
 - Nessun thread tocca il fisso finche' l'owner fa playtest. GaspMoverProject e' 5.7: lo si apre solo per esportare/copiare, mai salvarlo.
