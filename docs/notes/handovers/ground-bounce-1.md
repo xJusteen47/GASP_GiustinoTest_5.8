@@ -1,10 +1,8 @@
 # Ground bounce: hard bounce by speed + tunable tech bounce (cloud, 2026-11-16). NOT COMPILED
 Branch `claude/project-thread-ipt5wf` from `claude/kit-playtest-1116` 9658b271. Opus high, no editor, no asset touched.
-## Owner design (22:17Z, 22:23Z, 22:24Z)
-Tumble hitting the floor: fast (spike) = classic hard bounce, still launched; slower = "tech bounce" (small hop, then lying), height tunable,
+## Owner design (22:17Z-22:32Z) Tumble hitting the floor: fast (spike) = classic hard bounce, still launched; slower = "tech bounce" (small hop, then lying), height tunable,
 scaled by impact force down to a minimum or none; per-move override; a limit so a victim cannot bounce on forever. Dropkick = reference tech bounce.
-## What changed (all data, no Project Settings)
-- Hard bounce, core: `UGSTN_CombatRules::GroundImpact` (`FGSTN_GroundImpactRules`, GSTN_ImpactTypes.h): bBounceBySpeed (on), BounceMinSpeed 1200 cm/s
+## What changed (all data, no Project Settings) - Hard bounce, core: `UGSTN_CombatRules::GroundImpact` (`FGSTN_GroundImpactRules`, GSTN_ImpactTypes.h): bBounceBySpeed (on), BounceMinSpeed 1200 cm/s
   (speed into the floor x hit SpeedScale), bOnlyDuringHitstun (on), Restitution 0.6, MaxBounces 2, BounceWindowFrames 90 (0 = no limit).
   `FGSTN_CombatVictim::StepImpact` decides floors itself, also without a surface table/row; surface row bBounce/MinImpactSpeed and the victim's
   ImpactResponse still restrict. Chain in sync state `Core.Hit.GroundBounceCount/FirstFrame` (live while tumbling, inside the profile wire block,
@@ -24,8 +22,7 @@ scaled by impact force down to a minimum or none; per-move override; a limit so 
    SelfKnockdownImpactSpeed. Desktop: add the track to the dropkick timeline. Its victim follows the generic rules. Air timeout (2 s -> air idle)
    ends the move, so no self knockdown after it; the hop is vertical + stick steer, a downed user falling off a ledge does not bounce again.
 4. Flat landing (bNoTechBounce / NoBounceBelowSpeed) still starts the kit's GroundBounce GA (the clip); no-clip variant not done.
-## Desktop checks (nothing compiled or run here)
-1. Build _ue59 (IN-USO.txt). 2. Tests: `GSTNCombat.Core.Impact.GroundImpactRules`, `GSTNCombat.NP.Hits.Impact` (new GroundBounceBySpeed),
+## Desktop checks (nothing compiled or run here) 1. Build _ue59 (IN-USO.txt). 2. Tests: `GSTNCombat.Core.Impact.GroundImpactRules`, `GSTNCombat.NP.Hits.Impact` (new GroundBounceBySpeed),
 `GSTNCombat.NP.Hits.State` (new GroundBounceChain), `GSTNDefence.Core.Bounce` (new TechBounceHeight), `GSTNDefence.NP.*Landing*`, then full GSTN. Risk: integration tests
 that expect a fast spike to down at once may now see 1-2 hard bounces first (intended); judge per test.
 3. PIE L_Test_Hub: IMPATTI kit X (spike) at 100% = hard bounce(s) then tech bounce + lying; weak launch = small hop; dropkick = tech bounce.
