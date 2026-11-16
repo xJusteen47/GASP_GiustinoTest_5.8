@@ -30,7 +30,8 @@ const FGSTN_TimelineTrack_HoldUntilLanded* FGSTN_HoldUntilLanded::FindTrack(cons
 	return nullptr;
 }
 
-FGSTN_HoldClockDecision FGSTN_HoldUntilLanded::ResolveClock(const FGSTN_CombatTimelineData& Data, int32 CurrentFrame, bool bGroundKnown, bool bOnGround)
+FGSTN_HoldClockDecision FGSTN_HoldUntilLanded::ResolveClock(const FGSTN_CombatTimelineData& Data, int32 CurrentFrame, bool bGroundKnown, bool bOnGround,
+	int32 ElapsedFrames)
 {
 	FGSTN_HoldClockDecision Decision;
 	int32 TrackIndex = INDEX_NONE;
@@ -50,6 +51,13 @@ FGSTN_HoldClockDecision FGSTN_HoldUntilLanded::ResolveClock(const FGSTN_CombatTi
 			Decision.TargetFrame = Land;
 			Decision.TrackIndex = TrackIndex;
 		}
+		return Decision;
+	}
+	// Air timeout: still in the air part (not landed, not played through) after the move's air budget
+	if (Track->MaxAirFrames > 0 && ElapsedFrames >= Track->MaxAirFrames && CurrentFrame < Track->EndFrame)
+	{
+		Decision.Action = EGSTN_HoldClockAction::Timeout;
+		Decision.TrackIndex = TrackIndex;
 		return Decision;
 	}
 	if (CurrentFrame == Track->EndFrame - 1)

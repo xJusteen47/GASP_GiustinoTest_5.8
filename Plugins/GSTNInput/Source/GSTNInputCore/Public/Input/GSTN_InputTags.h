@@ -29,6 +29,12 @@ namespace GSTNInputTags
 	/** The character is in the air (falling or rising, not on a wall) */
 	GSTNINPUTCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Context_Airborne);
 
+	/**
+	 * Coyote time (owner 2026-11-16): the character left the ground a few frames ago without jumping, and the jump's coyote window is still
+	 * open. Added by the combat host with Airborne. A binding whose requirements say bGroundedInCoyote takes it as Grounded
+	 */
+	GSTNINPUTCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Context_Coyote);
+
 	/** The character is in a wall movement mode; with Airborne it identifies wall bindings */
 	GSTNINPUTCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Context_OnWall);
 

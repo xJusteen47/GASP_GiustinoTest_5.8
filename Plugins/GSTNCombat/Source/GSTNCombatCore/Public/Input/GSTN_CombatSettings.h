@@ -151,10 +151,6 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Combat|Jump")
 	FGSTN_JumpResetRules JumpResetRules;
 
-	/** Frames after walking off a ledge in which a ground jump is still allowed. 0 = none */
-	UPROPERTY(Config, EditAnywhere, Category = "Combat|Jump", meta = (ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
-	int32 JumpCoyoteFrames = 4;
-
 	/** Frames between a ground jump request and the take-off (the squat). 0 = the take-off is the frame of the request. A kit overrides it on its jump ability (UGSTN_GA_PlatformJump::bOverrideSquatFrames) */
 	UPROPERTY(Config, EditAnywhere, Category = "Combat|Jump", meta = (ClampMin = "0", ClampMax = "60", ForceUnits = "Frames"))
 	int32 JumpSquatFrames = 0;

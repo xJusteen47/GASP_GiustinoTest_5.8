@@ -199,4 +199,36 @@ bool FGSTN_BindingExclusiveGroupsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_BindingCoyoteTest, "GSTNInput.Core.Input.Bindings.Coyote", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_BindingCoyoteTest::RunTest(const FString& Parameters)
+{
+	// Coyote time per move (owner 2026-11-16): only a binding marked bGroundedInCoyote takes Input.Context.Coyote as Grounded
+	const FGameplayTag Grounded = GSTNInputTags::Context_Grounded.GetTag();
+	const FGameplayTag Airborne = GSTNInputTags::Context_Airborne.GetTag();
+	const FGameplayTag Coyote = GSTNInputTags::Context_Coyote.GetTag();
+	const FGameplayTag OnWall = GSTNInputTags::Context_OnWall.GetTag();
+	const FGameplayTagContainer InCoyote = Context({ Airborne, Coyote });
+
+	FGSTN_TagRequirements Plain = Requiring({ Grounded });
+	FGSTN_TagRequirements Takeoff = Requiring({ Grounded });
+	Takeoff.bGroundedInCoyote = true;
+	const FGSTN_TagRequirements Aerial = Requiring({ Airborne });
+
+	TestFalse(TEXT("a plain ground move: not in coyote time"), Plain.IsSatisfiedBy(InCoyote));
+	TestTrue(TEXT("a ground move that takes off: yes in coyote time"), Takeoff.IsSatisfiedBy(InCoyote));
+	TestTrue(TEXT("and on the ground as before"), Takeoff.IsSatisfiedBy(Context({ Grounded })));
+	TestFalse(TEXT("not in the air after the coyote window"), Takeoff.IsSatisfiedBy(Context({ Airborne })));
+	FGSTN_TagRequirements TakeoffOnWall = Requiring({ Grounded, OnWall });
+	TakeoffOnWall.bGroundedInCoyote = true;
+	TestFalse(TEXT("the other required tags still count"), TakeoffOnWall.IsSatisfiedBy(InCoyote));
+	FGSTN_TagRequirements Ignoring = Requiring({ Grounded }, { Airborne });
+	Ignoring.bGroundedInCoyote = true;
+	TestFalse(TEXT("the ignored tags still count"), Ignoring.IsSatisfiedBy(InCoyote));
+
+	TestEqual(TEXT("in coyote time the ground move wins over the aerial, in either order"), Select({ Aerial, Takeoff }, InCoyote), 1);
+	TestEqual(TEXT("(other order)"), Select({ Takeoff, Aerial }, InCoyote), 0);
+	TestEqual(TEXT("a plain ground move leaves it to the aerial"), Select({ Aerial, Plain }, InCoyote), 0);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

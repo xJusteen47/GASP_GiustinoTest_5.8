@@ -932,6 +932,11 @@ void UGSTN_CombatSimComponent::AppendContextTags(FGameplayTagContainer& OutTags)
 	{
 		ContextProvider->AppendContextTags(OutTags);
 	}
+	// Coyote time for the ground moves that may take off (owner 2026-11-16): the jump step of this frame ran before the input step
+	if (bFrameInCoyote)
+	{
+		OutTags.AddTag(GSTNInputTags::Context_Coyote);
+	}
 }
 
 uint8 UGSTN_CombatSimComponent::GetContextFingerprint() const
@@ -1338,7 +1343,12 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 			// A move that ended BY ITSELF links into its follow-up (FGSTN_CombatTimelineData::FollowUpTimeline: the dropkick's land into its get-up),
 			// on this same frame, before the adoption and the commands of the frame: a buffered command can still replace it by the normal rules
-			const int32 FollowUp = !bFrameGateClosed && TimelineOutput.bFinished && !TimelineOutput.bRecoil ? FrameSet.FindFollowUpEntry(Running) : INDEX_NONE;
+			int32 FollowUp = !bFrameGateClosed && TimelineOutput.bFinished && !TimelineOutput.bRecoil ? FrameSet.FindFollowUpEntry(Running) : INDEX_NONE;
+			// A landing inside a ContinueWithMove window (FGSTN_TimelineTrack_Landing) hands over to its continuation the same way
+			if (!bFrameGateClosed && TimelineOutput.LandingContinueTrack != INDEX_NONE)
+			{
+				FollowUp = FrameSet.FindLandingContinueEntry(Running, TimelineOutput.LandingContinueTrack);
+			}
 			if (FollowUp != INDEX_NONE)
 			{
 				StartTimelineEntry(OutSync.Core, Frame, FrameSet, FollowUp, &HookEnvironment);
