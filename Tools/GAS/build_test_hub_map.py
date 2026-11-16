@@ -384,7 +384,8 @@ def kit_pads_and_dummies():
         text = f'{label}\n{kit_name}' + (f'\n+ {support}' if support else '')
         sign(f'Z0_Pad_{label.replace(" ", "_").replace(":", "")}_Text', text, (x + 30.0, y), face_to=(0.0, y), size=22.0, height=170.0)
     label, (x, y) = DEBUG_PAD
-    box('Z0_Pad_DebugOptions', (x, y, 5.0), (PAD_RADIUS * 2.0, PAD_RADIUS * 2.0, 10.0), 'Red', mesh=CYLINDER)
+    pad = _spawn(unreal.load_class(None, '/Script/GSTNCombatDebug.GSTN_DebugOptionsPad'), (x, y, 5.0), label='Z0_Pad_DebugOptions')
+    pad.get_editor_property('mesh').set_material(0, _material('Red'))
     sign('Z0_Pad_DebugOptions_Text', label + chr(10) + 'salici: si apre la finestra', (x + 30.0, y), face_to=(0.0, y), size=24.0, height=170.0)
     sign('Z0_Pads_Title', 'PEDANE KIT: salici sopra', (1200.0, -1450.0), face_to=(0.0, -1450.0), size=30.0, height=230.0)
     # The dummies are NOT level actors: a placed Mover pawn makes the map unsaveable (its movement modes' transitions are private objects of the

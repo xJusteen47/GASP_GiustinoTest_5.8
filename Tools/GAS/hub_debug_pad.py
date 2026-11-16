@@ -32,7 +32,9 @@ def run(save=True):
             removed.append(label)
             actor.destroy_actor()
     label, (x, y) = hub.DEBUG_PAD
-    hub.box(NEW_PAD, (x, y, 5.0), (hub.PAD_RADIUS * 2.0, hub.PAD_RADIUS * 2.0, 10.0), 'Red', mesh=hub.CYLINDER)
+    # The native pad (GSTNCombatDebug): it opens the window by itself in a plain Play, no test_hub watcher needed
+    pad = hub._spawn(unreal.load_class(None, '/Script/GSTNCombatDebug.GSTN_DebugOptionsPad'), (x, y, 5.0), label=NEW_PAD)
+    pad.get_editor_property('mesh').set_material(0, hub._material('Red'))
     hub.sign(NEW_PAD + '_Text', label + chr(10) + 'salici: si apre la finestra', (x + 30.0, y), face_to=(0.0, y), size=24.0, height=170.0)
     saved = bool(les.save_current_level()) if save else False
     out = os.path.join(unreal.Paths.project_saved_dir(), 'TestHub', 'debug_pad.txt')

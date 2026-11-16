@@ -27,3 +27,13 @@ ground pushbox separates them first. Grid `Saved/DebugHub/cap/below_grid.png` (l
 - Debug Options panel calls FindConsoleObject every tick (log perf warning): cache the objects. Small.
 - `AM_OverlordDAirV9.uasset` dirty before this thread, untouched; PM_BoostJump etc. were not dirty here.
 **Cost** estimate ~13 $ (Opus, 4 builds, 1 test run, 3 editor sessions).
+## Follow-up: pad without h.prepare() (coordinator 2026-11-16 17:14)
+- New native `AGSTN_DebugOptionsPad` (GSTNCombatDebug, not Shipping): red 240 cm cylinder, slow tick; when the local player's pawn is within
+  120 cm it runs `gstn.Debug.OpenWindow` once (leave and step again to re-run). No script needed in Play. Builds OK (`Saved/Logs/ci/build.log`).
+  `hub_debug_pad.py` and `build_test_hub_map.py` now spawn this actor.
+- NOT in the map yet: both clean-Play runs (`Saved/Logs/ci/play.log`, `play2.log`, script `boot_play.py` in the thread scratchpad) hit
+  TIMEOUT because the editor never ran its -ExecCmds `py` command (no "Cmd: py" line, Python itself started); the UI run an hour earlier did.
+  2 attempts used (rule 5). Cause not found (blocking modal? restored layout?).
+- To finish (owner or next thread, 2 minutes in the open editor, NOT in Play): Python console
+  `import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import hub_debug_pad as p; p.run()` -> saves L_Test_Hub with the native pad;
+  then a plain Play, walk onto the red pad left of the spawn: the GSTN Debug Options window opens.
