@@ -54,6 +54,14 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 		FrameVelocity += MoverComp->GetGravityAcceleration() * Dt;
 	}
 	ProbeContact(StartState, TimeStep, MoverComp, FrameVelocity);
+
+	// A long tumble's move ends once its floor contact has been read by the combat tick (one frame after the record): it lived only to see
+	// the landing. Derived from the move's own fields and the step, so a resimulation ends it on the same frame
+	if (ElapsedFrames >= LandingEndsAfterFrames && Contact.IsSet() && Contact.Kind == EGSTN_TumbleContactKind::Floor
+		&& TimeStep.ServerFrame >= Contact.ContactFrame + 2)
+	{
+		DurationMs = static_cast<float>(TimeStep.BaseSimTimeMs + StepMs - StartSimTimeMs);
+	}
 	return true;
 }
 

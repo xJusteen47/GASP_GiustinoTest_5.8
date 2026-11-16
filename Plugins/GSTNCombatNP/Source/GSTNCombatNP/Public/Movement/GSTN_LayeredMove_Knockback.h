@@ -72,6 +72,14 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_Knockback : public FLayeredMoveBase
 	/** Extra distance the probe sweeps past the frame's movement, so a victim resting against a face still registers it */
 	static constexpr double ProbeMarginCm = 1.0;
 
+	/**
+	 * Past this many frames a move ends itself once a floor contact has been read (the frame after it was recorded). A tumble's move lives
+	 * until the victim lands (UGSTN_CombatVictim::TumbleProbeFrames, long); before this the move behaves as it always did (its drag and
+	 * gravity keep acting on the ground until its lifetime), after it the move does not outlive the landing. NIGHT-KD-1: a 180% launch flew
+	 * ~250 frames, the old fixed 240-frame probe expired in the air and the landing was never seen, so the victim stood up with no knockdown
+	 */
+	static constexpr int32 LandingEndsAfterFrames = 240;
+
 	virtual bool SupportsAsync() const override { return false; }
 	virtual bool GenerateMove(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, const UMoverComponent* MoverComp, UMoverBlackboard* SimBlackboard, FProposedMove& OutProposedMove) override;
 	virtual FLayeredMoveBase* Clone() const override;
