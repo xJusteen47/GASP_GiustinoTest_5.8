@@ -58,6 +58,9 @@ SEQUENCES = [
     # react-hook-4: hit from BEHIND (the victim's back to the attacker): bTurnBackAlongKnockback turns it back first along the knockback
     {'name': 'back_hitstand', 'launch': False, 'getup': None, 'behind': True},
     {'name': 'back_knockdown', 'launch': True, 'getup': 'jump', 'behind': True},
+    # hit-react-int: the victim stands SIDEWAYS to the attacker (turned 90 deg off the line to it): directional additive check (right = side +1)
+    {'name': 'side_hitstand', 'launch': False, 'getup': None, 'side': 1},
+    {'name': 'side_hitstand_l', 'launch': False, 'getup': None, 'side': -1},
 ]
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
     SEQUENCES = [s for s in SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
@@ -66,7 +69,8 @@ KIT = 'KIT_Test_DefenceLanding'
 ROLL_LIE = 4      # roll sequences: the stick is held from this many frames after the knockdown starts; the roll must wait for the landing
 FACE_SECONDS = float(os.environ.get('PIE_CAPTURE_FACE_SECONDS') or 0.3)  # the victim walks toward the attacker this long to face it, from PLACE cm away
 PLACE = 245.0
-PLACE_BEHIND = 165.0   # behind: the walk away adds about the 40 cm the walk toward takes off
+PLACE_SIDE = float(os.environ.get('PIE_CAPTURE_PLACE_SIDE') or 120.0)   # hit-react-int: side sequences start this close (the turn walks it away)
+PLACE_BEHIND = float(os.environ.get('PIE_CAPTURE_PLACE_BEHIND') or 165.0)   # behind: the walk away adds about the 40 cm the walk toward takes off
 BEHIND_STOP = float(os.environ.get('PIE_CAPTURE_BEHIND_STOP') or 160.0)  # behind: release the stick once turned away and this far (cm); it slides a bit on
 TIMEOUT = 1500.0
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None,
@@ -248,16 +252,22 @@ def _seq_prep(seq):
     # In FRONT of the attacker and facing it (react-hook-1 placed it with its back to the attacker): a short walk toward the attacker turns it,
     # then the pawn stops about 205 cm away (the test move's reach)
     # Behind: placed closer and walks AWAY from the attacker, so it ends about as far, with its back to it
-    g._place_near(ATTACKER, st['hkey'], (PLACE_BEHIND if seq.get('behind') else PLACE, 0.0))
+    g._place_near(ATTACKER, st['hkey'], (PLACE_BEHIND if seq.get('behind') else (PLACE_SIDE if seq.get('side') else PLACE), 0.0))
     return True
 
 
-def _turn_to_attacker(behind=False):
+def _turn_to_attacker(behind=False, side=0):
     """After the teleport has landed (react-hook-2: steering from the pre-teleport location walked the victim the wrong way)"""
     alo = g.snap(_world())[st['akey']]['location']
     if behind:
         loc = _pawn().get_actor_location()
         alo = (2.0 * loc.x - alo[0], 2.0 * loc.y - alo[1])
+    if side:   # steer toward a point 90 deg off the line to the attacker
+        loc = _pawn().get_actor_location()
+        dx, dy = alo[0] - loc.x, alo[1] - loc.y
+        n = math.hypot(dx, dy) or 1.0
+        alo = (loc.x - side * dy / n * 300.0, loc.y + side * dx / n * 300.0)
+        st['side_head'] = math.degrees(math.atan2(alo[1] - loc.y, alo[0] - loc.x))
     g.hold(0, 'move', g._steer_value(0, (alo[0], alo[1])))
 
 
@@ -397,7 +407,7 @@ def _tick(_dt):
                 _log('host still downed: jump to get up before the next sequence')
                 st.update(t=now)
         elif phase == 'seq_turn' and now - st['t'] > 1.5:
-            _turn_to_attacker(SEQUENCES[st['seq']].get('behind', False))
+            _turn_to_attacker(SEQUENCES[st['seq']].get('behind', False), SEQUENCES[st['seq']].get('side', 0))
             st.update(phase='seq_face', t=now)
         elif phase == 'seq_face' and SEQUENCES[st['seq']].get('behind') and now - st['t'] > 0.05:
             # Behind: stop on distance and heading, not wall time (react-hook-4: under load 0.3 s walked 155 cm, the victim stood 320 cm away,
@@ -409,7 +419,13 @@ def _tick(_dt):
             if (turned and math.hypot(loc.x - alo[0], loc.y - alo[1]) >= BEHIND_STOP) or now - st['t'] > 3.0 * FACE_SECONDS:
                 g.release(0, 'move')
                 st.update(phase='seq_begin', t=now)
-        elif phase == 'seq_face' and not SEQUENCES[st['seq']].get('behind') and now - st['t'] > FACE_SECONDS:
+        elif phase == 'seq_face' and SEQUENCES[st['seq']].get('side') and now - st['t'] > 0.05:
+            yaw = _pawn().get_actor_rotation().yaw
+            turned = abs((yaw - st['side_head'] + 180.0) % 360.0 - 180.0) < 12.0
+            if turned or now - st['t'] > 3.0 * FACE_SECONDS:
+                g.release(0, 'move')
+                st.update(phase='seq_begin', t=now)
+        elif phase == 'seq_face' and not SEQUENCES[st['seq']].get('behind') and not SEQUENCES[st['seq']].get('side') and now - st['t'] > FACE_SECONDS:
             g.release(0, 'move')
             st.update(phase='seq_begin', t=now)
         elif phase == 'seq_begin' and now - st['t'] > 2.5:
