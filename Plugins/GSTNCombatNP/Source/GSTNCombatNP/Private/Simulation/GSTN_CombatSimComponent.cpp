@@ -23,6 +23,7 @@
 #include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Movement/GSTN_LayeredMove_Launch.h"
 #include "Movement/GSTN_LayeredMove_PushBack.h"
+#include "Movement/GSTN_LayeredMove_LedgeGuard.h"
 #include "Movement/GSTN_LayeredMove_MomentumSlide.h"
 #include "Presentation/GSTN_PrecisionAimComponent.h"
 #include "Timeline/GSTN_StartupSteer.h"
@@ -116,6 +117,7 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 	PushBackEffect = UGSTN_GE_PushBack::StaticClass();
 	SetFacingEffect = UGSTN_GE_SetFacing::StaticClass();
 	MomentumSlideEffect = UGSTN_GE_MomentumSlide::StaticClass();
+	LedgeGuardEffect = UGSTN_GE_LedgeGuard::StaticClass();
 
 	InputSource = CreateDefaultSubobject<UGSTN_PlayerInputSource>(TEXT("InputSource"));
 	ContextProvider = CreateDefaultSubobject<UGSTN_MoverInputContextProvider>(TEXT("ContextProvider"));
@@ -440,11 +442,17 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 	}
 	// The victim layer of the surface impacts is the kit's, when it authors one
 	KitImpactResponse.Reset();
+	KitTumbleRecovery.Reset();
 	if (const UGSTN_PrimaryKitDefinition* Kit = Component->GetResolvedLoadout().Kit)
 	{
 		if (const FGSTN_ImpactResponseExtension* Extension = Kit->Extensions.Find<FGSTN_ImpactResponseExtension>())
 		{
 			KitImpactResponse = Extension->Response;
+		}
+		// And its tumble recovery commands, likewise
+		if (const FGSTN_TumbleRecoveryExtension* Recovery = Kit->Extensions.Find<FGSTN_TumbleRecoveryExtension>())
+		{
+			KitTumbleRecovery = *Recovery;
 		}
 	}
 
@@ -717,6 +725,11 @@ bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
 			}
 		}
 		return false;
+	}
+	if (GateCore && FGSTN_CombatVictim::IsTumbleActionable(*GateCore) && Current.Table.Commands.IsValidIndex(CommandIndex))
+	{
+		// A tumble that recovered in the air admits only the recovery's commands (the kit's list, else the rules'; empty = every one)
+		return FGSTN_TumbleRecoveryResolved::IsCommandAllowed(GetTumbleRecoveryCommands(), Current.Table.Commands[CommandIndex].Tag);
 	}
 	if (!GateCore || GateCore->ActionState != EGSTN_ActionState::InTimeline || !Current.Table.Commands.IsValidIndex(CommandIndex))
 	{
@@ -1321,6 +1334,8 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	{
 		HookEnvironment.Ground = GroundTracker->HasGameplayTag(Mover_IsOnGround, true) ? EGSTN_TrackHookGround::OnGround : EGSTN_TrackHookGround::Airborne;
 	}
+	// The Ledge Check rule's floor probe (FGSTN_LedgeRules): called by the clock only inside a ledge window, on the ground
+	HookEnvironment.HasFloorAhead = [this](float AheadCm, float DepthCm) { return ProbeFloorAhead(AheadCm, DepthCm); };
 	// The attacker side of hits (M4 H8) is not run on a hitstop frame either: it reads the same bHitstopFrame
 
 	// Step 2, the timeline clock: the running timeline reaches its end, or its ability is gone, and the combatant is Actionable again
@@ -1465,6 +1480,13 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	{
 		FGSTN_CombatVictim::EndReaction(OutSync.Core, Frame);
 		OutSync.Core.Requests.Add(EGSTN_RequestType::EndReaction, Frame, 0);
+	}
+
+	// A command from a tumble that recovered in the air ends the tumble (owner 2026-11-16): a jump or an air dodge lands as a normal fall,
+	// a move that starts a timeline overwrites the state anyway. The knockback move keeps flying until its lifetime, its probe unread outside Tumble
+	if (Result.HasRequest())
+	{
+		FGSTN_CombatVictim::LeaveTumbleByAction(OutSync.Core);
 	}
 
 	// Step 5b: a jump or fast fall command that the gate let through changes the jump state in the frame of the request

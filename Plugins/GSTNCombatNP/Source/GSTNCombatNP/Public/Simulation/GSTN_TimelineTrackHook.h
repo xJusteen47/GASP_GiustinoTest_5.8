@@ -32,6 +32,13 @@ struct FGSTN_TrackHookEnvironment
 	const FGSTN_SyncFragmentArray* Fragments = nullptr;
 	/** Read by the Hold Until Landed rule of the clock (FGSTN_HoldUntilLanded) and lent to the hooks */
 	EGSTN_TrackHookGround Ground = EGSTN_TrackHookGround::Unknown;
+
+	/**
+	 * The floor probe of the Ledge Check rule of the clock (FGSTN_LedgeRules): true when there is floor AheadCm in front of the character (along
+	 * its facing, Mover's pose at the end of the previous frame) within DepthCm under its feet. Unset (a test that lends none, an entity without
+	 * a pose) = the rule does nothing
+	 */
+	TFunction<bool(float AheadCm, float DepthCm)> HasFloorAhead;
 };
 
 /** What the combat clock hands a track hook for one track of the running timeline */

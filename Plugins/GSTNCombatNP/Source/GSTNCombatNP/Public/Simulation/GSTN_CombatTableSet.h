@@ -180,7 +180,7 @@ public:
 	void AppendAdoptable(TConstArrayView<TSubclassOf<UGSTN_GA_BaseCombat>> Adoptable);
 
 	/**
-	 * Registers the FollowUpTimeline (and the Landing tracks' ContinueMove) of every registered timeline that is not in the registry yet (no tier, no default window), the follow-ups' own
+	 * Registers the FollowUpTimeline (and the Landing and Ledge Check tracks' ContinueMove) of every registered timeline that is not in the registry yet (no tier, no default window), the follow-ups' own
 	 * follow-ups included: the combat model starts them by registry index when a move ends by itself. Deterministic: registry order
 	 */
 	void AppendFollowUps();
@@ -189,7 +189,7 @@ public:
 	int32 FindFollowUpEntry(int32 Index) const;
 
 	/**
-	 * The registry index of the ContinueMove of entry Index's Landing track TrackIndex (FGSTN_TimelineTrack_Landing, registered by
+	 * The registry index of the ContinueMove of entry Index's Landing or Ledge Check track TrackIndex (FGSTN_TimelineTrack_Landing or _LedgeCheck, registered by
 	 * AppendFollowUps like a follow-up), INDEX_NONE when it has none or it is not registered
 	 */
 	int32 FindLandingContinueEntry(int32 Index, int32 TrackIndex) const;

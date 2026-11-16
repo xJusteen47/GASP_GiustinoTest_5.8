@@ -947,7 +947,8 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 
 	/**
 	 * The response of a hitbox group: its own when authored, else the move's; null = the caller's fallbacks. A Landing track's index gives its
-	 * landing lag (FGSTN_TimelineTrack_Landing: the lag is played by the recoil player), never the move's response
+	 * landing lag (FGSTN_TimelineTrack_Landing: the lag is played by the recoil player), never the move's response; a Ledge Check's index gives
+	 * its Recoil response the same way (FGSTN_TimelineTrack_LedgeCheck)
 	 */
 	const FGSTN_RicochetResponse* GetRicochetResponse(int32 TrackIndex) const;
 

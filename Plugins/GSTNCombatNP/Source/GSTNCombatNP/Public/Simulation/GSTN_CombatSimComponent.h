@@ -27,6 +27,7 @@
 #include "Simulation/GSTN_InputSimulator.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
 #include "Timeline/GSTN_StartupSteer.h"
+#include "Hits/GSTN_TumbleRecovery.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 #include "World/GSTN_StepSnapshot.h"
@@ -391,6 +392,18 @@ public:
 	void ExecuteMomentumSlide();
 
 	/**
+	 * Ledge Check, Stop action (owner 2026-11-16, FGSTN_TimelineTrack_LedgeCheck): queues the ledge guard move of a timeline that just started,
+	 * through LedgeGuardEffect. Called by the ability when its timeline begins and it has a Stop ledge window, inside the simulation
+	 */
+	void ExecuteLedgeGuard();
+
+	/**
+	 * For the ledge guard move, from Mover's tick: the start frame of the timeline the combat state of the frame being simulated runs, and whether
+	 * its clock saw a ledge in a Stop window this frame (FGSTN_CombatSyncCore::bLedgeStop). False outside a timeline and in a recoil
+	 */
+	bool ReadLedgeStop(int32& OutStartFrame, bool& bOutStop) const;
+
+	/**
 	 * The momentum slide data of the move the combat state of the frame being simulated runs, and the frame that move started on. False
 	 * outside a timeline and once the timeline ended into a recoil. Read by the slide move from Mover's tick (the combat model ticked before
 	 * it in the same frame), like ReadJumpState
@@ -496,6 +509,19 @@ public:
 	 * the combat tick of the frame did not compute the bodies); InOutVelocity loses the inward part. Read by the body capsule modifier after the move
 	 */
 	FVector ConstrainFrameMove(const FVector& ActorEnd, FVector& InOutVelocity) const;
+
+	/**
+	 * Tumble air recovery for this combatant over the rules' (owner 2026-11-16): e.g. players AfterHitstun and training dummies or AI
+	 * UntilGround. Constant data of the actor (the same on every machine), never changed while the simulation runs
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Hit Reactions")
+	EGSTN_TumbleRecoveryOverride TumbleRecoveryOverride = EGSTN_TumbleRecoveryOverride::UseRules;
+
+	/** Rules and TumbleRecoveryOverride: a tumble may act in the air once its hitstun ends */
+	bool IsTumbleAirRecoveryOn() const;
+
+	/** The commands a recovered tumble may start: the kit's FGSTN_TumbleRecoveryExtension, else the rules'. Empty = every command */
+	const FGameplayTagContainer& GetTumbleRecoveryCommands() const;
 
 	/** How this character type meets other fighters (pushbox P4): soft pushbox + rigid core, pushbox only, or none. Per Blueprint / character type */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Body Collision")
@@ -993,6 +1019,9 @@ private:
 	/** The victim layer of the kit (FGSTN_ImpactResponseExtension), when it has one; the rules' otherwise */
 	TOptional<FGSTN_ImpactResponse> KitImpactResponse;
 
+	/** The kit's tumble recovery commands (FGSTN_TumbleRecoveryExtension), when it has one; the rules' otherwise */
+	TOptional<FGSTN_TumbleRecoveryExtension> KitTumbleRecovery;
+
 	/** Colliders the probe touched by contact frame, and the breaks the victim step requested by frame. Local data, see NoteContactSurface */
 	TMap<int32, TWeakObjectPtr<UPrimitiveComponent>> ContactSurfaces;
 	TMap<int32, TWeakObjectPtr<UPrimitiveComponent>> BreakRequests;
@@ -1071,6 +1100,10 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
 	TSubclassOf<UGameplayEffect> MomentumSlideEffect;
 
+	/** Instant effect that queues the ledge guard of a move with a Stop ledge window (FGSTN_LayeredMove_LedgeGuard); replace for a game with its own */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
+	TSubclassOf<UGameplayEffect> LedgeGuardEffect;
+
 	/** Instant effect of a SetFacing request (startup steering, plan precisione-weakpoint 5): turns Mover to Combat.SetByCaller.FacingYaw */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
 	TSubclassOf<UGameplayEffect> SetFacingEffect;
@@ -1105,6 +1138,12 @@ private:
 
 	/** The attacker's pose at the end of the previous frame from the Mover tracker (the actor's own without one). False without an owner */
 	bool ReadOwnPose(FTransform& OutTransform, FVector& OutUp);
+
+	/**
+	 * The Ledge Check probe (FGSTN_LedgeRules, owner 2026-11-16): true when there is floor AheadCm in front of the pose of ReadOwnPose (along its
+	 * flat facing) within DepthCm under the feet, traced on the root body's own channel. True (no ledge) without a body. Called by the clock only
+	 */
+	bool ProbeFloorAhead(float AheadCm, float DepthCm);
 
 	/**
 	 * What the attacker side predicted about each hit of the last frames, for the presentation component of this pawn (M4 H10). Local data

@@ -42,6 +42,9 @@ struct FGSTN_VictimHit
 	int32 HitstunFrames = 0;
 	int32 HitstopFrames = 0;
 
+	/** Balloon knockback: the hitstun before the warp (the flight frames), 0 = no balloon. HitstunFrames is then the shorter warped lock */
+	int32 BalloonFrames = 0;
+
 	/** The state this hit left the victim's damage in (after AdvanceVictim): the KO checks read it */
 	float DamagePercentAfter = 0.f;
 	float HealthFractionAfter = 1.f;
@@ -127,6 +130,14 @@ struct FGSTN_ReactionMove
 
 	/** The lifetime of the move: the frames left of the hitstun */
 	int32 Frames = 0;
+
+	/**
+	 * Balloon knockback (FGSTN_BalloonKnockbackSettings): the flight frames the warp covers, 0 = the classic flight. With it the knockback
+	 * move flies the same path M times faster on its first frames (FGSTN_BalloonMath with BalloonM0 and BalloonEndFraction)
+	 */
+	int32 BalloonFrames = 0;
+	float BalloonM0 = 1.f;
+	float BalloonEndFraction = 0.3f;
 };
 
 /** What the impact step reads (combat-m4-hits 7b). Everything is a value of the end of the previous frame or constant data */
@@ -186,6 +197,12 @@ struct FGSTN_ReactionStepInput
 
 	/** Fraction of the knockback the victim resists (the KnockbackResistance attribute) */
 	float KnockbackResistance = 0.f;
+
+	/**
+	 * Tumble air recovery (FGSTN_TumbleRecoveryResolved::bAfterHitstun, constant data of the combatant): a tumble whose hitstun ends in the air
+	 * becomes actionable (Core.bTumbleActionable) instead of staying locked until it lands. False = the behaviour before 2026-11-16
+	 */
+	bool bTumbleAirRecovery = false;
 
 	/**
 	 * Optional DI in place of the rules' (M6 F8: a tick extension's OverrideDI, the defence's DI rules): (Launch, StickOnPlane, Up, YawFallback,
@@ -259,11 +276,30 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 	 */
 	static void StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_CombatSyncCore& Core, FGSTN_ImpactStepResult& Out);
 
-	/** The combat state locks commands: a victim in hitstun, tumble or a surface impact reaction cannot act until it is Actionable again */
+	/**
+	 * The combat state locks commands: a victim in hitstun, tumble or a surface impact reaction cannot act until it is Actionable again. A
+	 * tumble that recovered in the air (Core.bTumbleActionable) is not locked: it may act, and acting ends it
+	 */
 	static bool IsActionLocked(const FGSTN_CombatSyncCore& Core)
 	{
-		return Core.ActionState == EGSTN_ActionState::Hitstun || Core.ActionState == EGSTN_ActionState::Tumble || Core.ActionState == EGSTN_ActionState::Splat
-			|| Core.ActionState == EGSTN_ActionState::KO;
+		return Core.ActionState == EGSTN_ActionState::Hitstun || (Core.ActionState == EGSTN_ActionState::Tumble && !Core.bTumbleActionable)
+			|| Core.ActionState == EGSTN_ActionState::Splat || Core.ActionState == EGSTN_ActionState::KO;
+	}
+
+	/** A tumble that may act (its hitstun ended in the air with recovery allowed): the gate admits the recovery's commands */
+	static bool IsTumbleActionable(const FGSTN_CombatSyncCore& Core)
+	{
+		return Core.ActionState == EGSTN_ActionState::Tumble && Core.bTumbleActionable;
+	}
+
+	/** A command started from an actionable tumble: the tumble ends here (Actionable), the flight goes on as plain falling. Pure */
+	static void LeaveTumbleByAction(FGSTN_CombatSyncCore& Core)
+	{
+		if (IsTumbleActionable(Core))
+		{
+			Core.ActionState = EGSTN_ActionState::Actionable;
+			Core.bTumbleActionable = false;
+		}
 	}
 
 	/** The part of the lock that is a hit reaction (not a KO): the stick feeds DI and nothing else, and the locomotion is held (the movement lock tag is projected from it) */

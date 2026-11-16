@@ -11,6 +11,9 @@ namespace GSTNCombatNPTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveVelocityZ, "Combat.SetByCaller.MoveVelocityZ", "Z of the world velocity of a knockback or push back move (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveDecay, "Combat.SetByCaller.MoveDecay", "Decay per frame of a knockback or push back move, as a fraction");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveGravityScale, "Combat.SetByCaller.MoveGravityScale", "Gravity scale of a knockback move");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveBalloonFrames, "Combat.SetByCaller.MoveBalloonFrames", "Balloon knockback: the flight frames the warp of a knockback move covers (0 = none)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveBalloonM0, "Combat.SetByCaller.MoveBalloonM0", "Balloon knockback: the speed multiplier of the first frame");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveBalloonEnd, "Combat.SetByCaller.MoveBalloonEnd", "Balloon knockback: the fraction of the flight left when the speed-up ends");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveSeconds, "Combat.SetByCaller.MoveSeconds", "Lifetime in seconds of a knockback or push back move");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_FacingYaw, "Combat.SetByCaller.FacingYaw", "World yaw in degrees of a startup steering turn, read by UGSTN_SetFacingMoveCreator");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Mode_PvE, "Combat.Mode.PvE", "Match mode: players against the game. Has the precision reticle by default");

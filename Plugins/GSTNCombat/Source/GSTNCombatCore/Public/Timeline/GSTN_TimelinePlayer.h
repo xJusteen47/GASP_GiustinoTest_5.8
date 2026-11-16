@@ -70,7 +70,7 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineOutput
 	bool bRecoilStartsNow = false;
 
 	/**
-	 * Written by the combat clock, never by the player: the Landing track (index into Tracks) whose ContinueWithMove ended the move on this
+	 * Written by the combat clock, never by the player: the Landing or Ledge Check track (index into Tracks) whose ContinueWithMove ended the move on this
 	 * frame; the combat model starts that track's ContinueMove on the same frame. INDEX_NONE otherwise
 	 */
 	int32 LandingContinueTrack = INDEX_NONE;

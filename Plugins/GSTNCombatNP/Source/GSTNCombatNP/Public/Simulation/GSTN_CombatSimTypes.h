@@ -164,6 +164,20 @@ struct FGSTN_CombatSyncCore
 	 */
 	bool bAirborneOk = false;
 
+	/**
+	 * A Ledge Check track with the Stop action found no floor ahead on this frame (FGSTN_LedgeRules, owner 2026-11-16): the move keeps playing,
+	 * its ledge guard move holds the character in place on the ground (FGSTN_LayeredMove_LedgeGuard reads it from Mover's tick of the same frame).
+	 * Written by the clock every tick of a timeline, cleared with it. One bit on the wire inside the action part
+	 */
+	bool bLedgeStop = false;
+
+	/**
+	 * A tumbling victim whose hitstun ended in the air may act (FGSTN_TumbleRecoveryRules AfterHitstun, owner 2026-11-16): ActionState stays
+	 * Tumble (animation, impacts, tech and knockdown on landing) but the reaction no longer locks commands or movement. Written by the
+	 * victim's StepReaction; cleared by a new stagger, any started command and every way out of Tumble. One bit on the wire inside the action part
+	 */
+	bool bTumbleActionable = false;
+
 	/** 0 = the primary weapon, 1.. = the additional weapons in loadout order */
 	uint8 ActiveWeaponIndex = 0;
 
@@ -201,7 +215,7 @@ struct FGSTN_CombatSyncCore
 	bool IsActionPartDefault() const
 	{
 		return ActionState == EGSTN_ActionState::Actionable && ActiveTimeline == INDEX_NONE && ActiveSource == EGSTN_ActivationSource::Command
-			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && PausedFramesTotal == 0 && RecoilStartFrame == INDEX_NONE && !HardContact.IsSet() && StrikeTrack == INDEX_NONE && !bAirborneOk && ActiveWeaponIndex == 0
+			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && PausedFramesTotal == 0 && RecoilStartFrame == INDEX_NONE && !HardContact.IsSet() && StrikeTrack == INDEX_NONE && !bAirborneOk && !bLedgeStop && !bTumbleActionable && ActiveWeaponIndex == 0
 			&& LoadoutRevision == 0 && TableRevision == 0 && Requests.IsEmpty() && Hit.IsDefault(GetHitContext());
 	}
 
@@ -263,6 +277,12 @@ struct FGSTN_CombatSyncCore
 		uint8 AirborneOk = bAirborneOk ? 1 : 0;
 		Ar.SerializeBits(&AirborneOk, 1);
 		bAirborneOk = AirborneOk != 0;
+		uint8 LedgeStop = bLedgeStop ? 1 : 0;
+		Ar.SerializeBits(&LedgeStop, 1);
+		bLedgeStop = LedgeStop != 0;
+		uint8 TumbleActionable = bTumbleActionable ? 1 : 0;
+		Ar.SerializeBits(&TumbleActionable, 1);
+		bTumbleActionable = TumbleActionable != 0;
 		Ar << ActiveWeaponIndex;
 		Ar << LoadoutRevision;
 		Ar << TableRevision;
@@ -301,6 +321,8 @@ struct FGSTN_CombatSyncCore
 		HardContact = FGSTN_HardContactState();
 		StrikeTrack = INDEX_NONE;
 		bAirborneOk = false;
+		bLedgeStop = false;
+		bTumbleActionable = false;
 		ActiveWeaponIndex = 0;
 		LoadoutRevision = 0;
 		TableRevision = 0;
@@ -328,6 +350,8 @@ struct FGSTN_CombatSyncCore
 		UE_NP_TRACE_RECONCILE(!(HardContact == AuthorityState.HardContact), "HardContact:");
 		UE_NP_TRACE_RECONCILE(StrikeTrack != AuthorityState.StrikeTrack, "StrikeTrack:");
 		UE_NP_TRACE_RECONCILE(bAirborneOk != AuthorityState.bAirborneOk, "AirborneOk:");
+		UE_NP_TRACE_RECONCILE(bLedgeStop != AuthorityState.bLedgeStop, "LedgeStop:");
+		UE_NP_TRACE_RECONCILE(bTumbleActionable != AuthorityState.bTumbleActionable, "TumbleActionable:");
 		UE_NP_TRACE_RECONCILE(ActiveWeaponIndex != AuthorityState.ActiveWeaponIndex, "ActiveWeaponIndex:");
 		UE_NP_TRACE_RECONCILE(LoadoutRevision != AuthorityState.LoadoutRevision, "LoadoutRevision:");
 		UE_NP_TRACE_RECONCILE(TableRevision != AuthorityState.TableRevision, "TableRevision:");

@@ -6,6 +6,7 @@
 #include "AbilitySystemComponent.h"
 #include "GSTN_CombatNPTags.h"
 #include "GSTN_CombatTags.h"
+#include "Hits/GSTN_BalloonKnockback.h"
 #include "Hits/GSTN_CombatHitTags.h"
 #include "Hits/GSTN_HitMathUtils.h"
 #include "Hits/GSTN_HitRunner.h"
@@ -251,6 +252,8 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 		Hit.HitstunFrames = Knockback.HitstunFrames;
 		Hit.HitstopFrames = Hit.Outcome.bHasKnockback ? FMath::Max(Knockback.HitstopFrames, 0) : 0;
 		FVector LaunchVelocity = Knockback.LaunchVelocity;
+		// A set velocity (FixedKnockback, an applier's launch) keeps the classic flight unless the balloon rules say otherwise
+		bool bSetKnockback = Entry.Hit.FixedKnockback >= 0.f;
 
 		// What an applier asked for (a break's launch and stagger) merges as a hit of that strength would: a launch faster than the hit's own
 		// replaces it, a hitstun floor longer than the hit's lengthens it, and either makes a hit that did not stagger stagger
@@ -262,6 +265,7 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 				Hit.bStaggered = true;
 				Hit.Reaction = EGSTN_HitReaction::Launch;
 				LaunchVelocity = Request.LaunchVelocity;
+				bSetKnockback = true;
 				const UGSTN_KnockbackModel* Model = Rules->KnockbackModel.Get();
 				// A request may ask for a launch that never tumbles (a shield break goes up and lands on its feet, M6 F7)
 				Hit.bTumble = !Request.bNoTumble && Model && LaunchVelocity.Size() >= Model->Tuning.TumbleThreshold;
@@ -303,6 +307,22 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 				Hit.HitstunFrames = FMath::Max(Hit.HitstunFrames, Rules->MinStaggerLockFrames);
 			}
 			Hit.bTumble &= Hit.Reaction == EGSTN_HitReaction::Launch;
+
+			// Balloon knockback (owner 2026-11-16): on the final reaction, so a promoted push or an applier's launch is judged like the rest. The
+			// hitstun becomes the game frames the warped flight needs to cover the model's hitstun: the lock ends at the same point of the path
+			const UGSTN_KnockbackModel* BalloonModel = Rules->KnockbackModel.Get();
+			const FGSTN_BalloonKnockbackSettings* Balloon = BalloonModel ? &BalloonModel->Tuning.Balloon : nullptr;
+			if (Balloon && Balloon->bEnabled && Hit.Reaction == EGSTN_HitReaction::Launch && (Hit.bTumble || !Balloon->bTumbleOnly)
+				&& (!bSetKnockback || Balloon->bApplyToFixedKnockback))
+			{
+				const int32 Flight = FMath::Min(Hit.HitstunFrames, FGSTN_BalloonMath::MaxFlightFrames);
+				const double M0 = FGSTN_BalloonMath::InitialMultiplier(*Balloon, Flight);
+				if (M0 > 1.0)
+				{
+					Hit.BalloonFrames = Flight;
+					Hit.HitstunFrames = FGSTN_BalloonMath::GameFrames(M0, Balloon->EndFraction, Flight) + (Hit.HitstunFrames - Flight);
+				}
+			}
 		}
 
 		const bool bInHitstunNow = IsActionLocked(Core);
@@ -314,9 +334,12 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 				Out.bCancelledMove = true;
 			}
 			Core.ActionState = Hit.bTumble ? EGSTN_ActionState::Tumble : EGSTN_ActionState::Hitstun;
+			// A new stagger locks again, also a tumble that had recovered
+			Core.bTumbleActionable = false;
 			Core.Hit.SetPendingReaction(Hit.Reaction);
 			Core.Hit.ImpactProfileQ = Entry.Hit.Impact.Pack();
 			Core.Hit.SetPendingLaunch(Hit.Reaction == EGSTN_HitReaction::StaggerInPlace ? FVector::ZeroVector : LaunchVelocity);
+			Core.Hit.PendingBalloonFrames = static_cast<uint8>(FMath::Clamp(Hit.BalloonFrames, 0, FGSTN_BalloonMath::MaxFlightFrames));
 			// A new staggering hit starts its own held-direction drift budget (M6 F8)
 			Core.Hit.SDIDistanceUsed = 0;
 			bAnyStaggered = true;
@@ -624,6 +647,7 @@ void FGSTN_CombatVictim::EndReaction(FGSTN_CombatSyncCore& Core, int32 Frame)
 		return;
 	}
 	Core.ActionState = EGSTN_ActionState::Actionable;
+	Core.bTumbleActionable = false;
 	Core.Hit.ClearPendingReaction();
 	Core.Hit.HitstunEndFrame = Frame;
 	Core.Hit.ImpactEndFrame = INDEX_NONE;
@@ -697,7 +721,8 @@ bool FGSTN_CombatVictim::ResolveHitFacing(const UGSTN_CombatRules* Rules, const 
 FGSTN_ReactionMove FGSTN_CombatVictim::StepReaction(const FGSTN_ReactionStepInput& In, FGSTN_CombatSyncCore& Core)
 {
 	FGSTN_ReactionMove Move;
-	if (!IsActionLocked(Core))
+	// A recovered tumble is not locked but still tumbles: it is followed to the ground below
+	if (!IsActionLocked(Core) && !IsTumbleActionable(Core))
 	{
 		return Move;
 	}
@@ -737,6 +762,16 @@ FGSTN_ReactionMove FGSTN_CombatVictim::StepReaction(const FGSTN_ReactionStepInpu
 			}
 			Move.Velocity = Influenced * Pass;
 			Move.GravityScale = 1.f;
+			if (const uint8 Flight = Core.Hit.PendingBalloonFrames)
+			{
+				const UGSTN_KnockbackModel* Model = In.Rules ? In.Rules->KnockbackModel.Get() : nullptr;
+				if (Model)
+				{
+					Move.BalloonFrames = Flight;
+					Move.BalloonM0 = static_cast<float>(FGSTN_BalloonMath::InitialMultiplier(Model->Tuning.Balloon, Flight));
+					Move.BalloonEndFraction = Model->Tuning.Balloon.EndFraction;
+				}
+			}
 			// A tumbling victim keeps the contact probe of its knockback move until it lands, which can be long after the hitstun
 			Move.Frames = Core.ActionState == EGSTN_ActionState::Tumble ? FMath::Max(Frames, TumbleProbeFrames) : Frames;
 			break;
@@ -756,10 +791,16 @@ FGSTN_ReactionMove FGSTN_CombatVictim::StepReaction(const FGSTN_ReactionStepInpu
 
 	if (!Core.Hit.HasPendingReaction() && Frame >= Core.Hit.HitstunEndFrame && Frame >= Core.HitstopEndFrame)
 	{
-		// Hitstun is over. A tumble goes on until the victim stands on something
+		// Hitstun is over. A tumble goes on until the victim stands on something; with air recovery it may act in the meantime (owner
+		// 2026-11-16, option B): it keeps tumbling (landing is still a tumble landing) until a command it starts ends it
 		if (Core.ActionState == EGSTN_ActionState::Hitstun || (Core.ActionState == EGSTN_ActionState::Tumble && In.bGrounded))
 		{
 			Core.ActionState = EGSTN_ActionState::Actionable;
+			Core.bTumbleActionable = false;
+		}
+		else if (Core.ActionState == EGSTN_ActionState::Tumble && In.bTumbleAirRecovery)
+		{
+			Core.bTumbleActionable = true;
 		}
 	}
 	return Move;

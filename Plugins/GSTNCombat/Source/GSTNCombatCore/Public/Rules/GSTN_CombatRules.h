@@ -13,6 +13,7 @@
 #include "Hits/GSTN_KnockbackModel.h"
 #include "Hits/GSTN_ReactionTypes.h"
 #include "Hits/GSTN_RelationshipResolver.h"
+#include "Hits/GSTN_TumbleRecovery.h"
 #include "Rules/GSTN_CombatStep.h"
 #include "Timeline/GSTN_Pushbox.h"
 #include "GSTN_CombatRules.generated.h"
@@ -165,6 +166,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits", meta = (ClampMin = "0.0", ClampMax = "180.0", ForceUnits = "Degrees",
 		EditCondition = "bTurnToAttackerWithoutKnockback"))
 	float TurnToAttackerMinAngleDeg = 90.f;
+
+	/**
+	 * Tumble air recovery (owner 2026-11-16, option B): AfterHitstun lets a tumbling victim act in the air once its hitstun ends (landing
+	 * without acting is still a tumble landing). A kit's FGSTN_TumbleRecoveryExtension replaces the allowed commands; a combat component's
+	 * TumbleRecoveryOverride (players vs AI and dummies) replaces the mode
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
+	FGSTN_TumbleRecoveryRules TumbleRecovery;
 
 	/** The shortest hitstun lock of a staggered victim (frames); read when the victim side applies the reaction (H9) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits", meta = (ClampMin = "0", ForceUnits = "Frames"))

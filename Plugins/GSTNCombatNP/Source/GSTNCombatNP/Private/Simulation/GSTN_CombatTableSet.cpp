@@ -16,6 +16,7 @@
 #include "Serialization/MemoryWriter.h"
 #include "Timeline/GSTN_CombatTimeline.h"
 #include "Timeline/GSTN_Landing.h"
+#include "Timeline/GSTN_Ledge.h"
 
 namespace
 {
@@ -257,11 +258,19 @@ namespace
 		return Class && Class->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()) ? Class : nullptr;
 	}
 
-	/** The ContinueMove class of a Landing track (loaded with the timeline's content like a follow-up), null when it is not one or has none */
+	/**
+	 * The ContinueMove class of a Landing or Ledge Check track (loaded with the timeline's content like a follow-up), null when it is not one or
+	 * has none
+	 */
 	UClass* ResolveLandingContinueClass(const FGSTN_CombatTimelineData* Data, int32 TrackIndex)
 	{
 		const FGSTN_TimelineTrack_Landing* Landing = Data && Data->Tracks.IsValidIndex(TrackIndex) ? Data->Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack_Landing>() : nullptr;
 		UClass* Class = Landing && Landing->Action == EGSTN_LandingAction::ContinueWithMove && !Landing->ContinueMove.IsNull() ? Landing->ContinueMove.Get() : nullptr;
+		if (!Landing && Data)
+		{
+			const TSoftClassPtr<UObject>* LedgeContinue = FGSTN_LedgeRules::GetContinueMove(*Data, TrackIndex);
+			Class = LedgeContinue ? LedgeContinue->Get() : nullptr;
+		}
 		return Class && Class->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()) ? Class : nullptr;
 	}
 }

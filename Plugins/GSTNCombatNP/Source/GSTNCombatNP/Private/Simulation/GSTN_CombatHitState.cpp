@@ -174,6 +174,8 @@ FGSTN_HitSyncState FGSTN_HitSyncState::Canonical(const FGSTN_HitLiveContext& Con
 		{
 			Out.PendingLaunchQ[Axis] = PendingLaunchQ[Axis];
 		}
+		// The balloon belongs to the launch: without one there is nothing to warp (and nothing of it goes on the wire)
+		Out.PendingBalloonFrames = (PendingLaunchQ[0] | PendingLaunchQ[1] | PendingLaunchQ[2]) != 0 ? PendingBalloonFrames : 0;
 		Out.SDIDistanceUsed = SDIDistanceUsed;
 	}
 	return Out;
@@ -183,7 +185,7 @@ bool FGSTN_HitSyncState::operator==(const FGSTN_HitSyncState& Other) const
 {
 	if (!(MoveOrigin == Other.MoveOrigin) || HitTargetsNum != Other.HitTargetsNum || HitConfirmFlags != Other.HitConfirmFlags
 		|| HitstunEndFrame != Other.HitstunEndFrame || ImpactEndFrame != Other.ImpactEndFrame || PendingReaction != Other.PendingReaction
-		|| SDIDistanceUsed != Other.SDIDistanceUsed || ImpactProfileQ != Other.ImpactProfileQ)
+		|| SDIDistanceUsed != Other.SDIDistanceUsed || ImpactProfileQ != Other.ImpactProfileQ || PendingBalloonFrames != Other.PendingBalloonFrames)
 	{
 		return false;
 	}
@@ -299,6 +301,12 @@ void FGSTN_HitSyncState::NetSerialize(FArchive& Ar, const FGSTN_HitLiveContext& 
 		for (int32 Axis = 0; Axis < 3; ++Axis)
 		{
 			Ar << Local.PendingLaunchQ[Axis];
+		}
+		uint8 bBalloon = Local.PendingBalloonFrames != 0 ? 1 : 0;
+		Ar.SerializeBits(&bBalloon, 1);
+		if (bBalloon)
+		{
+			Ar << Local.PendingBalloonFrames;
 		}
 	}
 	if (Mask & PartSDI)

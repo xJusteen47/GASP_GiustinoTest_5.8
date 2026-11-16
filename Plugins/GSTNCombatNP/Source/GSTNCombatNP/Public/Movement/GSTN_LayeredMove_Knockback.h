@@ -44,6 +44,21 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_Knockback : public FLayeredMoveBase
 	UPROPERTY()
 	float GravityScale = 1.f;
 
+	/**
+	 * Balloon knockback (FGSTN_BalloonKnockbackSettings, owner 2026-11-16): the flight frames the warp covers, 0 = the classic flight. While the
+	 * warp runs (FGSTN_BalloonMath: frame n flies M(n) flight frames) the move overrides the velocity with M(n) x the classic flight's velocity
+	 * at the warped time, so the path is the classic one, flown faster. From the first frame at M = 1 the falling mode takes over as usual
+	 */
+	UPROPERTY()
+	uint8 BalloonFrames = 0;
+
+	/** The warp's first frame multiplier and the flight fraction left when it ends */
+	UPROPERTY()
+	float BalloonM0 = 1.f;
+
+	UPROPERTY()
+	float BalloonEndFraction = 0.3f;
+
 	/** Frames since the move started, as of the last GenerateMove */
 	UPROPERTY()
 	int32 ElapsedFrames = 0;
