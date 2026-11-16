@@ -33,7 +33,7 @@ FVector UGSTN_HitMathUtils::ProjectOnPlane(const FVector& V, const FVector& Up)
 	return UnitUp.IsZero() ? V : V - UnitUp * FVector::DotProduct(V, UnitUp);
 }
 
-FVector UGSTN_HitMathUtils::LaunchDirection(EGSTN_YawSource YawSource, float AngleDeg, EGSTN_SpecialAngle SpecialAngle, const FVector& Up, const FVector& AttackerFacing, const FVector& HitboxToVictim, const FVector& HitboxVelocity, bool bVictimGrounded, float Knockback, const FGSTN_SakuraiParams& Sakurai)
+FVector UGSTN_HitMathUtils::LaunchDirection(EGSTN_YawSource YawSource, float AngleDeg, EGSTN_SpecialAngle SpecialAngle, const FVector& Up, const FVector& AttackerFacing, const FVector& HitboxToVictim, const FVector& HitboxVelocity, bool bVictimGrounded, float Knockback, const FGSTN_SakuraiParams& Sakurai, float YawOffsetDeg)
 {
 	const FVector UnitUp = Up.GetSafeNormal();
 	if (UnitUp.IsZero())
@@ -52,7 +52,12 @@ FVector UGSTN_HitMathUtils::LaunchDirection(EGSTN_YawSource YawSource, float Ang
 
 	const FVector& Preferred = YawSource == EGSTN_YawSource::HitboxToVictim ? HitboxToVictim
 		: YawSource == EGSTN_YawSource::HitboxVelocity ? HitboxVelocity : AttackerFacing;
-	const FVector Horizontal = FirstHorizontal(UnitUp, Preferred, AttackerFacing, HitboxToVictim);
+	FVector Horizontal = FirstHorizontal(UnitUp, Preferred, AttackerFacing, HitboxToVictim);
+	if (!FMath::IsNearlyZero(YawOffsetDeg))
+	{
+		// About the unit Up, so the result stays on the plane and unit length; a positive angle turns right as a positive yaw does
+		Horizontal = Horizontal.RotateAngleAxis(YawOffsetDeg, UnitUp).GetSafeNormal();
+	}
 
 	double Angle = AngleDeg;
 	if (SpecialAngle == EGSTN_SpecialAngle::Sakurai3D)

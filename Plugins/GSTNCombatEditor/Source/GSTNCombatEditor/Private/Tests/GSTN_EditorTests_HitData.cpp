@@ -165,6 +165,21 @@ bool FGSTN_HitDataPreviewTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the effective angle is the authored one"), FMath::IsNearlyEqual(Preview.EffectiveAngleDeg, 45.f, 1e-3f));
 	TestTrue(TEXT("the line says what the model said"), Preview.Line.ToString().Contains(TEXT("920")));
 
+	// The yaw offset reaches the preview: 90 turns the launch from +X to the attacker's right (+Y), the elevation and the knockback stay
+	FGSTN_HitData Sideways = Hit;
+	Sideways.YawOffsetDeg = 90.f;
+	const FGSTN_KnockbackPreview SidewaysPreview = GSTNHitDataPreview::Compute(Sideways, Rules.Get(), Victim);
+	TestTrue(TEXT("yaw offset 90: forward part gone, right part positive"), FMath::IsNearlyZero(SidewaysPreview.LaunchDirection.X, 1e-9) && SidewaysPreview.LaunchDirection.Y > 0.7);
+	TestTrue(TEXT("yaw offset keeps the elevation"), FMath::IsNearlyEqual(SidewaysPreview.EffectiveAngleDeg, 45.f, 1e-3f));
+	TestTrue(TEXT("yaw offset keeps the knockback"), FMath::IsNearlyEqual(SidewaysPreview.Result.Knockback, Preview.Result.Knockback, 1e-6));
+	TestTrue(TEXT("the line names the sideways turn"), SidewaysPreview.Line.ToString().Contains(TEXT("90 deg sideways")));
+
+	// The compass geometry: 0 points up the widget, +90 to the right, -90 to the left (screen y grows downwards)
+	const FVector2D Centre(50.0, 50.0);
+	TestTrue(TEXT("compass 0: up"), GSTNHitDataDial::YawArrowTip(Centre, 10.0, 0.f).Equals(FVector2D(50.0, 40.0), 1e-9));
+	TestTrue(TEXT("compass +90: right"), GSTNHitDataDial::YawArrowTip(Centre, 10.0, 90.f).Equals(FVector2D(60.0, 50.0), 1e-9));
+	TestTrue(TEXT("compass -90: left"), GSTNHitDataDial::YawArrowTip(Centre, 10.0, -90.f).Equals(FVector2D(40.0, 50.0), 1e-9));
+
 	// The victim's weight moves it the way the model says: twice the weight, half the knockback
 	Victim.Weight = 100.f;
 	TestTrue(TEXT("twice the weight"), FMath::IsNearlyEqual(GSTNHitDataPreview::Compute(Hit, Rules.Get(), Victim).Result.Knockback, 460.0, 1e-6));

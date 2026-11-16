@@ -153,7 +153,7 @@ EGSTN_StepResult UGSTN_HitStep_ComputeKnockback::Resolve_Implementation(const FG
 	}
 
 	Input.LaunchDirection = UGSTN_HitMathUtils::LaunchDirection(Incoming.Hit.YawSource, Incoming.Hit.AngleDeg, Incoming.Hit.SpecialAngle, Incoming.Up,
-		Incoming.AttackerFacing, Incoming.HitboxToVictim, Incoming.HitboxVelocity, Incoming.bVictimGrounded, static_cast<float>(Knockback), View.Rules->Sakurai);
+		Incoming.AttackerFacing, Incoming.HitboxToVictim, Incoming.HitboxVelocity, Incoming.bVictimGrounded, static_cast<float>(Knockback), View.Rules->Sakurai, Incoming.Hit.YawOffsetDeg);
 
 	Out.bHasKnockback = true;
 	Out.Knockback = Model->Compute(Input);

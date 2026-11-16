@@ -11,6 +11,7 @@
 #include "SGameplayTagCombo.h"
 #include "Timeline/Details/GSTN_HitDataMath.h"
 #include "Timeline/Details/SGSTN_AngleDial.h"
+#include "Timeline/Details/SGSTN_YawCompass.h"
 #include "Widgets/Input/SCheckBox.h"
 #include "Widgets/Input/SSpinBox.h"
 #include "Widgets/SBoxPanel.h"
@@ -52,7 +53,7 @@ TArray<FName> FGSTN_HitDataCustomization::GetLaidOutProperties()
 	return {
 		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, Damage), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, ShieldDamage),
 		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, BaseKnockback), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, KnockbackGrowth), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, FixedKnockback),
-		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, AngleDeg), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, SpecialAngle), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, YawSource),
+		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, AngleDeg), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, SpecialAngle), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, YawSource), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, YawOffsetDeg),
 		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, HitstunMultiplier),
 		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, HitstopMode), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, HitstopMultiplier), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, AttackerHitstopMultiplier),
 		GET_MEMBER_NAME_CHECKED(FGSTN_HitData, HitstopFramesOverride), GET_MEMBER_NAME_CHECKED(FGSTN_HitData, AttackerHitstopFramesOverride),
@@ -304,6 +305,50 @@ void FGSTN_HitDataCustomization::CustomizeChildren(TSharedRef<IPropertyHandle> P
 			.Font(IPropertyTypeCustomizationUtils::GetRegularFont())
 			.ColorAndOpacity(FSlateColor::UseSubduedForeground())
 			.Text_Lambda([YawHandle]() { return GSTNHitDataText::DescribeYawSource(static_cast<EGSTN_YawSource>(GetEnumValue(YawHandle))); })
+		];
+	AddRows(Knockback, { GET_MEMBER_NAME_CHECKED(FGSTN_HitData, YawOffsetDeg) });
+	const TSharedPtr<IPropertyHandle> YawOffsetHandle = Child(GET_MEMBER_NAME_CHECKED(FGSTN_HitData, YawOffsetDeg));
+	const auto ReadYawOffset = [YawOffsetHandle]()
+	{
+		float Value = 0.f;
+		if (YawOffsetHandle.IsValid() && YawOffsetHandle->IsValidHandle())
+		{
+			YawOffsetHandle->GetValue(Value);
+		}
+		return Value;
+	};
+	Knockback.AddWidgetRow()
+		.NameContent()
+		[
+			SNew(STextBlock).Font(IPropertyTypeCustomizationUtils::GetRegularFont()).Text(LOCTEXT("CompassLabel", "Launch seen from above"))
+		]
+		.ValueContent()
+		.MinDesiredWidth(300.f)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(FMargin(0.f, 2.f, 8.f, 2.f))
+			[
+				SNew(SBox)
+				.WidthOverride(SGSTN_YawCompass::GetCompassSize().X)
+				.HeightOverride(SGSTN_YawCompass::GetCompassSize().Y)
+				.ToolTipText(LOCTEXT("CompassTip", "Top view. The grey line is the way the yaw source picks, the orange arrow is the launch after Yaw Offset Deg. Set the number above to turn it."))
+				[
+					SNew(SGSTN_YawCompass)
+					.YawOffset_Lambda(ReadYawOffset)
+					.bDimmed_Lambda([SpecialHandle]() { return GetEnumValue(SpecialHandle) == static_cast<uint8>(EGSTN_SpecialAngle::AutoLink); })
+				]
+			]
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.f)
+			.VAlign(VAlign_Center)
+			[
+				SNew(STextBlock)
+				.AutoWrapText(true)
+				.Font(IPropertyTypeCustomizationUtils::GetRegularFont())
+				.Text_Lambda([ReadYawOffset]() { return GSTNHitDataText::DescribeYawOffset(ReadYawOffset()); })
+			]
 		];
 
 	IDetailGroup& Hitstun = ChildBuilder.AddGroup(TEXT("Hitstun"), LOCTEXT("GroupHitstun", "Hitstun"));

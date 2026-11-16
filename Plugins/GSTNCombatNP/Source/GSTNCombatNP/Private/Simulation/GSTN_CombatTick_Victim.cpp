@@ -292,7 +292,7 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 				Hit.Reaction = EGSTN_HitReaction::Launch;
 				const FGSTN_ResolvedHit& Resolved = Context.Incoming;
 				const FVector Direction = UGSTN_HitMathUtils::LaunchDirection(Resolved.Hit.YawSource, Resolved.Hit.AngleDeg, Resolved.Hit.SpecialAngle, Resolved.Up,
-					Resolved.AttackerFacing, Resolved.HitboxToVictim, Resolved.HitboxVelocity, In.bGrounded, Knockback.Knockback, Rules->Sakurai);
+					Resolved.AttackerFacing, Resolved.HitboxToVictim, Resolved.HitboxVelocity, In.bGrounded, Knockback.Knockback, Rules->Sakurai, Resolved.Hit.YawOffsetDeg);
 				LaunchVelocity = Direction * Knockback.Knockback;
 				const UGSTN_KnockbackModel* Model = Rules->KnockbackModel.Get();
 				Hit.bTumble = Model && Knockback.Knockback >= Model->Tuning.TumbleThreshold;

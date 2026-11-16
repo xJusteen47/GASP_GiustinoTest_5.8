@@ -29,6 +29,7 @@ FGSTN_HitData UGSTN_HitDataUtils::ApplyVariant(const FGSTN_HitData& Hit, const F
 	GSTN_TAKE_FIELD(AngleDeg)
 	GSTN_TAKE_FIELD(SpecialAngle)
 	GSTN_TAKE_FIELD(YawSource)
+	GSTN_TAKE_FIELD(YawOffsetDeg)
 	GSTN_TAKE_FIELD(HitstunMultiplier)
 	GSTN_TAKE_FIELD(HitstopMode)
 	GSTN_TAKE_FIELD(HitstopMultiplier)

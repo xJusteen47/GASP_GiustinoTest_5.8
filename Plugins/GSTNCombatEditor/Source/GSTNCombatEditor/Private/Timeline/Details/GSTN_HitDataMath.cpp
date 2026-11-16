@@ -43,6 +43,12 @@ FVector2D GSTNHitDataDial::PlaneComponents(float AngleDeg)
 	return FVector2D(FMath::Cos(Radians), FMath::Sin(Radians));
 }
 
+FVector2D GSTNHitDataDial::YawArrowTip(const FVector2D& Centre, double Radius, float YawOffsetDeg)
+{
+	const double Radians = FMath::DegreesToRadians(static_cast<double>(YawOffsetDeg));
+	return FVector2D(Centre.X + Radius * FMath::Sin(Radians), Centre.Y - Radius * FMath::Cos(Radians));
+}
+
 float GSTNHitDataDial::GetSnapDegrees(bool bShift, bool bCtrl)
 {
 	return bCtrl ? 15.f : (bShift ? 5.f : 1.f);
@@ -56,6 +62,18 @@ FText GSTNHitDataText::DescribeYawSource(EGSTN_YawSource YawSource)
 	case EGSTN_YawSource::HitboxVelocity: return LOCTEXT("YawHitboxVelocity", "Sends the victim the way the hitbox is moving: a sweeping blade carries them along.");
 	default: return LOCTEXT("YawAttackerFacing", "Sends the victim the way the attacker faces when the hit lands (the default).");
 	}
+}
+
+FText GSTNHitDataText::DescribeYawOffset(float YawOffsetDeg)
+{
+	const int32 Rounded = FMath::RoundToInt(YawOffsetDeg);
+	if (Rounded == 0)
+	{
+		return LOCTEXT("YawOffsetNone", "Straight along the yaw source: no sideways turn.");
+	}
+	return Rounded > 0
+		? FText::Format(LOCTEXT("YawOffsetRight", "Turned {0} deg to the right of the yaw source (seen from above)."), FText::AsNumber(Rounded))
+		: FText::Format(LOCTEXT("YawOffsetLeft", "Turned {0} deg to the left of the yaw source (seen from above)."), FText::AsNumber(-Rounded));
 }
 
 FText GSTNHitDataText::DescribeSpecialAngle(EGSTN_SpecialAngle SpecialAngle)
@@ -145,7 +163,7 @@ FGSTN_KnockbackPreview GSTNHitDataPreview::Compute(const FGSTN_HitData& Hit, con
 		Knockback = Model->Compute(Input).Knockback;
 	}
 	Input.LaunchDirection = UGSTN_HitMathUtils::LaunchDirection(Hit.YawSource, Hit.AngleDeg, Hit.SpecialAngle, Input.Up, Forward, Forward, FVector::ZeroVector,
-		Victim.bGrounded, static_cast<float>(Knockback), Rules->Sakurai);
+		Victim.bGrounded, static_cast<float>(Knockback), Rules->Sakurai, Hit.YawOffsetDeg);
 	Preview.LaunchDirection = Input.LaunchDirection;
 	Preview.EffectiveAngleDeg = static_cast<float>(FMath::RadiansToDegrees(FMath::Asin(FMath::Clamp(Input.LaunchDirection.Z, -1.0, 1.0))));
 
@@ -161,9 +179,10 @@ FGSTN_KnockbackPreview GSTNHitDataPreview::Compute(const FGSTN_HitData& Hit, con
 	const FText Tier = Result.bStaggered
 		? (Result.bTumble ? FText::Format(LOCTEXT("PreviewTumble", "{0} (tumble)"), DescribeReaction(Result.Reaction)) : DescribeReaction(Result.Reaction))
 		: LOCTEXT("PreviewNoTier", "no reaction");
-	Preview.Line = FText::Format(LOCTEXT("PreviewLine", "{0}: knockback {1} cm/s, {2}; {3}; hitstop {4} f (attacker {5} f). Attacker faces the victim; direction {6} deg above the plane."),
+	Preview.Line = FText::Format(LOCTEXT("PreviewLine", "{0}: knockback {1} cm/s, {2}; {3}; hitstop {4} f (attacker {5} f). Attacker faces the victim; direction {6} deg above the plane, {7} deg sideways (+ right)."),
 		Victim_, FText::AsNumber(Result.Knockback, &OneDecimal), Tier, Stagger, FText::AsNumber(Result.HitstopFrames), FText::AsNumber(Result.AttackerHitstopFrames),
-		FText::AsNumber(FMath::RoundToInt(Preview.EffectiveAngleDeg)));
+		FText::AsNumber(FMath::RoundToInt(Preview.EffectiveAngleDeg)),
+		FText::AsNumber(FMath::RoundToInt(FMath::RadiansToDegrees(FMath::Atan2(Input.LaunchDirection.Y, Input.LaunchDirection.X)))));
 	return Preview;
 }
 
