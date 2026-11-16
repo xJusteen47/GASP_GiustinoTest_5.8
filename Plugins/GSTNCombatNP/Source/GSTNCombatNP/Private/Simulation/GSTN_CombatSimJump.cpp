@@ -64,6 +64,7 @@ bool UGSTN_CombatSimComponent::BuildJumpParams(FGSTN_JumpParams& OutParams) cons
 void UGSTN_CombatSimComponent::StepJump(int32 Frame, uint32 HeldButtons, FGSTN_CombatSyncCore& Core)
 {
 	bFrameJumpValid = false;
+	bFrameInCoyote = false;
 
 	// Without a Mover component or the combat stats the jump state stays what it is (the default): nothing of this runs
 	const UGSTN_MoverSimStateTracker* Tracker = GetJumpTracker();
@@ -103,6 +104,8 @@ void UGSTN_CombatSimComponent::StepJump(int32 Frame, uint32 HeldButtons, FGSTN_C
 	{
 		Core.Jump.CoyoteFramesLeft = static_cast<uint8>(FMath::Clamp(FrameJumpParams.CoyoteFrames, 0, 255));
 	}
+	// In the air with the jump's coyote window still open: the ground moves that may take off still count as ground moves (AppendContextTags)
+	bFrameInCoyote = !FrameJumpSample.bGrounded && Core.Jump.CoyoteFramesLeft > 0;
 }
 
 bool UGSTN_CombatSimComponent::IsJumpBindingAllowed(int32 BindingIndex) const

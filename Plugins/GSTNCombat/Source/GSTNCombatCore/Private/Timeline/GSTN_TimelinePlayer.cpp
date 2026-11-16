@@ -73,6 +73,7 @@ void FGSTN_TimelineOutput::Reset()
 	TotalFrames = 0;
 	bFinished = false;
 	bBusy = false;
+	LandingContinueTrack = INDEX_NONE;
 	bRecoil = false;
 	bTailCancel = false;
 	TailStartFrame = INDEX_NONE;

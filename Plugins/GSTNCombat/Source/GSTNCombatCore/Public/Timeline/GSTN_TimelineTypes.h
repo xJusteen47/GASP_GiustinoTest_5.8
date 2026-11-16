@@ -24,6 +24,20 @@ class UCurveVector;
  */
 
 /** How the character turns when the timeline starts (combat.md 8.4) */
+/**
+ * Where a move lives (owner 2026-11-16). Any: today's behaviour, the move plays on wherever the character is. Ground: a ground move; if the
+ * character is in the air while it runs (walked off a ledge, pushed, teleported) the move is CANCELLED, except from the take-off window on
+ * (FGSTN_CombatTimelineData::TakeoffFromFrame: a ground move that sends the character up, the Smash 4 wizard's dropkick) or when it was
+ * started in coyote time. Air: an aerial; what a landing does is the Landing track's (FGSTN_TimelineTrack_Landing), none = plays on
+ */
+UENUM(BlueprintType)
+enum class EGSTN_MoveGroundRule : uint8
+{
+	Any,
+	Ground,
+	Air
+};
+
 UENUM(BlueprintType)
 enum class EGSTN_AimPolicy : uint8
 {
@@ -766,6 +780,27 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Chain", meta = (AllowedClasses = "/Script/GSTNCombatNP.GSTN_GA_BaseCombat"))
 	TSoftClassPtr<UObject> FollowUpTimeline;
 
+	/** Ground, air or either (EGSTN_MoveGroundRule). Any = no rule, the behaviour of every timeline made before 2026-11-16 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ground")
+	EGSTN_MoveGroundRule GroundRule = EGSTN_MoveGroundRule::Any;
+
+	/**
+	 * Ground moves only: the timeline frame from which the character may leave the ground (the take-off), -1 = never (any air frame cancels).
+	 * A move with a take-off may also start in coyote time (its binding takes Input.Context.Coyote as Grounded)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ground", meta = (EditCondition = "GroundRule == EGSTN_MoveGroundRule::Ground", ClampMin = "-1", ForceUnits = "Frames"))
+	int32 TakeoffFromFrame = -1;
+
+	/** Ground moves only: the take-off must happen before this frame (exclusive); later, an air frame cancels again. -1 = until the end */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ground", meta = (EditCondition = "GroundRule == EGSTN_MoveGroundRule::Ground && TakeoffFromFrame >= 0", ClampMin = "-1", ForceUnits = "Frames"))
+	int32 TakeoffUntilFrame = -1;
+
+	/** A ground move that may take off (and so may start in coyote time) */
+	bool AllowsTakeoff() const { return GroundRule == EGSTN_MoveGroundRule::Ground && TakeoffFromFrame >= 0; }
+
+	/** Frame is inside the take-off window */
+	bool IsTakeoffFrame(int32 Frame) const { return AllowsTakeoff() && Frame >= TakeoffFromFrame && (TakeoffUntilFrame < 0 || Frame < TakeoffUntilFrame); }
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim")
 	EGSTN_AimPolicy AimPolicy = EGSTN_AimPolicy::KeepFacing;
 
@@ -910,16 +945,11 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 		return bHasRicochetResponse && RicochetResponse.IsAuthored() ? &RicochetResponse : nullptr;
 	}
 
-	/** The response of a hitbox group: its own when authored, else the move's; null = the caller's fallbacks */
-	const FGSTN_RicochetResponse* GetRicochetResponse(int32 TrackIndex) const
-	{
-		const FGSTN_TimelineTrack_Hitbox* Track = GetHitboxTrack(TrackIndex);
-		if (Track && Track->bHasRicochetResponse && Track->RicochetResponse.IsAuthored())
-		{
-			return &Track->RicochetResponse;
-		}
-		return GetRicochetResponse();
-	}
+	/**
+	 * The response of a hitbox group: its own when authored, else the move's; null = the caller's fallbacks. A Landing track's index gives its
+	 * landing lag (FGSTN_TimelineTrack_Landing: the lag is played by the recoil player), never the move's response
+	 */
+	const FGSTN_RicochetResponse* GetRicochetResponse(int32 TrackIndex) const;
 
 	/**
 	 * The baked root-relative transform of a socket at a timeline frame. A frame past the baked range holds the last one and

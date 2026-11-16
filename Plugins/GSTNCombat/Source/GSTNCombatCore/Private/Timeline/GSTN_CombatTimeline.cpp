@@ -1,5 +1,6 @@
 #include "Timeline/GSTN_CombatTimeline.h"
 #include "Timeline/GSTN_TimelineValidation.h"
+#include "Timeline/GSTN_Landing.h"
 
 #if WITH_EDITOR
 #include "Input/GSTN_CombatSettings.h"
@@ -81,6 +82,23 @@ int32 FGSTN_CombatTimelineData::GetActiveEndFrame() const
 		}
 	}
 	return End;
+}
+
+const FGSTN_RicochetResponse* FGSTN_CombatTimelineData::GetRicochetResponse(int32 TrackIndex) const
+{
+	if (Tracks.IsValidIndex(TrackIndex))
+	{
+		if (const FGSTN_TimelineTrack_Landing* Landing = Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack_Landing>())
+		{
+			return Landing->Action == EGSTN_LandingAction::LandingLag && Landing->Lag.IsAuthored() ? &Landing->Lag : nullptr;
+		}
+	}
+	const FGSTN_TimelineTrack_Hitbox* Track = GetHitboxTrack(TrackIndex);
+	if (Track && Track->bHasRicochetResponse && Track->RicochetResponse.IsAuthored())
+	{
+		return &Track->RicochetResponse;
+	}
+	return GetRicochetResponse();
 }
 
 FGSTN_StrikeSettings FGSTN_CombatTimelineData::ResolveStrike(int32 TrackIndex) const

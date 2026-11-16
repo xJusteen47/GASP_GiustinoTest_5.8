@@ -762,6 +762,9 @@ private:
 	FGSTN_JumpParams FrameJumpParams;
 	bool bFrameJumpValid = false;
 
+	/** In the air inside the coyote window this frame (StepJump), read by AppendContextTags for Input.Context.Coyote. Frame scratch, never across frames */
+	bool bFrameInCoyote = false;
+
 	/** The authored gravity next to what the phases wrote over it; configuration mirrored from outside the simulation, see FGSTN_GravityBase */
 	FGSTN_GravityBase GravityBase;
 

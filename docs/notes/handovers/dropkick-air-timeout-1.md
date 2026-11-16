@@ -26,13 +26,22 @@ Branch `claude/project-thread-pcq7jx` from `claude/integ-night-1116` 194ad7e3. C
 - Landing lag exists only for movement moves (`UGSTN_GA_MoveTimeline`: dash, air dodge): movement track `bCancelOnLand` + `LandingLagFrames`,
   checked in the ability (`GSTN_GA_Dash.cpp` OnSimulationTick), not in the combat clock. Spin Drill has its own.
 
-## 3. Proposal: per-move landing rule (not built) — "da confermare" to owner
-- New track `Landing` (generalises the hold's Land jump): windows `[StartFrame, EndFrame)` with `Action`: `AutoCancel` (end, optional
-  `LagFrames`), `LandingLag` (jump to a lag part of the timeline/montage section, own actionable frame), `Continue` (jump to a ground
-  continuation part: the owner's "attack continues with a ground clip if landing before the startup ends"), `None` (play on = today).
-- Same mechanics as Hold Until Landed (clock jump + montage section jump, already written and rollback-safe); Hold becomes `Landing` +
-  `bHoldInAir`. Default for aerials with no track = today's behaviour, so nothing breaks.
-- Cost: ~10-14 $ Opus (core rule + clock + montage reuse + tests + timeline editor colour); clips are anim work apart.
+## 3. Ground rules + Landing track (BUILT in code, owner 2026-11-16 "parti"; not compiled)
+- `FGSTN_CombatTimelineData::GroundRule` (Any default = today / Ground / Air), `TakeoffFromFrame` / `TakeoffUntilFrame` (Ground only).
+  Ground move in the air -> CANCELLED (ledge, push, teleport), except: from a take-off inside the window (wizard dropkick) or a coyote start.
+  Synced bit `FGSTN_CombatSyncCore::bAirborneOk` (1 bit on the wire, cleared on ground/with the timeline).
+- New track `FGSTN_TimelineTrack_Landing` (`GSTN_Landing.h`): window + `Action` AutoCancel / LandingLag (`Lag` = an FGSTN_RicochetResponse:
+  frames, montage, cue, movement; played by the RECOIL player via `StrikeTrack` = landing track index) / ContinueWithMove (`ContinueMove`
+  class, started on the touchdown frame like a FollowUp; registered by `AppendFollowUps`). Outside windows = plays on. Ground moves land only
+  after a take-off. Rules pure in `FGSTN_LandingRules::Resolve`, called in `AdvanceClock` before Hold Until Landed.
+- Coyote per move: `Input.Context.Coyote` (combat host adds it in the air while `Jump.CoyoteFramesLeft > 0`); `FGSTN_TagRequirements::
+  bGroundedInCoyote` (not edited: `UGSTN_CombatTableSet::ApplyCoyoteFlags` sets it for moves with `AllowsTakeoff()`); a coyote match ranks
+  +1 so it beats the aerial of the same command.
+- Applied choices (rule 6): default Any so no current move changes until data is set; landing lag reuses the recoil (no new anim system);
+  ContinueWithMove needs its own ability (own hitboxes/frame data). Not done: data on the real moves (jab/ftilt = Ground, dair = Air +
+  windows) -> next desktop/anim thread; a validator hint for Landing windows past TotalFrames.
+- Tests: `GSTNCombat.Core.Landing.GroundRule`, `.Windows`, `GSTNInput.Core.Input.Bindings.Coyote`. Desktop: build, these + all
+  `GSTNCombat`/`GSTNInput` tests (bindings selection changed), PIE: walk off a ledge during a jab with GroundRule Ground -> air idle.
 
 ## 4. Coyote time today (owner question)
 - Jump only: `FGSTN_JumpLogic` opens the window on ground (`CoyoteFramesLeft = CoyoteFrames`), counts down in the air, a jump zeroes it.
@@ -44,4 +53,4 @@ Branch `claude/project-thread-pcq7jx` from `claude/integ-night-1116` 194ad7e3. C
   `UGSTN_GA_PlatformJump::CoyoteFrames` (default 4) is always read from the kit's jump binding (`GSTN_CombatSimJump.cpp`). Same value
   for every kit today. Caveat: a BP child with override OFF but a non-4 CoyoteFrames would now use its value (none known). Build check:
   `GSTNCombat.Core.Jump.*` + a ledge jump in PIE.
-- B) "attack coyote" (ground attacks allowed N frames after leaving the ground, ~4-6 $): waits for the owner, like the Landing track.
+- B) owner: coyote only for ground moves that go airborne -> done as above (section 3).

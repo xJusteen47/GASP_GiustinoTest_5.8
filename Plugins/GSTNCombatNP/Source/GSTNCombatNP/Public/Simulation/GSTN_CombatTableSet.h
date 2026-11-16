@@ -169,13 +169,25 @@ public:
 	void AppendAdoptable(TConstArrayView<TSubclassOf<UGSTN_GA_BaseCombat>> Adoptable);
 
 	/**
-	 * Registers the FollowUpTimeline of every registered timeline that is not in the registry yet (no tier, no default window), the follow-ups' own
+	 * Registers the FollowUpTimeline (and the Landing tracks' ContinueMove) of every registered timeline that is not in the registry yet (no tier, no default window), the follow-ups' own
 	 * follow-ups included: the combat model starts them by registry index when a move ends by itself. Deterministic: registry order
 	 */
 	void AppendFollowUps();
 
 	/** The registry index of the follow-up of entry Index (its timeline's FollowUpTimeline), INDEX_NONE when it has none or it is not registered */
 	int32 FindFollowUpEntry(int32 Index) const;
+
+	/**
+	 * The registry index of the ContinueMove of entry Index's Landing track TrackIndex (FGSTN_TimelineTrack_Landing, registered by
+	 * AppendFollowUps like a follow-up), INDEX_NONE when it has none or it is not registered
+	 */
+	int32 FindLandingContinueEntry(int32 Index, int32 TrackIndex) const;
+
+	/**
+	 * Coyote time per move (owner 2026-11-16): the bindings of a ground move that may take off (FGSTN_CombatTimelineData::AllowsTakeoff) take
+	 * Input.Context.Coyote as Grounded. Derived from the frame data once the bindings and the registry are built; never edited by hand
+	 */
+	void ApplyCoyoteFlags();
 
 	/**
 	 * Registers, for every class in the registry, each timeline of its Playable Timelines (UGSTN_GA_BaseCombat::PlayableTimelines) as an entry
