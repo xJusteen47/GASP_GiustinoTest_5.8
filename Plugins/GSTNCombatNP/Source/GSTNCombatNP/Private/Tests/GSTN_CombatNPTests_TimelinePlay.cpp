@@ -17,7 +17,7 @@
 
 namespace GSTNTimelinePlayTest
 {
-	UGSTN_CombatTimeline* MakeTimeline(int32 TotalFrames)
+	UGSTN_CombatTimeline* TLPlayMakeTimeline(int32 TotalFrames)
 	{
 		UGSTN_CombatTimeline* Timeline = NewObject<UGSTN_CombatTimeline>(GetTransientPackage());
 		Timeline->Data.TotalFrames = TotalFrames;
@@ -94,9 +94,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPTimelinePlayRegistryTest, "GSTNCombat.N
 bool FGSTN_NPTimelinePlayRegistryTest::RunTest(const FString& Parameters)
 {
 	using namespace GSTNTimelinePlayTest;
-	UGSTN_CombatTimeline* PhaseA = MakeTimeline(10);
-	UGSTN_CombatTimeline* PhaseB = MakeTimeline(20);
-	UGSTN_CombatTimeline* NotPlayable = MakeTimeline(5);
+	UGSTN_CombatTimeline* PhaseA = TLPlayMakeTimeline(10);
+	UGSTN_CombatTimeline* PhaseB = TLPlayMakeTimeline(20);
+	UGSTN_CombatTimeline* NotPlayable = TLPlayMakeTimeline(5);
 	const FPlayableScope Scope({PhaseA, PhaseB, PhaseA});
 
 	TestTrue(TEXT("Play Timeline On Activation off is a host"), UGSTN_CombatTableSet::IsHostClass(UGSTN_TestTimelineHost::StaticClass()));
@@ -143,7 +143,7 @@ bool FGSTN_NPTimelinePlayStartTest::RunTest(const FString& Parameters)
 {
 	// What StartTimelineFromAbility writes into the frame's state, as the pure steps it runs: Start (source Forced) and EvaluateStart
 	using namespace GSTNTimelinePlayTest;
-	UGSTN_CombatTimeline* Phase = MakeTimeline(12);
+	UGSTN_CombatTimeline* Phase = TLPlayMakeTimeline(12);
 	FGSTN_TimelineOutput Output;
 	Output.Reserve(Phase->Data);
 

@@ -57,7 +57,7 @@ void SGSTN_TimelineDetails::Construct(const FArguments& InArgs)
 		return !(PropertyAndParent.ParentProperties.IsEmpty() && PropertyAndParent.Property.GetFName() == GET_MEMBER_NAME_CHECKED(FGSTN_HitboxSpec, Keys));
 	}));
 
-	const auto SectionHeader = [](TFunction<FText()> Label, FName Icon) -> TSharedRef<SWidget>
+	const auto SectionHeader = [](TFunction<FText()> Label, FName Icon) mutable -> TSharedRef<SWidget>
 	{
 		return SNew(SBorder)
 			.BorderImage(FAppStyle::Get().GetBrush("DetailsView.CategoryTop"))
@@ -70,7 +70,7 @@ void SGSTN_TimelineDetails::Construct(const FArguments& InArgs)
 				]
 				+ SHorizontalBox::Slot().FillWidth(1.f).VAlign(VAlign_Center)
 				[
-					SNew(STextBlock).Font(FAppStyle::Get().GetFontStyle("DetailsView.CategoryFontStyle")).Text_Lambda(Label)
+					SNew(STextBlock).Font(FAppStyle::Get().GetFontStyle("DetailsView.CategoryFontStyle")).Text_Lambda(MoveTemp(Label))
 				]
 			];
 	};

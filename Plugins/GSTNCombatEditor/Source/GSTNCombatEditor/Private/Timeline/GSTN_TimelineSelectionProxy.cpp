@@ -147,7 +147,7 @@ FGSTN_HitboxSpec* UGSTN_TimelineSelectionProxy::GetMutableFocusedSpec()
 TSharedPtr<FStructOnScope> UGSTN_TimelineSelectionProxy::MakeSpecStructData()
 {
 	FGSTN_HitboxSpec* Spec = GetMutableFocusedSpec();
-	return Spec != nullptr ? MakeShared<FStructOnScope>(FGSTN_HitboxSpec::StaticStruct(), reinterpret_cast<uint8*>(Spec)) : nullptr;
+	return Spec != nullptr ? MakeShared<FStructOnScope>(FGSTN_HitboxSpec::StaticStruct(), reinterpret_cast<uint8*>(Spec)) : TSharedPtr<FStructOnScope>();
 }
 
 TSharedPtr<FStructOnScope> UGSTN_TimelineSelectionProxy::MakeKeyStructData()

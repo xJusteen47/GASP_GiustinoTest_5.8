@@ -1,4 +1,4 @@
-﻿// Combat abilities (GAS-NPP fork).
+// Combat abilities (GAS-NPP fork).
 
 #include "Abilities/GSTN_GA_BaseCombat.h"
 
@@ -829,18 +829,18 @@ UGSTN_PlayCombatTimelineTask* UGSTN_GA_BaseCombat::GetPlayTask() const
 	return PredictionTasksInstances.IsValidIndex(PlayTaskIndex.Value) ? Cast<UGSTN_PlayCombatTimelineTask>(PredictionTasksInstances[PlayTaskIndex.Value]) : nullptr;
 }
 
-EGSTN_TimelineStartRefusal UGSTN_GA_BaseCombat::PlayTimeline(const UGSTN_CombatTimeline* Timeline, int32 TaskIndex)
+EGSTN_TimelineStartRefusal UGSTN_GA_BaseCombat::PlayTimeline(const UGSTN_CombatTimeline* PlayedTimeline, int32 TaskIndex)
 {
 	UGSTN_CombatSimComponent* Combat = GetCombatComponent();
 	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
 	const UGSTN_CombatTableSet* Set = Combat ? Combat->GetActiveTableSet() : nullptr;
-	const int32 Entry = Set ? Set->FindPlayEntry(GetClass(), Timeline) : INDEX_NONE;
+	const int32 Entry = Set ? Set->FindPlayEntry(GetClass(), PlayedTimeline) : INDEX_NONE;
 	// Checked before the running play is touched, so a refused Play changes nothing
 	EGSTN_TimelineStartRefusal Refusal = FGSTN_TimelinePlayRules::CheckStart(IsActive() && AbilitySystem && AbilitySystem->IsInSimulationTick(),
 		AbilitySystem && AbilitySystem->GetIsRestoringFrame(), false, Entry != INDEX_NONE);
 	if (Refusal != EGSTN_TimelineStartRefusal::None)
 	{
-		UE_LOG(LogGSTNBaseCombat, Warning, TEXT("%s: Play Combat Timeline %s refused (%d): %s"), *GetName(), *GetNameSafe(Timeline), static_cast<int32>(Refusal),
+		UE_LOG(LogGSTNBaseCombat, Warning, TEXT("%s: Play Combat PlayedTimeline %s refused (%d): %s"), *GetName(), *GetNameSafe(PlayedTimeline), static_cast<int32>(Refusal),
 			Refusal == EGSTN_TimelineStartRefusal::NotRegistered ? TEXT("add it to Playable Timelines") : TEXT("call it from the ability's simulation (its events, a pin of a task)"));
 		return Refusal;
 	}
