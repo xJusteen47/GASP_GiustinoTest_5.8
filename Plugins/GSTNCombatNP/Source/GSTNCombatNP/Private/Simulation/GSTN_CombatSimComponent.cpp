@@ -66,6 +66,7 @@
 #include "Hits/GSTN_ImpactTypes.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Rules/GSTN_CombatRules.h"
+#include "Components/CapsuleComponent.h"
 #include "Debug/GSTN_CombatDebugDraw.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 #include "Simulation/GSTN_CombatTraceBuild.h"
@@ -1819,7 +1820,23 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 	}
 	if (GSTNCombatDebug::IsHitboxDrawOn())
 	{
-		GSTNCombatDebug::DrawHitboxes(GetWorld(), AttackerDebugShapes);
+		const double Now = GetWorld()->GetTimeSeconds();
+		if (AttackerDebugShapes.Num() > 0)
+		{
+			LingerDebugShapes = AttackerDebugShapes;
+			LingerDebugShapesTime = Now;
+			GSTNCombatDebug::DrawHitboxes(GetWorld(), AttackerDebugShapes);
+		}
+		else if (LingerDebugShapesTime >= 0.0 && Now - LingerDebugShapesTime <= GSTNCombatDebug::GetHitboxLingerSeconds())
+		{
+			GSTNCombatDebug::DrawHitboxes(GetWorld(), LingerDebugShapes, /*bFaded*/ true);
+		}
+	}
+	if (GSTNCombatDebug::IsBodyDrawOn())
+	{
+		const UGSTN_CombatWorldSubsystem* Subsystem = WorldSubsystem.Get();
+		const FGSTN_SnapshotEntry* Entry = (Subsystem && RegisteredEntityId != INDEX_NONE) ? Subsystem->GetSnapshot().Find(RegisteredEntityId) : nullptr;
+		GSTNCombatDebug::DrawBody(GetWorld(), Entry, GetOwner() ? Cast<UCapsuleComponent>(GetOwner()->GetRootComponent()) : nullptr);
 	}
 	if (GSTNCombatDebug::IsHurtboxDrawOn() && RegisteredEntityId != INDEX_NONE)
 	{

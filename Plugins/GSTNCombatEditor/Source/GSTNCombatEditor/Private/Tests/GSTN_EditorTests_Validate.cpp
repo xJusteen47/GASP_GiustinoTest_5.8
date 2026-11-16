@@ -746,7 +746,10 @@ bool FGSTN_ValidateCoreMessagesTest::RunTest(const FString& Parameters)
 	FGSTN_TimelineTrack_Event Late;
 	Late.StartFrame = 35;													// fires outside the timeline
 	AddTrack(Data, Late);
-	AddTrack(Data, FGSTN_TimelineTrack_Hitbox());							// addresses no part, group or tag
+	FGSTN_TimelineTrack_HurtboxModifier NoPart;								// a hurtbox modifier addressing no part, group or tag
+	NoPart.StartFrame = 0;
+	NoPart.EndFrame = 5;
+	AddTrack(Data, NoPart);
 	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>());				// an empty track
 	Data.bHasRicochetResponse = true;										// enabled, but no recoil frames
 	Data.RicochetResponse.RecoilFrames = 0;

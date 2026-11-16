@@ -5,6 +5,7 @@
 #include "Animation/DebugSkelMeshComponent.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Engine/SkeletalMesh.h"
+#include "Hits/GSTN_HitMathUtils.h"
 #include "Hits/GSTN_HurtboxPose.h"
 #include "Preview/GSTN_GizmoMath.h"
 #include "Preview/GSTN_HitboxGizmoTarget.h"
@@ -65,6 +66,10 @@ namespace
 				const FGSTN_TimelineTrack* Owner = Data->Tracks.IsValidIndex(Hitbox.Track) ? Data->Tracks[Hitbox.Track].GetPtr<FGSTN_TimelineTrack>() : nullptr;
 				const bool bHurtbox = Owner != nullptr && Owner->GetKind() == EGSTN_TimelineTrackKind::Hurtbox;
 				GSTNPreviewDrawing::DrawHitShape(PDI, Hitbox.Shape, Hitbox.Space, bHurtbox ? HurtboxTrackColor() : GroupColor(Hitbox.HitGroup), bSelected ? 2.5f : 0.f);
+				if (!bHurtbox && !bHitTesting)
+				{
+					DrawLaunchArrow(PDI, *Data, Hitbox, bSelected);
+				}
 				if (bHitTesting)
 				{
 					PDI->SetHitProxy(nullptr);
@@ -73,6 +78,32 @@ namespace
 		}
 
 	private:
+		/**
+		 * The knockback preview in the viewport: an arrow from the hitbox centre along the launch its hit data gives a victim in front of the
+		 * attacker (root frame: +X facing, +Z up), elevation AngleDeg and the sideways YawOffsetDeg, the same UGSTN_HitMathUtils::LaunchDirection the
+		 * knockback step calls. Hitbox-relative yaw sources (away from the hitbox, along its motion) read a victim straight ahead and no motion here
+		 */
+		static void DrawLaunchArrow(FPrimitiveDrawInterface* PDI, const FGSTN_CombatTimelineData& Data, const GSTNGizmo::FActiveHitbox& Hitbox, bool bSelected)
+		{
+			const FGSTN_TimelineTrack_Hitbox* Track = Data.Tracks.IsValidIndex(Hitbox.Track) ? Data.Tracks[Hitbox.Track].GetPtr<FGSTN_TimelineTrack_Hitbox>() : nullptr;
+			if (Track == nullptr || !Track->Hitboxes.IsValidIndex(Hitbox.Lane))
+			{
+				return;
+			}
+			const FGSTN_HitData& Hit = Track->Hitboxes[Hitbox.Lane].Data;
+			const FVector Facing = FVector::ForwardVector;
+			const FVector Direction = UGSTN_HitMathUtils::LaunchDirection(Hit.YawSource, Hit.AngleDeg, Hit.SpecialAngle, FVector::UpVector, Facing, Facing,
+				FVector::ZeroVector, /*bVictimGrounded*/ true, Hit.BaseKnockback, FGSTN_SakuraiParams(), Hit.YawOffsetDeg);
+			if (Direction.IsNearlyZero())
+			{
+				return;
+			}
+			const FVector From = (Hitbox.Shape.Local * Hitbox.Space).GetLocation();
+			const float Length = bSelected ? 90.f : 60.f;
+			const FMatrix Frame = FRotationTranslationMatrix(Direction.GetSafeNormal().Rotation(), From);
+			DrawDirectionalArrow(PDI, Frame, FLinearColor(1.f, 0.55f, 0.f), Length, bSelected ? 10.f : 7.f, SDPG_Foreground, bSelected ? 2.5f : 1.5f);
+		}
+
 		mutable TArray<GSTNGizmo::FActiveHitbox> Active;
 	};
 }

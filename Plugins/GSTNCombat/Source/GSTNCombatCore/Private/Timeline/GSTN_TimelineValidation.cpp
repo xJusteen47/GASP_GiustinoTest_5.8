@@ -12,8 +12,17 @@ namespace
 		Message.Text = MoveTemp(Text);
 	}
 
-	void CheckSelector(const TCHAR* Kind, int32 Index, const FGSTN_PartSelector& Part, const FGSTN_TimelineValidationContext& Context, TArray<FGSTN_TimelineMessage>& Out)
+	/**
+	 * bRequired: a HurtboxModifier with no selector modifies nothing, an error. A Hitbox track's Part is a label (the outline shows it; no hit
+	 * code reads it, hitboxes are placed by Space and Socket), so an empty one is fine there: only a name that does not exist is reported
+	 */
+	void CheckSelector(const TCHAR* Kind, int32 Index, const FGSTN_PartSelector& Part, const FGSTN_TimelineValidationContext& Context, TArray<FGSTN_TimelineMessage>& Out,
+		bool bRequired = true)
 	{
+		if (Part.IsEmpty() && !bRequired)
+		{
+			return;
+		}
 		if (Part.IsEmpty())
 		{
 			Add(Out, true, FString::Printf(TEXT("Track %d (%s) addresses no part, group or tag. A whole-body target is spelled with the group that holds every part."), Index, Kind));
@@ -271,7 +280,7 @@ void FGSTN_TimelineValidation::Validate(const FGSTN_CombatTimelineData& Data, co
 		if (Kind == EGSTN_TimelineTrackKind::Hitbox)
 		{
 			const FGSTN_TimelineTrack_Hitbox* HitboxTrack = static_cast<const FGSTN_TimelineTrack_Hitbox*>(Track);
-			CheckSelector(TEXT("Hitbox"), Index, HitboxTrack->Part, Context, OutMessages);
+			CheckSelector(TEXT("Hitbox"), Index, HitboxTrack->Part, Context, OutMessages, /*bRequired*/ false);
 			CheckHitboxes(Index, *HitboxTrack, Data, OutMessages);
 			CheckReachGroups(Index, *HitboxTrack, OutMessages);
 		}

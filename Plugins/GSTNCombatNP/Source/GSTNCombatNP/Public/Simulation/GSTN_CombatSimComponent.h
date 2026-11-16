@@ -1126,6 +1126,10 @@ private:
 	FGSTN_TimelineFrameResult AttackerScratch;
 	TArray<FGSTN_AttackerHit> AttackerHits;
 	TArray<FGSTN_AttackerDebugShape> AttackerDebugShapes;
+	/** Debug only, not state: the last non-empty hitbox shapes and when they were seen, so gstn.Combat.Debug.Hitboxes keeps a 2-3 frame
+	 *  active window on screen for gstn.Combat.Debug.HitboxLinger seconds (a one-frame draw is missed by the eye and by captures) */
+	TArray<FGSTN_AttackerDebugShape> LingerDebugShapes;
+	double LingerDebugShapesTime = -1.0;
 	bool bLoggedTargetOverflow = false;
 
 	/** Debug mirrors of the attacker step, see GetHitLog / GetHitboxTrace. Not state */

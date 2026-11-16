@@ -262,10 +262,9 @@ def _pad_check():
         if math.hypot(loc[0] - dx, loc[1] - dy) < hub.PAD_RADIUS:
             if _watch['on_pad'].get(key) != 'debug':
                 _watch['on_pad'][key] = 'debug'
-                _watch['debug'] = not _watch.get('debug', False)
-                for cvar in ('gstn.Combat.Debug.Hitboxes', 'gstn.Combat.Debug.Hurtboxes'):
-                    unreal.SystemLibrary.execute_console_command(world, f"{cvar} {int(_watch['debug'])}")
-                unreal.SystemLibrary.print_string(g.worlds()[i], 'Hitbox/hurtbox: ' + ('ACCESO' if _watch['debug'] else 'SPENTO'), True, True,
+                # The debug pad opens the editor window with every gstn.*Debug* switch (owner 2026-11-16, GASP-style level button)
+                unreal.SystemLibrary.execute_console_command(None, 'gstn.Debug.OpenWindow')
+                unreal.SystemLibrary.print_string(g.worlds()[i], 'Opzioni debug: finestra aperta (Tools > Debug)', True, True,
                                                   unreal.LinearColor(1, 0.3, 0.3, 1), 4.0)
             continue
         # The kit pads hold TH-1b kit pickups now (spawn_kits): the kit changes on hold interact, not by standing on the pad

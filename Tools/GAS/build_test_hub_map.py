@@ -94,8 +94,9 @@ MOD_PADS = [
     ('KIT_Test_Ranger', '', ['/Game/GASNPPTest/Combat/Mods/MOD_Test_Power.MOD_Test_Power'], 'TIRATORE + MOD POTENZA', (800.0, 700.0)),
 ]
 PAD_RADIUS = 120.0
-# Stepping on it toggles the hitbox and hurtbox debug draw (gstn.Combat.Debug.Hitboxes / Hurtboxes, GSTNCombatNP)
-DEBUG_PAD = ('DEBUG HITBOX/HURTBOX', (1200.0, 1450.0))
+# One debug pad by the spawn (owner 2026-11-16, like GASP's level button): stepping on it opens the GSTN Debug Options editor window
+# (gstn.Debug.OpenWindow, every gstn.*Debug* switch). It replaced the red hitbox/hurtbox toggle pad; Tools/GAS/hub_debug_pad.py places it in the map
+DEBUG_PAD = ('OPZIONI DEBUG', (300.0, -800.0))
 DUMMY_CLASS = '/Game/GASNPPTest/BP_GASNPP_TestCharacter'
 # Dummies: the test character spawned on the server at Play by test_hub, possessed by an AI controller (stands still, takes hits). (zone, (x, y), yaw)
 DUMMIES = [
@@ -383,8 +384,8 @@ def kit_pads_and_dummies():
         text = f'{label}\n{kit_name}' + (f'\n+ {support}' if support else '')
         sign(f'Z0_Pad_{label.replace(" ", "_").replace(":", "")}_Text', text, (x + 30.0, y), face_to=(0.0, y), size=22.0, height=170.0)
     label, (x, y) = DEBUG_PAD
-    box('Z0_Pad_Debug', (x, y, 5.0), (PAD_RADIUS * 2.0, PAD_RADIUS * 2.0, 10.0), 'Red', mesh=CYLINDER)
-    sign('Z0_Pad_Debug_Text', label + chr(10) + 'salici: acceso / spento', (x + 30.0, y), face_to=(0.0, y), size=22.0, height=170.0)
+    box('Z0_Pad_DebugOptions', (x, y, 5.0), (PAD_RADIUS * 2.0, PAD_RADIUS * 2.0, 10.0), 'Red', mesh=CYLINDER)
+    sign('Z0_Pad_DebugOptions_Text', label + chr(10) + 'salici: si apre la finestra', (x + 30.0, y), face_to=(0.0, y), size=24.0, height=170.0)
     sign('Z0_Pads_Title', 'PEDANE KIT: salici sopra', (1200.0, -1450.0), face_to=(0.0, -1450.0), size=30.0, height=230.0)
     # The dummies are NOT level actors: a placed Mover pawn makes the map unsaveable (its movement modes' transitions are private objects of the
     # Blueprint's CDO). test_hub spawns them on the server at every Play; here only their markers
