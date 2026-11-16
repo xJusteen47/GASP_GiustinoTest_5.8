@@ -97,10 +97,15 @@ namespace
 		TEXT("Fastest a minion moves (cm/s): a rewound query inflates its search by this times the rewind age (spec 9.2: 700 x 0.25 s = 175 cm)."));
 
 	/** The transform that carries a hitbox at a timeline frame; false for a space a minion cannot place (a projectile, a missing baked socket) */
-	bool BuildCarrier(const FGSTN_HitboxSpec& Spec, const FGSTN_CombatTimelineData& Timeline, const FTransform& Root, int32 TimelineFrame, int32 TrackFrame, FTransform& OutCarrier)
+	bool BuildCarrier(const FGSTN_HitboxSpec& Spec, const FGSTN_TimelineTrack_Hitbox* Track, const FGSTN_CombatTimelineData& Timeline, const FTransform& Root, int32 TimelineFrame, int32 TrackFrame, FTransform& OutCarrier)
 	{
-		const FTransform Key = UGSTN_HitShapeUtils::EvaluateKeys(Spec.Keys, TrackFrame);
-		switch (Spec.Space)
+		// Same placement as the fighters' (GSTN_CombatTick_Attacker BuildCarrier): a child of its group's transform is relative to the group
+		const FTransform Key = Track != nullptr
+			? UGSTN_HitShapeUtils::EvaluateKeys(Spec.Keys, TrackFrame) * Track->GetParentOffset(Spec)
+			: UGSTN_HitShapeUtils::EvaluateKeys(Spec.Keys, TrackFrame);
+		const EGSTN_HitboxSpace Space = Track != nullptr ? Track->GetEffectiveSpace(Spec) : Spec.Space;
+		const FName SocketName = Track != nullptr ? Track->GetEffectiveSocket(Spec) : Spec.Socket;
+		switch (Space)
 		{
 		case EGSTN_HitboxSpace::Root:
 			OutCarrier = Key * Root;
@@ -108,7 +113,7 @@ namespace
 		case EGSTN_HitboxSpace::BakedSocket:
 		{
 			FTransform Socket;
-			if (!Timeline.FindBakedSocket(Spec.Socket, TimelineFrame, Socket))
+			if (!Timeline.FindBakedSocket(SocketName, TimelineFrame, Socket))
 			{
 				return false;
 			}
@@ -699,12 +704,13 @@ bool UGSTN_MinionCombatSubsystem::FillSnapshotEntry(int32 Slot, int32 Frame, FGS
 	Out.Up = Out.Transform.GetUnitAxis(EAxis::Z);
 	Out.Hurtboxes = Set;
 	Out.BoundRadius = Resolved.BoundRadius;
+	// Pushbox P5: the body fighters and other minions meet (their push and core read it from this entry, end of the previous frame)
+	const UGSTN_CombatRules* Rules = CombatRules ? CombatRules.Get() : GetDefault<UGSTN_CombatRules>();
+	Definition->ResolvePushbox(Store.ActionState[Slot], FVector(Store.Position[Slot]), Out.Up, Rules->Pushbox, Out.Pushbox);
 	Out.HealthFraction = Store.MaxHealth[Slot] > 0.f ? FMath::Clamp(Store.Health[Slot] / Store.MaxHealth[Slot], 0.f, 1.f) : 1.f;
 
 	// Both hitstops freeze the minion: the victim's window (hits of the previous frames) and its own as an attacker
-	const bool bVictimHitstop = Frame < HitstopEndFrame[Slot];
-	const bool bAttackerHitstop = AttackerHitstopEndFrame[Slot] != INDEX_NONE && Frame <= AttackerHitstopEndFrame[Slot];
-	Out.bInHitstop = bVictimHitstop || bAttackerHitstop;
+	Out.bInHitstop = IsSlotInHitstop(Slot, Frame);
 
 	// The fighters' action state vocabulary, for steps that read it: any hit reaction is Hitstun, a running move InTimeline
 	switch (static_cast<EGSTN_MinionActionState>(Store.ActionState[Slot]))
@@ -729,10 +735,13 @@ bool UGSTN_MinionCombatSubsystem::FillSnapshotEntry(int32 Slot, int32 Frame, FGS
 	// How each hurtbox takes hits: the hurtbox modifier tracks of the running timeline at the frame it last evaluated (the end of the
 	// previous frame, like the fighter's), so a dodge's intangible feet or an armored windup work on minions with the same data
 	Out.HurtStates.Reset();
+	Out.HurtPose.Reset();
 	if (Set)
 	{
 		Out.HurtStates.SetNum(Set->Hurtboxes.Num());
 		const UGSTN_CombatTimeline* Timeline = Store.MoveId[Slot] != 0 && TimelinePrevFrame[Slot] != INDEX_NONE ? TimelineOfMoveId(Slot, Store.MoveId[Slot]) : nullptr;
+		FGSTN_HurtboxPoseInput PoseInput;
+		PoseInput.Set = Set;
 		if (Timeline)
 		{
 			FGSTN_TimelinePlayer::EvaluateHits(Timeline->Data, TimelinePrevFrame[Slot], HurtScratch);
@@ -740,6 +749,15 @@ bool UGSTN_MinionCombatSubsystem::FillSnapshotEntry(int32 Slot, int32 Frame, FGS
 			{
 				Out.HurtStates[Index] = FGSTN_TimelinePlayer::ResolveHurtState(HurtScratch, Set->Hurtboxes[Index]);
 			}
+			PoseInput.Timeline = &Timeline->Data;
+			PoseInput.TimelineFrame = TimelinePrevFrame[Slot];
+		}
+		// Same pose as a fighter's (owner 2026-11-16): bones of the running move, detail level, the move's Hurtbox tracks. A set of Both, non-following
+		// hurtboxes (every minion set so far) gives the default pose and costs nothing
+		FGSTN_HurtboxPose::Build(PoseInput, Out.HurtPose);
+		if (!Out.HurtPose.IsDefault())
+		{
+			Out.BoundRadius = FMath::Max(Out.BoundRadius, static_cast<float>(Out.HurtPose.ComputeBoundRadius(Set)));
 		}
 	}
 
@@ -765,6 +783,59 @@ bool UGSTN_MinionCombatSubsystem::FillSnapshotEntry(int32 Slot, int32 Frame, FGS
 	Out.Reaction = FGSTN_VictimReactionState::Make(KnockbackPercent[Slot], WeightScale, Flags, Threshold);
 	// No snapshot contributor runs for minions (no fragments, no parts code here): the parts bridge (M4b P16) uses the step slot, the victim view seam and the outcome seam
 	return true;
+}
+
+bool UGSTN_MinionCombatSubsystem::IsSlotInHitstop(int32 Slot, int32 Frame) const
+{
+	const bool bVictimHitstop = Frame < HitstopEndFrame[Slot];
+	const bool bAttackerHitstop = AttackerHitstopEndFrame[Slot] != INDEX_NONE && Frame <= AttackerHitstopEndFrame[Slot];
+	return bVictimHitstop || bAttackerHitstop;
+}
+
+void UGSTN_MinionCombatSubsystem::GatherMoveBodies(int32 Frame)
+{
+	MoveBodies.Reset();
+	const UGSTN_CombatRules* Rules = CombatRules ? CombatRules.Get() : GetDefault<UGSTN_CombatRules>();
+	MoveContext.Pushbox = Rules->Pushbox;
+	if (!MovementSettings.bBodyCollision || !Rules->Pushbox.bEnabled)
+	{
+		return;
+	}
+	// Fighters as the snapshot of the frame holds them (end of F-1, what their own push read). Its minion entries are skipped: the store
+	// gives every minion below, also when no fighter is registered and there is no snapshot
+	if (const FGSTN_StepSnapshot* Snapshot = AcquireFighterSnapshot(Frame))
+	{
+		for (const FGSTN_SnapshotEntry& Entry : Snapshot->Entries)
+		{
+			if (GSTNEntityKinds::IsMinionEntityId(Entry.EntityId) || !Entry.Pushbox.IsActive() || Entry.bPlacedByContributor)
+			{
+				continue;
+			}
+			FGSTN_PushboxBody& Body = MoveBodies.AddDefaulted_GetRef();
+			Body.EntityId = Entry.EntityId;
+			Body.Cylinder = Entry.Pushbox;
+			Body.bFrozen = Entry.bInHitstop;
+		}
+	}
+	MoveBodies.Append(TestFighterBodies);
+	// Minions with the same filter and body as AppendSnapshotEntities (a queued spawn and a dying minion have none)
+	for (int32 Slot = Store.NextAliveSlot(0); Slot != INDEX_NONE; Slot = Store.NextAliveSlot(Slot + 1))
+	{
+		const UGSTN_MinionDefinition* Definition = GetDefinition(Store.TypeIndex[Slot]);
+		if (PendingActivation[Slot] || IsDyingOrDead(Store.ActionState[Slot]) || !Definition)
+		{
+			continue;
+		}
+		const FVector Feet(Store.Position[Slot]);
+		FGSTN_PushboxBody Body;
+		if (Definition->ResolvePushbox(Store.ActionState[Slot], Feet, RootOf(Slot).GetUnitAxis(EAxis::Z), Rules->Pushbox, Body.Cylinder))
+		{
+			Body.EntityId = GSTNEntityKinds::MakeMinionEntityId(static_cast<uint16>(Slot));
+			Body.bFrozen = IsSlotInHitstop(Slot, Frame);
+			MoveBodies.Add(Body);
+		}
+	}
+	MoveBodies.Sort([](const FGSTN_PushboxBody& A, const FGSTN_PushboxBody& B) { return A.EntityId < B.EntityId; });
 }
 
 FGSTN_HitVictimView UGSTN_MinionCombatSubsystem::MakeMinionView(int32 Slot, const FGSTN_SnapshotEntry& Entry) const
@@ -1967,12 +2038,12 @@ void UGSTN_MinionCombatSubsystem::RunAttackQueries(int32 Slot, int32 Frame, cons
 		}
 		const FGSTN_HitboxSpec& Spec = *Active.Spec;
 		FTransform Carrier;
-		if (!BuildCarrier(Spec, Timeline, Root, TimelineFrame, Active.TrackFrame, Carrier))
+		if (!BuildCarrier(Spec, Active.Track, Timeline, Root, TimelineFrame, Active.TrackFrame, Carrier))
 		{
 			continue;
 		}
 		FTransform PreviousCarrier = Carrier;
-		if (!BuildCarrier(Spec, Timeline, Root, FMath::Max(TimelineFrame - 1, 0), FMath::Max(Active.TrackFrame - 1, 0), PreviousCarrier))
+		if (!BuildCarrier(Spec, Active.Track, Timeline, Root, FMath::Max(TimelineFrame - 1, 0), FMath::Max(Active.TrackFrame - 1, 0), PreviousCarrier))
 		{
 			PreviousCarrier = Carrier;
 		}
@@ -2032,19 +2103,29 @@ void UGSTN_MinionCombatSubsystem::RunAttackQueries(int32 Slot, int32 Frame, cons
 			Overlapped.Reset();
 			for (int32 HurtIndex = 0; HurtIndex < Hurtboxes.Num(); ++HurtIndex)
 			{
-				if (Victim.HurtStates.IsValidIndex(HurtIndex) && Victim.HurtStates[HurtIndex].State == EGSTN_HurtState::Intangible)
+				if (!Victim.IsHurtboxPresent(HurtIndex) || (Victim.HurtStates.IsValidIndex(HurtIndex) && Victim.HurtStates[HurtIndex].State == EGSTN_HurtState::Intangible))
 				{
 					continue;
 				}
+				// The fighter's posed hurtbox (bones, detail level: owner 2026-11-16), the same shape the pawn attacker tests
+				const FGSTN_HitShape& HurtShape = Victim.GetHurtShape(HurtIndex);
 				const bool bTouches = Spec.bSweepBetweenFrames
-					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, Hurtboxes[HurtIndex].Shape, Victim.Transform)
-					: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, Hurtboxes[HurtIndex].Shape, Victim.Transform);
+					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, HurtShape, Victim.Transform)
+					: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, HurtShape, Victim.Transform);
 				// Same opening rule as the pawn attacker (P18): a hurtbox with an opening counts only through its mouth. No opening: one bool
 				if (bTouches && (!Hurtboxes[HurtIndex].Opening.bEnabled || UGSTN_HitShapeUtils::PassesOpening(Hurtboxes[HurtIndex].Opening, HitShape, PreviousCarrier, Carrier, Spec.bSweepBetweenFrames, Victim.Transform)))
 				{
 					Overlapped.Add(HurtIndex);
 				}
 			}
+			Victim.AppendExtensionOverlaps(Overlapped,
+				[&](const FGSTN_HitShape& Shape)
+				{
+					return Spec.bSweepBetweenFrames
+						? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, Shape, Victim.Transform)
+						: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, Shape, Victim.Transform);
+				},
+				[&](int32 HurtIndex) { return Victim.HurtStates.IsValidIndex(HurtIndex) && Victim.HurtStates[HurtIndex].State == EGSTN_HurtState::Intangible; });
 			for (int32 ExtraPosition = 0; ExtraPosition < Victim.ExtraHurtboxes.Num(); ++ExtraPosition)
 			{
 				// Same outside-only rule as the pawn attacker (M11 L7c): a minion inside a dome never touches its shell
@@ -2310,6 +2391,8 @@ void UGSTN_MinionCombatSubsystem::StageMovement(int32 Frame)
 		MoveContext.KillZ = WorldSettings ? WorldSettings->KillZ : -UE_BIG_NUMBER;
 		MoveContext.FellOut.Reset();
 		MoveContext.MinionFrames = 0;
+		GatherMoveBodies(Frame);
+		MoveContext.Bodies = MoveBodies;
 
 		LightweightMovement.StepBatch(MoveContext, MoveSlots);
 

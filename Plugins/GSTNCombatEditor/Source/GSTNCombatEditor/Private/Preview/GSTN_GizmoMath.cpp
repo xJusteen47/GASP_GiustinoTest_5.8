@@ -312,12 +312,14 @@ void GSTNGizmo::CollectActiveHitboxes(const FGSTN_CombatTimelineData& Data, int3
 		{
 			const FGSTN_HitboxSpec& Spec = Track->Hitboxes[Lane];
 			const FTransform Key = UGSTN_HitShapeUtils::EvaluateKeys(Spec.Keys, Frame - Track->StartFrame);
+			const EGSTN_HitboxSpace Space = Track->GetEffectiveSpace(Spec);
+			const FName SocketName = Track->GetEffectiveSocket(Spec);
 
 			TOptional<FTransform> Socket;
-			if (Spec.Space == EGSTN_HitboxSpace::BakedSocket)
+			if (Space == EGSTN_HitboxSpace::BakedSocket)
 			{
 				FTransform Found;
-				if (Data.FindBakedSocket(Spec.Socket, Frame, Found) || LiveSocket(Spec.Socket, Found))
+				if (Data.FindBakedSocket(SocketName, Frame, Found) || LiveSocket(SocketName, Found))
 				{
 					Socket = Found;
 				}
@@ -329,7 +331,8 @@ void GSTNGizmo::CollectActiveHitboxes(const FGSTN_CombatTimelineData& Data, int3
 			Active.HitGroup = Spec.HitGroup;
 			Active.Shape = Spec.Shape;
 			Active.Shape.Local = Spec.Shape.Local * Key;
-			Active.Space = SpaceTransform(Spec.Space, Root, Socket);
+			// The carrier of the keys: the group's offset in the group's space for a child of the group (parenting), the hitbox's own space otherwise
+			Active.Space = Track->GetParentOffset(Spec) * SpaceTransform(Space, Root, Socket);
 		}
 	}
 }

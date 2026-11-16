@@ -1,6 +1,8 @@
 # ANIM-R2: the Overlord's dropkick (forward-air) on a test kit, so the built clips can be watched in a real Play session. Same idea and helpers as
 # setup_overlord_dair_kit.py. Data only: no C++, no input mapping, no project setting, no Blueprint graph, no shared Blueprint edited by hand.
-# Idempotent: a rerun rewrites the specs below over hand edits; it only creates NEW assets (KIT_Test_Hits and WPN_Test_Hits are only read).
+# Idempotent on its own assets; never overwrites hand edits: AS/AM/TL edited by hand (or saved by anything but this script) are KEPT, see
+# Tools/GAS/setup_guard.py; run(force=True) or run(force=['TL_Overlord_Dropkick']) (env SETUP_FORCE) replaces them after a backup in
+# Saved/Backups/SetupGuard. It only creates NEW assets (KIT_Test_Hits and WPN_Test_Hits are only read).
 #
 # Reads the three built clips of the anim pipeline (Content/AnimPipeline is a junction shared by every worktree) and copies them. Writes, under
 # /Game/GASNPPTest/Combat/Overlord (new assets only):
@@ -20,8 +22,12 @@ import csv
 import os
 import re
 import runpy
+import sys
 
 import unreal
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import setup_guard  # noqa: E402
 
 SRC = '/Game/AnimPipeline/Rig/Overlord/Dropkick'
 CLIPS = [('Startup', f'{SRC}/Startup/AS_OverlordDropkick_Startup'), ('Loop', f'{SRC}/Loop/AS_OverlordDropkick_Loop'),
@@ -50,6 +56,7 @@ CAPSULE_HALF_HEIGHT = 90.0                     # cm, the mesh component sits thi
 
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'AnimR2', 'setup_overlord_dropkick_kit.txt')
 _lines = []
+_guard = None   # setup_guard.Guard of the current run
 
 
 def log(msg):
@@ -90,7 +97,7 @@ def _clips(refresh):
     out = {}
     for name, src in CLIPS:
         path = f'{DIR}/AS_OverlordDropkick_{name}'
-        if refresh and lib.does_asset_exist(path):
+        if refresh and lib.does_asset_exist(path) and _guard.may_write(path):
             lib.delete_asset(path)
         if not lib.does_asset_exist(path):
             if not lib.does_asset_exist(src) or not lib.duplicate_asset(src, path):
@@ -114,16 +121,18 @@ def _segment(anim, start, reps):
 def _montage(clips, refresh):
     lib = unreal.EditorAssetLibrary
     path = f'{DIR}/AM_OverlordDropkick'
-    if refresh and lib.does_asset_exist(path):
+    if refresh and lib.does_asset_exist(path) and _guard.may_write(path):
         lib.delete_asset(path)
     montage = unreal.load_asset(path) if lib.does_asset_exist(path) else None
+    lens = {k: v.get_play_length() for k, v in clips.items()}
+    if montage and not _guard.may_write(path):
+        return montage, lens
     if not montage:
         factory = unreal.AnimMontageFactory()
         factory.set_editor_property('source_animation', clips['Startup'])
         factory.set_editor_property('target_skeleton', clips['Startup'].get_editor_property('skeleton'))
         montage = _tools().create_asset('AM_OverlordDropkick', DIR, unreal.AnimMontage, factory)
         log(f'created {path}')
-    lens = {k: v.get_play_length() for k, v in clips.items()}
     segs = [_segment(clips['Startup'], 0.0, 1), _segment(clips['Loop'], lens['Startup'], LOOP_REPS),
             _segment(clips['Land'], lens['Startup'] + LOOP_REPS * lens['Loop'], 1)]
     track = unreal.AnimTrack()
@@ -137,6 +146,7 @@ def _montage(clips, refresh):
         blend.set_editor_property('blend_time', seconds)
         montage.set_editor_property(prop, blend)
     lib.save_loaded_asset(montage, False)
+    _guard.record([path])
     # the montage length is only recomputed on load: reload the saved package
     unreal.EditorLoadingAndSavingUtils.reload_packages([montage.get_outermost()], unreal.ReloadPackagesInteractionMode.ASSUME_POSITIVE)
     montage = unreal.load_asset(path)
@@ -188,6 +198,9 @@ def _timeline(montage, clips, lens):
     if not asset:
         asset = _tools().create_asset(name, DIR, unreal.GSTN_CombatTimeline, unreal.DataAssetFactory())
         log(f'created {DIR}/{name}')
+    if not _guard.may_write(f'{DIR}/{name}'):
+        _guard.relink_montage(f'{DIR}/{name}', asset, montage)
+        return asset
     asset.set_editor_property('data', data)
     log(f'timeline total {total}, FAF {faf}, hitbox active {start}-{loop_end - 1} on {FOOT_BONE}, '
         f'keys {[tuple(round(v, 1) for v in k[1]) for k in samples]}')
@@ -268,10 +281,14 @@ def _weapon_and_kit(cls):
     return [weapon, kit]
 
 
-def run(refresh=False):
+def run(refresh=False, force=False):
+    """force: True, or asset names (['TL_Overlord_Dropkick']) to overwrite even if edited by hand (backed up first); default keeps them"""
+    global _guard
     del _lines[:]
     ok = False
     try:
+        _guard = setup_guard.Guard.for_unreal('setup_overlord_dropkick_kit', force=force, log=log)
+        _guard.precheck([f'{DIR}/AS_OverlordDropkick_{name}' for name, _ in CLIPS] + [f'{DIR}/AM_OverlordDropkick', f'{DIR}/TL_Overlord_Dropkick'])
         if not unreal.EditorAssetLibrary.does_directory_exist(DIR):
             unreal.EditorAssetLibrary.make_directory(DIR)
         clips = _clips(refresh)
@@ -282,16 +299,15 @@ def run(refresh=False):
         if not tail:
             raise RuntimeError('weapon or kit not built')
         saves = list(clips.values()) + [timeline, bp] + tail
-        for asset in saves:
-            unreal.EditorAssetLibrary.save_loaded_asset(asset, False)
-        log(f'saved {len(saves) + 1} assets: ' + ', '.join(a.get_name() for a in saves + [montage]))
+        _guard.save_and_record(saves, unreal.EditorAssetLibrary.save_loaded_asset)
+        log('saved: ' + ', '.join(a.get_name() for a in saves + [montage]) + '; ' + _guard.summary())
         ok = True
     except Exception as e:
         log(f'ERROR: {e!r}')
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, 'w') as f:
         f.write('\n'.join(_lines) + '\n')
-    for line in [l for l in _lines if 'WARNING' in l or 'ERROR' in l][:4] + [_lines[-1][:300]]:
+    for line in [l for l in _lines if any(w in l for w in ('WARNING', 'ERROR', 'KEPT', 'FORCE', 'MERGE'))][:4] + [_lines[-1][:300]]:
         print(line)
     return ok
 

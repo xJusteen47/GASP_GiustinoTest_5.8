@@ -7,6 +7,7 @@
 #include "GSTN_CombatEditorUtils.generated.h"
 
 class UGSTN_CombatTimeline;
+class UGSTN_HurtboxSetDefinition;
 class USkeletalMesh;
 
 /**
@@ -43,4 +44,12 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GSTN Combat|Editor", meta = (DevelopmentOnly))
 	static bool IsBakeStale(UGSTN_CombatTimeline* Timeline, USkeletalMesh* Mesh);
+
+	/**
+	 * The hurtbox set editor's "Follow bones in moves" and "Add simple body" from a script (owner 2026-11-16): every hurtbox with a bone of Mesh follows
+	 * it through the moves (reference read from Mesh, placed as the preview places it), and with bAddSimpleBody the Simple-level "body" capsule is added
+	 * for idle and movement while the rest becomes per limb. Marks the set dirty, does not save. Returns how many hurtboxes follow
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN Combat|Editor", meta = (DevelopmentOnly))
+	static int32 PrepareHurtboxSet(UGSTN_HurtboxSetDefinition* Set, USkeletalMesh* Mesh, bool bAddSimpleBody, FString& OutMessage);
 };

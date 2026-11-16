@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Input/GSTN_InputTags.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
 #include "GSTN_CommandBindings.generated.h"
 
@@ -46,13 +47,45 @@ struct GSTNINPUTCORE_API FGSTN_TagRequirements
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Requirements")
 	FGameplayTagContainer IgnoreTags;
 
+	/**
+	 * Not edited: set by the table compiler from the bound move (a ground move that may take off, FGSTN_CombatTimelineData::AllowsTakeoff).
+	 * A required Input.Context.Grounded also holds while the context has Input.Context.Coyote, and such a match wins a tie over the
+	 * plain aerial binding of the same command (GetSpecificity)
+	 */
+	bool bGroundedInCoyote = false;
+
 	bool IsEmpty() const { return RequireTags.IsEmpty() && IgnoreTags.IsEmpty(); }
 
-	/** All required tags are in Context and none of the ignored ones is */
+	/** All required tags are in Context and none of the ignored ones is (Grounded also by coyote, see bGroundedInCoyote) */
 	bool IsSatisfiedBy(const FGameplayTagContainer& Context) const
 	{
-		return Context.HasAll(RequireTags) && !Context.HasAny(IgnoreTags);
+		if (Context.HasAny(IgnoreTags))
+		{
+			return false;
+		}
+		if (!IsCoyoteMatch(Context))
+		{
+			return Context.HasAll(RequireTags);
+		}
+		for (const FGameplayTag& Tag : RequireTags)
+		{
+			if (Tag != GSTNInputTags::Context_Grounded.GetTag() && !Context.HasTag(Tag))
+			{
+				return false;
+			}
+		}
+		return true;
 	}
+
+	/** The requirements hold only through the coyote rule: they need Grounded, the context is in coyote time instead */
+	bool IsCoyoteMatch(const FGameplayTagContainer& Context) const
+	{
+		return bGroundedInCoyote && Context.HasTagExact(GSTNInputTags::Context_Coyote) && !Context.HasTagExact(GSTNInputTags::Context_Grounded)
+			&& RequireTags.HasTagExact(GSTNInputTags::Context_Grounded);
+	}
+
+	/** The selection rank in Context: the required count, one more for a coyote match (the ground move the player meant beats the aerial) */
+	int32 GetSpecificity(const FGameplayTagContainer& Context) const { return GetRequiredCount() + (IsCoyoteMatch(Context) ? 1 : 0); }
 
 	/** How demanding the requirements are: the binding with the most required tags is the most specific */
 	int32 GetRequiredCount() const { return RequireTags.Num(); }

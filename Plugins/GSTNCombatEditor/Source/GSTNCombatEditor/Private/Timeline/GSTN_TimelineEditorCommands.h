@@ -26,6 +26,8 @@ public:
 	TSharedPtr<FUICommandInfo> PreviousKey;
 	TSharedPtr<FUICommandInfo> NextKey;
 	TSharedPtr<FUICommandInfo> PlayPause;
+	TSharedPtr<FUICommandInfo> JumpToStart;
+	TSharedPtr<FUICommandInfo> JumpToEnd;
 
 	// Keys and tracks
 	TSharedPtr<FUICommandInfo> AddKeyAtPlayhead;
@@ -38,6 +40,8 @@ public:
 	// View
 	TSharedPtr<FUICommandInfo> FrameAll;
 	TSharedPtr<FUICommandInfo> FrameSelection;
+	TSharedPtr<FUICommandInfo> ZoomIn;
+	TSharedPtr<FUICommandInfo> ZoomOut;
 
 	// Timeline
 	TSharedPtr<FUICommandInfo> FitTotalFramesToMontage;

@@ -306,7 +306,7 @@ a `BakedSocket` hitbox uses; the runtime only indexes that array. **Bake sockets
   plays, the section, play rate, `TotalFrames`, tick rate, the mesh path and skeleton GUID, the sorted socket list and what the mesh says about each socket. It reads GUIDs and paths only.
   The toolbar button shows a yellow dot when the frames are missing, stale or baked by another tool (the tooltip says why); the Frame Data tab and the validator report the same
   (`BakedStale` is an error for the editor's own stale bake, a warning for frames with no record). Checked when the editor opens, after each edit (debounced) and when the preview subject changes.
-- **Bake on save** (setting `bBakeOnSave`, off): the toolkit bakes before it saves when the bake needs it and a preview mesh is shown.
+- **Bake on save** (setting `bBakeOnSave`, on by default since H1): the toolkit bakes before it saves when the bake needs it and a preview mesh is shown.
 - **Bake all**: `gstn.Combat.BakeAll [save] [/Package/Path]` bakes every timeline asset whose bake is missing or stale, taking the mesh from the asset's stored preview subject, else from its
   last bake, else from the settings' default skin (an asset with none is skipped and listed). Baked assets are left modified; `save` saves them. Timelines inline in ability Blueprints are baked from their own editor.
 - `UGSTN_CombatEditorUtils` (`BlueprintCallable`, development only): `GetTickRateHz`, `BakeTimeline(Timeline, Mesh, OutMessage)`, `IsBakeStale(Timeline, Mesh)`.
@@ -475,7 +475,7 @@ Project Settings > Plugins > GSTN Combat Editor (`UGSTN_CombatEditorSettings`, `
 | Setting | Default | Meaning |
 |---|---|---|
 | `DefaultPreviewKit`, `DefaultPreviewSkin` | none | The player subject the preview starts with when an asset has none of its own (E6). The subject of an asset is stored per user, see the preview section |
-| `bBakeOnSave` | off | Bake sockets when a timeline is saved (E8); baking is a button otherwise |
+| `bBakeOnSave` | on | Bake sockets when a timeline is saved (E8); baking is a button otherwise |
 | `bAutoKeyDefault` | on | A gizmo drag on a frame without a key creates the key first (E7) |
 | `TrackColors`, `GenericTrackColor` | one per M3 track kind | Row colours by track struct name |
 | `FallbackTickRateHz` | 62.5 | Used only when the Network Prediction settings object cannot be read |

@@ -9,6 +9,7 @@
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "Store/GSTN_MinionStore.h"
+#include "Sync/GSTN_SyncFragment.h"
 
 namespace
 {
@@ -102,6 +103,7 @@ void FGSTN_MinionMovement_Lightweight::StepBatch(FGSTN_MinionMoveContext& Ctx, T
 		return;
 	}
 	ComputeSeparation(Ctx, Slots);
+	BuildBodyHash(Ctx);
 
 	const FGSTN_MinionStore& Store = *Ctx.Store;
 	for (const int32 Slot : Slots)
@@ -209,6 +211,81 @@ void FGSTN_MinionMovement_Lightweight::ComputeSeparation(const FGSTN_MinionMoveC
 		}
 		SeparationBySlot[Slot] = Push.GetClampedToMaxSize(Ctx.Settings.MaxSeparationSpeed);
 	}
+}
+
+void FGSTN_MinionMovement_Lightweight::BuildBodyHash(const FGSTN_MinionMoveContext& Ctx)
+{
+	BodyCells.Reset();
+	if (Ctx.Bodies.IsEmpty() || !Ctx.Pushbox.bEnabled)
+	{
+		return;
+	}
+	// Two bodies interact only while their pushboxes (or cores) overlap at the start of the frame (FGSTN_Pushbox::ConstrainMove,
+	// ComputePush): with cells of twice the largest radius they are always in the same or adjacent cells
+	double MaxRadius = 1.0;
+	for (const FGSTN_PushboxBody& Body : Ctx.Bodies)
+	{
+		MaxRadius = FMath::Max(MaxRadius, static_cast<double>(FMath::Max(Body.Cylinder.Radius, Body.Cylinder.CoreRadius)));
+	}
+	BodyCellSize = 2.0 * MaxRadius;
+	for (int32 Index = 0; Index < Ctx.Bodies.Num(); ++Index)
+	{
+		const FVector& C = Ctx.Bodies[Index].Cylinder.Center;
+		BodyCells.Emplace(CellKey(FMath::FloorToInt32(C.X / BodyCellSize), FMath::FloorToInt32(C.Y / BodyCellSize)), Index);
+	}
+	// By cell then index (= entity id order, Bodies is sorted): the same visit order on every run
+	BodyCells.Sort([](const TPair<uint64, int32>& A, const TPair<uint64, int32>& B)
+	{
+		return A.Key < B.Key || (A.Key == B.Key && A.Value < B.Value);
+	});
+}
+
+const FGSTN_PushboxBody* FGSTN_MinionMovement_Lightweight::GatherBodyNeighbours(const FGSTN_MinionMoveContext& Ctx, int32 Slot)
+{
+	BodyNeighbours.Reset();
+	FighterNeighbours.Reset();
+	if (BodyCells.IsEmpty())
+	{
+		return nullptr;
+	}
+	const int32 EntityId = GSTNEntityKinds::MakeMinionEntityId(static_cast<uint16>(Slot));
+	const int32 SelfIndex = Algo::BinarySearchBy(Ctx.Bodies, EntityId, [](const FGSTN_PushboxBody& Body) { return Body.EntityId; });
+	if (SelfIndex == INDEX_NONE)
+	{
+		return nullptr;
+	}
+	const FGSTN_PushboxBody& Self = Ctx.Bodies[SelfIndex];
+	const FVector& C = Self.Cylinder.Center;
+	const int32 CellX = FMath::FloorToInt32(C.X / BodyCellSize);
+	const int32 CellY = FMath::FloorToInt32(C.Y / BodyCellSize);
+	TArray<int32, TInlineAllocator<32>> Found;
+	for (int32 DX = -1; DX <= 1; ++DX)
+	{
+		for (int32 DY = -1; DY <= 1; ++DY)
+		{
+			const uint64 Key = CellKey(CellX + DX, CellY + DY);
+			int32 Index = Algo::LowerBoundBy(BodyCells, Key, [](const TPair<uint64, int32>& Entry) { return Entry.Key; });
+			for (; Index < BodyCells.Num() && BodyCells[Index].Key == Key; ++Index)
+			{
+				if (BodyCells[Index].Value != SelfIndex)
+				{
+					Found.Add(BodyCells[Index].Value);
+				}
+			}
+		}
+	}
+	// Entity id order whatever the cells: ConstrainMove corrects against the others in the order given
+	Found.Sort();
+	for (const int32 Index : Found)
+	{
+		const FGSTN_PushboxBody& Other = Ctx.Bodies[Index];
+		BodyNeighbours.Add(Other);
+		if (!GSTNEntityKinds::IsMinionEntityId(Other.EntityId))
+		{
+			FighterNeighbours.Add(Other);
+		}
+	}
+	return &Self;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -327,7 +404,19 @@ void FGSTN_MinionMovement_Lightweight::StepSlot(FGSTN_MinionMoveContext& Ctx, in
 
 	// 2. Move
 	const FVector StartCentre = State.Centre;
-	const FVector Delta = Velocity * DeltaSeconds;
+	FVector Delta = Velocity * DeltaSeconds;
+	// Pushbox P5: the fighters' soft push (the minion's half of each pair), then the approach clamp and the rigid core against every
+	// body around, from the start of the frame; only the horizontal part changes, and the sweep below keeps the world winning
+	const FGSTN_PushboxBody* SelfBody = GatherBodyNeighbours(Ctx, Slot);
+	if (SelfBody && BodyNeighbours.IsEmpty())
+	{
+		SelfBody = nullptr;
+	}
+	if (SelfBody)
+	{
+		Delta += FGSTN_Pushbox::ComputePush(*SelfBody, FighterNeighbours, Ctx.Pushbox, State.Up);
+		Delta = FGSTN_Pushbox::ConstrainMove(*SelfBody, Delta, BodyNeighbours, Ctx.Pushbox, State.Up, &Velocity);
+	}
 	FHitResult FirstHit;
 	bool bMoveBlocked = false;
 	if (Delta.SizeSquared() > FMath::Square(MinMoveDistance))
@@ -353,6 +442,18 @@ void FGSTN_MinionMovement_Lightweight::StepSlot(FGSTN_MinionMoveContext& Ctx, in
 					Velocity -= FirstHit.Normal * Into;
 				}
 			}
+		}
+	}
+	// The sweep's slide along a wall and the step up redirect the move: the move actually made is constrained again (as a fighter's is,
+	// after its movement mode), and the correction is swept with no slide, so a wall still wins over a body
+	if (SelfBody)
+	{
+		const FVector Made = State.Centre - StartCentre;
+		const FVector Correction = FGSTN_Pushbox::ConstrainMove(*SelfBody, Made, BodyNeighbours, Ctx.Pushbox, State.Up, &Velocity) - Made;
+		if (Correction.SizeSquared() > FMath::Square(MinMoveDistance))
+		{
+			FHitResult CorrectionHit;
+			MoveWithCollision(Ctx, State, Correction, false, false, CorrectionHit);
 		}
 	}
 

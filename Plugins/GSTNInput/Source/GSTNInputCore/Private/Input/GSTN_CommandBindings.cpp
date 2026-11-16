@@ -9,10 +9,11 @@ int32 UGSTN_CommandBindingUtils::SelectBinding(TConstArrayView<const FGSTN_TagRe
 	for (int32 Index = 0; Index < Candidates.Num(); ++Index)
 	{
 		const FGSTN_TagRequirements* Requirements = Candidates[Index];
-		if (Requirements && Requirements->IsSatisfiedBy(Context) && Requirements->GetRequiredCount() > BestRequired)
+		const int32 Specificity = Requirements && Requirements->IsSatisfiedBy(Context) ? Requirements->GetSpecificity(Context) : -1;
+		if (Specificity > BestRequired)
 		{
 			Best = Index;
-			BestRequired = Requirements->GetRequiredCount();
+			BestRequired = Specificity;
 		}
 	}
 	return Best;

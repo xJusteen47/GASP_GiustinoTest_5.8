@@ -24,6 +24,20 @@ class UCurveVector;
  */
 
 /** How the character turns when the timeline starts (combat.md 8.4) */
+/**
+ * Where a move lives (owner 2026-11-16). Any: today's behaviour, the move plays on wherever the character is. Ground: a ground move; if the
+ * character is in the air while it runs (walked off a ledge, pushed, teleported) the move is CANCELLED, except from the take-off window on
+ * (FGSTN_CombatTimelineData::TakeoffFromFrame: a ground move that sends the character up, the Smash 4 wizard's dropkick) or when it was
+ * started in coyote time. Air: an aerial; what a landing does is the Landing track's (FGSTN_TimelineTrack_Landing), none = plays on
+ */
+UENUM(BlueprintType)
+enum class EGSTN_MoveGroundRule : uint8
+{
+	Any,
+	Ground,
+	Air
+};
+
 UENUM(BlueprintType)
 enum class EGSTN_AimPolicy : uint8
 {
@@ -168,7 +182,19 @@ enum class EGSTN_TimelineTrackKind : uint8
 	Event,
 	WeaponSwitch,
 	Hitbox,
-	HurtboxModifier
+	HurtboxModifier,
+	/** FGSTN_TimelineTrack_Hurtbox: a hitbox track's shapes used as extra hurtboxes of the one who plays the move */
+	Hurtbox
+};
+
+/** Which hurtbox detail level a move asks for while it runs (FGSTN_CombatTimelineData::HurtboxDetail) */
+UENUM(BlueprintType)
+enum class EGSTN_HurtboxDetailOverride : uint8
+{
+	/** The level of the character's hurtbox set (Simple unless the set says otherwise) */
+	UseSet,
+	Simple,
+	Detailed
 };
 
 /**
@@ -389,9 +415,33 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Hitbox : public FGSTN_TimelineTrac
 {
 	GENERATED_BODY()
 
+	/** The designer's name of the group, shown by the editor instead of "Group N" (owner 2026-11-16). A label only: nothing looks a group up by it */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox")
+	FName GroupName = NAME_None;
+
 	/** The part or group the hitbox is attached to */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox")
 	FGSTN_PartSelector Part;
+
+	/**
+	 * Parenting (owner 2026-11-16): on = the group is a transform of its own, GroupOffset in GroupSpace (on GroupSocket), and every hitbox with
+	 * bAttachToGroup is its child: its keys are relative to the group, so moving the group moves them all. Off = each hitbox is placed by its own
+	 * Space and Socket, the behaviour of every timeline made before parenting existed
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox|Group Transform")
+	bool bUseGroupTransform = false;
+
+	/** Where the group lives: Root, BakedSocket (on GroupSocket) or WorldAtMoveStart. Projectile is not a group space and places nothing */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox|Group Transform", meta = (EditCondition = "bUseGroupTransform"))
+	EGSTN_HitboxSpace GroupSpace = EGSTN_HitboxSpace::Root;
+
+	/** The baked socket (or bone) the group follows with GroupSpace BakedSocket. Baked like a hitbox's socket (Ctrl+B) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox|Group Transform", meta = (EditCondition = "bUseGroupTransform && GroupSpace == EGSTN_HitboxSpace::BakedSocket"))
+	FName GroupSocket = NAME_None;
+
+	/** The group's transform in its space: its children's keys are relative to it */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox|Group Transform", meta = (EditCondition = "bUseGroupTransform"))
+	FTransform GroupOffset = FTransform::Identity;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox")
 	TArray<FGSTN_HitboxSpec> Hitboxes;
@@ -421,7 +471,68 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Hitbox : public FGSTN_TimelineTrac
 	FGSTN_RicochetResponse RicochetResponse;
 
 	virtual EGSTN_TimelineTrackKind GetKind() const override { return EGSTN_TimelineTrackKind::Hitbox; }
+
+	/** Is this hitbox a child of the group's transform? */
+	bool IsParentedToGroup(const FGSTN_HitboxSpec& Spec) const { return bUseGroupTransform && Spec.bAttachToGroup; }
+
+	/** The space a hitbox is placed in after parenting: the group's for a child, its own otherwise */
+	EGSTN_HitboxSpace GetEffectiveSpace(const FGSTN_HitboxSpec& Spec) const { return IsParentedToGroup(Spec) ? GroupSpace : Spec.Space; }
+
+	/** The socket a hitbox follows after parenting (meaningful with GetEffectiveSpace BakedSocket) */
+	FName GetEffectiveSocket(const FGSTN_HitboxSpec& Spec) const { return IsParentedToGroup(Spec) ? GroupSocket : Spec.Socket; }
+
+	/**
+	 * What sits between a hitbox's evaluated keys and its space: the group's offset for a child, identity otherwise. Every reader places a hitbox as
+	 * Keys * GetParentOffset * Space, so the simulation, the minions, the bake and the editor preview agree
+	 */
+	const FTransform& GetParentOffset(const FGSTN_HitboxSpec& Spec) const { return IsParentedToGroup(Spec) ? GroupOffset : FTransform::Identity; }
 };
+
+/**
+ * Extra hurtboxes of the character playing the move, for a frame range (owner 2026-11-16): the leg stretched by a kick, the arm of a long punch, so
+ * the attack can be hit back where it reaches (Smash-like extended hurtboxes). It IS a hitbox track for everything but the hit: same shapes, keys,
+ * spaces (Root and BakedSocket; WorldAtMoveStart and Projectile are not hurtbox spaces and place nothing), group transform, names, so the timeline
+ * editor edits it exactly like a hitbox group. Nothing of its hitboxes' hit data is read, and the attacker never sees it: the only readers are
+ * FGSTN_HurtboxPose (the victim side) and the editor.
+ *
+ * A hit on one of its shapes counts as a hit on the set hurtbox named CountsAs (the torso, the leg it extends): that hurtbox's priority, reaction
+ * scale, tags, part and state (a Hurtbox Modifier on it applies to its extension too). None = the set's first hurtbox.
+ * Kept by the derived struct, so every reader of hitbox tracks that filters by GetKind (the player, the phases) or by GetHitboxTrack skips it.
+ */
+USTRUCT(BlueprintType, meta = (DisplayName = "Hurtbox"))
+struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Hurtbox : public FGSTN_TimelineTrack_Hitbox
+{
+	GENERATED_BODY()
+
+	/** The hurtbox of the character's set this group's shapes count as. None = the set's first one */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtbox")
+	FName CountsAs = NAME_None;
+
+	/**
+	 * On = while the track is open, this group's shapes REPLACE the CountsAs hurtbox instead of adding to it: the hand-made feet of a move (owner
+	 * 2026-11-16, "the feet need care in some moves, I will do those by hand"). Off = they add to it (a stretched limb)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtbox")
+	bool bReplaceCountsAs = false;
+
+	virtual EGSTN_TimelineTrackKind GetKind() const override { return EGSTN_TimelineTrackKind::Hurtbox; }
+};
+
+namespace GSTNTimelineTracks
+{
+	/** The attack hitbox track of a track instance: null for anything else, including a Hurtbox track (a hitbox track by inheritance, never an attack) */
+	inline const FGSTN_TimelineTrack_Hitbox* AsAttackHitbox(const TInstancedStruct<FGSTN_TimelineTrack>& Instance)
+	{
+		const FGSTN_TimelineTrack_Hitbox* Track = Instance.GetPtr<FGSTN_TimelineTrack_Hitbox>();
+		return Track && Track->GetKind() == EGSTN_TimelineTrackKind::Hitbox ? Track : nullptr;
+	}
+
+	inline FGSTN_TimelineTrack_Hitbox* AsAttackHitboxMutable(TInstancedStruct<FGSTN_TimelineTrack>& Instance)
+	{
+		FGSTN_TimelineTrack_Hitbox* Track = Instance.GetMutablePtr<FGSTN_TimelineTrack_Hitbox>();
+		return Track && Track->GetKind() == EGSTN_TimelineTrackKind::Hitbox ? Track : nullptr;
+	}
+}
 
 /**
  * Changes how the addressed hurtboxes take hits for a frame range (the feet of a dodge, an armored arm). Which hurtboxes,
@@ -669,6 +780,27 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Chain", meta = (AllowedClasses = "/Script/GSTNCombatNP.GSTN_GA_BaseCombat"))
 	TSoftClassPtr<UObject> FollowUpTimeline;
 
+	/** Ground, air or either (EGSTN_MoveGroundRule). Any = no rule, the behaviour of every timeline made before 2026-11-16 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ground")
+	EGSTN_MoveGroundRule GroundRule = EGSTN_MoveGroundRule::Any;
+
+	/**
+	 * Ground moves only: the timeline frame from which the character may leave the ground (the take-off), -1 = never (any air frame cancels).
+	 * A move with a take-off may also start in coyote time (its binding takes Input.Context.Coyote as Grounded)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ground", meta = (EditCondition = "GroundRule == EGSTN_MoveGroundRule::Ground", ClampMin = "-1", ForceUnits = "Frames"))
+	int32 TakeoffFromFrame = -1;
+
+	/** Ground moves only: the take-off must happen before this frame (exclusive); later, an air frame cancels again. -1 = until the end */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Ground", meta = (EditCondition = "GroundRule == EGSTN_MoveGroundRule::Ground && TakeoffFromFrame >= 0", ClampMin = "-1", ForceUnits = "Frames"))
+	int32 TakeoffUntilFrame = -1;
+
+	/** A ground move that may take off (and so may start in coyote time) */
+	bool AllowsTakeoff() const { return GroundRule == EGSTN_MoveGroundRule::Ground && TakeoffFromFrame >= 0; }
+
+	/** Frame is inside the take-off window */
+	bool IsTakeoffFrame(int32 Frame) const { return AllowsTakeoff() && Frame >= TakeoffFromFrame && (TakeoffUntilFrame < 0 || Frame < TakeoffUntilFrame); }
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim")
 	EGSTN_AimPolicy AimPolicy = EGSTN_AimPolicy::KeepFacing;
 
@@ -732,9 +864,23 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Tracks")
 	TArray<TInstancedStruct<FGSTN_TimelineTrack>> Tracks;
 
-	/** Root-relative transform of every socket a BakedSocket hitbox uses, one per timeline frame. Written by the baking tool */
+	/**
+	 * Root-relative transform of every socket a BakedSocket hitbox uses, and of every bone a hurtbox follows (FGSTN_Hurtbox::bFollowBone), one per
+	 * timeline frame. Written by the baking tool
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Tracks")
 	TMap<FName, FGSTN_BakedSocketFrames> BakedSockets;
+
+	/**
+	 * Bones baked for the hurtboxes of whoever plays this move, on top of the ones the editor finds by itself (the bones followed by every hurtbox set
+	 * of the project that the bake mesh has). Usually empty; add a bone here when a set the editor cannot find (made at run time) follows it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Hurtboxes")
+	TArray<FName> HurtboxBones;
+
+	/** The hurtbox detail level while this move runs (owner 2026-11-16). UseSet = the set's own (Simple unless it says otherwise) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Hurtboxes")
+	EGSTN_HurtboxDetailOverride HurtboxDetail = EGSTN_HurtboxDetailOverride::UseSet;
 
 #if WITH_EDITORONLY_DATA
 	/**
@@ -777,10 +923,10 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	/** One past the last frame any hitbox track is open (0 with none) */
 	int32 GetActiveEndFrame() const;
 
-	/** The hitbox track at TrackIndex (an index into Tracks), null when it is not one */
+	/** The hitbox track at TrackIndex (an index into Tracks), null when it is not one (a Hurtbox track is not) */
 	const FGSTN_TimelineTrack_Hitbox* GetHitboxTrack(int32 TrackIndex) const
 	{
-		return Tracks.IsValidIndex(TrackIndex) ? Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack_Hitbox>() : nullptr;
+		return Tracks.IsValidIndex(TrackIndex) ? GSTNTimelineTracks::AsAttackHitbox(Tracks[TrackIndex]) : nullptr;
 	}
 
 	/** The strike settings of a hitbox group: its own when it overrides them, the move's otherwise (also for INDEX_NONE) */
@@ -799,16 +945,12 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 		return bHasRicochetResponse && RicochetResponse.IsAuthored() ? &RicochetResponse : nullptr;
 	}
 
-	/** The response of a hitbox group: its own when authored, else the move's; null = the caller's fallbacks */
-	const FGSTN_RicochetResponse* GetRicochetResponse(int32 TrackIndex) const
-	{
-		const FGSTN_TimelineTrack_Hitbox* Track = GetHitboxTrack(TrackIndex);
-		if (Track && Track->bHasRicochetResponse && Track->RicochetResponse.IsAuthored())
-		{
-			return &Track->RicochetResponse;
-		}
-		return GetRicochetResponse();
-	}
+	/**
+	 * The response of a hitbox group: its own when authored, else the move's; null = the caller's fallbacks. A Landing track's index gives its
+	 * landing lag (FGSTN_TimelineTrack_Landing: the lag is played by the recoil player), never the move's response; a Ledge Check's index gives
+	 * its Recoil response the same way (FGSTN_TimelineTrack_LedgeCheck)
+	 */
+	const FGSTN_RicochetResponse* GetRicochetResponse(int32 TrackIndex) const;
 
 	/**
 	 * The baked root-relative transform of a socket at a timeline frame. A frame past the baked range holds the last one and

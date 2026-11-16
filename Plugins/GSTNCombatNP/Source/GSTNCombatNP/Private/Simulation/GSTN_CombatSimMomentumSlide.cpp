@@ -1,4 +1,4 @@
-// The momentum slide of ground moves started while running (owner 2026-11-13).
+// The momentum slide of ground moves started while running (owner 2026-11-13) and the ledge guard of the Ledge Check track (owner 2026-11-16).
 
 #include "Simulation/GSTN_CombatSimComponent.h"
 
@@ -35,5 +35,31 @@ bool UGSTN_CombatSimComponent::ReadRunningSlide(int32& OutStartFrame, const FGST
 	}
 	OutStartFrame = Sync->Core.TimelineStartFrame;
 	OutSlide = &Data->MomentumSlide;
+	return true;
+}
+
+void UGSTN_CombatSimComponent::ExecuteLedgeGuard()
+{
+	// Like the slide: the move latches its timeline on its own first frame and reads the clock's decision every frame, so the effect carries nothing
+	if (!AbilitySystem || !LedgeGuardEffect)
+	{
+		return;
+	}
+	const FGameplayEffectSpecHandle Spec = AbilitySystem->MakeOutgoingSpec(LedgeGuardEffect, 1.f, AbilitySystem->MakeEffectContext());
+	if (Spec.IsValid())
+	{
+		AbilitySystem->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+	}
+}
+
+bool UGSTN_CombatSimComponent::ReadLedgeStop(int32& OutStartFrame, bool& bOutStop) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (!Sync || Sync->Core.ActionState != EGSTN_ActionState::InTimeline || Sync->Core.RecoilStartFrame != INDEX_NONE)
+	{
+		return false;
+	}
+	OutStartFrame = Sync->Core.TimelineStartFrame;
+	bOutStop = Sync->Core.bLedgeStop;
 	return true;
 }

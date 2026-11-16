@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GenericTeamAgentInterface.h"
+#include "Hits/GSTN_HurtboxPose.h"
 #include "Hits/GSTN_HurtboxTypes.h"
 #include "Hits/GSTN_ReactionTypes.h"
 #include "Simulation/GSTN_CombatActionTypes.h"
@@ -12,6 +13,7 @@
 #include "Sync/GSTN_SyncFragment.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
+#include "Timeline/GSTN_Pushbox.h"
 #include "GSTN_StepSnapshot.generated.h"
 
 class AActor;
@@ -249,6 +251,12 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotEntry
 	/** A sphere around Transform that holds every hurtbox, for the broadphase */
 	float BoundRadius = 0.f;
 
+	/**
+	 * The fighter's pushbox at the end of the previous frame (FGSTN_Pushbox), world space. Inactive (radius 0) for an entity with none: a provider's
+	 * entities, a knocked out or parked fighter. Read by every fighter's combat tick to compute its own push (UGSTN_CombatSimComponent::ComputeFramePush)
+	 */
+	FGSTN_PushboxCylinder Pushbox;
+
 	/** In its hitstop window this frame: the one thing an attacker must not feed on */
 	bool bInHitstop = false;
 
@@ -270,7 +278,38 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotEntry
 	 */
 	FGSTN_ExtraHurtboxList ExtraHurtboxes;
 
-	/** The shape of the hurtbox a hit carries the index of: a set hurtbox, or an extra from GSTNHurtboxIndex::ExtraIndexBase. Null for an index that is neither */
+	/**
+	 * Where the set's hurtboxes are this frame (owner 2026-11-16): following their bones through the running move, the detail level's hurtboxes only,
+	 * plus the move's Hurtbox tracks or the kit's movement shapes. Default (empty) = the set as authored. Every reader of the set's shapes goes through
+	 * GetHurtShape / IsHurtboxPresent / HurtPose.Extensions, so the attacker, the minions and the projectiles test the same shapes
+	 */
+	FGSTN_HurtboxPose HurtPose;
+
+	/** The shape of set hurtbox Index this frame. Index must be valid in Hurtboxes */
+	const FGSTN_HitShape& GetHurtShape(int32 Index) const { return HurtPose.GetShape(*Hurtboxes, Index); }
+
+	/** Does set hurtbox Index take hits through its own shape this frame */
+	bool IsHurtboxPresent(int32 Index) const { return HurtPose.IsPresent(Index); }
+
+	/**
+	 * Appends to Overlapped the set hurtboxes whose pose extensions overlap (a move's stretched leg counts as the leg). Test(Shape) is the caller's
+	 * overlap test with the root-relative shape; Skip(Index) leaves out an index the caller does not want (intangible, the hard hurtbox already met).
+	 * An index already in the list is not added twice
+	 */
+	template <typename TTest, typename TSkip, typename TArrayType>
+	void AppendExtensionOverlaps(TArrayType& Overlapped, TTest&& Test, TSkip&& Skip) const
+	{
+		for (const FGSTN_PosedHurtboxExtension& PosedExt : HurtPose.Extensions)
+		{
+			if (Hurtboxes && Hurtboxes->Hurtboxes.IsValidIndex(PosedExt.HurtboxIndex) && !Overlapped.Contains(PosedExt.HurtboxIndex) && !Skip(PosedExt.HurtboxIndex)
+				&& Test(PosedExt.Shape))
+			{
+				Overlapped.Add(PosedExt.HurtboxIndex);
+			}
+		}
+	}
+
+	/** The shape of the hurtbox a hit carries the index of: a set hurtbox (posed), or an extra from GSTNHurtboxIndex::ExtraIndexBase. Null for an index that is neither */
 	const FGSTN_HitShape* FindHurtboxShape(int32 HurtboxIndex) const
 	{
 		if (GSTNHurtboxIndex::IsExtra(HurtboxIndex))
@@ -278,7 +317,22 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotEntry
 			const int32 Position = GSTNHurtboxIndex::ToExtraPosition(HurtboxIndex);
 			return ExtraHurtboxes.IsValidIndex(Position) ? &ExtraHurtboxes[Position].Shape : nullptr;
 		}
-		return Hurtboxes && Hurtboxes->Hurtboxes.IsValidIndex(HurtboxIndex) ? &Hurtboxes->Hurtboxes[HurtboxIndex].Shape : nullptr;
+		if (!Hurtboxes || !Hurtboxes->Hurtboxes.IsValidIndex(HurtboxIndex))
+		{
+			return nullptr;
+		}
+		// A hurtbox hit only through an extension (hidden by the level, or replaced by a move): the extension's shape is where the contact was
+		if (!HurtPose.IsPresent(HurtboxIndex))
+		{
+			for (const FGSTN_PosedHurtboxExtension& PosedExt : HurtPose.Extensions)
+			{
+				if (PosedExt.HurtboxIndex == HurtboxIndex)
+				{
+					return &PosedExt.Shape;
+				}
+			}
+		}
+		return &GetHurtShape(HurtboxIndex);
 	}
 };
 
@@ -440,6 +494,12 @@ public:
 	 * Deterministic: it reads the entries (their blobs and transforms) only, so every machine and a lag compensation rewind see the same result
 	 */
 	virtual void FinalizeSnapshot(int32 Frame, TArrayView<FGSTN_SnapshotEntry> Entries) const {}
+
+	/**
+	 * Appends the state tags (by name) the entity is in at the context's frame from this plugin's data (the Defence plugin's Combat.State.Knockdown),
+	 * so data keyed by state (the pushbox's StateRules) can match them without code naming the state. Same determinism as Contribute. Not called at a rebuild
+	 */
+	virtual void AppendStateTags(const FGSTN_SnapshotContributorContext& Context, FGSTN_PushboxStateTags& Out) const {}
 };
 
 /**
@@ -462,6 +522,9 @@ public:
 
 	/** The snapshot build: fills Entry.Extension (one blob per contributor), lets each contributor modify the entry and collects their extra hurtboxes. Resets both first; neutral with nothing registered */
 	void Fill(const FGSTN_SnapshotContributorContext& Context, FGSTN_SnapshotEntry& Entry) const;
+
+	/** Every contributor's AppendStateTags for the context, in type id order */
+	void CollectStateTags(const FGSTN_SnapshotContributorContext& Context, FGSTN_PushboxStateTags& Out) const;
 
 	/**
 	 * The victim drain: rebuilds every contributor's blob of Set from the fragments as they stand now, each contributor seeing its own blob

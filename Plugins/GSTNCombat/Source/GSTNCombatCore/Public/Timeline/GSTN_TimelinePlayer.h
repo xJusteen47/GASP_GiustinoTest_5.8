@@ -69,6 +69,12 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineOutput
 	/** The recoil starts with this evaluation */
 	bool bRecoilStartsNow = false;
 
+	/**
+	 * Written by the combat clock, never by the player: the Landing or Ledge Check track (index into Tracks) whose ContinueWithMove ended the move on this
+	 * frame; the combat model starts that track's ContinueMove on the same frame. INDEX_NONE otherwise
+	 */
+	int32 LandingContinueTrack = INDEX_NONE;
+
 	/** Cancel windows open at Frame */
 	TArray<const FGSTN_TimelineTrack_CancelWindow*> CancelWindows;
 

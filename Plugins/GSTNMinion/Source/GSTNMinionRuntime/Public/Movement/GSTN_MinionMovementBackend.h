@@ -6,6 +6,7 @@
 #include "CollisionQueryParams.h"
 #include "Engine/EngineTypes.h"
 #include "Templates/Function.h"
+#include "Timeline/GSTN_Pushbox.h"
 #include "GSTN_MinionMovementBackend.generated.h"
 
 class UGSTN_MinionDefinition;
@@ -69,6 +70,13 @@ struct GSTNMINIONRUNTIME_API FGSTN_MinionMovementSettings
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Movement|Separation", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
 	float MaxSeparationSpeed = 300.f;
+
+	/**
+	 * Pushbox P5: minions meet fighters and each other with the fighters' pushbox and rigid core (FGSTN_Pushbox, the type's
+	 * UGSTN_MinionDefinition::BodyCollision, the combat rules' Pushbox settings). Off: only the separation steering between minions
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Movement|Body Collision")
+	bool bBodyCollision = true;
 };
 
 /**
@@ -118,6 +126,14 @@ struct GSTNMINIONRUNTIME_API FGSTN_MinionMoveContext
 	FCollisionQueryParams QueryParams;
 	/** Feet below this height (world Z) = fell out of the world */
 	float KillZ = -UE_BIG_NUMBER;
+
+	/**
+	 * Pushbox P5: every active body at the start of the frame (the fighters of the step snapshot, every minion from the store, end of the
+	 * previous frame), sorted by entity id. Empty = no body collision. Read only: the result does not depend on the slot order
+	 */
+	TConstArrayView<FGSTN_PushboxBody> Bodies;
+	/** The combat rules' pushbox settings (the fighters' own, so a pair's shares stay equal and opposite) */
+	FGSTN_PushboxSettings Pushbox;
 
 	// Outputs, appended by the backend in slot order
 

@@ -103,7 +103,7 @@ FString GSTNBake::DescribeInputs(const FGSTN_CombatTimelineData& Data, const FGS
 	}
 
 	TArray<FGSTN_BakeSocketUse> Uses;
-	FGSTN_SocketBaker::CollectUses(Data, Uses);
+	FGSTN_SocketBaker::CollectUses(Data, Uses, Inputs.Mesh);
 	for (const FName Socket : FGSTN_SocketBaker::GetDistinctSockets(Uses))
 	{
 		FString Line = FString::Printf(TEXT("socket=%s"), *Socket.ToString());
@@ -132,7 +132,7 @@ FGSTN_BakeStatusResult GSTNBake::GetStatus(const FGSTN_CombatTimelineData& Data,
 {
 	FGSTN_BakeStatusResult Result;
 	TArray<FGSTN_BakeSocketUse> Uses;
-	FGSTN_SocketBaker::CollectUses(Data, Uses);
+	FGSTN_SocketBaker::CollectUses(Data, Uses, Inputs.Mesh);
 	const TArray<FName> Sockets = FGSTN_SocketBaker::GetDistinctSockets(Uses);
 	if (Sockets.IsEmpty())
 	{

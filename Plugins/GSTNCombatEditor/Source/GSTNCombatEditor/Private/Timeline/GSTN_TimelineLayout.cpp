@@ -260,6 +260,67 @@ FString FGSTN_TimelineLayout::FormatMilliseconds(int32 Frame, float TickRate)
 	return FString::Printf(TEXT("%.1f"), Milliseconds);
 }
 
+FString FGSTN_TimelineLayout::FormatSeconds(int32 Frame, float TickRate)
+{
+	const double Seconds = TickRate > 0.f ? static_cast<double>(Frame) / TickRate : 0.0;
+	return FString::Printf(TEXT("%.2f s"), Seconds);
+}
+
+void FGSTN_TimelineLayout::FormatRulerLabel(int32 Frame, float TickRate, EGSTN_RulerDisplay Display, FString& OutTop, FString& OutBottom)
+{
+	switch (Display)
+	{
+	case EGSTN_RulerDisplay::FramesAndMilliseconds:
+		OutTop = FString::FromInt(Frame);
+		OutBottom = FormatMilliseconds(Frame, TickRate) + TEXT(" ms");
+		break;
+	case EGSTN_RulerDisplay::Frames:
+		OutTop = FString::FromInt(Frame);
+		OutBottom.Reset();
+		break;
+	case EGSTN_RulerDisplay::Seconds:
+		OutTop = FormatSeconds(Frame, TickRate);
+		OutBottom.Reset();
+		break;
+	default:
+		OutTop = FString::FromInt(Frame);
+		OutBottom = FormatSeconds(Frame, TickRate);
+		break;
+	}
+}
+
+FString FGSTN_TimelineLayout::FormatPlayheadTime(int32 Frame, float TickRate, EGSTN_RulerDisplay Display)
+{
+	switch (Display)
+	{
+	case EGSTN_RulerDisplay::FramesAndMilliseconds:
+		return FormatMilliseconds(Frame, TickRate) + TEXT(" ms");
+	case EGSTN_RulerDisplay::Frames:
+		return FString();
+	default:
+		return FormatSeconds(Frame, TickRate);
+	}
+}
+
+void FGSTN_TimelineLayout::ZoomAroundCenter(FGSTN_TimelineViewTransform& View, double Factor, double WidthPixels, int32 TotalFrames)
+{
+	if (WidthPixels <= 0.0)
+	{
+		return;
+	}
+	View.ZoomAround(WidthPixels * 0.5, Factor);
+	ClampView(View, WidthPixels, TotalFrames);
+}
+
+void FGSTN_TimelineLayout::GetScrollRange(const FGSTN_TimelineViewTransform& View, double WidthPixels, int32 TotalFrames, double& OutMin, double& OutMax)
+{
+	// The same room ClampView allows: the whole timeline, the visible span included, so the thumb fills the bar when everything shows
+	const double Visible = View.GetVisibleFrameCount(FMath::Max(WidthPixels, 1.0));
+	const double Length = static_cast<double>(FMath::Max(TotalFrames, FGSTN_TimelineEditorModel::MinimumRulerFrames));
+	OutMin = FMath::Min(-0.5, View.FirstVisibleFrame);
+	OutMax = FMath::Max(Length + 0.5, View.FirstVisibleFrame + Visible);
+}
+
 // Navigation
 
 int32 FGSTN_TimelineLayout::FindAdjacentEdge(const FGSTN_CombatTimelineData& Data, int32 Frame, int32 Direction)

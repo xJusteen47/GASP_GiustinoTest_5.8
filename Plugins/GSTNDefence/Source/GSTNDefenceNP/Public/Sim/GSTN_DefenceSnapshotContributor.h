@@ -35,6 +35,9 @@ public:
 	virtual void Contribute(const FGSTN_SnapshotContributorContext& Context, FGSTN_SnapshotExtensionBlob& Blob) const override;
 	virtual void AppendExtraHurtboxes(const FGSTN_SnapshotContributorContext& Context, FGSTN_ExtraHurtboxList& Out) const override;
 
+	/** Combat.State.Knockdown while downed, for data keyed by state (the pushbox's StateRules: a downed body has none by default) */
+	virtual void AppendStateTags(const FGSTN_SnapshotContributorContext& Context, FGSTN_PushboxStateTags& Out) const override;
+
 	/**
 	 * The extension for the context: false when the entity has no defence data (nothing to contribute). The one function both hooks
 	 * use, so the flags and the bubble agree. OutData is the attached data the extension was built from (null at a rebuild)

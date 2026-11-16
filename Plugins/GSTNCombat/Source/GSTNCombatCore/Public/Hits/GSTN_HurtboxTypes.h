@@ -25,6 +25,29 @@ enum class EGSTN_HurtState : uint8
 };
 
 /**
+ * How detailed a combatant's hurtboxes are (owner 2026-11-16). Simple: one body volume (that also fills the gap between the legs, so a low poke aimed
+ * between them does not whiff) plus head and the like, the default for idle and basic movement; Detailed: a capsule per limb that follows its bone,
+ * the default while a move runs. A set holds both kinds at once and each hurtbox says which level it belongs to (EGSTN_HurtboxDetailUse)
+ */
+UENUM(BlueprintType)
+enum class EGSTN_HurtboxDetail : uint8
+{
+	Simple,
+	Detailed
+};
+
+/** Which detail levels a hurtbox is part of. Both is every hurtbox authored before the levels existed, so an old set behaves as before */
+UENUM(BlueprintType)
+enum class EGSTN_HurtboxDetailUse : uint8
+{
+	Both,
+	/** Only with detail Simple: the body volume the per-limb capsules replace */
+	SimpleOnly,
+	/** Only with detail Detailed: a per-limb capsule */
+	DetailedOnly
+};
+
+/**
  * The way into a hurtbox that sits inside another one (combat-m4-hits 9c B, combat-parts 3.4): a hollow medium-hardness cavity inside
  * a heavy-armour leg. Hit shapes are pure maths with no world query, so a bulky swing that overlaps the leg from outside also overlaps
  * the cavity inside it and would pick it by Priority, hitting soft material through the armour. With an opening, the cavity counts
@@ -54,8 +77,11 @@ struct GSTNCOMBATCORE_API FGSTN_HurtboxOpening
 };
 
 /**
- * One hurtbox of a combatant: where it is and how it reacts. Shape is root-relative, baked from the reference pose, so a
- * hurtbox costs no bone transform at runtime.
+ * One hurtbox of a combatant: where it is and how it reacts. Shape is root-relative in the reference pose. With bFollowBone (owner 2026-11-16) it
+ * follows Bone during a move: the running timeline bakes that bone's root-relative transform per frame next to its hitbox sockets
+ * (FGSTN_CombatTimelineData::BakedSockets), and the posed shape is Shape.Local * BoneReference^-1 * baked bone (FGSTN_HurtboxPose). Still no bone
+ * read at run time, so it costs a map lookup and two transform products per hurtbox, the same on every machine and in a resimulation. Without a
+ * baked frame for the bone (no move running, a move baked before the bone was asked for) the shape stays where the reference pose put it.
  */
 USTRUCT(BlueprintType)
 struct GSTNCOMBATCORE_API FGSTN_Hurtbox
@@ -66,9 +92,32 @@ struct GSTNCOMBATCORE_API FGSTN_Hurtbox
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox")
 	FName Name = NAME_None;
 
-	/** The bone the shape was baked from (tooling only) */
+	/** The bone the shape was baked from, and the one it follows with bFollowBone */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox")
 	FName Bone = NAME_None;
+
+	/**
+	 * Follow Bone through the animation of the running move (owner 2026-11-16). Off = the shape stays where the reference pose put it, as every
+	 * hurtbox did before. Needs BoneReference (the hurtbox set editor fills it with "Refresh bone references", the generator on generation)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox|Follow")
+	bool bFollowBone = false;
+
+	/** Root-relative transform of Bone in the reference pose, in the frame the socket baker uses: what Shape was authored against */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox|Follow", meta = (EditCondition = "bFollowBone"))
+	FTransform BoneReference = FTransform::Identity;
+
+	/** Which detail level of the set this hurtbox belongs to (Both = every level, the value of every hurtbox made before the levels) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox")
+	EGSTN_HurtboxDetailUse DetailUse = EGSTN_HurtboxDetailUse::Both;
+
+	/** Is the hurtbox there at this detail level? */
+	bool IsUsedAt(EGSTN_HurtboxDetail Detail) const
+	{
+		return DetailUse == EGSTN_HurtboxDetailUse::Both
+			|| (DetailUse == EGSTN_HurtboxDetailUse::SimpleOnly && Detail == EGSTN_HurtboxDetail::Simple)
+			|| (DetailUse == EGSTN_HurtboxDetailUse::DetailedOnly && Detail == EGSTN_HurtboxDetail::Detailed);
+	}
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hurtbox")
 	FGSTN_HitShape Shape;
@@ -178,6 +227,21 @@ public:
 	/** Index in this array is the HurtboxIndex a hit carries (at most 128 entries: the indices from GSTNHurtboxIndex::ExtraIndexBase are the extras') */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtboxes")
 	TArray<FGSTN_Hurtbox> Hurtboxes;
+
+	/**
+	 * Which hurtboxes take hits while no move runs: idle, walk, run, jump (owner 2026-11-16). Simple (default) = the Both and SimpleOnly ones, a body
+	 * volume that leaves no gap between the legs, so a low poke aimed between them does not whiff. A kit can replace that volume
+	 * (FGSTN_MovementHurtboxExtension). A set made before the levels has only Both hurtboxes, so it is the same at either level
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtboxes")
+	EGSTN_HurtboxDetail MovementDetail = EGSTN_HurtboxDetail::Simple;
+
+	/**
+	 * Which hurtboxes take hits while a move (a combat timeline) runs: Detailed (default) = the Both and DetailedOnly ones, per limb, following their
+	 * bones through the move's animation. A move can ask for the other level (FGSTN_CombatTimelineData::HurtboxDetail)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hurtboxes")
+	EGSTN_HurtboxDetail MoveDetail = EGSTN_HurtboxDetail::Detailed;
 
 	/** Entity default of the hitstun condition. Unset = the rules' value */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction")

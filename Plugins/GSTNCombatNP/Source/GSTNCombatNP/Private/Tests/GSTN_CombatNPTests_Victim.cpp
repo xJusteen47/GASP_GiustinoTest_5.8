@@ -2,6 +2,8 @@
 // the steps are the pure functions FGSTN_CombatVictim::Resolve and StepReaction over a sync core.
 
 #include "Misc/AutomationTest.h"
+#include "Serialization/BitReader.h"
+#include "Serialization/BitWriter.h"
 #include "AbilitySystemComponent.h"
 #include "Attributes/GSTN_CombatAttributeSet.h"
 #include "Engine/Engine.h"
@@ -842,6 +844,131 @@ bool FGSTN_VictimInterruptedClearsBufferTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("a press made later is kept"), LivePresses(History), 1);
 	TestFalse(TEXT("a quiet frame keeps it"), FGSTN_BufferResetRules::ApplyInterrupted(History, Quiet, 21));
 	TestEqual(TEXT("and it is there at hitstun end"), LivePresses(History), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimTumbleAirRecoveryTest, "GSTNCombat.NP.Hits.Victim.TumbleAirRecovery", GSTN_NP_TEST_FLAGS)
+bool FGSTN_VictimTumbleAirRecoveryTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-16, option B: with air recovery a tumble may act once its hitstun ends in the air, still tumbling until it acts or lands
+	FVictimFixture Tumble;
+	Tumble.Entries = { FVictimFixture::MakeEntry(10, 2000.f) };
+	Tumble.Run(11);
+	TestTrue(TEXT("tumbling"), Tumble.Core.ActionState == EGSTN_ActionState::Tumble);
+	auto Step = [&Tumble](int32 Frame)
+	{
+		FGSTN_ReactionStepInput In;
+		In.Frame = Frame;
+		In.Rules = Tumble.Rules.Get();
+		In.bGrounded = Tumble.bGrounded;
+		In.bTumbleAirRecovery = true;
+		return FGSTN_CombatVictim::StepReaction(In, Tumble.Core);
+	};
+	Step(Tumble.Core.HitstopEndFrame + 1);
+	Tumble.bGrounded = false;
+	const int32 HitstunEnd = Tumble.Core.Hit.HitstunEndFrame;
+	Step(HitstunEnd - 1);
+	TestTrue(TEXT("locked during the hitstun"), FGSTN_CombatVictim::IsActionLocked(Tumble.Core) && !Tumble.Core.bTumbleActionable);
+	Step(HitstunEnd);
+	TestTrue(TEXT("still tumbling after the hitstun"), Tumble.Core.ActionState == EGSTN_ActionState::Tumble);
+	TestTrue(TEXT("but able to act"), Tumble.Core.bTumbleActionable && !FGSTN_CombatVictim::IsActionLocked(Tumble.Core));
+
+	// The bit goes over the wire inside the action part
+	{
+		FBitWriter Writer(0, true);
+		Tumble.Core.NetSerialize(Writer);
+		FBitReader Reader(Writer.GetData(), Writer.GetNumBits());
+		FGSTN_CombatSyncCore Copy;
+		Copy.NetSerialize(Reader);
+		TestTrue(TEXT("bTumbleActionable survives the wire"), Copy.bTumbleActionable && Copy.ActionState == EGSTN_ActionState::Tumble);
+	}
+
+	// Landing without acting: Actionable as before (the defence plugin's tech or knockdown reads the contact in Tumble, untouched)
+	{
+		FGSTN_CombatSyncCore Saved = Tumble.Core;
+		Tumble.bGrounded = true;
+		Step(HitstunEnd + 5);
+		TestTrue(TEXT("landing ends the tumble"), Tumble.Core.ActionState == EGSTN_ActionState::Actionable && !Tumble.Core.bTumbleActionable);
+		Tumble.Core = Saved;
+		Tumble.bGrounded = false;
+	}
+
+	// Acting ends the tumble
+	FGSTN_CombatSyncCore Acting = Tumble.Core;
+	FGSTN_CombatVictim::LeaveTumbleByAction(Acting);
+	TestTrue(TEXT("a command leaves the tumble"), Acting.ActionState == EGSTN_ActionState::Actionable && !Acting.bTumbleActionable);
+
+	// A new hit locks it again
+	Tumble.Entries = { FVictimFixture::MakeEntry(HitstunEnd + 3, 2000.f) };
+	Tumble.Run(HitstunEnd + 4);
+	TestTrue(TEXT("a new stagger locks again"), Tumble.Core.ActionState == EGSTN_ActionState::Tumble && !Tumble.Core.bTumbleActionable
+		&& FGSTN_CombatVictim::IsActionLocked(Tumble.Core));
+
+	// Without air recovery (the default of the step input, the old behaviour) it stays locked in the air
+	FVictimFixture Old;
+	Old.Entries = { FVictimFixture::MakeEntry(10, 2000.f) };
+	Old.Run(11);
+	Old.Step(Old.Core.HitstopEndFrame + 1);
+	Old.bGrounded = false;
+	Old.Step(Old.Core.Hit.HitstunEndFrame + 20);
+	TestTrue(TEXT("no recovery: locked until it lands"), FGSTN_CombatVictim::IsActionLocked(Old.Core) && !Old.Core.bTumbleActionable);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_VictimBalloonKnockbackTest, "GSTNCombat.NP.Hits.Victim.BalloonKnockback", GSTN_NP_TEST_FLAGS)
+bool FGSTN_VictimBalloonKnockbackTest::RunTest(const FString& Parameters)
+{
+	// Off (the default): the classic flight, nothing pending
+	FVictimFixture Classic;
+	Classic.Entries = { FVictimFixture::MakeEntry(10, 4000.f) };
+	Classic.Run(11);
+	TestTrue(TEXT("a tumble"), Classic.Core.ActionState == EGSTN_ActionState::Tumble);
+	TestEqual(TEXT("off: no balloon"), static_cast<int32>(Classic.Core.Hit.PendingBalloonFrames), 0);
+	const int32 ClassicHitstun = Classic.Result.Hits[0].HitstunFrames;
+
+	// On: the same hit gets a shorter lock, and the flight frames (the classic hitstun) wait with the launch
+	FVictimFixture Balloon;
+	UGSTN_KnockbackModel* Model = Balloon.Rules->KnockbackModel.Get();
+	if (!TestNotNull(TEXT("the standard rules have a model"), Model))
+	{
+		return false;
+	}
+	Model->Tuning.Balloon.bEnabled = true;
+	Model->Tuning.Balloon.MinHitstunFrames = 10;
+	Model->Tuning.Balloon.FullHitstunFrames = 60;
+	Balloon.Entries = { FVictimFixture::MakeEntry(10, 4000.f) };
+	Balloon.Run(11);
+	const FGSTN_VictimHit& Hit = Balloon.Result.Hits[0];
+	TestTrue(TEXT("the classic hitstun is over the balloon's low end"), ClassicHitstun > 10);
+	TestEqual(TEXT("flight frames = the classic hitstun"), Hit.BalloonFrames, FMath::Min(ClassicHitstun, 255));
+	TestTrue(TEXT("a shorter lock"), Hit.HitstunFrames < ClassicHitstun);
+	TestEqual(TEXT("pending with the launch"), static_cast<int32>(Balloon.Core.Hit.PendingBalloonFrames), Hit.BalloonFrames);
+
+	// Over the wire with the pending launch
+	{
+		FBitWriter Writer(0, true);
+		Balloon.Core.NetSerialize(Writer);
+		FBitReader Reader(Writer.GetData(), Writer.GetNumBits());
+		FGSTN_CombatSyncCore Copy;
+		Copy.NetSerialize(Reader);
+		TestEqual(TEXT("PendingBalloonFrames survives the wire"), static_cast<int32>(Copy.Hit.PendingBalloonFrames), Hit.BalloonFrames);
+	}
+
+	// The launch move carries the warp
+	const FGSTN_ReactionMove Move = Balloon.Step(Balloon.Core.HitstopEndFrame + 1);
+	TestTrue(TEXT("a launch"), Move.Kind == FGSTN_ReactionMove::EKind::Launch);
+	TestEqual(TEXT("with the flight frames"), Move.BalloonFrames, Hit.BalloonFrames);
+	TestTrue(TEXT("and a first frame faster than 1"), Move.BalloonM0 > 1.f);
+	TestEqual(TEXT("cleared with the pending reaction"), static_cast<int32>(Balloon.Core.Hit.PendingBalloonFrames), 0);
+
+	// Set knockback keeps the classic flight (as in Ultimate)
+	FVictimFixture Fixed;
+	Fixed.Rules->KnockbackModel->Tuning.Balloon = Model->Tuning.Balloon;
+	FGSTN_HitInboxEntry FixedEntry = FVictimFixture::MakeEntry(10, 0.f);
+	FixedEntry.Hit.FixedKnockback = 4200.f;
+	Fixed.Entries = { FixedEntry };
+	Fixed.Run(11);
+	TestEqual(TEXT("fixed knockback: no balloon"), Fixed.Result.Hits[0].BalloonFrames, 0);
 	return true;
 }
 

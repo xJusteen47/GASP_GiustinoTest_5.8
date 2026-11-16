@@ -78,11 +78,16 @@ namespace
 	};
 
 	/** The transform that carries a hitbox's keys and shape at a timeline frame; false when its space cannot be placed (a missing baked socket, a projectile) */
-	bool BuildCarrier(const FGSTN_HitboxSpec& Spec, const FGSTN_CombatTimelineData& Timeline, const FGSTN_CombatSyncCore& Core, const FTransform& Root,
+	bool BuildCarrier(const FGSTN_HitboxSpec& Spec, const FGSTN_TimelineTrack_Hitbox* Track, const FGSTN_CombatTimelineData& Timeline, const FGSTN_CombatSyncCore& Core, const FTransform& Root,
 		int32 TimelineFrame, int32 TrackFrame, FTransform& OutCarrier)
 	{
-		const FTransform Key = UGSTN_HitShapeUtils::EvaluateKeys(Spec.Keys, TrackFrame);
-		switch (Spec.Space)
+		// A child of its group's transform (parenting, owner 2026-11-16): the keys are relative to the group's offset, and the group's space and socket place it
+		const FTransform Key = Track != nullptr
+			? UGSTN_HitShapeUtils::EvaluateKeys(Spec.Keys, TrackFrame) * Track->GetParentOffset(Spec)
+			: UGSTN_HitShapeUtils::EvaluateKeys(Spec.Keys, TrackFrame);
+		const EGSTN_HitboxSpace Space = Track != nullptr ? Track->GetEffectiveSpace(Spec) : Spec.Space;
+		const FName SocketName = Track != nullptr ? Track->GetEffectiveSocket(Spec) : Spec.Socket;
+		switch (Space)
 		{
 		case EGSTN_HitboxSpace::Root:
 			OutCarrier = Key * Root;
@@ -90,7 +95,7 @@ namespace
 		case EGSTN_HitboxSpace::BakedSocket:
 		{
 			FTransform Socket;
-			if (!Timeline.FindBakedSocket(Spec.Socket, TimelineFrame, Socket))
+			if (!Timeline.FindBakedSocket(SocketName, TimelineFrame, Socket))
 			{
 				return false;
 			}
@@ -123,18 +128,19 @@ namespace
 	 * whose motion would bend more than MaxDeflectAngleDeg stops the blade: true = the hitbox is closed for the rest of the swing. Pure
 	 * function of the timeline, the frame and the quantised contact, so it gives the same path on every machine and in a resimulation
 	 */
-	bool ApplyDeflection(const FGSTN_HitboxSpec& Spec, int32 TrackIndex, const FGSTN_CombatTimelineData& Timeline, const FGSTN_CombatSyncCore& Core, const FTransform& Root,
+	bool ApplyDeflection(const FGSTN_HitboxSpec& Spec, const FGSTN_TimelineTrack_Hitbox* Track, int32 TrackIndex, const FGSTN_CombatTimelineData& Timeline, const FGSTN_CombatSyncCore& Core, const FTransform& Root,
 		int32 TimelineFrame, int32 TrackFrame, FTransform& InOutCarrier)
 	{
 		// Only the group that met the face slides, with its own settings; another group open at the same time keeps its authored path
 		const FGSTN_HardContactState& Contact = Core.HardContact;
+		const EGSTN_HitboxSpace EffectiveSpace = Track != nullptr ? Track->GetEffectiveSpace(Spec) : Spec.Space;
 		if (!Contact.IsSet() || TrackIndex != Core.StrikeTrack)
 		{
 			return false;
 		}
 		const FGSTN_SweepDeflection& Deflection = *Timeline.ResolveStrike(Core.StrikeTrack).Deflection;
 		if (!Deflection.bEnabled || TimelineFrame <= Contact.TimelineFrame
-			|| (Spec.Space != EGSTN_HitboxSpace::Root && Spec.Space != EGSTN_HitboxSpace::BakedSocket))
+			|| (EffectiveSpace != EGSTN_HitboxSpace::Root && EffectiveSpace != EGSTN_HitboxSpace::BakedSocket))
 		{
 			return false;
 		}
@@ -144,7 +150,7 @@ namespace
 		auto LocalCenter = [&](int32 Frame, FVector& OutCenter)
 		{
 			FTransform Local;
-			if (!BuildCarrier(Spec, Timeline, Core, FTransform::Identity, Frame, FMath::Max(TrackFrame - (TimelineFrame - Frame), 0), Local))
+			if (!BuildCarrier(Spec, Track, Timeline, Core, FTransform::Identity, Frame, FMath::Max(TrackFrame - (TimelineFrame - Frame), 0), Local))
 			{
 				return false;
 			}
@@ -250,29 +256,29 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 		const FGSTN_StrikeSettings ActiveStrike = In.Timeline->ResolveStrike(Active.TrackIndex);
 
 		FTransform Carrier;
-		if (!BuildCarrier(Spec, *In.Timeline, Core, In.Root, In.TimelineFrame, Active.TrackFrame, Carrier))
+		if (!BuildCarrier(Spec, Active.Track, *In.Timeline, Core, In.Root, In.TimelineFrame, Active.TrackFrame, Carrier))
 		{
 			continue;
 		}
 		// The previous carrier moves the keys and the baked frame back one frame and keeps the root: the root of the previous frame is not state
 		FTransform PreviousCarrier = Carrier;
-		if (!BuildCarrier(Spec, *In.Timeline, Core, In.Root, FMath::Max(In.TimelineFrame - 1, 0), FMath::Max(Active.TrackFrame - 1, 0), PreviousCarrier))
+		if (!BuildCarrier(Spec, Active.Track, *In.Timeline, Core, In.Root, FMath::Max(In.TimelineFrame - 1, 0), FMath::Max(Active.TrackFrame - 1, 0), PreviousCarrier))
 		{
 			PreviousCarrier = Carrier;
 		}
 		// The slide along a hard face; a blade the face stopped has no hitbox left
-		if (ApplyDeflection(Spec, Active.TrackIndex, *In.Timeline, Core, In.Root, In.TimelineFrame, Active.TrackFrame, Carrier))
+		if (ApplyDeflection(Spec, Active.Track, Active.TrackIndex, *In.Timeline, Core, In.Root, In.TimelineFrame, Active.TrackFrame, Carrier))
 		{
 			continue;
 		}
-		ApplyDeflection(Spec, Active.TrackIndex, *In.Timeline, Core, In.Root, FMath::Max(In.TimelineFrame - 1, 0), FMath::Max(Active.TrackFrame - 1, 0), PreviousCarrier);
+		ApplyDeflection(Spec, Active.Track, Active.TrackIndex, *In.Timeline, Core, In.Root, FMath::Max(In.TimelineFrame - 1, 0), FMath::Max(Active.TrackFrame - 1, 0), PreviousCarrier);
 
 		if (In.DebugShapes)
 		{
 			FGSTN_AttackerDebugShape& Debug = In.DebugShapes->AddDefaulted_GetRef();
 			Debug.Frame = In.Frame;
 			Debug.HitboxIndex = HitboxIndex;
-			Debug.Space = static_cast<uint8>(Spec.Space);
+			Debug.Space = static_cast<uint8>(Active.Track != nullptr ? Active.Track->GetEffectiveSpace(Spec) : Spec.Space);
 			Debug.Shape = Spec.Shape;
 			Debug.World = Carrier;
 		}
@@ -350,13 +356,19 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 				{
 					continue;
 				}
-				if (!PassesStabOnly(Hurtboxes[HurtIndex].bStabOnly, Hurtboxes[HurtIndex].StabMaxAngleDeg, ActiveStrike.Kind, Hurtboxes[HurtIndex].Shape, Victim.Transform, PreviousCenter, HitboxCenter))
+				// The posed shape (bones, detail level: owner 2026-11-16); a hurtbox the level leaves out is reached only through its extensions below
+				if (!Victim.IsHurtboxPresent(HurtIndex))
+				{
+					continue;
+				}
+				const FGSTN_HitShape& HurtShape = Victim.GetHurtShape(HurtIndex);
+				if (!PassesStabOnly(Hurtboxes[HurtIndex].bStabOnly, Hurtboxes[HurtIndex].StabMaxAngleDeg, ActiveStrike.Kind, HurtShape, Victim.Transform, PreviousCenter, HitboxCenter))
 				{
 					continue;
 				}
 				const bool bTouches = Spec.bSweepBetweenFrames
-					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, Hurtboxes[HurtIndex].Shape, Victim.Transform)
-					: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, Hurtboxes[HurtIndex].Shape, Victim.Transform);
+					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, HurtShape, Victim.Transform)
+					: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, HurtShape, Victim.Transform);
 				// A hurtbox with an opening (a cavity behind armour, combat-m4-hits 9c B) counts only through its mouth and for a hitbox that
 				// fits; otherwise it stays out of the list and the pick below falls to the armour by Priority. No opening: one bool
 				if (bTouches && (!Hurtboxes[HurtIndex].Opening.bEnabled || UGSTN_HitShapeUtils::PassesOpening(Hurtboxes[HurtIndex].Opening, HitShape, PreviousCarrier, Carrier, Spec.bSweepBetweenFrames, Victim.Transform)))
@@ -364,6 +376,20 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 					Overlapped.Add(HurtIndex);
 				}
 			}
+			// The pose extensions (a move's Hurtbox track, a kit's movement body) count as the set hurtbox they name: its state, its stab rule. No opening:
+			// an extension is outside the armour by construction
+			Victim.AppendExtensionOverlaps(Overlapped,
+				[&](const FGSTN_HitShape& Shape)
+				{
+					return Spec.bSweepBetweenFrames
+						? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, Shape, Victim.Transform)
+						: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, Shape, Victim.Transform);
+				},
+				[&](int32 HurtIndex)
+				{
+					return HurtIndex == HardHurtbox || (Victim.HurtStates.IsValidIndex(HurtIndex) && Victim.HurtStates[HurtIndex].State == EGSTN_HurtState::Intangible)
+						|| Hurtboxes[HurtIndex].bStabOnly;
+				});
 			// The extras of the snapshot (a shield bubble) are tested like the body; they have no hurt state, so nothing makes them intangible.
 			// An outside-only shell (the backpack dome) is not there for an attacker whose root of the end of the previous frame is inside it
 			for (int32 ExtraPosition = 0; ExtraPosition < Victim.ExtraHurtboxes.Num(); ++ExtraPosition)

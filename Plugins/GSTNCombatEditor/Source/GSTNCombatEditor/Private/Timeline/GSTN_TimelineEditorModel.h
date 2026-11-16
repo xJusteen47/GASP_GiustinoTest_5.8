@@ -62,6 +62,19 @@ struct FGSTN_Selection
  * Frame to pixel mapping shared by the ruler, the lanes and the phase bar, so they cannot disagree (combat-m5-editor 5.2). Plain
  * numbers: the widgets pass their own width. A frame occupies [f, f + 1) on the ruler.
  */
+/** What the ruler labels a frame with. The frame number is always the simulation frame (62.5 Hz), the unit every track stores */
+enum class EGSTN_RulerDisplay : uint8
+{
+	/** "24" above "0.38 s" (the default, like the Montage editor) */
+	FramesAndSeconds,
+	/** "24" above "384.0 ms" (the ruler before 2026-11-16) */
+	FramesAndMilliseconds,
+	/** Frame numbers only */
+	Frames,
+	/** Seconds only */
+	Seconds
+};
+
 struct FGSTN_TimelineViewTransform
 {
 	static constexpr double MinPixelsPerFrame = 1.0;
@@ -180,6 +193,9 @@ public:
 
 	/** Shared by every widget of the editor. Not part of the data: scrolling and zooming are never undone. After changing it, call NotifyViewChanged so the widgets repaint */
 	FGSTN_TimelineViewTransform ViewTransform;
+
+	/** What the ruler's second line and the playhead readout show next to the frame (owner 2026-11-16: frames and seconds, like the Montage editor). View state, saved per user by the panel */
+	EGSTN_RulerDisplay RulerDisplay = EGSTN_RulerDisplay::FramesAndSeconds;
 
 	void NotifyViewChanged() { OnViewChanged.Broadcast(); }
 

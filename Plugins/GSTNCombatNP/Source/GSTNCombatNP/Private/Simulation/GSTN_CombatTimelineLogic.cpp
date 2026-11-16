@@ -4,6 +4,8 @@
 
 #include "Simulation/GSTN_TimelineTrackHook.h"
 #include "Timeline/GSTN_HoldUntilLanded.h"
+#include "Timeline/GSTN_Landing.h"
+#include "Timeline/GSTN_Ledge.h"
 #include "Timeline/GSTN_StartupSteer.h"
 #include "Events/GSTN_SimEvent.h"
 #include "GameFramework/Actor.h"
@@ -40,6 +42,9 @@ namespace
 		Core.RecoilStartFrame = INDEX_NONE;
 		Core.HardContact = FGSTN_HardContactState();
 	Core.StrikeTrack = INDEX_NONE;
+		Core.bAirborneOk = false;
+		Core.bLedgeStop = false;
+		Core.bTumbleActionable = false;
 		// The hits of the previous run do not count for this one; the caller writes the move origin
 		Core.Hit.ResetRun();
 	}
@@ -84,6 +89,9 @@ void FGSTN_CombatTimelineLogic::ClearTimeline(FGSTN_CombatSyncCore& Core)
 	Core.RecoilStartFrame = INDEX_NONE;
 	Core.HardContact = FGSTN_HardContactState();
 	Core.StrikeTrack = INDEX_NONE;
+	Core.bAirborneOk = false;
+	Core.bLedgeStop = false;
+	Core.bTumbleActionable = false;
 }
 
 bool FGSTN_CombatTimelineLogic::StartRecoil(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FGSTN_RicochetResponse* Fallback)
@@ -113,6 +121,8 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 	bool bAbilityActive, FGSTN_TimelineOutput& Output, bool bHitstopFrame, const FGSTN_RicochetResponse* RicochetFallback, const FGSTN_TrackHookEnvironment* HookEnvironment)
 {
 	Output.Reset();
+	// The Ledge Check's Stop holds only for the tick that saw the ledge (below)
+	Core.bLedgeStop = false;
 	if (Core.ActionState != EGSTN_ActionState::InTimeline)
 	{
 		return false;
@@ -178,6 +188,83 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 		}
 	}
 
+	// Ground rules (owner 2026-11-16, FGSTN_LandingRules): a Ground move found in the air outside its take-off ends; a landing inside a Landing
+	// window autocancels, starts the landing lag (played by the recoil player) or hands over to the continuation move. Before Hold Until Landed,
+	// so a Landing window wins over a hold's own land jump. Not on a hitstop frame, only with Mover's ground fact
+	if (!bHitstopFrame && Previous >= 0 && HookEnvironment && HookEnvironment->Ground != EGSTN_TrackHookGround::Unknown
+		&& (Data->GroundRule != EGSTN_MoveGroundRule::Any || FGSTN_LandingRules::HasLandingTracks(*Data)))
+	{
+		const FGSTN_GroundClockDecision Ground = FGSTN_LandingRules::Resolve(*Data, Previous + 1, HookEnvironment->Ground == EGSTN_TrackHookGround::OnGround,
+			Previous == 0, Core.bAirborneOk);
+		Core.bAirborneOk = Ground.bAirborneOk;
+		if (Ground.Action == EGSTN_GroundClockAction::CancelAirborne)
+		{
+			UE_LOG(LogGSTNCombatTimeline, Verbose, TEXT("Frame %d: ground move %d in the air at timeline frame %d: cancelled"), Frame, static_cast<int32>(Core.ActiveTimeline), Previous + 1);
+			ClearTimeline(Core);
+			return false;
+		}
+		if (Ground.Action == EGSTN_GroundClockAction::Land)
+		{
+			const FGSTN_TimelineTrack_Landing& Landing = Data->Tracks[Ground.TrackIndex].Get<FGSTN_TimelineTrack_Landing>();
+			UE_LOG(LogGSTNCombatTimeline, Verbose, TEXT("Frame %d: move %d landed at timeline frame %d, action %d"), Frame, static_cast<int32>(Core.ActiveTimeline), Previous + 1,
+				static_cast<int32>(Landing.Action));
+			if (Landing.Action == EGSTN_LandingAction::LandingLag && Landing.Lag.IsAuthored())
+			{
+				// The lag replaces the rest of the move from this frame, like a recoil (its response is the track's own: GetRicochetResponse)
+				Core.HardContact = FGSTN_HardContactState();
+				Core.StrikeTrack = static_cast<int16>(Ground.TrackIndex);
+				Core.RecoilStartFrame = Frame;
+				return AdvanceClock(Core, Frame, Data, DefaultOverrideFrames, bAbilityActive, Output, false, RicochetFallback, HookEnvironment);
+			}
+			// AutoCancel, or the continuation (the combat model starts it on this frame; a move it cannot find ends like an autocancel)
+			ClearTimeline(Core);
+			if (Landing.Action == EGSTN_LandingAction::ContinueWithMove)
+			{
+				Output.LandingContinueTrack = Ground.TrackIndex;
+			}
+			return false;
+		}
+	}
+
+	// Ledge Check (owner 2026-11-16, FGSTN_LedgeRules): on the ground inside a ledge window with no floor ahead, the move stops in place (the ledge
+	// guard move reads bLedgeStop in Mover's tick of this frame), ends, recoils into the track's response or hands over to its continuation.
+	// Cleared at the top of every tick, so Stop lasts exactly as long as the void is ahead inside the window. Not on a hitstop frame (the freeze
+	// holds the pawn)
+	if (!bHitstopFrame && Previous >= 0 && HookEnvironment && HookEnvironment->Ground == EGSTN_TrackHookGround::OnGround && HookEnvironment->HasFloorAhead
+		&& FGSTN_LedgeRules::HasLedgeTracks(*Data))
+	{
+		int32 LedgeTrack = INDEX_NONE;
+		const FGSTN_TimelineTrack_LedgeCheck* Ledge = FGSTN_LedgeRules::FindWindow(*Data, Previous + 1, &LedgeTrack);
+		if (Ledge && !HookEnvironment->HasFloorAhead(Ledge->ProbeAhead, Ledge->ProbeDepth))
+		{
+			UE_LOG(LogGSTNCombatTimeline, Verbose, TEXT("Frame %d: move %d sees a ledge at timeline frame %d, action %d"), Frame, static_cast<int32>(Core.ActiveTimeline), Previous + 1,
+				static_cast<int32>(Ledge->Action));
+			if (Ledge->Action == EGSTN_LedgeAction::Stop)
+			{
+				Core.bLedgeStop = true;
+			}
+			else if (Ledge->Action == EGSTN_LedgeAction::Recoil && Ledge->Response.IsAuthored())
+			{
+				// The response replaces the rest of the move from this frame, like a landing lag (GetRicochetResponse of the track's index)
+				Core.HardContact = FGSTN_HardContactState();
+				Core.StrikeTrack = static_cast<int16>(LedgeTrack);
+				Core.RecoilStartFrame = Frame;
+				return AdvanceClock(Core, Frame, Data, DefaultOverrideFrames, bAbilityActive, Output, false, RicochetFallback, HookEnvironment);
+			}
+			else
+			{
+				// EndMove, an unauthored Recoil, or the continuation (the combat model starts it on this frame; one it cannot find ends like EndMove)
+				const bool bContinue = Ledge->Action == EGSTN_LedgeAction::ContinueWithMove;
+				ClearTimeline(Core);
+				if (bContinue)
+				{
+					Output.LandingContinueTrack = LedgeTrack;
+				}
+				return false;
+			}
+		}
+	}
+
 	// Hold Until Landed (FGSTN_TimelineTrack_HoldUntilLanded, the dropkick): in the air on the hold's last frame the timeline stands there; on the
 	// ground it jumps to the land frame. Decided before the hooks, so they see the frame the timeline is on after a jump. Not on a hitstop frame (the
 	// timeline stands already; the landing is taken on the first frame after it), and only with Mover's ground fact
@@ -185,7 +272,17 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 	bool bStall = bHitstopFrame;
 	if (!bHitstopFrame && Previous >= 0 && HookEnvironment && HookEnvironment->Ground != EGSTN_TrackHookGround::Unknown)
 	{
-		const FGSTN_HoldClockDecision Hold = FGSTN_HoldUntilLanded::ResolveClock(*Data, Previous, true, HookEnvironment->Ground == EGSTN_TrackHookGround::OnGround);
+		const FGSTN_HoldClockDecision Hold = FGSTN_HoldUntilLanded::ResolveClock(*Data, Previous, true, HookEnvironment->Ground == EGSTN_TrackHookGround::OnGround,
+			Frame - Core.TimelineStartFrame);
+		if (Hold.Action == EGSTN_HoldClockAction::Timeout)
+		{
+			// Air timeout (owner 2026-11-16): the move ends here like an interrupt, not "by itself" (bFinished stays false, so no follow-up and
+			// no montage release): nothing of it is evaluated this frame, so its hitbox is closed, and the character is back in air idle
+			UE_LOG(LogGSTNCombatTimeline, Verbose, TEXT("Frame %d: timeline %d still in the air after %d frames: air timeout, the move ends"), Frame,
+				static_cast<int32>(Core.ActiveTimeline), Frame - Core.TimelineStartFrame);
+			ClearTimeline(Core);
+			return false;
+		}
 		if (Hold.Action == EGSTN_HoldClockAction::Stall)
 		{
 			bStall = true;
@@ -259,6 +356,11 @@ bool FGSTN_CombatTimelineLogic::IsCommandAllowed(const FGSTN_CombatSyncCore& Cor
 		}
 	}
 	return false;
+}
+
+bool FGSTN_CombatTimelineLogic::IsConditionMet(EGSTN_CancelCondition Condition, const FGSTN_CombatSyncCore& Core, uint32 ExtensionConditions)
+{
+	return ConditionHolds(Condition, Core, ExtensionConditions);
 }
 
 void FGSTN_CombatTimelineLogic::Start(FGSTN_CombatSyncCore& Core, int32 Frame, int32 TimelineIndex, EGSTN_ActivationSource Source)

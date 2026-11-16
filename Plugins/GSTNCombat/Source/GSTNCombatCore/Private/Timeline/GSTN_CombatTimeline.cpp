@@ -1,5 +1,7 @@
 #include "Timeline/GSTN_CombatTimeline.h"
 #include "Timeline/GSTN_TimelineValidation.h"
+#include "Timeline/GSTN_Landing.h"
+#include "Timeline/GSTN_Ledge.h"
 
 #if WITH_EDITOR
 #include "Input/GSTN_CombatSettings.h"
@@ -39,7 +41,7 @@ EDataValidationResult UGSTN_CombatTimeline::IsDataValid(FDataValidationContext& 
 	TArray<FGSTN_ReactionMatrixHit> Columns;
 	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Data.Tracks)
 	{
-		const FGSTN_TimelineTrack_Hitbox* HitboxTrack = Track.GetPtr<FGSTN_TimelineTrack_Hitbox>();
+		const FGSTN_TimelineTrack_Hitbox* HitboxTrack = GSTNTimelineTracks::AsAttackHitbox(Track);
 		for (int32 Index = 0; HitboxTrack != nullptr && Index < HitboxTrack->Hitboxes.Num(); ++Index)
 		{
 			FGSTN_ReactionMatrixHit& Column = Columns.AddDefaulted_GetRef();
@@ -75,12 +77,33 @@ int32 FGSTN_CombatTimelineData::GetActiveEndFrame() const
 	int32 End = 0;
 	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Tracks)
 	{
-		if (const FGSTN_TimelineTrack_Hitbox* HitboxTrack = Track.GetPtr<FGSTN_TimelineTrack_Hitbox>(); HitboxTrack && !HitboxTrack->Hitboxes.IsEmpty())
+		if (const FGSTN_TimelineTrack_Hitbox* HitboxTrack = GSTNTimelineTracks::AsAttackHitbox(Track); HitboxTrack && !HitboxTrack->Hitboxes.IsEmpty())
 		{
 			End = FMath::Max(End, HitboxTrack->EndFrame);
 		}
 	}
 	return End;
+}
+
+const FGSTN_RicochetResponse* FGSTN_CombatTimelineData::GetRicochetResponse(int32 TrackIndex) const
+{
+	if (Tracks.IsValidIndex(TrackIndex))
+	{
+		if (const FGSTN_TimelineTrack_Landing* Landing = Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack_Landing>())
+		{
+			return Landing->Action == EGSTN_LandingAction::LandingLag && Landing->Lag.IsAuthored() ? &Landing->Lag : nullptr;
+		}
+		if (const FGSTN_TimelineTrack_LedgeCheck* Ledge = Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack_LedgeCheck>())
+		{
+			return Ledge->Action == EGSTN_LedgeAction::Recoil && Ledge->Response.IsAuthored() ? &Ledge->Response : nullptr;
+		}
+	}
+	const FGSTN_TimelineTrack_Hitbox* Track = GetHitboxTrack(TrackIndex);
+	if (Track && Track->bHasRicochetResponse && Track->RicochetResponse.IsAuthored())
+	{
+		return &Track->RicochetResponse;
+	}
+	return GetRicochetResponse();
 }
 
 FGSTN_StrikeSettings FGSTN_CombatTimelineData::ResolveStrike(int32 TrackIndex) const

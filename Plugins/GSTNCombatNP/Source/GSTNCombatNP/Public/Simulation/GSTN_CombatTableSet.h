@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Bindings/GSTN_CommandBindingSet.h"
+#include "Hits/GSTN_HurtboxPose.h"
 #include "Input/GSTN_BufferResetRules.h"
 #include "Loadout/GSTN_CompiledBindingTable.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
@@ -117,6 +118,16 @@ public:
 	UPROPERTY(Transient)
 	FGSTN_RicochetResponse KitRicochet;
 
+	/**
+	 * The kit's own movement hurtbox (FGSTN_MovementHurtboxExtension, owner 2026-11-16), copied when the set is built: the simulation reads it from the
+	 * table of the revision it runs, never from the kit asset, so a rollback across a kit swap places the hurtboxes of the kit of that frame
+	 */
+	UPROPERTY(Transient)
+	bool bHasKitMovementHurtbox = false;
+
+	UPROPERTY(Transient)
+	FGSTN_MovementHurtboxExtension KitMovementHurtbox;
+
 	/** The project defaults per strike kind (UGSTN_CombatSettings::SwingRicochetDefault / StabRicochetDefault), copied when the set is built */
 	UPROPERTY(Transient)
 	FGSTN_RicochetResponse SwingRicochet;
@@ -158,13 +169,44 @@ public:
 	void AppendAdoptable(TConstArrayView<TSubclassOf<UGSTN_GA_BaseCombat>> Adoptable);
 
 	/**
-	 * Registers the FollowUpTimeline of every registered timeline that is not in the registry yet (no tier, no default window), the follow-ups' own
+	 * Registers the FollowUpTimeline (and the Landing and Ledge Check tracks' ContinueMove) of every registered timeline that is not in the registry yet (no tier, no default window), the follow-ups' own
 	 * follow-ups included: the combat model starts them by registry index when a move ends by itself. Deterministic: registry order
 	 */
 	void AppendFollowUps();
 
 	/** The registry index of the follow-up of entry Index (its timeline's FollowUpTimeline), INDEX_NONE when it has none or it is not registered */
 	int32 FindFollowUpEntry(int32 Index) const;
+
+	/**
+	 * The registry index of the ContinueMove of entry Index's Landing or Ledge Check track TrackIndex (FGSTN_TimelineTrack_Landing or _LedgeCheck, registered by
+	 * AppendFollowUps like a follow-up), INDEX_NONE when it has none or it is not registered
+	 */
+	int32 FindLandingContinueEntry(int32 Index, int32 TrackIndex) const;
+
+	/**
+	 * Coyote time per move (owner 2026-11-16): the bindings of a ground move that may take off (FGSTN_CombatTimelineData::AllowsTakeoff) take
+	 * Input.Context.Coyote as Grounded. Derived from the frame data once the bindings and the registry are built; never edited by hand
+	 */
+	void ApplyCoyoteFlags();
+
+	/**
+	 * Registers, for every class in the registry, each timeline of its Playable Timelines (UGSTN_GA_BaseCombat::PlayableTimelines) as an entry
+	 * (that class, that timeline) with no tier and no default window: what the Play Combat Timeline And Wait node starts by registry index.
+	 * Deterministic: registry order, then list order. Called by AppendAdoptable before the follow-ups, so a played timeline's follow-up is found too
+	 */
+	void AppendPlayableTimelines();
+
+	/**
+	 * The registry entry an ability of class AbilityClass plays Timeline with: the entry of that class whose override is Timeline, else (Timeline
+	 * is the class's own default data) its entry with no override. INDEX_NONE when the pair is not registered
+	 */
+	int32 FindPlayEntry(const UClass* AbilityClass, const UGSTN_CombatTimeline* Timeline) const;
+
+	/** The first registry entry of AbilityClass, the one a command, a forced start or Start Combat Move runs. INDEX_NONE when it is not registered */
+	int32 FindMoveEntry(const UClass* AbilityClass) const;
+
+	/** True for a combat ability class that does not play a timeline when activated (a host: Play Timeline On Activation off). Its bindings are plain */
+	static bool IsHostClass(const UClass* AbilityClass);
 
 	/**
 	 * Registers one timeline class and loads its content. Returns its registry index; with bShareExisting an entry of the same class

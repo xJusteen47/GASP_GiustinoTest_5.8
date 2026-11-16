@@ -75,8 +75,22 @@ struct GSTNCOMBATCORE_API FGSTN_HitboxSpec
 {
 	GENERATED_BODY()
 
+	/**
+	 * The designer's name of the hitbox ("Fist", "Sweetspot tip"), shown by the editor instead of "Hitbox N" (owner 2026-11-16). A label only:
+	 * nothing at runtime looks a hitbox up by it (hits name the hitbox by its index in the group), so a rename never breaks a reference
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hitbox")
+	FName Name = NAME_None;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hitbox")
 	FGSTN_HitShape Shape;
+
+	/**
+	 * With its group's bUseGroupTransform on, the hitbox is a child of the group (owner 2026-11-16): its keys are relative to the group's offset and the
+	 * group's space and socket replace Space and Socket below. Off (or a group without the transform) = the hitbox is placed on its own, as before
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hitbox")
+	bool bAttachToGroup = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hitbox")
 	EGSTN_HitboxSpace Space = EGSTN_HitboxSpace::Root;

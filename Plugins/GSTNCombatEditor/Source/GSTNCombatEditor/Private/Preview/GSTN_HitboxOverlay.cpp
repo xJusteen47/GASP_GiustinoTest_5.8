@@ -2,16 +2,28 @@
 
 #include "Preview/GSTN_HitboxOverlay.h"
 
+#include "Animation/DebugSkelMeshComponent.h"
+#include "AssetRegistry/AssetRegistryModule.h"
+#include "Engine/SkeletalMesh.h"
+#include "Hits/GSTN_HurtboxPose.h"
 #include "Preview/GSTN_GizmoMath.h"
 #include "Preview/GSTN_HitboxGizmoTarget.h"
 #include "Preview/GSTN_HitboxHitProxy.h"
 #include "Preview/GSTN_PreviewDrawing.h"
+#include "Preview/GSTN_TimelinePreviewScene.h"
 #include "SceneManagement.h"
 #include "Timeline/GSTN_TimelineEditorModel.h"
 
 namespace
 {
 	/** One colour per HitGroup (a hitbox group is at most a handful in a move); more groups wrap around */
+	/** The colour of a move's own hurtbox shapes: the green of the hurtbox set editor, not in the hitbox group palette */
+	const FLinearColor& HurtboxTrackColor()
+	{
+		static const FLinearColor Color(0.2f, 1.f, 0.45f);
+		return Color;
+	}
+
 	const FLinearColor& GroupColor(uint8 Group)
 	{
 		static const FLinearColor Palette[] = {
@@ -49,7 +61,10 @@ namespace
 				{
 					PDI->SetHitProxy(new HGSTN_HitboxProxy(Hitbox.Track, Hitbox.Lane));
 				}
-				GSTNPreviewDrawing::DrawHitShape(PDI, Hitbox.Shape, Hitbox.Space, GroupColor(Hitbox.HitGroup), bSelected ? 2.5f : 0.f);
+				// A Hurtbox track (the move's own hurtboxes, owner 2026-11-16) is edited like a hitbox group but drawn in the hurtbox green, so the two never read alike
+				const FGSTN_TimelineTrack* Owner = Data->Tracks.IsValidIndex(Hitbox.Track) ? Data->Tracks[Hitbox.Track].GetPtr<FGSTN_TimelineTrack>() : nullptr;
+				const bool bHurtbox = Owner != nullptr && Owner->GetKind() == EGSTN_TimelineTrackKind::Hurtbox;
+				GSTNPreviewDrawing::DrawHitShape(PDI, Hitbox.Shape, Hitbox.Space, bHurtbox ? HurtboxTrackColor() : GroupColor(Hitbox.HitGroup), bSelected ? 2.5f : 0.f);
 				if (bHitTesting)
 				{
 					PDI->SetHitProxy(nullptr);
@@ -62,12 +77,90 @@ namespace
 	};
 }
 
+namespace
+{
+	/**
+	 * The hurtboxes of the previewed character at the playhead (owner 2026-11-16): the set made for the preview mesh (its PreviewMesh), posed by the
+	 * same FGSTN_HurtboxPose the simulation uses, so following bones, the move's detail level and its Hurtbox tracks show as in game. The bones come
+	 * from the timeline's bake: an unbaked timeline shows the reference pose (save or bake it). Drawn with the Hitboxes toggle; no set found = nothing
+	 */
+	class FHurtboxOverlay final : public IGSTN_PreviewOverlay
+	{
+	public:
+		virtual FName GetOverlayName() const override { return TEXT("GSTN.Hurtboxes"); }
+
+		virtual void Draw(const FGSTN_PreviewDrawContext& Context, FPrimitiveDrawInterface* PDI) const override
+		{
+			const FGSTN_CombatTimelineData* Data = Context.Model != nullptr ? Context.Model->GetData() : nullptr;
+			const UDebugSkelMeshComponent* MeshComponent = Context.Scene != nullptr ? Context.Scene->GetMeshComponent() : nullptr;
+			const USkeletalMesh* Mesh = MeshComponent != nullptr ? MeshComponent->GetSkeletalMeshAsset() : nullptr;
+			if (PDI == nullptr || Data == nullptr || Mesh == nullptr || !Context.bShowHitboxes || PDI->IsHitTesting())
+			{
+				return;
+			}
+			const UGSTN_HurtboxSetDefinition* Set = FindSetFor(*Mesh);
+			if (Set == nullptr)
+			{
+				return;
+			}
+			FGSTN_HurtboxPoseInput Input;
+			Input.Set = Set;
+			Input.Timeline = Data;
+			Input.TimelineFrame = Context.Frame;
+			FGSTN_HurtboxPose::Build(Input, Pose);
+			const FTransform Root = FGSTN_HitboxGizmoTarget::GetRootTransform();
+			static const FLinearColor Body(0.2f, 0.85f, 0.35f, 1.f);
+			for (int32 Index = 0; Index < Set->Hurtboxes.Num(); ++Index)
+			{
+				if (Pose.IsPresent(Index))
+				{
+					GSTNPreviewDrawing::DrawHitShape(PDI, Pose.GetShape(*Set, Index), Root, Body);
+				}
+			}
+			// The move's own shapes are drawn by the hitbox overlay (selectable, editable); only the kit's would land here, and kits are not previewed
+		}
+
+	private:
+		/** The set whose PreviewMesh is Mesh, looked up once per mesh (the asset registry is not asked on every redraw) */
+		const UGSTN_HurtboxSetDefinition* FindSetFor(const USkeletalMesh& Mesh) const
+		{
+			if (CachedMesh.Get() != &Mesh)
+			{
+				CachedMesh = &Mesh;
+				CachedSet.Reset();
+				IAssetRegistry& Registry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry")).Get();
+				TArray<FAssetData> Assets;
+				Registry.GetAssetsByClass(UGSTN_HurtboxSetDefinition::StaticClass()->GetClassPathName(), Assets, true);
+				// Sorted by path, so two sets for one mesh always resolve to the same one
+				Assets.Sort([](const FAssetData& A, const FAssetData& B) { return A.GetSoftObjectPath().ToString() < B.GetSoftObjectPath().ToString(); });
+				const FSoftObjectPath MeshPath(&Mesh);
+				for (const FAssetData& Asset : Assets)
+				{
+					const UGSTN_HurtboxSetDefinition* Candidate = Cast<UGSTN_HurtboxSetDefinition>(Asset.GetAsset());
+					if (Candidate != nullptr && Candidate->PreviewMesh.ToSoftObjectPath() == MeshPath)
+					{
+						CachedSet = Candidate;
+						break;
+					}
+				}
+			}
+			return CachedSet.Get();
+		}
+
+		mutable FGSTN_HurtboxPose Pose;
+		mutable TWeakObjectPtr<const USkeletalMesh> CachedMesh;
+		mutable TWeakObjectPtr<const UGSTN_HurtboxSetDefinition> CachedSet;
+	};
+}
+
 void GSTNHitboxOverlay::Register()
 {
 	FGSTN_PreviewOverlayRegistry::Register(MakeShared<FHitboxOverlay>());
+	FGSTN_PreviewOverlayRegistry::Register(MakeShared<FHurtboxOverlay>());
 }
 
 void GSTNHitboxOverlay::Unregister()
 {
 	FGSTN_PreviewOverlayRegistry::Unregister(TEXT("GSTN.Hitboxes"));
+	FGSTN_PreviewOverlayRegistry::Unregister(TEXT("GSTN.Hurtboxes"));
 }

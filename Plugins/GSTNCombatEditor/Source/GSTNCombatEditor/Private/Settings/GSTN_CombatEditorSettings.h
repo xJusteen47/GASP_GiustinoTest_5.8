@@ -135,7 +135,7 @@ public:
 
 	// Editing
 
-	/** Baking the sockets when a timeline is saved. Off: baking is an explicit button, a stale bake is a validation error */
+	/** Baking the sockets when a timeline is saved (the plugin ini turns it on). Off: baking is an explicit button, a stale bake is a validation error */
 	UPROPERTY(Config, EditAnywhere, Category = "Editing")
 	bool bBakeOnSave = false;
 

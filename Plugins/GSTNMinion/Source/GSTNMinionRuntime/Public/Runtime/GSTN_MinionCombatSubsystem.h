@@ -552,6 +552,9 @@ public:
 	/** Activates without begin play (a test world has none), as OnWorldBeginPlay would on an authority */
 	void ActivateForTests() { Activate(); }
 
+	/** Test seam (pushbox P5): fighter bodies the movement step meets as if the snapshot held them (a world test has no NP fighter) */
+	TArray<FGSTN_PushboxBody> TestFighterBodies;
+
 	/** When set, every stage appends (stage number, slot index) for each slot it processes */
 	TArray<FIntPoint>* StageTraceForTests = nullptr;
 
@@ -814,6 +817,12 @@ private:
 	FGSTN_MinionMovementSettings MovementSettings;
 	TFunction<FVector(const FVector&)> GravitySource;
 	FGSTN_MinionMoveContext MoveContext;
+	/** Pushbox P5: the bodies of the movement step (fighters from the snapshot, minions from the store), sorted by entity id */
+	TArray<FGSTN_PushboxBody> MoveBodies;
+	/** Fills MoveBodies for Frame (start of the frame: the store and the snapshot hold the end of F-1 at the movement stage) */
+	void GatherMoveBodies(int32 Frame);
+	/** Frozen this frame: the victim's hitstop window or its own attacker hitstop (FillSnapshotEntry's bInHitstop) */
+	bool IsSlotInHitstop(int32 Slot, int32 Frame) const;
 	TArray<int32> MoveSlots;
 	TArray<FVector3f> PreviousPositions;
 	bool bWarnedMoverBackend = false;

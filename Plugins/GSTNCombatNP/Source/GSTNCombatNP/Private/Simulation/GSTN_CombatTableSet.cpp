@@ -15,6 +15,8 @@
 #include "Misc/Crc.h"
 #include "Serialization/MemoryWriter.h"
 #include "Timeline/GSTN_CombatTimeline.h"
+#include "Timeline/GSTN_Landing.h"
+#include "Timeline/GSTN_Ledge.h"
 
 namespace
 {
@@ -132,7 +134,13 @@ void UGSTN_CombatTableSet::DeriveFromBindings(const UGSTN_InputSettings& InputSe
 		const TSubclassOf<UGSTN_GA_BaseCombat> TimelineClass = Binding.Ability.Get() && Binding.Ability->IsChildOf(UGSTN_GA_BaseCombat::StaticClass())
 			? TSubclassOf<UGSTN_GA_BaseCombat>(Binding.Ability.Get()) : nullptr;
 		int32 Index = INDEX_NONE;
-		if (TimelineClass)
+		if (TimelineClass && IsHostClass(TimelineClass))
+		{
+			// A host plays no timeline of its own on activation: its binding is a plain ability (it ends the running timeline, as a stance does).
+			// It still gets a registry slot, so AppendPlayableTimelines finds it and registers what it plays
+			AddTimelineClass(TimelineClass, 0, 0, true);
+		}
+		else if (TimelineClass)
 		{
 			const int32 Tier = Table.Commands.IsValidIndex(Binding.CommandIndex) ? InputSettings.GetCommandTier(Table.Commands[Binding.CommandIndex].Tag) : 0;
 			Index = AddTimelineClass(TimelineClass, Tier, CombatSettings.GetDefaultOverrideFrames(Tier), true);
@@ -148,6 +156,17 @@ void UGSTN_CombatTableSet::DeriveFromBindings(const UGSTN_InputSettings& InputSe
 			TableJumpData = JumpDefault;
 		}
 	}
+	ApplyCoyoteFlags();
+}
+
+void UGSTN_CombatTableSet::ApplyCoyoteFlags()
+{
+	// After the registry loaded the timelines' content: the frame data read here is the one the move runs, the same on every machine
+	for (int32 BindingIndex = 0; BindingIndex < Table.Bindings.Num(); ++BindingIndex)
+	{
+		const FGSTN_CombatTimelineData* Data = BindingTimeline.IsValidIndex(BindingIndex) ? GetTimelineData(BindingTimeline[BindingIndex]) : nullptr;
+		Table.Bindings[BindingIndex].Requirements.bGroundedInCoyote = Data && Data->AllowsTakeoff();
+	}
 }
 
 void UGSTN_CombatTableSet::AppendAdoptable(TConstArrayView<TSubclassOf<UGSTN_GA_BaseCombat>> Adoptable)
@@ -159,7 +178,75 @@ void UGSTN_CombatTableSet::AppendAdoptable(TConstArrayView<TSubclassOf<UGSTN_GA_
 			AddTimelineClass(TimelineClass, 0, 0, false);
 		}
 	}
+	AppendPlayableTimelines();
 	AppendFollowUps();
+}
+
+bool UGSTN_CombatTableSet::IsHostClass(const UClass* AbilityClass)
+{
+	const UGSTN_GA_BaseCombat* Default = AbilityClass && AbilityClass->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()) ? AbilityClass->GetDefaultObject<UGSTN_GA_BaseCombat>() : nullptr;
+	return Default && !Default->bPlayTimelineOnActivation;
+}
+
+void UGSTN_CombatTableSet::AppendPlayableTimelines()
+{
+	// Only the classes registered before this call host: the played entries added here share their class, so the scan stops at the old end
+	const int32 Hosts = TimelineRegistry.Num();
+	for (int32 Index = 0; Index < Hosts; ++Index)
+	{
+		const TSubclassOf<UGSTN_GA_BaseCombat> Class = TimelineRegistry[Index];
+		const UGSTN_GA_BaseCombat* Default = Class ? Class->GetDefaultObject<UGSTN_GA_BaseCombat>() : nullptr;
+		if (!Default)
+		{
+			continue;
+		}
+		for (const TSoftObjectPtr<UGSTN_CombatTimeline>& Playable : Default->PlayableTimelines)
+		{
+			if (TimelineRegistry.Num() >= FGSTN_CompiledBindingTable::MaxRegistryEntries)
+			{
+				return;
+			}
+			// Loaded with the class's content (UGSTN_GA_BaseCombat::LoadTimelineContent), so Get is enough; never loaded in a tick
+			UGSTN_CombatTimeline* Timeline = Playable.Get();
+			if (Timeline && FindPlayEntry(Class, Timeline) == INDEX_NONE)
+			{
+				AddTimelineClass(Class, 0, 0, true, Timeline);
+			}
+		}
+	}
+}
+
+int32 UGSTN_CombatTableSet::FindPlayEntry(const UClass* AbilityClass, const UGSTN_CombatTimeline* Timeline) const
+{
+	if (!AbilityClass || !Timeline)
+	{
+		return INDEX_NONE;
+	}
+	int32 DefaultEntry = INDEX_NONE;
+	for (int32 Index = 0; Index < TimelineRegistry.Num(); ++Index)
+	{
+		if (TimelineRegistry[Index].Get() != AbilityClass)
+		{
+			continue;
+		}
+		const UGSTN_CombatTimeline* Override = TimelineOverrides.IsValidIndex(Index) ? TimelineOverrides[Index].Get() : nullptr;
+		if (Override == Timeline)
+		{
+			return Index;
+		}
+		if (!Override && DefaultEntry == INDEX_NONE)
+		{
+			DefaultEntry = Index;
+		}
+	}
+	// The class's own timeline asset, played by name: its entry without override runs exactly that data
+	const UGSTN_GA_BaseCombat* Default = AbilityClass->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()) ? AbilityClass->GetDefaultObject<UGSTN_GA_BaseCombat>() : nullptr;
+	return Default && DefaultEntry != INDEX_NONE && !Default->TimelineAsset.IsNull() && Default->TimelineAsset.Get() == Timeline ? DefaultEntry : INDEX_NONE;
+}
+
+int32 UGSTN_CombatTableSet::FindMoveEntry(const UClass* AbilityClass) const
+{
+	return AbilityClass ? TimelineRegistry.IndexOfByPredicate([AbilityClass](const TSubclassOf<UGSTN_GA_BaseCombat>& Class) { return Class.Get() == AbilityClass; }) : INDEX_NONE;
 }
 
 namespace
@@ -170,6 +257,22 @@ namespace
 		UClass* Class = Data && !Data->FollowUpTimeline.IsNull() ? Data->FollowUpTimeline.Get() : nullptr;
 		return Class && Class->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()) ? Class : nullptr;
 	}
+
+	/**
+	 * The ContinueMove class of a Landing or Ledge Check track (loaded with the timeline's content like a follow-up), null when it is not one or
+	 * has none
+	 */
+	UClass* ResolveLandingContinueClass(const FGSTN_CombatTimelineData* Data, int32 TrackIndex)
+	{
+		const FGSTN_TimelineTrack_Landing* Landing = Data && Data->Tracks.IsValidIndex(TrackIndex) ? Data->Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack_Landing>() : nullptr;
+		UClass* Class = Landing && Landing->Action == EGSTN_LandingAction::ContinueWithMove && !Landing->ContinueMove.IsNull() ? Landing->ContinueMove.Get() : nullptr;
+		if (!Landing && Data)
+		{
+			const TSoftClassPtr<UObject>* LedgeContinue = FGSTN_LedgeRules::GetContinueMove(*Data, TrackIndex);
+			Class = LedgeContinue ? LedgeContinue->Get() : nullptr;
+		}
+		return Class && Class->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()) ? Class : nullptr;
+	}
 }
 
 void UGSTN_CombatTableSet::AppendFollowUps()
@@ -177,12 +280,26 @@ void UGSTN_CombatTableSet::AppendFollowUps()
 	// The registry grows inside the loop: a follow-up's own follow-up is reached by the same scan
 	for (int32 Index = 0; Index < TimelineRegistry.Num() && Index < FGSTN_CompiledBindingTable::MaxRegistryEntries; ++Index)
 	{
-		UClass* FollowUp = ResolveFollowUpClass(GetTimelineData(Index));
-		if (FollowUp && TimelineRegistry.IndexOfByPredicate([FollowUp](const TSubclassOf<UGSTN_GA_BaseCombat>& Class) { return Class.Get() == FollowUp; }) == INDEX_NONE)
+		const FGSTN_CombatTimelineData* Data = GetTimelineData(Index);
+		TArray<UClass*, TInlineAllocator<4>> Chained;
+		Chained.Add(ResolveFollowUpClass(Data));
+		for (int32 TrackIndex = 0; Data && TrackIndex < Data->Tracks.Num(); ++TrackIndex)
 		{
-			AddTimelineClass(TSubclassOf<UGSTN_GA_BaseCombat>(FollowUp), 0, 0, false);
+			Chained.Add(ResolveLandingContinueClass(Data, TrackIndex));
+		}
+		for (UClass* FollowUp : Chained)
+		{
+			if (FollowUp && FindMoveEntry(FollowUp) == INDEX_NONE && TimelineRegistry.Num() < FGSTN_CompiledBindingTable::MaxRegistryEntries)
+			{
+				AddTimelineClass(TSubclassOf<UGSTN_GA_BaseCombat>(FollowUp), 0, 0, false);
+			}
 		}
 	}
+}
+
+int32 UGSTN_CombatTableSet::FindLandingContinueEntry(int32 Index, int32 TrackIndex) const
+{
+	return FindMoveEntry(ResolveLandingContinueClass(GetTimelineData(Index), TrackIndex));
 }
 
 int32 UGSTN_CombatTableSet::FindFollowUpEntry(int32 Index) const
@@ -445,7 +562,12 @@ UGSTN_CombatTableSet* FGSTN_CombatTableConverter::Convert(UObject* Outer, const 
 	{
 		const FGSTN_CompiledEntry& Entry = Compiled.Entries[BindingEntry[BindingIndex]];
 		const FGSTN_CompiledBinding& Binding = Set->Table.Bindings[BindingIndex];
-		const int32 Registry = RegistryRemap.IsValidIndex(Entry.TimelineIndex) ? RegistryRemap[Entry.TimelineIndex] : INDEX_NONE;
+		int32 Registry = RegistryRemap.IsValidIndex(Entry.TimelineIndex) ? RegistryRemap[Entry.TimelineIndex] : INDEX_NONE;
+		// A host keeps its registry slot (AppendPlayableTimelines reads it) but is bound as a plain ability: it plays no timeline on activation
+		if (Registry != INDEX_NONE && UGSTN_CombatTableSet::IsHostClass(Set->TimelineRegistry[Registry]))
+		{
+			Registry = INDEX_NONE;
+		}
 		Set->BindingTimeline.Add(static_cast<int16>(Registry));
 		if (Registry != INDEX_NONE && !TierSet[Registry])
 		{
@@ -456,6 +578,12 @@ UGSTN_CombatTableSet* FGSTN_CombatTableConverter::Convert(UObject* Outer, const 
 		}
 
 		const UClass* AbilityClass = Binding.Ability.Get();
+		if (UGSTN_CombatTableSet::IsHostClass(AbilityClass))
+		{
+			// A host bound with no registry entry of its own still needs one for AppendPlayableTimelines (after the remapped entries: TierSet
+			// only indexes those)
+			Set->AddTimelineClass(TSubclassOf<UGSTN_GA_BaseCombat>(const_cast<UClass*>(AbilityClass)), 0, 0, true);
+		}
 		const UGSTN_GA_PlatformJump* JumpDefault = AbilityClass->IsChildOf(UGSTN_GA_PlatformJump::StaticClass()) ? AbilityClass->GetDefaultObject<UGSTN_GA_PlatformJump>() : nullptr;
 		Set->BindingJumpRole.Add(JumpDefault ? static_cast<uint8>(JumpDefault->Role) + 1 : 0);
 		Set->BindingReaction.Add(UGSTN_CombatTableSet::MakeReactionFlags(Binding.Ability.Get()));
@@ -465,6 +593,7 @@ UGSTN_CombatTableSet* FGSTN_CombatTableConverter::Convert(UObject* Outer, const 
 		}
 	}
 	Set->AppendAdoptable(Input.Adoptable);
+	Set->ApplyCoyoteFlags();
 
 	// 6. The watched tags of the reset rules: the host's global rules, sorted by name, at most 64 (a bit mask in the sync state)
 	{

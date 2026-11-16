@@ -57,6 +57,19 @@ FScheduledInstantMovementEffect MakeScheduledEffectForNextFrame(const TScriptInt
 	return FScheduledInstantMovementEffect(MakeSchedulingInfoForNextFrame(Backend, TimeStep), InstantMovementEffect);
 }
 
+FMoverSchedulingInfo MakeSchedulingInfoForThisStep(bool bIsFixedDt, const FMoverTimeStep& TimeStep)
+{
+	const FMoverTime Now = bIsFixedDt ? FMoverTime(TimeStep.ServerFrame, TimeStep.BaseSimTimeMs) : FMoverTime(INDEX_NONE, TimeStep.BaseSimTimeMs);
+	return FMoverSchedulingInfo(/* ServerIssuanceTime = */ Now, /* ServerExecutionTime = */ Now, bIsFixedDt);
+}
+
+FScheduledInstantMovementEffect MakeScheduledEffectForThisStep(const TScriptInterface<IMoverBackendLiaisonInterface>& Backend, const FMoverTimeStep& TimeStep, TSharedPtr<FInstantMovementEffect> InstantMovementEffect)
+{
+	ensure(InstantMovementEffect.IsValid());
+	const bool bIsFixedDt = ensure(Backend) ? Backend->IsFixedDt() : false;
+	return FScheduledInstantMovementEffect(MakeSchedulingInfoForThisStep(bIsFixedDt, TimeStep), InstantMovementEffect);
+}
+
 FScheduledLayeredMove MakeScheduledMove(const TScriptInterface<IMoverBackendLiaisonInterface>& Backend, const FMoverTimeStep& TimeStep, TSharedPtr<FLayeredMoveBase> Move)
 {
 	ensure(Move.IsValid());

@@ -12,12 +12,14 @@
 #include "HAL/IConsoleManager.h"
 #include "Hits/GSTN_HurtboxTypes.h"
 #include "Hits/GSTN_ReactionTypes.h"
+#include "Input/GSTN_CombatSettings.h"
 #include "Modules/ModuleManager.h"
 #include "Net/GSTN_MinionClientRegistry.h"
 #include "Net/GSTN_MinionNetCodec.h"
 #include "Net/GSTN_MinionPack.h"
 #include "NetworkPredictionWorldManager.h"
 #include "Present/GSTN_MinionPuppet.h"
+#include "Rules/GSTN_CombatRules.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "Runtime/GSTN_MinionCombatSubsystem.h"
 #include "Runtime/GSTN_MinionPromotedComponent.h"
@@ -957,6 +959,8 @@ void UGSTN_MinionPresentationSubsystem::AppendSnapshotEntities(int32 Frame, TArr
 		return;
 	}
 	int32 Added = 0;
+	const UGSTN_CombatRules* Rules = UGSTN_CombatSettings::Get().ResolveDefaultRules();
+	const FGSTN_PushboxSettings& PushboxSettings = Rules ? Rules->Pushbox : GetDefault<UGSTN_CombatRules>()->Pushbox;
 	for (const TPair<int32, FGSTN_MinionPresentRecord>& Pair : Records)
 	{
 		const FGSTN_MinionPresentRecord& Record = Pair.Value;
@@ -982,6 +986,11 @@ void UGSTN_MinionPresentationSubsystem::AppendSnapshotEntities(int32 Frame, TArr
 		Entry.HealthFraction = Record.HealthFraction;
 		Entry.ActionState = PresentToFighterActionState(Record.Pose.ActionState, Record.Pose.MoveId);
 		Entry.Reaction = FGSTN_VictimReactionState::Make(0.0, 1.0, 0, Set ? Set->StaggerThreshold : FGSTN_StaggerThreshold());
+		// Pushbox P5: the same body as the authority's entry, so a predicted fighter meets the minion it sees (from the presented pose)
+		if (Definition)
+		{
+			Definition->ResolvePushbox(Record.Pose.ActionState, Entry.Transform.GetLocation(), Entry.Up, PushboxSettings, Entry.Pushbox);
+		}
 		++Added;
 	}
 	Stats.HittableEntries = Added;

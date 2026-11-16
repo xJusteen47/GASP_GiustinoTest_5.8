@@ -813,9 +813,13 @@ bool FGSTN_UiCommandsTest::RunTest(const FString& Parameters)
 	{
 		TestTrue(TEXT("every command exists"), Command.IsValid());
 	}
-	TestTrue(TEXT("step back is ,"), Commands.StepBack->GetFirstValidChord()->Key == EKeys::Comma);
-	TestTrue(TEXT("step forward is ."), Commands.StepForward->GetFirstValidChord()->Key == EKeys::Period);
-	TestTrue(TEXT("previous key is shift+,"), Commands.PreviousKey->GetFirstValidChord()->Key == EKeys::Comma && Commands.PreviousKey->GetFirstValidChord()->NeedsShift());
+	// Sequencer's chords since 2026-11-16 (owner: engine-like shortcuts)
+	TestTrue(TEXT("step back is Left"), Commands.StepBack->GetFirstValidChord()->Key == EKeys::Left);
+	TestTrue(TEXT("step forward is Right"), Commands.StepForward->GetFirstValidChord()->Key == EKeys::Right);
+	TestTrue(TEXT("previous key is ,"), Commands.PreviousKey->GetFirstValidChord()->Key == EKeys::Comma && !Commands.PreviousKey->GetFirstValidChord()->NeedsShift());
+	TestTrue(TEXT("next key is ."), Commands.NextKey->GetFirstValidChord()->Key == EKeys::Period);
+	TestTrue(TEXT("jump to start is Up"), Commands.JumpToStart.IsValid() && Commands.JumpToStart->GetFirstValidChord()->Key == EKeys::Up);
+	TestTrue(TEXT("zoom in is ctrl+="), Commands.ZoomIn.IsValid() && Commands.ZoomIn->GetFirstValidChord()->Key == EKeys::Equals && Commands.ZoomIn->GetFirstValidChord()->NeedsControl());
 	TestTrue(TEXT("play is space"), Commands.PlayPause->GetFirstValidChord()->Key == EKeys::SpaceBar);
 	TestTrue(TEXT("frame all is Home"), Commands.FrameAll->GetFirstValidChord()->Key == EKeys::Home);
 	TestTrue(TEXT("bake is ctrl+B"), Commands.BakeSockets->GetFirstValidChord()->Key == EKeys::B && Commands.BakeSockets->GetFirstValidChord()->NeedsControl());

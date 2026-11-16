@@ -14,7 +14,8 @@ class AGSTN_KOZone;
 
 /**
  * One entity at the end of one simulated frame, as the history ring of the world subsystem keeps it for lag compensation (combat-m4-hits 9).
- * Plain data, a few dozen bytes: the reaction state is the compact one the attacker's hitstop needs, so it rewinds with the transform.
+ * Plain data: the reaction state is the compact one the attacker's hitstop needs, so it rewinds with the transform. The hurtbox pose is inline
+ * (about 2 KB at most), so the ring of one entity stays a few dozen KB for the usual rewind window.
  */
 struct FGSTN_EntityHistoryRecord
 {
@@ -32,6 +33,9 @@ struct FGSTN_EntityHistoryRecord
 
 	/** The extra hurtboxes of the entry (a shield bubble): a rewind hands the step the ones of the rewound frame, so a hit lands on the bubble the victim had then */
 	FGSTN_ExtraHurtboxList ExtraHurtboxes;
+
+	/** Where the hurtboxes were (bones, detail level, move and kit shapes): a rewound hit tests the pose of that frame, not today's */
+	FGSTN_HurtboxPose HurtPose;
 };
 
 /**
@@ -151,7 +155,23 @@ public:
 	/** The radius of a sphere around the root that holds every hurtbox of the set, 0 for none */
 	static double ComputeBoundRadius(const UGSTN_HurtboxSetDefinition* Hurtboxes);
 
+	/**
+	 * Movement capsule ignores between fighters (pushbox plan, 2026-11-15). The capsule is the ECB: it meets the world only. Every registered
+	 * entity whose owner is an actor's component (a fighter) has its root ignore every other one, both ways, from RegisterEntity to UnregisterEntity;
+	 * the pushboxes (FGSTN_Pushbox) keep fighters apart instead. Ref-counted per (owner, other): anything else that ignores a partner (the link
+	 * presentation during a grab) goes through these too, so ending a grab cannot re-enable the blocking the registration turned off
+	 */
+	void AddMoveIgnore(AActor* Owner, AActor* Other);
+	void RemoveMoveIgnore(AActor* Owner, AActor* Other);
+	int32 GetMoveIgnoreCount(const AActor* Owner, const AActor* Other) const;
+
 private:
+	/** The actor a registry owner belongs to (the component's owner, or the actor itself), null otherwise */
+	static AActor* GetOwnerActorOf(UObject* Owner);
+
+	/** Ignore references per (owner, other) */
+	TMap<TPair<TObjectKey<AActor>, TObjectKey<AActor>>, int32> MoveIgnoreCounts;
+
 	struct FRegistryEntry
 	{
 		int32 EntityId = INDEX_NONE;

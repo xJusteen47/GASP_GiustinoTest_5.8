@@ -273,13 +273,30 @@ void UGSTN_LinkPresentationComponent::SetCollisionIgnoredPartner(AActor* NewPart
 	{
 		return;
 	}
+	// Through the combat world's ref-counted ignores (pushbox plan): fighters already ignore each other from their registration, and a raw
+	// un-ignore of the previous partner here would turn their capsule blocking back on after every grab
+	UGSTN_CombatWorldSubsystem* Ignores = UGSTN_CombatWorldSubsystem::Get(GetWorld());
 	if (Previous)
 	{
-		OwnRoot->IgnoreActorWhenMoving(Previous, false);
+		if (Ignores)
+		{
+			Ignores->RemoveMoveIgnore(Owner, Previous);
+		}
+		else
+		{
+			OwnRoot->IgnoreActorWhenMoving(Previous, false);
+		}
 	}
 	if (NewPartner && NewPartner != Owner)
 	{
-		OwnRoot->IgnoreActorWhenMoving(NewPartner, true);
+		if (Ignores)
+		{
+			Ignores->AddMoveIgnore(Owner, NewPartner);
+		}
+		else
+		{
+			OwnRoot->IgnoreActorWhenMoving(NewPartner, true);
+		}
 		IgnoredPartner = NewPartner;
 	}
 	else

@@ -658,6 +658,35 @@ FGSTN_LoadoutData (what a player owns and saves)
   its own: it reads its frame from the combat component and ends when the timeline ends, is interrupted or replaced.
 - Animation: the timeline frame is the truth; the synced montage follows (same tick, paused in hitstop). GASP keeps
   motion matching for locomotion, timelines use the montage slot; anim layer per weapon; GAS cues for VFX/SFX.
+- **Timelines played from the graph** (move-timeline-decoupling 1A/1B, 2026-11-16; owner decisions 1A + 1B). A timeline is an asset an
+  ability plays, as a montage is for `PlayMontageAndWait`:
+  - `Play Combat Timeline And Wait` (`UGSTN_PlayCombatTimelineTask`, a fork prediction task: rollback-safe, one instance per node) plays a
+    timeline of the ability's `PlayableTimelines` (or its `TimelineAsset`); pins On Key, On Hit Confirmed, On Completed, On Interrupted(reason),
+    On Cancelled. Each playable timeline is a registry entry (class, timeline) built with the tables (`AppendPlayableTimelines`), so a play is an
+    index in the sync state like any move.
+  - `bPlayTimelineOnActivation` (default on) keeps every standard move as it was. Off = a **host**: plays nothing on activation, survives the end
+    of each play (the graph chooses the next, or End Ability), pays its own cost (Commit Ability; played timelines never commit a host), is bound
+    as a plain ability, and by default (`bEndWhenTimelineInterrupted`) ends when a play is interrupted (hit, cancel into another move).
+  - `Start Combat Move(class)` (on `UGSTN_GA_Base`) starts another move's timeline and activates it in the same frame; the running move ends
+    (Interrupted). A frame-0 commit is done by the node.
+  - Both start **in the frame of the call**: the combat tick of the frame ran already, so `UGSTN_CombatSimComponent::StartTimelineFromAbility`
+    writes the start into that frame's combat state from inside the ability system's simulation step (`IsInSimulationTick`, fork getter) and
+    applies the Tags-track difference. Refused outside the simulation step, while restoring, with the gate closed, or for an unregistered pair.
+    Frame 0 of such a timeline does not run the attacker step (as for a command's start, which also follows it).
+- **Wait nodes** (move-timeline-decoupling 2A/3A, 2026-11-16; `GSTN_CombatWaitTasks.h`). Fork prediction tasks with their pins in the task's
+  sync data, counted on the combat clock (hitstop frames do not count):
+  - `Wait Combat Frames(Frames)` -> On Finish. The task form of `UGSTN_GA_Base::WaitCombatFrames` (which stays: one wait per ability).
+  - `Wait Command(Command, Window Frames, [Buffer Frames, Consume, Priority, Condition, Only Trigger Once])` -> On Command / On Window Expired.
+    Matches the command with its slot's rules on the frame's buffer (presses no command used; Buffer Frames -1 = the slot's buffer); never fires
+    in hitstop (fires on the first frame after), in a hit reaction or on a locked command; Condition is a cancel window's
+    (`FGSTN_CombatTimelineLogic::IsConditionMet`). Consume writes into the frame's combat state from the ability step
+    (`ConsumeCommandForWait`, as `StartTimelineFromAbility`). **Priority Before Bindings** (default): `CanExecuteBinding` refuses the bindings
+    of a command an active Wait Command claims (`UGSTN_WaitCommandTask::IsCommandClaimed`, the tasks as the previous frame left them, like the
+    lock tags), so the slot keeps its press for the wait. After Bindings: a binding that fires takes the press first.
+  - Validator (`FGSTN_SimGraphRules::FindTaskHint`): every GAS node unsafe in the simulation names its combat equivalent (Wait Delay/Delay ->
+    Wait Combat Frames, Wait Input Press -> Wait Command, Play Montage And Wait -> Play Combat Timeline And Wait, Apply Root Motion -> Movement
+    track / Apply Move Effect, Wait Target Data -> Get Aim Rotation / hitboxes / Fire Projectile, Spawn Actor -> Fire Projectile); the fork's
+    raw-input, montage and seconds tasks are warnings (`Ability.SimTaskHint`); our three tasks pass.
 
 ### 11.4 Lock tags (*Decision*)
 
@@ -759,6 +788,15 @@ FGSTN_LoadoutData (what a player owns and saves)
 - Hurtboxes: `UGSTN_HurtboxSetDefinition` (capsules on bones in ref pose, can be generated from the Physics Asset),
   relative to the root; per-timeline overrides in the `HurtboxModifier` track (bakeable). `UGSTN_CombatWorldSubsystem`
   registers hittable entities and owns the spatial broadphase.
+- **Hurtbox pose** (owner 2026-11-16, `FGSTN_HurtboxPose`, `Hits/GSTN_HurtboxPose.h`): a hurtbox with `bFollowBone` follows its
+  bone through the running move (the bone is baked into the timeline's `BakedSockets` next to the hitbox sockets; shape =
+  `Shape.Local * BoneReference^-1 * baked bone`). Detail levels: the set's `MovementDetail` (default Simple: the "body" capsule,
+  no gap between the legs) outside moves, `MoveDetail` (default Detailed: per-limb, following) during a move; a timeline's
+  `HurtboxDetail` overrides it, a kit's `FGSTN_MovementHurtboxExtension` replaces the movement body. A move's **Hurtbox track**
+  (`FGSTN_TimelineTrack_Hurtbox`, a hitbox track by inheritance, so the editor edits it like one) adds shapes that count as a set
+  hurtbox (`CountsAs`), or replace it (`bReplaceCountsAs`, the hand-made feet of a move). The pose is in the snapshot entry and the
+  lag-compensation record; the attacker, minions and projectiles read shapes through `GetHurtShape`/`IsHurtboxPresent`/extensions.
+  A set of `Both`, non-following hurtboxes gives the default pose: the old behaviour.
 
 ### 12.2 Queries
 

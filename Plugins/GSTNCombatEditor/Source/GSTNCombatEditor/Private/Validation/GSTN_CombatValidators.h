@@ -71,6 +71,8 @@ namespace GSTNValidationCodes
 	inline FName SimNonSyncVariable() { return TEXT("Ability.SimNonSyncVariable"); }
 	inline FName SimWorldRead() { return TEXT("Ability.SimWorldRead"); }
 	inline FName SimRandom() { return TEXT("Ability.SimRandom"); }
+	inline FName SimTaskHint() { return TEXT("Ability.SimTaskHint"); }
+	inline FName SimSpawn() { return TEXT("Ability.SimSpawn"); }
 
 	// Slots, shared by kit, weapon and preset
 	inline FName SlotAmbiguous() { return TEXT("Slot.Ambiguous"); }

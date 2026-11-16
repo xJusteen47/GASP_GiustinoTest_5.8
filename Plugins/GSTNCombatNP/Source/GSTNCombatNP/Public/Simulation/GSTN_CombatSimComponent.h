@@ -16,6 +16,7 @@
 #include "Loadout/GSTN_LoadoutData.h"
 #include "Presentation/GSTN_HitPresentation.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
+#include "Abilities/GSTN_TimelinePlay.h"
 #include "Simulation/GSTN_CombatAttacker.h"
 #include "Simulation/GSTN_CombatVictim.h"
 #include "Simulation/GSTN_CombatTableSet.h"
@@ -26,6 +27,7 @@
 #include "Simulation/GSTN_InputSimulator.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
 #include "Timeline/GSTN_StartupSteer.h"
+#include "Hits/GSTN_TumbleRecovery.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 #include "World/GSTN_StepSnapshot.h"
@@ -63,7 +65,9 @@ struct FGSTN_TrackHookEnvironment;
  * The combat tick only writes its own sync state. Everything it wants from the ability system (activate an ability,
  * freeze the montage during hitstop) is a frame-stamped request in that state, executed by this component from the
  * ability system's OnSimulationPreTick, i.e. inside the ability system's own tick, where the fork has the right frame,
- * time and rollback bookkeeping. Nothing else writes into the combat state during a frame.
+ * time and rollback bookkeeping. Nothing else writes into the combat state during a frame, with one exception: a timeline an ability
+ * graph starts (Play Combat Timeline And Wait, Start Combat Move) is written into the frame's state from inside the ability system's
+ * simulation step, after the combat tick of the same frame (StartTimelineFromAbility, FGSTN_TimelinePlayRules).
  *
  * Every tick the input simulation of GSTNInputNP (FGSTN_InputSimulator) runs on the embedded input state: the command is
  * sampled, classified against the facing the context provider knows for the end of the previous frame, appended to the
@@ -334,6 +338,40 @@ public:
 	 */
 	bool IsTimelineRunning(const UClass* AbilityClass, int32& OutStartFrame, int32* OutEntry = nullptr) const;
 
+	/**
+	 * Starts registry entry Entry in the frame being simulated, for an ability graph (move-timeline-decoupling 1A and 1B): what the combat tick
+	 * does for a command (state, move origin, evaluation of frame 0), source Forced, written into this frame's combat state from inside the
+	 * ability system's simulation step, plus the difference of the Tags tracks the tick already projected. A running timeline of another
+	 * class is replaced and its ability cancelled here (the pre-tick that executes a CancelTimeline request ran already). Refused (and nothing
+	 * written) outside the simulation step, while a frame is restored, with the gate closed or for an entry that is not one.
+	 * bOutCommitDue: the timeline commits on frame 0, and the pre-tick that commits a command's timeline ran already, so the caller commits
+	 */
+	EGSTN_TimelineStartRefusal StartTimelineFromAbility(int32 Entry, bool& bOutCommitDue);
+
+	// ---- Wait Command (move-timeline-decoupling 2A, UGSTN_WaitCommandTask). Simulation reads and writes for the task, called from the ability
+	// system's simulation step; the buffer they read is the frame's combat state, the one the ability reads in that step
+
+	/** Index of Command in the command table the simulated frame is on, INDEX_NONE if the table has none */
+	int32 FindCommandIndex(const FGameplayTag& Command) const;
+
+	/**
+	 * Whether a wait may take the command now: inside the simulation step, not restoring, the loadout gate open, not a hitstop frame (the press
+	 * waits in the buffer, which does not age it), not in a hit reaction, the command not locked by the owner's tags, Condition held
+	 */
+	bool CanTakeCommandForWait(int32 CommandIndex, EGSTN_CancelCondition Condition) const;
+
+	/**
+	 * Whether the command's input was completed by presses no command used, none older than BufferFrames (-1 = the command's own buffer).
+	 * OutTerminalFrame, when given, receives the frame of the input's last step (its terminal anchor)
+	 */
+	bool IsCommandEnteredForWait(int32 CommandIndex, int32 BufferFrames, int32* OutTerminalFrame = nullptr) const;
+
+	/**
+	 * Consumes the presses (and the terminal stick anchor) that complete the command, in this frame's combat state, as the combat tick does for
+	 * a command it executes. Returns false (nothing written) outside the simulation step or when the input is not there
+	 */
+	bool ConsumeCommandForWait(int32 CommandIndex, int32 BufferFrames);
+
 	/** The table set the simulated frame is on (Tables()): what a running ability resolves its registry entry against. Null before BeginPlay */
 	const UGSTN_CombatTableSet* GetActiveTableSet() const;
 
@@ -352,6 +390,18 @@ public:
 	 * Called by the ability when its timeline begins, inside the simulation; the move decides everything else on its own first frame
 	 */
 	void ExecuteMomentumSlide();
+
+	/**
+	 * Ledge Check, Stop action (owner 2026-11-16, FGSTN_TimelineTrack_LedgeCheck): queues the ledge guard move of a timeline that just started,
+	 * through LedgeGuardEffect. Called by the ability when its timeline begins and it has a Stop ledge window, inside the simulation
+	 */
+	void ExecuteLedgeGuard();
+
+	/**
+	 * For the ledge guard move, from Mover's tick: the start frame of the timeline the combat state of the frame being simulated runs, and whether
+	 * its clock saw a ledge in a Stop window this frame (FGSTN_CombatSyncCore::bLedgeStop). False outside a timeline and in a recoil
+	 */
+	bool ReadLedgeStop(int32& OutStartFrame, bool& bOutStop) const;
 
 	/**
 	 * The momentum slide data of the move the combat state of the frame being simulated runs, and the frame that move started on. False
@@ -439,6 +489,46 @@ public:
 	 * in a hold), INDEX_NONE outside a timeline and while a ricochet recoil plays. The frame the Event keys are crossed on
 	 */
 	int32 GetEvaluatedTimelineFrame() const;
+
+	/**
+	 * The timeline data of the move the frame being simulated runs and its evaluated frame (GetEvaluatedTimelineFrame), null (OutFrame INDEX_NONE)
+	 * outside a timeline and during a recoil. Read by the body capsule modifier from Mover's tick (the combat model ticked before it), like ReadRunningSlide
+	 */
+	const FGSTN_CombatTimelineData* ReadEvaluatedTimeline(int32& OutFrame) const;
+
+	/**
+	 * This frame's pushbox move (FGSTN_Pushbox): the world-space horizontal shift the fighter's pushbox overlaps ask for, computed by this frame's
+	 * combat tick from the step snapshot. Zero when the combat tick of the frame being simulated did not compute one. Read by the body capsule
+	 * modifier from Mover's tick (the combat model ticked before it), like ReadEvaluatedTimeline
+	 */
+	FVector ReadFramePush() const;
+
+	/**
+	 * P4 approach clamp + rigid core (FGSTN_Pushbox::ConstrainMove): this frame's own move of the fighter, ActorEnd - its location at the start of the
+	 * frame, corrected against the other bodies of the step snapshot. Returns the correction to add to ActorEnd (zero when there is nothing to do or
+	 * the combat tick of the frame did not compute the bodies); InOutVelocity loses the inward part. Read by the body capsule modifier after the move
+	 */
+	FVector ConstrainFrameMove(const FVector& ActorEnd, FVector& InOutVelocity) const;
+
+	/**
+	 * Tumble air recovery for this combatant over the rules' (owner 2026-11-16): e.g. players AfterHitstun and training dummies or AI
+	 * UntilGround. Constant data of the actor (the same on every machine), never changed while the simulation runs
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Hit Reactions")
+	EGSTN_TumbleRecoveryOverride TumbleRecoveryOverride = EGSTN_TumbleRecoveryOverride::UseRules;
+
+	/** Rules and TumbleRecoveryOverride: a tumble may act in the air once its hitstun ends */
+	bool IsTumbleAirRecoveryOn() const;
+
+	/** The commands a recovered tumble may start: the kit's FGSTN_TumbleRecoveryExtension, else the rules'. Empty = every command */
+	const FGameplayTagContainer& GetTumbleRecoveryCommands() const;
+
+	/** How this character type meets other fighters (pushbox P4): soft pushbox + rigid core, pushbox only, or none. Per Blueprint / character type */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Body Collision")
+	FGSTN_BodyCollisionProfile BodyCollision;
+
+	/** The pushbox of this fighter in the world for its snapshot entry, from the end of the previous frame. False = none */
+	bool ResolveSnapshotPushbox(int32 Frame, const FGSTN_CombatSyncCore& Core, const FTransform& CapsuleTransform, TConstArrayView<FName> StateTags, FGSTN_PushboxCylinder& Out);
 
 private:
 	/** The bit of a button tag in the active input config (the same asset on every machine), INDEX_NONE if it has none */
@@ -534,7 +624,8 @@ public:
 	 * Queues the permanent stats movement modifier (FGSTN_StatsMovementModifier) on the owner's Mover component once its
 	 * simulation exists, on the authority and the owning client. It makes the character's speeds follow its WalkSpeed stat
 	 * and stops them under Combat.Lock.Movement; it does nothing for an ability system without the combat attribute set.
-	 * Turn it off for a pawn whose speeds the combat stats must not touch
+	 * Turn it off for a pawn whose speeds the combat stats must not touch. The body capsule modifier (FGSTN_BodyCapsuleModifier, per-move
+	 * movement capsule) is queued with it and goes with it
 	 */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Stats")
 	bool bQueueStatsModifier = true;
@@ -697,6 +788,9 @@ private:
 	FGSTN_JumpParams FrameJumpParams;
 	bool bFrameJumpValid = false;
 
+	/** In the air inside the coyote window this frame (StepJump), read by AppendContextTags for Input.Context.Coyote. Frame scratch, never across frames */
+	bool bFrameInCoyote = false;
+
 	/** The authored gravity next to what the phases wrote over it; configuration mirrored from outside the simulation, see FGSTN_GravityBase */
 	FGSTN_GravityBase GravityBase;
 
@@ -761,6 +855,12 @@ private:
 	/** The cancel conditions the extensions hold this frame (IGSTN_CombatTickExtension::HeldCancelConditions), read by the gate with the cancel windows. Rewritten every tick, never state */
 	uint32 FrameCancelConditions = 0;
 
+	/**
+	 * FrameCancelConditions as the combat tick of the frame left it, kept past the tick for the ability system's step of the same frame (Wait
+	 * Command's Condition), like FrameAim. Rewritten every simulated frame before the step reads it, never state
+	 */
+	uint32 AbilityStepCancelConditions = 0;
+
 	/** The tag an extension admits only the bindings requiring (IGSTN_CombatTickExtension::AdmitsOnlyBindingsRequiring, M6 F8): the gate passes no other binding. Rewritten every tick, never state */
 	FGameplayTag FrameAdmitTag;
 
@@ -812,6 +912,9 @@ private:
 	/** Scratch of the combat tick, reused every frame (no allocation); the evaluation of the frame the gate and the commit read */
 	FGSTN_TimelineOutput TimelineOutput;
 
+	/** Scratch of StartTimelineFromAbility: the frame-0 evaluation of a start made after the tick, kept apart so the tick's own evaluation stays as it was */
+	FGSTN_TimelineOutput AbilityStartOutput;
+
 	/** The state the gate (IsCommandAllowed) reads: set at the top of the combat tick, valid only inside it */
 	const FGSTN_CombatSyncCore* GateCore = nullptr;
 
@@ -845,6 +948,26 @@ private:
 		bool bPrecisionAim = false;
 	};
 	FFrameAim FrameAim;
+
+	/**
+	 * The pushbox move of the frame the simulation is on (ReadFramePush). Written by every combat tick before Mover's tick of the same frame
+	 * reads it, a resimulated frame included; never a source of state, so it needs no rollback (as FrameAim)
+	 */
+	struct FFramePush
+	{
+		int32 Frame = INDEX_NONE;
+		FVector Move = FVector::ZeroVector;
+		/** The bodies for ConstrainFrameMove: this one at the start of the frame and every other with a pushbox. bHasBodies false = none */
+		bool bHasBodies = false;
+		FVector ActorStart = FVector::ZeroVector;
+		FVector Up = FVector::UpVector;
+		FGSTN_PushboxBody Self;
+		TArray<FGSTN_PushboxBody, TInlineAllocator<8>> Others;
+	};
+	FFramePush FramePush;
+
+	/** Fills FramePush for Frame from the snapshot (this entity's entry against every other) */
+	void ComputeFramePush(int32 Frame, const FGSTN_StepSnapshot* Snapshot);
 
 	/** The team of the owner or of its controller, NoTeam without one (read when registering and at every snapshot) */
 	FGenericTeamId ResolveTeam() const;
@@ -895,6 +1018,9 @@ private:
 
 	/** The victim layer of the kit (FGSTN_ImpactResponseExtension), when it has one; the rules' otherwise */
 	TOptional<FGSTN_ImpactResponse> KitImpactResponse;
+
+	/** The kit's tumble recovery commands (FGSTN_TumbleRecoveryExtension), when it has one; the rules' otherwise */
+	TOptional<FGSTN_TumbleRecoveryExtension> KitTumbleRecovery;
 
 	/** Colliders the probe touched by contact frame, and the breaks the victim step requested by frame. Local data, see NoteContactSurface */
 	TMap<int32, TWeakObjectPtr<UPrimitiveComponent>> ContactSurfaces;
@@ -971,6 +1097,10 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
 	TSubclassOf<UGameplayEffect> MomentumSlideEffect;
 
+	/** Instant effect that queues the ledge guard of a move with a Stop ledge window (FGSTN_LayeredMove_LedgeGuard); replace for a game with its own */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
+	TSubclassOf<UGameplayEffect> LedgeGuardEffect;
+
 	/** Instant effect of a SetFacing request (startup steering, plan precisione-weakpoint 5): turns Mover to Combat.SetByCaller.FacingYaw */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
 	TSubclassOf<UGameplayEffect> SetFacingEffect;
@@ -1005,6 +1135,12 @@ private:
 
 	/** The attacker's pose at the end of the previous frame from the Mover tracker (the actor's own without one). False without an owner */
 	bool ReadOwnPose(FTransform& OutTransform, FVector& OutUp);
+
+	/**
+	 * The Ledge Check probe (FGSTN_LedgeRules, owner 2026-11-16): true when there is floor AheadCm in front of the pose of ReadOwnPose (along its
+	 * flat facing) within DepthCm under the feet, traced on the root body's own channel. True (no ledge) without a body. Called by the clock only
+	 */
+	bool ProbeFloorAhead(float AheadCm, float DepthCm);
 
 	/**
 	 * What the attacker side predicted about each hit of the last frames, for the presentation component of this pawn (M4 H10). Local data

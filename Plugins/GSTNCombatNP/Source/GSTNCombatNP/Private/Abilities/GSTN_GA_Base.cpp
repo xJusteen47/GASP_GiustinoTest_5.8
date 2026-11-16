@@ -8,6 +8,7 @@
 #include "GameFramework/Actor.h"
 #include "Simulation/GSTN_CombatActionTypes.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "Simulation/GSTN_CombatTableSet.h"
 #include "Simulation/GSTN_InputHostUtils.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNGABase, Log, All);
@@ -89,6 +90,56 @@ void UGSTN_GA_Base::WaitCombatFrames(int32 Frames)
 void UGSTN_GA_Base::CancelCombatWait()
 {
 	WaitFrames.Value = 0;
+}
+
+bool UGSTN_GA_Base::StartCombatMove(TSubclassOf<UGSTN_GA_BaseCombat> Move)
+{
+	UGSTN_CombatSimComponent* Combat = GetCombatComponent();
+	UAbilitySystemComponent* AbilitySystem = GetAbilitySystemComponentFromActorInfo();
+	const UGSTN_CombatTableSet* Set = Combat ? Combat->GetActiveTableSet() : nullptr;
+	if (!Move || !Set || !AbilitySystem || !IsActive())
+	{
+		return false;
+	}
+	// Everything that can refuse is checked before the state is written: a refusal must leave the running move as it was
+	const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(Move);
+	const int32 Entry = Set->FindMoveEntry(Move);
+	if (!Spec || Entry == INDEX_NONE || UGSTN_CombatTableSet::IsHostClass(Move))
+	{
+		UE_LOG(LogGSTNGABase, Warning, TEXT("%s: Start Combat Move %s refused: %s"), *GetName(), *GetNameSafe(Move.Get()),
+			!Spec ? TEXT("the ability is not granted") : Entry == INDEX_NONE ? TEXT("the move is not in the registry (bind it, or add it to Adoptable Timelines)")
+			: TEXT("a host plays no timeline of its own: activate it instead"));
+		return false;
+	}
+	const FGameplayAbilitySpecHandle Handle = Spec->Handle;
+
+	bool bCommitDue = false;
+	if (Combat->StartTimelineFromAbility(Entry, bCommitDue) != EGSTN_TimelineStartRefusal::None)
+	{
+		return false;
+	}
+
+	// Activated as the model's own request (the ActivateEntry path of the pre-tick, which ran already this frame): the ability finds its timeline
+	// running from this frame and begins it in its activation. A running instance of the same class is retriggered
+	bool bActivated = false;
+	{
+		const FGSTN_CommandActivationScope CommandScope(Handle);
+		bActivated = AbilitySystem->TryActivateAbility(Handle);
+	}
+	if (!bActivated)
+	{
+		// The state names a timeline whose ability is not active: the combat tick of the next frame ends it (step 2)
+		UE_LOG(LogGSTNGABase, Warning, TEXT("%s: Start Combat Move %s: the ability refused to activate (tags, cost, cooldown)"), *GetName(), *GetNameSafe(Move.Get()));
+		return false;
+	}
+	if (bCommitDue)
+	{
+		if (const FGameplayAbilitySpec* Started = AbilitySystem->FindAbilitySpecFromHandle(Handle))
+		{
+			UGSTN_GA_BaseCombat::CommitOrCancel(*AbilitySystem, *Started);
+		}
+	}
+	return true;
 }
 
 bool UGSTN_GA_Base::CanActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,

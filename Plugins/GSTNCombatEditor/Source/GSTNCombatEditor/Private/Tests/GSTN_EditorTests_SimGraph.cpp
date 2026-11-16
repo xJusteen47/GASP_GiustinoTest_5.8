@@ -11,6 +11,7 @@
 #include "K2Node_CallFunction.h"
 #include "K2Node_Event.h"
 #include "K2Node_VariableSet.h"
+#include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Kismet2/BlueprintEditorUtils.h"
@@ -166,6 +167,51 @@ bool FGSTN_SimGraphWalkTest::RunTest(const FString& Parameters)
 
 	Package->ClearDirtyFlag();
 	Blueprint->ClearFlags(RF_Standalone | RF_Public);
+	return true;
+}
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SimGraphTaskHintsTest, "GSTNCombat.Editor.SimGraph.TaskHints", GSTN_SIM_GRAPH_TEST_FLAGS)
+bool FGSTN_SimGraphTaskHintsTest::RunTest(const FString& Parameters)
+{
+	// Every GAS node a designer brings from PlayMontageAndWait habits gets the combat node to use instead (move-timeline-decoupling 3A)
+	const auto Check = [this](const TCHAR* TaskClass, bool bFork, bool bFlagged, EGSTN_Severity Severity, const TCHAR* ReplacementPart)
+	{
+		const FGSTN_SimGraphRules::FTaskHint Hint = FGSTN_SimGraphRules::FindTaskHint(FName(TaskClass), bFork);
+		TestEqual(FString::Printf(TEXT("%s flagged"), TaskClass), Hint.bFlagged, bFlagged);
+		if (bFlagged)
+		{
+			TestTrue(FString::Printf(TEXT("%s severity"), TaskClass), Hint.Severity == Severity);
+			TestTrue(FString::Printf(TEXT("%s names %s"), TaskClass, ReplacementPart), Hint.Replacement.ToString().Contains(ReplacementPart));
+		}
+	};
+	Check(TEXT("AbilityTask_WaitDelay"), false, true, EGSTN_Severity::Error, TEXT("Wait Combat Frames"));
+	Check(TEXT("AbilityTask_WaitInputPress"), false, true, EGSTN_Severity::Error, TEXT("Wait Command"));
+	Check(TEXT("AbilityTask_WaitInputRelease"), false, true, EGSTN_Severity::Error, TEXT("End On Trigger Release"));
+	Check(TEXT("AbilityTask_PlayMontageAndWait"), false, true, EGSTN_Severity::Error, TEXT("Play Combat Timeline And Wait"));
+	Check(TEXT("AbilityTask_ApplyRootMotionConstantForce"), false, true, EGSTN_Severity::Error, TEXT("Movement track"));
+	Check(TEXT("AbilityTask_WaitTargetData"), false, true, EGSTN_Severity::Error, TEXT("Fire Projectile"));
+	Check(TEXT("AbilityTask_WaitGameplayEvent"), false, true, EGSTN_Severity::Warning, TEXT(""));
+	Check(TEXT("SomeAsyncAction"), false, true, EGSTN_Severity::Warning, TEXT(""));
+
+	// The fork's tasks are rollback safe: flagged only where a combat move needs another node
+	Check(TEXT("WaitInputEventPredictionTask"), true, true, EGSTN_Severity::Warning, TEXT("Wait Command"));
+	Check(TEXT("WaitAnyInputEventPredictionTask"), true, true, EGSTN_Severity::Warning, TEXT("Wait Command"));
+	Check(TEXT("PlayMontageAndWaitPredictionTask"), true, true, EGSTN_Severity::Warning, TEXT("Play Combat Timeline And Wait"));
+	Check(TEXT("WaitForDurationPredictionTask"), true, true, EGSTN_Severity::Warning, TEXT("Wait Combat Frames"));
+	Check(TEXT("WaitGameplayEventPredictionTask"), true, false, EGSTN_Severity::Warning, TEXT(""));
+	Check(TEXT("WaitAttributeChangePredictionTask"), true, false, EGSTN_Severity::Warning, TEXT(""));
+	Check(TEXT("GSTN_PlayCombatTimelineTask"), true, false, EGSTN_Severity::Warning, TEXT(""));
+	Check(TEXT("GSTN_WaitCommandTask"), true, false, EGSTN_Severity::Warning, TEXT(""));
+	Check(TEXT("GSTN_WaitCombatFramesTask"), true, false, EGSTN_Severity::Warning, TEXT(""));
+
+	const UFunction* DeferredSpawn = UGameplayStatics::StaticClass()->FindFunctionByName(TEXT("BeginDeferredActorSpawnFromClass"));
+	const UFunction* Print = UKismetSystemLibrary::StaticClass()->FindFunctionByName(TEXT("PrintString"));
+	if (TestTrue(TEXT("the engine functions exist"), DeferredSpawn && Print))
+	{
+		TestTrue(TEXT("a deferred spawn is a spawn"), FGSTN_SimGraphRules::IsActorSpawn(*DeferredSpawn));
+		TestFalse(TEXT("Print String is not"), FGSTN_SimGraphRules::IsActorSpawn(*Print));
+	}
 	return true;
 }
 

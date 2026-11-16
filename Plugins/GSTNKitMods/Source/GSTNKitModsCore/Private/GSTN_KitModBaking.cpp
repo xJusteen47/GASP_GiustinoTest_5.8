@@ -96,7 +96,7 @@ void FGSTN_KitModBaking::BakeTimeline(const FGSTN_CombatTimelineData& Base, cons
 	const bool bScaleShapes = !Modifier.HitboxScale.Equals(FVector::OneVector, 0.0);
 	for (TInstancedStruct<FGSTN_TimelineTrack>& Instance : OutDerived.Tracks)
 	{
-		if (FGSTN_TimelineTrack_Hitbox* Track = Instance.GetMutablePtr<FGSTN_TimelineTrack_Hitbox>())
+		if (FGSTN_TimelineTrack_Hitbox* Track = GSTNTimelineTracks::AsAttackHitboxMutable(Instance))
 		{
 			for (FGSTN_HitboxSpec& Spec : Track->Hitboxes)
 			{
@@ -145,7 +145,7 @@ void FGSTN_KitModBaking::BakeTimeline(const FGSTN_CombatTimelineData& Base, cons
 			{
 				Switch->SwapFrame = ScaleFrame(Switch->SwapFrame, Q);
 			}
-			if (FGSTN_TimelineTrack_Hitbox* Hitbox = Instance.GetMutablePtr<FGSTN_TimelineTrack_Hitbox>())
+			if (FGSTN_TimelineTrack_Hitbox* Hitbox = GSTNTimelineTracks::AsAttackHitboxMutable(Instance))
 			{
 				for (FGSTN_HitboxSpec& Spec : Hitbox->Hitboxes)
 				{

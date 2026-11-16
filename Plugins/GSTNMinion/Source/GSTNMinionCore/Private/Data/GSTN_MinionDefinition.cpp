@@ -10,6 +10,28 @@
 #include "Timeline/GSTN_CombatTimeline.h"
 #endif
 
+bool UGSTN_MinionDefinition::ResolvePushbox(uint8 ActionState, const FVector& Feet, const FVector& Up, const FGSTN_PushboxSettings& Settings, FGSTN_PushboxCylinder& Out) const
+{
+	Out = FGSTN_PushboxCylinder();
+	const EGSTN_BodyCollisionMode Mode = BodyCollision.Profile.Mode;
+	const EGSTN_MinionActionState State = static_cast<EGSTN_MinionActionState>(ActionState);
+	if (!Settings.bEnabled || Mode == EGSTN_BodyCollisionMode::None || State == EGSTN_MinionActionState::Spawning
+		|| State == EGSTN_MinionActionState::Dying || State == EGSTN_MinionActionState::Dead || BodyCollision.StatesWithoutBody.Contains(State))
+	{
+		return false;
+	}
+	// The capsule's centre as the lightweight movement places it (feet + up x half height, the half height at least the radius)
+	const float HalfHeight = FMath::Max(Stats.CapsuleHalfHeight, Stats.CapsuleRadius);
+	Out.Center = Feet + Up * HalfHeight;
+	Out.Radius = Stats.CapsuleRadius * Settings.CapsuleRadiusScale;
+	Out.HalfHeight = HalfHeight;
+	if (Mode == EGSTN_BodyCollisionMode::PushboxAndCore)
+	{
+		Out.CoreRadius = BodyCollision.Profile.CoreRadius > 0.f ? BodyCollision.Profile.CoreRadius : Stats.CapsuleRadius * Settings.CoreRadiusScale;
+	}
+	return Out.IsActive();
+}
+
 FPrimaryAssetId UGSTN_MinionDefinition::GetPrimaryAssetId() const
 {
 	return FPrimaryAssetId(GSTNMinion::DefinitionAssetType(), GetFName());

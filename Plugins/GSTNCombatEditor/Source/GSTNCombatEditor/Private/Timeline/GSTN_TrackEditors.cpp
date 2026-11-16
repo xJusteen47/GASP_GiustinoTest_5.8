@@ -212,7 +212,10 @@ namespace GSTNTrackEditors
 			virtual FText GetRowLabel(const FGSTN_TimelineTrack& Track) const override
 			{
 				const FGSTN_TimelineTrack_Hitbox& Hitbox = static_cast<const FGSTN_TimelineTrack_Hitbox&>(Track);
-				const FText Part = DescribeSelector(Hitbox.Part);
+				// A named group shows its name first (owner 2026-11-16: names instead of numbers)
+				const FText Part = Hitbox.GroupName.IsNone()
+					? DescribeSelector(Hitbox.Part)
+					: FText::Format(LOCTEXT("HitboxNamedGroup", "{0} ({1})"), FText::FromName(Hitbox.GroupName), DescribeSelector(Hitbox.Part));
 				if (Hitbox.Hitboxes.IsEmpty())
 				{
 					return FText::Format(LOCTEXT("HitboxNoSpecs", "{0}: no hitbox"), Part);
@@ -221,20 +224,22 @@ namespace GSTNTrackEditors
 				const int32 Shown = FMath::Min(Hitbox.Hitboxes.Num(), MaxLeavesShown);
 				for (int32 Index = 0; Index < Shown; ++Index)
 				{
-					Specs.Add(DescribeSpec(Hitbox.Hitboxes[Index]).ToString());
+					Specs.Add(DescribeSpec(Hitbox, Hitbox.Hitboxes[Index]).ToString());
 				}
 				const FText More = Hitbox.Hitboxes.Num() > Shown ? FText::Format(LOCTEXT("HitboxMore", " +{0}"), FText::AsNumber(Hitbox.Hitboxes.Num() - Shown)) : FText::GetEmpty();
 				return FText::Format(LOCTEXT("HitboxLabel", "{0}: {1}{2}"), Part, FText::FromString(FString::Join(Specs, TEXT(", "))), More);
 			}
 
 		private:
-			/** "G0" for a hitbox in root space, "G1 @hand_r" for a baked socket, with the zone when it is not the plain one */
-			static FText DescribeSpec(const FGSTN_HitboxSpec& Spec)
+			/** "G0" for a hitbox in root space, "G1 @hand_r" for a baked socket, with the zone when it is not the plain one; a named hitbox starts with its name */
+			static FText DescribeSpec(const FGSTN_TimelineTrack_Hitbox& Track, const FGSTN_HitboxSpec& Spec)
 			{
-				FString Text = FString::Printf(TEXT("G%d"), static_cast<int32>(Spec.HitGroup));
-				switch (Spec.Space)
+				FString Text = Spec.Name.IsNone() ? FString() : Spec.Name.ToString() + TEXT(" ");
+				Text += FString::Printf(TEXT("G%d"), static_cast<int32>(Spec.HitGroup));
+				const FName Socket = Track.GetEffectiveSocket(Spec);
+				switch (Track.GetEffectiveSpace(Spec))
 				{
-				case EGSTN_HitboxSpace::BakedSocket: Text += Spec.Socket.IsNone() ? FString(TEXT(" @?")) : FString(TEXT(" @")) + Spec.Socket.ToString(); break;
+				case EGSTN_HitboxSpace::BakedSocket: Text += Socket.IsNone() ? FString(TEXT(" @?")) : FString(TEXT(" @")) + Socket.ToString(); break;
 				case EGSTN_HitboxSpace::WorldAtMoveStart: Text += TEXT(" world"); break;
 				case EGSTN_HitboxSpace::Projectile: Text += TEXT(" projectile"); break;
 				default: break;
@@ -248,6 +253,42 @@ namespace GSTNTrackEditors
 					Text += TEXT(" sour");
 				}
 				return FText::FromString(Text);
+			}
+		};
+
+		/**
+		 * Hurtbox (owner 2026-11-16): the move's own hurtboxes. A hitbox track by inheritance, so the lanes, keys, gizmo, Details, rename and group
+		 * parenting are the hitbox ones (the keyed-access adapter and the selection walk up to the hitbox struct). Green like the hurtbox set editor
+		 */
+		class FHurtboxTrackEditor final : public IGSTN_TrackEditor
+		{
+		public:
+			virtual const UScriptStruct* GetTrackStruct() const override { return StructOf<FGSTN_TimelineTrack_Hurtbox>(); }
+			virtual FText GetDisplayName() const override { return LOCTEXT("HurtboxName", "Hurtbox"); }
+			virtual FName GetIconBrushName() const override { return TEXT("Icons.User"); }
+			virtual int32 GetDefaultLength() const override { return 6; }
+
+			virtual FLinearColor GetTrackColor(const FGSTN_TimelineTrack& Track) const override
+			{
+				return FLinearColor(0.2f, 0.8f, 0.4f, 1.f);
+			}
+
+			virtual void InitNewTrack(FGSTN_TimelineTrack& Track, int32 AddedAtFrame, const FGSTN_CombatTimelineData& Data) const override
+			{
+				// Starts with one shape so there is a lane to key; the designer moves it onto the limb (BakedSocket on a bone makes it follow)
+				FGSTN_TimelineTrack_Hurtbox& Hurtbox = static_cast<FGSTN_TimelineTrack_Hurtbox&>(Track);
+				FGSTN_HitboxSpec Spec = FGSTN_HitboxKeyedAccess::MakeDefaultSpec();
+				Spec.Name = TEXT("Hurtbox");
+				Hurtbox.Hitboxes.Add(Spec);
+			}
+
+			virtual FText GetRowLabel(const FGSTN_TimelineTrack& Track) const override
+			{
+				const FGSTN_TimelineTrack_Hurtbox& Hurtbox = static_cast<const FGSTN_TimelineTrack_Hurtbox&>(Track);
+				const FText Group = Hurtbox.GroupName.IsNone() ? LOCTEXT("HurtboxGroupDefault", "Hurtbox") : FText::FromName(Hurtbox.GroupName);
+				const FText CountsAs = Hurtbox.CountsAs.IsNone() ? LOCTEXT("HurtboxCountsFirst", "first hurtbox") : FText::FromName(Hurtbox.CountsAs);
+				return FText::Format(Hurtbox.bReplaceCountsAs ? LOCTEXT("HurtboxReplaces", "{0}: replaces {1} ({2})") : LOCTEXT("HurtboxAdds", "{0}: counts as {1} ({2})"),
+					Group, CountsAs, FText::AsNumber(Hurtbox.Hitboxes.Num()));
 			}
 		};
 
@@ -345,6 +386,7 @@ namespace GSTNTrackEditors
 		// The tracks of M4 (E5b). The hitbox track keeps its keys in lanes, one per hitbox: the model reaches them through this adapter
 		RegisterOne(MakeShared<FHitboxTrackEditor>());
 		RegisterOne(MakeShared<FHurtboxModifierTrackEditor>());
+		RegisterOne(MakeShared<FHurtboxTrackEditor>());
 		FGSTN_KeyedTrackAccessRegistry::Register(FGSTN_TimelineTrack_Hitbox::StaticStruct(), MakeShared<FGSTN_HitboxKeyedAccess>());
 	}
 

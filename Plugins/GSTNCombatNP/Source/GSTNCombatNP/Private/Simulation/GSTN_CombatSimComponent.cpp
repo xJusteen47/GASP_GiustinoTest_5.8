@@ -1,6 +1,8 @@
 // Combat simulation (GAS-NPP fork).
 
 #include "Simulation/GSTN_CombatSimComponent.h"
+
+#include "Hits/GSTN_HurtboxPose.h"
 #include "Loadout/GSTN_LoadoutModeRules.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "GameRules/GSTN_GameRules.h"
@@ -8,6 +10,7 @@
 #include "Loadout/GSTN_LoadoutComponent.h"
 
 #include "Abilities/GameplayAbility.h"
+#include "Abilities/GSTN_CombatWaitTasks.h"
 #include "Abilities/GSTN_GA_BaseCombat.h"
 #include "Abilities/GSTN_GA_PlatformJump.h"
 #include "Abilities/NpAbilitySystemComponent.h"
@@ -20,11 +23,13 @@
 #include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Movement/GSTN_LayeredMove_Launch.h"
 #include "Movement/GSTN_LayeredMove_PushBack.h"
+#include "Movement/GSTN_LayeredMove_LedgeGuard.h"
 #include "Movement/GSTN_LayeredMove_MomentumSlide.h"
 #include "Presentation/GSTN_PrecisionAimComponent.h"
 #include "Timeline/GSTN_StartupSteer.h"
 #include "Presentation/GSTN_SteerIndicatorComponent.h"
 #include "Movement/GSTN_SetFacingEffect.h"
+#include "Movement/GSTN_BodyCapsuleModifier.h"
 #include "Input/GSTN_InputTags.h"
 #include "Context/GSTN_InputContextProvider.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
@@ -110,6 +115,7 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 	PushBackEffect = UGSTN_GE_PushBack::StaticClass();
 	SetFacingEffect = UGSTN_GE_SetFacing::StaticClass();
 	MomentumSlideEffect = UGSTN_GE_MomentumSlide::StaticClass();
+	LedgeGuardEffect = UGSTN_GE_LedgeGuard::StaticClass();
 
 	InputSource = CreateDefaultSubobject<UGSTN_PlayerInputSource>(TEXT("InputSource"));
 	ContextProvider = CreateDefaultSubobject<UGSTN_MoverInputContextProvider>(TEXT("ContextProvider"));
@@ -230,6 +236,7 @@ void UGSTN_CombatSimComponent::AdoptTableSet(UGSTN_CombatTableSet* Set)
 		if (const FGSTN_CombatTimelineData* Data = Set->GetTimelineData(Index))
 		{
 			TimelineOutput.Reserve(*Data);
+			AbilityStartOutput.Reserve(*Data);
 		}
 	}
 
@@ -433,11 +440,17 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 	}
 	// The victim layer of the surface impacts is the kit's, when it authors one
 	KitImpactResponse.Reset();
+	KitTumbleRecovery.Reset();
 	if (const UGSTN_PrimaryKitDefinition* Kit = Component->GetResolvedLoadout().Kit)
 	{
 		if (const FGSTN_ImpactResponseExtension* Extension = Kit->Extensions.Find<FGSTN_ImpactResponseExtension>())
 		{
 			KitImpactResponse = Extension->Response;
+		}
+		// And its tumble recovery commands, likewise
+		if (const FGSTN_TumbleRecoveryExtension* Recovery = Kit->Extensions.Find<FGSTN_TumbleRecoveryExtension>())
+		{
+			KitTumbleRecovery = *Recovery;
 		}
 	}
 
@@ -475,6 +488,11 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 	if (Set)
 	{
 		Set->RulesSerial = RulesSerial;
+		// The kit's movement hurtbox travels with the revision's table (owner 2026-11-16: the idle/movement hurtbox may change per kit)
+		const UGSTN_PrimaryKitDefinition* Kit = Component->GetResolvedLoadout().Kit;
+		const FGSTN_MovementHurtboxExtension* Movement = Kit ? Kit->Extensions.Find<FGSTN_MovementHurtboxExtension>() : nullptr;
+		Set->bHasKitMovementHurtbox = Movement != nullptr;
+		Set->KitMovementHurtbox = Movement ? *Movement : FGSTN_MovementHurtboxExtension();
 	}
 	RegisterTableSet(Set);
 	DemandAppliedRevision(Revision);
@@ -702,6 +720,11 @@ bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
 		}
 		return false;
 	}
+	if (GateCore && FGSTN_CombatVictim::IsTumbleActionable(*GateCore) && Current.Table.Commands.IsValidIndex(CommandIndex))
+	{
+		// A tumble that recovered in the air admits only the recovery's commands (the kit's list, else the rules'; empty = every one)
+		return FGSTN_TumbleRecoveryResolved::IsCommandAllowed(GetTumbleRecoveryCommands(), Current.Table.Commands[CommandIndex].Tag);
+	}
 	if (!GateCore || GateCore->ActionState != EGSTN_ActionState::InTimeline || !Current.Table.Commands.IsValidIndex(CommandIndex))
 	{
 		return true;
@@ -920,6 +943,11 @@ void UGSTN_CombatSimComponent::AppendContextTags(FGameplayTagContainer& OutTags)
 	{
 		ContextProvider->AppendContextTags(OutTags);
 	}
+	// Coyote time for the ground moves that may take off (owner 2026-11-16): the jump step of this frame ran before the input step
+	if (bFrameInCoyote)
+	{
+		OutTags.AddTag(GSTNInputTags::Context_Coyote);
+	}
 }
 
 uint8 UGSTN_CombatSimComponent::GetContextFingerprint() const
@@ -955,6 +983,25 @@ bool UGSTN_CombatSimComponent::CanExecuteBinding(int32 BindingIndex) const
 			|| !(Current.BindingReaction[BindingIndex] & UGSTN_CombatTableSet::ReactionIgnoresHitstun))
 		{
 			return false;
+		}
+	}
+	// A Wait Command of a running ability takes this command first (Priority Before Bindings): the binding does not start, so the slot keeps its
+	// press for the wait, as a locked command does. The tasks are read as the previous frame left them, like the lock tags
+	if (AbilitySystem)
+	{
+		const FGSTN_CommandTable& Bound = GetCommandTable();
+		for (int32 CommandIndex = 0; CommandIndex < Bound.Commands.Num(); ++CommandIndex)
+		{
+			const FGSTN_CommandTable::FCommand& Command = Bound.Commands[CommandIndex];
+			if (BindingIndex >= Command.FirstBinding && BindingIndex < Command.FirstBinding + Command.NumBindings)
+			{
+				if (UGSTN_WaitCommandTask::IsCommandClaimed(*AbilitySystem, CommandIndex))
+				{
+					UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s: binding %d held back, a Wait Command claims %s"), *GetNameSafe(GetOwner()), BindingIndex, *Command.Tag.ToString());
+					return false;
+				}
+				break;
+			}
 		}
 	}
 	// On the end-of-previous-frame state, like the ability system's own check at execution
@@ -1022,6 +1069,32 @@ int32 UGSTN_CombatSimComponent::GetButtonHeldFrames(const FGameplayTag& Button) 
 	return Sync && Index != INDEX_NONE ? FGSTN_InputQueries::GetHeldFrames(Sync->Core.Input.History, Index, Sync->Core.Input.History.GetLatestFrame()) : INDEX_NONE;
 }
 
+namespace
+{
+	/**
+	 * Matches command Index of Table on Core's history with the slot's own rules (simultaneity, direction policy), BufferFrames as the time
+	 * buffer (-1 = the slot's own) and no hold buffer: "entered in the last N frames", not "still held". The matcher skips used presses, so the
+	 * press that started the move never answers
+	 */
+	bool MatchCommandInBuffer(const FGSTN_CombatSyncCore& Core, const FGSTN_CommandTable& Table, const FGSTN_ButtonMap& Buttons, int32 Index, int32 BufferFrames, FGSTN_PatternMatch& OutMatch)
+	{
+		const FGSTN_InputSlotSpec* Slot = Table.Commands.IsValidIndex(Index) ? Table.Commands[Index].Slot : nullptr;
+		if (!Slot)
+		{
+			return false;
+		}
+		FGSTN_MatchParams Params = Slot->MakeMatchParams(UGSTN_InputSettings::Get(), Buttons, Core.Input.History.GetLatestFrame());
+		if (BufferFrames >= 0)
+		{
+			Params.BufferFrames = BufferFrames;
+		}
+		Params.bHoldBuffer = false;
+		Params.PausedStart = Core.HitstopStartFrame;
+		Params.PausedEnd = Core.HitstopEndFrame;
+		return FGSTN_InputMatcher::Match(Slot->Pattern, Core.Input.History, Params, OutMatch);
+	}
+}
+
 bool UGSTN_CombatSimComponent::WasCommandEnteredWithin(const FGameplayTag& Command, int32 Frames) const
 {
 	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
@@ -1030,21 +1103,70 @@ bool UGSTN_CombatSimComponent::WasCommandEnteredWithin(const FGameplayTag& Comma
 		return false;
 	}
 	const FGSTN_CommandTable& Table = GetCommandTable();
-	const int32 Index = Table.FindCommand(Command);
-	const FGSTN_InputSlotSpec* Slot = Table.Commands.IsValidIndex(Index) ? Table.Commands[Index].Slot : nullptr;
-	if (!Slot)
+	FGSTN_PatternMatch Match;
+	return MatchCommandInBuffer(Sync->Core, Table, ButtonMap, Table.FindCommand(Command), Frames, Match);
+}
+
+int32 UGSTN_CombatSimComponent::FindCommandIndex(const FGameplayTag& Command) const
+{
+	return GetCommandTable().FindCommand(Command);
+}
+
+bool UGSTN_CombatSimComponent::CanTakeCommandForWait(int32 CommandIndex, EGSTN_CancelCondition Condition) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (!Sync || !AbilitySystem || !AbilitySystem->IsInSimulationTick() || AbilitySystem->GetIsRestoringFrame() || bFrameGateClosed)
 	{
 		return false;
 	}
-	// The slot's own rules (simultaneity, direction policy) with the window asked for as the time buffer and no hold buffer: "entered in the
-	// last N frames", not "still held". The matcher skips used presses, so the press that started the move never answers
-	FGSTN_MatchParams Params = Slot->MakeMatchParams(UGSTN_InputSettings::Get(), ButtonMap, Sync->Core.Input.History.GetLatestFrame());
-	Params.BufferFrames = Frames;
-	Params.bHoldBuffer = false;
-	Params.PausedStart = Sync->Core.HitstopStartFrame;
-	Params.PausedEnd = Sync->Core.HitstopEndFrame;
+	const FGSTN_CommandTable& Table = GetCommandTable();
+	if (!Table.Commands.IsValidIndex(CommandIndex) || Table.IsCommandLocked(CommandIndex, AbilitySystem->GetOwnedGameplayTags()))
+	{
+		return false;
+	}
+	const int32 Frame = Sync->Core.Input.History.GetLatestFrame();
+	return !Sync->Core.IsInHitstop(Frame) && !FGSTN_CombatVictim::IsActionLocked(Sync->Core)
+		&& FGSTN_CombatTimelineLogic::IsConditionMet(Condition, Sync->Core, AbilityStepCancelConditions);
+}
+
+bool UGSTN_CombatSimComponent::IsCommandEnteredForWait(int32 CommandIndex, int32 BufferFrames, int32* OutTerminalFrame) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
 	FGSTN_PatternMatch Match;
-	return FGSTN_InputMatcher::Match(Slot->Pattern, Sync->Core.Input.History, Params, Match);
+	const bool bEntered = Sync && MatchCommandInBuffer(Sync->Core, GetCommandTable(), ButtonMap, CommandIndex, BufferFrames, Match);
+	if (OutTerminalFrame)
+	{
+		*OutTerminalFrame = bEntered && Match.StepAnchors.Num() > 0 ? Match.StepAnchors.Last() : INDEX_NONE;
+	}
+	return bEntered;
+}
+
+bool UGSTN_CombatSimComponent::ConsumeCommandForWait(int32 CommandIndex, int32 BufferFrames)
+{
+	const FGSTN_CombatSyncState* Pending = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (!Pending || !AbilitySystem || !AbilitySystem->IsInSimulationTick() || AbilitySystem->GetIsRestoringFrame())
+	{
+		return false;
+	}
+	FGSTN_PatternMatch Match;
+	if (!MatchCommandInBuffer(Pending->Core, GetCommandTable(), ButtonMap, CommandIndex, BufferFrames, Match))
+	{
+		return false;
+	}
+	// Into this frame's combat state, from the ability system's step (as StartTimelineFromAbility): the next frame's tick starts from it, so no
+	// binding fires on these presses later. The event slots of the match index the same history, unchanged since the read above
+	const FGSTN_CombatSyncState* Written = NetworkPredictionProxy.WriteSyncState<FGSTN_CombatSyncState>([&Match](FGSTN_CombatSyncState& Sync)
+	{
+		for (const uint8 EventSlot : Match.UsedButtonEvents)
+		{
+			Sync.Core.Input.History.Consume(EventSlot);
+		}
+		if (Match.TerminalStickAnchor != INDEX_NONE)
+		{
+			Sync.Core.Input.History.ConsumeSticksUpTo(Match.TerminalStickAnchor);
+		}
+	}, "GSTN WaitCommandConsume");
+	return Written != nullptr;
 }
 
 FVector2D UGSTN_CombatSimComponent::GetMoveStick() const
@@ -1076,6 +1198,22 @@ int32 UGSTN_CombatSimComponent::GetEvaluatedTimelineFrame() const
 	}
 	// FGSTN_CombatTimelineLogic's evaluated frame (EvaluateInto): the paused frames already count this frame's own pause
 	return Sync->Core.Input.History.GetLatestFrame() - Sync->Core.TimelineStartFrame - Sync->Core.TimelinePausedFrames;
+}
+
+const FGSTN_CombatTimelineData* UGSTN_CombatSimComponent::ReadEvaluatedTimeline(int32& OutFrame) const
+{
+	OutFrame = GetEvaluatedTimelineFrame();
+	if (OutFrame == INDEX_NONE)
+	{
+		return nullptr;
+	}
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	const FGSTN_CombatTimelineData* Data = Sync ? GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline) : nullptr;
+	if (!Data)
+	{
+		OutFrame = INDEX_NONE;
+	}
+	return Data;
 }
 
 #if !UE_BUILD_SHIPPING
@@ -1117,6 +1255,10 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		World->RequestHistory(CombatRules->MaxRewindMs);
 	}
 	const FGSTN_StepSnapshot* StepSnapshot = World ? &World->EnsureSnapshot(Frame, static_cast<float>(TimeStep.TotalSimulationTime), static_cast<float>(TimeStep.StepMS)) : nullptr;
+
+	// The pushbox move of this frame, from the same end-of-previous-frame snapshot every fighter reads: a pair's shares are equal and opposite.
+	// Mover's tick of this frame applies it (FGSTN_BodyCapsuleModifier)
+	ComputeFramePush(Frame, StepSnapshot);
 
 	// The aim of this frame's command, kept for the ability system's tick that follows (GetAimRotation)
 	FrameAim.bHasAim = Input.Cmd->bHasAim;
@@ -1186,6 +1328,8 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	{
 		HookEnvironment.Ground = GroundTracker->HasGameplayTag(Mover_IsOnGround, true) ? EGSTN_TrackHookGround::OnGround : EGSTN_TrackHookGround::Airborne;
 	}
+	// The Ledge Check rule's floor probe (FGSTN_LedgeRules): called by the clock only inside a ledge window, on the ground
+	HookEnvironment.HasFloorAhead = [this](float AheadCm, float DepthCm) { return ProbeFloorAhead(AheadCm, DepthCm); };
 	// The attacker side of hits (M4 H8) is not run on a hitstop frame either: it reads the same bHitstopFrame
 
 	// Step 2, the timeline clock: the running timeline reaches its end, or its ability is gone, and the combatant is Actionable again
@@ -1212,7 +1356,12 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 			// A move that ended BY ITSELF links into its follow-up (FGSTN_CombatTimelineData::FollowUpTimeline: the dropkick's land into its get-up),
 			// on this same frame, before the adoption and the commands of the frame: a buffered command can still replace it by the normal rules
-			const int32 FollowUp = !bFrameGateClosed && TimelineOutput.bFinished && !TimelineOutput.bRecoil ? FrameSet.FindFollowUpEntry(Running) : INDEX_NONE;
+			int32 FollowUp = !bFrameGateClosed && TimelineOutput.bFinished && !TimelineOutput.bRecoil ? FrameSet.FindFollowUpEntry(Running) : INDEX_NONE;
+			// A landing inside a ContinueWithMove window (FGSTN_TimelineTrack_Landing) hands over to its continuation the same way
+			if (!bFrameGateClosed && TimelineOutput.LandingContinueTrack != INDEX_NONE)
+			{
+				FollowUp = FrameSet.FindLandingContinueEntry(Running, TimelineOutput.LandingContinueTrack);
+			}
 			if (FollowUp != INDEX_NONE)
 			{
 				StartTimelineEntry(OutSync.Core, Frame, FrameSet, FollowUp, &HookEnvironment);
@@ -1314,6 +1463,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, *this);
 	GateCore = nullptr;
 	bFrameActionsBlocked = false;
+	AbilityStepCancelConditions = FrameCancelConditions;
 	FrameCancelConditions = 0;
 	FrameAdmitTag = FGameplayTag();
 
@@ -1324,6 +1474,13 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	{
 		FGSTN_CombatVictim::EndReaction(OutSync.Core, Frame);
 		OutSync.Core.Requests.Add(EGSTN_RequestType::EndReaction, Frame, 0);
+	}
+
+	// A command from a tumble that recovered in the air ends the tumble (owner 2026-11-16): a jump or an air dodge lands as a normal fall,
+	// a move that starts a timeline overwrites the state anyway. The knockback move keeps flying until its lifetime, its probe unread outside Tumble
+	if (Result.HasRequest())
+	{
+		FGSTN_CombatVictim::LeaveTumbleByAction(OutSync.Core);
 	}
 
 	// Step 5b: a jump or fast fall command that the gate let through changes the jump state in the frame of the request
@@ -1569,6 +1726,81 @@ void UGSTN_CombatSimComponent::StartTimelineEntry(FGSTN_CombatSyncCore& Core, in
 	Core.Requests.Add(EGSTN_RequestType::ActivateEntry, Frame, static_cast<int16>(Entry));
 }
 
+EGSTN_TimelineStartRefusal UGSTN_CombatSimComponent::StartTimelineFromAbility(int32 Entry, bool& bOutCommitDue)
+{
+	bOutCommitDue = false;
+	const UGSTN_CombatTableSet& Set = Tables();
+	const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(Set, Entry);
+	const FGSTN_CombatSyncState* Pending = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	const EGSTN_TimelineStartRefusal Refusal = FGSTN_TimelinePlayRules::CheckStart(AbilitySystem && Pending && AbilitySystem->IsInSimulationTick(),
+		AbilitySystem && AbilitySystem->GetIsRestoringFrame(), bFrameGateClosed, Data != nullptr);
+	if (Refusal != EGSTN_TimelineStartRefusal::None)
+	{
+		UE_LOG(LogGSTNCombatSim, Log, TEXT("%s: timeline entry %d not started from the ability graph (refusal %d)"), *GetNameSafe(GetOwner()), Entry, static_cast<int32>(Refusal));
+		return Refusal;
+	}
+
+	// The combat tick of this frame ran: its pending state is this frame's output, the one the abilities read in this step
+	const int32 Frame = Pending->Core.Input.History.GetLatestFrame();
+	const UClass* Starting = Set.TimelineRegistry[Entry].Get();
+	const UClass* Replaced = Pending->Core.ActionState == EGSTN_ActionState::InTimeline && Set.TimelineRegistry.IsValidIndex(Pending->Core.ActiveTimeline)
+		? Set.TimelineRegistry[Pending->Core.ActiveTimeline].Get() : nullptr;
+	FGameplayTagContainer TagsBefore;
+	CollectTimelineTags(Pending->Core, Frame, TagsBefore);
+
+	FGSTN_TrackHookEnvironment Environment;
+	Environment.Buttons = &ButtonMap;
+	if (const UGSTN_MoverSimStateTracker* GroundTracker = GetJumpTracker())
+	{
+		Environment.Ground = GroundTracker->HasGameplayTag(Mover_IsOnGround, true) ? EGSTN_TrackHookGround::OnGround : EGSTN_TrackHookGround::Airborne;
+	}
+	const int32 DefaultOverride = Set.TimelineDefaultOverride.IsValidIndex(Entry) ? Set.TimelineDefaultOverride[Entry] : 0;
+	const FGSTN_CombatSyncState* Written = NetworkPredictionProxy.WriteSyncState<FGSTN_CombatSyncState>([&](FGSTN_CombatSyncState& Sync)
+	{
+		Environment.Fragments = &Sync.Fragments;
+		// Step 8 of the tick for a command, source Forced. Its CancelTimeline request names a frame whose pre-tick ran: the replaced ability is
+		// cancelled below instead, and the request is pruned with the frame
+		FGSTN_CombatTimelineLogic::Start(Sync.Core, Frame, Entry, EGSTN_ActivationSource::Forced);
+		StampMoveOrigin(Sync.Core, Frame);
+		FGSTN_CombatTimelineLogic::EvaluateStart(Sync.Core, Frame, *Data, DefaultOverride, AbilityStartOutput, &Environment);
+		bOutCommitDue = Sync.Core.Requests.Find(EGSTN_RequestType::CommitTimeline, Frame, static_cast<int16>(Entry)) != nullptr;
+	}, "GSTN AbilityStartTimeline");
+	if (!Written)
+	{
+		return EGSTN_TimelineStartRefusal::OutsideSimulation;
+	}
+
+	// The Tags tracks: the tick projected the replaced timeline's (or none) for this frame; the new one's replace them now, so the projection of
+	// the next frame, a difference with this state, starts from the counts this state holds
+	FGameplayTagContainer TagsAfter;
+	CollectTimelineTags(Written->Core, Frame, TagsAfter);
+	FGameplayTagContainer Remove;
+	FGameplayTagContainer Add;
+	FGSTN_TimelinePlayRules::DiffTags(TagsBefore, TagsAfter, Remove, Add);
+	for (const FGameplayTag& Tag : Remove)
+	{
+		AbilitySystem->RemoveLooseGameplayTag(Tag);
+	}
+	for (const FGameplayTag& Tag : Add)
+	{
+		AbilitySystem->AddLooseGameplayTag(Tag);
+	}
+	ProjectStateTags(Written->Core, Frame);
+
+	// A move of another class that ran is over (its ability may be the caller: Start Combat Move from inside a move). The same class is the
+	// caller's own sequence (a host playing its next timeline) or a restart into itself, which the activation handles
+	if (Replaced && Replaced != Starting)
+	{
+		const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(const_cast<UClass*>(Replaced));
+		if (Spec && Spec->IsActive())
+		{
+			AbilitySystem->CancelAbilityHandle(Spec->Handle);
+		}
+	}
+	UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline entry %d started from the ability graph (replaced %s)"), *GetNameSafe(GetOwner()), Frame, Entry, *GetNameSafe(Replaced));
+	return EGSTN_TimelineStartRefusal::None;
+}
+
 bool UGSTN_CombatSimComponent::IsBindingAdmitted(const FGSTN_CommandTable& Table, int32 BindingIndex) const
 {
 	if (!FrameAdmitTag.IsValid())
@@ -1600,6 +1832,12 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 	}
 	PollLoadoutComponent();
 	TryRegisterWithWorld();
+
+	// Per-move movement capsule: size and mesh offset of the presented Mover state, on every machine (simulated proxies run no modifier)
+	if (UMoverComponent* Mover = GetOwner() ? GetOwner()->FindComponentByClass<UMoverComponent>() : nullptr)
+	{
+		FGSTN_BodyCapsuleModifier::ApplyPresentation(*Mover);
+	}
 
 #if ENABLE_DRAW_DEBUG
 	if (CVarCombatDebugInput.GetValueOnGameThread() != 0)
@@ -1644,17 +1882,18 @@ void UGSTN_CombatSimComponent::TryQueueStatsModifier()
 		bStatsModifierQueued = true;
 		return;
 	}
-	if (Mover->FindMovementModifierByType<FGSTN_StatsMovementModifier>())
+	// The body capsule modifier (per-move movement capsule, FGSTN_TimelineTrack_BodyCapsule) rides along: same machines, same lifetime.
+	// An invalid handle means Mover's simulation does not exist yet (both fail together): try again next tick
+	bool bQueued = true;
+	if (!Mover->FindMovementModifierByType<FGSTN_StatsMovementModifier>())
 	{
-		bStatsModifierQueued = true;
-		return;
+		bQueued &= Mover->QueueMovementModifier(MakeShared<FGSTN_StatsMovementModifier>()).IsValid();
 	}
-
-	// An invalid handle means Mover's simulation does not exist yet: try again next tick
-	if (Mover->QueueMovementModifier(MakeShared<FGSTN_StatsMovementModifier>()).IsValid())
+	if (!Mover->FindMovementModifierByType<FGSTN_BodyCapsuleModifier>())
 	{
-		bStatsModifierQueued = true;
+		bQueued &= Mover->QueueMovementModifier(MakeShared<FGSTN_BodyCapsuleModifier>()).IsValid();
 	}
+	bStatsModifierQueued = bQueued;
 }
 
 void UGSTN_CombatSimComponent::RestoreFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux)
@@ -1842,6 +2081,16 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 
 	ProjectStateTags(Sync->Core, Frame);
 
+	// A finished move's released montage tail (owner rule 2026-11-15: it plays to its own end) is stopped by the next action. Walking and a hit
+	// reaction are actions too (owner PIE report 2026-11-16: after the example kit's 42-frame strong attack, the 4 s takedown montage's root
+	// motion overrode the walk for seconds, 0.2 cm a frame with the stick held). From the stick of this frame, inside the ASC tick: deterministic
+	float PlayingTime = 0.f;
+	if (AbilitySystem && AbilitySystem->GetPlayingSyncedMontage(PlayingTime) && Sync->Core.ActionState != EGSTN_ActionState::InTimeline
+		&& (Sync->Core.ActionState != EGSTN_ActionState::Actionable || Sync->Core.Input.History.GetCurrentStick().Zone != EGSTN_StickZone::Neutral))
+	{
+		UGSTN_GA_BaseCombat::StopReleasedMontages(*AbilitySystem);
+	}
+
 	// The tables of this frame (the combat tick of the same frame set them). A CancelTimeline names a slot of the registry the timeline
 	// was started in, which on a swap frame is the previous set
 	const UGSTN_CombatTableSet& FrameSet = Tables();
@@ -1987,7 +2236,9 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 		if (FrameSet.TimelineRegistry.IsValidIndex(Sync->Core.ActiveTimeline))
 		{
 			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(FrameSet.TimelineRegistry[Sync->Core.ActiveTimeline]);
-			if (Spec)
+			// A host pays for itself (Commit Ability in its graph, as any GAS ability): the timelines it plays never commit it, or a sequence of
+			// three would pay three times
+			if (Spec && !UGSTN_CombatTableSet::IsHostClass(FrameSet.TimelineRegistry[Sync->Core.ActiveTimeline]))
 			{
 				// The meter can have dropped since the activation: a refused commit ends the ability (the clock then returns to
 				// Actionable on the next frame) instead of letting the timeline run for free

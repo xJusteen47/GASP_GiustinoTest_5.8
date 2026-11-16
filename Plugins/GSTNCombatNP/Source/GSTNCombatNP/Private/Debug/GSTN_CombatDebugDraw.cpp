@@ -70,6 +70,15 @@ void GSTNCombatDebug::DrawHurtboxes(const UWorld* World, const FGSTN_SnapshotEnt
 			default: break;
 			}
 		}
-		DrawShape(World, Entry.Hurtboxes->Hurtboxes[Index].Shape, Entry.Transform, Color);
+		// The posed shape (bones, detail level); a hurtbox the level leaves out is not drawn
+		if (Entry.IsHurtboxPresent(Index))
+		{
+			DrawShape(World, Entry.GetHurtShape(Index), Entry.Transform, Color);
+		}
+	}
+	// The move's and the kit's own hurtbox shapes, in cyan: they count as the hurtbox they name
+	for (const FGSTN_PosedHurtboxExtension& Extension : Entry.HurtPose.Extensions)
+	{
+		DrawShape(World, Extension.Shape, Entry.Transform, FColor::Cyan);
 	}
 }
