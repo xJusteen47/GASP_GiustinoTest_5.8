@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "GameplayTagContainer.h"
+#include "GSTN_AdditiveReactionSource.h"
+#include "Cosmetics/GSTN_ReactionAnimSet.h"
 #include "GSTN_ReactionAnimComponent.generated.h"
 
 class UAbilitySystemComponent;
@@ -32,9 +34,13 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FGSTN_OnReactionEnded, FName, RuleNa
  * Cosmetic hooks (CP4): On Reaction Started / Ended follow the rule the owner's tags select (the state, not whether its animation could
  * play), for a Blueprint that adds dust, a hit flash or a sound to a reaction; and the set's HitstopShake trembles the mesh while the owner is
  * frozen by hitstop. Both come from the same per-frame tag read, so a rollback only changes what the next frame shows.
+ *
+ * Directional hit additives (hit-react-directional, owner option B 2026-11-16): on Combat.Event.Hit.Received it picks the side the hit came
+ * from (dot product of the push, attacker to victim, with the victim's facing) and the weight from the hitstun the event carries, and hands
+ * them to the anim node FGSTN_AnimNode_DirectionalHitAdditive through IGSTN_AdditiveReactionSource. Visual only, like the rest.
  */
 UCLASS(ClassGroup = (Combat), meta = (BlueprintSpawnableComponent))
-class GSTNCOMBATGAS_API UGSTN_ReactionAnimComponent : public UActorComponent
+class GSTNCOMBATGAS_API UGSTN_ReactionAnimComponent : public UActorComponent, public IGSTN_AdditiveReactionSource
 {
 	GENERATED_BODY()
 
@@ -75,6 +81,17 @@ public:
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	// IGSTN_AdditiveReactionSource
+	virtual void GetAdditiveReaction(FGSTN_AdditiveReactionRequest& Out) const override;
+
+	/** The side of the running directional additive (Front when none), for the debugger and the harness */
+	UFUNCTION(BlueprintPure, Category = "Combat|Debug")
+	EGSTN_HitSide GetDirectionalHitSide() const;
+
+	/** The weight of the running directional additive (0 when none), for the harness */
+	UFUNCTION(BlueprintPure, Category = "Combat|Debug")
+	float GetDirectionalHitWeight() const { return HitLayers[0].Weight; }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -84,6 +101,24 @@ private:
 	void ApplySet(UGSTN_ReactionAnimSet* NewSet);
 	void UnbindEvents();
 	void OnRestartEvent(const FGameplayEventData* Payload, FGameplayTag Tag);
+	void OnHitEvent(const FGameplayEventData* Payload);
+
+	/** Advances the directional additives: side settle, time, fades, the end of a layer */
+	void UpdateDirectionalHits(float DeltaTime, const FGameplayTagContainer& Tags);
+
+	/** One running directional additive */
+	struct FHitLayer
+	{
+		FGSTN_AdditiveReactionLayer Draw;
+		FVector Push = FVector::ZeroVector;   // world push of the hit as it arrived (attacker to victim)
+		uint8 Side = 0;                        // EGSTN_HitSide
+		bool bAir = false;
+		float Weight = 0.f;                    // the hit's intensity
+		float Fade = 1.f;                      // 1, falls to 0 when replaced or blocked
+		float Length = 0.f;
+		bool bFading = false;
+	};
+	void ResolveLayer(FHitLayer& Layer) const;
 
 	UAnimInstance* ResolveAnimInstance();
 	UAbilitySystemComponent* ResolveAbilitySystem();
@@ -152,4 +187,10 @@ private:
 	int32 AnnouncedRule = INDEX_NONE;
 	FName AnnouncedRuleName;
 	FVector LastWrittenLocation = FVector::ZeroVector;
+
+	/** Directional additives: [0] the newest hit, [1] the one it replaced while it fades out */
+	FHitLayer HitLayers[2];
+	FDelegateHandle HitEventHandle;
+	bool bHitEventPending = false;
+	FHitLayer PendingHit;
 };

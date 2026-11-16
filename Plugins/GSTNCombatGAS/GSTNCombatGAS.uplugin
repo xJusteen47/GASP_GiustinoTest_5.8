@@ -35,6 +35,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNAnimation",
+			"Enabled": true
+		},
+		{
 			"Name": "GameplayAbilities",
 			"Enabled": true
 		},

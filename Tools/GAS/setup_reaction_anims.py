@@ -98,7 +98,34 @@ def reaction_set():
     entry.array('rules', rules)
     entry.save()
     log(f'{SET_NAME}: {len(rules)} rules')
+    directional_hits(entry.asset)
     return entry.asset
+
+
+# Directional hit additives (hit-react-directional, owner option B 2026-11-16): one additive clip per side (front, back, left, right) for
+# the ground base (HitStand) and the air base (Tumble). None = the anim node draws its PLACEHOLDER spine bend (not a pose: the owner
+# supervises the real poses). Fill with additive AnimSequence names in REACT when they exist.
+DIRECTIONAL_CLIPS = {
+    'ground': {'front': None, 'back': None, 'left': None, 'right': None},
+    'air': {'front': None, 'back': None, 'left': None, 'right': None},
+}
+DIRECTIONAL_AIR_TAGS = ['Combat.State.Tumble']
+DIRECTIONAL_BLOCKED_TAGS = ['Combat.State.Knockdown', 'Combat.State.Splat']
+
+
+def directional_hits(asset):
+    settings = asset.get_editor_property('directional_hits')
+    for key in ('ground', 'air'):
+        adds = settings.get_editor_property(key)
+        for side, clip in DIRECTIONAL_CLIPS[key].items():
+            adds.set_editor_property(side, _anim(clip) if clip else None)
+        settings.set_editor_property(key, adds)
+    settings.set_editor_property('air_tags', _container(DIRECTIONAL_AIR_TAGS))
+    settings.set_editor_property('blocked_tags', _container(DIRECTIONAL_BLOCKED_TAGS))
+    asset.set_editor_property('directional_hits', settings)
+    unreal.EditorAssetLibrary.save_loaded_asset(asset, False)
+    clips = sum(1 for k in DIRECTIONAL_CLIPS.values() for c in k.values() if c)
+    log(f'{SET_NAME}: directional hits on, {clips}/8 clips, the rest PLACEHOLDER bend')
 
 
 def character_component(rset):

@@ -573,7 +573,9 @@ void UGSTN_CombatSimComponent::ExecuteVictimHits(int32 Frame)
 		Payload.bStaggered = Hit.bStaggered;
 		Payload.HurtboxIndex = Hit.Entry.HurtboxIndex;
 		Payload.Relationship = GSTNHitRelationship::FromIndex(Hit.Entry.Relationship);
-		const FGameplayEventData EventData = Payload.MakeEventData(FindAttackerActor(Hit), GetOwner(), CombatRules);
+		FGameplayEventData EventData = Payload.MakeEventData(FindAttackerActor(Hit), GetOwner(), CombatRules);
+		// The hitstun of the hit, for presentation listeners (the directional hit additive scales its weight with it); nothing in the sim reads it
+		EventData.EventMagnitude = static_cast<float>(Hit.HitstunFrames);
 		AbilitySystem->HandleGameplayEvent(GSTNCombatTags::Event_Hit_Received, &EventData);
 	}
 }

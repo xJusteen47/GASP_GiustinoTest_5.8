@@ -67,3 +67,50 @@ float FGSTN_HitstopShake::DistanceScale(float CameraDistanceCm) const
 	const float Reference = FMath::Max(ReferenceCameraDistanceCm, 1.f);
 	return FMath::Clamp(CameraDistanceCm / Reference, 1.f, FMath::Max(MaxDistanceScale, 1.f));
 }
+
+const TSoftObjectPtr<UAnimSequenceBase>& FGSTN_DirectionalHitAdditives::ForSide(EGSTN_HitSide Side) const
+{
+	switch (Side)
+	{
+	case EGSTN_HitSide::Back: return Back;
+	case EGSTN_HitSide::Left: return Left;
+	case EGSTN_HitSide::Right: return Right;
+	default: return Front;
+	}
+}
+
+EGSTN_HitSide FGSTN_DirectionalHitMath::SelectSide(const FVector& PushDirection, const FVector& VictimForward, const FVector& VictimRight)
+{
+	// The hit comes from the opposite of the push: a push along -Forward is a hit on the front
+	const FVector From = -FVector(PushDirection.X, PushDirection.Y, 0.0).GetSafeNormal();
+	const double F = FVector::DotProduct(From, FVector(VictimForward.X, VictimForward.Y, 0.0).GetSafeNormal());
+	const double R = FVector::DotProduct(From, FVector(VictimRight.X, VictimRight.Y, 0.0).GetSafeNormal());
+	if (FMath::Abs(F) >= FMath::Abs(R))
+	{
+		return F >= 0.0 ? EGSTN_HitSide::Front : EGSTN_HitSide::Back;
+	}
+	return R > 0.0 ? EGSTN_HitSide::Right : EGSTN_HitSide::Left;
+}
+
+FVector FGSTN_DirectionalHitMath::SidePush(EGSTN_HitSide Side, const FVector& VictimForward, const FVector& VictimRight)
+{
+	const FVector Forward = FVector(VictimForward.X, VictimForward.Y, 0.0).GetSafeNormal();
+	const FVector Right = FVector(VictimRight.X, VictimRight.Y, 0.0).GetSafeNormal();
+	switch (Side)
+	{
+	case EGSTN_HitSide::Back: return Forward;
+	case EGSTN_HitSide::Left: return Right;
+	case EGSTN_HitSide::Right: return -Right;
+	default: return -Forward;
+	}
+}
+
+float FGSTN_DirectionalHitMath::IntensityWeight(bool bStaggered, int32 HitstunFrames, int32 FullFrames, float MinWeight, float UnstaggeredWeight)
+{
+	if (!bStaggered)
+	{
+		return FMath::Clamp(UnstaggeredWeight, 0.f, 1.f);
+	}
+	const float Alpha = FMath::Clamp(static_cast<float>(HitstunFrames) / static_cast<float>(FMath::Max(FullFrames, 1)), 0.f, 1.f);
+	return FMath::Lerp(FMath::Clamp(MinWeight, 0.f, 1.f), 1.f, Alpha);
+}
