@@ -46,6 +46,20 @@ FGSTN_BodyCapsuleTarget FGSTN_BodyCapsule::ResolveTarget(const FGSTN_CombatTimel
 	return Target;
 }
 
+FGSTN_BodyCapsuleTarget FGSTN_BodyCapsule::ResolveTarget(const FGSTN_CombatTimelineData* Data, int32 TimelineFrame, const FGSTN_BodyCapsuleShape& Standing, const FGSTN_BodyCapsuleShape* Idle)
+{
+	if (!Idle || (Data && FindTrackAt(*Data, TimelineFrame)))
+	{
+		return ResolveTarget(Data, TimelineFrame, Standing);
+	}
+	FGSTN_BodyCapsuleTarget Target;
+	Target.Shape = *Idle;
+	Target.Shape.HalfHeight = FMath::Max(Idle->HalfHeight, Idle->Radius);
+	Target.Anchor = EGSTN_BodyCapsuleAnchor::Body;
+	Target.MaxShiftPerFrame = 0.f;
+	return Target;
+}
+
 FGSTN_BodyCapsuleStep FGSTN_BodyCapsule::Step(const FGSTN_BodyCapsuleShape& Applied, const FGSTN_BodyCapsuleTarget& Target)
 {
 	FGSTN_BodyCapsuleStep Out;

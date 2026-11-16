@@ -8,6 +8,8 @@
 #include "Timeline/GSTN_BodyCapsule.h"
 #include "GSTN_BodyCapsuleModifier.generated.h"
 
+struct FMoverSyncState;
+
 class UMoverComponent;
 
 /**
@@ -39,7 +41,21 @@ struct GSTNCOMBATNP_API FGSTN_BodyCapsuleModifier : public FMovementModifierBase
 	UPROPERTY()
 	FGSTN_BodyCapsuleShape Applied;
 
+	/**
+	 * Ground crouch (owner 2026-11-16, FGSTN_GroundCrouchKitExtension): the stance the combat tick decided for the last simulated frame. Mover sync
+	 * state like Applied, so a rollback restores it. While set, the capsule outside every Body Capsule track is the kit's crouch capsule and the
+	 * modifier reports Mover.IsCrouching (GASP's animation and walking mode read it, as with Mover's own stance modifier)
+	 */
+	UPROPERTY()
+	bool bCrouched = false;
+
 	virtual void OnPreMovement(UMoverComponent* MoverComp, const FMoverTimeStep& TimeStep) override;
+
+	virtual bool HasGameplayTag(FGameplayTag TagToFind, bool bExactMatch) const override;
+	virtual void GetGameplayTags(FGameplayTagContainer& InOutTags) const override;
+
+	/** The ground crouch stored in a Mover state (the body capsule modifier's bCrouched). False without the modifier */
+	static bool IsCrouchedIn(const FMoverSyncState& SyncState);
 	/**
 	 * Pushbox P4: after the movement mode moved the fighter, its own move is corrected against the other fighters' bodies at the start of the frame
 	 * (UGSTN_CombatSimComponent::ConstrainFrameMove: approach clamp + rigid core), as a horizontal swept move (the world wins) written into the

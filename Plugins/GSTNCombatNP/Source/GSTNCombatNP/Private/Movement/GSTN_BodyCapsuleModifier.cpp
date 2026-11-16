@@ -9,6 +9,8 @@
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
+#include "MoverTypes.h"
+#include "Rules/GSTN_GroundCrouch.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_BodyCapsuleModifier)
@@ -134,7 +136,22 @@ void FGSTN_BodyCapsuleModifier::OnPreMovement(UMoverComponent* MoverComp, const 
 	}
 
 	const FGSTN_CombatTimelineData* Data = Combat ? Combat->ReadEvaluatedTimeline(TimelineFrame) : nullptr;
-	const FGSTN_BodyCapsuleTarget Target = FGSTN_BodyCapsule::ResolveTarget(Data, TimelineFrame, Standing);
+	// Ground crouch: the combat tick of this frame decided it (none decided = keep the stance, e.g. no combat tick ran for the frame). Stored now,
+	// before any early return: this instance is the frame's output state
+	bool bCrouchNow = bCrouched;
+	float CrouchHalfHeight = 0.f;
+	float CrouchRadius = 0.f;
+	if (Combat && !Combat->ReadFrameGroundCrouch(bCrouchNow, CrouchHalfHeight, CrouchRadius))
+	{
+		bCrouchNow = bCrouched;
+	}
+	bCrouched = bCrouchNow;
+	FGSTN_BodyCapsuleShape CrouchShape;
+	if (bCrouchNow && CrouchHalfHeight > 0.f)
+	{
+		CrouchShape = FGSTN_GroundCrouchKitExtension::MakeCapsule(CrouchHalfHeight, CrouchRadius, Standing);
+	}
+	const FGSTN_BodyCapsuleTarget Target = FGSTN_BodyCapsule::ResolveTarget(Data, TimelineFrame, Standing, CrouchShape.HalfHeight > 0.f ? &CrouchShape : nullptr);
 	if (Target.Shape.NearlyEquals(Current))
 	{
 		return;
@@ -208,6 +225,40 @@ void FGSTN_BodyCapsuleModifier::NetSerialize(FArchive& Ar)
 {
 	Super::NetSerialize(Ar);
 	GSTNBodyCapsule::SerializeShape(Ar, Applied);
+	uint8 CrouchedFlag = bCrouched ? 1 : 0;
+	Ar << CrouchedFlag;
+	bCrouched = CrouchedFlag != 0;
+}
+
+bool FGSTN_BodyCapsuleModifier::HasGameplayTag(FGameplayTag TagToFind, bool bExactMatch) const
+{
+	if (!bCrouched)
+	{
+		return false;
+	}
+	const FGameplayTag Tag = Mover_IsCrouching.GetTag();
+	return bExactMatch ? Tag.MatchesTagExact(TagToFind) : Tag.MatchesTag(TagToFind);
+}
+
+void FGSTN_BodyCapsuleModifier::GetGameplayTags(FGameplayTagContainer& InOutTags) const
+{
+	if (bCrouched)
+	{
+		InOutTags.AddTag(Mover_IsCrouching.GetTag());
+	}
+}
+
+bool FGSTN_BodyCapsuleModifier::IsCrouchedIn(const FMoverSyncState& SyncState)
+{
+	for (auto It = SyncState.MovementModifiers.GetActiveModifiersIterator(); It; ++It)
+	{
+		const FMovementModifierBase* Modifier = It->Get();
+		if (Modifier && Modifier->GetScriptStruct() == FGSTN_BodyCapsuleModifier::StaticStruct())
+		{
+			return static_cast<const FGSTN_BodyCapsuleModifier*>(Modifier)->bCrouched;
+		}
+	}
+	return false;
 }
 
 UScriptStruct* FGSTN_BodyCapsuleModifier::GetScriptStruct() const
@@ -217,7 +268,7 @@ UScriptStruct* FGSTN_BodyCapsuleModifier::GetScriptStruct() const
 
 FString FGSTN_BodyCapsuleModifier::ToSimpleString() const
 {
-	return FString::Printf(TEXT("Body Capsule hh %.1f r %.1f off %s"), Applied.HalfHeight, Applied.Radius, *Applied.Offset.ToCompactString());
+	return FString::Printf(TEXT("Body Capsule hh %.1f r %.1f off %s%s"), Applied.HalfHeight, Applied.Radius, *Applied.Offset.ToCompactString(), bCrouched ? TEXT(" crouched") : TEXT(""));
 }
 
 bool FGSTN_BodyCapsuleShiftEffect::ApplyMovementEffect(FApplyMovementEffectParams& ApplyEffectParams, FMoverSyncState& OutputState)

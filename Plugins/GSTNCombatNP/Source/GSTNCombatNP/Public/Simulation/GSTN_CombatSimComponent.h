@@ -504,6 +504,21 @@ public:
 	FVector ReadFramePush() const;
 
 	/**
+	 * The ground crouch of the frame being simulated (FGSTN_GroundCrouchKitExtension, owner 2026-11-16), decided by this frame's combat tick
+	 * (ProjectStateTags) before Mover's tick reads it. False when the combat tick of the frame did not decide one (the caller keeps its own state).
+	 * bOutCrouch: the stance; OutHalfHeight / OutRadius: the kit's crouch capsule (FGSTN_GroundCrouchKitExtension::MakeCapsule). Read by the body
+	 * capsule modifier, like ReadFramePush
+	 */
+	bool ReadFrameGroundCrouch(bool& bOutCrouch, float& OutHalfHeight, float& OutRadius) const;
+
+	/**
+	 * On (default) = this component owns the ground crouch: Mover's own stance handling (UCharacterMoverComponent, fed by GASP's crouch input) is
+	 * switched off so the two never fight over the capsule. Off = the ground crouch never happens (the kit data is ignored) and Mover's is left alone
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "GSTN Combat|Crouch")
+	bool bNativeGroundCrouch = true;
+
+	/**
 	 * P4 approach clamp + rigid core (FGSTN_Pushbox::ConstrainMove): this frame's own move of the fighter, ActorEnd - its location at the start of the
 	 * frame, corrected against the other bodies of the step snapshot. Returns the correction to add to ActorEnd (zero when there is nothing to do or
 	 * the combat tick of the frame did not compute the bodies); InOutVelocity loses the inward part. Read by the body capsule modifier after the move
@@ -1050,6 +1065,23 @@ private:
 
 	/** Projects Combat.State.AirCrouch (the kit's FGSTN_AirCrouchKitExtension) from the state of the frame, the Mover tracker and the held buttons. Part of ProjectStateTags */
 	void ProjectAirCrouchTag(const FGSTN_CombatSyncCore& Core);
+
+	/**
+	 * Decides the ground crouch of the frame (the kit's FGSTN_GroundCrouchKitExtension: Mover's ground and the previous frame's crouch from the
+	 * tracker, the held buttons, the state) and projects Combat.State.Crouch. Stores the stance in FrameCrouch for the body capsule modifier. Part
+	 * of ProjectStateTags
+	 */
+	void ProjectGroundCrouch(const FGSTN_CombatSyncCore& Core);
+
+	/** The ground crouch of the frame the simulation is on (ReadFrameGroundCrouch). Written before Mover's tick reads it, never a source of state */
+	struct FFrameCrouch
+	{
+		int32 Frame = INDEX_NONE;
+		bool bCrouch = false;
+		float HalfHeight = 0.f;
+		float Radius = 0.f;
+	};
+	FFrameCrouch FrameCrouch;
 
 	/** The tags of the Tags tracks (FGSTN_TimelineTrack_Tags) open on the timeline the state runs at Frame. A function of the state only */
 	void CollectTimelineTags(const FGSTN_CombatSyncCore& Core, int32 Frame, FGameplayTagContainer& OutTags) const;

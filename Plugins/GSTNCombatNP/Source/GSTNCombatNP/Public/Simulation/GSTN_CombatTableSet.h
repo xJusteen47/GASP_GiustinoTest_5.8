@@ -8,6 +8,7 @@
 #include "Input/GSTN_BufferResetRules.h"
 #include "Loadout/GSTN_CompiledBindingTable.h"
 #include "Rules/GSTN_AirCrouch.h"
+#include "Rules/GSTN_GroundCrouch.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelineTypes.h"
@@ -138,6 +139,13 @@ public:
 
 	UPROPERTY(Transient)
 	FGSTN_AirCrouchKitExtension KitAirCrouch;
+
+	/**
+	 * The kit's ground crouch (FGSTN_GroundCrouchKitExtension, owner 2026-11-16), copied when the set is built like the air crouch. Always valid:
+	 * a kit without the extension (or a set built without a kit) gets the defaults, so every kit crouches unless its extension switches it off
+	 */
+	UPROPERTY(Transient)
+	FGSTN_GroundCrouchKitExtension KitGroundCrouch;
 
 	/** The project defaults per strike kind (UGSTN_CombatSettings::SwingRicochetDefault / StabRicochetDefault), copied when the set is built */
 	UPROPERTY(Transient)

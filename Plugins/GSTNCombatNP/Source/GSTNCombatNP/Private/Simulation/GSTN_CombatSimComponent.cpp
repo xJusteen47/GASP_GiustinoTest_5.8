@@ -52,6 +52,7 @@
 #include "Movement/GSTN_StatsMovementModifier.h"
 #include "Movement/GSTN_RunStageSyncState.h"
 #include "MoverComponent.h"
+#include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverTypes.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
@@ -500,6 +501,8 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 		const FGSTN_AirCrouchKitExtension* AirCrouch = Kit ? Kit->Extensions.Find<FGSTN_AirCrouchKitExtension>() : nullptr;
 		Set->bHasKitAirCrouch = AirCrouch != nullptr;
 		Set->KitAirCrouch = AirCrouch ? *AirCrouch : FGSTN_AirCrouchKitExtension();
+		const FGSTN_GroundCrouchKitExtension* GroundCrouch = Kit ? Kit->Extensions.Find<FGSTN_GroundCrouchKitExtension>() : nullptr;
+		Set->KitGroundCrouch = GroundCrouch ? *GroundCrouch : FGSTN_GroundCrouchKitExtension();
 	}
 	RegisterTableSet(Set);
 	DemandAppliedRevision(Revision);
@@ -853,7 +856,15 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 			}
 		}
 	}
-	if ((Running && Running->bIgnoreMoveInput) || bRooted || bHitTurn)
+	// Ground crouch without crouch walk (FGSTN_GroundCrouchKitExtension::bCrouchWalk off, Smash-like): crouched outside a move, the stick does not
+	// walk and the facing holds. Read from the latest frame's decision, like the steering below; the command carries it, so a resimulation agrees
+	bool bCrouchStill = false;
+	if (!bInTimeline && FrameCrouch.bCrouch && FrameCrouch.Frame != INDEX_NONE)
+	{
+		const UGSTN_CombatTableSet* CrouchTables = FindTableSet(Sync->Core.TableRevision);
+		bCrouchStill = CrouchTables && !CrouchTables->KitGroundCrouch.bCrouchWalk;
+	}
+	if ((Running && Running->bIgnoreMoveInput) || bRooted || bHitTurn || bCrouchStill)
 	{
 		if (FCharacterDefaultInputs* Inputs = InputCmdResult.InputCollection.FindMutableDataByType<FCharacterDefaultInputs>())
 		{
@@ -1910,6 +1921,16 @@ void UGSTN_CombatSimComponent::TryQueueStatsModifier()
 	{
 		bStatsModifierQueued = true;
 		return;
+	}
+
+	// Ground crouch (owner 2026-11-16): this component owns it (FGSTN_GroundCrouchKitExtension through the body capsule modifier). Mover's own
+	// stance handling (GASP's crouch input -> FStanceModifier) would resize the same capsule: off, on every machine
+	if (bNativeGroundCrouch)
+	{
+		if (UCharacterMoverComponent* CharacterMover = Cast<UCharacterMoverComponent>(Mover))
+		{
+			CharacterMover->SetHandleStanceChanges(false);
+		}
 	}
 
 	// Mover's sync state carries the modifier to the machines that simulate it: the authority and the owning client queue it, the
