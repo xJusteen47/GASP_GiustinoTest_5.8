@@ -242,7 +242,7 @@ bool FGSTN_BodyCapsuleShiftEffect::ApplyMovementEffect(FApplyMovementEffectParam
 	const FVector Up = MoverComp->GetUpDirection();
 	const FRotator Orientation = Sync->GetOrientation_WorldSpace();
 	const FVector ShiftWorld = FGSTN_GravityFrame::IsWorldUp(Up)
-		? FRotationMatrix(FRotator(0.0, Orientation.Yaw, 0.0)).TransformVector(ShiftLocal)
+		? FVector(FRotationMatrix(FRotator(0.0, Orientation.Yaw, 0.0)).TransformVector(ShiftLocal))
 		: FGSTN_GravityFrame::UprightRotation(Orientation.Quaternion(), Up).RotateVector(ShiftLocal);
 	const bool bGrowing = To.HalfHeight > From.HalfHeight || To.Radius > From.Radius;
 
