@@ -6,6 +6,8 @@
 #include "Cosmetics/GSTN_AttachmentProvider.h"
 #include "GSTN_EquipmentVisual.generated.h"
 
+class AActor;
+class USkeletalMeshComponent;
 class UGSTN_PrimaryKitDefinition;
 class UGSTN_WeaponDefinition;
 class UObject;
@@ -73,4 +75,11 @@ struct GSTNCOMBATGAS_API FGSTN_EquipmentVisualUtils
 
 	/** Whether Mesh (static or skeletal) has a socket of that name */
 	static bool MeshHasSocket(const UObject* Mesh, FName Socket);
+
+	/**
+	 * The skeletal mesh that draws Pawn's body, which is what a piece on the back must follow. GASP draws the character through a visual
+	 * override (a child actor whose mesh copies the pose of the pawn's mesh) and hides the pawn's own mesh, and the capsule never animates.
+	 * Preferred when it is drawn, else the pawn's first drawn skeletal mesh, else the first drawn one of its child actors, else Preferred.
+	 */
+	static USkeletalMeshComponent* FindShownBodyMesh(const AActor& Pawn, USkeletalMeshComponent* Preferred);
 };

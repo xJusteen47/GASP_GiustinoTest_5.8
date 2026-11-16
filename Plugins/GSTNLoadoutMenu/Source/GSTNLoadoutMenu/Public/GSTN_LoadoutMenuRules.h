@@ -8,6 +8,28 @@
 
 class UWorld;
 
+/** A loadout debug pad (AGSTN_LoadoutMenuPad) put in a level at Play, so a test level gets one without being saved with it */
+USTRUCT(BlueprintType)
+struct GSTNLOADOUTMENU_API FGSTN_LoadoutMenuPadPlacement
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pad")
+	TSoftObjectPtr<UWorld> Level;
+
+	/** Where the pad lies (its centre on the floor) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pad", meta = (ForceUnits = "cm"))
+	FVector Location = FVector::ZeroVector;
+
+	/** The way its label faces */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pad", meta = (ForceUnits = "deg"))
+	float Yaw = 0.f;
+
+	/** The bare debug list (true) or the normal loadout screen */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pad")
+	bool bDebug = true;
+};
+
 /**
  * When the loadout screen opens by itself, per mode or level (a GameRules piece, owner rule: no gameplay factor in Project Settings). The
  * class defaults come from the plugin's DefaultGSTNLoadoutMenu.ini (a config class, not in Project Settings): the playtest hub opens it,
@@ -34,6 +56,13 @@ public:
 	/** The levels where the screen opens by itself when a player first spawns (the playtest hub) */
 	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Opening")
 	TArray<TSoftObjectPtr<UWorld>> AutoOpenLevels;
+
+	/**
+	 * Loadout debug pads added to a level when Play starts (UGSTN_LoadoutMenuPadSubsystem): stepping on one opens the screen for the player
+	 * standing on it. A level can also hold AGSTN_LoadoutMenuPad actors of its own
+	 */
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Opening")
+	TArray<FGSTN_LoadoutMenuPadPlacement> Pads;
 
 	/** The player's saved loadout (UGSTN_LoadoutSubsystem preset) the screen starts from and writes on confirm */
 	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Saving")

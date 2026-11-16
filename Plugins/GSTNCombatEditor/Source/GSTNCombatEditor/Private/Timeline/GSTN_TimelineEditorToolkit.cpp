@@ -29,6 +29,7 @@
 #include "Timeline/Widgets/GSTN_TimelineWidgetCommon.h"
 #include "Timeline/Widgets/SGSTN_FindingsList.h"
 #include "Timeline/Widgets/SGSTN_FrameDataSummary.h"
+#include "Timeline/Widgets/SGSTN_HitboxOutliner.h"
 #include "Timeline/Widgets/SGSTN_InlineTimelineBar.h"
 #include "Preview/GSTN_PreviewController.h"
 #include "Preview/SGSTN_TimelineViewport.h"
@@ -47,11 +48,12 @@
 
 #define LOCTEXT_NAMESPACE "GSTNCombatEditor"
 
-const FName FGSTN_TimelineEditorToolkit::LayoutName(TEXT("GSTN_TimelineEditor_Layout_v1"));
+const FName FGSTN_TimelineEditorToolkit::LayoutName(TEXT("GSTN_TimelineEditor_Layout_v2"));
 const FName FGSTN_TimelineEditorToolkit::ViewportTabId(TEXT("GSTNTimelineEditor_Viewport"));
 const FName FGSTN_TimelineEditorToolkit::TimelineTabId(TEXT("GSTNTimelineEditor_Timeline"));
 const FName FGSTN_TimelineEditorToolkit::DetailsTabId(TEXT("GSTNTimelineEditor_Details"));
 const FName FGSTN_TimelineEditorToolkit::FrameDataTabId(TEXT("GSTNTimelineEditor_FrameData"));
+const FName FGSTN_TimelineEditorToolkit::HitboxesTabId(TEXT("GSTNTimelineEditor_Hitboxes"));
 
 namespace
 {
@@ -79,6 +81,36 @@ TSharedPtr<FGSTN_TimelineEditorToolkit> FGSTN_TimelineEditorToolkit::FindOpenFor
 		}
 	}
 	return nullptr;
+}
+
+bool FGSTN_TimelineEditorToolkit::OpenFor(const EToolkitMode::Type Mode, const TSharedPtr<IToolkitHost>& InitToolkitHost, const FGSTN_TimelineEditContext& InContext)
+{
+	if (!InContext.IsValid())
+	{
+		return false;
+	}
+	// Already open: to the front, and no toolkit is built (see the header: a refused toolkit must never be destroyed uninitialised)
+	if (const TSharedPtr<FGSTN_TimelineEditorToolkit> Open = FindOpenFor(InContext.GetTarget()))
+	{
+		Open->FocusWindow();
+		return false;
+	}
+	// Held by something that is not a toolkit (a test's lease): nothing to bring forward, and nothing opens
+	if (FGSTN_TimelineEditContextRegistry::IsOpen(InContext))
+	{
+		return false;
+	}
+
+	const TSharedRef<FGSTN_TimelineEditorToolkit> Toolkit = MakeShared<FGSTN_TimelineEditorToolkit>();
+	if (Toolkit->InitEditor(Mode, InitToolkitHost, InContext))
+	{
+		return true;
+	}
+	// Not reachable after the checks above. Should it ever be, keep the uninitialised toolkit alive instead of asserting in its destructor
+	ensureMsgf(false, TEXT("The timeline editor refused a target that had no editor: %s"), *InContext.GetDisplayName().ToString());
+	static TArray<TSharedRef<FGSTN_TimelineEditorToolkit>> Refused;
+	Refused.Add(Toolkit);
+	return false;
 }
 
 FGSTN_TimelineEditorToolkit::FGSTN_TimelineEditorToolkit() = default;
@@ -111,7 +143,7 @@ void FGSTN_TimelineEditorToolkit::Release()
 
 TSharedRef<FTabManager::FLayout> FGSTN_TimelineEditorToolkit::MakeDefaultLayout()
 {
-	// Left: the preview above the timeline. Right: the details of the selection above the frame data
+	// Left: the preview above the timeline. Right: the hitbox outliner, the details of the selection, the frame data
 	return FTabManager::NewLayout(LayoutName)
 		->AddArea
 		(
@@ -143,13 +175,19 @@ TSharedRef<FTabManager::FLayout> FGSTN_TimelineEditorToolkit::MakeDefaultLayout(
 				->Split
 				(
 					FTabManager::NewStack()
-					->SetSizeCoefficient(0.65f)
+					->SetSizeCoefficient(0.3f)
+					->AddTab(HitboxesTabId, ETabState::OpenedTab)
+				)
+				->Split
+				(
+					FTabManager::NewStack()
+					->SetSizeCoefficient(0.4f)
 					->AddTab(DetailsTabId, ETabState::OpenedTab)
 				)
 				->Split
 				(
 					FTabManager::NewStack()
-					->SetSizeCoefficient(0.35f)
+					->SetSizeCoefficient(0.3f)
 					->AddTab(FrameDataTabId, ETabState::OpenedTab)
 				)
 			)
@@ -511,6 +549,11 @@ void FGSTN_TimelineEditorToolkit::RegisterTabSpawners(const TSharedRef<FTabManag
 		.SetDisplayName(LOCTEXT("FrameDataTab", "Frame Data"))
 		.SetGroup(WorkspaceMenuCategory.ToSharedRef())
 		.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "Icons.Validate"));
+	InTabManager->RegisterTabSpawner(HitboxesTabId, FOnSpawnTab::CreateSP(this, &FGSTN_TimelineEditorToolkit::SpawnHitboxesTab))
+		.SetDisplayName(LOCTEXT("HitboxesTab", "Hitboxes"))
+		.SetTooltipText(LOCTEXT("HitboxesTabTip", "The hitbox groups of the move and their hitboxes. A click focuses one in the viewport; a click in the viewport selects it here."))
+		.SetGroup(WorkspaceMenuCategory.ToSharedRef())
+		.SetIcon(FSlateIcon(FAppStyle::GetAppStyleSetName(), "LevelEditor.Tabs.Outliner"));
 }
 
 void FGSTN_TimelineEditorToolkit::UnregisterTabSpawners(const TSharedRef<FTabManager>& InTabManager)
@@ -520,6 +563,7 @@ void FGSTN_TimelineEditorToolkit::UnregisterTabSpawners(const TSharedRef<FTabMan
 	InTabManager->UnregisterTabSpawner(TimelineTabId);
 	InTabManager->UnregisterTabSpawner(DetailsTabId);
 	InTabManager->UnregisterTabSpawner(FrameDataTabId);
+	InTabManager->UnregisterTabSpawner(HitboxesTabId);
 }
 
 FName FGSTN_TimelineEditorToolkit::GetToolkitFName() const
@@ -605,6 +649,15 @@ TSharedRef<SDockTab> FGSTN_TimelineEditorToolkit::SpawnDetailsTab(const FSpawnTa
 		.Label(LOCTEXT("DetailsTabLabel", "Details"))
 		[
 			SNew(SGSTN_TimelineDetails).Model(Model)
+		];
+}
+
+TSharedRef<SDockTab> FGSTN_TimelineEditorToolkit::SpawnHitboxesTab(const FSpawnTabArgs& Args)
+{
+	return SNew(SDockTab)
+		.Label(LOCTEXT("HitboxesTabLabel", "Hitboxes"))
+		[
+			SNew(SGSTN_HitboxOutliner).Model(Model)
 		];
 }
 

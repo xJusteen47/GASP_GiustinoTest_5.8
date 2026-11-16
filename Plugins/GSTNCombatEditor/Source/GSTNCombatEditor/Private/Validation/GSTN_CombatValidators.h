@@ -65,6 +65,13 @@ namespace GSTNValidationCodes
 	inline FName AbilityInlineIgnored() { return TEXT("Ability.InlineIgnored"); }
 	inline FName AbilityTimelineAssetUnresolved() { return TEXT("Ability.TimelineAssetUnresolved"); }
 
+	// Move actions on Event keys and the simulation graphs of an ability Blueprint (CP2 of the Blueprint seams)
+	inline FName MoveAction() { return TEXT("Timeline.MoveAction"); }
+	inline FName SimLatent() { return TEXT("Ability.SimLatent"); }
+	inline FName SimNonSyncVariable() { return TEXT("Ability.SimNonSyncVariable"); }
+	inline FName SimWorldRead() { return TEXT("Ability.SimWorldRead"); }
+	inline FName SimRandom() { return TEXT("Ability.SimRandom"); }
+
 	// Slots, shared by kit, weapon and preset
 	inline FName SlotAmbiguous() { return TEXT("Slot.Ambiguous"); }
 	inline FName SlotShadowed() { return TEXT("Slot.Shadowed"); }

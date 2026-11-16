@@ -9,6 +9,7 @@
 #include "Events/GSTN_SimEvent.h"
 #include "Input/GSTN_BufferResetRules.h"
 #include "Input/GSTN_ButtonMap.h"
+#include "GSTN_InputCoreTypes.h"
 #include "Jump/GSTN_GravityPhases.h"
 #include "Jump/GSTN_JumpLogic.h"
 #include "Loadout/GSTN_LoadoutAssembly.h"
@@ -24,6 +25,7 @@
 #include "Simulation/GSTN_HitInbox.h"
 #include "Simulation/GSTN_InputSimulator.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
+#include "Timeline/GSTN_StartupSteer.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 #include "World/GSTN_StepSnapshot.h"
@@ -116,6 +118,23 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Combat|Precision")
 	bool IsPrecisionAimInput() const { return bLastPrecisionAim; }
+
+	/** What the steering arrows draw (presentation, local): the running move's steering as of the latest simulated frame */
+	struct FSteerView
+	{
+		EGSTN_SteerPhase Phase = EGSTN_SteerPhase::None;
+		/** Move origin yaw and the cap around it (the allowed arc) */
+		float StartYawDeg = 0.f;
+		float MaxSteerDegrees = 0.f;
+		/** World yaw the picked stick points at, when it is out of the dead zone */
+		bool bStickActive = false;
+		float StickYawDeg = 0.f;
+		/** The move's own data toggle (FGSTN_SteerWindow::bShowIndicator) */
+		bool bShow = false;
+	};
+
+	/** The steering of the running move from the last command this pawn produced. False (and Phase None) when nothing steers or holds */
+	bool GetSteerView(FSteerView& Out) const;
 
 	/**
 	 * Network Prediction calls it on every instance of the model, whenever the simulation rolls back to a state. Drops the hits that
@@ -329,6 +348,19 @@ public:
 	void ExecuteRecoilMove(const FGSTN_TimelineTrack_Movement& Track, int32 RecoilFrames, float StepMs);
 
 	/**
+	 * Momentum slide (owner 2026-11-13, FGSTN_MomentumSlide): queues the slide move of a timeline that just started, through MomentumSlideEffect.
+	 * Called by the ability when its timeline begins, inside the simulation; the move decides everything else on its own first frame
+	 */
+	void ExecuteMomentumSlide();
+
+	/**
+	 * The momentum slide data of the move the combat state of the frame being simulated runs, and the frame that move started on. False
+	 * outside a timeline and once the timeline ended into a recoil. Read by the slide move from Mover's tick (the combat model ticked before
+	 * it in the same frame), like ReadJumpState
+	 */
+	bool ReadRunningSlide(int32& OutStartFrame, const FGSTN_MomentumSlide*& OutSlide) const;
+
+	/**
 	 * The camera aim of the command of the frame being simulated (UGSTN_InputConfig::bSendCameraAim, combat-m3 7.10): control
 	 * rotation pitch and yaw, roll 0. The simulation keeps it on its way past the ability system's tick of the same frame, rewritten
 	 * every simulated frame, so a re-simulation reads the command it replays. Zero when the command carries no aim (HasAim)
@@ -354,6 +386,65 @@ public:
 	 * a simulation read, called from an ability's activation or tick. False before the first simulated frame
 	 */
 	bool ReadJumpState(FGSTN_JumpState& OutState) const;
+
+	// ---- Blueprint seams, CP1: input and move questions a move's graph asks. Simulation reads like GetActivationContext (call them from an
+	// ability's activation, its tick or its move events, never from presentation code): they read the combat state of the frame being
+	// simulated, so the answer is the same on every machine and in every re-simulation. Buttons and commands are named by tag (the input
+	// config and the command table resolve them), never by key. Ages count combat frames like the input buffer: hitstop frames do not count
+
+	/**
+	 * Whether Button (an Input.Button.* tag of the input config) was pressed in the last Frames frames (0 = on this frame). bIncludeUsed: a
+	 * press a command already used counts too (the press that started the move does); false = only presses still waiting in the buffer
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	bool WasButtonPressedWithin(UPARAM(meta = (Categories = "Input.Button")) const FGameplayTag& Button, int32 Frames, bool bIncludeUsed = true) const;
+
+	/** Frames since the newest press of Button (0 = this frame), -1 when the recent history holds none. bIncludeUsed as WasButtonPressedWithin */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	int32 GetFramesSinceButtonPressed(UPARAM(meta = (Categories = "Input.Button")) const FGameplayTag& Button, bool bIncludeUsed = true) const;
+
+	/** How many presses of Button the last Frames frames hold (a double press is 2) */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	int32 CountButtonPressesWithin(UPARAM(meta = (Categories = "Input.Button")) const FGameplayTag& Button, int32 Frames, bool bIncludeUsed = true) const;
+
+	/** Frames Button has been held (0 on the press frame), -1 when it is up */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	int32 GetButtonHeldFrames(UPARAM(meta = (Categories = "Input.Button")) const FGameplayTag& Button) const;
+
+	/**
+	 * Whether the input of Command (a Command.* tag of the command table: its whole pattern, a motion, a chord, a double tap) was completed in
+	 * the last Frames frames by presses no command used yet. The press that started the running move is used, so it never answers: this is
+	 * "was it entered again". The answer does not use the press either: a binding of the command can still fire on it
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	bool WasCommandEnteredWithin(UPARAM(meta = (Categories = "Command")) const FGameplayTag& Command, int32 Frames) const;
+
+	/** The move stick of the frame's command (x right, y forward, -1..1, camera relative); GetFrameStick for Blueprint */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	FVector2D GetMoveStick() const;
+
+	/** The stick direction of the frame being simulated in Space (stick, facing relative or camera relative), as the patterns read it */
+	UFUNCTION(BlueprintPure, Category = "Combat|Input")
+	EGSTN_StickDirection GetStickDirection(EGSTN_DirectionSpace Space) const;
+
+	/**
+	 * The hit groups of the running timeline that confirmed a hit so far (bit i = the hit group i, groups past 7 share bits; a blocked hit
+	 * confirms, a parried or ricocheted one does not), 0 outside a timeline. The flags behind the OnHit cancel windows
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Hits")
+	int32 GetMoveHitConfirmGroups() const;
+
+	/**
+	 * The timeline frame the combat tick evaluated for the frame being simulated (F - start - paused frames: it stands still in hitstop and
+	 * in a hold), INDEX_NONE outside a timeline and while a ricochet recoil plays. The frame the Event keys are crossed on
+	 */
+	int32 GetEvaluatedTimelineFrame() const;
+
+private:
+	/** The bit of a button tag in the active input config (the same asset on every machine), INDEX_NONE if it has none */
+	int32 FindQueryButton(const FGameplayTag& Button) const;
+
+public:
 
 	/** The tracker of the owner's Mover component (the movement facts of the end of the previous frame: up direction, velocity, ground tag), null without a Mover component. The movement abilities read the local gravity frame from it */
 	UGSTN_MoverSimStateTracker* GetMoverTracker() { return GetJumpTracker(); }
@@ -455,6 +546,13 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Precision")
 	bool bAddPrecisionAim = true;
 
+	/**
+	 * Adds a UGSTN_SteerIndicatorComponent (the steering arrows and the allowed arc on the ground, local presentation) to the owner at BeginPlay,
+	 * except on a dedicated server or when the owner has one already. Each move says whether it shows them (FGSTN_SteerWindow::bShowIndicator)
+	 */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Precision")
+	bool bAddSteerIndicator = true;
+
 	/** The input config resolved at setup (InputConfig), null before BeginPlay or without one. For presentation that reads the same actions */
 	const UGSTN_InputConfig* GetActiveInputConfig() const { return ActiveInputConfig; }
 
@@ -524,6 +622,9 @@ public:
 	 * Returns false on a machine without authority or before the proxy has a pending state.
 	 */
 	bool ServerWriteLoadoutRevision(uint16 Revision);
+
+	/** Server: ServerWriteLoadoutRevision(Revision) unless the sync state already demands it. Called once a revision's table set is registered */
+	void DemandAppliedRevision(int32 Revision);
 
 	/**
 	 * Server only, from outside the simulation: a kit change by pickup (combat-m3 direction of 2026-10-23). Judges the loadout first
@@ -682,6 +783,13 @@ private:
 	const FGSTN_StepSnapshot* ServiceStepSnapshot = nullptr;
 	const FGSTN_StepSnapshot* ServiceView = nullptr;
 	bool bServiceViewResolved = false;
+
+	/**
+	 * Starts registry entry Entry of Set on Frame as a forced timeline (source Forced): the state, the move origin, the evaluation of its first
+	 * frame and the ActivateEntry request the ability system's pre-tick turns into the activation. Shared by StartForcedTimeline and the
+	 * follow-up of a move that ended by itself (FGSTN_CombatTimelineData::FollowUpTimeline)
+	 */
+	void StartTimelineEntry(FGSTN_CombatSyncCore& Core, int32 Frame, const UGSTN_CombatTableSet& Set, int32 Entry, const FGSTN_TrackHookEnvironment* Environment);
 
 	// IGSTN_CombatTickServices
 	virtual bool StartForcedTimeline(const UClass* AbilityClass) override;
@@ -859,6 +967,10 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Hits")
 	TSubclassOf<UGameplayEffect> FreezeAtRestEffect;
 
+	/** Instant effect that queues the momentum slide of a ground move (FGSTN_LayeredMove_MomentumSlide); replace for a game with its own */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
+	TSubclassOf<UGameplayEffect> MomentumSlideEffect;
+
 	/** Instant effect of a SetFacing request (startup steering, plan precisione-weakpoint 5): turns Mover to Combat.SetByCaller.FacingYaw */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
 	TSubclassOf<UGameplayEffect> SetFacingEffect;
@@ -871,6 +983,15 @@ private:
 	bool bLastPrecisionAim = false;
 	int8 LastAimStickX = 0;
 	int8 LastAimStickY = 0;
+	int8 LastMoveStickX = 0;
+	int8 LastMoveStickY = 0;
+
+	/**
+	 * Input side only (shapes the produced command, never read by the sim): a reaction or a get-up held the facing, and the stick has not
+	 * been pushed since. While set, a neutral stick keeps holding the facing, so the movement mode does not turn the pawn back to the
+	 * orientation of the walk before the hit (react-hook-4 review: a victim turned by a hit from behind turned its back again after the get-up)
+	 */
+	bool bHoldFacingAfterReaction = false;
 	uint16 LastCameraYaw = 0;
 
 	/** The attacker side of the combat tick for the frame being simulated (GSTN_CombatSimAttacker.cpp). Writes Core and the victims' inboxes */

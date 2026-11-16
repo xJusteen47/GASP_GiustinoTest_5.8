@@ -45,6 +45,16 @@ language (`owner_lang` in `animpipe.toml`). Record his own words with `owner-ok 
 `approve` if status says so. Variants: one per round (`variant new <move> --why=`), built and checked like a move named
 `<move>_var<A>`; the owner applies or discards it (`variant apply <move> --quote="<his words>"`), never you on your own.
 
+## 4b. Video frames first (before ANY change to the timeline)
+The owner counts frames of the in-game video (`v<N>`, 0-based, printed on every video and grid cell; owner keys are starred in
+red); the card counts anim frames. They differ by the hitstop freeze. Before you touch a key, an in-between, a lock or a
+render, write the map "requested frame -> key / segment touched" and put it in your message to the owner, e.g.
+`v13 = anim 13: between keys 11 and 14`. Never translate by hand: pass his numbers with `--video`
+(`render|approve --frames=13,14 --video`, `interp --drop=13 --video`, `interp --from=f.json --video`); the result's
+`frame_map` is the map to quote. A frame inside the freeze is refused. If the map shows an owner key, stop (section 5).
+In-game video without the owner's editor: `render <move> --standalone [--azs=90,0,45]`. Numeric requirements:
+`verify <move> --req=file.json` (format in `animpipe/verify.py`), PASS/FAIL per line, use it instead of judging by eye.
+
 ## 5. Hard rules (the commands refuse them too)
 - Never move or edit an owner key or a locked part: propose the change to the owner instead.
 - Fingers and hands on owner keys come from the owner's keys.

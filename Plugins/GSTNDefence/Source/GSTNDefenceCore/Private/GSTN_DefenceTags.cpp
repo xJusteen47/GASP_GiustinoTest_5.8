@@ -13,6 +13,7 @@ namespace GSTNDefenceTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Teching, "Combat.State.Teching", "A tech animation is running. Projected by the defence tick extension while the tech state machine is in the tech state");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Knockdown, "Combat.State.Knockdown", "Downed after landing from a tumble; get-up abilities require it. Projected until KnockdownEndFrame by the defence tick extension");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Tech_Lockout, "Combat.State.Tech.Lockout", "A tech press is ignored, the anti-mash lockout. Projected while the frame is before TechLockoutEndFrame, for UI and AI");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Move_KnockdownOnLanding, "Combat.Move.KnockdownOnLanding", "In a move's Tags track: landing inside the window after being airborne in it ends the move and downs its own user (a dropkick not recovered before the ground)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Mover_Tumble, "Combat.Mover.Tumble", "Mover tag carried by the tumble contact modifier while the entity tumbles. Added and removed with the modifier, never granted by an ability");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Immunity_Parry, "Combat.Immunity.Parry", "The attack cannot be parried, such as a boss signature attack. Granted by kits, abilities and gameplay effects as an ordinary count");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Immunity_Shield, "Combat.Immunity.Shield", "The attack cannot be blocked by the shield bubble. Granted by kits, abilities and gameplay effects as an ordinary count");
@@ -30,7 +31,7 @@ namespace GSTNDefenceTags
 		OutTags.Append({
 			State_Shielding, State_ShieldStun, State_ShieldBroken, State_ParryWindow, State_ParryRecovery, State_Parried,
 			State_Teching, State_Knockdown, State_Tech_Lockout,
-			Mover_Tumble,
+			Move_KnockdownOnLanding, Mover_Tumble,
 			Immunity_Parry, Immunity_Shield,
 			Command_Defence_Shield, Input_Lock_Command_Defence,
 			Event_Blocked, Event_Parried, Event_ShieldBroken, Event_Teched, Event_KnockedDown,

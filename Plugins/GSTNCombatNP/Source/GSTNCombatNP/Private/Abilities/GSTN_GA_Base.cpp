@@ -2,6 +2,7 @@
 
 #include "Abilities/GSTN_GA_Base.h"
 
+#include "Abilities/GSTN_GA_BaseCombat.h"
 #include "AbilitySystemComponent.h"
 #include "Bindings/GSTN_CommandBindingSet.h"
 #include "GameFramework/Actor.h"
@@ -111,6 +112,12 @@ void UGSTN_GA_Base::ActivateAbility(const FGameplayAbilitySpecHandle Handle, con
 	TriggerButton.Value = INDEX_NONE;
 	ActivationSource.Value = static_cast<uint8>(EGSTN_ActivationSource::Other);
 	WaitFrames.Value = 0;
+
+	// A new action ends the rest of a finished move's montage (owner rule 2026-11-15, UGSTN_GA_BaseCombat::StopReleasedMontages)
+	if (UAbilitySystemComponent* ReleasingSystem = ActorInfo ? ActorInfo->AbilitySystemComponent.Get() : nullptr)
+	{
+		UGSTN_GA_BaseCombat::StopReleasedMontages(*ReleasingSystem);
+	}
 
 	const bool bCommandActivation = FGSTN_InputHostUtils::IsCommandActivation(Handle);
 	UGSTN_CombatSimComponent* Combat = FindCombatComponent(ActorInfo);

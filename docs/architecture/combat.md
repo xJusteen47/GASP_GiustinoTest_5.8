@@ -648,6 +648,12 @@ FGSTN_LoadoutData (what a player owns and saves)
   jump-cancel), `Movement` (velocity curves, gravity, facing lock → one queued layered move via GE), `Tags`, `Event`
   (gameplay event / projectile / cue at frame N), `Charge` (loop while held), `LandingLag`/auto-cancel for aerials,
   buffer overrides.
+- **Momentum slide** (owner 2026-11-13, `FGSTN_MomentumSlide`, timeline field `MomentumSlide`, off by default): a ground move started
+  while running keeps sliding on its feet along the running direction (never along the facing), with the montage's root motion added,
+  slowed by a Fixed deceleration or by the character's own braking (`Character`, scaled). The facing of the move's first frame against the
+  run picks `Along` or `Against` (dot below `OppositeDotThreshold`), each with `Slide`/`Stop`, speed scale, cap, friction and a frame limit.
+  Played by `FGSTN_LayeredMove_MomentumSlide` (queued by `UGSTN_GA_BaseCombat::BeginTimeline`); it ends with the move, on a hit, a cancel,
+  a recoil, leaving the ground or a ledge; hitstop pauses it. Air moves and minions are unaffected. Not the movement track (no magnet).
 - The timeline frame lives in the combat sync state (start frame + hitstop-paused frames). The ability has no timers of
   its own: it reads its frame from the combat component and ends when the timeline ends, is interrupted or replaced.
 - Animation: the timeline frame is the truth; the synced montage follows (same tick, paused in hitstop). GASP keeps
@@ -855,6 +861,11 @@ What the code does, where it differs from the design text above is listed in `do
   threshold / `MaxReaction`, which the H12 data already allows). A timeline ability replaces the action state by its own when it starts, so the tag
   alone already leaves Hitstun for a timeline ability; the flag is what also drops the pending launch and the window, and is the only one of the two
   that matters for a plain ability. Limit: a launch already handed to Mover keeps its layered move (the flag cancels the freeze, not a flying victim).
+- **Launch, ground bounce, wall splat** (2026-11-13). `UGSTN_KnockbackModel_WeightDriven::PercentGrowth` (standard rules 1.0: knockback doubles every
+  100 %, uncapped) so strikes authored below the launch threshold launch at high percent; before, the percent entered only through the health
+  weight curve (at most x1.67) and those strikes only slid (PushBack). The standard rules carry `GSTN_SurfaceImpacts_Standard` (one row for
+  `Surface.Type.Wall`, no default outcome): without a table no impact ever resolved. A floor contact resolves only when the surface forces it or
+  the hit's `Impact.Force` is `Bounce` (the ground bounce of a spike, spent on the first floor). Content: `Tools/GAS/setup_launch_impacts.py`.
 - **Tools**: `Tools/GAS/setup_gas_assets.py --combat-input --hits-content --h13-content`, `build_test_combat_map.py`, `validate_combat_content.py`,
   `bake_sockets.py`, `make_hurtbox_set.py` (command lines in `Tools/README.md`).
 - **Settings and fork requirements**: `Config/DefaultGSTNCombat.ini` (plugin) names the default rules; the lag-compensation component and the hit

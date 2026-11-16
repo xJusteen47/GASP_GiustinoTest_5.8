@@ -56,9 +56,18 @@ required: reticle on + strong = the shot. The kit has no plain strong move, so t
 
 Not covered yet: a hitscan still spawns a one-frame projectile actor (bytes of a spawn) and, as every projectile, ignores walls.
 
+## Shots from a move (Blueprint seams CP2)
+
+A combat move fires a projectile from its own timeline, no separate ability: a **`UGSTN_ProjectileDefinition`** data asset (the shot spec:
+template, muzzle, delivery, aim; the same fields as `UGSTN_GA_FireProjectile`) named by the **Fire Projectile** move action on an Event key
+(data only), or by **Fire Move Projectile** in the move's graph. `FGSTN_ProjectileShotAdjust` turns or speeds up one shot (yaw around the
+shooter's up, pitch, speed scale: `FGSTN_ShotAim::ApplyAngleOffset`, test `GSTNProjectile.Core.ShotAngleOffset`). Both go through
+`FGSTN_ProjectileShot::Fire`, the builder the fire ability now uses too: host spawn once, ghost on the predicting client. Limits: a move has no
+event target (an EventTarget shot goes along the facing); two shots of one owner in the same frame draw one ghost (the host spawns both).
+
 ## Not yet (after slice 3)
 
 World collision and bounces, projectile vs projectile and deflect, lag compensation (`PositionAt` of the
-rewound frame), a timeline track key (the ability's `FireDelayFrames` stands in), a player input binding for the ability (content), pooling, VFX, minion ranged attacks, smoothing between fixed frames on the client.
+rewound frame), a player input binding for the ability (content), pooling, VFX, minion ranged attacks, smoothing between fixed frames on the client.
 
 Harness: `Tools/GASNPPTest/projectile_scenarios.py` (`SUITE_PROJECTILE`: ability hits and ghost adopt, dedicated server + 2 clients; `SUITE_PROJECTILE_BYTES`: wire bytes with ~20 alive, listen + 2).

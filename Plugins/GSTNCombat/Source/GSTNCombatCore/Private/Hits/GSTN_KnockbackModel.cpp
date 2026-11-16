@@ -95,7 +95,8 @@ FGSTN_KnockbackResult UGSTN_KnockbackModel::ResolveRules(const FGSTN_KnockbackIn
 
 double UGSTN_KnockbackModel_WeightDriven::ComputeKnockback(const FGSTN_KnockbackInput& Input) const
 {
-	return GetAuthoredBracket(Input.Hit) * Tuning.WeightReference / GetEffectiveWeight(Input);
+	const double PercentFactor = 1.0 + static_cast<double>(FMath::Max(PercentGrowth, 0.f)) * FMath::Max(static_cast<double>(Input.DamagePercent), 0.0) / 100.0;
+	return GetAuthoredBracket(Input.Hit) * PercentFactor * Tuning.WeightReference / GetEffectiveWeight(Input);
 }
 
 double UGSTN_KnockbackModel_PercentScaling::GetPercent(const FGSTN_KnockbackInput& Input) const

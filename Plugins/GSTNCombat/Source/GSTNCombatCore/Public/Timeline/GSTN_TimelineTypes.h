@@ -7,7 +7,9 @@
 #include "Hits/GSTN_HitboxTypes.h"
 #include "Hits/GSTN_HurtboxTypes.h"
 #include "Input/GSTN_BufferResetRules.h"
+#include "Curves/CurveFloat.h"
 #include "StructUtils/InstancedStruct.h"
+#include "Movement/GSTN_MomentumSlide.h"
 #include "GSTN_TimelineTypes.generated.h"
 
 class UAnimMontage;
@@ -295,6 +297,14 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Event : public FGSTN_TimelineTrack
 	FGameplayTag GameplayEventTag;
 
 	/**
+	 * Names this key for the move's own Blueprint (CP1 of the Blueprint seams): UGSTN_GA_BaseCombat raises On Move Key with it on the frame
+	 * the key is crossed, once, on every machine and in every re-simulation. Every Event key raises it; an empty tag is a key the graph tells
+	 * apart by its frame. Any tag works: the graph compares it, nothing else reads it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Event")
+	FGameplayTag KeyTag;
+
+	/**
 	 * Authoritative event key (seam D-1, game-modes.md 2): when set, the combat tick posts a sim event of this type to the entity's outbox on the
 	 * frame the key is crossed, with OutboxTags and OutboxMagnitude (a spin's sense, a count). The outbox is published on the authority only,
 	 * once per frame, so level objects and modes react to the move without a server request of their own. Empty = cue and gameplay event only
@@ -307,6 +317,15 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Event : public FGSTN_TimelineTrack
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Event|Outbox", meta = (EditCondition = "OutboxEventTag.IsValid()"))
 	float OutboxMagnitude = 0.f;
+
+	/**
+	 * Move actions run on the frame the key is crossed (CP2 of the Blueprint seams), after the cue and the gameplay event, before On Move Key:
+	 * fire a projectile, send an event, apply an effect, open a tag window. The action types live in the modules that can run them (the base
+	 * FGSTN_MoveAction in GSTNCombatNP, the projectile shot in GSTNProjectileNP), so this pure module names them only by path: without those
+	 * modules the list is just data nobody runs. Each runs inside the simulation, once per crossing and again in a re-simulation
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Event|Actions", meta = (BaseStruct = "/Script/GSTNCombatNP.GSTN_MoveAction", ExcludeBaseStruct))
+	TArray<FInstancedStruct> Actions;
 
 	virtual EGSTN_TimelineTrackKind GetKind() const override { return EGSTN_TimelineTrackKind::Event; }
 };
@@ -538,6 +557,65 @@ struct GSTNCOMBATCORE_API FGSTN_BakeInfo
 };
 
 /**
+ * Which stick turns a move during its steer window (FGSTN_SteerWindow, owner decision 2026-11-14: chosen per move). The stick is read from the
+ * frame's predicted input command, never from a fixed key: the move stick and the aim stick are whatever the player's input config maps to them.
+ */
+UENUM(BlueprintType)
+enum class EGSTN_SteerSource : uint8
+{
+	/** The aim stick, only while the precision reticle is on (plan precisione-weakpoint 5). Every move authored before 2026-11-14; for moves that need a reticle */
+	AimStickWithReticle,
+	/** The move stick, reticle or not (Monster Hunter style): the default the owner wants for new melee moves */
+	MoveStick,
+	/** The aim stick while the reticle is on and the aim stick is pushed, else the move stick */
+	MoveOrAimStick,
+};
+
+/**
+ * When and how a move turns during its startup (research handoffs/attack-aiming-research.md Â§2, owner 2026-11-14). The cap and the rate stay
+ * MaxSteerDegrees and SteerRateDegPerSecond on the timeline; this says which stick, in which frames, and how the facing is held. Pure data:
+ * FGSTN_StartupSteer::ResolveFrame turns it into a yaw per frame from the move origin, the frame's command and the facing of the previous frame.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_SteerWindow
+{
+	GENERATED_BODY()
+
+	/** Which stick steers. AimStickWithReticle keeps the behaviour of every move made before this struct existed */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer")
+	EGSTN_SteerSource Source = EGSTN_SteerSource::AimStickWithReticle;
+
+	/** First timeline frame the stick steers in (a charge that only turns from frame 6, a signature aerial from 0) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 StartFrame = 0;
+
+	/**
+	 * Frame the direction locks at (exclusive). -1 = the first active frame (the hitboxes never sweep while the stick turns them). A value past
+	 * the first active frame is honoured but tracks "for most of the animation", which players read as unfair (Absolver)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer", meta = (ClampMin = "-1", ForceUnits = "Frames"))
+	int32 EndFrame = -1;
+
+	/**
+	 * Multiplier of SteerRateDegPerSecond over the window: X = 0 at StartFrame, 1 at the lock; Y = the factor (1 = full rate). Free at the start
+	 * and heavy toward the lock, say. No keys = 1. Ignored when the rate is 0 (the turn is then immediate)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer")
+	FRuntimeFloatCurve RateScale;
+
+	/**
+	 * Move stick sources only: from the move's first frame to the end of its last active frame, the facing the move holds replaces the turn the
+	 * movement mode would make toward the move stick. Without it the stick keeps turning the character freely (the cap and the lock mean nothing)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer")
+	bool bHoldFacing = true;
+
+	/** Shows the steering arrows and the allowed arc for this move (presentation; GSTN.Combat.SteerIndicator overrides it) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer")
+	bool bShowIndicator = true;
+};
+
+/**
  * The frame-data source of truth of a combat ability, inline on the ability or in a UGSTN_CombatTimeline asset.
  */
 USTRUCT(BlueprintType)
@@ -565,6 +643,32 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Animation", meta = (ClampMin = "0.01"))
 	float MontagePlayRate = 1.f;
 
+	/**
+	 * How the montage leaves when the timeline ends by itself (TotalFrames reached; owner 2026-11-13: a move cut before the second punch of its
+	 * animation must not show that punch). -1 = as before: the montage's own blend, with the animation still playing under it. 0 = cut on the
+	 * last frame. More = a blend over that many frames. A cancelled tail blends over Tail's BlendOutFrames instead. Presentation only: the
+	 * simulation ends at TotalFrames whatever this says
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Animation", meta = (ClampMin = "-1", ForceUnits = "Frames"))
+	int32 EndBlendOutFrames = -1;
+
+	/**
+	 * On: while the montage blends out (at the end, or when the tail is cancelled) the pose of the last frame is held, so nothing of the
+	 * montage past the timeline is drawn. Off: the montage keeps playing under the blend, which can show the start of what follows in it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Animation")
+	bool bHoldPoseOnEnd = false;
+
+	/**
+	 * A timeline ability (a UGSTN_GA_BaseCombat child) the combat model starts on the frame this timeline ends BY ITSELF (TotalFrames reached; never
+	 * after a cancel, a hit or a replacing move): the move links into its recovery, e.g. the dropkick's land clip into a get-up, instead of handing
+	 * the pose back to the locomotion graph. Started like a forced timeline (source Forced), so its own frame data, cancel windows and tail apply;
+	 * the combat model adds it to the timeline registry by itself (no binding needed). None = the move ends as before. Soft: loaded with the
+	 * timeline's content, never in a tick
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Chain", meta = (AllowedClasses = "/Script/GSTNCombatNP.GSTN_GA_BaseCombat"))
+	TSoftClassPtr<UObject> FollowUpTimeline;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim")
 	EGSTN_AimPolicy AimPolicy = EGSTN_AimPolicy::KeepFacing;
 
@@ -578,7 +682,7 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	 * Right-stick steering during startup (plan precisione-weakpoint 5, FGSTN_StartupSteer): the most the move's direction can turn
 	 * from the facing it started with, either way. On top of AimPolicy, for every policy. 0 = the aim stick does not steer this move
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (ClampMin = "0.0", ClampMax = "90.0", ForceUnits = "deg"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (ClampMin = "0.0", ClampMax = "180.0", ForceUnits = "deg"))
 	float MaxSteerDegrees = 20.f;
 
 	/**
@@ -588,6 +692,29 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (EditCondition = "MaxSteerDegrees > 0", ClampMin = "0.0", ForceUnits = "deg/s"))
 	float SteerRateDegPerSecond = 0.f;
+
+	/**
+	 * Which stick steers, in which frames, and whether the facing is held (owner 2026-11-14). The default reproduces the reticle steer above.
+	 * 180 in MaxSteerDegrees with a short window is a signature move "aimable in any direction" in its first frames (Helm Breaker style)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (EditCondition = "MaxSteerDegrees > 0"))
+	FGSTN_SteerWindow Steer;
+
+	/**
+	 * While the timeline runs the move stick neither walks nor turns the character: Mover gets no move input and the facing of the previous
+	 * frame as its orientation, so the only motion is the move's own (its pushes, root motion). For moves that must not drift or turn under
+	 * a held stick: the get-ups and get-up rolls (react-hook-1 review: the roll back turned and slid about 1 m). The stick still reaches the
+	 * combat tick (DI, the commands)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Movement")
+	bool bIgnoreMoveInput = false;
+
+	/**
+	 * What the move does with the running speed it starts with, on the ground (owner 2026-11-13): slide on the feet along the momentum,
+	 * differently when started against it. Off by default. Separate from root motion and from movement tracks; see FGSTN_MomentumSlide
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Movement")
+	FGSTN_MomentumSlide MomentumSlide;
 
 	/** Startup override window (combat.md 8.3). -1 = the default of the command tier (settings), 0 = none */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Override", meta = (ClampMin = "-1", ForceUnits = "Frames"))

@@ -222,10 +222,15 @@ void UGSTN_LoadoutComponent::ResolveLoadout(const FGSTN_LoadoutData& Data, FGSTN
 void UGSTN_LoadoutComponent::ServerRequestLoadout_Implementation(const FGSTN_LoadoutData& Requested)
 {
 	TArray<FString> Errors;
-	if (!AcceptLoadout(Requested, Errors))
+	if (!ApplyRequested(Requested, Errors))
 	{
 		ClientLoadoutRejected(Errors);
 	}
+}
+
+bool UGSTN_LoadoutComponent::ApplyRequested(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors)
+{
+	return ServerLoadoutApplier ? ServerLoadoutApplier(Requested, OutErrors) : AcceptLoadout(Requested, OutErrors);
 }
 
 void UGSTN_LoadoutComponent::ServerRequestSpecialSwap_Implementation(int32 WeaponIndex, FGameplayTag Command, const TSoftClassPtr<UObject>& Alternative)
@@ -251,7 +256,7 @@ bool UGSTN_LoadoutComponent::AcceptSpecialSwap(int32 WeaponIndex, FGameplayTag C
 		return false;
 	}
 	// The loadout rules judge the alternative (one of the weapon's allowed ones, a weapon index the loadout has)
-	return AcceptLoadout(WithSpecial(Applied, WeaponIndex, Command, Alternative), OutErrors);
+	return ApplyRequested(WithSpecial(Applied, WeaponIndex, Command, Alternative), OutErrors);
 }
 
 FGSTN_LoadoutData UGSTN_LoadoutComponent::WithSpecial(const FGSTN_LoadoutData& Base, int32 WeaponIndex, FGameplayTag Command, const TSoftClassPtr<UObject>& Alternative)

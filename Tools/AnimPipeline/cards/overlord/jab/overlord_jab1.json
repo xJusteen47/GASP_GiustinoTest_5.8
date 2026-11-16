@@ -1,0 +1,311 @@
+{
+ "move": "overlord_jab1",
+ "class": "jab",
+ "anim": "/Game/AnimPipeline/Rig/Overlord/Jab/Jab1/AS_OverlordJab1",
+ "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+ "fps": 60,
+ "timing_csv": "refs/ufd/OverlordJab1_timing.csv",
+ "effector": "hand_r",
+ "_design": "Overlord Jab 1: Ganondorf Ocarina of Time style backhand slap with opposite (left) arm folded protectively across the torso ('braccio sul torso piegato'). Rapid internal coil on frame 2, explosive outward backhand snap on frame 4 (contact), followthrough apex at 6, recoil/combo cancel window into Jab 2 on frames 7-11, and crisp settle into neutral guard by frame 13.",
+ "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordJab1",
+ "faf_game": 14,
+ "poses": [
+  {
+   "name": "guard",
+   "frame": 0,
+   "source": null
+  },
+  {
+   "name": "anticipation_coil",
+   "frame": 2,
+   "source": null,
+   "spacing": "charge_long"
+  },
+  {
+   "name": "strike_contact",
+   "frame": 4,
+   "source": null,
+   "spacing": "arrive_1_2"
+  },
+  {
+   "name": "followthrough_apex",
+   "frame": 6,
+   "source": null,
+   "spacing": "hold_recoil"
+  },
+  {
+   "name": "recoil_cancel",
+   "frame": 8,
+   "source": null,
+   "spacing": "limb_led_recovery"
+  },
+  {
+   "name": "recovery_settle",
+   "frame": 11,
+   "source": null,
+   "spacing": "arrive_1_2"
+  },
+  {
+   "name": "neutral_guard",
+   "frame": 13,
+   "source": null
+  }
+ ],
+ "spacing": {
+  "startup": "charge_long",
+  "active": "hold_recoil",
+  "recovery": "arrive_1_2"
+ },
+ "part_delays": {
+  "chest": 1,
+  "head": 1,
+  "forearm": 0,
+  "hand": 0
+ },
+ "sheet_extra": {
+  "hold_window": [
+   4,
+   6
+  ],
+  "strike_limb": "arm_r",
+  "strike_side": "arm_r"
+ },
+ "planted": [
+  "foot_l_ik_ctrl",
+  "foot_r_ik_ctrl"
+ ],
+ "exemptions": [],
+ "edits": [
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [0, 2, 4, 6, 8, 11, 13],
+   "delta": [-9.6, 60.5, -28.4],
+   "why": "left upperarm folded protectively inward across torso"
+  },
+  {
+   "control": "lowerarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [0, 2, 4, 6, 8, 11, 13],
+   "delta": [0.0, 80.0, 0.0],
+   "why": "left forearm folded across ribs covering lower chest"
+  },
+  {
+   "control": "hand_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [0, 2, 4, 6, 8, 11, 13],
+   "delta": [10.0, -11.7, -4.2],
+   "why": "left fist tucked against solar plexus"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [0, 13],
+   "delta": [15.0, 10.0, -10.0],
+   "why": "right arm raised into combat ready stance"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [0, 13],
+   "delta": [0.0, 35.0, 10.0],
+   "why": "right arm elbow flexed in guard"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [2],
+   "delta": [10.0, 50.0, 30.0],
+   "why": "right arm chambered inside across chest for backhand coil"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [2],
+   "delta": [0.0, 85.0, -10.0],
+   "why": "right elbow flexed tight during coil"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [2],
+   "delta": [-25.0, 15.0, 15.0],
+   "why": "wrist cocked backhand ready to slap"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Rotation",
+   "frames": [2],
+   "delta": [-5.0, 0.0, -25.0],
+   "why": "torso internal coil opposing slap direction"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Location",
+   "frames": [2],
+   "delta": [0.0, -2.0, -0.5],
+   "why": "center of mass slight compression during windup"
+  },
+  {
+   "control": "chest_ctrl",
+   "attr": "Rotation",
+   "frames": [2],
+   "delta": [0.0, 0.0, -15.0],
+   "why": "chest coiled inward"
+  },
+  {
+   "control": "head_ctrl",
+   "attr": "Rotation",
+   "frames": [2],
+   "delta": [5.0, 0.0, 25.0],
+   "why": "head counter-rotated staring directly at opponent"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [4],
+   "delta": [-15.0, -25.0, -45.0],
+   "why": "explosive backhand slap snap extending outward"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [4],
+   "delta": [0.0, 15.0, 5.0],
+   "why": "forearm whip near full extension on impact"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [4],
+   "delta": [20.0, -15.0, -20.0],
+   "why": "backhand slap angle with knuckles leading"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Rotation",
+   "frames": [4],
+   "delta": [-3.0, 0.0, 25.0],
+   "why": "torso explosive rotation into slap direction"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Location",
+   "frames": [4],
+   "delta": [0.0, 5.0, 0.0],
+   "why": "pelvis forward drive into the slap"
+  },
+  {
+   "control": "chest_ctrl",
+   "attr": "Rotation",
+   "frames": [4],
+   "delta": [5.0, 0.0, 20.0],
+   "why": "chest snaps open into followthrough"
+  },
+  {
+   "control": "head_ctrl",
+   "attr": "Rotation",
+   "frames": [4],
+   "delta": [0.0, 0.0, -30.0],
+   "why": "head locked on target"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [6],
+   "delta": [-18.0, -28.0, -48.0],
+   "why": "moving hold extension apex"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [6],
+   "delta": [0.0, 12.0, 5.0],
+   "why": "slight overshoot on slap extension"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [6],
+   "delta": [22.0, -16.0, -22.0],
+   "why": "moving hold wrist angle"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Rotation",
+   "frames": [6],
+   "delta": [-2.0, 0.0, 27.0],
+   "why": "apex rotation hold"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Location",
+   "frames": [6],
+   "delta": [0.0, 5.5, 0.0],
+   "why": "apex forward drive"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [8],
+   "delta": [-5.0, -5.0, -20.0],
+   "why": "elastic recoil towards body"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [8],
+   "delta": [0.0, 45.0, 10.0],
+   "why": "forearm recoils inward"
+  },
+  {
+   "control": "hand_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [8],
+   "delta": [15.0, -5.0, -10.0],
+   "why": "wrist softens"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Rotation",
+   "frames": [8],
+   "delta": [-4.0, 0.0, 15.0],
+   "why": "torso recoil towards center"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Location",
+   "frames": [8],
+   "delta": [0.0, 2.5, 0.0],
+   "why": "weight centers back"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [11],
+   "delta": [10.0, 5.0, -10.0],
+   "why": "easing towards guard"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [11],
+   "delta": [0.0, 40.0, 10.0],
+   "why": "elbow settling in guard"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Rotation",
+   "frames": [11],
+   "delta": [-2.0, 0.0, 5.0],
+   "why": "body settling"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Location",
+   "frames": [11],
+   "delta": [0.0, 1.0, 0.0],
+   "why": "weight settling"
+  }
+ ]
+}

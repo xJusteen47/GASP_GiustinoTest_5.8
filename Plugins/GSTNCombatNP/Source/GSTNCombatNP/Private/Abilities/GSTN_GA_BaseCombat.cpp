@@ -5,10 +5,12 @@
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "Animation/AnimMontage.h"
 #include "Curves/CurveVector.h"
+#include "GameplayEffect.h"
 #include "GSTN_CombatTags.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "Timeline/GSTN_CombatTimeline.h"
+#include "Timeline/GSTN_HoldUntilLanded.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNBaseCombat, Log, All);
 
@@ -32,6 +34,15 @@ UGSTN_GA_BaseCombat::UGSTN_GA_BaseCombat(const FObjectInitializer& ObjectInitial
 	bRecoilPlayed.Value = false;
 	RecoilStartClock.Value = INDEX_NONE;
 	RecoilLength.Value = 0;
+	EvaluatedFrame.Value = INDEX_NONE;
+	ReportedHitGroups.Value = 0;
+	MoveEventsFrame.Value = INDEX_NONE;
+	for (int32 Slot = 0; Slot < MaxTagWindows; ++Slot)
+	{
+		TagWindowTag(Slot).Value = FGameplayTag();
+		TagWindowStart(Slot).Value = INDEX_NONE;
+		TagWindowFrames(Slot).Value = 0;
+	}
 }
 
 const FGSTN_CombatTimelineData& UGSTN_GA_BaseCombat::GetTimelineData() const
@@ -76,6 +87,14 @@ void UGSTN_GA_BaseCombat::LoadTimelineDataContent(const FGSTN_CombatTimelineData
 	if (!Data.Montage.IsNull())
 	{
 		OutKeep.AddUnique(Data.Montage.LoadSynchronous());
+	}
+	// The follow-up's class: the table set registers it by class (UGSTN_CombatTableSet::AppendFollowUps), which needs it loaded
+	if (!Data.FollowUpTimeline.IsNull())
+	{
+		if (UClass* FollowUp = Data.FollowUpTimeline.LoadSynchronous())
+		{
+			OutKeep.AddUnique(FollowUp);
+		}
 	}
 	if (const FGSTN_RicochetResponse* Recoil = Data.GetRicochetResponse())
 	{
@@ -157,6 +176,9 @@ void UGSTN_GA_BaseCombat::ActivateAbility(const FGameplayAbilitySpecHandle Handl
 	bRecoilPlayed.Value = false;
 	RecoilStartClock.Value = INDEX_NONE;
 	RecoilLength.Value = 0;
+	EvaluatedFrame.Value = INDEX_NONE;
+	ReportedHitGroups.Value = 0;
+	MoveEventsFrame.Value = INDEX_NONE;
 
 	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
 	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
@@ -193,6 +215,17 @@ void UGSTN_GA_BaseCombat::BeginTimeline(int32 StateStart)
 	RunningEntry.Value = Combat && Combat->IsTimelineRunning(GetClass(), EntryStart, &Entry) ? Entry : INDEX_NONE;
 
 	const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
+
+	// Momentum slide (FGSTN_MomentumSlide): queued before the montage starts, so the slide move is ahead of this frame's root motion move
+	// and wins the override mix (it adds the root motion itself). The move decides on its own first frame whether there is anything to slide
+	if (Data.MomentumSlide.bEnabled)
+	{
+		if (UGSTN_CombatSimComponent* SlideCombat = GetCombatComponent())
+		{
+			SlideCombat->ExecuteMomentumSlide();
+		}
+	}
+
 	UAnimMontage* Montage = Data.Montage.Get();
 	TimelineMontagePlayed = Montage;
 	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
@@ -201,6 +234,332 @@ void UGSTN_GA_BaseCombat::BeginTimeline(int32 StateStart)
 		AbilitySystem->PlaySyncedMontage(Montage, 0.f, Data.MontagePlayRate, Data.MontageSection, 1.f);
 	}
 	OnTimelineBegan(StateStart);
+
+	// The Blueprint move events (CP1): the start, then what this first frame already holds (a key on frame 0). The cursors start empty; a
+	// new run of the same ability (a cancel window into itself) starts them again
+	EvaluatedFrame.Value = INDEX_NONE;
+	ReportedHitGroups.Value = 0;
+	MoveEventsFrame.Value = INDEX_NONE;
+	if (CanRaiseMoveEvents())
+	{
+		K2_OnMoveStarted(StateStart);
+		if (IsActive() && bStarted.Value)
+		{
+			RaiseMoveEvents();
+		}
+	}
+}
+
+bool UGSTN_GA_BaseCombat::CanRaiseMoveEvents() const
+{
+	const UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	return AbilitySystem && !AbilitySystem->GetIsRestoringFrame();
+}
+
+void UGSTN_GA_BaseCombat::RaiseMoveEvents()
+{
+	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
+	if (!Combat || !CanRaiseMoveEvents())
+	{
+		return;
+	}
+	// Once per simulation frame: the activation and the tick of the start frame both get here, and the combat tick that wrote this frame's
+	// state ran before both
+	const int32 SimFrame = Combat->GetSimulationFrame();
+	if (MoveEventsFrame.Value == SimFrame)
+	{
+		return;
+	}
+	MoveEventsFrame.Value = SimFrame;
+
+	// Keys crossed since the last evaluated frame. The cursor moves before the handlers run, so a handler that ends or restarts the move
+	// never sees a key twice
+	const int32 Current = Combat->GetEvaluatedTimelineFrame();
+	if (Current != INDEX_NONE && Current > EvaluatedFrame.Value)
+	{
+		const int32 Last = EvaluatedFrame.Value;
+		EvaluatedFrame.Value = Current;
+		const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
+		FGSTN_MoveEventRules::FKeyList Keys;
+		FGSTN_MoveEventRules::CollectKeys(Data, Last, Current, Keys);
+		UE_LOG(LogGSTNBaseCombat, Verbose, TEXT("%s: move frame %d (from %d, sim frame %d, entry %d, %d tracks): %d key(s) crossed"), *GetName(), Current, Last,
+			SimFrame, RunningEntry.Value, Data.Tracks.Num(), Keys.Num());
+		for (const int32 TrackIndex : Keys)
+		{
+			if (!IsActive() || !bStarted.Value)
+			{
+				return;
+			}
+			if (const FGSTN_TimelineTrack_Event* Key = Data.Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack_Event>())
+			{
+				RunKey(*Key, TrackIndex, Current);
+			}
+		}
+	}
+
+	// Hits the attacker side of this frame's combat tick confirmed (it runs before the ability system)
+	const uint8 Groups = static_cast<uint8>(Combat->GetMoveHitConfirmGroups());
+	const uint8 NewGroups = FGSTN_MoveEventRules::NewConfirmGroups(ReportedHitGroups.Value, Groups);
+	ReportedHitGroups.Value = Groups;
+	if (NewGroups != 0 && IsActive() && bStarted.Value)
+	{
+		OnMoveHitConfirmed(NewGroups, Groups);
+	}
+
+	if (bTickMoveInBlueprint && IsActive() && bStarted.Value)
+	{
+		OnMoveFrame(EvaluatedFrame.Value);
+	}
+}
+
+void UGSTN_GA_BaseCombat::RunKey(const FGSTN_TimelineTrack_Event& Key, int32 TrackIndex, int32 TimelineFrame)
+{
+	// Until CP2 only the outbox part of a key ran (in the combat tick). The cue goes through the fork's frame-stamped cue executions (as the
+	// recoil's cue), the event to this ability system as Send Move Event does; both inside the simulation, once per crossing like the event
+	const auto IsRunning = [this]() { return IsActive() && bStarted.Value; };
+	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	if (AbilitySystem && Key.CueTag.IsValid())
+	{
+		AbilitySystem->ExecuteGameplayCue(Key.CueTag, AbilitySystem->MakeEffectContext());
+	}
+	if (Key.GameplayEventTag.IsValid())
+	{
+		SendMoveEvent(Key.GameplayEventTag, 0.f);
+	}
+	if (!IsRunning())
+	{
+		// The event started a move that replaced this one: its actions and its Blueprint event belong to a move that is over
+		return;
+	}
+	UE_LOG(LogGSTNBaseCombat, Verbose, TEXT("%s: key %s on move frame %d, %d action(s)"), *GetName(), *Key.KeyTag.ToString(), TimelineFrame, Key.Actions.Num());
+	FGSTN_MoveActionContext Context;
+	Context.Ability = this;
+	Context.KeyTag = Key.KeyTag;
+	Context.TimelineFrame = TimelineFrame;
+	FGSTN_MoveActionRules::RunActions(Key.Actions, Context, IsRunning);
+	if (IsRunning())
+	{
+		OnMoveKey(Key, TrackIndex, TimelineFrame);
+	}
+}
+
+bool UGSTN_GA_BaseCombat::CanRunMoveActions() const
+{
+	return IsActive() && bStarted.Value && CanRaiseMoveEvents();
+}
+
+bool UGSTN_GA_BaseCombat::SendMoveEvent(FGameplayTag EventTag, float Magnitude)
+{
+	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	if (!EventTag.IsValid() || !AbilitySystem || !CanRunMoveActions())
+	{
+		return false;
+	}
+	AActor* Avatar = GetAvatarActorFromActorInfo();
+	FGameplayEventData Payload;
+	Payload.EventTag = EventTag;
+	Payload.Instigator = Avatar;
+	Payload.Target = Avatar;
+	Payload.EventMagnitude = Magnitude;
+	AbilitySystem->HandleGameplayEvent(EventTag, &Payload);
+	return true;
+}
+
+bool UGSTN_GA_BaseCombat::ApplyMoveEffect(TSubclassOf<UGameplayEffect> Effect, float Level)
+{
+	if (!Effect || !CanRunMoveActions())
+	{
+		return false;
+	}
+	// The ability's own apply path (the one the dash and the move timelines use): the effect is part of the ability system's rolled back state
+	ApplyGameplayEffectToOwner(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), Effect.GetDefaultObject(), Level);
+	return true;
+}
+
+bool UGSTN_GA_BaseCombat::OpenMoveTagWindow(FGameplayTag Tag, int32 Frames)
+{
+	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	const int32 Clock = GetCombatClock();
+	if (!Tag.IsValid() || Frames < 1 || !AbilitySystem || Clock < 0 || !CanRunMoveActions())
+	{
+		return false;
+	}
+	FGameplayTag Tags[MaxTagWindows];
+	int32 Remaining[MaxTagWindows];
+	for (int32 Slot = 0; Slot < MaxTagWindows; ++Slot)
+	{
+		Tags[Slot] = TagWindowTag(Slot).Value;
+		Remaining[Slot] = TagWindowFrames(Slot).Value - FGSTN_CombatClock::Elapsed(Clock, TagWindowStart(Slot).Value);
+	}
+	const int32 Slot = FGSTN_MoveActionRules::PickTagWindowSlot(MakeArrayView(Tags), MakeArrayView(Remaining), Tag);
+	if (Slot == INDEX_NONE)
+	{
+		return false;
+	}
+	// A re-armed window keeps its loose tag (one count); a replaced one gives its own back first
+	if (TagWindowTag(Slot).Value != Tag)
+	{
+		CloseTagWindowSlot(Slot);
+		AbilitySystem->AddLooseGameplayTag(Tag);
+		TagWindowTag(Slot).Value = Tag;
+	}
+	TagWindowStart(Slot).Value = Clock;
+	TagWindowFrames(Slot).Value = Frames;
+	return true;
+}
+
+bool UGSTN_GA_BaseCombat::CloseMoveTagWindow(FGameplayTag Tag)
+{
+	if (!Tag.IsValid() || !CanRunMoveActions())
+	{
+		return false;
+	}
+	for (int32 Slot = 0; Slot < MaxTagWindows; ++Slot)
+	{
+		if (TagWindowTag(Slot).Value == Tag)
+		{
+			CloseTagWindowSlot(Slot);
+			return true;
+		}
+	}
+	return false;
+}
+
+void UGSTN_GA_BaseCombat::CloseTagWindowSlot(int32 Slot)
+{
+	const FGameplayTag Tag = TagWindowTag(Slot).Value;
+	if (Tag.IsValid())
+	{
+		if (UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent())
+		{
+			AbilitySystem->RemoveLooseGameplayTag(Tag);
+		}
+	}
+	TagWindowTag(Slot).Value = FGameplayTag();
+	TagWindowStart(Slot).Value = INDEX_NONE;
+	TagWindowFrames(Slot).Value = 0;
+}
+
+void UGSTN_GA_BaseCombat::CloseTagWindows(bool bAll)
+{
+	const int32 Clock = GetCombatClock();
+	for (int32 Slot = 0; Slot < MaxTagWindows; ++Slot)
+	{
+		if (TagWindowTag(Slot).Value.IsValid() && (bAll || FGSTN_MoveActionRules::IsTagWindowOver(Clock, TagWindowStart(Slot).Value, TagWindowFrames(Slot).Value)))
+		{
+			CloseTagWindowSlot(Slot);
+		}
+	}
+}
+
+bool UGSTN_GA_BaseCombat::RunMoveAction(const FInstancedStruct& Action)
+{
+	const UScriptStruct* Type = Action.GetScriptStruct();
+	if (Type == nullptr || !Type->IsChildOf(FGSTN_MoveAction::StaticStruct()) || !CanRunMoveActions())
+	{
+		return false;
+	}
+	FGSTN_MoveActionContext Context;
+	Context.Ability = this;
+	Context.TimelineFrame = GetMoveTimelineFrame();
+	return Action.Get<FGSTN_MoveAction>().Execute(Context);
+}
+
+float UGSTN_GA_BaseCombat::GetMoveRandomFloat(int32 Salt, float Min, float Max) const
+{
+	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
+	const uint32 Seed = FGSTN_MoveActionRules::MakeSeed(Combat ? Combat->GetSimulationFrame() : 0, StartFrame.Value, Salt);
+	return FGSTN_MoveActionRules::RandomFloatInRange(Seed, Min, Max);
+}
+
+int32 UGSTN_GA_BaseCombat::GetMoveRandomInteger(int32 Salt, int32 Min, int32 Max) const
+{
+	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
+	const uint32 Seed = FGSTN_MoveActionRules::MakeSeed(Combat ? Combat->GetSimulationFrame() : 0, StartFrame.Value, Salt);
+	return FGSTN_MoveActionRules::RandomIntInRange(Seed, Min, Max);
+
+}
+
+void UGSTN_GA_BaseCombat::UpdateHoldUntilLandedMontage()
+{
+	const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
+	const FGSTN_TimelineTrack_HoldUntilLanded* Track = FGSTN_HoldUntilLanded::FindTrack(Data);
+	if (!Track || bRecoilPlayed.Value)
+	{
+		return;
+	}
+	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
+	UAnimMontage* Montage = TimelineMontagePlayed ? TimelineMontagePlayed.Get() : Data.Montage.Get();
+	float MontageTime = 0.f;
+	if (!AbilitySystem || !Combat || !Montage || AbilitySystem->GetPlayingSyncedMontage(MontageTime) != Montage)
+	{
+		return;
+	}
+	const int32 TimelineFrame = Combat->GetEvaluatedTimelineFrame();
+	if (TimelineFrame == INDEX_NONE)
+	{
+		return;
+	}
+
+	// Timeline frame f is the montage f steps from the start of the move (the start tick holds the montage, so after the tick of frame f it is
+	// at f steps): the same mapping the frames-based loop and land times use
+	const float StepSeconds = AbilitySystem->GetFixedStepMs() / 1000.f;
+	const float SecondsPerFrame = StepSeconds * Data.MontagePlayRate * AbilitySystem->GetMontagePlayRateMultiplier();
+	float BaseTime = 0.f;
+	if (!Data.MontageSection.IsNone())
+	{
+		const int32 Section = Montage->GetSectionIndex(Data.MontageSection);
+		if (Section != INDEX_NONE)
+		{
+			float SectionEnd = 0.f;
+			Montage->GetSectionStartAndEndTime(Section, BaseTime, SectionEnd);
+		}
+	}
+	const FGSTN_HoldMontageTimes Times = FGSTN_HoldUntilLanded::ResolveMontageTimes(*Track, Montage, BaseTime, SecondsPerFrame);
+	// The advance of this tick, taken as a full step even in a hitstop pause: a wrap one tick early in a cyclic loop is the same pose
+	const FGSTN_HoldMontageDecision Decision = FGSTN_HoldUntilLanded::ResolveMontage(*Track, Times, TimelineFrame, MontageTime, SecondsPerFrame, SecondsPerFrame);
+	if (Decision.Action == EGSTN_HoldMontageAction::Wrap)
+	{
+		AbilitySystem->SetSyncedMontageTime(Montage, Decision.Time, false);
+	}
+	else if (Decision.Action == EGSTN_HoldMontageAction::Land)
+	{
+		UE_LOG(LogGSTNBaseCombat, Verbose, TEXT("%s: landed on timeline frame %d, montage %.3f -> %.3f"), *GetName(), TimelineFrame, MontageTime, Decision.Time);
+		AbilitySystem->SetSyncedMontageTime(Montage, Decision.Time, true);
+	}
+}
+
+void UGSTN_GA_BaseCombat::OnMoveKey(const FGSTN_TimelineTrack_Event& Key, int32 TrackIndex, int32 TimelineFrame)
+{
+	K2_OnMoveKey(Key.KeyTag, Key, TimelineFrame);
+}
+
+void UGSTN_GA_BaseCombat::OnMoveHitConfirmed(int32 NewHitGroups, int32 AllHitGroups)
+{
+	K2_OnMoveHitConfirmed(NewHitGroups, AllHitGroups);
+}
+
+void UGSTN_GA_BaseCombat::OnMoveEnded(EGSTN_MoveEndReason Reason)
+{
+	K2_OnMoveEnded(Reason);
+}
+
+void UGSTN_GA_BaseCombat::OnMoveFrame(int32 TimelineFrame)
+{
+	K2_OnMoveFrame(TimelineFrame);
+}
+
+int32 UGSTN_GA_BaseCombat::GetMoveTimelineFrame() const
+{
+	const UGSTN_CombatSimComponent* Combat = bStarted.Value ? GetCombatComponent() : nullptr;
+	return Combat && IsStillTheRunningTimeline() ? Combat->GetEvaluatedTimelineFrame() : INDEX_NONE;
+}
+
+int32 UGSTN_GA_BaseCombat::GetMoveHitConfirmGroups() const
+{
+	const UGSTN_CombatSimComponent* Combat = bStarted.Value ? GetCombatComponent() : nullptr;
+	return Combat && IsStillTheRunningTimeline() ? Combat->GetMoveHitConfirmGroups() : 0;
 }
 
 void UGSTN_GA_BaseCombat::BeginRecoil(const FGSTN_RicochetResponse& Response, float StepMs)
@@ -267,6 +626,8 @@ void UGSTN_GA_BaseCombat::OnSimulationTick(const FAbilitySystemTimeStep& TimeSte
 	{
 		return;
 	}
+	UE_LOG(LogGSTNBaseCombat, VeryVerbose, TEXT("%s: sim tick, step frame %d, started %d, awaiting %d, running %d"), *GetName(), TimeStep.ServerFrame,
+		bStarted.Value, bAwaitingAdoption.Value, IsStillTheRunningTimeline());
 
 	if (bAwaitingAdoption.Value)
 	{
@@ -306,8 +667,20 @@ void UGSTN_GA_BaseCombat::OnSimulationTick(const FAbilitySystemTimeStep& TimeSte
 		}
 	}
 
+	// The move events of the frame (CP1), while the combat state still names this timeline; the tag windows that are over close first (CP2)
+	if (IsStillTheRunningTimeline())
+	{
+		if (CanRaiseMoveEvents())
+		{
+			CloseTagWindows(false);
+		}
+		UpdateHoldUntilLandedMontage();
+		RaiseMoveEvents();
+		return;
+	}
+
 	// The combat state no longer names this timeline: it ended, was replaced or was cancelled
-	if (!IsStillTheRunningTimeline())
+	if (IsActive())
 	{
 		const UGSTN_CombatSimComponent* CombatNow = GetCombatComponent();
 		int32 StateStartNow = INDEX_NONE;
@@ -322,16 +695,37 @@ void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, co
 	const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
 {
 	ClearAwaitingAdoption();
+	bool bRaiseEnded = false;
+	EGSTN_MoveEndReason EndReason = EGSTN_MoveEndReason::Interrupted;
 	if (bStarted.Value)
 	{
+		// Why it ends, read before the cleanup below resets the recoil and the entry
+		{
+			const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
+			EndReason = FGSTN_MoveEventRules::ResolveEndReason(bWasCancelled, bRecoilPlayed.Value, EvaluatedFrame.Value, Data.TotalFrames, Data.GetTailStartFrame());
+			bRaiseEnded = CanRaiseMoveEvents() && IsActive();
+		}
+
 		// Stop the montage only if it is still this ability's: another timeline may have started its own in the same frame
 		// The montage BeginTimeline played; after a rollback that restored a started state without it, the one of the running data
 		UAnimMontage* Montage = TimelineMontagePlayed ? TimelineMontagePlayed.Get() : GetRunningTimelineData().Montage.Get();
 		UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
 		float Time = 0.f;
-		if (Montage && AbilitySystem && AbilitySystem->GetPlayingSyncedMontage(Time) == Montage)
+		const bool bOnSlot = Montage && AbilitySystem && AbilitySystem->GetPlayingSyncedMontage(Time) == Montage;
+		if (bOnSlot && ShouldReleaseMontageOnEnd(bWasCancelled))
 		{
-			AbilitySystem->StopSyncedMontage(Montage, bWasCancelled);
+			// Owner rule (2026-11-15): the end of the timeline is not the end of its animation. The montage plays on to its own end and
+			// blend-out; the next action stops it (StopReleasedMontages) or replaces it with its own
+			bMontageReleased.Value = true;
+			ReleasedMontage = Montage;
+		}
+		else if (bOnSlot)
+		{
+			// The data's blend-out on an end or a tail cancel (a recoil already took the slot, so it never gets here with the timeline's montage)
+			float BlendOutSeconds = -1.f;
+			bool bHoldPose = false;
+			ResolveMontageStop(BlendOutSeconds, bHoldPose);
+			AbilitySystem->StopSyncedMontageWithBlend(Montage, bWasCancelled, BlendOutSeconds, bHoldPose);
 		}
 		if (bRecoilPlayed.Value)
 		{
@@ -347,8 +741,99 @@ void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, co
 		bStarted.Value = false;
 		RunningEntry.Value = INDEX_NONE;
 		TimelineMontagePlayed = nullptr;
+		EvaluatedFrame.Value = INDEX_NONE;
+		ReportedHitGroups.Value = 0;
+	}
+	// The tag windows of Open Move Tag Window last at most as long as the move (CP2)
+	CloseTagWindows(true);
+	// After the cleanup (bStarted is false, so a handler that ends the ability again does not raise it twice), before the ability system's own
+	// end: the ability is still active, so the handler may still apply an effect or send an event
+	if (bRaiseEnded)
+	{
+		OnMoveEnded(EndReason);
 	}
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+}
+
+bool UGSTN_GA_BaseCombat::ShouldReleaseMontageOnEnd(bool bWasCancelled) const
+{
+	const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
+	// Same "ended by itself" test as ResolveMontageStop: the ability sees the end on the timeline's last frame or the one after
+	return !bWasCancelled && Data.TotalFrames > 0 && GetEndRuleFrame(Data) >= Data.TotalFrames - 1 && Data.EndBlendOutFrames < 0;
+}
+
+void UGSTN_GA_BaseCombat::StopReleasedMontages(UAbilitySystemComponent& AbilitySystem)
+{
+	UNpAbilitySystemComponent* NpAbilitySystem = Cast<UNpAbilitySystemComponent>(&AbilitySystem);
+	if (!NpAbilitySystem)
+	{
+		return;
+	}
+	float Time = 0.f;
+	UAnimMontage* Playing = NpAbilitySystem->GetPlayingSyncedMontage(Time);
+	for (const FGameplayAbilitySpec& Spec : AbilitySystem.GetActivatableAbilities())
+	{
+		for (UGameplayAbility* Instance : Spec.GetAbilityInstances())
+		{
+			UGSTN_GA_BaseCombat* Combat = Cast<UGSTN_GA_BaseCombat>(Instance);
+			if (!Combat || !Combat->bMontageReleased.Value)
+			{
+				continue;
+			}
+			Combat->bMontageReleased.Value = false;
+			// Only while it is still that montage on the slot: one that ended or was replaced since is left alone. Interrupted, so the
+			// montage's end notifies say it did not finish; the presentation leaves with the montage's own blend-out
+			if (Playing && Combat->ReleasedMontage == Playing)
+			{
+				NpAbilitySystem->StopSyncedMontage(Playing, true);
+				Playing = nullptr;
+			}
+		}
+	}
+}
+
+void UGSTN_GA_BaseCombat::ResolveMontageStop(float& OutBlendOutSeconds, bool& bOutHoldPose) const
+{
+	OutBlendOutSeconds = -1.f;
+	bOutHoldPose = false;
+	const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
+	const int32 Frame = GetEndRuleFrame(Data);
+	const int32 Total = Data.TotalFrames;
+	int32 BlendFrames = INDEX_NONE;
+	// The ability sees the end on the frame the combat state cleared the timeline: its last frame or the one after
+	if (Total > 0 && Frame >= Total - 1)
+	{
+		BlendFrames = Data.EndBlendOutFrames;
+	}
+	else
+	{
+		const int32 TailStart = Data.Tail.ResolveStartFrame(Total, Data.FirstActionableFrame);
+		if (TailStart != INDEX_NONE && Frame >= TailStart)
+		{
+			// The tail was cancelled (a stick move, a jump, a command): the blend its data names, until now not applied anywhere
+			BlendFrames = Data.Tail.ResolveBlendOutFrames(Total, Data.FirstActionableFrame);
+		}
+	}
+	if (BlendFrames < 0)
+	{
+		return;
+	}
+	// The fixed step of the simulation turns the data's frames into the blend's seconds
+	const UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	const float StepMs = AbilitySystem != nullptr ? AbilitySystem->GetFixedStepMs() : 16.f;
+	OutBlendOutSeconds = static_cast<float>(BlendFrames) * StepMs / 1000.f;
+	bOutHoldPose = Data.bHoldPoseOnEnd;
+}
+
+int32 UGSTN_GA_BaseCombat::GetEndRuleFrame(const FGSTN_CombatTimelineData& Data) const
+{
+	// A Hold Until Landed move stands on a frame for the whole fall and skips frames on the touchdown: the combat clock (which runs through a
+	// stall) says nothing about where its timeline is. The frame the clock last evaluated does. Every other move keeps the combat clock
+	if (EvaluatedFrame.Value != INDEX_NONE && FGSTN_HoldUntilLanded::FindTrack(Data))
+	{
+		return EvaluatedFrame.Value;
+	}
+	return GetTimelineFrame();
 }
 
 int32 UGSTN_GA_BaseCombat::GetTimelineFrame() const

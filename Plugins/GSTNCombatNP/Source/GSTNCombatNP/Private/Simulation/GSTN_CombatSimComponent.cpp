@@ -20,8 +20,10 @@
 #include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Movement/GSTN_LayeredMove_Launch.h"
 #include "Movement/GSTN_LayeredMove_PushBack.h"
+#include "Movement/GSTN_LayeredMove_MomentumSlide.h"
 #include "Presentation/GSTN_PrecisionAimComponent.h"
 #include "Timeline/GSTN_StartupSteer.h"
+#include "Presentation/GSTN_SteerIndicatorComponent.h"
 #include "Movement/GSTN_SetFacingEffect.h"
 #include "Input/GSTN_InputTags.h"
 #include "Context/GSTN_InputContextProvider.h"
@@ -35,11 +37,17 @@
 #include "Input/GSTN_CombatSettings.h"
 #include "Input/GSTN_DirectionClassifier.h"
 #include "Input/GSTN_InputConfig.h"
+#include "Input/GSTN_InputMatcher.h"
+#include "Input/GSTN_InputQueries.h"
+#include "Input/GSTN_InputSettings.h"
+#include "Input/GSTN_InputSlot.h"
 #include "Input/GSTN_InputScript.h"
 #include "Input/GSTN_InputSettings.h"
 #include "Movement/GSTN_StatsMovementModifier.h"
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
+#include "MoverTypes.h"
+#include "Mover/GSTN_MoverSimStateTracker.h"
 #include "NetworkPredictionModelDef.h"
 #include "NetworkPredictionModelDefRegistry.h"
 #include "NetworkPredictionProxyInit.h"
@@ -101,6 +109,7 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 	SurfaceLaunchEffect = UGSTN_GE_SurfaceLaunch::StaticClass();
 	PushBackEffect = UGSTN_GE_PushBack::StaticClass();
 	SetFacingEffect = UGSTN_GE_SetFacing::StaticClass();
+	MomentumSlideEffect = UGSTN_GE_MomentumSlide::StaticClass();
 
 	InputSource = CreateDefaultSubobject<UGSTN_PlayerInputSource>(TEXT("InputSource"));
 	ContextProvider = CreateDefaultSubobject<UGSTN_MoverInputContextProvider>(TEXT("ContextProvider"));
@@ -155,6 +164,12 @@ void UGSTN_CombatSimComponent::BeginPlay()
 	else
 	{
 		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: no context provider, the character is taken to face yaw 0 with no movement context"), *GetPathName());
+	}
+	// The steering arrows (presentation, owner 2026-11-14), the same way
+	if (bAddSteerIndicator && GetNetMode() != NM_DedicatedServer && GetOwner() && !GetOwner()->FindComponentByClass<UGSTN_SteerIndicatorComponent>())
+	{
+		UGSTN_SteerIndicatorComponent* Arrows = NewObject<UGSTN_SteerIndicatorComponent>(GetOwner(), TEXT("GSTN_SteerIndicator"));
+		Arrows->RegisterComponent();
 	}
 }
 
@@ -351,9 +366,22 @@ void UGSTN_CombatSimComponent::BindLoadoutComponent(UGSTN_LoadoutComponent* Load
 	if (UGSTN_LoadoutComponent* Old = BoundLoadout.Get())
 	{
 		Old->OnLoadoutApplied.RemoveDynamic(this, &UGSTN_CombatSimComponent::HandleLoadoutApplied);
+		Old->SetServerLoadoutApplier(nullptr);
 	}
 	BoundLoadout = Loadout;
 	Loadout->OnLoadoutApplied.AddUniqueDynamic(this, &UGSTN_CombatSimComponent::HandleLoadoutApplied);
+	// A client's request (the loadout screen) goes through the same server path as every other change: the table revision moves with it
+	Loadout->SetServerLoadoutApplier([WeakThis = TWeakObjectPtr<UGSTN_CombatSimComponent>(this), WeakLoadout = TWeakObjectPtr<UGSTN_LoadoutComponent>(Loadout)]
+		(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors)
+	{
+		UGSTN_CombatSimComponent* This = WeakThis.Get();
+		UGSTN_LoadoutComponent* Target = WeakLoadout.Get();
+		if (!This || !Target)
+		{
+			return Target ? Target->AcceptLoadout(Requested, OutErrors) : false;
+		}
+		return This->ServerApplyLoadoutChange(Target, Requested, OutErrors);
+	});
 
 	// A loadout that was applied before this component looked (the client's OnRep ran when the component replicated in)
 	if (Loadout->HasLoadout())
@@ -425,6 +453,7 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 	{
 		// A revision's loadout never changes; a repeated apply (a pawn that was set again) has nothing new. Under other GameRules (IO-2b:
 		// the server's pick arrived after this table was built) the same revision compiles to other buttons and replaces the set
+		DemandAppliedRevision(Revision);
 		return;
 	}
 
@@ -448,6 +477,24 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 		Set->RulesSerial = RulesSerial;
 	}
 	RegisterTableSet(Set);
+	DemandAppliedRevision(Revision);
+}
+
+void UGSTN_CombatSimComponent::DemandAppliedRevision(int32 Revision)
+{
+	// Every accept path ends here on the server (ServerApplyLoadoutChange, the loadout screen's request, a kit taken from the ground, a
+	// grant from the PlayerState): the simulation must be told to run the new table, or it keeps the old revision's table while the old
+	// abilities are gone and the kit does nothing (owner playtest 2026-11-13: no attack, no pickup after a kit change). The table set is
+	// registered above, so the demand never names a table this machine lacks. A write of the same value is skipped
+	if (!GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (Sync && Sync->Core.LoadoutRevision != static_cast<uint16>(Revision))
+	{
+		ServerWriteLoadoutRevision(static_cast<uint16>(Revision));
+	}
 }
 
 void UGSTN_CombatSimComponent::SetScriptedButtons(int32 Mask)
@@ -735,30 +782,112 @@ void UGSTN_CombatSimComponent::ProduceInput(const int32 DeltaTimeMS, FGSTN_Input
 	bLastPrecisionAim = Cmd->bPrecisionAim;
 	LastAimStickX = Cmd->AimStickX;
 	LastAimStickY = Cmd->AimStickY;
+	LastMoveStickX = Cmd->StickX;
+	LastMoveStickY = Cmd->StickY;
 	LastCameraYaw = Cmd->CameraYaw;
 }
 
 void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMoverInputCmdContext& InputCmdResult)
 {
 	const FGSTN_CombatSyncState* Sync = GetSyncState();
-	if (!bLastPrecisionAim || !Sync)
+	if (!Sync || !GetOwner())
 	{
 		return;
 	}
-	// The frame this input is for is the one after the latest simulated frame
-	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickY));
-	float HoldYaw = 0.f;
-	const FGSTN_CombatTimelineData* Timeline = GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline);
-	if (FGSTN_CombatTimelineLogic::ResolveSteerHoldYaw(Sync->Core, GetSimulationFrame() + 1, Timeline, AimStick,
-		FGSTN_DirectionClassifier::DequantizeYaw(LastCameraYaw), true, HoldYaw))
+	// The frame this input is for is the one after the latest simulated frame. Per-move steering (owner 2026-11-14): the reticle source holds
+	// only with the reticle on (slice 3b, unchanged); the move stick sources hold from the first frame to the end of the last active one, so
+	// the movement mode never turns the move further than its cap, nor after the lock. The rate (M11 L9) is the sim's, so they agree
+	// A timeline that ignores the move stick (the get-ups): no walk, the facing held. Same frame rule as the steer below: the frame after the latest
+	const bool bInTimeline = Sync->Core.ActionState == EGSTN_ActionState::InTimeline;
+	const FGSTN_CombatTimelineData* Running = bInTimeline ? GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline) : nullptr;
+	// Rooted outside a move (downed on the floor, a hit reaction): the stick must not turn the body either (react-hook-2 capture: a lying victim
+	// turned under the held stick, so the roll back read the stick as forward). Inside a move the steer below decides
+	const bool bRooted = !bInTimeline && AbilitySystem
+		&& (AbilitySystem->HasMatchingGameplayTag(GSTNCombatTags::Lock_Movement) || AbilitySystem->HasMatchingGameplayTag(GSTNCombatTags::Lock_Reaction));
+	// A hit turn the latest frame queued (the victim step's SetFacing; the state holds only that frame's requests): Mover applies it on the
+	// frame this input is for, and the walking mode orients to the command's intent on that same tick, so an intent still pointing the old way
+	// undid the turn (react-hook-5 diagnostics: SetFacing ran on the hit frame, the yaw never changed). The intent points the new way instead
+	float HoldYaw = static_cast<float>(GetOwner()->GetActorRotation().Yaw);
+	bool bHitTurn = false;
+	if (!bInTimeline)
 	{
-		// Aim handling (M11 L9): the intent follows the same rate as the sim's SetFacing, so the movement mode does not turn faster than the move
-		if (Timeline && Timeline->SteerRateDegPerSecond > 0.f && GetOwner())
+		for (const FGSTN_CombatRequest& Slot : Sync->Core.Requests.Slots)
 		{
-			HoldYaw = FGSTN_StartupSteer::RateLimitYaw(static_cast<float>(GetOwner()->GetActorRotation().Yaw), HoldYaw, Timeline->SteerRateDegPerSecond, LastStepMs * 0.001f);
+			if (Slot.Type == EGSTN_RequestType::SetFacing)
+			{
+				HoldYaw = FGSTN_StartupSteer::DequantizeYaw(Slot.Arg);
+				bHitTurn = true;
+			}
+		}
+	}
+	if ((Running && Running->bIgnoreMoveInput) || bRooted || bHitTurn)
+	{
+		if (FCharacterDefaultInputs* Inputs = InputCmdResult.InputCollection.FindMutableDataByType<FCharacterDefaultInputs>())
+		{
+			Inputs->SetMoveInput(EMoveInputType::DirectionalIntent, FVector::ZeroVector);
 		}
 		HoldOrientationIntent(InputCmdResult, HoldYaw);
+		bHoldFacingAfterReaction = true;
+		return;
 	}
+	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickY));
+	const FVector2D MoveStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastMoveStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastMoveStickY));
+	float SteerHoldYaw = 0.f;
+	bool bStickActive = false;
+	if (FGSTN_CombatTimelineLogic::ResolveSteerFrame(Sync->Core, GetSimulationFrame() + 1, GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline), MoveStick,
+		AimStick, bLastPrecisionAim, FGSTN_DirectionClassifier::DequantizeYaw(LastCameraYaw), static_cast<float>(GetOwner()->GetActorRotation().Yaw),
+		LastStepMs * 0.001f, SteerHoldYaw, bStickActive) != EGSTN_SteerPhase::None)
+	{
+		HoldOrientationIntent(InputCmdResult, SteerHoldYaw);
+		bHoldFacingAfterReaction = false;
+		return;
+	}
+	// Free after a reaction: the facing the hit turned to stays until the player pushes the stick
+	if (bHoldFacingAfterReaction)
+	{
+		if (MoveStick.SizeSquared() > FMath::Square(0.2))
+		{
+			bHoldFacingAfterReaction = false;
+		}
+		else
+		{
+			HoldOrientationIntent(InputCmdResult, static_cast<float>(GetOwner()->GetActorRotation().Yaw));
+		}
+	}
+}
+
+bool UGSTN_CombatSimComponent::GetSteerView(FSteerView& Out) const
+{
+	Out = FSteerView();
+	const FGSTN_CombatSyncState* Sync = GetSyncState();
+	const FGSTN_CombatTimelineData* Timeline = Sync ? GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline) : nullptr;
+	if (!Timeline || !GetOwner())
+	{
+		return false;
+	}
+	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickY));
+	const FVector2D MoveStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastMoveStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastMoveStickY));
+	const float CameraYaw = FGSTN_DirectionClassifier::DequantizeYaw(LastCameraYaw);
+	float Yaw = 0.f;
+	bool bStickActive = false;
+	// The latest simulated frame, step 0: where the steering stands, not a new step of it
+	Out.Phase = FGSTN_CombatTimelineLogic::ResolveSteerFrame(Sync->Core, GetSimulationFrame(), Timeline, MoveStick, AimStick, bLastPrecisionAim, CameraYaw,
+		static_cast<float>(GetOwner()->GetActorRotation().Yaw), 0.f, Yaw, bStickActive);
+	if (Out.Phase == EGSTN_SteerPhase::None)
+	{
+		return false;
+	}
+	Out.StartYawDeg = FGSTN_StartupSteer::DequantizeYaw(static_cast<int16>(Sync->Core.Hit.MoveOrigin.RotationQ[1]));
+	Out.MaxSteerDegrees = Timeline->MaxSteerDegrees;
+	Out.bShow = Timeline->Steer.bShowIndicator;
+	FVector2D Stick;
+	if (FGSTN_StartupSteer::PickStick(Timeline->Steer.Source, MoveStick, AimStick, bLastPrecisionAim, Stick)
+		&& FGSTN_StartupSteer::IsSteering(Stick, Timeline->MaxSteerDegrees))
+	{
+		Out.bStickActive = true;
+		Out.StickYawDeg = FRotator::NormalizeAxis(CameraYaw + FMath::RadiansToDegrees(static_cast<float>(FMath::Atan2(Stick.X, Stick.Y))));
+	}
+	return true;
 }
 
 bool UGSTN_CombatSimComponent::HoldOrientationIntent(FMoverInputCmdContext& InputCmd, float YawDeg)
@@ -845,6 +974,108 @@ bool UGSTN_CombatSimComponent::IsCommandButtonHeld(int32 Button) const
 {
 	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
 	return Sync && FGSTN_InputHostUtils::IsButtonHeld(Sync->Core.Input, Button);
+}
+
+namespace
+{
+	/** The age context of the input questions: the frame being simulated and the hitstop window of its state, the buffer's rule */
+	FGSTN_InputQueries::FAgeContext MakeQueryAgeContext(const FGSTN_CombatSyncState& Sync)
+	{
+		FGSTN_InputQueries::FAgeContext Context;
+		Context.Now = Sync.Core.Input.History.GetLatestFrame();
+		Context.PausedStart = Sync.Core.HitstopStartFrame;
+		Context.PausedEnd = Sync.Core.HitstopEndFrame;
+		return Context;
+	}
+}
+
+int32 UGSTN_CombatSimComponent::FindQueryButton(const FGameplayTag& Button) const
+{
+	return ActiveInputConfig && Button.IsValid() ? ActiveInputConfig->FindButtonIndex(Button) : INDEX_NONE;
+}
+
+bool UGSTN_CombatSimComponent::WasButtonPressedWithin(const FGameplayTag& Button, int32 Frames, bool bIncludeUsed) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	const int32 Index = FindQueryButton(Button);
+	return Sync && Index != INDEX_NONE && FGSTN_InputQueries::WasPressedWithin(Sync->Core.Input.History, Index, MakeQueryAgeContext(*Sync), Frames, bIncludeUsed);
+}
+
+int32 UGSTN_CombatSimComponent::GetFramesSinceButtonPressed(const FGameplayTag& Button, bool bIncludeUsed) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	const int32 Index = FindQueryButton(Button);
+	return Sync && Index != INDEX_NONE ? FGSTN_InputQueries::GetNewestPressAge(Sync->Core.Input.History, Index, MakeQueryAgeContext(*Sync), bIncludeUsed) : INDEX_NONE;
+}
+
+int32 UGSTN_CombatSimComponent::CountButtonPressesWithin(const FGameplayTag& Button, int32 Frames, bool bIncludeUsed) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	const int32 Index = FindQueryButton(Button);
+	return Sync && Index != INDEX_NONE ? FGSTN_InputQueries::CountPressesWithin(Sync->Core.Input.History, Index, MakeQueryAgeContext(*Sync), Frames, bIncludeUsed) : 0;
+}
+
+int32 UGSTN_CombatSimComponent::GetButtonHeldFrames(const FGameplayTag& Button) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	const int32 Index = FindQueryButton(Button);
+	return Sync && Index != INDEX_NONE ? FGSTN_InputQueries::GetHeldFrames(Sync->Core.Input.History, Index, Sync->Core.Input.History.GetLatestFrame()) : INDEX_NONE;
+}
+
+bool UGSTN_CombatSimComponent::WasCommandEnteredWithin(const FGameplayTag& Command, int32 Frames) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (!Sync || Frames < 0)
+	{
+		return false;
+	}
+	const FGSTN_CommandTable& Table = GetCommandTable();
+	const int32 Index = Table.FindCommand(Command);
+	const FGSTN_InputSlotSpec* Slot = Table.Commands.IsValidIndex(Index) ? Table.Commands[Index].Slot : nullptr;
+	if (!Slot)
+	{
+		return false;
+	}
+	// The slot's own rules (simultaneity, direction policy) with the window asked for as the time buffer and no hold buffer: "entered in the
+	// last N frames", not "still held". The matcher skips used presses, so the press that started the move never answers
+	FGSTN_MatchParams Params = Slot->MakeMatchParams(UGSTN_InputSettings::Get(), ButtonMap, Sync->Core.Input.History.GetLatestFrame());
+	Params.BufferFrames = Frames;
+	Params.bHoldBuffer = false;
+	Params.PausedStart = Sync->Core.HitstopStartFrame;
+	Params.PausedEnd = Sync->Core.HitstopEndFrame;
+	FGSTN_PatternMatch Match;
+	return FGSTN_InputMatcher::Match(Slot->Pattern, Sync->Core.Input.History, Params, Match);
+}
+
+FVector2D UGSTN_CombatSimComponent::GetMoveStick() const
+{
+	FVector2D Stick = FVector2D::ZeroVector;
+	float CameraYaw = 0.f;
+	GetFrameStick(Stick, CameraYaw);
+	return Stick;
+}
+
+EGSTN_StickDirection UGSTN_CombatSimComponent::GetStickDirection(EGSTN_DirectionSpace Space) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	return Sync ? Sync->Core.Input.History.GetCurrentStick().GetDirection(Space) : EGSTN_StickDirection::Neutral;
+}
+
+int32 UGSTN_CombatSimComponent::GetMoveHitConfirmGroups() const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	return Sync && Sync->Core.ActionState == EGSTN_ActionState::InTimeline ? static_cast<int32>(Sync->Core.Hit.HitConfirmFlags) : 0;
+}
+
+int32 UGSTN_CombatSimComponent::GetEvaluatedTimelineFrame() const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (!Sync || Sync->Core.ActionState != EGSTN_ActionState::InTimeline || Sync->Core.TimelineStartFrame == INDEX_NONE || Sync->Core.RecoilStartFrame != INDEX_NONE)
+	{
+		return INDEX_NONE;
+	}
+	// FGSTN_CombatTimelineLogic's evaluated frame (EvaluateInto): the paused frames already count this frame's own pause
+	return Sync->Core.Input.History.GetLatestFrame() - Sync->Core.TimelineStartFrame - Sync->Core.TimelinePausedFrames;
 }
 
 #if !UE_BUILD_SHIPPING
@@ -950,6 +1181,11 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	FGSTN_TrackHookEnvironment HookEnvironment;
 	HookEnvironment.Buttons = &ButtonMap;
 	HookEnvironment.Fragments = &OutSync.Fragments;
+	// Mover's ground as of the end of the previous frame (the tracker is rolled back with Mover): the Hold Until Landed rule of the clock reads it
+	if (const UGSTN_MoverSimStateTracker* GroundTracker = GetJumpTracker())
+	{
+		HookEnvironment.Ground = GroundTracker->HasGameplayTag(Mover_IsOnGround, true) ? EGSTN_TrackHookGround::OnGround : EGSTN_TrackHookGround::Airborne;
+	}
 	// The attacker side of hits (M4 H8) is not run on a hitstop frame either: it reads the same bHitstopFrame
 
 	// Step 2, the timeline clock: the running timeline reaches its end, or its ability is gone, and the combatant is Actionable again
@@ -973,6 +1209,15 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		{
 			UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline %d (start %d) ended: timeline frame %d of %d, finished %d, ability active %d"), *GetOwner()->GetName(), Frame, Running, StartBefore,
 				TimelineOutput.Frame, TimelineOutput.TotalFrames, TimelineOutput.bFinished, bAbilityActive);
+
+			// A move that ended BY ITSELF links into its follow-up (FGSTN_CombatTimelineData::FollowUpTimeline: the dropkick's land into its get-up),
+			// on this same frame, before the adoption and the commands of the frame: a buffered command can still replace it by the normal rules
+			const int32 FollowUp = !bFrameGateClosed && TimelineOutput.bFinished && !TimelineOutput.bRecoil ? FrameSet.FindFollowUpEntry(Running) : INDEX_NONE;
+			if (FollowUp != INDEX_NONE)
+			{
+				StartTimelineEntry(OutSync.Core, Frame, FrameSet, FollowUp, &HookEnvironment);
+				UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline %d links into its follow-up %d"), *GetOwner()->GetName(), Frame, Running, FollowUp);
+			}
 		}
 	}
 	// Step 3, adoption (combat-m3 7.4): timeline abilities that something other than a command activated in the previous frame.
@@ -1287,6 +1532,12 @@ void UGSTN_CombatSimComponent::FillHookContext(FGSTN_CombatTickContext& Context,
 	Context.Stick = FVector2D(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickY));
 	Context.StickOnPlane = FGSTN_CombatVictim::StickToPlane(Context.Stick, FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), Up);
 	Context.Buttons = &ButtonMap;
+	if (ContextProvider)
+	{
+		FGameplayTagContainer ContextTags;
+		ContextProvider->AppendContextTags(ContextTags);
+		Context.bGrounded = ContextTags.HasTagExact(GSTNInputTags::Context_Grounded);
+	}
 }
 
 bool UGSTN_CombatSimComponent::StartForcedTimeline(const UClass* AbilityClass)
@@ -1301,17 +1552,21 @@ bool UGSTN_CombatSimComponent::StartForcedTimeline(const UClass* AbilityClass)
 	{
 		return false;
 	}
+	StartTimelineEntry(ServiceSync->Core, ServiceFrame, Set, Entry, ServiceHookEnvironment);
+	return true;
+}
+
+void UGSTN_CombatSimComponent::StartTimelineEntry(FGSTN_CombatSyncCore& Core, int32 Frame, const UGSTN_CombatTableSet& Set, int32 Entry, const FGSTN_TrackHookEnvironment* Environment)
+{
 	// What step 8 does for a command, source Forced; the ability system's pre-tick of the frame activates the ability (ActivateEntry), which finds its
 	// timeline running from this frame and begins it
-	FGSTN_CombatSyncCore& Core = ServiceSync->Core;
-	FGSTN_CombatTimelineLogic::Start(Core, ServiceFrame, Entry, EGSTN_ActivationSource::Forced);
-	StampMoveOrigin(Core, ServiceFrame);
+	FGSTN_CombatTimelineLogic::Start(Core, Frame, Entry, EGSTN_ActivationSource::Forced);
+	StampMoveOrigin(Core, Frame);
 	if (const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(Set, Entry))
 	{
-		FGSTN_CombatTimelineLogic::EvaluateStart(Core, ServiceFrame, *Data, Set.TimelineDefaultOverride.IsValidIndex(Entry) ? Set.TimelineDefaultOverride[Entry] : 0, TimelineOutput, ServiceHookEnvironment);
+		FGSTN_CombatTimelineLogic::EvaluateStart(Core, Frame, *Data, Set.TimelineDefaultOverride.IsValidIndex(Entry) ? Set.TimelineDefaultOverride[Entry] : 0, TimelineOutput, Environment);
 	}
-	Core.Requests.Add(EGSTN_RequestType::ActivateEntry, ServiceFrame, static_cast<int16>(Entry));
-	return true;
+	Core.Requests.Add(EGSTN_RequestType::ActivateEntry, Frame, static_cast<int16>(Entry));
 }
 
 bool UGSTN_CombatSimComponent::IsBindingAdmitted(const FGSTN_CommandTable& Table, int32 BindingIndex) const
@@ -1532,7 +1787,7 @@ void UGSTN_CombatSimComponent::ExecuteFreeze(TSubclassOf<UGameplayEffect> Effect
 
 void UGSTN_CombatSimComponent::StepStartupSteer(int32 Frame, const FGSTN_InputCmd& Cmd, FGSTN_CombatSyncCore& Core, float StepSeconds)
 {
-	if (!Cmd.bPrecisionAim || Core.ActionState != EGSTN_ActionState::InTimeline || (Cmd.AimStickX == 0 && Cmd.AimStickY == 0))
+	if (Core.ActionState != EGSTN_ActionState::InTimeline || (Cmd.AimStickX == 0 && Cmd.AimStickY == 0 && Cmd.StickX == 0 && Cmd.StickY == 0))
 	{
 		return;
 	}
@@ -1543,9 +1798,15 @@ void UGSTN_CombatSimComponent::StepStartupSteer(int32 Frame, const FGSTN_InputCm
 		return;
 	}
 	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickY));
-	int16 YawArg = 0;
-	if (FGSTN_CombatTimelineLogic::ComputeStartupSteer(Core, Frame, GetRegistryTimeline(Tables(), Core.ActiveTimeline), AimStick,
-		FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), static_cast<float>(Pose.Rotator().Yaw), Cmd.bPrecisionAim, YawArg, StepSeconds))
+	const FVector2D MoveStick(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickY));
+	const float CurrentYaw = static_cast<float>(Pose.Rotator().Yaw);
+	float SteerYaw = 0.f;
+	bool bStickActive = false;
+	// Per-move steering (owner 2026-11-14): a turn only while the window is open and the move's stick is pushed; the holds are the input producer's
+	const EGSTN_SteerPhase Phase = FGSTN_CombatTimelineLogic::ResolveSteerFrame(Core, Frame, GetRegistryTimeline(Tables(), Core.ActiveTimeline), MoveStick,
+		AimStick, Cmd.bPrecisionAim, FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), CurrentYaw, StepSeconds, SteerYaw, bStickActive);
+	const int16 YawArg = FGSTN_StartupSteer::QuantizeYaw(SteerYaw);
+	if (Phase == EGSTN_SteerPhase::Steering && bStickActive && YawArg != FGSTN_StartupSteer::QuantizeYaw(CurrentYaw))
 	{
 		if (!Core.Requests.Add(EGSTN_RequestType::SetFacing, Frame, YawArg))
 		{
@@ -1670,6 +1931,12 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 			}
 			break;
 		case EGSTN_RequestType::SetFacing:
+			if (VictimFrame == Frame && bFrameInterrupted)
+			{
+				// Diagnostics of the react-hook-5 capture: the hit turn reached the pre-tick
+				UE_LOG(LogGSTNCombatSim, Verbose, TEXT("[HitTurn] %s pre-tick frame %d SetFacing %.0f actorYaw=%.0f effect=%d"), *GetOwner()->GetName(), Frame,
+					FGSTN_StartupSteer::DequantizeYaw(Slot.Arg), GetOwner()->GetActorRotation().Yaw, SetFacingEffect ? 1 : 0);
+			}
 			ExecuteSetFacing(Slot.Arg);
 			break;
 		case EGSTN_RequestType::Knockback:

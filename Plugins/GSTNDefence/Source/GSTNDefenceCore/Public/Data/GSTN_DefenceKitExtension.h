@@ -44,6 +44,13 @@ struct GSTNDEFENCECORE_API FGSTN_GetupSet
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Getup")
 	TSoftClassPtr<UObject> Roll;
 
+	/**
+	 * Optional get-up roll toward the head (owner 2026-11-14: the roll back over the shoulder). Started instead of Roll when the held stick
+	 * points against the facing; empty = Roll in every direction
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Getup")
+	TSoftClassPtr<UObject> RollBack;
+
 	/** Neutral get-up, started by the jump press */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Getup")
 	TSoftClassPtr<UObject> Neutral;

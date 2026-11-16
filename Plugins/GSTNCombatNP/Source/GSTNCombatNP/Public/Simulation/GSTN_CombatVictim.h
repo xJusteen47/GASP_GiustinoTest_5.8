@@ -225,6 +225,16 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 	static void Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSyncCore& Core, FGSTN_VictimResult& Out);
 
 	/**
+	 * The facing a staggered victim takes on the HIT frame (owner 2026-11-14, temporary until back/side reaction clips exist): with a
+	 * horizontal knockback (rules bTurnBackAlongKnockback) the back points along it; without one (rules bTurnToAttackerWithoutKnockback) the
+	 * victim faces the attacker when it was hit from further than TurnToAttackerMinAngleDeg off its facing. The turn lands on the first
+	 * reaction frame, inside the pose snap, and the hitstop freeze holds it. Reads the last staggered, non-ricochet hit of Result (the one
+	 * that wrote the pending reaction). Returns false for no turn. Pure: only sync data and the step snapshot
+	 */
+	static bool ResolveHitFacing(const UGSTN_CombatRules* Rules, const FGSTN_VictimResult& Result, const FGSTN_CombatSyncCore& Core,
+		const FGSTN_SnapshotEntry& Self, const FGSTN_StepSnapshot* Snapshot, float& OutYawDeg);
+
+	/**
 	 * The hitstop of the pending reaction ended: returns the move it becomes (DI from the stick, the knockback resistance applied) and clears
 	 * the pending reaction. Then hitstun end: Actionable, or Tumble until the victim lands. Does nothing for a combatant that is not in hitstun
 	 */

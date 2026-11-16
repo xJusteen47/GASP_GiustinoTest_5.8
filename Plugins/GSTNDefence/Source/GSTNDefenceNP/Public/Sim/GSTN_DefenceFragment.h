@@ -15,6 +15,13 @@ namespace GSTNDefenceHitFlags
 
 	/** No held-direction drift for this hit: a throw (or grab-like hit), an armored victim (unless the rules allow it), or the stagger-in-place tier (when the rules say so) */
 	constexpr uint8 SDIBlocked = 1 << 1;
+
+	/**
+	 * Not a hit flag: the entity was airborne inside a Combat.Move.KnockdownOnLanding window of its own move, so its next grounded frame in the
+	 * window downs it (FGSTN_TumbleLanding::SelfKnockdown). Lives here to reuse the serialised byte; a hit rewrites the byte, which disarms, and the
+	 * next airborne frame arms again
+	 */
+	constexpr uint8 SelfKnockdownArmed = 1 << 2;
 }
 
 /** What the tick extension starts at AfterClocks for a decision of the victim step of the same frame (FGSTN_DefenceFragment::PendingStartKind) */

@@ -2597,7 +2597,7 @@ def scenario_external_launch_jump(client=1, launch_speed=900.0):
 
 
 IA.setdefault('sprint', '/Game/Input/IA_Sprint')
-IA.setdefault('crouch', '/Game/Input/IA_Crouch')
+IA.setdefault('crouch', '/Game/GASNPPTest/Input/IA_GASNPP_Crouch')  # own action since 2026-11-13 (GASP's IA_Crouch fired its slide)
 
 
 def _bare_input(client, action, value=(1.0, 0.0, 0.0), start=True, pulse=False):

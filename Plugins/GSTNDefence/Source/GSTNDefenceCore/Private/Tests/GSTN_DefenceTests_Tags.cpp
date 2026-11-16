@@ -12,7 +12,7 @@ bool FGSTN_DefenceTagsDocumentedTest::RunTest(const FString& Parameters)
 {
 	TArray<FGameplayTag> Tags;
 	GSTNDefenceTags::GetDeclaredTags(Tags);
-	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 20);
+	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 21);
 
 	const UGameplayTagsManager& Manager = UGameplayTagsManager::Get();
 	TSet<FGameplayTag> Seen;
@@ -66,7 +66,7 @@ bool FGSTN_DefenceTagsNoForeignRootTest::RunTest(const FString& Parameters)
 		}
 
 		// Each native tag sits in a subtree the plugin owns (m6 spec 1c)
-		const bool bOwned = Name.StartsWith(TEXT("Combat.State.")) || Name == TEXT("Combat.Mover.Tumble")
+		const bool bOwned = Name.StartsWith(TEXT("Combat.State.")) || Name == TEXT("Combat.Mover.Tumble") || Name == TEXT("Combat.Move.KnockdownOnLanding")
 			|| Name == TEXT("Combat.Immunity.Parry") || Name == TEXT("Combat.Immunity.Shield")
 			|| Name == TEXT("Command.Defence.Shield") || Name == TEXT("Input.Lock.Command.Defence")
 			|| Name.StartsWith(TEXT("Combat.Event.")) || Name == TEXT("Combat.SetByCaller.ShieldDamage");

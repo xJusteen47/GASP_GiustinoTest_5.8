@@ -140,6 +140,7 @@ FGSTN_ResolvedGetupSet UGSTN_DefenceLibrary::ResolveGetupSet(const FGSTN_GetupSe
 	FGSTN_ResolvedGetupSet Resolved;
 	Resolved.GroundBounce = ResolveAbilityClass(Getup.GroundBounce, TEXT("The get-up set's ground bounce"));
 	Resolved.Roll = ResolveAbilityClass(Getup.Roll, TEXT("The get-up set's roll"));
+	Resolved.RollBack = ResolveAbilityClass(Getup.RollBack, TEXT("The get-up set's roll back"));
 	Resolved.Neutral = ResolveAbilityClass(Getup.Neutral, TEXT("The get-up set's neutral get-up"));
 	for (const TSoftClassPtr<UObject>& Attack : Getup.Attacks)
 	{
@@ -212,6 +213,10 @@ void UGSTN_DefenceLibrary::ContributeToLoadout(const FGSTN_LoadoutExtensionConte
 	TArray<TSubclassOf<UGameplayAbility>> Forced;
 	Forced.Add(Getup.GroundBounce);
 	Forced.Add(Getup.Roll);
+	if (Getup.RollBack)
+	{
+		Forced.Add(Getup.RollBack);
+	}
 	Forced.Append(Getup.Attacks);
 	TMap<EGSTN_TechType, TSubclassOf<UGameplayAbility>> Tech;
 	ResolveTechSet(Extension->Tech, Tech);

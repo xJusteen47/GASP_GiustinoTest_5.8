@@ -6,34 +6,9 @@
 #include "Abilities/GSTN_GA_Base.h"
 #include "Movement/GSTN_BallisticMode.h"
 #include "Movement/GSTN_ShotAim.h"
+#include "GSTN_ProjectileDefinition.h"
 
 #include "GSTN_GA_FireProjectile.generated.h"
-
-/** Where the shot goes */
-UENUM(BlueprintType)
-enum class EGSTN_ProjectileAim : uint8
-{
-	/** Along the shooter's facing, raised by LaunchPitchDeg */
-	Facing,
-	/** Along the camera aim of the activating command (GetAimRotation), raised by LaunchPitchDeg; the facing without an aim */
-	CommandAim,
-	/**
-	 * Along the move stick of the fire frame's command turned onto the shooter's plane (camera relative, as the stick moves the character),
-	 * raised by LaunchPitchDeg; the facing with the stick centred (M10: a tapped throw goes where the left stick points)
-	 */
-	Stick,
-	/**
-	 * At the Target actor of the triggering gameplay event (AI, traps, the harness), solved as a straight line or, with gravity, as
-	 * the flat or high arc that passes through it. Never used to steer a player's shot: the player aims (precision tools, no auto-play)
-	 */
-	EventTarget,
-	/**
-	 * M11 L9 (owner, 2026-11-12: vertical aim only with the reticle on). With the reticle on in the fire frame's command
-	 * (FGSTN_InputCmd::bPrecisionAim): along the camera aim of that command, up and down too, its pitch clamped to the ability's reticle
-	 * pitch limits. Off: as ReticleOffAim (Facing or Stick), flat plus LaunchPitchDeg
-	 */
-	Reticle
-};
 
 /**
  * The ability side of a projectile (entita-dinamiche review §3): an ability that fires one projectile through the host's
@@ -46,7 +21,9 @@ enum class EGSTN_ProjectileAim : uint8
  * the same shot is built from its own snapshot and drawn at once as a ghost (UGSTN_ProjectileSubsystem::SpawnGhost, slice 3), so the
  * shooter does not see the shot one round trip late; the host's projectile adopts the ghost when it arrives.
  *
- * Blueprint children set the template, the delay and the aim; a timeline track key will replace FireDelayFrames for moves later.
+ * Blueprint children set the template, the delay and the aim. A combat move fires a shot from its own timeline instead (CP2): the Fire
+ * Projectile move action on an Event key, or Fire Move Projectile in its graph, with a UGSTN_ProjectileDefinition; both build the shot with
+ * the same FGSTN_ProjectileShot this ability uses.
  */
 UCLASS(Blueprintable)
 class GSTNPROJECTILENP_API UGSTN_GA_FireProjectile : public UGSTN_GA_Base
@@ -116,6 +93,9 @@ protected:
 
 	/** Builds the shot and hands it to the host, or to the ghost on the predicting client. Whether a projectile was spawned (false on a client) */
 	bool Fire();
+
+	/** The shot of this activation from the properties and the aim hooks (GetShotAim, GetShotLaunchPitchDeg), read at the fire frame */
+	FGSTN_ProjectileShotSpec MakeShotSpec() const;
 
 	/** Fired or skipped: the ability is done */
 	void FinishFire();

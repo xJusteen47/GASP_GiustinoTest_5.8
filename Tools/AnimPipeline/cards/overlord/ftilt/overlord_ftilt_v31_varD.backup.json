@@ -1,0 +1,700 @@
+{
+ "move": "overlord_ftilt_v31_varD",
+ "class": "tilt",
+ "anim": "/Game/AnimPipeline/Rig/Overlord/FTilt/AS_GanonFTiltV31_Build_VarD",
+ "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+ "fps": 60,
+ "timing_csv": "refs/ufd/GanondorfFTilt_timing.csv",
+ "reference": "refs/owner_ganon_ftilt",
+ "effector": "ball_l",
+ "_design": "Overlord Ftilt VarD: Smash Bros x Astro Bot stylized cartoon Spartan Kick. Rear foot extends onto tiptoe (heel lift +7.5cm), flared dynamic arms framing diamond silhouette from behind, exaggerated spine curvature, and layered kinetic delay (part_delays: chest 1, head 2, forearm 2, hand 3) for ultra-satisfying, juicy secondary motion.",
+ "poses": [
+  {
+   "name": "first",
+   "frame": 0,
+   "source": {
+    "file": "refs/owner_ganon_ftilt/1_first.png",
+    "frame": 0
+   }
+  },
+  {
+   "name": "load",
+   "frame": 3,
+   "source": null,
+   "spacing": "arrive_1_2"
+  },
+  {
+   "name": "anticipation",
+   "frame": 7,
+   "source": {
+    "file": "refs/owner_ganon_ftilt/2_anticipation.png",
+    "frame": 7
+   }
+  },
+  {
+   "name": "snap",
+   "frame": 9,
+   "source": null
+  },
+  {
+   "name": "active",
+   "frame": 10,
+   "source": {
+    "file": "refs/owner_ganon_ftilt/3_active.png",
+    "frame": 10
+   },
+   "spacing": "limb_led_recovery",
+   "ease_out": 0.333
+  },
+  {
+   "name": "hold_end",
+   "frame": 20,
+   "source": null
+  },
+  {
+   "name": "land",
+   "frame": 23,
+   "source": null
+  },
+  {
+   "name": "sink",
+   "frame": 25,
+   "source": null
+  },
+  {
+   "name": "recovery",
+   "frame": 27,
+   "source": {
+    "file": "refs/owner_ganon_ftilt/4_recovery.png",
+    "frame": 27
+   }
+  },
+  {
+   "name": "rise",
+   "frame": 32,
+   "source": null
+  },
+  {
+   "name": "last",
+   "frame": 37,
+   "source": {
+    "file": "refs/owner_ganon_ftilt/5_last.png",
+    "frame": 37
+   }
+  }
+ ],
+ "spacing": {
+  "startup": "charge_long",
+  "active": "hold_recoil",
+  "recovery": "limb_led_recovery"
+ },
+ "part_delays": {
+  "chest": 1,
+  "head": 2,
+  "forearm": 2,
+  "hand": 3
+ },
+ "sheet_extra": {
+  "hold_window": [
+   9,
+   20
+  ],
+  "strike_limb": "leg_l",
+  "strike_side": "leg_l"
+ },
+ "exemptions": [
+  {
+   "check": "balance",
+   "frames": [
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    20,
+    21,
+    22
+   ],
+   "why": "stylized Spartan kick lunge on supporting tiptoe"
+  },
+  {
+   "check": "planted",
+   "frames": [
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37
+   ],
+   "why": "rear supporting foot pivots on ball and lifts onto tiptoe"
+  },
+  {
+   "check": "clearance",
+   "frames": [
+    25,
+    30,
+    31,
+    32,
+    33
+   ],
+   "pairs": [
+    "lowerarm_r|spine_03",
+    "lowerarm_r|spine_04",
+    "lowerarm_l|spine_03"
+   ],
+   "why": "recovery arm settling along body"
+  }
+ ],
+ "edits": [
+  {
+   "control": "foot_r_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    0,
+    6.0,
+    7.5
+   ],
+   "why": "true Ganondorf Ftilt mechanic: rear supporting heel lifts +7.5cm onto ball/tiptoe, driving lunge forward +6cm"
+  },
+  {
+   "control": "foot_r_ik_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    22.0,
+    0,
+    0
+   ],
+   "why": "plantarflexion: rear foot pitches down onto the ball of the foot (tiptoe angle)"
+  },
+  {
+   "control": "foot_r_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    20
+   ],
+   "delta": [
+    0,
+    3.0,
+    3.5
+   ],
+   "why": "supporting heel begins controlled descent during kick recoil"
+  },
+  {
+   "control": "foot_r_ik_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    20
+   ],
+   "delta": [
+    10.0,
+    0,
+    0
+   ],
+   "why": "supporting foot settles back towards floor as kick recovers"
+  },
+  {
+   "control": "leg_r_pv_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    0,
+    8.0,
+    5.0
+   ],
+   "why": "supporting knee pole rises and tracks elevated tiptoe thrust"
+  },
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    0,
+    25.0,
+    -35.0
+   ],
+   "why": "dynamic flared arm silhouette: left elbow flares out and back, creating negative space from rear camera"
+  },
+  {
+   "control": "lowerarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    0,
+    -30.0,
+    15.0
+   ],
+   "why": "flared left elbow flexion framing the chest dynamically"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    0,
+    -28.0,
+    -30.0
+   ],
+   "why": "dynamic flared arm silhouette: right elbow flares wide out and back, creating aggressive diamond silhouette from behind"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    0,
+    -35.0,
+    -15.0
+   ],
+   "why": "flared right elbow flexion with villain claw ready as counterbalance"
+  },
+  {
+   "control": "upperarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    20,
+    23,
+    25,
+    27,
+    32
+   ],
+   "delta": [
+    0,
+    -10.0,
+    -8.0
+   ],
+   "why": "recovery: right arm smoothly descends alongside thigh"
+  },
+  {
+   "control": "lowerarm_r_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    20,
+    23,
+    25,
+    27,
+    32
+   ],
+   "delta": [
+    0,
+    -25.0,
+    0
+   ],
+   "why": "recovery: open elbow cleanly along thigh"
+  },
+  {
+   "control": "upperarm_l_fk_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    23,
+    25,
+    27,
+    32
+   ],
+   "delta": [
+    0,
+    15.0,
+    -15.0
+   ],
+   "why": "recovery: left arm returns into natural combat guard"
+  },
+  {
+   "control": "foot_l_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    7
+   ],
+   "delta": [
+    0,
+    -19.0,
+    -8.0
+   ],
+   "why": "juicy anticipation: kicking leg coiled deep into chamber"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Location",
+   "frames": [
+    7
+   ],
+   "delta": [
+    0,
+    -4.0,
+    -4.0
+   ],
+   "why": "anticipation squash & settle back on rear hip"
+  },
+  {
+   "control": "leg_l_pv_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    7
+   ],
+   "delta": [
+    0,
+    40.0,
+    10.0
+   ],
+   "why": "knee held high and tightly coiled in anticipation"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Location",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    0,
+    18.0,
+    2.0
+   ],
+   "why": "forward hip drive +18cm, elevated +2cm by the rear tiptoe extension"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    0,
+    0,
+    -25.0
+   ],
+   "why": "de-twist pelvis to face squarely into attack axis"
+  },
+  {
+   "control": "spine_03_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    0,
+    -16.0,
+    0
+   ],
+   "why": "exaggerated forward torso pitch over supporting leg (oomph & power)"
+  },
+  {
+   "control": "spine_04_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    0,
+    -8.0,
+    0
+   ],
+   "why": "dynamic chest curve: spine extends forward in an aggressive arc"
+  },
+  {
+   "control": "head_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    0,
+    12.0,
+    25.0
+   ],
+   "why": "head remains locked forward, chin elevated looking right at opponent"
+  },
+  {
+   "control": "head_ik_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    0,
+    12.0,
+    25.0
+   ],
+   "why": "head remains locked forward, chin elevated looking right at opponent"
+  },
+  {
+   "control": "foot_l_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    -17.0,
+    22.0,
+    2.0
+   ],
+   "why": "Spartan Kick centered on forward axis (X +3cm), extended +22cm forward at chest height"
+  },
+  {
+   "control": "foot_l_ik_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    0,
+    0,
+    20.0
+   ],
+   "why": "square kicking foot yaw forward"
+  },
+  {
+   "control": "leg_l_pv_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    9,
+    10,
+    11,
+    14
+   ],
+   "delta": [
+    -13.0,
+    24.0,
+    0
+   ],
+   "why": "knee pole vector aligns cleanly with extended kicking leg"
+  },
+  {
+   "control": "foot_l_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    23
+   ],
+   "delta": [
+    -7.0,
+    0,
+    0
+   ],
+   "why": "centered landing foot"
+  },
+  {
+   "control": "foot_l_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    25,
+    27,
+    32,
+    37
+   ],
+   "delta": [
+    -14.0,
+    0,
+    0
+   ],
+   "why": "centered landing foot, natural combat stance"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Location",
+   "frames": [
+    25
+   ],
+   "delta": [
+    -8.0,
+    0,
+    5.0
+   ],
+   "why": "centered pelvis weight cushion"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Location",
+   "frames": [
+    27
+   ],
+   "delta": [
+    -18.0,
+    0,
+    8.0
+   ],
+   "why": "centered pelvis over stance"
+  },
+  {
+   "control": "body_ctrl",
+   "attr": "Location",
+   "frames": [
+    32,
+    37
+   ],
+   "delta": [
+    -26.0,
+    0,
+    5.0
+   ],
+   "why": "centered pelvis settling into final neutral guard"
+  },
+  {
+   "control": "leg_l_pv_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    23
+   ],
+   "delta": [
+    -12.0,
+    0,
+    0
+   ],
+   "why": "knee pole follows centered foot landing"
+  },
+  {
+   "control": "leg_l_pv_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    25,
+    27
+   ],
+   "delta": [
+    -25.0,
+    0,
+    0
+   ],
+   "why": "knee pole follows centered foot landing"
+  },
+  {
+   "control": "leg_l_pv_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    32,
+    37
+   ],
+   "delta": [
+    -38.0,
+    0,
+    0
+   ],
+   "why": "knee pole settles into neutral stance"
+  }
+ ],
+ "drop": [
+  {
+   "control": "foot_l_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    20
+   ],
+   "why": "leg drops in one block at 20-23: travels 10 -> 23 through hold end"
+  },
+  {
+   "control": "foot_l_ik_ctrl",
+   "attr": "Rotation",
+   "frames": [
+    20
+   ],
+   "why": "leg drops in one block at 20-23: travels 10 -> 23 through hold end"
+  },
+  {
+   "control": "leg_l_pv_ik_ctrl",
+   "attr": "Location",
+   "frames": [
+    20
+   ],
+   "why": "leg drops in one block at 20-23: travels 10 -> 23 through hold end"
+  }
+ ],
+ "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_GanonFTilt_V3",
+ "planted": [],
+ "hitstop_blend": [
+  {
+   "frame": 9,
+   "toward": 10,
+   "amount": 0.85,
+   "match": [],
+   "why": "hitstop_snap: strike pose arrives by 9 (85%)"
+  }
+ ],
+ "variant": {
+  "of": "overlord_ftilt_v31",
+  "letter": "D",
+  "why": "Smash Bros x Astro Bot style: rear foot on tiptoe (+7.5cm heel lift), flared dynamic arms framing diamond silhouette from behind, exaggerated spine curve, and part delays for juicy secondary motion",
+  "base_sha": "a7c4b700d1a5",
+  "at": "20261106_233800"
+ }
+}

@@ -33,6 +33,9 @@ struct GSTNDEFENCENP_API FGSTN_DefenceEntityData
 	TWeakObjectPtr<UClass> GroundBounce;
 	TWeakObjectPtr<UClass> GetupRoll;
 
+	/** The roll toward the head, started instead of GetupRoll with the stick against the facing; null = GetupRoll every way */
+	TWeakObjectPtr<UClass> GetupRollBack;
+
 	/** By EGSTN_TechType (index 0, None, unused). All null = the kit has no tech: no lockout, no window, the button does nothing in tumble */
 	TWeakObjectPtr<UClass> TechAbilities[6];
 	bool bHasTechSet = false;

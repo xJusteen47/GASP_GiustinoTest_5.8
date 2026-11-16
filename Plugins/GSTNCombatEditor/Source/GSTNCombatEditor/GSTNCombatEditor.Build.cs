@@ -20,7 +20,13 @@ using UnrealBuildTool;
 //
 // The hit data row (E12) adds GameplayTagsEditor (the tag combo of the hit type).
 //
+// The simulation graph rules (CP2 of the Blueprint seams) add BlueprintGraph (the K2 nodes they walk). The sync variable base struct of the
+// fork is found by its path, so AbilitySystemSimulation is not an edge of this module.
+//
 // The validation panel (E11) adds WorkspaceMenuStructure (the Window > GSTN Combat group its tab sits in).
+//
+// The Combat Move factory (CP5 of the Blueprint seams) adds ToolMenus (its Add to Kit or Weapon entry in the asset context menu of a move
+// Blueprint); GSTNInputCore becomes public because the new move options carry a binding's tag requirements.
 //
 // UMG, RenderCore and RHI are for the offscreen snapshot tests (GSTN.Visual.*, Tests/GSTN_VisualSnapshot.h): FWidgetRenderer and the read-back.
 //
@@ -44,7 +50,9 @@ public class GSTNCombatEditor : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"GameplayTags",
-			"GSTNCombatCore"
+			"GSTNCombatCore",
+			// The tag requirements of a kit binding are in a public header (Moves/GSTN_CombatMoveAuthoring.h, CP5)
+			"GSTNInputCore"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[]
@@ -56,6 +64,7 @@ public class GSTNCombatEditor : ModuleRules
 			"AdvancedPreviewScene",
 			"AnimGraph",
 			"AssetTools",
+			"BlueprintGraph",
 			"ContentBrowser",
 			"DataValidation",
 			"EditorFramework",
@@ -74,7 +83,7 @@ public class GSTNCombatEditor : ModuleRules
 			"GameplayAbilities",
 			"GSTNCombatGAS",
 			"GSTNCombatNP",
-			"GSTNInputCore"
+			"ToolMenus"
 		});
 	}
 }

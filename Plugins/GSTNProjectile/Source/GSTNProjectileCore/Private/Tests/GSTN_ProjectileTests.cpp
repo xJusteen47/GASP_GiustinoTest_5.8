@@ -242,4 +242,37 @@ bool FGSTNProjectileGhostReconcileTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTNProjectileAngleOffsetTest, "GSTNProjectile.Core.ShotAngleOffset",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FGSTNProjectileAngleOffsetTest::RunTest(const FString& Parameters)
+{
+	// CP2 move actions: the second shot of a double press leaves at another angle. Golden values by hand: Unreal's +Y is to the right of +X
+	const FVector Forward(1.0, 0.0, 0.0);
+	const FVector Up(0.0, 0.0, 1.0);
+	TestTrue(TEXT("no offset keeps the direction"), FGSTN_ShotAim::ApplyAngleOffset(Forward, Up, 0.f, 0.f).Equals(Forward, 1e-6));
+	TestTrue(TEXT("+90 yaw turns forward to the right"), FGSTN_ShotAim::ApplyAngleOffset(Forward, Up, 90.f, 0.f).Equals(FVector(0.0, 1.0, 0.0), 1e-5));
+	TestTrue(TEXT("-90 yaw turns forward to the left"), FGSTN_ShotAim::ApplyAngleOffset(Forward, Up, -90.f, 0.f).Equals(FVector(0.0, -1.0, 0.0), 1e-5));
+
+	// 30 degrees up: (cos 30, 0, sin 30)
+	const FVector Raised = FGSTN_ShotAim::ApplyAngleOffset(Forward, Up, 0.f, 30.f);
+	TestTrue(TEXT("+30 pitch raises the shot"), Raised.Equals(FVector(FMath::Cos(UE_PI / 6.0), 0.0, 0.5), 1e-5));
+
+	// The pitch adds to the shot's own elevation (a lob of 20 raised by 10 = 30) and keeps the heading
+	const FVector Lob = FRotator(20.0, 45.0, 0.0).Vector();
+	const FVector Higher = FGSTN_ShotAim::ApplyAngleOffset(Lob, Up, 0.f, 10.f);
+	TestTrue(TEXT("elevations add up"), FMath::IsNearlyEqual(Higher.Rotation().Pitch, 30.0, 1e-3));
+	TestTrue(TEXT("the heading stays"), FMath::IsNearlyEqual(Higher.Rotation().Yaw, 45.0, 1e-3));
+
+	// Clamped short of straight up, so the shot keeps a heading
+	const FVector Steep = FGSTN_ShotAim::ApplyAngleOffset(Forward, Up, 0.f, 120.f);
+	TestTrue(TEXT("clamped at 89 degrees"), FMath::IsNearlyEqual(Steep.Rotation().Pitch, 89.0, 1e-3) && Steep.X > 0.0);
+
+	// The shooter's own up: on a wall whose up is +Y, a yaw turns the shot around +Y. Forward +X with up +Y: +90 about +Y turns X towards -Z
+	const FVector WallUp(0.0, 1.0, 0.0);
+	const FVector OnWall = FGSTN_ShotAim::ApplyAngleOffset(Forward, WallUp, 90.f, 0.f);
+	TestTrue(TEXT("the yaw is around the shooter's up"), OnWall.Equals(Forward.RotateAngleAxis(90.0, WallUp), 1e-5) && FMath::IsNearlyZero(OnWall.Y, 1e-6));
+	TestTrue(TEXT("unit length"), FMath::IsNearlyEqual(FGSTN_ShotAim::ApplyAngleOffset(FVector(3.0, 4.0, 0.0), Up, 25.f, -15.f).Size(), 1.0, 1e-6));
+	return true;
+}
+
 #endif

@@ -401,13 +401,16 @@ void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_Comba
 		return;
 	}
 	const FGSTN_SurfaceImpactRow* Row = In.Table->GetRow(Contact.SurfaceTypeIndex);
-	if (!Row || (Contact.Kind != EGSTN_TumbleContactKind::Wall && !Row->bForceDefault))
+	FGSTN_ImpactProfile Profile = FGSTN_ImpactProfile::Unpack(Core.Hit.ImpactProfileQ);
+	// A floor ends the tumble (the landing), except where the surface forces its outcome or the attack forces a bounce: the ground bounce of
+	// a spike (owner, 2026-11-13). The attack's bounce is spent on the first floor it bounces off, so the victim bounces once and then lands
+	const bool bForcedGroundBounce = Contact.Kind == EGSTN_TumbleContactKind::Floor && Profile.Force == EGSTN_ImpactOutcome::Bounce;
+	if (!Row || (Contact.Kind != EGSTN_TumbleContactKind::Wall && !Row->bForceDefault && !bForcedGroundBounce))
 	{
 		return;
 	}
 
 	static const FGSTN_ImpactResponse AnythingGoes;
-	const FGSTN_ImpactProfile Profile = FGSTN_ImpactProfile::Unpack(Core.Hit.ImpactProfileQ);
 	const FGSTN_ImpactResult Resolved = UGSTN_ImpactMath::Resolve(FGSTN_ImpactInput::Make(Contact.SurfaceTypeIndex, Contact.ImpactSpeedQ),
 		In.Table, In.Response ? *In.Response : AnythingGoes, Profile);
 	if (Resolved.Outcome == EGSTN_ImpactOutcome::None)
@@ -449,6 +452,11 @@ void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_Comba
 		Out.Move.Frames = FMath::Max(Frames, TumbleProbeFrames);
 		Core.Hit.HitstunEndFrame = FMath::Max(Core.Hit.HitstunEndFrame, Frame + Frames);
 		Core.Hit.ImpactEndFrame = Frame + 1;
+		if (bForcedGroundBounce && !Row->bForceDefault)
+		{
+			Profile.Force = EGSTN_ImpactOutcome::None;
+			Core.Hit.ImpactProfileQ = Profile.Pack();
+		}
 		break;
 	}
 	case EGSTN_ImpactOutcome::BreakSurface:
@@ -566,9 +574,10 @@ void FGSTN_CombatVictim::AppendHitEvents(const FGSTN_VictimHit& Hit, int32 Frame
 
 void FGSTN_CombatVictim::ProjectStateTags(UAbilitySystemComponent& ASC, const FGSTN_CombatSyncCore& Core, int32 Frame)
 {
-	// Set, not added: nothing else grants these three, and a re-simulated frame must not inherit what the predicted future left behind
+	// Set, not added: nothing else grants these four, and a re-simulated frame must not inherit what the predicted future left behind
 	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Hitstun, Core.ActionState == EGSTN_ActionState::Hitstun || Core.ActionState == EGSTN_ActionState::Splat ? 1 : 0);
 	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Tumble, Core.ActionState == EGSTN_ActionState::Tumble ? 1 : 0);
+	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Splat, Core.ActionState == EGSTN_ActionState::Splat ? 1 : 0);
 	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Hitstop, Core.IsInHitstop(Frame) ? 1 : 0);
 
 	// The reaction lock has a tag of its own, set from the state like the others: a member remembering "I hold the lock" is outside the rolled
@@ -622,6 +631,67 @@ void FGSTN_CombatVictim::EndReaction(FGSTN_CombatSyncCore& Core, int32 Frame)
 	{
 		Core.HitstopEndFrame = Frame;
 	}
+}
+
+bool FGSTN_CombatVictim::ResolveHitFacing(const UGSTN_CombatRules* Rules, const FGSTN_VictimResult& Result, const FGSTN_CombatSyncCore& Core,
+	const FGSTN_SnapshotEntry& Self, const FGSTN_StepSnapshot* Snapshot, float& OutYawDeg)
+{
+	if (!Rules || !Core.Hit.HasPendingReaction())
+	{
+		return false;
+	}
+	// The hit that wrote the pending reaction: the last staggered one of the drain
+	const FGSTN_VictimHit* Last = nullptr;
+	for (const FGSTN_VictimHit& Hit : Result.Hits)
+	{
+		if (Hit.bStaggered && !Hit.bRicochet)
+		{
+			Last = &Hit;
+		}
+	}
+	if (!Last)
+	{
+		return false;
+	}
+	// Back along the knockback: the same rule the launch applies (ExecuteReactionMove), now already on the hit frame. DI may bend it by a
+	// few degrees when the move starts; that correction stays where it was
+	const FVector Launch = Core.Hit.GetPendingLaunch();
+	const FVector Flat(Launch.X, Launch.Y, 0.0);
+	if (Rules->bTurnBackAlongKnockback && Flat.SizeSquared() > 1.0)
+	{
+		OutYawDeg = static_cast<float>((-Flat).Rotation().Yaw);
+		return true;
+	}
+	if (!Rules->bTurnToAttackerWithoutKnockback)
+	{
+		return false;
+	}
+	// No push: face the attacker. A melee attacker by its position in the step snapshot; a thrown or shot hit (or an attacker not in the
+	// snapshot) against the hitbox's travel; last, the attacker's own facing reversed
+	const FVector SelfLocation = Self.Transform.GetLocation();
+	FVector ToAttacker = FVector::ZeroVector;
+	const FGSTN_SnapshotEntry* Attacker = Snapshot && !Last->Entry.SourceTag.IsValid() ? Snapshot->Find(Last->Entry.AttackerId) : nullptr;
+	if (Attacker)
+	{
+		ToAttacker = Attacker->Transform.GetLocation() - SelfLocation;
+	}
+	ToAttacker.Z = 0.0;
+	if (ToAttacker.SizeSquared() < 1.0)
+	{
+		ToAttacker = FVector(-Last->Entry.HitboxVelocity.X, -Last->Entry.HitboxVelocity.Y, 0.0);
+	}
+	if (ToAttacker.SizeSquared() < 1.0)
+	{
+		ToAttacker = -FRotator(0.0, Last->Entry.AttackerYaw, 0.0).Vector();
+	}
+	const FVector Facing = FVector(Self.Facing.X, Self.Facing.Y, 0.0).GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
+	const double CosAngle = FVector::DotProduct(Facing, ToAttacker.GetSafeNormal());
+	if (CosAngle > FMath::Cos(FMath::DegreesToRadians(static_cast<double>(Rules->TurnToAttackerMinAngleDeg))))
+	{
+		return false;
+	}
+	OutYawDeg = static_cast<float>(ToAttacker.Rotation().Yaw);
+	return true;
 }
 
 FGSTN_ReactionMove FGSTN_CombatVictim::StepReaction(const FGSTN_ReactionStepInput& In, FGSTN_CombatSyncCore& Core)
