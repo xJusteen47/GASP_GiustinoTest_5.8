@@ -19,12 +19,14 @@ scaled by impact force down to a minimum or none; per-move override; a limit so 
 1. Owner's "cancel after N frames" read as: no more HARD bounces after N frames (BounceWindowFrames) or N bounces (MaxBounces); then floors are
    landings. Other reading (bounce becomes actionable after N frames) NOT done.
 2. Hard bounce only while in hitstun by default (Smash-like): a launch upward coming down after hitstun lands with a (max height) tech bounce.
-3. "Dropkick causes the tech bounce": the dropkick USER's self knockdown bounces at SelfKnockdownImpactSpeed. If its VICTIM hard-bounces in
-   playtest, set the dropkick hitbox Impact > Forbid: Bounce (asset edit on desktop, not done).
+3. Dropkick (owner 22:32Z, like Big Band): its USER does the tech bounce on landing. Per move: new Defence track "Self Landing Bounce"
+   (FGSTN_SelfLandingBounceTrack: Mode Rules/Height/None, Height 25 cm) next to the KnockdownOnLanding tag window; without it the rules'
+   SelfKnockdownImpactSpeed. Desktop: add the track to the dropkick timeline. Its victim follows the generic rules. Air timeout (2 s -> air idle)
+   ends the move, so no self knockdown after it; the hop is vertical + stick steer, a downed user falling off a ledge does not bounce again.
 4. Flat landing (bNoTechBounce / NoBounceBelowSpeed) still starts the kit's GroundBounce GA (the clip); no-clip variant not done.
 ## Desktop checks (nothing compiled or run here)
 1. Build _ue59 (IN-USO.txt). 2. Tests: `GSTNCombat.Core.Impact.GroundImpactRules`, `GSTNCombat.NP.Hits.Impact` (new GroundBounceBySpeed),
-`GSTNCombat.NP.Hits.State` (new GroundBounceChain), `GSTNDefence.Core.Bounce` (new TechBounceHeight), then full GSTN. Risk: integration tests
+`GSTNCombat.NP.Hits.State` (new GroundBounceChain), `GSTNDefence.Core.Bounce` (new TechBounceHeight), `GSTNDefence.NP.*Landing*`, then full GSTN. Risk: integration tests
 that expect a fast spike to down at once may now see 1-2 hard bounces first (intended); judge per test.
 3. PIE L_Test_Hub: IMPATTI kit X (spike) at 100% = hard bounce(s) then tech bounce + lying; weak launch = small hop; dropkick = tech bounce.
 Tune in CombatRules_Standard > Ground Impact and DefenceRules > Ground Bounce (do NOT save unless the owner wants).

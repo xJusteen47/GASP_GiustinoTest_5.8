@@ -172,6 +172,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "GSTN|Defence")
 	static double TechBounceSpeed(const FGSTN_GroundBounceRules& Rules, double ImpactSpeed, double Gravity);
 
+	/** The launch speed that rises Height (cm) under Gravity times the rules' GroundBounceGravityScale; 0 for no height. Pure */
+	static double BounceSpeedForHeight(const FGSTN_GroundBounceRules& Rules, double Height, double Gravity);
+
 	/** GroundBounceVelocity with Speed in place of the rules' GroundBounceSpeed (the steer is the same). Pure */
 	static FVector GroundBounceVelocityAtSpeed(const FGSTN_GroundBounceRules& Rules, const FVector& Up, const FVector& StickOnPlane, double Speed);
 };

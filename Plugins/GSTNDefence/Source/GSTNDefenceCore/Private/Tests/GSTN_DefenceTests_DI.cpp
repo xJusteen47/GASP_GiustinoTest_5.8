@@ -289,6 +289,10 @@ bool FGSTN_DefenceTechBounceHeightTest::RunTest(const FString& Parameters)
 	Rules.GroundBounceSpeed = 300.f;
 	TestEqual(TEXT("scaling off: the fixed speed"), UGSTN_DefenceMath::TechBounceSpeed(Rules, 5000.0, 980.0), 300.0, 1e-9);
 
+	// A move's own height (the dropkick's Self Landing Bounce track) goes through the same formula
+	TestEqual(TEXT("40 cm by height"), UGSTN_DefenceMath::BounceSpeedForHeight(Rules, 40.0, 980.0), 484.97422611928565, 1e-6);
+	TestEqual(TEXT("0 cm: no bounce"), UGSTN_DefenceMath::BounceSpeedForHeight(Rules, 0.0, 980.0), 0.0, 1e-9);
+
 	// The steer is the fixed-speed bounce's at any speed
 	Rules.GroundBounceSteerDeg = 30.f;
 	TestTrue(TEXT("same steer at 600 cm/s"), UGSTN_DefenceMath::GroundBounceVelocityAtSpeed(Rules, FVector::UpVector, FVector(1.0, 0.0, 0.0), 600.0).Equals(FVector(300.0, 0.0, 519.6152422706632), 1e-6));

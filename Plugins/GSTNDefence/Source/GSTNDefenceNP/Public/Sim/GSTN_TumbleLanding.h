@@ -78,9 +78,14 @@ struct GSTNDEFENCENP_API FGSTN_TumbleLanding
 	 * The downed state of a landing: KnockdownEndFrame (MaxDownedFrames from LandingFrame, or the missed-tech knockdown when bMissedTech), the mini
 	 * bounce from the stick, the kit's ground bounce ability (pending, started at AfterClocks of this frame) and Combat.Event.KnockedDown. The caller
 	 * ends the reaction or the move first. ImpactSpeed (cm/s into the floor, after the hit's SpeedScale) sets the tech bounce's height
-	 * (UGSTN_DefenceMath::TechBounceSpeed, owner 2026-11-16); bNoBounce (the hit's bNoTechBounce) lands flat
+	 * (UGSTN_DefenceMath::TechBounceSpeed, owner 2026-11-16); bNoBounce (the hit's bNoTechBounce) lands flat;
+	 * FixedHeight at or above 0 replaces the speed's height (a move's own Self Landing Bounce track)
 	 */
-	static void EnterDowned(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data, int32 LandingFrame, bool bMissedTech, double ImpactSpeed, bool bNoBounce);
+	static void EnterDowned(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data, int32 LandingFrame, bool bMissedTech, double ImpactSpeed, bool bNoBounce,
+		double FixedHeight = -1.0);
+
+	/** The move's own Self Landing Bounce track (Defence), or null: the running timeline's, read before the move is cancelled */
+	static const struct FGSTN_SelfLandingBounceTrack* FindSelfLandingBounce(const FGSTN_CombatTickContext& Context);
 
 	/** The running move (not its ricochet recoil) has a Tags window with Combat.Move.KnockdownOnLanding open at this frame */
 	static bool IsSelfKnockdownWindowOpen(const FGSTN_CombatTickContext& Context);

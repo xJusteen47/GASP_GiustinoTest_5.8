@@ -86,3 +86,33 @@ struct GSTNDEFENCECORE_API FGSTN_ParryWindowTrack : public FGSTN_TimelineTrack
 	/** Appends one message per problem: an empty or inverted frame range, a profile name that is not baked to a profile */
 	void Validate(const FString& Label, TArray<FString>& OutErrors) const;
 };
+
+/** How the user of a move that downs itself on landing bounces (FGSTN_SelfLandingBounceTrack) */
+UENUM(BlueprintType)
+enum class EGSTN_SelfLandingBounce : uint8
+{
+	/** The rules' tech bounce at FGSTN_GroundBounceRules::SelfKnockdownImpactSpeed */
+	Rules,
+	/** This move's own height (cm) */
+	Height,
+	/** No bounce: the user drops flat */
+	None
+};
+
+/**
+ * The tech bounce of a move's OWN user when the move downs it on landing (owner 2026-11-16: the dropkick, like Big Band's: the attacker lands,
+ * hops and lies down). Works with the move's Combat.Move.KnockdownOnLanding tag window, which decides WHEN the landing downs the user; this
+ * track only says how high it bounces. The frame range is not read: any track of this kind on the move applies. Without one, the rules' value
+ */
+USTRUCT(BlueprintType, meta = (DisplayName = "Self Landing Bounce"))
+struct GSTNDEFENCECORE_API FGSTN_SelfLandingBounceTrack : public FGSTN_TimelineTrack
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Landing")
+	EGSTN_SelfLandingBounce Mode = EGSTN_SelfLandingBounce::Height;
+
+	/** Peak height of the hop (cm), under the rules' GroundBounceGravityScale; steered by the stick like any tech bounce */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Landing", meta = (ClampMin = "0.0", ForceUnits = "cm", EditCondition = "Mode == EGSTN_SelfLandingBounce::Height"))
+	float Height = 25.f;
+};

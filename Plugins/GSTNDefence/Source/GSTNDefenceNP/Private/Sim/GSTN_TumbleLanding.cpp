@@ -5,6 +5,7 @@
 #include "Abilities/GSTN_ShieldAbilityData.h"
 #include "AbilitySystemComponent.h"
 #include "Data/GSTN_DefenceRules.h"
+#include "Data/GSTN_DefenceTracks.h"
 #include "Events/GSTN_SimEvent.h"
 #include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
 #include "GSTN_CombatNPTags.h"
@@ -298,7 +299,7 @@ void FGSTN_TumbleLanding::OnContactResolved(FGSTN_CombatTickContext& Context, co
 	EnterDowned(Context, Data, Contact.ContactFrame, Data.bHasTechSet, ImpactSpeed, Profile.bNoTechBounce);
 }
 
-void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data, int32 LandingFrame, bool bMissedTech, double ImpactSpeed, bool bNoBounce)
+void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data, int32 LandingFrame, bool bMissedTech, double ImpactSpeed, bool bNoBounce, double FixedHeight)
 {
 	const int32 Frame = Context.Frame;
 	const FGSTN_GroundBounceRules& Bounce = Data.Rules->GroundBounce;
@@ -321,7 +322,9 @@ void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FG
 	const double Gravity = GravitySim ? GravitySim->GetBaseGravity().Size() : FGSTN_GravityFrame::NominalGravity;
 	// The mini bounce ("tech bounce"), steered by the frame's stick: a short launch, the knockback move's flight. Its height follows the impact
 	// speed (owner 2026-11-16: a soft landing barely bounces, a hard one bounces well); the hit may ask for none
-	const double BounceSpeed = bNoBounce ? 0.0 : UGSTN_DefenceMath::TechBounceSpeed(Bounce, ImpactSpeed, Gravity);
+	const double BounceSpeed = bNoBounce ? 0.0
+		: FixedHeight >= 0.0 ? UGSTN_DefenceMath::BounceSpeedForHeight(Bounce, FixedHeight, Gravity)
+		: UGSTN_DefenceMath::TechBounceSpeed(Bounce, ImpactSpeed, Gravity);
 	const FVector Velocity = BounceSpeed > 0.0 ? UGSTN_DefenceMath::GroundBounceVelocityAtSpeed(Bounce, Context.Up, Context.StickOnPlane, BounceSpeed) : FVector::ZeroVector;
 	// Heavier gravity makes it small AND quick (react-hook-1 review: 300 cm/s under normal gravity rose 44 cm and floated about 34 frames)
 	const float GravityScale = FMath::Max(Bounce.GroundBounceGravityScale, 0.01f);
@@ -339,6 +342,22 @@ void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FG
 		Fragment.PendingStartKind = GSTNDefencePendingStart::GroundBounce;
 	}
 	AppendEvent(Context, GSTNDefenceTags::Event_KnockedDown, 0.f);
+}
+
+const FGSTN_SelfLandingBounceTrack* FGSTN_TumbleLanding::FindSelfLandingBounce(const FGSTN_CombatTickContext& Context)
+{
+	if (!Context.RunningTimeline)
+	{
+		return nullptr;
+	}
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instanced : Context.RunningTimeline->Tracks)
+	{
+		if (const FGSTN_SelfLandingBounceTrack* Track = Instanced.GetPtr<FGSTN_SelfLandingBounceTrack>())
+		{
+			return Track;
+		}
+	}
+	return nullptr;
 }
 
 bool FGSTN_TumbleLanding::IsSelfKnockdownWindowOpen(const FGSTN_CombatTickContext& Context)
@@ -391,8 +410,12 @@ bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const 
 	// Landed inside the window: the move ends here and its user is downed as a tumble landing downs a victim. No tech evaluation (no contact, no
 	// reaction to tech out of): the way out is the owner's one, the get-up roll from the stick or the neutral get-up
 	Existing->HitFlags &= ~GSTNDefenceHitFlags::SelfKnockdownArmed;
+	// The move's own hop (owner 2026-11-16, the dropkick like Big Band's), read before the move is cancelled; else the rules' at their speed
+	const FGSTN_SelfLandingBounceTrack* Own = FindSelfLandingBounce(Context);
+	const bool bFlat = Own && Own->Mode == EGSTN_SelfLandingBounce::None;
+	const double Height = Own && Own->Mode == EGSTN_SelfLandingBounce::Height ? FMath::Max(static_cast<double>(Own->Height), 0.0) : -1.0;
 	FGSTN_CombatTimelineLogic::CancelForOtherCommand(Context.Out.Core, Context.Frame);
-	EnterDowned(Context, Data, Context.Frame, false, static_cast<double>(Data.Rules->GroundBounce.SelfKnockdownImpactSpeed), false);
+	EnterDowned(Context, Data, Context.Frame, false, static_cast<double>(Data.Rules->GroundBounce.SelfKnockdownImpactSpeed), bFlat, Height);
 	return true;
 }
 

@@ -361,7 +361,11 @@ double UGSTN_DefenceMath::TechBounceSpeed(const FGSTN_GroundBounceRules& Rules, 
 	{
 		return FMath::Max(static_cast<double>(Rules.GroundBounceSpeed), 0.0);
 	}
-	const double Height = TechBounceHeight(Rules, ImpactSpeed);
+	return BounceSpeedForHeight(Rules, TechBounceHeight(Rules, ImpactSpeed), Gravity);
+}
+
+double UGSTN_DefenceMath::BounceSpeedForHeight(const FGSTN_GroundBounceRules& Rules, double Height, double Gravity)
+{
 	const double Pull = FMath::Max(Gravity, 0.0) * FMath::Max(static_cast<double>(Rules.GroundBounceGravityScale), 0.01);
 	// Rise H under a constant pull g: v = sqrt(2 g H)
 	return Height > 0.0 && Pull > 0.0 ? FMath::Sqrt(2.0 * Pull * Height) : 0.0;
