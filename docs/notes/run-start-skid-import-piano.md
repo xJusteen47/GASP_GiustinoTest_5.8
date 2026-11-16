@@ -25,11 +25,13 @@ Prova subito, senza codice: DA_Locomotion_Default (/Game/GASNPPTest/Combat) -> A
 | R4 | Review ABP modificata dell'owner (ABP_WallSliding e simili): solo lettura, tabella "tieni / scarta / perche'" (stati, transizioni, IK, curve). Si porta solo cio' che e' buono nei layer (wall/skid), niente copia dell'ABP | cloud su export testuale (fisso esporta), Opus medium | ~1.5 $ |
 Poi L1-L3 del piano anim-layer (slot override, wall layer con clip vere, skid layer) usano R3/R4.
 
-Totale nuovo: ~17 $ (R0-R4). R3 sostituisce L0 (~2 $), quindi aggiunta netta ~15 $.
+Totale nuovo: ~20 $ (R0-R4 + R1c). R3 sostituisce L0 (~2 $), quindi aggiunta netta ~18 $.
 Ordine: R0 e R3 sul fisso dopo il playtest (stessa sessione editor), R1 e R4 in cloud in parallelo, poi R2.
 
-## 1b. Soglia di direzionalita' degli attacchi (owner 21:06Z: valore DIVERSO dalla zona morta)
-Esiste gia': `UGSTN_InputSettings` (GSTN Input) StickDeadZone 0.2 (sotto = Neutral) e AimZone 0.5 (0.2-0.5 = Aim: attacco neutro orientato; sopra = Tilt: attacco direzionale), FlickFrames 3; classificatore `FGSTN_DirectionClassifier::ClassifyZone`. Problemi: (a) sta in Project Settings, contro la regola "niente project settings per gameplay" -> va nei dati di gioco/kit insieme agli altri tunables (input-opzioni-per-giocatore.md §3); (b) oggi si misura sullo stick gia' ridotto dall'IMC, quindi le soglie reali dipendono dalla zona morta. Con R1a il classificatore legge lo stick dopo la zona morta del giocatore, rimappato 0..1: le soglie degli attacchi restano uguali qualunque zona morta scelga il giocatore. Lo spostamento fuori dai Project Settings NON e' in questo piano (~2 $, va col lavoro §3 del doc opzioni); qui solo R1a che lo rende coerente.
+## 1b. Soglie neutro/direzionale degli attacchi (owner 21:06Z: valore DIVERSO dalla zona morta; 21:07Z: anche questo OPZIONE DEL GIOCATORE)
+Esistono gia': `UGSTN_InputSettings` (Project Settings, GSTN Input) StickDeadZone 0.2 (sotto = Neutral), AimZone 0.5 (0.2-0.5 = Aim: attacco neutro orientato; sopra = Tilt: direzionale), FlickFrames 3; `FGSTN_DirectionClassifier::ClassifyZone`.
+Vincolo tecnico: la classificazione gira DENTRO la simulazione di input (GSTN_InputSimulator.cpp:64), su server e client, e la zona entra nello stato sincronizzato. Quindi un valore per giocatore deve essere identico su tutte le macchine: non basta un'opzione locale come la zona morta (R1a).
+- **R1c**: soglie Neutral/Aim per giocatore. Valore scelto nelle opzioni del giocatore (stesso sottosistema di R1a), copiato in `FGSTN_LoadoutData` (gia' per LocalPlayer, inviato al server e compilato su ogni macchina, IO-3 del doc opzioni) e letto dal classificatore al posto dei Project Settings. Default = dati delle regole di gioco (asset regole), non Project Settings. Cambiarlo a meta' partita = nuovo loadout (come il cambio kit). FlickFrames resta regola di gioco (scelta applicata, regola 6). Il classificatore legge lo stick dopo la zona morta del giocatore, rimappato 0..1. I campi in UGSTN_InputSettings vengono tolti. Test: due giocatori con soglie diverse, stessa classificazione su server e client. cloud, Opus medium, ~3 $.
 
 ## 2. Vincoli
 - Nessun thread tocca il fisso finche' l'owner fa playtest. GaspMoverProject e' 5.7: lo si apre solo per esportare/copiare, mai salvarlo.
