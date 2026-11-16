@@ -65,7 +65,9 @@ namespace
 				// A Hurtbox track (the move's own hurtboxes, owner 2026-11-16) is edited like a hitbox group but drawn in the hurtbox green, so the two never read alike
 				const FGSTN_TimelineTrack* Owner = Data->Tracks.IsValidIndex(Hitbox.Track) ? Data->Tracks[Hitbox.Track].GetPtr<FGSTN_TimelineTrack>() : nullptr;
 				const bool bHurtbox = Owner != nullptr && Owner->GetKind() == EGSTN_TimelineTrackKind::Hurtbox;
-				GSTNPreviewDrawing::DrawHitShape(PDI, Hitbox.Shape, Hitbox.Space, bHurtbox ? HurtboxTrackColor() : GroupColor(Hitbox.HitGroup), bSelected ? 2.5f : 0.f);
+				// In front of the mesh and the floor (a stomp's sphere sits half under the floor at the feet) and never a hairline: the owner could not see it
+				GSTNPreviewDrawing::DrawHitShape(PDI, Hitbox.Shape, Hitbox.Space, bHurtbox ? HurtboxTrackColor() : GroupColor(Hitbox.HitGroup), bSelected ? 2.5f : 1.5f,
+					SDPG_Foreground);
 				if (!bHurtbox && !bHitTesting)
 				{
 					DrawLaunchArrow(PDI, *Data, Hitbox, bSelected);

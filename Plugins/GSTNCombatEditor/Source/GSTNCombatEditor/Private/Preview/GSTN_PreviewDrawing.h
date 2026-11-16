@@ -64,7 +64,8 @@ namespace GSTNPreviewDrawing
 	FVector GetEffectiveExtent(const FGSTN_HitShape& Shape);
 
 	/** A hit or hurt shape as a wireframe. The shape sits at Shape.Local x Carrier (the preview's root space is world space: pass identity) */
-	void DrawHitShape(FPrimitiveDrawInterface* PDI, const FGSTN_HitShape& Shape, const FTransform& Carrier, const FLinearColor& Color, float Thickness = 0.f);
+	void DrawHitShape(FPrimitiveDrawInterface* PDI, const FGSTN_HitShape& Shape, const FTransform& Carrier, const FLinearColor& Color, float Thickness = 0.f,
+		ESceneDepthPriorityGroup Depth = SDPG_World);
 
 	/** An arrow from the middle of the capsule along +X, the direction the character faces, as long as the capsule is high */
 	void DrawFacingArrow(FPrimitiveDrawInterface* PDI, const FGSTN_PreviewCapsule& Capsule);

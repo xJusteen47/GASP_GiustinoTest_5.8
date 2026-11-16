@@ -46,6 +46,10 @@
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Text/STextBlock.h"
 
+
+static TAutoConsoleVariable<int32> CVarTimelineOpenAtFrame(TEXT("gstn.Combat.Timeline.OpenAtFrame"), 0,
+	TEXT("Editor only: a combat timeline editor opened while this is above 0 starts with the playhead on this frame (for scripted screenshots)."));
+
 #define LOCTEXT_NAMESPACE "GSTNCombatEditor"
 
 const FName FGSTN_TimelineEditorToolkit::LayoutName(TEXT("GSTN_TimelineEditor_Layout_v2"));
@@ -225,6 +229,11 @@ bool FGSTN_TimelineEditorToolkit::InitEditor(const EToolkitMode::Type Mode, cons
 	}
 
 	Model = MakeShared<FGSTN_TimelineEditorModel>(Context);
+	// Scripts (screenshots, reviews) open an editor on a given frame: no Python reaches the toolkit's model
+	if (const IConsoleVariable* StartFrame = IConsoleManager::Get().FindConsoleVariable(TEXT("gstn.Combat.Timeline.OpenAtFrame")); StartFrame && StartFrame->GetInt() > 0)
+	{
+		Model->SetPlayhead(StartFrame->GetInt());
+	}
 	// The preview scene follows the model's playhead and montage; its subject is stored per asset in the user's config
 	Preview = FGSTN_PreviewController::Create(Model.ToSharedRef());
 	// A different mesh is a different bake input: the status and the findings follow the subject

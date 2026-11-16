@@ -79,6 +79,10 @@ DAIR_SEQUENCES = [
     {'name': 'dair_land', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True, 'air': {'trigger_h': 184.0}},
     {'name': 'jump_only', 'taps': [], 'frames': 110, 'dummy': None, 'shoot': False, 'air': {}},
     {'name': 'dair_hit', 'taps': [], 'frames': 130, 'dummy': 62.0, 'shoot': True, 'air': {'trigger_h': 225.0}},
+    # DEBUG-HUB (owner 2026-11-16, "does the stomp really take the enemies below, or do pushbox and core stop it?"): the dummy almost under the
+    # attacker (PIE_CAPTURE_BELOW_DIST cm ahead, default 20), same jump and press; run with gstn.Combat.Debug.Hitboxes/Body on (PIE_CAPTURE_CVARS)
+    {'name': 'dair_below', 'taps': [], 'frames': 130, 'dummy': float(os.environ.get('PIE_CAPTURE_BELOW_DIST', 20.0)), 'shoot': True,
+     'air': {'trigger_h': 225.0}},
     # PUSHBOX-P3: the same hit on a dummy at a high percent (test-only server write of its DamagePercent, PIE_CAPTURE_DUMMY_PERCENT, default 180: at 150 the launch, ~1700 cm/s up and forward, stayed under the 1800 cm/s tumble threshold and flew ~17 m)
     # so the landing hit tumbles it into a knockdown; then the stick is held forward ('walk': from this many frames after the press, for this many
     # frames) so the attacker walks over the downed body (no pushbox expected while it is down)
@@ -426,6 +430,11 @@ def _tick(_dt):
             seq, frame = SEQUENCES[st['seq']], st['frame']
             if seq['shoot']:
                 _shoot(seq, frame)
+            # The scene captures do not show the debug draw (hitboxes, body): PIE_CAPTURE_HIRES='86,91' takes a real viewport shot on those
+            # frames (Saved/Screenshots/WindowsEditor/HighresScreenshot*.png, in frame order)
+            if str(frame) in os.environ.get('PIE_CAPTURE_HIRES', '').split(','):
+                _console('HighResShot 1')
+                _log(f'{seq["name"]}: HighResShot on v{frame}')
             tapped = (frame - PRE) in seq['taps']
             extra, hold_crouch = None, False
             air = seq.get('air')

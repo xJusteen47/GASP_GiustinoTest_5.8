@@ -86,7 +86,8 @@ FVector GSTNPreviewDrawing::GetEffectiveExtent(const FGSTN_HitShape& Shape)
 	return FVector::ZeroVector;
 }
 
-void GSTNPreviewDrawing::DrawHitShape(FPrimitiveDrawInterface* PDI, const FGSTN_HitShape& Shape, const FTransform& Carrier, const FLinearColor& Color, float Thickness)
+void GSTNPreviewDrawing::DrawHitShape(FPrimitiveDrawInterface* PDI, const FGSTN_HitShape& Shape, const FTransform& Carrier, const FLinearColor& Color, float Thickness,
+	ESceneDepthPriorityGroup Depth)
 {
 	FTransform World = Shape.Local * Carrier;
 	World.SetScale3D(FVector::OneVector);
@@ -95,14 +96,14 @@ void GSTNPreviewDrawing::DrawHitShape(FPrimitiveDrawInterface* PDI, const FGSTN_
 	switch (Shape.Type)
 	{
 	case EGSTN_ShapeType::Sphere:
-		DrawWireSphere(PDI, World.GetLocation(), Color, static_cast<float>(Extent.X), 16, SDPG_World, Thickness);
+		DrawWireSphere(PDI, World.GetLocation(), Color, static_cast<float>(Extent.X), 16, Depth, Thickness);
 		break;
 	case EGSTN_ShapeType::Capsule:
 		DrawWireCapsule(PDI, World.GetLocation(), World.GetUnitAxis(EAxis::X), World.GetUnitAxis(EAxis::Y), World.GetUnitAxis(EAxis::Z), Color,
-			static_cast<float>(Extent.X), static_cast<float>(Extent.Z), 12, SDPG_World, Thickness);
+			static_cast<float>(Extent.X), static_cast<float>(Extent.Z), 12, Depth, Thickness);
 		break;
 	case EGSTN_ShapeType::Box:
-		DrawWireBox(PDI, World.ToMatrixNoScale(), FBox(-Extent, Extent), Color, SDPG_World, Thickness);
+		DrawWireBox(PDI, World.ToMatrixNoScale(), FBox(-Extent, Extent), Color, Depth, Thickness);
 		break;
 	}
 }
