@@ -126,6 +126,7 @@ void FGSTN_KitModBaking::BakeTimeline(const FGSTN_CombatTimelineData& Base, cons
 		OutDerived.FirstActionableFrame = FMath::Min(ScaleFrame(Base.FirstActionableFrame, Q), OutDerived.TotalFrames);
 		OutDerived.Tail.StartFrame = Base.Tail.StartFrame >= 0 ? FMath::Min(ScaleFrame(Base.Tail.StartFrame, Q), OutDerived.TotalFrames) : Base.Tail.StartFrame;
 		OutDerived.TurnUntilFrame = ScaleFrame(Base.TurnUntilFrame, Q);
+		OutDerived.Reverse.Frames = Base.Reverse.Frames > 0 ? FMath::Max(ScaleFrame(Base.Reverse.Frames, Q), 1) : Base.Reverse.Frames;
 		OutDerived.OverrideFrames = Base.OverrideFrames > 0 ? FMath::Max(ScaleFrame(Base.OverrideFrames, Q), 1) : Base.OverrideFrames;
 		OutDerived.MontagePlayRate = Base.MontagePlayRate * static_cast<float>(TimeOne) / static_cast<float>(Q);
 

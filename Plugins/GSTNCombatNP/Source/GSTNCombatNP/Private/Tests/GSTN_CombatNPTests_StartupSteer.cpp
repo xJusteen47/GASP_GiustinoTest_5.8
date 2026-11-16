@@ -224,6 +224,19 @@ bool FGSTN_SetFacingEffectTest::RunTest(const FString& Parameters)
 
 	FMoverSyncState Empty;
 	TestFalse(TEXT("no default sync state: nothing applied"), Effect.ApplyMovementEffect(Params, Empty));
+
+	// A reverse with TurnWithFacing momentum (owner 2026-11-16): the velocity turns with the facing about the up, the vertical part stays
+	TestTrue(TEXT("180: drift flips"), FGSTN_SetFacingEffect::TurnVelocity(FVector(300.0, 0.0, -50.0), 0.f, 180.f).Equals(FVector(-300.0, 0.0, -50.0), 1e-2));
+	TestTrue(TEXT("90: drift turns"), FGSTN_SetFacingEffect::TurnVelocity(FVector(300.0, 0.0, 0.0), 0.f, 90.f).Equals(FVector(0.0, 300.0, 0.0), 1e-2));
+	FMoverSyncState Air;
+	Air.SyncStateCollection.FindOrAddMutableDataByType<FMoverDefaultSyncState>().SetTransforms_WorldSpace(FVector::ZeroVector, FRotator(0.0, 0.0, 0.0),
+		FVector(300.0, 0.0, 120.0), FVector::ZeroVector);
+	FGSTN_SetFacingEffect Reverse;
+	Reverse.YawDeg = 180.f;
+	Reverse.bTurnVelocity = true;
+	TestTrue(TEXT("reverse applied"), Reverse.ApplyMovementEffect(Params, Air));
+	const FMoverDefaultSyncState* AfterReverse = Air.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
+	TestTrue(TEXT("reverse: velocity flipped, rise kept"), AfterReverse && AfterReverse->GetVelocity_WorldSpace().Equals(FVector(-300.0, 0.0, 120.0), 1e-2));
 	return true;
 }
 

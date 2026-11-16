@@ -2065,7 +2065,20 @@ void UGSTN_CombatSimComponent::ExecuteFreeze(TSubclassOf<UGameplayEffect> Effect
 
 void UGSTN_CombatSimComponent::StepStartupSteer(int32 Frame, const FGSTN_InputCmd& Cmd, FGSTN_CombatSyncCore& Core, float StepSeconds)
 {
-	if (Core.ActionState != EGSTN_ActionState::InTimeline || (Cmd.AimStickX == 0 && Cmd.AimStickY == 0 && Cmd.StickX == 0 && Cmd.StickY == 0))
+	if (Core.ActionState != EGSTN_ActionState::InTimeline)
+	{
+		return;
+	}
+	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickY));
+	const FVector2D MoveStick(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickY));
+	// Start aim and reverse (owner 2026-11-16: the stick has priority over the facing): before the steering, so the cone starts from the new direction.
+	// The move origin is sync state and the stick the frame's command (read at execution, not at a buffered press): every machine and every
+	// resimulation turns the same way. The turn itself is a SetFacing request, like the steering's; nothing else steers in that frame
+	if (StepOriginAim(Frame, Cmd, MoveStick, AimStick, Core))
+	{
+		return;
+	}
+	if (Cmd.AimStickX == 0 && Cmd.AimStickY == 0 && Cmd.StickX == 0 && Cmd.StickY == 0)
 	{
 		return;
 	}
@@ -2075,8 +2088,6 @@ void UGSTN_CombatSimComponent::StepStartupSteer(int32 Frame, const FGSTN_InputCm
 	{
 		return;
 	}
-	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickY));
-	const FVector2D MoveStick(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickY));
 	// Yaw about the local up, the frame the facing effect writes in (gravity audit 2026-11-16)
 	const float CurrentYaw = FGSTN_GravityFrame::YawOfRotator(Pose.Rotator(), Up);
 	float SteerYaw = 0.f;
@@ -2094,7 +2105,40 @@ void UGSTN_CombatSimComponent::StepStartupSteer(int32 Frame, const FGSTN_InputCm
 	}
 }
 
-void UGSTN_CombatSimComponent::ExecuteSetFacing(int16 YawArg)
+bool UGSTN_CombatSimComponent::StepOriginAim(int32 Frame, const FGSTN_InputCmd& Cmd, const FVector2D& MoveStick, const FVector2D& AimStick, FGSTN_CombatSyncCore& Core)
+{
+	const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(Tables(), Core.ActiveTimeline);
+	if (!Data || Core.RecoilStartFrame != INDEX_NONE || !Core.Hit.MoveOrigin.bSet)
+	{
+		return false;
+	}
+	FGSTN_AimFrameInput In;
+	In.TimelineFrame = Frame - Core.TimelineStartFrame - Core.TimelinePausedFrames;
+	// The move origin keeps the yaw at 65536 steps per turn in a uint16: the same bits as the request's int16
+	In.OriginYawDeg = FGSTN_StartupSteer::DequantizeYaw(static_cast<int16>(Core.Hit.MoveOrigin.RotationQ[1]));
+	In.MoveStick = MoveStick;
+	In.AimStick = AimStick;
+	In.bPrecisionAim = Cmd.bPrecisionAim;
+	In.CameraYawDeg = FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw);
+	float Yaw = 0.f;
+	const EGSTN_AimTurn Turn = FGSTN_StartupSteer::ResolveOriginAim(*Data, In, Yaw);
+	if (Turn == EGSTN_AimTurn::None)
+	{
+		return false;
+	}
+	const int16 YawArg = FGSTN_StartupSteer::QuantizeYaw(Yaw);
+	Core.Hit.MoveOrigin.RotationQ[1] = static_cast<uint16>(YawArg);
+	const bool bTurnMomentum = Turn == EGSTN_AimTurn::Reverse && Data->Reverse.Momentum == EGSTN_ReverseMomentum::TurnWithFacing;
+	if (!Core.Requests.Add(bTurnMomentum ? EGSTN_RequestType::SetFacingTurnMomentum : EGSTN_RequestType::SetFacing, Frame, YawArg))
+	{
+		UE_LOG(LogGSTNCombatSim, Error, TEXT("%s frame %d: no room for the start aim request"), *GetOwner()->GetName(), Frame);
+	}
+	UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: %s to %.0f (timeline frame %d)"), *GetOwner()->GetName(), Frame,
+		Turn == EGSTN_AimTurn::Reverse ? TEXT("reverse") : TEXT("start aim"), Yaw, In.TimelineFrame);
+	return true;
+}
+
+void UGSTN_CombatSimComponent::ExecuteSetFacing(int16 YawArg, bool bTurnMomentum)
 {
 	if (!AbilitySystem || !SetFacingEffect)
 	{
@@ -2104,6 +2148,7 @@ void UGSTN_CombatSimComponent::ExecuteSetFacing(int16 YawArg)
 	if (Spec.IsValid())
 	{
 		Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_FacingYaw, FGSTN_StartupSteer::DequantizeYaw(YawArg));
+		Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_FacingTurnVelocity, bTurnMomentum ? 1.f : 0.f);
 		AbilitySystem->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
 	}
 }
@@ -2227,6 +2272,10 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 					FGSTN_StartupSteer::DequantizeYaw(Slot.Arg), GetOwner()->GetActorRotation().Yaw, SetFacingEffect ? 1 : 0);
 			}
 			ExecuteSetFacing(Slot.Arg);
+			break;
+		case EGSTN_RequestType::SetFacingTurnMomentum:
+			// A reverse that flips the drift (FGSTN_ReverseWindow::Momentum)
+			ExecuteSetFacing(Slot.Arg, true);
 			break;
 		case EGSTN_RequestType::Knockback:
 		case EGSTN_RequestType::PushBack:

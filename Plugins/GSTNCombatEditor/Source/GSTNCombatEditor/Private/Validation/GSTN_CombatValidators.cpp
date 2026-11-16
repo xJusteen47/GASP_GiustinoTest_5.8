@@ -584,7 +584,7 @@ void FGSTN_CombatValidators::CheckAimTurn(const FGSTN_CombatTimelineData& Data, 
 		AddFinding(Report, Context, EGSTN_Severity::Error, GSTNValidationCodes::AimTurn(),
 			FText::Format(LOCTEXT("TurnUntilPastEnd", "TurnUntilFrame ({0}) is after the end of the timeline ({1} frames)."), FText::AsNumber(Data.TurnUntilFrame), FText::AsNumber(Data.TotalFrames)));
 	}
-	if (Data.AimPolicy != EGSTN_AimPolicy::KeepFacing && Data.MaxTurnDegrees <= 0.f)
+	if (Data.AimPolicy != EGSTN_AimPolicy::KeepFacing && Data.AimPolicy != EGSTN_AimPolicy::Auto && Data.MaxTurnDegrees <= 0.f)
 	{
 		AddFinding(Report, Context, EGSTN_Severity::Error, GSTNValidationCodes::AimTurn(),
 			LOCTEXT("MaxTurnNotPositive", "The aim policy turns the character but MaxTurnDegrees is 0 or less, so it can never turn. Use KeepFacing for a move that does not turn."));

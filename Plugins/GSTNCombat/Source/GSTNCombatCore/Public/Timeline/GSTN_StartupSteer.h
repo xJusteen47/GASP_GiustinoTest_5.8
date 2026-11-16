@@ -6,6 +6,32 @@
 
 struct FGSTN_CombatTimelineData;
 enum class EGSTN_SteerSource : uint8;
+enum class EGSTN_AimPolicy : uint8;
+
+/** What the start aim / reverse of a frame does to the move (FGSTN_StartupSteer::ResolveOriginAim) */
+enum class EGSTN_AimTurn : uint8
+{
+	/** Nothing: the move keeps its direction */
+	None,
+	/** The start aim (AimPolicy): the move turns to the stick or the camera, the momentum stays */
+	Snap,
+	/** A reverse (FGSTN_ReverseWindow): the move turns to the stick; the momentum follows the window's Momentum */
+	Reverse,
+};
+
+/** What a frame's command gives the start aim (FGSTN_StartupSteer::ResolveOriginAim) */
+struct FGSTN_AimFrameInput
+{
+	/** Frames since the move started, pauses excluded */
+	int32 TimelineFrame = 0;
+	/** Yaw of the move origin as it stands (the facing at the start, or the yaw of an earlier snap or reverse), degrees */
+	float OriginYawDeg = 0.f;
+	/** Both sticks of the frame's command (+Y up) */
+	FVector2D MoveStick = FVector2D::ZeroVector;
+	FVector2D AimStick = FVector2D::ZeroVector;
+	bool bPrecisionAim = false;
+	float CameraYawDeg = 0.f;
+};
 
 /** Where a frame sits in a move's steering (FGSTN_StartupSteer::ResolveFrame) */
 enum class EGSTN_SteerPhase : uint8
@@ -105,6 +131,29 @@ struct GSTNCOMBATCORE_API FGSTN_StartupSteer
 	 * the step is taken in the offset from the start yaw instead. Caps of 180 turn the short way (the cone is the whole circle)
 	 */
 	static float RateLimitInCone(float StartYawDeg, float CurrentYawDeg, float TargetYawDeg, float MaxSteerDegrees, float MaxStepDeg);
+
+	/**
+	 * The policy a move really uses: EGSTN_AimPolicy::Auto resolved to SnapIfAimOrTilt for an attack (an active hitbox and the move stick read),
+	 * KeepFacing for the rest. The other values as they are
+	 */
+	static EGSTN_AimPolicy ResolveAimPolicy(const FGSTN_CombatTimelineData& Data);
+
+	/** The reverse window of a move, timeline frames [1, OutEnd): empty (OutEnd <= 1) for a move that cannot be reversed */
+	static int32 GetReverseEndFrame(const FGSTN_CombatTimelineData& Data);
+
+	/** World yaw (degrees, -180..180) a stick points at: +Y = camera forward, +X = camera right */
+	static float StickYaw(const FVector2D& Stick, float CameraYawDeg);
+
+	/**
+	 * The start aim and the reverse of a frame (owner 2026-11-16, stick priority "with all the usual reverse tricks"). Pure:
+	 *  - Reverse, frames 1 .. FGSTN_ReverseWindow::Frames (before the first active frame): the move stick pushed past StickThreshold, at least
+	 *    MinAngleDegrees away from the move's direction, turns it straight to the stick. Checked first.
+	 *  - Snap, frames 0 and 1: AimPolicy's stick (or camera) out of the dead zone turns the move to it, at most MaxTurnDegrees from the origin.
+	 *    Camera keeps snapping until TurnUntilFrame.
+	 * OutYawDeg is the new origin yaw. None when the yaw would not change (same quantized value). The caller rewrites the move origin, so the
+	 * steer cone, a later reverse and the WorldAtMoveStart hitboxes start from it, and asks Mover for the turn
+	 */
+	static EGSTN_AimTurn ResolveOriginAim(const FGSTN_CombatTimelineData& Data, const FGSTN_AimFrameInput& In, float& OutYawDeg);
 
 	/** Yaw at 65536 steps per turn, as the move origin keeps it, in the int16 a combat request carries (wraps, so -180 and 180 are one value) */
 	static int16 QuantizeYaw(float YawDeg);

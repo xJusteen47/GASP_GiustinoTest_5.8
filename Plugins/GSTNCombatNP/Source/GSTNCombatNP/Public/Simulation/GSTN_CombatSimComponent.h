@@ -812,7 +812,13 @@ private:
 	void ExecuteFreeze(TSubclassOf<UGameplayEffect> Effect, int32 Frames, float StepMs);
 
 	/** Applies SetFacingEffect with the request's yaw (FGSTN_StartupSteer::QuantizeYaw). Only from the ability system's pre-tick, like the freeze */
-	void ExecuteSetFacing(int16 YawArg);
+	void ExecuteSetFacing(int16 YawArg, bool bTurnMomentum = false);
+
+	/**
+	 * Start aim and reverse of the frame (owner 2026-11-16, FGSTN_StartupSteer::ResolveOriginAim): rewrites the move origin's yaw and adds a SetFacing
+	 * (or SetFacingTurnMomentum) request. True when it turned the move: the steering skips that frame
+	 */
+	bool StepOriginAim(int32 Frame, const FGSTN_InputCmd& Cmd, const FVector2D& MoveStick, const FVector2D& AimStick, FGSTN_CombatSyncCore& Core);
 
 	/** Montage time per frame, see GetHitstopMontageTrace. Debug only: never read by the simulation */
 	TMap<int32, float> HitstopMontageTrace;

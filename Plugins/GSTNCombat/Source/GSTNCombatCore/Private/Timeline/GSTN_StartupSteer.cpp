@@ -184,3 +184,99 @@ float FGSTN_StartupSteer::DequantizeYaw(int16 Value)
 {
 	return static_cast<float>(Value) * (360.f / 65536.f);
 }
+
+EGSTN_AimPolicy FGSTN_StartupSteer::ResolveAimPolicy(const FGSTN_CombatTimelineData& Data)
+{
+	if (Data.AimPolicy != EGSTN_AimPolicy::Auto)
+	{
+		return Data.AimPolicy;
+	}
+	// An attack that reads the move stick aims with it; a roll, a dodge or a get-up (no active hitbox, or the stick ignored) keeps its facing
+	return GetSteerEndFrame(Data) > 0 && !Data.bIgnoreMoveInput ? EGSTN_AimPolicy::SnapIfAimOrTilt : EGSTN_AimPolicy::KeepFacing;
+}
+
+int32 FGSTN_StartupSteer::GetReverseEndFrame(const FGSTN_CombatTimelineData& Data)
+{
+	const int32 FirstActive = GetSteerEndFrame(Data);
+	if (Data.Reverse.Frames <= 0 || FirstActive <= 0 || Data.bIgnoreMoveInput)
+	{
+		return 0;
+	}
+	return FMath::Min(Data.Reverse.Frames + 1, FirstActive);
+}
+
+float FGSTN_StartupSteer::StickYaw(const FVector2D& Stick, float CameraYawDeg)
+{
+	// Stick right (+X) with the camera at yaw 0 points along world +Y, which is yaw +90: hence atan2(X, Y), as SteerYaw
+	return FRotator::NormalizeAxis(CameraYawDeg + FMath::RadiansToDegrees(static_cast<float>(FMath::Atan2(Stick.X, Stick.Y))));
+}
+
+EGSTN_AimTurn FGSTN_StartupSteer::ResolveOriginAim(const FGSTN_CombatTimelineData& Data, const FGSTN_AimFrameInput& In, float& OutYawDeg)
+{
+	const float Origin = FRotator::NormalizeAxis(In.OriginYawDeg);
+	OutYawDeg = Origin;
+	if (In.TimelineFrame < 0)
+	{
+		return EGSTN_AimTurn::None;
+	}
+	const int16 OriginQ = QuantizeYaw(Origin);
+
+	// Reverse first: a hard flick back in the first frames turns the move whatever its policy (frame 0 belongs to the start aim)
+	if (In.TimelineFrame >= 1 && In.TimelineFrame < GetReverseEndFrame(Data)
+		&& In.MoveStick.SizeSquared() >= static_cast<double>(FMath::Square(FMath::Max(Data.Reverse.StickThreshold, DeadZone))))
+	{
+		const float Target = StickYaw(In.MoveStick, In.CameraYawDeg);
+		if (FMath::Abs(FMath::FindDeltaAngleDegrees(Origin, Target)) >= Data.Reverse.MinAngleDegrees && QuantizeYaw(Target) != OriginQ)
+		{
+			OutYawDeg = Target;
+			return EGSTN_AimTurn::Reverse;
+		}
+	}
+
+	bool bHasTarget = false;
+	float Target = Origin;
+	switch (ResolveAimPolicy(Data))
+	{
+	case EGSTN_AimPolicy::SnapToStick:
+		if (In.TimelineFrame <= 1 && In.MoveStick.SizeSquared() >= static_cast<double>(DeadZone * DeadZone))
+		{
+			Target = StickYaw(In.MoveStick, In.CameraYawDeg);
+			bHasTarget = true;
+		}
+		break;
+	case EGSTN_AimPolicy::SnapIfAimOrTilt:
+		if (In.TimelineFrame <= 1)
+		{
+			const bool bAimPushed = In.bPrecisionAim && In.AimStick.SizeSquared() >= static_cast<double>(DeadZone * DeadZone);
+			const FVector2D& Stick = bAimPushed ? In.AimStick : In.MoveStick;
+			if (Stick.SizeSquared() >= static_cast<double>(DeadZone * DeadZone))
+			{
+				Target = StickYaw(Stick, In.CameraYawDeg);
+				bHasTarget = true;
+			}
+		}
+		break;
+	case EGSTN_AimPolicy::Camera:
+		if (In.TimelineFrame <= FMath::Max(Data.TurnUntilFrame, 1))
+		{
+			Target = FRotator::NormalizeAxis(In.CameraYawDeg);
+			bHasTarget = true;
+		}
+		break;
+	case EGSTN_AimPolicy::KeepFacing:
+	default:
+		break;
+	}
+	if (!bHasTarget)
+	{
+		return EGSTN_AimTurn::None;
+	}
+	const float MaxTurn = FMath::Clamp(Data.MaxTurnDegrees, 0.f, 180.f);
+	Target = FRotator::NormalizeAxis(Origin + FMath::Clamp(FMath::FindDeltaAngleDegrees(Origin, Target), -MaxTurn, MaxTurn));
+	if (QuantizeYaw(Target) == OriginQ)
+	{
+		return EGSTN_AimTurn::None;
+	}
+	OutYawDeg = Target;
+	return EGSTN_AimTurn::Snap;
+}

@@ -26,6 +26,10 @@ struct GSTNCOMBATNP_API FGSTN_SetFacingEffect : public FInstantMovementEffect
 	UPROPERTY()
 	float YawDeg = 0.f;
 
+	/** The velocity turns with the facing, about the local up (a reverse with TurnWithFacing momentum, owner 2026-11-16). Off = it stays as it is */
+	UPROPERTY()
+	bool bTurnVelocity = false;
+
 	virtual bool ApplyMovementEffect(FApplyMovementEffectParams& ApplyEffectParams, FMoverSyncState& OutputState) override;
 	virtual FInstantMovementEffect* Clone() const override;
 	virtual void NetSerialize(FArchive& Ar) override;
@@ -34,6 +38,9 @@ struct GSTNCOMBATNP_API FGSTN_SetFacingEffect : public FInstantMovementEffect
 
 	/** The rotation the effect writes: OrientationDeg with its yaw about Up replaced. Pure, for the tests */
 	static FRotator MakeOrientation(const FRotator& OrientationDeg, float YawDeg, const FVector& Up = FVector::UpVector);
+
+	/** Velocity turned about Up by the yaw from FromYawDeg to ToYawDeg (the short way). Pure, for the tests */
+	static FVector TurnVelocity(const FVector& Velocity, float FromYawDeg, float ToYawDeg, const FVector& Up = FVector::UpVector);
 };
 
 template<>
@@ -42,7 +49,10 @@ struct TStructOpsTypeTraits<FGSTN_SetFacingEffect> : public TStructOpsTypeTraits
 	enum { WithCopy = true };
 };
 
-/** Queues FGSTN_SetFacingEffect on the target's Mover; the yaw is the SetByCaller Combat.SetByCaller.FacingYaw (degrees) */
+/**
+ * Queues FGSTN_SetFacingEffect on the target's Mover; the yaw is the SetByCaller Combat.SetByCaller.FacingYaw (degrees), and
+ * Combat.SetByCaller.FacingTurnVelocity above 0.5 turns the velocity too
+ */
 UCLASS(DisplayName = "GSTN Set Facing Move Creator")
 class GSTNCOMBATNP_API UGSTN_SetFacingMoveCreator : public UBaseMoveEffectCreator
 {
