@@ -38,6 +38,12 @@ public class GSTNCombatDebug : ModuleRules
 
 		// E15: the Gameplay Debugger category (WITH_GAMEPLAY_DEBUGGER_MENU, off where the engine has no debugger). GSTNCombatGAS above
 		// is for the native hit event tags the category's hit ring listens to
+		// The Debug Options window (Tools > Debug) is an editor tab: its menu group comes from WorkspaceMenuStructure, editor builds only
+		if (Target.bBuildEditor)
+		{
+			PrivateDependencyModuleNames.Add("WorkspaceMenuStructure");
+		}
+
 		SetupGameplayDebuggerSupport(Target);
 	}
 }

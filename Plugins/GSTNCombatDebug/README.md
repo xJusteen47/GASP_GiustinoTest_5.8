@@ -26,6 +26,18 @@ Other plugins reach it through `IGSTN_CombatDebugModule::Get()` (null when the p
 module in their dependencies because the interface is exported; a plugin that must not depend on it can call
 `FModuleManager::GetModulePtr<IGSTN_CombatDebugModule>("GSTNCombatDebug")` itself and needs only the header's include path.
 
+## Debug Options window
+
+**Tools > Debug > GSTN Debug Options** (or the console command `gstn.Debug.OpenWindow`) opens a dockable editor tab, the same idea as the
+options window of the Game Animation Sample (an Editor Utility Widget whose buttons set console variables): the debug switches live next to
+the viewport, never over the game. The panel (`Private/Window/SGSTN_DebugOptionsPanel`) has no list of its own: it shows every console
+variable whose name starts with `gstn.` and contains `Debug`, grouped by the second part of the name (Combat first), one row per variable by
+type (check box for a bool, check box plus the exact value for an int, number box for a float, text box for a string), the help text as
+tooltip. Rows read the variable every frame and write it with the console priority, so the console, config files and scripts keep working and
+the window always shows the truth. A new `gstn.<Group>.Debug...` variable in any plugin appears without touching the panel (Refresh lists
+variables of a plugin loaded later). The **Gameplay Debugger** button runs `EnableGDT` in the running play session. Editor builds only
+(`WITH_EDITOR`); covered by `GSTNCombat.Debug.OptionsWindow.*`.
+
 ## The combat adapter of the input display
 
 At startup the module registers three things in `FGSTN_InputSourceRegistry` of `GSTNInputDebug` and removes them at shutdown:
