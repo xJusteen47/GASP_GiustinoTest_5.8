@@ -658,6 +658,21 @@ FGSTN_LoadoutData (what a player owns and saves)
   its own: it reads its frame from the combat component and ends when the timeline ends, is interrupted or replaced.
 - Animation: the timeline frame is the truth; the synced montage follows (same tick, paused in hitstop). GASP keeps
   motion matching for locomotion, timelines use the montage slot; anim layer per weapon; GAS cues for VFX/SFX.
+- **Timelines played from the graph** (move-timeline-decoupling 1A/1B, 2026-11-16; owner decisions 1A + 1B). A timeline is an asset an
+  ability plays, as a montage is for `PlayMontageAndWait`:
+  - `Play Combat Timeline And Wait` (`UGSTN_PlayCombatTimelineTask`, a fork prediction task: rollback-safe, one instance per node) plays a
+    timeline of the ability's `PlayableTimelines` (or its `TimelineAsset`); pins On Key, On Hit Confirmed, On Completed, On Interrupted(reason),
+    On Cancelled. Each playable timeline is a registry entry (class, timeline) built with the tables (`AppendPlayableTimelines`), so a play is an
+    index in the sync state like any move.
+  - `bPlayTimelineOnActivation` (default on) keeps every standard move as it was. Off = a **host**: plays nothing on activation, survives the end
+    of each play (the graph chooses the next, or End Ability), pays its own cost (Commit Ability; played timelines never commit a host), is bound
+    as a plain ability, and by default (`bEndWhenTimelineInterrupted`) ends when a play is interrupted (hit, cancel into another move).
+  - `Start Combat Move(class)` (on `UGSTN_GA_Base`) starts another move's timeline and activates it in the same frame; the running move ends
+    (Interrupted). A frame-0 commit is done by the node.
+  - Both start **in the frame of the call**: the combat tick of the frame ran already, so `UGSTN_CombatSimComponent::StartTimelineFromAbility`
+    writes the start into that frame's combat state from inside the ability system's simulation step (`IsInSimulationTick`, fork getter) and
+    applies the Tags-track difference. Refused outside the simulation step, while restoring, with the gate closed, or for an unregistered pair.
+    Frame 0 of such a timeline does not run the attacker step (as for a command's start, which also follows it).
 
 ### 11.4 Lock tags (*Decision*)
 

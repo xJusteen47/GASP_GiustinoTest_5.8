@@ -11,6 +11,7 @@
 #include "GSTN_GA_Base.generated.h"
 
 class UGSTN_CombatSimComponent;
+class UGSTN_GA_BaseCombat;
 
 /**
  * Base of the abilities that run under the combat model (combat-m3 6.1). It adds to UNpGameplayAbility what an ability needs
@@ -94,6 +95,16 @@ public:
 	/** Stops a wait without calling anything */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Ability")
 	void CancelCombatWait();
+
+	/**
+	 * Starts another move IN THIS FRAME (move-timeline-decoupling 1B): Move's timeline replaces whatever runs (this ability's own included,
+	 * which then ends as Interrupted) and Move is activated now, so its first frame is this frame, with no gap and no adoption delay. Use it for
+	 * a move that branches into another (a hit that links into a follow-up, a stance that fires an attack). Move must be granted and in the
+	 * registry (bound to a command, adoptable, or a follow-up). Call it from the ability's simulation: its events, Wait Combat Frames, a task
+	 * pin; elsewhere it is refused. Returns whether Move started. The commit of a move whose commit frame is 0 is done here, like a command's
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Ability|Combat", meta = (DisplayName = "Start Combat Move"))
+	bool StartCombatMove(TSubclassOf<UGSTN_GA_BaseCombat> Move);
 
 	virtual void OnAvatarSet(const FGameplayAbilityActorInfo* ActorInfo, const FGameplayAbilitySpec& Spec) override;
 

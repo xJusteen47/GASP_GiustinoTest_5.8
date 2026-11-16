@@ -167,6 +167,25 @@ public:
 	int32 FindFollowUpEntry(int32 Index) const;
 
 	/**
+	 * Registers, for every class in the registry, each timeline of its Playable Timelines (UGSTN_GA_BaseCombat::PlayableTimelines) as an entry
+	 * (that class, that timeline) with no tier and no default window: what the Play Combat Timeline And Wait node starts by registry index.
+	 * Deterministic: registry order, then list order. Called by AppendAdoptable before the follow-ups, so a played timeline's follow-up is found too
+	 */
+	void AppendPlayableTimelines();
+
+	/**
+	 * The registry entry an ability of class AbilityClass plays Timeline with: the entry of that class whose override is Timeline, else (Timeline
+	 * is the class's own default data) its entry with no override. INDEX_NONE when the pair is not registered
+	 */
+	int32 FindPlayEntry(const UClass* AbilityClass, const UGSTN_CombatTimeline* Timeline) const;
+
+	/** The first registry entry of AbilityClass, the one a command, a forced start or Start Combat Move runs. INDEX_NONE when it is not registered */
+	int32 FindMoveEntry(const UClass* AbilityClass) const;
+
+	/** True for a combat ability class that does not play a timeline when activated (a host: Play Timeline On Activation off). Its bindings are plain */
+	static bool IsHostClass(const UClass* AbilityClass);
+
+	/**
 	 * Registers one timeline class and loads its content. Returns its registry index; with bShareExisting an entry of the same class
 	 * and the same override is not added twice. Override (may be null) replaces the class default's frame data for this entry only
 	 */

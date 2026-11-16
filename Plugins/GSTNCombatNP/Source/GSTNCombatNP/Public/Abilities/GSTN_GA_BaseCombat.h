@@ -6,11 +6,13 @@
 #include "Abilities/GSTN_GA_Base.h"
 #include "Abilities/GSTN_MoveActions.h"
 #include "Abilities/GSTN_MoveEvents.h"
+#include "Abilities/GSTN_TimelinePlay.h"
 #include "Presentation/GSTN_MoveCosmetics.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "GSTN_GA_BaseCombat.generated.h"
 
 class UGSTN_CombatTimeline;
+class UGSTN_PlayCombatTimelineTask;
 
 /**
  * A combat ability that runs a timeline (combat-m3 6.2): frame data (total and actionable frames, the startup override window,
@@ -50,6 +52,13 @@ class UGSTN_CombatTimeline;
  * actions (FGSTN_MoveAction: fire a projectile, send an event, apply an effect, open a tag window), then raises On Move Key, all in that order, on
  * the same cursor and with the same once-per-crossing rule as the event. A graph runs the same actions through the request nodes below (Send
  * Move Event, Apply Move Effect, Open Move Tag Window, Run Move Action); they do nothing outside the simulation step of an active move
+ *
+ * Timelines played from the graph (move-timeline-decoupling 1A): the node Play Combat Timeline And Wait (UGSTN_PlayCombatTimelineTask, a
+ * rollback-safe prediction task of the fork) starts any timeline of PlayableTimelines in the frame of the call and reports its keys, hits and
+ * end on its pins, as PlayMontageAndWait does for a montage. With bPlayTimelineOnActivation (default) nothing changes for a standard move: it
+ * plays its own timeline and ends with it, and a Play inside it replaces the running timeline (the ability then ends with the played one).
+ * With it off the ability is a HOST: it starts with no timeline, plays 0..N in any order its graph decides, survives the end of each (the graph
+ * chooses what follows, End Ability included) and pays its own cost (Commit Ability). Its command binding is a plain ability's
  */
 UCLASS(Abstract, Blueprintable)
 class GSTNCOMBATNP_API UGSTN_GA_BaseCombat : public UGSTN_GA_Base
@@ -66,6 +75,43 @@ public:
 	/** A shared timeline asset; wins over the inline one. Soft: loaded when the ability is granted, never in the simulation */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Timeline")
 	TSoftObjectPtr<UGSTN_CombatTimeline> TimelineAsset;
+
+	/**
+	 * On (default): the standard move. Activation plays this class's timeline (TimelineAsset or Timeline) and the ability ends with it, with no wiring.
+	 * Off: a host. Activation plays nothing; the graph plays timelines with Play Combat Timeline And Wait and decides when the ability ends.
+	 * A host is bound like a plain ability (a stance): its command ends the running timeline, and it is never adopted
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Timeline")
+	bool bPlayTimelineOnActivation = true;
+
+	/**
+	 * The timelines Play Combat Timeline And Wait may play in this ability (besides TimelineAsset). Each is registered for this class when the
+	 * tables are built, so a play is a registry entry like any move, the same on every machine. Soft: loaded with the class, never in the simulation
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Timeline")
+	TArray<TSoftObjectPtr<UGSTN_CombatTimeline>> PlayableTimelines;
+
+	/**
+	 * For a host: a played timeline that is interrupted (a hit, a cancel into another move, a ricochet, a tail cancel) ends the whole ability after
+	 * its On Interrupted pin ran, as it ends a standard move. Off: the host stays active and its graph decides. A completed play never ends a host
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Timeline", meta = (EditCondition = "!bPlayTimelineOnActivation"))
+	bool bEndWhenTimelineInterrupted = true;
+
+	/** True for a host (bPlayTimelineOnActivation off) */
+	bool IsHost() const { return !bPlayTimelineOnActivation; }
+
+	/**
+	 * What Play Combat Timeline And Wait does: starts Timeline (one of PlayableTimelines, or this class's TimelineAsset) in the frame being
+	 * simulated. A timeline this ability plays already ends first (Interrupted). TaskIndex is the node's task in PredictionTasksInstances, which
+	 * receives the keys, hits and end of this play (INDEX_NONE for a play from C++ with no node). Refused, with nothing changed, outside the
+	 * ability system's simulation step, while a frame is restored, with the gate closed or for a timeline not registered for this class
+	 */
+	EGSTN_TimelineStartRefusal PlayTimeline(const UGSTN_CombatTimeline* Timeline, int32 TaskIndex = INDEX_NONE);
+
+	/** True while a timeline of this ability runs (its own on activation, or one played by the node) */
+	UFUNCTION(BlueprintPure, Category = "Combat|Timeline")
+	bool IsPlayingTimeline() const { return bStarted.Value; }
 
 	/** The frame data this class runs by default: the asset's when it is set and loaded, else the inline one */
 	const FGSTN_CombatTimelineData& GetTimelineData() const;
@@ -258,6 +304,15 @@ private:
 	/** True while the combat state names this ability's class and the start frame it started on */
 	bool IsStillTheRunningTimeline() const;
 
+	/**
+	 * Ends the play under way (a timeline this ability runs), if any: montage release or stop, recoil, cursors, tag windows, then On Move Ended and
+	 * the end pin of the play's node. bAbilityEnding: the ability ends with it (EndAbility). Returns the node's result, and false when nothing played
+	 */
+	bool FinishTimelinePlay(bool bWasCancelled, bool bAbilityEnding, EGSTN_TimelinePlayResult& OutResult);
+
+	/** The node task of the play under way (PlayTaskIndex), null when the play has none */
+	UGSTN_PlayCombatTimelineTask* GetPlayTask() const;
+
 	/** Raises the key, hit and frame events of the frame being simulated, once per simulation frame (start frame included) */
 	void RaiseMoveEvents();
 
@@ -284,6 +339,10 @@ private:
 
 	/** Closes the windows whose frames are over (every simulated frame of the move), or all of them (the move ended) */
 	void CloseTagWindows(bool bAll);
+
+	/** Index in PredictionTasksInstances of the Play Combat Timeline And Wait node that started the play under way, INDEX_NONE for none (sync var) */
+	UPROPERTY(Transient)
+	FSyncInteger PlayTaskIndex;
 
 	/** True once the ability found itself in the combat state and started (sync var: rolled back with the instance) */
 	UPROPERTY(Transient)
