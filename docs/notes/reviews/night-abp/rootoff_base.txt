@@ -1,0 +1,13 @@
+20 game rootoff 0.0 footL [80.1, 164.6] pz 4.0 
+30 Tumbl rootoff 16.3 footL [22.5, 162.3] pz 8.4 
+60 Tumbl rootoff 10.8 footL [198.7, 167.4] pz 7.3 
+84 Tumbl rootoff 10.8 footL [392.3, 167.5] pz 11.6 
+90 Knock rootoff 16.3 footL [389.6, 166.5] pz -62.8 
+120 Knock rootoff 16.3 footL [388.7, 166.5] pz -76.0 
+140 getup rootoff 16.3 footL [400.8, 167.0] pz -75.8 
+160 getup rootoff 16.3 footL [446.9, 169.5] pz 0.5 
+165 game rootoff 14.5 footL [447.4, 169.0] pz -1.2 
+175 game rootoff 3.0 footL [454.5, 165.9] pz -4.1 
+190 game rootoff 0.0 footL [457.7, 165.1] pz 1.1 
+210 game rootoff 0.0 footL [457.8, 165.1] pz 3.4 
+232 game rootoff 0.0 footL [457.8, 165.1] pz 4.1 

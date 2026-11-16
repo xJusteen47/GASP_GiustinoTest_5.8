@@ -312,6 +312,19 @@ def _row(frame, states, tap):
     loc = _pawn().get_actor_location()
     row = {'f': frame, 'seg': key, 'segf': frame - s['seg0'], 'montage': _montage(), 'loc': [round(loc.x, 1), round(loc.y, 1), round(loc.z, 1)],
            'yaw': round(_pawn().get_actor_rotation().yaw, 1)}
+    # NIGHT-ABP: world positions of the feet, root and pelvis of the drawn mesh (foot creep / sag / crouch measured against the capsule)
+    try:
+        mesh = _pawn().get_component_by_class(unreal.SkeletalMeshComponent)
+        for b in ('foot_l', 'foot_r', 'root', 'pelvis'):
+            v = mesh.get_socket_location(b)
+            row[b] = [round(v.x, 1), round(v.y, 1), round(v.z, 1)]
+        rel = mesh.get_relative_location()
+        row['mesh_rel'] = [round(rel.x, 1), round(rel.y, 1), round(rel.z, 1)]
+        rb = mesh.get_bone_location('root', unreal.BoneSpaces.COMPONENT_SPACE) if hasattr(mesh, 'get_bone_location') else None
+        if rb is not None:
+            row['root_cs'] = [round(rb.x, 1), round(rb.y, 1), round(rb.z, 1)]
+    except Exception:  # noqa: BLE001
+        pass
     if tap:
         row['tap'] = tap
     st['rows'].write(json.dumps(row) + '\n')
@@ -444,5 +457,9 @@ def _tick(_dt):
     return None
 
 
+# NIGHT-ABP experiments: console variables set before Play (';' separated), e.g. a.AnimNode.OffsetRootBone.Enable 0
+for _cv in [c.strip() for c in os.environ.get('PIE_CAPTURE_CVARS', '').split(';') if c.strip()]:
+    unreal.SystemLibrary.execute_console_command(None, _cv)
+    _log(f'cvar: {_cv}')
 _log(f'driver loaded: out {OUT}, sequences {[s["name"] for s in SEQUENCES]}')
 st['handle'] = unreal.register_slate_post_tick_callback(_tick)
