@@ -1,0 +1,240 @@
+vecchio_percorso,nuovo_percorso,stato,ref_da_asset,ref_da_codice_ini,nota
+/GSTNCombat/Rules/GSTN_CombatRules_Standard,/GSTNCombat/Rules/GSTN_CombatRules_Standard,resta,0,6,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNCombat/Rules/GSTN_SurfaceImpacts_Standard,/GSTNCombat/Rules/GSTN_SurfaceImpacts_Standard,resta,1,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNDefence/Test/DA_DefenceRules_Test,/GSTNDefence/Test/DA_DefenceRules_Test,resta,4,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNDefence/Test/DA_DefenceRules_TestPvE,/GSTNDefence/Test/DA_DefenceRules_TestPvE,resta,1,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNDefence/Test/GA_CounterTest,/GSTNDefence/Test/GA_CounterTest,resta,1,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNDefence/Test/GA_GetupNeutral_Test,/GSTNDefence/Test/GA_GetupNeutral_Test,resta,12,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNDefence/Test/GA_GetupRollBack_Test,/GSTNDefence/Test/GA_GetupRollBack_Test,resta,12,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNDefence/Test/GA_GetupRoll_Test,/GSTNDefence/Test/GA_GetupRoll_Test,resta,12,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNDefence/Test/GA_GroundBounce_Test,/GSTNDefence/Test/GA_GroundBounce_Test,resta,12,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNDefence/Test/GA_Shield_Test,/GSTNDefence/Test/GA_Shield_Test,resta,5,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNDefence/Test/GA_TechInPlace_Test,/GSTNDefence/Test/GA_TechInPlace_Test,resta,1,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNDefence/Test/GA_TechRoll_Test,/GSTNDefence/Test/GA_TechRoll_Test,resta,1,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNDefence/Test/GA_TechWall_Test,/GSTNDefence/Test/GA_TechWall_Test,resta,1,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNLink/Test/DA_LinkType_Grab_Test,/GSTNLink/Test/DA_LinkType_Grab_Test,resta,0,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNLink/Test/DA_LinkType_Latch_Test,/GSTNLink/Test/DA_LinkType_Latch_Test,resta,0,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNLink/Test/GA_Grab_Test,/GSTNLink/Test/GA_Grab_Test,resta,12,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNLink/Test/GA_LatchAttack_Test,/GSTNLink/Test/GA_LatchAttack_Test,resta,12,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNLink/Test/GA_Pummel_Test,/GSTNLink/Test/GA_Pummel_Test,resta,12,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNLink/Test/GA_Release_Test,/GSTNLink/Test/GA_Release_Test,resta,12,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNLink/Test/GA_ThrowBack_Test,/GSTNLink/Test/GA_ThrowBack_Test,resta,12,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNLink/Test/GA_ThrowDown_Test,/GSTNLink/Test/GA_ThrowDown_Test,resta,12,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNLink/Test/GA_ThrowForward_Test,/GSTNLink/Test/GA_ThrowForward_Test,resta,12,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNLink/Test/GA_ThrowUp_Test,/GSTNLink/Test/GA_ThrowUp_Test,resta,12,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNParts/Samples/BP_HitStep_PartResolve_Example,/GSTNParts/Examples/BP_HitStep_PartResolve_Example,sposta,0,0,nome cartella uniforme agli altri plugin
+/GSTNParts/Samples/BP_PartStats_Example,/GSTNParts/Examples/BP_PartStats_Example,sposta,0,0,nome cartella uniforme agli altri plugin
+/GSTNParts/Samples/PS_Sample_Fighter,/GSTNParts/Examples/PS_Sample_Fighter,sposta,0,0,nome cartella uniforme agli altri plugin
+/GSTNParts/Samples/PS_Sample_Player,/GSTNParts/Examples/PS_Sample_Player,sposta,0,0,nome cartella uniforme agli altri plugin
+/GSTNParts/Samples/PT_Sample_Default,/GSTNParts/Examples/PT_Sample_Default,sposta,1,0,nome cartella uniforme agli altri plugin
+/GSTNPiggyback/Test/KIT_Test_Mount,/GSTNPiggyback/Test/KIT_Test_Mount,resta,0,1,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNPiggyback/Test/KIT_Test_MountHeavy,/GSTNPiggyback/Test/KIT_Test_MountHeavy,resta,0,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNPiggyback/Test/PMS_Test_Mount,/GSTNPiggyback/Test/PMS_Test_Mount,resta,2,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNPiggyback/Test/PM_BoostJump,/GSTNPiggyback/Test/PM_BoostJump,resta,1,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/GSTNPiggyback/Test/PM_ThrowRider,/GSTNPiggyback/Test/PM_ThrowRider,resta,1,0,contenuto plugin (Rules = shipping; Test = fixture dei test C++)
+/Game/AnimPipeline/Rig/Overlord/Dropkick/AM_OverlordDropkick,/Game/AnimPipeline/Rig/Overlord/Dropkick/AM_OverlordDropkick,resta,0,3,"sorgente pipeline anim (Live Link, script); doppione voluto della copia di gioco in Characters/Overlord/Moves"
+/Game/AnimPipeline/Rig/Overlord/Dropkick/Land/AS_OverlordDropkick_Land,/Game/AnimPipeline/Rig/Overlord/Dropkick/Land/AS_OverlordDropkick_Land,resta,0,9,"sorgente pipeline anim (Live Link, script); doppione voluto della copia di gioco in Characters/Overlord/Moves"
+/Game/AnimPipeline/Rig/Overlord/Dropkick/Loop/AS_OverlordDropkick_Loop,/Game/AnimPipeline/Rig/Overlord/Dropkick/Loop/AS_OverlordDropkick_Loop,resta,0,9,"sorgente pipeline anim (Live Link, script); doppione voluto della copia di gioco in Characters/Overlord/Moves"
+/Game/AnimPipeline/Rig/Overlord/Dropkick/Startup/AS_OverlordDropkick_Startup,/Game/AnimPipeline/Rig/Overlord/Dropkick/Startup/AS_OverlordDropkick_Startup,resta,0,9,"sorgente pipeline anim (Live Link, script); doppione voluto della copia di gioco in Characters/Overlord/Moves"
+/Game/Blueprints/Animation/ABP_GSTN_WallLayer,/Game/GSTN/Animation/Layers/ABP_GSTN_WallLayer,sposta,2,0,
+/Game/Blueprints/Animation/ABP_GSTN_WallLayer_Heavy,/Game/GSTN/Animation/Layers/ABP_GSTN_WallLayer_Heavy,sposta,1,0,
+/Game/Blueprints/Animation/ALI_GSTN_Wall,/Game/GSTN/Animation/Layers/ALI_GSTN_Wall,sposta,2,0,
+/Game/Blueprints/Animation/DA_AnimSetCollection_SandboxCharacter,/Game/GSTN/Animation/Layers/DA_AnimSetCollection_SandboxCharacter,sposta,1,0,
+/Game/Blueprints/Animation/DA_AnimSet_Wall,/Game/GSTN/Animation/Layers/DA_AnimSet_Wall,sposta,1,0,
+/Game/Blueprints/Animation/DA_AnimSet_Wall_Heavy,/Game/GSTN/Animation/Layers/DA_AnimSet_Wall_Heavy,sposta,1,0,
+/Game/Blueprints/DepthMarker/DMS_Toy,/Game/GSTN/DepthMarker/DMS_Toy,sposta,0,1,ini DefaultGSTNDepthMarker
+/Game/Blueprints/DepthMarker/DMS_Toy_Approach,/Game/GSTN/DepthMarker/DMS_Toy_Approach,sposta,1,0,ini DefaultGSTNDepthMarker
+/Game/Blueprints/DepthMarker/MF_DM_CrackGlow,/Game/GSTN/DepthMarker/MF_DM_CrackGlow,sposta,2,0,ini DefaultGSTNDepthMarker
+/Game/Blueprints/DepthMarker/M_DM_Beam,/Game/GSTN/DepthMarker/M_DM_Beam,sposta,2,0,ini DefaultGSTNDepthMarker
+/Game/Blueprints/DepthMarker/M_DM_CrackShell,/Game/GSTN/DepthMarker/M_DM_CrackShell,sposta,0,1,ini DefaultGSTNDepthMarker
+/Game/Blueprints/DepthMarker/M_DM_CrystalCharacter,/Game/GSTN/DepthMarker/M_DM_CrystalCharacter,sposta,0,1,ini DefaultGSTNDepthMarker
+/Game/Blueprints/DepthMarker/M_DM_FogPuff,/Game/GSTN/DepthMarker/M_DM_FogPuff,sposta,2,0,ini DefaultGSTNDepthMarker
+/Game/Blueprints/DepthMarker/M_DM_StainedGlass_Decal,/Game/GSTN/DepthMarker/M_DM_StainedGlass_Decal,sposta,1,0,ini DefaultGSTNDepthMarker
+/Game/Blueprints/Equipment/SM_Implant_Placeholder,/Game/GSTN/Equipment/SM_Implant_Placeholder,sposta,29,1,
+/Game/Blueprints/NewBlueprint,/Game/Blueprints/NewBlueprint,da verificare,2,0,Actor vuoto piazzato in DefaultLevel (GASP): probabilmente spazzatura; non spostato
+/Game/GAS/Backpacks/DA_Backpack_JetPack,/Game/GSTN/Backpacks/DA_Backpack_JetPack,sposta,0,2,
+/Game/GAS/Backpacks/DA_Backpack_ShieldDome,/Game/GSTN/Backpacks/DA_Backpack_ShieldDome,sposta,0,3,
+/Game/GAS/Input/IMC_GAS_Abilities,/Game/GSTN/Input/IMC_GAS_Abilities,sposta,0,3,
+/Game/GASNPPTest/BP_GASNPP_TestCharacter,/Game/GSTN/Core/BP_GASNPP_TestCharacter,sposta,1,4,rinomina proposta in fase 3
+/Game/GASNPPTest/BP_Test_BouncePad,/Game/GSTN/LevelObjects/BP_Test_BouncePad,sposta,0,2,
+/Game/GASNPPTest/Combat/AirCrouch/AS_AirCrouch_Loop_PLACEHOLDER,/Game/GSTN/Animation/Placeholders/AS_AirCrouch_Loop_PLACEHOLDER,sposta,1,1,PLACEHOLDER
+/Game/GASNPPTest/Combat/Archetypes/GA_Heavy_Jab,/Game/GSTNTests/Combat/Archetypes/Heavy/GA_Heavy_Jab,sposta,1,1,
+/Game/GASNPPTest/Combat/Archetypes/GA_Heavy_Special,/Game/GSTNTests/Combat/Archetypes/Heavy/GA_Heavy_Special,sposta,1,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Heavy_ThrowBack,/Game/GSTNTests/Combat/Archetypes/Heavy/GA_Heavy_ThrowBack,sposta,1,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Heavy_ThrowDown,/Game/GSTNTests/Combat/Archetypes/Heavy/GA_Heavy_ThrowDown,sposta,1,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Heavy_ThrowForward,/Game/GSTNTests/Combat/Archetypes/Heavy/GA_Heavy_ThrowForward,sposta,1,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Heavy_ThrowUp,/Game/GSTNTests/Combat/Archetypes/Heavy/GA_Heavy_ThrowUp,sposta,1,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Light_Jab,/Game/GSTNTests/Combat/Archetypes/Light/GA_Light_Jab,sposta,1,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Light_Special,/Game/GSTNTests/Combat/Archetypes/Light/GA_Light_Special,sposta,1,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Light_ThrowBack,/Game/GSTNTests/Combat/Archetypes/Light/GA_Light_ThrowBack,sposta,1,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Light_ThrowDown,/Game/GSTNTests/Combat/Archetypes/Light/GA_Light_ThrowDown,sposta,1,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Light_ThrowForward,/Game/GSTNTests/Combat/Archetypes/Light/GA_Light_ThrowForward,sposta,1,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Light_ThrowUp,/Game/GSTNTests/Combat/Archetypes/Light/GA_Light_ThrowUp,sposta,1,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Medium_Jab,/Game/GSTNTests/Combat/Archetypes/Medium/GA_Medium_Jab,sposta,1,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Medium_Special,/Game/GSTNTests/Combat/Archetypes/Medium/GA_Medium_Special,sposta,2,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Medium_ThrowBack,/Game/GSTNTests/Combat/Archetypes/Medium/GA_Medium_ThrowBack,sposta,6,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Medium_ThrowDown,/Game/GSTNTests/Combat/Archetypes/Medium/GA_Medium_ThrowDown,sposta,6,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Medium_ThrowForward,/Game/GSTNTests/Combat/Archetypes/Medium/GA_Medium_ThrowForward,sposta,6,0,
+/Game/GASNPPTest/Combat/Archetypes/GA_Medium_ThrowUp,/Game/GSTNTests/Combat/Archetypes/Medium/GA_Medium_ThrowUp,sposta,6,0,
+/Game/GASNPPTest/Combat/BPK_Test_JetPack,/Game/GSTNTests/Combat/Backpacks/BPK_Test_JetPack,sposta,0,0,
+/Game/GASNPPTest/Combat/BP_AttackerOutcome_Example,/Game/GSTNExamples/CombatSeams/BP_AttackerOutcome_Example,sposta,0,0,
+/Game/GASNPPTest/Combat/BP_KnockbackModel_Example,/Game/GSTNExamples/CombatSeams/BP_KnockbackModel_Example,sposta,0,0,
+/Game/GASNPPTest/Combat/BP_OutcomeApplier_Example,/Game/GSTNExamples/CombatSeams/BP_OutcomeApplier_Example,sposta,0,0,
+/Game/GASNPPTest/Combat/BP_RelationshipResolver_Example,/Game/GSTNExamples/CombatSeams/BP_RelationshipResolver_Example,sposta,0,0,
+/Game/GASNPPTest/Combat/BP_Step_Example,/Game/GSTNExamples/CombatSeams/BP_Step_Example,sposta,0,1,
+/Game/GASNPPTest/Combat/DA_Locomotion_Default,/Game/GSTN/Movement/DA_Locomotion_Default,sposta,28,0,usato da tutti i kit di test
+/Game/GASNPPTest/Combat/GSTN_CombatRules_TestParts,/Game/GSTNTests/Combat/Rules/GSTN_CombatRules_TestParts,sposta,0,0,rinomina proposta: CR_Test_Parts
+/Game/GASNPPTest/Combat/HBS_FromPhysics,/Game/GSTNTests/Combat/Hurtboxes/HBS_FromPhysics,sposta,0,1,
+/Game/GASNPPTest/Combat/HBS_Test_Heavy,/Game/GSTNTests/Combat/Hurtboxes/HBS_Test_Heavy,sposta,0,0,
+/Game/GASNPPTest/Combat/HBS_Test_Light,/Game/GSTNTests/Combat/Hurtboxes/HBS_Test_Light,sposta,0,0,
+/Game/GASNPPTest/Combat/HBS_Test_Medium,/Game/GSTNTests/Combat/Hurtboxes/HBS_Test_Medium,sposta,0,0,
+/Game/GASNPPTest/Combat/HBS_Test_Pawn,/Game/GSTNTests/Combat/Hurtboxes/HBS_Test_Pawn,sposta,1,3,
+/Game/GASNPPTest/Combat/HBS_Test_PawnParts,/Game/GSTNTests/Combat/Hurtboxes/HBS_Test_PawnParts,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_Alpha,/Game/GSTNTests/Combat/Kits/KIT_Test_Alpha,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_Beta,/Game/GSTNTests/Combat/Kits/KIT_Test_Beta,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_Defence,/Game/GSTNTests/Combat/Kits/KIT_Test_Defence,sposta,0,1,
+/Game/GASNPPTest/Combat/KIT_Test_DefenceLanding,/Game/GSTNTests/Combat/Kits/KIT_Test_DefenceLanding,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_DefenceLink,/Game/GSTNTests/Combat/Kits/KIT_Test_DefenceLink,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_DefencePvE,/Game/GSTNTests/Combat/Kits/KIT_Test_DefencePvE,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_DefenceTech,/Game/GSTNTests/Combat/Kits/KIT_Test_DefenceTech,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_Delta,/Game/GSTNTests/Combat/Kits/KIT_Test_Delta,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_Gamma,/Game/GSTNTests/Combat/Kits/KIT_Test_Gamma,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_Heavy,/Game/GSTNTests/Combat/Kits/KIT_Test_Heavy,sposta,0,3,
+/Game/GASNPPTest/Combat/KIT_Test_Hits,/Game/GSTNTests/Combat/Kits/KIT_Test_Hits,sposta,0,2,
+/Game/GASNPPTest/Combat/KIT_Test_HitsBurst,/Game/GSTNTests/Combat/Kits/KIT_Test_HitsBurst,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_HitsEscape,/Game/GSTNTests/Combat/Kits/KIT_Test_HitsEscape,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_Light,/Game/GSTNTests/Combat/Kits/KIT_Test_Light,sposta,0,3,
+/Game/GASNPPTest/Combat/KIT_Test_Link,/Game/GSTNTests/Combat/Kits/KIT_Test_Link,sposta,0,3,
+/Game/GASNPPTest/Combat/KIT_Test_Medium,/Game/GSTNTests/Combat/Kits/KIT_Test_Medium,sposta,0,3,
+/Game/GASNPPTest/Combat/KIT_Test_Modded,/Game/GSTNTests/Combat/Kits/KIT_Test_Modded,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_Omega,/Game/GSTNTests/Combat/Kits/KIT_Test_Omega,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_Overlord,/Game/GSTN/Characters/Overlord/KIT_Test_Overlord,sposta,0,1,rinomina proposta: KIT_Overlord
+/Game/GASNPPTest/Combat/KIT_Test_OverlordDAirV7,/Game/GSTN/_Archive/Overlord/KIT_Test_OverlordDAirV7,archivio,0,0,kit di una versione superata
+/Game/GASNPPTest/Combat/KIT_Test_OverlordDAirV8,/Game/GSTN/_Archive/Overlord/KIT_Test_OverlordDAirV8,archivio,0,0,kit di una versione superata
+/Game/GASNPPTest/Combat/KIT_Test_OverlordDAirV9,/Game/GSTN/Characters/Overlord/Variants/KIT_Test_OverlordDAirV9,sposta,0,0,kit di prova di una variante
+/Game/GASNPPTest/Combat/KIT_Test_OverlordDropkick,/Game/GSTN/Characters/Overlord/Variants/KIT_Test_OverlordDropkick,sposta,0,0,kit di prova di una variante
+/Game/GASNPPTest/Combat/KIT_Test_Parts,/Game/GSTNTests/Combat/Kits/KIT_Test_Parts,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_Ranger,/Game/GSTNTests/Combat/Kits/KIT_Test_Ranger,sposta,0,1,
+/Game/GASNPPTest/Combat/KIT_Test_Sigma,/Game/GSTNTests/Combat/Kits/KIT_Test_Sigma,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_Squat,/Game/GSTNTests/Combat/Kits/KIT_Test_Squat,sposta,0,0,
+/Game/GASNPPTest/Combat/KIT_Test_StrikeKinds,/Game/GSTNTests/Combat/Kits/KIT_Test_StrikeKinds,sposta,0,0,
+/Game/GASNPPTest/Combat/L_Test_Combat,/Game/GSTNTests/Maps/L_Test_Combat,sposta,0,1,
+/Game/GASNPPTest/Combat/MOD_Test_LongBlade,/Game/GSTNTests/Combat/Mods/MOD_Test_LongBlade,sposta,0,0,
+/Game/GASNPPTest/Combat/Mods/MOD_Test_Power,/Game/GSTNTests/Combat/Mods/MOD_Test_Power,sposta,0,2,
+/Game/GASNPPTest/Combat/Overlord/AM_OverlordDAirV7,/Game/GSTN/_Archive/Overlord/AM_OverlordDAirV7,archivio,1,1,"versione superata (V7/V8 DAir, Jab V2); niente la usa a parte la sua catena"
+/Game/GASNPPTest/Combat/Overlord/AM_OverlordDAirV8,/Game/GSTN/_Archive/Overlord/AM_OverlordDAirV8,archivio,1,1,"versione superata (V7/V8 DAir, Jab V2); niente la usa a parte la sua catena"
+/Game/GASNPPTest/Combat/Overlord/AM_OverlordDAirV9,/Game/GSTN/Characters/Overlord/Moves/DAir/AM_OverlordDAirV9,sposta,1,1,
+/Game/GASNPPTest/Combat/Overlord/AM_OverlordDropkick,/Game/GSTN/Characters/Overlord/Moves/Dropkick/AM_OverlordDropkick,sposta,1,1,
+/Game/GASNPPTest/Combat/Overlord/AM_OverlordJab1V2,/Game/GSTN/_Archive/Overlord/AM_OverlordJab1V2,archivio,0,1,"versione superata (V7/V8 DAir, Jab V2); niente la usa a parte la sua catena"
+/Game/GASNPPTest/Combat/Overlord/AM_OverlordJab1V3,/Game/GSTN/Characters/Overlord/Moves/Jab1/AM_OverlordJab1V3,sposta,1,2,
+/Game/GASNPPTest/Combat/Overlord/AM_OverlordJab2V2,/Game/GSTN/_Archive/Overlord/AM_OverlordJab2V2,archivio,0,1,"versione superata (V7/V8 DAir, Jab V2); niente la usa a parte la sua catena"
+/Game/GASNPPTest/Combat/Overlord/AM_OverlordJab2V3,/Game/GSTN/Characters/Overlord/Moves/Jab2/AM_OverlordJab2V3,sposta,1,1,
+/Game/GASNPPTest/Combat/Overlord/AS_OverlordDAirV7,/Game/GSTN/_Archive/Overlord/AS_OverlordDAirV7,archivio,1,1,"versione superata (V7/V8 DAir, Jab V2); niente la usa a parte la sua catena"
+/Game/GASNPPTest/Combat/Overlord/AS_OverlordDAirV8,/Game/GSTN/_Archive/Overlord/AS_OverlordDAirV8,archivio,1,1,"versione superata (V7/V8 DAir, Jab V2); niente la usa a parte la sua catena"
+/Game/GASNPPTest/Combat/Overlord/AS_OverlordDAirV9,/Game/GSTN/Characters/Overlord/Moves/DAir/AS_OverlordDAirV9,sposta,1,1,
+/Game/GASNPPTest/Combat/Overlord/AS_OverlordDropkick_Land,/Game/GSTN/Characters/Overlord/Moves/Dropkick/AS_OverlordDropkick_Land,sposta,1,1,doppione di /Game/AnimPipeline/Rig/... (sorgente)
+/Game/GASNPPTest/Combat/Overlord/AS_OverlordDropkick_Loop,/Game/GSTN/Characters/Overlord/Moves/Dropkick/AS_OverlordDropkick_Loop,sposta,1,1,doppione di /Game/AnimPipeline/Rig/... (sorgente)
+/Game/GASNPPTest/Combat/Overlord/AS_OverlordDropkick_Startup,/Game/GSTN/Characters/Overlord/Moves/Dropkick/AS_OverlordDropkick_Startup,sposta,1,1,doppione di /Game/AnimPipeline/Rig/... (sorgente)
+/Game/GASNPPTest/Combat/Overlord/AS_OverlordJab1V2,/Game/GSTN/_Archive/Overlord/AS_OverlordJab1V2,archivio,1,1,"versione superata (V7/V8 DAir, Jab V2); niente la usa a parte la sua catena"
+/Game/GASNPPTest/Combat/Overlord/AS_OverlordJab1V3,/Game/GSTN/Characters/Overlord/Moves/Jab1/AS_OverlordJab1V3,sposta,1,2,
+/Game/GASNPPTest/Combat/Overlord/AS_OverlordJab2V2,/Game/GSTN/_Archive/Overlord/AS_OverlordJab2V2,archivio,1,1,"versione superata (V7/V8 DAir, Jab V2); niente la usa a parte la sua catena"
+/Game/GASNPPTest/Combat/Overlord/AS_OverlordJab2V3,/Game/GSTN/Characters/Overlord/Moves/Jab2/AS_OverlordJab2V3,sposta,1,1,
+/Game/GASNPPTest/Combat/Overlord/GA_Overlord_DAirV7,/Game/GSTN/_Archive/Overlord/GA_Overlord_DAirV7,archivio,1,0,"versione superata (V7/V8 DAir, Jab V2); niente la usa a parte la sua catena"
+/Game/GASNPPTest/Combat/Overlord/GA_Overlord_DAirV8,/Game/GSTN/_Archive/Overlord/GA_Overlord_DAirV8,archivio,1,0,"versione superata (V7/V8 DAir, Jab V2); niente la usa a parte la sua catena"
+/Game/GASNPPTest/Combat/Overlord/GA_Overlord_DAirV9,/Game/GSTN/Characters/Overlord/Moves/DAir/GA_Overlord_DAirV9,sposta,1,0,
+/Game/GASNPPTest/Combat/Overlord/GA_Overlord_Dropkick,/Game/GSTN/Characters/Overlord/Moves/Dropkick/GA_Overlord_Dropkick,sposta,1,0,
+/Game/GASNPPTest/Combat/Overlord/GA_Overlord_Jab1,/Game/GSTN/Characters/Overlord/Moves/Jab1/GA_Overlord_Jab1,sposta,1,0,
+/Game/GASNPPTest/Combat/Overlord/GA_Overlord_Jab2,/Game/GSTN/Characters/Overlord/Moves/Jab2/GA_Overlord_Jab2,sposta,1,0,
+/Game/GASNPPTest/Combat/Overlord/TL_Overlord_DAirV7,/Game/GSTN/_Archive/Overlord/TL_Overlord_DAirV7,archivio,1,1,"versione superata (V7/V8 DAir, Jab V2); niente la usa a parte la sua catena"
+/Game/GASNPPTest/Combat/Overlord/TL_Overlord_DAirV8,/Game/GSTN/_Archive/Overlord/TL_Overlord_DAirV8,archivio,1,1,"versione superata (V7/V8 DAir, Jab V2); niente la usa a parte la sua catena"
+/Game/GASNPPTest/Combat/Overlord/TL_Overlord_DAirV9,/Game/GSTN/Characters/Overlord/Moves/DAir/TL_Overlord_DAirV9,sposta,1,2,
+/Game/GASNPPTest/Combat/Overlord/TL_Overlord_Dropkick,/Game/GSTN/Characters/Overlord/Moves/Dropkick/TL_Overlord_Dropkick,sposta,1,3,
+/Game/GASNPPTest/Combat/Overlord/TL_Overlord_Jab1,/Game/GSTN/Characters/Overlord/Moves/Jab1/TL_Overlord_Jab1,sposta,1,2,
+/Game/GASNPPTest/Combat/Overlord/TL_Overlord_Jab2,/Game/GSTN/Characters/Overlord/Moves/Jab2/TL_Overlord_Jab2,sposta,1,1,
+/Game/GASNPPTest/Combat/PM_Test_Glass,/Game/GSTNTests/Combat/Surfaces/PM_Test_Glass,sposta,2,1,
+/Game/GASNPPTest/Combat/PM_Test_Wall,/Game/GSTNTests/Combat/Surfaces/PM_Test_Wall,sposta,2,1,
+/Game/GASNPPTest/Combat/PS_Test_Pawn,/Game/GSTNTests/Combat/Hurtboxes/PS_Test_Pawn,sposta,1,0,
+/Game/GASNPPTest/Combat/Reaction/AM_React_GetUp,/Game/GSTN/Combat/Reactions/AM_React_GetUp,sposta,1,0,
+/Game/GASNPPTest/Combat/Reaction/AM_React_GroundHit,/Game/GSTN/_Archive/Reactions/AM_React_GroundHit,archivio,0,0,"nessun riferimento (asset, codice, ini)"
+/Game/GASNPPTest/Combat/Reaction/AM_React_Roll,/Game/GSTN/Combat/Reactions/AM_React_Roll,sposta,1,0,
+/Game/GASNPPTest/Combat/Reaction/AM_React_RollBack,/Game/GSTN/Combat/Reactions/AM_React_RollBack,sposta,1,0,
+/Game/GASNPPTest/Combat/Reaction/AS_React_GetUp,/Game/GSTN/Combat/Reactions/AS_React_GetUp,sposta,1,0,
+/Game/GASNPPTest/Combat/Reaction/AS_React_GroundHit,/Game/GSTN/Combat/Reactions/AS_React_GroundHit,sposta,2,0,
+/Game/GASNPPTest/Combat/Reaction/AS_React_HitStand,/Game/GSTN/Combat/Reactions/AS_React_HitStand,sposta,1,0,
+/Game/GASNPPTest/Combat/Reaction/AS_React_LieUp,/Game/GSTN/Combat/Reactions/AS_React_LieUp,sposta,1,0,
+/Game/GASNPPTest/Combat/Reaction/AS_React_Roll,/Game/GSTN/Combat/Reactions/AS_React_Roll,sposta,1,0,
+/Game/GASNPPTest/Combat/Reaction/AS_React_RollBack,/Game/GSTN/Combat/Reactions/AS_React_RollBack,sposta,1,0,
+/Game/GASNPPTest/Combat/Reaction/AS_React_Splat,/Game/GSTN/Combat/Reactions/AS_React_Splat,sposta,1,0,
+/Game/GASNPPTest/Combat/Reaction/AS_React_Tumble,/Game/GSTN/Combat/Reactions/AS_React_Tumble,sposta,1,0,
+/Game/GASNPPTest/Combat/Reaction/DA_ReactionAnims,/Game/GSTN/Combat/Reactions/DA_ReactionAnims,sposta,1,1,
+/Game/GASNPPTest/Combat/SIS_Test_Code,/Game/GSTNTests/Combat/Supers/SIS_Test_Code,sposta,1,0,
+/Game/GASNPPTest/Combat/SUP_Test_A,/Game/GSTNTests/Combat/Supers/SUP_Test_A,sposta,0,0,
+/Game/GASNPPTest/Combat/SUP_Test_B,/Game/GSTNTests/Combat/Supers/SUP_Test_B,sposta,0,0,
+/Game/GASNPPTest/Combat/TL_Test_HitBaked,/Game/GSTNTests/Combat/Timelines/TL_Test_HitBaked,sposta,0,1,
+/Game/GASNPPTest/Combat/TL_Test_StrikeKinds,/Game/GSTNTests/Combat/Timelines/TL_Test_StrikeKinds,sposta,0,2,
+/Game/GASNPPTest/Combat/WPN_Test_Blade,/Game/GSTNTests/Combat/Weapons/WPN_Test_Blade,sposta,6,0,
+/Game/GASNPPTest/Combat/WPN_Test_Heavy,/Game/GSTNTests/Combat/Weapons/WPN_Test_Heavy,sposta,1,0,
+/Game/GASNPPTest/Combat/WPN_Test_Hits,/Game/GSTNTests/Combat/Weapons/WPN_Test_Hits,sposta,14,0,
+/Game/GASNPPTest/Combat/WPN_Test_Light,/Game/GSTNTests/Combat/Weapons/WPN_Test_Light,sposta,1,0,
+/Game/GASNPPTest/Combat/WPN_Test_Medium,/Game/GSTNTests/Combat/Weapons/WPN_Test_Medium,sposta,2,0,
+/Game/GASNPPTest/Combat/WPN_Test_Overlord,/Game/GSTN/Characters/Overlord/WPN_Test_Overlord,sposta,1,0,rinomina proposta: WPN_Overlord
+/Game/GASNPPTest/Combat/WPN_Test_OverlordDAirV7,/Game/GSTN/_Archive/Overlord/WPN_Test_OverlordDAirV7,archivio,1,0,kit di una versione superata
+/Game/GASNPPTest/Combat/WPN_Test_OverlordDAirV8,/Game/GSTN/_Archive/Overlord/WPN_Test_OverlordDAirV8,archivio,1,0,kit di una versione superata
+/Game/GASNPPTest/Combat/WPN_Test_OverlordDAirV9,/Game/GSTN/Characters/Overlord/Variants/WPN_Test_OverlordDAirV9,sposta,1,0,kit di prova di una variante
+/Game/GASNPPTest/Combat/WPN_Test_OverlordDropkick,/Game/GSTN/Characters/Overlord/Variants/WPN_Test_OverlordDropkick,sposta,1,0,kit di prova di una variante
+/Game/GASNPPTest/Combat/WPN_Test_Spear,/Game/GSTNTests/Combat/Weapons/WPN_Test_Spear,sposta,1,0,
+/Game/GASNPPTest/Combat/WPN_Test_Support,/Game/GSTNTests/Combat/Weapons/WPN_Test_Support,sposta,0,0,
+/Game/GASNPPTest/Examples/Cosmetics/GCN_Example_Hit_Finisher,/Game/GSTNExamples/Cosmetics/GCN_Example_Hit_Finisher,sposta,0,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/Cosmetics/GCN_Example_Hit_Heavy,/Game/GSTNExamples/Cosmetics/GCN_Example_Hit_Heavy,sposta,0,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/Cosmetics/GCN_Example_Hit_Light,/Game/GSTNExamples/Cosmetics/GCN_Example_Hit_Light,sposta,0,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/Cosmetics/GCN_Example_Hit_Medium,/Game/GSTNExamples/Cosmetics/GCN_Example_Hit_Medium,sposta,0,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/DA_Example_Backpack_Dome,/Game/GSTNExamples/DA_Example_Backpack_Dome,sposta,0,3,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/DoubleShot/DA_Example_Shot,/Game/GSTNExamples/DoubleShot/DA_Example_Shot,sposta,3,1,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/DoubleShot/GA_Example_DoubleShot_A1,/Game/GSTNExamples/DoubleShot/GA_Example_DoubleShot_A1,sposta,1,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/DoubleShot/GA_Example_DoubleShot_A2,/Game/GSTNExamples/DoubleShot/GA_Example_DoubleShot_A2,sposta,1,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/DoubleShot/GA_Example_DoubleShot_B,/Game/GSTNExamples/DoubleShot/GA_Example_DoubleShot_B,sposta,1,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/DoubleShot/TL_Example_DoubleShot_A1,/Game/GSTNExamples/DoubleShot/TL_Example_DoubleShot_A1,sposta,1,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/DoubleShot/TL_Example_DoubleShot_A2,/Game/GSTNExamples/DoubleShot/TL_Example_DoubleShot_A2,sposta,1,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/DoubleShot/TL_Example_DoubleShot_B,/Game/GSTNExamples/DoubleShot/TL_Example_DoubleShot_B,sposta,1,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/GA_Example_BackpackDome,/Game/GSTNExamples/GA_Example_BackpackDome,sposta,1,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/GA_Example_GroundBounce,/Game/GSTNExamples/GA_Example_GroundBounce,sposta,1,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/GA_Example_Light,/Game/GSTNExamples/GA_Example_Light,sposta,1,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/GA_Example_Special,/Game/GSTNExamples/GA_Example_Special,sposta,2,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/GA_Example_Strong,/Game/GSTNExamples/GA_Example_Strong,sposta,4,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/GA_Example_WallSplat,/Game/GSTNExamples/GA_Example_WallSplat,sposta,1,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/KIT_Example,/Game/GSTNExamples/KIT_Example,sposta,0,1,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/KIT_Example_DoubleShotA,/Game/GSTNExamples/KIT_Example_DoubleShotA,sposta,0,1,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/KIT_Example_DoubleShotB,/Game/GSTNExamples/KIT_Example_DoubleShotB,sposta,0,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/KIT_Example_Impacts,/Game/GSTNExamples/KIT_Example_Impacts,sposta,0,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/WPN_Example,/Game/GSTNExamples/WPN_Example,sposta,3,1,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/Examples/WPN_Example_Impacts,/Game/GSTNExamples/WPN_Example_Impacts,sposta,1,0,vedi decisione 1 (esempi nel plugin)
+/Game/GASNPPTest/GM_GASNPPTest,/Game/GSTN/Core/GM_GASNPPTest,sposta,3,5,rinomina proposta in fase 3
+/Game/GASNPPTest/Input/BS_GASNPP_Test,/Game/GSTN/Input/BS_GASNPP_Test,sposta,1,0,
+/Game/GASNPPTest/Input/IA_GASNPP_Attack,/Game/GSTN/Input/Actions/IA_GASNPP_Attack,sposta,2,0,
+/Game/GASNPPTest/Input/IA_GASNPP_Buff,/Game/GSTN/Input/Actions/IA_GASNPP_Buff,sposta,2,2,
+/Game/GASNPPTest/Input/IA_GASNPP_Crouch,/Game/GSTN/Input/Actions/IA_GASNPP_Crouch,sposta,2,2,
+/Game/GASNPPTest/Input/IA_GASNPP_Dash,/Game/GSTN/Input/Actions/IA_GASNPP_Dash,sposta,2,2,
+/Game/GASNPPTest/Input/IA_GASNPP_Dodge,/Game/GSTN/Input/Actions/IA_GASNPP_Dodge,sposta,2,1,
+/Game/GASNPPTest/Input/IA_GASNPP_Interact,/Game/GSTN/Input/Actions/IA_GASNPP_Interact,sposta,2,0,
+/Game/GASNPPTest/Input/IA_GASNPP_Jump,/Game/GSTN/Input/Actions/IA_GASNPP_Jump,sposta,2,0,
+/Game/GASNPPTest/Input/IA_GASNPP_RunBoost,/Game/GSTN/Input/Actions/IA_GASNPP_RunBoost,sposta,2,1,
+/Game/GASNPPTest/Input/IA_GASNPP_Shield,/Game/GSTN/Input/Actions/IA_GASNPP_Shield,sposta,1,1,
+/Game/GASNPPTest/Input/IA_GASNPP_Special,/Game/GSTN/Input/Actions/IA_GASNPP_Special,sposta,2,0,
+/Game/GASNPPTest/Input/IA_GASNPP_Sprint,/Game/GSTN/Input/Actions/IA_GASNPP_Sprint,sposta,2,0,
+/Game/GASNPPTest/Input/IA_GASNPP_Strong,/Game/GSTN/Input/Actions/IA_GASNPP_Strong,sposta,1,0,
+/Game/GASNPPTest/Input/IC_GASNPP_Test,/Game/GSTN/Input/IC_GASNPP_Test,sposta,1,3,
+/Game/GASNPPTest/Input/IMC_GASNPP_Test,/Game/GSTN/Input/IMC_GASNPP_Test,sposta,0,2,
+/Game/GASNPPTest/Input/IMC_GSTN_Locomotion,/Game/GSTN/Input/IMC_GSTN_Locomotion,sposta,1,0,
+/Game/GASNPPTest/Input/SS_GASNPP_Standard,/Game/GSTN/Input/SS_GASNPP_Standard,sposta,35,0,
+/Game/GASNPPTest/Stance/DA_Stance_TestRelaxed,/Game/GSTNTests/Combat/Stances/DA_Stance_TestRelaxed,sposta,0,0,
+/Game/GASNPPTest/TestMaps/Hub/MI_Hub_Blue,/Game/GSTN/Maps/Hub/Materials/MI_Hub_Blue,sposta,1,0,
+/Game/GASNPPTest/TestMaps/Hub/MI_Hub_DarkBlue,/Game/GSTN/Maps/Hub/Materials/MI_Hub_DarkBlue,sposta,1,0,
+/Game/GASNPPTest/TestMaps/Hub/MI_Hub_Green,/Game/GSTN/Maps/Hub/Materials/MI_Hub_Green,sposta,1,0,
+/Game/GASNPPTest/TestMaps/Hub/MI_Hub_Grey,/Game/GSTN/Maps/Hub/Materials/MI_Hub_Grey,sposta,1,0,
+/Game/GASNPPTest/TestMaps/Hub/MI_Hub_Orange,/Game/GSTN/Maps/Hub/Materials/MI_Hub_Orange,sposta,1,0,
+/Game/GASNPPTest/TestMaps/Hub/MI_Hub_Red,/Game/GSTN/Maps/Hub/Materials/MI_Hub_Red,sposta,1,0,
+/Game/GASNPPTest/TestMaps/Hub/MI_Hub_White,/Game/GSTN/Maps/Hub/Materials/MI_Hub_White,sposta,1,0,
+/Game/GASNPPTest/TestMaps/Hub/MI_Hub_Yellow,/Game/GSTN/Maps/Hub/Materials/MI_Hub_Yellow,sposta,1,0,
+/Game/Levels/DefaultLevel_Harness,/Game/GSTNTests/Maps/DefaultLevel_Harness,sposta,0,1,
+/Game/Levels/L_WallSlideAB,/Game/GSTNTests/Maps/L_WallSlideAB,sposta,0,3,
+/Game/Levels/Test/L_Test_Hub,/Game/GSTN/Maps/L_Test_Hub,sposta,0,8,mappa di playtest; ini EditorStartupMap/GameDefaultMap
