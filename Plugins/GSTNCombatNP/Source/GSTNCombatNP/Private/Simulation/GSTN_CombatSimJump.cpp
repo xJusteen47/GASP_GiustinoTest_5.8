@@ -56,6 +56,7 @@ bool UGSTN_CombatSimComponent::BuildJumpParams(FGSTN_JumpParams& OutParams) cons
 	if (TableJumpData)
 	{
 		OutParams.CoyoteFrames = TableJumpData->CoyoteFrames;
+		OutParams.CutRampFrames = TableJumpData->CutRampFrames;
 	}
 	OutParams.SquatFrames = TableJumpData && TableJumpData->bOverrideSquatFrames ? TableJumpData->SquatFrames : UGSTN_CombatSettings::Get().JumpSquatFrames;
 	return true;

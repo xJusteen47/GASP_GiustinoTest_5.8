@@ -2,7 +2,12 @@
 
 #include "Movement/GSTN_RunStageSyncState.h"
 
+#include "AbilitySystemComponent.h"
+#include "AbilitySystemGlobals.h"
+#include "Attributes/GSTN_CombatAttributeSet.h"
+#include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "GameFramework/Actor.h"
+#include "Movement/GSTN_LayeredMove_RunSkid.h"
 #include "Kits/GSTN_LocomotionProfile.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverComponent.h"
@@ -26,8 +31,9 @@ bool FGSTN_RunStageSyncState::NetSerialize(FArchive& Ar, UPackageMap* Map, bool&
 void FGSTN_RunStageSyncState::ToString(FAnsiStringBuilderBase& Out) const
 {
 	Super::ToString(Out);
-	Out.Appendf("RunStage: %d  InStage: %d  SinceStart: %d  SinceRelease: %d  Carried: %.1f (%d frames, source %d)\n", Run.Stage + 1, Run.FramesInStage,
-		Run.FramesSinceMoveStart, Run.FramesSinceStickRelease, Run.CarriedSpeed, Run.FramesSinceCarry, static_cast<int32>(Run.CarrySource));
+	Out.Appendf("RunStage: %d  InStage: %d  SinceStart: %d  SinceRelease: %d  Carried: %.1f (%d/%d frames, source %d)  Air: %d takeoff %.1f stage %d\n", Run.Stage + 1, Run.FramesInStage,
+		Run.FramesSinceMoveStart, Run.FramesSinceStickRelease, Run.CarriedSpeed, Run.FramesSinceCarry, Run.CarryWindow, static_cast<int32>(Run.CarrySource),
+		Run.bAirborne ? 1 : 0, Run.TakeoffSpeed, Run.TakeoffStage + 1);
 }
 
 bool FGSTN_RunStageSyncState::ShouldReconcile(const FMoverDataStructBase& AuthorityState) const
@@ -36,7 +42,9 @@ bool FGSTN_RunStageSyncState::ShouldReconcile(const FMoverDataStructBase& Author
 	const FGSTN_RunStageState& Authority = static_cast<const FGSTN_RunStageSyncState&>(AuthorityState).Run;
 	return Run.Stage != Authority.Stage || Run.FramesInStage != Authority.FramesInStage || Run.FramesSinceMoveStart != Authority.FramesSinceMoveStart
 		|| Run.FramesSinceStickRelease != Authority.FramesSinceStickRelease || Run.FramesSinceCarry != Authority.FramesSinceCarry
-		|| Run.CarrySource != Authority.CarrySource || !FMath::IsNearlyEqual(Run.CarriedSpeed, Authority.CarriedSpeed, 0.5f);
+		|| Run.CarrySource != Authority.CarrySource || !FMath::IsNearlyEqual(Run.CarriedSpeed, Authority.CarriedSpeed, 0.5f)
+		|| Run.CarryWindow != Authority.CarryWindow || Run.bAirborne != Authority.bAirborne || Run.TakeoffStage != Authority.TakeoffStage
+		|| !FMath::IsNearlyEqual(Run.TakeoffSpeed, Authority.TakeoffSpeed, 0.5f);
 }
 
 void FGSTN_RunStageSyncState::Interpolate(const FMoverDataStructBase& From, const FMoverDataStructBase& To, float Pct)
@@ -118,6 +126,68 @@ void FGSTN_RunStageMover::PreMovement(UMoverComponent& MoverComp, float Factor)
 	// The stage of the start of this frame: the tracker holds the end of the previous one, and follows rollbacks
 	const FGSTN_RunStageState* State = Find(Tracker->GetSyncState());
 	ApplyStageValues(MoverComp, *Tuning, State ? State->Stage : 0, Factor);
+	ApplyAirValues(MoverComp, *Tuning, State, Factor);
+}
+
+int32 FGSTN_RunStageMover::ApplyAirValues(UMoverComponent& MoverComp, const FGSTN_LocomotionSimTuning& Tuning, const FGSTN_RunStageState* State, float Factor)
+{
+	if (!Tuning.RunStages.IsEnabled())
+	{
+		return 0;
+	}
+	UCommonLegacyMovementSettings* Shared = MoverComp.FindSharedSettings_Mutable<UCommonLegacyMovementSettings>();
+	if (!Shared)
+	{
+		return 0;
+	}
+	const FGSTN_RunAirTuning& Air = Tuning.RunStages.Air;
+
+	// The air control: the AirControl stat (its meaning is Mover's AirControlPercentage, "fraction of the ground acceleration available in
+	// the air"; read by nothing before P2), else the archetype's value; times the takeoff stage's scale. Assigned every substep, never adjusted
+	const UCommonLegacyMovementSettings* Base = Cast<UCommonLegacyMovementSettings>(Shared->GetArchetype());
+	float Control = Base ? Base->AirControlPercentage : Shared->AirControlPercentage;
+	if (Air.bUseAirControlStat)
+	{
+		const UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(MoverComp.GetOwner());
+		bool bFound = false;
+		const float Stat = ASC ? ASC->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetAirControlAttribute(), bFound) : 0.f;
+		if (bFound)
+		{
+			Control = Stat;
+		}
+	}
+	const bool bAirborne = State && State->bAirborne;
+	if (bAirborne)
+	{
+		Control *= FGSTN_RunStageLogic::GetAirControlScale(Tuning.RunStages, *State);
+	}
+	Control = FMath::Clamp(Control, 0.f, 1.f);
+	Shared->AirControlPercentage = Control;
+	int32 Written = 1;
+	for (const TPair<FName, TObjectPtr<UBaseMovementMode>>& Entry : MoverComp.MovementModes)
+	{
+		if (UObject* Mode = Entry.Value)
+		{
+			Written += WriteFloats(*Mode, Tuning.AirControlProperties, Control);
+		}
+	}
+
+	// Decision 1C, default model: in the air the top speed is the takeoff speed (with a floor). The stats wrote MaxSpeed = base * factor
+	// just before this, so the ground frames keep theirs. The first air frame still uses the ground value (the takeoff is latched at its end)
+	if (bAirborne && Air.Model == EGSTN_AirControlModel::TakeoffCap && Factor > 0.f)
+	{
+		const float Top = FGSTN_RunStageLogic::GetAirTopSpeed(Tuning.RunStages, *State, Factor);
+		Shared->MaxSpeed = Top;
+		++Written;
+		for (const TPair<FName, TObjectPtr<UBaseMovementMode>>& Entry : MoverComp.MovementModes)
+		{
+			if (UObject* Mode = Entry.Value)
+			{
+				Written += WriteFloats(*Mode, Tuning.AirSpeedProperties, Top);
+			}
+		}
+	}
+	return Written;
 }
 
 void FGSTN_RunStageMover::PostMovement(UMoverComponent& MoverComp, const FMoverTimeStep& TimeStep, FMoverSyncState& OutputSyncState, float Factor)
@@ -150,6 +220,15 @@ void FGSTN_RunStageMover::PostMovement(UMoverComponent& MoverComp, const FMoverT
 	Input.StickWorld = StickSize > 0.0 ? FGSTN_CombatVictim::StickToPlane(Stick, CameraYaw, Up).GetSafeNormal() * StickSize : FVector::ZeroVector;
 	Input.bBoostCommand = Tuning->RunStages.BoostCommand.IsValid() && Combat->WasCommandEnteredWithin(Tuning->RunStages.BoostCommand, 0);
 	Input.SpeedFactor = Factor;
+	// A run skid whose first live frame was this step (P2): the run drops and remembers the speed of before it
+	if (const FGSTN_LayeredMove_RunSkid* Skid = FGSTN_LayeredMove_RunSkid::FindActive(OutputSyncState))
+	{
+		if (Skid->CurrentLiveFrame == 0 && Skid->LastStepTimeMs == TimeStep.BaseSimTimeMs)
+		{
+			Input.bSkidStarted = true;
+			Input.SkidStartSpeed = Skid->StartSpeed;
+		}
+	}
 
 	FGSTN_RunStageSyncState& Entry = OutputSyncState.SyncStateCollection.FindOrAddMutableDataByType<FGSTN_RunStageSyncState>();
 	FGSTN_RunStageLogic::Step(Tuning->RunStages, Input, Entry.Run);

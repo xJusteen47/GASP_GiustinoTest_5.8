@@ -27,6 +27,7 @@ void FGSTN_JumpState::NetSerialize(FArchive& Ar)
 	Ar << AirJumpsUsed;
 	Ar << CoyoteFramesLeft;
 	Ar << SquatFramesLeft;
+	Ar << CutFrames;
 
 	if (Ar.IsLoading())
 	{

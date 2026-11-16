@@ -26,7 +26,9 @@
 #include "Movement/GSTN_LayeredMove_PushBack.h"
 #include "Movement/GSTN_LayeredMove_LedgeGuard.h"
 #include "Movement/GSTN_LayeredMove_MomentumSlide.h"
+#include "Movement/GSTN_LayeredMove_RunSkid.h"
 #include "Presentation/GSTN_PrecisionAimComponent.h"
+#include "Presentation/GSTN_RunPresentationComponent.h"
 #include "Timeline/GSTN_StartupSteer.h"
 #include "Presentation/GSTN_SteerIndicatorComponent.h"
 #include "Movement/GSTN_SetFacingEffect.h"
@@ -119,6 +121,7 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 	SetFacingEffect = UGSTN_GE_SetFacing::StaticClass();
 	MomentumSlideEffect = UGSTN_GE_MomentumSlide::StaticClass();
 	LedgeGuardEffect = UGSTN_GE_LedgeGuard::StaticClass();
+	RunSkidEffect = UGSTN_GE_RunSkid::StaticClass();
 
 	InputSource = CreateDefaultSubobject<UGSTN_PlayerInputSource>(TEXT("InputSource"));
 	ContextProvider = CreateDefaultSubobject<UGSTN_MoverInputContextProvider>(TEXT("ContextProvider"));
@@ -179,6 +182,11 @@ void UGSTN_CombatSimComponent::BeginPlay()
 	{
 		UGSTN_SteerIndicatorComponent* Arrows = NewObject<UGSTN_SteerIndicatorComponent>(GetOwner(), TEXT("GSTN_SteerIndicator"));
 		Arrows->RegisterComponent();
+	}
+	// The run skid's placeholder pose and the foot slide hook (presentation, Mario-style run P2), the same way
+	if (GetNetMode() != NM_DedicatedServer)
+	{
+		UGSTN_RunPresentationComponent::FindOrAdd(GetOwner());
 	}
 }
 
@@ -968,6 +976,15 @@ void UGSTN_CombatSimComponent::AppendContextTags(FGameplayTagContainer& OutTags)
 	if (bFrameInCoyote)
 	{
 		OutTags.AddTag(GSTNInputTags::Context_Coyote);
+	}
+	// The run skid's tags (owner 2026-11-16 12:46Z), from the tracked Mover state of the end of the previous frame: a kit binding can require
+	// Movement.State.Skid or its JumpWindow (the window is already shifted by that frame, FGSTN_RunSkidMath::InJumpWindow)
+	if (const UGSTN_MoverSimStateTracker* Tracker = JumpTracker.Get())
+	{
+		if (const FGSTN_LayeredMove_RunSkid* Skid = FGSTN_LayeredMove_RunSkid::FindActive(Tracker->GetSyncState()))
+		{
+			Skid->GetGameplayTags(OutTags);
+		}
 	}
 }
 
@@ -2242,6 +2259,9 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 
 	// A surface that launches, met by a combatant that is not tumbling: queued on Mover before it ticks, before a jump of this frame starts
 	StepSurfaceLaunch(TimeStep, Sync->Core);
+
+	// The run skid (Mario-style run P2): the stick of this frame reversed against the run of the end of the previous frame, queued before Mover ticks
+	StepRunSkid(Sync->Core);
 
 	// A timeline the model started by itself this frame (StartForcedTimeline: an extension's landing, tech, get-up): its ability is activated here and
 	// finds its timeline running from this frame, like a command's

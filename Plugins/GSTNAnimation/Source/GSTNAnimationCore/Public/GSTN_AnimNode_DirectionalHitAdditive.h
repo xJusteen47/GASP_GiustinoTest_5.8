@@ -73,6 +73,10 @@ private:
 	bool bHasRequest = false;
 
 	TWeakObjectPtr<UObject> CachedSource;
+	/** Further sources on the same actor (the run skid's placeholder lean, GSTNCombatNP), drawn after the first one */
+	TArray<TWeakObjectPtr<UObject>> CachedExtraSources;
+	TArray<FGSTN_AdditiveReactionRequest> ExtraRequests;
+	int32 CachedComponentCount = 0;
 	TWeakObjectPtr<const AActor> CachedOwner;
 
 	/** Per compact bone: inside BranchRoot's branch */

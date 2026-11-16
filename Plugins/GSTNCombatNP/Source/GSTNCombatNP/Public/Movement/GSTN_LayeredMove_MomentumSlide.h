@@ -101,6 +101,29 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_MomentumSlide : public FLayeredMoveBas
 	UPROPERTY()
 	double LastStepTimeMs = -1.0;
 
+	/**
+	 * P3: the speed of the current live frame and of the next one. The stick brakes the slide (FGSTN_MomentumSlideMath::ApplyStick), so the
+	 * speed is no longer a closed form of the start speed: it is stepped once per simulation time and kept in the move (rolled back with it)
+	 */
+	UPROPERTY()
+	float CurrentSpeed = 0.f;
+
+	UPROPERTY()
+	float NextSpeed = 0.f;
+
+	/** The move's stick rules, latched on the first frame from the timeline data */
+	UPROPERTY()
+	int32 RetreatWindowFrames = 0;
+
+	UPROPERTY()
+	float StickBrake = 0.f;
+
+	UPROPERTY()
+	float StickAgainstCos = -1.f;
+
+	UPROPERTY()
+	float StickAlongScale = 1.f;
+
 	/** How far under the feet the ledge probe looks, cm (as the push back) */
 	static constexpr double LedgeProbeDepth = 60.0;
 

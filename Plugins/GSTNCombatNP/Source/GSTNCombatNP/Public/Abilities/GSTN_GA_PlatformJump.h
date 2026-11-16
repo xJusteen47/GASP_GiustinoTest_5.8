@@ -114,6 +114,15 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data", meta = (ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
 	int32 CoyoteFrames = 4;
 
+	/**
+	 * Jump cut (owner 2026-11-16 19:46Z): when the hold ends (the button released after MinJumpHoldFrames, or MaxJumpHoldFrames reached),
+	 * the gravity grows from the rise scale (JumpRiseGravityScale) to the cut scale (JumpCutGravityScale) over these frames, and the fall
+	 * scale (FallGravityScale) takes over at the apex. 0 = the cut scale at once (the behaviour before). The scales and the hold frames are
+	 * the kit's stats (attributes); this ramp is kit data like the coyote time
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data", meta = (ClampMin = "0", ClampMax = "60", ForceUnits = "Frames"))
+	int32 CutRampFrames = 0;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")
 	bool bOverrideSquatFrames = false;
 

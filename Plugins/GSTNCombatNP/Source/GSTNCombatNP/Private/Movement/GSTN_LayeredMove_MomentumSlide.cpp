@@ -1,5 +1,6 @@
 #include "Movement/GSTN_LayeredMove_MomentumSlide.h"
 
+#include "Movement/GSTN_GroundProbe.h"
 #include "Components/PrimitiveComponent.h"
 #include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "Engine/World.h"
@@ -10,6 +11,10 @@
 #include "MoverDataModelTypes.h"
 #include "MoverTypes.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "Simulation/GSTN_CombatVictim.h"
+#include "GSTN_SurfaceTypes.h"
+#include "Kits/GSTN_LocomotionProfile.h"
+#include "Movement/GSTN_RunStageSyncState.h"
 
 namespace GSTNMomentumSlide
 {
@@ -59,8 +64,23 @@ bool FGSTN_LayeredMove_MomentumSlide::Decide(const FMoverTickStartData& StartSta
 	}
 
 	const FVector Up = MoverComp.GetUpDirection();
-	const FVector FlatVelocity = FVector::VectorPlaneProject(Sync->GetVelocity_WorldSpace(), Up);
+	FVector FlatVelocity = FVector::VectorPlaneProject(Sync->GetVelocity_WorldSpace(), Up);
 	const FVector FlatForward = FVector::VectorPlaneProject(Sync->GetOrientation_WorldSpace().Vector(), Up).GetSafeNormal();
+
+	// P3, decision 2A: the run state still carries the speed of before the stick release or the skid. It replaces the measured speed when
+	// faster; the direction stays the measured one (the skid slides along the old run), else the facing for a character already at rest
+	const FGSTN_LocomotionSimTuning* Locomotion = FGSTN_LocomotionAttach::Find(MoverComp.GetOwner());
+	const FGSTN_RunStageState* Run = FGSTN_RunStageMover::Find(StartState.SyncState);
+	if (Locomotion && Run)
+	{
+		const float Measured = static_cast<float>(FlatVelocity.Size());
+		const float Running = FGSTN_MomentumSlideMath::PickRunningSpeed(Data, Measured, FGSTN_RunStageLogic::GetCarriedSpeed(Locomotion->RunStages, *Run));
+		if (Running > Measured)
+		{
+			const FVector Dir = Measured > UE_KINDA_SMALL_NUMBER ? FlatVelocity / Measured : FlatForward;
+			FlatVelocity = Dir * Running;
+		}
+	}
 	bool bPickedAgainst = false;
 	const FGSTN_MomentumSlideResponse* Response = FGSTN_MomentumSlideMath::PickResponse(Data, FlatVelocity, FlatForward, bPickedAgainst);
 	bAgainst = bPickedAgainst;
@@ -71,7 +91,16 @@ bool FGSTN_LayeredMove_MomentumSlide::Decide(const FMoverTickStartData& StartSta
 
 	// The braking of Mover's legacy walking: a constant deceleration plus a friction proportional to the speed
 	const float CharacterFriction = (Settings->bUseSeparateBrakingFriction ? Settings->BrakingFriction : Settings->GroundFriction) * FMath::Max(Settings->BrakingFrictionFactor, 0.f);
-	const FGSTN_MomentumSlideBraking Braking = FGSTN_MomentumSlideMath::ResolveBraking(*Response, Settings->Deceleration, CharacterFriction);
+	FGSTN_MomentumSlideBraking Braking = FGSTN_MomentumSlideMath::ResolveBraking(*Response, Settings->Deceleration, CharacterFriction);
+	// The kit's slipperiness (P3) and the floor's friction (ice) scale the move's own braking
+	float Scale = Locomotion ? Locomotion->RunStages.AttackSlideFrictionScale : 1.f;
+	FGSTN_SurfaceView Floor;
+	if (FGSTN_GroundProbe::ResolveFloorSurface(StartState, Floor))
+	{
+		Scale *= Floor.Locomotion.FrictionScale;
+	}
+	Braking.Deceleration *= Scale;
+	Braking.Friction *= Scale;
 
 	Direction = FlatVelocity.GetSafeNormal();
 	StartSpeed = FGSTN_MomentumSlideMath::StartSpeed(*Response, static_cast<float>(FlatVelocity.Size()));
@@ -83,6 +112,12 @@ bool FGSTN_LayeredMove_MomentumSlide::Decide(const FMoverTickStartData& StartSta
 	TimelineStartFrame = RunningStartFrame;
 	LiveFrames = 0;
 	CurrentLiveFrame = INDEX_NONE;
+	CurrentSpeed = StartSpeed;
+	NextSpeed = StartSpeed;
+	RetreatWindowFrames = Data.RetreatWindowFrames;
+	StickBrake = Data.StickBrake;
+	StickAgainstCos = Data.StickAgainstCos;
+	StickAlongScale = Data.StickAlongScale;
 	return StartSpeed > 0.f;
 }
 
@@ -131,20 +166,7 @@ bool FGSTN_LayeredMove_MomentumSlide::FindRootMotion(const FMoverTickStartData& 
 
 bool FGSTN_LayeredMove_MomentumSlide::HasFloorAhead(const FMoverTickStartData& StartState, const UMoverComponent& MoverComp, const FVector& Velocity, double StepMs)
 {
-	const FMoverDefaultSyncState* Sync = StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
-	const UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(MoverComp.GetUpdatedComponent());
-	if (!Sync || !Primitive || !Primitive->GetWorld())
-	{
-		return true;
-	}
-	// The probe of the push back: the next step's feet position must have floor under it
-	const FVector Up = MoverComp.GetUpDirection();
-	const double HalfHeight = Primitive->Bounds.BoxExtent.GetMax();
-	const FVector Next = Sync->GetLocation_WorldSpace() + Velocity * (StepMs * 0.001);
-	const FVector Start = Next - Up * (HalfHeight - 10.0);
-	const FVector End = Next - Up * (HalfHeight + LedgeProbeDepth);
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNMomentumSlideLedge), false, Primitive->GetOwner());
-	return Primitive->GetWorld()->LineTraceTestByChannel(Start, End, ECC_Visibility, Params);
+	return FGSTN_GroundProbe::HasFloorAhead(StartState, MoverComp, Velocity, StepMs);
 }
 
 bool FGSTN_LayeredMove_MomentumSlide::GenerateMove(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, const UMoverComponent* MoverComp, UMoverBlackboard* SimBlackboard, FProposedMove& OutProposedMove)
@@ -183,10 +205,31 @@ bool FGSTN_LayeredMove_MomentumSlide::GenerateMove(const FMoverTickStartData& St
 
 	// Count the step once per simulation time: a refunded substep generates again with the same time
 	const bool bFrozen = IsFrozen(StartState);
+	const double StepMs = FMath::Max<double>(TimeStep.StepMs, UE_SMALL_NUMBER);
 	if (TimeStep.BaseSimTimeMs != LastStepTimeMs)
 	{
 		LastStepTimeMs = TimeStep.BaseSimTimeMs;
 		CurrentLiveFrame = bFrozen ? INDEX_NONE : LiveFrames++;
+		if (CurrentLiveFrame != INDEX_NONE)
+		{
+			// The frame moves at the speed it starts with, then the speed steps down with this frame's stick (P3 retreat rules)
+			CurrentSpeed = CurrentLiveFrame == 0 ? StartSpeed : NextSpeed;
+			FVector2D Stick;
+			float CameraYaw = 0.f;
+			Combat->GetFrameStick(Stick, CameraYaw);
+			const float StickSize = static_cast<float>(FMath::Min(Stick.Size(), 1.0));
+			const FVector StickDir = StickSize > 0.f ? FGSTN_CombatVictim::StickToPlane(Stick, CameraYaw, MoverComp->GetUpDirection()).GetSafeNormal() : FVector::ZeroVector;
+			FGSTN_MomentumSlide Rules;
+			Rules.RetreatWindowFrames = RetreatWindowFrames;
+			Rules.StickBrake = StickBrake;
+			Rules.StickAgainstCos = StickAgainstCos;
+			Rules.StickAlongScale = StickAlongScale;
+			FGSTN_MomentumSlideBraking Base;
+			Base.Deceleration = Deceleration;
+			Base.Friction = Friction;
+			const FGSTN_MomentumSlideBraking Braking = FGSTN_MomentumSlideMath::ApplyStick(Rules, Base, CurrentLiveFrame, static_cast<float>(StickDir.Dot(Direction)), StickSize);
+			NextSpeed = FGSTN_MomentumSlideMath::StepSpeed(CurrentSpeed, Braking, static_cast<float>(StepMs * 0.001));
+		}
 	}
 	if (CurrentLiveFrame == INDEX_NONE)
 	{
@@ -194,8 +237,7 @@ bool FGSTN_LayeredMove_MomentumSlide::GenerateMove(const FMoverTickStartData& St
 		return false;
 	}
 
-	const double StepMs = FMath::Max<double>(TimeStep.StepMs, UE_SMALL_NUMBER);
-	const float Speed = SpeedAtLiveFrame(CurrentLiveFrame, static_cast<float>(StepMs * 0.001));
+	const float Speed = CurrentSpeed;
 	if (Speed <= 0.f || (MaxFrames > 0 && CurrentLiveFrame >= MaxFrames))
 	{
 		Finish(TimeStep);
@@ -248,6 +290,12 @@ void FGSTN_LayeredMove_MomentumSlide::NetSerialize(FArchive& Ar)
 	Ar << LiveFrames;
 	Ar << CurrentLiveFrame;
 	Ar << LastStepTimeMs;
+	Ar << CurrentSpeed;
+	Ar << NextSpeed;
+	Ar << RetreatWindowFrames;
+	Ar << StickBrake;
+	Ar << StickAgainstCos;
+	Ar << StickAlongScale;
 }
 
 UScriptStruct* FGSTN_LayeredMove_MomentumSlide::GetScriptStruct() const

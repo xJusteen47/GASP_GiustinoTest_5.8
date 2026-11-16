@@ -45,6 +45,33 @@ float FGSTN_MomentumSlideMath::StepSpeed(float Speed, const FGSTN_MomentumSlideB
 	return FMath::Max(Speed - Loss, 0.f);
 }
 
+FGSTN_MomentumSlideBraking FGSTN_MomentumSlideMath::ApplyStick(const FGSTN_MomentumSlide& Slide, const FGSTN_MomentumSlideBraking& Base, int32 LiveFrame, float StickDot, float StickSize)
+{
+	constexpr float StickDeadzone = 0.25f;
+	constexpr float AlongCos = 0.7f;
+	FGSTN_MomentumSlideBraking Out = Base;
+	if (StickSize < StickDeadzone || LiveFrame < Slide.RetreatWindowFrames)
+	{
+		return Out;
+	}
+	if (StickDot <= Slide.StickAgainstCos)
+	{
+		Out.Deceleration += FMath::Max(Slide.StickBrake, 0.f) * FMath::Min(StickSize, 1.f);
+	}
+	else if (StickDot >= AlongCos)
+	{
+		const float Scale = FMath::Max(Slide.StickAlongScale, 0.f);
+		Out.Deceleration *= Scale;
+		Out.Friction *= Scale;
+	}
+	return Out;
+}
+
+float FGSTN_MomentumSlideMath::PickRunningSpeed(const FGSTN_MomentumSlide& Slide, float MeasuredSpeed, float CarriedSpeed)
+{
+	return Slide.bUseCarriedSpeed ? FMath::Max(MeasuredSpeed, CarriedSpeed) : MeasuredSpeed;
+}
+
 float FGSTN_MomentumSlideMath::PredictDistance(const FGSTN_MomentumSlideResponse& Response, float RunningSpeed, const FGSTN_MomentumSlideBraking& Braking, float TickRate, int32 MaxSteps)
 {
 	if (Response.Mode != EGSTN_MomentumSlideMode::Slide || TickRate <= 0.f)

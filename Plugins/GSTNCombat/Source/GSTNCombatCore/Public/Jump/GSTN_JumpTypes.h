@@ -98,6 +98,9 @@ struct GSTNCOMBATCORE_API FGSTN_JumpParams
 	/** Frames between a ground jump request and its take-off (0 = the take-off is the frame of the request) */
 	int32 SquatFrames = 0;
 
+	/** Frames over which the gravity grows from RiseGravityScale to CutGravityScale after the jump cut (0 = at once) */
+	int32 CutRampFrames = 0;
+
 	/**
 	 * Glide (M11 L7b, the jet-pack's slow descent): while falling with the button of the last jump still held, gravity uses GlideGravityScale
 	 * and the terminal speed GlideMaxFallSpeed. <= 0 = no glide (every kit without a glide stat, the default). Fast fall wins over the glide
@@ -148,17 +151,20 @@ struct GSTNCOMBATCORE_API FGSTN_JumpState
 	/** Falling with the button of the last jump held and a glide stat set (FGSTN_JumpParams::CanGlide): the glide gravity applies. Written by Step */
 	bool bGliding = false;
 
+	/** Frames since the jump cut while still rising (saturates at 255): the cut gravity ramp (FGSTN_JumpParams::CutRampFrames) */
+	uint8 CutFrames = 0;
+
 	bool IsDefault() const
 	{
 		return Phase == EGSTN_JumpPhase::None && StartFrame == INDEX_NONE && Button == INDEX_NONE && !bJumpCut && !bFastFalling && !bTakeoffWasAir
-			&& AirJumpsUsed == 0 && CoyoteFramesLeft == 0 && SquatFramesLeft == 0 && !bGliding;
+			&& AirJumpsUsed == 0 && CoyoteFramesLeft == 0 && SquatFramesLeft == 0 && !bGliding && CutFrames == 0;
 	}
 
 	bool operator==(const FGSTN_JumpState& Other) const
 	{
 		return Phase == Other.Phase && StartFrame == Other.StartFrame && Button == Other.Button && bJumpCut == Other.bJumpCut && bFastFalling == Other.bFastFalling
 			&& bTakeoffWasAir == Other.bTakeoffWasAir && AirJumpsUsed == Other.AirJumpsUsed && CoyoteFramesLeft == Other.CoyoteFramesLeft && SquatFramesLeft == Other.SquatFramesLeft
-			&& bGliding == Other.bGliding;
+			&& bGliding == Other.bGliding && CutFrames == Other.CutFrames;
 	}
 
 	/** One bit when default; same code for both directions */
