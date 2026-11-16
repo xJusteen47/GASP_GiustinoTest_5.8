@@ -48,6 +48,28 @@ uscite come i task GAS, tooltips stile engine; il validatore li riconosce come s
 icone, righello frame+secondi e scorciatoie del Montage editor (spazio, frecce, zoom) sull'editor esistente, senza riscriverlo su Sequencer (riscrittura = 60 $+, non vale).
 **Effetto sulle decisioni**: nessuna opzione consigliata cambia; 1A diventa task con pin (+3-5 $, ~30-40 $). La passata nativa (~10-15 $) va con CP6 (pubblicazione), nessuna decisione ora.
 
+## 2c. Utility GAS standard usate così come sono (62.5 Hz, rollback, buffer)
+Regola del fork: si aspetta con i `*PredictionTask`, non con gli `UAbilityTask` di serie (`docs/architecture/gas-npp.md:9`). Problemi tipici: timer a orologio, RPC e prediction key
+(fuori da NPP, mai annullati da un rollback), callback fuori dal tick, input letto due volte, montage che scavalca la timeline, root motion di CharacterMovement invece di Mover.
+| Utility | Esito | Perché / cosa usare |
+|---|---|---|
+| Qualunque `UAbilityTask` di serie (WaitDelay, WaitInputPress/Release, PlayMontageAndWait, WaitConfirm, NetworkSyncPoint) | **No** | RPC/prediction key e timer del mondo: non rientrano nel rollback. Il validatore li segnala già. |
+| Delay, Set Timer | **No** | Errore del validatore (`GSTN_SimGraphRules.cpp:248`). → **Wait Combat Frames** (esiste, `GSTN_GA_Base.h:92`, ferma in hitstop): farne un task con pin. |
+| Wait (fork, secondi) | OK con riserva | Tempo di simulazione, ma in secondi (arrotondati a 16 ms) e conta l'hitstop: per il gameplay usare i frame. |
+| WaitInputPress/Release, WaitInputEvent (fork) | **Serve equivalente** | Input grezzo: niente buffer/pattern/consumo, doppio input con i binding. → **Wait Command** / **Wait Command Release**; per tenere premuto c'è già `bEndOnTriggerRelease`. |
+| WaitGameplayEvent (fork) | OK con riserva | Deterministico se l'evento nasce in simulazione (Send Move Event, key). Mai da AnimNotify o UI: sono presentazione. |
+| WaitGameplayTagAdded/Removed (fork) | OK con riserva | Tag del tick di combattimento visti nello stesso frame; i cambi di modo di Mover arrivano un frame dopo (CLAUDE.md regola 5). |
+| PlayMontageAndWait (fork) | OK solo senza hitbox | Per una mossa salta hitbox, hitstop, cancel window, FAF, e litiga con la timeline sullo stesso slot. → **Play Combat Timeline And Wait**. |
+| ApplyRootMotion* | **No** | Root motion di CharacterMovement. → traccia Movement della timeline o Apply Move Effect (layered move di Mover). |
+| WaitTargetData / targeting | **No** (riserva per la versione fork) | Conferma del client via RPC. → GetAimRotation (simulazione), hitbox, Fire Projectile. |
+| WaitAttributeChange (fork) | OK | Attributi in simulazione. |
+| Costo/Cooldown GE, CommitAbility | OK con riserva | Nelle mosse a timeline il commit lo fa il tick a fine finestra di startup (`GSTN_GA_BaseCombat.h:22-23`): un CommitAbility a mano paga due volte. Cooldown in secondi, l'hitstop non lo ferma (da verificare). |
+| Add/Remove tag, ActivationOwned/Block/Cancel tags | OK | Bastano per la stance (decisione owner). Un tag loose a mano va tolto anche in simulazione; meglio ActivationOwnedTags o Open Move Tag Window. |
+| Apply GE a sé / GameplayCue | OK | Al bersaglio solo via hit data (inbox), non dal grafo dell'attaccante. Cue = presentazione (dedup CP4). |
+| Spawn Actor, Random, Get Actor Location | **No** | → Fire Projectile, Get Move Random, `GetMoverSimState`. |
+**Equivalenti da aggiungere** (stesso nome-schema e pin dei task GAS): Play Combat Timeline And Wait, Wait Command (+Release), Wait Combat Frames come task.
+Il validatore, per ogni nodo "No", dice quale equivalente usare: così chi viene da GAS trova la strada senza leggere la documentazione.
+
 ## 3. Proposta (chiude il gap, mosse standard invariate)
 1. **Abilità ospite**: qualunque `UGSTN_GA_Base` può dichiarare `Timelines` (lista soft di TL_ sul CDO). Il registro le compila come voci (classe ospite, TL):
    resta funzione pura del loadout → deterministico, nessuna project setting.
@@ -58,7 +80,7 @@ icone, righello frame+secondi e scorciatoie del Montage editor (spazio, frecce, 
 4. `GA_BaseCombat` = ospite che al via fa Play della sua timeline e termina con essa: **zero cablaggio** per le mosse standard, factory CP5 invariata.
 5. Implementazione: prima uno spike (½ giornata) sui `UBasePredictionTask` del fork con rollback forzato; se reggono, i nodi sono task; se no, request node
    non-latenti + eventi (stesso API visto dal designer). Validator: ammette solo i nostri task rollback-safe.
-6. Esempio + test: stance (tieni Y: entra, X/RT in stance, rilascio esce) e una mossa a 3 fasi con scelta a input; review regola 10 sulla cattura.
+6. Stance: nessun sistema dedicato (owner): tag + binding RequireTags; basta una riga di guida. Esempio + test: una mossa a 3 fasi con scelta a input; review regola 10.
 
 ## 4. Decisioni per l'owner (risposta tipo "1A 2A 3A")
 1. **Architettura timeline** — A) ospite + Play Combat Timeline, GA_BaseCombat come scorciatoia (**consigliata**, ~30-40 $ cloud Opus con nodo-task stile engine + build/test fisso ~5 $);
@@ -66,5 +88,6 @@ icone, righello frame+secondi e scorciatoie del Montage editor (spazio, frecce, 
    Fermo intanto: niente.
 2. **Attesa input** — A) Wait Command integrato col buffer (comando+finestra+consumo+priorità+condizione) (**consigliata**, ~12-18 $); B) permettere il task del fork
    `WaitInputEvent` (input grezzo, niente buffer: rischio doppi input, 0 $); C) solo polling come oggi.
-3. **Moveset della stance** — A) binding con RequireTags del tag di stance, nel kit (**consigliata**: buffer, priorità, editor dei kit già pronti; ~5-8 $ per esempio+test);
-   B) swap a un kit-stance (pesante, tocca il loadout); C) tutto dentro il grafo con Wait Command.
+3. **Equivalenti delle utility GAS** — A) i 3 task (Play Combat Timeline And Wait, Wait Command, Wait Combat Frames) + validatore che suggerisce l'equivalente
+   (**consigliata**, ~6-10 $ oltre 1A e 2A); B) solo avvisi del validatore (~2 $); C) rifare 1:1 tutti i task GAS (~40 $+, metà inutili: il fork ne ha già molti sicuri).
+Stance: decisa (tag generici + binding, niente esempio dedicato). Totale consigliato 1A+2A+3A ≈ 50-70 $ + build/test sul fisso.
