@@ -21,6 +21,17 @@ namespace
 	TAutoConsoleVariable<FString> CVarKitAtStart(TEXT("gstn.Debug.KitAtStart"), TEXT(""),
 		TEXT("Kit (asset name) every local player gets once when its pawn first appears in a play session. Empty = off. Debug tooling."), ECVF_Default);
 
+	TAutoConsoleVariable<FString> CVarKitAtStartLevels(TEXT("gstn.Debug.KitAtStartLevels"), TEXT(""),
+		TEXT("Comma separated level names where gstn.Debug.KitAtStart applies (e.g. L_Test_Hub). Empty = nowhere, so harness levels keep their own kits."), ECVF_Default);
+
+	bool IsStartKitLevel(const UWorld& World)
+	{
+		TArray<FString> Levels;
+		CVarKitAtStartLevels.GetValueOnGameThread().ParseIntoArray(Levels, TEXT(","), true);
+		const FString Map = UWorld::RemovePIEPrefix(World.GetMapName());
+		return Levels.ContainsByPredicate([&Map](const FString& Level) { return Map.Equals(Level.TrimStartAndEnd(), ESearchCase::IgnoreCase); });
+	}
+
 	FAutoConsoleCommand KitCommand(TEXT("gstn.Debug.Kit"),
 		TEXT("gstn.Debug.Kit <KitName>: gives the first local player of the play session that kit (same server path as the loadout screen)."),
 		FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
@@ -60,7 +71,7 @@ namespace
 		for (const FWorldContext& Context : GEngine->GetWorldContexts())
 		{
 			UWorld* World = Context.World();
-			if (!World || (Context.WorldType != EWorldType::PIE && Context.WorldType != EWorldType::Game) || !World->HasBegunPlay())
+			if (!World || (Context.WorldType != EWorldType::PIE && Context.WorldType != EWorldType::Game) || !World->HasBegunPlay() || !IsStartKitLevel(*World))
 			{
 				continue;
 			}

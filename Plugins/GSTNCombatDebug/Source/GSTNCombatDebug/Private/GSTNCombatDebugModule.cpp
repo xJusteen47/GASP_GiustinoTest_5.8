@@ -2,6 +2,7 @@
 
 #include "GSTNCombatDebugModule.h"
 
+#include "Kit/GSTN_DebugKitPicker.h"
 #include "GSTNInputDebugModule.h"
 #include "HAL/IConsoleManager.h"
 #include "Input/GSTN_StandardSlots.h"
@@ -101,6 +102,7 @@ public:
 #endif
 		// E17: gstn.Combat.Debug.Trace installs the trace sink while it is 1
 		FGSTN_CombatTraceController::Startup();
+		FGSTN_DebugKitPicker::Startup();
 #if WITH_EDITOR
 		// The Debug Options window: an editor tab, like the options window of the Game Animation Sample, instead of anything drawn over the game.
 		// The tab manager exists once the engine is initialised; a module of the Default phase loads before that in some start-ups
@@ -123,6 +125,7 @@ public:
 		PostEngineInitHandle.Reset();
 		UnregisterDebugOptionsTab();
 #endif
+		FGSTN_DebugKitPicker::Shutdown();
 		FGSTN_CombatTraceController::Shutdown();
 #if WITH_GAMEPLAY_DEBUGGER_MENU
 		if (IGameplayDebugger::IsAvailable())

@@ -10,6 +10,7 @@
 #include "Movement/GSTN_LayeredMove_RunSkid.h"
 #include "Kits/GSTN_LocomotionProfile.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
+#include "DefaultMovementSet/Modes/FallingMode.h"
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
@@ -171,9 +172,9 @@ int32 FGSTN_RunStageMover::ApplyAirValues(UMoverComponent& MoverComp, const FGST
 	const FGSTN_RunAirTuning& Air = Tuning.RunStages.Air;
 
 	// The air control: the AirControl stat (its meaning is Mover's AirControlPercentage, "fraction of the ground acceleration available in
-	// the air"; read by nothing before P2), else the archetype's value; times the takeoff stage's scale. Assigned every substep, never adjusted
-	const UCommonLegacyMovementSettings* Base = Cast<UCommonLegacyMovementSettings>(Shared->GetArchetype());
-	float Control = Base ? Base->AirControlPercentage : Shared->AirControlPercentage;
+	// the air"; read by nothing before P2), else the falling mode's authored value; times the takeoff stage's scale. In this Mover the
+	// percentage lives on each UFallingMode (not on the shared settings), so every falling mode gets it. Assigned every substep, never adjusted
+	float StatControl = -1.f;
 	if (Air.bUseAirControlStat)
 	{
 		const UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(MoverComp.GetOwner());
@@ -181,23 +182,28 @@ int32 FGSTN_RunStageMover::ApplyAirValues(UMoverComponent& MoverComp, const FGST
 		const float Stat = ASC ? ASC->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetAirControlAttribute(), bFound) : 0.f;
 		if (bFound)
 		{
-			Control = Stat;
+			StatControl = Stat;
 		}
 	}
 	const bool bAirborne = State && State->bAirborne;
-	if (bAirborne)
-	{
-		Control *= FGSTN_RunStageLogic::GetAirControlScale(Tuning.RunStages, *State);
-	}
-	Control = FMath::Clamp(Control, 0.f, 1.f);
-	Shared->AirControlPercentage = Control;
-	int32 Written = 1;
+	const float Scale = bAirborne ? FGSTN_RunStageLogic::GetAirControlScale(Tuning.RunStages, *State) : 1.f;
+	int32 Written = 0;
 	for (const TPair<FName, TObjectPtr<UBaseMovementMode>>& Entry : MoverComp.MovementModes)
 	{
-		if (UObject* Mode = Entry.Value)
+		UBaseMovementMode* Mode = Entry.Value;
+		if (!Mode)
 		{
-			Written += WriteFloats(*Mode, Tuning.AirControlProperties, Control);
+			continue;
 		}
+		const UFallingMode* BaseFalling = Cast<UFallingMode>(Mode->GetArchetype());
+		const float Authored = BaseFalling ? BaseFalling->AirControlPercentage : 1.f;
+		const float Control = FMath::Clamp((StatControl >= 0.f ? StatControl : Authored) * Scale, 0.f, 1.f);
+		if (UFallingMode* Falling = Cast<UFallingMode>(Mode))
+		{
+			Falling->AirControlPercentage = Control;
+			++Written;
+		}
+		Written += WriteFloats(*Mode, Tuning.AirControlProperties, Control);
 	}
 
 	// Decision 1C, default model: in the air the top speed is the takeoff speed (with a floor). The stats wrote MaxSpeed = base * factor

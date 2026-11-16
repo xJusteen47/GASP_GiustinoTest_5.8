@@ -1,6 +1,8 @@
 // Development tooling of GSTN Combat (PIE and development builds, never Shipping).
 
 #include "Window/SGSTN_DebugOptionsPanel.h"
+#include "Kit/GSTN_DebugKitPicker.h"
+#include "Widgets/Input/SComboBox.h"
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -94,9 +96,64 @@ FString SGSTN_DebugOptionsPanel::GroupOf(const FString& VariableName)
 
 void SGSTN_DebugOptionsPanel::Construct(const FArguments& InArgs)
 {
+	for (const FString& Name : FGSTN_DebugKitPicker::GetKitNames())
+	{
+		KitOptions.Add(MakeShared<FString>(Name));
+		if (Name == TEXT("KIT_Test_Playtest"))
+		{
+			SelectedKit = KitOptions.Last();
+		}
+	}
+	if (!SelectedKit.IsValid() && KitOptions.Num() > 0)
+	{
+		SelectedKit = KitOptions[0];
+	}
+
 	ChildSlot
 	[
 		SNew(SVerticalBox)
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(6.f, 6.f, 6.f, 0.f)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			[
+				SNew(STextBlock).Text(LOCTEXT("KitLabel", "Kit"))
+			]
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.f)
+			.Padding(6.f, 0.f, 0.f, 0.f)
+			[
+				SNew(SComboBox<TSharedPtr<FString>>)
+				.OptionsSource(&KitOptions)
+				.InitiallySelectedItem(SelectedKit)
+				.OnGenerateWidget_Lambda([](TSharedPtr<FString> Item) { return SNew(STextBlock).Text(FText::FromString(Item.IsValid() ? *Item : FString())); })
+				.OnSelectionChanged_Lambda([this](TSharedPtr<FString> Item, ESelectInfo::Type) { SelectedKit = Item; })
+				[
+					SNew(STextBlock).Text_Lambda([this]() { return FText::FromString(SelectedKit.IsValid() ? *SelectedKit : FString(TEXT("(no kit)"))); })
+				]
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(6.f, 0.f, 0.f, 0.f)
+			[
+				SNew(SButton)
+				.Text(LOCTEXT("ApplyKit", "Apply kit"))
+				.ToolTipText(LOCTEXT("ApplyKitTip", "Gives the first local player this kit (same server path as the loadout screen). Needs a play session. The hub's start kit is gstn.Debug.KitAtStart."))
+				.IsEnabled(this, &SGSTN_DebugOptionsPanel::HasPlayWorld)
+				.OnClicked(this, &SGSTN_DebugOptionsPanel::OnApplyKit)
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(6.f, 0.f, 0.f, 0.f)
+			[
+				SNew(STextBlock).Text_Lambda([this]() { return KitStatus; })
+			]
+		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		.Padding(6.f)
@@ -339,6 +396,25 @@ TSharedRef<SWidget> SGSTN_DebugOptionsPanel::MakeRow(const FString& Name, IConso
 FReply SGSTN_DebugOptionsPanel::OnRefresh()
 {
 	Rebuild();
+	return FReply::Handled();
+}
+
+FReply SGSTN_DebugOptionsPanel::OnApplyKit()
+{
+	APlayerController* Controller = FGSTN_DebugKitPicker::FindPlayController();
+	FString Error;
+	if (!SelectedKit.IsValid() || !Controller)
+	{
+		KitStatus = LOCTEXT("KitNoPlay", "start Play first");
+	}
+	else if (FGSTN_DebugKitPicker::RequestKit(*Controller, *SelectedKit, Error))
+	{
+		KitStatus = FText::Format(LOCTEXT("KitSent", "asked for {0}"), FText::FromString(*SelectedKit));
+	}
+	else
+	{
+		KitStatus = FText::FromString(Error);
+	}
 	return FReply::Handled();
 }
 

@@ -43,6 +43,12 @@ private:
 	bool HasPlayWorld() const;
 	void OnFilterChanged(const FText& Text);
 
+	/** Kit row (owner 2026-11-16): every kit the Asset Manager knows, applied to the first local player (FGSTN_DebugKitPicker) */
+	FReply OnApplyKit();
+	TArray<TSharedPtr<FString>> KitOptions;
+	TSharedPtr<FString> SelectedKit;
+	FText KitStatus;
+
 	TSharedPtr<SVerticalBox> Rows;
 	FString Filter;
 };
