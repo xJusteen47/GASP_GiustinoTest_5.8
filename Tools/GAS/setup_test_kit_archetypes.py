@@ -25,6 +25,9 @@ TAKEDOWN_WALK = '/Game/Characters/UEFN_Mannequin/Animations/Interactions/Takedow
 # mash_frames: the grab's mash base frames (the hold without mashing; KIT_Test_Link's test value is 90).
 # Strike: (total, first actionable, active start, active end, radius, reach from, reach to, height, damage, knockback, angle, hitstop, attacker hitstop,
 #          montage, play rate)
+# tilt = X with the stick (Command.Attack.Directional, owner playtest 2026-11-16: "light kit moves do not launch at 20%"). Standard rules
+#          (WeightDriven, LaunchThreshold 750, PercentGrowth 1.8) on a weight-100 dummy: K = knockback * (1 + 1.8 * % / 100), so the light
+#          tilt (560) launches from ~19 %, medium (620) ~11 %, heavy (700) ~4 %. Jabs stay Smash-like: light 300 never launches before ~86 %.
 # Throw:  (total, first actionable, throw frame, damage, knockback, angle (above 90 = behind the thrower), montage, play rate)
 KITS = {
     # Light and fast: quick jab, a pop-up special, low flat throws that keep the partner close (combo throws); floaty double jump, carries little
@@ -33,6 +36,7 @@ KITS = {
         'stats': {'WalkSpeed': 760.0, 'JumpVelocity': 820.0, 'Weight': 80.0, 'MaxCarryWeight': 60.0, 'Acceleration': 3200.0,
                   'AirControl': 0.55, 'FallGravityScale': 1.1, 'AirJumpCount': 2.0},
         'jab': (16, 13, 3, 5, 40.0, 70.0, 140.0, 0.0, 3.0, 300.0, 30.0, 4, 3, SHOVE.format('F'), 1.8),
+        'tilt': (20, 16, 4, 7, 45.0, 70.0, 150.0, 0.0, 5.0, 560.0, 40.0, 5, 4, SHOVE.format('F'), 1.5),
         'special': (24, 20, 5, 8, 55.0, 40.0, 110.0, 40.0, 5.0, 700.0, 80.0, 5, 4, TAKEDOWN.format('L'), 1.5),
         'throws': {'Forward': (22, 18, 5, 5.0, 1300.0, 20.0, SHOVE.format('F'), 1.6),
                    'Back': (26, 22, 8, 6.0, 1500.0, 160.0, SHOVE.format('B'), 1.6),
@@ -45,6 +49,7 @@ KITS = {
         'stats': {'WalkSpeed': 600.0, 'JumpVelocity': 720.0, 'Weight': 100.0, 'MaxCarryWeight': 90.0, 'Acceleration': 2048.0,
                   'AirControl': 0.35, 'FallGravityScale': 1.25, 'AirJumpCount': 1.0},
         'jab': (28, 24, 6, 9, 50.0, 80.0, 170.0, 0.0, 7.0, 550.0, 35.0, 6, 4, SHOVE.format('F'), 1.2),
+        'tilt': (26, 22, 6, 9, 50.0, 80.0, 170.0, 0.0, 8.0, 620.0, 40.0, 6, 5, SHOVE.format('F'), 1.2),
         'special': (34, 30, 9, 13, 60.0, 90.0, 190.0, 0.0, 10.0, 850.0, 30.0, 8, 6, TAKEDOWN.format('R'), 1.2),
         'throws': {'Forward': (30, 25, 9, 8.0, 1700.0, 45.0, TAKEDOWN.format('F'), 1.2),
                    'Back': (34, 29, 12, 10.0, 1900.0, 135.0, TAKEDOWN.format('B'), 1.2),
@@ -57,6 +62,7 @@ KITS = {
         'stats': {'WalkSpeed': 430.0, 'JumpVelocity': 620.0, 'Weight': 140.0, 'MaxCarryWeight': 200.0, 'Acceleration': 1200.0,
                   'AirControl': 0.2, 'FallGravityScale': 1.6, 'AirJumpCount': 1.0},
         'jab': (44, 40, 14, 18, 70.0, 90.0, 200.0, 0.0, 14.0, 900.0, 40.0, 10, 8, TAKEDOWN.format('F'), 0.85),
+        'tilt': (36, 32, 10, 14, 65.0, 90.0, 200.0, 0.0, 12.0, 700.0, 45.0, 8, 6, TAKEDOWN.format('F'), 0.9),
         'special': (56, 52, 20, 24, 140.0, 0.0, 60.0, -40.0, 18.0, 1200.0, 60.0, 12, 10, TAKEDOWN.format('B'), 0.8),
         'throws': {'Forward': (40, 34, 16, 13.0, 2300.0, 55.0, TAKEDOWN_WALK.format('F'), 0.9),
                    'Back': (46, 40, 20, 15.0, 2500.0, 120.0, TAKEDOWN_WALK.format('B'), 0.9),
@@ -136,7 +142,7 @@ def _rebind(bindings, command, cls):
 def run_kit(key, spec):
     saves = []
     strikes = {}
-    for move in ('jab', 'special'):
+    for move in ('jab', 'tilt', 'special'):
         bp, cls = _ability(f'GA_{key}_{move.capitalize()}', 'GSTN_GA_TestKitStrike')
         unreal.GSTN_TestKitContentLibrary.write_strike_move(cls, _strike_spec(spec[move]))
         strikes[move] = cls
@@ -157,9 +163,12 @@ def run_kit(key, spec):
     weapon.set_editor_property('weapon_tags', unreal.GameplayTagLibrary.make_gameplay_tag_container_from_array(
         [_tag(f'Weapon.Test.{key}'), _tag('Test.Role.Primary')]))
     bindings, n = _rebind(list(weapon.get_editor_property('bindings')), 'Command.Attack.Neutral', strikes['jab'])
-    weapon.set_editor_property('bindings', bindings)
     if not n:
         log(f'WARNING: WPN_Test_{key} has no Command.Attack.Neutral binding to give the jab')
+    bindings, n = _rebind(bindings, 'Command.Attack.Directional', strikes['tilt'])
+    if not n:
+        log(f'WARNING: WPN_Test_{key} has no Command.Attack.Directional binding to give the tilt')
+    weapon.set_editor_property('bindings', bindings)
 
     kit.set_editor_property('display_name', spec['label'])
     kit.set_editor_property('kit_tags', unreal.GameplayTagLibrary.make_gameplay_tag_container_from_array([_tag(f'Kit.Test.{key}')]))
