@@ -7,6 +7,7 @@
 #include "Hits/GSTN_HurtboxPose.h"
 #include "Input/GSTN_BufferResetRules.h"
 #include "Loadout/GSTN_CompiledBindingTable.h"
+#include "Rules/GSTN_AirCrouch.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelineTypes.h"
@@ -127,6 +128,16 @@ public:
 
 	UPROPERTY(Transient)
 	FGSTN_MovementHurtboxExtension KitMovementHurtbox;
+
+	/**
+	 * The kit's air crouch (FGSTN_AirCrouchKitExtension, owner 2026-11-16), copied when the set is built for the same reason as the movement
+	 * hurtbox. bHasKitAirCrouch false = the kit has none: the combatant never air-crouches
+	 */
+	UPROPERTY(Transient)
+	bool bHasKitAirCrouch = false;
+
+	UPROPERTY(Transient)
+	FGSTN_AirCrouchKitExtension KitAirCrouch;
 
 	/** The project defaults per strike kind (UGSTN_CombatSettings::SwingRicochetDefault / StabRicochetDefault), copied when the set is built */
 	UPROPERTY(Transient)

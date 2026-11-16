@@ -1010,6 +1010,9 @@ private:
 	/** Projects Combat.State.{Hitstun,Tumble,Hitstop} and the movement lock from the sync state of the frame (the ability system's pre-tick). Idempotent: a function of the state only */
 	void ProjectStateTags(const FGSTN_CombatSyncCore& Core, int32 Frame);
 
+	/** Projects Combat.State.AirCrouch (the kit's FGSTN_AirCrouchKitExtension) from the state of the frame, the Mover tracker and the held buttons. Part of ProjectStateTags */
+	void ProjectAirCrouchTag(const FGSTN_CombatSyncCore& Core);
+
 	/** The tags of the Tags tracks (FGSTN_TimelineTrack_Tags) open on the timeline the state runs at Frame. A function of the state only */
 	void CollectTimelineTags(const FGSTN_CombatSyncCore& Core, int32 Frame, FGameplayTagContainer& OutTags) const;
 

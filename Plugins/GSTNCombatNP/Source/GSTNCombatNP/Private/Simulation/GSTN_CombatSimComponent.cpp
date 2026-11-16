@@ -485,6 +485,10 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 		const FGSTN_MovementHurtboxExtension* Movement = Kit ? Kit->Extensions.Find<FGSTN_MovementHurtboxExtension>() : nullptr;
 		Set->bHasKitMovementHurtbox = Movement != nullptr;
 		Set->KitMovementHurtbox = Movement ? *Movement : FGSTN_MovementHurtboxExtension();
+		// The kit's air crouch, the same way (owner 2026-11-16)
+		const FGSTN_AirCrouchKitExtension* AirCrouch = Kit ? Kit->Extensions.Find<FGSTN_AirCrouchKitExtension>() : nullptr;
+		Set->bHasKitAirCrouch = AirCrouch != nullptr;
+		Set->KitAirCrouch = AirCrouch ? *AirCrouch : FGSTN_AirCrouchKitExtension();
 	}
 	RegisterTableSet(Set);
 	DemandAppliedRevision(Revision);
