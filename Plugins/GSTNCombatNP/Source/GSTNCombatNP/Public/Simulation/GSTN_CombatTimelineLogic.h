@@ -61,6 +61,13 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 		const FGameplayTag& Command, int32 CommandTier, int32 RunningTier, uint32 ExtensionConditions = 0);
 
 	/**
+	 * Whether a cancel condition holds on Core: Always yes, OnHit once a hit of the run is confirmed, OnWhiff while nothing hit, the others
+	 * (OnBlock, OnParry) from ExtensionConditions (bit = the condition's value, held by the tick extensions). The cancel windows ask it, and so
+	 * does Wait Command for its Condition pin
+	 */
+	static bool IsConditionMet(EGSTN_CancelCondition Condition, const FGSTN_CombatSyncCore& Core, uint32 ExtensionConditions = 0);
+
+	/**
 	 * Step 8. A timeline command won: ends the running one (a CancelTimeline request for the old registry entry), writes the
 	 * timeline state of the new one and returns. The ability itself is started by the input request of the same frame.
 	 */

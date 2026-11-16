@@ -673,6 +673,20 @@ FGSTN_LoadoutData (what a player owns and saves)
     writes the start into that frame's combat state from inside the ability system's simulation step (`IsInSimulationTick`, fork getter) and
     applies the Tags-track difference. Refused outside the simulation step, while restoring, with the gate closed, or for an unregistered pair.
     Frame 0 of such a timeline does not run the attacker step (as for a command's start, which also follows it).
+- **Wait nodes** (move-timeline-decoupling 2A/3A, 2026-11-16; `GSTN_CombatWaitTasks.h`). Fork prediction tasks with their pins in the task's
+  sync data, counted on the combat clock (hitstop frames do not count):
+  - `Wait Combat Frames(Frames)` -> On Finish. The task form of `UGSTN_GA_Base::WaitCombatFrames` (which stays: one wait per ability).
+  - `Wait Command(Command, Window Frames, [Buffer Frames, Consume, Priority, Condition, Only Trigger Once])` -> On Command / On Window Expired.
+    Matches the command with its slot's rules on the frame's buffer (presses no command used; Buffer Frames -1 = the slot's buffer); never fires
+    in hitstop (fires on the first frame after), in a hit reaction or on a locked command; Condition is a cancel window's
+    (`FGSTN_CombatTimelineLogic::IsConditionMet`). Consume writes into the frame's combat state from the ability step
+    (`ConsumeCommandForWait`, as `StartTimelineFromAbility`). **Priority Before Bindings** (default): `CanExecuteBinding` refuses the bindings
+    of a command an active Wait Command claims (`UGSTN_WaitCommandTask::IsCommandClaimed`, the tasks as the previous frame left them, like the
+    lock tags), so the slot keeps its press for the wait. After Bindings: a binding that fires takes the press first.
+  - Validator (`FGSTN_SimGraphRules::FindTaskHint`): every GAS node unsafe in the simulation names its combat equivalent (Wait Delay/Delay ->
+    Wait Combat Frames, Wait Input Press -> Wait Command, Play Montage And Wait -> Play Combat Timeline And Wait, Apply Root Motion -> Movement
+    track / Apply Move Effect, Wait Target Data -> Get Aim Rotation / hitboxes / Fire Projectile, Spawn Actor -> Fire Projectile); the fork's
+    raw-input, montage and seconds tasks are warnings (`Ability.SimTaskHint`); our three tasks pass.
 
 ### 11.4 Lock tags (*Decision*)
 

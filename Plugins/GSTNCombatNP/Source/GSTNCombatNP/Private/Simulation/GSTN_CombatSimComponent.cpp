@@ -8,6 +8,7 @@
 #include "Loadout/GSTN_LoadoutComponent.h"
 
 #include "Abilities/GameplayAbility.h"
+#include "Abilities/GSTN_CombatWaitTasks.h"
 #include "Abilities/GSTN_GA_BaseCombat.h"
 #include "Abilities/GSTN_GA_PlatformJump.h"
 #include "Abilities/NpAbilitySystemComponent.h"
@@ -958,6 +959,25 @@ bool UGSTN_CombatSimComponent::CanExecuteBinding(int32 BindingIndex) const
 			return false;
 		}
 	}
+	// A Wait Command of a running ability takes this command first (Priority Before Bindings): the binding does not start, so the slot keeps its
+	// press for the wait, as a locked command does. The tasks are read as the previous frame left them, like the lock tags
+	if (AbilitySystem)
+	{
+		const FGSTN_CommandTable& Bound = GetCommandTable();
+		for (int32 CommandIndex = 0; CommandIndex < Bound.Commands.Num(); ++CommandIndex)
+		{
+			const FGSTN_CommandTable::FCommand& Command = Bound.Commands[CommandIndex];
+			if (BindingIndex >= Command.FirstBinding && BindingIndex < Command.FirstBinding + Command.NumBindings)
+			{
+				if (UGSTN_WaitCommandTask::IsCommandClaimed(*AbilitySystem, CommandIndex))
+				{
+					UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s: binding %d held back, a Wait Command claims %s"), *GetNameSafe(GetOwner()), BindingIndex, *Command.Tag.ToString());
+					return false;
+				}
+				break;
+			}
+		}
+	}
 	// On the end-of-previous-frame state, like the ability system's own check at execution
 	const bool bCanExecute = FGSTN_InputHostUtils::CanExecuteBinding(AbilitySystem, GetCommandTable(), BindingIndex);
 	UE_CLOG(!bCanExecute && FrameAdmitTag.IsValid(), LogGSTNCombatSim, Verbose, TEXT("%s: binding %d cannot execute (its ability refuses)"), *GetNameSafe(GetOwner()), BindingIndex);
@@ -1023,6 +1043,32 @@ int32 UGSTN_CombatSimComponent::GetButtonHeldFrames(const FGameplayTag& Button) 
 	return Sync && Index != INDEX_NONE ? FGSTN_InputQueries::GetHeldFrames(Sync->Core.Input.History, Index, Sync->Core.Input.History.GetLatestFrame()) : INDEX_NONE;
 }
 
+namespace
+{
+	/**
+	 * Matches command Index of Table on Core's history with the slot's own rules (simultaneity, direction policy), BufferFrames as the time
+	 * buffer (-1 = the slot's own) and no hold buffer: "entered in the last N frames", not "still held". The matcher skips used presses, so the
+	 * press that started the move never answers
+	 */
+	bool MatchCommandInBuffer(const FGSTN_CombatSyncCore& Core, const FGSTN_CommandTable& Table, const FGSTN_ButtonMap& Buttons, int32 Index, int32 BufferFrames, FGSTN_PatternMatch& OutMatch)
+	{
+		const FGSTN_InputSlotSpec* Slot = Table.Commands.IsValidIndex(Index) ? Table.Commands[Index].Slot : nullptr;
+		if (!Slot)
+		{
+			return false;
+		}
+		FGSTN_MatchParams Params = Slot->MakeMatchParams(UGSTN_InputSettings::Get(), Buttons, Core.Input.History.GetLatestFrame());
+		if (BufferFrames >= 0)
+		{
+			Params.BufferFrames = BufferFrames;
+		}
+		Params.bHoldBuffer = false;
+		Params.PausedStart = Core.HitstopStartFrame;
+		Params.PausedEnd = Core.HitstopEndFrame;
+		return FGSTN_InputMatcher::Match(Slot->Pattern, Core.Input.History, Params, OutMatch);
+	}
+}
+
 bool UGSTN_CombatSimComponent::WasCommandEnteredWithin(const FGameplayTag& Command, int32 Frames) const
 {
 	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
@@ -1031,21 +1077,70 @@ bool UGSTN_CombatSimComponent::WasCommandEnteredWithin(const FGameplayTag& Comma
 		return false;
 	}
 	const FGSTN_CommandTable& Table = GetCommandTable();
-	const int32 Index = Table.FindCommand(Command);
-	const FGSTN_InputSlotSpec* Slot = Table.Commands.IsValidIndex(Index) ? Table.Commands[Index].Slot : nullptr;
-	if (!Slot)
+	FGSTN_PatternMatch Match;
+	return MatchCommandInBuffer(Sync->Core, Table, ButtonMap, Table.FindCommand(Command), Frames, Match);
+}
+
+int32 UGSTN_CombatSimComponent::FindCommandIndex(const FGameplayTag& Command) const
+{
+	return GetCommandTable().FindCommand(Command);
+}
+
+bool UGSTN_CombatSimComponent::CanTakeCommandForWait(int32 CommandIndex, EGSTN_CancelCondition Condition) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (!Sync || !AbilitySystem || !AbilitySystem->IsInSimulationTick() || AbilitySystem->GetIsRestoringFrame() || bFrameGateClosed)
 	{
 		return false;
 	}
-	// The slot's own rules (simultaneity, direction policy) with the window asked for as the time buffer and no hold buffer: "entered in the
-	// last N frames", not "still held". The matcher skips used presses, so the press that started the move never answers
-	FGSTN_MatchParams Params = Slot->MakeMatchParams(UGSTN_InputSettings::Get(), ButtonMap, Sync->Core.Input.History.GetLatestFrame());
-	Params.BufferFrames = Frames;
-	Params.bHoldBuffer = false;
-	Params.PausedStart = Sync->Core.HitstopStartFrame;
-	Params.PausedEnd = Sync->Core.HitstopEndFrame;
+	const FGSTN_CommandTable& Table = GetCommandTable();
+	if (!Table.Commands.IsValidIndex(CommandIndex) || Table.IsCommandLocked(CommandIndex, AbilitySystem->GetOwnedGameplayTags()))
+	{
+		return false;
+	}
+	const int32 Frame = Sync->Core.Input.History.GetLatestFrame();
+	return !Sync->Core.IsInHitstop(Frame) && !FGSTN_CombatVictim::IsActionLocked(Sync->Core)
+		&& FGSTN_CombatTimelineLogic::IsConditionMet(Condition, Sync->Core, AbilityStepCancelConditions);
+}
+
+bool UGSTN_CombatSimComponent::IsCommandEnteredForWait(int32 CommandIndex, int32 BufferFrames, int32* OutTerminalFrame) const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
 	FGSTN_PatternMatch Match;
-	return FGSTN_InputMatcher::Match(Slot->Pattern, Sync->Core.Input.History, Params, Match);
+	const bool bEntered = Sync && MatchCommandInBuffer(Sync->Core, GetCommandTable(), ButtonMap, CommandIndex, BufferFrames, Match);
+	if (OutTerminalFrame)
+	{
+		*OutTerminalFrame = bEntered && Match.StepAnchors.Num() > 0 ? Match.StepAnchors.Last() : INDEX_NONE;
+	}
+	return bEntered;
+}
+
+bool UGSTN_CombatSimComponent::ConsumeCommandForWait(int32 CommandIndex, int32 BufferFrames)
+{
+	const FGSTN_CombatSyncState* Pending = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	if (!Pending || !AbilitySystem || !AbilitySystem->IsInSimulationTick() || AbilitySystem->GetIsRestoringFrame())
+	{
+		return false;
+	}
+	FGSTN_PatternMatch Match;
+	if (!MatchCommandInBuffer(Pending->Core, GetCommandTable(), ButtonMap, CommandIndex, BufferFrames, Match))
+	{
+		return false;
+	}
+	// Into this frame's combat state, from the ability system's step (as StartTimelineFromAbility): the next frame's tick starts from it, so no
+	// binding fires on these presses later. The event slots of the match index the same history, unchanged since the read above
+	const FGSTN_CombatSyncState* Written = NetworkPredictionProxy.WriteSyncState<FGSTN_CombatSyncState>([&Match](FGSTN_CombatSyncState& Sync)
+	{
+		for (const uint8 EventSlot : Match.UsedButtonEvents)
+		{
+			Sync.Core.Input.History.Consume(EventSlot);
+		}
+		if (Match.TerminalStickAnchor != INDEX_NONE)
+		{
+			Sync.Core.Input.History.ConsumeSticksUpTo(Match.TerminalStickAnchor);
+		}
+	}, "GSTN WaitCommandConsume");
+	return Written != nullptr;
 }
 
 FVector2D UGSTN_CombatSimComponent::GetMoveStick() const
@@ -1315,6 +1410,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, *this);
 	GateCore = nullptr;
 	bFrameActionsBlocked = false;
+	AbilityStepCancelConditions = FrameCancelConditions;
 	FrameCancelConditions = 0;
 	FrameAdmitTag = FGameplayTag();
 

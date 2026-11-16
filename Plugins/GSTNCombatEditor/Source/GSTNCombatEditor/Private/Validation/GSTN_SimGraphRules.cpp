@@ -12,6 +12,7 @@
 #include "K2Node_CustomEvent.h"
 #include "K2Node_Event.h"
 #include "K2Node_FunctionEntry.h"
+#include "K2Node_SpawnActorFromClass.h"
 #include "K2Node_VariableSet.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
@@ -50,6 +51,29 @@ namespace GSTNSimGraph
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * The class an async or prediction task node runs, read by reflection: UK2Node_BaseAsyncTask keeps it protected (ProxyClass), and the fork's
+	 * prediction node (TaskInstance) is in an editor module this one has no edge to
+	 */
+	const UClass* ReadTaskClass(const UEdGraphNode& Node, const TCHAR* PropertyName)
+	{
+		if (const FObjectPropertyBase* Property = FindFProperty<FObjectPropertyBase>(Node.GetClass(), PropertyName))
+		{
+			const UObject* Value = Property->GetObjectPropertyValue_InContainer(&Node);
+			if (const UClass* AsClass = Cast<UClass>(Value))
+			{
+				return AsClass;
+			}
+			return Value ? Value->GetClass() : nullptr;
+		}
+		return nullptr;
+	}
+
+	bool IsForkTaskNode(const UEdGraphNode& Node)
+	{
+		return Node.GetClass()->GetFName() == FName(TEXT("K2Node_PredictionTask"));
 	}
 
 	FText NodeName(const UEdGraphNode& Node)
@@ -127,6 +151,78 @@ bool FGSTN_SimGraphRules::IsUnseededRandom(const UFunction& Function)
 	// The stream variants are seeded, and a stream held by the ability would be a non-sync member, which the variable rule reports
 	const FString Name = Function.GetName();
 	return Function.GetOwnerClass() == UKismetMathLibrary::StaticClass() && Name.StartsWith(TEXT("Random")) && !Name.EndsWith(TEXT("FromStream"));
+}
+
+FGSTN_SimGraphRules::FTaskHint FGSTN_SimGraphRules::FindTaskHint(FName TaskClassName, bool bForkTask)
+{
+	FTaskHint Hint;
+	const FString Name = TaskClassName.ToString();
+	const auto Flag = [&Hint](EGSTN_Severity Severity, const FText& Replacement, const FText& Reason)
+	{
+		Hint.bFlagged = true;
+		Hint.Severity = Severity;
+		Hint.Replacement = Replacement;
+		Hint.Reason = Reason;
+	};
+	const FText WaitCombatFrames = LOCTEXT("UseWaitCombatFrames", "Wait Combat Frames");
+	const FText WaitCommand = LOCTEXT("UseWaitCommand", "Wait Command (for a release: End On Trigger Release, or Get Button Held Frames)");
+	const FText PlayTimeline = LOCTEXT("UsePlayTimeline", "Play Combat Timeline And Wait");
+
+	if (bForkTask)
+	{
+		// Rollback safe, but each skips something a combat move relies on
+		if (Name == TEXT("WaitInputEventPredictionTask") || Name == TEXT("WaitAnyInputEventPredictionTask"))
+		{
+			Flag(EGSTN_Severity::Warning, WaitCommand, LOCTEXT("ReasonRawInput", "it reads the raw Input Action: no buffer, no motions or chords, and a binding of the kit can fire on the same press"));
+		}
+		else if (Name.StartsWith(TEXT("PlayMontageAndWait")))
+		{
+			Flag(EGSTN_Severity::Warning, PlayTimeline, LOCTEXT("ReasonMontage", "it plays only the montage: no hitboxes, hitstop, cancel windows or first actionable frame, and it fights the timeline for the montage slot"));
+		}
+		else if (Name.StartsWith(TEXT("WaitFor")) && Name.Contains(TEXT("Duration")))
+		{
+			Flag(EGSTN_Severity::Warning, WaitCombatFrames, LOCTEXT("ReasonSeconds", "it counts seconds (rounded to 16 ms) and keeps counting in hitstop, so it drifts from the move"));
+		}
+		return Hint;
+	}
+
+	if (Name == TEXT("AbilityTask_WaitDelay"))
+	{
+		Flag(EGSTN_Severity::Error, WaitCombatFrames, LOCTEXT("ReasonWorldTimer", "it waits on a world timer, outside the simulation, and a rollback never undoes it"));
+	}
+	else if (Name == TEXT("AbilityTask_WaitInputPress") || Name == TEXT("AbilityTask_WaitInputRelease"))
+	{
+		Flag(EGSTN_Severity::Error, WaitCommand, LOCTEXT("ReasonInputRpc", "it waits for a replicated input event and a prediction key, not the simulated input"));
+	}
+	else if (Name.StartsWith(TEXT("AbilityTask_PlayMontageAndWait")) || Name == TEXT("AbilityTask_PlayAnimAndWait"))
+	{
+		Flag(EGSTN_Severity::Error, PlayTimeline, LOCTEXT("ReasonGasMontage", "it plays a montage through the prediction key: no hitboxes, hitstop or cancel windows, and no rollback"));
+	}
+	else if (Name.StartsWith(TEXT("AbilityTask_ApplyRootMotion")))
+	{
+		Flag(EGSTN_Severity::Error, LOCTEXT("UseMovementTrack", "the Movement track of the timeline, or Apply Move Effect (a Mover layered move)"),
+			LOCTEXT("ReasonRootMotion", "it is root motion of Character Movement, which Mover does not run"));
+	}
+	else if (Name.StartsWith(TEXT("AbilityTask_WaitTargetData")) || Name.StartsWith(TEXT("AbilityTask_WaitConfirm")))
+	{
+		Flag(EGSTN_Severity::Error, LOCTEXT("UseAim", "Get Aim Rotation, the hitboxes of the timeline, or Fire Projectile"),
+			LOCTEXT("ReasonClientConfirm", "it waits for the client to confirm through an RPC, outside the simulation"));
+	}
+	else if (Name.StartsWith(TEXT("AbilityTask_")))
+	{
+		Flag(EGSTN_Severity::Warning, FText::GetEmpty(), LOCTEXT("ReasonAbilityTask", "a GAS ability task runs outside the simulation and is not rolled back; use a prediction task of the fork, or Wait Combat Frames and the move events"));
+	}
+	else
+	{
+		Flag(EGSTN_Severity::Warning, FText::GetEmpty(), LOCTEXT("ReasonAsync", "an async node resumes outside the simulation; only a rollback-safe task of the fork may run there"));
+	}
+	return Hint;
+}
+
+bool FGSTN_SimGraphRules::IsActorSpawn(const UFunction& Function)
+{
+	return Function.GetOwnerClass() == UGameplayStatics::StaticClass() && GSTNSimGraph::NameIn(Function.GetFName(), {
+		TEXT("BeginDeferredActorSpawnFromClass"), TEXT("BeginSpawningActorFromClass"), TEXT("FinishSpawningActor") });
 }
 
 void FGSTN_SimGraphRules::CheckBlueprint(const UBlueprint& Blueprint, UObject* Asset, FGSTN_ValidationReport& Report)
@@ -219,10 +315,23 @@ void FGSTN_SimGraphRules::CheckBlueprint(const UBlueprint& Blueprint, UObject* A
 			}
 		}
 
-		if (Node->IsA<UK2Node_BaseAsyncTask>())
+		const bool bForkTask = GSTNSimGraph::IsForkTaskNode(*Node);
+		if (Node->IsA<UK2Node_BaseAsyncTask>() || bForkTask)
 		{
-			Report.Add(EGSTN_Severity::Warning, GSTNValidationCodes::SimLatent(),
-				FText::Format(LOCTEXT("SimAsyncTask", "{0} is an async task in a simulation event: only a rollback-safe task of the fork may run there (use Wait Combat Frames and the move events)."), GSTNSimGraph::NodeName(*Node)), Asset);
+			const UClass* TaskClass = GSTNSimGraph::ReadTaskClass(*Node, bForkTask ? TEXT("TaskInstance") : TEXT("ProxyClass"));
+			const FTaskHint Hint = FindTaskHint(TaskClass ? TaskClass->GetFName() : NAME_None, bForkTask);
+			if (Hint.bFlagged)
+			{
+				const FText Message = Hint.Replacement.IsEmpty()
+					? FText::Format(LOCTEXT("SimTaskNoHint", "{0} in a simulation event: {1}."), GSTNSimGraph::NodeName(*Node), Hint.Reason)
+					: FText::Format(LOCTEXT("SimTaskHint", "{0} in a simulation event: {1}. Use {2}."), GSTNSimGraph::NodeName(*Node), Hint.Reason, Hint.Replacement);
+				Report.Add(Hint.Severity, bForkTask ? GSTNValidationCodes::SimTaskHint() : GSTNValidationCodes::SimLatent(), Message, Asset);
+			}
+		}
+		else if (Node->IsA<UK2Node_SpawnActorFromClass>())
+		{
+			Report.Add(EGSTN_Severity::Warning, GSTNValidationCodes::SimSpawn(),
+				FText::Format(LOCTEXT("SimSpawnNode", "{0} spawns an actor in a simulation event: the actor is not rolled back and every re-simulation spawns another. Use Fire Projectile (a Projectile Definition asset)."), GSTNSimGraph::NodeName(*Node)), Asset);
 		}
 		else if (const UK2Node_VariableSet* Set = Cast<UK2Node_VariableSet>(Node))
 		{
@@ -246,12 +355,17 @@ void FGSTN_SimGraphRules::CheckBlueprint(const UBlueprint& Blueprint, UObject* A
 			if (IsLatentFunction(*Function))
 			{
 				Report.Add(EGSTN_Severity::Error, GSTNValidationCodes::SimLatent(),
-					FText::Format(LOCTEXT("SimLatentCall", "{0} is latent (a delay or a timer) in a simulation event: it resumes outside the simulation and a rollback never undoes it. Use Wait Combat Frames."), GSTNSimGraph::NodeName(*Node)), Asset);
+					FText::Format(LOCTEXT("SimLatentCall", "{0} is latent (a delay or a timer) in a simulation event: it resumes outside the simulation and a rollback never undoes it. Use Wait Combat Frames (a task node, stands still in hitstop)."), GSTNSimGraph::NodeName(*Node)), Asset);
 			}
 			else if (IsWorldRead(*Function))
 			{
 				Report.Add(EGSTN_Severity::Warning, GSTNValidationCodes::SimWorldRead(),
 					FText::Format(LOCTEXT("SimWorldRead", "{0} reads the world or the Mover component in a simulation event: that is not the state of the simulated frame. Read the combat state and the input questions instead."), GSTNSimGraph::NodeName(*Node)), Asset);
+			}
+			else if (IsActorSpawn(*Function))
+			{
+				Report.Add(EGSTN_Severity::Warning, GSTNValidationCodes::SimSpawn(),
+					FText::Format(LOCTEXT("SimSpawnCall", "{0} spawns an actor in a simulation event: the actor is not rolled back and every re-simulation spawns another. Use Fire Projectile (a Projectile Definition asset)."), GSTNSimGraph::NodeName(*Node)), Asset);
 			}
 			else if (IsUnseededRandom(*Function))
 			{
