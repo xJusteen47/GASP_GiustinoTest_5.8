@@ -2120,6 +2120,7 @@ bool UGSTN_CombatSimComponent::StepOriginAim(int32 Frame, const FGSTN_InputCmd& 
 	In.AimStick = AimStick;
 	In.bPrecisionAim = Cmd.bPrecisionAim;
 	In.CameraYawDeg = FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw);
+	In.bStartedByCommand = Core.ActiveSource != EGSTN_ActivationSource::Forced;
 	float Yaw = 0.f;
 	const EGSTN_AimTurn Turn = FGSTN_StartupSteer::ResolveOriginAim(*Data, In, Yaw);
 	if (Turn == EGSTN_AimTurn::None)

@@ -191,8 +191,8 @@ EGSTN_AimPolicy FGSTN_StartupSteer::ResolveAimPolicy(const FGSTN_CombatTimelineD
 	{
 		return Data.AimPolicy;
 	}
-	// An attack that reads the move stick aims with it; a roll, a dodge or a get-up (no active hitbox, or the stick ignored) keeps its facing
-	return GetSteerEndFrame(Data) > 0 && !Data.bIgnoreMoveInput ? EGSTN_AimPolicy::SnapIfAimOrTilt : EGSTN_AimPolicy::KeepFacing;
+	// Every move that reads the move stick aims with it, attacks, rolls and dodges alike (owner 2026-11-16); a get-up ignores the stick and keeps its facing
+	return !Data.bIgnoreMoveInput ? EGSTN_AimPolicy::SnapIfAimOrTilt : EGSTN_AimPolicy::KeepFacing;
 }
 
 int32 FGSTN_StartupSteer::GetReverseEndFrame(const FGSTN_CombatTimelineData& Data)
@@ -235,7 +235,9 @@ EGSTN_AimTurn FGSTN_StartupSteer::ResolveOriginAim(const FGSTN_CombatTimelineDat
 
 	bool bHasTarget = false;
 	float Target = Origin;
-	switch (ResolveAimPolicy(Data))
+	// Auto aims only what the player started: a tech, a get-up or an AI's forced move keeps the direction its starter gave it
+	const EGSTN_AimPolicy Policy = Data.AimPolicy == EGSTN_AimPolicy::Auto && !In.bStartedByCommand ? EGSTN_AimPolicy::KeepFacing : ResolveAimPolicy(Data);
+	switch (Policy)
 	{
 	case EGSTN_AimPolicy::SnapToStick:
 		if (In.TimelineFrame <= 1 && In.MoveStick.SizeSquared() >= static_cast<double>(DeadZone * DeadZone))

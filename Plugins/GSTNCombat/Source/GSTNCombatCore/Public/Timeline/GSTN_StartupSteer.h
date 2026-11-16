@@ -31,6 +31,8 @@ struct FGSTN_AimFrameInput
 	FVector2D AimStick = FVector2D::ZeroVector;
 	bool bPrecisionAim = false;
 	float CameraYawDeg = 0.f;
+	/** The move came from the player's input (not Forced by the model, an AI or a script): only then does AimPolicy Auto aim */
+	bool bStartedByCommand = true;
 };
 
 /** Where a frame sits in a move's steering (FGSTN_StartupSteer::ResolveFrame) */
@@ -133,8 +135,8 @@ struct GSTNCOMBATCORE_API FGSTN_StartupSteer
 	static float RateLimitInCone(float StartYawDeg, float CurrentYawDeg, float TargetYawDeg, float MaxSteerDegrees, float MaxStepDeg);
 
 	/**
-	 * The policy a move really uses: EGSTN_AimPolicy::Auto resolved to SnapIfAimOrTilt for an attack (an active hitbox and the move stick read),
-	 * KeepFacing for the rest. The other values as they are
+	 * The policy a move really uses: EGSTN_AimPolicy::Auto resolved to SnapIfAimOrTilt for every move that reads the move stick (attacks, rolls,
+	 * dodges: owner 2026-11-16), KeepFacing for one with bIgnoreMoveInput (get-ups). The other values as they are
 	 */
 	static EGSTN_AimPolicy ResolveAimPolicy(const FGSTN_CombatTimelineData& Data);
 

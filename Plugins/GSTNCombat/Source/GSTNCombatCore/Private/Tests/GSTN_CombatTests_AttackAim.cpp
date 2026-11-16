@@ -41,7 +41,7 @@ bool FGSTN_AttackAimPolicyTest::RunTest(const FString& Parameters)
 	using S = FGSTN_StartupSteer;
 	TestTrue(TEXT("every move defaults to Auto"), FGSTN_CombatTimelineData().AimPolicy == EGSTN_AimPolicy::Auto);
 	TestTrue(TEXT("Auto attack: aim or move stick"), S::ResolveAimPolicy(MakeAttack()) == EGSTN_AimPolicy::SnapIfAimOrTilt);
-	TestTrue(TEXT("Auto without a hitbox (roll, dodge): keeps facing"), S::ResolveAimPolicy(FGSTN_CombatTimelineData()) == EGSTN_AimPolicy::KeepFacing);
+	TestTrue(TEXT("Auto without a hitbox (roll, dodge): follows the stick too"), S::ResolveAimPolicy(FGSTN_CombatTimelineData()) == EGSTN_AimPolicy::SnapIfAimOrTilt);
 	FGSTN_CombatTimelineData GetUp = MakeAttack();
 	GetUp.bIgnoreMoveInput = true;
 	TestTrue(TEXT("Auto get-up attack (stick ignored): keeps facing"), S::ResolveAimPolicy(GetUp) == EGSTN_AimPolicy::KeepFacing);
@@ -70,6 +70,13 @@ bool FGSTN_AttackAimSnapTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("already facing the stick: no turn"), S::ResolveOriginAim(Attack, Frame(0, 90.f, Right), Yaw) == EGSTN_AimTurn::None);
 	TestTrue(TEXT("frame 1 still snaps (a move the ability graph started)"), S::ResolveOriginAim(Attack, Frame(1, 0.f, Right), Yaw) == EGSTN_AimTurn::Snap);
 	TestTrue(TEXT("frame 2: the start aim is over"), S::ResolveOriginAim(Attack, Frame(2, 0.f, Right), Yaw) == EGSTN_AimTurn::None);
+	FGSTN_AimFrameInput Forced = Frame(0, -90.f, Right);
+	Forced.bStartedByCommand = false;
+	TestTrue(TEXT("a forced move (tech, AI) keeps its facing under Auto"), S::ResolveOriginAim(Attack, Forced, Yaw) == EGSTN_AimTurn::None);
+	FGSTN_CombatTimelineData Dodge;
+	Dodge.TotalFrames = 30;
+	TestTrue(TEXT("a dodge snaps to the stick"), S::ResolveOriginAim(Dodge, Frame(0, -90.f, Right), Yaw) == EGSTN_AimTurn::Snap && FMath::IsNearlyEqual(Yaw, 90.f, Tol));
+	TestTrue(TEXT("a dodge has no reverse"), S::ResolveOriginAim(Dodge, Frame(2, 0.f, FVector2D(0.0, -1.0)), Yaw) == EGSTN_AimTurn::None);
 
 	// The reticle's aim stick wins over the move stick, only with the reticle on
 	FGSTN_AimFrameInput Both = Frame(0, 0.f, Right);
