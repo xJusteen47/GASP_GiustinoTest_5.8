@@ -61,7 +61,11 @@ COMBAT_CONTEXT = '/Game/GASNPPTest/Input/IMC_GASNPP_Test'
 CROUCH_ACTION = '/Game/GASNPPTest/Input/IA_GASNPP_Crouch'
 CROUCH_TEMPLATE = '/Game/GASNPPTest/Input/IA_GASNPP_Dodge'   # a plain consuming boolean action
 GASP_CROUCH = '/Game/Input/IA_Crouch'
+# Mario run P1 (owner 2026-11-16): L3 = run boost to the last stage. Own plain boolean action, bound to Input.Button.RunBoost by
+# setup_gas_assets.py (input config); the command Command.Movement.RunBoost is a press of it. Data only: no key in code.
+RUNBOOST_ACTION = '/Game/GASNPPTest/Input/IA_GASNPP_RunBoost'
 PAD_LAYOUT = {
+    'Gamepad_LeftThumbstick': RUNBOOST_ACTION,
     'Gamepad_LeftTrigger': CROUCH_ACTION,
     'C': CROUCH_ACTION,
     'Gamepad_RightShoulder': '/Game/GASNPPTest/Input/IA_GASNPP_Dodge',
@@ -86,6 +90,15 @@ def _crouch_action():
         if hit:
             cfg.set_editor_property('buttons', buttons)
             eal.save_loaded_asset(cfg, only_if_is_dirty=False)
+    return action
+
+
+def _runboost_action():
+    eal = unreal.EditorAssetLibrary
+    if not eal.does_asset_exist(RUNBOOST_ACTION) and not eal.duplicate_asset(CROUCH_TEMPLATE, RUNBOOST_ACTION):
+        raise RuntimeError(f'could not make {RUNBOOST_ACTION}')
+    action = unreal.load_asset(RUNBOOST_ACTION)
+    eal.save_loaded_asset(action, only_if_is_dirty=True)
     return action
 
 
@@ -119,6 +132,7 @@ def run():
     out = [f'{LOCOMOTION_NAME}: removed {removed}, kept {len(kept)}: ' + ' '.join(f'{a}/{k}' for a, k in kept)]
     out += [_config(p, imc) for p in CONFIGS]
     out.append(f'crouch action: {_crouch_action().get_name()}')
+    out.append(f'run boost action: {_runboost_action().get_name()}')
     out.append(_pad_layout())
     return '\n'.join(out)
 

@@ -44,6 +44,7 @@
 #include "Input/GSTN_InputScript.h"
 #include "Input/GSTN_InputSettings.h"
 #include "Movement/GSTN_StatsMovementModifier.h"
+#include "Movement/GSTN_RunStageSyncState.h"
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverTypes.h"
@@ -1644,6 +1645,8 @@ void UGSTN_CombatSimComponent::TryQueueStatsModifier()
 		bStatsModifierQueued = true;
 		return;
 	}
+	// The run stages' state rides in Mover's sync state; the modes never write it, so it must be persistent to survive them
+	FGSTN_RunStageMover::RegisterPersistentState(*Mover);
 	if (Mover->FindMovementModifierByType<FGSTN_StatsMovementModifier>())
 	{
 		bStatsModifierQueued = true;

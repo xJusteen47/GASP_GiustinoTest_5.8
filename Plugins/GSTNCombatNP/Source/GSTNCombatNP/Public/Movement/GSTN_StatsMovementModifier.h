@@ -30,6 +30,10 @@ class UMoverComponent;
  * Factor = WalkSpeed / UGSTN_CombatSettings::StatsReferenceWalkSpeed, or 0 while the owner has Combat.Lock.Movement, so the
  * character brakes with its normal deceleration (gravity and layered moves are unaffected). A character whose ability system has
  * no combat attribute set is left untouched.
+ *
+ * Run stages (Mario-style run, P1): when the pawn's kit has a locomotion profile, the stage of the start of the frame then assigns
+ * its own values (stage speed * factor...) to the properties the profile names, over the stats' gait values, and OnPostMovement
+ * steps the stage. See FGSTN_RunStageMover.
  */
 USTRUCT()
 struct GSTNCOMBATNP_API FGSTN_StatsMovementModifier : public FMovementModifierBase
@@ -39,6 +43,13 @@ struct GSTNCOMBATNP_API FGSTN_StatsMovementModifier : public FMovementModifierBa
 	FGSTN_StatsMovementModifier();
 
 	virtual void OnPreMovement(UMoverComponent* MoverComp, const FMoverTimeStep& TimeStep) override;
+
+	/**
+	 * Steps the run stages (FGSTN_RunStageMover) with the substep's output. SyncState is the state machine's own output state
+	 * (MovementModeStateMachine passes OutputState.SyncState, a non-const object), the one place inside the movement tick where a
+	 * modifier can write sync data before the tracker and the network prediction copy it
+	 */
+	virtual void OnPostMovement(UMoverComponent* MoverComp, const FMoverTimeStep& TimeStep, const FMoverSyncState& SyncState, const FMoverAuxStateContext& AuxState) override;
 	virtual FMovementModifierBase* Clone() const override;
 	virtual void NetSerialize(FArchive& Ar) override;
 	virtual UScriptStruct* GetScriptStruct() const override;

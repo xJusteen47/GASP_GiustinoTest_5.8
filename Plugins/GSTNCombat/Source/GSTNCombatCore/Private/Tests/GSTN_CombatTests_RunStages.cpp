@@ -1,0 +1,266 @@
+// Headless tests of the Mario-style run stages (docs/notes/corsa-mario-piano.md, P1): stage climb, boost window, release, tight
+// turn, bump, substeps, network form and the rollback contract (restore a state, replay the same inputs, same result).
+
+#include "Tests/GSTN_CombatTestUtils.h"
+#include "Movement/GSTN_RunStageTypes.h"
+#include "Serialization/MemoryReader.h"
+#include "Serialization/MemoryWriter.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+namespace
+{
+	/** Three short stages so the tests stay readable: 3 frames each to climb, thresholds at 90% of the stage speed */
+	FGSTN_RunStagesTuning TestTuning(EGSTN_RunBoostMode Mode = EGSTN_RunBoostMode::InitialWindow)
+	{
+		FGSTN_RunStagesTuning Tuning = FGSTN_RunStagesTuning::MakeDefault();
+		for (FGSTN_RunStage& Stage : Tuning.Stages)
+		{
+			Stage.FramesToNextStage = 3;
+		}
+		Tuning.BoostMode = Mode;
+		Tuning.BoostWindowFrames = 5;
+		Tuning.ReleaseDropFrames = 4;
+		return Tuning;
+	}
+
+	/** A grounded frame running along +X at Speed with the stick at Stick (world) */
+	FGSTN_RunFrameInput Run(int32 Frame, float Speed, FVector Stick = FVector(1.0, 0.0, 0.0), bool bBoost = false)
+	{
+		FGSTN_RunFrameInput Input;
+		Input.Frame = Frame;
+		Input.bGrounded = true;
+		Input.GroundVelocity = FVector(Speed, 0.0, 0.0);
+		Input.StickWorld = Stick;
+		Input.bBoostCommand = bBoost;
+		return Input;
+	}
+
+	/** Steps frames [From, To) at the top speed of the stage the state is in (so every frame qualifies) */
+	int32 RunAtStageSpeed(const FGSTN_RunStagesTuning& Tuning, FGSTN_RunStageState& State, int32 From, int32 To)
+	{
+		for (int32 Frame = From; Frame < To; ++Frame)
+		{
+			FGSTN_RunStageLogic::Step(Tuning, Run(Frame, Tuning.GetStage(State.Stage).MaxSpeed), State);
+		}
+		return To;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunStagesClimbTest, "GSTNCombat.Core.RunStages.Climb", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunStagesClimbTest::RunTest(const FString& Parameters)
+{
+	const FGSTN_RunStagesTuning Tuning = TestTuning();
+	FGSTN_RunStageState State;
+
+	// Under the threshold nothing counts
+	for (int32 Frame = 0; Frame < 10; ++Frame)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, Run(Frame, Tuning.Stages[0].MaxSpeed * 0.5f), State);
+	}
+	TestEqual(TEXT("slow running stays on stage 1"), (int32)State.Stage, 0);
+
+	RunAtStageSpeed(Tuning, State, 10, 12);
+	TestEqual(TEXT("2 qualifying frames: still stage 1"), (int32)State.Stage, 0);
+	RunAtStageSpeed(Tuning, State, 12, 13);
+	TestEqual(TEXT("3 qualifying frames: stage 2"), (int32)State.Stage, 1);
+	RunAtStageSpeed(Tuning, State, 13, 16);
+	TestEqual(TEXT("3 more at stage 2 speed: stage 3"), (int32)State.Stage, 2);
+	RunAtStageSpeed(Tuning, State, 16, 40);
+	TestEqual(TEXT("the last stage is the top"), (int32)State.Stage, 2);
+
+	// The stick sideways (not forward) does not count
+	FGSTN_RunStageState Side;
+	for (int32 Frame = 0; Frame < 10; ++Frame)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, Run(Frame, Tuning.Stages[0].MaxSpeed, FVector(0.5, 0.86, 0.0)), Side);
+	}
+	TestEqual(TEXT("stick 60 degrees off the velocity: no climb"), (int32)Side.Stage, 0);
+
+	// A stats factor of 0.5 halves the threshold
+	FGSTN_RunStageState Slow;
+	for (int32 Frame = 0; Frame < 3; ++Frame)
+	{
+		FGSTN_RunFrameInput Input = Run(Frame, Tuning.Stages[0].MaxSpeed * 0.5f);
+		Input.SpeedFactor = 0.5f;
+		FGSTN_RunStageLogic::Step(Tuning, Input, Slow);
+	}
+	TestEqual(TEXT("a slow kit climbs at its own top speed"), (int32)Slow.Stage, 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunStagesBoostWindowTest, "GSTNCombat.Core.RunStages.BoostWindow", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunStagesBoostWindowTest::RunTest(const FString& Parameters)
+{
+	{
+		const FGSTN_RunStagesTuning Tuning = TestTuning();
+		FGSTN_RunStageState State;
+		FGSTN_RunStageLogic::Step(Tuning, Run(0, 0.f), State);
+		FGSTN_RunStageLogic::Step(Tuning, Run(1, 100.f, FVector(1.0, 0.0, 0.0), true), State);
+		TestEqual(TEXT("boost inside the initial window: last stage"), (int32)State.Stage, 2);
+	}
+	{
+		const FGSTN_RunStagesTuning Tuning = TestTuning();
+		FGSTN_RunStageState State;
+		for (int32 Frame = 0; Frame < 8; ++Frame)
+		{
+			FGSTN_RunStageLogic::Step(Tuning, Run(Frame, 100.f), State);
+		}
+		FGSTN_RunStageLogic::Step(Tuning, Run(8, 100.f, FVector(1.0, 0.0, 0.0), true), State);
+		TestEqual(TEXT("boost after the window (frame 8 > 5): ignored"), (int32)State.Stage, 0);
+
+		// Releasing and pushing again opens a new window
+		for (int32 Frame = 9; Frame < 11; ++Frame)
+		{
+			FGSTN_RunStageLogic::Step(Tuning, Run(Frame, 0.f, FVector::ZeroVector), State);
+		}
+		FGSTN_RunStageLogic::Step(Tuning, Run(11, 0.f), State);
+		FGSTN_RunStageLogic::Step(Tuning, Run(12, 50.f, FVector(1.0, 0.0, 0.0), true), State);
+		TestEqual(TEXT("a new start opens a new window"), (int32)State.Stage, 2);
+	}
+	{
+		const FGSTN_RunStagesTuning Tuning = TestTuning(EGSTN_RunBoostMode::Anytime);
+		FGSTN_RunStageState State;
+		for (int32 Frame = 0; Frame < 30; ++Frame)
+		{
+			FGSTN_RunStageLogic::Step(Tuning, Run(Frame, 100.f), State);
+		}
+		FGSTN_RunStageLogic::Step(Tuning, Run(30, 100.f, FVector(1.0, 0.0, 0.0), true), State);
+		TestEqual(TEXT("Anytime: boost late still works"), (int32)State.Stage, 2);
+	}
+	{
+		const FGSTN_RunStagesTuning Tuning = TestTuning(EGSTN_RunBoostMode::Disabled);
+		FGSTN_RunStageState State;
+		FGSTN_RunStageLogic::Step(Tuning, Run(0, 100.f, FVector(1.0, 0.0, 0.0), true), State);
+		TestEqual(TEXT("Disabled: no boost"), (int32)State.Stage, 0);
+	}
+	{
+		const FGSTN_RunStagesTuning Tuning = TestTuning();
+		FGSTN_RunStageState State;
+		FGSTN_RunStageLogic::Step(Tuning, Run(0, 0.f, FVector::ZeroVector, true), State);
+		TestEqual(TEXT("boost with the stick released: nothing"), (int32)State.Stage, 0);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunStagesDropTest, "GSTNCombat.Core.RunStages.Drop", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunStagesDropTest::RunTest(const FString& Parameters)
+{
+	const FGSTN_RunStagesTuning Tuning = TestTuning();
+
+	// Stick release: the speed of before the release is carried, the stage holds ReleaseDropFrames, then stage 1
+	{
+		FGSTN_RunStageState State;
+		int32 Frame = RunAtStageSpeed(Tuning, State, 0, 7);
+		TestEqual(TEXT("at stage 3 before the release"), (int32)State.Stage, 2);
+		const float Before = Tuning.Stages[2].MaxSpeed;
+		FGSTN_RunStageLogic::Step(Tuning, Run(Frame++, Before * 0.8f, FVector::ZeroVector), State);
+		TestEqual(TEXT("carried = speed of the frame before the release"), State.CarriedSpeed, Before);
+		TestEqual(TEXT("carried within the stage's CarryFrames"), FGSTN_RunStageLogic::GetCarriedSpeed(Tuning, State), Before);
+		for (int32 i = 0; i <= Tuning.Stages[2].CarryFrames; ++i)
+		{
+			FGSTN_RunStageLogic::Step(Tuning, Run(Frame++, 100.f, FVector::ZeroVector), State);
+		}
+		TestEqual(TEXT("past CarryFrames: nothing carried"), FGSTN_RunStageLogic::GetCarriedSpeed(Tuning, State), 0.f);
+		TestEqual(TEXT("released longer than ReleaseDropFrames: stage 1"), (int32)State.Stage, 0);
+	}
+	// A short release keeps the stage
+	{
+		FGSTN_RunStageState State;
+		int32 Frame = RunAtStageSpeed(Tuning, State, 0, 7);
+		FGSTN_RunStageLogic::Step(Tuning, Run(Frame++, 800.f, FVector::ZeroVector), State);
+		FGSTN_RunStageLogic::Step(Tuning, Run(Frame++, 800.f), State);
+		TestEqual(TEXT("one frame released: stage kept"), (int32)State.Stage, 2);
+	}
+	// Tight turn: one stage down
+	{
+		FGSTN_RunStageState State;
+		int32 Frame = RunAtStageSpeed(Tuning, State, 0, 7);
+		FGSTN_RunStageLogic::Step(Tuning, Run(Frame++, Tuning.Stages[2].MaxSpeed, FVector(-1.0, 0.0, 0.0)), State);
+		TestEqual(TEXT("stick against the velocity: one stage down"), (int32)State.Stage, 1);
+	}
+	// Bump: most of the speed lost in one frame
+	{
+		FGSTN_RunStageState State;
+		int32 Frame = RunAtStageSpeed(Tuning, State, 0, 7);
+		FGSTN_RunStageLogic::Step(Tuning, Run(Frame++, 50.f), State);
+		TestEqual(TEXT("a bump: stage 1"), (int32)State.Stage, 0);
+	}
+	// In the air the stage is kept
+	{
+		FGSTN_RunStageState State;
+		int32 Frame = RunAtStageSpeed(Tuning, State, 0, 7);
+		for (int32 i = 0; i < 20; ++i)
+		{
+			FGSTN_RunFrameInput Air = Run(Frame++, 0.f, FVector::ZeroVector);
+			Air.bGrounded = false;
+			FGSTN_RunStageLogic::Step(Tuning, Air, State);
+		}
+		TestEqual(TEXT("airborne with the stick released: stage kept"), (int32)State.Stage, 2);
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunStagesRollbackTest, "GSTNCombat.Core.RunStages.Rollback", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunStagesRollbackTest::RunTest(const FString& Parameters)
+{
+	const FGSTN_RunStagesTuning Tuning = TestTuning();
+
+	// A fixed input sequence: climb, boost, release, push again
+	TArray<FGSTN_RunFrameInput> Inputs;
+	for (int32 Frame = 0; Frame < 40; ++Frame)
+	{
+		const bool bReleased = Frame >= 20 && Frame < 23;
+		const float Speed = Frame < 10 ? 450.f : 700.f;
+		Inputs.Add(Run(Frame, bReleased ? 600.f : Speed, bReleased ? FVector::ZeroVector : FVector(1.0, 0.0, 0.0), Frame == 25));
+	}
+
+	FGSTN_RunStageState State;
+	FGSTN_RunStageState Saved;
+	TArray<FGSTN_RunStageState> Predicted;
+	for (const FGSTN_RunFrameInput& Input : Inputs)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, Input, State);
+		Predicted.Add(State);
+		if (Input.Frame == 15)
+		{
+			Saved = State;
+		}
+	}
+
+	// Rollback to the end of frame 15 and replay: every frame matches, the stage is restored then stepped again
+	FGSTN_RunStageState Replay = Saved;
+	TestEqual(TEXT("the restored stage is the saved one"), (int32)Replay.Stage, (int32)Predicted[15].Stage);
+	bool bAllEqual = true;
+	for (int32 Frame = 16; Frame < Inputs.Num(); ++Frame)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, Inputs[Frame], Replay);
+		bAllEqual &= Replay == Predicted[Frame];
+	}
+	TestTrue(TEXT("re-simulation gives the same state every frame"), bAllEqual);
+
+	// Substeps of one frame step once
+	FGSTN_RunStageState Once = Saved;
+	FGSTN_RunStageLogic::Step(Tuning, Inputs[16], Once);
+	const FGSTN_RunStageState AfterOne = Once;
+	FGSTN_RunStageLogic::Step(Tuning, Inputs[16], Once);
+	TestTrue(TEXT("a second substep of the same frame changes nothing"), Once == AfterOne);
+
+	// Network form: what the authority sends is what the client reads (speeds to 0.1 cm/s)
+	FGSTN_RunStageState Sent = Predicted[21];
+	Sent.CarriedSpeed = 612.34f;
+	TArray<uint8> Bytes;
+	FMemoryWriter Writer(Bytes);
+	Sent.SerializeCompact(Writer);
+	FGSTN_RunStageState Received;
+	FMemoryReader Reader(Bytes);
+	Received.SerializeCompact(Reader);
+	TestEqual(TEXT("stage survives the network"), (int32)Received.Stage, (int32)Sent.Stage);
+	TestEqual(TEXT("counters survive"), Received.FramesSinceStickRelease, Sent.FramesSinceStickRelease);
+	TestEqual(TEXT("carry source survives"), (int32)Received.CarrySource, (int32)Sent.CarrySource);
+	TestTrue(TEXT("carried speed to 0.1 cm/s"), FMath::IsNearlyEqual(Received.CarriedSpeed, 612.3f, 0.01f));
+	TestEqual(TEXT("frame survives"), Received.LastFrame, Sent.LastFrame);
+	return true;
+}
+
+#endif
