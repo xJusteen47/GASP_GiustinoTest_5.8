@@ -69,6 +69,31 @@ bool FGSTN_HoldUntilLandedClockTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_HoldUntilLandedTimeoutTest, "GSTNCombat.Core.HoldUntilLanded.AirTimeout", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_HoldUntilLandedTimeoutTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNHoldUntilLandedTests;
+	constexpr int32 MaxAir = 120;
+	const FGSTN_CombatTimelineData Off = MakeDropkick();
+	const FGSTN_CombatTimelineData Data = UGSTN_TimelineUtils::SetHoldUntilLandedTrack(Off, LoopStart, LoopEnd, Land, 0, NAME_None, NAME_None, MaxAir);
+	const FGSTN_TimelineTrack_HoldUntilLanded* Track = FGSTN_HoldUntilLanded::FindTrack(Data);
+	TestTrue(TEXT("the helper writes the timeout"), Track && Track->MaxAirFrames == MaxAir);
+	auto Action = [](const FGSTN_CombatTimelineData& In, int32 Current, bool bGround, int32 Elapsed)
+	{
+		return FGSTN_HoldUntilLanded::ResolveClock(In, Current, true, bGround, Elapsed).Action;
+	};
+
+	TestTrue(TEXT("0 = off: holds forever"), Action(Off, LoopEnd - 1, false, 100000) == EGSTN_HoldClockAction::Stall);
+	TestTrue(TEXT("unknown elapsed: holds"), Action(Data, LoopEnd - 1, false, INDEX_NONE) == EGSTN_HoldClockAction::Stall);
+	TestTrue(TEXT("in the air under the budget: holds"), Action(Data, LoopEnd - 1, false, MaxAir - 1) == EGSTN_HoldClockAction::Stall);
+	TestTrue(TEXT("in the air at the budget: times out"), Action(Data, LoopEnd - 1, false, MaxAir) == EGSTN_HoldClockAction::Timeout);
+	TestTrue(TEXT("in the startup too (a very long startup)"), Action(Data, 5, false, MaxAir + 3) == EGSTN_HoldClockAction::Timeout);
+	TestTrue(TEXT("landing in time wins: lands, never a timeout"), Action(Data, LoopEnd - 1, true, MaxAir + 50) == EGSTN_HoldClockAction::Land);
+	TestTrue(TEXT("past the air part (landed already): plays on"), Action(Data, Land + 2, false, MaxAir + 50) == EGSTN_HoldClockAction::None);
+	TestTrue(TEXT("without a ground fact: nothing"), FGSTN_HoldUntilLanded::ResolveClock(Data, LoopEnd - 1, false, false, MaxAir + 50).Action == EGSTN_HoldClockAction::None);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_HoldUntilLandedMontageTest, "GSTNCombat.Core.HoldUntilLanded.Montage", GSTN_CORE_TEST_FLAGS)
 bool FGSTN_HoldUntilLandedMontageTest::RunTest(const FString& Parameters)
 {

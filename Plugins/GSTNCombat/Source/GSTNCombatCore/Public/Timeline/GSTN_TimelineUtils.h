@@ -37,11 +37,11 @@ public:
 	/**
 	 * Authoring helper (as AddHitboxTrack): a copy of Data whose Hold Until Landed track (FGSTN_TimelineTrack_HoldUntilLanded) is the one given,
 	 * held in the air on [StartFrame, EndFrame) and landing on LandFrame (-1 = EndFrame). A track of that type already there is replaced, so a
-	 * setup script can run again. Sections None = the timeline frames mapped onto the montage
+	 * setup script can run again. Sections None = the timeline frames mapped onto the montage. MaxAirFrames: the air timeout (0 = none)
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
 	static FGSTN_CombatTimelineData SetHoldUntilLandedTrack(const FGSTN_CombatTimelineData& Data, int32 StartFrame, int32 EndFrame, int32 LandFrame = -1,
-		int32 LandFromFrame = 0, FName LoopSection = NAME_None, FName LandSection = NAME_None);
+		int32 LandFromFrame = 0, FName LoopSection = NAME_None, FName LandSection = NAME_None, int32 MaxAirFrames = 0);
 
 	/** Authoring helper: a copy of Data without its Hold Until Landed track */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")

@@ -26,7 +26,7 @@ FGSTN_CombatTimelineData UGSTN_TimelineUtils::AddHitboxTrack(const FGSTN_CombatT
 }
 
 FGSTN_CombatTimelineData UGSTN_TimelineUtils::SetHoldUntilLandedTrack(const FGSTN_CombatTimelineData& Data, int32 StartFrame, int32 EndFrame, int32 LandFrame,
-	int32 LandFromFrame, FName LoopSection, FName LandSection)
+	int32 LandFromFrame, FName LoopSection, FName LandSection, int32 MaxAirFrames)
 {
 	FGSTN_CombatTimelineData Result = RemoveHoldUntilLandedTrack(Data);
 	FGSTN_TimelineTrack_HoldUntilLanded Track;
@@ -36,6 +36,7 @@ FGSTN_CombatTimelineData UGSTN_TimelineUtils::SetHoldUntilLandedTrack(const FGST
 	Track.LandFromFrame = FMath::Max(LandFromFrame, 0);
 	Track.LoopSection = LoopSection;
 	Track.LandSection = LandSection;
+	Track.MaxAirFrames = FMath::Max(MaxAirFrames, 0);
 	Result.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_HoldUntilLanded>(Track));
 	return Result;
 }

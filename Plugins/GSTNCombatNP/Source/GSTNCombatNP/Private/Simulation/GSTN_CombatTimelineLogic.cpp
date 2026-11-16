@@ -185,7 +185,17 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 	bool bStall = bHitstopFrame;
 	if (!bHitstopFrame && Previous >= 0 && HookEnvironment && HookEnvironment->Ground != EGSTN_TrackHookGround::Unknown)
 	{
-		const FGSTN_HoldClockDecision Hold = FGSTN_HoldUntilLanded::ResolveClock(*Data, Previous, true, HookEnvironment->Ground == EGSTN_TrackHookGround::OnGround);
+		const FGSTN_HoldClockDecision Hold = FGSTN_HoldUntilLanded::ResolveClock(*Data, Previous, true, HookEnvironment->Ground == EGSTN_TrackHookGround::OnGround,
+			Frame - Core.TimelineStartFrame);
+		if (Hold.Action == EGSTN_HoldClockAction::Timeout)
+		{
+			// Air timeout (owner 2026-11-16): the move ends here like an interrupt, not "by itself" (bFinished stays false, so no follow-up and
+			// no montage release): nothing of it is evaluated this frame, so its hitbox is closed, and the character is back in air idle
+			UE_LOG(LogGSTNCombatTimeline, Verbose, TEXT("Frame %d: timeline %d still in the air after %d frames: air timeout, the move ends"), Frame,
+				static_cast<int32>(Core.ActiveTimeline), Frame - Core.TimelineStartFrame);
+			ClearTimeline(Core);
+			return false;
+		}
 		if (Hold.Action == EGSTN_HoldClockAction::Stall)
 		{
 			bStall = true;

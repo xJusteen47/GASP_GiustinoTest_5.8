@@ -49,6 +49,15 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_HoldUntilLanded : public FGSTN_Tim
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hold Until Landed|Montage")
 	FName LandSection = NAME_None;
 
+	/**
+	 * Air timeout (owner 2026-11-16): a move that is still in the air this many simulation frames after its start (hitstop frames included)
+	 * ENDS, like an interrupt: the hitbox closes, no follow-up, the montage blends out and the character is back in air idle with its normal air
+	 * control. Guards against a fall that never ends (an updraft, a very long drop). 0 = no timeout: the move holds until it lands. A landing in
+	 * time is unchanged
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hold Until Landed", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 MaxAirFrames = 0;
+
 	/** LandFrame with -1 resolved */
 	int32 ResolveLandFrame() const { return LandFrame >= 0 ? LandFrame : EndFrame; }
 };
@@ -61,7 +70,9 @@ enum class EGSTN_HoldClockAction : uint8
 	/** In the air on the last frame of the hold: stand on it this tick */
 	Stall,
 	/** On the ground: jump to TargetFrame this tick */
-	Land
+	Land,
+	/** Still in the air after MaxAirFrames: the move ends this tick (back to air idle) */
+	Timeout
 };
 
 struct FGSTN_HoldClockDecision
@@ -109,9 +120,12 @@ struct GSTNCOMBATCORE_API FGSTN_HoldUntilLanded
 	/**
 	 * The clock rule. CurrentFrame is the timeline frame the timeline stands on (evaluated by the previous tick); a tick that does nothing evaluates
 	 * CurrentFrame + 1. bGroundKnown false (no Mover) = None. On the ground, from LandFromFrame, before the timeline left the hold range and before
-	 * it reached the land frame by itself: Land. In the air on the hold's last frame: Stall. Not called on a hitstop tick (it stalls already)
+	 * it reached the land frame by itself: Land. In the air, before the land part, with ElapsedFrames (simulation frames since the move started,
+	 * INDEX_NONE = unknown) at or past the track's MaxAirFrames: Timeout. In the air on the hold's last frame: Stall. Not called on a hitstop tick
+	 * (it stalls already)
 	 */
-	static FGSTN_HoldClockDecision ResolveClock(const FGSTN_CombatTimelineData& Data, int32 CurrentFrame, bool bGroundKnown, bool bOnGround);
+	static FGSTN_HoldClockDecision ResolveClock(const FGSTN_CombatTimelineData& Data, int32 CurrentFrame, bool bGroundKnown, bool bOnGround,
+		int32 ElapsedFrames = INDEX_NONE);
 
 	/**
 	 * The montage times of Track: its sections when named and found in Montage, else the timeline frames mapped as the move's start maps them:

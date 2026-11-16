@@ -9,7 +9,8 @@
 #   Hold Until Landed track [startup + 6, startup + one loop) frames (decision 2A: loop f0-f5 play once as follow-through, only the loop's
 #   second half repeats; env DROPKICK_HOLD_FOLLOW_THROUGH, 0 = the old whole-loop hold), land frame = first frame of the land clip in the montage (after LOOP_REPS loops).
 #   In the air the timeline stands on the loop's last frame (the hitbox, open to the land frame, stays open) and the montage repeats its FIRST
-#   loop copy; on the first grounded frame the timeline jumps to the land frame and the montage to the land clip. The montage is not touched:
+#   loop copy (air timeout: still airborne MAX_AIR_FRAMES after the start, the move ends to air idle; env DROPKICK_MAX_AIR_FRAMES, 0 = off);
+#   on the first grounded frame the timeline jumps to the land frame and the montage to the land clip. The montage is not touched:
 #   the extra loop copies are simply never played. LOOP_REPS can go back to 1 later (shorter montage), this script follows it.
 #   Optional: DROPKICK_FOLLOW_UP=<Blueprint class path of a get-up timeline ability> sets FollowUpTimeline (started when the land clip ends by
 #   itself). None exists yet: the get-up clip is anim work. Empty = no follow-up (the land clip's montage tail plays out as before).
@@ -30,6 +31,8 @@ TIMELINE = f'{DIR}/TL_Overlord_Dropkick'
 CLIPS = {name: f'{DIR}/AS_OverlordDropkick_{name}' for name in ('Startup', 'Loop', 'Land')}
 ANIM_FPS = 60.0
 FOLLOW_THROUGH = int(os.environ.get('DROPKICK_HOLD_FOLLOW_THROUGH', '6'))   # loop frames played once before the hold
+# Air timeout (owner 2026-11-16): still in the air this many 62.5 Hz frames after the start (2 s), the move ends to air idle. 0 = off
+MAX_AIR_FRAMES = int(os.environ.get('DROPKICK_MAX_AIR_FRAMES', '125'))
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'AnimR2', 'setup_dropkick_hold_until_landed.txt')
 _lines = []
 
@@ -69,7 +72,7 @@ def run(force=False):
         total = data.get_editor_property('total_frames')
         if not (0 < start < end <= land < total):
             raise RuntimeError(f'frames do not fit: startup {start}, loop end {end}, land {land}, total {total}')
-        data = unreal.GSTN_TimelineUtils.set_hold_until_landed_track(data, start, end, land)
+        data = unreal.GSTN_TimelineUtils.set_hold_until_landed_track(data, start, end, land, max_air_frames=MAX_AIR_FRAMES)
         follow = os.environ.get('DROPKICK_FOLLOW_UP', '').strip()
         if follow:
             cls = lib.load_blueprint_class(follow)
@@ -81,6 +84,7 @@ def run(force=False):
         lib.save_loaded_asset(asset, False)
         guard.record([TIMELINE])
         log(f'TL_Overlord_Dropkick: hold [{start}, {end}) in the air, land frame {land} (loop x{reps} in the montage), total {total}, '
+            f'air timeout {MAX_AIR_FRAMES} frames, '
             f'{len(data.get_editor_property("tracks"))} tracks; saved')
         ok = True
     except Exception as e:
