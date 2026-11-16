@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "GameplayTagContainer.h"
 #include "GSTN_AdditiveReactionSource.h"
+#include "Cosmetics/GSTN_ReactionAnimSet.h"
 #include "GSTN_ReactionAnimComponent.generated.h"
 
 class UAbilitySystemComponent;
@@ -16,8 +17,6 @@ class USkeletalMeshComponent;
 class UGSTN_ReactionAnimSet;
 struct FGameplayEventData;
 struct FGSTN_ReactionAnimRule;
-struct FGSTN_DirectionalHitAdditives;
-enum class EGSTN_HitSide : uint8;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGSTN_OnReactionStarted, FName, RuleName, bool, bRestarted);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FGSTN_OnReactionEnded, FName, RuleName);
