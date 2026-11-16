@@ -8,6 +8,7 @@
 #include "Animation/AnimSequenceBase.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Cosmetics/GSTN_ReactionAnimSet.h"
+#include "Events/GSTN_HitEvents.h"
 #include "Camera/PlayerCameraManager.h"
 #include "GameFramework/Actor.h"
 #include "GSTN_CombatCoreTags.h"
@@ -131,8 +132,33 @@ void UGSTN_ReactionAnimComponent::ApplySet(UGSTN_ReactionAnimSet* NewSet)
 			}
 		}
 	}
+	HitLayers[0] = HitLayers[1] = FHitLayer();
+	bHitEventPending = false;
+	const FGSTN_DirectionalHitSettings& Directional = LoadedSet->DirectionalHits;
+	for (const FGSTN_DirectionalHitAdditives* Additives : { &Directional.Ground, &Directional.Air })
+	{
+		for (const TSoftObjectPtr<UAnimSequenceBase>* Soft : { &Additives->Front, &Additives->Back, &Additives->Left, &Additives->Right })
+		{
+			if (!Soft->IsNull())
+			{
+				if (UAnimSequenceBase* Loaded = Soft->LoadSynchronous())
+				{
+					LoadedAnimations.AddUnique(Loaded);
+				}
+				else
+				{
+					UE_LOG(LogGSTNReactionAnim, Warning, TEXT("%s: directional hit additive cannot load %s"), *GetNameSafe(GetOwner()), *Soft->ToString());
+				}
+			}
+		}
+	}
 	if (UAbilitySystemComponent* ASC = ResolveAbilitySystem())
 	{
+		if (Directional.bEnabled)
+		{
+			HitEventHandle = ASC->GenericGameplayEventCallbacks.FindOrAdd(GSTNCombatTags::Event_Hit_Received)
+				.AddUObject(this, &UGSTN_ReactionAnimComponent::OnHitEvent);
+		}
 		for (int32 Index = 0; Index < LoadedSet->Rules.Num(); ++Index)
 		{
 			const FGameplayTag Event = LoadedSet->Rules[Index].RestartEvent;
@@ -157,6 +183,139 @@ void UGSTN_ReactionAnimComponent::UnbindEvents()
 		}
 	}
 	EventHandles.Reset();
+	UAbilitySystemComponent* HitASC = AbilitySystem.Get();
+	if (HitASC && HitEventHandle.IsValid())
+	{
+		if (FGameplayEventMulticastDelegate* Delegate = HitASC->GenericGameplayEventCallbacks.Find(GSTNCombatTags::Event_Hit_Received))
+		{
+			Delegate->Remove(HitEventHandle);
+		}
+	}
+	HitEventHandle.Reset();
+}
+
+void UGSTN_ReactionAnimComponent::OnHitEvent(const FGameplayEventData* Payload)
+{
+	const AActor* Owner = GetOwner();
+	if (!Payload || !LoadedSet || !Owner)
+	{
+		return;
+	}
+	const FGSTN_DirectionalHitSettings& Settings = LoadedSet->DirectionalHits;
+	FGSTN_HitEventPayload Hit;
+	const bool bStaggered = FGSTN_HitEventPayload::FromEventData(*Payload, Hit) ? Hit.bStaggered : true;
+	const float Weight = FGSTN_DirectionalHitMath::IntensityWeight(bStaggered, FMath::RoundToInt(Payload->EventMagnitude),
+		Settings.FullWeightHitstunFrames, Settings.MinWeight, Settings.UnstaggeredWeight);
+	if (Weight <= 0.f)
+	{
+		return;
+	}
+	// The push: attacker to victim; an attacker on top of the victim pushes along its own facing
+	FVector Push = -Owner->GetActorForwardVector();
+	if (const AActor* Attacker = Payload->Instigator.Get())
+	{
+		Push = Owner->GetActorLocation() - Attacker->GetActorLocation();
+		Push.Z = 0.0;
+		if (Push.SizeSquared() < FMath::Square(5.0))
+		{
+			Push = Attacker->GetActorForwardVector();
+		}
+	}
+	Push = Push.GetSafeNormal2D();
+	// A resimulated frame can send the same hit again a moment later: it does not restart the flinch (a multi-hit 3+ frames apart does)
+	const FHitLayer& Newest = HitLayers[0];
+	if (Newest.Weight > 0.f && Newest.Draw.Time < 0.05f && FVector::DotProduct(Newest.Push, Push) > 0.95)
+	{
+		return;
+	}
+	PendingHit = FHitLayer();
+	PendingHit.Push = Push;
+	PendingHit.Weight = Weight;
+	bHitEventPending = true;
+}
+
+void UGSTN_ReactionAnimComponent::ResolveLayer(FHitLayer& Layer) const
+{
+	const AActor* Owner = GetOwner();
+	const FGSTN_DirectionalHitSettings& Settings = LoadedSet->DirectionalHits;
+	const FGSTN_DirectionalHitAdditives& Set = Layer.bAir ? Settings.Air : Settings.Ground;
+	const FVector Forward = Owner->GetActorForwardVector();
+	const FVector Right = Owner->GetActorRightVector();
+	const EGSTN_HitSide Side = FGSTN_DirectionalHitMath::SelectSide(Layer.Push, Forward, Right);
+	const UAnimSequenceBase* Clip = Set.ForSide(Side).Get();
+	Layer.Side = static_cast<uint8>(Side);
+	Layer.Draw.Additive = Clip;
+	Layer.Draw.PushDirection = FGSTN_DirectionalHitMath::SidePush(Side, Forward, Right);
+	Layer.Draw.PlaceholderAngleDeg = Clip ? 0.f : Set.PlaceholderAngleDeg;
+	Layer.Draw.PlaceholderPeakSeconds = Set.PlaceholderPeakSeconds;
+	Layer.Draw.PlaceholderLengthSeconds = Set.PlaceholderLengthSeconds;
+	Layer.Length = Clip ? Clip->GetPlayLength() : Set.PlaceholderLengthSeconds;
+}
+
+void UGSTN_ReactionAnimComponent::UpdateDirectionalHits(float DeltaTime, const FGameplayTagContainer& Tags)
+{
+	const FGSTN_DirectionalHitSettings& Settings = LoadedSet->DirectionalHits;
+	if (bHitEventPending)
+	{
+		bHitEventPending = false;
+		if (Settings.bEnabled)
+		{
+			HitLayers[1] = HitLayers[0];
+			HitLayers[1].bFading = HitLayers[1].Weight > 0.f;
+			HitLayers[0] = PendingHit;
+			HitLayers[0].bAir = Tags.HasAny(Settings.AirTags);
+			ResolveLayer(HitLayers[0]);
+		}
+	}
+	const bool bBlocked = !Settings.bEnabled || Tags.HasAny(Settings.BlockedTags);
+	const bool bHitstop = Tags.HasTagExact(GSTNCombatTags::State_Hitstop);
+	const float FadeStep = DeltaTime / FMath::Max(Settings.ReplaceFadeSeconds, 0.001f);
+	for (FHitLayer& Layer : HitLayers)
+	{
+		if (Layer.Weight <= 0.f)
+		{
+			continue;
+		}
+		float Time = Layer.Draw.Time;
+		if (Time < Settings.SideSettleSeconds)
+		{
+			// The back-hit turn lands on the first reaction frame, after the event: the side follows the body as drawn until it settles
+			ResolveLayer(Layer);
+		}
+		// The hit pose holds while the victim is frozen by the hitstop, then the flinch plays out
+		if (!bHitstop)
+		{
+			Time += DeltaTime;
+		}
+		else if (Time < Settings.HitstopHoldSeconds)
+		{
+			Time = FMath::Min(Time + DeltaTime, Settings.HitstopHoldSeconds);
+		}
+		if (Layer.bFading || bBlocked)
+		{
+			Layer.Fade -= FadeStep;
+		}
+		if (Time >= Layer.Length || Layer.Fade <= 0.f)
+		{
+			Layer = FHitLayer();
+			continue;
+		}
+		Layer.Draw.Time = Time;
+		Layer.Draw.Weight = Layer.Weight * Layer.Fade;
+	}
+}
+
+void UGSTN_ReactionAnimComponent::GetAdditiveReaction(FGSTN_AdditiveReactionRequest& Out) const
+{
+	for (int32 Index = 0; Index < FGSTN_AdditiveReactionRequest::MaxLayers; ++Index)
+	{
+		Out.Layers[Index] = HitLayers[Index].Weight > 0.f ? HitLayers[Index].Draw : FGSTN_AdditiveReactionLayer();
+	}
+}
+
+EGSTN_HitSide UGSTN_ReactionAnimComponent::GetDirectionalHitSide() const
+{
+	return static_cast<EGSTN_HitSide>(HitLayers[0].Side);
 }
 
 void UGSTN_ReactionAnimComponent::OnRestartEvent(const FGameplayEventData* Payload, FGameplayTag Tag)
@@ -278,6 +437,7 @@ void UGSTN_ReactionAnimComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	ASC->GetOwnedGameplayTags(Tags);
 	ShakeOffset = ComputeHitstopShake(DeltaTime, Tags);
 	UpdateEntryDrop(DeltaTime);
+	UpdateDirectionalHits(DeltaTime, Tags);
 
 	const int32 Winner = LoadedSet->SelectRule(Tags);
 	AnnounceReaction(Winner, Winner != INDEX_NONE && PendingRestartRule == Winner);

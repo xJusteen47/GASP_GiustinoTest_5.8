@@ -22,6 +22,8 @@ public class GSTNCombatGAS : ModuleRules
 			"ModularGameplay",
 			"GSTNCombatCore",
 			"GSTNInputCore",
+			// hit-react-directional: the reaction component feeds the directional hit additive node through IGSTN_AdditiveReactionSource
+			"GSTNAnimationCore",
 			// IO-2b: the GameRules change serial, to recompile a loadout built before the server picked the rules
 			"GSTNCore"
 		});
