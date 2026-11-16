@@ -31,8 +31,11 @@ function Get-Token([string]$kind) {
         $t = & gh api -X POST "repos/$Repo/actions/runners/$kind-token" --jq .token 2>>$log
         if ($LASTEXITCODE -eq 0 -and $t) { return $t.Trim() }
     }
-    Write-Output "gh non disponibile: apri https://github.com/$Repo/settings/actions/runners/new e copia il token dopo --token"
-    return (Read-Host 'Incolla il token').Trim()
+    # Write-Host, not Write-Output: anything written to the output stream becomes part of the returned token
+    Write-Host "gh non disponibile: apri https://github.com/$Repo/settings/actions/runners/new e copia il token dopo --token"
+    $t = (Read-Host 'Incolla il token (nuovo, vale 1 ora)').Trim()
+    if ($t -notmatch '^[A-Z0-9]{20,}$') { Write-Host 'ERRORE: token non valido (solo lettere maiuscole e cifre)'; exit 1 }
+    return $t
 }
 
 if ($Remove) {
