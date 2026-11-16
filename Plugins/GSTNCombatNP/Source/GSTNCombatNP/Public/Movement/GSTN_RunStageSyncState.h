@@ -60,8 +60,12 @@ struct GSTNCOMBATNP_API FGSTN_RunStageMover
 	/** The run state in SyncState, null when it has none */
 	static const FGSTN_RunStageState* Find(const FMoverSyncState& SyncState);
 
-	/** Writes the stage's values (Factor = stats factor) into every mode of MoverComp. Returns the number of values written */
-	static int32 ApplyStageValues(UMoverComponent& MoverComp, const FGSTN_LocomotionSimTuning& Tuning, int32 Stage, float Factor);
+	/**
+	 * Writes the stage's values (Factor = stats factor) into every mode of MoverComp. Returns the number of values written.
+	 * GroundSpeed >= 0 (the speed at the start of the frame, from the rollback-following tracker) adds the analog walk start: more
+	 * acceleration and turning at low speed, and the stage speed on the walk gait too (FGSTN_AnalogWalkTuning). < 0 = stage values only
+	 */
+	static int32 ApplyStageValues(UMoverComponent& MoverComp, const FGSTN_LocomotionSimTuning& Tuning, int32 Stage, float Factor, float GroundSpeed = -1.f);
 
 	/** OnPreMovement half (see the struct comment) */
 	static void PreMovement(UMoverComponent& MoverComp, float Factor);

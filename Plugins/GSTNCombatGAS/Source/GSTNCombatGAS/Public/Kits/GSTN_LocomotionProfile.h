@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "Movement/GSTN_AnalogWalkTypes.h"
 #include "Movement/GSTN_RunStageTypes.h"
 #include "Rules/GSTN_KitExtension.h"
 #include "GSTN_LocomotionProfile.generated.h"
@@ -50,6 +51,10 @@ public:
 	/** Properties that get the stage's ReleaseBrake * stats factor */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Walking Mode Properties")
 	TArray<FName> BrakeProperties;
+
+	/** Analog walk, walk start and air turn (owner playtest 2026-11-16). Works with the run stages on (it scales their stage 1) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Analog Walk", meta = (ShowOnlyInnerProperties))
+	FGSTN_AnalogWalkTuning AnalogWalk;
 };
 
 /** Values of a profile as the simulation reads them (no object reference: nothing has to keep the asset alive) */
@@ -60,6 +65,7 @@ struct GSTNCOMBATGAS_API FGSTN_LocomotionSimTuning
 	TArray<FName> AccelerationProperties;
 	TArray<FName> TurningProperties;
 	TArray<FName> BrakeProperties;
+	FGSTN_AnalogWalkTuning AnalogWalk;
 
 	static FGSTN_LocomotionSimTuning FromProfile(const UGSTN_LocomotionProfile& Profile);
 };

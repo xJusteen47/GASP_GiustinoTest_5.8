@@ -127,6 +127,41 @@ def _pad_layout():
     return 'IMC_GASNPP_Test pad: ' + (', '.join(changed) if changed else 'already set')
 
 
+# Owner playtest 2026-11-16. (1) L3 still toggled GASP's debug flight: SandboxCharacter_Mover has a raw "Gamepad_LeftThumbstick" key
+# event (not a mapping, so replacing IMC_Sandbox does not remove it). Our run boost action consumes the key from legacy key events while
+# it is started/ongoing/triggered, so the Blueprint never sees L3 (its keyboard toggle on Z stays). No Blueprint is edited.
+# (2) A light tilt did not walk: IMC_GSTN_Locomotion's left stick dead zone was GASP's 0.3. Lowered; the analog curve and its own
+# small dead zone are in the kit's locomotion profile (FGSTN_AnalogWalkTuning).
+MOVE_STICK_DEADZONE = 0.12
+CONSUME_EVENTS = 1 | 2 | 4   # ETriggerEvent Triggered | Started | Ongoing
+
+
+def _l3_consumes_legacy_key():
+    action = unreal.load_asset(RUNBOOST_ACTION)
+    if action.get_editor_property('consumes_action_and_axis_mappings') and action.get_editor_property('trigger_events_that_consume_legacy_keys') == CONSUME_EVENTS:
+        return 'IA_GASNPP_RunBoost: already consumes L3'
+    action.set_editor_property('consumes_action_and_axis_mappings', True)
+    action.set_editor_property('trigger_events_that_consume_legacy_keys', CONSUME_EVENTS)
+    unreal.EditorAssetLibrary.save_loaded_asset(action, only_if_is_dirty=False)
+    return 'IA_GASNPP_RunBoost: consumes L3 (GASP flight key event blocked)'
+
+
+def _move_deadzone():
+    imc = unreal.load_asset(LOCOMOTION)
+    changed = 0
+    for m in imc.get_editor_property('default_key_mappings').get_editor_property('mappings'):
+        if str(m.key.get_editor_property('key_name')) != 'Gamepad_Left2D':
+            continue
+        for mod in m.modifiers:
+            if isinstance(mod, unreal.InputModifierDeadZone) and abs(mod.get_editor_property('lower_threshold') - MOVE_STICK_DEADZONE) > 1e-4:
+                mod.set_editor_property('lower_threshold', MOVE_STICK_DEADZONE)
+                changed += 1
+    if changed:
+        imc.modify()
+        unreal.EditorAssetLibrary.save_loaded_asset(imc, only_if_is_dirty=False)
+    return f'{LOCOMOTION_NAME}: left stick dead zone {MOVE_STICK_DEADZONE}' + ('' if changed else ' (already)')
+
+
 def run():
     imc, removed, kept = _locomotion()
     out = [f'{LOCOMOTION_NAME}: removed {removed}, kept {len(kept)}: ' + ' '.join(f'{a}/{k}' for a, k in kept)]
@@ -134,6 +169,8 @@ def run():
     out.append(f'crouch action: {_crouch_action().get_name()}')
     out.append(f'run boost action: {_runboost_action().get_name()}')
     out.append(_pad_layout())
+    out.append(_l3_consumes_legacy_key())
+    out.append(_move_deadzone())
     return '\n'.join(out)
 
 

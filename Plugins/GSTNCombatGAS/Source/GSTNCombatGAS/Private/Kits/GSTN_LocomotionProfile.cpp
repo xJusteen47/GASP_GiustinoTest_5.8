@@ -53,6 +53,7 @@ FGSTN_LocomotionSimTuning FGSTN_LocomotionSimTuning::FromProfile(const UGSTN_Loc
 	Tuning.AccelerationProperties = Profile.AccelerationProperties;
 	Tuning.TurningProperties = Profile.TurningProperties;
 	Tuning.BrakeProperties = Profile.BrakeProperties;
+	Tuning.AnalogWalk = Profile.AnalogWalk;
 	return Tuning;
 }
 

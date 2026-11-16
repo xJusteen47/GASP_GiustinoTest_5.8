@@ -48,6 +48,7 @@ class UGSTN_InputConfig;
 class UGSTN_InputContextProvider;
 class UGSTN_LoadoutComponent;
 class UGSTN_MoverSimStateTracker;
+struct FGSTN_AnalogWalkTuning;
 class UAnimMontage;
 class UGameplayEffect;
 class UMoverComponent;
@@ -115,6 +116,13 @@ public:
 
 	/** Replaces the orientation intent of the command's character inputs with YawDeg (world). False when there are none or they are base-relative */
 	static bool HoldOrientationIntent(FMoverInputCmdContext& InputCmd, float YawDeg, const FVector& Up = FVector::UpVector);
+
+	/**
+	 * Analog walk (owner playtest 2026-11-16, FGSTN_AnalogWalkTuning of the kit's locomotion profile): sets the length of the command's
+	 * directional move intent from the stick tilt (curve of the profile), keeping the direction the pawn wrote, or the stick's own
+	 * camera-relative direction when the pawn wrote none (GASP drops a light tilt). Input only. False when nothing was changed
+	 */
+	static bool ApplyAnalogMoveIntent(FMoverInputCmdContext& InputCmd, const FGSTN_AnalogWalkTuning& Tuning, const FVector2D& Stick, float CameraYawDeg, const FVector& Up);
 
 	/**
 	 * True while the latest command this pawn produced had the precision aim (reticle) on. Local and presentation side; the simulation

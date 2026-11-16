@@ -84,21 +84,41 @@ namespace
 	}
 }
 
-int32 FGSTN_RunStageMover::ApplyStageValues(UMoverComponent& MoverComp, const FGSTN_LocomotionSimTuning& Tuning, int32 Stage, float Factor)
+int32 FGSTN_RunStageMover::ApplyStageValues(UMoverComponent& MoverComp, const FGSTN_LocomotionSimTuning& Tuning, int32 Stage, float Factor, float GroundSpeed)
 {
 	if (!Tuning.RunStages.IsEnabled())
 	{
 		return 0;
 	}
 	const FGSTN_RunStage& Values = Tuning.RunStages.GetStage(Stage);
+	const FGSTN_AnalogWalkTuning& Analog = Tuning.AnalogWalk;
+	const bool bAnalog = Analog.bEnabled && GroundSpeed >= 0.f;
+	// Walk start: the boost fades out as the speed reaches LowSpeedFraction of the stage top speed (assigned every frame, never adjusted)
+	const float Blend = bAnalog ? FGSTN_AnalogWalkLogic::StartBlend(Analog, GroundSpeed, Values.MaxSpeed * Factor) : 0.f;
+	const float Acceleration = Values.Acceleration * Factor * FMath::Lerp(1.f, Analog.StartAccelerationMultiplier, Blend);
+	const float Turning = FMath::Lerp(Values.TurningStrength, FMath::Max(Values.TurningStrength, Analog.StartTurningStrength), Blend);
 	int32 Written = 0;
 	for (const TPair<FName, TObjectPtr<UBaseMovementMode>>& Entry : MoverComp.MovementModes)
 	{
 		if (UObject* Mode = Entry.Value)
 		{
 			Written += WriteFloats(*Mode, Tuning.SpeedProperties, Values.MaxSpeed * Factor);
-			Written += WriteFloats(*Mode, Tuning.AccelerationProperties, Values.Acceleration * Factor);
-			Written += WriteFloats(*Mode, Tuning.TurningProperties, Values.TurningStrength);
+			Written += WriteFloats(*Mode, Tuning.AccelerationProperties, Acceleration);
+			Written += WriteFloats(*Mode, Tuning.TurningProperties, Turning);
+			if (bAnalog)
+			{
+				// GASP picks its walk gait for a light tilt: the gait must not cap the speed, the tilt (the intent length) does
+				Written += WriteFloats(*Mode, Analog.WalkSpeedProperties, Values.MaxSpeed * Factor);
+				Written += WriteFloats(*Mode, Analog.WalkAccelerationProperties, Acceleration);
+				if (Analog.StartFacingTime >= 0.f && Analog.RunFacingTime >= 0.f)
+				{
+					Written += WriteFloats(*Mode, Analog.FacingTimeProperties, FMath::Lerp(Analog.RunFacingTime, Analog.StartFacingTime, Blend));
+				}
+				if (Analog.AccelerationSmoothingTime >= 0.f)
+				{
+					Written += WriteFloats(*Mode, Analog.AccelerationSmoothingProperties, Analog.AccelerationSmoothingTime);
+				}
+			}
 			// Under a movement lock the factor is 0 and the character must still brake (the stats' contract): the brake keeps scale 1 then
 			Written += WriteFloats(*Mode, Tuning.BrakeProperties, Values.ReleaseBrake * (Factor > 0.f ? Factor : 1.f));
 		}
@@ -116,8 +136,16 @@ void FGSTN_RunStageMover::PreMovement(UMoverComponent& MoverComp, float Factor)
 		return;
 	}
 	// The stage of the start of this frame: the tracker holds the end of the previous one, and follows rollbacks
-	const FGSTN_RunStageState* State = Find(Tracker->GetSyncState());
-	ApplyStageValues(MoverComp, *Tuning, State ? State->Stage : 0, Factor);
+	const FMoverSyncState& Start = Tracker->GetSyncState();
+	const FGSTN_RunStageState* State = Find(Start);
+	float GroundSpeed = 0.f;
+	if (const FMoverDefaultSyncState* Default = Start.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>())
+	{
+		const FVector Up = Tracker->GetUpDirection();
+		const FVector Velocity = Default->GetVelocity_WorldSpace();
+		GroundSpeed = static_cast<float>((Velocity - Up * Velocity.Dot(Up)).Size());
+	}
+	ApplyStageValues(MoverComp, *Tuning, State ? State->Stage : 0, Factor, GroundSpeed);
 }
 
 void FGSTN_RunStageMover::PostMovement(UMoverComponent& MoverComp, const FMoverTimeStep& TimeStep, FMoverSyncState& OutputSyncState, float Factor)

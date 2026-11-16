@@ -38,6 +38,8 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "Kits/GSTN_WeaponDefinition.h"
+#include "Kits/GSTN_LocomotionProfile.h"
+#include "Movement/GSTN_AnalogWalkTypes.h"
 #include "GSTN_CombatTags.h"
 #include "GSTN_CombatRulesComponent.h"
 #include "Input/GSTN_CombatSettings.h"
@@ -865,6 +867,14 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 	}
 	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastAimStickY));
 	const FVector2D MoveStick(FGSTN_DirectionClassifier::DequantizeStickAxis(LastMoveStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(LastMoveStickY));
+	// Analog walk and air turn (kit locomotion profile data): input only, so they are predicted and replayed with the command
+	const FGSTN_LocomotionSimTuning* Locomotion = FGSTN_LocomotionAttach::Find(GetOwner());
+	const FGSTN_AnalogWalkTuning* Analog = Locomotion && Locomotion->AnalogWalk.bEnabled ? &Locomotion->AnalogWalk : nullptr;
+	const float CameraYawDeg = FGSTN_DirectionClassifier::DequantizeYaw(LastCameraYaw);
+	if (Analog)
+	{
+		ApplyAnalogMoveIntent(InputCmdResult, *Analog, MoveStick, CameraYawDeg, OwnerUp);
+	}
 	float SteerHoldYaw = 0.f;
 	bool bStickActive = false;
 	if (FGSTN_CombatTimelineLogic::ResolveSteerFrame(Sync->Core, GetSimulationFrame() + 1, GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline), MoveStick,
@@ -885,8 +895,54 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 		else
 		{
 			HoldOrientationIntent(InputCmdResult, OwnerYaw, OwnerUp);
+			return;
 		}
 	}
+	// Air turn (owner 2026-11-16: "in the air you can turn"): GASP orients to the velocity, which air control barely bends, so the facing
+	// follows the stick at the profile's rate instead. A move in progress keeps its facing unless the profile lets it turn
+	if (Analog && Analog->AirTurnRateDegPerSec > 0.f && MoveStick.SizeSquared() > FMath::Square(FMath::Max(Analog->InnerDeadzone, 0.05f))
+		&& (!bInTimeline || Analog->bAirTurnDuringMoves))
+	{
+		const UMoverComponent* Mover = GetOwner()->FindComponentByClass<UMoverComponent>();
+		if (Mover && !Mover->HasGameplayTag(Mover_IsOnGround, false))
+		{
+			const FVector StickDir = FGSTN_CombatVictim::StickToPlane(MoveStick, CameraYawDeg, OwnerUp);
+			if (!StickDir.IsNearlyZero())
+			{
+				const float TargetYaw = FGSTN_GravityFrame::YawOfRotator(FRotationMatrix::MakeFromXZ(StickDir, OwnerUp).Rotator(), OwnerUp);
+				const float StepSeconds = LastStepMs > 0 ? LastStepMs * 0.001f : 1.f / 62.5f;
+				HoldOrientationIntent(InputCmdResult, FGSTN_AnalogWalkLogic::StepAirYaw(*Analog, OwnerYaw, TargetYaw, StepSeconds), OwnerUp);
+			}
+		}
+	}
+}
+
+bool UGSTN_CombatSimComponent::ApplyAnalogMoveIntent(FMoverInputCmdContext& InputCmd, const FGSTN_AnalogWalkTuning& Tuning, const FVector2D& Stick,
+	float CameraYawDeg, const FVector& Up)
+{
+	FCharacterDefaultInputs* Inputs = InputCmd.InputCollection.FindMutableDataByType<FCharacterDefaultInputs>();
+	if (!Inputs || Inputs->GetMoveInputType() != EMoveInputType::DirectionalIntent)
+	{
+		return false;
+	}
+	// No stick, nothing to scale: a pawn moved by something else (an AI's path following) keeps its own intent
+	const float Intent = FGSTN_AnalogWalkLogic::StickToIntent(Tuning, static_cast<float>(FMath::Min(Stick.Size(), 1.0)));
+	if (Intent <= 0.f)
+	{
+		return false;
+	}
+	FVector Direction = Inputs->GetMoveInput().GetSafeNormal();
+	if (Direction.IsNearlyZero())
+	{
+		// The pawn dropped a light tilt: the stick's own direction on the ground plane, camera relative like the pawn's
+		Direction = FGSTN_CombatVictim::StickToPlane(Stick, CameraYawDeg, Up).GetSafeNormal();
+		if (Direction.IsNearlyZero())
+		{
+			return false;
+		}
+	}
+	Inputs->SetMoveInput(EMoveInputType::DirectionalIntent, Direction * Intent);
+	return true;
 }
 
 bool UGSTN_CombatSimComponent::GetSteerView(FSteerView& Out) const
