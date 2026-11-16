@@ -292,6 +292,12 @@ def _row(frame, tapped, extra=None):
                        'cap_hh': round(cap.get_unscaled_capsule_half_height(), 1), 'cap_r': round(cap.get_unscaled_capsule_radius(), 1),
                        'cap_bottom_z': round(pawn.get_actor_location().z - cap.get_unscaled_capsule_half_height(), 1),
                        'mesh_rel_z': round(mesh.get_editor_property('relative_location').z, 1)}
+        # NIGHT-ROOT: root bone and feet, world, against the actor (root-capsule offset, foot creep)
+        _al = pawn.get_actor_location()
+        for _b in ('root', 'foot_l', 'foot_r', 'pelvis'):
+            _v = mesh.get_socket_location(_b)
+            row['body'][_b] = [round(_v.x - _al.x, 1), round(_v.y - _al.y, 1), round(_v.z - _al.z, 1)]
+        row['body']['actor'] = [round(_al.x, 1), round(_al.y, 1), round(_al.z, 1)]
     except Exception as e:
         row['body_err'] = repr(e)[:80]
     if st.get('minions_spawned'):   # PUSHBOX-P5: the host world's minion puppets [x, y, z] (hidden pooled ones left out)

@@ -1,0 +1,5 @@
+dair_land: montage[n=0] game[n=150 max=0.0 mean=0.0] footL creep while actor still 189.9 cm
+dropkick_hit: montage[n=0] game[n=170 max=1.8 mean=0.3] footL creep while actor still 43.4 cm
+jab1: montage[n=24 max=16.3 mean=0.7] game[n=71 max=0.0 mean=0.0] footL creep while actor still 123.7 cm
+jump_only: montage[n=0] game[n=130 max=0.0 mean=0.0] footL creep while actor still 180.2 cm
+walk_into: montage[n=0] game[n=240 max=4.7 mean=0.6] footL creep while actor still 2.0 cm
