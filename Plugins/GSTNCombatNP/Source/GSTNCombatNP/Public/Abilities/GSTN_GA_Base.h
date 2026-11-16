@@ -87,9 +87,10 @@ public:
 	/**
 	 * Calls OnCombatFramesElapsed once Frames combat frames have passed (at least 1; hitstop frames do not count). The start
 	 * clock is a sync variable, so a rollback restores the wait. One wait at a time: calling it again re-arms it. Call it from
-	 * ActivateAbility or the ability's tick, not from presentation code
+	 * ActivateAbility or the ability's tick, not from presentation code. In a graph prefer the Wait Combat Frames task node
+	 * (UGSTN_WaitCombatFramesTask): one per node, with its own On Finish pin
 	 */
-	UFUNCTION(BlueprintCallable, Category = "Combat|Ability")
+	UFUNCTION(BlueprintCallable, Category = "Combat|Ability", meta = (DisplayName = "Wait Combat Frames (Event)"))
 	void WaitCombatFrames(int32 Frames);
 
 	/** Stops a wait without calling anything */

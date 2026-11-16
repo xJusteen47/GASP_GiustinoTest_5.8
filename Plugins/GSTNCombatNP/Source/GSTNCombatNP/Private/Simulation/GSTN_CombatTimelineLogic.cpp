@@ -261,6 +261,11 @@ bool FGSTN_CombatTimelineLogic::IsCommandAllowed(const FGSTN_CombatSyncCore& Cor
 	return false;
 }
 
+bool FGSTN_CombatTimelineLogic::IsConditionMet(EGSTN_CancelCondition Condition, const FGSTN_CombatSyncCore& Core, uint32 ExtensionConditions)
+{
+	return ConditionHolds(Condition, Core, ExtensionConditions);
+}
+
 void FGSTN_CombatTimelineLogic::Start(FGSTN_CombatSyncCore& Core, int32 Frame, int32 TimelineIndex, EGSTN_ActivationSource Source)
 {
 	if (Core.ActionState == EGSTN_ActionState::InTimeline && Core.ActiveTimeline != INDEX_NONE)

@@ -347,6 +347,30 @@ public:
 	 */
 	EGSTN_TimelineStartRefusal StartTimelineFromAbility(int32 Entry, bool& bOutCommitDue);
 
+	// ---- Wait Command (move-timeline-decoupling 2A, UGSTN_WaitCommandTask). Simulation reads and writes for the task, called from the ability
+	// system's simulation step; the buffer they read is the frame's combat state, the one the ability reads in that step
+
+	/** Index of Command in the command table the simulated frame is on, INDEX_NONE if the table has none */
+	int32 FindCommandIndex(const FGameplayTag& Command) const;
+
+	/**
+	 * Whether a wait may take the command now: inside the simulation step, not restoring, the loadout gate open, not a hitstop frame (the press
+	 * waits in the buffer, which does not age it), not in a hit reaction, the command not locked by the owner's tags, Condition held
+	 */
+	bool CanTakeCommandForWait(int32 CommandIndex, EGSTN_CancelCondition Condition) const;
+
+	/**
+	 * Whether the command's input was completed by presses no command used, none older than BufferFrames (-1 = the command's own buffer).
+	 * OutTerminalFrame, when given, receives the frame of the input's last step (its terminal anchor)
+	 */
+	bool IsCommandEnteredForWait(int32 CommandIndex, int32 BufferFrames, int32* OutTerminalFrame = nullptr) const;
+
+	/**
+	 * Consumes the presses (and the terminal stick anchor) that complete the command, in this frame's combat state, as the combat tick does for
+	 * a command it executes. Returns false (nothing written) outside the simulation step or when the input is not there
+	 */
+	bool ConsumeCommandForWait(int32 CommandIndex, int32 BufferFrames);
+
 	/** The table set the simulated frame is on (Tables()): what a running ability resolves its registry entry against. Null before BeginPlay */
 	const UGSTN_CombatTableSet* GetActiveTableSet() const;
 
@@ -801,6 +825,12 @@ private:
 
 	/** The cancel conditions the extensions hold this frame (IGSTN_CombatTickExtension::HeldCancelConditions), read by the gate with the cancel windows. Rewritten every tick, never state */
 	uint32 FrameCancelConditions = 0;
+
+	/**
+	 * FrameCancelConditions as the combat tick of the frame left it, kept past the tick for the ability system's step of the same frame (Wait
+	 * Command's Condition), like FrameAim. Rewritten every simulated frame before the step reads it, never state
+	 */
+	uint32 AbilityStepCancelConditions = 0;
 
 	/** The tag an extension admits only the bindings requiring (IGSTN_CombatTickExtension::AdmitsOnlyBindingsRequiring, M6 F8): the gate passes no other binding. Rewritten every tick, never state */
 	FGameplayTag FrameAdmitTag;
