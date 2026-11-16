@@ -49,4 +49,24 @@ namespace GSTNHitboxOutline
 
 	/** Selects the row's group or hitbox in the model and puts the playhead where it is drawn (see the namespace comment). False when the row no longer exists */
 	bool Focus(FGSTN_TimelineEditorModel& Model, const FGSTN_HitboxOutlineItem& Item);
+
+	// Editing from the outliner (owner 2026-11-16: rename, and manage hitboxes without the nested arrays of the Details panel). Each is one undo step
+
+	/** The name the rename box starts from: the stored name, or empty when the row still shows its number */
+	FText GetEditableName(const FGSTN_CombatTimelineData& Data, const FGSTN_HitboxOutlineItem& Item);
+
+	/** Sets GroupName or the hitbox's Name. Empty or whitespace clears it (the row shows its number again). False when nothing changed */
+	bool Rename(FGSTN_TimelineEditorModel& Model, const FGSTN_HitboxOutlineItem& Item, const FText& NewName);
+
+	/** Can the name be used? Names are labels, so the only rule is the length of an FName. Fills OutError for the rename box */
+	bool IsValidName(const FText& NewName, FText& OutError);
+
+	/** Appends the default hitbox to the group (a child of the group when the group has a transform) and focuses it. Returns its row, invalid on failure */
+	FGSTN_HitboxOutlineItem AddHitbox(FGSTN_TimelineEditorModel& Model, int32 Track);
+
+	/** Appends a copy of the hitbox (keys, shape, hit data; the name gets " copy") to its group and focuses it */
+	FGSTN_HitboxOutlineItem DuplicateHitbox(FGSTN_TimelineEditorModel& Model, const FGSTN_HitboxOutlineItem& Item);
+
+	/** Removes one hitbox (not the group; the last hitbox of a group stays, delete the track for that). Clears the selection first: flat key indices shift */
+	bool DeleteHitbox(FGSTN_TimelineEditorModel& Model, const FGSTN_HitboxOutlineItem& Item);
 }

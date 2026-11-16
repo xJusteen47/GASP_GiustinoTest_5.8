@@ -323,24 +323,26 @@ void FGSTN_CombatValidators::CheckBakedSockets(const FGSTN_CombatTimelineData& D
 	GatherHitboxes(Data, Hitboxes);
 	for (const FHitboxRef& Ref : Hitboxes)
 	{
-		if (Ref.Spec->Space != EGSTN_HitboxSpace::BakedSocket || Ref.Spec->Socket.IsNone())
+		// The socket after parenting: a child of a group on a socket reads the group's
+		const FName SocketName = Ref.Track->GetEffectiveSocket(*Ref.Spec);
+		if (Ref.Track->GetEffectiveSpace(*Ref.Spec) != EGSTN_HitboxSpace::BakedSocket || SocketName.IsNone())
 		{
 			continue; // a BakedSocket hitbox with no socket name is Core's error
 		}
-		UsedSockets.Add(Ref.Spec->Socket);
+		UsedSockets.Add(SocketName);
 		const FGSTN_FindingLocation Where = FGSTN_FindingLocation::OnTrack(Ref.TrackIndex, Ref.Track->StartFrame);
-		const FGSTN_BakedSocketFrames* Baked = Data.BakedSockets.Find(Ref.Spec->Socket);
+		const FGSTN_BakedSocketFrames* Baked = Data.BakedSockets.Find(SocketName);
 		if (Baked == nullptr || Baked->Frames.IsEmpty())
 		{
 			AddFinding(Report, Context, EGSTN_Severity::Error, GSTNValidationCodes::BakedSocketMissing(),
 				FText::Format(LOCTEXT("SocketNotBaked", "Track {0}, hitbox {1} reads the socket '{2}', which has no baked frames. Bake the timeline's sockets."),
-					Num(Ref.TrackIndex), Num(Ref.SpecIndex), FText::FromName(Ref.Spec->Socket)), Where);
+					Num(Ref.TrackIndex), Num(Ref.SpecIndex), FText::FromName(SocketName)), Where);
 		}
 		else if (Baked->Frames.Num() != Data.TotalFrames)
 		{
 			AddFinding(Report, Context, EGSTN_Severity::Error, GSTNValidationCodes::BakedLength(),
 				FText::Format(LOCTEXT("SocketBakedLength", "Track {0}, hitbox {1}: the socket '{2}' is baked for {3} frames and the timeline has {4}. The bake is out of date: bake again."),
-					Num(Ref.TrackIndex), Num(Ref.SpecIndex), FText::FromName(Ref.Spec->Socket), Num(Baked->Frames.Num()), Num(Data.TotalFrames)), Where);
+					Num(Ref.TrackIndex), Num(Ref.SpecIndex), FText::FromName(SocketName), Num(Baked->Frames.Num()), Num(Data.TotalFrames)), Where);
 		}
 	}
 

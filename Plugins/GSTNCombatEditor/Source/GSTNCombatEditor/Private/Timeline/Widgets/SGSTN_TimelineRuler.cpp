@@ -57,8 +57,15 @@ int32 SGSTN_TimelineRuler::OnPaint(const FPaintArgs& Args, const FGeometry& Allo
 		DrawVerticalLine(OutDrawElements, LayerId + 2, AllottedGeometry, X, Size.Y - TickHeight, Size.Y, bLabelled ? GridMajor() * 4.f : GridMajor() * 2.f);
 		if (bLabelled && Frame >= 0)
 		{
-			DrawLabel(OutDrawElements, LayerId + 3, AllottedGeometry, FVector2D(X + 3.0, 1.0), FString::FromInt(Frame), TextColor());
-			DrawLabel(OutDrawElements, LayerId + 3, AllottedGeometry, FVector2D(X + 3.0, 12.0), FGSTN_TimelineLayout::FormatMilliseconds(Frame, TickRate) + TEXT(" ms"), TextColorDim());
+			// Frames and seconds by default, like the Montage editor; the mode is in the View menu of the toolbar
+			FString Top;
+			FString Bottom;
+			FGSTN_TimelineLayout::FormatRulerLabel(Frame, TickRate, Model->RulerDisplay, Top, Bottom);
+			DrawLabel(OutDrawElements, LayerId + 3, AllottedGeometry, FVector2D(X + 3.0, 1.0), Top, TextColor());
+			if (!Bottom.IsEmpty())
+			{
+				DrawLabel(OutDrawElements, LayerId + 3, AllottedGeometry, FVector2D(X + 3.0, 12.0), Bottom, TextColorDim());
+			}
 		}
 	}
 
@@ -118,5 +125,6 @@ FReply SGSTN_TimelineRuler::OnMouseButtonUp(const FGeometry& MyGeometry, const F
 
 FReply SGSTN_TimelineRuler::OnMouseWheel(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
 {
-	return GSTNTimelineWidgets::HandleWheel(*Model, MyGeometry, MouseEvent);
+	// Over the ruler the wheel zooms, as over the time slider of Sequencer and of the animation editors; Shift scrolls
+	return GSTNTimelineWidgets::HandleWheel(*Model, MyGeometry, MouseEvent, /*bZoomByDefault*/ true);
 }

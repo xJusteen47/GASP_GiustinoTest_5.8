@@ -97,10 +97,15 @@ namespace
 		TEXT("Fastest a minion moves (cm/s): a rewound query inflates its search by this times the rewind age (spec 9.2: 700 x 0.25 s = 175 cm)."));
 
 	/** The transform that carries a hitbox at a timeline frame; false for a space a minion cannot place (a projectile, a missing baked socket) */
-	bool BuildCarrier(const FGSTN_HitboxSpec& Spec, const FGSTN_CombatTimelineData& Timeline, const FTransform& Root, int32 TimelineFrame, int32 TrackFrame, FTransform& OutCarrier)
+	bool BuildCarrier(const FGSTN_HitboxSpec& Spec, const FGSTN_TimelineTrack_Hitbox* Track, const FGSTN_CombatTimelineData& Timeline, const FTransform& Root, int32 TimelineFrame, int32 TrackFrame, FTransform& OutCarrier)
 	{
-		const FTransform Key = UGSTN_HitShapeUtils::EvaluateKeys(Spec.Keys, TrackFrame);
-		switch (Spec.Space)
+		// Same placement as the fighters' (GSTN_CombatTick_Attacker BuildCarrier): a child of its group's transform is relative to the group
+		const FTransform Key = Track != nullptr
+			? UGSTN_HitShapeUtils::EvaluateKeys(Spec.Keys, TrackFrame) * Track->GetParentOffset(Spec)
+			: UGSTN_HitShapeUtils::EvaluateKeys(Spec.Keys, TrackFrame);
+		const EGSTN_HitboxSpace Space = Track != nullptr ? Track->GetEffectiveSpace(Spec) : Spec.Space;
+		const FName SocketName = Track != nullptr ? Track->GetEffectiveSocket(Spec) : Spec.Socket;
+		switch (Space)
 		{
 		case EGSTN_HitboxSpace::Root:
 			OutCarrier = Key * Root;
@@ -108,7 +113,7 @@ namespace
 		case EGSTN_HitboxSpace::BakedSocket:
 		{
 			FTransform Socket;
-			if (!Timeline.FindBakedSocket(Spec.Socket, TimelineFrame, Socket))
+			if (!Timeline.FindBakedSocket(SocketName, TimelineFrame, Socket))
 			{
 				return false;
 			}
@@ -1967,12 +1972,12 @@ void UGSTN_MinionCombatSubsystem::RunAttackQueries(int32 Slot, int32 Frame, cons
 		}
 		const FGSTN_HitboxSpec& Spec = *Active.Spec;
 		FTransform Carrier;
-		if (!BuildCarrier(Spec, Timeline, Root, TimelineFrame, Active.TrackFrame, Carrier))
+		if (!BuildCarrier(Spec, Active.Track, Timeline, Root, TimelineFrame, Active.TrackFrame, Carrier))
 		{
 			continue;
 		}
 		FTransform PreviousCarrier = Carrier;
-		if (!BuildCarrier(Spec, Timeline, Root, FMath::Max(TimelineFrame - 1, 0), FMath::Max(Active.TrackFrame - 1, 0), PreviousCarrier))
+		if (!BuildCarrier(Spec, Active.Track, Timeline, Root, FMath::Max(TimelineFrame - 1, 0), FMath::Max(Active.TrackFrame - 1, 0), PreviousCarrier))
 		{
 			PreviousCarrier = Carrier;
 		}

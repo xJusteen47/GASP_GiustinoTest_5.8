@@ -107,29 +107,37 @@ namespace
 
 	void CheckHitboxes(int32 Index, const FGSTN_TimelineTrack_Hitbox& Track, const FGSTN_CombatTimelineData& Data, TArray<FGSTN_TimelineMessage>& Out)
 	{
+		// Parenting (owner 2026-11-16): a group transform in the projectile space places nothing
+		if (Track.bUseGroupTransform && Track.GroupSpace == EGSTN_HitboxSpace::Projectile)
+		{
+			Add(Out, true, FString::Printf(TEXT("Track %d: the group transform cannot be in the Projectile space (use Root, BakedSocket or WorldAtMoveStart)."), Index));
+		}
 		for (int32 HitboxIndex = 0; HitboxIndex < Track.Hitboxes.Num(); ++HitboxIndex)
 		{
 			const FGSTN_HitboxSpec& Spec = Track.Hitboxes[HitboxIndex];
+			// The space and socket the hitbox is placed in after parenting
+			const EGSTN_HitboxSpace Space = Track.GetEffectiveSpace(Spec);
+			const FName Socket = Track.GetEffectiveSocket(Spec);
 			if (!HasValidExtent(Spec.Shape))
 			{
 				Add(Out, true, FString::Printf(TEXT("Track %d, hitbox %d: the shape has no volume (a radius or half extent is not positive, or a capsule is shorter than its radius)."), Index, HitboxIndex));
 			}
-			if (Spec.Space == EGSTN_HitboxSpace::BakedSocket)
+			if (Space == EGSTN_HitboxSpace::BakedSocket)
 			{
-				if (Spec.Socket.IsNone())
+				if (Socket.IsNone())
 				{
 					Add(Out, true, FString::Printf(TEXT("Track %d, hitbox %d: a BakedSocket hitbox names no socket."), Index, HitboxIndex));
 				}
-				else if (const FGSTN_BakedSocketFrames* Baked = Data.BakedSockets.Find(Spec.Socket))
+				else if (const FGSTN_BakedSocketFrames* Baked = Data.BakedSockets.Find(Socket))
 				{
 					if (Baked->Frames.Num() < Data.TotalFrames)
 					{
-						Add(Out, false, FString::Printf(TEXT("Track %d, hitbox %d: socket '%s' is baked for %d frames, the timeline has %d (the last frame holds)."), Index, HitboxIndex, *Spec.Socket.ToString(), Baked->Frames.Num(), Data.TotalFrames));
+						Add(Out, false, FString::Printf(TEXT("Track %d, hitbox %d: socket '%s' is baked for %d frames, the timeline has %d (the last frame holds)."), Index, HitboxIndex, *Socket.ToString(), Baked->Frames.Num(), Data.TotalFrames));
 					}
 				}
 				else
 				{
-					Add(Out, false, FString::Printf(TEXT("Track %d, hitbox %d: socket '%s' has no baked frames yet (run the baking tool)."), Index, HitboxIndex, *Spec.Socket.ToString()));
+					Add(Out, false, FString::Printf(TEXT("Track %d, hitbox %d: socket '%s' has no baked frames yet (run the baking tool)."), Index, HitboxIndex, *Socket.ToString()));
 				}
 			}
 			for (int32 KeyIndex = 1; KeyIndex < Spec.Keys.Num(); ++KeyIndex)

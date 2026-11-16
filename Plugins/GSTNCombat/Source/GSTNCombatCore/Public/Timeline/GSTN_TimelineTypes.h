@@ -389,9 +389,33 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Hitbox : public FGSTN_TimelineTrac
 {
 	GENERATED_BODY()
 
+	/** The designer's name of the group, shown by the editor instead of "Group N" (owner 2026-11-16). A label only: nothing looks a group up by it */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox")
+	FName GroupName = NAME_None;
+
 	/** The part or group the hitbox is attached to */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox")
 	FGSTN_PartSelector Part;
+
+	/**
+	 * Parenting (owner 2026-11-16): on = the group is a transform of its own, GroupOffset in GroupSpace (on GroupSocket), and every hitbox with
+	 * bAttachToGroup is its child: its keys are relative to the group, so moving the group moves them all. Off = each hitbox is placed by its own
+	 * Space and Socket, the behaviour of every timeline made before parenting existed
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox|Group Transform")
+	bool bUseGroupTransform = false;
+
+	/** Where the group lives: Root, BakedSocket (on GroupSocket) or WorldAtMoveStart. Projectile is not a group space and places nothing */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox|Group Transform", meta = (EditCondition = "bUseGroupTransform"))
+	EGSTN_HitboxSpace GroupSpace = EGSTN_HitboxSpace::Root;
+
+	/** The baked socket (or bone) the group follows with GroupSpace BakedSocket. Baked like a hitbox's socket (Ctrl+B) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox|Group Transform", meta = (EditCondition = "bUseGroupTransform && GroupSpace == EGSTN_HitboxSpace::BakedSocket"))
+	FName GroupSocket = NAME_None;
+
+	/** The group's transform in its space: its children's keys are relative to it */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox|Group Transform", meta = (EditCondition = "bUseGroupTransform"))
+	FTransform GroupOffset = FTransform::Identity;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Hitbox")
 	TArray<FGSTN_HitboxSpec> Hitboxes;
@@ -421,6 +445,21 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Hitbox : public FGSTN_TimelineTrac
 	FGSTN_RicochetResponse RicochetResponse;
 
 	virtual EGSTN_TimelineTrackKind GetKind() const override { return EGSTN_TimelineTrackKind::Hitbox; }
+
+	/** Is this hitbox a child of the group's transform? */
+	bool IsParentedToGroup(const FGSTN_HitboxSpec& Spec) const { return bUseGroupTransform && Spec.bAttachToGroup; }
+
+	/** The space a hitbox is placed in after parenting: the group's for a child, its own otherwise */
+	EGSTN_HitboxSpace GetEffectiveSpace(const FGSTN_HitboxSpec& Spec) const { return IsParentedToGroup(Spec) ? GroupSpace : Spec.Space; }
+
+	/** The socket a hitbox follows after parenting (meaningful with GetEffectiveSpace BakedSocket) */
+	FName GetEffectiveSocket(const FGSTN_HitboxSpec& Spec) const { return IsParentedToGroup(Spec) ? GroupSocket : Spec.Socket; }
+
+	/**
+	 * What sits between a hitbox's evaluated keys and its space: the group's offset for a child, identity otherwise. Every reader places a hitbox as
+	 * Keys * GetParentOffset * Space, so the simulation, the minions, the bake and the editor preview agree
+	 */
+	const FTransform& GetParentOffset(const FGSTN_HitboxSpec& Spec) const { return IsParentedToGroup(Spec) ? GroupOffset : FTransform::Identity; }
 };
 
 /**

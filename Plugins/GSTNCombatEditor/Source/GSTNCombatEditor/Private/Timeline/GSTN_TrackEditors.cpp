@@ -212,7 +212,10 @@ namespace GSTNTrackEditors
 			virtual FText GetRowLabel(const FGSTN_TimelineTrack& Track) const override
 			{
 				const FGSTN_TimelineTrack_Hitbox& Hitbox = static_cast<const FGSTN_TimelineTrack_Hitbox&>(Track);
-				const FText Part = DescribeSelector(Hitbox.Part);
+				// A named group shows its name first (owner 2026-11-16: names instead of numbers)
+				const FText Part = Hitbox.GroupName.IsNone()
+					? DescribeSelector(Hitbox.Part)
+					: FText::Format(LOCTEXT("HitboxNamedGroup", "{0} ({1})"), FText::FromName(Hitbox.GroupName), DescribeSelector(Hitbox.Part));
 				if (Hitbox.Hitboxes.IsEmpty())
 				{
 					return FText::Format(LOCTEXT("HitboxNoSpecs", "{0}: no hitbox"), Part);
@@ -221,20 +224,22 @@ namespace GSTNTrackEditors
 				const int32 Shown = FMath::Min(Hitbox.Hitboxes.Num(), MaxLeavesShown);
 				for (int32 Index = 0; Index < Shown; ++Index)
 				{
-					Specs.Add(DescribeSpec(Hitbox.Hitboxes[Index]).ToString());
+					Specs.Add(DescribeSpec(Hitbox, Hitbox.Hitboxes[Index]).ToString());
 				}
 				const FText More = Hitbox.Hitboxes.Num() > Shown ? FText::Format(LOCTEXT("HitboxMore", " +{0}"), FText::AsNumber(Hitbox.Hitboxes.Num() - Shown)) : FText::GetEmpty();
 				return FText::Format(LOCTEXT("HitboxLabel", "{0}: {1}{2}"), Part, FText::FromString(FString::Join(Specs, TEXT(", "))), More);
 			}
 
 		private:
-			/** "G0" for a hitbox in root space, "G1 @hand_r" for a baked socket, with the zone when it is not the plain one */
-			static FText DescribeSpec(const FGSTN_HitboxSpec& Spec)
+			/** "G0" for a hitbox in root space, "G1 @hand_r" for a baked socket, with the zone when it is not the plain one; a named hitbox starts with its name */
+			static FText DescribeSpec(const FGSTN_TimelineTrack_Hitbox& Track, const FGSTN_HitboxSpec& Spec)
 			{
-				FString Text = FString::Printf(TEXT("G%d"), static_cast<int32>(Spec.HitGroup));
-				switch (Spec.Space)
+				FString Text = Spec.Name.IsNone() ? FString() : Spec.Name.ToString() + TEXT(" ");
+				Text += FString::Printf(TEXT("G%d"), static_cast<int32>(Spec.HitGroup));
+				const FName Socket = Track.GetEffectiveSocket(Spec);
+				switch (Track.GetEffectiveSpace(Spec))
 				{
-				case EGSTN_HitboxSpace::BakedSocket: Text += Spec.Socket.IsNone() ? FString(TEXT(" @?")) : FString(TEXT(" @")) + Spec.Socket.ToString(); break;
+				case EGSTN_HitboxSpace::BakedSocket: Text += Socket.IsNone() ? FString(TEXT(" @?")) : FString(TEXT(" @")) + Socket.ToString(); break;
 				case EGSTN_HitboxSpace::WorldAtMoveStart: Text += TEXT(" world"); break;
 				case EGSTN_HitboxSpace::Projectile: Text += TEXT(" projectile"); break;
 				default: break;

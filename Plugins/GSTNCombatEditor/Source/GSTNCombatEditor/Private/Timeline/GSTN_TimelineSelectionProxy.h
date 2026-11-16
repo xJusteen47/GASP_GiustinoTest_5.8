@@ -59,6 +59,22 @@ public:
 	/** The copy as the struct the details view shows. It points into this proxy, so the proxy must outlive the view's use of it */
 	TSharedPtr<FStructOnScope> MakeStructData();
 
+	// The selected hitbox and key of a Hitbox track (owner 2026-11-16: edit one hitbox and one key on their own, not inside the nested arrays of the group)
+
+	/** Which hitbox (and which of its keys) of the bound Hitbox track the Details panel shows apart. INDEX_NONE = none. Out-of-range values clear it */
+	void SetFocus(int32 InSpec, int32 InKeyInSpec);
+	int32 GetFocusSpec() const { return FocusSpec; }
+	int32 GetFocusKey() const { return FocusKey; }
+
+	/** The focused hitbox inside the copy, null when none (or the track is not a Hitbox track) */
+	const FGSTN_HitboxSpec* GetFocusedSpec() const;
+
+	/** The focused hitbox of the copy as a struct for its own details view; null when none. Points into the copy: rebuild after every Pull */
+	TSharedPtr<FStructOnScope> MakeSpecStructData();
+
+	/** The focused key of the copy, likewise */
+	TSharedPtr<FStructOnScope> MakeKeyStructData();
+
 private:
 	/** The copy of the track. A UPROPERTY so a hard reference inside a track (none today) is seen by the collector */
 	UPROPERTY()
@@ -71,4 +87,9 @@ private:
 
 	/** This proxy opened the model's drag for an interactive change and has not closed it yet */
 	bool bOwnsDrag = false;
+
+	int32 FocusSpec = INDEX_NONE;
+	int32 FocusKey = INDEX_NONE;
+
+	FGSTN_HitboxSpec* GetMutableFocusedSpec();
 };

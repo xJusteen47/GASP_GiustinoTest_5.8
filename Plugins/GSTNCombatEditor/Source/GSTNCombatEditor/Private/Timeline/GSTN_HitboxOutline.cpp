@@ -41,8 +41,13 @@ namespace
 		}
 	}
 
-	FText DescribeSpace(const FGSTN_HitboxSpec& Spec)
+	FText DescribeSpace(const FGSTN_TimelineTrack_Hitbox& Track, const FGSTN_HitboxSpec& Spec)
 	{
+		// A child of the group says so: its space is the group's
+		if (Track.IsParentedToGroup(Spec))
+		{
+			return LOCTEXT("OutlineChildOfGroup", "child of group");
+		}
 		switch (Spec.Space)
 		{
 		case EGSTN_HitboxSpace::BakedSocket:
@@ -83,14 +88,17 @@ FText GSTNHitboxOutline::GetName(const FGSTN_CombatTimelineData& Data, const FGS
 	}
 	if (Item.IsGroup())
 	{
-		return FText::Format(LOCTEXT("OutlineGroupName", "Group {0}"), FText::AsNumber(GetGroupNumber(Data, Item.Track)));
+		// The designer's name when the group has one (owner 2026-11-16), else its number
+		return Hitbox->GroupName.IsNone()
+			? FText::Format(LOCTEXT("OutlineGroupName", "Group {0}"), FText::AsNumber(GetGroupNumber(Data, Item.Track)))
+			: FText::FromName(Hitbox->GroupName);
 	}
 	if (!Hitbox->Hitboxes.IsValidIndex(Item.Spec))
 	{
 		return FText::GetEmpty();
 	}
 	const FGSTN_HitboxSpec& Spec = Hitbox->Hitboxes[Item.Spec];
-	const FText Name = FText::Format(LOCTEXT("OutlineHitboxName", "Hitbox {0}"), FText::AsNumber(Item.Spec + 1));
+	const FText Name = Spec.Name.IsNone() ? FText::Format(LOCTEXT("OutlineHitboxName", "Hitbox {0}"), FText::AsNumber(Item.Spec + 1)) : FText::FromName(Spec.Name);
 	switch (Spec.Zone)
 	{
 	case EGSTN_HitboxZone::Sweet:
@@ -118,6 +126,12 @@ FText GSTNHitboxOutline::GetSummary(const FGSTN_CombatTimelineData& Data, const 
 		{
 			Summary = FText::Format(LOCTEXT("OutlineGroupPart", "{0}, part {1}"), Summary, FText::FromName(Hitbox->Part.PartName));
 		}
+		if (Hitbox->bUseGroupTransform)
+		{
+			Summary = Hitbox->GroupSpace == EGSTN_HitboxSpace::BakedSocket
+				? FText::Format(LOCTEXT("OutlineGroupOnSocket", "{0}, on socket {1}"), Summary, FText::FromName(Hitbox->GroupSocket))
+				: FText::Format(LOCTEXT("OutlineGroupTransform", "{0}, group transform"), Summary);
+		}
 		return Summary;
 	}
 	if (!Hitbox->Hitboxes.IsValidIndex(Item.Spec))
@@ -126,7 +140,7 @@ FText GSTNHitboxOutline::GetSummary(const FGSTN_CombatTimelineData& Data, const 
 	}
 	const FGSTN_HitboxSpec& Spec = Hitbox->Hitboxes[Item.Spec];
 	return FText::Format(LOCTEXT("OutlineHitboxSummary", "{0}, {1}, hit group {2}, {3} {3}|plural(one=key,other=keys)"),
-		DescribeShape(Spec), DescribeSpace(Spec), FText::AsNumber(static_cast<int32>(Spec.HitGroup)), FText::AsNumber(Spec.Keys.Num()));
+		DescribeShape(Spec), DescribeSpace(*Hitbox, Spec), FText::AsNumber(static_cast<int32>(Spec.HitGroup)), FText::AsNumber(Spec.Keys.Num()));
 }
 
 bool GSTNHitboxOutline::FindSelected(const FGSTN_TimelineEditorModel& Model, FGSTN_HitboxOutlineItem& OutItem)
@@ -201,6 +215,149 @@ bool GSTNHitboxOutline::Focus(FGSTN_TimelineEditorModel& Model, const FGSTN_Hitb
 		Model.SetSelection(One);
 	}
 	return true;
+}
+
+FText GSTNHitboxOutline::GetEditableName(const FGSTN_CombatTimelineData& Data, const FGSTN_HitboxOutlineItem& Item)
+{
+	const FGSTN_TimelineTrack_Hitbox* Hitbox = GetHitboxTrack(Data, Item.Track);
+	if (Hitbox == nullptr)
+	{
+		return FText::GetEmpty();
+	}
+	if (Item.IsGroup())
+	{
+		return Hitbox->GroupName.IsNone() ? FText::GetEmpty() : FText::FromName(Hitbox->GroupName);
+	}
+	return Hitbox->Hitboxes.IsValidIndex(Item.Spec) && !Hitbox->Hitboxes[Item.Spec].Name.IsNone() ? FText::FromName(Hitbox->Hitboxes[Item.Spec].Name) : FText::GetEmpty();
+}
+
+bool GSTNHitboxOutline::IsValidName(const FText& NewName, FText& OutError)
+{
+	if (NewName.ToString().TrimStartAndEnd().Len() >= NAME_SIZE)
+	{
+		OutError = LOCTEXT("OutlineNameTooLong", "The name is too long.");
+		return false;
+	}
+	return true;
+}
+
+bool GSTNHitboxOutline::Rename(FGSTN_TimelineEditorModel& Model, const FGSTN_HitboxOutlineItem& Item, const FText& NewName)
+{
+	FText Error;
+	const FGSTN_CombatTimelineData* Data = Model.GetData();
+	const FGSTN_TimelineTrack_Hitbox* Hitbox = Data != nullptr ? GetHitboxTrack(*Data, Item.Track) : nullptr;
+	if (Hitbox == nullptr || (!Item.IsGroup() && !Hitbox->Hitboxes.IsValidIndex(Item.Spec)) || !IsValidName(NewName, Error))
+	{
+		return false;
+	}
+	const FString Trimmed = NewName.ToString().TrimStartAndEnd();
+	const FName Name = Trimmed.IsEmpty() ? NAME_None : FName(*Trimmed);
+	const FName Current = Item.IsGroup() ? Hitbox->GroupName : Hitbox->Hitboxes[Item.Spec].Name;
+	// FName compares without case: a change of case only is still a rename the designer wants to see
+	if (Current.IsEqual(Name, ENameCase::CaseSensitive))
+	{
+		return false;
+	}
+	const int32 Spec = Item.Spec;
+	const bool bGroup = Item.IsGroup();
+	return Model.ApplyTrackEdit(Item.Track, [Spec, bGroup, Name](FGSTN_TimelineTrack& Edited)
+	{
+		FGSTN_TimelineTrack_Hitbox& Track = static_cast<FGSTN_TimelineTrack_Hitbox&>(Edited);
+		if (bGroup)
+		{
+			Track.GroupName = Name;
+		}
+		else if (Track.Hitboxes.IsValidIndex(Spec))
+		{
+			Track.Hitboxes[Spec].Name = Name;
+		}
+	}, bGroup ? LOCTEXT("RenameHitboxGroup", "Rename hitbox group") : LOCTEXT("RenameHitbox", "Rename hitbox"));
+}
+
+FGSTN_HitboxOutlineItem GSTNHitboxOutline::AddHitbox(FGSTN_TimelineEditorModel& Model, int32 TrackIndex)
+{
+	const FGSTN_CombatTimelineData* Data = Model.GetData();
+	const FGSTN_TimelineTrack_Hitbox* Hitbox = Data != nullptr ? GetHitboxTrack(*Data, TrackIndex) : nullptr;
+	if (Hitbox == nullptr)
+	{
+		return FGSTN_HitboxOutlineItem();
+	}
+	const int32 NewSpec = Hitbox->Hitboxes.Num();
+	// Appended last: the flat indices of the keys already selected do not move
+	if (!Model.ApplyTrackEdit(TrackIndex, [](FGSTN_TimelineTrack& Edited)
+		{
+			FGSTN_TimelineTrack_Hitbox& Track = static_cast<FGSTN_TimelineTrack_Hitbox&>(Edited);
+			FGSTN_HitboxSpec Spec = FGSTN_HitboxKeyedAccess::MakeDefaultSpec();
+			// A child of a group with a transform starts on the group itself, not in front of the root
+			if (Track.bUseGroupTransform)
+			{
+				for (FGSTN_HitboxKey& Key : Spec.Keys)
+				{
+					Key.Offset = FVector::ZeroVector;
+				}
+			}
+			Track.Hitboxes.Add(MoveTemp(Spec));
+		}, LOCTEXT("AddHitboxToGroup", "Add hitbox")))
+	{
+		return FGSTN_HitboxOutlineItem();
+	}
+	const FGSTN_HitboxOutlineItem Added(TrackIndex, NewSpec);
+	Focus(Model, Added);
+	return Added;
+}
+
+FGSTN_HitboxOutlineItem GSTNHitboxOutline::DuplicateHitbox(FGSTN_TimelineEditorModel& Model, const FGSTN_HitboxOutlineItem& Item)
+{
+	const FGSTN_CombatTimelineData* Data = Model.GetData();
+	const FGSTN_TimelineTrack_Hitbox* Hitbox = Data != nullptr ? GetHitboxTrack(*Data, Item.Track) : nullptr;
+	if (Hitbox == nullptr || Item.IsGroup() || !Hitbox->Hitboxes.IsValidIndex(Item.Spec))
+	{
+		return FGSTN_HitboxOutlineItem();
+	}
+	const int32 NewSpec = Hitbox->Hitboxes.Num();
+	const int32 Source = Item.Spec;
+	if (!Model.ApplyTrackEdit(Item.Track, [Source](FGSTN_TimelineTrack& Edited)
+		{
+			FGSTN_TimelineTrack_Hitbox& Track = static_cast<FGSTN_TimelineTrack_Hitbox&>(Edited);
+			FGSTN_HitboxSpec Copy = Track.Hitboxes[Source];
+			if (!Copy.Name.IsNone())
+			{
+				Copy.Name = FName(*(Copy.Name.ToString() + TEXT(" copy")));
+			}
+			Track.Hitboxes.Add(MoveTemp(Copy));
+		}, LOCTEXT("DuplicateHitbox", "Duplicate hitbox")))
+	{
+		return FGSTN_HitboxOutlineItem();
+	}
+	const FGSTN_HitboxOutlineItem Added(Item.Track, NewSpec);
+	Focus(Model, Added);
+	return Added;
+}
+
+bool GSTNHitboxOutline::DeleteHitbox(FGSTN_TimelineEditorModel& Model, const FGSTN_HitboxOutlineItem& Item)
+{
+	const FGSTN_CombatTimelineData* Data = Model.GetData();
+	const FGSTN_TimelineTrack_Hitbox* Hitbox = Data != nullptr ? GetHitboxTrack(*Data, Item.Track) : nullptr;
+	if (Hitbox == nullptr || Item.IsGroup() || !Hitbox->Hitboxes.IsValidIndex(Item.Spec) || Hitbox->Hitboxes.Num() <= 1)
+	{
+		return false;
+	}
+	// The keys after the removed hitbox change their flat index: a selection kept across the edit would point at other keys
+	Model.ClearSelection();
+	const int32 Spec = Item.Spec;
+	const bool bRemoved = Model.ApplyTrackEdit(Item.Track, [Spec](FGSTN_TimelineTrack& Edited)
+	{
+		FGSTN_TimelineTrack_Hitbox& Track = static_cast<FGSTN_TimelineTrack_Hitbox&>(Edited);
+		if (Track.Hitboxes.IsValidIndex(Spec))
+		{
+			Track.Hitboxes.RemoveAt(Spec);
+		}
+	}, LOCTEXT("DeleteHitbox", "Delete hitbox"));
+	if (bRemoved)
+	{
+		Focus(Model, FGSTN_HitboxOutlineItem(Item.Track, INDEX_NONE));
+	}
+	return bRemoved;
 }
 
 #undef LOCTEXT_NAMESPACE
