@@ -11,3 +11,4 @@ Branch claude/project-thread-rafd93 da claude/kit-playtest-1116 9658b271. Nessun
 - Owner 21:06Z: zona morta base = OPZIONE PER GIOCATORE (R1a, LocalPlayer, IO-1); soglie attacchi neutri/direzionali = valore diverso, gia' in UGSTN_InputSettings (StickDeadZone 0.2, AimZone 0.5) ma in Project Settings: da spostare (fuori piano). Totale ~17 $.
 - Owner 21:07Z: anche le soglie neutro/direzionale sono opzione del giocatore -> R1c (via FGSTN_LoadoutData perche' classificate nella sim). Totale ~20 $.
 - Owner 21:08Z: reverse/rotazioni restano a parte; controllato: non leggono le soglie attacchi; pavimenti hardcoded 0.25 (StartupSteer, MomentumSlide) -> dati in R1c. Totale ~20.5 $.
+- Owner 21:10Z: anche FlickFrames opzione del giocatore; principio PvP: sensazione input regolabile dal giocatore; proposte in §1d (non costruite). Totale ~21 $.
