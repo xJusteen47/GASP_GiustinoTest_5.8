@@ -2073,6 +2073,14 @@ bool UGSTN_CombatSimComponent::PostHit(const FGSTN_HitInboxEntry& Entry)
 
 void UGSTN_CombatSimComponent::FinalizeFrame(const FGSTN_CombatSyncState* Sync, const FGSTN_CombatAuxState* Aux)
 {
+	// The Blueprint events (bp-exposure P1): the confirmed ones from the authority's outbox, before it is published and emptied; the state
+	// ones from the presented state, on every machine
+	SendConfirmedEvents();
+	if (Sync)
+	{
+		UpdateStateEvents(*Sync);
+	}
+
 	// Outside the simulation: the authority (a dedicated server, or the listen-server host's own pawn) publishes each event
 	// once; a predicting client drops what its predictions and re-simulations wrote
 	FGSTN_InputHostUtils::PublishOutbox(EventOutbox, GetOwner());
