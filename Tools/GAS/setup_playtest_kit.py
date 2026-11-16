@@ -16,7 +16,7 @@ import unreal
 FOLDER = '/Game/GASNPPTest/Combat'
 KIT = FOLDER + '/KIT_Test_Playtest'
 SOURCES = [FOLDER + '/KIT_Test_OverlordDropkick', FOLDER + '/KIT_Test_Hits']
-EXTRA_FROM = FOLDER + '/KIT_Test_Hits'
+EXTRA_FROM = [FOLDER + '/KIT_Test_Hits', FOLDER + '/KIT_Test_Light']   # Light carries the air crouch entry
 RULES = '/GSTNCombat/Rules/GSTN_CombatRules_Standard'
 LAUNCH_THRESHOLD = 750.0
 PERCENT_GROWTH = 1.8
