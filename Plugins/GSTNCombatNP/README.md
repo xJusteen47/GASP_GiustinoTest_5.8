@@ -413,3 +413,19 @@ next frame shows; nothing fires twice). Owner-approved VFX checklist: `Artifacts
   `HitstopAnimRate` (0 freezes; 0.03-0.1 keeps the frozen character moving a little). The predicted cue's context now carries the reaction.
 - Victim side lives in GSTNCombatGAS (`UGSTN_ReactionAnimComponent`: On Reaction Started/Ended, hitstop shake).
 - Tests `GSTNCombat.NP.MoveCosmetics.*` (tracker: windows and tail, hitstop, cancel and correction, slow screen; hit cue parameters).
+
+## Blueprint state and events (bp-exposure P1, 2026-11-16)
+
+Design and the confirmed/state contract: [combat-bp-state-events.md](../../docs/architecture/combat-bp-state-events.md).
+
+- **State queries** (presentation reads, never simulation): `UGSTN_CombatSimComponent::GetCombatStateView` ("Get Combat State",
+  `FGSTN_CombatStateView`: status, hitstun/hitstop frames left, tumble, KO, current move class + frame + length, air state, coyote frames, air
+  jumps, run stage), `GetFramesSinceLanded`, `GetCurrentMoveTags`, `GetLastHitReceived/Landed`; the same by actor in `UGSTN_CombatStateLibrary`
+  (`Presentation/GSTN_CombatStateLibrary.h`, Self by default).
+- **Confirmed events** (server decides, reliable multicast, once per machine): `OnHitReceived`, `OnHitLanded` (`FGSTN_CombatHitEventData`: attacker,
+  victim, damage, percent/health after, reaction, tumble, ricochet, hitstun/hitstop, launch velocity and angle, tags), `OnKnockedOut`
+  (`FGSTN_CombatKOEventData`), `OnCombatEvent` (every `Combat.Event.*` of the outbox, the optional plugins' included). Switch:
+  `bSendConfirmedEventsToClients`.
+- **State events** (edges of the presented state, every machine, no double fire on re-simulation): `OnMoveStarted/Ended`,
+  `OnHitstunStarted/Ended`, `OnTumbleStarted/Ended`, `OnLanded`, `OnLeftGround`, `OnRunStageChanged`.
+- Pure parts (`FGSTN_CombatStateView::FromCore`, `FGSTN_CombatStateWatcher`, payload builders): tests `GSTNCombat.NP.StateEvents.*`.

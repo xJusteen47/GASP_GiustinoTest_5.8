@@ -15,6 +15,7 @@
 #include "Loadout/GSTN_LoadoutAssembly.h"
 #include "Loadout/GSTN_LoadoutData.h"
 #include "Presentation/GSTN_HitPresentation.h"
+#include "Presentation/GSTN_CombatStateTypes.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Abilities/GSTN_TimelinePlay.h"
 #include "Simulation/GSTN_CombatAttacker.h"
@@ -54,6 +55,12 @@ class UMoverComponent;
 class UNpAbilitySystemComponent;
 struct FAbilitySystemTimeStep;
 struct FGSTN_TrackHookEnvironment;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FGSTN_OnCombatHitSignature, const FGSTN_CombatHitEventData&, Hit);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FGSTN_OnCombatKnockedOutSignature, const FGSTN_CombatKOEventData&, KnockOut);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FGSTN_OnCombatEventSignature, const FGSTN_SimEvent&, Event);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FGSTN_OnCombatStateChangedSignature, const FGSTN_CombatStateView&, State);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGSTN_OnRunStageChangedSignature, int32, NewStage, int32, OldStage);
 
 /**
  * Runs the combat Network Prediction model of its actor and drives the actor's ability system from it.
@@ -753,6 +760,94 @@ public:
 	/** The ricochet fallbacks of a resolved loadout (M4 H12): one per weapon in loadout order, and the kit's. An entry with no recoil frames is not authored */
 	static void BuildRicochetFallbacks(const FGSTN_ResolvedLoadout& Resolved, TArray<FGSTN_RicochetResponse>& OutWeapons, FGSTN_RicochetResponse& OutKit);
 
+	// ---- Blueprint state and events (bp-exposure P1, owner 1A 2A 2026-11-16). Design: docs/architecture/combat-bp-state-events.md
+	//
+	// Two kinds of events, never mixed:
+	//  - CONFIRMED (On Hit Received, On Hit Landed, On Knocked Out, On Combat Event): what the authority's simulation decided. The server fires
+	//    them once, from FinalizeFrame, and sends them to every client with a reliable multicast, so each fires exactly ONCE on EVERY machine,
+	//    re-simulations or not, a round trip late on a client. Use them for game flow, score, UI, kill feeds, sounds that must match the result.
+	//  - STATE (On Move Started/Ended, On Hitstun Started/Ended, On Tumble Started/Ended, On Landed, On Left Ground, On Run Stage Changed): a change
+	//    of the state this machine PRESENTS, found by comparing one finalized frame with the previous one (never from inside the simulation, so a
+	//    re-simulation that ends in the same state fires nothing). Immediate on the owning client (predicted), interpolated elsewhere; a rare
+	//    correction can show as a change and its undo. Use them for animation, camera and cosmetics.
+	// The predicted hit of the attacker's own machine (no round trip, may be cancelled) stays on UGSTN_HitPresentationComponent (On Hit Predicted).
+	// Every event runs outside the simulation: a listener must not write simulation state (start abilities through commands, not from here).
+
+	/** The latest combat state this machine presents. See FGSTN_CombatStateView (presentation read: UI, animation, cosmetics) */
+	UFUNCTION(BlueprintPure, Category = "Combat|State", meta = (DisplayName = "Get Combat State"))
+	FGSTN_CombatStateView GetCombatStateView() const;
+
+	/** Simulation frames since the presented state last landed, -1 while airborne (presentation memory, see On Landed) */
+	UFUNCTION(BlueprintPure, Category = "Combat|State")
+	int32 GetFramesSinceLanded() const;
+
+	/** The asset tags of the running move's ability (what a move is called to a designer: Move.Attack.Jab...). Empty outside a move */
+	UFUNCTION(BlueprintPure, Category = "Combat|State")
+	FGameplayTagContainer GetCurrentMoveTags() const;
+
+	/** The last hit this combatant received, as its confirmed event reported it on this machine. False before the first */
+	UFUNCTION(BlueprintPure, Category = "Combat|State")
+	bool GetLastHitReceived(FGSTN_CombatHitEventData& OutHit) const;
+
+	/** The last hit this combatant landed, as its confirmed event reported it on this machine. False before the first */
+	UFUNCTION(BlueprintPure, Category = "Combat|State")
+	bool GetLastHitLanded(FGSTN_CombatHitEventData& OutHit) const;
+
+	/** CONFIRMED: this combatant was hit (not for a ricochet). Fires once on every machine */
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Events")
+	FGSTN_OnCombatHitSignature OnHitReceived;
+
+	/** CONFIRMED: this combatant's attack hit someone (a ricochet too, with bRicochet). Fires once on every machine */
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Events")
+	FGSTN_OnCombatHitSignature OnHitLanded;
+
+	/** CONFIRMED: this combatant was knocked out (by a hit or a zone). Fires once on every machine */
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Events")
+	FGSTN_OnCombatKnockedOutSignature OnKnockedOut;
+
+	/**
+	 * CONFIRMED: every Combat.Event.* the simulation of this combatant published (hits, KO, timeline started/finished, impacts, and the events of
+	 * the optional plugins: knocked down, teched, shield broken, parts...). Filter on Event Type / Tags. Fires once on every machine
+	 */
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Events")
+	FGSTN_OnCombatEventSignature OnCombatEvent;
+
+	/** STATE: a move (combat timeline) started; State says which (Move Ability, Move Start Frame) */
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Events|State")
+	FGSTN_OnCombatStateChangedSignature OnMoveStarted;
+
+	/** STATE: the move ended or was replaced (State is the state after it) */
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Events|State")
+	FGSTN_OnCombatStateChangedSignature OnMoveEnded;
+
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Events|State")
+	FGSTN_OnCombatStateChangedSignature OnHitstunStarted;
+
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Events|State")
+	FGSTN_OnCombatStateChangedSignature OnHitstunEnded;
+
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Events|State")
+	FGSTN_OnCombatStateChangedSignature OnTumbleStarted;
+
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Events|State")
+	FGSTN_OnCombatStateChangedSignature OnTumbleEnded;
+
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Events|State")
+	FGSTN_OnCombatStateChangedSignature OnLanded;
+
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Events|State")
+	FGSTN_OnCombatStateChangedSignature OnLeftGround;
+
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Events|State")
+	FGSTN_OnRunStageChangedSignature OnRunStageChanged;
+
+	/**
+	 * Send the confirmed events to the clients (one reliable multicast per event). Off: they fire on the server only (a server-only game mode,
+	 * or a game that replicates its own results). Same value on every machine
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Events")
+	bool bSendConfirmedEventsToClients = true;
+
 protected:
 	virtual void InitializeNetworkPredictionProxy() override;
 
@@ -1194,4 +1289,45 @@ private:
 	uint32 ScriptedButtons = 0;
 	uint32 PendingTaps = 0;
 	bool bUseScriptedButtons = false;
+
+	// ---- Blueprint state and events (GSTN_CombatSimState.cpp)
+
+	/** The typed hits the victim step of this entity made, like EventOutbox: written by every tick, sent from FinalizeFrame on the authority only */
+	TArray<FGSTN_CombatHitEventData> HitEventOutbox;
+
+	/** Server side of the confirmed events: called from FinalizeFrame before the outbox is published */
+	void SendConfirmedEvents();
+
+	/** Every machine: finds the changes of the presented state and fires the state events */
+	void UpdateStateEvents(const FGSTN_CombatSyncState& Sync);
+
+	/** FGSTN_CombatStateView::FromCore plus what needs the tables and the movement component */
+	FGSTN_CombatStateView BuildStateView(const FGSTN_CombatSyncCore& Core) const;
+
+	void DispatchHit(const FGSTN_CombatHitEventData& Hit, bool bReceived);
+	void DispatchKnockOut(const FGSTN_CombatKOEventData& KnockOut);
+	void DispatchCombatEvent(const FGSTN_SimEvent& Event);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastConfirmedHit(const FGSTN_CombatHitEventData& Hit, bool bReceived);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastConfirmedKnockOut(const FGSTN_CombatKOEventData& KnockOut);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastConfirmedEvent(const FGSTN_SimEvent& Event);
+
+	void HandleConfirmedHit(const FGSTN_CombatHitEventData& Hit, bool bReceived);
+
+	FGSTN_CombatStateWatcher StateWatcher;
+
+	UPROPERTY(Transient)
+	FGSTN_CombatHitEventData LastHitReceived;
+
+	UPROPERTY(Transient)
+	FGSTN_CombatHitEventData LastHitLanded;
+
+	bool bHasLastHitReceived = false;
+	bool bHasLastHitLanded = false;
+	mutable TWeakObjectPtr<UMoverComponent> CachedMover;
 };

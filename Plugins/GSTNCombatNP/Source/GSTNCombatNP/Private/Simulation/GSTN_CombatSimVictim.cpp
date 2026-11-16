@@ -419,7 +419,25 @@ void UGSTN_CombatSimComponent::AppendVictimEvents(int32 Frame)
 		{
 			AttackerCombat->AppendMoveTags(Hit.Entry.AttackerTimeline, Hit.Entry.AttackerBinding, MoveTags);
 		}
+		const int32 EventsBefore = EventOutbox.Events.Num();
 		FGSTN_CombatVictim::AppendHitEvents(Hit, Frame, Attacker, GetOwner(), MoveTags, EventOutbox, FindCreditPartnerActor(Hit));
+
+		// The typed copy for the Blueprint events (On Hit Received / Landed), with the tags of the HitLanded event just written. Local data like
+		// the outbox, written on every machine without a branch; only the authority's is ever sent (SendConfirmedEvents)
+		const FGameplayTagContainer* EventTags = &MoveTags;
+		for (int32 Index = FMath::Min(EventsBefore, EventOutbox.Events.Num()); Index < EventOutbox.Events.Num(); ++Index)
+		{
+			if (EventOutbox.Events[Index].EventType == GSTNCombatTags::Event_HitLanded)
+			{
+				EventTags = &EventOutbox.Events[Index].Tags;
+				break;
+			}
+		}
+		if (HitEventOutbox.Num() >= FGSTN_SimEventOutbox::MaxEvents)
+		{
+			HitEventOutbox.RemoveAt(0);
+		}
+		HitEventOutbox.Add(FGSTN_CombatHitEventData::FromVictimHit(Hit, Frame, FGSTN_CombatVictim::CreditedAttacker(Attacker, Hit.Entry), GetOwner(), *EventTags));
 	}
 	if (VictimResult.KO != EGSTN_KOCause::None)
 	{
