@@ -1,6 +1,8 @@
 // Combat simulation (GAS-NPP fork).
 
 #include "Simulation/GSTN_CombatSimComponent.h"
+
+#include "Hits/GSTN_HurtboxPose.h"
 #include "Loadout/GSTN_LoadoutModeRules.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "GameRules/GSTN_GameRules.h"
@@ -477,6 +479,11 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 	if (Set)
 	{
 		Set->RulesSerial = RulesSerial;
+		// The kit's movement hurtbox travels with the revision's table (owner 2026-11-16: the idle/movement hurtbox may change per kit)
+		const UGSTN_PrimaryKitDefinition* Kit = Component->GetResolvedLoadout().Kit;
+		const FGSTN_MovementHurtboxExtension* Movement = Kit ? Kit->Extensions.Find<FGSTN_MovementHurtboxExtension>() : nullptr;
+		Set->bHasKitMovementHurtbox = Movement != nullptr;
+		Set->KitMovementHurtbox = Movement ? *Movement : FGSTN_MovementHurtboxExtension();
 	}
 	RegisterTableSet(Set);
 	DemandAppliedRevision(Revision);

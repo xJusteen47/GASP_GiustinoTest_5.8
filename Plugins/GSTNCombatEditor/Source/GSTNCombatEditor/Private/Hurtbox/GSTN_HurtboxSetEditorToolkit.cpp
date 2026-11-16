@@ -253,7 +253,57 @@ FGSTN_RegenerateSummary FGSTN_HurtboxSetEditorToolkit::GenerateFromPhysicsAsset(
 		Message = FText::Format(LOCTEXT("GenerateNotInGeneration", "{0} {1} hurtboxes of the set are not in the Physics Asset and were kept."), Message, FText::AsNumber(Summary.NotInGeneration.Num()));
 	}
 	Notify(Message);
+
+	// A generated set is per limb (DetailedOnly): without a Simple-level body, idle and movement would have no hurtbox at all
+	const TArray<FGSTN_Hurtbox>* After = Model->GetHurtboxes();
+	if (After && !After->ContainsByPredicate([](const FGSTN_Hurtbox& Hurtbox) { return Hurtbox.DetailUse != EGSTN_HurtboxDetailUse::DetailedOnly; }))
+	{
+		AddSimpleBody();
+	}
 	return Summary;
+}
+
+bool FGSTN_HurtboxSetEditorToolkit::AddSimpleBody()
+{
+	const TArray<FGSTN_Hurtbox>* Current = Model.IsValid() ? Model->GetHurtboxes() : nullptr;
+	TArray<FGSTN_Hurtbox> Next = Current ? *Current : TArray<FGSTN_Hurtbox>();
+	// The torso's zone tag makes a sensible start for the whole body; the designer can change it
+	const FGameplayTag Torso = GSTNHurtboxGenerator::SuggestZone(UGSTN_CombatEditorSettings::Get().HurtboxZoneRules, TEXT("spine"));
+	if (!Current || !GSTNHurtboxGenerator::ApplySimpleBody(Next, Torso))
+	{
+		Notify(LOCTEXT("SimpleBodyNothing", "There are no hurtboxes to measure the body from. Generate or add the per-limb hurtboxes first."));
+		return false;
+	}
+	const bool bChanged = Model->SetHurtboxes(Next, LOCTEXT("SimpleBodyStep", "Add simple body hurtbox"));
+	Notify(LOCTEXT("SimpleBodyDone", "Idle and movement now use the 'body' capsule (Simple); moves use the per-limb hurtboxes (Detailed). Resize the body with the gizmo if needed."));
+	return bChanged;
+}
+
+int32 FGSTN_HurtboxSetEditorToolkit::FollowBones()
+{
+	USkeletalMesh* Mesh = Preview.IsValid() ? Preview->GetMainMesh() : nullptr;
+	const TArray<FGSTN_Hurtbox>* Current = Model.IsValid() ? Model->GetHurtboxes() : nullptr;
+	if (!Current || Mesh == nullptr)
+	{
+		Notify(LOCTEXT("FollowNoMesh", "There is no preview mesh to read the bones from. Choose the mesh of this character in Preview mesh first."));
+		return 0;
+	}
+	TArray<FGSTN_Hurtbox> Next = *Current;
+	TArray<FName> Missing;
+	const int32 Following = GSTNHurtboxGenerator::FollowBones(Next, Mesh->GetRefSkeleton(), Preview->GetScene()->GetMeshToRoot(), Model->GetSelection(), &Missing);
+	Model->SetHurtboxes(Next, LOCTEXT("FollowBonesStep", "Hurtboxes follow their bones"));
+	FText Message = FText::Format(LOCTEXT("FollowDone", "{0} hurtboxes follow their bones in moves. Bake the timelines (or save them) so the bones are baked."), FText::AsNumber(Following));
+	if (!Missing.IsEmpty())
+	{
+		TArray<FString> Names;
+		for (const FName Name : Missing)
+		{
+			Names.Add(Name.ToString());
+		}
+		Message = FText::Format(LOCTEXT("FollowMissing", "{0} No such bone on the mesh for: {1}."), Message, FText::FromString(FString::Join(Names, TEXT(", "))));
+	}
+	Notify(Message, 8.f);
+	return Following;
 }
 
 int32 FGSTN_HurtboxSetEditorToolkit::MirrorSelection()
@@ -469,6 +519,14 @@ TSharedRef<SDockTab> FGSTN_HurtboxSetEditorToolkit::SpawnHurtboxesTab(const FSpa
 		Menu.AddMenuEntry(LOCTEXT("GenerateUpdate", "Update shapes from the Physics Asset"),
 			LOCTEXT("GenerateUpdateTip", "Also puts the Physics Asset shape and bone into the hurtboxes of the same name. Their zone tags, priority and reaction scale are kept."),
 			FSlateIcon(), FUIAction(FExecuteAction::CreateSPLambda(this, [this]() { GenerateFromPhysicsAsset(EGSTN_RegenerateMode::UpdateShapes); })));
+		Menu.AddSeparator();
+		Menu.AddMenuEntry(LOCTEXT("SimpleBodyMenu", "Add simple body (idle and movement)"),
+			LOCTEXT("SimpleBodyMenuTip", "Adds one 'body' capsule from the feet to the head that idle and movement use (Simple level, no gap between the legs). The other hurtboxes become per limb (Detailed), used while a move runs."),
+			FSlateIcon(), FUIAction(FExecuteAction::CreateSPLambda(this, [this]() { AddSimpleBody(); })));
+		Menu.AddMenuEntry(LOCTEXT("FollowBonesMenu", "Follow bones in moves"),
+			LOCTEXT("FollowBonesMenuTip", "The selected hurtboxes (all with no selection) follow their bone through every move's animation. Reads the bone's reference pose from the preview mesh."),
+			FSlateIcon(), FUIAction(FExecuteAction::CreateSPLambda(this, [this]() { FollowBones(); })));
+		Menu.AddSeparator();
 		Menu.AddMenuEntry(LOCTEXT("GenerateReplace", "Replace all"),
 			LOCTEXT("GenerateReplaceTip", "Throws the whole set away and makes it again from the Physics Asset. Everything made by hand is lost (asks first)."),
 			FSlateIcon(), FUIAction(FExecuteAction::CreateSPLambda(this, [this]() { GenerateFromPhysicsAsset(EGSTN_RegenerateMode::ReplaceAll); })));

@@ -105,8 +105,15 @@ struct FGSTN_BakeStatusResult
 class FGSTN_SocketBaker
 {
 public:
-	/** Every BakedSocket hitbox that names a socket, in track order. A BakedSocket hitbox with no socket name is the validator's error and is not listed */
-	static void CollectUses(const FGSTN_CombatTimelineData& Data, TArray<FGSTN_BakeSocketUse>& OutUses);
+	/**
+	 * Every BakedSocket hitbox that names a socket, in track order (Hurtbox tracks included: they are hitbox tracks), then the bones the hurtboxes
+	 * follow (owner 2026-11-16): the timeline's HurtboxBones and, with a mesh, every bone a hurtbox set of the project follows (bFollowBone) that the
+	 * mesh has. A hurtbox bone has no track (TrackIndex INDEX_NONE). A BakedSocket hitbox with no socket name is the validator's error and is not listed
+	 */
+	static void CollectUses(const FGSTN_CombatTimelineData& Data, TArray<FGSTN_BakeSocketUse>& OutUses, const USkeletalMesh* Mesh = nullptr);
+
+	/** The bones the hurtbox sets of the project follow that Mesh has, sorted by name. Loads the sets (small data assets). Editor only */
+	static TArray<FName> CollectProjectHurtboxBones(const USkeletalMesh& Mesh);
 
 	/** The distinct socket names of the uses, sorted by name (the order the hash and the result use) */
 	static TArray<FName> GetDistinctSockets(TConstArrayView<FGSTN_BakeSocketUse> Uses);

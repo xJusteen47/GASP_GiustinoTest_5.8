@@ -28,7 +28,8 @@ namespace
 
 	const FGSTN_TimelineTrack_Hitbox* GetHitboxTrack(const FGSTN_CombatTimelineData& Data, int32 Index)
 	{
-		return Data.Tracks.IsValidIndex(Index) ? Data.Tracks[Index].GetPtr<FGSTN_TimelineTrack_Hitbox>() : nullptr;
+		// Hit rules judge attacks: a Hurtbox track (a hitbox track by inheritance) carries no hit and is left out
+		return Data.Tracks.IsValidIndex(Index) ? GSTNTimelineTracks::AsAttackHitbox(Data.Tracks[Index]) : nullptr;
 	}
 
 	/** The same shape in the same place: type, extent, placement, space and the path of the keys, within a tenth of a millimetre */

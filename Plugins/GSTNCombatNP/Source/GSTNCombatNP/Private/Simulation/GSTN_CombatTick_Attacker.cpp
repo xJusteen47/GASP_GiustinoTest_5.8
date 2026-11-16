@@ -356,13 +356,19 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 				{
 					continue;
 				}
-				if (!PassesStabOnly(Hurtboxes[HurtIndex].bStabOnly, Hurtboxes[HurtIndex].StabMaxAngleDeg, ActiveStrike.Kind, Hurtboxes[HurtIndex].Shape, Victim.Transform, PreviousCenter, HitboxCenter))
+				// The posed shape (bones, detail level: owner 2026-11-16); a hurtbox the level leaves out is reached only through its extensions below
+				if (!Victim.IsHurtboxPresent(HurtIndex))
+				{
+					continue;
+				}
+				const FGSTN_HitShape& HurtShape = Victim.GetHurtShape(HurtIndex);
+				if (!PassesStabOnly(Hurtboxes[HurtIndex].bStabOnly, Hurtboxes[HurtIndex].StabMaxAngleDeg, ActiveStrike.Kind, HurtShape, Victim.Transform, PreviousCenter, HitboxCenter))
 				{
 					continue;
 				}
 				const bool bTouches = Spec.bSweepBetweenFrames
-					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, Hurtboxes[HurtIndex].Shape, Victim.Transform)
-					: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, Hurtboxes[HurtIndex].Shape, Victim.Transform);
+					? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, HurtShape, Victim.Transform)
+					: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, HurtShape, Victim.Transform);
 				// A hurtbox with an opening (a cavity behind armour, combat-m4-hits 9c B) counts only through its mouth and for a hitbox that
 				// fits; otherwise it stays out of the list and the pick below falls to the armour by Priority. No opening: one bool
 				if (bTouches && (!Hurtboxes[HurtIndex].Opening.bEnabled || UGSTN_HitShapeUtils::PassesOpening(Hurtboxes[HurtIndex].Opening, HitShape, PreviousCarrier, Carrier, Spec.bSweepBetweenFrames, Victim.Transform)))
@@ -370,6 +376,20 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 					Overlapped.Add(HurtIndex);
 				}
 			}
+			// The pose extensions (a move's Hurtbox track, a kit's movement body) count as the set hurtbox they name: its state, its stab rule. No opening:
+			// an extension is outside the armour by construction
+			Victim.AppendExtensionOverlaps(Overlapped,
+				[&](const FGSTN_HitShape& Shape)
+				{
+					return Spec.bSweepBetweenFrames
+						? UGSTN_HitShapeUtils::SweptOverlap(HitShape, PreviousCarrier, Carrier, Shape, Victim.Transform)
+						: UGSTN_HitShapeUtils::Overlap(HitShape, Carrier, Shape, Victim.Transform);
+				},
+				[&](int32 HurtIndex)
+				{
+					return HurtIndex == HardHurtbox || (Victim.HurtStates.IsValidIndex(HurtIndex) && Victim.HurtStates[HurtIndex].State == EGSTN_HurtState::Intangible)
+						|| Hurtboxes[HurtIndex].bStabOnly;
+				});
 			// The extras of the snapshot (a shield bubble) are tested like the body; they have no hurt state, so nothing makes them intangible.
 			// An outside-only shell (the backpack dome) is not there for an attacker whose root of the end of the previous frame is inside it
 			for (int32 ExtraPosition = 0; ExtraPosition < Victim.ExtraHurtboxes.Num(); ++ExtraPosition)

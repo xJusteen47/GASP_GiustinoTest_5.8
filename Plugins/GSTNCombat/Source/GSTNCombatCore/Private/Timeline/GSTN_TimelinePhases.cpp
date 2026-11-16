@@ -49,7 +49,7 @@ FGSTN_TimelinePhases FGSTN_TimelinePhases::Compute(const FGSTN_CombatTimelineDat
 	int32 WindowCount = 0;
 	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instance : Data.Tracks)
 	{
-		const FGSTN_TimelineTrack_Hitbox* Track = Instance.GetPtr<FGSTN_TimelineTrack_Hitbox>();
+		const FGSTN_TimelineTrack_Hitbox* Track = GSTNTimelineTracks::AsAttackHitbox(Instance);
 		if (Track != nullptr && Track->EndFrame > Track->StartFrame && CountsAsActive(*Track))
 		{
 			++WindowCount;
@@ -62,7 +62,7 @@ FGSTN_TimelinePhases FGSTN_TimelinePhases::Compute(const FGSTN_CombatTimelineDat
 		Windows.Reserve(WindowCount);
 		for (const TInstancedStruct<FGSTN_TimelineTrack>& Instance : Data.Tracks)
 		{
-			const FGSTN_TimelineTrack_Hitbox* Track = Instance.GetPtr<FGSTN_TimelineTrack_Hitbox>();
+			const FGSTN_TimelineTrack_Hitbox* Track = GSTNTimelineTracks::AsAttackHitbox(Instance);
 			if (Track != nullptr && Track->EndFrame > Track->StartFrame && CountsAsActive(*Track))
 			{
 				Windows.Add(FIntPoint(FMath::Max(Track->StartFrame, 0), Track->EndFrame));

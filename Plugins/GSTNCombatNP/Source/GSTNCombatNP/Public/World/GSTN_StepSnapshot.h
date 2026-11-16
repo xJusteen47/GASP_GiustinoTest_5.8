@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GenericTeamAgentInterface.h"
+#include "Hits/GSTN_HurtboxPose.h"
 #include "Hits/GSTN_HurtboxTypes.h"
 #include "Hits/GSTN_ReactionTypes.h"
 #include "Simulation/GSTN_CombatActionTypes.h"
@@ -277,7 +278,38 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotEntry
 	 */
 	FGSTN_ExtraHurtboxList ExtraHurtboxes;
 
-	/** The shape of the hurtbox a hit carries the index of: a set hurtbox, or an extra from GSTNHurtboxIndex::ExtraIndexBase. Null for an index that is neither */
+	/**
+	 * Where the set's hurtboxes are this frame (owner 2026-11-16): following their bones through the running move, the detail level's hurtboxes only,
+	 * plus the move's Hurtbox tracks or the kit's movement shapes. Default (empty) = the set as authored. Every reader of the set's shapes goes through
+	 * GetHurtShape / IsHurtboxPresent / HurtPose.Extensions, so the attacker, the minions and the projectiles test the same shapes
+	 */
+	FGSTN_HurtboxPose HurtPose;
+
+	/** The shape of set hurtbox Index this frame. Index must be valid in Hurtboxes */
+	const FGSTN_HitShape& GetHurtShape(int32 Index) const { return HurtPose.GetShape(*Hurtboxes, Index); }
+
+	/** Does set hurtbox Index take hits through its own shape this frame */
+	bool IsHurtboxPresent(int32 Index) const { return HurtPose.IsPresent(Index); }
+
+	/**
+	 * Appends to Overlapped the set hurtboxes whose pose extensions overlap (a move's stretched leg counts as the leg). Test(Shape) is the caller's
+	 * overlap test with the root-relative shape; Skip(Index) leaves out an index the caller does not want (intangible, the hard hurtbox already met).
+	 * An index already in the list is not added twice
+	 */
+	template <typename TTest, typename TSkip, typename TArrayType>
+	void AppendExtensionOverlaps(TArrayType& Overlapped, TTest&& Test, TSkip&& Skip) const
+	{
+		for (const FGSTN_PosedHurtboxExtension& Extension : HurtPose.Extensions)
+		{
+			if (Hurtboxes && Hurtboxes->Hurtboxes.IsValidIndex(Extension.HurtboxIndex) && !Overlapped.Contains(Extension.HurtboxIndex) && !Skip(Extension.HurtboxIndex)
+				&& Test(Extension.Shape))
+			{
+				Overlapped.Add(Extension.HurtboxIndex);
+			}
+		}
+	}
+
+	/** The shape of the hurtbox a hit carries the index of: a set hurtbox (posed), or an extra from GSTNHurtboxIndex::ExtraIndexBase. Null for an index that is neither */
 	const FGSTN_HitShape* FindHurtboxShape(int32 HurtboxIndex) const
 	{
 		if (GSTNHurtboxIndex::IsExtra(HurtboxIndex))
@@ -285,7 +317,22 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotEntry
 			const int32 Position = GSTNHurtboxIndex::ToExtraPosition(HurtboxIndex);
 			return ExtraHurtboxes.IsValidIndex(Position) ? &ExtraHurtboxes[Position].Shape : nullptr;
 		}
-		return Hurtboxes && Hurtboxes->Hurtboxes.IsValidIndex(HurtboxIndex) ? &Hurtboxes->Hurtboxes[HurtboxIndex].Shape : nullptr;
+		if (!Hurtboxes || !Hurtboxes->Hurtboxes.IsValidIndex(HurtboxIndex))
+		{
+			return nullptr;
+		}
+		// A hurtbox hit only through an extension (hidden by the level, or replaced by a move): the extension's shape is where the contact was
+		if (!HurtPose.IsPresent(HurtboxIndex))
+		{
+			for (const FGSTN_PosedHurtboxExtension& Extension : HurtPose.Extensions)
+			{
+				if (Extension.HurtboxIndex == HurtboxIndex)
+				{
+					return &Extension.Shape;
+				}
+			}
+		}
+		return &GetHurtShape(HurtboxIndex);
 	}
 };
 

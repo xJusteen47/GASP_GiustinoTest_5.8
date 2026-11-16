@@ -378,6 +378,7 @@ void UGSTN_CombatWorldSubsystem::RecordHistory(const FGSTN_StepSnapshot& Source,
 		Record.Reaction = Entry.Reaction;
 		Record.Extension = Entry.Extension;
 		Record.ExtraHurtboxes = Entry.ExtraHurtboxes;
+		Record.HurtPose = Entry.HurtPose;
 		if (Ring.Num() > MaxRecords)
 		{
 			Ring.RemoveAt(0, Ring.Num() - MaxRecords, EAllowShrinking::No);
@@ -465,6 +466,11 @@ const FGSTN_StepSnapshot& UGSTN_CombatWorldSubsystem::EnsureSnapshot(int32 Frame
 		if (Entry.BoundRadius <= 0.f)
 		{
 			Entry.BoundRadius = static_cast<float>(ComputeBoundRadius(Hurtboxes));
+		}
+		if (!Entry.HurtPose.IsDefault())
+		{
+			// A stretched limb or a move's own hurtbox reaches past the reference pose: the broadphase must still find the entity
+			Entry.BoundRadius = FMath::Max(Entry.BoundRadius, static_cast<float>(Entry.HurtPose.ComputeBoundRadius(Hurtboxes)));
 		}
 		if (!Entry.ExtraHurtboxes.IsEmpty())
 		{

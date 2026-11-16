@@ -52,6 +52,12 @@ void GSTNLagComp::BuildOverlay(const FGSTN_StepSnapshot& Source, int32 AttackerI
 		Entry.Reaction = Record.Reaction;
 		Entry.Extension = Record.Extension;
 		Entry.ExtraHurtboxes = Record.ExtraHurtboxes;
+		Entry.HurtPose = Record.HurtPose;
+		if (!Entry.HurtPose.IsDefault())
+		{
+			// The rewound pose (a limb stretched then) can reach further than the present one; the radius only grows
+			Entry.BoundRadius = FMath::Max(Entry.BoundRadius, static_cast<float>(Entry.HurtPose.ComputeBoundRadius(Entry.Hurtboxes)));
+		}
 		if (!Entry.ExtraHurtboxes.IsEmpty())
 		{
 			// The rewound bubble can be larger than the present one the entry's radius was built from; the radius never shrinks, so the broadphase stays a superset
