@@ -28,6 +28,12 @@ struct FGSTN_MinionStats;
  * Separation: a spatial hash of the slots of the frame (cells of twice the largest radius, sorted by cell then slot) gives each
  * slot a push on the ground plane away from overlapping neighbours, computed from the start-of-frame positions before any slot
  * moves, so the result does not depend on the loop order. The push is a velocity, so the sweep still keeps it out of walls.
+ *
+ * Body collision (pushbox P5): with Ctx.Bodies, a second hash of those bodies (cells of twice the largest radius, sorted by cell then
+ * entity id) gives each slot its overlapping neighbours at the start of the frame. The fighters' soft push is added to the frame's move
+ * (minion-minion softness stays the separation above), then FGSTN_Pushbox::ConstrainMove (approach clamp + rigid core) corrects the move
+ * against every neighbour, fighters and minions, exactly as a fighter's own move is corrected; the sweep runs after, so walls win.
+ * Cost: one sorted hash per frame (n log n) and a 3x3 cell lookup per slot, no pair loop over the whole crowd.
  */
 class GSTNMINIONRUNTIME_API FGSTN_MinionMovement_Lightweight : public IGSTN_MinionMovementBackend
 {
@@ -51,6 +57,11 @@ private:
 	void ComputeSeparation(const FGSTN_MinionMoveContext& Ctx, TArrayView<const int32> Slots);
 	void StepSlot(FGSTN_MinionMoveContext& Ctx, int32 Slot, const UGSTN_MinionDefinition& Definition, const FVector2D& Separation);
 
+	/** Hashes Ctx.Bodies (BodyCells, BodyCellSize) */
+	void BuildBodyHash(const FGSTN_MinionMoveContext& Ctx);
+	/** The body of Slot in Ctx.Bodies (null when it has none) and its overlapping neighbours into BodyNeighbours, by entity id */
+	const FGSTN_PushboxBody* GatherBodyNeighbours(const FGSTN_MinionMoveContext& Ctx, int32 Slot);
+
 	/** Capsule sweep of the slot's shape (RadiusOverride > 0: a thinner capsule with the same bottom, for the floor's perch probe) */
 	bool Sweep(const FGSTN_MinionMoveContext& Ctx, const FStepState& State, const FVector& From, const FVector& To, FHitResult& OutHit, float RadiusOverride = 0.f) const;
 	/** Pushes the capsule out of whatever it starts inside (up to a few iterations). True when it moved */
@@ -71,4 +82,10 @@ private:
 	TArray<FVector2D> SeparationBySlot;
 	/** (cell key, slot) sorted, scratch */
 	TArray<TPair<uint64, int32>> Cells;
+	/** (cell key, index in Ctx.Bodies) sorted, scratch */
+	TArray<TPair<uint64, int32>> BodyCells;
+	double BodyCellSize = 1.0;
+	/** One slot's neighbours (scratch) and the fighters among them */
+	TArray<FGSTN_PushboxBody> BodyNeighbours;
+	TArray<FGSTN_PushboxBody> FighterNeighbours;
 };

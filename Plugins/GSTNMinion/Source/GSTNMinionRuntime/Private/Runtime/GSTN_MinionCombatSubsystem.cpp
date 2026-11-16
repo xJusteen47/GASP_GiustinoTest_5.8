@@ -699,12 +699,13 @@ bool UGSTN_MinionCombatSubsystem::FillSnapshotEntry(int32 Slot, int32 Frame, FGS
 	Out.Up = Out.Transform.GetUnitAxis(EAxis::Z);
 	Out.Hurtboxes = Set;
 	Out.BoundRadius = Resolved.BoundRadius;
+	// Pushbox P5: the body fighters and other minions meet (their push and core read it from this entry, end of the previous frame)
+	const UGSTN_CombatRules* Rules = CombatRules ? CombatRules.Get() : GetDefault<UGSTN_CombatRules>();
+	Definition->ResolvePushbox(Store.ActionState[Slot], FVector(Store.Position[Slot]), Out.Up, Rules->Pushbox, Out.Pushbox);
 	Out.HealthFraction = Store.MaxHealth[Slot] > 0.f ? FMath::Clamp(Store.Health[Slot] / Store.MaxHealth[Slot], 0.f, 1.f) : 1.f;
 
 	// Both hitstops freeze the minion: the victim's window (hits of the previous frames) and its own as an attacker
-	const bool bVictimHitstop = Frame < HitstopEndFrame[Slot];
-	const bool bAttackerHitstop = AttackerHitstopEndFrame[Slot] != INDEX_NONE && Frame <= AttackerHitstopEndFrame[Slot];
-	Out.bInHitstop = bVictimHitstop || bAttackerHitstop;
+	Out.bInHitstop = IsSlotInHitstop(Slot, Frame);
 
 	// The fighters' action state vocabulary, for steps that read it: any hit reaction is Hitstun, a running move InTimeline
 	switch (static_cast<EGSTN_MinionActionState>(Store.ActionState[Slot]))
@@ -765,6 +766,59 @@ bool UGSTN_MinionCombatSubsystem::FillSnapshotEntry(int32 Slot, int32 Frame, FGS
 	Out.Reaction = FGSTN_VictimReactionState::Make(KnockbackPercent[Slot], WeightScale, Flags, Threshold);
 	// No snapshot contributor runs for minions (no fragments, no parts code here): the parts bridge (M4b P16) uses the step slot, the victim view seam and the outcome seam
 	return true;
+}
+
+bool UGSTN_MinionCombatSubsystem::IsSlotInHitstop(int32 Slot, int32 Frame) const
+{
+	const bool bVictimHitstop = Frame < HitstopEndFrame[Slot];
+	const bool bAttackerHitstop = AttackerHitstopEndFrame[Slot] != INDEX_NONE && Frame <= AttackerHitstopEndFrame[Slot];
+	return bVictimHitstop || bAttackerHitstop;
+}
+
+void UGSTN_MinionCombatSubsystem::GatherMoveBodies(int32 Frame)
+{
+	MoveBodies.Reset();
+	const UGSTN_CombatRules* Rules = CombatRules ? CombatRules.Get() : GetDefault<UGSTN_CombatRules>();
+	MoveContext.Pushbox = Rules->Pushbox;
+	if (!MovementSettings.bBodyCollision || !Rules->Pushbox.bEnabled)
+	{
+		return;
+	}
+	// Fighters as the snapshot of the frame holds them (end of F-1, what their own push read). Its minion entries are skipped: the store
+	// gives every minion below, also when no fighter is registered and there is no snapshot
+	if (const FGSTN_StepSnapshot* Snapshot = AcquireFighterSnapshot(Frame))
+	{
+		for (const FGSTN_SnapshotEntry& Entry : Snapshot->Entries)
+		{
+			if (GSTNEntityKinds::IsMinionEntityId(Entry.EntityId) || !Entry.Pushbox.IsActive() || Entry.bPlacedByContributor)
+			{
+				continue;
+			}
+			FGSTN_PushboxBody& Body = MoveBodies.AddDefaulted_GetRef();
+			Body.EntityId = Entry.EntityId;
+			Body.Cylinder = Entry.Pushbox;
+			Body.bFrozen = Entry.bInHitstop;
+		}
+	}
+	MoveBodies.Append(TestFighterBodies);
+	// Minions with the same filter and body as AppendSnapshotEntities (a queued spawn and a dying minion have none)
+	for (int32 Slot = Store.NextAliveSlot(0); Slot != INDEX_NONE; Slot = Store.NextAliveSlot(Slot + 1))
+	{
+		const UGSTN_MinionDefinition* Definition = GetDefinition(Store.TypeIndex[Slot]);
+		if (PendingActivation[Slot] || IsDyingOrDead(Store.ActionState[Slot]) || !Definition)
+		{
+			continue;
+		}
+		const FVector Feet(Store.Position[Slot]);
+		FGSTN_PushboxBody Body;
+		if (Definition->ResolvePushbox(Store.ActionState[Slot], Feet, RootOf(Slot).GetUnitAxis(EAxis::Z), Rules->Pushbox, Body.Cylinder))
+		{
+			Body.EntityId = GSTNEntityKinds::MakeMinionEntityId(static_cast<uint16>(Slot));
+			Body.bFrozen = IsSlotInHitstop(Slot, Frame);
+			MoveBodies.Add(Body);
+		}
+	}
+	MoveBodies.Sort([](const FGSTN_PushboxBody& A, const FGSTN_PushboxBody& B) { return A.EntityId < B.EntityId; });
 }
 
 FGSTN_HitVictimView UGSTN_MinionCombatSubsystem::MakeMinionView(int32 Slot, const FGSTN_SnapshotEntry& Entry) const
@@ -2310,6 +2364,8 @@ void UGSTN_MinionCombatSubsystem::StageMovement(int32 Frame)
 		MoveContext.KillZ = WorldSettings ? WorldSettings->KillZ : -UE_BIG_NUMBER;
 		MoveContext.FellOut.Reset();
 		MoveContext.MinionFrames = 0;
+		GatherMoveBodies(Frame);
+		MoveContext.Bodies = MoveBodies;
 
 		LightweightMovement.StepBatch(MoveContext, MoveSlots);
 

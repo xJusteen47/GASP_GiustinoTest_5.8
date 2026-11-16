@@ -1870,6 +1870,16 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 
 	ProjectStateTags(Sync->Core, Frame);
 
+	// A finished move's released montage tail (owner rule 2026-11-15: it plays to its own end) is stopped by the next action. Walking and a hit
+	// reaction are actions too (owner PIE report 2026-11-16: after the example kit's 42-frame strong attack, the 4 s takedown montage's root
+	// motion overrode the walk for seconds, 0.2 cm a frame with the stick held). From the stick of this frame, inside the ASC tick: deterministic
+	float PlayingTime = 0.f;
+	if (AbilitySystem && AbilitySystem->GetPlayingSyncedMontage(PlayingTime) && Sync->Core.ActionState != EGSTN_ActionState::InTimeline
+		&& (Sync->Core.ActionState != EGSTN_ActionState::Actionable || Sync->Core.Input.History.GetCurrentStick().Zone != EGSTN_StickZone::Neutral))
+	{
+		UGSTN_GA_BaseCombat::StopReleasedMontages(*AbilitySystem);
+	}
+
 	// The tables of this frame (the combat tick of the same frame set them). A CancelTimeline names a slot of the registry the timeline
 	// was started in, which on a swap frame is the previous set
 	const UGSTN_CombatTableSet& FrameSet = Tables();

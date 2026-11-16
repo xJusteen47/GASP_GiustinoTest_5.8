@@ -18,6 +18,15 @@
 #include "Rules/GSTN_CombatRules.h"
 #include "Timeline/GSTN_Pushbox.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
+#include "HAL/IConsoleManager.h"
+
+namespace
+{
+	/** Diagnostics (pushbox P5, owner PIE bug 2026-11-16): logs every frame the body constraint or push changes a fighter's move */
+	TAutoConsoleVariable<int32> CVarPushboxLog(TEXT("gstn.Pushbox.Log"), 0,
+		TEXT("1: log (LogTemp) each frame a fighter's move is corrected by the pushbox approach clamp / rigid core or pushed, with the bodies it read."),
+		ECVF_Default);
+}
 
 void UGSTN_CombatSimComponent::SetCombatWorldSubsystem(UGSTN_CombatWorldSubsystem* Subsystem)
 {
@@ -284,6 +293,16 @@ void UGSTN_CombatSimComponent::ComputeFramePush(int32 Frame, const FGSTN_StepSna
 		{
 			continue;
 		}
+		// P5, a crowd of minions in the snapshot: only bodies overlapping at the start of the frame can push or block (PairShare and
+		// ConstrainMove skip the rest), so the far ones are dropped here and the per-frame lists stay short. Same result, less work
+		const FVector Delta = Entry.Pushbox.Center - Self->Pushbox.Center;
+		const double Vertical = FVector::DotProduct(Delta, Self->Up);
+		const double Reach = FMath::Max(static_cast<double>(Entry.Pushbox.Radius) + Self->Pushbox.Radius, static_cast<double>(Entry.Pushbox.CoreRadius) + Self->Pushbox.CoreRadius);
+		if (FMath::Abs(Vertical) >= static_cast<double>(Entry.Pushbox.HalfHeight) + Self->Pushbox.HalfHeight
+			|| (Delta - Self->Up * Vertical).SizeSquared() >= FMath::Square(Reach))
+		{
+			continue;
+		}
 		FGSTN_PushboxBody& Body = Others.AddDefaulted_GetRef();
 		Body.EntityId = Entry.EntityId;
 		Body.Cylinder = Entry.Pushbox;
@@ -302,6 +321,21 @@ FVector UGSTN_CombatSimComponent::ConstrainFrameMove(const FVector& ActorEnd, FV
 	const FGSTN_PushboxSettings& Settings = CombatRules ? CombatRules->Pushbox : GetDefault<UGSTN_CombatRules>()->Pushbox;
 	const FVector Move = ActorEnd - FramePush.ActorStart;
 	const FVector Constrained = FGSTN_Pushbox::ConstrainMove(FramePush.Self, Move, FramePush.Others, Settings, FramePush.Up, &InOutVelocity);
+	if (CVarPushboxLog.GetValueOnAnyThread() != 0 && (!(Constrained - Move).IsNearlyZero(0.05) || !FramePush.Move.IsNearlyZero(0.05)))
+	{
+		const AActor* Owner = GetOwner();
+		FString Others;
+		for (const FGSTN_PushboxBody& Other : FramePush.Others)
+		{
+			Others += FString::Printf(TEXT(" [%d c=%s r=%.1f core=%.1f hh=%.1f fz=%d]"), Other.EntityId, *Other.Cylinder.Center.ToCompactString(), Other.Cylinder.Radius,
+				Other.Cylinder.CoreRadius, Other.Cylinder.HalfHeight, Other.bFrozen ? 1 : 0);
+		}
+		UE_LOG(LogTemp, Log, TEXT("PushboxLog f=%d %s role=%d id=%d start=%s end=%s self_c=%s r=%.1f core=%.1f move=%s corr=%s push=%s others:%s"),
+			FramePush.Frame, *GetNameSafe(Owner), Owner ? static_cast<int32>(Owner->GetLocalRole()) : -1, FramePush.Self.EntityId,
+			*FramePush.ActorStart.ToCompactString(), *ActorEnd.ToCompactString(), *FramePush.Self.Cylinder.Center.ToCompactString(),
+			FramePush.Self.Cylinder.Radius, FramePush.Self.Cylinder.CoreRadius, *Move.ToCompactString(), *(Constrained - Move).ToCompactString(),
+			*FramePush.Move.ToCompactString(), *Others);
+	}
 	return Constrained - Move;
 }
 

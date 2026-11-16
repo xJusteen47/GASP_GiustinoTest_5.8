@@ -7,6 +7,8 @@
 #include "GameplayTagContainer.h"
 #include "LOD/GSTN_MinionLOD.h"
 #include "Net/GSTN_MinionNetCodec.h"
+#include "Store/GSTN_MinionStore.h"
+#include "Timeline/GSTN_Pushbox.h"
 #include "GSTN_MinionDefinition.generated.h"
 
 class AActor;
@@ -90,6 +92,29 @@ struct GSTNMINIONCORE_API FGSTN_MinionStats
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Capsule", meta = (ClampMin = "1.0", ForceUnits = "cm"))
 	float CapsuleHalfHeight = 88.f;
+};
+
+/**
+ * How a minion type's body meets fighters and other minions (pushbox P5, owner 2026-11-16: the rigid core matters on minions too). The same
+ * pushbox and core as a fighter's (FGSTN_Pushbox, the profile of UGSTN_CombatSimComponent::BodyCollision), on the type: the snapshot entry of
+ * the minion carries the cylinder, so a fighter's push and core read minions with no minion code, and the lightweight movement reads the
+ * fighters and the other minions from the same snapshot. Pushbox = the capsule radius times the rules' CapsuleRadiusScale, the capsule height.
+ */
+USTRUCT(BlueprintType)
+struct GSTNMINIONCORE_API FGSTN_MinionBodyCollision
+{
+	GENERATED_BODY()
+
+	/** Core + pushbox by default (a fighter walking into a minion stops at its core); PushboxOnly = soft; None = ghost */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Minion|Body Collision")
+	FGSTN_BodyCollisionProfile Profile;
+
+	/**
+	 * Action states with no body (neither pushes nor is pushed, no core), as the fighters' Knockdown and Tumble: a launched or downed minion
+	 * can be walked over. Spawning, Dying and Dead never have one (not in the snapshot)
+	 */
+	UPROPERTY(EditAnywhere, Category = "Minion|Body Collision")
+	TArray<EGSTN_MinionActionState> StatesWithoutBody = { EGSTN_MinionActionState::Launched, EGSTN_MinionActionState::Knockdown };
 };
 
 /**
@@ -206,6 +231,16 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Movement")
 	EGSTN_MinionMovementBackend MovementBackend = EGSTN_MinionMovementBackend::Lightweight;
+
+	/** Pushbox and rigid core against fighters and other minions (P5) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|Movement")
+	FGSTN_MinionBodyCollision BodyCollision;
+
+	/**
+	 * The minion's pushbox in the world, from its feet (store position) and up, in ActionState (EGSTN_MinionActionState). False (Out inactive)
+	 * when the type or the state has none or the rules turn pushboxes off. Pure: the authority's snapshot entry, the client's and the tests agree
+	 */
+	bool ResolvePushbox(uint8 ActionState, const FVector& Feet, const FVector& Up, const FGSTN_PushboxSettings& Settings, FGSTN_PushboxCylinder& Out) const;
 
 	/** True to use LODOverride instead of the project's UGSTN_MinionLODSettings for this type */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Minion|LOD")

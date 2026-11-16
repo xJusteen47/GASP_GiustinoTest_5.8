@@ -107,9 +107,23 @@ PUSHBOX_SEQUENCES = [
     {'name': 'head_landing', 'taps': [], 'frames': 160, 'dummy': float(os.environ.get('PIE_CAPTURE_HEAD_DIST', 150.0)), 'shoot': True, 'air': {},
      'walk': (0, int(os.environ.get('PIE_CAPTURE_HEAD_STICK', 40)))},
 ]
+# PUSHBOX-P5 (minion core + pushbox): 'minions': (count, bench scenario) spawned by gstn.Minion.Bench.Spawn in a 600 cm ring around the host at
+# the start of the sequence (cleared first). minion_chase: the fighter stands while they run at it (fighter vs minion cores, minions vs each
+# other); minion_walk: the same crowd, then the stick is held forward into it. Rows carry the host world's puppet positions ('minions')
+MINION_SEQUENCES = [
+    {'name': 'minion_chase', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'minions': (8, 'Chase')},
+    {'name': 'minion_walk', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'minions': (8, 'Chase'), 'walk': (90, 160)},
+]
+# PUSHBOX-P5, owner PIE bug 2026-11-16 (run with PIE_CAPTURE_BUTTON=Strong): strong_walk hits a dummy 95 cm ahead with the strong attack, then
+# walks at it (the owner stopped ~2 m short for seconds); inside_escape puts the dummy 10 cm ahead (bodies overlapping) and walks away
+# ('walk_dir': the stick, default forward). Log the constraint with gstn.Pushbox.Log 1 (PIE_CAPTURE_PUSHLOG=1)
+BUG_SEQUENCES = [
+    {'name': 'strong_walk', 'taps': [0], 'frames': 300, 'dummy': 95.0, 'shoot': True, 'walk': (40, 240)},
+    {'name': 'inside_escape', 'taps': [], 'frames': 160, 'dummy': 10.0, 'shoot': True, 'walk': (20, 120), 'walk_dir': (0, -1, 0)},
+]
 AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after the attack press
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
-    SEQUENCES = [s for s in SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES + PUSHBOX_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
+    SEQUENCES = [s for s in SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
 elif 'DoubleShot' in KIT:
     SEQUENCES = DOUBLE_SHOT_SEQUENCES
 elif 'Dropkick' in KIT:
@@ -276,6 +290,13 @@ def _row(frame, tapped, extra=None):
                        'mesh_rel_z': round(mesh.get_editor_property('relative_location').z, 1)}
     except Exception as e:
         row['body_err'] = repr(e)[:80]
+    if st.get('minions_spawned'):   # PUSHBOX-P5: the host world's minion puppets [x, y, z] (hidden pooled ones left out)
+        try:
+            cls = getattr(unreal, 'GSTN_MinionPuppet', None)
+            row['minions'] = [[round(l.x, 1), round(l.y, 1), round(l.z, 1)] for a in unreal.GameplayStatics.get_all_actors_of_class(g.worlds()[0], cls)
+                              for c in [a.get_component_by_class(unreal.SkeletalMeshComponent)] if c is None or c.is_visible() for l in [a.get_actor_location()]] if cls else None
+        except Exception as e:
+            row['minions_err'] = repr(e)[:80]
     try:   # projectiles alive in the host world: [x, y, z, hidden, visual mesh set] (what a camera can see, 1 vs 2 shots)
         cls = getattr(unreal, 'GSTN_Projectile', None)
         if cls:
@@ -348,6 +369,13 @@ def _tick(_dt):
                     _log(f'dummy {keys[0]} percent {seq["dummy_percent"]}: {ok}')
                 st.update(dummy_placed=True, dummy_key=keys[0] if keys else None, t=now)         # one more wait for the teleport to settle
                 return None
+            if seq.get('minions') and not st.get('minions_spawned'):
+                count, mode = seq['minions']
+                _console('gstn.Minion.Bench.Clear')
+                _console(f'gstn.Minion.Bench.Spawn {count} {mode}')
+                _log(f'{seq["name"]}: spawned {count} {mode} minions')
+                st.update(minions_spawned=True, t=now)               # one more wait: the spawns activate and land
+                return None
             if seq.get('air') is not None:
                 z = _pawn().get_actor_location().z
                 if (st.get('rest_z') is None or abs(z - st['rest_z']) > 0.05) and now - st['t'] < 10:
@@ -360,6 +388,8 @@ def _tick(_dt):
             os.makedirs(os.path.join(OUT, seq['name']), exist_ok=True)
             st['rows'] = open(os.path.join(OUT, seq['name'], 'frames.jsonl'), 'w')
             _console('t.OverrideFPS 60')
+            if os.environ.get('PIE_CAPTURE_PUSHLOG') == '1':
+                _console('gstn.Pushbox.Log 1')
             st.update(shots=0, host_proj=0)
             st.update(phase='seq_run', frame=0, mask=g.button_mask(BUTTON), crouch=g.button_mask('Crouch'), jumped=None, fired=None, prev_z=None)
         elif phase == 'seq_run':
@@ -412,7 +442,7 @@ def _tick(_dt):
             walk_base = st['fired'] if st['fired'] is not None else (st['jumped'] if plain_jump else (PRE if air is None else None))
             if walk and walk_base is not None:
                 if frame == walk_base + walk[0]:
-                    g.hold(0, 'move', (0, 1, 0))
+                    g.hold(0, 'move', seq.get('walk_dir', (0, 1, 0)))
                     _log(f'{seq["name"]}: walk forward from v{frame}')
                 elif frame == walk_base + walk[0] + walk[1]:
                     g.release(0, 'move')
@@ -422,7 +452,9 @@ def _tick(_dt):
                 g.combat_clear(0)
                 _console('t.OverrideFPS 0')
                 _log(f'sequence {seq["name"]} done: {st["frame"]} frames, pawn z {_pawn().get_actor_location().z:.1f}, host shots {st.get("shots", 0)}')
-                st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False)
+                if st.get('minions_spawned'):
+                    _console('gstn.Minion.Bench.Clear')
+                st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False, minions_spawned=False)
         elif phase == 'ending' and not les.is_in_play_in_editor():
             unreal.unregister_slate_post_tick_callback(st['handle'])
             try:
