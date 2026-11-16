@@ -1,0 +1,53 @@
+# PR verso feature: build editor + test GSTN ridotti (<= 15 min di test). Gira SOLO sul runner del portatile.
+# Repo pubblico: il job non parte mai per PR da fork (codice estraneo sul portatile).
+name: CI PR
+
+on:
+  pull_request:
+    branches: ['feature/**']
+  workflow_dispatch:
+
+concurrency:
+  group: ci-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, Windows, gstn-laptop]
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+          clean: false        # workspace riusato: niente riscaricamento LFS / Intermediate a ogni run
+
+      - name: Build editor (max 45 min)
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File Tools\CI\Run-Timed.ps1 -Preset Build -Log Saved\Logs\ci\pr-build.log
+          exit $LASTEXITCODE
+
+      - name: Test GSTN ridotti (max 15 min)
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File Tools\CI\Run-Timed.ps1 -Preset Test -Tests "GSTNInput+GSTNCombat" -MaxMinutes 15 -Log Saved\Logs\ci\pr-test.log
+          $rt = $LASTEXITCODE
+          powershell -NoProfile -ExecutionPolicy Bypass -File Tools\CI\Check-TestLog.ps1 -UeLog Saved\Logs\ci\pr-test.log.ue.log -MinTests 50
+          if ($rt -ne 0) { exit $rt } else { exit $LASTEXITCODE }
+
+      - name: Esiti e log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-pr-logs
+          path: |
+            Saved/Logs/ci/*.esito
+            Saved/Logs/ci/*.log
+            Saved/Logs/ci/*.fail.txt
+          retention-days: 7
+          if-no-files-found: ignore
