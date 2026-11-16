@@ -99,6 +99,7 @@ FGSTN_SurfaceView UGSTN_SurfaceUtils::ResolveQuery(const FGSTN_SurfaceQuery& Que
 	FGSTN_SurfaceView View;
 	View.Behaviours = Behaviour->Behaviours;
 	View.Launch = Behaviour->Launch;
+	View.Locomotion = Behaviour->Locomotion;
 	View.DesignerTags = Behaviour->DesignerTags;
 	View.Source = Source;
 

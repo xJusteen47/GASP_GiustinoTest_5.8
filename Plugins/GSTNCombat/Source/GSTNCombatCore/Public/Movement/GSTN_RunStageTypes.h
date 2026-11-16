@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
+#include "Movement/GSTN_RunSkidTypes.h"
 #include "GSTN_RunStageTypes.generated.h"
 
 /** When the run boost command (L3 by default, in the kit's input data) may jump straight to the last stage (owner decision 3C) */
@@ -68,6 +69,13 @@ struct GSTNCOMBATCORE_API FGSTN_RunStage
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stage", meta = (ClampMin = "0"))
 	int32 CarryFrames = 4;
+
+	/**
+	 * Air steering of a jump that took off at this stage (TakeoffCap air model): multiplies Mover's air control. Lower at the higher
+	 * stages = a fast jump commits more to its direction (P2, owner decision 1C)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stage", meta = (ClampMin = "0", ClampMax = "4"))
+	float AirControlScale = 1.f;
 };
 
 /** The whole run tuning of a kit: the stages and the rules that move between them. Values only, copied out of the profile asset */
@@ -123,6 +131,21 @@ struct GSTNCOMBATCORE_API FGSTN_RunStagesTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Boost", meta = (ClampMin = "0"))
 	int32 BoostWindowFrames = 12;
 
+	/** The run skid (P2) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Skid")
+	FGSTN_RunSkidTuning Skid;
+
+	/**
+	 * P3, kit slipperiness (owner 10:12:59Z: "Luigi" slipperiness only as a kit setting, never the default): multiplies the braking of every
+	 * attack momentum slide of this kit. 1 = the moves' own data, 0.3 = very slippery
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Attack Momentum", meta = (ClampMin = "0", ClampMax = "4"))
+	float AttackSlideFrictionScale = 1.f;
+
+	/** The air control (P2) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Air")
+	FGSTN_RunAirTuning Air;
+
 	bool IsEnabled() const { return Stages.Num() > 0; }
 
 	/** The stage of index Stage, clamped into the table. The table must not be empty */
@@ -168,6 +191,22 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageState
 	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
 	EGSTN_RunCarrySource CarrySource = EGSTN_RunCarrySource::None;
 
+	/** Frames the carried speed stays valid, latched when it was stored (the stage may drop meanwhile) */
+	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
+	int32 CarryWindow = 0;
+
+	/** Airborne at the end of the last stepped frame */
+	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
+	bool bAirborne = false;
+
+	/** Ground speed of the last grounded frame before the current air time (the TakeoffCap air top speed), cm/s */
+	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
+	float TakeoffSpeed = 0.f;
+
+	/** The stage at takeoff (its AirControlScale steers the air time) */
+	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
+	uint8 TakeoffStage = 0;
+
 	/** Ground speed at the end of the previous stepped frame (bump detection, the carried speed) */
 	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
 	float PrevSpeed = 0.f;
@@ -194,6 +233,10 @@ struct GSTNCOMBATCORE_API FGSTN_RunFrameInput
 	FVector StickWorld = FVector::ZeroVector;
 	/** The boost command was entered on this frame */
 	bool bBoostCommand = false;
+	/** A run skid started on this frame (P2): the stage drops and the speed of before the skid is carried */
+	bool bSkidStarted = false;
+	/** The ground speed the skid started from, cm/s */
+	float SkidStartSpeed = 0.f;
 	/** The stats speed factor of the frame (WalkSpeed / reference; 0 under a movement lock) */
 	float SpeedFactor = 1.f;
 };
@@ -204,6 +247,12 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageLogic
 	/** Steps State by one frame. A second call with the same Frame (a substep) changes nothing */
 	static void Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunFrameInput& Input, FGSTN_RunStageState& State);
 
-	/** The speed an attack starting now may carry (decision 2A): the carried speed while within the stage's CarryFrames, else 0 */
+	/** The speed an attack starting now may carry (decision 2A): the carried speed while within its latched window, else 0 */
 	static float GetCarriedSpeed(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
+
+	/** TakeoffCap air top speed (before the stats factor): the takeoff speed with the profile's floor */
+	static float GetAirTopSpeed(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State, float Factor);
+
+	/** Air control multiplier of the current air time: the takeoff stage's scale (TakeoffCap), 1 (Fixed) */
+	static float GetAirControlScale(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
 };

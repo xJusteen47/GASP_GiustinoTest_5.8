@@ -20,7 +20,7 @@ struct FGSTN_LoadoutExtensionContext;
  * copied to the pawn where the loadout is compiled (FGSTN_LocomotionAttach), so the simulation never reads the asset. Nothing here is
  * a Project Setting and no key is named: the boost is a command tag, its key is in the kit's input data.
  *
- * Phases P2/P3 add the air control, the skid and the retreat slipperiness here (all with neutral defaults).
+ * P2 adds the skid and the air control (RunStages.Skid / RunStages.Air), P3 the attack momentum (RunStages.AttackMomentum).
  */
 UCLASS(BlueprintType)
 class GSTNCOMBATGAS_API UGSTN_LocomotionProfile : public UPrimaryDataAsset
@@ -52,6 +52,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Walking Mode Properties")
 	TArray<FName> BrakeProperties;
 
+	/**
+	 * Air (P2, TakeoffCap model): properties of any mode that get the air top speed while airborne, besides Mover's shared MaxSpeed which
+	 * is always written. For a Blueprint air mode with its own speed variable. Empty by default
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Air Mode Properties")
+	TArray<FName> AirSpeedProperties;
+
+	/** Properties that get the air control (0..1) besides Mover's shared AirControlPercentage, which is always written. Empty by default */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Air Mode Properties")
+	TArray<FName> AirControlProperties;
+
 	/** Analog walk, walk start and air turn (owner playtest 2026-11-16). Works with the run stages on (it scales their stage 1) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Analog Walk", meta = (ShowOnlyInnerProperties))
 	FGSTN_AnalogWalkTuning AnalogWalk;
@@ -65,6 +76,8 @@ struct GSTNCOMBATGAS_API FGSTN_LocomotionSimTuning
 	TArray<FName> AccelerationProperties;
 	TArray<FName> TurningProperties;
 	TArray<FName> BrakeProperties;
+	TArray<FName> AirSpeedProperties;
+	TArray<FName> AirControlProperties;
 	FGSTN_AnalogWalkTuning AnalogWalk;
 
 	static FGSTN_LocomotionSimTuning FromProfile(const UGSTN_LocomotionProfile& Profile);

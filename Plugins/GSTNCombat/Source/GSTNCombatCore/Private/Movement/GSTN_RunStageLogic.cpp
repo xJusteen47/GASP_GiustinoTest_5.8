@@ -47,6 +47,7 @@ FGSTN_RunStagesTuning FGSTN_RunStagesTuning::MakeDefault()
 	Stage1.ReleaseBrake = 4000.f;
 	Stage1.FramesToNextStage = 40;
 	Stage1.CarryFrames = 3;
+	Stage1.AirControlScale = 1.f;
 
 	FGSTN_RunStage Stage2;
 	Stage2.MaxSpeed = 650.f;
@@ -55,6 +56,7 @@ FGSTN_RunStagesTuning FGSTN_RunStagesTuning::MakeDefault()
 	Stage2.ReleaseBrake = 2500.f;
 	Stage2.FramesToNextStage = 60;
 	Stage2.CarryFrames = 5;
+	Stage2.AirControlScale = 0.8f;
 
 	FGSTN_RunStage Stage3;
 	Stage3.MaxSpeed = 850.f;
@@ -63,6 +65,7 @@ FGSTN_RunStagesTuning FGSTN_RunStagesTuning::MakeDefault()
 	Stage3.ReleaseBrake = 1800.f;
 	Stage3.FramesToNextStage = 1;
 	Stage3.CarryFrames = 8;
+	Stage3.AirControlScale = 0.6f;
 
 	Tuning.Stages = { Stage1, Stage2, Stage3 };
 	return Tuning;
@@ -72,7 +75,8 @@ bool FGSTN_RunStageState::operator==(const FGSTN_RunStageState& Other) const
 {
 	return Stage == Other.Stage && FramesInStage == Other.FramesInStage && FramesSinceMoveStart == Other.FramesSinceMoveStart
 		&& FramesSinceStickRelease == Other.FramesSinceStickRelease && CarriedSpeed == Other.CarriedSpeed && FramesSinceCarry == Other.FramesSinceCarry
-		&& CarrySource == Other.CarrySource && PrevSpeed == Other.PrevSpeed && LastFrame == Other.LastFrame;
+		&& CarrySource == Other.CarrySource && PrevSpeed == Other.PrevSpeed && LastFrame == Other.LastFrame && CarryWindow == Other.CarryWindow
+		&& bAirborne == Other.bAirborne && TakeoffSpeed == Other.TakeoffSpeed && TakeoffStage == Other.TakeoffStage;
 }
 
 void FGSTN_RunStageState::SerializeCompact(FArchive& Ar)
@@ -88,6 +92,12 @@ void FGSTN_RunStageState::SerializeCompact(FArchive& Ar)
 	SerializeSpeed(Ar, CarriedSpeed);
 	SerializeSpeed(Ar, PrevSpeed);
 	Ar << LastFrame;
+	SerializeCounter(Ar, CarryWindow);
+	uint8 AirBit = bAirborne ? 1 : 0;
+	Ar.SerializeBits(&AirBit, 1);
+	bAirborne = AirBit != 0;
+	SerializeSpeed(Ar, TakeoffSpeed);
+	Ar << TakeoffStage;
 }
 
 void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunFrameInput& Input, FGSTN_RunStageState& State)
@@ -103,9 +113,32 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 	const float PrevSpeed = State.PrevSpeed;
 	State.PrevSpeed = Speed;
 
-	// In the air the stage is kept as it was (the landing keeps the run, P2 adds the air rules); the counters wait
+	// In the air the stage is kept as it was (the landing keeps the run); the counters wait. The first air frame latches the takeoff:
+	// the ground speed of the last grounded frame and its stage set the air top speed and steering (P2, decision 1C)
 	if (!Input.bGrounded)
 	{
+		if (!State.bAirborne)
+		{
+			State.bAirborne = true;
+			State.TakeoffSpeed = FMath::Max(PrevSpeed, Speed);
+			State.TakeoffStage = State.Stage;
+		}
+		return;
+	}
+	State.bAirborne = false;
+
+	// A skid of this frame (P2): the speed of before it is remembered for the attacks (P3), the run drops to stage 1
+	if (Input.bSkidStarted)
+	{
+		State.CarriedSpeed = Input.SkidStartSpeed;
+		State.FramesSinceCarry = 0;
+		State.CarrySource = EGSTN_RunCarrySource::Skid;
+		State.CarryWindow = Tuning.Skid.CarryFrames;
+		if (Tuning.Skid.bResetsStage)
+		{
+			ResetToFirstStage(State);
+		}
+		State.FramesInStage = 0;
 		return;
 	}
 
@@ -128,6 +161,7 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 			State.CarriedSpeed = PrevSpeed;
 			State.FramesSinceCarry = 0;
 			State.CarrySource = EGSTN_RunCarrySource::StickRelease;
+			State.CarryWindow = Tuning.GetStage(State.Stage).CarryFrames;
 		}
 		else
 		{
@@ -197,5 +231,19 @@ float FGSTN_RunStageLogic::GetCarriedSpeed(const FGSTN_RunStagesTuning& Tuning, 
 	{
 		return 0.f;
 	}
-	return State.FramesSinceCarry <= Tuning.GetStage(State.Stage).CarryFrames ? State.CarriedSpeed : 0.f;
+	return State.FramesSinceCarry <= State.CarryWindow ? State.CarriedSpeed : 0.f;
+}
+
+float FGSTN_RunStageLogic::GetAirTopSpeed(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State, float Factor)
+{
+	return FMath::Max(State.TakeoffSpeed, Tuning.Air.MinAirSpeed * FMath::Max(Factor, 0.f));
+}
+
+float FGSTN_RunStageLogic::GetAirControlScale(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State)
+{
+	if (!Tuning.IsEnabled() || Tuning.Air.Model != EGSTN_AirControlModel::TakeoffCap)
+	{
+		return 1.f;
+	}
+	return Tuning.GetStage(State.TakeoffStage).AirControlScale;
 }

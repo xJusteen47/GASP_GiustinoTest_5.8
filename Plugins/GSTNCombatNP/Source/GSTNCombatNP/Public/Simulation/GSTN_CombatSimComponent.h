@@ -419,6 +419,19 @@ public:
 	bool ReadRunningSlide(int32& OutStartFrame, const FGSTN_MomentumSlide*& OutSlide) const;
 
 	/**
+	 * True while the combat state of the frame being simulated leaves the locomotion to the player (Actionable: no timeline, no hit
+	 * reaction, no link). Read by the run skid move from Mover's tick (the combat model ticked before it in the same frame)
+	 */
+	bool IsFreeToMove() const;
+
+	/**
+	 * Run skid (Mario-style run P2, FGSTN_LayeredMove_RunSkid): starts one this frame when the kit's locomotion profile says so
+	 * (FGSTN_RunSkidMath::ShouldStart) from the tracked Mover state of the end of the previous frame and this frame's stick. Called from the
+	 * ability system's pre-tick, before Mover ticks; nothing here is kept outside the sync states
+	 */
+	void StepRunSkid(const FGSTN_CombatSyncCore& Core);
+
+	/**
 	 * The camera aim of the command of the frame being simulated (UGSTN_InputConfig::bSendCameraAim, combat-m3 7.10): control
 	 * rotation pitch and yaw, roll 0. The simulation keeps it on its way past the ability system's tick of the same frame, rewritten
 	 * every simulated frame, so a re-simulation reads the command it replays. Zero when the command carries no aim (HasAim)
@@ -1119,6 +1132,10 @@ private:
 	/** Instant effect that queues the momentum slide of a ground move (FGSTN_LayeredMove_MomentumSlide); replace for a game with its own */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
 	TSubclassOf<UGameplayEffect> MomentumSlideEffect;
+
+	/** Instant effect that queues a run skid (FGSTN_LayeredMove_RunSkid); replace for a game with its own */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Locomotion")
+	TSubclassOf<UGameplayEffect> RunSkidEffect;
 
 	/** Instant effect that queues the ledge guard of a move with a Stop ledge window (FGSTN_LayeredMove_LedgeGuard); replace for a game with its own */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")

@@ -21,6 +21,7 @@ public class GSTNCombatNP : ModuleRules
 			"GSTNCombatCore",
 			"GSTNCombatGAS",
 			"GSTNSurfaceCore",
+			"GSTNAnimationCore", // the run skid's placeholder lean through the directional additive node (presentation)
 			"PhysicsCore",
 			"GameplayAbilities",
 			"AbilitySystemSimulation",

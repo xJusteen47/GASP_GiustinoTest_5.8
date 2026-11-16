@@ -71,6 +71,7 @@ FGSTN_JumpState FGSTN_JumpLogic::Step(const FGSTN_JumpState& In, int32 Frame, co
 			Out.StartFrame = INDEX_NONE;
 			Out.Button = INDEX_NONE;
 			Out.bJumpCut = false;
+			Out.CutFrames = 0;
 		}
 		return Out;
 	}
@@ -89,7 +90,12 @@ FGSTN_JumpState FGSTN_JumpLogic::Step(const FGSTN_JumpState& In, int32 Frame, co
 			if (Elapsed >= Params.MaxHoldFrames || (!bButtonHeld && Elapsed >= Params.MinHoldFrames))
 			{
 				Out.bJumpCut = true;
+				Out.CutFrames = 0;
 			}
+		}
+		else if (Out.CutFrames < 255)
+		{
+			++Out.CutFrames;
 		}
 		if (!bRising)
 		{
@@ -138,6 +144,7 @@ FGSTN_JumpState FGSTN_JumpLogic::ApplyTakeoff(const FGSTN_JumpState& In, int32 F
 	Out.StartFrame = Frame;
 	Out.Button = static_cast<int8>(Button);
 	Out.bJumpCut = false;
+	Out.CutFrames = 0;
 	Out.bFastFalling = false;
 	Out.CoyoteFramesLeft = 0;
 	Out.bTakeoffWasAir = Kind == EGSTN_JumpKind::Air;
@@ -177,6 +184,12 @@ float FGSTN_JumpLogic::GravityScale(const FGSTN_JumpState& State, const FGSTN_Ju
 	switch (State.Phase)
 	{
 	case EGSTN_JumpPhase::Rising:
+		if (State.bJumpCut && Params.CutRampFrames > 0)
+		{
+			// The ramp (owner 2026-11-16): the cut frame is the first step of it, the last one reaches the cut scale
+			const float Alpha = FMath::Min(1.f, static_cast<float>(State.CutFrames + 1) / static_cast<float>(Params.CutRampFrames));
+			return FMath::Lerp(Params.RiseGravityScale, Params.CutGravityScale, Alpha);
+		}
 		return State.bJumpCut ? Params.CutGravityScale : Params.RiseGravityScale;
 	case EGSTN_JumpPhase::Falling:
 		return State.bGliding && Params.CanGlide() ? Params.GlideGravityScale : Params.FallGravityScale;

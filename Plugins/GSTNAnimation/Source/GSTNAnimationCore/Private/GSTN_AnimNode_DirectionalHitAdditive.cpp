@@ -89,21 +89,45 @@ void FGSTN_AnimNode_DirectionalHitAdditive::CacheBones_AnyThread(const FAnimatio
 void FGSTN_AnimNode_DirectionalHitAdditive::PreUpdate(const UAnimInstance* InAnimInstance)
 {
 	bHasRequest = false;
+	ExtraRequests.Reset();
 	const AActor* Owner = InAnimInstance ? InAnimInstance->GetOwningActor() : nullptr;
 	if (!Owner)
 	{
 		return;
 	}
-	if (CachedOwner.Get() != Owner || !CachedSource.IsValid())
+	// A component added at runtime (the run skid source is created at BeginPlay) changes the count: the sources are looked up again
+	if (CachedOwner.Get() != Owner || !CachedSource.IsValid() || CachedComponentCount != Owner->GetComponents().Num())
 	{
+		CachedComponentCount = Owner->GetComponents().Num();
+		// Every component with the interface: the hit reactions first (the debug display reads the first), then the others in order
 		CachedOwner = Owner;
-		CachedSource = Owner->FindComponentByInterface(UGSTN_AdditiveReactionSource::StaticClass());
+		CachedSource = nullptr;
+		CachedExtraSources.Reset();
+		for (UActorComponent* Component : Owner->GetComponentsByInterface(UGSTN_AdditiveReactionSource::StaticClass()))
+		{
+			if (!CachedSource.IsValid())
+			{
+				CachedSource = Component;
+			}
+			else
+			{
+				CachedExtraSources.Add(Component);
+			}
+		}
 	}
 	if (const IGSTN_AdditiveReactionSource* SourceComponent = Cast<IGSTN_AdditiveReactionSource>(CachedSource.Get()))
 	{
 		Request = FGSTN_AdditiveReactionRequest();
 		SourceComponent->GetAdditiveReaction(Request);
 		bHasRequest = true;
+	}
+	ExtraRequests.Reset();
+	for (const TWeakObjectPtr<UObject>& Extra : CachedExtraSources)
+	{
+		if (const IGSTN_AdditiveReactionSource* ExtraComponent = Cast<IGSTN_AdditiveReactionSource>(Extra.Get()))
+		{
+			ExtraComponent->GetAdditiveReaction(ExtraRequests.AddDefaulted_GetRef());
+		}
 	}
 }
 
@@ -119,20 +143,28 @@ void FGSTN_AnimNode_DirectionalHitAdditive::Evaluate_AnyThread(FPoseContext& Out
 	{
 		return;
 	}
-	for (const FGSTN_AdditiveReactionLayer& Layer : Request.Layers)
+	auto Draw = [this, &Output](const FGSTN_AdditiveReactionRequest& Drawn)
 	{
-		if (!Layer.IsActive())
+		for (const FGSTN_AdditiveReactionLayer& Layer : Drawn.Layers)
 		{
-			continue;
+			if (!Layer.IsActive())
+			{
+				continue;
+			}
+			if (Layer.Additive)
+			{
+				ApplyClip(Output, Layer);
+			}
+			else
+			{
+				ApplyPlaceholder(Output, Layer);
+			}
 		}
-		if (Layer.Additive)
-		{
-			ApplyClip(Output, Layer);
-		}
-		else
-		{
-			ApplyPlaceholder(Output, Layer);
-		}
+	};
+	Draw(Request);
+	for (const FGSTN_AdditiveReactionRequest& Extra : ExtraRequests)
+	{
+		Draw(Extra);
 	}
 }
 

@@ -126,6 +126,36 @@ struct GSTNSURFACECORE_API FGSTN_SurfaceLaunchParams
 };
 
 /**
+ * What a run skid does at the edge of this surface (Mario-style run P2, owner 2026-11-16 17:46Z): the surface wins over the kit's
+ * own rule, so ice can make every character slide off while normal floors keep the kit's choice
+ */
+UENUM(BlueprintType)
+enum class EGSTN_SurfaceLedgeRule : uint8
+{
+	/** The kit's rule applies */
+	Inherit,
+	/** The skid stops at the edge */
+	StopAtLedge,
+	/** The skid carries the character off the edge */
+	SlideOff
+};
+
+/** How the surface changes ground locomotion (skids and attack slides). Static data like the rest of the behaviour */
+USTRUCT(BlueprintType)
+struct GSTNSURFACECORE_API FGSTN_SurfaceLocomotion
+{
+	GENERATED_BODY()
+
+	/** The skid at the edge of this surface; Inherit = the kit's rule */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Surface|Locomotion")
+	EGSTN_SurfaceLedgeRule SkidLedge = EGSTN_SurfaceLedgeRule::Inherit;
+
+	/** Multiplies the braking of skids and attack slides on this surface (0.25 = ice, four times as slippery; 1 = unchanged) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Surface|Locomotion", meta = (ClampMin = "0.0", ClampMax = "4.0"))
+	float FrictionScale = 1.f;
+};
+
+/**
  * What a surface offers (traversal-surfaces.md §2.1): the traversal behaviours, the impact class and the launch parameters.
  * Level objects and enemy body parts carry the same struct; no consumer knows which one it is reading.
  *
@@ -152,6 +182,10 @@ struct GSTNSURFACECORE_API FGSTN_SurfaceBehaviour
 	/** Used when Behaviours has Surface.Behaviour.Launch */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Surface")
 	FGSTN_SurfaceLaunchParams Launch;
+
+	/** Skid ledge rule and friction for ground locomotion (neutral by default) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Surface")
+	FGSTN_SurfaceLocomotion Locomotion;
 
 	/** Free identity for kits, abilities and AI queries (a boss "back plate"). Never read by core code */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Surface")
@@ -232,6 +266,10 @@ struct GSTNSURFACECORE_API FGSTN_SurfaceView
 	/** Launch parameters, meaningful when Behaviours has Surface.Behaviour.Launch */
 	UPROPERTY(BlueprintReadOnly, Category = "Surface")
 	FGSTN_SurfaceLaunchParams Launch;
+
+	/** Skid ledge rule and friction for ground locomotion */
+	UPROPERTY(BlueprintReadOnly, Category = "Surface")
+	FGSTN_SurfaceLocomotion Locomotion;
 
 	/** Designer identity of the surface */
 	UPROPERTY(BlueprintReadOnly, Category = "Surface")

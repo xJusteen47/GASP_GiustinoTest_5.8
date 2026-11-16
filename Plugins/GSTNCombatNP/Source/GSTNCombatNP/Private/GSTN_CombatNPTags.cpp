@@ -5,6 +5,8 @@
 namespace GSTNCombatNPTags
 {
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Mover_Frozen, "Combat.Mover.Frozen", "The pawn is held still by a hitstop freeze (FGSTN_LayeredMove_Freeze). A Mover tag, never granted to the ability system");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Movement_State_Skid, "Movement.State.Skid", "A run skid is running (FGSTN_LayeredMove_RunSkid). Mover tag, copied into the input context");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Movement_State_Skid_JumpWindow, "Movement.State.Skid.JumpWindow", "Inside the run skid's jump window. Mover tag, copied into the input context");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_FreezeSeconds, "Combat.SetByCaller.FreezeSeconds", "Freeze duration in seconds, read by UGSTN_FreezeMoveCreator");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveVelocityX, "Combat.SetByCaller.MoveVelocityX", "X of the world velocity of a knockback or push back move (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveVelocityY, "Combat.SetByCaller.MoveVelocityY", "Y of the world velocity of a knockback or push back move (cm/s)");

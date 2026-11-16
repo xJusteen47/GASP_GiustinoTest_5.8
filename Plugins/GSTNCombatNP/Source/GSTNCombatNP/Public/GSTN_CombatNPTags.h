@@ -16,6 +16,15 @@ namespace GSTNCombatNPTags
 	 */
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Mover_Frozen);
 
+	/**
+	 * Carried by the run skid move (FGSTN_LayeredMove_RunSkid) while it runs, owner 2026-11-16 12:46Z. A Mover tag derived from the sync
+	 * state (a rollback restores it); the combat tick copies it into the input context so a kit binding can require it
+	 */
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Movement_State_Skid);
+
+	/** The skid's jump window (FGSTN_RunSkidTuning::JumpWindowStart..End): a side somersault or any other binding hooks on it */
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Movement_State_Skid_JumpWindow);
+
 	/** SetByCaller key of the freeze effect: the freeze duration in seconds (UGSTN_FreezeMoveCreator) */
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(SetByCaller_FreezeSeconds);
 

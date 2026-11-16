@@ -111,6 +111,33 @@ struct GSTNCOMBATCORE_API FGSTN_MomentumSlide
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Momentum Slide", meta = (EditCondition = "bEnabled"))
 	bool bAddRootMotion = true;
 
+	/**
+	 * Mario-style run P3 (owner decision 2A): a move started just after the stick was released, or during a run skid, slides with the speed
+	 * of before the release / the skid while the run state still carries it (FGSTN_RunStage::CarryFrames, FGSTN_RunSkidTuning::CarryFrames),
+	 * when that is faster than the speed left. Needs the kit's locomotion profile; without one nothing is carried
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Momentum Slide|Run", meta = (EditCondition = "bEnabled"))
+	bool bUseCarriedSpeed = true;
+
+	/**
+	 * Retreat (owner 2026-11-16 10:12Z, method D): for these live frames from the start the stick held against the slide does NOT brake it,
+	 * so a retreating attack keeps its momentum; after them the stick brakes normally (StickBrake). 0 = the stick brakes from the first frame
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Momentum Slide|Stick", meta = (EditCondition = "bEnabled", ClampMin = "0", ForceUnits = "Frames"))
+	int32 RetreatWindowFrames = 6;
+
+	/** Extra deceleration while the stick is held against the slide after the retreat window (cm/s^2, 0 = the stick never brakes) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Momentum Slide|Stick", meta = (EditCondition = "bEnabled", ClampMin = "0", ForceUnits = "cm/s^2"))
+	float StickBrake = 3000.f;
+
+	/** Cosine between stick and slide direction at or under which the stick counts as against the slide */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Momentum Slide|Stick", meta = (EditCondition = "bEnabled", ClampMin = "-1", ClampMax = "1"))
+	float StickAgainstCos = -0.3f;
+
+	/** Multiplies the slide's braking while the stick is held along it (cosine >= 0.7): under 1 = slides further when pushed forward, 1 = no effect */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Momentum Slide|Stick", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "2"))
+	float StickAlongScale = 1.f;
+
 	FGSTN_MomentumSlide()
 	{
 		// Against defaults to a hard brake: 600 cm/s rests in 0.12 s, about 36 cm
@@ -143,6 +170,16 @@ struct GSTNCOMBATCORE_API FGSTN_MomentumSlideMath
 
 	/** One step of the slide's speed, never below zero */
 	static float StepSpeed(float Speed, const FGSTN_MomentumSlideBraking& Braking, float DeltaSeconds);
+
+	/**
+	 * The braking of one live frame with the stick (P3): StickDot = cosine between the stick and the slide direction, StickSize its magnitude
+	 * (0..1, under 0.25 = released). Inside the retreat window the stick changes nothing; after it, against = + StickBrake * StickSize, along =
+	 * the braking times StickAlongScale
+	 */
+	static FGSTN_MomentumSlideBraking ApplyStick(const FGSTN_MomentumSlide& Slide, const FGSTN_MomentumSlideBraking& Base, int32 LiveFrame, float StickDot, float StickSize);
+
+	/** The running speed a move starts from: the measured one, or the carried one when the data allows it and it is faster */
+	static float PickRunningSpeed(const FGSTN_MomentumSlide& Slide, float MeasuredSpeed, float CarriedSpeed);
 
 	/** Distance a slide covers before it rests or MaxFrames pass, at a fixed tick (a prediction for tuning and tests, never used to move anything) */
 	static float PredictDistance(const FGSTN_MomentumSlideResponse& Response, float RunningSpeed, const FGSTN_MomentumSlideBraking& Braking, float TickRate, int32 MaxSteps = 1000);

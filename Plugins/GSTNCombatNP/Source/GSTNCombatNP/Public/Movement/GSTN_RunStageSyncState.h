@@ -67,6 +67,13 @@ struct GSTNCOMBATNP_API FGSTN_RunStageMover
 	 */
 	static int32 ApplyStageValues(UMoverComponent& MoverComp, const FGSTN_LocomotionSimTuning& Tuning, int32 Stage, float Factor, float GroundSpeed = -1.f);
 
+	/**
+	 * The air control and air top speed (P2, decision 1C) into Mover's shared settings and the profile's named air properties: the AirControl
+	 * stat (or the archetype's value) times the takeoff stage's scale, and, airborne with the TakeoffCap model, the takeoff speed as MaxSpeed.
+	 * State = the run state of the start of the frame (null = grounded defaults). Returns the number of values written
+	 */
+	static int32 ApplyAirValues(UMoverComponent& MoverComp, const FGSTN_LocomotionSimTuning& Tuning, const FGSTN_RunStageState* State, float Factor);
+
 	/** OnPreMovement half (see the struct comment) */
 	static void PreMovement(UMoverComponent& MoverComp, float Factor);
 
