@@ -310,6 +310,21 @@ bool FGSTN_LaunchDirectionTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("elevation against the tilted up"), FVector::DotProduct(Direction, TiltedUp), 0.5, 1.0e-12);
 	TestTrue(TEXT("tilted up: horizontal part along the projected facing"), NearlyEqual(Direction, FVector(0.5, FMath::Cos(FMath::DegreesToRadians(30.0)), 0.0)));
 	TestTrue(TEXT("a zero up gives no direction"), UGSTN_HitMathUtils::LaunchDirection(EGSTN_YawSource::AttackerFacing, 30.f, EGSTN_SpecialAngle::None, FVector::ZeroVector, Facing, ToVictim, Velocity, false, 0.f, Sakurai).IsZero());
+
+	// Yaw offset: turns the horizontal part about Up, positive to the right (facing +Y, its right is -X), the elevation untouched
+	Direction = UGSTN_HitMathUtils::LaunchDirection(EGSTN_YawSource::AttackerFacing, 0.f, EGSTN_SpecialAngle::None, Up, Facing, ToVictim, Velocity, false, 0.f, Sakurai, 90.f);
+	TestTrue(TEXT("yaw offset 90: straight to the attacker's right"), NearlyEqual(Direction, FVector(-1.0, 0.0, 0.0)));
+	Direction = UGSTN_HitMathUtils::LaunchDirection(EGSTN_YawSource::AttackerFacing, 45.f, EGSTN_SpecialAngle::None, Up, Facing, ToVictim, Velocity, false, 0.f, Sakurai, -90.f);
+	TestTrue(TEXT("yaw offset -90 at 45 degrees: to the left and up"), NearlyEqual(Direction, FVector(C45, 0.0, S45)));
+	Direction = UGSTN_HitMathUtils::LaunchDirection(EGSTN_YawSource::AttackerFacing, 45.f, EGSTN_SpecialAngle::None, Up, Facing, ToVictim, Velocity, false, 0.f, Sakurai, 30.f);
+	TestEqual(TEXT("yaw offset keeps the elevation"), Direction.Z, S45, 1.0e-12);
+	TestEqual(TEXT("yaw offset keeps unit length"), Direction.Size(), 1.0, 1.0e-12);
+	Direction = UGSTN_HitMathUtils::LaunchDirection(EGSTN_YawSource::HitboxToVictim, 0.f, EGSTN_SpecialAngle::None, Up, Facing, ToVictim, Velocity, false, 0.f, Sakurai, 180.f);
+	TestTrue(TEXT("yaw offset applies to any yaw source: 180 turns away-from-hitbox into towards it"), NearlyEqual(Direction, FVector(1.0, 0.0, 0.0)));
+	Direction = UGSTN_HitMathUtils::LaunchDirection(EGSTN_YawSource::AttackerFacing, 10.f, EGSTN_SpecialAngle::AutoLink, Up, Facing, ToVictim, FVector(0.0, 3.0, 4.0), false, 0.f, Sakurai, 90.f);
+	TestTrue(TEXT("autolink with a moving hitbox ignores the yaw offset"), NearlyEqual(Direction, FVector(0.0, 0.6, 0.8)));
+	Direction = UGSTN_HitMathUtils::LaunchDirection(EGSTN_YawSource::AttackerFacing, 30.f, EGSTN_SpecialAngle::None, TiltedUp, Facing, ToVictim, Velocity, false, 0.f, Sakurai, 45.f);
+	TestEqual(TEXT("yaw offset on a tilted up keeps the elevation against it"), FVector::DotProduct(Direction, TiltedUp), 0.5, 1.0e-12);
 	return true;
 }
 

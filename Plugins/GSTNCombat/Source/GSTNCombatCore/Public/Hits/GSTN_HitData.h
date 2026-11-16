@@ -98,6 +98,14 @@ struct GSTNCOMBATCORE_API FGSTN_HitData
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit|Knockback")
 	EGSTN_YawSource YawSource = EGSTN_YawSource::AttackerFacing;
 
+	/**
+	 * Turns the launch sideways on the movement plane, after the yaw source picks the way: positive to the right of it, negative to the left
+	 * (90 = straight to the attacker's right with AttackerFacing). The elevation stays AngleDeg. Ignored by AutoLink while the hitbox moves, since
+	 * that launch follows the hitbox in three dimensions. Owner 2026-11-16: hits in 3D must be able to send sideways, not only in the attack plane
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit|Knockback", meta = (ClampMin = "-180.0", ClampMax = "180.0", ForceUnits = "deg"))
+	float YawOffsetDeg = 0.f;
+
 	/** Scales the hitstun frames. 0 = no hitstun and no stagger at all (damage and hitstop still apply), for multi-hits that must not pin the victim */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Hit|Hitstun", meta = (ClampMin = "0.0"))
 	float HitstunMultiplier = 1.f;
@@ -229,7 +237,8 @@ enum class EGSTN_HitDataField : uint32
 	StaggerForceMode = 1 << 18,
 	StaggerForce = 1 << 19,
 	StaggerForceScale = 1 << 20,
-	Impact = 1 << 21
+	Impact = 1 << 21,
+	YawOffsetDeg = 1 << 22
 };
 ENUM_CLASS_FLAGS(EGSTN_HitDataField);
 

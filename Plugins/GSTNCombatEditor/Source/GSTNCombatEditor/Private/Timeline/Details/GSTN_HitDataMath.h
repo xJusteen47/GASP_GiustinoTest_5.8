@@ -31,6 +31,12 @@ namespace GSTNHitDataDial
 	/** The launch direction in the attacker's own frame, from the elevation alone: x forward along the movement plane, z up. Unit length */
 	FVector2D PlaneComponents(float AngleDeg);
 
+	/**
+	 * The tip of the top-view yaw arrow (SGSTN_YawCompass): the yaw source's way points up the widget, a positive offset turns the arrow to the
+	 * right (clockwise on screen, as a positive yaw turns right seen from above). Screen space, y grows downwards
+	 */
+	FVector2D YawArrowTip(const FVector2D& Centre, double Radius, float YawOffsetDeg);
+
 	/** Dragging snaps to whole degrees, with Shift to 5 and with Ctrl to 15 (the diagonals and the right angles land on a snap) */
 	float GetSnapDegrees(bool bShift, bool bCtrl);
 }
@@ -39,6 +45,9 @@ namespace GSTNHitDataText
 {
 	/** A sentence for each yaw source, for the row under the property */
 	FText DescribeYawSource(EGSTN_YawSource YawSource);
+
+	/** A sentence for the sideways turn: straight along the yaw source, or how many degrees to its right or left */
+	FText DescribeYawOffset(float YawOffsetDeg);
 
 	/** A sentence for each special angle */
 	FText DescribeSpecialAngle(EGSTN_SpecialAngle SpecialAngle);

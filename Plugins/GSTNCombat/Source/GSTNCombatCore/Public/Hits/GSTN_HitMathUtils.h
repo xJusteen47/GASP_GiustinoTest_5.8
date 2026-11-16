@@ -67,9 +67,10 @@ public:
 	 * A yaw source with no horizontal part falls back to the attacker's facing, then to the direction to the victim, then to a
 	 * fixed direction on the plane. Special angles: Sakurai3D replaces AngleDeg by the low angle (grounded victim, knockback below
 	 * the threshold) or the high one; AutoLink is the hitbox velocity's own direction (the yaw source and angle when it has none).
+	 * YawOffsetDeg turns the horizontal part about Up before the elevation is applied: positive to the right of the yaw source (UE's yaw sense).
 	 */
 	UFUNCTION(BlueprintPure, Category = "GSTN|Hits")
-	static FVector LaunchDirection(EGSTN_YawSource YawSource, float AngleDeg, EGSTN_SpecialAngle SpecialAngle, const FVector& Up, const FVector& AttackerFacing, const FVector& HitboxToVictim, const FVector& HitboxVelocity, bool bVictimGrounded, float Knockback, const FGSTN_SakuraiParams& Sakurai);
+	static FVector LaunchDirection(EGSTN_YawSource YawSource, float AngleDeg, EGSTN_SpecialAngle SpecialAngle, const FVector& Up, const FVector& AttackerFacing, const FVector& HitboxToVictim, const FVector& HitboxVelocity, bool bVictimGrounded, float Knockback, const FGSTN_SakuraiParams& Sakurai, float YawOffsetDeg = 0.f);
 
 	/**
 	 * Directional influence on a launch, steps 1 to 8 of combat-m4-hits 3: the stick (on the plane normal to Up) turns the launch
