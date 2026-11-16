@@ -78,6 +78,9 @@ enum class EGSTN_RequestType : uint8
 	RemoveLinkEffect = 21,
 	LaunchLinked = 22,
 
+	/** A reverse whose momentum turns with the facing (owner 2026-11-16, FGSTN_ReverseWindow): Arg = the yaw, as SetFacing */
+	SetFacingTurnMomentum = 23,
+
 	Count UMETA(Hidden)
 };
 

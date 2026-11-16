@@ -38,13 +38,39 @@ enum class EGSTN_MoveGroundRule : uint8
 	Air
 };
 
+/**
+ * Which way an attack faces when it starts (owner 2026-11-16: the stick has priority over the facing, "stick right while facing left, the
+ * move goes right"). Applied by FGSTN_StartupSteer::ResolveOriginAim on the move's first frame (frames 0 and 1, so a move the ability graph
+ * starts one frame late still turns); the turn is instant and rewrites the move origin, so the steer cone, the reverse window and the
+ * WorldAtMoveStart hitboxes all start from the new direction. The stick is the one of the frame the move comes out (execution), not the one
+ * of a buffered press: the latest thing the player holds wins, and the reverse window covers a late flick.
+ */
 UENUM(BlueprintType)
 enum class EGSTN_AimPolicy : uint8
 {
+	/** The move starts where the character looks. For moves whose meaning is relative to the facing (a back air, a back throw) */
 	KeepFacing,
+	/** Snap to the move stick when it is out of the dead zone */
 	SnapToStick,
+	/** Snap to the aim stick while the reticle is on and it is pushed, else to the move stick */
 	SnapIfAimOrTilt,
-	Camera
+	/** Snap to the camera yaw, and keep following it until TurnUntilFrame (Focus mode style) */
+	Camera,
+	/**
+	 * Default of every move (owner 2026-11-16): SnapIfAimOrTilt for an attack (a move with an active hitbox that reads the move stick),
+	 * KeepFacing for the rest (rolls, dodges, get-ups with bIgnoreMoveInput). Added last so the stored values of the others stay the same
+	 */
+	Auto
+};
+
+/** What a reverse does to the character's momentum (FGSTN_ReverseWindow) */
+UENUM(BlueprintType)
+enum class EGSTN_ReverseMomentum : uint8
+{
+	/** The velocity stays as it is: only the move turns */
+	Keep,
+	/** The velocity turns with the facing, about the local up (a 180 reverse flips it: Smash's B-reverse) */
+	TurnWithFacing
 };
 
 /**
@@ -727,6 +753,34 @@ struct GSTNCOMBATCORE_API FGSTN_SteerWindow
 };
 
 /**
+ * Reverse window (owner 2026-11-16, Smash's turnaround / B-reverse): in the first frames after a move starts, pushing the move stick hard enough
+ * away from the move's direction turns the whole move to the stick, at once. Pure data, read by FGSTN_StartupSteer::ResolveOriginAim. It only
+ * applies to attacks (a move with an active hitbox, without bIgnoreMoveInput) and never reaches the first active frame. Frame 0 is the start aim's
+ * (AimPolicy): a stick already held back when the move comes out is a turnaround, not a reverse, and keeps the momentum.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_ReverseWindow
+{
+	GENERATED_BODY()
+
+	/** The window is timeline frames 1 to Frames (inclusive), cut before the first active frame. 0 = the move cannot be reversed (a back air) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reverse", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 Frames = 3;
+
+	/** How far the move stick must be pushed (0..1 of the unit circle). High, so a thumb drifting back does not turn an attack */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reverse", meta = (ClampMin = "0.25", ClampMax = "1.0"))
+	float StickThreshold = 0.7f;
+
+	/** How far from the move's direction the stick must point to count as "back" (180 = only straight back) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reverse", meta = (ClampMin = "0.0", ClampMax = "180.0", ForceUnits = "deg"))
+	float MinAngleDegrees = 120.f;
+
+	/** What the reverse does to the momentum. Keep by default; TurnWithFacing for aerial specials that should flip the drift */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reverse")
+	EGSTN_ReverseMomentum Momentum = EGSTN_ReverseMomentum::Keep;
+};
+
+/**
  * The frame-data source of truth of a combat ability, inline on the ability or in a UGSTN_CombatTimeline asset.
  */
 USTRUCT(BlueprintType)
@@ -801,9 +855,11 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	/** Frame is inside the take-off window */
 	bool IsTakeoffFrame(int32 Frame) const { return AllowsTakeoff() && Frame >= TakeoffFromFrame && (TakeoffUntilFrame < 0 || Frame < TakeoffUntilFrame); }
 
+	/** Which way the move faces when it starts: the stick by default for attacks (EGSTN_AimPolicy::Auto, owner 2026-11-16) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim")
-	EGSTN_AimPolicy AimPolicy = EGSTN_AimPolicy::KeepFacing;
+	EGSTN_AimPolicy AimPolicy = EGSTN_AimPolicy::Auto;
 
+	/** The most the start aim turns the move from where the character looks, either way (180 = any direction) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (EditCondition = "AimPolicy != EGSTN_AimPolicy::KeepFacing", ClampMin = "0.0", ClampMax = "180.0", ForceUnits = "deg"))
 	float MaxTurnDegrees = 180.f;
 
@@ -831,6 +887,10 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim", meta = (EditCondition = "MaxSteerDegrees > 0"))
 	FGSTN_SteerWindow Steer;
+
+	/** Turnaround / B-reverse in the first frames (owner 2026-11-16): a hard flick of the move stick away from the move turns it. See FGSTN_ReverseWindow */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Aim")
+	FGSTN_ReverseWindow Reverse;
 
 	/**
 	 * While the timeline runs the move stick neither walks nor turns the character: Mover gets no move input and the facing of the previous

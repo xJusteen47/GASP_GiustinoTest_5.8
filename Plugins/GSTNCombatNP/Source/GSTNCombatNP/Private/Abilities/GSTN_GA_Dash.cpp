@@ -10,6 +10,8 @@
 #include "MoverComponent.h"
 #include "MoverTypes.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "Movement/GSTN_GravityFrame.h"
+#include "Timeline/GSTN_StartupSteer.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNMoveTimeline, Log, All);
 
@@ -30,6 +32,13 @@ FEffectMoveContainer UGSTN_MoveImpulseCreator::MakeMove_Implementation(UMoverCom
 	if (const FMoverDefaultSyncState* State = Tracker->GetSyncState().SyncStateCollection.FindDataByType<FMoverDefaultSyncState>())
 	{
 		Facing = State->GetOrientation_WorldSpace().Vector();
+	}
+	// Stick priority (owner 2026-11-16: rolls and dodges follow the stick too): the move origin of the timeline that just started already holds
+	// the start aim of this frame (the combat tick ran before the ability system), while the Mover state above is still the facing of the frame before
+	const UGSTN_CombatSimComponent* Combat = TargetMoverComponent->GetOwner() ? TargetMoverComponent->GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
+	if (const FGSTN_CombatSyncState* Sync = Combat ? Combat->GetSyncState() : nullptr; Sync && Sync->Core.ActionState == EGSTN_ActionState::InTimeline && Sync->Core.Hit.MoveOrigin.bSet)
+	{
+		Facing = FGSTN_GravityFrame::DirectionOfYaw(FGSTN_StartupSteer::DequantizeYaw(static_cast<int16>(Sync->Core.Hit.MoveOrigin.RotationQ[1])), Up);
 	}
 	const FVector Fallback = FVector::CrossProduct(FVector::RightVector, Up);
 	const FVector Forward = FGSTN_DashMath::HorizontalForward(Up, Facing, Fallback);

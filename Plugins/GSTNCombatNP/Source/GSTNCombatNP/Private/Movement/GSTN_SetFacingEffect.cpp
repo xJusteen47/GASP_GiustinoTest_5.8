@@ -16,6 +16,17 @@ FRotator FGSTN_SetFacingEffect::MakeOrientation(const FRotator& OrientationDeg, 
 	return FGSTN_GravityFrame::WithYaw(OrientationDeg, YawDeg, Up);
 }
 
+FVector FGSTN_SetFacingEffect::TurnVelocity(const FVector& Velocity, float FromYawDeg, float ToYawDeg, const FVector& Up)
+{
+	const FVector Axis = Up.GetSafeNormal();
+	if (Axis.IsNearlyZero())
+	{
+		return Velocity;
+	}
+	const float Delta = FMath::FindDeltaAngleDegrees(FromYawDeg, ToYawDeg);
+	return FQuat(Axis, FMath::DegreesToRadians(static_cast<double>(Delta))).RotateVector(Velocity);
+}
+
 bool FGSTN_SetFacingEffect::ApplyMovementEffect(FApplyMovementEffectParams& ApplyEffectParams, FMoverSyncState& OutputState)
 {
 	FMoverDefaultSyncState* Sync = OutputState.SyncStateCollection.FindMutableDataByType<FMoverDefaultSyncState>();
@@ -34,8 +45,13 @@ bool FGSTN_SetFacingEffect::ApplyMovementEffect(FApplyMovementEffectParams& Appl
 	{
 		Updated->SetWorldRotation(NewOrientation, /*bSweep*/ false, nullptr, ETeleportType::TeleportPhysics);
 	}
-	// Everything but the yaw stays as the step found it, base included, so a character on a moving platform keeps riding it
-	Sync->SetTransforms_WorldSpace(Sync->GetLocation_WorldSpace(), NewOrientation, Sync->GetVelocity_WorldSpace(),
+	// A reverse with TurnWithFacing momentum (owner 2026-11-16): the drift turns with the move, a 180 flips it. The turn is about the local up, so the
+	// vertical speed (a jump, a fall) is untouched
+	const FVector Velocity = bTurnVelocity
+		? TurnVelocity(Sync->GetVelocity_WorldSpace(), FGSTN_GravityFrame::YawOfRotator(Sync->GetOrientation_WorldSpace(), Up), YawDeg, Up)
+		: Sync->GetVelocity_WorldSpace();
+	// Everything but the yaw (and, on a reverse, the velocity) stays as the step found it, base included, so a character on a moving platform keeps riding it
+	Sync->SetTransforms_WorldSpace(Sync->GetLocation_WorldSpace(), NewOrientation, Velocity,
 		Sync->GetAngularVelocityDegrees_WorldSpace(), Sync->GetMovementBase(), Sync->GetMovementBaseBoneName());
 	// True = the sync state changed: Mover copies it into the state the movement mode starts from
 	return true;
@@ -50,6 +66,9 @@ void FGSTN_SetFacingEffect::NetSerialize(FArchive& Ar)
 {
 	Super::NetSerialize(Ar);
 	Ar << YawDeg;
+	uint8 TurnVelocityBit = bTurnVelocity ? 1 : 0;
+	Ar << TurnVelocityBit;
+	bTurnVelocity = TurnVelocityBit != 0;
 }
 
 UScriptStruct* FGSTN_SetFacingEffect::GetScriptStruct() const
@@ -59,7 +78,7 @@ UScriptStruct* FGSTN_SetFacingEffect::GetScriptStruct() const
 
 FString FGSTN_SetFacingEffect::ToSimpleString() const
 {
-	return FString::Printf(TEXT("SetFacing %.1f"), YawDeg);
+	return FString::Printf(TEXT("SetFacing %.1f%s"), YawDeg, bTurnVelocity ? TEXT(" +velocity") : TEXT(""));
 }
 
 FEffectMoveContainer UGSTN_SetFacingMoveCreator::MakeMove_Implementation(UMoverComponent* TargetMoverComponent, UAbilitySystemComponent* TargetAbilitySystemComponent,
@@ -69,6 +88,7 @@ FEffectMoveContainer UGSTN_SetFacingMoveCreator::MakeMove_Implementation(UMoverC
 	if (EffectSpec.IsValid() && EffectSpec.Data.IsValid())
 	{
 		Effect.YawDeg = EffectSpec.Data->GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_FacingYaw, false, 0.f);
+		Effect.bTurnVelocity = EffectSpec.Data->GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_FacingTurnVelocity, false, 0.f) > 0.5f;
 	}
 	return FEffectMoveContainer(&Effect);
 }
