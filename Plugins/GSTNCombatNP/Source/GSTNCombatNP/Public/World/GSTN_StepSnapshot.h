@@ -299,12 +299,12 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotEntry
 	template <typename TTest, typename TSkip, typename TArrayType>
 	void AppendExtensionOverlaps(TArrayType& Overlapped, TTest&& Test, TSkip&& Skip) const
 	{
-		for (const FGSTN_PosedHurtboxExtension& Extension : HurtPose.Extensions)
+		for (const FGSTN_PosedHurtboxExtension& PosedExt : HurtPose.Extensions)
 		{
-			if (Hurtboxes && Hurtboxes->Hurtboxes.IsValidIndex(Extension.HurtboxIndex) && !Overlapped.Contains(Extension.HurtboxIndex) && !Skip(Extension.HurtboxIndex)
-				&& Test(Extension.Shape))
+			if (Hurtboxes && Hurtboxes->Hurtboxes.IsValidIndex(PosedExt.HurtboxIndex) && !Overlapped.Contains(PosedExt.HurtboxIndex) && !Skip(PosedExt.HurtboxIndex)
+				&& Test(PosedExt.Shape))
 			{
-				Overlapped.Add(Extension.HurtboxIndex);
+				Overlapped.Add(PosedExt.HurtboxIndex);
 			}
 		}
 	}
@@ -324,11 +324,11 @@ struct GSTNCOMBATNP_API FGSTN_SnapshotEntry
 		// A hurtbox hit only through an extension (hidden by the level, or replaced by a move): the extension's shape is where the contact was
 		if (!HurtPose.IsPresent(HurtboxIndex))
 		{
-			for (const FGSTN_PosedHurtboxExtension& Extension : HurtPose.Extensions)
+			for (const FGSTN_PosedHurtboxExtension& PosedExt : HurtPose.Extensions)
 			{
-				if (Extension.HurtboxIndex == HurtboxIndex)
+				if (PosedExt.HurtboxIndex == HurtboxIndex)
 				{
-					return &Extension.Shape;
+					return &PosedExt.Shape;
 				}
 			}
 		}

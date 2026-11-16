@@ -54,7 +54,7 @@ bool FGSTN_EditorHurtboxTrackEditorTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("registered"), Editor.IsValid());
 	if (Editor.IsValid())
 	{
-		TestEqual(TEXT("its own editor, not the hitbox one"), Editor->GetTrackStruct(), FGSTN_TimelineTrack_Hurtbox::StaticStruct());
+		TestTrue(TEXT("its own editor, not the hitbox one"), Editor->GetTrackStruct() == FGSTN_TimelineTrack_Hurtbox::StaticStruct());
 		TestTrue(TEXT("keyed like a hitbox track"), Editor->HasKeys());
 	}
 
