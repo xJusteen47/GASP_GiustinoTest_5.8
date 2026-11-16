@@ -31,6 +31,7 @@ uint16 FGSTN_ImpactProfile::Pack() const
 	}
 	Bits |= bForceIgnoresSurface ? (1u << 5) : 0u;
 	Bits |= bNoTech ? (1u << 6) : 0u;
+	Bits |= bNoTechBounce ? (1u << 7) : 0u;
 	const int32 Scale = FMath::Clamp(FMath::RoundToInt(SpeedScale * SpeedScaleUnitsPerOne), 0, 255);
 	Bits |= static_cast<uint16>((Scale ^ SpeedScaleUnitsPerOne) << 8);
 	return Bits;
@@ -49,6 +50,7 @@ FGSTN_ImpactProfile FGSTN_ImpactProfile::Unpack(uint16 Packed)
 	}
 	Profile.bForceIgnoresSurface = (Packed & (1u << 5)) != 0;
 	Profile.bNoTech = (Packed & (1u << 6)) != 0;
+	Profile.bNoTechBounce = (Packed & (1u << 7)) != 0;
 	Profile.SpeedScale = static_cast<float>(((Packed >> 8) & 0xFF) ^ SpeedScaleUnitsPerOne) / static_cast<float>(SpeedScaleUnitsPerOne);
 	return Profile;
 }

@@ -153,6 +153,32 @@ bool FGSTN_HitStateRoundTripTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_HitStateGroundBounceChainTest, "GSTNCombat.NP.Hits.State.GroundBounceChain", GSTN_NP_TEST_FLAGS)
+bool FGSTN_HitStateGroundBounceChainTest::RunTest(const FString& Parameters)
+{
+	// The hard ground bounce chain (owner 2026-11-16) goes on the wire while tumbling, also with the default profile, and is dead otherwise
+	FGSTN_CombatSyncState Victim = MakeVictimWithHit();
+	Victim.Core.Hit.GroundBounceCount = 2;
+	Victim.Core.Hit.GroundBounceFirstFrame = HitStateFrame - 3;
+	bool bError = false;
+	FGSTN_CombatSyncState Loaded = HitStateReadBack(Victim, bError);
+	TestFalse(TEXT("reads back without an error"), bError);
+	TestTrue(TEXT("equal after the wire"), HitStateSame(Victim, Loaded));
+	TestEqual(TEXT("the count"), static_cast<int32>(Loaded.Core.Hit.GroundBounceCount), 2);
+	TestEqual(TEXT("the first frame"), Loaded.Core.Hit.GroundBounceFirstFrame, HitStateFrame - 3);
+
+	FGSTN_CombatSyncState Other = Victim;
+	Other.Core.Hit.GroundBounceCount = 1;
+	TestFalse(TEXT("a different count reconciles"), HitStateSame(Victim, Other));
+
+	FGSTN_CombatSyncState Standing = Victim;
+	Standing.Core.ActionState = EGSTN_ActionState::Hitstun;
+	FGSTN_CombatSyncState LoadedStanding = HitStateReadBack(Standing, bError);
+	TestFalse(TEXT("not tumbling: reads back"), bError);
+	TestEqual(TEXT("not tumbling: the chain is dead"), static_cast<int32>(LoadedStanding.Core.Hit.GroundBounceCount), 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_HitStateIdleZeroCostTest, "GSTNCombat.NP.Hits.State.IdleZeroCost", GSTN_NP_TEST_FLAGS)
 bool FGSTN_HitStateIdleZeroCostTest::RunTest(const FString& Parameters)
 {

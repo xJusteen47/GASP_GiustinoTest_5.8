@@ -187,6 +187,16 @@ void UGSTN_DefenceRules::Validate(TArray<FString>& OutErrors) const
 	{
 		OutErrors.Add(TEXT("The ground bounce speed must be finite and not negative, and its steer angle between 0 and 90 degrees."));
 	}
+	if (!IsFiniteNonNegative(GroundBounce.NoBounceBelowSpeed) || !IsFiniteNonNegative(GroundBounce.ScaleMinSpeed) || !IsFiniteNonNegative(GroundBounce.ScaleMaxSpeed)
+		|| !IsFiniteNonNegative(GroundBounce.MinHeight) || !IsFiniteNonNegative(GroundBounce.MaxHeight) || !IsFiniteNonNegative(GroundBounce.SelfKnockdownImpactSpeed)
+		|| !(GroundBounce.HeightExponent > 0.f) || !FMath::IsFinite(GroundBounce.HeightExponent))
+	{
+		OutErrors.Add(TEXT("The tech bounce speeds and heights must be finite and not negative, and its height exponent above 0."));
+	}
+	if (GroundBounce.ScaleMaxSpeed < GroundBounce.ScaleMinSpeed)
+	{
+		OutErrors.Add(TEXT("The tech bounce's ScaleMaxSpeed must not be below its ScaleMinSpeed."));
+	}
 	if (!(GroundBounce.GroundBounceGravityScale > 0.f) || !FMath::IsFinite(GroundBounce.GroundBounceGravityScale))
 	{
 		OutErrors.Add(TEXT("The ground bounce gravity scale must be finite and above 0."));

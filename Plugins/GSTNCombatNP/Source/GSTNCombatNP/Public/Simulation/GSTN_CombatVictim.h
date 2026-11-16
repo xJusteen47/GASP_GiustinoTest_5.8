@@ -267,7 +267,9 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 	 * The surface impact of a tumbling victim (combat-m4-hits 7b, M4 H11): reads the contact record of the frame before and resolves it through
 	 * UGSTN_ImpactMath::Resolve, with the hit's profile kept in the sync state (Core.Hit.ImpactProfileQ), the victim's response and the surface
 	 * table. Acts only on a victim in Tumble, outside a hitstop, whose record was made on exactly the previous frame (so a contact resolves once)
-	 * and that no hit staggered this frame. Floors and ceilings resolve only on a surface whose row forces its outcome (a trampoline).
+	 * and that no hit staggered this frame. Ceilings resolve only on a surface whose row forces its outcome (a trampoline); floors also on the
+	 * hard ground bounce (owner 2026-11-16, UGSTN_CombatRules::GroundImpact: the hit forces it, or the speed into the floor is above the threshold
+	 * while in hitstun, within the per-launch chain limit counted in Core.Hit.GroundBounceCount), with or without a surface table or row.
 	 *  - Splat: ActionState Splat until ImpactEndFrame, held at rest by a freeze of that many frames; extra damage in Out.Damage;
 	 *  - Bounce: Out.Move relaunches the victim; the state stays Tumble and the hitstun end moves to cover the flight;
 	 *  - BreakSurface: a one frame hitstop window, then the pending launch (the pre-impact velocity times the surface's ResidualSpeedScale)

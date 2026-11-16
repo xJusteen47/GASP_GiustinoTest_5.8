@@ -525,4 +525,37 @@ bool FGSTN_ImpactGoldenMatrixTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_GroundImpactRulesTest, "GSTNCombat.Core.Impact.GroundImpactRules", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_GroundImpactRulesTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-16: hard ground bounce above a speed while in hitstun, a chain limit against endless bounces
+	FGSTN_GroundImpactRules Rules;
+	Rules.BounceMinSpeed = 1200.f;
+	TestFalse(TEXT("at the threshold: a landing"), Rules.WantsBounceAtSpeed(1200.0, true));
+	TestTrue(TEXT("above it, in hitstun: a bounce"), Rules.WantsBounceAtSpeed(1201.0, true));
+	TestFalse(TEXT("above it, after the hitstun: a landing (default)"), Rules.WantsBounceAtSpeed(2000.0, false));
+	Rules.bOnlyDuringHitstun = false;
+	TestTrue(TEXT("without the hitstun condition: a bounce"), Rules.WantsBounceAtSpeed(2000.0, false));
+	Rules.bBounceBySpeed = false;
+	TestFalse(TEXT("speed bounces off: never"), Rules.WantsBounceAtSpeed(5000.0, true));
+
+	Rules.MaxBounces = 2;
+	Rules.BounceWindowFrames = 60;
+	TestTrue(TEXT("the first bounce"), Rules.AllowsAnotherBounce(0, INDEX_NONE, 100));
+	TestTrue(TEXT("the second, inside the window"), Rules.AllowsAnotherBounce(1, 100, 160));
+	TestFalse(TEXT("the second, after the window"), Rules.AllowsAnotherBounce(1, 100, 161));
+	TestFalse(TEXT("a third: over the count"), Rules.AllowsAnotherBounce(2, 100, 110));
+	Rules.MaxBounces = 0;
+	Rules.BounceWindowFrames = 0;
+	TestTrue(TEXT("no limits"), Rules.AllowsAnotherBounce(15, 0, 100000));
+
+	// The per-move flat landing survives the packed profile, and alone it does not disturb the other fields
+	FGSTN_ImpactProfile Profile;
+	Profile.bNoTechBounce = true;
+	const FGSTN_ImpactProfile Back = FGSTN_ImpactProfile::Unpack(Profile.Pack());
+	TestTrue(TEXT("bNoTechBounce round trip"), Back.bNoTechBounce && !Back.bNoTech && Back.Force == EGSTN_ImpactOutcome::None && FMath::IsNearlyEqual(Back.SpeedScale, 1.f));
+	TestFalse(TEXT("it is not the default profile"), Profile.IsDefault());
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

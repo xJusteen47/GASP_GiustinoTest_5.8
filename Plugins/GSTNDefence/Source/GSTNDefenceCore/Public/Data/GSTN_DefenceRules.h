@@ -315,14 +315,55 @@ struct GSTNDEFENCECORE_API FGSTN_SDIRules
 	bool bSDIInStaggerInPlace = true;
 };
 
-/** Landing from a tumble without a tech (m6 spec 6, owner revision): a stick-steered mini bounce, then the downed state */
+/**
+ * Landing from a tumble without a tech (m6 spec 6, owner revision): a stick-steered mini bounce (the "tech bounce" of fighting games), then the
+ * downed state. Owner 2026-11-16: its HEIGHT follows how hard the victim hits the floor, from MinHeight at ScaleMinSpeed up to MaxHeight at
+ * ScaleMaxSpeed (the impact speed along the floor's normal, times the hit's SpeedScale); below NoBounceBelowSpeed there is none at all. Faster
+ * than the combat rules' GroundImpact.BounceMinSpeed (in hitstun) the victim does not land: it hard-bounces (combat core). Per move: the hit's
+ * Impact profile (bNoTechBounce lands flat, SpeedScale scales the judged speed)
+ */
 USTRUCT(BlueprintType)
 struct GSTNDEFENCECORE_API FGSTN_GroundBounceRules
 {
 	GENERATED_BODY()
 
-	/** Speed of the mini bounce along the entity's local up */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
+	/** The height follows the impact speed (the curve below). Off: always GroundBounceSpeed (the behaviour before 2026-11-16) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce")
+	bool bScaleWithImpactSpeed = true;
+
+	/** Slower than this into the floor: no bounce, the victim drops flat. 0 = always at least MinHeight */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bScaleWithImpactSpeed"))
+	float NoBounceBelowSpeed = 0.f;
+
+	/** The impact speed at and below which the bounce is MinHeight */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bScaleWithImpactSpeed"))
+	float ScaleMinSpeed = 300.f;
+
+	/** The impact speed at and above which the bounce is MaxHeight (about the core's hard bounce threshold, so the two meet) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bScaleWithImpactSpeed"))
+	float ScaleMaxSpeed = 1200.f;
+
+	/** Peak height of the softest bounce (cm of the pelvis rise, under GroundBounceGravityScale) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce", meta = (ClampMin = "0.0", ForceUnits = "cm", EditCondition = "bScaleWithImpactSpeed"))
+	float MinHeight = 12.f;
+
+	/** Peak height of the hardest bounce */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce", meta = (ClampMin = "0.0", ForceUnits = "cm", EditCondition = "bScaleWithImpactSpeed"))
+	float MaxHeight = 40.f;
+
+	/** Shape of the curve between the two: 1 linear, above 1 stays low longer (only hard landings bounce high), below 1 rises early */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce", meta = (ClampMin = "0.1", ClampMax = "4.0", EditCondition = "bScaleWithImpactSpeed"))
+	float HeightExponent = 1.f;
+
+	/**
+	 * The impact speed a move's own user lands with when its Combat.Move.KnockdownOnLanding window downs it (the dropkick): that landing has no
+	 * contact record, so its bounce is judged at this speed
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bScaleWithImpactSpeed"))
+	float SelfKnockdownImpactSpeed = 900.f;
+
+	/** Speed of the mini bounce along the entity's local up, when bScaleWithImpactSpeed is off */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "!bScaleWithImpactSpeed"))
 	float GroundBounceSpeed = 300.f;
 
 	/** The stick at the contact frame steers the bounce's direction by up to this angle off the vertical */

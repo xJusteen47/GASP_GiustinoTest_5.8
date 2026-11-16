@@ -191,6 +191,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
 	FGSTN_ImpactResponse ImpactResponse;
 
+	/**
+	 * The hard ground bounce of a tumbling victim (owner 2026-11-16): above a speed into the floor, while in hitstun, it bounces like off a wall;
+	 * below, it lands (the Defence plugin's tech bounce, then lying). Per move: the hit's Impact profile. Chain limit against endless bounces
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
+	FGSTN_GroundImpactRules GroundImpact;
+
 	/** Damage of a surface impact before the surface's and the victim's ImpactDamageScale. 0 = impacts do no damage (they still stun) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits", meta = (ClampMin = "0.0"))
 	float BaseImpactDamage = 0.f;

@@ -291,11 +291,14 @@ void FGSTN_TumbleLanding::OnContactResolved(FGSTN_CombatTickContext& Context, co
 	{
 		return;
 	}
+	// The hit's say in the landing, read before the reaction ends: a flat landing, and the speed scale the impact is judged with
+	const FGSTN_ImpactProfile Profile = FGSTN_ImpactProfile::Unpack(Context.Out.Core.Hit.ImpactProfileQ);
+	const double ImpactSpeed = static_cast<double>(Contact.ImpactSpeedQ) * Profile.SpeedScale;
 	FGSTN_CombatVictim::EndReaction(Context.Out.Core, Context.Frame);
-	EnterDowned(Context, Data, Contact.ContactFrame, Data.bHasTechSet);
+	EnterDowned(Context, Data, Contact.ContactFrame, Data.bHasTechSet, ImpactSpeed, Profile.bNoTechBounce);
 }
 
-void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data, int32 LandingFrame, bool bMissedTech)
+void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data, int32 LandingFrame, bool bMissedTech, double ImpactSpeed, bool bNoBounce)
 {
 	const int32 Frame = Context.Frame;
 	const FGSTN_GroundBounceRules& Bounce = Data.Rules->GroundBounce;
@@ -312,15 +315,17 @@ void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FG
 	}
 	Fragment.KnockdownEndFrame = DownedEnd;
 
-	// The mini bounce, steered by the frame's stick: a short launch, the knockback move's flight
-	const FVector Velocity = UGSTN_DefenceMath::GroundBounceVelocity(Bounce, Context.Up, Context.StickOnPlane);
-	// Heavier gravity makes it small AND quick (react-hook-1 review: 300 cm/s under normal gravity rose 44 cm and floated about 34 frames)
-	const float GravityScale = FMath::Max(Bounce.GroundBounceGravityScale, 0.01f);
-	const double Rise = FMath::Max(Velocity.Dot(Context.Up), 0.0);
 	// The entity's own gravity, not 980 (gravity audit 2026-11-16: a low-gravity zone floats longer, so the flight lasts longer); 980 without a
 	// Mover. Near zero gravity the bounce is capped at 10 s rather than never ending
 	const UGSTN_CombatSimComponent* GravitySim = Context.Owner ? Context.Owner->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
 	const double Gravity = GravitySim ? GravitySim->GetBaseGravity().Size() : FGSTN_GravityFrame::NominalGravity;
+	// The mini bounce ("tech bounce"), steered by the frame's stick: a short launch, the knockback move's flight. Its height follows the impact
+	// speed (owner 2026-11-16: a soft landing barely bounces, a hard one bounces well); the hit may ask for none
+	const double BounceSpeed = bNoBounce ? 0.0 : UGSTN_DefenceMath::TechBounceSpeed(Bounce, ImpactSpeed, Gravity);
+	const FVector Velocity = BounceSpeed > 0.0 ? UGSTN_DefenceMath::GroundBounceVelocityAtSpeed(Bounce, Context.Up, Context.StickOnPlane, BounceSpeed) : FVector::ZeroVector;
+	// Heavier gravity makes it small AND quick (react-hook-1 review: 300 cm/s under normal gravity rose 44 cm and floated about 34 frames)
+	const float GravityScale = FMath::Max(Bounce.GroundBounceGravityScale, 0.01f);
+	const double Rise = FMath::Max(Velocity.Dot(Context.Up), 0.0);
 	const int32 MaxFlightFrames = FMath::Max(FMath::CeilToInt32(10.0 / FrameSeconds), 1);
 	const double FlightSeconds = Gravity > UE_KINDA_SMALL_NUMBER ? 2.0 * Rise / (Gravity * GravityScale) : 10.0;
 	const int32 FlightFrames = FMath::Clamp(FMath::CeilToInt32(FMath::Min(FlightSeconds, 10.0) / FrameSeconds), 1, MaxFlightFrames);
@@ -387,7 +392,7 @@ bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const 
 	// reaction to tech out of): the way out is the owner's one, the get-up roll from the stick or the neutral get-up
 	Existing->HitFlags &= ~GSTNDefenceHitFlags::SelfKnockdownArmed;
 	FGSTN_CombatTimelineLogic::CancelForOtherCommand(Context.Out.Core, Context.Frame);
-	EnterDowned(Context, Data, Context.Frame, false);
+	EnterDowned(Context, Data, Context.Frame, false, static_cast<double>(Data.Rules->GroundBounce.SelfKnockdownImpactSpeed), false);
 	return true;
 }
 

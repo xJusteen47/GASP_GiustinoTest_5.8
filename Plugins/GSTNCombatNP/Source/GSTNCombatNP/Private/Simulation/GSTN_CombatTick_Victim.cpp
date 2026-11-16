@@ -339,6 +339,9 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 			Core.bTumbleActionable = false;
 			Core.Hit.SetPendingReaction(Hit.Reaction);
 			Core.Hit.ImpactProfileQ = Entry.Hit.Impact.Pack();
+			// A new launch starts its own ground bounce chain (FGSTN_GroundImpactRules limit)
+			Core.Hit.GroundBounceCount = 0;
+			Core.Hit.GroundBounceFirstFrame = INDEX_NONE;
 			Core.Hit.SetPendingLaunch(Hit.Reaction == EGSTN_HitReaction::StaggerInPlace ? FVector::ZeroVector : LaunchVelocity);
 			Core.Hit.PendingBalloonFrames = static_cast<uint8>(FMath::Clamp(Hit.BalloonFrames, 0, FGSTN_BalloonMath::MaxFlightFrames));
 			// A new staggering hit starts its own held-direction drift budget (M6 F8)
@@ -412,7 +415,8 @@ void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_Comba
 	Out = FGSTN_ImpactStepResult();
 	const FGSTN_TumbleContactSyncState& Contact = In.Contact;
 	const int32 Frame = In.Frame;
-	if (Core.ActionState != EGSTN_ActionState::Tumble || In.bStaggeredThisFrame || Core.IsInHitstop(Frame) || !In.Table || !Contact.IsSet()
+	if (Core.ActionState != EGSTN_ActionState::Tumble || In.bStaggeredThisFrame || Core.IsInHitstop(Frame) || !Contact.IsSet()
+		|| (!In.Table && Contact.Kind != EGSTN_TumbleContactKind::Floor)
 		|| Contact.ContactFrame != Frame - 1)
 	{
 		return;
@@ -424,19 +428,56 @@ void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_Comba
 	{
 		return;
 	}
-	const FGSTN_SurfaceImpactRow* Row = In.Table->GetRow(Contact.SurfaceTypeIndex);
+	// No table: no surface rows, but the rules' ground bounce still applies to floors
+	const FGSTN_SurfaceImpactRow* Row = In.Table ? In.Table->GetRow(Contact.SurfaceTypeIndex) : nullptr;
 	FGSTN_ImpactProfile Profile = FGSTN_ImpactProfile::Unpack(Core.Hit.ImpactProfileQ);
-	// A floor ends the tumble (the landing), except where the surface forces its outcome or the attack forces a bounce: the ground bounce of
-	// a spike (owner, 2026-11-13). The attack's bounce is spent on the first floor it bounces off, so the victim bounces once and then lands
-	const bool bForcedGroundBounce = Contact.Kind == EGSTN_TumbleContactKind::Floor && Profile.Force == EGSTN_ImpactOutcome::Bounce;
-	if (!Row || (Contact.Kind != EGSTN_TumbleContactKind::Wall && !Row->bForceDefault && !bForcedGroundBounce))
+	// A floor ends the tumble (the landing), except where the surface forces its outcome (a trampoline) or the floor bounces the victim
+	// (owner, 2026-11-16): the attack forces a bounce (a spike, owner 2026-11-13; spent on the first floor it bounces off), or the victim hits
+	// it faster than the rules' GroundImpact threshold while still in hitstun. A per-launch chain limit stops endless bounces; past it, or
+	// slower, the floor is a landing and the Defence plugin's tech bounce takes over
+	const bool bFloor = Contact.Kind == EGSTN_TumbleContactKind::Floor;
+	const bool bSurfaceForces = Row && Row->bForceDefault;
+	const bool bForcedGroundBounce = bFloor && Profile.Force == EGSTN_ImpactOutcome::Bounce;
+	const double JudgedSpeed = static_cast<double>(Contact.ImpactSpeedQ) * Profile.SpeedScale;
+	bool bFloorBounce = false;
+	if (bFloor && !bSurfaceForces && In.Rules)
+	{
+		const FGSTN_GroundImpactRules& Ground = In.Rules->GroundImpact;
+		const bool bWanted = bForcedGroundBounce || (Ground.WantsBounceAtSpeed(JudgedSpeed, Core.Hit.HitstunEndFrame > Frame)
+			&& !Profile.Forbid.Contains(EGSTN_ImpactOutcome::Bounce));
+		bFloorBounce = bWanted && Ground.AllowsAnotherBounce(Core.Hit.GroundBounceCount, Core.Hit.GroundBounceFirstFrame, Frame) && JudgedSpeed > 0.0;
+		if (bFloorBounce && Row)
+		{
+			// The floor's own say: its bounce switch (a forcing hit with bForceIgnoresSurface overrides it) and its speed threshold
+			bFloorBounce = (Row->Allowed.bBounce || (bForcedGroundBounce && Profile.bForceIgnoresSurface)) && JudgedSpeed > static_cast<double>(Row->MinImpactSpeed);
+		}
+		if (bFloorBounce && !bForcedGroundBounce && In.Response)
+		{
+			// The victim's say (a heavy that never bounces); a forced bounce is the attack's and passes, as on walls
+			bFloorBounce = In.Response->Find(Row ? Row->Surface : FGameplayTag()).Allowed.bBounce;
+		}
+	}
+	if (!bFloorBounce && (!Row || (Contact.Kind != EGSTN_TumbleContactKind::Wall && !bSurfaceForces)))
 	{
 		return;
 	}
 
 	static const FGSTN_ImpactResponse AnythingGoes;
-	const FGSTN_ImpactResult Resolved = UGSTN_ImpactMath::Resolve(FGSTN_ImpactInput::Make(Contact.SurfaceTypeIndex, Contact.ImpactSpeedQ),
-		In.Table, In.Response ? *In.Response : AnythingGoes, Profile);
+	FGSTN_ImpactResult Resolved;
+	if (bFloorBounce)
+	{
+		// Decided above, also on a floor without a surface type (no row): the rules' restitution unless the victim sets its own
+		const FGSTN_ImpactResponseEntry& Victim = (In.Response ? *In.Response : AnythingGoes).Find(Row ? Row->Surface : FGameplayTag());
+		Resolved.Outcome = EGSTN_ImpactOutcome::Bounce;
+		Resolved.JudgedSpeed = static_cast<float>(JudgedSpeed);
+		Resolved.Restitution = Victim.Restitution >= 0.f ? Victim.Restitution : In.Rules->GroundImpact.Restitution;
+		Resolved.ImpactDamageScale = (Row ? Row->ImpactDamageScale : 1.f) * Victim.ImpactDamageScale;
+	}
+	else
+	{
+		Resolved = UGSTN_ImpactMath::Resolve(FGSTN_ImpactInput::Make(Contact.SurfaceTypeIndex, Contact.ImpactSpeedQ),
+			In.Table, In.Response ? *In.Response : AnythingGoes, Profile);
+	}
 	if (Resolved.Outcome == EGSTN_ImpactOutcome::None)
 	{
 		return;
@@ -476,10 +517,19 @@ void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_Comba
 		Out.Move.Frames = FMath::Max(Frames, TumbleProbeFrames);
 		Core.Hit.HitstunEndFrame = FMath::Max(Core.Hit.HitstunEndFrame, Frame + Frames);
 		Core.Hit.ImpactEndFrame = Frame + 1;
-		if (bForcedGroundBounce && !Row->bForceDefault)
+		if (bFloorBounce)
 		{
-			Profile.Force = EGSTN_ImpactOutcome::None;
-			Core.Hit.ImpactProfileQ = Profile.Pack();
+			// One more link of the chain; a forced bounce is spent here, so the next floor judges by speed alone
+			if (Core.Hit.GroundBounceCount == 0)
+			{
+				Core.Hit.GroundBounceFirstFrame = Frame;
+			}
+			Core.Hit.GroundBounceCount = static_cast<uint8>(FMath::Min<int32>(Core.Hit.GroundBounceCount + 1, 15));
+			if (bForcedGroundBounce)
+			{
+				Profile.Force = EGSTN_ImpactOutcome::None;
+				Core.Hit.ImpactProfileQ = Profile.Pack();
+			}
 		}
 		break;
 	}

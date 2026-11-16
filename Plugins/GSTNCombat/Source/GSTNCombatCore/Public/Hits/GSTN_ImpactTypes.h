@@ -51,18 +51,88 @@ struct GSTNCOMBATCORE_API FGSTN_ImpactProfile
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Impact")
 	bool bNoTech = false;
 
+	/**
+	 * Ground landing of a victim this hit launched (owner 2026-11-16): no small "tech bounce" on the landing, the victim drops flat and lies
+	 * down. The hard bounce has its own per-move switches: Force = Bounce always bounces (a spike), Forbid Bounce never does. The tech bounce's
+	 * height follows the judged impact speed, so SpeedScale also scales it per move
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Impact")
+	bool bNoTechBounce = false;
+
 	/** Bits of the packed form that carry the speed scale */
 	static constexpr uint16 SpeedScaleUnitsPerOne = 32;
 
 	/**
 	 * The profile as the 16 bits the victim keeps in its sync state while it tumbles (combat-m4-hits 11, the profile of the hit that
-	 * launched it): Force (2 bits), Forbid mask (3), bForceIgnoresSurface, bNoTech, and the speed scale in 1/32 (8 bits, up to 7.97)
+	 * launched it): Force (2 bits), Forbid mask (3), bForceIgnoresSurface, bNoTech, bNoTechBounce, and the speed scale in 1/32 (8 bits, up to 7.97)
 	 * stored against the default, so the default profile packs to 0 and an idle combatant pays nothing on the wire. Lossy by design:
 	 * a scale is rounded to 1/32, a duplicate in Forbid is one bit; Unpack(Pack(P)) is the profile every machine decides with
 	 */
 	uint16 Pack() const;
 	static FGSTN_ImpactProfile Unpack(uint16 Packed);
 	bool IsDefault() const { return Pack() == 0; }
+};
+
+/**
+ * The HARD ground bounce of a tumbling victim, the rules' part (owner 2026-11-16; UGSTN_CombatRules::GroundImpact). A victim that hits a floor
+ * fast enough while its hitstun still runs bounces off it like a wall bounce (Brawlhalla / a Smash spike): still tumbling, still in hitstun.
+ * Slower than that it LANDS, and the Defence plugin's landing gives the small "tech bounce" before it lies down (FGSTN_GroundBounceRules).
+ * The speed is the contact's speed into the floor along its normal, times the hit's FGSTN_ImpactProfile::SpeedScale.
+ *
+ * Per move (the hit that launched the victim, FGSTN_ImpactProfile): Force = Bounce bounces on the first floor whatever the speed (spent
+ * there); Forbid Bounce never hard-bounces (always a landing); bNoTechBounce lands flat. A surface that forces its own outcome (a trampoline)
+ * is the surface's business and is not limited here.
+ *
+ * The chain limit stops a victim from bouncing on forever (down a slope, off ledges, from one step to the next): after MaxBounces hard
+ * bounces, or BounceWindowFrames after the first one, every floor is a landing. Both count per launch: a new staggering hit starts again
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_GroundImpactRules
+{
+	GENERATED_BODY()
+
+	/** A fast enough floor contact bounces by itself, without a Force on the hit. Off = only forced bounces (the behaviour before 2026-11-16) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ground Impact")
+	bool bBounceBySpeed = true;
+
+	/** The hard bounce needs more than this speed into the floor (cm/s, after the hit's SpeedScale); slower is a landing (tech bounce) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ground Impact", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bBounceBySpeed"))
+	float BounceMinSpeed = 1200.f;
+
+	/**
+	 * Only while the hitstun still runs (Smash: a victim bounces while its knockback is live). Off: a long fall after the hitstun can bounce
+	 * too. Kept on, a launch upward that comes down after its hitstun lands (tech bounce) however fast it falls
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ground Impact", meta = (EditCondition = "bBounceBySpeed"))
+	bool bOnlyDuringHitstun = true;
+
+	/** The fraction of the speed the bounce keeps (reflected about the floor's normal). The victim's ImpactResponse restitution wins when set */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ground Impact", meta = (ClampMin = "0.0"))
+	float Restitution = 0.6f;
+
+	/** Hard ground bounces per launch; the next floor is a landing. 0 = no limit */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ground Impact|Limit", meta = (ClampMin = "0", ClampMax = "15"))
+	int32 MaxBounces = 2;
+
+	/** Frames after the first hard ground bounce of a launch during which another may happen; later floors are landings. 0 = no limit */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ground Impact|Limit", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 BounceWindowFrames = 90;
+
+	/** The speed alone asks for a hard bounce (bBounceBySpeed, the threshold, the hitstun condition). Pure */
+	bool WantsBounceAtSpeed(double JudgedSpeed, bool bInHitstun) const
+	{
+		return bBounceBySpeed && JudgedSpeed > static_cast<double>(BounceMinSpeed) && (bInHitstun || !bOnlyDuringHitstun);
+	}
+
+	/** The chain limit lets one more hard bounce happen: Count bounces so far, the first at FirstFrame (INDEX_NONE for none). Pure */
+	bool AllowsAnotherBounce(int32 Count, int32 FirstFrame, int32 Frame) const
+	{
+		if (MaxBounces > 0 && Count >= MaxBounces)
+		{
+			return false;
+		}
+		return BounceWindowFrames <= 0 || Count == 0 || FirstFrame == INDEX_NONE || Frame - FirstFrame <= BounceWindowFrames;
+	}
 };
 
 /** Which outcomes a surface or a victim lets through (None is always allowed) */

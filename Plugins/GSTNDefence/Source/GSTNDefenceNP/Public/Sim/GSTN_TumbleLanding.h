@@ -32,8 +32,9 @@ enum class EGSTN_TumbleContactKind : uint8;
  *    only a floor contact with no impact outcome falls to the landing below. The hit's bNoTech skips the evaluation. Presses between contacts are
  *    registered every frame of the tumble (AfterClocks), so the lockout and Combat.State.Tech.Lockout show while airborne. A kit without a tech
  *    set registers nothing: the shield button in tumble does nothing and starts no lockout.
- *  - Landing (OnContactResolved, floor contact, impact outcome None): the reaction ends, the mini ground bounce goes out (GroundBounceVelocity
- *    with the frame's stick, as a knockback move), the kit's ground bounce ability starts Forced, and the entity is downed: KnockdownEndFrame =
+ *  - Landing (OnContactResolved, floor contact, impact outcome None): the reaction ends, the mini ground bounce ("tech bounce") goes out
+ *    (its height from the contact's impact speed, TechBounceSpeed; steered by the frame's stick, as a knockback move; none for a hit with
+ *    bNoTechBounce), the kit's ground bounce ability starts Forced, and the entity is downed: KnockdownEndFrame =
  *    the contact plus MaxDownedFrames (0 = never: MAX_int32), or after a failed tech of a kit with a tech set the spec's KnockdownFrames +
  *    NoTechKnockdownBonusFrames. Combat.Event.KnockedDown goes out.
  *  - Downed: the movement lock (UGSTN_GE_DownedLock, Combat.Lock.Movement) holds while IsKnockedDown; the gate admits only the bindings that
@@ -76,9 +77,10 @@ struct GSTNDEFENCENP_API FGSTN_TumbleLanding
 	/**
 	 * The downed state of a landing: KnockdownEndFrame (MaxDownedFrames from LandingFrame, or the missed-tech knockdown when bMissedTech), the mini
 	 * bounce from the stick, the kit's ground bounce ability (pending, started at AfterClocks of this frame) and Combat.Event.KnockedDown. The caller
-	 * ends the reaction or the move first
+	 * ends the reaction or the move first. ImpactSpeed (cm/s into the floor, after the hit's SpeedScale) sets the tech bounce's height
+	 * (UGSTN_DefenceMath::TechBounceSpeed, owner 2026-11-16); bNoBounce (the hit's bNoTechBounce) lands flat
 	 */
-	static void EnterDowned(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data, int32 LandingFrame, bool bMissedTech);
+	static void EnterDowned(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data, int32 LandingFrame, bool bMissedTech, double ImpactSpeed, bool bNoBounce);
 
 	/** The running move (not its ricochet recoil) has a Tags window with Combat.Move.KnockdownOnLanding open at this frame */
 	static bool IsSelfKnockdownWindowOpen(const FGSTN_CombatTickContext& Context);

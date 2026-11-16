@@ -217,6 +217,88 @@ bool FGSTN_ImpactForcedGroundBounceTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ImpactGroundBounceBySpeedTest, "GSTNCombat.NP.Hits.Impact.GroundBounceBySpeed", GSTN_NP_TEST_FLAGS)
+bool FGSTN_ImpactGroundBounceBySpeedTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-16: faster than GroundImpact.BounceMinSpeed into an ordinary floor while in hitstun = a hard bounce, still tumbling
+	const FVector Up(0.0, 0.0, 1.0);
+	FImpactFixture F;
+	F.Rules->GroundImpact.BounceMinSpeed = 1200.f;
+	F.Rules->GroundImpact.MaxBounces = 2;
+	F.Rules->GroundImpact.BounceWindowFrames = 60;
+	F.In.Velocity = FVector(300.0, 0.0, -1500.0);
+	F.SetContact(TEXT("Wall"), 1500.0, 10, EGSTN_TumbleContactKind::Floor, Up);
+	const FGSTN_ImpactStepResult First = F.Step(11);
+	TestTrue(TEXT("fast floor in hitstun: hard bounce"), First.Outcome == EGSTN_ImpactOutcome::Bounce);
+	TestTrue(*FString::Printf(TEXT("up at the rules' restitution (%s)"), *First.Move.Velocity.ToString()), FMath::IsNearlyEqual(First.Move.Velocity.Z, 1500.0 * 0.6, 1.0));
+	TestTrue(TEXT("still tumbling"), F.Core.ActionState == EGSTN_ActionState::Tumble);
+	TestEqual(TEXT("one link of the chain"), static_cast<int32>(F.Core.Hit.GroundBounceCount), 1);
+	TestEqual(TEXT("the chain starts here"), F.Core.Hit.GroundBounceFirstFrame, 11);
+
+	// Second fast floor inside the window: a bounce; a third is over the count: a landing
+	F.SetContact(TEXT("Wall"), 1300.0, 30, EGSTN_TumbleContactKind::Floor, Up);
+	TestTrue(TEXT("second bounce"), F.Step(31).Outcome == EGSTN_ImpactOutcome::Bounce);
+	F.SetContact(TEXT("Wall"), 1300.0, 50, EGSTN_TumbleContactKind::Floor, Up);
+	TestTrue(TEXT("the count limit makes the third a landing"), F.Step(51).Outcome == EGSTN_ImpactOutcome::None);
+
+	// The window: a second bounce after BounceWindowFrames is a landing
+	FImpactFixture W;
+	W.Rules->GroundImpact.BounceMinSpeed = 1200.f;
+	W.Rules->GroundImpact.MaxBounces = 0;
+	W.Rules->GroundImpact.BounceWindowFrames = 20;
+	W.Core.Hit.HitstunEndFrame = 500;
+	W.SetContact(TEXT("Wall"), 1500.0, 10, EGSTN_TumbleContactKind::Floor, Up);
+	TestTrue(TEXT("first"), W.Step(11).Outcome == EGSTN_ImpactOutcome::Bounce);
+	W.SetContact(TEXT("Wall"), 1500.0, 40, EGSTN_TumbleContactKind::Floor, Up);
+	TestTrue(TEXT("past the window: a landing"), W.Step(41).Outcome == EGSTN_ImpactOutcome::None);
+
+	// Slow, or after the hitstun, or forbidden by the hit: a landing (the Defence tech bounce)
+	FImpactFixture Slow;
+	Slow.SetContact(TEXT("Wall"), 1100.0, 10, EGSTN_TumbleContactKind::Floor, Up);
+	TestTrue(TEXT("slow: landing"), Slow.Step(11).Outcome == EGSTN_ImpactOutcome::None);
+	FImpactFixture Late;
+	Late.Core.Hit.HitstunEndFrame = 5;
+	Late.SetContact(TEXT("Wall"), 3000.0, 10, EGSTN_TumbleContactKind::Floor, Up);
+	TestTrue(TEXT("after the hitstun: landing"), Late.Step(11).Outcome == EGSTN_ImpactOutcome::None);
+	FImpactFixture Forbidden;
+	FGSTN_ImpactProfile NoBounce;
+	NoBounce.Forbid.Add(EGSTN_ImpactOutcome::Bounce);
+	Forbidden.Core.Hit.ImpactProfileQ = NoBounce.Pack();
+	Forbidden.SetContact(TEXT("Wall"), 3000.0, 10, EGSTN_TumbleContactKind::Floor, Up);
+	TestTrue(TEXT("the move forbids it: landing"), Forbidden.Step(11).Outcome == EGSTN_ImpactOutcome::None);
+
+	// The hit's SpeedScale judges the speed: x2 makes a 700 cm/s contact a bounce
+	FImpactFixture Scaled;
+	FGSTN_ImpactProfile Heavy;
+	Heavy.SpeedScale = 2.f;
+	Scaled.Core.Hit.ImpactProfileQ = Heavy.Pack();
+	Scaled.SetContact(TEXT("Wall"), 700.0, 10, EGSTN_TumbleContactKind::Floor, Up);
+	TestTrue(TEXT("speed scale x2: bounce"), Scaled.Step(11).Outcome == EGSTN_ImpactOutcome::Bounce);
+
+	// A floor without a surface type, and rules without a surface table, still bounce by speed
+	FImpactFixture NoTable;
+	NoTable.In.Table = nullptr;
+	NoTable.SetContact(TEXT("Wall"), 1500.0, 10, EGSTN_TumbleContactKind::Floor, Up);
+	NoTable.In.Contact.SurfaceTypeIndex = 0;
+	TestTrue(TEXT("no table, no type: bounce"), NoTable.Step(11).Outcome == EGSTN_ImpactOutcome::Bounce);
+	NoTable.SetContact(TEXT("Wall"), 1500.0, 12, EGSTN_TumbleContactKind::Wall);
+	NoTable.Core.ActionState = EGSTN_ActionState::Tumble;
+	TestTrue(TEXT("no table: a wall decides nothing"), NoTable.Step(13).Outcome == EGSTN_ImpactOutcome::None);
+
+	// A victim that never bounces (its response) lands; a forced bounce of the attack still bounces it, as on walls
+	FImpactFixture Heavyweight;
+	Heavyweight.Response.Default.Allowed.bBounce = false;
+	Heavyweight.SetContact(TEXT("Wall"), 1500.0, 10, EGSTN_TumbleContactKind::Floor, Up);
+	TestTrue(TEXT("the victim never bounces: landing"), Heavyweight.Step(11).Outcome == EGSTN_ImpactOutcome::None);
+
+	// Speed bounces switched off: the behaviour before 2026-11-16
+	FImpactFixture Off;
+	Off.Rules->GroundImpact.bBounceBySpeed = false;
+	Off.SetContact(TEXT("Wall"), 3000.0, 10, EGSTN_TumbleContactKind::Floor, Up);
+	TestTrue(TEXT("off: landing"), Off.Step(11).Outcome == EGSTN_ImpactOutcome::None);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ImpactSplatEndsActionableTest, "GSTNCombat.NP.Hits.Impact.SplatEndsActionable", GSTN_NP_TEST_FLAGS)
 bool FGSTN_ImpactSplatEndsActionableTest::RunTest(const FString& Parameters)
 {

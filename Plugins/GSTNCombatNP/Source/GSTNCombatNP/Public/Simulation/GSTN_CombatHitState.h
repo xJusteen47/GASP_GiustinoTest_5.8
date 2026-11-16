@@ -76,7 +76,7 @@ struct FGSTN_MoveOrigin
  * serialized inside the action part of the core, which makes a combatant with nothing live pay no bit for it at all.
  *
  * Wire format (inside the action part, after the requests): 1 bit "hit part live"; then 8 bits of presence (move origin, targets,
- * confirm flags, hitstun end, impact end, pending launch, SDI, impact profile), 2 bits of pending reaction, and the blocks that are present.
+ * confirm flags, hitstun end, impact end, pending launch, SDI, impact profile and ground bounce chain), 2 bits of pending reaction, and the blocks that are present.
  */
 struct GSTNCOMBATNP_API FGSTN_HitSyncState
 {
@@ -105,6 +105,14 @@ struct GSTNCOMBATNP_API FGSTN_HitSyncState
 	 * hit asked of the surface the victim will hit (combat-m4-hits 7b layer 1). Live while the combatant tumbles; the plan's "ImpactProfileIndex"
 	 */
 	uint16 ImpactProfileQ = 0;
+
+	/**
+	 * The hard ground bounces of the current launch (FGSTN_GroundImpactRules chain limit): how many, and the frame of the first (INDEX_NONE
+	 * for none). Live while the combatant tumbles, like the profile; a new staggering hit resets them. On the wire inside the profile block
+	 * (1 bit, then 4 bits of count and the frame when set)
+	 */
+	uint8 GroundBounceCount = 0;
+	int32 GroundBounceFirstFrame = INDEX_NONE;
 
 	/** The launch velocity chosen by the hit, in cm/s divided by 4, applied when the hitstop ends. State at F + 1 like the reaction */
 	int16 PendingLaunchQ[3] = { 0, 0, 0 };

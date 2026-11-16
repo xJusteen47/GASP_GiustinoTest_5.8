@@ -339,9 +339,38 @@ FGSTN_TechEvaluation UGSTN_DefenceMath::EvaluateTech(const FGSTN_TechState& Stat
 
 FVector UGSTN_DefenceMath::GroundBounceVelocity(const FGSTN_GroundBounceRules& Rules, const FVector& Up, const FVector& StickOnPlane)
 {
+	return GroundBounceVelocityAtSpeed(Rules, Up, StickOnPlane, Rules.GroundBounceSpeed);
+}
+
+double UGSTN_DefenceMath::TechBounceHeight(const FGSTN_GroundBounceRules& Rules, double ImpactSpeed)
+{
+	if (!(ImpactSpeed >= static_cast<double>(Rules.NoBounceBelowSpeed)))
+	{
+		return 0.0;
+	}
+	const double Low = Rules.ScaleMinSpeed;
+	const double High = FMath::Max(static_cast<double>(Rules.ScaleMaxSpeed), Low);
+	const double Alpha = High > Low ? FMath::Clamp((ImpactSpeed - Low) / (High - Low), 0.0, 1.0) : (ImpactSpeed >= High ? 1.0 : 0.0);
+	const double Shaped = FMath::Pow(Alpha, FMath::Max(static_cast<double>(Rules.HeightExponent), 0.1));
+	return FMath::Max(FMath::Lerp(static_cast<double>(Rules.MinHeight), static_cast<double>(Rules.MaxHeight), Shaped), 0.0);
+}
+
+double UGSTN_DefenceMath::TechBounceSpeed(const FGSTN_GroundBounceRules& Rules, double ImpactSpeed, double Gravity)
+{
+	if (!Rules.bScaleWithImpactSpeed)
+	{
+		return FMath::Max(static_cast<double>(Rules.GroundBounceSpeed), 0.0);
+	}
+	const double Height = TechBounceHeight(Rules, ImpactSpeed);
+	const double Pull = FMath::Max(Gravity, 0.0) * FMath::Max(static_cast<double>(Rules.GroundBounceGravityScale), 0.01);
+	// Rise H under a constant pull g: v = sqrt(2 g H)
+	return Height > 0.0 && Pull > 0.0 ? FMath::Sqrt(2.0 * Pull * Height) : 0.0;
+}
+
+FVector UGSTN_DefenceMath::GroundBounceVelocityAtSpeed(const FGSTN_GroundBounceRules& Rules, const FVector& Up, const FVector& StickOnPlane, double Speed)
+{
 	const FVector UpUnit = Up.GetSafeNormal();
 	const FVector UpAxis = UpUnit.IsNearlyZero() ? FVector::UpVector : UpUnit;
-	const double Speed = Rules.GroundBounceSpeed;
 
 	// Only the part of the stick on the plane normal to Up steers
 	const FVector OnPlane = StickOnPlane - UpAxis * FVector::DotProduct(StickOnPlane, UpAxis);

@@ -166,6 +166,8 @@ FGSTN_HitSyncState FGSTN_HitSyncState::Canonical(const FGSTN_HitLiveContext& Con
 	if (Context.bTumbling)
 	{
 		Out.ImpactProfileQ = ImpactProfileQ;
+		Out.GroundBounceCount = GroundBounceCount;
+		Out.GroundBounceFirstFrame = GroundBounceCount != 0 ? GroundBounceFirstFrame : INDEX_NONE;
 	}
 	if (Context.HitstopEndFrame > Context.Frame)
 	{
@@ -185,7 +187,8 @@ bool FGSTN_HitSyncState::operator==(const FGSTN_HitSyncState& Other) const
 {
 	if (!(MoveOrigin == Other.MoveOrigin) || HitTargetsNum != Other.HitTargetsNum || HitConfirmFlags != Other.HitConfirmFlags
 		|| HitstunEndFrame != Other.HitstunEndFrame || ImpactEndFrame != Other.ImpactEndFrame || PendingReaction != Other.PendingReaction
-		|| SDIDistanceUsed != Other.SDIDistanceUsed || ImpactProfileQ != Other.ImpactProfileQ || PendingBalloonFrames != Other.PendingBalloonFrames)
+		|| SDIDistanceUsed != Other.SDIDistanceUsed || ImpactProfileQ != Other.ImpactProfileQ || PendingBalloonFrames != Other.PendingBalloonFrames
+		|| GroundBounceCount != Other.GroundBounceCount || GroundBounceFirstFrame != Other.GroundBounceFirstFrame)
 	{
 		return false;
 	}
@@ -236,7 +239,7 @@ void FGSTN_HitSyncState::NetSerialize(FArchive& Ar, const FGSTN_HitLiveContext& 
 		Mask |= Local.ImpactEndFrame != INDEX_NONE ? PartImpact : 0;
 		Mask |= (Local.PendingLaunchQ[0] | Local.PendingLaunchQ[1] | Local.PendingLaunchQ[2]) != 0 ? PartLaunch : 0;
 		Mask |= Local.SDIDistanceUsed != 0 ? PartSDI : 0;
-		Mask |= Local.ImpactProfileQ != 0 ? PartProfile : 0;
+		Mask |= Local.ImpactProfileQ != 0 || Local.GroundBounceCount != 0 ? PartProfile : 0;
 	}
 	Ar.SerializeBits(&Mask, PartCount);
 	uint8 Reaction = Local.PendingReaction;
@@ -316,6 +319,16 @@ void FGSTN_HitSyncState::NetSerialize(FArchive& Ar, const FGSTN_HitLiveContext& 
 	if (Mask & PartProfile)
 	{
 		Ar << Local.ImpactProfileQ;
+		// The ground bounce chain rides with the profile (both live while tumbling): 1 bit, then the count (4 bits) and the first frame
+		uint8 bChain = Local.GroundBounceCount != 0 ? 1 : 0;
+		Ar.SerializeBits(&bChain, 1);
+		if (bChain)
+		{
+			uint8 Count = static_cast<uint8>(FMath::Min<int32>(Local.GroundBounceCount, 15));
+			Ar.SerializeBits(&Count, 4);
+			Local.GroundBounceCount = Count;
+			SerializeFramePlusOne(Ar, Local.GroundBounceFirstFrame);
+		}
 	}
 
 	if (Ar.IsLoading())
@@ -350,6 +363,10 @@ void FGSTN_HitSyncState::ToString(FAnsiStringBuilderBase& Out) const
 	Out.Appendf(" Hit: targets %d confirm %d stun->%d impact->%d profile %d pending %d launch(%d,%d,%d)", static_cast<int32>(HitTargetsNum),
 		static_cast<int32>(HitConfirmFlags), HitstunEndFrame, ImpactEndFrame, static_cast<int32>(ImpactProfileQ), static_cast<int32>(PendingReaction),
 		static_cast<int32>(PendingLaunchQ[0]), static_cast<int32>(PendingLaunchQ[1]), static_cast<int32>(PendingLaunchQ[2]));
+	if (GroundBounceCount != 0)
+	{
+		Out.Appendf(" groundBounces %d from %d", static_cast<int32>(GroundBounceCount), GroundBounceFirstFrame);
+	}
 	if (MoveOrigin.bSet)
 	{
 		Out.Appendf(" origin(%d,%d,%d)", MoveOrigin.PositionQ[0], MoveOrigin.PositionQ[1], MoveOrigin.PositionQ[2]);

@@ -168,7 +168,8 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, co
 		const bool bNewContact = Contact.IsSet() && Contact.ContactFrame == Frame - 1 && !ImpactIn.bStaggeredThisFrame && !Core.IsInHitstop(Frame)
 			&& !(Core.Hit.ImpactEndFrame != INDEX_NONE && Contact.ContactFrame < Core.Hit.ImpactEndFrame);
 		const bool bConsumed = bNewContact && Extensions.ConsumeTumbleContact(VictimContext, Contact);
-		if (!bConsumed && ImpactTable)
+		// Without a surface table only the rules' ground bounce can resolve (StepImpact checks the floor itself)
+		if (!bConsumed)
 		{
 			FGSTN_CombatVictim::StepImpact(ImpactIn, Core, ImpactResult);
 		}

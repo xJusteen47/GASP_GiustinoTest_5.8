@@ -157,4 +157,21 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "GSTN|Defence")
 	static FVector GroundBounceVelocity(const FGSTN_GroundBounceRules& Rules, const FVector& Up, const FVector& StickOnPlane);
+
+	/**
+	 * The tech bounce's peak height for a landing at ImpactSpeed (cm/s into the floor, after the hit's SpeedScale), owner 2026-11-16: 0 below
+	 * NoBounceBelowSpeed, MinHeight up to ScaleMinSpeed, MaxHeight from ScaleMaxSpeed, between them along the exponent's curve. Pure
+	 */
+	UFUNCTION(BlueprintPure, Category = "GSTN|Defence")
+	static double TechBounceHeight(const FGSTN_GroundBounceRules& Rules, double ImpactSpeed);
+
+	/**
+	 * The tech bounce's launch speed: with bScaleWithImpactSpeed the speed that rises TechBounceHeight under Gravity (cm/s², the entity's)
+	 * times GroundBounceGravityScale; without it GroundBounceSpeed. 0 = no bounce. Pure
+	 */
+	UFUNCTION(BlueprintPure, Category = "GSTN|Defence")
+	static double TechBounceSpeed(const FGSTN_GroundBounceRules& Rules, double ImpactSpeed, double Gravity);
+
+	/** GroundBounceVelocity with Speed in place of the rules' GroundBounceSpeed (the steer is the same). Pure */
+	static FVector GroundBounceVelocityAtSpeed(const FGSTN_GroundBounceRules& Rules, const FVector& Up, const FVector& StickOnPlane, double Speed);
 };

@@ -260,4 +260,39 @@ bool FGSTN_DefenceBounceSteerTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DefenceTechBounceHeightTest, "GSTNDefence.Core.Bounce.TechBounceHeight", GSTNDefenceTest::Flags)
+bool FGSTN_DefenceTechBounceHeightTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-16: the tech bounce's height follows the impact speed. 10 cm at 300 cm/s and below, 40 cm at 1200 and above
+	FGSTN_GroundBounceRules Rules;
+	Rules.ScaleMinSpeed = 300.f;
+	Rules.ScaleMaxSpeed = 1200.f;
+	Rules.MinHeight = 10.f;
+	Rules.MaxHeight = 40.f;
+	Rules.HeightExponent = 1.f;
+	Rules.NoBounceBelowSpeed = 0.f;
+	TestEqual(TEXT("soft landing: the minimum"), UGSTN_DefenceMath::TechBounceHeight(Rules, 100.0), 10.0, 1e-9);
+	TestEqual(TEXT("halfway: halfway"), UGSTN_DefenceMath::TechBounceHeight(Rules, 750.0), 25.0, 1e-9);
+	TestEqual(TEXT("hard landing: the maximum"), UGSTN_DefenceMath::TechBounceHeight(Rules, 5000.0), 40.0, 1e-9);
+	Rules.HeightExponent = 2.f;
+	TestEqual(TEXT("exponent 2: a quarter of the way at halfway"), UGSTN_DefenceMath::TechBounceHeight(Rules, 750.0), 17.5, 1e-9);
+	Rules.NoBounceBelowSpeed = 200.f;
+	TestEqual(TEXT("under the no-bounce speed: none"), UGSTN_DefenceMath::TechBounceHeight(Rules, 199.0), 0.0, 1e-9);
+	TestEqual(TEXT("at it: the minimum"), UGSTN_DefenceMath::TechBounceHeight(Rules, 200.0), 10.0, 1e-9);
+
+	// The launch speed rises that height under the bounce's gravity: v = sqrt(2 g s H). 980 x 3, 40 cm: sqrt(235200) = 484.97422611928565
+	Rules.GroundBounceGravityScale = 3.f;
+	Rules.bScaleWithImpactSpeed = true;
+	TestEqual(TEXT("speed for 40 cm at gravity x3"), UGSTN_DefenceMath::TechBounceSpeed(Rules, 5000.0, 980.0), 484.97422611928565, 1e-6);
+	TestEqual(TEXT("no height, no speed"), UGSTN_DefenceMath::TechBounceSpeed(Rules, 100.0, 980.0), 0.0, 1e-9);
+	Rules.bScaleWithImpactSpeed = false;
+	Rules.GroundBounceSpeed = 300.f;
+	TestEqual(TEXT("scaling off: the fixed speed"), UGSTN_DefenceMath::TechBounceSpeed(Rules, 5000.0, 980.0), 300.0, 1e-9);
+
+	// The steer is the fixed-speed bounce's at any speed
+	Rules.GroundBounceSteerDeg = 30.f;
+	TestTrue(TEXT("same steer at 600 cm/s"), UGSTN_DefenceMath::GroundBounceVelocityAtSpeed(Rules, FVector::UpVector, FVector(1.0, 0.0, 0.0), 600.0).Equals(FVector(300.0, 0.0, 519.6152422706632), 1e-6));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
