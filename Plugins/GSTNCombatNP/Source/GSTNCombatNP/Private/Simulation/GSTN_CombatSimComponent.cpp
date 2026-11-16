@@ -231,6 +231,7 @@ void UGSTN_CombatSimComponent::AdoptTableSet(UGSTN_CombatTableSet* Set)
 		if (const FGSTN_CombatTimelineData* Data = Set->GetTimelineData(Index))
 		{
 			TimelineOutput.Reserve(*Data);
+			AbilityStartOutput.Reserve(*Data);
 		}
 	}
 
@@ -1590,6 +1591,81 @@ void UGSTN_CombatSimComponent::StartTimelineEntry(FGSTN_CombatSyncCore& Core, in
 	Core.Requests.Add(EGSTN_RequestType::ActivateEntry, Frame, static_cast<int16>(Entry));
 }
 
+EGSTN_TimelineStartRefusal UGSTN_CombatSimComponent::StartTimelineFromAbility(int32 Entry, bool& bOutCommitDue)
+{
+	bOutCommitDue = false;
+	const UGSTN_CombatTableSet& Set = Tables();
+	const FGSTN_CombatTimelineData* Data = GetRegistryTimeline(Set, Entry);
+	const FGSTN_CombatSyncState* Pending = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	const EGSTN_TimelineStartRefusal Refusal = FGSTN_TimelinePlayRules::CheckStart(AbilitySystem && Pending && AbilitySystem->IsInSimulationTick(),
+		AbilitySystem && AbilitySystem->GetIsRestoringFrame(), bFrameGateClosed, Data != nullptr);
+	if (Refusal != EGSTN_TimelineStartRefusal::None)
+	{
+		UE_LOG(LogGSTNCombatSim, Log, TEXT("%s: timeline entry %d not started from the ability graph (refusal %d)"), *GetNameSafe(GetOwner()), Entry, static_cast<int32>(Refusal));
+		return Refusal;
+	}
+
+	// The combat tick of this frame ran: its pending state is this frame's output, the one the abilities read in this step
+	const int32 Frame = Pending->Core.Input.History.GetLatestFrame();
+	const UClass* Starting = Set.TimelineRegistry[Entry].Get();
+	const UClass* Replaced = Pending->Core.ActionState == EGSTN_ActionState::InTimeline && Set.TimelineRegistry.IsValidIndex(Pending->Core.ActiveTimeline)
+		? Set.TimelineRegistry[Pending->Core.ActiveTimeline].Get() : nullptr;
+	FGameplayTagContainer TagsBefore;
+	CollectTimelineTags(Pending->Core, Frame, TagsBefore);
+
+	FGSTN_TrackHookEnvironment Environment;
+	Environment.Buttons = &ButtonMap;
+	if (const UGSTN_MoverSimStateTracker* GroundTracker = GetJumpTracker())
+	{
+		Environment.Ground = GroundTracker->HasGameplayTag(Mover_IsOnGround, true) ? EGSTN_TrackHookGround::OnGround : EGSTN_TrackHookGround::Airborne;
+	}
+	const int32 DefaultOverride = Set.TimelineDefaultOverride.IsValidIndex(Entry) ? Set.TimelineDefaultOverride[Entry] : 0;
+	const FGSTN_CombatSyncState* Written = NetworkPredictionProxy.WriteSyncState<FGSTN_CombatSyncState>([&](FGSTN_CombatSyncState& Sync)
+	{
+		Environment.Fragments = &Sync.Fragments;
+		// Step 8 of the tick for a command, source Forced. Its CancelTimeline request names a frame whose pre-tick ran: the replaced ability is
+		// cancelled below instead, and the request is pruned with the frame
+		FGSTN_CombatTimelineLogic::Start(Sync.Core, Frame, Entry, EGSTN_ActivationSource::Forced);
+		StampMoveOrigin(Sync.Core, Frame);
+		FGSTN_CombatTimelineLogic::EvaluateStart(Sync.Core, Frame, *Data, DefaultOverride, AbilityStartOutput, &Environment);
+		bOutCommitDue = Sync.Core.Requests.Find(EGSTN_RequestType::CommitTimeline, Frame, static_cast<int16>(Entry)) != nullptr;
+	}, "GSTN AbilityStartTimeline");
+	if (!Written)
+	{
+		return EGSTN_TimelineStartRefusal::OutsideSimulation;
+	}
+
+	// The Tags tracks: the tick projected the replaced timeline's (or none) for this frame; the new one's replace them now, so the projection of
+	// the next frame, a difference with this state, starts from the counts this state holds
+	FGameplayTagContainer TagsAfter;
+	CollectTimelineTags(Written->Core, Frame, TagsAfter);
+	FGameplayTagContainer Remove;
+	FGameplayTagContainer Add;
+	FGSTN_TimelinePlayRules::DiffTags(TagsBefore, TagsAfter, Remove, Add);
+	for (const FGameplayTag& Tag : Remove)
+	{
+		AbilitySystem->RemoveLooseGameplayTag(Tag);
+	}
+	for (const FGameplayTag& Tag : Add)
+	{
+		AbilitySystem->AddLooseGameplayTag(Tag);
+	}
+	ProjectStateTags(Written->Core, Frame);
+
+	// A move of another class that ran is over (its ability may be the caller: Start Combat Move from inside a move). The same class is the
+	// caller's own sequence (a host playing its next timeline) or a restart into itself, which the activation handles
+	if (Replaced && Replaced != Starting)
+	{
+		const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(const_cast<UClass*>(Replaced));
+		if (Spec && Spec->IsActive())
+		{
+			AbilitySystem->CancelAbilityHandle(Spec->Handle);
+		}
+	}
+	UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline entry %d started from the ability graph (replaced %s)"), *GetNameSafe(GetOwner()), Frame, Entry, *GetNameSafe(Replaced));
+	return EGSTN_TimelineStartRefusal::None;
+}
+
 bool UGSTN_CombatSimComponent::IsBindingAdmitted(const FGSTN_CommandTable& Table, int32 BindingIndex) const
 {
 	if (!FrameAdmitTag.IsValid())
@@ -2025,7 +2101,9 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 		if (FrameSet.TimelineRegistry.IsValidIndex(Sync->Core.ActiveTimeline))
 		{
 			const FGameplayAbilitySpec* Spec = AbilitySystem->FindAbilitySpecFromClass(FrameSet.TimelineRegistry[Sync->Core.ActiveTimeline]);
-			if (Spec)
+			// A host pays for itself (Commit Ability in its graph, as any GAS ability): the timelines it plays never commit it, or a sequence of
+			// three would pay three times
+			if (Spec && !UGSTN_CombatTableSet::IsHostClass(FrameSet.TimelineRegistry[Sync->Core.ActiveTimeline]))
 			{
 				// The meter can have dropped since the activation: a refused commit ends the ability (the clock then returns to
 				// Actionable on the next frame) instead of letting the timeline run for free

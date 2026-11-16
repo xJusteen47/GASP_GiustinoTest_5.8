@@ -16,6 +16,7 @@
 #include "Loadout/GSTN_LoadoutData.h"
 #include "Presentation/GSTN_HitPresentation.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
+#include "Abilities/GSTN_TimelinePlay.h"
 #include "Simulation/GSTN_CombatAttacker.h"
 #include "Simulation/GSTN_CombatVictim.h"
 #include "Simulation/GSTN_CombatTableSet.h"
@@ -63,7 +64,9 @@ struct FGSTN_TrackHookEnvironment;
  * The combat tick only writes its own sync state. Everything it wants from the ability system (activate an ability,
  * freeze the montage during hitstop) is a frame-stamped request in that state, executed by this component from the
  * ability system's OnSimulationPreTick, i.e. inside the ability system's own tick, where the fork has the right frame,
- * time and rollback bookkeeping. Nothing else writes into the combat state during a frame.
+ * time and rollback bookkeeping. Nothing else writes into the combat state during a frame, with one exception: a timeline an ability
+ * graph starts (Play Combat Timeline And Wait, Start Combat Move) is written into the frame's state from inside the ability system's
+ * simulation step, after the combat tick of the same frame (StartTimelineFromAbility, FGSTN_TimelinePlayRules).
  *
  * Every tick the input simulation of GSTNInputNP (FGSTN_InputSimulator) runs on the embedded input state: the command is
  * sampled, classified against the facing the context provider knows for the end of the previous frame, appended to the
@@ -333,6 +336,16 @@ public:
 	 * when given, receives the timeline registry entry the state runs (two entries of one class are two moves: a base and a modded one)
 	 */
 	bool IsTimelineRunning(const UClass* AbilityClass, int32& OutStartFrame, int32* OutEntry = nullptr) const;
+
+	/**
+	 * Starts registry entry Entry in the frame being simulated, for an ability graph (move-timeline-decoupling 1A and 1B): what the combat tick
+	 * does for a command (state, move origin, evaluation of frame 0), source Forced, written into this frame's combat state from inside the
+	 * ability system's simulation step, plus the difference of the Tags tracks the tick already projected. A running timeline of another
+	 * class is replaced and its ability cancelled here (the pre-tick that executes a CancelTimeline request ran already). Refused (and nothing
+	 * written) outside the simulation step, while a frame is restored, with the gate closed or for an entry that is not one.
+	 * bOutCommitDue: the timeline commits on frame 0, and the pre-tick that commits a command's timeline ran already, so the caller commits
+	 */
+	EGSTN_TimelineStartRefusal StartTimelineFromAbility(int32 Entry, bool& bOutCommitDue);
 
 	/** The table set the simulated frame is on (Tables()): what a running ability resolves its registry entry against. Null before BeginPlay */
 	const UGSTN_CombatTableSet* GetActiveTableSet() const;
@@ -839,6 +852,9 @@ private:
 
 	/** Scratch of the combat tick, reused every frame (no allocation); the evaluation of the frame the gate and the commit read */
 	FGSTN_TimelineOutput TimelineOutput;
+
+	/** Scratch of StartTimelineFromAbility: the frame-0 evaluation of a start made after the tick, kept apart so the tick's own evaluation stays as it was */
+	FGSTN_TimelineOutput AbilityStartOutput;
 
 	/** The state the gate (IsCommandAllowed) reads: set at the top of the combat tick, valid only inside it */
 	const FGSTN_CombatSyncCore* GateCore = nullptr;

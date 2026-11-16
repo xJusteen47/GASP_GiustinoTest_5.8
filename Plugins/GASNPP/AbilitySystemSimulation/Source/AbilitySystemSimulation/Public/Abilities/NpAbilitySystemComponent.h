@@ -88,6 +88,9 @@ class ABILITYSYSTEMSIMULATION_API UNpAbilitySystemComponent : public UAbilitySys
 
 	UFUNCTION(BlueprintCallable, Category = "AbilitySimulation")
 	bool GetIsRestoringFrame() const {return bIsRestoringFrame;}
+	// GSTN (Play Combat Timeline, 2026-11-16): true for the whole of InternalSimulationTick (pre-tick, abilities, effects). Lets simulation-only
+	// requests made from an ability graph refuse a call from presentation or input code, which runs outside the simulation step
+	bool IsInSimulationTick() const {return bInSimulationTick;}
 
 	UFUNCTION(BlueprintCallable, Category = "AbilitySimulation")
 	UNetMontageSimulator* GetMontagePlayer() {return MontagePlayer;}

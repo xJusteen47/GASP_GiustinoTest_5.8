@@ -2,6 +2,7 @@
 
 #include "Abilities/GSTN_GA_BaseCombat.h"
 
+#include "Abilities/GSTN_PlayCombatTimelineTask.h"
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "Animation/AnimMontage.h"
 #include "Curves/CurveVector.h"
@@ -37,6 +38,7 @@ UGSTN_GA_BaseCombat::UGSTN_GA_BaseCombat(const FObjectInitializer& ObjectInitial
 	EvaluatedFrame.Value = INDEX_NONE;
 	ReportedHitGroups.Value = 0;
 	MoveEventsFrame.Value = INDEX_NONE;
+	PlayTaskIndex.Value = INDEX_NONE;
 	for (int32 Slot = 0; Slot < MaxTagWindows; ++Slot)
 	{
 		TagWindowTag(Slot).Value = FGameplayTag();
@@ -64,6 +66,15 @@ void UGSTN_GA_BaseCombat::LoadTimelineContent(TArray<TObjectPtr<UObject>>& OutKe
 		OutKeep.AddUnique(TimelineAsset.LoadSynchronous());
 	}
 	LoadTimelineDataContent(GetTimelineData(), OutKeep);
+	// The timelines the node may play: the table set registers them by object (AppendPlayableTimelines), which needs them loaded
+	for (const TSoftObjectPtr<UGSTN_CombatTimeline>& Playable : PlayableTimelines)
+	{
+		if (UGSTN_CombatTimeline* Loaded = Playable.IsNull() ? nullptr : Playable.LoadSynchronous())
+		{
+			OutKeep.AddUnique(Loaded);
+			LoadTimelineDataContent(Loaded->Data, OutKeep);
+		}
+	}
 }
 
 const FGSTN_CombatTimelineData& UGSTN_GA_BaseCombat::GetRunningTimelineData() const
@@ -165,9 +176,8 @@ void UGSTN_GA_BaseCombat::ActivateAbility(const FGameplayAbilitySpecHandle Handl
 	// A retrigger of an instance that still waits: its tag goes before the variables are rewritten
 	ClearAwaitingAdoption();
 
-	// Captures the activation context and applies the interrupt policy
-	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
-
+	// The variables of a run are rewritten before the parent runs the Blueprint's ActivateAbility: a Play Combat Timeline And Wait there starts
+	// a play that must survive this function
 	bStarted.Value = false;
 	StartClock.Value = INDEX_NONE;
 	StartFrame.Value = INDEX_NONE;
@@ -179,6 +189,16 @@ void UGSTN_GA_BaseCombat::ActivateAbility(const FGameplayAbilitySpecHandle Handl
 	EvaluatedFrame.Value = INDEX_NONE;
 	ReportedHitGroups.Value = 0;
 	MoveEventsFrame.Value = INDEX_NONE;
+	PlayTaskIndex.Value = INDEX_NONE;
+
+	// Captures the activation context and applies the interrupt policy
+	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+
+	// The graph ended the ability, or played a timeline already (the play replaced this class's own one)
+	if (!IsActive() || bStarted.Value)
+	{
+		return;
+	}
 
 	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
 	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
@@ -186,6 +206,12 @@ void UGSTN_GA_BaseCombat::ActivateAbility(const FGameplayAbilitySpecHandle Handl
 	{
 		UE_LOG(LogGSTNBaseCombat, Log, TEXT("%s: no combat component or ability system on the avatar: ended"), *GetName());
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
+		return;
+	}
+
+	// A host plays nothing on its own: its graph plays timelines with the node, and it is never adopted
+	if (IsHost())
+	{
 		return;
 	}
 
@@ -304,6 +330,10 @@ void UGSTN_GA_BaseCombat::RaiseMoveEvents()
 	if (NewGroups != 0 && IsActive() && bStarted.Value)
 	{
 		OnMoveHitConfirmed(NewGroups, Groups);
+		if (UGSTN_PlayCombatTimelineTask* Task = IsActive() && bStarted.Value ? GetPlayTask() : nullptr)
+		{
+			Task->HandleHitConfirmed(NewGroups, Groups);
+		}
 	}
 
 	if (bTickMoveInBlueprint && IsActive() && bStarted.Value)
@@ -340,6 +370,13 @@ void UGSTN_GA_BaseCombat::RunKey(const FGSTN_TimelineTrack_Event& Key, int32 Tra
 	if (IsRunning())
 	{
 		OnMoveKey(Key, TrackIndex, TimelineFrame);
+	}
+	if (IsRunning())
+	{
+		if (UGSTN_PlayCombatTimelineTask* Task = GetPlayTask())
+		{
+			Task->HandleKey(Key.KeyTag, TimelineFrame);
+		}
 	}
 }
 
@@ -687,6 +724,18 @@ void UGSTN_GA_BaseCombat::OnSimulationTick(const FAbilitySystemTimeStep& TimeSte
 		const bool bRunningNow = CombatNow && CombatNow->IsTimelineRunning(GetClass(), StateStartNow);
 		UE_LOG(LogGSTNBaseCombat, Log, TEXT("%s: the combat state no longer names this timeline: ended (running %d, state start %d, own start %d, frame %d, step frame %d)"),
 			*GetName(), bRunningNow, StateStartNow, StartFrame.Value, CombatNow ? CombatNow->GetSimulationFrame() : INDEX_NONE, TimeStep.ServerFrame);
+		if (IsHost())
+		{
+			// A host outlives its timelines: the play ends (its pin runs, and may play the next one in this same frame), the ability stays unless
+			// the play was interrupted and the host ends on that
+			EGSTN_TimelinePlayResult Result = EGSTN_TimelinePlayResult::Completed;
+			if (FinishTimelinePlay(false, false, Result) && IsActive() && !bStarted.Value
+				&& FGSTN_TimelinePlayRules::ShouldHostEndAfterPlay(Result, bEndWhenTimelineInterrupted))
+			{
+				EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), true, true);
+			}
+			return;
+		}
 		EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), true, false);
 	}
 }
@@ -695,9 +744,22 @@ void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, co
 	const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled)
 {
 	ClearAwaitingAdoption();
+	// The play under way ends with the ability (On Move Ended, then the node's pin, while the ability is still active)
+	EGSTN_TimelinePlayResult Result = EGSTN_TimelinePlayResult::Cancelled;
+	FinishTimelinePlay(bWasCancelled, true, Result);
+	CloseTagWindows(true);
+	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+}
+
+bool UGSTN_GA_BaseCombat::FinishTimelinePlay(bool bWasCancelled, bool bAbilityEnding, EGSTN_TimelinePlayResult& OutResult)
+{
+	OutResult = EGSTN_TimelinePlayResult::Cancelled;
+	if (!bStarted.Value)
+	{
+		return false;
+	}
 	bool bRaiseEnded = false;
 	EGSTN_MoveEndReason EndReason = EGSTN_MoveEndReason::Interrupted;
-	if (bStarted.Value)
 	{
 		// Why it ends, read before the cleanup below resets the recoil and the entry
 		{
@@ -746,13 +808,72 @@ void UGSTN_GA_BaseCombat::EndAbility(const FGameplayAbilitySpecHandle Handle, co
 	}
 	// The tag windows of Open Move Tag Window last at most as long as the move (CP2)
 	CloseTagWindows(true);
+	const int32 TaskIndex = PlayTaskIndex.Value;
+	PlayTaskIndex.Value = INDEX_NONE;
+	OutResult = FGSTN_TimelinePlayRules::ResolveResult(EndReason, bAbilityEnding);
 	// After the cleanup (bStarted is false, so a handler that ends the ability again does not raise it twice), before the ability system's own
-	// end: the ability is still active, so the handler may still apply an effect or send an event
+	// end: the ability is still active, so the handler may still apply an effect, send an event, or play the next timeline
 	if (bRaiseEnded)
 	{
 		OnMoveEnded(EndReason);
+		if (UGSTN_PlayCombatTimelineTask* Task = PredictionTasksInstances.IsValidIndex(TaskIndex) ? Cast<UGSTN_PlayCombatTimelineTask>(PredictionTasksInstances[TaskIndex]) : nullptr)
+		{
+			Task->HandleEnded(OutResult, EndReason);
+		}
 	}
-	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
+	return true;
+}
+
+UGSTN_PlayCombatTimelineTask* UGSTN_GA_BaseCombat::GetPlayTask() const
+{
+	return PredictionTasksInstances.IsValidIndex(PlayTaskIndex.Value) ? Cast<UGSTN_PlayCombatTimelineTask>(PredictionTasksInstances[PlayTaskIndex.Value]) : nullptr;
+}
+
+EGSTN_TimelineStartRefusal UGSTN_GA_BaseCombat::PlayTimeline(const UGSTN_CombatTimeline* Timeline, int32 TaskIndex)
+{
+	UGSTN_CombatSimComponent* Combat = GetCombatComponent();
+	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	const UGSTN_CombatTableSet* Set = Combat ? Combat->GetActiveTableSet() : nullptr;
+	const int32 Entry = Set ? Set->FindPlayEntry(GetClass(), Timeline) : INDEX_NONE;
+	// Checked before the running play is touched, so a refused Play changes nothing
+	EGSTN_TimelineStartRefusal Refusal = FGSTN_TimelinePlayRules::CheckStart(IsActive() && AbilitySystem && AbilitySystem->IsInSimulationTick(),
+		AbilitySystem && AbilitySystem->GetIsRestoringFrame(), false, Entry != INDEX_NONE);
+	if (Refusal != EGSTN_TimelineStartRefusal::None)
+	{
+		UE_LOG(LogGSTNBaseCombat, Warning, TEXT("%s: Play Combat Timeline %s refused (%d): %s"), *GetName(), *GetNameSafe(Timeline), static_cast<int32>(Refusal),
+			Refusal == EGSTN_TimelineStartRefusal::NotRegistered ? TEXT("add it to Playable Timelines") : TEXT("call it from the ability's simulation (its events, a pin of a task)"));
+		return Refusal;
+	}
+
+	// The play under way gives way: its pin says Interrupted and its montage is stopped (the new one takes the slot in this frame)
+	EGSTN_TimelinePlayResult Previous = EGSTN_TimelinePlayResult::Interrupted;
+	FinishTimelinePlay(true, false, Previous);
+	if (bStarted.Value)
+	{
+		// The pin of the previous play played another one: that one gives way too, once (a pin that keeps replaying is refused below)
+		FinishTimelinePlay(true, false, Previous);
+	}
+	if (!IsActive() || bStarted.Value)
+	{
+		// The pin of the previous play ended the ability
+		return EGSTN_TimelineStartRefusal::OutsideSimulation;
+	}
+
+	bool bCommitDue = false;
+	Refusal = Combat->StartTimelineFromAbility(Entry, bCommitDue);
+	if (Refusal != EGSTN_TimelineStartRefusal::None)
+	{
+		return Refusal;
+	}
+	// The commit of a played timeline is the ability's own business (Commit Ability): bCommitDue is not acted on here
+
+	PlayTaskIndex.Value = TaskIndex;
+	if (UGSTN_PlayCombatTimelineTask* Task = GetPlayTask())
+	{
+		Task->ActivateTask();
+	}
+	BeginTimeline(Combat->GetSimulationFrame());
+	return EGSTN_TimelineStartRefusal::None;
 }
 
 bool UGSTN_GA_BaseCombat::ShouldReleaseMontageOnEnd(bool bWasCancelled) const
