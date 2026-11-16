@@ -8,3 +8,4 @@ Branch claude/project-thread-rafd93 da claude/kit-playtest-1116 9658b271. Nessun
 - Owner: in GaspMoverProject ci sono anche la sua wall slide e un'ABP modificata ("probabilmente male") -> R3 copia, R4 review tieni/scarta.
 - Da confermare: fonte della clip di partenza.
 - Owner 21:03Z: il problema e' ZONA MORTA + accelerazione ISTANTANEA. Cause: IMC dead zone 0.12 + InnerDeadzone 0.05 in serie; MinSpeedFraction 0.12 + StartAccelerationMultiplier 2.5 (gradino). Piano rivisto: R1 = zona morta unica + rampa (AccelerationCurve, AccelRampFrames); tolta l'opzione velocita' al frame 1; R2 (clip) priorita' bassa.
+- Owner 21:06Z: zona morta base = OPZIONE PER GIOCATORE (R1a, LocalPlayer, IO-1); soglie attacchi neutri/direzionali = valore diverso, gia' in UGSTN_InputSettings (StickDeadZone 0.2, AimZone 0.5) ma in Project Settings: da spostare (fuori piano). Totale ~17 $.
