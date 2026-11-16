@@ -30,6 +30,10 @@ OUT_DIR = os.path.join(unreal.Paths.project_saved_dir(), 'TestHub')
 FIGHTER_SPOTS = {'Z5': (-5500.0, -1000.0, 150.0), 'Z1': (4200.0, 1200.0, 150.0), 'Z2': (7500.0, 600.0, 150.0)}
 DEFAULT_KIT = g.HIT_KIT        # KIT_Test_Hits: attacks + the spin bindings prepare() adds in memory
 MOUNT_KIT = 'KIT_Test_Mount'
+# NIGHT-KD-1: the dummies had no kit, so no defence data: a tumble landing never downed them (the owner saw a 180% dummy land on its feet).
+# KIT_Test_DefenceLanding (saved): landing bounce, downed with no automatic get-up, get-up roll on the stick (toward the head against the
+# facing), neutral get-up on the jump button. Given 1 s after the play setup: a loadout change in the dummies' spawn tick crashed (2026-11-06)
+DUMMY_KIT = 'KIT_Test_DefenceLanding'
 KIT_PICKUPS = True   # kits on the ground (AGSTN_KitPickup, hold interact) instead of the Python pads
 _state = {'prepared': None, 'walkers': {}, 'selftest': None, 'rows': []}
 
@@ -232,6 +236,14 @@ def play_setup():
     return out
 
 
+def dummy_setup():
+    """The dummies' kit (DUMMY_KIT), so a launch that lands downs them; the defence steps of the hit rules put back if a suite took them out"""
+    import defence_scenarios as ds
+    if not ds._has_steps_saved():
+        ds.Lib.add_defence_steps_to_rules(g.hit_rules())
+    return {k: g._apply_loadout(k, DUMMY_KIT) for k in dummies()}
+
+
 def _pad_check():
     world = g.worlds()[0]
     snapshot = g.snap(world)
@@ -298,7 +310,7 @@ def _watch_tick(_dt):
     except Exception:
         running = False
     if not running:
-        _watch.update(pie=False, ready=False, on_pad={}, damage={})
+        _watch.update(pie=False, ready=False, dummies=False, on_pad={}, damage={})
         if _watch['auto']:
             _auto_content()
         return
@@ -312,6 +324,9 @@ def _watch_tick(_dt):
         if not _watch['ready'] and now - _watch['since'] > 4.0:
             _watch['ready'] = True
             unreal.log(f'[test_hub] play setup: {play_setup()}')
+        if _watch['ready'] and not _watch.get('dummies') and now - _watch['since'] > 5.0:
+            _watch['dummies'] = True
+            unreal.log(f'[test_hub] dummy kit: {dummy_setup()}')
         if _watch['ready']:
             _pad_check()
             _hit_feedback()

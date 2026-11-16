@@ -82,6 +82,10 @@ DAIR_SEQUENCES = [
     # frames) so the attacker walks over the downed body (no pushbox expected while it is down)
     {'name': 'dair_knockdown', 'taps': [], 'frames': 520, 'dummy': 62.0, 'shoot': True, 'air': {'trigger_h': 225.0},
      'dummy_percent': float(os.environ.get('PIE_CAPTURE_DUMMY_PERCENT', 180.0)), 'walk': (50, 400)},
+    # NIGHT-KD-1: the same hit, then the attacker walks up to ~3 m from where the dummy lands (~22 m at 180%) and stops, so the side cameras
+    # frame the dummy lying on the floor (the 520-frame run ends with the dummy 10 m off camera)
+    {'name': 'dair_knockdown_near', 'taps': [], 'frames': 760, 'dummy': 62.0, 'shoot': True, 'air': {'trigger_h': 225.0},
+     'dummy_percent': float(os.environ.get('PIE_CAPTURE_DUMMY_PERCENT', 180.0)), 'walk': (50, 480)},
 ]
 # Dropkick (forward air, ANIM-R2): same 'air' mechanism, but the stick is held forward (instead of crouch) and Attack tapped the next frame
 # (command Directional while Airborne, setup_overlord_dropkick_kit.py): PIE_CAPTURE_KIT=KIT_Test_OverlordDropkick. The move is 80 frames long
@@ -452,6 +456,14 @@ def _tick(_dt):
                 g.combat_clear(0)
                 _console('t.OverrideFPS 0')
                 _log(f'sequence {seq["name"]} done: {st["frame"]} frames, pawn z {_pawn().get_actor_location().z:.1f}, host shots {st.get("shots", 0)}')
+                if seq.get('dummy_percent') is not None and st.get('dummy_key'):   # NIGHT-KD-1: why the landing did (not) down the dummy
+                    try:
+                        dummy = g.comps(g.worlds()[0])[st['dummy_key']].get_owner()
+                        sim = dummy.get_component_by_class(unreal.GSTN_CombatSimComponent)
+                        _log(f'dummy impact debug: {sim.get_impact_debug() if sim else "no sim"}')
+                        _log(f'dummy defence: {unreal.GSTN_DefenceContentLibrary.get_defence_state_string(dummy)}')
+                    except Exception as e:  # noqa: BLE001
+                        _log(f'dummy diag failed: {e}')
                 if st.get('minions_spawned'):
                     _console('gstn.Minion.Bench.Clear')
                 st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False, minions_spawned=False)
