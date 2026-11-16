@@ -440,11 +440,17 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 	}
 	// The victim layer of the surface impacts is the kit's, when it authors one
 	KitImpactResponse.Reset();
+	KitTumbleRecovery.Reset();
 	if (const UGSTN_PrimaryKitDefinition* Kit = Component->GetResolvedLoadout().Kit)
 	{
 		if (const FGSTN_ImpactResponseExtension* Extension = Kit->Extensions.Find<FGSTN_ImpactResponseExtension>())
 		{
 			KitImpactResponse = Extension->Response;
+		}
+		// And its tumble recovery commands, likewise
+		if (const FGSTN_TumbleRecoveryExtension* Recovery = Kit->Extensions.Find<FGSTN_TumbleRecoveryExtension>())
+		{
+			KitTumbleRecovery = *Recovery;
 		}
 	}
 
@@ -713,6 +719,11 @@ bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
 			}
 		}
 		return false;
+	}
+	if (GateCore && FGSTN_CombatVictim::IsTumbleActionable(*GateCore) && Current.Table.Commands.IsValidIndex(CommandIndex))
+	{
+		// A tumble that recovered in the air admits only the recovery's commands (the kit's list, else the rules'; empty = every one)
+		return FGSTN_TumbleRecoveryResolved::IsCommandAllowed(GetTumbleRecoveryCommands(), Current.Table.Commands[CommandIndex].Tag);
 	}
 	if (!GateCore || GateCore->ActionState != EGSTN_ActionState::InTimeline || !Current.Table.Commands.IsValidIndex(CommandIndex))
 	{
@@ -1463,6 +1474,13 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	{
 		FGSTN_CombatVictim::EndReaction(OutSync.Core, Frame);
 		OutSync.Core.Requests.Add(EGSTN_RequestType::EndReaction, Frame, 0);
+	}
+
+	// A command from a tumble that recovered in the air ends the tumble (owner 2026-11-16): a jump or an air dodge lands as a normal fall,
+	// a move that starts a timeline overwrites the state anyway. The knockback move keeps flying until its lifetime, its probe unread outside Tumble
+	if (Result.HasRequest())
+	{
+		FGSTN_CombatVictim::LeaveTumbleByAction(OutSync.Core);
 	}
 
 	// Step 5b: a jump or fast fall command that the gate let through changes the jump state in the frame of the request

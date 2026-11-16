@@ -109,6 +109,12 @@ struct GSTNCOMBATNP_API FGSTN_HitSyncState
 	/** The launch velocity chosen by the hit, in cm/s divided by 4, applied when the hitstop ends. State at F + 1 like the reaction */
 	int16 PendingLaunchQ[3] = { 0, 0, 0 };
 
+	/**
+	 * Balloon knockback of the pending launch (FGSTN_BalloonKnockbackSettings): the flight frames the warp covers, 0 = the classic flight.
+	 * Live with the pending launch; on the wire inside its block (1 bit, then 8 when set)
+	 */
+	uint8 PendingBalloonFrames = 0;
+
 	/** 0 = none, otherwise EGSTN_HitReaction + 1. Two bits on the wire */
 	uint8 PendingReaction = 0;
 
@@ -126,7 +132,7 @@ struct GSTNCOMBATNP_API FGSTN_HitSyncState
 	bool HasPendingReaction() const { return PendingReaction != 0; }
 	EGSTN_HitReaction GetPendingReaction() const { return static_cast<EGSTN_HitReaction>(FMath::Max<int32>(static_cast<int32>(PendingReaction) - 1, 0)); }
 	void SetPendingReaction(EGSTN_HitReaction Reaction) { PendingReaction = static_cast<uint8>(static_cast<uint8>(Reaction) + 1); }
-	void ClearPendingReaction() { PendingReaction = 0; PendingLaunchQ[0] = PendingLaunchQ[1] = PendingLaunchQ[2] = 0; }
+	void ClearPendingReaction() { PendingReaction = 0; PendingLaunchQ[0] = PendingLaunchQ[1] = PendingLaunchQ[2] = 0; PendingBalloonFrames = 0; }
 
 	/** Quantises to 4 cm/s and clamps to the int16 range (about 1310 m/s) */
 	void SetPendingLaunch(const FVector& Velocity);

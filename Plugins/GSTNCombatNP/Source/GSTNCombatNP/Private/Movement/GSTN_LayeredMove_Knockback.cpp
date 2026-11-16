@@ -7,6 +7,7 @@
 #include "MoverTypes.h"
 #include "Components/PrimitiveComponent.h"
 #include "Engine/World.h"
+#include "Hits/GSTN_BalloonKnockback.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 
 FGSTN_LayeredMove_Knockback::FProbeStats FGSTN_LayeredMove_Knockback::ProbeStats;
@@ -21,6 +22,34 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 {
 	const double StepMs = FMath::Max<double>(TimeStep.StepMs, UE_SMALL_NUMBER);
 	ElapsedFrames = FMath::Max(FMath::RoundToInt((TimeStep.BaseSimTimeMs - StartSimTimeMs) / StepMs), 0);
+
+	// Balloon: the warped frames, and the first one back at M = 1 (which sets the classic velocity of the warped time for the mode to go on
+	// from). Only in the air after the first frame: a victim that landed or slid onto a floor is the falling mode's and the impact step's
+	if (BalloonFrames > 0 && BalloonM0 > 1.f && (ElapsedFrames == 0 || StartState.SyncState.MovementMode == ForceMovementMode))
+	{
+		double PreviousConsumed = 0.0;
+		double PreviousMultiplier = BalloonM0;
+		if (ElapsedFrames > 0)
+		{
+			FGSTN_BalloonMath::Evaluate(BalloonM0, BalloonEndFraction, BalloonFrames, ElapsedFrames - 1, PreviousConsumed, PreviousMultiplier);
+		}
+		if (ElapsedFrames == 0 || PreviousMultiplier > 1.0)
+		{
+			double Consumed = 0.0;
+			double Multiplier = 1.0;
+			FGSTN_BalloonMath::Evaluate(BalloonM0, BalloonEndFraction, BalloonFrames, ElapsedFrames, Consumed, Multiplier);
+			const FVector Gravity = MoverComp ? MoverComp->GetGravityAcceleration() * static_cast<double>(GravityScale) : FVector::ZeroVector;
+			const FVector Warped = (Velocity + Gravity * (Consumed * StepMs * 0.001)) * Multiplier;
+			OutProposedMove.MixMode = EMoveMixMode::OverrideVelocity;
+			OutProposedMove.LinearVelocity = Warped;
+			if (ElapsedFrames == 0)
+			{
+				OutProposedMove.PreferredMode = ForceMovementMode;
+			}
+			ProbeContact(StartState, TimeStep, MoverComp, Warped);
+			return true;
+		}
+	}
 
 	if (ElapsedFrames == 0)
 	{
@@ -126,6 +155,12 @@ void FGSTN_LayeredMove_Knockback::NetSerialize(FArchive& Ar)
 	Ar << GravityScale;
 	Ar << ElapsedFrames;
 	Ar << ForceMovementMode;
+	Ar << BalloonFrames;
+	if (BalloonFrames > 0)
+	{
+		Ar << BalloonM0;
+		Ar << BalloonEndFraction;
+	}
 	Contact.NetSerialize(Ar);
 }
 
@@ -152,6 +187,9 @@ FEffectMoveContainer UGSTN_KnockbackMoveCreator::MakeMove_Implementation(UMoverC
 		Move.DecayPerFrame = Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveDecay, false, 0.f);
 		Move.GravityScale = Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveGravityScale, false, 1.f);
 		Move.DurationMs = Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveSeconds, false, 0.f) * 1000.f;
+		Move.BalloonFrames = static_cast<uint8>(FMath::Clamp(FMath::RoundToInt(Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveBalloonFrames, false, 0.f)), 0, 255));
+		Move.BalloonM0 = Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveBalloonM0, false, 1.f);
+		Move.BalloonEndFraction = Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveBalloonEnd, false, 0.3f);
 	}
 	return FEffectMoveContainer(&Move);
 }

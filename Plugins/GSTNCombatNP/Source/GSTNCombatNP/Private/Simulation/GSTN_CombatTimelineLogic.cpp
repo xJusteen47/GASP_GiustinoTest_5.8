@@ -44,6 +44,7 @@ namespace
 	Core.StrikeTrack = INDEX_NONE;
 		Core.bAirborneOk = false;
 		Core.bLedgeStop = false;
+		Core.bTumbleActionable = false;
 		// The hits of the previous run do not count for this one; the caller writes the move origin
 		Core.Hit.ResetRun();
 	}
@@ -90,6 +91,7 @@ void FGSTN_CombatTimelineLogic::ClearTimeline(FGSTN_CombatSyncCore& Core)
 	Core.StrikeTrack = INDEX_NONE;
 	Core.bAirborneOk = false;
 	Core.bLedgeStop = false;
+	Core.bTumbleActionable = false;
 }
 
 bool FGSTN_CombatTimelineLogic::StartRecoil(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData* Data, const FGSTN_RicochetResponse* Fallback)

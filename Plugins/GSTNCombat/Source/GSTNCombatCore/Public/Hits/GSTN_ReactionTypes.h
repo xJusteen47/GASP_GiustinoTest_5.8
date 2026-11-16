@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Hits/GSTN_BalloonKnockback.h"
 #include "Hits/GSTN_HitData.h"
 #include "GSTN_ReactionTypes.generated.h"
 
@@ -245,6 +246,13 @@ struct GSTNCOMBATCORE_API FGSTN_ReactionTuning
 	/** Floor of the effective weight (a victim never becomes weightless) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reaction|Weight", meta = (ClampMin = "0.001"))
 	float MinWeight = 1.f;
+
+	/**
+	 * Balloon knockback (owner 2026-11-16, Smash Ultimate style): strong launches fly the same path faster at the start, so the victim spends
+	 * less time in the air and in hitstun. Off by default. Applied by the victim side after the reaction is final (FGSTN_BalloonMath)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reaction|Balloon")
+	FGSTN_BalloonKnockbackSettings Balloon;
 };
 
 /**

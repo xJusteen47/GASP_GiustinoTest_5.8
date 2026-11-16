@@ -27,6 +27,7 @@
 #include "Simulation/GSTN_InputSimulator.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
 #include "Timeline/GSTN_StartupSteer.h"
+#include "Hits/GSTN_TumbleRecovery.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 #include "World/GSTN_StepSnapshot.h"
@@ -508,6 +509,19 @@ public:
 	 * the combat tick of the frame did not compute the bodies); InOutVelocity loses the inward part. Read by the body capsule modifier after the move
 	 */
 	FVector ConstrainFrameMove(const FVector& ActorEnd, FVector& InOutVelocity) const;
+
+	/**
+	 * Tumble air recovery for this combatant over the rules' (owner 2026-11-16): e.g. players AfterHitstun and training dummies or AI
+	 * UntilGround. Constant data of the actor (the same on every machine), never changed while the simulation runs
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Hit Reactions")
+	EGSTN_TumbleRecoveryOverride TumbleRecoveryOverride = EGSTN_TumbleRecoveryOverride::UseRules;
+
+	/** Rules and TumbleRecoveryOverride: a tumble may act in the air once its hitstun ends */
+	bool IsTumbleAirRecoveryOn() const;
+
+	/** The commands a recovered tumble may start: the kit's FGSTN_TumbleRecoveryExtension, else the rules'. Empty = every command */
+	const FGameplayTagContainer& GetTumbleRecoveryCommands() const;
 
 	/** How this character type meets other fighters (pushbox P4): soft pushbox + rigid core, pushbox only, or none. Per Blueprint / character type */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat|Body Collision")
@@ -1004,6 +1018,9 @@ private:
 
 	/** The victim layer of the kit (FGSTN_ImpactResponseExtension), when it has one; the rules' otherwise */
 	TOptional<FGSTN_ImpactResponse> KitImpactResponse;
+
+	/** The kit's tumble recovery commands (FGSTN_TumbleRecoveryExtension), when it has one; the rules' otherwise */
+	TOptional<FGSTN_TumbleRecoveryExtension> KitTumbleRecovery;
 
 	/** Colliders the probe touched by contact frame, and the breaks the victim step requested by frame. Local data, see NoteContactSurface */
 	TMap<int32, TWeakObjectPtr<UPrimitiveComponent>> ContactSurfaces;

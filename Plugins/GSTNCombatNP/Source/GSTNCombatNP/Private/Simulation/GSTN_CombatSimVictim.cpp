@@ -269,6 +269,7 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, co
 	}
 	Reaction.Stick = FVector2D(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickY));
 	Reaction.CameraYawDegrees = FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw);
+	Reaction.bTumbleAirRecovery = IsTumbleAirRecoveryOn();
 	if (AbilitySystem && AbilitySystem->HasAttributeSetForAttribute(UGSTN_HealthAttributeSet::GetKnockbackResistanceAttribute()))
 	{
 		Reaction.KnockbackResistance = AbilitySystem->GetNumericAttribute(UGSTN_HealthAttributeSet::GetKnockbackResistanceAttribute());
@@ -642,7 +643,23 @@ void UGSTN_CombatSimComponent::ExecuteReactionMove(float StepMs)
 	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveDecay, ReactionMove.DecayPerFrame);
 	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveGravityScale, ReactionMove.GravityScale);
 	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveSeconds, ReactionMove.Frames * StepMs * 0.001f);
+	if (bLaunch && ReactionMove.BalloonFrames > 0)
+	{
+		Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveBalloonFrames, static_cast<float>(ReactionMove.BalloonFrames));
+		Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveBalloonM0, ReactionMove.BalloonM0);
+		Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveBalloonEnd, ReactionMove.BalloonEndFraction);
+	}
 	AbilitySystem->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+}
+
+bool UGSTN_CombatSimComponent::IsTumbleAirRecoveryOn() const
+{
+	return FGSTN_TumbleRecoveryResolved::IsAfterHitstun(CombatRules ? &CombatRules->TumbleRecovery : nullptr, TumbleRecoveryOverride);
+}
+
+const FGameplayTagContainer& UGSTN_CombatSimComponent::GetTumbleRecoveryCommands() const
+{
+	return FGSTN_TumbleRecoveryResolved::GetAllowedCommands(CombatRules ? &CombatRules->TumbleRecovery : nullptr, KitTumbleRecovery.IsSet() ? &KitTumbleRecovery.GetValue() : nullptr);
 }
 
 void UGSTN_CombatSimComponent::ExecuteMeterGain(int32 Amount)
