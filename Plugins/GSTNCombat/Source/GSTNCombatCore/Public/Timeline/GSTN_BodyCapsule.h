@@ -121,6 +121,13 @@ struct GSTNCOMBATCORE_API FGSTN_BodyCapsule
 	static FGSTN_BodyCapsuleTarget ResolveTarget(const FGSTN_CombatTimelineData* Data, int32 TimelineFrame, const FGSTN_BodyCapsuleShape& Standing);
 
 	/**
+	 * As above, with the capsule of the state outside every track (the ground crouch, FGSTN_GroundCrouchKitExtension): Idle, when not null, takes
+	 * the place of Standing as the shape to go to when no track holds the frame, with the Body anchor (the mesh stays put, the bottom stays on the
+	 * feet) and no step limit. A track holding the frame still wins
+	 */
+	static FGSTN_BodyCapsuleTarget ResolveTarget(const FGSTN_CombatTimelineData* Data, int32 TimelineFrame, const FGSTN_BodyCapsuleShape& Standing, const FGSTN_BodyCapsuleShape* Idle);
+
+	/**
 	 * One frame's step from Applied toward Target. Body anchor: the offset moves at most MaxShiftPerFrame (size changes at once), the actor moves
 	 * by the offset change, so the mesh root (actor - offset) stays put. Capsule anchor: at once; the actor moves only by the half height change,
 	 * so the capsule's bottom stays (a grounded capsule stays on the ground), the mesh moves with the new offset

@@ -26,6 +26,8 @@
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverTypes.h"
 #include "Rules/GSTN_AirCrouch.h"
+#include "Rules/GSTN_GroundCrouch.h"
+#include "Movement/GSTN_BodyCapsuleModifier.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Timeline/GSTN_StartupSteer.h"
 #include "Simulation/GSTN_CombatTableSet.h"
@@ -508,7 +510,61 @@ void UGSTN_CombatSimComponent::ProjectStateTags(const FGSTN_CombatSyncCore& Core
 	{
 		FGSTN_CombatVictim::ProjectStateTags(*AbilitySystem, Core, Frame);
 		ProjectAirCrouchTag(Core);
+		ProjectGroundCrouch(Core);
 	}
+}
+
+void UGSTN_CombatSimComponent::ProjectGroundCrouch(const FGSTN_CombatSyncCore& Core)
+{
+	// Same sources as the air crouch: the kit of the revision the state runs, Mover's ground and the previous frame's crouch from the tracker
+	// (rolled back with Mover, still the end of the previous frame here), the frame's held buttons. A function of those only, so a resimulated
+	// frame decides the same
+	const int32 Frame = Core.Input.History.GetLatestFrame();
+	const UGSTN_CombatTableSet* Set = bNativeGroundCrouch ? FindTableSet(Core.TableRevision) : nullptr;
+	bool bStance = false;
+	bool bTag = false;
+	float HalfHeight = 0.f;
+	float Radius = 0.f;
+	if (Set && Set->KitGroundCrouch.bEnabled)
+	{
+		const FGSTN_GroundCrouchKitExtension& Crouch = Set->KitGroundCrouch;
+		const int32 Button = ButtonMap.GetIndex(Crouch.ResolveHoldButton());
+		const bool bHeld = Button >= 0 && Button < 32 && (Core.Input.History.GetHeldButtons() & (1u << Button)) != 0;
+		const UGSTN_MoverSimStateTracker* Tracker = GetJumpTracker();
+		const bool bGrounded = bHeld && Tracker && Tracker->HasGameplayTag(Mover_IsOnGround, true);
+		if (bGrounded)
+		{
+			const bool bWasCrouched = FGSTN_BodyCapsuleModifier::IsCrouchedIn(Tracker->GetSyncState());
+			FGameplayTagContainer OwnerTags;
+			if (!Crouch.BlockedTags.IsEmpty())
+			{
+				AbilitySystem->GetOwnedGameplayTags(OwnerTags);
+			}
+			const bool bInMove = Core.ActionState == EGSTN_ActionState::InTimeline;
+			const bool bLocked = FGSTN_CombatVictim::IsActionLocked(Core);
+			bStance = Crouch.HoldsStance(true, true, bInMove, bLocked, bWasCrouched, OwnerTags);
+			bTag = Crouch.HoldsTag(true, true, bInMove, bLocked, bWasCrouched, OwnerTags);
+		}
+		HalfHeight = Crouch.CapsuleHalfHeight;
+		Radius = Crouch.CapsuleRadius;
+	}
+	FrameCrouch.Frame = Frame;
+	FrameCrouch.bCrouch = bStance;
+	FrameCrouch.HalfHeight = HalfHeight;
+	FrameCrouch.Radius = Radius;
+	AbilitySystem->SetLooseGameplayTagCount(GSTNCombatTags::State_Crouch, bTag ? 1 : 0);
+}
+
+bool UGSTN_CombatSimComponent::ReadFrameGroundCrouch(bool& bOutCrouch, float& OutHalfHeight, float& OutRadius) const
+{
+	if (FrameCrouch.Frame == INDEX_NONE || FrameCrouch.Frame != GetSimulationFrame())
+	{
+		return false;
+	}
+	bOutCrouch = FrameCrouch.bCrouch;
+	OutHalfHeight = FrameCrouch.HalfHeight;
+	OutRadius = FrameCrouch.Radius;
+	return true;
 }
 
 void UGSTN_CombatSimComponent::ProjectAirCrouchTag(const FGSTN_CombatSyncCore& Core)

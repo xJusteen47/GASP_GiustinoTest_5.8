@@ -15,6 +15,7 @@
 #include "MoverComponent.h"
 #include "MoverSimulationTypes.h"
 #include "Movement/GSTN_BodyCapsuleModifier.h"
+#include "Rules/GSTN_GroundCrouch.h"
 #include "Movement/GSTN_GravityFrame.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Timeline/GSTN_Pushbox.h"
@@ -127,6 +128,27 @@ bool UGSTN_CombatSimComponent::ReadSnapshotEntry(int32 Frame, FGSTN_SnapshotEntr
 		PoseInput.Set = Set;
 		// The kit's movement hurtbox comes with the table of the loadout revision the state names, so a rollback across a kit swap reads the old kit's
 		PoseInput.KitMovement = Tables && Tables->bHasKitMovementHurtbox ? &Tables->KitMovementHurtbox : nullptr;
+		// Ground crouch (owner 2026-11-16): crouched at the end of the previous frame (Mover state, like the transform) = the kit's crouched body.
+		// Read only outside moves, as every movement hurtbox
+		FGSTN_MovementHurtboxExtension CrouchHurtbox;
+		if (Tables && Tables->KitGroundCrouch.bEnabled && !Tables->KitGroundCrouch.CrouchHurtboxShapes.IsEmpty())
+		{
+			bool bCrouched = false;
+			if (Tracker)
+			{
+				bCrouched = FGSTN_BodyCapsuleModifier::IsCrouchedIn(Tracker->GetSyncState());
+			}
+			else if (const UMoverComponent* ProxyMover = Owner->FindComponentByClass<UMoverComponent>())
+			{
+				const FGSTN_BodyCapsuleModifier* Presented = ProxyMover->FindMovementModifierByType<FGSTN_BodyCapsuleModifier>();
+				bCrouched = Presented && Presented->bCrouched;
+			}
+			if (bCrouched)
+			{
+				CrouchHurtbox = Tables->KitGroundCrouch.MakeHurtbox(PoseInput.KitMovement);
+				PoseInput.KitMovement = &CrouchHurtbox;
+			}
+		}
 		if (Timeline)
 		{
 			const int32 EvaluatedFrame = Core.IsInHitstop(Frame) ? Frame - 1 : Frame;
