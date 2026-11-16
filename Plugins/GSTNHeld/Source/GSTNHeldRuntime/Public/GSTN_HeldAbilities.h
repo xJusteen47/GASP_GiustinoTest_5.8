@@ -99,6 +99,10 @@ public:
 
 protected:
 	virtual bool PrepareShot(FGSTN_ProjectileParams& InOutParams, bool bHost) override;
+
+	/** The authored throw gravity carried into the thrower's own gravity (FGSTN_GravityFrame::FollowGravity) */
+	void FollowThrowerGravity(FGSTN_ProjectileParams& InOutParams) const;
+
 	virtual void OnShotFired(AGSTN_Projectile& Shot) override;
 	virtual bool DeferFire() const override;
 	virtual EGSTN_ProjectileAim GetShotAim() const override;

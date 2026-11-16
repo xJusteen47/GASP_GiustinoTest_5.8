@@ -3,6 +3,7 @@
 #include "Simulation/GSTN_CombatSimComponent.h"
 
 #include "Hits/GSTN_HurtboxPose.h"
+#include "Movement/GSTN_GravityFrame.h"
 #include "Loadout/GSTN_LoadoutModeRules.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "GameRules/GSTN_GameRules.h"
@@ -830,7 +831,10 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 	// A hit turn the latest frame queued (the victim step's SetFacing; the state holds only that frame's requests): Mover applies it on the
 	// frame this input is for, and the walking mode orients to the command's intent on that same tick, so an intent still pointing the old way
 	// undid the turn (react-hook-5 diagnostics: SetFacing ran on the hit frame, the yaw never changed). The intent points the new way instead
-	float HoldYaw = static_cast<float>(GetOwner()->GetActorRotation().Yaw);
+	// Yaws about the local up (gravity audit 2026-11-16): Mover keeps the capsule upright on the gravity floor, so the actor's up is it
+	const FVector OwnerUp = GetOwner()->GetActorUpVector();
+	const float OwnerYaw = FGSTN_GravityFrame::YawOfRotator(GetOwner()->GetActorRotation(), OwnerUp);
+	float HoldYaw = OwnerYaw;
 	bool bHitTurn = false;
 	if (!bInTimeline)
 	{
@@ -849,7 +853,7 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 		{
 			Inputs->SetMoveInput(EMoveInputType::DirectionalIntent, FVector::ZeroVector);
 		}
-		HoldOrientationIntent(InputCmdResult, HoldYaw);
+		HoldOrientationIntent(InputCmdResult, HoldYaw, OwnerUp);
 		bHoldFacingAfterReaction = true;
 		return;
 	}
@@ -858,10 +862,10 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 	float SteerHoldYaw = 0.f;
 	bool bStickActive = false;
 	if (FGSTN_CombatTimelineLogic::ResolveSteerFrame(Sync->Core, GetSimulationFrame() + 1, GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline), MoveStick,
-		AimStick, bLastPrecisionAim, FGSTN_DirectionClassifier::DequantizeYaw(LastCameraYaw), static_cast<float>(GetOwner()->GetActorRotation().Yaw),
+		AimStick, bLastPrecisionAim, FGSTN_DirectionClassifier::DequantizeYaw(LastCameraYaw), OwnerYaw,
 		LastStepMs * 0.001f, SteerHoldYaw, bStickActive) != EGSTN_SteerPhase::None)
 	{
-		HoldOrientationIntent(InputCmdResult, SteerHoldYaw);
+		HoldOrientationIntent(InputCmdResult, SteerHoldYaw, OwnerUp);
 		bHoldFacingAfterReaction = false;
 		return;
 	}
@@ -874,7 +878,7 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 		}
 		else
 		{
-			HoldOrientationIntent(InputCmdResult, static_cast<float>(GetOwner()->GetActorRotation().Yaw));
+			HoldOrientationIntent(InputCmdResult, OwnerYaw, OwnerUp);
 		}
 	}
 }
@@ -895,7 +899,7 @@ bool UGSTN_CombatSimComponent::GetSteerView(FSteerView& Out) const
 	bool bStickActive = false;
 	// The latest simulated frame, step 0: where the steering stands, not a new step of it
 	Out.Phase = FGSTN_CombatTimelineLogic::ResolveSteerFrame(Sync->Core, GetSimulationFrame(), Timeline, MoveStick, AimStick, bLastPrecisionAim, CameraYaw,
-		static_cast<float>(GetOwner()->GetActorRotation().Yaw), 0.f, Yaw, bStickActive);
+		FGSTN_GravityFrame::YawOfRotator(GetOwner()->GetActorRotation(), GetOwner()->GetActorUpVector()), 0.f, Yaw, bStickActive);
 	if (Out.Phase == EGSTN_SteerPhase::None)
 	{
 		return false;
@@ -913,15 +917,26 @@ bool UGSTN_CombatSimComponent::GetSteerView(FSteerView& Out) const
 	return true;
 }
 
-bool UGSTN_CombatSimComponent::HoldOrientationIntent(FMoverInputCmdContext& InputCmd, float YawDeg)
+bool UGSTN_CombatSimComponent::HoldOrientationIntent(FMoverInputCmdContext& InputCmd, float YawDeg, const FVector& Up)
 {
 	FCharacterDefaultInputs* Inputs = InputCmd.InputCollection.FindMutableDataByType<FCharacterDefaultInputs>();
 	if (!Inputs || Inputs->bUsingMovementBase)
 	{
 		return false;
 	}
-	Inputs->OrientationIntent = FRotator(0.0, YawDeg, 0.0).Vector();
+	// YawDeg is about the local up: Mover's walking mode reads the intent back in its gravity frame (ApplyGravityToOrientationIntent)
+	Inputs->OrientationIntent = FGSTN_GravityFrame::DirectionOfYaw(YawDeg, Up);
 	return true;
+}
+
+FVector UGSTN_CombatSimComponent::GetBaseGravity() const
+{
+	if (GravityBase.bValid)
+	{
+		return GravityBase.Base;
+	}
+	const UMoverComponent* Mover = GetOwner() ? GetOwner()->FindComponentByClass<UMoverComponent>() : nullptr;
+	return Mover ? Mover->GetGravityAcceleration() : FVector(0.0, 0.0, -FGSTN_GravityFrame::NominalGravity);
 }
 
 float UGSTN_CombatSimComponent::GetFacingYaw() const
@@ -2038,7 +2053,8 @@ void UGSTN_CombatSimComponent::StepStartupSteer(int32 Frame, const FGSTN_InputCm
 	}
 	const FVector2D AimStick(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.AimStickY));
 	const FVector2D MoveStick(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickY));
-	const float CurrentYaw = static_cast<float>(Pose.Rotator().Yaw);
+	// Yaw about the local up, the frame the facing effect writes in (gravity audit 2026-11-16)
+	const float CurrentYaw = FGSTN_GravityFrame::YawOfRotator(Pose.Rotator(), Up);
 	float SteerYaw = 0.f;
 	bool bStickActive = false;
 	// Per-move steering (owner 2026-11-14): a turn only while the window is open and the move's stick is pushed; the holds are the input producer's

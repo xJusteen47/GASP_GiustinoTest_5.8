@@ -22,6 +22,7 @@
 #include "GSTN_SurfaceUtils.h"
 #include "Movement/GSTN_LayeredMove_Freeze.h"
 #include "Movement/GSTN_LayeredMove_Knockback.h"
+#include "Movement/GSTN_GravityFrame.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Timeline/GSTN_StartupSteer.h"
@@ -236,7 +237,7 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, co
 		if (bTurn)
 		{
 			const int16 YawArg = FGSTN_StartupSteer::QuantizeYaw(TurnYaw);
-			if (YawArg != FGSTN_StartupSteer::QuantizeYaw(static_cast<float>(Self->Facing.Rotation().Yaw)))
+			if (YawArg != FGSTN_StartupSteer::QuantizeYaw(FGSTN_GravityFrame::YawOfDirection(Self->Facing, Self->Up)))
 			{
 				bQueued = Core.Requests.Add(EGSTN_RequestType::SetFacing, Frame, YawArg);
 				if (!bQueued)
@@ -622,10 +623,14 @@ void UGSTN_CombatSimComponent::ExecuteReactionMove(float StepMs)
 	const bool bLaunch = ReactionMove.Kind == FGSTN_ReactionMove::EKind::Launch;
 	// Back first along the knockback (rules data, owner 2026-11-14): the facing is Mover sync state, queued as the steer's instant effect on the
 	// same pre-tick as the move, so a resimulated frame turns the same way. A vertical launch keeps the facing
-	const FVector Flat(ReactionMove.Velocity.X, ReactionMove.Velocity.Y, 0.0);
+	// On the gravity floor, yaw about the local up (gravity audit 2026-11-16)
+	FTransform Pose;
+	FVector Up = FVector::UpVector;
+	ReadOwnPose(Pose, Up);
+	const FVector Flat = FGSTN_GravityFrame::Flatten(ReactionMove.Velocity, Up);
 	if (CombatRules && CombatRules->bTurnBackAlongKnockback && Flat.SizeSquared() > 1.0)
 	{
-		ExecuteSetFacing(FGSTN_StartupSteer::QuantizeYaw(static_cast<float>((-Flat).Rotation().Yaw)));
+		ExecuteSetFacing(FGSTN_StartupSteer::QuantizeYaw(FGSTN_GravityFrame::YawOfDirection(-Flat, Up)));
 	}
 	const TSubclassOf<UGameplayEffect> Effect = bLaunch ? KnockbackEffect : PushBackEffect;
 	if (!Effect)

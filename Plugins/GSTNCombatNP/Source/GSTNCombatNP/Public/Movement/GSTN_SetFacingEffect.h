@@ -22,7 +22,7 @@ struct GSTNCOMBATNP_API FGSTN_SetFacingEffect : public FInstantMovementEffect
 {
 	GENERATED_BODY()
 
-	/** World yaw the character faces after the effect, degrees */
+	/** Yaw (degrees) the character faces after the effect, about its local up (= world yaw under world-Z gravity) */
 	UPROPERTY()
 	float YawDeg = 0.f;
 
@@ -32,8 +32,8 @@ struct GSTNCOMBATNP_API FGSTN_SetFacingEffect : public FInstantMovementEffect
 	virtual UScriptStruct* GetScriptStruct() const override;
 	virtual FString ToSimpleString() const override;
 
-	/** The rotation the effect writes: OrientationDeg with its yaw replaced. Pure, for the tests */
-	static FRotator MakeOrientation(const FRotator& OrientationDeg, float YawDeg);
+	/** The rotation the effect writes: OrientationDeg with its yaw about Up replaced. Pure, for the tests */
+	static FRotator MakeOrientation(const FRotator& OrientationDeg, float YawDeg, const FVector& Up = FVector::UpVector);
 };
 
 template<>
