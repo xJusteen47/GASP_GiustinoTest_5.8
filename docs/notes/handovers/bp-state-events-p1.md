@@ -25,3 +25,10 @@ Owner decisions: 1A (P1 now), 2A (online: events reach clients). Design: `docs/a
 
 ## Da confermare (to owner via coordinator)
 - None blocking. P2 of the audit (BP timeline track, validator, knockback model exposure) remains queued.
+
+## Desktop steps (next thread with _ue59, merge into the playtest integration)
+1. `git fetch origin claude/project-thread-brrdze` and merge it into the integration branch (only C++ + docs: no asset conflict).
+2. Build editor target (timed script, 45 min); a UHT/compile error = attempt 1 of 2.
+3. Headless tests: `GSTNCombat.NP.StateEvents` then the full suite (expect 734 + 3).
+4. PIE dedicated server + 2 clients: bind On Hit Received / On Landed in a test BP, check one fire per machine per hit.
+Cost estimate of this thread: ~11 $ (Opus, cloud, no build).
