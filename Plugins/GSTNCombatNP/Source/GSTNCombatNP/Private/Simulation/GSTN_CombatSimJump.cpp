@@ -52,7 +52,11 @@ bool UGSTN_CombatSimComponent::BuildJumpParams(FGSTN_JumpParams& OutParams) cons
 	OutParams.GlideGravityScale = AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetGlideGravityScaleAttribute(), bFound);
 	OutParams.GlideMaxFallSpeed = AbilitySystem->GetGameplayAttributeValue(UGSTN_CombatAttributeSet::GetGlideMaxFallSpeedAttribute(), bFound);
 	const UGSTN_GA_PlatformJump* TableJumpData = Tables().TableJumpData;
-	OutParams.CoyoteFrames = TableJumpData && TableJumpData->bOverrideCoyoteFrames ? TableJumpData->CoyoteFrames : UGSTN_CombatSettings::Get().JumpCoyoteFrames;
+	// Coyote time is kit data only (no project setting); without a jump ability the params keep their default
+	if (TableJumpData)
+	{
+		OutParams.CoyoteFrames = TableJumpData->CoyoteFrames;
+	}
 	OutParams.SquatFrames = TableJumpData && TableJumpData->bOverrideSquatFrames ? TableJumpData->SquatFrames : UGSTN_CombatSettings::Get().JumpSquatFrames;
 	return true;
 }

@@ -107,11 +107,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data", meta = (EditCondition = "bOverrideResetRules"))
 	FGSTN_JumpResetRules ResetRules;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")
-	bool bOverrideCoyoteFrames = false;
-
-	/** Frames after leaving the ground in which a ground jump is still allowed */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data", meta = (EditCondition = "bOverrideCoyoteFrames", ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
+	/**
+	 * Frames after leaving the ground in which a ground jump is still allowed (coyote time). 0 = none. Kit data, not a project setting
+	 * (owner rule: no gameplay in Project Settings); a kit without a jump ability keeps the jump logic's default (FGSTN_JumpParams)
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data", meta = (ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
 	int32 CoyoteFrames = 4;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")

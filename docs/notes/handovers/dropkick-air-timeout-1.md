@@ -40,5 +40,8 @@ Branch `claude/project-thread-pcq7jx` from `claude/integ-night-1116` 194ad7e3. C
   gameplay" rule; the kit override `UGSTN_GA_PlatformJump::bOverrideCoyoteFrames` exists). Launch pads: `bResetCoyote` / kit rule Clear.
 - No coyote for attacks: walking off a ledge and pressing attack 1 frame later gives the aerial. Ground read is one frame late (Mover end
   of previous frame), so the effective window is ~5 frames.
-- Possible follow-ups (owner): A) move the default from project settings to the kit data (~2 $); B) "attack coyote": ground attacks
-  allowed N frames after leaving the ground (~4-6 $).
+- A) DONE (coordinator, rule 6): `JumpCoyoteFrames` removed from `UGSTN_CombatSettings` and its ini; `bOverrideCoyoteFrames` removed;
+  `UGSTN_GA_PlatformJump::CoyoteFrames` (default 4) is always read from the kit's jump binding (`GSTN_CombatSimJump.cpp`). Same value
+  for every kit today. Caveat: a BP child with override OFF but a non-4 CoyoteFrames would now use its value (none known). Build check:
+  `GSTNCombat.Core.Jump.*` + a ledge jump in PIE.
+- B) "attack coyote" (ground attacks allowed N frames after leaving the ground, ~4-6 $): waits for the owner, like the Landing track.

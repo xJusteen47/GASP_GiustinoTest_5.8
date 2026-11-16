@@ -253,7 +253,7 @@ and `LoadoutRules.{KitExists, AdditionalWeapons, Supers, Customisations, Skin, N
 
 ## Jump (`Jump/`, added in C13)
 
-Pure and relative to a `GravityDir` the caller passes in (up = -GravityDir, never world Z): `FGSTN_JumpState` (the jump part of the combat sync core, one bit when default), `FGSTN_JumpLogic` (`Step`, `ClassifyJump`, `ApplyTakeoff`, `ApplyFastFall`, `GravityScale`, `SimulateApex`), `FGSTN_GravityPhases` / `FGSTN_GravityBase` (the phase scale applied to the local gravity, remembering the authored one) and `FGSTN_JumpResetRules` data (air jumps Keep / Refill / Set N, coyote Clear / Keep, cancel the hold phase on an external launch; default Refill + Clear + cancel). The rules and `JumpCoyoteFrames` are settings of `UGSTN_CombatSettings`. Native tags `Command.Movement.Jump` / `.FastFall`. Tests: `GSTNCombat.Core.Jump.*`, `GSTNCombat.Core.Gravity.*`.
+Pure and relative to a `GravityDir` the caller passes in (up = -GravityDir, never world Z): `FGSTN_JumpState` (the jump part of the combat sync core, one bit when default), `FGSTN_JumpLogic` (`Step`, `ClassifyJump`, `ApplyTakeoff`, `ApplyFastFall`, `GravityScale`, `SimulateApex`), `FGSTN_GravityPhases` / `FGSTN_GravityBase` (the phase scale applied to the local gravity, remembering the authored one) and `FGSTN_JumpResetRules` data (air jumps Keep / Refill / Set N, coyote Clear / Keep, cancel the hold phase on an external launch; default Refill + Clear + cancel). The rules are settings of `UGSTN_CombatSettings`; coyote time is kit data (`UGSTN_GA_PlatformJump::CoyoteFrames`, default 4). Native tags `Command.Movement.Jump` / `.FastFall`. Tests: `GSTNCombat.Core.Jump.*`, `GSTNCombat.Core.Gravity.*`.
 
 ## Movement kit data (`Movement/`, `Input/GSTN_MovementSlots`, added in C14)
 
