@@ -19,3 +19,13 @@ _ue59 left checked out on this branch, built, ready for the playtest.
 - Rollback check of the same-frame start (StartTimelineFromAbility writes combat state from the ability sim step) under the PIE lag harness: not run, needs a test host BP (timeline CP2). Unit test StartInFrame passes only.
 - Dirty asset not touched and not committed: `Content/GASNPPTest/Combat/Overlord/AM_OverlordDAirV9.uasset` (was already modified before this thread; owner decides). PM_BoostJump/PM_ThrowRider/IC_GASNPP_Test/KIT_Test_Hits were clean.
 - Editor not opened, no maps saved.
+
+## Checkpoint 2 (same thread): hurtbox follow bones + Wait Command
+- Merged 6bfba81b (hurtbox, clean) -> build FAIL, 3 errors (integ1116-hb-build.log): GSTN_StepSnapshot.h loop var `Extension` hid the member (C4458, renamed `PosedExt`, 2 sites); GSTN_EditorTests_HurtboxFollow.cpp TestEqual on UScriptStruct* -> TestTrue(==).
+- Merged 466fc1ae (Wait Command / Wait Combat Frames / validator hints, clean), one build: ESITO OK (integ1116-hb-build2.log "Result: Succeeded").
+- Tests -Tests GSTN (integ1116-hb-test.log): ESITO OK, 1665 Success, 0 Fail/Error. New pass: HurtboxPose.{DetailLevels,FollowsBone,HurtboxTrack,KitMovement,LegacySetUnchanged}, Editor.HurtboxFollow.{SimpleBody,TrackEditor}, NP.WaitTasks.{CombatFrames,Command}, Editor.SimGraph.TaskHints.
+- Pushed 1684b510.
+
+## Not done (budget reached, stable point)
+- PIE leg check (low hit between the legs on an idle dummy): needs first the asset step of hurtbox-follow-bones.md §3 (prepare_hurtbox_set on the playtest set + save + re-bake all timelines = versioned asset changes), then a scenario with a low poke placed between the legs. Est. one desktop thread, Sonnet/Opus medium, ~6-8 $.
+- Rollback check of the same-frame start AND of Wait Command's consume (both write sync state from the ability step): needs a test host BP (3-phase move) + gasnpp_test.py lag run. Timeline CP2 work, ~8-10 $. Until then: unit tests only.
