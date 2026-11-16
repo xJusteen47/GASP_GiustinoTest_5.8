@@ -38,6 +38,12 @@ public:
 	/** The hitbox of the first selected key that belongs to a Hitbox track. False when the selection holds none */
 	static bool FindSelectedLane(const FGSTN_TimelineEditorModel& Model, FLane& OutLane);
 
+	/**
+	 * Parenting (owner 2026-11-16): the group whose window is selected (a group row of the Hitboxes tab, or the bar of a Hitbox track) when that group
+	 * has a transform. The gizmo then moves and turns the group (GroupOffset) and every child follows. INDEX_NONE when there is none, or a key is selected
+	 */
+	static int32 FindSelectedGroup(const FGSTN_TimelineEditorModel& Model);
+
 	/** The preview's root: the origin (the character stands still in the preview) */
 	static FTransform GetRootTransform() { return FTransform::Identity; }
 
@@ -62,8 +68,11 @@ public:
 private:
 	const FGSTN_TimelineTrack_Hitbox* GetHitboxTrack(int32 TrackIndex) const;
 
-	/** The space of a hitbox at an absolute frame (socket placement included) */
-	FTransform ComputeSpace(const FGSTN_HitboxSpec& Spec, int32 Frame) const;
+	/** The space of a hitbox's keys at an absolute frame (socket placement and, for a child of its group, the group's offset included) */
+	FTransform ComputeSpace(const FGSTN_TimelineTrack_Hitbox& Track, const FGSTN_HitboxSpec& Spec, int32 Frame) const;
+
+	/** A space and socket at an absolute frame, without any offset: what a group's offset is relative to */
+	FTransform ComputePlacementSpace(EGSTN_HitboxSpace Space, FName SocketName, int32 Frame) const;
 
 	/**
 	 * Opens the model's drag and settles which key it edits (see the class comment), keeping the state Apply starts from. False, with nothing left
@@ -77,6 +86,8 @@ private:
 	// The drag in progress: the state as it was at BeginDrag, because every Apply starts from it
 	bool bDragOpen = false;
 	bool bOffsetAll = false;
+	/** The drag moves a group's transform, not a key */
+	bool bGroupDrag = false;
 	FLane DragLane;
 	int32 DragKeyFlat = INDEX_NONE;
 	FTransform DragSpace = FTransform::Identity;

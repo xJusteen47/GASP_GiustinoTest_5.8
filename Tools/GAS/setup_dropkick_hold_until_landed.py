@@ -2,6 +2,8 @@
 # (FGSTN_TimelineTrack_HoldUntilLanded, C++ on claude/project-thread-qxjy3w). Data only: no Blueprint graph, no input, no project setting.
 # Needs the dropkick kit of claude/project-thread-anim-r2 (Tools/GAS/setup_overlord_dropkick_kit.py, Tools/AnimPipeline/dropkick_loop_reps.py):
 # run it AFTER that script, and again after any rerun of it (the kit script rewrites the timeline without the track).
+# Never over hand edits: a timeline saved by anything but the setup scripts is KEPT (Tools/GAS/setup_guard.py); run(force=True) adds the
+# track anyway (backup in Saved/Backups/SetupGuard). The ledger shares the timeline with the kit script: after this script it stays script-owned.
 #
 # What it writes into /Game/GASNPPTest/Combat/Overlord/TL_Overlord_Dropkick (nothing else):
 #   Hold Until Landed track [startup + 6, startup + one loop) frames (decision 2A: loop f0-f5 play once as follow-through, only the loop's
@@ -16,8 +18,12 @@
 # Output:    Saved/AnimR2/setup_dropkick_hold_until_landed.txt, at most 5 printed lines.
 import os
 import runpy
+import sys
 
 import unreal
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import setup_guard  # noqa: E402
 
 DIR = '/Game/GASNPPTest/Combat/Overlord'
 TIMELINE = f'{DIR}/TL_Overlord_Dropkick'
@@ -40,11 +46,15 @@ def _loop_reps():
     return int(runpy.run_path(path)['LOOP_REPS'])
 
 
-def run():
+def run(force=False):
     del _lines[:]
     ok = False
     try:
         lib = unreal.EditorAssetLibrary
+        guard = setup_guard.Guard.for_unreal('setup_dropkick_hold_until_landed', force=force, log=log)
+        guard.precheck([TIMELINE])
+        if lib.does_asset_exist(TIMELINE) and not guard.may_write(TIMELINE):
+            raise RuntimeError('TL_Overlord_Dropkick was edited by hand: not touched (run(force=True) to add the track anyway)')
         for path in [TIMELINE] + list(CLIPS.values()):
             if not lib.does_asset_exist(path):
                 raise RuntimeError(f'{path} missing: run Tools/GAS/setup_overlord_dropkick_kit.py first')
@@ -69,6 +79,7 @@ def run():
             log(f'follow-up timeline {follow}')
         asset.set_editor_property('data', data)
         lib.save_loaded_asset(asset, False)
+        guard.record([TIMELINE])
         log(f'TL_Overlord_Dropkick: hold [{start}, {end}) in the air, land frame {land} (loop x{reps} in the montage), total {total}, '
             f'{len(data.get_editor_property("tracks"))} tracks; saved')
         ok = True

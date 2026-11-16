@@ -118,6 +118,21 @@ public:
 	/** The time of the start of a frame in milliseconds with one decimal ("62.5"), from the frame times the tick rate */
 	static FString FormatMilliseconds(int32 Frame, float TickRate);
 
+	/** The time of the start of a frame in seconds with two decimals and the unit ("0.38 s") */
+	static FString FormatSeconds(int32 Frame, float TickRate);
+
+	/** The ruler's two lines for a frame in a display mode: OutTop is drawn bold, OutBottom dim (empty = no second line) */
+	static void FormatRulerLabel(int32 Frame, float TickRate, EGSTN_RulerDisplay Display, FString& OutTop, FString& OutBottom);
+
+	/** The playhead readout next to the frame field ("0.38 s", "384.0 ms"), empty in Frames mode */
+	static FString FormatPlayheadTime(int32 Frame, float TickRate, EGSTN_RulerDisplay Display);
+
+	/** Zoom by a factor around the middle of the lanes (the toolbar buttons and Ctrl+= / Ctrl+-), then keeps the view on the timeline */
+	static void ZoomAroundCenter(FGSTN_TimelineViewTransform& View, double Factor, double WidthPixels, int32 TotalFrames);
+
+	/** Horizontal scrollbar of the lanes: the scrollable range [OutMin, OutMax) in frames for the view, wider than the timeline by the view's margin */
+	static void GetScrollRange(const FGSTN_TimelineViewTransform& View, double WidthPixels, int32 TotalFrames, double& OutMin, double& OutMax);
+
 	// Navigation
 
 	/**

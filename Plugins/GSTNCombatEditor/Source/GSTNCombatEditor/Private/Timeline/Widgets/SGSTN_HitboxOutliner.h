@@ -15,7 +15,10 @@ class FGSTN_TimelineEditorModel;
  *  - a click on a row focuses it (GSTNHitboxOutline::Focus): the group or the hitbox is selected, the gizmo goes on it, and the playhead
  *    moves inside the group's frames when it was outside, so the shape is drawn;
  *  - a click on a hitbox in the viewport (or on a lane of the timeline) selects its row here, expands its group and scrolls it into view.
- * It never edits: the Details tab and the viewport gizmo do.
+ * Since the owner's pass of 2026-11-16 it also manages the hitboxes, so nobody has to dig in the nested arrays of the Details panel:
+ *  - rename in place (F2, double-click, or a click on the name of the selected row), like the Outliner and the Content Browser;
+ *  - right-click menu: Rename, Add Hitbox (on a group), Duplicate (Ctrl+D) and Delete (Del) of a hitbox. Each is one undo step.
+ * Values are edited in the Details tab, which shows only the selected hitbox and key.
  */
 class SGSTN_HitboxOutliner : public SCompoundWidget
 {
@@ -38,6 +41,13 @@ private:
 	void SyncSelectionToTree();
 	void HandleTreeSelectionChanged(FItemPtr Item, ESelectInfo::Type SelectInfo);
 	void HandleDoubleClick(FItemPtr Item);
+	TSharedPtr<SWidget> MakeContextMenu();
+	void RenameSelected();
+	FItemPtr GetSelectedItem() const;
+
+	//~ SWidget
+	virtual bool SupportsKeyboardFocus() const override { return true; }
+	virtual FReply OnKeyDown(const FGeometry& MyGeometry, const FKeyEvent& InKeyEvent) override;
 	TSharedRef<ITableRow> OnGenerateRow(FItemPtr Item, const TSharedRef<STableViewBase>& OwnerTable);
 	void OnGetChildren(FItemPtr Item, TArray<FItemPtr>& OutChildren);
 	FItemPtr FindRow(const FGSTN_HitboxOutlineItem& Item) const;

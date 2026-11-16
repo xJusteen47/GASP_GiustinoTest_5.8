@@ -73,10 +73,12 @@ namespace GSTNTimelineWidgets
 	inline FLinearColor TextColorDim() { return FStyleColors::Foreground.GetSpecifiedColor() * FLinearColor(1.f, 1.f, 1.f, 0.7f); }
 
 	/** The wheel over the ruler, the phase bar or a lane: scroll, or zoom around the cursor with Ctrl */
-	inline FReply HandleWheel(FGSTN_TimelineEditorModel& Model, const FGeometry& Geometry, const FPointerEvent& MouseEvent)
+	inline FReply HandleWheel(FGSTN_TimelineEditorModel& Model, const FGeometry& Geometry, const FPointerEvent& MouseEvent, bool bZoomByDefault = false)
 	{
+		// Ctrl+wheel zooms everywhere (Sequencer, Montage editor); over the ruler the plain wheel zooms too. Shift+wheel always scrolls sideways
 		const FVector2D Local = Geometry.AbsoluteToLocal(MouseEvent.GetScreenSpacePosition());
-		FGSTN_TimelineLayout::ApplyWheel(Model.ViewTransform, Local.X, MouseEvent.GetWheelDelta(), MouseEvent.IsControlDown(), Geometry.GetLocalSize().X, Model.GetPlayableFrames());
+		const bool bZoom = !MouseEvent.IsShiftDown() && (MouseEvent.IsControlDown() || bZoomByDefault);
+		FGSTN_TimelineLayout::ApplyWheel(Model.ViewTransform, Local.X, MouseEvent.GetWheelDelta(), bZoom, Geometry.GetLocalSize().X, Model.GetPlayableFrames());
 		Model.NotifyViewChanged();
 		return FReply::Handled();
 	}

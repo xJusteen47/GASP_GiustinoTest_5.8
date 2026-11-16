@@ -54,6 +54,24 @@ public:
 	/** Width of the lane area (the ruler's), 0 before the first arrangement */
 	double GetLaneWidth() const;
 
+	/**
+	 * The native brush of a toolbar role ("Play", "ZoomIn"...): the first of its candidate names the app style has, else the last candidate.
+	 * bOutFound says whether any candidate exists, for the test that lists the icons this engine lacks
+	 */
+	static FName ResolveToolbarIcon(FName Role, bool* bOutFound = nullptr);
+
+	/** Every toolbar role, for that test */
+	static TArray<FName> GetToolbarIconRoles();
+
+	/** Sets what the ruler shows and remembers it for this user */
+	void SetRulerDisplay(EGSTN_RulerDisplay Display);
+
+	//~ SWidget: middle- or right-drag pans the lanes sideways, like Sequencer
+	virtual FReply OnPreviewMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
+	virtual FReply OnMouseMove(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
+	virtual FReply OnMouseButtonUp(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
+	virtual void Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime) override;
+
 private:
 	void BindCommands();
 
@@ -65,6 +83,10 @@ private:
 	TSharedRef<SWidget> MakeToolbar(const TSharedRef<SWidget>& ToolbarExtra);
 	TSharedRef<SWidget> MakeCommandButton(const TSharedPtr<FUICommandInfo>& Command);
 	TSharedRef<SWidget> MakeAddTrackMenu();
+	TSharedRef<SWidget> MakeViewMenu();
+
+	/** The horizontal scrollbar under the lanes was dragged: Offset is the fraction of the scroll range at the left edge */
+	void HandleHorizontalScroll(float Offset);
 
 	/** The FTSTicker callback of playback: whole frames at the real tick rate, looped over the timeline */
 	bool TickPlayback(float DeltaSeconds);
@@ -84,6 +106,11 @@ private:
 	TArray<TSharedPtr<FGSTN_TimelineRowData>> Rows;
 	TSharedPtr<SListView<TSharedPtr<FGSTN_TimelineRowData>>> RowList;
 	TSharedPtr<SScrollBar> RowScrollBar;
+	TSharedPtr<SScrollBar> HorizontalScrollBar;
+
+	/** A middle or right drag that pans the view; Moved says whether it went far enough to count (a right click that did not move stays a click) */
+	bool bPanning = false;
+	double PanMovedPixels = 0.0;
 	TSharedPtr<SGSTN_TimelineRuler> Ruler;
 
 	FDelegateHandle DataChangedHandle;

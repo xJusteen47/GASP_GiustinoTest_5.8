@@ -19,10 +19,14 @@ FGSTN_TimelineEditorCommands::FGSTN_TimelineEditorCommands()
 
 void FGSTN_TimelineEditorCommands::RegisterCommands()
 {
-	UI_COMMAND(StepBack, "Step Back", "Move the playhead one frame back", EUserInterfaceActionType::Button, FInputChord(EKeys::Comma));
-	UI_COMMAND(StepForward, "Step Forward", "Move the playhead one frame forward", EUserInterfaceActionType::Button, FInputChord(EKeys::Period));
-	UI_COMMAND(PreviousKey, "Previous Key", "Move the playhead to the previous key or window edge", EUserInterfaceActionType::Button, FInputChord(EModifierKey::Shift, EKeys::Comma));
-	UI_COMMAND(NextKey, "Next Key", "Move the playhead to the next key or window edge", EUserInterfaceActionType::Button, FInputChord(EModifierKey::Shift, EKeys::Period));
+	// The chords of Sequencer and the animation editors (owner 2026-11-16: engine-like shortcuts): arrows step a frame, comma and period jump between keys,
+	// Up goes to the start and Ctrl+Up to the end. Every chord can be changed in Editor Preferences > Keyboard Shortcuts > GSTN Timeline Editor
+	UI_COMMAND(StepBack, "Step Back", "Move the playhead one frame back", EUserInterfaceActionType::Button, FInputChord(EKeys::Left));
+	UI_COMMAND(StepForward, "Step Forward", "Move the playhead one frame forward", EUserInterfaceActionType::Button, FInputChord(EKeys::Right));
+	UI_COMMAND(PreviousKey, "Previous Key", "Move the playhead to the previous key or window edge", EUserInterfaceActionType::Button, FInputChord(EKeys::Comma));
+	UI_COMMAND(NextKey, "Next Key", "Move the playhead to the next key or window edge", EUserInterfaceActionType::Button, FInputChord(EKeys::Period));
+	UI_COMMAND(JumpToStart, "Jump to Start", "Move the playhead to the first frame (of the loop range when one is set)", EUserInterfaceActionType::Button, FInputChord(EKeys::Up));
+	UI_COMMAND(JumpToEnd, "Jump to End", "Move the playhead to the last frame (of the loop range when one is set)", EUserInterfaceActionType::Button, FInputChord(EModifierKey::Control, EKeys::Up));
 	UI_COMMAND(PlayPause, "Play", "Play or pause the timeline at the real tick rate", EUserInterfaceActionType::Button, FInputChord(EKeys::SpaceBar));
 
 	UI_COMMAND(AddKeyAtPlayhead, "Add Key", "Add a key at the playhead to the selected track, with the values of the curve at that frame", EUserInterfaceActionType::Button, FInputChord(EKeys::K));
@@ -34,6 +38,8 @@ void FGSTN_TimelineEditorCommands::RegisterCommands()
 
 	UI_COMMAND(FrameAll, "Frame All", "Show the whole timeline", EUserInterfaceActionType::Button, FInputChord(EKeys::Home));
 	UI_COMMAND(FrameSelection, "Frame Selection", "Show the selected windows and keys", EUserInterfaceActionType::Button, FInputChord(EKeys::F));
+	UI_COMMAND(ZoomIn, "Zoom In", "Zoom the timeline in around its middle (also Ctrl+wheel, or the wheel over the ruler)", EUserInterfaceActionType::Button, FInputChord(EModifierKey::Control, EKeys::Equals));
+	UI_COMMAND(ZoomOut, "Zoom Out", "Zoom the timeline out around its middle (also Ctrl+wheel, or the wheel over the ruler)", EUserInterfaceActionType::Button, FInputChord(EModifierKey::Control, EKeys::Hyphen));
 
 	UI_COMMAND(FitTotalFramesToMontage, "Fit Length to Montage", "Set the total frames to the length of the montage section at its play rate. Never done automatically", EUserInterfaceActionType::Button, FInputChord());
 

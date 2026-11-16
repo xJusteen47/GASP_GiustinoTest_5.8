@@ -53,6 +53,29 @@ bool FGSTN_HitboxGizmoTarget::FindSelectedLane(const FGSTN_TimelineEditorModel& 
 	return false;
 }
 
+int32 FGSTN_HitboxGizmoTarget::FindSelectedGroup(const FGSTN_TimelineEditorModel& Model)
+{
+	const FGSTN_CombatTimelineData* Data = Model.GetData();
+	if (Data == nullptr)
+	{
+		return INDEX_NONE;
+	}
+	int32 Found = INDEX_NONE;
+	for (const FGSTN_Selection& Item : Model.GetSelection())
+	{
+		if (Item.IsKey())
+		{
+			return INDEX_NONE; // a key wins: the gizmo is on its hitbox
+		}
+		const FGSTN_TimelineTrack_Hitbox* Track = Data->GetHitboxTrack(Item.TrackIndex);
+		if (Found == INDEX_NONE && Track != nullptr && Track->bUseGroupTransform)
+		{
+			Found = Item.TrackIndex;
+		}
+	}
+	return Found;
+}
+
 bool FGSTN_HitboxGizmoTarget::ResolveLiveSocket(const FGSTN_TimelinePreviewScene* Scene, FName Socket, FTransform& OutRootRelative)
 {
 	const UDebugSkelMeshComponent* Mesh = Scene != nullptr ? Scene->GetMeshComponent() : nullptr;
@@ -70,19 +93,25 @@ const FGSTN_TimelineTrack_Hitbox* FGSTN_HitboxGizmoTarget::GetHitboxTrack(int32 
 	return (Data != nullptr && Data->Tracks.IsValidIndex(TrackIndex)) ? Data->Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack_Hitbox>() : nullptr;
 }
 
-FTransform FGSTN_HitboxGizmoTarget::ComputeSpace(const FGSTN_HitboxSpec& Spec, int32 Frame) const
+FTransform FGSTN_HitboxGizmoTarget::ComputeSpace(const FGSTN_TimelineTrack_Hitbox& Track, const FGSTN_HitboxSpec& Spec, int32 Frame) const
+{
+	// A child of the group's transform is keyed relative to the group: the group's offset is part of the space the gizmo works in
+	return Track.GetParentOffset(Spec) * ComputePlacementSpace(Track.GetEffectiveSpace(Spec), Track.GetEffectiveSocket(Spec), Frame);
+}
+
+FTransform FGSTN_HitboxGizmoTarget::ComputePlacementSpace(EGSTN_HitboxSpace Space, FName SocketName, int32 Frame) const
 {
 	TOptional<FTransform> Socket;
-	if (Spec.Space == EGSTN_HitboxSpace::BakedSocket)
+	if (Space == EGSTN_HitboxSpace::BakedSocket)
 	{
 		FTransform Found;
 		const FGSTN_CombatTimelineData* Data = Model->GetData();
-		if ((Data != nullptr && Data->FindBakedSocket(Spec.Socket, Frame, Found)) || ResolveLiveSocket(Scene.Pin().Get(), Spec.Socket, Found))
+		if ((Data != nullptr && Data->FindBakedSocket(SocketName, Frame, Found)) || ResolveLiveSocket(Scene.Pin().Get(), SocketName, Found))
 		{
 			Socket = Found;
 		}
 	}
-	return GSTNGizmo::SpaceTransform(Spec.Space, GetRootTransform(), Socket);
+	return GSTNGizmo::SpaceTransform(Space, GetRootTransform(), Socket);
 }
 
 bool FGSTN_HitboxGizmoTarget::GetWidgetFrame(FVector& OutLocation, FQuat& OutLocalRotation) const
@@ -90,7 +119,17 @@ bool FGSTN_HitboxGizmoTarget::GetWidgetFrame(FVector& OutLocation, FQuat& OutLoc
 	FLane Lane;
 	if (!FindSelectedLane(*Model, Lane))
 	{
-		return false;
+		// A group with a transform: the gizmo sits on the group (the parent of its hitboxes)
+		const FGSTN_TimelineTrack_Hitbox* Group = GetHitboxTrack(FindSelectedGroup(*Model));
+		const int32 GroupFrame = Model->GetPlayhead();
+		if (Group == nullptr || !Group->Contains(GroupFrame))
+		{
+			return false;
+		}
+		const FTransform GroupWorld = Group->GroupOffset * ComputePlacementSpace(Group->GroupSpace, Group->GroupSocket, GroupFrame);
+		OutLocation = GroupWorld.GetLocation();
+		OutLocalRotation = GroupWorld.GetRotation();
+		return true;
 	}
 	const FGSTN_TimelineTrack_Hitbox* Track = GetHitboxTrack(Lane.Track);
 	const int32 Frame = Model->GetPlayhead();
@@ -100,7 +139,7 @@ bool FGSTN_HitboxGizmoTarget::GetWidgetFrame(FVector& OutLocation, FQuat& OutLoc
 		return false;
 	}
 	const FGSTN_HitboxSpec& Spec = Track->Hitboxes[Lane.Spec];
-	const FTransform World = UGSTN_HitShapeUtils::EvaluateKeys(Spec.Keys, Frame - Track->StartFrame) * ComputeSpace(Spec, Frame);
+	const FTransform World = UGSTN_HitShapeUtils::EvaluateKeys(Spec.Keys, Frame - Track->StartFrame) * ComputeSpace(*Track, Spec, Frame);
 	OutLocation = World.GetLocation();
 	OutLocalRotation = World.GetRotation();
 	return true;
@@ -157,10 +196,27 @@ bool FGSTN_HitboxGizmoTarget::OpenDrag(bool bInOffsetAll, const FText& Descripti
 	{
 		return false;
 	}
+	bGroupDrag = false;
 	FLane Lane;
 	if (!FindSelectedLane(*Model, Lane))
 	{
-		return false;
+		// The group's transform: one undo step that writes GroupOffset; its children follow because their keys are relative to it
+		const int32 GroupIndex = FindSelectedGroup(*Model);
+		const FGSTN_TimelineTrack_Hitbox* Group = GetHitboxTrack(GroupIndex);
+		const int32 GroupFrame = Model->GetPlayhead();
+		if (Group == nullptr || !Group->Contains(GroupFrame) || !Model->BeginDrag(LOCTEXT("MoveHitboxGroup", "Move hitbox group")))
+		{
+			return false;
+		}
+		DragLane = FLane();
+		DragLane.Track = GroupIndex;
+		DragSpace = ComputePlacementSpace(Group->GroupSpace, Group->GroupSocket, GroupFrame);
+		StartKey = Group->GroupOffset;
+		bOffsetAll = false;
+		DragKeyFlat = INDEX_NONE;
+		bGroupDrag = true;
+		bDragOpen = true;
+		return true;
 	}
 	const FGSTN_TimelineTrack_Hitbox* Track = GetHitboxTrack(Lane.Track);
 	const int32 Frame = Model->GetPlayhead();
@@ -183,7 +239,7 @@ bool FGSTN_HitboxGizmoTarget::OpenDrag(bool bInOffsetAll, const FText& Descripti
 	// Taken before anything is made: the path as it is now
 	StartShape = Spec.Shape;
 	StartKeys = Spec.Keys;
-	DragSpace = ComputeSpace(Spec, Frame);
+	DragSpace = ComputeSpace(*Track, Spec, Frame);
 	DragLane = Lane;
 	bOffsetAll = bInOffsetAll;
 	DragKeyFlat = INDEX_NONE;
@@ -229,6 +285,17 @@ bool FGSTN_HitboxGizmoTarget::ApplyDelta(const GSTNGizmo::FDragDelta& Delta)
 		return false;
 	}
 	bool bChanged = false;
+	if (bGroupDrag)
+	{
+		// Scale has no meaning for a group (its children's extents are their own): translate and rotate only
+		const FTransform NewOffset = GSTNGizmo::ApplyDragToKey(StartKey, DragSpace, Delta);
+		return Model->ApplyTrackEdit(DragLane.Track, [NewOffset](FGSTN_TimelineTrack& Edited)
+		{
+			FGSTN_TimelineTrack_Hitbox& Hitbox = static_cast<FGSTN_TimelineTrack_Hitbox&>(Edited);
+			Hitbox.GroupOffset.SetLocation(NewOffset.GetLocation());
+			Hitbox.GroupOffset.SetRotation(NewOffset.GetRotation());
+		}, LOCTEXT("MoveHitboxGroupEdit", "Move hitbox group"));
+	}
 	if (bOffsetAll)
 	{
 		if (!Delta.Translation.IsNearlyZero(1e-9))
@@ -347,6 +414,11 @@ bool FGSTN_HitboxGizmoTarget::MirrorSelectedKey()
 	{
 		return false;
 	}
+	if (bGroupDrag)
+	{
+		CancelDrag(); // a group has no key to mirror
+		return false;
+	}
 	const bool bChanged = Model->SetKeyTransform(DragLane.Track, DragKeyFlat, GSTNGizmo::MirrorKeyAcrossRootYZ(StartKey, DragSpace, GetRootTransform()));
 	EndDrag();
 	return bChanged;
@@ -357,6 +429,12 @@ FText FGSTN_HitboxGizmoTarget::GetStatusText() const
 	FLane Lane;
 	if (!FindSelectedLane(*Model, Lane))
 	{
+		if (const FGSTN_TimelineTrack_Hitbox* Group = GetHitboxTrack(FindSelectedGroup(*Model)))
+		{
+			return Group->Contains(Model->GetPlayhead())
+				? LOCTEXT("GizmoOnGroup", "Gizmo: moving the group. Its child hitboxes follow (their keys are relative to the group).")
+				: LOCTEXT("GizmoGroupOutside", "The playhead is outside the group's window: move it inside to use the gizmo.");
+		}
 		return LOCTEXT("GizmoNoKey", "Select a hitbox key (click a hitbox, or a key in the timeline) to move it with the gizmo.");
 	}
 	const FGSTN_TimelineTrack_Hitbox* Track = GetHitboxTrack(Lane.Track);

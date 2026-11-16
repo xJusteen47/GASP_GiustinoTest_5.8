@@ -1,7 +1,8 @@
 # ANIM-DAIR-1: the Overlord's down-air on a test kit, so the built animation can be watched in a real Play session (same idea and same helpers
-# as setup_overlord_jab_kit.py). Data only: no C++, no input mapping, no project setting, no Blueprint graph. Idempotent: a rerun rewrites the specs
-# below over hand edits. Like the jab script it only ever creates NEW assets (nothing existing is overwritten except the assets it made itself),
-# so there is nothing to back up: KIT_Test_Hits, WPN_Test_Hits, the jab kit and the animation builds are only read.
+# as setup_overlord_jab_kit.py). Data only: no C++, no input mapping, no project setting, no Blueprint graph. Idempotent on its own assets; never overwrites
+# hand edits: AS/AM/TL edited by hand (or saved by anything but this script) are KEPT, see Tools/GAS/setup_guard.py; run(force=True) or
+# run(force=['TL_Overlord_DAirV9']) (env SETUP_FORCE) replaces them after a backup in Saved/Backups/SetupGuard. Like the jab script it only
+# ever creates NEW assets besides its own: KIT_Test_Hits, WPN_Test_Hits, the jab kit and the animation builds are only read.
 #
 # Reads (never writes) the built animation(s) of the anim pipeline. Which one: the environment variable OVERLORD_DAIR_ANIM, a comma separated
 # list of asset paths (default ANIM_V8). A list builds one kit per animation in the same run, so both can be in the same map session:
@@ -27,8 +28,12 @@
 import math
 import os
 import re
+import sys
 
 import unreal
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import setup_guard  # noqa: E402
 
 ANIM_V8 = '/Game/AnimPipeline/Rig/Overlord/DAir/AS_OverlordDAirV8_Build'
 ANIM_V7 = '/Game/AnimPipeline/Rig/Overlord/DAir/AS_OverlordDAirV7_Build'   # the base, for the comparison capture
@@ -68,6 +73,7 @@ CAPSULE_HALF_HEIGHT = 90.0     # cm, the mesh component sits this far below the 
 
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'AnimDAir', 'setup_overlord_dair_kit.txt')
 _lines = []
+_guard = None   # setup_guard.Guard of the current run
 
 
 def log(msg):
@@ -103,7 +109,7 @@ def _anim_and_montage(label, src, refresh):
     lib = unreal.EditorAssetLibrary
     if refresh:
         for p in (montage_path, anim_path):
-            if lib.does_asset_exist(p):
+            if lib.does_asset_exist(p) and _guard.may_write(p):
                 lib.delete_asset(p)
                 log(f'refresh: deleted {p}')
     if not lib.does_asset_exist(anim_path):
@@ -112,7 +118,8 @@ def _anim_and_montage(label, src, refresh):
             return None, None
         log(f'created {anim_path} (copy of {src})')
     anim = unreal.load_asset(anim_path)
-    _bake_ik_feet(label, anim)
+    if _guard.may_write(anim_path):
+        _bake_ik_feet(label, anim)
     montage = unreal.load_asset(montage_path) if lib.does_asset_exist(montage_path) else None
     if not montage:
         factory = unreal.AnimMontageFactory()
@@ -120,13 +127,14 @@ def _anim_and_montage(label, src, refresh):
         factory.set_editor_property('target_skeleton', anim.get_editor_property('skeleton'))
         montage = _tools().create_asset(f'AM_OverlordDAir{label}', DIR, unreal.AnimMontage, factory)
         log(f'created {montage_path}')
-    blend = montage.get_editor_property('blend_in')
-    blend.set_editor_property('blend_time', BLEND_IN_SECONDS)
-    montage.set_editor_property('blend_in', blend)
-    blend = montage.get_editor_property('blend_out')
-    blend.set_editor_property('blend_time', BLEND_OUT_SECONDS)
-    montage.set_editor_property('blend_out', blend)
-    montage.set_editor_property('blend_out_trigger_time', BLEND_OUT_TRIGGER)
+    if _guard.may_write(montage_path):
+        blend = montage.get_editor_property('blend_in')
+        blend.set_editor_property('blend_time', BLEND_IN_SECONDS)
+        montage.set_editor_property('blend_in', blend)
+        blend = montage.get_editor_property('blend_out')
+        blend.set_editor_property('blend_time', BLEND_OUT_SECONDS)
+        montage.set_editor_property('blend_out', blend)
+        montage.set_editor_property('blend_out_trigger_time', BLEND_OUT_TRIGGER)
     frames = anim.get_play_length() * ANIM_FPS
     log(f'{label}: anim {frames:.1f} frames at 60 fps (card: {TOTAL_FRAMES}), skeleton {anim.get_editor_property("skeleton").get_name()}, '
         f'montage {montage.get_play_length():.3f} s')
@@ -216,6 +224,9 @@ def _timeline(label, anim, montage):
     if not asset:
         asset = _tools().create_asset(name, DIR, unreal.GSTN_CombatTimeline, unreal.DataAssetFactory())
         log(f'created {DIR}/{name}')
+    if not _guard.may_write(f'{DIR}/{name}'):
+        _guard.relink_montage(f'{DIR}/{name}', asset, montage)
+        return asset
     asset.set_editor_property('data', data)
     log(f'{label}: timeline total {TOTAL_FRAMES}, FAF {FAF}, active {ACTIVE}, hitbox on {FOOT_BONE} keys {[tuple(round(v, 1) for v in k) for k in foot]} ({how})')
     return asset
@@ -295,11 +306,15 @@ def _weapon_and_kit(label, cls):
     return [weapon, kit]
 
 
-def run(refresh=False, anims=None):
+def run(refresh=False, anims=None, force=False):
+    """force: True, or asset names (['TL_Overlord_DAirV9']) to overwrite even if edited by hand (backed up first); default keeps them"""
+    global _guard
     del _lines[:]
     ok = False
     try:
         anims = anims or [a.strip() for a in os.environ.get('OVERLORD_DAIR_ANIM', ANIM_V8).split(',') if a.strip()]
+        _guard = setup_guard.Guard.for_unreal('setup_overlord_dair_kit', force=force, log=log)
+        _guard.precheck([f'{DIR}/{kind}{_label(src)}' for src in anims for kind in ('AS_OverlordDAir', 'AM_OverlordDAir', 'TL_Overlord_DAir')])
         if not unreal.EditorAssetLibrary.does_directory_exist(DIR):
             unreal.EditorAssetLibrary.make_directory(DIR)
         saves = []
@@ -314,16 +329,15 @@ def run(refresh=False, anims=None):
             if not tail:
                 raise RuntimeError(f'{label}: weapon or kit not built')
             saves += [anim, montage, timeline, bp] + tail
-        for asset in saves:
-            unreal.EditorAssetLibrary.save_loaded_asset(asset, False)
-        log(f'saved {len(saves)} assets: ' + ', '.join(a.get_name() for a in saves))
+        _guard.save_and_record(saves, unreal.EditorAssetLibrary.save_loaded_asset)
+        log('saved: ' + ', '.join(a.get_name() for a in saves) + '; ' + _guard.summary())
         ok = True
     except Exception as e:
         log(f'ERROR: {e!r}')
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, 'w') as f:
         f.write('\n'.join(_lines) + '\n')
-    for line in [l for l in _lines if 'WARNING' in l or 'ERROR' in l][:4] + [_lines[-1][:300]]:
+    for line in [l for l in _lines if any(w in l for w in ('WARNING', 'ERROR', 'KEPT', 'FORCE', 'MERGE'))][:4] + [_lines[-1][:300]]:
         print(line)
     return ok
 

@@ -41,10 +41,12 @@ void FGSTN_SocketBaker::CollectUses(const FGSTN_CombatTimelineData& Data, TArray
 		for (int32 HitboxIndex = 0; HitboxIndex < Track->Hitboxes.Num(); ++HitboxIndex)
 		{
 			const FGSTN_HitboxSpec& Spec = Track->Hitboxes[HitboxIndex];
-			if (Spec.Space == EGSTN_HitboxSpace::BakedSocket && !Spec.Socket.IsNone())
+			// The socket the hitbox is placed on after parenting: a child of a group on a socket needs the group's socket baked
+			const FName Socket = Track->GetEffectiveSocket(Spec);
+			if (Track->GetEffectiveSpace(Spec) == EGSTN_HitboxSpace::BakedSocket && !Socket.IsNone())
 			{
 				FGSTN_BakeSocketUse Use;
-				Use.Socket = Spec.Socket;
+				Use.Socket = Socket;
 				Use.TrackIndex = TrackIndex;
 				Use.HitboxIndex = HitboxIndex;
 				OutUses.Add(Use);
