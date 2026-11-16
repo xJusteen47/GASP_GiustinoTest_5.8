@@ -11,7 +11,7 @@ Il 5.8 ha già il pezzo "niente ABP monolitico": plugin GSTNAnimation (ABP princ
 - **Clip dai dati**: le clip le sceglie l'anim set del kit/skin (ABP figlio con asset override), mai cablate nel grafo base. Kit->LocomotionAnimLayer confluisce nello stesso sistema (B3).
 - **Root motion spento** su tutte le clip portate: il movimento lo fa Mover; skid con distance matching sulla distanza di stop che la sim conosce dal freno (curva Distance aggiunta alla COPIA della clip, la posa non si tocca).
 - **Mani sul muro**: il Control Rig IK sta DENTRO il wall layer (dopo la macchina a stati), così l'ABP base non sa nulla di muri. Bersagli delle mani = proiezione sul piano del muro (normale + punto di contatto aggiunti a FGSTN_WallAnimState), niente trace per frame. Peso IK per stato (Idle/Left/Right pieno, Skid ridotto) come dato.
-- **Stance**: restano il nodo additivo busto con dati per kit (stance-offset). Stance animate in futuro = layer ALI_GSTN_Stance che fornisce la posa al nodo, stessa presa.
+- **Stance (owner 17:28Z, ambito: stance)**: la sceglie la GAMEPLAY ABILITY attiva, non il kit. L'abilità porta un tag Anim.Stance.* (tra i tag che concede da attiva, quindi predetto e ripristinato dalla resim); la presentazione legge i tag dell'ASC in sola lettura e li mappa in una tabella tag -> stance (anim set). Il nodo additivo busto di claude/stance-offset resta la presa; cambia solo chi sceglie (oggi kit extension). Senza tag = stance di default del personaggio. Stance animate in futuro = layer ALI_GSTN_Stance, stessa presa.
 - **Skid**: layer a 3 fasi Enter/Loop/Exit dalla fase scritta dalla sim (P2 corsa), mirror per piede, uscita con inertialization verso corsa o salto dallo skid. La svolta a 180 (SS_180_Turn) e il solo skid diventano un'opzione per kit (regola "due comportamenti = impostazione").
 
 ## 3. Fasi (stime, non costi reali)
@@ -21,13 +21,13 @@ Il 5.8 ha già il pezzo "niente ABP monolitico": plugin GSTNAnimation (ABP princ
 | L1 | C++: slot di override, campi normale/contatto nel wall state, script setup_wall_anim_layer.py -> setup_anim_layers.py (int blend, wall layer con clip vere + nodo CR), test | cloud, Opus medium | ~5 $ |
 | L2 | Build, esecuzione script, cattura wall slide (regola 10) + review | fisso Haiku/Sonnet + review cloud | ~3 $ |
 | L3 | Skid layer: FGSTN_SkidAnimState, ALI_GSTN_Skid, ABP_GSTN_SkidLayer, distance matching, mirror, uscite; DOPO P2 della corsa | cloud Opus medium + fisso | ~5 $ |
-| L4 | B3: collection di anim set nel kit/arma/skin applicata dal loadout | cloud Sonnet medium | ~3 $ |
-Totale ~18 $. Ordine: L0 e L1 subito (indipendenti), L2, poi L4, L3 dopo P2.
+| L4 | B3: collection di anim set nel kit/arma/skin applicata dal loadout + stance scelta dal tag dell'abilità | cloud Sonnet medium | ~4.5 $ |
+Totale ~19.5 $. Ordine: L0 e L1 subito (indipendenti), L2, poi L4, L3 dopo P2.
 
 ## 4. Vincoli
 - ABP base binario: lo toccano già claude/stance-offset (non in feature) e ora L1. Prima entra stance-offset (PR unico dopo il playtest), poi L1 rigenera il grafo con lo script. Un solo thread alla volta sull'ABP base.
 - Due copie di CR_WallIkControlRig nel 5.7 (GiustinoMoves/ e GiustinoMoves/WallSlide/): L0 porta quella usata da ABP_WallSliding.
 - Nessuna animazione dell'owner viene modificata: solo copie, curve dati sulle copie.
 
-## 5. Da confermare (owner)
-1. Stance: A) solo busto additivo a riposo come ora, layer stance animate più avanti (consigliata, 0 $ in più) · B) anche locomozione intera diversa per kit (camminata/corsa per kit, nuovo database motion matching per kit, ~+8 $ e asset). Se nessuna risposta: A.
+## 5. Decisioni
+1. Stance: decisa dall'owner (17:28Z), scelta dall'abilità attiva (vedi §2). Costo: +~1.5 $ dentro L4 (selezione per tag invece che per kit), nessuna fase nuova.
