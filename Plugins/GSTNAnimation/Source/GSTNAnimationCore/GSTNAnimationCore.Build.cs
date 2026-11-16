@@ -14,7 +14,8 @@ public class GSTNAnimationCore : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
-			"GameplayTags"
+			"GameplayTags",
+			"AnimationCore"   // two-bone IK solver of the blend-out foot lock node
 		});
 
 		// Finds the plugin's own Config/Tags folder to register it with the tag manager

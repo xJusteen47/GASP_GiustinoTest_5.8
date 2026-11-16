@@ -26,7 +26,8 @@ public class GSTNAnimationEditor : ModuleRules
 			"BlueprintGraph",    // K2 nodes (variable get, enum equality) and the K2 schema
 			"AnimGraph",         // anim graph nodes, state machine graphs, the anim schema
 			"AnimGraphRuntime",  // runtime node structs behind the editor nodes (blend list)
-			"KismetCompiler"
+			"KismetCompiler",
+			"GSTNAnimationCore"   // runtime struct of the blend-out foot lock node (same plugin)
 		});
 	}
 }

@@ -618,6 +618,65 @@ bool UGSTN_AnimGraphAuthoringLibrary::InsertOverrideLayerBlend(UAnimBlueprint* A
 	return bOk;
 }
 
+bool UGSTN_AnimGraphAuthoringLibrary::InsertPoseNodeAfter(UAnimBlueprint* AnimBlueprint, const FString& UpstreamNodeTitle, UClass* NodeClass)
+{
+	UEdGraph* AnimGraph = FindGraph(AnimBlueprint, UEdGraphSchema_K2::GN_AnimGraph);
+	if (!AnimGraph || !NodeClass || !NodeClass->IsChildOf(UAnimGraphNode_Base::StaticClass()))
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertPoseNodeAfter: needs an anim Blueprint with an AnimGraph and an anim graph node class"));
+		return false;
+	}
+	UEdGraphNode* Upstream = nullptr;
+	int32 Matches = 0;
+	for (UEdGraphNode* Node : AnimGraph->Nodes)
+	{
+		if (Cast<UAnimGraphNode_Base>(Node) && Node->GetNodeTitle(ENodeTitleType::ListView).ToString() == UpstreamNodeTitle)
+		{
+			Upstream = Node;
+			++Matches;
+		}
+	}
+	UEdGraphPin* UpstreamOut = Matches == 1 ? FindPosePin(Upstream, EGPD_Output) : nullptr;
+	if (!UpstreamOut)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertPoseNodeAfter: %d pose node(s) titled %s in the AnimGraph, expected one"), Matches, *UpstreamNodeTitle);
+		return false;
+	}
+	const TArray<UEdGraphPin*> Downstream = UpstreamOut->LinkedTo;
+	for (const UEdGraphPin* Pin : Downstream)
+	{
+		if (Pin && Pin->GetOwningNode()->IsA(NodeClass))
+		{
+			UE_LOG(LogGSTNAnimGraphAuthoring, Log, TEXT("InsertPoseNodeAfter: %s already follows %s"), *NodeClass->GetName(), *UpstreamNodeTitle);
+			return true;
+		}
+	}
+
+	AnimGraph->Modify();
+	Upstream->Modify();
+	UAnimGraphNode_Base* NewNode = SpawnNode<UAnimGraphNode_Base>(AnimGraph, FVector2D(Upstream->NodePosX + 40, Upstream->NodePosY + 220), NodeClass);
+	UEdGraphPin* NewIn = FindPosePin(NewNode, EGPD_Input);
+	UEdGraphPin* NewOut = FindPosePin(NewNode, EGPD_Output);
+	if (!NewIn || !NewOut)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertPoseNodeAfter: %s has no pose input and output"), *NodeClass->GetName());
+		AnimGraph->RemoveNode(NewNode);
+		return false;
+	}
+	UpstreamOut->BreakAllPinLinks();
+	bool bOk = Connect(UpstreamOut, NewIn);
+	for (UEdGraphPin* Pin : Downstream)
+	{
+		bOk &= Connect(NewOut, Pin);
+	}
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBlueprint);
+	if (!bOk)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertPoseNodeAfter: some links failed on %s, see above"), *AnimBlueprint->GetName());
+	}
+	return bOk;
+}
+
 bool UGSTN_AnimGraphAuthoringLibrary::SetChildAssetOverride(UAnimBlueprint* ChildBlueprint, FName StateName, UAnimationAsset* Asset)
 {
 	UAnimBlueprint* Parent = ChildBlueprint ? UAnimBlueprint::GetParentAnimBlueprint(ChildBlueprint) : nullptr;

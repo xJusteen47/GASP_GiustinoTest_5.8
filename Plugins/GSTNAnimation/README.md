@@ -24,6 +24,7 @@ First user: the wall layer of the project ([wall-anim.md](../../docs/architectur
 | `UGSTN_AnimSetDefinition` | primary data asset `GSTN_AnimSet` | One feature slot (`SetTag`, `Anim.Set.*`): `LayerClass` and `MontageOverrides` (`Reference` -> `Visual`). |
 | `FGSTN_AnimSetRule`, `UGSTN_AnimSetCollection` | data (`GSTN_AnimSetCollection`) | "Use this set when the cosmetic tags match `When`", with a priority; one collection per source (character, kit, weapon, skin). |
 | `UGSTN_AnimSetUtils` | function library | `ResolveWinners`, `ResolveLayerClasses`, `ValidateMontageOverride`. Pure and deterministic. |
+| `FGSTN_AnimNode_BlendOutFootLock` (+ editor node `UGSTN_AnimGraphNode_BlendOutFootLock`) | anim node | Main graph, right after the `Procedural_Feet` layer: keeps the feet planted while a montage blends back to the game pose (capsule still), then steps each foot to the game pose. Request from `UGSTN_CharacterAnimInstance` (`bFootLockRequest`); passes the pose through otherwise. `a.GSTN.BlendOutFootLock 0` turns it off. Inserted by `UGSTN_AnimGraphAuthoringLibrary::InsertPoseNodeAfter`. |
 | `UGSTN_AnimSetComponent` | actor component | Holds the sources and cosmetic tags of one character, loads asynchronously, links the winning layers on the mesh, answers `ResolveVisualMontage`. |
 
 ## How it resolves

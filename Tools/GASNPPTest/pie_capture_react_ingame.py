@@ -318,6 +318,12 @@ def _row(frame, states, tap):
         for b in ('foot_l', 'foot_r', 'root', 'pelvis'):
             v = mesh.get_socket_location(b)
             row[b] = [round(v.x, 1), round(v.y, 1), round(v.z, 1)]
+        try:   # NIGHT-FOOTLOCK: blend-out foot lock phases (L*10+R: 0 free 1 locked 2 step 3 release), request, largest montage weight
+            ai = mesh.get_anim_instance()
+            row['fl'] = [int(ai.get_editor_property('foot_lock_debug_phase')), int(ai.get_editor_property('foot_lock_request')),
+                         round(float(ai.get_editor_property('foot_lock_montage_weight')), 2)]
+        except Exception as e:  # noqa: BLE001
+            row['fl_err'] = repr(e)[:60]
         rel = mesh.get_relative_location()
         row['mesh_rel'] = [round(rel.x, 1), round(rel.y, 1), round(rel.z, 1)]
         rb = mesh.get_bone_location('root', unreal.BoneSpaces.COMPONENT_SPACE) if hasattr(mesh, 'get_bone_location') else None

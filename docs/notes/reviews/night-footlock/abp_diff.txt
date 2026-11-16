@@ -1,0 +1,14 @@
+diff --git a/Saved/footlock/abp_before.txt b/Saved/footlock/abp_after.txt
+index 87140a75..3d218ed3 100644
+--- a/Saved/footlock/abp_before.txt
++++ b/Saved/footlock/abp_after.txt
+@@ -56 +56 @@ Graph AnimGraph [AnimationGraph] outer SandboxCharacter_Mover_ABP
+-    out Pose [struct:PoseLink] -> AnimGraphNode_LinkedAnimLayer_5.InPose_
++    out Pose [struct:PoseLink] -> GSTN_AnimGraphNode_BlendOutFootLock_0.Source
+@@ -82 +82 @@ Graph AnimGraph [AnimationGraph] outer SandboxCharacter_Mover_ABP
+-    in  InPose_ [struct:PoseLink] -> AnimGraphNode_LinkedAnimLayer_0.Pose
++    in  InPose_ [struct:PoseLink] -> GSTN_AnimGraphNode_BlendOutFootLock_0.Pose
+@@ -101,0 +102,3 @@ Graph AnimGraph [AnimationGraph] outer SandboxCharacter_Mover_ABP
++  GSTN_AnimGraphNode_BlendOutFootLock "GSTN Blend-Out Foot Lock" (GSTN_AnimGraphNode_BlendOutFootLock_0)
++    in  Source [struct:PoseLink] = (LinkID=-1,SourceLinkID=-1) -> AnimGraphNode_LinkedAnimLayer_0.Pose
++    out Pose [struct:PoseLink] -> AnimGraphNode_LinkedAnimLayer_5.InPose_

@@ -271,6 +271,16 @@ def _montage():
     return None
 
 
+def _fl_row(mesh, body):
+    # NIGHT-FOOTLOCK: the blend-out foot lock's request and phases (UGSTN_CharacterAnimInstance; L*10+R, 0 free 1 locked 2 step 3 release)
+    try:
+        ai = mesh.get_anim_instance()
+        body['fl'] = [int(ai.get_editor_property('foot_lock_debug_phase')), int(ai.get_editor_property('foot_lock_request')),
+                      round(float(ai.get_editor_property('foot_lock_montage_weight')), 2)]
+    except Exception as e:
+        body['fl_err'] = repr(e)[:60]
+
+
 def _row(frame, tapped, extra=None):
     view = g._view(0, h._key(0)) or {}
     row = {'f': frame, 'tap': tapped, 'combat': view.get('combat'), 'tags': view.get('tags'), 'loc': view.get('location'), 'montage': _montage()}
@@ -298,6 +308,7 @@ def _row(frame, tapped, extra=None):
             _v = mesh.get_socket_location(_b)
             row['body'][_b] = [round(_v.x - _al.x, 1), round(_v.y - _al.y, 1), round(_v.z - _al.z, 1)]
         row['body']['actor'] = [round(_al.x, 1), round(_al.y, 1), round(_al.z, 1)]
+        _fl_row(mesh, row['body'])
     except Exception as e:
         row['body_err'] = repr(e)[:80]
     if st.get('minions_spawned'):   # PUSHBOX-P5: the host world's minion puppets [x, y, z] (hidden pooled ones left out)
@@ -494,5 +505,9 @@ def _tick(_dt):
     return None
 
 
+# NIGHT-FOOTLOCK: console variables set before Play (';' separated, as in pie_capture_react_ingame.py), e.g. a.GSTN.BlendOutFootLock 0
+for _cv in [c.strip() for c in os.environ.get('PIE_CAPTURE_CVARS', '').split(';') if c.strip()]:
+    unreal.SystemLibrary.execute_console_command(None, _cv)
+    _log(f'cvar: {_cv}')
 _log(f'driver loaded: kit {KIT}, button {BUTTON}, out {OUT}')
 st['handle'] = unreal.register_slate_post_tick_callback(_tick)

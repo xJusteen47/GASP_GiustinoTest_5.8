@@ -95,6 +95,14 @@ public:
 	static bool InsertOverrideLayerBlend(UAnimBlueprint* AnimBlueprint, UAnimBlueprint* LayerInterface, FName LayerName, FName ActiveVariable,
 		FName BlendTimeVariable, bool bInertialization, const FString& InsertBeforeNodeClass);
 
+	/**
+	 * Puts one new pose node of NodeClass (a UAnimGraphNode_Base with one local-space pose input and output) in AnimBlueprint's AnimGraph
+	 * right after the only node titled UpstreamNodeTitle (e.g. a Linked Anim Layer "Procedural_Feet"): what that node fed now comes out of
+	 * the new node. No change when its output already feeds a node of NodeClass
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
+	static bool InsertPoseNodeAfter(UAnimBlueprint* AnimBlueprint, const FString& UpstreamNodeTitle, UClass* NodeClass);
+
 	//~ Child anim Blueprints (skin variants, anim-layers.md part B)
 
 	/**

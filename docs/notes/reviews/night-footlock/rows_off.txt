@@ -1,0 +1,6 @@
+jab/jab1 f45 n50 slide L 17.9 R 37.6  step L 0.0 R 0.0  end L 11.3 R 12.9
+jab/jab1_jab2_faf f83 n67 slide L 17.9 R 37.7  step L 0.0 R 0.0  end L 11.1 R 13.1
+dair/dair_land f116 n8 slide L 12.9 R 17.5  step L 0.0 R 0.0  end L 10.2 R 16.9
+dropkick/dropkick_hit f137 n4 slide L 52.6 R 70.4  step L 0.0 R 0.0  end L 52.6 R 70.4
+react/hitstand f80 n71 slide L 18.1 R 44.6  step L 0.0 R 0.0  end L 10.5 R 34.7
+react/knockdown_getup f163 n71 slide L 12.6 R 35.6  step L 0.0 R 0.0  end L 11.6 R 12.0
