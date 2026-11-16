@@ -3,7 +3,7 @@ Thread cloud, Opus medium, budget ~5 $. Fonti: codice di claude/kit-playtest-111
 Gergo owner (ambito: corsa a stadi): stadio 1 = **run**, stadio 2 = **sprint 1**, stadio 3 = **sprint 2**. Niente "walk" come stadio.
 
 ## 0. Stato attuale (dal codice)
-- Modalita' Mover a terra = `UWalkingMode` ("Walking" e' solo il nome della modalita' a terra, non il gait). Base = **run** 450 cm/s, accel 1800; sprint 1 650/1400; sprint 2 850 (GSTN_RunStageLogic.cpp:42-62).
+- Modalita' Mover a terra = la modalita' Blueprint del GASP, figlia di `USmoothWalkingMode` (smoothing a molla; handovers/corsa-mario-p1.md:8, m3-doc-deltas.md:142). AccelerationSmoothingTime e FacingSmoothingTime gia' portati a 0.03 s dall'Analog Walk. Cambiare modalita' (Walking classico o C++) = reparent di un BP binario condiviso e perdita della traiettoria liscia che il motion matching usa: NON consigliato prima di R0. Base = **run** 450 cm/s, accel 1800; sprint 1 650/1400; sprint 2 850 (GSTN_RunStageLogic.cpp:42-62).
 - La camminata esiste solo come stick poco inclinato (Analog Walk): velocita' = curva dell'inclinazione; il gait walk del GASP viene scelto dall'ABP per la clip ma non limita (WalkSpeed = velocita' dello stadio, GSTN_RunStageSyncState.cpp:119).
 - Partenza sim, conto su carta: boost x2.5 sotto il 50% della velocita' -> 0->225 in ~0.08 s, 225->450 in ~0.125 s, + smoothing 0.03 s: **~0.2 s (~13 frame)**. Probabile che il ritardo percepito sia soprattutto ANIMAZIONE (motion matching GASP sceglie start realistici e lenti, blend), non la sim. Va misurato prima di toccare numeri (regola 11).
 
