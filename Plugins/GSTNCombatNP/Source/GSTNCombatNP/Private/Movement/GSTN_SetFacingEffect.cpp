@@ -2,15 +2,18 @@
 
 #include "Components/SceneComponent.h"
 #include "GSTN_CombatNPTags.h"
+#include "Movement/GSTN_GravityFrame.h"
+#include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
 #include "MoverTypes.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_SetFacingEffect)
 
-FRotator FGSTN_SetFacingEffect::MakeOrientation(const FRotator& OrientationDeg, float YawDeg)
+FRotator FGSTN_SetFacingEffect::MakeOrientation(const FRotator& OrientationDeg, float YawDeg, const FVector& Up)
 {
-	return FRotator(OrientationDeg.Pitch, FRotator::NormalizeAxis(YawDeg), OrientationDeg.Roll);
+	// The yaw about the local up (gravity audit 2026-11-16); world up gives FRotator(Pitch, Yaw, Roll) as before
+	return FGSTN_GravityFrame::WithYaw(OrientationDeg, YawDeg, Up);
 }
 
 bool FGSTN_SetFacingEffect::ApplyMovementEffect(FApplyMovementEffectParams& ApplyEffectParams, FMoverSyncState& OutputState)
@@ -20,7 +23,8 @@ bool FGSTN_SetFacingEffect::ApplyMovementEffect(FApplyMovementEffectParams& Appl
 	{
 		return false;
 	}
-	const FRotator NewOrientation = MakeOrientation(Sync->GetOrientation_WorldSpace(), YawDeg);
+	const FVector Up = ApplyEffectParams.MoverComp ? ApplyEffectParams.MoverComp->GetUpDirection() : FVector::UpVector;
+	const FRotator NewOrientation = MakeOrientation(Sync->GetOrientation_WorldSpace(), YawDeg, Up);
 	// The component turns too, like FTeleportEffect moves it. A walking step that neither moves nor turns from its start state skips the
 	// component move and reads its final rotation back from the component, so a turn written only into the sync state was lost on a
 	// frame at rest (the victim frozen in hitstop: react-hook-5, the turn showed only on the first frame the knockdown moved). A turn

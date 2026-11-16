@@ -5,6 +5,7 @@
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/Actor.h"
 #include "MoveLibrary/MovementUtils.h"
+#include "Movement/GSTN_GravityFrame.h"
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
@@ -236,8 +237,13 @@ bool FGSTN_BodyCapsuleShiftEffect::ApplyMovementEffect(FApplyMovementEffectParam
 		return false;
 	}
 
+	// The shift is in the capsule's upright frame: its yaw about the local up, on the gravity floor (gravity audit 2026-11-16; world up gives
+	// the old yaw-only frame exactly)
+	const FVector Up = MoverComp->GetUpDirection();
 	const FRotator Orientation = Sync->GetOrientation_WorldSpace();
-	const FVector ShiftWorld = FRotationMatrix(FRotator(0.0, Orientation.Yaw, 0.0)).TransformVector(ShiftLocal);
+	const FVector ShiftWorld = FGSTN_GravityFrame::IsWorldUp(Up)
+		? FRotationMatrix(FRotator(0.0, Orientation.Yaw, 0.0)).TransformVector(ShiftLocal)
+		: FGSTN_GravityFrame::UprightRotation(Orientation.Quaternion(), Up).RotateVector(ShiftLocal);
 	const bool bGrowing = To.HalfHeight > From.HalfHeight || To.Radius > From.Radius;
 
 	// Growing like the stance modifier's expand (FStanceModifier::CanExpand + its teleport): when the grown capsule fits at the destination

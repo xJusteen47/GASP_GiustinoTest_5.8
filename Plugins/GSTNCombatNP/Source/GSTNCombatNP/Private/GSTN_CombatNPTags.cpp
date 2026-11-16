@@ -15,7 +15,7 @@ namespace GSTNCombatNPTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveBalloonM0, "Combat.SetByCaller.MoveBalloonM0", "Balloon knockback: the speed multiplier of the first frame");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveBalloonEnd, "Combat.SetByCaller.MoveBalloonEnd", "Balloon knockback: the fraction of the flight left when the speed-up ends");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveSeconds, "Combat.SetByCaller.MoveSeconds", "Lifetime in seconds of a knockback or push back move");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_FacingYaw, "Combat.SetByCaller.FacingYaw", "World yaw in degrees of a startup steering turn, read by UGSTN_SetFacingMoveCreator");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_FacingYaw, "Combat.SetByCaller.FacingYaw", "Yaw (degrees, about the local up) of a startup steering turn, read by UGSTN_SetFacingMoveCreator");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Mode_PvE, "Combat.Mode.PvE", "Match mode: players against the game. Has the precision reticle by default");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Mode_TDM, "Combat.Mode.TDM", "Match mode: team deathmatch. Has the precision reticle by default");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Mode_Duel, "Combat.Mode.Duel", "Match mode: one against one. No precision reticle");

@@ -12,6 +12,7 @@
 #include "GSTN_HeldSettings.h"
 #include "Presentation/GSTN_PrecisionAimComponent.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "Movement/GSTN_GravityFrame.h"
 #include "GSTN_HeldObjectComponent.h"
 #include "GSTN_HeldSubsystem.h"
 #include "GSTN_HeldTags.h"
@@ -299,6 +300,7 @@ bool UGSTN_GA_HeldThrow::PrepareShot(FGSTN_ProjectileParams& InOutParams, bool b
 			InOutParams.SourceTag = GSTNHeldTags::Source_ThrownEnemy;
 			// The thrown body is seeded as already hit by its own shot (NoteEnemyThrown): one more so MaxHits still counts the targets
 			InOutParams.MaxHits = static_cast<uint8>(FMath::Min(static_cast<int32>(InOutParams.MaxHits) + 1, 255));
+			FollowThrowerGravity(InOutParams);
 			return true;
 		}
 		if (bHost)
@@ -315,7 +317,19 @@ bool UGSTN_GA_HeldThrow::PrepareShot(FGSTN_ProjectileParams& InOutParams, bool b
 	}
 	// Its hits' events say a thrown object made them (M10 G3)
 	InOutParams.SourceTag = GSTNCombatHitTags::Source_Thrown;
+	FollowThrowerGravity(InOutParams);
 	return true;
+}
+
+void UGSTN_GA_HeldThrow::FollowThrowerGravity(FGSTN_ProjectileParams& InOutParams) const
+{
+	// The tuning's arc is written under earth gravity (-980 on Z): the shot falls along the thrower's own gravity, with its strength (gravity
+	// audit 2026-11-16). Earth gravity leaves it exactly as authored
+	const AActor* Avatar = GetAvatarActorFromActorInfo();
+	if (const UGSTN_CombatSimComponent* Sim = Avatar ? Avatar->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr)
+	{
+		InOutParams.GravityAccel = FGSTN_GravityFrame::FollowGravity(InOutParams.GravityAccel, Sim->GetBaseGravity());
+	}
 }
 
 void UGSTN_GA_HeldThrow::OnShotFired(AGSTN_Projectile& Shot)

@@ -19,6 +19,8 @@
 #include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Movement/GSTN_LayeredMove_PushBack.h"
 #include "Movement/GSTN_TumbleContact.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
+#include "Movement/GSTN_GravityFrame.h"
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
@@ -315,7 +317,13 @@ void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FG
 	// Heavier gravity makes it small AND quick (react-hook-1 review: 300 cm/s under normal gravity rose 44 cm and floated about 34 frames)
 	const float GravityScale = FMath::Max(Bounce.GroundBounceGravityScale, 0.01f);
 	const double Rise = FMath::Max(Velocity.Dot(Context.Up), 0.0);
-	const int32 FlightFrames = FMath::Max(FMath::CeilToInt32(2.0 * Rise / (980.0 * GravityScale) / FrameSeconds), 1);
+	// The entity's own gravity, not 980 (gravity audit 2026-11-16: a low-gravity zone floats longer, so the flight lasts longer); 980 without a
+	// Mover. Near zero gravity the bounce is capped at 10 s rather than never ending
+	const UGSTN_CombatSimComponent* GravitySim = Context.Owner ? Context.Owner->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
+	const double Gravity = GravitySim ? GravitySim->GetBaseGravity().Size() : FGSTN_GravityFrame::NominalGravity;
+	const int32 MaxFlightFrames = FMath::Max(FMath::CeilToInt32(10.0 / FrameSeconds), 1);
+	const double FlightSeconds = Gravity > UE_KINDA_SMALL_NUMBER ? 2.0 * Rise / (Gravity * GravityScale) : 10.0;
+	const int32 FlightFrames = FMath::Clamp(FMath::CeilToInt32(FMath::Min(FlightSeconds, 10.0) / FrameSeconds), 1, MaxFlightFrames);
 	if (!Velocity.IsNearlyZero())
 	{
 		ApplyMoveEffect(Context.AbilitySystem, UGSTN_GE_Knockback::StaticClass(), Velocity, 0.f, GravityScale, FlightFrames);

@@ -15,6 +15,7 @@
 #include "MoverComponent.h"
 #include "MoverSimulationTypes.h"
 #include "Movement/GSTN_BodyCapsuleModifier.h"
+#include "Movement/GSTN_GravityFrame.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Timeline/GSTN_Pushbox.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
@@ -273,9 +274,14 @@ bool UGSTN_CombatSimComponent::ResolveSnapshotPushbox(int32 Frame, const FGSTN_C
 		Out.CoreRadius = BodyCollision.CoreRadius > 0.f ? BodyCollision.CoreRadius : Standing.Radius * Settings.CoreRadiusScale;
 	}
 	// The capsule centre is the actor; the mesh root sits at actor - Capsule.Offset in the yaw frame (FGSTN_BodyCapsuleShiftEffect's frame)
+	// Upright frame = yaw about the local up (gravity audit 2026-11-16; world up gives the old yaw-only frame exactly)
+	const FVector Up = Mover->GetUpDirection();
+	const bool bWorldUp = FGSTN_GravityFrame::IsWorldUp(Up);
 	const FRotator Yaw(0.0, CapsuleTransform.Rotator().Yaw, 0.0);
-	const FVector MeshRoot = CapsuleTransform.GetLocation() - Yaw.RotateVector(Capsule.Offset);
-	Out.Center = MeshRoot + Yaw.RotateVector(Local.Offset);
+	const FQuat Upright = bWorldUp ? FQuat::Identity : FGSTN_GravityFrame::UprightRotation(CapsuleTransform.GetRotation(), Up);
+	auto ToWorld = [&](const FVector& V) { return bWorldUp ? Yaw.RotateVector(V) : Upright.RotateVector(V); };
+	const FVector MeshRoot = CapsuleTransform.GetLocation() - ToWorld(Capsule.Offset);
+	Out.Center = MeshRoot + ToWorld(Local.Offset);
 	Out.Radius = Local.Radius;
 	Out.HalfHeight = Local.HalfHeight;
 	return true;

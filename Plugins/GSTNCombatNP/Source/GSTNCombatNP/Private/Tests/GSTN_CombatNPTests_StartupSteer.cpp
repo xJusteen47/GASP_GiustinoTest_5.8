@@ -197,6 +197,13 @@ bool FGSTN_SetFacingEffectTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("roll kept"), Turned.Roll, -3.0);
 	TestEqual(TEXT("yaw normalized"), Turned.Yaw, -160.0, 1e-4);
 
+	// Sideways gravity (up = +X, a wall; gravity audit 2026-11-16): the turn is about the local up, the capsule stays on the wall
+	const FVector WallUp = FVector::ForwardVector;
+	const FRotator OnWall = FQuat::FindBetweenNormals(FVector::UpVector, WallUp).Rotator();
+	const FQuat TurnedOnWall = FGSTN_SetFacingEffect::MakeOrientation(OnWall, 90.f, WallUp).Quaternion();
+	TestTrue(TEXT("wall: capsule stays upright on the wall"), TurnedOnWall.GetUpVector().Equals(WallUp, 1e-4));
+	TestEqual(TEXT("wall: faces perpendicular to its up"), FVector::DotProduct(TurnedOnWall.GetForwardVector(), WallUp), 0.0, 1e-4);
+
 	FMoverSyncState State;
 	FMoverDefaultSyncState& Default = State.SyncStateCollection.FindOrAddMutableDataByType<FMoverDefaultSyncState>();
 	Default.SetTransforms_WorldSpace(FVector(100.0, 200.0, 90.0), FRotator(0.0, 30.0, 0.0), FVector(300.0, 0.0, 0.0), FVector::ZeroVector);

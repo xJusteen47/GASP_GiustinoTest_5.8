@@ -11,6 +11,7 @@
 #include "Hits/GSTN_HitMathUtils.h"
 #include "Hits/GSTN_HitRunner.h"
 #include "Hits/GSTN_HitShapeUtils.h"
+#include "Movement/GSTN_GravityFrame.h"
 #include "Hits/GSTN_ImpactMath.h"
 #include "Rules/GSTN_CombatRules.h"
 #include "Simulation/GSTN_CombatAttacker.h"
@@ -680,10 +681,11 @@ bool FGSTN_CombatVictim::ResolveHitFacing(const UGSTN_CombatRules* Rules, const 
 	// Back along the knockback: the same rule the launch applies (ExecuteReactionMove), now already on the hit frame. DI may bend it by a
 	// few degrees when the move starts; that correction stays where it was
 	const FVector Launch = Core.Hit.GetPendingLaunch();
-	const FVector Flat(Launch.X, Launch.Y, 0.0);
+	// Flat = on the victim's gravity floor, yaw about its local up (gravity audit 2026-11-16; world Z gives the old maths exactly)
+	const FVector Flat = FGSTN_GravityFrame::Flatten(Launch, Self.Up);
 	if (Rules->bTurnBackAlongKnockback && Flat.SizeSquared() > 1.0)
 	{
-		OutYawDeg = static_cast<float>((-Flat).Rotation().Yaw);
+		OutYawDeg = FGSTN_GravityFrame::YawOfDirection(-Flat, Self.Up);
 		return true;
 	}
 	if (!Rules->bTurnToAttackerWithoutKnockback)
@@ -699,22 +701,23 @@ bool FGSTN_CombatVictim::ResolveHitFacing(const UGSTN_CombatRules* Rules, const 
 	{
 		ToAttacker = Attacker->Transform.GetLocation() - SelfLocation;
 	}
-	ToAttacker.Z = 0.0;
+	ToAttacker = FGSTN_GravityFrame::Flatten(ToAttacker, Self.Up);
 	if (ToAttacker.SizeSquared() < 1.0)
 	{
-		ToAttacker = FVector(-Last->Entry.HitboxVelocity.X, -Last->Entry.HitboxVelocity.Y, 0.0);
+		ToAttacker = FGSTN_GravityFrame::Flatten(-Last->Entry.HitboxVelocity, Self.Up);
 	}
 	if (ToAttacker.SizeSquared() < 1.0)
 	{
-		ToAttacker = -FRotator(0.0, Last->Entry.AttackerYaw, 0.0).Vector();
+		// AttackerYaw is a world yaw (the attacker's own facing): flattened on the victim's floor
+		ToAttacker = FGSTN_GravityFrame::Flatten(-FRotator(0.0, Last->Entry.AttackerYaw, 0.0).Vector(), Self.Up);
 	}
-	const FVector Facing = FVector(Self.Facing.X, Self.Facing.Y, 0.0).GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
+	const FVector Facing = FGSTN_GravityFrame::Flatten(Self.Facing, Self.Up).GetSafeNormal(UE_SMALL_NUMBER, FVector::ForwardVector);
 	const double CosAngle = FVector::DotProduct(Facing, ToAttacker.GetSafeNormal());
 	if (CosAngle > FMath::Cos(FMath::DegreesToRadians(static_cast<double>(Rules->TurnToAttackerMinAngleDeg))))
 	{
 		return false;
 	}
-	OutYawDeg = static_cast<float>(ToAttacker.Rotation().Yaw);
+	OutYawDeg = FGSTN_GravityFrame::YawOfDirection(ToAttacker, Self.Up);
 	return true;
 }
 

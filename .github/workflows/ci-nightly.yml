@@ -1,0 +1,54 @@
+# Notte: build + suite completa GSTN su feature/gas-npp-5.8. Gira SOLO sul runner del portatile.
+# ATTENZIONE: GitHub esegue gli "schedule" solo dal branch di default (main). Questo file deve esistere anche su main
+# (vedi docs/notes/handovers/ci-runner-2026-11-16.md); su feature serve solo per l'avvio a mano (workflow_dispatch).
+name: CI Nightly
+
+on:
+  schedule:
+    - cron: '0 1 * * *'     # 01:00 UTC = 02:00 a Roma (03:00 con l'ora legale)
+  workflow_dispatch:
+
+concurrency:
+  group: ci-nightly
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  full:
+    runs-on: [self-hosted, Windows, gstn-laptop]
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/gas-npp-5.8
+          lfs: true
+          clean: false
+
+      - name: Build editor (max 45 min)
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File Tools\CI\Run-Timed.ps1 -Preset Build -Log Saved\Logs\ci\night-build.log
+          exit $LASTEXITCODE
+
+      - name: Suite completa GSTN (max 30 min)
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File Tools\CI\Run-Timed.ps1 -Preset Test -Tests "GSTN" -Log Saved\Logs\ci\night-test.log
+          $rt = $LASTEXITCODE
+          powershell -NoProfile -ExecutionPolicy Bypass -File Tools\CI\Check-TestLog.ps1 -UeLog Saved\Logs\ci\night-test.log.ue.log -MinTests 90
+          if ($rt -ne 0) { exit $rt } else { exit $LASTEXITCODE }
+
+      - name: Esiti e log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-nightly-logs
+          path: |
+            Saved/Logs/ci/*.esito
+            Saved/Logs/ci/*.log
+            Saved/Logs/ci/*.fail.txt
+          retention-days: 14
+          if-no-files-found: ignore

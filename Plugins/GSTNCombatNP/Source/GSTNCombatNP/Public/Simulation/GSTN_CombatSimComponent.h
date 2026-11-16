@@ -114,7 +114,7 @@ public:
 	virtual void ProduceInput_Implementation(int32 SimTimeMs, FMoverInputCmdContext& InputCmdResult) override;
 
 	/** Replaces the orientation intent of the command's character inputs with YawDeg (world). False when there are none or they are base-relative */
-	static bool HoldOrientationIntent(FMoverInputCmdContext& InputCmd, float YawDeg);
+	static bool HoldOrientationIntent(FMoverInputCmdContext& InputCmd, float YawDeg, const FVector& Up = FVector::UpVector);
 
 	/**
 	 * True while the latest command this pawn produced had the precision aim (reticle) on. Local and presentation side; the simulation
@@ -538,6 +538,12 @@ public:
 
 	/** The tracker of the owner's Mover component (the movement facts of the end of the previous frame: up direction, velocity, ground tag), null without a Mover component. The movement abilities read the local gravity frame from it */
 	UGSTN_MoverSimStateTracker* GetMoverTracker() { return GetJumpTracker(); }
+
+	/**
+	 * The entity's own gravity without the jump phases' scaling (fast fall, hold): the authored base the phases track, else Mover's current
+	 * gravity, else earth gravity. For data written against 980 (a throw's arc, a bounce's flight): gravity audit 2026-11-16
+	 */
+	FVector GetBaseGravity() const;
 
 	/**
 	 * Rewrites Mover's gravity override to the authored gravity scaled by the gravity phase of the jump state of the frame being
