@@ -48,7 +48,10 @@ bool FGSTN_RunStageSyncStateTest::RunTest(const FString& Parameters)
 	// Rollback: the sync state saved for a frame brings its stage back, whatever was stepped after it
 	FMoverSyncState Saved;
 	Saved.SyncStateCollection.FindOrAddMutableDataByType<FGSTN_RunStageSyncState>().Run.Stage = 1;
-	FMoverSyncState Live = Saved;
+	// Assignment, not copy construction: FMoverDataCollection only deep-copies in operator= (the copy constructor shares the elements), which is
+	// what the sim's rollback uses
+	FMoverSyncState Live;
+	Live = Saved;
 	Live.SyncStateCollection.FindOrAddMutableDataByType<FGSTN_RunStageSyncState>().Run.Stage = 2;
 	TestEqual(TEXT("the saved copy is independent of the live one"), (int32)FGSTN_RunStageMover::Find(Saved)->Stage, 1);
 	Live = Saved;
