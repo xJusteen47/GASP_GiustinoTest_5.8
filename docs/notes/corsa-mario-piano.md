@@ -20,13 +20,15 @@ Stesso walking mode gait GASP (Run/Sprint scalati dalla statistica WalkSpeed via
 - **Aria**: velocità orizzontale massima in aria = velocità di stacco (con minimo); accelerazione di sterzata e frenata per stadio di stacco, più una curva "controllo vs velocità di stacco". Usa finalmente l'attributo AirControl come moltiplicatore.
 - **Skid e svolte strette**: sotto la soglia (stadio 1, o dot non abbastanza opposto) svolta stretta senza skid (pivot in pochi frame); sopra, skid nel sim con freno vero (cm/s²) e durata in frame; skid non annullato dal rilascio stick, salto dallo skid = finestra dati (salto laterale opzionale, non costruito ora).
 - **Momento negli attacchi neutri**: la sim ricorda la velocità di corsa prima del rilascio stick per K frame (K per stadio). Un attacco neutro entro K usa quella velocità come ingresso del `MomentumSlide` già esistente; oltre K vale il freno dello stadio (forte allo stadio 1, quindi poca scivolata).
+- **Ritirata attaccando (owner 10:11Z, ambito: attacchi a terra con MomentumSlide)**: lo stick indietro durante l'attacco NON ferma il momento. Oggi lo slide ignora lo stick (velocità in override), ma il kit ESEMPIO strong ha Against = Stop e a fine slide il walking mode frena con lo stick. Aggiunte per mossa: `StickBrake` (freno extra in cm/s² quando lo stick è contro la velocità, 0 = nessuno, default 0), `StickAlongScale` (meno attrito se lo stick è a favore), uscita dallo slide con la velocità conservata per N frame prima del freno dello stadio; attrito del terreno come moltiplicatore (dato di superficie, `GSTNSurface`). L'attacco girato all'indietro mentre si corre (caso Against) usa Slide di default, così si attacca indietro scivolando via.
+- **Tracce di skid**: skid e slide pubblicano nello stato di sim "piedi che scivolano" (velocità, frame); la presentazione ne ricava decal e polvere. Solo l'hook, niente VFX in queste fasi.
 
 **Da portare**: struttura del layered move di skid, gravità extra salita/discesa (se il PlatformJump non la copre già), parametri gait come base dei valori. **Da rifare**: tutto quello che gira sul game thread, il freno dello skid, il controllo aereo fisso, il montage di svolta come guida del movimento.
 
-**Fasi (stime, non costi reali)**: P1 profilo + sync state + 3 stadi + L3 (Opus medium, ~8 $) · P2 aria + skid (~6 $) · P3 momento negli attacchi + test headless (~5 $) · build e playtest sul fisso (Haiku, ~2 $). Ogni fase un thread; serve il fisso solo per build e playtest.
+**Fasi (stime, non costi reali)**: P1 profilo + sync state + 3 stadi + L3 (Opus medium, ~8 $) · P2 aria + skid + hook tracce (~6.5 $) · P3 momento negli attacchi + ritirata + test headless (~6.5 $) · build e playtest sul fisso (Haiku, ~2 $). Totale ~23 $ + 1.5 $ opzioni = ~24.5 $ (delta ritirata e tracce: +2 $). Ogni fase un thread; serve il fisso solo per build e playtest.
 
-## 4. Decisioni per l'owner (risposta tipo "1A 2A 3C")
-1. **Controllo in aria**. A) tetto = velocità di stacco, sterzata per stadio (stile 3D World) · B) solo percentuale di controllo da una curva sulla velocità di stacco · C) entrambi, scelta per kit (+1 $). Consigliata **C, default A**.
-2. **Velocità portata negli attacchi neutri dopo aver lasciato lo stick**. A) quella di prima del rilascio, entro K frame per stadio · B) quella attuale già frenata (più semplice, meno momento). Consigliata **A**; costo uguale.
-3. **L3 verso lo stadio 3**. A) solo entro la finestra iniziale dallo stadio 1 · B) in qualsiasi momento della corsa · C) entrambi come dato per kit (+0.5 $). Consigliata **C, default A**.
-Intanto resta fermo solo questo lavoro; nessun'altra voce della coda dipende da qui.
+## 4. Decisioni dell'owner (2026-11-16 10:11Z): 1C 2A 3C
+1. Controllo in aria: entrambi i modelli come dato per kit, default "tetto = velocità di stacco, sterzata per stadio".
+2. Attacco neutro dopo il rilascio dello stick: usa la velocità di prima del rilascio, entro K frame per stadio.
+3. L3 verso lo stadio 3: finestra iniziale o in ogni momento, dato per kit, default finestra iniziale.
+"Melee to left stick" in coda = direzione dallo stick sinistro, non L3 (confermato).
