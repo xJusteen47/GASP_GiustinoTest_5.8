@@ -1,0 +1,68 @@
+// Spin and drill, Network Prediction half.
+
+#include "Sim/GSTN_DrillTrackHook.h"
+
+#include "Layout/GSTN_ButtonLayout.h"
+#include "Data/GSTN_SpinDrillTracks.h"
+#include "Data/GSTN_SpinDrillTypes.h"
+#include "Input/GSTN_CombatButtonTags.h"
+#include "Input/GSTN_InputHistory.h"
+#include "Math/GSTN_DrillMath.h"
+#include "Input/GSTN_ButtonMap.h"
+#include "Sim/GSTN_DrillFragment.h"
+#include "Sim/GSTN_DrillTickExtension.h"
+#include "Simulation/GSTN_InputSimTypes.h"
+
+bool FGSTN_BoreTrackHook::ShouldStall(const FGSTN_DrillFragment* Fragment, int32 TimelineFrame, int32 SeatFrame, int32 BoreFrame)
+{
+	if (!Fragment || !Fragment->IsLatched())
+	{
+		return false;
+	}
+	if (TimelineFrame == SeatFrame && Fragment->Phase == EGSTN_DrillPhase::Seating)
+	{
+		return true;
+	}
+	return TimelineFrame == BoreFrame;
+}
+
+FGSTN_TrackHookResult FGSTN_BoreTrackHook::Evaluate(const FGSTN_TrackHookContext& Context) const
+{
+	const FGSTN_BoreTrack& Track = static_cast<const FGSTN_BoreTrack&>(Context.Track);
+	FGSTN_TrackHookResult Result;
+
+	const int32 Button = Context.Buttons ? Context.Buttons->GetIndex(Track.ResolveHoldButton()) : INDEX_NONE;
+	const bool bHeld = Button >= 0 && Button < 32 && (Context.Input.History.GetHeldButtons() & (1u << Button)) != 0;
+	const FGSTN_DrillFragment* Fragment = Context.Fragments ? FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(*Context.Fragments) : nullptr;
+
+	// The timeline stands ON the held frame (TimelineFrame, the one the previous tick evaluated), so the tip's track of that frame stays open
+	if (Context.Frame != Context.TimelineStartFrame && ShouldStall(Fragment, Context.TimelineFrame, Track.StartFrame, Track.BoreFrame))
+	{
+		Result.bStallThisFrame = true;
+	}
+
+	// Jump boost (13b): jump held now, or a press at most the window before this frame, read from the same history as the crouch
+	bool bJumpBoost = false;
+	const int32 JumpButton = Context.Buttons ? Context.Buttons->GetIndex(UGSTN_ButtonLayout::GetButton(TEXT("Drill.Exit"), GSTNCombatButtonTags::Button_Jump.GetTag())) : INDEX_NONE;
+	if (JumpButton >= 0 && JumpButton < 32)
+	{
+		const FGSTN_InputHistory& History = Context.Input.History;
+		int32 LastPress = INDEX_NONE;
+		for (int32 Age = 0; Age < History.GetNumButtonEvents(); ++Age)
+		{
+			const FGSTN_ButtonEvent Event = History.GetButtonEvent(History.GetButtonSlot(Age));
+			if (Event.Button == JumpButton && !Event.bRelease)
+			{
+				LastPress = Event.Frame;
+				break;
+			}
+		}
+		bJumpBoost = UGSTN_DrillMath::IsJumpBoostInWindow(Context.Frame, LastPress, (History.GetHeldButtons() & (1u << JumpButton)) != 0, FGSTN_BoreTuning().JumpBoostWindowFrames);
+	}
+
+	Result.bStampWindow = true;
+	Result.Window.StartFrame = Context.TimelineStartFrame;
+	Result.Window.EndFrame = bHeld ? INDEX_NONE : Context.Frame;
+	Result.Window.Profile = bJumpBoost ? GSTNDrillStamps::CrouchMarkerJump : GSTNDrillStamps::CrouchMarker;
+	return Result;
+}

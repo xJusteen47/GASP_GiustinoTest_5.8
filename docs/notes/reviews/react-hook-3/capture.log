@@ -1,0 +1,29 @@
+    0.0s driver loaded: out C:/Users/jacop/Documents/Unreal Projects/GASP_Giustino2_ue59/Saved/AnimReact/react-hook-3, sequences ['hitstand', 'knockdown_getup', 'roll', 'rollback', 'roll_late']
+    8.0s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '3', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   20.5s review stage: parked [('Z1', (3800.0, 300.0))]; host P256, attacker P257
+   20.5s defence steps saved in the rules: True
+   20.5s kits KIT_Test_DefenceLanding: host OK, attacker OK
+   20.5s anim mesh SkeletalMesh, reaction components ['GSTN_ReactionAnimComponent']
+   26.7s sequence hitstand: host at (90, -210, 88) yaw -180, attacker at [0, -210, 88] yaw 0, distance 90 cm, facing error 0 deg (0 = face to face), states []
+   27.7s hitstand: v10 attack c1 (states [])
+   42.8s sequence hitstand done: 149 frames, run {'seg': 'game', 'seg0': 78, 'hit': True, 'free_at': 78}
+   48.5s sequence knockdown_getup: host at (97, -210, 88) yaw 180, attacker at [0, -210, 88] yaw 0, distance 97 cm, facing error 0 deg (0 = face to face), states []
+   49.6s knockdown_getup: v10 attack c1 (states [])
+   63.1s knockdown_getup: v134 jump (states ['Knockdown'])
+   74.1s sequence knockdown_getup done: 232 frames, run {'seg': 'game', 'seg0': 161, 'down_at': 84, 'input_at': 134, 'up_at': 135}
+   79.9s sequence roll: host at (97, -210, 88) yaw 180, attacker at [0, -210, 88] yaw 0, distance 97 cm, facing error 0 deg (0 = face to face), states []
+   81.0s roll: v10 attack c1 (states [])
+   89.4s roll: v88 stick facing yaw 180 (states ['Knockdown'])
+   94.5s roll: v133 stick released (states [])
+  102.4s sequence roll done: 204 frames, run {'seg': 'game', 'seg0': 133, 'down_at': 84, 'input_at': 88, 'up_at': 107, 'released': 133}
+  108.2s sequence rollback: host at (97, -210, 88) yaw 180, attacker at [0, -210, 88] yaw 0, distance 97 cm, facing error 0 deg (0 = face to face), states []
+  109.3s rollback: v10 attack c1 (states [])
+  117.6s rollback: v88 stick against yaw 360 (states ['Knockdown'])
+  122.7s rollback: v133 stick released (states [])
+  130.7s sequence rollback done: 204 frames, run {'seg': 'game', 'seg0': 133, 'down_at': 84, 'input_at': 88, 'up_at': 107, 'released': 133}
+  136.5s sequence roll_late: host at (97, -210, 88) yaw 180, attacker at [0, -210, 88] yaw 0, distance 97 cm, facing error 0 deg (0 = face to face), states []
+  137.5s roll_late: v10 attack c1 (states [])
+  150.8s roll_late: v133 stick facing yaw 180 (states ['Knockdown'])
+  154.0s roll_late: v161 stick released (states [])
+  161.9s sequence roll_late done: 232 frames, run {'seg': 'game', 'seg0': 161, 'down_at': 83, 'input_at': 133, 'up_at': 135, 'released': 161}
+  163.4s finish: ok

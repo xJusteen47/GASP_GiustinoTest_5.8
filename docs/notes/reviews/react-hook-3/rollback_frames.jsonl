@@ -1,0 +1,204 @@
+{"f": 0, "seg": "game", "segf": 0, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 1, "seg": "game", "segf": 1, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 2, "seg": "game", "segf": 2, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 3, "seg": "game", "segf": 3, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 4, "seg": "game", "segf": 4, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 5, "seg": "game", "segf": 5, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 6, "seg": "game", "segf": 6, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 7, "seg": "game", "segf": 7, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 8, "seg": "game", "segf": 8, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 9, "seg": "game", "segf": 9, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 10, "seg": "game", "segf": 10, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0, "tap": "attack c1"}
+{"f": 11, "seg": "game", "segf": 11, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 12, "seg": "game", "segf": 12, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 13, "seg": "game", "segf": 13, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 14, "seg": "game", "segf": 14, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 15, "seg": "game", "segf": 15, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 16, "seg": "game", "segf": 16, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 17, "seg": "game", "segf": 17, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 18, "seg": "game", "segf": 18, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 19, "seg": "game", "segf": 19, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 20, "seg": "game", "segf": 20, "montage": null, "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 21, "seg": "Tumble", "segf": 0, "montage": ["AnimMontage_22", 0.0], "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 22, "seg": "Tumble", "segf": 1, "montage": ["AnimMontage_22", 1.0], "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 23, "seg": "Tumble", "segf": 2, "montage": ["AnimMontage_22", 2.0], "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 24, "seg": "Tumble", "segf": 3, "montage": ["AnimMontage_22", 3.0], "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 25, "seg": "Tumble", "segf": 4, "montage": ["AnimMontage_22", 4.0], "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 26, "seg": "Tumble", "segf": 5, "montage": ["AnimMontage_22", 5.0], "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 27, "seg": "Tumble", "segf": 6, "montage": ["AnimMontage_22", 6.0], "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 28, "seg": "Tumble", "segf": 7, "montage": ["AnimMontage_22", 7.0], "loc": [96.8, -210.1, 88.1], "yaw": 180.0}
+{"f": 29, "seg": "Tumble", "segf": 8, "montage": ["AnimMontage_22", 8.0], "loc": [103.7, -210.1, 92.1], "yaw": 180.0}
+{"f": 30, "seg": "Tumble", "segf": 9, "montage": ["AnimMontage_22", 9.0], "loc": [110.6, -210.1, 95.8], "yaw": 180.0}
+{"f": 31, "seg": "Tumble", "segf": 10, "montage": ["AnimMontage_22", 10.0], "loc": [117.5, -210.1, 99.3], "yaw": 180.0}
+{"f": 32, "seg": "Tumble", "segf": 11, "montage": ["AnimMontage_22", 11.0], "loc": [124.4, -210.1, 102.5], "yaw": 180.0}
+{"f": 33, "seg": "Tumble", "segf": 12, "montage": ["AnimMontage_22", 12.0], "loc": [131.3, -210.1, 105.5], "yaw": 180.0}
+{"f": 34, "seg": "Tumble", "segf": 13, "montage": ["AnimMontage_22", 13.0], "loc": [138.2, -210.1, 108.2], "yaw": 180.0}
+{"f": 35, "seg": "Tumble", "segf": 14, "montage": ["AnimMontage_22", 14.0], "loc": [145.2, -210.1, 110.7], "yaw": 180.0}
+{"f": 36, "seg": "Tumble", "segf": 15, "montage": ["AnimMontage_22", 15.0], "loc": [152.1, -210.1, 112.9], "yaw": 180.0}
+{"f": 37, "seg": "Tumble", "segf": 16, "montage": ["AnimMontage_22", 16.0], "loc": [159.0, -210.1, 114.8], "yaw": 180.0}
+{"f": 38, "seg": "Tumble", "segf": 17, "montage": ["AnimMontage_22", 17.0], "loc": [165.9, -210.1, 116.5], "yaw": 180.0}
+{"f": 39, "seg": "Tumble", "segf": 18, "montage": ["AnimMontage_22", 18.0], "loc": [172.8, -210.1, 118.0], "yaw": 180.0}
+{"f": 40, "seg": "Tumble", "segf": 19, "montage": ["AnimMontage_22", 19.0], "loc": [179.7, -210.1, 119.2], "yaw": 180.0}
+{"f": 41, "seg": "Tumble", "segf": 20, "montage": ["AnimMontage_22", 20.0], "loc": [186.6, -210.1, 120.2], "yaw": 180.0}
+{"f": 42, "seg": "Tumble", "segf": 21, "montage": ["AnimMontage_22", 21.0], "loc": [186.6, -210.1, 120.2], "yaw": 180.0}
+{"f": 43, "seg": "Tumble", "segf": 22, "montage": ["AnimMontage_22", 22.0], "loc": [186.6, -210.1, 120.2], "yaw": 180.0}
+{"f": 44, "seg": "Tumble", "segf": 23, "montage": ["AnimMontage_22", 23.0], "loc": [186.6, -210.1, 120.2], "yaw": 180.0}
+{"f": 45, "seg": "Tumble", "segf": 24, "montage": ["AnimMontage_22", 24.0], "loc": [186.6, -210.1, 120.2], "yaw": 180.0}
+{"f": 46, "seg": "Tumble", "segf": 25, "montage": ["AnimMontage_22", 25.0], "loc": [186.6, -210.1, 120.2], "yaw": 180.0}
+{"f": 47, "seg": "Tumble", "segf": 26, "montage": ["AnimMontage_22", 26.0], "loc": [186.6, -210.1, 120.2], "yaw": 180.0}
+{"f": 48, "seg": "Tumble", "segf": 27, "montage": ["AnimMontage_22", 27.0], "loc": [193.5, -210.1, 121.1], "yaw": 180.0}
+{"f": 49, "seg": "Tumble", "segf": 28, "montage": ["AnimMontage_22", 28.0], "loc": [201.3, -210.1, 125.6], "yaw": 180.0}
+{"f": 50, "seg": "Tumble", "segf": 29, "montage": ["AnimMontage_22", 29.0], "loc": [209.0, -210.1, 129.8], "yaw": 180.0}
+{"f": 51, "seg": "Tumble", "segf": 30, "montage": ["AnimMontage_22", 30.0], "loc": [216.8, -210.1, 133.6], "yaw": 180.0}
+{"f": 52, "seg": "Tumble", "segf": 31, "montage": ["AnimMontage_22", 31.0], "loc": [224.5, -210.1, 137.2], "yaw": 180.0}
+{"f": 53, "seg": "Tumble", "segf": 32, "montage": ["AnimMontage_22", 32.0], "loc": [232.3, -210.1, 140.4], "yaw": 180.0}
+{"f": 54, "seg": "Tumble", "segf": 33, "montage": ["AnimMontage_22", 33.0], "loc": [240.0, -210.1, 143.3], "yaw": 180.0}
+{"f": 55, "seg": "Tumble", "segf": 34, "montage": ["AnimMontage_22", 34.0], "loc": [247.8, -210.1, 145.9], "yaw": 180.0}
+{"f": 56, "seg": "Tumble", "segf": 35, "montage": ["AnimMontage_22", 35.0], "loc": [255.5, -210.1, 148.2], "yaw": 180.0}
+{"f": 57, "seg": "Tumble", "segf": 36, "montage": ["AnimMontage_22", 36.0], "loc": [263.2, -210.1, 150.2], "yaw": 180.0}
+{"f": 58, "seg": "Tumble", "segf": 37, "montage": ["AnimMontage_22", 37.0], "loc": [271.0, -210.1, 151.8], "yaw": 180.0}
+{"f": 59, "seg": "Tumble", "segf": 38, "montage": ["AnimMontage_22", 38.0], "loc": [278.7, -210.1, 153.2], "yaw": 180.0}
+{"f": 60, "seg": "Tumble", "segf": 39, "montage": ["AnimMontage_22", 39.0], "loc": [286.5, -210.1, 154.2], "yaw": 180.0}
+{"f": 61, "seg": "Tumble", "segf": 40, "montage": ["AnimMontage_22", 40.0], "loc": [294.2, -210.1, 154.9], "yaw": 180.0}
+{"f": 62, "seg": "Tumble", "segf": 41, "montage": ["AnimMontage_22", 41.0], "loc": [302.0, -210.1, 155.3], "yaw": 180.0}
+{"f": 63, "seg": "Tumble", "segf": 42, "montage": ["AnimMontage_22", 42.0], "loc": [309.7, -210.1, 155.4], "yaw": 180.0}
+{"f": 64, "seg": "Tumble", "segf": 43, "montage": ["AnimMontage_22", 43.0], "loc": [317.4, -210.1, 155.2], "yaw": 180.0}
+{"f": 65, "seg": "Tumble", "segf": 44, "montage": ["AnimMontage_22", 44.0], "loc": [325.2, -210.1, 154.6], "yaw": 180.0}
+{"f": 66, "seg": "Tumble", "segf": 45, "montage": ["AnimMontage_22", 45.0], "loc": [332.9, -210.1, 153.8], "yaw": 180.0}
+{"f": 67, "seg": "Tumble", "segf": 46, "montage": ["AnimMontage_22", 46.0], "loc": [340.7, -210.1, 152.6], "yaw": 180.0}
+{"f": 68, "seg": "Tumble", "segf": 47, "montage": ["AnimMontage_22", 47.0], "loc": [348.4, -210.1, 151.1], "yaw": 180.0}
+{"f": 69, "seg": "Tumble", "segf": 48, "montage": ["AnimMontage_22", 48.0], "loc": [363.9, -210.1, 147.2], "yaw": 180.0}
+{"f": 70, "seg": "Tumble", "segf": 49, "montage": ["AnimMontage_22", 49.0], "loc": [371.7, -210.1, 144.8], "yaw": 180.0}
+{"f": 71, "seg": "Tumble", "segf": 50, "montage": ["AnimMontage_22", 50.0], "loc": [379.4, -210.1, 142.1], "yaw": 180.0}
+{"f": 72, "seg": "Tumble", "segf": 51, "montage": ["AnimMontage_22", 51.0], "loc": [387.1, -210.1, 139.0], "yaw": 180.0}
+{"f": 73, "seg": "Tumble", "segf": 52, "montage": ["AnimMontage_22", 52.0], "loc": [394.9, -210.1, 135.7], "yaw": 180.0}
+{"f": 74, "seg": "Tumble", "segf": 53, "montage": ["AnimMontage_22", 53.0], "loc": [402.6, -210.1, 132.0], "yaw": 180.0}
+{"f": 75, "seg": "Tumble", "segf": 54, "montage": ["AnimMontage_22", 54.0], "loc": [410.4, -210.1, 128.0], "yaw": 180.0}
+{"f": 76, "seg": "Tumble", "segf": 55, "montage": ["AnimMontage_22", 55.0], "loc": [418.1, -210.1, 123.7], "yaw": 180.0}
+{"f": 77, "seg": "Tumble", "segf": 56, "montage": ["AnimMontage_22", 56.0], "loc": [425.9, -210.1, 119.1], "yaw": 180.0}
+{"f": 78, "seg": "Tumble", "segf": 57, "montage": ["AnimMontage_22", 57.0], "loc": [433.6, -210.1, 114.2], "yaw": 180.0}
+{"f": 79, "seg": "Tumble", "segf": 58, "montage": ["AnimMontage_22", 58.0], "loc": [441.4, -210.1, 108.9], "yaw": 180.0}
+{"f": 80, "seg": "Tumble", "segf": 59, "montage": ["AnimMontage_22", 59.0], "loc": [449.1, -210.1, 103.4], "yaw": 180.0}
+{"f": 81, "seg": "Tumble", "segf": 60, "montage": ["AnimMontage_22", 60.0], "loc": [456.8, -210.1, 97.5], "yaw": 180.0}
+{"f": 82, "seg": "Tumble", "segf": 61, "montage": ["AnimMontage_22", 61.0], "loc": [464.6, -210.1, 91.3], "yaw": 180.0}
+{"f": 83, "seg": "Tumble", "segf": 62, "montage": ["AnimMontage_22", 62.0], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 84, "seg": "Knockdown", "segf": 0, "montage": ["AnimMontage_25", 0.0], "loc": [472.3, -210.1, 92.9], "yaw": 180.0}
+{"f": 85, "seg": "Knockdown", "segf": 1, "montage": ["AnimMontage_25", 1.0], "loc": [472.3, -210.1, 97.0], "yaw": 180.0}
+{"f": 86, "seg": "Knockdown", "segf": 2, "montage": ["AnimMontage_25", 2.0], "loc": [472.3, -210.1, 100.3], "yaw": 180.0}
+{"f": 87, "seg": "Knockdown", "segf": 3, "montage": ["AnimMontage_25", 3.0], "loc": [472.3, -210.1, 102.8], "yaw": 180.0}
+{"f": 88, "seg": "Knockdown", "segf": 4, "montage": ["AnimMontage_25", 4.0], "loc": [472.3, -210.1, 104.6], "yaw": 180.0, "tap": "stick against yaw 360"}
+{"f": 89, "seg": "Knockdown", "segf": 5, "montage": ["AnimMontage_25", 5.0], "loc": [472.3, -210.1, 105.7], "yaw": 180.0}
+{"f": 90, "seg": "Knockdown", "segf": 6, "montage": ["AnimMontage_25", 6.0], "loc": [472.3, -210.1, 105.9], "yaw": 180.0}
+{"f": 91, "seg": "Knockdown", "segf": 7, "montage": ["AnimMontage_25", 7.0], "loc": [472.3, -210.1, 105.5], "yaw": 180.0}
+{"f": 92, "seg": "Knockdown", "segf": 8, "montage": ["AnimMontage_25", 8.0], "loc": [472.3, -210.1, 104.1], "yaw": 180.0}
+{"f": 93, "seg": "Knockdown", "segf": 9, "montage": ["AnimMontage_25", 9.0], "loc": [472.3, -210.1, 98.4], "yaw": 180.0}
+{"f": 94, "seg": "Knockdown", "segf": 10, "montage": ["AnimMontage_25", 10.0], "loc": [472.3, -210.1, 94.2], "yaw": 180.0}
+{"f": 95, "seg": "Knockdown", "segf": 11, "montage": ["AnimMontage_25", 11.0], "loc": [472.3, -210.1, 89.0], "yaw": 180.0}
+{"f": 96, "seg": "Knockdown", "segf": 12, "montage": ["AnimMontage_25", 12.0], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 97, "seg": "Knockdown", "segf": 13, "montage": ["AnimMontage_25", 13.0], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 98, "seg": "Knockdown", "segf": 14, "montage": ["AnimMontage_25", 14.0], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 99, "seg": "Knockdown", "segf": 15, "montage": ["AnimMontage_28", 0.0], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 100, "seg": "Knockdown", "segf": 16, "montage": ["AnimMontage_28", 1.0], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 101, "seg": "Knockdown", "segf": 17, "montage": ["AnimMontage_28", 2.0], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 102, "seg": "Knockdown", "segf": 18, "montage": ["AnimMontage_28", 2.0], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 103, "seg": "Knockdown", "segf": 19, "montage": ["AnimMontage_28", 2.0], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 104, "seg": "Knockdown", "segf": 20, "montage": ["AnimMontage_28", 2.0], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 105, "seg": "Knockdown", "segf": 21, "montage": ["AnimMontage_28", 2.0], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 106, "seg": "Knockdown", "segf": 22, "montage": ["AnimMontage_28", 2.0], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 107, "seg": "getup", "segf": 0, "montage": ["AM_React_RollBack", 0.0], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 108, "seg": "getup", "segf": 1, "montage": ["AM_React_RollBack", 1.24], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 109, "seg": "getup", "segf": 2, "montage": ["AM_React_RollBack", 1.62], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 110, "seg": "getup", "segf": 3, "montage": ["AM_React_RollBack", 2.62], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 111, "seg": "getup", "segf": 4, "montage": ["AM_React_RollBack", 3.62], "loc": [472.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 112, "seg": "getup", "segf": 5, "montage": ["AM_React_RollBack", 4.62], "loc": [476.0, -210.1, 88.1], "yaw": 180.0}
+{"f": 113, "seg": "getup", "segf": 6, "montage": ["AM_React_RollBack", 5.62], "loc": [479.7, -210.1, 88.1], "yaw": 180.0}
+{"f": 114, "seg": "getup", "segf": 7, "montage": ["AM_React_RollBack", 6.62], "loc": [483.4, -210.1, 88.1], "yaw": 180.0}
+{"f": 115, "seg": "getup", "segf": 8, "montage": ["AM_React_RollBack", 7.62], "loc": [500.0, -210.1, 88.1], "yaw": 180.0}
+{"f": 116, "seg": "getup", "segf": 9, "montage": ["AM_React_RollBack", 8.62], "loc": [516.5, -210.1, 88.1], "yaw": 180.0}
+{"f": 117, "seg": "getup", "segf": 10, "montage": ["AM_React_RollBack", 9.62], "loc": [535.4, -210.1, 88.1], "yaw": 180.0}
+{"f": 118, "seg": "getup", "segf": 11, "montage": ["AM_React_RollBack", 10.62], "loc": [537.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 119, "seg": "getup", "segf": 12, "montage": ["AM_React_RollBack", 11.62], "loc": [537.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 120, "seg": "getup", "segf": 13, "montage": ["AM_React_RollBack", 12.62], "loc": [537.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 121, "seg": "getup", "segf": 14, "montage": ["AM_React_RollBack", 13.62], "loc": [537.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 122, "seg": "getup", "segf": 15, "montage": ["AM_React_RollBack", 14.62], "loc": [537.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 123, "seg": "getup", "segf": 16, "montage": ["AM_React_RollBack", 15.62], "loc": [537.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 124, "seg": "getup", "segf": 17, "montage": ["AM_React_RollBack", 16.62], "loc": [537.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 125, "seg": "getup", "segf": 18, "montage": ["AM_React_RollBack", 17.62], "loc": [537.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 126, "seg": "getup", "segf": 19, "montage": ["AM_React_RollBack", 18.62], "loc": [537.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 127, "seg": "getup", "segf": 20, "montage": ["AM_React_RollBack", 19.62], "loc": [537.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 128, "seg": "getup", "segf": 21, "montage": ["AM_React_RollBack", 20.62], "loc": [537.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 129, "seg": "getup", "segf": 22, "montage": ["AM_React_RollBack", 21.62], "loc": [537.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 130, "seg": "getup", "segf": 23, "montage": null, "loc": [537.3, -210.1, 88.1], "yaw": 180.0}
+{"f": 131, "seg": "getup", "segf": 24, "montage": null, "loc": [537.4, -210.1, 88.1], "yaw": 176.1}
+{"f": 132, "seg": "getup", "segf": 25, "montage": null, "loc": [537.5, -210.1, 88.1], "yaw": 169.5}
+{"f": 133, "seg": "game", "segf": 0, "montage": null, "loc": [537.8, -210.1, 88.1], "yaw": 161.0, "tap": "stick released"}
+{"f": 134, "seg": "game", "segf": 1, "montage": null, "loc": [538.4, -210.1, 88.1], "yaw": 151.5}
+{"f": 135, "seg": "game", "segf": 2, "montage": null, "loc": [539.4, -210.1, 88.1], "yaw": 135.5}
+{"f": 136, "seg": "game", "segf": 3, "montage": null, "loc": [540.6, -210.1, 88.1], "yaw": 119.5}
+{"f": 137, "seg": "game", "segf": 4, "montage": null, "loc": [542.0, -210.1, 88.1], "yaw": 102.7}
+{"f": 138, "seg": "game", "segf": 5, "montage": null, "loc": [543.5, -210.1, 88.1], "yaw": 86.8}
+{"f": 139, "seg": "game", "segf": 6, "montage": null, "loc": [545.2, -210.1, 88.1], "yaw": 72.4}
+{"f": 140, "seg": "game", "segf": 7, "montage": null, "loc": [546.7, -210.1, 88.1], "yaw": 60.0}
+{"f": 141, "seg": "game", "segf": 8, "montage": null, "loc": [549.6, -210.1, 88.1], "yaw": 40.5}
+{"f": 142, "seg": "game", "segf": 9, "montage": null, "loc": [550.8, -210.1, 88.1], "yaw": 33.1}
+{"f": 143, "seg": "game", "segf": 10, "montage": null, "loc": [551.8, -210.1, 88.1], "yaw": 26.9}
+{"f": 144, "seg": "game", "segf": 11, "montage": null, "loc": [552.6, -210.1, 88.1], "yaw": 21.9}
+{"f": 145, "seg": "game", "segf": 12, "montage": null, "loc": [553.3, -210.1, 88.1], "yaw": 17.8}
+{"f": 146, "seg": "game", "segf": 13, "montage": null, "loc": [553.8, -210.1, 88.1], "yaw": 14.4}
+{"f": 147, "seg": "game", "segf": 14, "montage": null, "loc": [554.2, -210.1, 88.1], "yaw": 11.7}
+{"f": 148, "seg": "game", "segf": 15, "montage": null, "loc": [554.6, -210.1, 88.1], "yaw": 9.5}
+{"f": 149, "seg": "game", "segf": 16, "montage": null, "loc": [554.8, -210.1, 88.1], "yaw": 7.7}
+{"f": 150, "seg": "game", "segf": 17, "montage": null, "loc": [555.1, -210.1, 88.1], "yaw": 6.2}
+{"f": 151, "seg": "game", "segf": 18, "montage": null, "loc": [555.2, -210.1, 88.1], "yaw": 5.0}
+{"f": 152, "seg": "game", "segf": 19, "montage": null, "loc": [555.3, -210.1, 88.1], "yaw": 4.1}
+{"f": 153, "seg": "game", "segf": 20, "montage": null, "loc": [555.4, -210.1, 88.1], "yaw": 3.3}
+{"f": 154, "seg": "game", "segf": 21, "montage": null, "loc": [555.5, -210.1, 88.1], "yaw": 2.7}
+{"f": 155, "seg": "game", "segf": 22, "montage": null, "loc": [555.6, -210.1, 88.1], "yaw": 2.2}
+{"f": 156, "seg": "game", "segf": 23, "montage": null, "loc": [555.6, -210.1, 88.1], "yaw": 1.8}
+{"f": 157, "seg": "game", "segf": 24, "montage": null, "loc": [555.7, -210.1, 88.1], "yaw": 1.4}
+{"f": 158, "seg": "game", "segf": 25, "montage": null, "loc": [555.7, -210.1, 88.1], "yaw": 1.1}
+{"f": 159, "seg": "game", "segf": 26, "montage": null, "loc": [555.7, -210.1, 88.1], "yaw": 0.9}
+{"f": 160, "seg": "game", "segf": 27, "montage": null, "loc": [555.7, -210.1, 88.1], "yaw": 0.8}
+{"f": 161, "seg": "game", "segf": 28, "montage": null, "loc": [555.7, -210.1, 88.1], "yaw": 0.6}
+{"f": 162, "seg": "game", "segf": 29, "montage": null, "loc": [555.7, -210.1, 88.1], "yaw": 0.5}
+{"f": 163, "seg": "game", "segf": 30, "montage": null, "loc": [555.7, -210.1, 88.1], "yaw": 0.4}
+{"f": 164, "seg": "game", "segf": 31, "montage": null, "loc": [555.7, -210.1, 88.1], "yaw": 0.3}
+{"f": 165, "seg": "game", "segf": 32, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.2}
+{"f": 166, "seg": "game", "segf": 33, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.2}
+{"f": 167, "seg": "game", "segf": 34, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.1}
+{"f": 168, "seg": "game", "segf": 35, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.1}
+{"f": 169, "seg": "game", "segf": 36, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.1}
+{"f": 170, "seg": "game", "segf": 37, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.1}
+{"f": 171, "seg": "game", "segf": 38, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.0}
+{"f": 172, "seg": "game", "segf": 39, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.0}
+{"f": 173, "seg": "game", "segf": 40, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.0}
+{"f": 174, "seg": "game", "segf": 41, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.0}
+{"f": 175, "seg": "game", "segf": 42, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.0}
+{"f": 176, "seg": "game", "segf": 43, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 177, "seg": "game", "segf": 44, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 178, "seg": "game", "segf": 45, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 179, "seg": "game", "segf": 46, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 180, "seg": "game", "segf": 47, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 181, "seg": "game", "segf": 48, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 182, "seg": "game", "segf": 49, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 183, "seg": "game", "segf": 50, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 184, "seg": "game", "segf": 51, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 185, "seg": "game", "segf": 52, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 186, "seg": "game", "segf": 53, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 187, "seg": "game", "segf": 54, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 188, "seg": "game", "segf": 55, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 189, "seg": "game", "segf": 56, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 190, "seg": "game", "segf": 57, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 191, "seg": "game", "segf": 58, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 192, "seg": "game", "segf": 59, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 193, "seg": "game", "segf": 60, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 194, "seg": "game", "segf": 61, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 195, "seg": "game", "segf": 62, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": -0.0}
+{"f": 196, "seg": "game", "segf": 63, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.0}
+{"f": 197, "seg": "game", "segf": 64, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.0}
+{"f": 198, "seg": "game", "segf": 65, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.0}
+{"f": 199, "seg": "game", "segf": 66, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.0}
+{"f": 200, "seg": "game", "segf": 67, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.0}
+{"f": 201, "seg": "game", "segf": 68, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.0}
+{"f": 202, "seg": "game", "segf": 69, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.0}
+{"f": 203, "seg": "game", "segf": 70, "montage": null, "loc": [555.8, -210.1, 88.1], "yaw": 0.0}

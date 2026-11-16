@@ -1,0 +1,39 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Backpack Pickups",
+	"Description": "Bridge between GSTNBackpack and GSTNPickups (modularity-and-tags.md §3.7 rule 3): the backpack pickup payload, so a backpack can lie on the ground and be swapped like a support weapon. Enable it only with both plugins; neither of them names the other.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNBackpackPickups",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GSTNCombat",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNBackpack",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNPickups",
+			"Enabled": true
+		}
+	]
+}

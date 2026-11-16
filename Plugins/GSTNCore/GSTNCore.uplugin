@@ -1,0 +1,25 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Core",
+	"Description": "Shared helpers of the GSTN plugins that two or more of them need (modularity-and-tags.md 3.6). First content, Net/: the pose history ring (FGSTN_PoseHistory) shared by GSTNPlatform and GSTNMinion. Pure: no GAS, Network Prediction or Mover, depends on no other GSTN plugin.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": true,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

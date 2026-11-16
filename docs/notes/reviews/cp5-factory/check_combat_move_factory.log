@@ -1,0 +1,7 @@
+GA_Check_Strike: OK | GA_Check_Strike: Strike, 30 frames, active 6-9, actionable 24
+GA_Check_Action: OK | timeline asset /Game/GASNPPTest/Examples/FactoryCheck/TL_Check_Action | GA_Check_Action: Action, 40 frames, active 10-12, actionable 32
+GA_Check_Empty: OK | active start 50 -> 19 | active end 1 -> 19 | first actionable frame 0 -> 20 | GA_Check_Empty: Empty, 20 frames, active 19-19, actionable 20
+action timeline asset: <Object '/Game/GASNPPTest/Examples/FactoryCheck/TL_Check_Action.TL_Check_Action' (0x0000029552A46C00) Class 'GSTN_CombatTimeline'>
+bind on a copy of KIT_Example: ok=True, bindings 15 -> 15 | GSTN_PrimaryKitDefinition_0: replaced Command.Special.Neutral -> GA_Check_Action_C (run Validate on it: the command must be in its command set)
+empty move frames after sanitize: total 20, actionable 20
+RESULT: PASS (3 moves)

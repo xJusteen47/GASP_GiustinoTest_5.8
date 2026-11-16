@@ -1,0 +1,30 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Interact",
+	"Description": "One focus, one prompt: what the Interact button will act on. Pure focus maths (pointing, reach and arc, scoring, sticky hysteresis), a stamped candidate registry, a meaning table, and a game-thread runtime with interactable and interactor components and a minimal local presentation. Standalone: no GAS, Network Prediction, Mover, combat or other GSTN plugin.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNInteractCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNInteractRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

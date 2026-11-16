@@ -1,0 +1,42 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "title": "gstn-visual-review verdict",
+ "type": "object",
+ "required": ["move", "round", "esito", "problemi", "segmenti"],
+ "properties": {
+  "move": {"type": "string", "description": "card move name, e.g. overlord_dair_v4"},
+  "round": {"type": "integer", "minimum": 1, "maximum": 2},
+  "esito": {"enum": ["ok", "correggi", "chiedi_owner"]},
+  "problemi": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": ["regola", "frame", "parti", "gravita", "prova"],
+    "properties": {
+     "regola": {"type": "string", "description": "id from rubric.md"},
+     "frame": {"description": "anim frame or [from, to]", "oneOf": [{"type": "integer"}, {"type": "array", "items": {"type": "integer"}}]},
+     "parti": {"type": "array", "items": {"enum": ["arm_l", "arm_r", "leg_l", "leg_r", "trunk", "head", "hand_l", "hand_r"]}},
+     "gravita": {"enum": ["blocca", "nota"]},
+     "pannello": {"type": "string", "description": "lato | camera | dietro | traiettorie | hitstop"},
+     "prova": {"type": "string"},
+     "correzione": {
+      "type": "object",
+      "properties": {
+       "frame": {"type": "integer"}, "parte": {"type": "string"},
+       "direzione": {"type": "string", "description": "avanti | indietro | su | giu | fuori | dentro | ruota ..."},
+       "quanto": {"type": "string", "description": "e.g. '4 cm', '10 deg'"}
+      }
+     }
+    }
+   }
+  },
+  "segmenti": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": ["da", "a", "stato"],
+    "properties": {"da": {"type": "integer"}, "a": {"type": "integer"}, "stato": {"enum": ["ok", "manca", "brutto"]}}
+   }
+  }
+ }
+}
