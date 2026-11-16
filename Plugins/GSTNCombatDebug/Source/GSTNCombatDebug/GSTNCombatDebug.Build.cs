@@ -28,6 +28,7 @@ public class GSTNCombatDebug : ModuleRules
 			"GameplayTags",
 			"Projects",
 			"Slate",
+			"InputCore",
 			"GSTNInputCore",
 			"GSTNInputNP",
 			"GSTNInputDebug",

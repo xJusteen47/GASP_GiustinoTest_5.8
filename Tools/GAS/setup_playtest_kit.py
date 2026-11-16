@@ -37,12 +37,11 @@ def _kit(lines):
     else:
         lines.append('%s: exists, kept' % KIT)
     kit = unreal.load_asset(KIT)
-    extra = unreal.load_asset(EXTRA_FROM)
     ext = kit.get_editor_property('extensions')
     entries = list(ext.get_editor_property('extension_data'))
     have = {_type_of(e) for e in entries}
     added = []
-    for e in extra.get_editor_property('extensions').get_editor_property('extension_data'):
+    for e in [x for path in EXTRA_FROM for x in unreal.load_asset(path).get_editor_property('extensions').get_editor_property('extension_data')]:
         t = _type_of(e)
         if t not in have:
             entries.append(e)
