@@ -20,7 +20,14 @@ TAG_RULES = [
     ('Tumble (ground bounce, landing)', ['Combat.State.Tumble', 'Combat.Mover.Tumble']),
 ]
 MONTAGE_RULE = 'Reaction montages (tech bounce, ground hit)'
+# Aerial landing-lag clips (owner playtest 2026-11-17: the down air's legs went into the floor during its final landing lag; the poses stay as
+# approved, only the penetration is removed). AM_OverlordDAirLand{LightTuckR4,HeavyTuckR3,HeavyR2,LightR3,...}; 'AirLand' also catches the
+# landing clips of the other aerials when they get one, 'LandingLag' any clip named after the action
+LANDING_KEYS = ['AirLand', 'LandingLag']
+LANDING_RULE = 'Aerial landing lag montages'
 
+# GROUND_CONTACT_RULES_ONLY=1: update the rules of the settings asset only (the node is already in the ABP since F4)
+ONLY_RULES = os.environ.get('GROUND_CONTACT_RULES_ONLY', '') == '1'
 proj = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
 out_dir = os.path.join(proj, 'Saved', 'GroundContact')
 os.makedirs(out_dir, exist_ok=True)
@@ -32,14 +39,15 @@ def log(msg):
     unreal.log(f'[ground_contact_setup] {msg}')
 
 
-def find_montages():
+def find_montages(keys=None):
+    keys = keys or MONTAGE_KEYS
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
     found = []
     for data in registry.get_assets_by_path('/Game', recursive=True):
         if str(data.asset_class_path.asset_name) != 'AnimMontage':
             continue
         name = str(data.asset_name)
-        if any(key.lower() in name.lower() for key in MONTAGE_KEYS):
+        if any(key.lower() in name.lower() for key in keys):
             found.append(str(data.package_name))
     return sorted(found)
 
@@ -62,9 +70,16 @@ def run():
     montage_paths = find_montages()
     montages = [unreal.load_asset(p) for p in montage_paths]
     da.set_rule(MONTAGE_RULE, [], [m for m in montages if m], 1.0)
+    landing_paths = [p for p in find_montages(LANDING_KEYS) if p not in montage_paths]
+    landing = [unreal.load_asset(p) for p in landing_paths]
+    da.set_rule(LANDING_RULE, [], [m for m in landing if m], 1.0)
     unreal.EditorAssetLibrary.save_loaded_asset(da, False)
     with open(os.path.join(out_dir, 'montages.txt'), 'w', encoding='utf-8') as f:
-        f.write('\n'.join(montage_paths))
+        f.write('\n'.join(montage_paths + ['# landing lag'] + landing_paths))
+    if ONLY_RULES:
+        log(f'settings {"created" if created else "updated"}: {len(montage_paths)} reaction + {len(landing_paths)} landing lag montages (montages.txt)')
+        log('ESITO: OK rules only (GROUND_CONTACT_RULES_ONLY=1, ABP untouched)')
+        return
 
     src = os.path.join(proj, 'Content', 'Blueprints', 'SandboxCharacter_Mover_ABP.uasset')
     bak = os.path.join(proj, 'Saved', 'Backups', 'GAS', 'groundcontact')
@@ -87,7 +102,7 @@ def run():
     saved = unreal.EditorAssetLibrary.save_loaded_asset(abp, False)
     with open(os.path.join(out_dir, 'abp_after.txt'), 'w', encoding='utf-8') as f:
         f.write(lib.describe_graphs(abp))
-    log(f'settings {"created" if created else "updated"}: {da.get_path_name()}, {len(montage_paths)} reaction montages (montages.txt)')
+    log(f'settings {"created" if created else "updated"}: {da.get_path_name()}, {len(montage_paths)} reaction + {len(landing_paths)} landing lag montages (montages.txt)')
     log(f'ESITO: {"OK" if ok and saved else "FAIL"} node before Output Pose, compiled={ok}, saved={saved}')
 
 
