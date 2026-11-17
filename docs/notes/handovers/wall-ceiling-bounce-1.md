@@ -6,17 +6,20 @@ bounce with a clip, NOT the full tech bounce. Splat and hitbox-forced bounce are
   GroundImpact threshold 1200 cm/s, only in hitstun, restitution 0.6, MaxBounces 2, window 90; off = own `Bounce` rules. Chain counted apart from the floor's,
   walls + ceilings together (sync `Core.Hit.WallBounceCount/FirstFrame`).
 - Judge (setting, both behaviours shipped): Speed (default, like the ground) or RemainingHitstun (>= BounceMinHitstunFrames 20 = hard).
-- Bump (under the hard bounce): push off the face BumpMinSpeed 150..BumpMaxSpeed 350 cm/s over impact 100..1200 cm/s (exponent 1), keeps 50% of the slide,
+- Bump (under the hard bounce): push off the face BumpMinDistance 4..BumpMaxDistance 12 cm over impact 100..1200 cm/s, drag 0.25/frame (start speed = D x drag x 62.5) (exponent 1), keeps 50% of the slide,
   no damage, nothing under 50 cm/s, also after hitstun (bBumpOnlyDuringHitstun off). BumpFrames 14: hitstun at least that long, one bump at a time.
 - Presentation: `Combat.State.Bump` + `.Wall`/`.Ceiling` projected for BumpFrames (sync `BumpEndFrame/BumpKind`, rollback safe); event `Combat.Event.Impact.Bump`.
 - Order: Defence wall tech, then surface row (splat/break/forced bounce) and hit Force, then this default. Hit Forbid Bounce = always bump.
 - Impact step now runs for any entity with CombatRules (before: needed a surface table or a Defence extension) -> floors of such entities hard-bounce too.
 ## Choices applied (rule 6), da confermare (13d)
 1. "Poco hitstun" judged by SPEED like the ground (owner's clarification); hitstun judge available as setting.
-2. Bump size scales with impact; owner said "piccolo piccolo": 150-350 cm/s ≈ 2-8 cm off the wall. Tune in CombatRules_Standard > Wall Impact.
+2. Bump size scales with impact; owner said "piccolo piccolo": 4-12 cm off the wall (PIE 1: plain 210 cm/s carried ~45 cm and slid after landing, so bump is now a distance + drag; drag is horizontal, a ceiling bump is mostly gravity). Tune in CombatRules_Standard > Wall Impact.
 3. No clip exists: desktop must add reaction anim rules (RequiredTags Combat.State.Bump.Wall / .Ceiling, priority above Tumble, End BlendOut) with a placeholder.
 ## Desktop checks (fisso, worktree `GASP_Giustino2_wallbounce`, _ue59 untouched)
 Build Editor Win64 Dev UE 5.9 OK 580 s (`Saved\Logs\ci\wallbounce-build1.log`). Tests (Select-String "Test Completed. Result=\{(\w+)\}"):
 `GSTNCombat.NP.Hits`+`GSTNDefence` 163/0 (`wallbounce-test1.log.ue.log`), both new tests pass; full `GSTN` 1720/1 (`wallbounce-test2.log.ue.log`): only
 `GSTNCombat.Editor.Preview.Spike.MontageSampling`, asset load errors (AS_OverlordDropkick_Land: no target USkeleton) in the fresh worktree, not this change (not rerun on base).
 Remains: bump clip rule + placeholder in the reaction anim set (desktop, asset edit); PIE check on L_Test_Combat wall. Cost estimate ~8 $ (Opus, ~95k context, 1 build).
+## PIE 1 on _ue59 (local merge f189e6f9, see wall-bounce-ue59-check-1.md): weak f45 432 cm/s -> bump, Bump.Wall f46-59; strong f35 3968 cm/s -> hard 2381 cm/s, no Bump.
+FAIL "gioco": (1) bump clip montage gone after 1 frame (replaced by another montage, diagnosis pending); (2) push ~45 cm -> fixed by distance + drag (this commit);
+(3) tumble pose clips into the wall mesh before contact (queue). MontageSampling passes on _ue59 (content), so the worktree failure was missing content.

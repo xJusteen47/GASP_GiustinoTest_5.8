@@ -626,7 +626,9 @@ void FGSTN_CombatVictim::StepDefaultSurfaceBounce(const FGSTN_ImpactStepInput& I
 	else
 	{
 		// The bump: a small push off the face and a clip, no tech bounce, no damage. One at a time: a contact inside the clip's window slides
-		const double BumpSpeed = Rules.BumpSpeed(JudgedSpeed);
+		// The simulation step (62.5 Hz, untouchable): the push speed that covers the bump's distance under its drag
+		constexpr double SimFrameSeconds = 1.0 / 62.5;
+		const double BumpSpeed = Rules.BumpSpeed(JudgedSpeed, SimFrameSeconds);
 		if (BumpSpeed <= 0.0 || (Rules.bBumpOnlyDuringHitstun && HitstunLeft <= 0) || Core.Hit.BumpEndFrame > Frame)
 		{
 			return;
@@ -635,6 +637,7 @@ void FGSTN_CombatVictim::StepDefaultSurfaceBounce(const FGSTN_ImpactStepInput& I
 		Out.Move.Kind = FGSTN_ReactionMove::EKind::Launch;
 		Out.Move.Velocity = Normal * BumpSpeed + Tangent * FMath::Clamp(static_cast<double>(Rules.BumpTangentKeep), 0.0, 1.0);
 		Out.Move.Frames = FMath::Max(FMath::Max(HitstunLeft, Frames), TumbleProbeFrames);
+		Out.Move.DecayPerFrame = FMath::Clamp(Rules.BumpDragPerFrame, 0.01f, 1.f);
 		Core.Hit.HitstunEndFrame = FMath::Max(Core.Hit.HitstunEndFrame, Frame + Frames);
 		Core.Hit.ImpactEndFrame = Frame + 1;
 		Core.Hit.BumpEndFrame = Frame + Frames;
