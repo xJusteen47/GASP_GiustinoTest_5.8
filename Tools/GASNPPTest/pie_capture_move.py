@@ -504,8 +504,16 @@ def _tick(_dt):
                     w = g.worlds()[0]
                     loc = _pawn().get_actor_location()
                     cls = unreal.GSTN_DepthProjectionVolume
-                    vol = unreal.GameplayStatics.begin_deferred_actor_spawn_from_class(w, cls, unreal.Transform(loc, unreal.Rotator(0, 0, 0), unreal.Vector(1, 1, 1)))
-                    vol = unreal.GameplayStatics.finish_spawning_actor(vol, unreal.Transform(loc, unreal.Rotator(0, 0, 0), unreal.Vector(1, 1, 1)))
+                    tf = unreal.Transform(loc, unreal.Rotator(0, 0, 0), unreal.Vector(1, 1, 1))
+                    vol = None
+                    for fn in ('begin_spawning_actor_from_class', 'begin_deferred_actor_spawn_from_class'):
+                        if hasattr(unreal.GameplayStatics, fn):
+                            vol = getattr(unreal.GameplayStatics, fn)(w, cls, tf)
+                            vol = unreal.GameplayStatics.finish_spawning_actor(vol, tf)
+                            break
+                    if vol is None and hasattr(unreal.EditorLevelLibrary, 'spawn_actor_from_class'):
+                        _log('spawn candidates: ' + ','.join(n for n in dir(unreal.GameplayStatics) if 'pawn' in n))
+                        raise RuntimeError('no PIE-world spawn function')
                     pr = unreal.GSTN_DepthProjection()
                     pr.set_editor_property('mode', unreal.GSTN_DepthProjectionMode.OWNER_LOCAL)
                     pr.set_editor_property('direction', unreal.Vector(0, 1, 0))

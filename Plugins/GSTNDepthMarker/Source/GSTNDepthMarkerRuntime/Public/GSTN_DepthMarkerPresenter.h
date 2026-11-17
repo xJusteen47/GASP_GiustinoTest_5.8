@@ -152,7 +152,7 @@ public:
 	float RadiusMultiplier = 1.5f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Ring", meta = (ClampMin = "0.1", ForceUnits = "cm"))
-	float ThicknessCm = 3.f;
+	float ThicknessCm = 7.5f;   // x2.5 (Fable review round 1, 2026-11-17)
 
 protected:
 	virtual void OnMarkerUpdated_Implementation(const FGSTN_DepthMarkerView& View, AActor* Holder) override;
@@ -177,7 +177,7 @@ public:
 	float DutyCycle = 0.5f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "DepthMarker|Line", meta = (ClampMin = "0.1", ForceUnits = "cm"))
-	float WidthCm = 2.5f;
+	float WidthCm = 5.f;   // x2 (Fable review round 1, 2026-11-17)
 
 	/**
 	 * Dash length and gap grow with the line length: x1 up to GrowStartCm, x DashGrowthMax from GrowEndCm on, linear in between

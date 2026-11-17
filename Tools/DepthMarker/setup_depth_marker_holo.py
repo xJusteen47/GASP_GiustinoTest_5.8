@@ -103,30 +103,50 @@ float breathe = 0.92 + 0.08 * sin(Time * 2.2);
 """
 
 # ---------------------------------------------------------------------------------------------------------------------------------
-seg = new_material("M_DM_Holo", unreal.MaterialDomain.MD_SURFACE, unreal.BlendMode.BLEND_ADDITIVE, unreal.MaterialShadingModel.MSM_UNLIT, True)
-seg_code = HOLO_COMMON + """
-float edge = 1.0 + EdgeBoost * Fres;
+seg = new_material("M_DM_Holo", unreal.MaterialDomain.MD_SURFACE, unreal.BlendMode.BLEND_TRANSLUCENT, unreal.MaterialShadingModel.MSM_UNLIT, True)
+# The ring and dashes are ISM cubes: without this flag the engine silently uses the DEFAULT material in game (log: "missing usage flag
+# InstancedStaticMeshes", which is why round 1 showed a dark ring).
+seg.set_editor_property("used_with_instanced_static_meshes", True)
+# Round 2 (Fable FAIL round 1): bright emissive cyan-white (Intensity 4, Whiten 0.55) with a thin DARK outline. Additive cannot darken, so the
+# segment is translucent: the silhouette (Fresnel) is near black and opaque, the rest is the bright holo colour.
+seg_common = HOLO_COMMON + """
+float rim = saturate(Fres);
+float outline = smoothstep(OutlineStart, OutlineStart + 0.12, rim);
+"""
+seg_color = seg_common + """
+float edge = 1.0 + EdgeBoost * rim * (1.0 - outline);
 float3 tint = lerp(Color.rgb, float3(1.0, 1.0, 1.0), Whiten);
-return tint * Intensity * saturate(Opacity) * scan * flick * breathe * edge;
+float3 bright = tint * Intensity * scan * flick * breathe * edge;
+return lerp(bright, float3(0.0, 0.0, 0.0), outline * OutlineDark);
+"""
+seg_alpha = seg_common + """
+return saturate(Opacity) * lerp(saturate(0.75 + 0.25 * scan) * flick, 1.0, outline);
 """
 s_time = node(seg, unreal.MaterialExpressionTime, -1200, 0)
 s_fres = node(seg, unreal.MaterialExpressionFresnel, -1200, 100, exponent=3.0)
-s_color = vector_param(seg, -1200, 220, "Color", unreal.LinearColor(0.2, 0.8, 1.0, 1.0))
+s_color = vector_param(seg, -1200, 220, "Color", unreal.LinearColor(0.55, 0.95, 1.0, 1.0))
 s_opacity = scalar_param(seg, -1200, 380, "Opacity", 1.0)
 s_axis = vector_param(seg, -1200, 480, "ScanAxis", unreal.LinearColor(0.0, 0.0, 1.0, 0.0))
 s_spacing = scalar_param(seg, -1200, 640, "ScanSpacing", 6.0)
 s_speed = scalar_param(seg, -1200, 740, "ScanSpeed", 0.6)
-s_strength = scalar_param(seg, -1200, 840, "ScanStrength", 0.7)
+s_strength = scalar_param(seg, -1200, 840, "ScanStrength", 0.4)
 s_fchance = scalar_param(seg, -1200, 940, "FlickerChance", 0.04)
-s_fdepth = scalar_param(seg, -1200, 1040, "FlickerDepth", 0.45)
-s_edge = scalar_param(seg, -1200, 1140, "EdgeBoost", 1.5)
-s_white = scalar_param(seg, -1200, 1240, "Whiten", 0.25)
-s_int = scalar_param(seg, -1200, 1340, "Intensity", 2.2)
-s_out = custom(seg, -700, 300, seg_code,
-               ("Time", "Fres", "Color", "Opacity", "ScanAxis", "ScanSpacing", "ScanSpeed", "ScanStrength", "FlickerChance",
-                "FlickerDepth", "EdgeBoost", "Whiten", "Intensity"), unreal.CustomMaterialOutputType.CMOT_FLOAT3)
-wire(seg, s_out, (s_time, s_fres, s_color, s_opacity, s_axis, s_spacing, s_speed, s_strength, s_fchance, s_fdepth, s_edge, s_white, s_int))
-prop(s_out, unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+s_fdepth = scalar_param(seg, -1200, 1040, "FlickerDepth", 0.3)
+s_edge = scalar_param(seg, -1200, 1140, "EdgeBoost", 1.0)
+s_white = scalar_param(seg, -1200, 1240, "Whiten", 0.55)
+s_int = scalar_param(seg, -1200, 1340, "Intensity", 4.0)
+s_ostart = scalar_param(seg, -1200, 1440, "OutlineStart", 0.62)
+s_odark = scalar_param(seg, -1200, 1540, "OutlineDark", 0.9)
+seg_in = ("Time", "Fres", "Color", "Opacity", "ScanAxis", "ScanSpacing", "ScanSpeed", "ScanStrength", "FlickerChance",
+          "FlickerDepth", "EdgeBoost", "Whiten", "Intensity", "OutlineStart", "OutlineDark")
+seg_src = (s_time, s_fres, s_color, s_opacity, s_axis, s_spacing, s_speed, s_strength, s_fchance, s_fdepth, s_edge, s_white, s_int,
+           s_ostart, s_odark)
+s_c = custom(seg, -700, 300, seg_color, seg_in, unreal.CustomMaterialOutputType.CMOT_FLOAT3)
+wire(seg, s_c, seg_src)
+s_a = custom(seg, -700, 900, seg_alpha, seg_in)
+wire(seg, s_a, seg_src)
+prop(s_c, unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+prop(s_a, unreal.MaterialProperty.MP_OPACITY)
 finish(seg)
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -156,10 +176,10 @@ d_speed = scalar_param(dec, -1200, 620, "ScanSpeed", 0.5)
 d_strength = scalar_param(dec, -1200, 720, "ScanStrength", 0.6)
 d_fchance = scalar_param(dec, -1200, 820, "FlickerChance", 0.04)
 d_fdepth = scalar_param(dec, -1200, 920, "FlickerDepth", 0.45)
-d_ring = scalar_param(dec, -1200, 1020, "RingWidth", 0.05)
-d_disc = scalar_param(dec, -1200, 1120, "DiscAlpha", 0.3)
+d_ring = scalar_param(dec, -1200, 1020, "RingWidth", 0.09)
+d_disc = scalar_param(dec, -1200, 1120, "DiscAlpha", 0.45)
 d_white = scalar_param(dec, -1200, 1220, "Whiten", 0.25)
-d_int = scalar_param(dec, -1200, 1320, "Intensity", 2.0)
+d_int = scalar_param(dec, -1200, 1320, "Intensity", 3.0)
 common_in = ("UV", "Time", "Opacity", "ScanAxis", "ScanSpacing", "ScanSpeed", "ScanStrength", "FlickerChance", "FlickerDepth",
              "RingWidth", "DiscAlpha")
 common_src = (d_uv, d_time, d_opacity, d_axis, d_spacing, d_speed, d_strength, d_fchance, d_fdepth, d_ring, d_disc)
