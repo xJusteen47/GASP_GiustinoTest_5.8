@@ -125,6 +125,15 @@ struct GSTNCOMBATNP_API FGSTN_HitSyncState
 	int32 BumpEndFrame = INDEX_NONE;
 	uint8 BumpKind = 0;
 
+	/**
+	 * The last wall or ceiling contact the default surface bounce decided (a hard bounce or a bump): its frame and its face (BumpKindWall /
+	 * BumpKindCeiling; 0 = none). Contacts within FGSTN_SurfaceBounceRules::RecontactFrames of it do nothing (polish M2 r3: a wall bounce fired
+	 * twice 6 frames apart), and the presentation names the face from it (a ceiling is not a WallBounce). Live while tumbling; a new staggering
+	 * hit clears it. On the wire in the profile block (1 bit, then 2 bits of face and the frame)
+	 */
+	int32 SurfaceImpactFrame = INDEX_NONE;
+	uint8 SurfaceImpactKind = 0;
+
 	static constexpr uint8 BumpKindWall = 1;
 	static constexpr uint8 BumpKindCeiling = 2;
 

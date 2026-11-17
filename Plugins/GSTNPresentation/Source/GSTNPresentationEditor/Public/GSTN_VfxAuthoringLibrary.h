@@ -7,6 +7,7 @@
 #include "GSTN_VfxAuthoringLibrary.generated.h"
 
 class UNiagaraRendererProperties;
+class UNiagaraComponent;
 class UNiagaraSystem;
 
 /**
@@ -35,6 +36,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
 	static bool AddUserVector2(UNiagaraSystem* System, FName Name, FVector2D Default);
 
+	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
+	static bool AddUserInt(UNiagaraSystem* System, FName Name, int32 Default);
+
 	/** Adds an emitter copied from an emitter asset (a template), renamed; returns its unique name or an error starting with "!" */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
 	static FString AddEmitter(UNiagaraSystem* System, const FString& EmitterAssetPath, const FString& NewName);
@@ -54,6 +58,21 @@ public:
 	/** Appends a stock or project module script (asset path) to a stack */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
 	static FString AddModule(UNiagaraSystem* System, const FString& EmitterName, const FString& Stack, const FString& ModuleScriptPath);
+
+	/** Inserts a module before another one of the same stack. A force (Drag, GravityForce) must run before SolveForcesAndVelocity: appended
+	 *  after it, its force is cleared before the next solve and the particle keeps a constant speed (review r2: shards and run puffs) */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
+	static FString AddModuleBefore(UNiagaraSystem* System, const FString& EmitterName, const FString& Stack, const FString& ModuleScriptPath,
+		const FString& BeforeModule);
+
+	/** Debug: the live particles of one emitter of a CPU system, "x,y,z/vx,vy,vz" per particle (component space for a local-space
+	 *  emitter), at most Max. Used with AdvanceSimulation to measure speeds frame by frame without a capture */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
+	static FString DescribeParticles(UNiagaraComponent* Component, const FString& EmitterName, int32 Max = 8);
+
+	/** The stack's modules in execution order, "A > B > C(off)" */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
+	static FString ListModules(UNiagaraSystem* System, const FString& EmitterName, const FString& Stack);
 
 	/** Enables or disables a stack module (a template module the effect does not want is disabled, not removed) */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")

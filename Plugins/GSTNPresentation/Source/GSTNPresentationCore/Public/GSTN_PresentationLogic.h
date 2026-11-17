@@ -79,6 +79,18 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationSnapshot
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
 	int32 WallBounceCount = INDEX_NONE;
 
+	/**
+	 * The last wall or ceiling contact the simulation decided in this reaction (a hard bounce or a bump): its frame (INDEX_NONE = none, or a
+	 * source that does not say) and whether the face was a ceiling. A counted bounce takes its tag from it (WallBounce or WallBounce.Ceiling);
+	 * for BounceRefireFrames after it the velocity reading stays silent: the bump's own push off the face is not a second bounce (polish M2 r3:
+	 * Bump.Ceiling and WallBounce on the same frame)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
+	int32 SurfaceImpactFrame = INDEX_NONE;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
+	bool bSurfaceImpactCeiling = false;
+
 	/** Frame of the last hit received (stamped by the simulation), INDEX_NONE before the first */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
 	int32 LastHitFrame = INDEX_NONE;
@@ -151,6 +163,14 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationDeriveRules
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Derive", meta = (ClampMin = "0", ForceUnits = "cm/s"))
 	float BounceMinSpeed = 200.f;
 
+	/**
+	 * A bounce read from the velocity (no count covers it) is not repeated for this many frames after a bounce of the same kind (floor, or
+	 * walls and ceilings), nor after a wall or ceiling contact the simulation stamped (SurfaceImpactFrame): a victim that grinds along a face
+	 * turns its velocity more than once (polish M2 r3: WallBounce twice 3 to 6 frames apart)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Derive", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 BounceRefireFrames = 8;
+
 	/** Running again within this many frames after a skid, against the skid's direction (dot below -0.5), is a Turn180 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Derive", meta = (ClampMin = "1"))
 	int32 TurnWindowFrames = 30;
@@ -190,6 +210,9 @@ private:
 	FGSTN_PresentationSnapshot Previous;
 	FVector SkidDirection = FVector::ZeroVector;
 	int32 SkidExitFrame = INDEX_NONE;
+	/** The frame of the last floor bounce and of the last wall or ceiling bounce emitted (BounceRefireFrames) */
+	int32 LastGroundBounceFrame = INDEX_NONE;
+	int32 LastSurfaceBounceFrame = INDEX_NONE;
 	int32 FramesSinceSkid = -1;
 };
 

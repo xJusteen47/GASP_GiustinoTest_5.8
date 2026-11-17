@@ -1338,6 +1338,28 @@ private:
 	bool ProbeFloorAhead(float AheadCm, float DepthCm);
 
 	/**
+	 * Touchdown anticipation (UGSTN_CombatRules::bAnticipateTouchdown, 2026-11-17): true when the fighter, airborne at the end of the previous
+	 * frame and falling, reaches a walkable floor during this frame's fall: a sweep of the capsule it had at the end of the previous frame (the
+	 * tracker's state, the body capsule modifier's shape) along gravity by FGSTN_LandingRules::FallThisFrame + the rules' margin. Reads only the
+	 * restored simulation state and static world geometry, so a resimulation gives the same answer. Stamps FrameTouchdown for Mover's tick
+	 */
+	bool ProbeTouchdownThisFrame(int32 Frame, float StepSeconds);
+
+public:
+	/**
+	 * The touchdown this frame's combat tick anticipated (ProbeTouchdownThisFrame), for the body capsule modifier: the standing capsule that comes
+	 * back on that frame grows from the floor (GroundedRestore) as it would a frame later on Mover's own ground. False when none was
+	 */
+	bool ReadFrameTouchdown() const;
+
+private:
+	/** The frame ProbeTouchdownThisFrame last answered true for (INDEX_NONE: none). Never a source of state, like FramePush */
+	int32 FrameTouchdown = INDEX_NONE;
+
+	/** The mesh location the body capsule's smoothing correction wrote last (FGSTN_BodyCapsuleModifier::ApplyPresentation). Presentation only */
+	FVector BodyCapsuleCorrectedAt = FVector(TNumericLimits<float>::Max());
+
+	/**
 	 * What the attacker side predicted about each hit of the last frames, for the presentation component of this pawn (M4 H10). Local data
 	 * rewritten by every tick and re-simulation; the simulation never reads it
 	 */

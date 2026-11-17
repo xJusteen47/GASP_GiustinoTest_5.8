@@ -79,6 +79,9 @@ bool UGSTN_CombatPresentationEvents::ReadSnapshot(const AActor* Owner, FGSTN_Pre
 	// The simulation's bounce counts: a spike off the ground never shows a downward velocity to the presentation
 	Out.GroundBounceCount = View.GroundBounceCount;
 	Out.WallBounceCount = View.WallBounceCount;
+	// Which face the last wall or ceiling contact was, and when: the tag of a counted bounce, and silence for the bump's push off the face
+	Out.SurfaceImpactFrame = View.SurfaceImpactFrame;
+	Out.bSurfaceImpactCeiling = View.bSurfaceImpactCeiling;
 	Out.MoveTags = Combat->GetCurrentMoveTags();
 	Out.MoveStartFrame = View.bInMove ? View.MoveStartFrame : INDEX_NONE;
 

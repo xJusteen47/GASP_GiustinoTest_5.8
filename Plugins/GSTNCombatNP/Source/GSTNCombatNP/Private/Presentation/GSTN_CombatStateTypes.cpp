@@ -40,6 +40,8 @@ FGSTN_CombatStateView FGSTN_CombatStateView::FromCore(const FGSTN_CombatSyncCore
 	View.bKnockedOut = Core.ActionState == EGSTN_ActionState::KO;
 	View.GroundBounceCount = Core.Hit.GroundBounceCount;
 	View.WallBounceCount = Core.Hit.WallBounceCount;
+	View.SurfaceImpactFrame = Core.Hit.SurfaceImpactKind != 0 ? Core.Hit.SurfaceImpactFrame : INDEX_NONE;
+	View.bSurfaceImpactCeiling = Core.Hit.SurfaceImpactKind == FGSTN_HitSyncState::BumpKindCeiling;
 
 	View.bInMove = Core.ActionState == EGSTN_ActionState::InTimeline && Core.ActiveTimeline != INDEX_NONE;
 	if (View.bInMove)

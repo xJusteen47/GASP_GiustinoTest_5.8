@@ -104,6 +104,13 @@ struct GSTNCOMBATNP_API FGSTN_CombatStateView
 	UPROPERTY(BlueprintReadOnly, Category = "Combat State|Hit Reaction")
 	int32 WallBounceCount = 0;
 
+	/** The last wall or ceiling contact the simulation decided in this reaction (bounce or bump): its frame (INDEX_NONE = none) and its face */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat State|Hit Reaction")
+	int32 SurfaceImpactFrame = INDEX_NONE;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Combat State|Hit Reaction")
+	bool bSurfaceImpactCeiling = false;
+
 	// ---- Current move
 
 	UPROPERTY(BlueprintReadOnly, Category = "Combat State|Move")

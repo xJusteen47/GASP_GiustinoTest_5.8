@@ -63,6 +63,20 @@ void UGSTN_CharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 	UpdateFootLockRequest(DeltaSeconds);
 	UpdateStance(DeltaSeconds);
+	UpdateCoveredLanding(DeltaSeconds);
+}
+
+void UGSTN_CharacterAnimInstance::UpdateCoveredLanding(float DeltaSeconds)
+{
+	// Up = the actor's own up (gravity's opposite on a planetoid too): this module knows no movement component
+	const AActor* Owner = GetOwningActor();
+	const FVector Up = Owner ? Owner->GetActorUpVector() : FVector::UpVector;
+	const float UpSpeed = static_cast<float>(CapsuleVelocity.Dot(Up));
+	const float FloorSpeed = static_cast<float>((CapsuleVelocity - Up * UpSpeed).Size());
+	const FGSTN_CoveredLandingOutput Out = CoveredLandingLogic.Step(CoveredLanding, DeltaSeconds, UpSpeed, FloorSpeed, bMontageDrivingPose,
+		FootLockMontageWeight);
+	bCoveredLandingCapture = Out.bCapture;
+	CoveredLandingAlpha = Out.HoldAlpha;
 }
 
 void UGSTN_CharacterAnimInstance::UpdateFootLockRequest(float DeltaSeconds)
@@ -86,9 +100,11 @@ void UGSTN_CharacterAnimInstance::UpdateFootLockRequest(float DeltaSeconds)
 	if (const AActor* Owner = GetOwningActor())
 	{
 		const FVector Location = Owner->GetActorLocation();
+		CapsuleVelocity = FVector::ZeroVector;
 		if (bFootLockHasLastLocation && DeltaSeconds > KINDA_SMALL_NUMBER)
 		{
-			Speed = FVector::Dist(Location, FootLockLastActorLocation) / DeltaSeconds;
+			CapsuleVelocity = (Location - FootLockLastActorLocation) / DeltaSeconds;
+			Speed = static_cast<float>(CapsuleVelocity.Size());
 		}
 		FootLockLastActorLocation = Location;
 		bFootLockHasLastLocation = true;

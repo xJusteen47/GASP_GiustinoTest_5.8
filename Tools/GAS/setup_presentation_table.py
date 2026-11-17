@@ -29,7 +29,7 @@ def _tags(names):
 
 
 def _cue(event, system, min_mag=0.0, scale=None, socket="", offset=(0, 0, 0), orient=False, scale_size=True, stop_on=(), max_duration=0.0,
-         strong=0.0, accent=None):
+         strong=0.0, accent=None, grounded="", count=0, strong_count=0):
     cue = unreal.GSTN_PresentationCue()
     cue.set_editor_property("event_tag", _tag(event))
     cue.set_editor_property("min_magnitude", float(min_mag))
@@ -48,6 +48,9 @@ def _cue(event, system, min_mag=0.0, scale=None, socket="", offset=(0, 0, 0), or
     cue.set_editor_property("strong_intensity", float(strong))
     if accent:
         cue.set_editor_property("accent_tint", accent)
+    cue.set_editor_property("grounded_bone", grounded)
+    cue.set_editor_property("count_max", int(count))
+    cue.set_editor_property("strong_count", int(strong_count))
     return cue
 
 
@@ -64,15 +67,17 @@ def rows():
         # Hit sizes from the hitstun (frames): 28 or less = small (0.5), ~43 = medium (0.8), 58+ = large (1.1); intensity is also the share
         # of the 8 shards that spawn (4 / 6 / 8) and the sprite size scale. Measured 2026-11-17 (KIT_Test_Hits jab): 31 frames at 0 % (0.56),
         # 40 at 90 % (0.74), 67 at 170 % (1.1). From 1.0 the hit is strong: 3 accent stars in the kit's second colour (a kit row overrides it)
-        _cue("Hit", "NS_GSTN_HitSpark", scale=((28, 58), (0.5, 1.1)), orient=True, strong=1.0, accent=ACCENT),
+        _cue("Hit", "NS_GSTN_HitSpark", scale=((28, 58), (0.5, 1.1)), orient=True, strong=1.0, accent=ACCENT,
+             count=8, strong_count=3),
         _cue("WallBounce", "NS_GSTN_Impact", scale=((200, 1500), (0.7, 1.3)), orient=True),
         _cue("GroundBounce", "NS_GSTN_Impact", scale=((200, 1500), (0.7, 1.3)), offset=feet, orient=True),
         _cue("Splat", "NS_GSTN_Impact", scale=((200, 1500), (0.8, 1.4)), orient=True),
         # The small default bump off a wall or ceiling (no magnitude): a small impact, not a bounce's (size to be judged in the polish M2 r3 review)
         _cue("Bump.Wall", "NS_GSTN_Impact", scale=((0, 1), (0.4, 0.4)), orient=True),
         _cue("Bump.Ceiling", "NS_GSTN_Impact", scale=((0, 1), (0.4, 0.4))),
-        # The downed landing after a tumble: the landing ring at the feet, a little bigger (no magnitude: intensity 1 -> 1.2)
-        _cue("Knockdown", "NS_GSTN_LandRing", scale=((0, 1), (1.2, 1.2)), offset=feet),
+        # The downed landing after a tumble: the landing ring at the feet, a little bigger (no magnitude: intensity 1 -> 1.2). It waits for
+        # the drawn pelvis to reach the floor (review r2: the ring came 8-10 frames before the body touched down)
+        _cue("Knockdown", "NS_GSTN_LandRing", scale=((0, 1), (1.2, 1.2)), offset=feet, grounded="pelvis"),
         _cue("Tumble.Start", "NS_GSTN_TumbleTrail", socket="pelvis", scale_size=False,
              stop_on=("Tumble.End", "Knockdown", "GetUp", "Splat", "Land"), max_duration=3.0),
     ]

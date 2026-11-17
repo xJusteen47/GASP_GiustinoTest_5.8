@@ -120,4 +120,26 @@ bool FGSTN_BodyCapsuleGroundedRestoreTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_BodyCapsuleSmoothingTest, "GSTNCombat.Core.BodyCapsule.SmoothingCorrection", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_BodyCapsuleSmoothingTest::RunTest(const FString& Parameters)
+{
+	// dropkick-capsule-3 f137: grounded restore, actor 37.2 -> 88.2 (shift +51, no other move); the smoothing drew the actor at 73.5
+	// (mesh 14.7 cm too low): the correction gives the 14.7 back, so the mesh root is where the simulation put it
+	const FVector Start(0.0, 0.0, 37.2);
+	const FVector End(0.0, 0.0, 88.2);
+	const FVector Shift(0.0, 0.0, 51.0);
+	TestEqual(TEXT("restore: the missing part of the shift"), FGSTN_BodyCapsule::SmoothingCorrection(FVector(0.0, 0.0, 73.5), Start, End, Shift).Z, 14.7, 0.01);
+	TestEqual(TEXT("presented at the frame's start: the whole shift"), FGSTN_BodyCapsule::SmoothingCorrection(Start, Start, End, Shift).Z, 51.0, 0.01);
+	TestTrue(TEXT("presented at the frame's end: nothing"), FGSTN_BodyCapsule::SmoothingCorrection(End, Start, End, Shift).IsNearlyZero(0.01));
+	TestTrue(TEXT("no shift this frame: nothing"), FGSTN_BodyCapsule::SmoothingCorrection(FVector(0.0, 0.0, 50.0), Start, End, FVector::ZeroVector).IsNearlyZero());
+
+	// A falling frame with a shift: 10 cm of fall plus a 20 cm body-anchor shift up; half way through, half the shift is missing
+	const FVector FallStart(0.0, 0.0, 200.0);
+	const FVector FallEnd(0.0, 0.0, 210.0);
+	const FVector Presented = FallStart + (FallEnd - FallStart) * 0.5;
+	TestEqual(TEXT("mixed move: (1 - alpha) of the shift"), FGSTN_BodyCapsule::SmoothingCorrection(Presented, FallStart, FallEnd, FVector(0.0, 0.0, 20.0)).Z, 10.0, 0.01);
+	TestTrue(TEXT("beyond the ends: clamped"), FGSTN_BodyCapsule::SmoothingCorrection(FallEnd + FVector(0.0, 0.0, 5.0), FallStart, FallEnd, FVector(0.0, 0.0, 20.0)).IsNearlyZero());
+	return true;
+}
+
 #endif

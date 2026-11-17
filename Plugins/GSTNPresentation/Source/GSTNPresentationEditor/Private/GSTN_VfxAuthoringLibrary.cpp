@@ -4,6 +4,11 @@
 
 #include "EdGraphSchema_Niagara.h"
 #include "NiagaraCommon.h"
+#include "NiagaraComponent.h"
+#include "NiagaraDataSetAccessor.h"
+#include "NiagaraEmitterInstance.h"
+#include "NiagaraSystemInstance.h"
+#include "NiagaraSystemInstanceController.h"
 #include "NiagaraEditorUtilities.h"
 #include "NiagaraEmitter.h"
 #include "NiagaraEmitterHandle.h"
@@ -124,6 +129,8 @@ namespace GSTNVfxAuthoring
 		ENiagaraScriptUsage Usage = ENiagaraScriptUsage::ParticleUpdateScript;
 	};
 
+	static void OrderedModules(UNiagaraNodeOutput* Output, TArray<UNiagaraNodeFunctionCall*>& Out);
+
 	static FString FindModule(UNiagaraSystem* System, const FString& EmitterName, const FString& Stack, const FString& ModuleName, FModuleRef& Out)
 	{
 		Out.Handle = FindHandle(System, EmitterName);
@@ -141,9 +148,26 @@ namespace GSTNVfxAuthoring
 		Out.Graph->GetNodesOfClass(Calls);
 		UNiagaraNodeFunctionCall* Partial = nullptr;
 		ENiagaraScriptUsage PartialUsage = ENiagaraScriptUsage::ParticleUpdateScript;
+		// Stack membership from the backward walk of every output: the forward walk (StackOutputOf) loses a template's force modules
+		// (review r2/r3: 'no module Drag', so the template's Drag kept its default and no particle ever slowed down)
+		TMap<UNiagaraNodeFunctionCall*, UNiagaraNodeOutput*> OutputOf;
+		{
+			TArray<UNiagaraNodeOutput*> Outputs;
+			Out.Graph->GetNodesOfClass(Outputs);
+			for (UNiagaraNodeOutput* Output : Outputs)
+			{
+				TArray<UNiagaraNodeFunctionCall*> Ordered;
+				OrderedModules(Output, Ordered);
+				for (UNiagaraNodeFunctionCall* Call : Ordered)
+				{
+					OutputOf.FindOrAdd(Call, Output);
+				}
+			}
+		}
 		for (UNiagaraNodeFunctionCall* Call : Calls)
 		{
-			UNiagaraNodeOutput* Output = Call ? StackOutputOf(Call) : nullptr;
+			UNiagaraNodeOutput* const* Found = OutputOf.Find(Call);
+			UNiagaraNodeOutput* Output = Found ? *Found : (Call ? StackOutputOf(Call) : nullptr);
 			if (!Output || (!Stack.IsEmpty() && StackName(Output->GetUsage()) != Stack))
 			{
 				continue;
@@ -283,6 +307,35 @@ namespace GSTNVfxAuthoring
 		return Out + TEXT("}");
 	}
 
+	/** The stack's modules in execution order: walks the parameter map chain back from the output node (the engine's ordered walk is not
+	 *  exported) */
+	static void OrderedModules(UNiagaraNodeOutput* Output, TArray<UNiagaraNodeFunctionCall*>& Out)
+	{
+		UNiagaraNode* Current = Output;
+		while (Current)
+		{
+			UEdGraphPin* MapIn = nullptr;
+			for (UEdGraphPin* Pin : Current->Pins)
+			{
+				if (Pin && Pin->Direction == EGPD_Input && UEdGraphSchema_Niagara::PinToTypeDefinition(Pin) == FNiagaraTypeDefinition::GetParameterMapDef())
+				{
+					MapIn = Pin;
+					break;
+				}
+			}
+			if (!MapIn || MapIn->LinkedTo.IsEmpty())
+			{
+				return;
+			}
+			UNiagaraNode* Previous = Cast<UNiagaraNode>(MapIn->LinkedTo[0]->GetOwningNode());
+			if (UNiagaraNodeFunctionCall* Call = Cast<UNiagaraNodeFunctionCall>(Previous))
+			{
+				Out.Insert(Call, 0);
+			}
+			Current = Previous;
+		}
+	}
+
 	static UNiagaraNodeOutput* OutputFor(UNiagaraGraph* Graph, const FString& Stack)
 	{
 		TArray<UNiagaraNodeOutput*> Outputs;
@@ -319,6 +372,11 @@ bool UGSTN_VfxAuthoringLibrary::AddUserVector2(UNiagaraSystem* System, FName Nam
 {
 	// Niagara's vec2 is float, the Blueprint-facing FVector2D is double
 	return GSTNVfxAuthoring::AddUser<FVector2f>(System, FNiagaraTypeDefinition::GetVec2Def(), Name, FVector2f(Default));
+}
+
+bool UGSTN_VfxAuthoringLibrary::AddUserInt(UNiagaraSystem* System, FName Name, int32 Default)
+{
+	return GSTNVfxAuthoring::AddUser<int32>(System, FNiagaraTypeDefinition::GetIntDef(), Name, Default);
 }
 
 FString UGSTN_VfxAuthoringLibrary::AddEmitter(UNiagaraSystem* System, const FString& EmitterAssetPath, const FString& NewName)
@@ -485,6 +543,51 @@ FString UGSTN_VfxAuthoringLibrary::AddModule(UNiagaraSystem* System, const FStri
 	UNiagaraNodeFunctionCall* Added = FNiagaraStackGraphUtilities::AddScriptModuleToStack(ModuleScript, *Output);
 	System->MarkPackageDirty();
 	return Added ? FString() : TEXT("AddScriptModuleToStack failed");
+}
+
+FString UGSTN_VfxAuthoringLibrary::AddModuleBefore(UNiagaraSystem* System, const FString& EmitterName, const FString& Stack,
+	const FString& ModuleScriptPath, const FString& BeforeModule)
+{
+	using namespace GSTNVfxAuthoring;
+	FNiagaraEmitterHandle* Handle = FindHandle(System, EmitterName);
+	UNiagaraGraph* Graph = EmitterGraph(Handle ? Handle->GetEmitterData() : nullptr);
+	UNiagaraScript* ModuleScript = LoadObject<UNiagaraScript>(nullptr, *ModuleScriptPath);
+	UNiagaraNodeOutput* Output = Graph ? OutputFor(Graph, Stack) : nullptr;
+	if (!ModuleScript || !Output)
+	{
+		return FString::Printf(TEXT("cannot add %s to %s %s"), *ModuleScriptPath, *EmitterName, *Stack);
+	}
+	TArray<UNiagaraNodeFunctionCall*> Modules;
+	OrderedModules(Output, Modules);
+	const int32 Index = Modules.IndexOfByPredicate([&BeforeModule](const UNiagaraNodeFunctionCall* Call) { return Call->GetFunctionName() == BeforeModule; });
+	if (Index == INDEX_NONE)
+	{
+		return FString::Printf(TEXT("no module %s in %s (%d modules)"), *BeforeModule, *Stack, Modules.Num());
+	}
+	Graph->Modify();
+	UNiagaraNodeFunctionCall* Added = FNiagaraStackGraphUtilities::AddScriptModuleToStack(ModuleScript, *Output, Index);
+	System->MarkPackageDirty();
+	return Added ? FString() : TEXT("AddScriptModuleToStack failed");
+}
+
+FString UGSTN_VfxAuthoringLibrary::ListModules(UNiagaraSystem* System, const FString& EmitterName, const FString& Stack)
+{
+	using namespace GSTNVfxAuthoring;
+	FNiagaraEmitterHandle* Handle = FindHandle(System, EmitterName);
+	UNiagaraGraph* Graph = EmitterGraph(Handle ? Handle->GetEmitterData() : nullptr);
+	UNiagaraNodeOutput* Output = Graph ? OutputFor(Graph, Stack) : nullptr;
+	if (!Output)
+	{
+		return FString::Printf(TEXT("no stack %s on %s"), *Stack, *EmitterName);
+	}
+	TArray<UNiagaraNodeFunctionCall*> Modules;
+	OrderedModules(Output, Modules);
+	TArray<FString> Names;
+	for (const UNiagaraNodeFunctionCall* Call : Modules)
+	{
+		Names.Add(Call->GetFunctionName() + (Call->IsNodeEnabled() ? TEXT("") : TEXT("(off)")));
+	}
+	return FString::Join(Names, TEXT(" > "));
 }
 
 FString UGSTN_VfxAuthoringLibrary::SetModuleEnabled(UNiagaraSystem* System, const FString& EmitterName, const FString& Stack, const FString& ModuleName, bool bEnabled)
@@ -681,4 +784,39 @@ void UGSTN_VfxAuthoringLibrary::CompileAndWait(UNiagaraSystem* System)
 	}
 	System->RequestCompile(false);
 	System->WaitForCompilationComplete(false, false);
+}
+
+FString UGSTN_VfxAuthoringLibrary::DescribeParticles(UNiagaraComponent* Component, const FString& EmitterName, int32 Max)
+{
+	FNiagaraSystemInstanceControllerPtr Controller = Component ? Component->GetSystemInstanceController() : nullptr;
+	FNiagaraSystemInstance* Instance = Controller.IsValid() ? Controller->GetSystemInstance_Unsafe() : nullptr;
+	if (!Instance)
+	{
+		return TEXT("no instance");
+	}
+	for (const FNiagaraEmitterInstanceRef& Emitter : Instance->GetEmitters())
+	{
+		if (Emitter->GetEmitterHandle().GetName() != FName(*EmitterName))
+		{
+			continue;
+		}
+		const FNiagaraDataSet& Data = Emitter->GetParticleData();
+		const FNiagaraDataBuffer* Buffer = Data.GetCurrentData();
+		if (!Buffer)
+		{
+			return TEXT("n=0 (no data)");
+		}
+		const auto Position = FNiagaraDataSetAccessor<FNiagaraPosition>::CreateReader(Data, TEXT("Position"));
+		const auto Velocity = FNiagaraDataSetAccessor<FVector3f>::CreateReader(Data, TEXT("Velocity"));
+		const int32 Count = Buffer->GetNumInstances();
+		FString Out = FString::Printf(TEXT("n=%d"), Count);
+		for (int32 Index = 0; Index < FMath::Min(Count, Max); ++Index)
+		{
+			const FVector3f P = Position.GetSafe(Index, FNiagaraPosition(FVector3f::ZeroVector));
+			const FVector3f V = Velocity.GetSafe(Index, FVector3f::ZeroVector);
+			Out += FString::Printf(TEXT(" %.0f,%.0f,%.0f/%.0f,%.0f,%.0f"), P.X, P.Y, P.Z, V.X, V.Y, V.Z);
+		}
+		return Out;
+	}
+	return TEXT("no emitter");
 }

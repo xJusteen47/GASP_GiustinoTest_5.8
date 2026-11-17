@@ -61,3 +61,18 @@ FGSTN_GroundClockDecision FGSTN_LandingRules::Resolve(const FGSTN_CombatTimeline
 	}
 	return Decision;
 }
+
+double FGSTN_LandingRules::FallThisFrame(double UpSpeed, double GravityAccel, double StepSeconds)
+{
+	if (UpSpeed >= 0.0 || StepSeconds <= 0.0)
+	{
+		return 0.0;
+	}
+	return -UpSpeed * StepSeconds + 0.5 * FMath::Max(GravityAccel, 0.0) * StepSeconds * StepSeconds;
+}
+
+bool FGSTN_LandingRules::ReachesFloorThisFrame(double UpSpeed, double GravityAccel, double StepSeconds, double FloorDistance, double MarginCm)
+{
+	const double Fall = FallThisFrame(UpSpeed, GravityAccel, StepSeconds);
+	return Fall > 0.0 && FloorDistance >= -MarginCm && FloorDistance <= Fall + FMath::Max(MarginCm, 0.0);
+}

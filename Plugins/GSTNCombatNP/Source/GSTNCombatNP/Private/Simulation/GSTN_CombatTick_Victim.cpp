@@ -347,6 +347,8 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 			Core.Hit.WallBounceFirstFrame = INDEX_NONE;
 			Core.Hit.BumpEndFrame = INDEX_NONE;
 			Core.Hit.BumpKind = 0;
+			Core.Hit.SurfaceImpactFrame = INDEX_NONE;
+			Core.Hit.SurfaceImpactKind = 0;
 			Core.Hit.SetPendingLaunch(Hit.Reaction == EGSTN_HitReaction::StaggerInPlace ? FVector::ZeroVector : LaunchVelocity);
 			Core.Hit.PendingBalloonFrames = static_cast<uint8>(FMath::Clamp(Hit.BalloonFrames, 0, FGSTN_BalloonMath::MaxFlightFrames));
 			// A new staggering hit starts its own held-direction drift budget (M6 F8)
@@ -584,6 +586,13 @@ void FGSTN_CombatVictim::StepDefaultSurfaceBounce(const FGSTN_ImpactStepInput& I
 		return;
 	}
 	const int32 Frame = In.Frame;
+	// The face just bounced off or bumped is still being touched (the victim grinds along it, or the reflected speed is small): one contact,
+	// one event (polish M2 r3: WallBounce at sim 2022 and 2025, wall bump 2514/2516/2520)
+	if (Core.Hit.SurfaceImpactKind != 0 && Core.Hit.SurfaceImpactFrame != INDEX_NONE && Frame >= Core.Hit.SurfaceImpactFrame
+		&& Frame - Core.Hit.SurfaceImpactFrame < FMath::Max(Rules.RecontactFrames, 0))
+	{
+		return;
+	}
 	const int32 HitstunLeft = FMath::Max(Core.Hit.HitstunEndFrame - Frame, 0);
 	const FGSTN_GroundImpactRules& Hard = Rules.HardRules(In.Rules->GroundImpact);
 	const FGameplayTag Surface = Row ? Row->Surface : FGameplayTag();
@@ -645,6 +654,8 @@ void FGSTN_CombatVictim::StepDefaultSurfaceBounce(const FGSTN_ImpactStepInput& I
 		Out.bBump = true;
 		Out.Resolved.Restitution = 0.f;
 	}
+	Core.Hit.SurfaceImpactFrame = Frame;
+	Core.Hit.SurfaceImpactKind = bCeiling ? FGSTN_HitSyncState::BumpKindCeiling : FGSTN_HitSyncState::BumpKindWall;
 	Out.Outcome = EGSTN_ImpactOutcome::Bounce;
 	Out.Resolved.Outcome = EGSTN_ImpactOutcome::Bounce;
 	Out.Resolved.JudgedSpeed = static_cast<float>(JudgedSpeed);

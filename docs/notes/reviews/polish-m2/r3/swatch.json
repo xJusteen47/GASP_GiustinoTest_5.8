@@ -1,0 +1,159 @@
+{
+ "grey": [
+  {
+   "gain": 0.25,
+   "screen": "#3E3E3F"
+  },
+  {
+   "gain": 0.5,
+   "screen": "#838383"
+  },
+  {
+   "gain": 1.0,
+   "screen": "#BAB9BA"
+  },
+  {
+   "gain": 2.0,
+   "screen": "#DCDCDC"
+  },
+  {
+   "gain": 4.0,
+   "screen": "#F0F0F0"
+  },
+  {
+   "gain": 8.0,
+   "screen": "#FBFBFB"
+  }
+ ],
+ "dust": [
+  {
+   "gain": 0.7,
+   "screen": "#9D988F"
+  },
+  {
+   "gain": 1.0,
+   "screen": "#BAB6AE"
+  },
+  {
+   "gain": 1.5,
+   "screen": "#D1CEC8"
+  },
+  {
+   "gain": 2.2,
+   "screen": "#E1DEDA"
+  },
+  {
+   "gain": 3.0,
+   "screen": "#EAE8E4"
+  },
+  {
+   "gain": 4.5,
+   "screen": "#F2F1EF"
+  }
+ ],
+ "dust_shade": [
+  {
+   "gain": 0.7,
+   "screen": "#81715B"
+  },
+  {
+   "gain": 1.0,
+   "screen": "#A29581"
+  },
+  {
+   "gain": 1.5,
+   "screen": "#BFB4A4"
+  },
+  {
+   "gain": 2.2,
+   "screen": "#D4CBBE"
+  },
+  {
+   "gain": 3.0,
+   "screen": "#DFD8CE"
+  },
+  {
+   "gain": 4.5,
+   "screen": "#EBE5DD"
+  }
+ ],
+ "hit_end": [
+  {
+   "gain": 0.7,
+   "screen": "#AE2F00"
+  },
+  {
+   "gain": 1.0,
+   "screen": "#D75300"
+  },
+  {
+   "gain": 1.5,
+   "screen": "#F57E01"
+  },
+  {
+   "gain": 2.2,
+   "screen": "#FFA102"
+  },
+  {
+   "gain": 3.0,
+   "screen": "#FFB909"
+  },
+  {
+   "gain": 4.5,
+   "screen": "#FFD11C"
+  }
+ ],
+ "hit_mid": [
+  {
+   "gain": 0.7,
+   "screen": "#A87E02"
+  },
+  {
+   "gain": 1.0,
+   "screen": "#C8A407"
+  },
+  {
+   "gain": 1.5,
+   "screen": "#E1C517"
+  },
+  {
+   "gain": 2.2,
+   "screen": "#EFDC33"
+  },
+  {
+   "gain": 3.0,
+   "screen": "#F6E74E"
+  },
+  {
+   "gain": 4.5,
+   "screen": "#FDF271"
+  }
+ ],
+ "accent": [
+  {
+   "gain": 0.7,
+   "screen": "#9B0100"
+  },
+  {
+   "gain": 1.0,
+   "screen": "#D40401"
+  },
+  {
+   "gain": 1.5,
+   "screen": "#FF1404"
+  },
+  {
+   "gain": 2.2,
+   "screen": "#FF290B"
+  },
+  {
+   "gain": 3.0,
+   "screen": "#FF3C14"
+  },
+  {
+   "gain": 4.5,
+   "screen": "#FF5924"
+  }
+ ],
+ "_flipped": true
+}

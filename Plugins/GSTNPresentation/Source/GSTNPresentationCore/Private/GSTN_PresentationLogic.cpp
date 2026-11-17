@@ -212,6 +212,12 @@ void FGSTN_PresentationDeriver::Step(const FGSTN_PresentationSnapshot& C, const 
 	const FVector HNow = Horizontal(C.Velocity, Up);
 	const int32 F = C.Frame;
 	const bool bNewHit = C.LastHitFrame != INDEX_NONE && C.LastHitFrame != P.LastHitFrame;
+	if (bNewHit)
+	{
+		// A new launch: its bounces are its own
+		LastGroundBounceFrame = INDEX_NONE;
+		LastSurfaceBounceFrame = INDEX_NONE;
+	}
 
 	// Air: jumps and landings (a reacting victim's contacts are bounces or a knockdown, below; a downed one makes none)
 	const bool bQuiet = C.StateTags.HasAny(Rules.QuietAirTags) || P.StateTags.HasAny(Rules.QuietAirTags);
@@ -240,13 +246,18 @@ void FGSTN_PresentationDeriver::Step(const FGSTN_PresentationSnapshot& C, const 
 	if (bCountedGround)
 	{
 		Emit(Out, GroundBounce, F, FMath::Max(-UpBefore, UpNow), C.Location, Up);
+		LastGroundBounceFrame = F;
 	}
 	if (bCountedWall)
 	{
-		// Walls and ceilings share the count: a ceiling turns the rise into a fall, a wall turns the speed along the floor
-		if (UpBefore > 0.f && UpNow < 0.f && FMath::Abs(UpBefore - UpNow) >= (HNow - HBefore).Size())
+		// Walls and ceilings share the count; the simulation says which face it was (SurfaceImpactFrame), else a ceiling turns the rise into a
+		// fall and a wall turns the speed along the floor
+		const bool bSaysFace = C.SurfaceImpactFrame != INDEX_NONE;
+		const bool bCeiling = bSaysFace ? C.bSurfaceImpactCeiling
+			: (UpBefore > 0.f && UpNow < 0.f && FMath::Abs(UpBefore - UpNow) >= (HNow - HBefore).Size());
+		if (bCeiling)
 		{
-			Emit(Out, WallBounce, F, FMath::Max(UpBefore, -UpNow), C.Location, -Up);
+			Emit(Out, WallBounce_Ceiling, F, FMath::Max(UpBefore, -UpNow), C.Location, -Up);
 		}
 		else
 		{
@@ -255,20 +266,35 @@ void FGSTN_PresentationDeriver::Step(const FGSTN_PresentationSnapshot& C, const 
 			const float Into = FMath::Max(-FVector::DotProduct(HBefore, Normal), FVector::DotProduct(HNow, Normal));
 			Emit(Out, WallBounce, F, Into, C.Location, Normal);
 		}
+		LastSurfaceBounceFrame = F;
 	}
 	// Then the velocity reflected in one frame (gravity and drag change it far less than BounceMinSpeed per frame), for the bounces no count
-	// covers (a source without counts, a surface row's or a hit's forced wall bounce). A new hit also turns the velocity around: never a bounce
+	// covers (a source without counts, a surface row's or a hit's forced wall bounce). A new hit also turns the velocity around: never a bounce.
+	// Nor does a wall or ceiling contact the simulation decided (a bump pushes off the face) or a second turn soon after a bounce of the same kind
+	const auto Recent = [F, &Rules](int32 Then)
+	{
+		return Then != INDEX_NONE && F >= Then && F - Then <= Rules.BounceRefireFrames;
+	};
+	const bool bSurfaceDecided = Recent(C.SurfaceImpactFrame);
 	if (P.bReacting && C.bReacting && !C.bSplat && !bNewHit && !bCountedGround && !bCountedWall)
 	{
 		if (UpBefore <= -Rules.BounceMinSpeed && UpNow > 0.f)
 		{
-			Emit(Out, GroundBounce, F, -UpBefore, C.Location, Up);
+			if (!Recent(LastGroundBounceFrame))
+			{
+				Emit(Out, GroundBounce, F, -UpBefore, C.Location, Up);
+				LastGroundBounceFrame = F;
+			}
 		}
 		else if (UpBefore >= Rules.BounceMinSpeed && UpNow < 0.f)
 		{
-			Emit(Out, WallBounce, F, UpBefore, C.Location, -Up);  // ceiling
+			if (!bSurfaceDecided && !Recent(LastSurfaceBounceFrame))
+			{
+				Emit(Out, WallBounce_Ceiling, F, UpBefore, C.Location, -Up);
+				LastSurfaceBounceFrame = F;
+			}
 		}
-		else
+		else if (!bSurfaceDecided && !Recent(LastSurfaceBounceFrame))
 		{
 			// A reflection changes the velocity along the surface normal only: the change's direction is the normal (pointing away from the wall)
 			const FVector Normal = (HNow - HBefore).GetSafeNormal();
@@ -276,6 +302,7 @@ void FGSTN_PresentationDeriver::Step(const FGSTN_PresentationSnapshot& C, const 
 			if (!Normal.IsZero() && Into >= Rules.BounceMinSpeed && FVector::DotProduct(HNow, Normal) > 0.f)
 			{
 				Emit(Out, WallBounce, F, Into, C.Location, Normal);
+				LastSurfaceBounceFrame = F;
 			}
 		}
 	}

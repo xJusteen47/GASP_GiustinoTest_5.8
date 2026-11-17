@@ -1480,9 +1480,13 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	HookEnvironment.Buttons = &ButtonMap;
 	HookEnvironment.Fragments = &OutSync.Fragments;
 	// Mover's ground as of the end of the previous frame (the tracker is rolled back with Mover): the Hold Until Landed rule of the clock reads it
+	// A fall that reaches the floor during this frame is a landing on this frame (UGSTN_CombatRules::bAnticipateTouchdown): the landing lag and
+	// the clip start on the frame of contact, not one later
 	if (const UGSTN_MoverSimStateTracker* GroundTracker = GetJumpTracker())
 	{
-		HookEnvironment.Ground = GroundTracker->HasGameplayTag(Mover_IsOnGround, true) ? EGSTN_TrackHookGround::OnGround : EGSTN_TrackHookGround::Airborne;
+		const bool bOnGround = GroundTracker->HasGameplayTag(Mover_IsOnGround, true)
+			|| ProbeTouchdownThisFrame(Frame, static_cast<float>(TimeStep.StepMS) / 1000.f);
+		HookEnvironment.Ground = bOnGround ? EGSTN_TrackHookGround::OnGround : EGSTN_TrackHookGround::Airborne;
 	}
 	// The Ledge Check rule's floor probe (FGSTN_LedgeRules): called by the clock only inside a ledge window, on the ground
 	HookEnvironment.HasFloorAhead = [this](float AheadCm, float DepthCm) { return ProbeFloorAhead(AheadCm, DepthCm); };
@@ -1917,7 +1921,8 @@ EGSTN_TimelineStartRefusal UGSTN_CombatSimComponent::StartTimelineFromAbility(in
 	Environment.Buttons = &ButtonMap;
 	if (const UGSTN_MoverSimStateTracker* GroundTracker = GetJumpTracker())
 	{
-		Environment.Ground = GroundTracker->HasGameplayTag(Mover_IsOnGround, true) ? EGSTN_TrackHookGround::OnGround : EGSTN_TrackHookGround::Airborne;
+		Environment.Ground = GroundTracker->HasGameplayTag(Mover_IsOnGround, true) || ReadFrameTouchdown() ? EGSTN_TrackHookGround::OnGround
+			: EGSTN_TrackHookGround::Airborne;
 	}
 	const int32 DefaultOverride = Set.TimelineDefaultOverride.IsValidIndex(Entry) ? Set.TimelineDefaultOverride[Entry] : 0;
 	const FGSTN_CombatSyncState* Written = NetworkPredictionProxy.WriteSyncState<FGSTN_CombatSyncState>([&](FGSTN_CombatSyncState& Sync)
@@ -2001,7 +2006,7 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 	// Per-move movement capsule: size and mesh offset of the presented Mover state, on every machine (simulated proxies run no modifier)
 	if (UMoverComponent* Mover = GetOwner() ? GetOwner()->FindComponentByClass<UMoverComponent>() : nullptr)
 	{
-		FGSTN_BodyCapsuleModifier::ApplyPresentation(*Mover);
+		FGSTN_BodyCapsuleModifier::ApplyPresentation(*Mover, &BodyCapsuleCorrectedAt);
 	}
 
 #if ENABLE_DRAW_DEBUG

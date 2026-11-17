@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
+#include "GSTN_CoveredLanding.h"
 #include "GSTN_CharacterAnimInstance.generated.h"
 
 class UGSTN_StanceDefinition;
@@ -111,6 +112,19 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "Animation|Stance")
 	int32 StanceDebugState = 0;
 
+	// Covered landing (FGSTN_CoveredLandingLogic, read by FGSTN_AnimNode_CoveredLanding, written here on the game thread): a landing made while
+	// a montage drove the pose keeps the montage's last pose over the base layer's own landing reaction (dair V10 light landing r3, 2026-11-17)
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Animation|Covered Landing")
+	FGSTN_CoveredLandingSettings CoveredLanding;
+
+	/** The node copies the pose of this frame as the one to hold */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Animation|Covered Landing")
+	bool bCoveredLandingCapture = false;
+
+	/** Weight of the held pose over the live one (0 = live) */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Animation|Covered Landing")
+	float CoveredLandingAlpha = 0.f;
+
 protected:
 	virtual void NativeInitializeAnimation() override;
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
@@ -118,6 +132,9 @@ protected:
 private:
 	void UpdateFootLockRequest(float DeltaSeconds);
 	void UpdateStance(float DeltaSeconds);
+	void UpdateCoveredLanding(float DeltaSeconds);
+	FGSTN_CoveredLandingLogic CoveredLandingLogic;
+	FVector CapsuleVelocity = FVector::ZeroVector;  // this frame, from UpdateFootLockRequest
 
 	bool bStanceWaitingTrigger = false;
 	bool bStanceWasMontage = false;

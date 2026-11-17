@@ -80,4 +80,12 @@ struct GSTNCOMBATCORE_API FGSTN_LandingRules
 	 * CancelAirborne. On the ground inside a Landing window: Land, for an Air or Any move always, for a Ground move only after a take-off
 	 */
 	static FGSTN_GroundClockDecision Resolve(const FGSTN_CombatTimelineData& Data, int32 Frame, bool bOnGround, bool bFirstTick, bool bAirborneOk);
+
+	/**
+	 * Touchdown anticipation (UGSTN_CombatRules::bAnticipateTouchdown): how far a fighter falls this frame (UpSpeed cm/s along up, negative when
+	 * falling; GravityAccel cm/s^2, positive; StepSeconds the fixed step), and whether that reaches a floor FloorDistance below the capsule
+	 * (MarginCm more). Rising or still: never. Pure
+	 */
+	static double FallThisFrame(double UpSpeed, double GravityAccel, double StepSeconds);
+	static bool ReachesFloorThisFrame(double UpSpeed, double GravityAccel, double StepSeconds, double FloorDistance, double MarginCm);
 };
