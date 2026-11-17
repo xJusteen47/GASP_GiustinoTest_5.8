@@ -3,6 +3,7 @@
     python vfx_sheet.py pair <off_dir> <on_dir> <sequence> <view> <out.png> --from=F --to=F [--step=1] [--cols=6] [--cell=200]
         (each frame: VFX off above, VFX on below, same frame number: the rule 10 off/on comparison)
     python vfx_sheet.py video <off_dir> <on_dir> <sequence> <view> <out.mp4> [--fps=30]   (off | on side by side, every frame)
+    python vfx_sheet.py gif <off_dir> <on_dir> <sequence> <view> <out.gif> --from=F --to=F [--cell=360] [--ms=33]   (no ffmpeg)
 Prints one line.
 """
 import os
@@ -86,6 +87,23 @@ def video(off, on, seq, view, out, o):
     return f'{out}: {len(names)} frames'
 
 
+def gif(off, on, seq, view, out, o):
+    """off | on side by side, every frame from..to, at half speed (33 ms a frame): the stand-in for the mp4 where ffmpeg is missing"""
+    frames = range(int(o.get('from', 0)), int(o['to']) + 1)
+    side = int(o.get('cell', 360))
+    images = []
+    for f in frames:
+        a, b = _frame(off, seq, view, f), _frame(on, seq, view, f)
+        if not (a and b):
+            continue
+        img = Image.new('RGB', (side * 2, side))
+        img.paste(_label(a.resize((side, side)), f'v{f} OFF'), (0, 0))
+        img.paste(_label(b.resize((side, side)), f'v{f} ON'), (side, 0))
+        images.append(img.quantize(colors=128))
+    images[0].save(out, save_all=True, append_images=images[1:], duration=int(o.get('ms', 33)), loop=0, optimize=True)
+    return f'{out}: {len(images)} frames'
+
+
 def main():
     a = sys.argv[1:]
     o = _opts(a)
@@ -94,6 +112,8 @@ def main():
         print(sheet(a[1], a[2], a[3], a[4], o))
     elif a[0] == 'pair':
         print(pair(a[1], a[2], a[3], a[4], a[5], o))
+    elif a[0] == 'gif':
+        print(gif(a[1], a[2], a[3], a[4], a[5], o))
     elif a[0] == 'video':
         print(video(a[1], a[2], a[3], a[4], a[5], o))
 

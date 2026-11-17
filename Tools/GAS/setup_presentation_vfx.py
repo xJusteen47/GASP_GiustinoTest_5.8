@@ -93,8 +93,12 @@ class Emitter:
     def sphere(self, radius, scale=(1, 1, 1), offset=(0, 0, 0)):
         s = "ParticleSpawn"
         self.set(s, "ShapeLocation", "Shape Primitive", "Sphere").set(s, "ShapeLocation", "Sphere Radius", radius)
-        self.set(s, "ShapeLocation", "Non Uniform Scale", scale).set(s, "ShapeLocation", "Offset", offset)
-        return self
+        return self.shape_offset(offset).set(s, "ShapeLocation", "Non Uniform Scale", scale)
+
+    def shape_offset(self, offset):
+        """The template's ShapeLocation ignores Offset (Offset Mode None): turn it on, then set it"""
+        self.set("ParticleSpawn", "ShapeLocation", "Offset Mode", "Default")
+        return self.set("ParticleSpawn", "ShapeLocation", "Offset", offset)
 
     def cone(self, axis, angle, speed):
         s = "ParticleSpawn"
@@ -151,7 +155,7 @@ def _burst_puffs(system, name, count, life, size, speed, drag, cone=None, sphere
     e.burst(count).particle(life, size)
     if ring:
         e.set("ParticleSpawn", "ShapeLocation", "Shape Primitive", "Ring / Disc").set("ParticleSpawn", "ShapeLocation", "Ring Radius", ring[0])
-        e.set("ParticleSpawn", "ShapeLocation", "Offset", (0, 0, ring[1]))
+        e.shape_offset((0, 0, ring[1]))
     else:
         e.sphere(*sphere)
     if cone:
@@ -214,21 +218,21 @@ def land_ring():
 
 
 def speed_lines():
-    """Sprint 2 (sustained, attached, world space): 3-5 white tapered streaks at the sides, left behind as the runner moves on"""
+    """Sprint 2 (sustained, attached to the root bone, LOCAL space): 3-5 white tapered streaks that slide backwards along the body's sides
+    at hip to chest height. The mannequin faces +Y in mesh space: the lines start a little behind the centre (never in front) and move -Y"""
     s = _system("NS_GSTN_SpeedLines")
     if s:
-        e = Emitter(s, "Fountain", "Lines").settings(False)
+        e = Emitter(s, "Fountain", "Lines").settings(True)
         e.off("ParticleUpdate", "ScaleColor")
-        e.set("EmitterUpdate", "SpawnRate", "SpawnRate", 12.0)
-        # The streak fills ~22 % of its cell's width: a 40 cm wide sprite draws a ~9 cm line
-        e.particle((0.22, 0.30), None, non_uniform=(40, 110))
-        e.set("ParticleSpawn", "ShapeLocation", "Shape Primitive", "Ring / Disc")
-        e.set("ParticleSpawn", "ShapeLocation", "Ring Radius", 60.0).set("ParticleSpawn", "ShapeLocation", "Offset", (0, 0, 90))
-        # Streaks point along the run: a small share of the owner's velocity gives the alignment, drag holds them back
-        e.set("ParticleSpawn", "AddVelocity", "Velocity Mode", "Linear")
-        e.link("ParticleSpawn", "AddVelocity", "Velocity", "Engine.Owner.Velocity")
-        e.set("ParticleSpawn", "AddVelocity", "Velocity Speed Scale", 0.25)
-        e.drag(3.0).material("SpeedStreak", velocity_aligned=True)
+        e.set("EmitterUpdate", "SpawnRate", "SpawnRate", 14.0)
+        # The streak fills ~22 % of its cell's width: a 34 cm wide sprite draws a ~7 cm line
+        e.particle((0.22, 0.28), None, non_uniform=(34, 130))
+        e.set("ParticleSpawn", "ShapeLocation", "Shape Primitive", "Cylinder")
+        e.set("ParticleSpawn", "ShapeLocation", "Cylinder Radius", 62.0).set("ParticleSpawn", "ShapeLocation", "Cylinder Height", 90.0)
+        e.set("ParticleSpawn", "ShapeLocation", "Non Uniform Scale", (1, 0.35, 1))
+        e.shape_offset((0, -25, 55))
+        e.set("ParticleSpawn", "AddVelocity", "Velocity Mode", "Linear").set("ParticleSpawn", "AddVelocity", "Velocity", (0, -450, 0))
+        e.drag(2.0).material("SpeedStreak", velocity_aligned=True)
     return s
 
 
