@@ -90,6 +90,9 @@ DAIR_SEQUENCES = [
      'air': {'trigger_h': float(os.environ.get('PIE_CAPTURE_DAIR_EARLY_H', 30.0))}},
     {'name': 'dair_land_late', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True,
      'air': {'rise_h': float(os.environ.get('PIE_CAPTURE_DAIR_LATE_RISE', 60.0))}},
+    # review r2: try for the late light window from the apex (pressed falling just under the peak, the longest fall the hub's jump gives)
+    {'name': 'dair_land_apex', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True,
+     'air': {'trigger_h': float(os.environ.get('PIE_CAPTURE_DAIR_APEX_H', 240.0))}},
     # DEBUG-HUB (owner 2026-11-16, "does the stomp really take the enemies below, or do pushbox and core stop it?"): the dummy almost under the
     # attacker (PIE_CAPTURE_BELOW_DIST cm ahead, default 20), same jump and press; run with gstn.Combat.Debug.Hitboxes/Body on (PIE_CAPTURE_CVARS)
     {'name': 'dair_below', 'taps': [], 'frames': 130, 'dummy': float(os.environ.get('PIE_CAPTURE_BELOW_DIST', 20.0)), 'shoot': True,

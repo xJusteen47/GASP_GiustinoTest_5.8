@@ -30,14 +30,20 @@ ROUND = os.environ.get('DAIR_V10_ROUND', '')
 LABEL = 'V10' + ROUND
 SRC = '/Game/AnimPipeline/Rig/Overlord/DAir/AS_OverlordDAirV10_Build'
 BASE_TL = f'{DIR}/TL_Overlord_DAirV10' if ROUND else f'{DIR}/TL_Overlord_DAirV9'
-LAND_SRC = {'Heavy': '/Game/AnimPipeline/Rig/Overlord/DAir/AS_OverlordDAirLandHeavy' + ROUND,
-            'Light': '/Game/AnimPipeline/Rig/Overlord/DAir/AS_OverlordDAirLandLight'}
-# R2: the light montage gets its own asset with 1-frame blends: the 4-frame clip (0.05 s) was shorter than 2 f in + 4 f out and never showed (review r1)
-LAND_NAME = {'Heavy': 'Heavy' + ROUND, 'Light': 'Light' + ROUND}
-LAND_BLEND_IN = {'Heavy': 3.0 / 60.0, 'Light': (1.0 if ROUND else 2.0) / 60.0}
-LAND_BLEND_OUT_BY = {'Heavy': 4.0 / 60.0, 'Light': (1.0 if ROUND else 4.0) / 60.0}
-# (start, end exclusive, clip, lag frames): internal 0-based timeline frames
-WINDOWS = [(0, 3, 'Light', 4), (3, 31, 'Heavy', 16), (31, 43, 'Light', 4)]
+_B = '/Game/AnimPipeline/Rig/Overlord/DAir/AS_OverlordDAirLand'
+# Per round, the clips: kind -> (asset name suffix, animpipe build to copy or None = reuse the existing AS_OverlordDAirLand<suffix>, blend in f, out f)
+CLIPS = {
+    '': {'Heavy': ('Heavy', _B + 'Heavy', 3, 4), 'Light': ('Light', _B + 'Light', 2, 4)},
+    # R2: the light montage gets its own asset with 1-frame blends: the 4-frame clip (0.05 s) was shorter than 2 f in + 4 f out and never showed (review r1)
+    'R2': {'Heavy': ('HeavyR2', _B + 'HeavyR2', 3, 4), 'Light': ('LightR2', None, 1, 1)},
+    # R3 (review r2): heavy-tucked for the charge window (ball on the floor start), light r3 (12 frames, covers the locomotion landing), heavy = R2
+    'R3': {'HeavyTuck': ('HeavyTuckR3', _B + 'HeavyTuckR3', 1, 3), 'Heavy': ('HeavyR2', None, 3, 4), 'Light': ('LightR3', _B + 'LightR3', 1, 4)},
+}[ROUND]
+# (start, end exclusive, clip, lag frames): internal 0-based timeline frames (designer frame = internal + 1)
+# R3: the tucked window runs past the charge (anim 0-12) by the 2-frame landing latency: the review's dair_land shows the ball (anim 12) and is
+# decided on internal 13 (designer f14), so the window is internal 3-13 = designer f4-14
+WINDOWS = ([(0, 3, 'Light', 4), (3, 14, 'HeavyTuck', 16), (14, 31, 'Heavy', 16), (31, 43, 'Light', 4)] if ROUND == 'R3'
+           else [(0, 3, 'Light', 4), (3, 31, 'Heavy', 16), (31, 43, 'Light', 4)])
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'DairV10', 'setup_overlord_dair_v10.txt')
 _lines = []
 
@@ -49,15 +55,16 @@ def log(msg):
 
 def _land_clip(kind):
     lib = unreal.EditorAssetLibrary
-    name = LAND_NAME[kind]
-    anim_path, montage_path = f'{DIR}/AS_OverlordDAirLand{name}', f'{DIR}/AM_OverlordDAirLand{name}'
-    if ROUND and kind == 'Light':   # same clip as round 1: the montage is new, the animation is round 1's
-        anim_path = f'{DIR}/AS_OverlordDAirLandLight'
+    name, src, blend_in, blend_out = CLIPS[kind]
+    montage_path = f'{DIR}/AM_OverlordDAirLand{name}'
+    # R2's light montage plays round 1's light animation; every other clip has its own copy of its build
+    anim_path = f'{DIR}/AS_OverlordDAirLandLight' if name == 'LightR2' else f'{DIR}/AS_OverlordDAirLand{name}'
     if not lib.does_asset_exist(anim_path):
-        if not lib.duplicate_asset(LAND_SRC[kind], anim_path):
-            raise RuntimeError(f'could not copy {LAND_SRC[kind]}')
+        if not src or not lib.duplicate_asset(src, anim_path):
+            raise RuntimeError(f'could not copy {src} to {anim_path}')
         log(f'created {anim_path}')
     anim = unreal.load_asset(anim_path)
+    reused = lib.does_asset_exist(montage_path) and ROUND and src is None
     montage = unreal.load_asset(montage_path) if lib.does_asset_exist(montage_path) else None
     if not montage:
         factory = unreal.AnimMontageFactory()
@@ -65,11 +72,16 @@ def _land_clip(kind):
         factory.set_editor_property('target_skeleton', anim.get_editor_property('skeleton'))
         montage = K._tools().create_asset(f'AM_OverlordDAirLand{name}', DIR, unreal.AnimMontage, factory)
         log(f'created {montage_path}')
-    for prop, t in (('blend_in', LAND_BLEND_IN[kind]), ('blend_out', LAND_BLEND_OUT_BY[kind])):
-        blend = montage.get_editor_property(prop)
-        blend.set_editor_property('blend_time', t)
-        montage.set_editor_property(prop, blend)
-    montage.set_editor_property('rate_scale', K.MONTAGE_PLAY_RATE)   # one animation frame per simulation tick, as the move's montage
+    if not reused:   # a clip reused from an earlier round keeps its montage as it is
+        for prop, frames in (('blend_in', blend_in), ('blend_out', blend_out)):
+            blend = montage.get_editor_property(prop)
+            blend.set_editor_property('blend_time', frames / 60.0)
+            montage.set_editor_property(prop, blend)
+        montage.set_editor_property('rate_scale', K.MONTAGE_PLAY_RATE)   # one animation frame per simulation tick, as the move's montage
+        # R3 tucked clip: its rise is its last 6 frames; with the automatic trigger the blend out began at f10 and mixed the rise with the base
+        # layer's landing crouch (Saved/DairV10/variant_r3c/dair_land v100-103): play to the end, then blend out
+        if name == 'HeavyTuckR3':
+            montage.set_editor_property('blend_out_trigger_time', 0.0)
     log(f'{kind}: {anim.get_play_length() * 60:.1f} frames, montage {montage.get_play_length():.3f} s')
     return anim, montage
 
@@ -110,10 +122,11 @@ def run():
             raise RuntimeError('V10 anim/montage not built')
         land = {}
         saves = [] if ROUND else [anim, montage]
-        for kind in ('Heavy', 'Light'):
+        for kind, (name, src, _, _) in CLIPS.items():
             a, m = _land_clip(kind)
             land[kind] = m
-            saves += [m] if (ROUND and kind == 'Light') else [a, m]   # round 1's light animation is reused, not saved again
+            if not (ROUND and src is None):   # a clip reused from an earlier round is not saved again
+                saves += [a, m]
         timeline = _timeline(montage, land)
         bp, cls = K._ability(LABEL, timeline)
         tail = K._weapon_and_kit(LABEL, cls)
