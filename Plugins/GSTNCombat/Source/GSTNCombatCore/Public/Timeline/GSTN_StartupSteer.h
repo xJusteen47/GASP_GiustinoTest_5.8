@@ -76,18 +76,21 @@ struct FGSTN_SteerFrameInput
  */
 struct GSTNCOMBATCORE_API FGSTN_StartupSteer
 {
-	/** Stick magnitude (unit circle) under which the aim stick does not steer: a resting thumb must not turn an attack */
+	/**
+	 * Default stick dead zone (unit circle). A move's own value is FGSTN_SteerWindow::StickDeadZone (same default); this one is only for callers
+	 * with no move at hand (the reticle presentation)
+	 */
 	static constexpr float DeadZone = 0.25f;
 
 	/**
 	 * Yaw (degrees, -180..180) the move faces after steering. The stick (+Y up, as on the controller) is turned into a world yaw with
 	 * the camera yaw (+Y = camera forward), and StartYawDeg is turned toward it by at most MaxSteerDegrees either way. Inside the dead
-	 * zone, or with MaxSteerDegrees <= 0, it is StartYawDeg.
+	 * zone (StickDeadZone, the move's FGSTN_SteerWindow::StickDeadZone), or with MaxSteerDegrees <= 0, it is StartYawDeg.
 	 */
-	static float SteerYaw(float StartYawDeg, const FVector2D& AimStick, float CameraYawDeg, float MaxSteerDegrees);
+	static float SteerYaw(float StartYawDeg, const FVector2D& AimStick, float CameraYawDeg, float MaxSteerDegrees, float StickDeadZone = DeadZone);
 
 	/** True when the stick is out of the dead zone and the move can steer at all: only then does a frame ask for a turn */
-	static bool IsSteering(const FVector2D& AimStick, float MaxSteerDegrees);
+	static bool IsSteering(const FVector2D& AimStick, float MaxSteerDegrees, float StickDeadZone = DeadZone);
 
 	/**
 	 * Aim handling (M11 L9): TargetYawDeg reached from CurrentYawDeg by at most RateDegPerSecond * StepSeconds this frame, the short way
@@ -106,7 +109,7 @@ struct GSTNCOMBATCORE_API FGSTN_StartupSteer
 	 * MoveStick the move stick, MoveOrAimStick the aim stick while the reticle is on and the aim stick is out of the dead zone, else the move
 	 * stick. False when the source reads nothing this frame
 	 */
-	static bool PickStick(EGSTN_SteerSource Source, const FVector2D& MoveStick, const FVector2D& AimStick, bool bPrecisionAim, FVector2D& OutStick);
+	static bool PickStick(EGSTN_SteerSource Source, const FVector2D& MoveStick, const FVector2D& AimStick, bool bPrecisionAim, FVector2D& OutStick, float StickDeadZone = DeadZone);
 
 	/** Whether the source is one of the move stick ones, which hold the facing (FGSTN_SteerWindow::bHoldFacing) */
 	static bool IsMoveStickSource(EGSTN_SteerSource Source);

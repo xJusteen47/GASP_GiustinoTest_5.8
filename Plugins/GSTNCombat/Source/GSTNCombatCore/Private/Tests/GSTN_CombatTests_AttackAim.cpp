@@ -70,6 +70,11 @@ bool FGSTN_AttackAimSnapTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("already facing the stick: no turn"), S::ResolveOriginAim(Attack, Frame(0, 90.f, Right), Yaw) == EGSTN_AimTurn::None);
 	TestTrue(TEXT("frame 1 still snaps (a move the ability graph started)"), S::ResolveOriginAim(Attack, Frame(1, 0.f, Right), Yaw) == EGSTN_AimTurn::Snap);
 	TestTrue(TEXT("frame 2: the start aim is over"), S::ResolveOriginAim(Attack, Frame(2, 0.f, Right), Yaw) == EGSTN_AimTurn::None);
+	// The dead zone is the move's data (FGSTN_SteerWindow::StickDeadZone, 0.25 as the old constant)
+	TestTrue(TEXT("tilt 0.4 snaps with the default dead zone"), S::ResolveOriginAim(Attack, Frame(0, -90.f, FVector2D(0.4, 0.0)), Yaw) == EGSTN_AimTurn::Snap);
+	FGSTN_CombatTimelineData Stiff = Attack;
+	Stiff.Steer.StickDeadZone = 0.5f;
+	TestTrue(TEXT("tilt 0.4 under a 0.5 dead zone keeps the facing"), S::ResolveOriginAim(Stiff, Frame(0, -90.f, FVector2D(0.4, 0.0)), Yaw) == EGSTN_AimTurn::None);
 	FGSTN_AimFrameInput Forced = Frame(0, -90.f, Right);
 	Forced.bStartedByCommand = false;
 	TestTrue(TEXT("a forced move (tech, AI) keeps its facing under Auto"), S::ResolveOriginAim(Attack, Forced, Yaw) == EGSTN_AimTurn::None);

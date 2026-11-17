@@ -130,6 +130,10 @@ struct GSTNCOMBATCORE_API FGSTN_MomentumSlide
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Momentum Slide|Stick", meta = (EditCondition = "bEnabled", ClampMin = "0", ForceUnits = "cm/s^2"))
 	float StickBrake = 3000.f;
 
+	/** Stick magnitude (unit circle) under which the stick counts as released and neither brakes nor pushes the slide (0.25 = the old constant) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Momentum Slide|Stick", meta = (EditCondition = "bEnabled", ClampMin = "0.0", ClampMax = "1.0"))
+	float StickDeadZone = 0.25f;
+
 	/** Cosine between stick and slide direction at or under which the stick counts as against the slide */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Momentum Slide|Stick", meta = (EditCondition = "bEnabled", ClampMin = "-1", ClampMax = "1"))
 	float StickAgainstCos = -0.3f;
@@ -173,7 +177,7 @@ struct GSTNCOMBATCORE_API FGSTN_MomentumSlideMath
 
 	/**
 	 * The braking of one live frame with the stick (P3): StickDot = cosine between the stick and the slide direction, StickSize its magnitude
-	 * (0..1, under 0.25 = released). Inside the retreat window the stick changes nothing; after it, against = + StickBrake * StickSize, along =
+	 * (0..1, under StickDeadZone = released). Inside the retreat window the stick changes nothing; after it, against = + StickBrake * StickSize, along =
 	 * the braking times StickAlongScale
 	 */
 	static FGSTN_MomentumSlideBraking ApplyStick(const FGSTN_MomentumSlide& Slide, const FGSTN_MomentumSlideBraking& Base, int32 LiveFrame, float StickDot, float StickSize);

@@ -220,6 +220,10 @@ bool FGSTN_MomentumSlideStickTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("stick along: less braking"), Along.Deceleration, 750.f);
 	const FGSTN_MomentumSlideBraking Released = FGSTN_MomentumSlideMath::ApplyStick(Slide, Base, 8, -1.f, 0.1f);
 	TestEqual(TEXT("released: nothing"), Released.Deceleration, 1500.f);
+	TestEqual(TEXT("dead zone default is the old constant"), FGSTN_MomentumSlide().StickDeadZone, 0.25f);
+	FGSTN_MomentumSlide Stiff = Slide;
+	Stiff.StickDeadZone = 0.6f;
+	TestEqual(TEXT("half stick under a 0.6 dead zone: nothing"), FGSTN_MomentumSlideMath::ApplyStick(Stiff, Base, 6, -1.f, 0.5f).Deceleration, 1500.f);
 	const FGSTN_MomentumSlideBraking Side = FGSTN_MomentumSlideMath::ApplyStick(Slide, Base, 8, 0.f, 1.f);
 	TestEqual(TEXT("sideways: nothing"), Side.Deceleration, 1500.f);
 

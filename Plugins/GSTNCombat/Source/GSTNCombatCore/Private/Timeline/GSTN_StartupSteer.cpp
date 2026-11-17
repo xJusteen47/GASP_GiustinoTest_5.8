@@ -4,10 +4,10 @@
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "Curves/RichCurve.h"
 
-float FGSTN_StartupSteer::SteerYaw(float StartYawDeg, const FVector2D& AimStick, float CameraYawDeg, float MaxSteerDegrees)
+float FGSTN_StartupSteer::SteerYaw(float StartYawDeg, const FVector2D& AimStick, float CameraYawDeg, float MaxSteerDegrees, float StickDeadZone)
 {
 	const float Start = FRotator::NormalizeAxis(StartYawDeg);
-	if (MaxSteerDegrees <= 0.f || AimStick.SizeSquared() < static_cast<double>(DeadZone * DeadZone))
+	if (MaxSteerDegrees <= 0.f || AimStick.SizeSquared() < static_cast<double>(StickDeadZone * StickDeadZone))
 	{
 		return Start;
 	}
@@ -18,9 +18,9 @@ float FGSTN_StartupSteer::SteerYaw(float StartYawDeg, const FVector2D& AimStick,
 	return FRotator::NormalizeAxis(Start + FMath::Clamp(Delta, -MaxSteerDegrees, MaxSteerDegrees));
 }
 
-bool FGSTN_StartupSteer::IsSteering(const FVector2D& AimStick, float MaxSteerDegrees)
+bool FGSTN_StartupSteer::IsSteering(const FVector2D& AimStick, float MaxSteerDegrees, float StickDeadZone)
 {
-	return MaxSteerDegrees > 0.f && AimStick.SizeSquared() >= static_cast<double>(DeadZone * DeadZone);
+	return MaxSteerDegrees > 0.f && AimStick.SizeSquared() >= static_cast<double>(StickDeadZone * StickDeadZone);
 }
 
 float FGSTN_StartupSteer::RateLimitYaw(float CurrentYawDeg, float TargetYawDeg, float RateDegPerSecond, float StepSeconds)
@@ -48,9 +48,9 @@ int32 FGSTN_StartupSteer::GetSteerEndFrame(const FGSTN_CombatTimelineData& Data)
 	return First == MAX_int32 ? 0 : First;
 }
 
-bool FGSTN_StartupSteer::PickStick(EGSTN_SteerSource Source, const FVector2D& MoveStick, const FVector2D& AimStick, bool bPrecisionAim, FVector2D& OutStick)
+bool FGSTN_StartupSteer::PickStick(EGSTN_SteerSource Source, const FVector2D& MoveStick, const FVector2D& AimStick, bool bPrecisionAim, FVector2D& OutStick, float StickDeadZone)
 {
-	const bool bAimPushed = AimStick.SizeSquared() >= static_cast<double>(DeadZone * DeadZone);
+	const bool bAimPushed = AimStick.SizeSquared() >= static_cast<double>(StickDeadZone * StickDeadZone);
 	switch (Source)
 	{
 	case EGSTN_SteerSource::MoveStick:
@@ -147,11 +147,11 @@ EGSTN_SteerPhase FGSTN_StartupSteer::ResolveFrame(const FGSTN_CombatTimelineData
 	}
 
 	const float Start = FRotator::NormalizeAxis(In.StartYawDeg);
-	OutStickActive = IsSteering(In.Stick, MaxSteer);
+	OutStickActive = IsSteering(In.Stick, MaxSteer, Data.Steer.StickDeadZone);
 	float Target = 0.f;
 	if (OutStickActive || !IsMoveStickSource(Data.Steer.Source))
 	{
-		Target = SteerYaw(Start, In.Stick, In.CameraYawDeg, MaxSteer);
+		Target = SteerYaw(Start, In.Stick, In.CameraYawDeg, MaxSteer, Data.Steer.StickDeadZone);
 	}
 	else
 	{
@@ -220,10 +220,11 @@ EGSTN_AimTurn FGSTN_StartupSteer::ResolveOriginAim(const FGSTN_CombatTimelineDat
 		return EGSTN_AimTurn::None;
 	}
 	const int16 OriginQ = QuantizeYaw(Origin);
+	const float DeadZoneSq = FMath::Square(FMath::Max(Data.Steer.StickDeadZone, 0.f));
 
 	// Reverse first: a hard flick back in the first frames turns the move whatever its policy (frame 0 belongs to the start aim)
 	if (In.TimelineFrame >= 1 && In.TimelineFrame < GetReverseEndFrame(Data)
-		&& In.MoveStick.SizeSquared() >= static_cast<double>(FMath::Square(FMath::Max(Data.Reverse.StickThreshold, DeadZone))))
+		&& In.MoveStick.SizeSquared() >= static_cast<double>(FMath::Square(FMath::Max(Data.Reverse.StickThreshold, Data.Steer.StickDeadZone))))
 	{
 		const float Target = StickYaw(In.MoveStick, In.CameraYawDeg);
 		if (FMath::Abs(FMath::FindDeltaAngleDegrees(Origin, Target)) >= Data.Reverse.MinAngleDegrees && QuantizeYaw(Target) != OriginQ)
@@ -240,7 +241,7 @@ EGSTN_AimTurn FGSTN_StartupSteer::ResolveOriginAim(const FGSTN_CombatTimelineDat
 	switch (Policy)
 	{
 	case EGSTN_AimPolicy::SnapToStick:
-		if (In.TimelineFrame <= 1 && In.MoveStick.SizeSquared() >= static_cast<double>(DeadZone * DeadZone))
+		if (In.TimelineFrame <= 1 && In.MoveStick.SizeSquared() >= static_cast<double>(DeadZoneSq))
 		{
 			Target = StickYaw(In.MoveStick, In.CameraYawDeg);
 			bHasTarget = true;
@@ -249,9 +250,9 @@ EGSTN_AimTurn FGSTN_StartupSteer::ResolveOriginAim(const FGSTN_CombatTimelineDat
 	case EGSTN_AimPolicy::SnapIfAimOrTilt:
 		if (In.TimelineFrame <= 1)
 		{
-			const bool bAimPushed = In.bPrecisionAim && In.AimStick.SizeSquared() >= static_cast<double>(DeadZone * DeadZone);
+			const bool bAimPushed = In.bPrecisionAim && In.AimStick.SizeSquared() >= static_cast<double>(DeadZoneSq);
 			const FVector2D& Stick = bAimPushed ? In.AimStick : In.MoveStick;
-			if (Stick.SizeSquared() >= static_cast<double>(DeadZone * DeadZone))
+			if (Stick.SizeSquared() >= static_cast<double>(DeadZoneSq))
 			{
 				Target = StickYaw(Stick, In.CameraYawDeg);
 				bHasTarget = true;

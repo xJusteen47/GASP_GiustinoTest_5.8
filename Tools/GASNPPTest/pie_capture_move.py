@@ -132,8 +132,24 @@ BUG_SEQUENCES = [
     {'name': 'inside_escape', 'taps': [], 'frames': 160, 'dummy': 10.0, 'shoot': True, 'walk': (20, 120), 'walk_dir': (0, -1, 0)},
 ]
 AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after the attack press
+# Movement QA clips (qa-movement-1117): no attack. 'sticks' = [(frame from PRE, IA_Move value or None = release)], camera relative ((0, 1) = away
+# from the game camera); 'jump' = (frame, frames held) through the combat Jump button; 'crouch_tap' = frame of a Crouch tap (fast fall);
+# 'follow' = the review cameras move with the pawn at the start yaw. Select with PIE_CAPTURE_SEQUENCES (the names below), and
+# PIE_CAPTURE_VIEWS=az90,az0,game keeps fewer views (one grid per view, project rule 4)
+MOVE_SEQUENCES = [
+    {'name': 'mv_run_stop', 'taps': [], 'frames': 210, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (160, None)]},
+    {'name': 'mv_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (170, None)]},
+    {'name': 'mv_walk_low', 'taps': [], 'frames': 140, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 0.2, 0)), (110, None)]},
+    {'name': 'mv_jump_full', 'taps': [], 'frames': 90, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 24)},
+    {'name': 'mv_jump_tap', 'taps': [], 'frames': 70, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 0)},
+    {'name': 'mv_air_reverse', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (55, 18),
+     'sticks': [(0, (0, 1, 0)), (62, (0, -1, 0)), (115, None)]},
+    {'name': 'mv_fast_fall', 'taps': [], 'frames': 80, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 24), 'crouch_tap': 36},
+]
+if os.environ.get('PIE_CAPTURE_VIEWS'):
+    VIEWS = [v for v in VIEWS if v[0] in os.environ['PIE_CAPTURE_VIEWS'].split(',')]
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
-    SEQUENCES = [s for s in SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
+    SEQUENCES = [s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
 elif 'DoubleShot' in KIT:
     SEQUENCES = DOUBLE_SHOT_SEQUENCES
 elif 'Dropkick' in KIT:
@@ -251,7 +267,7 @@ def _place_cameras(follow=False):
 
 def _shoot(seq, frame):
     manager = g._local_pawn(0)[0].get_editor_property('player_camera_manager')
-    if seq.get('air') is not None:
+    if seq.get('air') is not None or seq.get('follow'):
         _place_cameras(follow=True)
     for (name, az), cam, rt in zip(VIEWS, st['cams'], st['rts']):
         comp = cam.capture_component2d
@@ -475,6 +491,26 @@ def _tick(_dt):
                 g.combat_clear(0)
                 if air.get('stick'):
                     g.release(0, 'move')
+            for at, value in seq.get('sticks', []):                 # movement QA clips
+                if frame == PRE + at:
+                    if value is None:
+                        g.release(0, 'move')
+                    else:
+                        g.hold(0, 'move', value)
+                    _log(f'{seq["name"]}: stick {value} on v{frame}')
+            if seq.get('jump') is not None:
+                at, held = seq['jump']
+                if frame == PRE + at:
+                    jump_mask = g.button_mask('Jump')
+                    g.combat_tap(0, jump_mask)
+                    if held > 0:
+                        g.combat_hold(0, jump_mask)
+                    _log(f'{seq["name"]}: jump on v{frame}, held {held} frames')
+                elif held > 0 and frame == PRE + at + held:
+                    g.combat_clear(0)
+            if seq.get('crouch_tap') is not None and frame == PRE + seq['crouch_tap']:
+                g.combat_tap(0, st['crouch'])
+                _log(f'{seq["name"]}: crouch tap on v{frame}')
             walk = seq.get('walk')
             # From the attack press; a plain jump (no press) from the jump; a ground sequence with no air entry from PRE (pushbox P4)
             plain_jump = air is not None and 'rise_h' not in air and 'trigger_h' not in air
@@ -489,6 +525,8 @@ def _tick(_dt):
             if st['frame'] >= PRE + seq['frames']:
                 st['rows'].close()
                 g.combat_clear(0)
+                if seq.get('sticks'):
+                    g.release(0, 'move')
                 _console('t.OverrideFPS 0')
                 _log(f'sequence {seq["name"]} done: {st["frame"]} frames, pawn z {_pawn().get_actor_location().z:.1f}, host shots {st.get("shots", 0)}')
                 if seq.get('dummy_percent') is not None and st.get('dummy_key'):   # NIGHT-KD-1: why the landing did (not) down the dummy

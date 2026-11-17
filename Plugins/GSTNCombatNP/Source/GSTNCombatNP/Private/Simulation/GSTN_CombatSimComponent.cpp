@@ -999,8 +999,8 @@ bool UGSTN_CombatSimComponent::GetSteerView(FSteerView& Out) const
 	Out.MaxSteerDegrees = Timeline->MaxSteerDegrees;
 	Out.bShow = Timeline->Steer.bShowIndicator;
 	FVector2D Stick;
-	if (FGSTN_StartupSteer::PickStick(Timeline->Steer.Source, MoveStick, AimStick, bLastPrecisionAim, Stick)
-		&& FGSTN_StartupSteer::IsSteering(Stick, Timeline->MaxSteerDegrees))
+	if (FGSTN_StartupSteer::PickStick(Timeline->Steer.Source, MoveStick, AimStick, bLastPrecisionAim, Stick, Timeline->Steer.StickDeadZone)
+		&& FGSTN_StartupSteer::IsSteering(Stick, Timeline->MaxSteerDegrees, Timeline->Steer.StickDeadZone))
 	{
 		Out.bStickActive = true;
 		Out.StickYawDeg = FRotator::NormalizeAxis(CameraYaw + FMath::RadiansToDegrees(static_cast<float>(FMath::Atan2(Stick.X, Stick.Y))));
