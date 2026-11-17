@@ -58,6 +58,9 @@ def _kit(lines):
 def _rules(lines):
     rules = unreal.load_asset(RULES)
     model = rules.get_editor_property('knockback_model')
+    if not isinstance(model, unreal.GSTN_KnockbackModel_WeightDriven):
+        lines.append('rules: model is %s (setup_knockback_smash.py), percent growth left alone' % model.get_class().get_name())
+        return
     tuning = model.get_editor_property('tuning')
     before = (tuning.get_editor_property('launch_threshold'), model.get_editor_property('percent_growth'))
     tuning.set_editor_property('launch_threshold', max(LAUNCH_THRESHOLD, tuning.get_editor_property('push_back_threshold')))

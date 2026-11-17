@@ -94,6 +94,16 @@ struct GSTNCOMBATNP_API FGSTN_CombatStateView
 	UPROPERTY(BlueprintReadOnly, Category = "Combat State|Hit Reaction")
 	bool bKnockedOut = false;
 
+	/**
+	 * Hard bounces of the current reaction: off floors, and off walls and ceilings together (combat rules GroundImpact / WallImpact). They
+	 * count up within one launch and start again from 0 on a new staggering hit; a rise is a bounce on that frame (presentation effects)
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat State|Hit Reaction")
+	int32 GroundBounceCount = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Combat State|Hit Reaction")
+	int32 WallBounceCount = 0;
+
 	// ---- Current move
 
 	UPROPERTY(BlueprintReadOnly, Category = "Combat State|Move")

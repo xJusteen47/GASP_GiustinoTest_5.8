@@ -67,6 +67,18 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationSnapshot
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
 	bool bSplat = false;
 
+	/**
+	 * The bounces of the current reaction as the simulation counts them (floor; walls and ceilings), INDEX_NONE when the source has no
+	 * count. When set, a rise is a bounce whatever the velocity showed: a spike off the ground reflects inside one simulation frame and
+	 * the landing's floor projection clears the downward speed before any snapshot sees it (polish M2 r2: no GroundBounce from a spike).
+	 * A count only grows within one reaction; a new hit starts it again from 0
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
+	int32 GroundBounceCount = INDEX_NONE;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
+	int32 WallBounceCount = INDEX_NONE;
+
 	/** Frame of the last hit received (stamped by the simulation), INDEX_NONE before the first */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
 	int32 LastHitFrame = INDEX_NONE;
@@ -111,6 +123,14 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationTagRule
 	/** Emitted when it goes away (none = nothing) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rule", meta = (Categories = "Presentation.Event"))
 	FGameplayTag OnRemoved;
+
+	/**
+	 * The watched tag counts only while this state tag is absent (none = always counts). The tumble trail waits out the hitstop: the
+	 * tumble tag is granted on the hit frame, but the victim stays frozen until the hitstop ends, so the effect starts at the launch.
+	 * A hitstop inside the state (a second hit) ends the effect and starts it again after the freeze
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rule")
+	FGameplayTag HeldWhileTag;
 };
 
 /** Thresholds of the derivation (component data; the defaults fit the 62.5 Hz fighters of this project) */
@@ -134,6 +154,16 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationDeriveRules
 	/** Running again within this many frames after a skid, against the skid's direction (dot below -0.5), is a Turn180 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Derive", meta = (ClampMin = "1"))
 	int32 TurnWindowFrames = 30;
+
+	/**
+	 * No jump or landing while the character owns one of these state tags: the downed landing's small bounce is not a jump (review r2: a
+	 * jump puff on every knockdown). Filled by MakeDefaultQuietTags
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Derive")
+	FGameplayTagContainer QuietAirTags;
+
+	/** This project's quiet tags (Combat.State.Knockdown, by name) */
+	static FGameplayTagContainer MakeDefaultQuietTags();
 
 	/** Tag rules (shield, knockdown, dodge... whatever state or move tags the game's abilities carry) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Derive")

@@ -38,7 +38,11 @@ protected:
  *   P = Percent + Damage
  *   K = ((P / PercentDivisor + P x Damage / DamageDivisor) x WeightNumerator / (EffectiveWeight + WeightOffset) x TermScale
  *        + TermBase) x KnockbackGrowth / GrowthDivisor + BaseKnockback) x UnitScale
- * FixedKnockback, when used, is the knockback itself (no percent, no weight), as in the games the formula comes from.
+ * P is the percent AFTER this hit (before + this hit's damage), as in Smash. With bBaseKnockbackInCmPerSecond the base is already in cm/s
+ * and only the growth part is scaled: K = (...) x KnockbackGrowth / GrowthDivisor x UnitScale + BaseKnockback (same K when the base is
+ * authored x UnitScale). KnockbackGrowth is the Smash KBG here (100 = the formula's full growth), NOT the weight driven model's per damage
+ * growth: a move tuned for one model must be retuned for the other (Tools/GAS/setup_knockback_smash.py writes both data sets).
+ * FixedKnockback, when used, is the knockback itself in cm/s (no percent, no weight), as in the games the formula comes from.
  */
 UCLASS(meta = (DisplayName = "Percent Scaling"))
 class GSTNCOMBATCORE_API UGSTN_KnockbackModel_PercentScaling : public UGSTN_KnockbackModel
@@ -70,6 +74,14 @@ public:
 	/** cm/s per unit of the formula */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Percent", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
 	float UnitScale = 10.f;
+
+	/**
+	 * The hits' BaseKnockback is in cm/s (as in every other model and in the tier thresholds) and UnitScale scales only the growth part.
+	 * Off = the base is in units of the formula and is scaled too. On keeps a move that was never retuned at its authored speed (a flat K)
+	 * instead of multiplying it by UnitScale (owner 2026-11-17, F2: the standard rules turn it on)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Percent")
+	bool bBaseKnockbackInCmPerSecond = false;
 
 	virtual bool UsesPercentTerm() const override { return true; }
 

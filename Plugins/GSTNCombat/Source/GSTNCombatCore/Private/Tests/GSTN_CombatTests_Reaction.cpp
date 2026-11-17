@@ -6,6 +6,7 @@
 #include "Hits/GSTN_KnockbackModel.h"
 #include "Hits/GSTN_KnockbackModels.h"
 #include "Hits/GSTN_ReactionValidation.h"
+#include "Rules/GSTN_CombatRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -903,6 +904,124 @@ bool FGSTN_ReactionPercentGrowthTest::RunTest(const FString& Parameters)
 	// With the standard health weight at its end (0.6) as well: 550 x 2 / 0.6 = 1833.3, a tumble
 	Input.Reaction.WeightScale = 0.6f;
 	TestTrue(TEXT("tumbles with the weight curve"), Model->Compute(Input).bTumble);
+	return true;
+}
+
+// ---- F2 (owner 2026-11-17, decision 2B): the standard rules move to the Smash formula. Hand values from the published formula
+// K = ((P/10 + P*d/20) * 200/(w+100) * 1.4 + 18) * KBG/100 + BKB, P = percent after the hit, worked out below (and by
+// Tools/GAS/knockback_smash_data.py, which writes the conversion table with the same numbers)
+namespace GSTNReactionTest
+{
+	TStrongObjectPtr<UGSTN_KnockbackModel_PercentScaling> MakeSmash(float UnitScale, bool bBaseInCm)
+	{
+		TStrongObjectPtr<UGSTN_KnockbackModel_PercentScaling> Model = MakeModel<UGSTN_KnockbackModel_PercentScaling>(MakeTuning());
+		Model->UnitScale = UnitScale;
+		Model->bBaseKnockbackInCmPerSecond = bBaseInCm;
+		return Model;
+	}
+
+	FGSTN_KnockbackInput MakeSmashInput(float Damage, float Base, float Growth, float PercentBefore, float Weight)
+	{
+		FGSTN_KnockbackInput Input = MakeInput();
+		Input.Hit.Damage = Damage;
+		Input.Hit.BaseKnockback = Base;
+		Input.Hit.KnockbackGrowth = Growth;
+		Input.DamagePercent = PercentBefore;
+		Input.Weight = Weight;
+		return Input;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ReactionSmashFormulaKnownValuesTest, "GSTNCombat.Core.Reaction.SmashFormulaKnownValues", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_ReactionSmashFormulaKnownValuesTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNReactionTest;
+	// UnitScale 1 and the base in formula units: K is the Smash knockback itself
+	TStrongObjectPtr<UGSTN_KnockbackModel_PercentScaling> Model = MakeSmash(1.f, false);
+
+	// 12 damage, BKB 30, KBG 100, 50 % before, weight 98: P = 62; 6.2 + 37.2 = 43.4; x 200/198 = 43.8384; x 1.4 + 18 = 79.3737; K = 109.374
+	TestEqual(TEXT("mid strong hit on a 98 weight"), Model->Compute(MakeSmashInput(12.f, 30.f, 100.f, 50.f, 98.f)).Knockback, 109.374f, 0.01f);
+	// A jab at 0 %: 3 damage, BKB 20, KBG 40, weight 100: P = 3; 0.3 + 0.45 = 0.75; x 1 x 1.4 + 18 = 19.05; K = 7.62 + 20 = 27.62
+	TestEqual(TEXT("jab at 0 percent"), Model->Compute(MakeSmashInput(3.f, 20.f, 40.f, 0.f, 100.f)).Knockback, 27.62f, 0.01f);
+	// 18 damage, BKB 40, KBG 90, 100 % before, weight 135: P = 118; 11.8 + 106.2 = 118; x 200/235 = 100.4255; x 1.4 + 18 = 158.5957;
+	// K = 142.7362 + 40 = 182.736
+	TestEqual(TEXT("heavy hit on a 135 weight"), Model->Compute(MakeSmashInput(18.f, 40.f, 90.f, 100.f, 135.f)).Knockback, 182.736f, 0.01f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ReactionSmashBaseInCmTest, "GSTNCombat.Core.Reaction.SmashBaseInCmPerSecond", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_ReactionSmashBaseInCmTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNReactionTest;
+	// The base in cm/s is the base in units x UnitScale: the same K
+	TStrongObjectPtr<UGSTN_KnockbackModel_PercentScaling> Units = MakeSmash(22.5f, false);
+	TStrongObjectPtr<UGSTN_KnockbackModel_PercentScaling> Cm = MakeSmash(22.5f, true);
+	const float InUnits = Units->Compute(MakeSmashInput(12.f, 30.f, 100.f, 50.f, 98.f)).Knockback;
+	TestEqual(TEXT("same K both ways"), Cm->Compute(MakeSmashInput(12.f, 30.f * 22.5f, 100.f, 50.f, 98.f)).Knockback, InUnits, 0.05f);
+	TestEqual(TEXT("x UnitScale"), InUnits, 109.374f * 22.5f, 0.3f);
+	// A move never retuned (growth 0) keeps its authored speed instead of being multiplied by UnitScale
+	TestEqual(TEXT("flat K without growth"), Cm->Compute(MakeSmashInput(8.f, 500.f, 0.f, 120.f, 100.f)).Knockback, 500.f, 0.001f);
+
+	// The F2 anchors (knockback_table.csv): light jab BKB 327 KBG 40 (3 %) launches (750) from 80 %, not 79 %;
+	// the strong BKB 35 KBG 100 (14 %) tumbles (1800) from 40 %, not 39 %. 79 %: (8.2 + 12.3) x 1.4 + 18 = 46.7 x 0.4 x 22.5 + 327 = 747.3
+	TestTrue(TEXT("jab below launch at 79"), Cm->Compute(MakeSmashInput(3.f, 327.f, 40.f, 79.f, 100.f)).Knockback < 750.f);
+	TestTrue(TEXT("jab launches at 80"), Cm->Compute(MakeSmashInput(3.f, 327.f, 40.f, 80.f, 100.f)).Knockback >= 750.f);
+	TestTrue(TEXT("strong below tumble at 39"), Cm->Compute(MakeSmashInput(14.f, 35.f, 100.f, 39.f, 100.f)).Knockback < 1800.f);
+	TestTrue(TEXT("strong tumbles at 40"), Cm->Compute(MakeSmashInput(14.f, 35.f, 100.f, 40.f, 100.f)).Knockback >= 1800.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ReactionSmashMonotonicTest, "GSTNCombat.Core.Reaction.SmashMonotonicDeterministic", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_ReactionSmashMonotonicTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNReactionTest;
+	TStrongObjectPtr<UGSTN_KnockbackModel_PercentScaling> Model = MakeSmash(22.5f, true);
+	bool bPercentUp = true;
+	bool bWeightDown = true;
+	bool bSame = true;
+	for (float Damage : { 3.f, 8.f, 14.f })
+	{
+		float Last = -1.f;
+		for (int32 Percent = 0; Percent <= 300; Percent += 5)
+		{
+			const FGSTN_KnockbackInput Input = MakeSmashInput(Damage, 300.f, 70.f, static_cast<float>(Percent), 100.f);
+			const FGSTN_KnockbackResult First = Model->Compute(Input);
+			bSame &= Same(First, Model->Compute(Input));
+			bPercentUp &= First.Knockback > Last;
+			Last = First.Knockback;
+		}
+		float LastWeight = TNumericLimits<float>::Max();
+		for (int32 Weight = 60; Weight <= 200; Weight += 10)
+		{
+			const float K = Model->Compute(MakeSmashInput(Damage, 300.f, 70.f, 80.f, static_cast<float>(Weight))).Knockback;
+			bWeightDown &= K < LastWeight;
+			LastWeight = K;
+		}
+	}
+	TestTrue(TEXT("more percent, more knockback"), bPercentUp);
+	TestTrue(TEXT("more weight, less knockback"), bWeightDown);
+	TestTrue(TEXT("same input, same result (bitwise)"), bSame);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ReactionSwitchModelTest, "GSTNCombat.Core.Reaction.SwitchKnockbackModel", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_ReactionSwitchModelTest::RunTest(const FString& Parameters)
+{
+	TStrongObjectPtr<UGSTN_CombatRules> Rules(NewObject<UGSTN_CombatRules>(GetTransientPackage()));
+	UGSTN_CombatRules::FillStandard(Rules.Get());
+	Rules->KnockbackModel->Tuning.LaunchThreshold = 750.f;
+	UGSTN_KnockbackModel* Model = UGSTN_CombatRules::SwitchKnockbackModel(Rules.Get(), UGSTN_KnockbackModel_PercentScaling::StaticClass());
+	TestNotNull(TEXT("a new model"), Model);
+	TestTrue(TEXT("the rules use it"), Rules->KnockbackModel == Model && Model->IsA<UGSTN_KnockbackModel_PercentScaling>());
+	TestEqual(TEXT("the tuning is kept"), Model ? Model->Tuning.LaunchThreshold : 0.f, 750.f);
+	TestNull(TEXT("an abstract class is refused"), UGSTN_CombatRules::SwitchKnockbackModel(Rules.Get(), UGSTN_KnockbackModel::StaticClass()));
+
+	// The standard curve falls (1 -> 0.6): a percent model with it counts the damage twice; flat is what the switch script bakes
+	TestEqual(TEXT("standard curve at 1"), UGSTN_CombatRules::EvaluateDefaultWeightCurve(Rules.Get(), 1.f), 0.6f, 0.001f);
+	TestTrue(TEXT("flat curve"), UGSTN_CombatRules::SetDefaultWeightCurveLinear(Rules.Get(), 1.f, 1.f) && Rules->DefaultWeightCurve.IsFlat());
+	TArray<FGSTN_ReactionMessage> Messages;
+	FGSTN_ReactionValidation::ValidateModelWithCurve(Rules->KnockbackModel, Rules->DefaultWeightCurve, Messages);
+	TestEqual(TEXT("no curve warning with a flat curve"), Messages.Num(), 0);
 	return true;
 }
 

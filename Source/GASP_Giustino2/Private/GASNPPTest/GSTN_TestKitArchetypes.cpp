@@ -122,7 +122,7 @@ FString UGSTN_TestKitContentLibrary::DescribeMoveKnockback(TSubclassOf<UGameplay
 			for (const FGSTN_HitboxSpec& Box : Track->Hitboxes)
 			{
 				const FGSTN_HitData& Hit = Box.Data;
-				Out += FString::Printf(TEXT("[%.0f%% b%.0f g%.0f f%.0f a%.0f] "), Hit.Damage, Hit.BaseKnockback, Hit.KnockbackGrowth, Hit.FixedKnockback, Hit.AngleDeg);
+				Out += FString::Printf(TEXT("[%.1f%% b%.0f g%.0f f%.0f a%.0f] "), Hit.Damage, Hit.BaseKnockback, Hit.KnockbackGrowth, Hit.FixedKnockback, Hit.AngleDeg);
 				++Count;
 			}
 		}
@@ -165,6 +165,66 @@ bool UGSTN_TestKitContentLibrary::WriteMoveKnockback(TSubclassOf<UGameplayAbilit
 	Defaults->Timeline = MoveTemp(Data);
 	Defaults->MarkPackageDirty();
 	return true;
+}
+
+bool UGSTN_TestKitContentLibrary::WriteMoveHitKnockback(TSubclassOf<UGameplayAbility> MoveClass, int32 HitIndex, float BaseKnockback, float KnockbackGrowth,
+	bool bWriteTimelineAsset)
+{
+	if (!MoveClass || !MoveClass->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()) || MoveClass->HasAnyClassFlags(CLASS_Native))
+	{
+		return false;
+	}
+	UGSTN_GA_BaseCombat* Defaults = GetMutableDefault<UGSTN_GA_BaseCombat>(MoveClass.Get());
+	UGSTN_CombatTimeline* Asset = nullptr;
+	if (!Defaults->TimelineAsset.IsNull())
+	{
+		Asset = bWriteTimelineAsset ? Defaults->TimelineAsset.LoadSynchronous() : nullptr;
+		if (!Asset)
+		{
+			return false;
+		}
+	}
+	FGSTN_CombatTimelineData Data = Asset ? Asset->Data : Defaults->Timeline;
+	int32 Index = 0;
+	for (TInstancedStruct<FGSTN_TimelineTrack>& Instanced : Data.Tracks)
+	{
+		if (FGSTN_TimelineTrack_Hitbox* Track = Instanced.GetMutablePtr<FGSTN_TimelineTrack_Hitbox>())
+		{
+			for (FGSTN_HitboxSpec& Box : Track->Hitboxes)
+			{
+				if (HitIndex < 0 || HitIndex == Index)
+				{
+					Box.Data.BaseKnockback = FMath::Max(BaseKnockback, 0.f);
+					Box.Data.KnockbackGrowth = FMath::Max(KnockbackGrowth, 0.f);
+				}
+				++Index;
+			}
+		}
+	}
+	FGSTN_CombatTimelineData& Target = Asset ? Asset->Data : Defaults->Timeline;
+	if (FGSTN_CombatTimelineData::StaticStruct()->CompareScriptStruct(&Data, &Target, PPF_None))
+	{
+		return false;
+	}
+	Target = MoveTemp(Data);
+	if (Asset)
+	{
+		Asset->MarkPackageDirty();
+	}
+	else
+	{
+		Defaults->MarkPackageDirty();
+	}
+	return true;
+}
+
+UObject* UGSTN_TestKitContentLibrary::GetMoveTimelineAsset(TSubclassOf<UGameplayAbility> MoveClass)
+{
+	if (!MoveClass || !MoveClass->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()))
+	{
+		return nullptr;
+	}
+	return GetDefault<UGSTN_GA_BaseCombat>(MoveClass.Get())->TimelineAsset.LoadSynchronous();
 }
 
 #if WITH_DEV_AUTOMATION_TESTS

@@ -142,6 +142,25 @@ public:
 	static bool WriteThrowMove(TSubclassOf<UGameplayAbility> ThrowClass, int32 TotalFrames, int32 FirstActionableFrame, int32 ThrowFrame, float Damage,
 		float BaseKnockback, float AngleDeg, UAnimMontage* Montage, float MontagePlayRate = 1.f);
 
+	/**
+	 * Knockback model switch (owner 2026-11-17, F2): the throw classes of a kit's link extension, loaded (null = the slot is empty and the common
+	 * native throw plays). False when the kit has no link extension
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool GetKitThrows(UGSTN_PrimaryKitDefinition* Kit, TSubclassOf<UGameplayAbility>& OutForward, TSubclassOf<UGameplayAbility>& OutBack,
+		TSubclassOf<UGameplayAbility>& OutUp, TSubclassOf<UGameplayAbility>& OutDown);
+
+	/** "[dmg% bBase gGrowth fFixed aAngle]" of every Throw key of a throw move (native classes too), "not a throw" otherwise. Read only */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static FString DescribeThrowKnockback(TSubclassOf<UGameplayAbility> ThrowClass);
+
+	/**
+	 * Knockback model switch (owner 2026-11-17, F2): base and growth of every Throw key of a Blueprint child of a common throw, the rest of
+	 * the throw untouched. Native classes are refused. True when something changed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool WriteThrowKnockback(TSubclassOf<UGameplayAbility> ThrowClass, float BaseKnockback, float KnockbackGrowth);
+
 	/** M11 K3 content: the kit link extension's grab mash base frames (how long the grabbed side is held without mashing). Returns whether it changed */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
 	static bool SetKitGrabMashFrames(UGSTN_PrimaryKitDefinition* Kit, int32 MashBaseFrames);

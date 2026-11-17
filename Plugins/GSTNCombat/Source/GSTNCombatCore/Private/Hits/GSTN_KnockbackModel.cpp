@@ -114,7 +114,8 @@ double UGSTN_KnockbackModel_PercentScaling::ComputeKnockback(const FGSTN_Knockba
 	const double Damage = Hit.Damage;
 	const double Percent = GetPercent(Input) + Damage;
 	const double Term = (Percent / PercentDivisor + Percent * Damage / DamageDivisor) * WeightNumerator / (GetEffectiveWeight(Input) + WeightOffset) * TermScale + TermBase;
-	return (Term * Hit.KnockbackGrowth / GrowthDivisor + Hit.BaseKnockback) * UnitScale;
+	const double Growth = Term * Hit.KnockbackGrowth / GrowthDivisor;
+	return bBaseKnockbackInCmPerSecond ? Growth * UnitScale + Hit.BaseKnockback : (Growth + Hit.BaseKnockback) * UnitScale;
 }
 
 double UGSTN_KnockbackModel_CappedPercent::GetPercent(const FGSTN_KnockbackInput& Input) const

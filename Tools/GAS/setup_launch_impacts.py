@@ -69,7 +69,10 @@ def _find_asset(path):
 def _rules(saves):
     rules = unreal.load_asset(RULES)
     model = rules.get_editor_property('knockback_model')
-    model.set_editor_property('percent_growth', 1.0)
+    if isinstance(model, unreal.GSTN_KnockbackModel_WeightDriven):
+        model.set_editor_property('percent_growth', 1.0)
+    else:
+        log(f'rules: model is {model.get_class().get_name()} (setup_knockback_smash.py), percent growth left alone; rerun that script after this one')
     path = f'{TABLE_DIR}/{TABLE}'
     table = unreal.load_asset(path)
     if not table:

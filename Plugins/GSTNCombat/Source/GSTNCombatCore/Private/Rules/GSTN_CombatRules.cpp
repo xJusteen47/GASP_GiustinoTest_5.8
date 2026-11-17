@@ -193,6 +193,38 @@ void UGSTN_CombatRules::FillStandard(UGSTN_CombatRules* Rules)
 	Rules->ResolveHitPipeline();
 }
 
+UGSTN_KnockbackModel* UGSTN_CombatRules::SwitchKnockbackModel(UGSTN_CombatRules* Rules, TSubclassOf<UGSTN_KnockbackModel> ModelClass)
+{
+	if (Rules == nullptr || ModelClass == nullptr || ModelClass->HasAnyClassFlags(CLASS_Abstract))
+	{
+		return nullptr;
+	}
+	UGSTN_KnockbackModel* Model = NewObject<UGSTN_KnockbackModel>(Rules, ModelClass.Get(), NAME_None, RF_Transactional);
+	if (Rules->KnockbackModel != nullptr)
+	{
+		Model->Tuning = Rules->KnockbackModel->Tuning;
+	}
+	Rules->Modify();
+	Rules->KnockbackModel = Model;
+	return Model;
+}
+
+bool UGSTN_CombatRules::SetDefaultWeightCurveLinear(UGSTN_CombatRules* Rules, float AtZero, float AtOne)
+{
+	if (Rules == nullptr)
+	{
+		return false;
+	}
+	Rules->Modify();
+	Rules->DefaultWeightCurve.BakeLinear(AtZero, AtOne);
+	return true;
+}
+
+float UGSTN_CombatRules::EvaluateDefaultWeightCurve(const UGSTN_CombatRules* Rules, float T)
+{
+	return Rules ? Rules->DefaultWeightCurve.Evaluate(T) : 1.f;
+}
+
 #if WITH_EDITOR
 EDataValidationResult UGSTN_CombatRules::IsDataValid(FDataValidationContext& Context) const
 {
