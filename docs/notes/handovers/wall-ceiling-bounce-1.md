@@ -23,3 +23,11 @@ Remains: bump clip rule + placeholder in the reaction anim set (desktop, asset e
 ## PIE 1 on _ue59 (local merge f189e6f9, see wall-bounce-ue59-check-1.md): weak f45 432 cm/s -> bump, Bump.Wall f46-59; strong f35 3968 cm/s -> hard 2381 cm/s, no Bump.
 FAIL "gioco": (1) bump clip montage gone after 1 frame (replaced by another montage, diagnosis pending); (2) push ~45 cm -> fixed by distance + drag (this commit);
 (3) tumble pose clips into the wall mesh before contact (queue). MontageSampling passes on _ue59 (content), so the worktree failure was missing content.
+## Integration on _ue59 (fisso, 2026-11-17 13:50-15:30Z, owner OK typed in thread; local only, nothing pushed)
+HEAD 6cdbaa74 = 0281ba60 (v94blx 7d7b4f20 + this branch) + jprs4t a41f5bac + kup1kk 93a036a9 + rwaob2 16131b6c + 2 local fixes for kup1kk:
+9dfdfc68 lambda param Skid -> SkidPhase (C4459, GSTN_PresentationTests.cpp:226; kup1kk later fixed it too) and 6cdbaa74 safe divisor (C4723, GSTN_PresentationLogic.cpp:18).
+setup_qa_movement_1117 OK (KIT_Test_Playtest JumpVelocity 700->1240, uncommitted); setup_anim_layers OK after kup1kk 93a036a9 (slots 1 Wall/2 Skid/3 RunStart,
+ABP 0 errors 3 warnings); SandboxCharacter_Mover_ABP + ALI_GSTN_Skid + ALI_GSTN_RunStart uncommitted in _ue59, to be committed on kup1kk.
+Tests: GSTN 1739/1739 (Saved/Logs/ci/integ1117_test_gstn.log), DepthMarker Mover+Runtime 35/35. Desktop ~/.claude/settings.json: permanent allow for local git/merge/build/test/setup
+scripts; deny push feature/main, force, branch deletion, reset --hard, clean, worktree remove, git rm, Remove-Item/rm (all sessions on that PC).
+Total cost estimate this thread ~25 $ (Opus, ~150k context, 6 desktop runs).
