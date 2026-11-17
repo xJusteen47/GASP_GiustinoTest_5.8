@@ -28,3 +28,9 @@ _ue59 HEAD = a local merge of 7d7b4f20 (v94blx) + h2hlp5 06078c80 = f189e6f9. It
   It starts on f46 and stops on f47 (ActiveRule None from f47), ConsumedRule = BumpWall, so it does not restart while Bump.Wall holds (to f59).
   No other montage starts f44-f62 (OnMontageStarted only AnimMontage_3 on f46 and the Tumble rule's on f60). The character's own Falling/Walking
   pose shows. This is data (placeholder too short for BlendOut), not the game code: a clip of about 14 frames, or HoldLastPose, would hold it.
+
+## Round 3 (data only, _ue59 HEAD unchanged 0281ba60)
+- DA_ReactionAnims: BumpWall and BumpCeiling EndBehaviour = HoldLastPose (pie_wall_bounce.py edit_reaction_set, only that asset saved).
+- Weak run (Saved/WallBounce/r3, weak_r3*): BumpWall montage active f47-f59 (the bump this run was f47-f59), held at clip frame 2. Tumble rule
+  on f60 (1 frame, its montage starts), then no rule. In the grid the standing HitStand pose snaps back to a horizontal tumble pose for about
+  4 frames (f60-f64, held through the blend) before the landing crouch: a pop to look at when the real clip comes.

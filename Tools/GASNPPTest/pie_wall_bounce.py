@@ -97,7 +97,8 @@ def edit_reaction_set():
         rule.set_editor_property('required_tags', _container(tag))
         rule.set_editor_property('priority', tumble_pri + 1)
         rule.set_editor_property('animation', anim)
-        rule.set_editor_property('end_behaviour', unreal.GSTN_ReactionAnimEnd.BLEND_OUT)
+        # round 3: HOLD_LAST_POSE (the 3-frame placeholder stopped at once under BlendOut); WALL_END overrides
+        rule.set_editor_property('end_behaviour', getattr(unreal.GSTN_ReactionAnimEnd, os.environ.get('WALL_END') or 'HOLD_LAST_POSE'))
         rule.set_editor_property('blend_in_frames', 2)
         rule.set_editor_property('blend_out_frames', 6)
         if new:
