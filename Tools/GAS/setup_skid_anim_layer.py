@@ -3,7 +3,7 @@
 #
 # Run headless (editor closed; needs GSTNAnimationEditor + GSTNCombatNP built with UGSTN_SkidAnimInstance / GSTN Clip At Time):
 #   UnrealEditor-Cmd.exe <project>.uproject -run=pythonscript -script="<project>/Tools/GAS/setup_skid_anim_layer.py" -unattended -nullrhi
-# Env: SKID_CLIP (default Ported57/Skid/Skid_Revised), RUN_START_CLIP (default none: the run start layer stays off until the owner picks a clip).
+# Env: SKID_CLIP (default Ported57/SkidOwner/SS_180_Turn2), RUN_START_CLIP (default none: the run start layer stays off until the owner picks a clip).
 # Prints at most 5 lines; full log in the editor log ([setup_skid_anim_layer]).
 #
 # Steps (assets in /Game/Blueprints/Animation):
@@ -20,7 +20,9 @@ import setup_wall_anim_layer as wall  # noqa: E402
 import setup_anim_layers as layers  # noqa: E402
 
 ANIM_DIR = wall.ANIM_DIR
-SKID_CLIP = os.environ.get('SKID_CLIP', f'{ANIM_DIR}/Ported57/Skid/Skid_Revised')
+# Owner 2026-11-17 23:53Z: the skid clip is SS_180_Turn2 (GiustinoMoves/Skid, root fixed by the owner's script; handover hitstop-downed-jab-1
+# addendum 2). SKID_CLIP=Ported57/Skid/Skid_Revised is the earlier choice, kept as fallback
+SKID_CLIP = os.environ.get('SKID_CLIP', f'{ANIM_DIR}/Ported57/SkidOwner/SS_180_Turn2')
 RUN_START_CLIP = os.environ.get('RUN_START_CLIP', '')
 
 # name -> (parent class, interface, layer graph, clip property, clip path, set asset, set tag)

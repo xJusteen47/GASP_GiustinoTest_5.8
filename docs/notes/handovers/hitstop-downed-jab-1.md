@@ -59,18 +59,18 @@ Cost estimate ~11 $ (Opus high, cloud only).
 - Risk: Skid_Revised's own root/hips travel is not removed (root motion off); if the clip drifts forward of the capsule the fix is a pose-space
   offset, not a sim change.
 
-## Addendum 2: run start clip (owner 23:52Z): SS_180_Turn2
-Owner: the run start clip is SS_180_Turn2, from GaspMoverProject/Content/GiustinoMoves/Skid (uasset also in the project thread's uploads). Its root
-may not rotate well; the owner wrote a root-fix script in that folder (subfolder RootCorrection seen; the cloud could not open the folder, so
-nobody has read the script yet). Note: M1 already copied an SS_180_Turn2 into Ported57/Skid from another source folder: compare before using it.
-Desktop steps, after the skid layer steps (editor of _ue59 only, GaspMoverProject is 5.7: open it never, copy files only):
-1. Read the owner's script in GaspMoverProject/Content/GiustinoMoves/Skid/RootCorrection first (what it changes, which asset it expects). Do not run
-   anything that writes into GaspMoverProject.
-2. Copy GiustinoMoves/Skid/SS_180_Turn2.uasset into _ue59 Content/Blueprints/Animation/Ported57/RunStart/ (same skeleton SK_UEFN_Mannequin, as M1;
-   if the reference is broken, migrate with the port57_m1.py pattern). Keep the M1 copy untouched.
-3. Run the owner's root-fix script on the _ue59 copy only (adapt the asset path, never the logic; if it needs a change, write why in the handover).
-4. Set the clip: env RUN_START_CLIP=/Game/Blueprints/Animation/Ported57/RunStart/SS_180_Turn2 and rerun Tools/GAS/setup_skid_anim_layer.py (ESITO OK,
-   the log line says run_start_clip = that path).
-5. Capture a start from still at run stage 1 on KIT_Test_Overlord (side + front, 4x slow, frame before the start included) and send to a Fable
-   review (rule 10). Check first: the root faces the run direction during the whole clip (a 180 turn clip: if the body ends turned around, the
-   clip needs a trim/offset decided by the owner, not a sim change). Tuning: StartFromSpeed / PlayRate on ABP_GSTN_RunStartLayer.
+## Addendum 2: skid clip = SS_180_Turn2 (owner 23:52-23:53Z; corrected: it is the SKID clip, not the run start)
+Choice applied (rule 6): SS_180_Turn2 REPLACES Skid_Revised as the skid clip (owner's latest word); Skid_Revised stays as fallback
+(SKID_CLIP env). The run start slot stays EMPTY until the owner names a clip.
+Source: GaspMoverProject/Content/GiustinoMoves/Skid (5.7 project: copy files only, never open/save it). Its root may not rotate well; the owner
+wrote a root-fix script there (subfolder RootCorrection seen; the cloud could not open the folder, nobody has read the script yet). M1 already copied
+an SS_180_Turn2 into Ported57/Skid from another folder: keep it untouched, compare.
+Desktop steps, before running setup_skid_anim_layer.py:
+1. Read the owner's script in GiustinoMoves/Skid/RootCorrection first (what it changes, which asset it expects). Nothing writes into GaspMoverProject.
+2. Copy GiustinoMoves/Skid/SS_180_Turn2.uasset to _ue59 Content/Blueprints/Animation/Ported57/SkidOwner/ (skeleton SK_UEFN_Mannequin as M1; broken
+   reference = migrate with the port57_m1.py pattern).
+3. Run the owner's root-fix script on that copy only (adapt the asset path, never the logic; any change is written in the handover).
+4. Script default is now SKID_CLIP=/Game/Blueprints/Animation/Ported57/SkidOwner/SS_180_Turn2: run setup_skid_anim_layer.py (log line: skid_clip = that path).
+5. Capture a skid at run stage 1, KIT_Test_Overlord (side + top, 4x slow, frame before the reverse included) -> Fable review (rule 10). Check FIRST
+   the facing: the clip turns the root 180 while the sim turns the actor after the skid; a double turn (body ends facing back, or pops 180 at the
+   exit) = root fix / clip question for the owner, not a sim change. Tuning: StopFraction / StopTime / ExitPlayRate on ABP_GSTN_SkidLayer.

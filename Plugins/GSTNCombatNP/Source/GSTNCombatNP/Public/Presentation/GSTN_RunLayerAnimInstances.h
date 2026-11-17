@@ -49,7 +49,7 @@ class GSTNCOMBATNP_API UGSTN_SkidAnimInstance : public UAnimInstance, public IGS
 	GENERATED_BODY()
 
 public:
-	/** The skid clip (owner's choice 2026-11-16: Skid_Revised from GaspMoverProject, Ported57/Skid). Root motion is not used */
+	/** The skid clip (owner 2026-11-17: SS_180_Turn2, root fixed by the owner; set by Tools/GAS/setup_skid_anim_layer.py). Root motion is not used */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skid|Animation")
 	TObjectPtr<UAnimSequenceBase> SkidClip;
 
