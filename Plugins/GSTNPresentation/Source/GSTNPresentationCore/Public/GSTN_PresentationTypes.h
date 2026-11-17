@@ -172,6 +172,23 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationCue
 	FName StrongParameter = TEXT("User.Strong");
 
 	/**
+	 * Particle counts set by the cue (int user parameters, linked to a burst's Spawn Count): CountParameter = round(CountMax x intensity,
+	 * capped at CountMax), StrongCountParameter = StrongCount on a strong hit, else 0. A spawn probability linked to a float user parameter
+	 * never gated the burst (review r2: 8 shards and the red accent stars on every hit size). 0 = not set
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (ClampMin = "0"))
+	int32 CountMax = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FName CountParameter = TEXT("User.Count");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (ClampMin = "0"))
+	int32 StrongCount = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FName StrongCountParameter = TEXT("User.StrongCount");
+
+	/**
 	 * Waits for the drawn body: the cue plays once this bone of the owner's mesh is within GroundedHeight above the cue's location (or after
 	 * GroundedMaxWait). The event comes from the simulation, which can be frames ahead of what the mesh shows (review r2: the knockdown ring
 	 * came ~8-10 frames before the body touched the floor). The effect spawns under the bone. None = play at once

@@ -41,40 +41,60 @@ HIT_END = _lin("FF8A1E")
 HIT_SHADE = unreal.LinearColor(1.0, 0.72, 0.55, 1.0)
 COOL_SHADE = unreal.LinearColor(0.78, 0.82, 0.95, 1.0)
 
+
+def _mul(colour, k):
+    return unreal.LinearColor(colour.r * k, colour.g * k, colour.b * k, 1.0)
+
+
+# Screen-calibrated values (round 3). The emissive value is not what shows: eye adaptation inverse, the tone curve and the capture's post
+# desaturate light colours and push saturated ones (review r2 read the #FFF6E8 dust as grey #DEDCD7). Measured on a swatch capture
+# (NS_GSTN_Swatch, Tools/GASNPPTest/vfx_swatch.py, docs/notes/reviews/polish-m2/r3/swatch.json): grey 1 -> #BAB9BA, 2 -> #DCDCDC,
+# 4 -> #F0F0F0, 8 -> #FBFBFB; #FF8A1E x1.5 -> #F57E01, x2.2 -> #FFA102, x4.5 -> #FFD11C. These are used with DisplayGain 1:
+# - dust lit, for #F2E9DA on screen (per-channel inverse of the grey ramp), and its shade for ~#D4C2AC (style sheet: #FFF6E8 / #D9C7B0,
+#   review r2 minimum #F0E8DA / #D0BEA8)
+DUST_SCREEN = unreal.LinearColor(4.5, 3.25, 1.92, 1.0)
+DUST_SCREEN_SHADE = unreal.LinearColor(0.38, 0.36, 0.44, 1.0)  # (1.70, 1.18, 0.84) / DUST_SCREEN
+# - hit: white core, then #FF8A1E x4.5 (reads ~#FFD11C, the style sheet's #FFD23C), ending at x1.7 (reads ~#FF8A1E). A uniform shade keeps
+#   the dark tone orange (review r2: the old warm shade pushed the end colour toward red)
+HIT_WHITE = unreal.LinearColor(4.0, 4.0, 4.0, 1.0)
+HIT_MID_SCREEN = _mul(HIT_END, 4.5)
+HIT_END_SCREEN = _mul(HIT_END, 1.7)
+HIT_SCREEN_SHADE = unreal.LinearColor(0.75, 0.75, 0.75, 1.0)
+
 # Effect looks. Times are normalized age (0..1 of the particle's life)
 INSTANCES = {
     # Dust balls (run start, skid, jump, landing, impacts): born at 60%, full by frame ~3, shrink to 30% and die there (a ball never
     # shrinks to a point: review r1). DisplayGain: the tone curve greys a plain #FFF6E8 out (r1 read #C9C5BF on screen)
-    "DustBall": dict(cell="Ball", StartScale=0.6, GrowEnd=0.12, ShrinkStart=0.4, EndScale=0.3, ErodeStart=1.0, DisplayGain=2.1,
-                     colors=(DUST, DUST, DUST), ShadowMul=DUST_SHADE),
+    "DustBall": dict(cell="Ball", StartScale=0.6, GrowEnd=0.12, ShrinkStart=0.4, EndScale=0.3, ErodeStart=1.0, DisplayGain=1.0,
+                     colors=(DUST_SCREEN, DUST_SCREEN, DUST_SCREEN), ShadowMul=DUST_SCREEN_SHADE),
     # Landing / knockdown ring: thin, 43% -> 100% in the first 6 frames (ease-out), then thinned by erosion (6 -> 2 cm) until it dies
     "LandRing": dict(cell="ThinRing", FlatLight=1.0, StartScale=0.43, GrowEnd=0.33, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.3,
-                     DisplayGain=2.1, colors=(DUST, DUST, DUST)),
+                     DisplayGain=1.0, colors=(DUST_SCREEN, DUST_SCREEN, DUST_SCREEN)),
     # Landing / knockdown ring on the floor: the thick ring, thinned by erosion from 40% of its life. A flat thin ring is seen nearly edge-on
     # from a low camera (12 degrees: a 6 cm band is ~1 px) and vanished after ~5 frames in review r2; the splat's ring faces the camera
     "GroundRing": dict(cell="Ring", FlatLight=1.0, StartScale=0.43, GrowEnd=0.33, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.4,
-                       DisplayGain=2.1, colors=(DUST, DUST, DUST)),
+                       DisplayGain=1.0, colors=(DUST_SCREEN, DUST_SCREEN, DUST_SCREEN)),
     # Jump: thin ring, smaller and quicker than the landing
     "JumpRing": dict(cell="ThinRing", FlatLight=1.0, StartScale=0.4, GrowEnd=1.0, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.5,
-                     DisplayGain=2.1, colors=(DUST, DUST, DUST)),
+                     DisplayGain=1.0, colors=(DUST_SCREEN, DUST_SCREEN, DUST_SCREEN)),
     # Sprint lines: tapered white streaks, short life
     "SpeedStreak": dict(cell="Streak", FlatLight=1.0, StartScale=0.6, GrowEnd=0.2, ShrinkStart=0.5, EndScale=0.3, ErodeStart=1.0,
                         DisplayGain=2.0, colors=(WHITE, WHITE, WHITE)),
     # Hit: 4-point star shards, white -> yellow -> orange, shrink out; pushed behind the flash for their first frame
-    "HitStar": dict(cell="Star4", StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.3, EndScale=0.3, ErodeStart=1.0, DisplayGain=2.0,
-                    colors=(WHITE, HIT_MID, HIT_END), MidTime=0.12, ShadowMul=HIT_SHADE, DepthPush=60.0, DepthPushEnd=0.08, AppearAt=0.05),
+    "HitStar": dict(cell="Star4", StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.3, EndScale=0.3, ErodeStart=1.0, DisplayGain=1.0,
+                    colors=(HIT_WHITE, HIT_MID_SCREEN, HIT_END_SCREEN), MidTime=0.12, ShadowMul=HIT_SCREEN_SHADE, DepthPush=60.0, DepthPushEnd=0.08, AppearAt=0.05),
     # Strong hit accent: 5-point stars in the row's second colour (User.AccentTint through the particle colour)
-    "HitAccent": dict(cell="Star5", StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.3, EndScale=0.3, ErodeStart=1.0, DisplayGain=2.0,
-                      colors=(WHITE, WHITE, WHITE), ShadowMul=HIT_SHADE, DepthPush=60.0, DepthPushEnd=0.08, AppearAt=0.05),
+    "HitAccent": dict(cell="Star5", StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.3, EndScale=0.3, ErodeStart=1.0, DisplayGain=3.0,
+                      colors=(WHITE, WHITE, WHITE), ShadowMul=HIT_SCREEN_SHADE, DepthPush=60.0, DepthPushEnd=0.08, AppearAt=0.05),
     # Hit flash: the only thing above 1 (bloom), one or two frames
     "HitFlash": dict(cell="FlatBall", FlatLight=1.0, EmissiveBoost=4.0, StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.0, EndScale=0.3,
                      ErodeStart=1.0, colors=(WHITE, WHITE, HIT_MID), MidTime=0.5),
     # Hit ring: yellow from frame 2 (white only on frame 1: r1 read a dirty beige while it blended), widens and thins
     "HitRing": dict(cell="Ring", FlatLight=1.0, StartScale=0.35, GrowEnd=1.0, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.3,
-                    DisplayGain=2.0, colors=(WHITE, HIT_MID, HIT_END), MidTime=0.08),
+                    DisplayGain=1.0, colors=(HIT_WHITE, HIT_MID_SCREEN, HIT_END_SCREEN), MidTime=0.08),
     # Tumble trail: balls dropped along the path (tinted by the cue, white by default), shrink out
-    "TrailBall": dict(cell="Ball", StartScale=0.8, GrowEnd=0.1, ShrinkStart=0.3, EndScale=0.3, ErodeStart=1.0, DisplayGain=2.0,
-                      colors=(WHITE, WHITE, WHITE), ShadowMul=COOL_SHADE),
+    "TrailBall": dict(cell="Ball", StartScale=0.8, GrowEnd=0.1, ShrinkStart=0.3, EndScale=0.3, ErodeStart=1.0, DisplayGain=1.0,
+                      colors=(DUST_SCREEN, DUST_SCREEN, DUST_SCREEN), ShadowMul=DUST_SCREEN_SHADE),  # same dust as the puffs (review r2)
     # Colour calibration only (NS_GSTN_Swatch, capture with PIE_SWATCH=1): flat, full size all its life, the particle colour as is
     "Swatch": dict(cell="FlatBall", FlatLight=1.0, StartScale=1.0, GrowEnd=0.01, ShrinkStart=1.0, EndScale=1.0, ErodeStart=1.0,
                    DisplayGain=1.0, colors=(WHITE, WHITE, WHITE)),

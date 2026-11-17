@@ -300,9 +300,9 @@ bool FGSTN_PresentationDeriveCountedBounceTest::RunTest(const FString& Parameter
 	TestEqual(TEXT("chain: second bounce, then the re-hit's first"), Count(Events, GroundBounce), 2);
 
 	// A splat is not a bounce, whatever the count does
-	FGSTN_PresentationSnapshot Splat = Reacting(71, FVector::ZeroVector, 0, 1);
-	Splat.bSplat = true;
-	TestEqual(TEXT("splat: no wall bounce"), Count(Run({Reacting(70, FVector(900, 0, 0), 0, 0), Splat}), WallBounce), 0);
+	FGSTN_PresentationSnapshot SplatSnap = Reacting(71, FVector::ZeroVector, 0, 1);
+	SplatSnap.bSplat = true;
+	TestEqual(TEXT("splat: no wall bounce"), Count(Run({Reacting(70, FVector(900, 0, 0), 0, 0), SplatSnap}), WallBounce), 0);
 
 	// The bump's projected state tag is a Bump event (default tag rules), once per bump
 	const FGameplayTag BumpWall = FGameplayTag::RequestGameplayTag(FName(TEXT("Combat.State.Bump.Wall")), false);

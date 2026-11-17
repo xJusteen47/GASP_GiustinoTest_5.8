@@ -70,6 +70,14 @@ if os.environ.get('PIE_CAPTURE_SEQUENCES'):
 FILL_LIGHTS = [(35.0, 5.0), (325.0, 5.0), (95.0, 3.0)]
 WARMUP = ['NS_GSTN_RunStartDust', 'NS_GSTN_SkidDust', 'NS_GSTN_JumpPuff', 'NS_GSTN_LandRing', 'NS_GSTN_SpeedLines', 'NS_GSTN_HitSpark',
           'NS_GSTN_Impact', 'NS_GSTN_TumbleTrail']
+# PIE_SWATCH=1: colour calibration run. NS_GSTN_Swatch (setup_presentation_vfx.swatch) is placed between the side camera and the scene at
+# every sequence start, facing the camera; read the side frames with Tools/GASNPPTest/vfx_swatch.py
+SWATCH = os.environ.get('PIE_SWATCH') == '1'
+if SWATCH:
+    WARMUP.append('NS_GSTN_Swatch')
+# PIE_PROBE=1: debug run. At the first sequence frame the kit's burst systems are spawned 6 m above the pawn (unscaled, hit at intensity
+# 0.56) and their particles (position / velocity) are written to capture.log for 12 frames (UGSTN_VfxAuthoringLibrary.DescribeParticles)
+PROBE = [('NS_GSTN_HitSpark', ['Stars', 'Accent']), ('NS_GSTN_RunStartDust', ['Big', 'Small']), ('NS_GSTN_LandRing', ['Puffs'])]     if os.environ.get('PIE_PROBE') == '1' else []
 TIMEOUT = 840.0
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None,
       'blocks': [], 'kit': KIT}
@@ -303,10 +311,34 @@ def _tick(_dt):
             if not _blocks(seq):
                 return None
             _log(f'sequence {seq["name"]}: {_aim(seq, False)}')
+            if SWATCH:
+                c, cam = st['centre'], st['cams'][0].get_actor_location()
+                mid = unreal.Vector(c.x + (cam.x - c.x) * 0.45, c.y + (cam.y - c.y) * 0.45, c.z + (cam.z - c.z) * 0.45)
+                rot = unreal.MathLibrary.find_look_at_rotation(mid, cam)
+                system = unreal.load_asset('/GSTNPresentation/VFX/NS_GSTN_Swatch')
+                unreal.NiagaraFunctionLibrary.spawn_system_at_location(_world(), system, mid, rot, unreal.Vector(1, 1, 1), True, True,
+                                                                      unreal.NCPoolMethod.NONE, False)
+                _log(f'swatch at {mid}')
             _console('t.OverrideFPS 60')
             st.update(phase='seq_run', frame=0, mask=g.button_mask('Attack'), strong_mask=g.button_mask('Strong'), stick=None)
         elif phase == 'seq_run':
             seq, frame = SEQUENCES[st['seq']], st['frame']
+            if PROBE and frame == 0:
+                p = _pawn().get_actor_location()
+                st['probe'] = []
+                for name, emitters in PROBE:
+                    comp = unreal.NiagaraFunctionLibrary.spawn_system_at_location(
+                        _world(), unreal.load_asset(f'/GSTNPresentation/VFX/{name}'), unreal.Vector(p.x, p.y, p.z + 600), unreal.Rotator(),
+                        unreal.Vector(1, 1, 1), False, True, unreal.NCPoolMethod.NONE, False)
+                    comp.set_variable_float('User.Intensity', 0.56)
+                    comp.set_variable_float('User.Strong', 0.0)
+                    comp.set_variable_int('User.Count', 4)
+                    comp.set_variable_int('User.StrongCount', 0)
+                    st['probe'].append((name, emitters, comp))
+            if PROBE and 0 < frame <= 12:
+                for name, emitters, comp in st['probe']:
+                    for em in emitters:
+                        _log(f'probe f{frame} {name}.{em}: {unreal.GSTN_VfxAuthoringLibrary.describe_particles(comp, em, 6)}')
             _shoot(seq, frame)
             k = frame - PRE
             want = _stick_at(seq, k) if k >= 0 else None

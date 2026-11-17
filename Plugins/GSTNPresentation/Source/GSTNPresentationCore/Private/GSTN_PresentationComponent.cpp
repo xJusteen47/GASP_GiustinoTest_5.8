@@ -264,6 +264,15 @@ void UGSTN_PresentationComponent::PlayCue(const FGSTN_PresentationCue& Cue, cons
 			{
 				System->SetVariableLinearColor(Cue.AccentColorParameter, Cue.AccentTint);
 			}
+			const bool bStrong = Cue.StrongIntensity > 0.f && Intensity >= Cue.StrongIntensity;
+			if (Cue.CountMax > 0 && !Cue.CountParameter.IsNone())
+			{
+				System->SetVariableInt(Cue.CountParameter, FMath::Clamp(FMath::RoundToInt(Cue.CountMax * Intensity), 1, Cue.CountMax));
+			}
+			if (Cue.StrongCount > 0 && !Cue.StrongCountParameter.IsNone())
+			{
+				System->SetVariableInt(Cue.StrongCountParameter, bStrong ? Cue.StrongCount : 0);
+			}
 			if (!Cue.StrongParameter.IsNone())
 			{
 				System->SetVariableFloat(Cue.StrongParameter, Cue.StrongIntensity > 0.f && Intensity >= Cue.StrongIntensity ? 1.f : 0.f);
