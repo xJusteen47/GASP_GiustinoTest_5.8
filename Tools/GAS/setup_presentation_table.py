@@ -68,6 +68,9 @@ def rows():
         _cue("WallBounce", "NS_GSTN_Impact", scale=((200, 1500), (0.7, 1.3)), orient=True),
         _cue("GroundBounce", "NS_GSTN_Impact", scale=((200, 1500), (0.7, 1.3)), offset=feet, orient=True),
         _cue("Splat", "NS_GSTN_Impact", scale=((200, 1500), (0.8, 1.4)), orient=True),
+        # The small default bump off a wall or ceiling (no magnitude): a small impact, not a bounce's (size to be judged in the polish M2 r3 review)
+        _cue("Bump.Wall", "NS_GSTN_Impact", scale=((0, 1), (0.4, 0.4)), orient=True),
+        _cue("Bump.Ceiling", "NS_GSTN_Impact", scale=((0, 1), (0.4, 0.4))),
         # The downed landing after a tumble: the landing ring at the feet, a little bigger (no magnitude: intensity 1 -> 1.2)
         _cue("Knockdown", "NS_GSTN_LandRing", scale=((0, 1), (1.2, 1.2)), offset=feet),
         _cue("Tumble.Start", "NS_GSTN_TumbleTrail", socket="pelvis", scale_size=False,

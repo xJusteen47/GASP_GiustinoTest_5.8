@@ -7,9 +7,9 @@ Presentation only: nothing here is read by a simulation, nothing is replicated. 
 
 | Piece | What it does |
 |---|---|
-| `Presentation.Event.*` (native, `GSTN_PresentationTags.h`) | Jump(.Ground/.Air), Land, RunStart, StageUp, StopRelease, Skid(.Enter/.Loop/.Exit), Turn180, Hit, Splat, WallBounce, GroundBounce, Knockdown, GetUp, Roll, Dodge, Shield(.On/.Hit/.Break). The tag comment gives the unit of the magnitude. |
+| `Presentation.Event.*` (native, `GSTN_PresentationTags.h`) | Jump(.Ground/.Air), Land, RunStart, StageUp, StopRelease, Skid(.Enter/.Loop/.Exit), Turn180, Hit, Splat, WallBounce, GroundBounce, Bump(.Wall/.Ceiling), Knockdown, GetUp, Roll, Dodge, Shield(.On/.Hit/.Break). The tag comment gives the unit of the magnitude. |
 | `UGSTN_PresentationTable` (DataAsset) | Rows `FGSTN_PresentationCue`: event tag -> Niagara (world or socket, oriented, scaled, `User.Intensity`), sound (volume), camera shake (view target or world radius), short additive (through the directional additive node). Threshold `MinMagnitude` and scale (input range -> intensity, exponent). A row for a parent tag answers its children; `Parent` table = fallback (skin -> kit -> default). |
-| `FGSTN_PresentationDeriver` | Pure: two consecutive presented snapshots -> events (edges of grounded, run stage, skid phase, reaction velocity reflections, last hit frame, tag rules). |
+| `FGSTN_PresentationDeriver` | Pure: two consecutive presented snapshots -> events (edges of grounded, run stage, skid phase, the simulation's bounce counts with reaction velocity reflections as fallback, last hit frame, tag rules). |
 | `FGSTN_PresentationDedupe` | Rollback guard: once per (event, frame), +-`DedupeFrameWindow` (2) for edges read from presented state, exact frame for simulation stamps (hits, move starts). |
 | `UGSTN_PresentationComponent` | Per character. `SubmitSnapshot`, `ReportEvent`, table stack (`SetTableLayer(Source, Table, Priority)` over `DefaultTable`), effects (not on a dedicated server), Blueprint `OnPresentationEvent` and `BindEventByTag` (one Blueprint event per type). |
 

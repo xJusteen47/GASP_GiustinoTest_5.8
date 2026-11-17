@@ -150,6 +150,9 @@ TArray<FGSTN_PresentationTagRule> FGSTN_PresentationDeriveRules::MakeDefaultTagR
 	// The trail starts at the launch, not in the hitstop freeze of the hit that caused it (polish M2 review r1)
 	Rules.Add(Rule(TEXT("Combat.State.Tumble"), GSTNPresentationTags::Tumble_Start, GSTNPresentationTags::Tumble_End, TEXT("Combat.State.Hitstop")));
 	Rules.Add(Rule(TEXT("Combat.State.Knockdown"), GSTNPresentationTags::Knockdown, GSTNPresentationTags::GetUp));
+	// The small default bump off a wall or ceiling (combat rules WallImpact / CeilingImpact): its window is projected as a state tag
+	Rules.Add(Rule(TEXT("Combat.State.Bump.Wall"), GSTNPresentationTags::Bump_Wall));
+	Rules.Add(Rule(TEXT("Combat.State.Bump.Ceiling"), GSTNPresentationTags::Bump_Ceiling));
 	return Rules;
 }
 
@@ -226,9 +229,36 @@ void FGSTN_PresentationDeriver::Step(const FGSTN_PresentationSnapshot& C, const 
 		Emit(Out, Land, F, -UpBefore, C.Location, Up);
 	}
 
-	// Bounces of a reacting victim: the velocity reflected in one frame (gravity and drag change it far less than BounceMinSpeed per frame).
-	// A new hit also turns the velocity around: never read as a bounce
-	if (P.bReacting && C.bReacting && !C.bSplat && !bNewHit)
+	// Bounces of a reacting victim. The simulation's own count first: a bounce it decided is one, even when the velocity never showed the way in. In that step the
+	// velocity reading below stays silent, so one bounce is one event
+	const auto CountRose = [bNewHit](int32 Before, int32 Now)
+	{
+		return Before != INDEX_NONE && Now != INDEX_NONE && Now > 0 && (Now > Before || (bNewHit && Now != Before));
+	};
+	const bool bCountedGround = C.bReacting && !C.bSplat && CountRose(P.GroundBounceCount, C.GroundBounceCount);
+	const bool bCountedWall = C.bReacting && !C.bSplat && CountRose(P.WallBounceCount, C.WallBounceCount);
+	if (bCountedGround)
+	{
+		Emit(Out, GroundBounce, F, FMath::Max(-UpBefore, UpNow), C.Location, Up);
+	}
+	if (bCountedWall)
+	{
+		// Walls and ceilings share the count: a ceiling turns the rise into a fall, a wall turns the speed along the floor
+		if (UpBefore > 0.f && UpNow < 0.f && FMath::Abs(UpBefore - UpNow) >= (HNow - HBefore).Size())
+		{
+			Emit(Out, WallBounce, F, FMath::Max(UpBefore, -UpNow), C.Location, -Up);
+		}
+		else
+		{
+			const FVector Change = HNow - HBefore;
+			const FVector Normal = !Change.IsNearlyZero() ? Change.GetSafeNormal() : HNow.GetSafeNormal();
+			const float Into = FMath::Max(-FVector::DotProduct(HBefore, Normal), FVector::DotProduct(HNow, Normal));
+			Emit(Out, WallBounce, F, Into, C.Location, Normal);
+		}
+	}
+	// Then the velocity reflected in one frame (gravity and drag change it far less than BounceMinSpeed per frame), for the bounces no count
+	// covers (a source without counts, a surface row's or a hit's forced wall bounce). A new hit also turns the velocity around: never a bounce
+	if (P.bReacting && C.bReacting && !C.bSplat && !bNewHit && !bCountedGround && !bCountedWall)
 	{
 		if (UpBefore <= -Rules.BounceMinSpeed && UpNow > 0.f)
 		{
