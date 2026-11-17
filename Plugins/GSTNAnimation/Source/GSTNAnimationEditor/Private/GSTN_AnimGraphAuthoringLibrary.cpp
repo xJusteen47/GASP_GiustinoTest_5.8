@@ -1070,6 +1070,90 @@ bool UGSTN_AnimGraphAuthoringLibrary::InsertPoseNodeAfter(UAnimBlueprint* AnimBl
 	return bOk;
 }
 
+bool UGSTN_AnimGraphAuthoringLibrary::InsertPoseNodeBeforeOutput(UAnimBlueprint* AnimBlueprint, UClass* NodeClass)
+{
+	UEdGraph* AnimGraph = FindGraph(AnimBlueprint, UEdGraphSchema_K2::GN_AnimGraph);
+	if (!AnimGraph || !NodeClass || !NodeClass->IsChildOf(UAnimGraphNode_Base::StaticClass()))
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertPoseNodeBeforeOutput: needs an anim Blueprint with an AnimGraph and an anim graph node class"));
+		return false;
+	}
+	UEdGraphNode* Root = nullptr;
+	for (UEdGraphNode* Node : AnimGraph->Nodes)
+	{
+		if (Cast<UAnimGraphNode_Root>(Node))
+		{
+			Root = Node;
+			break;
+		}
+	}
+	UEdGraphPin* RootIn = Root ? FindPosePin(Root, EGPD_Input) : nullptr;
+	if (!RootIn || RootIn->LinkedTo.Num() != 1)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertPoseNodeBeforeOutput: the Output Pose of %s is missing or not fed by one node"),
+			*GetNameSafe(AnimBlueprint));
+		return false;
+	}
+	UEdGraphPin* UpstreamOut = RootIn->LinkedTo[0];
+	if (UpstreamOut->GetOwningNode()->IsA(NodeClass))
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Log, TEXT("InsertPoseNodeBeforeOutput: %s already feeds the Output Pose"), *NodeClass->GetName());
+		return true;
+	}
+	AnimGraph->Modify();
+	Root->Modify();
+	UAnimGraphNode_Base* NewNode = SpawnNode<UAnimGraphNode_Base>(AnimGraph, FVector2D(Root->NodePosX - 260, Root->NodePosY + 160), NodeClass);
+	UEdGraphPin* NewIn = FindPosePin(NewNode, EGPD_Input);
+	UEdGraphPin* NewOut = FindPosePin(NewNode, EGPD_Output);
+	if (!NewIn || !NewOut)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertPoseNodeBeforeOutput: %s has no pose input and output"), *NodeClass->GetName());
+		AnimGraph->RemoveNode(NewNode);
+		return false;
+	}
+	RootIn->BreakAllPinLinks();
+	bool bOk = Connect(UpstreamOut, NewIn);
+	bOk &= Connect(NewOut, RootIn);
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBlueprint);
+	if (!bOk)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertPoseNodeBeforeOutput: some links failed on %s, see above"), *AnimBlueprint->GetName());
+	}
+	return bOk;
+}
+
+bool UGSTN_AnimGraphAuthoringLibrary::SetPoseNodeProperty(UAnimBlueprint* AnimBlueprint, UClass* NodeClass, FName PropertyName, const FString& ValueText)
+{
+	UEdGraph* AnimGraph = FindGraph(AnimBlueprint, UEdGraphSchema_K2::GN_AnimGraph);
+	UAnimGraphNode_Base* Found = nullptr;
+	int32 Matches = 0;
+	for (UEdGraphNode* Node : AnimGraph ? AnimGraph->Nodes : TArray<TObjectPtr<UEdGraphNode>>())
+	{
+		if (NodeClass && Node && Node->IsA(NodeClass))
+		{
+			Found = Cast<UAnimGraphNode_Base>(Node);
+			++Matches;
+		}
+	}
+	const FStructProperty* NodeProperty = Found ? CastField<FStructProperty>(Found->GetClass()->FindPropertyByName(TEXT("Node"))) : nullptr;
+	const FProperty* Inner = NodeProperty ? NodeProperty->Struct->FindPropertyByName(PropertyName) : nullptr;
+	if (Matches != 1 || !Inner)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("SetPoseNodeProperty: %d node(s) of %s, property %s %s"), Matches, *GetNameSafe(NodeClass),
+			*PropertyName.ToString(), Inner ? TEXT("found") : TEXT("not found"));
+		return false;
+	}
+	Found->Modify();
+	void* NodeData = NodeProperty->ContainerPtrToValuePtr<void>(Found);
+	if (!Inner->ImportText_InContainer(*ValueText, NodeData, Found, PPF_None))
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("SetPoseNodeProperty: could not read '%s' as %s"), *ValueText, *PropertyName.ToString());
+		return false;
+	}
+	FBlueprintEditorUtils::MarkBlueprintAsModified(AnimBlueprint);
+	return true;
+}
+
 bool UGSTN_AnimGraphAuthoringLibrary::SetChildAssetOverride(UAnimBlueprint* ChildBlueprint, FName StateName, UAnimationAsset* Asset)
 {
 	UAnimBlueprint* Parent = ChildBlueprint ? UAnimBlueprint::GetParentAnimBlueprint(ChildBlueprint) : nullptr;

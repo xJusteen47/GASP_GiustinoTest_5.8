@@ -146,6 +146,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
 	static bool InsertPoseNodeAfter(UAnimBlueprint* AnimBlueprint, const FString& UpstreamNodeTitle, UClass* NodeClass);
 
+	/**
+	 * Puts one new pose node of NodeClass right in front of the AnimGraph's Output Pose: what fed the output now goes through the new node
+	 * (a post-process on the final pose, e.g. the ground contact fix). No change when the output is already fed by a node of NodeClass
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
+	static bool InsertPoseNodeBeforeOutput(UAnimBlueprint* AnimBlueprint, UClass* NodeClass);
+
+	/**
+	 * Sets one property of the runtime node (the "Node" struct) of the only node of NodeClass in the AnimGraph, from text (an asset path
+	 * for an object, "1.5" for a float). For setup scripts: Python cannot reach the runtime struct of an anim graph node. True if set
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
+	static bool SetPoseNodeProperty(UAnimBlueprint* AnimBlueprint, UClass* NodeClass, FName PropertyName, const FString& ValueText);
+
 	//~ Child anim Blueprints (skin variants, anim-layers.md part B)
 
 	/**
