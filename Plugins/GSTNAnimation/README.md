@@ -50,6 +50,8 @@ Default source priorities (`GSTNAnimSet`): character 0, kit 100, weapon 200, ski
 - `GSTNAnimationCore` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags; private Projects (finds the plugin's `Config/Tags`).
 - `GSTNAnimationEditor` (`Build.cs`): public Core, CoreUObject, Engine; private UnrealEd, BlueprintGraph, AnimGraph, AnimGraphRuntime, KismetCompiler.
   The Property Access node of a rule (plugin PropertyAccessNode, class private to its module) is created by class name with its `Path` set by reflection.
+- `GSTNMotionToolsEditor` (`Build.cs`, editor, PostEngineInit): public Core, CoreUObject, Engine; private InputCore, Json, PythonScriptPlugin,
+  Slate, SlateCore, UnrealEd, WorkspaceMenuStructure. Plugin dependency: PythonScriptPlugin (the panel runs `Content/Python/gstn_motion_tools`).
 - Dependents: the project module (wall layer). Planned: the loadout apply path (kit / weapon / skin collections), spin and drill.
 
 ## Gameplay tags
@@ -73,3 +75,24 @@ Default source priorities (`GSTNAnimSet`): character 0, kit 100, weapon 200, ski
 
 Enable the plugin, reparent the main anim graph to `UGSTN_CharacterAnimInstance` (it adds nothing else), add `UGSTN_AnimSetComponent`
 to the character with a default collection, and call `SetSource` / `SetCosmeticTags` where the game applies its loadout and skins.
+
+## Motion Tools (authoring, editor only)
+
+Non-destructive helpers for move animation on a Level Sequence with a Control Rig track (Window > GSTN Animation > Motion Tools).
+Each operation writes only its own **additive section** ("layer") on the Control Rig track, one row each; the base section is never
+written, every layer can be switched off, re-weighted, hand-edited or removed, and re-applying rewrites the same channels.
+
+- **Overlap** (follow-through) on a chain (Testa, Busto, Braccio, Polso, Mantello, Coda, or the viewport selection): preset
+  (Leggero, Pesante, Frusta, Rigido) + three sliders (Ritardo in frames at the chain tip, Morbidezza 0..1, Rimbalzo 0..1), weight, mode
+  (Molla = damped spring; Sfasamento = the motion replayed later down the chain). Key protection: weight 0 on the base key frames, the
+  first and the last frame (on a baked clip, keyed every frame, give the owner key frames instead). Optional floor guard: the layer may
+  not push the chain's collision spheres (radii of the runtime ground-contact fix) under a plane.
+- **Easing** presets on a key interval of the selected controls (Lineare, Morbido, Scatto, Anticipo, Overshoot, Assestamento), on the
+  Easing layer under Overlap. The interval's end values stay.
+- The same operations from Python and MCP: `import gstn_motion_tools as mt; mt.overlap(chain="testa", preset="pesante")`,
+  `mt.easing([...], 10, 16, "scatto")`, `mt.layer("Overlap", active=False)`, `mt.describe()`; toolset `GSTNMotionToolsToolset` when the
+  editor's ToolsetRegistry is present. Settings applied are stored in the sequence's metadata tag `GSTN.MotionTools`.
+- Code: math `Content/Python/gstn_motion_tools/core.py` (no `unreal`), operations `api.py`, Sequencer I/O `sequencer_io.py`, panel bridge
+  `panel.py`, in-editor smoke test `selftest.py`; cloud tests `tests/` (`python -m unittest gstn_motion_tools.tests.test_motion_tools
+  gstn_motion_tools.tests.test_editor_glue` from `Content/Python`). Panel: `Source/GSTNMotionToolsEditor`.
+- It is a speed-up tool used where it fits (owner, 2026-11-17): hand-keyed curves stay where it is not enough.

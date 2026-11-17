@@ -42,6 +42,10 @@ __pycache__/
 
 # GSTN plugins whose Content is project-owned (the standard combat rules asset); the rule above is for engine-level plugin copies
 !Plugins/GSTNCombat/Content/
+# GSTN Motion Tools Python package (only the Python folder: the plugin has no other content in git)
+!Plugins/GSTNAnimation/Content/
+Plugins/GSTNAnimation/Content/*
+!Plugins/GSTNAnimation/Content/Python/
 !Plugins/GSTNParts/Content/
 !Plugins/GSTNDefence/Content/
 !Plugins/GSTNLink/Content/
