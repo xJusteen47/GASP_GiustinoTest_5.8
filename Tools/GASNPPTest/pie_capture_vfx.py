@@ -30,18 +30,34 @@ KIT = os.environ.get('PIE_CAPTURE_KIT', 'KIT_Test_Hits')
 OUT = os.environ.get('PIE_CAPTURE_OUT') or os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()),
                                                         'PolishM2', f'vfx{VFX}')
 SIZE = 480
-# 'side': on the pawn's right at the sequence start, follows the pawn (movement) or frames pawn + dummy (hits); 'game': the player's camera
-VIEWS = ['side', 'game']
+# 'side': on the pawn's right at the sequence start, follows the pawn (movement), the victim (follow_victim) or frames pawn + dummy (hits);
+# 'game': the player's camera; 'close': the player's camera at CLOSE x its field of view (review r1: the fighter was ~45 px high in 'game')
+VIEWS = ['side', 'game', 'close']
+CLOSE = 0.5
+CUBE = '/Engine/BasicShapes/Cube'
 ELEVATION, FOV = 12.0, 50.0
 PRE = 20
 FWD, BACK = (0, 1, 0), (0, -1, 0)   # stick, relative to the camera (as in scenario_combat_main_inputs)
 # stick: [(from frame, to frame, direction)] after PRE; jump: frames after PRE pressing Jump; tap: frames pressing Attack;
-# dummy: (cm ahead, damage percent) or None; dist: camera distance; follow: the side camera moves with the pawn
+# dummy: (cm ahead, damage percent) or None; dist: camera distance; follow: the side camera moves with the pawn; follow_victim: with the
+# dummy; kit: the host's kit for this sequence (default KIT); strong: frames pressing Strong; blocks: boxes summoned for the sequence and
+# removed after it, (cm ahead, cm to the side, cm above the floor, size along, across, up), placed along the host's facing
 SEQUENCES = [
     {'name': 'jump', 'frames': 100, 'jump': [0], 'dist': 520.0, 'follow': False},
     {'name': 'hit_small', 'frames': 60, 'tap': [0], 'dummy': (95.0, 0.0), 'dist': 480.0, 'follow': False},
     {'name': 'hit_medium', 'frames': 80, 'tap': [0], 'dummy': (95.0, 90.0), 'dist': 480.0, 'follow': False},
-    {'name': 'hit_large', 'frames': 180, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 900.0, 'follow': False},
+    # The launch, followed until the downed landing (~190 frames after the hit) and a little after
+    {'name': 'hit_large', 'frames': 260, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 650.0, 'follow': False, 'follow_victim': True},
+    # Wall and ceiling contacts of a launched victim (NS_GSTN_Impact): a wall across the launch and a low ceiling over it
+    {'name': 'wall', 'frames': 120, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 650.0, 'follow': False, 'follow_victim': True,
+     'blocks': [(420.0, 0.0, 0.0, 60.0, 700.0, 500.0)]},
+    {'name': 'ceiling', 'frames': 120, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 650.0, 'follow': False, 'follow_victim': True,
+     'blocks': [(650.0, 0.0, 300.0, 1200.0, 700.0, 40.0)]},
+    # KIT_Example_Impacts: strong = wall splat (a wall behind the victim), attack = spike with a ground bounce
+    {'name': 'splat', 'frames': 120, 'strong': [0], 'kit': 'KIT_Example_Impacts', 'dummy': (95.0, 100.0), 'dist': 650.0, 'follow': False,
+     'follow_victim': True, 'blocks': [(330.0, 0.0, 0.0, 60.0, 700.0, 500.0)]},
+    {'name': 'ground_bounce', 'frames': 120, 'tap': [0], 'kit': 'KIT_Example_Impacts', 'dummy': (95.0, 100.0), 'dist': 650.0,
+     'follow': False, 'follow_victim': True},
     # Movement last: the sprint ends ~37 m away, near where the other players are parked
     {'name': 'run_skid', 'frames': 200, 'stick': [(0, 110, FWD), (110, 150, BACK)], 'dist': 650.0, 'follow': True},
     {'name': 'sprint', 'frames': 300, 'stick': [(0, 250, FWD)], 'dist': 700.0, 'follow': True},
@@ -52,7 +68,8 @@ FILL_LIGHTS = [(35.0, 5.0), (325.0, 5.0), (95.0, 3.0)]
 WARMUP = ['NS_GSTN_RunStartDust', 'NS_GSTN_SkidDust', 'NS_GSTN_JumpPuff', 'NS_GSTN_LandRing', 'NS_GSTN_SpeedLines', 'NS_GSTN_HitSpark',
           'NS_GSTN_Impact', 'NS_GSTN_TumbleTrail']
 TIMEOUT = 840.0
-st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None}
+st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None,
+      'blocks': [], 'kit': KIT}
 
 
 def _log(msg):
@@ -117,15 +134,55 @@ def _make_lights():
     return True
 
 
+def _victim():
+    keys = h.dummies()
+    comp = g.comps(_world()).get(keys[0]) if keys else None
+    return comp.get_owner() if comp else None
+
+
+def _blocks(seq):
+    """Summons the sequence's boxes (one per call, like the scene captures); True when all are placed"""
+    want = seq.get('blocks', [])
+    if len(st['blocks']) >= len(want):
+        return True
+    known = st.setdefault('mesh_before', {a.get_name() for a in unreal.GameplayStatics.get_all_actors_of_class(_world(), unreal.StaticMeshActor)})
+    new = [a for a in unreal.GameplayStatics.get_all_actors_of_class(_world(), unreal.StaticMeshActor) if a.get_name() not in known]
+    if not new:
+        _console('Summon StaticMeshActor')
+        return False
+    actor = new[0]
+    known.add(actor.get_name())
+    ahead, side, up, along, across, height = want[len(st['blocks'])]
+    pawn = _pawn()
+    p, yaw = pawn.get_actor_location(), pawn.get_actor_rotation().yaw
+    fx, fy = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+    floor = p.z - 92.0  # capsule half height of the test character
+    comp = actor.static_mesh_component
+    comp.set_mobility(unreal.ComponentMobility.MOVABLE)
+    comp.set_static_mesh(unreal.load_asset(CUBE))
+    comp.set_collision_profile_name('BlockAll')
+    actor.set_actor_scale3d(unreal.Vector(along / 100.0, across / 100.0, height / 100.0))
+    centre = unreal.Vector(p.x + fx * ahead - fy * side, p.y + fy * ahead + fx * side, floor + up + height * 0.5)
+    actor.set_actor_location_and_rotation(centre, unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw), False, True)
+    st['blocks'].append(actor)
+    _log(f'{seq["name"]}: block at ({centre.x:.0f}, {centre.y:.0f}, {centre.z:.0f}) size ({along:.0f}, {across:.0f}, {height:.0f})')
+    return len(st['blocks']) >= len(want)
+
+
 def _aim(seq, follow):
     pawn = _pawn()
     centre = pawn.get_actor_location()
+    if follow and seq.get('follow_victim') and st.get('victim'):
+        v = st['victim'].get_actor_location()
+        centre = unreal.Vector(v.x, v.y, max(v.z, st['centre'].z))
     if not follow:
         st['yaw'] = pawn.get_actor_rotation().yaw
         if seq.get('dummy'):   # frame attacker and victim: look at the middle
             ahead = seq['dummy'][0] * 0.5
             centre = unreal.Vector(centre.x + ahead * math.cos(math.radians(st['yaw'])), centre.y + ahead * math.sin(math.radians(st['yaw'])), centre.z)
         st['centre'] = centre
+    elif seq.get('follow_victim') and st.get('victim'):
+        pass
     elif seq.get('follow'):
         centre = unreal.Vector(centre.x, centre.y, st['centre'].z)
     else:
@@ -143,9 +200,9 @@ def _aim(seq, follow):
 def _shoot(seq, frame):
     _aim(seq, True)
     manager = g._local_pawn(0)[0].get_editor_property('player_camera_manager')
-    game = st['cams'][1]
-    game.set_actor_location_and_rotation(manager.get_camera_location(), manager.get_camera_rotation(), False, False)
-    game.capture_component2d.set_editor_property('fov_angle', manager.get_fov_angle())
+    for cam, scale in ((st['cams'][1], 1.0), (st['cams'][2], CLOSE)):
+        cam.set_actor_location_and_rotation(manager.get_camera_location(), manager.get_camera_rotation(), False, False)
+        cam.capture_component2d.set_editor_property('fov_angle', manager.get_fov_angle() * scale)
     for name, cam, rt in zip(VIEWS, st['cams'], st['rts']):
         cam.capture_component2d.capture_scene()
         folder = os.path.join(OUT, seq['name'], name)
@@ -226,6 +283,11 @@ def _tick(_dt):
             if st['seq'] >= len(SEQUENCES):
                 return _finish('ok')
             seq = SEQUENCES[st['seq']]
+            if seq.get('kit', KIT) != st['kit']:
+                st['kit'] = seq.get('kit', KIT)
+                _log(f'{seq["name"]}: kit {st["kit"]}: {h.kit(0, st["kit"])}')
+                st.update(t=now + 2.0)
+                return None
             if seq.get('dummy') and not st.get('dummy_placed'):
                 keys = h.dummies()
                 ahead, percent = seq['dummy']
@@ -233,11 +295,13 @@ def _tick(_dt):
                 if keys:
                     g.comps(g.worlds()[0])[keys[0]].server_set_damage_percent(percent)
                 _log(f'{seq["name"]}: dummy {keys[:1]} at {placed}, percent {percent}')
-                st.update(dummy_placed=True, t=now)
+                st.update(dummy_placed=True, t=now, victim=_victim())
+                return None
+            if not _blocks(seq):
                 return None
             _log(f'sequence {seq["name"]}: {_aim(seq, False)}')
             _console('t.OverrideFPS 60')
-            st.update(phase='seq_run', frame=0, mask=g.button_mask('Attack'), stick=None)
+            st.update(phase='seq_run', frame=0, mask=g.button_mask('Attack'), strong_mask=g.button_mask('Strong'), stick=None)
         elif phase == 'seq_run':
             seq, frame = SEQUENCES[st['seq']], st['frame']
             _shoot(seq, frame)
@@ -256,6 +320,9 @@ def _tick(_dt):
             if k in seq.get('tap', []):
                 g.combat_tap(0, st['mask'])
                 _log(f'{seq["name"]}: attack on v{frame}')
+            if k in seq.get('strong', []):
+                g.combat_tap(0, st['strong_mask'])
+                _log(f'{seq["name"]}: strong on v{frame}')
             st['frame'] = frame + 1
             if st['frame'] >= PRE + seq['frames']:
                 g.release(0, 'move')
@@ -263,7 +330,9 @@ def _tick(_dt):
                 _console('t.OverrideFPS 0')
                 p = _pawn().get_actor_location()
                 _log(f'sequence {seq["name"]} done: {st["frame"]} frames, pawn at ({p.x:.0f}, {p.y:.0f}, {p.z:.0f})')
-                st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False)
+                for block in st['blocks']:
+                    block.destroy_actor()
+                st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False, blocks=[], victim=None)
         elif phase == 'ending' and not les.is_in_play_in_editor():
             unreal.unregister_slate_post_tick_callback(st['handle'])
             try:

@@ -175,8 +175,12 @@ bool FGSTN_PresentationDeriveAirTest::RunTest(const FString& Parameters)
 	Falling.AirJumpsUsed = 1;
 	Frames.Add(Falling);
 	Frames.Add(Snap(6, true));
+	Frames[0].Location = FVector(100, 0, 0);
+	Frames[1].Location = FVector(100, 0, 15);  // first airborne frame: already above the floor
 	TArray<FGSTN_PresentationEvent> Events = Run(Frames);
 	TestEqual(TEXT("one ground jump"), Count(Events, Jump_Ground), 1);
+	const FGSTN_PresentationEvent* Takeoff = Events.FindByPredicate([](const FGSTN_PresentationEvent& E) { return E.EventTag == GSTNPresentationTags::Jump_Ground; });
+	TestTrue(TEXT("jump at the last grounded location"), Takeoff && Takeoff->Location.Equals(Frames[0].Location));
 	TestEqual(TEXT("one air jump"), Count(Events, Jump_Air), 1);
 	TestEqual(TEXT("one landing"), Count(Events, Land), 1);
 	const FGSTN_PresentationEvent* Landing = Events.FindByPredicate([](const FGSTN_PresentationEvent& E) { return E.EventTag == GSTNPresentationTags::Land; });
@@ -186,6 +190,24 @@ bool FGSTN_PresentationDeriveAirTest::RunTest(const FString& Parameters)
 	Events = Run({Snap(1, true), Snap(2, false, FVector(300, 0, -10)), Snap(3, true, FVector(300, 0, 0))});
 	TestEqual(TEXT("ledge: no jump"), Count(Events, Jump_Ground), 0);
 	TestEqual(TEXT("step: no landing"), Count(Events, Land), 0);
+
+	// A quiet state (downed): its small bounce makes no jump and no landing
+	FGSTN_PresentationDeriveRules Quiet;
+	Quiet.QuietAirTags.AddTag(GSTNPresentationTags::Shield);
+	FGSTN_PresentationSnapshot Q1 = Snap(1, true);
+	Q1.StateTags.AddTag(GSTNPresentationTags::Shield);
+	FGSTN_PresentationSnapshot Q2 = Snap(2, false, FVector(0, 0, 500));
+	Q2.StateTags = Q1.StateTags;
+	FGSTN_PresentationSnapshot Q3 = Snap(3, true);
+	Q3.StateTags = Q1.StateTags;
+	Q3.Velocity = FVector::ZeroVector;
+	FGSTN_PresentationSnapshot Q2b = Q2;
+	Q2b.Velocity = FVector(0, 0, -500);
+	Q2b.Frame = 3;
+	Q3.Frame = 4;
+	Events = Run({Q1, Q2, Q2b, Q3}, Quiet);
+	TestEqual(TEXT("quiet: no jump"), Count(Events, Jump_Ground), 0);
+	TestEqual(TEXT("quiet: no landing"), Count(Events, Land), 0);
 
 	// The first snapshot is only the reference
 	Events = Run({Snap(1, false, FVector(0, 0, -900))});
@@ -296,6 +318,25 @@ bool FGSTN_PresentationDeriveTagsTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("two dodges (restart counts)"), Count(Events, Dodge), 2);
 	const FGSTN_PresentationEvent* FirstDodge = Events.FindByPredicate([](const FGSTN_PresentationEvent& E) { return E.EventTag == GSTNPresentationTags::Dodge; });
 	TestTrue(TEXT("move event stamped with the move's start frame"), FirstDodge && FirstDodge->Frame == 3 && FirstDodge->bExactFrame);
+
+	// A held rule waits out its hold tag: the state starts frozen (hitstop), the event comes at the first free frame
+	FGSTN_PresentationDeriveRules Held;
+	FGSTN_PresentationTagRule& Trail = Held.TagRules.AddDefaulted_GetRef();
+	Trail.WatchedTag = Tumble;
+	Trail.OnAdded = Tumble_Start;
+	Trail.OnRemoved = Tumble_End;
+	Trail.HeldWhileTag = Shield;
+	FGSTN_PresentationSnapshot H2 = Snap(2, false);
+	H2.StateTags.AddTag(Tumble);
+	H2.StateTags.AddTag(Shield);
+	FGSTN_PresentationSnapshot H3 = H2;
+	H3.Frame = 3;
+	FGSTN_PresentationSnapshot H4 = Snap(4, false);
+	H4.StateTags.AddTag(Tumble);
+	Events = Run({Snap(1, true), H2, H3, H4}, Held);
+	const FGSTN_PresentationEvent* Start = Events.FindByPredicate([](const FGSTN_PresentationEvent& E) { return E.EventTag == GSTNPresentationTags::Tumble_Start; });
+	TestTrue(TEXT("held: starts once, after the hold"), Count(Events, Tumble_Start) == 1 && Start && Start->Frame == 4);
+	TestEqual(TEXT("held: no end while frozen"), Count(Events, Tumble_End), 0);
 
 	TestTrue(TEXT("default rules exist"), FGSTN_PresentationDeriveRules::MakeDefaultTagRules().Num() >= 5);
 	return true;

@@ -31,6 +31,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
 	static bool AddUserColor(UNiagaraSystem* System, FName Name, FLinearColor Default);
 
+	/** Adds (or keeps) User.<Name> as a 2D vector with this default (e.g. a sprite size scale the cue sets from its intensity) */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
+	static bool AddUserVector2(UNiagaraSystem* System, FName Name, FVector2D Default);
+
 	/** Adds an emitter copied from an emitter asset (a template), renamed; returns its unique name or an error starting with "!" */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
 	static FString AddEmitter(UNiagaraSystem* System, const FString& EmitterAssetPath, const FString& NewName);

@@ -117,22 +117,38 @@ EDataValidationResult UGSTN_PresentationTable::IsDataValid(FDataValidationContex
 
 // Derivation -----------------------------------------------------------------------------------------------------------------------------
 
+FGameplayTagContainer FGSTN_PresentationDeriveRules::MakeDefaultQuietTags()
+{
+	FGameplayTagContainer Out;
+	const FGameplayTag Knockdown = FGameplayTag::RequestGameplayTag(FName(TEXT("Combat.State.Knockdown")), false);
+	if (Knockdown.IsValid())
+	{
+		Out.AddTag(Knockdown);
+	}
+	return Out;
+}
+
 TArray<FGSTN_PresentationTagRule> FGSTN_PresentationDeriveRules::MakeDefaultTagRules()
 {
 	// By name: the defence plugin owns these tags and may be disabled (an invalid watched tag never matches)
-	auto Rule = [](const TCHAR* Watched, const FGameplayTag& OnAdded, const FGameplayTag& OnRemoved = FGameplayTag())
+	auto Rule = [](const TCHAR* Watched, const FGameplayTag& OnAdded, const FGameplayTag& OnRemoved = FGameplayTag(), const TCHAR* HeldWhile = nullptr)
 	{
 		FGSTN_PresentationTagRule Out;
 		Out.WatchedTag = FGameplayTag::RequestGameplayTag(FName(Watched), false);
 		Out.OnAdded = OnAdded;
 		Out.OnRemoved = OnRemoved;
+		if (HeldWhile)
+		{
+			Out.HeldWhileTag = FGameplayTag::RequestGameplayTag(FName(HeldWhile), false);
+		}
 		return Out;
 	};
 	TArray<FGSTN_PresentationTagRule> Rules;
 	Rules.Add(Rule(TEXT("Combat.State.Shielding"), GSTNPresentationTags::Shield_On));
 	Rules.Add(Rule(TEXT("Combat.State.ShieldStun"), GSTNPresentationTags::Shield_Hit));
 	Rules.Add(Rule(TEXT("Combat.State.ShieldBroken"), GSTNPresentationTags::Shield_Break));
-	Rules.Add(Rule(TEXT("Combat.State.Tumble"), GSTNPresentationTags::Tumble_Start, GSTNPresentationTags::Tumble_End));
+	// The trail starts at the launch, not in the hitstop freeze of the hit that caused it (polish M2 review r1)
+	Rules.Add(Rule(TEXT("Combat.State.Tumble"), GSTNPresentationTags::Tumble_Start, GSTNPresentationTags::Tumble_End, TEXT("Combat.State.Hitstop")));
 	Rules.Add(Rule(TEXT("Combat.State.Knockdown"), GSTNPresentationTags::Knockdown, GSTNPresentationTags::GetUp));
 	return Rules;
 }
@@ -194,16 +210,18 @@ void FGSTN_PresentationDeriver::Step(const FGSTN_PresentationSnapshot& C, const 
 	const int32 F = C.Frame;
 	const bool bNewHit = C.LastHitFrame != INDEX_NONE && C.LastHitFrame != P.LastHitFrame;
 
-	// Air: jumps and landings (a reacting victim's contacts are bounces or a knockdown, below)
-	if (P.bGrounded && !C.bGrounded && !C.bReacting && UpNow >= Rules.JumpMinUpSpeed)
+	// Air: jumps and landings (a reacting victim's contacts are bounces or a knockdown, below; a downed one makes none)
+	const bool bQuiet = C.StateTags.HasAny(Rules.QuietAirTags) || P.StateTags.HasAny(Rules.QuietAirTags);
+	if (P.bGrounded && !C.bGrounded && !C.bReacting && !bQuiet && UpNow >= Rules.JumpMinUpSpeed)
 	{
-		Emit(Out, Jump_Ground, F, UpNow, C.Location, Up);
+		// At the last grounded location: one frame later the character is already a jump step in the air (review r1: ~20 cm high)
+		Emit(Out, Jump_Ground, F, UpNow, P.Location, Up);
 	}
 	else if (!P.bGrounded && !C.bGrounded && C.AirJumpsUsed > P.AirJumpsUsed)
 	{
 		Emit(Out, Jump_Air, F, FMath::Max(UpNow, 0.f), C.Location, Up);
 	}
-	if (!P.bGrounded && C.bGrounded && !P.bReacting && !C.bReacting && -UpBefore >= Rules.LandMinFallSpeed)
+	if (!P.bGrounded && C.bGrounded && !P.bReacting && !C.bReacting && !bQuiet && -UpBefore >= Rules.LandMinFallSpeed)
 	{
 		Emit(Out, Land, F, -UpBefore, C.Location, Up);
 	}
@@ -305,8 +323,10 @@ void FGSTN_PresentationDeriver::Step(const FGSTN_PresentationSnapshot& C, const 
 		}
 		const FGameplayTagContainer& Before = Rule.bMoveTag ? P.MoveTags : P.StateTags;
 		const FGameplayTagContainer& Now = Rule.bMoveTag ? C.MoveTags : C.StateTags;
-		bool bHad = Before.HasTag(Rule.WatchedTag);
-		const bool bHas = Now.HasTag(Rule.WatchedTag);
+		// A held rule also needs the hold tag absent (always looked up in the state tags)
+		const bool bHeld = Rule.HeldWhileTag.IsValid();
+		bool bHad = Before.HasTag(Rule.WatchedTag) && !(bHeld && P.StateTags.HasTag(Rule.HeldWhileTag));
+		const bool bHas = Now.HasTag(Rule.WatchedTag) && !(bHeld && C.StateTags.HasTag(Rule.HeldWhileTag));
 		const bool bRestarted = Rule.bMoveTag && bHad && bHas && C.MoveStartFrame != P.MoveStartFrame;
 		if (bRestarted)
 		{

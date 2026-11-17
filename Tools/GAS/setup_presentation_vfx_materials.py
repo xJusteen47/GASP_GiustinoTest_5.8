@@ -43,33 +43,37 @@ COOL_SHADE = unreal.LinearColor(0.78, 0.82, 0.95, 1.0)
 
 # Effect looks. Times are normalized age (0..1 of the particle's life)
 INSTANCES = {
-    # Dust balls (run start, skid, jump, landing, impacts): born at 60%, full by frame ~3, shrink out (no erosion)
-    "DustBall": dict(cell="Ball", StartScale=0.6, GrowEnd=0.12, ShrinkStart=0.35, EndScale=0.0, ErodeStart=1.0,
+    # Dust balls (run start, skid, jump, landing, impacts): born at 60%, full by frame ~3, shrink to 30% and die there (a ball never
+    # shrinks to a point: review r1). DisplayGain: the tone curve greys a plain #FFF6E8 out (r1 read #C9C5BF on screen)
+    "DustBall": dict(cell="Ball", StartScale=0.6, GrowEnd=0.12, ShrinkStart=0.4, EndScale=0.3, ErodeStart=1.0, DisplayGain=2.1,
                      colors=(DUST, DUST, DUST), ShadowMul=DUST_SHADE),
-    # Landing / impact ring: widens with an ease-out over its whole life and thins out by erosion
-    "LandRing": dict(cell="Ring", FlatLight=1.0, StartScale=0.3, GrowEnd=1.0, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.45,
-                     colors=(DUST, DUST, DUST)),
+    # Landing / knockdown ring: thin, 43% -> 100% in the first 6 frames (ease-out), then thinned by erosion (6 -> 2 cm) until it dies
+    "LandRing": dict(cell="ThinRing", FlatLight=1.0, StartScale=0.43, GrowEnd=0.33, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.3,
+                     DisplayGain=2.1, colors=(DUST, DUST, DUST)),
     # Jump: thin ring, smaller and quicker than the landing
     "JumpRing": dict(cell="ThinRing", FlatLight=1.0, StartScale=0.4, GrowEnd=1.0, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.5,
-                     colors=(DUST, DUST, DUST)),
+                     DisplayGain=2.1, colors=(DUST, DUST, DUST)),
     # Sprint lines: tapered white streaks, short life
-    "SpeedStreak": dict(cell="Streak", FlatLight=1.0, StartScale=0.6, GrowEnd=0.2, ShrinkStart=0.5, EndScale=0.0, ErodeStart=1.0,
-                        colors=(WHITE, WHITE, WHITE)),
-    # Hit: 4-point star shards, biggest and whitest at frame 1, white -> yellow -> orange, shrink out
-    "HitStar": dict(cell="Star4", StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.25, EndScale=0.0, ErodeStart=1.0,
-                    colors=(WHITE, HIT_MID, HIT_END), MidTime=0.3, ShadowMul=HIT_SHADE),
+    "SpeedStreak": dict(cell="Streak", FlatLight=1.0, StartScale=0.6, GrowEnd=0.2, ShrinkStart=0.5, EndScale=0.3, ErodeStart=1.0,
+                        DisplayGain=2.0, colors=(WHITE, WHITE, WHITE)),
+    # Hit: 4-point star shards, white -> yellow -> orange, shrink out; pushed behind the flash for their first frame
+    "HitStar": dict(cell="Star4", StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.3, EndScale=0.3, ErodeStart=1.0, DisplayGain=2.0,
+                    colors=(WHITE, HIT_MID, HIT_END), MidTime=0.12, ShadowMul=HIT_SHADE, DepthPush=60.0, DepthPushEnd=0.08),
+    # Strong hit accent: 5-point stars in the row's second colour (User.AccentTint through the particle colour)
+    "HitAccent": dict(cell="Star5", StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.3, EndScale=0.3, ErodeStart=1.0, DisplayGain=2.0,
+                      colors=(WHITE, WHITE, WHITE), ShadowMul=HIT_SHADE, DepthPush=60.0, DepthPushEnd=0.08),
     # Hit flash: the only thing above 1 (bloom), one or two frames
     "HitFlash": dict(cell="FlatBall", FlatLight=1.0, EmissiveBoost=4.0, StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.0, EndScale=0.3,
                      ErodeStart=1.0, colors=(WHITE, WHITE, HIT_MID), MidTime=0.5),
-    # Hit ring: white -> yellow, widens and thins
+    # Hit ring: yellow from frame 2 (white only on frame 1: r1 read a dirty beige while it blended), widens and thins
     "HitRing": dict(cell="Ring", FlatLight=1.0, StartScale=0.35, GrowEnd=1.0, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.3,
-                    colors=(WHITE, HIT_MID, HIT_MID), MidTime=0.4),
+                    DisplayGain=2.0, colors=(WHITE, HIT_MID, HIT_END), MidTime=0.08),
     # Tumble trail: balls dropped along the path (tinted by the cue, white by default), shrink out
-    "TrailBall": dict(cell="Ball", StartScale=0.8, GrowEnd=0.1, ShrinkStart=0.15, EndScale=0.0, ErodeStart=1.0,
+    "TrailBall": dict(cell="Ball", StartScale=0.8, GrowEnd=0.1, ShrinkStart=0.3, EndScale=0.3, ErodeStart=1.0, DisplayGain=2.0,
                       colors=(WHITE, WHITE, WHITE), ShadowMul=COOL_SHADE),
     # Tumble ribbon: one tone; older segments erode first, so the tail tapers
     "TrailRibbon": dict(cell="FlatBall", FlatLight=1.0, StartScale=1.0, GrowEnd=0.01, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.0,
-                        colors=(WHITE, WHITE, WHITE)),
+                        DisplayGain=2.0, colors=(WHITE, WHITE, WHITE)),
 }
 
 
@@ -86,6 +90,8 @@ def import_atlas():
     tex.set_editor_property("srgb", False)
     tex.set_editor_property("compression_settings", unreal.TextureCompressionSettings.TC_DEFAULT)
     tex.set_editor_property("lod_group", unreal.TextureGroup.TEXTUREGROUP_EFFECTS)
+    # No mips: a small sprite would read a blurred mip where the next cell bleeds in (review r1, the cross at the end of every ball)
+    tex.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
     EAL.save_loaded_asset(tex)
     return tex
 
@@ -182,7 +188,10 @@ def build_master(atlas):
     scaled = _op(mat, unreal.MaterialExpressionDivide, centred, size_safe, -1300, -150)
     back = _node(mat, unreal.MaterialExpressionAdd, -1150, -150, const_b=0.5)
     _link(scaled, "", back, "A")
-    clamped = _unary(mat, unreal.MaterialExpressionSaturate, back, -1000, -150)
+    # Clamped inside the cell's empty border (>= 25 px of 256), never on its edge: a clamped sample on the edge is filtered with the next
+    # cell, and a shrinking shape clamps most of its quad (review r1: a stripe, then a cross, on every ball in its last frames)
+    clamped = _node(mat, unreal.MaterialExpressionClamp, -1000, -150, min_default=0.05, max_default=0.95)
+    _link(back, "", clamped, "Input")
     cell = _op(mat, unreal.MaterialExpressionAppendVector, _scalar(mat, "CellX", 0.0, -1150, 0), _scalar(mat, "CellY", 0.0, -1150, 100),
                -1000, 50)
     shifted = _op(mat, unreal.MaterialExpressionAdd, clamped, cell, -850, -100)
@@ -223,6 +232,12 @@ def build_master(atlas):
     _link(erode, "", erode_bias, "A")
     mask = _op(mat, unreal.MaterialExpressionMin, tex, erode_bias, 550, 1200, a_out="R")
 
+    # Pushed back from the camera in the first part of life (DepthPush cm until DepthPushEnd): the hit's shards are born inside the flash and
+    # must not draw over it (review r1: a dark star in the frame-1 flash). 0 = off
+    push_t = _unary(mat, unreal.MaterialExpressionOneMinus, _ramp(mat, t, zero_c, _scalar(mat, "DepthPushEnd", 0.1, 400, 1600), 450, 1600),
+                    850, 1600)
+    depth = _op(mat, unreal.MaterialExpressionMultiply, push_t, _scalar(mat, "DepthPush", 0.0, 850, 1700), 1000, 1650)
+    MEL.connect_material_property(depth, "", unreal.MaterialProperty.MP_PIXEL_DEPTH_OFFSET)
     MEL.connect_material_property(emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     MEL.connect_material_property(mask, "", unreal.MaterialProperty.MP_OPACITY_MASK)
     MEL.recompile_material(mat)
@@ -238,7 +253,8 @@ def build_instances(master):
             f"MI_GSTN_VFX_{name}", MATS, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
         mi.set_editor_property("parent", master)
         col, row = CELLS[look["cell"]]
-        scalars = {"CellX": col, "CellY": row, "FlatLight": 0.0, "EmissiveBoost": 1.0, "MidTime": 0.3}
+        scalars = {"CellX": col, "CellY": row, "FlatLight": 0.0, "EmissiveBoost": 1.0, "MidTime": 0.3, "DisplayGain": 1.3,
+                   "DepthPush": 0.0, "DepthPushEnd": 0.1}
         scalars.update({k: v for k, v in look.items() if isinstance(v, (int, float))})
         for key, value in scalars.items():
             MEL.set_material_instance_scalar_parameter_value(mi, key, float(value))

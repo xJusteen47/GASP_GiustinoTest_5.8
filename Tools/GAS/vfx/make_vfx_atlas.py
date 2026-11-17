@@ -4,6 +4,8 @@
 shade crescent: two flat tones, no gradient), B = erosion field (1 at the shape's deepest point, 0 on its edge: the master material
 cuts B below a threshold that rises with age, so a shape dies by eroding from its edge, never by fading).
 Cells: 0 ball, 1 ring, 2 star 4 points, 3 star 5 points, 4 drop (point up), 5 tapered streak (along V), 6 thin ring, 7 ball (no shade).
+Every shape is drawn at SHAPE_SCALE of its cell: >= 16 px of empty border in every channel, so a small or clamped sample never reads
+the next cell (review r1: a stripe, then a cross on every ball in its last frames). The texture has no mips (material script).
 Stdlib only (zlib PNG writer): python Tools/GAS/vfx/make_vfx_atlas.py  -> Tools/GAS/vfx/T_GSTN_VFX_Atlas.png
 """
 import math
@@ -12,6 +14,7 @@ import struct
 import zlib
 
 CELL = 256
+SHAPE_SCALE = 0.84  # the widest shapes reach 0.95 of the half cell: 0.95 * 0.84 * 128 = 102 px, 26 px of border
 COLS, ROWS = 4, 2
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "T_GSTN_VFX_Atlas.png")
@@ -84,7 +87,7 @@ SHAPES = [
     (star(5, 0.95, 0.42), 0.12),
     (drop(), 0.14),
     (streak(), 0.0),
-    (ring(0.86, 0.07), 0.0),
+    (ring(0.86, 0.05), 0.0),
     (circle(0.92), 0.0),
 ]
 
@@ -98,8 +101,9 @@ def render_cell(sdf, light):
         row = []
         for i in range(CELL):
             x = -1 + (i + 0.5) * px
-            d = sdf(x, y)
-            lit = sdf(x + light * 0.7, y + light) if light > 0 else -1.0
+            k = SHAPE_SCALE
+            d = sdf(x / k, y / k) * k
+            lit = sdf((x + light * 0.7 * k) / k, (y + light * k) / k) if light > 0 else -1.0
             row.append((d, lit))
             deepest = max(deepest, -d)
         values.append(row)

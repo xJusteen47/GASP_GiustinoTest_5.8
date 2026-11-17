@@ -315,6 +315,12 @@ bool UGSTN_VfxAuthoringLibrary::AddUserColor(UNiagaraSystem* System, FName Name,
 	return GSTNVfxAuthoring::AddUser<FLinearColor>(System, FNiagaraTypeDefinition::GetColorDef(), Name, Default);
 }
 
+bool UGSTN_VfxAuthoringLibrary::AddUserVector2(UNiagaraSystem* System, FName Name, FVector2D Default)
+{
+	// Niagara's vec2 is float, the Blueprint-facing FVector2D is double
+	return GSTNVfxAuthoring::AddUser<FVector2f>(System, FNiagaraTypeDefinition::GetVec2Def(), Name, FVector2f(Default));
+}
+
 FString UGSTN_VfxAuthoringLibrary::AddEmitter(UNiagaraSystem* System, const FString& EmitterAssetPath, const FString& NewName)
 {
 	UNiagaraEmitter* Source = LoadObject<UNiagaraEmitter>(nullptr, *EmitterAssetPath);

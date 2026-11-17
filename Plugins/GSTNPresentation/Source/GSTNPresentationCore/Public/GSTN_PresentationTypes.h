@@ -121,9 +121,16 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationCue
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
 	bool bOrientToDirection = false;
 
-	/** Multiply the system's scale by the intensity */
+	/**
+	 * Multiply the system's scale by the intensity. The component scale moves and spreads the particles but Niagara never applies it to
+	 * a sprite's size, so the intensity also goes to SizeParameter (a system multiplies its sprite sizes by it)
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
 	bool bScaleSize = true;
+
+	/** 2D vector user parameter set to (intensity, intensity) when bScaleSize (None = not set): the sprite size scale */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FName SizeParameter = TEXT("User.SizeScale");
 
 	/** Float user parameter set to the intensity (None = not set) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
@@ -146,6 +153,23 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationCue
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
 	FLinearColor Tint = FLinearColor::White;
+
+	/** Second colour of the row (the kit's secondary, style sheet A "Colore"), set on AccentColorParameter (None = not set) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FLinearColor AccentTint = FLinearColor::White;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FName AccentColorParameter = TEXT("User.AccentTint");
+
+	/**
+	 * Strong tier: StrongParameter (float user parameter) is set to 1 when the intensity reaches StrongIntensity, else 0. A system gates an
+	 * extra layer with it (the strong hit's accent shards). 0 = never strong
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (ClampMin = "0"))
+	float StrongIntensity = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FName StrongParameter = TEXT("User.Strong");
 
 	bool IsSustained() const { return !StopOn.IsEmpty() || MaxDuration > 0.f; }
 

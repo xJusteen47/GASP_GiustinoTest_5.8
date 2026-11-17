@@ -36,6 +36,7 @@ UGSTN_PresentationComponent::UGSTN_PresentationComponent()
 	PrimaryComponentTick.TickGroup = TG_PostPhysics;
 	SetIsReplicatedByDefault(false);
 	DeriveRules.TagRules = FGSTN_PresentationDeriveRules::MakeDefaultTagRules();
+	DeriveRules.QuietAirTags = FGSTN_PresentationDeriveRules::MakeDefaultQuietTags();
 }
 
 UGSTN_PresentationComponent* UGSTN_PresentationComponent::FindOrAdd(AActor* Owner)
@@ -213,6 +214,10 @@ void UGSTN_PresentationComponent::PlayCue(const FGSTN_PresentationCue& Cue, cons
 			{
 				System->SetRelativeScale3D(FVector(Intensity));
 			}
+			if (Cue.bScaleSize && !Cue.SizeParameter.IsNone())
+			{
+				System->SetVariableVec2(Cue.SizeParameter, FVector2D(Intensity, Intensity));
+			}
 			if (!Cue.IntensityParameter.IsNone())
 			{
 				System->SetVariableFloat(Cue.IntensityParameter, Intensity);
@@ -220,6 +225,14 @@ void UGSTN_PresentationComponent::PlayCue(const FGSTN_PresentationCue& Cue, cons
 			if (!Cue.ColorParameter.IsNone())
 			{
 				System->SetVariableLinearColor(Cue.ColorParameter, Cue.Tint);
+			}
+			if (!Cue.AccentColorParameter.IsNone())
+			{
+				System->SetVariableLinearColor(Cue.AccentColorParameter, Cue.AccentTint);
+			}
+			if (!Cue.StrongParameter.IsNone())
+			{
+				System->SetVariableFloat(Cue.StrongParameter, Cue.StrongIntensity > 0.f && Intensity >= Cue.StrongIntensity ? 1.f : 0.f);
 			}
 			if (Cue.IsSustained())
 			{
