@@ -10,7 +10,7 @@ Clips: `/Game/GASNPPTest/Combat/Reaction/AS_React_*` (AnimPipeline bakes). Image
 - Local bone TRANSLATION lengths are correct: `_lock_lengths` pins them to the source frame 0 (check: only root +16.3, pelvis, ik_*, VB bones differ from the reference pose, as intended).
 
 ## Finding (measured, Saved/Logs/ci/react_bones.txt, script Tools/GASNPPTest/react_bones_m1.py, command in README header of this folder's txt)
-All 8 reaction clips carry NON-UNIT SCALE KEYS, constant in every frame, on 5 bones (reference pose scale is 1.000 everywhere):
+The 4 clips measured (Tumble, HitStand, GroundHit, Splat; the other 4 were not checked) carry NON-UNIT SCALE KEYS, constant in every frame, on 5 bones (reference pose scale is 1.000 everywhere):
 | bone | scale3d in clip |
 |---|---|
 | head | (1.15, 1.15, 1.15) |
@@ -23,5 +23,5 @@ It is a bake bug (scale not locked to 1), NOT a retarget setting, so I applied n
 ## Diagnostic copy (not part of the game)
 `/Game/AnimPipeline/Diag/AS_React_GroundHit_scale1` (local, Content/AnimPipeline is not versioned): same clip, scale forced to 1 on those 5
 tracks (script `Tools/GASNPPTest/react_scale1_m1.py`). Bottom row of the image. Visible difference is moderate (head, thighs, feet), the pose is identical.
-If Fable agrees, the obvious fix is in `animpipe/ue_rig.py::_lock_lengths`: write `scl.append(Vector(1,1,1))` (or `unreal.Vector.ONE`) instead of `t.scale3d`, then re-bake the 8 clips.
+If Fable agrees, the obvious fix is in `animpipe/ue_rig.py::_lock_lengths`: write `scl.append(Vector(1,1,1))` (or `unreal.Vector.ONE`) instead of `t.scale3d`, then re-bake the clips.
 Camera: standalone capture at dist 270, fov 55, centre (0,15,95), so lying poses sit low in the frame.
