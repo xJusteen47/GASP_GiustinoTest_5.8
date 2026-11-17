@@ -369,6 +369,23 @@ def build(spec):
     return json.dumps({k: v for k, v in res.items() if k not in ("controls", "shifted")})
 
 
+def _unit_scale(dst):
+    """Every bone track keeps scale3d = (1,1,1). The Control Rig bake leaks non-unit scale (head 1.15, thigh 1.12, foot 0.89 on the
+    mannequin rig: a compensating pair), which showed as stretched, detached limbs on the base reactions (M1 review, 2026-11-17).
+    Only the scale keys change: translation and rotation are rewritten with their own values. Returns the tracks it had to fix."""
+    ctrl = dst.get_editor_property("controller")
+    n = dst.get_editor_property("number_of_sampled_keys")
+    fixed = []
+    ctrl.open_bracket(unreal.Text("animpipe unit scale"), False)
+    for b in [str(x) for x in unreal.AnimationLibrary.get_animation_track_names(dst)]:
+        tfs = [unreal.AnimationLibrary.get_bone_pose_for_frame(dst, b, f, False) for f in range(n)]
+        if any(max(abs(t.scale3d.x - 1.0), abs(t.scale3d.y - 1.0), abs(t.scale3d.z - 1.0)) > 1e-4 for t in tfs):
+            ctrl.set_bone_track_keys(b, [t.translation for t in tfs], [t.rotation for t in tfs], [unreal.Vector(1.0, 1.0, 1.0)] * n, False)
+            fixed.append(b)
+    ctrl.close_bracket(False)
+    return fixed
+
+
 FREE_TRANSLATION = ("root", "pelvis", "ik_", "vb ")   # bones whose translation is motion, not length
 
 
@@ -392,12 +409,13 @@ def _lock_lengths(dst, src):
             per[b] = max(per.get(b, 0.0), dd)
             if dd > worst:
                 worst, wb = dd, f"{b}@{f}"
-            pos.append(ref); rot.append(t.rotation); scl.append(t.scale3d)
+            pos.append(ref); rot.append(t.rotation); scl.append(unreal.Vector(1.0, 1.0, 1.0))   # the rig's scale must not leak into the clip
         ctrl.set_bone_track_keys(b, pos, rot, scl, False)
         done += 1
     ctrl.close_bracket(False)
+    res_scale = _unit_scale(dst)
     big = sorted(((round(v, 2), k) for k, v in per.items() if v > 0.1), reverse=True)[:8]
-    return {"bones": done, "removed_max_cm": round(worst, 3), "at": wb, "over_0.1": big, "frames": n}
+    return {"bones": done, "removed_max_cm": round(worst, 3), "at": wb, "over_0.1": big, "frames": n, "unit_scale_fixed": res_scale}
 
 
 def _bake_ik_feet(dst):

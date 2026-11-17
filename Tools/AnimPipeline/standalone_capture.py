@@ -35,7 +35,7 @@ def _script():
         cap.set_frame(JOB["anim"], w)
         yield
         yield
-        cap.capture("lit", JOB["azs"][0], JOB["el"], "_warm", size=JOB["size"], dist=JOB["dist"], fov=JOB["fov"])
+        cap.capture("lit", JOB["azs"][0], JOB["el"], "_warm", size=JOB["size"], dist=JOB["dist"], fov=JOB["fov"], center=JOB.get("center"))
     for az in JOB["azs"]:
         sub = os.path.join(JOB["out_dir"], str(az)); os.makedirs(sub, exist_ok=True)
         for f in range(n + 1):
@@ -43,7 +43,7 @@ def _script():
             for _ in range(SETTLE_TICKS):
                 yield
             cap.OUT = sub.replace("\\", "/").rstrip("/") + "/"
-            cap.capture("lit", az, JOB["el"], "%03d" % f, size=JOB["size"], dist=JOB["dist"], fov=JOB["fov"])
+            cap.capture("lit", az, JOB["el"], "%03d" % f, size=JOB["size"], dist=JOB["dist"], fov=JOB["fov"], center=JOB.get("center"))
         _log(f"az {az}: {n + 1} frames")
     json.dump({"n": n, "azs": JOB["azs"], "size": JOB["size"], "move": JOB["move"]}, open(os.path.join(JOB["out_dir"], "manifest.json"), "w"))
 
