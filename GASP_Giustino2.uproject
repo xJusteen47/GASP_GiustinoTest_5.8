@@ -228,6 +228,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNDepthMarkerMover",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNCamera",
 			"Enabled": true
 		},
