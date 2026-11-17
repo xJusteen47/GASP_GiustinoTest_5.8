@@ -18,10 +18,10 @@ Costo stimato thread: ~45 $ Opus + review Fable ~8 $.
 ## Decisione owner (20:57) e brief del giro mirato (thread nuovo, portatile + editor, Opus medium)
 Owner: "fai i consigliati" = nucleo accettato come v1; UN giro mirato sulle palline degli impatti; anello di atterraggio più piccolo e sottile, sotto l'anello del colpo L; ricattura del bump. Poi review Fable solo di palline, anello e bump.
 1. `Tools/GAS/setup_presentation_vfx.py`: `impact()` e `land_ring()` Puffs: nascita su cerchio più largo (~55-60 cm), spinta radiale fuori dalla sagoma, palline 14-18 cm; knockdown/terra/soffitto non devono stare sul corpo per più di 2-3 frame.
-2. Anello: `land_ring()` taglia 182 -> ~120 (sotto i ~115 cm del colpo L a 1,1), `GroundRing` più sottile (cella ThinRing con ErodeStart ~0,5, oppure Ring con erosione prima); controllare che dalla vista side resti visibile 15-18 frame (il ThinRing piatto spariva in r2).
+2. Anello: `land_ring()` taglia 182 -> ~100 (sotto i ~115 cm del colpo L a 1,1), `GroundRing` più sottile (cella ThinRing con ErodeStart ~0,5, oppure Ring con erosione prima); controllare che dalla vista side resti visibile 15-18 frame (il ThinRing piatto spariva in r2).
 3. `Tools/GASNPPTest/pie_capture_vfx.py`: `wall_bump` frames 110 -> 200 (il Bump.Wall è a ~v176).
 4. Setup (scratch `boot_setup.py`), cattura ON e OFF solo `jump,hit_large,wall_bump,ceiling,ground_bounce`, griglie off/on in `r4/`, Fable con la stessa checklist D.
 ## Coda codice (gioco)
-- Rimbalzi muro doppi a 6 frame (wall: WallBounce sim 2022 e 2025; wall_bump 2514/2516/2520).
+- Rimbalzi muro doppi a 6 frame (cattura r3b1: ceiling WallBounce sim 2022 e 2025; wall_bump 2514/2516/2520).
 - Bump e WallBounce nello stesso frame (Bump.Ceiling 2041 con WallBounce 2041).
 - Soffitto segnalato come WallBounce invece di rimbalzo soffitto (sequenza ceiling).
