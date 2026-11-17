@@ -58,6 +58,12 @@ the root/capsule (`UGSTN_DepthSubjectAdapter::GetPresentedOffset` now adds the v
 Character mesh, else the first non-root mesh; `bFollowPresentedMesh` turns it off) and from a probe answer being applied on the column of the frame
 that issued it (it is now re-projected on the current column with `ReprojectTarget` on probed frames too, like the in-between ones).
 
+Mover pawns (2026-11-17): the generic adapters guess the visual mesh ("first mesh that is not the root") and its rest place (archetype),
+which the per-move capsule changes at run time; SandboxCharacter_Mover is a Pawn, so it fell to the Actor adapter (feet = capsule centre).
+The separate plugin `GSTNDepthMarkerMover` registers `UGSTN_DepthSubjectAdapter_Mover` (priority 200): presented root =
+`BaseVisualComponentTransform^-1 * PrimaryVisualComponent` (exactly what Mover's smoothing wrote), feet at the capsule bottom along
+`GetUpDirection()`, airborne/ground from `UCharacterMoverComponent`, base from `GetMovementBase()`. Tests `GSTNDepthMarker.Mover.*`.
+
 ## Approach marker and projection planes
 
 The character is airborne above a lower platform (marker A, straight down along gravity) and a higher platform is nearby, offset

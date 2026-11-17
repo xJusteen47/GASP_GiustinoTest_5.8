@@ -1984,6 +1984,9 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 			DrawDebugString(GetWorld(), Pawn->GetActorLocation() + FVector(0.0, 0.0, 140.0), GetDebugString(), nullptr, FColor::White, 0.f, true);
 		}
 	}
+	// Debug shapes ride the presented (smoothed) mesh unless gstn.Combat.Debug.FollowMesh 0
+	const FVector DebugOffset = (GSTNCombatDebug::IsHitboxDrawOn() || GSTNCombatDebug::IsBodyDrawOn() || GSTNCombatDebug::IsHurtboxDrawOn())
+		? GSTNCombatDebug::GetPresentationOffset(GetOwner()) : FVector::ZeroVector;
 	if (GSTNCombatDebug::IsHitboxDrawOn())
 	{
 		const double Now = GetWorld()->GetTimeSeconds();
@@ -1991,18 +1994,18 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 		{
 			LingerDebugShapes = AttackerDebugShapes;
 			LingerDebugShapesTime = Now;
-			GSTNCombatDebug::DrawHitboxes(GetWorld(), AttackerDebugShapes);
+			GSTNCombatDebug::DrawHitboxes(GetWorld(), AttackerDebugShapes, /*bFaded*/ false, DebugOffset);
 		}
 		else if (LingerDebugShapesTime >= 0.0 && Now - LingerDebugShapesTime <= GSTNCombatDebug::GetHitboxLingerSeconds())
 		{
-			GSTNCombatDebug::DrawHitboxes(GetWorld(), LingerDebugShapes, /*bFaded*/ true);
+			GSTNCombatDebug::DrawHitboxes(GetWorld(), LingerDebugShapes, /*bFaded*/ true, DebugOffset);
 		}
 	}
 	if (GSTNCombatDebug::IsBodyDrawOn())
 	{
 		const UGSTN_CombatWorldSubsystem* Subsystem = WorldSubsystem.Get();
 		const FGSTN_SnapshotEntry* Entry = (Subsystem && RegisteredEntityId != INDEX_NONE) ? Subsystem->GetSnapshot().Find(RegisteredEntityId) : nullptr;
-		GSTNCombatDebug::DrawBody(GetWorld(), Entry, GetOwner() ? Cast<UCapsuleComponent>(GetOwner()->GetRootComponent()) : nullptr);
+		GSTNCombatDebug::DrawBody(GetWorld(), Entry, GetOwner() ? Cast<UCapsuleComponent>(GetOwner()->GetRootComponent()) : nullptr, DebugOffset);
 	}
 	if (GSTNCombatDebug::IsHurtboxDrawOn() && RegisteredEntityId != INDEX_NONE)
 	{
@@ -2010,7 +2013,7 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 		{
 			if (const FGSTN_SnapshotEntry* Entry = Subsystem->GetSnapshot().Find(RegisteredEntityId))
 			{
-				GSTNCombatDebug::DrawHurtboxes(GetWorld(), *Entry);
+				GSTNCombatDebug::DrawHurtboxes(GetWorld(), *Entry, DebugOffset);
 			}
 		}
 	}
