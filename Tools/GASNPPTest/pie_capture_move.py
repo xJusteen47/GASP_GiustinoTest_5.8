@@ -110,6 +110,9 @@ DAIR_SEQUENCES = [
 # Dropkick (forward air, ANIM-R2): same 'air' mechanism, but the stick is held forward (instead of crouch) and Attack tapped the next frame
 # (command Directional while Airborne, setup_overlord_dropkick_kit.py): PIE_CAPTURE_KIT=KIT_Test_OverlordDropkick. The move is 80 frames long
 DROPKICK_SEQUENCES = [
+    # F4 (owner 2026-11-17, orange Overlord kit): after the forward air (dropkick) lands, the stick is pushed forward: the character must run, not slide
+    {'name': 'dropkick_land_walk', 'taps': [], 'frames': 220, 'dummy': None, 'shoot': True, 'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5},
+     'sticks': [(int(os.environ.get('PIE_CAPTURE_LAND_WALK_AT', 130)), (0, 1, 0)), (210, None)]},
     {'name': 'dropkick_whiff', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5}},
     # PUSHBOX-P2: the same press with a dummy ahead, so the landing and the end meet a body. P3: 120 cm let the kick pass ~230 cm over the dummy
     # (no hit), the kick connects further out: PIE_CAPTURE_DROPKICK_DIST (default 275 cm)
