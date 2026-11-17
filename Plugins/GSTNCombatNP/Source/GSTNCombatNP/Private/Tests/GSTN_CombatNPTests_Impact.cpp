@@ -348,7 +348,9 @@ bool FGSTN_ImpactWallCeilingDefaultBounceTest::RunTest(const FString& Parameters
 	Soft.SetContact(TEXT("Wall"), 100.0, 10);
 	const FGSTN_ImpactStepResult Bump = Soft.Step(11);
 	TestTrue(TEXT("slow wall: bump"), Bump.Outcome == EGSTN_ImpactOutcome::Bounce && Bump.bBump);
-	TestTrue(*FString::Printf(TEXT("smallest bump off the wall (%s)"), *Bump.Move.Velocity.ToString()), FMath::IsNearlyEqual(Bump.Move.Velocity.X, -150.0, 1.0));
+	// 4 cm under a 0.25 drag at 62.5 Hz: 4 x 0.25 x 62.5 = 62.5 cm/s
+	TestTrue(*FString::Printf(TEXT("smallest bump off the wall (%s)"), *Bump.Move.Velocity.ToString()), FMath::IsNearlyEqual(Bump.Move.Velocity.X, -62.5, 0.5));
+	TestEqual(TEXT("the bump drags"), Bump.Move.DecayPerFrame, 0.25f);
 	TestTrue(TEXT("keeps half the slide"), FMath::IsNearlyEqual(Bump.Move.Velocity.Y, 50.0, 1.0) && FMath::IsNearlyEqual(Bump.Move.Velocity.Z, -100.0, 1.0));
 	TestEqual(TEXT("bump window"), Soft.Core.Hit.BumpEndFrame, 11 + 14);
 	TestEqual(TEXT("on a wall"), static_cast<int32>(Soft.Core.Hit.BumpKind), static_cast<int32>(FGSTN_HitSyncState::BumpKindWall));
@@ -371,7 +373,7 @@ bool FGSTN_ImpactWallCeilingDefaultBounceTest::RunTest(const FString& Parameters
 	Top.SetContact(TEXT("Wall"), 3000.0, 10, EGSTN_TumbleContactKind::Ceiling, FVector(0.0, 0.0, -1.0));
 	const FGSTN_ImpactStepResult Ceiling = Top.Step(11);
 	TestTrue(TEXT("after the hitstun a fast ceiling is a bump (the ground's hitstun condition)"), Ceiling.bBump);
-	TestTrue(*FString::Printf(TEXT("biggest bump, down (%s)"), *Ceiling.Move.Velocity.ToString()), FMath::IsNearlyEqual(Ceiling.Move.Velocity.Z, -350.0, 1.0));
+	TestTrue(*FString::Printf(TEXT("biggest bump, down (%s)"), *Ceiling.Move.Velocity.ToString()), FMath::IsNearlyEqual(Ceiling.Move.Velocity.Z, -12.0 * 0.25 * 62.5, 0.5));
 	TestEqual(TEXT("on a ceiling"), static_cast<int32>(Top.Core.Hit.BumpKind), static_cast<int32>(FGSTN_HitSyncState::BumpKindCeiling));
 
 	// The attack forbids the bounce: a bump, never the hard bounce

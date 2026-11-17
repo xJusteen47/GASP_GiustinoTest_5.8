@@ -153,7 +153,7 @@ enum class EGSTN_SurfaceBounceJudge : uint8
  *    about the face at the restitution, still tumbling, still in hitstun. bSameAsGround reads threshold, hitstun condition, restitution and chain
  *    limit from GroundImpact; off, from Bounce below. The chain (walls and ceilings together) is counted apart from the floor's.
  *  - BUMP: slower than that (little knockback left) the victim does NOT get the floor's tech bounce: it is nudged off the face a little
- *    (BumpMinSpeed..BumpMaxSpeed, scaled by the impact speed) and plays a short clip. The clip is presentation: the combat tick projects
+ *    (BumpMinDistance..BumpMaxDistance, scaled by the impact speed, stopped by a drag) and plays a short clip. The clip is presentation: the combat tick projects
  *    Combat.State.Bump (+ .Wall / .Ceiling) for BumpFrames, and a reaction anim rule on that tag plays it.
  *
  * What a surface or the attack asks first is not touched: a surface row that splats, breaks or forces a bounce, a hit that forces an outcome
@@ -197,19 +197,29 @@ struct GSTNCOMBATCORE_API FGSTN_SurfaceBounceRules
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (EditCondition = "bEnabled && bBump"))
 	bool bBumpOnlyDuringHitstun = false;
 
-	/** Impact speeds mapped onto BumpMinSpeed..BumpMaxSpeed: at or under ScaleMinSpeed the smallest bump, at or over ScaleMaxSpeed the biggest */
+	/** Impact speeds mapped onto BumpMinDistance..BumpMaxDistance: at or under ScaleMinSpeed the smallest bump, at or over ScaleMaxSpeed the biggest */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bEnabled && bBump"))
 	float BumpScaleMinSpeed = 100.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bEnabled && bBump"))
 	float BumpScaleMaxSpeed = 1200.f;
 
-	/** Speed off the face of the smallest and of the biggest bump (cm/s along the face's normal; 150 cm/s is a few cm before gravity wins) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bEnabled && bBump"))
-	float BumpMinSpeed = 150.f;
+	/**
+	 * How far the smallest and the biggest bump carry the victim off the face (cm). The push starts at the speed that, with BumpDragPerFrame,
+	 * covers this distance (v = D x drag / frame time). PIE 2026-11-17: a plain 210 cm/s push without drag carried ~45 cm, far too much
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.0", ForceUnits = "cm", EditCondition = "bEnabled && bBump"))
+	float BumpMinDistance = 4.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bEnabled && bBump"))
-	float BumpMaxSpeed = 350.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.0", ForceUnits = "cm", EditCondition = "bEnabled && bBump"))
+	float BumpMaxDistance = 12.f;
+
+	/**
+	 * Fraction of the horizontal speed the bump takes away each frame (the knockback move's drag, kept for the rest of the flight): it stops the
+	 * push quickly and the victim does not slide on after landing. 0.25 at 62.5 Hz: about 90% of the distance in 8 frames
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.01", ClampMax = "1.0", EditCondition = "bEnabled && bBump"))
+	float BumpDragPerFrame = 0.25f;
 
 	/** Shape of the scale: 1 linear, above 1 soft impacts stay small longer */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.1", EditCondition = "bEnabled && bBump"))
@@ -240,8 +250,8 @@ struct GSTNCOMBATCORE_API FGSTN_SurfaceBounceRules
 		return Hard.WantsBounceAtSpeed(JudgedSpeed, HitstunFramesLeft > 0);
 	}
 
-	/** The bump's speed off the face for an impact speed, 0 for none (bump off, or grazing). Pure */
-	double BumpSpeed(double JudgedSpeed) const
+	/** The bump's distance off the face for an impact speed, 0 for none (bump off, or grazing). Pure */
+	double BumpDistance(double JudgedSpeed) const
 	{
 		if (!bBump || JudgedSpeed <= static_cast<double>(NoBumpBelowSpeed))
 		{
@@ -250,7 +260,21 @@ struct GSTNCOMBATCORE_API FGSTN_SurfaceBounceRules
 		const double Range = FMath::Max(static_cast<double>(BumpScaleMaxSpeed) - static_cast<double>(BumpScaleMinSpeed), 1.0);
 		const double Alpha = FMath::Clamp((JudgedSpeed - static_cast<double>(BumpScaleMinSpeed)) / Range, 0.0, 1.0);
 		const double Shaped = FMath::Pow(Alpha, static_cast<double>(FMath::Max(BumpExponent, 0.1f)));
-		return FMath::Lerp(static_cast<double>(BumpMinSpeed), static_cast<double>(FMath::Max(BumpMaxSpeed, BumpMinSpeed)), Shaped);
+		return FMath::Lerp(static_cast<double>(BumpMinDistance), static_cast<double>(FMath::Max(BumpMaxDistance, BumpMinDistance)), Shaped);
+	}
+
+	/**
+	 * The bump's starting speed off the face (cm/s) for an impact speed: the distance covered under the drag (sum of v x dt x (1 - drag)^n is
+	 * v x dt / drag), FrameSeconds the simulation step. 0 for none. Pure
+	 */
+	double BumpSpeed(double JudgedSpeed, double FrameSeconds) const
+	{
+		const double Distance = BumpDistance(JudgedSpeed);
+		if (Distance <= 0.0 || FrameSeconds <= 0.0)
+		{
+			return 0.0;
+		}
+		return Distance * FMath::Clamp(static_cast<double>(BumpDragPerFrame), 0.01, 1.0) / FrameSeconds;
 	}
 };
 
