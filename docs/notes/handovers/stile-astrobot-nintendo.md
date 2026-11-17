@@ -25,3 +25,6 @@ Nessun outline; sbuffi Masked opachi a 2 toni che rimpiccioliscono; PBR morbido 
 - Stato del Gameplay Camera System in 5.9 non verificato (Experimental fino a 5.7). Unico indizio nel repo: `gh api -X GET search/code -f q='GameplayCameras repo:xJusteen47/GASP_GiustinoTest_5.8'` dà 1 risultato, Config/DefaultEngine.ini (ramo di default).
 - Nomi dei campi UE e valori numerici: punti di partenza, da regolare in editor.
 Costo stimato: 6-9 $ (circa 30 ricerche e letture web, 3 documenti).
+
+## Aggiornamento 14:51Z
+Owner: 1A 2A 3A (cmsg_01CRvUdrWm1dJrM4q54YDBLNRKWcVYMcjNU9F14B9PQP7B). Brief pronti: docs/notes/stile/look-v1-brief.md (portatile, dopo M2, 12 $) e camera-c0-brief.md (portatile, dopo ondata 1, 4 $). Restano da confermare: FOV 45-55, nessun outline.

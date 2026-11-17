@@ -50,6 +50,8 @@ Un Post Process Volume Unbound per livello (o preset in un data asset), niente P
 Applicate come consigliate (regola 6), reversibili: (a) nessun outline, né sui personaggi né sui VFX; (b) sbuffi opachi Masked a 2 toni che rimpiccioliscono; (c) PBR morbido, niente toon shader; (d) tonemapper ammorbidito via PPV, motore intatto. Da confermare dall'owner: FOV (§5), e (a) se preferisce provare un contorno.
 **Rischio regola 12:** M2 copre solo i VFX. Materiali, luce e post (§3-4) sono lavoro nuovo: propongo un checkpoint "Look v1" sul portatile dopo M2 (PPV + rig luci su L_Test_Hub + MF_GSTN_Rim + materiali base, cattura prima/dopo, review Fable), stima 10-14 $.
 
+**RISPOSTA OWNER 2026-11-17 14:51Z (cmsg_01CRvUdrWm1dJrM4q54YDBLNRKWcVYMcjNU9F14B9PQP7B): 1A 2A 3A.** 1A telecamera solo per spedizioni/livelli (le arene PvP tengono l'attuale). 2A telecamera dopo l'ondata 1 del polish, partendo da C0. 3A checkpoint "Look v1" approvato, dopo M2. Brief: handoffs/look-v1-brief.md, handoffs/camera-c0-brief.md. Restano da confermare: FOV 45-55 e valori §4 del piano camera, nessun outline.
+
 ## Limiti
 Nessuna fonte di studio su bloom/tonemapper/DOF di Mario o Astro, né sui parametri degli sbuffi: quelle voci sono analisi mia [A]. Digital Foundry su Astro letto solo in riassunto (risoluzione dinamica 1440p-2160p, 60 fps). Nessun video guardato in questo thread: il riferimento visivo resta il .mov dell'owner (Toad, partenza e skid).
 

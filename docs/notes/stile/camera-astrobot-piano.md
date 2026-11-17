@@ -49,5 +49,7 @@ Totale ~34-42 $. Planet (gravità) resta con la milestone dei volumi Galaxy.
 2. **Quando.** A (consigliata) dopo l'ondata 1 del polish (M0-M5), partendo da C0. B subito: occupa un posto cloud e uno slot sul fisso.
 Da confermare (13d): strada tecnica A/B dopo C0 (la scelgo io sul risultato salvo veto); valori di §4.
 
+**RISPOSTA OWNER 2026-11-17 14:51Z (cmsg_01CRvUdrWm1dJrM4q54YDBLNRKWcVYMcjNU9F14B9PQP7B): 1A 2A 3A.** 1A telecamera solo per spedizioni/livelli (le arene PvP tengono l'attuale). 2A telecamera dopo l'ondata 1 del polish, partendo da C0. 3A checkpoint "Look v1" approvato, dopo M2. Brief: handoffs/look-v1-brief.md, handoffs/camera-c0-brief.md. Restano da confermare: FOV 45-55 e valori §4 del piano camera, nessun outline.
+
 ## Fonti
 F1 lumasworkshop.com/wiki/Cameras (formato telecamere di Super Mario Galaxy) · F2 videogameschronicle.com "Astro Bot: How Team Asobi has turned Playroom into a galaxy-sized sequel" · F3 threadreaderapp.com/thread/924061000919285761 (dettagli Odyssey) · F4 gamedeveloper.com "Lessons from Suzy Cube: the camera system, part 1" · F5 documentazione Epic "Gameplay Camera System Overview" · F6 strayspark.studio "Gameplay Cameras plugin UE 5.7 production guide"
