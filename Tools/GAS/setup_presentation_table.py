@@ -73,7 +73,8 @@ def rows():
         _cue("GroundBounce", "NS_GSTN_Impact", scale=((200, 1500), (0.7, 1.3)), offset=feet, orient=True),
         _cue("Splat", "NS_GSTN_Impact", scale=((200, 1500), (0.8, 1.4)), orient=True),
         # The small default bump off a wall or ceiling (no magnitude): a small impact, not a bounce's (size to be judged in the polish M2 r3 review)
-        _cue("Bump.Wall", "NS_GSTN_Impact", scale=((0, 1), (0.4, 0.4)), orient=True),
+        # 0.65, not 0.4 (review r4): at 0.4 the balls were ~7 cm dots born 23 cm out, inside the torso, hidden by the trail
+        _cue("Bump.Wall", "NS_GSTN_Impact", scale=((0, 1), (0.65, 0.65)), orient=True),
         _cue("Bump.Ceiling", "NS_GSTN_Impact", scale=((0, 1), (0.4, 0.4))),
         # The downed landing after a tumble: the landing ring at the feet, a little bigger (no magnitude: intensity 1 -> 1.2). It waits for
         # the drawn pelvis to reach the floor (review r2: the ring came 8-10 frames before the body touched down)
