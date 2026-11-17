@@ -53,8 +53,9 @@ SEQUENCES = [
      'blocks': [(420.0, 0.0, 0.0, 60.0, 700.0, 500.0)]},
     {'name': 'ceiling', 'frames': 120, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 650.0, 'follow': False, 'follow_victim': True,
      'blocks': [(650.0, 0.0, 300.0, 1200.0, 700.0, 40.0)]},
-    # The small default bump (combat rules WallImpact, under 1200 cm/s): the medium launch (90 %) into a nearer wall
-    {'name': 'wall_bump', 'frames': 90, 'tap': [0], 'dummy': (95.0, 90.0), 'dist': 520.0, 'follow': False, 'follow_victim': True,
+    # The small default bump (combat rules WallImpact, under 1200 cm/s): the medium launch (90 %) into a nearer wall. 200 frames: the
+    # Bump.Wall event comes ~176 frames in (r3 missed it at 90)
+    {'name': 'wall_bump', 'frames': 200, 'tap': [0], 'dummy': (95.0, 90.0), 'dist': 520.0, 'follow': False, 'follow_victim': True,
      'blocks': [(260.0, 0.0, 0.0, 60.0, 700.0, 500.0)]},
     # KIT_Example_Impacts: strong = wall splat (a wall behind the victim), attack = spike with a ground bounce
     {'name': 'splat', 'frames': 120, 'strong': [0], 'kit': 'KIT_Example_Impacts', 'dummy': (95.0, 100.0), 'dist': 650.0, 'follow': False,

@@ -1,0 +1,4 @@
+BP_GASNPP_TestCharacter_C_0 Presentation.Event.Jump.Ground frame=1370 mag=684.3 intensity=1.00 niagara=NS_GSTN
+BP_GASNPP_TestCharacter_C_0 Presentation.Event.Land frame=1436 mag=1291.4 intensity=0.99 niagara=NS_GSTN_LandR
+BP_GASNPP_TestCharacter_C_3 Presentation.Event.Hit frame=1810 mag=67.0 intensity=1.10 niagara=NS_GSTN_HitSpark
+BP_GASNPP_TestCharacter_C_3 Presentation.Event.Knockdown frame=1992 mag=0.0 intensity=1.20 niagara=NS_GSTN_Lan

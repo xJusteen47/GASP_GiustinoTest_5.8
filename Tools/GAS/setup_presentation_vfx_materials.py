@@ -72,7 +72,8 @@ INSTANCES = {
                      DisplayGain=1.0, colors=(DUST_SCREEN, DUST_SCREEN, DUST_SCREEN)),
     # Landing / knockdown ring on the floor: the thick ring, thinned by erosion from 40% of its life. A flat thin ring is seen nearly edge-on
     # from a low camera (12 degrees: a 6 cm band is ~1 px) and vanished after ~5 frames in review r2; the splat's ring faces the camera
-    "GroundRing": dict(cell="Ring", FlatLight=1.0, StartScale=0.43, GrowEnd=0.33, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.4,
+    # Round 4 (owner): thinner, through the smaller size (182 -> 95 cm halves the band) and an earlier erosion (0.4 -> 0.3)
+    "GroundRing": dict(cell="Ring", FlatLight=1.0, StartScale=0.43, GrowEnd=0.33, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.3,
                        DisplayGain=1.0, colors=(DUST_SCREEN, DUST_SCREEN, DUST_SCREEN)),
     # Jump: thin ring, smaller and quicker than the landing
     "JumpRing": dict(cell="ThinRing", FlatLight=1.0, StartScale=0.4, GrowEnd=1.0, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.5,

@@ -274,12 +274,14 @@ def jump_puff():
 
 
 def land_ring():
-    """Landing (scaled by the fall speed; the knockdown plays it at 1.2): a ring 60 -> 140 cm in 6 frames that thins out and dies at 18
-    frames (300 ms), and 6 radial balls of 16-20 cm born on a 38 cm circle (off the feet, review r2) that stop ~40 cm further out"""
+    """Landing (scaled by the fall speed; the knockdown plays it at 1.2): a ring ~40 -> 95 cm in 6 frames that thins out and dies at 18
+    frames (300 ms), and 6 radial balls of 14-18 cm born on a 58 cm circle that stop ~50 cm further out.
+    Round 4 (owner): the ring stays under the strong hit's ring (~115 cm at 1.1; the knockdown's 1.2 gives ~114), and the balls are born
+    outside the silhouette and pushed out fast, so on a knockdown they sit on the body for 2-3 frames at most (r3: a lump for 6-10)"""
     s = _system("NS_GSTN_LandRing")
     if s:
-        _ring(s, "Ring", "GroundRing", 0.30, 182)
-        _burst_puffs(s, "Puffs", 6, (0.30, 0.40), (16 * BALL, 20 * BALL), 300, 7.0, ring=(38, 10))
+        _ring(s, "Ring", "GroundRing", 0.30, 95)
+        _burst_puffs(s, "Puffs", 6, (0.30, 0.40), (14 * BALL, 18 * BALL), 440, 8.0, ring=(58, 10))
     return s
 
 
@@ -345,8 +347,9 @@ def impact():
     s = _system("NS_GSTN_Impact")
     if s:
         _ring(s, "Ring", "LandRing", 0.30, 182, facing=(1, 0, 0), offset=(3, 0, 0))
-        # Born on a 40 cm circle on the surface, not in its middle (review r2: overlapping balls over the victim's thighs)
-        _burst_puffs(s, "Puffs", 5, (0.30, 0.40), (18 * BALL, 24 * BALL), 300, 7.0, sphere=(40, (0.05, 1, 1), (14, 0, 0)), rim=True)
+        # Born on a 58 cm circle on the surface, not in its middle (review r2: overlapping balls over the victim's thighs), smaller (14-18
+        # cm) and pushed out fast (round 4: in r3 the 40 cm circle still left a lump over the body for 6-10 frames)
+        _burst_puffs(s, "Puffs", 5, (0.30, 0.40), (14 * BALL, 18 * BALL), 440, 8.0, sphere=(58, (0.05, 1, 1), (14, 0, 0)), rim=True)
     return s
 
 
