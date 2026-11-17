@@ -81,7 +81,7 @@ def streak():
 
 # Shapes in cell units: -1..1 across the cell. Light offset: the lit part is the shape moved up-left by this much
 SHAPES = [
-    (circle(0.92), 0.16),
+    (circle(0.92), 0.34),  # shade crescent ~27% of the ball (review r2: ~8% read as no second tone)
     (ring(0.78, 0.15), 0.0),
     (star(4, 0.95, 0.30, rot=-math.pi / 2), 0.10),
     (star(5, 0.95, 0.42), 0.12),

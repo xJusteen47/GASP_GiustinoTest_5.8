@@ -55,6 +55,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
 	static FString AddModule(UNiagaraSystem* System, const FString& EmitterName, const FString& Stack, const FString& ModuleScriptPath);
 
+	/** Inserts a module before another one of the same stack. A force (Drag, GravityForce) must run before SolveForcesAndVelocity: appended
+	 *  after it, its force is cleared before the next solve and the particle keeps a constant speed (review r2: shards and run puffs) */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
+	static FString AddModuleBefore(UNiagaraSystem* System, const FString& EmitterName, const FString& Stack, const FString& ModuleScriptPath,
+		const FString& BeforeModule);
+
+	/** The stack's modules in execution order, "A > B > C(off)" */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
+	static FString ListModules(UNiagaraSystem* System, const FString& EmitterName, const FString& Stack);
+
 	/** Enables or disables a stack module (a template module the effect does not want is disabled, not removed) */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
 	static FString SetModuleEnabled(UNiagaraSystem* System, const FString& EmitterName, const FString& Stack, const FString& ModuleName, bool bEnabled);

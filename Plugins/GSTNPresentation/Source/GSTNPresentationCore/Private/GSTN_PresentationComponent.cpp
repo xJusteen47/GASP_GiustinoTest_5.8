@@ -181,13 +181,47 @@ bool UGSTN_PresentationComponent::ReportEvent(const FGSTN_PresentationEvent& InE
 	return true;
 }
 
-void UGSTN_PresentationComponent::PlayCue(const FGSTN_PresentationCue& Cue, const FGSTN_PresentationEvent& Event, float Intensity)
+bool UGSTN_PresentationComponent::IsBodyGrounded(const FGSTN_PresentationCue& Cue, FGSTN_PresentationEvent& Event) const
+{
+	const AActor* Owner = GetOwner();
+	const USkeletalMeshComponent* Mesh = Owner ? Owner->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
+	if (!Mesh || Mesh->GetBoneIndex(Cue.GroundedBone) == INDEX_NONE)
+	{
+		return true;  // nothing to wait for
+	}
+	const FVector Bone = Mesh->GetBoneLocation(Cue.GroundedBone);
+	const FVector Ground = Event.Location + Cue.Offset;
+	if (Bone.Z - Ground.Z > Cue.GroundedHeight)
+	{
+		return false;
+	}
+	// Under the body as drawn, at the event's height (the floor)
+	Event.Location.X = Bone.X - Cue.Offset.X;
+	Event.Location.Y = Bone.Y - Cue.Offset.Y;
+	return true;
+}
+
+void UGSTN_PresentationComponent::PlayCue(const FGSTN_PresentationCue& Cue, const FGSTN_PresentationEvent& InEvent, float Intensity)
 {
 	UWorld* World = GetWorld();
 	AActor* Owner = GetOwner();
 	if (!World || !Owner)
 	{
 		return;
+	}
+	FGSTN_PresentationEvent Event = InEvent;
+	if (!Cue.GroundedBone.IsNone() && !IsBodyGrounded(Cue, Event))
+	{
+		if (Cue.GroundedMaxWait > 0.f)
+		{
+			FPendingGrounded& Pending = PendingGrounded.AddDefaulted_GetRef();
+			Pending.Cue = Cue;
+			Pending.Event = InEvent;
+			Pending.Intensity = Intensity;
+			Pending.Deadline = World->GetTimeSeconds() + Cue.GroundedMaxWait;
+			UpdateTickEnabled();
+			return;
+		}
 	}
 	USkeletalMeshComponent* Mesh = Owner->FindComponentByClass<USkeletalMeshComponent>();
 
@@ -306,6 +340,23 @@ void UGSTN_PresentationComponent::TickComponent(float DeltaTime, ELevelTick Tick
 		}
 		Sustained.RemoveAll([](const FSustained& Entry) { return !Entry.System.IsValid() || !Entry.System->IsActive(); });
 	}
+	if (const UWorld* World = GetWorld(); World && !PendingGrounded.IsEmpty())
+	{
+		const double Now = World->GetTimeSeconds();
+		// Moved out first: PlayCue may queue again (it never does here, the bone check is skipped) and must not touch the array we walk
+		TArray<FPendingGrounded> Waiting = MoveTemp(PendingGrounded);
+		for (FPendingGrounded& Pending : Waiting)
+		{
+			const bool bDue = IsBodyGrounded(Pending.Cue, Pending.Event) || Now >= Pending.Deadline;
+			if (!bDue)
+			{
+				PendingGrounded.Add(MoveTemp(Pending));
+				continue;
+			}
+			Pending.Cue.GroundedBone = NAME_None;  // due: play as is
+			PlayCue(Pending.Cue, Pending.Event, Pending.Intensity);
+		}
+	}
 	UpdateTickEnabled();
 }
 
@@ -324,7 +375,7 @@ void UGSTN_PresentationComponent::StopSustained(const FGameplayTag& EventTag)
 
 void UGSTN_PresentationComponent::UpdateTickEnabled()
 {
-	SetComponentTickEnabled(!Additives.IsEmpty() || !Sustained.IsEmpty());
+	SetComponentTickEnabled(!Additives.IsEmpty() || !Sustained.IsEmpty() || !PendingGrounded.IsEmpty());
 }
 
 void UGSTN_PresentationComponent::GetAdditiveReaction(FGSTN_AdditiveReactionRequest& Out) const

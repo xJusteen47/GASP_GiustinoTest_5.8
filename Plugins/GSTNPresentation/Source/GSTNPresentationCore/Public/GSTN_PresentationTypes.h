@@ -171,6 +171,20 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationCue
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
 	FName StrongParameter = TEXT("User.Strong");
 
+	/**
+	 * Waits for the drawn body: the cue plays once this bone of the owner's mesh is within GroundedHeight above the cue's location (or after
+	 * GroundedMaxWait). The event comes from the simulation, which can be frames ahead of what the mesh shows (review r2: the knockdown ring
+	 * came ~8-10 frames before the body touched the floor). The effect spawns under the bone. None = play at once
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FName GroundedBone;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float GroundedHeight = 35.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (ClampMin = "0", ForceUnits = "s"))
+	float GroundedMaxWait = 0.4f;
+
 	bool IsSustained() const { return !StopOn.IsEmpty() || MaxDuration > 0.f; }
 
 	// Sound

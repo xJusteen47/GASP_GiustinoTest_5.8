@@ -283,6 +283,35 @@ namespace GSTNVfxAuthoring
 		return Out + TEXT("}");
 	}
 
+	/** The stack's modules in execution order: walks the parameter map chain back from the output node (the engine's ordered walk is not
+	 *  exported) */
+	static void OrderedModules(UNiagaraNodeOutput* Output, TArray<UNiagaraNodeFunctionCall*>& Out)
+	{
+		UNiagaraNode* Current = Output;
+		while (Current)
+		{
+			UEdGraphPin* MapIn = nullptr;
+			for (UEdGraphPin* Pin : Current->Pins)
+			{
+				if (Pin && Pin->Direction == EGPD_Input && UEdGraphSchema_Niagara::PinToTypeDefinition(Pin) == FNiagaraTypeDefinition::GetParameterMapDef())
+				{
+					MapIn = Pin;
+					break;
+				}
+			}
+			if (!MapIn || MapIn->LinkedTo.IsEmpty())
+			{
+				return;
+			}
+			UNiagaraNode* Previous = Cast<UNiagaraNode>(MapIn->LinkedTo[0]->GetOwningNode());
+			if (UNiagaraNodeFunctionCall* Call = Cast<UNiagaraNodeFunctionCall>(Previous))
+			{
+				Out.Insert(Call, 0);
+			}
+			Current = Previous;
+		}
+	}
+
 	static UNiagaraNodeOutput* OutputFor(UNiagaraGraph* Graph, const FString& Stack)
 	{
 		TArray<UNiagaraNodeOutput*> Outputs;
@@ -485,6 +514,51 @@ FString UGSTN_VfxAuthoringLibrary::AddModule(UNiagaraSystem* System, const FStri
 	UNiagaraNodeFunctionCall* Added = FNiagaraStackGraphUtilities::AddScriptModuleToStack(ModuleScript, *Output);
 	System->MarkPackageDirty();
 	return Added ? FString() : TEXT("AddScriptModuleToStack failed");
+}
+
+FString UGSTN_VfxAuthoringLibrary::AddModuleBefore(UNiagaraSystem* System, const FString& EmitterName, const FString& Stack,
+	const FString& ModuleScriptPath, const FString& BeforeModule)
+{
+	using namespace GSTNVfxAuthoring;
+	FNiagaraEmitterHandle* Handle = FindHandle(System, EmitterName);
+	UNiagaraGraph* Graph = EmitterGraph(Handle ? Handle->GetEmitterData() : nullptr);
+	UNiagaraScript* ModuleScript = LoadObject<UNiagaraScript>(nullptr, *ModuleScriptPath);
+	UNiagaraNodeOutput* Output = Graph ? OutputFor(Graph, Stack) : nullptr;
+	if (!ModuleScript || !Output)
+	{
+		return FString::Printf(TEXT("cannot add %s to %s %s"), *ModuleScriptPath, *EmitterName, *Stack);
+	}
+	TArray<UNiagaraNodeFunctionCall*> Modules;
+	OrderedModules(Output, Modules);
+	const int32 Index = Modules.IndexOfByPredicate([&BeforeModule](const UNiagaraNodeFunctionCall* Call) { return Call->GetFunctionName() == BeforeModule; });
+	if (Index == INDEX_NONE)
+	{
+		return FString::Printf(TEXT("no module %s in %s (%d modules)"), *BeforeModule, *Stack, Modules.Num());
+	}
+	Graph->Modify();
+	UNiagaraNodeFunctionCall* Added = FNiagaraStackGraphUtilities::AddScriptModuleToStack(ModuleScript, *Output, Index);
+	System->MarkPackageDirty();
+	return Added ? FString() : TEXT("AddScriptModuleToStack failed");
+}
+
+FString UGSTN_VfxAuthoringLibrary::ListModules(UNiagaraSystem* System, const FString& EmitterName, const FString& Stack)
+{
+	using namespace GSTNVfxAuthoring;
+	FNiagaraEmitterHandle* Handle = FindHandle(System, EmitterName);
+	UNiagaraGraph* Graph = EmitterGraph(Handle ? Handle->GetEmitterData() : nullptr);
+	UNiagaraNodeOutput* Output = Graph ? OutputFor(Graph, Stack) : nullptr;
+	if (!Output)
+	{
+		return FString::Printf(TEXT("no stack %s on %s"), *Stack, *EmitterName);
+	}
+	TArray<UNiagaraNodeFunctionCall*> Modules;
+	OrderedModules(Output, Modules);
+	TArray<FString> Names;
+	for (const UNiagaraNodeFunctionCall* Call : Modules)
+	{
+		Names.Add(Call->GetFunctionName() + (Call->IsNodeEnabled() ? TEXT("") : TEXT("(off)")));
+	}
+	return FString::Join(Names, TEXT(" > "));
 }
 
 FString UGSTN_VfxAuthoringLibrary::SetModuleEnabled(UNiagaraSystem* System, const FString& EmitterName, const FString& Stack, const FString& ModuleName, bool bEnabled)

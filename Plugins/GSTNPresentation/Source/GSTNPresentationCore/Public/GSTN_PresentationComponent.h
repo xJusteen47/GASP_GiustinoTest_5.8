@@ -149,6 +149,20 @@ private:
 	};
 	TArray<FSustained> Sustained;
 
+	/** A cue waiting for the drawn body (FGSTN_PresentationCue::GroundedBone) */
+	struct FPendingGrounded
+	{
+		FGSTN_PresentationCue Cue;
+		FGSTN_PresentationEvent Event;
+		float Intensity = 1.f;
+		/** World time (s) after which it plays anyway */
+		double Deadline = 0.0;
+	};
+	TArray<FPendingGrounded> PendingGrounded;
+
+	/** True (and Event.Location moved under the bone) when the cue may play now */
+	bool IsBodyGrounded(const FGSTN_PresentationCue& Cue, FGSTN_PresentationEvent& Event) const;
+
 	/** Stops the sustained systems that EventTag ends; drops the finished ones */
 	void StopSustained(const FGameplayTag& EventTag);
 	void UpdateTickEnabled();

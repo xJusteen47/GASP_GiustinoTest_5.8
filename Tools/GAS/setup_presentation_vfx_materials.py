@@ -50,6 +50,10 @@ INSTANCES = {
     # Landing / knockdown ring: thin, 43% -> 100% in the first 6 frames (ease-out), then thinned by erosion (6 -> 2 cm) until it dies
     "LandRing": dict(cell="ThinRing", FlatLight=1.0, StartScale=0.43, GrowEnd=0.33, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.3,
                      DisplayGain=2.1, colors=(DUST, DUST, DUST)),
+    # Landing / knockdown ring on the floor: the thick ring, thinned by erosion from 40% of its life. A flat thin ring is seen nearly edge-on
+    # from a low camera (12 degrees: a 6 cm band is ~1 px) and vanished after ~5 frames in review r2; the splat's ring faces the camera
+    "GroundRing": dict(cell="Ring", FlatLight=1.0, StartScale=0.43, GrowEnd=0.33, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.4,
+                       DisplayGain=2.1, colors=(DUST, DUST, DUST)),
     # Jump: thin ring, smaller and quicker than the landing
     "JumpRing": dict(cell="ThinRing", FlatLight=1.0, StartScale=0.4, GrowEnd=1.0, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.5,
                      DisplayGain=2.1, colors=(DUST, DUST, DUST)),
@@ -58,10 +62,10 @@ INSTANCES = {
                         DisplayGain=2.0, colors=(WHITE, WHITE, WHITE)),
     # Hit: 4-point star shards, white -> yellow -> orange, shrink out; pushed behind the flash for their first frame
     "HitStar": dict(cell="Star4", StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.3, EndScale=0.3, ErodeStart=1.0, DisplayGain=2.0,
-                    colors=(WHITE, HIT_MID, HIT_END), MidTime=0.12, ShadowMul=HIT_SHADE, DepthPush=60.0, DepthPushEnd=0.08),
+                    colors=(WHITE, HIT_MID, HIT_END), MidTime=0.12, ShadowMul=HIT_SHADE, DepthPush=60.0, DepthPushEnd=0.08, AppearAt=0.05),
     # Strong hit accent: 5-point stars in the row's second colour (User.AccentTint through the particle colour)
     "HitAccent": dict(cell="Star5", StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.3, EndScale=0.3, ErodeStart=1.0, DisplayGain=2.0,
-                      colors=(WHITE, WHITE, WHITE), ShadowMul=HIT_SHADE, DepthPush=60.0, DepthPushEnd=0.08),
+                      colors=(WHITE, WHITE, WHITE), ShadowMul=HIT_SHADE, DepthPush=60.0, DepthPushEnd=0.08, AppearAt=0.05),
     # Hit flash: the only thing above 1 (bloom), one or two frames
     "HitFlash": dict(cell="FlatBall", FlatLight=1.0, EmissiveBoost=4.0, StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.0, EndScale=0.3,
                      ErodeStart=1.0, colors=(WHITE, WHITE, HIT_MID), MidTime=0.5),
@@ -71,6 +75,9 @@ INSTANCES = {
     # Tumble trail: balls dropped along the path (tinted by the cue, white by default), shrink out
     "TrailBall": dict(cell="Ball", StartScale=0.8, GrowEnd=0.1, ShrinkStart=0.3, EndScale=0.3, ErodeStart=1.0, DisplayGain=2.0,
                       colors=(WHITE, WHITE, WHITE), ShadowMul=COOL_SHADE),
+    # Colour calibration only (NS_GSTN_Swatch, capture with PIE_SWATCH=1): flat, full size all its life, the particle colour as is
+    "Swatch": dict(cell="FlatBall", FlatLight=1.0, StartScale=1.0, GrowEnd=0.01, ShrinkStart=1.0, EndScale=1.0, ErodeStart=1.0,
+                   DisplayGain=1.0, colors=(WHITE, WHITE, WHITE)),
     # Tumble ribbon: one tone; older segments erode first, so the tail tapers
     "TrailRibbon": dict(cell="FlatBall", FlatLight=1.0, StartScale=1.0, GrowEnd=0.01, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.0,
                         DisplayGain=2.0, colors=(WHITE, WHITE, WHITE)),
@@ -226,7 +233,16 @@ def build_master(atlas):
     # Erosion: keep = min(particle alpha, 1 - ramp(t, ErodeStart, 1)); visible where B >= 1 - keep (clip 0.5)
     keep_life = _unary(mat, unreal.MaterialExpressionOneMinus, _ramp(mat, t, _scalar(mat, "ErodeStart", 0.6, -700, 1400), one_c, -550, 1400),
                        -50, 1400)
-    keep = _op(mat, unreal.MaterialExpressionMin, color, keep_life, 100, 1300, a_out="A")
+    # Hidden before AppearAt (normalized age): the hit's shards must not show in the flash's frame (review r2: a cream star on frame 1).
+    # appear = saturate((t - AppearAt) * 10000 + 1): 1 at t = 0 when AppearAt is 0 (the default: every other effect shows on frame 1)
+    late = _op(mat, unreal.MaterialExpressionSubtract, t, _scalar(mat, "AppearAt", 0.0, -700, 1550), -550, 1550)
+    late_k = _node(mat, unreal.MaterialExpressionMultiply, -400, 1550, const_b=10000.0)
+    _link(late, "", late_k, "A")
+    late_1 = _node(mat, unreal.MaterialExpressionAdd, -280, 1550, const_b=1.0)
+    _link(late_k, "", late_1, "A")
+    appear = _unary(mat, unreal.MaterialExpressionSaturate, late_1, -160, 1550)
+    keep_alive = _op(mat, unreal.MaterialExpressionMin, keep_life, appear, -40, 1500)
+    keep = _op(mat, unreal.MaterialExpressionMin, color, keep_alive, 100, 1300, a_out="A")
     erode = _op(mat, unreal.MaterialExpressionAdd, tex, keep, 250, 1250, a_out="B")
     erode_bias = _node(mat, unreal.MaterialExpressionAdd, 400, 1250, const_b=-0.5)
     _link(erode, "", erode_bias, "A")
@@ -254,7 +270,7 @@ def build_instances(master):
         mi.set_editor_property("parent", master)
         col, row = CELLS[look["cell"]]
         scalars = {"CellX": col, "CellY": row, "FlatLight": 0.0, "EmissiveBoost": 1.0, "MidTime": 0.3, "DisplayGain": 1.3,
-                   "DepthPush": 0.0, "DepthPushEnd": 0.1}
+                   "DepthPush": 0.0, "DepthPushEnd": 0.1, "AppearAt": 0.0}
         scalars.update({k: v for k, v in look.items() if isinstance(v, (int, float))})
         for key, value in scalars.items():
             MEL.set_material_instance_scalar_parameter_value(mi, key, float(value))

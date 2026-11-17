@@ -29,7 +29,7 @@ def _tags(names):
 
 
 def _cue(event, system, min_mag=0.0, scale=None, socket="", offset=(0, 0, 0), orient=False, scale_size=True, stop_on=(), max_duration=0.0,
-         strong=0.0, accent=None):
+         strong=0.0, accent=None, grounded=""):
     cue = unreal.GSTN_PresentationCue()
     cue.set_editor_property("event_tag", _tag(event))
     cue.set_editor_property("min_magnitude", float(min_mag))
@@ -48,6 +48,7 @@ def _cue(event, system, min_mag=0.0, scale=None, socket="", offset=(0, 0, 0), or
     cue.set_editor_property("strong_intensity", float(strong))
     if accent:
         cue.set_editor_property("accent_tint", accent)
+    cue.set_editor_property("grounded_bone", grounded)
     return cue
 
 
@@ -68,8 +69,9 @@ def rows():
         _cue("WallBounce", "NS_GSTN_Impact", scale=((200, 1500), (0.7, 1.3)), orient=True),
         _cue("GroundBounce", "NS_GSTN_Impact", scale=((200, 1500), (0.7, 1.3)), offset=feet, orient=True),
         _cue("Splat", "NS_GSTN_Impact", scale=((200, 1500), (0.8, 1.4)), orient=True),
-        # The downed landing after a tumble: the landing ring at the feet, a little bigger (no magnitude: intensity 1 -> 1.2)
-        _cue("Knockdown", "NS_GSTN_LandRing", scale=((0, 1), (1.2, 1.2)), offset=feet),
+        # The downed landing after a tumble: the landing ring at the feet, a little bigger (no magnitude: intensity 1 -> 1.2). It waits for
+        # the drawn pelvis to reach the floor (review r2: the ring came 8-10 frames before the body touched down)
+        _cue("Knockdown", "NS_GSTN_LandRing", scale=((0, 1), (1.2, 1.2)), offset=feet, grounded="pelvis"),
         _cue("Tumble.Start", "NS_GSTN_TumbleTrail", socket="pelvis", scale_size=False,
              stop_on=("Tumble.End", "Knockdown", "GetUp", "Splat", "Land"), max_duration=3.0),
     ]
