@@ -9,6 +9,8 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "GSTN_PlaytestCamera.generated.h"
 
+class UGSTN_CameraAnchorSettingsAsset;
+
 /**
  * Pushes the final view back along its own forward by gstn.Camera.PlaytestExtraDistance and up by gstn.Camera.PlaytestExtraHeight, sweeping
  * from the unmodified view so a wall stops it short. Presentation only: never read by the simulation
@@ -26,7 +28,10 @@ protected:
 	virtual bool ModifyCamera(float DeltaTime, FMinimalViewInfo& InOutPOV) override;
 };
 
-/** Adds the playtest camera modifier to every local player's camera manager in a game world, once (camera managers come and go with players) */
+/**
+ * Adds the playtest camera modifier to every local player's camera manager in a game world, once (camera managers come and go with players),
+ * and a UGSTN_CameraAnchorComponent to every locally viewed pawn that has none (GSTN_CameraAnchor.h: the camera stops shaking with the capsule)
+ */
 UCLASS()
 class GASP_GIUSTINO2_API UGSTN_PlaytestCameraSubsystem : public UTickableWorldSubsystem
 {
@@ -36,4 +41,9 @@ public:
 	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
+
+private:
+	UPROPERTY(Transient)
+	TObjectPtr<UGSTN_CameraAnchorSettingsAsset> AnchorSettings;
+	bool bAnchorSettingsLoaded = false;
 };
