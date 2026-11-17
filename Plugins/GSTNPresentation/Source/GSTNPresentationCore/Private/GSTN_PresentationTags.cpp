@@ -21,7 +21,8 @@ namespace GSTNPresentationTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Turn180, "Presentation.Event.Turn180", "Running again the other way after a skid. Magnitude: horizontal speed (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Hit, "Presentation.Event.Hit", "Hit received (confirmed). Magnitude: hitstun frames");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Splat, "Presentation.Event.Splat", "Pinned to a surface by a splat. Magnitude: speed before (cm/s)");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(WallBounce, "Presentation.Event.WallBounce", "A reacting victim bounces off a wall or ceiling. Magnitude: speed into the surface (cm/s)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(WallBounce, "Presentation.Event.WallBounce", "A reacting victim bounces off a wall (a ceiling: the .Ceiling child). Magnitude: speed into the surface (cm/s)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(WallBounce_Ceiling, "Presentation.Event.WallBounce.Ceiling", "The bounce is off a ceiling (a cue table without a row of its own plays the WallBounce row). Direction: down");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GroundBounce, "Presentation.Event.GroundBounce", "A reacting victim bounces off the ground. Magnitude: fall speed (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Bump, "Presentation.Event.Bump", "A slow reacting victim taps a wall or ceiling: the small default bump, not a bounce. Magnitude: 0");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Bump_Wall, "Presentation.Event.Bump.Wall", "The bump is off a wall. Direction: away from it");

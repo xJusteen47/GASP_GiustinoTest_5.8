@@ -236,6 +236,14 @@ struct GSTNCOMBATCORE_API FGSTN_SurfaceBounceRules
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "1", ForceUnits = "Frames", EditCondition = "bEnabled && bBump"))
 	int32 BumpFrames = 14;
 
+	/**
+	 * After a hard bounce or a bump off a wall or ceiling, contacts with a wall or ceiling during this many frames do nothing: the victim still
+	 * grinding along the face it just left is the same contact, not a second bounce (polish M2 r3: WallBounce twice 3 to 6 frames apart, bumps
+	 * 2 and 4 frames apart). 0 = every contact counts (the behaviour before 2026-11-17)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce", meta = (ClampMin = "0", ForceUnits = "Frames", EditCondition = "bEnabled"))
+	int32 RecontactFrames = 8;
+
 	/** The hard bounce's rules in force: GroundImpact or Bounce. Pure */
 	const FGSTN_GroundImpactRules& HardRules(const FGSTN_GroundImpactRules& Ground) const { return bSameAsGround ? Ground : Bounce; }
 

@@ -284,8 +284,20 @@ bool FGSTN_PresentationDeriveCountedBounceTest::RunTest(const FString& Parameter
 
 	// A ceiling shares the wall count: the rise turned into a fall, the normal points down
 	Events = Run({Reacting(40, FVector(200, 0, 900), 0, 0), Reacting(41, FVector(200, 0, -540), 0, 1)});
-	const FGSTN_PresentationEvent* Ceiling = Events.FindByPredicate([](const FGSTN_PresentationEvent& E) { return E.EventTag == GSTNPresentationTags::WallBounce; });
-	TestTrue(TEXT("ceiling: one, normal -Up"), Count(Events, WallBounce) == 1 && Ceiling && Ceiling->Direction.Equals(FVector(0, 0, -1), 0.01));
+	const FGSTN_PresentationEvent* Ceiling = Events.FindByPredicate([](const FGSTN_PresentationEvent& E) { return E.EventTag == GSTNPresentationTags::WallBounce_Ceiling; });
+	TestTrue(TEXT("ceiling: one ceiling bounce, normal -Up"), Count(Events, WallBounce_Ceiling) == 1 && Ceiling && Ceiling->Direction.Equals(FVector(0, 0, -1), 0.01));
+	TestEqual(TEXT("ceiling: not reported as a wall (polish M2 r3)"), Count(Events, WallBounce), 0);
+
+	// The simulation names the face: a ceiling it stamped is a ceiling even when the velocity turned along the floor too
+	FGSTN_PresentationSnapshot Stamped = Reacting(43, FVector(-300, 0, -200), 0, 1);
+	Stamped.SurfaceImpactFrame = 43;
+	Stamped.bSurfaceImpactCeiling = true;
+	Events = Run({Reacting(42, FVector(900, 0, 100), 0, 0), Stamped});
+	TestEqual(TEXT("stamped ceiling: ceiling tag"), Count(Events, WallBounce_Ceiling), 1);
+	TestEqual(TEXT("stamped ceiling: no wall tag"), Count(Events, WallBounce), 0);
+	Stamped.bSurfaceImpactCeiling = false;
+	Events = Run({Reacting(42, FVector(900, 0, 100), 0, 0), Stamped});
+	TestEqual(TEXT("stamped wall: wall tag"), Count(Events, WallBounce), 1);
 
 	// A second bounce of the chain is a second event; a new hit resets the count without one, and its first bounce counts again
 	FGSTN_PresentationSnapshot ReHit = Reacting(52, FVector(600, 0, 600), 0, 0);
@@ -316,6 +328,23 @@ bool FGSTN_PresentationDeriveCountedBounceTest::RunTest(const FString& Parameter
 		FGSTN_PresentationSnapshot B3 = B2;
 		B3.Frame = 82;
 		TestEqual(TEXT("bump: one event"), Count(Run({B1, B2, B3}, Rules), Bump_Wall), 1);
+
+		// The bump's push off the face turns the velocity, but the simulation stamped the contact: no WallBounce with the bump (polish M2 r3)
+		B2.SurfaceImpactFrame = 81;
+		B3.SurfaceImpactFrame = 81;
+		const TArray<FGSTN_PresentationEvent> BumpEvents = Run({B1, B2, B3}, Rules);
+		TestEqual(TEXT("bump: still one bump"), Count(BumpEvents, Bump_Wall), 1);
+		TestEqual(TEXT("bump: no wall bounce on the same frame"), Count(BumpEvents, WallBounce) + Count(BumpEvents, WallBounce_Ceiling), 0);
+	}
+
+	// Grinding along a wall turns the velocity twice a few frames apart (no count, polish M2 r3): one wall bounce, then one more only after
+	// BounceRefireFrames
+	{
+		const TArray<FGSTN_PresentationEvent> Grind = Run({Reacting(90, FVector(800, 0, 0), INDEX_NONE, INDEX_NONE),
+			Reacting(91, FVector(-500, 0, 0), INDEX_NONE, INDEX_NONE), Reacting(94, FVector(600, 0, 0), INDEX_NONE, INDEX_NONE),
+			Reacting(95, FVector(-400, 0, 0), INDEX_NONE, INDEX_NONE), Reacting(110, FVector(600, 0, 0), INDEX_NONE, INDEX_NONE),
+			Reacting(111, FVector(-400, 0, 0), INDEX_NONE, INDEX_NONE)});
+		TestEqual(TEXT("grind: the second turn 4 frames later is not a bounce, the one 20 frames later is"), Count(Grind, WallBounce), 2);
 	}
 	return true;
 }

@@ -425,6 +425,85 @@ bool FGSTN_ImpactWallCeilingDefaultBounceTest::RunTest(const FString& Parameters
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ImpactSurfaceRecontactTest, "GSTNCombat.NP.Hits.Impact.SurfaceRecontactAndFace", GSTN_NP_TEST_FLAGS)
+bool FGSTN_ImpactSurfaceRecontactTest::RunTest(const FString& Parameters)
+{
+	// Polish M2 r3: a wall bounce fired twice 3 to 6 frames apart (the victim still grinding along the face it left), wall bumps 2 and 4
+	// frames apart; and the face of the contact must be known (a ceiling was reported as a wall bounce)
+	const auto Enable = [](FImpactFixture& F)
+	{
+		F.Rules->WallImpact.bEnabled = true;
+		F.Rules->CeilingImpact.bEnabled = true;
+		F.Rules->GroundImpact.BounceMinSpeed = 1200.f;
+		F.Rules->GroundImpact.MaxBounces = 0;
+		F.Rules->GroundImpact.BounceWindowFrames = 0;
+		F.In.Table = nullptr;
+	};
+
+	FImpactFixture Wall;
+	Enable(Wall);
+	Wall.SetContact(TEXT("Wall"), 1500.0, 10);
+	Wall.In.Contact.SurfaceTypeIndex = 0;
+	TestTrue(TEXT("first contact: hard bounce"), Wall.Step(11).Outcome == EGSTN_ImpactOutcome::Bounce && !Wall.Out.bBump);
+	TestEqual(TEXT("contact stamped"), Wall.Core.Hit.SurfaceImpactFrame, 11);
+	TestEqual(TEXT("face: wall"), static_cast<int32>(Wall.Core.Hit.SurfaceImpactKind), static_cast<int32>(FGSTN_HitSyncState::BumpKindWall));
+	// The same face 6 frames later (sim 2022 -> 2025 was 3): the same contact, nothing
+	Wall.SetContact(TEXT("Wall"), 1300.0, 16);
+	Wall.In.Contact.SurfaceTypeIndex = 0;
+	TestTrue(TEXT("6 frames later: nothing"), Wall.Step(17).Outcome == EGSTN_ImpactOutcome::None);
+	TestEqual(TEXT("one link of the chain"), static_cast<int32>(Wall.Core.Hit.WallBounceCount), 1);
+	// Past RecontactFrames a new contact counts again
+	Wall.SetContact(TEXT("Wall"), 1300.0, 20);
+	Wall.In.Contact.SurfaceTypeIndex = 0;
+	TestTrue(TEXT("9 frames later: a bounce"), Wall.Step(21).Outcome == EGSTN_ImpactOutcome::Bounce);
+	TestEqual(TEXT("two links"), static_cast<int32>(Wall.Core.Hit.WallBounceCount), 2);
+
+	// A bump followed by touches 2 and 4 frames later (wall_bump 2514/2516/2520): one bump, nothing else, not even a hard bounce
+	FImpactFixture Bump;
+	Enable(Bump);
+	Bump.Core.Hit.HitstunEndFrame = 5;
+	Bump.SetContact(TEXT("Wall"), 300.0, 10);
+	TestTrue(TEXT("bump"), Bump.Step(11).bBump);
+	Bump.Core.Hit.HitstunEndFrame = 200;
+	Bump.SetContact(TEXT("Wall"), 2000.0, 12);
+	TestTrue(TEXT("2 frames later, fast: still the same contact"), Bump.Step(13).Outcome == EGSTN_ImpactOutcome::None);
+	Bump.SetContact(TEXT("Wall"), 2000.0, 14);
+	TestTrue(TEXT("4 frames later: still nothing"), Bump.Step(15).Outcome == EGSTN_ImpactOutcome::None);
+
+	// A ceiling says it is a ceiling
+	FImpactFixture Ceiling;
+	Enable(Ceiling);
+	Ceiling.SetContact(TEXT("Wall"), 1500.0, 10, EGSTN_TumbleContactKind::Ceiling, FVector(0.0, 0.0, -1.0));
+	Ceiling.In.Contact.SurfaceTypeIndex = 0;
+	TestTrue(TEXT("ceiling bounce"), Ceiling.Step(11).Outcome == EGSTN_ImpactOutcome::Bounce);
+	TestEqual(TEXT("face: ceiling"), static_cast<int32>(Ceiling.Core.Hit.SurfaceImpactKind), static_cast<int32>(FGSTN_HitSyncState::BumpKindCeiling));
+
+	// 0 = every contact counts (before 2026-11-17)
+	FImpactFixture Every;
+	Enable(Every);
+	Every.Rules->WallImpact.RecontactFrames = 0;
+	Every.SetContact(TEXT("Wall"), 1500.0, 10);
+	Every.In.Contact.SurfaceTypeIndex = 0;
+	Every.Step(11);
+	Every.SetContact(TEXT("Wall"), 1500.0, 12);
+	Every.In.Contact.SurfaceTypeIndex = 0;
+	TestTrue(TEXT("RecontactFrames 0: the second contact bounces"), Every.Step(13).Outcome == EGSTN_ImpactOutcome::Bounce);
+
+	// The stamp crosses the wire and survives the tumble's projection
+	FGSTN_HitSyncState Sent = Wall.Core.Hit;
+	FGSTN_HitLiveContext Tumbling;
+	Tumbling.Frame = 20;
+	Tumbling.bTumbling = true;
+	FBitWriter Writer(512, true);
+	Sent.NetSerialize(Writer, Tumbling);
+	FGSTN_HitSyncState Received;
+	FBitReader Reader(Writer.GetData(), Writer.GetNumBits());
+	Received.NetSerialize(Reader, Tumbling);
+	TestEqual(TEXT("wire: frame"), Received.SurfaceImpactFrame, Sent.SurfaceImpactFrame);
+	TestEqual(TEXT("wire: face"), static_cast<int32>(Received.SurfaceImpactKind), static_cast<int32>(Sent.SurfaceImpactKind));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ImpactSplatEndsActionableTest, "GSTNCombat.NP.Hits.Impact.SplatEndsActionable", GSTN_NP_TEST_FLAGS)
 bool FGSTN_ImpactSplatEndsActionableTest::RunTest(const FString& Parameters)
 {

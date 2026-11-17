@@ -175,6 +175,11 @@ FGSTN_HitSyncState FGSTN_HitSyncState::Canonical(const FGSTN_HitLiveContext& Con
 			Out.BumpEndFrame = BumpEndFrame;
 			Out.BumpKind = BumpKind;
 		}
+		if (SurfaceImpactKind != 0)
+		{
+			Out.SurfaceImpactFrame = SurfaceImpactFrame;
+			Out.SurfaceImpactKind = SurfaceImpactKind;
+		}
 	}
 	if (Context.HitstopEndFrame > Context.Frame)
 	{
@@ -197,7 +202,7 @@ bool FGSTN_HitSyncState::operator==(const FGSTN_HitSyncState& Other) const
 		|| SDIDistanceUsed != Other.SDIDistanceUsed || ImpactProfileQ != Other.ImpactProfileQ || PendingBalloonFrames != Other.PendingBalloonFrames
 		|| GroundBounceCount != Other.GroundBounceCount || GroundBounceFirstFrame != Other.GroundBounceFirstFrame
 		|| WallBounceCount != Other.WallBounceCount || WallBounceFirstFrame != Other.WallBounceFirstFrame || BumpEndFrame != Other.BumpEndFrame
-		|| BumpKind != Other.BumpKind)
+		|| BumpKind != Other.BumpKind || SurfaceImpactFrame != Other.SurfaceImpactFrame || SurfaceImpactKind != Other.SurfaceImpactKind)
 	{
 		return false;
 	}
@@ -248,7 +253,8 @@ void FGSTN_HitSyncState::NetSerialize(FArchive& Ar, const FGSTN_HitLiveContext& 
 		Mask |= Local.ImpactEndFrame != INDEX_NONE ? PartImpact : 0;
 		Mask |= (Local.PendingLaunchQ[0] | Local.PendingLaunchQ[1] | Local.PendingLaunchQ[2]) != 0 ? PartLaunch : 0;
 		Mask |= Local.SDIDistanceUsed != 0 ? PartSDI : 0;
-		Mask |= Local.ImpactProfileQ != 0 || Local.GroundBounceCount != 0 || Local.WallBounceCount != 0 || Local.BumpKind != 0 ? PartProfile : 0;
+		Mask |= Local.ImpactProfileQ != 0 || Local.GroundBounceCount != 0 || Local.WallBounceCount != 0 || Local.BumpKind != 0
+			|| Local.SurfaceImpactKind != 0 ? PartProfile : 0;
 	}
 	Ar.SerializeBits(&Mask, PartCount);
 	uint8 Reaction = Local.PendingReaction;
@@ -357,6 +363,16 @@ void FGSTN_HitSyncState::NetSerialize(FArchive& Ar, const FGSTN_HitLiveContext& 
 			Local.BumpKind = Kind;
 			SerializeFramePlusOne(Ar, Local.BumpEndFrame);
 		}
+		// The last wall or ceiling contact: 1 bit, its face (2 bits) and its frame
+		uint8 bSurface = Local.SurfaceImpactKind != 0 ? 1 : 0;
+		Ar.SerializeBits(&bSurface, 1);
+		if (bSurface)
+		{
+			uint8 Kind = Local.SurfaceImpactKind;
+			Ar.SerializeBits(&Kind, 2);
+			Local.SurfaceImpactKind = Kind;
+			SerializeFramePlusOne(Ar, Local.SurfaceImpactFrame);
+		}
 	}
 
 	if (Ar.IsLoading())
@@ -402,6 +418,10 @@ void FGSTN_HitSyncState::ToString(FAnsiStringBuilderBase& Out) const
 	if (BumpKind != 0)
 	{
 		Out.Appendf(" bump %d->%d", static_cast<int32>(BumpKind), BumpEndFrame);
+	}
+	if (SurfaceImpactKind != 0)
+	{
+		Out.Appendf(" surface %d@%d", static_cast<int32>(SurfaceImpactKind), SurfaceImpactFrame);
 	}
 	if (MoveOrigin.bSet)
 	{
