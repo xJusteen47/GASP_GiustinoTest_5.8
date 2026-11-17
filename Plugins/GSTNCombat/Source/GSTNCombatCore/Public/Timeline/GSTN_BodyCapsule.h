@@ -141,4 +141,16 @@ struct GSTNCOMBATCORE_API FGSTN_BodyCapsule
 	 * In the air the Body anchor stays (the body does not move on screen). A target that is not the standing shape is returned as it is
 	 */
 	static FGSTN_BodyCapsuleTarget GroundedRestore(const FGSTN_BodyCapsuleTarget& Target, const FGSTN_BodyCapsuleShape& Standing, bool bGrounded);
+
+	/**
+	 * Presentation: what to add to the drawn mesh so that the capsule shift of the newest simulated frame is NOT interpolated (2026-11-17, dair
+	 * V10 v88 sink, dropkick contact frames: body under the floor or out of the picture for one rendered frame, more or less from one capture
+	 * to the next). Mover's smoothing draws the mesh at the base visual offset of the newest frame on a location interpolated between the last
+	 * two frames: the offset changes in one step with the shift, the location only by the interpolated fraction of it, so the mesh is drawn
+	 * (1 - Alpha) x Shift away from where the simulation put it. The shift is a change of collision, not a motion: the answer is that amount.
+	 * Presented: the location the smoothing drew (the interpolated actor); FrameStart / FrameEnd: the actor at the start and at the end of the
+	 * newest frame (Shift included). Alpha is the fraction of the frame's move Presented covers (0..1); a frame that did not move gives none.
+	 * Body anchor: the mesh root stays where it was; Capsule anchor: it goes to the new place at once. Pure
+	 */
+	static FVector SmoothingCorrection(const FVector& Presented, const FVector& FrameStart, const FVector& FrameEnd, const FVector& Shift);
 };

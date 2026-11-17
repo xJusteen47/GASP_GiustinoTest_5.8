@@ -120,4 +120,19 @@ bool FGSTN_LandingAuthoringTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LandingTouchdownTest, "GSTNCombat.Core.Landing.TouchdownThisFrame", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_LandingTouchdownTest::RunTest(const FString& Parameters)
+{
+	constexpr double Step = 1.0 / 62.5;
+	// Falling at 800 cm/s under 980 cm/s^2: 12.8 + 0.125 = 12.93 cm this frame
+	TestEqual(TEXT("fall of the frame"), FGSTN_LandingRules::FallThisFrame(-800.0, 980.0, Step), 12.9254, 0.001);
+	TestTrue(TEXT("floor 10 cm below: touches this frame"), FGSTN_LandingRules::ReachesFloorThisFrame(-800.0, 980.0, Step, 10.0, 3.0));
+	TestTrue(TEXT("floor 15 cm below: inside the margin"), FGSTN_LandingRules::ReachesFloorThisFrame(-800.0, 980.0, Step, 15.0, 3.0));
+	TestFalse(TEXT("floor 20 cm below: next frame"), FGSTN_LandingRules::ReachesFloorThisFrame(-800.0, 980.0, Step, 20.0, 3.0));
+	TestFalse(TEXT("rising: never"), FGSTN_LandingRules::ReachesFloorThisFrame(300.0, 980.0, Step, 1.0, 3.0));
+	TestFalse(TEXT("still: never (standing is Mover's own ground)"), FGSTN_LandingRules::ReachesFloorThisFrame(0.0, 980.0, Step, 0.5, 3.0));
+	TestFalse(TEXT("a floor above the capsule bottom is not one to land on"), FGSTN_LandingRules::ReachesFloorThisFrame(-800.0, 980.0, Step, -10.0, 3.0));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

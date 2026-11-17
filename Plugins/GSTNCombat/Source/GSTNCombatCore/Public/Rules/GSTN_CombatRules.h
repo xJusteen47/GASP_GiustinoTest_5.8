@@ -209,6 +209,20 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
 	FGSTN_SurfaceBounceRules CeilingImpact;
 
+	/**
+	 * Touchdown on the frame of contact (2026-11-17, dair V10: the landing clip came two frames after the body reached the floor). The combat
+	 * tick reads Mover's ground as of the end of the previous frame, so a landing used to be decided one frame after the body touched. On: a
+	 * falling fighter whose fall of this frame reaches a walkable floor (a capsule sweep from the previous frame's state, FGSTN_LandingRules::
+	 * ReachesFloorThisFrame) is on the ground for the move's ground rules on this frame: Landing windows, Hold Until Landed, and the body
+	 * capsule's grounded restore. Off: the behaviour before (one frame later). Data per game mode, never a project setting
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Landing")
+	bool bAnticipateTouchdown = true;
+
+	/** Extra reach of that sweep past this frame's fall (Mover keeps the capsule a couple of centimetres over the floor) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Landing", meta = (ClampMin = "0.0", ClampMax = "20.0", ForceUnits = "cm", EditCondition = "bAnticipateTouchdown"))
+	float TouchdownMarginCm = 3.f;
+
 	/** Damage of a surface impact before the surface's and the victim's ImpactDamageScale. 0 = impacts do no damage (they still stun) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits", meta = (ClampMin = "0.0"))
 	float BaseImpactDamage = 0.f;

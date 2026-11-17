@@ -49,6 +49,15 @@ struct GSTNCOMBATNP_API FGSTN_BodyCapsuleModifier : public FMovementModifierBase
 	UPROPERTY()
 	bool bCrouched = false;
 
+	/**
+	 * Presentation only (never on the wire, never compared: a modifier reconciles by type): where the actor was when the frame that produced
+	 * this state began, and how far the capsule shift effects of that frame moved it. ApplyPresentation takes the shift out of Mover's
+	 * interpolation (FGSTN_BodyCapsule::SmoothingCorrection). Written by OnPreMovement (start, shift cleared) and by the shift effect
+	 * (the move it really made, sweeps included). Simulated proxies run no modifier: both stay zero there, nothing is corrected
+	 */
+	FVector PresentFrameStart = FVector::ZeroVector;
+	FVector PresentShift = FVector::ZeroVector;
+
 	virtual void OnPreMovement(UMoverComponent* MoverComp, const FMoverTimeStep& TimeStep) override;
 
 	virtual bool HasGameplayTag(FGameplayTag TagToFind, bool bExactMatch) const override;
@@ -74,8 +83,13 @@ struct GSTNCOMBATNP_API FGSTN_BodyCapsuleModifier : public FMovementModifierBase
 	/** Sets the capsule size and the mesh offset of Shape (no move). Changes nothing already right. Returns whether something changed */
 	static bool ApplyShape(UMoverComponent& MoverComp, const FGSTN_BodyCapsuleShape& Shape, const FGSTN_BodyCapsuleShape& Standing);
 
-	/** Presentation, every machine (simulated proxies too): the shape of the modifier in MoverComp's current sync state. Called by the combat component's tick */
-	static void ApplyPresentation(UMoverComponent& MoverComp);
+	/**
+	 * Presentation, every machine (simulated proxies too): the shape of the modifier in MoverComp's current sync state. Called by the combat
+	 * component's tick (TG_PostUpdateWork, after Mover's smoothing placed the mesh). With VisualComponentOffset smoothing it also takes the
+	 * newest frame's capsule shift out of the interpolation (PresentShift); InOutCorrectedAt remembers the mesh location it wrote, so a frame
+	 * whose smoothing did not place the mesh again is not corrected twice
+	 */
+	static void ApplyPresentation(UMoverComponent& MoverComp, FVector* InOutCorrectedAt = nullptr);
 };
 
 template<>

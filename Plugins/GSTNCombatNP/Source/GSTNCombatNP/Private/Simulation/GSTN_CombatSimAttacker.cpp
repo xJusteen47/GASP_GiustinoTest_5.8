@@ -8,6 +8,9 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
+#include "MoverComponent.h"
+#include "Movement/GSTN_BodyCapsuleModifier.h"
+#include "Timeline/GSTN_Landing.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
 #include "NetworkPredictionTickState.h"
@@ -82,6 +85,69 @@ bool UGSTN_CombatSimComponent::ProbeFloorAhead(float AheadCm, float DepthCm)
 	FCollisionResponseParams Responses;
 	Body->InitSweepCollisionParams(Params, Responses);
 	return Body->GetWorld()->LineTraceTestByChannel(Start, End, Body->GetCollisionObjectType(), Params, Responses);
+}
+
+bool UGSTN_CombatSimComponent::ProbeTouchdownThisFrame(int32 Frame, float StepSeconds)
+{
+	if (!CombatRules || !CombatRules->bAnticipateTouchdown)
+	{
+		return false;
+	}
+	const UGSTN_MoverSimStateTracker* Tracker = GetJumpTracker();
+	const UMoverComponent* Mover = GetOwner() ? GetOwner()->FindComponentByClass<UMoverComponent>() : nullptr;
+	const UPrimitiveComponent* Body = GetOwner() ? Cast<UPrimitiveComponent>(GetOwner()->GetRootComponent()) : nullptr;
+	FTransform Pose;
+	FVector Up;
+	if (!Tracker || !Mover || !Body || !Body->GetWorld() || !ReadOwnPose(Pose, Up) || Tracker->HasGameplayTag(Mover_IsOnGround, true))
+	{
+		return false;
+	}
+	const double Fall = FGSTN_LandingRules::FallThisFrame(Tracker->GetUpSpeed(), Mover->GetGravityAcceleration().Size(), StepSeconds);
+	if (Fall <= 0.0)
+	{
+		return false;
+	}
+	// The capsule of the end of the previous frame: the body capsule modifier's shape in the tracked state (the component may still hold another
+	// one during a resimulation, the modifier re-applies it only in Mover's tick)
+	FGSTN_BodyCapsuleShape Shape;
+	if (!FGSTN_BodyCapsuleModifier::GetStanding(*Mover, Shape))
+	{
+		return false;
+	}
+	for (auto It = Tracker->GetSyncState().MovementModifiers.GetActiveModifiersIterator(); It; ++It)
+	{
+		const FMovementModifierBase* Modifier = It->Get();
+		if (Modifier && Modifier->GetScriptStruct() == FGSTN_BodyCapsuleModifier::StaticStruct())
+		{
+			const FGSTN_BodyCapsuleShape& Applied = static_cast<const FGSTN_BodyCapsuleModifier*>(Modifier)->Applied;
+			Shape = Applied.HalfHeight > 0.f ? Applied : Shape;
+			break;
+		}
+	}
+	const double Margin = CombatRules->TouchdownMarginCm;
+	const FVector Start = Pose.GetLocation();
+	const FVector End = Start - Up * (Fall + Margin);
+	const FQuat Upright = FRotationMatrix::MakeFromZ(Up).ToQuat();
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNTouchdownProbe), false, GetOwner());
+	FCollisionResponseParams Responses;
+	Body->InitSweepCollisionParams(Params, Responses);
+	FHitResult Hit;
+	const bool bHit = Body->GetWorld()->SweepSingleByChannel(Hit, Start, End, Upright, Body->GetCollisionObjectType(),
+		FCollisionShape::MakeCapsule(Shape.Radius, FMath::Max(Shape.HalfHeight, Shape.Radius)), Params, Responses);
+	// Walkable: Mover's default slope limit (about 45 degrees); a face we start inside is Mover's to resolve, not a landing
+	constexpr double WalkableCos = 0.71;
+	if (!bHit || Hit.bStartPenetrating || Hit.ImpactNormal.Dot(Up) < WalkableCos
+		|| !FGSTN_LandingRules::ReachesFloorThisFrame(Tracker->GetUpSpeed(), Mover->GetGravityAcceleration().Size(), StepSeconds, Hit.Distance, Margin))
+	{
+		return false;
+	}
+	FrameTouchdown = Frame;
+	return true;
+}
+
+bool UGSTN_CombatSimComponent::ReadFrameTouchdown() const
+{
+	return FrameTouchdown != INDEX_NONE && FrameTouchdown == GetSimulationFrame();
 }
 
 void UGSTN_CombatSimComponent::StampMoveOrigin(FGSTN_CombatSyncCore& Core, int32 Frame)

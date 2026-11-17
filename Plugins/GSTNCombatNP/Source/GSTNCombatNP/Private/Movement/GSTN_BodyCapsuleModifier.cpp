@@ -88,7 +88,7 @@ bool FGSTN_BodyCapsuleModifier::ApplyShape(UMoverComponent& MoverComp, const FGS
 	return bChanged;
 }
 
-void FGSTN_BodyCapsuleModifier::ApplyPresentation(UMoverComponent& MoverComp)
+void FGSTN_BodyCapsuleModifier::ApplyPresentation(UMoverComponent& MoverComp, FVector* InOutCorrectedAt)
 {
 	FGSTN_BodyCapsuleShape Standing;
 	if (!GetStanding(MoverComp, Standing))
@@ -101,12 +101,34 @@ void FGSTN_BodyCapsuleModifier::ApplyPresentation(UMoverComponent& MoverComp)
 	// With VisualComponentOffset smoothing Mover places the mesh from the base visual transform itself; otherwise the mesh only follows its
 	// relative location, which nothing else rewrites
 	USceneComponent* Visual = MoverComp.GetPrimaryVisualComponent();
-	if (Visual && Visual != MoverComp.GetUpdatedComponent() && MoverComp.SmoothingMode != EMoverSmoothingMode::VisualComponentOffset)
+	USceneComponent* Updated = MoverComp.GetUpdatedComponent();
+	if (Visual && Visual != Updated && MoverComp.SmoothingMode != EMoverSmoothingMode::VisualComponentOffset)
 	{
 		const FVector Wanted = MoverComp.GetBaseVisualComponentTransform().GetLocation();
 		if (!Visual->GetRelativeLocation().Equals(Wanted, 0.01))
 		{
 			Visual->SetRelativeLocation(Wanted, false, nullptr, ETeleportType::TeleportPhysics);
+		}
+	}
+	else if (Visual && Updated && Visual != Updated && Modifier && !Modifier->PresentShift.IsNearlyZero(0.001))
+	{
+		// The smoothing drew the mesh at base offset x the interpolated actor: the shift of the newest frame is a change of collision, the mesh
+		// takes all of it now (2026-11-17: dair V10 v88 sink, dropkick contact frames with the body under the floor or out of the picture)
+		const FTransform VisualWorld = Visual->GetComponentTransform();
+		if (InOutCorrectedAt && VisualWorld.GetLocation().Equals(*InOutCorrectedAt, 0.001))
+		{
+			return;  // nothing placed the mesh again since the last correction
+		}
+		const FTransform Presented = MoverComp.GetBaseVisualComponentTransform().Inverse() * VisualWorld;
+		const FVector Correction = FGSTN_BodyCapsule::SmoothingCorrection(Presented.GetLocation(), Modifier->PresentFrameStart, Updated->GetComponentLocation(),
+			Modifier->PresentShift);
+		if (!Correction.IsNearlyZero(0.01))
+		{
+			Visual->SetWorldLocation(VisualWorld.GetLocation() + Correction, false, nullptr, ETeleportType::TeleportPhysics);
+			if (InOutCorrectedAt)
+			{
+				*InOutCorrectedAt = Visual->GetComponentLocation();
+			}
 		}
 	}
 }
@@ -118,6 +140,9 @@ void FGSTN_BodyCapsuleModifier::OnPreMovement(UMoverComponent* MoverComp, const 
 	{
 		return;
 	}
+	// Presentation facts of this frame (ApplyPresentation): where it starts, no shift yet
+	PresentFrameStart = MoverComp->GetUpdatedComponent() ? MoverComp->GetUpdatedComponent()->GetComponentLocation() : FVector::ZeroVector;
+	PresentShift = FVector::ZeroVector;
 	const FGSTN_BodyCapsuleShape Current = GSTNBodyCapsule::Resolve(Applied, Standing);
 	// The component properties follow the (maybe restored) state before anything moves this substep
 	ApplyShape(*MoverComp, Current, Standing);
@@ -151,10 +176,11 @@ void FGSTN_BodyCapsuleModifier::OnPreMovement(UMoverComponent* MoverComp, const 
 	{
 		CrouchShape = FGSTN_GroundCrouchKitExtension::MakeCapsule(CrouchHalfHeight, CrouchRadius, Standing);
 	}
-	// On the floor the standing capsule grows from the floor (GroundedRestore); the ground fact is the frame's input sync state, as every reader sees it
+	// On the floor the standing capsule grows from the floor (GroundedRestore); the ground fact is the frame's input sync state, as every reader sees it,
+	// or the touchdown this frame's combat tick anticipated (UGSTN_CombatRules::bAnticipateTouchdown: the move ended on the frame of contact)
+	const bool bGrounded = MoverComp->HasGameplayTag(Mover_IsOnGround, true) || (Combat && Combat->ReadFrameTouchdown());
 	const FGSTN_BodyCapsuleTarget Target = FGSTN_BodyCapsule::GroundedRestore(
-		FGSTN_BodyCapsule::ResolveTarget(Data, TimelineFrame, Standing, CrouchShape.HalfHeight > 0.f ? &CrouchShape : nullptr), Standing,
-		MoverComp->HasGameplayTag(Mover_IsOnGround, true));
+		FGSTN_BodyCapsule::ResolveTarget(Data, TimelineFrame, Standing, CrouchShape.HalfHeight > 0.f ? &CrouchShape : nullptr), Standing, bGrounded);
 	if (Target.Shape.NearlyEquals(Current))
 	{
 		return;
@@ -321,6 +347,7 @@ bool FGSTN_BodyCapsuleShiftEffect::ApplyMovementEffect(FApplyMovementEffectParam
 		FHitResult Hit;
 		Updated->SetWorldLocation(Updated->GetComponentLocation() + ShiftWorld, bSweepMove, bSweepMove ? &Hit : nullptr, ETeleportType::TeleportPhysics);
 	};
+	const FVector Before = Updated->GetComponentLocation();
 	if (bGrowing)
 	{
 		Move();
@@ -330,6 +357,16 @@ bool FGSTN_BodyCapsuleShiftEffect::ApplyMovementEffect(FApplyMovementEffectParam
 	{
 		FGSTN_BodyCapsuleModifier::ApplyShape(*MoverComp, To, Standing);
 		Move();
+	}
+	// The move really made (a sweep may have shortened it), for the presentation of this frame: the modifier of this output state
+	for (auto It = OutputState.MovementModifiers.GetActiveModifiersIterator(); It; ++It)
+	{
+		FMovementModifierBase* Modifier = It->Get();
+		if (Modifier && Modifier->GetScriptStruct() == FGSTN_BodyCapsuleModifier::StaticStruct())
+		{
+			static_cast<FGSTN_BodyCapsuleModifier*>(Modifier)->PresentShift += Updated->GetComponentLocation() - Before;
+			break;
+		}
 	}
 
 	// The modifier in this output state already holds To (it queued this effect on the same substep): nothing to write there

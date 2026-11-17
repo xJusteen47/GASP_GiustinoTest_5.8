@@ -92,3 +92,15 @@ FGSTN_BodyCapsuleTarget FGSTN_BodyCapsule::GroundedRestore(const FGSTN_BodyCapsu
 	}
 	return Out;
 }
+
+FVector FGSTN_BodyCapsule::SmoothingCorrection(const FVector& Presented, const FVector& FrameStart, const FVector& FrameEnd, const FVector& Shift)
+{
+	const FVector Move = FrameEnd - FrameStart;
+	const double MoveSq = Move.SizeSquared();
+	if (Shift.IsNearlyZero(0.001) || MoveSq < UE_KINDA_SMALL_NUMBER)
+	{
+		return FVector::ZeroVector;
+	}
+	const double Alpha = FMath::Clamp((Presented - FrameStart).Dot(Move) / MoveSq, 0.0, 1.0);
+	return Shift * (1.0 - Alpha);
+}
