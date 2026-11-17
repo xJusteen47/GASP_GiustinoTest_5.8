@@ -11,6 +11,8 @@ INDICE.md NON trovato (né in project files né su claude/artifacts): stime cali
 ## 1. Regole che valgono per ogni checkpoint
 Regola 10 (video in-game guardato, PASS/FAIL, max 3 giri di posa), 13 (2-3 tratti d'identità per clip nel brief, versioni approvate bloccate, sheet curve condiviso), feel rule (frame 1 cambia posa), clip dell'owner solo copie. Ogni animazione = blocking → test in gioco → polish (workflow owner). Ogni VFX è un DATO (tabella evento → effetto per kit/skin), mai cablato: si sostituisce senza codice. Niente nella sim: eventi letti dallo stato sincronizzato lato presentazione (rollback: dedupe per frame).
 
+**REVIEW CON FABLE 5.2 (owner 2026-11-17 14:26Z, cmsg_01CRvUdrWm1dJrM4q54YDBLNP9GzDDKrH4RAiM2buVfk14; ambito: ogni animazione e ogni VFX del piano: M1 diagnosi ossa, M2, M3, M4, M6, M7, M8, M9).** Fable 5.2 high (a) da director decide le pose chiave e lo sheet delle curve prima del blocking (regola 3: Fable giudica e decide le pose; agy/Haiku/Sonnet solo catture, import, build) e (b) fa la review video in-game regola 10 (PASS/FAIL, frame uno per uno attorno a hit/FAF/contatto, VFX off poi on). Nessun altro modello firma un PASS; solo PASS arriva all'owner. Costo della review Fable (~7-9 $ per giro) già nelle stime dei checkpoint.
+
 ## 2. Checkpoint, in ordine di impatto sul feeling
 | # | Cosa | Assorbe dalla coda | Macchina, modello | Stima |
 |---|---|---|---|---|

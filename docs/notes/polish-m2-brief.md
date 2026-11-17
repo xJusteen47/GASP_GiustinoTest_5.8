@@ -1,5 +1,5 @@
 # Brief M2: kit VFX v1 (Niagara) per movimento e colpi
-Macchina: PORTATILE (editor + MCP editor). Modello: Opus medium; review cloud Fable (regola 10, VFX off poi on). Budget: 17 $. Dopo M0 (serve la tabella eventi; se M0 non è ancora entrato, preparare i sistemi e collegarli dopo).
+Macchina: PORTATILE (editor + MCP editor). Modello: Opus medium; review cloud Fable 5.2 high (regola 10, VFX off poi on; solo Fable firma il PASS, owner 14:26Z). Budget: 17 $. Dopo M0 (serve la tabella eventi; se M0 non è ancora entrato, preparare i sistemi e collegarli dopo).
 Piano: polish-movimento-vfx-piano.md M2 + §5; checklist VFX approvata 11-15 (handoffs/silhouette-vfx-ricerca.md, artifact silhouette). Riferimento owner: riferimenti/mario3dw-toad-start-skid-owner-1117.mov (sbuffi a partenza e skid).
 ## Stile
 Smooth / cartoon alla Fortnite / Astro Bot: forme morbide, sbuffi a pallina che si gonfiano e svaniscono, colori puliti; l'effetto non copre mai il personaggio, la taglia segue l'importanza.
