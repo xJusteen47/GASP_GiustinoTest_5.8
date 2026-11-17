@@ -1,3 +1,4 @@
+# NOTE (polish M0): run() now delegates to setup_anim_layers.py (main graph seam with override slots); the functions here are its wall part.
 # Builds the wall anim layer and plugs it into the character (wall-anim.md "Layer graph", anim-layers.md A2 and part B). Idempotent: running it
 # again changes nothing (every step is "find or add"; a Blueprint is backed up and saved only when a step changes it).
 #
@@ -424,6 +425,13 @@ def check():
 
 
 def run(variant=False):
+    """The main ABP's seam has override SLOTS now (polish M0, L1): setup_anim_layers.py builds it and the wall layer together."""
+    import setup_anim_layers
+    return setup_anim_layers.run(variant)
+
+
+def run_bool_seam_legacy(variant=False):
+    """The old single-layer seam (Blend Poses by bool). Kept for reference only: setup_anim_layers.py replaces it in place."""
     main_abp = unreal.load_asset(MAIN_ABP)
     skeleton = main_abp.get_editor_property('target_skeleton')
     ali = ensure_interface()

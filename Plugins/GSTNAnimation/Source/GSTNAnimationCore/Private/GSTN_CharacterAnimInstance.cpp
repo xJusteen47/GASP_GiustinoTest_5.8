@@ -11,31 +11,54 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_CharacterAnimInstance)
 
+FGSTN_OverridePick FGSTN_OverridePick::Pick(TConstArrayView<FGSTN_OverrideCandidate> Candidates)
+{
+	FGSTN_OverridePick Out;
+	int32 BestPriority = 0;
+	for (int32 Index = 0; Index < Candidates.Num(); ++Index)
+	{
+		const FGSTN_OverrideCandidate& Candidate = Candidates[Index];
+		if (Candidate.bActive && Candidate.Slot > GSTNOverrideSlot::None && (Out.Index == INDEX_NONE || Candidate.Priority > BestPriority))
+		{
+			Out.Slot = Candidate.Slot;
+			Out.BlendTime = Candidate.BlendTime;
+			Out.Index = Index;
+			BestPriority = Candidate.Priority;
+		}
+	}
+	return Out;
+}
+
 void UGSTN_CharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
 	Super::NativeUpdateAnimation(DeltaSeconds);
 
-	const IGSTN_OverrideLayerSource* Best = nullptr;
-	const UAnimInstance* BestInstance = nullptr;
+	// Linked instances are updated before the main one, so their answers are this frame's
+	TArray<FGSTN_OverrideCandidate, TInlineAllocator<4>> Candidates;
+	TArray<const UAnimInstance*, TInlineAllocator<4>> Instances;
 	if (const USkeletalMeshComponent* Mesh = GetOwningComponent())
 	{
-		// Linked instances are updated before the main one, so their answers are this frame's
 		for (const UAnimInstance* Linked : Mesh->GetLinkedAnimInstances())
 		{
-			const IGSTN_OverrideLayerSource* Source = Cast<IGSTN_OverrideLayerSource>(Linked);
-			if (Source && Source->IsOverrideLayerActive() && (!Best || Source->GetOverridePriority() > Best->GetOverridePriority()))
+			if (const IGSTN_OverrideLayerSource* Source = Cast<IGSTN_OverrideLayerSource>(Linked))
 			{
-				Best = Source;
-				BestInstance = Linked;
+				FGSTN_OverrideCandidate& Candidate = Candidates.AddDefaulted_GetRef();
+				Candidate.bActive = Source->IsOverrideLayerActive();
+				Candidate.Slot = Source->GetOverrideSlot();
+				Candidate.Priority = Source->GetOverridePriority();
+				Candidate.BlendTime = Source->GetOverrideBlendTime();
+				Instances.Add(Linked);
 			}
 		}
 	}
 
-	bOverrideLayerActive = Best != nullptr;
-	ActiveOverrideLayerClass = BestInstance ? BestInstance->GetClass() : nullptr;
-	if (Best)
+	const FGSTN_OverridePick Pick = FGSTN_OverridePick::Pick(Candidates);
+	bOverrideLayerActive = Pick.Index != INDEX_NONE;
+	ActiveOverrideSlot = Pick.Slot;
+	ActiveOverrideLayerClass = bOverrideLayerActive ? Instances[Pick.Index]->GetClass() : nullptr;
+	if (bOverrideLayerActive)
 	{
-		OverrideBlendTime = Best->GetOverrideBlendTime();
+		OverrideBlendTime = Pick.BlendTime;  // kept after the layer stops, so the blend out uses the same time
 	}
 
 	UpdateFootLockRequest(DeltaSeconds);

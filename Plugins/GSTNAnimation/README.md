@@ -20,7 +20,7 @@ First user: the wall layer of the project ([wall-anim.md](../../docs/architectur
 | Class | Kind | Role |
 |---|---|---|
 | `IGSTN_OverrideLayerSource` | C++ interface | A linked layer says whether it wants the pose now, with which blend time and priority. |
-| `UGSTN_CharacterAnimInstance` | `UAnimInstance` | Parent for the main graph: polls the linked layers, exposes `bOverrideLayerActive`, `OverrideBlendTime`, `ActiveOverrideLayerClass`. |
+| `UGSTN_CharacterAnimInstance` | `UAnimInstance` | Parent for the main graph: polls the linked layers, exposes `ActiveOverrideSlot` (Blend Poses by int seam, slots in `GSTNOverrideSlot`), `bOverrideLayerActive`, `OverrideBlendTime`, `ActiveOverrideLayerClass`. |
 | `UGSTN_AnimSetDefinition` | primary data asset `GSTN_AnimSet` | One feature slot (`SetTag`, `Anim.Set.*`): `LayerClass` and `MontageOverrides` (`Reference` -> `Visual`). |
 | `FGSTN_AnimSetRule`, `UGSTN_AnimSetCollection` | data (`GSTN_AnimSetCollection`) | "Use this set when the cosmetic tags match `When`", with a priority; one collection per source (character, kit, weapon, skin). |
 | `UGSTN_AnimSetUtils` | function library | `ResolveWinners`, `ResolveLayerClasses`, `ValidateMontageOverride`. Pure and deterministic. |
