@@ -244,11 +244,13 @@ bool FGSTN_PresentationDeriveRunTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("skid exit"), Count(Events, Skid_Exit), 1);
 	TestEqual(TEXT("a skid is not a release stop"), Count(Events, StopRelease), 0);
 	TestEqual(TEXT("turn"), Count(Events, Turn180), 1);
+	TestEqual(TEXT("stage 3 -> skid is one stage-down (ends sprint lines)"), Count(Events, StageDown), 1);
 
 	// Stick released: soft stop, no skid, no turn
 	Events = Run({Run1(1, 0, 0), Run1(2, 1, 400), Run1(3, 0, 200), Run1(4, 0, 0)});
 	TestEqual(TEXT("release stop"), Count(Events, StopRelease), 1);
 	TestEqual(TEXT("release: no skid"), Count(Events, Skid_Enter), 0);
+	TestEqual(TEXT("release: stage-down too"), Count(Events, StageDown), 1);
 
 	// After the turn window a run the other way is not a turn
 	FGSTN_PresentationDeriveRules Rules;
@@ -295,7 +297,7 @@ bool FGSTN_PresentationDeriveTagsTest::RunTest(const FString& Parameters)
 	const FGSTN_PresentationEvent* FirstDodge = Events.FindByPredicate([](const FGSTN_PresentationEvent& E) { return E.EventTag == GSTNPresentationTags::Dodge; });
 	TestTrue(TEXT("move event stamped with the move's start frame"), FirstDodge && FirstDodge->Frame == 3 && FirstDodge->bExactFrame);
 
-	TestTrue(TEXT("default rules exist"), FGSTN_PresentationDeriveRules::MakeDefaultTagRules().Num() >= 4);
+	TestTrue(TEXT("default rules exist"), FGSTN_PresentationDeriveRules::MakeDefaultTagRules().Num() >= 5);
 	return true;
 }
 

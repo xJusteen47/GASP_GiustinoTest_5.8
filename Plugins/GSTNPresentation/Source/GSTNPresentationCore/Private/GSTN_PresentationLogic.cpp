@@ -132,6 +132,7 @@ TArray<FGSTN_PresentationTagRule> FGSTN_PresentationDeriveRules::MakeDefaultTagR
 	Rules.Add(Rule(TEXT("Combat.State.Shielding"), GSTNPresentationTags::Shield_On));
 	Rules.Add(Rule(TEXT("Combat.State.ShieldStun"), GSTNPresentationTags::Shield_Hit));
 	Rules.Add(Rule(TEXT("Combat.State.ShieldBroken"), GSTNPresentationTags::Shield_Break));
+	Rules.Add(Rule(TEXT("Combat.State.Tumble"), GSTNPresentationTags::Tumble_Start, GSTNPresentationTags::Tumble_End));
 	Rules.Add(Rule(TEXT("Combat.State.Knockdown"), GSTNPresentationTags::Knockdown, GSTNPresentationTags::GetUp));
 	return Rules;
 }
@@ -255,6 +256,12 @@ void FGSTN_PresentationDeriver::Step(const FGSTN_PresentationSnapshot& C, const 
 		{
 			Emit(Out, StopRelease, F, HBefore.Size(), C.Location, HBefore.GetSafeNormal());
 		}
+	}
+
+	// Any drop of the stage, in the air too: the end of a sustained stage effect (sprint lines) must never be missed
+	if (C.RunStage < P.RunStage)
+	{
+		Emit(Out, StageDown, F, static_cast<float>(FMath::Max(C.RunStage, 0)), C.Location, HNow.GetSafeNormal());
 	}
 
 	// Skid phases; then a run the other way soon after the skid is the turn

@@ -55,7 +55,7 @@ UGSTN_CombatPresentationEvents* UGSTN_CombatPresentationEvents::FindOrAdd(AActor
 	return Added;
 }
 
-bool UGSTN_CombatPresentationEvents::ReadSnapshot(const AActor* Owner, FGSTN_PresentationSnapshot& Out)
+bool UGSTN_CombatPresentationEvents::ReadSnapshot(const AActor* Owner, FGSTN_PresentationSnapshot& Out, float RunMinSpeed)
 {
 	using namespace GSTNCombatPresentationEvents;
 	Out = FGSTN_PresentationSnapshot();
@@ -74,7 +74,6 @@ bool UGSTN_CombatPresentationEvents::ReadSnapshot(const AActor* Owner, FGSTN_Pre
 	Out.Location = Owner->GetActorLocation();
 	Out.bGrounded = !View.bAirborne;
 	Out.AirJumpsUsed = View.AirJumpsUsed;
-	Out.RunStage = View.bHasRunStages ? View.RunStage : 0;
 	Out.bReacting = View.Status == EGSTN_CombatStatus::Hitstun || View.Status == EGSTN_CombatStatus::Tumble;
 	Out.bSplat = View.Status == EGSTN_CombatStatus::Splat;
 	Out.MoveTags = Combat->GetCurrentMoveTags();
@@ -86,6 +85,10 @@ bool UGSTN_CombatPresentationEvents::ReadSnapshot(const AActor* Owner, FGSTN_Pre
 		Out.Up = Mover->GetUpDirection();
 		Out.SkidPhase = ToPresentation(UGSTN_RunPresentationComponent::ReadFootSlide(Mover->GetSyncState(), StepSeconds).SkidPhase);
 	}
+	// The snapshot counts stages from 1 with 0 = not running; the simulation's stage is 0-based and stays 0 at rest. Running = stages on
+	// and faster than RunMinSpeed (in the air too: a jump keeps the sprint lines) (polish M2: with the raw index RunStart fired only when sprint 1 began, ~40 frames late)
+	const FVector Horizontal = Out.Velocity - Out.Up * FVector::DotProduct(Out.Velocity, Out.Up);
+	Out.RunStage = View.bHasRunStages && Horizontal.Size() >= RunMinSpeed ? View.RunStage + 1 : 0;
 
 	FGSTN_CombatHitEventData Hit;
 	if (Combat->GetLastHitReceived(Hit))
@@ -126,7 +129,7 @@ void UGSTN_CombatPresentationEvents::TickComponent(float DeltaTime, ELevelTick T
 	}
 
 	FGSTN_PresentationSnapshot Snapshot;
-	if (ReadSnapshot(Owner, Snapshot))
+	if (ReadSnapshot(Owner, Snapshot, RunMinSpeed))
 	{
 		Presentation->SubmitSnapshot(Snapshot);
 	}

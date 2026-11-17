@@ -129,6 +129,26 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationCue
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
 	FName IntensityParameter = TEXT("User.Intensity");
 
+	/**
+	 * Sustained effect (a skid trail, sprint lines, a tumble trail): the system keeps playing until one of these events fires on the same
+	 * character (a parent tag stops on every child), then it is deactivated and its live particles fade out. Empty = a one-shot burst.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (Categories = "Presentation.Event"))
+	FGameplayTagContainer StopOn;
+
+	/** Sustained effect: deactivated after this many seconds even if no StopOn event came (a missed end never leaves it on). 0 = no cap */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (ClampMin = "0", ForceUnits = "s"))
+	float MaxDuration = 0.f;
+
+	/** Linear colour user parameter set from Tint (None = not set): a skin recolours the effect without a new system */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FName ColorParameter = TEXT("User.Tint");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FLinearColor Tint = FLinearColor::White;
+
+	bool IsSustained() const { return !StopOn.IsEmpty() || MaxDuration > 0.f; }
+
 	// Sound
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Sound")

@@ -12,6 +12,7 @@ namespace GSTNPresentationTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Land, "Presentation.Event.Land", "Landing (not from a tumble). Magnitude: fall speed at contact (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(RunStart, "Presentation.Event.RunStart", "The run starts from below stage 1. Magnitude: horizontal speed (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(StageUp, "Presentation.Event.StageUp", "The run goes up a stage. Magnitude: the new stage (2, 3...)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(StageDown, "Presentation.Event.StageDown", "The run goes down a stage, to 0 included (ends a sustained effect such as sprint lines). Magnitude: the new stage");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(StopRelease, "Presentation.Event.StopRelease", "The run ends without a skid (stick released). Magnitude: horizontal speed before (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Skid, "Presentation.Event.Skid", "Run skid phases");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Skid_Enter, "Presentation.Event.Skid.Enter", "Skid starts. Magnitude: sliding speed (cm/s)");
@@ -22,6 +23,9 @@ namespace GSTNPresentationTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Splat, "Presentation.Event.Splat", "Pinned to a surface by a splat. Magnitude: speed before (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(WallBounce, "Presentation.Event.WallBounce", "A reacting victim bounces off a wall or ceiling. Magnitude: speed into the surface (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GroundBounce, "Presentation.Event.GroundBounce", "A reacting victim bounces off the ground. Magnitude: fall speed (cm/s)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tumble, "Presentation.Event.Tumble", "Tumble (launched hard enough to tumble)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tumble_Start, "Presentation.Event.Tumble.Start", "Tumble starts (Combat.State.Tumble added)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tumble_End, "Presentation.Event.Tumble.End", "Tumble ends (Combat.State.Tumble removed)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Knockdown, "Presentation.Event.Knockdown", "Downed on the ground");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GetUp, "Presentation.Event.GetUp", "Getting up from the ground");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Roll, "Presentation.Event.Roll", "Roll (downed roll or tech roll)");
