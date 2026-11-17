@@ -68,6 +68,8 @@ bool FGSTN_TableAssembleFromDefinitionsTest::RunTest(const FString& Parameters)
 	TStrongObjectPtr<UGSTN_PrimaryKitDefinition> Kit(NewObject<UGSTN_PrimaryKitDefinition>(GetTransientPackage()));
 	Kit->CommandSet.BaseSet = TSoftObjectPtr<UGSTN_InputSlotSet>(Base.Get());
 	Kit->KitBindings = { MakeLoadoutBinding(Strong_Neutral.GetTag(), AbilityY()) };
+	// The rows are counted: the missing-move fallback (which would borrow the attack for its other shapes) is covered by Table.MissingMoveFallback
+	Kit->CommandSet.bFillMissingMoves = false;
 
 	// A parent weapon and a child that replaces the parent's grounded attack and allows swapping it
 	const FGameplayTag Grounded = GSTNCombatTags::State_Busy.GetTag();
