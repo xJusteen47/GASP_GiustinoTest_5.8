@@ -342,6 +342,11 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 			// A new launch starts its own ground bounce chain (FGSTN_GroundImpactRules limit)
 			Core.Hit.GroundBounceCount = 0;
 			Core.Hit.GroundBounceFirstFrame = INDEX_NONE;
+			// ... and its own wall and ceiling chain; a bump in progress is cut by the new reaction
+			Core.Hit.WallBounceCount = 0;
+			Core.Hit.WallBounceFirstFrame = INDEX_NONE;
+			Core.Hit.BumpEndFrame = INDEX_NONE;
+			Core.Hit.BumpKind = 0;
 			Core.Hit.SetPendingLaunch(Hit.Reaction == EGSTN_HitReaction::StaggerInPlace ? FVector::ZeroVector : LaunchVelocity);
 			Core.Hit.PendingBalloonFrames = static_cast<uint8>(FMath::Clamp(Hit.BalloonFrames, 0, FGSTN_BalloonMath::MaxFlightFrames));
 			// A new staggering hit starts its own held-direction drift budget (M6 F8)
@@ -416,7 +421,7 @@ void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_Comba
 	const FGSTN_TumbleContactSyncState& Contact = In.Contact;
 	const int32 Frame = In.Frame;
 	if (Core.ActionState != EGSTN_ActionState::Tumble || In.bStaggeredThisFrame || Core.IsInHitstop(Frame) || !Contact.IsSet()
-		|| (!In.Table && Contact.Kind != EGSTN_TumbleContactKind::Floor)
+		|| (!In.Table && !In.Rules)
 		|| Contact.ContactFrame != Frame - 1)
 	{
 		return;
@@ -457,8 +462,14 @@ void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_Comba
 			bFloorBounce = In.Response->Find(Row ? Row->Surface : FGameplayTag()).Allowed.bBounce;
 		}
 	}
+	// Walls and ceilings bounce by default (owner 2026-11-17, FGSTN_SurfaceBounceRules) when neither the surface row nor the hit decides
+	const bool bWallOrCeiling = Contact.Kind == EGSTN_TumbleContactKind::Wall || Contact.Kind == EGSTN_TumbleContactKind::Ceiling;
 	if (!bFloorBounce && (!Row || (Contact.Kind != EGSTN_TumbleContactKind::Wall && !bSurfaceForces)))
 	{
+		if (bWallOrCeiling && !bSurfaceForces)
+		{
+			StepDefaultSurfaceBounce(In, Core, Row, Profile, JudgedSpeed, Out);
+		}
 		return;
 	}
 
@@ -480,6 +491,11 @@ void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_Comba
 	}
 	if (Resolved.Outcome == EGSTN_ImpactOutcome::None)
 	{
+		// A wall row that asks nothing at this speed (under its MinImpactSpeed, its outcome refused): the default bounce
+		if (bWallOrCeiling && !bSurfaceForces)
+		{
+			StepDefaultSurfaceBounce(In, Core, Row, Profile, JudgedSpeed, Out);
+		}
 		return;
 	}
 
@@ -551,6 +567,89 @@ void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_Comba
 	default:
 		break;
 	}
+}
+
+void FGSTN_CombatVictim::StepDefaultSurfaceBounce(const FGSTN_ImpactStepInput& In, FGSTN_CombatSyncCore& Core, const FGSTN_SurfaceImpactRow* Row,
+	const FGSTN_ImpactProfile& Profile, double JudgedSpeed, FGSTN_ImpactStepResult& Out)
+{
+	const FGSTN_TumbleContactSyncState& Contact = In.Contact;
+	if (!In.Rules)
+	{
+		return;
+	}
+	const bool bCeiling = Contact.Kind == EGSTN_TumbleContactKind::Ceiling;
+	const FGSTN_SurfaceBounceRules& Rules = bCeiling ? In.Rules->CeilingImpact : In.Rules->WallImpact;
+	if (!Rules.bEnabled)
+	{
+		return;
+	}
+	const int32 Frame = In.Frame;
+	const int32 HitstunLeft = FMath::Max(Core.Hit.HitstunEndFrame - Frame, 0);
+	const FGSTN_GroundImpactRules& Hard = Rules.HardRules(In.Rules->GroundImpact);
+	const FGameplayTag Surface = Row ? Row->Surface : FGameplayTag();
+	static const FGSTN_ImpactResponse AnythingGoes;
+	const FGSTN_ImpactResponseEntry& Victim = (In.Response ? *In.Response : AnythingGoes).Find(Surface);
+
+	// The hard bounce: the floor's judgement (or the remaining hitstun), the attack's Forbid, the chain, the surface's and the victim's say
+	bool bHard = Rules.WantsHardBounce(In.Rules->GroundImpact, JudgedSpeed, HitstunLeft) && JudgedSpeed > 0.0
+		&& !Profile.Forbid.Contains(EGSTN_ImpactOutcome::Bounce)
+		&& Hard.AllowsAnotherBounce(Core.Hit.WallBounceCount, Core.Hit.WallBounceFirstFrame, Frame)
+		&& Victim.Allowed.bBounce;
+	if (bHard && Row)
+	{
+		bHard = Row->Allowed.bBounce && JudgedSpeed > static_cast<double>(Row->MinImpactSpeed);
+	}
+
+	const FVector Normal = Contact.GetNormal();
+	const double Speed = Contact.ImpactSpeedQ;
+	const FVector Tangent = In.Velocity - Normal * In.Velocity.Dot(Normal);
+	if (bHard)
+	{
+		// As the surface bounce: the slid velocity plus the speed out of the face, times the restitution; still tumbling, the hitstun at least
+		// MinBounceFrames on
+		const float Restitution = Victim.Restitution >= 0.f ? Victim.Restitution : Hard.Restitution;
+		const int32 Frames = FMath::Max(HitstunLeft, MinBounceFrames);
+		Out.Move.Kind = FGSTN_ReactionMove::EKind::Launch;
+		Out.Move.Velocity = (Tangent + Normal * Speed) * Restitution;
+		Out.Move.Frames = FMath::Max(Frames, TumbleProbeFrames);
+		Core.Hit.HitstunEndFrame = FMath::Max(Core.Hit.HitstunEndFrame, Frame + Frames);
+		Core.Hit.ImpactEndFrame = Frame + 1;
+		if (Core.Hit.WallBounceCount == 0)
+		{
+			Core.Hit.WallBounceFirstFrame = Frame;
+		}
+		Core.Hit.WallBounceCount = static_cast<uint8>(FMath::Min<int32>(Core.Hit.WallBounceCount + 1, 15));
+		Out.Resolved.Restitution = Restitution;
+		Out.Resolved.ImpactDamageScale = (Row ? Row->ImpactDamageScale : 1.f) * Victim.ImpactDamageScale;
+		Out.Damage = In.Rules->BaseImpactDamage * Out.Resolved.ImpactDamageScale;
+	}
+	else
+	{
+		// The bump: a small push off the face and a clip, no tech bounce, no damage. One at a time: a contact inside the clip's window slides
+		// The simulation step (62.5 Hz, untouchable): the push speed that covers the bump's distance under its drag
+		constexpr double SimFrameSeconds = 1.0 / 62.5;
+		const double BumpSpeed = Rules.BumpSpeed(JudgedSpeed, SimFrameSeconds);
+		if (BumpSpeed <= 0.0 || (Rules.bBumpOnlyDuringHitstun && HitstunLeft <= 0) || Core.Hit.BumpEndFrame > Frame)
+		{
+			return;
+		}
+		const int32 Frames = FMath::Max(Rules.BumpFrames, 1);
+		Out.Move.Kind = FGSTN_ReactionMove::EKind::Launch;
+		Out.Move.Velocity = Normal * BumpSpeed + Tangent * FMath::Clamp(static_cast<double>(Rules.BumpTangentKeep), 0.0, 1.0);
+		Out.Move.Frames = FMath::Max(FMath::Max(HitstunLeft, Frames), TumbleProbeFrames);
+		Out.Move.DecayPerFrame = FMath::Clamp(Rules.BumpDragPerFrame, 0.01f, 1.f);
+		Core.Hit.HitstunEndFrame = FMath::Max(Core.Hit.HitstunEndFrame, Frame + Frames);
+		Core.Hit.ImpactEndFrame = Frame + 1;
+		Core.Hit.BumpEndFrame = Frame + Frames;
+		Core.Hit.BumpKind = bCeiling ? FGSTN_HitSyncState::BumpKindCeiling : FGSTN_HitSyncState::BumpKindWall;
+		Out.bBump = true;
+		Out.Resolved.Restitution = 0.f;
+	}
+	Out.Outcome = EGSTN_ImpactOutcome::Bounce;
+	Out.Resolved.Outcome = EGSTN_ImpactOutcome::Bounce;
+	Out.Resolved.JudgedSpeed = static_cast<float>(JudgedSpeed);
+	Out.SurfaceTypeIndex = Contact.SurfaceTypeIndex;
+	Out.Normal = Normal;
 }
 
 bool FGSTN_CombatVictim::ApplyZoneKO(FGSTN_CombatSyncCore& Core, int32 Frame, bool bInZone, bool& bCancelledMove)
@@ -653,6 +752,11 @@ void FGSTN_CombatVictim::ProjectStateTags(UAbilitySystemComponent& ASC, const FG
 	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Tumble, Core.ActionState == EGSTN_ActionState::Tumble ? 1 : 0);
 	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Splat, Core.ActionState == EGSTN_ActionState::Splat ? 1 : 0);
 	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Hitstop, Core.IsInHitstop(Frame) ? 1 : 0);
+	// The wall or ceiling bump's clip window (FGSTN_SurfaceBounceRules): a reaction anim rule on Combat.State.Bump(.Wall/.Ceiling) plays it
+	const bool bBump = Core.ActionState == EGSTN_ActionState::Tumble && Core.Hit.BumpKind != 0 && Core.Hit.BumpEndFrame > Frame;
+	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Bump, bBump ? 1 : 0);
+	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Bump_Wall, bBump && Core.Hit.BumpKind == FGSTN_HitSyncState::BumpKindWall ? 1 : 0);
+	ASC.SetLooseGameplayTagCount(GSTNCombatTags::State_Bump_Ceiling, bBump && Core.Hit.BumpKind == FGSTN_HitSyncState::BumpKindCeiling ? 1 : 0);
 
 	// The reaction lock has a tag of its own, set from the state like the others: a member remembering "I hold the lock" is outside the rolled
 	// back state, so a resimulation from before the hit would skip the Add. Lock_Movement stays for whoever else roots the combatant

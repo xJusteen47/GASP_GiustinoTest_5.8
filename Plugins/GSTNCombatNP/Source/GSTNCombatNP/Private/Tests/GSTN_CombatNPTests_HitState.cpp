@@ -179,6 +179,37 @@ bool FGSTN_HitStateGroundBounceChainTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_HitStateWallBounceAndBumpTest, "GSTNCombat.NP.Hits.State.WallBounceAndBump", GSTN_NP_TEST_FLAGS)
+bool FGSTN_HitStateWallBounceAndBumpTest::RunTest(const FString& Parameters)
+{
+	// The wall and ceiling chain and the bump window (2026-11-17) ride with the ground chain: on the wire while tumbling, dead once over
+	FGSTN_CombatSyncState Victim = MakeVictimWithHit();
+	Victim.Core.Hit.WallBounceCount = 1;
+	Victim.Core.Hit.WallBounceFirstFrame = HitStateFrame - 2;
+	Victim.Core.Hit.BumpKind = FGSTN_HitSyncState::BumpKindCeiling;
+	Victim.Core.Hit.BumpEndFrame = HitStateFrame + 10;
+	bool bError = false;
+	FGSTN_CombatSyncState Loaded = HitStateReadBack(Victim, bError);
+	TestFalse(TEXT("reads back without an error"), bError);
+	TestTrue(TEXT("equal after the wire"), HitStateSame(Victim, Loaded));
+	TestEqual(TEXT("wall count"), static_cast<int32>(Loaded.Core.Hit.WallBounceCount), 1);
+	TestEqual(TEXT("wall first frame"), Loaded.Core.Hit.WallBounceFirstFrame, HitStateFrame - 2);
+	TestEqual(TEXT("bump kind"), static_cast<int32>(Loaded.Core.Hit.BumpKind), static_cast<int32>(FGSTN_HitSyncState::BumpKindCeiling));
+	TestEqual(TEXT("bump end"), Loaded.Core.Hit.BumpEndFrame, HitStateFrame + 10);
+
+	FGSTN_CombatSyncState Other = Victim;
+	Other.Core.Hit.BumpKind = FGSTN_HitSyncState::BumpKindWall;
+	TestFalse(TEXT("a different bump face reconciles"), HitStateSame(Victim, Other));
+
+	FGSTN_CombatSyncState Over = Victim;
+	Over.Core.Hit.BumpEndFrame = HitStateFrame;
+	FGSTN_CombatSyncState LoadedOver = HitStateReadBack(Over, bError);
+	TestFalse(TEXT("over: reads back"), bError);
+	TestEqual(TEXT("a bump that ended is dead"), static_cast<int32>(LoadedOver.Core.Hit.BumpKind), 0);
+	TestEqual(TEXT("the chain lives on"), static_cast<int32>(LoadedOver.Core.Hit.WallBounceCount), 1);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_HitStateIdleZeroCostTest, "GSTNCombat.NP.Hits.State.IdleZeroCost", GSTN_NP_TEST_FLAGS)
 bool FGSTN_HitStateIdleZeroCostTest::RunTest(const FString& Parameters)
 {
