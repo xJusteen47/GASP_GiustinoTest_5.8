@@ -6,6 +6,7 @@
 #include "Bindings/GSTN_CommandBindingSet.h"
 #include "Hits/GSTN_HurtboxPose.h"
 #include "Input/GSTN_BufferResetRules.h"
+#include "Input/GSTN_StickThresholds.h"
 #include "Loadout/GSTN_CompiledBindingTable.h"
 #include "Rules/GSTN_AirCrouch.h"
 #include "Rules/GSTN_GroundCrouch.h"
@@ -136,6 +137,9 @@ public:
 	 */
 	UPROPERTY(Transient)
 	bool bHasKitAirCrouch = false;
+
+	/** The player's stick zones and flick window of this revision (FGSTN_LoadoutInputFeelExt), what the input simulation classifies with */
+	FGSTN_StickThresholds StickThresholds;
 
 	UPROPERTY(Transient)
 	FGSTN_AirCrouchKitExtension KitAirCrouch;

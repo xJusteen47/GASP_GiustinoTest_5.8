@@ -63,7 +63,8 @@ FGSTN_InputTickResult FGSTN_InputSimulator::Tick(const FGSTN_InputTickArgs& Args
 	Sample.Released = (PrevHeld | Sample.Pressed) & ~Cmd.HeldButtons;
 	Sample.Stick = FGSTN_DirectionClassifier::Classify(
 		FVector2D(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickY)),
-		FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), Host.GetFacingYaw(), In.Classifier, Frame, *Args.Settings, Out.Classifier);
+		FGSTN_DirectionClassifier::DequantizeYaw(Cmd.CameraYaw), Host.GetFacingYaw(), In.Classifier, Frame, *Args.Settings,
+		Args.StickThresholds ? Args.StickThresholds->Sanitized() : FGSTN_StickThresholds(), Out.Classifier);
 	Result.Pressed = Sample.Pressed;
 
 	// 2. Append

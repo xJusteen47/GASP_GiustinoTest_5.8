@@ -112,7 +112,7 @@ public:
 	 * (owner rule: no gameplay in Project Settings); a kit without a jump ability keeps the jump logic's default (FGSTN_JumpParams)
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data", meta = (ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
-	int32 CoyoteFrames = 4;
+	int32 CoyoteFrames = 6;   // Mario 3D World preset (2026-11-17): ~0.1 s
 
 	/**
 	 * Jump cut (owner 2026-11-16 19:46Z): when the hold ends (the button released after MinJumpHoldFrames, or MaxJumpHoldFrames reached),
@@ -121,7 +121,7 @@ public:
 	 * the kit's stats (attributes); this ramp is kit data like the coyote time
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data", meta = (ClampMin = "0", ClampMax = "60", ForceUnits = "Frames"))
-	int32 CutRampFrames = 0;
+	int32 CutRampFrames = 3;   // Mario 3D World preset (2026-11-17): release gravity rises over 3 frames
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")
 	bool bOverrideSquatFrames = false;

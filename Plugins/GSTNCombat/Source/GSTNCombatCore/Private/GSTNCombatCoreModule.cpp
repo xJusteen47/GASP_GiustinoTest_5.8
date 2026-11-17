@@ -1,5 +1,6 @@
 #include "GameplayTagsManager.h"
 #include "Input/GSTN_CombatSettings.h"
+#include "Loadout/GSTN_LoadoutInputFeel.h"
 #include "Interfaces/IPluginManager.h"
 #include "Modules/ModuleManager.h"
 
@@ -19,10 +20,14 @@ public:
 
 		// The settings object exists and has read its config by now: its first access happens here
 		UGSTN_CombatSettings::Get().PushToInputSettings();
+
+		// The player's input feel (stick zones, flick window) travels in the loadout under a stable id
+		FGSTN_LoadoutExtensionTypes::Register(FGSTN_LoadoutInputFeelExt::WireId, FGSTN_LoadoutInputFeelExt::StaticStruct());
 	}
 
 	virtual void ShutdownModule() override
 	{
+		FGSTN_LoadoutExtensionTypes::Unregister(FGSTN_LoadoutInputFeelExt::WireId);
 		if (UObjectInitialized())
 		{
 			UGSTN_CombatSettings::RemoveFromInputSettings();

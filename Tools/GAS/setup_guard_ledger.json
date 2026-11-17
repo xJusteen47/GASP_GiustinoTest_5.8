@@ -85,8 +85,8 @@
    "sha256": "c861c1c008b37260d4e217134e839de65dda6513840ba43b2edbd37759678a78"
   },
   "/Game/GASNPPTest/Combat/Overlord/TL_Overlord_Dropkick": {
-   "script": "seed integ-cp3 069287f7",
-   "sha256": "3f5165bcd190c6c92cd3343f5c1364cdc8ef2ca8d8b0990d9d3caa4490d8d698"
+   "script": "setup_playtest_fixes_1117",
+   "sha256": "bed6aec346cdc6beec0b184583234df0ee69a088fbfe66478e4f65c92a1eee70"
   },
   "/Game/GASNPPTest/Combat/Overlord/TL_Overlord_Jab1": {
    "script": "seed integ-cp3 069287f7",

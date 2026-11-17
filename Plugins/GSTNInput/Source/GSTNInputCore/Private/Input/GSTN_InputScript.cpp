@@ -38,12 +38,12 @@ namespace
 	}
 
 	/** Stick magnitude of a zone: the middle of the Aim band, full for Tilt */
-	float ZoneMagnitude(EGSTN_StickZone Zone, const UGSTN_InputSettings& Settings)
+	float ZoneMagnitude(EGSTN_StickZone Zone)
 	{
 		switch (Zone)
 		{
 		case EGSTN_StickZone::Neutral: return 0.f;
-		case EGSTN_StickZone::Aim:     return 0.5f * (Settings.StickDeadZone + Settings.AimZone);
+		case EGSTN_StickZone::Aim:     { const FGSTN_StickThresholds Defaults; return 0.5f * (Defaults.NeutralZone + Defaults.AimZone); }
 		default:                       return 1.f;
 		}
 	}
@@ -380,11 +380,11 @@ bool FGSTN_InputScript::Advance(FGSTN_InputHistory& History, const UGSTN_InputSe
 		Sample.Pressed = Pressed;
 		Sample.Released = Released;
 
-		const float Magnitude = ZoneMagnitude(StickZone, Settings);
+		const float Magnitude = ZoneMagnitude(StickZone);
 		const float Radians = FMath::DegreesToRadians(StickAngle);
 		const FVector2D Stick(FMath::Sin(Radians) * Magnitude, FMath::Cos(Radians) * Magnitude);
 		FGSTN_ClassifierState NewState;
-		Sample.Stick = FGSTN_DirectionClassifier::Classify(Stick, CameraYaw, FacingYaw, ClassifierState, NextFrame, Settings, NewState);
+		Sample.Stick = FGSTN_DirectionClassifier::Classify(Stick, CameraYaw, FacingYaw, ClassifierState, NextFrame, Settings, FGSTN_StickThresholds(), NewState);
 		ClassifierState = NewState;
 
 		History.Append(Sample);

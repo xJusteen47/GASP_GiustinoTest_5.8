@@ -10,7 +10,7 @@ namespace
 	FGSTN_StickSample ClassifyOnce(const FVector2D& Stick, float CameraYaw, float FacingYaw, const UGSTN_InputSettings& Settings)
 	{
 		FGSTN_ClassifierState State;
-		return FGSTN_DirectionClassifier::Classify(Stick, CameraYaw, FacingYaw, FGSTN_ClassifierState(), 10, Settings, State);
+		return FGSTN_DirectionClassifier::Classify(Stick, CameraYaw, FacingYaw, FGSTN_ClassifierState(), 10, Settings, FGSTN_StickThresholds(), State);
 	}
 }
 
@@ -159,14 +159,15 @@ bool FGSTN_ClassifierFlickTest::RunTest(const FString& Parameters)
 	const FVector2D Full(0.f, 1.f);
 
 	// Runs a stick sequence (one entry per frame, starting at frame 0) and returns the frames that flicked.
-	const auto FlickFrames = [&Settings](const TArray<FVector2D>& Sticks)
+	FGSTN_StickThresholds Thresholds;
+	const auto FlickFrames = [&Settings, &Thresholds](const TArray<FVector2D>& Sticks)
 	{
 		TArray<int32> Result;
 		FGSTN_ClassifierState State;
 		for (int32 Frame = 0; Frame < Sticks.Num(); ++Frame)
 		{
 			FGSTN_ClassifierState Next;
-			if (FGSTN_DirectionClassifier::Classify(Sticks[Frame], 0.f, 0.f, State, Frame, *Settings, Next).bFlick)
+			if (FGSTN_DirectionClassifier::Classify(Sticks[Frame], 0.f, 0.f, State, Frame, *Settings, Thresholds, Next).bFlick)
 			{
 				Result.Add(Frame);
 			}
@@ -194,7 +195,7 @@ bool FGSTN_ClassifierFlickTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("second flick"), FlickFrames({ Neutral, Full, Neutral, Neutral, Full }) == TArray<int32>({ 1, 4 }));
 
 	// A custom FlickFrames.
-	Settings->FlickFrames = 1;
+	Thresholds.FlickFrames = 1;
 	TestTrue(TEXT("FlickFrames = 1 rejects a two-frame push"), FlickFrames({ Neutral, Light, Full }).IsEmpty());
 	TestTrue(TEXT("FlickFrames = 1 accepts a direct push"), FlickFrames({ Neutral, Full }) == TArray<int32>({ 1 }));
 	return true;

@@ -26,13 +26,16 @@ struct GSTNCOMBATCORE_API FGSTN_AnalogWalkTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Analog Walk")
 	bool bEnabled = true;
 
-	/** Stick length (0..1, after the input mapping's own dead zone) under which the stick moves nothing */
+	/**
+	 * A second dead zone on top of the player's (UGSTN_InputOptionsSubsystem, applied before this reads the stick). 0 by default since
+	 * 2026-11-17: two dead zones in series made a light tilt do nothing (owner playtest 2026-11-16)
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Analog Walk|Stick", meta = (ClampMin = "0", ClampMax = "0.9"))
-	float InnerDeadzone = 0.05f;
+	float InnerDeadzone = 0.f;
 
 	/** Fraction of the top speed asked for just past the dead zone (the slowest walk) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Analog Walk|Stick", meta = (ClampMin = "0", ClampMax = "1"))
-	float MinSpeedFraction = 0.12f;
+	float MinSpeedFraction = 0.f;
 
 	/** Shape of the tilt curve: 1 = linear, above 1 = finer control of the slow walks */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Analog Walk|Stick", meta = (ClampMin = "0.25", ClampMax = "4"))
@@ -46,9 +49,12 @@ struct GSTNCOMBATCORE_API FGSTN_AnalogWalkTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Analog Walk|Walk Start", meta = (ClampMin = "0.01", ClampMax = "1"))
 	float LowSpeedFraction = 0.5f;
 
-	/** Acceleration multiplier at rest (1 = the stage's own acceleration) */
+	/**
+	 * Acceleration multiplier at rest (1 = the stage's own acceleration). 1 by default since 2026-11-17: the start is shaped by the run
+	 * stage's acceleration ramp (FGSTN_RunStage::AccelRampFrames), not by a jump in acceleration (owner: "no step")
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Analog Walk|Walk Start", meta = (ClampMin = "1", ClampMax = "10"))
-	float StartAccelerationMultiplier = 2.5f;
+	float StartAccelerationMultiplier = 1.f;
 
 	/** Turning strength at rest (Mover's TurningStrength; the stage's own value takes over as the speed rises) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Analog Walk|Walk Start", meta = (ClampMin = "0"))

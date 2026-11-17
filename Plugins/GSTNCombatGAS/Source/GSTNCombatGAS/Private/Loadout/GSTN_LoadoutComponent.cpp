@@ -1,6 +1,12 @@
 // Combat vocabulary that needs the ability system (no Network Prediction, no Mover).
 
 #include "Loadout/GSTN_LoadoutComponent.h"
+#include "Loadout/GSTN_LoadoutInputFeel.h"
+#include "Input/GSTN_InputOptionsSubsystem.h"
+#include "Engine/LocalPlayer.h"
+#include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/Pawn.h"
 #include "Abilities/GameplayAbility.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
@@ -230,7 +236,46 @@ void UGSTN_LoadoutComponent::ServerRequestLoadout_Implementation(const FGSTN_Loa
 
 bool UGSTN_LoadoutComponent::ApplyRequested(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors)
 {
+	// The player's input feel is not a loadout screen's business: a request that lacks it keeps the applied one
+	if (!GSTNLoadoutExtension::Find<FGSTN_LoadoutInputFeelExt>(Requested.Extensions))
+	{
+		const FGSTN_LoadoutInputFeelExt* AppliedFeel = GSTNLoadoutExtension::Find<FGSTN_LoadoutInputFeelExt>(Applied.Extensions);
+		if (AppliedFeel || bHasPendingInputFeel)
+		{
+			FGSTN_LoadoutInputFeelExt Feel;
+			Feel.StickThresholds = bHasPendingInputFeel ? PendingInputFeel : AppliedFeel->StickThresholds;
+			FGSTN_LoadoutData WithFeel = Requested;
+			GSTNLoadoutExtension::Set(WithFeel.Extensions, Feel);
+			return ServerLoadoutApplier ? ServerLoadoutApplier(WithFeel, OutErrors) : AcceptLoadout(WithFeel, OutErrors);
+		}
+	}
 	return ServerLoadoutApplier ? ServerLoadoutApplier(Requested, OutErrors) : AcceptLoadout(Requested, OutErrors);
+}
+
+void UGSTN_LoadoutComponent::ServerSetInputFeel_Implementation(const FGSTN_StickThresholds& Thresholds)
+{
+	const FGSTN_StickThresholds Clean = Thresholds.Sanitized();
+	const FGSTN_LoadoutInputFeelExt* Current = GSTNLoadoutExtension::Find<FGSTN_LoadoutInputFeelExt>(Applied.Extensions);
+	if (Current ? Current->StickThresholds == Clean : Clean == FGSTN_StickThresholds())
+	{
+		return;
+	}
+	// Before a loadout exists there is nothing to revise: the first request carries the applied one's lack of it, so keep it for then
+	PendingInputFeel = Clean;
+	bHasPendingInputFeel = true;
+	if (!HasLoadout())
+	{
+		return;
+	}
+	FGSTN_LoadoutData Next = Applied;
+	FGSTN_LoadoutInputFeelExt Feel;
+	Feel.StickThresholds = Clean;
+	GSTNLoadoutExtension::Set(Next.Extensions, Feel);
+	TArray<FString> Errors;
+	if (!ApplyRequested(Next, Errors))
+	{
+		ClientLoadoutRejected(Errors);
+	}
 }
 
 void UGSTN_LoadoutComponent::ServerRequestSpecialSwap_Implementation(int32 WeaponIndex, FGameplayTag Command, const TSoftClassPtr<UObject>& Alternative)
@@ -473,6 +518,40 @@ void UGSTN_LoadoutComponent::ApplyAppliedLoadout()
 	}
 
 	OnLoadoutApplied.Broadcast(this, Revision);
+	SyncLocalInputFeel();
+}
+
+void UGSTN_LoadoutComponent::SyncLocalInputFeel()
+{
+	// Only the owning player's machine knows their options; it asks the server when the applied loadout carries other values
+	const AActor* Owner = GetOwner();
+	APlayerController* PlayerController = nullptr;
+	if (const APlayerState* PlayerState = Cast<APlayerState>(Owner))
+	{
+		PlayerController = PlayerState->GetPlayerController();
+	}
+	else if (const APawn* Pawn = Cast<APawn>(Owner))
+	{
+		PlayerController = Cast<APlayerController>(Pawn->GetController());
+	}
+	if (!PlayerController || !PlayerController->IsLocalController())
+	{
+		return;
+	}
+	UGSTN_InputOptionsSubsystem* Options = ULocalPlayer::GetSubsystem<UGSTN_InputOptionsSubsystem>(PlayerController->GetLocalPlayer());
+	if (!Options)
+	{
+		return;
+	}
+	if (!InputOptionsHandle.IsValid())
+	{
+		InputOptionsHandle = Options->OnChanged.AddWeakLambda(this, [this](const FGSTN_InputOptions&) { SyncLocalInputFeel(); });
+	}
+	const FGSTN_StickThresholds Wanted = Options->GetOptions().StickThresholds.Sanitized();
+	if (HasLoadout() && FGSTN_LoadoutInputFeelExt::Resolve(Applied.Extensions) != Wanted)
+	{
+		ServerSetInputFeel(Wanted);
+	}
 }
 
 void UGSTN_LoadoutComponent::HandlePawnSet(APlayerState* Player, APawn* NewPawn, APawn* OldPawn)

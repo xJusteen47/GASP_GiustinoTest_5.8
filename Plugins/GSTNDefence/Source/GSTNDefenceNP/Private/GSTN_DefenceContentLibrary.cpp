@@ -358,3 +358,19 @@ bool UGSTN_DefenceContentLibrary::WriteKitGetupRollBack(UGSTN_PrimaryKitDefiniti
 	}
 	return false;
 }
+
+FGSTN_CombatTimelineData UGSTN_DefenceContentLibrary::SetSelfLandingBounceTrack(const FGSTN_CombatTimelineData& Data, EGSTN_SelfLandingBounce Mode, float Height)
+{
+	FGSTN_CombatTimelineData Result = Data;
+	Result.Tracks.RemoveAll([](const TInstancedStruct<FGSTN_TimelineTrack>& Track)
+	{
+		return Track.GetScriptStruct() == FGSTN_SelfLandingBounceTrack::StaticStruct();
+	});
+	FGSTN_SelfLandingBounceTrack Track;
+	Track.StartFrame = 0;
+	Track.EndFrame = FMath::Max(Data.TotalFrames, 1);
+	Track.Mode = Mode;
+	Track.Height = FMath::Max(Height, 0.f);
+	Result.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_SelfLandingBounceTrack>(Track));
+	return Result;
+}

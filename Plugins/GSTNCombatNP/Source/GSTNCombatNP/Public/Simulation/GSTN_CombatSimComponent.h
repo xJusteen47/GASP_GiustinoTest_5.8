@@ -129,7 +129,8 @@ public:
 	 * directional move intent from the stick tilt (curve of the profile), keeping the direction the pawn wrote, or the stick's own
 	 * camera-relative direction when the pawn wrote none (GASP drops a light tilt). Input only. False when nothing was changed
 	 */
-	static bool ApplyAnalogMoveIntent(FMoverInputCmdContext& InputCmd, const FGSTN_AnalogWalkTuning& Tuning, const FVector2D& Stick, float CameraYawDeg, const FVector& Up);
+	static bool ApplyAnalogMoveIntent(FMoverInputCmdContext& InputCmd, const FGSTN_AnalogWalkTuning& Tuning, const FVector2D& Stick, float CameraYawDeg, const FVector& Up,
+		bool bPlayerStick = false);
 
 	/**
 	 * True while the latest command this pawn produced had the precision aim (reticle) on. Local and presentation side; the simulation

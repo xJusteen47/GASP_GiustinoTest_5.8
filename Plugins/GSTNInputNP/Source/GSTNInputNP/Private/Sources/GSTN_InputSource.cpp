@@ -7,6 +7,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "EnhancedPlayerInput.h"
 #include "Engine/LocalPlayer.h"
+#include "Input/GSTN_InputOptionsSubsystem.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "Input/GSTN_DirectionClassifier.h"
@@ -63,6 +64,8 @@ void UGSTN_PlayerInputSource::ProduceInput(const FGSTN_InputSourceContext& Conte
 	if (const UInputAction* MoveAction = Context.Config->GetMoveAction())
 	{
 		FVector2D Stick = PlayerInput->GetActionValue(MoveAction).Get<FVector2D>();
+		// The player's one dead zone (radial, remapped), before anything reads the stick; the mapping context keeps only a hardware floor
+		Stick = UGSTN_InputOptionsSubsystem::ApplyRadialDeadZone(Stick, UGSTN_InputOptionsSubsystem::GetFor(LocalPlayer).MoveStickDeadZone);
 		if (Stick.SizeSquared() > 1.0)
 		{
 			Stick = Stick.GetSafeNormal();

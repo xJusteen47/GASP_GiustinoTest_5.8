@@ -93,7 +93,8 @@ namespace
 	}
 }
 
-int32 FGSTN_RunStageMover::ApplyStageValues(UMoverComponent& MoverComp, const FGSTN_LocomotionSimTuning& Tuning, int32 Stage, float Factor, float GroundSpeed)
+int32 FGSTN_RunStageMover::ApplyStageValues(UMoverComponent& MoverComp, const FGSTN_LocomotionSimTuning& Tuning, int32 Stage, float Factor, float GroundSpeed,
+	float AccelRamp)
 {
 	if (!Tuning.RunStages.IsEnabled())
 	{
@@ -104,7 +105,7 @@ int32 FGSTN_RunStageMover::ApplyStageValues(UMoverComponent& MoverComp, const FG
 	const bool bAnalog = Analog.bEnabled && GroundSpeed >= 0.f;
 	// Walk start: the boost fades out as the speed reaches LowSpeedFraction of the stage top speed (assigned every frame, never adjusted)
 	const float Blend = bAnalog ? FGSTN_AnalogWalkLogic::StartBlend(Analog, GroundSpeed, Values.MaxSpeed * Factor) : 0.f;
-	const float Acceleration = Values.Acceleration * Factor * FMath::Lerp(1.f, Analog.StartAccelerationMultiplier, Blend);
+	const float Acceleration = Values.Acceleration * Factor * AccelRamp * FMath::Lerp(1.f, Analog.StartAccelerationMultiplier, Blend);
 	const float Turning = FMath::Lerp(Values.TurningStrength, FMath::Max(Values.TurningStrength, Analog.StartTurningStrength), Blend);
 	int32 Written = 0;
 	for (const TPair<FName, TObjectPtr<UBaseMovementMode>>& Entry : MoverComp.MovementModes)
@@ -154,7 +155,8 @@ void FGSTN_RunStageMover::PreMovement(UMoverComponent& MoverComp, float Factor)
 		const FVector Velocity = Default->GetVelocity_WorldSpace();
 		GroundSpeed = static_cast<float>((Velocity - Up * Velocity.Dot(Up)).Size());
 	}
-	ApplyStageValues(MoverComp, *Tuning, State ? State->Stage : 0, Factor, GroundSpeed);
+	ApplyStageValues(MoverComp, *Tuning, State ? State->Stage : 0, Factor, GroundSpeed,
+		State ? FGSTN_RunStageLogic::GetAccelerationRamp(Tuning->RunStages, *State) : 1.f);
 	ApplyAirValues(MoverComp, *Tuning, State, Factor);
 }
 

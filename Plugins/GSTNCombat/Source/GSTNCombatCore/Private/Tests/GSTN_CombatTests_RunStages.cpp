@@ -263,4 +263,43 @@ bool FGSTN_RunStagesRollbackTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunStagesAccelRampTest, "GSTNCombat.Core.RunStages.AccelRamp", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunStagesAccelRampTest::RunTest(const FString& Parameters)
+{
+	FGSTN_RunStagesTuning Tuning = TestTuning();
+	FGSTN_RunStageState State;
+	TestEqual(TEXT("no ramp authored = full acceleration"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State), 1.f);
+
+	Tuning.Stages[0].AccelRampFrames = 4;
+	Tuning.Stages[0].RampStartFraction = 0.2f;
+	TestEqual(TEXT("at rest: the first ramp frame"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State), 0.2f, 1e-4f);
+
+	// A light tilt (under the stages' "released" threshold) still ramps, and the ramp grows without a step
+	const FVector Light(0.1, 0.0, 0.0);
+	float Prev = FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State);
+	for (int32 Frame = 0; Frame < 4; ++Frame)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, Run(Frame, 20.f * Frame, Light), State);
+		const float Ramp = FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State);
+		TestTrue(*FString::Printf(TEXT("ramp grows, frame %d"), Frame), Ramp > Prev && Ramp - Prev <= 0.2f + 1e-4f);
+		Prev = Ramp;
+	}
+	TestEqual(TEXT("ramp done"), Prev, 1.f, 1e-4f);
+
+	// Stick back at rest: the next push ramps again
+	FGSTN_RunStageLogic::Step(Tuning, Run(4, 0.f, FVector::ZeroVector), State);
+	TestEqual(TEXT("released: back to the start"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State), 0.2f, 1e-4f);
+
+	// The state round-trips through the network form
+	FGSTN_RunStageLogic::Step(Tuning, Run(5, 10.f, Light), State);
+	TArray<uint8> Bytes;
+	FMemoryWriter Writer(Bytes);
+	State.SerializeCompact(Writer);
+	FGSTN_RunStageState Read;
+	FMemoryReader Reader(Bytes);
+	Read.SerializeCompact(Reader);
+	TestEqual(TEXT("ramp counter survives the network form"), Read.RampFrames, State.RampFrames);
+	return true;
+}
+
 #endif

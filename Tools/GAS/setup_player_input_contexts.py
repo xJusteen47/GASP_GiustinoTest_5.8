@@ -132,7 +132,8 @@ def _pad_layout():
 # it is started/ongoing/triggered, so the Blueprint never sees L3 (its keyboard toggle on Z stays). No Blueprint is edited.
 # (2) A light tilt did not walk: IMC_GSTN_Locomotion's left stick dead zone was GASP's 0.3. Lowered; the analog curve and its own
 # small dead zone are in the kit's locomotion profile (FGSTN_AnalogWalkTuning).
-MOVE_STICK_DEADZONE = 0.12
+# 2026-11-17: the dead zone is the player's (UGSTN_InputOptionsSubsystem, radial, remapped); the mapping keeps a hardware floor only.
+MOVE_STICK_DEADZONE = 0.02
 CONSUME_EVENTS = 1 | 2 | 4   # ETriggerEvent Triggered | Started | Ongoing
 
 

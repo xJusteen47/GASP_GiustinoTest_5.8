@@ -19,10 +19,11 @@ namespace
 }
 
 FGSTN_StickSample FGSTN_DirectionClassifier::Classify(const FVector2D& RawStick, float CameraYawDeg, float FacingYawDeg,
-	const FGSTN_ClassifierState& Prev, int32 Frame, const UGSTN_InputSettings& Settings, FGSTN_ClassifierState& OutState)
+	const FGSTN_ClassifierState& Prev, int32 Frame, const UGSTN_InputSettings& Settings, const FGSTN_StickThresholds& Thresholds,
+	FGSTN_ClassifierState& OutState)
 {
 	FGSTN_StickSample Sample;
-	Sample.Zone = ClassifyZone(static_cast<float>(RawStick.Size()), Settings);
+	Sample.Zone = ClassifyZone(static_cast<float>(RawStick.Size()), Thresholds);
 
 	OutState.Zone = Sample.Zone;
 	OutState.LastNeutralFrame = Sample.Zone == EGSTN_StickZone::Neutral ? Frame : Prev.LastNeutralFrame;
@@ -44,19 +45,19 @@ FGSTN_StickSample FGSTN_DirectionClassifier::Classify(const FVector2D& RawStick,
 	// A flick is the frame the stick reaches Tilt after leaving Neutral no more than FlickFrames ago.
 	if (Sample.Zone == EGSTN_StickZone::Tilt && Prev.Zone != EGSTN_StickZone::Tilt && Prev.LastNeutralFrame != INDEX_NONE)
 	{
-		Sample.bFlick = (Frame - Prev.LastNeutralFrame) <= Settings.FlickFrames;
+		Sample.bFlick = (Frame - Prev.LastNeutralFrame) <= Thresholds.FlickFrames;
 	}
 
 	return Sample;
 }
 
-EGSTN_StickZone FGSTN_DirectionClassifier::ClassifyZone(float Magnitude, const UGSTN_InputSettings& Settings)
+EGSTN_StickZone FGSTN_DirectionClassifier::ClassifyZone(float Magnitude, const FGSTN_StickThresholds& Thresholds)
 {
-	if (Magnitude < Settings.StickDeadZone)
+	if (Magnitude < Thresholds.NeutralZone)
 	{
 		return EGSTN_StickZone::Neutral;
 	}
-	return Magnitude < Settings.AimZone ? EGSTN_StickZone::Aim : EGSTN_StickZone::Tilt;
+	return Magnitude < Thresholds.AimZone ? EGSTN_StickZone::Aim : EGSTN_StickZone::Tilt;
 }
 
 EGSTN_StickDirection FGSTN_DirectionClassifier::AngleToDirection(float AngleDeg, float DiagonalHalfAngle)

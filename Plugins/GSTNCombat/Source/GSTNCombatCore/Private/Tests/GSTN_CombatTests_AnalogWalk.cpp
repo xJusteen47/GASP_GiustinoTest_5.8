@@ -9,7 +9,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_AnalogWalkCurveTest, "GSTNCombat.Core.Ana
 bool FGSTN_AnalogWalkCurveTest::RunTest(const FString& Parameters)
 {
 	const FGSTN_AnalogWalkTuning Tuning;
-	TestEqual(TEXT("inside the dead zone nothing moves"), FGSTN_AnalogWalkLogic::StickToIntent(Tuning, 0.03f), 0.f);
+	FGSTN_AnalogWalkTuning WithDeadzone = Tuning;
+	WithDeadzone.InnerDeadzone = 0.05f;
+	TestEqual(TEXT("inside the dead zone nothing moves"), FGSTN_AnalogWalkLogic::StickToIntent(WithDeadzone, 0.03f), 0.f);
+	// Defaults (2026-11-17): no second dead zone and no minimum speed, so the intent starts from zero without a step
+	const float Tiny = FGSTN_AnalogWalkLogic::StickToIntent(Tuning, 0.03f);
+	TestTrue(TEXT("a tiny tilt moves a tiny bit, no step"), Tiny > 0.f && Tiny < 0.03f);
 	const float Light = FGSTN_AnalogWalkLogic::StickToIntent(Tuning, 0.1f);
 	const float Half = FGSTN_AnalogWalkLogic::StickToIntent(Tuning, 0.5f);
 	TestTrue(TEXT("a light tilt walks, slowly"), Light >= Tuning.MinSpeedFraction && Light < 0.2f);

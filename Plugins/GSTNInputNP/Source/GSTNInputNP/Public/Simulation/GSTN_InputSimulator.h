@@ -9,6 +9,7 @@
 #include "Input/GSTN_BufferResetRules.h"
 #include "Simulation/GSTN_InputSimTypes.h"
 #include "StructUtils/InstancedStruct.h"
+#include "Input/GSTN_StickThresholds.h"
 
 class UGSTN_InputSettings;
 struct FGSTN_ButtonMap;
@@ -70,6 +71,8 @@ struct FGSTN_InputTickArgs
 	const FGSTN_CommandTable* Table = nullptr;
 	const FGSTN_ButtonMap* Buttons = nullptr;
 	const UGSTN_InputSettings* Settings = nullptr;
+	/** The player's stick zones and flick window (their loadout's, the same on every machine); null = the defaults */
+	const FGSTN_StickThresholds* StickThresholds = nullptr;
 
 	/** The host's reset rules, applied before the table's own */
 	TConstArrayView<TInstancedStruct<FGSTN_BufferResetRule>> GlobalResetRules;

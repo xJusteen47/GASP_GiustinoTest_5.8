@@ -76,6 +76,18 @@ struct GSTNCOMBATCORE_API FGSTN_RunStage
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stage", meta = (ClampMin = "0", ClampMax = "4"))
 	float AirControlScale = 1.f;
+
+	/**
+	 * Acceleration ramp (owner 2026-11-16: "Mario / Astro Bot start, no step"): over this many frames from the start of the stage (stick
+	 * pushed from rest for stage 1, the stage reached for the others) the acceleration grows from RampStartFraction of Acceleration to all
+	 * of it, linearly. 0 = no ramp (full acceleration at once). Frames at 62.5 Hz
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stage|Acceleration Ramp", meta = (ClampMin = "0", ClampMax = "120"))
+	int32 AccelRampFrames = 0;
+
+	/** Fraction of Acceleration on the first frame of the ramp */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stage|Acceleration Ramp", meta = (ClampMin = "0", ClampMax = "1"))
+	float RampStartFraction = 1.f;
 };
 
 /** The whole run tuning of a kit: the stages and the rules that move between them. Values only, copied out of the profile asset */
@@ -91,6 +103,13 @@ struct GSTNCOMBATCORE_API FGSTN_RunStagesTuning
 	/** Stick magnitude (0..1) under which the stick counts as released */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Rules", meta = (ClampMin = "0", ClampMax = "1"))
 	float StickDeadzone = 0.25f;
+
+	/**
+	 * Stick magnitude from which a push counts as a start for the acceleration ramp. Small on purpose: the player's dead zone has already
+	 * removed the noise, and a light tilt walking slowly must ramp too (StickDeadzone above is the run stages' "released")
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Rules", meta = (ClampMin = "0", ClampMax = "1"))
+	float RampStickThreshold = 0.01f;
 
 	/** Cosine between stick and ground velocity from which the stick counts as "forward" (stage frames count only then) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Rules", meta = (ClampMin = "-1", ClampMax = "1"))
@@ -215,6 +234,14 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageState
 	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
 	int32 LastFrame = INDEX_NONE;
 
+	/** Frames into the acceleration ramp of RampStage (-1 = stick at rest: the next push starts a ramp) */
+	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
+	int32 RampFrames = -1;
+
+	/** The stage the ramp belongs to: a new stage starts its own ramp */
+	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
+	uint8 RampStage = 0;
+
 	bool operator==(const FGSTN_RunStageState& Other) const;
 	bool operator!=(const FGSTN_RunStageState& Other) const { return !(*this == Other); }
 
@@ -255,4 +282,7 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageLogic
 
 	/** Air control multiplier of the current air time: the takeoff stage's scale (TakeoffCap), 1 (Fixed) */
 	static float GetAirControlScale(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
+
+	/** Acceleration multiplier of the current stage's ramp (1 = no ramp or ramp done). The state is the one at the start of the frame */
+	static float GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
 };

@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "Data/GSTN_DefenceTracks.h"
+#include "Timeline/GSTN_TimelineTypes.h"
 #include "GSTN_DefenceContentLibrary.generated.h"
 
 class AActor;
@@ -23,6 +25,12 @@ class GSTNDEFENCENP_API UGSTN_DefenceContentLibrary : public UBlueprintFunctionL
 	GENERATED_BODY()
 
 public:
+	/**
+	 * The timeline with one Self Landing Bounce track (FGSTN_SelfLandingBounceTrack), replacing any it had: how high a move that downs its own
+	 * user on landing makes it hop (the dropkick, Tools/GAS/setup_playtest_fixes_1117.py). Python cannot build the instanced track itself
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Content")
+	static FGSTN_CombatTimelineData SetSelfLandingBounceTrack(const FGSTN_CombatTimelineData& Data, EGSTN_SelfLandingBounce Mode, float Height);
 	/**
 	 * Sets (adds or replaces) the kit's FGSTN_DefenceKitExtension: its rules and its shield ability class (null = the kit has no shield).
 	 * Tech and get-up sets are left as they are (empty on a new entry). False for a null kit

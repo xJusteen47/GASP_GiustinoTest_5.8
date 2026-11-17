@@ -1,6 +1,7 @@
 // Combat simulation (GAS-NPP fork).
 
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "Loadout/GSTN_LoadoutInputFeel.h"
 
 #include "Hits/GSTN_HurtboxPose.h"
 #include "Movement/GSTN_GravityFrame.h"
@@ -513,6 +514,7 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 		Set->KitAirCrouch = AirCrouch ? *AirCrouch : FGSTN_AirCrouchKitExtension();
 		const FGSTN_GroundCrouchKitExtension* GroundCrouch = Kit ? Kit->Extensions.Find<FGSTN_GroundCrouchKitExtension>() : nullptr;
 		Set->KitGroundCrouch = GroundCrouch ? *GroundCrouch : FGSTN_GroundCrouchKitExtension();
+		Set->StickThresholds = FGSTN_LoadoutInputFeelExt::Resolve(Component->GetApplied().Extensions);
 	}
 	RegisterTableSet(Set);
 	DemandAppliedRevision(Revision);
@@ -892,7 +894,8 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 	const float CameraYawDeg = FGSTN_DirectionClassifier::DequantizeYaw(LastCameraYaw);
 	if (Analog)
 	{
-		ApplyAnalogMoveIntent(InputCmdResult, *Analog, MoveStick, CameraYawDeg, OwnerUp);
+		const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+		ApplyAnalogMoveIntent(InputCmdResult, *Analog, MoveStick, CameraYawDeg, OwnerUp, OwnerPawn && OwnerPawn->IsPlayerControlled());
 	}
 	float SteerHoldYaw = 0.f;
 	bool bStickActive = false;
@@ -937,7 +940,7 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 }
 
 bool UGSTN_CombatSimComponent::ApplyAnalogMoveIntent(FMoverInputCmdContext& InputCmd, const FGSTN_AnalogWalkTuning& Tuning, const FVector2D& Stick,
-	float CameraYawDeg, const FVector& Up)
+	float CameraYawDeg, const FVector& Up, bool bPlayerStick)
 {
 	FCharacterDefaultInputs* Inputs = InputCmd.InputCollection.FindMutableDataByType<FCharacterDefaultInputs>();
 	if (!Inputs || Inputs->GetMoveInputType() != EMoveInputType::DirectionalIntent)
@@ -948,6 +951,13 @@ bool UGSTN_CombatSimComponent::ApplyAnalogMoveIntent(FMoverInputCmdContext& Inpu
 	const float Intent = FGSTN_AnalogWalkLogic::StickToIntent(Tuning, static_cast<float>(FMath::Min(Stick.Size(), 1.0)));
 	if (Intent <= 0.f)
 	{
+		// A player's stick inside their dead zone (UGSTN_InputOptionsSubsystem) is no move at all: the pawn's own intent comes from the mapping
+		// context, which keeps only a hardware floor, so it would creep. A pawn without a player (AI path following) keeps its own
+		if (bPlayerStick && !Inputs->GetMoveInput().IsNearlyZero())
+		{
+			Inputs->SetMoveInput(EMoveInputType::DirectionalIntent, FVector::ZeroVector);
+			return true;
+		}
 		return false;
 	}
 	FVector Direction = Inputs->GetMoveInput().GetSafeNormal();
@@ -1562,6 +1572,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	Args.Buttons = &ButtonMap;
 	Args.Settings = &UGSTN_InputSettings::Get();
 	Args.GlobalResetRules = ResetRules;
+	Args.StickThresholds = &FrameSet.StickThresholds;
 	Args.PausedStart = InSync.Core.HitstopStartFrame;
 	Args.PausedEnd = InSync.Core.HitstopEndFrame;
 	Args.Outbox = &EventOutbox;

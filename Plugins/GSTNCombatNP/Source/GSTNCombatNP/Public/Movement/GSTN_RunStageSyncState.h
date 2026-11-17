@@ -65,7 +65,8 @@ struct GSTNCOMBATNP_API FGSTN_RunStageMover
 	 * GroundSpeed >= 0 (the speed at the start of the frame, from the rollback-following tracker) adds the analog walk start: more
 	 * acceleration and turning at low speed, and the stage speed on the walk gait too (FGSTN_AnalogWalkTuning). < 0 = stage values only
 	 */
-	static int32 ApplyStageValues(UMoverComponent& MoverComp, const FGSTN_LocomotionSimTuning& Tuning, int32 Stage, float Factor, float GroundSpeed = -1.f);
+	static int32 ApplyStageValues(UMoverComponent& MoverComp, const FGSTN_LocomotionSimTuning& Tuning, int32 Stage, float Factor, float GroundSpeed = -1.f,
+		float AccelRamp = 1.f);
 
 	/**
 	 * The air control and air top speed (P2, decision 1C) into Mover's shared settings and the profile's named air properties: the AirControl

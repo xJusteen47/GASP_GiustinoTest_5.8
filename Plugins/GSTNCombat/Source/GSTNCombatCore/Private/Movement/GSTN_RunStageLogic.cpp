@@ -76,7 +76,8 @@ bool FGSTN_RunStageState::operator==(const FGSTN_RunStageState& Other) const
 	return Stage == Other.Stage && FramesInStage == Other.FramesInStage && FramesSinceMoveStart == Other.FramesSinceMoveStart
 		&& FramesSinceStickRelease == Other.FramesSinceStickRelease && CarriedSpeed == Other.CarriedSpeed && FramesSinceCarry == Other.FramesSinceCarry
 		&& CarrySource == Other.CarrySource && PrevSpeed == Other.PrevSpeed && LastFrame == Other.LastFrame && CarryWindow == Other.CarryWindow
-		&& bAirborne == Other.bAirborne && TakeoffSpeed == Other.TakeoffSpeed && TakeoffStage == Other.TakeoffStage;
+		&& bAirborne == Other.bAirborne && TakeoffSpeed == Other.TakeoffSpeed && TakeoffStage == Other.TakeoffStage
+		&& RampFrames == Other.RampFrames && RampStage == Other.RampStage;
 }
 
 void FGSTN_RunStageState::SerializeCompact(FArchive& Ar)
@@ -98,6 +99,8 @@ void FGSTN_RunStageState::SerializeCompact(FArchive& Ar)
 	bAirborne = AirBit != 0;
 	SerializeSpeed(Ar, TakeoffSpeed);
 	Ar << TakeoffStage;
+	SerializeCounter(Ar, RampFrames);
+	Ar << RampStage;
 }
 
 void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunFrameInput& Input, FGSTN_RunStageState& State)
@@ -126,6 +129,22 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 		return;
 	}
 	State.bAirborne = false;
+
+	// Acceleration ramp: a push from rest starts the ramp of the current stage, a new stage starts its own, the stick at rest ends it
+	// (read by GetAccelerationRamp from the next frame's start state; counted before the early returns below so every grounded frame counts)
+	if (Input.StickWorld.Size() < Tuning.RampStickThreshold)
+	{
+		State.RampFrames = -1;
+	}
+	else if (State.RampFrames < 0 || State.RampStage != State.Stage)
+	{
+		State.RampFrames = 0;
+		State.RampStage = State.Stage;
+	}
+	else
+	{
+		State.RampFrames = Advance(State.RampFrames);
+	}
 
 	// A skid of this frame (P2): the speed of before it is remembered for the attacks (P3), the run drops to stage 1
 	if (Input.bSkidStarted)
@@ -246,4 +265,21 @@ float FGSTN_RunStageLogic::GetAirControlScale(const FGSTN_RunStagesTuning& Tunin
 		return 1.f;
 	}
 	return Tuning.GetStage(State.TakeoffStage).AirControlScale;
+}
+
+float FGSTN_RunStageLogic::GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State)
+{
+	if (!Tuning.IsEnabled())
+	{
+		return 1.f;
+	}
+	const FGSTN_RunStage& Stage = Tuning.GetStage(State.Stage);
+	if (Stage.AccelRampFrames <= 0)
+	{
+		return 1.f;
+	}
+	// At rest, or a stage the ramp has not caught up with yet (the stage changed at the end of the last frame): the ramp's first frame
+	const int32 Frames = (State.RampFrames < 0 || State.RampStage != State.Stage) ? 0 : State.RampFrames + 1;
+	const float Alpha = FMath::Clamp(static_cast<float>(Frames) / static_cast<float>(Stage.AccelRampFrames), 0.f, 1.f);
+	return FMath::Lerp(FMath::Clamp(Stage.RampStartFraction, 0.f, 1.f), 1.f, Alpha);
 }

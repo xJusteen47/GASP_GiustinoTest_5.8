@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GSTN_InputCoreTypes.h"
 #include "Input/GSTN_InputSample.h"
+#include "Input/GSTN_StickThresholds.h"
 
 class UGSTN_InputSettings;
 
@@ -49,14 +50,16 @@ struct GSTNINPUTCORE_API FGSTN_DirectionClassifier
 	 * @param FacingYawDeg Yaw the character faces (from the simulated Mover state).
 	 * @param Prev State returned for the previous frame (default state on the first frame).
 	 * @param Frame Current simulation frame.
-	 * @param Settings Thresholds.
+	 * @param Settings Direction sectors (diagonal width, world reference yaw).
+	 * @param Thresholds Zones and flick window: the player's, from their loadout (FGSTN_StickThresholds).
 	 * @param OutState State to feed the next frame with.
 	 */
 	static FGSTN_StickSample Classify(const FVector2D& RawStick, float CameraYawDeg, float FacingYawDeg,
-		const FGSTN_ClassifierState& Prev, int32 Frame, const UGSTN_InputSettings& Settings, FGSTN_ClassifierState& OutState);
+		const FGSTN_ClassifierState& Prev, int32 Frame, const UGSTN_InputSettings& Settings, const FGSTN_StickThresholds& Thresholds,
+		FGSTN_ClassifierState& OutState);
 
 	/** Zone of a stick magnitude: below the dead zone Neutral, below the aim zone Aim, else Tilt */
-	static EGSTN_StickZone ClassifyZone(float Magnitude, const UGSTN_InputSettings& Settings);
+	static EGSTN_StickZone ClassifyZone(float Magnitude, const FGSTN_StickThresholds& Thresholds);
 
 	/**
 	 * Sector of an angle (0 = up, clockwise, any range). Eight sectors, the diagonals extending DiagonalHalfAngle degrees

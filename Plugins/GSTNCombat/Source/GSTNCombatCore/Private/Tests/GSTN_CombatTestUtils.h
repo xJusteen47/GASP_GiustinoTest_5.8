@@ -44,9 +44,6 @@ namespace GSTNCombatTest
 		Settings->BufferConflictPolicy = EGSTN_BufferConflictPolicy::MostRecent;
 		Settings->bChordGraceByDefault = false;
 		Settings->ChordGraceFrames = 3;
-		Settings->StickDeadZone = 0.2f;
-		Settings->AimZone = 0.5f;
-		Settings->FlickFrames = 3;
 		Settings->DiagonalHalfAngle = 22.5f;
 		Settings->WorldReferenceYaw = 0.f;
 		Settings->CommandTiers.Empty();

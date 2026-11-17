@@ -1,5 +1,6 @@
 #include "Tests/GSTN_CombatTestUtils.h"
 #include "Input/GSTN_CombatSettings.h"
+#include "Input/GSTN_StickThresholds.h"
 #include "Input/GSTN_InputTags.h"
 #include "Input/GSTN_StandardSlots.h"
 #include "Misc/DataValidation.h"
@@ -75,7 +76,7 @@ bool FGSTN_CombatSettingsDefaultsTest::RunTest(const FString& Parameters)
 		Settings.GetCommandTier(GSTNCommandTags::Combo_AttackSpecial_Neutral) > Settings.GetCommandTier(GSTNCommandTags::Special_Neutral));
 	TestTrue(TEXT("attack buttons are exclusive"), Settings.IsExclusiveButton(GSTNCombatButtonTags::Button_Attack.GetTag()));
 	TestFalse(TEXT("jump is not exclusive"), Settings.IsExclusiveButton(GSTNCombatButtonTags::Button_Jump.GetTag()));
-	TestTrue(TEXT("dead zone below aim zone"), Settings.StickDeadZone < Settings.AimZone);
+	TestTrue(TEXT("dead zone below aim zone"), FGSTN_StickThresholds().NeutralZone < FGSTN_StickThresholds().AimZone);
 	return true;
 }
 

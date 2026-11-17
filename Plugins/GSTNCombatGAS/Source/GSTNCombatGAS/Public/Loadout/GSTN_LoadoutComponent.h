@@ -9,6 +9,7 @@
 #include "Loadout/GSTN_LoadoutAssembly.h"
 #include "Loadout/GSTN_LoadoutChoices.h"
 #include "Loadout/GSTN_LoadoutData.h"
+#include "Input/GSTN_StickThresholds.h"
 #include "UObject/PrimaryAssetId.h"
 #include "UObject/StrongObjectPtr.h"
 #include "GSTN_LoadoutComponent.generated.h"
@@ -73,6 +74,13 @@ public:
 	/** The owning client asks for a loadout. Validated on the server; see AcceptLoadout */
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Combat|Loadout")
 	void ServerRequestLoadout(const FGSTN_LoadoutData& Requested);
+
+	/**
+	 * The owning client's input feel (stick zones, flick window: FGSTN_LoadoutInputFeelExt) changed, or the pawn just started: the server puts it
+	 * into the applied loadout (a new revision, so every machine classifies the stick with it from the same frame). Unchanged = nothing happens
+	 */
+	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Combat|Loadout")
+	void ServerSetInputFeel(const FGSTN_StickThresholds& Thresholds);
 
 	/** Sent by the server to the requesting client when the rules refused its loadout; raises OnLoadoutRejected there */
 	UFUNCTION(Client, Reliable)
@@ -216,6 +224,14 @@ protected:
 private:
 	/** AcceptLoadout through ServerLoadoutApplier when one is set */
 	bool ApplyRequested(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors);
+
+	/** Server: the input feel the owning client last sent; put into every request that lacks one (it may arrive before the first loadout) */
+	FGSTN_StickThresholds PendingInputFeel;
+	bool bHasPendingInputFeel = false;
+
+	/** Owning machine: sends the player's stick thresholds (UGSTN_InputOptionsSubsystem) when the applied loadout carries others */
+	void SyncLocalInputFeel();
+	FDelegateHandle InputOptionsHandle;
 
 	FServerLoadoutApplier ServerLoadoutApplier;
 

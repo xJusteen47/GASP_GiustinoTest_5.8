@@ -157,17 +157,7 @@ public:
 
 	// ---- Stick
 
-	/** Normalised stick magnitude below which the stick is Neutral */
-	UPROPERTY(Config, EditAnywhere, Category = "Input|Stick", meta = (ClampMin = "0", ClampMax = "1"))
-	float StickDeadZone = 0.2f;
-
-	/** Normalised stick magnitude below which the stick is only Aim (a light tilt); from here on it is Tilt */
-	UPROPERTY(Config, EditAnywhere, Category = "Input|Stick", meta = (ClampMin = "0", ClampMax = "1"))
-	float AimZone = 0.5f;
-
-	/** A flick is a stick that reaches Tilt at most this many frames after it was last Neutral */
-	UPROPERTY(Config, EditAnywhere, Category = "Input|Stick", meta = (ClampMin = "0"))
-	int32 FlickFrames = 3;
+	// The Neutral / Aim / Tilt thresholds and the flick window are the player's (FGSTN_StickThresholds, carried by the loadout), not settings.
 
 	/**
 	 * Half-width of a diagonal sector around its 45 degree line. 22.5 gives eight equal sectors, less gives wider
