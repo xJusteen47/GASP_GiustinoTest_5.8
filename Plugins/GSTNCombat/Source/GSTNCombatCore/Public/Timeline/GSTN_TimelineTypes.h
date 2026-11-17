@@ -734,6 +734,14 @@ struct GSTNCOMBATCORE_API FGSTN_SteerWindow
 	int32 StartFrame = 0;
 
 	/**
+	 * Stick magnitude (unit circle) under which a stick does not aim this move: the start snap (AimPolicy), the reverse window (never below
+	 * this, whatever its StickThreshold) and the steering. A resting thumb must not turn an attack. 0.25 is the value every move had while it
+	 * was a constant (FGSTN_StartupSteer::DeadZone)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float StickDeadZone = 0.25f;
+
+	/**
 	 * Frame the direction locks at (exclusive). -1 = the first active frame (the hitboxes never sweep while the stick turns them). A value past
 	 * the first active frame is honoured but tracks "for most of the animation", which players read as unfair (Absolver)
 	 */

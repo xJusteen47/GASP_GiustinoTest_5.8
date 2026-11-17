@@ -153,10 +153,18 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 		State.FramesSinceCarry = 0;
 		State.CarrySource = EGSTN_RunCarrySource::Skid;
 		State.CarryWindow = Tuning.Skid.CarryFrames;
-		if (Tuning.Skid.bResetsStage)
+		if (Tuning.Skid.bResetsStage && !Tuning.Skid.bResumeStageAfterSkid)
 		{
 			ResetToFirstStage(State);
 		}
+		State.FramesInStage = 0;
+		return;
+	}
+
+	// Resume after the skid (owner 2026-11-17): the stage is frozen while the skid lives, so the push off continues from it. Without this the
+	// reversed stick reads as a tight turn every skid frame. The stage counters restart from zero once the skid is over
+	if (Input.bSkidActive && Tuning.Skid.bResumeStageAfterSkid)
+	{
 		State.FramesInStage = 0;
 		return;
 	}
@@ -195,14 +203,15 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 		return;
 	}
 
-	// Boost: straight to the last stage (owner decision 3C)
-	if (Input.bBoostCommand && State.Stage < LastStage)
+	// Boost: straight to BoostTargetStage (owner decision 3C; owner 2026-11-17: the middle stage by default). It never lowers the stage
+	const int32 BoostTarget = Tuning.GetBoostTargetIndex();
+	if (Input.bBoostCommand && State.Stage < BoostTarget)
 	{
 		const bool bAllowed = Tuning.BoostMode == EGSTN_RunBoostMode::Anytime
 			|| (Tuning.BoostMode == EGSTN_RunBoostMode::InitialWindow && State.FramesSinceMoveStart <= Tuning.BoostWindowFrames);
 		if (bAllowed)
 		{
-			State.Stage = static_cast<uint8>(LastStage);
+			State.Stage = static_cast<uint8>(BoostTarget);
 			State.FramesInStage = 0;
 			return;
 		}

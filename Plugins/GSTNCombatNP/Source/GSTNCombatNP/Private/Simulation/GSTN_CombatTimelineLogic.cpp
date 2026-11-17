@@ -465,7 +465,7 @@ bool FGSTN_CombatTimelineLogic::ResolveSteerHoldYaw(const FGSTN_CombatSyncCore& 
 	}
 	// The move origin keeps the yaw at 65536 steps per turn in a uint16: the same bits as the request's int16
 	const float StartYaw = FGSTN_StartupSteer::DequantizeYaw(static_cast<int16>(Core.Hit.MoveOrigin.RotationQ[1]));
-	OutYawDeg = FGSTN_StartupSteer::SteerYaw(StartYaw, AimStick, CameraYawDeg, Data->MaxSteerDegrees);
+	OutYawDeg = FGSTN_StartupSteer::SteerYaw(StartYaw, AimStick, CameraYawDeg, Data->MaxSteerDegrees, Data->Steer.StickDeadZone);
 	return true;
 }
 
@@ -483,7 +483,7 @@ EGSTN_SteerPhase FGSTN_CombatTimelineLogic::ResolveSteerFrame(const FGSTN_Combat
 	// The move origin keeps the yaw at 65536 steps per turn in a uint16: the same bits as the request's int16
 	In.StartYawDeg = FGSTN_StartupSteer::DequantizeYaw(static_cast<int16>(Core.Hit.MoveOrigin.RotationQ[1]));
 	In.CurrentYawDeg = CurrentYawDeg;
-	In.bSourceActive = FGSTN_StartupSteer::PickStick(Data->Steer.Source, MoveStick, AimStick, bPrecisionAim, In.Stick);
+	In.bSourceActive = FGSTN_StartupSteer::PickStick(Data->Steer.Source, MoveStick, AimStick, bPrecisionAim, In.Stick, Data->Steer.StickDeadZone);
 	In.CameraYawDeg = CameraYawDeg;
 	In.StepSeconds = StepSeconds;
 	return FGSTN_StartupSteer::ResolveFrame(*Data, In, OutYawDeg, OutStickActive);
@@ -493,7 +493,7 @@ bool FGSTN_CombatTimelineLogic::ComputeStartupSteer(const FGSTN_CombatSyncCore& 
 	float CameraYawDeg, float CurrentYawDeg, bool bPrecisionAim, int16& OutYawArg, float StepSeconds)
 {
 	float SteerYawDeg = 0.f;
-	if (!Data || !FGSTN_StartupSteer::IsSteering(AimStick, Data->MaxSteerDegrees)
+	if (!Data || !FGSTN_StartupSteer::IsSteering(AimStick, Data->MaxSteerDegrees, Data->Steer.StickDeadZone)
 		|| !ResolveSteerHoldYaw(Core, Frame, Data, AimStick, CameraYawDeg, bPrecisionAim, SteerYawDeg))
 	{
 		return false;

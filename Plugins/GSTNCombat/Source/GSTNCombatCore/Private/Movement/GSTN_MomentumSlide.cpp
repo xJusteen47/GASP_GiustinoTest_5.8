@@ -47,10 +47,9 @@ float FGSTN_MomentumSlideMath::StepSpeed(float Speed, const FGSTN_MomentumSlideB
 
 FGSTN_MomentumSlideBraking FGSTN_MomentumSlideMath::ApplyStick(const FGSTN_MomentumSlide& Slide, const FGSTN_MomentumSlideBraking& Base, int32 LiveFrame, float StickDot, float StickSize)
 {
-	constexpr float StickDeadzone = 0.25f;
 	constexpr float AlongCos = 0.7f;
 	FGSTN_MomentumSlideBraking Out = Base;
-	if (StickSize < StickDeadzone || LiveFrame < Slide.RetreatWindowFrames)
+	if (StickSize < Slide.StickDeadZone || LiveFrame < Slide.RetreatWindowFrames)
 	{
 		return Out;
 	}

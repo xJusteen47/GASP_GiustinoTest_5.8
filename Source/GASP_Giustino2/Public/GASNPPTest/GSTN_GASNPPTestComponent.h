@@ -68,6 +68,12 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
 	FString DrainSimHistory();
 
+	/** Movement QA (qa-movement-1117): the presented frame as the player sees it, JSON {slide: {src, phase, speed, frame}, lean, montage, override,
+	    overrideClass, pose: {pelvis, footL, footR} (bone Z minus the capsule bottom, cm), abp: {name: value} (the anim Blueprint's own bool, enum,
+	    number and name variables)}. Presentation only: read on the game thread after the frame's movement, never by the simulation. */
+	UFUNCTION(BlueprintCallable, Category = "GASNPP Test")
+	FString GetPresentationSnapshot() const;
+
 	/**
 	 * Authority only: puts the pawn back where it spawned (a teleport through Mover's instant effects, so it is predicted and rolled back like any other move;
 	 * the caller waits for the pawn to settle). The scenarios start from here, wherever the previous one ended.
@@ -391,6 +397,10 @@ private:
 		FName Mode;
 		bool bResimulating = false;
 		TArray<FString> Tags;
+		/** Movement QA: the run stage (FGSTN_RunStageState::Stage, -1 = no state), frames since the stick moved, and the skid phase (-1 = none) */
+		int32 RunStage = -1;
+		int32 RunFrames = -1;
+		int32 SkidPhase = -1;
 	};
 	TArray<FSimHistoryEntry> SimHistory;
 

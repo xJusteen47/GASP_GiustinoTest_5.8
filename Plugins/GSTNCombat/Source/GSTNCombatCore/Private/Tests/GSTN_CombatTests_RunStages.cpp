@@ -97,7 +97,7 @@ bool FGSTN_RunStagesBoostWindowTest::RunTest(const FString& Parameters)
 		FGSTN_RunStageState State;
 		FGSTN_RunStageLogic::Step(Tuning, Run(0, 0.f), State);
 		FGSTN_RunStageLogic::Step(Tuning, Run(1, 100.f, FVector(1.0, 0.0, 0.0), true), State);
-		TestEqual(TEXT("boost inside the initial window: last stage"), (int32)State.Stage, 2);
+		TestEqual(TEXT("boost inside the initial window: the middle stage (BoostTargetStage 2)"), (int32)State.Stage, 1);
 	}
 	{
 		const FGSTN_RunStagesTuning Tuning = TestTuning();
@@ -116,7 +116,7 @@ bool FGSTN_RunStagesBoostWindowTest::RunTest(const FString& Parameters)
 		}
 		FGSTN_RunStageLogic::Step(Tuning, Run(11, 0.f), State);
 		FGSTN_RunStageLogic::Step(Tuning, Run(12, 50.f, FVector(1.0, 0.0, 0.0), true), State);
-		TestEqual(TEXT("a new start opens a new window"), (int32)State.Stage, 2);
+		TestEqual(TEXT("a new start opens a new window"), (int32)State.Stage, 1);
 	}
 	{
 		const FGSTN_RunStagesTuning Tuning = TestTuning(EGSTN_RunBoostMode::Anytime);
@@ -126,7 +126,7 @@ bool FGSTN_RunStagesBoostWindowTest::RunTest(const FString& Parameters)
 			FGSTN_RunStageLogic::Step(Tuning, Run(Frame, 100.f), State);
 		}
 		FGSTN_RunStageLogic::Step(Tuning, Run(30, 100.f, FVector(1.0, 0.0, 0.0), true), State);
-		TestEqual(TEXT("Anytime: boost late still works"), (int32)State.Stage, 2);
+		TestEqual(TEXT("Anytime: boost late still works"), (int32)State.Stage, 1);
 	}
 	{
 		const FGSTN_RunStagesTuning Tuning = TestTuning(EGSTN_RunBoostMode::Disabled);
@@ -139,6 +139,26 @@ bool FGSTN_RunStagesBoostWindowTest::RunTest(const FString& Parameters)
 		FGSTN_RunStageState State;
 		FGSTN_RunStageLogic::Step(Tuning, Run(0, 0.f, FVector::ZeroVector, true), State);
 		TestEqual(TEXT("boost with the stick released: nothing"), (int32)State.Stage, 0);
+	}
+	{
+		// Owner 2026-11-17: the target is data, counted from 1; out of range is clamped; a boost never lowers the stage
+		FGSTN_RunStagesTuning Tuning = TestTuning(EGSTN_RunBoostMode::Anytime);
+		TestEqual(TEXT("default target = stage 2 (sprint 1), index 1"), Tuning.GetBoostTargetIndex(), 1);
+		Tuning.BoostTargetStage = 3;
+		FGSTN_RunStageState Last;
+		FGSTN_RunStageLogic::Step(Tuning, Run(0, 100.f, FVector(1.0, 0.0, 0.0), true), Last);
+		TestEqual(TEXT("BoostTargetStage 3: the last stage (the old rule)"), (int32)Last.Stage, 2);
+		Tuning.BoostTargetStage = 99;
+		TestEqual(TEXT("a target past the table is clamped to the last stage"), Tuning.GetBoostTargetIndex(), 2);
+		Tuning.BoostTargetStage = 2;
+		FGSTN_RunStageState High;
+		High.Stage = 2;
+		FGSTN_RunStageLogic::Step(Tuning, Run(0, 800.f, FVector(1.0, 0.0, 0.0), true), High);
+		TestEqual(TEXT("boost at stage 3 does not drop it to stage 2"), (int32)High.Stage, 2);
+		Tuning.BoostTargetStage = 1;
+		FGSTN_RunStageState First;
+		FGSTN_RunStageLogic::Step(Tuning, Run(0, 100.f, FVector(1.0, 0.0, 0.0), true), First);
+		TestEqual(TEXT("BoostTargetStage 1: the boost does nothing"), (int32)First.Stage, 0);
 	}
 	return true;
 }

@@ -118,6 +118,7 @@ bool FGSTN_LayeredMove_MomentumSlide::Decide(const FMoverTickStartData& StartSta
 	StickBrake = Data.StickBrake;
 	StickAgainstCos = Data.StickAgainstCos;
 	StickAlongScale = Data.StickAlongScale;
+	StickDeadZone = Data.StickDeadZone;
 	return StartSpeed > 0.f;
 }
 
@@ -224,6 +225,7 @@ bool FGSTN_LayeredMove_MomentumSlide::GenerateMove(const FMoverTickStartData& St
 			Rules.StickBrake = StickBrake;
 			Rules.StickAgainstCos = StickAgainstCos;
 			Rules.StickAlongScale = StickAlongScale;
+			Rules.StickDeadZone = StickDeadZone;
 			FGSTN_MomentumSlideBraking Base;
 			Base.Deceleration = Deceleration;
 			Base.Friction = Friction;
@@ -296,6 +298,7 @@ void FGSTN_LayeredMove_MomentumSlide::NetSerialize(FArchive& Ar)
 	Ar << StickBrake;
 	Ar << StickAgainstCos;
 	Ar << StickAlongScale;
+	Ar << StickDeadZone;
 }
 
 UScriptStruct* FGSTN_LayeredMove_MomentumSlide::GetScriptStruct() const

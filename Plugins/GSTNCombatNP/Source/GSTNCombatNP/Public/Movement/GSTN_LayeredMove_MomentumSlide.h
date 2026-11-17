@@ -124,6 +124,9 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_MomentumSlide : public FLayeredMoveBas
 	UPROPERTY()
 	float StickAlongScale = 1.f;
 
+	UPROPERTY()
+	float StickDeadZone = 0.25f;
+
 	/** How far under the feet the ledge probe looks, cm (as the push back) */
 	static constexpr double LedgeProbeDepth = 60.0;
 

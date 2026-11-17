@@ -7,7 +7,7 @@
 #include "Movement/GSTN_RunSkidTypes.h"
 #include "GSTN_RunStageTypes.generated.h"
 
-/** When the run boost command (L3 by default, in the kit's input data) may jump straight to the last stage (owner decision 3C) */
+/** When the run boost command (L3 by default, in the kit's input data) may jump straight to BoostTargetStage (owner decision 3C) */
 UENUM(BlueprintType)
 enum class EGSTN_RunBoostMode : uint8
 {
@@ -136,7 +136,7 @@ struct GSTNCOMBATCORE_API FGSTN_RunStagesTuning
 	float BumpMinSpeed = 300.f;
 
 	/**
-	 * The command that jumps to the last stage (Command.Movement.RunBoost, an ini tag; Tools/GAS/setup_run_stages.py sets it). The key
+	 * The command that jumps to BoostTargetStage (Command.Movement.RunBoost, an ini tag; Tools/GAS/setup_run_stages.py sets it). The key
 	 * (L3 by default) is in the kit's input data, never in code. Empty = no boost
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Boost", meta = (Categories = "Command"))
@@ -149,6 +149,16 @@ struct GSTNCOMBATCORE_API FGSTN_RunStagesTuning
 	/** InitialWindow: frames from the start of the run (stick pushed from rest) in which the boost works */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Boost", meta = (ClampMin = "0"))
 	int32 BoostWindowFrames = 12;
+
+	/**
+	 * The stage the boost jumps to, counted FROM 1 like the owner names them: 1 = run, 2 = sprint 1, 3 = sprint 2. Owner 2026-11-17:
+	 * L3 goes to the MIDDLE stage, not the last (was: always the last). Clamped into the table; a boost never lowers the stage
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Boost", meta = (ClampMin = "1"))
+	int32 BoostTargetStage = 2;
+
+	/** BoostTargetStage as a 0-based index into Stages, clamped. The table must not be empty */
+	int32 GetBoostTargetIndex() const { return FMath::Clamp(BoostTargetStage - 1, 0, Stages.Num() - 1); }
 
 	/** The run skid (P2) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Skid")
@@ -264,6 +274,11 @@ struct GSTNCOMBATCORE_API FGSTN_RunFrameInput
 	bool bSkidStarted = false;
 	/** The ground speed the skid started from, cm/s */
 	float SkidStartSpeed = 0.f;
+	/**
+	 * A run skid is live on this frame (its start frame included, until its exit phase is over). With Skid.bResumeStageAfterSkid the stage
+	 * is frozen meanwhile: the stick held against the old velocity would otherwise read as a tight turn every frame and drop it
+	 */
+	bool bSkidActive = false;
 	/** The stats speed factor of the frame (WalkSpeed / reference; 0 under a movement lock) */
 	float SpeedFactor = 1.f;
 };

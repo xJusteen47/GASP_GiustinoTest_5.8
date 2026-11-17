@@ -39,6 +39,14 @@
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Loadout/GSTN_LoadoutComponent.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
+#include "Movement/GSTN_LayeredMove_RunSkid.h"
+#include "Movement/GSTN_RunStageSyncState.h"
+#include "Presentation/GSTN_RunPresentationComponent.h"
+#include "GSTN_CharacterAnimInstance.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Animation/AnimMontage.h"
+#include "Engine/BlueprintGeneratedClass.h"
 #include "MoverComponent.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
@@ -532,6 +540,26 @@ void UGSTN_GASNPPTestComponent::HandlePreSimulationTick(const FMoverTimeStep& Ti
 				if (Name.StartsWith(TEXT("Test.")) || Name.StartsWith(TEXT("Combat.State.")) || Name.StartsWith(TEXT("Combat.Lock.")))
 				{
 					Entry.Tags.Add(Name);
+				}
+			}
+		}
+		if (SimState)
+		{
+			// Movement QA: the Mover-side locomotion state of the frame (run stage, skid and its tags, which are Mover tags, not owned tags)
+			const FMoverSyncState& Sync = SimState->GetSyncState();
+			if (const FGSTN_RunStageState* Run = FGSTN_RunStageMover::Find(Sync))
+			{
+				Entry.RunStage = Run->Stage;
+				Entry.RunFrames = Run->FramesSinceMoveStart;
+			}
+			if (const FGSTN_LayeredMove_RunSkid* Skid = FGSTN_LayeredMove_RunSkid::FindActive(Sync))
+			{
+				Entry.SkidPhase = static_cast<int32>(Skid->GetPhase());
+				FGameplayTagContainer SkidTags;
+				Skid->GetGameplayTags(SkidTags);
+				for (const FGameplayTag& Tag : SkidTags)
+				{
+					Entry.Tags.Add(Tag.ToString());
 				}
 			}
 		}
@@ -1253,6 +1281,107 @@ int32 UGSTN_GASNPPTestComponent::CountOwnedBulkSpecs() const
 	return Owned;
 }
 
+FString UGSTN_GASNPPTestComponent::GetPresentationSnapshot() const
+{
+	TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
+	AActor* Owner = GetOwner();
+	if (!Owner)
+	{
+		return TEXT("{}");
+	}
+	if (const UGSTN_RunPresentationComponent* Run = Owner->FindComponentByClass<UGSTN_RunPresentationComponent>())
+	{
+		const FGSTN_FootSlideState& Slide = Run->GetFootSlide();
+		TSharedRef<FJsonObject> S = MakeShared<FJsonObject>();
+		S->SetNumberField(TEXT("src"), static_cast<int32>(Slide.Source));
+		S->SetNumberField(TEXT("phase"), static_cast<int32>(Slide.SkidPhase));
+		S->SetNumberField(TEXT("speed"), Slide.Speed);
+		S->SetNumberField(TEXT("frame"), Slide.Frame);
+		Json->SetObjectField(TEXT("slide"), S);
+		FGSTN_AdditiveReactionRequest Lean;
+		Run->GetAdditiveReaction(Lean);
+		float LeanDeg = 0.f;
+		for (const FGSTN_AdditiveReactionLayer& Layer : Lean.Layers)
+		{
+			LeanDeg = FMath::Max(LeanDeg, Layer.IsActive() ? Layer.PlaceholderAngleDeg * Layer.Weight : 0.f);
+		}
+		Json->SetNumberField(TEXT("lean"), LeanDeg);
+	}
+
+	// Movement QA diagnosis: the shared settings the falling mode turns and caps with, and the run state's airborne latch
+	if (const UMoverComponent* MoverComp = Owner->FindComponentByClass<UMoverComponent>())
+	{
+		if (const UCommonLegacyMovementSettings* Shared = MoverComp->FindSharedSettings<UCommonLegacyMovementSettings>())
+		{
+			Json->SetNumberField(TEXT("turnRate"), Shared->TurningRate);
+			Json->SetNumberField(TEXT("maxSpeed"), Shared->MaxSpeed);
+		}
+		if (const FGSTN_RunStageState* Run = FGSTN_RunStageMover::Find(MoverComp->GetSyncState()))
+		{
+			Json->SetBoolField(TEXT("runAirborne"), Run->bAirborne);
+		}
+	}
+	// The mesh the main anim graph drives (the GSTN parent), else the first animated one
+	USkeletalMeshComponent* Mesh = nullptr;
+	TInlineComponentArray<USkeletalMeshComponent*> Meshes(Owner);
+	for (USkeletalMeshComponent* Candidate : Meshes)
+	{
+		if (Candidate && Candidate->GetAnimInstance() && (!Mesh || Candidate->GetAnimInstance()->IsA<UGSTN_CharacterAnimInstance>()))
+		{
+			Mesh = Candidate;
+		}
+	}
+	UAnimInstance* Anim = Mesh ? Mesh->GetAnimInstance() : nullptr;
+	if (Anim)
+	{
+		const UAnimMontage* Montage = Anim->GetCurrentActiveMontage();
+		Json->SetStringField(TEXT("montage"), Montage ? Montage->GetName() : FString());
+		if (const UGSTN_CharacterAnimInstance* Main = Cast<UGSTN_CharacterAnimInstance>(Anim))
+		{
+			Json->SetBoolField(TEXT("override"), Main->bOverrideLayerActive);
+			Json->SetStringField(TEXT("overrideClass"), GetNameSafe(Main->ActiveOverrideLayerClass));
+		}
+		// The anim Blueprint's own variables (GASP's gait, movement state, in-air flags...), so a check can name them without C++
+		TSharedRef<FJsonObject> Vars = MakeShared<FJsonObject>();
+		int32 Count = 0;
+		for (TFieldIterator<FProperty> It(Anim->GetClass()); It && Count < 200; ++It)
+		{
+			const FProperty* Prop = *It;
+			if (!Cast<UBlueprintGeneratedClass>(Prop->GetOwnerClass()))
+			{
+				continue;
+			}
+			if (!(Prop->IsA<FBoolProperty>() || Prop->IsA<FNumericProperty>() || Prop->IsA<FEnumProperty>() || Prop->IsA<FNameProperty>()))
+			{
+				continue;
+			}
+			FString Value;
+			Prop->ExportTextItem_InContainer(Value, Anim, nullptr, nullptr, PPF_None);
+			Vars->SetStringField(Prop->GetName(), Value);
+			++Count;
+		}
+		Json->SetObjectField(TEXT("abp"), Vars);
+	}
+	if (Mesh)
+	{
+		const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(Owner->GetRootComponent());
+		const double Bottom = Capsule ? Capsule->GetComponentLocation().Z - Capsule->GetScaledCapsuleHalfHeight() : Owner->GetActorLocation().Z;
+		TSharedRef<FJsonObject> Pose = MakeShared<FJsonObject>();
+		for (const TCHAR* Bone : { TEXT("pelvis"), TEXT("foot_l"), TEXT("foot_r") })
+		{
+			if (Mesh->GetBoneIndex(Bone) != INDEX_NONE)
+			{
+				Pose->SetNumberField(Bone, Mesh->GetSocketLocation(Bone).Z - Bottom);
+			}
+		}
+		Json->SetObjectField(TEXT("pose"), Pose);
+	}
+	FString Result;
+	TSharedRef<TJsonWriter<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>> Writer = TJsonWriterFactory<TCHAR, TCondensedJsonPrintPolicy<TCHAR>>::Create(&Result);
+	FJsonSerializer::Serialize(Json, Writer);
+	return Result;
+}
+
 FString UGSTN_GASNPPTestComponent::DrainSimHistory()
 {
 	auto Vec = [](const FVector& V) -> TArray<TSharedPtr<FJsonValue>>
@@ -1270,6 +1399,9 @@ FString UGSTN_GASNPPTestComponent::DrainSimHistory()
 		Json->SetArrayField(TEXT("vel"), Vec(Entry.Velocity));
 		Json->SetStringField(TEXT("mode"), Entry.Mode.ToString());
 		Json->SetBoolField(TEXT("rs"), Entry.bResimulating);
+		Json->SetNumberField(TEXT("stage"), Entry.RunStage);
+		Json->SetNumberField(TEXT("runfr"), Entry.RunFrames);
+		Json->SetNumberField(TEXT("skid"), Entry.SkidPhase);
 		TArray<TSharedPtr<FJsonValue>> Tags;
 		for (const FString& Tag : Entry.Tags)
 		{

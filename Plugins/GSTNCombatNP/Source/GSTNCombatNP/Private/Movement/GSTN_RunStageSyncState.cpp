@@ -211,6 +211,15 @@ int32 FGSTN_RunStageMover::ApplyAirValues(UMoverComponent& MoverComp, const FGST
 		Written += WriteFloats(*Mode, Tuning.AirControlProperties, Control);
 	}
 
+	// Air turn (qa-movement-1117): the falling mode turns the facing toward the orientation intent at most at the shared TurningRate (measured
+	// in game: a constant 300 deg/s), so the profile's AirTurnRateDegPerSec (UGSTN_CombatSimComponent's air turn intent) was capped by it: a
+	// 180 degree air turn took 31 frames instead of ~3. While airborne the shared rate is raised to the air turn rate; on the ground it is the
+	// authored one again. Assigned every substep from the state, like MaxSpeed below, so a resimulation writes the same values
+	const UCommonLegacyMovementSettings* AuthoredShared = Cast<UCommonLegacyMovementSettings>(Shared->GetArchetype());
+	const float GroundTurnRate = AuthoredShared ? AuthoredShared->TurningRate : Shared->TurningRate;
+	const float AirTurnRate = Tuning.AnalogWalk.bEnabled ? Tuning.AnalogWalk.AirTurnRateDegPerSec : 0.f;
+	Shared->TurningRate = bAirborne && AirTurnRate > GroundTurnRate ? AirTurnRate : GroundTurnRate;
+	++Written;
 	// Decision 1C, default model: in the air the top speed is the takeoff speed (with a floor). The stats wrote MaxSpeed = base * factor
 	// just before this, so the ground frames keep theirs. The first air frame still uses the ground value (the takeoff is latched at its end)
 	if (bAirborne && Air.Model == EGSTN_AirControlModel::TakeoffCap && Factor > 0.f)
@@ -259,9 +268,10 @@ void FGSTN_RunStageMover::PostMovement(UMoverComponent& MoverComp, const FMoverT
 	Input.StickWorld = StickSize > 0.0 ? FGSTN_CombatVictim::StickToPlane(Stick, CameraYaw, Up).GetSafeNormal() * StickSize : FVector::ZeroVector;
 	Input.bBoostCommand = Tuning->RunStages.BoostCommand.IsValid() && Combat->WasCommandEnteredWithin(Tuning->RunStages.BoostCommand, 0);
 	Input.SpeedFactor = Factor;
-	// A run skid whose first live frame was this step (P2): the run drops and remembers the speed of before it
+	// A run skid whose first live frame was this step (P2): the run drops (or freezes, bResumeStageAfterSkid) and remembers the speed of before it
 	if (const FGSTN_LayeredMove_RunSkid* Skid = FGSTN_LayeredMove_RunSkid::FindActive(OutputSyncState))
 	{
+		Input.bSkidActive = true;
 		if (Skid->CurrentLiveFrame == 0 && Skid->LastStepTimeMs == TimeStep.BaseSimTimeMs)
 		{
 			Input.bSkidStarted = true;
