@@ -29,6 +29,22 @@ void FGSTN_AirTurnInputs::ToString(FAnsiStringBuilderBase& Out) const
 	Out.Appendf("AirTurnRate: %.0f\n", RateDegPerSec);
 }
 
+bool FGSTN_AirTurnInputs::ShouldReconcile(const FMoverDataStructBase& AuthorityState) const
+{
+	return RateDegPerSec != static_cast<const FGSTN_AirTurnInputs&>(AuthorityState).RateDegPerSec;
+}
+
+void FGSTN_AirTurnInputs::Interpolate(const FMoverDataStructBase& From, const FMoverDataStructBase& To, float Pct)
+{
+	RateDegPerSec = static_cast<const FGSTN_AirTurnInputs&>(Pct < 0.5f ? From : To).RateDegPerSec;
+}
+
+void FGSTN_AirTurnInputs::Merge(const FMoverDataStructBase& From)
+{
+	// A dropped frame that turned still turns: keep the larger rate
+	RateDegPerSec = FMath::Max(RateDegPerSec, static_cast<const FGSTN_AirTurnInputs&>(From).RateDegPerSec);
+}
+
 float FGSTN_AirTurn::QuantizeRate(float RateDegPerSec)
 {
 	return static_cast<float>(FMath::RoundToInt32(FMath::Clamp(RateDegPerSec, 0.f, MaxRateDegPerSec)));

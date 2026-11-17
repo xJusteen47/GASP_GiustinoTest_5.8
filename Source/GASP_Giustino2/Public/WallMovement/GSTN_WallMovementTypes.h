@@ -431,6 +431,21 @@ struct GASP_GIUSTINO2_API FGSTN_WallInputs : public FMoverDataStructBase
 	virtual bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess) override;
 	virtual UScriptStruct* GetScriptStruct() const override { return StaticStruct(); }
 	virtual void ToString(FAnsiStringBuilderBase& Out) const override;
+
+	// Mover asserts when an input entry lacks these: NP smoothing interpolates the input collection of a smoothed sim.
+	// A button press is not blended (nearer frame wins) and a merged dropped press is kept.
+	virtual bool ShouldReconcile(const FMoverDataStructBase& AuthorityState) const override
+	{
+		return bWantsToDetach != static_cast<const FGSTN_WallInputs&>(AuthorityState).bWantsToDetach;
+	}
+	virtual void Interpolate(const FMoverDataStructBase& From, const FMoverDataStructBase& To, float Pct) override
+	{
+		bWantsToDetach = static_cast<const FGSTN_WallInputs&>(Pct < 0.5f ? From : To).bWantsToDetach;
+	}
+	virtual void Merge(const FMoverDataStructBase& From) override
+	{
+		bWantsToDetach |= static_cast<const FGSTN_WallInputs&>(From).bWantsToDetach;
+	}
 };
 
 template<>

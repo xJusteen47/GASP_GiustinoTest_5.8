@@ -62,6 +62,28 @@ bool FGSTN_AirTurnInputsNetTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// Regression: NP smoothing interpolates the input collection; without these overrides Mover's base checkf crashed the editor in PIE
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_AirTurnInputsSmoothingTest, "GSTNCombat.NP.AirTurn.InputsSmoothing", GSTN_NP_TEST_FLAGS)
+bool FGSTN_AirTurnInputsSmoothingTest::RunTest(const FString& Parameters)
+{
+	FGSTN_AirTurnInputs From, To, Out;
+	From.RateDegPerSec = 0.f;
+	To.RateDegPerSec = 3600.f;
+	FMoverDataCollection FromCollection, ToCollection, OutCollection;
+	FromCollection.AddOrOverwriteData(MakeShared<FGSTN_AirTurnInputs>(From));
+	ToCollection.AddOrOverwriteData(MakeShared<FGSTN_AirTurnInputs>(To));
+	OutCollection.Interpolate(FromCollection, ToCollection, 0.25f);
+	const FGSTN_AirTurnInputs* Lerped = OutCollection.FindDataByType<FGSTN_AirTurnInputs>();
+	TestTrue(TEXT("the collection interpolates the entry"), Lerped != nullptr);
+	if (Lerped) { TestEqual(TEXT("nearer frame's rate"), Lerped->RateDegPerSec, 0.f); }
+	Out.Interpolate(From, To, 0.75f);
+	TestEqual(TEXT("nearer frame's rate (late)"), Out.RateDegPerSec, 3600.f);
+	TestTrue(TEXT("rate change reconciles"), From.ShouldReconcile(To));
+	From.Merge(To);
+	TestEqual(TEXT("merge keeps the turn"), From.RateDegPerSec, 3600.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_AirTurnApplyTest, "GSTNCombat.NP.AirTurn.Apply", GSTN_NP_TEST_FLAGS)
 bool FGSTN_AirTurnApplyTest::RunTest(const FString& Parameters)
 {

@@ -33,6 +33,13 @@ struct GSTNCOMBATNP_API FGSTN_AirTurnInputs : public FMoverDataStructBase
 	virtual bool NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess) override;
 	virtual UScriptStruct* GetScriptStruct() const override { return StaticStruct(); }
 	virtual void ToString(FAnsiStringBuilderBase& Out) const override;
+
+	// Mover asserts (checkf) when these are missing on an input entry: NP smoothing interpolates the whole input collection of a
+	// smoothed sim (TFixedSmoothingService::FinalizeSmoothingFrame), and physics-based movement merges and reconciles inputs.
+	// The rate is a discrete per-frame value, so it is not blended: the nearer frame's rate is taken.
+	virtual bool ShouldReconcile(const FMoverDataStructBase& AuthorityState) const override;
+	virtual void Interpolate(const FMoverDataStructBase& From, const FMoverDataStructBase& To, float Pct) override;
+	virtual void Merge(const FMoverDataStructBase& From) override;
 };
 
 template<>
