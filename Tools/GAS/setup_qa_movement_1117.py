@@ -14,8 +14,8 @@ FOLDER = '/Game/GASNPPTest/Combat'
 KIT = FOLDER + '/KIT_Test_Playtest'
 FAST_FALL = 'Command.Movement.FastFall'
 # The Mario 3D World preset (Plugins/GSTNCombatGAS/Config/DefaultGSTNCombatGAS.ini)
-PRESET_STATS = {'JumpVelocity': 1240.0, 'JumpRiseGravityScale': 0.0, 'JumpCutGravityScale': 4.1, 'FallGravityScale': 4.1, 'MaxFallSpeed': 1800.0,
-                'FastFallSpeed': 2600.0, 'FastFallGravityScale': 6.0, 'MinJumpHoldFrames': 2.0, 'MaxJumpHoldFrames': 11.0, 'AirJumpVelocity': 900.0,
+PRESET_STATS = {'JumpVelocity': 1240.0, 'JumpRiseGravityScale': 0.0, 'JumpCutGravityScale': 4.1, 'FallGravityScale': 4.1, 'MaxFallSpeed': 1500.0,
+                'FastFallSpeed': 2400.0, 'FastFallGravityScale': 6.0, 'MinJumpHoldFrames': 2.0, 'MaxJumpHoldFrames': 11.0, 'AirJumpVelocity': 900.0,
                 'AirControl': 0.85}
 OUT = os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()), 'QAM', 'setup_qa_movement_1117.txt')
 _lines = []
