@@ -1,0 +1,3 @@
+torso: r35 half55 z15 (-40..70) x0  ->  torso: r22 half50 z0 (-50..50) x0
+head: r22 half22 z68 (46..90) x0  ->  head: r12 half16 z66 (50..82) x2
+feet: r30 half30 z-62 (-92..-32) x0  ->  feet: r20 half22 z-66 (-88..-44) x4

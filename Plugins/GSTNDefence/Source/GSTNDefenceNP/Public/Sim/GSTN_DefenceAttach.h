@@ -36,6 +36,9 @@ struct GSTNDEFENCENP_API FGSTN_DefenceEntityData
 	/** The roll toward the head, started instead of GetupRoll with the stick against the facing; null = GetupRoll every way */
 	TWeakObjectPtr<UClass> GetupRollBack;
 
+	/** The neutral get-up, started Forced when a downed state with an end (rules MaxDownedFrames) runs out: the body gets up instead of popping to idle */
+	TWeakObjectPtr<UClass> GetupNeutral;
+
 	/** By EGSTN_TechType (index 0, None, unused). All null = the kit has no tech: no lockout, no window, the button does nothing in tumble */
 	TWeakObjectPtr<UClass> TechAbilities[6];
 	bool bHasTechSet = false;

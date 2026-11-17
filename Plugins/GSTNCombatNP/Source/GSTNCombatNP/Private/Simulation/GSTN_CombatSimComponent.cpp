@@ -857,17 +857,18 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 	const float OwnerYaw = FGSTN_GravityFrame::YawOfRotator(GetOwner()->GetActorRotation(), OwnerUp);
 	float HoldYaw = OwnerYaw;
 	bool bHitTurn = false;
-	if (!bInTimeline)
+	// Read inside a move too: a move's start snap (back aerial, 180 deg) is a SetFacing of the latest frame, and the held facing below must
+	// point the new way on the frame Mover applies it
+	bool bQueuedTurn = false;
+	for (const FGSTN_CombatRequest& Slot : Sync->Core.Requests.Slots)
 	{
-		for (const FGSTN_CombatRequest& Slot : Sync->Core.Requests.Slots)
+		if (Slot.Type == EGSTN_RequestType::SetFacing || Slot.Type == EGSTN_RequestType::SetFacingTurnMomentum)
 		{
-			if (Slot.Type == EGSTN_RequestType::SetFacing)
-			{
-				HoldYaw = FGSTN_StartupSteer::DequantizeYaw(Slot.Arg);
-				bHitTurn = true;
-			}
+			HoldYaw = FGSTN_StartupSteer::DequantizeYaw(Slot.Arg);
+			bQueuedTurn = true;
 		}
 	}
+	bHitTurn = !bInTimeline && bQueuedTurn;
 	// Ground crouch without crouch walk (FGSTN_GroundCrouchKitExtension::bCrouchWalk off, Smash-like): crouched outside a move, the stick does not
 	// walk and the facing holds. Read from the latest frame's decision, like the steering below; the command carries it, so a resimulation agrees
 	bool bCrouchStill = false;
@@ -934,8 +935,24 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 				const float TargetYaw = FGSTN_GravityFrame::YawOfRotator(FRotationMatrix::MakeFromXZ(StickDir, OwnerUp).Rotator(), OwnerUp);
 				const float StepSeconds = LastStepMs > 0 ? LastStepMs * 0.001f : 1.f / 62.5f;
 				HoldOrientationIntent(InputCmdResult, FGSTN_AnalogWalkLogic::StepAirYaw(*Analog, OwnerYaw, TargetYaw, StepSeconds), OwnerUp);
+				return;
 			}
 		}
+	}
+	// A move without a steer phase keeps the facing it has (playtest 2026-11-17: the back aerial snapped 180 deg, then GASP's orientation
+	// pulled it back to the old facing at ~5 deg/frame for the whole move). A start snap queued on the latest frame is the facing to keep
+	if (bInTimeline)
+	{
+		// A forced move of a downed body (the ground bounce after a knockdown, the dropkick's own landing): the downed lock is on, so the stick
+		// neither walks nor turns it (playtest 2026-11-17: the body turned under the stick after the dropkick). Only a roll or get-up turns it
+		if (AbilitySystem && AbilitySystem->HasMatchingGameplayTag(GSTNCombatTags::Lock_Movement))
+		{
+			if (FCharacterDefaultInputs* Inputs = InputCmdResult.InputCollection.FindMutableDataByType<FCharacterDefaultInputs>())
+			{
+				Inputs->SetMoveInput(EMoveInputType::DirectionalIntent, FVector::ZeroVector);
+			}
+		}
+		HoldOrientationIntent(InputCmdResult, HoldYaw, OwnerUp);
 	}
 }
 

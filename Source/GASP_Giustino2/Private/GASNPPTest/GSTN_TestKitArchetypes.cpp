@@ -3,6 +3,7 @@
 #include "GASNPPTest/GSTN_TestKitArchetypes.h"
 #include "Animation/AnimMontage.h"
 #include "Hits/GSTN_HitboxTypes.h"
+#include "Timeline/GSTN_CombatTimeline.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 
 UGSTN_GA_TestKitStrike::UGSTN_GA_TestKitStrike(const FObjectInitializer& ObjectInitializer)
@@ -94,6 +95,69 @@ bool UGSTN_TestKitContentLibrary::WriteStartupSteer(TSubclassOf<UGameplayAbility
 	Data.MaxSteerDegrees = FMath::Clamp(MaxSteerDegrees, 0.f, 180.f);
 	Data.SteerRateDegPerSecond = FMath::Max(SteerRateDegPerSecond, 0.f);
 	Data.Steer = Steer;
+	if (FGSTN_CombatTimelineData::StaticStruct()->CompareScriptStruct(&Data, &Defaults->Timeline, PPF_None))
+	{
+		return false;
+	}
+	Defaults->Timeline = MoveTemp(Data);
+	Defaults->MarkPackageDirty();
+	return true;
+}
+
+FString UGSTN_TestKitContentLibrary::DescribeMoveKnockback(TSubclassOf<UGameplayAbility> MoveClass)
+{
+	if (!MoveClass || !MoveClass->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()))
+	{
+		return TEXT("not a combat move");
+	}
+	const UGSTN_GA_BaseCombat* Defaults = GetDefault<UGSTN_GA_BaseCombat>(MoveClass.Get());
+	const UGSTN_CombatTimeline* Asset = Defaults->TimelineAsset.LoadSynchronous();
+	const FGSTN_CombatTimelineData& Data = Asset ? Asset->Data : Defaults->Timeline;
+	FString Out = Asset ? FString::Printf(TEXT("asset %s "), *Asset->GetName()) : FString(TEXT("inline "));
+	int32 Count = 0;
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instanced : Data.Tracks)
+	{
+		if (const FGSTN_TimelineTrack_Hitbox* Track = Instanced.GetPtr<FGSTN_TimelineTrack_Hitbox>())
+		{
+			for (const FGSTN_HitboxSpec& Box : Track->Hitboxes)
+			{
+				const FGSTN_HitData& Hit = Box.Data;
+				Out += FString::Printf(TEXT("[%.0f%% b%.0f g%.0f f%.0f a%.0f] "), Hit.Damage, Hit.BaseKnockback, Hit.KnockbackGrowth, Hit.FixedKnockback, Hit.AngleDeg);
+				++Count;
+			}
+		}
+	}
+	return FString::Printf(TEXT("%d hitboxes: %s"), Count, *Out);
+}
+
+bool UGSTN_TestKitContentLibrary::WriteMoveKnockback(TSubclassOf<UGameplayAbility> MoveClass, float BaseKnockback, float KnockbackGrowth, float AngleDeg)
+{
+	if (!MoveClass || !MoveClass->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()) || MoveClass->HasAnyClassFlags(CLASS_Native))
+	{
+		return false;
+	}
+	UGSTN_GA_BaseCombat* Defaults = GetMutableDefault<UGSTN_GA_BaseCombat>(MoveClass.Get());
+	if (!Defaults->TimelineAsset.IsNull())
+	{
+		return false;
+	}
+	FGSTN_CombatTimelineData Data = Defaults->Timeline;
+	for (TInstancedStruct<FGSTN_TimelineTrack>& Instanced : Data.Tracks)
+	{
+		if (FGSTN_TimelineTrack_Hitbox* Track = Instanced.GetMutablePtr<FGSTN_TimelineTrack_Hitbox>())
+		{
+			for (FGSTN_HitboxSpec& Box : Track->Hitboxes)
+			{
+				Box.Data.BaseKnockback = FMath::Max(BaseKnockback, 0.f);
+				Box.Data.KnockbackGrowth = FMath::Max(KnockbackGrowth, 0.f);
+				Box.Data.FixedKnockback = -1.f;
+				if (AngleDeg >= -90.f)
+				{
+					Box.Data.AngleDeg = FMath::Clamp(AngleDeg, -90.f, 90.f);
+				}
+			}
+		}
+	}
 	if (FGSTN_CombatTimelineData::StaticStruct()->CompareScriptStruct(&Data, &Defaults->Timeline, PPF_None))
 	{
 		return false;

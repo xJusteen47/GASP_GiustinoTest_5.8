@@ -87,6 +87,7 @@ void FGSTN_DefenceAttach::SetKitMoves(const AActor* Owner, const FGSTN_DefenceKi
 	Data->GroundBounce = nullptr;
 	Data->GetupRoll = nullptr;
 	Data->GetupRollBack = nullptr;
+	Data->GetupNeutral = nullptr;
 	for (TWeakObjectPtr<UClass>& Tech : Data->TechAbilities)
 	{
 		Tech = nullptr;
@@ -100,6 +101,7 @@ void FGSTN_DefenceAttach::SetKitMoves(const AActor* Owner, const FGSTN_DefenceKi
 	Data->GroundBounce = Extension->GetupSet.GroundBounce.IsNull() ? nullptr : Cast<UClass>(Extension->GetupSet.GroundBounce.LoadSynchronous());
 	Data->GetupRoll = Extension->GetupSet.Roll.IsNull() ? nullptr : Cast<UClass>(Extension->GetupSet.Roll.LoadSynchronous());
 	Data->GetupRollBack = Extension->GetupSet.RollBack.IsNull() ? nullptr : Cast<UClass>(Extension->GetupSet.RollBack.LoadSynchronous());
+	Data->GetupNeutral = Extension->GetupSet.Neutral.IsNull() ? nullptr : Cast<UClass>(Extension->GetupSet.Neutral.LoadSynchronous());
 	for (const TPair<EGSTN_TechType, TSoftClassPtr<UObject>>& Entry : Extension->Tech.Abilities)
 	{
 		const uint8 Type = static_cast<uint8>(Entry.Key);

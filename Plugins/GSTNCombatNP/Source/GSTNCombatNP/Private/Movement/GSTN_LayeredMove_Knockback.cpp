@@ -12,6 +12,8 @@
 
 FGSTN_LayeredMove_Knockback::FProbeStats FGSTN_LayeredMove_Knockback::ProbeStats;
 
+DEFINE_LOG_CATEGORY_STATIC(LogGSTNKnockbackMove, Log, All);
+
 FGSTN_LayeredMove_Knockback::FGSTN_LayeredMove_Knockback()
 {
 	MixMode = EMoveMixMode::OverrideVelocity;
@@ -66,8 +68,29 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 	const FMoverDefaultSyncState* Sync = StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
 	const FVector Up = MoverComp ? MoverComp->GetUpDirection() : FVector::UpVector;
 	const FVector Current = Sync ? Sync->GetVelocity_WorldSpace() : FVector::ZeroVector;
-	const FVector Horizontal = Current - Up * Current.Dot(Up);
 	const double Dt = StepMs * 0.001;
+	UE_LOG(LogGSTNKnockbackMove, Verbose, TEXT("[Knockback] %s frame %d elapsed %d mode %s want (%.0f %.0f %.0f) have (%.0f %.0f %.0f)"),
+		MoverComp && MoverComp->GetOwner() ? *MoverComp->GetOwner()->GetName() : TEXT("?"), TimeStep.ServerFrame, ElapsedFrames,
+		*StartState.SyncState.MovementMode.ToString(), Velocity.X, Velocity.Y, Velocity.Z, Current.X, Current.Y, Current.Z);
+
+	// The launch frame lost (playtest 2026-11-17, Saved/PF1117c/diag strong_*.jsonl: the victim went Falling on the launch frame with zero
+	// velocity, then Walking, tumble animation on the ground): a velocity handed back on that frame (the finish velocity of the hitstop freeze)
+	// replaced the launch. The mode the first tick asked for is there, so the second tick gives the launch again, one step of gravity on.
+	// Read from the sync state and the move's own fields only, so a resimulation decides the same
+	const double WantUp = Velocity.Dot(Up);
+	if (ElapsedFrames == 1 && StartState.SyncState.MovementMode == ForceMovementMode && WantUp > 100.0 && Current.Dot(Up) < WantUp * 0.25)
+	{
+		FVector Relaunch = Velocity;
+		if (MoverComp)
+		{
+			Relaunch += MoverComp->GetGravityAcceleration() * static_cast<double>(GravityScale) * Dt;
+		}
+		OutProposedMove.MixMode = EMoveMixMode::OverrideVelocity;
+		OutProposedMove.LinearVelocity = Relaunch;
+		ProbeContact(StartState, TimeStep, MoverComp, Relaunch);
+		return true;
+	}
+	const FVector Horizontal = Current - Up * Current.Dot(Up);
 	FVector Extra = -Horizontal * FMath::Clamp<double>(DecayPerFrame, 0.0, 1.0);
 	if (MoverComp && !FMath::IsNearlyEqual(GravityScale, 1.f))
 	{
