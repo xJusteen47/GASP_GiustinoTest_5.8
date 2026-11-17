@@ -40,7 +40,9 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationTableLayer
  *
  * Presentation only: nothing here is read by a simulation, and it holds no sync state.
  */
-UCLASS(ClassGroup = (GSTN), meta = (BlueprintSpawnableComponent))
+class UNiagaraComponent;
+
+UCLASS(ClassGroup = (GSTN), Config = Game, meta = (BlueprintSpawnableComponent))
 class GSTNPRESENTATIONCORE_API UGSTN_PresentationComponent : public UActorComponent, public IGSTN_AdditiveReactionSource
 {
 	GENERATED_BODY()
@@ -55,9 +57,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation")
 	bool bPlayEffects = true;
 
-	/** Asked after every layer */
+	/** Asked after every layer; null = ProjectDefaultTable */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation")
 	TObjectPtr<UGSTN_PresentationTable> DefaultTable;
+
+	/**
+	 * The project's last fallback, from DefaultGame.ini ([/Script/GSTNPresentationCore.GSTN_PresentationComponent] ProjectDefaultTable=...):
+	 * a component added at run time (UGSTN_CombatPresentationEvents) has no DefaultTable of its own. Data, not a gameplay setting.
+	 */
+	UPROPERTY(Config, EditDefaultsOnly, Category = "Presentation")
+	TSoftObjectPtr<UGSTN_PresentationTable> ProjectDefaultTable;
 
 	/** Thresholds and tag rules of SubmitSnapshot */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation")
@@ -129,6 +138,34 @@ private:
 	};
 	/** Newest first, at most FGSTN_AdditiveReactionRequest::MaxLayers */
 	TArray<FActiveAdditive> Additives;
+
+	/** A sustained cue's system still playing: deactivated by a StopOn event or at its end time */
+	struct FSustained
+	{
+		TWeakObjectPtr<UNiagaraComponent> System;
+		FGameplayTagContainer StopOn;
+		/** World time (s); <= 0 = no cap */
+		double EndTime = 0.0;
+	};
+	TArray<FSustained> Sustained;
+
+	/** A cue waiting for the drawn body (FGSTN_PresentationCue::GroundedBone) */
+	struct FPendingGrounded
+	{
+		FGSTN_PresentationCue Cue;
+		FGSTN_PresentationEvent Event;
+		float Intensity = 1.f;
+		/** World time (s) after which it plays anyway */
+		double Deadline = 0.0;
+	};
+	TArray<FPendingGrounded> PendingGrounded;
+
+	/** True (and Event.Location moved under the bone) when the cue may play now */
+	bool IsBodyGrounded(const FGSTN_PresentationCue& Cue, FGSTN_PresentationEvent& Event) const;
+
+	/** Stops the sustained systems that EventTag ends; drops the finished ones */
+	void StopSustained(const FGameplayTag& EventTag);
+	void UpdateTickEnabled();
 
 	UPROPERTY(Transient)
 	TArray<FGSTN_PresentationTableLayer> Layers;

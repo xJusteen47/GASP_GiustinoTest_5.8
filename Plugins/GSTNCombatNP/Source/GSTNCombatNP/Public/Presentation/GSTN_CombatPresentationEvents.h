@@ -50,10 +50,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation")
 	bool bEnabled = true;
 
+	/** Ground speed above which the fighter counts as running (snapshot RunStage >= 1): the run start and the release stop are read here */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float RunMinSpeed = 120.f;
+
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	/** This frame's snapshot of Owner (false when it has no combat state yet). Reads only */
-	static bool ReadSnapshot(const AActor* Owner, FGSTN_PresentationSnapshot& Out);
+	static bool ReadSnapshot(const AActor* Owner, FGSTN_PresentationSnapshot& Out, float RunMinSpeed = 120.f);
 
 private:
 	UPROPERTY(Transient)

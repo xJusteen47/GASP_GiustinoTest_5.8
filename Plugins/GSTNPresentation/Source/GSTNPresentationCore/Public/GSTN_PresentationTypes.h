@@ -121,13 +121,88 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationCue
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
 	bool bOrientToDirection = false;
 
-	/** Multiply the system's scale by the intensity */
+	/**
+	 * Multiply the system's scale by the intensity. The component scale moves and spreads the particles but Niagara never applies it to
+	 * a sprite's size, so the intensity also goes to SizeParameter (a system multiplies its sprite sizes by it)
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
 	bool bScaleSize = true;
+
+	/** 2D vector user parameter set to (intensity, intensity) when bScaleSize (None = not set): the sprite size scale */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FName SizeParameter = TEXT("User.SizeScale");
 
 	/** Float user parameter set to the intensity (None = not set) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
 	FName IntensityParameter = TEXT("User.Intensity");
+
+	/**
+	 * Sustained effect (a skid trail, sprint lines, a tumble trail): the system keeps playing until one of these events fires on the same
+	 * character (a parent tag stops on every child), then it is deactivated and its live particles fade out. Empty = a one-shot burst.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (Categories = "Presentation.Event"))
+	FGameplayTagContainer StopOn;
+
+	/** Sustained effect: deactivated after this many seconds even if no StopOn event came (a missed end never leaves it on). 0 = no cap */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (ClampMin = "0", ForceUnits = "s"))
+	float MaxDuration = 0.f;
+
+	/** Linear colour user parameter set from Tint (None = not set): a skin recolours the effect without a new system */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FName ColorParameter = TEXT("User.Tint");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FLinearColor Tint = FLinearColor::White;
+
+	/** Second colour of the row (the kit's secondary, style sheet A "Colore"), set on AccentColorParameter (None = not set) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FLinearColor AccentTint = FLinearColor::White;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FName AccentColorParameter = TEXT("User.AccentTint");
+
+	/**
+	 * Strong tier: StrongParameter (float user parameter) is set to 1 when the intensity reaches StrongIntensity, else 0. A system gates an
+	 * extra layer with it (the strong hit's accent shards). 0 = never strong
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (ClampMin = "0"))
+	float StrongIntensity = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FName StrongParameter = TEXT("User.Strong");
+
+	/**
+	 * Particle counts set by the cue (int user parameters, linked to a burst's Spawn Count): CountParameter = round(CountMax x intensity,
+	 * capped at CountMax), StrongCountParameter = StrongCount on a strong hit, else 0. A spawn probability linked to a float user parameter
+	 * never gated the burst (review r2: 8 shards and the red accent stars on every hit size). 0 = not set
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (ClampMin = "0"))
+	int32 CountMax = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FName CountParameter = TEXT("User.Count");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (ClampMin = "0"))
+	int32 StrongCount = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FName StrongCountParameter = TEXT("User.StrongCount");
+
+	/**
+	 * Waits for the drawn body: the cue plays once this bone of the owner's mesh is within GroundedHeight above the cue's location (or after
+	 * GroundedMaxWait). The event comes from the simulation, which can be frames ahead of what the mesh shows (review r2: the knockdown ring
+	 * came ~8-10 frames before the body touched the floor). The effect spawns under the bone. None = play at once
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	FName GroundedBone;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float GroundedHeight = 35.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (ClampMin = "0", ForceUnits = "s"))
+	float GroundedMaxWait = 0.4f;
+
+	bool IsSustained() const { return !StopOn.IsEmpty() || MaxDuration > 0.f; }
 
 	// Sound
 
