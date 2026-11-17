@@ -564,6 +564,12 @@ public:
 	/** Rules and TumbleRecoveryOverride: a tumble may act in the air once its hitstun ends */
 	bool IsTumbleAirRecoveryOn() const;
 
+	/**
+	 * The air control the running move asks for (its movement track's AirControlOverride, 0..1), or below 0 when no move runs or it asks for none.
+	 * The latest simulated state's move, the same on every machine (read by the run stage air values before the Mover tick)
+	 */
+	float GetRunningMoveAirControl() const;
+
 	/** The commands a recovered tumble may start: the kit's FGSTN_TumbleRecoveryExtension, else the rules'. Empty = every command */
 	const FGameplayTagContainer& GetTumbleRecoveryCommands() const;
 

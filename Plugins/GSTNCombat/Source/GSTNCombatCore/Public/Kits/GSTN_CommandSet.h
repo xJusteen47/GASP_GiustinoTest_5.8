@@ -9,6 +9,25 @@
 #include "GSTN_CommandSet.generated.h"
 
 /**
+ * One missing-move fallback: when the kit binds nothing to Command in some context, the first command of Fallbacks that has a binding in that
+ * context starts its move instead (owner 2026-11-17: a kit with fewer moves still answers every input of a button). An empty list switches the
+ * fallback off for Command.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_CommandFallback
+{
+	GENERATED_BODY()
+
+	/** The command that may be missing */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Fallback", meta = (Categories = "Command"))
+	FGameplayTag Command;
+
+	/** Nearest first. The default lists keep the button and try the same stance (standing / crouched) before the same direction */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Fallback", meta = (Categories = "Command"))
+	TArray<FGameplayTag> Fallbacks;
+};
+
+/**
  * The commands a kit understands: a base slot set, minus the commands the kit removes, plus the slots the kit adds. A kit that
  * has no dodge removes the dodge command instead of editing the shared set, and a kit with a special move adds its slot, so
  * kits share one default set and stay small (combat-m3 8). Pure data: the composition below reads slot specs and does not
@@ -34,6 +53,21 @@ struct GSTNCOMBATCORE_API FGSTN_CommandSet
 	/** Commands of the base set this kit does not have. Bindings to them are an error */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Command Set", meta = (Categories = "Command"))
 	FGameplayTagContainer RemovedCommands;
+
+	/**
+	 * Missing-move fallback (owner 2026-11-17). On: a command of the standard families (attack, strong, special) the kit leaves unbound in a context
+	 * borrows the move of the nearest command on the same button, stance first then direction (UGSTN_StandardSlots::BuildDefaultFallbacks). The
+	 * compiler adds the borrowed rows; a real binding always wins over a borrowed one
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Command Set|Fallback")
+	bool bFillMissingMoves = true;
+
+	/** Per-command replacements of the default lists (and lists for the kit's own commands). An entry with no fallbacks turns one command off */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Command Set|Fallback", meta = (EditCondition = "bFillMissingMoves"))
+	TArray<FGSTN_CommandFallback> FallbackOverrides;
+
+	/** The fallback lists that apply: the defaults, each replaced by the override of its command, then the overrides of other commands. Empty when off */
+	void GetFallbacks(TArray<FGSTN_CommandFallback>& OutFallbacks) const;
 
 	/**
 	 * The base set in memory: BaseSet, or the settings' default when BaseSet is empty. Null when neither is set or the asset

@@ -28,6 +28,7 @@ FGSTN_CombatTimelineData FGSTN_MoveTimelines::Make(const FGSTN_MoveTimelineParam
 	Movement.MomentumMode = Params.MomentumMode;
 	Movement.bCancelOnLand = Params.bCancelOnLand;
 	Movement.LandingLagFrames = Params.LandingLagFrames;
+	Movement.AirControlOverride = Params.AirControlOverride;
 	Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Movement>(Movement));
 
 	if (Params.HurtboxFrames > 0)
@@ -55,11 +56,14 @@ FGSTN_DashMoveData FGSTN_MoveTimelines::DashMove()
 
 FGSTN_DashMoveData FGSTN_MoveTimelines::GroundDodgeMove()
 {
-	// A low long-jump arc: about 0.61 s in the air, 46 cm high, 490 cm long under the nominal gravity
+	// A low long-jump arc: about 0.61 s in the air, 46 cm high, 490 cm long under the nominal gravity. Mario long jump (owner 2026-11-17): a run
+	// keeps its speed into the jump (never slower than 800), up to 1400
 	FGSTN_DashMoveData Move;
 	Move.ForwardSpeed = 800.f;
 	Move.UpSpeed = 300.f;
 	Move.ModeChange = EGSTN_DashModeChange::AirMode;
+	Move.CarriedSpeedScale = 1.f;
+	Move.MaxForwardSpeed = 1400.f;
 	return Move;
 }
 
@@ -92,6 +96,17 @@ FGSTN_MoveTimelineParams FGSTN_MoveTimelines::GroundDodgeParams(const FGSTN_Dash
 	Params.LandingLagFrames = 0;
 	Params.HurtboxFrames = InvincibleFramesFor(Arc.AirFrames, DefaultInvincibleFraction);
 	Params.HurtboxTag = GSTNCombatHitTags::Hurtbox_Feet.GetTag();
+	// Owner 2026-11-17: no startup (the impulse is the first frame), no ending lag (landing ends it), blocking until then, the feet vulnerable after
+	// the first 40 %, and highly controllable in the air
+	Params.AirControlOverride = 1.f;
+	return Params;
+}
+
+FGSTN_MoveTimelineParams FGSTN_MoveTimelines::AirDodgeFromGroundParams(const FGSTN_DashMoveData& Move, float TickRate)
+{
+	FGSTN_MoveTimelineParams Params = GroundDodgeParams(Move, TickRate);
+	Params.TotalFrames = FMath::Max(Params.TotalFrames, AirDodgeMaxAirFrames);
+	Params.FirstActionableFrame = Params.TotalFrames;
 	return Params;
 }
 

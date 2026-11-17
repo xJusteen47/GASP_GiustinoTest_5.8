@@ -2,6 +2,7 @@
 // executes what it decided in the ability system's pre-tick.
 
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "Timeline/GSTN_TimelineTypes.h"
 
 #include "Abilities/GameplayAbility.h"
 #include "Abilities/GSTN_GA_BaseCombat.h"
@@ -768,6 +769,29 @@ void UGSTN_CombatSimComponent::ExecuteReactionMove(float StepMs)
 		Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveBalloonEnd, ReactionMove.BalloonEndFraction);
 	}
 	AbilitySystem->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
+}
+
+float UGSTN_CombatSimComponent::GetRunningMoveAirControl() const
+{
+	const FGSTN_CombatSyncState* Sync = GetSyncState();
+	if (!Sync || Sync->Core.ActionState != EGSTN_ActionState::InTimeline)
+	{
+		return -1.f;
+	}
+	const FGSTN_CombatTimelineData* Running = GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline);
+	if (!Running)
+	{
+		return -1.f;
+	}
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Running->Tracks)
+	{
+		const FGSTN_TimelineTrack* Base = Track.GetPtr<FGSTN_TimelineTrack>();
+		if (Base && Base->GetKind() == EGSTN_TimelineTrackKind::Movement)
+		{
+			return static_cast<const FGSTN_TimelineTrack_Movement*>(Base)->AirControlOverride;
+		}
+	}
+	return -1.f;
 }
 
 bool UGSTN_CombatSimComponent::IsTumbleAirRecoveryOn() const

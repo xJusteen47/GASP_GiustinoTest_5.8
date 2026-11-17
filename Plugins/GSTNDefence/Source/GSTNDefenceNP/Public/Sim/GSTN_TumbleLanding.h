@@ -12,9 +12,11 @@ class UAbilitySystemComponent;
 struct FGSTN_CombatTickContext;
 struct FGSTN_DefenceEntityData;
 struct FGSTN_DefenceFragment;
+struct FGSTN_GroundBounceRules;
 struct FGSTN_InputHistory;
 struct FGSTN_TechRules;
 struct FGSTN_TumbleContactSyncState;
+enum class EGSTN_AutoGetupScope : uint8;
 enum class EGSTN_ImpactOutcome : uint8;
 enum class EGSTN_TumbleContactKind : uint8;
 
@@ -54,6 +56,18 @@ struct GSTNDEFENCENP_API FGSTN_TumbleLanding
 
 	/** Stick magnitude that counts as holding a direction (the get-up roll, a rolling tech) */
 	static constexpr double HoldStickMagnitude = 0.5;
+
+	/**
+	 * The get-up roll's input on Frame (owner 2026-11-17): StickOnly = the stick held at HoldStickMagnitude; DodgeAndStick = that plus a press of
+	 * DodgeButton (history bit, INDEX_NONE = no such button: never) in the last RollPressBufferFrames frames, Frame included. Pure
+	 */
+	static bool WantsDownedRoll(const FGSTN_GroundBounceRules& Rules, const FGSTN_InputHistory& History, int32 DodgeButton, int32 Frame, double StickSize);
+
+	/** Whether MaxDownedFrames gets this entity up by itself: always for Everyone, only without a player for DummiesOnly. Pure */
+	static bool AppliesAutoGetup(EGSTN_AutoGetupScope Scope, bool bPlayerControlled);
+
+	/** A player controller possesses the entity's pawn (constant for a match on every machine; false for a non-pawn and in a test) */
+	static bool IsPlayerEntity(const AActor* Owner);
 
 	/** The presses of Button in the history after the frame After, ascending */
 	static void CollectPresses(const FGSTN_InputHistory& History, int32 Button, int32 After, TArray<int32, TInlineAllocator<8>>& OutFrames);

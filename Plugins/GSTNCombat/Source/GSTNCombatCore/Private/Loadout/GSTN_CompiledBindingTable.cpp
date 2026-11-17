@@ -51,6 +51,75 @@ namespace
 		FSoftObjectPath TimelineOverride;
 	};
 
+	/** Whenever Narrow is satisfied, Broad is too: Broad requires a subset and ignores a subset */
+	bool Covers(const FGSTN_TagRequirements& Broad, const FGSTN_TagRequirements& Narrow)
+	{
+		return Narrow.RequireTags.HasAllExact(Broad.RequireTags) && Narrow.IgnoreTags.HasAllExact(Broad.IgnoreTags);
+	}
+
+	/**
+	 * Missing-move fallback (owner 2026-11-17) for the rows of one source. For each fallback list in order, a row of a fallback command is copied
+	 * under the missing command (the missing command's slot, the borrowed move's requirements, ability and timeline) unless a row of the missing
+	 * command, real or already borrowed, in this source or in Others, already covers its context: so a real binding is never shadowed and the
+	 * nearest fallback wins. Only real rows are borrowed (never a copy of a copy). Pure: the same input gives the same rows on every machine
+	 */
+	void FillMissingMoves(TArray<FPendingEntry>& Own, TConstArrayView<const TArray<FPendingEntry>*> Others, TConstArrayView<FGSTN_CommandFallback> Fallbacks,
+		const TMap<FGameplayTag, const FGSTN_InputSlotSpec*>& SetByCommand, const FGameplayTagContainer& Removed, TConstArrayView<FGSTN_ExclusiveTagGroup> Groups)
+	{
+		const TArray<FPendingEntry> Real = Own;
+		for (const FGSTN_CommandFallback& Fallback : Fallbacks)
+		{
+			const FGameplayTag Missing = Fallback.Command;
+			const FGSTN_InputSlotSpec* const* Slot = SetByCommand.Find(Missing);
+			if (!Missing.IsValid() || Removed.HasTagExact(Missing) || !Slot)
+			{
+				continue;
+			}
+			TArray<FGSTN_TagRequirements> Present;
+			const auto Collect = [&Present, &Missing](const TArray<FPendingEntry>& Rows)
+			{
+				for (const FPendingEntry& Row : Rows)
+				{
+					if (Row.Entry.Command == Missing)
+					{
+						Present.Add(Row.Entry.Requirements);
+					}
+				}
+			};
+			Collect(Own);
+			for (const TArray<FPendingEntry>* Other : Others)
+			{
+				Collect(*Other);
+			}
+			for (const FGameplayTag& From : Fallback.Fallbacks)
+			{
+				if (From == Missing)
+				{
+					continue;
+				}
+				for (const FPendingEntry& Row : Real)
+				{
+					// Skipped when a present row already answers its context, or would tie with it (both can hold with as many required tags:
+					// the binding validator's "arbitrary choice"), so borrowing never adds a conflict
+					const FGSTN_TagRequirements& Wanted = Row.Entry.Requirements;
+					if (Row.Entry.Command != From
+						|| Present.ContainsByPredicate([&Wanted, Groups](const FGSTN_TagRequirements& Existing)
+							{
+								return Covers(Existing, Wanted)
+									|| (Existing.GetRequiredCount() == Wanted.GetRequiredCount() && Existing.CanHoldTogether(Wanted, Groups));
+							}))
+					{
+						continue;
+					}
+					FPendingEntry& Borrowed = Own.Add_GetRef(Row);
+					Borrowed.Entry.Command = Missing;
+					Borrowed.Slot = **Slot;
+					Present.Add(Row.Entry.Requirements);
+				}
+			}
+		}
+	}
+
 	void SortByCommand(TArray<FPendingEntry>& Pending)
 	{
 		// Stable: rows of one command keep the order the data lists them in
@@ -277,6 +346,30 @@ FGSTN_CompiledBindingTable FGSTN_BindingTableCompiler::Compile(const FGSTN_Compi
 		if (Replaced == 0)
 		{
 			Report.AddWarning(FString::Printf(TEXT("Customisation %d swaps %s on weapon %d, which binds nothing to it, and is ignored."), Index, *Customisation.Command.ToString(), Customisation.WeaponIndex));
+		}
+	}
+
+	// Missing-move fallback (owner 2026-11-17), after the customisations so a swapped move is what gets borrowed. Weapons first (the attacks
+	// live there), each counting the kit's real rows as present; then the kit, counting every weapon's rows, so a kit row is never borrowed
+	// over a weapon's real or borrowed move
+	{
+		TArray<FGSTN_CommandFallback> Fallbacks;
+		Input.Kit.CommandSet.GetFallbacks(Fallbacks);
+		if (!Fallbacks.IsEmpty())
+		{
+			const FGameplayTagContainer& Removed = Input.Kit.CommandSet.RemovedCommands;
+			const TArray<FGSTN_ExclusiveTagGroup> Groups = Settings.GetAllExclusiveContextGroups();
+			const TArray<const TArray<FPendingEntry>*> KitOnly = { &KitEntries };
+			for (TArray<FPendingEntry>& Weapon : WeaponEntries)
+			{
+				FillMissingMoves(Weapon, KitOnly, Fallbacks, SetByCommand, Removed, Groups);
+			}
+			TArray<const TArray<FPendingEntry>*> AllWeapons;
+			for (const TArray<FPendingEntry>& Weapon : WeaponEntries)
+			{
+				AllWeapons.Add(&Weapon);
+			}
+			FillMissingMoves(KitEntries, AllWeapons, Fallbacks, SetByCommand, Removed, Groups);
 		}
 	}
 

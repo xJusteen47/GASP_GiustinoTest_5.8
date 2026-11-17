@@ -205,6 +205,10 @@ void UGSTN_DefenceRules::Validate(TArray<FString>& OutErrors) const
 	{
 		OutErrors.Add(TEXT("The maximum downed frames must not be negative (0 = never)."));
 	}
+	if (GroundBounce.RollPressBufferFrames < 1)
+	{
+		OutErrors.Add(TEXT("The downed roll's press buffer must be at least 1 frame (1 = the press frame only)."));
+	}
 }
 
 #if WITH_EDITOR

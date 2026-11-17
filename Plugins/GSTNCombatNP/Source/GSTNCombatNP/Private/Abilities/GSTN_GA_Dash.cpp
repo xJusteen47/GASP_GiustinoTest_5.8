@@ -43,7 +43,10 @@ FEffectMoveContainer UGSTN_MoveImpulseCreator::MakeMove_Implementation(UMoverCom
 	const FVector Fallback = FVector::CrossProduct(FVector::RightVector, Up);
 	const FVector Forward = FGSTN_DashMath::HorizontalForward(Up, Facing, Fallback);
 
-	const FVector Impulse = FGSTN_DashMath::ImpulseVelocity(Up, Forward, Move);
+	// The long jump keeps the run's speed (CarriedSpeedScale): the velocity at the end of the previous frame, along the jump's direction
+	FGSTN_DashMoveData Effective = Move;
+	Effective.ForwardSpeed = FGSTN_DashMath::EffectiveForwardSpeed(Move, Tracker->GetVelocity(), Forward);
+	const FVector Impulse = FGSTN_DashMath::ImpulseVelocity(Up, Forward, Effective);
 	Effect.VelocityToApply = FGSTN_DashMath::ResolveVelocity(Tracker->GetVelocity(), Impulse, Move.MixMode, Move.MomentumMode);
 
 	Effect.ForceMovementMode = Tracker->GetMovementModeName();
@@ -79,7 +82,8 @@ UGSTN_GE_MoveGroundDodge::UGSTN_GE_MoveGroundDodge()
 
 UGSTN_GE_MoveAirDodge::UGSTN_GE_MoveAirDodge()
 {
-	Configure(FGSTN_MoveTimelines::AirDodgeMove());
+	// Owner 2026-11-17: the air dodge is the ground one for now (AirDodgeMove, the dive roll, stays for the real air dodge)
+	Configure(FGSTN_MoveTimelines::GroundDodgeMove());
 }
 
 UGSTN_GA_MoveTimeline::UGSTN_GA_MoveTimeline(const FObjectInitializer& ObjectInitializer)
@@ -187,6 +191,6 @@ UGSTN_GA_GroundDodge::UGSTN_GA_GroundDodge(const FObjectInitializer& ObjectIniti
 UGSTN_GA_AirDodge::UGSTN_GA_AirDodge(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	SetDefaultMove(FGSTN_MoveTimelines::AirDodgeParams(), UGSTN_GE_MoveAirDodge::StaticClass());
+	SetDefaultMove(FGSTN_MoveTimelines::AirDodgeFromGroundParams(FGSTN_MoveTimelines::GroundDodgeMove(), FGSTN_MoveTimelines::DefaultTickRate), UGSTN_GE_MoveAirDodge::StaticClass());
 	BlockInHitReaction();
 }

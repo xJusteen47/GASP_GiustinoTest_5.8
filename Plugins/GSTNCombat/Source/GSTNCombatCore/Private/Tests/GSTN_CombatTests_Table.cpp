@@ -95,6 +95,8 @@ namespace
 	{
 		FGSTN_CompileInput Input;
 		Input.Kit.BaseSet = Base;
+		// These tests count rows: the missing-move fallback has its own test (Table.MissingMoveFallback)
+		Input.Kit.CommandSet.bFillMissingMoves = false;
 		return Input;
 	}
 
@@ -694,6 +696,102 @@ bool FGSTN_TableButtonLayoutTest::RunTest(const FString& Parameters)
 #endif
 
 	FGSTN_ActiveGameRules::Set(Previous);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_TableMissingMoveFallbackTest, "GSTNCombat.Core.Table.MissingMoveFallback", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_TableMissingMoveFallbackTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNCommandTags;
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = GSTNCombatTest::MakeSettings();
+	FGSTN_ExclusiveTagGroup Group;
+	Group.Tags.AddTag(TblGrounded());
+	Group.Tags.AddTag(TblAirborne());
+	Settings->ExclusiveContextGroups = { Group };
+	const TStrongObjectPtr<UGSTN_InputSlotSet> Base = TblMakeStandardSet();
+
+	// A small kit (owner 2026-11-17): jab on the ground (A), a neutral air (B), a crouch jab (C). Nothing else on the attack button
+	FGSTN_CompileInput Input;
+	Input.Kit.BaseSet = Base.Get();
+	Input.Kit.Bindings = { TblBind(Attack_Neutral, TblAbilityA(), TblGrounded()), TblBind(Attack_Neutral, TblAbilityB(), TblAirborne()),
+		TblBind(Attack_CrouchNeutral, TblAbilityC(), TblGrounded()) };
+
+	// The ability of the row of Command that requires Context, empty when there is none (or more than one)
+	const auto MoveFor = [](const FGSTN_CompiledBindingTable& Table, const FGameplayTag& Command, const FGameplayTag& Context)
+	{
+		FSoftObjectPath Found;
+		int32 Count = 0;
+		for (const FGSTN_CompiledEntry& Entry : Table.Entries)
+		{
+			if (Entry.Command == Command && Entry.Requirements.RequireTags.HasTagExact(Context))
+			{
+				Found = Entry.Ability;
+				++Count;
+			}
+		}
+		return Count == 1 ? Found : FSoftObjectPath();
+	};
+
+	FGSTN_CompileReport Report;
+	const FGSTN_CompiledBindingTable Table = FGSTN_BindingTableCompiler::Compile(Input, *Settings, &Report);
+	FGSTN_BindingTableCompiler::FindConflicts(Table, *Settings, Report);
+	TestEqual(TEXT("borrowing adds no error or conflict"), Report.Errors.Num(), 0);
+	TestTrue(TEXT("standing tilt on the ground: the jab (same stance)"), MoveFor(Table, Attack_Directional, TblGrounded()) == TblAbilityA());
+	TestTrue(TEXT("standing tilt in the air: the neutral air"), MoveFor(Table, Attack_Directional, TblAirborne()) == TblAbilityB());
+	TestTrue(TEXT("crouch tilt on the ground: the crouch jab (stance wins over direction)"), MoveFor(Table, Attack_CrouchDirectional, TblGrounded()) == TblAbilityC());
+	TestTrue(TEXT("crouch tilt in the air: no crouch move there, the neutral air"), MoveFor(Table, Attack_CrouchDirectional, TblAirborne()) == TblAbilityB());
+	TestTrue(TEXT("a real binding is kept"), MoveFor(Table, Attack_CrouchNeutral, TblGrounded()) == TblAbilityC());
+	TestTrue(TEXT("crouch neutral in the air borrows the neutral air"), MoveFor(Table, Attack_CrouchNeutral, TblAirborne()) == TblAbilityB());
+	const bool bOtherButton = Table.Entries.ContainsByPredicate([](const FGSTN_CompiledEntry& Entry)
+	{
+		return Entry.Command.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Command.Strong"))) || Entry.Command.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("Command.Special")));
+	});
+	TestFalse(TEXT("never from another button"), bOtherButton);
+	if (const FGSTN_CompiledEntry* Borrowed = Table.Entries.FindByPredicate([](const FGSTN_CompiledEntry& Entry) { return Entry.Command == Attack_Directional.GetTag(); }))
+	{
+		TestEqual(TEXT("a borrowed row uses the missing command's slot"), Table.Slots[Borrowed->SlotIndex].Command, Attack_Directional.GetTag());
+	}
+
+	// Data: an override with an empty list turns one command off; the switch turns all off
+	FGSTN_CompileInput NoTilt = Input;
+	FGSTN_CommandFallback Off;
+	Off.Command = Attack_Directional.GetTag();
+	NoTilt.Kit.CommandSet.FallbackOverrides = { Off };
+	const FGSTN_CompiledBindingTable NoTiltTable = FGSTN_BindingTableCompiler::Compile(NoTilt, *Settings);
+	TestTrue(TEXT("override: no standing tilt"), MoveFor(NoTiltTable, Attack_Directional, TblGrounded()).IsNull());
+	TestTrue(TEXT("override: the others still borrow"), MoveFor(NoTiltTable, Attack_CrouchDirectional, TblGrounded()) == TblAbilityC());
+	FGSTN_CompileInput Disabled = Input;
+	Disabled.Kit.CommandSet.bFillMissingMoves = false;
+	TestEqual(TEXT("switched off: only the three real rows"), FGSTN_BindingTableCompiler::Compile(Disabled, *Settings).Entries.Num(), 3);
+
+	// A weapon's real tilt is never shadowed by a row the kit borrows
+	FGSTN_CompileInput WithWeapon = Input;
+	WithWeapon.Weapons.SetNum(1);
+	WithWeapon.Weapons[0].Bindings = { TblBind(Attack_Directional, TblAbilityD()) };
+	const FGSTN_CompiledBindingTable WeaponTable = FGSTN_BindingTableCompiler::Compile(WithWeapon, *Settings);
+	const bool bKitTilt = WeaponTable.Entries.ContainsByPredicate([](const FGSTN_CompiledEntry& Entry)
+	{
+		return Entry.Source == EGSTN_EntrySource::Kit && Entry.Command == Attack_Directional.GetTag();
+	});
+	TestFalse(TEXT("the kit borrows no tilt over the weapon's"), bKitTilt);
+
+	// Determinism: the same input gives the same bytes
+	TArray<uint8> First;
+	TArray<uint8> Second;
+	FGSTN_BindingTableCompiler::Compile(Input, *Settings).WriteBytes(First);
+	FGSTN_BindingTableCompiler::Compile(Input, *Settings).WriteBytes(Second);
+	TestTrue(TEXT("the same compile twice"), First == Second);
+
+	// The default lists: same button, stance first
+	const TArray<FGSTN_CommandFallback> Defaults = UGSTN_StandardSlots::BuildDefaultFallbacks();
+	const FGSTN_CommandFallback* Crouch = Defaults.FindByPredicate([](const FGSTN_CommandFallback& F) { return F.Command == Attack_CrouchDirectional.GetTag(); });
+	if (TestNotNull(TEXT("crouch tilt has a default list"), Crouch) && TestEqual(TEXT("three fallbacks"), Crouch->Fallbacks.Num(), 3))
+	{
+		TestEqual(TEXT("1st: crouch neutral"), Crouch->Fallbacks[0], Attack_CrouchNeutral.GetTag());
+		TestEqual(TEXT("2nd: standing tilt"), Crouch->Fallbacks[1], Attack_Directional.GetTag());
+		TestEqual(TEXT("3rd: standing neutral"), Crouch->Fallbacks[2], Attack_Neutral.GetTag());
+	}
+	TestEqual(TEXT("twelve lists: three buttons, four shapes"), Defaults.Num(), 12);
 	return true;
 }
 

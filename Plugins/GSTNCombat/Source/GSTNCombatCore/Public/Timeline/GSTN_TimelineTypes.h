@@ -320,6 +320,13 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTrack_Movement : public FGSTN_TimelineTr
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (ClampMin = "0", ForceUnits = "Frames"))
 	int32 LandingLagFrames = 0;
 
+	/**
+	 * Air control (Mover's AirControlPercentage, 0..1) while the track runs and the character is airborne, in place of the kit's (owner 2026-11-17:
+	 * the ground dodge is a highly controllable long jump). Below 0 = the kit's. Read by the run stage air values, so it needs the kit's run stages
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (ClampMin = "-1.0", ClampMax = "1.0"))
+	float AirControlOverride = -1.f;
+
 	virtual EGSTN_TimelineTrackKind GetKind() const override { return EGSTN_TimelineTrackKind::Movement; }
 };
 

@@ -30,6 +30,13 @@ FVector FGSTN_DashMath::ResolveVelocity(const FVector& Prior, const FVector& Imp
 	return Prior + Impulse;
 }
 
+float FGSTN_DashMath::EffectiveForwardSpeed(const FGSTN_DashMoveData& Data, const FVector& Prior, const FVector& Forward)
+{
+	const float Carried = Data.CarriedSpeedScale > 0.f ? static_cast<float>(FMath::Max(Prior.Dot(Forward), 0.0)) * Data.CarriedSpeedScale : 0.f;
+	const float Speed = FMath::Max(Data.ForwardSpeed, Carried);
+	return Data.MaxForwardSpeed > 0.f ? FMath::Min(Speed, FMath::Max(Data.MaxForwardSpeed, Data.ForwardSpeed)) : Speed;
+}
+
 FGSTN_ArcPrediction FGSTN_DashMath::PredictArc(const FGSTN_DashMoveData& Data, float GravityAccel, float TickRate)
 {
 	FGSTN_ArcPrediction Arc;

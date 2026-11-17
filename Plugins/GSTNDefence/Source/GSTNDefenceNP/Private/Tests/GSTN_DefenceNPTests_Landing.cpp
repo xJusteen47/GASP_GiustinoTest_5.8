@@ -18,6 +18,7 @@
 #include "Hits/GSTN_ImpactTypes.h"
 #include "Input/GSTN_ButtonMap.h"
 #include "Input/GSTN_CombatButtonTags.h"
+#include "Input/GSTN_InputHistory.h"
 #include "Input/GSTN_InputSample.h"
 #include "Math/GSTN_DefenceMath.h"
 #include "Math/GSTN_DIRulesMath.h"
@@ -120,6 +121,20 @@ namespace
 			Out.Core.Input.History.Append(Up);
 		}
 
+		/** The dodge button (bit 1) pressed on Frame (one frame) */
+		void PressDodge(int32 Frame)
+		{
+			FGSTN_InputSample Down;
+			Down.Frame = Frame;
+			Down.Held = 2u;
+			Down.Pressed = 2u;
+			Out.Core.Input.History.Append(Down);
+			FGSTN_InputSample Up;
+			Up.Frame = Frame + 1;
+			Up.Released = 2u;
+			Out.Core.Input.History.Append(Up);
+		}
+
 		static FGSTN_TumbleContactSyncState Contact(EGSTN_TumbleContactKind Kind, int32 Frame, const FVector& Normal)
 		{
 			FGSTN_TumbleContactSyncState Contact;
@@ -139,7 +154,7 @@ namespace
 		TStrongObjectPtr<UGSTN_DefenceRules> Rules;
 		FGSTN_CombatSyncState In;
 		FGSTN_CombatSyncState Out;
-		const FGameplayTag ButtonTags[1] = { GSTNCombatButtonTags::Button_Shield.GetTag() };
+		const FGameplayTag ButtonTags[2] = { GSTNCombatButtonTags::Button_Shield.GetTag(), GSTNCombatButtonTags::Button_Dodge.GetTag() };
 		FGSTN_ButtonMap Map{ ButtonTags };
 		FFakeServices Services;
 	};
@@ -205,7 +220,15 @@ bool FGSTN_DefenceLandingDownedRollTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("no roll from the air"), Land.Services.Started.Num(), 0);
 	TestTrue(TEXT("still downed in the air"), Land.Fragment().IsKnockedDown(141));
 
-	// Holding the stick on the floor: the get-up roll starts Forced and the downed state ends on its frame
+	// Holding the stick alone on the floor: no roll by default (owner 2026-11-17: the stick rolled by accident; dodge + stick rolls)
+	FGSTN_CombatTickContext StickAlone = Land.Make(141, FVector2D(0.8, 0.0));
+	StickAlone.bGrounded = true;
+	FGSTN_TumbleLanding::AfterClocks(StickAlone, Land.Data());
+	TestEqual(TEXT("the stick alone does not roll"), Land.Services.Started.Num(), 0);
+	TestTrue(TEXT("still downed with the stick alone"), Land.Fragment().IsKnockedDown(141));
+
+	// Dodge pressed with the stick held on the floor: the get-up roll starts Forced and the downed state ends on its frame
+	Land.PressDodge(141);
 	FGSTN_CombatTickContext Roll = Land.Make(141, FVector2D(0.8, 0.0));
 	Roll.bGrounded = true;
 	FGSTN_TumbleLanding::AfterClocks(Roll, Land.Data());
@@ -220,9 +243,62 @@ bool FGSTN_DefenceLandingDownedRollTest::RunTest(const FString& Parameters)
 	FGSTN_CombatTimelineLogic::Start(Busy.Out.Core, 100, 0, EGSTN_ActivationSource::Forced);
 	FGSTN_CombatTickContext BusyRoll = Busy.Make(101, FVector2D(0.8, 0.0));
 	BusyRoll.bGrounded = true;
+	Busy.PressDodge(101);
 	FGSTN_TumbleLanding::AfterClocks(BusyRoll, Busy.Data());
 	TestFalse(TEXT("no roll while the bounce plays"), Busy.Services.Started.Contains(UGSTN_GA_GetupRoll::StaticClass()));
 	TestTrue(TEXT("still downed"), Busy.Fragment().IsKnockedDown(101));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DefenceLandingRollInputTest, "GSTNDefence.NP.Landing.RollInputIsData", TestFlags)
+bool FGSTN_DefenceLandingRollInputTest::RunTest(const FString& Parameters)
+{
+	FGSTN_GroundBounceRules Rules;
+	TestEqual(TEXT("default: dodge + stick"), Rules.RollInput, EGSTN_DownedRollInput::DodgeAndStick);
+	FGSTN_InputHistory History;
+	const auto PressDodge = [&History](int32 Frame)
+	{
+		FGSTN_InputSample Down;
+		Down.Frame = Frame;
+		Down.Held = 2u;
+		Down.Pressed = 2u;
+		History.Append(Down);
+		FGSTN_InputSample Up;
+		Up.Frame = Frame + 1;
+		Up.Released = 2u;
+		History.Append(Up);
+	};
+	PressDodge(100);
+	Rules.RollPressBufferFrames = 6;
+	TestTrue(TEXT("dodge + stick on the press frame"), FGSTN_TumbleLanding::WantsDownedRoll(Rules, History, 1, 100, 0.8));
+	TestTrue(TEXT("on the last buffered frame (frame 6 counting the press as 1)"), FGSTN_TumbleLanding::WantsDownedRoll(Rules, History, 1, 105, 0.8));
+	TestFalse(TEXT("not one frame past the buffer"), FGSTN_TumbleLanding::WantsDownedRoll(Rules, History, 1, 106, 0.8));
+	TestFalse(TEXT("dodge without the stick"), FGSTN_TumbleLanding::WantsDownedRoll(Rules, History, 1, 100, 0.2));
+	TestFalse(TEXT("a press of another button"), FGSTN_TumbleLanding::WantsDownedRoll(Rules, History, 0, 100, 0.8));
+	TestFalse(TEXT("no dodge button in the map"), FGSTN_TumbleLanding::WantsDownedRoll(Rules, History, INDEX_NONE, 100, 0.8));
+	FGSTN_InputHistory Empty;
+	TestFalse(TEXT("the stick alone does not roll by default"), FGSTN_TumbleLanding::WantsDownedRoll(Rules, Empty, 1, 100, 0.8));
+	Rules.RollInput = EGSTN_DownedRollInput::StickOnly;
+	TestTrue(TEXT("StickOnly: the stick alone rolls"), FGSTN_TumbleLanding::WantsDownedRoll(Rules, Empty, 1, 100, 0.8));
+	TestFalse(TEXT("StickOnly: a light stick does not"), FGSTN_TumbleLanding::WantsDownedRoll(Rules, Empty, 1, 100, 0.2));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DefenceLandingAutoGetupScopeTest, "GSTNDefence.NP.Landing.AutoGetupScope", TestFlags)
+bool FGSTN_DefenceLandingAutoGetupScopeTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("default: everyone gets up by itself"), FGSTN_GroundBounceRules().AutoGetupFor, EGSTN_AutoGetupScope::Everyone);
+	TestTrue(TEXT("Everyone: a player"), FGSTN_TumbleLanding::AppliesAutoGetup(EGSTN_AutoGetupScope::Everyone, true));
+	TestTrue(TEXT("Everyone: a dummy"), FGSTN_TumbleLanding::AppliesAutoGetup(EGSTN_AutoGetupScope::Everyone, false));
+	TestFalse(TEXT("DummiesOnly: a player lies until they act"), FGSTN_TumbleLanding::AppliesAutoGetup(EGSTN_AutoGetupScope::DummiesOnly, true));
+	TestTrue(TEXT("DummiesOnly: a dummy"), FGSTN_TumbleLanding::AppliesAutoGetup(EGSTN_AutoGetupScope::DummiesOnly, false));
+
+	// The rig's owner is no player pawn: DummiesOnly still ends its downed state
+	FLandRig Land(false, 30);
+	Land.Rules->GroundBounce.AutoGetupFor = EGSTN_AutoGetupScope::DummiesOnly;
+	FGSTN_CombatTickContext Context = Land.Make(100);
+	FGSTN_TumbleLanding::OnContactResolved(Context, Land.Data(), FLandRig::Contact(EGSTN_TumbleContactKind::Floor, 99, FVector::UpVector), EGSTN_ImpactOutcome::None);
+	TestEqual(TEXT("a dummy is downed for MaxDownedFrames"), Land.Fragment().KnockdownEndFrame, 99 + 30);
 	return true;
 }
 

@@ -30,6 +30,9 @@ struct FGSTN_MoveTimelineParams
 
 	/** Intangible: the hit passes through the feet and the torso still takes it (S section 1b). A kit's own timeline picks any kind */
 	EGSTN_HurtboxModifierKind HurtboxKind = EGSTN_HurtboxModifierKind::Intangible;
+
+	/** The movement track's AirControlOverride: below 0 = the kit's air control */
+	float AirControlOverride = -1.f;
 };
 
 /** Builders of the default movement timelines, as plain data */
@@ -56,8 +59,17 @@ struct GSTNCOMBATCORE_API FGSTN_MoveTimelines
 	/** The default ground dodge: take-off to landing in one low arc, feet intangible for the first 40 % of the airborne frames, lands standing */
 	static FGSTN_MoveTimelineParams GroundDodgeParams(const FGSTN_DashMoveData& Move, float TickRate);
 
-	/** The default air dodge (dive roll): ends on landing with a short landing lag, feet intangible for the first part of its dive */
+	/** The air dive roll (UGSTN_GA_AirDodge's default until 2026-11-17): ends on landing with a short landing lag, feet intangible for the first part of its dive */
 	static FGSTN_MoveTimelineParams AirDodgeParams();
+
+	/**
+	 * The air dodge for now (owner 2026-11-17: "in the air, use the ground one"): the ground dodge's arc and windows, but blocking until landing for
+	 * MaxAirFrames (it cannot be chained in the air to fly) and then actionable
+	 */
+	static FGSTN_MoveTimelineParams AirDodgeFromGroundParams(const FGSTN_DashMoveData& Move, float TickRate);
+
+	/** Longest an air dodge made from the ground one stays blocking in the air (2 s at 60 Hz, like the dropkick's air limit) */
+	static constexpr int32 AirDodgeMaxAirFrames = 120;
 
 	/** The default impulses */
 	static FGSTN_DashMoveData DashMove();

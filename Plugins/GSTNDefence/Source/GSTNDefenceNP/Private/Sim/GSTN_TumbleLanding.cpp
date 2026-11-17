@@ -7,6 +7,7 @@
 #include "Data/GSTN_DefenceRules.h"
 #include "Data/GSTN_DefenceTracks.h"
 #include "Events/GSTN_SimEvent.h"
+#include "GameFramework/Pawn.h"
 #include "GameplayEffectComponents/TargetTagsGameplayEffectComponent.h"
 #include "GSTN_CombatNPTags.h"
 #include "GSTN_CombatTags.h"
@@ -15,6 +16,7 @@
 #include "Input/GSTN_ButtonMap.h"
 #include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_InputHistory.h"
+#include "Layout/GSTN_ButtonLayout.h"
 #include "Math/GSTN_DefenceMath.h"
 #include "Movement/GSTN_LayeredMove_Freeze.h"
 #include "Movement/GSTN_LayeredMove_Knockback.h"
@@ -116,6 +118,44 @@ namespace
 		}
 		return State;
 	}
+}
+
+bool FGSTN_TumbleLanding::WantsDownedRoll(const FGSTN_GroundBounceRules& Rules, const FGSTN_InputHistory& History, int32 DodgeButton, int32 Frame, double StickSize)
+{
+	if (StickSize < HoldStickMagnitude)
+	{
+		return false;
+	}
+	if (Rules.RollInput == EGSTN_DownedRollInput::StickOnly)
+	{
+		return true;
+	}
+	if (DodgeButton < 0)
+	{
+		return false;
+	}
+	// Window [Frame - Buffer + 1, Frame]: a buffer of 1 is the press frame only
+	const int32 Oldest = Frame - FMath::Max(Rules.RollPressBufferFrames, 1) + 1;
+	for (int32 Age = 0; Age < History.GetNumButtonEvents(); ++Age)
+	{
+		const FGSTN_ButtonEvent& Event = History.GetButtonEvent(History.GetButtonSlot(Age));
+		if (!Event.bRelease && Event.Button == DodgeButton && Event.Frame >= Oldest && Event.Frame <= Frame)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool FGSTN_TumbleLanding::AppliesAutoGetup(EGSTN_AutoGetupScope Scope, bool bPlayerControlled)
+{
+	return Scope == EGSTN_AutoGetupScope::Everyone || !bPlayerControlled;
+}
+
+bool FGSTN_TumbleLanding::IsPlayerEntity(const AActor* Owner)
+{
+	const APawn* Pawn = Cast<APawn>(Owner);
+	return Pawn && Pawn->IsPlayerControlled();
 }
 
 void FGSTN_TumbleLanding::CollectPresses(const FGSTN_InputHistory& History, int32 Button, int32 After, TArray<int32, TInlineAllocator<8>>& OutFrames)
@@ -310,7 +350,7 @@ void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FG
 		// A missed tech of a kit that has one: the spec's knockdown, with the price of not teching
 		DownedEnd = LandingFrame + FMath::Max(Data.Rules->Tech.KnockdownFrames, 1) + FMath::Max(Data.Rules->Tech.NoTechKnockdownBonusFrames, 0);
 	}
-	else if (Bounce.MaxDownedFrames > 0)
+	else if (Bounce.MaxDownedFrames > 0 && AppliesAutoGetup(Bounce.AutoGetupFor, IsPlayerEntity(Context.Owner)))
 	{
 		DownedEnd = LandingFrame + Bounce.MaxDownedFrames;
 	}
@@ -455,8 +495,12 @@ void FGSTN_TumbleLanding::AfterClocks(FGSTN_CombatTickContext& Context, const FG
 	{
 		Fragment->KnockdownEndFrame = Frame;
 	}
+	// The roll's input is the rules' (owner 2026-11-17: dodge + stick by default, so a stick held to walk away never rolls by accident). The
+	// dodge button is the button layout's Movement.Dodge, never a fixed button
+	const int32 DodgeButton = Context.Buttons
+		? Context.Buttons->GetIndex(UGSTN_ButtonLayout::GetButton(TEXT("Movement.Dodge"), GSTNCombatButtonTags::Button_Dodge.GetTag())) : INDEX_NONE;
 	if (Fragment && Fragment->IsKnockedDown(Frame) && Context.Out.Core.ActionState == EGSTN_ActionState::Actionable && Context.bGrounded
-		&& Context.StickOnPlane.Size() >= HoldStickMagnitude
+		&& Data.Rules && WantsDownedRoll(Data.Rules->GroundBounce, Context.Out.Core.Input.History, DodgeButton, Frame, Context.StickOnPlane.Size())
 		&& Data.GetupRoll.IsValid() && Context.Services)
 	{
 		const bool bBack = Data.GetupRollBack.IsValid() && Context.StickOnPlane.Dot(ReadFacing(Context.Owner)) < 0.0;

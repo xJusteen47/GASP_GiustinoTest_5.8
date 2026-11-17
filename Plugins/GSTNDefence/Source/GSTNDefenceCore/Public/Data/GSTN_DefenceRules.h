@@ -315,6 +315,26 @@ struct GSTNDEFENCECORE_API FGSTN_SDIRules
 	bool bSDIInStaggerInPlace = true;
 };
 
+/** What rolls a downed entity up off the floor (owner 2026-11-17: the stick alone rolled by accident) */
+UENUM(BlueprintType)
+enum class EGSTN_DownedRollInput : uint8
+{
+	/** A press of the dodge button (button layout function Movement.Dodge) with the stick held: the default */
+	DodgeAndStick,
+	/** The stick held alone (the behaviour before 2026-11-17) */
+	StickOnly,
+};
+
+/** Who gets up by itself when MaxDownedFrames runs out (owner 2026-11-17: everyone by default, dummies only as the alternative) */
+UENUM(BlueprintType)
+enum class EGSTN_AutoGetupScope : uint8
+{
+	/** Every downed entity, players included (Smash-like: lying too long gets you up) */
+	Everyone,
+	/** Only entities no player controls (training dummies, AI): a player lies until they act */
+	DummiesOnly,
+};
+
 /**
  * Landing from a tumble without a tech (m6 spec 6, owner revision): a stick-steered mini bounce (the "tech bounce" of fighting games), then the
  * downed state. Owner 2026-11-16: its HEIGHT follows how hard the victim hits the floor, from MinHeight at ScaleMinSpeed up to MaxHeight at
@@ -380,6 +400,21 @@ struct GSTNDEFENCECORE_API FGSTN_GroundBounceRules
 	/** Frames after which a downed entity gets up by itself; 0 = never (the default) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing", meta = (ClampMin = "0", ForceUnits = "Frames"))
 	int32 MaxDownedFrames = 0;
+
+	/** Who MaxDownedFrames applies to. A player is an entity whose pawn a player controller possesses (constant for a match) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing")
+	EGSTN_AutoGetupScope AutoGetupFor = EGSTN_AutoGetupScope::Everyone;
+
+	/** What starts the get-up roll while downed. Jump still stands up in place and an attack is still the get-up attack */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Roll")
+	EGSTN_DownedRollInput RollInput = EGSTN_DownedRollInput::DodgeAndStick;
+
+	/**
+	 * DodgeAndStick: how many frames back a dodge press still counts (1 = this frame only), so a press a frame before the stick, or before the
+	 * bounce has landed, is not lost. Counted from 1 like the designer frame data
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Roll", meta = (ClampMin = "1", ClampMax = "30", ForceUnits = "Frames", EditCondition = "RollInput == EGSTN_DownedRollInput::DodgeAndStick"))
+	int32 RollPressBufferFrames = 6;
 };
 
 /**

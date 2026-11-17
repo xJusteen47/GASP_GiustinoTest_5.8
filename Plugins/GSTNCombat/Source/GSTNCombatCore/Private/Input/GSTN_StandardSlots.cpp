@@ -5,6 +5,7 @@
 #include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_InputConditions.h"
 #include "Input/GSTN_MovementSlots.h"
+#include "Kits/GSTN_CommandSet.h"
 
 namespace
 {
@@ -140,6 +141,33 @@ TArray<FGSTN_InputSlotSpec> UGSTN_StandardSlots::Build()
 		RecordLayoutFunctions(Spec);
 	}
 	return Slots;
+}
+
+TArray<FGSTN_CommandFallback> UGSTN_StandardSlots::BuildDefaultFallbacks()
+{
+	using namespace GSTNCommandTags;
+	// Per family in shape order Neutral, Directional, CrouchNeutral, CrouchDirectional
+	const FNativeGameplayTag* Families[3][4] = {
+		{ &Attack_Neutral, &Attack_Directional, &Attack_CrouchNeutral, &Attack_CrouchDirectional },
+		{ &Strong_Neutral, &Strong_Directional, &Strong_CrouchNeutral, &Strong_CrouchDirectional },
+		{ &Special_Neutral, &Special_Directional, &Special_CrouchNeutral, &Special_CrouchDirectional },
+	};
+	// Same stance, other direction; then other stance, same direction; then the opposite corner
+	const int32 Order[4][3] = { { 1, 2, 3 }, { 0, 3, 2 }, { 3, 0, 1 }, { 2, 1, 0 } };
+	TArray<FGSTN_CommandFallback> Out;
+	for (const auto& Family : Families)
+	{
+		for (int32 Shape = 0; Shape < 4; ++Shape)
+		{
+			FGSTN_CommandFallback& Fallback = Out.AddDefaulted_GetRef();
+			Fallback.Command = Family[Shape]->GetTag();
+			for (const int32 Other : Order[Shape])
+			{
+				Fallback.Fallbacks.Add(Family[Other]->GetTag());
+			}
+		}
+	}
+	return Out;
 }
 
 #if WITH_EDITOR

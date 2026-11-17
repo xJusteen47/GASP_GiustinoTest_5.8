@@ -136,7 +136,8 @@ public:
 
 /**
  * The default ground dodge (Mario long jump / Helldivers dive arc): the character is thrown into a low arc and lands standing, no prone
- * state. The feet are invincible from take-off for 40 % of the airborne frames (a hurtbox modifier track, data). Bind to
+ * state. The feet are invincible from take-off for 40 % of the airborne frames (a hurtbox modifier track, data). Owner 2026-11-17: no startup,
+ * no ending lag, no montage, blocking (not cancellable) until landing, the run's speed carried in, full air control while it flies. Bind to
  * Command.Defence.Dodge with a grounded requirement. Blocked in hitstun and hitstop by default.
  */
 UCLASS(Blueprintable)
@@ -149,8 +150,9 @@ public:
 };
 
 /**
- * The default air dodge (Mario 3D World dive roll): forward and down, ends on landing with a short landing lag. Bind to Command.Defence.Dodge
- * with an airborne requirement. Blocked in hitstun and hitstop by default.
+ * The default air dodge. For now (owner 2026-11-17) the ground dodge's long jump from the air: same impulse and windows, blocking until landing
+ * (at most FGSTN_MoveTimelines::AirDodgeMaxAirFrames). The dive roll (forward and down, AirDodgeMove/AirDodgeParams) waits for the real air
+ * dodge. Bind to Command.Defence.Dodge with an airborne requirement. Blocked in hitstun and hitstop by default.
  */
 UCLASS(Blueprintable)
 class GSTNCOMBATNP_API UGSTN_GA_AirDodge : public UGSTN_GA_MoveTimeline

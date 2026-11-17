@@ -7,6 +7,8 @@
 #include "Input/GSTN_InputSlot.h"
 #include "GSTN_StandardSlots.generated.h"
 
+struct FGSTN_CommandFallback;
+
 /**
  * The plugin's standard command set (combat.md section 9.1) as slot specs.
  *
@@ -36,6 +38,17 @@ class GSTNCOMBATCORE_API UGSTN_StandardSlots : public UBlueprintFunctionLibrary
 public:
 	/** The 12 family commands (per family: Neutral, Directional, CrouchNeutral, CrouchDirectional) followed by the 4 chord commands */
 	static TArray<FGSTN_InputSlotSpec> Build();
+
+	/**
+	 * The default missing-move fallbacks of the three families (owner 2026-11-17): the same button only, the current stance (standing or
+	 * crouched) first, then the direction (neutral or tilted). For each family:
+	 *   Neutral           -> Directional, CrouchNeutral, CrouchDirectional
+	 *   Directional       -> Neutral, CrouchDirectional, CrouchNeutral
+	 *   CrouchNeutral     -> CrouchDirectional, Neutral, Directional
+	 *   CrouchDirectional -> CrouchNeutral, Directional, Neutral
+	 * The chords have none (two buttons: no "same button"). A kit replaces any list (FGSTN_CommandSet::FallbackOverrides)
+	 */
+	static TArray<FGSTN_CommandFallback> BuildDefaultFallbacks();
 
 #if WITH_EDITOR
 	/**

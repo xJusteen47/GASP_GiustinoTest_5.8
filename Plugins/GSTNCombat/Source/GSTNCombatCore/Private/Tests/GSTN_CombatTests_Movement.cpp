@@ -138,6 +138,23 @@ bool FGSTN_DodgeMomentumTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DodgeCarriedSpeedTest, "GSTNCombat.Core.Dodge.LongJumpCarriesRunSpeed", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_DodgeCarriedSpeedTest::RunTest(const FString& Parameters)
+{
+	const FGSTN_DashMoveData Move = FGSTN_MoveTimelines::GroundDodgeMove();
+	const FVector Forward = FVector::ForwardVector;
+	TestEqual(TEXT("standing: the base speed"), FGSTN_DashMath::EffectiveForwardSpeed(Move, FVector::ZeroVector, Forward), Move.ForwardSpeed);
+	TestEqual(TEXT("walking slower than the base: the base speed"), FGSTN_DashMath::EffectiveForwardSpeed(Move, Forward * 300.0, Forward), Move.ForwardSpeed);
+	TestEqual(TEXT("running faster: the run's speed"), FGSTN_DashMath::EffectiveForwardSpeed(Move, Forward * 1100.0, Forward), 1100.f);
+	TestEqual(TEXT("sprinting: capped"), FGSTN_DashMath::EffectiveForwardSpeed(Move, Forward * 2000.0, Forward), Move.MaxForwardSpeed);
+	TestEqual(TEXT("running away from the jump: the base speed"), FGSTN_DashMath::EffectiveForwardSpeed(Move, Forward * -1100.0, Forward), Move.ForwardSpeed);
+	TestEqual(TEXT("vertical speed does not count"), FGSTN_DashMath::EffectiveForwardSpeed(Move, FVector::UpVector * 1500.0, Forward), Move.ForwardSpeed);
+	FGSTN_DashMoveData Plain = Move;
+	Plain.CarriedSpeedScale = 0.f;
+	TestEqual(TEXT("scale 0: the base speed only"), FGSTN_DashMath::EffectiveForwardSpeed(Plain, Forward * 1100.0, Forward), Move.ForwardSpeed);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MoveTimelinesTest, "GSTNCombat.Core.Dodge.DefaultTimelines", GSTN_CORE_TEST_FLAGS)
 bool FGSTN_MoveTimelinesTest::RunTest(const FString& Parameters)
 {
@@ -195,7 +212,16 @@ bool FGSTN_MoveTimelinesTest::RunTest(const FString& Parameters)
 	{
 		TestTrue(TEXT("it ends on landing"), Movement->bCancelOnLand);
 		TestEqual(TEXT("and lands straight into actionable: no landing lag"), Movement->LandingLagFrames, 0);
+		TestEqual(TEXT("full air control while it flies (owner 2026-11-17: a highly controllable long jump)"), Movement->AirControlOverride, 1.f);
 	}
+	TestEqual(TEXT("blocking until it lands: nothing actionable before the end"), GroundData.FirstActionableFrame, GroundData.TotalFrames);
+	TestEqual(TEXT("no startup override"), GroundData.OverrideFrames, 0);
+
+	// The air dodge for now is the ground one, blocking up to the air limit
+	const FGSTN_MoveTimelineParams AirFromGround = FGSTN_MoveTimelines::AirDodgeFromGroundParams(GroundMove, TickRate);
+	TestTrue(TEXT("air dodge from the ground one: ends on landing, no lag"), AirFromGround.bCancelOnLand && AirFromGround.LandingLagFrames == 0);
+	TestEqual(TEXT("blocking for the air limit"), AirFromGround.FirstActionableFrame, FGSTN_MoveTimelines::AirDodgeMaxAirFrames);
+	TestEqual(TEXT("the same feet window as the ground dodge"), AirFromGround.HurtboxFrames, Ground.HurtboxFrames);
 	TestTrue(TEXT("the timeline has room for a heavier gravity"), GroundData.TotalFrames > Arc.AirFrames);
 
 	// The air dodge is the dive roll: cancelled by landing with a short lag

@@ -44,6 +44,17 @@ struct GSTNCOMBATCORE_API FGSTN_DashMoveData
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dash")
 	EGSTN_DashModeChange ModeChange = EGSTN_DashModeChange::KeepMode;
+
+	/**
+	 * Run speed carried into the impulse (Mario long jump, owner 2026-11-17): the forward speed is the larger of ForwardSpeed and this fraction of
+	 * the speed the character had along the forward direction. 0 = ForwardSpeed only (the behaviour before 2026-11-17)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dash", meta = (ClampMin = "0.0", ClampMax = "2.0"))
+	float CarriedSpeedScale = 0.f;
+
+	/** Cap of the forward speed with the carried speed in; 0 = no cap */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dash", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
+	float MaxForwardSpeed = 0.f;
 };
 
 /** What a ballistic arc does on level ground under constant gravity (a prediction for tuning and tests, never used to move anything) */
@@ -79,6 +90,9 @@ struct GSTNCOMBATCORE_API FGSTN_DashMath
 	 * decides between adding to it (Additive) and replacing it (Override)
 	 */
 	static FVector ResolveVelocity(const FVector& Prior, const FVector& Impulse, EGSTN_MoveMixMode Mix, EGSTN_MomentumMode Momentum);
+
+	/** ForwardSpeed raised by the carried speed (Prior along Forward times CarriedSpeedScale, never backwards), capped by MaxForwardSpeed when set */
+	static float EffectiveForwardSpeed(const FGSTN_DashMoveData& Data, const FVector& Prior, const FVector& Forward);
 
 	/** The ballistic arc of the impulse under a gravity of size GravityAccel (cm/s^2) and a fixed tick of TickRate Hz */
 	static FGSTN_ArcPrediction PredictArc(const FGSTN_DashMoveData& Data, float GravityAccel, float TickRate);

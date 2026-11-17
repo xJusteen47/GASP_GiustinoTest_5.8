@@ -189,6 +189,9 @@ int32 FGSTN_RunStageMover::ApplyAirValues(UMoverComponent& MoverComp, const FGST
 	}
 	const bool bAirborne = State && State->bAirborne;
 	const float Scale = bAirborne ? FGSTN_RunStageLogic::GetAirControlScale(Tuning.RunStages, *State) : 1.f;
+	// A move that asks for its own air control (the ground dodge's long jump, owner 2026-11-17) replaces stat, authored value and stage scale
+	const UGSTN_CombatSimComponent* Combat = FindCombat(MoverComp);
+	const float MoveControl = Combat ? Combat->GetRunningMoveAirControl() : -1.f;
 	int32 Written = 0;
 	for (const TPair<FName, TObjectPtr<UBaseMovementMode>>& Entry : MoverComp.MovementModes)
 	{
@@ -199,7 +202,7 @@ int32 FGSTN_RunStageMover::ApplyAirValues(UMoverComponent& MoverComp, const FGST
 		}
 		const UFallingMode* BaseFalling = Cast<UFallingMode>(Mode->GetArchetype());
 		const float Authored = BaseFalling ? BaseFalling->AirControlPercentage : 1.f;
-		const float Control = FMath::Clamp((StatControl >= 0.f ? StatControl : Authored) * Scale, 0.f, 1.f);
+		const float Control = MoveControl >= 0.f ? FMath::Min(MoveControl, 1.f) : FMath::Clamp((StatControl >= 0.f ? StatControl : Authored) * Scale, 0.f, 1.f);
 		if (UFallingMode* Falling = Cast<UFallingMode>(Mode))
 		{
 			Falling->AirControlPercentage = Control;

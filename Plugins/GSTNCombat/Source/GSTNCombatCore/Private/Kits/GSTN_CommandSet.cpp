@@ -2,6 +2,7 @@
 
 #include "Kits/GSTN_CommandSet.h"
 #include "Input/GSTN_CombatSettings.h"
+#include "Input/GSTN_StandardSlots.h"
 
 const UGSTN_InputSlotSet* FGSTN_CommandSet::ResolveBaseSet() const
 {
@@ -38,6 +39,32 @@ void FGSTN_CommandSet::Compose(const UGSTN_InputSlotSet* Base, TArray<const FGST
 		else
 		{
 			OutSpecs.Add(&Spec);
+		}
+	}
+}
+
+void FGSTN_CommandSet::GetFallbacks(TArray<FGSTN_CommandFallback>& OutFallbacks) const
+{
+	OutFallbacks.Reset();
+	if (!bFillMissingMoves)
+	{
+		return;
+	}
+	OutFallbacks = UGSTN_StandardSlots::BuildDefaultFallbacks();
+	for (const FGSTN_CommandFallback& Override : FallbackOverrides)
+	{
+		if (!Override.Command.IsValid())
+		{
+			continue;
+		}
+		const int32 Existing = OutFallbacks.IndexOfByPredicate([&Override](const FGSTN_CommandFallback& Other) { return Other.Command == Override.Command; });
+		if (Existing != INDEX_NONE)
+		{
+			OutFallbacks[Existing] = Override;
+		}
+		else
+		{
+			OutFallbacks.Add(Override);
 		}
 	}
 }
