@@ -30,4 +30,7 @@ namespace GSTNCombatNPTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(EventHit_Reaction_PushBack, "Combat.Event.Hit.Reaction.PushBack", "Tag of a HitLanded or HitReceived event: the reaction tier was a push back");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(EventHit_Reaction_Launch, "Combat.Event.Hit.Reaction.Launch", "Tag of a HitLanded or HitReceived event: the reaction tier was a launch");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(EventHit_CreditPartner, "Combat.Event.Hit.CreditPartner", "Tag of the copy of a HitLanded or KO event sent to the hit's credit partner (FGSTN_HitCredit)");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(AnimSet_Skid, "Anim.Set.Skid", "Anim set slot of the run skid layer (UGSTN_SkidAnimInstance)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(AnimSet_RunStart, "Anim.Set.RunStart", "Anim set slot of the run start layer (UGSTN_RunStartAnimInstance)");
 }

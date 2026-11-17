@@ -452,6 +452,23 @@ UEdGraphNode* UGSTN_AnimGraphAuthoringLibrary::FindOrAddSequencePlayer(UEdGraph*
 	return Player;
 }
 
+UEdGraphNode* UGSTN_AnimGraphAuthoringLibrary::FindOrAddPoseNode(UEdGraph* Graph, UClass* NodeClass, FVector2D Position)
+{
+	if (!Graph || !NodeClass || !NodeClass->IsChildOf(UAnimGraphNode_Base::StaticClass()))
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("FindOrAddPoseNode: needs a graph and an anim graph node class"));
+		return nullptr;
+	}
+	for (UEdGraphNode* Node : Graph->Nodes)
+	{
+		if (Node && Node->IsA(NodeClass))
+		{
+			return Node;
+		}
+	}
+	return SpawnNode<UAnimGraphNode_Base>(Graph, Position, NodeClass);
+}
+
 bool UGSTN_AnimGraphAuthoringLibrary::ConnectToGraphOutput(UEdGraphNode* PoseNode)
 {
 	UEdGraph* Graph = PoseNode ? PoseNode->GetGraph() : nullptr;

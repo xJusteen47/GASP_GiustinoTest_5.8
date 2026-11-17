@@ -97,6 +97,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
 	static UEdGraphNode* FindOrAddSequencePlayer(UEdGraph* Graph, UAnimSequenceBase* Sequence, bool bLoop, FVector2D Position);
 
+	/** The first node of NodeClass (an anim graph node class) in Graph, added at Position if missing. For leaf pose nodes such as GSTN Clip At Time */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
+	static UEdGraphNode* FindOrAddPoseNode(UEdGraph* Graph, UClass* NodeClass, FVector2D Position);
+
 	/** Wires PoseNode's pose output into its graph's result (Output Pose of an anim or layer graph, the result of a state), replacing what was there */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
 	static bool ConnectToGraphOutput(UEdGraphNode* PoseNode);

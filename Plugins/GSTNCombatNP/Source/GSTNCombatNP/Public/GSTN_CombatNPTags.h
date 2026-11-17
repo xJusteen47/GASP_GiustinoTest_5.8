@@ -66,4 +66,8 @@ namespace GSTNCombatNPTags
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Mode_PvE);
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Mode_TDM);
 	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Mode_Duel);
+
+	/** Anim set slots of the run presentation layers (polish M4): the run skid clip and the run start clip */
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(AnimSet_Skid);
+	GSTNCOMBATNP_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(AnimSet_RunStart);
 }

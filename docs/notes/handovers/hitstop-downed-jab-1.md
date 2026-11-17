@@ -42,3 +42,19 @@ Branch claude/project-thread-77vkmg from 98dml5 72d1afaf (crash fix). NOTHING CO
 - A ground move that relied on stick walking (none found: get-ups use bIgnoreMoveInput, dodge/dash use movement tracks) needs bWalkDuringMove.
 - Timers of other layered moves still count during the freeze (unchanged behaviour).
 Cost estimate ~11 $ (Opus high, cloud only).
+
+## Addendum: skid layer (M4 skid part, coordinator go 23:29Z, ~5 $), NOT compiled
+- GSTNAnimationCore: IGSTN_ClipTimeSource + leaf node FGSTN_AnimNode_ClipAtTime (clip and time copied from the instance in PreUpdate, no root
+  motion); editor node "GSTN Clip At Time"; library FindOrAddPoseNode.
+- GSTNCombatNP (Presentation/GSTN_RunLayerAnimInstances): UGSTN_SkidAnimInstance (slot Skid while the foot slide is a run skid; SkidClip stretched
+  over [0, StopTime] up to the rest frame, Exit plays on at ExitPlayRate; turns the placeholder lean off when a clip is set) and
+  UGSTN_RunStartAnimInstance (slot RunStart, one play of RunStartClip when ground speed crosses StartFromSpeed from still; EMPTY clip = off, the
+  owner picks the clip). Tags Anim.Set.Skid / Anim.Set.RunStart. Tests GSTNCombat.NP.RunLayers.{SkidClipTime,RunStartTrigger}.
+- Script Tools/GAS/setup_skid_anim_layer.py: ABP_GSTN_SkidLayer (Skid_Revised) + ABP_GSTN_RunStartLayer (no clip, env RUN_START_CLIP=<path> later),
+  DA_AnimSet_Skid/RunStart, rules in DA_AnimSetCollection_SandboxCharacter. Re-runs setup_anim_layers.py first (idempotent).
+- Desktop: after step 2-3 above, run it headless (editor closed): UnrealEditor-Cmd ... -run=pythonscript -script="<project>/Tools/GAS/setup_skid_anim_layer.py"
+  -unattended -nullrhi, expect "ESITO: OK". Commit the new/changed assets in Content/Blueprints/Animation. Then capture a skid at run stage 1
+  on KIT_Test_Overlord (side view, 4x slow) for the Fable review (rule 10): first frame changes pose, feet stop when the body stops.
+- Tuning if the review says so: StopFraction / StopTime / ExitPlayRate on ABP_GSTN_SkidLayer class defaults (data, no code).
+- Risk: Skid_Revised's own root/hips travel is not removed (root motion off); if the clip drifts forward of the capsule the fix is a pose-space
+  offset, not a sim change.
