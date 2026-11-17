@@ -122,6 +122,18 @@ public:
 	 * Upgrades in place: a seam of InsertOverrideLayerBlend (Blend Poses by bool) or an int seam with other layers is removed first, its base
 	 * pose kept (and its Inertialization node reused). No change when the int seam already has exactly these layers on these slots
 	 */
+	/**
+	 * A Blend Poses by int in Graph (an anim graph of an anim Blueprint) with NumPoses pose pins (>= 2), each with its BlendTime_N pin and
+	 * the ActiveChildIndex pin shown. The poses are put in the node's arrays BEFORE its pins are made, so the pins exist at once (adding
+	 * pose pins to a spawned node did not create them in 5.8). Null and an error when the pins do not come out
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
+	static UEdGraphNode* SpawnBlendPosesByInt(UEdGraph* Graph, int32 NumPoses, FVector2D Position);
+
+	/** Input pose pins (BlendPose_N) of a blend list node */
+	UFUNCTION(BlueprintPure, Category = "GSTN|Anim Graph Authoring")
+	static int32 CountBlendPosePins(const UEdGraphNode* BlendNode);
+
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
 	static bool InsertOverrideLayerSlots(UAnimBlueprint* AnimBlueprint, const TArray<FGSTN_OverrideSlotLayer>& Slots, FName SlotVariable,
 		FName BlendTimeVariable, bool bInertialization, const FString& InsertBeforeNodeClass);

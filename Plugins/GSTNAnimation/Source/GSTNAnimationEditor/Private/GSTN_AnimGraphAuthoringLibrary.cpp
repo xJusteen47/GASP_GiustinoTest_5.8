@@ -704,16 +704,6 @@ namespace GSTNAnimGraphAuthoring
 		}
 	}
 
-	int32 CountBlendPosePins(const UEdGraphNode* Node)
-	{
-		int32 Count = 0;
-		for (const UEdGraphPin* Pin : Node->Pins)
-		{
-			Count += Pin && Pin->Direction == EGPD_Input && Pin->PinName.ToString().StartsWith(TEXT("BlendPose_")) ? 1 : 0;
-		}
-		return Count;
-	}
-
 	UEdGraphPin* BlendPosePin(UEdGraphNode* Node, int32 Index)
 	{
 		return Node->FindPin(*FString::Printf(TEXT("BlendPose_%d"), Index), EGPD_Input);
@@ -724,6 +714,93 @@ namespace GSTNAnimGraphAuthoring
 		UEdGraphPin* Linked = LinkedPin(Pin);
 		return Linked ? Cast<UAnimGraphNode_LinkedAnimLayer>(Linked->GetOwningNode()) : nullptr;
 	}
+}
+
+int32 UGSTN_AnimGraphAuthoringLibrary::CountBlendPosePins(const UEdGraphNode* BlendNode)
+{
+	int32 Count = 0;
+	if (BlendNode)
+	{
+		for (const UEdGraphPin* Pin : BlendNode->Pins)
+		{
+			Count += Pin && Pin->Direction == EGPD_Input && Pin->PinName.ToString().StartsWith(TEXT("BlendPose_")) ? 1 : 0;
+		}
+	}
+	return Count;
+}
+
+UEdGraphNode* UGSTN_AnimGraphAuthoringLibrary::SpawnBlendPosesByInt(UEdGraph* Graph, int32 NumPoses, FVector2D Position)
+{
+	if (!Graph || NumPoses < 2)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("SpawnBlendPosesByInt: needs a graph and at least 2 poses"));
+		return nullptr;
+	}
+	Graph->Modify();
+	UAnimGraphNode_BlendListByInt* Blend = NewObject<UAnimGraphNode_BlendListByInt>(Graph, NAME_None, RF_Transactional);
+	Graph->AddNode(Blend, false, false);
+	Blend->CreateNewGuid();
+	Blend->PostPlacedNewNode();
+
+	// Size the runtime node's arrays first (reflection: the editor node's Node struct, its BlendPose and BlendTime arrays), then make the pins
+	const FStructProperty* NodeProperty = FindFProperty<FStructProperty>(Blend->GetClass(), TEXT("Node"));
+	void* NodeStruct = NodeProperty ? NodeProperty->ContainerPtrToValuePtr<void>(Blend) : nullptr;
+	for (const TCHAR* ArrayName : {TEXT("BlendPose"), TEXT("BlendTime")})
+	{
+		const FArrayProperty* Array = NodeStruct ? FindFProperty<FArrayProperty>(NodeProperty->Struct, ArrayName) : nullptr;
+		if (!Array)
+		{
+			UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("SpawnBlendPosesByInt: the node struct has no array %s"), ArrayName);
+			continue;
+		}
+		FScriptArrayHelper Helper(Array, Array->ContainerPtrToValuePtr<void>(NodeStruct));
+		const int32 Before = Helper.Num();
+		if (Before < NumPoses)
+		{
+			Helper.AddValues(NumPoses - Before);
+			if (FCString::Strcmp(ArrayName, TEXT("BlendTime")) == 0)
+			{
+				// New blend times as the editor's add-pin gives them (0.1 s), not 0
+				const FFloatProperty* Inner = CastField<FFloatProperty>(Array->Inner);
+				for (int32 Index = Before; Inner && Index < NumPoses; ++Index)
+				{
+					Inner->SetPropertyValue(Helper.GetRawPtr(Index), 0.1f);
+				}
+			}
+		}
+	}
+	Blend->AllocateDefaultPins();
+	Blend->NodePosX = FMath::RoundToInt(Position.X);
+	Blend->NodePosY = FMath::RoundToInt(Position.Y);
+
+	// The index and every blend time as pins (an array element added after the pin options were built can be hidden)
+	for (FOptionalPinFromProperty& PinOption : Blend->ShowPinForProperties)
+	{
+		const FString Name = PinOption.PropertyName.ToString();
+		if (Name == TEXT("ActiveChildIndex") || Name.StartsWith(TEXT("BlendTime")))
+		{
+			PinOption.bShowPin = true;
+		}
+	}
+	Blend->ReconstructNode();
+
+	// Fallback: the engine's own add-pin, should the arrays above not have been read by the pin allocation
+	for (int32 Guard = 0; CountBlendPosePins(Blend) < NumPoses && Guard < NumPoses; ++Guard)
+	{
+		Blend->AddPinToBlendList();
+	}
+	const int32 Poses = CountBlendPosePins(Blend);
+	const bool bTimes = Blend->FindPin(*FString::Printf(TEXT("BlendTime_%d"), NumPoses - 1), EGPD_Input) != nullptr;
+	const bool bIndex = Blend->FindPin(TEXT("ActiveChildIndex"), EGPD_Input) != nullptr;
+	if (Poses < NumPoses || !bIndex)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("SpawnBlendPosesByInt: %d pose pin(s) of %d, index pin %s; node removed"), Poses, NumPoses,
+			bIndex ? TEXT("found") : TEXT("missing"));
+		Graph->RemoveNode(Blend);
+		return nullptr;
+	}
+	UE_CLOG(!bTimes, LogGSTNAnimGraphAuthoring, Warning, TEXT("SpawnBlendPosesByInt: BlendTime_%d has no pin (the constant blend time applies)"), NumPoses - 1);
+	return Blend;
 }
 
 bool UGSTN_AnimGraphAuthoringLibrary::InsertOverrideLayerSlots(UAnimBlueprint* AnimBlueprint, const TArray<FGSTN_OverrideSlotLayer>& Slots,
@@ -801,8 +878,8 @@ bool UGSTN_AnimGraphAuthoringLibrary::InsertOverrideLayerSlots(UAnimBlueprint* A
 	if (UAnimGraphNode_BlendListByInt* OldInt = Cast<UAnimGraphNode_BlendListByInt>(Seam))
 	{
 		int32 LinkedLayers = 0;
-		bool bSame = CountBlendPosePins(OldInt) == MaxSlot + 1;
-		for (int32 Index = 1; Index < CountBlendPosePins(OldInt); ++Index)
+		bool bSame = UGSTN_AnimGraphAuthoringLibrary::CountBlendPosePins(OldInt) == MaxSlot + 1;
+		for (int32 Index = 1; Index < UGSTN_AnimGraphAuthoringLibrary::CountBlendPosePins(OldInt); ++Index)
 		{
 			if (UAnimGraphNode_LinkedAnimLayer* Layer = LayerOnPin(BlendPosePin(OldInt, Index)))
 			{
@@ -840,6 +917,13 @@ bool UGSTN_AnimGraphAuthoringLibrary::InsertOverrideLayerSlots(UAnimBlueprint* A
 	const FVector2D RootPosition(Root->NodePosX, Root->NodePosY);
 	AnimGraph->Modify();
 	Root->Modify();
+	// The new blend first: if its pose pins do not come out, nothing of the old seam has been touched
+	UAnimGraphNode_BlendListByInt* Blend = Cast<UAnimGraphNode_BlendListByInt>(
+		SpawnBlendPosesByInt(AnimGraph, MaxSlot + 1, RootPosition + FVector2D(bInertialization ? -560 : -300, 0)));
+	if (!Blend)
+	{
+		return false;  // logged
+	}
 	for (UEdGraphNode* Old : OldNodes)
 	{
 		RemoveNodeAndGetters(AnimBlueprint, Old);
@@ -854,36 +938,9 @@ bool UGSTN_AnimGraphAuthoringLibrary::InsertOverrideLayerSlots(UAnimBlueprint* A
 		Inertialization = nullptr;
 	}
 
-	UAnimGraphNode_BlendListByInt* Blend = SpawnNode<UAnimGraphNode_BlendListByInt>(AnimGraph, RootPosition + FVector2D(bInertialization ? -560 : -300, 0));
-	while (CountBlendPosePins(Blend) < MaxSlot + 1)
-	{
-		const int32 Before = CountBlendPosePins(Blend);
-		Blend->AddPinToBlendList();
-		if (CountBlendPosePins(Blend) == Before)
-		{
-			UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertOverrideLayerSlots: could not add a pose pin to the Blend Poses by int"));
-			return false;
-		}
-	}
 	if (bInertialization)
 	{
 		SetNodeStructMember(Blend, TEXT("TransitionType"), TEXT("Inertialization"));
-	}
-	// The index and every blend time as pins: a pose pin added after the spawn can leave its BlendTime_N entry hidden (it is then a
-	// constant on the node and the link to the variable fails), so show them all and rebuild the pins once
-	bool bPinsChanged = false;
-	for (FOptionalPinFromProperty& PinOption : Blend->ShowPinForProperties)
-	{
-		const FString Name = PinOption.PropertyName.ToString();
-		if ((Name == TEXT("ActiveChildIndex") || Name.StartsWith(TEXT("BlendTime"))) && !PinOption.bShowPin)
-		{
-			PinOption.bShowPin = true;
-			bPinsChanged = true;
-		}
-	}
-	if (bPinsChanged)
-	{
-		Blend->ReconstructNode();
 	}
 
 	bool bOk = true;
