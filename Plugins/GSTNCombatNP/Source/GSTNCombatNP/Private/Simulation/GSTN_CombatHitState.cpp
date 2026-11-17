@@ -168,6 +168,13 @@ FGSTN_HitSyncState FGSTN_HitSyncState::Canonical(const FGSTN_HitLiveContext& Con
 		Out.ImpactProfileQ = ImpactProfileQ;
 		Out.GroundBounceCount = GroundBounceCount;
 		Out.GroundBounceFirstFrame = GroundBounceCount != 0 ? GroundBounceFirstFrame : INDEX_NONE;
+		Out.WallBounceCount = WallBounceCount;
+		Out.WallBounceFirstFrame = WallBounceCount != 0 ? WallBounceFirstFrame : INDEX_NONE;
+		if (BumpEndFrame > Context.Frame && BumpKind != 0)
+		{
+			Out.BumpEndFrame = BumpEndFrame;
+			Out.BumpKind = BumpKind;
+		}
 	}
 	if (Context.HitstopEndFrame > Context.Frame)
 	{
@@ -188,7 +195,9 @@ bool FGSTN_HitSyncState::operator==(const FGSTN_HitSyncState& Other) const
 	if (!(MoveOrigin == Other.MoveOrigin) || HitTargetsNum != Other.HitTargetsNum || HitConfirmFlags != Other.HitConfirmFlags
 		|| HitstunEndFrame != Other.HitstunEndFrame || ImpactEndFrame != Other.ImpactEndFrame || PendingReaction != Other.PendingReaction
 		|| SDIDistanceUsed != Other.SDIDistanceUsed || ImpactProfileQ != Other.ImpactProfileQ || PendingBalloonFrames != Other.PendingBalloonFrames
-		|| GroundBounceCount != Other.GroundBounceCount || GroundBounceFirstFrame != Other.GroundBounceFirstFrame)
+		|| GroundBounceCount != Other.GroundBounceCount || GroundBounceFirstFrame != Other.GroundBounceFirstFrame
+		|| WallBounceCount != Other.WallBounceCount || WallBounceFirstFrame != Other.WallBounceFirstFrame || BumpEndFrame != Other.BumpEndFrame
+		|| BumpKind != Other.BumpKind)
 	{
 		return false;
 	}
@@ -239,7 +248,7 @@ void FGSTN_HitSyncState::NetSerialize(FArchive& Ar, const FGSTN_HitLiveContext& 
 		Mask |= Local.ImpactEndFrame != INDEX_NONE ? PartImpact : 0;
 		Mask |= (Local.PendingLaunchQ[0] | Local.PendingLaunchQ[1] | Local.PendingLaunchQ[2]) != 0 ? PartLaunch : 0;
 		Mask |= Local.SDIDistanceUsed != 0 ? PartSDI : 0;
-		Mask |= Local.ImpactProfileQ != 0 || Local.GroundBounceCount != 0 ? PartProfile : 0;
+		Mask |= Local.ImpactProfileQ != 0 || Local.GroundBounceCount != 0 || Local.WallBounceCount != 0 || Local.BumpKind != 0 ? PartProfile : 0;
 	}
 	Ar.SerializeBits(&Mask, PartCount);
 	uint8 Reaction = Local.PendingReaction;
@@ -329,6 +338,25 @@ void FGSTN_HitSyncState::NetSerialize(FArchive& Ar, const FGSTN_HitLiveContext& 
 			Local.GroundBounceCount = Count;
 			SerializeFramePlusOne(Ar, Local.GroundBounceFirstFrame);
 		}
+		// The wall and ceiling chain, the same way, then the bump: 1 bit, its face (2 bits) and its end frame
+		uint8 bWallChain = Local.WallBounceCount != 0 ? 1 : 0;
+		Ar.SerializeBits(&bWallChain, 1);
+		if (bWallChain)
+		{
+			uint8 Count = static_cast<uint8>(FMath::Min<int32>(Local.WallBounceCount, 15));
+			Ar.SerializeBits(&Count, 4);
+			Local.WallBounceCount = Count;
+			SerializeFramePlusOne(Ar, Local.WallBounceFirstFrame);
+		}
+		uint8 bBump = Local.BumpKind != 0 ? 1 : 0;
+		Ar.SerializeBits(&bBump, 1);
+		if (bBump)
+		{
+			uint8 Kind = Local.BumpKind;
+			Ar.SerializeBits(&Kind, 2);
+			Local.BumpKind = Kind;
+			SerializeFramePlusOne(Ar, Local.BumpEndFrame);
+		}
 	}
 
 	if (Ar.IsLoading())
@@ -366,6 +394,14 @@ void FGSTN_HitSyncState::ToString(FAnsiStringBuilderBase& Out) const
 	if (GroundBounceCount != 0)
 	{
 		Out.Appendf(" groundBounces %d from %d", static_cast<int32>(GroundBounceCount), GroundBounceFirstFrame);
+	}
+	if (WallBounceCount != 0)
+	{
+		Out.Appendf(" wallBounces %d from %d", static_cast<int32>(WallBounceCount), WallBounceFirstFrame);
+	}
+	if (BumpKind != 0)
+	{
+		Out.Appendf(" bump %d->%d", static_cast<int32>(BumpKind), BumpEndFrame);
 	}
 	if (MoveOrigin.bSet)
 	{

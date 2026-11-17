@@ -140,7 +140,7 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, co
 
 	// The surface impact of a tumbling victim: the contact the knockback move's probe made on the frame before, from Mover's tracked state
 	ImpactResult = FGSTN_ImpactStepResult();
-	if (Self && (ImpactTable || !Extensions.IsEmpty()) && Core.ActionState == EGSTN_ActionState::Tumble)
+	if (Self && (ImpactTable || CombatRules || !Extensions.IsEmpty()) && Core.ActionState == EGSTN_ActionState::Tumble)
 	{
 		FGSTN_ImpactStepInput ImpactIn;
 		ImpactIn.Frame = Frame;
@@ -169,7 +169,7 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, co
 		const bool bNewContact = Contact.IsSet() && Contact.ContactFrame == Frame - 1 && !ImpactIn.bStaggeredThisFrame && !Core.IsInHitstop(Frame)
 			&& !(Core.Hit.ImpactEndFrame != INDEX_NONE && Contact.ContactFrame < Core.Hit.ImpactEndFrame);
 		const bool bConsumed = bNewContact && Extensions.ConsumeTumbleContact(VictimContext, Contact);
-		// Without a surface table only the rules' ground bounce can resolve (StepImpact checks the floor itself)
+		// Without a surface table only the rules' defaults can resolve: the ground bounce, the wall and ceiling bounce (StepImpact checks the face)
 		if (!bConsumed)
 		{
 			FGSTN_CombatVictim::StepImpact(ImpactIn, Core, ImpactResult);
@@ -357,7 +357,7 @@ void UGSTN_CombatSimComponent::AppendImpactEvent(int32 Frame)
 	switch (ImpactResult.Outcome)
 	{
 	case EGSTN_ImpactOutcome::Splat: Event.EventType = GSTNCombatTags::Event_Impact_Splat; break;
-	case EGSTN_ImpactOutcome::Bounce: Event.EventType = GSTNCombatTags::Event_Impact_Bounce; break;
+	case EGSTN_ImpactOutcome::Bounce: Event.EventType = ImpactResult.bBump ? GSTNCombatTags::Event_Impact_Bump : GSTNCombatTags::Event_Impact_Bounce; break;
 	case EGSTN_ImpactOutcome::BreakSurface: Event.EventType = GSTNCombatTags::Event_Impact_Break; break;
 	default: return;
 	}

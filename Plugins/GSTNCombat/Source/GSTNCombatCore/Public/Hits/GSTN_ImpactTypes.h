@@ -135,6 +135,125 @@ struct GSTNCOMBATCORE_API FGSTN_GroundImpactRules
 	}
 };
 
+/** What decides a hard wall or ceiling bounce against the small bump (FGSTN_SurfaceBounceRules::Judge) */
+UENUM(BlueprintType)
+enum class EGSTN_SurfaceBounceJudge : uint8
+{
+	/** The speed into the face, the same test as the floor (FGSTN_GroundImpactRules::WantsBounceAtSpeed). Owner 2026-11-17: "same rules as the ground" */
+	Speed,
+	/** The hitstun still to run when the victim touches the face: at least BounceMinHitstunFrames = hard bounce, less = bump */
+	RemainingHitstun,
+};
+
+/**
+ * The DEFAULT bounce of a tumbling victim off a wall or a ceiling, the rules' part (owner 2026-11-17; UGSTN_CombatRules::WallImpact and
+ * CeilingImpact). Every wall and ceiling bounces a launched victim, with or without a surface table:
+ *
+ *  - HARD bounce: the same rules as the floor's hard bounce (Smash): above the speed threshold, while the hitstun runs, the victim is reflected
+ *    about the face at the restitution, still tumbling, still in hitstun. bSameAsGround reads threshold, hitstun condition, restitution and chain
+ *    limit from GroundImpact; off, from Bounce below. The chain (walls and ceilings together) is counted apart from the floor's.
+ *  - BUMP: slower than that (little knockback left) the victim does NOT get the floor's tech bounce: it is nudged off the face a little
+ *    (BumpMinSpeed..BumpMaxSpeed, scaled by the impact speed) and plays a short clip. The clip is presentation: the combat tick projects
+ *    Combat.State.Bump (+ .Wall / .Ceiling) for BumpFrames, and a reaction anim rule on that tag plays it.
+ *
+ * What a surface or the attack asks first is not touched: a surface row that splats, breaks or forces a bounce, a hit that forces an outcome
+ * (Force) and the Defence plugin's wall tech all decide before this default. A hit that forbids Bounce gets the bump, never the hard bounce
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_SurfaceBounceRules
+{
+	GENERATED_BODY()
+
+	/** Off: these faces do nothing by default (the victim slides along them, the behaviour before 2026-11-17); surface rows still apply */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce")
+	bool bEnabled = true;
+
+	/** What tells the hard bounce from the bump */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce", meta = (EditCondition = "bEnabled"))
+	EGSTN_SurfaceBounceJudge Judge = EGSTN_SurfaceBounceJudge::Speed;
+
+	/** Judge RemainingHitstun: the hard bounce needs at least this much hitstun left */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce", meta = (ClampMin = "1", ForceUnits = "Frames",
+		EditCondition = "bEnabled && Judge == EGSTN_SurfaceBounceJudge::RemainingHitstun"))
+	int32 BounceMinHitstunFrames = 20;
+
+	/** The hard bounce follows the floor's rules (GroundImpact: threshold, hitstun condition, restitution, chain limit). Off: Bounce below */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce", meta = (EditCondition = "bEnabled"))
+	bool bSameAsGround = true;
+
+	/** The hard bounce's own rules when bSameAsGround is off (bBounceBySpeed off = never hard, always the bump) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce", meta = (EditCondition = "bEnabled && !bSameAsGround"))
+	FGSTN_GroundImpactRules Bounce;
+
+	/** Too slow for the hard bounce: the small bump with its clip. Off: the victim slides along the face as before */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (EditCondition = "bEnabled"))
+	bool bBump = true;
+
+	/** Contacts at or under this speed into the face (grazing it) do nothing */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bEnabled && bBump"))
+	float NoBumpBelowSpeed = 50.f;
+
+	/** The bump only while the hitstun runs. Off (default): a tumble after its hitstun bumps too */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (EditCondition = "bEnabled && bBump"))
+	bool bBumpOnlyDuringHitstun = false;
+
+	/** Impact speeds mapped onto BumpMinSpeed..BumpMaxSpeed: at or under ScaleMinSpeed the smallest bump, at or over ScaleMaxSpeed the biggest */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bEnabled && bBump"))
+	float BumpScaleMinSpeed = 100.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bEnabled && bBump"))
+	float BumpScaleMaxSpeed = 1200.f;
+
+	/** Speed off the face of the smallest and of the biggest bump (cm/s along the face's normal; 150 cm/s is a few cm before gravity wins) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bEnabled && bBump"))
+	float BumpMinSpeed = 150.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bEnabled && bBump"))
+	float BumpMaxSpeed = 350.f;
+
+	/** Shape of the scale: 1 linear, above 1 soft impacts stay small longer */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.1", EditCondition = "bEnabled && bBump"))
+	float BumpExponent = 1.f;
+
+	/** The fraction of the speed along the face the bump keeps (0 = stops sliding, 1 = keeps all of it) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "0.0", ClampMax = "1.0", EditCondition = "bEnabled && bBump"))
+	float BumpTangentKeep = 0.5f;
+
+	/**
+	 * Length of the bump: Combat.State.Bump lives this long (the clip's window) and the hitstun lasts at least as long. Another bump cannot
+	 * start before it ends (a hard bounce can)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Surface Bounce|Bump", meta = (ClampMin = "1", ForceUnits = "Frames", EditCondition = "bEnabled && bBump"))
+	int32 BumpFrames = 14;
+
+	/** The hard bounce's rules in force: GroundImpact or Bounce. Pure */
+	const FGSTN_GroundImpactRules& HardRules(const FGSTN_GroundImpactRules& Ground) const { return bSameAsGround ? Ground : Bounce; }
+
+	/** The judgement asks for a hard bounce (before the chain limit, the surface and the victim). Pure */
+	bool WantsHardBounce(const FGSTN_GroundImpactRules& Ground, double JudgedSpeed, int32 HitstunFramesLeft) const
+	{
+		const FGSTN_GroundImpactRules& Hard = HardRules(Ground);
+		if (Judge == EGSTN_SurfaceBounceJudge::RemainingHitstun)
+		{
+			return Hard.bBounceBySpeed && JudgedSpeed > 0.0 && HitstunFramesLeft >= BounceMinHitstunFrames;
+		}
+		return Hard.WantsBounceAtSpeed(JudgedSpeed, HitstunFramesLeft > 0);
+	}
+
+	/** The bump's speed off the face for an impact speed, 0 for none (bump off, or grazing). Pure */
+	double BumpSpeed(double JudgedSpeed) const
+	{
+		if (!bBump || JudgedSpeed <= static_cast<double>(NoBumpBelowSpeed))
+		{
+			return 0.0;
+		}
+		const double Range = FMath::Max(static_cast<double>(BumpScaleMaxSpeed) - static_cast<double>(BumpScaleMinSpeed), 1.0);
+		const double Alpha = FMath::Clamp((JudgedSpeed - static_cast<double>(BumpScaleMinSpeed)) / Range, 0.0, 1.0);
+		const double Shaped = FMath::Pow(Alpha, static_cast<double>(FMath::Max(BumpExponent, 0.1f)));
+		return FMath::Lerp(static_cast<double>(BumpMinSpeed), static_cast<double>(FMath::Max(BumpMaxSpeed, BumpMinSpeed)), Shaped);
+	}
+};
+
 /** Which outcomes a surface or a victim lets through (None is always allowed) */
 USTRUCT(BlueprintType)
 struct GSTNCOMBATCORE_API FGSTN_ImpactAllowed
