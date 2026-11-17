@@ -78,6 +78,8 @@ namespace
 		F.TechEndFrame = 190;
 		F.TechType = 2;
 		F.KnockdownEndFrame = 200;
+		F.DownedStartFrame = 186;
+		F.DownedFreeFrame = 199;
 		F.GrabImmunityEndFrame = 210;
 		F.SetPushback(146, FVector(-300.0, 40.0, 0.0), 8);
 		F.MirrorValueQ = F.ShieldValueQ;
@@ -145,7 +147,7 @@ bool FGSTN_DefenceFragmentBytesTest::RunTest(const FString& Parameters)
 	const FGSTN_DefenceFragment Everything = DefMakeEverything();
 	const int32 AllBytes = DefPayloadBytes(Everything);
 	UE_LOG(LogGSTNDefenceNPTest, Display, TEXT("Fragment bytes: every group live %d B payload"), AllBytes);
-	TestEqual(TEXT("every group live"), AllBytes, 2 + 85);
+	TestEqual(TEXT("every group live"), AllBytes, 2 + 93);
 	TestTrue(TEXT("within the fragment list's payload limit"), AllBytes <= FGSTN_SyncFragmentList::MaxFragmentBytes);
 
 	// Round trip of the worst case through the list framing: every field survives and nothing is left in the reader
@@ -193,6 +195,8 @@ bool FGSTN_DefenceFragmentBytesTest::RunTest(const FString& Parameters)
 	Differs(TEXT("tech end"), [](FGSTN_DefenceFragment& F) { F.TechEndFrame += 1; });
 	Differs(TEXT("tech type"), [](FGSTN_DefenceFragment& F) { F.TechType += 1; });
 	Differs(TEXT("knockdown"), [](FGSTN_DefenceFragment& F) { F.KnockdownEndFrame += 1; });
+	Differs(TEXT("downed start"), [](FGSTN_DefenceFragment& F) { F.DownedStartFrame += 1; });
+	Differs(TEXT("downed free"), [](FGSTN_DefenceFragment& F) { F.DownedFreeFrame += 1; });
 	Differs(TEXT("grab immunity"), [](FGSTN_DefenceFragment& F) { F.GrabImmunityEndFrame += 1; });
 	Differs(TEXT("pushback start"), [](FGSTN_DefenceFragment& F) { F.PushbackStartFrame += 1; });
 	Differs(TEXT("pushback velocity"), [](FGSTN_DefenceFragment& F) { F.PushbackVelocityQ[1] += 1; });

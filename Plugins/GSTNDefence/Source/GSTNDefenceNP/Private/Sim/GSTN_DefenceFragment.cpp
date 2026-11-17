@@ -100,7 +100,8 @@ bool FGSTN_DefenceFragment::operator==(const FGSTN_DefenceFragment& Other) const
 		&& ShieldStunEndFrame == Other.ShieldStunEndFrame && ParryRecoveryEndFrame == Other.ParryRecoveryEndFrame && BreakEndFrame == Other.BreakEndFrame
 		&& PunishEndFrame == Other.PunishEndFrame && PunishKind == Other.PunishKind
 		&& TechLockoutEndFrame == Other.TechLockoutEndFrame && LastTechPressFrame == Other.LastTechPressFrame && TechEndFrame == Other.TechEndFrame && TechType == Other.TechType
-		&& KnockdownEndFrame == Other.KnockdownEndFrame && GrabImmunityEndFrame == Other.GrabImmunityEndFrame
+		&& KnockdownEndFrame == Other.KnockdownEndFrame && DownedStartFrame == Other.DownedStartFrame && DownedFreeFrame == Other.DownedFreeFrame
+		&& GrabImmunityEndFrame == Other.GrabImmunityEndFrame
 		&& SamePushback(*this, Other)
 		&& MirrorValueQ == Other.MirrorValueQ && MirrorFrame == Other.MirrorFrame
 		&& HitFlags == Other.HitFlags && PendingStartFrame == Other.PendingStartFrame && PendingStartKind == Other.PendingStartKind;
@@ -122,7 +123,7 @@ void FGSTN_DefenceFragment::NetSerialize(FArchive& Ar)
 		Mask |= (ShieldStunEndFrame != INDEX_NONE || ParryRecoveryEndFrame != INDEX_NONE || BreakEndFrame != INDEX_NONE) ? Presence::Stuns : 0;
 		Mask |= (PunishEndFrame != INDEX_NONE || PunishKind != 0) ? Presence::Punish : 0;
 		Mask |= (TechLockoutEndFrame != INDEX_NONE || LastTechPressFrame != INDEX_NONE || TechEndFrame != INDEX_NONE || TechType != 0) ? Presence::Tech : 0;
-		Mask |= KnockdownEndFrame != INDEX_NONE ? Presence::Knockdown : 0;
+		Mask |= (KnockdownEndFrame != INDEX_NONE || DownedStartFrame != INDEX_NONE || DownedFreeFrame != INDEX_NONE) ? Presence::Knockdown : 0;
 		Mask |= GrabImmunityEndFrame != INDEX_NONE ? Presence::GrabImmunity : 0;
 		Mask |= !SamePushback(*this, Defaults) ? Presence::Pushback : 0;
 		Mask |= (MirrorValueQ != 0 || MirrorFrame != INDEX_NONE) ? Presence::Mirror : 0;
@@ -155,7 +156,7 @@ void FGSTN_DefenceFragment::NetSerialize(FArchive& Ar)
 		}
 		if (Mask & Presence::Knockdown)
 		{
-			Ar << KnockdownEndFrame;
+			Ar << KnockdownEndFrame << DownedStartFrame << DownedFreeFrame;
 		}
 		if (Mask & Presence::GrabImmunity)
 		{
@@ -221,7 +222,7 @@ void FGSTN_DefenceFragment::NetSerialize(FArchive& Ar)
 	}
 	if (Mask & Presence::Knockdown)
 	{
-		Ar << KnockdownEndFrame;
+		Ar << KnockdownEndFrame << DownedStartFrame << DownedFreeFrame;
 	}
 	if (Mask & Presence::GrabImmunity)
 	{

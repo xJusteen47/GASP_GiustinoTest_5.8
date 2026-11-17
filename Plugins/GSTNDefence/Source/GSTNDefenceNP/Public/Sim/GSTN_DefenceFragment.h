@@ -122,6 +122,9 @@ struct GSTNDEFENCENP_API FGSTN_DefenceFragment : public FGSTN_SyncFragment
 	uint8 TechType = 0;
 	/** The downed state ends here (exclusive); MAX_int32 = downed until a get-up (MaxDownedFrames 0, the default) */
 	int32 KnockdownEndFrame = INDEX_NONE;
+	/** The frame the current (or last) downed state started, and its first frame free to act: the carry window of the roll's dodge press */
+	int32 DownedStartFrame = INDEX_NONE;
+	int32 DownedFreeFrame = INDEX_NONE;
 	int32 GrabImmunityEndFrame = INDEX_NONE;
 
 	// ---- F8: the last hit's DI/SDI flags (GSTNDefenceHitFlags), and a start the victim step decided for the tick extension of the same frame

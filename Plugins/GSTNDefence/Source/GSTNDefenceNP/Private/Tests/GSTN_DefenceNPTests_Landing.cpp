@@ -285,6 +285,41 @@ bool FGSTN_DefenceLandingRollInputTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DefenceLandingRollCarryTest, "GSTNDefence.NP.Landing.RollPressCarriedFromDowned", TestFlags)
+bool FGSTN_DefenceLandingRollCarryTest::RunTest(const FString& Parameters)
+{
+	// Owner playtest 2026-11-17: a dodge pressed during the bounce/ground hit (not yet free) was lost when the body became free 20 frames later
+	FGSTN_GroundBounceRules Rules;
+	Rules.RollPressBufferFrames = 6;
+	FGSTN_InputHistory History;
+	FGSTN_InputSample Down;
+	Down.Frame = 105;
+	Down.Held = 2u;
+	Down.Pressed = 2u;
+	History.Append(Down);
+	FGSTN_InputSample Up;
+	Up.Frame = 106;
+	Up.Released = 2u;
+	History.Append(Up);
+
+	// Downed on 100, free on 125: the press of 105 is 20 frames old, past the plain buffer
+	int32 From = INDEX_NONE;
+	int32 Until = INDEX_NONE;
+	TestFalse(TEXT("plain buffer alone loses it"), FGSTN_TumbleLanding::WantsDownedRoll(Rules, History, 1, 125, 0.8));
+	TestTrue(TEXT("a carry window on the first free frame"), FGSTN_TumbleLanding::DownedRollCarry(Rules, 100, 125, 125, From, Until));
+	TestEqual(TEXT("from the buffer before the downed start"), From, 95);
+	TestEqual(TEXT("until the first free frame"), Until, 125);
+	TestTrue(TEXT("the carried press rolls on the first free frame"), FGSTN_TumbleLanding::WantsDownedRoll(Rules, History, 1, 125, 0.8, From, Until));
+	TestTrue(TEXT("and on the last buffered frame after it (6 counting the free frame as 1)"), FGSTN_TumbleLanding::DownedRollCarry(Rules, 100, 125, 130, From, Until)
+		&& FGSTN_TumbleLanding::WantsDownedRoll(Rules, History, 1, 130, 0.8, From, Until));
+	TestFalse(TEXT("no carry once the buffer after freedom is over (a stick pushed later to walk never rolls)"), FGSTN_TumbleLanding::DownedRollCarry(Rules, 100, 125, 131, From, Until));
+	TestFalse(TEXT("the carried press still needs the stick"), FGSTN_TumbleLanding::WantsDownedRoll(Rules, History, 1, 125, 0.2, 95, 125));
+	TestFalse(TEXT("no carry before the body is free"), FGSTN_TumbleLanding::DownedRollCarry(Rules, 100, INDEX_NONE, 110, From, Until));
+	TestFalse(TEXT("a press older than the downed start and its buffer is not carried"), FGSTN_TumbleLanding::DownedRollCarry(Rules, 120, 140, 140, From, Until)
+		&& FGSTN_TumbleLanding::WantsDownedRoll(Rules, History, 1, 140, 0.8, From, Until));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DefenceLandingAutoGetupScopeTest, "GSTNDefence.NP.Landing.AutoGetupScope", TestFlags)
 bool FGSTN_DefenceLandingAutoGetupScopeTest::RunTest(const FString& Parameters)
 {

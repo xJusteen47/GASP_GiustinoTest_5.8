@@ -121,7 +121,22 @@ namespace
 	}
 }
 
-bool FGSTN_TumbleLanding::WantsDownedRoll(const FGSTN_GroundBounceRules& Rules, const FGSTN_InputHistory& History, int32 DodgeButton, int32 Frame, double StickSize)
+bool FGSTN_TumbleLanding::DownedRollCarry(const FGSTN_GroundBounceRules& Rules, int32 DownedStartFrame, int32 DownedFreeFrame, int32 Frame, int32& OutFrom, int32& OutUntil)
+{
+	OutFrom = INDEX_NONE;
+	OutUntil = INDEX_NONE;
+	const int32 Buffer = FMath::Max(Rules.RollPressBufferFrames, 1);
+	if (DownedStartFrame == INDEX_NONE || DownedFreeFrame == INDEX_NONE || DownedFreeFrame < DownedStartFrame || Frame >= DownedFreeFrame + Buffer)
+	{
+		return false;
+	}
+	OutFrom = DownedStartFrame - Buffer + 1;
+	OutUntil = DownedFreeFrame;
+	return OutUntil > OutFrom;
+}
+
+bool FGSTN_TumbleLanding::WantsDownedRoll(const FGSTN_GroundBounceRules& Rules, const FGSTN_InputHistory& History, int32 DodgeButton, int32 Frame, double StickSize,
+	int32 CarryFrom, int32 CarryUntil)
 {
 	if (StickSize < HoldStickMagnitude)
 	{
@@ -140,7 +155,11 @@ bool FGSTN_TumbleLanding::WantsDownedRoll(const FGSTN_GroundBounceRules& Rules, 
 	for (int32 Age = 0; Age < History.GetNumButtonEvents(); ++Age)
 	{
 		const FGSTN_ButtonEvent& Event = History.GetButtonEvent(History.GetButtonSlot(Age));
-		if (!Event.bRelease && Event.Button == DodgeButton && Event.Frame >= Oldest && Event.Frame <= Frame)
+		if (Event.bRelease || Event.Button != DodgeButton || Event.Frame > Frame)
+		{
+			continue;
+		}
+		if (Event.Frame >= Oldest || (CarryFrom != INDEX_NONE && Event.Frame >= CarryFrom && Event.Frame < CarryUntil))
 		{
 			return true;
 		}
@@ -356,6 +375,9 @@ void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FG
 		DownedEnd = LandingFrame + Bounce.MaxDownedFrames;
 	}
 	Fragment.KnockdownEndFrame = DownedEnd;
+	// The carry of the get-up roll's dodge press starts here; the first free frame is stamped by AfterClocks
+	Fragment.DownedStartFrame = Frame;
+	Fragment.DownedFreeFrame = INDEX_NONE;
 
 	// The entity's own gravity, not 980 (gravity audit 2026-11-16: a low-gravity zone floats longer, so the flight lasts longer); 980 without a
 	// Mover. Near zero gravity the bounce is capped at 10 s rather than never ending
@@ -525,8 +547,20 @@ void FGSTN_TumbleLanding::AfterClocks(FGSTN_CombatTickContext& Context, const FG
 	// dodge button is the button layout's Movement.Dodge, never a fixed button
 	const int32 DodgeButton = Context.Buttons
 		? Context.Buttons->GetIndex(UGSTN_ButtonLayout::GetButton(TEXT("Movement.Dodge"), GSTNCombatButtonTags::Button_Dodge.GetTag())) : INDEX_NONE;
-	if (Fragment && Fragment->IsKnockedDown(Frame) && Context.Out.Core.ActionState == EGSTN_ActionState::Actionable && Context.bGrounded
-		&& Data.Rules && WantsDownedRoll(Data.Rules->GroundBounce, Context.Out.Core.Input.History, DodgeButton, Frame, Context.StickOnPlane.Size())
+	const bool bDownedFree = Fragment && Fragment->IsKnockedDown(Frame) && Context.Out.Core.ActionState == EGSTN_ActionState::Actionable && Context.bGrounded;
+	// The first frame the downed body is free: presses made before it (during the bounce and ground hit) are carried to it (owner 2026-11-17)
+	if (bDownedFree && (Fragment->DownedFreeFrame == INDEX_NONE || Fragment->DownedFreeFrame < Fragment->DownedStartFrame))
+	{
+		Fragment->DownedFreeFrame = Frame;
+	}
+	int32 CarryFrom = INDEX_NONE;
+	int32 CarryUntil = INDEX_NONE;
+	if (bDownedFree && Data.Rules)
+	{
+		DownedRollCarry(Data.Rules->GroundBounce, Fragment->DownedStartFrame, Fragment->DownedFreeFrame, Frame, CarryFrom, CarryUntil);
+	}
+	if (bDownedFree
+		&& Data.Rules && WantsDownedRoll(Data.Rules->GroundBounce, Context.Out.Core.Input.History, DodgeButton, Frame, Context.StickOnPlane.Size(), CarryFrom, CarryUntil)
 		&& Data.GetupRoll.IsValid() && Context.Services)
 	{
 		const bool bBack = Data.GetupRollBack.IsValid() && Context.StickOnPlane.Dot(ReadFacing(Context.Owner)) < 0.0;

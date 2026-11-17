@@ -60,8 +60,20 @@ struct GSTNDEFENCENP_API FGSTN_TumbleLanding
 	/**
 	 * The get-up roll's input on Frame (owner 2026-11-17): StickOnly = the stick held at HoldStickMagnitude; DodgeAndStick = that plus a press of
 	 * DodgeButton (history bit, INDEX_NONE = no such button: never) in the last RollPressBufferFrames frames, Frame included. Pure
+	 *
+	 * Carried presses (owner playtest 2026-11-17: "I can't buffer the dodge from the downed state"): a press in [CarryFrom, CarryUntil) also counts.
+	 * The caller passes the frames the body was downed but not yet free to act (the bounce and ground hit clips, which can outlast the buffer),
+	 * see DownedRollCarry. INDEX_NONE = no carry
 	 */
-	static bool WantsDownedRoll(const FGSTN_GroundBounceRules& Rules, const FGSTN_InputHistory& History, int32 DodgeButton, int32 Frame, double StickSize);
+	static bool WantsDownedRoll(const FGSTN_GroundBounceRules& Rules, const FGSTN_InputHistory& History, int32 DodgeButton, int32 Frame, double StickSize,
+		int32 CarryFrom = INDEX_NONE, int32 CarryUntil = INDEX_NONE);
+
+	/**
+	 * The carry window of WantsDownedRoll on Frame: presses from RollPressBufferFrames before the downed state started (DownedStartFrame) up to the
+	 * first frame the body was free (DownedFreeFrame, exclusive) still count for RollPressBufferFrames frames after that first free frame, so a dodge
+	 * pressed during the bounce rolls as soon as the body can, and an old press never rolls a stick pushed much later to walk. False = no carry. Pure
+	 */
+	static bool DownedRollCarry(const FGSTN_GroundBounceRules& Rules, int32 DownedStartFrame, int32 DownedFreeFrame, int32 Frame, int32& OutFrom, int32& OutUntil);
 
 	/** Whether MaxDownedFrames gets this entity up by itself: always for Everyone, only without a player for DummiesOnly. Pure */
 	static bool AppliesAutoGetup(EGSTN_AutoGetupScope Scope, bool bPlayerControlled);
