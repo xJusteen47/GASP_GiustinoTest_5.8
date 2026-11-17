@@ -24,8 +24,8 @@ Heavy,GA_Heavy_ThrowBack,throw_Back,15.0,120,2500.0,1694,100,KO,2500,2501,tumble
 Heavy,GA_Heavy_ThrowUp,throw_Up,11.0,89,2600.0,2159,70,mid,2600,2600,tumble,5324,3173,tumble,12133,4033,tumble,16033,4750,tumble,0,0,0,0,4210,15167,4033,12133,3768,8667,setup_test_kit_archetypes.py
 Heavy,GA_Heavy_ThrowDown,throw_Down,10.0,85,1300.0,1063,40,combo,1300,1301,launch,2662,1603,launch,6067,2057,tumble,8017,2435,tumble,0,0,17,67,2149,7583,2057,6067,1918,4333,setup_test_kit_archetypes.py
 Playtest,GA_Playtest_GroundHit,ground_hit,8.0,30,780.0,462,60,combo,780,781,launch,1597,1159,launch,3640,1726,launch,4810,2198,tumble,0,0,49,108,1839,4550,1726,3640,1556,2600,setup_playtest_launch_1117.py (root hitbox; other hitboxes keep K at 0 % too)
-Overlord,GA_Overlord_Jab1,overlord,3.0,30,150.0,0,40,combo,150,171,stagger,307,297,stagger,700,486,stagger,925,644,push,112,184,,,522,875,486,700,432,500,setup_overlord_jab_kit.py
-Overlord,GA_Overlord_Jab2,overlord,7.0,35,550.0,298,50,combo,550,550,push,1126,834,launch,2567,1259,launch,3392,1613,launch,16,29,74,177,1343,3208,1259,2567,1132,1833,setup_overlord_jab_kit.py
+Overlord,GA_Overlord_Jab1,overlord_jab1,3.0,30,150.0,315,20,combo,150,401,stagger,307,464,stagger,700,558,push,925,637,push,112,222,,,576,875,558,700,531,500,setup_overlord_jab_kit.py
+Overlord,GA_Overlord_Jab2,overlord_jab2,7.0,35,550.0,923,74,mid,550,1296,launch,1126,1716,launch,2567,2345,tumble,3392,2870,tumble,16,0,74,49,2470,3208,2345,2567,2158,1833,setup_overlord_jab_kit.py
 Overlord,GA_Overlord_Dropkick,overlord,10.0,40,400.0,0,80,mid,400,475,stagger,819,1080,launch,1867,1987,tumble,2467,2743,tumble,35,19,98,88,2172,2333,1987,1867,1710,1333,setup_overlord_dropkick_kit.py
 Overlord,GA_Overlord_DAirV9,overlord,11.0,75,450.0,9,70,mid,450,450,stagger,921,1023,launch,2100,1883,tumble,2775,2600,tumble,28,21,89,95,2060,2625,1883,2100,1618,1500,setup_overlord_dair_kit.py
 Examples,GA_Example_GroundBounce,other,12.0,-45,1900.0,1432,70,mid,1900,1901,tumble,3890,2518,tumble,8867,3444,tumble,11717,4216,tumble,0,0,0,0,3636,11083,3444,8867,3156,6333,setup_launch_impacts.py

@@ -63,6 +63,7 @@ def first_percent_reaching_old(k_target, base, weight=100.0, limit=300):
 
 # ---- Roles: how a move's BKB is chosen. Every role names its KBG (combo <= 60, KO >= 100). An anchor fixes K at one percent:
 #   ('at', K, percent)  K reaches K at that percent (before the hit) on weight 100: jab 'launch at 80 %', strong 'tumble at 40 %'
+#   ('bkb', value)      the BKB itself in cm/s (a reference move's BKB x UnitScale)
 #   ('keep0',)          K at 0 % stays what it is today (the old base): the move feels the same at 0 % and gains its own growth after
 def role_spec(role, kit, tilt_preset='hop0'):
     """(kbg, anchor) of a role in a kit"""
@@ -85,12 +86,20 @@ def role_spec(role, kit, tilt_preset='hop0'):
         if kit == 'Heavy' and d == 'Back':
             kbg = 100
         return kbg, ('keep0',)
-    if role == 'overlord':   # NOT approved knockback (owner scope: list them). Same K at 0 %, growth per move in OVERLORD_KBG
+    # Owner 2026-11-17 20:45Z, scope: Overlord jab 1 / jab 2 only: jab 1 launches little so it combos into jab 2, jab 2 launches far.
+    # Jab 1: K 400 at 0 % (stagger in place, the 31 f stagger lock holds it for jab 2), KBG 20: stays below push back (540) until ~110 %.
+    # Jab 2 (owner 20:45Z "it stays a jab, stick to Ganondorf's jab"): Ganondorf's Ultimate jab (Thunder Punch, 11 %, BKB 41, KBG 74,
+    # ssbwiki Ganondorf_(SSBU)) with jab 2's own damage (7 %): BKB 41 x 22.5 = 923 cm/s, KBG 74. Launches at 0 % (~1300), tumbles from ~49 %
+    if role == 'overlord_jab1':
+        return 20, ('at', 400.0, 0)
+    if role == 'overlord_jab2':
+        return 74, ('bkb', 41 * UNIT_SCALE)
+    if role == 'overlord':   # owner OK 2026-11-17 (option 3A): same K at 0 %, growth per move in OVERLORD_KBG
         return None, ('keep0',)
     return 70, ('keep0',)    # anything found on a kit and not listed: same K at 0 %, middle growth
 
 
-OVERLORD_KBG = {'GA_Overlord_Jab1': 40, 'GA_Overlord_Jab2': 50, 'GA_Overlord_Dropkick': 80, 'GA_Overlord_DAir': 70}
+OVERLORD_KBG = {'GA_Overlord_Dropkick': 80, 'GA_Overlord_DAir': 70}
 
 
 def overlord_kbg(name):
@@ -106,6 +115,8 @@ def convert(role, kit, damage, old_base, tilt_preset='hop0', name=''):
     if kbg is None:
         kbg = overlord_kbg(name)
     # Rounded up to the whole cm/s, so the anchor is met at its percent (a round down would move 'tumble at 40 %' to 41 %)
+    if anchor[0] == 'bkb':
+        return math.ceil(anchor[1] - 1e-9), kbg
     if anchor[0] == 'at':
         return math.ceil(bkb_for(anchor[1], anchor[2], damage, kbg) - 1e-9), kbg
     return math.ceil(bkb_for(old_base, 0, damage, kbg) - 1e-9), kbg
@@ -140,8 +151,8 @@ MOVES = [
     ('Heavy', 'Heavy', 'GA_Heavy_ThrowDown', 'throw_Down', 10.0, 1300.0, 85, 'setup_test_kit_archetypes.py'),
     ('Playtest', 'Playtest', 'GA_Playtest_GroundHit', 'ground_hit', 8.0, 780.0, 30, 'setup_playtest_launch_1117.py (root hitbox; other hitboxes keep K at 0 % too)'),
     # Overlord moves on the playtest kit / their test kits: NOT approved knockback, listed for the owner (scope of 2B). Same K at 0 %
-    ('Overlord', 'Overlord', 'GA_Overlord_Jab1', 'overlord', 3.0, 150.0, 30, 'setup_overlord_jab_kit.py'),
-    ('Overlord', 'Overlord', 'GA_Overlord_Jab2', 'overlord', 7.0, 550.0, 35, 'setup_overlord_jab_kit.py'),
+    ('Overlord', 'Overlord', 'GA_Overlord_Jab1', 'overlord_jab1', 3.0, 150.0, 30, 'setup_overlord_jab_kit.py'),
+    ('Overlord', 'Overlord', 'GA_Overlord_Jab2', 'overlord_jab2', 7.0, 550.0, 35, 'setup_overlord_jab_kit.py'),
     ('Overlord', 'Overlord', 'GA_Overlord_Dropkick', 'overlord', 10.0, 400.0, 40, 'setup_overlord_dropkick_kit.py'),
     ('Overlord', 'Overlord', 'GA_Overlord_DAirV9', 'overlord', 11.0, 450.0, 75, 'setup_overlord_dair_kit.py'),
     # Example impact moves (KIT_Example_Impacts), not on the four kits: converted too so they do not turn flat

@@ -14,13 +14,12 @@ Branch `claude/project-thread-8xfrpx` from cocsel 3fd73243. Owner 2B, scope: sta
 - Guards: setup_playtest_kit.py and setup_launch_impacts.py no longer write percent_growth on a non weight driven model.
 - Tests (GSTN_CombatTests_Reaction.cpp): SmashFormulaKnownValues (3 hand cases of the published formula; no online calculator reachable from the cloud),
   SmashBaseInCmPerSecond (equivalence + F2 anchors), SmashMonotonicDeterministic, SwitchKnockbackModel.
-## Applied choices (rule 6, DA CONFERMARE)
-1. Tilts default hop0 (launch at 0 % at 30°, as the 11-17 playtest script already set them, owner words) instead of the brief's 19/11/4 %, which described
-   the values before that script. `--tilts smash` gives 19/11/4.
-2. Heavy jab (14 %, base 900) launched at 0 %: now from 80 % like the other jabs (brief target).
-3. Overlord moves (jab1, jab2, dropkick, dair V9; knockback never approved) converted by default, same K at 0 %, KBG 40/50/80/70; written into their
-   timeline asset when they use one (hitbox data only). `--no-overlord` leaves them flat. Dropkick/jab1: BKB clamps at 0, K at 0 % 475/171 (was 400/150).
-4. KBG per role: jab 40/30/20, tilt 90/70/70, special 60/80/100, strong 100 (tumble 40 %), throws F60 B80 (heavy 100) U70 D40, ground hit 60, others 70.
+## Owner decisions (2026-11-17 20:45Z: "vanno bene le consigliate")
+1. Tilts hop0 (launch at 0 % at 30°, the 11-17 playtest) is the default; `--tilts smash` gives 19/11/4 %. 2. Heavy jab from 80 % like the other jabs.
+3. Overlord moves converted (same K at 0 %): dropkick KBG 80, dair V9 70. `--no-overlord` leaves them flat.
+4. RULE, scope Overlord jab 1 / jab 2 only: jab 1 launches little so it combos into jab 2 (K 400 at 0 %, KBG 20: stagger in place until ~110 %,
+   the 31 f stagger lock holds it); jab 2 stays a JAB modelled on Ganondorf's Ultimate jab (BKB 41 -> 923 cm/s, KBG 74, ssbwiki; its own 7 %):
+   launches at 0 % (~1300), tumbles from ~49 %. Other KBG per role: jab 40/30/20, tilt 90/70/70, special 60/80/100, strong 100, throws F60 B80 (heavy 100) U70 D40.
 ## What changes elsewhere (flagged, not retuned)
 - High % is far less extreme: old model ×5-6 at 100 % (growth 1.8 × curve 0.6), new ×2-4. Hitstun = 0.02·K follows (e.g. light throw F at 100 %: 121 -> 39 f).
 - Hard bounce / tech / balloon read K or speed: fewer hard bounces at high %. Weight spread 80 vs 140 at 100 %: ×1.75 -> ×1.2-1.3 (formula 200/(w+100)).

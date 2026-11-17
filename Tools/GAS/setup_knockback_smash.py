@@ -101,7 +101,7 @@ def convert_move(kit, cls, command, model, tilts, overlord, before, after, done)
         return []
     done.add(name)
     role, row_kit = _role(kit, name, command)
-    if role == 'overlord' and not overlord:
+    if role.startswith('overlord') and not overlord:
         log(f'{kit} {name}: Overlord move skipped (--no-overlord)')
         return []
     desc = L.describe_move_knockback(cls)
