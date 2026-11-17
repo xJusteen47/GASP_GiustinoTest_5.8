@@ -26,6 +26,13 @@ Regola 10 (video in-game guardato, PASS/FAIL, max 3 giri di posa), 13 (2-3 tratt
 Totale ~218 $ (+ ~6 $ fix aria). **Prima ondata** per giudicare il feeling: M0+M1+M2+M5 (~48 $, in parallelo: cloud ×2, portatile, fisso) poi M3 (~41 $): ~89 $.
 Ogni checkpoint di animazione = 1 thread di blocking + 1 di polish, review cloud inclusa nella stima. Posti (regola 7): fisso = animazione (agy), portatile = VFX, cloud ≤2 = codice/review.
 
+## 2b. Strati procedurali: Control Rig e animazione fisica (owner 12:36Z, domanda)
+- **Control Rig** (IK, non fisica): il CR del wall slide dell'owner entra in M4 (dentro il wall layer, mani proiettate sul muro, piano anim-layer). Stesso strumento, nello stesso checkpoint della clip: foot IK su pendii e skid (M4), lean/aim del busto (M8), mani sul bordo nel ledge (futuro). Costo già nelle stime.
+- **Animazione fisica stile Fortnite in volo/caduta** = nuovo **M9** (dopo M6, serve la clip di tumble): (a) moto secondario con nodo RigidBody/AnimDynamics nell'ABP (braccia, gambe, mantello/capelli) in caduta, tumble, salto lungo; (b) Physics Control con blend parziale verso la posa animata per il "dimenarsi" in aria e l'impatto del knockdown/rimbalzo; mai ragdoll completo (la posa deve restare leggibile, regola silhouette). Cloud Opus high (codice) + fisso (tuning, cattura, review regola 10): ~18 $.
+- **Online**: solo presentazione, mai nella sim, mai replicata (ogni macchina la calcola dal suo stato: piccole differenze visive accettate). VINCOLO: le hurtbox che seguono le ossa (hurtbox-follow-bones) devono leggere la posa PRIMA della fisica, sennò un client vede/colpisce un corpo diverso: va verificato e fissato in M9.
+- **PC toaster**: fisica attiva solo nei stati che la usano (aria, tumble, knockdown), corpi limitati (~6-10), LOD: spenta oltre una distanza e per personaggi fuori camera; impostazione grafica on/off. Costo misurato con stat anim prima della review.
+Totale piano con M9: ~236 $.
+
 ## 3. Rimbalzo muri/soffitti (owner 12:30Z, ambito: vittima che tocca muro o soffitto)
 Applicato (regola 6), da confermare (13d):
 - Default per OGNI superficie non-pavimento: vittima in hitstun/tumble che tocca muro o soffitto rimbalza (riflette la velocità normale) con una clip breve. Lo SPLAT (tabella superfici / Force Splat) e il rimbalzo FORZATO dalla hitbox (Force Bounce) restano cose separate e vincono sul default.
