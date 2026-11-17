@@ -15,4 +15,8 @@ bounce with a clip, NOT the full tech bounce. Splat and hitbox-forced bounce are
 1. "Poco hitstun" judged by SPEED like the ground (owner's clarification); hitstun judge available as setting.
 2. Bump size scales with impact; owner said "piccolo piccolo": 150-350 cm/s ≈ 2-8 cm off the wall. Tune in CombatRules_Standard > Wall Impact.
 3. No clip exists: desktop must add reaction anim rules (RequiredTags Combat.State.Bump.Wall / .Ceiling, priority above Tumble, End BlendOut) with a placeholder.
-## Desktop checks: see results below.
+## Desktop checks (fisso, worktree `GASP_Giustino2_wallbounce`, _ue59 untouched)
+Build Editor Win64 Dev UE 5.9 OK 580 s (`Saved\Logs\ci\wallbounce-build1.log`). Tests (Select-String "Test Completed. Result=\{(\w+)\}"):
+`GSTNCombat.NP.Hits`+`GSTNDefence` 163/0 (`wallbounce-test1.log.ue.log`), both new tests pass; full `GSTN` 1720/1 (`wallbounce-test2.log.ue.log`): only
+`GSTNCombat.Editor.Preview.Spike.MontageSampling`, asset load errors (AS_OverlordDropkick_Land: no target USkeleton) in the fresh worktree, not this change (not rerun on base).
+Remains: bump clip rule + placeholder in the reaction anim set (desktop, asset edit); PIE check on L_Test_Combat wall. Cost estimate ~8 $ (Opus, ~95k context, 1 build).
