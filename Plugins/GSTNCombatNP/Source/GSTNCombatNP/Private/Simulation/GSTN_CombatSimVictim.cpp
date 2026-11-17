@@ -511,6 +511,8 @@ void UGSTN_CombatSimComponent::ProjectStateTags(const FGSTN_CombatSyncCore& Core
 	if (AbilitySystem)
 	{
 		FGSTN_CombatVictim::ProjectStateTags(*AbilitySystem, Core, Frame);
+		// Set from the state like the reaction tags: the hook a dodge landing clip attaches to (owner 2026-11-17)
+		AbilitySystem->SetLooseGameplayTagCount(GSTNCombatTags::State_Dodge_EndLag, Core.DodgeLanding.IsEndLag(Frame) ? 1 : 0);
 		ProjectAirCrouchTag(Core);
 		ProjectGroundCrouch(Core);
 	}

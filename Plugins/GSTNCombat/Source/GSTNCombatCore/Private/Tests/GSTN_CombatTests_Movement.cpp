@@ -211,7 +211,7 @@ bool FGSTN_MoveTimelinesTest::RunTest(const FString& Parameters)
 	if (TestNotNull(TEXT("the ground dodge has a movement track"), Movement))
 	{
 		TestTrue(TEXT("it ends on landing"), Movement->bCancelOnLand);
-		TestEqual(TEXT("and lands straight into actionable: no landing lag"), Movement->LandingLagFrames, 0);
+		TestEqual(TEXT("with the ending lag of the dodge (owner 2026-11-17 20:13Z)"), Movement->LandingLagFrames, FGSTN_MoveTimelines::DefaultDodgeEndLagFrames);
 		TestEqual(TEXT("full air control while it flies (owner 2026-11-17: a highly controllable long jump)"), Movement->AirControlOverride, 1.f);
 	}
 	TestEqual(TEXT("blocking until it lands: nothing actionable before the end"), GroundData.FirstActionableFrame, GroundData.TotalFrames);
@@ -219,8 +219,8 @@ bool FGSTN_MoveTimelinesTest::RunTest(const FString& Parameters)
 
 	// The air dodge for now is the ground one, blocking up to the air limit
 	const FGSTN_MoveTimelineParams AirFromGround = FGSTN_MoveTimelines::AirDodgeFromGroundParams(GroundMove, TickRate);
-	TestTrue(TEXT("air dodge from the ground one: ends on landing, no lag"), AirFromGround.bCancelOnLand && AirFromGround.LandingLagFrames == 0);
-	TestEqual(TEXT("blocking for the air limit"), AirFromGround.FirstActionableFrame, FGSTN_MoveTimelines::AirDodgeMaxAirFrames);
+	TestTrue(TEXT("air dodge from the ground one: ends on landing, the same lag"), AirFromGround.bCancelOnLand && AirFromGround.LandingLagFrames == Ground.LandingLagFrames);
+	TestEqual(TEXT("blocking for the air limit and the lag"), AirFromGround.FirstActionableFrame, FGSTN_MoveTimelines::AirDodgeMaxAirFrames + Ground.LandingLagFrames);
 	TestEqual(TEXT("the same feet window as the ground dodge"), AirFromGround.HurtboxFrames, Ground.HurtboxFrames);
 	TestTrue(TEXT("the timeline has room for a heavier gravity"), GroundData.TotalFrames > Arc.AirFrames);
 

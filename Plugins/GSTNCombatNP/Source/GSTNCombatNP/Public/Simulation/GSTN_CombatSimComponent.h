@@ -427,6 +427,20 @@ public:
 	bool ReadRunningSlide(int32& OutStartFrame, const FGSTN_MomentumSlide*& OutSlide) const;
 
 	/**
+	 * The dodge landing (owner 2026-11-17, FGSTN_DodgeLandingState): called by a dodge's ability on the frame it sees the ground again, inside the
+	 * ability system's simulation step (after the combat tick of the frame, like StartTimelineFromAbility). Writes the ending lag (the kit's,
+	 * else MoveLandingLagFrames) and the kit's re-dodge lock into this frame's combat state, projects the lag tag and queues the kit's belly slide.
+	 * Returns the ending lag the ability holds its timeline for. Nothing is written outside the simulation step or while a frame is restored
+	 */
+	int32 OpenDodgeLanding(int32 LandedFrame, int32 MoveLandingLagFrames);
+
+	/**
+	 * The belly slide of the dodge landing the frame being simulated is in: the landing frame and the kit's slide data, false outside the ending
+	 * lag. Read by the slide move (FGSTN_LayeredMove_MomentumSlide::bLandingSlide) from Mover's tick, like ReadRunningSlide
+	 */
+	bool ReadLandingSlide(int32& OutLandedFrame, const FGSTN_MomentumSlide*& OutSlide) const;
+
+	/**
 	 * True while the combat state of the frame being simulated leaves the locomotion to the player (Actionable: no timeline, no hit
 	 * reaction, no link). Read by the run skid move from Mover's tick (the combat model ticked before it in the same frame)
 	 */
@@ -1068,6 +1082,9 @@ private:
 	/** The state the gate (IsCommandAllowed) reads: set at the top of the combat tick, valid only inside it */
 	const FGSTN_CombatSyncCore* GateCore = nullptr;
 
+	/** The frame the gate is asked for (the dodge landing's windows are frame ranges): set with GateCore */
+	int32 GateFrame = INDEX_NONE;
+
 	// The assets InputConfig / SlotBindings resolved to at setup, strongly held because the table points into them and the
 	// input source reads the config every frame. Never resolved in a tick
 	UPROPERTY(Transient)
@@ -1266,6 +1283,10 @@ private:
 	/** Instant effect that queues the momentum slide of a ground move (FGSTN_LayeredMove_MomentumSlide); replace for a game with its own */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
 	TSubclassOf<UGameplayEffect> MomentumSlideEffect;
+
+	/** Instant effect that queues the belly slide of a dodge landing (FGSTN_LayeredMove_MomentumSlide, bLandingSlide); replace for a game with its own */
+	UPROPERTY(EditDefaultsOnly, Category = "Combat|Timeline")
+	TSubclassOf<UGameplayEffect> DodgeLandingSlideEffect;
 
 	/** Instant effect that queues a run skid (FGSTN_LayeredMove_RunSkid); replace for a game with its own */
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Locomotion")

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Jump/GSTN_JumpTypes.h"
+#include "Movement/GSTN_DodgeLanding.h"
 #include "Simulation/GSTN_CombatActionTypes.h"
 #include "Simulation/GSTN_CombatHitState.h"
 #include "Simulation/GSTN_InputSimTypes.h"
@@ -109,6 +110,13 @@ struct FGSTN_CombatSyncCore
 
 	/** Jump phase, air jumps used, coyote window and the hold of the jump button (combat-m3 7.9). Written by the combat tick only; one bit when default */
 	FGSTN_JumpState Jump;
+
+	/**
+	 * The ending lag and the re-dodge lock of a dodge landing (owner 2026-11-17, FGSTN_DodgeLandingState). Written on the landing frame by the
+	 * dodge's ability (UGSTN_CombatSimComponent::OpenDodgeLanding), kept canonical by the combat tick. Outside the action part, like Jump, so the
+	 * lock outlives the move; one bit when unset
+	 */
+	FGSTN_DodgeLandingState DodgeLanding;
 
 	bool IsInHitstop(int32 Frame) const { return Frame >= HitstopStartFrame && Frame < HitstopEndFrame; }
 
@@ -232,6 +240,7 @@ struct FGSTN_CombatSyncCore
 		Ar << HitstopStartFrame;
 		Ar << HitstopEndFrame;
 		Jump.NetSerialize(Ar);
+		DodgeLanding.NetSerialize(Ar);
 
 		uint8 bAction = IsActionPartDefault() ? 0 : 1;
 		Ar.SerializeBits(&bAction, 1);
@@ -340,6 +349,7 @@ struct FGSTN_CombatSyncCore
 		UE_NP_TRACE_RECONCILE(HitstopStartFrame != AuthorityState.HitstopStartFrame, "HitstopStartFrame:");
 		UE_NP_TRACE_RECONCILE(HitstopEndFrame != AuthorityState.HitstopEndFrame, "HitstopEndFrame:");
 		UE_NP_TRACE_RECONCILE(!(Jump == AuthorityState.Jump), "Jump:");
+		UE_NP_TRACE_RECONCILE(!(DodgeLanding == AuthorityState.DodgeLanding), "DodgeLanding:");
 		UE_NP_TRACE_RECONCILE(ActionState != AuthorityState.ActionState, "ActionState:");
 		UE_NP_TRACE_RECONCILE(ActiveTimeline != AuthorityState.ActiveTimeline, "ActiveTimeline:");
 		UE_NP_TRACE_RECONCILE(ActiveSource != AuthorityState.ActiveSource, "ActiveSource:");
@@ -368,6 +378,10 @@ struct FGSTN_CombatSyncCore
 		if (!Jump.IsDefault())
 		{
 			Jump.ToString(Out);
+		}
+		if (DodgeLanding.IsSet())
+		{
+			Out.Appendf(" DodgeLanding: %d lag %d lock %d", DodgeLanding.LandedFrame, static_cast<int32>(DodgeLanding.EndLagFrames), static_cast<int32>(DodgeLanding.LockFrames));
 		}
 		if (!IsActionPartDefault())
 		{
