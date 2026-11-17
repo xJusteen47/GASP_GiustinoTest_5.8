@@ -66,6 +66,9 @@ namespace
 
 			Rules.Reset(NewObject<UGSTN_CombatRules>(GetTransientPackage()));
 			Rules->BaseImpactDamage = 5.f;
+			// The tests below are about the surface rows; the default wall and ceiling bounce (2026-11-17) has its own test, which turns it on
+			Rules->WallImpact.bEnabled = false;
+			Rules->CeilingImpact.bEnabled = false;
 
 			Core.ActionState = EGSTN_ActionState::Tumble;
 			Core.Hit.HitstunEndFrame = 100;
@@ -296,6 +299,127 @@ bool FGSTN_ImpactGroundBounceBySpeedTest::RunTest(const FString& Parameters)
 	Off.Rules->GroundImpact.bBounceBySpeed = false;
 	Off.SetContact(TEXT("Wall"), 3000.0, 10, EGSTN_TumbleContactKind::Floor, Up);
 	TestTrue(TEXT("off: landing"), Off.Step(11).Outcome == EGSTN_ImpactOutcome::None);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ImpactWallCeilingDefaultBounceTest, "GSTNCombat.NP.Hits.Impact.WallCeilingDefaultBounce", GSTN_NP_TEST_FLAGS)
+bool FGSTN_ImpactWallCeilingDefaultBounceTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-17: walls and ceilings bounce by default with the floor's rules; with little knockback left, a small bump with a clip
+	const auto Enable = [](FImpactFixture& F)
+	{
+		F.Rules->WallImpact.bEnabled = true;
+		F.Rules->CeilingImpact.bEnabled = true;
+		F.Rules->GroundImpact.BounceMinSpeed = 1200.f;
+		F.Rules->GroundImpact.MaxBounces = 2;
+		F.Rules->GroundImpact.BounceWindowFrames = 0;
+		F.In.Table = nullptr;
+	};
+
+	// Fast into a wall, in hitstun, no surface table: a hard bounce at the ground's restitution, still tumbling, one link of the wall chain
+	FImpactFixture Hard;
+	Enable(Hard);
+	Hard.In.Velocity = FVector(0.0, 0.0, -200.0);
+	Hard.SetContact(TEXT("Wall"), 1500.0, 10);
+	Hard.In.Contact.SurfaceTypeIndex = 0;
+	const FGSTN_ImpactStepResult First = Hard.Step(11);
+	TestTrue(TEXT("fast wall: bounce"), First.Outcome == EGSTN_ImpactOutcome::Bounce);
+	TestFalse(TEXT("a hard bounce, not a bump"), First.bBump);
+	TestTrue(*FString::Printf(TEXT("off the wall at 0.6 (%s)"), *First.Move.Velocity.ToString()), FMath::IsNearlyEqual(First.Move.Velocity.X, -1500.0 * 0.6, 1.0));
+	TestTrue(TEXT("still tumbling"), Hard.Core.ActionState == EGSTN_ActionState::Tumble);
+	TestEqual(TEXT("wall chain 1"), static_cast<int32>(Hard.Core.Hit.WallBounceCount), 1);
+	TestEqual(TEXT("the ground chain is untouched"), static_cast<int32>(Hard.Core.Hit.GroundBounceCount), 0);
+	TestEqual(TEXT("no bump window"), static_cast<int32>(Hard.Core.Hit.BumpKind), 0);
+
+	// The chain limit (shared by walls and ceilings): the third hard contact is a bump
+	Hard.SetContact(TEXT("Wall"), 1500.0, 20, EGSTN_TumbleContactKind::Ceiling, FVector(0.0, 0.0, -1.0));
+	Hard.In.Contact.SurfaceTypeIndex = 0;
+	TestTrue(TEXT("ceiling: second hard bounce"), Hard.Step(21).Outcome == EGSTN_ImpactOutcome::Bounce && !Hard.Out.bBump);
+	Hard.SetContact(TEXT("Wall"), 1500.0, 30);
+	Hard.In.Contact.SurfaceTypeIndex = 0;
+	const FGSTN_ImpactStepResult Third = Hard.Step(31);
+	TestTrue(TEXT("over the chain: a bump"), Third.Outcome == EGSTN_ImpactOutcome::Bounce && Third.bBump);
+
+	// Slow: the bump, scaled by the impact, with its clip window, the hitstun at least as long, no damage
+	FImpactFixture Soft;
+	Enable(Soft);
+	Soft.Core.Hit.HitstunEndFrame = 12;
+	Soft.In.Velocity = FVector(0.0, 100.0, -200.0);
+	Soft.SetContact(TEXT("Wall"), 100.0, 10);
+	const FGSTN_ImpactStepResult Bump = Soft.Step(11);
+	TestTrue(TEXT("slow wall: bump"), Bump.Outcome == EGSTN_ImpactOutcome::Bounce && Bump.bBump);
+	TestTrue(*FString::Printf(TEXT("smallest bump off the wall (%s)"), *Bump.Move.Velocity.ToString()), FMath::IsNearlyEqual(Bump.Move.Velocity.X, -150.0, 1.0));
+	TestTrue(TEXT("keeps half the slide"), FMath::IsNearlyEqual(Bump.Move.Velocity.Y, 50.0, 1.0) && FMath::IsNearlyEqual(Bump.Move.Velocity.Z, -100.0, 1.0));
+	TestEqual(TEXT("bump window"), Soft.Core.Hit.BumpEndFrame, 11 + 14);
+	TestEqual(TEXT("on a wall"), static_cast<int32>(Soft.Core.Hit.BumpKind), static_cast<int32>(FGSTN_HitSyncState::BumpKindWall));
+	TestEqual(TEXT("the hitstun covers the clip"), Soft.Core.Hit.HitstunEndFrame, 11 + 14);
+	TestEqual(TEXT("no damage"), Bump.Damage, 0.f);
+	TestTrue(TEXT("still tumbling"), Soft.Core.ActionState == EGSTN_ActionState::Tumble);
+	// Inside the window another touch slides
+	Soft.SetContact(TEXT("Wall"), 300.0, 15);
+	TestTrue(TEXT("one bump at a time"), Soft.Step(16).Outcome == EGSTN_ImpactOutcome::None);
+	// Grazing: nothing
+	FImpactFixture Graze;
+	Enable(Graze);
+	Graze.SetContact(TEXT("Wall"), 40.0, 10);
+	TestTrue(TEXT("grazing: nothing"), Graze.Step(11).Outcome == EGSTN_ImpactOutcome::None);
+	// The biggest bump at the top of the scale; a ceiling bump says so
+	FImpactFixture Top;
+	Enable(Top);
+	Top.Core.Hit.HitstunEndFrame = 5;
+	Top.In.Velocity = FVector::ZeroVector;
+	Top.SetContact(TEXT("Wall"), 3000.0, 10, EGSTN_TumbleContactKind::Ceiling, FVector(0.0, 0.0, -1.0));
+	const FGSTN_ImpactStepResult Ceiling = Top.Step(11);
+	TestTrue(TEXT("after the hitstun a fast ceiling is a bump (the ground's hitstun condition)"), Ceiling.bBump);
+	TestTrue(*FString::Printf(TEXT("biggest bump, down (%s)"), *Ceiling.Move.Velocity.ToString()), FMath::IsNearlyEqual(Ceiling.Move.Velocity.Z, -350.0, 1.0));
+	TestEqual(TEXT("on a ceiling"), static_cast<int32>(Top.Core.Hit.BumpKind), static_cast<int32>(FGSTN_HitSyncState::BumpKindCeiling));
+
+	// The attack forbids the bounce: a bump, never the hard bounce
+	FImpactFixture Forbidden;
+	Enable(Forbidden);
+	FGSTN_ImpactProfile NoBounce;
+	NoBounce.Forbid.Add(EGSTN_ImpactOutcome::Bounce);
+	Forbidden.Core.Hit.ImpactProfileQ = NoBounce.Pack();
+	Forbidden.SetContact(TEXT("Wall"), 3000.0, 10);
+	TestTrue(TEXT("forbidden: bump"), Forbidden.Step(11).bBump);
+
+	// The surface row still decides first: a splat wall above its speed splats; under it the default takes over
+	FImpactFixture Splat;
+	Enable(Splat);
+	Splat.In.Table = Splat.Table.Get();
+	Splat.SetContact(TEXT("Wall"), 1000.0, 10);
+	TestTrue(TEXT("the row's splat wins"), Splat.Step(11).Outcome == EGSTN_ImpactOutcome::Splat);
+	FImpactFixture UnderRow;
+	Enable(UnderRow);
+	UnderRow.In.Table = UnderRow.Table.Get();
+	UnderRow.SetContact(TEXT("Wall"), 250.0, 10);
+	TestTrue(TEXT("under the row's speed: bump"), UnderRow.Step(11).bBump);
+
+	// Judge by remaining hitstun (the alternative setting): slow but with lots of hitstun left = hard bounce
+	FImpactFixture ByStun;
+	Enable(ByStun);
+	ByStun.Rules->WallImpact.Judge = EGSTN_SurfaceBounceJudge::RemainingHitstun;
+	ByStun.Rules->WallImpact.BounceMinHitstunFrames = 20;
+	ByStun.SetContact(TEXT("Wall"), 400.0, 10);
+	TestTrue(TEXT("100 frames of hitstun left: hard"), ByStun.Step(11).Outcome == EGSTN_ImpactOutcome::Bounce && !ByStun.Out.bBump);
+	FImpactFixture ByStunLow;
+	Enable(ByStunLow);
+	ByStunLow.Rules->WallImpact.Judge = EGSTN_SurfaceBounceJudge::RemainingHitstun;
+	ByStunLow.Core.Hit.HitstunEndFrame = 20;
+	ByStunLow.SetContact(TEXT("Wall"), 2000.0, 10);
+	TestTrue(TEXT("9 frames left: bump"), ByStunLow.Step(11).bBump);
+
+	// Off: the wall decides nothing (the behaviour before 2026-11-17); bump off: only the hard bounce
+	FImpactFixture Off;
+	Enable(Off);
+	Off.Rules->WallImpact.bEnabled = false;
+	Off.SetContact(TEXT("Wall"), 3000.0, 10);
+	TestTrue(TEXT("off: nothing"), Off.Step(11).Outcome == EGSTN_ImpactOutcome::None);
+	FImpactFixture NoBump;
+	Enable(NoBump);
+	NoBump.Rules->WallImpact.bBump = false;
+	NoBump.SetContact(TEXT("Wall"), 300.0, 10);
+	TestTrue(TEXT("bump off: slow slides"), NoBump.Step(11).Outcome == EGSTN_ImpactOutcome::None);
 	return true;
 }
 
