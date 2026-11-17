@@ -121,4 +121,19 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Test|Kits")
 	static bool WriteStartupSteer(TSubclassOf<UGameplayAbility> StrikeClass, float MaxSteerDegrees, float SteerRateDegPerSecond, const FGSTN_SteerWindow& Steer);
+
+	/**
+	 * "n hitboxes: dmg/base/growth/fixed/angle; ..." for any combat move (its TimelineAsset when set, else its inline timeline). Read only,
+	 * native classes too: the playtest kit tuning script (Tools/GAS/setup_playtest_launch_1117.py) logs it before and after
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Test|Kits")
+	static FString DescribeMoveKnockback(TSubclassOf<UGameplayAbility> MoveClass);
+
+	/**
+	 * Per-move launch tuning (owner playtest 2026-11-17, playtest kits only, never the global rules): every hitbox of the move's INLINE timeline
+	 * gets this base and growth, and the angle when AngleDeg >= -90 (below = keep each hitbox's angle). Fixed knockback is cleared so the
+	 * bracket applies. Blueprint children only (native classes and moves on a shared TimelineAsset are refused). True when something changed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Test|Kits")
+	static bool WriteMoveKnockback(TSubclassOf<UGameplayAbility> MoveClass, float BaseKnockback, float KnockbackGrowth, float AngleDeg = -999.f);
 };

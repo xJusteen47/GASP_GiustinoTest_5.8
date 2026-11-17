@@ -723,6 +723,8 @@ void UGSTN_CombatSimComponent::ExecuteVictimCues(int32 Frame)
 	}
 }
 
+DEFINE_LOG_CATEGORY_STATIC(LogGSTNReactionMove, Log, All);
+
 void UGSTN_CombatSimComponent::ExecuteReactionMove(float StepMs)
 {
 	if (!AbilitySystem || ReactionMove.Kind == FGSTN_ReactionMove::EKind::None)
@@ -742,6 +744,8 @@ void UGSTN_CombatSimComponent::ExecuteReactionMove(float StepMs)
 		ExecuteSetFacing(FGSTN_StartupSteer::QuantizeYaw(FGSTN_GravityFrame::YawOfDirection(-Flat, Up)));
 	}
 	const TSubclassOf<UGameplayEffect> Effect = bLaunch ? KnockbackEffect : PushBackEffect;
+	UE_LOG(LogGSTNReactionMove, Verbose, TEXT("[ReactionMove] %s frame %d %s velocity (%.0f %.0f %.0f) frames %d"), *GetOwner()->GetName(), GetSimulationFrame(),
+		bLaunch ? TEXT("launch") : TEXT("push"), ReactionMove.Velocity.X, ReactionMove.Velocity.Y, ReactionMove.Velocity.Z, ReactionMove.Frames);
 	if (!Effect)
 	{
 		return;

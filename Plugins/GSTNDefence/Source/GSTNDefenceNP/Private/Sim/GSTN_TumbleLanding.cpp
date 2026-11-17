@@ -448,12 +448,29 @@ void FGSTN_TumbleLanding::AfterClocks(FGSTN_CombatTickContext& Context, const FG
 	// Downed, free to act (the bounce ability is over) and lying on the floor (the bounce has landed: never a roll from the air, react-hook-1
 	// review): holding the stick rolls up on any such frame, toward the head when the stick points against the facing and the kit has a roll back
 	FGSTN_DefenceFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DefenceFragment>(Context.Out.Fragments);
+	// Hit while lying (playtest 2026-11-17, Saved/PF1117c/diag strong_100.jsonl: a dummy still downed from an earlier knockdown was launched,
+	// but the Knockdown tag outlived the hit, so the lying pose (Knockdown rule, priority above Tumble) showed through the whole flight and the
+	// next bounce): a new hit's reaction ends the knockdown, the hit's own reaction takes over, and a later landing downs it again
+	if (Fragment && Fragment->IsKnockedDown(Frame) && Context.Out.Core.Hit.HasPendingReaction())
+	{
+		Fragment->KnockdownEndFrame = Frame;
+	}
 	if (Fragment && Fragment->IsKnockedDown(Frame) && Context.Out.Core.ActionState == EGSTN_ActionState::Actionable && Context.bGrounded
 		&& Context.StickOnPlane.Size() >= HoldStickMagnitude
 		&& Data.GetupRoll.IsValid() && Context.Services)
 	{
 		const bool bBack = Data.GetupRollBack.IsValid() && Context.StickOnPlane.Dot(ReadFacing(Context.Owner)) < 0.0;
 		if (Context.Services->StartForcedTimeline(bBack ? Data.GetupRollBack.Get() : Data.GetupRoll.Get()))
+		{
+			Fragment->KnockdownEndFrame = Frame;
+		}
+	}
+	// A downed state with an end (rules MaxDownedFrames > 0) that runs out with nobody pressing anything: the neutral get-up plays on its last
+	// frame, so the body gets up instead of popping from lying to idle (playtest 2026-11-17: dummies lay forever, no get-up ever seen)
+	else if (Fragment && Fragment->KnockdownEndFrame != NeverEnds && Fragment->IsKnockedDown(Frame) && Frame + 1 >= Fragment->KnockdownEndFrame
+		&& Context.Out.Core.ActionState == EGSTN_ActionState::Actionable && Context.bGrounded && Data.GetupNeutral.IsValid() && Context.Services)
+	{
+		if (Context.Services->StartForcedTimeline(Data.GetupNeutral.Get()))
 		{
 			Fragment->KnockdownEndFrame = Frame;
 		}
