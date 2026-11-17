@@ -18,3 +18,7 @@ wall-ceiling-bounce-1, launch-light-kit-1, playtest-fixes-1117c, qa-movement-111
 Numeri Smash controllati su ssbwiki solo per gravità, run, air speed, squat, tumble; il resto a memoria. Confronti con Odyssey/Astro Bot a occhio.
 Camera: quota di schermo stimata con FOV 90 non verificato. Niente build, niente test (nessun file di gioco cambiato).
 Costo stimato ~6 $.
+## Risposta owner 20:13Z e seguito
+1A + la schivata vuole ENDING LAG (v94blx l'aveva letta come "no lag"); 2B formula Smash; 3 per modalità (arena 60 f, platform 94 f).
+Piano e brief in project files: `handoffs/feel-defaults-piano.md`, `feel-f1-dodge-lag-brief.md`, `feel-f2-knockback-smash-brief.md`,
+`feel-f3-run-per-mode-brief.md`, `feel-f4-desktop-brief.md` (~21 $). Thread chiuso.
