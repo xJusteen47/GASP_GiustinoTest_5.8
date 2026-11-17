@@ -12,6 +12,7 @@
 #include "GSTN_CombatNPTags.h"
 #include "GSTN_CombatTags.h"
 #include "GSTN_DefenceTags.h"
+#include "GSTNDefenceCoreModule.h"
 #include "Hits/GSTN_ImpactTypes.h"
 #include "Input/GSTN_ButtonMap.h"
 #include "Input/GSTN_CombatButtonTags.h"
@@ -416,8 +417,12 @@ bool FGSTN_TumbleLanding::IsSelfKnockdownWindowOpen(const FGSTN_CombatTickContex
 	return false;
 }
 
-bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data)
+bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data, const UClass** OutBounceAbility)
 {
+	if (OutBounceAbility)
+	{
+		*OutBounceAbility = nullptr;
+	}
 	if (!Data.Rules)
 	{
 		return false;
@@ -429,6 +434,8 @@ bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const 
 		// Outside the window (or the move is over) nothing stays armed: a later landing is an ordinary one
 		if (bArmed)
 		{
+			UE_LOG(LogGSTNDefence, Log, TEXT("SelfKnockdown: frame %d disarmed, window closed (state %d, timeline output %s, tag windows %d)"), Context.Frame,
+				static_cast<int32>(Context.Out.Core.ActionState), Context.Timeline ? TEXT("yes") : TEXT("no"), Context.Timeline ? Context.Timeline->TagWindows.Num() : -1);
 			Existing->HitFlags &= ~GSTNDefenceHitFlags::SelfKnockdownArmed;
 		}
 		return false;
@@ -437,6 +444,7 @@ bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const 
 	{
 		if (!bArmed)
 		{
+			UE_LOG(LogGSTNDefence, Log, TEXT("SelfKnockdown: frame %d armed (airborne inside the window)"), Context.Frame);
 			FGSTN_SyncFragmentList::FindOrAdd<FGSTN_DefenceFragment>(Context.Out.Fragments).HitFlags |= GSTNDefenceHitFlags::SelfKnockdownArmed;
 		}
 		return false;
@@ -450,19 +458,34 @@ bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const 
 	// Landed inside the window: the move ends here and its user is downed as a tumble landing downs a victim. No tech evaluation (no contact, no
 	// reaction to tech out of): the way out is the owner's one, the get-up roll from the stick or the neutral get-up
 	Existing->HitFlags &= ~GSTNDefenceHitFlags::SelfKnockdownArmed;
+	UE_LOG(LogGSTNDefence, Log, TEXT("SelfKnockdown: frame %d landed inside the window: the move's user is downed"), Context.Frame);
 	// The move's own hop (owner 2026-11-16, the dropkick like Big Band's), read before the move is cancelled; else the rules' at their speed
 	const FGSTN_SelfLandingBounceTrack* Own = FindSelfLandingBounce(Context);
 	const bool bFlat = Own && Own->Mode == EGSTN_SelfLandingBounce::None;
 	const double Height = Own && Own->Mode == EGSTN_SelfLandingBounce::Height ? FMath::Max(static_cast<double>(Own->Height), 0.0) : -1.0;
+	// The move's own bounce clip (its ability), resolved now: the move is cancelled below, so AfterClocks can no longer read its tracks
+	const UClass* OwnBounce = Own && !Own->BounceAbility.IsNull() ? Own->BounceAbility.Get() : nullptr;
 	FGSTN_CombatTimelineLogic::CancelForOtherCommand(Context.Out.Core, Context.Frame);
 	EnterDowned(Context, Data, Context.Frame, false, static_cast<double>(Data.Rules->GroundBounce.SelfKnockdownImpactSpeed), bFlat, Height);
+	if (OwnBounce)
+	{
+		// Pending even for a kit without a GroundBounce of its own: the move names the ability to start
+		FGSTN_DefenceFragment& Fragment = FGSTN_SyncFragmentList::FindOrAdd<FGSTN_DefenceFragment>(Context.Out.Fragments);
+		Fragment.PendingStartFrame = Context.Frame;
+		Fragment.PendingStartKind = GSTNDefencePendingStart::GroundBounce;
+	}
+	if (OutBounceAbility)
+	{
+		*OutBounceAbility = OwnBounce;
+	}
 	return true;
 }
 
 void FGSTN_TumbleLanding::AfterClocks(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data)
 {
 	const int32 Frame = Context.Frame;
-	SelfKnockdown(Context, Data);
+	const UClass* OwnBounce = nullptr;
+	SelfKnockdown(Context, Data, &OwnBounce);
 	if (FGSTN_DefenceFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DefenceFragment>(Context.Out.Fragments))
 	{
 		// What the victim step of this frame decided to start: the model starts it now that the frame's tables are known
@@ -473,7 +496,10 @@ void FGSTN_TumbleLanding::AfterClocks(FGSTN_CombatTickContext& Context, const FG
 			Fragment->PendingStartFrame = INDEX_NONE;
 			Fragment->PendingStartKind = GSTNDefencePendingStart::None;
 			UClass* Class = Kind == GSTNDefencePendingStart::GroundBounce ? Data.GroundBounce.Get() : Data.GetTechAbility(Fragment->TechType);
-			if (bNow && Class && Context.Services)
+			// A move's own bounce ability first (Self Landing Bounce track); not registered by the kit = the kit's ground bounce as before
+			const bool bOwnStarted = bNow && Kind == GSTNDefencePendingStart::GroundBounce && OwnBounce && Context.Services
+				&& Context.Services->StartForcedTimeline(OwnBounce);
+			if (!bOwnStarted && bNow && Class && Context.Services)
 			{
 				Context.Services->StartForcedTimeline(Class);
 			}

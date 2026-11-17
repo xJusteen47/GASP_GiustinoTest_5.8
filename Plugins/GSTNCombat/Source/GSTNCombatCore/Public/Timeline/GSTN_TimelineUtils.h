@@ -7,6 +7,7 @@
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "Timeline/GSTN_BodyCapsule.h"
 #include "Timeline/GSTN_Pushbox.h"
+#include "Timeline/GSTN_Landing.h"
 #include "GSTN_TimelineUtils.generated.h"
 
 /**
@@ -70,4 +71,17 @@ public:
 	/** Authoring helper: a copy of Data without any Pushbox track */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
 	static FGSTN_CombatTimelineData RemovePushboxTracks(const FGSTN_CombatTimelineData& Data);
+
+	/**
+	 * Authoring helper: a copy of Data with one more Landing track (FGSTN_TimelineTrack_Landing) on [StartFrame, EndFrame), so a kit script can
+	 * author an aerial's landing windows (Python cannot build the instanced track itself): Action, the LandingLag response (frames, montage, cue)
+	 * and the ContinueWithMove ability. The first window holding a frame wins. Run RemoveLandingTracks first to re-run
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
+	static FGSTN_CombatTimelineData AddLandingTrack(const FGSTN_CombatTimelineData& Data, int32 StartFrame, int32 EndFrame, EGSTN_LandingAction Action,
+		const FGSTN_RicochetResponse& Lag, TSoftClassPtr<UObject> ContinueMove);
+
+	/** Authoring helper: a copy of Data without any Landing track */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
+	static FGSTN_CombatTimelineData RemoveLandingTracks(const FGSTN_CombatTimelineData& Data);
 };

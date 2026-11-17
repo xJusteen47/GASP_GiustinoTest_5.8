@@ -102,3 +102,27 @@ FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemovePushboxTracks(const FGSTN_Co
 	});
 	return Result;
 }
+
+FGSTN_CombatTimelineData UGSTN_TimelineUtils::AddLandingTrack(const FGSTN_CombatTimelineData& Data, int32 StartFrame, int32 EndFrame, EGSTN_LandingAction Action,
+	const FGSTN_RicochetResponse& Lag, TSoftClassPtr<UObject> ContinueMove)
+{
+	FGSTN_CombatTimelineData Result = Data;
+	FGSTN_TimelineTrack_Landing Track;
+	Track.StartFrame = StartFrame;
+	Track.EndFrame = EndFrame;
+	Track.Action = Action;
+	Track.Lag = Lag;
+	Track.ContinueMove = ContinueMove;
+	Result.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Landing>(Track));
+	return Result;
+}
+
+FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemoveLandingTracks(const FGSTN_CombatTimelineData& Data)
+{
+	FGSTN_CombatTimelineData Result = Data;
+	Result.Tracks.RemoveAll([](const TInstancedStruct<FGSTN_TimelineTrack>& Track)
+	{
+		return Track.GetScriptStruct() == FGSTN_TimelineTrack_Landing::StaticStruct();
+	});
+	return Result;
+}

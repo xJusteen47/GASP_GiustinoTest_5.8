@@ -2,6 +2,7 @@
 
 #include "Tests/GSTN_CombatTestUtils.h"
 #include "Timeline/GSTN_Landing.h"
+#include "Timeline/GSTN_TimelineUtils.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -91,6 +92,31 @@ bool FGSTN_LandingWindowTest::RunTest(const FString& Parameters)
 	AddWindow(Wizard, 0, 60, EGSTN_LandingAction::AutoCancel);
 	TestTrue(TEXT("on the ground before the take-off: no landing"), FGSTN_LandingRules::Resolve(Wizard, 5, true, false, false).Action == EGSTN_GroundClockAction::None);
 	TestTrue(TEXT("after it: lands"), FGSTN_LandingRules::Resolve(Wizard, 20, true, false, true).Action == EGSTN_GroundClockAction::Land);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LandingAuthoringTest, "GSTNCombat.Core.Landing.AuthoringHelpers", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_LandingAuthoringTest::RunTest(const FString& Parameters)
+{
+	// The kit-script path of an aerial's landing windows (dair V10: light lag, heavy lag, light lag): added in order, found by frame, removable
+	FGSTN_CombatTimelineData Data;
+	Data.TotalFrames = 43;
+	FGSTN_RicochetResponse Light;
+	Light.RecoilFrames = 4;
+	FGSTN_RicochetResponse Heavy;
+	Heavy.RecoilFrames = 16;
+	Data = UGSTN_TimelineUtils::AddLandingTrack(Data, 0, 3, EGSTN_LandingAction::LandingLag, Light, nullptr);
+	Data = UGSTN_TimelineUtils::AddLandingTrack(Data, 3, 31, EGSTN_LandingAction::LandingLag, Heavy, nullptr);
+	Data = UGSTN_TimelineUtils::AddLandingTrack(Data, 31, 43, EGSTN_LandingAction::LandingLag, Light, nullptr);
+	int32 Index = INDEX_NONE;
+	const FGSTN_TimelineTrack_Landing* Early = FGSTN_LandingRules::FindWindow(Data, 2, &Index);
+	TestTrue(TEXT("frame 2: the light window"), Early && Early->Lag.RecoilFrames == 4 && Index == 0);
+	const FGSTN_TimelineTrack_Landing* Mid = FGSTN_LandingRules::FindWindow(Data, 3);
+	TestTrue(TEXT("frame 3: the heavy window"), Mid && Mid->Action == EGSTN_LandingAction::LandingLag && Mid->Lag.RecoilFrames == 16);
+	const FGSTN_TimelineTrack_Landing* Late = FGSTN_LandingRules::FindWindow(Data, 42);
+	TestTrue(TEXT("frame 42: the light window again"), Late && Late->Lag.RecoilFrames == 4);
+	Data = UGSTN_TimelineUtils::RemoveLandingTracks(Data);
+	TestNull(TEXT("removed"), FGSTN_LandingRules::FindWindow(Data, 10));
 	return true;
 }
 

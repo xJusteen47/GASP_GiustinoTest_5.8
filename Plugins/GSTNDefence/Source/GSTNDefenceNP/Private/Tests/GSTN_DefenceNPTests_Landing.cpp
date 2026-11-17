@@ -20,6 +20,7 @@
 #include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_InputHistory.h"
 #include "Input/GSTN_InputSample.h"
+#include "Data/GSTN_DefenceTracks.h"
 #include "Math/GSTN_DefenceMath.h"
 #include "Math/GSTN_DIRulesMath.h"
 #include "Math/GSTN_SDIMath.h"
@@ -660,6 +661,70 @@ bool FGSTN_DefenceLandingSelfKnockdownTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("outside the window: no knockdown"), FGSTN_TumbleLanding::SelfKnockdown(After, Late.Data()));
 	TestEqual(TEXT("and disarmed"), Late.Fragment().HitFlags & GSTNDefenceHitFlags::SelfKnockdownArmed, 0);
 	TestEqual(TEXT("not downed"), Late.Fragment().KnockdownEndFrame, static_cast<int32>(INDEX_NONE));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DefenceLandingSelfBounceAbilityTest, "GSTNDefence.NP.Landing.SelfBounceOwnAbility", TestFlags)
+bool FGSTN_DefenceLandingSelfBounceAbilityTest::RunTest(const FString& Parameters)
+{
+	// The dropkick's own bounce clip (Self Landing Bounce track, BounceAbility): the landing starts the move's ability instead of the kit's
+	// GroundBounce; without one, or when the model cannot start it (not registered), the kit's GroundBounce as before
+	FGSTN_TimelineTrack_Tags Window;
+	Window.Tags.AddTag(GSTNDefenceTags::Move_KnockdownOnLanding);
+	FGSTN_TimelineOutput Timeline;
+	Timeline.TagWindows.Add(&Window);
+	FGSTN_SelfLandingBounceTrack Bounce;
+	Bounce.StartFrame = 0;
+	Bounce.EndFrame = 60;
+	Bounce.BounceAbility = UGSTN_GA_GetupRoll::StaticClass();   // any registered timeline ability stands for the move's bounce clip
+	FGSTN_CombatTimelineData Move;
+	Move.TotalFrames = 60;
+	Move.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_SelfLandingBounceTrack>(Bounce));
+
+	auto LandOnce = [&](FLandRig& Land, const FGSTN_CombatTimelineData* Data)
+	{
+		Land.Out.Core.ActionState = EGSTN_ActionState::InTimeline;
+		Land.Out.Core.HitstopStartFrame = INDEX_NONE;
+		Land.Out.Core.HitstopEndFrame = INDEX_NONE;
+		FGSTN_CombatTickContext Air = Land.Make(101);
+		Air.Timeline = &Timeline;
+		Air.RunningTimeline = Data;
+		Air.bGrounded = false;
+		FGSTN_TumbleLanding::AfterClocks(Air, Land.Data());
+		FGSTN_CombatTickContext Landed = Land.Make(120);
+		Landed.Timeline = &Timeline;
+		Landed.RunningTimeline = Data;
+		Landed.bGrounded = true;
+		FGSTN_TumbleLanding::AfterClocks(Landed, Land.Data());
+	};
+
+	FLandRig Own(false, 30);
+	LandOnce(Own, &Move);
+	TestEqual(TEXT("one ability started on the landing"), Own.Services.Started.Num(), 1);
+	TestTrue(TEXT("the move's own bounce ability"), Own.Services.Started.Num() == 1 && Own.Services.Started[0] == UGSTN_GA_GetupRoll::StaticClass());
+	TestEqual(TEXT("still downed as before"), Own.Fragment().KnockdownEndFrame, 120 + 30);
+
+	const UClass* Out = UGSTN_GA_GroundBounce::StaticClass();
+	FLandRig Direct(false, 30);
+	Direct.Out.Core.ActionState = EGSTN_ActionState::InTimeline;
+	FGSTN_CombatTickContext Air = Direct.Make(101);
+	Air.Timeline = &Timeline;
+	Air.RunningTimeline = &Move;
+	Air.bGrounded = false;
+	FGSTN_TumbleLanding::SelfKnockdown(Air, Direct.Data(), &Out);
+	TestNull(TEXT("no bounce ability while airborne"), Out);
+	FGSTN_CombatTickContext Landed = Direct.Make(120);
+	Landed.Timeline = &Timeline;
+	Landed.RunningTimeline = &Move;
+	Landed.bGrounded = true;
+	TestTrue(TEXT("landing downs"), FGSTN_TumbleLanding::SelfKnockdown(Landed, Direct.Data(), &Out));
+	TestTrue(TEXT("SelfKnockdown names the move's bounce ability"), Out == UGSTN_GA_GetupRoll::StaticClass());
+
+	FGSTN_CombatTimelineData Plain;
+	Plain.TotalFrames = 60;
+	FLandRig Kit(false, 30);
+	LandOnce(Kit, &Plain);
+	TestTrue(TEXT("no BounceAbility: the kit's GroundBounce"), Kit.Services.Started.Num() == 1 && Kit.Services.Started[0] == UGSTN_GA_GroundBounce::StaticClass());
 	return true;
 }
 

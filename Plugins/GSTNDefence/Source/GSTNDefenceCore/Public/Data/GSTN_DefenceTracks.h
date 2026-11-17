@@ -115,4 +115,14 @@ struct GSTNDEFENCECORE_API FGSTN_SelfLandingBounceTrack : public FGSTN_TimelineT
 	/** Peak height of the hop (cm), under the rules' GroundBounceGravityScale; steered by the stick like any tech bounce */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Landing", meta = (ClampMin = "0.0", ForceUnits = "cm", EditCondition = "Mode == EGSTN_SelfLandingBounce::Height"))
 	float Height = 25.f;
+
+	/**
+	 * Optional: the timeline ability (a UGSTN_GA_BaseCombat child) started Forced on the landing instead of the kit's GroundBounce, so this move's
+	 * user gets its own bounce clip (dropkick-tech-bounce brief, owner 2026-11-17: a distinct landing clip that breaks from the active pose).
+	 * Only presentation and frame data change: the hop's height and steering stay the ones above. Its montage wins over the reaction set's
+	 * Knockdown rule while it plays (bYieldToOtherMontages), and the rule takes over when it ends. The class must be granted by the kit
+	 * (its TriggeredAbilities): when it is not registered, or not loaded, the kit's GroundBounce starts as before
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Landing", meta = (AllowedClasses = "/Script/GSTNCombatNP.GSTN_GA_BaseCombat"))
+	TSoftClassPtr<UObject> BounceAbility;
 };

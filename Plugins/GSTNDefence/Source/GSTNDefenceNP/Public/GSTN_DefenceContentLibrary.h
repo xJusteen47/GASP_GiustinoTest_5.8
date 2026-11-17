@@ -31,6 +31,13 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Content")
 	static FGSTN_CombatTimelineData SetSelfLandingBounceTrack(const FGSTN_CombatTimelineData& Data, EGSTN_SelfLandingBounce Mode, float Height);
+
+	/**
+	 * The timeline with its Self Landing Bounce track's BounceAbility set (null clears it): the move's own bounce clip (dropkick tech bounce).
+	 * A timeline without the track gets the default one (Height mode, 25 cm). The class must also be granted by the kit (TriggeredAbilities)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Content")
+	static FGSTN_CombatTimelineData SetSelfLandingBounceAbility(const FGSTN_CombatTimelineData& Data, TSubclassOf<UObject> BounceAbility);
 	/**
 	 * Sets (adds or replaces) the kit's FGSTN_DefenceKitExtension: its rules and its shield ability class (null = the kit has no shield).
 	 * Tech and get-up sets are left as they are (empty on a new entry). False for a null kit

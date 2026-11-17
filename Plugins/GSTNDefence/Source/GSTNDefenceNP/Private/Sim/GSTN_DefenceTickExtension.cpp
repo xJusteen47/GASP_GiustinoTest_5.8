@@ -55,6 +55,21 @@ void FGSTN_DefenceTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN
 	switch (Point)
 	{
 	case EGSTN_CombatHookPoint::AfterClocks:
+#if !UE_BUILD_SHIPPING
+		if (!Data && Context.Out.Core.ActionState == EGSTN_ActionState::InTimeline)
+		{
+			static TSet<FString> Told;   // diagnostics only: an entity in a move with no defence data runs no defence step (self knockdown included)
+			const FString Name = GetNameSafe(Context.Owner);
+			UE_CLOG(!Told.Contains(Name), LogGSTNDefence, Warning, TEXT("Defence: %s runs a move but has no defence data"), *Name);
+			Told.Add(Name);
+		}
+		if (Data && !Data->Rules)
+		{
+			static bool bToldNoRules = false;   // diagnostics only (dropkick-tech-bounce, 2026-11-17): a defence entity without rules runs no step
+			UE_CLOG(!bToldNoRules, LogGSTNDefence, Warning, TEXT("Defence: %s has defence data but no rules: no defence step runs"), *GetNameSafe(Context.Owner));
+			bToldNoRules = true;
+		}
+#endif
 		if (Data && Data->Rules)
 		{
 			StepClocks(Context, *Data);

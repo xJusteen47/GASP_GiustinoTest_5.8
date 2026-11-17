@@ -79,6 +79,11 @@ DAIR_SEQUENCES = [
     {'name': 'dair_land', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True, 'air': {'trigger_h': 184.0}},
     {'name': 'jump_only', 'taps': [], 'frames': 110, 'dummy': None, 'shoot': False, 'air': {}},
     {'name': 'dair_hit', 'taps': [], 'frames': 130, 'dummy': 62.0, 'shoot': True, 'air': {'trigger_h': 225.0}},
+    # DAIR-V10 (2026-11-17): with the current jump dair_hit lands on anim ~10, before the strike (with V10's Landing windows the move ends in the
+    # heavy landing lag, no hit). dair_hit_rise presses on the way up as the whiff, so the strike happens in the air; dummy PIE_CAPTURE_DAIR_HIT_DIST
+    # cm ahead (default 40)
+    {'name': 'dair_hit_rise', 'taps': [], 'frames': 130, 'dummy': float(os.environ.get('PIE_CAPTURE_DAIR_HIT_DIST', 40.0)), 'shoot': True,
+     'air': {'rise_h': float(os.environ.get('PIE_CAPTURE_DAIR_HIT_RISE', 100.0))}},
     # DEBUG-HUB (owner 2026-11-16, "does the stomp really take the enemies below, or do pushbox and core stop it?"): the dummy almost under the
     # attacker (PIE_CAPTURE_BELOW_DIST cm ahead, default 20), same jump and press; run with gstn.Combat.Debug.Hitboxes/Body on (PIE_CAPTURE_CVARS)
     {'name': 'dair_below', 'taps': [], 'frames': 130, 'dummy': float(os.environ.get('PIE_CAPTURE_BELOW_DIST', 20.0)), 'shoot': True,
@@ -100,6 +105,12 @@ DROPKICK_SEQUENCES = [
     # PUSHBOX-P2: the same press with a dummy ahead, so the landing and the end meet a body. P3: 120 cm let the kick pass ~230 cm over the dummy
     # (no hit), the kick connects further out: PIE_CAPTURE_DROPKICK_DIST (default 275 cm)
     {'name': 'dropkick_hit', 'taps': [], 'frames': 150, 'dummy': float(os.environ.get('PIE_CAPTURE_DROPKICK_DIST', 275.0)), 'shoot': True, 'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5}},
+    # DROPKICK-BOUNCE-1: a LOW jump case for the user's landing hop: pressed on the way down at PIE_CAPTURE_DROPKICK_LOW_H cm (default 90), so
+    # the kick lands from a short fall; the hit variant puts the dummy PIE_CAPTURE_DROPKICK_LOW_DIST cm ahead (default 150)
+    {'name': 'dropkick_low_whiff', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True,
+     'air': {'trigger_h': float(os.environ.get('PIE_CAPTURE_DROPKICK_LOW_H', 90.0)), 'stick': True}},
+    {'name': 'dropkick_low_hit', 'taps': [], 'frames': 150, 'dummy': float(os.environ.get('PIE_CAPTURE_DROPKICK_LOW_DIST', 150.0)), 'shoot': True,
+     'air': {'trigger_h': float(os.environ.get('PIE_CAPTURE_DROPKICK_LOW_H', 90.0)), 'stick': True}},
 ]
 # CP3 double-shot examples (PIE_CAPTURE_KIT=KIT_Example_DoubleShotA / B, PIE_CAPTURE_BUTTON=Special): one press, two presses 8 frames apart (a double
 # press), two presses 40 frames apart (two single shots)
@@ -329,6 +340,12 @@ def _row(frame, tapped, extra=None):
             row['dummy']['snap'] = {k: se.get(k) for k in ('actionState', 'reactionFlags', 'damagePercent', 'stateTags') if k in se}
         except Exception as e:
             row['dummy_err'] = repr(e)[:80]
+    if os.environ.get('PIE_CAPTURE_HOST_SNAP') == '1':   # DROPKICK-BOUNCE-1: the host's own step snapshot (action state, state tags, reaction flags)
+        try:
+            se = json.loads(g.comps(g.worlds()[0])[h._key(0)].read_snapshot_entry(-1) or '{}')
+            row['snap'] = {k: se.get(k) for k in ('actionState', 'reactionFlags', 'stateTags', 'grounded') if k in se}
+        except Exception as e:
+            row['snap_err'] = repr(e)[:80]
     try:   # body vs capsule (DROPKICK-CAPSULE): pelvis world z, capsule half height/radius, mesh z relative to the actor
         pawn = _pawn()
         cap = pawn.get_component_by_class(unreal.CapsuleComponent)

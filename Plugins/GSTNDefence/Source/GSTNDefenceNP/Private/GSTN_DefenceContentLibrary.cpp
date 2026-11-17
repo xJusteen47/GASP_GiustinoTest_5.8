@@ -374,3 +374,22 @@ FGSTN_CombatTimelineData UGSTN_DefenceContentLibrary::SetSelfLandingBounceTrack(
 	Result.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_SelfLandingBounceTrack>(Track));
 	return Result;
 }
+
+FGSTN_CombatTimelineData UGSTN_DefenceContentLibrary::SetSelfLandingBounceAbility(const FGSTN_CombatTimelineData& Data, TSubclassOf<UObject> BounceAbility)
+{
+	FGSTN_CombatTimelineData Result = Data;
+	for (TInstancedStruct<FGSTN_TimelineTrack>& Instanced : Result.Tracks)
+	{
+		if (FGSTN_SelfLandingBounceTrack* Track = Instanced.GetMutablePtr<FGSTN_SelfLandingBounceTrack>())
+		{
+			Track->BounceAbility = BounceAbility.Get();
+			return Result;
+		}
+	}
+	FGSTN_SelfLandingBounceTrack Track;
+	Track.StartFrame = 0;
+	Track.EndFrame = FMath::Max(Data.TotalFrames, 1);
+	Track.BounceAbility = BounceAbility.Get();
+	Result.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_SelfLandingBounceTrack>(Track));
+	return Result;
+}
