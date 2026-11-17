@@ -34,3 +34,14 @@ float FGSTN_AnalogWalkLogic::StepAirYaw(const FGSTN_AnalogWalkTuning& Tuning, fl
 	const float MaxStep = FMath::Max(Tuning.AirTurnRateDegPerSec, 0.f) * FMath::Max(DeltaSeconds, 0.f);
 	return FRotator::NormalizeAxis(CurrentYaw + FMath::Clamp(Delta, -MaxStep, MaxStep));
 }
+
+float FGSTN_AnalogWalkLogic::AirTurnYawRate(float RateDegPerSec, float CurrentYaw, float TargetYaw, float DeltaSeconds)
+{
+	if (RateDegPerSec <= 0.f || DeltaSeconds <= KINDA_SMALL_NUMBER)
+	{
+		return 0.f;
+	}
+	// Same side rule as StepAirYaw (NormalizeAxis: an exact half turn goes positive), so the step the input asked for is the one taken
+	const float Delta = FRotator::NormalizeAxis(TargetYaw - CurrentYaw);
+	return FMath::Clamp(Delta / DeltaSeconds, -RateDegPerSec, RateDegPerSec);
+}

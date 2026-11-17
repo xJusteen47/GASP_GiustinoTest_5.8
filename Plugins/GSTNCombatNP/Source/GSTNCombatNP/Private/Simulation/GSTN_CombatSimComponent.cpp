@@ -34,6 +34,8 @@
 #include "Presentation/GSTN_SteerIndicatorComponent.h"
 #include "Movement/GSTN_SetFacingEffect.h"
 #include "Movement/GSTN_BodyCapsuleModifier.h"
+#include "Movement/GSTN_AirTurn.h"
+#include "DefaultMovementSet/Modes/FallingMode.h"
 #include "Input/GSTN_InputTags.h"
 #include "Context/GSTN_InputContextProvider.h"
 #include "DataTypes/AbilitySimulationDataTypes.h"
@@ -192,6 +194,40 @@ void UGSTN_CombatSimComponent::BeginPlay()
 	{
 		UGSTN_RunPresentationComponent::FindOrAdd(GetOwner());
 	}
+	BindAirTurn();
+}
+
+void UGSTN_CombatSimComponent::BindAirTurn()
+{
+	// Mover's hook after the mode and the layered moves generated the move (one delegate per Mover). Bound on every machine that
+	// simulates: the server and the owner must turn the same way. A pawn whose hook someone else took keeps GASP's 300 deg/s air turn
+	UMoverComponent* Mover = GetOwner() ? GetOwner()->FindComponentByClass<UMoverComponent>() : nullptr;
+	if (!Mover)
+	{
+		return;
+	}
+	if (Mover->ProcessGeneratedMovement.IsBound() && Mover->ProcessGeneratedMovement.GetUObject() != this)
+	{
+		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: the Mover's ProcessGeneratedMovement is bound by %s: the air turn keeps the falling mode's own rate"),
+			*GetPathName(), *GetNameSafe(Mover->ProcessGeneratedMovement.GetUObject()));
+		return;
+	}
+	FMover_ProcessGeneratedMovement Hook;
+	Hook.BindUFunction(this, GET_FUNCTION_NAME_CHECKED(UGSTN_CombatSimComponent, HandleProcessGeneratedMovement));
+	Mover->BindProcessGeneratedMovement(Hook);
+	AirTurnMover = Mover;
+}
+
+void UGSTN_CombatSimComponent::HandleProcessGeneratedMovement(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, FProposedMove& OutProposedMove)
+{
+	const UMoverComponent* Mover = AirTurnMover.Get();
+	if (!Mover)
+	{
+		return;
+	}
+	// The frame's mode from the start state (a mode change this frame is the next frame's business); GASP's BP falling mode is a UFallingMode
+	const UBaseMovementMode* Mode = Mover->FindMovementModeByName(StartState.SyncState.MovementMode);
+	FGSTN_AirTurn::Apply(StartState, Cast<UFallingMode>(Mode) != nullptr, Mover->GetUpDirection(), TimeStep.StepMs * 0.001f, OutProposedMove);
 }
 
 void UGSTN_CombatSimComponent::CompileInput()
@@ -323,6 +359,14 @@ const FGSTN_CommandTable& UGSTN_CombatSimComponent::GetCommandTable() const
 
 void UGSTN_CombatSimComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (UMoverComponent* Mover = AirTurnMover.Get())
+	{
+		if (Mover->ProcessGeneratedMovement.GetUObject() == this)
+		{
+			Mover->UnbindProcessGeneratedMovement();
+		}
+	}
+	AirTurnMover.Reset();
 	if (UGSTN_CombatWorldSubsystem* Subsystem = WorldSubsystem.Get())
 	{
 		if (RegisteredEntityId != INDEX_NONE)
@@ -933,7 +977,12 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 			{
 				const float TargetYaw = FGSTN_GravityFrame::YawOfRotator(FRotationMatrix::MakeFromXZ(StickDir, OwnerUp).Rotator(), OwnerUp);
 				const float StepSeconds = LastStepMs > 0 ? LastStepMs * 0.001f : 1.f / 62.5f;
-				HoldOrientationIntent(InputCmdResult, FGSTN_AnalogWalkLogic::StepAirYaw(*Analog, OwnerYaw, TargetYaw, StepSeconds), OwnerUp);
+				if (HoldOrientationIntent(InputCmdResult, FGSTN_AnalogWalkLogic::StepAirYaw(*Analog, OwnerYaw, TargetYaw, StepSeconds), OwnerUp))
+				{
+					// The rate rides with the command: the sim turns at it after GASP's falling mode capped it at 300 (FGSTN_AirTurn)
+					InputCmdResult.InputCollection.FindOrAddMutableDataByType<FGSTN_AirTurnInputs>().RateDegPerSec =
+						FGSTN_AirTurn::QuantizeRate(Analog->AirTurnRateDegPerSec);
+				}
 			}
 		}
 	}

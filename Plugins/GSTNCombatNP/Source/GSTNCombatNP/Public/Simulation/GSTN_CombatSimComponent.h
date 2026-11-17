@@ -33,6 +33,7 @@
 #include "Timeline/GSTN_TimelinePlayer.h"
 #include "World/GSTN_StepSnapshot.h"
 #include "MoverSimulationTypes.h"
+#include "MoveLibrary/MovementUtilsTypes.h"
 #include "Input/GSTN_InputConfigSource.h"
 #include "GSTN_CombatSimComponent.generated.h"
 
@@ -896,6 +897,16 @@ private:
 
 	UFUNCTION()
 	void HandleLoadoutApplied(UGSTN_LoadoutComponent* Component, int32 Revision);
+
+	/** Binds HandleProcessGeneratedMovement to the owner's Mover (BeginPlay; skipped with a warning when the hook is someone else's) */
+	void BindAirTurn();
+
+	/** Mover's ProcessGeneratedMovement: the air turn at the kit profile's rate over GASP's fixed 300 deg/s (FGSTN_AirTurn::Apply) */
+	UFUNCTION()
+	void HandleProcessGeneratedMovement(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, FProposedMove& OutProposedMove);
+
+	/** The Mover whose hook this component holds (unbound in EndPlay) */
+	TWeakObjectPtr<UMoverComponent> AirTurnMover;
 
 	/** Looks for the loadout component to bind, a few times a second, until one is bound (the PlayerState and its component arrive after BeginPlay on a client) */
 	void PollLoadoutComponent();

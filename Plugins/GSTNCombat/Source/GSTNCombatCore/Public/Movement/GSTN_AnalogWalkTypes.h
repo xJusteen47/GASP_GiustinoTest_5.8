@@ -115,4 +115,11 @@ struct GSTNCOMBATCORE_API FGSTN_AnalogWalkLogic
 
 	/** The yaw after one air-turn step from CurrentYaw towards TargetYaw (degrees, shortest way) */
 	static float StepAirYaw(const FGSTN_AnalogWalkTuning& Tuning, float CurrentYaw, float TargetYaw, float DeltaSeconds);
+
+	/**
+	 * Yaw speed (deg/s, signed about the local up) that turns CurrentYaw toward TargetYaw this step, capped at RateDegPerSec: the falling
+	 * mode's turn rule with the profile's air turn rate (m3-air-turn 2026-11-17). GASP's BP_MovementMode_Falling recomputes the turn
+	 * with a fixed 300 deg/s cap after Mover's own, so the air turn sets it again from this. 0 when Rate or DeltaSeconds is not positive
+	 */
+	static float AirTurnYawRate(float RateDegPerSec, float CurrentYaw, float TargetYaw, float DeltaSeconds);
 };

@@ -49,4 +49,43 @@ bool FGSTN_AnalogWalkAirYawTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_AnalogWalkAirTurnRateTest, "GSTNCombat.Core.AnalogWalk.AirTurnRate", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_AnalogWalkAirTurnRateTest::RunTest(const FString& Parameters)
+{
+	// m3-air-turn 2026-11-17: the sim turns at the profile's rate (3600 in the Mario 3DW preset), not GASP's fixed 300 deg/s
+	const float Dt = 1.f / 62.5f;
+	const float Rate = 3600.f;
+	TestEqual(TEXT("a gap wider than a frame turns at the full rate"), FGSTN_AnalogWalkLogic::AirTurnYawRate(Rate, 0.f, 120.f, Dt), Rate, 1e-2f);
+	TestEqual(TEXT("the other side turns at minus the rate"), FGSTN_AnalogWalkLogic::AirTurnYawRate(Rate, 0.f, -120.f, Dt), -Rate, 1e-2f);
+	TestEqual(TEXT("a small gap closes in exactly one frame"), FGSTN_AnalogWalkLogic::AirTurnYawRate(Rate, 10.f, 20.f, Dt), 10.f / Dt, 1e-2f);
+	TestEqual(TEXT("across +-180 the short way"), FGSTN_AnalogWalkLogic::AirTurnYawRate(Rate, 170.f, -170.f, Dt), 20.f / Dt, 1e-2f);
+	TestEqual(TEXT("an exact half turn goes positive, like StepAirYaw"), FGSTN_AnalogWalkLogic::AirTurnYawRate(Rate, 0.f, 180.f, Dt), Rate, 1e-2f);
+	TestEqual(TEXT("rate 0 never turns"), FGSTN_AnalogWalkLogic::AirTurnYawRate(0.f, 0.f, 90.f, Dt), 0.f);
+	TestEqual(TEXT("no time, no turn"), FGSTN_AnalogWalkLogic::AirTurnYawRate(Rate, 0.f, 90.f, 0.f), 0.f);
+
+	// The producer's step and the sim's rate agree: a 180 reversal at 3600 deg/s faces the new way in ceil(180 / 57.6) = 4 frames
+	FGSTN_AnalogWalkTuning Tuning;
+	Tuning.AirTurnRateDegPerSec = Rate;
+	float Yaw = 0.f;
+	int32 Frames = 0;
+	while (FMath::Abs(FRotator::NormalizeAxis(180.f - Yaw)) > 0.01f && Frames < 100)
+	{
+		const float Intent = FGSTN_AnalogWalkLogic::StepAirYaw(Tuning, Yaw, 180.f, Dt);
+		Yaw = FRotator::NormalizeAxis(Yaw + FGSTN_AnalogWalkLogic::AirTurnYawRate(Rate, Yaw, Intent, Dt) * Dt);
+		++Frames;
+	}
+	TestEqual(TEXT("180 at 3600 deg/s takes 4 frames"), Frames, 4);
+	// The old cap (GASP's falling mode, 300 deg/s) took 38: the defect the QA pass measured (qa-movement-1117 defect 3)
+	Yaw = 0.f;
+	Frames = 0;
+	while (FMath::Abs(FRotator::NormalizeAxis(180.f - Yaw)) > 0.01f && Frames < 100)
+	{
+		const float Intent = FGSTN_AnalogWalkLogic::StepAirYaw(Tuning, Yaw, 180.f, Dt);
+		Yaw = FRotator::NormalizeAxis(Yaw + FGSTN_AnalogWalkLogic::AirTurnYawRate(300.f, Yaw, Intent, Dt) * Dt);
+		++Frames;
+	}
+	TestEqual(TEXT("the 300 deg/s cap takes 38 frames"), Frames, 38);
+	return true;
+}
+
 #endif

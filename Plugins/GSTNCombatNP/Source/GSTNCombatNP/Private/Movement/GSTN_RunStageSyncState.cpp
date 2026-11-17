@@ -212,6 +212,8 @@ int32 FGSTN_RunStageMover::ApplyAirValues(UMoverComponent& MoverComp, const FGST
 	// in game: a constant 300 deg/s), so the profile's AirTurnRateDegPerSec (UGSTN_CombatSimComponent's air turn intent) was capped by it: a
 	// 180 degree air turn took 31 frames instead of ~3. While airborne the shared rate is raised to the air turn rate; on the ground it is the
 	// authored one again. Assigned every substep from the state, like MaxSpeed below, so a resimulation writes the same values
+	// m3-air-turn 2026-11-17: this alone did not fix it. GASP's BP_MovementMode_Falling recomputes the turn after Mover's with a fixed 300 deg/s
+	// typed on its node, so the real limiter was the Blueprint; FGSTN_AirTurn sets the turn again after the mode. Kept for Mover's own modes
 	const UCommonLegacyMovementSettings* AuthoredShared = Cast<UCommonLegacyMovementSettings>(Shared->GetArchetype());
 	const float GroundTurnRate = AuthoredShared ? AuthoredShared->TurningRate : Shared->TurningRate;
 	const float AirTurnRate = Tuning.AnalogWalk.bEnabled ? Tuning.AnalogWalk.AirTurnRateDegPerSec : 0.f;
