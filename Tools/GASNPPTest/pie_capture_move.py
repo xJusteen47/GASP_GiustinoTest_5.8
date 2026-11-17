@@ -241,8 +241,20 @@ def _clear_stage():
     """Review only, nothing saved: the other players leave the piazza (they spawn a step away and hide the move) and the kit's placeholder cube
     on the back is hidden (it covers the trunk and the arms from behind)"""
     parked = [h.park(i, 'Z1') for i in h._players() if i != 0]
-    _console('gstn.Combat.KitPlaceholderLook 0')
     me = _pawn().get_actor_location()
+    # F4 (2026-11-17): the clients' worlds often have no possessed pawn yet (h._players() = host only), so their pawns stayed in the piazza
+    # (one 48 cm from ours in the dair capture). Park any other player pawn (key P<n>) found on the server within 1000 cm, by its comp
+    if not parked:
+        spots = h.hub.PARK['Z1']
+        for n, (key, comp) in enumerate(sorted(g.comps(g.worlds()[0]).items())):
+            owner = comp.get_owner()
+            if owner == _pawn() or not str(key).startswith('P') or owner.get_actor_location().distance(me) > 1000:
+                continue
+            x, y = spots[n % len(spots)]
+            spawn = comp.get_spawn_location()
+            comp.server_reset_to_spawn(unreal.Vector(x - spawn.x, y - spawn.y, 0.0))
+            parked.append((key, (x, y)))
+    _console('gstn.Combat.KitPlaceholderLook 0')
     others = [round(c.get_owner().get_actor_location().distance(me)) for c in g.comps(_world()).values() if c.get_owner() != _pawn()]
     return f'parked {parked}, other pawns at {sorted(others)[:4]} cm'
 
@@ -430,8 +442,8 @@ def _tick(_dt):
             st.update(phase='kit_wait', t=now)
         elif phase == 'kit_wait' and now - st['t'] > 3:
             # F4 (2026-11-17): the two clients' players can join after the host's input is ready; parking ran with [] and a hub pawn stood
-            # next to ours in the R4/playtest_r3 captures. Wait up to 40 s for all three players before staging
-            if len(h._players()) < 3 and now - st['t'] < 40:
+            # next to ours in the R4/playtest_r3 captures. Wait up to 15 s for all three players before staging
+            if len(h._players()) < 3 and now - st['t'] < 15:
                 return
             view = g._view(0, h._key(0)) or {}
             _log(f'loadout: {json.dumps(view.get("loadout"))[:300]}')

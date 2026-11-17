@@ -46,8 +46,9 @@ CLIPS = {
 # (start, end exclusive, clip, lag frames): internal 0-based timeline frames (designer frame = internal + 1)
 # R3: the tucked window runs past the charge (anim 0-12) by the 2-frame landing latency: the review's dair_land shows the ball (anim 12) and is
 # decided on internal 13 (designer f14), so the window is internal 3-13 = designer f4-14
-# F4 (2026-11-17): with the touchdown on the contact frame (landing fixes z9mi0s) the R4 tucked window is back to designer f4-12 (internal 3-11)
-_TUCK_END = int(os.environ.get('DAIR_V10_TUCK_END', '12'))
+# F4 (2026-11-17): f4-12 (DAIR_V10_TUCK_END=12) was tried after the landing fixes (z9mi0s): dair_land touched down on anim 10 and still got
+# HeavyR2 (pelvis 45 -> 73 pop, Saved/DairV10/f4_r4b/dair_land/frames.jsonl v89-90): the montage still trails the timeline. Default stays f4-14
+_TUCK_END = int(os.environ.get('DAIR_V10_TUCK_END', '14'))
 WINDOWS = ([(0, 3, 'LightTuck', 4), (3, _TUCK_END, 'HeavyTuck', 16), (_TUCK_END, 31, 'Heavy', 16), (31, 43, 'Light', 4)] if ROUND == 'R4'
            else [(0, 3, 'Light', 4), (3, 14, 'HeavyTuck', 16), (14, 31, 'Heavy', 16), (31, 43, 'Light', 4)] if ROUND == 'R3'
            else [(0, 3, 'Light', 4), (3, 31, 'Heavy', 16), (31, 43, 'Light', 4)])
