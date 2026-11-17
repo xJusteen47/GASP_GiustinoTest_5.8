@@ -15,10 +15,9 @@ float FGSTN_PresentationScale::Evaluate(float Magnitude) const
 {
 	const double Low = InputRange.X;
 	const double High = InputRange.Y;
-	// Divisor kept provably non-zero: with a constant equal range inlined, MSVC flags the dead branch (C4723).
-	const bool bFlat = FMath::IsNearlyEqual(Low, High);
-	const double Span = bFlat ? 1.0 : (High - Low);
-	double T = bFlat ? (Magnitude >= High ? 1.0 : 0.0) : (Magnitude - Low) / Span;
+	// An empty range is a step at High; the divisor is never zero (C4723)
+	const double Span = High - Low;
+	double T = FMath::Abs(Span) <= UE_KINDA_SMALL_NUMBER ? (Magnitude >= High ? 1.0 : 0.0) : (Magnitude - Low) / (FMath::Abs(Span) > 0.0 ? Span : 1.0);
 	if (bClampInput)
 	{
 		T = FMath::Clamp(T, 0.0, 1.0);
