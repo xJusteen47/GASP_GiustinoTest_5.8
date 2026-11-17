@@ -3,6 +3,7 @@
 #include "GSTN_CombatNPTags.h"
 #include "Input/GSTN_InputMatcher.h"
 #include "Misc/AutomationTest.h"
+#include "MoveLibrary/MovementMixer.h"
 #include "Movement/GSTN_LayeredMove_Freeze.h"
 #include "Serialization/BitReader.h"
 #include "Serialization/BitWriter.h"
@@ -147,6 +148,57 @@ bool FGSTN_FreezeZeroOnFinishFlagTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a move is generated"), Freeze.GenerateMove(StartData, TimeStep, nullptr, nullptr, Proposed));
 	TestTrue(TEXT("with zero velocity"), Proposed.LinearVelocity.IsZero());
 	TestEqual(TEXT("overriding everything"), Proposed.MixMode, EMoveMixMode::OverrideAll);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_FreezeWinsOverEarlierMoveTest, "GSTNCombat.NP.Hits.Hitstop.FreezeWinsOverEarlierMove", GSTN_NP_TEST_FLAGS)
+bool FGSTN_FreezeWinsOverEarlierMoveTest::RunTest(const FString& Parameters)
+{
+	// Owner playtest 2026-11-17: the pawn kept falling in hitstop. Mover's mixer breaks a priority tie in favour of the move that started
+	// FIRST, so a priority-0 override already running (an aerial's movement track, a knockback) beat a priority-0 freeze queued by the hit
+	UMovementMixer* Mixer = NewObject<UMovementMixer>();
+
+	FGSTN_LayeredMove_Freeze Running;	// stands in for any earlier override move: the mixer reads only priority and start time
+	Running.Priority = 0;
+	Running.StartSimTimeMs = 100.0;
+	FProposedMove RunningStep;
+	RunningStep.MixMode = EMoveMixMode::OverrideVelocity;
+	RunningStep.LinearVelocity = FVector(0.0, 0.0, -900.0);
+
+	FGSTN_LayeredMove_Freeze Freeze;
+	Freeze.Setup(FVector(0.0, 0.0, -900.0), 133.f, false);
+	Freeze.StartSimTimeMs = 500.0;
+	TestTrue(TEXT("the hitstop freeze outranks every other layered move"), Freeze.Priority == FGSTN_LayeredMove_Freeze::HitstopPriority && Freeze.Priority > 1);
+	FProposedMove FreezeStep;
+	TestTrue(TEXT("a move is generated"), Freeze.GenerateMove(FMoverTickStartData(), FMoverTimeStep(), nullptr, nullptr, FreezeStep));
+
+	for (const bool bFreezeFirst : {false, true})
+	{
+		Mixer->ResetMixerState();
+		FProposedMove Combined;
+		Combined.MixMode = EMoveMixMode::AdditiveVelocity;
+		if (bFreezeFirst)
+		{
+			Mixer->MixLayeredMove(Freeze, FreezeStep, Combined);
+			Mixer->MixLayeredMove(Running, RunningStep, Combined);
+		}
+		else
+		{
+			Mixer->MixLayeredMove(Running, RunningStep, Combined);
+			Mixer->MixLayeredMove(Freeze, FreezeStep, Combined);
+		}
+		TestEqual(FString::Printf(TEXT("freeze overrides all (mixed %s)"), bFreezeFirst ? TEXT("first") : TEXT("last")), Combined.MixMode, EMoveMixMode::OverrideAll);
+		TestTrue(FString::Printf(TEXT("no velocity, no gravity fall (mixed %s)"), bFreezeFirst ? TEXT("first") : TEXT("last")), Combined.LinearVelocity.IsZero());
+	}
+
+	// The wire keeps the priority (Mover serializes a non-default one)
+	FBitWriter Writer(1024, true);
+	Freeze.NetSerialize(Writer);
+	FBitReader Reader(Writer.GetData(), Writer.GetNumBits());
+	FGSTN_LayeredMove_Freeze Loaded;
+	Loaded.Priority = 0;
+	Loaded.NetSerialize(Reader);
+	TestEqual(TEXT("priority after the wire"), static_cast<int32>(Loaded.Priority), static_cast<int32>(FGSTN_LayeredMove_Freeze::HitstopPriority));
 	return true;
 }
 

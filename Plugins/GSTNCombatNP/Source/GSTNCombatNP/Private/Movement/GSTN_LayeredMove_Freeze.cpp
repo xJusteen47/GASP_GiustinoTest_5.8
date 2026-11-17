@@ -8,6 +8,7 @@
 FGSTN_LayeredMove_Freeze::FGSTN_LayeredMove_Freeze()
 {
 	MixMode = EMoveMixMode::OverrideAll;
+	Priority = HitstopPriority;
 }
 
 void FGSTN_LayeredMove_Freeze::Setup(const FVector& InIncomingVelocity, float InDurationMs, bool bInZeroVelocityOnFinish)
@@ -92,7 +93,7 @@ FEffectMoveContainer UGSTN_FreezeMoveCreator::MakeMove_Implementation(UMoverComp
 		Freeze.DriftVelocity = FVector(Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityX, false, 0.f),
 			Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityY, false, 0.f), Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityZ, false, 0.f));
 		// Above the hitstop freeze it rides on (the higher override wins), and it leaves the velocity to that freeze
-		Freeze.Priority = 1;
+		Freeze.Priority = FGSTN_LayeredMove_Freeze::DriftPriority;
 		Freeze.FinishVelocitySettings.FinishVelocityMode = ELayeredMoveFinishVelocityMode::MaintainLastRootMotionVelocity;
 	}
 	return FEffectMoveContainer(&Freeze);

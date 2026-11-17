@@ -21,8 +21,8 @@
  * plane (the vertical part is the walking mode's ground snap's). The turn of the montage is held too for that frame. The move ends with its
  * timeline (DurationMs set so the next flush removes it).
  *
- * Mixing: OverrideVelocity at priority 1: wins over the montage's root motion move and the momentum slide (priority 0). A hitstop freeze (also
- * priority 1) holds the pawn already: on a frozen frame this move stands aside.
+ * Mixing: OverrideVelocity at priority 1: wins over the montage's root motion move and the momentum slide (priority 0). A hitstop freeze (priority
+ * FGSTN_LayeredMove_Freeze::HitstopPriority) holds the pawn already: on a frozen frame this move stands aside.
  *
  * Rollback: the only latched value is the timeline's start frame, serialized; the stop itself is read from the restored combat state.
  */

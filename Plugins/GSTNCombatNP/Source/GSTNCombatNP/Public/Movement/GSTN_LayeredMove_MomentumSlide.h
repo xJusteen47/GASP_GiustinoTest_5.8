@@ -38,7 +38,7 @@ enum class EGSTN_MomentumSlidePhase : uint8
  *   - at a ledge (no floor under the next step) it ends, when the data says so.
  *
  * Mixing: OverrideVelocity at priority 0, queued before the montage starts, so it wins over the montage's root motion move (same priority,
- * earlier start) and loses to the freeze (priority 1). The root motion is not lost: the move finds this frame's root motion move among the
+ * earlier start) and loses to the freeze (HitstopPriority). The root motion is not lost: the move finds this frame's root motion move among the
  * queued moves of its start state and adds its ground velocity. Vertical velocity is left to the walking mode's ground snap, like the push back.
  *
  * Rollback: every latched value is a serialized field of the move, so a restored sync state replays it. A step is counted once per

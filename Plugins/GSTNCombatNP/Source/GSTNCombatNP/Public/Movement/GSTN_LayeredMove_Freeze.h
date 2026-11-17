@@ -19,11 +19,22 @@
  * tick it finishes on, which is the first frame outside the window), and a stagger-in-place victim sets bZeroVelocityOnFinish: it leaves the freeze with
  * zero velocity. The restore uses the finish velocity settings of the layered move, which Mover already serializes, so no extra state
  * is needed to survive a rollback.
+ *
+ * Priority (owner playtest 2026-11-17: "the character keeps falling during hitstop"): Mover's mixer gives a tie in priority to the move that
+ * STARTED FIRST, so at the default priority 0 any override move already running when the hit lands (an aerial's movement track, a dash
+ * impulse, a juggled victim's knockback) won over the freeze and the falling mode added gravity under it. The hitstop freeze therefore runs at
+ * HitstopPriority, above every other layered move of the project; the SDI drift freeze rides one step above it (DriftPriority).
  */
 USTRUCT()
 struct GSTNCOMBATNP_API FGSTN_LayeredMove_Freeze : public FLayeredMoveBase
 {
 	GENERATED_BODY()
+
+	/** Mixer priority of the hitstop freeze: above any other layered move, whatever started first */
+	static constexpr uint8 HitstopPriority = 250;
+
+	/** Mixer priority of the one-frame SDI drift freeze, which must win over the hitstop freeze it rides on */
+	static constexpr uint8 DriftPriority = HitstopPriority + 1;
 
 	FGSTN_LayeredMove_Freeze();
 	virtual ~FGSTN_LayeredMove_Freeze() = default;

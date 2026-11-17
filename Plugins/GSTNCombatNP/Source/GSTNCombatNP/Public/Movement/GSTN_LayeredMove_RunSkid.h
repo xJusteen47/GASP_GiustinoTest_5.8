@@ -38,7 +38,7 @@ enum class EGSTN_RunSkidLife : uint8
  * Tags: Movement.State.Skid while running, Movement.State.Skid.JumpWindow inside the window. Derived from the move in the sync state, so a
  * rollback restores them; the combat tick copies them into the input context (kit bindings) and the presentation reads the phase.
  *
- * Mixing: OverrideVelocity at priority 0, like the momentum slide (a freeze, priority 1, wins).
+ * Mixing: OverrideVelocity at priority 0, like the momentum slide (a freeze, HitstopPriority, wins).
  */
 USTRUCT()
 struct GSTNCOMBATNP_API FGSTN_LayeredMove_RunSkid : public FLayeredMoveBase
