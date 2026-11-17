@@ -264,6 +264,77 @@ def _shoot(run, frame):
     unreal.RenderingLibrary.export_render_target(_world(), st['rt'], folder, f'f{frame:03d}.png')
 
 
+DIAG = os.environ.get('WALL_DIAG') == '1'   # round 2: why the BumpWall montage stops one frame after it starts
+
+
+def _diag_hook():
+    """Montage started / blending out / ended events of the victim's anim instance, stamped with the capture frame"""
+    if st.get('diag_hooked'):
+        return
+    st['diag_hooked'], st['events'], st['seen'] = True, [], {}
+    anim = _pawn().get_component_by_class(unreal.SkeletalMeshComponent).get_anim_instance()
+    st['anim'] = anim
+
+    def ev(kind):
+        def f(montage, *args):
+            st['seen'][montage.get_name()] = montage
+            st['events'].append([st.get('frame'), kind, montage.get_name(), [str(a) for a in args]])
+        return f
+    for name, kind in (('on_montage_started', 'start'), ('on_montage_blending_out', 'blendout'), ('on_montage_ended', 'end')):
+        try:
+            getattr(anim, name).add_callable(ev(kind))
+        except Exception as e:  # noqa: BLE001
+            _log(f'diag: cannot bind {name}: {e!r}')
+    try:
+        st['slot'] = str(unreal.load_asset(SET).get_editor_property('slot_name'))
+        clip = unreal.load_asset('/Game/GASNPPTest/Combat/Reaction/AS_React_HitStand')
+        _log(f'diag: slot {st["slot"]}, AS_React_HitStand length {clip.get_play_length():.3f} s = {clip.get_play_length() * 60:.1f} frames')
+    except Exception as e:  # noqa: BLE001
+        _log(f'diag: set/clip read failed {e!r}')
+
+
+def _diag(frame):
+    anim, out = st['anim'], {}
+    mons = []
+    for name, m in st['seen'].items():
+        try:
+            if anim.montage_is_active(m) or anim.montage_is_playing(m):
+                grp = ''
+                try:
+                    grp = str(m.get_group_name())
+                except Exception:  # noqa: BLE001
+                    pass
+                mons.append([name, grp, round(anim.montage_get_position(m) * 60.0, 1), bool(anim.montage_is_playing(m)),
+                             bool(anim.montage_get_is_stopped(m))])
+        except Exception as e:  # noqa: BLE001
+            mons.append([name, 'err', repr(e)[:50]])
+    out['montages'] = mons
+    try:
+        out['slot_w'] = round(anim.get_slot_montage_global_weight(st.get('slot', 'DefaultSlot')), 3)
+    except Exception as e:  # noqa: BLE001
+        out['slot_w'] = repr(e)[:40]
+    try:
+        rc = _pawn().get_component_by_class(unreal.GSTN_ReactionAnimComponent)
+        out['rule'] = str(rc.get_active_rule_name())
+    except Exception as e:  # noqa: BLE001
+        out['rule'] = repr(e)[:40]
+    asc = _pawn().get_component_by_class(unreal.AbilitySystemComponent)
+    try:
+        out['all_tags'] = sorted(t for t in str(asc.get_owned_gameplay_tags()).replace('"', ' ').split() if '.' in t and t[0].isupper())
+    except Exception:  # noqa: BLE001
+        try:
+            out['all_tags'] = _tag_names(unreal.BlueprintGameplayTagLibrary.get_owned_gameplay_tags(_pawn()))
+        except Exception as e:  # noqa: BLE001
+            out['all_tags'] = repr(e)[:40]
+    try:
+        m = asc.get_current_montage()
+        out['asc_montage'] = m.get_name() if m else None
+    except Exception as e:  # noqa: BLE001
+        out['asc_montage'] = repr(e)[:40]
+    out['events'] = [e for e in st['events'] if e[0] == frame]
+    return out
+
+
 def _row(run, frame, tap):
     v = g.snap(_world())[st['hkey']]
     loc, vel = v['location'], v.get('velocity', (0, 0, 0))
@@ -273,6 +344,8 @@ def _row(run, frame, tap):
     row = {'f': frame, 'tags': [t for t in TAGS if _has(t)], 'vel': [round(x) for x in vel],
            'vin': round(vel[0] * w['fwd'][0] + vel[1] * w['fwd'][1]), 'loc': [round(x, 1) for x in loc], 'wall_cm': round(dist, 1),
            'montage': _montage(), 'impact': cc.get_impact_info(), 'counts': cc.get_impact_counts(), 'mode': v.get('mode')}
+    if DIAG:
+        row['diag'] = _diag(frame)
     if tap:
         row['tap'] = tap
     run['rows'].append(row)
@@ -348,11 +421,13 @@ def _tick(_dt):
             st.update(phase='cameras', t=now)
         elif phase == 'cameras':
             if _make_camera() and _make_lights() and _make_wall_visual():
+                if DIAG:
+                    _diag_hook()
                 st.update(phase='prep', t=now)
             elif now - st['t'] > 20:
                 _finish('could not summon the scene capture')
         elif phase == 'prep' and now - st['t'] > 1.5:
-            if st['ri'] >= 2:
+            if st['ri'] >= (1 if os.environ.get('WALL_ONLY_WEAK') == '1' else 2):
                 return _finish('ok')
             st['run'] = _next_run()
             _prep(st['run'])

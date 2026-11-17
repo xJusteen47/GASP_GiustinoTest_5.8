@@ -19,3 +19,12 @@ _ue59 HEAD = a local merge of 7d7b4f20 (v94blx) + h2hlp5 06078c80 = f189e6f9. It
    whole bump. The grid shows the character's own locomotion pose (running legs) against the wall, not AS_React_HitStand.
 2. The push off the wall is about 45 cm, not "piccolo piccolo". Tune BumpMin/MaxSpeed or the slide kept after landing.
 3. In the weak grid the tumble pose clips into the wall face before contact (mesh only).
+
+## Round 2 (e73cb44 bump as a distance; _ue59 local merge 0281ba60, not pushed)
+- Build OK 211 s (wallbounce-ue59-build2.log). GSTNCombat.NP.Hits.Impact 10/10 Success, WallCeilingDefaultBounce included (wallbounce-ue59-test2.log.ue.log).
+- Weak run only, with WALL_DIAG=1 (Saved/WallBounce/r2, docs/notes/reviews/wall-bounce-1/weak_r2*): contact f45, deepest point 30.7 cm from the capsule centre.
+  The push ends at 36.9 cm on f58 (about 6 cm). It lands on f55 at 36.7 cm and moves 0.2 cm after that: no slide.
+- Why the clip stops: AS_React_HitStand is 3 frames long (0.05 s). A BlendOut rule stops its montage once Remaining <= BlendOut 6 f + 1.5 f lead.
+  It starts on f46 and stops on f47 (ActiveRule None from f47), ConsumedRule = BumpWall, so it does not restart while Bump.Wall holds (to f59).
+  No other montage starts f44-f62 (OnMontageStarted only AnimMontage_3 on f46 and the Tumble rule's on f60). The character's own Falling/Walking
+  pose shows. This is data (placeholder too short for BlendOut), not the game code: a clip of about 14 frames, or HoldLastPose, would hold it.
