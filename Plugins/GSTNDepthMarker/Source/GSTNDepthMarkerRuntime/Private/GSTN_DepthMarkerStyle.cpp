@@ -18,6 +18,12 @@ void UGSTN_DepthMarkerStyle::PopulateDefaultPresenters()
 	GroundLine->ActiveStates = BelowStates;
 	Presenters.Add(GroundLine);
 
+	// Blob shadow on the target, cast along the marker's projection (gravity by default, a wall when a projection says so). Its material is
+	// the settings' DefaultDecalMaterial (holographic disc); with none set the presenter draws nothing
+	UGSTN_DepthPresenter_Decal* GroundShadow = NewObject<UGSTN_DepthPresenter_Decal>(this);
+	GroundShadow->ActiveStates = BelowStates;
+	Presenters.Add(GroundShadow);
+
 	// The above layer is lighter so two markers do not compete (§8)
 	UGSTN_DepthPresenter_Ring* AboveRing = NewObject<UGSTN_DepthPresenter_Ring>(this);
 	AboveRing->Layer = EGSTN_DepthLayer::Above;

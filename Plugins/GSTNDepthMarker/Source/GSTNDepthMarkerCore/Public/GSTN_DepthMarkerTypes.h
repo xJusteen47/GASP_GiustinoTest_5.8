@@ -7,6 +7,52 @@
 #include "UObject/ObjectMacros.h"
 #include "GSTN_DepthMarkerTypes.generated.h"
 
+/** Where the marker (and its blob shadow) is cast. Gravity is the default; the others are for walls, ceilings and set pieces */
+UENUM(BlueprintType)
+enum class EGSTN_DepthProjectionMode : uint8
+{
+	/** Along the entity's own gravity (the adapter's Up), the normal case */
+	Gravity,
+	/** Along Direction, in world space */
+	World,
+	/** Along Direction, in the owner's frame (X forward, Y right, Z up): e.g. (0,1,0) = to the right of the character */
+	OwnerLocal
+};
+
+/**
+ * The direction a marker is cast along (depth-marker.md §2, "projection"). Data only: a component default, a volume or a state rule picks one.
+ * Presentation only: changing it never touches the simulation.
+ */
+USTRUCT(BlueprintType)
+struct GSTNDEPTHMARKERCORE_API FGSTN_DepthProjection
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Projection")
+	EGSTN_DepthProjectionMode Mode = EGSTN_DepthProjectionMode::Gravity;
+
+	/** The way the marker is cast (the column goes this way), World or OwnerLocal; normalised on use. Down = (0,0,-1) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Projection",
+		meta = (EditCondition = "Mode != EGSTN_DepthProjectionMode::Gravity"))
+	FVector Direction = FVector(0.0, 0.0, -1.0);
+
+	/**
+	 * Off gravity, start the column at the middle of the body instead of the feet (a sideways shadow should leave the hips, not the soles).
+	 * Ignored along gravity.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Projection")
+	bool bFromBodyCentre = true;
+
+	/**
+	 * Off gravity, show the marker while the entity stands on the ground too (a wall shadow next to a walking character). Along gravity the
+	 * usual rule stays: no marker while grounded.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Projection")
+	bool bShowWhenGrounded = true;
+
+	bool IsGravity() const { return Mode == EGSTN_DepthProjectionMode::Gravity; }
+};
+
 /** What a target is made of */
 UENUM(BlueprintType)
 enum class EGSTN_DepthTargetKind : uint8

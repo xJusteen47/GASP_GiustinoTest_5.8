@@ -722,3 +722,37 @@ bool FGSTN_DepthMarkerMath::UpdateVisibility(FGSTN_DepthSelectionState& State, b
 	}
 	return State.bVisible;
 }
+
+bool FGSTN_DepthMarkerMath::ApplyProjection(FGSTN_DepthSubjectState& Subject, const FGSTN_DepthProjection& Projection, const FQuat& OwnerRotation)
+{
+	if (Projection.IsGravity())
+	{
+		return false;
+	}
+	FVector Cast = Projection.Mode == EGSTN_DepthProjectionMode::OwnerLocal ? OwnerRotation.RotateVector(Projection.Direction) : Projection.Direction;
+	if (!Cast.Normalize())
+	{
+		return false;
+	}
+	const FVector GravityUp = Subject.Up.GetSafeNormal();
+	const FVector NewUp = -Cast;
+	// Within a degree of gravity: keep the gravity column (no needless reset of the selection)
+	if (FVector::DotProduct(NewUp, GravityUp) > 0.99985)
+	{
+		return false;
+	}
+	if (Projection.bFromBodyCentre)
+	{
+		Subject.Feet += GravityUp * (Subject.TopOffset * 0.5f);
+	}
+	Subject.Up = NewUp;
+	// The floor under the feet is not what a sideways (or upward) column hits
+	Subject.BaseComponent.Reset();
+	Subject.bBaseMoves = false;
+	if (Projection.bShowWhenGrounded)
+	{
+		Subject.bAirborne = true;
+		Subject.bGrounded = false;
+	}
+	return true;
+}

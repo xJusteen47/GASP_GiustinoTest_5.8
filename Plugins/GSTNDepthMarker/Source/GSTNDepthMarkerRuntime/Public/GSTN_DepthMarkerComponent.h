@@ -11,6 +11,19 @@
 class UGSTN_DepthMarkerStyle;
 class UGSTN_DepthTargetSelector;
 
+/** A projection used while the owner's tags match (first matching rule wins) */
+USTRUCT(BlueprintType)
+struct GSTNDEPTHMARKERRUNTIME_API FGSTN_DepthProjectionRule
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Projection")
+	FGameplayTagQuery When;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Projection")
+	FGSTN_DepthProjection Projection;
+};
+
 /**
  * Gives its actor a depth marker. The opt-in is data: a pawn has a marker if it has this component (added by pawn data, an
  * ability set, a Game Feature AddComponents action or a minion definition), so no code asks "is this an enemy".
@@ -56,6 +69,27 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Tags")
 	FGameplayTagQuery ShowOnlyWhen;
 
+	/**
+	 * Where the marker and its blob shadow are cast. Precedence: the first matching ProjectionRules entry (owner state), then the
+	 * highest-priority Depth Projection Volume around the feet, then this default (gravity unless changed), then gravity.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Projection")
+	FGSTN_DepthProjection Projection;
+
+	/**
+	 * Per state: e.g. wall slide -> cast sideways into the wall. Tags come from IGSTN_DepthTagSource on the owner, else from the owner or
+	 * its components that implement IGameplayTagAssetInterface (the ability system component does). Read only when the list is not empty.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DepthMarker|Projection")
+	TArray<FGSTN_DepthProjectionRule> ProjectionRules;
+
+	/** Set from code or Blueprint for a phase (a cutscene, a boss); beats volumes and the default, not the state rules. Clear to drop it */
+	UFUNCTION(BlueprintCallable, Category = "DepthMarker")
+	void SetProjectionOverride(const FGSTN_DepthProjection& InProjection) { ProjectionOverride = InProjection; bHasProjectionOverride = true; }
+
+	UFUNCTION(BlueprintCallable, Category = "DepthMarker")
+	void ClearProjectionOverride() { bHasProjectionOverride = false; }
+
 	/** Local switch (a Blueprint can turn the marker off for a phase without removing the component) */
 	UFUNCTION(BlueprintCallable, Category = "DepthMarker")
 	void SetMarkerEnabled(bool bInEnabled) { bMarkerEnabled = bInEnabled; }
@@ -74,5 +108,7 @@ private:
 	friend class UGSTN_DepthMarkerSubsystem;
 
 	bool bMarkerEnabled = true;
+	bool bHasProjectionOverride = false;
+	FGSTN_DepthProjection ProjectionOverride;
 	FGSTN_DepthResult LastResult;
 };
