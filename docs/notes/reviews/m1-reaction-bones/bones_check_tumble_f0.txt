@@ -1,0 +1,28 @@
+AnimPose names: AnimPose,AnimPoseContext,AnimPoseEvaluationOptions,AnimPoseExtensions,AnimPoseSpaces
+AnimPoseExtensions: acquire_editor_element_handle,call_method,cast,edit_property,evaluate_animation_blueprint_with_input_pose,get_anim_pose_at_frame,get_anim_pose_at_time,get_bone_names,get_bone_pose,get_class,get_curve_names,get_curve_weight,get_decoration_host_section,get_default_object,get_editor_property,get_fname,get_full_name,get_name,get_outer,get_outermost,get_package,get_path_name,get_ref_bone_pose,get_ref_pose_relative_transform,get_reference_pose,get_relative_to_ref_pose_transform,get_relative_transform,get_socket_names,get_socket_pose,get_typed_outer,get_world,is_editor_property_overridden,is_package_external,is_valid,modify,modify_property,rename,reset_editor_property,set_bone_pose,set_editor_properties,set_editor_property,static_class
+n_bones=93
+opts props: evaluate_curves,evaluation_type,extract_root_motion,incorporate_root_motion_into_pose,optional_skeletal_mesh,retrieve_additive_as_full_pose,should_retarget
+REF root t=(0.00,0.00,0.00) s=(1.000,1.000,1.000)
+REF pelvis t=(0.00,-0.71,93.12) s=(1.000,1.000,1.000)
+REF head t=(5.39,-0.00,-0.00) s=(1.000,1.000,1.000)
+REF thigh_l t=(-2.57,-0.01,-7.75) s=(1.000,1.000,1.000)
+REF foot_l t=(-42.56,0.11,0.43) s=(1.000,1.000,1.000)
+REF thigh_r t=(-2.57,-0.01,7.75) s=(1.000,1.000,1.000)
+REF foot_r t=(42.56,-0.11,-0.43) s=(1.000,1.000,1.000)
+REF upperarm_l t=(15.51,-0.00,0.00) s=(1.000,1.000,1.000)
+REF hand_l t=(22.35,-0.00,-0.00) s=(1.000,1.000,1.000)
+REF calf_l t=(-39.05,-0.00,-0.00) s=(1.000,1.000,1.000)
+REF ik_foot_l t=(15.26,-4.42,9.44) s=(1.000,1.000,1.000)
+== AS_React_Tumble t=0.00: 11 of 93 bones differ
+   root anim=16.30 ref=0.00 scale=(1.00,1.00,1.00)
+   pelvis anim=98.10 ref=93.12 scale=(1.00,1.00,1.00)
+   head anim=5.39 ref=5.39 scale=(1.15,1.15,1.15)
+   thigh_l anim=8.09 ref=8.16 scale=(1.00,1.12,1.12)
+   foot_l anim=42.56 ref=42.56 scale=(1.00,0.89,0.89)
+   thigh_r anim=8.24 ref=8.16 scale=(1.00,1.12,1.12)
+   foot_r anim=42.56 ref=42.56 scale=(1.00,0.89,0.89)
+   ik_foot_l anim=90.78 ref=18.48 scale=(1.00,1.00,1.00)
+   ik_foot_r anim=112.69 ref=18.48 scale=(1.00,1.00,1.00)
+   VB hand_l_prop_01 anim=111.06 ref=115.17 scale=(1.00,1.00,1.00)
+   VB hand_r_prop_01 anim=90.60 ref=115.17 scale=(1.00,1.00,1.00)
+DONE_MARK
