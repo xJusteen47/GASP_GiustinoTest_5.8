@@ -161,4 +161,19 @@ bool FGSTN_SteerWindowRateTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_GroundMoveNoWalkTest, "GSTNCombat.Core.Timeline.GroundMoveDoesNotWalk", EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FGSTN_GroundMoveNoWalkTest::RunTest(const FString& Parameters)
+{
+	// Owner playtest 2026-11-17: the Overlord jab (montage without root motion) walked under a fully tilted stick
+	FGSTN_CombatTimelineData Jab;
+	TestFalse(TEXT("off by default"), Jab.bWalkDuringMove);
+	TestFalse(TEXT("a ground move does not walk"), FGSTN_CombatTimelineData::StickWalks(&Jab, true, true));
+	TestTrue(TEXT("an aerial keeps its drift"), FGSTN_CombatTimelineData::StickWalks(&Jab, true, false));
+	TestTrue(TEXT("outside a move the stick walks"), FGSTN_CombatTimelineData::StickWalks(nullptr, false, true));
+	TestFalse(TEXT("an unknown running move on the ground does not walk"), FGSTN_CombatTimelineData::StickWalks(nullptr, true, true));
+	Jab.bWalkDuringMove = true;
+	TestTrue(TEXT("the timeline can allow it"), FGSTN_CombatTimelineData::StickWalks(&Jab, true, true));
+	return true;
+}
+
 #endif

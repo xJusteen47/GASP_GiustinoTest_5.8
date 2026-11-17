@@ -917,6 +917,22 @@ struct GSTNCOMBATCORE_API FGSTN_CombatTimelineData
 	bool bIgnoreMoveInput = false;
 
 	/**
+	 * On the ground the move stick walks the character during this move (it still turns it per the aim rules either way). Off by default (owner
+	 * playtest 2026-11-17, Overlord jab: "movement possible during the jab" with the stick fully tilted): a ground move gets no walk input, so the only
+	 * motion is the move's own (root motion, pushes, momentum slide) and the walking mode's braking. Before this, only a montage with root motion
+	 * held the character (its root motion move overrides the walk); a montage without it (the Overlord jabs) let the stick walk at full speed.
+	 * In the air the stick keeps its air drift whatever this says
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Timeline|Movement")
+	bool bWalkDuringMove = false;
+
+	/** Whether the move stick may walk the character this frame: outside a move always, in the air always (air drift), on the ground only with bWalkDuringMove. Pure */
+	static bool StickWalks(const FGSTN_CombatTimelineData* Running, bool bInTimeline, bool bOnGround)
+	{
+		return !bInTimeline || !bOnGround || (Running && Running->bWalkDuringMove);
+	}
+
+	/**
 	 * What the move does with the running speed it starts with, on the ground (owner 2026-11-13): slide on the feet along the momentum,
 	 * differently when started against it. Off by default. Separate from root motion and from movement tracks; see FGSTN_MomentumSlide
 	 */

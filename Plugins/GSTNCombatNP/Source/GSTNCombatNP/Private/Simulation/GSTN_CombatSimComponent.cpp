@@ -963,6 +963,19 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 		const APawn* OwnerPawn = Cast<APawn>(GetOwner());
 		ApplyAnalogMoveIntent(InputCmdResult, *Analog, MoveStick, CameraYawDeg, OwnerUp, OwnerPawn && OwnerPawn->IsPlayerControlled());
 	}
+	// A ground move does not walk under the stick (owner playtest 2026-11-17, Overlord jab), unless the timeline says so. Before the steer, which
+	// returns early: the steer turns the move, it never walks it
+	if (bInTimeline)
+	{
+		const UMoverComponent* GroundMover = GetOwner()->FindComponentByClass<UMoverComponent>();
+		if (!FGSTN_CombatTimelineData::StickWalks(Running, bInTimeline, GroundMover && GroundMover->HasGameplayTag(Mover_IsOnGround, false)))
+		{
+			if (FCharacterDefaultInputs* Inputs = InputCmdResult.InputCollection.FindMutableDataByType<FCharacterDefaultInputs>())
+			{
+				Inputs->SetMoveInput(EMoveInputType::DirectionalIntent, FVector::ZeroVector);
+			}
+		}
+	}
 	float SteerHoldYaw = 0.f;
 	bool bStickActive = false;
 	if (FGSTN_CombatTimelineLogic::ResolveSteerFrame(Sync->Core, GetSimulationFrame() + 1, GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline), MoveStick,
