@@ -869,17 +869,41 @@ bool UGSTN_AnimGraphAuthoringLibrary::InsertOverrideLayerSlots(UAnimBlueprint* A
 	{
 		SetNodeStructMember(Blend, TEXT("TransitionType"), TEXT("Inertialization"));
 	}
+	// The index and every blend time as pins: a pose pin added after the spawn can leave its BlendTime_N entry hidden (it is then a
+	// constant on the node and the link to the variable fails), so show them all and rebuild the pins once
+	bool bPinsChanged = false;
+	for (FOptionalPinFromProperty& PinOption : Blend->ShowPinForProperties)
+	{
+		const FString Name = PinOption.PropertyName.ToString();
+		if ((Name == TEXT("ActiveChildIndex") || Name.StartsWith(TEXT("BlendTime"))) && !PinOption.bShowPin)
+		{
+			PinOption.bShowPin = true;
+			bPinsChanged = true;
+		}
+	}
+	if (bPinsChanged)
+	{
+		Blend->ReconstructNode();
+	}
 
 	bool bOk = true;
 	if (Base)
 	{
-		bOk &= Connect(Base, BlendPosePin(Blend, 0));
+		const bool bBase = Connect(Base, BlendPosePin(Blend, 0));
+		UE_CLOG(!bBase, LogGSTNAnimGraphAuthoring, Error, TEXT("InsertOverrideLayerSlots: base pose %s.%s -> BlendPose_0 failed"),
+			*Base->GetOwningNode()->GetName(), *Base->PinName.ToString());
+		bOk &= bBase;
 	}
 	for (const FResolved& R : Resolved)
 	{
 		const FVector2D Position(Blend->NodePosX - 420, Blend->NodePosY - 200 * R.Slot);
 		UAnimGraphNode_LinkedAnimLayer* Layer = SpawnLinkedLayer(AnimGraph, R.Interface, R.InterfaceGraph, R.Layer, Position);
-		bOk &= Connect(FindPosePin(Layer, EGPD_Output), BlendPosePin(Blend, R.Slot));
+		UEdGraphPin* LayerOut = FindPosePin(Layer, EGPD_Output);
+		UEdGraphPin* PoseIn = BlendPosePin(Blend, R.Slot);
+		const bool bLayer = Connect(LayerOut, PoseIn);
+		UE_CLOG(!bLayer, LogGSTNAnimGraphAuthoring, Error, TEXT("InsertOverrideLayerSlots: layer %s -> BlendPose_%d failed (layer pose pin %s, blend pin %s)"),
+			*R.Layer.ToString(), R.Slot, LayerOut ? TEXT("found") : TEXT("missing"), PoseIn ? TEXT("found") : TEXT("missing"));
+		bOk &= bLayer;
 	}
 	for (int32 Index = 1; Index <= MaxSlot; ++Index)
 	{
@@ -891,11 +915,22 @@ bool UGSTN_AnimGraphAuthoringLibrary::InsertOverrideLayerSlots(UAnimBlueprint* A
 
 	UK2Node_VariableGet* SlotGet = SpawnSelfVariableGet(AnimGraph, SlotVariable, FVector2D(Blend->NodePosX - 320, Blend->NodePosY + 220));
 	UK2Node_VariableGet* TimeGet = SpawnSelfVariableGet(AnimGraph, BlendTimeVariable, FVector2D(Blend->NodePosX - 320, Blend->NodePosY + 300));
-	bOk &= Connect(SlotGet->FindPin(SlotVariable, EGPD_Output), Blend->FindPin(TEXT("ActiveChildIndex"), EGPD_Input));
+	UEdGraphPin* SlotOut = SlotGet->FindPin(SlotVariable, EGPD_Output);
+	UEdGraphPin* IndexIn = Blend->FindPin(TEXT("ActiveChildIndex"), EGPD_Input);
+	const bool bIndex = Connect(SlotOut, IndexIn);
+	UE_CLOG(!bIndex, LogGSTNAnimGraphAuthoring, Error, TEXT("InsertOverrideLayerSlots: %s -> ActiveChildIndex failed (getter pin %s, index pin %s)"),
+		*SlotVariable.ToString(), SlotOut ? TEXT("found") : TEXT("missing"), IndexIn ? TEXT("found") : TEXT("missing"));
+	bOk &= bIndex;
 	UEdGraphPin* TimeOut = TimeGet->FindPin(BlendTimeVariable, EGPD_Output);
 	for (int32 Index = 0; Index <= MaxSlot; ++Index)
 	{
-		bOk &= Connect(TimeOut, Blend->FindPin(*FString::Printf(TEXT("BlendTime_%d"), Index), EGPD_Input));
+		// Not fatal: without the link the pose keeps the node's constant blend time (0.1 s), the seam still works
+		UEdGraphPin* TimeIn = Blend->FindPin(*FString::Printf(TEXT("BlendTime_%d"), Index), EGPD_Input);
+		if (!TimeIn || !Connect(TimeOut, TimeIn))
+		{
+			UE_LOG(LogGSTNAnimGraphAuthoring, Warning, TEXT("InsertOverrideLayerSlots: BlendTime_%d not linked to %s (pin %s)"), Index,
+				*BlendTimeVariable.ToString(), TimeIn ? TEXT("found") : TEXT("missing"));
+		}
 	}
 
 	if (bInertialization)
