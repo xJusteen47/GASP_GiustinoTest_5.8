@@ -15,3 +15,5 @@ Branch `claude/project-thread-kup1kk` da `claude/playtest-fixes-1117c` 23fb94a4 
 1. Build (script a tempo, 45 min). Punti a rischio: `UAnimGraphNode_BlendListByInt::AddPinToBlendList` (export), `UMoverComponent::GetSyncState() const`.
 2. Test sopra + suite ridotta. 3. Editor chiuso: `setup_anim_layers.py` headless, poi `--check`; commit di SandboxCharacter_Mover_ABP + 2 ALI nuove (ABP base: un thread alla volta).
 4. PIE: wall slide ancora visibile (slot 1). M2 crea le tabelle (DA_Presentation_Default + kit) e i Niagara.
+## Fix dopo l'integrazione sul fisso (2026-11-17 14:05Z)
+- C4459 nel test Derive.Run: parametro `Skid` -> `SkidPhase` (come 9dfdfc68 locale). - "some links failed" su SandboxCharacter_Mover_ABP (log ci/integ-1117-setup_anim_layers-ue.log:2731, NON letto dal cloud): causa più probabile i pin BlendTime_N/ActiveChildIndex nascosti sul Blend Poses by int dopo AddPinToBlendList. Ora vengono mostrati (ShowPinForProperties + ReconstructNode), i link BlendTime non sono più fatali (warning), ogni link fatale logga quale pin manca. Se fallisce ancora, la riga d'errore dice quale.
