@@ -135,9 +135,9 @@ bool FGSTN_HoldUntilLandedMontageTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a long fall stays inside the loop"), bInside);
 
 	// The clock jumped to the land frame: the montage jumps to the land part, wherever it was
-	const FGSTN_HoldMontageDecision Landed = FGSTN_HoldUntilLanded::ResolveMontage(*Track, Times, Land, (LoopStart + 4) * SecondsPerFrame, SecondsPerFrame, SecondsPerFrame);
-	TestTrue(TEXT("landed: jump"), Landed.Action == EGSTN_HoldMontageAction::Land);
-	TestEqual(TEXT("to the land part's start"), Landed.Time, Times.LandStart, Tolerance);
+	const FGSTN_HoldMontageDecision LandedDecision = FGSTN_HoldUntilLanded::ResolveMontage(*Track, Times, Land, (LoopStart + 4) * SecondsPerFrame, SecondsPerFrame, SecondsPerFrame);
+	TestTrue(TEXT("landed: jump"), LandedDecision.Action == EGSTN_HoldMontageAction::Land);
+	TestEqual(TEXT("to the land part's start"), LandedDecision.Time, Times.LandStart, Tolerance);
 	TestTrue(TEXT("once there: nothing"), FGSTN_HoldUntilLanded::ResolveMontage(*Track, Times, Land + 1, Times.LandStart, SecondsPerFrame, SecondsPerFrame).Action == EGSTN_HoldMontageAction::None);
 	TestEqual(TEXT("a late call lands where the timeline is"), FGSTN_HoldUntilLanded::ResolveMontage(*Track, Times, Land + 2, 0.2f, SecondsPerFrame, SecondsPerFrame).Time,
 		Times.LandStart + 2 * SecondsPerFrame, Tolerance);
