@@ -429,6 +429,10 @@ def _tick(_dt):
             _log(f'kit {KIT}: {h.kit(0, KIT)}')
             st.update(phase='kit_wait', t=now)
         elif phase == 'kit_wait' and now - st['t'] > 3:
+            # F4 (2026-11-17): the two clients' players can join after the host's input is ready; parking ran with [] and a hub pawn stood
+            # next to ours in the R4/playtest_r3 captures. Wait up to 40 s for all three players before staging
+            if len(h._players()) < 3 and now - st['t'] < 40:
+                return
             view = g._view(0, h._key(0)) or {}
             _log(f'loadout: {json.dumps(view.get("loadout"))[:300]}')
             _log(f'review stage: {_clear_stage()}')
