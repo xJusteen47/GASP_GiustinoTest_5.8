@@ -11,7 +11,8 @@ class UGSTN_StanceDefinition;
 /**
  * C++ parent for the character's main anim graph (reparent the GASP Mover ABP to it; it adds nothing else, so the GASP graph keeps
  * working as it is). It knows no feature: every frame it asks the linked anim layers that implement IGSTN_OverrideLayerSource whether
- * one wants to take over the pose, and exposes the answer for one "Blend Poses by bool" in front of a Linked Anim Layer node.
+ * one wants to take over the pose, and exposes the winner's slot for one "Blend Poses by int" whose pose N is the Linked Anim Layer of
+ * slot N (GSTNOverrideSlot; the setup script Tools/GAS/setup_anim_layers.py builds it).
  * See the plugin README and docs/architecture/anim-layers.md.
  */
 UCLASS(Blueprintable)
@@ -23,6 +24,10 @@ public:
 	/** A linked layer wants to replace the main pose this frame */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "Animation|Override Layer")
 	bool bOverrideLayerActive = false;
+
+	/** Slot of the winning layer (GSTNOverrideSlot), 0 = the base pose: drives the seam's Blend Poses by int */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Animation|Override Layer")
+	int32 ActiveOverrideSlot = 0;
 
 	/** Blend time of the winning layer, or of the one that just stopped (so the blend out uses the same time) */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "Animation|Override Layer")

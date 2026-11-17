@@ -6,6 +6,7 @@
 #include "Animation/AnimLayerInterface.h"
 #include "Animation/AnimSequenceBase.h"
 #include "AnimGraphNode_BlendListByBool.h"
+#include "AnimGraphNode_BlendListByInt.h"
 #include "AnimGraphNode_Inertialization.h"
 #include "AnimGraphNode_LinkedAnimLayer.h"
 #include "AnimGraphNode_Root.h"
@@ -614,6 +615,306 @@ bool UGSTN_AnimGraphAuthoringLibrary::InsertOverrideLayerBlend(UAnimBlueprint* A
 	if (!bOk)
 	{
 		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertOverrideLayerBlend: some links failed on %s, see above"), *AnimBlueprint->GetName());
+	}
+	return bOk;
+}
+
+namespace GSTNAnimGraphAuthoring
+{
+	/** The graph of LayerName in AnimBlueprint's implementation of InterfaceClass; null when it does not implement it */
+	const UEdGraph* FindInterfaceGraph(const UAnimBlueprint* AnimBlueprint, const UClass* InterfaceClass, FName LayerName)
+	{
+		for (const FBPInterfaceDescription& Description : AnimBlueprint->ImplementedInterfaces)
+		{
+			if (Description.Interface == InterfaceClass)
+			{
+				for (const UEdGraph* Graph : Description.Graphs)
+				{
+					if (Graph && Graph->GetFName() == LayerName)
+					{
+						return Graph;
+					}
+				}
+			}
+		}
+		return nullptr;
+	}
+
+	/** A Linked Anim Layer node: the fields SetupFromLayerId sets when the node is spawned from the layer's menu entry */
+	UAnimGraphNode_LinkedAnimLayer* SpawnLinkedLayer(UEdGraph* AnimGraph, UClass* InterfaceClass, const UEdGraph* InterfaceGraph, FName LayerName,
+		const FVector2D& Position)
+	{
+		UAnimGraphNode_LinkedAnimLayer* Layer = NewObject<UAnimGraphNode_LinkedAnimLayer>(AnimGraph, NAME_None, RF_Transactional);
+		AnimGraph->AddNode(Layer, false, false);
+		Layer->CreateNewGuid();
+		Layer->Node.Layer = LayerName;
+		Layer->Node.Interface = InterfaceClass;
+		Layer->InterfaceGuid = InterfaceGraph->InterfaceGuid;
+		if (FStructProperty* ReferenceProperty = FindFProperty<FStructProperty>(Layer->GetClass(), TEXT("FunctionReference")))
+		{
+			FGuid FunctionGuid;
+			FBlueprintEditorUtils::GetFunctionGuidFromClassByFieldName(FBlueprintEditorUtils::GetMostUpToDateClass(InterfaceClass), LayerName, FunctionGuid);
+			ReferenceProperty->ContainerPtrToValuePtr<FMemberReference>(Layer)->SetExternalMember(LayerName, InterfaceClass, FunctionGuid);
+		}
+		Layer->PostPlacedNewNode();
+		Layer->AllocateDefaultPins();
+		Layer->NodePosX = FMath::RoundToInt(Position.X);
+		Layer->NodePosY = FMath::RoundToInt(Position.Y);
+		return Layer;
+	}
+
+	UK2Node_VariableGet* SpawnSelfVariableGet(UEdGraph* Graph, FName Variable, const FVector2D& Position)
+	{
+		UK2Node_VariableGet* Get = NewObject<UK2Node_VariableGet>(Graph, NAME_None, RF_Transactional);
+		Get->VariableReference.SetSelfMember(Variable);
+		Graph->AddNode(Get, false, false);
+		Get->CreateNewGuid();
+		Get->PostPlacedNewNode();
+		Get->AllocateDefaultPins();
+		Get->NodePosX = FMath::RoundToInt(Position.X);
+		Get->NodePosY = FMath::RoundToInt(Position.Y);
+		return Get;
+	}
+
+	/** Removes Node, then the variable getters that fed it and now feed nothing */
+	void RemoveNodeAndGetters(UBlueprint* Blueprint, UEdGraphNode* Node)
+	{
+		TArray<UEdGraphNode*> Getters;
+		for (UEdGraphPin* Pin : Node->Pins)
+		{
+			if (Pin && Pin->Direction == EGPD_Input)
+			{
+				for (UEdGraphPin* Linked : Pin->LinkedTo)
+				{
+					if (Linked && Cast<UK2Node_VariableGet>(Linked->GetOwningNode()))
+					{
+						Getters.AddUnique(Linked->GetOwningNode());
+					}
+				}
+			}
+		}
+		FBlueprintEditorUtils::RemoveNode(Blueprint, Node, /*bDontRecompile*/ true);
+		for (UEdGraphNode* Getter : Getters)
+		{
+			const bool bUnused = !Getter->Pins.ContainsByPredicate([](const UEdGraphPin* Pin) { return Pin && Pin->Direction == EGPD_Output && Pin->LinkedTo.Num() > 0; });
+			if (bUnused)
+			{
+				FBlueprintEditorUtils::RemoveNode(Blueprint, Getter, true);
+			}
+		}
+	}
+
+	int32 CountBlendPosePins(const UEdGraphNode* Node)
+	{
+		int32 Count = 0;
+		for (const UEdGraphPin* Pin : Node->Pins)
+		{
+			Count += Pin && Pin->Direction == EGPD_Input && Pin->PinName.ToString().StartsWith(TEXT("BlendPose_")) ? 1 : 0;
+		}
+		return Count;
+	}
+
+	UEdGraphPin* BlendPosePin(UEdGraphNode* Node, int32 Index)
+	{
+		return Node->FindPin(*FString::Printf(TEXT("BlendPose_%d"), Index), EGPD_Input);
+	}
+
+	UAnimGraphNode_LinkedAnimLayer* LayerOnPin(UEdGraphPin* Pin)
+	{
+		UEdGraphPin* Linked = LinkedPin(Pin);
+		return Linked ? Cast<UAnimGraphNode_LinkedAnimLayer>(Linked->GetOwningNode()) : nullptr;
+	}
+}
+
+bool UGSTN_AnimGraphAuthoringLibrary::InsertOverrideLayerSlots(UAnimBlueprint* AnimBlueprint, const TArray<FGSTN_OverrideSlotLayer>& Slots,
+	FName SlotVariable, FName BlendTimeVariable, bool bInertialization, const FString& InsertBeforeNodeClass)
+{
+	UEdGraph* AnimGraph = FindGraph(AnimBlueprint, UEdGraphSchema_K2::GN_AnimGraph);
+	if (!AnimGraph || Slots.IsEmpty())
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertOverrideLayerSlots: needs an anim Blueprint with an AnimGraph and at least one slot"));
+		return false;
+	}
+
+	// The slots, checked: compiled interfaces the Blueprint implements, slots 1.. without repeats
+	struct FResolved
+	{
+		int32 Slot = 0;
+		UClass* Interface = nullptr;
+		const UEdGraph* InterfaceGraph = nullptr;
+		FName Layer;
+	};
+	TArray<FResolved> Resolved;
+	int32 MaxSlot = 0;
+	for (const FGSTN_OverrideSlotLayer& Spec : Slots)
+	{
+		UClass* Interface = Spec.LayerInterface ? Spec.LayerInterface->GeneratedClass.Get() : nullptr;
+		if (!Interface || !Interface->IsChildOf(UAnimLayerInterface::StaticClass()) || Spec.Slot < 1
+			|| Resolved.ContainsByPredicate([&Spec](const FResolved& R) { return R.Slot == Spec.Slot; }))
+		{
+			UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertOverrideLayerSlots: slot %d needs a compiled layer interface and a slot number >= 1 used once"), Spec.Slot);
+			return false;
+		}
+		const UEdGraph* InterfaceGraph = FindInterfaceGraph(AnimBlueprint, Interface, Spec.LayerName);
+		if (!InterfaceGraph)
+		{
+			UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertOverrideLayerSlots: %s does not implement %s with a layer %s (ImplementLayerInterface first)"),
+				*AnimBlueprint->GetName(), *Interface->GetName(), *Spec.LayerName.ToString());
+			return false;
+		}
+		Resolved.Add({Spec.Slot, Interface, InterfaceGraph, Spec.LayerName});
+		MaxSlot = FMath::Max(MaxSlot, Spec.Slot);
+	}
+	Resolved.Sort([](const FResolved& A, const FResolved& B) { return A.Slot < B.Slot; });
+
+	// The node the seam goes in front of: the Output Pose, or the only node of the given class
+	UEdGraphNode* Root = nullptr;
+	int32 Matches = 0;
+	for (UEdGraphNode* Node : AnimGraph->Nodes)
+	{
+		const bool bMatch = InsertBeforeNodeClass.IsEmpty() ? Cast<UAnimGraphNode_Root>(Node) != nullptr
+			: (Node && Node->GetClass()->GetName() == InsertBeforeNodeClass);
+		if (bMatch)
+		{
+			Root = Node;
+			++Matches;
+		}
+	}
+	UEdGraphPin* RootIn = Matches == 1 ? FindPosePin(Root, EGPD_Input) : nullptr;
+	if (!RootIn)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertOverrideLayerSlots: %d node(s) of class %s with a pose input in the AnimGraph, expected one"),
+			Matches, InsertBeforeNodeClass.IsEmpty() ? TEXT("AnimGraphNode_Root") : *InsertBeforeNodeClass);
+		return false;
+	}
+
+	// What feeds the target now: [Inertialization <-] an old seam (bool or int) or anything else (the base pose itself)
+	UEdGraphPin* Base = LinkedPin(RootIn);
+	UEdGraphNode* Seam = Base ? Base->GetOwningNode() : nullptr;
+	UAnimGraphNode_Inertialization* Inertialization = Cast<UAnimGraphNode_Inertialization>(Seam);
+	if (Inertialization)
+	{
+		UEdGraphPin* InertialIn = LinkedPin(FindPosePin(Inertialization, EGPD_Input));
+		Seam = InertialIn ? InertialIn->GetOwningNode() : nullptr;
+	}
+	TArray<UEdGraphNode*> OldNodes;
+	if (UAnimGraphNode_BlendListByInt* OldInt = Cast<UAnimGraphNode_BlendListByInt>(Seam))
+	{
+		int32 LinkedLayers = 0;
+		bool bSame = CountBlendPosePins(OldInt) == MaxSlot + 1;
+		for (int32 Index = 1; Index < CountBlendPosePins(OldInt); ++Index)
+		{
+			if (UAnimGraphNode_LinkedAnimLayer* Layer = LayerOnPin(BlendPosePin(OldInt, Index)))
+			{
+				++LinkedLayers;
+				OldNodes.Add(Layer);
+			}
+		}
+		for (const FResolved& R : Resolved)
+		{
+			const UAnimGraphNode_LinkedAnimLayer* Layer = LayerOnPin(BlendPosePin(OldInt, R.Slot));
+			bSame &= Layer && Layer->Node.Layer == R.Layer && Layer->Node.Interface == R.Interface;
+		}
+		if (bSame && LinkedLayers == Resolved.Num())
+		{
+			UE_LOG(LogGSTNAnimGraphAuthoring, Log, TEXT("InsertOverrideLayerSlots: %s already has these %d slot(s)"), *AnimBlueprint->GetName(), Resolved.Num());
+			return true;
+		}
+		Base = LinkedPin(BlendPosePin(OldInt, 0));
+		OldNodes.Add(OldInt);
+	}
+	else if (UAnimGraphNode_BlendListByBool* OldBool = Cast<UAnimGraphNode_BlendListByBool>(Seam))
+	{
+		if (UAnimGraphNode_LinkedAnimLayer* Layer = LayerOnPin(OldBool->FindPin(TEXT("BlendPose_0"), EGPD_Input)))
+		{
+			Base = LinkedPin(OldBool->FindPin(TEXT("BlendPose_1"), EGPD_Input));
+			OldNodes.Add(Layer);
+			OldNodes.Add(OldBool);
+		}
+	}
+	if (OldNodes.IsEmpty())
+	{
+		Inertialization = nullptr;  // not ours: it stays upstream, part of the base pose
+	}
+
+	const FVector2D RootPosition(Root->NodePosX, Root->NodePosY);
+	AnimGraph->Modify();
+	Root->Modify();
+	for (UEdGraphNode* Old : OldNodes)
+	{
+		RemoveNodeAndGetters(AnimBlueprint, Old);
+	}
+	if (!Inertialization)
+	{
+		RootIn->BreakAllPinLinks();
+	}
+	else if (!bInertialization)
+	{
+		FBlueprintEditorUtils::RemoveNode(AnimBlueprint, Inertialization, true);
+		Inertialization = nullptr;
+	}
+
+	UAnimGraphNode_BlendListByInt* Blend = SpawnNode<UAnimGraphNode_BlendListByInt>(AnimGraph, RootPosition + FVector2D(bInertialization ? -560 : -300, 0));
+	while (CountBlendPosePins(Blend) < MaxSlot + 1)
+	{
+		const int32 Before = CountBlendPosePins(Blend);
+		Blend->AddPinToBlendList();
+		if (CountBlendPosePins(Blend) == Before)
+		{
+			UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertOverrideLayerSlots: could not add a pose pin to the Blend Poses by int"));
+			return false;
+		}
+	}
+	if (bInertialization)
+	{
+		SetNodeStructMember(Blend, TEXT("TransitionType"), TEXT("Inertialization"));
+	}
+
+	bool bOk = true;
+	if (Base)
+	{
+		bOk &= Connect(Base, BlendPosePin(Blend, 0));
+	}
+	for (const FResolved& R : Resolved)
+	{
+		const FVector2D Position(Blend->NodePosX - 420, Blend->NodePosY - 200 * R.Slot);
+		UAnimGraphNode_LinkedAnimLayer* Layer = SpawnLinkedLayer(AnimGraph, R.Interface, R.InterfaceGraph, R.Layer, Position);
+		bOk &= Connect(FindPosePin(Layer, EGPD_Output), BlendPosePin(Blend, R.Slot));
+	}
+	for (int32 Index = 1; Index <= MaxSlot; ++Index)
+	{
+		if (!LayerOnPin(BlendPosePin(Blend, Index)))
+		{
+			UE_LOG(LogGSTNAnimGraphAuthoring, Warning, TEXT("InsertOverrideLayerSlots: slot %d has no layer (it would show the reference pose)"), Index);
+		}
+	}
+
+	UK2Node_VariableGet* SlotGet = SpawnSelfVariableGet(AnimGraph, SlotVariable, FVector2D(Blend->NodePosX - 320, Blend->NodePosY + 220));
+	UK2Node_VariableGet* TimeGet = SpawnSelfVariableGet(AnimGraph, BlendTimeVariable, FVector2D(Blend->NodePosX - 320, Blend->NodePosY + 300));
+	bOk &= Connect(SlotGet->FindPin(SlotVariable, EGPD_Output), Blend->FindPin(TEXT("ActiveChildIndex"), EGPD_Input));
+	UEdGraphPin* TimeOut = TimeGet->FindPin(BlendTimeVariable, EGPD_Output);
+	for (int32 Index = 0; Index <= MaxSlot; ++Index)
+	{
+		bOk &= Connect(TimeOut, Blend->FindPin(*FString::Printf(TEXT("BlendTime_%d"), Index), EGPD_Input));
+	}
+
+	if (bInertialization)
+	{
+		if (!Inertialization)
+		{
+			Inertialization = SpawnNode<UAnimGraphNode_Inertialization>(AnimGraph, RootPosition + FVector2D(-260, 0));
+			bOk &= Connect(FindPosePin(Inertialization, EGPD_Output), RootIn);
+		}
+		bOk &= Connect(FindPosePin(Blend, EGPD_Output), FindPosePin(Inertialization, EGPD_Input));
+	}
+	else
+	{
+		bOk &= Connect(FindPosePin(Blend, EGPD_Output), RootIn);
+	}
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBlueprint);
+	if (!bOk)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("InsertOverrideLayerSlots: some links failed on %s, see above"), *AnimBlueprint->GetName());
 	}
 	return bOk;
 }

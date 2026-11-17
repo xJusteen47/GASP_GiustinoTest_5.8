@@ -30,6 +30,7 @@
 #include "Movement/GSTN_LayeredMove_RunSkid.h"
 #include "Presentation/GSTN_PrecisionAimComponent.h"
 #include "Presentation/GSTN_RunPresentationComponent.h"
+#include "Presentation/GSTN_CombatPresentationEvents.h"
 #include "Timeline/GSTN_StartupSteer.h"
 #include "Presentation/GSTN_SteerIndicatorComponent.h"
 #include "Movement/GSTN_SetFacingEffect.h"
@@ -192,6 +193,8 @@ void UGSTN_CombatSimComponent::BeginPlay()
 	{
 		UGSTN_RunPresentationComponent::FindOrAdd(GetOwner());
 	}
+	// The presentation events (dust, sparks, shakes per kit table, Blueprint events): on every machine, the server included (events, no effects)
+	UGSTN_CombatPresentationEvents::FindOrAdd(GetOwner());
 }
 
 void UGSTN_CombatSimComponent::CompileInput()

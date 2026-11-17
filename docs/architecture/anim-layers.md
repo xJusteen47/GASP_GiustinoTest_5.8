@@ -23,9 +23,10 @@ This is the Lyra pattern (weapon anim layers linked by `LinkAnimClassLayers`, va
 
 ```
 Main ABP (parent UGSTN_CharacterAnimInstance)            knows no feature
-  GASP locomotion ──┐
-                    ├─ Blend Poses by bool (bOverrideLayerActive, OverrideBlendTime, inertialization)
-  Linked Anim Layer ┘     one node per layer interface (ALI_GSTN_Wall::WallLayer, later ALI_GSTN_Spin...)
+  GASP locomotion ─────────────── [0] ┐
+  Linked Anim Layer WallLayer ─── [1] ├─ Blend Poses by int (ActiveOverrideSlot, OverrideBlendTime, inertialization)
+  Linked Anim Layer SkidLayer ─── [2] │    slots = GSTNOverrideSlot (GSTN_OverrideLayerSource.h); built by Tools/GAS/setup_anim_layers.py
+  Linked Anim Layer RunStartLayer [3] ┘    winner = highest priority among active layers (default wall > skid > run start)
 
 Layer ABP (e.g. ABP_GSTN_WallLayer, parent UGSTN_WallAnimInstance, implements ALI_GSTN_Wall)
   reads its own data (WallAnim) and says when it wants the pose (IGSTN_OverrideLayerSource)
@@ -37,7 +38,7 @@ Anim set component (part B)      resolves sets per tag from the sources, links t
 | Piece | Kind | Where | Part |
 |---|---|---|---|
 | `IGSTN_OverrideLayerSource` | C++ interface: `IsOverrideLayerActive`, `GetOverrideBlendTime`, `GetOverridePriority` | plugin `GSTNAnimation`, module `GSTNAnimationCore` | A |
-| `UGSTN_CharacterAnimInstance` | C++ parent of the main ABP: polls linked layers, exposes `bOverrideLayerActive`, `OverrideBlendTime`, `ActiveOverrideLayerClass` | same | A |
+| `UGSTN_CharacterAnimInstance` | C++ parent of the main ABP: polls linked layers, exposes `ActiveOverrideSlot`, `bOverrideLayerActive`, `OverrideBlendTime`, `ActiveOverrideLayerClass` | same | A |
 | `UGSTN_WallAnimInstance` | C++ parent of the wall layer ABP: `WallAnim` (wall-anim.md) | project `WallMovement/Animation/` (stays: it reads Mover wall state) | A |
 | `ALI_GSTN_Wall`, `ABP_GSTN_WallLayer` | assets (interface + layer graph, placeholder clips) | `Content/Blueprints/Animation/` | A, editor step |
 | `UGSTN_AnimSetDefinition` | `UPrimaryDataAsset`, type `GSTN_AnimSet` | plugin `GSTNAnimation`, module `GSTNAnimationCore` | B |

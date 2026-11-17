@@ -13,6 +13,24 @@ class UBlueprint;
 class UEdGraph;
 class UEdGraphNode;
 
+/** One override slot of the main graph (InsertOverrideLayerSlots): the Linked Anim Layer that feeds pose Slot of the Blend Poses by int */
+USTRUCT(BlueprintType)
+struct GSTNANIMATIONEDITOR_API FGSTN_OverrideSlotLayer
+{
+	GENERATED_BODY()
+
+	/** 1.. (0 is the base pose) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Override Slot")
+	int32 Slot = 1;
+
+	/** Compiled anim layer interface (ALI_GSTN_Wall...) the main Blueprint implements */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Override Slot")
+	TObjectPtr<UAnimBlueprint> LayerInterface;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Override Slot")
+	FName LayerName;
+};
+
 /**
  * Builds anim graph pieces that the Python editor API cannot (it has no graph node creation or pin wiring), so the anim layer assets of
  * anim-layers.md can be made by an idempotent script (Tools/GAS/setup_wall_anim_layer.py) instead of by hand. Every call is "find or
@@ -93,6 +111,19 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
 	static bool InsertOverrideLayerBlend(UAnimBlueprint* AnimBlueprint, UAnimBlueprint* LayerInterface, FName LayerName, FName ActiveVariable,
+		FName BlendTimeVariable, bool bInertialization, const FString& InsertBeforeNodeClass);
+
+	/**
+	 * The override seam with SLOTS (anim-layer-skid-wallslide-piano L1), in front of the first pose input of the node of class
+	 * InsertBeforeNodeClass (empty = the Output Pose): a Blend Poses by int driven by SlotVariable (int) whose pose 0 is whatever fed that input
+	 * and whose pose N is a Linked Anim Layer node for the layer of Slots with Slot N; BlendTimeVariable (float) gives every blend time. With
+	 * bInertialization the blend requests inertialization and an Inertialization node right after it serves the request. AnimBlueprint must
+	 * implement every interface (ImplementLayerInterface).
+	 * Upgrades in place: a seam of InsertOverrideLayerBlend (Blend Poses by bool) or an int seam with other layers is removed first, its base
+	 * pose kept (and its Inertialization node reused). No change when the int seam already has exactly these layers on these slots
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
+	static bool InsertOverrideLayerSlots(UAnimBlueprint* AnimBlueprint, const TArray<FGSTN_OverrideSlotLayer>& Slots, FName SlotVariable,
 		FName BlendTimeVariable, bool bInertialization, const FString& InsertBeforeNodeClass);
 
 	/**

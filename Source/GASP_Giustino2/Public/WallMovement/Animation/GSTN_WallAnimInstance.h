@@ -40,6 +40,7 @@ public:
 	//~ Begin IGSTN_OverrideLayerSource
 	virtual bool IsOverrideLayerActive() const override { return WallAnim.bIsActive; }
 	virtual float GetOverrideBlendTime() const override { return OverrideBlendTime; }
+	virtual int32 GetOverrideSlot() const override { return GSTNOverrideSlot::Wall; }
 	//~ End IGSTN_OverrideLayerSource
 
 protected:
