@@ -24,3 +24,4 @@ Desktop _ue59 (branch checked out there, AM_OverlordDAirV9.uasset local change l
 `Run-Timed.ps1 -Preset Test -Tests GSTN -Log Saved\Logs\ci\v94blx-test1.log`: 1722 Success / 1 Fail (Select-String "Test Completed. Result=\{(\w+)\}").
 Fail = GSTNCombat.GAS.Table.AssembleFromDefinitions counted rows (12 vs 3: the borrowed rows); fixed in the test (fallback off there), re-run below.
 Cost ~12 $ estimated (Opus, 1 build, 2 test runs).
+Re-run after 7d7b4f20: build OK (v94blx-build2.log), `-Tests GSTNCombat.GAS.Table` 1 Success / 0 Fail (v94blx-test2.log). Total 1723/1723. Branch ready for playtest in _ue59.
