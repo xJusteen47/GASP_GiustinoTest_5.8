@@ -25,4 +25,4 @@ Ricontrollo regola 11: claim 1117b "crouch+X a terra = jab, probe tolta" conferm
 Jab non lancia a 0 %; special mantiene l'angolo; auto get-up a 90 frame anche per il giocatore (regola globale dei test); bottone Strong aggiunto all'IC.
 ## Da confermare (owner)
 - Auto get-up 90 frame va bene? A 0 % il lancio è un saltello con animazione HitStand (non tumble): ok?
-## Test: vedi riga sotto. Costo stimato ~20 $ (Opus, 4 build, ~6 PIE).
+## Test: `Run-Timed.ps1 -Preset Test -Tests GSTN -Log Saved\Logs\ci\pf1117c-test1.log` ESITO OK, 1719 Success / 0 altri (Select-String "Test Completed. Result=\{(\w+)\}"). Build: pf1117c-build1..4 (build2 FAIL: categoria di log, corretto). Costo stimato ~20 $ (Opus, 4 build, ~6 PIE).
