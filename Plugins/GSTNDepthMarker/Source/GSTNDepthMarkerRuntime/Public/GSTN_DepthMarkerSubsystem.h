@@ -16,6 +16,7 @@
 
 class UGSTN_DepthMarkerComponent;
 class UGSTN_DepthMarkerPlaneComponent;
+class UGSTN_DepthProjectionComponent;
 class UGSTN_DepthMarkerPresenter;
 class UGSTN_DepthMarkerStyle;
 class UGSTN_DepthTargetSelector;
@@ -61,6 +62,14 @@ public:
 	void UnregisterPlane(UGSTN_DepthMarkerPlaneComponent* Plane);
 	int32 GetNumPlanes() const { return Planes.Num(); }
 
+	/** Projection boxes (Depth Projection Volume): they register themselves */
+	void RegisterProjectionBox(UGSTN_DepthProjectionComponent* Box);
+	void UnregisterProjectionBox(UGSTN_DepthProjectionComponent* Box);
+	int32 GetNumProjectionBoxes() const { return ProjectionBoxes.Num(); }
+
+	/** The projection that applies to this marker this frame (rules, override, volumes, default); public for the tests */
+	FGSTN_DepthProjection ResolveProjection(const UGSTN_DepthMarkerComponent& Component, const FVector& Feet) const;
+
 	/** Markers the last tick drew (after the cap) and traces it issued, for the tests and stat displays */
 	int32 GetLastActiveCount() const { return LastActiveCount; }
 	int32 GetLastTraceCount() const { return LastTraceCount; }
@@ -88,6 +97,7 @@ private:
 	void OnProbeDone(const FTraceHandle& Handle, FTraceDatum& Datum);
 
 	bool ReadSubject(const UGSTN_DepthMarkerComponent& Component, FGSTN_DepthSubjectState& Out) const;
+	static void GatherOwnerTags(const AActor* Owner, FGameplayTagContainer& OutTags);
 	UGSTN_DepthMarkerStyle* ResolveStyle(const UGSTN_DepthMarkerComponent& Component);
 	UGSTN_DepthTargetSelector* ResolveSelector(const UGSTN_DepthMarkerComponent& Component);
 	UGSTN_DepthMarkerStyle* ResolveApproachStyle(const UGSTN_DepthMarkerComponent& Component, const UGSTN_DepthMarkerStyle* PrimaryStyle);
@@ -122,6 +132,7 @@ private:
 	TArray<FStyleOverride> StyleOverrides;
 
 	TArray<TWeakObjectPtr<UGSTN_DepthMarkerPlaneComponent>> Planes;
+	TArray<TWeakObjectPtr<UGSTN_DepthProjectionComponent>> ProjectionBoxes;
 
 	TStrongObjectPtr<UGSTN_DepthMarkerStyle> BuiltinStyle;
 	TStrongObjectPtr<UGSTN_DepthMarkerStyle> BuiltinApproachStyle;

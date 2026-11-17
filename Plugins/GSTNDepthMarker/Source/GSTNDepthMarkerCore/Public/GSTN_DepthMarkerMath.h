@@ -49,6 +49,13 @@ struct GSTNDEPTHMARKERCORE_API FGSTN_DepthMarkerMath
 	/** Cosmetic radius stretch on a slope: 1 / max(dot(Normal, Up), 0.5), at most 2 */
 	static float SlopeRadiusScale(const FVector& Normal, const FVector& Up);
 
+	/**
+	 * Turns the subject's gravity column into the projection's column: Up becomes minus the cast direction; off gravity the column may start
+	 * at the body centre and the subject counts as "off its surface" so the marker shows when grounded too (bShowWhenGrounded).
+	 * OwnerRotation is used by OwnerLocal. Returns false (subject untouched) for Gravity, a zero direction or one within 1 degree of gravity.
+	 */
+	static bool ApplyProjection(FGSTN_DepthSubjectState& Subject, const FGSTN_DepthProjection& Projection, const FQuat& OwnerRotation);
+
 	/** Step 1. Remembers Up. Returns true and clears the selection when it turned more than UpResetDegrees since the last call */
 	static bool UpdateFrame(FGSTN_DepthSelectionState& State, const FVector& Up, const FGSTN_DepthSelectorParams& Params);
 

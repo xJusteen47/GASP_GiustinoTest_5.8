@@ -64,6 +64,22 @@ The separate plugin `GSTNDepthMarkerMover` registers `UGSTN_DepthSubjectAdapter_
 `BaseVisualComponentTransform^-1 * PrimaryVisualComponent` (exactly what Mover's smoothing wrote), feet at the capsule bottom along
 `GetUpDirection()`, airborne/ground from `UCharacterMoverComponent`, base from `GetMovementBase()`. Tests `GSTNDepthMarker.Mover.*`.
 
+## Projection direction (where the marker and its shadow are cast)
+
+Gravity by default. `FGSTN_DepthProjection` (Mode Gravity / World / OwnerLocal, Direction, bFromBodyCentre, bShowWhenGrounded) picks
+another direction; precedence, first wins: the marker component's `ProjectionRules` (a tag query on the owner state: IGSTN_DepthTagSource,
+else IGameplayTagAssetInterface on the owner or its components, e.g. the ability system), a code/Blueprint `SetProjectionOverride`, the
+highest-priority `AGSTN_DepthProjectionVolume` around the feet (direction in world or box space), the component's `Projection`.
+`FGSTN_DepthMarkerMath::ApplyProjection` rewrites the subject's Up (and start point), so the column, the probes, the ring, the dashes and
+the blob shadow decal all follow it. Cost: one point-in-box per volume per marker per frame; tags read only when rules exist.
+Show/Hide heights then measure the distance along the projection (a wall nearer than ShowHeight shows no marker).
+
+## Holographic look (2026-11-17)
+
+`Tools/DepthMarker/setup_depth_marker_holo.py` builds `M_DM_Holo` (additive unlit segments: drifting scanlines, edge boost, rare flicker,
+breathe) and `M_DM_Holo_Decal` (blob shadow disc + ring); the project ini makes them the default segment and decal materials. The built-in
+style now also has a ground Decal presenter (the blob shadow). All look numbers are material parameters.
+
 ## Approach marker and projection planes
 
 The character is airborne above a lower platform (marker A, straight down along gravity) and a higher platform is nearby, offset

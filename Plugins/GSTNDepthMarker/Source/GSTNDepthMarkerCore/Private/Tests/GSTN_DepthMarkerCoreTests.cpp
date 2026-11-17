@@ -909,6 +909,54 @@ GSTN_DM_TEST(DashScaleGrowsWithLengthAndClamps)
 	return true;
 }
 
+GSTN_DM_TEST(ProjectionDirection)
+{
+	FGSTN_DepthSubjectState Base;
+	Base.Feet = FVector(0, 0, 0);
+	Base.Up = FVector::UpVector;
+	Base.TopOffset = 180.f;
+	Base.bGrounded = true;
+	Base.bAirborne = false;
+
+	FGSTN_DepthSubjectState S = Base;
+	FGSTN_DepthProjection Gravity;
+	TestFalse(TEXT("gravity leaves the subject alone"), FGSTN_DepthMarkerMath::ApplyProjection(S, Gravity, FQuat::Identity));
+	TestTrue(TEXT("gravity: same up"), S.Up.Equals(FVector::UpVector));
+
+	FGSTN_DepthProjection Down;
+	Down.Mode = EGSTN_DepthProjectionMode::World;
+	TestFalse(TEXT("a world down equal to gravity changes nothing"), FGSTN_DepthMarkerMath::ApplyProjection(S, Down, FQuat::Identity));
+
+	FGSTN_DepthProjection Side;
+	Side.Mode = EGSTN_DepthProjectionMode::World;
+	Side.Direction = FVector(0, 2, 0);
+	S = Base;
+	TestTrue(TEXT("sideways applies"), FGSTN_DepthMarkerMath::ApplyProjection(S, Side, FQuat::Identity));
+	TestTrue(TEXT("up is minus the cast direction"), S.Up.Equals(FVector(0, -1, 0), 1e-4));
+	TestTrue(TEXT("column from the body centre"), S.Feet.Equals(FVector(0, 0, 90), 1e-3));
+	TestTrue(TEXT("shown while grounded"), S.bAirborne && !S.bGrounded);
+
+	FGSTN_DepthProjection Right;
+	Right.Mode = EGSTN_DepthProjectionMode::OwnerLocal;
+	Right.Direction = FVector(0, 1, 0);
+	Right.bFromBodyCentre = false;
+	Right.bShowWhenGrounded = false;
+	S = Base;
+	const FQuat Yaw90(FVector::UpVector, FMath::DegreesToRadians(90.0));
+	TestTrue(TEXT("owner local applies"), FGSTN_DepthMarkerMath::ApplyProjection(S, Right, Yaw90));
+	// Owner facing +Y: its right is -X, so Up (= minus the cast) is +X
+	TestTrue(TEXT("owner local direction is turned by the owner"), S.Up.Equals(FVector(1, 0, 0), 1e-4));
+	TestTrue(TEXT("feet kept"), S.Feet.Equals(FVector::ZeroVector, 1e-3));
+	TestTrue(TEXT("grounded kept"), S.bGrounded && !S.bAirborne);
+
+	FGSTN_DepthProjection Zero;
+	Zero.Mode = EGSTN_DepthProjectionMode::World;
+	Zero.Direction = FVector::ZeroVector;
+	S = Base;
+	TestFalse(TEXT("a zero direction falls back to gravity"), FGSTN_DepthMarkerMath::ApplyProjection(S, Zero, FQuat::Identity));
+	return true;
+}
+
 #undef CHECK
 
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -9,6 +9,7 @@
 #include "GSTN_DepthMarkerMath.h"
 #include "GSTN_DepthMarkerPlane.h"
 #include "GSTN_DepthMarkerPresenter.h"
+#include "GSTN_DepthProjectionVolume.h"
 #include "GSTN_DepthMarkerScheduler.h"
 #include "GSTN_DepthMarkerSettings.h"
 #include "GSTN_DepthMarkerStyle.h"
@@ -322,6 +323,52 @@ GSTN_DMR_TEST(MarkerFollowsPresentedPoseNotSimulatedSteps)
 	FGSTN_DepthSubjectState RawState;
 	Raw->ReadState(Actor, RawState);
 	TestTrue(TEXT("opted out: the root"), FMath::IsNearlyEqual(static_cast<float>(RawState.Feet.X), 96.f, 0.01f));
+	return true;
+}
+
+GSTN_DMR_TEST(ProjectionPrecedence)
+{
+	FRig Rig;
+	UGSTN_DepthMarkerSubsystem* Subsystem = UGSTN_DepthMarkerSubsystem::Get(Rig.World);
+	if (!TestNotNull(TEXT("subsystem"), Subsystem))
+	{
+		return false;
+	}
+	AActor* Actor = Rig.World->SpawnActor<AActor>(FVector::ZeroVector, FRotator::ZeroRotator);
+	UGSTN_DepthMarkerComponent* Marker = NewObject<UGSTN_DepthMarkerComponent>(Actor);
+	Marker->RegisterComponent();
+
+	TestTrue(TEXT("default: gravity"), Subsystem->ResolveProjection(*Marker, FVector::ZeroVector).IsGravity());
+
+	AGSTN_DepthProjectionVolume* Low = Rig.World->SpawnActor<AGSTN_DepthProjectionVolume>(FVector::ZeroVector, FRotator::ZeroRotator);
+	Low->Box->Projection.Direction = FVector(1, 0, 0);
+	AGSTN_DepthProjectionVolume* High = Rig.World->SpawnActor<AGSTN_DepthProjectionVolume>(FVector::ZeroVector, FRotator::ZeroRotator);
+	High->Box->Projection.Direction = FVector(0, 1, 0);
+	High->Box->Priority = 5;
+	Subsystem->RegisterProjectionBox(Low->Box);
+	Subsystem->RegisterProjectionBox(High->Box);
+
+	TestTrue(TEXT("inside both boxes: the higher priority"),
+		Subsystem->ResolveProjection(*Marker, FVector::ZeroVector).Direction.Equals(FVector(0, 1, 0)));
+	TestTrue(TEXT("outside every box: the component default"), Subsystem->ResolveProjection(*Marker, FVector(5000, 0, 0)).IsGravity());
+
+	FGSTN_DepthProjection Up;
+	Up.Mode = EGSTN_DepthProjectionMode::World;
+	Up.Direction = FVector(0, 0, 1);
+	Marker->SetProjectionOverride(Up);
+	TestTrue(TEXT("a code override beats the boxes"), Subsystem->ResolveProjection(*Marker, FVector::ZeroVector).Direction.Equals(FVector(0, 0, 1)));
+	Marker->ClearProjectionOverride();
+	TestTrue(TEXT("cleared: the boxes again"), Subsystem->ResolveProjection(*Marker, FVector::ZeroVector).Direction.Equals(FVector(0, 1, 0)));
+
+	// Box-space direction follows the box rotation
+	High->Box->bDirectionInBoxSpace = true;
+	High->SetActorRotation(FRotator(0, 90, 0));
+	TestTrue(TEXT("box space: turned with the box"),
+		Subsystem->ResolveProjection(*Marker, FVector::ZeroVector).Direction.Equals(FVector(-1, 0, 0), 1e-4));
+
+	Subsystem->UnregisterProjectionBox(Low->Box);
+	Subsystem->UnregisterProjectionBox(High->Box);
+	TestEqual(TEXT("unregistered"), Subsystem->GetNumProjectionBoxes(), 0);
 	return true;
 }
 

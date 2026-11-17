@@ -10,6 +10,8 @@
 #include "GSTN_DepthMarkerSettings.h"
 #include "GSTN_DepthMarkerStyle.h"
 #include "Components/MeshComponent.h"
+#include "GameplayTagAssetInterface.h"
+#include "GSTN_DepthProjectionVolume.h"
 #include "GSTN_DepthMarkerToy.h"
 #include "Materials/MaterialInterface.h"
 #include "GameFramework/GameStateBase.h"
@@ -230,6 +232,7 @@ void UGSTN_DepthMarkerSubsystem::Deinitialize()
 	MarkersById.Reset();
 	StyleOverrides.Reset();
 	Planes.Reset();
+	ProjectionBoxes.Reset();
 	if (AActor* HolderActor = Holder.Get())
 	{
 		HolderActor->Destroy();
@@ -439,12 +442,98 @@ bool UGSTN_DepthMarkerSubsystem::ReadSubject(const UGSTN_DepthMarkerComponent& C
 	{
 		return false;
 	}
+	bool bRead = false;
 	if (Owner->Implements<UGSTN_DepthSubject>())
 	{
-		return IGSTN_DepthSubject::Execute_GetDepthSubjectState(Owner, Out);
+		bRead = IGSTN_DepthSubject::Execute_GetDepthSubjectState(Owner, Out);
 	}
-	const UGSTN_DepthSubjectAdapter* Adapter = FGSTN_DepthAdapterRegistry::Resolve(Owner);
-	return Adapter && Adapter->ReadState(Owner, Out);
+	else
+	{
+		const UGSTN_DepthSubjectAdapter* Adapter = FGSTN_DepthAdapterRegistry::Resolve(Owner);
+		bRead = Adapter && Adapter->ReadState(Owner, Out);
+	}
+	if (bRead)
+	{
+		// The adapter gives the gravity column; the projection may cast it elsewhere (walls, ceilings). Everything downstream reads Up
+		FGSTN_DepthMarkerMath::ApplyProjection(Out, ResolveProjection(Component, Out.Feet), Owner->GetActorQuat());
+	}
+	return bRead;
+}
+
+void UGSTN_DepthMarkerSubsystem::GatherOwnerTags(const AActor* Owner, FGameplayTagContainer& OutTags)
+{
+	if (!Owner)
+	{
+		return;
+	}
+	if (Owner->Implements<UGSTN_DepthTagSource>())
+	{
+		IGSTN_DepthTagSource::Execute_GetDepthMarkerTags(Owner, OutTags);
+		return;
+	}
+	if (const IGameplayTagAssetInterface* OwnerTags = Cast<IGameplayTagAssetInterface>(Owner))
+	{
+		OwnerTags->GetOwnedGameplayTags(OutTags);
+		return;
+	}
+	// The ability system component (and any other tag owner on the pawn), without depending on GAS
+	TInlineComponentArray<UActorComponent*> Components(Owner);
+	for (const UActorComponent* Component : Components)
+	{
+		if (const IGameplayTagAssetInterface* ComponentTags = Cast<IGameplayTagAssetInterface>(Component))
+		{
+			FGameplayTagContainer Tags;
+			ComponentTags->GetOwnedGameplayTags(Tags);
+			OutTags.AppendTags(Tags);
+		}
+	}
+}
+
+FGSTN_DepthProjection UGSTN_DepthMarkerSubsystem::ResolveProjection(const UGSTN_DepthMarkerComponent& Component, const FVector& Feet) const
+{
+	if (!Component.ProjectionRules.IsEmpty())
+	{
+		FGameplayTagContainer Tags;
+		GatherOwnerTags(Component.GetOwner(), Tags);
+		for (const FGSTN_DepthProjectionRule& Rule : Component.ProjectionRules)
+		{
+			if (!Rule.When.IsEmpty() && Rule.When.Matches(Tags))
+			{
+				return Rule.Projection;
+			}
+		}
+	}
+	if (Component.bHasProjectionOverride)
+	{
+		return Component.ProjectionOverride;
+	}
+	const UGSTN_DepthProjectionComponent* Best = nullptr;
+	for (const TWeakObjectPtr<UGSTN_DepthProjectionComponent>& Weak : ProjectionBoxes)
+	{
+		const UGSTN_DepthProjectionComponent* Box = Weak.Get();
+		if (Box && Box->bProjectionEnabled && (!Best || Box->Priority > Best->Priority) && Box->ContainsPoint(Feet))
+		{
+			Best = Box;
+		}
+	}
+	if (Best)
+	{
+		return Best->GetWorldProjection();
+	}
+	return Component.Projection;
+}
+
+void UGSTN_DepthMarkerSubsystem::RegisterProjectionBox(UGSTN_DepthProjectionComponent* Box)
+{
+	if (Box)
+	{
+		ProjectionBoxes.AddUnique(Box);
+	}
+}
+
+void UGSTN_DepthMarkerSubsystem::UnregisterProjectionBox(UGSTN_DepthProjectionComponent* Box)
+{
+	ProjectionBoxes.Remove(Box);
 }
 
 void UGSTN_DepthMarkerSubsystem::BindPresenters(FMarker& Marker, UGSTN_DepthMarkerStyle* Style)
