@@ -225,11 +225,11 @@ bool FGSTN_PresentationDeriveRunTest::RunTest(const FString& Parameters)
 	using namespace GSTNPresentationTest;
 	using namespace GSTNPresentationTags;
 
-	auto Run1 = [](int32 Frame, int32 Stage, float Vx, EGSTN_PresentationSkidPhase Skid = EGSTN_PresentationSkidPhase::None)
+	auto Run1 = [](int32 Frame, int32 Stage, float Vx, EGSTN_PresentationSkidPhase SkidPhase = EGSTN_PresentationSkidPhase::None)
 	{
 		FGSTN_PresentationSnapshot S = Snap(Frame, true, FVector(Vx, 0, 0));
 		S.RunStage = Stage;
-		S.SkidPhase = Skid;
+		S.SkidPhase = SkidPhase;
 		return S;
 	};
 	// Start, two stage-ups, skid (enter, loop, exit), run the other way
