@@ -38,11 +38,16 @@ CLIPS = {
     'R2': {'Heavy': ('HeavyR2', _B + 'HeavyR2', 3, 4), 'Light': ('LightR2', None, 1, 1)},
     # R3 (review r2): heavy-tucked for the charge window (ball on the floor start), light r3 (12 frames, covers the locomotion landing), heavy = R2
     'R3': {'HeavyTuck': ('HeavyTuckR3', _B + 'HeavyTuckR3', 1, 3), 'Heavy': ('HeavyR2', None, 3, 4), 'Light': ('LightR3', _B + 'LightR3', 1, 4)},
+    # R4 (owner + cloud check of dair_land_early r3): the f1-3 window gets LightTuckR4 (starts from the tucked air pose at contact, arms crossed);
+    # the other clips are R3's, untouched; f32+ keeps LightR3
+    'R4': {'LightTuck': ('LightTuckR4', _B + 'LightTuckR4', 1, 4), 'HeavyTuck': ('HeavyTuckR3', None, 1, 3), 'Heavy': ('HeavyR2', None, 3, 4),
+           'Light': ('LightR3', None, 1, 4)},
 }[ROUND]
 # (start, end exclusive, clip, lag frames): internal 0-based timeline frames (designer frame = internal + 1)
 # R3: the tucked window runs past the charge (anim 0-12) by the 2-frame landing latency: the review's dair_land shows the ball (anim 12) and is
 # decided on internal 13 (designer f14), so the window is internal 3-13 = designer f4-14
-WINDOWS = ([(0, 3, 'Light', 4), (3, 14, 'HeavyTuck', 16), (14, 31, 'Heavy', 16), (31, 43, 'Light', 4)] if ROUND == 'R3'
+WINDOWS = ([(0, 3, 'LightTuck', 4), (3, 14, 'HeavyTuck', 16), (14, 31, 'Heavy', 16), (31, 43, 'Light', 4)] if ROUND == 'R4'
+           else [(0, 3, 'Light', 4), (3, 14, 'HeavyTuck', 16), (14, 31, 'Heavy', 16), (31, 43, 'Light', 4)] if ROUND == 'R3'
            else [(0, 3, 'Light', 4), (3, 31, 'Heavy', 16), (31, 43, 'Light', 4)])
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'DairV10', 'setup_overlord_dair_v10.txt')
 _lines = []
@@ -80,7 +85,7 @@ def _land_clip(kind):
         montage.set_editor_property('rate_scale', K.MONTAGE_PLAY_RATE)   # one animation frame per simulation tick, as the move's montage
         # R3 tucked clip: its rise is its last 6 frames; with the automatic trigger the blend out began at f10 and mixed the rise with the base
         # layer's landing crouch (Saved/DairV10/variant_r3c/dair_land v100-103): play to the end, then blend out
-        if name == 'HeavyTuckR3':
+        if 'Tuck' in name:   # (LightTuckR4 too: its rise is its last frames)
             montage.set_editor_property('blend_out_trigger_time', 0.0)
     log(f'{kind}: {anim.get_play_length() * 60:.1f} frames, montage {montage.get_play_length():.3f} s')
     return anim, montage

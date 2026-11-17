@@ -3,6 +3,9 @@
 #   KIT_Test_Playtest     defence extension rules = DA_DefenceRules_Test (the kit had none and the standard combat rules carry none: no defence data
 #                         at all for the player). The get-up set, tech set and the shield ability the kit already has are kept
 #   TL_Overlord_Dropkick  Tags window Combat.Move.KnockdownOnLanding over the whole move (same as TL_Overlord_DropkickTB); no BounceAbility
+# Owner standing rule (2026-11-17 21:41, scope: shared systems): shared systems go on ALL test kits; move-specific variants stay in their own kit
+# until approved. DEFENCE_RULES_ALL_KITS=1 (run_all_kits): every kit under /Game with a defence extension and no rules gets RULES (its shield,
+# get-up and tech sets kept). Kits that already name rules are left as they are.
 # Rerun-safe, saves .uasset only. Editor: import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import setup_playtest_dropkick_knockdown as s; s.run()
 # Output: Saved/PlaytestFixes/setup_playtest_dropkick_knockdown.txt, at most 5 printed lines.
 import os
@@ -96,6 +99,44 @@ def run():
     for line in [l for l in _lines if 'ERROR' in l][:4] + [_lines[-1][:300] if _lines else '']:
         print(line)
     return ok
+
+
+def _needs_rules(kit):
+    """The kit's defence extension text, or None when the kit has none or it already names rules"""
+    text = kit.get_editor_property('extensions').export_text()
+    i = text.find('GSTN_DefenceKitExtension')
+    if i < 0:
+        return None
+    m = re.search(r'Rules=("?)([^",)]*)', text[i:])
+    value = m.group(2) if m else ''
+    return None if value and value != 'None' else text
+
+
+def run_all_kits():
+    """DEFENCE_RULES_ALL_KITS: the owner's shared-systems rule for the defence rules; returns the kits it changed"""
+    del _lines[:]
+    changed = []
+    try:
+        rules = unreal.load_asset(RULES)
+        for path in unreal.EditorAssetLibrary.list_assets('/Game', True, False):
+            name = path.rsplit('/', 1)[-1].split('.')[0]
+            if not name.startswith('KIT_'):
+                continue
+            kit = unreal.load_asset(path)
+            if not isinstance(kit, unreal.GSTN_PrimaryKitDefinition) or _needs_rules(kit) is None:
+                continue
+            shield = _shield(kit)
+            if unreal.GSTN_DefenceContentLibrary.set_kit_defence_extension(kit, rules, shield):
+                unreal.EditorAssetLibrary.save_loaded_asset(kit, False)
+                changed.append(name)
+        log(f'defence rules {RULES} given to {len(changed)} kits: {", ".join(changed)}')
+    except Exception as e:
+        log(f'ERROR: {e!r}')
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    with open(OUT.replace('.txt', '_all_kits.txt'), 'w') as f:
+        f.write('\n'.join(_lines) + '\n')
+    print(_lines[-1][:300] if _lines else '')
+    return changed
 
 
 if __name__ == '__main__':
