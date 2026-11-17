@@ -15,7 +15,10 @@ float FGSTN_PresentationScale::Evaluate(float Magnitude) const
 {
 	const double Low = InputRange.X;
 	const double High = InputRange.Y;
-	double T = FMath::IsNearlyEqual(Low, High) ? (Magnitude >= High ? 1.0 : 0.0) : (Magnitude - Low) / (High - Low);
+	// Divisor kept provably non-zero: with a constant equal range inlined, MSVC flags the dead branch (C4723).
+	const bool bFlat = FMath::IsNearlyEqual(Low, High);
+	const double Span = bFlat ? 1.0 : (High - Low);
+	double T = bFlat ? (Magnitude >= High ? 1.0 : 0.0) : (Magnitude - Low) / Span;
 	if (bClampInput)
 	{
 		T = FMath::Clamp(T, 0.0, 1.0);
