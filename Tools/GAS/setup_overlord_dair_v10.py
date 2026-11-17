@@ -24,13 +24,18 @@ import setup_overlord_dair_kit as K  # noqa: E402
 import setup_dair_body_capsule as CAP  # noqa: E402
 
 DIR = K.DIR
-LABEL = 'V10'
+# Review rounds (DAIR_V10_ROUND=R2, ...): new assets with the suffix next to round 1, never over it. R2: the V10 clip/montage of round 1 (charge
+# PASS), the heavy clip AS_OverlordDAirLandHeavyR2 (review r1 notes), TL_Overlord_DAirV10R2 duplicated from TL_Overlord_DAirV10, its own GA/WPN/KIT
+ROUND = os.environ.get('DAIR_V10_ROUND', '')
+LABEL = 'V10' + ROUND
 SRC = '/Game/AnimPipeline/Rig/Overlord/DAir/AS_OverlordDAirV10_Build'
-BASE_TL = f'{DIR}/TL_Overlord_DAirV9'
-LAND_SRC = {'Heavy': '/Game/AnimPipeline/Rig/Overlord/DAir/AS_OverlordDAirLandHeavy',
+BASE_TL = f'{DIR}/TL_Overlord_DAirV10' if ROUND else f'{DIR}/TL_Overlord_DAirV9'
+LAND_SRC = {'Heavy': '/Game/AnimPipeline/Rig/Overlord/DAir/AS_OverlordDAirLandHeavy' + ROUND,
             'Light': '/Game/AnimPipeline/Rig/Overlord/DAir/AS_OverlordDAirLandLight'}
-LAND_BLEND_IN = {'Heavy': 3.0 / 60.0, 'Light': 2.0 / 60.0}
-LAND_BLEND_OUT = 4.0 / 60.0
+# R2: the light montage gets its own asset with 1-frame blends: the 4-frame clip (0.05 s) was shorter than 2 f in + 4 f out and never showed (review r1)
+LAND_NAME = {'Heavy': 'Heavy' + ROUND, 'Light': 'Light' + ROUND}
+LAND_BLEND_IN = {'Heavy': 3.0 / 60.0, 'Light': (1.0 if ROUND else 2.0) / 60.0}
+LAND_BLEND_OUT_BY = {'Heavy': 4.0 / 60.0, 'Light': (1.0 if ROUND else 4.0) / 60.0}
 # (start, end exclusive, clip, lag frames): internal 0-based timeline frames
 WINDOWS = [(0, 3, 'Light', 4), (3, 31, 'Heavy', 16), (31, 43, 'Light', 4)]
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'DairV10', 'setup_overlord_dair_v10.txt')
@@ -44,7 +49,10 @@ def log(msg):
 
 def _land_clip(kind):
     lib = unreal.EditorAssetLibrary
-    anim_path, montage_path = f'{DIR}/AS_OverlordDAirLand{kind}', f'{DIR}/AM_OverlordDAirLand{kind}'
+    name = LAND_NAME[kind]
+    anim_path, montage_path = f'{DIR}/AS_OverlordDAirLand{name}', f'{DIR}/AM_OverlordDAirLand{name}'
+    if ROUND and kind == 'Light':   # same clip as round 1: the montage is new, the animation is round 1's
+        anim_path = f'{DIR}/AS_OverlordDAirLandLight'
     if not lib.does_asset_exist(anim_path):
         if not lib.duplicate_asset(LAND_SRC[kind], anim_path):
             raise RuntimeError(f'could not copy {LAND_SRC[kind]}')
@@ -55,9 +63,9 @@ def _land_clip(kind):
         factory = unreal.AnimMontageFactory()
         factory.set_editor_property('source_animation', anim)
         factory.set_editor_property('target_skeleton', anim.get_editor_property('skeleton'))
-        montage = K._tools().create_asset(f'AM_OverlordDAirLand{kind}', DIR, unreal.AnimMontage, factory)
+        montage = K._tools().create_asset(f'AM_OverlordDAirLand{name}', DIR, unreal.AnimMontage, factory)
         log(f'created {montage_path}')
-    for prop, t in (('blend_in', LAND_BLEND_IN[kind]), ('blend_out', LAND_BLEND_OUT)):
+    for prop, t in (('blend_in', LAND_BLEND_IN[kind]), ('blend_out', LAND_BLEND_OUT_BY[kind])):
         blend = montage.get_editor_property(prop)
         blend.set_editor_property('blend_time', t)
         montage.set_editor_property(prop, blend)
@@ -94,15 +102,18 @@ def run():
     try:
         K._guard = setup_guard.Guard.for_unreal('setup_overlord_dair_v10', force=False, log=log)
         K._lines = _lines
-        anim, montage = K._anim_and_montage(LABEL, SRC, False)
+        if ROUND:   # the charge passed review: the round-1 V10 clip and montage, untouched
+            anim, montage = unreal.load_asset(f'{DIR}/AS_OverlordDAirV10'), unreal.load_asset(f'{DIR}/AM_OverlordDAirV10')
+        else:
+            anim, montage = K._anim_and_montage(LABEL, SRC, False)
         if not montage:
             raise RuntimeError('V10 anim/montage not built')
         land = {}
-        saves = [anim, montage]
+        saves = [] if ROUND else [anim, montage]
         for kind in ('Heavy', 'Light'):
             a, m = _land_clip(kind)
             land[kind] = m
-            saves += [a, m]
+            saves += [m] if (ROUND and kind == 'Light') else [a, m]   # round 1's light animation is reused, not saved again
         timeline = _timeline(montage, land)
         bp, cls = K._ability(LABEL, timeline)
         tail = K._weapon_and_kit(LABEL, cls)
@@ -112,7 +123,7 @@ def run():
         for a in saves:
             unreal.EditorAssetLibrary.save_loaded_asset(a, False)
         log('saved: ' + ', '.join(a.get_name() for a in saves))
-        cap_ok = CAP.run(LABEL)
+        cap_ok = True if ROUND else CAP.run(LABEL)   # R2 keeps the V10 tracks it was duplicated with (same clip)
         log(f'body capsule V10: {"ok" if cap_ok else "FAILED"} (Saved/AnimR2/setup_dair_body_capsule.txt)')
         ok = bool(cap_ok)
     except Exception as e:

@@ -19,7 +19,9 @@ import unreal
 
 DIR = '/Game/GASNPPTest/Combat/Overlord'
 ROOT = '/Game/GASNPPTest/Combat'
-SRC = '/Game/AnimPipeline/Rig/Overlord/Dropkick/AS_OverlordDropkickTechBounce'
+# Review rounds (DROPKICK_BOUNCE_ROUND=R2, ...): every asset of the chain gets the suffix, next to round 1, never over it
+R = os.environ.get('DROPKICK_BOUNCE_ROUND', '')
+SRC = '/Game/AnimPipeline/Rig/Overlord/Dropkick/AS_OverlordDropkickTechBounce' + R
 SIM_HZ, ANIM_FPS = 62.5, 60.0
 TOTAL_FRAMES = int(os.environ.get('DROPKICK_BOUNCE_FRAMES', '15'))   # the clip's 15 frames (r1 retime to the measured hop), one per tick
 WINDOW_TAG = 'Combat.Move.KnockdownOnLanding'
@@ -44,18 +46,18 @@ def _dup(src, dst):
 
 def _clip():
     if os.environ.get('DROPKICK_BOUNCE_REFRESH') == '1':   # a new animpipe build: the copies are this script's own, rebuilt from it
-        for p in (f'{DIR}/AM_OverlordDropkickTechBounce', f'{DIR}/AS_OverlordDropkickTechBounce'):
+        for p in (f'{DIR}/AM_OverlordDropkickTechBounce{R}', f'{DIR}/AS_OverlordDropkickTechBounce{R}'):
             if lib.does_asset_exist(p):
                 lib.delete_asset(p)
                 log(f'refresh: deleted {p}')
-    anim = _dup(SRC, f'{DIR}/AS_OverlordDropkickTechBounce')
-    path = f'{DIR}/AM_OverlordDropkickTechBounce'
+    anim = _dup(SRC, f'{DIR}/AS_OverlordDropkickTechBounce{R}')
+    path = f'{DIR}/AM_OverlordDropkickTechBounce{R}'
     montage = unreal.load_asset(path) if lib.does_asset_exist(path) else None
     if not montage:
         factory = unreal.AnimMontageFactory()
         factory.set_editor_property('source_animation', anim)
         factory.set_editor_property('target_skeleton', anim.get_editor_property('skeleton'))
-        montage = unreal.AssetToolsHelpers.get_asset_tools().create_asset('AM_OverlordDropkickTechBounce', DIR, unreal.AnimMontage, factory)
+        montage = unreal.AssetToolsHelpers.get_asset_tools().create_asset('AM_OverlordDropkickTechBounce' + R, DIR, unreal.AnimMontage, factory)
         log(f'created {path}')
     for prop, frames in (('blend_in', 1.0), ('blend_out', 3.0)):
         blend = montage.get_editor_property(prop)
@@ -66,12 +68,12 @@ def _clip():
 
 
 def _bounce_ability(montage):
-    path = f'{DIR}/GA_Overlord_DropkickTechBounce'
+    path = f'{DIR}/GA_Overlord_DropkickTechBounce{R}'
     bp = unreal.load_asset(path) if lib.does_asset_exist(path) else None
     if not bp:
         factory = unreal.BlueprintFactory()
         factory.set_editor_property('parent_class', unreal.GSTN_GA_GroundBounce.static_class())
-        bp = unreal.AssetToolsHelpers.get_asset_tools().create_asset('GA_Overlord_DropkickTechBounce', DIR, unreal.Blueprint, factory)
+        bp = unreal.AssetToolsHelpers.get_asset_tools().create_asset('GA_Overlord_DropkickTechBounce' + R, DIR, unreal.Blueprint, factory)
         unreal.BlueprintEditorLibrary.compile_blueprint(bp)
         log(f'created {path}')
     cls = unreal.EditorAssetLibrary.load_blueprint_class(path)
@@ -87,7 +89,7 @@ def _bounce_ability(montage):
 
 
 def _move_timeline(bounce_cls):
-    asset = _dup(f'{DIR}/TL_Overlord_Dropkick', f'{DIR}/TL_Overlord_DropkickTB')
+    asset = _dup(f'{DIR}/TL_Overlord_Dropkick', f'{DIR}/TL_Overlord_DropkickTB{R}')
     data = asset.get_editor_property('data')
     text = data.export_text()
     if WINDOW_TAG not in text:
@@ -113,9 +115,9 @@ def _move_timeline(bounce_cls):
 
 
 def _move_ability(timeline):
-    bp = _dup(f'{DIR}/GA_Overlord_Dropkick', f'{DIR}/GA_Overlord_DropkickTB')
+    bp = _dup(f'{DIR}/GA_Overlord_Dropkick', f'{DIR}/GA_Overlord_DropkickTB{R}')
     unreal.BlueprintEditorLibrary.compile_blueprint(bp)
-    cls = unreal.EditorAssetLibrary.load_blueprint_class(f'{DIR}/GA_Overlord_DropkickTB')
+    cls = unreal.EditorAssetLibrary.load_blueprint_class(f'{DIR}/GA_Overlord_DropkickTB{R}')
     unreal.get_default_object(cls).set_editor_property('timeline_asset', timeline)
     return bp, cls
 
@@ -133,7 +135,7 @@ def _swap(bindings, old_cls, new_cls):
 
 def _kit(move_cls, bounce_cls):
     old_cls = unreal.EditorAssetLibrary.load_blueprint_class(f'{DIR}/GA_Overlord_Dropkick')
-    kit = _dup(f'{ROOT}/KIT_Test_Playtest', f'{ROOT}/KIT_Test_PlaytestTB')
+    kit = _dup(f'{ROOT}/KIT_Test_Playtest', f'{ROOT}/KIT_Test_PlaytestTB{R}')
     kit.set_editor_property('display_name', 'PLAYTEST + DROPKICK TECH BOUNCE')
     bindings, n_kit = _swap(list(kit.get_editor_property('kit_bindings')), old_cls, move_cls)
     kit.set_editor_property('kit_bindings', bindings)
@@ -142,7 +144,7 @@ def _kit(move_cls, bounce_cls):
     if weapon:
         wb, n_wpn = _swap(list(weapon.get_editor_property('bindings')), old_cls, move_cls)
         if n_wpn:
-            wcopy = _dup(weapon.get_path_name().split('.')[0], f'{ROOT}/WPN_Test_PlaytestTB')
+            wcopy = _dup(weapon.get_path_name().split('.')[0], f'{ROOT}/WPN_Test_PlaytestTB{R}')
             wb, _ = _swap(list(wcopy.get_editor_property('bindings')), old_cls, move_cls)
             wcopy.set_editor_property('bindings', wb)
             kit.set_editor_property('primary_weapon', wcopy)
@@ -156,10 +158,11 @@ def _kit(move_cls, bounce_cls):
         raise RuntimeError(f'could not set the defence rules {RULES} on KIT_Test_PlaytestTB')
     log(f'KIT_Test_PlaytestTB: defence extension rules = {RULES} (get-up set kept, no shield)')
     log(f'KIT_Test_PlaytestTB: dropkick bindings swapped kit {n_kit} weapon {n_wpn}; triggered abilities {len(trig)}')
-    already = 'WPN_Test_PlaytestTB' in str(kit.get_editor_property('primary_weapon'))
+    # A rerun finds the kit already on its weapon copy (nothing left to swap): that copy is the one to save, never the original weapon
+    already = n_kit + n_wpn == 0 and f'WPN_Test_PlaytestTB{R}' in str(weapon)
     if n_kit + n_wpn == 0 and not already:
         raise RuntimeError('no GA_Overlord_Dropkick binding found on KIT_Test_Playtest or its weapon')
-    if already and weapon and weapon not in saves:
+    if already and weapon not in saves:
         saves.append(weapon)
     return saves
 

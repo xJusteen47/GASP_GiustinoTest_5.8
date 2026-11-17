@@ -96,4 +96,28 @@ bool FGSTN_BodyCapsuleStepTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_BodyCapsuleGroundedRestoreTest, "GSTNCombat.Core.BodyCapsule.GroundedRestore", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_BodyCapsuleGroundedRestoreTest::RunTest(const FString& Parameters)
+{
+	// An aerial landed on its small capsule: back to standing on the floor, the bottom stays (actor up by the half height change), not the mesh root
+	const FGSTN_BodyCapsuleShape Standing = FGSTN_BodyCapsuleShape::Standing(86.f, 34.f);
+	FGSTN_BodyCapsuleShape Small;
+	Small.HalfHeight = 33.f;
+	Small.Radius = 30.f;
+	Small.Offset = FVector(0.0, 0.0, 85.0);
+	FGSTN_BodyCapsuleTarget Restore;
+	Restore.Shape = Standing;
+	const FGSTN_BodyCapsuleTarget OnGround = FGSTN_BodyCapsule::GroundedRestore(Restore, Standing, true);
+	TestTrue(TEXT("grounded: capsule anchor"), OnGround.Anchor == EGSTN_BodyCapsuleAnchor::Capsule);
+	const FGSTN_BodyCapsuleStep Step = FGSTN_BodyCapsule::Step(Small, OnGround);
+	TestEqual(TEXT("the actor rises by the half height change"), Step.ActorShiftLocal.Z, 86.0 - 33.0, 0.01);
+	TestTrue(TEXT("standing offset applied"), Step.Applied.NearlyEquals(Standing));
+	const FGSTN_BodyCapsuleTarget InAir = FGSTN_BodyCapsule::GroundedRestore(Restore, Standing, false);
+	TestTrue(TEXT("airborne: body anchor kept"), InAir.Anchor == EGSTN_BodyCapsuleAnchor::Body);
+	FGSTN_BodyCapsuleTarget Track;
+	Track.Shape = Small;
+	TestTrue(TEXT("a track's shape is left as it is"), FGSTN_BodyCapsule::GroundedRestore(Track, Standing, true).Anchor == EGSTN_BodyCapsuleAnchor::Body);
+	return true;
+}
+
 #endif

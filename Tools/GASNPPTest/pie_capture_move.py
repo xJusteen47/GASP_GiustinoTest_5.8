@@ -84,6 +84,12 @@ DAIR_SEQUENCES = [
     # cm ahead (default 40)
     {'name': 'dair_hit_rise', 'taps': [], 'frames': 130, 'dummy': float(os.environ.get('PIE_CAPTURE_DAIR_HIT_DIST', 40.0)), 'shoot': True,
      'air': {'rise_h': float(os.environ.get('PIE_CAPTURE_DAIR_HIT_RISE', 100.0))}},
+    # DAIR-V10 review r1: a landing in the move's first frames (pressed falling just over the floor: light window f1-3) and a late one (pressed
+    # rising lower than the whiff: the hang ends near the floor, landing in the last frames: light window f32+)
+    {'name': 'dair_land_early', 'taps': [], 'frames': 110, 'dummy': None, 'shoot': True,
+     'air': {'trigger_h': float(os.environ.get('PIE_CAPTURE_DAIR_EARLY_H', 30.0))}},
+    {'name': 'dair_land_late', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True,
+     'air': {'rise_h': float(os.environ.get('PIE_CAPTURE_DAIR_LATE_RISE', 60.0))}},
     # DEBUG-HUB (owner 2026-11-16, "does the stomp really take the enemies below, or do pushbox and core stop it?"): the dummy almost under the
     # attacker (PIE_CAPTURE_BELOW_DIST cm ahead, default 20), same jump and press; run with gstn.Combat.Debug.Hitboxes/Body on (PIE_CAPTURE_CVARS)
     {'name': 'dair_below', 'taps': [], 'frames': 130, 'dummy': float(os.environ.get('PIE_CAPTURE_BELOW_DIST', 20.0)), 'shoot': True,

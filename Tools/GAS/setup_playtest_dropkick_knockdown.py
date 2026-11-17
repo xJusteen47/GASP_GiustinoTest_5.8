@@ -1,0 +1,85 @@
+# Owner decision 2026-11-17 (option A, data only; thread dair-dropkick-anim round 2): the playtest dropkick downs its user on landing and the 25 cm
+# Self Landing Bounce plays, with the kit's GENERIC GroundBounce (the dropkick's own bounce ability goes on only after its clip passes review).
+#   KIT_Test_Playtest     defence extension rules = DA_DefenceRules_Test (the kit had none and the standard combat rules carry none: no defence data
+#                         at all for the player). The get-up set, tech set and the shield ability the kit already has are kept
+#   TL_Overlord_Dropkick  Tags window Combat.Move.KnockdownOnLanding over the whole move (same as TL_Overlord_DropkickTB); no BounceAbility
+# Rerun-safe, saves .uasset only. Editor: import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import setup_playtest_dropkick_knockdown as s; s.run()
+# Output: Saved/PlaytestFixes/setup_playtest_dropkick_knockdown.txt, at most 5 printed lines.
+import os
+import re
+
+import unreal
+
+KIT = '/Game/GASNPPTest/Combat/KIT_Test_Playtest'
+TIMELINE = '/Game/GASNPPTest/Combat/Overlord/TL_Overlord_Dropkick'
+RULES = '/GSTNDefence/Test/DA_DefenceRules_Test'
+WINDOW_TAG = 'Combat.Move.KnockdownOnLanding'
+OUT = os.path.join(unreal.Paths.project_saved_dir(), 'PlaytestFixes', 'setup_playtest_dropkick_knockdown.txt')
+_lines = []
+
+
+def log(msg):
+    _lines.append(str(msg))
+    unreal.log(f'[playtest_dropkick_kd] {msg}')
+
+
+def _shield(kit):
+    """The shield ability class the kit's defence extension names now (kept), None when none"""
+    text = kit.get_editor_property('extensions').export_text()
+    m = re.search(r'ShieldAbility="?([^",)]+)', text)
+    if not m or m.group(1) in ('None', ''):
+        return None
+    path = m.group(1).strip("'")
+    cls = unreal.load_class(None, path) if '.' in path else None
+    log(f'shield ability kept: {path} ({"loaded" if cls else "NOT loaded"})')
+    return cls
+
+
+def _window(asset):
+    data = asset.get_editor_property('data')
+    text = data.export_text()
+    if WINDOW_TAG in text:
+        log('TL_Overlord_Dropkick: window already there')
+        return False
+    total = data.get_editor_property('total_frames')
+    window = f'/Script/GSTNCombatCore.GSTN_TimelineTrack_Tags(StartFrame=0,EndFrame={total},Tags=(GameplayTags=((TagName="{WINDOW_TAG}"))))'
+    i = text.find('Tracks=(')
+    if i < 0:
+        raise RuntimeError('no Tracks in the dropkick timeline text')
+    j = i + len('Tracks=(')
+    data.import_text(text[:j] + window + ('' if text[j] == ')' else ',') + text[j:])
+    if WINDOW_TAG not in data.export_text():
+        raise RuntimeError('the KnockdownOnLanding window did not import')
+    asset.set_editor_property('data', data)
+    log(f'TL_Overlord_Dropkick: Tags window {WINDOW_TAG} [0, {total})')
+    return True
+
+
+def run():
+    del _lines[:]
+    ok = False
+    try:
+        kit, rules, tl = unreal.load_asset(KIT), unreal.load_asset(RULES), unreal.load_asset(TIMELINE)
+        if not (kit and rules and tl):
+            raise RuntimeError(f'missing asset: kit {bool(kit)} rules {bool(rules)} timeline {bool(tl)}')
+        shield = _shield(kit)
+        if not unreal.GSTN_DefenceContentLibrary.set_kit_defence_extension(kit, rules, shield):
+            raise RuntimeError('set_kit_defence_extension failed')
+        log(f'KIT_Test_Playtest: defence rules {RULES}')
+        _window(tl)
+        for a in (kit, tl):
+            unreal.EditorAssetLibrary.save_loaded_asset(a, False)
+        log('saved: KIT_Test_Playtest, TL_Overlord_Dropkick')
+        ok = True
+    except Exception as e:
+        log(f'ERROR: {e!r}')
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    with open(OUT, 'w') as f:
+        f.write('\n'.join(_lines) + '\n')
+    for line in [l for l in _lines if 'ERROR' in l][:4] + [_lines[-1][:300] if _lines else '']:
+        print(line)
+    return ok
+
+
+if __name__ == '__main__':
+    run()

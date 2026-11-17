@@ -151,7 +151,10 @@ void FGSTN_BodyCapsuleModifier::OnPreMovement(UMoverComponent* MoverComp, const 
 	{
 		CrouchShape = FGSTN_GroundCrouchKitExtension::MakeCapsule(CrouchHalfHeight, CrouchRadius, Standing);
 	}
-	const FGSTN_BodyCapsuleTarget Target = FGSTN_BodyCapsule::ResolveTarget(Data, TimelineFrame, Standing, CrouchShape.HalfHeight > 0.f ? &CrouchShape : nullptr);
+	// On the floor the standing capsule grows from the floor (GroundedRestore); the ground fact is the frame's input sync state, as every reader sees it
+	const FGSTN_BodyCapsuleTarget Target = FGSTN_BodyCapsule::GroundedRestore(
+		FGSTN_BodyCapsule::ResolveTarget(Data, TimelineFrame, Standing, CrouchShape.HalfHeight > 0.f ? &CrouchShape : nullptr), Standing,
+		MoverComp->HasGameplayTag(Mover_IsOnGround, true));
 	if (Target.Shape.NearlyEquals(Current))
 	{
 		return;

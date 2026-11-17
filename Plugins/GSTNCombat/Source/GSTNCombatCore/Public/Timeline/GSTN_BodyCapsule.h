@@ -133,4 +133,12 @@ struct GSTNCOMBATCORE_API FGSTN_BodyCapsule
 	 * so the capsule's bottom stays (a grounded capsule stays on the ground), the mesh moves with the new offset
 	 */
 	static FGSTN_BodyCapsuleStep Step(const FGSTN_BodyCapsuleShape& Applied, const FGSTN_BodyCapsuleTarget& Target);
+
+	/**
+	 * The standing capsule coming back while the pawn stands on the floor grows FROM THE FLOOR (Capsule anchor: bottom kept, the mesh root goes
+	 * under the actor's standing offset). With the Body anchor the mesh root stayed where the move's last track had it, below an aerial's tucked
+	 * feet, so after a landing the pawn stood sunk by that gap for good (dair V9 27 cm, V10 52 cm under the floor; dair-v10 review r1, 2026-11-17).
+	 * In the air the Body anchor stays (the body does not move on screen). A target that is not the standing shape is returned as it is
+	 */
+	static FGSTN_BodyCapsuleTarget GroundedRestore(const FGSTN_BodyCapsuleTarget& Target, const FGSTN_BodyCapsuleShape& Standing, bool bGrounded);
 };

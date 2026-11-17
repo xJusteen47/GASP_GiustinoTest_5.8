@@ -81,3 +81,14 @@ FGSTN_BodyCapsuleStep FGSTN_BodyCapsule::Step(const FGSTN_BodyCapsuleShape& Appl
 	Out.ActorShiftLocal = Delta;
 	return Out;
 }
+
+FGSTN_BodyCapsuleTarget FGSTN_BodyCapsule::GroundedRestore(const FGSTN_BodyCapsuleTarget& Target, const FGSTN_BodyCapsuleShape& Standing, bool bGrounded)
+{
+	FGSTN_BodyCapsuleTarget Out = Target;
+	if (bGrounded && Target.Shape.NearlyEquals(Standing))
+	{
+		Out.Anchor = EGSTN_BodyCapsuleAnchor::Capsule;
+		Out.MaxShiftPerFrame = 0.f;
+	}
+	return Out;
+}
