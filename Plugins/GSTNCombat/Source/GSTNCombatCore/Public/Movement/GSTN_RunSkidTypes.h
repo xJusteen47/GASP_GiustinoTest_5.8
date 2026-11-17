@@ -91,9 +91,17 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid")
 	EGSTN_SkidLedge Ledge = EGSTN_SkidLedge::StopAtLedge;
 
-	/** A skid drops the run back to stage 1 (Mario); off = the stage is kept */
+	/** A skid drops the run back to stage 1 (Mario); off = the stage is kept. Ignored while bResumeStageAfterSkid is on */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid")
 	bool bResetsStage = true;
+
+	/**
+	 * Owner 2026-11-17 (default ON, to be confirmed by the owner): after the skid's turn the run pushes off from the stage it had when
+	 * the skid started (no "cold start" from stage 1), so a skid back is not slower than releasing and pushing the stick again. The stage
+	 * is frozen for the whole skid. Off = the old rule (bResetsStage). Lives in the run state (Mover sync state): rollback safe
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid")
+	bool bResumeStageAfterSkid = true;
 
 	/** Frames after the skid started in which a neutral ground attack still carries the speed of before the skid (P3 momentum memory) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid", meta = (ClampMin = "0", ForceUnits = "Frames"))

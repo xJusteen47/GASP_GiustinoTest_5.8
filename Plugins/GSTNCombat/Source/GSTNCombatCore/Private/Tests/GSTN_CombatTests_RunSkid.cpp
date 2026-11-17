@@ -84,6 +84,7 @@ bool FGSTN_RunSkidRunStateTest::RunTest(const FString& Parameters)
 {
 	FGSTN_RunStagesTuning Tuning = FGSTN_RunStagesTuning::MakeDefault();
 	Tuning.Skid.CarryFrames = 6;
+	Tuning.Skid.bResumeStageAfterSkid = false;  // the old rule; the resume is RunSkid.Resume
 	FGSTN_RunStageState State;
 	State.Stage = 2;
 
@@ -109,6 +110,101 @@ bool FGSTN_RunSkidRunStateTest::RunTest(const FString& Parameters)
 	Skid.Frame = 0;
 	FGSTN_RunStageLogic::Step(Tuning, Skid, Kept);
 	TestEqual(TEXT("bResetsStage off keeps the stage"), static_cast<int32>(Kept.Stage), 2);
+	return true;
+}
+
+namespace
+{
+	/** A grounded frame of a skid: running along +X at Speed, the stick held fully back (-X) */
+	FGSTN_RunFrameInput SkidFrame(int32 Index, float Speed, bool bStart)
+	{
+		FGSTN_RunFrameInput Input = Frame(Index, true, Speed);
+		Input.StickWorld = FVector(-1.0, 0.0, 0.0);
+		Input.bSkidActive = true;
+		Input.bSkidStarted = bStart;
+		Input.SkidStartSpeed = bStart ? Speed : 0.f;
+		return Input;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunSkidResumeTest, "GSTNCombat.Core.RunSkid.Resume", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunSkidResumeTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-17: after the skid the run resumes from the stage it had (no cold start). Default ON
+	FGSTN_RunStagesTuning Tuning = FGSTN_RunStagesTuning::MakeDefault();
+	TestTrue(TEXT("resume is the default"), Tuning.Skid.bResumeStageAfterSkid);
+
+	FGSTN_RunStageState State;
+	State.Stage = 2;
+	FGSTN_RunStageLogic::Step(Tuning, SkidFrame(0, 820.f, true), State);
+	TestEqual(TEXT("skid start keeps the stage"), static_cast<int32>(State.Stage), 2);
+	TestEqual(TEXT("the speed of before the skid is still carried"), FGSTN_RunStageLogic::GetCarriedSpeed(Tuning, State), 820.f);
+	// 20 skid frames braking with the stick reversed: without the freeze each one is a tight turn and drops a stage
+	for (int32 F = 1; F <= 20; ++F)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, SkidFrame(F, FMath::Max(0.f, 820.f - 40.f * F), false), State);
+	}
+	TestEqual(TEXT("frozen through the skid"), static_cast<int32>(State.Stage), 2);
+	// The exit pushed off along -X, the stick is still -X: a normal run frame, the old stage goes on
+	FGSTN_RunFrameInput After = Frame(21, true, 250.f);
+	After.GroundVelocity = FVector(-250.0, 0.0, 0.0);
+	After.StickWorld = FVector(-1.0, 0.0, 0.0);
+	FGSTN_RunStageLogic::Step(Tuning, After, State);
+	TestEqual(TEXT("the push off resumes from stage 3"), static_cast<int32>(State.Stage), 2);
+
+	// Rollback: the state restored at the skid start and the same frames replayed give the same state (only sync-state data is used)
+	FGSTN_RunStageState Saved;
+	Saved.Stage = 1;
+	FGSTN_RunStageState A = Saved, B = Saved;
+	for (int32 F = 0; F < 12; ++F)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, SkidFrame(F, 600.f - 40.f * F, F == 0), A);
+		FGSTN_RunStageLogic::Step(Tuning, SkidFrame(F, 600.f - 40.f * F, F == 0), B);
+	}
+	TestTrue(TEXT("replay is identical"), A == B);
+	TestEqual(TEXT("stage 2 resumed as stage 2"), static_cast<int32>(A.Stage), 1);
+
+	// Off: the old rule (stage 1 after the skid)
+	Tuning.Skid.bResumeStageAfterSkid = false;
+	FGSTN_RunStageState Old;
+	Old.Stage = 2;
+	for (int32 F = 0; F < 5; ++F)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, SkidFrame(F, 700.f - 40.f * F, F == 0), Old);
+	}
+	TestEqual(TEXT("resume off: stage 1 after the skid"), static_cast<int32>(Old.Stage), 0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunSkidReleaseVsReverseTest, "GSTNCombat.Core.RunSkid.ReleaseVsReverse", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunSkidReleaseVsReverseTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-17: letting go of the stick only brakes (the stage's ReleaseBrake); only the stick held back past ReverseStickCos skids
+	const FGSTN_RunSkidTuning Tuning;
+	const FVector Run(700.0, 0.0, 0.0);
+	TestFalse(TEXT("stick released: never a skid"), FGSTN_RunSkidMath::ShouldStart(Tuning, 2, Run, FVector::ZeroVector, 1.f));
+	TestFalse(TEXT("stick barely touched back (under MinStickMagnitude): no skid"),
+		FGSTN_RunSkidMath::ShouldStart(Tuning, 2, Run, FVector(-0.2, 0.0, 0.0), 1.f));
+	TestTrue(TEXT("stick fully back: skid"), FGSTN_RunSkidMath::ShouldStart(Tuning, 2, Run, FVector(-1.0, 0.0, 0.0), 1.f));
+	// The reverse cone is data: at the default -0.5 a stick 135 degrees off skids, one 110 degrees off does not
+	const FVector Deg135(-0.7071, 0.7071, 0.0);
+	const FVector Deg110(-0.342, 0.940, 0.0);
+	TestTrue(TEXT("135 degrees back: skid"), FGSTN_RunSkidMath::ShouldStart(Tuning, 2, Run, Deg135, 1.f));
+	TestFalse(TEXT("110 degrees: no skid"), FGSTN_RunSkidMath::ShouldStart(Tuning, 2, Run, Deg110, 1.f));
+	FGSTN_RunSkidTuning Strict = Tuning;
+	Strict.ReverseStickCos = -0.9f;
+	TestFalse(TEXT("a stricter ReverseStickCos (-0.9) rejects 135 degrees"), FGSTN_RunSkidMath::ShouldStart(Strict, 2, Run, Deg135, 1.f));
+
+	// The run state with the stick released: the release path (carry from the release), the stage drops only after ReleaseDropFrames
+	FGSTN_RunStagesTuning Stages = FGSTN_RunStagesTuning::MakeDefault();
+	FGSTN_RunStageState State;
+	State.Stage = 2;
+	FGSTN_RunStageLogic::Step(Stages, Frame(0, true, 800.f), State);
+	FGSTN_RunFrameInput Released = Frame(1, true, 770.f);
+	Released.StickWorld = FVector::ZeroVector;
+	FGSTN_RunStageLogic::Step(Stages, Released, State);
+	TestEqual(TEXT("release: carry source is the release, not a skid"), State.CarrySource, EGSTN_RunCarrySource::StickRelease);
+	TestEqual(TEXT("release keeps the stage for now"), static_cast<int32>(State.Stage), 2);
 	return true;
 }
 

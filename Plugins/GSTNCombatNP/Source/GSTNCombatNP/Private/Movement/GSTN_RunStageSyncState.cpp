@@ -265,9 +265,10 @@ void FGSTN_RunStageMover::PostMovement(UMoverComponent& MoverComp, const FMoverT
 	Input.StickWorld = StickSize > 0.0 ? FGSTN_CombatVictim::StickToPlane(Stick, CameraYaw, Up).GetSafeNormal() * StickSize : FVector::ZeroVector;
 	Input.bBoostCommand = Tuning->RunStages.BoostCommand.IsValid() && Combat->WasCommandEnteredWithin(Tuning->RunStages.BoostCommand, 0);
 	Input.SpeedFactor = Factor;
-	// A run skid whose first live frame was this step (P2): the run drops and remembers the speed of before it
+	// A run skid whose first live frame was this step (P2): the run drops (or freezes, bResumeStageAfterSkid) and remembers the speed of before it
 	if (const FGSTN_LayeredMove_RunSkid* Skid = FGSTN_LayeredMove_RunSkid::FindActive(OutputSyncState))
 	{
+		Input.bSkidActive = true;
 		if (Skid->CurrentLiveFrame == 0 && Skid->LastStepTimeMs == TimeStep.BaseSimTimeMs)
 		{
 			Input.bSkidStarted = true;
