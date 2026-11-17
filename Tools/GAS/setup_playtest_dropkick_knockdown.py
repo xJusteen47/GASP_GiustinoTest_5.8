@@ -14,6 +14,11 @@ KIT = '/Game/GASNPPTest/Combat/KIT_Test_Playtest'
 TIMELINE = '/Game/GASNPPTest/Combat/Overlord/TL_Overlord_Dropkick'
 RULES = '/GSTNDefence/Test/DA_DefenceRules_Test'
 WINDOW_TAG = 'Combat.Move.KnockdownOnLanding'
+# After the bounce clip's review PASS (Fable r3, 2026-11-17): PLAYTEST_DROPKICK_OWN_BOUNCE=R3 sets the dropkick's own bounce ability on
+# TL_Overlord_Dropkick's Self Landing Bounce and registers it in KIT_Test_Playtest's TriggeredAbilities (the model starts only registered classes).
+# Empty = the kit's generic GroundBounce (option A as first applied)
+OWN_BOUNCE = os.environ.get('PLAYTEST_DROPKICK_OWN_BOUNCE', '')
+OWN_BOUNCE_GA = '/Game/GASNPPTest/Combat/Overlord/GA_Overlord_DropkickTechBounce' + OWN_BOUNCE
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'PlaytestFixes', 'setup_playtest_dropkick_knockdown.txt')
 _lines = []
 
@@ -67,6 +72,18 @@ def run():
             raise RuntimeError('set_kit_defence_extension failed')
         log(f'KIT_Test_Playtest: defence rules {RULES}')
         _window(tl)
+        if OWN_BOUNCE:
+            cls = unreal.EditorAssetLibrary.load_blueprint_class(OWN_BOUNCE_GA)
+            if not cls:
+                raise RuntimeError(f'{OWN_BOUNCE_GA} missing')
+            tl.set_editor_property('data', unreal.GSTN_DefenceContentLibrary.set_self_landing_bounce_ability(tl.get_editor_property('data'), cls))
+            if OWN_BOUNCE_GA.rsplit('/', 1)[1] not in tl.get_editor_property('data').export_text():
+                raise RuntimeError('BounceAbility not set on TL_Overlord_Dropkick')
+            trig = list(kit.get_editor_property('triggered_abilities'))
+            if not any(OWN_BOUNCE_GA.rsplit('/', 1)[1] + '_C' in str(t) for t in trig):
+                trig.append(cls)
+                kit.set_editor_property('triggered_abilities', trig)
+            log(f'TL_Overlord_Dropkick: BounceAbility = {OWN_BOUNCE_GA.rsplit("/", 1)[1]}; KIT_Test_Playtest triggered abilities {len(trig)}')
         for a in (kit, tl):
             unreal.EditorAssetLibrary.save_loaded_asset(a, False)
         log('saved: KIT_Test_Playtest, TL_Overlord_Dropkick')
