@@ -15,7 +15,9 @@ float FGSTN_PresentationScale::Evaluate(float Magnitude) const
 {
 	const double Low = InputRange.X;
 	const double High = InputRange.Y;
-	double T = FMath::IsNearlyEqual(Low, High) ? (Magnitude >= High ? 1.0 : 0.0) : (Magnitude - Low) / (High - Low);
+	// An empty range is a step at High; the divisor is never zero (C4723)
+	const double Span = High - Low;
+	double T = FMath::Abs(Span) <= UE_KINDA_SMALL_NUMBER ? (Magnitude >= High ? 1.0 : 0.0) : (Magnitude - Low) / (FMath::Abs(Span) > 0.0 ? Span : 1.0);
 	if (bClampInput)
 	{
 		T = FMath::Clamp(T, 0.0, 1.0);
