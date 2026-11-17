@@ -304,6 +304,25 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Rules")
 	static void FillStandard(UGSTN_CombatRules* Rules);
 
+	/**
+	 * Editor tooling (scripts): replaces the rules' knockback model with a new one of ModelClass, outered to the rules, copying the shared
+	 * Tuning (thresholds, hitstun, hitstop, weight, balloon) so only the knockback formula changes. The model's own properties start at
+	 * their defaults. Returns the new model (null for a null or abstract class). The caller saves the asset
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Rules")
+	static UGSTN_KnockbackModel* SwitchKnockbackModel(UGSTN_CombatRules* Rules, TSubclassOf<UGSTN_KnockbackModel> ModelClass);
+
+	/**
+	 * Editor tooling (scripts): bakes DefaultWeightCurve as a straight line (1, 1 = flat, what the percent models need; 1, 0.6 = the
+	 * standard weight driven curve). The curve has no Blueprint type, so scripts set it here. Returns false for null rules
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Rules")
+	static bool SetDefaultWeightCurveLinear(UGSTN_CombatRules* Rules, float AtZero, float AtOne);
+
+	/** Editor tooling (scripts): the DefaultWeightCurve at T in [0, 1] (1 when not authored) */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Rules")
+	static float EvaluateDefaultWeightCurve(const UGSTN_CombatRules* Rules, float T);
+
 #if WITH_EDITOR
 	virtual EDataValidationResult IsDataValid(FDataValidationContext& Context) const override;
 #endif

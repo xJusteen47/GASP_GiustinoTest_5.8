@@ -136,4 +136,17 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Test|Kits")
 	static bool WriteMoveKnockback(TSubclassOf<UGameplayAbility> MoveClass, float BaseKnockback, float KnockbackGrowth, float AngleDeg = -999.f);
+
+	/**
+	 * Knockback model switch (owner 2026-11-17, F2, Tools/GAS/setup_knockback_smash.py): the base and growth of ONE hitbox (HitIndex counts the
+	 * hitboxes in DescribeMoveKnockback's order; -1 = every hitbox), angle and fixed knockback untouched, hitbox shape and frames untouched.
+	 * Inline timelines of Blueprint children always; a move on a TimelineAsset only with bWriteTimelineAsset (the asset is dirtied, the caller
+	 * saves GetMoveTimelineAsset). Native classes are refused. True when something changed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Test|Kits")
+	static bool WriteMoveHitKnockback(TSubclassOf<UGameplayAbility> MoveClass, int32 HitIndex, float BaseKnockback, float KnockbackGrowth, bool bWriteTimelineAsset = false);
+
+	/** The TimelineAsset of a combat move (null when it uses its inline timeline): what a script saves after WriteMoveHitKnockback */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Test|Kits")
+	static UObject* GetMoveTimelineAsset(TSubclassOf<UGameplayAbility> MoveClass);
 };

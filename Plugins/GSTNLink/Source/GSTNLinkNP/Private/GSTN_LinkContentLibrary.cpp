@@ -17,6 +17,7 @@
 #include "Animation/AnimMontage.h"
 #include "Input/GSTN_LinkSlots.h"
 #include "Data/GSTN_LinkKitExtension.h"
+#include "Data/GSTN_LinkOutcomeTrack.h"
 #include "Hits/GSTN_HitSteps.h"
 #include "Kits/GSTN_AbilityBinding.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
@@ -659,6 +660,95 @@ bool UGSTN_LinkContentLibrary::SetKitThrows(UGSTN_PrimaryKitDefinition* Kit, TSu
 		}
 	}
 	return false;
+}
+
+bool UGSTN_LinkContentLibrary::GetKitThrows(UGSTN_PrimaryKitDefinition* Kit, TSubclassOf<UGameplayAbility>& OutForward, TSubclassOf<UGameplayAbility>& OutBack,
+	TSubclassOf<UGameplayAbility>& OutUp, TSubclassOf<UGameplayAbility>& OutDown)
+{
+	OutForward = OutBack = OutUp = OutDown = nullptr;
+	if (!Kit)
+	{
+		return false;
+	}
+	for (const FInstancedStruct& Entry : Kit->Extensions.ExtensionData)
+	{
+		if (const FGSTN_LinkKitExtension* Extension = Entry.GetPtr<FGSTN_LinkKitExtension>())
+		{
+			auto Load = [](const FSoftClassPath& Path) -> TSubclassOf<UGameplayAbility>
+			{
+				UClass* Class = Path.IsNull() ? nullptr : Path.TryLoadClass<UGameplayAbility>();
+				return Class;
+			};
+			OutForward = Load(Extension->Throws.Forward);
+			OutBack = Load(Extension->Throws.Back);
+			OutUp = Load(Extension->Throws.Up);
+			OutDown = Load(Extension->Throws.Down);
+			return true;
+		}
+	}
+	return false;
+}
+
+namespace GSTNLinkContentPrivate
+{
+	/** Calls Visit on every Throw key's hit of a throw timeline; returns how many */
+	template <typename TimelineT, typename VisitT>
+	int32 ForEachThrowHit(TimelineT& Timeline, VisitT&& Visit)
+	{
+		int32 Count = 0;
+		for (auto& Instanced : Timeline.Tracks)
+		{
+			if (auto* Track = Instanced.template GetMutablePtr<FGSTN_LinkOutcomeTrack>())
+			{
+				for (FGSTN_LinkOutcomeKey& Key : Track->Keys)
+				{
+					if (Key.Outcome == EGSTN_LinkOutcome::Throw)
+					{
+						Visit(Key.ThrowHit);
+						++Count;
+					}
+				}
+			}
+		}
+		return Count;
+	}
+}
+
+FString UGSTN_LinkContentLibrary::DescribeThrowKnockback(TSubclassOf<UGameplayAbility> ThrowClass)
+{
+	if (!ThrowClass || !ThrowClass->IsChildOf(UGSTN_GA_LinkThrow::StaticClass()))
+	{
+		return TEXT("not a throw");
+	}
+	FGSTN_CombatTimelineData Data = GetDefault<UGSTN_GA_LinkThrow>(ThrowClass.Get())->Timeline;
+	FString Out;
+	const int32 Count = GSTNLinkContentPrivate::ForEachThrowHit(Data, [&Out](const FGSTN_HitData& Hit)
+	{
+		Out += FString::Printf(TEXT("[%.1f%% b%.0f g%.0f f%.0f a%.0f] "), Hit.Damage, Hit.BaseKnockback, Hit.KnockbackGrowth, Hit.FixedKnockback, Hit.AngleDeg);
+	});
+	return FString::Printf(TEXT("%d throw keys: %s"), Count, *Out);
+}
+
+bool UGSTN_LinkContentLibrary::WriteThrowKnockback(TSubclassOf<UGameplayAbility> ThrowClass, float BaseKnockback, float KnockbackGrowth)
+{
+	if (!ThrowClass || !ThrowClass->IsChildOf(UGSTN_GA_LinkThrow::StaticClass()) || ThrowClass->HasAnyClassFlags(CLASS_Native))
+	{
+		return false;
+	}
+	UGSTN_GA_LinkThrow* Defaults = GetMutableDefault<UGSTN_GA_LinkThrow>(ThrowClass.Get());
+	FGSTN_CombatTimelineData Data = Defaults->Timeline;
+	GSTNLinkContentPrivate::ForEachThrowHit(Data, [BaseKnockback, KnockbackGrowth](FGSTN_HitData& Hit)
+	{
+		Hit.BaseKnockback = FMath::Max(BaseKnockback, 0.f);
+		Hit.KnockbackGrowth = FMath::Max(KnockbackGrowth, 0.f);
+	});
+	if (FGSTN_CombatTimelineData::StaticStruct()->CompareScriptStruct(&Data, &Defaults->Timeline, PPF_None))
+	{
+		return false;
+	}
+	Defaults->Timeline = MoveTemp(Data);
+	Defaults->MarkPackageDirty();
+	return true;
 }
 
 bool UGSTN_LinkContentLibrary::SetKitGrabMashFrames(UGSTN_PrimaryKitDefinition* Kit, int32 MashBaseFrames)
