@@ -124,6 +124,7 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 	PushBackEffect = UGSTN_GE_PushBack::StaticClass();
 	SetFacingEffect = UGSTN_GE_SetFacing::StaticClass();
 	MomentumSlideEffect = UGSTN_GE_MomentumSlide::StaticClass();
+	DodgeLandingSlideEffect = UGSTN_GE_DodgeLandingSlide::StaticClass();
 	LedgeGuardEffect = UGSTN_GE_LedgeGuard::StaticClass();
 	RunSkidEffect = UGSTN_GE_RunSkid::StaticClass();
 
@@ -514,6 +515,8 @@ void UGSTN_CombatSimComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Comp
 		Set->KitAirCrouch = AirCrouch ? *AirCrouch : FGSTN_AirCrouchKitExtension();
 		const FGSTN_GroundCrouchKitExtension* GroundCrouch = Kit ? Kit->Extensions.Find<FGSTN_GroundCrouchKitExtension>() : nullptr;
 		Set->KitGroundCrouch = GroundCrouch ? *GroundCrouch : FGSTN_GroundCrouchKitExtension();
+		const FGSTN_DodgeLandingKitExtension* DodgeLanding = Kit ? Kit->Extensions.Find<FGSTN_DodgeLandingKitExtension>() : nullptr;
+		Set->KitDodgeLanding = DodgeLanding ? *DodgeLanding : FGSTN_DodgeLandingKitExtension();
 		Set->StickThresholds = FGSTN_LoadoutInputFeelExt::Resolve(Component->GetApplied().Extensions);
 	}
 	RegisterTableSet(Set);
@@ -723,6 +726,18 @@ bool UGSTN_CombatSimComponent::IsCommandAllowed(int32 CommandIndex) const
 			return false;
 		}
 	}
+	if (GateCore && Current.Table.Commands.IsValidIndex(CommandIndex))
+	{
+		// The dodge landing (owner 2026-11-17): its ending lag refuses every command but the kit's roll-out, which passes whatever the running dodge
+		// says; its re-dodge lock refuses the dodge. A refused press stays in the buffer for as long as the buffer keeps it
+		const EGSTN_DodgeLandingGate Landing = FGSTN_DodgeLandingLogic::Gate(GateCore->DodgeLanding, Current.KitDodgeLanding, GateFrame, Current.Table.Commands[CommandIndex].Tag);
+		if (Landing != EGSTN_DodgeLandingGate::Free)
+		{
+			UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: command %s %s by the dodge landing"), *GetNameSafe(GetOwner()), GateFrame, *Current.Table.Commands[CommandIndex].Tag.ToString(),
+				Landing == EGSTN_DodgeLandingGate::Recovery ? TEXT("allowed as a roll-out") : TEXT("refused"));
+			return Landing == EGSTN_DodgeLandingGate::Recovery;
+		}
+	}
 	if (GateCore && FGSTN_CombatVictim::IsActionLocked(*GateCore))
 	{
 		// The one exception: an ability tagged Combat.Ability.IgnoreHitstunOnActivation, in a reaction (a KO is never bypassed). The gate only asks
@@ -877,7 +892,10 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 		const UGSTN_CombatTableSet* CrouchTables = FindTableSet(Sync->Core.TableRevision);
 		bCrouchStill = CrouchTables && !CrouchTables->KitGroundCrouch.bCrouchWalk;
 	}
-	if ((Running && Running->bIgnoreMoveInput) || bRooted || bHitTurn || bCrouchStill)
+	// A dodge's ending lag (owner 2026-11-17): no walking and no turning, the speed it kept slides out (the kit's landing slide) or brakes with the
+	// walking mode's friction. The frame this input is for, like the rest
+	const bool bDodgeEndLag = Sync->Core.DodgeLanding.IsEndLag(GetSimulationFrame() + 1);
+	if ((Running && Running->bIgnoreMoveInput) || bRooted || bHitTurn || bCrouchStill || bDodgeEndLag)
 	{
 		if (FCharacterDefaultInputs* Inputs = InputCmdResult.InputCollection.FindMutableDataByType<FCharacterDefaultInputs>())
 		{
@@ -1409,6 +1427,9 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	// move or a hitstun state is what the rest of the tick sees
 	RunVictimStep(TimeStep, InSync, OutSync, StepSnapshot, *Input.Cmd);
 
+	// The dodge landing (owner 2026-11-17): a hit reaction or a KO of this frame ends its lag and lock, so does the end of both windows
+	FGSTN_DodgeLandingLogic::Normalize(OutSync.Core.DodgeLanding, Frame, FGSTN_CombatVictim::IsInReaction(OutSync.Core) || OutSync.Core.ActionState == EGSTN_ActionState::KO);
+
 	// The loadout table swap (loadout-table-swap-design 2c). The active table is the set of the demanded revision; the frame that first has
 	// it is the boundary on every machine, and every later step of the frame (clock, adoption, jump, input, step 8) reads that one table.
 	// A demand whose set is not here yet (the loadout has not reached this machine) closes the gate: the clocks keep running on the table
@@ -1532,6 +1553,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 
 	// The gate the input simulation asks (IsCommandAllowed) reads the state this frame is writing
 	GateCore = &OutSync.Core;
+	GateFrame = Frame;
 
 	// Extension hooks at the fixed points of the tick. With nothing registered every call is an empty loop
 	FGSTN_CombatTickContext HookContext(Frame, InSync, OutSync);
@@ -1614,6 +1636,13 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	if (Result.HasRequest())
 	{
 		FGSTN_CombatVictim::LeaveTumbleByAction(OutSync.Core);
+	}
+
+	// A command the gate let through inside a dodge's ending lag is its roll-out (only the kit's recovery commands pass there): the lag ends on this
+	// frame, the re-dodge lock keeps running
+	if (Result.HasRequest())
+	{
+		OutSync.Core.DodgeLanding.CutEndLag(Frame);
 	}
 
 	// Step 5b: a jump or fast fall command that the gate let through changes the jump state in the frame of the request

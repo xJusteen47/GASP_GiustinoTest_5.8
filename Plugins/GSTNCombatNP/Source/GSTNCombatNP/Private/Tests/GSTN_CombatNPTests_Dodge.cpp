@@ -5,6 +5,9 @@
 #include "Abilities/GSTN_GA_Dash.h"
 #include "GSTN_CombatCoreTags.h"
 #include "Misc/AutomationTest.h"
+#include "Serialization/BitReader.h"
+#include "Serialization/BitWriter.h"
+#include "Simulation/GSTN_CombatSimTypes.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -47,6 +50,30 @@ bool FGSTN_NPDodgeDataTest::RunTest(const FString& Parameters)
 			TestNotNull(*(Name + TEXT(" effect has the apply-move component")), Effect->FindComponent<UApplyMoveGameplayEffectComponent>());
 		}
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPDodgeLandingTest, "GSTNCombat.NP.Dodge.LandingInSyncState", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPDodgeLandingTest::RunTest(const FString& Parameters)
+{
+	// The dodges open the dodge landing (owner 2026-11-17), the dash does not
+	TestTrue(TEXT("ground dodge opens a dodge landing"), GetDefault<UGSTN_GA_GroundDodge>()->bDodgeLanding);
+	TestTrue(TEXT("air dodge opens a dodge landing"), GetDefault<UGSTN_GA_AirDodge>()->bDodgeLanding);
+	TestFalse(TEXT("the dash does not"), GetDefault<UGSTN_GA_Dash>()->bDodgeLanding);
+
+	// The windows travel in the sync state and are compared on reconcile
+	FGSTN_CombatSyncState State;
+	State.Core.DodgeLanding = FGSTN_DodgeLandingState::Open(4321, 8, 10);
+	FBitWriter Writer(1024, true);
+	State.Core.NetSerialize(Writer);
+	FBitReader Reader(Writer.GetData(), Writer.GetNumBits());
+	FGSTN_CombatSyncState Loaded;
+	Loaded.Core.NetSerialize(Reader);
+	TestFalse(TEXT("read back without error"), Reader.IsError());
+	TestTrue(TEXT("the dodge landing round trips"), Loaded.Core.DodgeLanding == State.Core.DodgeLanding);
+	TestFalse(TEXT("an equal state needs no reconcile"), Loaded.Core.ShouldReconcile(State.Core));
+	Loaded.Core.DodgeLanding.CutEndLag(4322);
+	TestTrue(TEXT("a different lag asks for a reconcile"), Loaded.Core.ShouldReconcile(State.Core));
 	return true;
 }
 

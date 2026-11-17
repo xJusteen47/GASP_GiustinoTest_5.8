@@ -123,6 +123,7 @@ void UGSTN_GA_MoveTimeline::ActivateAbility(const FGameplayAbilitySpecHandle Han
 	// Before the base: it starts the timeline, which applies the move
 	bLeftGround.Value = false;
 	LandedFrame.Value = INDEX_NONE;
+	LandedLagFrames.Value = 0;
 	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
 }
 
@@ -167,10 +168,12 @@ void UGSTN_GA_MoveTimeline::OnSimulationTick(const FAbilitySystemTimeStep& TimeS
 	if (LandedFrame.Value == INDEX_NONE)
 	{
 		LandedFrame.Value = Frame;
+		// A dodge opens its landing in the combat state (the lag, the re-dodge lock, the belly slide) and holds for the lag it resolved
+		LandedLagFrames.Value = bDodgeLanding ? Combat->OpenDodgeLanding(Frame, Track->LandingLagFrames) : Track->LandingLagFrames;
 	}
-	if (Frame - LandedFrame.Value >= Track->LandingLagFrames)
+	if (Frame - LandedFrame.Value >= LandedLagFrames.Value)
 	{
-		UE_LOG(LogGSTNMoveTimeline, Verbose, TEXT("%s: landed on frame %d, lag %d: ended"), *GetName(), LandedFrame.Value, Track->LandingLagFrames);
+		UE_LOG(LogGSTNMoveTimeline, Verbose, TEXT("%s: landed on frame %d, lag %d: ended"), *GetName(), LandedFrame.Value, LandedLagFrames.Value);
 		EndAbility(GetCurrentAbilitySpecHandle(), GetCurrentActorInfo(), GetCurrentActivationInfo(), true, false);
 	}
 }
@@ -186,6 +189,7 @@ UGSTN_GA_GroundDodge::UGSTN_GA_GroundDodge(const FObjectInitializer& ObjectIniti
 {
 	SetDefaultMove(FGSTN_MoveTimelines::GroundDodgeParams(FGSTN_MoveTimelines::GroundDodgeMove(), FGSTN_MoveTimelines::DefaultTickRate), UGSTN_GE_MoveGroundDodge::StaticClass());
 	BlockInHitReaction();
+	bDodgeLanding = true;
 }
 
 UGSTN_GA_AirDodge::UGSTN_GA_AirDodge(const FObjectInitializer& ObjectInitializer)
@@ -193,4 +197,5 @@ UGSTN_GA_AirDodge::UGSTN_GA_AirDodge(const FObjectInitializer& ObjectInitializer
 {
 	SetDefaultMove(FGSTN_MoveTimelines::AirDodgeFromGroundParams(FGSTN_MoveTimelines::GroundDodgeMove(), FGSTN_MoveTimelines::DefaultTickRate), UGSTN_GE_MoveAirDodge::StaticClass());
 	BlockInHitReaction();
+	bDodgeLanding = true;
 }

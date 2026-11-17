@@ -63,10 +63,13 @@ struct GSTNCOMBATCORE_API FGSTN_MoveTimelines
 	static FGSTN_MoveTimelineParams AirDodgeParams();
 
 	/**
-	 * The air dodge for now (owner 2026-11-17: "in the air, use the ground one"): the ground dodge's arc and windows, but blocking until landing for
-	 * MaxAirFrames (it cannot be chained in the air to fly) and then actionable
+	 * The air dodge for now (owner 2026-11-17: "in the air, use the ground one"): the ground dodge's arc, windows and ending lag, blocking until it
+	 * lands, for at most AirDodgeMaxAirFrames in the air (it cannot be chained in the air to fly)
 	 */
 	static FGSTN_MoveTimelineParams AirDodgeFromGroundParams(const FGSTN_DashMoveData& Move, float TickRate);
+
+	/** Ending lag of the default ground and air dodge (owner 2026-11-17 20:13Z), the movement track's LandingLagFrames: a starting value, kit data overrides it */
+	static constexpr int32 DefaultDodgeEndLagFrames = 8;
 
 	/** Longest an air dodge made from the ground one stays blocking in the air (2 s at 60 Hz, like the dropkick's air limit) */
 	static constexpr int32 AirDodgeMaxAirFrames = 120;

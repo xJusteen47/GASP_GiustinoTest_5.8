@@ -181,7 +181,8 @@ bool FGSTN_LayeredMove_MomentumSlide::GenerateMove(const FMoverTickStartData& St
 	const UGSTN_CombatSimComponent* Combat = Owner ? Owner->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
 	int32 RunningStartFrame = INDEX_NONE;
 	const FGSTN_MomentumSlide* Data = nullptr;
-	const bool bRunning = Combat && Combat->ReadRunningSlide(RunningStartFrame, Data) && Data;
+	// The belly slide of a dodge landing lives with the landing's ending lag (its "start frame" is the landing frame), the others with their timeline
+	const bool bRunning = Combat && (bLandingSlide ? Combat->ReadLandingSlide(RunningStartFrame, Data) : Combat->ReadRunningSlide(RunningStartFrame, Data)) && Data;
 
 	if (Phase == static_cast<uint8>(EGSTN_MomentumSlidePhase::Undecided))
 	{
@@ -274,9 +275,12 @@ void FGSTN_LayeredMove_MomentumSlide::NetSerialize(FArchive& Ar)
 	uint8 bAgainstBit = bAgainst ? 1 : 0;
 	uint8 bLedgeBit = bStopAtLedge ? 1 : 0;
 	uint8 bRootBit = bAddRootMotion ? 1 : 0;
+	uint8 bLandingBit = bLandingSlide ? 1 : 0;
 	Ar.SerializeBits(&bAgainstBit, 1);
 	Ar.SerializeBits(&bLedgeBit, 1);
 	Ar.SerializeBits(&bRootBit, 1);
+	Ar.SerializeBits(&bLandingBit, 1);
+	bLandingSlide = bLandingBit != 0;
 	bAgainst = bAgainstBit != 0;
 	bStopAtLedge = bLedgeBit != 0;
 	bAddRootMotion = bRootBit != 0;
@@ -314,6 +318,25 @@ FEffectMoveContainer UGSTN_MomentumSlideMoveCreator::MakeMove_Implementation(UMo
 	// Undecided: the move reads everything on its first frame
 	FGSTN_LayeredMove_MomentumSlide Move;
 	return FEffectMoveContainer(&Move);
+}
+
+FEffectMoveContainer UGSTN_DodgeLandingSlideMoveCreator::MakeMove_Implementation(UMoverComponent* TargetMoverComponent, UAbilitySystemComponent* TargetAbilitySystemComponent,
+	const int32& EffectHandle, const FGameplayEffectSpecHandle& EffectSpec) const
+{
+	FGSTN_LayeredMove_MomentumSlide Move;
+	Move.bLandingSlide = true;
+	return FEffectMoveContainer(&Move);
+}
+
+UGSTN_GE_DodgeLandingSlide::UGSTN_GE_DodgeLandingSlide()
+{
+	DurationPolicy = EGameplayEffectDurationType::Instant;
+
+	UApplyMoveGameplayEffectComponent* ApplyMove = CreateDefaultSubobject<UApplyMoveGameplayEffectComponent>(TEXT("ApplyMove"));
+	UGSTN_DodgeLandingSlideMoveCreator* Creator = CreateDefaultSubobject<UGSTN_DodgeLandingSlideMoveCreator>(TEXT("DodgeLandingSlideMoveCreator"));
+	Creator->LayeredMoveDefaultParams.CopyDurationFromEffect = false;
+	ApplyMove->MoveProcessor = Creator;
+	GEComponents.Add(ApplyMove);
 }
 
 UGSTN_GE_MomentumSlide::UGSTN_GE_MomentumSlide()

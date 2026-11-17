@@ -53,7 +53,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_StateRoundTripTest, "GSTNCombat.NP.State.
 
 bool FGSTN_StateRoundTripTest::RunTest(const FString& Parameters)
 {
-	// An idle combatant that never had a loadout costs two bits more than the part that existed before: the action part and the jump state
+	// An idle combatant that never had a loadout costs three bits more than the part that existed before: the action part, the jump state and the dodge landing
 	FGSTN_CombatSyncState Idle;
 	FBitWriter CoreWriter(512, true);
 	Idle.Core.Input.NetSerialize(CoreWriter);
@@ -61,7 +61,7 @@ bool FGSTN_StateRoundTripTest::RunTest(const FString& Parameters)
 	CoreWriter << Start;
 	CoreWriter << Start;
 	TestTrue(TEXT("the default action part is default"), Idle.Core.IsActionPartDefault());
-	TestEqual(TEXT("an idle combatant pays one bit for the whole action part and one for the jump state"), BitsOfState(Idle) - 1 - CoreWriter.GetNumBits(), static_cast<int64>(2));
+	TestEqual(TEXT("an idle combatant pays one bit for the whole action part, one for the jump state and one for the dodge landing"), BitsOfState(Idle) - 1 - CoreWriter.GetNumBits(), static_cast<int64>(3));
 
 	bool bError = false;
 	const FGSTN_CombatSyncState IdleLoaded = ReadBackState(Idle, bError);

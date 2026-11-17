@@ -8,6 +8,7 @@
 #include "Input/GSTN_BufferResetRules.h"
 #include "Input/GSTN_StickThresholds.h"
 #include "Loadout/GSTN_CompiledBindingTable.h"
+#include "Movement/GSTN_DodgeLanding.h"
 #include "Rules/GSTN_AirCrouch.h"
 #include "Rules/GSTN_GroundCrouch.h"
 #include "Simulation/GSTN_WeaponStatsSwap.h"
@@ -150,6 +151,13 @@ public:
 	 */
 	UPROPERTY(Transient)
 	FGSTN_GroundCrouchKitExtension KitGroundCrouch;
+
+	/**
+	 * The kit's dodge landing (FGSTN_DodgeLandingKitExtension, owner 2026-11-17): ending lag, re-dodge lock, roll-out, belly slide. Always valid like
+	 * the ground crouch: a kit without the extension gets the defaults (8 f lag from the move, 10 f lock, slide on, roll-out off)
+	 */
+	UPROPERTY(Transient)
+	FGSTN_DodgeLandingKitExtension KitDodgeLanding;
 
 	/** The project defaults per strike kind (UGSTN_CombatSettings::SwingRicochetDefault / StabRicochetDefault), copied when the set is built */
 	UPROPERTY(Transient)

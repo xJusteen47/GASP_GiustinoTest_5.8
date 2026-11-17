@@ -85,6 +85,13 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_MomentumSlide : public FLayeredMoveBas
 	UPROPERTY()
 	bool bAddRootMotion = true;
 
+	/**
+	 * The belly slide of a dodge landing (owner 2026-11-17): the data is the kit's (UGSTN_CombatSimComponent::ReadLandingSlide) and the slide lives
+	 * while the ending lag of that landing does (TimelineStartFrame holds the landing frame), instead of the running timeline's
+	 */
+	UPROPERTY()
+	bool bLandingSlide = false;
+
 	/** Simulation frame the timeline the slide belongs to started on (UGSTN_CombatSimComponent::ReadRunningSlide) */
 	UPROPERTY()
 	int32 TimelineStartFrame = INDEX_NONE;
@@ -173,6 +180,27 @@ class GSTNCOMBATNP_API UGSTN_MomentumSlideMoveCreator : public UBaseMoveEffectCr
 public:
 	virtual FEffectMoveContainer MakeMove_Implementation(UMoverComponent* TargetMoverComponent, UAbilitySystemComponent* TargetAbilitySystemComponent,
 		const int32& EffectHandle, const FGameplayEffectSpecHandle& EffectSpec) const override;
+};
+
+/** Queues an undecided belly slide of a dodge landing on the target's Mover once */
+UCLASS(DisplayName = "GSTN Dodge Landing Slide Move Creator")
+class GSTNCOMBATNP_API UGSTN_DodgeLandingSlideMoveCreator : public UBaseMoveEffectCreator
+{
+	GENERATED_BODY()
+
+public:
+	virtual FEffectMoveContainer MakeMove_Implementation(UMoverComponent* TargetMoverComponent, UAbilitySystemComponent* TargetAbilitySystemComponent,
+		const int32& EffectHandle, const FGameplayEffectSpecHandle& EffectSpec) const override;
+};
+
+/** Instant: starts the belly slide of the dodge landing of this frame (UGSTN_CombatSimComponent::OpenDodgeLanding) */
+UCLASS()
+class GSTNCOMBATNP_API UGSTN_GE_DodgeLandingSlide : public UGameplayEffect
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GE_DodgeLandingSlide();
 };
 
 /** Instant: starts the momentum slide of the move that begins this frame (UGSTN_CombatSimComponent::ExecuteMomentumSlide) */

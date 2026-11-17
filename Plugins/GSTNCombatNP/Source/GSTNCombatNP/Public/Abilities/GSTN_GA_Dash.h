@@ -79,8 +79,8 @@ public:
  *
  * The ability never sets the character's state: it applies MoveEffect (a gameplay effect with UApplyMoveGameplayEffectComponent) and
  * Mover applies the queued move. It ends the timeline on landing when the movement track says bCancelOnLand, after the track's landing
- * lag, reading the ground tag from the Mover sim state of the frame (never the Mover component's own queries), so the character is
- * actionable again straight away and there is no extra state for it.
+ * lag (a dodge: the lag of its dodge landing, bDodgeLanding), reading the ground tag from the Mover sim state of the frame (never the Mover
+ * component's own queries).
  */
 UCLASS(Abstract, Blueprintable)
 class GSTNCOMBATNP_API UGSTN_GA_MoveTimeline : public UGSTN_GA_BaseCombat
@@ -93,6 +93,14 @@ public:
 	/** Applied to the owner when the timeline starts. It must move the character (UApplyMoveGameplayEffectComponent) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
 	TSubclassOf<UGameplayEffect> MoveEffect;
+
+	/**
+	 * A dodge landing (owner 2026-11-17): on landing the move opens the kit's dodge landing (FGSTN_DodgeLandingKitExtension: ending lag, re-dodge
+	 * lock, belly slide, roll-out) in the combat state, and holds the timeline for that lag instead of the movement track's own. On for the ground
+	 * and the air dodge; off for the dash and any other landing move
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Movement")
+	bool bDodgeLanding = false;
 
 	virtual void ActivateAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 		const FGameplayAbilityActivationInfo ActivationInfo, const FGameplayEventData* TriggerEventData) override;
@@ -122,6 +130,10 @@ private:
 	/** Simulation frame the character was first seen on the ground again after leaving it, INDEX_NONE before */
 	UPROPERTY(Transient)
 	FSyncInteger LandedFrame;
+
+	/** The lag the landing holds the timeline for (the track's, or the dodge landing's), set with LandedFrame */
+	UPROPERTY(Transient)
+	FSyncInteger LandedLagFrames;
 };
 
 /** The default dash: a ground burst along the facing in the plane perpendicular to the local gravity. Bind to Command.Movement.Dash */
@@ -137,7 +149,8 @@ public:
 /**
  * The default ground dodge (Mario long jump / Helldivers dive arc): the character is thrown into a low arc and lands standing, no prone
  * state. The feet are invincible from take-off for 40 % of the airborne frames (a hurtbox modifier track, data). Owner 2026-11-17: no startup,
- * no ending lag, no montage, blocking (not cancellable) until landing, the run's speed carried in, full air control while it flies. Bind to
+ * no montage, blocking (not cancellable) until the end of the landing lag, the run's speed carried in, full air control while it flies; on landing
+ * the kit's dodge landing (8 f ending lag with a belly slide, then a 10 f re-dodge lock from the landing; FGSTN_DodgeLandingKitExtension). Bind to
  * Command.Defence.Dodge with a grounded requirement. Blocked in hitstun and hitstop by default.
  */
 UCLASS(Blueprintable)

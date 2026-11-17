@@ -189,7 +189,7 @@ bool FGSTN_HitStateIdleZeroCostTest::RunTest(const FString& Parameters)
 	int32 Start = INDEX_NONE;
 	CoreWriter << Start;
 	CoreWriter << Start;
-	TestEqual(TEXT("an idle combatant pays the action part bit and the jump state bit, and nothing for the hit part"), HitStateBits(Idle) - 1 - CoreWriter.GetNumBits(), static_cast<int64>(2));
+	TestEqual(TEXT("an idle combatant pays the action part, jump state and dodge landing bits, and nothing for the hit part"), HitStateBits(Idle) - 1 - CoreWriter.GetNumBits(), static_cast<int64>(3));
 
 	// A combatant whose every hit field has run out looks idle: the same bits, the same state
 	FGSTN_CombatSyncState Stale;

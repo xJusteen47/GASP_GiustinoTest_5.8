@@ -89,15 +89,18 @@ FGSTN_MoveTimelineParams FGSTN_MoveTimelines::GroundDodgeParams(const FGSTN_Dash
 {
 	const FGSTN_ArcPrediction Arc = FGSTN_DashMath::PredictArc(Move, NominalGravity, TickRate);
 	FGSTN_MoveTimelineParams Params;
-	// Room for a heavier gravity than nominal: the ability ends the timeline on landing anyway
-	Params.TotalFrames = Arc.AirFrames + 12;
+	// Owner 2026-11-17 20:13Z: the dodge needs ending lag ("vulnerable at the end" meant lag). 8 frames from the landing, counted from 1, as the
+	// move's data; a kit overrides it with FGSTN_DodgeLandingKitExtension::EndLagFrames. The combat state holds the lag (FGSTN_DodgeLandingState),
+	// so it lasts even if a late landing outruns the timeline
+	Params.LandingLagFrames = DefaultDodgeEndLagFrames;
+	// Room for a heavier gravity than nominal and for the lag: the ability ends the timeline after the lag anyway
+	Params.TotalFrames = Arc.AirFrames + 12 + Params.LandingLagFrames;
 	Params.FirstActionableFrame = Params.TotalFrames;
 	Params.bCancelOnLand = true;
-	Params.LandingLagFrames = 0;
 	Params.HurtboxFrames = InvincibleFramesFor(Arc.AirFrames, DefaultInvincibleFraction);
 	Params.HurtboxTag = GSTNCombatHitTags::Hurtbox_Feet.GetTag();
-	// Owner 2026-11-17: no startup (the impulse is the first frame), no ending lag (landing ends it), blocking until then, the feet vulnerable after
-	// the first 40 %, and highly controllable in the air
+	// Owner 2026-11-17: no startup (the impulse is the first frame), blocking until the end of the lag, the feet vulnerable after the first 40 %,
+	// and highly controllable in the air (Mario long jump: steer to choose the landing)
 	Params.AirControlOverride = 1.f;
 	return Params;
 }
@@ -105,7 +108,7 @@ FGSTN_MoveTimelineParams FGSTN_MoveTimelines::GroundDodgeParams(const FGSTN_Dash
 FGSTN_MoveTimelineParams FGSTN_MoveTimelines::AirDodgeFromGroundParams(const FGSTN_DashMoveData& Move, float TickRate)
 {
 	FGSTN_MoveTimelineParams Params = GroundDodgeParams(Move, TickRate);
-	Params.TotalFrames = FMath::Max(Params.TotalFrames, AirDodgeMaxAirFrames);
+	Params.TotalFrames = FMath::Max(Params.TotalFrames, AirDodgeMaxAirFrames + Params.LandingLagFrames);
 	Params.FirstActionableFrame = Params.TotalFrames;
 	return Params;
 }
