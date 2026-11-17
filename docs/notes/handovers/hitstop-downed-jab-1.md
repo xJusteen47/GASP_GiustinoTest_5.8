@@ -58,3 +58,19 @@ Cost estimate ~11 $ (Opus high, cloud only).
 - Tuning if the review says so: StopFraction / StopTime / ExitPlayRate on ABP_GSTN_SkidLayer class defaults (data, no code).
 - Risk: Skid_Revised's own root/hips travel is not removed (root motion off); if the clip drifts forward of the capsule the fix is a pose-space
   offset, not a sim change.
+
+## Addendum 2: run start clip (owner 23:52Z): SS_180_Turn2
+Owner: the run start clip is SS_180_Turn2, from GaspMoverProject/Content/GiustinoMoves/Skid (uasset also in the project thread's uploads). Its root
+may not rotate well; the owner wrote a root-fix script in that folder (subfolder RootCorrection seen; the cloud could not open the folder, so
+nobody has read the script yet). Note: M1 already copied an SS_180_Turn2 into Ported57/Skid from another source folder: compare before using it.
+Desktop steps, after the skid layer steps (editor of _ue59 only, GaspMoverProject is 5.7: open it never, copy files only):
+1. Read the owner's script in GaspMoverProject/Content/GiustinoMoves/Skid/RootCorrection first (what it changes, which asset it expects). Do not run
+   anything that writes into GaspMoverProject.
+2. Copy GiustinoMoves/Skid/SS_180_Turn2.uasset into _ue59 Content/Blueprints/Animation/Ported57/RunStart/ (same skeleton SK_UEFN_Mannequin, as M1;
+   if the reference is broken, migrate with the port57_m1.py pattern). Keep the M1 copy untouched.
+3. Run the owner's root-fix script on the _ue59 copy only (adapt the asset path, never the logic; if it needs a change, write why in the handover).
+4. Set the clip: env RUN_START_CLIP=/Game/Blueprints/Animation/Ported57/RunStart/SS_180_Turn2 and rerun Tools/GAS/setup_skid_anim_layer.py (ESITO OK,
+   the log line says run_start_clip = that path).
+5. Capture a start from still at run stage 1 on KIT_Test_Overlord (side + front, 4x slow, frame before the start included) and send to a Fable
+   review (rule 10). Check first: the root faces the run direction during the whole clip (a 180 turn clip: if the body ends turned around, the
+   clip needs a trim/offset decided by the owner, not a sim change). Tuning: StartFromSpeed / PlayRate on ABP_GSTN_RunStartLayer.
