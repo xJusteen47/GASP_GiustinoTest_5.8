@@ -76,6 +76,9 @@ bool UGSTN_CombatPresentationEvents::ReadSnapshot(const AActor* Owner, FGSTN_Pre
 	Out.AirJumpsUsed = View.AirJumpsUsed;
 	Out.bReacting = View.Status == EGSTN_CombatStatus::Hitstun || View.Status == EGSTN_CombatStatus::Tumble;
 	Out.bSplat = View.Status == EGSTN_CombatStatus::Splat;
+	// The simulation's bounce counts: a spike off the ground never shows a downward velocity to the presentation
+	Out.GroundBounceCount = View.GroundBounceCount;
+	Out.WallBounceCount = View.WallBounceCount;
 	Out.MoveTags = Combat->GetCurrentMoveTags();
 	Out.MoveStartFrame = View.bInMove ? View.MoveStartFrame : INDEX_NONE;
 

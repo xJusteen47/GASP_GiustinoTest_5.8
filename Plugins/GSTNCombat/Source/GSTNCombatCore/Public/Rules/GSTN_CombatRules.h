@@ -198,6 +198,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
 	FGSTN_GroundImpactRules GroundImpact;
 
+	/**
+	 * The default bounce off walls (owner 2026-11-17): the floor's hard bounce rules, and under them a small bump with its clip instead of the
+	 * floor's tech bounce. Surface rows (splat, break, forced bounce) and the hit's Force still decide first
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
+	FGSTN_SurfaceBounceRules WallImpact;
+
+	/** The same for ceilings (faces within 45 degrees of down); its chain is shared with the walls' */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
+	FGSTN_SurfaceBounceRules CeilingImpact;
+
 	/** Damage of a surface impact before the surface's and the victim's ImpactDamageScale. 0 = impacts do no damage (they still stun) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits", meta = (ClampMin = "0.0"))
 	float BaseImpactDamage = 0.f;

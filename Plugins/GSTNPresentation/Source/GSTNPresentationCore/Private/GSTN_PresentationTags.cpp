@@ -23,6 +23,9 @@ namespace GSTNPresentationTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Splat, "Presentation.Event.Splat", "Pinned to a surface by a splat. Magnitude: speed before (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(WallBounce, "Presentation.Event.WallBounce", "A reacting victim bounces off a wall or ceiling. Magnitude: speed into the surface (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GroundBounce, "Presentation.Event.GroundBounce", "A reacting victim bounces off the ground. Magnitude: fall speed (cm/s)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Bump, "Presentation.Event.Bump", "A slow reacting victim taps a wall or ceiling: the small default bump, not a bounce. Magnitude: 0");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Bump_Wall, "Presentation.Event.Bump.Wall", "The bump is off a wall. Direction: away from it");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Bump_Ceiling, "Presentation.Event.Bump.Ceiling", "The bump is off a ceiling");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tumble, "Presentation.Event.Tumble", "Tumble (launched hard enough to tumble)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tumble_Start, "Presentation.Event.Tumble.Start", "Tumble starts (Combat.State.Tumble added)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tumble_End, "Presentation.Event.Tumble.End", "Tumble ends (Combat.State.Tumble removed)");

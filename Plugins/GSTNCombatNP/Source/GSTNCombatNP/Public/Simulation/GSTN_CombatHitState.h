@@ -76,7 +76,7 @@ struct FGSTN_MoveOrigin
  * serialized inside the action part of the core, which makes a combatant with nothing live pay no bit for it at all.
  *
  * Wire format (inside the action part, after the requests): 1 bit "hit part live"; then 8 bits of presence (move origin, targets,
- * confirm flags, hitstun end, impact end, pending launch, SDI, impact profile and ground bounce chain), 2 bits of pending reaction, and the blocks that are present.
+ * confirm flags, hitstun end, impact end, pending launch, SDI, impact profile with the bounce chains and the bump), 2 bits of pending reaction, and the blocks that are present.
  */
 struct GSTNCOMBATNP_API FGSTN_HitSyncState
 {
@@ -113,6 +113,20 @@ struct GSTNCOMBATNP_API FGSTN_HitSyncState
 	 */
 	uint8 GroundBounceCount = 0;
 	int32 GroundBounceFirstFrame = INDEX_NONE;
+
+	/**
+	 * The default wall and ceiling bounces of the current launch (FGSTN_SurfaceBounceRules, owner 2026-11-17): the hard bounces' chain, counted
+	 * apart from the floor's, and the bump's window: Combat.State.Bump is projected until BumpEndFrame (exclusive), BumpKind says which face
+	 * (1 wall, 2 ceiling). Live while the combatant tumbles, like the ground chain; a new staggering hit resets them. On the wire in the same
+	 * block as the ground chain
+	 */
+	uint8 WallBounceCount = 0;
+	int32 WallBounceFirstFrame = INDEX_NONE;
+	int32 BumpEndFrame = INDEX_NONE;
+	uint8 BumpKind = 0;
+
+	static constexpr uint8 BumpKindWall = 1;
+	static constexpr uint8 BumpKindCeiling = 2;
 
 	/** The launch velocity chosen by the hit, in cm/s divided by 4, applied when the hitstop ends. State at F + 1 like the reaction */
 	int16 PendingLaunchQ[3] = { 0, 0, 0 };

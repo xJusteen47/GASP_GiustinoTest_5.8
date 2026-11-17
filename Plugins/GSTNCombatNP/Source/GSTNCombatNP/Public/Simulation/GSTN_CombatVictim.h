@@ -173,6 +173,9 @@ struct FGSTN_ImpactStepResult
 	/** Bounce: the launch move that replaces the victim's velocity (the pre-impact velocity reflected about the normal, times the restitution) */
 	FGSTN_ReactionMove Move;
 
+	/** The bounce is the small wall or ceiling bump of FGSTN_SurfaceBounceRules (its own event, Combat.Event.Impact.Bump), not a hard bounce */
+	bool bBump = false;
+
 	/** Splat and break: the victim holds still for this many frames from this frame (the freeze runs at rest) */
 	int32 FreezeFrames = 0;
 	bool bFreezeAtRest = false;
@@ -277,6 +280,14 @@ struct GSTNCOMBATNP_API FGSTN_CombatVictim
 	 * Pure: a function of its inputs and the core.
 	 */
 	static void StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_CombatSyncCore& Core, FGSTN_ImpactStepResult& Out);
+
+	/**
+	 * The default wall and ceiling bounce (owner 2026-11-17, UGSTN_CombatRules::WallImpact / CeilingImpact), run by StepImpact for a wall or
+	 * ceiling contact that no surface row and no hit decided: the hard bounce by the floor's rules, else the small bump with its clip window.
+	 * Writes Out only when it decides something
+	 */
+	static void StepDefaultSurfaceBounce(const FGSTN_ImpactStepInput& In, FGSTN_CombatSyncCore& Core, const FGSTN_SurfaceImpactRow* Row,
+		const FGSTN_ImpactProfile& Profile, double JudgedSpeed, FGSTN_ImpactStepResult& Out);
 
 	/**
 	 * The combat state locks commands: a victim in hitstun, tumble or a surface impact reaction cannot act until it is Actionable again. A

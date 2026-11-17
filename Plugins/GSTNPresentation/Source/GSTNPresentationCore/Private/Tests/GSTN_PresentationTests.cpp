@@ -241,6 +241,85 @@ bool FGSTN_PresentationDeriveAirTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PresentationDeriveCountedBounceTest, "GSTNPresentation.Core.Derive.CountedBounce", GSTNPresentationTest::Flags)
+bool FGSTN_PresentationDeriveCountedBounceTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNPresentationTest;
+	using namespace GSTNPresentationTags;
+
+	auto Reacting = [](int32 Frame, const FVector& Velocity, int32 Ground, int32 Wall)
+	{
+		FGSTN_PresentationSnapshot S = Snap(Frame, false, Velocity);
+		S.bReacting = true;
+		S.GroundBounceCount = Ground;
+		S.WallBounceCount = Wall;
+		return S;
+	};
+
+	// A spike off the ground (polish M2 r2): the victim is grounded and still, the next presented frame it already rises; the downward
+	// speed never reached a snapshot. The simulation's count says it bounced
+	FGSTN_PresentationSnapshot Still = Reacting(10, FVector::ZeroVector, 0, 0);
+	Still.bGrounded = true;
+	TArray<FGSTN_PresentationEvent> Events = Run({Still, Reacting(11, FVector(900, 0, 1600), 1, 0), Reacting(12, FVector(880, 0, 1580), 1, 0)});
+	TestEqual(TEXT("spike: one ground bounce from the count"), Count(Events, GroundBounce), 1);
+	const FGSTN_PresentationEvent* Spike = Events.FindByPredicate([](const FGSTN_PresentationEvent& E) { return E.EventTag == GSTNPresentationTags::GroundBounce; });
+	TestTrue(TEXT("spike: frame of the rise, magnitude = speed off the floor"), Spike && Spike->Frame == 11 && FMath::IsNearlyEqual(Spike->Magnitude, 1600.f));
+	TestEqual(TEXT("spike: no landing, no jump"), Count(Events, Land) + Count(Events, Jump_Ground), 0);
+
+	// Without a count (another source) the same frames show nothing: the velocity reading needs the way in
+	FGSTN_PresentationSnapshot NoCountA = Still;
+	NoCountA.GroundBounceCount = NoCountA.WallBounceCount = INDEX_NONE;
+	FGSTN_PresentationSnapshot NoCountB = Reacting(11, FVector(900, 0, 1600), INDEX_NONE, INDEX_NONE);
+	TestEqual(TEXT("no count: no bounce"), Count(Run({NoCountA, NoCountB}), GroundBounce), 0);
+
+	// A bounce both readings see is one event (count and reflection on the same frame)
+	Events = Run({Reacting(20, FVector(0, 0, -900), 0, 0), Reacting(21, FVector(0, 0, 540), 1, 0)});
+	TestEqual(TEXT("both: one ground bounce"), Count(Events, GroundBounce), 1);
+
+	// A wall: the count rises, the normal is where the speed along the floor turned
+	Events = Run({Reacting(30, FVector(800, 300, 100), 0, 0), Reacting(31, FVector(-480, 300, 90), 0, 1)});
+	TestEqual(TEXT("wall: one wall bounce"), Count(Events, WallBounce), 1);
+	const FGSTN_PresentationEvent* Wall = Events.FindByPredicate([](const FGSTN_PresentationEvent& E) { return E.EventTag == GSTNPresentationTags::WallBounce; });
+	TestTrue(TEXT("wall: normal -X, magnitude = speed into it"), Wall && Wall->Direction.Equals(FVector(-1, 0, 0), 0.01) && FMath::IsNearlyEqual(Wall->Magnitude, 800.f));
+
+	// A ceiling shares the wall count: the rise turned into a fall, the normal points down
+	Events = Run({Reacting(40, FVector(200, 0, 900), 0, 0), Reacting(41, FVector(200, 0, -540), 0, 1)});
+	const FGSTN_PresentationEvent* Ceiling = Events.FindByPredicate([](const FGSTN_PresentationEvent& E) { return E.EventTag == GSTNPresentationTags::WallBounce; });
+	TestTrue(TEXT("ceiling: one, normal -Up"), Count(Events, WallBounce) == 1 && Ceiling && Ceiling->Direction.Equals(FVector(0, 0, -1), 0.01));
+
+	// A second bounce of the chain is a second event; a new hit resets the count without one, and its first bounce counts again
+	FGSTN_PresentationSnapshot ReHit = Reacting(52, FVector(600, 0, 600), 0, 0);
+	ReHit.LastHitFrame = 52;
+	ReHit.LastHitStrength = 60.f;
+	FGSTN_PresentationSnapshot AfterHit = Reacting(60, FVector(600, 0, 700), 1, 0);
+	AfterHit.LastHitFrame = 52;
+	AfterHit.LastHitStrength = 60.f;
+	FGSTN_PresentationSnapshot Before = Reacting(61, FVector(600, 0, 690), 1, 0);
+	Before.LastHitFrame = 52;
+	Events = Run({Reacting(50, FVector(0, 0, 400), 1, 0), Reacting(51, FVector(0, 0, 300), 2, 0), ReHit, AfterHit, Before});
+	TestEqual(TEXT("chain: second bounce, then the re-hit's first"), Count(Events, GroundBounce), 2);
+
+	// A splat is not a bounce, whatever the count does
+	FGSTN_PresentationSnapshot Splat = Reacting(71, FVector::ZeroVector, 0, 1);
+	Splat.bSplat = true;
+	TestEqual(TEXT("splat: no wall bounce"), Count(Run({Reacting(70, FVector(900, 0, 0), 0, 0), Splat}), WallBounce), 0);
+
+	// The bump's projected state tag is a Bump event (default tag rules), once per bump
+	const FGameplayTag BumpWall = FGameplayTag::RequestGameplayTag(FName(TEXT("Combat.State.Bump.Wall")), false);
+	if (BumpWall.IsValid())
+	{
+		FGSTN_PresentationDeriveRules Rules;
+		Rules.TagRules = FGSTN_PresentationDeriveRules::MakeDefaultTagRules();
+		FGSTN_PresentationSnapshot B1 = Reacting(80, FVector(300, 0, 0), 0, 0);
+		FGSTN_PresentationSnapshot B2 = Reacting(81, FVector(-60, 0, 0), 0, 0);
+		B2.StateTags.AddTag(BumpWall);
+		FGSTN_PresentationSnapshot B3 = B2;
+		B3.Frame = 82;
+		TestEqual(TEXT("bump: one event"), Count(Run({B1, B2, B3}, Rules), Bump_Wall), 1);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PresentationDeriveRunTest, "GSTNPresentation.Core.Derive.Run", GSTNPresentationTest::Flags)
 bool FGSTN_PresentationDeriveRunTest::RunTest(const FString& Parameters)
 {

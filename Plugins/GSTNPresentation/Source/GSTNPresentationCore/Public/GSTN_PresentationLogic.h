@@ -67,6 +67,18 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationSnapshot
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
 	bool bSplat = false;
 
+	/**
+	 * The bounces of the current reaction as the simulation counts them (floor; walls and ceilings), INDEX_NONE when the source has no
+	 * count. When set, a rise is a bounce whatever the velocity showed: a spike off the ground reflects inside one simulation frame and
+	 * the landing's floor projection clears the downward speed before any snapshot sees it (polish M2 r2: no GroundBounce from a spike).
+	 * A count only grows within one reaction; a new hit starts it again from 0
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
+	int32 GroundBounceCount = INDEX_NONE;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
+	int32 WallBounceCount = INDEX_NONE;
+
 	/** Frame of the last hit received (stamped by the simulation), INDEX_NONE before the first */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
 	int32 LastHitFrame = INDEX_NONE;

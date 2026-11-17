@@ -88,6 +88,9 @@ namespace GSTNCombatTags
 	/** A launched victim bounced off a surface (outbox event on the victim). */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Impact_Bounce);
 
+	/** A launched victim touched a wall or ceiling too slowly for a hard bounce and was nudged off it (the default bump, outbox event on the victim). */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Impact_Bump);
+
 	/** A launched victim broke the surface it hit and went through (outbox event on the victim). */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Impact_Break);
 
@@ -109,6 +112,14 @@ namespace GSTNCombatTags
 	 * tick, never granted. Presentation reads it to pick the splat reaction over the plain hitstun one
 	 */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Splat);
+
+	/**
+	 * The small wall or ceiling bump of a tumbling combatant (UGSTN_CombatRules::WallImpact / CeilingImpact) is playing: lives for the rules'
+	 * BumpFrames. Projected by the combat tick, never granted; .Wall or .Ceiling says which face. A reaction anim rule on it plays the bump clip
+	 */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Bump);
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Bump_Wall);
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Bump_Ceiling);
 
 	// Cues
 

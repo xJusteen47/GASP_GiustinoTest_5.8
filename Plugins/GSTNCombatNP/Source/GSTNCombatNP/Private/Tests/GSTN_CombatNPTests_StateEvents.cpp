@@ -62,6 +62,10 @@ bool FGSTN_StateViewFromCoreTest::RunTest(const FString& Parameters)
 	Core.bTumbleActionable = true;
 	View = FGSTN_CombatStateView::FromCore(Core);
 	TestTrue(TEXT("an actionable tumble is a tumble, not hitstun"), View.bInTumble && View.bTumbleActionable && !View.bInHitstun);
+	Core.Hit.GroundBounceCount = 1;
+	Core.Hit.WallBounceCount = 2;
+	View = FGSTN_CombatStateView::FromCore(Core);
+	TestTrue(TEXT("bounce counts of the reaction (presentation reads their rise)"), View.GroundBounceCount == 1 && View.WallBounceCount == 2);
 
 	Core = StateEvCore(200);
 	Core.ActionState = EGSTN_ActionState::InTimeline;

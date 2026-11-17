@@ -11,6 +11,9 @@ namespace GSTNCombatTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Lock_Movement, "Combat.Lock.Movement", "Locks the combatant's movement. Granted by abilities and effects that root the combatant, read by the stats movement modifier");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Lock_Reaction, "Combat.Lock.Reaction", "Locks the movement of a combatant in a hit reaction or KO. Projected by the combat tick from the sync state, never granted");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Splat, "Combat.State.Splat", "Pinned to a surface by a splat. Projected by the combat tick with Combat.State.Hitstun, never granted");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Bump, "Combat.State.Bump", "The small default bump off a wall or ceiling is playing (tumbling). Projected by the combat tick, never granted");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Bump_Wall, "Combat.State.Bump.Wall", "The bump is off a wall. Projected with Combat.State.Bump, never granted");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(State_Bump_Ceiling, "Combat.State.Bump.Ceiling", "The bump is off a ceiling. Projected with Combat.State.Bump, never granted");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_Role_Primary, "Combat.Weapon.Role.Primary", "Role of the weapon the combatant uses by default. Granted by the stats effect of the active weapon");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Weapon_Role_Support, "Combat.Weapon.Role.Support", "Role of the weapon the combatant can switch to. Granted by the stats effect of the active weapon");
@@ -29,6 +32,7 @@ namespace GSTNCombatTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Impact, "Combat.Event.Impact", "Root of the surface impact events (splat, bounce, break)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Impact_Splat, "Combat.Event.Impact.Splat", "A launched victim was pinned to a surface. Outbox event on the victim, published once on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Impact_Bounce, "Combat.Event.Impact.Bounce", "A launched victim bounced off a surface. Outbox event on the victim, published once on the authority");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Impact_Bump, "Combat.Event.Impact.Bump", "A launched victim was nudged off a wall or ceiling (the small default bounce). Outbox event on the victim, published once on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Impact_Break, "Combat.Event.Impact.Break", "A launched victim broke the surface it hit. Outbox event on the victim, published once on the authority");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(KOReason_Health, "Combat.KOReason.Health", "KO reason: the health or the damage cap was reached. Named on the KO event only");
@@ -66,9 +70,9 @@ namespace GSTNCombatTags
 			Lock_Movement, Lock_Reaction,
 			Weapon_Role_Primary, Weapon_Role_Support,
 			Event_TimelineStarted, Event_TimelineFinished, Event_WeaponSwitched, Event_LoadoutSwapped, Event_SuperUsed,
-			Event_HitLanded, Event_HitReceived, Event_KO, Entity_Fighter, Event_Hit_Received, Event_Impact, Event_Impact_Splat, Event_Impact_Bounce, Event_Impact_Break,
+			Event_HitLanded, Event_HitReceived, Event_KO, Entity_Fighter, Event_Hit_Received, Event_Impact, Event_Impact_Splat, Event_Impact_Bounce, Event_Impact_Bump, Event_Impact_Break,
 			KOReason_Health, KOReason_Zone,
-			State_Tumble, State_Splat,
+			State_Tumble, State_Splat, State_Bump, State_Bump_Wall, State_Bump_Ceiling,
 			Cue_Hit,
 			Source_Command, Source_Forced, Source_Adopted,
 			Hurtbox_Head, Hurtbox_Torso, Hurtbox_Arm, Hurtbox_Leg, Hurtbox_Hand, Hurtbox_Foot,
