@@ -144,6 +144,12 @@ MOVE_SEQUENCES = [
     {'name': 'mv_jump_tap', 'taps': [], 'frames': 70, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 0)},
     {'name': 'mv_air_reverse', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (55, 18),
      'sticks': [(0, (0, 1, 0)), (62, (0, -1, 0)), (115, None)]},
+    # M1 depth marker clips (rule 10): 'marker' turns gstn.DepthMarker.Enable on; 'proj_volume' spawns a projection box around the start (owner-local sideways)
+    {'name': 'dm_circle_jump', 'taps': [], 'frames': 300, 'dummy': None, 'shoot': True, 'follow': True, 'marker': True, 'jump': (105, 20),
+     'sticks': [(0, (0, 1, 0)), (25, (0.7, 0.7, 0)), (50, (1, 0, 0)), (75, (0.7, -0.7, 0)), (100, (0, -1, 0)), (125, (-0.7, -0.7, 0)),
+                (150, (-1, 0, 0)), (175, (-0.7, 0.7, 0)), (200, (0, 1, 0)), (240, None)]},
+    {'name': 'dm_projection', 'taps': [], 'frames': 160, 'dummy': None, 'shoot': True, 'follow': True, 'marker': True, 'proj_volume': True,
+     'sticks': [(0, (1, 0, 0)), (60, (-1, 0, 0)), (120, None)]},
     {'name': 'mv_fast_fall', 'taps': [], 'frames': 80, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 24), 'crouch_tap': 36},
 ]
 if os.environ.get('PIE_CAPTURE_VIEWS'):
@@ -491,6 +497,25 @@ def _tick(_dt):
                 g.combat_clear(0)
                 if air.get('stick'):
                     g.release(0, 'move')
+            if seq.get('marker') and frame == PRE - 5:
+                _console('gstn.DepthMarker.Enable 1')
+            if seq.get('proj_volume') and frame == PRE:
+                try:
+                    w = g.worlds()[0]
+                    loc = _pawn().get_actor_location()
+                    cls = unreal.GSTN_DepthProjectionVolume
+                    vol = unreal.GameplayStatics.begin_deferred_actor_spawn_from_class(w, cls, unreal.Transform(loc, unreal.Rotator(0, 0, 0), unreal.Vector(1, 1, 1)))
+                    vol = unreal.GameplayStatics.finish_spawning_actor(vol, unreal.Transform(loc, unreal.Rotator(0, 0, 0), unreal.Vector(1, 1, 1)))
+                    pr = unreal.GSTN_DepthProjection()
+                    pr.set_editor_property('mode', unreal.GSTN_DepthProjectionMode.OWNER_LOCAL)
+                    pr.set_editor_property('direction', unreal.Vector(0, 1, 0))
+                    box = vol.get_editor_property('box')
+                    box.set_editor_property('projection', pr)
+                    box.set_editor_property('priority', 10)
+                    box.set_box_extent(unreal.Vector(1500, 1500, 600), True)
+                    _log(f'{seq["name"]}: projection volume spawned at {loc}')
+                except Exception as e:  # noqa: BLE001
+                    _log(f'{seq["name"]}: projection volume FAILED: {e!r}')
             for at, value in seq.get('sticks', []):                 # movement QA clips
                 if frame == PRE + at:
                     if value is None:
