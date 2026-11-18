@@ -32,5 +32,6 @@ namespace GSTNCombatNPTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(EventHit_CreditPartner, "Combat.Event.Hit.CreditPartner", "Tag of the copy of a HitLanded or KO event sent to the hit's credit partner (FGSTN_HitCredit)");
 
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(AnimSet_Skid, "Anim.Set.Skid", "Anim set slot of the run skid layer (UGSTN_SkidAnimInstance)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(AnimSet_Locomotion, "Anim.Set.Locomotion", "Anim set slot of the locomotion animation profile (UGSTN_LocomotionAnimSet: lean...)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(AnimSet_RunStart, "Anim.Set.RunStart", "Anim set slot of the run start layer (UGSTN_RunStartAnimInstance)");
 }
