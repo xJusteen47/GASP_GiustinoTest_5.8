@@ -16,6 +16,7 @@ Content/*
 !Content/GASNPPTest/
 !Content/Input/
 !Content/Levels/
+!Content/GSTN/
 Plugins/*/Content/
 
 # IDE / solution files (regenerated from the .uproject)
