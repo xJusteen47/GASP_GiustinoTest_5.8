@@ -1,0 +1,31 @@
+# Skid follows the clip's root motion (owner choice A part 2) - branch claude/skid-rootmotion-1, worktree GASP_Giustino2_skidrm
+Start: d871e7aa (claude/desktop-jab-fk). Code commit 78cc0004, review commit after it. No ABP change (owner: the ABP must stay readable).
+
+## Done
+- FGSTN_RunSkidTuning::RootTrack (GSTN_RunSkidTypes.h): baked samples (Speed signed along the entry direction, Turn 0..1, TurnSign)
+  + tuning PlayRate, EntryBlendSeconds 0.1, ReverseSpeedScale 1, EndTime 0 (= clip end). Math in FGSTN_RunSkidMath::Track*.
+- FGSTN_LayeredMove_RunSkid: with a usable track, every live frame takes speed + facing from the samples (clip time = frame*dt*PlayRate);
+  RestFrame/ExitFrames come from the clip; the move ends at the clip end, the walking mode takes over. New serialized fields bClipTrack,
+  StartFacing, TurnAngleDeg. Track off = old constant brake, unchanged.
+- Bake: UGSTN_RunSkidTrackLibrary (BP: BakeRunSkidRootTrack, BakeProfileSkidRootTrack, SampleRunSkidRootTrack); profile field
+  SkidRootMotionClip (auto bake on edit) + Bake Skid Root Track button. Tools/GAS/bake_skid_root_track.py (headless).
+- DA_Locomotion_Default baked from SkidOwner/SS_180_Turn_Root180: 51 samples, 0.83 s, yaw +180, entry 90 cm/s, peak 277, rest 0.567 s,
+  push-off only -60..-97 cm/s (Saved/Logs/ci/bake_skid_root_track.txt).
+- Presentation: skid clip time runs at the track's PlayRate (GSTN_RunPresentationComponent::TickSkidPlayTime).
+
+## Proofs
+- Build: Saved/Logs/ci/skidrm_build1.log, `Select-String "Result: Succeeded"` = 1.
+- Tests GSTNCombat: Saved/Logs/ci/skidrm_test1.log, 705 `Result={Success}`, 0 Fail/Error; new GSTNCombat.Core.RunSkid.RootTrack passes.
+- Capture: pie_capture_timed.ps1 -Kit KIT_Test_Overlord -Out docs/notes/reviews/skid-rootmotion-1/cap -Sequences mv_skid_base (ESITO OK;
+  cap/ not committed). actor_speed_f40-135.txt from frames.jsonl body.actor.
+
+## Review (Fable, REVIEW-fable.md): FAIL, narrow
+- PASS: one 180 turn; brake pose arrives with the brake (old FAIL fixed); feet locked in brake and turn (old 46 cm drag fixed).
+- FAIL run restart: dati montage, f88-103 run pose while the capsule does ~84 cm/s (the clip's tail root, pelvis-derived, is too slow);
+  gioco, walking takes over at f104 and reaches 450 by f109 under a planted foot (69 cm slide).
+- To verify: f53 duplicate of f52 (harness or gioco).
+
+## Next (attempt 2, recommended, rule 6): data only, no rebuild
+- Re-bake the push-off/tail speed from the planted foot instead of the root bone (python AnimPose at time, speed = -foot velocity
+  while a foot is planted), or hand over earlier (RootTrack.EndTime ~0.6 s). Needs one capture slot on _ue59 + one review.
+- Build before the next editor start from this worktree is done; _ue59 DLLs do not have this code until the branch is merged.
