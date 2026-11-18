@@ -24,3 +24,15 @@ Not done:
 - Auto-cancel landing source (brief 5): no budget.
 - Captures base vs new: editor start blocked by Saved/Autosaves/PackageRestoreData.json dialog (owner must answer it).
   Base = profile RunStart.bEnabled/Skid.bEnabled false (or the commit before this one).
+
+## Part 2 (same thread, owner 13:26Z: skid into GASP's setup on copies)
+- 18d7fe1a: ABP_GSTN_Locomotion + CHT_GSTN_LocomotionAnimations (Content/Blueprints/Animation/GSTNLocomotion/, copies of
+  SandboxCharacter_Mover_ABP and CHT_MoverCharacterAnimations_PoseMatch; originals untouched). Profile field MainAnimClass (empty = no change):
+  set it to ABP_GSTN_Locomotion only once the copy has the skid.
+- MCP 5.9 (127.0.0.1:8000): BlueprintDslToolset refuses AnimBlueprint ("not supported by the blueprint domain yet"); the generic
+  BlueprintToolset lists ABP graphs (State Controller has Slide Transition / Slide Loop: the model for a Skid state) and has CreateNode /
+  ConnectPins, untested on state machine nodes. No tool edits chooser rows. Stopped at 2 attempts (rule 5): manual steps for the owner.
+- Next: C++ BlueprintPure on UGSTN_RunPresentationComponent returning skid clip + section time (for a Sequence Evaluator explicit time);
+  owner adds the chooser row and the Skid state copied from Slide; then MainAnimClass, captures, Fable review.
+- Camera: cherry-picked aca5d77a (02558de5); DA_CameraAnchor_Default values set in the editor's memory but NOT saved (editor was in PIE):
+  save it after PIE (Tools/GASNPPTest/camera_tiltshift_defaults.py redoes it).
