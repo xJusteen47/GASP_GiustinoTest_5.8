@@ -24,5 +24,6 @@ Owner: crouch + forward = upright run, slower; run start frantic/sped up; skid n
   the clip turn add up (double turn), and with clip speed (A) the two are no longer in step. GASP's Offset Root Bone / orientation warping
   after the override slot are the other suspects (skid-main-graph-1 list).
 - Proposed fix (A part 2, Opus high): during the skid the sim takes facing AND speed from the clip's root track (baked table, deterministic),
-  the anim side strips the root yaw (or the actor does not turn), orientation warping/offset root bone off while the Skid slot is active.
+  the anim side strips the root yaw (or the actor does not turn). Owner 19:43Z: orientation + stride warping STAY ON in base locomotion,
+  skid included; only the entry blend may be absent/very short. Fix the warping inputs/targets during the skid, never disable it.
 - Tried: reading the GASP ABP graph through GSTN_AnimBlueprintToolset from Python failed once (list_anim_graphs, line 10); not retried.
