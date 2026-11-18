@@ -123,6 +123,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data", meta = (ClampMin = "0", ClampMax = "60", ForceUnits = "Frames"))
 	int32 CutRampFrames = 3;   // Mario 3D World preset (2026-11-17): release gravity rises over 3 frames
 
+	/**
+	 * What MaxJumpHoldFrames ends (owner 2026-11-17, both kept as options). HoldWindow (default, early 2D Mario): a window from the take-off;
+	 * held = JumpRiseGravityScale, released = JumpCutGravityScale, after the window or once descending = FallGravityScale. CutUntilApex (the
+	 * behaviour before): the end of the hold counts as a release and JumpCutGravityScale lasts until the apex. Kit data like the ramp
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")
+	EGSTN_JumpGravityModel GravityModel = EGSTN_JumpGravityModel::HoldWindow;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")
 	bool bOverrideSquatFrames = false;
 

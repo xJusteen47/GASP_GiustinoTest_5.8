@@ -1584,6 +1584,7 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 				JumpJson->SetNumberField(TEXT("phase"), static_cast<int32>(Jump.Phase));
 				JumpJson->SetNumberField(TEXT("startFrame"), Jump.StartFrame);
 				JumpJson->SetBoolField(TEXT("cut"), Jump.bJumpCut);
+				JumpJson->SetBoolField(TEXT("window_over"), Jump.bHoldWindowOver);
 				JumpJson->SetBoolField(TEXT("fastFalling"), Jump.bFastFalling);
 				JumpJson->SetNumberField(TEXT("airJumpsUsed"), Jump.AirJumpsUsed);
 				JumpJson->SetNumberField(TEXT("coyote"), Jump.CoyoteFramesLeft);

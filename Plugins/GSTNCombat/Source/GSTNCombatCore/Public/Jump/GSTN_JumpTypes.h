@@ -23,6 +23,28 @@ enum class EGSTN_JumpPhase : uint8
 	Launched
 };
 
+/**
+ * How the gravity of a jump of the combatant's own is chosen while it rises (owner 2026-11-17: both behaviours stay as options, per kit).
+ * Both: instant impulse at the take-off, JumpRiseGravityScale while the button is held, JumpCutGravityScale once it is released (after
+ * MinJumpHoldFrames), FallGravityScale once descending. They differ only on what MaxJumpHoldFrames ends.
+ */
+UENUM(BlueprintType)
+enum class EGSTN_JumpGravityModel : uint8
+{
+	/**
+	 * Owner's model, a facsimile of the early 2D Mario jumps (default): MaxJumpHoldFrames is a window from the take-off. Inside it the held
+	 * button keeps the reduced (rise) gravity and a release switches to the boosted (cut) gravity; when the window ends the descent (fall)
+	 * gravity applies, still rising or not, held or not
+	 */
+	HoldWindow,
+
+	/**
+	 * The behaviour before 2026-11-18 (Mario 3D World preset): reaching MaxJumpHoldFrames counts as a release, the cut gravity applies until
+	 * the apex, the fall gravity after it
+	 */
+	CutUntilApex
+};
+
 /** What an external launch does to the air jumps already used */
 UENUM(BlueprintType)
 enum class EGSTN_AirJumpsOnLaunch : uint8
@@ -101,6 +123,9 @@ struct GSTNCOMBATCORE_API FGSTN_JumpParams
 	/** Frames over which the gravity grows from RiseGravityScale to CutGravityScale after the jump cut (0 = at once) */
 	int32 CutRampFrames = 0;
 
+	/** What MaxHoldFrames ends (EGSTN_JumpGravityModel). Kit data (UGSTN_GA_PlatformJump::GravityModel) */
+	EGSTN_JumpGravityModel GravityModel = EGSTN_JumpGravityModel::HoldWindow;
+
 	/**
 	 * Glide (M11 L7b, the jet-pack's slow descent): while falling with the button of the last jump still held, gravity uses GlideGravityScale
 	 * and the terminal speed GlideMaxFallSpeed. <= 0 = no glide (every kit without a glide stat, the default). Fast fall wins over the glide
@@ -154,17 +179,20 @@ struct GSTNCOMBATCORE_API FGSTN_JumpState
 	/** Frames since the jump cut while still rising (saturates at 255): the cut gravity ramp (FGSTN_JumpParams::CutRampFrames) */
 	uint8 CutFrames = 0;
 
+	/** HoldWindow model only: MaxHoldFrames passed while rising, the fall gravity applies until the landing. Written by Step */
+	bool bHoldWindowOver = false;
+
 	bool IsDefault() const
 	{
 		return Phase == EGSTN_JumpPhase::None && StartFrame == INDEX_NONE && Button == INDEX_NONE && !bJumpCut && !bFastFalling && !bTakeoffWasAir
-			&& AirJumpsUsed == 0 && CoyoteFramesLeft == 0 && SquatFramesLeft == 0 && !bGliding && CutFrames == 0;
+			&& AirJumpsUsed == 0 && CoyoteFramesLeft == 0 && SquatFramesLeft == 0 && !bGliding && CutFrames == 0 && !bHoldWindowOver;
 	}
 
 	bool operator==(const FGSTN_JumpState& Other) const
 	{
 		return Phase == Other.Phase && StartFrame == Other.StartFrame && Button == Other.Button && bJumpCut == Other.bJumpCut && bFastFalling == Other.bFastFalling
 			&& bTakeoffWasAir == Other.bTakeoffWasAir && AirJumpsUsed == Other.AirJumpsUsed && CoyoteFramesLeft == Other.CoyoteFramesLeft && SquatFramesLeft == Other.SquatFramesLeft
-			&& bGliding == Other.bGliding && CutFrames == Other.CutFrames;
+			&& bGliding == Other.bGliding && CutFrames == Other.CutFrames && bHoldWindowOver == Other.bHoldWindowOver;
 	}
 
 	/** One bit when default; same code for both directions */

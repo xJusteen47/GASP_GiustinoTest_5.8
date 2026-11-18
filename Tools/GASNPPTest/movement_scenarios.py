@@ -6,7 +6,8 @@
 # What is read: the sim ticks of both copies (UGSTN_GASNPPTestComponent.DrainSimHistory: loc, vel, yaw, mode, run stage, skid phase and the
 # skid's Mover tags) and, every editor tick, the owner's presented frame (GetPresentationSnapshot: foot slide, skid lean, montage, override
 # layer, bone heights over the capsule bottom, the anim Blueprint's own variables). Targets come from the Mario 3D World preset
-# (handoffs/preset-mario3dw.md): full jump apex about 2.3 character heights, air time about 0.93 s, tap about 0.56 of the full jump, a run start
+# (handoffs/preset-mario3dw.md), the jump from the hold-gravity model of 2026-11-18 (docs/notes/handovers/jump-hold-gravity.md): full jump
+# apex about 1.9 character heights, air time about 0.75 s, tap about 0.32 of the full jump; a run start
 # ramp of about 6 frames, air turn of 180 degrees in about 3 frames. Checks have a tolerance band around the target and print the measure.
 import json
 import math
@@ -432,8 +433,8 @@ def scenario_move_analog_walk(client=1):
 
 # ------------------------------------------------------------------------------------------------ JUMP / AIR
 def scenario_move_jump_full(client=1):
-    """A jump from rest with the button held 0.4 s. Apex 1.9..2.8 character heights (target 2.3), the rise keeps its speed while held (the 3DW
-    constant rise: the slowest of the first 8 rising frames is at least 85 % of the first), air time 0.7..1.3 s (target 0.93). Owner and authority
+    """A jump from rest with the button held 0.4 s. Apex 1.6..2.4 character heights (target 1.9), the rise slows gently while held (hold
+    gravity 2.6 g: the slowest of the first 8 rising frames is at least 70 % of the first, expected ~79 %), air time 0.6..1.1 s (target 0.75). Owner and authority
     agree on the apex within 2 cm. Animation: no montage, the presented pose changes in the air (the feet leave their ground height)."""
     q = _Q('move_jump_full', client)
     T = 1.2
@@ -452,7 +453,9 @@ def scenario_move_jump_full(client=1):
             keep = (min(rise) / max(rise[0], 1.0)) if rise else 0.0
             q.metrics.setdefault('jump_full', {})[sd] = {'apex_cm': round(f['apex'], 1), 'heights': round(ratio, 2), 'air_s': air,
                                                          'rise_vz_first8': [round(x) for x in rise], 'apex_s': (f['apex_ms'] - f['takeoff_ms']) / 1000.0}
-            ok = 1.9 <= ratio <= 2.8 and air is not None and 0.7 <= air <= 1.3 and keep >= 0.85
+            # Hold-gravity jump (2026-11-18, early 2D Mario defaults): held 0.4 s ~335 cm = ~1.9 heights, air ~0.75 s; the hold gravity (2.6 g)
+            # keeps ~0.79 of the take-off speed after 8 frames (it was constant with the Mario 3D World rise scale 0)
+            ok = 1.6 <= ratio <= 2.4 and air is not None and 0.6 <= air <= 1.1 and keep >= 0.7
             return ok, f'apex {f["apex"]:.0f} cm = {ratio:.2f} heights ({H["h"]:.0f} cm), air {air} s, rise speed kept {keep:.2f}'
         return _both(side)
 
@@ -477,7 +480,7 @@ def scenario_move_jump_full(client=1):
         (0.5, lambda: ('jump kit (no-op if the kit has it)', g._srv(q.key).server_set_jump_kit(True))),
         (T, lambda: _jump(client, 0.4)),
         (T + 0.4, lambda: ('release', g.combat_clear(client))),
-        (T + 2.2, q.check('full jump: apex ~2.3 heights, air ~0.93 s, constant rise while held', apex)),
+        (T + 2.2, q.check('full jump: apex ~1.9 heights, air ~0.75 s, slow deceleration while held', apex)),
         (T + 2.2, q.check('owner and authority agree on the apex', agree)),
         (T + 2.2, q.check('anim: no montage, feet leave the ground pose in the air', anim)),
         (T + 2.4, q.finish()),
@@ -486,9 +489,9 @@ def scenario_move_jump_full(client=1):
 
 
 def scenario_move_jump_tap(client=1):
-    """A full jump (held 0.4 s), then a tap (one frame). The tap's apex is 0.35..0.75 of the full one (target 0.56) and, once the button is up,
-    gravity is the cut gravity: the vertical speed falls by at least 3000 cm/s2 (cut 4.1 g, reached over the cut ramp) in frames 4..8 after
-    the release."""
+    """A full jump (held 0.4 s), then a tap (one frame). The tap's apex is 0.2..0.45 of the full one (target ~0.32: 107 / 335 cm with the
+    hold-gravity defaults of 2026-11-18, no minimum hold) and, once the button is up, gravity is the cut gravity: the vertical speed falls by
+    at least 3000 cm/s2 (cut 9 g, reached over the cut ramp) in frames 4..8 after the release."""
     q = _Q('move_jump_tap', client)
     TA, TB = 1.2, 3.6
 
@@ -502,7 +505,7 @@ def scenario_move_jump_tap(client=1):
             v = [s['vel'][2] for s in w[4:9]]
             dec = (v[0] - v[-1]) / (FRAME * (len(v) - 1)) if len(v) > 1 else 0.0
             q.metrics.setdefault('jump_tap', {})[sd] = {'full_cm': round(a['apex'], 1), 'tap_cm': round(b['apex'], 1), 'ratio': round(r, 2), 'cut_decel': round(dec)}
-            return 0.35 <= r <= 0.75 and dec >= 3000.0, f'tap {b["apex"]:.0f} / full {a["apex"]:.0f} = {r:.2f}, cut deceleration {dec:.0f} cm/s2'
+            return 0.2 <= r <= 0.45 and dec >= 3000.0, f'tap {b["apex"]:.0f} / full {a["apex"]:.0f} = {r:.2f}, cut deceleration {dec:.0f} cm/s2'
         return _both(side)
 
     steps = [

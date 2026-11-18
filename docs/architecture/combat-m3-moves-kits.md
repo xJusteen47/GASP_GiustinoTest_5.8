@@ -133,7 +133,8 @@ BeginPlay on the authority and the autonomous client (it lives in Mover's sync s
 `Acceleration`, `Deceleration`, `GroundFriction`, `AirControl`, the terminal fall speed) and **the gravity override**:
 world gravity × the scale of the current jump phase, read from the combat sync state of the same frame (7.9) —
 `JumpRiseGravityScale` while rising with the jump held (within `MaxJumpHoldFrames`), `JumpCutGravityScale` while rising
-after release, `FallGravityScale` while descending, `FastFallGravityScale` and `FastFallSpeed` while fast falling.
+after release, `FallGravityScale` while descending (and, with the default `GravityModel` HoldWindow of the jump ability, from the end of
+`MaxJumpHoldFrames` on), `FastFallGravityScale` and `FastFallSpeed` while fast falling.
 While the owner has **`Combat.Lock.Movement`** (ASC tags of the same frame: the ASC ticks first) it writes `MaxSpeed`
 and `Acceleration` 0 (the character brakes with its normal deceleration; gravity and layered moves are unaffected).
 Never ends. Also used outside jumps (falling off a ledge = fall phase).

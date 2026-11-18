@@ -6,7 +6,9 @@
 #   WPN_Test_<Kit>   a copy of WPN_Test_Hits whose neutral attack is the kit's jab
 #   KIT_Test_<Kit>   a copy of KIT_Test_Link (the link slots and moves, the dodges) with its own weapon, stats (UGSTN_GE_TestKitArchetypeInit),
 #                    special and four throws in its link extension (the loadout extension GSTNLinkThrows binds them, M11 K2)
-# Jump / fall / air control: Mario 3D World preset (handoffs/preset-mario3dw.md, 2026-11-17), scaled per archetype.
+# Jump / fall: owner's hold-gravity jump, early 2D Mario (2026-11-18, docs/notes/handovers/jump-hold-gravity.md), scaled per archetype
+# (impulse x1.14 / 1 / 0.87, release+fall gravity x0.88 / 1 / 1.29, same hold gravity 2.6): full jump ~440 / 344 / 259 cm, tap ~157 / 107 / 65 cm.
+# Air control: Mario 3D World preset (handoffs/preset-mario3dw.md, 2026-11-17).
 # Every number is a PLACEHOLDER for the playtest and every montage a GASP placeholder: retune the Blueprints' Class Defaults or the specs below
 # and rerun (a rerun rewrites the specs over hand edits). The hub places the kits through test_hub.spawn_kits (build_test_hub_map.KIT_PADS).
 # Output: Saved/Logs/k3/setup_archetypes.log, at most 5 printed lines.
@@ -34,8 +36,8 @@ KITS = {
     # Light and fast: quick jab, a pop-up special, low flat throws that keep the partner close (combo throws); floaty double jump, carries little
     'Light': {
         'label': 'LEGGERO', 'pad': (800.0, -350.0), 'mash_frames': 90,
-        'stats': {'WalkSpeed': 760.0, 'JumpVelocity': 1450.0, 'Weight': 80.0, 'MaxCarryWeight': 60.0, 'Acceleration': 3200.0,
-                  'AirControl': 0.95, 'FallGravityScale': 3.6, 'AirJumpCount': 2.0},
+        'stats': {'WalkSpeed': 760.0, 'JumpVelocity': 1540.0, 'Weight': 80.0, 'MaxCarryWeight': 60.0, 'Acceleration': 3200.0,
+                  'AirControl': 0.95, 'FallGravityScale': 7.9, 'JumpCutGravityScale': 7.9, 'JumpRiseGravityScale': 2.6, 'AirJumpCount': 2.0},
         'jab': (16, 13, 3, 5, 40.0, 70.0, 140.0, 0.0, 3.0, 300.0, 30.0, 4, 3, SHOVE.format('F'), 1.8),
         'tilt': (20, 16, 4, 7, 45.0, 70.0, 150.0, 0.0, 5.0, 560.0, 40.0, 5, 4, SHOVE.format('F'), 1.5),
         'special': (24, 20, 5, 8, 55.0, 40.0, 110.0, 40.0, 5.0, 700.0, 80.0, 5, 4, TAKEDOWN.format('L'), 1.5),
@@ -47,8 +49,8 @@ KITS = {
     # Medium: the reference fighter (standard weight and speed), mid-range strikes, throws at classic Smash angles
     'Medium': {
         'label': 'MEDIO', 'pad': (800.0, 0.0), 'mash_frames': 120,
-        'stats': {'WalkSpeed': 600.0, 'JumpVelocity': 1270.0, 'Weight': 100.0, 'MaxCarryWeight': 90.0, 'Acceleration': 2048.0,
-                  'AirControl': 0.85, 'FallGravityScale': 4.1, 'AirJumpCount': 1.0},
+        'stats': {'WalkSpeed': 600.0, 'JumpVelocity': 1350.0, 'Weight': 100.0, 'MaxCarryWeight': 90.0, 'Acceleration': 2048.0,
+                  'AirControl': 0.85, 'FallGravityScale': 9.0, 'JumpCutGravityScale': 9.0, 'JumpRiseGravityScale': 2.6, 'AirJumpCount': 1.0},
         'jab': (28, 24, 6, 9, 50.0, 80.0, 170.0, 0.0, 7.0, 550.0, 35.0, 6, 4, SHOVE.format('F'), 1.2),
         'tilt': (26, 22, 6, 9, 50.0, 80.0, 170.0, 0.0, 8.0, 620.0, 40.0, 6, 5, SHOVE.format('F'), 1.2),
         'special': (34, 30, 9, 13, 60.0, 90.0, 190.0, 0.0, 10.0, 850.0, 30.0, 8, 6, TAKEDOWN.format('R'), 1.2),
@@ -60,8 +62,8 @@ KITS = {
     # Heavy and slow: a long-startup hammer, a wide slam around itself, steep strong throws that send far; falls fast, lifts anyone
     'Heavy': {
         'label': 'PESANTE', 'pad': (800.0, 350.0), 'mash_frames': 180,
-        'stats': {'WalkSpeed': 430.0, 'JumpVelocity': 1100.0, 'Weight': 140.0, 'MaxCarryWeight': 200.0, 'Acceleration': 1200.0,
-                  'AirControl': 0.65, 'FallGravityScale': 5.3, 'AirJumpCount': 1.0},
+        'stats': {'WalkSpeed': 430.0, 'JumpVelocity': 1170.0, 'Weight': 140.0, 'MaxCarryWeight': 200.0, 'Acceleration': 1200.0,
+                  'AirControl': 0.65, 'FallGravityScale': 11.6, 'JumpCutGravityScale': 11.6, 'JumpRiseGravityScale': 2.6, 'AirJumpCount': 1.0},
         'jab': (44, 40, 14, 18, 70.0, 90.0, 200.0, 0.0, 14.0, 900.0, 40.0, 10, 8, TAKEDOWN.format('F'), 0.85),
         'tilt': (36, 32, 10, 14, 65.0, 90.0, 200.0, 0.0, 12.0, 700.0, 45.0, 8, 6, TAKEDOWN.format('F'), 0.9),
         'special': (56, 52, 20, 24, 140.0, 0.0, 60.0, -40.0, 18.0, 1200.0, 60.0, 12, 10, TAKEDOWN.format('B'), 0.8),
