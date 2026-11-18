@@ -10,6 +10,7 @@
 #include "GSTN_RunPresentationComponent.generated.h"
 
 class UMoverComponent;
+class UAnimSequenceBase;
 
 /** Which sliding move the feet slide in */
 UENUM(BlueprintType)
@@ -105,6 +106,20 @@ public:
 	/** The lean values in use: the applied locomotion profile's, else the built-in defaults */
 	const FGSTN_LocomotionLeanSettings& GetLeanSettings() const;
 
+	/** The applied locomotion profile's run start and skid values, else the built-in defaults */
+	const FGSTN_RunStartScrambleSettings& GetScrambleSettings() const;
+	const FGSTN_SkidSectionSettings& GetSkidSectionSettings() const;
+
+	/** The run start scramble of the presented frame and its loaded run cycle (null = no scramble) */
+	const FGSTN_RunStartScrambleState& GetScramble() const { return Scramble; }
+	UAnimSequenceBase* GetScrambleClip() const { return ScrambleClip; }
+
+	/** The three-section skid clip (null = sections off or not loaded: the skid layer keeps its own clip) and the skid's entry speed */
+	UAnimSequenceBase* GetSkidSectionClip() const { return SkidSectionClip; }
+	float GetSkidEntrySpeed() const { return SkidEntrySpeed; }
+	int32 GetSkidEnterFrames() const { return EnterFrames; }
+	int32 GetSkidExitFrames() const { return ExitFrames; }
+
 	/** The foot slide of a Mover sync state (pure but for the kit lookup; the tests call it) */
 	static FGSTN_FootSlideState ReadFootSlide(const struct FMoverSyncState& SyncState, float StepSeconds);
 
@@ -113,6 +128,23 @@ private:
 	TObjectPtr<UMoverComponent> Mover;
 
 	void TickLean(float DeltaTime);
+	void TickScramble(float DeltaTime);
+	void ResolveClips();
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequenceBase> ScrambleClip;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequenceBase> SkidSectionClip;
+
+	FGSTN_RunStartScrambleState Scramble;
+	FGSTN_RunStartScrambleSettings DefaultScrambleSettings;
+	FGSTN_SkidSectionSettings DefaultSkidSettings;
+	/** The soft paths last resolved (a profile change reloads) */
+	FSoftObjectPath ResolvedScramblePath;
+	FSoftObjectPath ResolvedSkidPath;
+	float SkidEntrySpeed = 0.f;
+	FVector ScrambleDirection = FVector::ForwardVector;
 
 	FGSTN_FootSlideState FootSlide;
 	FGSTN_LocomotionLeanSolver LeanSolver;

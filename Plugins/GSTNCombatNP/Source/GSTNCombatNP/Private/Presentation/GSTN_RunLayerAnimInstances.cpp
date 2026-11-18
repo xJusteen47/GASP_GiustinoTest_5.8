@@ -60,19 +60,33 @@ void UGSTN_SkidAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	}
 	UGSTN_RunPresentationComponent* Run = Presentation.Get();
 	Slide = Run ? Run->GetFootSlide() : FGSTN_FootSlideState();
-	if (Run && SkidClip)
+	UAnimSequenceBase* SectionClip = Run ? Run->GetSkidSectionClip() : nullptr;
+	if (!bActive)
+	{
+		ActiveClip = SectionClip ? SectionClip : SkidClip.Get();
+	}
+	if (Run && ActiveClip)
 	{
 		// The real clip replaces the placeholder lean (the additive would lean the clip a second time)
 		Run->bPlaceholderSkidLean = false;
 	}
-	const bool bLive = SkidClip && Slide.Source == EGSTN_FootSlideSource::RunSkid && Slide.SkidPhase != EGSTN_RunSkidPhase::None;
+	const bool bLive = ActiveClip && Slide.Source == EGSTN_FootSlideSource::RunSkid && Slide.SkidPhase != EGSTN_RunSkidPhase::None;
 	if (bLive)
 	{
 		bActive = true;
 		TailSeconds = -1.f;
 		LastPhase = Slide.SkidPhase;
-		ClipTime = FGSTN_SkidClipTime::Compute(Slide.SkidPhase, Slide.Frame, Slide.RestFrame, SkidClip->GetPlayLength(), StopTime, StopFraction,
-			ExitPlayRate, GSTNRunLayers::SimFrameSeconds);
+		if (SectionClip && ActiveClip == SectionClip)
+		{
+			// Three sections: fixed entry, hold on the speed left, fixed push (brief section 3)
+			ClipTime = Run->GetSkidSectionSettings().ClipTime(Slide.SkidPhase, Slide.Frame, Slide.RestFrame, Run->GetSkidEnterFrames(),
+				Run->GetSkidExitFrames(), Slide.Speed, Run->GetSkidEntrySpeed(), ActiveClip->GetPlayLength());
+		}
+		else
+		{
+			ClipTime = FGSTN_SkidClipTime::Compute(Slide.SkidPhase, Slide.Frame, Slide.RestFrame, ActiveClip->GetPlayLength(), StopTime, StopFraction,
+				ExitPlayRate, GSTNRunLayers::SimFrameSeconds);
+		}
 		return;
 	}
 	// Tail: the sim's Exit is over but the clip (stop + push off in one motion) is not; play it out on the ground, nothing else sliding
@@ -82,11 +96,11 @@ void UGSTN_SkidAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		Mover = Owner ? Owner->FindComponentByClass<UMoverComponent>() : nullptr;
 	}
 	const bool bOnGround = Mover.IsValid() && Mover->HasGameplayTag(Mover_IsOnGround, false);
-	if (bActive && SkidClip && LastPhase == EGSTN_RunSkidPhase::Exit && !Slide.IsSliding() && bOnGround && MaxTailSeconds > 0.f)
+	if (bActive && ActiveClip && LastPhase == EGSTN_RunSkidPhase::Exit && !Slide.IsSliding() && bOnGround && MaxTailSeconds > 0.f)
 	{
 		TailSeconds = FMath::Max(TailSeconds, 0.f) + DeltaSeconds;
 		ClipTime += DeltaSeconds * FMath::Max(ExitPlayRate, 0.f);
-		if (ClipTime < SkidClip->GetPlayLength() && TailSeconds <= MaxTailSeconds)
+		if (ClipTime < ActiveClip->GetPlayLength() && TailSeconds <= MaxTailSeconds)
 		{
 			return;
 		}
@@ -99,9 +113,9 @@ void UGSTN_SkidAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 bool UGSTN_SkidAnimInstance::GetClipAtTime(UAnimSequenceBase*& OutClip, float& OutTime) const
 {
-	OutClip = SkidClip;
+	OutClip = ActiveClip ? ActiveClip.Get() : SkidClip.Get();
 	OutTime = ClipTime;
-	return SkidClip != nullptr;
+	return OutClip != nullptr;
 }
 
 void UGSTN_RunStartAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
@@ -116,6 +130,22 @@ void UGSTN_RunStartAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	{
 		Presentation = Owner->FindComponentByClass<UGSTN_RunPresentationComponent>();
 	}
+	// Scramble mode: the presentation component runs the state, this layer only shows the run cycle at its time
+	const UGSTN_RunPresentationComponent* Run = Presentation.Get();
+	ScrambleClip = Run ? Run->GetScrambleClip() : nullptr;
+	bScramble = ScrambleClip != nullptr;
+	if (bScramble)
+	{
+		const FGSTN_RunStartScrambleSettings& Settings = Run->GetScrambleSettings();
+		ScrambleBlendIn = Settings.BlendInSeconds;
+		ScrambleBlendOut = Settings.BlendOutSeconds;
+		const float Length = ScrambleClip->GetPlayLength();
+		if (Run->GetScramble().bActive && Length > 0.f)
+		{
+			ScrambleTime = FMath::Fmod(Run->GetScramble().ClipTime, Length);
+		}
+		return;
+	}
 	const UMoverComponent* Movement = Mover.Get();
 	if (!Movement)
 	{
@@ -129,8 +159,30 @@ void UGSTN_RunStartAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	State.Step(DeltaSeconds, GroundSpeed, bOnGround, bSkidding, StartFromSpeed, RunStartClip ? RunStartClip->GetPlayLength() : 0.f, PlayRate);
 }
 
+bool UGSTN_RunStartAnimInstance::IsOverrideLayerActive() const
+{
+	if (bScramble)
+	{
+		const UGSTN_RunPresentationComponent* Run = Presentation.Get();
+		return Run && Run->GetScramble().bActive;
+	}
+	return State.bActive && RunStartClip != nullptr;
+}
+
+float UGSTN_RunStartAnimInstance::GetOverrideBlendTime() const
+{
+	// Scramble: a near cut in (brief: 2 frames), a softer hand back to GASP's run
+	return bScramble ? (IsOverrideLayerActive() ? ScrambleBlendIn : ScrambleBlendOut) : OverrideBlendTime;
+}
+
 bool UGSTN_RunStartAnimInstance::GetClipAtTime(UAnimSequenceBase*& OutClip, float& OutTime) const
 {
+	if (bScramble)
+	{
+		OutClip = ScrambleClip;
+		OutTime = ScrambleTime;
+		return true;
+	}
 	OutClip = RunStartClip;
 	OutTime = State.Elapsed * PlayRate;
 	return RunStartClip != nullptr;

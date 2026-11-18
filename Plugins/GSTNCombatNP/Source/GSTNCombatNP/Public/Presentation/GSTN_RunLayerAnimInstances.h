@@ -98,6 +98,9 @@ protected:
 private:
 	TWeakObjectPtr<UGSTN_RunPresentationComponent> Presentation;
 	TWeakObjectPtr<UMoverComponent> Mover;
+	/** The clip shown: the locomotion profile's three-section clip when it has one (brief decision 2A), else SkidClip */
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequenceBase> ActiveClip;
 	bool bActive = false;
 	/** Last live phase seen, and the time spent in the tail after the sim's Exit */
 	EGSTN_RunSkidPhase LastPhase = EGSTN_RunSkidPhase::None;
@@ -130,8 +133,8 @@ public:
 	float OverrideBlendTime = 0.1f;
 
 	//~ Begin IGSTN_OverrideLayerSource
-	virtual bool IsOverrideLayerActive() const override { return State.bActive && RunStartClip != nullptr; }
-	virtual float GetOverrideBlendTime() const override { return OverrideBlendTime; }
+	virtual bool IsOverrideLayerActive() const override;
+	virtual float GetOverrideBlendTime() const override;
 	virtual int32 GetOverrideSlot() const override { return GSTNOverrideSlot::RunStart; }
 	//~ End IGSTN_OverrideLayerSource
 
@@ -146,4 +149,11 @@ private:
 	TWeakObjectPtr<const UMoverComponent> Mover;
 	TWeakObjectPtr<const UGSTN_RunPresentationComponent> Presentation;
 	FGSTN_RunStartClipState State;
+	/** Scramble mode (locomotion profile RunStart, decision 1A): the run cycle at the scramble's rate replaces the one-shot RunStartClip */
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequenceBase> ScrambleClip;
+	bool bScramble = false;
+	float ScrambleTime = 0.f;
+	float ScrambleBlendIn = 0.032f;
+	float ScrambleBlendOut = 0.12f;
 };

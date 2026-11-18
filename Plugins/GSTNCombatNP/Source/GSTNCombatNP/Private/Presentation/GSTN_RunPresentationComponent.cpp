@@ -13,6 +13,10 @@
 #include "Movement/GSTN_LayeredMove_RunSkid.h"
 #include "MoverComponent.h"
 #include "MoverSimulationTypes.h"
+#include "MoverDataModelTypes.h"
+#include "MoverTypes.h"
+#include "MoverDataModelTypes.h"
+#include "MoverTypes.h"
 
 namespace GSTNRunPresentation
 {
@@ -95,7 +99,24 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 	}
 
 	const bool bWas = FootSlide.IsSliding();
+	const bool bWasSkid = FootSlide.Source == EGSTN_FootSlideSource::RunSkid;
 	FootSlide = ReadFootSlide(Mover->GetSyncState(), GSTNRunPresentation::StepSeconds);
+	// The skid's entry speed (highest over the enter frames): the hold of the three-section clip runs on the share of it left
+	if (FootSlide.Source == EGSTN_FootSlideSource::RunSkid)
+	{
+		if (!bWasSkid)
+		{
+			SkidEntrySpeed = FootSlide.Speed;
+		}
+		else if (FootSlide.SkidPhase == EGSTN_RunSkidPhase::Enter)
+		{
+			SkidEntrySpeed = FMath::Max(SkidEntrySpeed, FootSlide.Speed);
+		}
+	}
+	else
+	{
+		SkidEntrySpeed = 0.f;
+	}
 
 	// The kit's placeholder lean and phase lengths (static kit data)
 	const FGSTN_LocomotionSimTuning* Locomotion = FGSTN_LocomotionAttach::Find(GetOwner());
@@ -108,6 +129,60 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 		OnFootSlideChanged.Broadcast(FootSlide.IsSliding(), FootSlide);
 	}
 	TickLean(DeltaTime);
+	ResolveClips();
+	TickScramble(DeltaTime);
+}
+
+const FGSTN_RunStartScrambleSettings& UGSTN_RunPresentationComponent::GetScrambleSettings() const
+{
+	const UGSTN_LocomotionAnimSet* Profile = LeanProfile.Get();
+	return Profile ? Profile->RunStart : DefaultScrambleSettings;
+}
+
+const FGSTN_SkidSectionSettings& UGSTN_RunPresentationComponent::GetSkidSectionSettings() const
+{
+	const UGSTN_LocomotionAnimSet* Profile = LeanProfile.Get();
+	return Profile ? Profile->Skid : DefaultSkidSettings;
+}
+
+void UGSTN_RunPresentationComponent::ResolveClips()
+{
+	// Soft references in the profile: loaded once on the game thread, again only when the profile points somewhere else
+	const FGSTN_RunStartScrambleSettings& Run = GetScrambleSettings();
+	const FSoftObjectPath RunPath = Run.bEnabled ? Run.RunCycle.ToSoftObjectPath() : FSoftObjectPath();
+	if (RunPath != ResolvedScramblePath)
+	{
+		ResolvedScramblePath = RunPath;
+		ScrambleClip = RunPath.IsValid() ? Run.RunCycle.LoadSynchronous() : nullptr;
+	}
+	const FGSTN_SkidSectionSettings& Skid = GetSkidSectionSettings();
+	const FSoftObjectPath SkidPath = Skid.bEnabled ? Skid.Clip.ToSoftObjectPath() : FSoftObjectPath();
+	if (SkidPath != ResolvedSkidPath)
+	{
+		ResolvedSkidPath = SkidPath;
+		SkidSectionClip = SkidPath.IsValid() ? Skid.Clip.LoadSynchronous() : nullptr;
+	}
+}
+
+void UGSTN_RunPresentationComponent::TickScramble(float DeltaTime)
+{
+	const FGSTN_LocomotionSimTuning* Locomotion = FGSTN_LocomotionAttach::Find(GetOwner());
+	const float TargetSpeed = Locomotion && Locomotion->RunStages.Stages.Num() > 0 ? Locomotion->RunStages.Stages[0].MaxSpeed : 0.f;
+	const FVector Up = Mover->GetUpDirection();
+	const FVector Velocity = Mover->GetVelocity();
+	const FVector Ground = Velocity - Up * Velocity.Dot(Up);
+	// The stick (a sim proxy without inputs counts as a full push: the speed alone then drives the scramble)
+	float Stick = 1.f;
+	if (const FCharacterDefaultInputs* Inputs = Mover->GetLastInputCmd().InputCollection.FindDataByType<FCharacterDefaultInputs>())
+	{
+		Stick = FMath::Clamp(static_cast<float>(Inputs->GetMoveInput().Size()), 0.f, 1.f);
+	}
+	if (!Ground.IsNearlyZero(1.f))
+	{
+		ScrambleDirection = Ground.GetSafeNormal();
+	}
+	Scramble.Step(GetScrambleSettings(), DeltaTime, static_cast<float>(Ground.Size()), TargetSpeed, Stick, Mover->HasGameplayTag(Mover_IsOnGround, true),
+		FootSlide.Source == EGSTN_FootSlideSource::RunSkid, ScrambleClip != nullptr);
 }
 
 const FGSTN_LocomotionLeanSettings& UGSTN_RunPresentationComponent::GetLeanSettings() const
@@ -162,6 +237,20 @@ void UGSTN_RunPresentationComponent::GetAdditiveReaction(FGSTN_AdditiveReactionR
 		Lean.Weight = FMath::Clamp(LocoLeanDeg / MaxDeg, 0.f, 1.f);
 	}
 
+	// Layer 0 out of a skid: the run start scramble's extra lean along the run (negative = the rebound, leaning back)
+	const float ScrambleAngle = GetScrambleSettings().ExtraLeanDeg * 1.2f;
+	if (FootSlide.Source != EGSTN_FootSlideSource::RunSkid && FMath::Abs(Scramble.LeanDeg) > 0.05f && ScrambleAngle > 0.f)
+	{
+		FGSTN_AdditiveReactionLayer& Layer = Out.Layers[0];
+		Layer.Additive = nullptr;
+		Layer.PushDirection = Scramble.LeanDeg > 0.f ? ScrambleDirection : -ScrambleDirection;
+		Layer.PlaceholderAngleDeg = ScrambleAngle;
+		Layer.PlaceholderPeakSeconds = 0.1f;
+		Layer.PlaceholderLengthSeconds = 1.f;
+		Layer.Time = 0.1f;
+		Layer.Weight = FMath::Clamp(FMath::Abs(Scramble.LeanDeg) / ScrambleAngle, 0.f, 1.f);
+		return;
+	}
 	if (FootSlide.Source != EGSTN_FootSlideSource::RunSkid || LeanDeg <= 0.f)
 	{
 		return;
