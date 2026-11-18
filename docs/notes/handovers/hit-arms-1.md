@@ -12,9 +12,14 @@ Branch `claude/hit-arms-1` (base `claude/project-thread-98dml5` 5b22e56e). Opus 
 - r1 FAIL (braccio guida = gesto di "alt", braccio dietro sul fianco, posa congelata); r2 FAIL (mano guida sul fianco, posa "cowboy");
   r3: colpo frontale difendibile, V3 la migliore delle tre; colpo da sinistra FAIL "gioco": una posa sola non regge i colpi laterali.
 - Parità Smash/AAA: no (Fable, r3). Video non guardati dal revisore: timing e blend con le additive non giudicati.
-## Per l'owner (3 giri di posa esauriti, regola 10)
-1. Approvare ArmsV3 come posa frontale (set HitArms nel BP)? 2. Pose per lato (specchio o variante laterale, codice) e/o 9 pose alto/medio/basso x S/M/L?
-3. Ritocco gomito dietro 60->68° e +5° abduzione (un giro corto)?
+## Decisioni owner 20:40 locali ("fai le consigliate"): 1A 2A 3A
+1A: il personaggio usa DA_ReactionAnims_HitArms (ArmsV3). Script `Tools/GAS/hitarms_swap.py` (backup del BP, idempotente). Eseguito solo
+   quando _ue59 è libero e nessuno è in PIE: vedi in fondo se è fatto. 3A: gomito del braccio dietro lasciato a 60°.
+2A (thread di codice NUOVO, questo era vicino al limite di contesto): scegliere la posa HitStand per lato del colpo.
+   Proposta: nel rule FGSTN_ReactionAnimRule un'animazione opzionale per lato (o un flag "mirror per lato") letta con il lato già calcolato
+   per le additive (EGSTN_HitSide, GSTN_ReactionAnimSet.h); la clip per l'altro lato si genera con `HITARMS_LEAD=r HITARMS_VERSION=V3R
+   build_hit_arms_v2.py` (attenzione: lo script reimposta HitStand del set su quella clip, rimetterlo su V3). Prima capire la cattura
+   side_hitstand_l di r3 (yaw -126: il braccio guida sinistro finisce vicino alla testa e poi sul petto) e ricatturare front + left + right.
 ## Coda codice ("gioco")
 Scegliere o specchiare la posa HitStand per lato del colpo, così il braccio guida è quello dal lato dell'attaccante.
 ## Prove
@@ -24,3 +29,7 @@ Log build `Saved/Reaction/hit_arms.log`, `hit_arms_v2.log` (righe "frame N: ... 
 - La clip HitStand originale ha solo 4 key: la "vita" nei frame tenuti richiede una clip più lunga (regola HoldLastPose, sicuro).
 - DA_ReactionAnims_HitArms caricato non si cancella headless: lo script lo riusa.
 ## Costo stimato: 18-25 $ (Opus ~140k contesto, 3 review Fable ~110k, 3 build, 7 catture).
+## Stato 1A (20:48 locali)
+NON eseguito: l'owner usa il fisso, il coordinatore ha fermato editor e build. Da lanciare quando il coordinatore lo dice, con _ue59 libero e nessuno in PIE:
+`Run-Timed.ps1 -Kind Test -Exe UnrealEditor-Cmd.exe -ArgLine "<uproject> -run=pythonscript -script=<project>/Tools/GAS/hitarms_swap.py -unattended -nullrhi"`,
+poi controllare `Saved/Reaction/hitarms_swap.log` ("written") e committare `Content/Blueprints/SandboxCharacter_Mover.uasset` più i nuovi asset su questo branch.
