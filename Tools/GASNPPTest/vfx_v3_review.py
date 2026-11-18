@@ -9,11 +9,11 @@ Others: 8 frames spread over the window after the input. Prints one line.
 """
 import os
 import re
+import shutil
 import subprocess
 import sys
 
-import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 CAP, OUT, REF = sys.argv[1], sys.argv[2], sys.argv[3]
 REFS = {"hit": "astro_1.png", "ground_bounce": "astro_3.png", "wall": "astro_3.png", "jump": "astro_3.png", "run_skid": "astro_3.png",
@@ -50,8 +50,8 @@ def brightest(folder, start, end):
         img = frame(folder, n)
         if img is None:
             break
-        a = np.asarray(img)
-        score = int(((a.min(axis=2) >= 245)).sum())
+        r, g, b = img.split()  # PIL only: the laptop python has no numpy
+        score = ImageChops.darker(ImageChops.darker(r, g), b).point(lambda v: 255 if v >= 245 else 0).histogram()[255]
         if score > best:
             best, best_n = score, n
     return best_n
@@ -76,6 +76,14 @@ def sheet(bd, seq, picks, game):
 
 
 def mp4(folder, path):
+    """60 fps mp4; without ffmpeg (the laptop) an animated WebP at 60 fps (17/17/16 ms) that a browser plays at real speed"""
+    if shutil.which("ffmpeg") is None:
+        names = sorted(f for f in os.listdir(folder) if re.fullmatch(r"f\d{3}\.png", f))
+        imgs = [Image.open(os.path.join(folder, f)).convert("RGB") for f in names]
+        if imgs:
+            imgs[0].save(path[:-4] + ".webp", save_all=True, append_images=imgs[1:], loop=0, quality=80,
+                         duration=[(17, 17, 16)[i % 3] for i in range(len(imgs))])
+        return
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", "60", "-i", os.path.join(folder, "f%03d.png"), "-c:v", "libx264",
                     "-pix_fmt", "yuv420p", "-crf", "20", path], check=False)
 
@@ -88,15 +96,19 @@ for bd in ("light", "dark"):
         continue
     first = inputs(os.path.join(root, "capture.log"))
     for seq in sorted(os.listdir(root)):
-        game, close = os.path.join(root, seq, "game"), os.path.join(root, seq, "close")
-        if not os.path.isdir(game):
+        # r3 laptop: the game/close cameras sit behind the attacker and the victim hides the hit; the side view shows it, so the
+        # sheets use the side view and every view gets a video
+        game, side = os.path.join(root, seq, "game"), os.path.join(root, seq, "side")
+        if not os.path.isdir(side):
             continue
-        count = len(os.listdir(game))
-        mp4(game, os.path.join(OUT, f"{bd}_{seq}_game.mp4"))
-        mp4(close, os.path.join(OUT, f"{bd}_{seq}_close.mp4"))
+        count = len(os.listdir(side))
+        for view in ("side", "game", "close"):
+            if os.path.isdir(os.path.join(root, seq, view)):
+                mp4(os.path.join(root, seq, view), os.path.join(OUT, f"{bd}_{seq}_{view}.mp4"))
+        game = side
         start = first.get(seq, PRE)
         if seq.startswith("hit"):
-            h = brightest(close, start, min(start + 30, count))
+            h = brightest(side, start, min(start + 30, count))
             picks = [h - 1, h, h + 1, h + 2, h + 4, h + 6, h + 9, h + 13]
         else:
             span = max(8, count - start - 4)

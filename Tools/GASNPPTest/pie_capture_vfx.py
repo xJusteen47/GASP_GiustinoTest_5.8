@@ -179,6 +179,14 @@ def _backdrop():
     p, yaw = pawn.get_actor_location(), pawn.get_actor_rotation().yaw
     fx, fy = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
     floor = p.z - 92.0
+    try:   # r3 light: p.z - 92 put the plane ~4 cm UNDER the hub floor (no backdrop in any frame): use the real floor height
+        hit = unreal.SystemLibrary.line_trace_single(pawn, p, unreal.Vector(p.x, p.y, p.z - 300.0), unreal.TraceTypeQuery.TRACE_TYPE_QUERY1,
+                                                     False, [pawn], unreal.DrawDebugTrace.NONE, True)
+        if hit:
+            floor = hit.to_tuple()[4].z
+    except Exception as e:
+        _log(f'backdrop floor trace failed: {e}')
+    _log(f'backdrop floor z {floor:.1f} (pawn z {p.z:.1f})')
     comp = actor.static_mesh_component
     comp.set_mobility(unreal.ComponentMobility.MOVABLE)
     comp.set_collision_profile_name('NoCollision')
@@ -186,7 +194,7 @@ def _backdrop():
     if not st['backdrop']:   # floor: 40 m square, 0.3 cm over the hub floor (the traces still hit the real floor under it)
         comp.set_static_mesh(unreal.load_asset('/Engine/BasicShapes/Plane'))
         actor.set_actor_scale3d(unreal.Vector(40.0, 40.0, 1.0))
-        actor.set_actor_location_and_rotation(unreal.Vector(p.x + fx * 600, p.y + fy * 600, floor + 0.3), unreal.Rotator(), False, True)
+        actor.set_actor_location_and_rotation(unreal.Vector(p.x + fx * 600, p.y + fy * 600, floor + 1.0), unreal.Rotator(), False, True)
     else:                    # far wall 18 m ahead, 40 m wide, 15 m high
         comp.set_static_mesh(unreal.load_asset(CUBE))
         actor.set_actor_scale3d(unreal.Vector(0.4, 40.0, 15.0))

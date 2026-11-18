@@ -62,7 +62,8 @@ def rows():
         _cue("RunStart", "NS_GSTN_RunStartDust", offset=feet, orient=True),
         _cue("Skid.Enter", "NS_GSTN_SkidDust", socket="root", scale_size=False,
              stop_on=("Skid.Exit", "Jump", "Hit", "Splat", "Knockdown", "Tumble.Start"), max_duration=1.5),
-        _cue("Jump.Ground", "NS_GSTN_JumpPuff", offset=feet),
+        # No Jump.Ground row (owner playtest 2026-11-17: dust only on run start and skid; v3 has no rings, so the jump shows nothing).
+        # NS_GSTN_JumpPuff stays built for a kit that wants it.
         _cue("Land", "NS_GSTN_LandRing", min_mag=300, scale=((600, 2500), (0.7, 1.5)), offset=feet),  # a plain jump lands at ~1300 cm/s
         _cue("StageUp", "NS_GSTN_SpeedLines", min_mag=SPRINT2_STAGE, socket="root", scale_size=False,
              stop_on=("StageDown", "Skid", "Hit", "Splat", "Knockdown", "Tumble.Start"), min_speed=450.0),  # v2: never on a walk (owner playtest)
