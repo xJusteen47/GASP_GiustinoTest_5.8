@@ -33,3 +33,10 @@ AM_OverlordDAirV9.uasset modificata dall'owner: non committata, non toccata.
   reale non verificato. Il comando viene consumato (Resolution.ConsumeFrom): il secondo dodge veniva da una pressione nuova finta.
 - Test GSTNInput+GSTNCombat.Core+GSTN.Camera 387/387 (Saved/Logs/ci/test_1118b.log.ue.log). Skid/RTG: thread nuovo (2A).
 Costo stimato ~18 $ (oltre i 15: camera e dodge aggiunti dopo).
+
+**Seguito 2 (09:30-09:42):** ADS: `FGSTN_CameraAnchorSettings::bCrouchOffsetInAim` (on) + `AimCrouchOffset` (40,0,-30) + `AimCrouchHalfLife` 0.1 s;
+letto da PlayerInputState.WantsToAim di GASP. NON verificato in PIE: Run-Timed ESITO BLOCCATO (diag1118i.log), editor fermo sul dialogo di
+ripristino pacchetti (Saved/Autosaves/PackageRestoreData.json, non toccato). Merge vbnr9g (air momentum): rinominato `Dt` -> `AirMomentumDt` nel
+test (C4459 in unity build). Test GSTNInput+GSTNCombat+GSTN.Camera 842/842, AirMomentum 5/5 (Saved/Logs/ci/test_1118c.log.ue.log).
+Profili: tutti i 36 KIT_Test_* hanno DA_Locomotion_Default; i 4 KIT_Example* no (Saved/Diag1118/kits_loco.txt). Dummy non controllato.
+Da fare: click owner sul dialogo, poi `DIAG_ONLY_AIM=1` Run-Timed Capture diag_playtest_1118.py e video ADS crouch.

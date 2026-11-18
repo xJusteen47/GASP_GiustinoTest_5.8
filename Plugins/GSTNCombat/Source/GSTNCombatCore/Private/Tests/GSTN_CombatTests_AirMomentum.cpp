@@ -11,7 +11,7 @@
 
 namespace
 {
-	constexpr float Dt = 0.016f;
+	constexpr float AirMomentumDt = 0.016f;
 
 	/** Runs Frames frames with a constant stick, feeding the output back */
 	FGSTN_AirMomentumOutput Run(const FGSTN_AirMomentumTuning& Tuning, FGSTN_AirMomentumInput Input, int32 Frames)
@@ -35,7 +35,7 @@ namespace
 		Input.Stick = Stick;
 		Input.TopSpeed = 450.f;
 		Input.Control = 0.85f;
-		Input.DeltaSeconds = Dt;
+		Input.DeltaSeconds = AirMomentumDt;
 		return Input;
 	}
 }
