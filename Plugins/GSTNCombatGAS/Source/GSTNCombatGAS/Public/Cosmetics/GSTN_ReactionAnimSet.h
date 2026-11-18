@@ -8,6 +8,7 @@
 #include "GSTN_ReactionAnimSet.generated.h"
 
 class UAnimSequenceBase;
+class UBlendProfile;
 
 /** What the last animation of a reaction rule does when it reaches its end while the rule still holds */
 UENUM(BlueprintType)
@@ -81,6 +82,15 @@ struct GSTNCOMBATGAS_API FGSTN_ReactionAnimRule
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction", meta = (ClampMin = "0", ForceUnits = "Frames"))
 	int32 BlendOutFrames = 6;
+
+	/**
+	 * Optional per-bone timing of the blend back to the character's own animation (follow-through, owner 2026-11-18 on the crouch: fast in and
+	 * out, the rest of the body arriving after the hips). A blend profile of the character's skeleton in Time Factor mode: a bone's blend lasts
+	 * BlendOutFrames x its factor (legs 0.5 land first, arms and head 1.5 trail). Only for the return to the character's own pose; a rule taking
+	 * over still cross-fades evenly with its own blend in. Empty = every bone over BlendOutFrames
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction")
+	TSoftObjectPtr<UBlendProfile> BlendOutProfile;
 
 	/**
 	 * The mesh starts this much higher than the capsule puts it and falls into place over EntryDropFrames (presentation only, the capsule never

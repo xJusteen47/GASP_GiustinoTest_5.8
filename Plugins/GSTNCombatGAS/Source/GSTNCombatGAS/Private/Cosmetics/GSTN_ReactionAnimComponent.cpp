@@ -6,6 +6,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequenceBase.h"
+#include "Animation/BlendProfile.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Cosmetics/GSTN_ReactionAnimSet.h"
 #include "Events/GSTN_HitEvents.h"
@@ -108,6 +109,7 @@ void UGSTN_ReactionAnimComponent::ApplySet(UGSTN_ReactionAnimSet* NewSet)
 	ShakeElapsed = -1.f;
 	LoadedSet = NewSet;
 	LoadedAnimations.Reset();
+	LoadedBlendOutProfiles.Reset();
 	ActiveRule = INDEX_NONE;
 	ConsumedRule = INDEX_NONE;
 	PendingRestartRule = INDEX_NONE;
@@ -117,6 +119,12 @@ void UGSTN_ReactionAnimComponent::ApplySet(UGSTN_ReactionAnimSet* NewSet)
 	}
 	for (const FGSTN_ReactionAnimRule& Rule : LoadedSet->Rules)
 	{
+		UBlendProfile* Profile = Rule.BlendOutProfile.IsNull() ? nullptr : Rule.BlendOutProfile.LoadSynchronous();
+		if (!Rule.BlendOutProfile.IsNull() && !Profile)
+		{
+			UE_LOG(LogGSTNReactionAnim, Warning, TEXT("%s: reaction %s cannot load blend profile %s"), *GetNameSafe(GetOwner()), *Rule.Name.ToString(), *Rule.BlendOutProfile.ToString());
+		}
+		LoadedBlendOutProfiles.Add(Profile);
 		for (const TSoftObjectPtr<UAnimSequenceBase>* Soft : { &Rule.Animation, &Rule.ThenAnimation })
 		{
 			if (!Soft->IsNull())
@@ -406,7 +414,12 @@ bool UGSTN_ReactionAnimComponent::PlayStage(UAnimInstance& Anim, const FGSTN_Rea
 	return true;
 }
 
-void UGSTN_ReactionAnimComponent::StopActive(UAnimInstance* Anim, float BlendSeconds)
+UBlendProfile* UGSTN_ReactionAnimComponent::ResolveBlendOutProfile(int32 RuleIndex) const
+{
+	return LoadedBlendOutProfiles.IsValidIndex(RuleIndex) ? LoadedBlendOutProfiles[RuleIndex].Get() : nullptr;
+}
+
+void UGSTN_ReactionAnimComponent::StopActive(UAnimInstance* Anim, float BlendSeconds, UBlendProfile* Profile)
 {
 	if (Anim && ActiveMontage)
 	{
@@ -414,9 +427,19 @@ void UGSTN_ReactionAnimComponent::StopActive(UAnimInstance* Anim, float BlendSec
 		{
 			// The pose shown now is held through the blend: nothing of the clip past this frame is drawn
 			Instance->SetPlayRate(0.f);
-			FAlphaBlend Blend = Instance->GetBlend();
-			Blend.SetBlendTime(BlendSeconds);
-			Instance->Stop(Blend);
+			if (Profile)
+			{
+				// Per-bone times: the held pose leaves the hips first and the arms last, the follow-through of a fast exit
+				FMontageBlendSettings Settings(BlendSeconds);
+				Settings.BlendProfile = Profile;
+				Instance->Stop(Settings);
+			}
+			else
+			{
+				FAlphaBlend Blend = Instance->GetBlend();
+				Blend.SetBlendTime(BlendSeconds);
+				Instance->Stop(Blend);
+			}
 		}
 	}
 	ActiveMontage = nullptr;
@@ -459,8 +482,9 @@ void UGSTN_ReactionAnimComponent::TickComponent(float DeltaTime, ELevelTick Tick
 		// The state changed: a new rule cross-fades from our pose with its own blend in, no rule blends back with the old one's blend out
 		const float Blend = Winner != INDEX_NONE ? GSTNReactionAnim::Seconds(LoadedSet->Rules[Winner].BlendInFrames)
 			: GSTNReactionAnim::Seconds(LoadedSet->Rules[ActiveRule].BlendOutFrames);
-		// The old pose is held while it fades, the new rule fades in over the same time below: a cross-fade with no frame of the game's pose
-		StopActive(Anim, Blend);
+		// The old pose is held while it fades, the new rule fades in over the same time below: a cross-fade with no frame of the game's pose.
+		// Only the way back to the character's own pose takes the rule's per-bone profile
+		StopActive(Anim, Blend, Winner == INDEX_NONE ? ResolveBlendOutProfile(ActiveRule) : nullptr);
 	}
 
 	if (Winner == INDEX_NONE)
@@ -532,7 +556,7 @@ void UGSTN_ReactionAnimComponent::TickComponent(float DeltaTime, ELevelTick Tick
 		const float BlendOut = GSTNReactionAnim::Seconds(Rule.BlendOutFrames);
 		if (Remaining <= BlendOut + Lead)
 		{
-			StopActive(Anim, BlendOut);
+			StopActive(Anim, BlendOut, ResolveBlendOutProfile(Winner));
 			ConsumedRule = Winner;
 		}
 		break;
