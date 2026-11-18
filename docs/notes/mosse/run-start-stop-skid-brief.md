@@ -74,3 +74,26 @@ Stime a occhio dai costi di INDICE.md di thread simili; fermo finche' non decide
 
 ## Ordine proposto
 Thread codice cloud (Opus): sezioni dello skid + scramble + valori nel profilo. Poi fisso: build, cattura base e variante, review cloud contro i tratti d'identita' qui sopra (regola 10).
+
+## 4. Stomp landing (landing lag del dair dell'Overlord) - aggiunta 2026-11-18
+Riferimento: dair di Ganondorf, `docs/notes/reviews/ref-smash-run/ganon_dair_landing.jpg` (4.9-8.8 s). Il video e' al rallentatore o a passi: valgono pose e ordine, NON i tempi. Durata: i 16 frame del lag pesante gia' decisi in handoffs/stomp-atterraggio.md (4 per il leggero). Regola: handoffs/landing-hard-cut-regola.md. Dal riferimento si prende il principio, non la posa di Ganon.
+
+Tratti d'identita':
+1. Il primo frame e' gia' l'urto: corpo raccolto e basso, testa incassata sotto le spalle (Ganon passa da in piedi a circa meta' altezza in un solo passo, riquadri 12 -> 16).
+2. Posa TENUTA per quasi tutto il lag, che continua ad affondare un poco (riquadri 16-84), poi rialzo rapido solo alla fine (88-104).
+3. Il morbido arriva dopo e va verso il basso/avanti: mantello che scavalca la schiena, polvere ai due lati dei piedi. Per l'Overlord: braccia conserte mantenute (tratto della mossa), ginocchia larghe.
+
+Pose chiave (frame da 1, 62.5 Hz, lag pesante 16):
+| Frame | Cosa |
+|---|---|
+| ultimo in aria | Posa di stomp: gambe dritte unite, busto piegato. |
+| 1 | Taglio netto (fusione 0-1 frame). Piedi nello stesso punto a terra, bacino gia' al ~75% dell'affondo, busto chiuso sulle ginocchia, testa giu'. Anello di polvere, scossa camera. |
+| 2-3 | Compressione massima: bacino e testa al punto piu' basso. |
+| 4-11 | Tenuta viva: risale del ~10% dal punto piu' basso e resta li'. Cio' che pende finisce la sua corsa verso il basso entro il frame 6 e si posa. |
+| 12-16 | Rialzo verso idle, lento all'inizio e veloce alla fine; libero dal frame 17. |
+Lag leggero (4 frame): stessa posa del frame 1 al ~40% dell'affondo, rialzo subito.
+
+Curve: ingresso senza ease (e' un taglio); compressione 1 -> 3 ease-out; un solo rimbalzo piccolo, niente oscillazioni; rialzo ease-in. Follow-through: spalle e testa toccano il minimo 1 frame dopo il bacino, tessuti 3 frame dopo.
+Controllo che spiega il "salto di posa" di oggi: tra l'ultimo frame in aria e il frame 1 NESSUNA parte del corpo deve salire, e i piedi non si spostano. Se la clip attuale parte da una posa alta e poi scende, col taglio netto si vede un salto in su: e' un difetto della clip, non del gioco.
+
+Clip: prima provare una VARIANTE della clip attuale (copia, mai l'originale; AM_OverlordDAirV9 non si tocca): si taglia l'attacco perche' il frame 1 sia gia' vicino alla compressione massima e si ridistribuiscono i tempi come sopra. Vale solo se la posa piu' bassa della clip attuale ha la testa sotto ~55% dell'altezza in piedi e nessuna parte sale al frame 1; altrimenti clip nuova con agy da tre pose (frame 1, 3, 11). Non ho visto la clip attuale: la scelta la fa la review in video sul fisso (regola 10), con la griglia base accanto a questa.
