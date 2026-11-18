@@ -11,6 +11,7 @@
 
 class UMoverComponent;
 class UAnimSequenceBase;
+class UAnimInstance;
 
 /** Which sliding move the feet slide in */
 UENUM(BlueprintType)
@@ -124,6 +125,16 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
 	float GetSkidClipTime() const;
+
+	/**
+	 * The same two values read from an Animation Blueprint without a component reference: the owning actor's run presentation component,
+	 * or false / 0 when it has none. AnimInstance defaults to self, so a transition rule or a Sequence Evaluator pin calls them directly.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static bool IsAnimOwnerSkidding(const UAnimInstance* AnimInstance);
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static float GetAnimOwnerSkidClipTime(const UAnimInstance* AnimInstance);
 
 	/** The profile moves the skid into the main ABP (the skid layer then never takes the pose) */
 	bool IsSkidInMainGraph() const;

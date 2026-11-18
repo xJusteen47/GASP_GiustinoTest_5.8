@@ -146,6 +146,27 @@ float UGSTN_RunPresentationComponent::GetSkidClipTime() const
 		SkidEntrySpeed, SkidSectionClip->GetPlayLength());
 }
 
+namespace
+{
+	const UGSTN_RunPresentationComponent* FindRunPresentation(const UAnimInstance* AnimInstance)
+	{
+		const AActor* Owner = AnimInstance ? AnimInstance->GetOwningActor() : nullptr;
+		return Owner ? Owner->FindComponentByClass<UGSTN_RunPresentationComponent>() : nullptr;
+	}
+}
+
+bool UGSTN_RunPresentationComponent::IsAnimOwnerSkidding(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run && Run->IsSkidding();
+}
+
+float UGSTN_RunPresentationComponent::GetAnimOwnerSkidClipTime(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run ? Run->GetSkidClipTime() : 0.f;
+}
+
 bool UGSTN_RunPresentationComponent::IsSkidInMainGraph() const
 {
 	const UGSTN_LocomotionAnimSet* Profile = LeanProfile.Get();
