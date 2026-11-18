@@ -68,3 +68,6 @@ il Jump Designer del kit rosa salvato dall'owner (300 cm, 0.5 s, MaxHold 20, Min
 Saved/Diag1118/align_kits.txt). KIT_Test_Playtest torna sul Default, DA_Locomotion_Playtest eliminato. Air crouch aggiunto a Hits, OverlordDropkick,
 OverlordDAirV10 R0-R4. Stats di movimento uguali per 34 kit (WalkSpeed 600, JumpVelocity 1350; Weight e MaxCarryWeight tenuti): valori di prima in
 kit-stats-before-align-1118.tsv. Non provato in PIE.
+
+**Seguito 10 (13:10):** merge pg3fen (tilt-shift), compila, test 850/850, GSTN.Camera 11/11 (test_1118h.log.ue.log). camera_tiltshift_setup.py NON eseguito:
+UnrealEditor-Cmd non ha renderer (anche senza -nullrhi) e recompile_material fallisce (tiltshift.log, tiltshift2.log). Va lanciato nell'editor aperto (Python) o con Run-Timed -Preset Capture. Il default CinematicDOF non ne ha bisogno.
