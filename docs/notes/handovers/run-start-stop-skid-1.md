@@ -26,7 +26,7 @@ Not done:
   Base = profile RunStart.bEnabled/Skid.bEnabled false (or the commit before this one).
 
 ## Part 2 (same thread, owner 13:26Z: skid into GASP's setup on copies)
-- 18d7fe1a: ABP_GSTN_Locomotion + CHT_GSTN_LocomotionAnimations (Content/Blueprints/Animation/GSTNLocomotion/, copies of
+- 18d7fe1a: ABP_GSTN_Locomotion + CHT_GSTN_LocomotionAnimations (Content/GSTN/Animation/Locomotion/ (moved), copies of
   SandboxCharacter_Mover_ABP and CHT_MoverCharacterAnimations_PoseMatch; originals untouched). Profile field MainAnimClass (empty = no change):
   set it to ABP_GSTN_Locomotion only once the copy has the skid.
 - MCP 5.9 (127.0.0.1:8000): BlueprintDslToolset refuses AnimBlueprint ("not supported by the blueprint domain yet"); the generic
@@ -36,3 +36,6 @@ Not done:
   owner adds the chooser row and the Skid state copied from Slide; then MainAnimClass, captures, Fable review.
 - Camera: cherry-picked aca5d77a (02558de5); DA_CameraAnchor_Default values set in the editor's memory but NOT saved (editor was in PIE):
   save it after PIE (Tools/GASNPPTest/camera_tiltshift_defaults.py redoes it).
+- 0127e6f4: IsSkidding / GetSkidClipTime (BlueprintPure) + profile bSkidInMainGraph (skid layer off). Built, tests 221/221
+  (Saved/Logs/ci/rss-test2.log). Owner wires a single "Skid" state (from the copied Slide group) in ABP_GSTN_Locomotion; the copy's
+  chooser nodes still point at GASP's CHT until the owner repoints them. Content/GSTN is now versioned (.gitignore).
