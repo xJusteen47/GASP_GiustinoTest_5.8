@@ -119,6 +119,28 @@ bool FGSTN_AirMomentumExternalTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_AirMomentumDriftDITest, "GSTNCombat.Core.AirMomentum.DriftDI", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_AirMomentumDriftDITest::RunTest(const FString& Parameters)
+{
+	const FGSTN_AirMomentumTuning Tuning;
+	FGSTN_AirMomentumInput Launch = Drift(1200.f, FVector::ZeroVector);
+	Launch.External = FVector(1200, 0, 0);
+	const FGSTN_AirMomentumOutput Neutral = Run(Tuning, Launch, 12);
+
+	// Hitstun drift: the stick against the knockback does not brake it, sideways it drifts
+	FGSTN_AirMomentumInput Against = Launch;
+	Against.bDriftDI = true;
+	Against.Stick = FVector(-1, 0, 0);
+	const FGSTN_AirMomentumOutput AgainstOut = Run(Tuning, Against, 12);
+	TestTrue(TEXT("drift DI never brakes the push"), FMath::IsNearlyEqual(AgainstOut.External.X, Neutral.External.X, 0.01));
+	TestTrue(TEXT("drift DI against: the player channel pulls back within the cap"), AgainstOut.Velocity.X < Neutral.Velocity.X && AgainstOut.Velocity.X >= Neutral.Velocity.X - 450.0 - 0.01);
+	FGSTN_AirMomentumInput Side = Launch;
+	Side.bDriftDI = true;
+	Side.Stick = FVector(0, 1, 0);
+	TestTrue(TEXT("drift DI sideways moves the path"), Run(Tuning, Side, 12).Velocity.Y > 300.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_AirMomentumClampTest, "GSTNCombat.Core.AirMomentum.CollisionClamp", GSTN_CORE_TEST_FLAGS)
 bool FGSTN_AirMomentumClampTest::RunTest(const FString& Parameters)
 {

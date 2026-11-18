@@ -66,6 +66,15 @@ struct GSTNCOMBATCORE_API FGSTN_AirMomentumTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum|External", meta = (ClampMin = "0", ForceUnits = "cm/s"))
 	float ExternalMinSpeed = 20.f;
 
+	/**
+	 * Drift DI (owner 2026-11-18: "the air control during hitstun"): while a knockback flies under hitstun (movement locked) the victim keeps
+	 * its air control, scaled by DriftDIControlScale (acceleration, brake and top speed of the player channel). It adds to the knockback: the
+	 * external channel is never braked by it, it only decays. The launch DI (FGSTN_DIParams, hit frame only) is separate and unchanged.
+	 * Default 1 = full air control, as Smash Ultimate is reported to allow during hitstun: UNVERIFIED. 0 = no drift (the old behaviour)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum|Drift DI", meta = (ClampMin = "0", ClampMax = "2"))
+	float DriftDIControlScale = 1.f;
+
 	bool IsEnabled() const { return Style != EGSTN_AirInertiaStyle::MoverLegacy; }
 	float GetNeutralDeceleration() const { return Style == EGSTN_AirInertiaStyle::Carry ? CarryNeutralDeceleration : HighFrictionNeutralDeceleration; }
 };
@@ -86,6 +95,8 @@ struct GSTNCOMBATCORE_API FGSTN_AirMomentumInput
 	/** Extra per-frame fraction of the external channel lost (a knockback move's own drag, FGSTN_LayeredMove_Knockback::DecayPerFrame) */
 	float ExternalDragPerFrame = 0.f;
 	float DeltaSeconds = 0.016f;
+	/** Hitstun drift DI frame: the stick steers the player channel only (Control and TopSpeed already scaled), the external channel just decays */
+	bool bDriftDI = false;
 };
 
 struct GSTNCOMBATCORE_API FGSTN_AirMomentumOutput

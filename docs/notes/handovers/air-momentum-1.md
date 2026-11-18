@@ -18,7 +18,10 @@ Branch `claude/project-thread-vbnr9g` from 98dml5 `cb8163ab`.
   channel (wall collisions take their share). External sources: any `FLayeredMove_Launch` child (trampoline) and the knockback move
   (launch, relaunch, balloon frames, wall/ceiling/ground bounces that relaunch). A player-owned override move (dodge, lunge) empties it.
   Knockback `DecayPerFrame` acts on the external channel. Movement lock (stats factor 0) = no steering.
-- Tests: `GSTNCombat.Core.AirMomentum.*` (5 tests: styles, steer, external, collision clamp, wire).
+- Drift DI (owner 08:55Z, "the air control during hitstun"): under a movement lock with a knockback move active the victim keeps its air
+  control × `DriftDIControlScale` (default 1 = Smash Ultimate-like, UNVERIFIED; 0 = off). It steers the player channel only and adds to
+  the knockback, never brakes it. Launch DI (`FGSTN_DIParams`, hit frame) and SDI (Defence, hitstop) are unchanged: no overlap.
+- Tests: `GSTNCombat.Core.AirMomentum.*` (6 tests: styles, steer, external, collision clamp, wire).
 
 ## Not done / risks (desktop thread)
 1. Build + `GSTNCombat.Core.AirMomentum` + full `GSTNCombat` run (Run-Timed.ps1). Nothing compiled here.
@@ -27,7 +30,8 @@ Branch `claude/project-thread-vbnr9g` from 98dml5 `cb8163ab`.
 3. Dodge long jump etc.: after an override move ends in the air, the drift is the player channel → it now decays at 4000 with neutral
    stick (Astro). If the long jump feels cut, the move must hand its speed as external (follow-up) or the kit uses `Carry`.
 4. Pink kit jump height ("bassissimo") is NOT touched here (jump values live with the desktop thread / qaz1xr kit scripts).
-5. Netcode: verify with the PIE harness (knockback + trampoline, 2 clients) that ExternalVelocity does not cause corrections.
+5. Drift DI needs the victim's MoveInput to reach Mover during hitstun: if the input producer zeroes it under the lock, no drift (check).
+6. Netcode: verify with the PIE harness (knockback + trampoline, 2 clients) that ExternalVelocity does not cause corrections.
 
 ## Decisions applied (rule 6)
 - Default style HighFriction (owner: "tenerne di meno, o almeno per kit"); Mario kept as `Carry`.
