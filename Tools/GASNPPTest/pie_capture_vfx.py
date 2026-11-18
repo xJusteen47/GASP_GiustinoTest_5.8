@@ -201,12 +201,9 @@ def _backdrop():
 
 
 def _surface_colour():
-    if not SURFACE:
-        return
-    for actor in (_pawn(), st.get('victim')):
-        comp = actor.get_component_by_class(unreal.GSTN_PresentationComponent) if actor else None
-        if comp:
-            comp.set_editor_property('default_surface_color', unreal.LinearColor(SURFACE[0], SURFACE[1], SURFACE[2], 1.0))
+    """Through the cvar, never a property write: set_editor_property in Play reruns the pawn's construction script (r2: NP crash)"""
+    if SURFACE:
+        _console('GSTN.Presentation.SurfaceColor ' + ','.join(f'{v:.3f}' for v in SURFACE))
 
 
 def _blocks(seq):

@@ -12,6 +12,7 @@
 class UAnimSequenceBase;
 class UMaterialInterface;
 class UStaticMeshComponent;
+class AStaticMeshActor;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGSTN_OnPresentationEvent, const FGSTN_PresentationEvent&, Event, float, Intensity);
 DECLARE_DYNAMIC_DELEGATE_TwoParams(FGSTN_OnPresentationEventSingle, const FGSTN_PresentationEvent&, Event, float, Intensity);
@@ -162,6 +163,7 @@ public:
 	const FGSTN_PresentationSnapshot& GetLastSnapshot() const { return Deriver.GetPrevious(); }
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void GetAdditiveReaction(FGSTN_AdditiveReactionRequest& Out) const override;
 
 private:
@@ -220,6 +222,8 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UStaticMeshComponent> ContactShadow;
+
+	TWeakObjectPtr<AStaticMeshActor> ContactShadowActor;
 
 	/** A cue waiting for the drawn body (FGSTN_PresentationCue::GroundedBone) */
 	struct FPendingGrounded

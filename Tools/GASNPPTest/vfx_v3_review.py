@@ -1,0 +1,106 @@
+"""VFX v3 review pack (rule 10 + owner's v3 rule: compare with the Astro Bot captures FIRST, real speed, light and dark).
+
+  python make_v3_review.py <capture root with light/ and dark/> <out dir> <ref dir>
+
+For every backdrop and sequence: <bd>_<seq>_game.mp4 (game camera, 60 fps = real speed) and <bd>_<seq>_close.mp4; one side-by-side sheet
+per sequence: the owner's reference on the left, 8 of our game-camera frames on the right (4x2, frame numbers burnt in). Hit sequences:
+the 8 frames start one frame before the brightest frame of the close view after the attack (the star), then +1 +2 +4 +6 +9 +13 +18.
+Others: 8 frames spread over the window after the input. Prints one line.
+"""
+import os
+import re
+import subprocess
+import sys
+
+import numpy as np
+from PIL import Image, ImageDraw
+
+CAP, OUT, REF = sys.argv[1], sys.argv[2], sys.argv[3]
+REFS = {"hit": "astro_1.png", "ground_bounce": "astro_3.png", "wall": "astro_3.png", "jump": "astro_3.png", "run_skid": "astro_3.png",
+        "sprint": "astro_2.png"}
+PRE = 20
+H = 720
+
+
+def ref_for(seq):
+    for key, name in REFS.items():
+        if seq.startswith(key):
+            return name
+    return "astro_1.png"
+
+
+def inputs(log):
+    """{sequence: first input frame (v)} from capture.log"""
+    found = {}
+    for line in open(log, encoding="utf-8", errors="replace"):
+        m = re.search(r"(\w+): (attack|strong|jump|stick \(.*?\)) (?:on|from) v(\d+)", line)
+        if m and m.group(1) not in found and "None" not in m.group(2):
+            found[m.group(1)] = int(m.group(3))
+    return found
+
+
+def frame(folder, n):
+    path = os.path.join(folder, f"f{n:03d}.png")
+    return Image.open(path).convert("RGB") if os.path.exists(path) else None
+
+
+def brightest(folder, start, end):
+    best, best_n = -1, start
+    for n in range(start, end):
+        img = frame(folder, n)
+        if img is None:
+            break
+        a = np.asarray(img)
+        score = int(((a.min(axis=2) >= 245)).sum())
+        if score > best:
+            best, best_n = score, n
+    return best_n
+
+
+def sheet(bd, seq, picks, game):
+    ref = Image.open(os.path.join(REF, ref_for(seq))).convert("RGB")
+    ref = ref.resize((int(ref.width * H / ref.height), H))
+    cell = H // 2
+    grid = Image.new("RGB", (cell * 4, H), (0, 0, 0))
+    for i, n in enumerate(picks):
+        img = frame(game, n)
+        if img is None:
+            continue
+        img = img.resize((cell, cell))
+        ImageDraw.Draw(img).text((6, 4), f"v{n}", fill=(255, 0, 255))
+        grid.paste(img, ((i % 4) * cell, (i // 4) * cell))
+    out = Image.new("RGB", (ref.width + grid.width + 8, H), (255, 0, 255))
+    out.paste(ref, (0, 0))
+    out.paste(grid, (ref.width + 8, 0))
+    out.save(os.path.join(OUT, f"{bd}_{seq}_vs_{ref_for(seq)[:-4]}.png"))
+
+
+def mp4(folder, path):
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", "60", "-i", os.path.join(folder, "f%03d.png"), "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p", "-crf", "20", path], check=False)
+
+
+os.makedirs(OUT, exist_ok=True)
+made = 0
+for bd in ("light", "dark"):
+    root = os.path.join(CAP, bd)
+    if not os.path.isdir(root):
+        continue
+    first = inputs(os.path.join(root, "capture.log"))
+    for seq in sorted(os.listdir(root)):
+        game, close = os.path.join(root, seq, "game"), os.path.join(root, seq, "close")
+        if not os.path.isdir(game):
+            continue
+        count = len(os.listdir(game))
+        mp4(game, os.path.join(OUT, f"{bd}_{seq}_game.mp4"))
+        mp4(close, os.path.join(OUT, f"{bd}_{seq}_close.mp4"))
+        start = first.get(seq, PRE)
+        if seq.startswith("hit"):
+            h = brightest(close, start, min(start + 30, count))
+            picks = [h - 1, h, h + 1, h + 2, h + 4, h + 6, h + 9, h + 13]
+        else:
+            span = max(8, count - start - 4)
+            picks = [start + int(i * span / 8) for i in range(8)]
+        sheet(bd, seq, [p for p in picks if 0 <= p < count], game)
+        made += 1
+print(f"{made} sequences -> {OUT}")
