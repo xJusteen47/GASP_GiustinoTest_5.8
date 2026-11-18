@@ -36,3 +36,16 @@ Branch `claude/project-thread-vbnr9g` from 98dml5 `cb8163ab`.
 ## Decisions applied (rule 6)
 - Default style HighFriction (owner: "tenerne di meno, o almeno per kit"); Mario kept as `Carry`.
 - Air control multiplies the new accelerations, so stage AirControlScale, the AirControl stat and move overrides keep working.
+
+## Jump designer (owner 09:13Z) — same branch, NOT compiled
+- `Jump/GSTN_JumpDesigner.h/.cpp` (Core): inputs FullJumpHeight 350 cm, TimeToApex 0.5 s, MaxHoldFrames 30, MinHoldFrames 0,
+  HoldToFallGravityRatio 0.29, CutToFallGravityRatio 1, CutRampFrames 3, GravityModel HoldWindow, WorldGravity 980. Closed form with the
+  hold window and the gravity change (header comment has the equations), then a secant on v0 against `FGSTN_JumpLogic::SimulateApex`
+  at 16 ms so the full height is exact at 62.5 Hz. Read-only derived: JumpVelocity, Rise/Cut/Fall scales, full height + apex frames,
+  short hop height + frames. Defaults give v0 1311 cm/s, scales 2.40/8.27/8.27, full 350 cm @ frame 31, short hop 110 cm @ frame 10
+  (python replica of the state machine, scratch only: confirm with the tests).
+- Lives in `UGSTN_LocomotionProfile::JumpDesigner` (the DA the kit references, shareable by many kits; refreshed in PostLoad, on edit
+  and in FromProfile). Off by default. On: `BuildJumpParams` takes scales/hold/ramp/model from it, the jump move creator its v0 (ground
+  jump; RunBoost still multiplies; air jump keeps its stat). Pink kit: give its profile the designer with the wanted height.
+- Tests `GSTNCombat.Core.JumpDesigner.*` (4). Risk: WorldGravity must equal Mover's gravity magnitude in the level (check GASP value).
+- Air steering rate is now continuous in the stick·drift dot: AirAcceleration (1) / AirAccelerationSide (0) / AirBrake (-1).

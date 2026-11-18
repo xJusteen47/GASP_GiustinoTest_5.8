@@ -8,6 +8,8 @@
 #include "Attributes/GSTN_CombatAttributeSet.h"
 #include "GameFramework/Actor.h"
 #include "Input/GSTN_CombatSettings.h"
+#include "Jump/GSTN_JumpDesigner.h"
+#include "Kits/GSTN_LocomotionProfile.h"
 #include "Movement/GSTN_LayeredMove_Launch.h"
 #include "Movement/GSTN_SurfaceLaunch.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
@@ -60,6 +62,11 @@ bool UGSTN_CombatSimComponent::BuildJumpParams(FGSTN_JumpParams& OutParams) cons
 		OutParams.GravityModel = TableJumpData->GravityModel;
 	}
 	OutParams.SquatFrames = TableJumpData && TableJumpData->bOverrideSquatFrames ? TableJumpData->SquatFrames : UGSTN_CombatSettings::Get().JumpSquatFrames;
+	// Jump designer (owner 2026-11-18): the kit's locomotion profile replaces the gravity scales, hold frames, cut ramp and model it derived
+	if (const FGSTN_LocomotionSimTuning* Locomotion = FGSTN_LocomotionAttach::Find(GetOwner()))
+	{
+		FGSTN_JumpDesigner::ApplyToParams(Locomotion->JumpDesigner, OutParams);
+	}
 	return true;
 }
 
