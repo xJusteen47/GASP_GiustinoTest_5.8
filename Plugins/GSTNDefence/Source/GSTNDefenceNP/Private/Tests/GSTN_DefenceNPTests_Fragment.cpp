@@ -203,7 +203,7 @@ bool FGSTN_DefenceFragmentBytesTest::RunTest(const FString& Parameters)
 	Differs(TEXT("pushback frames"), [](FGSTN_DefenceFragment& F) { F.PushbackFrames += 1; });
 	Differs(TEXT("mirror value"), [](FGSTN_DefenceFragment& F) { F.MirrorValueQ += 1; });
 	Differs(TEXT("mirror frame"), [](FGSTN_DefenceFragment& F) { F.MirrorFrame += 1; });
-	TestEqual(TEXT("26 single-field differences checked"), Checked, 26);
+	TestEqual(TEXT("28 single-field differences checked"), Checked, 28);
 
 	// Quantisation: quarter points, round half up, so two machines agree on the bit
 	TestEqual(TEXT("37.25 is 149 quarters"), static_cast<int32>(FGSTN_DefenceFragment::QuantizeValue(37.25)), 149);
