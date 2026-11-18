@@ -27,3 +27,8 @@ Owner: crouch + forward = upright run, slower; run start frantic/sped up; skid n
   the anim side strips the root yaw (or the actor does not turn). Owner 19:43Z: orientation + stride warping STAY ON in base locomotion,
   skid included; only the entry blend may be absent/very short. Fix the warping inputs/targets during the skid, never disable it.
 - Tried: reading the GASP ABP graph through GSTN_AnimBlueprintToolset from Python failed once (list_anim_graphs, line 10); not retried.
+
+## Side lean (owner: "not seen")
+- Solver works: 297 live samples during the owner's play (scratchpad leanlog, script leanloop.py polling get_locomotion_lean), moving
+  samples 75: lean 0-4 deg 57, 4-8 3, 8-12 2, 12-16 6, 16+ 7 = spikes on starts/stops, curves stay under 4 deg. Cause: side accel of a run
+  curve is far below AccelForMaxLean 3000. Applied (rule 6): DA Lean.TurnScale 1 -> 2.5. Owner to judge; revert = 1.
