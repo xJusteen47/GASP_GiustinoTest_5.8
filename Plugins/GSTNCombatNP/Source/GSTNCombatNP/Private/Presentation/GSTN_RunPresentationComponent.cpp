@@ -127,7 +127,7 @@ void UGSTN_RunPresentationComponent::TickLean(float DeltaTime)
 	const FMoverSyncState& Sync = Mover->GetSyncState();
 	const FGSTN_RunStageState* Run = FGSTN_RunStageMover::Find(Sync);
 	float StateScale = Settings.GetStageScale(Run ? Run->Stage : 0) * FMath::Max(GSTNRunPresentation::CVarLean.GetValueOnGameThread(), 0.f);
-	if (Mover->IsAirborne())
+	if (Mover->HasGameplayTag(Mover_IsInAir, true))
 	{
 		StateScale *= Settings.AirScale;
 	}

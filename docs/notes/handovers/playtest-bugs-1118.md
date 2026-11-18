@@ -71,3 +71,7 @@ kit-stats-before-align-1118.tsv. Non provato in PIE.
 
 **Seguito 10 (13:10):** merge pg3fen (tilt-shift), compila, test 850/850, GSTN.Camera 11/11 (test_1118h.log.ue.log). camera_tiltshift_setup.py NON eseguito:
 UnrealEditor-Cmd non ha renderer (anche senza -nullrhi) e recompile_material fallisce (tiltshift.log, tiltshift2.log). Va lanciato nell'editor aperto (Python) o con Run-Timed -Preset Capture. Il default CinematicDOF non ne ha bisogno.
+
+**Seguito 11 (13:17):** merge zqg4ty (lean additivo). Build falliva: UMoverComponent::IsAirborne non esiste -> HasGameplayTag(Mover_IsInAir) in
+GSTN_RunPresentationComponent.cpp. Test GSTNInput+GSTNCombat+GSTN.Camera+GSTNAnimation 862/862 (test_1118i.log.ue.log). setup_locomotion_profile.py ok:
+nuovo DA_AnimSet_Locomotion_Default, collegato in DA_AnimSetCollection_SandboxCharacter (locoprofile.log). Cattura in attesa del dialogo di ripristino.
