@@ -91,4 +91,32 @@ bool FGSTN_RunStartScrambleTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunStartScrambleLowFpsTest, "GSTNCombat.NP.RunStartSkid.ScrambleLowFps", GSTN_RSS_TEST_FLAGS)
+bool FGSTN_RunStartScrambleLowFpsTest::RunTest(const FString& Parameters)
+{
+	// bugpass-1 B1: the extra lean spring must stay bounded at low frame rates, with the default and with the stiffest allowed spring
+	for (const float Frequency : { 6.f, 15.f })
+	{
+		FGSTN_RunStartScrambleSettings S;
+		S.LeanSpringFrequency = Frequency;
+		for (const float Dt : { 1.f / 30.f, 1.f / 20.f })
+		{
+			const float Target = 450.f;
+			FGSTN_RunStartScrambleState Run;
+			Run.Step(S, Dt, 0.f, Target, 1.f, true, false, true);
+			float Speed = 40.f;
+			float MaxAbs = 0.f;
+			for (int32 Frame = 0; Frame < 120; ++Frame)
+			{
+				Speed = FMath::Min(Speed + 30.f, Target);
+				Run.Step(S, Dt, Speed, Target, 1.f, true, false, true);
+				MaxAbs = FMath::Max(MaxAbs, FMath::Abs(Run.LeanDeg));
+			}
+			TestTrue(FString::Printf(TEXT("bounded at %.0f Hz, %.0f fps"), Frequency, 1.f / Dt), FMath::IsFinite(MaxAbs) && MaxAbs <= S.ExtraLeanDeg * 1.5f + 0.1f);
+			TestTrue(FString::Printf(TEXT("settles at %.0f Hz, %.0f fps"), Frequency, 1.f / Dt), FMath::Abs(Run.LeanDeg) < 0.2f);
+		}
+	}
+	return true;
+}
+
 #endif
