@@ -411,7 +411,7 @@ bool FGSTN_PushboxShiftEffect::ApplyMovementEffect(FApplyMovementEffectParams& A
 		return false;
 	}
 	// Swept: the world stops it. Other fighters are in the capsule's ignore list (UGSTN_CombatWorldSubsystem), so only the world can
-	GSTNBodyCapsule::SweptHorizontalMove(*Updated, Move);
+	GSTNBodyCapsule::SweptHorizontalMove(*Updated, Move, ApplyEffectParams.MoverComp ? ApplyEffectParams.MoverComp->GetUpDirection() : FVector::UpVector);
 	Sync->SetTransforms_WorldSpace(Updated->GetComponentLocation(), Sync->GetOrientation_WorldSpace(), Sync->GetVelocity_WorldSpace(),
 		Sync->GetAngularVelocityDegrees_WorldSpace(), Sync->GetMovementBase(), Sync->GetMovementBaseBoneName());
 	return true;
