@@ -36,7 +36,7 @@ FGSTN_AirMomentumOutput FGSTN_AirMomentumLogic::Step(const FGSTN_AirMomentumTuni
 	if (ExternalSize > UE_KINDA_SMALL_NUMBER && StickSize > UE_KINDA_SMALL_NUMBER)
 	{
 		const double Against = -StickDir.Dot(External / ExternalSize) * StickSize;
-		if (Against > 0.0)
+		if (Against > 0.0 && !Input.bDriftDI)
 		{
 			ExternalDecel += Tuning.ExternalBrake * Against * Control;
 		}

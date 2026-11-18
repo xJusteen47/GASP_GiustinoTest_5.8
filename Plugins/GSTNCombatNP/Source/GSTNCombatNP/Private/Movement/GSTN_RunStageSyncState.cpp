@@ -368,7 +368,14 @@ bool FGSTN_RunStageMover::ApplyAirMomentum(const UMoverComponent& MoverComp, con
 	const FVector StartVelocity = Default->GetVelocity_WorldSpace();
 	Input.Velocity = FVector::VectorPlaneProject(StartVelocity, Up);
 	Input.External = Run ? FVector::VectorPlaneProject(Run->ExternalVelocity, Up) : FVector::ZeroVector;
-	if (const FCharacterDefaultInputs* Inputs = StartState.InputCmd.InputCollection.FindDataByType<FCharacterDefaultInputs>(); Inputs && Factor > 0.f)
+	// Drift DI: under a movement lock with a knockback flying, the stick still nudges the path (kit option)
+	bool bKnockbackActive = false;
+	for (const TSharedPtr<FLayeredMoveBase>& Move : StartState.SyncState.LayeredMoves.GetActiveMoves())
+	{
+		bKnockbackActive |= Move.IsValid() && Move->GetScriptStruct()->IsChildOf(FGSTN_LayeredMove_Knockback::StaticStruct());
+	}
+	Input.bDriftDI = Factor <= 0.f && bKnockbackActive && Momentum.DriftDIControlScale > 0.f;
+	if (const FCharacterDefaultInputs* Inputs = StartState.InputCmd.InputCollection.FindDataByType<FCharacterDefaultInputs>(); Inputs && (Factor > 0.f || Input.bDriftDI))
 	{
 		FVector Stick = FVector::VectorPlaneProject(Inputs->GetMoveInput_WorldSpace(), Up);
 		if (Inputs->GetMoveInputType() == EMoveInputType::Velocity)
@@ -381,6 +388,15 @@ bool FGSTN_RunStageMover::ApplyAirMomentum(const UMoverComponent& MoverComp, con
 	// takeoff stage scale, or the running move's own)
 	Input.TopSpeed = Shared->MaxSpeed;
 	Input.Control = Falling->AirControlPercentage;
+	if (Input.bDriftDI)
+	{
+		// Under the lock the stats wrote MaxSpeed = 0 and PreMovement kept the ground top speed: the drift uses the archetype's speed (the
+		// reference WalkSpeed) with the run tuning's air floor, scaled
+		const UCommonLegacyMovementSettings* AuthoredShared = Cast<UCommonLegacyMovementSettings>(Shared->GetArchetype());
+		const float BaseTop = FMath::Max(AuthoredShared ? AuthoredShared->MaxSpeed : Shared->MaxSpeed, Tuning->RunStages.Air.MinAirSpeed);
+		Input.TopSpeed = BaseTop * Momentum.DriftDIControlScale;
+		Input.Control = FMath::Clamp(Falling->AirControlPercentage * Momentum.DriftDIControlScale, 0.f, 1.f);
+	}
 	Input.DeltaSeconds = static_cast<float>(DeltaSeconds);
 	// A knockback's own horizontal drag (its additive frames) acts on the push it gave
 	for (const TSharedPtr<FLayeredMoveBase>& Move : StartState.SyncState.LayeredMoves.GetActiveMoves())
