@@ -27,8 +27,28 @@ public:
 	/** The pushed back location from the view, its forward and the extra distance and height (no collision). Pure, for the tests */
 	static FVector PushBack(const FVector& ViewLocation, const FVector& ViewForward, float ExtraDistance, float ExtraHeight);
 
-	/** Where a world point lands on screen vertically, as a UV (0 top, 1 bottom, may leave 0..1). Pure, for the tests and the screen band */
+	/** Where a world point lands on screen vertically, as a UV (0 top, 1 bottom, may leave 0..1), with the view's off-center (Shift) offset. Pure, for the tests and the screen band */
 	static float ScreenV(const FMinimalViewInfo& View, const FVector& WorldPoint);
+
+	/**
+	 * Telephoto framing: the camera distance scale that keeps a point the same size on screen when the horizontal FOV goes from FromFOV to
+	 * ToFOV (tan(From/2) / tan(To/2)), and the inverse (the FOV that keeps the size at a given distance scale). Pure, for the tests
+	 */
+	static float TelephotoDistanceScale(float FromFOV, float ToFOV);
+	static float FOVForDistanceScale(float FromFOV, float DistanceScale);
+
+	/**
+	 * Shift: levels the view's pitch by Straighten (0..1) and returns the off-center projection offset (half screens, UE's
+	 * FMinimalViewInfo::OffCenterProjectionOffset convention) that puts WorldPoint back where it was on screen. Rotation is changed in place.
+	 * Pure, for the tests
+	 */
+	static FVector2D StraightenWithShift(FMinimalViewInfo& InOutView, const FVector& WorldPoint, float Straighten);
+
+	/** Projected NDC (x right, y up, -1..1 at the edges) of a world point, with the view's off-center offset applied. Pure, for the tests */
+	static FVector2D ProjectNDC(const FMinimalViewInfo& View, const FVector& WorldPoint);
+
+	/** Tilted plane: the focal plane normal for a view rotation and a tilt angle (degrees) around the view's right axis. Pure, for the tests */
+	static FVector TiltedPlaneNormal(const FRotator& ViewRotation, float TiltAngle);
 
 	/** The f-stop the DOF tilt shift uses: Fstop / Intensity, never under 0.7. Pure, for the tests */
 	static float TiltShiftFstop(const FGSTN_CameraTiltShiftSettings& TiltShift);
@@ -42,6 +62,10 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> BandMaterial;
 	bool bBandMaterialTried = false;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> PlaneMaterial;
+	bool bPlaneMaterialTried = false;
 };
 
 /**

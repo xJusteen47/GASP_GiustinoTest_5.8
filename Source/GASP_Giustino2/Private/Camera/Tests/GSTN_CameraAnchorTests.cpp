@@ -246,12 +246,104 @@ bool FGSTN_CameraTiltShiftMathTest::RunTest(const FString&)
 	Near(*this, TEXT("point ahead: screen centre"), UGSTN_PlaytestCameraModifier::ScreenV(View, FVector(500, 0, 0)), 0.5, 0.001);
 	Near(*this, TEXT("45 deg up: top edge"), UGSTN_PlaytestCameraModifier::ScreenV(View, FVector(500, 0, 500)), 0.0, 0.001);
 	Near(*this, TEXT("45 deg down: bottom edge"), UGSTN_PlaytestCameraModifier::ScreenV(View, FVector(500, 0, -500)), 1.0, 0.001);
+	// Telephoto: 90 -> 45 deg needs tan(45)/tan(22.5) = 2.414 times the distance; the inverse gives the FOV back
+	Near(*this, TEXT("telephoto 90->45 distance scale"), UGSTN_PlaytestCameraModifier::TelephotoDistanceScale(90.f, 45.f), 2.41421, 0.001);
+	Near(*this, TEXT("FOV for that scale"), UGSTN_PlaytestCameraModifier::FOVForDistanceScale(90.f, 2.41421f), 45.0, 0.01);
+	Near(*this, TEXT("scale 1 keeps the FOV"), UGSTN_PlaytestCameraModifier::FOVForDistanceScale(70.f, 1.f), 70.0, 0.01);
 	FGSTN_CameraTiltShiftSettings T;
 	T.Fstop = 2.f;
 	T.Intensity = 2.f;
 	Near(*this, TEXT("intensity 2 halves the f-stop"), UGSTN_PlaytestCameraModifier::TiltShiftFstop(T), 1.0, 0.001);
 	T.Intensity = 10.f;
 	Near(*this, TEXT("f-stop floor 0.7"), UGSTN_PlaytestCameraModifier::TiltShiftFstop(T), 0.7, 0.001);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraShiftTest, "GSTN.Camera.Shift.StraightenKeepsCharacterOnScreen", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraShiftTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	// Camera 400 cm back and 250 cm up looking 26 deg down at the character: levelling it fully with the shift leaves the character exactly
+	// where it was on screen, and a vertical edge projects as a vertical line (same x at both ends)
+	FMinimalViewInfo View;
+	View.Location = FVector(-400, 0, 250);
+	View.Rotation = FRotator(-26, 0, 0);
+	View.FOV = 90.f;
+	View.AspectRatio = 16.f / 9.f;
+	const FVector Character(0, 30, 90);
+	const FVector2D Before = UGSTN_PlaytestCameraModifier::ProjectNDC(View, Character);
+	FMinimalViewInfo Shifted = View;
+	const FVector2D Offset = UGSTN_PlaytestCameraModifier::StraightenWithShift(Shifted, Character, 1.f);
+	Shifted.OffCenterProjectionOffset = decltype(Shifted.OffCenterProjectionOffset)(Offset.X, Offset.Y);
+	const FVector2D After = UGSTN_PlaytestCameraModifier::ProjectNDC(Shifted, Character);
+	Near(*this, TEXT("pitch levelled"), Shifted.Rotation.Pitch, 0.0, 0.001);
+	Near(*this, TEXT("character x kept"), After.X, Before.X, 0.001);
+	Near(*this, TEXT("character y kept"), After.Y, Before.Y, 0.001);
+	const FVector2D Top = UGSTN_PlaytestCameraModifier::ProjectNDC(Shifted, FVector(200, 300, 400));
+	const FVector2D Bottom = UGSTN_PlaytestCameraModifier::ProjectNDC(Shifted, FVector(200, 300, 0));
+	Near(*this, TEXT("verticals stay vertical"), Top.X, Bottom.X, 0.001);
+	// Straighten 0: nothing changes
+	FMinimalViewInfo Same = View;
+	const FVector2D None = UGSTN_PlaytestCameraModifier::StraightenWithShift(Same, Character, 0.f);
+	Near(*this, TEXT("straighten 0: no offset"), None.Size(), 0.0, 0.0001);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraTiltPlaneTest, "GSTN.Camera.TiltShift.TiltedPlaneNormal", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraTiltPlaneTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	// Tilt 0 = plane parallel to the sensor (normal = view forward); tilt 90 - pitch = the plane lies on the floor (normal = world up)
+	const FRotator Down30(-30, 0, 0);
+	const FVector N0 = UGSTN_PlaytestCameraModifier::TiltedPlaneNormal(Down30, 0.f);
+	Near(*this, TEXT("tilt 0 = forward"), FVector::DotProduct(N0, Down30.Vector()), 1.0, 0.0001);
+	const FVector NFloor = UGSTN_PlaytestCameraModifier::TiltedPlaneNormal(Down30, 60.f);
+	Near(*this, TEXT("tilt 60 at pitch -30 = floor"), FMath::Abs(FVector::DotProduct(NFloor, FVector::UpVector)), 1.0, 0.0001);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraAnchorHighJumpNoSnapTest, "GSTN.Camera.Anchor.HighJumpInRiseBandDoesNotSnap", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraAnchorHighJumpNoSnapTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	// Bug pass 4 K2: with a rise band larger than the snap distance, a jump that goes more than SnapDistance above the held camera was taken for
+	// a teleport: the camera popped onto the character and the air hold was lost until the landing. The test now measures the held point
+	FGSTN_CameraAnchorSettings S = Settings(0.f);
+	S.bHoldGroundHeightInAir = true;
+	S.AirRiseBand = 600.f;
+	S.AirFallBand = 0.f;
+	S.SnapDistance = 400.f;
+	FGSTN_CameraAnchorDamper D;
+	D.Reset(FVector::ZeroVector);
+	D.Step(FVector::ZeroVector, FVector::UpVector, Dt, S, false);
+	for (int32 Height = 50; Height <= 550; Height += 50)
+	{
+		Near(*this, *FString::Printf(TEXT("jump at %d cm: camera stays on the ground"), Height), D.Step(FVector(0, 0, Height), FVector::UpVector, Dt, S, true).Z, 0.0, 0.01);
+	}
+	TestTrue(TEXT("the ground height is still known"), D.bHasGround);
+	// A real teleport in the air still snaps
+	const FVector Far(2000, 0, 300);
+	TestTrue(TEXT("teleport in the air snaps"), D.Step(Far, FVector::UpVector, Dt, S, true).Equals(Far, 1e-4));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraScreenVShiftTest, "GSTN.Camera.TiltShift.ScreenVFollowsShift", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraScreenVShiftTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	// Bug pass 4 K1: the screen band centre (ScreenV) ignored the Shift's off-center offset. It must agree with ProjectNDC (v = 0.5 - 0.5 y)
+	FMinimalViewInfo View;
+	View.Location = FVector::ZeroVector;
+	View.Rotation = FRotator::ZeroRotator;
+	View.FOV = 90.f;
+	View.AspectRatio = 16.f / 9.f;
+	View.OffCenterProjectionOffset = decltype(View.OffCenterProjectionOffset)(0.0, 0.5);
+	const FVector Points[] = { FVector(500, 0, 0), FVector(500, 40, 120), FVector(800, -60, -200) };
+	for (const FVector& Point : Points)
+	{
+		Near(*this, TEXT("ScreenV = 0.5 - 0.5 NDC y"), UGSTN_PlaytestCameraModifier::ScreenV(View, Point), 0.5 - 0.5 * UGSTN_PlaytestCameraModifier::ProjectNDC(View, Point).Y, 0.001);
+	}
+	Near(*this, TEXT("point ahead, offset 0.5: lower on screen"), UGSTN_PlaytestCameraModifier::ScreenV(View, FVector(500, 0, 0)), 0.75, 0.001);
 	return true;
 }
 
