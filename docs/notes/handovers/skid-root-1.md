@@ -17,3 +17,4 @@ Branch claude/project-thread-98dml5. Owner ask: first unmodified skid clip (SS_1
   and check: single 180 turn (no clip+actor double turn), pelvis above floor, feet not sliding. Not looked at yet: no video.
 - Fallback layer clip if it fails: SKID_CLIP=.../SkidOwner/SS_180_Turn2_Src (PASS in skid-ss180turn2-2).
 - _ue59 lock released. Cost ~3 $.
+- UPDATE 15:15: owner confirmed the cause (Mixamo import without root motion). The restore json was emptied by a later session; capture cap2 OK, REVIEW.md: facing and pelvis PASS. Lock released.
