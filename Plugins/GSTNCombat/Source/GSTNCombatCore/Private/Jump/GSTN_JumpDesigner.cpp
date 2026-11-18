@@ -36,7 +36,7 @@ void FGSTN_JumpDesigner::SolveClosedForm(const FGSTN_JumpDesignerTuning& Tuning,
 	const double TApex = FMath::Max<double>(Tuning.TimeToApex, 0.01);
 	const double K = FMath::Clamp<double>(Tuning.HoldToFallGravityRatio, 0.01, 1.0);
 	const double C = FMath::Max<double>(Tuning.CutToFallGravityRatio, 0.01);
-	const double T = FMath::Max(Tuning.MaxHoldFrames, 1) * FMath::Max(StepSeconds, 0.001);
+	const double T = FMath::Max(Tuning.MaxHoldFrames, 1) * FMath::Max(StepSeconds, 1e-6);
 	// After the hold window: the fall gravity (HoldWindow) or the cut gravity until the apex (CutUntilApex)
 	const double M = Model == EGSTN_JumpGravityModel::CutUntilApex ? C : 1.0;
 
