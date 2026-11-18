@@ -138,6 +138,9 @@ def foot_path(frames_c, fp, par, order, nfr, ground_z):
     spots = []
     for f, v in ks:
         p = frames_c[f][1][foot]
+        if isinstance(v, dict):   # exact spot copied from another take: {"pos": [x, y, z], "quat": [x, y, z, w]} component space
+            spots.append((f, np.array(v["pos"], float), q2m(np.array(v["quat"], float)), p.copy(), frames_c[f][0][foot].copy()))
+            continue
         spots.append((f, p.copy() if v == "pose" else np.array([v[0], v[1], ground_z]), frames_c[f][0][foot].copy(),
                       p.copy(), frames_c[f][0][foot].copy()))
     worst = 0.0
@@ -190,6 +193,8 @@ def main():
     raw = json.load(open(os.path.join(os.path.dirname(os.path.abspath(args[0])), plan["keys_file"])))["frames"]
     tm = json.load(open(TMPL)); bones = list(tm["local"])
     root_off = np.array(tm["local"]["root"][:3], float)
+    if "root_offset" in plan:   # the owner's poses are in the mesh frame: the template root offset (16 cm) moved the whole body
+        root_off = np.array(plan["root_offset"], float)
     k0 = raw[plan["keys"][0]["key"]]
     par = parents({b: k0[b] for b in bones})
     order = []
@@ -218,7 +223,7 @@ def main():
     def key_shift(k):
         d = key_local(k["key"]); sh = k.get("shift")
         if sh:
-            q, t = d["pelvis"]; d["pelvis"] = (q, t + np.array([sh[0], sh[1], 0.0]))
+            q, t = d["pelvis"]; d["pelvis"] = (q, t + np.array((list(sh) + [0.0, 0.0])[:3], float))
         return d
 
     keys = [(int(k["frame"]), key_shift(k), k.get("ease", "inout")) for k in plan["keys"]]
@@ -263,7 +268,7 @@ def main():
             else:
                 Rc[b] = Rc[p] @ L; Pc[b] = Pc[p] + Rc[p] @ tl
         frames_c[f] = (Rc, Pc)
-    gz = float(min(frames_c[0][1]["foot_l"][2], frames_c[0][1]["foot_r"][2]))
+    gz = float(plan["ground_z"]) if "ground_z" in plan else float(min(frames_c[0][1]["foot_l"][2], frames_c[0][1]["foot_r"][2]))
     reach = 0.0
     for fp in plan.get("foot_paths", []):
         reach = max(reach, foot_path(frames_c, fp, par, order, nfr, gz))
@@ -273,7 +278,7 @@ def main():
     # exactness check at the key frames: hands/feet/head against the owner's key, in UE component space
     for fk, _, _ in keys:
         kd = next(k for k in plan["keys"] if int(k["frame"]) == fk); kname = kd["key"]
-        sh = np.array([*(kd.get("shift") or [0, 0]), 0.0])
+        sh = np.array((list(kd.get("shift") or []) + [0.0, 0.0, 0.0])[:3], float)
         if offs: break
         for b in ("hand_r", "hand_l", "head"):
             exp = P @ np.array(raw[kname][b]["global_position"]) + root_off
