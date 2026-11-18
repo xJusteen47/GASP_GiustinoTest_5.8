@@ -113,6 +113,10 @@ public:
 
 	/** The run start scramble of the presented frame and its loaded run cycle (null = no scramble) */
 	const FGSTN_RunStartScrambleState& GetScramble() const { return Scramble; }
+
+	/** The run start scramble's extra lean (degrees) and blend alpha of the presented frame (debug: bug pass B1 low-fps check) */
+	UFUNCTION(BlueprintPure, Category = "Combat|Run")
+	FVector2D GetScrambleLeanAndAlpha() const { return FVector2D(Scramble.LeanDeg, Scramble.Alpha); }
 	UAnimSequenceBase* GetScrambleClip() const { return ScrambleClip; }
 
 	/**
