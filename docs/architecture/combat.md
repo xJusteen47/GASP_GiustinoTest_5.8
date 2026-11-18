@@ -743,8 +743,8 @@ FGSTN_LoadoutData (what a player owns and saves)
   |---|---|
   | `JumpVelocity` | Initial upward speed. |
   | `JumpRiseGravityScale` | Rising **while the jump button is held** (and for at most `MaxJumpHoldFrames`). |
-  | `JumpCutGravityScale` | Rising after the button is released (or after `MaxJumpHoldFrames`): cuts the jump short. |
-  | `FallGravityScale` | Descending (independent from rising). |
+  | `JumpCutGravityScale` | Rising after the button is released inside the hold window: cuts the jump short. With the jump ability's `GravityModel` = `CutUntilApex` (the behaviour before 2026-11-18) also after `MaxJumpHoldFrames`, until the apex. |
+  | `FallGravityScale` | Descending (independent from rising); with `GravityModel` = `HoldWindow` (default, owner's early 2D Mario model) also from the end of `MaxJumpHoldFrames` on, still rising or not. |
   | `MaxFallSpeed`, `FastFallSpeed`, `FastFallGravityScale` | Terminal speeds and fast-fall. |
   | `MinJumpHoldFrames` | Frames before a release starts cutting (the minimum hop). |
   | `AirJumpCount`, `AirJumpVelocity` | Multi-jump. |

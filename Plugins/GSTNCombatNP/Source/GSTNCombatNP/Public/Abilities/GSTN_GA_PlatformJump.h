@@ -14,7 +14,7 @@ class UGSTN_CombatSimComponent;
 /**
  * Creates Mover's jump impulse (FJumpImpulseEffect, along Mover's up direction, which follows the local gravity) with the upward
  * speed of the combat stats: JumpVelocity, or AirJumpVelocity for an air jump. A pawn whose ability system has no combat attribute set
- * gets Mover's own JumpUpwardsSpeed.
+ * gets Mover's own JumpUpwardsSpeed. A ground jump is scaled by the kit's running jump (UGSTN_GA_PlatformJump::RunBoost) when it is on.
  */
 UCLASS(DisplayName = "GSTN Platform Jump Move Creator")
 class GSTNCOMBATNP_API UGSTN_PlatformJumpMoveCreator : public UBaseMoveEffectCreator
@@ -122,6 +122,18 @@ public:
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data", meta = (ClampMin = "0", ClampMax = "60", ForceUnits = "Frames"))
 	int32 CutRampFrames = 3;   // Mario 3D World preset (2026-11-17): release gravity rises over 3 frames
+
+	/**
+	 * What MaxJumpHoldFrames ends (owner 2026-11-17, both kept as options). HoldWindow (default, early 2D Mario): a window from the take-off;
+	 * held = JumpRiseGravityScale, released = JumpCutGravityScale, after the window or once descending = FallGravityScale. CutUntilApex (the
+	 * behaviour before): the end of the hold counts as a release and JumpCutGravityScale lasts until the apex. Kit data like the ramp
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")
+	EGSTN_JumpGravityModel GravityModel = EGSTN_JumpGravityModel::HoldWindow;
+
+	/** Running jump (owner 2026-11-18, off by default): a ground jump taken faster goes higher (FGSTN_JumpRunBoost). Read by the jump move creator */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")
+	FGSTN_JumpRunBoost RunBoost;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")
 	bool bOverrideSquatFrames = false;

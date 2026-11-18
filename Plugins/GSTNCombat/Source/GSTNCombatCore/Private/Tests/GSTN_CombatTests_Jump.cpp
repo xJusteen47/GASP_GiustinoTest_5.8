@@ -382,4 +382,140 @@ bool FGSTN_JumpGlideTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+/**
+ * Owner's hold-gravity jump (2026-11-17, early 2D Mario), EGSTN_JumpGravityModel::HoldWindow, against the behaviour before (CutUntilApex).
+ * Cut and fall scales differ on purpose so that every phase is told apart.
+ */
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_JumpHoldWindowModelTest, "GSTNCombat.Core.Jump.HoldWindowModel", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_JumpHoldWindowModelTest::RunTest(const FString& Parameters)
+{
+	FGSTN_JumpParams Params;
+	Params.RiseGravityScale = 1.f;
+	Params.CutGravityScale = 5.f;
+	Params.FallGravityScale = 3.f;
+	Params.MinHoldFrames = 0;
+	Params.MaxHoldFrames = 10;
+	Params.CutRampFrames = 0;
+	const FGSTN_JumpResetRules Rules;
+	TestTrue(TEXT("the owner's model is the default"), Params.GravityModel == EGSTN_JumpGravityModel::HoldWindow);
+
+	FGSTN_JumpMoverSample Rising;
+	Rising.bGrounded = false;
+	Rising.UpSpeed = 500.0;
+	FGSTN_JumpMoverSample Descending = Rising;
+	Descending.UpSpeed = -10.0;
+
+	// Runs a jump from frame 0 with the button held on frames 1..HeldUntil, rising on every frame; returns the scale of each frame 1..Frames
+	auto Scales = [&](int32 HeldUntil, int32 Frames, FGSTN_JumpState* OutLast = nullptr)
+	{
+		TArray<float> Out;
+		FGSTN_JumpState State = FGSTN_JumpLogic::ApplyTakeoff(FGSTN_JumpState(), 0, 0, EGSTN_JumpKind::Ground);
+		for (int32 Frame = 1; Frame <= Frames; ++Frame)
+		{
+			State = FGSTN_JumpLogic::Step(State, Frame, Rising, Frame <= HeldUntil, Params, Rules);
+			Out.Add(FGSTN_JumpLogic::GravityScale(State, Params));
+		}
+		if (OutLast)
+		{
+			*OutLast = State;
+		}
+		return Out;
+	};
+
+	// Held through the window: the reduced gravity inside it, the descent gravity as soon as it ends, still rising and still held
+	FGSTN_JumpState Last;
+	TArray<float> Held = Scales(100, 14, &Last);
+	TestEqual(TEXT("held, inside the window: hold gravity"), Held[8], 1.f);
+	TestEqual(TEXT("held, the window ends (frame 10): descent gravity while still rising"), Held[9], 3.f);
+	TestEqual(TEXT("held, after the window: descent gravity"), Held[13], 3.f);
+	TestTrue(TEXT("the window flag is set, the phase still rising"), Last.bHoldWindowOver && Last.Phase == EGSTN_JumpPhase::Rising);
+
+	// Released inside the window: the boosted gravity at once, then the descent gravity when the window ends
+	TArray<float> Released = Scales(4, 14);
+	TestEqual(TEXT("held on frame 4: hold gravity"), Released[3], 1.f);
+	TestEqual(TEXT("released on frame 5: boosted gravity"), Released[4], 5.f);
+	TestEqual(TEXT("released, frame 9: still boosted"), Released[8], 5.f);
+	TestEqual(TEXT("released, the window ends: descent gravity"), Released[9], 3.f);
+
+	// Released, then the apex before the window ends: the descent gravity from the apex
+	FGSTN_JumpState State = FGSTN_JumpLogic::ApplyTakeoff(FGSTN_JumpState(), 0, 0, EGSTN_JumpKind::Ground);
+	State = FGSTN_JumpLogic::Step(State, 1, Rising, false, Params, Rules);
+	TestEqual(TEXT("a tap: boosted gravity from the first frame (no minimum hold)"), FGSTN_JumpLogic::GravityScale(State, Params), 5.f);
+	State = FGSTN_JumpLogic::Step(State, 2, Descending, false, Params, Rules);
+	TestEqual(TEXT("descending before the window ends: descent gravity"), FGSTN_JumpLogic::GravityScale(State, Params), 3.f);
+
+	// The ramp: a jump held to the end of the window ramps from the hold to the descent gravity; one released long before switches at once
+	Params.CutRampFrames = 4;
+	Held = Scales(100, 14);
+	TestEqual(TEXT("ramp: the window end is step 1 of 4 toward the descent gravity"), Held[9], 1.5f, 1e-4f);
+	TestEqual(TEXT("ramp: step 4 reaches the descent gravity"), Held[12], 3.f, 1e-4f);
+	Released = Scales(2, 14);
+	TestEqual(TEXT("ramp: released on frame 3, step 1 toward the boosted gravity"), Released[2], 2.f, 1e-4f);
+	TestEqual(TEXT("ramp: a cut 7 frames old switches at once to the descent gravity at the window end"), Released[9], 3.f, 1e-4f);
+	Params.CutRampFrames = 0;
+
+	// The behaviour before, kept as an option: the window end counts as a release, the boosted gravity lasts until the apex
+	Params.GravityModel = EGSTN_JumpGravityModel::CutUntilApex;
+	Held = Scales(100, 14, &Last);
+	TestEqual(TEXT("CutUntilApex, held: hold gravity inside the window"), Held[8], 1.f);
+	TestEqual(TEXT("CutUntilApex, held past the window: boosted gravity until the apex"), Held[13], 5.f);
+	TestFalse(TEXT("CutUntilApex never sets the window flag"), Last.bHoldWindowOver);
+	Released = Scales(4, 14);
+	TestEqual(TEXT("CutUntilApex, released: boosted gravity past the window"), Released[13], 5.f);
+	Params.GravityModel = EGSTN_JumpGravityModel::HoldWindow;
+
+	// The same jump lands higher with the descent gravity after the window than with the boosted one (fall 3 < cut 5)
+	FGSTN_JumpParams Before = Params;
+	Before.GravityModel = EGSTN_JumpGravityModel::CutUntilApex;
+	const double WindowApex = FGSTN_JumpLogic::SimulateApex(FVector(0.0, 0.0, -1.0), 980.0, 900.0, 100, Params).Height;
+	const double BeforeApex = FGSTN_JumpLogic::SimulateApex(FVector(0.0, 0.0, -1.0), 980.0, 900.0, 100, Before).Height;
+	TestTrue(*FString::Printf(TEXT("held through: HoldWindow apex %.1f > CutUntilApex apex %.1f"), WindowApex, BeforeApex), WindowApex > BeforeApex);
+	TestTrue(TEXT("a tap is the same in both (the window never ends before the apex)"), FMath::IsNearlyEqual(
+		FGSTN_JumpLogic::SimulateApex(FVector(0.0, 0.0, -1.0), 980.0, 300.0, 0, Params).Height, FGSTN_JumpLogic::SimulateApex(FVector(0.0, 0.0, -1.0), 980.0, 300.0, 0, Before).Height));
+
+	// A new take-off and an external launch clear the flag; the flag travels
+	FGSTN_JumpState Over;
+	Scales(100, 12, &Over);
+	TestFalse(TEXT("an air jump starts a new window"), FGSTN_JumpLogic::ApplyTakeoff(Over, 20, 0, EGSTN_JumpKind::Air).bHoldWindowOver);
+	FGSTN_JumpMoverSample Launch = Rising;
+	Launch.bExternalLaunch = true;
+	TestFalse(TEXT("an external launch ends the jump's window"), FGSTN_JumpLogic::Step(Over, 13, Launch, true, Params, Rules).bHoldWindowOver);
+	TArray<uint8> Bytes;
+	FMemoryWriter Writer(Bytes);
+	Over.NetSerialize(Writer);
+	FGSTN_JumpState Received;
+	FMemoryReader Reader(Bytes);
+	Received.NetSerialize(Reader);
+	TestTrue(TEXT("the window flag survives the wire"), Received == Over && Received.bHoldWindowOver);
+	TestFalse(TEXT("the flag alone makes the state non-default"), [] { FGSTN_JumpState S; S.bHoldWindowOver = true; return S.IsDefault(); }());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_JumpRunBoostTest, "GSTNCombat.Core.Jump.RunBoost", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_JumpRunBoostTest::RunTest(const FString& Parameters)
+{
+	FGSTN_JumpRunBoost Boost;
+	TestFalse(TEXT("off by default"), Boost.bEnabled);
+	TestEqual(TEXT("off: no boost at any speed"), Boost.VelocityScale(2000.0), 1.f);
+
+	Boost.bEnabled = true;
+	TestEqual(TEXT("standing: plain jump"), Boost.VelocityScale(0.0), 1.f);
+	TestEqual(TEXT("at MinSpeed: plain jump"), Boost.VelocityScale(470.0), 1.f);
+	TestEqual(TEXT("halfway: half the boost"), Boost.VelocityScale(660.0), 1.06f, 1e-4f);
+	TestEqual(TEXT("at FullSpeed: full boost"), Boost.VelocityScale(850.0), 1.12f, 1e-4f);
+	TestEqual(TEXT("past FullSpeed: capped"), Boost.VelocityScale(1500.0), 1.12f, 1e-4f);
+
+	// About +25 % height at the full boost, as SMB1's fastest jump (height grows with the square of the take-off speed)
+	const FGSTN_JumpParams Params;
+	const double Plain = FGSTN_JumpLogic::SimulateApex(FVector(0.0, 0.0, -1.0), 980.0, 1000.0, 100, Params).Height;
+	const double Running = FGSTN_JumpLogic::SimulateApex(FVector(0.0, 0.0, -1.0), 980.0, 1000.0 * Boost.VelocityScale(900.0), 100, Params).Height;
+	TestTrue(*FString::Printf(TEXT("running jump is higher (%.1f vs %.1f)"), Running, Plain), Running > Plain * 1.1);
+
+	// A step instead of a ramp when the two speeds meet
+	Boost.FullSpeed = Boost.MinSpeed;
+	TestEqual(TEXT("step: below"), Boost.VelocityScale(400.0), 1.f);
+	TestEqual(TEXT("step: at or above"), Boost.VelocityScale(470.0), 1.12f, 1e-4f);
+	return true;
+}
+
 #endif

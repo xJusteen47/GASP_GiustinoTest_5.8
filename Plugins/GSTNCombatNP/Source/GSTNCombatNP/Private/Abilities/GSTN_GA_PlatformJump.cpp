@@ -8,7 +8,9 @@
 #include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "Jump/GSTN_JumpTypes.h"
 #include "MoverComponent.h"
+#include "Mover/GSTN_MoverSimStateTracker.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "Simulation/GSTN_CombatTableSet.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNPlatformJump, Log, All);
 
@@ -29,6 +31,26 @@ FEffectMoveContainer UGSTN_PlatformJumpMoveCreator::MakeMove_Implementation(UMov
 		if (const UCommonLegacyMovementSettings* CommonSettings = TargetMoverComponent->FindSharedSettings<UCommonLegacyMovementSettings>())
 		{
 			JumpMove.UpwardsSpeed = CommonSettings->JumpUpwardsSpeed;
+		}
+	}
+
+	// Running jump (owner 2026-11-18, kit data, off by default): the horizontal speed comes from the tracked Mover sync state (the end of the
+	// previous frame, identical on every machine and in every re-simulation), never from the component's live queries
+	if (!bAirJump && TargetMoverComponent)
+	{
+		const AActor* Owner = TargetMoverComponent->GetOwner();
+		const UGSTN_CombatSimComponent* Combat = Owner ? Owner->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
+		const UGSTN_CombatTableSet* TableSet = Combat ? Combat->GetActiveTableSet() : nullptr;
+		const UGSTN_GA_PlatformJump* JumpData = TableSet ? TableSet->TableJumpData : nullptr;
+		if (JumpData && JumpData->RunBoost.bEnabled)
+		{
+			if (const UGSTN_MoverSimStateTracker* Tracker = UGSTN_MoverSimStateTracker::FindOrAdd(TargetMoverComponent))
+			{
+				const FVector Up = Tracker->GetUpDirection();
+				const FVector Velocity = Tracker->GetVelocity();
+				const double Horizontal = (Velocity - Up * Velocity.Dot(Up)).Size();
+				JumpMove.UpwardsSpeed *= JumpData->RunBoost.VelocityScale(Horizontal);
+			}
 		}
 	}
 	return FEffectMoveContainer(&JumpMove);

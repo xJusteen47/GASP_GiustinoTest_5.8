@@ -23,6 +23,70 @@ enum class EGSTN_JumpPhase : uint8
 	Launched
 };
 
+/**
+ * How the gravity of a jump of the combatant's own is chosen while it rises (owner 2026-11-17: both behaviours stay as options, per kit).
+ * Both: instant impulse at the take-off, JumpRiseGravityScale while the button is held, JumpCutGravityScale once it is released (after
+ * MinJumpHoldFrames), FallGravityScale once descending. They differ only on what MaxJumpHoldFrames ends.
+ */
+UENUM(BlueprintType)
+enum class EGSTN_JumpGravityModel : uint8
+{
+	/**
+	 * Owner's model, a facsimile of the early 2D Mario jumps (default): MaxJumpHoldFrames is a window from the take-off. Inside it the held
+	 * button keeps the reduced (rise) gravity and a release switches to the boosted (cut) gravity; when the window ends the descent (fall)
+	 * gravity applies, still rising or not, held or not
+	 */
+	HoldWindow,
+
+	/**
+	 * The behaviour before 2026-11-18 (Mario 3D World preset): reaching MaxJumpHoldFrames counts as a release, the cut gravity applies until
+	 * the apex, the fall gravity after it
+	 */
+	CutUntilApex
+};
+
+/**
+ * Running jump (owner 2026-11-18, option per kit, OFF by default): a ground jump taken faster goes higher, as in the early 2D Mario games (SMB1
+ * gives its fastest jump 5 px/f instead of 4: about +25 % height). The take-off speed JumpVelocity is scaled by VelocityScale of the horizontal
+ * speed at the take-off (the speed across local up, from the Mover sync state of the frame before: the same on every machine). Linear between
+ * MinSpeed (scale 1) and FullSpeed (MaxVelocityScale); the height grows with the square of the scale (1.12 = +25 %). Air jumps are never boosted.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_JumpRunBoost
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Jump")
+	bool bEnabled = false;
+
+	/** Horizontal speed at and below which the jump is the plain one, cm/s. Default: run stage 1 (470) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Jump", meta = (EditCondition = "bEnabled", ClampMin = "0", ForceUnits = "cm/s"))
+	float MinSpeed = 470.f;
+
+	/** Horizontal speed at and above which the full boost applies, cm/s. Default: run stage 3, sprint 2 (850) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Jump", meta = (EditCondition = "bEnabled", ClampMin = "0", ForceUnits = "cm/s"))
+	float FullSpeed = 850.f;
+
+	/** Take-off speed multiplier at FullSpeed. 1.12 = about +25 % height (SMB1's fastest jump; also Mario 3D World JumpPow / JumpPowLow) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Jump", meta = (EditCondition = "bEnabled", ClampMin = "1", ClampMax = "2"))
+	float MaxVelocityScale = 1.12f;
+
+	/** The multiplier of JumpVelocity for a ground jump taken at HorizontalSpeed (1 when disabled) */
+	float VelocityScale(double HorizontalSpeed) const
+	{
+		if (!bEnabled || MaxVelocityScale <= 1.f)
+		{
+			return 1.f;
+		}
+		if (FullSpeed <= MinSpeed)
+		{
+			return HorizontalSpeed >= MinSpeed ? MaxVelocityScale : 1.f;
+		}
+		const float Alpha = FMath::Clamp(static_cast<float>((HorizontalSpeed - MinSpeed) / (FullSpeed - MinSpeed)), 0.f, 1.f);
+		return FMath::Lerp(1.f, MaxVelocityScale, Alpha);
+	}
+};
+
 /** What an external launch does to the air jumps already used */
 UENUM(BlueprintType)
 enum class EGSTN_AirJumpsOnLaunch : uint8
@@ -101,6 +165,9 @@ struct GSTNCOMBATCORE_API FGSTN_JumpParams
 	/** Frames over which the gravity grows from RiseGravityScale to CutGravityScale after the jump cut (0 = at once) */
 	int32 CutRampFrames = 0;
 
+	/** What MaxHoldFrames ends (EGSTN_JumpGravityModel). Kit data (UGSTN_GA_PlatformJump::GravityModel) */
+	EGSTN_JumpGravityModel GravityModel = EGSTN_JumpGravityModel::HoldWindow;
+
 	/**
 	 * Glide (M11 L7b, the jet-pack's slow descent): while falling with the button of the last jump still held, gravity uses GlideGravityScale
 	 * and the terminal speed GlideMaxFallSpeed. <= 0 = no glide (every kit without a glide stat, the default). Fast fall wins over the glide
@@ -154,17 +221,20 @@ struct GSTNCOMBATCORE_API FGSTN_JumpState
 	/** Frames since the jump cut while still rising (saturates at 255): the cut gravity ramp (FGSTN_JumpParams::CutRampFrames) */
 	uint8 CutFrames = 0;
 
+	/** HoldWindow model only: MaxHoldFrames passed while rising, the fall gravity applies until the landing. Written by Step */
+	bool bHoldWindowOver = false;
+
 	bool IsDefault() const
 	{
 		return Phase == EGSTN_JumpPhase::None && StartFrame == INDEX_NONE && Button == INDEX_NONE && !bJumpCut && !bFastFalling && !bTakeoffWasAir
-			&& AirJumpsUsed == 0 && CoyoteFramesLeft == 0 && SquatFramesLeft == 0 && !bGliding && CutFrames == 0;
+			&& AirJumpsUsed == 0 && CoyoteFramesLeft == 0 && SquatFramesLeft == 0 && !bGliding && CutFrames == 0 && !bHoldWindowOver;
 	}
 
 	bool operator==(const FGSTN_JumpState& Other) const
 	{
 		return Phase == Other.Phase && StartFrame == Other.StartFrame && Button == Other.Button && bJumpCut == Other.bJumpCut && bFastFalling == Other.bFastFalling
 			&& bTakeoffWasAir == Other.bTakeoffWasAir && AirJumpsUsed == Other.AirJumpsUsed && CoyoteFramesLeft == Other.CoyoteFramesLeft && SquatFramesLeft == Other.SquatFramesLeft
-			&& bGliding == Other.bGliding && CutFrames == Other.CutFrames;
+			&& bGliding == Other.bGliding && CutFrames == Other.CutFrames && bHoldWindowOver == Other.bHoldWindowOver;
 	}
 
 	/** One bit when default; same code for both directions */

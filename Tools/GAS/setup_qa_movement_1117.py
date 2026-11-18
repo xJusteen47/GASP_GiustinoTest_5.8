@@ -13,9 +13,10 @@ import unreal
 FOLDER = '/Game/GASNPPTest/Combat'
 KIT = FOLDER + '/KIT_Test_Playtest'
 FAST_FALL = 'Command.Movement.FastFall'
-# The Mario 3D World preset (Plugins/GSTNCombatGAS/Config/DefaultGSTNCombatGAS.ini)
-PRESET_STATS = {'JumpVelocity': 1240.0, 'JumpRiseGravityScale': 0.0, 'JumpCutGravityScale': 4.1, 'FallGravityScale': 4.1, 'MaxFallSpeed': 1500.0,
-                'FastFallSpeed': 2400.0, 'FastFallGravityScale': 6.0, 'MinJumpHoldFrames': 2.0, 'MaxJumpHoldFrames': 11.0, 'AirJumpVelocity': 900.0,
+# The ini defaults (Plugins/GSTNCombatGAS/Config/DefaultGSTNCombatGAS.ini): owner's hold-gravity jump, early 2D Mario (2026-11-18).
+# The Mario 3D World values before: JumpVelocity 1240, Rise 0, Cut 4.1, Fall 4.1, FastFall 6.0, MinHold 2, MaxHold 11 (+ GravityModel CutUntilApex)
+PRESET_STATS = {'JumpVelocity': 1350.0, 'JumpRiseGravityScale': 2.6, 'JumpCutGravityScale': 9.0, 'FallGravityScale': 9.0, 'MaxFallSpeed': 1500.0,
+                'FastFallSpeed': 2400.0, 'FastFallGravityScale': 12.0, 'MinJumpHoldFrames': 0.0, 'MaxJumpHoldFrames': 30.0, 'AirJumpVelocity': 900.0,
                 'AirControl': 0.85}
 OUT = os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()), 'QAM', 'setup_qa_movement_1117.txt')
 _lines = []

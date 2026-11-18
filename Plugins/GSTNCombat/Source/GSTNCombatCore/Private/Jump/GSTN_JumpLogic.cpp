@@ -72,6 +72,7 @@ FGSTN_JumpState FGSTN_JumpLogic::Step(const FGSTN_JumpState& In, int32 Frame, co
 			Out.Button = INDEX_NONE;
 			Out.bJumpCut = false;
 			Out.CutFrames = 0;
+			Out.bHoldWindowOver = false;
 		}
 		return Out;
 	}
@@ -84,9 +85,15 @@ FGSTN_JumpState FGSTN_JumpLogic::Step(const FGSTN_JumpState& In, int32 Frame, co
 		break;
 
 	case EGSTN_JumpPhase::Rising:
+	{
+		const int32 Elapsed = Frame - Out.StartFrame;
+		// HoldWindow (owner 2026-11-17): the end of the hold window hands the rise to the fall gravity, held or released
+		if (Params.GravityModel == EGSTN_JumpGravityModel::HoldWindow && Elapsed >= Params.MaxHoldFrames)
+		{
+			Out.bHoldWindowOver = true;
+		}
 		if (!Out.bJumpCut)
 		{
-			const int32 Elapsed = Frame - Out.StartFrame;
 			if (Elapsed >= Params.MaxHoldFrames || (!bButtonHeld && Elapsed >= Params.MinHoldFrames))
 			{
 				Out.bJumpCut = true;
@@ -102,6 +109,7 @@ FGSTN_JumpState FGSTN_JumpLogic::Step(const FGSTN_JumpState& In, int32 Frame, co
 			Out.Phase = EGSTN_JumpPhase::Falling;
 		}
 		break;
+	}
 
 	case EGSTN_JumpPhase::Launched:
 		if (!bRising)
@@ -149,6 +157,7 @@ FGSTN_JumpState FGSTN_JumpLogic::ApplyTakeoff(const FGSTN_JumpState& In, int32 F
 	Out.CoyoteFramesLeft = 0;
 	Out.bTakeoffWasAir = Kind == EGSTN_JumpKind::Air;
 	Out.bGliding = false;
+	Out.bHoldWindowOver = false;
 	if (Kind == EGSTN_JumpKind::Air && Out.AirJumpsUsed < 255)
 	{
 		++Out.AirJumpsUsed;
@@ -184,13 +193,18 @@ float FGSTN_JumpLogic::GravityScale(const FGSTN_JumpState& State, const FGSTN_Ju
 	switch (State.Phase)
 	{
 	case EGSTN_JumpPhase::Rising:
+	{
+		// After the hold window (HoldWindow model only) the target is the fall gravity, before it the cut gravity
+		const float Target = State.bHoldWindowOver ? Params.FallGravityScale : Params.CutGravityScale;
 		if (State.bJumpCut && Params.CutRampFrames > 0)
 		{
-			// The ramp (owner 2026-11-16): the cut frame is the first step of it, the last one reaches the cut scale
+			// The ramp (owner 2026-11-16): the cut frame is the first step of it, the last one reaches the target scale. A jump held to the
+			// end of the window ramps from the rise to the fall gravity; a cut long before it is past the ramp and switches at once
 			const float Alpha = FMath::Min(1.f, static_cast<float>(State.CutFrames + 1) / static_cast<float>(Params.CutRampFrames));
-			return FMath::Lerp(Params.RiseGravityScale, Params.CutGravityScale, Alpha);
+			return FMath::Lerp(Params.RiseGravityScale, Target, Alpha);
 		}
-		return State.bJumpCut ? Params.CutGravityScale : Params.RiseGravityScale;
+		return State.bJumpCut || State.bHoldWindowOver ? Target : Params.RiseGravityScale;
+	}
 	case EGSTN_JumpPhase::Falling:
 		return State.bGliding && Params.CanGlide() ? Params.GlideGravityScale : Params.FallGravityScale;
 	case EGSTN_JumpPhase::None:
