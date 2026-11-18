@@ -199,6 +199,126 @@ struct GSTNCOMBATNP_API FGSTN_SkidSectionSettings
 	float ClipTime(EGSTN_RunSkidPhase Phase, int32 Frame, int32 RestFrame, int32 EnterFrames, int32 ExitFrames, float Speed, float EntrySpeed, float Length) const;
 };
 
+/** How the character stops when the stick is let go during a run (no reverse input: that is the skid) */
+UENUM(BlueprintType)
+enum class EGSTN_RunStopMode : uint8
+{
+	/** No stop state: GASP's motion matching picks its own stop (the behaviour before) */
+	Off,
+	/** The dedicated stop clip (Smash-style braking pose), timed on the sim's braking */
+	Clip,
+	/** A plain cross-fade from the run into the idle pose */
+	Blend
+};
+
+/**
+ * RUN STOP (owner 2026-11-18, brief run-start-stop-skid section 2; reference Ganondorf's run stop): stick let go with no reverse input. A clip
+ * of its own, played by the RunStop state of the main ABP (raw clip, never through motion matching). The sim brakes much faster than any stop
+ * clip, so the braking part is timed on the SPEED (clip time where the clip's root speed / its run speed = sim speed / speed at release): the
+ * front foot plants when the body actually stops, at every run stage. After the stop the settle (torso rises, arms close) plays at SettleRate.
+ * Two clips, one per planted foot: the foot that is swinging at release plants in front.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATNP_API FGSTN_RunStopSettings
+{
+	GENERATED_BODY()
+
+	/** Console override: gstn.RunStop.Mode (-1 = this value, 0 off, 1 clip, 2 blend) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop")
+	// Off until a stop clip passes the review (run-stop-1: the GASP Neutral stop reads as an upright jog-to-stop, not Ganondorf's brake)
+	EGSTN_RunStopMode Mode = EGSTN_RunStopMode::Off;
+
+	/** The stop that plants the LEFT foot in front, and the one that plants the right */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop")
+	TSoftObjectPtr<UAnimSequenceBase> ClipLeftFoot =
+		TSoftObjectPtr<UAnimSequenceBase>(FSoftObjectPath(TEXT("/Game/Characters/UEFN_Mannequin/Animations/Run/M_Neutral_Run_Stop_F_Lfoot.M_Neutral_Run_Stop_F_Lfoot")));
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop")
+	TSoftObjectPtr<UAnimSequenceBase> ClipRightFoot =
+		TSoftObjectPtr<UAnimSequenceBase>(FSoftObjectPath(TEXT("/Game/Characters/UEFN_Mannequin/Animations/Run/M_Neutral_Run_Stop_F_Rfoot.M_Neutral_Run_Stop_F_Rfoot")));
+
+	/** The pose the Blend mode cross-fades into (and the idle the clip settles into) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop")
+	TSoftObjectPtr<UAnimSequenceBase> IdleClip =
+		TSoftObjectPtr<UAnimSequenceBase>(FSoftObjectPath(TEXT("/Game/Characters/UEFN_Mannequin/Animations/Idle/M_Neutral_Stand_Idle_Loop.M_Neutral_Stand_Idle_Loop")));
+
+	/** Only a run stops this way: the speed when the stick was let go */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
+	float MinEntrySpeed = 300.f;
+
+	/** Stick below this = let go; it must stay there ConfirmFrames before the stop starts (a flick back passes through neutral: skid) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float StickDeadzone = 0.2f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop", meta = (ClampMin = "0", ClampMax = "10"))
+	int32 ConfirmFrames = 2;
+
+	/** Below this the body counts as stopped: the settle starts */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
+	float StoppedSpeed = 10.f;
+
+	/** Play rate of the settle after the stop (clip seconds per second) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop", meta = (ClampMin = "0.25", ClampMax = "4.0"))
+	float SettleRate = 1.5f;
+
+	/** Clip seconds of settle after the clip's own stop, then the state hands over to idle */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop", meta = (ClampMin = "0.0", ForceUnits = "s"))
+	float SettleClipSeconds = 1.3f;
+
+	/** Safety: a body that keeps sliding without the stick (pushed, on ice, a frozen proxy) leaves the brake after this long and settles */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop", meta = (ClampMin = "0.1", ForceUnits = "s"))
+	float MaxBrakeSeconds = 0.8f;
+
+	/** Blend mode: how long the state stays on (its transition's cross-fade does the interpolation) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop", meta = (ClampMin = "0.0", ForceUnits = "s"))
+	float BlendSeconds = 0.35f;
+};
+
+/** A stop clip's root speed over time (60 Hz), measured once when the clip loads. Pure: the tests build it from numbers */
+struct GSTNCOMBATNP_API FGSTN_RunStopTrack
+{
+	float SampleRate = 60.f;
+	/** Horizontal root speed, cm/s, one per sample */
+	TArray<float> Speed;
+	float RunSpeed = 0.f;
+	/** Sample indices: last one at run speed before the brake, first one at rest */
+	int32 BrakeStart = 0;
+	int32 StopIndex = 0;
+
+	bool IsValid() const { return RunSpeed > 1.f && StopIndex > BrakeStart; }
+	float BrakeStartTime() const { return BrakeStart / SampleRate; }
+	float StopTime() const { return StopIndex / SampleRate; }
+
+	/** Builds the track from root positions sampled at SampleRate */
+	void Build(const TArray<FVector>& RootPositions, float InSampleRate);
+
+	/** The braking clip time whose root speed share matches SpeedFraction (1 = brake start, 0 = stop) */
+	float TimeForSpeedFraction(float SpeedFraction) const;
+};
+
+/** The run stop between frames, game thread. Pure but for the inputs: the tests drive it */
+struct GSTNCOMBATNP_API FGSTN_RunStopState
+{
+	EGSTN_RunStopMode Active = EGSTN_RunStopMode::Off;
+	bool bLeftFoot = true;
+	float ClipTime = 0.f;
+	float EntrySpeed = 0.f;
+	float Elapsed = 0.f;
+	/** Speed while the stick was last held, and frames since it was let go (-1 = held) */
+	float HeldSpeed = 0.f;
+	int32 FramesReleased = -1;
+
+	bool IsClip() const { return Active == EGSTN_RunStopMode::Clip; }
+	bool IsBlend() const { return Active == EGSTN_RunStopMode::Blend; }
+
+	/**
+	 * One presented frame. bBlocked: anything that is not a plain grounded run (air, crouch, skid, slide). bLeftFootSwinging: which foot plants
+	 * if a stop starts now. Track: the chosen foot's track (Tracks[0] left, [1] right), null = no clip loaded (Clip mode then does nothing).
+	 */
+	void Step(const FGSTN_RunStopSettings& Settings, EGSTN_RunStopMode Mode, float DeltaSeconds, float Speed, float Stick, bool bBlocked,
+		bool bLeftFootSwinging, const FGSTN_RunStopTrack* LeftTrack, const FGSTN_RunStopTrack* RightTrack);
+};
+
 /**
  * The LOCOMOTION ANIMATION PROFILE (owner 2026-11-18: locomotion animation depends on the character, body, weight and state, not only on the
  * kit). It is an anim set in slot Anim.Set.Locomotion, so it is chosen like every other anim set (UGSTN_AnimSetComponent): the character's
@@ -233,6 +353,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion")
 	FGSTN_SkidSectionSettings Skid;
+
+	/** Stick let go during a run: the RunStop state of MainAnimClass */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion")
+	FGSTN_RunStopSettings RunStop;
 };
 
 /** The lean's state between frames, game thread. Pure but for the inputs: the tests drive it */

@@ -135,6 +135,7 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 	TickSkidPlayTime(DeltaTime);
 	ApplyMainAnimClass();
 	TickScramble(DeltaTime);
+	TickRunStop(DeltaTime);
 }
 
 namespace GSTNRunPresentation
@@ -277,12 +278,7 @@ void UGSTN_RunPresentationComponent::TickScramble(float DeltaTime)
 	const FVector Up = Mover->GetUpDirection();
 	const FVector Velocity = Mover->GetVelocity();
 	const FVector Ground = Velocity - Up * Velocity.Dot(Up);
-	// The stick (a sim proxy without inputs counts as a full push: the speed alone then drives the scramble)
-	float Stick = 1.f;
-	if (const FCharacterDefaultInputs* Inputs = Mover->GetLastInputCmd().InputCollection.FindDataByType<FCharacterDefaultInputs>())
-	{
-		Stick = FMath::Clamp(static_cast<float>(Inputs->GetMoveInput().Size()), 0.f, 1.f);
-	}
+	const float Stick = ReadStick();
 	if (!Ground.IsNearlyZero(1.f))
 	{
 		ScrambleDirection = Ground.GetSafeNormal();
@@ -386,4 +382,156 @@ void UGSTN_RunPresentationComponent::GetAdditiveReaction(FGSTN_AdditiveReactionR
 	Layer.PlaceholderLengthSeconds = 1.f;
 	Layer.Time = 0.1f;
 	Layer.Weight = FMath::Clamp(Weight, 0.f, 1.f);
+}
+
+namespace GSTNRunPresentation
+{
+	static TAutoConsoleVariable<int32> CVarRunStopLog(TEXT("gstn.RunStop.Log"), 0, TEXT("1 = log the run stop every frame it is armed or playing (LogTemp)"));
+	static TAutoConsoleVariable<int32> CVarRunStopMode(TEXT("gstn.RunStop.Mode"), -1,
+		TEXT("Run stop (stick let go during a run): -1 = the locomotion profile's mode, 0 = off (GASP's stop), 1 = stop clip, 2 = blend into idle"));
+
+	bool RunStopGroundOnly(const UMoverComponent* Mover)
+	{
+		return Mover->HasGameplayTag(Mover_IsOnGround, true) && !Mover->HasGameplayTag(Mover_IsCrouching, true);
+	}
+
+	/** Root positions of a clip at 60 Hz (the root track, before any root motion setting) */
+	void BuildRunStopTrack(const UAnimSequenceBase* Clip, FGSTN_RunStopTrack& Out)
+	{
+		Out = FGSTN_RunStopTrack();
+		if (!Clip)
+		{
+			return;
+		}
+		constexpr float Rate = 60.f;
+		const float Length = Clip->GetPlayLength();
+		TArray<FVector> Positions;
+		for (int32 i = 0; i <= FMath::FloorToInt(Length * Rate); ++i)
+		{
+			const FAnimExtractContext Context(static_cast<double>(i) / Rate);
+			Positions.Add(Clip->ExtractRootTrackTransform(Context, nullptr).GetTranslation());
+		}
+		Out.Build(Positions, Rate);
+	}
+}
+
+float UGSTN_RunPresentationComponent::ReadStick() const
+{
+	float Stick = 1.f;
+	if (const FCharacterDefaultInputs* Inputs = Mover ? Mover->GetLastInputCmd().InputCollection.FindDataByType<FCharacterDefaultInputs>() : nullptr)
+	{
+		Stick = FMath::Clamp(static_cast<float>(Inputs->GetMoveInput().Size()), 0.f, 1.f);
+	}
+	return Stick;
+}
+
+const FGSTN_RunStopSettings& UGSTN_RunPresentationComponent::GetRunStopSettings() const
+{
+	const UGSTN_LocomotionAnimSet* Profile = LeanProfile.Get();
+	return Profile ? Profile->RunStop : DefaultRunStopSettings;
+}
+
+bool UGSTN_RunPresentationComponent::IsLeftFootSwinging() const
+{
+	TArray<USkeletalMeshComponent*> Meshes;
+	GetOwner()->GetComponents(Meshes);
+	for (const USkeletalMeshComponent* Mesh : Meshes)
+	{
+		if (Mesh && Mesh->GetAnimInstance())
+		{
+			const int32 Left = Mesh->GetBoneIndex(TEXT("foot_l"));
+			const int32 Right = Mesh->GetBoneIndex(TEXT("foot_r"));
+			if (Left == INDEX_NONE || Right == INDEX_NONE)
+			{
+				break;
+			}
+			// Component space: the higher foot is the one swinging forward
+			return Mesh->GetBoneTransform(Left, FTransform::Identity).GetLocation().Z >= Mesh->GetBoneTransform(Right, FTransform::Identity).GetLocation().Z;
+		}
+	}
+	// No mesh: alternate
+	return !RunStop.bLeftFoot;
+}
+
+void UGSTN_RunPresentationComponent::TickRunStop(float DeltaTime)
+{
+	const FGSTN_RunStopSettings& Settings = GetRunStopSettings();
+	// Clips: soft references, loaded once on the game thread, their tracks measured once
+	const FSoftObjectPath Paths[3] = { Settings.ClipLeftFoot.ToSoftObjectPath(), Settings.ClipRightFoot.ToSoftObjectPath(), Settings.IdleClip.ToSoftObjectPath() };
+	for (int32 i = 0; i < 3; ++i)
+	{
+		if (Paths[i] == ResolvedRunStopPaths[i])
+		{
+			continue;
+		}
+		ResolvedRunStopPaths[i] = Paths[i];
+		if (i < 2)
+		{
+			const TSoftObjectPtr<UAnimSequenceBase>& Soft = i == 0 ? Settings.ClipLeftFoot : Settings.ClipRightFoot;
+			RunStopClips[i] = Paths[i].IsValid() ? Soft.LoadSynchronous() : nullptr;
+			GSTNRunPresentation::BuildRunStopTrack(RunStopClips[i], RunStopTracks[i]);
+		}
+		else
+		{
+			RunStopIdleClip = Paths[i].IsValid() ? Settings.IdleClip.LoadSynchronous() : nullptr;
+		}
+	}
+
+	const int32 Forced = GSTNRunPresentation::CVarRunStopMode.GetValueOnGameThread();
+	const EGSTN_RunStopMode Mode = Forced >= 0 ? static_cast<EGSTN_RunStopMode>(FMath::Clamp(Forced, 0, 2)) : Settings.Mode;
+	const FVector Up = Mover->GetUpDirection();
+	const FVector Velocity = Mover->GetVelocity();
+	const float Speed = static_cast<float>((Velocity - Up * Velocity.Dot(Up)).Size());
+	// Only a plain grounded run stops this way: the skid (reverse input) and every slide keep their own presentation
+	const bool bBlocked = !GSTNRunPresentation::RunStopGroundOnly(Mover) || FootSlide.IsSliding() || IsSkidding();
+	// The foot is read only when a stop may start (a bone read per frame otherwise)
+	const bool bMayStart = RunStop.Active == EGSTN_RunStopMode::Off && !bBlocked && RunStop.FramesReleased >= 0;
+	const bool bLeftSwinging = bMayStart ? IsLeftFootSwinging() : RunStop.bLeftFoot;
+	RunStop.Step(Settings, Mode, DeltaTime, Speed, ReadStick(), bBlocked, bLeftSwinging, &RunStopTracks[0], &RunStopTracks[1]);
+	// Review evidence (rule 11): one line per presented frame of a stop, gstn.RunStop.Log 1
+	static IConsoleVariable* LogVar = IConsoleManager::Get().FindConsoleVariable(TEXT("gstn.RunStop.Log"));
+	if (LogVar && LogVar->GetInt() != 0 && (RunStop.Active != EGSTN_RunStopMode::Off || RunStop.FramesReleased >= 0))
+	{
+		UE_LOG(LogTemp, Log, TEXT("RunStop mode=%d active=%d left=%d t=%.3f speed=%.0f entry=%.0f released=%d stop=%.3f"), int32(Mode), int32(RunStop.Active),
+			RunStop.bLeftFoot ? 1 : 0, RunStop.ClipTime, Speed, RunStop.EntrySpeed, RunStop.FramesReleased, RunStopTracks[RunStop.bLeftFoot ? 0 : 1].StopTime());
+	}
+}
+
+UAnimSequenceBase* UGSTN_RunPresentationComponent::GetRunStopClip() const
+{
+	if (RunStop.IsBlend())
+	{
+		return RunStopIdleClip;
+	}
+	return RunStopClips[RunStop.bLeftFoot ? 0 : 1];
+}
+
+bool UGSTN_RunPresentationComponent::IsAnimOwnerRunStopping(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run && Run->IsRunStopping();
+}
+
+bool UGSTN_RunPresentationComponent::IsAnimOwnerRunStopBlending(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run && Run->IsRunStopBlending();
+}
+
+UAnimSequenceBase* UGSTN_RunPresentationComponent::GetAnimOwnerRunStopClip(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run ? Run->GetRunStopClip() : nullptr;
+}
+
+float UGSTN_RunPresentationComponent::GetAnimOwnerRunStopClipTime(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run ? Run->GetRunStopClipTime() : 0.f;
+}
+
+bool UGSTN_RunPresentationComponent::IsAnimOwnerRunStopLeftFoot(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return !Run || Run->GetRunStop().bLeftFoot;
 }

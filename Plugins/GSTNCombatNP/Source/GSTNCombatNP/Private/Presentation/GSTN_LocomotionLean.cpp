@@ -160,3 +160,172 @@ void FGSTN_RunStartScrambleState::Step(const FGSTN_RunStartScrambleSettings& Set
 		LeanRate = 0.f;
 	}
 }
+
+void FGSTN_RunStopTrack::Build(const TArray<FVector>& RootPositions, float InSampleRate)
+{
+	SampleRate = FMath::Max(InSampleRate, 1.f);
+	Speed.Reset();
+	RunSpeed = 0.f;
+	BrakeStart = StopIndex = 0;
+	const int32 Num = RootPositions.Num();
+	if (Num < 3)
+	{
+		return;
+	}
+	// Horizontal root speed, smoothed over three samples (clip keys are 30 Hz, the track 60 Hz)
+	TArray<float> Raw;
+	Raw.SetNumZeroed(Num);
+	for (int32 i = 1; i < Num; ++i)
+	{
+		Raw[i] = FVector::Dist2D(RootPositions[i], RootPositions[i - 1]) * SampleRate;
+	}
+	Raw[0] = Raw[1];
+	Speed.SetNumZeroed(Num);
+	for (int32 i = 0; i < Num; ++i)
+	{
+		Speed[i] = (Raw[FMath::Max(i - 1, 0)] + Raw[i] + Raw[FMath::Min(i + 1, Num - 1)]) / 3.f;
+	}
+	// The stop: the first sample at rest after the clip's top speed
+	int32 Peak = 0;
+	for (int32 i = 0; i < Num; ++i)
+	{
+		if (Speed[i] > Speed[Peak])
+		{
+			Peak = i;
+		}
+	}
+	StopIndex = Num - 1;
+	for (int32 i = Peak; i < Num; ++i)
+	{
+		if (Speed[i] < 5.f)
+		{
+			StopIndex = i;
+			break;
+		}
+	}
+	// The run speed: the mean before the stop's last 0.5 s (the clips start in the run cycle)
+	const int32 RunEnd = FMath::Max(StopIndex - FMath::RoundToInt(0.5f * SampleRate), 1);
+	float Sum = 0.f;
+	for (int32 i = 0; i < RunEnd; ++i)
+	{
+		Sum += Speed[i];
+	}
+	RunSpeed = Sum / RunEnd;
+	// The brake starts at the last sample still at 95% of it
+	BrakeStart = 0;
+	for (int32 i = StopIndex; i >= 0; --i)
+	{
+		if (Speed[i] >= 0.95f * RunSpeed)
+		{
+			BrakeStart = i;
+			break;
+		}
+	}
+}
+
+float FGSTN_RunStopTrack::TimeForSpeedFraction(float SpeedFraction) const
+{
+	if (!IsValid())
+	{
+		return 0.f;
+	}
+	const float Target = FMath::Clamp(SpeedFraction, 0.f, 1.f) * RunSpeed;
+	for (int32 i = BrakeStart + 1; i <= StopIndex; ++i)
+	{
+		if (Speed[i] <= Target)
+		{
+			// Between i - 1 (above) and i (at or below)
+			const float Above = Speed[i - 1];
+			const float Alpha = Above > Speed[i] ? FMath::Clamp((Above - Target) / (Above - Speed[i]), 0.f, 1.f) : 1.f;
+			return (i - 1 + Alpha) / SampleRate;
+		}
+	}
+	return StopTime();
+}
+
+void FGSTN_RunStopState::Step(const FGSTN_RunStopSettings& Settings, EGSTN_RunStopMode Mode, float DeltaSeconds, float Speed, float Stick, bool bBlocked,
+	bool bLeftFootSwinging, const FGSTN_RunStopTrack* LeftTrack, const FGSTN_RunStopTrack* RightTrack)
+{
+	const bool bHeld = Stick >= Settings.StickDeadzone;
+	// Anything but a plain grounded run, or the stick pushed again, ends the stop at once (the base locomotion takes over)
+	if (bBlocked || bHeld || Mode == EGSTN_RunStopMode::Off)
+	{
+		Active = EGSTN_RunStopMode::Off;
+		FramesReleased = bHeld && !bBlocked ? -1 : FramesReleased;
+		if (bHeld && !bBlocked)
+		{
+			HeldSpeed = Speed;
+		}
+		else if (bBlocked)
+		{
+			// A skid or an air frame never turns into a stop later
+			HeldSpeed = 0.f;
+			FramesReleased = -1;
+		}
+		return;
+	}
+
+	if (Active == EGSTN_RunStopMode::Off)
+	{
+		if (FramesReleased < 0)
+		{
+			FramesReleased = 0;
+		}
+		else
+		{
+			++FramesReleased;
+		}
+		if (FramesReleased < Settings.ConfirmFrames || HeldSpeed < Settings.MinEntrySpeed)
+		{
+			return;
+		}
+		const FGSTN_RunStopTrack* Track = bLeftFootSwinging ? LeftTrack : RightTrack;
+		if (Mode == EGSTN_RunStopMode::Clip && !(Track && Track->IsValid()))
+		{
+			return;
+		}
+		// Starts once per release
+		Active = Mode;
+		bLeftFoot = bLeftFootSwinging;
+		EntrySpeed = HeldSpeed;
+		HeldSpeed = 0.f;
+		Elapsed = 0.f;
+		ClipTime = Track && Track->IsValid() ? Track->BrakeStartTime() : 0.f;
+	}
+	else
+	{
+		Elapsed += DeltaSeconds;
+	}
+
+	if (Active == EGSTN_RunStopMode::Blend)
+	{
+		ClipTime = Elapsed;
+		if (Elapsed >= Settings.BlendSeconds && Speed <= Settings.StoppedSpeed)
+		{
+			Active = EGSTN_RunStopMode::Off;
+		}
+		return;
+	}
+
+	const FGSTN_RunStopTrack* Track = bLeftFoot ? LeftTrack : RightTrack;
+	if (!(Track && Track->IsValid()))
+	{
+		Active = EGSTN_RunStopMode::Off;
+		return;
+	}
+	if (Speed > Settings.StoppedSpeed && ClipTime < Track->StopTime() && Elapsed < Settings.MaxBrakeSeconds)
+	{
+		// Braking: the clip time follows the sim's speed, never backwards
+		const float Fraction = EntrySpeed > KINDA_SMALL_NUMBER ? Speed / EntrySpeed : 0.f;
+		ClipTime = FMath::Max(ClipTime, Track->TimeForSpeedFraction(Fraction));
+	}
+	else
+	{
+		// Stopped: the settle plays on at its own rate
+		ClipTime = FMath::Max(ClipTime, Track->StopTime()) + DeltaSeconds * Settings.SettleRate;
+	}
+	if (ClipTime >= Track->StopTime() + Settings.SettleClipSeconds)
+	{
+		Active = EGSTN_RunStopMode::Off;
+	}
+}

@@ -136,6 +136,42 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
 	static float GetAnimOwnerSkidClipTime(const UAnimInstance* AnimInstance);
 
+	/**
+	 * For the RunStop states of the main locomotion ABP (owner 2026-11-18, stick let go during a run with no reverse input; FGSTN_RunStopSettings):
+	 * IsRunStopping = the stop clip plays (state "Run Stop", Sequence Evaluator: clip GetRunStopClip, explicit time GetRunStopClipTime);
+	 * IsRunStopBlending = the plain cross-fade into idle (state "Run Stop Blend", the profile's idle clip). Never both; never during a skid.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
+	bool IsRunStopping() const { return RunStop.IsClip(); }
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
+	bool IsRunStopBlending() const { return RunStop.IsBlend(); }
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
+	UAnimSequenceBase* GetRunStopClip() const;
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
+	float GetRunStopClipTime() const { return RunStop.ClipTime; }
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static bool IsAnimOwnerRunStopping(const UAnimInstance* AnimInstance);
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static bool IsAnimOwnerRunStopBlending(const UAnimInstance* AnimInstance);
+
+	/** The stop plants the left foot in front (state "Run Stop": Blend Poses by bool between the left-foot and right-foot clips) */
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static bool IsAnimOwnerRunStopLeftFoot(const UAnimInstance* AnimInstance);
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static UAnimSequenceBase* GetAnimOwnerRunStopClip(const UAnimInstance* AnimInstance);
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static float GetAnimOwnerRunStopClipTime(const UAnimInstance* AnimInstance);
+
+	const FGSTN_RunStopSettings& GetRunStopSettings() const;
+	const FGSTN_RunStopState& GetRunStop() const { return RunStop; }
+
 	/** The profile moves the skid into the main ABP (the skid layer then never takes the pose) */
 	bool IsSkidInMainGraph() const;
 
@@ -179,6 +215,21 @@ private:
 	float SkidPlayTime = -1.f;
 	void TickSkidPlayTime(float DeltaTime);
 	FVector ScrambleDirection = FVector::ForwardVector;
+
+	/** Run stop: the two clips (left foot, right foot in front), their root speed tracks, the idle of the blend mode, and the state */
+	void TickRunStop(float DeltaTime);
+	/** The mesh's left foot is the one in the air (higher than the right): it is the one that plants in front */
+	bool IsLeftFootSwinging() const;
+	/** The stick, 0..1 (a sim proxy without inputs counts as a full push) */
+	float ReadStick() const;
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequenceBase> RunStopClips[2];
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequenceBase> RunStopIdleClip;
+	FSoftObjectPath ResolvedRunStopPaths[3];
+	FGSTN_RunStopTrack RunStopTracks[2];
+	FGSTN_RunStopState RunStop;
+	FGSTN_RunStopSettings DefaultRunStopSettings;
 
 	FGSTN_FootSlideState FootSlide;
 	FGSTN_LocomotionLeanSolver LeanSolver;

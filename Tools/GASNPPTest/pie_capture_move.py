@@ -160,6 +160,8 @@ AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after
 # 'follow' = the review cameras move with the pawn at the start yaw. Select with PIE_CAPTURE_SEQUENCES (the names below), and
 # PIE_CAPTURE_VIEWS=az90,az0,game keeps fewer views (one grid per view, project rule 4)
 MOVE_SEQUENCES = [
+    # Run stop at the BASE run stage (owner 2026-11-18, Ganondorf-style stop): stick let go at stage 1, 100 frames to see brake + settle into idle
+    {'name': 'mv_run_stop_base', 'taps': [], 'frames': 135, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (35, None)]},
     {'name': 'mv_run_stop', 'taps': [], 'frames': 210, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (160, None)]},
     {'name': 'mv_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (170, None)]},
     # Skid at the BASE run stage (MinStage 0, 11-18): reverse before FramesToNextStage (40 sim f) so the run is still stage 1 (470 > MinSpeed 350)
