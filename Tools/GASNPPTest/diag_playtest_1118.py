@@ -21,7 +21,8 @@ st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'frame': 0}
 HOLD_SEQ = [(20, 'crouch'), (90, 'jump'), (200, 'clear'), (240, 'jump'), (262, 'crouch'), (380, 'clear'), (420, 'dodge'), (610, 'clear'), (640, 'stick'), (650, 'dodge'), (840, 'clear'), (841, 'unstick'), (900, 'end')]
 STOMP_SEQ = [(20, 'jumphold'), (45, 'clear'), (60, 'crouch'), (62, 'tap'), (80, 'clear'), (260, 'end')]
 DROPKICK_SEQ = [(20, 'jumphold'), (45, 'clear'), (50, 'stick'), (52, 'tap'), (80, 'unstick'), (260, 'end')]
-SEQS = [('dropkick', 'KIT_Test_Playtest', DROPKICK_SEQ), ('stomp', 'KIT_Test_Overlord', STOMP_SEQ)]
+DODGE_SEQ = [(20, 'stick'), (30, 'dodge'), (110, 'tapdg'), (220, 'clear'), (221, 'unstick'), (260, 'end')]
+SEQS = [('dodge', 'KIT_Test_Playtest', DODGE_SEQ)] if os.environ.get('DIAG_ONLY_DODGE') else [('hold', 'KIT_Test_Playtest', HOLD_SEQ[:7] + [(400, 'end')])] if os.environ.get('DIAG_ONLY_HOLD') else [('dropkick', 'KIT_Test_Playtest', DROPKICK_SEQ), ('stomp', 'KIT_Test_Overlord', STOMP_SEQ)]
 
 
 def _log(m):
@@ -90,7 +91,7 @@ def _tick(_dt):
         if ph == 'boot' and now - st['t'] > 3:
             da = unreal.load_asset('/Game/Blueprints/Data/DA_CameraAnchor_Default')
             s = da.get_editor_property('settings')
-            s.set_editor_property('mode', getattr(unreal.GSTN_CameraAnchorMode, os.environ.get('DIAG_ANCHOR_MODE', 'SHIFT_VIEW')))
+            s.set_editor_property('mode', getattr(unreal.GSTN_CameraAnchorMode, os.environ.get('DIAG_ANCHOR_MODE', 'MOVE_CAMERA_COMPONENT')))
             da.set_editor_property('settings', s)
             unreal.EditorAssetLibrary.save_loaded_asset(da, False)
             _log(f'anchor settings {da.get_editor_property("settings")}')
@@ -129,6 +130,8 @@ def _tick(_dt):
                     g.combat_hold(0, st['jp'])
                 elif a == 'crouch':
                     g.combat_hold(0, st['cr'])
+                elif a == 'tapdg':
+                    g.combat_tap(0, st['dg'])
                 elif a == 'dodge':
                     g.combat_hold(0, st['dg'])
                 elif a == 'clear':

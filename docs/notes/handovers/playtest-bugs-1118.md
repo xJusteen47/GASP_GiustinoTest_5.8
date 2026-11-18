@@ -24,4 +24,12 @@ Base 3eecfcea + merge VFX v2 (aait2t, pulito, compilato). Diagnosi a righe per f
    Dropkick: la discesa è la caduta (vz -616 -> -1500 terminale), non la capsula (mesh continua al resize f62).
 Test: `GSTNCombat.Core+GSTN.Camera` 248/248 (Saved/Logs/ci/test_1118.log.ue.log, conta "Result={Success}").
 AM_OverlordDAirV9.uasset modificata dall'owner: non committata, non toccata.
-Costo stimato ~13 $.
+**Seguito (stesso thread, decisioni coordinatore 1A 2A):**
+- Camera: la causa del -30 cm col crouch era GASP: CameraRig_CrouchOffset (OffsetCameraNode TranslationOffset X40 Z-30), l'ancora già compensava la
+  capsula. Messo a 0 (Saved/Diag1118/crouchoffset.txt prima/dopo). hold.jsonl: crouch f21 -> cz 202 costante (dip 8 cm per ~5 frame). Vale anche in ADS
+  (l'offset è un rig unico): da separare se l'owner lo vuole in mira. Nuovo helper UGSTN_PropertyTextLibrary (proprietà non visibili a Python).
+- Dodge tenuto + stick: GSTN_InputSimulator ora non conta come pressione un tap di un tasto già giù e ancora giù (Started di Enhanced Input
+  rilanciato su tasto tenuto). Verifica dodge.jsonl: tasto+stick tenuti, tap spurio a f110 -> nessuna seconda richiesta (req 1036 unica). Col pad
+  reale non verificato. Il comando viene consumato (Resolution.ConsumeFrom): il secondo dodge veniva da una pressione nuova finta.
+- Test GSTNInput+GSTNCombat.Core+GSTN.Camera 387/387 (Saved/Logs/ci/test_1118b.log.ue.log). Skid/RTG: thread nuovo (2A).
+Costo stimato ~18 $ (oltre i 15: camera e dodge aggiunti dopo).

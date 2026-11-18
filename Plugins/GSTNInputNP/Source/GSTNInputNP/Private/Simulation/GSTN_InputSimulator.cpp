@@ -59,7 +59,11 @@ FGSTN_InputTickResult FGSTN_InputSimulator::Tick(const FGSTN_InputTickArgs& Args
 	FGSTN_InputSample Sample;
 	Sample.Frame = Frame;
 	Sample.Held = Cmd.HeldButtons;
-	Sample.Pressed = (Cmd.HeldButtons & ~PrevHeld) | Cmd.PressedButtons;
+	// A tap of a button that was down at the end of the last frame and is still down is not a new press (owner 2026-11-18: dodge held with the
+	// stick dodged again after the first one). Enhanced Input fires Started again for a held key when the mapping contexts are rebuilt (a context
+	// added or removed by a state change), and the source turns every Started into a tap. A real release and press inside one frame is lost:
+	// the held samples never saw the button up
+	Sample.Pressed = (Cmd.HeldButtons & ~PrevHeld) | (Cmd.PressedButtons & ~(PrevHeld & Cmd.HeldButtons));
 	Sample.Released = (PrevHeld | Sample.Pressed) & ~Cmd.HeldButtons;
 	Sample.Stick = FGSTN_DirectionClassifier::Classify(
 		FVector2D(FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickX), FGSTN_DirectionClassifier::DequantizeStickAxis(Cmd.StickY)),
