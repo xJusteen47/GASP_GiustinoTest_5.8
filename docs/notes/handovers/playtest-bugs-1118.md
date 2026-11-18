@@ -59,3 +59,6 @@ Calcolo a mano del closed form (K .29, T .48, A .32): Fall 1469, V0 675, v a fin
 **Seguito 7 (10:35, owner A):** DA_Locomotion_Playtest = copia di DA_Locomotion_Default, solo KIT_Test_Playtest punta a lei (2 riferimenti
 sostituiti), Jump Designer on 350 cm / 0.5 s. Ricavati (Saved/Diag1118/loco_playtest3.txt): velocità 1311, gravità rise 2.40 / cut 8.27 /
 fall 8.27, salto pieno 350 cm apice 31 frame, tocco 110 cm apice 10 frame. Script Saved/Diag1118/loco_playtest*.py (UnrealEditor-Cmd). Non provato in PIE.
+
+**Seguito 8 (12:35):** kit rosa sostituito dal giallo: test_hub.play_setup (watcher del hub, 4 s dopo Play) dava DEFAULT_KIT = KIT_Test_Hits
+(tinta 64°, giallo; Playtest 301°, rosa; formula di GSTN_KitPlaceholderLook) a tutti i giocatori, sopra gstn.Debug.KitAtStart. Ora usa KitAtStart se impostato.

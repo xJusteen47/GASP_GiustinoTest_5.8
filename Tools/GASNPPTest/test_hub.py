@@ -232,7 +232,15 @@ def play_setup():
     out = [('dummies', spawn_dummies()), ('kits', spawn_kits()), ('backpacks', spawn_backpacks()), ('bounce pads', spawn_bounce_pads()), g.hit_rules_setup(), ls.link_setup()]
     # Players only: a loadout change on a dummy summoned in the same tick crashed the editor in the link snapshot contributor (2026-11-06,
     # FGSTN_SyncFragmentList::Find from UGSTN_CombatSimComponent::SimulationTick). The dummies keep their default kit: being hit needs none
-    out.append({_key(i): g._apply_loadout(_key(i), DEFAULT_KIT) for i in _players()})
+    # The start kit of the debug picker (gstn.Debug.KitAtStart, DefaultEngine.ini) wins over DEFAULT_KIT: the picker gives it at Play and this
+    # step, 4 s later, replaced it with KIT_Test_Hits (owner 2026-11-18: "the pink kit appears, then the yellow one replaces it")
+    start_kit = ''
+    try:
+        start_kit = (unreal.SystemLibrary.get_console_variable_string_value('gstn.Debug.KitAtStart') or '').strip()
+    except Exception:
+        pass
+    player_kit = start_kit or DEFAULT_KIT
+    out.append({_key(i): g._apply_loadout(_key(i), player_kit) for i in _players()})
     return out
 
 
