@@ -114,6 +114,20 @@ public:
 	const FGSTN_RunStartScrambleState& GetScramble() const { return Scramble; }
 	UAnimSequenceBase* GetScrambleClip() const { return ScrambleClip; }
 
+	/**
+	 * For the Skid state of the main locomotion ABP (ABP_GSTN_Locomotion, owner 2026-11-18): true while the run skid is on (rule in) and its
+	 * three-section clip time (Sequence Evaluator explicit time, clip SS_180_Turn_Root180). With the profile's bSkidInMainGraph the skid
+	 * override layer stays off, so the two never play together.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
+	bool IsSkidding() const { return FootSlide.Source == EGSTN_FootSlideSource::RunSkid; }
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
+	float GetSkidClipTime() const;
+
+	/** The profile moves the skid into the main ABP (the skid layer then never takes the pose) */
+	bool IsSkidInMainGraph() const;
+
 	/** The three-section skid clip (null = sections off or not loaded: the skid layer keeps its own clip) and the skid's entry speed */
 	UAnimSequenceBase* GetSkidSectionClip() const { return SkidSectionClip; }
 	float GetSkidEntrySpeed() const { return SkidEntrySpeed; }

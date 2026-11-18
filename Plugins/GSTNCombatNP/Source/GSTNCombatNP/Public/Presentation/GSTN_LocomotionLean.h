@@ -224,6 +224,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion")
 	TSoftClassPtr<UAnimInstance> MainAnimClass;
 
+	/** The skid plays in MainAnimClass's Skid state (GetSkidClipTime), not in the skid override layer */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion")
+	bool bSkidInMainGraph = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion")
 	FGSTN_RunStartScrambleSettings RunStart;
 

@@ -60,6 +60,14 @@ void UGSTN_SkidAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	}
 	UGSTN_RunPresentationComponent* Run = Presentation.Get();
 	Slide = Run ? Run->GetFootSlide() : FGSTN_FootSlideState();
+	if (Run && Run->IsSkidInMainGraph())
+	{
+		// The main ABP's Skid state plays it: this layer stays off (and so does the placeholder lean)
+		Run->bPlaceholderSkidLean = false;
+		bActive = false;
+		ClipTime = 0.f;
+		return;
+	}
 	UAnimSequenceBase* SectionClip = Run ? Run->GetSkidSectionClip() : nullptr;
 	if (!bActive)
 	{

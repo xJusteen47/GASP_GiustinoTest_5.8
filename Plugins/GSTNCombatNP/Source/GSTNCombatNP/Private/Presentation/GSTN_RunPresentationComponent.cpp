@@ -136,6 +136,22 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 	TickScramble(DeltaTime);
 }
 
+float UGSTN_RunPresentationComponent::GetSkidClipTime() const
+{
+	if (!SkidSectionClip || FootSlide.Source != EGSTN_FootSlideSource::RunSkid)
+	{
+		return 0.f;
+	}
+	return GetSkidSectionSettings().ClipTime(FootSlide.SkidPhase, FootSlide.Frame, FootSlide.RestFrame, EnterFrames, ExitFrames, FootSlide.Speed,
+		SkidEntrySpeed, SkidSectionClip->GetPlayLength());
+}
+
+bool UGSTN_RunPresentationComponent::IsSkidInMainGraph() const
+{
+	const UGSTN_LocomotionAnimSet* Profile = LeanProfile.Get();
+	return Profile && Profile->bSkidInMainGraph && !Profile->MainAnimClass.IsNull();
+}
+
 void UGSTN_RunPresentationComponent::ApplyMainAnimClass()
 {
 	const UGSTN_LocomotionAnimSet* Profile = LeanProfile.Get();
