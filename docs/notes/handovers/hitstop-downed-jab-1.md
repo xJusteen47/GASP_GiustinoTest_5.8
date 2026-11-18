@@ -18,7 +18,9 @@ Branch claude/project-thread-77vkmg from 98dml5 72d1afaf (crash fix). NOTHING CO
    now adds rule "Aerial landing lag montages" (names with AirLand / LandingLag: AM_OverlordDAirLand*). Poses untouched (rule 13e).
 
 ## Diagnosis only: skid / run start clips not visible (Overlord kit, run stage 1)
-- Sim skid DOES fire at run stage 1 (FGSTN_RunSkidTuning MinStage 1, MinSpeed 350, ReverseStickCos -0.5).
+- CORRECTION 11-18: the sim skid does NOT fire at run stage 1: FGSTN_RunSkidTuning::MinStage is 0-based, default 1 = stage 2 (sprint 1); at the
+  base run a reversal is the walking mode's pivot. The owner reverses at the base run, so no skid at all. Fix (data, rule 6 applied): desktop sets
+  MinStage 0 in DA_Locomotion_Default > Run Stages > Skid (and in the Overlord kit's locomotion profile if it has its own). MinSpeed 350 < run 450: ok.
 - The clip never shows: the override slot activates only for a linked anim instance implementing IGSTN_OverrideLayerSource
   (GSTN_CharacterAnimInstance.cpp:40-55). Only the wall layer has one. ALI_GSTN_Skid / ALI_GSTN_RunStart are EMPTY interfaces from M0; M1 only
   copied Skid_Revised / SS_180_Turn into Ported57/Skid. The skid and run start layers are polish M4, never started. F4's "plays the same on both
