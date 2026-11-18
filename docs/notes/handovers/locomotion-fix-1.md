@@ -38,3 +38,10 @@ Owner: crouch + forward = upright run, slower; run start frantic/sped up; skid n
    patch (crouch gate + skid clip speed) is NOT in the DLLs on disk.
 2. Owner idea for the double turn, try BEFORE any code job: SS_180_Turn_Root180 asset root motion settings, bForceRootLock = true with
    RootMotionRootLock = AnimFirstFrame (clip root yaw removed from the pose, only the sim's 180 turn remains), warping on; check in PIE.
+3. BETTER LEAD (coordinator 19:55Z, owner's 5.7 reference docs/notes/skid-57-reference.md on claude/skid-57-reference cb531e85), try BEFORE 2:
+   in 5.7 the sim only braked, never rotated; the Skid state + chooser row played the clip BEFORE Offset Root Bone with rotation mode
+   Accumulate (mesh follows the clip's 180, capsule turn ignored), orientation warping on. Here: main-graph Skid state already exists
+   (5a644a8e; MainAnimClass = ABP_GSTN_Locomotion, bSkidInMainGraph = true), set its Offset Root Bone rotation to Accumulate while
+   skidding, and stop the sim turning the actor in Exit (FGSTN_LayeredMove_RunSkid::GenerateMove, AngularVelocity in the Exit branch:
+   the facing must still end up on TurnDirection when the skid ends, e.g. snap at Finish). This also explains the main-graph review's
+   "turn stops at ~90 deg". Skid layer path stays the fallback.
