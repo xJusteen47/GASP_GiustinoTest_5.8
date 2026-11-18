@@ -1,0 +1,4 @@
+clip,source,frames,fps,duration_s,steps,steps_per_s,left_contacts,right_contacts,arm_swing_L_deg,arm_swing_R_deg,arm_fwd_max_deg,arm_back_max_deg,root_travel_m,speed_mps
+standard_run,Male Locomotion Pack.zip/standard run.fbx,23,30.0,0.733,2,2.73,7,18,123.6,106.1,24.8,-109.3,3.24,4.42
+sword_and_shield_run,Sword and Shield Pack.zip/sword and shield run.fbx,22,30.0,0.7,2,2.86,5,16,111.0,29.7,33.2,-79.5,2.9,4.15
+sword_and_shield_run_2,Sword and Shield Pack.zip/sword and shield run (2).fbx,17,30.0,0.533,2,3.75,8,14,20.0,45.9,56.2,-45.3,2.34,4.39
