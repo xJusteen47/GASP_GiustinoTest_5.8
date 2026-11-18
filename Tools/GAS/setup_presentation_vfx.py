@@ -317,8 +317,8 @@ def run_start_dust():
     back, small ~30 cm). Lit, roughness 0.6: their contact shadow comes from the real light"""
     s = _system("NS_GSTN_RunStartDust")
     if s:
-        _balls(s, "Big", 2, (0.30, 0.34), (16, 20), 380, 6.0, cone=((-1, 0, 0.55), 50), box=((20, 44, 2), (-14, 0, 12)))
-        _balls(s, "Small", 2, (0.26, 0.30), (12, 13), 170, 6.0, cone=((-1, 0, 0.05), 50), box=((20, 44, 2), (-6, 0, 8)))
+        _balls(s, "Big", 2, (0.30, 0.34), (20, 24), 380, 6.0, cone=((-1, 0, 0.55), 50), box=((20, 44, 2), (-14, 0, 12)))
+        _balls(s, "Small", 2, (0.26, 0.30), (15, 17), 170, 6.0, cone=((-1, 0, 0.05), 50), box=((20, 44, 2), (-6, 0, 8)))
     return s
 
 
@@ -349,7 +349,7 @@ def land_ring():
     if s:
         _ground_plane(s)
         _torus(s, "Ring", "TorusZ", "Gloss", 0.30, 80)
-        _balls(s, "Puffs", 6, (0.34, 0.42), (14, 18), 440, 6.0, ring=(58, 10), origin=(0, 0, -40), gravity=-2200, bounce=True)
+        _balls(s, "Puffs", 6, (0.34, 0.42), (20, 26), 440, 6.0, ring=(58, 10), origin=(0, 0, -40), gravity=-2200, bounce=True)
     return s
 
 
@@ -386,18 +386,21 @@ def hit_spark():
         _ground_plane(s)
         flash = Emitter(s, "OmnidirectionalBurst", "Flash").settings(True)
         flash.off("ParticleUpdate", "ScaleColor")
-        flash.burst(1).particle((0.034, 0.034), (83, 83)).sized().sphere(0.01, offset=(-30, 0, 0)).radial(0.0).material("HitFlash")
-        _torus(s, "Ring", "TorusX", "Neon", 0.20, 105, offset=(-30, 0, 0), facing="camera")
+        # r1 review: on the contact, not over the attacker (-30 -> +10); a bigger flash from the game camera (83 -> 110)
+        flash.burst(1).particle((0.034, 0.034), (110, 110)).sized().sphere(0.01, offset=(10, 0, 0)).radial(0.0)
+        flash.toward_camera(60.0).material("HitFlash")  # r2 review: a dark square behind the attacker from the game camera
+        _torus(s, "Ring", "TorusX", "Neon", 0.20, 85, offset=(10, 0, 0), facing="camera")
         shards = Emitter(s, "OmnidirectionalBurst", "Shards").settings(True)
         shards.off("ParticleUpdate", "ScaleColor")
         shards.burst(8).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.Count")
         # Fan regular-ish: a cone of +-45 degrees (120 set), no curl, no vortex
-        shards.mesh_particle((0.24, 0.30), (24, 28)).sphere(4, offset=(-25, 0, 0)).cone((1, 0, 0), 120, 3000).drag(14.0)
-        shards.toward_camera(60.0).mesh("Gem", "Gem", facing="velocity")
+        # r2 review: drag 14 -> 20 (they flew ~3 m), born on a 12 cm sphere in a wider fan (a pile on the ground bounce)
+        shards.mesh_particle((0.24, 0.30), (18, 22)).sphere(12, offset=(5, 0, 0)).cone((1, 0, 0), 150, 3000).drag(20.0)
+        shards.toward_camera(30.0).mesh("Gem", "Gem", facing="velocity")
         debris = Emitter(s, "OmnidirectionalBurst", "Debris").settings(True)
         debris.off("ParticleUpdate", "ScaleColor")
         debris.burst(3).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.StrongCount")
-        debris.mesh_particle((0.75, 0.90), (18, 22)).sphere(4, offset=(-25, 0, 0)).cone((1, 0, 0.6), 110, 900).drag(2.5)
+        debris.mesh_particle((0.75, 0.90), (18, 22)).sphere(4, offset=(5, 0, 0)).cone((1, 0, 0.6), 110, 900).drag(2.5)
         debris.gravity(-2600).bounce()
         debris.link("ParticleSpawn", "InitializeParticle", "Color", "User.AccentTint")
         debris.mesh("Gem", "Debris", facing="velocity", shadow="Debris")
@@ -411,7 +414,7 @@ def impact():
     if s:
         _ground_plane(s)
         _torus(s, "Ring", "TorusX", "Gloss", 0.30, 80, offset=(3, 0, 0))
-        _balls(s, "Puffs", 5, (0.45, 0.60), (14, 18), 440, 5.0, sphere=(58, (0.05, 1, 1), (14, 0, 0)), rim=True, gravity=-2200, bounce=True,
+        _balls(s, "Puffs", 5, (0.45, 0.60), (16, 22), 440, 5.0, sphere=(72, (0.05, 1, 1), (14, 0, 0)), rim=True, gravity=-2200, bounce=True,
                shadow="Dust")
     return s
 

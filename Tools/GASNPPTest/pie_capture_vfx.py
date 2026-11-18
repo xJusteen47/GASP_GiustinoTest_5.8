@@ -48,6 +48,8 @@ SEQUENCES = [
     {'name': 'hit_medium', 'frames': 80, 'tap': [0], 'dummy': (95.0, 90.0), 'dist': 480.0, 'follow': False},
     # The launch, followed until the downed landing (~190 frames after the hit) and a little after
     {'name': 'hit_large', 'frames': 260, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 650.0, 'follow': False, 'follow_victim': True},
+    # VFX v2: the strong hit from a fixed camera on the hit point, so the debris' fall, bounces and shadows stay in frame
+    {'name': 'hit_debris', 'frames': 90, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 520.0, 'follow': False},
     # Wall and ceiling contacts of a launched victim (NS_GSTN_Impact): a wall across the launch and a low ceiling over it
     {'name': 'wall', 'frames': 120, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 650.0, 'follow': False, 'follow_victim': True,
      'blocks': [(420.0, 0.0, 0.0, 60.0, 700.0, 500.0)]},

@@ -131,7 +131,7 @@ def build_shadow():
     target = _op(mat, unreal.MaterialExpressionAppendVector, xy, ground, -350, 300)
     wpo = _op(mat, unreal.MaterialExpressionSubtract, target, world, -200, 300)
     MEL.connect_material_property(wpo, "", unreal.MaterialProperty.MP_WORLD_POSITION_OFFSET)
-    shade = _eye_inverse(mat, _vector(mat, "ShadowColor", unreal.LinearColor(0.035, 0.05, 0.12, 1), -400, 600), -200, 600)
+    shade = _eye_inverse(mat, _vector(mat, "ShadowColor", unreal.LinearColor(0.03, 0.08, 0.32, 1), -400, 600), -200, 600)
     MEL.connect_material_property(shade, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     MEL.connect_material_property(_appear(mat, t, -700, 900), "", unreal.MaterialProperty.MP_OPACITY_MASK)
     MEL.recompile_material(mat)
@@ -148,21 +148,24 @@ NEON = unreal.LinearColor(1.0, 0.62, 0.05, 1)  # saturated amber for the hit rin
 
 LOOKS = {
     # "Cotton" dust (run start, skid, landing and impact balls, trail): warm white, matte-ish, born at 60% -> 100% by frame 3, pop out
-    "Dust": dict(Roughness=0.6, Specular=0.5, StartScale=0.6, GrowEnd=0.15, ShrinkStart=0.45, EndScale=0.0, RimStrength=0.25,
+    "Dust": dict(Roughness=0.6, Specular=0.5, StartScale=0.6, GrowEnd=0.15, ShrinkStart=0.45, EndScale=0.0, RimStrength=0.6, RimPower=2.0,
+                 EmissiveAmount=0.3,  # r1 review: white went grey in the hub light
                  colors=(DUST, DUST, DUST)),
     # Glossy white plastic (landing / jump ring, sprint capsules)
-    "Gloss": dict(Roughness=0.25, Specular=0.65, StartScale=0.45, GrowEnd=0.3, ShrinkStart=0.55, EndScale=0.0, RimStrength=0.35,
+    "Gloss": dict(Roughness=0.25, Specular=0.65, StartScale=0.45, GrowEnd=0.3, ShrinkStart=0.55, EndScale=0.0, RimStrength=0.6, RimPower=2.0,
+                  EmissiveAmount=0.3,
                   colors=(DUST, DUST, DUST)),
     "Streak": dict(Roughness=0.25, Specular=0.65, StartScale=0.7, GrowEnd=0.2, ShrinkStart=0.5, EndScale=0.0, RimStrength=0.4,
                    colors=(WHITE, WHITE, WHITE)),
     # Hit shards: glossy gems, white -> yellow -> orange, full size on their first shown frame, pop out; hidden on the flash frame
-    "Gem": dict(Roughness=0.22, Specular=0.7, StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.4, EndScale=0.0, RimStrength=0.45, MidTime=0.15,
+    "Gem": dict(Roughness=0.22, Specular=0.7, StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.4, EndScale=0.0, RimStrength=0.45, MidTime=0.3,
                 EmissiveAmount=0.35, AppearAt=0.05, colors=(WHITE, HIT_MID, HIT_END)),
     # Strong hit debris: the kit's accent colour (particle colour = User.AccentTint), bounces on the floor, pops out
     "Debris": dict(Roughness=0.25, Specular=0.7, StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.75, EndScale=0.0, RimStrength=0.4,
                    EmissiveAmount=0.15, AppearAt=0.02, colors=(WHITE, WHITE, WHITE)),
     # "Neon glass" ring of the hit: opaque torus, flat saturated emissive + white Fresnel rim (never translucent)
-    "Neon": dict(Roughness=0.3, Specular=0.5, StartScale=0.35, GrowEnd=0.6, ShrinkStart=0.6, EndScale=0.0, RimStrength=1.5, RimPower=2.0,
+    "Neon": dict(Roughness=0.3, Specular=0.5, StartScale=0.85, GrowEnd=0.15,  # r1 review: biggest on frame 1, not at the hitstop end
+                 ShrinkStart=0.6, EndScale=0.0, RimStrength=1.5, RimPower=2.0,
                  EmissiveAmount=2.5, MidTime=0.08, colors=(WHITE, NEON, NEON)),
 }
 
