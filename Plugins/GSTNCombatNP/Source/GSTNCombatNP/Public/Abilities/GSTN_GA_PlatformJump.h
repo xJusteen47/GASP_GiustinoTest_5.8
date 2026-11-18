@@ -14,7 +14,7 @@ class UGSTN_CombatSimComponent;
 /**
  * Creates Mover's jump impulse (FJumpImpulseEffect, along Mover's up direction, which follows the local gravity) with the upward
  * speed of the combat stats: JumpVelocity, or AirJumpVelocity for an air jump. A pawn whose ability system has no combat attribute set
- * gets Mover's own JumpUpwardsSpeed.
+ * gets Mover's own JumpUpwardsSpeed. A ground jump is scaled by the kit's running jump (UGSTN_GA_PlatformJump::RunBoost) when it is on.
  */
 UCLASS(DisplayName = "GSTN Platform Jump Move Creator")
 class GSTNCOMBATNP_API UGSTN_PlatformJumpMoveCreator : public UBaseMoveEffectCreator
@@ -130,6 +130,10 @@ public:
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")
 	EGSTN_JumpGravityModel GravityModel = EGSTN_JumpGravityModel::HoldWindow;
+
+	/** Running jump (owner 2026-11-18, off by default): a ground jump taken faster goes higher (FGSTN_JumpRunBoost). Read by the jump move creator */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")
+	FGSTN_JumpRunBoost RunBoost;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Jump|Kit Data")
 	bool bOverrideSquatFrames = false;

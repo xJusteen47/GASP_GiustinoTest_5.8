@@ -491,4 +491,31 @@ bool FGSTN_JumpHoldWindowModelTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_JumpRunBoostTest, "GSTNCombat.Core.Jump.RunBoost", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_JumpRunBoostTest::RunTest(const FString& Parameters)
+{
+	FGSTN_JumpRunBoost Boost;
+	TestFalse(TEXT("off by default"), Boost.bEnabled);
+	TestEqual(TEXT("off: no boost at any speed"), Boost.VelocityScale(2000.0), 1.f);
+
+	Boost.bEnabled = true;
+	TestEqual(TEXT("standing: plain jump"), Boost.VelocityScale(0.0), 1.f);
+	TestEqual(TEXT("at MinSpeed: plain jump"), Boost.VelocityScale(470.0), 1.f);
+	TestEqual(TEXT("halfway: half the boost"), Boost.VelocityScale(660.0), 1.06f, 1e-4f);
+	TestEqual(TEXT("at FullSpeed: full boost"), Boost.VelocityScale(850.0), 1.12f, 1e-4f);
+	TestEqual(TEXT("past FullSpeed: capped"), Boost.VelocityScale(1500.0), 1.12f, 1e-4f);
+
+	// About +25 % height at the full boost, as SMB1's fastest jump (height grows with the square of the take-off speed)
+	const FGSTN_JumpParams Params;
+	const double Plain = FGSTN_JumpLogic::SimulateApex(FVector(0.0, 0.0, -1.0), 980.0, 1000.0, 100, Params).Height;
+	const double Running = FGSTN_JumpLogic::SimulateApex(FVector(0.0, 0.0, -1.0), 980.0, 1000.0 * Boost.VelocityScale(900.0), 100, Params).Height;
+	TestTrue(*FString::Printf(TEXT("running jump is higher (%.1f vs %.1f)"), Running, Plain), Running > Plain * 1.1);
+
+	// A step instead of a ramp when the two speeds meet
+	Boost.FullSpeed = Boost.MinSpeed;
+	TestEqual(TEXT("step: below"), Boost.VelocityScale(400.0), 1.f);
+	TestEqual(TEXT("step: at or above"), Boost.VelocityScale(470.0), 1.12f, 1e-4f);
+	return true;
+}
+
 #endif

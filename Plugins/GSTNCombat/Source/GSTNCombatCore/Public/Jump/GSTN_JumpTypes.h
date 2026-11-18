@@ -45,6 +45,48 @@ enum class EGSTN_JumpGravityModel : uint8
 	CutUntilApex
 };
 
+/**
+ * Running jump (owner 2026-11-18, option per kit, OFF by default): a ground jump taken faster goes higher, as in the early 2D Mario games (SMB1
+ * gives its fastest jump 5 px/f instead of 4: about +25 % height). The take-off speed JumpVelocity is scaled by VelocityScale of the horizontal
+ * speed at the take-off (the speed across local up, from the Mover sync state of the frame before: the same on every machine). Linear between
+ * MinSpeed (scale 1) and FullSpeed (MaxVelocityScale); the height grows with the square of the scale (1.12 = +25 %). Air jumps are never boosted.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_JumpRunBoost
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Jump")
+	bool bEnabled = false;
+
+	/** Horizontal speed at and below which the jump is the plain one, cm/s. Default: run stage 1 (470) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Jump", meta = (EditCondition = "bEnabled", ClampMin = "0", ForceUnits = "cm/s"))
+	float MinSpeed = 470.f;
+
+	/** Horizontal speed at and above which the full boost applies, cm/s. Default: run stage 3, sprint 2 (850) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Jump", meta = (EditCondition = "bEnabled", ClampMin = "0", ForceUnits = "cm/s"))
+	float FullSpeed = 850.f;
+
+	/** Take-off speed multiplier at FullSpeed. 1.12 = about +25 % height (SMB1's fastest jump; also Mario 3D World JumpPow / JumpPowLow) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Jump", meta = (EditCondition = "bEnabled", ClampMin = "1", ClampMax = "2"))
+	float MaxVelocityScale = 1.12f;
+
+	/** The multiplier of JumpVelocity for a ground jump taken at HorizontalSpeed (1 when disabled) */
+	float VelocityScale(double HorizontalSpeed) const
+	{
+		if (!bEnabled || MaxVelocityScale <= 1.f)
+		{
+			return 1.f;
+		}
+		if (FullSpeed <= MinSpeed)
+		{
+			return HorizontalSpeed >= MinSpeed ? MaxVelocityScale : 1.f;
+		}
+		const float Alpha = FMath::Clamp(static_cast<float>((HorizontalSpeed - MinSpeed) / (FullSpeed - MinSpeed)), 0.f, 1.f);
+		return FMath::Lerp(1.f, MaxVelocityScale, Alpha);
+	}
+};
+
 /** What an external launch does to the air jumps already used */
 UENUM(BlueprintType)
 enum class EGSTN_AirJumpsOnLaunch : uint8
