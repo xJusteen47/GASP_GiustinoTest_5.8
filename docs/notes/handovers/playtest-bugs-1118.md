@@ -62,3 +62,9 @@ fall 8.27, salto pieno 350 cm apice 31 frame, tocco 110 cm apice 10 frame. Scrip
 
 **Seguito 8 (12:35):** kit rosa sostituito dal giallo: test_hub.play_setup (watcher del hub, 4 s dopo Play) dava DEFAULT_KIT = KIT_Test_Hits
 (tinta 64°, giallo; Playtest 301°, rosa; formula di GSTN_KitPlaceholderLook) a tutti i giocatori, sopra gstn.Debug.KitAtStart. Ora usa KitAtStart se impostato.
+
+**Seguito 9 (13:02, owner: rifiniture uguali su tutti i kit):** Tools/GAS/align_kits_movement_1118.py (UnrealEditor-Cmd). DA_Locomotion_Default prende
+il Jump Designer del kit rosa salvato dall'owner (300 cm, 0.5 s, MaxHold 20, MinHold 3, hold ratio 0.53); il Default prima aveva 1000 cm / cut 0.58 (in
+Saved/Diag1118/align_kits.txt). KIT_Test_Playtest torna sul Default, DA_Locomotion_Playtest eliminato. Air crouch aggiunto a Hits, OverlordDropkick,
+OverlordDAirV10 R0-R4. Stats di movimento uguali per 34 kit (WalkSpeed 600, JumpVelocity 1350; Weight e MaxCarryWeight tenuti): valori di prima in
+kit-stats-before-align-1118.tsv. Non provato in PIE.
