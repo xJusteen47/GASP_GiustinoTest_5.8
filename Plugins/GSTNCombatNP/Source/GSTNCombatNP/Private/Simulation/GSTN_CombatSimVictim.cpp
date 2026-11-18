@@ -762,6 +762,7 @@ void UGSTN_CombatSimComponent::ExecuteReactionMove(float StepMs)
 	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityY, ReactionMove.Velocity.Y);
 	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityZ, ReactionMove.Velocity.Z);
 	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveDecay, ReactionMove.DecayPerFrame);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveDragFrames, static_cast<float>(ReactionMove.DragFrames));
 	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveGravityScale, ReactionMove.GravityScale);
 	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveSeconds, ReactionMove.Frames * StepMs * 0.001f);
 	if (bLaunch && ReactionMove.BalloonFrames > 0)

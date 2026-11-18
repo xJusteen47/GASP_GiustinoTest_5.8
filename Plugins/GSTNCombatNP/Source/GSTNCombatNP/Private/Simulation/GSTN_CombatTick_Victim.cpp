@@ -651,6 +651,8 @@ void FGSTN_CombatVictim::StepDefaultSurfaceBounce(const FGSTN_ImpactStepInput& I
 		Out.Move.Velocity = Normal * BumpSpeed + Tangent * FMath::Clamp(static_cast<double>(Rules.BumpTangentKeep), 0.0, 1.0);
 		Out.Move.Frames = FMath::Max(FMath::Max(HitstunLeft, Frames), TumbleProbeFrames);
 		Out.Move.DecayPerFrame = FMath::Clamp(Rules.BumpDragPerFrame, 0.01f, 1.f);
+		// The drag stops the push within the clip; the long life only carries the contact probe (bug pass C1)
+		Out.Move.DragFrames = Frames;
 		Core.Hit.HitstunEndFrame = FMath::Max(Core.Hit.HitstunEndFrame, Frame + Frames);
 		Core.Hit.ImpactEndFrame = Frame + 1;
 		Core.Hit.BumpEndFrame = Frame + Frames;

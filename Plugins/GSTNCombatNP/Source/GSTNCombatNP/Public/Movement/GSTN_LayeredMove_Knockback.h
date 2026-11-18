@@ -40,6 +40,14 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_Knockback : public FLayeredMoveBase
 	UPROPERTY()
 	float DecayPerFrame = 0.f;
 
+	/** Frames of the move the drag acts on, 0 = its whole life. A wall or ceiling bump drags only through its clip (bug pass C1: the drag
+	 * outlived the bump by ~4 s, slowing the walk after the get-up and eating the air drift after a tumble recovery) */
+	UPROPERTY()
+	uint16 DragFrames = 0;
+
+	/** The drag of the move at its current frame: DecayPerFrame inside DragFrames (or always when 0), else none */
+	float ActiveDragPerFrame() const { return (DragFrames == 0 || ElapsedFrames < DragFrames) ? DecayPerFrame : 0.f; }
+
 	/** 1 = the gravity of the movement mode; the move adds the difference as an extra acceleration */
 	UPROPERTY()
 	float GravityScale = 1.f;

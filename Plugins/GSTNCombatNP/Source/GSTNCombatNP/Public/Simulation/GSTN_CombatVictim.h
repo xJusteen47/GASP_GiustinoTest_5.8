@@ -126,6 +126,8 @@ struct FGSTN_ReactionMove
 	EKind Kind = EKind::None;
 	FVector Velocity = FVector::ZeroVector;
 	float DecayPerFrame = 0.f;
+	/** Frames the drag acts on, 0 = the whole move (FGSTN_LayeredMove_Knockback::DragFrames) */
+	int32 DragFrames = 0;
 	float GravityScale = 1.f;
 
 	/** The lifetime of the move: the frames left of the hitstun */

@@ -351,6 +351,8 @@ bool FGSTN_ImpactWallCeilingDefaultBounceTest::RunTest(const FString& Parameters
 	// 4 cm under a 0.25 drag at 62.5 Hz: 4 x 0.25 x 62.5 = 62.5 cm/s
 	TestTrue(*FString::Printf(TEXT("smallest bump off the wall (%s)"), *Bump.Move.Velocity.ToString()), FMath::IsNearlyEqual(Bump.Move.Velocity.X, -62.5, 0.5));
 	TestEqual(TEXT("the bump drags"), Bump.Move.DecayPerFrame, 0.25f);
+	TestEqual(TEXT("C1: only through the bump clip"), Bump.Move.DragFrames, 14);
+	TestTrue(TEXT("C1: the move outlives the clip (contact probe)"), Bump.Move.Frames > 14);
 	TestTrue(TEXT("keeps half the slide"), FMath::IsNearlyEqual(Bump.Move.Velocity.Y, 50.0, 1.0) && FMath::IsNearlyEqual(Bump.Move.Velocity.Z, -100.0, 1.0));
 	TestEqual(TEXT("bump window"), Soft.Core.Hit.BumpEndFrame, 11 + 14);
 	TestEqual(TEXT("on a wall"), static_cast<int32>(Soft.Core.Hit.BumpKind), static_cast<int32>(FGSTN_HitSyncState::BumpKindWall));

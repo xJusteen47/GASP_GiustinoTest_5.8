@@ -403,7 +403,7 @@ bool FGSTN_RunStageMover::ApplyAirMomentum(const UMoverComponent& MoverComp, con
 	{
 		if (Move.IsValid() && Move->GetScriptStruct()->IsChildOf(FGSTN_LayeredMove_Knockback::StaticStruct()))
 		{
-			Input.ExternalDragPerFrame = FMath::Max(Input.ExternalDragPerFrame, static_cast<const FGSTN_LayeredMove_Knockback&>(*Move).DecayPerFrame);
+			Input.ExternalDragPerFrame = FMath::Max(Input.ExternalDragPerFrame, static_cast<const FGSTN_LayeredMove_Knockback&>(*Move).ActiveDragPerFrame());
 		}
 	}
 

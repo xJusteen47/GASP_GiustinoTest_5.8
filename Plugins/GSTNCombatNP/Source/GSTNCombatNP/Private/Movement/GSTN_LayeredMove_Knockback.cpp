@@ -91,7 +91,7 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 		return true;
 	}
 	const FVector Horizontal = Current - Up * Current.Dot(Up);
-	FVector Extra = -Horizontal * FMath::Clamp<double>(DecayPerFrame, 0.0, 1.0);
+	FVector Extra = -Horizontal * FMath::Clamp<double>(ActiveDragPerFrame(), 0.0, 1.0);
 	if (MoverComp && !FMath::IsNearlyEqual(GravityScale, 1.f))
 	{
 		Extra += MoverComp->GetGravityAcceleration() * (GravityScale - 1.0) * Dt;
@@ -183,6 +183,10 @@ void FGSTN_LayeredMove_Knockback::NetSerialize(FArchive& Ar)
 	Super::NetSerialize(Ar);
 	SerializePackedVector<10, 16>(Velocity, Ar);
 	Ar << DecayPerFrame;
+	if (DecayPerFrame > 0.f)
+	{
+		Ar << DragFrames;
+	}
 	Ar << GravityScale;
 	Ar << ElapsedFrames;
 	Ar << ForceMovementMode;
@@ -216,6 +220,7 @@ FEffectMoveContainer UGSTN_KnockbackMoveCreator::MakeMove_Implementation(UMoverC
 			Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityY, false, 0.f),
 			Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityZ, false, 0.f));
 		Move.DecayPerFrame = Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveDecay, false, 0.f);
+		Move.DragFrames = static_cast<uint16>(FMath::Clamp(FMath::RoundToInt(Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveDragFrames, false, 0.f)), 0, 65535));
 		Move.GravityScale = Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveGravityScale, false, 1.f);
 		Move.DurationMs = Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveSeconds, false, 0.f) * 1000.f;
 		Move.BalloonFrames = static_cast<uint8>(FMath::Clamp(FMath::RoundToInt(Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveBalloonFrames, false, 0.f)), 0, 255));

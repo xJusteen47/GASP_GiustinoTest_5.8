@@ -16,6 +16,7 @@ namespace GSTNCombatNPTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveBalloonFrames, "Combat.SetByCaller.MoveBalloonFrames", "Balloon knockback: the flight frames the warp of a knockback move covers (0 = none)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveBalloonM0, "Combat.SetByCaller.MoveBalloonM0", "Balloon knockback: the speed multiplier of the first frame");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveBalloonEnd, "Combat.SetByCaller.MoveBalloonEnd", "Balloon knockback: the fraction of the flight left when the speed-up ends");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveDragFrames, "Combat.SetByCaller.MoveDragFrames", "Frames of a knockback move its drag acts on (0 = the whole move)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_MoveSeconds, "Combat.SetByCaller.MoveSeconds", "Lifetime in seconds of a knockback or push back move");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_FacingYaw, "Combat.SetByCaller.FacingYaw", "Yaw (degrees, about the local up) of a startup steering turn, read by UGSTN_SetFacingMoveCreator");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(SetByCaller_FacingTurnVelocity, "Combat.SetByCaller.FacingTurnVelocity", "1 when a facing turn also turns the velocity about the local up (a reverse with TurnWithFacing momentum)");
