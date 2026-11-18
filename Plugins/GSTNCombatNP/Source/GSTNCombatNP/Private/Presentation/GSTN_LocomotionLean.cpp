@@ -151,9 +151,17 @@ void FGSTN_RunStartScrambleState::Step(const FGSTN_RunStartScrambleSettings& Set
 	// The extra lean: a spring on its target (cut in fast, out with one rebound past the run lean)
 	const float Target = Settings.ExtraLeanDeg * Alpha;
 	const float Omega = 2.f * PI * FMath::Max(Settings.LeanSpringFrequency, 0.1f);
-	const float Accel = Omega * Omega * (Target - LeanDeg) - 2.f * FMath::Max(Settings.LeanSpringDamping, 0.f) * Omega * LeanRate;
-	LeanRate += Accel * Dt;
-	LeanDeg += LeanRate * Dt;
+	const float Damping = FMath::Max(Settings.LeanSpringDamping, 0.f);
+	// Sub-steps of at most 1/120 s, like the lean solver: one explicit step per frame diverges at 30 fps with the default 6 Hz / 0.55
+	// (omega * dt past the stable bound), and the lean grew without end on a slow machine (bugpass-1, B1)
+	const int32 SubSteps = FMath::Clamp(FMath::CeilToInt(Dt * 120.f), 1, 8);
+	const float SubDt = Dt / SubSteps;
+	for (int32 i = 0; i < SubSteps; ++i)
+	{
+		const float Accel = Omega * Omega * (Target - LeanDeg) - 2.f * Damping * Omega * LeanRate;
+		LeanRate += Accel * SubDt;
+		LeanDeg += LeanRate * SubDt;
+	}
 	if (!bActive && FMath::Abs(LeanDeg) < 0.05f && FMath::Abs(LeanRate) < 0.5f)
 	{
 		LeanDeg = 0.f;

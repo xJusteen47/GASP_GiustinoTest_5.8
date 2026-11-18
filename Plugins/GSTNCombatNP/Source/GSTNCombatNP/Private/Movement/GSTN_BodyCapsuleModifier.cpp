@@ -204,14 +204,15 @@ void FGSTN_BodyCapsuleModifier::OnPreMovement(UMoverComponent* MoverComp, const 
 namespace GSTNBodyCapsule
 {
 	/** A swept move of the updated component (only the world blocks: fighters ignore each other), once more from a hair above when it starts touching the floor */
-	static void SweptHorizontalMove(USceneComponent& Updated, const FVector& Move)
+	static void SweptHorizontalMove(USceneComponent& Updated, const FVector& Move, const FVector& Up)
 	{
 		const FVector Start = Updated.GetComponentLocation();
 		FHitResult Hit;
 		Updated.SetWorldLocation(Start + Move, /*bSweep*/ true, &Hit, ETeleportType::None);
 		if (Hit.bStartPenetrating)
 		{
-			const FVector Lift(0.0, 0.0, 0.5);
+			// Along the gravity up (bugpass-1 B7; world Z before), so a custom-gravity floor is cleared too
+			const FVector Lift = (Up.IsNearlyZero() ? FVector::UpVector : Up.GetSafeNormal()) * 0.5;
 			Updated.SetWorldLocation(Start + Lift, true, nullptr, ETeleportType::None);
 			Updated.SetWorldLocation(Updated.GetComponentLocation() + Move, true, nullptr, ETeleportType::None);
 			Updated.SetWorldLocation(Updated.GetComponentLocation() - Lift, true, nullptr, ETeleportType::None);
@@ -240,7 +241,7 @@ void FGSTN_BodyCapsuleModifier::OnPostMovement(UMoverComponent* MoverComp, const
 	}
 	if (!Correction.IsNearlyZero(0.001))
 	{
-		GSTNBodyCapsule::SweptHorizontalMove(*Updated, Correction);
+		GSTNBodyCapsule::SweptHorizontalMove(*Updated, Correction, MoverComp->GetUpDirection());
 	}
 	Sync->SetTransforms_WorldSpace(Updated->GetComponentLocation(), Sync->GetOrientation_WorldSpace(), Velocity,
 		Sync->GetAngularVelocityDegrees_WorldSpace(), Sync->GetMovementBase(), Sync->GetMovementBaseBoneName());

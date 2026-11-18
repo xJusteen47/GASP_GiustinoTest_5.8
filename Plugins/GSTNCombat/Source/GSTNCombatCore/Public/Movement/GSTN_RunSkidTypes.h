@@ -44,8 +44,12 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid")
 	bool bEnabled = true;
 
-	/** Lowest 0-based run stage that skids (1 = stage 2: at stage 1 a reversal is a quick pivot of the walking mode, the plan's rule) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid", meta = (ClampMin = "0"))
+	/**
+	 * Lowest run stage that skids, counted FROM 0 (0 = run, 1 = sprint 1, 2 = sprint 2). Unlike Boost Target Stage, which counts from 1: the
+	 * display name says so (bugpass-1 B2, decision A: name only, the stored values keep their meaning). 1 = at the run a reversal is a quick
+	 * pivot of the walking mode, the plan's rule
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid", meta = (ClampMin = "0", DisplayName = "Min Stage Index (0 = Run)"))
 	int32 MinStage = 1;
 
 	/** Ground speed (at the reference WalkSpeed) under which no skid starts */
