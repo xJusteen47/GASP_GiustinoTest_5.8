@@ -49,3 +49,7 @@ la facing resta tenuta; a terra/downed invariato. Test 843/843, AirMomentum 6/6 
 vs 0.5 +-0.005; altezza ok) in test_1118e.log.ue.log. Non corretto qui (codice del thread vbnr9g). Gravità: L_Test_Hub senza override (global_gravity_set False),
 PhysicsSettings default -980 -> WorldGravity 980 giusto (Saved/Diag1118/gravity.txt). Jump Designer sul kit rosa NON acceso: KIT_Test_Playtest usa
 DA_Locomotion_Default condiviso da tutti i 36 kit (regola 12): serve decidere se accenderlo per tutti o fare un DA_Locomotion_Playtest.
+
+**Seguito 5 (10:25):** merge 46224f43 (test con TimeToApex 0.8). Ancora FAIL, e peggio: modello 0 altezza 309.9 / apice 0.572 s, modello 1
+304.5 / 0.541 s (attesi 350 / 0.8) -> non è condizionamento: closed form e FGSTN_JumpLogic::SimulateApex non concordano (test_1118f.log.ue.log).
+Calcolo a mano del closed form (K .29, T .48, A .32): Fall 1469, V0 675, v a fine finestra 470 -> serve guardare cosa fa la logica dopo la finestra.
