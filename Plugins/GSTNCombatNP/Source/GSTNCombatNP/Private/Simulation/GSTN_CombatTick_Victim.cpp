@@ -397,6 +397,8 @@ void FGSTN_CombatVictim::Resolve(const FGSTN_VictimTickInput& In, FGSTN_CombatSy
 			Out.bCancelledMove = true;
 		}
 		Core.ActionState = EGSTN_ActionState::KO;
+		// The recovered tumble's flag belongs to the Tumble state only (bug pass 3, C3)
+		Core.bTumbleActionable = false;
 	}
 
 	if (bAnyStaggered)
@@ -518,6 +520,8 @@ void FGSTN_CombatVictim::StepImpact(const FGSTN_ImpactStepInput& In, FGSTN_Comba
 	{
 		const int32 Frames = FMath::Max(Resolved.SplatFrames, 1);
 		Core.ActionState = EGSTN_ActionState::Splat;
+		// A recovered tumble can splat too: the flag must not outlive the Tumble state (bug pass 3, C3)
+		Core.bTumbleActionable = false;
 		Core.Hit.ImpactEndFrame = Frame + Frames;
 		Core.Hit.ImpactProfileQ = 0;
 		Core.Hit.ClearPendingReaction();
@@ -675,6 +679,7 @@ bool FGSTN_CombatVictim::ApplyZoneKO(FGSTN_CombatSyncCore& Core, int32 Frame, bo
 		bCancelledMove = true;
 	}
 	Core.ActionState = EGSTN_ActionState::KO;
+	Core.bTumbleActionable = false;
 	return true;
 }
 

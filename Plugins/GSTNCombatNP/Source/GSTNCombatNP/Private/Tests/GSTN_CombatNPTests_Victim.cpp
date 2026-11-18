@@ -898,6 +898,14 @@ bool FGSTN_VictimTumbleAirRecoveryTest::RunTest(const FString& Parameters)
 	FGSTN_CombatVictim::LeaveTumbleByAction(Acting);
 	TestTrue(TEXT("a command leaves the tumble"), Acting.ActionState == EGSTN_ActionState::Actionable && !Acting.bTumbleActionable);
 
+	// A KO from a recovered tumble drops the flag with the state (bug pass 3, C3): it lives only in Tumble
+	{
+		FGSTN_CombatSyncCore Zoned = Tumble.Core;
+		bool bCancelled = false;
+		TestTrue(TEXT("zone KO from a recovered tumble"), FGSTN_CombatVictim::ApplyZoneKO(Zoned, HitstunEnd + 1, true, bCancelled));
+		TestTrue(TEXT("the KO clears the recovered flag"), Zoned.ActionState == EGSTN_ActionState::KO && !Zoned.bTumbleActionable);
+	}
+
 	// A new hit locks it again
 	Tumble.Entries = { FVictimFixture::MakeEntry(HitstunEnd + 3, 2000.f) };
 	Tumble.Run(HitstunEnd + 4);
