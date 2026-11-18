@@ -30,6 +30,76 @@ enum class EGSTN_RunSkidPhase : uint8
 };
 
 /**
+ * The skid driven by its clip (owner choice A part 2, 2026-11-18): the ground speed and the turn of the skid clip's root motion, baked
+ * into plain samples (UGSTN_RunSkidTrackLibrary::BakeRunSkidRootTrack, or the locomotion profile's SkidRootMotionClip in the editor).
+ * The simulation reads only these numbers, never the clip: every machine computes the same velocity from the same live frame, so the
+ * move stays deterministic and rollback safe, and the capsule moves the way the clip's feet do (no glide while the clip still brakes).
+ *
+ * Speed is signed along the clip's entry direction (> 0 = still braking along the old run, < 0 = pushing off the other way). Turn is the
+ * fraction (0..1) of the clip's total root yaw already done at that sample.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_RunSkidRootTrack
+{
+	GENERATED_BODY()
+
+	/** On (and baked) = the skid follows the clip; off = the constant brake and the Exit turn of the tuning, as before */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run Skid|Clip Root Motion")
+	bool bEnabled = false;
+
+	/** Samples per second of the baked arrays */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run Skid|Clip Root Motion", meta = (ClampMin = "1", ForceUnits = "Hz"))
+	float SampleRate = 60.f;
+
+	/** Clip speed of the presentation and the simulation together (1 = the clip's own speed, owner choice A) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run Skid|Clip Root Motion", meta = (ClampMin = "0.1", ClampMax = "4"))
+	float PlayRate = 1.f;
+
+	/**
+	 * The run usually enters faster than the clip's own first frame: the braking speed starts at the run's speed scaled down to the clip's
+	 * over these seconds (no velocity pop on the first frame). 0 = the clip's speed from the first frame
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run Skid|Clip Root Motion", meta = (ClampMin = "0", ClampMax = "1", ForceUnits = "s"))
+	float EntryBlendSeconds = 0.1f;
+
+	/** Scale of the push-off speed (the samples under 0). 1 = the clip's own */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run Skid|Clip Root Motion", meta = (ClampMin = "0", ClampMax = "3"))
+	float ReverseSpeedScale = 1.f;
+
+	/** Clip second at which the skid hands over to the walking mode (the run restarts). 0 = the end of the baked clip */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run Skid|Clip Root Motion", meta = (ClampMin = "0", ForceUnits = "s"))
+	float EndTime = 0.f;
+
+	/** Baked: root ground speed along the clip's entry direction per sample, cm/s */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run Skid|Clip Root Motion|Baked")
+	TArray<float> Speed;
+
+	/** Baked: fraction of the clip's total root yaw done per sample (0..1) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run Skid|Clip Root Motion|Baked")
+	TArray<float> Turn;
+
+	/** Baked: the side the clip turns (+1 = positive yaw); a stick reversed by about 180 degrees turns this way, like the mesh */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run Skid|Clip Root Motion|Baked")
+	float TurnSign = 1.f;
+
+	/** Baked: the clip's total root yaw in degrees (information only) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run Skid|Clip Root Motion|Baked")
+	float TotalYawDeg = 0.f;
+
+	/** Baked: the clip the samples came from (information only, the simulation never loads it) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run Skid|Clip Root Motion|Baked")
+	FSoftObjectPath SourceClip;
+
+	bool IsUsable() const { return bEnabled && Speed.Num() >= 2 && Turn.Num() == Speed.Num() && SampleRate > 0.f && PlayRate > 0.f; }
+
+	/** Seconds of baked clip */
+	float GetBakedLength() const { return Speed.Num() > 1 ? static_cast<float>(Speed.Num() - 1) / SampleRate : 0.f; }
+
+	/** Clip second where the skid ends (EndTime clamped to the baked length) */
+	float GetEndTime() const { const float Length = GetBakedLength(); return EndTime > 0.f ? FMath::Min(EndTime, Length) : Length; }
+};
+
+/**
  * The run skid of a kit (Mario-style run P2): the stick pushed against a fast run brakes the character on its feet along the old
  * direction with a real deceleration, then it turns and pushes off the other way. Below the threshold (stage 1, or a slow walk) the
  * walking mode's own tight turn handles it, no skid.
@@ -114,6 +184,13 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Presentation", meta = (ClampMin = "0", ClampMax = "60"))
 	float PlaceholderLeanDeg = 22.f;
+
+	/**
+	 * Owner choice A part 2: the skid takes its speed and turn from the clip's baked root motion. On = Brake, ExitFrames and ExitSpeed are
+	 * not used (the clip decides when the body rests, turns and pushes off, and the walking mode takes over at its end)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Run Skid|Clip Root Motion")
+	FGSTN_RunSkidRootTrack RootTrack;
 };
 
 /** Which air control model a kit uses (owner decision 1C: both, per kit) */
@@ -174,4 +251,25 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidMath
 
 	/** Stopping distance of a skid (tuning aid and the anim layer's distance matching) */
 	static float StopDistance(float StartSpeed, float Brake);
+
+	/** Root track: the clip time of a live frame (0 = the first) */
+	static float TrackClipTime(const FGSTN_RunSkidRootTrack& Track, int32 LiveFrame, float DeltaSeconds);
+
+	/** Root track: the baked speed (signed, cm/s of clip time) and turn fraction at a clip time, linear between samples, clamped */
+	static void SampleTrack(const FGSTN_RunSkidRootTrack& Track, float ClipTime, float& OutSpeed, float& OutTurn);
+
+	/** Root track: live frames of the whole skid (the move ends after this many) */
+	static int32 TrackFrames(const FGSTN_RunSkidRootTrack& Track, float DeltaSeconds);
+
+	/** Root track: the first live frame whose speed is no longer along the old direction (the Exit phase starts there) */
+	static int32 TrackRestFrame(const FGSTN_RunSkidRootTrack& Track, float DeltaSeconds);
+
+	/**
+	 * Root track: the ground speed of a live frame, signed along the old direction (> 0 braking, < 0 pushing off), world cm/s: the clip's
+	 * speed times PlayRate, the braking part blended from the run's EntrySpeed, the push-off scaled by ReverseSpeedScale
+	 */
+	static float TrackGroundSpeed(const FGSTN_RunSkidRootTrack& Track, int32 LiveFrame, float DeltaSeconds, float EntrySpeed);
+
+	/** Root track: the turn fraction (0..1) the facing has reached at the end of a live frame (1 on the last one) */
+	static float TrackTurnAt(const FGSTN_RunSkidRootTrack& Track, int32 LiveFrame, float DeltaSeconds);
 };

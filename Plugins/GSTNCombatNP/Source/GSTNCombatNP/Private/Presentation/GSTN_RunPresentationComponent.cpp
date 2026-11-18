@@ -154,6 +154,12 @@ void UGSTN_RunPresentationComponent::TickSkidPlayTime(float DeltaTime)
 		return;
 	}
 	const float Length = SkidSectionClip->GetPlayLength();
+	// With the sim on the clip's root track, the clip plays at the track's rate, the same clock as the capsule (owner choice A part 2)
+	const FGSTN_LocomotionSimTuning* Locomotion = FGSTN_LocomotionAttach::Find(GetOwner());
+	if (Locomotion && Locomotion->RunStages.Skid.RootTrack.IsUsable())
+	{
+		DeltaTime *= Locomotion->RunStages.Skid.RootTrack.PlayRate;
+	}
 	if (FootSlide.Source == EGSTN_FootSlideSource::RunSkid && FootSlide.SkidPhase != EGSTN_RunSkidPhase::None)
 	{
 		SkidPlayTime = SkidPlayTime < 0.f ? 0.f : FMath::Min(SkidPlayTime + DeltaTime, Length);

@@ -11,6 +11,7 @@
 #include "GSTN_LocomotionProfile.generated.h"
 
 class AActor;
+class UAnimSequence;
 class UGSTN_PrimaryKitDefinition;
 struct FGSTN_CompileInput;
 struct FGSTN_LoadoutExtensionContext;
@@ -75,6 +76,18 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Jump Designer", meta = (ShowOnlyInnerProperties))
 	FGSTN_JumpDesignerTuning JumpDesigner;
+
+	/**
+	 * Owner choice A part 2 (2026-11-18): the skid clip whose root motion the skid follows. Setting it (or Bake Skid Root Track) bakes its
+	 * root speed and turn into RunStages.Skid.RootTrack and turns the track on; the simulation reads only those samples. Use the clip the
+	 * skid presentation plays (main-graph Skid state / skid section clip), so the feet and the capsule agree
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Run Skid Clip")
+	TSoftObjectPtr<UAnimSequence> SkidRootMotionClip;
+
+	/** Bakes SkidRootMotionClip again (after the clip changed) */
+	UFUNCTION(CallInEditor, BlueprintCallable, Category = "Locomotion|Run Skid Clip")
+	void BakeSkidRootTrack();
 
 	virtual void PostLoad() override;
 #if WITH_EDITOR

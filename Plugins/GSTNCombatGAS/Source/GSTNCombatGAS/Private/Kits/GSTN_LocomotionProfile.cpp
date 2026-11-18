@@ -5,6 +5,7 @@
 #include "Components/ActorComponent.h"
 #include "GameFramework/Actor.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
+#include "Kits/GSTN_RunSkidTrackLibrary.h"
 #include "Loadout/GSTN_LoadoutAssembly.h"
 #include "Loadout/GSTN_LoadoutExtensions.h"
 #include "UObject/ObjectKey.h"
@@ -77,8 +78,18 @@ void UGSTN_LocomotionProfile::PostEditChangeProperty(FPropertyChangedEvent& Prop
 	Super::PostEditChangeProperty(PropertyChangedEvent);
 	// The read-only derived fields follow every edit
 	FGSTN_JumpDesigner::Refresh(JumpDesigner);
+	// A new skid clip: bake its root track now, so the saved profile carries the samples the simulation reads
+	if (PropertyChangedEvent.GetMemberPropertyName() == GET_MEMBER_NAME_CHECKED(UGSTN_LocomotionProfile, SkidRootMotionClip) && !SkidRootMotionClip.IsNull())
+	{
+		UGSTN_RunSkidTrackLibrary::BakeProfileSkidRootTrack(this);
+	}
 }
 #endif
+
+void UGSTN_LocomotionProfile::BakeSkidRootTrack()
+{
+	UGSTN_RunSkidTrackLibrary::BakeProfileSkidRootTrack(this);
+}
 
 const FGSTN_LocomotionSimTuning* FGSTN_LocomotionAttach::Find(const AActor* Owner)
 {

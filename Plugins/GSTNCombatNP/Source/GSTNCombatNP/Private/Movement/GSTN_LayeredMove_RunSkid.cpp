@@ -67,6 +67,10 @@ EGSTN_RunSkidPhase FGSTN_LayeredMove_RunSkid::GetPhase() const
 
 float FGSTN_LayeredMove_RunSkid::GetSlideSpeed(float DeltaSeconds) const
 {
+	if (bClipTrack)
+	{
+		return 0.f;
+	}
 	const int32 Frame = CurrentLiveFrame == INDEX_NONE ? LiveFrames - 1 : CurrentLiveFrame;
 	return Frame >= 0 && Frame < RestFrame ? FGSTN_RunSkidMath::SpeedAt(StartSpeed, Brake, Frame, DeltaSeconds) : 0.f;
 }
@@ -137,7 +141,69 @@ bool FGSTN_LayeredMove_RunSkid::Decide(const FMoverTickStartData& StartState, co
 	JumpWindowEnd = Tuning.JumpWindowEnd;
 	LiveFrames = 0;
 	CurrentLiveFrame = INDEX_NONE;
+
+	// Clip track: the turn goes from this frame's facing to the new direction, the way the clip's root yaw goes
+	bClipTrack = Tuning.RootTrack.IsUsable();
+	StartFacing = FVector::VectorPlaneProject(Sync->GetOrientation_WorldSpace().Vector(), Up).GetSafeNormal();
+	if (StartFacing.IsNearlyZero())
+	{
+		StartFacing = Direction;
+	}
+	TurnAngleDeg = 0.f;
+	if (bClipTrack)
+	{
+		const double Sin = Up.Dot(StartFacing.Cross(TurnDirection));
+		const double Cos = StartFacing.Dot(TurnDirection);
+		double Angle = FMath::RadiansToDegrees(FMath::Atan2(Sin, Cos));
+		// A reversal near 180: turn the side the clip turns, so the capsule and the mesh agree
+		const double ClipSign = Tuning.RootTrack.TurnSign >= 0.f ? 1.0 : -1.0;
+		if (FMath::Abs(Angle) > 170.0 && FMath::Sign(Angle) != ClipSign)
+		{
+			Angle -= FMath::Sign(Angle) * 360.0;
+		}
+		TurnAngleDeg = static_cast<float>(Angle);
+	}
 	return StartSpeed > KINDA_SMALL_NUMBER && !Direction.IsNearlyZero();
+}
+
+const FGSTN_RunSkidRootTrack* FGSTN_LayeredMove_RunSkid::FindRootTrack(const UMoverComponent& MoverComp)
+{
+	const FGSTN_LocomotionSimTuning* Locomotion = FGSTN_LocomotionAttach::Find(MoverComp.GetOwner());
+	return Locomotion && Locomotion->RunStages.Skid.RootTrack.IsUsable() ? &Locomotion->RunStages.Skid.RootTrack : nullptr;
+}
+
+bool FGSTN_LayeredMove_RunSkid::GenerateClipTrackMove(const FMoverTickStartData& StartState, const UMoverComponent& MoverComp, const FGSTN_RunSkidRootTrack& Track,
+	double StepMs, FProposedMove& OutProposedMove)
+{
+	const float DeltaSeconds = static_cast<float>(StepMs * 0.001);
+	const FVector Up = MoverComp.GetUpDirection();
+
+	// Signed along the old direction: braking while > 0, then the push-off along the new direction
+	const float Ground = FGSTN_RunSkidMath::TrackGroundSpeed(Track, CurrentLiveFrame, DeltaSeconds, StartSpeed);
+	FVector Velocity = Ground >= 0.f ? Direction * Ground : TurnDirection * -Ground;
+	if (bStopAtLedge && !Velocity.IsNearlyZero() && !FGSTN_GroundProbe::HasFloorAhead(StartState, MoverComp, Velocity, StepMs))
+	{
+		// The edge: hold here, the clip goes on (the body brakes and turns in place)
+		Velocity = FVector::ZeroVector;
+	}
+
+	// Facing: where the clip's root yaw is at the end of this frame, an absolute target so nothing drifts over the frames
+	FVector Angular = FVector::ZeroVector;
+	const FMoverDefaultSyncState* Sync = StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
+	if (Sync)
+	{
+		const FVector Facing = FVector::VectorPlaneProject(Sync->GetOrientation_WorldSpace().Vector(), Up).GetSafeNormal();
+		const FVector Target = StartFacing.RotateAngleAxis(TurnAngleDeg * FGSTN_RunSkidMath::TrackTurnAt(Track, CurrentLiveFrame, DeltaSeconds), Up);
+		if (!Facing.IsNearlyZero())
+		{
+			// Signed angle about Up (UE: X cross Y = Z, a positive yaw turns X to Y)
+			const double AngleDeg = FMath::RadiansToDegrees(FMath::Atan2(Up.Dot(Facing.Cross(Target)), Facing.Dot(Target)));
+			Angular = Up * (AngleDeg / FMath::Max<double>(DeltaSeconds, UE_SMALL_NUMBER));
+		}
+	}
+	OutProposedMove.LinearVelocity = Velocity;
+	OutProposedMove.AngularVelocityDegrees = Angular;
+	return true;
 }
 
 bool FGSTN_LayeredMove_RunSkid::GenerateMove(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, const UMoverComponent* MoverComp, UMoverBlackboard* SimBlackboard, FProposedMove& OutProposedMove)
@@ -158,7 +224,20 @@ bool FGSTN_LayeredMove_RunSkid::GenerateMove(const FMoverTickStartData& StartSta
 			Finish(TimeStep);
 			return false;
 		}
-		RestFrame = FGSTN_RunSkidMath::FramesToRest(StartSpeed, Brake, DeltaSeconds);
+		const FGSTN_RunSkidRootTrack* DecidedTrack = bClipTrack ? FindRootTrack(*MoverComp) : nullptr;
+		if (DecidedTrack)
+		{
+			// The clip decides the phases: braking until its root speed turns round, then the turn and push-off to its end
+			const int32 Frames = FGSTN_RunSkidMath::TrackFrames(*DecidedTrack, DeltaSeconds);
+			RestFrame = FGSTN_RunSkidMath::TrackRestFrame(*DecidedTrack, DeltaSeconds);
+			ExitFrames = FMath::Max(Frames - RestFrame, 0);
+			EnterFrames = FMath::Min(EnterFrames, RestFrame);
+		}
+		else
+		{
+			bClipTrack = false;
+			RestFrame = FGSTN_RunSkidMath::FramesToRest(StartSpeed, Brake, DeltaSeconds);
+		}
 		Life = static_cast<uint8>(EGSTN_RunSkidLife::Running);
 	}
 
@@ -190,6 +269,18 @@ bool FGSTN_LayeredMove_RunSkid::GenerateMove(const FMoverTickStartData& StartSta
 	{
 		Finish(TimeStep);
 		return false;
+	}
+
+	if (bClipTrack)
+	{
+		const FGSTN_RunSkidRootTrack* Track = FindRootTrack(*MoverComp);
+		if (!Track)
+		{
+			// The kit lost its track mid-skid (loadout change): the walking mode takes over
+			Finish(TimeStep);
+			return false;
+		}
+		return GenerateClipTrackMove(StartState, *MoverComp, *Track, StepMs, OutProposedMove);
 	}
 
 	if (Phase != EGSTN_RunSkidPhase::Exit)
@@ -269,6 +360,11 @@ void FGSTN_LayeredMove_RunSkid::NetSerialize(FArchive& Ar)
 	uint8 bLedgeBit = bStopAtLedge ? 1 : 0;
 	Ar.SerializeBits(&bLedgeBit, 1);
 	bStopAtLedge = bLedgeBit != 0;
+	uint8 bTrackBit = bClipTrack ? 1 : 0;
+	Ar.SerializeBits(&bTrackBit, 1);
+	bClipTrack = bTrackBit != 0;
+	Ar << StartFacing;
+	Ar << TurnAngleDeg;
 	// Full precision: the speed of every frame is recomputed from these
 	Ar << Direction;
 	Ar << TurnDirection;

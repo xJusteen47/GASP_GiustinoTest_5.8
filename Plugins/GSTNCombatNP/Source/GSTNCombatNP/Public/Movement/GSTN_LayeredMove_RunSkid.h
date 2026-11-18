@@ -38,6 +38,11 @@ enum class EGSTN_RunSkidLife : uint8
  * Tags: Movement.State.Skid while running, Movement.State.Skid.JumpWindow inside the window. Derived from the move in the sync state, so a
  * rollback restores them; the combat tick copies them into the input context (kit bindings) and the presentation reads the phase.
  *
+ * Clip track (FGSTN_RunSkidTuning::RootTrack on): the body follows the skid clip instead. Each live frame takes its signed ground speed
+ * and its facing from the clip's baked root motion at clip time LiveFrame * dt * PlayRate (the presentation plays the same clip from the
+ * first skid frame at the same rate), so the brake lasts as long as the clip's, the turn goes with the clip's root yaw and the push-off
+ * hands over to the walking mode when the clip ends. The ledge and leave-the-ground rules stay.
+ *
  * Mixing: OverrideVelocity at priority 0, like the momentum slide (a freeze, HitstopPriority, wins).
  */
 USTRUCT()
@@ -103,13 +108,29 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_RunSkid : public FLayeredMoveBase
 	UPROPERTY()
 	double LastStepTimeMs = -1.0;
 
+	/**
+	 * Latched on the first frame: the kit's skid has a usable clip root track (FGSTN_RunSkidTuning::RootTrack, owner choice A part 2).
+	 * The speed and the facing of every live frame then come from the baked clip samples instead of the constant brake and the Exit turn,
+	 * RestFrame and ExitFrames from the clip's own rest and length
+	 */
+	UPROPERTY()
+	bool bClipTrack = false;
+
+	/** Clip track: unit facing of the first frame, the turn is measured from it */
+	UPROPERTY()
+	FVector StartFacing = FVector::ZeroVector;
+
+	/** Clip track: signed yaw from StartFacing to TurnDirection (degrees, about Up; a ~180 reversal turns the clip's way) */
+	UPROPERTY()
+	float TurnAngleDeg = 0.f;
+
 	/** The skid tuning of this move as latched on its first frame (the phase and window rules) */
 	FGSTN_RunSkidTuning MakeTuning() const;
 
 	/** The phase of the current live frame (None before the first frame and after the exit) */
 	EGSTN_RunSkidPhase GetPhase() const;
 
-	/** The ground speed of the current live frame along Direction (0 in the exit) */
+	/** The ground speed of the current live frame along Direction (0 in the exit). Constant brake mode only (0 with a clip track) */
 	float GetSlideSpeed(float DeltaSeconds) const;
 
 	/** The running skid in a sync state's active moves, null when there is none */
@@ -127,6 +148,12 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_RunSkid : public FLayeredMoveBase
 private:
 	void Finish(const FMoverTimeStep& TimeStep);
 	bool Decide(const FMoverTickStartData& StartState, const UMoverComponent& MoverComp);
+	/** Clip track mode: the velocity and turn of the current live frame */
+	bool GenerateClipTrackMove(const FMoverTickStartData& StartState, const UMoverComponent& MoverComp, const FGSTN_RunSkidRootTrack& Track, double StepMs, FProposedMove& OutProposedMove);
+
+public:
+	/** The kit's usable skid root track for this Mover's owner, null when there is none (static kit data, same on every machine) */
+	static const FGSTN_RunSkidRootTrack* FindRootTrack(const UMoverComponent& MoverComp);
 };
 
 template<>

@@ -330,4 +330,46 @@ bool FGSTN_MomentumSlideStickTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunSkidRootTrackTest, "GSTNCombat.Core.RunSkid.RootTrack", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunSkidRootTrackTest::RunTest(const FString& Parameters)
+{
+	// A 1 s clip at 10 Hz: braking 400 -> 0 over 0.5 s, then pushing off to -300, the turn done between 0.3 s and 0.7 s
+	FGSTN_RunSkidRootTrack Track;
+	TestFalse(TEXT("off by default"), Track.IsUsable());
+	Track.bEnabled = true;
+	Track.SampleRate = 10.f;
+	Track.EntryBlendSeconds = 0.f;
+	Track.Speed = { 400.f, 320.f, 240.f, 160.f, 80.f, 0.f, -60.f, -120.f, -180.f, -240.f, -300.f };
+	Track.Turn = { 0.f, 0.f, 0.f, 0.f, 0.25f, 0.5f, 0.75f, 1.f, 1.f, 1.f, 1.f };
+	TestTrue(TEXT("usable once baked"), Track.IsUsable());
+	TestEqual(TEXT("baked length"), Track.GetBakedLength(), 1.f);
+
+	const float Step = 0.05f;
+	TestEqual(TEXT("20 live frames cover the clip"), FGSTN_RunSkidMath::TrackFrames(Track, Step), 20);
+	TestEqual(TEXT("rest where the clip's speed turns round (0.5 s)"), FGSTN_RunSkidMath::TrackRestFrame(Track, Step), 10);
+	TestEqual(TEXT("frame 1 brakes at the clip's speed"), FGSTN_RunSkidMath::TrackGroundSpeed(Track, 1, Step, 650.f), 360.f, 0.01f);
+	TestEqual(TEXT("frame 14 pushes off"), FGSTN_RunSkidMath::TrackGroundSpeed(Track, 14, Step, 650.f), -120.f, 0.01f);
+	TestEqual(TEXT("the turn reaches 1 on the last frame"), FGSTN_RunSkidMath::TrackTurnAt(Track, 19, Step), 1.f);
+	TestEqual(TEXT("half the turn at the end of frame 9"), FGSTN_RunSkidMath::TrackTurnAt(Track, 9, Step), 0.5f, 0.001f);
+
+	// The run enters faster than the clip: scaled from the run's speed to the clip's over the blend
+	Track.EntryBlendSeconds = 0.1f;
+	TestEqual(TEXT("first frame keeps the run's speed"), FGSTN_RunSkidMath::TrackGroundSpeed(Track, 0, Step, 600.f), 600.f, 0.01f);
+	TestEqual(TEXT("after the blend: the clip's speed"), FGSTN_RunSkidMath::TrackGroundSpeed(Track, 2, Step, 600.f), 320.f, 0.01f);
+
+	// Play rate: the clip runs twice as fast, so do its speeds, and the skid lasts half as long
+	Track.PlayRate = 2.f;
+	TestEqual(TEXT("double rate: 10 frames"), FGSTN_RunSkidMath::TrackFrames(Track, Step), 10);
+	TestEqual(TEXT("double rate: speeds doubled"), FGSTN_RunSkidMath::TrackGroundSpeed(Track, 7, Step, 0.f), -240.f, 0.01f);
+
+	// End time: the run restarts at 0.8 s, the turn still completes on the last frame
+	Track.PlayRate = 1.f;
+	Track.EndTime = 0.6f;
+	TestEqual(TEXT("cut at 0.6 s: 12 frames"), FGSTN_RunSkidMath::TrackFrames(Track, Step), 12);
+	TestEqual(TEXT("cut: the turn normalised to the end time"), FGSTN_RunSkidMath::TrackTurnAt(Track, 9, Step), 0.5f / 0.75f, 0.001f);
+	TestEqual(TEXT("cut: done on the last frame"), FGSTN_RunSkidMath::TrackTurnAt(Track, 11, Step), 1.f);
+	return true;
+}
+
 #endif
