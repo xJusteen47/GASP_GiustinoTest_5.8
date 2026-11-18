@@ -55,3 +55,7 @@ DA_Locomotion_Default condiviso da tutti i 36 kit (regola 12): serve decidere se
 Calcolo a mano del closed form (K .29, T .48, A .32): Fall 1469, V0 675, v a fine finestra 470 -> serve guardare cosa fa la logica dopo la finestra.
 
 **Seguito 6 (10:28):** merge 5ea4fe5c: test 847/847, 0 fail, JumpDesigner tutti ok (test_1118g.log.ue.log).
+
+**Seguito 7 (10:35, owner A):** DA_Locomotion_Playtest = copia di DA_Locomotion_Default, solo KIT_Test_Playtest punta a lei (2 riferimenti
+sostituiti), Jump Designer on 350 cm / 0.5 s. Ricavati (Saved/Diag1118/loco_playtest3.txt): velocità 1311, gravità rise 2.40 / cut 8.27 /
+fall 8.27, salto pieno 350 cm apice 31 frame, tocco 110 cm apice 10 frame. Script Saved/Diag1118/loco_playtest*.py (UnrealEditor-Cmd). Non provato in PIE.
