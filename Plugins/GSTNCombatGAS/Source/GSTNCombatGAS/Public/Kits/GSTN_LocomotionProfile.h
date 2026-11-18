@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "Jump/GSTN_JumpDesigner.h"
 #include "Movement/GSTN_AnalogWalkTypes.h"
 #include "Movement/GSTN_RunStageTypes.h"
 #include "Rules/GSTN_KitExtension.h"
@@ -66,6 +67,19 @@ public:
 	/** Analog walk, walk start and air turn (owner playtest 2026-11-16). Works with the run stages on (it scales their stage 1) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Analog Walk", meta = (ShowOnlyInnerProperties))
 	FGSTN_AnalogWalkTuning AnalogWalk;
+
+	/**
+	 * Jump from designer numbers (owner 2026-11-18): full jump height and time to apex; the take-off speed and the gravities are derived
+	 * (read-only fields below the inputs). Off = the kit's jump stats as before. The whole movement setup of a kit lives in this asset
+	 * (run stages, skid, air momentum, drift DI, jump), so several kits can share it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Jump Designer", meta = (ShowOnlyInnerProperties))
+	FGSTN_JumpDesignerTuning JumpDesigner;
+
+	virtual void PostLoad() override;
+#if WITH_EDITOR
+	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
 };
 
 /** Values of a profile as the simulation reads them (no object reference: nothing has to keep the asset alive) */
@@ -79,6 +93,8 @@ struct GSTNCOMBATGAS_API FGSTN_LocomotionSimTuning
 	TArray<FName> AirSpeedProperties;
 	TArray<FName> AirControlProperties;
 	FGSTN_AnalogWalkTuning AnalogWalk;
+	/** Derived values refreshed when copied (FromProfile) */
+	FGSTN_JumpDesignerTuning JumpDesigner;
 
 	static FGSTN_LocomotionSimTuning FromProfile(const UGSTN_LocomotionProfile& Profile);
 };

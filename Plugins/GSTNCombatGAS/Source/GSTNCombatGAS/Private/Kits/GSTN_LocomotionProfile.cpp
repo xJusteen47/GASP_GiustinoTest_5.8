@@ -56,8 +56,29 @@ FGSTN_LocomotionSimTuning FGSTN_LocomotionSimTuning::FromProfile(const UGSTN_Loc
 	Tuning.AnalogWalk = Profile.AnalogWalk;
 	Tuning.AirSpeedProperties = Profile.AirSpeedProperties;
 	Tuning.AirControlProperties = Profile.AirControlProperties;
+	// Derived on every machine from the same data, so host and clients jump alike
+	Tuning.JumpDesigner = Profile.JumpDesigner;
+	if (Tuning.JumpDesigner.bEnabled)
+	{
+		FGSTN_JumpDesigner::Refresh(Tuning.JumpDesigner);
+	}
 	return Tuning;
 }
+
+void UGSTN_LocomotionProfile::PostLoad()
+{
+	Super::PostLoad();
+	FGSTN_JumpDesigner::Refresh(JumpDesigner);
+}
+
+#if WITH_EDITOR
+void UGSTN_LocomotionProfile::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+	// The read-only derived fields follow every edit
+	FGSTN_JumpDesigner::Refresh(JumpDesigner);
+}
+#endif
 
 const FGSTN_LocomotionSimTuning* FGSTN_LocomotionAttach::Find(const AActor* Owner)
 {

@@ -42,7 +42,14 @@ struct GSTNCOMBATCORE_API FGSTN_AirMomentumTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum|Player", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
 	float AirAcceleration = 3200.f;
 
-	/** Player channel: deceleration when the stick points against the drift (x air control) */
+	/**
+	 * Player channel: acceleration with the stick at 90 degrees to the drift (x air control). The rate follows the dot between the stick and
+	 * the drift continuously (owner 2026-11-18): dot 1 = AirAcceleration, dot 0 = this, dot -1 = AirBrake, linear in between
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum|Player", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
+	float AirAccelerationSide = 3200.f;
+
+	/** Player channel: deceleration when the stick points straight against the drift, dot -1 (x air control) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum|Player", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
 	float AirBrake = 4500.f;
 
@@ -76,6 +83,13 @@ struct GSTNCOMBATCORE_API FGSTN_AirMomentumTuning
 	float DriftDIControlScale = 1.f;
 
 	bool IsEnabled() const { return Style != EGSTN_AirInertiaStyle::MoverLegacy; }
+	/** The player channel's rate for the dot between the stick direction and the drift direction (1 along, 0 sideways, -1 against) */
+	float GetSteerRate(float Dot) const
+	{
+		const float D = FMath::Clamp(Dot, -1.f, 1.f);
+		return D >= 0.f ? FMath::Lerp(AirAccelerationSide, AirAcceleration, D) : FMath::Lerp(AirAccelerationSide, AirBrake, -D);
+	}
+
 	float GetNeutralDeceleration() const { return Style == EGSTN_AirInertiaStyle::Carry ? CarryNeutralDeceleration : HighFrictionNeutralDeceleration; }
 };
 

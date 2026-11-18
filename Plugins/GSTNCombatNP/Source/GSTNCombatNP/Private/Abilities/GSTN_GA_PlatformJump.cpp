@@ -7,6 +7,7 @@
 #include "DefaultMovementSet/InstantMovementEffects/BasicInstantMovementEffects.h"
 #include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "Jump/GSTN_JumpTypes.h"
+#include "Kits/GSTN_LocomotionProfile.h"
 #include "MoverComponent.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
@@ -31,6 +32,16 @@ FEffectMoveContainer UGSTN_PlatformJumpMoveCreator::MakeMove_Implementation(UMov
 		if (const UCommonLegacyMovementSettings* CommonSettings = TargetMoverComponent->FindSharedSettings<UCommonLegacyMovementSettings>())
 		{
 			JumpMove.UpwardsSpeed = CommonSettings->JumpUpwardsSpeed;
+		}
+	}
+
+	// Jump designer (owner 2026-11-18): the ground jump's speed derived from the profile's height and apex time replaces the JumpVelocity stat
+	if (!bAirJump && TargetMoverComponent)
+	{
+		const FGSTN_LocomotionSimTuning* Locomotion = FGSTN_LocomotionAttach::Find(TargetMoverComponent->GetOwner());
+		if (Locomotion && Locomotion->JumpDesigner.bEnabled && Locomotion->JumpDesigner.bDerivedValid)
+		{
+			JumpMove.UpwardsSpeed = Locomotion->JumpDesigner.DerivedJumpVelocity;
 		}
 	}
 

@@ -70,6 +70,11 @@ bool FGSTN_AirMomentumSteerTest::RunTest(const FString& Parameters)
 	// Reversal +450 -> -450 with the stick back: under 20 frames
 	const FGSTN_AirMomentumOutput Back = Run(Tuning, Drift(450.f, FVector(-1, 0, 0)), 20);
 	TestTrue(TEXT("full reversal within 20 frames"), FMath::IsNearlyEqual(Back.Velocity.X, -450.0, 1.0));
+	// The rate follows the dot continuously: forward, side, back, and halfway between side and back at 135 degrees
+	TestTrue(TEXT("dot 1 = forward rate"), FMath::IsNearlyEqual(Tuning.GetSteerRate(1.f), Tuning.AirAcceleration));
+	TestTrue(TEXT("dot 0 = side rate"), FMath::IsNearlyEqual(Tuning.GetSteerRate(0.f), Tuning.AirAccelerationSide));
+	TestTrue(TEXT("dot -1 = brake"), FMath::IsNearlyEqual(Tuning.GetSteerRate(-1.f), Tuning.AirBrake));
+	TestTrue(TEXT("dot -0.5 = halfway side/brake"), FMath::IsNearlyEqual(Tuning.GetSteerRate(-0.5f), 0.5f * (Tuning.AirAccelerationSide + Tuning.AirBrake)));
 	// Half tilt: half the cap
 	TestTrue(TEXT("half tilt = half the cap"), FMath::IsNearlyEqual(Run(Tuning, Drift(0.f, FVector(0.5, 0, 0)), 30).Velocity.X, 225.0, 1.0));
 	// Zero air control: a held stick steers nothing
