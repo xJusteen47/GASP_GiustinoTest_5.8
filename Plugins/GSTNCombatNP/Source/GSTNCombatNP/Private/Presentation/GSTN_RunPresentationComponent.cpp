@@ -153,12 +153,18 @@ void UGSTN_RunPresentationComponent::TickSkidPlayTime(float DeltaTime)
 		SkidPlayTime = -1.f;
 		return;
 	}
-	const float Length = SkidSectionClip->GetPlayLength();
-	// With the sim on the clip's root track, the clip plays at the track's rate, the same clock as the capsule (owner choice A part 2)
+	float Length = SkidSectionClip->GetPlayLength();
+	// With the sim on the clip's root track, the clip plays at the track's rate, the same clock as the capsule (owner choice A part 2), and
+	// stops where the sim hands over to the walking mode (EndTime): the locomotion graph's own run takes the pose with the capsule's speed
 	const FGSTN_LocomotionSimTuning* Locomotion = FGSTN_LocomotionAttach::Find(GetOwner());
 	if (Locomotion && Locomotion->RunStages.Skid.RootTrack.IsUsable())
 	{
-		DeltaTime *= Locomotion->RunStages.Skid.RootTrack.PlayRate;
+		const FGSTN_RunSkidRootTrack& Track = Locomotion->RunStages.Skid.RootTrack;
+		DeltaTime *= Track.PlayRate;
+		if (Track.EndTime > 0.f)
+		{
+			Length = FMath::Min(Length, Track.GetEndTime());
+		}
 	}
 	if (FootSlide.Source == EGSTN_FootSlideSource::RunSkid && FootSlide.SkidPhase != EGSTN_RunSkidPhase::None)
 	{

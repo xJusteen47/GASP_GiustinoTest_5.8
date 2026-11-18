@@ -34,3 +34,13 @@ Start: d871e7aa (claude/desktop-jab-fk). Code commit 78cc0004, review commit aft
   turn to TurnDirection over a few frames, end the move; presentation: no clip tail when the stick is neutral, Skid state blends to Idle
   (the clip's root yaw is only 0.67 of the turn at rest, so the idle exit must cover the last ~60 deg). Code thread (Opus) + capture + review.
 - Build before the next editor start from this worktree is done; _ue59 DLLs do not have this code until the branch is merged.
+
+## Attempt 2 (coordinator go, 23:25-23:40 local) - review skid-rootmotion-2: FAIL narrow, BETTER than attempt 1. STOP (rule 5, 2 tries)
+- Foot-based re-bake of the push-off (Tools/GAS/bake_skid_pushoff_from_foot.py): the clip's planted foot also moves ~73-91 cm/s
+  (Saved/Logs/ci/bake_skid_pushoff.txt): the slow tail is the clip itself (dati montage). Not kept.
+- Kept: presentation ends the skid clip at RootTrack.EndTime (GSTN_RunPresentationComponent::TickSkidPlayTime); EndTime = 0.7 s in
+  DA_Locomotion_Default (Tools/GAS/set_skid_track_end_time.py). Build: Saved/Logs/ci/skidrm_build2.log, "Result: Succeeded" = 1.
+- Review: turn and hand-over PASS (no mesh pop with the partial clip yaw); crawl 5 frames instead of 16; 450 cm/s at f100 not f109.
+  FAIL (gioco): first two run steps skate (foot_l ~80 cm f98-110, foot_r 53 cm f110-120); minor side-step wobble f105-112.
+- Next (code thread): what the locomotion graph plays when the Skid state exits (pose and blend), then stride warping / speed-matched
+  play rate on the run blend-in, or a slower walking accel right after the skid. Or the owner re-times the clip tail (dati montage).
