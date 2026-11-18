@@ -17,3 +17,12 @@ Owner: crouch + forward = upright run, slower; run start frantic/sped up; skid n
   Content/Characters/UEFN_Mannequin/Animations/Run; per the GASP ANIM rule add it as a raw row in CHT_GSTN_LocomotionAnimations + a state
   machine transition, if GASP's MM start is not enough. The brief docs/notes/mosse/run-start-stop-skid-brief.md does not exist in _ue59.
 - Sim follows clip (A part 2): make the RunSkid layered move use the clip's root speed curve (deterministic table baked from the clip).
+
+## Skid turns with the movement (owner 19:42Z) - NOT fixed here, next code thread
+- Sim (FGSTN_LayeredMove_RunSkid::GenerateMove): facing held while sliding (AngularVelocity 0), then in Exit the ACTOR turns to the new
+  direction over ExitFrames. The clip SS_180_Turn_Root180 also turns its root 180 and the layer does not use root motion: the actor turn and
+  the clip turn add up (double turn), and with clip speed (A) the two are no longer in step. GASP's Offset Root Bone / orientation warping
+  after the override slot are the other suspects (skid-main-graph-1 list).
+- Proposed fix (A part 2, Opus high): during the skid the sim takes facing AND speed from the clip's root track (baked table, deterministic),
+  the anim side strips the root yaw (or the actor does not turn), orientation warping/offset root bone off while the Skid slot is active.
+- Tried: reading the GASP ABP graph through GSTN_AnimBlueprintToolset from Python failed once (list_anim_graphs, line 10); not retried.
