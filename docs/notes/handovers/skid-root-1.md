@@ -18,3 +18,4 @@ Branch claude/project-thread-98dml5. Owner ask: first unmodified skid clip (SS_1
 - Fallback layer clip if it fails: SKID_CLIP=.../SkidOwner/SS_180_Turn2_Src (PASS in skid-ss180turn2-2).
 - _ue59 lock released. Cost ~3 $.
 - UPDATE 15:15: owner confirmed the cause (Mixamo import without root motion). The restore json was emptied by a later session; capture cap2 OK, REVIEW.md: facing and pelvis PASS. Lock released.
+- Fable review (REVIEW-fable.md): FAIL. Facing and pelvis PASS; brake feet PASS. FAIL: pop v58->59 (head 31, feet 27-39 cm in one frame) and restart slide v76-88 (foot jump 29 cm, stride frozen while body glides). Labels gioco/dati montage (montage null in frames.jsonl). Next: Tools/GAS/diag_skid_clip_jumps.py (read only, quits itself) tells if the v59 jump is inside the clip; not run, _ue59 held by the MCP toolset thread.
