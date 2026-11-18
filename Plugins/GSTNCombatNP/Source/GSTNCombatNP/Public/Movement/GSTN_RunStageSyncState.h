@@ -11,6 +11,8 @@ class AActor;
 class UMoverComponent;
 struct FGSTN_LocomotionSimTuning;
 struct FMoverSyncState;
+struct FMoverTickStartData;
+struct FProposedMove;
 struct FMoverTimeStep;
 
 /**
@@ -80,4 +82,18 @@ struct GSTNCOMBATNP_API FGSTN_RunStageMover
 
 	/** OnPostMovement half; OutputSyncState is the state machine's output of the substep */
 	static void PostMovement(UMoverComponent& MoverComp, const FMoverTimeStep& TimeStep, FMoverSyncState& OutputSyncState, float Factor);
+
+	/**
+	 * Air momentum (owner 2026-11-18, FGSTN_AirMomentumLogic), from Mover's ProcessGeneratedMovement (after the mode and the layered
+	 * moves): replaces the horizontal velocity the falling mode proposed with the two-channel model. Only when the kit's profile has the
+	 * model on, the frame's mode is a UFallingMode (GASP's Blueprint one included) and no layered move overrides the velocity. The vertical
+	 * velocity and the rotation are left as they are. Reads the air top speed and air control PreMovement wrote for this substep.
+	 * Returns true when it ran; OutExternal is the external channel after the step and OutProposedHorizontal the horizontal velocity
+	 * proposed (both before collisions), which PostMovement compares with the moved velocity and stores
+	 */
+	static bool ApplyAirMomentum(const UMoverComponent& MoverComp, const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep,
+		FProposedMove& InOutMove, FVector& OutExternal, FVector& OutProposedHorizontal);
+
+	/** True when SyncState has an active layered move that counts as an external push: any FLayeredMove_Launch child, a knockback */
+	static bool HasExternalPushMove(const FMoverSyncState& SyncState);
 };

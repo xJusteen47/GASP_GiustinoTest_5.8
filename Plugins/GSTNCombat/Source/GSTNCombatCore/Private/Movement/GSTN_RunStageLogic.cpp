@@ -77,7 +77,7 @@ bool FGSTN_RunStageState::operator==(const FGSTN_RunStageState& Other) const
 		&& FramesSinceStickRelease == Other.FramesSinceStickRelease && CarriedSpeed == Other.CarriedSpeed && FramesSinceCarry == Other.FramesSinceCarry
 		&& CarrySource == Other.CarrySource && PrevSpeed == Other.PrevSpeed && LastFrame == Other.LastFrame && CarryWindow == Other.CarryWindow
 		&& bAirborne == Other.bAirborne && TakeoffSpeed == Other.TakeoffSpeed && TakeoffStage == Other.TakeoffStage
-		&& RampFrames == Other.RampFrames && RampStage == Other.RampStage;
+		&& RampFrames == Other.RampFrames && RampStage == Other.RampStage && ExternalVelocity == Other.ExternalVelocity;
 }
 
 void FGSTN_RunStageState::SerializeCompact(FArchive& Ar)
@@ -101,6 +101,12 @@ void FGSTN_RunStageState::SerializeCompact(FArchive& Ar)
 	Ar << TakeoffStage;
 	SerializeCounter(Ar, RampFrames);
 	Ar << RampStage;
+	for (int32 Axis = 0; Axis < 3; ++Axis)
+	{
+		float Component = static_cast<float>(ExternalVelocity[Axis]);
+		SerializeSpeed(Ar, Component);
+		ExternalVelocity[Axis] = Component;
+	}
 }
 
 void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunFrameInput& Input, FGSTN_RunStageState& State)

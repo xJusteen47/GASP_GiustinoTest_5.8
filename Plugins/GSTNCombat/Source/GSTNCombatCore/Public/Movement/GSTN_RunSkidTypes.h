@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Movement/GSTN_AirMomentumTypes.h"
 #include "GSTN_RunSkidTypes.generated.h"
 
 /** What a run skid does at a ledge (owner 2026-11-16 17:46Z). A surface may override it (FGSTN_SurfaceLocomotion::SkidLedge) */
@@ -141,6 +142,13 @@ struct GSTNCOMBATCORE_API FGSTN_RunAirTuning
 	/** The AirControl stat multiplies Mover's air control (the stat was declared but read by nothing before P2) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Air")
 	bool bUseAirControlStat = true;
+
+	/**
+	 * Air momentum (owner 2026-11-18): player drift and external pushes in two channels, the neutral stick style (Astro default, Mario
+	 * option) and stronger air steering. Style MoverLegacy = the falling mode as before
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Air", meta = (ShowOnlyInnerProperties))
+	FGSTN_AirMomentumTuning Momentum;
 };
 
 /** Pure math of the skid, shared by the Mover move, the combat tick and the tests */

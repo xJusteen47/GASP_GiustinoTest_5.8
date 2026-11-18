@@ -7,13 +7,17 @@
 #include "Attributes/GSTN_CombatAttributeSet.h"
 #include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "GameFramework/Actor.h"
+#include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Movement/GSTN_LayeredMove_RunSkid.h"
+#include "Movement/GSTN_StatsMovementModifier.h"
+#include "DefaultMovementSet/LayeredMoves/LaunchMove.h"
 #include "Kits/GSTN_LocomotionProfile.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "DefaultMovementSet/Modes/FallingMode.h"
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
+#include "MoveLibrary/MovementUtilsTypes.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatVictim.h"
 #include "Stats/GSTN_StatsScaling.h"
@@ -45,7 +49,8 @@ bool FGSTN_RunStageSyncState::ShouldReconcile(const FMoverDataStructBase& Author
 		|| Run.FramesSinceStickRelease != Authority.FramesSinceStickRelease || Run.FramesSinceCarry != Authority.FramesSinceCarry
 		|| Run.CarrySource != Authority.CarrySource || !FMath::IsNearlyEqual(Run.CarriedSpeed, Authority.CarriedSpeed, 0.5f)
 		|| Run.CarryWindow != Authority.CarryWindow || Run.bAirborne != Authority.bAirborne || Run.TakeoffStage != Authority.TakeoffStage
-		|| !FMath::IsNearlyEqual(Run.TakeoffSpeed, Authority.TakeoffSpeed, 0.5f);
+		|| !FMath::IsNearlyEqual(Run.TakeoffSpeed, Authority.TakeoffSpeed, 0.5f)
+		|| !Run.ExternalVelocity.Equals(Authority.ExternalVelocity, 0.5);
 }
 
 void FGSTN_RunStageSyncState::Interpolate(const FMoverDataStructBase& From, const FMoverDataStructBase& To, float Pct)
@@ -283,4 +288,113 @@ void FGSTN_RunStageMover::PostMovement(UMoverComponent& MoverComp, const FMoverT
 
 	FGSTN_RunStageSyncState& Entry = OutputSyncState.SyncStateCollection.FindOrAddMutableDataByType<FGSTN_RunStageSyncState>();
 	FGSTN_RunStageLogic::Step(Tuning->RunStages, Input, Entry.Run);
+
+	// Air momentum: the external channel of the end of this substep (every substep, not once per frame: it follows the velocity). On the
+	// ground it is empty. In the air: the model's value of this substep when it ran (clamped to what collisions left); else the whole moved
+	// velocity when an external push owns the frame (the launch frame of a knockback or a trampoline overrides the velocity); else empty
+	// (a player-owned override move, a dodge or an attack lunge: the drift is the player's again)
+	const FGSTN_AirMomentumTuning& Momentum = Tuning->RunStages.Air.Momentum;
+	FVector External = FVector::ZeroVector;
+	if (Momentum.IsEnabled() && !Input.bGrounded)
+	{
+		FVector ModelExternal;
+		FVector ModelProposed;
+		if (Combat->ConsumeAirMomentumExternal(TimeStep.BaseSimTimeMs, ModelExternal, ModelProposed))
+		{
+			External = FGSTN_AirMomentumLogic::ClampExternalToMoved(ModelExternal, ModelProposed, Input.GroundVelocity, Momentum.ExternalMinSpeed);
+		}
+		else if (HasExternalPushMove(OutputSyncState))
+		{
+			External = Input.GroundVelocity.Size() >= Momentum.ExternalMinSpeed ? Input.GroundVelocity : FVector::ZeroVector;
+		}
+	}
+	Entry.Run.ExternalVelocity = External;
+}
+
+bool FGSTN_RunStageMover::HasExternalPushMove(const FMoverSyncState& SyncState)
+{
+	for (const TSharedPtr<FLayeredMoveBase>& Move : SyncState.LayeredMoves.GetActiveMoves())
+	{
+		const UScriptStruct* Type = Move.IsValid() ? Move->GetScriptStruct() : nullptr;
+		if (Type && (Type->IsChildOf(FLayeredMove_Launch::StaticStruct()) || Type->IsChildOf(FGSTN_LayeredMove_Knockback::StaticStruct())))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool FGSTN_RunStageMover::ApplyAirMomentum(const UMoverComponent& MoverComp, const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep,
+	FProposedMove& InOutMove, FVector& OutExternal, FVector& OutProposedHorizontal)
+{
+	OutExternal = FVector::ZeroVector;
+	OutProposedHorizontal = FVector::ZeroVector;
+	const FGSTN_LocomotionSimTuning* Tuning = FGSTN_LocomotionAttach::Find(MoverComp.GetOwner());
+	if (!Tuning || !Tuning->RunStages.IsEnabled() || !Tuning->RunStages.Air.Momentum.IsEnabled())
+	{
+		return false;
+	}
+	// A layered move that overrides the velocity owns the frame (a launch frame, a dodge, a freeze)
+	if (InOutMove.MixMode == EMoveMixMode::OverrideVelocity || InOutMove.MixMode == EMoveMixMode::OverrideAll
+		|| InOutMove.MixMode == EMoveMixMode::OverrideAllExceptVerticalVelocity)
+	{
+		return false;
+	}
+	const UFallingMode* Falling = Cast<UFallingMode>(MoverComp.FindMovementModeByName(StartState.SyncState.MovementMode));
+	const FMoverDefaultSyncState* Default = StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
+	const UCommonLegacyMovementSettings* Shared = MoverComp.FindSharedSettings<UCommonLegacyMovementSettings>();
+	if (!Falling || !Default || !Shared)
+	{
+		return false;
+	}
+	const double DeltaSeconds = TimeStep.StepMs * 0.001;
+	if (DeltaSeconds <= UE_KINDA_SMALL_NUMBER)
+	{
+		return false;
+	}
+	const FGSTN_AirMomentumTuning& Momentum = Tuning->RunStages.Air.Momentum;
+	const FVector Up = MoverComp.GetUpDirection().GetSafeNormal().IsNearlyZero() ? FVector::UpVector : MoverComp.GetUpDirection().GetSafeNormal();
+	const FGSTN_RunStageState* Run = Find(StartState.SyncState);
+
+	// No steering under a movement lock (stats factor 0: hitstun, a reaction), like the stats' contract on the ground
+	float Factor = 1.f;
+	const UAbilitySystemComponent* ASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(MoverComp.GetOwner());
+	if (ASC)
+	{
+		FGSTN_StatsMovementModifier::ResolveSpeedFactor(*ASC, Factor);
+	}
+
+	FGSTN_AirMomentumInput Input;
+	const FVector StartVelocity = Default->GetVelocity_WorldSpace();
+	Input.Velocity = FVector::VectorPlaneProject(StartVelocity, Up);
+	Input.External = Run ? FVector::VectorPlaneProject(Run->ExternalVelocity, Up) : FVector::ZeroVector;
+	if (const FCharacterDefaultInputs* Inputs = StartState.InputCmd.InputCollection.FindDataByType<FCharacterDefaultInputs>(); Inputs && Factor > 0.f)
+	{
+		FVector Stick = FVector::VectorPlaneProject(Inputs->GetMoveInput_WorldSpace(), Up);
+		if (Inputs->GetMoveInputType() == EMoveInputType::Velocity)
+		{
+			Stick = Shared->MaxSpeed > UE_KINDA_SMALL_NUMBER ? Stick / Shared->MaxSpeed : FVector::ZeroVector;
+		}
+		Input.Stick = Stick.GetClampedToMaxSize(1.0);
+	}
+	// The values PreMovement assigned for this substep: the air top speed (TakeoffCap or the stats' MaxSpeed) and the air control (stat x
+	// takeoff stage scale, or the running move's own)
+	Input.TopSpeed = Shared->MaxSpeed;
+	Input.Control = Falling->AirControlPercentage;
+	Input.DeltaSeconds = static_cast<float>(DeltaSeconds);
+	// A knockback's own horizontal drag (its additive frames) acts on the push it gave
+	for (const TSharedPtr<FLayeredMoveBase>& Move : StartState.SyncState.LayeredMoves.GetActiveMoves())
+	{
+		if (Move.IsValid() && Move->GetScriptStruct()->IsChildOf(FGSTN_LayeredMove_Knockback::StaticStruct()))
+		{
+			Input.ExternalDragPerFrame = FMath::Max(Input.ExternalDragPerFrame, static_cast<const FGSTN_LayeredMove_Knockback&>(*Move).DecayPerFrame);
+		}
+	}
+
+	const FGSTN_AirMomentumOutput Out = FGSTN_AirMomentumLogic::Step(Momentum, Input);
+	const double Vertical = InOutMove.LinearVelocity.Dot(Up);
+	InOutMove.LinearVelocity = Out.Velocity + Up * Vertical;
+	OutExternal = Out.External;
+	OutProposedHorizontal = Out.Velocity;
+	return true;
 }
