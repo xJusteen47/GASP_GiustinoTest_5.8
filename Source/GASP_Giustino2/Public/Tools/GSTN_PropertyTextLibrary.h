@@ -21,4 +21,8 @@ public:
 	/** Sets the property PropertyName of Object from text (Modify() first, so the package is dirtied). False when it does not exist or parse */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Tools")
 	static bool SetPropertyText(UObject* Object, FName PropertyName, const FString& Text);
+
+	/** Every property of Object's class as "Name : Type" (Blueprint variables keep their GUID suffix) */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Tools")
+	static TArray<FString> ListProperties(UObject* Object);
 };

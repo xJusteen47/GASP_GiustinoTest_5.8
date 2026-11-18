@@ -69,6 +69,22 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorSettings
 	/** A jump of the anchor larger than this in one frame is a teleport (respawn, reset): the camera snaps instead of flying there */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor", meta = (ClampMin = "1", ForceUnits = "cm"))
 	float SnapDistance = 400.f;
+
+	/**
+	 * Crouch lowers the camera only while aiming (owner 2026-11-18: no crouch offset in the normal view, "in ADS it would be right, I must see
+	 * it"). GASP's own crouch offset rig (CameraRig_CrouchOffset) is zeroed in every mode; this puts AimCrouchOffset back while the pawn is
+	 * crouched AND aims (GASP's PlayerInputState.WantsToAim). Off = crouch never moves the camera
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Crouch")
+	bool bCrouchOffsetInAim = true;
+
+	/** The aim crouch offset: X along the view's forward (yaw only), Y right, Z along up. GASP's rig had (40, 0, -30) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Crouch", meta = (ForceUnits = "cm", EditCondition = "bCrouchOffsetInAim"))
+	FVector AimCrouchOffset = FVector(40.0, 0.0, -30.0);
+
+	/** How fast the aim crouch offset comes in and goes out (half life) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Crouch", meta = (ClampMin = "0", ClampMax = "2", ForceUnits = "s", EditCondition = "bCrouchOffsetInAim"))
+	float AimCrouchHalfLife = 0.1f;
 };
 
 /** Shared default tuning. The camera anchor subsystem loads /Game/Blueprints/Data/DA_CameraAnchor_Default when it exists, else C++ defaults */
@@ -169,4 +185,11 @@ private:
 	FGSTN_CameraAnchorDamper Damper;
 	FVector LastCorrection = FVector::ZeroVector;
 	bool bShiftView = false;
+	/** 0..1 blend of the aim crouch offset */
+	float AimCrouchAlpha = 0.f;
+
+	/** GASP's PlayerInputState.WantsToAim of the owner (a Blueprint struct: found by name, GUID suffix ignored), false when absent */
+	bool IsOwnerAiming() const;
+	/** The world offset of the aim crouch this frame (already blended) */
+	FVector StepAimCrouchOffset(float DeltaTime, const FVector& Up, const FGSTN_CameraAnchorSettings& Tuning);
 };

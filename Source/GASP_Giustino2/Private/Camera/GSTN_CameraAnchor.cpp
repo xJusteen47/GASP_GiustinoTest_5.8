@@ -6,6 +6,8 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
+#include "GameplayTagContainer.h"
 #include "HAL/IConsoleManager.h"
 #include "MoverComponent.h"
 
@@ -247,6 +249,48 @@ void UGSTN_CameraAnchorComponent::ResolveComponents()
 	}
 }
 
+bool UGSTN_CameraAnchorComponent::IsOwnerAiming() const
+{
+	const AActor* Owner = GetOwner();
+	const FStructProperty* InputState = Owner ? CastField<FStructProperty>(Owner->GetClass()->FindPropertyByName(TEXT("PlayerInputState"))) : nullptr;
+	if (!InputState)
+	{
+		return false;
+	}
+	const void* StateData = InputState->ContainerPtrToValuePtr<void>(Owner);
+	for (TFieldIterator<FBoolProperty> It(InputState->Struct); It; ++It)
+	{
+		// Blueprint struct members are named "WantsToAim_<n>_<guid>"
+		if (It->GetName().StartsWith(TEXT("WantsToAim")))
+		{
+			return It->GetPropertyValue_InContainer(StateData);
+		}
+	}
+	return false;
+}
+
+FVector UGSTN_CameraAnchorComponent::StepAimCrouchOffset(float DeltaTime, const FVector& Up, const FGSTN_CameraAnchorSettings& Tuning)
+{
+	const AActor* Owner = GetOwner();
+	const UMoverComponent* Mover = Owner ? Owner->FindComponentByClass<UMoverComponent>() : nullptr;
+	static const FGameplayTag CrouchTag = FGameplayTag::RequestGameplayTag(TEXT("Mover.IsCrouching"), false);
+	const bool bCrouched = Mover && CrouchTag.IsValid() && Mover->HasGameplayTag(CrouchTag, true);
+	const float Goal = (Tuning.bCrouchOffsetInAim && bCrouched && IsOwnerAiming()) ? 1.f : 0.f;
+	AimCrouchAlpha = Tuning.AimCrouchHalfLife <= 0.f ? Goal
+		: Goal + (AimCrouchAlpha - Goal) * FMath::Exp2(-DeltaTime / Tuning.AimCrouchHalfLife);
+	if (AimCrouchAlpha < KINDA_SMALL_NUMBER)
+	{
+		return FVector::ZeroVector;
+	}
+	// The view's yaw from the controller (the camera follows it), flattened on the plane of Up
+	const APawn* Pawn = Cast<APawn>(Owner);
+	const FRotator View = Pawn && Pawn->GetController() ? Pawn->GetController()->GetControlRotation() : Owner->GetActorRotation();
+	const FVector Forward = FVector::VectorPlaneProject(View.Vector(), Up).GetSafeNormal();
+	const FVector Right = FVector::CrossProduct(Up, Forward);
+	const FVector& O = Tuning.AimCrouchOffset;
+	return AimCrouchAlpha * (Forward * O.X + Right * O.Y + Up * O.Z);
+}
+
 void UGSTN_CameraAnchorComponent::RestoreCamera()
 {
 	USceneComponent* Camera = CameraComponent.Get();
@@ -280,7 +324,7 @@ void UGSTN_CameraAnchorComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	const FVector Raw = Visual ? FGSTN_CameraAnchorDamper::StandingRootFromVisual(Visual->GetComponentTransform(), VisualRelativeStanding, ParentScale) : Root;
 	const UMoverComponent* Mover = Owner->FindComponentByClass<UMoverComponent>();
 	const FVector Up = Mover ? Mover->GetUpDirection() : Owner->GetActorUpVector();
-	const FVector Damped = Damper.Step(Raw, Up, DeltaTime, Tuning);
+	const FVector Damped = Damper.Step(Raw, Up, DeltaTime, Tuning) + StepAimCrouchOffset(DeltaTime, Up, Tuning);
 
 	USceneComponent* Camera = CameraComponent.Get();
 	if (Camera && Tuning.Mode == EGSTN_CameraAnchorMode::MoveCameraComponent)

@@ -22,7 +22,8 @@ HOLD_SEQ = [(20, 'crouch'), (90, 'jump'), (200, 'clear'), (240, 'jump'), (262, '
 STOMP_SEQ = [(20, 'jumphold'), (45, 'clear'), (60, 'crouch'), (62, 'tap'), (80, 'clear'), (260, 'end')]
 DROPKICK_SEQ = [(20, 'jumphold'), (45, 'clear'), (50, 'stick'), (52, 'tap'), (80, 'unstick'), (260, 'end')]
 DODGE_SEQ = [(20, 'stick'), (30, 'dodge'), (110, 'tapdg'), (220, 'clear'), (221, 'unstick'), (260, 'end')]
-SEQS = [('dodge', 'KIT_Test_Playtest', DODGE_SEQ)] if os.environ.get('DIAG_ONLY_DODGE') else [('hold', 'KIT_Test_Playtest', HOLD_SEQ[:7] + [(400, 'end')])] if os.environ.get('DIAG_ONLY_HOLD') else [('dropkick', 'KIT_Test_Playtest', DROPKICK_SEQ), ('stomp', 'KIT_Test_Overlord', STOMP_SEQ)]
+AIM_SEQ = [(10, 'aimon'), (20, 'crouch'), (80, 'clear'), (120, 'aimoff'), (130, 'crouch'), (190, 'clear'), (230, 'end')]
+SEQS = [('aim', 'KIT_Test_Playtest', AIM_SEQ)] if os.environ.get('DIAG_ONLY_AIM') else [('dodge', 'KIT_Test_Playtest', DODGE_SEQ)] if os.environ.get('DIAG_ONLY_DODGE') else [('hold', 'KIT_Test_Playtest', HOLD_SEQ[:7] + [(400, 'end')])] if os.environ.get('DIAG_ONLY_HOLD') else [('dropkick', 'KIT_Test_Playtest', DROPKICK_SEQ), ('stomp', 'KIT_Test_Overlord', STOMP_SEQ)]
 
 
 def _log(m):
@@ -119,6 +120,13 @@ def _tick(_dt):
         elif ph == 'run':
             f = st['frame']
             ev = [a for (fr, a) in st['seq'] if fr == f]
+            if 'aimon' in ev: st['aim'] = True
+            if 'aimoff' in ev: st['aim'] = False
+            if st.get('aim'):
+                import re as _re
+                L = unreal.GSTN_PropertyTextLibrary
+                t = L.get_property_text(_pawn(), 'PlayerInputState')
+                L.set_property_text(_pawn(), 'PlayerInputState', _re.sub(r'(WantsToAim\w*)=False', r'\1=True', t))
             _row(f, ev)
             for a in ev:
                 if a == 'tap':

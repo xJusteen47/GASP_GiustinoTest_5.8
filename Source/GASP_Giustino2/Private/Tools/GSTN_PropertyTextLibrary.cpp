@@ -22,3 +22,17 @@ bool UGSTN_PropertyTextLibrary::SetPropertyText(UObject* Object, FName PropertyN
 	Object->Modify();
 	return Property->ImportText_Direct(*Text, Property->ContainerPtrToValuePtr<void>(Object), Object, PPF_None) != nullptr;
 }
+
+TArray<FString> UGSTN_PropertyTextLibrary::ListProperties(UObject* Object)
+{
+	TArray<FString> Out;
+	if (Object)
+	{
+		for (TFieldIterator<FProperty> It(Object->GetClass()); It; ++It)
+		{
+			Out.Add(FString::Printf(TEXT("%s : %s"), *It->GetName(), *It->GetCPPType()));
+		}
+	}
+	return Out;
+}
+
