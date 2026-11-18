@@ -1,4 +1,4 @@
-"""Polish M2: the Niagara systems of the VFX kit v1 (/GSTNPresentation/VFX/NS_GSTN_*) and the default presentation table.
+"""Polish M2 + VFX v2: the Niagara systems of the VFX kit (v2: lit glossy meshes, see the block before the systems) (/GSTNPresentation/VFX/NS_GSTN_*) and the default presentation table.
 
 Style sheet handoffs/stile-sheet-vfx-review.md: few big shapes (puffs 3-7, hit 4-8 shards + 1 flash + 1 ring, cap 12 per burst),
 fast start and high drag, CPU sim, sprite/ribbon renderers, <= 3 emitters per system, fixed bounds, nothing replicated.
@@ -166,6 +166,57 @@ class Emitter:
         self.add("ParticleUpdate", "Update/Camera/CameraOffset")
         return self.set("ParticleUpdate", "CameraOffset", "Camera Offset Amount", amount)
 
+    # VFX v2: meshes ----------------------------------------------------------------------------------------------------------------
+
+    def mesh(self, shape, look, facing=None, shadow=None):
+        """Lit mesh renderer (replaces the template's sprite): SM_GSTN_VFX_<shape> with MI_GSTN_VFX_Toy<look>. facing: "velocity" (shards,
+        streaks: the mesh's X along the motion) or "camera" (the hit's ring faces the viewer). shadow: a second renderer, the same particles
+        flattened on the floor (MI_GSTN_VFX_ToyShadow<shadow>), its height from User.GroundHeight through dynamic parameter 0"""
+        mesh = unreal.load_asset(f"{ROOT}/Meshes/SM_GSTN_VFX_{shape}")
+        mode = {None: 0, "velocity": 1, "camera": 2}[facing]
+        renderer = L.add_mesh_renderer(self.system, self.name, mesh, unreal.load_asset(f"{MATS}/MI_GSTN_VFX_Toy{look}"), True, mode)
+        if renderer is None:
+            ERRORS.append(f"{self.name}: no mesh renderer ({shape})")
+            return self
+        if shadow:
+            L.add_mesh_renderer(self.system, self.name, mesh, unreal.load_asset(f"{MATS}/MI_GSTN_VFX_ToyShadow{shadow}"), False, mode)
+            self.add("ParticleUpdate", "Update/Material/DynamicMaterialParameters")
+            self.link("ParticleUpdate", "DynamicMaterialParameters", MESH_NAMES["dyn0"], "User.GroundHeight")
+        return self
+
+    def mesh_particle(self, life, size, rotation=False, scale=(1, 1, 1)):
+        """Lifetime (s) and size range in cm (the meshes are 100 cm across, so mesh scale = cm / 100), times a non-uniform shape scale.
+        No SizeScale: a local-space mesh follows its component's scale (the cue's intensity), unlike a sprite"""
+        s = "ParticleSpawn"
+        update = L.list_modules(self.system, self.name, "ParticleUpdate").split(" > ")
+        if "GravityForce" in update:
+            self.set("ParticleUpdate", "GravityForce", "Gravity", (0, 0, 0))
+        if "Drag" in update:
+            self.set("ParticleUpdate", "Drag", "Drag", 0.0)
+        self.set(s, "InitializeParticle", "Lifetime Mode", "Random")
+        self.set(s, "InitializeParticle", "Lifetime Min", life[0]).set(s, "InitializeParticle", "Lifetime Max", life[1])
+        self.set(s, "InitializeParticle", MESH_NAMES["scale_mode"], MESH_NAMES["scale_random"])
+        self.set(s, "InitializeParticle", MESH_NAMES["scale_min"], [size[0] / 100.0 * k for k in scale])
+        self.set(s, "InitializeParticle", MESH_NAMES["scale_max"], [size[1] / 100.0 * k for k in scale])
+        if rotation:
+            self.set(s, "InitializeParticle", MESH_NAMES["orient_mode"], MESH_NAMES["orient_random"])
+        self.set(s, "InitializeParticle", "Color Mode", "Direct Set")
+        self.link(s, "InitializeParticle", "Color", "User.Tint")
+        return self
+
+    def bounce(self, restitution=0.55, friction=0.6):
+        """Bounces on the floor under the event: an analytical plane (User.GroundPoint / GroundNormal in the system's local space, set by
+        the cue with one trace per event). No Niagara trace, no depth buffer (toaster, CPU sim). Restitution 0.55 + friction + drag: the
+        second bounce is a hop, then the piece rests and pops out"""
+        self.add("ParticleUpdate", "Collision/Collision")
+        c = "ParticleUpdate"
+        for key, value in MESH_NAMES["collision"].items():
+            self.set(c, "Collision", key, value)
+        self.link(c, "Collision", MESH_NAMES["plane_pos"], "User.GroundPoint")
+        self.link(c, "Collision", MESH_NAMES["plane_normal"], "User.GroundNormal")
+        self.set(c, "Collision", MESH_NAMES["restitution"], restitution)
+        return self.set(c, "Collision", MESH_NAMES["friction"], friction)
+
     def material(self, mi, velocity_aligned=False):
         renderer = L.get_renderer(self.system, self.name, 0)
         if renderer is None:
@@ -194,19 +245,32 @@ def _system(name):
     return system
 
 
-# Sizes: the atlas draws a shape at 0.84 of its cell, so a ball is 0.77 of its sprite, a ring 0.78 (outer), a thin ring 0.77, a star 0.8.
-# Sizes below are sprite sizes at intensity 1; the comments give the drawn size. Ground effects sit above the floor (a flat ring on the
-# floor plane z-fights with it and vanishes: review r1, the landing ring was never seen)
-BALL = 1.0 / 0.77
+# VFX v2 (2026-11-17, owner 1A/2A/3A; docs/notes/stile/vfx-stile-v2-astrobot.md): lit glossy meshes instead of sprites. Sizes are the drawn
+# size in cm at intensity 1 (the meshes are 100 cm across). Only the hit's flash stays a sprite (v1 master). One-shots are local space: the
+# cue's scale (intensity) scales positions and meshes alike. Ground effects sit above the floor.
+# Owner playtest 2026-11-17: dust only on run start and skid (the jump keeps its ring, no balls); the sprint lines stop under 450 cm/s
+# (table); the hit and impacts are pulled toward the camera (table, TowardCamera).
+BALL = 1.0 / 0.77  # v1 sprite sizes (kept for the swatch)
+
+# Input names of the 5.9 stock modules (probe: Saved/Logs/ci/v2-probe.txt)
+MESH_NAMES = {
+    "scale_mode": "Mesh Scale Mode", "scale_random": "Random Non-Uniform", "scale_min": "Mesh Scale Min", "scale_max": "Mesh Scale Max",
+    "orient_mode": "Mesh Orientation Mode", "orient_random": "Random",
+    "dyn0": "Index 0 Param 1",
+    "plane_pos": "Analytical Collision Plane Position 1", "plane_normal": "Analytical Collision Normal 1",
+    "restitution": "Restitution", "friction": "Friction",
+    "collision": {"CPU Collision Type": "Analytical Planes", "Analytical Collision Plane Space": "Local", "Enable Rest State": True,
+                  "EnableMaxCollisionCount": True, "Max Number Of Collisions": 2},
+}
 
 
-def _burst_puffs(system, name, count, life, size, speed, drag, cone=None, sphere=(8, (1, 1, 0.4), (0, 0, 0)), gravity=None, ring=None,
-                 rim=False, box=None):
-    """ring=(radius, z): the puffs start on a ground ring and fly outward, so 3-6 balls read apart instead of one lump. rim: on the sphere's
-    surface only (with a flat scale, the rim of a disc). box=(size, offset): spawned in a box"""
+def _balls(system, name, count, life, size, speed, drag, look="Dust", cone=None, ring=None, sphere=(8, (1, 1, 0.4), (0, 0, 0)), rim=False,
+           box=None, gravity=None, bounce=False, shadow=None, origin=None):
+    """Round pieces: ring=(radius, z) born on a ground ring flying out; box=(size, offset); else a sphere. origin: the radial push's
+    centre (local), below the ring = the balls hop up and out"""
     e = Emitter(system, "OmnidirectionalBurst", name).settings(True)
     e.off("ParticleUpdate", "ScaleColor")
-    e.burst(count).particle(life, size).sized()
+    e.burst(count).mesh_particle(life, size)
     if ring:
         e.set("ParticleSpawn", "ShapeLocation", "Shape Primitive", "Ring / Disc").set("ParticleSpawn", "ShapeLocation", "Ring Radius", ring[0])
         e.shape_offset((0, 0, ring[1]))
@@ -221,85 +285,90 @@ def _burst_puffs(system, name, count, life, size, speed, drag, cone=None, sphere
         e.cone(cone[0], cone[1], speed)
     else:
         e.radial(speed)
+        if origin:
+            e.set("ParticleSpawn", "AddVelocity", "Velocity Origin", origin)
     e.drag(drag)
     if gravity:
         e.gravity(gravity)
-    return e.material("DustBall")
+    if bounce:
+        e.bounce()
+    return e.mesh("Ball", look, shadow=shadow)
 
 
-def _ring(system, name, mi, life, size, facing=(0, 0, 1), offset=(0, 0, 3)):
-    """One flat particle, no motion: the material widens and thins it over its life. 3 cm off the surface"""
+def _torus(system, name, shape, look, life, size, offset=(0, 0, 3), facing=None):
+    """One torus, no motion: the material grows it from StartScale and pops it out"""
     e = Emitter(system, "OmnidirectionalBurst", name).settings(True)
     e.off("ParticleUpdate", "ScaleColor")
-    e.burst(1).particle((life, life), (size, size)).sized().sphere(0.01, offset=offset).radial(0.0).facing(facing)
-    return e.material(mi)
+    e.burst(1).mesh_particle((life, life), (size, size)).sphere(0.01, offset=offset).radial(0.0)
+    return e.mesh(shape, look, facing=facing)
+
+
+def _ground_plane(system):
+    """User.GroundPoint / GroundNormal (local) and GroundHeight (world Z), set by the cue at spawn (UGSTN_PresentationComponent)"""
+    L.add_user_vector(system, "GroundPoint", unreal.Vector(0, 0, 0))
+    L.add_user_vector(system, "GroundNormal", unreal.Vector(0, 0, 1))
+    L.add_user_float(system, "GroundHeight", 0.0)
 
 
 # The systems --------------------------------------------------------------------------------------------------------------------
 
 def run_start_dust():
-    """RunStart, spawned at the feet, X along the run: 4 separate balls (20 / 16 / 12 cm) kicked backwards in a 60 degree fan, spread
-    across the feet. Two emitters, two speeds (review r2: one lump sliding back at a constant speed): the big pair is kicked harder and
-    stops ~50 cm back, the small pair ~30 cm (drag 6)"""
+    """RunStart, at the feet, X along the run: 4 "cotton" balls (20 / 16 / 12 cm) kicked backwards in a fan, two speeds (big ~50 cm
+    back, small ~30 cm). Lit, roughness 0.6: their contact shadow comes from the real light"""
     s = _system("NS_GSTN_RunStartDust")
     if s:
-        # The side camera sees X and Z only (Y is depth): the two pairs must part along X and in height, not only across (probe r3: same X)
-        _burst_puffs(s, "Big", 2, (0.30, 0.34), (16 * BALL, 20 * BALL), 380, 6.0, cone=((-1, 0, 0.55), 50),
-                     box=((20, 44, 2), (-14, 0, 12)))
-        _burst_puffs(s, "Small", 2, (0.26, 0.30), (12 * BALL, 13 * BALL), 170, 6.0, cone=((-1, 0, 0.05), 50),
-                     box=((20, 44, 2), (-6, 0, 8)))
+        _balls(s, "Big", 2, (0.30, 0.34), (20, 24), 380, 6.0, cone=((-1, 0, 0.55), 50), box=((20, 44, 2), (-14, 0, 12)))
+        _balls(s, "Small", 2, (0.26, 0.30), (15, 17), 170, 6.0, cone=((-1, 0, 0.05), 50), box=((20, 44, 2), (-6, 0, 8)))
     return s
 
 
 def skid_dust():
-    """Skid (sustained, attached to the feet, world space): a ball (14-18 cm) every 37 cm slid, left behind as a row, max 4-5 alive.
-    By distance: a nearly stopped skid adds no ball on the feet (review r2). Centred 15 cm up, so the floor never cuts a ball"""
+    """Skid (sustained, attached to the feet, world space): a cotton ball (14-18 cm) every 37 cm slid, left behind as a row"""
     s = _system("NS_GSTN_SkidDust")
     if s:
         e = Emitter(s, "Fountain", "Trail").settings(False)
         e.off("ParticleUpdate", "ScaleColor")
         e.per_distance(37.0)
-        e.particle((0.28, 0.32), (14 * BALL, 18 * BALL)).sphere(3, (1, 1, 0.3), (0, 0, 15)).cone((0, 0, 1), 30, 40)
-        e.drag(6.0).material("DustBall")
+        e.mesh_particle((0.28, 0.32), (14, 18)).sphere(3, (1, 1, 0.3), (0, 0, 15)).cone((0, 0, 1), 30, 40)
+        e.drag(6.0).mesh("Ball", "Dust")
     return s
 
 
 def jump_puff():
-    """Jump from the ground (at the last grounded location): 3 small balls out to the sides and a thin ring on the floor"""
+    """Jump from the ground: a thin glossy torus on the floor, ~86 cm. No dust balls (owner 2026-11-17: dust only on run start and skid)"""
     s = _system("NS_GSTN_JumpPuff")
     if s:
-        _burst_puffs(s, "Puffs", 3, (0.25, 0.32), (17 * BALL, 21 * BALL), 220, 8.0, ring=(18, 11))
-        _ring(s, "Ring", "JumpRing", 0.26, 110)
+        _torus(s, "Ring", "TorusZ", "Gloss", 0.26, 86)
     return s
 
 
 def land_ring():
-    """Landing (scaled by the fall speed; the knockdown plays it at 1.2): a ring 60 -> 140 cm in 6 frames that thins out and dies at 18
-    frames (300 ms), and 6 radial balls of 16-20 cm born on a 38 cm circle (off the feet, review r2) that stop ~40 cm further out"""
+    """Landing (scaled by the fall speed; knockdown 1.2): a glossy torus ~80 cm that widens from 45% and pops out at 300 ms, and 6 cotton
+    balls (14-18 cm) born on a 58 cm circle, pushed out and up, falling back on the floor plane once (one hop, then rest)"""
     s = _system("NS_GSTN_LandRing")
     if s:
-        _ring(s, "Ring", "GroundRing", 0.30, 182)
-        _burst_puffs(s, "Puffs", 6, (0.30, 0.40), (16 * BALL, 20 * BALL), 300, 7.0, ring=(38, 10))
+        _ground_plane(s)
+        _torus(s, "Ring", "TorusZ", "Gloss", 0.30, 80)
+        _balls(s, "Puffs", 6, (0.34, 0.42), (20, 26), 440, 6.0, ring=(58, 10), origin=(0, 0, -40), gravity=-2200, bounce=True)
     return s
 
 
 def _lines(system, name, side):
-    """One side of the body: spawned in a box 50-80 cm out from the axis, 60-150 cm high, sliding backwards (-Y)"""
+    """One side of the body: capsules spawned 50-80 cm out, 60-150 cm high, sliding backwards (-Y), X along the motion"""
     e = Emitter(system, "Fountain", name).settings(True)
     e.off("ParticleUpdate", "ScaleColor")
     e.set("EmitterUpdate", "SpawnRate", "SpawnRate", 8.0)
-    # The streak is 0.185 of its sprite wide and 0.75 long: 24 x 187 draws ~4.5 x 140 cm
-    e.particle((0.24, 0.30), None, non_uniform=(24, 187))
+    e.mesh_particle((0.24, 0.30), (90, 110), scale=(1.0, 0.35, 0.35))
     e.set("ParticleSpawn", "ShapeLocation", "Shape Primitive", "Box / Plane")
     e.set("ParticleSpawn", "ShapeLocation", "Box Size", (30, 60, 90))
     e.shape_offset((65 * side, -20, 105))
     e.set("ParticleSpawn", "AddVelocity", "Velocity Mode", "Linear").set("ParticleSpawn", "AddVelocity", "Velocity", (0, -450, 0))
-    return e.drag(2.0).material("SpeedStreak", velocity_aligned=True)
+    return e.drag(2.0).mesh("Capsule", "Streak", facing="velocity")
 
 
 def speed_lines():
-    """Sprint 2 (sustained, attached to the root bone, LOCAL space): 3-5 white tapered streaks only at the body's sides (never over it,
-    review r1: from the game camera they covered the legs). The mannequin faces +Y in mesh space, so the sides are +-X"""
+    """Sprint 2 (sustained, attached to the root bone, local space): glossy white tapered capsules at the body's sides only. The table
+    stops them under 450 cm/s (owner playtest: lines trailing a walk)"""
     s = _system("NS_GSTN_SpeedLines")
     if s:
         _lines(s, "Left", -1)
@@ -308,57 +377,58 @@ def speed_lines():
 
 
 def hit_spark():
-    """Hit (X along the push): 1 flash, 1 ring, up to 8 star shards, and 3 accent stars on a strong hit. Sizes at intensity 1 (the cue
-    gives 0.56 / 0.74 / 1.1 for S / M / L): flash 64 cm, ring 105 cm, shards 24 cm -> S 36 / 58 / 13, M 47 / 77 / 18, L 70 / 115 / 26.
-    User.Intensity = share of the 8 shards that spawn (4 / 6 / 8)"""
+    """Hit (X along the push; cue intensity 0.5 / 0.74 / 1.1 for S / M / L, which scales everything): flash sprite 64 cm (frames 1-2), a
+    "neon" torus ~105 cm facing the camera, 4/6/8 glossy gem shards (User.Count) in an 80 degree fan, braked hard, gone by frame ~18.
+    Strong hit (User.StrongCount = 3): 3 debris gems in the kit's accent colour that fall, bounce on the floor (max 2) with a shadow
+    under them, and pop out by ~0.9 s"""
     s = _system("NS_GSTN_HitSpark")
     if s:
+        _ground_plane(s)
         flash = Emitter(s, "OmnidirectionalBurst", "Flash").settings(True)
         flash.off("ParticleUpdate", "ScaleColor")
-        # Everything sits on the contact side (local -X = toward the attacker, the cue turns X along the push), not over the torso
-        flash.burst(1).particle((0.034, 0.034), (83, 83)).sized().sphere(0.01, offset=(-30, 0, 0)).radial(0.0).material("HitFlash")
-        ring = Emitter(s, "OmnidirectionalBurst", "Ring").settings(True)
-        ring.off("ParticleUpdate", "ScaleColor")
-        ring.burst(1).particle((0.18, 0.18), (134, 134)).sized().sphere(0.01, offset=(-30, 0, 0)).radial(0.0).material("HitRing")
-        # Shards: an 80 degree fan along the push, fast and braked hard, drawn 40 cm toward the camera so the victim never hides them.
-        # 2000 cm/s braked by drag 12: ~55 cm out by the 3rd frame, ~160 cm at rest (times the hit's scale); hidden on the flash frame
-        # (material AppearAt). Review r2: 600 cm/s with no working drag left a lump of stars on the victim
-        stars = Emitter(s, "OmnidirectionalBurst", "Stars").settings(True)
-        stars.off("ParticleUpdate", "ScaleColor")
-        # Count: the cue sets User.Count = 8 x intensity (4 / 6 / 8). Speed 3000 braked by drag 14 (in-game probe r3: drag 12 at 2000 gave
-        # ~40 cm by frame 3 at scale 1, ~23 cm on a small hit); cone 120 = a fan of about +-45 degrees (40 measured +-14)
-        stars.burst(8).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.Count")
-        stars.particle((0.20, 0.28), (27, 33), rotation=True).sized().sphere(4, offset=(-25, 0, 0)).cone((1, 0, 0), 120, 3000).drag(14.0)
-        stars.toward_camera(60.0).material("HitStar")
-        # Strong hit only (User.Strong, set by the cue from its StrongIntensity): 3 five-point stars in the row's accent colour
-        accent = Emitter(s, "OmnidirectionalBurst", "Accent").settings(True)
-        accent.off("ParticleUpdate", "ScaleColor")
-        accent.burst(3).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.StrongCount")
-        accent.particle((0.22, 0.30), (24, 30), rotation=True).sized().sphere(4, offset=(-25, 0, 0)).cone((1, 0, 0), 140, 2600).drag(14.0)
-        accent.link("ParticleSpawn", "InitializeParticle", "Color", "User.AccentTint")
-        accent.toward_camera(60.0).material("HitAccent")
+        # r1 review: on the contact, not over the attacker (-30 -> +10); a bigger flash from the game camera (83 -> 110)
+        flash.burst(1).particle((0.034, 0.034), (110, 110)).sized().sphere(0.01, offset=(10, 0, 0)).radial(0.0)
+        flash.toward_camera(60.0).material("HitFlash")  # r2 review: a dark square behind the attacker from the game camera
+        _torus(s, "Ring", "TorusX", "Neon", 0.20, 85, offset=(10, 0, 0), facing="camera")
+        shards = Emitter(s, "OmnidirectionalBurst", "Shards").settings(True)
+        shards.off("ParticleUpdate", "ScaleColor")
+        shards.burst(8).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.Count")
+        # Fan regular-ish: a cone of +-45 degrees (120 set), no curl, no vortex
+        # r2 review: drag 14 -> 20 (they flew ~3 m), born on a 12 cm sphere in a wider fan (a pile on the ground bounce)
+        shards.mesh_particle((0.24, 0.30), (18, 22)).sphere(12, offset=(5, 0, 0)).cone((1, 0, 0), 150, 3000).drag(20.0)
+        shards.toward_camera(30.0).mesh("Gem", "Gem", facing="velocity")
+        debris = Emitter(s, "OmnidirectionalBurst", "Debris").settings(True)
+        debris.off("ParticleUpdate", "ScaleColor")
+        debris.burst(3).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.StrongCount")
+        debris.mesh_particle((0.75, 0.90), (18, 22)).sphere(4, offset=(5, 0, 0)).cone((1, 0, 0.6), 110, 900).drag(2.5)
+        debris.gravity(-2600).bounce()
+        debris.link("ParticleSpawn", "InitializeParticle", "Color", "User.AccentTint")
+        debris.mesh("Gem", "Debris", facing="velocity", shadow="Debris")
     return s
 
 
 def impact():
-    """Wall, ceiling or ground contact of a launched victim (X along the surface normal): the landing recipe, turned, 3 cm off the surface"""
+    """Wall, ceiling or ground contact of a launched victim (X along the surface normal): a glossy torus on the surface (~80 cm) and 5
+    cotton balls born on its rim, pushed off the surface, falling to the floor and bouncing there, with shadows"""
     s = _system("NS_GSTN_Impact")
     if s:
-        _ring(s, "Ring", "LandRing", 0.30, 182, facing=(1, 0, 0), offset=(3, 0, 0))
-        # Born on a 40 cm circle on the surface, not in its middle (review r2: overlapping balls over the victim's thighs)
-        _burst_puffs(s, "Puffs", 5, (0.30, 0.40), (18 * BALL, 24 * BALL), 300, 7.0, sphere=(40, (0.05, 1, 1), (14, 0, 0)), rim=True)
+        _ground_plane(s)
+        _torus(s, "Ring", "TorusX", "Gloss", 0.30, 80, offset=(3, 0, 0))
+        _balls(s, "Puffs", 5, (0.45, 0.60), (16, 22), 440, 5.0, sphere=(72, (0.05, 1, 1), (14, 0, 0)), rim=True, gravity=-2200, bounce=True,
+               shadow="Dust")
     return s
 
 
 def tumble_trail():
-    """Tumble (sustained, attached to the pelvis, world space; starts at the launch, after the hitstop): a ball of 18 cm every 60 cm flown
-    (3-4 in a row at launch speed; review r2: at a rate they were ~2 m apart), 300 ms. No ribbon: it never read in r1 (decision applied in round 2, see the handover)"""
+    """Tumble (sustained, attached to the pelvis, world space; starts at the launch): a chain of glossy balls (18 cm) one every 60 cm
+    flown, shrinking out in 300 ms, each with its shadow on the floor under the launch"""
     s = _system("NS_GSTN_TumbleTrail")
     if s:
+        _ground_plane(s)
         balls = Emitter(s, "Fountain", "Balls").settings(False)
         balls.off("ParticleUpdate", "ScaleColor")
         balls.per_distance(60.0)
-        balls.particle((0.28, 0.32), (18 * BALL, 18 * BALL)).sphere(2).cone((0, 0, 1), 180, 10).material("TrailBall")
+        balls.mesh_particle((0.28, 0.32), (18, 18)).sphere(2).cone((0, 0, 1), 180, 10).mesh("Ball", "Dust", shadow="Dust")
     return s
 
 

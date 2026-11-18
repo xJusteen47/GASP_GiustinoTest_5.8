@@ -122,6 +122,20 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationCue
 	bool bOrientToDirection = false;
 
 	/**
+	 * World spawn only: cm the system is moved toward the local player's camera, so an effect at a contact on the far side of the body
+	 * is not hidden by it (owner playtest 2026-11-17: hit effects behind the back). Cosmetic, per machine; 0 = off
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float TowardCamera = 0.f;
+
+	/**
+	 * Sustained only: the system stops when the character's horizontal speed drops under this (cm/s), whatever events came. A safety
+	 * for stage effects (owner playtest 2026-11-17: sprint lines trailing a walking character); 0 = off
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float SustainMinSpeed = 0.f;
+
+	/**
 	 * Multiply the system's scale by the intensity. The component scale moves and spreads the particles but Niagara never applies it to
 	 * a sprite's size, so the intensity also goes to SizeParameter (a system multiplies its sprite sizes by it)
 	 */

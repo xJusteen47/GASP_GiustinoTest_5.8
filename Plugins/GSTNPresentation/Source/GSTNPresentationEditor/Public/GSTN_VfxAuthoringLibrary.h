@@ -9,6 +9,8 @@
 class UNiagaraRendererProperties;
 class UNiagaraComponent;
 class UNiagaraSystem;
+class UStaticMesh;
+class UMaterialInterface;
 
 /**
  * Builds the kit's Niagara systems from a script (Tools/GAS/setup_presentation_vfx.py) through the same editor APIs the Niagara stack
@@ -38,6 +40,27 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
 	static bool AddUserInt(UNiagaraSystem* System, FName Name, int32 Default);
+
+	/** Adds (or keeps) User.<Name> as a 3D vector (v2: the ground plane point and normal the cue sets for the bounces) */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
+	static bool AddUserVector(UNiagaraSystem* System, FName Name, FVector Default);
+
+	/**
+	 * VFX v2 (meshes, not sprites): adds a mesh renderer drawing Mesh with Material (an override, so the mesh asset keeps its own).
+	 * bReplace removes the emitter's renderers first (the template's sprite); false appends, e.g. the flattened shadow pass of the same
+	 * particles. Facing: ENiagaraMeshFacingMode as an int (0 default, 1 velocity, 2 camera position; the enum is not exposed to Python).
+	 * Null if no emitter
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
+	static UNiagaraRendererProperties* AddMeshRenderer(UNiagaraSystem* System, const FString& EmitterName, UStaticMesh* Mesh,
+		UMaterialInterface* Material, bool bReplace, int32 Facing = 0);
+
+	/**
+	 * +1 when most triangles of LOD 0 have a geometric normal (V1 - V0) x (V2 - V0) along their vertex normals, -1 when against, 0 if no
+	 * render data. The kit's meshes are written by a script: compared with an engine mesh, it tells whether they render inside out
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
+	static int32 MeshWindingSign(UStaticMesh* Mesh);
 
 	/** Adds an emitter copied from an emitter asset (a template), renamed; returns its unique name or an error starting with "!" */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")

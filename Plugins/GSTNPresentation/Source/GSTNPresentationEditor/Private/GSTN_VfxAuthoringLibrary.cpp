@@ -15,7 +15,11 @@
 #include "NiagaraGraph.h"
 #include "NiagaraNodeFunctionCall.h"
 #include "NiagaraNodeOutput.h"
+#include "NiagaraMeshRendererProperties.h"
 #include "NiagaraRendererProperties.h"
+#include "Engine/StaticMesh.h"
+#include "StaticMeshResources.h"
+#include "Materials/MaterialInterface.h"
 #include "NiagaraRibbonRendererProperties.h"
 #include "NiagaraScript.h"
 #include "NiagaraScriptSource.h"
@@ -379,6 +383,11 @@ bool UGSTN_VfxAuthoringLibrary::AddUserInt(UNiagaraSystem* System, FName Name, i
 	return GSTNVfxAuthoring::AddUser<int32>(System, FNiagaraTypeDefinition::GetIntDef(), Name, Default);
 }
 
+bool UGSTN_VfxAuthoringLibrary::AddUserVector(UNiagaraSystem* System, FName Name, FVector Default)
+{
+	return GSTNVfxAuthoring::AddUser<FVector3f>(System, FNiagaraTypeDefinition::GetVec3Def(), Name, FVector3f(Default));
+}
+
 FString UGSTN_VfxAuthoringLibrary::AddEmitter(UNiagaraSystem* System, const FString& EmitterAssetPath, const FString& NewName)
 {
 	UNiagaraEmitter* Source = LoadObject<UNiagaraEmitter>(nullptr, *EmitterAssetPath);
@@ -713,6 +722,73 @@ UNiagaraRendererProperties* UGSTN_VfxAuthoringLibrary::GetRenderer(UNiagaraSyste
 	FNiagaraEmitterHandle* Handle = GSTNVfxAuthoring::FindHandle(System, EmitterName);
 	FVersionedNiagaraEmitterData* Data = Handle ? Handle->GetEmitterData() : nullptr;
 	return Data && Data->GetRenderers().IsValidIndex(Index) ? Data->GetRenderers()[Index] : nullptr;
+}
+
+UNiagaraRendererProperties* UGSTN_VfxAuthoringLibrary::AddMeshRenderer(UNiagaraSystem* System, const FString& EmitterName, UStaticMesh* Mesh,
+	UMaterialInterface* Material, bool bReplace, int32 Facing)
+{
+	FNiagaraEmitterHandle* Handle = GSTNVfxAuthoring::FindHandle(System, EmitterName);
+	FVersionedNiagaraEmitterData* Data = Handle ? Handle->GetEmitterData() : nullptr;
+	if (!Data || !Mesh)
+	{
+		return nullptr;
+	}
+	const FVersionedNiagaraEmitter Instance = Handle->GetInstance();
+	UNiagaraEmitter* Emitter = Instance.Emitter;
+	Emitter->Modify();
+	if (bReplace)
+	{
+		const TArray<UNiagaraRendererProperties*> Old = Data->GetRenderers();
+		for (UNiagaraRendererProperties* Renderer : Old)
+		{
+			Emitter->RemoveRenderer(Renderer, Instance.Version);
+		}
+	}
+	UNiagaraMeshRendererProperties* Renderer = NewObject<UNiagaraMeshRendererProperties>(Emitter, NAME_None, RF_Transactional);
+	Renderer->Meshes.Reset();
+	FNiagaraMeshRendererMeshProperties& Entry = Renderer->Meshes.AddDefaulted_GetRef();
+	Entry.Mesh = Mesh;
+	if (Material)
+	{
+		Renderer->bOverrideMaterials = true;
+		Renderer->OverrideMaterials.Reset();
+		// One override per mesh section (the kit's meshes have one)
+		const int32 Sections = FMath::Max(1, Mesh->GetStaticMaterials().Num());
+		for (int32 Index = 0; Index < Sections; ++Index)
+		{
+			FNiagaraMeshMaterialOverride& Override = Renderer->OverrideMaterials.AddDefaulted_GetRef();
+			Override.ExplicitMat = Material;
+		}
+	}
+	Renderer->FacingMode = static_cast<ENiagaraMeshFacingMode>(FMath::Clamp(Facing, 0, 3));
+	Emitter->AddRenderer(Renderer, Instance.Version);
+	System->MarkPackageDirty();
+	return Renderer;
+}
+
+int32 UGSTN_VfxAuthoringLibrary::MeshWindingSign(UStaticMesh* Mesh)
+{
+	const FStaticMeshRenderData* Data = Mesh ? Mesh->GetRenderData() : nullptr;
+	if (!Data || Data->LODResources.IsEmpty())
+	{
+		return 0;
+	}
+	const FStaticMeshLODResources& Lod = Data->LODResources[0];
+	TArray<uint32> Indices;
+	Lod.IndexBuffer.GetCopy(Indices);
+	const FPositionVertexBuffer& Positions = Lod.VertexBuffers.PositionVertexBuffer;
+	const FStaticMeshVertexBuffer& Tangents = Lod.VertexBuffers.StaticMeshVertexBuffer;
+	int32 Score = 0;
+	for (int32 Index = 0; Index + 2 < Indices.Num(); Index += 3)
+	{
+		const FVector3f V0 = Positions.VertexPosition(Indices[Index]);
+		const FVector3f V1 = Positions.VertexPosition(Indices[Index + 1]);
+		const FVector3f V2 = Positions.VertexPosition(Indices[Index + 2]);
+		const FVector3f Normal = Tangents.VertexTangentZ(Indices[Index]) + Tangents.VertexTangentZ(Indices[Index + 1])
+			+ Tangents.VertexTangentZ(Indices[Index + 2]);
+		Score += FVector3f::DotProduct(FVector3f::CrossProduct(V1 - V0, V2 - V0), Normal) > 0.f ? 1 : -1;
+	}
+	return Score > 0 ? 1 : -1;
 }
 
 UNiagaraRendererProperties* UGSTN_VfxAuthoringLibrary::SetRibbonRenderer(UNiagaraSystem* System, const FString& EmitterName)

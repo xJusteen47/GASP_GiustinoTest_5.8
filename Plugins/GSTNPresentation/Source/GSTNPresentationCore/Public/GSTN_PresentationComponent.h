@@ -68,6 +68,18 @@ public:
 	UPROPERTY(Config, EditDefaultsOnly, Category = "Presentation")
 	TSoftObjectPtr<UGSTN_PresentationTable> ProjectDefaultTable;
 
+	/**
+	 * VFX v2 (owner decision 2A, 2026-11-17): while this character is in hitstop (Combat.State.Hitstop in its snapshot), the one-shot
+	 * effects it spawned run at this time scale, then go on at full speed with the character. 0 = frozen, 1 = free. A player setting: the
+	 * settings menu writes it on every presentation component the local player sees (no project setting). Cosmetic only.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation|Hitstop", meta = (ClampMin = "0", ClampMax = "1"))
+	float HitstopVfxTimeScale = 0.15f;
+
+	/** Frames an effect runs at full speed before the hitstop slows it: the hit's flash (frames 1-2) shows whatever the scale */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation|Hitstop", meta = (ClampMin = "0", ClampMax = "8"))
+	int32 HitstopVfxFreeFrames = 2;
+
 	/** Thresholds and tag rules of SubmitSnapshot */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation")
 	FGSTN_PresentationDeriveRules DeriveRules;
@@ -146,8 +158,29 @@ private:
 		FGameplayTagContainer StopOn;
 		/** World time (s); <= 0 = no cap */
 		double EndTime = 0.0;
+		/** FGSTN_PresentationCue::SustainMinSpeed */
+		float MinSpeed = 0.f;
 	};
 	TArray<FSustained> Sustained;
+
+	/** A one-shot effect of this character, slowed while the character is in hitstop (HitstopVfxTimeScale) */
+	struct FOneShot
+	{
+		TWeakObjectPtr<UNiagaraComponent> System;
+		/** World time (s) of the spawn */
+		double SpawnTime = 0.0;
+	};
+	TArray<FOneShot> OneShots;
+
+	/** Applies HitstopVfxTimeScale to the live one-shots; drops the finished ones */
+	void UpdateHitstopTime(double Now);
+
+	/**
+	 * VFX v2 bounces and shadows (owner decision 3A): a system exposing User.GroundPoint / User.GroundNormal (its local space) and
+	 * User.GroundHeight (world) gets the floor under the event: one line trace per event on the game thread, the feet as fallback.
+	 * The particles bounce on that analytical plane (no Niagara trace, no depth buffer: the toaster target) and their shadows lie on it
+	 */
+	void SetGroundPlane(UNiagaraComponent* System, const FGSTN_PresentationEvent& Event) const;
 
 	/** A cue waiting for the drawn body (FGSTN_PresentationCue::GroundedBone) */
 	struct FPendingGrounded

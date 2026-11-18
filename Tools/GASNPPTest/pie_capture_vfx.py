@@ -48,13 +48,18 @@ SEQUENCES = [
     {'name': 'hit_medium', 'frames': 80, 'tap': [0], 'dummy': (95.0, 90.0), 'dist': 480.0, 'follow': False},
     # The launch, followed until the downed landing (~190 frames after the hit) and a little after
     {'name': 'hit_large', 'frames': 260, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 650.0, 'follow': False, 'follow_victim': True},
+    # VFX v2: the strong hit from a fixed camera on the hit point, so the debris' fall, bounces and shadows stay in frame
+    {'name': 'hit_debris', 'frames': 90, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 520.0, 'follow': False},
     # Wall and ceiling contacts of a launched victim (NS_GSTN_Impact): a wall across the launch and a low ceiling over it
     {'name': 'wall', 'frames': 120, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 650.0, 'follow': False, 'follow_victim': True,
      'blocks': [(420.0, 0.0, 0.0, 60.0, 700.0, 500.0)]},
     {'name': 'ceiling', 'frames': 120, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 650.0, 'follow': False, 'follow_victim': True,
      'blocks': [(650.0, 0.0, 300.0, 1200.0, 700.0, 40.0)]},
-    # The small default bump (combat rules WallImpact, under 1200 cm/s): the medium launch (90 %) into a nearer wall
-    {'name': 'wall_bump', 'frames': 90, 'tap': [0], 'dummy': (95.0, 90.0), 'dist': 520.0, 'follow': False, 'follow_victim': True,
+    # The small default bump (combat rules WallImpact, under 1200 cm/s): the medium launch (90 %) into a nearer wall. 200 frames: the
+    # Bump.Wall event comes ~176 frames in (r3 missed it at 90)
+    # side_az 135 (review r4): from 90 the camera saw the wall edge-on (impact ring on its plane not judgeable); 135 = behind-right,
+    # 45 would put the camera behind the wall
+    {'name': 'wall_bump', 'frames': 200, 'side_az': 135.0, 'tap': [0], 'dummy': (95.0, 90.0), 'dist': 520.0, 'follow': False, 'follow_victim': True,
      'blocks': [(260.0, 0.0, 0.0, 60.0, 700.0, 500.0)]},
     # KIT_Example_Impacts: strong = wall splat (a wall behind the victim), attack = spike with a ground bounce
     {'name': 'splat', 'frames': 120, 'strong': [0], 'kit': 'KIT_Example_Impacts', 'dummy': (95.0, 100.0), 'dist': 650.0, 'follow': False,
@@ -201,7 +206,7 @@ def _aim(seq, follow):
     yaw = st['yaw']
     for (az, _i), light in zip(FILL_LIGHTS, st['lights']):
         light.set_actor_rotation(unreal.Rotator(roll=0.0, pitch=-25.0, yaw=yaw + az + 180.0), False)
-    a, e = math.radians(yaw + 90.0), math.radians(ELEVATION)
+    a, e = math.radians(yaw + seq.get('side_az', 90.0)), math.radians(ELEVATION)   # side_az: 90 = on the pawn's right
     d = seq['dist']
     pos = unreal.Vector(centre.x + d * math.cos(e) * math.cos(a), centre.y + d * math.cos(e) * math.sin(a), centre.z + d * math.sin(e))
     st['cams'][0].set_actor_location_and_rotation(pos, unreal.MathLibrary.find_look_at_rotation(pos, centre), False, False)

@@ -10,7 +10,10 @@
 #include "GameFramework/Actor.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "CollisionQueryParams.h"
+#include "Engine/HitResult.h"
 #include "Kismet/GameplayStatics.h"
+#include "NiagaraTypes.h"
 #include "NiagaraComponent.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
@@ -239,7 +242,18 @@ void UGSTN_PresentationComponent::PlayCue(const FGSTN_PresentationCue& Cue, cons
 			// One-shots come from the world pool (no allocation per hit on a toaster PC); a sustained effect is held by this component
 			// until its stop event, so it is never pooled (a pooled component could be handed to another effect meanwhile)
 			const bool bPooled = !Cue.IsSustained();
-			System = UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, Cue.Niagara, Event.Location + Cue.Offset, Rotation,
+			FVector Location = Event.Location + Cue.Offset;
+			if (Cue.TowardCamera > 0.f)
+			{
+				// The first local player's view: split screen shares the effect, the main view decides (cosmetic only)
+				const APlayerController* Viewer = World->GetFirstPlayerController();
+				if (Viewer && Viewer->PlayerCameraManager)
+				{
+					const FVector ToCamera = Viewer->PlayerCameraManager->GetCameraLocation() - Location;
+					Location += ToCamera.GetSafeNormal() * FMath::Min<double>(Cue.TowardCamera, ToCamera.Size() * 0.5);
+				}
+			}
+			System = UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, Cue.Niagara, Location, Rotation,
 				FVector(Cue.bScaleSize ? Intensity : 1.f), !bPooled, true, bPooled ? ENCPoolMethod::AutoRelease : ENCPoolMethod::None);
 		}
 		if (System)
@@ -277,12 +291,21 @@ void UGSTN_PresentationComponent::PlayCue(const FGSTN_PresentationCue& Cue, cons
 			{
 				System->SetVariableFloat(Cue.StrongParameter, Cue.StrongIntensity > 0.f && Intensity >= Cue.StrongIntensity ? 1.f : 0.f);
 			}
+			// A pooled component may come back from an effect that was slowed by a hitstop
+			System->SetCustomTimeDilation(1.f);
+			SetGroundPlane(System, Event);
+			if (!Cue.IsSustained())
+			{
+				OneShots.Add({System, World->GetTimeSeconds()});
+				UpdateTickEnabled();
+			}
 			if (Cue.IsSustained())
 			{
 				FSustained& Entry = Sustained.AddDefaulted_GetRef();
 				Entry.System = System;
 				Entry.StopOn = Cue.StopOn;
 				Entry.EndTime = Cue.MaxDuration > 0.f ? World->GetTimeSeconds() + Cue.MaxDuration : 0.0;
+				Entry.MinSpeed = Cue.SustainMinSpeed;
 				UpdateTickEnabled();
 			}
 		}
@@ -339,9 +362,13 @@ void UGSTN_PresentationComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	if (const UWorld* World = GetWorld(); World && !Sustained.IsEmpty())
 	{
 		const double Now = World->GetTimeSeconds();
+		const FGSTN_PresentationSnapshot& State = Deriver.GetPrevious();
+		const FVector Up = State.Up.IsNearlyZero() ? FVector::UpVector : State.Up.GetSafeNormal();
+		const double Speed = State.bValid ? FVector::VectorPlaneProject(State.Velocity, Up).Size() : 0.0;
 		for (FSustained& Entry : Sustained)
 		{
-			if (Entry.EndTime > 0.0 && Now >= Entry.EndTime && Entry.System.IsValid())
+			const bool bTooSlow = Entry.MinSpeed > 0.f && State.bValid && Speed < Entry.MinSpeed;
+			if (((Entry.EndTime > 0.0 && Now >= Entry.EndTime) || bTooSlow) && Entry.System.IsValid())
 			{
 				Entry.System->Deactivate();
 				Entry.System.Reset();
@@ -366,7 +393,68 @@ void UGSTN_PresentationComponent::TickComponent(float DeltaTime, ELevelTick Tick
 			PlayCue(Pending.Cue, Pending.Event, Pending.Intensity);
 		}
 	}
+	if (const UWorld* World = GetWorld(); World && !OneShots.IsEmpty())
+	{
+		UpdateHitstopTime(World->GetTimeSeconds());
+	}
 	UpdateTickEnabled();
+}
+
+void UGSTN_PresentationComponent::UpdateHitstopTime(double Now)
+{
+	static const FGameplayTag HitstopTag = FGameplayTag::RequestGameplayTag(TEXT("Combat.State.Hitstop"), false);
+	const FGSTN_PresentationSnapshot& State = Deriver.GetPrevious();
+	const bool bHitstop = HitstopTag.IsValid() && State.bValid && State.StateTags.HasTag(HitstopTag);
+	const double FreeTime = HitstopVfxFreeFrames / 60.0;
+	for (FOneShot& Shot : OneShots)
+	{
+		UNiagaraComponent* System = Shot.System.Get();
+		if (!System)
+		{
+			continue;
+		}
+		if (!System->IsActive())
+		{
+			System->SetCustomTimeDilation(1.f);  // back to the pool at full speed
+			Shot.System.Reset();
+			continue;
+		}
+		const bool bSlow = bHitstop && Now - Shot.SpawnTime >= FreeTime;
+		System->SetCustomTimeDilation(bSlow ? FMath::Clamp(HitstopVfxTimeScale, 0.f, 1.f) : 1.f);
+	}
+	OneShots.RemoveAll([](const FOneShot& Shot) { return !Shot.System.IsValid(); });
+}
+
+void UGSTN_PresentationComponent::SetGroundPlane(UNiagaraComponent* System, const FGSTN_PresentationEvent& Event) const
+{
+	static const FNiagaraVariable PointVar(FNiagaraTypeDefinition::GetVec3Def(), TEXT("User.GroundPoint"));
+	UNiagaraSystem* Asset = System ? System->GetAsset() : nullptr;
+	if (!Asset || !Asset->GetExposedParameters().FindParameterOffset(PointVar))
+	{
+		return;  // no bounce in this effect: no trace
+	}
+	const UWorld* World = GetWorld();
+	const AActor* Owner = GetOwner();
+	const FGSTN_PresentationSnapshot& State = Deriver.GetPrevious();
+	const FVector Up = State.bValid && !State.Up.IsNearlyZero() ? State.Up.GetSafeNormal() : FVector::UpVector;
+	// Fallback: the feet (the event of an airborne hit is at the body)
+	FVector Point = Owner ? Owner->GetActorLocation() - Up * Owner->GetSimpleCollisionHalfHeight() : Event.Location;
+	FVector Normal = Up;
+	if (World)
+	{
+		FHitResult Hit;
+		const FVector Start = Event.Location + Up * 20.0;
+		const FVector End = Event.Location - Up * 800.0;
+		if (World->LineTraceSingleByObjectType(Hit, Start, End, FCollisionObjectQueryParams(ECC_WorldStatic)))
+		{
+			Point = Hit.ImpactPoint;
+			Normal = Hit.ImpactNormal;
+		}
+	}
+	const FTransform& Transform = System->GetComponentTransform();
+	System->SetVariableVec3(TEXT("GroundPoint"), Transform.InverseTransformPosition(Point));
+	System->SetVariableVec3(TEXT("GroundNormal"), Transform.InverseTransformVectorNoScale(Normal).GetSafeNormal());
+	System->SetVariableFloat(TEXT("GroundHeight"), Point.Z);
 }
 
 void UGSTN_PresentationComponent::StopSustained(const FGameplayTag& EventTag)
@@ -384,7 +472,7 @@ void UGSTN_PresentationComponent::StopSustained(const FGameplayTag& EventTag)
 
 void UGSTN_PresentationComponent::UpdateTickEnabled()
 {
-	SetComponentTickEnabled(!Additives.IsEmpty() || !Sustained.IsEmpty() || !PendingGrounded.IsEmpty());
+	SetComponentTickEnabled(!Additives.IsEmpty() || !Sustained.IsEmpty() || !PendingGrounded.IsEmpty() || !OneShots.IsEmpty());
 }
 
 void UGSTN_PresentationComponent::GetAdditiveReaction(FGSTN_AdditiveReactionRequest& Out) const

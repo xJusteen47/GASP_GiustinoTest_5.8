@@ -1,0 +1,9 @@
+BP_GASNPP_TestCharacter_C_3 Presentation.Event.Hit frame=1849 mag=40.0 intensity=0.74 niagara=NS_GSTN_HitSpark
+BP_GASNPP_TestCharacter_C_3 Presentation.Event.WallBounce frame=1862 mag=1065.7 intensity=1.10 niagara=NS_GSTN
+BP_GASNPP_TestCharacter_C_3 Presentation.Event.Hit frame=1870 mag=45.0 intensity=0.84 niagara=NS_GSTN_HitSpark
+BP_GASNPP_TestCharacter_C_3 Presentation.Event.WallBounce frame=1878 mag=1063.2 intensity=1.10 niagara=NS_GSTN
+BP_GASNPP_TestCharacter_C_3 Presentation.Event.WallBounce frame=1884 mag=1180.8 intensity=1.15 niagara=NS_GSTN
+BP_GASNPP_TestCharacter_C_3 Presentation.Event.GroundBounce frame=1916 mag=902.4 intensity=1.02 niagara=NS_GST
+BP_GASNPP_TestCharacter_C_3 Presentation.Event.WallBounce frame=1981 mag=408.2 intensity=0.80 niagara=NS_GSTN_
+BP_GASNPP_TestCharacter_C_3 Presentation.Event.Bump.Wall frame=1981 mag=0.0 intensity=0.65 niagara=NS_GSTN_Imp
+BP_GASNPP_TestCharacter_C_3 Presentation.Event.Knockdown frame=2007 mag=0.0 intensity=1.20 niagara=NS_GSTN_Lan
