@@ -35,6 +35,12 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FGSTN_OnReactionEnded, FName, RuleNa
  * play), for a Blueprint that adds dust, a hit flash or a sound to a reaction; and the set's HitstopShake trembles the mesh while the owner is
  * frozen by hitstop. Both come from the same per-frame tag read, so a rollback only changes what the next frame shows.
  *
+ * Hitstop presentation (Sakurai's eight hitstop techniques, owner 2026-11-18; the hitstop LENGTH, #5, is simulation data on the hitboxes,
+ * hurtboxes and kit mods): the shake (#1-4, #8, FGSTN_HitstopShake), the victim's blend into its hit pose (#6, FGSTN_HitstopPoseBlend)
+ * and the attacker's sub-frame advance (#7, FGSTN_HitstopAdvance, a lead on the synced montage's drawn time). The hitstop's length and the
+ * synced montage come through FGSTN_HitstopPresentationHooks (filled by GSTNCombatNP). Nothing here moves the capsule, the hurtboxes or the
+ * simulated pose (#2).
+ *
  * Directional hit additives (hit-react-directional, owner option B 2026-11-16): on Combat.Event.Hit.Received it picks the side the hit came
  * from (dot product of the push, attacker to victim, with the victim's facing) and the weight from the hitstun the event carries, and hands
  * them to the anim node FGSTN_AnimNode_DirectionalHitAdditive through IGSTN_AdditiveReactionSource. Visual only, like the rest.
@@ -74,6 +80,14 @@ public:
 	/** The offset the hitstop shake puts on the mesh now (relative space), for the harness */
 	UFUNCTION(BlueprintPure, Category = "Combat|Debug")
 	FVector GetHitstopShakeOffset() const { return ShakeOffset; }
+
+	/** The lead (montage seconds) the attacker's hitstop advance puts on the synced montage now, for the harness */
+	UFUNCTION(BlueprintPure, Category = "Combat|Debug")
+	float GetHitstopAdvanceLead() const { return AppliedLead; }
+
+	/** True while the victim's reaction is held on its hit pose by the hitstop (Sakurai #6), for the harness */
+	UFUNCTION(BlueprintPure, Category = "Combat|Debug")
+	bool IsHitstopPoseHeld() const { return bHitstopPoseHeld; }
 
 	/** Adds the component to Actor (or returns the one it has) with Set; for scripts and tests */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Reaction")
@@ -138,8 +152,26 @@ private:
 	/** Writes this frame's height of the entry drop and the hitstop shake on the mesh (0 at their end), as a difference over whatever Mover put there */
 	void UpdateEntryDrop(float DeltaTime);
 
-	/** The hitstop shake of this frame in the mesh's parent space (zero outside hitstop): screen right, from the first local camera */
-	FVector ComputeHitstopShake(float DeltaTime, const FGameplayTagContainer& Tags);
+	/** Advances the hitstop clock: seconds into the hitstop and its length (from the simulation through the hooks, 0 when unknown) */
+	void UpdateHitstopTimer(float DeltaTime, const FGameplayTagContainer& Tags);
+
+	/** The hitstop shake of this frame in the mesh's parent space (zero outside hitstop): in the first local camera's screen plane */
+	FVector ComputeHitstopShake(const FGameplayTagContainer& Tags);
+
+	/** Sakurai #6: holds the reaction started in hitstop on its hit pose until the hitstop ends, then lets it play on */
+	void UpdateHitstopPoseHold(UAnimInstance& Anim);
+
+	/** Sakurai #7: the attacker's lead on its synced montage during its hitstop, absorbed after it */
+	void UpdateHitstopAdvance(const FGameplayTagContainer& Tags);
+
+	/** Sets the synced montage's presentation lead through the hooks, when it changed */
+	void ApplyAdvanceLead(float Lead);
+
+	/** The blend in of Rule when it starts now: the hitstop pose blend while the victim is frozen by a hitstop, else the rule's own */
+	float BlendInSeconds(const FGSTN_ReactionAnimRule& Rule) const;
+
+	/** A rule starting now starts inside the victim's hitstop with the pose blend on */
+	bool StartsInHitstopPoseBlend() const;
 
 	/** Raises On Reaction Started / Ended when the selected rule changed or restarted */
 	void AnnounceReaction(int32 Winner, bool bRestart);
@@ -179,9 +211,24 @@ private:
 	/** The offset written on the mesh last (drop + shake) and the relative location it gave: if the location changed since, Mover reset it and the offset is gone */
 	FVector AppliedOffset = FVector::ZeroVector;
 
-	/** Seconds into the current hitstop, -1 outside one; the shake of this frame */
-	float ShakeElapsed = -1.f;
+	/** Seconds into the current hitstop (-1 outside one), its length (0 = unknown) and the shake of this frame */
+	float HitstopElapsed = -1.f;
+	float HitstopDuration = 0.f;
 	FVector ShakeOffset = FVector::ZeroVector;
+
+	/** The owner is the hit one of the current hitstop (hitstun or tumble), not the attacker */
+	bool bVictimInHitstop = false;
+
+	/** The playing reaction started inside the victim's hitstop (pose blend on), and it is held on its hit pose now */
+	bool bStartedInHitstop = false;
+	bool bHitstopPoseHeld = false;
+
+	/** The attacker's advance: the montage it rides on, the time it started from, the farthest time drawn, the lead set last */
+	TWeakObjectPtr<const UObject> AdvanceMontage;
+	float AdvanceBaseTime = 0.f;
+	float AdvancePeakTime = -1.f;
+	bool bAdvancing = false;
+	float AppliedLead = 0.f;
 
 	/** The rule the events last announced (INDEX_NONE: none) and its name */
 	int32 AnnouncedRule = INDEX_NONE;

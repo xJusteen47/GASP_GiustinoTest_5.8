@@ -1,4 +1,11 @@
+#include "Abilities/NpAbilitySystemComponent.h"
+#include "AbilitySystemGlobals.h"
+#include "Animation/AnimMontage.h"
 #include "Bindings/GSTN_CommandBindingSet.h"
+#include "Cosmetics/GSTN_HitstopFeel.h"
+#include "MontageSimulator/NetMontageSimulator.h"
+#include "Presentation/GSTN_CombatStateLibrary.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
 #include "Loadout/GSTN_CompiledBindingTable.h"
 #include "Loadout/GSTN_LoadoutRules.h"
 #include "Modules/ModuleManager.h"
@@ -10,6 +17,58 @@
 namespace
 {
 	const FName TableLimitsValidatorId(TEXT("GSTN.NP.TableLimits"));
+
+	UNetMontageSimulator* FindMontagePlayer(const AActor* Actor)
+	{
+		UNpAbilitySystemComponent* Asc = Cast<UNpAbilitySystemComponent>(UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Actor));
+		return Asc ? Asc->GetMontagePlayer() : nullptr;
+	}
+
+	/**
+	 * The hitstop presentation of the reaction component (GSTNCombatGAS, Sakurai's hitstop techniques 2026-11-18) reads the hitstop length and
+	 * drives the synced montage's presentation lead through these: that module sees neither the combat simulation nor the GAS-NPP fork.
+	 * Presentation only, nothing here writes the simulation.
+	 */
+	void InstallHitstopPresentationHooks()
+	{
+		FGSTN_HitstopPresentationHooks::GetHitstopSecondsLeft = [](const AActor* Actor) -> float
+		{
+			if (!UGSTN_CombatStateLibrary::GetCombatComponent(Actor))
+			{
+				return -1.f;
+			}
+			const UNpAbilitySystemComponent* Asc = Cast<UNpAbilitySystemComponent>(UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Actor));
+			const float StepSeconds = (Asc ? Asc->GetFixedStepMs() : 16.f) / 1000.f;
+			return static_cast<float>(UGSTN_CombatStateLibrary::GetHitstopFramesLeft(Actor)) * StepSeconds;
+		};
+		FGSTN_HitstopPresentationHooks::GetPresentedMontageTime = [](const AActor* Actor, const UObject*& OutMontage, float& OutTime) -> bool
+		{
+			OutMontage = nullptr;
+			OutTime = 0.f;
+			const UNetMontageSimulator* Player = FindMontagePlayer(Actor);
+			const UAnimMontage* Montage = nullptr;
+			if (!Player || !Player->GetPresentedMontageTime(Montage, OutTime))
+			{
+				return false;
+			}
+			OutMontage = Montage;
+			return true;
+		};
+		FGSTN_HitstopPresentationHooks::SetMontagePresentationLead = [](const AActor* Actor, float LeadSeconds)
+		{
+			if (UNetMontageSimulator* Player = FindMontagePlayer(Actor))
+			{
+				Player->SetPresentationLead(LeadSeconds);
+			}
+		};
+	}
+
+	void UninstallHitstopPresentationHooks()
+	{
+		FGSTN_HitstopPresentationHooks::GetHitstopSecondsLeft = nullptr;
+		FGSTN_HitstopPresentationHooks::GetPresentedMontageTime = nullptr;
+		FGSTN_HitstopPresentationHooks::SetMontagePresentationLead = nullptr;
+	}
 }
 
 /**
@@ -24,12 +83,14 @@ public:
 		UGSTN_LoadoutRules::RegisterValidator(TableLimitsValidatorId, &FGSTNCombatNPModule::ValidateTableLimits);
 		// A client whose combat sync fragments differ from the server's is refused at connect (FGSTN_FragmentNetworkVersion)
 		FGSTN_FragmentNetworkVersion::Install();
+		InstallHitstopPresentationHooks();
 	}
 
 	virtual void ShutdownModule() override
 	{
 		UGSTN_LoadoutRules::UnregisterValidator(TableLimitsValidatorId);
 		FGSTN_FragmentNetworkVersion::Uninstall();
+		UninstallHitstopPresentationHooks();
 	}
 
 	static FGSTN_LoadoutRuleResult ValidateTableLimits(const FGSTN_LoadoutRulesView& View)

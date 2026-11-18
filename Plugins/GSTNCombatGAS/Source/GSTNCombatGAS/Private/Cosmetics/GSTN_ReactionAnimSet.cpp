@@ -5,6 +5,7 @@
 
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"
+#include "GSTN_CombatTags.h"
 #endif
 
 bool FGSTN_ReactionAnimRule::Matches(const FGameplayTagContainer& OwnerTags) const
@@ -48,17 +49,34 @@ EDataValidationResult UGSTN_ReactionAnimSet::IsDataValid(FDataValidationContext&
 			Context.AddWarning(FText::FromString(FString::Printf(TEXT("Reaction rule %d (%s) has no animation: it shows the character's own pose."), Index, *Rule.Name.ToString())));
 		}
 	}
+	// Sakurai #1: the attacker shakes less than the victim, never as much
+	if (HitstopShake.bEnabled && HitstopShake.AttackerAmplitudeCm > 0.f && HitstopShake.AttackerAmplitudeCm >= HitstopShake.VictimAmplitudeCm)
+	{
+		Context.AddWarning(FText::FromString(FString::Printf(TEXT("Hitstop shake: the attacker (%.2f cm) shakes as much as or more than the victim (%.2f cm)."),
+			HitstopShake.AttackerAmplitudeCm, HitstopShake.VictimAmplitudeCm)));
+	}
+	// Sakurai #7 is per attack: the tag is the switch
+	if (HitstopAdvance.Mode == EGSTN_HitstopAdvanceMode::TaggedMoves && !HitstopAdvance.MoveTag.IsValid())
+	{
+		Context.AddWarning(FText::FromString(TEXT("Hitstop advance: TaggedMoves with no Move Tag never applies.")));
+	}
 	return Result == EDataValidationResult::NotValidated ? EDataValidationResult::Valid : Result;
 }
 #endif
 
-float FGSTN_HitstopShake::Sample(float AmplitudeCm, float FrequencyHz, float DecaySeconds, float ElapsedSeconds)
+FGSTN_HitstopShake::FGSTN_HitstopShake()
 {
-	if (AmplitudeCm <= 0.f || ElapsedSeconds < 0.f || DecaySeconds <= 0.f || ElapsedSeconds >= DecaySeconds)
+	AirTags.AddTag(GSTNCombatTags::State_Falling);
+	AirTags.AddTag(GSTNCombatTags::State_Tumble);
+}
+
+float FGSTN_HitstopShake::Sample(float AmplitudeCm, float FrequencyHz, float DurationSeconds, float ElapsedSeconds)
+{
+	if (AmplitudeCm <= 0.f || ElapsedSeconds < 0.f || DurationSeconds <= 0.f || ElapsedSeconds >= DurationSeconds)
 	{
 		return 0.f;
 	}
-	const float Fade = 1.f - ElapsedSeconds / DecaySeconds;
+	const float Fade = 1.f - ElapsedSeconds / DurationSeconds;
 	return AmplitudeCm * Fade * FMath::Cos(UE_TWO_PI * FrequencyHz * ElapsedSeconds);
 }
 

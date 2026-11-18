@@ -403,4 +403,23 @@ bool FGSTN_MontageSyncStepperCarryTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// Hitstop micro-advance (Sakurai #7, 2026-11-18): the presentation lead rides on the shown time, never reaches the blend out, 0 changes nothing
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_MontageSyncPresentationLeadTest, "GSTNCombat.NP.MontageSync.PresentationLead", GSTN_NP_TEST_FLAGS)
+bool FGSTN_MontageSyncPresentationLeadTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("No lead: the shown time"), UNetMontageSimulator::ApplyPresentationLead(0.5f, 0.f, 2.f), 0.5f);
+	TestEqual(TEXT("Negative lead: the shown time"), UNetMontageSimulator::ApplyPresentationLead(0.5f, -0.1f, 2.f), 0.5f);
+	TestEqual(TEXT("A lead adds to the shown time"), UNetMontageSimulator::ApplyPresentationLead(0.5f, 0.01f, 2.f), 0.51f, 1e-6f);
+	TestTrue(TEXT("A lead stops short of the blend out"), UNetMontageSimulator::ApplyPresentationLead(1.995f, 0.01f, 2.f) < 2.f);
+	TestEqual(TEXT("A lead never draws behind the shown time"), UNetMontageSimulator::ApplyPresentationLead(2.5f, 0.01f, 2.f), 2.5f);
+
+	// The instance follows: an instance on the shown time with a lead ahead moves forward by the lead in one update
+	const float Target = UNetMontageSimulator::ApplyPresentationLead(0.5f, 0.005f, 2.f);
+	const FSyncedMontagePresentationStep Landing = UNetMontageSimulator::ComputeLandOnSimTimeStep(0.5f, Target, GSTNMontageSyncTests::CardRate,
+		GSTNMontageSyncTests::Step, 4.f, 0.f);
+	TestFalse(TEXT("A lead within reach is played, not teleported"), Landing.bSetPosition);
+	TestEqual(TEXT("It lands on the lead"), 0.5f + Landing.PlayRate * GSTNMontageSyncTests::Step, 0.505f, 1e-5f);
+	return true;
+}
+
 #endif

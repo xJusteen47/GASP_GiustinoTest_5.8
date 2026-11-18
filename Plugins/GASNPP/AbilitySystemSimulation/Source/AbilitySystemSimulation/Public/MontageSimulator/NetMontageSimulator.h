@@ -157,6 +157,21 @@ public:
 	UFUNCTION(Blueprintable, Category = "MontageSimulator")
 	UAnimMontage* GetPlayingMontage(float& OutCurrentTime) const;
 
+	/**
+	 * GSTN fork (hitstop micro-advance, 2026-11-18): a presentation-only lead (montage seconds, >= 0) added to the time LandOnSimTime shows, so
+	 * a character frozen by a hitstop can be drawn a fraction of a frame past the simulation (Sakurai's "the blade keeps pushing"). Never read by
+	 * the simulation and never rolled back; it never carries the shown time to or past the montage's blend-out. The caller owns it and sets it
+	 * back to 0 (UGSTN_ReactionAnimComponent, attacker hitstop advance). FreeRun ignores it
+	 */
+	void SetPresentationLead(float LeadSeconds) { PresentationLeadSeconds = FMath::Max(LeadSeconds, 0.f); }
+	float GetPresentationLead() const { return PresentationLeadSeconds; }
+
+	/** GSTN fork (hitstop micro-advance): the montage and time the presentation clock showed last (without the lead). False when none */
+	bool GetPresentedMontageTime(const UAnimMontage*& OutMontage, float& OutTime) const;
+
+	/** The time a frame shows with a lead: ShownTime + Lead, kept under the blend-out time (a lead never starts the blend out). Pure, for the tests */
+	static float ApplyPresentationLead(float ShownTime, float LeadSeconds, float BlendOutTime);
+
 
 	UFUNCTION(BlueprintPure, Category = "MontageSimulator")
 	static FTransform GetAttachedSocketWorldTransformFromMontage(UAnimMontage* Montage, float MontageTime,
@@ -243,6 +258,8 @@ private:
 	int32 NextConsumedAnchor = 0;
 	TWeakObjectPtr<UAnimMontage> PresentedMontage;
 	float PresentedTime = 0.f;
+	/** GSTN fork (hitstop micro-advance): see SetPresentationLead. Presentation only, not state */
+	float PresentationLeadSeconds = 0.f;
 	/**
 	 * GSTN fork (half-rate montage): the sub-stepper time the presented instance still holds (ComputeLandOnSimTimeStep's CarriedSeconds), and
 	 * the instance it belongs to (FAnimMontageInstance::GetInstanceID; a new instance starts with none). Presentation only, not state.

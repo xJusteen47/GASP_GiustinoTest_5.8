@@ -7,6 +7,7 @@
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequenceBase.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Cosmetics/GSTN_HitstopFeel.h"
 #include "Cosmetics/GSTN_ReactionAnimSet.h"
 #include "Events/GSTN_HitEvents.h"
 #include "Camera/PlayerCameraManager.h"
@@ -26,6 +27,12 @@ namespace GSTNReactionAnim
 	constexpr int32 LoopCount = 10000;
 
 	float Seconds(int32 Frames) { return FMath::Max(Frames, 0) * FrameSeconds; }
+
+	/**
+	 * A hitstop left that is this much longer than the one being counted down is a new hit during the freeze (a multi-hit, a trade): the shake
+	 * starts again from full. Covers the 60 Hz drawing of a 62.5 Hz simulation (a frame can show one more tick left than the clock expects)
+	 */
+	constexpr float HitstopRestartSlackSeconds = 0.035f;
 }
 
 UGSTN_ReactionAnimComponent::UGSTN_ReactionAnimComponent(const FObjectInitializer& ObjectInitializer)
@@ -53,6 +60,7 @@ void UGSTN_ReactionAnimComponent::BeginPlay()
 void UGSTN_ReactionAnimComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	UnbindEvents();
+	ApplyAdvanceLead(0.f);
 	DropCm = 0.f;
 	UpdateEntryDrop(0.f);
 	if (USkeletalMeshComponent* MeshComponent = Mesh.Get())
@@ -105,7 +113,11 @@ void UGSTN_ReactionAnimComponent::ApplySet(UGSTN_ReactionAnimSet* NewSet)
 	}
 	AnnouncedRule = INDEX_NONE;
 	AnnouncedRuleName = NAME_None;
-	ShakeElapsed = -1.f;
+	HitstopElapsed = -1.f;
+	HitstopDuration = 0.f;
+	bAdvancing = false;
+	AdvancePeakTime = -1.f;
+	ApplyAdvanceLead(0.f);
 	LoadedSet = NewSet;
 	LoadedAnimations.Reset();
 	ActiveRule = INDEX_NONE;
@@ -396,13 +408,22 @@ bool UGSTN_ReactionAnimComponent::PlayStage(UAnimInstance& Anim, const FGSTN_Rea
 		}
 		Montage->bEnableAutoBlendOut = false;
 	}
+	// Sakurai #6: a reaction that starts while the victim is frozen blends into its hit pose on the pose blend's curve
+	const bool bPoseBlend = Stage == 0 && StartsInHitstopPoseBlend();
+	FAlphaBlendArgs BlendIn(BlendSeconds);
+	if (bPoseBlend)
+	{
+		BlendIn.BlendOption = LoadedSet->HitstopPoseBlend.BlendOption;
+	}
 	// Playing on the slot's group stops what plays there with this blend in as its blend out: the cross-fade of a chain
-	if (Anim.Montage_PlayWithBlendIn(Montage, FAlphaBlendArgs(BlendSeconds), Rule.PlayRate, EMontagePlayReturnType::MontageLength, 0.f, true) <= 0.f)
+	if (Anim.Montage_PlayWithBlendIn(Montage, BlendIn, Rule.PlayRate, EMontagePlayReturnType::MontageLength, 0.f, true) <= 0.f)
 	{
 		return false;
 	}
 	ActiveMontage = Montage;
 	ActiveStage = Stage;
+	bStartedInHitstop = bPoseBlend;
+	bHitstopPoseHeld = false;
 	return true;
 }
 
@@ -435,9 +456,12 @@ void UGSTN_ReactionAnimComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	}
 	FGameplayTagContainer Tags;
 	ASC->GetOwnedGameplayTags(Tags);
-	ShakeOffset = ComputeHitstopShake(DeltaTime, Tags);
+	UpdateHitstopTimer(DeltaTime, Tags);
+	ShakeOffset = ComputeHitstopShake(Tags);
 	UpdateEntryDrop(DeltaTime);
 	UpdateDirectionalHits(DeltaTime, Tags);
+	UpdateHitstopPoseHold(*Anim);
+	UpdateHitstopAdvance(Tags);
 
 	const int32 Winner = LoadedSet->SelectRule(Tags);
 	AnnounceReaction(Winner, Winner != INDEX_NONE && PendingRestartRule == Winner);
@@ -457,7 +481,7 @@ void UGSTN_ReactionAnimComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	if (ActiveRule != INDEX_NONE && Winner != ActiveRule)
 	{
 		// The state changed: a new rule cross-fades from our pose with its own blend in, no rule blends back with the old one's blend out
-		const float Blend = Winner != INDEX_NONE ? GSTNReactionAnim::Seconds(LoadedSet->Rules[Winner].BlendInFrames)
+		const float Blend = Winner != INDEX_NONE ? BlendInSeconds(LoadedSet->Rules[Winner])
 			: GSTNReactionAnim::Seconds(LoadedSet->Rules[ActiveRule].BlendOutFrames);
 		// The old pose is held while it fades, the new rule fades in over the same time below: a cross-fade with no frame of the game's pose
 		StopActive(Anim, Blend);
@@ -484,7 +508,7 @@ void UGSTN_ReactionAnimComponent::TickComponent(float DeltaTime, ELevelTick Tick
 		{
 			return;
 		}
-		if (PlayStage(*Anim, Rule, 0, GSTNReactionAnim::Seconds(Rule.BlendInFrames)))
+		if (PlayStage(*Anim, Rule, 0, BlendInSeconds(Rule)))
 		{
 			if (!bRestart)
 			{
@@ -592,30 +616,193 @@ void UGSTN_ReactionAnimComponent::UpdateEntryDrop(float DeltaTime)
 	AppliedOffset = Offset;
 }
 
-FVector UGSTN_ReactionAnimComponent::ComputeHitstopShake(float DeltaTime, const FGameplayTagContainer& Tags)
+void UGSTN_ReactionAnimComponent::UpdateHitstopTimer(float DeltaTime, const FGameplayTagContainer& Tags)
+{
+	if (!Tags.HasTagExact(GSTNCombatTags::State_Hitstop))
+	{
+		HitstopElapsed = -1.f;
+		HitstopDuration = 0.f;
+		bVictimInHitstop = false;
+		return;
+	}
+	// The hit one is the one in hitstun (or tumbling); the attacker is frozen too, without either
+	bVictimInHitstop = Tags.HasTagExact(GSTNCombatTags::State_Hitstun) || Tags.HasTagExact(GSTNCombatTags::State_Tumble);
+	const float Left = FGSTN_HitstopPresentationHooks::GetHitstopSecondsLeft ? FGSTN_HitstopPresentationHooks::GetHitstopSecondsLeft(GetOwner()) : -1.f;
+	if (HitstopElapsed < 0.f)
+	{
+		HitstopElapsed = 0.f;
+		HitstopDuration = FMath::Max(Left, 0.f);
+		return;
+	}
+	HitstopElapsed += DeltaTime;
+	if (Left > 0.f)
+	{
+		if (HitstopDuration <= 0.f)
+		{
+			// The length became known after the first frame (the simulation's view arrived late): the clock keeps its start
+			HitstopDuration = HitstopElapsed + Left;
+		}
+		else if (Left > HitstopDuration - HitstopElapsed + GSTNReactionAnim::HitstopRestartSlackSeconds)
+		{
+			// A new hit during the freeze: a new hitstop, counted from now
+			HitstopElapsed = 0.f;
+			HitstopDuration = Left;
+		}
+	}
+}
+
+FVector UGSTN_ReactionAnimComponent::ComputeHitstopShake(const FGameplayTagContainer& Tags)
 {
 	const FGSTN_HitstopShake* Shake = LoadedSet ? &LoadedSet->HitstopShake : nullptr;
 	USkeletalMeshComponent* MeshComponent = Mesh.Get();
-	if (!Shake || !Shake->bEnabled || !MeshComponent || !Tags.HasTagExact(GSTNCombatTags::State_Hitstop))
+	if (!Shake || !Shake->bEnabled || !MeshComponent || HitstopElapsed < 0.f)
 	{
-		ShakeElapsed = -1.f;
 		return FVector::ZeroVector;
 	}
-	// The hit one is the one in hitstun (or tumbling); the attacker is frozen too, without either
-	const bool bVictim = Tags.HasTagExact(GSTNCombatTags::State_Hitstun) || Tags.HasTagExact(GSTNCombatTags::State_Tumble);
-	const float Amplitude = bVictim ? Shake->VictimAmplitudeCm : Shake->AttackerAmplitudeCm;
-	ShakeElapsed = ShakeElapsed < 0.f ? 0.f : ShakeElapsed + DeltaTime;
+	const float Amplitude = bVictimInHitstop ? Shake->VictimAmplitudeCm : Shake->AttackerAmplitudeCm;
 	const APlayerCameraManager* Camera = UGameplayStatics::GetPlayerCameraManager(this, 0);
 	if (Amplitude <= 0.f || !Camera)
 	{
 		return FVector::ZeroVector;
 	}
+	// Sakurai #4: the amplitude converges to zero over the hitstop this hit really gives (DecaySeconds when its length is unknown)
+	const float Duration = Shake->DecayMode == EGSTN_HitstopShakeDecay::OverHitstop && HitstopDuration > 0.f ? HitstopDuration : Shake->DecaySeconds;
+	// Sakurai #8: a far camera scales the shake up
 	const float Distance = FVector::Dist(Camera->GetCameraLocation(), MeshComponent->GetComponentLocation());
-	const float Value = FGSTN_HitstopShake::Sample(Amplitude * Shake->DistanceScale(Distance), Shake->FrequencyHz, Shake->DecaySeconds, ShakeElapsed);
-	const FVector ScreenRight = FRotationMatrix(Camera->GetCameraRotation()).GetScaledAxis(EAxis::Y).GetSafeNormal();
-	const FVector World = ScreenRight * Value;
+	const float Value = FGSTN_HitstopShake::Sample(Amplitude * Shake->DistanceScale(Distance), Shake->FrequencyHz, Duration, HitstopElapsed);
+	if (Value == 0.f)
+	{
+		return FVector::ZeroVector;
+	}
+	// Sakurai #3: side to side on the ground (nothing along the owner's up), every direction of the screen plane in the air
+	const FRotationMatrix CameraAxes(Camera->GetCameraRotation());
+	const FVector ScreenRight = CameraAxes.GetScaledAxis(EAxis::Y).GetSafeNormal();
+	FVector Direction;
+	if (Shake->bAllAxesInAir && Tags.HasAny(Shake->AirTags))
+	{
+		const FVector2D Axis = FGSTN_HitstopFeelMath::AirShakeAxis(Shake->FrequencyHz, HitstopElapsed);
+		Direction = ScreenRight * Axis.X + CameraAxes.GetScaledAxis(EAxis::Z).GetSafeNormal() * Axis.Y;
+	}
+	else
+	{
+		const AActor* Owner = GetOwner();
+		Direction = FGSTN_HitstopFeelMath::GroundShakeDirection(ScreenRight, Owner ? Owner->GetActorUpVector() : FVector::UpVector);
+	}
+	// Sakurai #2: only the mesh moves (UpdateEntryDrop writes it as an offset over Mover's): capsule, hurtboxes and the simulation stay put
+	const FVector World = Direction * Value;
 	const USceneComponent* Parent = MeshComponent->GetAttachParent();
 	return Parent ? Parent->GetComponentTransform().InverseTransformVectorNoScale(World) : World;
+}
+
+bool UGSTN_ReactionAnimComponent::StartsInHitstopPoseBlend() const
+{
+	return bVictimInHitstop && LoadedSet && LoadedSet->HitstopPoseBlend.bEnabled;
+}
+
+float UGSTN_ReactionAnimComponent::BlendInSeconds(const FGSTN_ReactionAnimRule& Rule) const
+{
+	return StartsInHitstopPoseBlend() ? GSTNReactionAnim::Seconds(LoadedSet->HitstopPoseBlend.BlendFrames) : GSTNReactionAnim::Seconds(Rule.BlendInFrames);
+}
+
+void UGSTN_ReactionAnimComponent::UpdateHitstopPoseHold(UAnimInstance& Anim)
+{
+	FAnimMontageInstance* Instance = ActiveMontage ? Anim.GetActiveInstanceForMontage(ActiveMontage) : nullptr;
+	if (!Instance || !LoadedSet || !LoadedSet->Rules.IsValidIndex(ActiveRule))
+	{
+		bHitstopPoseHeld = false;
+		bStartedInHitstop = false;
+		return;
+	}
+	const FGSTN_HitstopPoseBlend& PoseBlend = LoadedSet->HitstopPoseBlend;
+	if (bStartedInHitstop && bVictimInHitstop && PoseBlend.bEnabled && ActiveStage == 0)
+	{
+		// The clip runs into its hit pose and stops there while the freeze lasts. Not set back onto the frame: an update that went a little past
+		// it holds where it is, a pose never jumps backwards
+		if (!bHitstopPoseHeld && Instance->GetPosition() >= GSTNReactionAnim::Seconds(PoseBlend.HoldAtFrame))
+		{
+			Instance->SetPlayRate(0.f);
+			bHitstopPoseHeld = true;
+		}
+		return;
+	}
+	if (bHitstopPoseHeld)
+	{
+		// The hitstop is over (or the setting went off): the reaction plays out from its hit pose
+		Instance->SetPlayRate(LoadedSet->Rules[ActiveRule].PlayRate);
+		bHitstopPoseHeld = false;
+	}
+	if (!bVictimInHitstop)
+	{
+		bStartedInHitstop = false;
+	}
+}
+
+void UGSTN_ReactionAnimComponent::UpdateHitstopAdvance(const FGameplayTagContainer& Tags)
+{
+	const AActor* Owner = GetOwner();
+	if (!LoadedSet || !Owner || !FGSTN_HitstopPresentationHooks::GetPresentedMontageTime || !FGSTN_HitstopPresentationHooks::SetMontagePresentationLead)
+	{
+		return;
+	}
+	const UObject* Montage = nullptr;
+	float Time = 0.f;
+	if (!FGSTN_HitstopPresentationHooks::GetPresentedMontageTime(Owner, Montage, Time) || !Montage)
+	{
+		bAdvancing = false;
+		AdvancePeakTime = -1.f;
+		ApplyAdvanceLead(0.f);
+		return;
+	}
+	if (AdvanceMontage.Get() != Montage)
+	{
+		// Another move (or none before): nothing of the last one's advance carries over
+		bAdvancing = false;
+		AdvancePeakTime = -1.f;
+		ApplyAdvanceLead(0.f);
+	}
+	const FGSTN_HitstopAdvance& Advance = LoadedSet->HitstopAdvance;
+	float Lead = 0.f;
+	if (HitstopElapsed >= 0.f && !bVictimInHitstop && Advance.AppliesTo(Tags))
+	{
+		if (!bAdvancing)
+		{
+			// Starts from what is drawn now, lead included (a second hit while the first one's lead is still absorbing)
+			bAdvancing = true;
+			AdvanceMontage = Montage;
+			AdvanceBaseTime = Time + AppliedLead;
+		}
+		// The clock may still be catching up with the frozen simulation on the first frames: never draw behind the base
+		AdvanceBaseTime = FMath::Max(AdvanceBaseTime, Time);
+		const float Duration = HitstopDuration > 0.f ? HitstopDuration : LoadedSet->HitstopShake.DecaySeconds;
+		const float Alpha = Duration > 0.f ? HitstopElapsed / Duration : 1.f;
+		AdvancePeakTime = AdvanceBaseTime + FGSTN_HitstopFeelMath::AdvanceLead(Advance.AdvanceFrames * GSTNReactionAnim::FrameSeconds, Alpha);
+		Lead = FGSTN_HitstopFeelMath::AbsorbLead(AdvancePeakTime, Time);
+	}
+	else
+	{
+		bAdvancing = false;
+		// After the freeze the drawn pose waits for the simulation to pass the farthest time it showed (less than a frame), then nothing
+		Lead = AdvancePeakTime >= 0.f ? FGSTN_HitstopFeelMath::AbsorbLead(AdvancePeakTime, Time) : 0.f;
+		if (Lead <= 0.f)
+		{
+			AdvancePeakTime = -1.f;
+		}
+	}
+	AdvanceMontage = Montage;
+	ApplyAdvanceLead(Lead);
+}
+
+void UGSTN_ReactionAnimComponent::ApplyAdvanceLead(float Lead)
+{
+	if (FMath::IsNearlyEqual(Lead, AppliedLead, 1.e-6f))
+	{
+		return;
+	}
+	AppliedLead = Lead;
+	if (FGSTN_HitstopPresentationHooks::SetMontagePresentationLead)
+	{
+		FGSTN_HitstopPresentationHooks::SetMontagePresentationLead(GetOwner(), Lead);
+	}
 }
 
 void UGSTN_ReactionAnimComponent::AnnounceReaction(int32 Winner, bool bRestart)
