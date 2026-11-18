@@ -366,7 +366,7 @@ def run_start_dust():
     s = _system("NS_GSTN_RunStartDust")
     if s:
         _surface(s)
-        _smoke(s, "Puffs", 3, (0.42, 0.52), (42, 56), 320, 6.0, look="SmokeLight", cone=((-1, 0, 0.35), 55), sphere=(10, (1, 1, 0.3), (-12, 0, 14)),
+        _smoke(s, "Puffs", 5, (0.45, 0.58), (110, 160), 150, 6.0, look="SmokeLight", cone=((-1, 0, 0.35), 55), sphere=(10, (1, 1, 0.3), (-6, 0, 14)),
                rise=60.0)
         _grains(s, "Grains", 4, (0.35, 0.45), (3, 5), 420, ((-1, 0, 0.8), 45))
     return s
@@ -378,8 +378,8 @@ def skid_dust():
     if s:
         _surface(s)
         e = _sprites(s, "Trail", "Fountain", local=False)
-        e.per_distance(30.0)
-        e.particle((0.40, 0.48), (36, 50), rotation=True).sized()
+        e.per_distance(20.0)
+        e.particle((0.45, 0.55), (95, 135), rotation=True).sized()  # r4 Fable: x3, the skid row was invisible
         e.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")
         e.sphere(4, (1, 1, 0.3), (0, 0, 14)).cone((0, 0, 1), 35, 70).drag(5.0).material("SmokeLight")
     return s
@@ -400,7 +400,7 @@ def land_ring():
     s = _system("NS_GSTN_LandRing")
     if s:
         _surface(s)
-        _smoke(s, "Puffs", 6, (0.48, 0.60), (48, 66), 420, 6.0, ring=(30, 12), origin=(0, 0, -12), rise=40.0)
+        _smoke(s, "Puffs", 6, (0.50, 0.62), (110, 150), 260, 6.0, ring=(30, 12), origin=(0, 0, -12), rise=40.0)
         _grains(s, "Grains", 6, (0.40, 0.55), (3, 5), 520, ((0, 0, 1), 70), gravity=-900.0)
     return s
 
@@ -436,11 +436,11 @@ def hit_spark():
     if s:
         _ground_plane(s)
         star = _sprites(s, "Star")
-        star.burst(1).particle((0.085, 0.085), (120, 120), rotation=True).sized().sphere(0.01, offset=(10, 0, 0)).radial(0.0)
+        star.burst(1).particle((0.085, 0.085), (210, 210), rotation=True).sized().sphere(0.01, offset=(10, 0, 0)).radial(0.0)
         star.toward_camera(60.0).material("FlashStar")
         streaks = _sprites(s, "Streaks")
         streaks.burst(8).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.Count")
-        streaks.particle((0.13, 0.17), None, non_uniform=(9.0, 60.0)).sized()
+        streaks.particle((0.13, 0.17), None, non_uniform=(12.0, 85.0)).sized()
         streaks.sphere(10, offset=(5, 0, 0)).cone((1, 0, 0), 150, 2200).drag(14.0)
         streaks.toward_camera(45.0).material("FlashStreak", velocity_aligned=True)
         sparks = _sprites(s, "Sparks")

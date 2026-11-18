@@ -43,13 +43,14 @@ FWD, BACK = (0, 1, 0), (0, -1, 0)   # stick, relative to the camera (as in scena
 # dummy; kit: the host's kit for this sequence (default KIT); strong: frames pressing Strong; blocks: boxes summoned for the sequence and
 # removed after it, (cm ahead, cm to the side, cm above the floor, size along, across, up), placed along the host's facing
 SEQUENCES = [
-    {'name': 'jump', 'frames': 100, 'jump': [0], 'dist': 520.0, 'follow': False},
+    {'name': 'jump', 'frames': 100, 'jump': [0], 'dist': 700.0, 'follow': True, 'follow_z': 0.6},  # r4: the pawn left the frame upwards
     {'name': 'hit_small', 'frames': 60, 'tap': [0], 'dummy': (95.0, 0.0), 'dist': 480.0, 'follow': False},
     {'name': 'hit_medium', 'frames': 80, 'tap': [0], 'dummy': (95.0, 90.0), 'dist': 480.0, 'follow': False},
     # The launch, followed until the downed landing (~190 frames after the hit) and a little after
     {'name': 'hit_large', 'frames': 260, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 650.0, 'follow': False, 'follow_victim': True},
     # VFX v2: the strong hit from a fixed camera on the hit point, so the debris' fall, bounces and shadows stay in frame
-    {'name': 'hit_debris', 'frames': 90, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 520.0, 'follow': False},
+    {'name': 'hit_debris', 'frames': 90, 'tap': [0], 'kit': 'KIT_Example_Impacts',  # r4: the KIT_Test_Hits jab is 31 hitstun frames at any percent (never strong), its strong misses; the Impacts jab is 68
+     'dummy': (95.0, 170.0), 'dist': 520.0, 'follow': False},
     # Wall and ceiling contacts of a launched victim (NS_GSTN_Impact): a wall across the launch and a low ceiling over it
     {'name': 'wall', 'frames': 120, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 650.0, 'follow': False, 'follow_victim': True,
      'blocks': [(420.0, 0.0, 0.0, 60.0, 700.0, 500.0)]},
@@ -64,8 +65,8 @@ SEQUENCES = [
     # KIT_Example_Impacts: strong = wall splat (a wall behind the victim), attack = spike with a ground bounce
     {'name': 'splat', 'frames': 120, 'strong': [0], 'kit': 'KIT_Example_Impacts', 'dummy': (95.0, 100.0), 'dist': 650.0, 'follow': False,
      'follow_victim': True, 'blocks': [(330.0, 0.0, 0.0, 60.0, 700.0, 500.0)]},
-    {'name': 'ground_bounce', 'frames': 120, 'tap': [0], 'kit': 'KIT_Example_Impacts', 'dummy': (95.0, 100.0), 'dist': 650.0,
-     'follow': False, 'follow_victim': True},
+    {'name': 'ground_bounce', 'frames': 120, 'tap': [0], 'kit': 'KIT_Example_Impacts', 'dummy': (95.0, 100.0), 'dist': 900.0,
+     'follow': False, 'follow_victim': True},  # r4: 650 lost the bouncing victim
     # Movement last: the sprint ends ~37 m away, near where the other players are parked
     {'name': 'run_skid', 'frames': 200, 'stick': [(0, 110, FWD), (110, 150, BACK)], 'dist': 650.0, 'follow': True},
     {'name': 'sprint', 'frames': 300, 'stick': [(0, 250, FWD)], 'dist': 700.0, 'follow': True},
@@ -160,7 +161,7 @@ def _victim():
 # wall ahead, white snow (light) or dark rock (dark), material M_GSTN_VFX_CaptureBackdrop (setup_presentation_vfx_v3). PIE_SURFACE_COLOR="r,g,b"
 # (linear) is the presentation components' DefaultSurfaceColor for the run (the dust and snow colour). Capture only
 BACKDROP = os.environ.get('PIE_BACKDROP', '')
-BACKDROP_COLOURS = {'light': (0.82, 0.86, 0.92), 'dark': (0.035, 0.035, 0.045)}
+BACKDROP_COLOURS = {'light': (0.95, 0.96, 0.98), 'dark': (0.035, 0.035, 0.045)}
 SURFACE = [float(v) for v in os.environ['PIE_SURFACE_COLOR'].split(',')] if os.environ.get('PIE_SURFACE_COLOR') else None
 
 
@@ -258,7 +259,8 @@ def _aim(seq, follow):
     elif seq.get('follow_victim') and st.get('victim'):
         pass
     elif seq.get('follow'):
-        centre = unreal.Vector(centre.x, centre.y, st['centre'].z)
+        # follow_z: share of the height gained that the camera follows (keeps the floor and the take-off in frame)
+        centre = unreal.Vector(centre.x, centre.y, st['centre'].z + max(0.0, centre.z - st['centre'].z) * seq.get('follow_z', 0.0))
     else:
         centre = st['centre']
     yaw = st['yaw']

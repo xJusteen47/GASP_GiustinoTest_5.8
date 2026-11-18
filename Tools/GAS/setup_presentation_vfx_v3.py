@@ -226,7 +226,7 @@ def build_contact_shadow():
     return mat
 
 
-ORANGE = unreal.LinearColor(1.0, 0.32, 0.02, 1)  # saturated: reads on white snow and on dark rock
+ORANGE = unreal.LinearColor(1.0, 0.22, 0.0, 1)  # saturated: reads on white snow and on dark rock
 CYAN = unreal.LinearColor(0.25, 0.75, 1.0, 1)
 WHITE = unreal.LinearColor(1, 1, 1, 1)
 
@@ -249,11 +249,11 @@ FLASH_LOOKS = {
 }
 SMOKE_LOOKS = {
     # Impact / landing dust and snow: big soft lit puffs that grow and erode
-    "SmokeDust": dict(OpacityMax=0.8, ShadeMin=0.55, StartScale=0.45, GrowEnd=0.75, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.2,
-                      FadeDistance=35.0, EmissiveLift=0.14, Roughness=0.9),
+    "SmokeDust": dict(OpacityMax=0.85, ShadeMin=0.4, StartScale=0.45, GrowEnd=0.75, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.2,
+                      FadeDistance=35.0, EmissiveLift=0.06, Roughness=0.9),  # r4 Fable: darker underside, reads on a same-colour floor
     # Locomotion dust: thinner, quicker
-    "SmokeLight": dict(OpacityMax=0.6, ShadeMin=0.6, StartScale=0.5, GrowEnd=0.8, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.1,
-                       FadeDistance=25.0, EmissiveLift=0.14, Roughness=0.9),
+    "SmokeLight": dict(OpacityMax=0.7, ShadeMin=0.4, StartScale=0.6, GrowEnd=0.8, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.1,
+                       FadeDistance=25.0, EmissiveLift=0.06, Roughness=0.9),
 }
 
 

@@ -13,7 +13,8 @@ $env:PIE_CAPTURE_KIT = 'KIT_Test_Hits'; $env:PIE_CAPTURE_SEQUENCES = $Seq
 $here = $PSScriptRoot -replace '\\', '/'
 $boot = Join-Path $env:TEMP 'gstn_vfx_v3_boot.py'
 $gas = (Join-Path (Split-Path $PSScriptRoot) 'GAS') -replace '\\', '/'
-$preLine = if ($Pre) { "try:`n    print('pre:', runpy.run_path(r'$gas/$Pre.py', run_name='pre')['run']())`nexcept Exception as e:`n    print('pre failed:', e)`n" } else { '' }
+# -Pre a,b,c: several modules in order (v3 materials, then systems, then table)
+$preLine = ($Pre -split ',' | ? { $_ } | % { "try:`n    print('pre $_', runpy.run_path(r'$gas/$_.py', run_name='pre')['run']())`nexcept Exception as e:`n    print('pre $_ failed:', e)`n" }) -join ''
 [IO.File]::WriteAllText($boot, "import runpy`n$preLine" + "try:`n    runpy.run_path(r'$here/vd2_mover.py', run_name='vd2_mover')`nexcept Exception as e:`n    print('vd2_mover failed:', e)`n__file__ = r'$here/pie_capture_vfx.py'`nexec(open(__file__).read())`n", (New-Object Text.UTF8Encoding $false))
 & (Join-Path $PSScriptRoot '..\CI\Run-Timed.ps1') -Preset Capture -Log (Join-Path $outAbs 'run.log') -Script $boot -MaxMinutes $Max
 $done = Join-Path $outAbs 'done.txt'
