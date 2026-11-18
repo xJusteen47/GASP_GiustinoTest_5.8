@@ -79,6 +79,7 @@ struct GSTNCOMBATNP_API FGSTN_LocomotionLeanSettings
 };
 
 class UAnimSequenceBase;
+class UAnimInstance;
 
 /**
  * Run start "scramble" (owner 2026-11-18, decision 1A, docs/notes/mosse/run-start-stop-skid-brief.md section 1): from still, the run pose
@@ -215,6 +216,13 @@ class GSTNCOMBATNP_API UGSTN_LocomotionAnimSet : public UGSTN_AnimSetDefinition
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion")
 	FGSTN_LocomotionLeanSettings Lean;
+
+	/**
+	 * The main locomotion anim blueprint (owner 2026-11-18: our copy of GASP's Mover ABP and raw chooser, ABP_GSTN_Locomotion, where the skid
+	 * row and state live). Empty = the mesh keeps its own class (GASP's original): going back is clearing this field.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion")
+	TSoftClassPtr<UAnimInstance> MainAnimClass;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion")
 	FGSTN_RunStartScrambleSettings RunStart;

@@ -130,6 +130,9 @@ private:
 	void TickLean(float DeltaTime);
 	void TickScramble(float DeltaTime);
 	void ResolveClips();
+	/** Puts the profile's main anim class on the character's mesh (the anim set component relinks the layers on OnAnimInitialized) */
+	void ApplyMainAnimClass();
+	FSoftObjectPath ResolvedMainAnimClass;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UAnimSequenceBase> ScrambleClip;

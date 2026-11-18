@@ -3,6 +3,8 @@
 #include "Presentation/GSTN_RunPresentationComponent.h"
 
 #include "GameFramework/Actor.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Animation/AnimInstance.h"
 #include "GSTN_AnimSetComponent.h"
 #include "GSTN_CombatNPTags.h"
 #include "HAL/IConsoleManager.h"
@@ -130,7 +132,38 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 	}
 	TickLean(DeltaTime);
 	ResolveClips();
+	ApplyMainAnimClass();
 	TickScramble(DeltaTime);
+}
+
+void UGSTN_RunPresentationComponent::ApplyMainAnimClass()
+{
+	const UGSTN_LocomotionAnimSet* Profile = LeanProfile.Get();
+	const FSoftObjectPath Path = Profile ? Profile->MainAnimClass.ToSoftObjectPath() : FSoftObjectPath();
+	if (Path == ResolvedMainAnimClass)
+	{
+		return;
+	}
+	ResolvedMainAnimClass = Path;
+	UClass* AnimClass = Path.IsValid() ? Profile->MainAnimClass.LoadSynchronous() : nullptr;
+	if (!AnimClass)
+	{
+		return;
+	}
+	// The character's animated mesh: the first one running an anim instance
+	TArray<USkeletalMeshComponent*> Meshes;
+	GetOwner()->GetComponents(Meshes);
+	for (USkeletalMeshComponent* Mesh : Meshes)
+	{
+		if (Mesh && Mesh->GetAnimInstance())
+		{
+			if (Mesh->GetAnimInstance()->GetClass() != AnimClass)
+			{
+				Mesh->SetAnimInstanceClass(AnimClass);
+			}
+			return;
+		}
+	}
 }
 
 const FGSTN_RunStartScrambleSettings& UGSTN_RunPresentationComponent::GetScrambleSettings() const
