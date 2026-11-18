@@ -45,3 +45,15 @@ Owner: crouch + forward = upright run, slower; run start frantic/sped up; skid n
    skidding, and stop the sim turning the actor in Exit (FGSTN_LayeredMove_RunSkid::GenerateMove, AngularVelocity in the Exit branch:
    the facing must still end up on TurnDirection when the skid ends, e.g. snap at Finish). This also explains the main-graph review's
    "turn stops at ~90 deg". Skid layer path stays the fallback.
+
+## Round 2 (21:49-22:10 local): 5.7-style skid - commits 5ca4bb15, 08a05194, review skid-57-1
+- Build OK: Saved/Logs/ci/locofix_build1.log (`grep -c "Result: Succeeded"` = 1). Live Coding fixes now on disk.
+- Profile: MainAnimClass = ABP_GSTN_Locomotion, bSkidInMainGraph = true. Skid state before Offset Root Bone (GASP default), warping on.
+  Clip time = time since skid start, IsSkidding stays true while the clip plays out (tail). One alias "-> Skid" (Locomotion Loop/Transition,
+  Idle Loop/Transition/Idle Break) with ONE transition IsAnimOwnerSkidding(), 0.08 s; the 5 old arrows removed (GSTN AddStateAlias, new).
+- Capture: pie_capture_timed.ps1 -Kit KIT_Test_Overlord -Out docs/notes/reviews/skid-57-1/cap -Sequences mv_skid_base (ESITO OK, cap/ not
+  committed). Grids main vs base (skid-root-1/cap2) v52-100 + skid_57.mp4.
+- Fable: FAIL (REVIEW-fable.md). Double turn FIXED (one 180, no snap in or out). FAIL: brake pose arrives after the brake and feet glide,
+  because the sim brakes in 0.18 s and is at 450 cm/s the other way by v76 while the clip still brakes/turns until ~v92 ("gioco").
+- Next code job (Opus high, A part 2): the RunSkid layered move takes speed (and the reverse) from the clip's root track (baked table,
+  deterministic), so the capsule follows the clip. Lock released.
