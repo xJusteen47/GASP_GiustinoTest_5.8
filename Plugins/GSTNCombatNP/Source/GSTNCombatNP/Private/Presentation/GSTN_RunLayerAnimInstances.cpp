@@ -65,9 +65,36 @@ void UGSTN_SkidAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		// The real clip replaces the placeholder lean (the additive would lean the clip a second time)
 		Run->bPlaceholderSkidLean = false;
 	}
-	bActive = SkidClip && Slide.Source == EGSTN_FootSlideSource::RunSkid && Slide.SkidPhase != EGSTN_RunSkidPhase::None;
-	ClipTime = bActive ? FGSTN_SkidClipTime::Compute(Slide.SkidPhase, Slide.Frame, Slide.RestFrame, SkidClip->GetPlayLength(), StopTime, StopFraction,
-		ExitPlayRate, GSTNRunLayers::SimFrameSeconds) : 0.f;
+	const bool bLive = SkidClip && Slide.Source == EGSTN_FootSlideSource::RunSkid && Slide.SkidPhase != EGSTN_RunSkidPhase::None;
+	if (bLive)
+	{
+		bActive = true;
+		TailSeconds = -1.f;
+		LastPhase = Slide.SkidPhase;
+		ClipTime = FGSTN_SkidClipTime::Compute(Slide.SkidPhase, Slide.Frame, Slide.RestFrame, SkidClip->GetPlayLength(), StopTime, StopFraction,
+			ExitPlayRate, GSTNRunLayers::SimFrameSeconds);
+		return;
+	}
+	// Tail: the sim's Exit is over but the clip (stop + push off in one motion) is not; play it out on the ground, nothing else sliding
+	if (!Mover.IsValid())
+	{
+		AActor* Owner = GetOwningActor();
+		Mover = Owner ? Owner->FindComponentByClass<UMoverComponent>() : nullptr;
+	}
+	const bool bOnGround = Mover.IsValid() && Mover->HasGameplayTag(Mover_IsOnGround, false);
+	if (bActive && SkidClip && LastPhase == EGSTN_RunSkidPhase::Exit && !Slide.IsSliding() && bOnGround && MaxTailSeconds > 0.f)
+	{
+		TailSeconds = FMath::Max(TailSeconds, 0.f) + DeltaSeconds;
+		ClipTime += DeltaSeconds * FMath::Max(ExitPlayRate, 0.f);
+		if (ClipTime < SkidClip->GetPlayLength() && TailSeconds <= MaxTailSeconds)
+		{
+			return;
+		}
+	}
+	bActive = false;
+	TailSeconds = -1.f;
+	LastPhase = EGSTN_RunSkidPhase::None;
+	ClipTime = 0.f;
 }
 
 bool UGSTN_SkidAnimInstance::GetClipAtTime(UAnimSequenceBase*& OutClip, float& OutTime) const

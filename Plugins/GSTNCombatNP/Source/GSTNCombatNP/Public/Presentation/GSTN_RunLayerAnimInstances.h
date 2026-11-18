@@ -64,6 +64,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skid|Animation", meta = (ClampMin = "0.1"))
 	float ExitPlayRate = 1.f;
 
+	/**
+	 * The skid clip is ONE motion: brake, turn and push off the other way (owner 2026-11-18, SS_180_Turn2). When the sim's Exit ends before the
+	 * clip does, the clip plays on to its end at ExitPlayRate (presentation only) while the character stays on the ground and no other slide
+	 * starts, at most MaxTailSeconds; then the layer blends out. 0 = cut at the end of the Exit phase (the behaviour before).
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skid|Animation", meta = (ClampMin = "0", ForceUnits = "s"))
+	float MaxTailSeconds = 0.6f;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skid|Animation", meta = (ClampMin = "0", ForceUnits = "s"))
 	float OverrideBlendTime = 0.08f;
 
@@ -89,7 +97,11 @@ protected:
 
 private:
 	TWeakObjectPtr<UGSTN_RunPresentationComponent> Presentation;
+	TWeakObjectPtr<UMoverComponent> Mover;
 	bool bActive = false;
+	/** Last live phase seen, and the time spent in the tail after the sim's Exit */
+	EGSTN_RunSkidPhase LastPhase = EGSTN_RunSkidPhase::None;
+	float TailSeconds = -1.f;
 };
 
 /**
