@@ -91,9 +91,24 @@ Pose chiave (frame da 1, 62.5 Hz, lag pesante 16):
 | 2-3 | Compressione massima: bacino e testa al punto piu' basso. |
 | 4-11 | Tenuta viva: risale del ~10% dal punto piu' basso e resta li'. Cio' che pende finisce la sua corsa verso il basso entro il frame 6 e si posa. |
 | 12-16 | Rialzo verso idle, lento all'inizio e veloce alla fine; libero dal frame 17. |
-Lag leggero (4 frame): stessa posa del frame 1 al ~40% dell'affondo, rialzo subito.
+Lag leggero (4 frame): vedi sezione 5 (stessa clip accorciata, non una clip a parte).
 
 Curve: ingresso senza ease (e' un taglio); compressione 1 -> 3 ease-out; un solo rimbalzo piccolo, niente oscillazioni; rialzo ease-in. Follow-through: spalle e testa toccano il minimo 1 frame dopo il bacino, tessuti 3 frame dopo.
 Controllo che spiega il "salto di posa" di oggi: tra l'ultimo frame in aria e il frame 1 NESSUNA parte del corpo deve salire, e i piedi non si spostano. Se la clip attuale parte da una posa alta e poi scende, col taglio netto si vede un salto in su: e' un difetto della clip, non del gioco.
 
 Clip: prima provare una VARIANTE della clip attuale (copia, mai l'originale; AM_OverlordDAirV9 non si tocca): si taglia l'attacco perche' il frame 1 sia gia' vicino alla compressione massima e si ridistribuiscono i tempi come sopra. Vale solo se la posa piu' bassa della clip attuale ha la testa sotto ~55% dell'altezza in piedi e nessuna parte sale al frame 1; altrimenti clip nuova con agy da tre pose (frame 1, 3, 11). Non ho visto la clip attuale: la scelta la fa la review in video sul fisso (regola 10), con la griglia base accanto a questa.
+
+## 5. Atterraggio in auto cancel: sistema dati proposto (owner 2026-11-18 12:56Z; ambito: tutti gli aerei)
+Osservazione dell'owner: in auto cancel gli aerei usano la STESSA animazione del landing lag completo ma accorciata, oppure la posa di atterraggio del salto. Diventa un'impostazione per mossa, anzi per finestra, perche' la traccia Landing ha gia' finestre con il proprio `Lag`.
+
+Campo nuovo su ogni finestra della traccia Landing (`FGSTN_TimelineTrack_Landing`), `Sorgente clip`:
+| Valore | Cosa suona | Quando |
+|---|---|---|
+| Clip della mossa, accorciata | La clip di landing completo della mossa, ridotta ai frame di lag della finestra | default per le finestre a lag corto |
+| Landing del salto | L'atterraggio normale dal profilo di locomozione del personaggio | default per AutoCancel a 0 frame |
+| Clip propria | Un montage scelto a mano | casi speciali (es. dropkick) |
+
+Come si accorcia (stessa lezione dello skid: non si stira ne' si comprime tutta la clip): la clip di landing ha tre marker, Urto / Tenuta / Rialzo. Urto e Rialzo suonano alla loro velocita'; si taglia la Tenuta fino a far tornare il conto dei frame. Se il lag e' piu' corto di Urto + Rialzo si tiene il frame 1 dell'urto e si accorcia il Rialzo. Cosi' ogni aereo ha UNA clip di landing e l'identita' resta la stessa a ogni lag.
+Opzione in piu', spenta di default: `Intensita'` 0-1 per finestra, che mescola l'urto verso il landing del salto (atterraggio leggero = affondo meno profondo).
+Per lo stomp: finestre 1-3 e 32-42 (lag 4) = clip dello stomp accorciata; finestra 4-31 (lag 16) = clip intera. Nessuna seconda clip da disegnare.
+Costo stimato: codice (campo + taglio per marker + lettura del landing dal profilo) ~4 $ cloud Opus, piu' build e test sul fisso. I marker si mettono via script sulle clip di landing esistenti.
