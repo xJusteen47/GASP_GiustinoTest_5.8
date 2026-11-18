@@ -32,3 +32,9 @@ Owner: crouch + forward = upright run, slower; run start frantic/sped up; skid n
 - Solver works: 297 live samples during the owner's play (scratchpad leanlog, script leanloop.py polling get_locomotion_lean), moving
   samples 75: lean 0-4 deg 57, 4-8 3, 8-12 2, 12-16 6, 16+ 7 = spikes on starts/stops, curves stay under 4 deg. Cause: side accel of a run
   curve is far below AccelForMaxLean 3000. Applied (rule 6): DA Lean.TurnScale 1 -> 2.5. Owner to judge; revert = 1.
+
+## Queued (owner needs the desktop, 19:48Z): do these when the coordinator frees it
+1. Close the editor (owner, the classifier blocks Claude from quitting it), then a full build with Run-Timed -Kind Build: the Live Coding
+   patch (crouch gate + skid clip speed) is NOT in the DLLs on disk.
+2. Owner idea for the double turn, try BEFORE any code job: SS_180_Turn_Root180 asset root motion settings, bForceRootLock = true with
+   RootMotionRootLock = AnimFirstFrame (clip root yaw removed from the pose, only the sim's 180 turn remains), warping on; check in PIE.
