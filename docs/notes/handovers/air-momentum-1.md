@@ -10,7 +10,7 @@ Branch `claude/project-thread-vbnr9g` from 98dml5 `cb8163ab`.
   decay, braked only by the stick against it, the stick along it adds nothing past the cap. No vectoring (one scalar cap).
 - Tuning per kit: `DA_Locomotion_* > Run Stages > Air > Momentum` (`FGSTN_RunAirTuning::Momentum`). Style `HighFriction` (Astro, DEFAULT),
   `Carry` (Mario), `MoverLegacy` (exactly the old falling mode). Defaults (cm/s², ×air control 0.85 for player accel/brake):
-  AirAcceleration 3200, AirBrake 4500, HighFrictionNeutralDeceleration 4000, CarryNeutralDeceleration 550 (old Mover value 200),
+  AirAcceleration 3200 (stick along, dot 1), AirAccelerationSide 3200 (dot 0), AirBrake 4500 (dot -1), linear in the dot between, HighFrictionNeutralDeceleration 4000, CarryNeutralDeceleration 550 (old Mover value 200),
   ExternalDeceleration 300, ExternalBrake 1800, ExternalMinSpeed 20. New fields → existing assets get these defaults, no editor work.
 - State: `FGSTN_RunStageState::ExternalVelocity` (sync state, rollback-safe, +12 bytes on the wire at 0.1 cm/s, reconcile tol 0.5).
 - NP: `FGSTN_RunStageMover::ApplyAirMomentum` from the combat component's existing `ProcessGeneratedMovement` hook (after the air turn)

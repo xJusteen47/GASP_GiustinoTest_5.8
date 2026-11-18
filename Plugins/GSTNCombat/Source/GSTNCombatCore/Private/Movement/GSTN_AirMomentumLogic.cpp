@@ -68,11 +68,14 @@ FGSTN_AirMomentumOutput FGSTN_AirMomentumLogic::Step(const FGSTN_AirMomentumTuni
 		{
 			const FVector Side = Player - StickDir * PlayerAlong;
 			const double KeptAlong = FMath::Max(PlayerAlong - Tuning.GetNeutralDeceleration() * Dt, TargetSpeed);
-			NewPlayer = StickDir * KeptAlong + MoveToward(Side, FVector::ZeroVector, Tuning.AirAcceleration * Control * Dt);
+			NewPlayer = StickDir * KeptAlong + MoveToward(Side, FVector::ZeroVector, Tuning.AirAccelerationSide * Control * Dt);
 		}
 		else
 		{
-			const double Rate = (bBraking ? Tuning.AirBrake : Tuning.AirAcceleration) * Control;
+			// The rate follows the dot between stick and drift (forward / side / back, continuous); from rest it is the forward one
+			const double PlayerSize = Player.Size();
+			const double Dot = PlayerSize > 1.0 ? PlayerAlong / PlayerSize : 1.0;
+			const double Rate = Tuning.GetSteerRate(static_cast<float>(Dot)) * Control;
 			NewPlayer = MoveToward(Player, Target, Rate * Dt);
 		}
 	}
