@@ -79,6 +79,11 @@ double FGSTN_CameraAnchorDamper::AirHoldHeight(double Wanted, bool bInAir, const
 	{
 		return Wanted;  // off, or spawned in the air: no ground to hold yet
 	}
+	return HeldHeightInAir(Wanted, Settings);
+}
+
+double FGSTN_CameraAnchorDamper::HeldHeightInAir(double Wanted, const FGSTN_CameraAnchorSettings& Settings) const
+{
 	// Continuous at both edges: inside [ground - fall band, ground + rise band] the camera stays on the ground height, outside it follows
 	const double Top = GroundHeight + Settings.AirRiseBand;
 	const double Bottom = GroundHeight - Settings.AirFallBand;
@@ -107,12 +112,20 @@ double FGSTN_CameraAnchorDamper::SpringStep(double X, double Goal, double& InOut
 
 FVector FGSTN_CameraAnchorDamper::Step(const FVector& Target, const FVector& InUp, float DeltaTime, const FGSTN_CameraAnchorSettings& Settings, bool bInAir)
 {
-	if (!bValid || FVector::Dist(Target, Location) > Settings.SnapDistance)
+	const FVector Up = InUp.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+	// Teleport test against the point the camera follows: in the air that is the held height, not the character, so a jump higher than
+	// SnapDistance inside a large AirRiseBand is not mistaken for a teleport (bug pass 4, K2: the camera popped up and the hold was lost)
+	FVector Followed = Target;
+	if (bValid && bInAir && Settings.bHoldGroundHeightInAir && bHasGround)
+	{
+		const double RawHeight = FVector::DotProduct(Target, Up);
+		Followed += (HeldHeightInAir(RawHeight, Settings) - RawHeight) * Up;
+	}
+	if (!bValid || FVector::Dist(Followed, Location) > Settings.SnapDistance)
 	{
 		Reset(Target);
 		return Location;
 	}
-	const FVector Up = InUp.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
 
 	// Vertical: air hold (the height followed), dead band, then the spring (up and down half lives differ), then the lag clamp
 	const double Current = FVector::DotProduct(Location, Up);

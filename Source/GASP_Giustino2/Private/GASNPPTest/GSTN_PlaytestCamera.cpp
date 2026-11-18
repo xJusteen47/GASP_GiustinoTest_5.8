@@ -43,7 +43,9 @@ float UGSTN_PlaytestCameraModifier::ScreenV(const FMinimalViewInfo& View, const 
 	{
 		return 0.5f;
 	}
-	return 0.5f - 0.5f * float(Local.Z / Local.X) / TanHalfVertical;
+	// Minus the view's off-center offset (the Shift): the projection subtracts it in NDC, as in ProjectNDC (bug pass 4, K1: the screen band
+	// stayed where the unshifted character would be)
+	return 0.5f - 0.5f * (float(Local.Z / Local.X) / TanHalfVertical - float(View.OffCenterProjectionOffset.Y));
 }
 
 float UGSTN_PlaytestCameraModifier::TelephotoDistanceScale(float FromFOV, float ToFOV)

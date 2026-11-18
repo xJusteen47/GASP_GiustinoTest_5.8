@@ -228,6 +228,52 @@ bool FGSTN_NPSimulatorRequestTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPHeldStartedAgainTest, "GSTNInput.NP.Simulator.HeldButtonStartedAgainIsNotAPress", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPHeldStartedAgainTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-18 (held dodge dodged twice): Enhanced Input fires Started again for a held key when the mapping contexts are rebuilt, and
+	// the source turns every Started into a tap. A tap of a button held on both frames is not a new press; a tap from up still is (bug pass 4)
+	const TStrongObjectPtr<UGSTN_CommandBindingSet> Set = MakeBindingSet();
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = MakeNPSettings();
+	const FGSTN_CommandTable Table = Set->BuildTable();
+	const FGSTN_ButtonMap Buttons(TArray<FGameplayTag>{ TestButtonA.GetTag() });
+	FMockHost Host;
+
+	auto Run = [&](FGSTN_InputSimState& State, int32 Frame, uint32 Held, uint32 Taps)
+	{
+		FGSTN_InputCmd Cmd;
+		Cmd.HeldButtons = Held;
+		Cmd.PressedButtons = Taps;
+		FGSTN_InputSimState Out = State;
+		FGSTN_InputTickArgs Args;
+		Args.Frame = Frame;
+		Args.Cmd = &Cmd;
+		Args.In = &State;
+		Args.Out = &Out;
+		Args.Table = &Table;
+		Args.Buttons = &Buttons;
+		Args.Settings = Settings.Get();
+		const FGSTN_InputTickResult Result = FGSTN_InputSimulator::Tick(Args, Host);
+		State = Out;
+		return Result;
+	};
+
+	FGSTN_InputSimState State;
+	Run(State, 0, 0, 0);
+	TestTrue(TEXT("first press requests"), Run(State, 1, 1, 1).HasRequest());
+	const int32 EventsAfterPress = State.History.GetNumButtonEvents();
+	Run(State, 2, 1, 0);
+	TestFalse(TEXT("Started again while held: no request"), Run(State, 3, 1, 1).HasRequest());
+	TestEqual(TEXT("and no new press in the history"), State.History.GetNumButtonEvents(), EventsAfterPress);
+	for (int32 Frame = 4; Frame < 12; ++Frame)
+	{
+		TestFalse(TEXT("still held: nothing buffered"), Run(State, Frame, 1, 0).HasRequest());
+	}
+	Run(State, 12, 0, 0);
+	TestTrue(TEXT("a tap shorter than a frame from up is a press"), Run(State, 13, 0, 1).HasRequest());
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPPrecisionAimBindingTest, "GSTNInput.NP.Simulator.PrecisionAimBinding", GSTN_NP_TEST_FLAGS)
 bool FGSTN_NPPrecisionAimBindingTest::RunTest(const FString& Parameters)
 {

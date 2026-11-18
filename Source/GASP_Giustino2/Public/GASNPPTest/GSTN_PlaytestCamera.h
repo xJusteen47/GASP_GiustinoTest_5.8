@@ -27,7 +27,7 @@ public:
 	/** The pushed back location from the view, its forward and the extra distance and height (no collision). Pure, for the tests */
 	static FVector PushBack(const FVector& ViewLocation, const FVector& ViewForward, float ExtraDistance, float ExtraHeight);
 
-	/** Where a world point lands on screen vertically, as a UV (0 top, 1 bottom, may leave 0..1). Pure, for the tests and the screen band */
+	/** Where a world point lands on screen vertically, as a UV (0 top, 1 bottom, may leave 0..1), with the view's off-center (Shift) offset. Pure, for the tests and the screen band */
 	static float ScreenV(const FMinimalViewInfo& View, const FVector& WorldPoint);
 
 	/**

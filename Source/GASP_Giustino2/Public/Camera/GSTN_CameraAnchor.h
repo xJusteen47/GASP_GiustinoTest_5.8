@@ -310,6 +310,9 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorDamper
 	/** The height the camera follows given the wanted height (air hold applied). Updates the ground height when grounded. Pure helper of Step */
 	double AirHoldHeight(double Wanted, bool bInAir, const FGSTN_CameraAnchorSettings& Settings);
 
+	/** The in-air part of AirHoldHeight without touching the state (needs a ground height). Pure helper of Step's teleport test */
+	double HeldHeightInAir(double Wanted, const FGSTN_CameraAnchorSettings& Settings) const;
+
 	/** One critically damped spring step (Holden's exact form) of X toward Goal; InOutSpeed is the spring's speed. HalfLife <= 0 snaps */
 	static double SpringStep(double X, double Goal, double& InOutSpeed, float HalfLife, float DeltaTime);
 

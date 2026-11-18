@@ -302,4 +302,49 @@ bool FGSTN_CameraTiltPlaneTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraAnchorHighJumpNoSnapTest, "GSTN.Camera.Anchor.HighJumpInRiseBandDoesNotSnap", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraAnchorHighJumpNoSnapTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	// Bug pass 4 K2: with a rise band larger than the snap distance, a jump that goes more than SnapDistance above the held camera was taken for
+	// a teleport: the camera popped onto the character and the air hold was lost until the landing. The test now measures the held point
+	FGSTN_CameraAnchorSettings S = Settings(0.f);
+	S.bHoldGroundHeightInAir = true;
+	S.AirRiseBand = 600.f;
+	S.AirFallBand = 0.f;
+	S.SnapDistance = 400.f;
+	FGSTN_CameraAnchorDamper D;
+	D.Reset(FVector::ZeroVector);
+	D.Step(FVector::ZeroVector, FVector::UpVector, Dt, S, false);
+	for (int32 Height = 50; Height <= 550; Height += 50)
+	{
+		Near(*this, *FString::Printf(TEXT("jump at %d cm: camera stays on the ground"), Height), D.Step(FVector(0, 0, Height), FVector::UpVector, Dt, S, true).Z, 0.0, 0.01);
+	}
+	TestTrue(TEXT("the ground height is still known"), D.bHasGround);
+	// A real teleport in the air still snaps
+	const FVector Far(2000, 0, 300);
+	TestTrue(TEXT("teleport in the air snaps"), D.Step(Far, FVector::UpVector, Dt, S, true).Equals(Far, 1e-4));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraScreenVShiftTest, "GSTN.Camera.TiltShift.ScreenVFollowsShift", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraScreenVShiftTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	// Bug pass 4 K1: the screen band centre (ScreenV) ignored the Shift's off-center offset. It must agree with ProjectNDC (v = 0.5 - 0.5 y)
+	FMinimalViewInfo View;
+	View.Location = FVector::ZeroVector;
+	View.Rotation = FRotator::ZeroRotator;
+	View.FOV = 90.f;
+	View.AspectRatio = 16.f / 9.f;
+	View.OffCenterProjectionOffset = decltype(View.OffCenterProjectionOffset)(0.0, 0.5);
+	const FVector Points[] = { FVector(500, 0, 0), FVector(500, 40, 120), FVector(800, -60, -200) };
+	for (const FVector& Point : Points)
+	{
+		Near(*this, TEXT("ScreenV = 0.5 - 0.5 NDC y"), UGSTN_PlaytestCameraModifier::ScreenV(View, Point), 0.5 - 0.5 * UGSTN_PlaytestCameraModifier::ProjectNDC(View, Point).Y, 0.001);
+	}
+	Near(*this, TEXT("point ahead, offset 0.5: lower on screen"), UGSTN_PlaytestCameraModifier::ScreenV(View, FVector(500, 0, 0)), 0.75, 0.001);
+	return true;
+}
+
 #endif
