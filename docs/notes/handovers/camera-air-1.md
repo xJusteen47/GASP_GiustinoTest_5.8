@@ -2,8 +2,8 @@
 Branch `claude/camera-air-1` from claude/desktop-jab-fk d871e7aa. Owner bug 19:29Z: camera jitters when dair / fair start (orange kit).
 
 ## Measured (scripted PIE, t.OverrideFPS 60, inputs scripted, not the pad)
-Script `Saved/CamAir/diag_cam_air.py` (Run-Timed -Preset Capture; env DIAG_KITS, DIAG_OUT, DIAG_CVARS, DIAG_ABS). Rows per frame: actor,
-mesh, GameplayCameraComponent (gcc), final POV. Metric `python Saved/CamAir/metric.py <dirs>` = mean/max |second difference of POV z|, f15-60.
+Script `Tools/GASNPPTest/diag_cam_air.py` (Run-Timed -Preset Capture; env DIAG_KITS, DIAG_OUT, DIAG_CVARS, DIAG_ABS). Rows per frame: actor,
+mesh, GameplayCameraComponent (gcc), final POV. Metric `python Tools/GASNPPTest/camair_metric.py <dirs>` = mean/max |second difference of POV z|, f15-60.
 - Before (Saved/CamAir/diag): plain jump smooth on both kits (mean 0.43, max 1.5). KIT_Test_Overlord dair: 10 capsule resizes (hh 86 -> 46.7
   -> 35 -> 31.3 ... ), each moves the actor 6-20 cm more than the mesh; POV steps up to 27.7 cm, while gcc (the anchor) stays smooth.
 - Cause 1 (engine order): UGameplayCameraComponentBase reads its own location as the start pose and runs the camera in its tick
