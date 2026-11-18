@@ -246,6 +246,10 @@ bool FGSTN_CameraTiltShiftMathTest::RunTest(const FString&)
 	Near(*this, TEXT("point ahead: screen centre"), UGSTN_PlaytestCameraModifier::ScreenV(View, FVector(500, 0, 0)), 0.5, 0.001);
 	Near(*this, TEXT("45 deg up: top edge"), UGSTN_PlaytestCameraModifier::ScreenV(View, FVector(500, 0, 500)), 0.0, 0.001);
 	Near(*this, TEXT("45 deg down: bottom edge"), UGSTN_PlaytestCameraModifier::ScreenV(View, FVector(500, 0, -500)), 1.0, 0.001);
+	// Telephoto: 90 -> 45 deg needs tan(45)/tan(22.5) = 2.414 times the distance; the inverse gives the FOV back
+	Near(*this, TEXT("telephoto 90->45 distance scale"), UGSTN_PlaytestCameraModifier::TelephotoDistanceScale(90.f, 45.f), 2.41421, 0.001);
+	Near(*this, TEXT("FOV for that scale"), UGSTN_PlaytestCameraModifier::FOVForDistanceScale(90.f, 2.41421f), 45.0, 0.01);
+	Near(*this, TEXT("scale 1 keeps the FOV"), UGSTN_PlaytestCameraModifier::FOVForDistanceScale(70.f, 1.f), 70.0, 0.01);
 	FGSTN_CameraTiltShiftSettings T;
 	T.Fstop = 2.f;
 	T.Intensity = 2.f;

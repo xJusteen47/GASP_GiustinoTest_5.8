@@ -30,6 +30,13 @@ public:
 	/** Where a world point lands on screen vertically, as a UV (0 top, 1 bottom, may leave 0..1). Pure, for the tests and the screen band */
 	static float ScreenV(const FMinimalViewInfo& View, const FVector& WorldPoint);
 
+	/**
+	 * Telephoto framing: the camera distance scale that keeps a point the same size on screen when the horizontal FOV goes from FromFOV to
+	 * ToFOV (tan(From/2) / tan(To/2)), and the inverse (the FOV that keeps the size at a given distance scale). Pure, for the tests
+	 */
+	static float TelephotoDistanceScale(float FromFOV, float ToFOV);
+	static float FOVForDistanceScale(float FromFOV, float DistanceScale);
+
 	/** The f-stop the DOF tilt shift uses: Fstop / Intensity, never under 0.7. Pure, for the tests */
 	static float TiltShiftFstop(const FGSTN_CameraTiltShiftSettings& TiltShift);
 

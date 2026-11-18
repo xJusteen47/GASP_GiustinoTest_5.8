@@ -196,6 +196,15 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Framing", meta = (ClampMin = "-500", ClampMax = "1000", ForceUnits = "cm"))
 	float ExtraHeight = 45.f;
 
+	/**
+	 * Telephoto framing (miniature optics): a narrower field of view with the camera moved back so the character keeps the same size and
+	 * place on screen. Flatter perspective, less wide-angle stretch, the world reads more like a model. Horizontal degrees; 0 = off (GASP's
+	 * FOV). Only narrows: a value above the current FOV does nothing. Try 55, then 45 (Super Mario Galaxy's default). If a wall stops the
+	 * camera short, the FOV opens again to keep the character's size
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Framing", meta = (ClampMin = "0", ClampMax = "120", Units = "deg"))
+	float TelephotoFOV = 0.f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift")
 	FGSTN_CameraTiltShiftSettings TiltShift;
 };

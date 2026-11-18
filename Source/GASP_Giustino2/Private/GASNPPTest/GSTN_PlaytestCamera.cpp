@@ -44,6 +44,19 @@ float UGSTN_PlaytestCameraModifier::ScreenV(const FMinimalViewInfo& View, const 
 	return 0.5f - 0.5f * float(Local.Z / Local.X) / TanHalfVertical;
 }
 
+float UGSTN_PlaytestCameraModifier::TelephotoDistanceScale(float FromFOV, float ToFOV)
+{
+	const float From = FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(FromFOV, 1.f, 170.f)) * 0.5f);
+	const float To = FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(ToFOV, 1.f, 170.f)) * 0.5f);
+	return From / To;
+}
+
+float UGSTN_PlaytestCameraModifier::FOVForDistanceScale(float FromFOV, float DistanceScale)
+{
+	const float From = FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(FromFOV, 1.f, 170.f)) * 0.5f);
+	return FMath::RadiansToDegrees(2.f * FMath::Atan(From / FMath::Max(DistanceScale, 0.01f)));
+}
+
 float UGSTN_PlaytestCameraModifier::TiltShiftFstop(const FGSTN_CameraTiltShiftSettings& TiltShift)
 {
 	return FMath::Max(TiltShift.Fstop / FMath::Max(TiltShift.Intensity, 0.01f), 0.7f);
@@ -140,12 +153,39 @@ bool UGSTN_PlaytestCameraModifier::ModifyCamera(float DeltaTime, FMinimalViewInf
 		}
 		InOutPOV.Location = End;
 	}
-	// Focus on the character: the damped anchor (where the camera aims) when it runs, else the view target
-	if (ViewTarget)
+	if (!ViewTarget)
 	{
-		const bool bAnchorRuns = Anchor && Anchor->IsActiveForOwner();
-		ApplyTiltShift(Tuning.TiltShift, InOutPOV, bAnchorRuns ? Anchor->GetDampedAnchor() : ViewTarget->GetActorLocation());
+		return false;
 	}
+	// Focus on the character: the damped anchor (where the camera aims) when it runs, else the view target
+	const bool bAnchorRuns = Anchor && Anchor->IsActiveForOwner();
+	const FVector Focus = bAnchorRuns ? Anchor->GetDampedAnchor() : ViewTarget->GetActorLocation();
+
+	// Telephoto framing: scaling the camera position about the character by k and the FOV's tangent by 1/k keeps the character at the same
+	// size and place on screen (exact for the focus point); only the perspective flattens
+	if (Tuning.TelephotoFOV > 1.f && Tuning.TelephotoFOV < InOutPOV.FOV)
+	{
+		const float Scale = TelephotoDistanceScale(InOutPOV.FOV, Tuning.TelephotoFOV);
+		const FVector Start = InOutPOV.Location;
+		FVector End = Focus + (Start - Focus) * Scale;
+		float FOV = Tuning.TelephotoFOV;
+		if (UWorld* World = CameraOwner ? CameraOwner->GetWorld() : nullptr)
+		{
+			FCollisionQueryParams Query(SCENE_QUERY_STAT(GSTNPlaytestCameraTele), false, ViewTarget);
+			FHitResult Hit;
+			if (World->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, ECC_Camera, FCollisionShape::MakeSphere(GSTNPlaytestCamera::ProbeRadius), Query))
+			{
+				// Stopped short by a wall: open the FOV to the scale actually reached, so the character keeps its size
+				End = Hit.Location;
+				const double Base = FVector::Dist(Start, Focus);
+				const float Reached = Base > 1.0 ? float(FVector::Dist(End, Focus) / Base) : 1.f;
+				FOV = FOVForDistanceScale(InOutPOV.FOV, FMath::Max(Reached, 1.f));
+			}
+		}
+		InOutPOV.Location = End;
+		InOutPOV.FOV = FOV;
+	}
+	ApplyTiltShift(Tuning.TiltShift, InOutPOV, Focus);
 	return false;
 }
 

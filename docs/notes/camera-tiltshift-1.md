@@ -31,13 +31,14 @@ Thread cloud, Opus medium, 2026-11-18. Richiesta owner 11:58Z (cmsg_01CRvUdrWm1d
 Distanza: Framing > ExtraDistance (400; più basso = più vicino). Toy look: TiltShift > Intensity (1; 0 = spento), SensorWidth (300 mm; 150 = più leggero, 500 = molto miniatura), Fstop. Salto: Air > AirRiseBand (250 cm; il salto designer è 350 cm, quindi l'apice sposta la camera di 100 cm; metti 350 per camera del tutto ferma), LandingHalfLife.
 
 ## 5. Proposte (non fatte)
-1. FOV più stretto (45-55°) insieme alla distanza: è metà dell'effetto giocattolo; tocca il rig GASP o un override nel modifier (~1 $).
+1. FATTO (13:45Z): Framing > TelephotoFOV (0 = spento). FOV più stretto e camera arretrata della quantità che tiene il personaggio della stessa grandezza a schermo (tan(FOV/2)); contro un muro il FOV si riapre. Prova 55, poi 45. Globale nel DA; per kit/personaggio con un componente anchor proprio.
 2. Ritardo prima del riallineamento in salita (pushdelay di Galaxy) se il riallineamento all'atterraggio risulta ancora nervoso.
 3. Pareti/arrampicata: oggi contano come "in aria"; se la camera resta troppo in basso sui muri, escludere le modalità muro dall'hold.
 4. Dissolvenza a retino degli ostacoli fra camera e personaggio (Odyssey) e modalità a volumi: già nel piano camera-astrobot (C1-C2).
 
-## 6. Ricerca: io vs Gemini
-In attesa: Gemini nel browser integrato non è collegato all'account (solo Flash-Lite, banner cookie). Appena l'owner accede rilancio la stessa domanda e scrivo qui quale ha reso di più.
+## 6. Ricerca: io vs Gemini (risposta raccolta dall'owner, 13:42Z)
+Gemini: nessuna fonte citata, ricetta generica (DOF + banda + luci) già coperta qui; numeri non verificati e per il gameplay estremi (FOV 20-35°, pitch 35-55°); non tocca la domanda sul comportamento verticale della camera. Punto utile: l'**ottica** (FOV stretto con camera più lontana) come metà dell'effetto miniatura, che qui era solo la proposta 1 ed è ora implementata (TelephotoFOV). Io: fonti per i parametri (Galaxy, platform snapping), risultato già in codice, ma ho sopravvalutato il blur (corretto in §7).
+**Verdetto:** su questa domanda la ricerca propria ha reso di più per precisione e fonti; Gemini è utile come checklist veloce o seconda opinione, non come fonte di numeri. Per le prossime: Gemini per una lista ampia di idee, poi verifica con fonti.
 
 ## Fonti
 F1 lumasworkshop.com/wiki/Cameras (parametri camere Super Mario Galaxy) · F2 fukuchi.org/en/works/jumplab/settings-camera-platformSnapping.html · F3 gamedeveloper.com "Scroll Back: the theory and practice of cameras in side-scrollers" (Itay Keren) · F4 dev.epicgames.com "Cinematic Depth of Field" / react-postprocessing tilt-shift (tecnica banda a schermo)
