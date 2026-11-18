@@ -77,6 +77,10 @@ edits marked "GAS-NPP fork"; the others are unmodified as far as git shows.
 
 [UE_MCP_Bridge](UE_MCP_Bridge/README.md): third-party editor-only WebSocket bridge for the UE-MCP server. Not game code.
 
+[GSTNAnimToolsets](GSTNAnimToolsets/README.md): editor-only AI toolsets for the editor MCP (ToolsetRegistry): Animation Blueprint
+state machines, states, transitions with composite rules and AnimGraph nodes in any graph (anim layers included), and Chooser
+Tables. Module `GSTNAnimToolsets` (Editor). Not game code; no GSTN plugin depends on it.
+
 ## Dependency overview
 
 Arrows read "depends on". Source of truth: the `Plugins` list of each `.uplugin` and the `Build.cs` of each module; check

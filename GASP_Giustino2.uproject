@@ -204,6 +204,13 @@
 			]
 		},
 		{
+			"Name": "GSTNAnimToolsets",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
 			"Name": "GSTNCombatDebug",
 			"Enabled": true
 		},
