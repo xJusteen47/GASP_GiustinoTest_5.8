@@ -121,7 +121,7 @@ public:
 	 * override layer stays off, so the two never play together.
 	 */
 	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
-	bool IsSkidding() const { return FootSlide.Source == EGSTN_FootSlideSource::RunSkid; }
+	bool IsSkidding() const { return SkidPlayTime >= 0.f || FootSlide.Source == EGSTN_FootSlideSource::RunSkid; }
 
 	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
 	float GetSkidClipTime() const;
@@ -172,6 +172,12 @@ private:
 	FSoftObjectPath ResolvedScramblePath;
 	FSoftObjectPath ResolvedSkidPath;
 	float SkidEntrySpeed = 0.f;
+	/**
+	 * Clip speed (cvar gstn.Skid.PlayAtClipSpeed, owner choice A): seconds since the skid started, < 0 = no skid shown. Runs on past the
+	 * sim's skid while the clip has frames left and the character stays on the ground with nothing else sliding (the restart is in the clip)
+	 */
+	float SkidPlayTime = -1.f;
+	void TickSkidPlayTime(float DeltaTime);
 	FVector ScrambleDirection = FVector::ForwardVector;
 
 	FGSTN_FootSlideState FootSlide;

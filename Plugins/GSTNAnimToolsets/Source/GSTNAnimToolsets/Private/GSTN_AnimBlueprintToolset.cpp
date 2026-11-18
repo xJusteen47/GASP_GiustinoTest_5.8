@@ -462,6 +462,61 @@ UAnimStateNodeBase* UGSTN_AnimBlueprintToolset::AddState(UAnimGraphNode_StateMac
 	return State;
 }
 
+UAnimStateNodeBase* UGSTN_AnimBlueprintToolset::AddStateAlias(UAnimGraphNode_StateMachineBase* Machine, const FString& Name,
+	const TArray<FString>& AliasedStateNames, bool bGlobalAlias, TOptional<FIntPoint> Position)
+{
+	UAnimationStateMachineGraph* MachineGraph = MachineGraphOf(Machine);
+	UAnimBlueprint* AnimBlueprint = AnimBlueprintOf(MachineGraph);
+	if (!MachineGraph || !AnimBlueprint)
+	{
+		Raise(TEXT("Machine is null or is not in an Animation Blueprint."));
+		return nullptr;
+	}
+	if (Name.IsEmpty() || FindStateByName(MachineGraph, Name))
+	{
+		Raise(FString::Printf(TEXT("Name '%s' is empty or already used in the machine."), *Name));
+		return nullptr;
+	}
+	// Resolve every aliased state first: nothing is created when a name is wrong
+	TArray<UAnimStateNodeBase*> Aliased;
+	for (const FString& StateName : AliasedStateNames)
+	{
+		UAnimStateNodeBase* State = FindStateByName(MachineGraph, StateName);
+		if (!State || State->IsA<UAnimStateAliasNode>())
+		{
+			Raise(FString::Printf(TEXT("'%s' is not a state or conduit of the machine."), *StateName));
+			return nullptr;
+		}
+		Aliased.Add(State);
+	}
+	if (Aliased.IsEmpty() && !bGlobalAlias)
+	{
+		Raise(TEXT("An alias needs at least one state, or bGlobalAlias."));
+		return nullptr;
+	}
+
+	const FIntPoint Where = Position.Get(NextFreePosition(MachineGraph));
+	const FScopedTransaction Transaction(LOCTEXT("AddStateAlias", "Add State Alias"));
+	UAnimStateAliasNode* Alias = FEdGraphSchemaAction_NewStateNode::SpawnNodeFromTemplate<UAnimStateAliasNode>(
+		MachineGraph, NewObject<UAnimStateAliasNode>(), FVector2f(static_cast<float>(Where.X), static_cast<float>(Where.Y)), false);
+	if (!Alias)
+	{
+		Raise(TEXT("The alias node could not be created."));
+		return nullptr;
+	}
+	Alias->OnRenameNode(Name);
+	Alias->Modify();
+	Alias->bGlobalAlias = bGlobalAlias;
+	TSet<TWeakObjectPtr<UAnimStateNodeBase>>& Set = Alias->GetAliasedStates();
+	Set.Reset();
+	for (UAnimStateNodeBase* State : Aliased)
+	{
+		Set.Add(State);
+	}
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(AnimBlueprint);
+	return Alias;
+}
+
 UAnimStateNodeBase* UGSTN_AnimBlueprintToolset::FindState(UAnimGraphNode_StateMachineBase* Machine, const FString& Name)
 {
 	UAnimationStateMachineGraph* MachineGraph = MachineGraphOf(Machine);

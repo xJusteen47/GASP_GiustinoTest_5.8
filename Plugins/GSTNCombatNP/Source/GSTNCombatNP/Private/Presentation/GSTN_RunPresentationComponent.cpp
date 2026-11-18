@@ -132,12 +132,48 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 	}
 	TickLean(DeltaTime);
 	ResolveClips();
+	TickSkidPlayTime(DeltaTime);
 	ApplyMainAnimClass();
 	TickScramble(DeltaTime);
 }
 
+namespace GSTNRunPresentation
+{
+	bool SkidAtClipSpeed()
+	{
+		static IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("gstn.Skid.PlayAtClipSpeed"));
+		return CVar && CVar->GetInt() != 0;
+	}
+}
+
+void UGSTN_RunPresentationComponent::TickSkidPlayTime(float DeltaTime)
+{
+	if (!SkidSectionClip || !GSTNRunPresentation::SkidAtClipSpeed())
+	{
+		SkidPlayTime = -1.f;
+		return;
+	}
+	const float Length = SkidSectionClip->GetPlayLength();
+	if (FootSlide.Source == EGSTN_FootSlideSource::RunSkid && FootSlide.SkidPhase != EGSTN_RunSkidPhase::None)
+	{
+		SkidPlayTime = SkidPlayTime < 0.f ? 0.f : FMath::Min(SkidPlayTime + DeltaTime, Length);
+		return;
+	}
+	// Tail: the stop and the push off are one clip, it plays out after the sim's skid
+	if (SkidPlayTime >= 0.f && !FootSlide.IsSliding() && Mover->HasGameplayTag(Mover_IsOnGround, false) && SkidPlayTime + DeltaTime < Length)
+	{
+		SkidPlayTime += DeltaTime;
+		return;
+	}
+	SkidPlayTime = -1.f;
+}
+
 float UGSTN_RunPresentationComponent::GetSkidClipTime() const
 {
+	if (SkidSectionClip && SkidPlayTime >= 0.f)
+	{
+		return SkidPlayTime;
+	}
 	if (!SkidSectionClip || FootSlide.Source != EGSTN_FootSlideSource::RunSkid)
 	{
 		return 0.f;

@@ -330,6 +330,19 @@ public:
 		EGSTN_StateKind Kind, TOptional<FIntPoint> Position);
 
 	/**
+	 * Adds a state alias: one node standing for several states, so a single transition out of it replaces one transition per state
+	 * (owner 2026-11-18: the Skid entry from the locomotion and idle states, without a tangle of arrows).
+	 * @param Machine The state machine node.
+	 * @param Name Unique name in the machine.
+	 * @param AliasedStateNames States (or conduits) the alias stands for, by name; empty with bGlobalAlias = every state.
+	 * @param bGlobalAlias True = the alias stands for every state of the machine.
+	 * @param Position Node position; next to the existing states if unset.
+	 */
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Write"), Category = "GSTN|AnimToolset")
+	static UAnimStateNodeBase* AddStateAlias(UAnimGraphNode_StateMachineBase* Machine, const FString& Name,
+		const TArray<FString>& AliasedStateNames, bool bGlobalAlias, TOptional<FIntPoint> Position);
+
+	/**
 	 * Returns the state, conduit or alias of a machine with the given name, case-insensitive.
 	 * @param Machine The state machine node.
 	 * @param Name The state name.
