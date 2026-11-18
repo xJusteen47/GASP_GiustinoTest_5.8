@@ -13,6 +13,38 @@ bool FGSTN_ReactionAnimRule::Matches(const FGameplayTagContainer& OwnerTags) con
 	return !RequiredTags.IsEmpty() && OwnerTags.HasAll(RequiredTags) && !OwnerTags.HasAny(BlockedTags);
 }
 
+const TSoftObjectPtr<UAnimSequenceBase>& FGSTN_ReactionSideAnimations::ForSide(EGSTN_HitSide Side) const
+{
+	switch (Side)
+	{
+	case EGSTN_HitSide::Back: return Back;
+	case EGSTN_HitSide::Left: return Left;
+	case EGSTN_HitSide::Right: return Right;
+	default: return Front;
+	}
+}
+
+bool FGSTN_ReactionSideAnimations::HasAny() const
+{
+	return !Front.IsNull() || !Back.IsNull() || !Left.IsNull() || !Right.IsNull();
+}
+
+const TSoftObjectPtr<UAnimSequenceBase>& FGSTN_ReactionAnimRule::AnimationForSide(EGSTN_HitSide Side) const
+{
+	const TSoftObjectPtr<UAnimSequenceBase>& SideClip = SideAnimations.ForSide(Side);
+	return SideClip.IsNull() ? Animation : SideClip;
+}
+
+TSoftObjectPtr<UAnimSequenceBase> UGSTN_ReactionAnimSet::GetRuleAnimationForSide(int32 RuleIndex, EGSTN_HitSide Side) const
+{
+	return Rules.IsValidIndex(RuleIndex) ? Rules[RuleIndex].AnimationForSide(Side) : TSoftObjectPtr<UAnimSequenceBase>();
+}
+
+EGSTN_HitSide UGSTN_ReactionAnimSet::SelectHitSide(const FVector& PushDirection, const FVector& VictimForward, const FVector& VictimRight)
+{
+	return FGSTN_DirectionalHitMath::SelectSide(PushDirection, VictimForward, VictimRight);
+}
+
 int32 UGSTN_ReactionAnimSet::SelectRule(const FGameplayTagContainer& OwnerTags) const
 {
 	int32 Best = INDEX_NONE;
@@ -47,6 +79,13 @@ EDataValidationResult UGSTN_ReactionAnimSet::IsDataValid(FDataValidationContext&
 		if (Rule.Animation.IsNull())
 		{
 			Context.AddWarning(FText::FromString(FString::Printf(TEXT("Reaction rule %d (%s) has no animation: it shows the character's own pose."), Index, *Rule.Name.ToString())));
+		}
+		// One side without the other is the hit-arms-1 r3 failure again: the base pose's lead arm crosses the head on the missing side
+		if (Rule.SideAnimations.Left.IsNull() != Rule.SideAnimations.Right.IsNull())
+		{
+			Context.AddWarning(FText::FromString(FString::Printf(TEXT("Reaction rule %d (%s) has a %s side clip but no %s one: hits from the %s play the base Animation."),
+				Index, *Rule.Name.ToString(), Rule.SideAnimations.Left.IsNull() ? TEXT("Right") : TEXT("Left"),
+				Rule.SideAnimations.Left.IsNull() ? TEXT("Left") : TEXT("Right"), Rule.SideAnimations.Left.IsNull() ? TEXT("left") : TEXT("right"))));
 		}
 	}
 	// Sakurai #1: the attacker shakes less than the victim, never as much

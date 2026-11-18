@@ -22,6 +22,60 @@ enum class EGSTN_ReactionAnimEnd : uint8
 	BlendOut,
 };
 
+/** The side of the victim a hit came from (hit-react-directional) */
+UENUM(BlueprintType)
+enum class EGSTN_HitSide : uint8
+{
+	Front,
+	Back,
+	Left,
+	Right,
+};
+
+/**
+ * Per-side clips of a reaction rule's first animation (hit-arms, owner decision 2A 2026-11-18). One HitStand pose cannot serve every side:
+ * its lead arm is drawn on one side of the body, and on a hit from the other side that arm crosses in front of the head (hit-arms-1 r3
+ * review). A side with a clip plays it in place of the rule's Animation; an empty side plays Animation. The mirrored clip of a pose is baked
+ * offline (Tools/GAS/build_hit_arms_v2.py with HITARMS_LEAD=r), so the anim graph needs no mirror node and a side can also be a pose of its own.
+ * The side is the one the directional additives use (FGSTN_DirectionalHitMath::SelectSide on the last Combat.Event.Hit.Received push against
+ * the victim's facing). Presentation only, like the rule.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATGAS_API FGSTN_ReactionSideAnimations
+{
+	GENERATED_BODY()
+
+	/** Hit from the front. Empty = the rule's Animation */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction|Sides")
+	TSoftObjectPtr<UAnimSequenceBase> Front;
+
+	/** Hit from behind. Empty = the rule's Animation */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction|Sides")
+	TSoftObjectPtr<UAnimSequenceBase> Back;
+
+	/** Hit on the victim's left side: the pose whose lead arm is the left one. Empty = the rule's Animation */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction|Sides")
+	TSoftObjectPtr<UAnimSequenceBase> Left;
+
+	/** Hit on the victim's right side: the pose whose lead arm is the right one. Empty = the rule's Animation */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction|Sides")
+	TSoftObjectPtr<UAnimSequenceBase> Right;
+
+	/**
+	 * For this long after the reaction starts (60 fps frames) the side is read again every frame, and a change swaps the clip at the same time
+	 * with no blend: the back-hit turn rotates the victim on its first reaction frame, and the hit event can arrive a frame after the state
+	 * tag. After it the side holds, so the pose never flips mid-reaction. 0 = read once at the start
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction|Sides", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 SideSettleFrames = 3;
+
+	/** The clip set for Side (may be null) */
+	const TSoftObjectPtr<UAnimSequenceBase>& ForSide(EGSTN_HitSide Side) const;
+
+	/** At least one side has a clip */
+	bool HasAny() const;
+};
+
 /**
  * One victim reaction as data: "while the owner's tags match, play this animation". The tags are the projected combat states
  * (Combat.State.Hitstun, Combat.State.Tumble, Combat.State.Splat, Combat.State.Knockdown, ...), so the rule never names a state in code.
@@ -51,6 +105,10 @@ struct GSTNCOMBATGAS_API FGSTN_ReactionAnimRule
 	/** An animation sequence (played as a dynamic montage on the set's slot) or a montage asset */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction")
 	TSoftObjectPtr<UAnimSequenceBase> Animation;
+
+	/** Optional per-side replacements of Animation (the HitStand lead arm on the attacker's side), see FGSTN_ReactionSideAnimations */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reaction")
+	FGSTN_ReactionSideAnimations SideAnimations;
 
 	/**
 	 * Optional: played right after Animation while the rule still holds, cross-faded over ChainBlendFrames and started before Animation ends,
@@ -105,6 +163,9 @@ struct GSTNCOMBATGAS_API FGSTN_ReactionAnimRule
 
 	/** True when the owner's tags satisfy this rule */
 	bool Matches(const FGameplayTagContainer& OwnerTags) const;
+
+	/** The first animation for a hit from Side: the side's clip, else Animation. ThenAnimation is the same for every side */
+	const TSoftObjectPtr<UAnimSequenceBase>& AnimationForSide(EGSTN_HitSide Side) const;
 };
 
 /**
@@ -175,15 +236,6 @@ struct GSTNCOMBATGAS_API FGSTN_HitstopShake
 	float DistanceScale(float CameraDistanceCm) const;
 };
 
-/** The side of the victim a hit came from (hit-react-directional) */
-UENUM(BlueprintType)
-enum class EGSTN_HitSide : uint8
-{
-	Front,
-	Back,
-	Left,
-	Right,
-};
 
 /**
  * The 4 directional hit additives of one base reaction (ground or air), owner option B 2026-11-16 (handoffs/reazioni-ricerca.md): an
@@ -337,6 +389,14 @@ public:
 	/** The index of the rule that wins for these tags, INDEX_NONE when none holds. Pure: highest Priority, then the first listed */
 	UFUNCTION(BlueprintPure, Category = "Combat|Reaction")
 	int32 SelectRule(const FGameplayTagContainer& OwnerTags) const;
+
+	/** The first animation rule RuleIndex plays for a hit from Side (its side clip, else its Animation); null for a bad index or no clip */
+	UFUNCTION(BlueprintPure, Category = "Combat|Reaction")
+	TSoftObjectPtr<UAnimSequenceBase> GetRuleAnimationForSide(int32 RuleIndex, EGSTN_HitSide Side) const;
+
+	/** The side a hit pushing the victim along PushDirection (attacker to victim) came from, as the reactions read it. Pure */
+	UFUNCTION(BlueprintPure, Category = "Combat|Reaction")
+	static EGSTN_HitSide SelectHitSide(const FVector& PushDirection, const FVector& VictimForward, const FVector& VictimRight);
 
 	virtual FPrimaryAssetId GetPrimaryAssetId() const override;
 

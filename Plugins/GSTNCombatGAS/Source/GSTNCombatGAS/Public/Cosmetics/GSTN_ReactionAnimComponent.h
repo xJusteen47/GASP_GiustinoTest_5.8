@@ -106,6 +106,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat|Debug")
 	float GetDirectionalHitWeight() const { return HitLayers[0].Weight; }
 
+	/** The side the playing reaction's first animation was picked for (FGSTN_ReactionSideAnimations; Front before any hit), for the harness */
+	UFUNCTION(BlueprintPure, Category = "Combat|Debug")
+	EGSTN_HitSide GetReactionPoseSide() const { return ActivePoseSide; }
+
+	/** The side of the last hit against the victim's facing now (Front before any hit): the side a reaction starting now picks */
+	UFUNCTION(BlueprintPure, Category = "Combat|Reaction")
+	EGSTN_HitSide GetLastHitSide() const;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -137,8 +145,14 @@ private:
 	UAnimInstance* ResolveAnimInstance();
 	UAbilitySystemComponent* ResolveAbilitySystem();
 
-	/** Starts the stage (0 = Animation, 1 = ThenAnimation) of the rule; false when it has no animation there */
+	/** Starts the stage (0 = Animation for the last hit's side, 1 = ThenAnimation) of the rule; false when it has no animation there */
 	bool PlayStage(UAnimInstance& Anim, const FGSTN_ReactionAnimRule& Rule, int32 Stage, float BlendSeconds);
+
+	/**
+	 * Within the rule's side settle window, swaps the first animation for the clip of the side read now when it changed (same time, no blend,
+	 * hitstop hold kept). True when it swapped
+	 */
+	bool UpdatePoseSide(UAnimInstance& Anim, const FGSTN_ReactionAnimRule& Rule, float DeltaTime);
 
 	/** Stops the montage this component plays, holding its last shown pose through the blend */
 	void StopActive(UAnimInstance* Anim, float BlendSeconds);
@@ -240,4 +254,10 @@ private:
 	FDelegateHandle HitEventHandle;
 	bool bHitEventPending = false;
 	FHitLayer PendingHit;
+
+	/** Per-side reaction poses: the last hit's world push (attacker to victim), the side the playing clip was picked for, seconds since */
+	FVector LastHitPush = FVector::ZeroVector;
+	bool bHasHitPush = false;
+	EGSTN_HitSide ActivePoseSide = EGSTN_HitSide::Front;
+	float PoseSideAge = 0.f;
 };

@@ -129,7 +129,8 @@ void UGSTN_ReactionAnimComponent::ApplySet(UGSTN_ReactionAnimSet* NewSet)
 	}
 	for (const FGSTN_ReactionAnimRule& Rule : LoadedSet->Rules)
 	{
-		for (const TSoftObjectPtr<UAnimSequenceBase>* Soft : { &Rule.Animation, &Rule.ThenAnimation })
+		const FGSTN_ReactionSideAnimations& Sides = Rule.SideAnimations;
+		for (const TSoftObjectPtr<UAnimSequenceBase>* Soft : { &Rule.Animation, &Rule.ThenAnimation, &Sides.Front, &Sides.Back, &Sides.Left, &Sides.Right })
 		{
 			if (!Soft->IsNull())
 			{
@@ -166,7 +167,9 @@ void UGSTN_ReactionAnimComponent::ApplySet(UGSTN_ReactionAnimSet* NewSet)
 	}
 	if (UAbilitySystemComponent* ASC = ResolveAbilitySystem())
 	{
-		if (Directional.bEnabled)
+		// The hit event feeds the directional additives and the per-side poses: bound when either is used
+		const bool bSidePoses = LoadedSet->Rules.ContainsByPredicate([](const FGSTN_ReactionAnimRule& Rule) { return Rule.SideAnimations.HasAny(); });
+		if (Directional.bEnabled || bSidePoses)
 		{
 			HitEventHandle = ASC->GenericGameplayEventCallbacks.FindOrAdd(GSTNCombatTags::Event_Hit_Received)
 				.AddUObject(this, &UGSTN_ReactionAnimComponent::OnHitEvent);
@@ -213,15 +216,6 @@ void UGSTN_ReactionAnimComponent::OnHitEvent(const FGameplayEventData* Payload)
 	{
 		return;
 	}
-	const FGSTN_DirectionalHitSettings& Settings = LoadedSet->DirectionalHits;
-	FGSTN_HitEventPayload Hit;
-	const bool bStaggered = FGSTN_HitEventPayload::FromEventData(*Payload, Hit) ? Hit.bStaggered : true;
-	const float Weight = FGSTN_DirectionalHitMath::IntensityWeight(bStaggered, FMath::RoundToInt(Payload->EventMagnitude),
-		Settings.FullWeightHitstunFrames, Settings.MinWeight, Settings.UnstaggeredWeight);
-	if (Weight <= 0.f)
-	{
-		return;
-	}
 	// The push: attacker to victim; an attacker on top of the victim pushes along its own facing
 	FVector Push = -Owner->GetActorForwardVector();
 	if (const AActor* Attacker = Payload->Instigator.Get())
@@ -234,6 +228,19 @@ void UGSTN_ReactionAnimComponent::OnHitEvent(const FGameplayEventData* Payload)
 		}
 	}
 	Push = Push.GetSafeNormal2D();
+	// The per-side poses read every hit, a weak one included: the reaction it starts must still face the right way
+	LastHitPush = Push;
+	bHasHitPush = true;
+
+	const FGSTN_DirectionalHitSettings& Settings = LoadedSet->DirectionalHits;
+	FGSTN_HitEventPayload Hit;
+	const bool bStaggered = FGSTN_HitEventPayload::FromEventData(*Payload, Hit) ? Hit.bStaggered : true;
+	const float Weight = FGSTN_DirectionalHitMath::IntensityWeight(bStaggered, FMath::RoundToInt(Payload->EventMagnitude),
+		Settings.FullWeightHitstunFrames, Settings.MinWeight, Settings.UnstaggeredWeight);
+	if (Weight <= 0.f)
+	{
+		return;
+	}
 	// A resimulated frame can send the same hit again a moment later: it does not restart the flinch (a multi-hit 3+ frames apart does)
 	const FHitLayer& Newest = HitLayers[0];
 	if (Newest.Weight > 0.f && Newest.Draw.Time < 0.05f && FVector::DotProduct(Newest.Push, Push) > 0.95)
@@ -330,6 +337,61 @@ EGSTN_HitSide UGSTN_ReactionAnimComponent::GetDirectionalHitSide() const
 	return static_cast<EGSTN_HitSide>(HitLayers[0].Side);
 }
 
+EGSTN_HitSide UGSTN_ReactionAnimComponent::GetLastHitSide() const
+{
+	const AActor* Owner = GetOwner();
+	// Read against the facing now, as the additives do: the back-hit turn rotates the victim after the event
+	return bHasHitPush && Owner ? FGSTN_DirectionalHitMath::SelectSide(LastHitPush, Owner->GetActorForwardVector(), Owner->GetActorRightVector())
+		: EGSTN_HitSide::Front;
+}
+
+bool UGSTN_ReactionAnimComponent::UpdatePoseSide(UAnimInstance& Anim, const FGSTN_ReactionAnimRule& Rule, float DeltaTime)
+{
+	if (ActiveStage != 0 || !Rule.SideAnimations.HasAny())
+	{
+		return false;
+	}
+	PoseSideAge += DeltaTime;
+	if (PoseSideAge > GSTNReactionAnim::Seconds(Rule.SideAnimations.SideSettleFrames) + UE_KINDA_SMALL_NUMBER)
+	{
+		return false;
+	}
+	const EGSTN_HitSide Side = GetLastHitSide();
+	if (Side == ActivePoseSide)
+	{
+		return false;
+	}
+	if (Rule.AnimationForSide(Side) == Rule.AnimationForSide(ActivePoseSide))
+	{
+		// Another side with the same clip (front and back both on the base): nothing to swap
+		ActivePoseSide = Side;
+		return false;
+	}
+	const FAnimMontageInstance* Old = ActiveMontage ? Anim.GetActiveInstanceForMontage(ActiveMontage) : nullptr;
+	const float Position = Old ? Old->GetPosition() : 0.f;
+	const bool bWasHeld = bHitstopPoseHeld;
+	const bool bWasStartedInHitstop = bStartedInHitstop;
+	const float Age = PoseSideAge;
+	// No blend: the two clips are the same reaction on the other side, a cross-fade would draw both arms half way for a frame
+	if (!PlayStage(Anim, Rule, 0, 0.f))
+	{
+		return false;
+	}
+	PoseSideAge = Age;
+	bStartedInHitstop = bWasStartedInHitstop;
+	if (FAnimMontageInstance* New = Anim.GetActiveInstanceForMontage(ActiveMontage))
+	{
+		New->SetPosition(Position);
+		if (bWasHeld)
+		{
+			New->SetPlayRate(0.f);
+			bHitstopPoseHeld = true;
+		}
+	}
+	UE_LOG(LogGSTNReactionAnim, Verbose, TEXT("%s: reaction %s pose side -> %d at %.3f s"), *GetNameSafe(GetOwner()), *Rule.Name.ToString(), static_cast<int32>(Side), Position);
+	return true;
+}
+
 void UGSTN_ReactionAnimComponent::OnRestartEvent(const FGameplayEventData* Payload, FGameplayTag Tag)
 {
 	// Remembered for the tick, which restarts the rule only if it is the one that wins then (a hit during the hit reaction, or after its clip
@@ -388,8 +450,13 @@ bool UGSTN_ReactionAnimComponent::IsOtherMontagePlaying(const UAnimInstance& Ani
 
 bool UGSTN_ReactionAnimComponent::PlayStage(UAnimInstance& Anim, const FGSTN_ReactionAnimRule& Rule, int32 Stage, float BlendSeconds)
 {
-	const TSoftObjectPtr<UAnimSequenceBase>& Soft = Stage == 0 ? Rule.Animation : Rule.ThenAnimation;
-	UAnimSequenceBase* Asset = Soft.Get();
+	// The first stage is the clip of the last hit's side (the HitStand lead arm on the attacker's side); a side clip that did not load plays the base
+	const EGSTN_HitSide Side = GetLastHitSide();
+	UAnimSequenceBase* Asset = Stage == 0 ? Rule.AnimationForSide(Side).Get() : Rule.ThenAnimation.Get();
+	if (!Asset && Stage == 0)
+	{
+		Asset = Rule.Animation.Get();
+	}
 	if (!Asset)
 	{
 		return false;
@@ -422,6 +489,11 @@ bool UGSTN_ReactionAnimComponent::PlayStage(UAnimInstance& Anim, const FGSTN_Rea
 	}
 	ActiveMontage = Montage;
 	ActiveStage = Stage;
+	if (Stage == 0)
+	{
+		ActivePoseSide = Side;
+		PoseSideAge = 0.f;
+	}
 	bStartedInHitstop = bPoseBlend;
 	bHitstopPoseHeld = false;
 	return true;
@@ -522,7 +594,8 @@ void UGSTN_ReactionAnimComponent::TickComponent(float DeltaTime, ELevelTick Tick
 		return;
 	}
 
-	// The rule plays on: chain, hold or blend out near the end of the stage
+	// The rule plays on: the side settles (per-side poses), then chain, hold or blend out near the end of the stage
+	UpdatePoseSide(*Anim, Rule, DeltaTime);
 	FAnimMontageInstance* Instance = Anim->GetActiveInstanceForMontage(ActiveMontage);
 	if (!Instance)
 	{
