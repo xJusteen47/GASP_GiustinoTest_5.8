@@ -79,6 +79,12 @@ namespace GSTNCombatTags
 	/** Gameplay event sent to the victim's abilities when it is hit (payload: FGSTN_HitEventPayload in the event's context). Not an outbox event. */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Hit_Received);
 
+	/**
+	 * Hitstop micro-advance (Sakurai #7, 2026-11-18): a move whose attacker carries this tag (a Tags track on its timeline) creeps its
+	 * animation forward by a fraction of a frame during its hitstop. Read by the presentation only (FGSTN_HitstopAdvance).
+	 */
+	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Feel_HitstopAdvance);
+
 	/** Root of the surface impact events (splat, bounce, break). */
 	GSTNCOMBATGAS_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Impact);
 

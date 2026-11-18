@@ -311,6 +311,8 @@ void UNetMontageSimulator::ResetPresentationClock()
 	PresentedTime = 0.f;
 	CarriedStepperSeconds = 0.f;
 	CarriedStepperInstanceId = INDEX_NONE;
+	// No montage shown: a hitstop lead has nothing to ride on, and must not carry over to the next move
+	PresentationLeadSeconds = 0.f;
 }
 
 float UNetMontageSimulator::ComputePresentedTime(const FSyncedMontagePresentationClockInput& Input)
@@ -903,7 +905,9 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 		// A montage plays again (a new move, a rollback that restored one): a stop asked for before it no longer applies
 		PendingStop = FPendingStopPresentation();
 		// LandOnSimTime: the presentation clock picks the time this frame shows (the start on a start's first frame, then a steady advance)
-		const float ShownTime = bLandOnSimTime ? PresentMontageTime(*AnimInstance, DesiredMontage, SyncState, bSmoothedState, RateMultiplier) : SyncState.GetCurrentTime();
+		const float ClockTime = bLandOnSimTime ? PresentMontageTime(*AnimInstance, DesiredMontage, SyncState, bSmoothedState, RateMultiplier) : SyncState.GetCurrentTime();
+		// The hitstop micro-advance (presentation lead) rides on top of the clock; the clock itself (PresentedTime) never includes it
+		const float ShownTime = bLandOnSimTime ? ApplyPresentationLead(ClockTime, PresentationLeadSeconds, GetMontageBlendOutTime(DesiredMontage)) : ClockTime;
 		// if there's an active instance of the montage (is not blending out) , end it
 		if (FAnimMontageInstance* MontageInstance = AnimInstance->GetActiveInstanceForMontage(DesiredMontage))
 		{
@@ -980,6 +984,24 @@ void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& Sync
 		PendingStop = FPendingStopPresentation();
 		LastPlayingMontage = nullptr;
 	}
+}
+
+bool UNetMontageSimulator::GetPresentedMontageTime(const UAnimMontage*& OutMontage, float& OutTime) const
+{
+	OutMontage = PresentedMontage.Get();
+	OutTime = PresentedTime;
+	return OutMontage != nullptr;
+}
+
+float UNetMontageSimulator::ApplyPresentationLead(float ShownTime, float LeadSeconds, float BlendOutTime)
+{
+	if (LeadSeconds <= 0.f)
+	{
+		return ShownTime;
+	}
+	// One millisecond under the blend out: FinalizeMontageFrame stops the instance at that time, a lead must not trigger it
+	const float Ceiling = FMath::Max(BlendOutTime - 1.e-3f, ShownTime);
+	return FMath::Min(ShownTime + LeadSeconds, Ceiling);
 }
 
 FSyncedMontagePresentationStep UNetMontageSimulator::ComputeLandOnSimTimeStep(float InstancePosition, float TargetTime, float NominalPlayRate,
