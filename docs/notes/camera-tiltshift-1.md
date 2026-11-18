@@ -64,3 +64,6 @@ Il "tilt-shift miniatura" delle foto è quasi sempre solo **tilt** (o la sua imi
 Rischi: se il render ignorasse l'offset off-axis passato dal modifier, lo shift non si vede (si verifica al primo PIE con `gstn.Camera.Shift 1`); la posizione mondo nel materiale post-process va verificata in compilazione (2 tentativi, poi resta il DOF).
 
 Fonti aggiunte: F5 cambridgeincolour.com "Tilt shift lenses" (parte 1 shift/prospettiva, parte 2 tilt/profondità di campo) · F6 Scheimpflug principle · F7 SIGGRAPH 2013 poster, Nakane, "Simulating Depth of Field Effects Taken by a Camera with a Tilt Shift Lens"
+
+## 9. Altri riferimenti (owner 14:23Z, astro_10..13 ritagliati)
+astro_12 è il migliore (pavimento a piastrelle, porta e colonna verticali): pitch ≈ 15,5°, FOV orizzontale ≈ 86° (79-95° se ci fosse uno shift non misurabile); fuga verticale coerente con una camera inclinata semplice. Conferma: grandangolo, niente shift visibile, tilt/sfocatura quasi assenti. Dettagli e comandi in docs/notes/reviews/ref-astrobot-camera/README.md.
