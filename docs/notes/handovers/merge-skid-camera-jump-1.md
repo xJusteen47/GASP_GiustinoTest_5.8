@@ -45,3 +45,6 @@ All headless, one at a time, ESITO OK (logs Saved/Logs/ci/py_*.log.ue.log):
   pie_capture_move.py (reverse at render frame 30 = base stage). Command: $env:PIE_CAPTURE_VIEWS='az90,game'; Tools/GASNPPTest/pie_capture_timed.ps1
   -Kit KIT_Test_Overlord -Out docs/notes/reviews/skid-ss180turn2-1/cap -Sequences mv_skid_base, then pie_capture_grid.py, then Fable (facing first).
 - Not re-run after the data changes: the full GSTN suite (C++ unchanged since 1783/0) and movement QA.
+## Update 07:15Z
+- Capture 07:42 done: FAIL, the re-retargeted clip sinks the body (docs/notes/reviews/skid-ss180turn2-1/REVIEW.md). Owner chose the original clip: setup_skid_anim_layer.py default is now SkidOwner/SS_180_Turn2_Src (007ec463), NOT yet run (auto-mode classifier denied it even after the owner's rule; a new session should load the rule).
+- Next thread: run setup_skid_anim_layer.py, commit Content/Blueprints/Animation, capture mv_skid_base (PIE_CAPTURE_VIEWS=az90,game), review facing first.
