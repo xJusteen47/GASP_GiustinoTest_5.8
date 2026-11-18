@@ -19,7 +19,9 @@ namespace GSTNPlaytestCamera
 	static TAutoConsoleVariable<float> CVarExtraHeight(TEXT("gstn.Camera.PlaytestExtraHeight"), -1.f,
 		TEXT("Extra camera height (cm) on top of the extra distance. -1 = the camera settings' ExtraHeight"));
 	static TAutoConsoleVariable<int32> CVarTiltShift(TEXT("gstn.Camera.TiltShift"), -1,
-		TEXT("Tilt-shift toy look: -1 = camera settings (DA_CameraAnchor_Default TiltShift), 0 = off, 1 = Cinematic DOF, 2 = cheap screen band"));
+		TEXT("Tilt (focus) toy look: -1 = camera settings (DA_CameraAnchor_Default TiltShift), 0 = off, 1 = Cinematic DOF, 2 = cheap screen band, 3 = tilted plane"));
+	static TAutoConsoleVariable<int32> CVarShift(TEXT("gstn.Camera.Shift"), -1,
+		TEXT("Lens shift (off-axis framing, independent from the tilt): -1 = camera settings (DA_CameraAnchor_Default Shift), 0 = off, 1 = on"));
 	static TAutoConsoleVariable<float> CVarTiltShiftIntensity(TEXT("gstn.Camera.TiltShift.Intensity"), -1.f,
 		TEXT("Tilt-shift intensity override (-1 = camera settings)"));
 	static constexpr float ProbeRadius = 12.f;
@@ -57,6 +59,40 @@ float UGSTN_PlaytestCameraModifier::FOVForDistanceScale(float FromFOV, float Dis
 	return FMath::RadiansToDegrees(2.f * FMath::Atan(From / FMath::Max(DistanceScale, 0.01f)));
 }
 
+FVector2D UGSTN_PlaytestCameraModifier::ProjectNDC(const FMinimalViewInfo& View, const FVector& WorldPoint)
+{
+	// UE's perspective with the horizontal FOV kept: x_ndc = (right / forward) / tan(FOV/2), y_ndc = (up / forward) * aspect / tan(FOV/2), then
+	// FMinimalViewInfo's off-center projection subtracts its offset (projection matrix M[2][0] = -Offset.X, M[2][1] = -Offset.Y)
+	const FVector Local = View.Rotation.UnrotateVector(WorldPoint - View.Location);  // X forward, Y right, Z up
+	const float Aspect = View.AspectRatio > KINDA_SMALL_NUMBER ? View.AspectRatio : 16.f / 9.f;
+	const float TanHalf = FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(View.FOV, 1.f, 170.f)) * 0.5f);
+	const double Forward = FMath::Max(Local.X, 1.0);
+	return FVector2D(Local.Y / Forward / TanHalf, Local.Z / Forward * Aspect / TanHalf) - FVector2D(View.OffCenterProjectionOffset.X, View.OffCenterProjectionOffset.Y);
+}
+
+FVector2D UGSTN_PlaytestCameraModifier::StraightenWithShift(FMinimalViewInfo& InOutView, const FVector& WorldPoint, float Straighten)
+{
+	const FVector2D Before = ProjectNDC(InOutView, WorldPoint);
+	FMinimalViewInfo Levelled = InOutView;
+	Levelled.Rotation.Pitch *= 1.f - FMath::Clamp(Straighten, 0.f, 1.f);
+	Levelled.OffCenterProjectionOffset = decltype(Levelled.OffCenterProjectionOffset)(0, 0);
+	// ndc = projected - offset: the offset that keeps the point where it was is the difference of the two projections
+	const FVector2D After = ProjectNDC(Levelled, WorldPoint);
+	InOutView.Rotation = Levelled.Rotation;
+	return After - Before;
+}
+
+FVector UGSTN_PlaytestCameraModifier::TiltedPlaneNormal(const FRotator& ViewRotation, float TiltAngle)
+{
+	// Plane parallel to the sensor: normal = forward. Tilting it by A around the right axis moves its "up" to Up cos A + Forward sin A (top away
+	// from the camera for A > 0), so its normal becomes Forward cos A - Up sin A
+	const FRotationMatrix Axes(ViewRotation);
+	const FVector Forward = Axes.GetUnitAxis(EAxis::X);
+	const FVector Up = Axes.GetUnitAxis(EAxis::Z);
+	const float A = FMath::DegreesToRadians(TiltAngle);
+	return (Forward * FMath::Cos(A) - Up * FMath::Sin(A)).GetSafeNormal();
+}
+
 float UGSTN_PlaytestCameraModifier::TiltShiftFstop(const FGSTN_CameraTiltShiftSettings& TiltShift)
 {
 	return FMath::Max(TiltShift.Fstop / FMath::Max(TiltShift.Intensity, 0.01f), 0.7f);
@@ -69,7 +105,7 @@ void UGSTN_PlaytestCameraModifier::ApplyTiltShift(const FGSTN_CameraTiltShiftSet
 	if (Forced >= 0)
 	{
 		TiltShift.bEnabled = Forced > 0;
-		TiltShift.Mode = Forced == 2 ? EGSTN_TiltShiftMode::ScreenBand : EGSTN_TiltShiftMode::CinematicDOF;
+		TiltShift.Mode = Forced == 3 ? EGSTN_TiltShiftMode::TiltedPlane : (Forced == 2 ? EGSTN_TiltShiftMode::ScreenBand : EGSTN_TiltShiftMode::CinematicDOF);
 	}
 	const float ForcedIntensity = GSTNPlaytestCamera::CVarTiltShiftIntensity.GetValueOnGameThread();
 	if (ForcedIntensity >= 0.f)
@@ -100,6 +136,33 @@ void UGSTN_PlaytestCameraModifier::ApplyTiltShift(const FGSTN_CameraTiltShiftSet
 			BandMaterial->SetScalarParameterValue(TEXT("Radius"), TiltShift.BandMaxRadius * TiltShift.Intensity);
 			FPostProcessSettings Settings;
 			Settings.AddBlendable(BandMaterial.Get(), 1.f);
+			CameraOwner->AddCachedPPBlend(Settings, 1.f);
+			return;
+		}
+	}
+
+	// The real tilt: focal plane through the character, rotated around the camera's right axis (Scheimpflug); blur from each pixel's distance
+	// to it. Camera relative vectors: the material works in camera relative space (no large world coordinates in the shader)
+	if (TiltShift.Mode == EGSTN_TiltShiftMode::TiltedPlane)
+	{
+		if (!bPlaneMaterialTried)
+		{
+			bPlaneMaterialTried = true;
+			if (UMaterialInterface* Material = TiltShift.PlaneMaterial.LoadSynchronous())
+			{
+				PlaneMaterial = UMaterialInstanceDynamic::Create(Material, this);
+			}
+		}
+		if (PlaneMaterial)
+		{
+			const FVector Point = Focus - POV.Location;
+			const FVector Normal = TiltedPlaneNormal(POV.Rotation, TiltShift.TiltAngle);
+			PlaneMaterial->SetVectorParameterValue(TEXT("PlanePoint"), FLinearColor(Point.X, Point.Y, Point.Z, 0.f));
+			PlaneMaterial->SetVectorParameterValue(TEXT("PlaneNormal"), FLinearColor(Normal.X, Normal.Y, Normal.Z, 0.f));
+			PlaneMaterial->SetScalarParameterValue(TEXT("BlurScale"), TiltShift.PlaneBlurScale * TiltShift.Intensity);
+			PlaneMaterial->SetScalarParameterValue(TEXT("Radius"), TiltShift.PlaneMaxRadius * TiltShift.Intensity);
+			FPostProcessSettings Settings;
+			Settings.AddBlendable(PlaneMaterial.Get(), 1.f);
 			CameraOwner->AddCachedPPBlend(Settings, 1.f);
 			return;
 		}
@@ -184,6 +247,17 @@ bool UGSTN_PlaytestCameraModifier::ModifyCamera(float DeltaTime, FMinimalViewInf
 		}
 		InOutPOV.Location = End;
 		InOutPOV.FOV = FOV;
+	}
+	// Shift (independent from the tilt): level part of the pitch and slide the lens so the character stays put on screen, plus a manual offset
+	const int32 ForcedShift = GSTNPlaytestCamera::CVarShift.GetValueOnGameThread();
+	const bool bShift = ForcedShift >= 0 ? ForcedShift > 0 : Tuning.Shift.bEnabled;
+	if (bShift)
+	{
+		FVector2D Offset = StraightenWithShift(InOutPOV, Focus, Tuning.Shift.StraightenVerticals) + Tuning.Shift.Offset;
+		Offset.X = FMath::Clamp(Offset.X, -1.5, 1.5);
+		Offset.Y = FMath::Clamp(Offset.Y, -1.5, 1.5);
+		using FOffset = decltype(InOutPOV.OffCenterProjectionOffset);
+		InOutPOV.OffCenterProjectionOffset = FOffset(InOutPOV.OffCenterProjectionOffset.X + Offset.X, InOutPOV.OffCenterProjectionOffset.Y + Offset.Y);
 	}
 	ApplyTiltShift(Tuning.TiltShift, InOutPOV, Focus);
 	return false;

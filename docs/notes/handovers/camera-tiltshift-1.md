@@ -10,3 +10,4 @@ Per il fisso (Haiku/Sonnet, ~3 $):
 Decisioni applicate (regola 6, da confermare): ExtraDistance 400 / ExtraHeight 45; AirRiseBand 250 (l'apice del salto 350 cm sposta la camera di 100 cm); DOF Fstop 2, sensore 300 mm; look-ahead spento.
 Rischi: AddCachedPPBlend dal modifier (se il DOF non si vede, controllare che GASP non sovrascriva il DOF nel suo rig); la scalabilità Low spegne il DOF (usare la banda); arrampicata conta come "in aria".
 Costo stimato thread: ~6 $.
+Aggiornamento 14:30Z: tilt e shift separati (note §8). Nuovi: modo TiltedPlane (M_GSTN_TiltPlane dallo stesso script), struct Shift (off-axis, spento), +2 test. Per il fisso, in più: `gstn.Camera.Shift 1` e `gstn.Camera.TiltShift 3` nella cattura A/B; Fable rivede prima dell'owner. Valori leggeri da scrivere nel DA: Fstop 4, SensorWidth 120.

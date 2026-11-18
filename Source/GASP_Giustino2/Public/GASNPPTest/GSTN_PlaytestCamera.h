@@ -37,6 +37,19 @@ public:
 	static float TelephotoDistanceScale(float FromFOV, float ToFOV);
 	static float FOVForDistanceScale(float FromFOV, float DistanceScale);
 
+	/**
+	 * Shift: levels the view's pitch by Straighten (0..1) and returns the off-center projection offset (half screens, UE's
+	 * FMinimalViewInfo::OffCenterProjectionOffset convention) that puts WorldPoint back where it was on screen. Rotation is changed in place.
+	 * Pure, for the tests
+	 */
+	static FVector2D StraightenWithShift(FMinimalViewInfo& InOutView, const FVector& WorldPoint, float Straighten);
+
+	/** Projected NDC (x right, y up, -1..1 at the edges) of a world point, with the view's off-center offset applied. Pure, for the tests */
+	static FVector2D ProjectNDC(const FMinimalViewInfo& View, const FVector& WorldPoint);
+
+	/** Tilted plane: the focal plane normal for a view rotation and a tilt angle (degrees) around the view's right axis. Pure, for the tests */
+	static FVector TiltedPlaneNormal(const FRotator& ViewRotation, float TiltAngle);
+
 	/** The f-stop the DOF tilt shift uses: Fstop / Intensity, never under 0.7. Pure, for the tests */
 	static float TiltShiftFstop(const FGSTN_CameraTiltShiftSettings& TiltShift);
 
@@ -49,6 +62,10 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> BandMaterial;
 	bool bBandMaterialTried = false;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> PlaneMaterial;
+	bool bPlaneMaterialTried = false;
 };
 
 /**

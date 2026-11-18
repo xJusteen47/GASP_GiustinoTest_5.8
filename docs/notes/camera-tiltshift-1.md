@@ -47,3 +47,20 @@ F1 lumasworkshop.com/wiki/Cameras (parametri camere Super Mario Galaxy) · F2 fu
 Default molto più leggeri: l'effetto deve restare sottile, appena percepibile ai bordi (Astro Bot). Il blur cresce circa come SensorWidth / Fstop: 300/2 = 150 → 120/4 = 30, cioè 1/5.
 DOF: Fstop 2 → 4, SensorWidth 300 → 120 mm. Banda: BandMaxRadius 8 → 3 px, BandHalfHeight 0,12 → 0,25, BandFeather 0,3 → 0,35. Intensity resta 1.
 Il DA_CameraAnchor_Default sul fisso ha già i valori vecchi salvati: vanno scritti a mano nel DA (le nuove default C++ valgono solo per asset nuovi). Anteprima subito senza build: console `gstn.Camera.TiltShift.Intensity 0.2` (stesso effetto dei nuovi default).
+
+## 8. Tilt e shift sono due cose diverse (owner 14:17Z)
+Un obiettivo tilt-shift ha due movimenti indipendenti [F5, F6]:
+- **Tilt** (basculaggio): la lente si inclina rispetto al sensore. Il piano di fuoco non è più parallelo al sensore ma ruota (regola di Scheimpflug: piano del sensore, piano della lente e piano di fuoco si incontrano su una retta). Cambia SOLO cosa è a fuoco. Tilt "inverso" (piano più ripido del terreno) = fetta nitida sottilissima = effetto miniatura. Tilt "verso il terreno" = tutto il pavimento a fuoco (uso architettonico).
+- **Shift** (decentramento): la lente scorre parallela al sensore. Cambia SOLO l'inquadratura: proiezione decentrata (off-axis). Uso classico: camera in bolla (verticali parallele, niente edifici che "cadono") e shift verso il basso per riprendere il terreno. Nessun effetto su fuoco o sfocatura.
+Il "tilt-shift miniatura" delle foto è quasi sempre solo **tilt** (o la sua imitazione a banda sullo schermo, F7).
+
+**Astro Bot usa lo shift?** Misura sui riferimenti (`docs/notes/reviews/ref-astrobot-camera/`, `vp_vertical_edges.py`): nella giungla (astro_ref_1) gli spigoli della torre convergono verso il basso (pendenze +0,05 / −0,08, fuga verticale a y ≈ 3500 su 786 px di altezza); nel voxel la fuga verticale è a y ≈ 1700. Le verticali convergono, come in una camera inclinata normale: **nessun segno di shift che raddrizza le verticali**. Uno shift piccolo non si può escludere (servirebbe un terzo punto di fuoco finito per trovare il centro ottico; qui la terza direzione è parallela allo schermo). Nessuna fonte di Team Asobi. Quindi: shift disponibile ma **spento** di default.
+
+**Fatto (codice, da compilare):**
+- Tilt (DA > "Tilt (focus)", nome C++ invariato `TiltShift`): nuovo modo **TiltedPlane** = tilt vero. Piano di fuoco per il personaggio ruotato di `TiltAngle` (default −20°, tilt inverso) attorno all'asse destro della camera; blur = distanza del pixel dal piano / distanza dalla camera × `PlaneBlurScale` (12), max `PlaneMaxRadius` (4 px). Materiale M_GSTN_TiltPlane dallo stesso script (posizione relativa alla camera, 12 letture). Gli altri modi restano: CinematicDOF (= tilt 0, piano parallelo al sensore), ScreenBand (imitazione a schermo).
+- **Shift** (DA > Shift, indipendente): `bEnabled` (spento), `StraightenVerticals` 0..1 (porta la camera in bolla e compensa con lo shift: il personaggio resta nello stesso punto dello schermo, i muri smettono di pendere), `Offset` manuale (mezzi schermi). Implementato con `FMinimalViewInfo::OffCenterProjectionOffset` nel modifier, nessun asset.
+- Console: `gstn.Camera.TiltShift 3` (piano inclinato), `gstn.Camera.Shift 0/1`.
+- Test: GSTN.Camera.Shift.StraightenKeepsCharacterOnScreen, GSTN.Camera.TiltShift.TiltedPlaneNormal.
+Rischi: se il render ignorasse l'offset off-axis passato dal modifier, lo shift non si vede (si verifica al primo PIE con `gstn.Camera.Shift 1`); la posizione mondo nel materiale post-process va verificata in compilazione (2 tentativi, poi resta il DOF).
+
+Fonti aggiunte: F5 cambridgeincolour.com "Tilt shift lenses" (parte 1 shift/prospettiva, parte 2 tilt/profondità di campo) · F6 Scheimpflug principle · F7 SIGGRAPH 2013 poster, Nakane, "Simulating Depth of Field Effects Taken by a Camera with a Tilt Shift Lens"

@@ -259,4 +259,47 @@ bool FGSTN_CameraTiltShiftMathTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraShiftTest, "GSTN.Camera.Shift.StraightenKeepsCharacterOnScreen", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraShiftTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	// Camera 400 cm back and 250 cm up looking 26 deg down at the character: levelling it fully with the shift leaves the character exactly
+	// where it was on screen, and a vertical edge projects as a vertical line (same x at both ends)
+	FMinimalViewInfo View;
+	View.Location = FVector(-400, 0, 250);
+	View.Rotation = FRotator(-26, 0, 0);
+	View.FOV = 90.f;
+	View.AspectRatio = 16.f / 9.f;
+	const FVector Character(0, 30, 90);
+	const FVector2D Before = UGSTN_PlaytestCameraModifier::ProjectNDC(View, Character);
+	FMinimalViewInfo Shifted = View;
+	const FVector2D Offset = UGSTN_PlaytestCameraModifier::StraightenWithShift(Shifted, Character, 1.f);
+	Shifted.OffCenterProjectionOffset = decltype(Shifted.OffCenterProjectionOffset)(Offset.X, Offset.Y);
+	const FVector2D After = UGSTN_PlaytestCameraModifier::ProjectNDC(Shifted, Character);
+	Near(*this, TEXT("pitch levelled"), Shifted.Rotation.Pitch, 0.0, 0.001);
+	Near(*this, TEXT("character x kept"), After.X, Before.X, 0.001);
+	Near(*this, TEXT("character y kept"), After.Y, Before.Y, 0.001);
+	const FVector2D Top = UGSTN_PlaytestCameraModifier::ProjectNDC(Shifted, FVector(200, 300, 400));
+	const FVector2D Bottom = UGSTN_PlaytestCameraModifier::ProjectNDC(Shifted, FVector(200, 300, 0));
+	Near(*this, TEXT("verticals stay vertical"), Top.X, Bottom.X, 0.001);
+	// Straighten 0: nothing changes
+	FMinimalViewInfo Same = View;
+	const FVector2D None = UGSTN_PlaytestCameraModifier::StraightenWithShift(Same, Character, 0.f);
+	Near(*this, TEXT("straighten 0: no offset"), None.Size(), 0.0, 0.0001);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraTiltPlaneTest, "GSTN.Camera.TiltShift.TiltedPlaneNormal", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraTiltPlaneTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	// Tilt 0 = plane parallel to the sensor (normal = view forward); tilt 90 - pitch = the plane lies on the floor (normal = world up)
+	const FRotator Down30(-30, 0, 0);
+	const FVector N0 = UGSTN_PlaytestCameraModifier::TiltedPlaneNormal(Down30, 0.f);
+	Near(*this, TEXT("tilt 0 = forward"), FVector::DotProduct(N0, Down30.Vector()), 1.0, 0.0001);
+	const FVector NFloor = UGSTN_PlaytestCameraModifier::TiltedPlaneNormal(Down30, 60.f);
+	Near(*this, TEXT("tilt 60 at pitch -30 = floor"), FMath::Abs(FVector::DotProduct(NFloor, FVector::UpVector)), 1.0, 0.0001);
+	return true;
+}
+
 #endif
