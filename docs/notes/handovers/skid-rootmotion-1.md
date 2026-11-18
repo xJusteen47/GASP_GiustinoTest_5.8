@@ -44,3 +44,6 @@ Start: d871e7aa (claude/desktop-jab-fk). Code commit 78cc0004, review commit aft
   FAIL (gioco): first two run steps skate (foot_l ~80 cm f98-110, foot_r 53 cm f110-120); minor side-step wobble f105-112.
 - Next (code thread): what the locomotion graph plays when the Skid state exits (pose and blend), then stride warping / speed-matched
   play rate on the run blend-in, or a slower walking accel right after the skid. Or the owner re-times the clip tail (dati montage).
+- Owner 2026-11-18 22:35Z: the original skid clip comes from the Mixamo Sword and Shield pack, which has NO root motion. The root in
+  SS_180_Turn_Root180 was rebuilt from the pelvis (RTG / root_fix script), so its speed is an estimate: likely why the tail moves ~85 cm/s
+  in a run pose. A next fix should not trust the clip root for the push-off (code: speed-matched run blend-in) or re-author the tail.
