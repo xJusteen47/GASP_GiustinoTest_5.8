@@ -1,4 +1,4 @@
-# Merge skid/camera/jump on _ue59 (desktop, Opus medium, 2026-11-18) — PARTIAL, stopped at a stable point
+# Merge skid/camera/jump on _ue59 (desktop, Opus medium, 2026-11-18) — setup DONE (06:30Z run), skid capture NOT done
 Branch claude/project-thread-98dml5, from 72d1afaf. Merged in order, no conflicts: 77vkmg (106ab72f), edmqov (8f28c410), qaz1xr (f797d1ad).
 
 ## Done
@@ -27,3 +27,21 @@ Run headless, editor closed, one at a time, check ESITO / git status after each:
    actor = possible double turn). Only PASS to owner.
 Kept: owner's uncommitted AM_OverlordDAirV9.uasset. _ue59 is built and playable (skid = placeholder lean until step 2-3; kits keep old jump data).
 Cost ~6 $.
+
+## Update 06:30Z (owner allowed the editor scripts)
+All headless, one at a time, ESITO OK (logs Saved/Logs/ci/py_*.log.ue.log):
+- ground_contact_setup (rules only): montages.txt lists AM_OverlordDAirLand*; DA_GroundContact_Default committed.
+- port_skid_owner_clip (2nd attempt: 5.9 DuplicateAndRetarget wants target_path). FINDING (Saved/SkidOwner/port_skid_owner_clip.log): the owner's
+  SS_180_Turn2 is ALREADY root-fixed (root follows the pelvis, pelvis local ~(0,0,z); root yaw 0 -> 179.7 by t=0.417 of 0.833 s; root travels
+  +65 cm then back to +49). Re-applying RTG_RootCorrection gives an odd root (yaw 108 at t=0, pelvis local (78,-25,-3)). The layer uses the
+  re-retargeted copy SkidOwner/SS_180_Turn2 (handover default); the untouched owner clip is SkidOwner/SS_180_Turn2_Src.
+  RECOMMENDED (da confermare, coordinator -> owner): SKID_CLIP=/Game/Blueprints/Animation/Ported57/SkidOwner/SS_180_Turn2_Src and re-run
+  setup_skid_anim_layer.py (a run with that env was refused by the permission system). Facing risk confirmed by the data: the clip root turns 180
+  in its first half, the sim turns the actor after the skid -> likely double turn unless the layer drops the root track.
+- setup_skid_anim_layer: ESITO OK, skid_clip = SkidOwner/SS_180_Turn2. setup_skid_minstage_0.py (new): 1 profile, DA_Locomotion_Default MinStage 0.
+- camera_anchor_setup (DA_CameraAnchor_Default), setup_test_kit_archetypes, setup_qa_movement_1117, setup_overlord_kit_shared_f4: all kits + GA archetypes
+  re-saved and committed (9bfe6bec).
+- Capture NOT run: pie_capture_timed.ps1 (windowed editor) was refused by the permission system. Ready: new sequence mv_skid_base in
+  pie_capture_move.py (reverse at render frame 30 = base stage). Command: $env:PIE_CAPTURE_VIEWS='az90,game'; Tools/GASNPPTest/pie_capture_timed.ps1
+  -Kit KIT_Test_Overlord -Out docs/notes/reviews/skid-ss180turn2-1/cap -Sequences mv_skid_base, then pie_capture_grid.py, then Fable (facing first).
+- Not re-run after the data changes: the full GSTN suite (C++ unchanged since 1783/0) and movement QA.

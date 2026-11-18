@@ -162,6 +162,8 @@ AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after
 MOVE_SEQUENCES = [
     {'name': 'mv_run_stop', 'taps': [], 'frames': 210, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (160, None)]},
     {'name': 'mv_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (170, None)]},
+    # Skid at the BASE run stage (MinStage 0, 11-18): reverse before FramesToNextStage (40 sim f) so the run is still stage 1 (470 > MinSpeed 350)
+    {'name': 'mv_skid_base', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (30, (0, -1, 0)), (110, None)]},
     {'name': 'mv_walk_low', 'taps': [], 'frames': 140, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 0.2, 0)), (110, None)]},
     {'name': 'mv_jump_full', 'taps': [], 'frames': 90, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 24)},
     {'name': 'mv_jump_tap', 'taps': [], 'frames': 70, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 0)},
