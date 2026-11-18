@@ -28,4 +28,9 @@ Start: d871e7aa (claude/desktop-jab-fk). Code commit 78cc0004, review commit aft
 ## Next (attempt 2, recommended, rule 6): data only, no rebuild
 - Re-bake the push-off/tail speed from the planted foot instead of the root bone (python AnimPose at time, speed = -foot velocity
   while a foot is planted), or hand over earlier (RootTrack.EndTime ~0.6 s). Needs one capture slot on _ue59 + one review.
+- Owner design 2026-11-18 22:24Z (scope: run skid, stick released after the reversal): like Mario 3D World / Smash, play the brake +
+  turn part of the clip, then stop facing the new direction, NO run restart; stick held = restart into the run as now. Not small
+  (not done here): sim, in the clip-track branch, stick neutral once the clip's speed turns round (RestFrame) -> velocity 0, finish the
+  turn to TurnDirection over a few frames, end the move; presentation: no clip tail when the stick is neutral, Skid state blends to Idle
+  (the clip's root yaw is only 0.67 of the turn at rest, so the idle exit must cover the last ~60 deg). Code thread (Opus) + capture + review.
 - Build before the next editor start from this worktree is done; _ue59 DLLs do not have this code until the branch is merged.
