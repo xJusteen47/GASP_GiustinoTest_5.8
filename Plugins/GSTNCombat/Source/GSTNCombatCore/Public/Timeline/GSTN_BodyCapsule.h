@@ -143,6 +143,14 @@ struct GSTNCOMBATCORE_API FGSTN_BodyCapsule
 	static FGSTN_BodyCapsuleTarget GroundedRestore(const FGSTN_BodyCapsuleTarget& Target, const FGSTN_BodyCapsuleShape& Standing, bool bGrounded);
 
 	/**
+	 * On the floor a step keeps the capsule's bottom where it is (2026-11-18, dair V9 stomp landing: Body-anchor steps between the move's own tracks
+	 * grew the capsule 35 -> 63 cm while the actor went down, bottom 27 cm under the floor; the pawn then stood sunk for good, mesh root -28 cm).
+	 * A growth cannot be swept, so nothing else stops it; a first fix that only stopped the sinking left the pawn 10 cm over the floor after a
+	 * shrink. The bottom change is taken out of the actor shift (both ways): the capsule stays on the floor, the mesh follows the actor. In the air nothing changes (Body anchor keeps the body still on screen). Pure
+	 */
+	static void KeepBottomOnFloor(FGSTN_BodyCapsuleStep& Step, const FGSTN_BodyCapsuleShape& From, bool bGrounded);
+
+	/**
 	 * Presentation: what to add to the drawn mesh so that the capsule shift of the newest simulated frame is NOT interpolated (2026-11-17, dair
 	 * V10 v88 sink, dropkick contact frames: body under the floor or out of the picture for one rendered frame, more or less from one capture
 	 * to the next). Mover's smoothing draws the mesh at the base visual offset of the newest frame on a location interpolated between the last

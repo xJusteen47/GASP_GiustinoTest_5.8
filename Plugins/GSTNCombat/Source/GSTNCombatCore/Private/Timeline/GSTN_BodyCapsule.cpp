@@ -82,6 +82,17 @@ FGSTN_BodyCapsuleStep FGSTN_BodyCapsule::Step(const FGSTN_BodyCapsuleShape& Appl
 	return Out;
 }
 
+void FGSTN_BodyCapsule::KeepBottomOnFloor(FGSTN_BodyCapsuleStep& Step, const FGSTN_BodyCapsuleShape& From, bool bGrounded)
+{
+	if (!bGrounded)
+	{
+		return;
+	}
+	// Bottom (along the capsule's up) moves by the actor shift minus the half height change
+	const double BottomChange = Step.ActorShiftLocal.Z - (double(Step.Applied.HalfHeight) - double(From.HalfHeight));
+	Step.ActorShiftLocal.Z -= BottomChange;
+}
+
 FGSTN_BodyCapsuleTarget FGSTN_BodyCapsule::GroundedRestore(const FGSTN_BodyCapsuleTarget& Target, const FGSTN_BodyCapsuleShape& Standing, bool bGrounded)
 {
 	FGSTN_BodyCapsuleTarget Out = Target;

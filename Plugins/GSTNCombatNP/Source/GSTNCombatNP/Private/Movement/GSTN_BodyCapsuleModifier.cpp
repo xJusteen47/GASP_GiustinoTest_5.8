@@ -186,7 +186,8 @@ void FGSTN_BodyCapsuleModifier::OnPreMovement(UMoverComponent* MoverComp, const 
 		return;
 	}
 
-	const FGSTN_BodyCapsuleStep Step = FGSTN_BodyCapsule::Step(Current, Target);
+	FGSTN_BodyCapsuleStep Step = FGSTN_BodyCapsule::Step(Current, Target);
+	FGSTN_BodyCapsule::KeepBottomOnFloor(Step, Current, bGrounded);
 	TSharedPtr<FGSTN_BodyCapsuleShiftEffect> Effect = MakeShared<FGSTN_BodyCapsuleShiftEffect>();
 	Effect->From = Current;
 	Effect->To = Step.Applied;
