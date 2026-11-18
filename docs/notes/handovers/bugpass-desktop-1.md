@@ -18,7 +18,12 @@ Branch `claude/bugpass-integration` = origin/claude/project-thread-98dml5 (5b22e
 | B1 aid | cecb996e | `UGSTN_RunPresentationComponent::GetScrambleLeanAndAlpha` (debug) + `pie_b1_lean_probe.py`. B1 math already covered: `RunStartSkid.ScrambleLowFps` Success. | |
 
 ## Still open
-- PIE (needs the _ue59 lock; this thread was last in the queue): `pie_c1_bump_walk.py` (C1 walk speed after a bump, boot `C:\Users\jacop\gstn_bp\boot_c1.py`)
-  and `pie_b1_lean_probe.py` (lean at t.MaxFPS 60/30/20). Launch: `Run-Timed.ps1 -Preset Capture -Script <boot>` from this worktree. See the PIE section below.
-- K3 (camera after landing on slopes), I1 feel, B2/B6, B4, K4: feel checks for the owner's playtest; not scripted here.
+- C1 PIE: PENDING (lock queue at 20:37: movement fix, jab r3, then this; closed instead of waiting, coordinator OK). Ready to run from this worktree
+  under the _ue59 lock: `Tools/CI/Run-Timed.ps1 -Preset Capture -Script C:/Users/jacop/gstn_bp/boot_c1.py` (boot = one-line exec of
+  `Tools/GASNPPTest/pie_c1_bump_walk.py`; weak bump only, DA_ReactionAnims NOT edited). Read `Saved/C1Bump/<run>/c1_summary.json`: PASS = speed_at
+  5..15 already near steady_max, frames_to_90pct small (< ~20). Untested script: 2 tries max.
+- Run-start lean PIE: DROPPED (coordinator 20:37: the movement thread turns the run-start layer off). B1 math covered by `RunStartSkid.ScrambleLowFps`;
+  `pie_b1_lean_probe.py` kept for when the layer comes back.
+- K3, I1 feel, B2/B6, B4, K4: feel checks for the owner's playtest; not scripted here.
 - C1 with tumble air recovery + jump (air drift) is covered by the same drag window but not seen in Play.
+- Branch: claude/bugpass-integration pushed, not merged anywhere. Worktree GASP_Giustino2_bugpass kept (junctions inside Content/).
