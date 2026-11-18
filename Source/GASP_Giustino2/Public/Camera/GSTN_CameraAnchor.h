@@ -19,6 +19,7 @@
 #include "GSTN_CameraAnchor.generated.h"
 
 class USceneComponent;
+class UMaterialInterface;
 
 /** How the anchor reaches the view */
 UENUM(BlueprintType)
@@ -28,6 +29,71 @@ enum class EGSTN_CameraAnchorMode : uint8
 	MoveCameraComponent,
 	/** Leaves the component alone and shifts the final view by the same correction (camera modifier). Fallback when no camera component is found */
 	ShiftView,
+};
+
+/** How the tilt-shift "toy / miniature" look is made (GSTN_CameraAnchor.h, FGSTN_CameraTiltShiftSettings) */
+UENUM(BlueprintType)
+enum class EGSTN_TiltShiftMode : uint8
+{
+	/** Cinematic depth of field focused on the character with a very shallow focus (big virtual sensor): best look, real depth. Costs what
+	 *  Cinematic DOF costs; on the Low scalability preset the engine turns DOF off, so a toaster pays nothing (and sees no effect) */
+	CinematicDOF,
+	/** A cheap screen-space band: sharp around the character's height on screen, blurred toward the top and bottom of the frame (post process
+	 *  material M_GSTN_TiltShift, ~12 texture reads per blurred pixel, made by Tools/GASNPPTest/camera_tiltshift_setup.py). Works on any preset */
+	ScreenBand,
+};
+
+/**
+ * The tilt-shift "toy / miniature" look (owner 2026-11-18: Astro Bot and Mario's toy feel comes from tilt shift). A real tilt-shift photo
+ * makes a full-size scene read as a model because only a thin slice is sharp, which is what a macro lens on a small object does. Presentation
+ * only, local only: applied by UGSTN_PlaytestCameraModifier on top of the view
+ */
+USTRUCT(BlueprintType)
+struct GASP_GIUSTINO2_API FGSTN_CameraTiltShiftSettings
+{
+	GENERATED_BODY()
+
+	/** On/off (console gstn.Camera.TiltShift 0/1/2 overrides it for A/B: 0 off, 1 Cinematic DOF, 2 screen band, -1 = this data) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift")
+	bool bEnabled = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift", meta = (EditCondition = "bEnabled"))
+	EGSTN_TiltShiftMode Mode = EGSTN_TiltShiftMode::CinematicDOF;
+
+	/** Overall strength. 0 = no blur, 1 = the tuned look, 2 = twice the blur. In DOF mode it divides the f-stop, in band mode it scales the radius */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift", meta = (ClampMin = "0", ClampMax = "3", EditCondition = "bEnabled"))
+	float Intensity = 1.f;
+
+	/** DOF: focus distance added to the camera-to-character distance (+ focuses behind the character, - in front) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|DOF", meta = (ForceUnits = "cm", EditCondition = "bEnabled"))
+	float FocusOffset = 0.f;
+
+	/** DOF: aperture at Intensity 1. Lower = shallower focus, more blur */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|DOF", meta = (ClampMin = "0.7", ClampMax = "32", EditCondition = "bEnabled"))
+	float Fstop = 2.f;
+
+	/**
+	 * DOF: virtual sensor width. The trick of the miniature look: at the same field of view a bigger sensor means a longer lens and a much
+	 * shallower focus (blur grows about linearly with it). 24.89 mm is the engine default and gives almost no blur at playtest distances
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|DOF", meta = (ClampMin = "10", ClampMax = "1000", ForceUnits = "mm", EditCondition = "bEnabled"))
+	float SensorWidth = 300.f;
+
+	/** Band: half height of the sharp band around the character, as a fraction of the screen height */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Band", meta = (ClampMin = "0", ClampMax = "0.5", EditCondition = "bEnabled"))
+	float BandHalfHeight = 0.12f;
+
+	/** Band: how far (fraction of the screen height) the blur takes to reach full strength past the sharp band */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Band", meta = (ClampMin = "0.01", ClampMax = "1", EditCondition = "bEnabled"))
+	float BandFeather = 0.3f;
+
+	/** Band: largest blur radius in pixels at Intensity 1 (1080p reference; the material scales it with the view height) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Band", meta = (ClampMin = "0", ClampMax = "40", EditCondition = "bEnabled"))
+	float BandMaxRadius = 8.f;
+
+	/** Band: the post process material (parameters BandCenter, BandHalfHeight, BandFeather, Radius). Missing = falls back to Cinematic DOF */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Band", meta = (EditCondition = "bEnabled"))
+	TSoftObjectPtr<UMaterialInterface> BandMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Blueprints/Camera/M_GSTN_TiltShift.M_GSTN_TiltShift")));
 };
 
 /** Tuning of the camera anchor. Data, never project settings: on the component (per character) or in a UGSTN_CameraAnchorSettingsAsset */
@@ -62,6 +128,39 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Vertical", meta = (ClampMin = "0", ClampMax = "1000", ForceUnits = "cm"))
 	float MaxVerticalLag = 80.f;
 
+	/**
+	 * Mario / Astro Bot rule (owner 2026-11-18: their camera does not blindly follow the character): while airborne the camera keeps the
+	 * height of the ground the character left, so an ordinary jump does not move it at all. It rises only by what the character climbs above
+	 * AirRiseBand (very high jumps, wall climbs), follows down whatever goes below the take-off height (falls off a ledge, to see the landing),
+	 * and re-anchors to the new ground on landing with LandingHalfLife (a jump onto a higher platform). Off = the camera follows every jump
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Air")
+	bool bHoldGroundHeightInAir = true;
+
+	/** How far above the take-off ground the character may go before the camera starts to rise (the rest of the climb is followed) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Air", meta = (ClampMin = "0", ClampMax = "2000", ForceUnits = "cm", EditCondition = "bHoldGroundHeightInAir"))
+	float AirRiseBand = 250.f;
+
+	/** How far below the take-off ground the character may go before the camera follows down. 0 = follows any drop below it right away */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Air", meta = (ClampMin = "0", ClampMax = "2000", ForceUnits = "cm", EditCondition = "bHoldGroundHeightInAir"))
+	float AirFallBand = 0.f;
+
+	/** Half life of the vertical catch up after a landing on a different height (softer than the capsule damping above). 0 = the normal half lives */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Air", meta = (ClampMin = "0", ClampMax = "2", ForceUnits = "s", EditCondition = "bHoldGroundHeightInAir"))
+	float LandingHalfLife = 0.2f;
+
+	/** Look ahead: the camera aims this many seconds ahead of the character's horizontal velocity (0 = off). Try 0.25 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Horizontal", meta = (ClampMin = "0", ClampMax = "2", ForceUnits = "s"))
+	float LookAheadTime = 0.f;
+
+	/** Look ahead never exceeds this distance */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Horizontal", meta = (ClampMin = "0", ClampMax = "500", ForceUnits = "cm"))
+	float MaxLookAhead = 80.f;
+
+	/** How slowly the look ahead turns and grows (half life): high keeps it from swinging on every direction change */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Horizontal", meta = (ClampMin = "0", ClampMax = "3", ForceUnits = "s"))
+	float LookAheadHalfLife = 0.5f;
+
 	/** Horizontal damping half life. 0 = the camera follows the drawn body horizontally exactly (GASP's own damping still applies) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Horizontal", meta = (ClampMin = "0", ClampMax = "2", ForceUnits = "s"))
 	float HorizontalHalfLife = 0.f;
@@ -85,6 +184,20 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorSettings
 	/** How fast the aim crouch offset comes in and goes out (half life) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Crouch", meta = (ClampMin = "0", ClampMax = "2", ForceUnits = "s", EditCondition = "bCrouchOffsetInAim"))
 	float AimCrouchHalfLife = 0.1f;
+
+	/**
+	 * Distance pushed behind GASP's view along its forward (owner 2026-11-17 "much farther" = 550, 2026-11-18 "a bit closer"). Stops short of
+	 * walls. Console gstn.Camera.PlaytestExtraDistance >= 0 overrides it (A/B); -1 = this data
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Framing", meta = (ClampMin = "0", ClampMax = "2000", ForceUnits = "cm"))
+	float ExtraDistance = 400.f;
+
+	/** Extra height on top of ExtraDistance. Console gstn.Camera.PlaytestExtraHeight overrides it unless it is -1 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Framing", meta = (ClampMin = "-500", ClampMax = "1000", ForceUnits = "cm"))
+	float ExtraHeight = 45.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift")
+	FGSTN_CameraTiltShiftSettings TiltShift;
 };
 
 /** Shared default tuning. The camera anchor subsystem loads /Game/Blueprints/Data/DA_CameraAnchor_Default when it exists, else C++ defaults */
@@ -109,12 +222,24 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorDamper
 	double VerticalSpeed = 0.0;
 	FVector HorizontalSpeed = FVector::ZeroVector;
 	bool bValid = false;
+	/** Height (along Up) of the last ground the character stood on, for the air hold */
+	double GroundHeight = 0.0;
+	bool bHasGround = false;
+	bool bWasInAir = false;
+	/** Set on landing, cleared once the camera reached the new ground: the vertical spring uses LandingHalfLife meanwhile */
+	bool bLandingCatchUp = false;
 
 	/** Snaps to Target and clears the speeds */
 	void Reset(const FVector& Target);
 
-	/** Moves the damped location toward Target for DeltaTime and returns it. Up is the unit "up" (gravity opposite) the vertical rules use */
-	FVector Step(const FVector& Target, const FVector& Up, float DeltaTime, const FGSTN_CameraAnchorSettings& Settings);
+	/**
+	 * Moves the damped location toward Target for DeltaTime and returns it. Up is the unit "up" (gravity opposite) the vertical rules use.
+	 * bInAir drives the air hold (bHoldGroundHeightInAir): false = grounded, Target's height becomes the ground height
+	 */
+	FVector Step(const FVector& Target, const FVector& Up, float DeltaTime, const FGSTN_CameraAnchorSettings& Settings, bool bInAir = false);
+
+	/** The height the camera follows given the wanted height (air hold applied). Updates the ground height when grounded. Pure helper of Step */
+	double AirHoldHeight(double Wanted, bool bInAir, const FGSTN_CameraAnchorSettings& Settings);
 
 	/** One critically damped spring step (Holden's exact form) of X toward Goal; InOutSpeed is the spring's speed. HalfLife <= 0 snaps */
 	static double SpringStep(double X, double Goal, double& InOutSpeed, float HalfLife, float DeltaTime);
@@ -187,6 +312,8 @@ private:
 	bool bShiftView = false;
 	/** 0..1 blend of the aim crouch offset */
 	float AimCrouchAlpha = 0.f;
+	/** Smoothed look ahead offset (world, horizontal) */
+	FVector LookAhead = FVector::ZeroVector;
 
 	/** GASP's PlayerInputState.WantsToAim of the owner (a Blueprint struct: found by name, GUID suffix ignored), false when absent */
 	bool IsOwnerAiming() const;

@@ -6,6 +6,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Camera/GSTN_CameraAnchor.h"
+#include "GASNPPTest/GSTN_PlaytestCamera.h"
 #include "Misc/AutomationTest.h"
 
 namespace GSTNCameraAnchorTest
@@ -175,6 +176,82 @@ bool FGSTN_CameraAnchorCapsuleShiftTest::RunTest(const FString&)
 		const FVector After = FGSTN_CameraAnchorDamper::StandingRootFromVisual(VisualWorld, StandingRel);
 		TestTrue(FString::Printf(TEXT("yaw %.0f: the anchor did not move with the capsule"), Yaw), After.Equals(Before, 1e-3));
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraAnchorAirHoldTest, "GSTN.Camera.Anchor.AirHoldKeepsGroundHeight", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraAnchorAirHoldTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	// Mario / Astro rule: a normal jump (here 200 cm, under the 250 cm rise band) does not move the camera; a 400 cm climb moves it by 150
+	FGSTN_CameraAnchorSettings S = Settings(0.f);
+	S.bHoldGroundHeightInAir = true;
+	S.AirRiseBand = 250.f;
+	S.AirFallBand = 0.f;
+	FGSTN_CameraAnchorDamper D;
+	D.Reset(FVector::ZeroVector);
+	D.Step(FVector::ZeroVector, FVector::UpVector, Dt, S, false);
+	Near(*this, TEXT("jump 200: camera stays on the ground"), D.Step(FVector(0, 0, 200), FVector::UpVector, Dt, S, true).Z, 0.0, 0.01);
+	Near(*this, TEXT("climb 400: follows minus the band"), D.Step(FVector(0, 0, 390), FVector::UpVector, Dt, S, true).Z, 140.0, 0.01);
+	// Falling below the take-off height is followed right away (fall band 0)
+	Near(*this, TEXT("drop below ground: followed"), D.Step(FVector(0, 0, -100), FVector::UpVector, Dt, S, true).Z, -100.0, 0.01);
+	// Off: the camera follows the jump
+	S.bHoldGroundHeightInAir = false;
+	FGSTN_CameraAnchorDamper Off;
+	Off.Reset(FVector::ZeroVector);
+	Off.Step(FVector::ZeroVector, FVector::UpVector, Dt, S, false);
+	Near(*this, TEXT("hold off: follows the jump"), Off.Step(FVector(0, 0, 200), FVector::UpVector, Dt, S, true).Z, 200.0, 0.01);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraAnchorLandingCatchUpTest, "GSTN.Camera.Anchor.LandingOnHigherGroundCatchesUpSoftly", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraAnchorLandingCatchUpTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	// Jump onto a 150 cm platform: in the air the camera stays at 0; on landing it rises with LandingHalfLife (0.2 s), not the 0.07 s
+	// capsule half life, and the 80 cm lag clamp does not snap it up meanwhile
+	FGSTN_CameraAnchorSettings S = Settings(0.07f, 0.f, 80.f);
+	S.bHoldGroundHeightInAir = true;
+	S.AirRiseBand = 250.f;
+	S.LandingHalfLife = 0.2f;
+	FGSTN_CameraAnchorDamper D;
+	D.Reset(FVector::ZeroVector);
+	D.Step(FVector::ZeroVector, FVector::UpVector, Dt, S, false);
+	Near(*this, TEXT("apex: held"), D.Step(FVector(0, 0, 150), FVector::UpVector, Dt, S, true).Z, 0.0, 0.01);
+	double Z = 0.0;
+	const int32 Frames = FMath::RoundToInt(0.2f / Dt);
+	for (int32 Frame = 0; Frame < Frames; ++Frame)
+	{
+		Z = D.Step(FVector(0, 0, 150), FVector::UpVector, Dt, S, false).Z;
+	}
+	// Critically damped from rest: 0.596 of the step left after one half life -> about 60.6 cm covered of 150
+	Near(*this, TEXT("one landing half life: ~40% covered"), Z, 150.0 * (1.0 - 0.596), 6.0);
+	for (int32 Frame = 0; Frame < 4 * Frames; ++Frame)
+	{
+		Z = D.Step(FVector(0, 0, 150), FVector::UpVector, Dt, S, false).Z;
+	}
+	Near(*this, TEXT("settles on the platform"), Z, 150.0, 3.0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraTiltShiftMathTest, "GSTN.Camera.TiltShift.Math", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraTiltShiftMathTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	FMinimalViewInfo View;
+	View.Location = FVector::ZeroVector;
+	View.Rotation = FRotator::ZeroRotator;
+	View.FOV = 90.f;
+	View.AspectRatio = 1.f;
+	Near(*this, TEXT("point ahead: screen centre"), UGSTN_PlaytestCameraModifier::ScreenV(View, FVector(500, 0, 0)), 0.5, 0.001);
+	Near(*this, TEXT("45 deg up: top edge"), UGSTN_PlaytestCameraModifier::ScreenV(View, FVector(500, 0, 500)), 0.0, 0.001);
+	Near(*this, TEXT("45 deg down: bottom edge"), UGSTN_PlaytestCameraModifier::ScreenV(View, FVector(500, 0, -500)), 1.0, 0.001);
+	FGSTN_CameraTiltShiftSettings T;
+	T.Fstop = 2.f;
+	T.Intensity = 2.f;
+	Near(*this, TEXT("intensity 2 halves the f-stop"), UGSTN_PlaytestCameraModifier::TiltShiftFstop(T), 1.0, 0.001);
+	T.Intensity = 10.f;
+	Near(*this, TEXT("f-stop floor 0.7"), UGSTN_PlaytestCameraModifier::TiltShiftFstop(T), 0.7, 0.001);
 	return true;
 }
 

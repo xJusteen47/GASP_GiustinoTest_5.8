@@ -8,13 +8,20 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 
 namespace GSTNPlaytestCamera
 {
-	static TAutoConsoleVariable<float> CVarExtraDistance(TEXT("gstn.Camera.PlaytestExtraDistance"), 0.f,
-		TEXT("Extra camera distance (cm) behind the play view, pushed back along the view's forward. 0 = off. Presentation only"));
-	static TAutoConsoleVariable<float> CVarExtraHeight(TEXT("gstn.Camera.PlaytestExtraHeight"), 0.f,
-		TEXT("Extra camera height (cm) on top of gstn.Camera.PlaytestExtraDistance"));
+	static TAutoConsoleVariable<float> CVarExtraDistance(TEXT("gstn.Camera.PlaytestExtraDistance"), -1.f,
+		TEXT("Extra camera distance (cm) behind the play view, pushed back along the view's forward. -1 = the camera settings' ExtraDistance "
+			 "(DA_CameraAnchor_Default), 0 = off. Presentation only"));
+	static TAutoConsoleVariable<float> CVarExtraHeight(TEXT("gstn.Camera.PlaytestExtraHeight"), -1.f,
+		TEXT("Extra camera height (cm) on top of the extra distance. -1 = the camera settings' ExtraHeight"));
+	static TAutoConsoleVariable<int32> CVarTiltShift(TEXT("gstn.Camera.TiltShift"), -1,
+		TEXT("Tilt-shift toy look: -1 = camera settings (DA_CameraAnchor_Default TiltShift), 0 = off, 1 = Cinematic DOF, 2 = cheap screen band"));
+	static TAutoConsoleVariable<float> CVarTiltShiftIntensity(TEXT("gstn.Camera.TiltShift.Intensity"), -1.f,
+		TEXT("Tilt-shift intensity override (-1 = camera settings)"));
 	static constexpr float ProbeRadius = 12.f;
 	/** Shared camera anchor tuning, optional (C++ defaults when missing). Created by Tools/GASNPPTest/camera_anchor_setup.py */
 	static const TCHAR* AnchorSettingsPath = TEXT("/Game/Blueprints/Data/DA_CameraAnchor_Default.DA_CameraAnchor_Default");
@@ -25,35 +32,120 @@ FVector UGSTN_PlaytestCameraModifier::PushBack(const FVector& ViewLocation, cons
 	return ViewLocation - ViewForward.GetSafeNormal() * FMath::Max(ExtraDistance, 0.f) + FVector::UpVector * ExtraHeight;
 }
 
+float UGSTN_PlaytestCameraModifier::ScreenV(const FMinimalViewInfo& View, const FVector& WorldPoint)
+{
+	const FVector Local = View.Rotation.UnrotateVector(WorldPoint - View.Location);  // X forward, Y right, Z up
+	const float Aspect = View.AspectRatio > KINDA_SMALL_NUMBER ? View.AspectRatio : 16.f / 9.f;
+	const float TanHalfVertical = FMath::Tan(FMath::DegreesToRadians(FMath::Clamp(View.FOV, 1.f, 170.f)) * 0.5f) / Aspect;
+	if (Local.X <= KINDA_SMALL_NUMBER || TanHalfVertical <= KINDA_SMALL_NUMBER)
+	{
+		return 0.5f;
+	}
+	return 0.5f - 0.5f * float(Local.Z / Local.X) / TanHalfVertical;
+}
+
+float UGSTN_PlaytestCameraModifier::TiltShiftFstop(const FGSTN_CameraTiltShiftSettings& TiltShift)
+{
+	return FMath::Max(TiltShift.Fstop / FMath::Max(TiltShift.Intensity, 0.01f), 0.7f);
+}
+
+void UGSTN_PlaytestCameraModifier::ApplyTiltShift(const FGSTN_CameraTiltShiftSettings& InTiltShift, const FMinimalViewInfo& POV, const FVector& Focus)
+{
+	FGSTN_CameraTiltShiftSettings TiltShift = InTiltShift;
+	const int32 Forced = GSTNPlaytestCamera::CVarTiltShift.GetValueOnGameThread();
+	if (Forced >= 0)
+	{
+		TiltShift.bEnabled = Forced > 0;
+		TiltShift.Mode = Forced == 2 ? EGSTN_TiltShiftMode::ScreenBand : EGSTN_TiltShiftMode::CinematicDOF;
+	}
+	const float ForcedIntensity = GSTNPlaytestCamera::CVarTiltShiftIntensity.GetValueOnGameThread();
+	if (ForcedIntensity >= 0.f)
+	{
+		TiltShift.Intensity = ForcedIntensity;
+	}
+	if (!TiltShift.bEnabled || TiltShift.Intensity <= KINDA_SMALL_NUMBER || !CameraOwner)
+	{
+		return;
+	}
+
+	// The cheap band: needs its material (made by Tools/GASNPPTest/camera_tiltshift_setup.py); without it, falls back to the DOF
+	if (TiltShift.Mode == EGSTN_TiltShiftMode::ScreenBand)
+	{
+		if (!bBandMaterialTried)
+		{
+			bBandMaterialTried = true;
+			if (UMaterialInterface* Material = TiltShift.BandMaterial.LoadSynchronous())
+			{
+				BandMaterial = UMaterialInstanceDynamic::Create(Material, this);
+			}
+		}
+		if (BandMaterial)
+		{
+			BandMaterial->SetScalarParameterValue(TEXT("BandCenter"), FMath::Clamp(ScreenV(POV, Focus), 0.f, 1.f));
+			BandMaterial->SetScalarParameterValue(TEXT("BandHalfHeight"), TiltShift.BandHalfHeight);
+			BandMaterial->SetScalarParameterValue(TEXT("BandFeather"), TiltShift.BandFeather);
+			BandMaterial->SetScalarParameterValue(TEXT("Radius"), TiltShift.BandMaxRadius * TiltShift.Intensity);
+			FPostProcessSettings Settings;
+			Settings.AddBlendable(BandMaterial.Get(), 1.f);
+			CameraOwner->AddCachedPPBlend(Settings, 1.f);
+			return;
+		}
+	}
+
+	// Cinematic DOF focused on the character: a big virtual sensor at the same field of view = a long lens = a thin sharp slice (the
+	// macro-lens look that makes the world read as a model). The ground in front and the background blur, more the farther from the slice
+	FPostProcessSettings Settings;
+	Settings.bOverride_DepthOfFieldFocalDistance = true;
+	Settings.DepthOfFieldFocalDistance = FMath::Max(float(FVector::Dist(POV.Location, Focus)) + TiltShift.FocusOffset, 10.f);
+	Settings.bOverride_DepthOfFieldFstop = true;
+	Settings.DepthOfFieldFstop = TiltShiftFstop(TiltShift);
+	Settings.bOverride_DepthOfFieldMinFstop = true;
+	Settings.DepthOfFieldMinFstop = FMath::Min(Settings.DepthOfFieldFstop, 1.2f);
+	Settings.bOverride_DepthOfFieldSensorWidth = true;
+	Settings.DepthOfFieldSensorWidth = TiltShift.SensorWidth;
+	CameraOwner->AddCachedPPBlend(Settings, 1.f);
+}
+
 bool UGSTN_PlaytestCameraModifier::ModifyCamera(float DeltaTime, FMinimalViewInfo& InOutPOV)
 {
 	Super::ModifyCamera(DeltaTime, InOutPOV);
 	// Camera anchor in ShiftView mode (or no camera component found): the view moves by the anchor's correction first
 	const AActor* ViewTarget = CameraOwner ? CameraOwner->GetViewTarget() : nullptr;
-	if (const UGSTN_CameraAnchorComponent* Anchor = ViewTarget ? ViewTarget->FindComponentByClass<UGSTN_CameraAnchorComponent>() : nullptr)
+	const UGSTN_CameraAnchorComponent* Anchor = ViewTarget ? ViewTarget->FindComponentByClass<UGSTN_CameraAnchorComponent>() : nullptr;
+	if (Anchor)
 	{
 		InOutPOV.Location += Anchor->GetViewShift();
 	}
-	const float Extra = GSTNPlaytestCamera::CVarExtraDistance.GetValueOnGameThread();
-	const float Height = GSTNPlaytestCamera::CVarExtraHeight.GetValueOnGameThread();
-	if (Extra <= 0.f && FMath::IsNearlyZero(Height))
+	// Framing and tilt shift come from the camera settings (C++ defaults when the pawn has no anchor yet); console values >= 0 override
+	static const FGSTN_CameraAnchorSettings DefaultSettings;
+	const FGSTN_CameraAnchorSettings& Tuning = Anchor ? Anchor->GetSettings() : DefaultSettings;
+	const float ForcedExtra = GSTNPlaytestCamera::CVarExtraDistance.GetValueOnGameThread();
+	const float ForcedHeight = GSTNPlaytestCamera::CVarExtraHeight.GetValueOnGameThread();
+	const float Extra = ForcedExtra >= 0.f ? ForcedExtra : Tuning.ExtraDistance;
+	const float Height = ForcedHeight >= 0.f ? ForcedHeight : Tuning.ExtraHeight;
+	if (Extra > 0.f || !FMath::IsNearlyZero(Height))
 	{
-		return false;
-	}
-	const FVector Start = InOutPOV.Location;
-	FVector End = PushBack(Start, InOutPOV.Rotation.Vector(), Extra, Height);
-	// Stop short of a wall: the sweep starts at the GASP view, which its own rig already keeps clear
-	UWorld* World = CameraOwner ? CameraOwner->GetWorld() : nullptr;
-	if (World)
-	{
-		FCollisionQueryParams Query(SCENE_QUERY_STAT(GSTNPlaytestCamera), false, CameraOwner->GetViewTarget());
-		FHitResult Hit;
-		if (World->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, ECC_Camera, FCollisionShape::MakeSphere(GSTNPlaytestCamera::ProbeRadius), Query))
+		const FVector Start = InOutPOV.Location;
+		FVector End = PushBack(Start, InOutPOV.Rotation.Vector(), Extra, Height);
+		// Stop short of a wall: the sweep starts at the GASP view, which its own rig already keeps clear
+		UWorld* World = CameraOwner ? CameraOwner->GetWorld() : nullptr;
+		if (World)
 		{
-			End = Hit.Location;
+			FCollisionQueryParams Query(SCENE_QUERY_STAT(GSTNPlaytestCamera), false, CameraOwner->GetViewTarget());
+			FHitResult Hit;
+			if (World->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, ECC_Camera, FCollisionShape::MakeSphere(GSTNPlaytestCamera::ProbeRadius), Query))
+			{
+				End = Hit.Location;
+			}
 		}
+		InOutPOV.Location = End;
 	}
-	InOutPOV.Location = End;
+	// Focus on the character: the damped anchor (where the camera aims) when it runs, else the view target
+	if (ViewTarget)
+	{
+		const bool bAnchorRuns = Anchor && Anchor->IsActiveForOwner();
+		ApplyTiltShift(Tuning.TiltShift, InOutPOV, bAnchorRuns ? Anchor->GetDampedAnchor() : ViewTarget->GetActorLocation());
+	}
 	return false;
 }
 

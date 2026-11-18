@@ -59,6 +59,30 @@ void FGSTN_CameraAnchorDamper::Reset(const FVector& Target)
 	VerticalSpeed = 0.0;
 	HorizontalSpeed = FVector::ZeroVector;
 	bValid = true;
+	bHasGround = false;
+	bWasInAir = false;
+	bLandingCatchUp = false;
+}
+
+double FGSTN_CameraAnchorDamper::AirHoldHeight(double Wanted, bool bInAir, const FGSTN_CameraAnchorSettings& Settings)
+{
+	if (!bInAir)
+	{
+		bLandingCatchUp = bLandingCatchUp || (bWasInAir && bHasGround && !FMath::IsNearlyEqual(GroundHeight, Wanted, 1.0));
+		GroundHeight = Wanted;
+		bHasGround = true;
+		bWasInAir = false;
+		return Wanted;
+	}
+	bWasInAir = true;
+	if (!Settings.bHoldGroundHeightInAir || !bHasGround)
+	{
+		return Wanted;  // off, or spawned in the air: no ground to hold yet
+	}
+	// Continuous at both edges: inside [ground - fall band, ground + rise band] the camera stays on the ground height, outside it follows
+	const double Top = GroundHeight + Settings.AirRiseBand;
+	const double Bottom = GroundHeight - Settings.AirFallBand;
+	return Wanted > Top ? Wanted - Settings.AirRiseBand : (Wanted < Bottom ? Wanted + Settings.AirFallBand : GroundHeight);
 }
 
 double FGSTN_CameraAnchorDamper::SpringStep(double X, double Goal, double& InOutSpeed, float HalfLife, float DeltaTime)
@@ -81,7 +105,7 @@ double FGSTN_CameraAnchorDamper::SpringStep(double X, double Goal, double& InOut
 	return E * (J0 + J1 * DeltaTime) + Goal;
 }
 
-FVector FGSTN_CameraAnchorDamper::Step(const FVector& Target, const FVector& InUp, float DeltaTime, const FGSTN_CameraAnchorSettings& Settings)
+FVector FGSTN_CameraAnchorDamper::Step(const FVector& Target, const FVector& InUp, float DeltaTime, const FGSTN_CameraAnchorSettings& Settings, bool bInAir)
 {
 	if (!bValid || FVector::Dist(Target, Location) > Settings.SnapDistance)
 	{
@@ -90,14 +114,22 @@ FVector FGSTN_CameraAnchorDamper::Step(const FVector& Target, const FVector& InU
 	}
 	const FVector Up = InUp.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
 
-	// Vertical: dead band, then the spring (up and down half lives differ), then the lag clamp
+	// Vertical: air hold (the height followed), dead band, then the spring (up and down half lives differ), then the lag clamp
 	const double Current = FVector::DotProduct(Location, Up);
-	const double Wanted = FVector::DotProduct(Target, Up);
+	const double Raw = FVector::DotProduct(Target, Up);
+	const double Wanted = AirHoldHeight(Raw, bInAir, Settings);
 	const double Error = Wanted - Current;
 	const double Goal = FMath::Abs(Error) <= Settings.DeadBand ? Current : Wanted - FMath::Sign(Error) * Settings.DeadBand;
-	const float HalfLife = Goal >= Current ? Settings.UpHalfLife : Settings.DownHalfLife;
+	if (bLandingCatchUp && FMath::Abs(Goal - Current) < 1.0)
+	{
+		bLandingCatchUp = false;
+	}
+	const float HalfLife = (bLandingCatchUp && Settings.LandingHalfLife > 0.f) ? Settings.LandingHalfLife
+		: (Goal >= Current ? Settings.UpHalfLife : Settings.DownHalfLife);
 	double Vertical = SpringStep(Current, Goal, VerticalSpeed, HalfLife, DeltaTime);
-	if (Settings.MaxVerticalLag > 0.f)
+	// The lag clamp keeps fast moves framed. It holds around the followed height, so it never undoes the air hold; while catching up after
+	// a landing it is off (the catch up is the point), except for falls (never lose the character below the frame)
+	if (Settings.MaxVerticalLag > 0.f && !(bLandingCatchUp && Goal >= Current))
 	{
 		const double Clamped = FMath::Clamp(Vertical, Wanted - Settings.MaxVerticalLag, Wanted + Settings.MaxVerticalLag);
 		if (Clamped != Vertical)
@@ -109,7 +141,7 @@ FVector FGSTN_CameraAnchorDamper::Step(const FVector& Target, const FVector& InU
 
 	// Horizontal: the plane perpendicular to Up
 	const FVector CurrentPlane = Location - Current * Up;
-	const FVector WantedPlane = Target - Wanted * Up;
+	const FVector WantedPlane = Target - Raw * Up;
 	FVector Plane = WantedPlane;
 	if (Settings.HorizontalHalfLife > KINDA_SMALL_NUMBER)
 	{
@@ -324,7 +356,20 @@ void UGSTN_CameraAnchorComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	const FVector Raw = Visual ? FGSTN_CameraAnchorDamper::StandingRootFromVisual(Visual->GetComponentTransform(), VisualRelativeStanding, ParentScale) : Root;
 	const UMoverComponent* Mover = Owner->FindComponentByClass<UMoverComponent>();
 	const FVector Up = Mover ? Mover->GetUpDirection() : Owner->GetActorUpVector();
-	const FVector Damped = Damper.Step(Raw, Up, DeltaTime, Tuning) + StepAimCrouchOffset(DeltaTime, Up, Tuning);
+	// Airborne as Mover reports it (its own state tag, same source as the crouch); no Mover = always grounded (no air hold)
+	static const FGameplayTag InAirTag = FGameplayTag::RequestGameplayTag(TEXT("Mover.IsInAir"), false);
+	const bool bInAir = Mover && InAirTag.IsValid() && Mover->HasGameplayTag(InAirTag, true);
+	// Look ahead along the horizontal velocity, slowly smoothed so a direction change does not swing the view
+	FVector LookAheadGoal = FVector::ZeroVector;
+	if (Tuning.LookAheadTime > 0.f && Tuning.MaxLookAhead > 0.f)
+	{
+		const FVector Velocity = Mover ? Mover->GetVelocity() : Owner->GetVelocity();
+		LookAheadGoal = FVector::VectorPlaneProject(Velocity, Up) * Tuning.LookAheadTime;
+		LookAheadGoal = LookAheadGoal.GetClampedToMaxSize(Tuning.MaxLookAhead);
+	}
+	LookAhead = Tuning.LookAheadHalfLife <= 0.f ? LookAheadGoal
+		: LookAheadGoal + (LookAhead - LookAheadGoal) * FMath::Exp2(-DeltaTime / Tuning.LookAheadHalfLife);
+	const FVector Damped = Damper.Step(Raw, Up, DeltaTime, Tuning, bInAir) + LookAhead + StepAimCrouchOffset(DeltaTime, Up, Tuning);
 
 	USceneComponent* Camera = CameraComponent.Get();
 	if (Camera && Tuning.Mode == EGSTN_CameraAnchorMode::MoveCameraComponent)
