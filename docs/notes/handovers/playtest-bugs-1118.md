@@ -44,3 +44,8 @@ Da fare: click owner sul dialogo, poi `DIAG_ONLY_AIM=1` Run-Timed Capture diag_p
 **Seguito 3 (09:58):** merge drift DI (vbnr9g 565f8259; di nuovo `Dt` -> `AirMomentumDt`). Trovato: `ProduceInput` azzerava il MoveInput
 della vittima con Lock.Reaction/Lock.Movement (bRooted) -> la drift non avrebbe mai visto lo stick. Ora in aria (Mover.IsInAir) il MoveInput resta,
 la facing resta tenuta; a terra/downed invariato. Test 843/843, AirMomentum 6/6 (test_1118d.log.ue.log). PIE non verificato (dialogo restore).
+
+**Seguito 4 (10:19):** merge vbnr9g dba37f89 + 642fbe12, compila. Test 846 ok, 1 FAIL: GSTNCombat.Core.JumpDesigner.ClosedForm (apex 0.485/0.483 s
+vs 0.5 +-0.005; altezza ok) in test_1118e.log.ue.log. Non corretto qui (codice del thread vbnr9g). Gravità: L_Test_Hub senza override (global_gravity_set False),
+PhysicsSettings default -980 -> WorldGravity 980 giusto (Saved/Diag1118/gravity.txt). Jump Designer sul kit rosa NON acceso: KIT_Test_Playtest usa
+DA_Locomotion_Default condiviso da tutti i 36 kit (regola 12): serve decidere se accenderlo per tutti o fare un DA_Locomotion_Playtest.
