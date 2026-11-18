@@ -232,6 +232,22 @@ void UGSTN_CombatSimComponent::HandleProcessGeneratedMovement(const FMoverTickSt
 	// The frame's mode from the start state (a mode change this frame is the next frame's business); GASP's BP falling mode is a UFallingMode
 	const UBaseMovementMode* Mode = Mover->FindMovementModeByName(StartState.SyncState.MovementMode);
 	FGSTN_AirTurn::Apply(StartState, Cast<UFallingMode>(Mode) != nullptr, Mover->GetUpDirection(), TimeStep.StepMs * 0.001f, OutProposedMove);
+
+	// Air momentum (owner 2026-11-18): the horizontal velocity of the two-channel model; its external channel goes to this substep's PostMovement
+	FVector External;
+	FVector Proposed;
+	AirMomentumStepMs = FGSTN_RunStageMover::ApplyAirMomentum(*Mover, StartState, TimeStep, OutProposedMove, External, Proposed) ? TimeStep.BaseSimTimeMs : -1.0;
+	AirMomentumExternal = External;
+	AirMomentumProposed = Proposed;
+}
+
+bool UGSTN_CombatSimComponent::ConsumeAirMomentumExternal(double StepBaseTimeMs, FVector& OutExternal, FVector& OutProposedHorizontal)
+{
+	const bool bMatch = AirMomentumStepMs >= 0.0 && AirMomentumStepMs == StepBaseTimeMs;
+	OutExternal = bMatch ? AirMomentumExternal : FVector::ZeroVector;
+	OutProposedHorizontal = bMatch ? AirMomentumProposed : FVector::ZeroVector;
+	AirMomentumStepMs = -1.0;
+	return bMatch;
 }
 
 void UGSTN_CombatSimComponent::CompileInput()

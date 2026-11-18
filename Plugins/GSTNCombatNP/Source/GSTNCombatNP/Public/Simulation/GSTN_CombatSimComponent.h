@@ -585,6 +585,14 @@ public:
 	 */
 	float GetRunningMoveAirControl() const;
 
+	/**
+	 * The external air channel the air momentum model computed in the substep that started at StepBaseTimeMs (FGSTN_RunStageMover::
+	 * ApplyAirMomentum, from Mover's ProcessGeneratedMovement), handed to the same substep's PostMovement, which stores it in the run state.
+	 * False when the model did not run in that substep. Not state: written and read inside one substep, so every simulation and
+	 * resimulation of the step writes it again before reading it
+	 */
+	bool ConsumeAirMomentumExternal(double StepBaseTimeMs, FVector& OutExternal, FVector& OutProposedHorizontal);
+
 	/** The commands a recovered tumble may start: the kit's FGSTN_TumbleRecoveryExtension, else the rules'. Empty = every command */
 	const FGameplayTagContainer& GetTumbleRecoveryCommands() const;
 
@@ -927,6 +935,11 @@ private:
 
 	/** The Mover whose hook this component holds (unbound in EndPlay) */
 	TWeakObjectPtr<UMoverComponent> AirTurnMover;
+
+	/** The air momentum hand-off of one substep (ConsumeAirMomentumExternal) */
+	double AirMomentumStepMs = -1.0;
+	FVector AirMomentumExternal = FVector::ZeroVector;
+	FVector AirMomentumProposed = FVector::ZeroVector;
 
 	/** Looks for the loadout component to bind, a few times a second, until one is bound (the PlayerState and its component arrive after BeginPlay on a client) */
 	void PollLoadoutComponent();

@@ -252,6 +252,13 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageState
 	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
 	uint8 RampStage = 0;
 
+	/**
+	 * External channel of the air momentum (FGSTN_AirMomentumLogic): the horizontal velocity a knockback, a launch or a bounce gave, cm/s,
+	 * world space. Zero on the ground and after a player-owned override move
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
+	FVector ExternalVelocity = FVector::ZeroVector;
+
 	bool operator==(const FGSTN_RunStageState& Other) const;
 	bool operator!=(const FGSTN_RunStageState& Other) const { return !(*this == Other); }
 
