@@ -251,7 +251,10 @@ void UGSTN_RunPresentationComponent::TickScramble(float DeltaTime)
 	{
 		ScrambleDirection = Ground.GetSafeNormal();
 	}
-	Scramble.Step(GetScrambleSettings(), DeltaTime, static_cast<float>(Ground.Size()), TargetSpeed, Stick, Mover->HasGameplayTag(Mover_IsOnGround, true),
+	// Crouched counts as off the ground: the scramble's end speed is a share of the STANDING run, which a crouch walk never reaches, so it would
+	// otherwise overlay the standing run cycle for the whole crouch walk (owner playtest 2026-11-18)
+	const bool bScrambleGround = Mover->HasGameplayTag(Mover_IsOnGround, true) && !Mover->HasGameplayTag(Mover_IsCrouching, true);
+	Scramble.Step(GetScrambleSettings(), DeltaTime, static_cast<float>(Ground.Size()), TargetSpeed, Stick, bScrambleGround,
 		FootSlide.Source == EGSTN_FootSlideSource::RunSkid, ScrambleClip != nullptr);
 }
 

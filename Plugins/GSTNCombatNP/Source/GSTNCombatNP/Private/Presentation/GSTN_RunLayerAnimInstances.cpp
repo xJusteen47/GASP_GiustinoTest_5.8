@@ -3,6 +3,7 @@
 #include "Animation/AnimSequenceBase.h"
 #include "MoverComponent.h"
 #include "MoverTypes.h"
+#include "HAL/IConsoleManager.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_RunLayerAnimInstances)
 
@@ -10,6 +11,13 @@ namespace GSTNRunLayers
 {
 	/** One simulation frame (62.5 Hz): the skid counts live frames of the sim */
 	constexpr float SimFrameSeconds = 0.016f;
+
+	/**
+	 * Owner 2026-11-18 (choice A): the profile's skid clip plays at its own speed from the first skid frame to its end, one motion, instead of
+	 * the three sections stretched on the sim's phases. 0 = the three-section timing (the behaviour before).
+	 */
+	static TAutoConsoleVariable<int32> CVarSkidClipSpeed(TEXT("gstn.Skid.PlayAtClipSpeed"), 1,
+		TEXT("1 = the run skid clip plays at its own speed from start to end; 0 = three sections stretched on the skid phases"));
 }
 
 float FGSTN_SkidClipTime::Compute(EGSTN_RunSkidPhase Phase, int32 Frame, int32 RestFrame, float Length, float StopTime, float StopFraction, float ExitPlayRate,
@@ -81,10 +89,16 @@ void UGSTN_SkidAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	const bool bLive = ActiveClip && Slide.Source == EGSTN_FootSlideSource::RunSkid && Slide.SkidPhase != EGSTN_RunSkidPhase::None;
 	if (bLive)
 	{
+		const bool bWasActive = bActive;
 		bActive = true;
 		TailSeconds = -1.f;
 		LastPhase = Slide.SkidPhase;
-		if (SectionClip && ActiveClip == SectionClip)
+		if (SectionClip && ActiveClip == SectionClip && GSTNRunLayers::CVarSkidClipSpeed.GetValueOnGameThread() != 0)
+		{
+			// Clip speed: the time since the skid started, whatever the sim's phase (bActive was false on the first frame: start at 0)
+			ClipTime = bWasActive ? FMath::Min(ClipTime + DeltaSeconds, ActiveClip->GetPlayLength()) : 0.f;
+		}
+		else if (SectionClip && ActiveClip == SectionClip)
 		{
 			// Three sections: fixed entry, hold on the speed left, fixed push (brief section 3)
 			ClipTime = Run->GetSkidSectionSettings().ClipTime(Slide.SkidPhase, Slide.Frame, Slide.RestFrame, Run->GetSkidEnterFrames(),
@@ -104,11 +118,14 @@ void UGSTN_SkidAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		Mover = Owner ? Owner->FindComponentByClass<UMoverComponent>() : nullptr;
 	}
 	const bool bOnGround = Mover.IsValid() && Mover->HasGameplayTag(Mover_IsOnGround, false);
-	if (bActive && ActiveClip && LastPhase == EGSTN_RunSkidPhase::Exit && !Slide.IsSliding() && bOnGround && MaxTailSeconds > 0.f)
+	const bool bClipSpeed = GSTNRunLayers::CVarSkidClipSpeed.GetValueOnGameThread() != 0 && ActiveClip && Run && ActiveClip == Run->GetSkidSectionClip();
+	if (bActive && ActiveClip && LastPhase != EGSTN_RunSkidPhase::None && !Slide.IsSliding() && bOnGround && (MaxTailSeconds > 0.f || bClipSpeed)
+		&& (bClipSpeed || LastPhase == EGSTN_RunSkidPhase::Exit))
 	{
 		TailSeconds = FMath::Max(TailSeconds, 0.f) + DeltaSeconds;
-		ClipTime += DeltaSeconds * FMath::Max(ExitPlayRate, 0.f);
-		if (ClipTime < ActiveClip->GetPlayLength() && TailSeconds <= MaxTailSeconds)
+		ClipTime += DeltaSeconds * (bClipSpeed ? 1.f : FMath::Max(ExitPlayRate, 0.f));
+		// Clip speed: the clip always plays to its end (the restart is part of it), the tail cap does not cut it
+		if (ClipTime < ActiveClip->GetPlayLength() && (bClipSpeed || TailSeconds <= MaxTailSeconds))
 		{
 			return;
 		}
