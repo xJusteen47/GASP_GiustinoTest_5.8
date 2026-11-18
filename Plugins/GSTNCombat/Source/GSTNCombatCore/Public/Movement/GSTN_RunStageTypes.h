@@ -90,6 +90,34 @@ struct GSTNCOMBATCORE_API FGSTN_RunStage
 	float RampStartFraction = 1.f;
 };
 
+/**
+ * Run start stamp (owner 2026-11-18, choice B, Toad reference): pushed hard from (almost) still, the character first stamps almost in
+ * place, limbs already frantic, for Frames, then accelerates as usual. Simulation side only: the acceleration is cut to AccelFraction
+ * meanwhile. The frantic clip is presentation (it reads IsStartStamp / the counter). Ends early when the stick goes back to rest, the
+ * stage changes (boost) or the character leaves the ground. Frames at 62.5 Hz
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_RunStartStampTuning
+{
+	GENERATED_BODY()
+
+	/** Frames of the stamp. 0 = off (Toad: ~0.33 s = 21 frames) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Start Stamp", meta = (ClampMin = "0", ClampMax = "120"))
+	int32 Frames = 0;
+
+	/** Fraction of the stage acceleration during the stamp: small = almost in place */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Start Stamp", meta = (ClampMin = "0", ClampMax = "1"))
+	float AccelFraction = 0.05f;
+
+	/** Stick magnitude (0..1) that starts the stamp: a light tilt walks without it (owner: walk = light tilt only) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Start Stamp", meta = (ClampMin = "0", ClampMax = "1"))
+	float StickMin = 0.5f;
+
+	/** The stamp starts only under this ground speed (at the reference WalkSpeed): a re-push while running never stamps */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Start Stamp", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float MaxStartSpeed = 60.f;
+};
+
 /** The whole run tuning of a kit: the stages and the rules that move between them. Values only, copied out of the profile asset */
 USTRUCT(BlueprintType)
 struct GSTNCOMBATCORE_API FGSTN_RunStagesTuning
@@ -159,6 +187,10 @@ struct GSTNCOMBATCORE_API FGSTN_RunStagesTuning
 
 	/** BoostTargetStage as a 0-based index into Stages, clamped. The table must not be empty */
 	int32 GetBoostTargetIndex() const { return FMath::Clamp(BoostTargetStage - 1, 0, Stages.Num() - 1); }
+
+	/** The run start stamp (owner choice B, 2026-11-18) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Start Stamp")
+	FGSTN_RunStartStampTuning StartStamp;
 
 	/** The run skid (P2) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Skid")
@@ -253,6 +285,13 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageState
 	uint8 RampStage = 0;
 
 	/**
+	 * Run start stamp: -1 = none this push (the stick at rest resets it), else frames since the stamp started. The stamp is live while
+	 * it is under StartStamp.Frames; past it, it stays counting until the stick rests, so one push stamps once
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
+	int32 StampFrames = -1;
+
+	/**
 	 * External channel of the air momentum (FGSTN_AirMomentumLogic): the horizontal velocity a knockback, a launch or a bounce gave, cm/s,
 	 * world space. Zero on the ground and after a player-owned override move
 	 */
@@ -304,6 +343,9 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageLogic
 
 	/** Air control multiplier of the current air time: the takeoff stage's scale (TakeoffCap), 1 (Fixed) */
 	static float GetAirControlScale(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
+
+	/** The start stamp is live in State (the end of the last stepped frame) */
+	static bool IsStartStamp(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
 
 	/** Acceleration multiplier of the current stage's ramp (1 = no ramp or ramp done). The state is the one at the start of the frame */
 	static float GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
