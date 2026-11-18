@@ -960,7 +960,12 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 	const bool bDodgeEndLag = Sync->Core.DodgeLanding.IsEndLag(GetSimulationFrame() + 1);
 	if ((Running && Running->bIgnoreMoveInput) || bRooted || bHitTurn || bCrouchStill || bDodgeEndLag)
 	{
-		if (FCharacterDefaultInputs* Inputs = InputCmdResult.InputCollection.FindMutableDataByType<FCharacterDefaultInputs>())
+		// Drift DI (2026-11-18): a victim rooted by its reaction while flying keeps the stick's move input, so the air momentum's drift (only with a
+		// knockback active and the kit's DriftDIControlScale > 0; the lock's zero top speed stops everything else) can read it. The facing still holds
+		const UMoverComponent* RootedMover = bRooted && !bHitTurn && !bCrouchStill && !bDodgeEndLag ? GetOwner()->FindComponentByClass<UMoverComponent>() : nullptr;
+		const bool bKeepDriftInput = RootedMover && RootedMover->HasGameplayTag(Mover_IsInAir, false);
+		FCharacterDefaultInputs* Inputs = InputCmdResult.InputCollection.FindMutableDataByType<FCharacterDefaultInputs>();
+		if (Inputs && !bKeepDriftInput)
 		{
 			Inputs->SetMoveInput(EMoveInputType::DirectionalIntent, FVector::ZeroVector);
 		}

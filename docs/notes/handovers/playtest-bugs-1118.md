@@ -40,3 +40,7 @@ ripristino pacchetti (Saved/Autosaves/PackageRestoreData.json, non toccato). Mer
 test (C4459 in unity build). Test GSTNInput+GSTNCombat+GSTN.Camera 842/842, AirMomentum 5/5 (Saved/Logs/ci/test_1118c.log.ue.log).
 Profili: tutti i 36 KIT_Test_* hanno DA_Locomotion_Default; i 4 KIT_Example* no (Saved/Diag1118/kits_loco.txt). Dummy non controllato.
 Da fare: click owner sul dialogo, poi `DIAG_ONLY_AIM=1` Run-Timed Capture diag_playtest_1118.py e video ADS crouch.
+
+**Seguito 3 (09:58):** merge drift DI (vbnr9g 565f8259; di nuovo `Dt` -> `AirMomentumDt`). Trovato: `ProduceInput` azzerava il MoveInput
+della vittima con Lock.Reaction/Lock.Movement (bRooted) -> la drift non avrebbe mai visto lo stick. Ora in aria (Mover.IsInAir) il MoveInput resta,
+la facing resta tenuta; a terra/downed invariato. Test 843/843, AirMomentum 6/6 (test_1118d.log.ue.log). PIE non verificato (dialogo restore).
