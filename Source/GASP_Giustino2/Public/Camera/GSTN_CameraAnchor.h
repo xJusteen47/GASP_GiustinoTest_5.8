@@ -70,26 +70,26 @@ struct GASP_GIUSTINO2_API FGSTN_CameraTiltShiftSettings
 
 	/** DOF: aperture at Intensity 1. Lower = shallower focus, more blur */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|DOF", meta = (ClampMin = "0.7", ClampMax = "32", EditCondition = "bEnabled"))
-	float Fstop = 2.f;
+	float Fstop = 4.f;
 
 	/**
 	 * DOF: virtual sensor width. The trick of the miniature look: at the same field of view a bigger sensor means a longer lens and a much
 	 * shallower focus (blur grows about linearly with it). 24.89 mm is the engine default and gives almost no blur at playtest distances
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|DOF", meta = (ClampMin = "10", ClampMax = "1000", ForceUnits = "mm", EditCondition = "bEnabled"))
-	float SensorWidth = 300.f;
+	float SensorWidth = 120.f;
 
 	/** Band: half height of the sharp band around the character, as a fraction of the screen height */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Band", meta = (ClampMin = "0", ClampMax = "0.5", EditCondition = "bEnabled"))
-	float BandHalfHeight = 0.12f;
+	float BandHalfHeight = 0.25f;
 
 	/** Band: how far (fraction of the screen height) the blur takes to reach full strength past the sharp band */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Band", meta = (ClampMin = "0.01", ClampMax = "1", EditCondition = "bEnabled"))
-	float BandFeather = 0.3f;
+	float BandFeather = 0.35f;
 
 	/** Band: largest blur radius in pixels at Intensity 1 (1080p reference; the material scales it with the view height) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Band", meta = (ClampMin = "0", ClampMax = "40", EditCondition = "bEnabled"))
-	float BandMaxRadius = 8.f;
+	float BandMaxRadius = 3.f;
 
 	/** Band: the post process material (parameters BandCenter, BandHalfHeight, BandFeather, Radius). Missing = falls back to Cinematic DOF */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Band", meta = (EditCondition = "bEnabled"))
