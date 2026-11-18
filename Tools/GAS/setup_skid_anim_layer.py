@@ -22,7 +22,7 @@ import setup_anim_layers as layers  # noqa: E402
 ANIM_DIR = wall.ANIM_DIR
 # Owner 2026-11-17 23:53Z: the skid clip is SS_180_Turn2 (GiustinoMoves/Skid, root fixed by the owner's script; handover hitstop-downed-jab-1
 # addendum 2). SKID_CLIP=Ported57/Skid/Skid_Revised is the earlier choice, kept as fallback
-SKID_CLIP = os.environ.get('SKID_CLIP', f'{ANIM_DIR}/Ported57/SkidOwner/SS_180_Turn2')
+SKID_CLIP = os.environ.get('SKID_CLIP', f'{ANIM_DIR}/Ported57/SkidOwner/SS_180_Turn2_Src')  # owner 11-18 07:08Z: the original clip (already root-fixed)
 RUN_START_CLIP = os.environ.get('RUN_START_CLIP', '')
 
 # name -> (parent class, interface, layer graph, clip property, clip path, set asset, set tag)
