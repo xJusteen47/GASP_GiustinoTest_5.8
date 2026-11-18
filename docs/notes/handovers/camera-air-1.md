@@ -13,7 +13,7 @@ mesh, GameplayCameraComponent (gcc), final POV. Metric `python Tools/GASNPPTest/
 ## Changed (built OK, Saved/Logs/ci/camair-build1.log `Result: Succeeded`)
 `FGSTN_CameraAnchorSettings::bEvaluateCameraAfterAnchor` (on): combat sim component -> anchor -> camera component, all TG_PostUpdateWork
 (`UGSTN_CameraAnchorComponent::OrderTicks`). Result (Saved/CamAir/diag_fix): GASP's camera now follows the anchor smoothly, but the final POV still
-steps (Overlord dair max 21.0, mean 2.32 vs 2.64). So a later stage still sees the capsule: suspects, in order: our UGSTN_PlaytestCameraModifier
+steps (Overlord dair mean 3.93 max 21.0, before 4.51 max 27.7, camair_metric.py diag diag_fix). So a later stage still sees the capsule: suspects, in order: our UGSTN_PlaytestCameraModifier
 push-back (400 cm) + its sweep, or a GASP rig switch at move start (POV x shifts 5-12 cm at dair start: crouch/stance rig blend).
 One run with push-back off (diag_nopush, DIAG_CVARS gstn.Camera.PlaytestExtraDistance 0 / ExtraHeight 0) looked smoother but had a different
 trajectory (runs differed: the script now waits for the ground between items, not yet run).
