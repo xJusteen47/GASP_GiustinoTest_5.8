@@ -10,6 +10,7 @@
 #include "GameplayTagContainer.h"
 #include "HAL/IConsoleManager.h"
 #include "MoverComponent.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_CameraAnchor)
 
@@ -278,6 +279,34 @@ void UGSTN_CameraAnchorComponent::ResolveComponents()
 	{
 		CameraRelativeStanding = GSTNCameraAnchor::StandingRelative(*Camera);
 		bCameraFollowsVisual = Visual && Camera->IsAttachedTo(Visual);
+	}
+	OrderTicks(GetSettings());
+}
+
+void UGSTN_CameraAnchorComponent::OrderTicks(const FGSTN_CameraAnchorSettings& Tuning)
+{
+	AActor* Owner = GetOwner();
+	if (!Owner || !Tuning.bEvaluateCameraAfterAnchor)
+	{
+		return;
+	}
+	// The anchor reads the mesh after the combat component wrote this frame's body capsule correction (it ticks in TG_PostUpdateWork too,
+	// so without a prerequisite the order between the two changed from frame to frame)
+	TInlineComponentArray<UGSTN_CombatSimComponent*> Combat(Owner);
+	for (UGSTN_CombatSimComponent* Component : Combat)
+	{
+		if (Component && Component->PrimaryComponentTick.bCanEverTick)
+		{
+			AddTickPrerequisiteComponent(Component);
+		}
+	}
+	// The camera component reads its location (GameplayCameraComponent: start pose of the whole camera evaluation) after the anchor moved it.
+	// The player camera manager reads the result after all tick groups, so moving the camera's tick later loses nothing
+	USceneComponent* Camera = CameraComponent.Get();
+	if (Camera && Camera->PrimaryComponentTick.bCanEverTick)
+	{
+		Camera->SetTickGroup(TG_PostUpdateWork);
+		Camera->AddTickPrerequisiteComponent(this);
 	}
 }
 

@@ -170,6 +170,16 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorSettings
 	float SnapDistance = 400.f;
 
 	/**
+	 * Tick order (2026-11-18, dair/fair jitter). GASP's GameplayCameraComponent takes its start pose from its own location and runs the whole
+	 * camera in its tick (TG_PostPhysics), before this anchor (TG_PostUpdateWork) and before the combat component's body capsule presentation.
+	 * Each capsule resize then reached the view for a frame as the capsule shift (Overlord dair: 10 resizes, view steps up to 28 cm while the
+	 * anchor was smooth; Saved/CamAir). On: the anchor ticks after the capsule presentation and the camera component after the anchor, in the
+	 * same frame. Off = engine order (A/B)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor")
+	bool bEvaluateCameraAfterAnchor = true;
+
+	/**
 	 * Crouch lowers the camera only while aiming (owner 2026-11-18: no crouch offset in the normal view, "in ADS it would be right, I must see
 	 * it"). GASP's own crouch offset rig (CameraRig_CrouchOffset) is zeroed in every mode; this puts AimCrouchOffset back while the pawn is
 	 * crouched AND aims (GASP's PlayerInputState.WantsToAim). Off = crouch never moves the camera
@@ -299,6 +309,8 @@ protected:
 private:
 	void ResolveComponents();
 	void RestoreCamera();
+	/** bEvaluateCameraAfterAnchor: presentation components -> this -> camera component, all in TG_PostUpdateWork. Once per resolve */
+	void OrderTicks(const FGSTN_CameraAnchorSettings& Tuning);
 
 	TWeakObjectPtr<USceneComponent> CameraComponent;
 	TWeakObjectPtr<USceneComponent> VisualComponent;
