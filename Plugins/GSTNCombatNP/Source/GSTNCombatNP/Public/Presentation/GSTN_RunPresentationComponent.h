@@ -6,6 +6,7 @@
 #include "Components/ActorComponent.h"
 #include "GSTN_AdditiveReactionSource.h"
 #include "Movement/GSTN_RunSkidTypes.h"
+#include "Presentation/GSTN_LocomotionLean.h"
 #include "GSTN_RunPresentationComponent.generated.h"
 
 class UMoverComponent;
@@ -65,7 +66,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGSTN_OnFootSlideChanged, bool, bSl
  *   - the foot slide hook above;
  *   - the PLACEHOLDER skid pose until the real clips come with the anim layer plan (anim-layer-skid-wallslide-piano L0/L3): the torso leans
  *     back against the slide through the directional additive node already in the main graph (IGSTN_AdditiveReactionSource), by the
- *     kit's FGSTN_RunSkidTuning::PlaceholderLeanDeg. No Blueprint wiring: UGSTN_CombatSimComponent creates this component at BeginPlay.
+ *     kit's FGSTN_RunSkidTuning::PlaceholderLeanDeg (layer 0 of the request);
+ *   - the additive LOCOMOTION LEAN (layer 1): the torso leans into the presented acceleration, values in the character's locomotion animation
+ *     profile (UGSTN_LocomotionAnimSet, slot Anim.Set.Locomotion; built-in defaults while none is applied). Console: a.GSTN.LocomotionLean 0.
+ * No Blueprint wiring: UGSTN_CombatSimComponent creates this component at BeginPlay.
  */
 UCLASS(ClassGroup = (Combat), meta = (BlueprintSpawnableComponent))
 class GSTNCOMBATNP_API UGSTN_RunPresentationComponent : public UActorComponent, public IGSTN_AdditiveReactionSource
@@ -94,6 +98,13 @@ public:
 
 	virtual void GetAdditiveReaction(FGSTN_AdditiveReactionRequest& Out) const override;
 
+	/** The locomotion lean of the presented frame: horizontal world vector, length = degrees (debug, cosmetics) */
+	UFUNCTION(BlueprintPure, Category = "Combat|Run")
+	FVector GetLocomotionLean() const { return LeanSolver.Lean; }
+
+	/** The lean values in use: the applied locomotion profile's, else the built-in defaults */
+	const FGSTN_LocomotionLeanSettings& GetLeanSettings() const;
+
 	/** The foot slide of a Mover sync state (pure but for the kit lookup; the tests call it) */
 	static FGSTN_FootSlideState ReadFootSlide(const struct FMoverSyncState& SyncState, float StepSeconds);
 
@@ -101,7 +112,12 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMoverComponent> Mover;
 
+	void TickLean(float DeltaTime);
+
 	FGSTN_FootSlideState FootSlide;
+	FGSTN_LocomotionLeanSolver LeanSolver;
+	FGSTN_LocomotionLeanSettings DefaultLeanSettings;
+	TWeakObjectPtr<const UGSTN_LocomotionAnimSet> LeanProfile;
 	float LeanDeg = 0.f;
 	int32 EnterFrames = 0;
 	int32 ExitFrames = 0;

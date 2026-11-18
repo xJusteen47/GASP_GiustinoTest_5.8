@@ -3,6 +3,11 @@
 #include "Presentation/GSTN_RunPresentationComponent.h"
 
 #include "GameFramework/Actor.h"
+#include "GSTN_AnimSetComponent.h"
+#include "GSTN_CombatNPTags.h"
+#include "HAL/IConsoleManager.h"
+#include "Movement/GSTN_RunStageSyncState.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
 #include "Kits/GSTN_LocomotionProfile.h"
 #include "Movement/GSTN_LayeredMove_MomentumSlide.h"
 #include "Movement/GSTN_LayeredMove_RunSkid.h"
@@ -13,6 +18,9 @@ namespace GSTNRunPresentation
 {
 	/** The fixed simulation step (62.5 Hz, owner: untouchable): the presentation only needs it to turn frames into speeds */
 	constexpr float StepSeconds = 0.016f;
+
+	static TAutoConsoleVariable<float> CVarLean(TEXT("a.GSTN.LocomotionLean"), 1.f,
+		TEXT("Additive locomotion lean: 1 = as the profile says (default), 0 = off, other values scale it (2 = double, to judge it)."));
 }
 
 UGSTN_RunPresentationComponent::UGSTN_RunPresentationComponent()
@@ -99,10 +107,61 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 	{
 		OnFootSlideChanged.Broadcast(FootSlide.IsSliding(), FootSlide);
 	}
+	TickLean(DeltaTime);
+}
+
+const FGSTN_LocomotionLeanSettings& UGSTN_RunPresentationComponent::GetLeanSettings() const
+{
+	const UGSTN_LocomotionAnimSet* Profile = LeanProfile.Get();
+	return Profile ? Profile->Lean : DefaultLeanSettings;
+}
+
+void UGSTN_RunPresentationComponent::TickLean(float DeltaTime)
+{
+	// The applied profile can change (skin, kit or weapon collections): looked up each frame, a map find on the anim set component
+	const UGSTN_AnimSetComponent* AnimSets = GetOwner() ? GetOwner()->FindComponentByClass<UGSTN_AnimSetComponent>() : nullptr;
+	LeanProfile = AnimSets ? Cast<UGSTN_LocomotionAnimSet>(AnimSets->FindSet(GSTNCombatNPTags::AnimSet_Locomotion)) : nullptr;
+	const FGSTN_LocomotionLeanSettings& Settings = GetLeanSettings();
+
+	// State scale: run stage, air, attack timeline, skid or attack slide (the spring blends in and out of each)
+	const FMoverSyncState& Sync = Mover->GetSyncState();
+	const FGSTN_RunStageState* Run = FGSTN_RunStageMover::Find(Sync);
+	float StateScale = Settings.GetStageScale(Run ? Run->Stage : 0) * FMath::Max(GSTNRunPresentation::CVarLean.GetValueOnGameThread(), 0.f);
+	if (Mover->IsAirborne())
+	{
+		StateScale *= Settings.AirScale;
+	}
+	if (FootSlide.IsSliding())
+	{
+		StateScale *= Settings.SlideScale;
+	}
+	if (const UGSTN_CombatSimComponent* Sim = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>())
+	{
+		if (Sim->IsInTimeline())
+		{
+			StateScale *= Settings.AttackScale;
+		}
+	}
+	LeanSolver.Step(Settings, Mover->GetVelocity(), GetOwner()->GetActorForwardVector(), DeltaTime, StateScale);
 }
 
 void UGSTN_RunPresentationComponent::GetAdditiveReaction(FGSTN_AdditiveReactionRequest& Out) const
 {
+	// Layer 1: the locomotion lean, the placeholder bend held at its peak with the weight carrying the angle
+	const float LocoLeanDeg = LeanSolver.Lean.Size();
+	const float MaxDeg = GetLeanSettings().MaxAngleDeg * 1.2f;
+	if (LocoLeanDeg > 0.05f && MaxDeg > 0.f)
+	{
+		FGSTN_AdditiveReactionLayer& Lean = Out.Layers[1];
+		Lean.Additive = nullptr;
+		Lean.PushDirection = LeanSolver.Lean / LocoLeanDeg;
+		Lean.PlaceholderAngleDeg = MaxDeg;
+		Lean.PlaceholderPeakSeconds = 0.1f;
+		Lean.PlaceholderLengthSeconds = 1.f;
+		Lean.Time = 0.1f;
+		Lean.Weight = FMath::Clamp(LocoLeanDeg / MaxDeg, 0.f, 1.f);
+	}
+
 	if (FootSlide.Source != EGSTN_FootSlideSource::RunSkid || LeanDeg <= 0.f)
 	{
 		return;
