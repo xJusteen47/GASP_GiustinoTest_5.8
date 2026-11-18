@@ -392,6 +392,15 @@ def _tick(_dt):
             mesh = _mesh()
             comps = [c.get_class().get_name() for c in _pawn().get_components_by_class(unreal.ActorComponent) if 'Reaction' in c.get_class().get_name()]
             _log(f'anim mesh {mesh.get_name() if mesh else None}, reaction components {comps}')
+            # Optional variant reaction set for the host only (in memory, nothing saved), e.g. a copy with new clips under review
+            if os.environ.get('PIE_CAPTURE_REACTION_SET'):
+                vset = unreal.load_asset(os.environ['PIE_CAPTURE_REACTION_SET'])
+                for c in _pawn().get_components_by_class(unreal.GSTN_ReactionAnimComponent):
+                    try:
+                        c.set_reaction_set(vset)
+                        _log(f'reaction set on the host: {vset.get_name() if vset else None}')
+                    except Exception as ex:
+                        _log(f'reaction set swap failed: {ex}')
             st.update(phase='cameras', t=now)
         elif phase == 'cameras':
             if _make_cameras() and _make_lights():
