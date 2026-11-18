@@ -41,3 +41,8 @@ In attesa: Gemini nel browser integrato non è collegato all'account (solo Flash
 
 ## Fonti
 F1 lumasworkshop.com/wiki/Cameras (parametri camere Super Mario Galaxy) · F2 fukuchi.org/en/works/jumplab/settings-camera-platformSnapping.html · F3 gamedeveloper.com "Scroll Back: the theory and practice of cameras in side-scrollers" (Itay Keren) · F4 dev.epicgames.com "Cinematic Depth of Field" / react-postprocessing tilt-shift (tecnica banda a schermo)
+
+## 7. Correzione 2026-11-18 13:38Z (owner: "blur decisamente esagerato")
+Default molto più leggeri: l'effetto deve restare sottile, appena percepibile ai bordi (Astro Bot). Il blur cresce circa come SensorWidth / Fstop: 300/2 = 150 → 120/4 = 30, cioè 1/5.
+DOF: Fstop 2 → 4, SensorWidth 300 → 120 mm. Banda: BandMaxRadius 8 → 3 px, BandHalfHeight 0,12 → 0,25, BandFeather 0,3 → 0,35. Intensity resta 1.
+Il DA_CameraAnchor_Default sul fisso ha già i valori vecchi salvati: vanno scritti a mano nel DA (le nuove default C++ valgono solo per asset nuovi). Anteprima subito senza build: console `gstn.Camera.TiltShift.Intensity 0.2` (stesso effetto dei nuovi default).
