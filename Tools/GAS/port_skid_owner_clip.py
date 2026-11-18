@@ -68,7 +68,7 @@ def run():
     out_path = f'{DST}/SS_180_Turn2'
     if not eal.does_asset_exist(out_path):
         data = unreal.EditorAssetLibrary.find_asset_data(f'{DST}/SS_180_Turn2_Src')
-        res = unreal.IKRetargetBatchOperation.duplicate_and_retarget([data], mesh, mesh, rtg, '', '', '', '_RF', False)
+        res = unreal.IKRetargetBatchOperation.duplicate_and_retarget([data], mesh, mesh, rtg, '', '', '', '_RF', target_path=DST)
         log(f'retarget results {[str(r.package_name) for r in res]}')
         rf = f'{DST}/SS_180_Turn2_Src_RF'
         if not eal.does_asset_exist(rf):
