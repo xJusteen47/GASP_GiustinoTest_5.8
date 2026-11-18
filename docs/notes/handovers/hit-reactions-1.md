@@ -27,3 +27,12 @@ thread toolset AnimBP. Segnalato al coordinatore. Resta un file `IN-USO.txt` all
 Build/catture: `Saved/Logs/ci/hitadd_*.log(.esito)`, tutte ESITO OK. Hit per sequenza: `capture.log` in `Saved/AnimReact/hitadd_v3|v3b|v4|v4b` (`done:` con `'hit': True`).
 ## Costo
 Stima 25-35 $ (Opus ~150k contesto, 4 giri di review Fable ~160k, 9 commandlet, 6 catture).
+
+## Aggiornamento 18:58 locali: decisioni owner 2A, 3A (risposta "1,2,3 consigliati")
+- 3A: `AS_GSTN_React_HitStand_ArmLow` (copia di AS_React_HitStand, originale intatto): braccio sinistro -25° alla spalla (mano -20 cm,
+  elevazione -4,8 -> -29,8°). Fable PASS (`docs/notes/reviews/hitstand-armlow-1/REVIEW-fable.md`); lato destro non ricatturato con la variante.
+- 2A: `DA_ReactionAnims_HitAdd` ha la regola HitStand sulla variante e solo i 4 additivi approvati (gli altri 4 tornano al segnaposto);
+  `SandboxCharacter_Mover` (componente GSTN_ReactionAnim) ora usa il set variante. Backup del BP in `Saved/Backups/GAS/hitreact/`.
+  Rischio: il set variante è una copia di DA_ReactionAnims delle 16:00 del 18/11; modifiche dell'owner a DA_ReactionAnims dopo quell'ora NON
+  arrivano in gioco finché non si ricopiano. Script: `Tools/GAS/hitstand_armlow_and_swap.py` (idempotente; HITSTAND_SWAP=0 per non toccare il BP).
+- Lock: la prima esecuzione è partita senza riscrivere il lock (scrittura fallita, file cambiato dal thread skid appena liberato); poi preso e liberato.
