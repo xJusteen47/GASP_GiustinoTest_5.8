@@ -1,4 +1,4 @@
-"""Polish M2 + VFX v2: the Niagara systems of the VFX kit (v2: lit glossy meshes, see the block before the systems) (/GSTNPresentation/VFX/NS_GSTN_*) and the default presentation table.
+"""Polish M2 + VFX v2 + VFX v3: the Niagara systems of the VFX kit (v3: light, smoke and toys, see the block before the systems; run setup_presentation_vfx_v3 first) (/GSTNPresentation/VFX/NS_GSTN_*) and the default presentation table.
 
 Style sheet handoffs/stile-sheet-vfx-review.md: few big shapes (puffs 3-7, hit 4-8 shards + 1 flash + 1 ring, cap 12 per burst),
 fast start and high drag, CPU sim, sprite/ribbon renderers, <= 3 emitters per system, fixed bounds, nothing replicated.
@@ -311,64 +311,115 @@ def _ground_plane(system):
 
 
 # The systems --------------------------------------------------------------------------------------------------------------------
+# VFX v3 (2026-11-18, docs/notes/stile/vfx-stile-v3-design-sheet.md, owner refs docs/notes/reviews/ref-astrobot-vfx/astro_1-5): energy is
+# light (MI_GSTN_VFX_Flash*: white core + saturated fringe, translucent, bloom), air is real smoke (MI_GSTN_VFX_Smoke*: lit translucent
+# puffs with Depth Fade, the floor's colour through User.SurfaceColor), solids are toys (v2 Toy meshes, strong-hit debris only). No tori,
+# no rings, no glossy balls. Sprites never scale with their component: every sprite emitter goes through sized() (User.SizeScale).
+
+
+def _surface(system):
+    """User.SurfaceColor: the colour of the floor under the event (UGSTN_PresentationComponent, Physical Material surface type)"""
+    L.add_user_color(system, "SurfaceColor", unreal.LinearColor(0.78, 0.74, 0.68, 1))
+
+
+def _sprites(system, name, template="OmnidirectionalBurst", local=True):
+    e = Emitter(system, template, name).settings(local)
+    e.off("ParticleUpdate", "ScaleColor")  # the material fades the particle, not the template's colour curve
+    return e
+
+
+def _smoke(system, name, count, life, size, speed, drag, look="SmokeDust", cone=None, ring=None, sphere=None, origin=None, rise=0.0):
+    """Lit translucent puffs in the floor's colour. ring=(radius, z): born on a ground ring, pushed out (origin below = out and up)"""
+    e = _sprites(system, name)
+    e.burst(count).particle(life, size, rotation=True).sized()
+    e.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")
+    if ring:
+        e.set("ParticleSpawn", "ShapeLocation", "Shape Primitive", "Ring / Disc").set("ParticleSpawn", "ShapeLocation", "Ring Radius", ring[0])
+        e.shape_offset((0, 0, ring[1]))
+    elif sphere:
+        e.sphere(*sphere)
+    else:
+        e.sphere(6)
+    if cone:
+        e.cone(cone[0], cone[1], speed)
+    else:
+        e.radial(speed)
+        if origin:
+            e.set("ParticleSpawn", "AddVelocity", "Velocity Origin", origin)
+    e.drag(drag)
+    if rise:
+        e.gravity(rise)  # a slight lift: warm dust floats, it never falls like a ball
+    return e.material(look)
+
+
+def _grains(system, name, count, life, size, speed, cone, gravity=-700.0, drag=3.0, offset=(0, 0, 10)):
+    """astro_3: fine grains of snow / dust in the floor's colour, small glints that fall"""
+    e = _sprites(system, name)
+    e.burst(count).particle(life, size, rotation=True).sized()
+    e.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")
+    e.sphere(8, offset=offset).cone(cone[0], cone[1], speed).drag(drag).gravity(gravity)
+    return e.material("Grain")
+
 
 def run_start_dust():
-    """RunStart, at the feet, X along the run: 4 "cotton" balls (20 / 16 / 12 cm) kicked backwards in a fan, two speeds (big ~50 cm
-    back, small ~30 cm). Lit, roughness 0.6: their contact shadow comes from the real light"""
+    """RunStart, at the feet, X along the run: 3 light puffs kicked backwards low + 3 grains (astro_3, small)"""
     s = _system("NS_GSTN_RunStartDust")
     if s:
-        _balls(s, "Big", 2, (0.30, 0.34), (20, 24), 380, 6.0, cone=((-1, 0, 0.55), 50), box=((20, 44, 2), (-14, 0, 12)))
-        _balls(s, "Small", 2, (0.26, 0.30), (15, 17), 170, 6.0, cone=((-1, 0, 0.05), 50), box=((20, 44, 2), (-6, 0, 8)))
+        _surface(s)
+        _smoke(s, "Puffs", 3, (0.42, 0.52), (42, 56), 320, 6.0, look="SmokeLight", cone=((-1, 0, 0.35), 55), sphere=(10, (1, 1, 0.3), (-12, 0, 14)),
+               rise=60.0)
+        _grains(s, "Grains", 4, (0.35, 0.45), (3, 5), 420, ((-1, 0, 0.8), 45))
     return s
 
 
 def skid_dust():
-    """Skid (sustained, attached to the feet, world space): a cotton ball (14-18 cm) every 37 cm slid, left behind as a row"""
+    """Skid (sustained, attached to the feet, world space): a light puff every 30 cm slid, left behind as a soft row"""
     s = _system("NS_GSTN_SkidDust")
     if s:
-        e = Emitter(s, "Fountain", "Trail").settings(False)
-        e.off("ParticleUpdate", "ScaleColor")
-        e.per_distance(37.0)
-        e.mesh_particle((0.28, 0.32), (14, 18)).sphere(3, (1, 1, 0.3), (0, 0, 15)).cone((0, 0, 1), 30, 40)
-        e.drag(6.0).mesh("Ball", "Dust")
+        _surface(s)
+        e = _sprites(s, "Trail", "Fountain", local=False)
+        e.per_distance(30.0)
+        e.particle((0.40, 0.48), (36, 50), rotation=True).sized()
+        e.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")
+        e.sphere(4, (1, 1, 0.3), (0, 0, 14)).cone((0, 0, 1), 35, 70).drag(5.0).material("SmokeLight")
     return s
 
 
 def jump_puff():
-    """Jump from the ground: a thin glossy torus on the floor, ~86 cm. No dust balls (owner 2026-11-17: dust only on run start and skid)"""
+    """Jump from the ground: 3 small light puffs at the feet, flat and quick (v3: no ring)"""
     s = _system("NS_GSTN_JumpPuff")
     if s:
-        _torus(s, "Ring", "TorusZ", "Gloss", 0.26, 86)
+        _surface(s)
+        _smoke(s, "Puffs", 3, (0.30, 0.36), (30, 40), 260, 7.0, look="SmokeLight", ring=(18, 8), origin=(0, 0, -6))
     return s
 
 
 def land_ring():
-    """Landing (scaled by the fall speed; knockdown 1.2): a glossy torus ~80 cm that widens from 45% and pops out at 300 ms, and 6 cotton
-    balls (14-18 cm) born on a 58 cm circle, pushed out and up, falling back on the floor plane once (one hop, then rest)"""
+    """Landing (scaled by the fall speed; knockdown 1.2): 6 lit puffs born on a 30 cm circle, pushed out low along the floor, growing and
+    eroding in ~0.55 s, + 6 grains (astro_3). No torus, no balls"""
     s = _system("NS_GSTN_LandRing")
     if s:
-        _ground_plane(s)
-        _torus(s, "Ring", "TorusZ", "Gloss", 0.30, 80)
-        _balls(s, "Puffs", 6, (0.34, 0.42), (20, 26), 440, 6.0, ring=(58, 10), origin=(0, 0, -40), gravity=-2200, bounce=True)
+        _surface(s)
+        _smoke(s, "Puffs", 6, (0.48, 0.60), (48, 66), 420, 6.0, ring=(30, 12), origin=(0, 0, -12), rise=40.0)
+        _grains(s, "Grains", 6, (0.40, 0.55), (3, 5), 520, ((0, 0, 1), 70), gravity=-900.0)
     return s
 
 
 def _lines(system, name, side):
-    """One side of the body: capsules spawned 50-80 cm out, 60-150 cm high, sliding backwards (-Y), X along the motion"""
-    e = Emitter(system, "Fountain", name).settings(True)
-    e.off("ParticleUpdate", "ScaleColor")
+    """astro_2: one side of the body, thin very bright white-cyan lines 50-80 cm out, 60-150 cm high, sliding backwards (-Y)"""
+    e = _sprites(system, name, "Fountain")
     e.set("EmitterUpdate", "SpawnRate", "SpawnRate", 8.0)
-    e.mesh_particle((0.24, 0.30), (90, 110), scale=(1.0, 0.35, 0.35))
+    e.particle((0.22, 0.28), None, non_uniform=(3.0, 110.0)).sized()
     e.set("ParticleSpawn", "ShapeLocation", "Shape Primitive", "Box / Plane")
     e.set("ParticleSpawn", "ShapeLocation", "Box Size", (30, 60, 90))
     e.shape_offset((65 * side, -20, 105))
     e.set("ParticleSpawn", "AddVelocity", "Velocity Mode", "Linear").set("ParticleSpawn", "AddVelocity", "Velocity", (0, -450, 0))
-    return e.drag(2.0).mesh("Capsule", "Streak", facing="velocity")
+    return e.drag(2.0).material("FlashLaser", velocity_aligned=True)
 
 
 def speed_lines():
-    """Sprint 2 (sustained, attached to the root bone, local space): glossy white tapered capsules at the body's sides only. The table
-    stops them under 450 cm/s (owner playtest: lines trailing a walk)"""
+    """Sprint 2 (sustained, attached to the root bone, local space): thin bright lines at the body's sides only. The table stops them
+    under 450 cm/s (owner playtest: lines trailing a walk)"""
     s = _system("NS_GSTN_SpeedLines")
     if s:
         _lines(s, "Left", -1)
@@ -377,30 +428,29 @@ def speed_lines():
 
 
 def hit_spark():
-    """Hit (X along the push; cue intensity 0.5 / 0.74 / 1.1 for S / M / L, which scales everything): flash sprite 64 cm (frames 1-2), a
-    "neon" torus ~105 cm facing the camera, 4/6/8 glossy gem shards (User.Count) in an 80 degree fan, braked hard, gone by frame ~18.
-    Strong hit (User.StrongCount = 3): 3 debris gems in the kit's accent colour that fall, bounce on the floor (max 2) with a shadow
-    under them, and pop out by ~0.9 s"""
+    """Hit (X along the push; cue intensity 0.5 / 0.74 / 1.1 for S / M / L). astro_1: a sharp white star-burst with an orange fringe,
+    biggest on frame 1 and shrinking to nothing (~5 frames before the hitstop slows it), 4/6/8 short coloured streaks (User.Count) flying
+    out in a 150 degree fan, 6 tiny sparks that fall. Strong hit (User.StrongCount = 3): 3 small glossy debris in the kit's accent colour
+    that bounce on the floor (max 2) with a shadow, gone by ~0.9 s (owner 3A)"""
     s = _system("NS_GSTN_HitSpark")
     if s:
         _ground_plane(s)
-        flash = Emitter(s, "OmnidirectionalBurst", "Flash").settings(True)
-        flash.off("ParticleUpdate", "ScaleColor")
-        # r1 review: on the contact, not over the attacker (-30 -> +10); a bigger flash from the game camera (83 -> 110)
-        flash.burst(1).particle((0.034, 0.034), (110, 110)).sized().sphere(0.01, offset=(10, 0, 0)).radial(0.0)
-        flash.toward_camera(60.0).material("HitFlash")  # r2 review: a dark square behind the attacker from the game camera
-        _torus(s, "Ring", "TorusX", "Neon", 0.20, 85, offset=(10, 0, 0), facing="camera")
-        shards = Emitter(s, "OmnidirectionalBurst", "Shards").settings(True)
-        shards.off("ParticleUpdate", "ScaleColor")
-        shards.burst(8).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.Count")
-        # Fan regular-ish: a cone of +-45 degrees (120 set), no curl, no vortex
-        # r2 review: drag 14 -> 20 (they flew ~3 m), born on a 12 cm sphere in a wider fan (a pile on the ground bounce)
-        shards.mesh_particle((0.24, 0.30), (18, 22)).sphere(12, offset=(5, 0, 0)).cone((1, 0, 0), 150, 3000).drag(20.0)
-        shards.toward_camera(30.0).mesh("Gem", "Gem", facing="velocity")
+        star = _sprites(s, "Star")
+        star.burst(1).particle((0.085, 0.085), (120, 120), rotation=True).sized().sphere(0.01, offset=(10, 0, 0)).radial(0.0)
+        star.toward_camera(60.0).material("FlashStar")
+        streaks = _sprites(s, "Streaks")
+        streaks.burst(8).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.Count")
+        streaks.particle((0.13, 0.17), None, non_uniform=(9.0, 60.0)).sized()
+        streaks.sphere(10, offset=(5, 0, 0)).cone((1, 0, 0), 150, 2200).drag(14.0)
+        streaks.toward_camera(45.0).material("FlashStreak", velocity_aligned=True)
+        sparks = _sprites(s, "Sparks")
+        sparks.burst(6).particle((0.22, 0.32), (7, 11), rotation=True).sized()
+        sparks.sphere(8, offset=(5, 0, 0)).cone((1, 0, 0.3), 170, 1300).drag(6.0).gravity(-900.0)
+        sparks.toward_camera(45.0).material("FlashSpark")
         debris = Emitter(s, "OmnidirectionalBurst", "Debris").settings(True)
         debris.off("ParticleUpdate", "ScaleColor")
         debris.burst(3).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.StrongCount")
-        debris.mesh_particle((0.75, 0.90), (18, 22)).sphere(4, offset=(5, 0, 0)).cone((1, 0, 0.6), 110, 900).drag(2.5)
+        debris.mesh_particle((0.75, 0.90), (10, 13)).sphere(4, offset=(5, 0, 0)).cone((1, 0, 0.6), 110, 900).drag(2.5)
         debris.gravity(-2600).bounce()
         debris.link("ParticleSpawn", "InitializeParticle", "Color", "User.AccentTint")
         debris.mesh("Gem", "Debris", facing="velocity", shadow="Debris")
@@ -408,27 +458,25 @@ def hit_spark():
 
 
 def impact():
-    """Wall, ceiling or ground contact of a launched victim (X along the surface normal): a glossy torus on the surface (~80 cm) and 5
-    cotton balls born on its rim, pushed off the surface, falling to the floor and bouncing there, with shadows"""
+    """Wall, ceiling or ground contact of a launched victim (X along the surface normal): astro_3, a cloud of 5 lit puffs off the surface
+    in the floor's colour, growing and eroding in ~0.7 s, + 8 grains that fall"""
     s = _system("NS_GSTN_Impact")
     if s:
-        _ground_plane(s)
-        _torus(s, "Ring", "TorusX", "Gloss", 0.30, 80, offset=(3, 0, 0))
-        _balls(s, "Puffs", 5, (0.45, 0.60), (16, 22), 440, 5.0, sphere=(72, (0.05, 1, 1), (14, 0, 0)), rim=True, gravity=-2200, bounce=True,
-               shadow="Dust")
+        _surface(s)
+        _smoke(s, "Puffs", 5, (0.60, 0.78), (60, 88), 460, 6.0, cone=((1, 0, 0), 80), sphere=(40, (0.05, 1, 1), (14, 0, 0)), rise=40.0)
+        _grains(s, "Grains", 8, (0.45, 0.60), (3, 5), 650, ((1, 0, 0), 75), gravity=-900.0, offset=(10, 0, 0))
     return s
 
 
 def tumble_trail():
-    """Tumble (sustained, attached to the pelvis, world space; starts at the launch): a chain of glossy balls (18 cm) one every 60 cm
-    flown, shrinking out in 300 ms, each with its shadow on the floor under the launch"""
+    """Tumble (sustained, attached to the pelvis, world space; starts at the launch): a dotted energy trail, one small bright spark every
+    25 cm flown, shrinking out in 250 ms (v3: no glossy balls)"""
     s = _system("NS_GSTN_TumbleTrail")
     if s:
-        _ground_plane(s)
-        balls = Emitter(s, "Fountain", "Balls").settings(False)
-        balls.off("ParticleUpdate", "ScaleColor")
-        balls.per_distance(60.0)
-        balls.mesh_particle((0.28, 0.32), (18, 18)).sphere(2).cone((0, 0, 1), 180, 10).mesh("Ball", "Dust", shadow="Dust")
+        e = _sprites(s, "Dots", "Fountain", local=False)
+        e.per_distance(25.0)
+        e.particle((0.22, 0.26), (14, 16), rotation=True).sized()
+        e.sphere(2).cone((0, 0, 1), 180, 10).material("FlashSpark")
     return s
 
 

@@ -15,7 +15,8 @@ public class GSTNPresentationCore : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"GameplayTags",
-			"GSTNAnimationCore"
+			"GSTNAnimationCore",
+			"PhysicsCore"  // EPhysicalSurface in the presentation component (VFX v3 floor colour)
 		});
 
 		PrivateDependencyModuleNames.Add("Niagara");

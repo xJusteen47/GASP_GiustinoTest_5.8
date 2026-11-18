@@ -29,7 +29,7 @@ VFX = os.environ.get('PIE_VFX', '1')
 KIT = os.environ.get('PIE_CAPTURE_KIT', 'KIT_Test_Hits')
 OUT = os.environ.get('PIE_CAPTURE_OUT') or os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()),
                                                         'PolishM2', f'vfx{VFX}')
-SIZE = 480
+SIZE = int(os.environ.get('PIE_CAPTURE_SIZE', '480'))
 # 'side': on the pawn's right at the sequence start, follows the pawn (movement), the victim (follow_victim) or frames pawn + dummy (hits);
 # 'game': the player's camera; 'close': the player's camera at CLOSE x its field of view (review r1: the fighter was ~45 px high in 'game')
 VIEWS = ['side', 'game', 'close']
@@ -154,6 +154,59 @@ def _victim():
     keys = h.dummies()
     comp = g.comps(_world()).get(keys[0]) if keys else None
     return comp.get_owner() if comp else None
+
+
+# VFX v3 (rule: clarity on LIGHT and DARK backgrounds): PIE_BACKDROP=light|dark lays a no-collision floor plane over the hub floor and a far
+# wall ahead, white snow (light) or dark rock (dark), material M_GSTN_VFX_CaptureBackdrop (setup_presentation_vfx_v3). PIE_SURFACE_COLOR="r,g,b"
+# (linear) is the presentation components' DefaultSurfaceColor for the run (the dust and snow colour). Capture only
+BACKDROP = os.environ.get('PIE_BACKDROP', '')
+BACKDROP_COLOURS = {'light': (0.82, 0.86, 0.92), 'dark': (0.035, 0.035, 0.045)}
+SURFACE = [float(v) for v in os.environ['PIE_SURFACE_COLOR'].split(',')] if os.environ.get('PIE_SURFACE_COLOR') else None
+
+
+def _backdrop():
+    """Summons the backdrop (floor plane + far wall), one actor per call; True when placed"""
+    if not BACKDROP or len(st.setdefault('backdrop', [])) >= 2:
+        return True
+    known = st.setdefault('mesh_before', {a.get_name() for a in unreal.GameplayStatics.get_all_actors_of_class(_world(), unreal.StaticMeshActor)})
+    new = [a for a in unreal.GameplayStatics.get_all_actors_of_class(_world(), unreal.StaticMeshActor) if a.get_name() not in known]
+    if not new:
+        _console('Summon StaticMeshActor')
+        return False
+    actor = new[0]
+    known.add(actor.get_name())
+    pawn = _pawn()
+    p, yaw = pawn.get_actor_location(), pawn.get_actor_rotation().yaw
+    fx, fy = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+    floor = p.z - 92.0
+    comp = actor.static_mesh_component
+    comp.set_mobility(unreal.ComponentMobility.MOVABLE)
+    comp.set_collision_profile_name('NoCollision')
+    comp.set_cast_shadow(False)
+    if not st['backdrop']:   # floor: 40 m square, 0.3 cm over the hub floor (the traces still hit the real floor under it)
+        comp.set_static_mesh(unreal.load_asset('/Engine/BasicShapes/Plane'))
+        actor.set_actor_scale3d(unreal.Vector(40.0, 40.0, 1.0))
+        actor.set_actor_location_and_rotation(unreal.Vector(p.x + fx * 600, p.y + fy * 600, floor + 0.3), unreal.Rotator(), False, True)
+    else:                    # far wall 18 m ahead, 40 m wide, 15 m high
+        comp.set_static_mesh(unreal.load_asset(CUBE))
+        actor.set_actor_scale3d(unreal.Vector(0.4, 40.0, 15.0))
+        actor.set_actor_location_and_rotation(unreal.Vector(p.x + fx * 1800, p.y + fy * 1800, floor + 750), unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw),
+                                              False, True)
+    mid = comp.create_dynamic_material_instance(0, unreal.load_asset('/GSTNPresentation/VFX/Materials/M_GSTN_VFX_CaptureBackdrop'))
+    r, gr, b = BACKDROP_COLOURS[BACKDROP]
+    mid.set_vector_parameter_value('Color', unreal.LinearColor(r, gr, b, 1.0))
+    st['backdrop'].append(actor)
+    _log(f'backdrop {BACKDROP} {len(st["backdrop"])}/2')
+    return len(st['backdrop']) >= 2
+
+
+def _surface_colour():
+    if not SURFACE:
+        return
+    for actor in (_pawn(), st.get('victim')):
+        comp = actor.get_component_by_class(unreal.GSTN_PresentationComponent) if actor else None
+        if comp:
+            comp.set_editor_property('default_surface_color', unreal.LinearColor(SURFACE[0], SURFACE[1], SURFACE[2], 1.0))
 
 
 def _blocks(seq):
@@ -313,8 +366,9 @@ def _tick(_dt):
                 _log(f'{seq["name"]}: dummy {keys[:1]} at {placed}, percent {percent}')
                 st.update(dummy_placed=True, t=now, victim=_victim())
                 return None
-            if not _blocks(seq):
+            if not _blocks(seq) or not _backdrop():
                 return None
+            _surface_colour()
             _log(f'sequence {seq["name"]}: {_aim(seq, False)}')
             if SWATCH:
                 c, cam = st['centre'], st['cams'][0].get_actor_location()
@@ -372,7 +426,9 @@ def _tick(_dt):
                 _log(f'sequence {seq["name"]} done: {st["frame"]} frames, pawn at ({p.x:.0f}, {p.y:.0f}, {p.z:.0f})')
                 for block in st['blocks']:
                     block.destroy_actor()
-                st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False, blocks=[], victim=None)
+                for actor in st.get('backdrop', []):
+                    actor.destroy_actor()
+                st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False, blocks=[], victim=None, backdrop=[])
         elif phase == 'ending' and not les.is_in_play_in_editor():
             unreal.unregister_slate_post_tick_callback(st['handle'])
             try:
