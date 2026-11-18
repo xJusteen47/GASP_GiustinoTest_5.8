@@ -158,7 +158,13 @@ def build_smoke_full(smoke):
 
     # Self-shading: lerp(ShadeMin, 1, G); base colour = surface colour (particle colour) x shading
     shade = _lerp(mat, _scalar(mat, "ShadeMin", 0.55, -100, 50), one_c, _component(mat, tex, "G", -100, 150), 100, 100)
-    base = _op(mat, unreal.MaterialExpressionMultiply, pcol, shade, 250, 150)
+    # r5 Fable: ShadeMin 0.4 read as soot on a white floor. The puff stays the floor's colour (ShadeMin ~0.7); the edge gets a thin, slightly
+    # darker soft rim (RimShade at density 0, 1 at RimWidth) and the contrast comes from opacity, not from darkening the whole puff
+    rim = _lerp(mat, _scalar(mat, "RimShade", 0.8, -100, 380), one_c,
+                _unary(mat, unreal.MaterialExpressionSaturate,
+                       _op(mat, unreal.MaterialExpressionDivide, _component(mat, tex, "R", -100, 470), _scalar(mat, "RimWidth", 0.35, -100, 540),
+                           50, 480), 180, 480), 300, 400)
+    base = _op(mat, unreal.MaterialExpressionMultiply, _op(mat, unreal.MaterialExpressionMultiply, pcol, shade, 250, 150), rim, 330, 200)
     lift = _eye_inverse(mat, _op(mat, unreal.MaterialExpressionMultiply, base, _scalar(mat, "EmissiveLift", 0.12, 250, 300), 400, 250),
                         550, 250)
 
@@ -228,6 +234,7 @@ def build_contact_shadow():
 
 ORANGE = unreal.LinearColor(1.0, 0.22, 0.0, 1)  # saturated: reads on white snow and on dark rock
 CYAN = unreal.LinearColor(0.25, 0.75, 1.0, 1)
+BLUE = unreal.LinearColor(0.05, 0.35, 1.0, 1)  # r5 Fable: the sprint lines' cyan fringe washed out to white; a deeper blue survives the bloom
 WHITE = unreal.LinearColor(1, 1, 1, 1)
 
 FLASH_LOOKS = {
@@ -242,18 +249,22 @@ FLASH_LOOKS = {
                        fringe=unreal.LinearColor(1.0, 0.75, 0.1, 1)),
     # astro_2: thin very bright lines (sprint lines, jets)
     "FlashLaser": dict(tex="T_GSTN_VFX_Streak", Brightness=6.0, StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.6, EndScale=0.2, FadeStart=0.5,
-                       fringe=CYAN),
+                       fringe=BLUE),
     # astro_3: fine snow/dust grains, the floor's colour (particle colour), small glints
     "Grain": dict(tex="T_GSTN_VFX_Star", Brightness=1.4, StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.5, EndScale=0.0, FadeStart=0.6,
                   fringe=WHITE),
 }
 SMOKE_LOOKS = {
     # Impact / landing dust and snow: big soft lit puffs that grow and erode
-    "SmokeDust": dict(OpacityMax=0.85, ShadeMin=0.4, StartScale=0.45, GrowEnd=0.75, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.2,
-                      FadeDistance=35.0, EmissiveLift=0.06, Roughness=0.9),  # r4 Fable: darker underside, reads on a same-colour floor
+    # r5 Fable: ShadeMin 0.4 / EmissiveLift 0.06 read as soot on the light floor. r6 self-check: 0.7 / 0.14 still mid grey on the 0.95
+    # floor (the lit translucent puff gets far less light than the floor): EmissiveLift 0.5 (eye-adapted, so ~half the surface colour on
+    # screen whatever the exposure, still < 1: no bloom), ShadeMin 0.8, rim 0.8 keeps a soft edge. On-screen opacity was ~0.3-0.4 on the
+    # dark floor -> OpacityMax 1.0 (the particle alpha and the erosion keep it below that)
+    "SmokeDust": dict(OpacityMax=1.0, ShadeMin=0.8, StartScale=0.45, GrowEnd=0.75, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.2,
+                      FadeDistance=35.0, EmissiveLift=0.5, Roughness=0.9, RimShade=0.8, RimWidth=0.35),
     # Locomotion dust: thinner, quicker
-    "SmokeLight": dict(OpacityMax=0.7, ShadeMin=0.4, StartScale=0.6, GrowEnd=0.8, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.1,
-                       FadeDistance=25.0, EmissiveLift=0.06, Roughness=0.9),
+    "SmokeLight": dict(OpacityMax=0.9, ShadeMin=0.8, StartScale=0.6, GrowEnd=0.8, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.1,
+                       FadeDistance=25.0, EmissiveLift=0.5, Roughness=0.9, RimShade=0.8, RimWidth=0.35),
 }
 
 

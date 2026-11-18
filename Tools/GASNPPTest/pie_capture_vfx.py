@@ -43,7 +43,7 @@ FWD, BACK = (0, 1, 0), (0, -1, 0)   # stick, relative to the camera (as in scena
 # dummy; kit: the host's kit for this sequence (default KIT); strong: frames pressing Strong; blocks: boxes summoned for the sequence and
 # removed after it, (cm ahead, cm to the side, cm above the floor, size along, across, up), placed along the host's facing
 SEQUENCES = [
-    {'name': 'jump', 'frames': 100, 'jump': [0], 'dist': 700.0, 'follow': True, 'follow_z': 0.6},  # r4: the pawn left the frame upwards
+    {'name': 'jump', 'frames': 160, 'jump': [0], 'dist': 700.0, 'follow': True, 'follow_z': 0.6},  # r4: the pawn left the frame upwards
     {'name': 'hit_small', 'frames': 60, 'tap': [0], 'dummy': (95.0, 0.0), 'dist': 480.0, 'follow': False},
     {'name': 'hit_medium', 'frames': 80, 'tap': [0], 'dummy': (95.0, 90.0), 'dist': 480.0, 'follow': False},
     # The launch, followed until the downed landing (~190 frames after the hit) and a little after
@@ -166,8 +166,10 @@ SURFACE = [float(v) for v in os.environ['PIE_SURFACE_COLOR'].split(',')] if os.e
 
 
 def _backdrop():
-    """Summons the backdrop (floor plane + far wall), one actor per call; True when placed"""
-    if not BACKDROP or len(st.setdefault('backdrop', [])) >= 2:
+    """Summons the backdrop (floor plane + far wall + side wall), one actor per call; True when placed. r5: the movement sequences ran off
+    the 40 m floor (no sprint lines over it) and the side camera saw the black sky behind a jumping dark mannequin: an 80 m floor reaching
+    65 m ahead, a far wall 45 m ahead and a wall behind the subject on the side camera's axis"""
+    if not BACKDROP or len(st.setdefault('backdrop', [])) >= 3:
         return True
     known = st.setdefault('mesh_before', {a.get_name() for a in unreal.GameplayStatics.get_all_actors_of_class(_world(), unreal.StaticMeshActor)})
     new = [a for a in unreal.GameplayStatics.get_all_actors_of_class(_world(), unreal.StaticMeshActor) if a.get_name() not in known]
@@ -192,21 +194,27 @@ def _backdrop():
     comp.set_mobility(unreal.ComponentMobility.MOVABLE)
     comp.set_collision_profile_name('NoCollision')
     comp.set_cast_shadow(False)
-    if not st['backdrop']:   # floor: 40 m square, 0.3 cm over the hub floor (the traces still hit the real floor under it)
+    if not st['backdrop']:   # floor: 80 m square from 15 m behind to 65 m ahead, 1 cm over the hub floor (traces still hit the real floor)
         comp.set_static_mesh(unreal.load_asset('/Engine/BasicShapes/Plane'))
-        actor.set_actor_scale3d(unreal.Vector(40.0, 40.0, 1.0))
-        actor.set_actor_location_and_rotation(unreal.Vector(p.x + fx * 600, p.y + fy * 600, floor + 1.0), unreal.Rotator(), False, True)
-    else:                    # far wall 18 m ahead, 40 m wide, 15 m high
+        actor.set_actor_scale3d(unreal.Vector(80.0, 80.0, 1.0))
+        actor.set_actor_location_and_rotation(unreal.Vector(p.x + fx * 2500, p.y + fy * 2500, floor + 1.0), unreal.Rotator(), False, True)
+    elif len(st['backdrop']) == 1:   # far wall 45 m ahead (past the sprint's end), 80 m wide, 30 m high
         comp.set_static_mesh(unreal.load_asset(CUBE))
-        actor.set_actor_scale3d(unreal.Vector(0.4, 40.0, 15.0))
-        actor.set_actor_location_and_rotation(unreal.Vector(p.x + fx * 1800, p.y + fy * 1800, floor + 750), unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw),
+        actor.set_actor_scale3d(unreal.Vector(0.4, 80.0, 30.0))
+        actor.set_actor_location_and_rotation(unreal.Vector(p.x + fx * 4500, p.y + fy * 4500, floor + 1500), unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw),
                                               False, True)
+    else:                    # side wall: 16 m on the pawn's left (the side camera sits on its right), along the whole floor
+        comp.set_static_mesh(unreal.load_asset(CUBE))
+        actor.set_actor_scale3d(unreal.Vector(0.4, 80.0, 30.0))
+        lx, ly = fy, -fx
+        actor.set_actor_location_and_rotation(unreal.Vector(p.x + fx * 2500 + lx * 1600, p.y + fy * 2500 + ly * 1600, floor + 1500),
+                                              unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw + 90.0), False, True)
     mid = comp.create_dynamic_material_instance(0, unreal.load_asset('/GSTNPresentation/VFX/Materials/M_GSTN_VFX_CaptureBackdrop'))
     r, gr, b = BACKDROP_COLOURS[BACKDROP]
     mid.set_vector_parameter_value('Color', unreal.LinearColor(r, gr, b, 1.0))
     st['backdrop'].append(actor)
-    _log(f'backdrop {BACKDROP} {len(st["backdrop"])}/2')
-    return len(st['backdrop']) >= 2
+    _log(f'backdrop {BACKDROP} {len(st["backdrop"])}/3')
+    return len(st['backdrop']) >= 3
 
 
 def _surface_colour():
@@ -271,6 +279,29 @@ def _aim(seq, follow):
     pos = unreal.Vector(centre.x + d * math.cos(e) * math.cos(a), centre.y + d * math.cos(e) * math.sin(a), centre.z + d * math.sin(e))
     st['cams'][0].set_actor_location_and_rotation(pos, unreal.MathLibrary.find_look_at_rotation(pos, centre), False, False)
     return (round(centre.x), round(centre.y), round(centre.z)), round(yaw)
+
+
+def _contact(seq, frame):
+    """Logs '<seq>: land on vN' (the pawn back on the floor after a jump) and '<seq>: bounce on vN' (the victim's first floor contact after
+    the launch), so the review sheet can sample around them (r5: no landing and no bounce contact in the 8 frames)"""
+    if seq['name'] == 'jump':
+        actor, key, rise = _pawn(), 'land', 30.0
+    elif seq['name'] == 'ground_bounce' and st.get('victim'):
+        actor, key, rise = st['victim'], 'bounce', 40.0
+    else:
+        return
+    z = actor.get_actor_location().z
+    c = st.setdefault('contact', {})
+    if frame == 0 or c.get('seq') != seq['name']:
+        c.clear()
+        c.update(seq=seq['name'], z0=z, up=False, done=False)
+    if c['done']:
+        return
+    if z > c['z0'] + rise:
+        c['up'] = True
+    elif c['up'] and z <= c['z0'] + 8.0:
+        c['done'] = True
+        _log(f'{seq["name"]}: {key} on v{frame}')
 
 
 def _shoot(seq, frame):
@@ -373,6 +404,12 @@ def _tick(_dt):
                 _log(f'{seq["name"]}: dummy {keys[:1]} at {placed}, percent {percent}')
                 st.update(dummy_placed=True, t=now, victim=_victim())
                 return None
+            if not seq.get('dummy') and not st.get('dummy_placed') and h.dummies():
+                # r5 light run_skid: the dummy left 43 cm ahead by the hit sequences overlapped the run-start puff: 15 m behind
+                placed = h._place_ahead(0, h.dummies()[0], -1500.0)
+                _log(f'{seq["name"]}: dummy moved away to {placed}')
+                st.update(dummy_placed=True, t=now, victim=None)
+                return None
             if not _blocks(seq) or not _backdrop():
                 return None
             _surface_colour()
@@ -406,6 +443,7 @@ def _tick(_dt):
                     for em in emitters:
                         _log(f'probe f{frame} {name}.{em}: {unreal.GSTN_VfxAuthoringLibrary.describe_particles(comp, em, 6)}')
             _shoot(seq, frame)
+            _contact(seq, frame)
             k = frame - PRE
             want = _stick_at(seq, k) if k >= 0 else None
             if want != st['stick']:

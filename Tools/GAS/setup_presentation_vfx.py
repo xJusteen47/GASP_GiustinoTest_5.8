@@ -368,7 +368,7 @@ def run_start_dust():
         _surface(s)
         _smoke(s, "Puffs", 5, (0.45, 0.58), (110, 160), 150, 6.0, look="SmokeLight", cone=((-1, 0, 0.35), 55), sphere=(10, (1, 1, 0.3), (-6, 0, 14)),
                rise=60.0)
-        _grains(s, "Grains", 4, (0.35, 0.45), (3, 5), 420, ((-1, 0, 0.8), 45))
+        _grains(s, "Grains", 4, (0.35, 0.45), (5, 8), 420, ((-1, 0, 0.8), 45))  # r5: 3-5 cm grains invisible on the dark floor
     return s
 
 
@@ -377,11 +377,19 @@ def skid_dust():
     s = _system("NS_GSTN_SkidDust")
     if s:
         _surface(s)
+        # r5 Fable: no dust in the slide pose (v142); the puff seen at v167 was the RunStart of the turn (log: Skid.Enter v128, Exit v143,
+        # RunStart v146). Spawn per unit never fired on the skid, so: a burst of 3 at Skid.Enter (dust on frame 1) and a steady rate while
+        # the cue lives (it stops on Skid.Exit; a skid is ~15 frames, so the rate cannot pile up)
+        kick = _sprites(s, "Kick", local=False)
+        kick.burst(3).particle((0.45, 0.55), (100, 140), rotation=True).sized()
+        kick.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")
+        kick.sphere(10, (1, 1, 0.3), (0, 0, 14)).cone((0, 0, 1), 50, 120).drag(5.0).material("SmokeLight")
         e = _sprites(s, "Trail", "Fountain", local=False)
-        e.per_distance(20.0)
+        e.set("EmitterUpdate", "SpawnRate", "SpawnRate", 18.0)
         e.particle((0.45, 0.55), (95, 135), rotation=True).sized()  # r4 Fable: x3, the skid row was invisible
         e.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")
         e.sphere(4, (1, 1, 0.3), (0, 0, 14)).cone((0, 0, 1), 35, 70).drag(5.0).material("SmokeLight")
+        _grains(s, "Grains", 4, (0.35, 0.45), (5, 8), 380, ((0, 0, 1), 60))
     return s
 
 
@@ -401,7 +409,7 @@ def land_ring():
     if s:
         _surface(s)
         _smoke(s, "Puffs", 6, (0.50, 0.62), (110, 150), 260, 6.0, ring=(30, 12), origin=(0, 0, -12), rise=40.0)
-        _grains(s, "Grains", 6, (0.40, 0.55), (3, 5), 520, ((0, 0, 1), 70), gravity=-900.0)
+        _grains(s, "Grains", 6, (0.40, 0.55), (5, 8), 520, ((0, 0, 1), 70), gravity=-900.0)
     return s
 
 
@@ -436,7 +444,10 @@ def hit_spark():
     if s:
         _ground_plane(s)
         star = _sprites(s, "Star")
-        star.burst(1).particle((0.085, 0.085), (210, 210), rotation=True).sized().sphere(0.01, offset=(10, 0, 0)).radial(0.0)
+        # r5 Fable: the strong star stayed near full size v35-v44 and hid both torsos: the hitstop slows the whole system to 0.15 after 2
+        # free frames (owner 2A), so a 5-frame life became ~12 frames. 2.5 frames of life: 100 % on frame 1, ~15 % by frame 4, gone by
+        # frame 6; the streaks and sparks carry the rest of the hitstop
+        star.burst(1).particle((0.042, 0.042), (210, 210), rotation=True).sized().sphere(0.01, offset=(10, 0, 0)).radial(0.0)
         star.toward_camera(60.0).material("FlashStar")
         streaks = _sprites(s, "Streaks")
         streaks.burst(8).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.Count")
@@ -459,12 +470,13 @@ def hit_spark():
 
 def impact():
     """Wall, ceiling or ground contact of a launched victim (X along the surface normal): astro_3, a cloud of 5 lit puffs off the surface
-    in the floor's colour, growing and eroding in ~0.7 s, + 8 grains that fall"""
+    in the floor's colour, growing and eroding in ~0.7 s, + 10 grains that fall. r5 Fable: 2-3 blobs of 20-40 cm next to astro_3's cloud
+    wider than the character: 7 puffs of 170-240 cm (StartScale 0.45 -> ~120-180 cm at peak), born on a wide flat disc, spread low"""
     s = _system("NS_GSTN_Impact")
     if s:
         _surface(s)
-        _smoke(s, "Puffs", 5, (0.60, 0.78), (60, 88), 460, 6.0, cone=((1, 0, 0), 80), sphere=(40, (0.05, 1, 1), (14, 0, 0)), rise=40.0)
-        _grains(s, "Grains", 8, (0.45, 0.60), (3, 5), 650, ((1, 0, 0), 75), gravity=-900.0, offset=(10, 0, 0))
+        _smoke(s, "Puffs", 7, (0.60, 0.80), (170, 240), 420, 6.0, cone=((1, 0, 0), 85), sphere=(60, (0.05, 1.6, 1.6), (20, 0, 0)), rise=30.0)
+        _grains(s, "Grains", 10, (0.45, 0.60), (5, 8), 650, ((1, 0, 0), 75), gravity=-900.0, offset=(10, 0, 0))
     return s
 
 

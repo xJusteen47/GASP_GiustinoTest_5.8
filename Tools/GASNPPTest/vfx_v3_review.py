@@ -39,6 +39,16 @@ def inputs(log):
     return found
 
 
+def contacts(log):
+    """{sequence: frame (v)} of the landing / floor contact logged by pie_capture_vfx._contact"""
+    found = {}
+    for line in open(log, encoding="utf-8", errors="replace"):
+        m = re.search(r"(\w+): (?:land|bounce) on v(\d+)", line)
+        if m and m.group(1) not in found:
+            found[m.group(1)] = int(m.group(2))
+    return found
+
+
 def frame(folder, n):
     path = os.path.join(folder, f"f{n:03d}.png")
     return Image.open(path).convert("RGB") if os.path.exists(path) else None
@@ -95,6 +105,7 @@ for bd in ("light", "dark"):
     if not os.path.isdir(root):
         continue
     first = inputs(os.path.join(root, "capture.log"))
+    touch = contacts(os.path.join(root, "capture.log"))
     for seq in sorted(os.listdir(root)):
         # r3 laptop: the game/close cameras sit behind the attacker and the victim hides the hit; the side view shows it, so the
         # sheets use the side view and every view gets a video
@@ -110,6 +121,9 @@ for bd in ("light", "dark"):
         if seq.startswith("hit"):
             h = brightest(side, start, min(start + 30, count))
             picks = [h - 1, h, h + 1, h + 2, h + 4, h + 6, h + 9, h + 13]
+        elif seq in touch:   # r5: half the sheet around the landing / floor contact (4 of 8 frames from contact - 1)
+            t = touch[seq]
+            picks = [start, start + (t - start) // 3, start + 2 * (t - start) // 3, t - 1, t, t + 2, t + 6, t + 14]
         else:
             span = max(8, count - start - 4)
             picks = [start + int(i * span / 8) for i in range(8)]
