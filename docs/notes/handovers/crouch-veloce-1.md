@@ -19,7 +19,7 @@ down in 2 phone frames (~4 game frames), body+head overshoot then settle by 4 ph
    upper arms 1.2, lower arms/hands/head 1.5 (starting values, Fable tunes).
 4. Clips from the curve sheet (FK, local slerp; feet pinned): AS_GSTN_Crouch_{Enter,Idle,Exit}, AS_AirCrouch_Enter, new content in
    AS_AirCrouch_Loop_PLACEHOLDER (same path). Ground: chooser raw rows + state machine transitions with the blend profile, bFastCrouch setting.
-5. DA_ReactionAnims (AirCrouch rule: Enter + BlendOutProfile): ONLY after the owner commits his own edits to that asset (memory: don't touch).
+5. DA_ReactionAnims (AirCrouch rule: Enter + BlendOutProfile): owner 23:48 says he edits nothing by hand, so free to edit; git status first.
 6. Capture variant vs base (same frames), Fable review identity first. Max 3 pose rounds.
 
 ## Open

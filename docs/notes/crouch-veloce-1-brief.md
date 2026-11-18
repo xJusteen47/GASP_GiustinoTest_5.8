@@ -34,8 +34,8 @@ Misure dal riferimento (telefono 30 fps = 2 frame di gioco a step): giù 2 step,
   (regola owner GASP ANIM), blend d'ingresso 0-2 frame; warping lasciato acceso. Entrambi i comportamenti come impostazione:
   `DA_Locomotion_Default` > Crouch > `bFastCrouch` (nostro, default ON) / OFF = crouch GASP com'è oggi. Tempi di blend nel profilo, non nel kit.
 - Crouch walk: oggi clip GASP (bCrouchWalk ON). Con la posa nuova il passo GASP stona: giro 1 lo lascia, la review lo segnala come "gioco".
-- Aria: si sostituisce il CONTENUTO di `AS_AirCrouch_Loop_PLACEHOLDER` (stesso percorso) e si aggiunge `AS_AirCrouch_Enter`. Il rinvio a
-  `DA_ReactionAnims` (che l'owner sta modificando, non toccare) serve solo per l'Enter: va fatto dopo che l'owner committa le sue modifiche.
+- Aria: si sostituisce il CONTENUTO di `AS_AirCrouch_Loop_PLACEHOLDER` (stesso percorso) e si aggiunge `AS_AirCrouch_Enter`. In `DA_ReactionAnims`
+  (owner 23:48: nessuna modifica a mano, si può toccare; prima git status) vanno Enter e BlendOutProfile della regola AirCrouch.
   L'uscita oggi è un blend di 3 frame: per l'Exit con follow-through serve un campo ExitAnim nella regola (codice piccolo, GSTNCombatGAS).
 - Atterraggio con LT tenuto: air crouch -> crouch a terra quasi a taglio netto (regola LANDING), senza passare dal land GASP in piedi.
 
