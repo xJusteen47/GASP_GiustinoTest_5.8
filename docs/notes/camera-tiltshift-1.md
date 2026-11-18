@@ -1,0 +1,43 @@
+# Camera: tilt-shift "giocattolo", camera più vicina, studio Mario Odyssey / Astro Bot (camera-tiltshift-1)
+Thread cloud, Opus medium, 2026-11-18. Richiesta owner 11:58Z (cmsg_01CRvUdrWm1dJrM4q54YDBLNAwCQkvosBvcfniVSPjqiKd). Ambito: tutte le kit (un solo DA camera, DA_CameraAnchor_Default). Codice NON compilato: build e test sul fisso.
+**[F]** fonte · **[A]** analisi/inferenza mia, da verificare su video.
+
+## 1. Come funzionano le camere di Mario / Astro Bot (asse verticale)
+- **Non seguono il salto.** Durante il salto la camera resta all'altezza del terreno da cui sei partito; si riallinea quando atterri su un'altra quota. È il "platform snapping" dei platform 2D (Super Mario World) [F2, F3], portato in 3D: Galaxy lo scrive nei dati di ogni camera con soglie `uplay` (quanto sali prima che la camera salga, default 300) e `lplay` (quanto scendi prima che scenda, default 800), ritardi `pushdelay`/`pushdelaylow` (120 frame) e `camint` (frame per arrivare in posizione) [F1]. Odyssey e Astro Bot si comportano allo stesso modo a occhio [A].
+- **Cadute: segue giù** per farti vedere dove atterri (quando scendi sotto la quota di partenza) [A, coerente con F1 lplay].
+- **Riallineamento all'atterraggio morbido** (~0,2-0,4 s), non uno scatto [A].
+- **Anticipo (look-ahead)** leggero nella direzione di corsa, lento a girare [A]; FOV stretto (Galaxy 45° [F1]) e pitch 20-30° in giù [A, già in camera-astrobot-piano.md].
+- **Effetto giocattolo (tilt-shift):** è la profondità di campo cortissima di un obiettivo macro: solo una fetta sottile attorno al personaggio è nitida, il terreno vicino (basso schermo) e lo sfondo (alto schermo) sfocano. Con camera alta e inclinata in giù, profondità e altezza sullo schermo coincidono, quindi un DOF fisico focalizzato sul personaggio dà proprio la banda del tilt-shift [A; tecnica standard, F4]. Team Asobi non ha pubblicato parametri: nessuna fonte primaria trovata.
+
+## 2. Confronto con la nostra camera (anchor, camera-anchor-1)
+| Cosa | Mario/Astro | Noi prima | Ora |
+|---|---|---|---|
+| Salto normale | camera ferma | seguiva il salto (molla 0,07 s) | **ferma** (AirRiseBand 250 cm) |
+| Salto altissimo / arrampicata | sale per l'eccedenza | seguiva | segue oltre i 250 cm |
+| Caduta sotto la quota | segue giù | seguiva | segue (AirFallBand 0) |
+| Atterraggio su altra quota | riallinea morbido | 0,07 s | **LandingHalfLife 0,2 s** |
+| Capsula (stomp, knockdown) | n/d | anchor dal mesh | invariato |
+| Look-ahead | leggero | no | **c'è, spento** (LookAheadTime 0; prova 0,25) |
+| Distanza | vicina, FOV stretto | +550 cm | **+400 cm**, ora dato nel DA |
+| Tilt-shift | sì | no | **sì**, on/off + intensità |
+
+## 3. Cosa è stato fatto (codice, branch claude/project-thread-pg3fen)
+- `FGSTN_CameraAnchorSettings` (DA_CameraAnchor_Default): nuovi gruppi **Air** (bHoldGroundHeightInAir, AirRiseBand, AirFallBand, LandingHalfLife), **Horizontal** look-ahead (LookAheadTime, MaxLookAhead, LookAheadHalfLife), **Framing** (ExtraDistance 400, ExtraHeight 45: prima 550/60 nel DefaultEngine.ini, righe tolte), **TiltShift**.
+- Tilt-shift (`FGSTN_CameraTiltShiftSettings`, applicato da UGSTN_PlaytestCameraModifier): **CinematicDOF** (default) = fuoco sulla distanza camera-personaggio, Fstop 2, sensore virtuale 300 mm (il trucco: sensore grande = obiettivo lungo = fuoco sottile); **ScreenBand** (economico, per toaster) = materiale post-process a banda centrata sull'altezza a schermo del personaggio, 12 letture per pixel sfocato, creato da `Tools/GASNPPTest/camera_tiltshift_setup.py`. Senza materiale ricade sul DOF. Nota: con scalabilità Low il motore spegne il DOF, lì serve ScreenBand.
+- Console per A/B: `gstn.Camera.TiltShift` (-1 dati, 0 off, 1 DOF, 2 banda), `gstn.Camera.TiltShift.Intensity`, `gstn.Camera.PlaytestExtraDistance/Height` (-1 = dati).
+- Test nuovi: GSTN.Camera.Anchor.AirHoldKeepsGroundHeight, .LandingOnHigherGroundCatchesUpSoftly, GSTN.Camera.TiltShift.Math.
+
+## 4. Valori da toccare (DA_CameraAnchor_Default)
+Distanza: Framing > ExtraDistance (400; più basso = più vicino). Toy look: TiltShift > Intensity (1; 0 = spento), SensorWidth (300 mm; 150 = più leggero, 500 = molto miniatura), Fstop. Salto: Air > AirRiseBand (250 cm; il salto designer è 350 cm, quindi l'apice sposta la camera di 100 cm; metti 350 per camera del tutto ferma), LandingHalfLife.
+
+## 5. Proposte (non fatte)
+1. FOV più stretto (45-55°) insieme alla distanza: è metà dell'effetto giocattolo; tocca il rig GASP o un override nel modifier (~1 $).
+2. Ritardo prima del riallineamento in salita (pushdelay di Galaxy) se il riallineamento all'atterraggio risulta ancora nervoso.
+3. Pareti/arrampicata: oggi contano come "in aria"; se la camera resta troppo in basso sui muri, escludere le modalità muro dall'hold.
+4. Dissolvenza a retino degli ostacoli fra camera e personaggio (Odyssey) e modalità a volumi: già nel piano camera-astrobot (C1-C2).
+
+## 6. Ricerca: io vs Gemini
+In attesa: Gemini nel browser integrato non è collegato all'account (solo Flash-Lite, banner cookie). Appena l'owner accede rilancio la stessa domanda e scrivo qui quale ha reso di più.
+
+## Fonti
+F1 lumasworkshop.com/wiki/Cameras (parametri camere Super Mario Galaxy) · F2 fukuchi.org/en/works/jumplab/settings-camera-platformSnapping.html · F3 gamedeveloper.com "Scroll Back: the theory and practice of cameras in side-scrollers" (Itay Keren) · F4 dev.epicgames.com "Cinematic Depth of Field" / react-postprocessing tilt-shift (tecnica banda a schermo)
