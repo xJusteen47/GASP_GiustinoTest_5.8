@@ -106,6 +106,11 @@ for bd in ("light", "dark"):
         continue
     first = inputs(os.path.join(root, "capture.log"))
     touch = contacts(os.path.join(root, "capture.log"))
+    # argv[4] "seq=v,...": a contact frame the driver missed (r7: the victim's z test never fired; the second GroundBounce event is 74
+    # frames after the Hit event in r6 and r7, which r6's driver logged as v105)
+    for item in (sys.argv[4].split(",") if len(sys.argv) > 4 else []):
+        name, v = item.split("=")
+        touch.setdefault(name, int(v))
     for seq in sorted(os.listdir(root)):
         # r3 laptop: the game/close cameras sit behind the attacker and the victim hides the hit; the side view shows it, so the
         # sheets use the side view and every view gets a video
