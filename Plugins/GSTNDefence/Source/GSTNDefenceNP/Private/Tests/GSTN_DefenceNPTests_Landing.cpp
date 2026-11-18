@@ -416,6 +416,39 @@ bool FGSTN_DefenceLandingMaxDownedTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DefenceLandingGetupAfterBusyEndTest, "GSTNDefence.NP.Landing.GetupWhenEndCameBusy", TestFlags)
+bool FGSTN_DefenceLandingGetupAfterBusyEndTest::RunTest(const FString& Parameters)
+{
+	// Bug pass D1: MaxDownedFrames shorter than the ground bounce: the last downed frame comes while its timeline plays
+	FLandRig Land(false, 30);
+	FGSTN_DefenceKitExtension Kit;
+	Kit.GetupSet.GroundBounce = UGSTN_GA_GroundBounce::StaticClass();
+	Kit.GetupSet.Roll = UGSTN_GA_GetupRoll::StaticClass();
+	Kit.GetupSet.Neutral = UGSTN_GA_GetupNeutral::StaticClass();
+	FGSTN_DefenceAttach::SetKitMoves(Land.Rig.Owner, &Kit);
+	FGSTN_CombatTickContext Landing = Land.Make(100);
+	FGSTN_TumbleLanding::OnContactResolved(Landing, Land.Data(), FLandRig::Contact(EGSTN_TumbleContactKind::Floor, 99, FVector::UpVector), EGSTN_ImpactOutcome::None);
+	TestEqual(TEXT("downed until 129"), Land.Fragment().KnockdownEndFrame, 99 + 30);
+	FGSTN_CombatTimelineLogic::Start(Land.Out.Core, 100, 0, EGSTN_ActivationSource::Forced);
+	Land.Services.Started.Reset();
+	for (int32 Frame = 101; Frame <= 135; ++Frame)
+	{
+		FGSTN_CombatTickContext Busy = Land.Make(Frame);
+		Busy.bGrounded = true;
+		FGSTN_TumbleLanding::AfterClocks(Busy, Land.Data());
+	}
+	TestTrue(TEXT("still downed past the end while the bounce plays (no pop)"), Land.Fragment().IsKnockedDown(136));
+	TestEqual(TEXT("no get-up while busy"), Land.Services.Started.Num(), 0);
+	// The bounce ends: the get-up plays on the first free frame
+	Land.Out.Core.ActionState = EGSTN_ActionState::Actionable;
+	FGSTN_CombatTickContext Free = Land.Make(136);
+	Free.bGrounded = true;
+	FGSTN_TumbleLanding::AfterClocks(Free, Land.Data());
+	TestTrue(TEXT("the neutral get-up starts on the first free frame"), Land.Services.Started.Num() == 1 && Land.Services.Started[0] == UGSTN_GA_GetupNeutral::StaticClass());
+	TestFalse(TEXT("up from the get-up's frame"), Land.Fragment().IsKnockedDown(136));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DefenceLandingTechSuccessTest, "GSTNDefence.NP.Landing.TechSuccessCancelsImpact", TestFlags)
 bool FGSTN_DefenceLandingTechSuccessTest::RunTest(const FString& Parameters)
 {

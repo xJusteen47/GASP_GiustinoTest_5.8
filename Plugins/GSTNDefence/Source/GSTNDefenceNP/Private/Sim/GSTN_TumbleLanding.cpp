@@ -572,11 +572,20 @@ void FGSTN_TumbleLanding::AfterClocks(FGSTN_CombatTickContext& Context, const FG
 	// A downed state with an end (rules MaxDownedFrames > 0) that runs out with nobody pressing anything: the neutral get-up plays on its last
 	// frame, so the body gets up instead of popping from lying to idle (playtest 2026-11-17: dummies lay forever, no get-up ever seen)
 	else if (Fragment && Fragment->KnockdownEndFrame != NeverEnds && Fragment->IsKnockedDown(Frame) && Frame + 1 >= Fragment->KnockdownEndFrame
-		&& Context.Out.Core.ActionState == EGSTN_ActionState::Actionable && Context.bGrounded && Data.GetupNeutral.IsValid() && Context.Services)
+		&& Data.GetupNeutral.IsValid() && Context.Services)
 	{
-		if (Context.Services->StartForcedTimeline(Data.GetupNeutral.Get()))
+		if (Context.Out.Core.ActionState == EGSTN_ActionState::Actionable && Context.bGrounded)
 		{
-			Fragment->KnockdownEndFrame = Frame;
+			if (Context.Services->StartForcedTimeline(Data.GetupNeutral.Get()))
+			{
+				Fragment->KnockdownEndFrame = Frame;
+			}
+		}
+		// Bug pass D1: the last frame came while the body was not free (the ground bounce or ground hit still playing, or still in the air): the
+		// end moves one frame on, so the get-up plays on the first free frame instead of the body popping from lying to idle. A KO stays as it is
+		else if (Context.Out.Core.ActionState != EGSTN_ActionState::KO)
+		{
+			Fragment->KnockdownEndFrame = Frame + 2;
 		}
 	}
 }
