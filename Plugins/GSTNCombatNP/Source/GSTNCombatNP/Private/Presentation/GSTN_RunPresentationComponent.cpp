@@ -106,7 +106,8 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 	// The skid's entry speed (highest over the enter frames): the hold of the three-section clip runs on the share of it left
 	if (FootSlide.Source == EGSTN_FootSlideSource::RunSkid)
 	{
-		if (!bWasSkid)
+		// A new skid: none before, or one that starts on the frame the previous ended (bugpass-1 B5: the old entry speed was kept)
+		if (!bWasSkid || (FootSlide.SkidPhase == EGSTN_RunSkidPhase::Enter && FootSlide.Frame == 0))
 		{
 			SkidEntrySpeed = FootSlide.Speed;
 		}
