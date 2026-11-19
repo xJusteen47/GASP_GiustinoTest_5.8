@@ -87,9 +87,11 @@ struct GSTNANIMATIONCORE_API FGSTN_AnimNode_BlendOutFootLock : public FAnimNode_
 	UPROPERTY(EditAnywhere, Category = "Settings")
 	float StepLift = 4.f;
 
-	/** The second foot starts its step when the first is this far into its own (0..1) */
-	UPROPERTY(EditAnywhere, Category = "Settings")
-	float SecondStepStart = 0.6f;
+	/** The second foot starts its step when the first is this far into its own. >= 1 = one foot at a time (owner 2026-11-19: after the
+	 *  jab both feet lifted together back into the idle stance, very unnatural; 0.6 overlapped 40 % of a step with both feet in the air).
+	 *  1.15 leaves a short double-support beat between the two steps, like a real weight shift */
+	UPROPERTY(EditAnywhere, Category = "Settings", meta = (ClampMin = "1.0"))
+	float SecondStepStart = 1.15f;
 
 	/** Seconds of the blend back when no step is needed or the capsule starts moving */
 	UPROPERTY(EditAnywhere, Category = "Settings")
@@ -136,6 +138,14 @@ struct GSTNANIMATIONCORE_API FGSTN_AnimNode_BlendOutFootLock : public FAnimNode_
 	UPROPERTY(EditAnywhere, Category = "Pop Guard", meta = (ClampMin = "0.01", ForceUnits = "s"))
 	float PopBlendTime = 0.15f;
 
+	/**
+	 * Intended-slide marker (owner 2026-11-19: in some moves, like the skid, the foot slides on purpose). A clip authors this float curve
+	 * (both feet) or <name>_l / <name>_r (one foot) above 0.5 where its slide is design: the pop guard never fires on that foot there.
+	 * The offline clip check reads the same curve (Tools/AnimPipeline/clipcheck), so a marked slide is neither a FAIL nor "fixed". None = off.
+	 */
+	UPROPERTY(EditAnywhere, Category = "Pop Guard")
+	FName SlideCurve = TEXT("GSTN_FootSlide");
+
 	// FAnimNode_Base
 	virtual void Initialize_AnyThread(const FAnimationInitializeContext& Context) override;
 	virtual void CacheBones_AnyThread(const FAnimationCacheBonesContext& Context) override;
@@ -145,6 +155,7 @@ struct GSTNANIMATIONCORE_API FGSTN_AnimNode_BlendOutFootLock : public FAnimNode_
 
 private:
 	void FreeAll();
+	bool IsIntendedSlide(const FBlendedCurve& Curve, int32 LegIndex) const;
 	void BeginRelease(const FTransform InputWorld[2], bool bAllowStep);
 
 	float DeltaTime = 0.f;

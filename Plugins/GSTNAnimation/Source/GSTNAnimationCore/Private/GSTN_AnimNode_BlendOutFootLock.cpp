@@ -125,6 +125,17 @@ void FGSTN_AnimNode_BlendOutFootLock::BeginRelease(const FTransform InputWorld[2
 	}
 }
 
+bool FGSTN_AnimNode_BlendOutFootLock::IsIntendedSlide(const FBlendedCurve& Curve, int32 LegIndex) const
+{
+	if (SlideCurve.IsNone())
+	{
+		return false;
+	}
+	static const FName Suffix[2] = {TEXT("_l"), TEXT("_r")};
+	const FName SideName(*(SlideCurve.ToString() + Suffix[LegIndex].ToString()));
+	return FMath::Max(Curve.Get(SlideCurve), Curve.Get(SideName)) > 0.5f;
+}
+
 void FGSTN_AnimNode_BlendOutFootLock::Evaluate_AnyThread(FPoseContext& Output)
 {
 	Source.Evaluate(Output);
@@ -184,7 +195,10 @@ void FGSTN_AnimNode_BlendOutFootLock::Evaluate_AnyThread(FPoseContext& Output)
 		// Only a FREE foot can pop: while a pop fades, the input keeps moving on its own track and a second trigger would swallow a
 		// real swing (skid exit f146-155 re-triggered and hid ~73 cm, then whipped 28 cm/frame). A jump wider than PopMaxDistance is a
 		// real change of pose (a transition), not a glitch: it shows as it is.
-		if (bPopGuard && Leg.Phase == EGSTN_FootLockPhase::Free && Leg.bHasTrack && !bRising)
+		// An intended slide (the clip's GSTN_FootSlide curve, or its _l/_r variant, above 0.5) is design, never a pop: a skid foot that
+		// breaks loose from a still plant must show as authored. Same marker as the offline clip check (clipcheck/clip_check.py)
+		const bool bIntendedSlide = IsIntendedSlide(Output.Curve, i);
+		if (bPopGuard && Leg.Phase == EGSTN_FootLockPhase::Free && Leg.bHasTrack && !bRising && !bIntendedSlide)
 		{
 			const double Jump = FVector::Dist(InWorld, Leg.LastInWorld) - Leg.LastInVelocity.Size() * Dt;
 			// ... and only a foot that was STILL (planted, pinned): a moving foot that speeds up is motion, and holding it back made

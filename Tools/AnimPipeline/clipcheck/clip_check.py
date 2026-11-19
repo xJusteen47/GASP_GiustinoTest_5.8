@@ -44,6 +44,8 @@ DRIFT_WINDOW_S = 0.25   # ... within 0.25 s (GASP landings settle 3 cm over 1.7 
 SKATE_FAIL_S = 0.2      # flat on the floor and moving for >= 0.2 s = skating (GASP max: 0.17 s, landing heavy shuffle)
 SKATE_WARN_CM = 5.0     # shorter floor slides >= 5 cm = touchdown/lift-off sweeps (GASP pivots: up to 71 cm in 0.13 s): WARN
 PEN_FAIL_CM = -1.5      # below standing height
+RETURN_IDLE_S = 0.5     # last 0.5 s of a clip that hands to an idle: ...
+LIFT_CM = 2.0           # ... both balls > 2 cm above their flat-foot height on the same frame = FAIL (both feet up together)
 STAND_BALL_CM = 3.2     # UEFN mannequin, foot flat on the floor: ball bone height (dash r3 f1, run start r3 left foot)
 STAND_FOOT_CM = 9.4     # same, foot (ankle) bone height. Override per clip with "stand_ball_cm"/"stand_foot_cm".
 SPIKE_DEG = 6.0         # pose off its neighbours' midway by > 6 deg (60 fps): WARN, one-frame extreme, look at it
@@ -163,6 +165,31 @@ def runs(mask):
     return out
 
 
+SLIDE_CURVE = 'GSTN_FootSlide'   # authored marker (0..1): > 0.5 = the move slides that foot on purpose (skid, run stop slide)
+SLIDE_ON = 0.5
+
+
+def load_meta(cfg, base):
+    meta = cfg.get('meta')
+    if not meta:
+        return None
+    mp = meta if os.path.isabs(meta) else os.path.join(base, meta)
+    return json.load(open(mp)) if os.path.exists(mp) else None
+
+
+def slide_windows(md, side):
+    """Intended-slide windows authored IN THE CLIP: float curve GSTN_FootSlide (both feet) or GSTN_FootSlide_l / _r, sampled
+    per frame by export_clips_ue.py. Returns [(first, last, why)] in 1-based frames. The same curve is read in game by the
+    foot lock (GSTN_AnimNode_BlendOutFootLock), so check, fixers and runtime agree on where a slide is design."""
+    if not md:
+        return []
+    cv = {k.lower(): v for k, v in md.get('curves', {}).items()}
+    vals = cv.get(f'{SLIDE_CURVE.lower()}_{side}') or cv.get(SLIDE_CURVE.lower())
+    if not vals:
+        return []
+    return [(a + 1, b + 1, SLIDE_CURVE) for a, b in runs([float(x) > SLIDE_ON for x in vals])]
+
+
 def speed_at(spec, t):
     if spec is None:
         return None
@@ -207,6 +234,7 @@ def check(name, cfg, base, outdir):
         fails.append('no bone tracks: the clip is empty')
 
     # feet: plant, slide, ground
+    md_early = load_meta(cfg, base)
     feet = {}
     for s in 'lr':
         ball = np.array([f['pos'][f'ball_{s}'] for f in F]); foot = np.array([f['pos'][f'foot_{s}'] for f in F])
@@ -235,7 +263,9 @@ def check(name, cfg, base, outdir):
         contact = low & (vh <= CONTACT_VH)
         plant = contact
         win = max(int(round(DRIFT_WINDOW_S * fps)), 1)
-        ok_win = [(w[0], w[1]) for w in cfg.get('slide_ok', [])]
+        ok_win = [(w[0], w[1]) for w in cfg.get('slide_ok', [])] + [w[:2] for w in slide_windows(md_early, s)]
+        if ok_win:
+            info['slide_ok'] = [list(w) for w in ok_win]
         def allowed(a, b):
             return any(a + 1 >= w0 and b + 1 <= w1 for w0, w1 in ok_win)
         for a, b in runs(contact):   # drift: a planted ball creeping (window, so a slow weight settle is not a slide)
@@ -266,6 +296,16 @@ def check(name, cfg, base, outdir):
         M[f'foot_{s}'] = info
     if not rm and cfg.get('game_speed_cms') is None and not cfg.get('air'):
         warns.append('in-place clip without game_speed_cms: feet not judged against the ground')
+    # return to idle: never both feet in the air (owner 2026-11-19, scope: every move that hands to an idle: after the jab both feet
+    # lifted together back into the idle stance). Judged on the last RETURN_IDLE_S of a clip whose end_ref is an idle, or "returns_idle"
+    end_fbx = str((cfg.get('end_ref') or {}).get('fbx', ''))
+    if not cfg.get('air') and (cfg.get('returns_idle') or 'idle' in os.path.basename(end_fbx).lower()) and 'l' in feet and 'r' in feet:
+        a0 = max(0, N - int(round(RETURN_IDLE_S * fps)))
+        both = (feet['l']['h'][a0:] > LIFT_CM) & (feet['r']['h'][a0:] > LIFT_CM)
+        rs = [(a + a0 + 1, b + a0 + 1) for a, b in runs(both)]
+        M['return_idle_both_up'] = rs
+        if rs:
+            fails.append(f'both feet in the air while returning to idle (f{rs[0][0]}-{rs[0][1]}): step one foot at a time')
 
     # pops: per-bone angular acceleration
     jerk = np.zeros((N, len(S['names'])))

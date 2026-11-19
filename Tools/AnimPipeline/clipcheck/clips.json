@@ -1,5 +1,5 @@
 {
- "_note": "Clips judged on their own (clip_check.py). Paths relative to this file. 'asset' rows are exported first by export_clips_ue.py into ../../../Saved/ClipCheck/export/ (desktop, editor closed). GASP_* rows = references for handoffs AND calibration: GASP's own clips must pass, or the thresholds are wrong. 'slide_ok': [[from, to, why]] frames where a floor slide is the move's design (WARN instead of FAIL). In-place rows need game_speed_cms (0 = the capsule stands still) to judge the feet. 'fix': generic fixes fix_clips_ue.py applies to the asset ('filters' = remove the pops the check fails, 'ik_feet' = ik_foot bones from the feet).",
+ "_note": "Clips judged on their own (clip_check.py). Paths relative to this file. 'asset' rows are exported first by export_clips_ue.py into ../../../Saved/ClipCheck/export/ (desktop, editor closed). GASP_* rows = references for handoffs AND calibration: GASP's own clips must pass, or the thresholds are wrong. 'slide_ok': [[from, to, why]] frames where a floor slide is the move's design (WARN instead of FAIL). In-place rows need game_speed_cms (0 = the capsule stands still) to judge the feet. 'fix': generic fixes fix_clips_ue.py applies to the asset ('filters' = remove the pops the check fails, 'ik_feet' = ik_foot bones from the feet). 'splice' = first/last 'seconds' eased to the neighbour clip's pose; 'floor_clamp' = feet lifted out of the floor (vertical only). Intended slides: author the float curve GSTN_FootSlide (or _l/_r) > 0.5 on the clip; 'slide_ok' rows stay for clips without it.",
  "clips": {
   "Dash_Ganon_r3_src": {
    "fbx": "../../../docs/notes/reviews/dash-ganon/r3/AS_GSTN_Dash_Ganon_r3.fbx",
@@ -165,8 +165,17 @@
     "frame": "nearest"
    },
    "fix": [
-    "filters"
-   ]
+    "filters",
+    "splice",
+    "ik_feet"
+   ],
+   "splice": {
+    "end": {
+     "asset": "M_Neutral_Run_Loop_F",
+     "frame": "nearest"
+    },
+    "seconds": 0.1
+   }
   },
   "RunStart_Frantic": {
    "asset": "/Game/GSTN/Animation/RunStart/AS_GSTN_RunStart_Frantic",
@@ -184,8 +193,21 @@
     "frame": "nearest"
    },
    "fix": [
-    "filters"
-   ]
+    "filters",
+    "splice",
+    "ik_feet"
+   ],
+   "splice": {
+    "start": {
+     "asset": "M_Neutral_Stand_Idle_Loop",
+     "frame": "nearest"
+    },
+    "end": {
+     "asset": "M_Neutral_Run_Loop_F",
+     "frame": "nearest"
+    },
+    "seconds": 0.1
+   }
   },
   "RunStop_L": {
    "asset": "AS_RunStop_Ganon_L_V5",
@@ -203,6 +225,7 @@
    },
    "fix": [
     "filters",
+    "splice",
     "ik_feet"
    ],
    "slide_ok": [
@@ -211,7 +234,18 @@
      30,
      "run stop identity trait 2: both feet slide to a stop before the torso rises (runstop-v6 review_fable)"
     ]
-   ]
+   ],
+   "splice": {
+    "start": {
+     "asset": "M_Neutral_Run_Loop_F",
+     "frame": "nearest"
+    },
+    "end": {
+     "asset": "M_Relaxed_Stand_Idle_Loop",
+     "frame": "first"
+    },
+    "seconds": 0.1
+   }
   },
   "RunStop_R": {
    "asset": "AS_RunStop_Ganon_R_V5",
@@ -229,6 +263,7 @@
    },
    "fix": [
     "filters",
+    "splice",
     "ik_feet"
    ],
    "slide_ok": [
@@ -237,7 +272,18 @@
      30,
      "run stop identity trait 2: both feet slide to a stop before the torso rises (runstop-v6 review_fable)"
     ]
-   ]
+   ],
+   "splice": {
+    "start": {
+     "asset": "M_Neutral_Run_Loop_F",
+     "frame": "nearest"
+    },
+    "end": {
+     "asset": "M_Relaxed_Stand_Idle_Loop",
+     "frame": "first"
+    },
+    "seconds": 0.1
+   }
   },
   "Skid_180": {
    "asset": "SS_180_Turn_Root180",
@@ -259,7 +305,24 @@
      20,
      "skid: the braking right foot slides on purpose (owner clip, one motion)"
     ]
-   ]
+   ],
+   "fix": [
+    "splice",
+    "floor_clamp",
+    "ik_feet"
+   ],
+   "splice": {
+    "start": {
+     "asset": "M_Neutral_Run_Loop_F",
+     "frame": "nearest"
+    },
+    "end": {
+     "asset": "M_Neutral_Run_Loop_F",
+     "frame": "nearest"
+    },
+    "seconds": 0.1
+   },
+   "floor_clamp": {}
   },
   "Crouch_Enter": {
    "asset": "/Game/GSTN/Animation/Crouch/AS_GSTN_Crouch_Enter",
