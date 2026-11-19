@@ -174,7 +174,7 @@
      "asset": "M_Neutral_Run_Loop_F",
      "frame": "nearest"
     },
-    "seconds": 0.1
+    "seconds": 0.2
    }
   },
   "RunStart_Frantic": {
@@ -186,7 +186,7 @@
    "_game_speed_cms": "fill from the sim (StartStamp 21 f, accel x0.05) to judge the planted feet",
    "start_ref": {
     "fbx": "../../../Saved/ClipCheck/export/GASP_Idle.fbx",
-    "frame": "nearest"
+    "frame": 138
    },
    "end_ref": {
     "fbx": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx",
@@ -201,13 +201,13 @@
    "splice": {
     "start": {
      "asset": "M_Neutral_Stand_Idle_Loop",
-     "frame": "nearest"
+     "frame": 138
     },
     "end": {
      "asset": "M_Neutral_Run_Loop_F",
      "frame": "nearest"
     },
-    "seconds": 0.1
+    "seconds": 0.2
    }
   },
   "RunStop_L": {
@@ -246,7 +246,7 @@
      "asset": "M_Relaxed_Stand_Idle_Loop",
      "frame": "first"
     },
-    "seconds": 0.1
+    "seconds": 0.2
    },
    "slide_marker": {
     "side": "both",
@@ -293,7 +293,7 @@
      "asset": "M_Relaxed_Stand_Idle_Loop",
      "frame": "first"
     },
-    "seconds": 0.1
+    "seconds": 0.2
    },
    "slide_marker": {
     "side": "both",
@@ -340,7 +340,7 @@
      "asset": "M_Neutral_Run_Loop_F",
      "frame": "nearest"
     },
-    "seconds": 0.1
+    "seconds": 0.2
    },
    "floor_clamp": {},
    "slide_marker": {

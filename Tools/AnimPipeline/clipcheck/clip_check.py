@@ -103,6 +103,7 @@ def sample_fbx(path):
         sc.frame_set(f)
         mw = arm.matrix_world
         fr = {'root': np.array(mw.translation) * 100.0, 'root_yaw': mw.to_euler().z, 'pos': {}, 'q': {}, 't': {}}
+        fr['root_bone_inv'] = np.array(mw.inverted())   # the FBX root bone often becomes the armature object: its motion is here
         for pb in arm.pose.bones:
             if pb.name in KEY_BONES:
                 fr['pos'][pb.name] = np.array(mw @ pb.head) * 100.0
@@ -128,7 +129,7 @@ def ref_frames(spec, base):
 
 
 def _in_root(fr, p):
-    ""Point (world cm) in the root BONE's space when the clip has one (a root-motion clip turns and travels with it), else vs the object""
+    """Point (world cm) in the root BONE's space when the clip has one (a root-motion clip turns and travels with it), else vs the object"""
     m = fr.get('root_bone_inv')
     if m is None:
         return p - fr['root']
