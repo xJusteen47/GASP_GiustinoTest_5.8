@@ -1,0 +1,232 @@
+### IsStarting
+--K2Node_FunctionEntry_0 [K2Node_FunctionEntry]  type=|IsStarting
+--K2Node_FunctionResult_0 [K2Node_FunctionResult]  type=|Aggiunginododiritorno...
+   ReturnValue:Booleano =false <-> K2Node_CommutativeAssociativeBinaryOperator_0
+--K2Node_CallFunction_1 [K2Node_CallFunction]  type=MovementAnalysis|IsMoving
+   ReturnValue:Booleano =false <-> K2Node_CommutativeAssociativeBinaryOperator_0
+--K2Node_CommutativeAssociativeBinaryOperator_0 [K2Node_CommutativeAssociativeBinaryOperator]  type=Matematica|Booleano|ANDBoolean
+   A:Booleano =false <-> K2Node_CallFunction_1
+   B:Booleano =false <-> K2Node_PromotableOperator_5
+   C:Booleano <-> K2Node_CallFunction_2
+   D:Booleano <-> K2Node_CallFunction_5
+   ReturnValue:Booleano =false <-> K2Node_FunctionResult_0
+--K2Node_VariableGet_2 [K2Node_VariableGet]  type=Variables|EssentialValues|GetVelocity
+   Velocity:Vector =0, 0, 0 <-> K2Node_CallFunction_3
+--K2Node_CallFunction_3 [K2Node_CallFunction]  type=Matematica|Vettore|VectorLengthXY
+   A:Vector =0, 0, 0 <-> K2Node_VariableGet_2
+   ReturnValue:Float (doppia precisione) =0.0 <-> K2Node_PromotableOperator_4
+--K2Node_VariableGet_1 [K2Node_VariableGet]  type=Variables|Traiettoria|GetTrj_FutureVelocity
+   Trj_FutureVelocity:Vector =0, 0, 0 <-> K2Node_CallFunction_0
+--K2Node_CallFunction_0 [K2Node_CallFunction]  type=Matematica|Vettore|VectorLengthXY
+   A:Vector =0, 0, 0 <-> K2Node_VariableGet_1
+   ReturnValue:Float (doppia precisione) =0.0 <-> K2Node_PromotableOperator_5
+--K2Node_PromotableOperator_4 [K2Node_PromotableOperator]  type=Utility|Operatori|Aggiungi
+   A:Float (doppia precisione) <-> K2Node_CallFunction_3
+   B:Float (doppia precisione) =100.000000
+   ReturnValue:Float (doppia precisione) <-> K2Node_PromotableOperator_5
+--K2Node_PromotableOperator_5 [K2Node_PromotableOperator]  type=Utility|Operatori|Maggioreuguale(>=)
+   A:Float (doppia precisione) <-> K2Node_CallFunction_0
+   B:Float (doppia precisione) <-> K2Node_PromotableOperator_4
+   ReturnValue:Booleano <-> K2Node_CommutativeAssociativeBinaryOperator_0
+--K2Node_VariableGet_0 [K2Node_VariableGet]  type=Variables|MotionMatching|GetCurrentDatabaseTags
+   CurrentDatabaseTags:Array di Nome <-> K2Node_CallArrayFunction_0
+--K2Node_CallArrayFunction_0 [K2Node_CallArrayFunction]  type=Utilità|Array|ContainsItem
+   TargetArray:Array di Nome <-> K2Node_VariableGet_0
+   ItemToFind:Nome (by ref) =Pivots
+   ReturnValue:Booleano =false <-> K2Node_CallFunction_2
+--K2Node_CallFunction_2 [K2Node_CallFunction]  type=Matematica|Booleano|NOTBoolean
+   A:Booleano =false <-> K2Node_CallArrayFunction_0
+   ReturnValue:Booleano =false <-> K2Node_CommutativeAssociativeBinaryOperator_0
+--K2Node_VariableGet_3 [K2Node_VariableGet]  type=Variables|EssentialValues|GetSpeed2D
+   Speed2D:Float (doppia precisione) =0.0 <-> K2Node_PromotableOperator_0
+--K2Node_PromotableOperator_0 [K2Node_PromotableOperator]  type=Utility|Operatori|Maggiore(>)
+   A:Float (doppia precisione) <-> K2Node_VariableGet_3
+   B:Float (doppia precisione) =100.000000
+   ReturnValue:Booleano <-> K2Node_CallFunction_5
+--K2Node_CallFunction_5 [K2Node_CallFunction]  type=Matematica|Booleano|NOTBoolean
+   A:Booleano =false <-> K2Node_PromotableOperator_0
+   ReturnValue:Booleano =false <-> K2Node_CommutativeAssociativeBinaryOperator_0
+### IsPivoting
+--K2Node_FunctionEntry_0 [K2Node_FunctionEntry]  type=|IsPivoting
+--K2Node_FunctionResult_0 [K2Node_FunctionResult]  type=|Aggiunginododiritorno...
+   ReturnValue:Booleano =false <-> K2Node_CommutativeAssociativeBinaryOperator_0
+--K2Node_CommutativeAssociativeBinaryOperator_0 [K2Node_CommutativeAssociativeBinaryOperator]  type=Matematica|Booleano|ANDBoolean
+   A:Booleano =false <-> K2Node_Select_2
+   B:Booleano =false <-> K2Node_EnumEquality_0
+   ReturnValue:Booleano =false <-> K2Node_FunctionResult_0
+--K2Node_Composite_0 [K2Node_Composite]  type=|MMPivotconditions
+   ReturnValue:Booleano <-> K2Node_Select_2
+--K2Node_Composite_2 [K2Node_Composite]  type=|SMPivotConditions
+   ReturnValue:Booleano <-> K2Node_Select_2
+--K2Node_VariableGet_2 [K2Node_VariableGet]  type=Variables|Predefinito|GetLocomotionSetup
+   LocomotionSetup:Numero intero =0 <-> K2Node_Select_2
+--K2Node_Select_2 [K2Node_Select]  type=Utilità|Seleziona
+   Option 0:Booleano =false <-> K2Node_Composite_0
+   Option 1:Booleano =false <-> K2Node_Composite_2
+   Index:Numero intero =0 <-> K2Node_VariableGet_2
+   ReturnValue:Booleano <-> K2Node_CommutativeAssociativeBinaryOperator_0
+--K2Node_VariableGet_3 [K2Node_VariableGet]  type=Variables|Stati|GetMovementState
+   MovementState:E_MovementState enum =NewEnumerator4 <-> K2Node_EnumEquality_0
+--K2Node_EnumEquality_0 [K2Node_EnumEquality]  type=Utilità|Enum|Uguale(enum)
+   A:E_MovementState enum <-> K2Node_VariableGet_3
+   B:E_MovementState enum =NewEnumerator0
+   ReturnValue:Booleano <-> K2Node_CommutativeAssociativeBinaryOperator_0
+### SetBlendStackAnimFromChooser
+--K2Node_FunctionEntry_0 [K2Node_FunctionEntry]  type=|SetBlendStackAnimFromChooser
+   StateMachineState:E_ExperimentalStateMachineSt =NewEnumerator0
+   ForceBlend:Booleano =true
+--K2Node_ExecutionSequence_1 [K2Node_ExecutionSequence]  type=Utilità|ControlloDiFlusso|Sequenza
+   then_0:Exec <-> K2Node_Knot_11
+   then_1:Exec <-> K2Node_EvaluateChooser2_3
+   then_2:Exec <-> K2Node_IfThenElse_7
+--K2Node_VariableSet_11 [K2Node_VariableSet]  type=Variables|StateMachine(Experimental)|SetNoValidAnim
+   NoValidAnim:Booleano =false
+   Output_Get:Booleano =false
+--K2Node_VariableSet_13 [K2Node_VariableSet]  type=Variables|StateMachine(Experimental)|SetPrevious_BlendStackInputs
+   Previous_BlendStackInputs:S Blend Stack Inputs Struttu <-> K2Node_VariableGet_7
+--K2Node_VariableGet_7 [K2Node_VariableGet]  type=Variables|StateMachine(Experimental)|GetBlendStackInputs
+   BlendStackInputs:S Blend Stack Inputs Struttu <-> K2Node_VariableSet_13
+--K2Node_FunctionResult_2 [K2Node_FunctionResult]  type=|Aggiunginododiritorno...
+--K2Node_IfThenElse_5 [K2Node_IfThenElse]  type=Utilità|ControlloDiFlusso|Ramo
+   Condition:Booleano =true <-> K2Node_PromotableOperator_4
+   else:Exec <-> K2Node_VariableSet_14
+--K2Node_VariableSet_14 [K2Node_VariableSet]  type=Variables|StateMachine(Experimental)|SetNoValidAnim
+   NoValidAnim:Booleano =true
+   Output_Get:Booleano =false
+--K2Node_IfThenElse_7 [K2Node_IfThenElse]  type=Utilità|ControlloDiFlusso|Ramo
+   Condition:Booleano =true <-> K2Node_BreakStruct_4
+   else:Exec <-> K2Node_CallFunction_8
+--K2Node_AnimNodeReference_3 [K2Node_AnimNodeReference]  type=Variabili|Riferimentonodo:StateMachineBlendStack
+   Value:Riferimento Nodo Animazione  <-> K2Node_CallFunction_7
+--K2Node_CallFunction_7 [K2Node_CallFunction]  type=Animazione|BlendStack|ConverttoBlendStackNode
+   Node:Riferimento Nodo Animazione  <-> K2Node_AnimNodeReference_3
+   BlendStackNode:Blend Stack Anim Node Refere <-> K2Node_CallFunction_8
+   Result:Booleano =false
+--K2Node_CallFunction_8 [K2Node_CallFunction]  type=Animazione|BlendStack|ForceBlendOnNextUpdate
+   BlendStackNode:Blend Stack Anim Node Refere <-> K2Node_CallFunction_7
+--K2Node_VariableGet_2 [K2Node_VariableGet]  type=Variables|StateMachine(Experimental)|GetBlendStackInputs
+   BlendStackInputs:S Blend Stack Inputs Struttu <-> K2Node_SetFieldsInStruct_2
+--K2Node_SetFieldsInStruct_2 [K2Node_SetFieldsInStruct]  type=Utilità|Struttura|SetmembersinSBlendStackInputs
+   StructRef:S Blend Stack Inputs Struttu <-> K2Node_VariableGet_2
+   Anim:Asset Di Animazione Riferime <-> K2Node_VariableGet_37
+   Loop:Booleano =False <-> K2Node_CallFunction_11
+   StartTime:Float (doppia precisione) =0.000000 <-> K2Node_VariableGet_1
+   BlendTime:Float (doppia precisione) =0.000000 <-> K2Node_VariableGet_1
+   BlendCurve:EAlphaBlendOption enum =Linear <-> K2Node_VariableGet_1
+   BlendProfile:Profilo Di Fusione Riferimen <-> K2Node_CallFunction_10
+   Tags:Array di Nome <-> K2Node_VariableGet_1
+--K2Node_CallFunction_10 [K2Node_CallFunction]  type=Animazione|Scheletro|GetBlendProfilebyName
+   InBlendProfileName:Nome =None <-> K2Node_VariableGet_1
+   ReturnValue:Profilo Di Fusione Riferimen <-> K2Node_SetFieldsInStruct_2
+--K2Node_VariableSet_18 [K2Node_VariableSet]  type=Variables|StateMachine(Experimental)|SetNotifyTransition_Re-Transition
+   NotifyTransition_Re-Transition:Booleano =false
+   Output_Get:Booleano =false
+--K2Node_VariableSet_19 [K2Node_VariableSet]  type=Variables|StateMachine(Experimental)|SetNotifyTransition_ToLoop
+   NotifyTransition_ToLoop:Booleano =false
+   Output_Get:Booleano =false
+--K2Node_Knot_11 [K2Node_Knot]  type=|RerouteNode
+   InputPin:Exec <-> K2Node_ExecutionSequence_1
+   OutputPin:Exec <-> K2Node_VariableSet_1
+--K2Node_CallFunction_11 [K2Node_CallFunction]  type=Animazione|Ricercapose|IsAnimationAssetLooping
+   Asset:Riferimento Oggetto <-> K2Node_VariableGet_37
+   bIsAssetLooping:Booleano =false <-> K2Node_SetFieldsInStruct_2
+--K2Node_VariableSet_27 [K2Node_VariableSet]  type=Variables|SetChosenAnim
+   ChosenAnim:Asset Di Animazione Riferime <-> K2Node_EvaluateChooser2_3
+   Output_Get:Asset Di Animazione Riferime <-> K2Node_PromotableOperator_4
+--K2Node_PromotableOperator_4 [K2Node_PromotableOperator]  type=Utility|Operatori|Nonuguale(!=)
+   A:Riferimento Oggetto <-> K2Node_VariableSet_27
+   ReturnValue:Booleano <-> K2Node_IfThenElse_5
+--K2Node_VariableGet_37 [K2Node_VariableGet]  type=Variables|GetChosenAnim
+   ChosenAnim:Asset Di Animazione Riferime <-> K2Node_CallFunction_11,K2Node_SetFieldsInStruct_2
+--K2Node_AnimNodeReference_2 [K2Node_AnimNodeReference]  type=Variabili|Riferimentonodo:PoseHistory
+   Value:Riferimento Nodo Animazione  <-> K2Node_CallFunction_1
+--K2Node_CallFunction_1 [K2Node_CallFunction]  type=Animazione|PoseHistory|ConverttoPoseHistoryNode
+   Node:Riferimento Nodo Animazione  <-> K2Node_AnimNodeReference_2
+   PoseSearchHistoryCollectorNode:Pose Search History Collecto <-> K2Node_CallFunction_2
+   Result:Booleano =false
+--K2Node_CallFunction_2 [K2Node_CallFunction]  type=Animazione|PoseHistory|GetPoseHistoryReference
+   Node:Pose Search History Collecto <-> K2Node_CallFunction_1
+   ReturnValue:Pose History Reference Strut <-> K2Node_EvaluateChooser2_3
+--K2Node_EvaluateChooser2_3 [K2Node_EvaluateChooser2]  type=Animazione|Valutaselettore
+   PoseHistoryReference:Pose History Reference Strut <-> K2Node_CallFunction_2
+   S_CHT_MoverCharacterAnimations_OUT:S CHT Mover Character Animat <-> K2Node_VariableSet_0
+   Result:Asset Di Animazione Riferime <-> K2Node_VariableSet_27
+--K2Node_VariableSet_1 [K2Node_VariableSet]  type=Variables|StateMachine(Experimental)|SetStateName
+   StateName:Nome =None <-> K2Node_VariableGet_0
+   Output_Get:Nome =None
+--K2Node_VariableGet_0 [K2Node_VariableGet]  type=Variables|GetState Name
+   State Name:Nome =None <-> K2Node_VariableSet_1
+--K2Node_VariableSet_0 [K2Node_VariableSet]  type=Variables|SetCHT_OUT
+   CHT_OUT:S CHT Mover Character Animat <-> K2Node_EvaluateChooser2_3
+--K2Node_VariableGet_1 [K2Node_VariableGet]  type=Variables|GetCHT_OUT_StartTime
+   CHT_OUT_StartTime:Float (doppia precisione) <-> K2Node_SetFieldsInStruct_2
+   CHT_OUT_BlendTime:Float (doppia precisione) <-> K2Node_SetFieldsInStruct_2
+   CHT_OUT_BlendCurve:EAlphaBlendOption enum <-> K2Node_SetFieldsInStruct_2
+   CHT_OUT_BlendProfile:Nome <-> K2Node_CallFunction_10
+   CHT_OUT_Tags:Array di Nome <-> K2Node_SetFieldsInStruct_2
+--K2Node_VariableGet_16 [K2Node_VariableGet]  type=Variables|StateMachine(Experimental)|GetBlendStackInputs
+   BlendStackInputs:S Blend Stack Inputs Struttu <-> K2Node_BreakStruct_4
+--K2Node_BreakStruct_4 [K2Node_BreakStruct]  type=Utilità|Struttura|BreakSBlendStackInputs
+   S_BlendStackInputs:S Blend Stack Inputs Struttu <-> K2Node_VariableGet_16
+   Loop:Booleano <-> K2Node_IfThenElse_7
+### IsAnimationAlmostComplete
+--K2Node_FunctionEntry_0 [K2Node_FunctionEntry]  type=|IsAnimationAlmostComplete
+--K2Node_FunctionResult_0 [K2Node_FunctionResult]  type=|Aggiunginododiritorno...
+   ReturnValue:Booleano =false <-> K2Node_CommutativeAssociativeBinaryOperator_0
+--K2Node_AnimNodeReference_1 [K2Node_AnimNodeReference]  type=Variabili|Riferimentonodo:StateMachineBlendStack
+   Value:Riferimento Nodo Animazione  <-> K2Node_CallFunction_5
+--K2Node_CallFunction_5 [K2Node_CallFunction]  type=Animazione|BlendStack|ConverttoBlendStackNode
+   Node:Riferimento Nodo Animazione  <-> K2Node_AnimNodeReference_1
+   BlendStackNode:Blend Stack Anim Node Refere <-> K2Node_CallFunction_0,K2Node_CallFunction_6
+   Result:Booleano =false
+--K2Node_CallFunction_0 [K2Node_CallFunction]  type=Animazione|BlendStack|IsCurrentAssetLooping
+   BlendStackNode:Blend Stack Anim Node Refere <-> K2Node_CallFunction_5
+   ReturnValue:Booleano =false <-> K2Node_CallFunction_4
+--K2Node_CallFunction_4 [K2Node_CallFunction]  type=Matematica|Booleano|NOTBoolean
+   A:Booleano =false <-> K2Node_CallFunction_0
+   ReturnValue:Booleano =false <-> K2Node_CommutativeAssociativeBinaryOperator_0
+--K2Node_CommutativeAssociativeBinaryOperator_0 [K2Node_CommutativeAssociativeBinaryOperator]  type=Matematica|Booleano|ANDBoolean
+   A:Booleano =false <-> K2Node_CallFunction_4
+   B:Booleano =false <-> K2Node_PromotableOperator_0
+   ReturnValue:Booleano =false <-> K2Node_FunctionResult_0
+--K2Node_CallFunction_6 [K2Node_CallFunction]  type=Animazione|BlendStack|GetCurrentAssetTimeRemaining
+   BlendStackNode:Blend Stack Anim Node Refere <-> K2Node_CallFunction_5
+   ReturnValue:Float (precisione singola) =0.0 <-> K2Node_PromotableOperator_0
+--K2Node_PromotableOperator_0 [K2Node_PromotableOperator]  type=Utility|Operatori|Minoreuguale(<=)
+   A:Float (doppia precisione) <-> K2Node_CallFunction_6
+   B:Float (doppia precisione) =0.750000
+   ReturnValue:Booleano <-> K2Node_CommutativeAssociativeBinaryOperator_0
+### OnStateEntry_LocomotionTransition
+--K2Node_FunctionEntry_0 [K2Node_FunctionEntry]  type=|OnStateEntry_LocomotionTransition
+--K2Node_FunctionResult_0 [K2Node_FunctionResult]  type=|Aggiunginododiritorno...
+--K2Node_CallFunction_1 [K2Node_CallFunction]  type=StateMachine(Experimental)|SetBlendStackAnimFromChooser
+   State Name:Nome =Locomotion Transition
+   StateMachineState:E_ExperimentalStateMachineSt =NewEnumerator4
+   ForceBlend:Booleano =true
+--K2Node_VariableSet_0 [K2Node_VariableSet]  type=Variables|StateMachine(Experimental)|SetFutureFacingOnTransitionStart
+   FutureFacingOnTransitionStart:Rotatore =0, 0, 0 <-> K2Node_VariableGet_0
+   Output_Get:Rotatore =0, 0, 0
+--K2Node_VariableGet_0 [K2Node_VariableGet]  type=Variables|Traiettoria|GetTrj_FutureFacing
+   Trj_FutureFacing:Rotatore =0, 0, 0 <-> K2Node_VariableSet_0
+### OnUpdate_LocomotionTransition
+--K2Node_FunctionEntry_0 [K2Node_FunctionEntry]  type=|OnUpdate_LocomotionTransition
+--K2Node_FunctionResult_0 [K2Node_FunctionResult]  type=|Aggiunginododiritorno...
+--K2Node_VariableSet_0 [K2Node_VariableSet]  type=Variables|StateMachine(Experimental)|SetFutureFacingOnTransitionStart
+   FutureFacingOnTransitionStart:Rotatore =0, 0, 0 <-> K2Node_CallFunction_0
+   Output_Get:Rotatore =0, 0, 0 <-> K2Node_CallFunction_0
+--K2Node_CallFunction_0 [K2Node_CallFunction]  type=Matematica|Interpolazione|RInterpTo
+   Current:Rotatore =0, 0, 0 <-> K2Node_VariableSet_0
+   Target:Rotatore =0, 0, 0 <-> K2Node_VariableGet_1
+   DeltaTime:Float (precisione singola) =0.0 <-> K2Node_CallFunction_2
+   InterpSpeed:Float (precisione singola) =4.000000
+   ReturnValue:Rotatore =0, 0, 0 <-> K2Node_VariableSet_0
+--K2Node_VariableGet_1 [K2Node_VariableGet]  type=Variables|Traiettoria|GetTrj_FutureFacing
+   Trj_FutureFacing:Rotatore =0, 0, 0 <-> K2Node_CallFunction_0
+--K2Node_CallFunction_2 [K2Node_CallFunction]  type=Animazione|GetDeltaSeconds
+   ReturnValue:Float (precisione singola) =0.0 <-> K2Node_CallFunction_0
+### Set_NotifyTransition_ToLoop
+--K2Node_FunctionEntry_0 [K2Node_FunctionEntry]  type=|Set_NotifyTransition_ToLoop
+   ToLoop:Booleano =false <-> K2Node_VariableSet_0
+--K2Node_VariableSet_0 [K2Node_VariableSet]  type=Variables|StateMachine(Experimental)|SetNotifyTransition_ToLoop
+   NotifyTransition_ToLoop:Booleano =false <-> K2Node_FunctionEntry_0
+   Output_Get:Booleano =false

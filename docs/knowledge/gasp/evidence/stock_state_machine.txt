@@ -1,0 +1,120 @@
+MACHINE State Controller
+ S Idle Loop [AnimStateNode]  name: "Idle Loop", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP:AnimGraph.AnimGrap
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"OnStateEntry_IdleLoop","memberGuid":"9B311FF5-4FD8-91F3-BC43-F4B7612C43C6","bSelfContext":true,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-00000
+ S Idle Transition [AnimStateNode]  name: "Idle Transition", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP:AnimGraph.An
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"OnStateEntry_IdleTransition","memberGuid":"161622C3-43F1-A8D8-7629-13B60DBC5B7C","bSelfContext":true,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000
+ S Locomotion -> Idle [AnimStateAliasNode]  name: "Locomotion -> Idle", kind: Alias, graph: None, position: {x: -192, y: 240}, animations: }>
+ S Locomotion Transition [AnimStateNode]  name: "Locomotion Transition", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP:AnimGr
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"OnStateEntry_LocomotionTransition","memberGuid":"5E38840E-405F-C94D-7E31-C0921F7EE0D2","bSelfContext":true,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-000
+ S Locomotion Loop [AnimStateNode]  name: "Locomotion Loop", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP:AnimGraph.An
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"OnStateEntry_LocomotionLoop","memberGuid":"575768D0-4D30-F963-1135-13A1FE563FD1","bSelfContext":true,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000
+ S Idle -> Locomotion [AnimStateAliasNode]  name: "Idle -> Locomotion", kind: Alias, graph: None, position: {x: -192, y: -112}, animations: }>
+ S In Air Transition [AnimStateNode]  name: "In Air Transition", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP:AnimGraph.
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"OnStateEntry_InAirTransition","memberGuid":"5E70059F-4248-E8EA-37DB-30AD0CA375B3","bSelfContext":true,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-000
+ S In Air Loop [AnimStateNode]  name: "In Air Loop", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP:AnimGraph.AnimGr
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"OnStateEntry_InAirLoop","memberGuid":"CE771635-4383-1FE1-D619-85AC89E1830E","bSelfContext":true,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-0000
+ S -> In Air [AnimStateAliasNode]  name: "-> In Air", kind: Alias, graph: None, position: {x: 912, y: -352}, animations: }>
+ S -> Grounded [AnimStateAliasNode]  name: "-> Grounded", kind: Alias, graph: None, position: {x: -336, y: 48}, animations: }>
+ S Re-Enter [AnimStateAliasNode]  name: "Re-Enter", kind: Alias, graph: None, position: {x: 176, y: -368}, animations: }>
+ S Re-Enter  [AnimStateAliasNode]  name: "Re-Enter ", kind: Alias, graph: None, position: {x: 192, y: 48}, animations: }>
+ S Idle Break [AnimStateNode]  name: "Idle Break", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP:AnimGraph.AnimGra
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"OnStateEntry_IdleBreak","memberGuid":"60737DBA-4928-0856-24AE-2B8465817332","bSelfContext":true,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-0000
+ S Conduit [AnimStateConduitNode]  name: "Conduit", kind: Conduit, graph: "/Script/AnimGraph.AnimationTransitionGraph'/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP
+   node: AnimGraphNode_TransitionResult AnimGraphNode_TransitionResult_0
+ S Slide Transition [AnimStateNode]  name: "Slide Transition", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP:AnimGraph.A
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"OnStateEntry_SlideTransition","memberGuid":"8D2DBBF3-4D76-1B10-F28A-E79479C053A5","bSelfContext":true,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-000
+ S Slide Loop [AnimStateNode]  name: "Slide Loop", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP:AnimGraph.AnimGra
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"OnStateEntry_SlideLoop","memberGuid":"45B24812-404A-BAE0-C1CB-EAB6DC499ACC","bSelfContext":true,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-0000
+ S -> Slide [AnimStateAliasNode]  name: "-> Slide", kind: Alias, graph: None, position: {x: 928, y: -96}, animations: }>
+ S Re-Enter   [AnimStateAliasNode]  name: "Re-Enter  ", kind: Alias, graph: None, position: {x: 1232, y: -192}, animations: }>
+ S Re-Enter    [AnimStateAliasNode]  name: "Re-Enter   ", kind: Alias, graph: None, position: {x: 1232, y: -448}, animations: }>
+ S -> Debug Fly [AnimStateAliasNode]  name: "-> Debug Fly", kind: Alias, graph: None, position: {x: 912, y: 144}, animations: }>
+ S Debug Flying Loop [AnimStateNode]  name: "Debug Flying Loop", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP:AnimGraph.
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"OnStateEntry_DebugFlyingLoop","memberGuid":"473633ED-4A29-3CC5-49BD-7D9B8BB78C4B","bSelfContext":true,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-000
+ T ition: "", from_: "Idle -> Locomotion", to: "Locomotion Transition", rule_graph: "", rule: "(MovementState == NewEnumerator0)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Locomotion -> Idle", to: "Idle Transition", rule_graph: "", rule: "(MovementState == NewEnumerator4)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Locomotion Transition", to: "Locomotion Loop", rule_graph: "", rule: "(IsAnimationAlmostComplete() && (Current State Time (State Controller) > \"\"))", crossfade_duration: 0.200000, priority_order: 2, shared_rules: True}>
+ T ition: "", from_: "Locomotion Transition", to: "Locomotion Loop", rule_graph: "", rule: "(NoValidAnim || Break S Blend Stack Inputs)", crossfade_duration: 0.200000, priority_order: 2, shared_rules: True}>
+ T ition: "", from_: "Idle Transition", to: "Idle Loop", rule_graph: "", rule: "(IsAnimationAlmostComplete() && (Current State Time (State Controller) > \"\"))", crossfade_duration: 0.200000, priority_order: 1, shared_rules: True}>
+ T ition: "", from_: "Idle Transition", to: "Idle Loop", rule_graph: "", rule: "(NoValidAnim || Break S Blend Stack Inputs)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: True}>
+ T ition: "", from_: "In Air Transition", to: "In Air Loop", rule_graph: "", rule: "(IsAnimationAlmostComplete() && (Current State Time (State Controller) > \"\"))", crossfade_duration: 0.200000, priority_order: 1, shared_rules: True}>
+ T ition: "", from_: "In Air Transition", to: "In Air Loop", rule_graph: "", rule: "(NoValidAnim || Break S Blend Stack Inputs)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: True}>
+ T ition: "", from_: "-> In Air", to: "In Air Transition", rule_graph: "", rule: "(MovementMode == NewEnumerator5)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "-> Grounded", to: "Conduit", rule_graph: "", rule: "(MovementMode == NewEnumerator4)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Re-Enter", to: "Locomotion Transition", rule_graph: "", rule: "(((MovementDirection != MovementDirection_LastFrame) || (Stance != Stance_LastFrame) || (Gait != Gait_LastFrame)) && (Current State Time (State Controller) > \"\"))", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Re-Enter", to: "Locomotion Transition", rule_graph: "", rule: "(IsPivoting() && (Current State Time (State Controller) > Seleziona) && !Trj_IsCircling && (MovementMode_Recent == NewEnumerator4))", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Re-Enter", to: "Locomotion Transition", rule_graph: "", rule: "((Abs(A=NormalizedDeltaRotator(A=Trj_FutureFacing, B=FutureFacingOnTransitionStart).ReturnValue_Yaw) > 60.000000) && ((Current State Time (State Controller) < 0.500000) && (Current State Time (State Controller) > \"\")) && !Break S Blend Stack Inputs && !Trj_IsCircling)", crossfade_duration: 0.200000, priority_order: 2, shared_rules: False}>
+ T ition: "", from_: "Re-Enter ", to: "Idle Transition", rule_graph: "", rule: "((Stance != Stance_LastFrame) && (Current State Time (State Controller) > \"\"))", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Idle Loop", to: "Idle Break", rule_graph: "", rule: "(Current State Time (State Controller) > 3.000000)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Idle Break", to: "Idle Loop", rule_graph: "", rule: "(IsAnimationAlmostComplete() && (Current State Time (State Controller) > \"\"))", crossfade_duration: 0.200000, priority_order: 1, shared_rules: True}>
+ T ition: "", from_: "Idle Break", to: "Idle Loop", rule_graph: "", rule: "(NoValidAnim || Break S Blend Stack Inputs)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: True}>
+ T ition: "", from_: "Re-Enter ", to: "Idle Transition", rule_graph: "", rule: "(ShouldTurnInPlace() && (Current State Time (State Controller) > \"\") && (((GetCurveValue(CurveName=Enable_TurnInPlaceSteering) < 0.100000) && (Current State Time (State Controller) > 0.300000)) || (Array_Contains(TargetArray=Break S Blend Stack Inputs, ItemToFind=Spin_L) && (FutureFacingDelta > 45.000000)) || (Array_Contains(TargetArray=Break S Blend Stack I
+ T ition: "", from_: "Conduit", to: "Locomotion Transition", rule_graph: "", rule: "(MovementState == NewEnumerator0)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Conduit", to: "Idle Transition", rule_graph: "", rule: "(MovementState == NewEnumerator4)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Re-Enter", to: "Locomotion Transition", rule_graph: "", rule: "NotifyTransition_Re-Transition", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Locomotion Transition", to: "Locomotion Loop", rule_graph: "", rule: "NotifyTransition_ToLoop", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Slide Transition", to: "Slide Loop", rule_graph: "", rule: "(IsAnimationAlmostComplete() && (Current State Time (State Controller) > \"\"))", crossfade_duration: 0.200000, priority_order: 1, shared_rules: True}>
+ T ition: "", from_: "Slide Transition", to: "Slide Loop", rule_graph: "", rule: "(NoValidAnim || Break S Blend Stack Inputs)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: True}>
+ T ition: "", from_: "-> Slide", to: "Slide Transition", rule_graph: "", rule: "(MovementMode == NewEnumerator6)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Re-Enter  ", to: "Slide Transition", rule_graph: "", rule: "((MovementDirection != MovementDirection_LastFrame) && (Current State Time (State Controller) > \"\"))", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Locomotion Transition", to: "Locomotion Loop", rule_graph: "", rule: "(Trj_CirclingTime > 0.250000)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Re-Enter", to: "Locomotion Transition", rule_graph: "", rule: "((Abs(A=Subtract_DoubleDouble(A=FutureFacingDelta, B=FutureFacingDelta_LastFrame)) > 200.000000) && (Current State Time (State Controller) > \"\"))", crossfade_duration: 0.200000, priority_order: 3, shared_rules: False}>
+ T ition: "", from_: "Re-Enter   ", to: "In Air Transition", rule_graph: "", rule: "((MovementDirection != MovementDirection_LastFrame) && (Current State Time (State Controller) > \"\"))", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "-> Debug Fly", to: "Debug Flying Loop", rule_graph: "", rule: "(MovementMode == NewEnumerator10)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Locomotion Transition", to: "Locomotion Loop", rule_graph: "", rule: "((Abs(A=SlopeAngle) > 15.000000) && (Current State Time (State Controller) > 0.750000))", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+MACHINE Ragdoll
+ S NoRagdoll [AnimStateNode]  name: "NoRagdoll", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP:AnimGraph.AnimGraphNode_Sta
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfC
+   node: AnimGraphNode_UseCachedPose AnimGraphNode_UseCachedPose_0
+ S -> Blend Out [AnimStateAliasNode]  name: "-> Blend Out", kind: Alias, graph: None, position: {x: 0, y: -256}, animations: }>
+ S Blend Out Pose [AnimStateNode]  name: "Blend Out Pose", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP:AnimGraph.AnimGraphNod
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfC
+   node: AnimGraphNode_PoseSnapshot AnimGraphNode_PoseSnapshot_0
+   node: AnimGraphNode_CopyBone AnimGraphNode_CopyBone_1
+   node: AnimGraphNode_LocalToComponentSpace AnimGraphNode_LocalToComponentSpace_0
+   node: AnimGraphNode_CopyBone AnimGraphNode_CopyBone_0
+   node: AnimGraphNode_ComponentToLocalSpace AnimGraphNode_ComponentToLocalSpace_0
+ S -> Ragdoll [AnimStateAliasNode]  name: "-> Ragdoll", kind: Alias, graph: None, position: {x: 0, y: -448}, animations: }>
+ S In Ragdoll [AnimStateNode]  name: "In Ragdoll", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP:AnimGraph.AnimGraphNode_St
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfC
+   node: AnimGraphNode_StateMachine AnimGraphNode_StateMachine_0
+ T ition: "", from_: "-> Blend Out", to: "Blend Out Pose", rule_graph: "", rule: "(MovementMode != NewEnumerator9)", crossfade_duration: 0.000000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Blend Out Pose", to: "NoRagdoll", rule_graph: "", rule: "(MovementMode != NewEnumerator9)", crossfade_duration: 0.500000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "-> Ragdoll", to: "In Ragdoll", rule_graph: "", rule: "(MovementMode == NewEnumerator9)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+MACHINE Ragdoll Animations
+ S Ragdoll In Air [AnimStateNode]  name: "Ragdoll In Air", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprints/S
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfC
+   node: AnimGraphNode_BlendSpacePlayer AnimGraphNode_BlendSpacePlayer_1
+   node: AnimGraphNode_BlendListByBool AnimGraphNode_BlendListByBool_1
+   node: K2Node_PromotableOperator K2Node_PromotableOperator_1
+   node: AnimGraphNode_BlendSpacePlayer AnimGraphNode_BlendSpacePlayer_0
+   node: AnimGraphNode_ModifyCurve AnimGraphNode_ModifyCurve_2
+   node: AnimGraphNode_ModifyCurve AnimGraphNode_ModifyCurve_0
+   node: K2Node_PropertyAccess K2Node_PropertyAccess_0
+ S Ragdoll On Ground [AnimStateNode]  name: "Ragdoll On Ground", kind: State, graph: "/Script/AnimGraph.AnimationStateGraph'/Game/Blueprint
+    fns  {"StateEntryFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateExitFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfContext":false,"bWasDeprecated":false},"StateFullyBlendedInFunction":{"memberParent":null,"memberScope":"","memberName":"None","memberGuid":"00000000-0000-0000-0000-000000000000","bSelfC
+   node: AnimGraphNode_BlendSpacePlayer AnimGraphNode_BlendSpacePlayer_2
+   node: AnimGraphNode_TwoWayBlend AnimGraphNode_TwoWayBlend_0
+   node: AnimGraphNode_BlendSpacePlayer AnimGraphNode_BlendSpacePlayer_1
+   node: AnimGraphNode_ModifyCurve AnimGraphNode_ModifyCurve_6
+   node: AnimGraphNode_ModifyCurve AnimGraphNode_ModifyCurve_3
+   node: AnimGraphNode_BlendListByEnum AnimGraphNode_BlendListByEnum_1
+   node: AnimGraphNode_SequenceEvaluator AnimGraphNode_SequenceEvaluator_2
+   node: AnimGraphNode_ModifyCurve AnimGraphNode_ModifyCurve_2
+   node: AnimGraphNode_SequenceEvaluator AnimGraphNode_SequenceEvaluator_5
+   node: AnimGraphNode_ModifyCurve AnimGraphNode_ModifyCurve_4
+   node: AnimGraphNode_SequenceEvaluator AnimGraphNode_SequenceEvaluator_1
+   node: AnimGraphNode_ModifyCurve AnimGraphNode_ModifyCurve_7
+   node: AnimGraphNode_ModifyCurve AnimGraphNode_ModifyCurve_5
+   node: AnimGraphNode_SequenceEvaluator AnimGraphNode_SequenceEvaluator_7
+   node: AnimGraphNode_ModifyCurve AnimGraphNode_ModifyCurve_0
+   node: AnimGraphNode_SequenceEvaluator AnimGraphNode_SequenceEvaluator_3
+   node: AnimGraphNode_SequenceEvaluator AnimGraphNode_SequenceEvaluator_0
+   node: AnimGraphNode_ModifyCurve AnimGraphNode_ModifyCurve_1
+ S Conduit [AnimStateConduitNode]  name: "Conduit", kind: Conduit, graph: "/Script/AnimGraph.AnimationTransitionGraph'/Gam
+   node: AnimGraphNode_TransitionResult AnimGraphNode_TransitionResult_0
+ T ition: "", from_: "Conduit", to: "Ragdoll In Air", rule_graph: "", rule: "(Accesso alla proprietà > 0.300000)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Conduit", to: "Ragdoll On Ground", rule_graph: "", rule: "((Accesso alla proprietà <= 0.300000) || (Accesso alla proprietà != NewEnumerator0))", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Ragdoll In Air", to: "Ragdoll On Ground", rule_graph: "", rule: "(Accesso alla proprietà <= 0.200000)", crossfade_duration: 1.000000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Ragdoll On Ground", to: "Ragdoll In Air", rule_graph: "", rule: "((Current State Time (Ragdoll) > 0.500000) && (Accesso alla proprietà > 0.500000))", crossfade_duration: 0.500000, priority_order: 1, shared_rules: False}>
+ T ition: "", from_: "Conduit", to: "Ragdoll On Ground", rule_graph: "", rule: "(Accesso alla proprietà != NewEnumerator0)", crossfade_duration: 0.200000, priority_order: 1, shared_rules: False}>
