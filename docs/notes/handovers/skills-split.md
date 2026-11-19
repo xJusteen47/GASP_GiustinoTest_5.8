@@ -24,7 +24,8 @@ Piano eseguito: `docs/notes/review/skills-portabilita.md` passi 1-4. **Nulla pub
 
 ## Aperto
 - Owner 11-19 14:57: repo `game-anim-vfx-review-skills`, PRIVATO per ora, licenza MIT (`skills-public/LICENSE`).
-  Il repo lo crea l'owner (il thread non può creare repo); poi un thread lo collega e ci spinge `skills-public/`.
+  Creato dall'owner; caricato 11-19: github.com/xJusteen47/game-anim-vfx-review-skills `main` 0cdf55c (copia di `skills-public/`).
+  Fonte di verità resta `skills-public/` qui: chi la cambia ricopia nel repo pubblico.
 - Account skill `gstn-move-animation` non divisa (fuori ambito). Copie in project files `anim-skills/` e `vfx-theory/`
   ora vecchie: il coordinatore le aggiorna dal branch.
 - Mai provato in una review reale: la prima review anim o VFX verifica che i due strati si leggano bene insieme.
