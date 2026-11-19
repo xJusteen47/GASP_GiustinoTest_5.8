@@ -100,6 +100,14 @@ for path, kind in spec:
     rows = sample(seq)
     n = len(rows); times = [r["t"] for r in rows]
     cl, cr, sp = contacts(rows, "l"), contacts(rows, "r"), root_speed(rows)
+    # Intended slide (docs/notes/foot-lock-and-slides.md): where the designer's GSTN_FootSlide(_l/_r) curve is > 0.5 the foot is NOT a
+    # contact, so GASP's CR_Biped_FootPlacement never pins it (a pin on a sliding foot pops when it lets go: skid, anim-setup-2)
+    for s, c in (("l", cl), ("r", cr)):
+        for name in ("GSTN_FootSlide_" + s, "GSTN_FootSlide"):
+            if AL.does_curve_exist(seq, name, unreal.RawCurveTrackTypes.RCT_FLOAT):
+                for i, t in enumerate(times):
+                    if AL.get_float_value_at_time(seq, name, t) > 0.5:
+                        c[i] = 0.0
     # NO movedata_speed (2026-11-19, skid a5 FAIL): ABP Get_DynamicPlayRate plays any clip that has it at capsule speed / curve speed,
     # so our authored timing stalled near speed 0 (skid) and drifted (run stop). Our clips play at their own rate: removed if present
     curves = {"contact_l": cl, "contact_r": cr}

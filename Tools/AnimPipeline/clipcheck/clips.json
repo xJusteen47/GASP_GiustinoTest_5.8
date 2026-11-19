@@ -224,6 +224,7 @@
     "frame": "first"
    },
    "fix": [
+    "slide_marker",
     "filters",
     "splice",
     "ik_feet"
@@ -245,6 +246,14 @@
      "frame": "first"
     },
     "seconds": 0.1
+   },
+   "slide_marker": {
+    "side": "both",
+    "frames": [
+     1,
+     30
+    ],
+    "ramp": 2
    }
   },
   "RunStop_R": {
@@ -262,6 +271,7 @@
     "frame": "first"
    },
    "fix": [
+    "slide_marker",
     "filters",
     "splice",
     "ik_feet"
@@ -283,6 +293,14 @@
      "frame": "first"
     },
     "seconds": 0.1
+   },
+   "slide_marker": {
+    "side": "both",
+    "frames": [
+     1,
+     30
+    ],
+    "ramp": 2
    }
   },
   "Skid_180": {
@@ -307,6 +325,7 @@
     ]
    ],
    "fix": [
+    "slide_marker",
     "splice",
     "floor_clamp",
     "ik_feet"
@@ -322,7 +341,15 @@
     },
     "seconds": 0.1
    },
-   "floor_clamp": {}
+   "floor_clamp": {},
+   "slide_marker": {
+    "side": "r",
+    "frames": [
+     1,
+     20
+    ],
+    "ramp": 2
+   }
   },
   "Crouch_Enter": {
    "asset": "/Game/GSTN/Animation/Crouch/AS_GSTN_Crouch_Enter",

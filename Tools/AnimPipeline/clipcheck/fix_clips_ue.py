@@ -220,6 +220,35 @@ def _aim(tf, old_dir, new_dir):
     return out
 
 
+def slide_marker(anim, cfg, dry):
+    """Writes the intended-slide marker curve (docs/notes/foot-lock-and-slides.md) from the row's "slide_marker":
+    {"side": "l"|"r"|"both", "frames": [first, last] (1-based), "ramp": 2}. 1 inside, linear ramp of `ramp` frames each side."""
+    n = _nkeys(anim)
+    step = anim.get_play_length() / max(n - 1, 1)
+    side = cfg.get('side', 'both')
+    name = 'GSTN_FootSlide' if side == 'both' else f'GSTN_FootSlide_{side}'
+    a, b = cfg['frames'][0] - 1, cfg['frames'][1] - 1
+    ramp = int(cfg.get('ramp', 2))
+    vals = []
+    for f in range(n):
+        if a <= f <= b:
+            v = 1.0
+        elif a - ramp <= f < a:
+            v = (f - (a - ramp)) / float(ramp + 1)
+        elif b < f <= b + ramp:
+            v = (b + ramp + 1 - f) / float(ramp + 1)
+        else:
+            v = 0.0
+        vals.append(v)
+    if not dry:
+        T = unreal.RawCurveTrackTypes.RCT_FLOAT
+        if AL.does_curve_exist(anim, name, T):
+            AL.remove_curve(anim, name, False)
+        AL.add_curve(anim, name, T, False)
+        AL.add_float_curve_keys(anim, name, [f * step for f in range(n)], vals)
+    return {'curve': name, 'frames': [a + 1, b + 1]}
+
+
 def main():
     unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(['/Game'], True)
     C = json.load(open(os.path.join(HERE, 'clips.json')))['clips']
@@ -240,6 +269,8 @@ def main():
             r['filters'] = filters(anim, dry)
         if 'splice' in fx:
             r['splice'] = splice(anim, cfg.get('splice', {}), dry)
+        if 'slide_marker' in fx:
+            r['slide_marker'] = slide_marker(anim, cfg['slide_marker'], dry)
         if 'floor_clamp' in fx:
             r['floor_clamp'] = floor_clamp(anim, cfg.get('floor_clamp', {}), dry)
         if 'ik_feet' in fx and not dry:

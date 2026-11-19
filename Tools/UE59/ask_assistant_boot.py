@@ -24,7 +24,7 @@ OUT = os.path.join(D, 'replies.json')
 T_START = time.time()
 WARM_S = float(os.environ.get('ASSIST_WARM_S', '60'))
 TIMEOUT = float(os.environ.get('ASSIST_TIMEOUT_S', '900'))
-_st = {'i': 0, 'pending': None, 'conv': str(uuid.uuid4()), 'res': [], 'h': None, 't0': 0.0, 'warm': 0}
+_st = {'i': 0, 'pending': None, 'conv': '', 'res': [], 'h': None, 't0': 0.0, 'warm': 0}
 
 
 def _save(done=False):
