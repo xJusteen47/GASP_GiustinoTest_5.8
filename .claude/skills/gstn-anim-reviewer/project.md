@@ -25,6 +25,13 @@ Generic method: `skills-public/anim-reviewer/SKILL.md`. Section numbers below re
   `animazione-picchiaduro-action.md` §10). References: `Tools/AnimPipeline/reflib/`.
 - Frame tool: `skills-public/anim-reviewer/scripts/rv_frames.py` (current captures: 360 px squares per view).
 
+## Clip in isolation (§2 gate; owner 11-19)
+- Results: `docs/notes/reviews/clip-check/<clip>/metrics.json` + `grid.png` (one image: side sticks with world ground
+  ticks, ball heights with plants shaded, planted-ball ground speed, body angular acceleration with pops). Tool and
+  thresholds: `Tools/AnimPipeline/clipcheck/README.md`. GASP reference clips run through the same check as calibration:
+  if a GASP clip fails, the threshold is wrong, not the clip.
+- No result for a clip of the move or for a clip it hands to/from: ask for it, the cycle does not start.
+
 ## Capture labels and timing (§3)
 - Labels `v` (video frame), `m`, `a` (anim frame); frames from the `--video` map. Sim 62.5 Hz. Designer-facing frame
   data counts from 1. Views: az180 or game camera (behind) + side. The owner looks mostly from behind.

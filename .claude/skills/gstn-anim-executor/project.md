@@ -23,6 +23,11 @@ Antigravity cannot run git in its sandbox: the Claude session commits card and s
 - Gates: `author`, `build`, `check`, `fidelity`. Check: `animpipe verify <move> --req=<file>`; bone dump
   `sheets/raw/<take>_legbones.json` (X left, Y forward, Z up, cm).
 - Before/after: `animpipe poses <card> --over=<take before>` and `animpipe trails`, or `clip_grid.py` for lit views.
+- Clip in isolation (§3, before any capture; owner 11-19 hard gate): add the clip to
+  `Tools/AnimPipeline/clipcheck/clips.json`; editor assets are exported first with `export_clips_ue.py` (headless,
+  editor closed, read-only), then `python Tools/AnimPipeline/clipcheck/clip_check.py <clips.json> <out> <clip>`
+  (pip `bpy numpy matplotlib`, cloud OK). Commit `<out>/<clip>/metrics.json` + `grid.png` under
+  `docs/notes/reviews/clip-check/`. README next to the script.
 - In-game video: `animpipe render <move> --standalone [--azs=...]`; labels `v`, `m`, `a`. Curves file `curve.txt`.
 - Reference dossiers: `docs/notes/reference-dossiers/`.
 - Per-control keys and per-key tangents do not exist in the card yet: refuse with `formato_scheda`.

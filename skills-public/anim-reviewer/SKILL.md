@@ -28,6 +28,14 @@ Never old sessions, chats, logs or earlier reviews unless the brief names them.
 Check the entry conditions in the contract. One is missing: say which, ask for it, stop. Never ask anyone to invent a
 pose from text.
 
+**Clip in isolation first (hard gate).** A clip that fails on its own never passes in the full setup, however much the
+setup is iterated, and it can break clips that already work. Before any in-game review, every clip of the move (and
+every clip it hands to or from) needs a clip-in-isolation result: planted feet that do not slide (or slide at the
+capsule speed for an in-place clip), feet not through the floor, no one-frame flips or snaps, loop seams that join,
+first/last pose close to the clip it takes over from / hands to, required engine curves present. A FAIL there is a
+`pose` (or `data`) item and the in-game review does not start; "one-frame extremes" warnings are looked at, not
+gating. Missing result: ask the executor for it, stop.
+
 ## 3. Video review (nobody sends a move on without having looked at the in-game video)
 Work from the mp4 files in `start/` or `end/`: variant and base, the version that hits and the one that whiffs.
 1. **Capture chain first.** The review is void, and you say so, if: the new clip is not really playing (variant

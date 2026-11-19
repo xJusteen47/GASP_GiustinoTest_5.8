@@ -42,6 +42,10 @@ to understand the words), not old sessions.
    keys before and after, the paths. Then stop.
 
 ## 3. Start and end of a cycle: the in-game video
+**Before it, the clip-in-isolation check** (hard gate, reviewer §2): run the project's isolation check on every clip
+of the move and on the clips it hands to/from; commit its numbers and one grid per clip next to the videos. Any FAIL:
+no capture, report the fail lines and stop (the clip is fixed first, never the game setup around it).
+
 On request only, after build and checks pass. Put in `start/` (or `end/`) the mp4 files and grids of variant **and**
 base on the same frames: the version that hits, the one that whiffs, and one sequence that acts at the first
 actionable frame. Frame labels must be readable. Commit them: the review is done from those files. Report gate line
