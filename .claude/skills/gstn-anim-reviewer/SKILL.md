@@ -16,6 +16,10 @@ Model: Fable, high effort (reviews are the one place the project uses it). One m
 - The card (`Tools/AnimPipeline/cards/<kit>/...json`): `_design`, `poses`, `anim_active`, `approved`. `rules.md` and
   `kits/<kit>.md` in `.claude/skills/animpipe-move/`.
 - `docs/notes/review/critico-estetico.md` (the critic, §3b) and the GASP curve check the brief names (§3.7).
+- The **reference dossier** if the move has a reference video (`docs/notes/review/dossier-riferimento.md`; dossiers in
+  `docs/notes/reference-dossiers/`). There is a reference video but no dossier: write it first, once, from
+  `docs/notes/review/dossier-template.md` (frames via `rv_frames.py`, grids kept out of the repo), before the first
+  review. No reference video: skip it and judge by principles.
 - The cycle folder `docs/notes/reviews/<move>-c<N>/`: `ciclo.md` if it exists, the last `esito.json`.
 - Theory (`docs/notes/anim-theory/`): only the section of the principle you are about to cite.
 Never old threads, chats, logs or earlier reviews unless the brief names them.
@@ -43,7 +47,10 @@ Work from the mp4 files in `inizio/` or `fine/`: variant and base, the version t
 5. **Answer the six questions** of `rubric.md` (five for a reaction), yes or no, each with the `v` frames and the view it
    comes from. Derive each answer with the four steps of `principi-animazione-corporea.md` §13: intent of the move,
    what the principle predicts here, what the frames show, where they differ and why.
-6. **References.** Two of the same class, numbers from `rubric.md` or `Tools/AnimPipeline/reflib/`. Side by side only on
+6. **References.** If there is a dossier, compare against it first: timing per phase, key poses and silhouette,
+   sizes relative to the body, follow-through; each gap names the dossier field and the frame. A deviation the owner's
+   rules or our heavier character explain is not a gap (the dossier's "not for us" section). Then two of the same
+   class, numbers from `rubric.md` or `Tools/AnimPipeline/reflib/`. Side by side only on
    the desktop grid that is never committed. From behind there is no Smash reference: say so and judge by silhouette.
 7. **GASP curves.** GASP features read animation curves from clips and montages (foot IK lock or disable, warping,
    distance matching, `RootMotionTranslationScale` on our montages, and others). A missing or wrong curve shows up as a
@@ -61,9 +68,10 @@ Work from the mp4 files in `inizio/` or `fine/`: variant and base, the version t
 ## 3b. The critic (owner 2026-11-19; principle in `docs/notes/review/critico-estetico.md`)
 Every video review has a critic beside you: a separate Fable high agent whose job succeeds only when it finds what is
 not optimal. You do not play it yourself and you do not show it your answers.
-- **Brief it with:** the grids you made (same ones, no new capture), the references, the identity traits of the move
-  (rule 13a), the owner rules in scope, the north star "Ganondorf inside Astro Bot" and the Smash/AAA bar. Not your
-  verdict, not the executor's notes, not earlier reviews.
+- **Brief it with:** the grids you made (same ones, no new capture), the reference dossier if there is one (else the
+  references), the identity traits of the move (rule 13a), the owner rules in scope, the north star "Ganondorf inside
+  Astro Bot" and the Smash/AAA bar. Not the move brief beyond those, not your verdict, not the executor's notes, not
+  earlier reviews: it judges the result against the dossier, blind to what was intended.
 - **It returns** at least the 3 heaviest flaws, ranked `grave` / `medio` / `lieve`, each with frame and view, what is
   seen, the reference or principle it betrays, label (`posa` / `dati montage` / `gioco`) and the smallest fix. If it
   finds fewer than three it says where it looked. Weight is judged at real speed: `grave` = the owner would see it at
@@ -99,7 +107,7 @@ Six instructions, or nothing left above the bar: ask for the final in-game captu
 # Review: <move> ciclo <N> — PASS | FAIL — <date>
 Catena di cattura: valida | non valida (perché). Limiti.
 | domanda | sì/no | frame e vista | cosa si vede |
-Confronto: <due riferimenti, classe>, cosa torna e cosa no.
+Confronto: <dossier e/o due riferimenti, classe>, cosa torna e cosa no.
 Critico: <ogni voce, peso, accolta | respinta (frame)>.
 Curve GASP: presenti | mancanti (quali) | non verificate.
 Scarti (max 3): frame, vista, etichetta, principio, correzione.

@@ -16,6 +16,10 @@ dichiarata nel brief, per esempio colpo S/M/L).
 - `vfx-theory/principi-vfx.md`: solo la sezione del principio che stai per citare.
 - I riferimenti dell'owner: `handoffs/ref-astrobot-vfx/NOTE.md` (+ clip DK Bananza su `claude/ref-astrobot-vfx`).
 - `docs/notes/review/critico-estetico.md` (il critico, §3b).
+- Il **dossier del riferimento** se l'effetto ha un riferimento video (`docs/notes/review/dossier-riferimento.md`;
+  dossier in `docs/notes/reference-dossiers/`). C'è il video ma manca il dossier: scrivilo prima, una volta, da
+  `docs/notes/review/dossier-template.md` (frame con `rv_frames.py`, griglie fuori dal repo). Per i VFX contano
+  soprattutto taglie rispetto al personaggio, curva di opacità e vita, luce e materia.
 - La cartella della review `docs/notes/reviews/<effetto>-r<N>/`: video, griglie, l'ultimo `review.md` se c'è.
 Mai thread o chat vecchi.
 
@@ -35,15 +39,17 @@ Se l'owner dice che il video non torna, ricontrolla la catena prima dell'effetto
    alla scomparsa dell'ultimo pezzo.
 3. **Passata VFX spenti → accesi**: il personaggio e l'arto che colpisce restano leggibili?
 4. **Fermo a metà vita** e **fermo in scala di grigi** del frame di contatto (se il video lo permette).
-5. **Confronto** con un riferimento della stessa classe (Astro Bot / DK Bananza per stile, Smash per timing e peso del
-   colpo). Immagini di altri giochi solo sul desktop, mai nel repo.
+5. **Confronto** prima con il dossier, se c'è (ogni scostamento cita il campo del dossier e il frame; ciò che il
+   dossier dice "non vale per noi" non è uno scarto), poi con un riferimento della stessa classe (Astro Bot / DK
+   Bananza per stile, Smash per timing e peso del colpo). Immagini di altri giochi solo sul desktop, mai nel repo.
 
 ## 3b. Il critico (owner 2026-11-19; principio in `docs/notes/review/critico-estetico.md`)
 Ogni review ha accanto un critico: un agente Fable high separato, che riesce solo se trova cosa non è ottimale. Non
 lo fai tu e non gli mostri le tue risposte.
-- **Gli dai:** le stesse griglie e video (nessuna cattura nuova), i riferimenti (clip DK Bananza / Astro Bot, note
-  dell'owner), le regole dell'owner nel loro ambito, la domanda "starebbe in DK Bananza?". Non il tuo verdetto, non
-  le note di chi ha fatto l'effetto, non le review precedenti.
+- **Gli dai:** le stesse griglie e video (nessuna cattura nuova), il dossier del riferimento se c'è (altrimenti i
+  riferimenti: clip DK Bananza / Astro Bot, note dell'owner), le regole dell'owner nel loro ambito, la domanda
+  "starebbe in DK Bananza?". Non il brief oltre a questo, non il tuo verdetto, non le note di chi ha fatto
+  l'effetto, non le review precedenti: giudica il risultato contro il dossier, senza sapere cosa si voleva fare.
 - **Ti restituisce** almeno i 3 difetti più pesanti, `grave` / `medio` / `lieve`, ognuno con frame e vista, cosa si
   vede, riferimento o principio tradito, etichetta (§5) e correzione più piccola; se ne trova meno di tre dice dove ha
   cercato. Il peso si giudica a velocità reale: `grave` = l'owner lo vede al primo sguardo.
@@ -97,7 +103,7 @@ Etichetta ogni NO: **forma / timing / colore-valore / materiale / gerarchia / pe
 Catena di cattura: valida | non valida (perché). Limiti.
 Impressione a velocità reale: <una riga>.
 | domanda | sì/no | frame e vista | cosa si vede |   (solo i NO e le domande chiave)
-Confronto: <riferimento, classe>, cosa torna e cosa no.
+Confronto: <dossier e/o riferimento, classe>, cosa torna e cosa no.
 Critico: <ogni voce, peso, accolta | respinta (frame)>.
 Scarti (max 3): frame, vista, etichetta, principio, correzione più piccola.
 Lato gioco: <difetti `gioco`>.

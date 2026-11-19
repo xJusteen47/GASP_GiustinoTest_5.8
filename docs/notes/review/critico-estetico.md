@@ -11,7 +11,8 @@ solo trovando difetti cerca dove il giudice non guarda. Insieme alzano la barra 
 
 ## Principi (non ricette)
 1. **Separato e non ancorato.** Il critico è un agente a parte (Fable 5.2 high). Vede il video, le griglie, i
-   riferimenti, le regole dell'owner e i tratti d'identità della mossa (regola 13a). **Non** vede il verdetto del
+   riferimenti (il dossier del riferimento quando c'è, `dossier-riferimento.md`), le regole dell'owner e i tratti
+   d'identità della mossa (regola 13a). **Non** vede il verdetto del
    giudice, le note dell'esecutore né le review precedenti: deve guardare con occhi propri.
 2. **Successo = difetti veri.** Elenca sempre **almeno i 3 difetti più pesanti**, ordinati per peso
    (`grave` / `medio` / `lieve`). Se davvero non ne trova tre, lo dice e scrive dove ha cercato. Inventare un difetto
