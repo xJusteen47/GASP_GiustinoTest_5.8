@@ -110,6 +110,9 @@ def sample_fbx(path):
             q = m.to_quaternion()
             fr['q'][pb.name] = np.array([q.w, q.x, q.y, q.z])
             fr['t'][pb.name] = np.array(m.translation)
+            if pb.name == 'root':   # root BONE (root motion) in world, cm: hand-offs compare feet in its space
+                rm = mw @ pb.matrix
+                fr['root_bone_inv'] = np.array(rm.inverted())
         out['frames'].append(fr)
     return out
 
@@ -124,11 +127,20 @@ def ref_frames(spec, base):
     return _REF_CACHE[path]
 
 
+def _in_root(fr, p):
+    ""Point (world cm) in the root BONE's space when the clip has one (a root-motion clip turns and travels with it), else vs the object""
+    m = fr.get('root_bone_inv')
+    if m is None:
+        return p - fr['root']
+    q = m @ np.r_[p / 100.0, 1.0]
+    return q[:3] * 100.0
+
+
 def pose_gap(R, fr):
     """(max key-bone local rotation gap deg, bone, top3, feet gap cm relative to the root)"""
     g = sorted(((qangle(R['q'][n], fr['q'][n]), n) for n in KEY_BONES if n in R['q'] and n not in ('ball_l', 'ball_r')),
                reverse=True)
-    fg = max(np.linalg.norm((fr['pos'][f'foot_{s}'] - fr['root']) - (R['pos'][f'foot_{s}'] - R['root'])) for s in 'lr')
+    fg = max(np.linalg.norm(_in_root(fr, fr['pos'][f'foot_{s}']) - _in_root(R, R['pos'][f'foot_{s}'])) for s in 'lr')
     return g[0][0], g[0][1], [[n, round(a, 1)] for a, n in g[:3]], float(fg)
 
 
@@ -427,7 +439,10 @@ def check(name, cfg, base, outdir):
     M['verdict'] = 'FAIL' if fails else ('PASS*' if warns else 'PASS')
     od = os.path.join(outdir, name); os.makedirs(od, exist_ok=True)
     json.dump(M, open(os.path.join(od, 'metrics.json'), 'w'), indent=1, default=float)
-    draw(name, S, feet, jerk, pop_frames, fwd, lat, M, os.path.join(od, 'grid.png'))
+    try:
+        draw(name, S, feet, jerk, pop_frames, fwd, lat, M, os.path.join(od, 'grid.png'))
+    except ImportError:   # no matplotlib in this Python (Blender without the extra folder): metrics only, no image
+        M['grid'] = 'skipped: no matplotlib'
     return M
 
 

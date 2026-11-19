@@ -195,6 +195,7 @@
    "fix": [
     "filters",
     "splice",
+    "floor_clamp",
     "ik_feet"
    ],
    "splice": {
