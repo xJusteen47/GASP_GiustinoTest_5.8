@@ -169,6 +169,7 @@ def world_delta(ax, prt):
     return qmul(qaxis(ax["twist"], t), qmul(qaxis(ax["roll"], r), qaxis(ax["pitch"], p)))
 
 
+FEET_FROM_SOURCE = False  # plan "feet_from_source": true (v4+): pose feet start from the source feet, not the offset pelvis
 TIP_RELATIVE = False  # plan "tip_relative": true (v2+): pitch/roll say where the bone's TIP goes, also on hanging bones
 
 
@@ -210,13 +211,21 @@ def ax_vec(ax, v3):
 
 # ---------- leg IK ----------
 def solve_leg(sk, loc, side, target_pos, target_rot):
-    th, ca, fo = f"thigh_{side}", f"calf_{side}", f"foot_{side}"
+    return solve_chain(sk, loc, f"thigh_{side}", f"calf_{side}", f"foot_{side}", target_pos, target_rot)
+
+
+def solve_chain(sk, loc, th, ca, fo, target_pos, target_rot, pole_dir=None):
+    """Two-bone IK. pole_dir (component space) = where the middle joint points; None keeps the current bend plane.
+    target_rot None keeps the end bone's current component rotation."""
     w = fk(sk, loc)
+    if target_rot is None:
+        target_rot = w[fo][0]
     H, K0, F0 = w[th][1], w[ca][1], w[fo][1]
     a, b = vlen(vsub(K0, H)), vlen(vsub(F0, K0))
     d_vec = vsub(target_pos, H); d = min(vlen(d_vec), a + b - 0.01); u = vn(d_vec)
     x = (a * a - b * b + d * d) / (2 * d); h = math.sqrt(max(0.0, a * a - x * x))
-    pole = vsub(vsub(K0, H), vmul(u, vdot(vsub(K0, H), u)))
+    pref = pole_dir if pole_dir is not None else vsub(K0, H)
+    pole = vsub(pref, vmul(u, vdot(pref, u)))
     if vlen(pole) < 1e-4:
         pole = (0.0, 0.0, 0.0)
     K = vadd(vadd(H, vmul(u, x)), vmul(vn(pole), h))
@@ -287,6 +296,8 @@ def build_poses(sk, plan, ax):
         seqs[name] = path
         poses[name] = read_pose(sk, unreal.load_asset(path), s.get("frame", 0))
         log(f"source {name} = {path} f{s.get('frame', 0)}")
+        if FEET_FROM_SOURCE:  # v4: before v4 the source feet were filled after the poses, so a pelvis offset moved the feet too
+            w = fk(sk, poses[name]); feet[name] = {x: (w[f"foot_{x}"][1], w[f"foot_{x}"][0]) for x in ("l", "r")}
     pending = dict(plan["poses"])
     while pending:
         progressed = False
@@ -301,6 +312,17 @@ def build_poses(sk, plan, ax):
                 loc = apply_rot(sk, loc, ax, p["rot"])
             if p.get("hands"):
                 loc.update(hand_locals(sk, p["hands"]))
+            # arm_ik (v4): {"l": {"hand": [fwd,right,up] cm in component space, "pole": [fwd,right,up] elbow direction}}
+            # leg_ik (v5, air tuck): {"l": {"foot": [...], "pole": [...]}}; "rel_pelvis": true on either = position from the pelvis
+            for kind, chain, key in (("leg_ik", ("thigh", "calf", "foot"), "foot"), ("arm_ik", ("upperarm", "lowerarm", "hand"), "hand")):
+                for s, spec in (p.get(kind) or {}).items():
+                    tgt = ax_vec(ax, spec[key])
+                    if spec.get("rel_pelvis"):
+                        tgt = vadd(tgt, fk(sk, loc)["pelvis"][1])
+                    st = solve_chain(sk, loc, f"{chain[0]}_{s}", f"{chain[1]}_{s}", f"{chain[2]}_{s}", tgt, None,
+                                     ax_vec(ax, spec["pole"]) if spec.get("pole") else None)
+                    if st > 0.5:
+                        log(f"pose {name}: {kind} {s} short by {st:.1f} cm")
             w = fk(sk, loc)
             fb = feet.get(p["base"]) or {s: (w[f"foot_{s}"][1], w[f"foot_{s}"][0]) for s in ("l", "r")}
             feet[name] = {s: (vadd(fb[s][0], ax_vec(ax, p.get("feet", {}).get(f"foot_{s}", (0, 0, 0)))),
@@ -327,6 +349,10 @@ def sample(keys, poses, feet, t, bone):
             ft = {s: (vadd(fa[s][0], vmul(vsub(fb[s][0], fa[s][0]), e)), slerp(fa[s][1], fb[s][1], e)) for s in ("l", "r")}
             return (slerp(qa, qb, e), vadd(ta, vmul(vsub(tb, ta), e))), ft
     k = keys[-1]; return poses[k["pose"]][bone], feet[k["pose"]]
+
+
+REPORT_BONES = ("pelvis", "calf_l", "calf_r", "foot_l", "foot_r", "ball_l", "ball_r", "lowerarm_l", "lowerarm_r",
+                "hand_l", "hand_r", "head")
 
 
 def build_clip(sk, name, c, poses, feet, ax):
@@ -358,6 +384,14 @@ def build_clip(sk, name, c, poses, feet, ax):
         w = fk(sk, fr)
         for s in ("l", "r"):
             slide = max(slide, vlen(vsub(w[f"ball_{s}"][1], w0[f"ball_{s}"][1])) if c.get("pin_feet") and c.get("check_slide", True) else 0)
+    for rf in c.get("report", []):  # bone positions in character axes [fwd, right, up] cm, to check a pose by numbers
+        w = fk(sk, frames[min(rf, n - 1)])
+        parts = []
+        for b in REPORT_BONES:
+            if b in w:
+                p = w[b][1]
+                parts.append(f"{b}=({vdot(p, ax['fwd']):.0f},{vdot(p, ax['right']):.0f},{vdot(p, ax['up']):.0f})")
+        log(f"{name} f{rf}: " + " ".join(parts))
     log(f"{name}: {n} keys, pelvis dz per frame " + " ".join(f"{v:.1f}" for v in pel))
     log(f"{name}: max ball drift {slide:.1f} cm, leg overreach {max(0.0, max_stretch):.1f} cm")
     return frames
@@ -408,8 +442,9 @@ def main():
     stand = read_pose(sk, unreal.load_asset(find_seq(plan["sources"][plan.get("axes_from", "stand")]["hints"])), 0)
     ax = axes(sk, stand)
     log("axes " + " ".join(f"{k}={tuple(round(v, 2) for v in ax[k])}" for k in ("fwd", "right", "up")))
-    global TIP_RELATIVE
+    global TIP_RELATIVE, FEET_FROM_SOURCE
     TIP_RELATIVE = plan.get("tip_relative", False)
+    FEET_FROM_SOURCE = plan.get("feet_from_source", False)
     log(f"tip_relative={TIP_RELATIVE}")
     poses, feet = build_poses(sk, plan, ax)
     only = plan.get("only")
