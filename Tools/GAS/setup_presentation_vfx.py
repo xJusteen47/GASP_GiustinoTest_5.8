@@ -475,8 +475,18 @@ def impact():
     s = _system("NS_GSTN_Impact")
     if s:
         _surface(s)
-        _smoke(s, "Puffs", 7, (0.60, 0.80), (170, 240), 420, 6.0, cone=((1, 0, 0), 85), sphere=(60, (0.05, 1.6, 1.6), (20, 0, 0)), rise=30.0)
-        _grains(s, "Grains", 10, (0.45, 0.60), (5, 8), 650, ((1, 0, 0), 75), gravity=-900.0, offset=(10, 0, 0))
+        # r7 Fable: 7 equal puffs born together on one disc averaged into one flat blob (dark v119); dark v76, 4-5 separate lumps, is the
+        # target. Billows = a few big lobes first, then smaller ones born 2-3 and 5 frames later, further out and higher, each with its own
+        # shading (SmokeCloud: darker underside and rim) so overlapping lobes separate. Sizes 100-240 cm, 7 lobes in all
+        core = _smoke(s, "Core", 3, (0.65, 0.80), (200, 240), 300, 6.0, look="SmokeCloud", cone=((1, 0, 0), 70),
+                      sphere=(40, (0.05, 1.4, 1.0), (20, 0, 0)), rise=25.0)
+        lobes = _smoke(s, "Lobes", 2, (0.55, 0.70), (140, 180), 520, 6.0, look="SmokeCloud", cone=((1, 0, 0), 85),
+                       sphere=(90, (0.05, 1.8, 1.3), (35, 0, 0)), rise=45.0)
+        lobes.set("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Time", 0.04)
+        tops = _smoke(s, "Tops", 2, (0.45, 0.60), (100, 130), 620, 6.0, look="SmokeCloud", cone=((1, 0, 0), 60),
+                      sphere=(70, (0.05, 1.6, 1.0), (70, 0, 0)), rise=70.0)
+        tops.set("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Time", 0.085)
+        _grains(s, "Grains", 10, (0.45, 0.60), (9, 12), 650, ((1, 0, 0), 75), gravity=-900.0, offset=(10, 0, 0))
     return s
 
 

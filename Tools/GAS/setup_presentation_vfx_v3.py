@@ -156,16 +156,28 @@ def build_smoke_full(smoke):
     _link(atlas_uv, "", tex, "UVs")
     pcol = _node(mat, unreal.MaterialExpressionParticleColor, -450, 300)
 
+    # r8 Fable: the cloud's shading (ShadeMin 0.62, rim 0.68, lift 0.4) separates the lobes on the dark floor but reads grey, darker than
+    # a white floor. Each shading value has a *Light twin used on bright floors, blended by the surface colour (particle colour, G as a
+    # cheap luminance) from 0.4 to 0.7. The MIs that need no difference set the twin to the same value
+    over = _node(mat, unreal.MaterialExpressionSubtract, -550, 800, const_b=0.4)
+    _link(_component(mat, pcol, "G", -700, 800), "", over, "A")
+    span = _node(mat, unreal.MaterialExpressionMultiply, -400, 800, const_b=3.333)
+    _link(over, "", span, "A")
+    bright = _unary(mat, unreal.MaterialExpressionSaturate, span, -250, 800)
+
+    def _by_floor(name, default, x, y):
+        return _lerp(mat, _scalar(mat, name, default, x, y), _scalar(mat, name + "Light", default, x, y + 40), bright, x + 150, y)
+
     # Self-shading: lerp(ShadeMin, 1, G); base colour = surface colour (particle colour) x shading
-    shade = _lerp(mat, _scalar(mat, "ShadeMin", 0.55, -100, 50), one_c, _component(mat, tex, "G", -100, 150), 100, 100)
+    shade = _lerp(mat, _by_floor("ShadeMin", 0.55, -300, 50), one_c, _component(mat, tex, "G", -100, 150), 100, 100)
     # r5 Fable: ShadeMin 0.4 read as soot on a white floor. The puff stays the floor's colour (ShadeMin ~0.7); the edge gets a thin, slightly
     # darker soft rim (RimShade at density 0, 1 at RimWidth) and the contrast comes from opacity, not from darkening the whole puff
-    rim = _lerp(mat, _scalar(mat, "RimShade", 0.8, -100, 380), one_c,
+    rim = _lerp(mat, _by_floor("RimShade", 0.8, -300, 380), one_c,
                 _unary(mat, unreal.MaterialExpressionSaturate,
                        _op(mat, unreal.MaterialExpressionDivide, _component(mat, tex, "R", -100, 470), _scalar(mat, "RimWidth", 0.35, -100, 540),
                            50, 480), 180, 480), 300, 400)
     base = _op(mat, unreal.MaterialExpressionMultiply, _op(mat, unreal.MaterialExpressionMultiply, pcol, shade, 250, 150), rim, 330, 200)
-    lift = _eye_inverse(mat, _op(mat, unreal.MaterialExpressionMultiply, base, _scalar(mat, "EmissiveLift", 0.12, 250, 300), 400, 250),
+    lift = _eye_inverse(mat, _op(mat, unreal.MaterialExpressionMultiply, base, _by_floor("EmissiveLift", 0.12, 100, 300), 400, 250),
                         550, 250)
 
     # Erosion: density - erode(t) * (0.35 + B), sharpened a little (soft but not mush)
@@ -242,7 +254,9 @@ FLASH_LOOKS = {
     "FlashStar": dict(tex="T_GSTN_VFX_Star", Brightness=7.0, StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.0, EndScale=0.0, FadeStart=0.7,
                       fringe=ORANGE),
     # Short coloured streaks flying out of the hit (velocity-aligned)
-    "FlashStreak": dict(tex="T_GSTN_VFX_Streak", Brightness=5.0, StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.35, EndScale=0.0,
+    # r7 Fable: the strong fan held full length v36-v44 over the victim's legs (the hitstop slows the system to 0.15 after 2 free frames,
+    # so ShrinkStart 0.35 of a 0.15 s life began at ~frame 9): 0.12 starts the shrink on frame 2-3, about half length by frame 4
+    "FlashStreak": dict(tex="T_GSTN_VFX_Streak", Brightness=5.0, StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.12, EndScale=0.0,
                         FadeStart=0.6, fringe=ORANGE),
     # Tiny sparks
     "FlashSpark": dict(tex="T_GSTN_VFX_Star", Brightness=8.0, StartScale=1.0, GrowEnd=0.01, ShrinkStart=0.3, EndScale=0.0, FadeStart=0.8,
@@ -261,10 +275,19 @@ SMOKE_LOOKS = {
     # screen whatever the exposure, still < 1: no bloom), ShadeMin 0.8, rim 0.8 keeps a soft edge. On-screen opacity was ~0.3-0.4 on the
     # dark floor -> OpacityMax 1.0 (the particle alpha and the erosion keep it below that)
     "SmokeDust": dict(OpacityMax=1.0, ShadeMin=0.8, StartScale=0.45, GrowEnd=0.75, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.2,
-                      FadeDistance=35.0, EmissiveLift=0.5, Roughness=0.9, RimShade=0.8, RimWidth=0.35),
+                      FadeDistance=35.0, EmissiveLift=0.5, Roughness=0.9, RimShade=0.72, RimWidth=0.35,
+                       ShadeMinLight=0.8, RimShadeLight=0.72, EmissiveLiftLight=0.5),
+    # Impact / bounce cloud lobes (r7 Fable: one flat blob): lower ShadeMin and a wider, darker rim give each lobe a lit top and a shaded
+    # underside so the overlapping lobes separate; OpacityMax 0.8 (dark v119 read as an opaque sticker). Lift 0.4: on the light floor the
+    # extra shading must not read as soot (r5: ShadeMin 0.4 did)
+    "SmokeCloud": dict(OpacityMax=0.8, ShadeMin=0.62, StartScale=0.5, GrowEnd=0.7, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.25,
+                       FadeDistance=35.0, EmissiveLift=0.4, Roughness=0.9, RimShade=0.68, RimWidth=0.5,
+                       # r8 Fable: grey on the white floor -> paler on bright floors only
+                       ShadeMinLight=0.78, RimShadeLight=0.76, EmissiveLiftLight=0.55),
     # Locomotion dust: thinner, quicker
     "SmokeLight": dict(OpacityMax=0.9, ShadeMin=0.8, StartScale=0.6, GrowEnd=0.8, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.1,
-                       FadeDistance=25.0, EmissiveLift=0.5, Roughness=0.9, RimShade=0.8, RimWidth=0.35),
+                       FadeDistance=25.0, EmissiveLift=0.5, Roughness=0.9, RimShade=0.8, RimWidth=0.35,
+                       ShadeMinLight=0.8, RimShadeLight=0.8, EmissiveLiftLight=0.5),
 }
 
 

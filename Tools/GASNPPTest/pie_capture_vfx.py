@@ -180,6 +180,10 @@ def _backdrop():
     known.add(actor.get_name())
     pawn = _pawn()
     p, yaw = pawn.get_actor_location(), pawn.get_actor_rotation().yaw
+    if SEQUENCES[st['seq']].get('stick'):
+        # r8: the sprint starts at yaw -180 but the camera-relative stick runs it along world +X: placed by the yaw, the floor and the far
+        # wall were behind it and the lines were drawn over the hub's blue floor and black sky (r5, r8 first light run)
+        yaw = 0.0
     fx, fy = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
     floor = p.z - 92.0
     try:   # r3 light: p.z - 92 put the plane ~4 cm UNDER the hub floor (no backdrop in any frame): use the real floor height
@@ -405,8 +409,14 @@ def _tick(_dt):
                 st.update(dummy_placed=True, t=now, victim=_victim())
                 return None
             if not seq.get('dummy') and not st.get('dummy_placed') and h.dummies():
-                # r5 light run_skid: the dummy left 43 cm ahead by the hit sequences overlapped the run-start puff: 15 m behind
-                placed = h._place_ahead(0, h.dummies()[0], -1500.0)
+                # r5 light run_skid: the dummy left 43 cm ahead by the hit sequences overlapped the run-start puff. r7: "15 m behind the
+                # pawn's yaw" put it IN the sprint path (the sprint starts at yaw -180 and runs +X): the host ran into it 16 frames after
+                # StageUp and the lines stopped. Every movement sequence runs world +X, so park it 30 m on -X, whatever the yaw.
+                key = h.dummies()[0]
+                v = g.snap(g.worlds()[0])[h._key(0)]
+                x, y, z = v['location'][0] - 3000.0, v['location'][1], v['location'][2] + 2.0
+                g.comps(g.worlds()[0])[key].server_teleport_exact(unreal.Vector(x, y, z))
+                placed = (round(x), round(y))
                 _log(f'{seq["name"]}: dummy moved away to {placed}')
                 st.update(dummy_placed=True, t=now, victim=None)
                 return None
