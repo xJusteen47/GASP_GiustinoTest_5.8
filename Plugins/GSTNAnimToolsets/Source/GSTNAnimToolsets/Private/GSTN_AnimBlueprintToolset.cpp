@@ -5,6 +5,7 @@
 
 #include "GSTN_AnimRuleGraph.h"
 
+#include "Animation/BlendProfile.h"
 #include "AnimGraphNode_AssetPlayerBase.h"
 #include "AnimGraphNode_Base.h"
 #include "AnimGraphNode_Root.h"
@@ -800,3 +801,26 @@ UAnimGraphNode_Base* UGSTN_AnimBlueprintToolset::AddAnimNode(UEdGraph* Graph, UC
 }
 
 #undef LOCTEXT_NAMESPACE
+
+FString UGSTN_AnimBlueprintToolset::SetBlendProfileScales(UBlendProfile* Profile, USkeleton* Skeleton, const TMap<FName, float>& Scales, int32 Mode)
+{
+	if (!Profile)
+	{
+		return TEXT("no profile");
+	}
+	Profile->Modify();
+	if (Skeleton)
+	{
+		Profile->OwningSkeleton = Skeleton;
+	}
+	Profile->Mode = static_cast<EBlendProfileMode>(FMath::Clamp(Mode, 0, 2));
+	int32 Set = 0;
+	for (const TPair<FName, float>& Pair : Scales)
+	{
+		Profile->SetBoneBlendScale(Pair.Key, Pair.Value, false, true);
+		++Set;
+	}
+	Profile->MarkPackageDirty();
+	return FString::Printf(TEXT("%d bones set, %d entries, skeleton %s"), Set, Profile->GetNumBlendEntries(),
+		*GetNameSafe(Profile->GetSkeleton().Get()));
+}

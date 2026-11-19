@@ -329,3 +329,58 @@ void FGSTN_RunStopState::Step(const FGSTN_RunStopSettings& Settings, EGSTN_RunSt
 		Active = EGSTN_RunStopMode::Off;
 	}
 }
+
+void FGSTN_FastCrouchState::Step(bool bEnabled, bool bCrouched, bool bGrounded, float Speed, float DeltaTime, float EnterLength, float ExitLength,
+	float MoveSpeed)
+{
+	const bool bStill = Speed <= MoveSpeed;
+	// The crouch stance comes a frame or two after the landing (combat tick): count a few frames as "just landed"
+	TimeSinceLand = !bGrounded ? 0.f : (!bWasGrounded ? 0.f : TimeSinceLand + DeltaTime);
+	const bool bLanded = bGrounded && TimeSinceLand <= 4.f / 60.f;
+	if (!bEnabled || !bGrounded)
+	{
+		Phase = EGSTN_FastCrouchPhase::Off;
+	}
+	else if (bCrouched && bStill)
+	{
+		if (Phase == EGSTN_FastCrouchPhase::Off || Phase == EGSTN_FastCrouchPhase::Exit)
+		{
+			// Landing crouched (air crouch held): the crouch pose at once, near a hard cut (brief: no standing land in between).
+			// A crouch walk that stops: the crouch pose too, it is already down
+			const bool bAlreadyDown = bLanded || (bWasCrouched && Phase == EGSTN_FastCrouchPhase::Off);
+			Phase = bAlreadyDown ? EGSTN_FastCrouchPhase::Idle : EGSTN_FastCrouchPhase::Enter;
+			Time = 0.f;
+		}
+		else
+		{
+			Time += DeltaTime;
+			if (Phase == EGSTN_FastCrouchPhase::Enter && Time >= EnterLength)
+			{
+				Phase = EGSTN_FastCrouchPhase::Idle;
+				Time = 0.f;
+			}
+		}
+	}
+	else if (!bCrouched && bStill && (Phase == EGSTN_FastCrouchPhase::Enter || Phase == EGSTN_FastCrouchPhase::Idle))
+	{
+		Phase = EGSTN_FastCrouchPhase::Exit;
+		Time = 0.f;
+	}
+	else if (Phase == EGSTN_FastCrouchPhase::Exit && bStill)
+	{
+		Time += DeltaTime;
+		if (Time >= ExitLength)
+		{
+			Phase = EGSTN_FastCrouchPhase::Off;
+			Time = 0.f;
+		}
+	}
+	else
+	{
+		// Moving: GASP's crouch walk / run
+		Phase = EGSTN_FastCrouchPhase::Off;
+		Time = 0.f;
+	}
+	bWasCrouched = bCrouched;
+	bWasGrounded = bGrounded;
+}

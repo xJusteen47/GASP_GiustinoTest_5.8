@@ -328,6 +328,56 @@ struct GSTNCOMBATNP_API FGSTN_RunStopState
  * Today it holds the lean. Planned sections (docs/notes/additive-lean-1.md): the GASP locomotion set (chooser table / pose search databases),
  * the skid and run start presentation values (their clips already live in the Anim.Set.Skid / Anim.Set.RunStart sets).
  */
+/**
+ * FAST CROUCH (owner 2026-11-18, brief crouch-veloce-1: "bello veloce il passaggio, da e fuori"; reference Ganondorf). Standing ground crouch
+ * plays our own clips in the Crouch Enter / Crouch Idle / Crouch Exit states of the main ABP (raw clips, never motion matching): down in ~4
+ * frames with overshoot, arms and head trailing; up in ~4-5. Moving while crouched hands back to GASP's crouch walk. Off = GASP's crouch.
+ */
+UENUM(BlueprintType)
+enum class EGSTN_FastCrouchPhase : uint8
+{
+	Off,
+	Enter,
+	Idle,
+	Exit
+};
+
+USTRUCT(BlueprintType)
+struct GSTNCOMBATNP_API FGSTN_FastCrouchSettings
+{
+	GENERATED_BODY()
+
+	/** Console override: gstn.FastCrouch.Mode (-1 = this value, 0 = GASP's crouch, 1 = fast crouch) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Crouch")
+	bool bFastCrouch = true;
+
+	/** Their lengths time the Enter / Exit states (the ABP plays the same clips) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Crouch")
+	TSoftObjectPtr<UAnimSequenceBase> EnterClip =
+		TSoftObjectPtr<UAnimSequenceBase>(FSoftObjectPath(TEXT("/Game/GSTN/Animation/Crouch/AS_GSTN_Crouch_Enter.AS_GSTN_Crouch_Enter")));
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Crouch")
+	TSoftObjectPtr<UAnimSequenceBase> ExitClip =
+		TSoftObjectPtr<UAnimSequenceBase>(FSoftObjectPath(TEXT("/Game/GSTN/Animation/Crouch/AS_GSTN_Crouch_Exit.AS_GSTN_Crouch_Exit")));
+
+	/** Above this horizontal speed (cm/s) the crouch is a crouch walk: GASP's clips take over */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Crouch", meta = (ClampMin = "0"))
+	float MoveSpeed = 60.f;
+};
+
+/** Phase machine of the fast crouch, game thread, pure: the tests drive it */
+struct GSTNCOMBATNP_API FGSTN_FastCrouchState
+{
+	EGSTN_FastCrouchPhase Phase = EGSTN_FastCrouchPhase::Off;
+	float Time = 0.f;
+	bool bWasCrouched = false;
+	bool bWasGrounded = true;
+	float TimeSinceLand = 1.f;
+
+	/** bCrouched: grounded crouch stance; bGrounded: on the ground at all. Landing crouched skips the Enter (air crouch -> crouch cut) */
+	void Step(bool bEnabled, bool bCrouched, bool bGrounded, float Speed, float DeltaTime, float EnterLength, float ExitLength, float MoveSpeed);
+};
+
 UCLASS(BlueprintType)
 class GSTNCOMBATNP_API UGSTN_LocomotionAnimSet : public UGSTN_AnimSetDefinition
 {
@@ -357,6 +407,10 @@ public:
 	/** Stick let go during a run: the RunStop state of MainAnimClass */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion")
 	FGSTN_RunStopSettings RunStop;
+
+	/** Standing ground crouch: the Crouch Enter / Idle / Exit states of MainAnimClass */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion")
+	FGSTN_FastCrouchSettings Crouch;
 };
 
 /** The lean's state between frames, game thread. Pure but for the inputs: the tests drive it */

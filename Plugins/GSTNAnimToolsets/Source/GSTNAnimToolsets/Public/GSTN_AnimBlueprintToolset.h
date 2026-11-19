@@ -422,4 +422,11 @@ public:
 	 */
 	UFUNCTION(meta = (AICallable, AIAccessMode = "Write"), Category = "GSTN|AnimToolset")
 	static UAnimGraphNode_Base* AddAnimNode(UEdGraph* Graph, UClass* NodeClass, TOptional<FIntPoint> Position);
+
+	/**
+	 * Per-bone scales of a blend profile (UBlendProfile entries are not Python-exposed). Mode: 0 = Time Factor, 1 = Weight Factor, 2 = Blend
+	 * Mask. Skeleton: sets the owning skeleton when given (a profile asset made from Python has none). Existing entries not in Scales are kept. Returns a short report.
+	 */
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Write"), Category = "GSTN|AnimToolset")
+	static FString SetBlendProfileScales(UBlendProfile* Profile, USkeleton* Skeleton, const TMap<FName, float>& Scales, int32 Mode);
 };

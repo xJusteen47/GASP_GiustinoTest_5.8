@@ -136,6 +136,7 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 	ApplyMainAnimClass();
 	TickScramble(DeltaTime);
 	TickRunStop(DeltaTime);
+	TickFastCrouch(DeltaTime);
 }
 
 namespace GSTNRunPresentation
@@ -540,4 +541,100 @@ bool UGSTN_RunPresentationComponent::IsAnimOwnerRunStopLeftFoot(const UAnimInsta
 {
 	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
 	return !Run || Run->GetRunStop().bLeftFoot;
+}
+
+namespace GSTNRunPresentation
+{
+	static TAutoConsoleVariable<int32> CVarFastCrouchMode(TEXT("gstn.FastCrouch.Mode"), -1,
+		TEXT("Standing ground crouch: -1 = the locomotion profile's bFastCrouch, 0 = GASP's crouch, 1 = fast crouch clips"));
+	static TAutoConsoleVariable<int32> CVarFastCrouchLog(TEXT("gstn.FastCrouch.Log"), 0, TEXT("1 = log the fast crouch phase every frame it is not Off"));
+}
+
+void UGSTN_RunPresentationComponent::TickFastCrouch(float DeltaTime)
+{
+	const UGSTN_LocomotionAnimSet* Profile = LeanProfile.Get();
+	const FGSTN_FastCrouchSettings& Settings = Profile ? Profile->Crouch : DefaultFastCrouchSettings;
+	const TSoftObjectPtr<UAnimSequenceBase>* Soft[2] = { &Settings.EnterClip, &Settings.ExitClip };
+	for (int32 i = 0; i < 2; ++i)
+	{
+		const FSoftObjectPath Path = Soft[i]->ToSoftObjectPath();
+		if (Path != ResolvedFastCrouchPaths[i])
+		{
+			ResolvedFastCrouchPaths[i] = Path;
+			FastCrouchClips[i] = Path.IsValid() ? Soft[i]->LoadSynchronous() : nullptr;
+		}
+	}
+	const int32 Forced = GSTNRunPresentation::CVarFastCrouchMode.GetValueOnGameThread();
+	// No clip = nothing to play: GASP's crouch
+	const bool bEnabled = (Forced >= 0 ? Forced != 0 : Settings.bFastCrouch) && FastCrouchClips[0] && FastCrouchClips[1];
+	const FVector Up = Mover->GetUpDirection();
+	const FVector Velocity = Mover->GetVelocity();
+	const float Speed = static_cast<float>((Velocity - Up * Velocity.Dot(Up)).Size());
+	const bool bGrounded = Mover->HasGameplayTag(Mover_IsOnGround, true);
+	const bool bCrouched = bGrounded && Mover->HasGameplayTag(Mover_IsCrouching, true);
+	FastCrouch.Step(bEnabled, bCrouched, bGrounded, Speed, DeltaTime, FastCrouchClips[0] ? FastCrouchClips[0]->GetPlayLength() : 0.f,
+		FastCrouchClips[1] ? FastCrouchClips[1]->GetPlayLength() : 0.f, Settings.MoveSpeed);
+	if (GSTNRunPresentation::CVarFastCrouchLog.GetValueOnGameThread() != 0 && FastCrouch.Phase != EGSTN_FastCrouchPhase::Off)
+	{
+		// Review evidence: the main state machine's current state (is the ABP following the phase?)
+		FName StateName = NAME_None;
+		const USkeletalMeshComponent* Mesh = GetOwner() ? GetOwner()->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
+		if (UAnimInstance* Anim = Mesh ? Mesh->GetAnimInstance() : nullptr)
+		{
+			const int32 Machine = Anim->GetStateMachineIndex(TEXT("State Controller"));
+			StateName = Machine != INDEX_NONE ? Anim->GetCurrentStateName(Machine) : FName(TEXT("no-machine"));
+			// The ABP's own mode/blend variables (which branch of the anim graph is live), once per phase change
+			static EGSTN_FastCrouchPhase LastLogged = EGSTN_FastCrouchPhase::Off;
+			if (LastLogged != FastCrouch.Phase)
+			{
+				LastLogged = FastCrouch.Phase;
+				FString Vars;
+				for (TFieldIterator<FProperty> It(Anim->GetClass(), EFieldIteratorFlags::ExcludeSuper); It; ++It)
+				{
+					const FProperty* Prop = *It;
+					if (!(Prop->IsA<FBoolProperty>() || Prop->IsA<FIntProperty>() || Prop->IsA<FFloatProperty>() || Prop->IsA<FDoubleProperty>()
+						|| Prop->IsA<FEnumProperty>() || Prop->IsA<FByteProperty>()))
+					{
+						continue;
+					}
+					FString Value;
+					Prop->ExportTextItem_Direct(Value, Prop->ContainerPtrToValuePtr<void>(Anim), nullptr, Anim, PPF_None);
+					Vars += FString::Printf(TEXT("%s=%s "), *Prop->GetName(), *Value);
+				}
+				UE_LOG(LogTemp, Log, TEXT("FastCrouch ABP vars: %s"), *Vars);
+			}
+		}
+		UE_LOG(LogTemp, Log, TEXT("FastCrouch phase=%d t=%.3f speed=%.0f crouched=%d state=%s anim=%s"), int32(FastCrouch.Phase), FastCrouch.Time, Speed,
+			bCrouched ? 1 : 0, *StateName.ToString(), Mesh && Mesh->GetAnimInstance() ? *Mesh->GetAnimInstance()->GetClass()->GetName() : TEXT("none"));
+	}
+}
+
+bool UGSTN_RunPresentationComponent::IsAnimOwnerFastCrouchEntering(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run && Run->FastCrouch.Phase == EGSTN_FastCrouchPhase::Enter;
+}
+
+bool UGSTN_RunPresentationComponent::IsAnimOwnerFastCrouchIdle(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run && Run->FastCrouch.Phase == EGSTN_FastCrouchPhase::Idle;
+}
+
+bool UGSTN_RunPresentationComponent::IsAnimOwnerFastCrouchExiting(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run && Run->FastCrouch.Phase == EGSTN_FastCrouchPhase::Exit;
+}
+
+bool UGSTN_RunPresentationComponent::IsAnimOwnerFastCrouching(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run && Run->FastCrouch.Phase != EGSTN_FastCrouchPhase::Off;
+}
+
+float UGSTN_RunPresentationComponent::GetAnimOwnerFastCrouchTime(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run ? Run->FastCrouch.Time : 0.f;
 }

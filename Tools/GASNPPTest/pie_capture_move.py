@@ -178,6 +178,11 @@ MOVE_SEQUENCES = [
     {'name': 'dm_projection', 'taps': [], 'frames': 160, 'dummy': None, 'shoot': True, 'follow': True, 'marker': True, 'proj_volume': True,
      'sticks': [(0, (1, 0, 0)), (60, (-1, 0, 0)), (120, None)]},
     {'name': 'mv_fast_fall', 'taps': [], 'frames': 80, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 24), 'crouch_tap': 36},
+    # Fast crouch (crouch-veloce-2): 'crouch_hold' = (frame from PRE, frames held) of the combat Crouch button. Ground in/out, air crouch
+    # released mid-air, and landing with crouch still held
+    {'name': 'cr_ground', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True, 'follow': True, 'crouch_hold': (20, 70)},
+    {'name': 'cr_air', 'taps': [], 'frames': 100, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 24), 'crouch_hold': (30, 20)},
+    {'name': 'cr_land', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 24), 'crouch_hold': (30, 90)},
 ]
 if os.environ.get('PIE_CAPTURE_VIEWS'):
     VIEWS = [v for v in VIEWS if v[0] in os.environ['PIE_CAPTURE_VIEWS'].split(',')]
@@ -593,6 +598,14 @@ def _tick(_dt):
             if seq.get('crouch_tap') is not None and frame == PRE + seq['crouch_tap']:
                 g.combat_tap(0, st['crouch'])
                 _log(f'{seq["name"]}: crouch tap on v{frame}')
+            if seq.get('crouch_hold') is not None:
+                at, held = seq['crouch_hold']
+                if frame == PRE + at:
+                    g.combat_hold(0, st['crouch'])
+                    _log(f'{seq["name"]}: crouch held from v{frame}')
+                elif frame == PRE + at + held:
+                    g.combat_clear(0)
+                    _log(f'{seq["name"]}: crouch released on v{frame}')
             walk = seq.get('walk')
             # From the attack press; a plain jump (no press) from the jump; a ground sequence with no air entry from PRE (pushbox P4)
             plain_jump = air is not None and 'rise_h' not in air and 'trigger_h' not in air

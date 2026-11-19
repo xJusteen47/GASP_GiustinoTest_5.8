@@ -169,6 +169,25 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
 	static float GetAnimOwnerRunStopClipTime(const UAnimInstance* AnimInstance);
 
+	/** Fast crouch (brief crouch-veloce-1): the phase the main ABP's crouch states read, and the clip time of Enter / Exit */
+	UFUNCTION(BlueprintPure, Category = "Combat|Crouch", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static bool IsAnimOwnerFastCrouchEntering(const UAnimInstance* AnimInstance);
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Crouch", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static bool IsAnimOwnerFastCrouchIdle(const UAnimInstance* AnimInstance);
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Crouch", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static bool IsAnimOwnerFastCrouchExiting(const UAnimInstance* AnimInstance);
+
+	/** Any phase but Off (the states' way back to the GASP graph) */
+	UFUNCTION(BlueprintPure, Category = "Combat|Crouch", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static bool IsAnimOwnerFastCrouching(const UAnimInstance* AnimInstance);
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Crouch", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static float GetAnimOwnerFastCrouchTime(const UAnimInstance* AnimInstance);
+
+	const FGSTN_FastCrouchState& GetFastCrouch() const { return FastCrouch; }
+
 	const FGSTN_RunStopSettings& GetRunStopSettings() const;
 	const FGSTN_RunStopState& GetRunStop() const { return RunStop; }
 
@@ -218,6 +237,7 @@ private:
 
 	/** Run stop: the two clips (left foot, right foot in front), their root speed tracks, the idle of the blend mode, and the state */
 	void TickRunStop(float DeltaTime);
+	void TickFastCrouch(float DeltaTime);
 	/** The mesh's left foot is the one in the air (higher than the right): it is the one that plants in front */
 	bool IsLeftFootSwinging() const;
 	/** The stick, 0..1 (a sim proxy without inputs counts as a full push) */
@@ -230,6 +250,11 @@ private:
 	FGSTN_RunStopTrack RunStopTracks[2];
 	FGSTN_RunStopState RunStop;
 	FGSTN_RunStopSettings DefaultRunStopSettings;
+	FGSTN_FastCrouchState FastCrouch;
+	FGSTN_FastCrouchSettings DefaultFastCrouchSettings;
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequenceBase> FastCrouchClips[2];
+	FSoftObjectPath ResolvedFastCrouchPaths[2];
 
 	FGSTN_FootSlideState FootSlide;
 	FGSTN_LocomotionLeanSolver LeanSolver;
