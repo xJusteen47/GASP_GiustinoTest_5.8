@@ -405,15 +405,52 @@ def jump_puff():
     return s
 
 
+def _puffs(system, name, count, life, size, speed, drag, look="PuffDust", ring=(30, 15), origin=(0, 0, -6), curl=(0.0, 0.0), cone=None,
+           gravity=None):
+    """Smoke redo A1 (docs/notes/reviews/vfx-v3/hd1/REVIEW-SMOKE-LOOK.md option A): small lumpy flipbook puffs (MI_GSTN_VFX_Puff*) in the
+    floor's colour. No sprite rotation (the form shading's light is in the sprite's frame), sorted by view depth (shaded puffs pop
+    otherwise), wide lifetime spread so they die one after another. curl=(strength, frequency): Curl Noise Force swirl"""
+    e = _sprites(system, name)
+    e.burst(count).particle(life, size, rotation=False).sized()
+    e.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")
+    if ring:
+        e.set("ParticleSpawn", "ShapeLocation", "Shape Primitive", "Ring / Disc").set("ParticleSpawn", "ShapeLocation", "Ring Radius", ring[0])
+        e.shape_offset((0, 0, ring[1]))
+    else:
+        e.sphere(6)
+    if cone:
+        e.cone(cone[0], cone[1], speed)
+    else:
+        e.radial(speed)
+        if origin:
+            e.set("ParticleSpawn", "AddVelocity", "Velocity Origin", origin)
+    e.drag(drag)
+    if gravity:
+        e.gravity(gravity)
+    if curl[0]:
+        e.add_force("Update/Forces/CurlNoiseForce", "CurlNoiseForce")
+        e.set("ParticleUpdate", "CurlNoiseForce", "Noise Strength", curl[0]).set("ParticleUpdate", "CurlNoiseForce", "Noise Frequency", curl[1])
+    e.material(look)
+    renderer = L.get_renderer(system, e.name, 0)
+    if renderer is not None:
+        renderer.set_editor_property("sort_mode", unreal.NiagaraSortMode.VIEW_DEPTH)
+    return e
+
+
 def land_ring():
-    """Landing (scaled by the fall speed; knockdown 1.2): 6 lit puffs born on a 30 cm circle, pushed out low along the floor, growing and
-    eroding in ~0.55 s, + 6 grains (astro_3). No torus, no balls"""
+    """Landing (scaled by the fall speed; knockdown 1.2). Smoke redo A1 (REVIEW-SMOKE-LOOK.md option A, DK Bananza): a clustered skirt of
+    16 small lumpy puffs (25-55 cm) thrown out low along the floor, 8 quick wisps, 8 snow clumps that hop and fall, and a soft contact disc
+    that darkens the floor under the landing for a third of a second. Replaces 10 cards of 150-210 cm (hd1)"""
     s = _system("NS_GSTN_LandRing")
     if s:
         _surface(s)
-        # hd1 DK review (docs/notes/reviews/vfx-v3/hd1/REVIEW-DK.md): a faint smudge at knee height: DK's ring is ~2x the character's width and flat on the floor
-        _smoke(s, "Puffs", 10, (0.50, 0.62), (150, 210), 380, 6.0, ring=(45, 12), origin=(0, 0, -4), rise=15.0)
-        _grains(s, "Grains", 12, (0.40, 0.55), (12, 20), 420, ((0, 0, 1), 50), gravity=-900.0)  # attempt 1: drifted at head height
+        _puffs(s, "Skirt", 16, (0.22, 0.50), (25, 55), 680, 7.0, ring=(36, 12), origin=(0, 0, -5), curl=(60.0, 0.02))  # A1 review: lingered, floated
+        _puffs(s, "Wisps", 8, (0.20, 0.32), (12, 25), 820, 6.0, ring=(28, 8), origin=(0, 0, -8), curl=(200.0, 0.03))
+        _puffs(s, "Clumps", 8, (0.40, 0.55), (8, 16), 430, 1.5, look="PuffClump", ring=None, cone=((0, 0, 1), 55), gravity=-1300.0)
+        disc = _sprites(s, "Contact")
+        disc.burst(1).particle((0.35, 0.35), (220, 220)).sized()  # A1 review: invisible at 170 / 0.22
+        disc.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")
+        disc.sphere(0.01, offset=(0, 0, 1.5)).radial(0.0).facing((0, 0, 1)).material("ContactDisc")
     return s
 
 
