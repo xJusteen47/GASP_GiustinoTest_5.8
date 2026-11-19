@@ -85,48 +85,53 @@ def eased(tab, f, kinds=None):
 # ------------------------------------------------------------------ THE POSES (r1 numbers; Fable tunes them)
 # Lean = pelvis -> neck_01 from vertical, deg, + = forward (trait 2: 45-50 in the lunge). Load hunched (extra upper-spine curl),
 # push = the fastest change (ease-out into the lunge), lunge a MOVING hold 52 -> 49, settle 32 -> 25 into the run.
-LEAN = {0: 6, 2: 18, 4: 36, 5: 38, 6: 46, 8: 55, 11: 51, 13: 44, 15: 38, 17: 33, 20: 28, 24: 25}
-LEAN_K = {2: 'out', 4: 'out', 6: 'in', 8: 'out', 11: 'lin', 13: 'io', 15: 'io', 17: 'io', 20: 'out', 24: 'io'}
+# r2 = r1 + Fable r1 fixes (docs/notes/reviews/dash-ganon/r1/REVIEW-fable.md; its frames count from 1 = index + 1 here).
+LEAN = {0: 6, 1: 13, 2: 21, 3: 29, 4: 34, 5: 37, 6: 47, 7: 54, 8: 55, 9: 53.7, 10: 52.3, 11: 51, 12: 50, 13: 46.5, 15: 38, 17: 33, 20: 28,
+        24: 25}               # r2 fix 4: even load steps, the push (5 -> 7) is the fastest change
 HUNCH = {0: 0, 3: 10, 5: 14, 7: 5, 9: 0, 12: 0, 16: 3, 24: 3}         # extra flexion on spine_04/05 (deg): compact load (trait 1)
-# Pelvis height (m; bind pose 0.856, ankle 0.094). Load deep (trait 1), lunge low and long, catch dip then rise (trait 3).
-PZ = {0: 0.88, 2: 0.81, 4: 0.72, 5: 0.71, 7: 0.76, 9: 0.79, 11: 0.79, 14: 0.77, 16: 0.76, 17: 0.745, 19: 0.80, 21: 0.83,
-      24: 0.80}
-PZ_K = {2: 'out', 4: 'out', 5: 'io', 7: 'in', 9: 'out', 11: 'lin', 14: 'io', 16: 'in', 17: 'out', 19: 'out', 21: 'io', 24: 'in'}
+# Pelvis height (m; idle ~0.88, ankle 0.094). r2: load deep 0.63 (fix 4), push rises over 3 f, lunge low 0.74-0.75 with a small arc
+# (fix 5), catch compresses ~5 cm to 0.715 at f18-19 and rises over f20-22, no step above 3.5 cm/f (fix 1, trait 3)
+PZ = {0: 0.88, 1: 0.83, 2: 0.77, 3: 0.70, 4: 0.65, 5: 0.63, 6: 0.67, 7: 0.71, 8: 0.74, 9: 0.75, 10: 0.75, 11: 0.74, 12: 0.745,
+      13: 0.742, 14: 0.740, 15: 0.740, 16: 0.720, 17: 0.705, 18: 0.705, 19: 0.74, 20: 0.775, 21: 0.80, 24: 0.80}
+# r3 (Fable r2 fix 1): flat 0.74 into the contact (r2 rose in the air on f15-16), bottom 0.705 on f18-19
 PF = {0: 0.0, 4: -0.03, 6: 0.04, 9: 0.06, 12: 0.06, 16: 0.03, 19: 0.06, 24: 0.05}   # pelvis forward of the root (m)
 # Hip yaw (deg, + = left hip forward: the left leg leads the lunge), shoulders counter it (trait 2: arrow, not a twist)
 YAW = {0: 0, 4: -6, 7: 10, 10: 14, 13: 10, 16: 2, 20: -10, 24: -14}
-# Head WORLD pitch from vertical (neck_01 -> head line), deg: eyes forward, 1-2 frames late on the lean (overlap)
-HEAD = {0: 8, 3: 14, 6: 24, 9: 38, 12: 38, 15: 30, 18: 22, 21: 16, 24: 14}   # r1b: chin forward in the lunge (arrow)
+# Head WORLD pitch from vertical (neck_01 -> head line), deg: chin forward in the lunge, a nod on the catch (r2 fix 1)
+HEAD = {0: 8, 3: 14, 6: 24, 9: 38, 12: 38, 15: 32, 16: 35, 17: 34, 20: 21, 24: 14}
 SHRUG = {0: 0, 4: 12, 6: 8, 9: 3, 14: 0, 24: 0}                  # clavicles up/forward in the load (hunched)
 
 # Feet. Ankle targets (F, L, U); "planted" keys move back with the root so the foot stays still on the ground.
 G = 0.094                    # ankle height, foot flat
-LOAD_SLIDE = (0, 3)          # frames 1-4: both feet slide forward with the body (Smash: the dust sells it), no lift
-# Right foot = the PUSH foot: planted in the world from frame 3 to toe-off at 7, then trails STRAIGHT behind (trait 2)
-R_PLANT = (3, 7)             # world plant [first, last] (ball planted on its toes from 5)
-R_AIR = {8: (-0.60, -0.13, 0.30), 11: (-0.66, -0.13, 0.34), 14: (-0.48, -0.14, 0.34), 17: (-0.18, -0.13, 0.38),
-         20: (0.14, -0.12, 0.33), 24: (0.40, -0.12, 0.16)}
-# Left foot = the LEAD foot: knee drive from the load, lunge thigh forward-up, heel-first contact at 15, planted to 21
-L_AIR = {4: (0.06, 0.13, 0.13), 6: (0.16, 0.13, 0.24), 8: (0.30, 0.13, 0.32), 11: (0.36, 0.13, 0.30), 13: (0.43, 0.13, 0.19),
-         15: (0.40, 0.13, G + 0.012)}
-L_PLANT = (15, 20)          # flat 15-20, on the toes 21-22 (TOEFLAT), toe-off after 22
-L_AFTER = {24: (-0.40, 0.13, 0.24)}                 # after the toe-off the foot kicks back up
-STANCE = {'l': (0.05, 0.13), 'r': (-0.05, -0.13)}  # start stance (F, L)
-# Foot pitch (deg, + = toe down / heel up) and how flat the toes stay on the ground (1 = ball flat, toes bent)
-PITCH = {'r': {0: 0, 3: 0, 5: 18, 7: 48, 9: 68, 12: 70, 15: 45, 18: 18, 21: 0, 24: -12},
-         'l': {0: 0, 3: 0, 4: 18, 6: 30, 9: 22, 12: 8, 14: -8, 15: -14, 16: 0, 20: 0, 21: 22, 22: 42, 24: 55}}
-TOEFLAT = {'r': range(5, 8), 'l': range(21, 23)}
+STANCE = {'l': (0.04, 0.17), 'r': (-0.08, -0.17)}  # r2 fix 7: wide stance (0.34 m), feet close fore-aft in the load
+LOAD_SLIDE = (0, 1)          # frames 1-2: both feet slide forward with the body (Smash: the dust sells it)
+# Right foot = the PUSH foot: planted in the world from frame 3, on its toes 6-9, toe-off after 9 with the leg straight (r2 fix 3),
+# then the toe GRAZES behind (ball ~5 cm up, fix 5) while the body pulls it, and recovers forward for the run
+R_PLANT = (2, 8)             # world plant [first, last] (indices)
+R_AIR = {9: (-0.58, -0.16, 0.20), 10: (-0.60, -0.16, 0.20), 11: (-0.60, -0.15, 0.20), 12: (-0.57, -0.15, 0.21), 14: (-0.40, -0.15, 0.30), 17: (-0.12, -0.14, 0.38),
+         20: (0.16, -0.13, 0.32), 24: (0.38, -0.13, 0.16)}
+# Left foot = the LEAD foot: slides with the body to frame 5, knee drive, lunge foot low (fix 5), heel-first contact at frame 16
+# only 0.22 m ahead of the hips (fix 1), flat 17-21, toe pinned 22-23 (fix 2), then kicks back up
+L_AIR = {3: (0.05, 0.17, 0.11), 4: (0.07, 0.17, 0.14), 5: (0.10, 0.17, 0.16), 6: (0.15, 0.16, 0.20), 8: (0.27, 0.15, 0.22),
+         10: (0.32, 0.15, 0.20), 12: (0.31, 0.16, 0.19), 13: (0.29, 0.16, 0.15), 15: (0.25, 0.16, G)}
+# r3 (Fable r2 fixes 2-3): rear leg straighter (split ~0.95), the left foot steps up in the load instead of skating, stomp-down 14-16
+L_PLANT = (15, 20)           # flat 15-20 (indices), on the toes 21-22 (TOEFLAT), toe-off after 22
+L_AFTER = {24: (-0.42, 0.15, 0.22)}
+# Foot pitch (deg, + = toe down / heel up)
+PITCH = {'r': {0: 0, 2: 0, 4: 12, 5: 30, 7: 50, 8: 62, 10: 70, 12: 70, 15: 45, 18: 18, 21: 0, 24: -12},
+         'l': {0: 0, 2: 0, 3: 10, 4: 15, 5: 18, 7: 26, 10: 18, 12: 4, 14: -14, 15: -22, 16: -6, 17: 0, 20: 0, 21: 40, 22: 72, 24: 60}}
+TOEFLAT = {'r': range(3, 9), 'l': range(21, 23)}   # r2: the push toe stays on the ground from its first heel lift
 
 # Hands: fist targets relative to spine_05 (F, L, U), elbow poles relative to the shoulder. Load: tucked by the hips; lunge: both
 # fists low and forward, the right (contralateral to the lead leg) further; then the run swing settles 2-3 frames after the catch.
-HAND = {'l': {0: (0.02, 0.22, -0.40), 2: (-0.02, 0.21, -0.36), 4: (-0.06, 0.19, -0.30), 5: (-0.06, 0.19, -0.30),
-              7: (0.04, 0.18, -0.30), 9: (0.12, 0.17, -0.32), 12: (0.10, 0.17, -0.33), 15: (-0.04, 0.19, -0.36),
+HAND = {'l': {0: (0.02, 0.22, -0.40), 2: (-0.02, 0.22, -0.36), 4: (-0.06, 0.24, -0.30), 5: (-0.06, 0.24, -0.30),
+              7: (0.00, 0.23, -0.28), 8: (0.02, 0.23, -0.27), 10: (0.06, 0.25, -0.26), 12: (0.03, 0.24, -0.28), 15: (-0.06, 0.21, -0.34),
               18: (-0.22, 0.20, -0.30), 21: (-0.12, 0.20, -0.36), 24: (0.16, 0.17, -0.28)},
-        'r': {0: (0.02, -0.22, -0.40), 2: (-0.02, -0.21, -0.36), 4: (-0.06, -0.19, -0.30), 5: (-0.06, -0.19, -0.30),
-              7: (0.12, -0.17, -0.28), 9: (0.26, -0.15, -0.30), 12: (0.27, -0.15, -0.31), 15: (0.22, -0.16, -0.27),
+        'r': {0: (0.02, -0.22, -0.40), 2: (-0.02, -0.22, -0.36), 4: (-0.06, -0.24, -0.30), 5: (-0.06, -0.24, -0.30),
+              7: (0.12, -0.19, -0.32), 8: (0.20, -0.17, -0.35), 10: (0.28, -0.16, -0.39), 12: (0.26, -0.16, -0.38), 15: (0.22, -0.17, -0.30),
               18: (0.18, -0.17, -0.27), 21: (0.02, -0.19, -0.37), 24: (-0.20, -0.20, -0.31)}}
-ELBOW_POLE = {'l': (-0.45, 0.12, -0.20), 'r': (-0.45, -0.12, -0.20)}   # r1b: back and down, not out (chicken wings in r1)
-KNEE_POLE = {'l': (0.6, 0.06, 0.0), 'r': (0.6, -0.06, 0.0)}
+ELBOW_POLE = {'l': (-0.45, 0.22, -0.20), 'r': (-0.45, -0.22, -0.20)}   # r2 fix 7: elbows ~10 cm off the ribs, still back
+KNEE_POLE = {'l': (0.6, 0.15, 0.0), 'r': (0.6, -0.15, 0.0)}   # r2 fix 7: knees out
 
 
 # ------------------------------------------------------------------ scene
@@ -258,10 +263,11 @@ def ankle_target(s, i):
     land = V(*L_AIR[a]); land.z = G
     if i <= b:
         return land - V(ROOT[i] - ROOT[a], 0, 0), None
-    ball = land - ANK_FROM_BALL['l'] - V(ROOT[b] - ROOT[a], 0, 0)       # the ball stays where it was on the last flat frame
-    toe = {k: ball + rx(catmull(PITCH['l'], k)) @ ANK_FROM_BALL['l'] for k in TOEFLAT['l']}
+    ball_b = land - ANK_FROM_BALL['l'] - V(ROOT[b] - ROOT[a], 0, 0)     # ball on the last flat frame
+    balls = {k: ball_b - V(ROOT[k] - ROOT[b], 0, 0) for k in TOEFLAT['l']}  # r2 fix 2: pinned in the WORLD (r1 slid 10 cm/f)
+    toe = {k: balls[k] + rx(catmull(PITCH['l'], k)) @ ANK_FROM_BALL['l'] for k in TOEFLAT['l']}
     if i in toe:
-        return toe[i], ball
+        return toe[i], balls[i]
     k1 = max(TOEFLAT['l'])                                              # toe-off -> the foot kicks back up
     tab = {b: tuple(land - V(ROOT[b] - ROOT[a], 0, 0)), k1: tuple(toe[k1]), 24: tuple(V(*L_AFTER[24]))}
     return Vector(catmull(tab, i)), None
@@ -272,9 +278,9 @@ def pose(i):
         pb.matrix_basis = FIST.get(pb.name, Matrix.Identity(4))
     vl.update()
     # pelvis: height, forward, lean share, yaw
-    L = eased(LEAN, i, LEAN_K)
+    L = catmull(LEAN, i)
     pb = P['pelvis']; M = pb.matrix.copy()
-    M.translation = MWI @ Vector((REST['pelvis'].x, REST['pelvis'].y - catmull(PF, i), eased(PZ, i, PZ_K))); pb.matrix = M; vl.update()
+    M.translation = MWI @ Vector((REST['pelvis'].x, REST['pelvis'].y - catmull(PF, i), catmull(PZ, i))); pb.matrix = M; vl.update()
     yaw = catmull(YAW, i)
     # square up the bind pose (hips 6 deg, shoulders 4 deg twisted, r3/README), then the authored yaw
     rot_world('pelvis', rz(-line_yaw('thigh_r', 'thigh_l')).to_4x4())

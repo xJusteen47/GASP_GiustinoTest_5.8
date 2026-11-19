@@ -1,9 +1,9 @@
-"""L3 boost dash clip in ABP_GSTN_Locomotion (dash-ganon r1; model: Tools/GAS/run_start/run_start_states.py). Headless, editor closed,
+"""L3 boost dash clip in ABP_GSTN_Locomotion (dash-ganon r3; model: Tools/GAS/run_start/run_start_states.py). Headless, editor closed,
 _ue59 lock held:
   UnrealEditor-Cmd <uproject> -run=pythonscript -script="<project>/Tools/GAS/dash/dash_states.py" -unattended -nullrhi
 (copy the script to a path without spaces first if the project path has spaces, as for route_states.py.)
 
-  1. imports docs/notes/reviews/dash-ganon/<DASH_ROUND or r1>/AS_GSTN_Dash_Ganon_<round>.fbx as /Game/GSTN/Animation/Dash/AS_GSTN_Dash_Ganon
+  1. imports docs/notes/reviews/dash-ganon/<DASH_ROUND or r3>/AS_GSTN_Dash_Ganon_<round>.fbx as /Game/GSTN/Animation/Dash/AS_GSTN_Dash_Ganon
      (UEFN mannequin skeleton, 60 fps, root motion on the root = the sim's boost dash; skipped when the asset exists and
      DASH_REIMPORT is not 1). Root motion ON + root lock REF_POSE + force root lock (as the run stop clips / GASP starts): the clip's
      root speed only feeds movedata_speed and warping, the capsule stays the sim's;
@@ -19,7 +19,7 @@ import unreal
 
 PROJ = unreal.Paths.project_dir()
 OUT = unreal.Paths.project_saved_dir() + "Dash/dash_states.txt"
-ROUND = os.environ.get("DASH_ROUND", "r1")
+ROUND = os.environ.get("DASH_ROUND", "r3")   # r2 = the Fable offline PASS, r3 = r2 + its non-gating fixes 1-4
 FBX = PROJ + f"docs/notes/reviews/dash-ganon/{ROUND}/AS_GSTN_Dash_Ganon_{ROUND}.fbx"
 FOLDER, NAME = "/Game/GSTN/Animation/Dash", "AS_GSTN_Dash_Ganon"
 CLIP = f"{FOLDER}/{NAME}"
