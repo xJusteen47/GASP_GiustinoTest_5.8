@@ -33,3 +33,7 @@
 - p3_one_after (PIE_PERF_PLAYERS=3, one process, -unattended, 15 s): 'PIE worlds: 3', frames 104, avg/p50/p95 125.0 ms = the engine's delta clamp, i.e. <= 8 fps (real may be lower). Source: Saved/SpeedUp/p3_one_after/result.txt line 'frames'.
 - The probe sets the players per run (LevelEditorPlaySettings CDO, not saved); pie_capture scripts should do the same and force 1 player for single-character captures.
 - Not measured: 3 players multi-process without throttle (owner's foreground 15 fps).
+
+## Power plan (owner, 2026-11-19 ~19:58 local)
+- Owner set the desktop Windows power plan to best performance; the PIE lag he saw disappeared (owner report, no measurement).
+- Recommendation: same plan on the laptop when plugged in (on battery keep the default).
