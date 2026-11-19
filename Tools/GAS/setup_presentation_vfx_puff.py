@@ -117,19 +117,28 @@ def build_puff(tex):
     surf = _lerp(mat, _mask(mat, pcol, 1000, 300, r=True, g=True, b=True),
                  _mask(mat, _vector(mat, "SnowColor", U.LinearColor(0.85, 0.88, 0.95, 1), 1000, 400), 1120, 400, r=True, g=True, b=True),
                  snow_k, 1250, 350)
-    lit = _op(mat, U.MaterialExpressionMultiply, surf,
-              _mask(mat, _vector(mat, "LitColor", U.LinearColor(1, 1, 1, 1), 1250, 150), 1400, 150, r=True, g=True, b=True), 1550, 200)
-    shade = _op(mat, U.MaterialExpressionMultiply, surf,
-                _mask(mat, _vector(mat, "ShadeColor", U.LinearColor(0.58, 0.66, 0.86, 1), 1250, 450), 1400, 450, r=True, g=True, b=True),
-                1550, 400)
+    # A2 r3: the lit side is most of the puff, so the light floor's warm smudge needs a warm lit tint too (LitColorLight; same default)
+    lit_t = _lerp(mat, _mask(mat, _vector(mat, "LitColor", U.LinearColor(1, 1, 1, 1), 1250, 150), 1400, 150, r=True, g=True, b=True),
+                  _mask(mat, _vector(mat, "LitColorLight", U.LinearColor(1, 1, 1, 1), 1250, 200), 1400, 200, r=True, g=True, b=True),
+                  bright, 1480, 170)
+    lit = _op(mat, U.MaterialExpressionMultiply, surf, lit_t, 1550, 200)
+    # A2 r3 (REVIEW-A2r2 gap 2, owner 1A "darker warmer smudge on the light floor"): the shade tint is split by floor brightness, so the
+    # light floor gets a warm brown underside while the dark floor keeps a cool one (its blue cast). Same default = no change
+    shade_t = _lerp(mat, _mask(mat, _vector(mat, "ShadeColor", U.LinearColor(0.58, 0.66, 0.86, 1), 1250, 450), 1400, 450, r=True, g=True, b=True),
+                    _mask(mat, _vector(mat, "ShadeColorLight", U.LinearColor(0.58, 0.66, 0.86, 1), 1250, 500), 1400, 500, r=True, g=True, b=True),
+                    bright, 1480, 450)
+    shade = _op(mat, U.MaterialExpressionMultiply, surf, shade_t, 1550, 400)
     occ = _lerp(mat, one_c, _mask(mat, tx, 1550, 600, b=True), _scalar(mat, "OccStrength", 0.7, 1550, 680), 1700, 600)
     col0 = _op(mat, U.MaterialExpressionMultiply, _lerp(mat, shade, lit, smooth, 2100, 300), occ, 2250, 400)
     # Owner idea 2026-11-19 (A2 r2, scope: realistic smoke looks): dust readable on any floor through value contrast INSIDE the puff:
     # soft brownish-dark thin edges (where the texture alpha is low), slightly whiter lit tops (LitColor). EdgeTint (1,1,1) = off
     edge_k = _unary(mat, U.MaterialExpressionSaturate,
                     _op(mat, U.MaterialExpressionDivide, tx_a, _scalar(mat, "EdgeWidth", 0.35, 2100, 750), 2200, 750), 2300, 750)
-    edge_c = _lerp(mat, _mask(mat, _vector(mat, "EdgeTint", U.LinearColor(1, 1, 1, 1), 2200, 650), 2300, 650, r=True, g=True, b=True),
-                   one_c, edge_k, 2400, 700)
+    # A2 r3: brown edges only on bright floors (EdgeTint); on dark floors a cool edge (EdgeTintDark) so the dust keeps the floor's hue
+    edge_t = _lerp(mat, _mask(mat, _vector(mat, "EdgeTintDark", U.LinearColor(1, 1, 1, 1), 2150, 600), 2250, 600, r=True, g=True, b=True),
+                   _mask(mat, _vector(mat, "EdgeTint", U.LinearColor(1, 1, 1, 1), 2200, 650), 2300, 650, r=True, g=True, b=True),
+                   bright, 2350, 620)
+    edge_c = _lerp(mat, edge_t, one_c, edge_k, 2400, 700)
     col = _op(mat, U.MaterialExpressionMultiply, col0, edge_c, 2350, 400)
     # A1 review: on the dark floor the lit side came out darker than the floor (auto exposure lifts it): a brighter emissive there
     gain = _lerp(mat, _scalar(mat, "DarkBrightness", 1.6, 2100, 600), _scalar(mat, "Brightness", 1.0, 2100, 550), bright, 2250, 550)
@@ -196,12 +205,17 @@ LOOKS = {
     # underside reads below the light floor (Brightness 0.8: the light floor exposes near white whatever its albedo, auto exposure).
     # r2 first pass (DarkSnow 0.15, gain 0.85, brown edges 0.55, FadeDistance 35) went darker than the dark floor and nearly vanished. Owner idea (same day): slightly
     # brownish-dark soft edges and undersides, slightly whiter tops, so the puff carries its own value contrast on any floor
-    "SmokeReal": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.4, DarkBrightness=1.15, Brightness=0.65, Wrap=0.15, RampLo=0.25, RampHi=0.6,
-                      LitColor=(0.95, 1.0, 1.12), ShadeColor=(0.40, 0.40, 0.45), EdgeTint=(0.70, 0.62, 0.56), EdgeWidth=0.35, OccStrength=0.8, FlipRate=1.0, StartScale=0.8, GrowEnd=1.0,
+    # A2 r3 (REVIEW-A2r2): dark floor 2.7-3.1x the floor and neutral (steam) -> DarkSnow 0.4 -> 0.26, gain 1.0, blue SnowColor/LitColor/shade
+    # (target median 1.7-2.0x floor, B/R >= 1.3); light floor (owner 1A) warm brown underside and wide brown edges, Brightness 0.58;
+    # crunchy creases OccStrength 0.8 -> 0.65. Light pass 1 stayed blue-grey (the lit side carried LitColor): warm LitColorLight
+    "SmokeReal": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.26, DarkBrightness=1.0, Brightness=0.58, Wrap=0.15, RampLo=0.25, RampHi=0.6,
+                      LitColor=(0.88, 1.0, 1.22), LitColorLight=(1.0, 0.90, 0.76), SnowColor=(0.74, 0.82, 1.0), ShadeColor=(0.36, 0.40, 0.52), ShadeColorLight=(0.44, 0.36, 0.28),
+                      EdgeTint=(0.60, 0.50, 0.40), EdgeTintDark=(0.80, 0.84, 0.95), EdgeWidth=0.6, OccStrength=0.65, FlipRate=1.0, StartScale=0.8, GrowEnd=1.0,
                       FadeStart=0.2, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0, OpacityMax=0.9),  # r2 pass 3: light floor nearly invisible at 0.75/0.05
     # A2: thin low haze layer under the skirt (replaces the 8 small wisps that read as "ears", REVIEW-A1b flaw 3)
-    "SmokeHaze": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.35, DarkBrightness=1.15, Brightness=0.65, Wrap=0.15, RampLo=0.25, RampHi=0.6,
-                      LitColor=(0.95, 1.0, 1.12), ShadeColor=(0.40, 0.40, 0.45), EdgeTint=(0.70, 0.62, 0.56), EdgeWidth=0.35, OccStrength=0.8, FlipRate=1.0, StartScale=0.85, GrowEnd=1.0,
+    "SmokeHaze": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.22, DarkBrightness=1.0, Brightness=0.58, Wrap=0.15, RampLo=0.25, RampHi=0.6,
+                      LitColor=(0.88, 1.0, 1.22), LitColorLight=(1.0, 0.90, 0.76), SnowColor=(0.74, 0.82, 1.0), ShadeColor=(0.36, 0.40, 0.52), ShadeColorLight=(0.44, 0.36, 0.28),
+                      EdgeTint=(0.60, 0.50, 0.40), EdgeTintDark=(0.80, 0.84, 0.95), EdgeWidth=0.6, OccStrength=0.65, FlipRate=1.0, StartScale=0.85, GrowEnd=1.0,
                       FadeStart=0.05, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0, OpacityMax=0.3),
     "PuffClump": dict(DarkSnow=0.3, FlipRate=0.3, StartScale=0.8, GrowEnd=0.08, ShrinkStart=0.6, EndScale=0.0, OccStrength=0.5),
 }
@@ -221,6 +235,11 @@ def run():
     made = []
     for name, look in LOOKS.items():
         mi = V3._instance(name, puff)
+        look = dict(look)
+        if "ShadeColor" in look:
+            look.setdefault("ShadeColorLight", look["ShadeColor"])
+        if "LitColor" in look:
+            look.setdefault("LitColorLight", look["LitColor"])
         for k, v in look.items():
             if k == "tex":
                 MEL.set_material_instance_texture_parameter_value(mi, "Tex", textures[v])

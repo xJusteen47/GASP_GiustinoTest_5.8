@@ -454,9 +454,10 @@ def land_ring():
         # A2 r2 (REVIEW-A2 gap 3: right lobe up to the knee at +15..+26, a wisp alive to +38): max 90 -> 65 cm, ring 26 -> 30 to keep the
         # width, weaker rise, shorter life (all alpha 0 by ~+27 frames). Gap 2 (straight cut line in the dust base): centres raised from
         # 5 cm under the floor to 6 cm over it, so less of each sprite is cut by the floor (the material depth fade softens the rest)
-        _puffs(s, "Skirt", 8, (0.40, 0.50), (30, 65), 180, 4.5, look="SmokeReal", ring=(30, 8), origin=(0, 0, 6), curl=(40.0, 0.02),
+        # A2 r3 (REVIEW-A2r2 gap 3: top 68-76 px vs A1b early 48-53): max 65 -> 50 cm, ring 30 -> 36 to hold the width, wisps 65 -> 50
+        _puffs(s, "Skirt", 8, (0.40, 0.50), (30, 50), 180, 4.5, look="SmokeReal", ring=(36, 8), origin=(0, 0, 6), curl=(40.0, 0.02),
                gravity=3.0, ring_width=0.6)
-        _puffs(s, "Wisps", 4, (0.35, 0.45), (45, 65), 130, 6.0, look="SmokeHaze", ring=(14, 4), origin=(0, 0, 4), curl=(60.0, 0.03))
+        _puffs(s, "Wisps", 4, (0.35, 0.45), (40, 50), 130, 6.0, look="SmokeHaze", ring=(14, 4), origin=(0, 0, 4), curl=(60.0, 0.03))
         _puffs(s, "Clumps", 5, (0.30, 0.45), (3, 6), 220, 1.5, look="PuffClump", ring=None, cone=((0, 0, 1), 60), gravity=-1300.0)
         disc = _sprites(s, "Contact")
         disc.burst(1).particle((0.35, 0.35), (120, 120)).sized()  # A2: scaled with the dust (was 220)

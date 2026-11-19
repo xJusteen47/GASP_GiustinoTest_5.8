@@ -10,7 +10,11 @@ import subprocess
 import sys
 import tempfile
 
-import imageio_ffmpeg
+try:
+    import imageio_ffmpeg
+    FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
+except ImportError:  # the desktop has ffmpeg on PATH
+    FFMPEG = 'ffmpeg'
 from PIL import Image, ImageDraw, ImageFont
 
 out, root, seq, view, a, b, label = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], int(sys.argv[5]), int(sys.argv[6]), sys.argv[7]
@@ -38,7 +42,7 @@ for f in range(a, b + 1):
     d.text((12, 6), label, fill=(255, 255, 255), font=font)
     img.save(os.path.join(tmp, f'{n:04d}.png'))
     n += 1
-cmd = [imageio_ffmpeg.get_ffmpeg_exe(), '-y', '-loglevel', 'error', '-framerate', '60', '-i', os.path.join(tmp, '%04d.png'),
+cmd = [FFMPEG, '-y', '-loglevel', 'error', '-framerate', '60', '-i', os.path.join(tmp, '%04d.png'),
        '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out]
 subprocess.run(cmd, check=True)
 print(f'{out}: {n} frames, {os.path.getsize(out) // 1024} KB')

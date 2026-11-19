@@ -115,7 +115,7 @@ def _console(cmd):
 
 def _ready():
     ws = g.worlds()
-    if len(ws) < 3 or _pawn() is None:
+    if len(ws) < 1 + int(os.environ.get("PIE_CLIENTS", "2")) or _pawn() is None:
         return False
     comp = g.local_comp(ws[0])
     return bool(comp and json.loads(comp.get_state_snapshot()).get('inputReady'))
@@ -356,7 +356,7 @@ def _tick(_dt):
         if phase != 'ending' and now - st['start'] > TIMEOUT:
             return _finish(f'timeout in phase {phase}')
         if phase == 'boot' and now - st['t'] > 8:
-            _log(f'setup_editor: {g.setup_editor(True, "listen", 2)}')
+            _log(f'setup_editor: {g.setup_editor(True, "listen", int(os.environ.get("PIE_CLIENTS", "2")))}')
             # ProxyCreationWhenPSOReady 0: in the editor an effect's first use otherwise draws the default material (a dark quad) while its
             # pipeline compiles; a packaged game ships its PSO cache. Capture only
             for cmd in (f'GSTN.Presentation.Effects {VFX}', 'GSTN.Presentation.Log 1', 'r.PSOPrecache.ProxyCreationWhenPSOReady 0'):
