@@ -15,3 +15,11 @@ a2r2c/a2_dark, a2_light (second pass, current assets) - NOT looked at yet.
 ## Next
 Look at a2r2c grid vs a1b, run vfx_dust_measure (box 660,700,1140,960), then blind critic + Fable high review; owner mp4 only on PASS.
 Max 1 more colour attempt this round (2 used). Cost so far ~12 $ estimated.
+## Resume 18:15 UTC: second pass checked (grid of a1b vs a2r2c, game view f160-f175, looked at once)
+- Dark: dust now reads as a low blue-grey skirt at the feet, lighter than the floor, size well under A1b. Contact disc still slightly dark at f160.
+- Light: dust nearly invisible again (only grit and a faint haze); A1b on light reads as clear grey smoke (larger, denser, longer).
+- `vfx_dust_measure.py` numbers (Saved/VfxV3/a2r2c/measure_*.tsv, box 660,700,1140,960, thr 8) are NOT usable: the off pass's character
+  pose/position differs from the on pass, so the diff mask includes the body (bbox stuck at the box size). Needs a mask that excludes the
+  character (e.g. diff only below the ankle line, or same-run on/off frames).
+- Two colour attempts used (rule 5). Proposed next: light floor only, more density (OpacityMax 0.75 -> 0.9, FadeStart 0.05 -> 0.2) and
+  Brightness 0.8 -> 0.65, then the blind critic + Fable high review. Needs ~5 $ more (budget 15 $ reached).
