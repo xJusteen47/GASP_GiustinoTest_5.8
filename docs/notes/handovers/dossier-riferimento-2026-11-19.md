@@ -24,3 +24,15 @@ tratti d'identità (regola 13a) ma non il resto del brief; immagini di altri gio
 Aperto:
 - Mai provato: primo uso naturale = redo VFX v3 contro DK Bananza (thread 'Compare VFX dust with DK Bananza').
 - `handoffs/dash-ganon-ref/NOTE.md` è già di fatto un dossier: da spostare in `reference-dossiers/` se utile.
+
+## Seguito (stesso thread): setup aggiornato con le lezioni del giorno (owner 14:41-14:44Z)
+- `principi-vfx.md`: "Lezioni dell'owner 2026-11-19" in testa; §3.13 e §8.5 i gas crescono sfumando ad alpha 0
+  (mai rimpiccioliti opachi); §5.6-bis leggibile *e* credibile; §7 "comportamento reale, stile solo nella palette";
+  §12.5-6 confronto sul video/dossier + assistente AI dell'Unreal Editor; §13 checklist 12-14; §15.5 risolta.
+- `gstn-vfx-reviewer`: lezioni in §1, impressione "sembra il materiale vero?", confronto sempre col video, domande 8/10/11,
+  PASS richiede che regga accanto al riferimento. Non esiste una skill esecutore VFX: chi costruisce usa §13.
+- `gstn-anim-reviewer` §3.5 (sei sì non bastano senza il riferimento), §3.7 (domanda all'assistente AI dell'editor);
+  `gstn-anim-executor` §3 (`curve.txt`, viste del dossier, non vede critico né verdetto), §5 (assistente AI).
+- Bozza per la skill dell'account `gstn-move-animation`: `docs/notes/review/gstn-move-animation-edits-2026-11-19.md`
+  (5 coppie old/new verificate sul SKILL.md sincronizzato; la 1 toglie "Never Fable", in conflitto con la regola 3).
+- Aperto: lo sheet `stile-sheet-vfx-review.md` dice ancora "mai dissolvenza in trasparenza": va allineato per la categoria B.

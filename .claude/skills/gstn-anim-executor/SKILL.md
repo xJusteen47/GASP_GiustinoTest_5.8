@@ -49,6 +49,11 @@ On request only. `animpipe render <move> --standalone [--azs=...]` after `build`
 `fine/`) the mp4 files and grids of variant **and** base on the same frames: the version that hits, the one that whiffs,
 and one sequence that acts at FAF. Frame labels (`v`, `m`, `a`) must be readable. Commit them: the review is done from
 those files. Report the gate line and the paths, nothing about how it looks.
+- **Curves for the reviewer** (GASP curve check, reviewer §3.7): next to the videos write `curve.txt` with the curve
+  names on the clip and the montage of variant and base (editor MCP dump or import log). Facts only, no fix.
+- **Reference video**: if the brief names a reference dossier (`docs/notes/reference-dossiers/`), capture the views it
+  needs to be compared on (same side or rear view as the reference) besides the usual ones. You do not read or judge it.
+- You never see the critic's items or the reviewer's verdict; you only receive the instruction that follows from them.
 
 ## 4. If you are a Claude session driving Antigravity
 - Send the instruction file **verbatim**, plus: "read `.claude/skills/gstn-anim-executor/SKILL.md` and
@@ -67,6 +72,9 @@ those files. Report the gate line and the paths, nothing about how it looks.
 - If the owner says he edited the move in Unreal: do not build (`rifiuto: serve_owner`). Only edits on the "Manuale"
   layer survive, after `animpipe capture`.
 - Never start, close or configure Unreal or Cascadeur unless the brief says the machine is free; exit 4 means ask.
+- An engine question you cannot answer from the contract (why a gate or an import behaves as it does): ask the Unreal
+  Editor's built-in AI assistant (owner 11-19; editor open) and paste its answer in `note`. If it does not settle it,
+  refuse with the failing line; never guess a setting.
 - Never delete a snapshot. Restore instead of repairing a card by hand.
 - Scripts write to files and print at most five lines. No full logs, reports or diffs in the reply.
 - No images, GIFs or videos of other games in the repo.

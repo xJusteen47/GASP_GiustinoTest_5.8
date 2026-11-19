@@ -16,6 +16,17 @@ clip DK Bananza 2026-11-19). **[A]** = adattamento o ragionamento nostro, da ver
 `claude/locomotion-finish-1` e04141c7); cosa è stato accettato e cosa no è in §16-bis.
 Frame: contati da 1; sim a 62,5 Hz, 1 frame ≈ 16 ms.
 
+**Lezioni dell'owner 2026-11-19** (dopo i video 1080p del fumo v3; ambito: tutti i VFX, il punto 2 i gas). Sono
+principi, non ricette; dove contraddicono il testo sotto, vincono loro e il testo è già allineato.
+1. **La leggibilità non si compra uccidendo il realismo.** Opacità piena, taglia gonfiata o densità alta fanno
+   "leggere" una nuvola ma la trasformano in un PNG piatto. Un gas si giudica su due domande insieme: si legge? sembra
+   polvere (fumo, neve) vera? (§5.6-bis)
+2. **La polvere vera si disperde**: mentre cresce sfuma fino ad alpha 0. Non si rimpicciolisce restando opaca (§3.13, §8.5).
+3. **"Stile DK / Astro Bot" = comportamento realistico, stile solo nel colore e nella palette.** Non usare
+   "stilizzato" per il comportamento: fisica, dispersione e luce sono reali (§7).
+4. **Si giudica sempre contro il video di riferimento** (il dossier, `docs/notes/review/dossier-riferimento.md`), non
+   solo contro la checklist: una checklist tutta "sì" non basta se accanto al riferimento non torna (§12.5).
+
 ## 0. Cosa c'era già (non ripetuto, solo richiamato)
 - `vfx-clarity-ricerca.md` (11-17): Sakurai su hitstop e risalto dei personaggi, gerarchia Riot, portata onesta, ombre di 3D Land.
 - `silhouette-vfx-ricerca.md` (11-15, approvato): la posa porta le fasi lunghe, i VFX le fasi brevi (frame attivi, contatto);
@@ -104,10 +115,11 @@ fumo e polvere, scelta tecnica, prestazioni, processo. Le contraddizioni trovate
 12. **Decadimento termico** dell'energia [G, F5]: nucleo bianco (massimo) → bordo giallo/arancio saturo → rosso scuro →
     fumo freddo. Vale per fuoco, esplosioni e colpi "caldi"; saltare un gradino toglie credibilità. Per elementi non
     termici (elettrico, ghiaccio) la stessa idea: bianco al nucleo, tinta satura, poi tinta spenta.
-13. **Morte per erosione o contrazione, non per velo** [G, F10]: lo stile Nintendo/Riot chiude le forme mangiandone il
-    bordo (soglia sulla maschera) o rimpicciolendole; l'opacità che cala in modo lineare lascia un velo grigio e
-    overdraw che dura. Eccezione: i gas (v3, categoria B) possono calare di opacità, ma solo a fine vita e a contrasto
-    già basso.
+13. **Morte secondo la materia** [G, F10, owner 11-19]. *Energia e solidi*: si chiudono per erosione del bordo
+    (soglia sulla maschera) o contrazione, non per velo; un'opacità che cala lenta lascia un velo grigio e overdraw.
+    *Gas* (polvere, fumo, neve, vapore): si **disperdono** come quelli veri, crescono mentre l'opacità scende fino a 0;
+    non si rimpiccioliscono restando opachi (sembra un oggetto che si sgonfia, non aria). Il velo si evita facendo
+    arrivare l'alpha davvero a 0 entro la vita e abbassando il contrasto, non accorciando la crescita.
 
 **Intervalli indicativi (dal nostro sheet, frame a ~60 fps)** [A]: lampo del colpo 1-2 frame; colpo intero 12-20 frame
 (200-330 ms); polvere 15-27 frame (250-450 ms); anello d'atterraggio 15-21 frame; detriti < 1 s.
@@ -145,6 +157,9 @@ fumo e polvere, scelta tecnica, prestazioni, processo. Le contraddizioni trovate
    dei frame attivi si legge ancora [F7].
 5. **Portata onesta** [F6]: l'effetto attivo non fa sembrare il colpo più corto o più piccolo della hitbox.
 6. **Il primo frame conta**: un cambio visibile al frame 1 dopo l'input (posa o effetto) [F22].
+6-bis. **Leggibile e credibile insieme** [owner 11-19]: per i gas la leggibilità viene da tempo, posizione, luce e
+   colore del materiale, non da opacità piena o taglia gonfiata. Se per "leggere" la nuvola diventa un disco opaco
+   o un PNG piatto, il realismo è perso e l'effetto è sbagliato anche se si legge.
 7. **Densità con più giocatori**: in PvP gli effetti si sommano; gli effetti dell'avversario che minacciano me valgono
    più dei miei cosmetici [F6]. Effetti brevi e pochi strati restano la prima difesa.
 
@@ -166,15 +181,17 @@ fumo e polvere, scelta tecnica, prestazioni, processo. Le contraddizioni trovate
 8. **Gli effetti prendono la luce della scena** quando sono materia (fumo, polvere, detriti) e la **emettono** quando
    sono energia (lampi, scie) [O astro_1-5, F23]. Mischiare i due ruoli produce il "grigio piatto" o il "neon sporco".
 
-## 7. Stile stilizzato semi-realistico (Astro Bot, DK Bananza)
+## 7. Il look Astro Bot / DK Bananza: comportamento reale, palette di stile
 1. **Tre famiglie di materia, tre trattamenti** [O, F23]:
    - *Energia* (lampi, stelle, scie, laser): emissiva, netta, breve, colori puri; legge su qualsiasi sfondo.
    - *Gas* (fumo, polvere, neve, vapore): realistica, morbida, traslucida, **illuminata** dalla scena, **colorata dal
      materiale** che l'ha generata (rosa sul nemico rosa, bianca sulla neve) [O astro_3].
    - *Solidi* (detriti, schegge, coriandoli, monete): mesh lucide, bordi arrotondati, ombre, rimbalzo fisico [O astro_4].
-2. **Comportamento credibile, forma semplificata** [F4, F5]: il fumo sale e rallenta, la polvere ricade, i detriti
-   rimbalzano e si fermano; ma le forme sono più grandi, più tonde e meno numerose del vero. "Realistico" vale per
-   la fisica e la luce, "giocattolo" per la forma.
+2. **Comportamento reale, stile nel colore** [F4, F5, owner 11-19]: il fumo sale e rallenta, la polvere si disperde e
+   ricade, i detriti rimbalzano e si fermano, la luce della scena li modella. Quello che è "di stile" è la palette:
+   colori puliti e saturi, materiale che tinge il gas, poche tinte per effetto. Non si semplifica il gas in sagome
+   piatte da cartone: è la causa delle "nuvole come PNG grandi e piatti". Per i solidi restano lecite forme pulite e
+   arrotondate (mesh lucide, §7.1), sempre con fisica vera. Evitare la parola "stilizzato" per il comportamento.
 3. **L'effetto nasce dai dati del materiale** [F24]: in DK Bananza dove si rompe, quanto si rompe e di che materiale è
    pilotano l'effetto, e voce e suono sono sincronizzati sul colpo finale. Gli effetti di distruzione sono generati in
    automatico dalle texture dei materiali (800+ tipi). La sensazione tattile viene da effetti e suoni che **rispondono
@@ -205,8 +222,9 @@ fumo e polvere, scelta tecnica, prestazioni, processo. Le contraddizioni trovate
 3. **Polvere d'atterraggio e di frenata si allarga lungo il terreno** [A, F5]: è aria spinta fuori da sotto il corpo,
    quindi radiale e bassa; si alza solo un po' e ricade.
 4. **Rotolamento**: masse che girano su se stesse in direzione coerente con la spinta; forze alternate danno l'oscillazione a S [F18].
-5. **Si stacca, si spezza, si dissolve** [F18, F5]: il fumo si rompe in pezzi più piccoli prima di sparire; i pezzi grandi
-   assorbono i piccoli mentre salgono. La dissoluzione è per erosione o rimpicciolimento, non un velo trasparente che resta.
+5. **Si stacca, si spezza, si disperde** [F18, F5, owner 11-19]: il fumo si rompe in pezzi e si apre; i pezzi grandi
+   assorbono i piccoli mentre salgono. Ogni massa **cresce mentre sfuma ad alpha 0**, come la polvere vera nell'aria;
+   non si rimpicciolisce opaca e non lascia un velo che resta (l'alpha arriva a 0 dentro la vita, §3.13).
 6. **Volume con la luce** [F5]: niente contorni; luce della scena dall'alto, ombra sotto, rim verso la camera. Il fumo
    colorato dal materiale si illumina, non diventa grigio: un fumo grigio su fondo chiaro "sporca" lo schermo [A,
    coerente col FAIL r8 "nuvola troppo grigia"].
@@ -290,7 +308,11 @@ impacchettati e colore dal parametro, così una texture serve molti effetti [F16
 3. **Style guide** del gioco con: forme permesse, gamma di valore e saturazione, regole di timing, cosa è solido,
    gassoso, energetico [F17]. Da noi è lo sheet + v3; questo documento ne dà le ragioni.
 4. **Review in due passate** (VFX spenti, poi accesi), due sfondi, due viste, a velocità reale e poi frame per frame.
-5. **Un effetto si confronta con un riferimento della stessa classe** (colpo con colpo, polvere con polvere).
+5. **Un effetto si confronta con un riferimento della stessa classe** (colpo con colpo, polvere con polvere), **sul
+   video**: prima si scrive il dossier del riferimento (`docs/notes/review/dossier-riferimento.md`), chi costruisce lo
+   usa come bersaglio e chi revisiona lo usa come metro. La checklist non sostituisce il confronto [owner 11-19].
+6. **Dubbi tecnici su Unreal** (Niagara, materiali, render): chiedere all'assistente AI integrato nell'Unreal Editor,
+   che dà consigli specifici del motore (owner 11-19; serve l'editor aperto).
 
 ## 13. Checklist per chi costruisce un effetto
 1. Che cosa comunica, a chi (chi fa / chi subisce), con che voto d'importanza?
@@ -304,7 +326,10 @@ impacchettati e colore dal parametro, così una texture serve molti effetti [F16
 9. Durante l'hitstop rallenta e riparte col personaggio?
 10. Costo: numero di particelle ed emitter, overdraw (≤3-5 strati), texture lette, preset basso?
 11. Si schiaccia e si allunga nel verso del moto? Ogni forma ha l'orientamento giusto (camera, piano, asse)?
-12. Muore per erosione o contrazione, senza velo grigio che resta?
+12. Muore secondo la materia: energia e solidi per erosione o contrazione; gas che crescono sfumando ad alpha 0;
+    nessun velo grigio che resta?
+13. Si legge **e** sembra il materiale vero (polvere, fumo, neve), senza opacità o taglia gonfiate?
+14. Messo accanto al video di riferimento (dossier), torna? Taglie rispetto al personaggio, vita, dispersione, luce.
 
 ## 14. Checklist per chi revisiona
 È la skill `vfx-theory/gstn-vfx-reviewer.SKILL.md` (12 domande sì/no giudicabili dal video + 2 controlli strumentali, etichette di FAIL, formato del verdetto).
@@ -321,6 +346,9 @@ impacchettati e colore dal parametro, così una texture serve molti effetti [F16
 4. **Hitstop dei VFX** (da peer review): default 0,15 per tutti (decisione owner v2 2A) contro hit mark a velocità piena
    e materia frenata (§9.2). Proposta: A) energia a 1,0 e materia a 0,15 (consigliata, una seconda impostazione);
    B) tenere 0,15 per tutto. Si decide guardando le due versioni in gioco.
+5. **Dissolvenza dei gas** (owner 11-19): lo sheet dice "mai dissolvenza in trasparenza" e la versione precedente
+   di §3.13 permetteva ai gas di calare di opacità solo a fine vita. L'owner ha deciso: i gas crescono sfumando ad
+   alpha 0 per tutta la dissipazione. Risolta; lo sheet va aggiornato per la categoria B.
 Il coordinatore le porta all'owner; questo documento non cambia lo sheet.
 
 ## 16. Limiti

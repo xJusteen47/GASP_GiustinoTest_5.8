@@ -16,6 +16,8 @@ dichiarata nel brief, per esempio colpo S/M/L).
 - `vfx-theory/principi-vfx.md`: solo la sezione del principio che stai per citare.
 - I riferimenti dell'owner: `handoffs/ref-astrobot-vfx/NOTE.md` (+ clip DK Bananza su `claude/ref-astrobot-vfx`).
 - `docs/notes/review/critico-estetico.md` (il critico, §3b).
+- **Lezioni dell'owner 2026-11-19** in testa a `principi-vfx.md` (leggibile *e* credibile; gas che crescono sfumando
+  ad alpha 0; stile solo nella palette; si giudica sul video di riferimento).
 - Il **dossier del riferimento** se l'effetto ha un riferimento video (`docs/notes/review/dossier-riferimento.md`;
   dossier in `docs/notes/reference-dossiers/`). C'è il video ma manca il dossier: scrivilo prima, una volta, da
   `docs/notes/review/dossier-template.md` (frame con `rv_frames.py`, griglie fuori dal repo). Per i VFX contano
@@ -34,7 +36,8 @@ La review è nulla, e lo scrivi, se manca una di queste:
 Se l'owner dice che il video non torna, ricontrolla la catena prima dell'effetto.
 
 ## 3. Come guardi (regola 4: una griglia per vista, guardata una volta; max 8 immagini per video)
-1. **Prima a velocità reale**, una volta, senza fermarti: impressione d'insieme (colpisce? pesa? sporca lo schermo?).
+1. **Prima a velocità reale**, una volta, senza fermarti, se puoi accanto al video di riferimento: impressione
+   d'insieme (colpisce? pesa? sporca lo schermo? **sembra il materiale vero** o un PNG piatto?).
 2. **Poi frame per frame** attorno all'evento: 2 frame prima, il frame dell'evento, l'hitstop, la ripartenza, fino
    alla scomparsa dell'ultimo pezzo.
 3. **Passata VFX spenti → accesi**: il personaggio e l'arto che colpisce restano leggibili?
@@ -42,13 +45,17 @@ Se l'owner dice che il video non torna, ricontrolla la catena prima dell'effetto
 5. **Confronto** prima con il dossier, se c'è (ogni scostamento cita il campo del dossier e il frame; ciò che il
    dossier dice "non vale per noi" non è uno scarto), poi con un riferimento della stessa classe (Astro Bot / DK
    Bananza per stile, Smash per timing e peso del colpo). Immagini di altri giochi solo sul desktop, mai nel repo.
+   Il confronto col video si fa **sempre**: la checklist tutta "sì" non dà PASS se accanto al riferimento non torna.
+   Nessun riferimento della classe: scrivilo come limite.
+6. **Dubbio tecnico** (perché Niagara o il materiale fanno così, quale modulo usare): la correzione proposta la verifica
+   chi costruisce con l'assistente AI dell'Unreal Editor; tu scrivi la domanda da fargli, non inventi il nome del modulo.
 
 ## 3b. Il critico (owner 2026-11-19; principio in `docs/notes/review/critico-estetico.md`)
 Ogni review ha accanto un critico: un agente Fable high separato, che riesce solo se trova cosa non è ottimale. Non
 lo fai tu e non gli mostri le tue risposte.
 - **Gli dai:** le stesse griglie e video (nessuna cattura nuova), il dossier del riferimento se c'è (altrimenti i
   riferimenti: clip DK Bananza / Astro Bot, note dell'owner), le regole dell'owner nel loro ambito, la domanda
-  "starebbe in DK Bananza?". Non il brief oltre a questo, non il tuo verdetto, non le note di chi ha fatto
+  "starebbe in DK Bananza?" e "sembra il materiale vero?". Non il brief oltre a questo, non il tuo verdetto, non le note di chi ha fatto
   l'effetto, non le review precedenti: giudica il risultato contro il dossier, senza sapere cosa si voleva fare.
 - **Ti restituisce** almeno i 3 difetti più pesanti, `grave` / `medio` / `lieve`, ognuno con frame e vista, cosa si
   vede, riferimento o principio tradito, etichetta (§5) e correzione più piccola; se ne trova meno di tre dice dove ha
@@ -71,13 +78,16 @@ Tutte si giudicano guardando il video. Tra parentesi la sezione di `principi-vfx
 6. **Frame dell'evento**: parte al frame giusto (contatto, appoggio, partenza) e il frame 1 è già leggibile (§3.8, §5.6).
 7. **Curva di vita**: climax nel primo quarto, frenata non lineare, strati sfasati, follow-through della materia leggera,
    durata che non sembra lunga (§3).
-8. **Morte pulita**: erosione o contrazione; nessun velo grigio o pezzo che resta dopo che il gioco è andato avanti (§3.13, §8.5).
+8. **Morte pulita e secondo la materia**: energia e solidi per erosione o contrazione; i gas crescono mentre sfumano
+   fino ad alpha 0 (mai rimpiccioliti opachi); nessun velo grigio o pezzo che resta dopo che il gioco è andato avanti (§3.13, §8.5).
 9. **Hitstop** (solo colpi): lampo, fermo, tremito e suono nello stesso frame; durante il fermo l'effetto si comporta come
    l'impostazione dichiarata nel brief; tutto riparte col personaggio; a segno e a vuoto si distinguono nettamente (§9).
 10. **Valore e sfondo**: in scala di grigi il contatto è il punto più contrastato; si legge su fondo chiaro e scuro senza
-    diventare grigio; valore massimo solo nel nucleo, un colore domina (§6).
-11. **Materia e luce** (Astro Bot / DK Bananza): l'energia emette, netta e breve; il gas è morbido, illuminato, colorato dal
-    materiale, sale o ricade secondo la causa e non taglia sui piani; i solidi sono lucidi, con ombra, si fermano senza
+    diventare grigio; valore massimo solo nel nucleo, un colore domina (§6). La leggibilità non viene da opacità o
+    taglia gonfiate a scapito del realismo (§5.6-bis).
+11. **Materia e luce** (Astro Bot / DK Bananza: comportamento reale, stile solo nella palette): l'energia emette, netta
+    e breve; il gas si comporta come quello vero (si disperde, è morbido, illuminato, colorato dal materiale, sale o
+    ricade secondo la causa, non taglia sui piani) e non sembra una sagoma piatta; i solidi sono lucidi, con ombra, si fermano senza
     scivolare; da dietro e di 3/4 si capisce dove ha colpito (ombra o segno a terra) (§7, §8, §5.3).
 12. **Barra di qualità**: accanto a un riferimento della stessa classe (Astro Bot / DK Bananza per lo stile, Smash per
     timing e peso), l'effetto è alla pari per il suo ruolo? Nomina il riferimento e una cosa che torna e una che no (§12.5).
@@ -109,7 +119,7 @@ Scarti (max 3): frame, vista, etichetta, principio, correzione più piccola.
 Lato gioco: <difetti `gioco`>.
 Decisioni dell'owner: <solo se servono>.
 ```
-PASS solo se tutte le 12 domande sono sì, nessun controllo strumentale eseguito è NO e nessuna voce `grave` accolta del
+PASS solo se tutte le 12 domande sono sì, l'effetto regge accanto al video di riferimento, nessun controllo strumentale eseguito è NO e nessuna voce `grave` accolta del
 critico resta aperta. Max 3 giri, poi decide l'owner con i difetti scritti chiari.
 
 ## 7. All'owner

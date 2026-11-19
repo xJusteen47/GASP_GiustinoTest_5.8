@@ -45,7 +45,8 @@ Work from the mp4 files in `inizio/` or `fine/`: variant and base, the version t
    dead frame; the first frame of the move must be of the same order as the frames after it. Compare counts only inside
    the same crop. This is the only thing you measure yourself: every other number comes from the gate line.
 5. **Answer the six questions** of `rubric.md` (five for a reaction), yes or no, each with the `v` frames and the view it
-   comes from. Derive each answer with the four steps of `principi-animazione-corporea.md` §13: intent of the move,
+   comes from. The questions do not replace the reference: six yes are not a PASS if the move does not hold up next to
+   the reference video or its dossier (step 6). Derive each answer with the four steps of `principi-animazione-corporea.md` §13: intent of the move,
    what the principle predicts here, what the frames show, where they differ and why.
 6. **References.** If there is a dossier, compare against it first: timing per phase, key poses and silhouette,
    sizes relative to the body, follow-through; each gap names the dossier field and the frame. A deviation the owner's
@@ -59,6 +60,9 @@ Work from the mp4 files in `inizio/` or `fine/`: variant and base, the version t
    from memory) and compare it with the curves of the clip and montage (editor MCP dump or the import log). Also check
    that a re-bake kept the curves the base had. Missing, wrong or dropped curve: label `dati montage`. No list available:
    write "curve GASP non verificate" as a limit, not a no.
+   When you are unsure why the engine behaves as it does (a curve ignored, a montage or blend setting, warping), write
+   the exact question for the Unreal Editor's built-in AI assistant (owner 11-19; it needs the editor open) into the
+   `gioco` or `dati montage` item, so the desktop thread asks it instead of guessing. Never name a setting from memory.
 8. **Sort every no** into `posa`, `dati montage` (curves, notifies, blend times, play rate, root motion flags) or
    `gioco` (Anim BP, state machine, blend logic: a crouch or jump when the montage ends, a repeated `a` value, a slide
    of the capsule). Any `gioco` gap suspends the pose cycle: write what a code thread must check, and do not write
