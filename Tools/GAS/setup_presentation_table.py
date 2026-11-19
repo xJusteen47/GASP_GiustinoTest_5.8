@@ -65,8 +65,10 @@ def rows():
         # No Jump.Ground row (owner playtest 2026-11-17: dust only on run start and skid; v3 has no rings, so the jump shows nothing).
         # NS_GSTN_JumpPuff stays built for a kit that wants it.
         _cue("Land", "NS_GSTN_LandRing", min_mag=300, scale=((600, 2500), (0.7, 1.5)), offset=feet),  # a plain jump lands at ~1300 cm/s
-        _cue("StageUp", "NS_GSTN_SpeedLines", min_mag=SPRINT2_STAGE, socket="root", scale_size=False,
-             stop_on=("StageDown", "Skid", "Hit", "Splat", "Knockdown", "Tumble.Start"), min_speed=450.0),  # v2: never on a walk (owner playtest)
+        # No StageUp row (owner 2026-11-19: "le linee dello sprint per ora levale"). NS_GSTN_SpeedLines stays built (VFX v3 r10 PASS:
+        # 16/s, 6 x 170 cm); to bring them back restore:
+        # _cue("StageUp", "NS_GSTN_SpeedLines", min_mag=SPRINT2_STAGE, socket="root", scale_size=False,
+        #      stop_on=("StageDown", "Skid", "Hit", "Splat", "Knockdown", "Tumble.Start"), min_speed=450.0),  # never on a walk
         # Hit sizes from the hitstun (frames): 28 or less = small (0.5), ~43 = medium (0.8), 58+ = large (1.1); intensity is also the share
         # of the 8 shards that spawn (4 / 6 / 8) and the sprite size scale. Measured 2026-11-17 (KIT_Test_Hits jab): 31 frames at 0 % (0.56),
         # 40 at 90 % (0.74), 67 at 170 % (1.1). From 1.0 the hit is strong: 3 accent stars in the kit's second colour (a kit row overrides it)

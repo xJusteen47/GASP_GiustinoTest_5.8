@@ -29,3 +29,7 @@ Cost: ~45 min editor (8 runs), 2 Fable reviews (~135k + small); ~9 $ estimated.
   first readable 5 frames after contact, a ring at v153-v154 before the logged landing v155.
 - Fix: speed lines 16/s per side, life 0.30-0.38 s, 6 x 170 cm. r10 sprint recaptured (Saved/VfxV3/r10, both ESITO OK): `r10/REVIEW.md` PASS.
 - Owner video: `r10/vfx_v3_light_dark.webp` (game camera, light | dark, 60 fps, built by `Tools/GASNPPTest/vfx_side_by_side.py`).
+## Owner 2026-11-19: sprint lines off for now
+"le linee dello sprint per ora levale": StageUp row removed from `setup_presentation_table.py` (kept as a comment to restore),
+`DA_GSTN_Presentation_Default` rebuilt (11 rows). NS_GSTN_SpeedLines stays built (r10 PASS version). Check: r11 sprint run, Sprint 2
+StageUp mag 3 logs `niagara=-` (Saved/VfxV3/r11/light/run.log.ue.log, grep "_C_0 .*StageUp").
