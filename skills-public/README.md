@@ -3,8 +3,7 @@
 Agent skills (Claude Code `SKILL.md` format, readable by any agent by path) for reviewing game character animation and
 visual effects from in-game video, with an adversarial critic and a written reference dossier.
 
-**Status: not published.** This folder is prepared for a possible public repository. Publishing, repository name and
-license wait for the owner's explicit OK. No license is granted yet.
+License: MIT (see `LICENSE`). Intended repository: `game-anim-vfx-review-skills`, private for now.
 
 | Folder | What |
 |---|---|

@@ -23,7 +23,8 @@ Piano eseguito: `docs/notes/review/skills-portabilita.md` passi 1-4. **Nulla pub
 - Strati di progetto anim in inglese (come prima), VFX in italiano (come prima). Gemini resta nominato nelle fonti.
 
 ## Aperto
-- **Owner**: pubblicazione = OK su repo (nome, pubblico), licenza (es. MIT o CC BY 4.0 per i testi). Non fatto nulla.
+- Owner 11-19 14:57: repo `game-anim-vfx-review-skills`, PRIVATO per ora, licenza MIT (`skills-public/LICENSE`).
+  Il repo lo crea l'owner (il thread non può creare repo); poi un thread lo collega e ci spinge `skills-public/`.
 - Account skill `gstn-move-animation` non divisa (fuori ambito). Copie in project files `anim-skills/` e `vfx-theory/`
   ora vecchie: il coordinatore le aggiorna dal branch.
 - Mai provato in una review reale: la prima review anim o VFX verifica che i due strati si leggano bene insieme.
