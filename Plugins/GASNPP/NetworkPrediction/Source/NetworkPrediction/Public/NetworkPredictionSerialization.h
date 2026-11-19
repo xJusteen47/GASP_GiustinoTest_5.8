@@ -4,6 +4,7 @@
 
 #include "Net/UnrealNetwork.h" // For MakeRelative
 #include "NetworkPredictionCVars.h"
+#include "NetworkPredictionLog.h"
 #include "NetworkPredictionNetBytes.h"
 #include "NetworkPredictionReplicationProxy.h"
 #include "NetworkPredictionTickState.h"
@@ -461,7 +462,7 @@ public:
 				TArray<uint8> DiscardedData;
 				DiscardedData.SetNumZeroed((DataSize + 7 )/ 8);
 				P.Ar.SerializeBits(DiscardedData.GetData(),DataSize); // Read all invalid together from the buffer and do nothing with it.
-				UE_LOG(LogNetworkPrediction,Warning,TEXT("Client ID %d Discarded Update from Missing Delta State %d"),ClientRecvState.ID,DeltaStateFrame)
+				UE_NP_LOG_THROTTLED(Warning, 1.0, TEXT("Client ID %d Discarded Update from Missing Delta State %d"),ClientRecvState.ID,DeltaStateFrame)
 				return;
 			}
 			
@@ -785,7 +786,7 @@ public:
 				TArray<uint8> DiscardedData;
 				DiscardedData.SetNumZeroed((DataSize + 7 )/ 8);
 				P.Ar.SerializeBits(DiscardedData.GetData(),DataSize); // Read all invalid together from the buffer and do nothing with it.
-				UE_LOG(LogNetworkPrediction,Warning,TEXT("Client ID %d Discarded Update from Missing Delta State %d"),ClientRecvState.ID,DeltaStateFrame)
+				UE_NP_LOG_THROTTLED(Warning, 1.0, TEXT("Client ID %d Discarded Update from Missing Delta State %d"),ClientRecvState.ID,DeltaStateFrame)
 				return;
 			}
 			

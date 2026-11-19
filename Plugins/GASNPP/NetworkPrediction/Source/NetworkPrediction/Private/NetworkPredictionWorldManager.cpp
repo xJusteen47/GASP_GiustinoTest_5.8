@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "NetworkPredictionWorldManager.h"
+#include "NetworkPredictionLog.h"
 #include "Engine/Engine.h"
 #include "Engine/NetConnection.h"
 #include "HAL/PlatformTime.h"
@@ -275,7 +276,7 @@ void UNetworkPredictionWorldManager::ReconcileSimulationsPostNetworkUpdate_Inter
 	UE_NP_TRACE_FIXED_TICK_OFFSET(FixedTickState.Offset, OffsetChanged);
 	if (OffsetChanged)
 	{
-		UE_LOG(LogNetworkPrediction,Warning,TEXT("ReconcileFromInputOffset Old Offset %d, New Offset %d"),FixedTickState.LastOffset,FixedTickState.Offset)
+		UE_NP_LOG_THROTTLED(Warning, 1.0, TEXT("ReconcileFromInputOffset Old Offset %d, New Offset %d"),FixedTickState.LastOffset,FixedTickState.Offset)
 	}
 	FixedTickState.LastOffset = FixedTickState.Offset;
 
@@ -720,12 +721,12 @@ void UNetworkPredictionWorldManager::BeginNewSimulationFrame_Internal(float Delt
 				const int32 BufferedMS = VariableTickState.Interpolation.LatestRecvTimeMS - (int32)VariableTickState.Interpolation.fTimeMS;
 				if (BufferedMS > MaxBufferedMS)
 				{
-					UE_LOG(LogNetworkPrediction, Warning, TEXT("Independent Interpolation fell behind. BufferedMS: %d"), BufferedMS);
+					UE_NP_LOG_THROTTLED(Warning, 1.0, TEXT("Independent Interpolation fell behind. BufferedMS: %d"), BufferedMS);
 					VariableTickState.Interpolation.fTimeMS = (float)(VariableTickState.Interpolation.LatestRecvTimeMS - DesiredBufferedMS);
 				}
 				else if (BufferedMS <= 0)
 				{
-					UE_LOG(LogNetworkPrediction, Warning, TEXT("Independent Interpolation starved: %d"), BufferedMS);
+					UE_NP_LOG_THROTTLED(Warning, 1.0, TEXT("Independent Interpolation starved: %d"), BufferedMS);
 					InterpolationRate = 0.f;
 				}
 
@@ -1035,7 +1036,7 @@ bool UNetworkPredictionWorldManager::RewindActors(AActor* RequestingActor, const
 		FinalRewindTime = ClampRewindingTime(CurrentSimTimeMS,RewindSimTimeMS);
 		if (FinalRewindTime > RewindSimTimeMS)
 		{
-			UE_LOG(LogNetworkPrediction,Warning,TEXT("Desired Lag Compensation Rewind Exceeded Supported ping for %s : Desired Time %f , FinalTime %f")
+			UE_NP_LOG_THROTTLED(Warning, 1.0, TEXT("Desired Lag Compensation Rewind Exceeded Supported ping for %s : Desired Time %f , FinalTime %f")
 		,*GetNameSafe(RequestingActor),RewindSimTimeMS,FinalRewindTime);
 		}
 	}
@@ -1177,7 +1178,7 @@ TSharedPtr<FNpLagCompensationData> UNetworkPredictionWorldManager::GetComponentS
 		FinalRewindTime = ClampRewindingTime(CurrentSimTimeMS,TargetSimTimeMS);
 		if (FinalRewindTime > TargetSimTimeMS)
 		{
-			UE_LOG(LogNetworkPrediction,Warning,TEXT("Desired Lag Compensation Rewind Exceeded Supported ping for %s : Desired Time %f , FinalTime %f")
+			UE_NP_LOG_THROTTLED(Warning, 1.0, TEXT("Desired Lag Compensation Rewind Exceeded Supported ping for %s : Desired Time %f , FinalTime %f")
 		,*GetNameSafe(RequestingActor),TargetSimTimeMS,FinalRewindTime);
 		}
 	}
