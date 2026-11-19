@@ -68,7 +68,7 @@ def rows():
              stop_on=("Skid.Exit", "Jump", "Hit", "Splat", "Knockdown", "Tumble.Start"), max_duration=1.5),
         # Run stop (locomotion-finish-2): the planted front foot slides while the run brakes (clip frames 0-31, ~0.5 s): the skid's dust,
         # shorter, from the release; never on a walk-speed stop
-        _cue("RunStopPlant", "NS_GSTN_SkidDust", min_mag=300, socket="root", scale_size=False,
+        _cue("RunStopPlant", "NS_GSTN_RunStopDust", min_mag=300, socket="root", scale_size=False,  # lf3: half size, no grains
              stop_on=("RunStart", "Skid", "Jump", "Hit", "Splat", "Knockdown", "Tumble.Start"), max_duration=0.5),
         # No Jump.Ground row (owner playtest 2026-11-17: dust only on run start and skid; v3 has no rings, so the jump shows nothing).
         # NS_GSTN_JumpPuff stays built for a kit that wants it.

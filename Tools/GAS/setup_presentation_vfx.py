@@ -395,6 +395,24 @@ def skid_dust():
     return s
 
 
+def run_stop_dust():
+    """Run stop (locomotion-finish-3, Fable r2: the skid dust was thigh high, 1.5 m long and hid the brake legs; star glints read as hit
+    sparks): the skid's two emitters at about half size and half life, no grains, so the feet stay readable"""
+    s = _system("NS_GSTN_RunStopDust")
+    if s:
+        _surface(s)
+        kick = _sprites(s, "Kick", local=False)
+        kick.burst(4).particle((0.22, 0.28), (70, 95), rotation=True).sized()
+        kick.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")
+        kick.sphere(18, (0.5, 1, 0.3), (0, 0, 7)).cone((0, 0, 1), 60, 100).drag(5.0).material("SmokeLight")
+        e = _sprites(s, "Trail", "Fountain", local=False)
+        e.set("EmitterUpdate", "SpawnRate", "SpawnRate", 24.0)
+        e.particle((0.22, 0.28), (60, 80), rotation=True).sized()
+        e.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")
+        e.sphere(15, (0.5, 1, 0.3), (0, 0, 7)).cone((0, 0, 1), 35, 35).drag(5.0).material("SmokeLight")
+    return s
+
+
 def jump_puff():
     """Jump from the ground: 3 small light puffs at the feet, flat and quick (v3: no ring)"""
     s = _system("NS_GSTN_JumpPuff")
@@ -561,7 +579,7 @@ def swatch():
     return f"swatch: {len(swatch_cells())} cells, {len(ERRORS)} errors: {' | '.join(ERRORS)[:600]}"
 
 
-SYSTEMS = [run_start_dust, skid_dust, jump_puff, land_ring, speed_lines, hit_spark, hit_debris, impact, tumble_trail]
+SYSTEMS = [run_start_dust, skid_dust, run_stop_dust, jump_puff, land_ring, speed_lines, hit_spark, hit_debris, impact, tumble_trail]
 
 
 def run():

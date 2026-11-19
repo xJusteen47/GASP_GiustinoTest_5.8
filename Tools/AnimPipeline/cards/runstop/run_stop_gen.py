@@ -64,8 +64,8 @@ BALL_OFF = {s: P0[f"foot_{s}"] - P0[f"ball_{s}"] for s in "lr"}          # ankle
 
 # ---------------- the action, LEFT foot planted in front (component space, root at the origin) ----------------
 # Pelvis offset from the idle pelvis (2.1, -2.5, 90.6): 7 cm down on the plant (brief: 6-8), deeper while it absorbs, over the foot
-PELVIS_LOC = [(0, [0, 2.5, -7.0], "lin"), (2, [0, 2.5, -8.0], "lin"), (12, [0, 8.0, -10.5], "io"), (22, [0, 12.0, -9.0], "io"),
-              (STOP, [0, 13.0, -7.5], "io"), (STOP + 8, [0, 10.0, -6.5], "io"), (STOP + 18, [0, 4.0, -2.5], "io"),
+PELVIS_LOC = [(0, [0, 2.5, -7.0], "lin"), (2, [0, 2.5, -8.0], "lin"), (12, [0, 8.0, -11.5], "io"), (22, [0, 12.0, -12.0], "io"),
+              (STOP, [0, 13.0, -11.0], "io"), (STOP + 8, [0, 10.0, -8.0], "io"), (STOP + 18, [0, 4.0, -2.5], "io"),
               (STOP + 27, [0, 0, 0], "io")]   # V2 (Fable r3 FAIL): stays low after the lunge, rises over ~19 frames, no pelvis bump
 # Pelvis rotation: forward tilt and the left hip forward (yaw), unwinding with the rise
 PELVIS_ROT = [(0, [-8, 0, 12], "lin"), (2, [-8, 0, 12], "lin"), (22, [-8, 0, 10], "io"), (STOP, [-7, 0, 8], "io"),
@@ -83,16 +83,16 @@ HEAD_PITCH = [(0, 2, "lin"), (2, 2, "lin"), (STOP, 3, "io"), (STOP + 3, 3, "io")
 # Front (left) ankle: lands 50 cm ahead, heel first (toes up 14 deg), flat by frame 7, skids while the pelvis comes over it; after the
 # stop it steps back under the body (the end pose is the idle, root at rest)
 LF_POS = [(0, [16, 42, 11.5], "lin"), (2, [16, 42, 11.5], "lin"), (7, [16.5, 40, 9.4], "io"), (22, [17, 33, 9.4], "io"),
-          (STOP, [17, 31, 9.4], "io"), (STOP + 6, [17, 31, 9.4], "lin"), (STOP + 10, [18.5, 26, 15.0], "io"),
-          (STOP + 15, [20.0, 12.5, 9.4], "io")]
-LF_ROT = [(0, [14, 0, 6], "lin"), (2, [14, 0, 6], "lin"), (7, [0, 0, 6], "io"), (STOP + 6, [0, 0, 6], "lin"),
-          (STOP + 10, [-8, 0, 3], "io"), (STOP + 15, [0, 0, 0], "io")]
+          (STOP, [17, 31, 9.4], "io"), (STOP + 9, [17, 31, 9.4], "lin"), (STOP + 13, [18.5, 26, 15.0], "io"),
+          (STOP + 18, [20.0, 12.5, 9.4], "io")]
+LF_ROT = [(0, [14, 0, 6], "lin"), (2, [14, 0, 6], "lin"), (7, [0, 0, 6], "io"), (STOP + 9, [0, 0, 6], "lin"),
+          (STOP + 13, [-8, 0, 3], "io"), (STOP + 18, [0, 0, 0], "io")]
 LF_POLE = [(0, [18, 110, 45], "lin")]
 # Back (right) foot: on its toes, dragged behind, then a quick step up beside the body
-RB_BALL = [(0, [-12, -50, 3.2], "lin"), (2, [-12, -50, 3.2], "lin"), (10, [-13, -45, 3.2], "io")]
-RF_POS = [(14, [-14, -34, 17.0], "io"), (20, [-14.5, -20.4, 9.4], "io")]                 # ankle, after the toe drag
-RF_ROT = [(0, [-48, 0, -4], "lin"), (2, [-48, 0, -4], "lin"), (10, [-42, 0, -4], "io"), (14, [-18, 0, -2], "io"), (20, [0, 0, 0], "io")]
-RF_POLE = [(0, [-16, 40, 15], "lin"), (20, [-16, 60, 45], "io")]
+RB_BALL = [(0, [-12, -50, 3.2], "lin"), (2, [-12, -50, 3.2], "lin"), (10, [-13, -45, 3.2], "io"), (STOP, [-13, -42, 3.2], "io")]   # V3: drags on its toes to the stop
+RF_POS = [(STOP + 5, [-14, -32, 17.0], "io"), (STOP + 9, [-14.5, -20.4, 9.4], "io")]   # V3 (Fable FAIL r2): step after the stop                 # ankle, after the toe drag
+RF_ROT = [(0, [-48, 0, -4], "lin"), (2, [-48, 0, -4], "lin"), (10, [-42, 0, -4], "io"), (STOP, [-40, 0, -4], "io"), (STOP + 5, [-18, 0, -2], "io"), (STOP + 9, [0, 0, 0], "io")]
+RF_POLE = [(0, [-16, 40, 15], "lin"), (STOP, [-16, 40, 15], "lin"), (STOP + 9, [-16, 60, 45], "io")]
 
 # Arms (hand targets in the chest frame): run swing on the plant (right arm forward, left back), open LOW to the sides for balance
 # (brief frames 4-10), hold through the brake, then a small forward swing and close to the idle 3-4 frames after the trunk (trait 3)
@@ -125,12 +125,12 @@ def action(f):
          "pole_hl": curve(POLE_L, f), "pole_hr": curve(POLE_R, f), "fingers": float(curve(FINGERS, f)),
          "ankle_l": curve(LF_POS, f), "rot_l": curve(LF_ROT, f), "pole_l": curve(LF_POLE, f),
          "rot_r": curve(RF_ROT, f), "pole_r": curve(RF_POLE, f)}
-    if f <= 10:
+    if f <= STOP:
         ball = curve(RB_BALL, f)
         d["ankle_r"] = ball + foot_R(d["rot_r"], "r") @ R0["foot_r"].T @ BALL_OFF["r"]
     else:
-        start = curve(RB_BALL, 10) + foot_R(curve(RF_ROT, 10), "r") @ R0["foot_r"].T @ BALL_OFF["r"]
-        d["ankle_r"] = curve([(10, start, "lin")] + RF_POS, f)
+        start = curve(RB_BALL, STOP) + foot_R(curve(RF_ROT, STOP), "r") @ R0["foot_r"].T @ BALL_OFF["r"]
+        d["ankle_r"] = curve([(STOP, start, "lin")] + RF_POS, f)
     return d
 
 
@@ -169,12 +169,12 @@ def numbers(f, side):
         # The idle stance is staggered (left foot 12.5 cm forward, right 20 cm back), so the mirrored stop cannot end on it with the
         # same steps. As in GASP's own Rfoot stop: the back (left) foot steps up beside and ahead, and after the stop the planted right
         # foot steps back under the body.
-        if f > 10:
-            back10 = mirrored(action(10))["ankle_l"]
-            d["ankle_l"] = curve([(10, back10, "lin"), (14, [14.0, -10.0, 17.0], "io"), (20, IDLE_ANKLE["l"], "io")], f)
+        if f > STOP:
+            back10 = mirrored(action(STOP))["ankle_l"]
+            d["ankle_l"] = curve([(STOP, back10, "lin"), (STOP + 5, [14.0, -10.0, 17.0], "io"), (STOP + 9, IDLE_ANKLE["l"], "io")], f)
             front = mirrored(action(STOP))["ankle_r"]
-            d["ankle_r"] = curve([(STOP, front, "lin"), (STOP + 6, front, "lin"), (STOP + 11, [-16.0, 8.0, 17.0], "io"),
-                                  (STOP + 17, IDLE_ANKLE["r"], "io")], f) if f >= STOP else mirrored(action(f))["ankle_r"]
+            d["ankle_r"] = curve([(STOP, front, "lin"), (STOP + 9, front, "lin"), (STOP + 13, [-16.0, 8.0, 17.0], "io"),
+                                  (STOP + 18, IDLE_ANKLE["r"], "io")], f) if f >= STOP else mirrored(action(f))["ankle_r"]
     return d
 
 

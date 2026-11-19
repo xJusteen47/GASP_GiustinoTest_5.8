@@ -185,6 +185,7 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 	TickFastCrouch(DeltaTime);
 	// Time since this skid began (the Skid state's re-entry guard, locomotion-finish-2): -1 when not skidding
 	SkidElapsed = IsSkidding() ? (SkidElapsed < 0.f ? 0.f : SkidElapsed + DeltaTime) : -1.f;
+	GroundSpeed = GetOwner() ? GetOwner()->GetVelocity().Size2D() : 0.f;
 }
 
 namespace GSTNRunPresentation
@@ -257,6 +258,12 @@ float UGSTN_RunPresentationComponent::GetAnimOwnerSkidElapsed(const UAnimInstanc
 {
 	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
 	return Run ? Run->SkidElapsed : -1.f;
+}
+
+float UGSTN_RunPresentationComponent::GetAnimOwnerGroundSpeed(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run ? Run->GroundSpeed : 0.f;
 }
 
 float UGSTN_RunPresentationComponent::GetAnimOwnerRunStartTime(const UAnimInstance* AnimInstance)
