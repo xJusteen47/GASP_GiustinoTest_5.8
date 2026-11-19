@@ -96,8 +96,12 @@ try:
     transition(enter, exit_, "IsAnimOwnerFastCrouchExiting", False, 0.03)
     transition(idle, exit_, "IsAnimOwnerFastCrouchExiting", False, 0.03)
     transition(exit_, enter, "IsAnimOwnerFastCrouchEntering", False, 0.03)
-    for s in (enter, idle, exit_):
+    for s in (enter, idle):
         transition(s, conduit, "IsAnimOwnerFastCrouching", True, 0.1)
+    # crouch-veloce-3: Exit -> Conduit -> "Idle Transition" found no chooser row standing still, so the Blend Stack played the
+    # root fallback (skid clip, pose_match 7.6 cm). The exit clip already ends on the standing idle: go straight to Idle Loop
+    # (it leaves for locomotion by its own transitions if the stick is held).
+    transition(exit_, g("FindState", machine, "Idle Loop"), "IsAnimOwnerFastCrouching", True, 0.1)
     note = ("Fast Crouch (owner 2026-11-18): standing ground crouch, our clips (Tools/GAS/crouch). Phase from C++ "
             "UGSTN_RunPresentationComponent::TickFastCrouch; gstn.FastCrouch.Mode 0 = GASP crouch, 1 = these states")
     unreal.BlueprintEditorLibrary.set_node_comment(alias, note)

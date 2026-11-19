@@ -169,12 +169,29 @@ def world_delta(ax, prt):
     return qmul(qaxis(ax["twist"], t), qmul(qaxis(ax["roll"], r), qaxis(ax["pitch"], p)))
 
 
+TIP_RELATIVE = False  # plan "tip_relative": true (v2+): pitch/roll say where the bone's TIP goes, also on hanging bones
+
+
+def tip_dir(sk, w, b):
+    """Direction from the bone to its farthest child (its tip), component space; None for leaves."""
+    kids = [c for c in sk.names if sk.parent.get(c) == b]
+    if not kids:
+        return None
+    c = max(kids, key=lambda k: vlen(vsub(w[k][1], w[b][1])))
+    return vn(vsub(w[c][1], w[b][1]))
+
+
 def apply_rot(sk, loc, ax, rot):
     loc = dict(loc)
+    w0 = fk(sk, loc)  # hanging is judged on the BASE pose: after a parent's rotation a calf can sit near horizontal and flip sign
     for b in sorted(rot, key=lambda x: sk.depth[x]):
         w = fk(sk, loc); p = sk.parent[b]
         pq = w[p][0] if p else (0, 0, 0, 1)
-        d = world_delta(ax, rot[b])
+        prt = tuple(rot[b])
+        tip = tip_dir(sk, w0, b) if TIP_RELATIVE else None
+        if tip is not None and vdot(tip, ax["up"]) < 0:
+            prt = (-prt[0], -prt[1], prt[2])  # hanging bone: v1 moved its tip backward for pitch + (axis up x fwd)
+        d = world_delta(ax, prt)
         q, t = loc[b]
         loc[b] = (qnorm(qmul(qinv(pq), qmul(d, qmul(pq, q)))), t)
     return loc
@@ -357,17 +374,29 @@ def write_clip(sk, folder, name, frames):
     ctrl.open_bracket(unreal.Text("fast crouch"), False)
     ctrl.set_frame_rate(unreal.FrameRate(FPS, 1), False)
     ctrl.set_number_of_frames(unreal.FrameNumber(len(frames) - 1), False)
+    model = None
+    try:
+        have = {str(n) for n in unreal.AnimationLibrary.get_animation_track_names(seq)}
+    except Exception:
+        have = set()
     for b in sk.names:
+        if b not in have:  # set_bone_track_keys does nothing on a missing track (round 1 wrote 0 bone tracks)
+            fn = "add_bone_track" if hasattr(ctrl, "add_bone_track") else "add_bone_curve"
+            getattr(ctrl, fn)(b, False)
         rots = [unreal.Quat(*fr[b][0]) for fr in frames]
         pos = [unreal.Vector(*fr[b][1]) for fr in frames]
         ctrl.set_bone_track_keys(b, pos, rots, [unreal.Vector(1, 1, 1)] * len(frames), False)
     ctrl.close_bracket(False)
+    try:
+        log(f"{name}: bone tracks = {len(unreal.AnimationLibrary.get_animation_track_names(seq))}")
+    except Exception as ex:
+        log(f"{name}: bone tracks unreadable ({ex})")
     unreal.EditorAssetLibrary.save_asset(path, only_if_is_dirty=False)
     return path
 
 
 def main():
-    plan_path = sys.argv[-1]
+    plan_path = os.environ.get("CROUCH_PLAN") or sys.argv[-1]  # env var: the project path has spaces
     plan = json.load(open(plan_path, encoding="utf-8"))
     aset = unreal.get_default_object(unreal.AnimationSettings)
     try:
@@ -379,6 +408,9 @@ def main():
     stand = read_pose(sk, unreal.load_asset(find_seq(plan["sources"][plan.get("axes_from", "stand")]["hints"])), 0)
     ax = axes(sk, stand)
     log("axes " + " ".join(f"{k}={tuple(round(v, 2) for v in ax[k])}" for k in ("fwd", "right", "up")))
+    global TIP_RELATIVE
+    TIP_RELATIVE = plan.get("tip_relative", False)
+    log(f"tip_relative={TIP_RELATIVE}")
     poses, feet = build_poses(sk, plan, ax)
     only = plan.get("only")
     made = []
