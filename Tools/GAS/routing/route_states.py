@@ -22,7 +22,7 @@ DA_PATH = "/Game/GSTN/Animation/Locomotion/DA_AnimSet_Locomotion_Default"
 LIB_CLASS = "/Script/GSTNCombatNP.GSTN_LocomotionStateLibrary"
 ENTRY_FN = "SetBlendStackFromStateName"
 CROUCH_IDLE = "/Game/GSTN/Animation/Crouch/AS_GSTN_Crouch_Idle.AS_GSTN_Crouch_Idle"
-OUR_STATES = ["Skid", "Run Stop", "Run Stop Blend", "Crouch Enter", "Crouch Idle", "Crouch Exit", "Run Start", "Skid Exit Run"]
+OUR_STATES = ["Skid", "Run Stop", "Run Stop Blend", "Crouch Enter", "Crouch Idle", "Crouch Exit", "Run Start", "Skid Exit Run", "Dash"]
 
 log = []
 def p(*a): log.append(" ".join(str(x) for x in a))
@@ -73,6 +73,9 @@ def rows_spec(da):
         "Crouch Exit": (soft_path(cr, "exit_clip"), 0.0, 0.03, False),
         # run-start-frantic-2: imported by Tools/GAS/run_start/run_start_states.py (not in the anim set yet)
         "Run Start": ("/Game/GSTN/Animation/RunStart/AS_GSTN_RunStart_Frantic.AS_GSTN_RunStart_Frantic", 0.0, 0.05, False),
+        # L3 boost dash (dash-ganon r1): imported by Tools/GAS/dash/dash_states.py (not in the anim set yet); 0.03 s blend = near-hard
+        # cut, the load must read from the first frames
+        "Dash": ("/Game/GSTN/Animation/Dash/AS_GSTN_Dash_Ganon.AS_GSTN_Dash_Ganon", 0.0, 0.03, False),
         # locomotion-finish-3: skid -> run loop at the matched foot phase (Tools/GAS/skid_exit_run.py writes routing/skid_exit_run.json)
         **_skid_exit_run(),
     }
