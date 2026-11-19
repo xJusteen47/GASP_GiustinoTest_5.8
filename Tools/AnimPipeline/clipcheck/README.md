@@ -45,3 +45,26 @@ is wrong, not the clip: tune the constant, write why in the commit.
 Top: side-view sticks (blue = left) with ground ticks fixed in the world every 25 cm (a planted foot stays on its tick),
 plant markers, red titles on pop frames. Then: ball height vs flat-foot (plants shaded), planted-ball ground speed,
 body angular acceleration with pop frames in red.
+
+## Intended slides (owner 2026-11-19, scope: every clip)
+Some moves slide a foot on purpose (skid brake, run stop slide). Mark it ON THE CLIP, not in the game setup: add the float
+curve `GSTN_FootSlide` (both feet) or `GSTN_FootSlide_l` / `GSTN_FootSlide_r` (one foot), value 1 over the slide frames, 0
+elsewhere (Animation Sequence editor, Curves, Add Curve; a montage inherits it from its clip). Effects:
+- clip_check: a drift or skate inside the window is WARN "(slide_ok)", not FAIL (the old per-row `slide_ok` still works).
+- fixers: `floor_clamp` only lifts feet vertically, so a slide keeps its travel; `splice` touches only the first/last 0.1 s.
+- game: the foot lock's pop guard (GSTN_AnimNode_BlendOutFootLock, property SlideCurve) never fires on a marked foot.
+Pending: the Unreal Assistant's answer on GASP's own foot-lock curves (docs/notes/abp-architecture.md); if GASP already has
+an unlock curve, the marker becomes that curve and this name an alias.
+
+## Generic fixes (fix_clips_ue.py, rows with "fix")
+| Fix | What it does |
+|---|---|
+| filters | removes the pops the check fails (deflick, ease_snaps) |
+| splice | first/last `seconds` (0.1) of every bone track eased to the neighbour clip's pose (`"splice": {"start": {"asset", "frame"}, "end": ...}`); root and ik bones untouched |
+| floor_clamp | ball/heel below flat-foot height: the foot is lifted straight up by leg IK, foot keeps its world rotation |
+| ik_feet | ik_foot_l/r re-baked from the feet (always last) |
+Agents save through `Tools/CI/Save-Assets.ps1 -Script Tools\AnimPipeline\clipcheck\fix_clips_ue.py [-Only rows] [-Steps fixes]`.
+
+## Return to idle (owner 2026-11-19, scope: every move that hands to an idle)
+FAIL when both balls are > 2 cm up on the same frame in the last 0.5 s of a clip whose `end_ref` is an idle (or
+`"returns_idle": true`). In game the blend-out foot lock steps one foot at a time (SecondStepStart >= 1).

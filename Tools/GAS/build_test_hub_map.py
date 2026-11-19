@@ -46,6 +46,7 @@ ZONES = {
     'Z4': ('Z4  SPIN / DRILL\nanello 4 bersagli - piattaforma 3 m\nruota lo stick', (0.0, 4650.0)),
     'Z5': ('Z5  TRAVERSAL\nwall slide (piatto, spigolo 90)\ngradini - salti - rampe', (-2150.0, 1000.0)),
     'Z6': ('Z6  ANIMAZIONI\nslomo 0.25 per guardarle', (0.0, -2150.0)),
+    'Z7': ('Z7  PENDENZE\nsalita e discesa 8 15 25 35 gradi\ncorsa skid stop atterraggi', (-3200.0, -4000.0)),
 }
 PARK = {
     'Z0': [(0.0, -450.0), (0.0, -150.0), (0.0, 150.0), (0.0, 450.0)],
@@ -56,6 +57,7 @@ PARK = {
     'Z4': [(0.0, 5600.0), (0.0, 6000.0), (200.0, 6200.0), (-200.0, 6200.0)],          # slot 0 in the middle of the ring, 1..3 ring spots
     'Z5': [(-3400.0, -1400.0), (-3400.0, -200.0), (-3300.0, 600.0), (-3300.0, 1300.0)],
     'Z6': [(-300.0, -3000.0), (300.0, -3000.0), (0.0, -3300.0), (600.0, -3300.0)],
+    'Z7': [(-3300.0, -4600.0), (-3300.0, -5200.0), (-3300.0, -5800.0), (-3300.0, -6400.0)],   # foot of each slope lane
 }
 ANIMS = [
     ('Jab v12', ['/Game/AnimPipeline/Rig/AS_JabV12_Build', '/Game/AnimPipeline/Pilot/AS_Pilot_JabV12']),
@@ -401,6 +403,36 @@ def lights():
     _spawn(unreal.ExponentialHeightFog, (0.0, 0.0, -200.0), label='Fog')
 
 
+# Z7 slopes (owner 2026-11-19: test uphill and downhill: foot placement and IK, floor clamp, skid, run start/stop, landings on
+# inclines). Four lanes, 4 m wide, each a hill rising toward -X from x = SLOPE_X0: a 12 m ramp up, a 6 m plateau, a 12 m ramp down.
+SLOPE_X0, SLOPE_RUN, SLOPE_TOP = -3500.0, 1200.0, 600.0
+SLOPE_LANES = ((8.0, -4600.0), (15.0, -5200.0), (25.0, -5800.0), (35.0, -6400.0))   # (degrees, lane y)
+
+
+def z7_slopes():
+    floor('Z7_Floor', -7500.0, -2000.0, -6800.0, -3700.0)   # touches Z6 at x -2000: walkable from the plaza
+    for angle, y in SLOPE_LANES:
+        a = math.radians(angle)
+        length = SLOPE_RUN / math.cos(a)
+        h = SLOPE_RUN * math.tan(a)
+        off = 10.0 / math.cos(a)   # slabs are 20 cm thick: centre 10 cm under the walking surface, which starts at z 0
+        box(f'Z7_Up_{int(angle)}', (SLOPE_X0 - SLOPE_RUN / 2.0, y, h / 2.0 - off), (length, 400.0, 20.0), 'Blue', rot=(angle, 180.0, 0.0))
+        box(f'Z7_Top_{int(angle)}', (SLOPE_X0 - SLOPE_RUN - SLOPE_TOP / 2.0, y, h / 2.0), (SLOPE_TOP, 400.0, h), 'DarkBlue')
+        box(f'Z7_Down_{int(angle)}', (SLOPE_X0 - 1.5 * SLOPE_RUN - SLOPE_TOP, y, h / 2.0 - off), (length, 400.0, 20.0), 'Blue',
+            rot=(angle, 0.0, 0.0))
+        sign(f'Z7_Text_{int(angle)}', f'{int(angle)} gradi', (SLOPE_X0 + 150.0, y), face_to=(0.0, y), size=30.0, height=80.0)
+    sign('Z7_Sign', ZONES['Z7'][0], ZONES['Z7'][1], face_to=(0.0, 0.0))
+
+
+def z7_only():
+    """Adds (or rebuilds) only the slope zone in the open L_Test_Hub: removes the Z7_ actors first, leaves the rest alone"""
+    sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    for a in sub.get_all_level_actors():
+        if a.actor_has_tag(TAG) and a.get_actor_label().startswith('Z7_'):
+            sub.destroy_actor(a)
+    z7_slopes()
+
+
 def run():
     """Fills the open level (never saves it). Refuses a level that already has a path other than L_Test_Hub: an untitled level or the hub only"""
     _report.clear()
@@ -410,7 +442,7 @@ def run():
     if not (path.startswith('/Temp/') or path in ('/Game/NewWorld', MAP_PATH)):
         raise RuntimeError(f'the open level is {path}: open an empty level (File > New Level > Empty Level) or {MAP_PATH}')
     log(f'cleared {clear()} hub actors in {path}')
-    for step in (z0_plaza, z1_hits, z2_duel, z3_piggyback, z4_spin, z5_traversal, z6_animations, kit_pads_and_dummies, lights):
+    for step in (z0_plaza, z1_hits, z2_duel, z3_piggyback, z4_spin, z5_traversal, z6_animations, z7_slopes, kit_pads_and_dummies, lights):
         try:
             step()
         except Exception as e:   # one broken zone must not hide the others

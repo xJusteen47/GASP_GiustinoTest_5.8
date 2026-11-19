@@ -2,7 +2,7 @@
 Save-Assets.ps1 - the ONLY route an agent uses to save versioned assets headless in GASP_Giustino2_ue59.
 The owner allows exactly this file in his Claude Code permissions (rule 2026-11-19, decision 3A of anim-setup-3).
 
-  & .\Tools\CI\Save-Assets.ps1 -Script Tools\AnimPipeline\clipcheck\fix_clips_ue.py [-Only "RowA,RowB"] [-Tag name]
+  & .\Tools\CI\Save-Assets.ps1 -Script Tools\AnimPipeline\clipcheck\fix_clips_ue.py [-Only "RowA,RowB"] [-Steps "splice,ik_feet"] [-Tag name]
 
 Guards (each one refuses with exit 2, nothing runs):
   - runs only from the GASP_Giustino2_ue59 checkout;
@@ -17,6 +17,7 @@ Log: Saved\Logs\ci\save_<tag>.log. Prints at most 5 lines.
 param(
     [Parameter(Mandatory = $true)][string]$Script,
     [string]$Only = '',
+    [string]$Steps = '',
     [string]$Tag = 'assets'
 )
 $ErrorActionPreference = 'Stop'
@@ -43,6 +44,7 @@ if ($open) { Refuse "un editor di questo checkout e' aperto (pid $($open[0].Proc
 $env:CLIPFIX_WRITE = '1'
 $env:GSTN_SAVE = '1'
 $env:CLIPFIX_ONLY = $Only
+$env:CLIPFIX_STEPS = $Steps
 $engine = if ($env:UE_ENGINE_DIR) { $env:UE_ENGINE_DIR } else { 'C:\Program Files\Epic Games\UE_5.9\Engine' }
 $exe = Join-Path $engine 'Binaries\Win64\UnrealEditor-Cmd.exe'
 $log = Join-Path $root "Saved\Logs\ci\save_$Tag.log"
