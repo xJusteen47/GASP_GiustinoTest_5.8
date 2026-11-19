@@ -416,8 +416,10 @@ def land_ring():
 def _lines(system, name, side):
     """astro_2: one side of the body, thin very bright white-cyan lines 50-80 cm out, 60-150 cm high, sliding backwards (-Y)"""
     e = _sprites(system, name, "Fountain")
-    e.set("EmitterUpdate", "SpawnRate", "SpawnRate", 8.0)
-    e.particle((0.22, 0.28), None, non_uniform=(3.0, 110.0)).sized()
+    # r9 real-speed check: from the game camera (behind the runner) 8/s lines of 3 x 110 cm read as 2-4 short flecks changing place every
+    # frame, none on the light floor. Twice the rate, longer life (lines overlap from frame to frame) and 6 x 170 cm
+    e.set("EmitterUpdate", "SpawnRate", "SpawnRate", 16.0)
+    e.particle((0.30, 0.38), None, non_uniform=(6.0, 170.0)).sized()
     e.set("ParticleSpawn", "ShapeLocation", "Shape Primitive", "Box / Plane")
     e.set("ParticleSpawn", "ShapeLocation", "Box Size", (30, 60, 90))
     e.shape_offset((65 * side, -20, 105))

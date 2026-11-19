@@ -23,3 +23,9 @@ only). Reviews: `r8/REVIEW.md` Fable high **FAIL, very close (11/12)**; `r9/REVI
 r8/light (with -Pre v3+systems), light2, light3 (sprint after the backdrop fix), dark (0.15, discarded), dark2 (stopped), dark3, dark4;
 r9/light (ground_bounce, -Pre v3). Packs merged in Saved/VfxV3/r8pack, r9pack.
 Cost: ~45 min editor (8 runs), 2 Fable reviews (~135k + small); ~9 $ estimated.
+## Real-speed check (coordinator: project rule, game camera at real speed)
+- r9 `r9/REALSPEED.md` (8 sheets of consecutive 60 fps game frames): FAIL on sprint only (no readable line on light, flecks on dark); hits,
+  bounce, landing pass (no popping, flicker, soot, cream). Notes: star lives 1 frame, streaks frozen over the legs 8-9 frames, bounce cloud
+  first readable 5 frames after contact, a ring at v153-v154 before the logged landing v155.
+- Fix: speed lines 16/s per side, life 0.30-0.38 s, 6 x 170 cm. r10 sprint recaptured (Saved/VfxV3/r10, both ESITO OK): `r10/REVIEW.md` PASS.
+- Owner video: `r10/vfx_v3_light_dark.webp` (game camera, light | dark, 60 fps, built by `Tools/GASNPPTest/vfx_side_by_side.py`).
