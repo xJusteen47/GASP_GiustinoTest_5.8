@@ -272,6 +272,15 @@ struct GSTNCOMBATNP_API FGSTN_RunStopSettings
 	/** Blend mode: how long the state stays on (its transition's cross-fade does the interpolation) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop", meta = (ClampMin = "0.0", ForceUnits = "s"))
 	float BlendSeconds = 0.35f;
+
+	/** Hold the feet where the stop clip leaves them while the main graph blends to the idle, then step each foot to the idle's spot
+	 *  (IGSTN_PoseDriverSource -> blend-out foot lock). Works for any stop clip and any idle: no clip has to end on the idle's stance */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop|Hand-off")
+	bool bHoldFeetThroughHandOff = true;
+
+	/** Length of the main graph's blend from the stop clip to the idle (the chooser row's blend; ~0.75 s measured, locomotion-finish-4) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stop|Hand-off", meta = (ClampMin = "0.0", ForceUnits = "s", EditCondition = "bHoldFeetThroughHandOff"))
+	float HandOffSeconds = 0.75f;
 };
 
 /** A stop clip's root speed over time (60 Hz), measured once when the clip loads. Pure: the tests build it from numbers */

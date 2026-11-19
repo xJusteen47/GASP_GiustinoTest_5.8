@@ -525,6 +525,13 @@ const FGSTN_RunStopSettings& UGSTN_RunPresentationComponent::GetRunStopSettings(
 	return Profile ? Profile->RunStop : DefaultRunStopSettings;
 }
 
+bool UGSTN_RunPresentationComponent::IsDrivingPose(float& OutHandOffSeconds) const
+{
+	const FGSTN_RunStopSettings& Settings = GetRunStopSettings();
+	OutHandOffSeconds = Settings.HandOffSeconds;
+	return Settings.bHoldFeetThroughHandOff && RunStop.IsClip();
+}
+
 bool UGSTN_RunPresentationComponent::IsLeftFootSwinging() const
 {
 	TArray<USkeletalMeshComponent*> Meshes;

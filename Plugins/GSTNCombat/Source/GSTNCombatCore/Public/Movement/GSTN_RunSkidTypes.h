@@ -16,6 +16,22 @@ enum class EGSTN_SkidLedge : uint8
 	SlideOff
 };
 
+/**
+ * Which way the body turns in the skid's exit when the new direction is (nearly) straight behind it (anim-setup-1). An exact reverse has no
+ * shorter side, so without a rule the side came from float noise and the body turned against the skid clip half the time. Set it to the side
+ * the kit's skid clip turns; turns clearly off the reverse still take the shorter way.
+ */
+UENUM(BlueprintType)
+enum class EGSTN_SkidTurnSide : uint8
+{
+	/** Always the shorter way (the old behaviour: a straight reverse picks a side at random) */
+	Shortest,
+	/** Positive yaw seen from above: forward turns toward the right hand (UE +Y) */
+	Right,
+	/** Negative yaw: forward turns toward the left hand */
+	Left
+};
+
 /** The phase of a run skid, written by the simulation, read by the presentation (anim layer, foot slide VFX) */
 UENUM(BlueprintType)
 enum class EGSTN_RunSkidPhase : uint8
@@ -75,6 +91,14 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 	/** Speed along the new direction at the end of the Exit phase; the walking mode takes over from it (0 = from rest) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid", meta = (ClampMin = "0", ForceUnits = "cm/s"))
 	float ExitSpeed = 250.f;
+
+	/** Side of the exit turn for a near-reverse; must match the skid clip's turn (SS_180_Turn_Root180 turns +180 yaw = Right) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Turn")
+	EGSTN_SkidTurnSide TurnSide = EGSTN_SkidTurnSide::Right;
+
+	/** A new direction within this many degrees of straight behind counts as a reverse and turns on TurnSide */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Turn", meta = (ClampMin = "0", ClampMax = "90", ForceUnits = "Degrees"))
+	float ReverseConeDeg = 45.f;
 
 	/**
 	 * The Movement.State.Skid.JumpWindow tag is on from this skid frame (0 = the first) to JumpWindowEnd included, so a kit binding

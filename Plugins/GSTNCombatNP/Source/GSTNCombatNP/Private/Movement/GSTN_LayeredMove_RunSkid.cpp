@@ -2,6 +2,7 @@
 
 #include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "GameFramework/Actor.h"
+#include "HAL/IConsoleManager.h"
 #include "GSTN_CombatNPTags.h"
 #include "GSTN_SurfaceTypes.h"
 #include "Kits/GSTN_LocomotionProfile.h"
@@ -15,6 +16,9 @@
 
 namespace GSTNRunSkid
 {
+	// Test override of the kit's turn side (captures compare both sides); -1 = the kit's data. Same value on every machine or the sides diverge
+	TAutoConsoleVariable<int32> CVarTurnSide(TEXT("gstn.Skid.TurnSide"), -1, TEXT("Skid exit turn side for a near-reverse: -1 kit data, 0 shortest, 1 right (+yaw), 2 left"));
+
 	/** A safety net only: the move ends itself long before */
 	constexpr float MaxLifeMs = 10000.f;
 
@@ -122,6 +126,29 @@ bool FGSTN_LayeredMove_RunSkid::Decide(const FMoverTickStartData& StartState, co
 	TurnDirection = StickDir.IsNearlyZero() ? -Direction : StickDir;
 	StartSpeed = static_cast<float>(FlatVelocity.Size());
 
+	// Turn side (anim-setup-1): a near-reverse turns on the kit's side (the skid clip's), anything else the shorter way. Latched here so
+	// every exit frame turns the same way: an exact 180 used to pick its side from float noise each frame
+	TurnSign = 0;
+	{
+		const FVector Facing = FVector::VectorPlaneProject(Sync->GetOrientation_WorldSpace().Vector(), Up).GetSafeNormal();
+		const double AngleDeg = Facing.IsNearlyZero() ? 0.0
+			: FMath::RadiansToDegrees(FMath::Atan2(Up.Dot(Facing.Cross(TurnDirection)), Facing.Dot(TurnDirection)));
+		int32 Side = static_cast<int32>(Tuning.TurnSide);
+		const int32 SideOverride = GSTNRunSkid::CVarTurnSide.GetValueOnAnyThread();
+		if (SideOverride >= 0 && SideOverride <= static_cast<int32>(EGSTN_SkidTurnSide::Left))
+		{
+			Side = SideOverride;
+		}
+		if (Side != static_cast<int32>(EGSTN_SkidTurnSide::Shortest) && FMath::Abs(AngleDeg) >= 180.0 - Tuning.ReverseConeDeg)
+		{
+			TurnSign = Side == static_cast<int32>(EGSTN_SkidTurnSide::Right) ? 1 : -1;
+		}
+		else if (FMath::Abs(AngleDeg) > 1.0)
+		{
+			TurnSign = AngleDeg > 0.0 ? 1 : -1;
+		}
+	}
+
 	// The floor's surface: its ledge rule wins over the kit's, its friction scales the brake (ice)
 	FGSTN_SurfaceView Floor;
 	const bool bHasFloor = FGSTN_GroundProbe::ResolveFloorSurface(StartState, Floor);
@@ -226,7 +253,17 @@ bool FGSTN_LayeredMove_RunSkid::GenerateMove(const FMoverTickStartData& StartSta
 			// Signed angle about Up from the facing to the new direction (UE: X cross Y = Z, a positive yaw turns X to Y)
 			const double Sin = Up.Dot(Facing.Cross(TurnDirection));
 			const double Cos = Facing.Dot(TurnDirection);
-			const double AngleDeg = FMath::RadiansToDegrees(FMath::Atan2(Sin, Cos));
+			double AngleDeg = FMath::RadiansToDegrees(FMath::Atan2(Sin, Cos));
+			// Keep the latched side: the remaining angle shrinks on that side; only the far side's wrap (past 90) is unwrapped, so a
+			// facing already on target never spins round
+			if (TurnSign > 0 && AngleDeg < -90.0)
+			{
+				AngleDeg += 360.0;
+			}
+			else if (TurnSign < 0 && AngleDeg > 90.0)
+			{
+				AngleDeg -= 360.0;
+			}
 			const int32 FramesLeft = FMath::Max(ExitLength - ExitFrame, 1);
 			Angular = Up * (AngleDeg / (FramesLeft * StepMs * 0.001));
 		}
@@ -272,6 +309,7 @@ void FGSTN_LayeredMove_RunSkid::NetSerialize(FArchive& Ar)
 	// Full precision: the speed of every frame is recomputed from these
 	Ar << Direction;
 	Ar << TurnDirection;
+	Ar << TurnSign;
 	Ar << StartSpeed;
 	Ar << Brake;
 	Ar << EnterFrames;

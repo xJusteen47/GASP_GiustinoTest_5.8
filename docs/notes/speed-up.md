@@ -27,3 +27,9 @@
 - One editor session for many captures: in-editor job server (queue folder, heartbeat, intercept QUIT_EDITOR via a proxy of the
   `unreal` module, unregister the job's tick callbacks) + client script with fallback to Run-Timed. Saves ~30 s per capture.
 - Laptop: same Run-Timed change applies as is.
+
+## 4. 1 vs 3 players (anim-setup-1, 2026-11-19 ~18:25 UTC)
+- p1_after really ran ONE player: result.txt 'set play_number_of_clients 1', 'PIE worlds: 1', and only UEDPIE_0 in run.log.ue.log. So 26 fps = 1 player.
+- p3_one_after (PIE_PERF_PLAYERS=3, one process, -unattended, 15 s): 'PIE worlds: 3', frames 104, avg/p50/p95 125.0 ms = the engine's delta clamp, i.e. <= 8 fps (real may be lower). Source: Saved/SpeedUp/p3_one_after/result.txt line 'frames'.
+- The probe sets the players per run (LevelEditorPlaySettings CDO, not saved); pie_capture scripts should do the same and force 1 player for single-character captures.
+- Not measured: 3 players multi-process without throttle (owner's foreground 15 fps).

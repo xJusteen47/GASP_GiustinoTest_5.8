@@ -232,7 +232,7 @@ def _console(cmd):
 
 def _ready():
     ws = g.worlds()
-    if len(ws) < 3 or _pawn() is None:
+    if len(ws) < int(os.environ.get('PIE_CAPTURE_CLIENTS', '2')) + 1 or _pawn() is None:
         return False
     comp = g.local_comp(ws[0])
     return bool(comp and json.loads(comp.get_state_snapshot()).get('inputReady'))
@@ -468,7 +468,8 @@ def _tick(_dt):
         if phase != 'ending' and now - st['start'] > TIMEOUT:
             return _finish(f'timeout in phase {phase}')
         if phase == 'boot' and now - st['t'] > 8:
-            _log(f'setup_editor: {g.setup_editor(True, "listen", 2)}')
+            # PIE_CAPTURE_CLIENTS (default 2 = 3 players): 0 for single-character captures (locomotion): 1 PIE world, ~3x faster (speed-up.md 4)
+            _log(f'setup_editor: {g.setup_editor(True, "listen", int(os.environ.get("PIE_CAPTURE_CLIENTS", "2")))}')
             les.editor_request_begin_play()
             st.update(phase='wait_ready', t=now)
         elif phase == 'wait_ready':

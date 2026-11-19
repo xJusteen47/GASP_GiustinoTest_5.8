@@ -74,7 +74,7 @@ void FGSTN_AnimNode_BlendOutFootLock::Update_AnyThread(const FAnimationUpdateCon
 	bRequest = bEnabled && Instance && Instance->bFootLockRequest;
 	bInstantRelease = !bEnabled || !Instance || Instance->bFootLockInstantRelease;
 	bMoving = Instance && Instance->bFootLockMoving;
-	MontageWeight = Instance ? Instance->FootLockMontageWeight : 0.f;
+	MontageWeight = Instance ? FMath::Max(Instance->FootLockMontageWeight, Instance->FootLockHandOffWeight) : 0.f;
 }
 
 void FGSTN_AnimNode_BlendOutFootLock::FreeAll()

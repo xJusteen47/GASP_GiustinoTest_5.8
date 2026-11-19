@@ -3,6 +3,7 @@
 #include "GSTN_CharacterAnimInstance.h"
 
 #include "GSTN_OverrideLayerSource.h"
+#include "GSTN_PoseDriverSource.h"
 #include "GSTN_StanceTypes.h"
 #include "HAL/IConsoleManager.h"
 #include "Animation/AnimMontage.h"
@@ -94,6 +95,33 @@ void UGSTN_CharacterAnimInstance::UpdateFootLockRequest(float DeltaSeconds)
 	}
 	FootLockMontageWeight = MaxWeight;
 	bMontageDrivingPose = bMontageDriving;
+
+	// A gameplay clip in the main graph (IGSTN_PoseDriverSource) arms the same window as a montage; after it lets go the hand-off weight
+	// fades over its blend so the feet are held until the next pose has fully blended in, then step to it
+	bool bSourceDriving = false;
+	if (const AActor* Owner = GetOwningActor())
+	{
+		for (UActorComponent* Component : Owner->GetComponentsByInterface(UGSTN_PoseDriverSource::StaticClass()))
+		{
+			float HandOff = 0.f;
+			const IGSTN_PoseDriverSource* Source = Cast<IGSTN_PoseDriverSource>(Component);
+			if (Source && Source->IsDrivingPose(HandOff))
+			{
+				bSourceDriving = true;
+				PoseDriverHandOff = FMath::Max(HandOff, 0.f);
+			}
+		}
+	}
+	if (bSourceDriving)
+	{
+		FootLockHandOffWeight = 1.f;
+	}
+	else if (bPoseDriverActive || FootLockHandOffWeight > 0.f)
+	{
+		FootLockHandOffWeight = PoseDriverHandOff > KINDA_SMALL_NUMBER ? FMath::Max(FootLockHandOffWeight - DeltaSeconds / PoseDriverHandOff, 0.f) : 0.f;
+	}
+	bPoseDriverActive = bSourceDriving;
+	bMontageDriving |= bSourceDriving;
 
 	// Capsule speed from the actor's own motion (no movement component knowledge: this module depends on no Mover)
 	float Speed = 0.f;

@@ -58,6 +58,11 @@ public:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "Animation|Foot Lock")
 	float FootLockMontageWeight = 0.f;
 
+	/** 1 -> 0 over the hand-off after a pose driver (IGSTN_PoseDriverSource: Run Stop, Skid...) lets go; the node treats it like a montage
+	 *  weight, so the feet step only once the next pose is fully blended in */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "Animation|Foot Lock")
+	float FootLockHandOffWeight = 0.f;
+
 	/** Debug: phases the node evaluated last, left * 10 + right (0 free, 1 locked, 2 stepping, 3 releasing) */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "Animation|Foot Lock")
 	int32 FootLockDebugPhase = 0;
@@ -145,6 +150,8 @@ private:
 
 	bool bFootLockWindowOpen = false;
 	float FootLockWindowTime = 0.f;
+	bool bPoseDriverActive = false;   // an IGSTN_PoseDriverSource drove the pose last frame
+	float PoseDriverHandOff = 0.f;    // its hand-off seconds (the fade of FootLockHandOffWeight)
 	FVector FootLockLastActorLocation = FVector::ZeroVector;
 	bool bFootLockHasLastLocation = false;
 };

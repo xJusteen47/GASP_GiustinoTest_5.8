@@ -61,6 +61,10 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_RunSkid : public FLayeredMoveBase
 	FVector TurnDirection = FVector::ZeroVector;
 
 	/** Ground speed of the first frame, cm/s */
+	/** Side of the exit turn, latched on the first frame: +1 positive yaw, -1 negative, 0 the shorter way (EGSTN_SkidTurnSide) */
+	UPROPERTY()
+	int8 TurnSign = 0;
+
 	UPROPERTY()
 	float StartSpeed = 0.f;
 

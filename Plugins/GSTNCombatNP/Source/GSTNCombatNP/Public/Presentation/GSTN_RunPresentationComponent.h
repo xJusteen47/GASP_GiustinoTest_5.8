@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "GSTN_AdditiveReactionSource.h"
+#include "GSTN_PoseDriverSource.h"
 #include "Movement/GSTN_RunSkidTypes.h"
 #include "Presentation/GSTN_LocomotionLean.h"
 #include "GSTN_RunPresentationComponent.generated.h"
@@ -74,7 +75,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGSTN_OnFootSlideChanged, bool, bSl
  * No Blueprint wiring: UGSTN_CombatSimComponent creates this component at BeginPlay.
  */
 UCLASS(ClassGroup = (Combat), meta = (BlueprintSpawnableComponent))
-class GSTNCOMBATNP_API UGSTN_RunPresentationComponent : public UActorComponent, public IGSTN_AdditiveReactionSource
+class GSTNCOMBATNP_API UGSTN_RunPresentationComponent : public UActorComponent, public IGSTN_AdditiveReactionSource, public IGSTN_PoseDriverSource
 {
 	GENERATED_BODY()
 
@@ -99,6 +100,9 @@ public:
 	bool bPlaceholderSkidLean = true;
 
 	virtual void GetAdditiveReaction(FGSTN_AdditiveReactionRequest& Out) const override;
+
+	/** IGSTN_PoseDriverSource: the run stop clip owns the pose (RunStop.IsClip); the feet are held through its hand-off to the idle */
+	virtual bool IsDrivingPose(float& OutHandOffSeconds) const override;
 
 	/** The locomotion lean of the presented frame: horizontal world vector, length = degrees (debug, cosmetics) */
 	UFUNCTION(BlueprintPure, Category = "Combat|Run")
