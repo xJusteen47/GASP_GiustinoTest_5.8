@@ -398,6 +398,15 @@ def _row(frame, tapped, extra=None):
         _fl_row(mesh, row['body'])
     except Exception as e:
         row['body_err'] = repr(e)[:80]
+    try:   # LANDING-SYNC (2026-11-19): the ABP state of each machine and its time in it, to line the pose up with the sim's touchdown
+        anim = _pawn().get_component_by_class(unreal.SkeletalMeshComponent).get_anim_instance()
+        row['abp'] = {}
+        for _m in ('State Controller', 'Locomotion'):
+            _i = anim.get_state_machine_index(_m)
+            if _i is not None and _i >= 0:
+                row['abp'][_m] = [str(anim.get_current_state_name(_i)), round(anim.get_instance_current_state_elapsed_time(_i), 3)]
+    except Exception as e:
+        row['abp_err'] = repr(e)[:80]
     if st.get('minions_spawned'):   # PUSHBOX-P5: the host world's minion puppets [x, y, z] (hidden pooled ones left out)
         try:
             cls = getattr(unreal, 'GSTN_MinionPuppet', None)
