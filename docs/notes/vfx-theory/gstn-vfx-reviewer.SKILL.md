@@ -15,6 +15,7 @@ dichiarata nel brief, per esempio colpo S/M/L).
   `vfx-stile-v3-categorie.md` (la v3 vince sulle righe in conflitto, vedi `principi-vfx.md` §15).
 - `vfx-theory/principi-vfx.md`: solo la sezione del principio che stai per citare.
 - I riferimenti dell'owner: `handoffs/ref-astrobot-vfx/NOTE.md` (+ clip DK Bananza su `claude/ref-astrobot-vfx`).
+- `docs/notes/review/critico-estetico.md` (il critico, §3b).
 - La cartella della review `docs/notes/reviews/<effetto>-r<N>/`: video, griglie, l'ultimo `review.md` se c'è.
 Mai thread o chat vecchi.
 
@@ -36,6 +37,19 @@ Se l'owner dice che il video non torna, ricontrolla la catena prima dell'effetto
 4. **Fermo a metà vita** e **fermo in scala di grigi** del frame di contatto (se il video lo permette).
 5. **Confronto** con un riferimento della stessa classe (Astro Bot / DK Bananza per stile, Smash per timing e peso del
    colpo). Immagini di altri giochi solo sul desktop, mai nel repo.
+
+## 3b. Il critico (owner 2026-11-19; principio in `docs/notes/review/critico-estetico.md`)
+Ogni review ha accanto un critico: un agente Fable high separato, che riesce solo se trova cosa non è ottimale. Non
+lo fai tu e non gli mostri le tue risposte.
+- **Gli dai:** le stesse griglie e video (nessuna cattura nuova), i riferimenti (clip DK Bananza / Astro Bot, note
+  dell'owner), le regole dell'owner nel loro ambito, la domanda "starebbe in DK Bananza?". Non il tuo verdetto, non
+  le note di chi ha fatto l'effetto, non le review precedenti.
+- **Ti restituisce** almeno i 3 difetti più pesanti, `grave` / `medio` / `lieve`, ognuno con frame e vista, cosa si
+  vede, riferimento o principio tradito, etichetta (§5) e correzione più piccola; se ne trova meno di tre dice dove ha
+  cercato. Il peso si giudica a velocità reale: `grave` = l'owner lo vede al primo sguardo.
+- **Rispondi a ogni voce:** accolta (entra negli scarti, ordinata con i tuoi) o respinta con il frame che la smentisce.
+  Il gusto senza riferimento o principio si respinge. Le voci respinte restano in `review.md`.
+- Una passata per giro, non conta come giro.
 
 ## 4. Le domande (12, sì/no, ognuna con frame e vista; v2 dopo la peer review Gemini)
 Tutte si giudicano guardando il video. Tra parentesi la sezione di `principi-vfx.md`.
@@ -72,7 +86,7 @@ Tutte si giudicano guardando il video. Tra parentesi la sezione di `principi-vfx
 Etichetta ogni NO: **forma / timing / colore-valore / materiale / gerarchia / perf / gioco**.
 - `gioco` = evento al frame sbagliato, hitstop che non rallenta i VFX, effetto che non parte, camera: va alla coda del
   codice, non conta come giro (regola 10), scrivi cosa deve controllare il thread di codice.
-- Tieni i **tre** scarti più gravi, il più grave per primo. Per ognuno: frame e vista, principio (sezione di
+- Tieni i **tre** scarti più gravi, dopo aver risposto al critico (§3b), il più grave per primo. Per ognuno: frame e vista, principio (sezione di
   `principi-vfx.md`), cosa si vede, **la correzione più piccola** (prima timing/curva, poi taglia/colore, poi forma,
   per ultimo uno strato nuovo).
 - Cambiare la forma base, la palette di un kit o il voto d'importanza è **design**: decide l'owner.
@@ -84,12 +98,15 @@ Catena di cattura: valida | non valida (perché). Limiti.
 Impressione a velocità reale: <una riga>.
 | domanda | sì/no | frame e vista | cosa si vede |   (solo i NO e le domande chiave)
 Confronto: <riferimento, classe>, cosa torna e cosa no.
+Critico: <ogni voce, peso, accolta | respinta (frame)>.
 Scarti (max 3): frame, vista, etichetta, principio, correzione più piccola.
 Lato gioco: <difetti `gioco`>.
 Decisioni dell'owner: <solo se servono>.
 ```
-PASS solo se tutte le 12 domande sono sì e nessun controllo strumentale eseguito è NO. Max 3 giri, poi decide l'owner con i difetti scritti chiari.
+PASS solo se tutte le 12 domande sono sì, nessun controllo strumentale eseguito è NO e nessuna voce `grave` accolta del
+critico resta aperta. Max 3 giri, poi decide l'owner con i difetti scritti chiari.
 
 ## 7. All'owner
-Italiano, breve: verdetto, al massimo tre scarti, l'unica decisione che serve. Allega il video finale e una griglia.
+Italiano, breve: verdetto, al massimo tre scarti, l'unica decisione che serve. Se PASS, una riga con le voci
+`medio`/`lieve` del critico rimaste aperte. Allega il video finale e una griglia.
 Handover di max 30 righe con il costo.

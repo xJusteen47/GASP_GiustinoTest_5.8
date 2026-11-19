@@ -15,6 +15,7 @@ Model: Fable, high effort (reviews are the one place the project uses it). One m
 - The brief of the thread, then `Tools/AnimPipeline/contract/`: `README.md`, `rubric.md`, `instruction.md`, `glossary.md`.
 - The card (`Tools/AnimPipeline/cards/<kit>/...json`): `_design`, `poses`, `anim_active`, `approved`. `rules.md` and
   `kits/<kit>.md` in `.claude/skills/animpipe-move/`.
+- `docs/notes/review/critico-estetico.md` (the critic, §3b) and the GASP curve check the brief names (§3.7).
 - The cycle folder `docs/notes/reviews/<move>-c<N>/`: `ciclo.md` if it exists, the last `esito.json`.
 - Theory (`docs/notes/anim-theory/`): only the section of the principle you are about to cite.
 Never old threads, chats, logs or earlier reviews unless the brief names them.
@@ -44,10 +45,32 @@ Work from the mp4 files in `inizio/` or `fine/`: variant and base, the version t
    what the principle predicts here, what the frames show, where they differ and why.
 6. **References.** Two of the same class, numbers from `rubric.md` or `Tools/AnimPipeline/reflib/`. Side by side only on
    the desktop grid that is never committed. From behind there is no Smash reference: say so and judge by silhouette.
-7. **Sort every no** into pose defect or `gioco` (Anim BP, montage, blend: a crouch or jump when the montage ends, a
-   repeated `a` value, a slide of the capsule). Any `gioco` gap suspends the pose cycle: write what a code thread must
-   check, and do not write instructions for it.
-8. Keep the **three largest** pose gaps, gravest first.
+7. **GASP curves.** GASP features read animation curves from clips and montages (foot IK lock or disable, warping,
+   distance matching, `RootMotionTranslationScale` on our montages, and others). A missing or wrong curve shows up as a
+   game-looking defect: feet that slide or pop, IK that snaps, warping that fights the pose during the move. Take the
+   list of curves the ABP really reads from the project's GASP curve check (the brief names it; never assume names
+   from memory) and compare it with the curves of the clip and montage (editor MCP dump or the import log). Also check
+   that a re-bake kept the curves the base had. Missing, wrong or dropped curve: label `dati montage`. No list available:
+   write "curve GASP non verificate" as a limit, not a no.
+8. **Sort every no** into `posa`, `dati montage` (curves, notifies, blend times, play rate, root motion flags) or
+   `gioco` (Anim BP, state machine, blend logic: a crouch or jump when the montage ends, a repeated `a` value, a slide
+   of the capsule). Any `gioco` gap suspends the pose cycle: write what a code thread must check, and do not write
+   instructions for it.
+9. Keep the **three largest** pose gaps, gravest first, after answering the critic (§3b).
+
+## 3b. The critic (owner 2026-11-19; principle in `docs/notes/review/critico-estetico.md`)
+Every video review has a critic beside you: a separate Fable high agent whose job succeeds only when it finds what is
+not optimal. You do not play it yourself and you do not show it your answers.
+- **Brief it with:** the grids you made (same ones, no new capture), the references, the identity traits of the move
+  (rule 13a), the owner rules in scope, the north star "Ganondorf inside Astro Bot" and the Smash/AAA bar. Not your
+  verdict, not the executor's notes, not earlier reviews.
+- **It returns** at least the 3 heaviest flaws, ranked `grave` / `medio` / `lieve`, each with frame and view, what is
+  seen, the reference or principle it betrays, label (`posa` / `dati montage` / `gioco`) and the smallest fix. If it
+  finds fewer than three it says where it looked. Weight is judged at real speed: `grave` = the owner would see it at
+  first glance, or it breaks an identity trait or the north star.
+- **You answer every item:** accepted (it joins your gaps, ranked with them) or rejected with the frame that shows
+  otherwise. Taste without a reference or principle is rejected. Rejected items stay in `review.md`.
+- Once per round, it does not count as a pose round. Your next instruction starts from the gravest accepted item.
 
 ## 4. One instruction
 Write `passo-NN/istruzione.json` exactly as in `instruction.md`: header plus the eight fields. Then stop and wait.
@@ -77,11 +100,14 @@ Six instructions, or nothing left above the bar: ask for the final in-game captu
 Catena di cattura: valida | non valida (perché). Limiti.
 | domanda | sì/no | frame e vista | cosa si vede |
 Confronto: <due riferimenti, classe>, cosa torna e cosa no.
-Scarti (max 3): frame, vista, principio, correzione.
+Critico: <ogni voce, peso, accolta | respinta (frame)>.
+Curve GASP: presenti | mancanti (quali) | non verificate.
+Scarti (max 3): frame, vista, etichetta, principio, correzione.
 Lato gioco: <difetti `gioco`, per il thread di codice>.
 Decisioni dell'owner: <solo se servono>.
 ```
-PASS only if all answers are yes and the move does not look out of place next to the references. After the second cycle
+PASS only if all answers are yes, no accepted `grave` critic item is still open, and the move does not look out of
+place next to the references. After the second cycle
 a FAIL goes to the owner anyway, with the remaining gaps written plainly.
 
 ## 7. Other entry points
@@ -91,5 +117,6 @@ a FAIL goes to the owner anyway, with the remaining gaps written plainly.
   coordinator; do not ask for a build.
 
 ## 8. Talking to the owner
-Italian, short: verdict first, then at most three gaps, then the one decision he must take. Attach the final video and
+Italian, short: verdict first, then at most three gaps, then the one decision he must take. On a PASS add one line
+with the critic's `medio`/`lieve` items left open, so he knows what was chosen not to fix. Attach the final video and
 one grid. Images of other games never leave the desktop. End the thread with a handover of at most 30 lines with the cost.
