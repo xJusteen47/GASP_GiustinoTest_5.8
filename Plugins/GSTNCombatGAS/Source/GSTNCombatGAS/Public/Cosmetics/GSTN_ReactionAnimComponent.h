@@ -11,6 +11,7 @@
 
 class UAbilitySystemComponent;
 class UAnimInstance;
+class UBlendProfile;
 class UAnimMontage;
 class UAnimSequenceBase;
 class USkeletalMeshComponent;
@@ -126,8 +127,11 @@ private:
 	/** Starts the stage (0 = Animation, 1 = ThenAnimation) of the rule; false when it has no animation there */
 	bool PlayStage(UAnimInstance& Anim, const FGSTN_ReactionAnimRule& Rule, int32 Stage, float BlendSeconds);
 
-	/** Stops the montage this component plays, holding its last shown pose through the blend */
-	void StopActive(UAnimInstance* Anim, float BlendSeconds);
+	/** Stops the montage this component plays, holding its last shown pose through the blend; Profile spreads the blend per bone */
+	void StopActive(UAnimInstance* Anim, float BlendSeconds, UBlendProfile* Profile = nullptr);
+
+	/** The rule's loaded blend out profile, when it has one and the blend goes back to the character's own pose */
+	UBlendProfile* ResolveBlendOutProfile(int32 RuleIndex) const;
 
 	/** A montage not started by this component is playing and not blending out */
 	bool IsOtherMontagePlaying(const UAnimInstance& Anim) const;
@@ -150,6 +154,10 @@ private:
 	/** Keeps the rules' animations in memory while the set is applied */
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<UAnimSequenceBase>> LoadedAnimations;
+
+	/** The rules' blend out profiles, by rule index (null where a rule has none) */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UBlendProfile>> LoadedBlendOutProfiles;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UAnimMontage> ActiveMontage;
