@@ -40,3 +40,5 @@ MCP project Instructions: "GASP_Giustino2. Prefer GSTNAnimToolsets for AnimBP an
 
 ## 4. For the editor thread
 Run `Tools/UE59/ue59_editor_checks.py` once in the open editor (MCP execute_python with the file content, or `py "<path>"` in the Output Log). Read-only, about a minute (loads ~20 rigs). Output: `Saved/UE59/ue59_editor_checks.txt`. Copy it to `docs/notes/ue59-editor-checks.txt` on this branch.
+
+Then run `Tools/UE59/ue59_ask_assistant.py` in the same open editor (owner: the Editor AI assistant is free, use it to confirm fit). It asks the 6 open questions (UAF notify, Control Rig replacements, frame-rate cap, toolset restriction, Pose Search roles, Python BP/StateTree editing) and writes `Saved/UE59/assistant_replies.txt` (ends with `== DONE ==`). Copy it to `docs/notes/ue59-assistant-replies.txt`; where a reply contradicts §1-2, the reply wins after a check.
