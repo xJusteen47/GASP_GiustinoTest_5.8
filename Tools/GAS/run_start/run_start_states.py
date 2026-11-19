@@ -76,6 +76,9 @@ def transition(frm, to, r, xf):
 try:
     seq = import_clip()
     length = seq.get_play_length()
+    # the hand-off flag waits for a contact_l/r rising edge: without the curves it falls back to RunStart.HandOffMaxAfterStamp
+    curves = [str(n) for n in unreal.AnimationLibrary.get_animation_curve_names(seq, unreal.RawCurveTrackTypes.RCT_FLOAT)]
+    p("clip curves", sorted(curves))
     abp = unreal.load_asset("/Game/GSTN/Animation/Locomotion/ABP_GSTN_Locomotion")
     machine = detail = None
     for info in g("FindStateMachines", abp, ""):
