@@ -3,12 +3,16 @@ machine, never through motion matching). Builds, next to Skid:
   - alias "-> Run Stop" (Locomotion Loop/Transition, Idle Loop/Transition) with two transitions:
       -> "Run Stop"       IsAnimOwnerRunStopping()      0.06 s (sharp entry, brief section 2)
       -> "Run Stop Blend" IsAnimOwnerRunStopBlending()  0.30 s (the plain interpolation into idle the owner asked to compare)
-  - "Run Stop": Blend Poses by bool (IsAnimOwnerRunStopLeftFoot) between two Sequence Evaluators (GASP M_Neutral_Run_Stop_F_Lfoot /
-    _Rfoot), explicit time = GetAnimOwnerRunStopClipTime() (speed-matched brake, then settle; C++ UGSTN_RunPresentationComponent)
+  - "Run Stop": Blend Poses by bool (IsAnimOwnerRunStopLeftFoot) between two Sequence Evaluators (env RUNSTOP_CLIP_L / RUNSTOP_CLIP_R,
+    default the pose-based stop AS_RunStop_Ganon_L_V1 / _R_V1 of run-stop-2; they MUST be the clips in DA_AnimSet_Locomotion_Default.RunStop,
+    whose root tracks time the brake), explicit time = GetAnimOwnerRunStopClipTime() (speed-matched brake, then settle; C++ UGSTN_RunPresentationComponent)
   - "Run Stop Blend": the profile's idle clip
   - out of both: -> Conduit when the function turns false, 0.2 s; comment boxes for the owner.
 Clean rebuild on every run (removes its own nodes first). Headless: run from a path without spaces. Report -> Saved/Logs/ci/run_stop_states.txt"""
+import os
 import unreal
+CLIP_L = os.environ.get("RUNSTOP_CLIP_L", "AS_RunStop_Ganon_L_V1")
+CLIP_R = os.environ.get("RUNSTOP_CLIP_R", "AS_RunStop_Ganon_R_V1")
 OUT = unreal.Paths.project_saved_dir() + "Logs/ci/run_stop_states.txt"
 log = []
 def p(*a): log.append(" ".join(str(x) for x in a))
@@ -76,8 +80,8 @@ try:
     # Run Stop: two evaluators, one per planted foot, the same clip time
     sg = inner_graph(stop)
     result = b("FindNodes", sg, "", None, False)[0]
-    ev_l = node_of_type(sg, "M_Neutral_Run_Stop_F_Lfoot", ["Valuta", "M_Neutral_Run_Stop_F_Lfoot"], (-700, -120))
-    ev_r = node_of_type(sg, "M_Neutral_Run_Stop_F_Rfoot", ["Valuta", "M_Neutral_Run_Stop_F_Rfoot"], (-700, 120))
+    ev_l = node_of_type(sg, CLIP_L, ["Valuta", CLIP_L], (-700, -120))
+    ev_r = node_of_type(sg, CLIP_R, ["Valuta", CLIP_R], (-700, 120))
     for ev in (ev_l, ev_r):
         p("evaluator", ev.get_class().get_name())
     bl = g("AddAnimNode", sg, unreal.load_class(None, "/Script/AnimGraph.AnimGraphNode_BlendListByBool"), unreal.IntPoint(-350, 0))
@@ -99,7 +103,7 @@ try:
         if "BlendTime" in k:
             b("SetPinValue", v, "0.0")
     b("AddCommentBox", sg, "Run Stop: the foot swinging at release plants in front (left = true). Clip time from C++: brake timed on the sim's "
-      "speed, then the settle (FGSTN_RunStopSettings in DA_AnimSet_Locomotion_Default)", [ev_l, ev_r, bl, f_time, f_left], None, 40)
+      "speed, then the settle (FGSTN_RunStopSettings in DA_AnimSet_Locomotion_Default: its ClipLeftFoot/RightFoot must be these two clips)", [ev_l, ev_r, bl, f_time, f_left], None, 40)
 
     # Run Stop Blend: the idle pose, the transition's cross-fade is the interpolation
     p("blend anim", g("SetStateAnimation", blend, unreal.load_asset(ANIM + "Idle/M_Neutral_Stand_Idle_Loop")))

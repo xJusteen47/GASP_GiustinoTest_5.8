@@ -322,6 +322,12 @@ void UGSTN_RunPresentationComponent::TickLean(float DeltaTime)
 			StateScale *= Settings.AttackScale;
 		}
 	}
+	// The run stop clip carries its own weight (torso still leaning FORWARD over the planted foot, brief section 2 trait 2). The braking
+	// would make the solver lean the body BACK by up to MaxAngleDeg and cancel it (run-stop-2 capture), so the lean springs out instead
+	if (RunStop.IsClip())
+	{
+		StateScale = 0.f;
+	}
 	LeanSolver.Step(Settings, Mover->GetVelocity(), GetOwner()->GetActorForwardVector(), DeltaTime, StateScale);
 }
 
