@@ -453,7 +453,9 @@ def hit_spark():
         # r5 Fable: the strong star stayed near full size v35-v44 and hid both torsos: the hitstop slows the whole system to 0.15 after 2
         # free frames (owner 2A), so a 5-frame life became ~12 frames. 2.5 frames of life: 100 % on frame 1, ~15 % by frame 4, gone by
         # frame 6; the streaks and sparks carry the rest of the hitstop
-        star.burst(1).particle((0.042, 0.042), (240, 240), rotation=True).sized().sphere(0.01, offset=(10, 0, 0)).radial(0.0)
+        # locomotion-finish-2 (owner 2A): the hit is now energy (cue HitstopTime Energy, full speed in the hitstop), so the star gets its own
+        # real life back: 0.083 s = 5 frames at 60 (hd1 open item 2). The debris (matter, slowed) moved to NS_GSTN_HitDebris
+        star.burst(1).particle((0.083, 0.083), (240, 240), rotation=True).sized().sphere(0.01, offset=(10, 0, 0)).radial(0.0)
         star.toward_camera(90.0).material("FlashStar")
         streaks = _sprites(s, "Streaks")
         streaks.burst(8).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.Count")
@@ -465,6 +467,15 @@ def hit_spark():
         sparks.burst(10).particle((0.22, 0.32), (12, 18), rotation=True).sized()
         sparks.sphere(8, offset=(5, 0, 0)).cone((1, 0, 0.3), 170, 1300).drag(6.0).gravity(-900.0)
         sparks.toward_camera(90.0).material("FlashSpark")
+    return s
+
+
+def hit_debris():
+    """The matter half of a hit (cue MatterNiagara of the Hit row, slowed by the hitstop; owner 2A): the strong hit's debris, as it was
+    in NS_GSTN_HitSpark"""
+    s = _system("NS_GSTN_HitDebris")
+    if s:
+        _ground_plane(s)
         debris = Emitter(s, "OmnidirectionalBurst", "Debris").settings(True)
         debris.off("ParticleUpdate", "ScaleColor")
         debris.burst(3).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.StrongCount")
@@ -550,7 +561,7 @@ def swatch():
     return f"swatch: {len(swatch_cells())} cells, {len(ERRORS)} errors: {' | '.join(ERRORS)[:600]}"
 
 
-SYSTEMS = [run_start_dust, skid_dust, jump_puff, land_ring, speed_lines, hit_spark, impact, tumble_trail]
+SYSTEMS = [run_start_dust, skid_dust, jump_puff, land_ring, speed_lines, hit_spark, hit_debris, impact, tumble_trail]
 
 
 def run():

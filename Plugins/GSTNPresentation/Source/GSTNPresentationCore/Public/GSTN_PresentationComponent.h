@@ -204,6 +204,8 @@ private:
 		TWeakObjectPtr<UNiagaraComponent> System;
 		/** World time (s) of the spawn */
 		double SpawnTime = 0.0;
+		/** Energy keeps full speed in a hitstop (FGSTN_PresentationCue::HitstopTime) */
+		bool bEnergy = false;
 	};
 	TArray<FOneShot> OneShots;
 

@@ -87,6 +87,16 @@ enum class EGSTN_PresentationShakeScope : uint8
 	World
 };
 
+/** How an effect's time runs while its owner is in hitstop (Combat.State.Hitstop) */
+UENUM(BlueprintType)
+enum class EGSTN_PresentationHitstopTime : uint8
+{
+	/** Dust, debris, smoke: slowed to the component's HitstopVfxTimeScale (after its free frames) */
+	Matter,
+	/** Flash, star, streaks, sparks: full speed, so the flash reads as a flash */
+	Energy
+};
+
 /** What one event plays, as a row of a presentation table. Every effect is optional; an empty row only fires the Blueprint events */
 USTRUCT(BlueprintType)
 struct GSTNPRESENTATIONCORE_API FGSTN_PresentationCue
@@ -108,6 +118,24 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationCue
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
 	TObjectPtr<UNiagaraSystem> Niagara;
+
+	/** How Niagara runs while its owner is in hitstop (owner decision 2A): matter slows down, energy keeps full speed */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	EGSTN_PresentationHitstopTime HitstopTime = EGSTN_PresentationHitstopTime::Matter;
+
+	/**
+	 * The matter half of an effect that has both (a hit: star and streaks are energy, the debris is matter): spawned with Niagara, at the
+	 * same point and with the same parameters, always on the hitstop time scale. None = Niagara alone
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	TObjectPtr<UNiagaraSystem> MatterNiagara;
+
+	/**
+	 * World spawn only: the event's point is moved down to the floor under it (one trace, 400 cm) before Offset. For a body hitting the
+	 * floor (ground bounce), whose event sits at the body, not at the contact
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")
+	bool bSnapToFloor = false;
 
 	/** None = spawned in the world at the event; else attached to this socket or bone of the owner's mesh */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cue|Niagara")

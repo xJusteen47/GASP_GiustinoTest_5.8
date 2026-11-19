@@ -29,7 +29,7 @@ def _tags(names):
 
 
 def _cue(event, system, min_mag=0.0, scale=None, socket="", offset=(0, 0, 0), orient=False, scale_size=True, stop_on=(), max_duration=0.0,
-         strong=0.0, accent=None, grounded="", count=0, strong_count=0, toward_camera=0.0, min_speed=0.0):
+         strong=0.0, accent=None, grounded="", count=0, strong_count=0, toward_camera=0.0, min_speed=0.0, energy=False, matter="", snap=False):
     cue = unreal.GSTN_PresentationCue()
     cue.set_editor_property("event_tag", _tag(event))
     cue.set_editor_property("min_magnitude", float(min_mag))
@@ -39,6 +39,10 @@ def _cue(event, system, min_mag=0.0, scale=None, socket="", offset=(0, 0, 0), or
         s.set_editor_property("output_range", unreal.Vector2D(*scale[1]))
         cue.set_editor_property("scale", s)
     cue.set_editor_property("niagara", unreal.load_asset(f"{ROOT}/{system}"))
+    # owner 2A (locomotion-finish-2): energy keeps full speed in a hitstop, matter (and the matter half of a hit) slows
+    cue.set_editor_property("hitstop_time", unreal.GSTN_PresentationHitstopTime.ENERGY if energy else unreal.GSTN_PresentationHitstopTime.MATTER)
+    cue.set_editor_property("matter_niagara", unreal.load_asset(f"{ROOT}/{matter}") if matter else None)
+    cue.set_editor_property("snap_to_floor", bool(snap))
     cue.set_editor_property("attach_socket", socket)
     cue.set_editor_property("offset", unreal.Vector(*offset))
     cue.set_editor_property("orient_to_direction", orient)
@@ -62,6 +66,10 @@ def rows():
         _cue("RunStart", "NS_GSTN_RunStartDust", offset=feet, orient=True),
         _cue("Skid.Enter", "NS_GSTN_SkidDust", socket="root", scale_size=False,
              stop_on=("Skid.Exit", "Jump", "Hit", "Splat", "Knockdown", "Tumble.Start"), max_duration=1.5),
+        # Run stop (locomotion-finish-2): the planted front foot slides while the run brakes (clip frames 0-31, ~0.5 s): the skid's dust,
+        # shorter, from the release; never on a walk-speed stop
+        _cue("StopRelease", "NS_GSTN_SkidDust", min_mag=300, socket="root", scale_size=False,
+             stop_on=("RunStart", "Skid", "Jump", "Hit", "Splat", "Knockdown", "Tumble.Start"), max_duration=0.5),
         # No Jump.Ground row (owner playtest 2026-11-17: dust only on run start and skid; v3 has no rings, so the jump shows nothing).
         # NS_GSTN_JumpPuff stays built for a kit that wants it.
         _cue("Land", "NS_GSTN_LandRing", min_mag=300, scale=((600, 2500), (0.7, 1.5)), offset=feet),  # a plain jump lands at ~1300 cm/s
@@ -73,9 +81,9 @@ def rows():
         # of the 8 shards that spawn (4 / 6 / 8) and the sprite size scale. Measured 2026-11-17 (KIT_Test_Hits jab): 31 frames at 0 % (0.56),
         # 40 at 90 % (0.74), 67 at 170 % (1.1). From 1.0 the hit is strong: 3 accent stars in the kit's second colour (a kit row overrides it)
         _cue("Hit", "NS_GSTN_HitSpark", scale=((28, 58), (0.5, 1.1)), orient=True, strong=1.0, accent=ACCENT,
-             count=12, strong_count=7, toward_camera=45.0),  # hd1 DK review: M 6 -> 9 streaks, 7 big chunks on a strong hit  # v2: never hidden behind the back (owner playtest)
+             count=12, strong_count=7, toward_camera=45.0, energy=True, matter="NS_GSTN_HitDebris"),  # hd1 DK review: M 6 -> 9 streaks, 7 big chunks on a strong hit  # v2: never hidden behind the back (owner playtest)
         _cue("WallBounce", "NS_GSTN_Impact", scale=((200, 1500), (0.7, 1.3)), orient=True, toward_camera=30.0),
-        _cue("GroundBounce", "NS_GSTN_Impact", scale=((200, 1500), (0.7, 1.3)), offset=feet, orient=True),
+        _cue("GroundBounce", "NS_GSTN_Impact", scale=((200, 1500), (0.7, 1.3)), offset=(0, 0, 5), orient=True, snap=True),  # hd1 open 1: at the floor contact, not the torso
         _cue("Splat", "NS_GSTN_Impact", scale=((200, 1500), (0.8, 1.4)), orient=True, toward_camera=30.0),
         # The small default bump off a wall or ceiling (no magnitude): a small impact, not a bounce's (size to be judged in the polish M2 r3 review)
         # 0.65, not 0.4 (review r4): at 0.4 the balls were ~7 cm dots born 23 cm out, inside the torso, hidden by the trail

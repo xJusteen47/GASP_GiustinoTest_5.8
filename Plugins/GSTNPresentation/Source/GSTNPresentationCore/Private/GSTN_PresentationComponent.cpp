@@ -240,12 +240,34 @@ void UGSTN_PresentationComponent::PlayCue(const FGSTN_PresentationCue& Cue, cons
 	}
 	USkeletalMeshComponent* Mesh = Owner->FindComponentByClass<USkeletalMeshComponent>();
 
-	if (Cue.Niagara)
+	// Floor contact (bSnapToFloor): the event of a body hitting the floor sits at the body (a bounce: the torso), the effect belongs on the floor
+	if (Cue.bSnapToFloor)
 	{
+		const FGSTN_PresentationSnapshot& State = Deriver.GetPrevious();
+		const FVector Up = State.bValid && !State.Up.IsNearlyZero() ? State.Up.GetSafeNormal() : FVector::UpVector;
+		FHitResult Hit;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTN_PresentationFloorSnap), false, Owner);
+		if (World->LineTraceSingleByObjectType(Hit, Event.Location + Up * 20.0, Event.Location - Up * 400.0,
+			FCollisionObjectQueryParams(ECC_WorldStatic), Params))
+		{
+			Event.Location = Hit.ImpactPoint;
+		}
+	}
+
+	// Two parts (owner decision 2A, 2026-11-19): energy (flash, star, streaks) keeps full speed during a hitstop, matter (dust, debris,
+	// smoke) slows to HitstopVfxTimeScale. The main system is energy only when HitstopTime says so; MatterNiagara is always matter
+	for (int32 Part = 0; Part < 2; ++Part)
+	{
+		UNiagaraSystem* Asset = Part == 0 ? Cue.Niagara.Get() : Cue.MatterNiagara.Get();
+		if (!Asset)
+		{
+			continue;
+		}
+		const bool bEnergy = Part == 0 && Cue.HitstopTime == EGSTN_PresentationHitstopTime::Energy;
 		UNiagaraComponent* System = nullptr;
 		if (!Cue.AttachSocket.IsNone() && Mesh)
 		{
-			System = UNiagaraFunctionLibrary::SpawnSystemAttached(Cue.Niagara, Mesh, Cue.AttachSocket, Cue.Offset, FRotator::ZeroRotator,
+			System = UNiagaraFunctionLibrary::SpawnSystemAttached(Asset, Mesh, Cue.AttachSocket, Cue.Offset, FRotator::ZeroRotator,
 				EAttachLocation::KeepRelativeOffset, true);
 		}
 		else
@@ -265,7 +287,7 @@ void UGSTN_PresentationComponent::PlayCue(const FGSTN_PresentationCue& Cue, cons
 					Location += ToCamera.GetSafeNormal() * FMath::Min<double>(Cue.TowardCamera, ToCamera.Size() * 0.5);
 				}
 			}
-			System = UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, Cue.Niagara, Location, Rotation,
+			System = UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, Asset, Location, Rotation,
 				FVector(Cue.bScaleSize ? Intensity : 1.f), !bPooled, true, bPooled ? ENCPoolMethod::AutoRelease : ENCPoolMethod::None);
 		}
 		if (System)
@@ -308,7 +330,7 @@ void UGSTN_PresentationComponent::PlayCue(const FGSTN_PresentationCue& Cue, cons
 			SetGroundPlane(System, Event);
 			if (!Cue.IsSustained())
 			{
-				OneShots.Add({System, World->GetTimeSeconds()});
+				OneShots.Add({System, World->GetTimeSeconds(), bEnergy});
 				UpdateTickEnabled();
 			}
 			if (Cue.IsSustained())
@@ -431,7 +453,7 @@ void UGSTN_PresentationComponent::UpdateHitstopTime(double Now)
 			Shot.System.Reset();
 			continue;
 		}
-		const bool bSlow = bHitstop && Now - Shot.SpawnTime >= FreeTime;
+		const bool bSlow = !Shot.bEnergy && bHitstop && Now - Shot.SpawnTime >= FreeTime;
 		System->SetCustomTimeDilation(bSlow ? FMath::Clamp(HitstopVfxTimeScale, 0.f, 1.f) : 1.f);
 	}
 	OneShots.RemoveAll([](const FOneShot& Shot) { return !Shot.System.IsValid(); });
