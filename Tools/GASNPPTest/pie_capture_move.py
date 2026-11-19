@@ -375,6 +375,12 @@ def _fl_row(mesh, body):
 def _row(frame, tapped, extra=None):
     view = g._view(0, h._key(0)) or {}
     row = {'f': frame, 'tap': tapped, 'combat': view.get('combat'), 'tags': view.get('tags'), 'loc': view.get('location'), 'montage': _montage()}
+    try:   # skid "two poses for the same input": actor and mesh yaw (world), logged every frame
+        _pw = _pawn()
+        _mesh = _pw.get_component_by_class(unreal.SkeletalMeshComponent)
+        row['yaw'] = [round(_pw.get_actor_rotation().yaw, 2), round(_mesh.get_world_rotation().yaw, 2) if _mesh else None]
+    except Exception as e:  # noqa: BLE001
+        row['yaw_err'] = repr(e)[:80]
     row.update(extra or {})
     if st.get('dummy_key') is not None:   # PUSHBOX-P2: the dummy's state and place (knockdown tag, the push between the two)
         try:
