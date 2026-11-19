@@ -238,6 +238,8 @@ bool FGSTN_PipelineHealthWeightTest::RunTest(const FString& Parameters)
 	// the weight scale is 0.8 and K = 600 x 100 / (100 x 0.8) = 750, a push back. The hit's own 10 damage would make it 60 %
 	// (0.76, K = 789): it does not count until the next hit
 	const TStrongObjectPtr<UGSTN_CombatRules> Rules(UGSTN_CombatRules::CreateStandard(GetTransientPackage()));
+	// These numbers isolate the health weight curve: the uncapped percent growth of the standard model is tested in Reaction.WeightDrivenPercentGrowth
+	Cast<UGSTN_KnockbackModel_WeightDriven>(Rules->KnockbackModel)->PercentGrowth = 0.f;
 	FGSTN_HitResolutionContext Context = MakeContext(100.f);
 	Context.Victim.ReactionState = FGSTN_VictimReactionState::Make(50.0, 1.0, 0, FGSTN_StaggerThreshold());
 	FGSTN_HitPipelineRunner::Run(*Rules, Context);
@@ -266,6 +268,8 @@ bool FGSTN_PipelineTwoEntriesTest::RunTest(const FString& Parameters)
 	// Two hits of 40 damage drain from one inbox in order. The first sees a full weight (K = 600 exactly); the victim then
 	// stands at 40 %, weight scale 0.84, and the second hit's K is 600 / 0.84 = 714.3
 	const TStrongObjectPtr<UGSTN_CombatRules> Rules(UGSTN_CombatRules::CreateStandard(GetTransientPackage()));
+	// These numbers isolate the health weight curve: the uncapped percent growth of the standard model is tested in Reaction.WeightDrivenPercentGrowth
+	Cast<UGSTN_KnockbackModel_WeightDriven>(Rules->KnockbackModel)->PercentGrowth = 0.f;
 	FGSTN_HitVictimView Victim;
 	Victim.Weight = 100.f;
 

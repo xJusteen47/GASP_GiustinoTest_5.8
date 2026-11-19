@@ -17,10 +17,21 @@ class UScriptStruct;
  * reads its own fragment: a stun that keeps a hold stalled, a value that ends it). Both are content or state the component owns for the
  * tick; null in a test that lends nothing, which a hook must accept
  */
+/** Mover's ground fact the combat tick lends the timeline clock: the state at the end of the previous frame (the clock runs before Mover) */
+enum class EGSTN_TrackHookGround : uint8
+{
+	/** No Mover component (a test, an entity without movement): rules that need the ground do nothing */
+	Unknown,
+	OnGround,
+	Airborne
+};
+
 struct FGSTN_TrackHookEnvironment
 {
 	const FGSTN_ButtonMap* Buttons = nullptr;
 	const FGSTN_SyncFragmentArray* Fragments = nullptr;
+	/** Read by the Hold Until Landed rule of the clock (FGSTN_HoldUntilLanded) and lent to the hooks */
+	EGSTN_TrackHookGround Ground = EGSTN_TrackHookGround::Unknown;
 };
 
 /** What the combat clock hands a track hook for one track of the running timeline */
@@ -53,6 +64,9 @@ struct FGSTN_TrackHookContext
 
 	/** The entity's sync fragments as the frame is writing them (the victim step of the frame ran already); null when the caller lends none. Read only */
 	const FGSTN_SyncFragmentArray* Fragments = nullptr;
+
+	/** Mover's ground at the end of the previous frame; Unknown when the caller lends none */
+	EGSTN_TrackHookGround Ground = EGSTN_TrackHookGround::Unknown;
 
 	FGSTN_TrackHookContext(const FGSTN_TimelineTrack& InTrack, const FGSTN_InputSimState& InInput)
 		: Track(InTrack), Input(InInput)

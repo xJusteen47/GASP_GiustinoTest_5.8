@@ -74,7 +74,7 @@ void UGSTN_HitPresentationComponent::PauseMesh(USkeletalMeshComponent* Mesh)
 	if (State.Holders++ == 0)
 	{
 		State.OldRate = Mesh->GlobalAnimRateScale;
-		Mesh->GlobalAnimRateScale = 0.f;
+		Mesh->GlobalAnimRateScale = FMath::Clamp(HitstopAnimRate, 0.f, 1.f) * State.OldRate;
 	}
 }
 
@@ -215,6 +215,10 @@ void UGSTN_HitPresentationComponent::StartEffect(const FGSTN_HitPresentationKey&
 				Context->HitLocation = FVector_NetQuantize10(View.HitLocation);
 				Context->TimelineIndex = View.Timeline;
 				Context->HitboxIndex = View.HitboxIndex;
+				if (View.bHasKnockback)
+				{
+					Context->Reaction = View.Knockback.Reaction;
+				}
 			}
 			CueManager->HandleGameplayCue(Victim ? Victim : Attacker, View.CueTag, EGameplayCueEvent::Executed, Params);
 			Dedup.NoteLocal(Effect.HitId, Frame);
@@ -256,6 +260,18 @@ void UGSTN_HitPresentationComponent::StartEffect(const FGSTN_HitPresentationKey&
 		Effect.ReactionVelocity = View.Knockback.LaunchVelocity;
 		Effect.ReactionStart = Now + View.Knockback.HitstopFrames * StepMs * 0.001;
 	}
+
+	// The Blueprint hook (CP4), last: everything the hit shows already runs. A copy, since a handler must not see the effect list change under it
+	Effect.Event.Victim = Victim;
+	Effect.Event.Location = View.HitLocation;
+	Effect.Event.CueTag = View.CueTag;
+	Effect.Event.AttackerHitstopFrames = View.AttackerHitstopFrames;
+	Effect.Event.VictimHitstopFrames = View.bHasKnockback ? View.Knockback.HitstopFrames : 0;
+	Effect.Event.Reaction = View.bHasKnockback ? View.Knockback.Reaction : EGSTN_HitReaction::StaggerInPlace;
+	Effect.Event.LaunchVelocity = View.bHasKnockback ? View.Knockback.LaunchVelocity : FVector::ZeroVector;
+	Effect.Event.bRicochet = View.bRicochet;
+	const FGSTN_PredictedHitEvent Event = Effect.Event;
+	OnHitPredicted.Broadcast(Event);
 }
 
 void UGSTN_HitPresentationComponent::EndEffect(FEffect& Effect)
@@ -285,10 +301,12 @@ void UGSTN_HitPresentationComponent::EndEffect(FEffect& Effect)
 
 void UGSTN_HitPresentationComponent::CancelEffect(const FGSTN_HitPresentationKey& Key)
 {
+	TArray<FGSTN_PredictedHitEvent, TInlineAllocator<2>> Cancelled;
 	for (int32 Index = Effects.Num() - 1; Index >= 0; --Index)
 	{
 		if (Effects[Index].Key == Key)
 		{
+			Cancelled.Add(Effects[Index].Event);
 			// The prediction did not stand: the real cue, if one comes, is the only one
 			Dedup.Forget(Effects[Index].HitId);
 			EndEffect(Effects[Index]);
@@ -297,6 +315,10 @@ void UGSTN_HitPresentationComponent::CancelEffect(const FGSTN_HitPresentationKey
 		}
 	}
 	UpdateTickEnabled();
+	for (const FGSTN_PredictedHitEvent& Event : Cancelled)
+	{
+		OnHitPredictionCancelled.Broadcast(Event);
+	}
 }
 
 void UGSTN_HitPresentationComponent::UpdateTickEnabled()

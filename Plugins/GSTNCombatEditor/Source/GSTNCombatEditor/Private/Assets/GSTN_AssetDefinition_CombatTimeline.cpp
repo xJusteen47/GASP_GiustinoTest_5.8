@@ -34,9 +34,8 @@ EAssetCommandResult UGSTN_AssetDefinition_CombatTimeline::OpenAssets(const FAsse
 {
 	for (UGSTN_CombatTimeline* Timeline : OpenArgs.LoadObjects<UGSTN_CombatTimeline>())
 	{
-		// A timeline that already has an editor is brought to the front by InitEditor and no second one opens
-		const TSharedRef<FGSTN_TimelineEditorToolkit> Toolkit = MakeShared<FGSTN_TimelineEditorToolkit>();
-		Toolkit->InitEditor(OpenArgs.GetToolkitMode(), OpenArgs.ToolkitHost, FGSTN_TimelineEditContext::ForAsset(Timeline));
+		// A timeline that already has an editor is brought to the front and no second toolkit is built
+		FGSTN_TimelineEditorToolkit::OpenFor(OpenArgs.GetToolkitMode(), OpenArgs.ToolkitHost, FGSTN_TimelineEditContext::ForAsset(Timeline));
 	}
 	return EAssetCommandResult::Handled;
 }

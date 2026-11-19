@@ -7,6 +7,7 @@
 #include "GameplayTagContainer.h"
 #include "GSTN_TumbleLanding.generated.h"
 
+class AActor;
 class UAbilitySystemComponent;
 struct FGSTN_CombatTickContext;
 struct FGSTN_DefenceEntityData;
@@ -72,7 +73,25 @@ struct GSTNDEFENCENP_API FGSTN_TumbleLanding
 	/** The extension's OnTumbleContactResolved: the landing */
 	static void OnContactResolved(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data, const FGSTN_TumbleContactSyncState& Contact, EGSTN_ImpactOutcome Outcome);
 
-	/** AfterClocks: the pending start of the frame, the tech presses of a tumble, the get-up roll from the stick */
+	/**
+	 * The downed state of a landing: KnockdownEndFrame (MaxDownedFrames from LandingFrame, or the missed-tech knockdown when bMissedTech), the mini
+	 * bounce from the stick, the kit's ground bounce ability (pending, started at AfterClocks of this frame) and Combat.Event.KnockedDown. The caller
+	 * ends the reaction or the move first
+	 */
+	static void EnterDowned(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data, int32 LandingFrame, bool bMissedTech);
+
+	/** The running move (not its ricochet recoil) has a Tags window with Combat.Move.KnockdownOnLanding open at this frame */
+	static bool IsSelfKnockdownWindowOpen(const FGSTN_CombatTickContext& Context);
+
+	/**
+	 * A move's own user landing inside its Combat.Move.KnockdownOnLanding window (owner, 2026-11-13: the dropkick, like a j.HK that downs its user
+	 * when it is not recovered before the ground). An airborne frame inside the window arms (GSTNDefenceHitFlags::SelfKnockdownArmed); the next
+	 * grounded frame inside it cancels the move and calls EnterDowned. Leaving the window disarms. Grounded at the end of the previous frame, as
+	 * every reader of the frame sees it. True when it downed the entity this frame
+	 */
+	static bool SelfKnockdown(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data);
+
+	/** AfterClocks: the self knockdown of a move, the pending start of the frame, the tech presses of a tumble, the get-up roll from the stick */
 	static void AfterClocks(FGSTN_CombatTickContext& Context, const FGSTN_DefenceEntityData& Data);
 
 	/** AfterExecute: a get-up command that started this frame ends the downed state */
@@ -83,6 +102,9 @@ struct GSTNDEFENCENP_API FGSTN_TumbleLanding
 
 	/** Combat.State.Knockdown while the entity is downed at the frame, else none */
 	static FGameplayTag AdmitsOnly(const FGSTN_CombatTickContext& Context);
+
+	/** The facing of Owner at the end of the previous frame (Mover sim state through the tracker); forward without a Mover */
+	static FVector ReadFacing(const AActor* Owner);
 
 	/** Whether the entity's avatar has a Mover to queue a layered move on (the move effects need one) */
 	static bool CanQueueMoves(const UAbilitySystemComponent* AbilitySystem);

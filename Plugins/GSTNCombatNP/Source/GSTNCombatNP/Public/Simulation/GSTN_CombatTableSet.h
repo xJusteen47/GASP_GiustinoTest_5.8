@@ -151,8 +151,20 @@ public:
 	/** Registers the timeline classes of Table.Bindings (binding order, each once) and the per-binding facts. Revision 0 uses it; a converted set fills the same arrays itself */
 	void DeriveFromBindings(const UGSTN_InputSettings& InputSettings, const UGSTN_CombatSettings& CombatSettings);
 
-	/** Appends the adoptable timelines after the bound ones, with no tier and no default window (combat-m3 6.3) */
+	/**
+	 * Appends the adoptable timelines after the bound ones, with no tier and no default window (combat-m3 6.3), then the follow-up timelines
+	 * (AppendFollowUps): every set is built through here, so the registry holds them on every machine
+	 */
 	void AppendAdoptable(TConstArrayView<TSubclassOf<UGSTN_GA_BaseCombat>> Adoptable);
+
+	/**
+	 * Registers the FollowUpTimeline of every registered timeline that is not in the registry yet (no tier, no default window), the follow-ups' own
+	 * follow-ups included: the combat model starts them by registry index when a move ends by itself. Deterministic: registry order
+	 */
+	void AppendFollowUps();
+
+	/** The registry index of the follow-up of entry Index (its timeline's FollowUpTimeline), INDEX_NONE when it has none or it is not registered */
+	int32 FindFollowUpEntry(int32 Index) const;
 
 	/**
 	 * Registers one timeline class and loads its content. Returns its registry index; with bShareExisting an entry of the same class

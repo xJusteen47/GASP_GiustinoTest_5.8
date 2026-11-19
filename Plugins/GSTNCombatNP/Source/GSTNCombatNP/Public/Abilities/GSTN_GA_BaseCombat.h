@@ -4,6 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "Abilities/GSTN_GA_Base.h"
+#include "Abilities/GSTN_MoveActions.h"
+#include "Abilities/GSTN_MoveEvents.h"
+#include "Presentation/GSTN_MoveCosmetics.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "GSTN_GA_BaseCombat.generated.h"
 
@@ -34,6 +37,19 @@ class UGSTN_CombatTimeline;
  * the optional movement is a push back (the slide of the victim side, through the queued-move path). RecoilFrames are locked; the combatant is
  * actionable after them and the rest of the recoil montage plays on as the cancellable tail (the next synced montage replaces it, a hit stops it).
  * Nothing here knows about the server or about re-simulation: every read is the combat state of the frame, every variable a sync variable.
+ *
+ * Blueprint move events (CP1 of the Blueprint seams): a Blueprint child reacts to its own move with On Move Started, On Move Key (an Event key
+ * of the timeline crossed), On Move Hit Confirmed, On Move Ended and, opt-in, On Move Frame. They are SIMULATION events: raised inside the
+ * ability's simulation step on every machine and again in every re-simulation (never while a frame is being restored), each exactly once
+ * per simulated path, because their cursors are sync variables. A handler may do what simulation code may do (read the combat state and the
+ * input questions of the combat component, write FSync* variables, wait combat frames, apply effects, send gameplay events); it must not read
+ * the world, the Mover component or anything that is not rolled back, and it must not use latent nodes (Delay, timers). Presentation belongs
+ * to the cosmetic hooks (CP4): the move's CosmeticWindows, the hit cue (UGSTN_GCN_CombatHit) and the events of the presentation components
+ *
+ * Event keys and move actions (CP2): when the timeline crosses an Event key the ability fires the key's cue and gameplay event, runs its move
+ * actions (FGSTN_MoveAction: fire a projectile, send an event, apply an effect, open a tag window), then raises On Move Key, all in that order, on
+ * the same cursor and with the same once-per-crossing rule as the event. A graph runs the same actions through the request nodes below (Send
+ * Move Event, Apply Move Effect, Open Move Tag Window, Run Move Action); they do nothing outside the simulation step of an active move
  */
 UCLASS(Abstract, Blueprintable)
 class GSTNCOMBATNP_API UGSTN_GA_BaseCombat : public UGSTN_GA_Base
@@ -97,6 +113,18 @@ public:
 	virtual void EndAbility(const FGameplayAbilitySpecHandle Handle, const FGameplayAbilityActorInfo* ActorInfo,
 		const FGameplayAbilityActivationInfo ActivationInfo, bool bReplicateEndAbility, bool bWasCancelled) override;
 
+	/**
+	 * Owner rule (2026-11-15, all moves): when a timeline ends by itself the rest of its montage keeps playing until the montage ends (with its
+	 * own blend-out) or a new action takes over; the ability only RELEASES it (data with EndBlendOutFrames >= 0 still stops it, see
+	 * ResolveMontageStop). A new action is any UGSTN_GA_Base activation, which calls this before it does anything else, or any synced montage,
+	 * which replaces the slot by itself. Stops the released montage of every combat ability of AbilitySystem that still plays one (the montage's
+	 * own blend-out). Simulation code: the released flag is a sync variable and the playing montage is the montage player's synced state
+	 */
+	static void StopReleasedMontages(UAbilitySystemComponent& AbilitySystem);
+
+	/** True while the montage this ability released at its natural end may still be on the synced slot (sync variable) */
+	bool HasReleasedMontage() const { return bMontageReleased.Value; }
+
 	/** Combat frames since the timeline started (the clock minus the clock of its start), 0 when not started */
 	UFUNCTION(BlueprintPure, Category = "Combat|Timeline")
 	int32 GetTimelineFrame() const;
@@ -110,12 +138,109 @@ public:
 	/** True once the ability found itself in the combat state and its timeline runs (false while it waits for adoption and after it ended) */
 	bool HasTimelineStarted() const { return bStarted.Value; }
 
+	/**
+	 * Raises On Move Frame on every simulated frame the move runs (after the key and hit events of the frame). OFF by default: a Blueprint
+	 * graph that runs every frame on every combatant costs on weak hardware, and most moves only need keys and hits
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Blueprint")
+	bool bTickMoveInBlueprint = false;
+
+	/**
+	 * Cosmetic windows of the move (CP4): trails, whooshes, glows, in timeline frames. Played by UGSTN_MoveCosmeticsComponent on the machines that
+	 * draw, from the presented combat state; the simulation never reads them, so they can be changed freely without touching how the move plays.
+	 * The hit itself (spark, hit sound, shake, rumble) is the hitbox's cue: a UGSTN_GCN_CombatHit
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Cosmetics")
+	TArray<FGSTN_MoveCosmeticWindow> CosmeticWindows;
+
+	/**
+	 * The timeline frame the combat tick evaluated for this frame (it stands still in hitstop and in a hold, unlike GetTimelineFrame, which
+	 * counts the combat clock), -1 outside the move and while a recoil plays. The frame On Move Key compares keys with
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Timeline")
+	int32 GetMoveTimelineFrame() const;
+
+	/** The hit groups of this move that confirmed a hit so far (bit i = hit group i), 0 before the first */
+	UFUNCTION(BlueprintPure, Category = "Combat|Timeline")
+	int32 GetMoveHitConfirmGroups() const;
+
+	// ---- Move actions (CP2): requests a move makes, never direct state writes. All of them refuse (return false) outside the simulation step
+	// of an active, started move: in a frame being restored, in presentation code, after the end
+
+	/** Whether a move action may run now: the move is active and started, and the ability system is simulating (not restoring) a frame */
+	bool CanRunMoveActions() const;
+
+	/** Sends a gameplay event to this move's own ability system (abilities triggered by it start; timelines among them are adopted) */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Move Actions", meta = (DisplayName = "Send Move Event"))
+	bool SendMoveEvent(FGameplayTag EventTag, float Magnitude = 0.f);
+
+	/** Applies an effect to the owner (a movement goes through an effect with UApplyMoveGameplayEffectComponent: a queued Mover move) */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Move Actions", meta = (DisplayName = "Apply Move Effect"))
+	bool ApplyMoveEffect(TSubclassOf<UGameplayEffect> Effect, float Level = 1.f);
+
+	/** Grants Tag for Frames combat frames or until the move ends (MaxTagWindows at a time; the same tag again re-arms it) */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Move Actions", meta = (DisplayName = "Open Move Tag Window"))
+	bool OpenMoveTagWindow(FGameplayTag Tag, int32 Frames = 10);
+
+	/** Closes the window of Tag now, if it is open */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Move Actions", meta = (DisplayName = "Close Move Tag Window"))
+	bool CloseMoveTagWindow(FGameplayTag Tag);
+
+	/** Runs any move action (Make Instanced Struct of a move action type: a projectile shot, an event...), as an Event key would */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Move Actions", meta = (DisplayName = "Run Move Action"))
+	bool RunMoveAction(UPARAM(meta = (BaseStruct = "/Script/GSTNCombatNP.GSTN_MoveAction")) const FInstancedStruct& Action);
+
+	/** A random number the same on every machine and in every re-simulation of this frame. Salt tells two draws of the same frame apart */
+	UFUNCTION(BlueprintPure, Category = "Combat|Move Actions", meta = (DisplayName = "Get Move Random Float"))
+	float GetMoveRandomFloat(int32 Salt, float Min = 0.f, float Max = 1.f) const;
+
+	/** A random integer in [Min, Max], the same on every machine and in every re-simulation of this frame */
+	UFUNCTION(BlueprintPure, Category = "Combat|Move Actions", meta = (DisplayName = "Get Move Random Integer"))
+	int32 GetMoveRandomInteger(int32 Salt, int32 Min, int32 Max) const;
+
+	/** Tag windows a move holds at a time (Open Move Tag Window) */
+	static constexpr int32 MaxTagWindows = 2;
+
 protected:
 	/**
 	 * Called once when the timeline starts: in ActivateAbility for a command, in the adoption tick for an activation that waited.
 	 * The movement abilities apply their impulse here. Simulation code: deterministic, no server-only branches
 	 */
 	virtual void OnTimelineBegan(int32 StateStartFrame) {}
+
+	// ---- Move events (CP1). The C++ virtuals call the Blueprint events; a C++ child overrides the virtual (and calls Super to keep the event)
+
+	/** An Event key of the running timeline was crossed this frame. Key is the track (its KeyTag, cue, gameplay event), TrackIndex its index in Tracks */
+	virtual void OnMoveKey(const FGSTN_TimelineTrack_Event& Key, int32 TrackIndex, int32 TimelineFrame);
+
+	/** Hit groups of the move confirmed a hit this frame (NewHitGroups), AllHitGroups the groups confirmed so far */
+	virtual void OnMoveHitConfirmed(int32 NewHitGroups, int32 AllHitGroups);
+
+	/** The timeline ended. Raised from EndAbility while the ability is still active, after its montage was stopped */
+	virtual void OnMoveEnded(EGSTN_MoveEndReason Reason);
+
+	/** Every simulated frame the move runs, with bTickMoveInBlueprint */
+	virtual void OnMoveFrame(int32 TimelineFrame);
+
+	/** The timeline started (after its montage and OnTimelineBegan). MoveStartFrame is the simulation frame the combat state started it on */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Combat|Move", meta = (DisplayName = "On Move Started"))
+	void K2_OnMoveStarted(int32 MoveStartFrame);
+
+	/** An Event key was crossed (once, on the frame the timeline reaches it). Compare KeyTag; Key holds the rest of the track */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Combat|Move", meta = (DisplayName = "On Move Key"))
+	void K2_OnMoveKey(FGameplayTag KeyTag, const FGSTN_TimelineTrack_Event& Key, int32 TimelineFrame);
+
+	/** A hit of this move was confirmed (hit or blocked; a parry or a ricochet is not). NewHitGroups: the groups that confirmed this frame */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Combat|Move", meta = (DisplayName = "On Move Hit Confirmed"))
+	void K2_OnMoveHitConfirmed(int32 NewHitGroups, int32 AllHitGroups);
+
+	/** The move ended, and why */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Combat|Move", meta = (DisplayName = "On Move Ended"))
+	void K2_OnMoveEnded(EGSTN_MoveEndReason Reason);
+
+	/** Every simulated frame the move runs, only with bTickMoveInBlueprint. TimelineFrame stands still in hitstop */
+	UFUNCTION(BlueprintImplementableEvent, Category = "Combat|Move", meta = (DisplayName = "On Move Frame"))
+	void K2_OnMoveFrame(int32 TimelineFrame);
 
 private:
 	/** Starts the timeline whose start the combat state shows: sync variables, montage */
@@ -133,6 +258,33 @@ private:
 	/** True while the combat state names this ability's class and the start frame it started on */
 	bool IsStillTheRunningTimeline() const;
 
+	/** Raises the key, hit and frame events of the frame being simulated, once per simulation frame (start frame included) */
+	void RaiseMoveEvents();
+
+	/**
+	 * Hold Until Landed (FGSTN_TimelineTrack_HoldUntilLanded, the dropkick): the montage follows the clock's decision of this frame, before the
+	 * montage ticks. While the timeline is in the hold range the montage loops its loop part; once the clock jumped to the land frame the montage
+	 * jumps to its land part, as a new start (held this tick, drawn first). Stateless: the timeline frame and the synced montage time say it all
+	 */
+	void UpdateHoldUntilLandedMontage();
+
+	/** Move events are simulation events: none while the ability system restores a frame */
+	bool CanRaiseMoveEvents() const;
+
+	/** An Event key was crossed: its cue, its gameplay event and its move actions (CP2), then On Move Key. Stops when the move stops running */
+	void RunKey(const FGSTN_TimelineTrack_Event& Key, int32 TrackIndex, int32 TimelineFrame);
+
+	/** The tag window slots (sync variables), by index */
+	FSyncGameplayTag& TagWindowTag(int32 Slot) { return Slot == 0 ? TagWindowTag0 : TagWindowTag1; }
+	FSyncInteger& TagWindowStart(int32 Slot) { return Slot == 0 ? TagWindowStart0 : TagWindowStart1; }
+	FSyncInteger& TagWindowFrames(int32 Slot) { return Slot == 0 ? TagWindowFrames0 : TagWindowFrames1; }
+
+	/** Removes the loose tag of a slot and frees it */
+	void CloseTagWindowSlot(int32 Slot);
+
+	/** Closes the windows whose frames are over (every simulated frame of the move), or all of them (the move ended) */
+	void CloseTagWindows(bool bAll);
+
 	/** True once the ability found itself in the combat state and started (sync var: rolled back with the instance) */
 	UPROPERTY(Transient)
 	FSyncBool bStarted;
@@ -141,9 +293,30 @@ private:
 	UPROPERTY(Transient)
 	FSyncInteger RunningEntry;
 
+	/**
+	 * How the timeline's montage leaves when this ability ends with it still on the slot: the blend-out in seconds (-1 = the montage player's
+	 * default) and whether the pose is held. The natural end uses the data's EndBlendOutFrames, a cancel inside the tail Tail.BlendOutFrames,
+	 * anything earlier (a hit, a replacing move) the default. Presentation only
+	 */
+	void ResolveMontageStop(float& OutBlendOutSeconds, bool& bOutHoldPose) const;
+
 	/** The montage BeginTimeline played (kept alive by the ability or the table set), to find it on the slot later. Not state: only read to stop it */
 	UPROPERTY(Transient)
 	TObjectPtr<UAnimMontage> TimelineMontagePlayed;
+
+	/** The timeline ended by itself and left its montage playing (StopReleasedMontages). Sync variable: a rollback restores whether a release is pending */
+	UPROPERTY(Transient)
+	FSyncBool bMontageReleased;
+
+	/** The montage of the last release. Not state: only compared with the synced slot's montage before it is stopped, so a stale one stops nothing */
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> ReleasedMontage;
+
+	/** The timeline ends by itself on this frame and its data lets the montage play on (EndBlendOutFrames < 0): the owner rule above */
+	bool ShouldReleaseMontageOnEnd(bool bWasCancelled) const;
+
+	/** The timeline frame the end rules (release, stop blend) compare with the data: the combat clock's, or for a Hold Until Landed move the last evaluated one */
+	int32 GetEndRuleFrame(const FGSTN_CombatTimelineData& Data) const;
 
 	/** Combat clock at the start, the origin of GetTimelineFrame */
 	UPROPERTY(Transient)
@@ -167,6 +340,37 @@ private:
 	/** The montage the recoil plays (kept alive by the ability or the table set), to find it on the slot when the ability ends. Not state: only read to stop it */
 	UPROPERTY(Transient)
 	TObjectPtr<UAnimMontage> RecoilMontagePlayed;
+
+	/** The last timeline frame the move events saw evaluated (sync var): keys in (it, now] are raised. INDEX_NONE before the first */
+	UPROPERTY(Transient)
+	FSyncInteger EvaluatedFrame;
+
+	/** The hit groups On Move Hit Confirmed already reported for this run (sync var) */
+	UPROPERTY(Transient)
+	FSyncByte ReportedHitGroups;
+
+	/** Simulation frame the move events were last raised on (sync var): ActivateAbility and the tick of one frame raise them once */
+	UPROPERTY(Transient)
+	FSyncInteger MoveEventsFrame;
+
+	/** The tag windows of Open Move Tag Window (sync vars): the tag (empty = free slot), the combat clock it opened on, its length */
+	UPROPERTY(Transient)
+	FSyncGameplayTag TagWindowTag0;
+
+	UPROPERTY(Transient)
+	FSyncGameplayTag TagWindowTag1;
+
+	UPROPERTY(Transient)
+	FSyncInteger TagWindowStart0;
+
+	UPROPERTY(Transient)
+	FSyncInteger TagWindowStart1;
+
+	UPROPERTY(Transient)
+	FSyncInteger TagWindowFrames0;
+
+	UPROPERTY(Transient)
+	FSyncInteger TagWindowFrames1;
 
 	/** True from an activation that waits for adoption until it is adopted, cancelled or ended */
 	UPROPERTY(Transient)

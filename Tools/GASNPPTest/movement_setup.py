@@ -23,9 +23,9 @@ MAPPINGS = [
     (INPUT_DIR + '/IA_GASNPP_Special', ['MiddleMouseButton'], ['Gamepad_FaceButton_Top']),     # Y special
     (INPUT_DIR + '/IA_GASNPP_Interact', ['O'], ['Gamepad_FaceButton_Right']),                  # B grab (interact tap = grab, hold = pick up / kit swap)
     (INPUT_DIR + '/IA_GASNPP_Strong', ['K'], ['Gamepad_RightTrigger']),                        # RT strong
-    (INPUT_DIR + '/IA_GASNPP_Shield', ['I'], ['Gamepad_LeftTrigger']),                         # LT shield
-    (INPUT_DIR + '/IA_GASNPP_Dodge', ['U'], ['Gamepad_LeftShoulder']),                         # LB dodge (shield + dodge on one trigger would fire both)
-    ('/Game/Input/IA_Crouch', [], ['Gamepad_RightShoulder']),                                  # RB crouch (keyboard C stays in IMC_Sandbox)
+    (INPUT_DIR + '/IA_GASNPP_Shield', ['I'], ['Gamepad_LeftShoulder']),                        # LB shield (owner layout 2026-11-13)
+    (INPUT_DIR + '/IA_GASNPP_Dodge', ['U'], ['Gamepad_RightShoulder']),                        # RB dodge
+    (INPUT_DIR + '/IA_GASNPP_Crouch', ['C'], ['Gamepad_LeftTrigger']),                         # LT crouch, own action (GASP's IA_Crouch fired its slide)
     (INPUT_DIR + '/IA_GASNPP_Sprint', ['L'], []),
 ]
 NEW_ACTIONS = ['IA_GASNPP_Strong', 'IA_GASNPP_Shield']

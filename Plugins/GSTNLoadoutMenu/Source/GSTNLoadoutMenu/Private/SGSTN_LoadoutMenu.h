@@ -21,8 +21,16 @@ public:
 
 	void Construct(const FArguments& InArgs);
 
-	/** Rebuilds the rows from the draft; Hint is the button line, Feedback a refusal to show (empty for none) */
-	void Refresh(const FGSTN_LoadoutDraft& Draft, const FText& Hint, const FString& Feedback);
+	/**
+	 * Rebuilds the rows from the draft; Hint is the button line, Feedback a refusal to show (empty for none). bDebug draws the bare debug list
+	 * instead (one text line per row with its index and option count, Applied = the kit the player has now)
+	 */
+	void Refresh(const FGSTN_LoadoutDraft& Draft, const FText& Hint, const FString& Feedback, bool bDebug = false, const FString& Applied = FString());
+
+private:
+	void RefreshDebug(const FGSTN_LoadoutDraft& Draft, const FText& Hint, const FString& Feedback, const FString& Applied);
+
+public:
 
 private:
 	TSharedPtr<SVerticalBox> Rows;

@@ -81,13 +81,16 @@ with their scrollbar or with the wheel over the name column.
 
 Double-click a `UGSTN_CombatTimeline` asset in the Content Browser (a Data Asset of that class, as before): the asset definition
 `UGSTN_AssetDefinition_CombatTimeline` (`UAssetDefinitionDefault`) opens `FGSTN_TimelineEditorToolkit`, a standalone asset editor with
-four tabs in the layout `GSTN_TimelineEditor_Layout_v1`: **Viewport** (the 3D preview, E6, below), **Timeline** (the
-panel of E4 under a warning bar), **Details** and **Frame Data**. Save is the editor's own Save; the layout is saved and restored by
-the editor. A second toolkit on an open asset is refused and the open one comes to the front (the context registry of E2).
+five tabs in the layout `GSTN_TimelineEditor_Layout_v2`: **Viewport** (the 3D preview, E6, below), **Timeline** (the
+panel of E4 under a warning bar), **Hitboxes** (the hitbox outliner), **Details** and **Frame Data**. Save is the editor's own Save; the layout is saved and restored by
+the editor. A second toolkit on an open asset is refused and the open one comes to the front (the context registry of E2). Every
+opener goes through `FGSTN_TimelineEditorToolkit::OpenFor`, which checks before it builds a toolkit: a refused toolkit destroyed
+without `InitAssetEditor` asserts in UE 5.9.
 
 | Type | File | Role |
 |---|---|---|
-| `FGSTN_TimelineEditorToolkit` | `Private/Timeline/GSTN_TimelineEditorToolkit.h` | Owns the model, the undo client and the lease of the target; spawns the four tabs. |
+| `FGSTN_TimelineEditorToolkit` | `Private/Timeline/GSTN_TimelineEditorToolkit.h` | Owns the model, the undo client and the lease of the target; spawns the five tabs. |
+| `SGSTN_HitboxOutliner`, `GSTNHitboxOutline` | `Private/Timeline/Widgets/`, `Private/Timeline/GSTN_HitboxOutline.h` | The Hitboxes tab: hitbox groups (Hitbox tracks) with their hitboxes as a tree. A row click selects it and moves the playhead into the group's frames so the shape is drawn; a viewport click selects the row. The logic is Slate-free and tested headless. |
 | `UGSTN_TimelineSelectionProxy` | `Private/Timeline/GSTN_TimelineSelectionProxy.h` | A transient copy of the selected track, shown by a structure details view. `Commit` writes it back with `ApplyTrackEdit` (one undo step; a slider drag is one step through the model's drag). |
 | `SGSTN_TimelineDetails` | `Private/Timeline/Widgets/` | The Details tab: follows the selection (one row at a time) and the data. |
 | `SGSTN_MontageLengthBar` | same | Warning bar when the montage and `TotalFrames` disagree, with **Fit Total Frames to montage** (undoable, explicit, never automatic). |
@@ -497,6 +500,31 @@ severities and colours in the settings) without C++. New tools (a track editor, 
 (`IGSTN_TrackEditor`, "Adding a track editor" above); Editor Utility Widgets will call the Blueprint-callable `UGSTN_CombatEditorUtils` (tick rate,
 validate, bake): `GetTickRateHz`, `BakeTimeline`, `IsBakeStale` (E8).
 
+**Move graph authoring (Blueprint seams CP3).** `UGSTN_MoveGraphAuthoring` (`Public/Graph/`) lays down the event graph of a move Blueprint from a
+script, so example and starter moves are never wired by hand: `SetMemberVariable` (bool, int, float, name, string, `struct:<path>` incl. the fork's
+sync variables, `object:<class path>`, with default, category and tooltip), `ClearEventGraph`, `AddEventNode` (an event of the parent class:
+`K2_OnMoveKey`...), `AddCallNode` (a class path + function name; empty path = the ability's own), `AddVariableNode` (get/set), `AddStructNode`
+(make/break), `AddBranchNode`, `ConnectPins` (through the K2 schema; an empty pin name = the only data pin of that side), `SetPinDefault`,
+`CompileAndReport`, `CheckSimulationRules` (the CP2 rules above) and `DescribeEventGraph`. Nodes are named by their GUID string. First user:
+`Tools/GAS/setup_double_shot_examples.py` (the B version of the double-press special). Test `GSTNCombat.Editor.MoveGraph.BuildsAndCompiles`.
+
+**Cosmetic authoring (Blueprint seams CP4).** `UGSTN_CosmeticAuthoring` (`Public/Graph/`): `SetHitCueTag` (the cue tag of every hitbox of a move's
+inline timeline, where Python cannot reach) and `GetActiveFrames` (the frames the hitboxes are open, to lay a trail window over them). User:
+`Tools/GAS/setup_cosmetic_hooks.py`.
+
+**Combat Move factory (Blueprint seams CP5).** Content Browser > Add > Gameplay > Combat > **Combat Move** (`UGSTN_CombatMoveFactory`,
+`Private/Moves/`) opens a dialog of `FGSTN_NewCombatMoveOptions`: template (`Strike` = one swept sphere hitbox over the active frames, `Action` = one
+Event key on the first active frame for move actions or a graph, `Empty`), parent class (the combat ability or a game's child of it), total / active /
+actionable frames (put in order, never refused), montage and rate, key tag, timeline inline or as a `TL_` asset next to the move, the move events laid
+down unwired (`On Move Started/Key/Hit Confirmed/Ended`; On Move Frame stays opt-in), and an optional hookup (`FGSTN_MoveKitHookup`: kit and/or
+weapon, command, requirements). The asset is a Gameplay Ability Blueprint child of `UGSTN_GA_BaseCombat`, exactly like one made by hand. A move
+Blueprint's context menu has **Add to Kit or Weapon...** (same hookup; a binding with the same command and requirements is replaced, one undo step).
+The logic is `UGSTN_CombatMoveAuthoring` (`Public/Moves/`, Blueprint-callable, so Python and editor agents use the same path: `CreateCombatMove`,
+`MakeStarterTimeline`, `SanitizeOptions`, `AddMoveToKit`, `AddMoveToKitAssets`, `IsCombatMoveBlueprint`); nothing here saves. No input, no project
+setting: the move answers a command tag, the kit's command set decides the button. `UGSTN_MoveGraphAuthoring` now also finds the "Gameplay Ability
+Graph" page of a Blueprint made by the engine's ability factory. Tests `GSTNCombat.Editor.MoveFactory.*` (`StarterTimeline`, `BindingUpsert`,
+`CreatesAndBinds`). The dialog and the context menu are checked by hand (they need a Slate application).
+
 ## Replacing content
 
 The plugin ships no content and references none by path. The preview kit, skin and mesh are soft references in the settings
@@ -537,6 +565,7 @@ The canary build (plugin alone in a blank project, modularity §3.7 rule 7) is n
 
 ## Changelog
 
+- 0.15.0 (2026-11-15, Blueprint seams CP5): the Combat Move factory, Add to Kit or Weapon, `UGSTN_CombatMoveAuthoring`, tests `MoveFactory.*`; module deps `ToolMenus` (private) and `GSTNInputCore` (now public).
 - 0.14.0 (2026-10-25, E7): gizmos and viewport picking: translate/rotate/scale on the hitbox key of the selection (auto-key, offset-all, mirror, Add key) and on the hurtbox shape in the hurtbox set editor, click or ray picking of shapes, the hitbox overlay with the Hitboxes toggle, `FGSTN_GizmoEdMode` (spike S4), `GSTNGizmo` maths and `GSTNCombat.Editor.Gizmo.*` (7 tests); `FGSTN_HurtboxEditModel::CancelEdit`.
 - 0.13.0 (2026-10-25, E9): the hurtbox set editor (viewport, list, details, findings), the Physics Asset generator with regeneration modes, the mirror with per-skeleton rules, `Hurtbox.BoneMissing` and `Hurtbox.Outside`, `PreviewMesh` on the hurtbox set (editor-only, `GSTNCombatCore`); the preview controller can run without a timeline; tests `Hurtbox.*`.
 - 0.12.0 (2026-10-25, E8): the socket baker, the staleness record and check, the Bake sockets button with its dot, Bake on save, `gstn.Combat.BakeAll`, `UGSTN_CombatEditorUtils`, the `BakedStale` hash rule; `FGSTN_BakeInfo` in `GSTNCombatCore`; tests `Bake.*`.

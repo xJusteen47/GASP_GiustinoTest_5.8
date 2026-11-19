@@ -18,6 +18,8 @@ refs/
 *_targets_raw.json
 *_points.json
 *_overrides.json
+*_bones.json
+*_author.txt
 blockout_dump.json
 cur_dump.json
 page_files*.json

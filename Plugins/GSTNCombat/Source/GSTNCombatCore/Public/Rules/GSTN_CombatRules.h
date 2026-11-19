@@ -139,6 +139,28 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits", meta = (ClampMin = "0.0"))
 	float AirborneJuggleScale = 1.f;
 
+	/**
+	 * A knocked-back victim (launch or push back) is turned so its BACK points along the knockback, on the frame the move starts (owner
+	 * 2026-11-14, as in Smash): a hit from behind or the side plays the same front-hit reactions instead of flying feet first. The turn is made on the hit frame (react-hook-4 review) and the facing is kept
+	 * after the reaction until the stick is pushed. Off = the
+	 * victim keeps the facing it had. Later: directional reactions (back/side) that reuse the front clips with a pre-rotation can replace it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
+	bool bTurnBackAlongKnockback = true;
+
+	/**
+	 * A staggered victim hit with NO horizontal knockback (a hit stand, a straight-up launch) is turned to face the attacker on the hit frame,
+	 * when the attacker stood further than TurnToAttackerMinAngleDeg off its facing (owner 2026-11-14: temporary, so a hit from behind plays the
+	 * front clips the right way round until back-hit clips exist). Off = the victim keeps its facing
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits")
+	bool bTurnToAttackerWithoutKnockback = true;
+
+	/** The smallest angle between the victim's facing and the attacker for bTurnToAttackerWithoutKnockback: 90 = only hits from behind turn */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits", meta = (ClampMin = "0.0", ClampMax = "180.0", ForceUnits = "Degrees",
+		EditCondition = "bTurnToAttackerWithoutKnockback"))
+	float TurnToAttackerMinAngleDeg = 90.f;
+
 	/** The shortest hitstun lock of a staggered victim (frames); read when the victim side applies the reaction (H9) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Rules|Hits", meta = (ClampMin = "0", ForceUnits = "Frames"))
 	int32 MinStaggerLockFrames = 31;

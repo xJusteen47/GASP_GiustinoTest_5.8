@@ -1,6 +1,7 @@
 // Editor tooling of GSTN Combat (editor only; the runtime never depends on it).
 
 #include "Validation/GSTN_EditorValidators.h"
+#include "Validation/GSTN_SimGraphRules.h"
 
 #include "Abilities/GSTN_GA_BaseCombat.h"
 #include "AssetRegistry/AssetData.h"
@@ -80,6 +81,8 @@ namespace
 			return false;
 		}
 		FGSTN_CombatValidators::ValidateAbilityTimeline(*Ability, Asset, UGSTN_CombatEditorSettings::GetSimulationTickRate(), true, Report);
+		// What the simulation events of its graphs reach (CP2): latent nodes, non-sync variables, world reads, unseeded random
+		FGSTN_SimGraphRules::CheckBlueprint(*Blueprint, Asset, Report);
 		return true;
 	}
 

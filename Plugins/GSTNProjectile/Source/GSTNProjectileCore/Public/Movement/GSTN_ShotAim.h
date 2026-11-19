@@ -60,4 +60,11 @@ struct GSTNPROJECTILECORE_API FGSTN_ShotAim
 	 * aim. Off: FlatDirection (facing or stick) raised by LaunchPitchDeg, as every non-reticle shot
 	 */
 	static FVector ReticleDirection(bool bReticleOn, const FRotator& ReticleAim, const FVector& FlatDirection, float MinPitchDeg, float MaxPitchDeg, float LaunchPitchDeg);
+
+	/**
+	 * A shot direction turned by a move's offsets (CP2 move actions: the second shot of a double-press special leaves at another angle): YawDeg
+	 * around Up (positive = to the right of the direction, seen from above), then PitchDeg up towards Up, clamped short of straight up or down
+	 * so the result keeps a heading. Unit length; the direction unchanged (normalized) when both offsets are zero
+	 */
+	static FVector ApplyAngleOffset(const FVector& Direction, const FVector& Up, float YawDeg, float PitchDeg);
 };

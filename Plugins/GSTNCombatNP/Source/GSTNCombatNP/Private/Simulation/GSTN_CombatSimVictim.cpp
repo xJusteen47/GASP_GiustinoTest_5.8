@@ -24,6 +24,7 @@
 #include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "Rules/GSTN_CombatRules.h"
+#include "Timeline/GSTN_StartupSteer.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 
@@ -223,6 +224,31 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, co
 	if (Result.FreezeFrames > 0)
 	{
 		Core.Requests.Add(EGSTN_RequestType::VictimFreeze, Frame, static_cast<int16>(FMath::Min(Result.FreezeFrames, 32767)));
+	}
+
+	// The turn of a staggered victim, on the hit frame (react-hook-4 review: turned at the launch, the first 7 hitstop frames showed the
+	// reaction pose the wrong way round). Queued like a steer: the pre-tick of this frame hands it to Mover before the hitstop freeze holds it
+	if (bFrameInterrupted)
+	{
+		float TurnYaw = 0.f;
+		const bool bTurn = Self && FGSTN_CombatVictim::ResolveHitFacing(CombatRules, Result, Core, *Self, Snapshot, TurnYaw);
+		bool bQueued = false;
+		if (bTurn)
+		{
+			const int16 YawArg = FGSTN_StartupSteer::QuantizeYaw(TurnYaw);
+			if (YawArg != FGSTN_StartupSteer::QuantizeYaw(static_cast<float>(Self->Facing.Rotation().Yaw)))
+			{
+				bQueued = Core.Requests.Add(EGSTN_RequestType::SetFacing, Frame, YawArg);
+				if (!bQueued)
+				{
+					UE_LOG(LogGSTNCombatVictim, Error, TEXT("%s frame %d: no room for the hit turn request (%d requests)"), *GetOwner()->GetName(), Frame, Core.Requests.Num());
+				}
+			}
+		}
+		// Diagnostics of the react-hook-5 capture (the turn did not show in game): one line per interrupting hit
+		UE_LOG(LogGSTNCombatVictim, Verbose, TEXT("[HitTurn] %s frame %d self=%d rules=%d pending=%d turn=%d yaw=%.0f selfYaw=%.0f queued=%d requests=%d"),
+			*GetOwner()->GetName(), Frame, Self ? 1 : 0, CombatRules ? 1 : 0, Core.Hit.HasPendingReaction() ? 1 : 0, bTurn ? 1 : 0, TurnYaw,
+			Self ? Self->Facing.Rotation().Yaw : 0.0, bQueued ? 1 : 0, Core.Requests.Num());
 	}
 
 	// The end of the hitstop and of the hitstun, by the reaction the hit chose
@@ -593,6 +619,13 @@ void UGSTN_CombatSimComponent::ExecuteReactionMove(float StepMs)
 		return;
 	}
 	const bool bLaunch = ReactionMove.Kind == FGSTN_ReactionMove::EKind::Launch;
+	// Back first along the knockback (rules data, owner 2026-11-14): the facing is Mover sync state, queued as the steer's instant effect on the
+	// same pre-tick as the move, so a resimulated frame turns the same way. A vertical launch keeps the facing
+	const FVector Flat(ReactionMove.Velocity.X, ReactionMove.Velocity.Y, 0.0);
+	if (CombatRules && CombatRules->bTurnBackAlongKnockback && Flat.SizeSquared() > 1.0)
+	{
+		ExecuteSetFacing(FGSTN_StartupSteer::QuantizeYaw(static_cast<float>((-Flat).Rotation().Yaw)));
+	}
 	const TSubclassOf<UGameplayEffect> Effect = bLaunch ? KnockbackEffect : PushBackEffect;
 	if (!Effect)
 	{

@@ -1,8 +1,25 @@
 """Tiny client for UE_MCP_Bridge: call(method, params) and py(entry, **kwargs) on capture_ue.py."""
 import base64, json, os, socket, struct, ast
 
-PORT = 55976
+PORT = 56754
 HERE = os.path.dirname(os.path.abspath(__file__)).replace("\\", "/")
+
+def get_port():
+    if "UE_MCP_PORT" in os.environ:
+        return int(os.environ["UE_MCP_PORT"])
+    for base in [
+        os.path.abspath(os.path.join(HERE, "../..")),
+        "C:/Users/jacop/Documents/Unreal Projects/GASP_Giustino2_feature",
+        "C:/Users/jacop/Documents/Unreal Projects/GASP_Giustino2",
+    ]:
+        pj = os.path.join(base, "Saved/UE_MCP_Bridge/port.json")
+        if os.path.exists(pj):
+            try:
+                with open(pj) as f:
+                    return int(json.load(f)["port"])
+            except Exception:
+                pass
+    return PORT
 
 def _recv_exact(s, n):
     b = b""
@@ -35,12 +52,27 @@ def _recv(s):
 
 _sock = None
 _id = 0
+def backend():
+    """'builtin' = the editor's own MCP server (owner rule 2026-11-13, see ue_builtin.py), 'bridge' = UE_MCP_Bridge.
+    UE_MCP_BACKEND forces one; UE_MCP_PORT (a bridge port) keeps meaning the bridge; otherwise built-in when it answers."""
+    b = os.environ.get("UE_MCP_BACKEND")
+    if b:
+        return b
+    if "UE_MCP_PORT" in os.environ:
+        return "bridge"
+    import ue_builtin
+    return "builtin" if ue_builtin.available() else "bridge"
+
 def call(method, params=None, timeout=300):
     global _sock, _id
+    if backend() == "builtin":
+        import ue_builtin
+        return ue_builtin.call(method, params, timeout)
+    port = get_port()
     if _sock is None:
-        _sock = socket.create_connection(("127.0.0.1", PORT), timeout=timeout)
+        _sock = socket.create_connection(("127.0.0.1", port), timeout=timeout)
         k = base64.b64encode(os.urandom(16)).decode()
-        _sock.sendall(f"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {k}\r\nSec-WebSocket-Version: 13\r\n\r\n".encode())
+        _sock.sendall(f"GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {k}\r\nSec-WebSocket-Version: 13\r\n\r\n".encode())
         r = b""
         while b"\r\n\r\n" not in r: r += _sock.recv(1024)
     _id += 1
@@ -62,4 +94,3 @@ def py(entry, **kwargs):
         return ast.literal_eval(v) if isinstance(v, str) else v
     except Exception:
         return v
-

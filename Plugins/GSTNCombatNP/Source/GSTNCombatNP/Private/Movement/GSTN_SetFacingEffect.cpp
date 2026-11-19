@@ -1,5 +1,6 @@
 #include "Movement/GSTN_SetFacingEffect.h"
 
+#include "Components/SceneComponent.h"
 #include "GSTN_CombatNPTags.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
@@ -19,8 +20,18 @@ bool FGSTN_SetFacingEffect::ApplyMovementEffect(FApplyMovementEffectParams& Appl
 	{
 		return false;
 	}
+	const FRotator NewOrientation = MakeOrientation(Sync->GetOrientation_WorldSpace(), YawDeg);
+	// The component turns too, like FTeleportEffect moves it. A walking step that neither moves nor turns from its start state skips the
+	// component move and reads its final rotation back from the component, so a turn written only into the sync state was lost on a
+	// frame at rest (the victim frozen in hitstop: react-hook-5, the turn showed only on the first frame the knockdown moved). A turn
+	// about the up axis cannot collide with anything, so it is set without a sweep. On a resimulated frame the component is first put
+	// back at the sync state of the frame before, and the same effect turns it the same way again
+	if (USceneComponent* Updated = ApplyEffectParams.UpdatedComponent)
+	{
+		Updated->SetWorldRotation(NewOrientation, /*bSweep*/ false, nullptr, ETeleportType::TeleportPhysics);
+	}
 	// Everything but the yaw stays as the step found it, base included, so a character on a moving platform keeps riding it
-	Sync->SetTransforms_WorldSpace(Sync->GetLocation_WorldSpace(), MakeOrientation(Sync->GetOrientation_WorldSpace(), YawDeg), Sync->GetVelocity_WorldSpace(),
+	Sync->SetTransforms_WorldSpace(Sync->GetLocation_WorldSpace(), NewOrientation, Sync->GetVelocity_WorldSpace(),
 		Sync->GetAngularVelocityDegrees_WorldSpace(), Sync->GetMovementBase(), Sync->GetMovementBaseBoneName());
 	// True = the sync state changed: Mover copies it into the state the movement mode starts from
 	return true;

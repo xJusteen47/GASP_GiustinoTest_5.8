@@ -320,6 +320,8 @@ A launched (Tumble) victim that runs into a surface splats, bounces or breaks it
 - **Strike per hitbox group (owner 2026-11-09):** a hitbox track (`FGSTN_TimelineTrack_Hitbox`) is a hitbox group. With `bOverrideStrike` it has its own `StrikeKind`, `HardSurfaceBehaviour` and `SweepDeflection` (else the move's apply, so older content is unchanged): a move that slashes then thrusts is two groups. `FGSTN_CombatTimelineData::ResolveStrike(TrackIndex)` gives the settings; `FGSTN_CombatSyncCore::StrikeTrack` (on the wire only with a contact or a recoil) says which group ricocheted: only that group slides, its `EndFrame` starts a FinishThenRecoil recoil, and stab-only hurtboxes test the group's kind. Recoil chain: group `RicochetResponse` > move > weapon > kit > project default of the group's kind (`UGSTN_CombatSettings::SwingRicochetDefault` / `StabRicochetDefault`, copied into the table set and its checksum; placeholder shove montages in `Config/DefaultGSTNCombat.ini` until the real animations). Nothing ties Swing to a weapon or blade: the flat is the hitbox shape's Z, so a punch or kick group marked Swing recoils like a sword (test `PerHitboxGroup`).
 - **Startup steering (plan precisione-weakpoint 5, slice 3):** every frame of a running timeline's startup (before `FGSTN_StartupSteer::GetSteerEndFrame`, the first active frame; paused frames push it, a recoil stops it) the combat tick reads the aim stick of the frame's command (`FGSTN_InputCmd::AimStickX/Y`, camera-relative through `CameraYaw`) and `FGSTN_CombatTimelineLogic::ComputeStartupSteer` clamps the yaw to `MaxSteerDegrees` around the move origin's yaw (`Hit.MoveOrigin`, no new sync field). When the result differs from the pose it adds a `SetFacing` request (yaw as int16, 65536 steps per turn); the ability system's pre-tick applies `UGSTN_GE_SetFacing`, whose creator queues the Mover instant effect `FGSTN_SetFacingEffect` (yaw only; location, velocity, base kept). Centred stick = no request, the facing stays where it is. `AimPolicy` is still data only. Tests `GSTNCombat.NP.Weakpoint.StartupSteerTurn`, `SetFacingEffect`.
 - **Steering needs the reticle (slice 3b, owner decision 2026-11-10):** the right stick turns the character only while the precision reticle is on. The combat component writes the local reticle (`UGSTN_PrecisionAimComponent::IsReticleShown`) into the predicted command (`FGSTN_InputCmd::bPrecisionAim`, 1 bit), and `ComputeStartupSteer` refuses without it, so with the reticle off the right stick is the camera's alone and the left stick turns the character as before. With the reticle on the right stick wins: the combat component is also a Mover input producer (Mover asks the pawn first, then its components) and, during the startup window, replaces the left stick's orientation intent with the facing the move holds (`ResolveSteerHoldYaw`: the steered yaw, or the move origin's with the stick centred); the move input is kept, and a base-relative intent is left alone. The bit is the hook for moves that will aim with the reticle later (ranged strong attacks): they read `bPrecisionAim` of the frame's command, never the camera. Test `GSTNCombat.NP.Weakpoint.ReticleGatesSteer`.
+- **Per-move steering source and window (owner 2026-11-14, `handoffs/attack-aiming-research.md`):** `FGSTN_CombatTimelineData::Steer` (`FGSTN_SteerWindow`) picks, per move, the stick (`EGSTN_SteerSource`: `AimStickWithReticle` = everything above, the default so old moves are unchanged; `MoveStick` = the left stick, Monster Hunter style, the owner's default for new melee moves; `MoveOrAimStick` = the aim stick while the reticle is on and it is pushed, else the left stick), the frames (`StartFrame`, `EndFrame` exclusive, -1 = first active frame), a `RateScale` curve over the window on top of `SteerRateDegPerSecond`, and `bHoldFacing`. `MaxSteerDegrees` now clamps to 180 (a "signature" move aimable in any direction in its first frames). One pure decision, `FGSTN_StartupSteer::ResolveFrame` (called through `FGSTN_CombatTimelineLogic::ResolveSteerFrame`), serves the combat tick (SetFacing request while Steering with the stick pushed), the Mover input producer (orientation intent held for every phase but None) and the arrows. With a move stick source the facing is held from the first frame to the end of the last active hitbox window (`GetHoldEndFrame`): the left stick cannot turn the move past its cap, nor after the lock; after the active frames it turns the character as before. Releasing the left stick keeps the aim (the reticle source still goes back to the origin). Wide cones (90 to 180) step in the offset from the origin so the rate never crosses the back. Same for ground and air: the sim does not tell them apart for the yaw. Tests `GSTNCombat.Core.StartupSteer.Window.*`.
+- **Steering arrows v0 (`UGSTN_SteerIndicatorComponent`, presentation):** added by the combat component at BeginPlay (`bAddSteerIndicator`), locally controlled pawn only. Thin arrow = the picked stick, thick arrow = the facing, the arc = the allowed cone around the move origin while the window is open; at the lock the thick arrow flashes white for `LockFlashFrames`. Shown when the move's `Steer.bShowIndicator` and the component's `bEnabled` say so; `GSTN.Combat.SteerIndicator` 0/1 forces it off/on (-1 = data). Debug lines (no Shipping) until real decals and body cues.
 - **Precision reticle and aim arrow (plan precisione-weakpoint 4, slice 3):** `UGSTN_PrecisionAimComponent`, added to the owner by the combat component at BeginPlay (`bAddPrecisionAim`, not on a dedicated server), local presentation only. The reticle toggles on `UGSTN_InputConfig::ReticleToggleAction` (right stick click by default) and marks where the camera ray meets the world; it exists only in the match modes `UGSTN_CombatSettings::PrecisionReticleModes` lists (default `Combat.Mode.PvE`, `Combat.Mode.TDM`; `Combat.Mode.Duel` and any new mode: no). The mode comes from a game state implementing `IGSTN_MatchModeSource`, else `FallbackMatchMode` (PvE). The arrow at the feet shows the aim stick direction while it is out of the dead zone, in every mode. Placeholder look: debug lines, absent from Shipping. Gyro: not done.
 - **Dodges:** `UGSTN_GA_GroundDodge` / `UGSTN_GA_AirDodge` carry the feet window as data (see GSTNCombat). The snapshot reads it for the hit pipeline of every attacker, so the feet are missed during the window and the torso is not.
 - Harness hooks (not API): `GetRecoilInfo`, `UGSTN_GASNPPTestComponent::SetForceRicochet / GetDodgeWindow / ServerSetPlanted`. Tests: `GSTNCombat.NP.Hits.Dodge.FeetWindowFromData`, `GSTNCombat.NP.Hits.Ricochet.*`. Details and deviations: `docs/notes/m4-doc-deltas.md` "H12".
@@ -341,3 +343,73 @@ fragment changed on the wire.
 - **Reverse deliveries.** `FGSTN_HitResolutionContext::OutgoingEntries` / `FGSTN_StepResult::OutgoingEntries` (`TArray<FGSTN_InboxEntry>`): a step queues messages to the attacker of the hit it resolves. `FGSTN_CombatVictim::Resolve` stamps `Frame` and `SenderId` for the hits that stand (not a ricochet, not a hit a step refused) into `FGSTN_VictimResult::Outgoing`, and `RunVictimStep` posts each through `PostToInbox(TargetId, Entry)` after the step, so the attacker drains it on the next frame; a target that does not tick on this machine refuses it (on a client the reply reaches only an attacker it predicts).
 - **Request kinds.** `FGSTN_CombatRequests` already has `Capacity = 8` slots (the plan asked for six); the wire is 4 bits count + per **present** request 5 bits type, packed frame, 16 bits argument, so an absent slot costs nothing. `EGSTN_RequestType` gains the data-only kinds `EnterLinked`, `ExitLink`, `ApplyLinkEffect`, `RemoveLinkEffect`, `LaunchLinked` (18 to 22, inside the 5-bit field, no handler in this module).
 - Tests: `GSTNCombat.NP.Snapshot.ExtraHurtboxInHistory`, `GSTNCombat.NP.Clock.{TrackHookStallsTimelineNotClock, HookStampsWindow}`, `GSTNCombat.NP.Tick.BlocksActionsVeto`, `GSTNCombat.NP.Victim.OutgoingEntriesPosted`, `GSTNCombat.NP.Requests.EightSlotsRoundTrip`. Core side: `GSTNCombat.Core.Hurtbox.*` (see `GSTNCombat`). Details: `docs/notes/m6-doc-deltas.md` "M6 follow-up 2 (F2)".
+
+## Blueprint move events and input questions (Blueprint seams CP1, `docs/notes/handovers/combat-plugin-bp-plan.md`)
+
+A Blueprint child of `UGSTN_GA_BaseCombat` reacts to its own move without C++: **On Move Started**, **On Move Key** (an Event key of the timeline
+crossed; the key's new `KeyTag` names it), **On Move Hit Confirmed** (new hit groups of the run; blocked counts, parry and ricochet do not),
+**On Move Ended** (`EGSTN_MoveEndReason`: Finished, TailCancelled, AfterRecoil, Interrupted) and, only with `bTickMoveInBlueprint`, **On Move Frame**.
+They are simulation events: raised on every machine and again in every re-simulation, exactly once per simulated path (the cursors
+`EvaluatedFrame`, `ReportedHitGroups`, `MoveEventsFrame` are sync variables), never while the ability system restores a frame. The rules are
+`FGSTN_MoveEventRules` (`Abilities/GSTN_MoveEvents.h`), tested in `GSTNCombat.NP.MoveEvents.*`.
+
+The combat component answers the input questions a graph asks, by tag and never by key: `WasButtonPressedWithin`, `GetFramesSinceButtonPressed`,
+`CountButtonPressesWithin`, `GetButtonHeldFrames` (an `Input.Button.*` tag of the input config), `WasCommandEnteredWithin` (a `Command.*` tag:
+its whole pattern, by presses no command used yet), `GetMoveStick`, `GetStickDirection`, `GetMoveHitConfirmGroups`. Simulation reads, like
+`GetActivationContext`; ages count combat frames like the buffer (hitstop does not age a press). The arithmetic is `FGSTN_InputQueries` in
+GSTNInputCore (`GSTNInput.Core.Input.Queries.*`).
+
+## Move actions, Event keys and the simulation graph validator (Blueprint seams CP2)
+
+**Event keys now run.** When a combat timeline crosses an Event key, `UGSTN_GA_BaseCombat` fires, in this order and once per crossing (same
+sync cursor as On Move Key, again in a re-simulation, never while restoring): the key's `CueTag` (the fork's frame-stamped cue executions), its
+`GameplayEventTag` (to the own ability system: abilities triggered by it start, timelines among them are adopted), its **Actions**, then On Move
+Key. Until CP2 only the outbox part of a key ran. If the event starts a move that replaces this one, the rest is skipped.
+
+**Move actions** (`Abilities/GSTN_MoveActions.h`) are requests, never direct state writes: `FGSTN_MoveAction` instanced structs in the key's
+`Actions` list, or run from a graph. Built in: **Send Event**, **Apply Effect** (a move = an effect with `UApplyMoveGameplayEffectComponent`),
+**Open Tag Window** (a loose tag for N combat frames or until the move ends; 2 windows at a time, the slots are sync variables). The projectile
+plugin adds **Fire Projectile** (`UGSTN_ProjectileDefinition` asset + yaw/pitch/speed adjust). A plugin adds its own action by deriving from
+`FGSTN_MoveAction` in its own module; the Core track names the base only by path.
+
+Graph nodes on the ability (category *Combat|Move Actions*): Send Move Event, Apply Move Effect, Open/Close Move Tag Window, Run Move Action
+(any action struct), Get Move Random Float/Integer (the same on every machine: seed = simulation frame, move start frame, salt), and Fire Move
+Projectile (GSTNProjectileNP). All refuse outside the simulation step of an active move (`CanRunMoveActions`). Rules in `FGSTN_MoveActionRules`,
+tests `GSTNCombat.NP.MoveActions.*`.
+
+**Simulation graph validator** (GSTNCombatEditor, `FGSTN_SimGraphRules`, runs with the ability Blueprint validator on save and in Validate all):
+walks what the simulation events reach (exec links, the nodes feeding them, the Blueprint's own functions and custom events) and reports
+`Ability.SimLatent` (Delay, timers: error; async tasks: warning), `Ability.SimNonSyncVariable`, `Ability.SimWorldRead` (Mover, actor transform,
+world time, traces), `Ability.SimRandom`. An action that cannot run (no definition, no tag) is `Timeline.MoveAction`. Tests
+`GSTNCombat.Editor.SimGraph.*`.
+
+## Example moves made with the seams (Blueprint seams CP3)
+
+`Tools/GAS/setup_double_shot_examples.py` builds the owner's double-press special twice in `/Game/GASNPPTest/Examples/DoubleShot`: **A, data only**
+(`GA_Example_DoubleShot_A1`/`_A2`: an Event key with a Fire Projectile action each; A1's Tags window `Example.State.DoubleShotChain` + cancel window
+into the special, the kit binds the special to A2 while the tag is up, like jab 1 -> jab 2) and **B, one ability with a graph**
+(`GA_Example_DoubleShot_B`: On Move Key "Fire" shoots and arms the `FollowUpState` sync integer; On Move Frame asks `WasCommandEnteredWithin`; the
+follow-up opens a tag window that the timeline's `OnTagAdded` buffer reset rule turns into a flush, then Wait Combat Frames -> On Combat Frames
+Elapsed shoots the second shot). Kits `KIT_Example_DoubleShotA`/`B` (hub pads). The graph is laid down by `UGSTN_MoveGraphAuthoring`
+(GSTNCombatEditor), never by hand.
+
+
+## Cosmetic hooks (Blueprint seams CP4)
+
+Presentation only: driven by the presented state or by cues, never fed back into the simulation, safe under rollback (a correction changes what the
+next frame shows; nothing fires twice). Owner-approved VFX checklist: `Artifacts/Animazione/silhouette-multi-angolo-e-vfx.html`.
+- **Move cosmetic windows** (`Presentation/GSTN_MoveCosmetics.h`, `GSTN_MoveCosmeticsComponent.h`): `UGSTN_GA_BaseCombat::CosmeticWindows`, each a
+  tag, timeline frames (start, end or -1 = until the move ends, tail), a Niagara system on a mesh socket (attached or left in the world), a sound,
+  freeze in hitstop, kill when interrupted. `UGSTN_MoveCosmeticsComponent` (on the character, added by `Tools/GAS/setup_cosmetic_hooks.py`) reads
+  the latest presented combat state every drawn frame and diffs the live windows with `FGSTN_MoveCosmeticTracker` (pure): a window that began is
+  never replayed for the same run (a correction flicker), windows skipped between two drawn frames still play (a slow screen), an end is natural
+  when the window's frames ran out and interrupted when the move was cut during them. Blueprint: On Move Cosmetic Begin/End (overridable events
+  of a Blueprint child, and assignable delegates). Off on a dedicated server. Niagara is a private dependency (pooled components, ManualRelease).
+- **Hit cue** (`Presentation/GSTN_GCN_CombatHit.h`): `UGSTN_GCN_CombatHit`, a GCN Burst for the hitbox `CueTag` (`GameplayCue.Hit.Light/Medium/
+  Heavy/Finisher` in the examples): placed at the hit context's location, turned along the hit, and played once on the attacker's machine (the
+  prediction's local cue plays, the real cue of the same hit asks `ShouldPlayAuthoritativeCue` and is skipped). `UGSTN_CombatCueLibrary::
+  GetCombatHitInfo` reads the hit (location, direction, reaction, KO reason) in a Blueprint cue.
+- **Predicted hit events** on `UGSTN_HitPresentationComponent`: `OnHitPredicted` / `OnHitPredictionCancelled` (`FGSTN_PredictedHitEvent`), and
+  `HitstopAnimRate` (0 freezes; 0.03-0.1 keeps the frozen character moving a little). The predicted cue's context now carries the reaction.
+- Victim side lives in GSTNCombatGAS (`UGSTN_ReactionAnimComponent`: On Reaction Started/Ended, hitstop shake).
+- Tests `GSTNCombat.NP.MoveCosmetics.*` (tracker: windows and tail, hitstop, cancel and correction, slow screen; hit cue parameters).

@@ -503,9 +503,9 @@ bool FGSTN_RegistryToolkitShapeTest::RunTest(const FString& Parameters)
 {
 	// The layout: the name carries the version, and the four tabs of combat-m5-editor 5.1 are in it
 	const TSharedRef<FTabManager::FLayout> Layout = FGSTN_TimelineEditorToolkit::MakeDefaultLayout();
-	TestEqual(TEXT("the layout is the versioned one"), Layout->GetLayoutName(), FName(TEXT("GSTN_TimelineEditor_Layout_v1")));
+	TestEqual(TEXT("the layout is the versioned one"), Layout->GetLayoutName(), FName(TEXT("GSTN_TimelineEditor_Layout_v2")));
 	const FString Text = Layout->ToString();
-	for (const FName TabId : { FGSTN_TimelineEditorToolkit::ViewportTabId, FGSTN_TimelineEditorToolkit::TimelineTabId, FGSTN_TimelineEditorToolkit::DetailsTabId, FGSTN_TimelineEditorToolkit::FrameDataTabId })
+	for (const FName TabId : { FGSTN_TimelineEditorToolkit::ViewportTabId, FGSTN_TimelineEditorToolkit::TimelineTabId, FGSTN_TimelineEditorToolkit::DetailsTabId, FGSTN_TimelineEditorToolkit::FrameDataTabId, FGSTN_TimelineEditorToolkit::HitboxesTabId })
 	{
 		TestTrue(*FString::Printf(TEXT("the layout holds %s"), *TabId.ToString()), Text.Contains(TabId.ToString()));
 	}

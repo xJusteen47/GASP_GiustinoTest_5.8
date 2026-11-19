@@ -46,6 +46,12 @@ def run(path, opt):
     imgs = [poses.get(f, {}).get("source") for f in sel]
     has_img = any(s and str(s.get("file", "")).endswith(".png") for s in imgs)
     rows = 3 if has_img else 2
+    from animpipe import vframes as V, verbs
+    a0, hit = V.params(c, opt)
+    try:
+        owner = verbs.owner_frames(c, c["move"])
+    except Exception:
+        owner = set()
     fig, ax = plt.subplots(rows, len(sel), figsize=(3.4 * len(sel), 3.6 * rows), squeeze=False)
     for k, f in enumerate(sel):
         r = 0
@@ -62,7 +68,12 @@ def run(path, opt):
             _draw(a, F[str(f)], i, j)
             a.set_aspect("equal"); a.set_xlim(-90, 90) if i == 0 else a.set_xlim(-80, 100); a.set_ylim(0, 190)
             a.set_xticks([]); a.set_yticks([])
-            a.set_title(f"{f} {name} ({lab})", fontsize=9)
+            ok = f in owner       # the owner's own keys: red frame + star; the number first is the VIDEO frame (the owner's count)
+            a.set_title(f"v{V.anim_to_video(f, a0, hit)} (anim {f}){' ★ OWNER KEY' if ok else ''} {name} {lab}", fontsize=8,
+                        color="#b00020" if ok else "black", fontweight="bold" if ok else "normal")
+            if ok:
+                for sp in a.spines.values():
+                    sp.set_edgecolor("#b00020"); sp.set_linewidth(2.5)
     if opt.get("blind"):
         fig.suptitle(f"version {opt['blind']}  (left limbs red, right blue)")
     else:

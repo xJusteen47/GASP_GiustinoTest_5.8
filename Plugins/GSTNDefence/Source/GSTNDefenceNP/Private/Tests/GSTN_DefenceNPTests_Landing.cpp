@@ -29,6 +29,7 @@
 #include "Sim/GSTN_DIWiring.h"
 #include "Sim/GSTN_SDIDrift.h"
 #include "Sim/GSTN_TumbleLanding.h"
+#include "Timeline/GSTN_TimelinePlayer.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "Simulation/GSTN_CombatTickExtension.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
@@ -197,8 +198,16 @@ bool FGSTN_DefenceLandingDownedRollTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("downed: the gate admits only Combat.State.Knockdown bindings"), FGSTN_TumbleLanding::AdmitsOnly(Still) == GSTNDefenceTags::State_Knockdown.GetTag());
 	TestEqual(TEXT("nothing started"), Land.Services.Started.Num(), 0);
 
-	// Holding the stick: the get-up roll starts Forced and the downed state ends on its frame
+	// Holding the stick in the air (the bounce has not landed yet): no roll (react-hook-1 review: the rolls started at the bounce's peak)
+	FGSTN_CombatTickContext Airborne = Land.Make(141, FVector2D(0.8, 0.0));
+	Airborne.bGrounded = false;
+	FGSTN_TumbleLanding::AfterClocks(Airborne, Land.Data());
+	TestEqual(TEXT("no roll from the air"), Land.Services.Started.Num(), 0);
+	TestTrue(TEXT("still downed in the air"), Land.Fragment().IsKnockedDown(141));
+
+	// Holding the stick on the floor: the get-up roll starts Forced and the downed state ends on its frame
 	FGSTN_CombatTickContext Roll = Land.Make(141, FVector2D(0.8, 0.0));
+	Roll.bGrounded = true;
 	FGSTN_TumbleLanding::AfterClocks(Roll, Land.Data());
 	TestTrue(TEXT("the roll started Forced"), Land.Services.Started.Num() == 1 && Land.Services.Started[0] == UGSTN_GA_GetupRoll::StaticClass());
 	TestFalse(TEXT("up from the roll's frame"), Land.Fragment().IsKnockedDown(141));
@@ -210,6 +219,7 @@ bool FGSTN_DefenceLandingDownedRollTest::RunTest(const FString& Parameters)
 	FGSTN_TumbleLanding::OnContactResolved(BusyLanding, Busy.Data(), FLandRig::Contact(EGSTN_TumbleContactKind::Floor, 99, FVector::UpVector), EGSTN_ImpactOutcome::None);
 	FGSTN_CombatTimelineLogic::Start(Busy.Out.Core, 100, 0, EGSTN_ActivationSource::Forced);
 	FGSTN_CombatTickContext BusyRoll = Busy.Make(101, FVector2D(0.8, 0.0));
+	BusyRoll.bGrounded = true;
 	FGSTN_TumbleLanding::AfterClocks(BusyRoll, Busy.Data());
 	TestFalse(TEXT("no roll while the bounce plays"), Busy.Services.Started.Contains(UGSTN_GA_GetupRoll::StaticClass()));
 	TestTrue(TEXT("still downed"), Busy.Fragment().IsKnockedDown(101));
@@ -523,6 +533,57 @@ bool FGSTN_DefenceSDIThrowBlocksTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("no drift on a throw"), Step.DriftVelocity.IsZero() && Step.bBlocked);
 	TestEqual(TEXT("no distance used"), static_cast<int32>(Core.Hit.SDIDistanceUsed), 0);
 	FGSTN_DefenceAttach::Reset();
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DefenceLandingSelfKnockdownTest, "GSTNDefence.NP.Landing.SelfKnockdownOnLanding", TestFlags)
+bool FGSTN_DefenceLandingSelfKnockdownTest::RunTest(const FString& Parameters)
+{
+	// A move with a Combat.Move.KnockdownOnLanding window (the dropkick): airborne in it arms, the next grounded frame in it downs its own user
+	FLandRig Land(false, 30);
+	Land.Out.Core.ActionState = EGSTN_ActionState::InTimeline;
+	Land.Out.Core.HitstopStartFrame = INDEX_NONE;
+	Land.Out.Core.HitstopEndFrame = INDEX_NONE;
+	FGSTN_TimelineTrack_Tags Window;
+	Window.Tags.AddTag(GSTNDefenceTags::Move_KnockdownOnLanding);
+	FGSTN_TimelineOutput Timeline;
+	Timeline.TagWindows.Add(&Window);
+
+	FGSTN_CombatTickContext Takeoff = Land.Make(100);
+	Takeoff.Timeline = &Timeline;
+	Takeoff.bGrounded = true;
+	TestFalse(TEXT("grounded before ever leaving the ground: nothing"), FGSTN_TumbleLanding::SelfKnockdown(Takeoff, Land.Data()));
+	TestEqual(TEXT("not armed"), Land.Fragment().HitFlags & GSTNDefenceHitFlags::SelfKnockdownArmed, 0);
+
+	FGSTN_CombatTickContext Air = Land.Make(101);
+	Air.Timeline = &Timeline;
+	Air.bGrounded = false;
+	TestFalse(TEXT("airborne: nothing yet"), FGSTN_TumbleLanding::SelfKnockdown(Air, Land.Data()));
+	TestTrue(TEXT("armed"), (Land.Fragment().HitFlags & GSTNDefenceHitFlags::SelfKnockdownArmed) != 0);
+
+	FGSTN_CombatTickContext Landed = Land.Make(120);
+	Landed.Timeline = &Timeline;
+	Landed.bGrounded = true;
+	TestTrue(TEXT("landing in the window downs"), FGSTN_TumbleLanding::SelfKnockdown(Landed, Land.Data()));
+	const FGSTN_DefenceFragment Fragment = Land.Fragment();
+	TestEqual(TEXT("downed for MaxDownedFrames from the landing"), Fragment.KnockdownEndFrame, 120 + 30);
+	TestEqual(TEXT("disarmed"), Fragment.HitFlags & GSTNDefenceHitFlags::SelfKnockdownArmed, 0);
+	TestTrue(TEXT("the move ended"), Land.Out.Core.ActionState != EGSTN_ActionState::InTimeline);
+	TestEqual(TEXT("the ground bounce ability is pending"), Fragment.PendingStartFrame, 120);
+
+	// Leaving the window disarms: a landing after the move's window is an ordinary landing
+	FLandRig Late(false, 30);
+	Late.Out.Core.ActionState = EGSTN_ActionState::InTimeline;
+	FGSTN_CombatTickContext LateAir = Late.Make(101);
+	LateAir.Timeline = &Timeline;
+	FGSTN_TumbleLanding::SelfKnockdown(LateAir, Late.Data());
+	FGSTN_TimelineOutput Closed;
+	FGSTN_CombatTickContext After = Late.Make(110);
+	After.Timeline = &Closed;
+	After.bGrounded = true;
+	TestFalse(TEXT("outside the window: no knockdown"), FGSTN_TumbleLanding::SelfKnockdown(After, Late.Data()));
+	TestEqual(TEXT("and disarmed"), Late.Fragment().HitFlags & GSTNDefenceHitFlags::SelfKnockdownArmed, 0);
+	TestEqual(TEXT("not downed"), Late.Fragment().KnockdownEndFrame, static_cast<int32>(INDEX_NONE));
 	return true;
 }
 

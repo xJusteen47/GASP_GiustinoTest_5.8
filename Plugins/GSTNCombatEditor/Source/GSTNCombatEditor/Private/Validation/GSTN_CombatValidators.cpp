@@ -3,6 +3,7 @@
 #include "Validation/GSTN_CombatValidators.h"
 
 #include "Abilities/GSTN_GA_BaseCombat.h"
+#include "Abilities/GSTN_MoveActions.h"
 #include "AssetRegistry/AssetData.h"
 #include "AssetRegistry/IAssetRegistry.h"
 #include "Animation/AnimMontage.h"
@@ -541,6 +542,32 @@ void FGSTN_CombatValidators::CheckTagsTrack(const FGSTN_CombatTimelineData& Data
 			if (IsUnregistered(Event.GameplayEventTag))
 			{
 				ReportTag(Event.GameplayEventTag, FText::Format(LOCTEXT("EventTagWhere", "The gameplay event of event {0}"), TrackName(Index)), Index, Track->StartFrame);
+			}
+			if (IsUnregistered(Event.KeyTag))
+			{
+				ReportTag(Event.KeyTag, FText::Format(LOCTEXT("EventKeyWhere", "The Blueprint key of event {0}"), TrackName(Index)), Index, Track->StartFrame);
+			}
+			// Move actions (CP2): an entry that is not a move action (its module is not loaded, or the struct was removed) runs nothing; an
+			// action reports itself what it lacks (a projectile without a definition, an event without a tag)
+			for (int32 ActionIndex = 0; ActionIndex < Event.Actions.Num(); ++ActionIndex)
+			{
+				const FInstancedStruct& Action = Event.Actions[ActionIndex];
+				const UScriptStruct* Type = Action.GetScriptStruct();
+				FText Why;
+				if (Type == nullptr || !Type->IsChildOf(FGSTN_MoveAction::StaticStruct()))
+				{
+					Why = LOCTEXT("ActionNotAMoveAction", "is empty or not a move action: it runs nothing");
+				}
+				else
+				{
+					Why = Action.Get<FGSTN_MoveAction>().Validate();
+				}
+				if (!Why.IsEmpty())
+				{
+					AddFinding(Report, Context, EGSTN_Severity::Warning, GSTNValidationCodes::MoveAction(),
+						FText::Format(LOCTEXT("ActionWhere", "Action {0} of event {1}: {2}"), FText::AsNumber(ActionIndex), TrackName(Index), Why),
+						FGSTN_FindingLocation::OnTrack(Index, Track->StartFrame));
+				}
 			}
 		}
 	}

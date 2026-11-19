@@ -201,6 +201,15 @@ void UNpAbilitySystemComponent::StopSyncedMontage(UAnimMontage* Montage, bool bI
 	MontagePlayer->StopMontage(FAbilityMontageCancel(Montage), bInterrupted);
 }
 
+void UNpAbilitySystemComponent::StopSyncedMontageWithBlend(UAnimMontage* Montage, bool bInterrupted, float BlendOutSeconds, bool bHoldPose)
+{
+	if (!MontagePlayer)
+	{
+		return;
+	}
+	MontagePlayer->StopMontageWithBlend(FAbilityMontageCancel(Montage), bInterrupted, BlendOutSeconds, bHoldPose);
+}
+
 void UNpAbilitySystemComponent::PauseCurrentSyncedMontage()
 {
 	if (!MontagePlayer)
@@ -226,6 +235,15 @@ void UNpAbilitySystemComponent::JumpSyncedMontageToSection(UAnimMontage* Montage
 		return;
 	}
 	MontagePlayer->MontageJumpToSection(Montage,SectionName);
+}
+
+void UNpAbilitySystemComponent::SetSyncedMontageTime(UAnimMontage* Montage, float Time, bool bRestart)
+{
+	if (!MontagePlayer)
+	{
+		return;
+	}
+	MontagePlayer->SetMontageTime(Montage, Time, bRestart);
 }
 
 void UNpAbilitySystemComponent::SetCurrentMontagePlayRate(float PlayRate)
@@ -789,8 +807,8 @@ void UNpAbilitySystemComponent::FinalizeSmoothingFrame(const FAbilitySimSyncStat
 	//Finalize Smoothed Montage for local player , this smoothes the montage playback
 	if (AbilityActorInfo && GetAvatarActor())
 	{
-		//Finalize Montage
-		MontagePlayer->FinalizeFrame(SyncState->MontageSimulatorData);
+		//Finalize Montage (GSTN fork: the state is NP's interpolated one; the montage player's presentation clock reads the latest tick itself)
+		MontagePlayer->FinalizeFrame(SyncState->MontageSimulatorData, true);
 	}
 	
 }
