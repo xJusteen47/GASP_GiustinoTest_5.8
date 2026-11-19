@@ -34,10 +34,13 @@ param(
     [double]$SilentMinutes = 10,
     [double]$SilentSeconds,
     [string]$Engine,
-    [switch]$SelfTest
+    [switch]$SelfTest,
+    [switch]$KeepThrottle,      # Capture: keep the editor's background throttle (default: off, see docs/notes/speed-up.md)
+    [string]$ExtraArgs = ''     # appended to the preset's command line
 )
 
 $ErrorActionPreference = 'Stop'
+$script:Unthrottle = -not $KeepThrottle
 
 Add-Type -TypeDefinition @'
 using System;
@@ -93,6 +96,21 @@ public class GstnJob {
     public uint ExitCode() { uint c; GetExitCodeProcess(proc, out c); return c; }
     public uint Active() { BASIC_ACCOUNTING a; return QueryInformationJobObject(job, 1, out a, Marshal.SizeOf(typeof(BASIC_ACCOUNTING)), IntPtr.Zero) ? a.ActiveProcesses : 0; }
     public void KillAll() { if (job != IntPtr.Zero) TerminateJobObject(job, 1); }
+
+    // Windows 11 EcoQoS / timer-resolution throttling of background processes: opt the process out (speed-up.md, item 1)
+    [StructLayout(LayoutKind.Sequential)] struct POWER_THROTTLING { public uint Version, ControlMask, StateMask; }
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetProcessInformation(IntPtr h, int cls, ref POWER_THROTTLING info, int size);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetPriorityClass(IntPtr h, uint cls);
+    public static string Unthrottle(int pid) {
+        IntPtr h = OpenProcess(0x0200, false, pid);   // PROCESS_SET_INFORMATION
+        if (h == IntPtr.Zero) return "open failed " + Marshal.GetLastWin32Error();
+        POWER_THROTTLING s = new POWER_THROTTLING(); s.Version = 1; s.ControlMask = 0x1 | 0x4; s.StateMask = 0; // EXECUTION_SPEED | IGNORE_TIMER_RESOLUTION, both off
+        bool a = SetProcessInformation(h, 4, ref s, Marshal.SizeOf(typeof(POWER_THROTTLING)));   // ProcessPowerThrottling
+        bool b = SetPriorityClass(h, 0x8000);                                                     // ABOVE_NORMAL_PRIORITY_CLASS
+        CloseHandle(h);
+        return "ecoqos_off=" + a + " above_normal=" + b;
+    }
     public void Close() { if (proc != IntPtr.Zero) CloseHandle(proc); if (job != IntPtr.Zero) CloseHandle(job); proc = IntPtr.Zero; job = IntPtr.Zero; }
 }
 '@
@@ -115,9 +133,21 @@ function Invoke-Timed {
     try {
         $j.Start($line, $Cwd)
         $lastSize = -1; $lastChange = Get-Date
+        $unthrottled = @{}; $nextScan = Get-Date
         while ($true) {
             if ($j.WaitMs(1000)) { $code = [int]$j.ExitCode(); break }
             $now = Get-Date
+            if ($script:Unthrottle -and $now -ge $nextScan) {
+                # the editor is a child of cmd.exe (and PIE clients children of the editor): opt each one out of EcoQoS once
+                $nextScan = $now.AddSeconds(5)
+                $tree = @($j.Pid); $all = @(Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, Name)
+                for ($k = 0; $k -lt $tree.Count; $k++) { $tree += @($all | Where-Object { $_.ParentProcessId -eq $tree[$k] } | ForEach-Object ProcessId) }
+                foreach ($p in $all) {
+                    if ($tree -contains $p.ProcessId -and $p.Name -match '^UnrealEditor' -and -not $unthrottled[$p.ProcessId]) {
+                        $unthrottled[$p.ProcessId] = [GstnJob]::Unthrottle([int]$p.ProcessId)
+                    }
+                }
+            }
             if (($now - $t0).TotalSeconds -ge $MaxSec) { $verdict = 'TIMEOUT'; break }
             $size = -1
             if (Test-Path $Watch) { $fi = Get-Item $Watch; $size = $fi.Length + $fi.LastWriteTimeUtc.Ticks }
@@ -167,7 +197,7 @@ if ($SelfTest) {
     $r = Invoke-Timed 'Test' "$d\silent.log" $ps '-NoProfile -Command "Start-Sleep 300"' $null 600 4 $d -Quiet | Select-Object -Last 1
     $res += "4 BLOCCATO-case: $(if ($r -eq 125) {'PASS'} else {'FAIL'})"
     $res | Select-Object -First 5 | ForEach-Object { Write-Output $_ }
-    exit $(if ($res -match 'FAIL') { 1 } else { 0 })
+    exit $(if ($res -match ': FAIL') { 1 } else { 0 })
 }
 
 # ---- real run ---------------------------------------------------------------------------------------------------------
@@ -180,6 +210,9 @@ $uproject = "$Root\GASP_Giustino2.uproject"
 $eng = Resolve-EngineDir
 $Log = if ([IO.Path]::IsPathRooted($Log)) { $Log } else { Join-Path $Root $Log }
 
+# -unattended: UEditorEngine::ShouldThrottleCPUUsage returns false (no 3 fps cap in the background, no modal dialogs).
+# The ini override also keeps editor viewports rendering when the window has no focus (EditorEngine.cpp, 'Background Process').
+$NoThrottleArgs = '-unattended -ini:EditorSettings:[/Script/UnrealEd.EditorPerformanceSettings]:bThrottleCPUWhenNotForeground=False'
 switch ($Preset) {
     'Build' {
         $Exe = "$eng\Build\BatchFiles\Build.bat"
@@ -194,9 +227,10 @@ switch ($Preset) {
         if (-not $Script) { Write-Output 'ERRORE: -Script obbligatorio per Capture'; exit 2 }
         $py = if ([IO.Path]::IsPathRooted($Script)) { $Script } else { Join-Path $Root $Script }
         $Exe = "$eng\Binaries\Win64\UnrealEditor.exe"
-        $ArgLine = "`"$uproject`" -windowed -nosplash -nosound -ExecCmds=`"py $($py -replace '\\', '/')`" -abslog=`"$Log.ue.log`""
+        $ArgLine = "`"$uproject`" -windowed -nosplash -nosound $(if (-not $KeepThrottle) { $NoThrottleArgs }) -ExecCmds=`"py $($py -replace '\\', '/')`" -abslog=`"$Log.ue.log`""
         if (-not $WatchFile) { $WatchFile = "$Log.ue.log" }
     }
 }
 if (-not $Exe) { Write-Output 'ERRORE: serve -Preset oppure -Exe'; exit 2 }
+if ($ExtraArgs) { $ArgLine = "$ArgLine $ExtraArgs" }
 exit (Invoke-Timed $Kind $Log $Exe $ArgLine $WatchFile $maxSec $silentSec $Root | Select-Object -Last 1)
