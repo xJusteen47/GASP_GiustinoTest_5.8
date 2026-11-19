@@ -100,16 +100,18 @@ for path, kind in spec:
     rows = sample(seq)
     n = len(rows); times = [r["t"] for r in rows]
     cl, cr, sp = contacts(rows, "l"), contacts(rows, "r"), root_speed(rows)
-    curves = {"contact_l": cl, "contact_r": cr, "movedata_speed": sp}
+    # NO movedata_speed (2026-11-19, skid a5 FAIL): ABP Get_DynamicPlayRate plays any clip that has it at capsule speed / curve speed,
+    # so our authored timing stalled near speed 0 (skid) and drifted (run stop). Our clips play at their own rate: removed if present
+    curves = {"contact_l": cl, "contact_r": cr}
+    if not DRY and AL.does_curve_exist(seq, "movedata_speed", unreal.RawCurveTrackTypes.RCT_FLOAT):
+        AL.remove_curve(seq, "movedata_speed", False)
     if kind in ("start", "pivot"):
         ph = phase(cl, cr, n)
         if ph:
             curves["phase"] = ph
     # An in-place clip (no root motion: our frantic run start) gets neither: warping scales the stride by capsule speed / root speed,
     # and a 0 root speed is what an absent movedata_speed reads anyway
-    if max(sp) < 50.0:
-        del curves["movedata_speed"]
-    elif kind == "start":
+    if max(sp) >= 50.0 and kind == "start":
         curves["enable_warping"] = [1.0] * n
     p(path.rsplit("/", 1)[-1], kind, "frames", n, "onsets L", onsets(cl), "R", onsets(cr), "speed max %.0f" % max(sp), "curves", sorted(curves))
     if DRY:
@@ -120,7 +122,7 @@ for path, kind in spec:
         AL.add_curve(seq, name, unreal.RawCurveTrackTypes.RCT_FLOAT, False)
         AL.add_float_curve_keys(seq, name, times, vals)
     if AL.is_valid_anim_notify_track_name(seq, TRACK):
-        AL.remove_anim_notify_track(seq, TRACK)
+        AL.remove_animation_notify_track(seq, TRACK)
     AL.add_animation_notify_track(seq, TRACK)
     for s, c in (("l", cl), ("r", cr)):
         cls = unreal.load_class(None, FOLEY[s])

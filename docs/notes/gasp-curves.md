@@ -10,7 +10,7 @@ While the Blend Stack blends two clips, the one without the curve weighs as 0.
 ## What each one does (in our ABP; "ABP" = the name is in ABP_GSTN_Locomotion)
 | Curve / notify | Read by | Effect |
 |---|---|---|
-| MoveData_Speed (ABP) | dynamic play rate | the clip's own speed; play rate = capsule speed / this |
+| MoveData_Speed (ABP) | Get_DynamicPlayRate | if the clip has it, play rate = capsule speed / this (clamped). NOT on our clips: it stalled the skid near speed 0 (skid a5) |
 | MaxDynamicPlayRate (ABP) | same | cap of that play rate |
 | Enable_Warping (ABP) | stride + orientation warping alpha | 1 = stride and facing adapt to the capsule |
 | Enable_TurnInPlaceSteering (ABP) | steering, turn in place | root steering during a turn in place |
@@ -24,9 +24,9 @@ While the Blend Stack blends two clips, the one without the curve weighs as 0.
 ## GASP parity applied to our clips (Tools/GAS/routing/curves_author.py, derived from each clip's own bones)
 | Clip | Kind (GASP equivalent) | Added |
 |---|---|---|
-| AS_RunStop_Ganon_L_V5 / R_V5 | stop (M_Neutral_Run_Stop_*) | contact_l/r, movedata_speed, Foley Run L/R |
+| AS_RunStop_Ganon_L_V5 / R_V5 | stop (M_Neutral_Run_Stop_*) | contact_l/r, Foley Run L/R (movedata_speed removed, see above) |
 | AS_GSTN_RunStart_Frantic | start, but in place (no root motion) | contact_l/r, phase, Foley; NO enable_warping / movedata_speed (warping would scale by a 0 root speed) |
-| SS_180_Turn_Root180 (skid, owner's clip) | pivot (M_Neutral_Run_Pivot_*) | contact_l/r, movedata_speed, phase, Foley; NO enable_warping (the slide is wanted) |
+| SS_180_Turn_Root180 (skid, owner's clip) | pivot (M_Neutral_Run_Pivot_*) | contact_l/r, phase, Foley; NO enable_warping, NO movedata_speed |
 | AS_GSTN_Crouch_* | - | skipped: the clips have no bone tracks (known, crouch_fk_build) |
 Contact rule checked on GASP clips: 93-99% agreement with GASP's own contact curves; movedata_speed matches (500 cm/s run start).
 Not done: Disable_AdditiveLeans / Disable_AO = 1 on skid and stop (GASP's stops do not have them; try it if the lean bends the skid).

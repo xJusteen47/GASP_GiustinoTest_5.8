@@ -167,7 +167,7 @@ MOVE_SEQUENCES = [
     # Skid at the BASE run stage (MinStage 0, 11-18): reverse before FramesToNextStage (40 sim f) so the run is still stage 1 (470 > MinSpeed 350)
     # skid-finish-4: released early (30 frames after the reverse, inside Skid Exit Run) and held long (1.5 s)
     {'name': 'mv_skid_release', 'taps': [], 'frames': 190, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (125, None)]},
-    {'name': 'mv_skid_hold', 'taps': [], 'frames': 230, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (185, None)]},
+    {'name': 'mv_skid_hold', 'taps': [], 'frames': 280, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (245, None)]},
     {'name': 'mv_skid_base', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (30, (0, -1, 0)), (110, None)]},
     {'name': 'mv_walk_low', 'taps': [], 'frames': 140, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 0.2, 0)), (110, None)]},
     {'name': 'mv_jump_full', 'taps': [], 'frames': 90, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 24)},
