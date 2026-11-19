@@ -35,6 +35,13 @@ namespace GSTNFootLock
 		T = FMath::Clamp(T, 0.f, 1.f);
 		return T * T * (3.f - 2.f * T);
 	}
+
+	/** Pop offset weight: (1 - t)^2, steepest at the start, so the shown foot moves toward the pose from the first frame (a
+	 *  smoothstep fade held it still for ~3 frames: skid entry froze the left foot f120-122, anim-setup-2 review) */
+	float PopFade(float T)
+	{
+		return FMath::Square(1.f - FMath::Clamp(T, 0.f, 1.f));
+	}
 }
 
 FGSTN_AnimNode_BlendOutFootLock::FGSTN_AnimNode_BlendOutFootLock()
@@ -174,10 +181,15 @@ void FGSTN_AnimNode_BlendOutFootLock::Evaluate_AnyThread(FPoseContext& Output)
 		const FVector InWorld = InputWorld[i].GetLocation();
 		bool bPopped = false;
 		const bool bGuardable = Leg.Phase == EGSTN_FootLockPhase::Free || Leg.Phase == EGSTN_FootLockPhase::Smoothing;
-		if (bPopGuard && bGuardable && Leg.bHasTrack && !bRising)
+		// Only a FREE foot can pop: while a pop fades, the input keeps moving on its own track and a second trigger would swallow a
+		// real swing (skid exit f146-155 re-triggered and hid ~73 cm, then whipped 28 cm/frame). A jump wider than PopMaxDistance is a
+		// real change of pose (a transition), not a glitch: it shows as it is.
+		if (bPopGuard && Leg.Phase == EGSTN_FootLockPhase::Free && Leg.bHasTrack && !bRising)
 		{
 			const double Jump = FVector::Dist(InWorld, Leg.LastInWorld) - Leg.LastInVelocity.Size() * Dt;
-			if (Jump > PopDistance)
+			// ... and only a foot that was STILL (planted, pinned): a moving foot that speeds up is motion, and holding it back made
+			// it freeze 2 frames then catch up at 22-25 cm/frame (skid entry, anim-setup-3 cap_skid1 vs cap_skid_noguard f120-124)
+			if (Jump > PopDistance && Leg.LastInVelocity.Size() <= PopStillSpeed && FVector::Dist(Leg.LastOutWorld, InWorld) <= PopMaxDistance)
 			{
 				Leg.PopOffset = Leg.LastOutWorld - InWorld;
 				Leg.PopRotationOffset = (Leg.LastOutRotation * InputWorld[i].GetRotation().Inverse()).GetNormalized();
@@ -201,7 +213,7 @@ void FGSTN_AnimNode_BlendOutFootLock::Evaluate_AnyThread(FPoseContext& Output)
 			Leg.Held = InputWorld[i];
 			if (Leg.Phase == EGSTN_FootLockPhase::Smoothing)
 			{
-				const float A = 1.f - GSTNFootLock::SmoothStep(Leg.PhaseTime / FMath::Max(PopBlendTime, KINDA_SMALL_NUMBER));
+				const float A = GSTNFootLock::PopFade(Leg.PhaseTime / FMath::Max(PopBlendTime, KINDA_SMALL_NUMBER));
 				Leg.Held.SetLocation(InWorld + Leg.PopOffset * A);
 			}
 			Leg.Phase = EGSTN_FootLockPhase::Locked;
@@ -256,7 +268,7 @@ void FGSTN_AnimNode_BlendOutFootLock::Evaluate_AnyThread(FPoseContext& Output)
 		case EGSTN_FootLockPhase::Smoothing:
 		{
 			Leg.PhaseTime += DeltaTime;
-			const float A = 1.f - GSTNFootLock::SmoothStep(Leg.PhaseTime / FMath::Max(PopBlendTime, KINDA_SMALL_NUMBER));
+			const float A = GSTNFootLock::PopFade(Leg.PhaseTime / FMath::Max(PopBlendTime, KINDA_SMALL_NUMBER));
 			if (A <= 0.f)
 			{
 				Leg.Phase = EGSTN_FootLockPhase::Free;

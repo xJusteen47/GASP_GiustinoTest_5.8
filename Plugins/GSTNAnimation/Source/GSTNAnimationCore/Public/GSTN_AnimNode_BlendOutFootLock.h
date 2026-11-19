@@ -122,7 +122,17 @@ struct GSTNANIMATIONCORE_API FGSTN_AnimNode_BlendOutFootLock : public FAnimNode_
 	UPROPERTY(EditAnywhere, Category = "Pop Guard", meta = (ClampMin = "0", ForceUnits = "cm"))
 	float PopDistance = 8.f;
 
-	/** Seconds over which a pop's offset fades to the game pose */
+	/** A one-frame foot jump wider than this (cm) is a real change of pose, not a pop: the guard leaves it alone (offsets that big
+	 *  hid a real swing at the skid exit and released it as a whip) */
+	UPROPERTY(EditAnywhere, Category = "Pop Guard", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float PopMaxDistance = 20.f;
+
+	/** A pop is a STILL foot jumping (a pin letting go): the guard only fires when the foot moved slower than this (cm/s) the frame
+	 *  before. A swinging or accelerating foot is real motion (skid entry left foot) */
+	UPROPERTY(EditAnywhere, Category = "Pop Guard", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float PopStillSpeed = 60.f;
+
+	/** Seconds over which a pop's offset fades to the game pose, (1 - t)^2: the foot starts moving on the first frame */
 	UPROPERTY(EditAnywhere, Category = "Pop Guard", meta = (ClampMin = "0.01", ForceUnits = "s"))
 	float PopBlendTime = 0.15f;
 
