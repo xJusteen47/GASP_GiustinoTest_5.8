@@ -8,3 +8,4 @@ Applicate da confermare (§7): settings → Data Asset, un solo air hold, preset
 Gemini: ricerca alla cieca e review integrate (rev. 2, §9 del doc): accolti 15 punti, respinti o non verificati 5 (baffi di Nesky, tasto O di Astro, talk Hayashida, numeri senza fonte, decisione ControlRotation = tecnica, spec §5).
 Prove: §2 dal codice (git show origin/claude/ue59-sync-1119:Plugins/GSTNCamera/README.md e GSTN_CameraTypes.h); misure Astro da docs/notes/reviews/ref-astrobot-camera/README.md (branch pg3fen). Numeri §4 non misurati = [A].
 Costo stimato thread: ~6 $.
+RISPOSTA OWNER 17:55Z: 1A 2A 3A. Vecchio piano C0-C3 (camera-astrobot-piano.md) superato. Brief P0: docs/notes/camera-platforming/camera-p0-brief.md (copia handoffs/camera-p0-brief.md), fisso, Sonnet, 5 $, dopo il ciclo di locomozione.
