@@ -30,14 +30,10 @@ for k, v in (("play_net_mode", unreal.PlayNetMode.PIE_LISTEN_SERVER), ("play_num
         p("FAILED set", k, e)
 # The editor runs on virtual desktop 2, never in front: with "Use Less CPU when in Background" it is capped (first run: a flat 125 ms
 # per frame, p50 = p95). Off for the probe only (editor setting of this machine, restored at the end)
-try:
-    _perf = unreal.get_default_object(unreal.EditorPerformanceSettings)
-    _throttle_before = _perf.get_editor_property("throttle_cpu_when_not_foreground")
-    _perf.set_editor_property("throttle_cpu_when_not_foreground", False)
-    p("throttle_cpu_when_not_foreground", _throttle_before, "-> False")
-except Exception as e:
-    _perf, _throttle_before = None, None
-    p("FAILED throttle off", e)
+# The bitfield is not reachable from Python's set_editor_property, so the generic "set" console command does it (CDO, not saved)
+_perf, _throttle_before = True, 1
+unreal.SystemLibrary.execute_console_command(None, "set /Script/UnrealEd.EditorPerformanceSettings bThrottleCPUWhenNotForeground 0")
+p("set /Script/UnrealEd.EditorPerformanceSettings bThrottleCPUWhenNotForeground 0")
 les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
 st = {"t0": time.time(), "phase": "boot", "frames": 0, "dt": 0.0, "dts": []}
 tag = "one" if ONE else "multi"
@@ -53,7 +49,7 @@ def tick(dt):
     if st["phase"] == "boot" and t > 8:
         les.editor_request_begin_play(); st["phase"] = "warm"; st["tw"] = time.time(); p("PIE requested")
     elif st["phase"] == "warm" and time.time() - st["tw"] > 12:
-        for c in ("stat unit", "stat game", f"trace.file {OUT}/pie_{tag}.utrace cpu,frame,log,bookmark", f"csvprofile start"):
+        for c in ("t.IdleWhenNotForeground 0", "t.MaxFPS 0", "stat unit", "stat game", f"trace.file {OUT}/pie_{tag}.utrace cpu,frame,log,bookmark", f"csvprofile start"):
             cmd(c)
         st["phase"] = "measure"; st["tm"] = time.time(); p("measure start, PIE worlds:",
             len(unreal.EditorLevelLibrary.get_pie_worlds(False)) if hasattr(unreal.EditorLevelLibrary, "get_pie_worlds") else "?")
@@ -74,7 +70,7 @@ def tick(dt):
         st["phase"] = "quit"; st["tq"] = time.time()
     elif st["phase"] == "quit" and time.time() - st["tq"] > 3:
         if _perf is not None:
-            _perf.set_editor_property("throttle_cpu_when_not_foreground", _throttle_before)
+            unreal.SystemLibrary.execute_console_command(None, "set /Script/UnrealEd.EditorPerformanceSettings bThrottleCPUWhenNotForeground 1")
         open(os.path.join(OUT, "done.txt"), "w").write("ok")
         unreal.SystemLibrary.execute_console_command(None, "QUIT_EDITOR")
 
