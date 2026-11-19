@@ -5,6 +5,9 @@
 #include "GameFramework/Actor.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimClassInterface.h"
+#include "Animation/AnimStateMachineTypes.h"
+#include "Animation/AnimNode_StateMachine.h"
 #include "GSTN_AnimSetComponent.h"
 #include "GSTN_CombatNPTags.h"
 #include "HAL/IConsoleManager.h"
@@ -27,6 +30,33 @@ namespace GSTNRunPresentation
 
 	static TAutoConsoleVariable<float> CVarLean(TEXT("a.GSTN.LocomotionLean"), 1.f,
 		TEXT("Additive locomotion lean: 1 = as the profile says (default), 0 = off, other values scale it (2 = double, to judge it)."));
+
+	static int32 LogRunStart = 0;
+	static FAutoConsoleVariableRef CVarLogRunStart(TEXT("gstn.RunStart.Log"), LogRunStart,
+		TEXT("1 = log every presentation tick while a run start is possible: stamp time, stamp flag, speed and the current state of every "
+			"state machine of the main anim instance (diagnosis of which state shows the start)"));
+
+	/** "Machine:State" for every baked state machine of the anim instance (diagnostics only) */
+	static FString DescribeMachines(const UAnimInstance* Anim)
+	{
+		FString Out;
+		const IAnimClassInterface* AnimClass = Anim ? IAnimClassInterface::GetFromClass(Anim->GetClass()) : nullptr;
+		if (!AnimClass)
+		{
+			return Out;
+		}
+		const TArray<FBakedAnimationStateMachine>& Machines = AnimClass->GetBakedStateMachines();
+		for (int32 Index = 0; Index < Machines.Num(); ++Index)
+		{
+			// Read through the class's baked description: the instance's own description pointer is null until the machine initializes
+			const FAnimNode_StateMachine* Machine = Anim->GetStateMachineInstance(Index);
+			const int32 State = Machine ? Machine->GetCurrentState() : INDEX_NONE;
+			const FName StateName = Machines[Index].States.IsValidIndex(State) ? Machines[Index].States[State].StateName : NAME_None;
+			Out += FString::Printf(TEXT(" [%s:%s #%d/%d %.2f]"), *Machines[Index].MachineName.ToString(), *StateName.ToString(), State,
+				Machine ? 1 : 0, Machine ? Machine->GetCurrentStateElapsedTime() : -1.f);
+		}
+		return Out;
+	}
 }
 
 UGSTN_RunPresentationComponent::UGSTN_RunPresentationComponent()
@@ -110,6 +140,14 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 		RunStartTime = RunState && RunState->StampFrames >= 0 ? (RunState->StampFrames + 1) * GSTNRunPresentation::StepSeconds : -1.f;
 		bRunStartStamp = RunState && RunTuning && FGSTN_RunStageLogic::IsStartStamp(RunTuning->RunStages, *RunState);
 		BoostDashTime = RunState && RunState->DashFrames >= 0 ? (RunState->DashFrames + 1) * GSTNRunPresentation::StepSeconds : -1.f;
+		if (GSTNRunPresentation::LogRunStart && RunState && (RunState->StampFrames >= 0 || RunState->Stage == 0))
+		{
+			const USkeletalMeshComponent* Mesh = GetOwner()->FindComponentByClass<USkeletalMeshComponent>();
+			const UAnimInstance* Anim = Mesh ? Mesh->GetAnimInstance() : nullptr;
+			UE_LOG(LogTemp, Log, TEXT("RunStartLog %s %s f=%llu stamp=%d t=%.3f flag=%d stage=%d speed=%.0f%s"), *GetNameSafe(GetOwner()),
+				*GetNameSafe(Anim ? Anim->GetClass() : nullptr), GFrameCounter, RunState->StampFrames,
+				RunStartTime, bRunStartStamp ? 1 : 0, RunState->Stage, Mover->GetVelocity().Size2D(), *GSTNRunPresentation::DescribeMachines(Anim));
+		}
 	}
 	// The skid's entry speed (highest over the enter frames): the hold of the three-section clip runs on the share of it left
 	if (FootSlide.Source == EGSTN_FootSlideSource::RunSkid)

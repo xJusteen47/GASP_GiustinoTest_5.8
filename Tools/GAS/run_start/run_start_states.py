@@ -15,6 +15,8 @@ FOLDER, NAME = "/Game/GSTN/Animation/RunStart", "AS_GSTN_RunStart_Frantic"
 CLIP = f"{FOLDER}/{NAME}"
 SOURCE = "/Game/Characters/UEFN_Mannequin/Animations/Idle/M_Neutral_Stand_Idle_Loop"
 ALIAS_FROM = ["Idle Loop", "Idle Transition", "Idle Break"]
+ALIAS_FROM_MOVING = ["Locomotion Transition", "Locomotion Loop"]  # GASP start states (v2)
+ALIAS_WINDOW = 0.25  # s from the push: later than this the run start is not entered any more
 log = []
 def p(*a): log.append(" ".join(str(x) for x in a))
 
@@ -80,6 +82,11 @@ try:
         if any(s.name == "Skid" for s in d.states):
             machine, detail = info.machine, d
     names = {s.name: s for s in detail.states}
+    p("states", sorted(names))
+    # v2 (locomotion-finish): the push also lets GASP leave idle on the same frame (our getter is one frame late), so the alias also
+    # covers GASP's moving ground states; the alias only fires in the first ALIAS_WINDOW s so the state cannot re-enter after its exit
+    alias_from = [n for n in ALIAS_FROM + ALIAS_FROM_MOVING if n in names]
+    p("alias from", alias_from)
     for n in ["-> Run Start", "Run Start"]:
         if n in names:
             g("RemoveState", names[n].state); p("removed old", n)
@@ -91,10 +98,11 @@ try:
     except Exception as ex:
         p("position fallback", ex)
     state = g("AddState", machine, "Run Start", unreal.GSTN_StateKind.STATE, unreal.IntPoint(pos.x + 400, pos.y))
-    alias = g("AddStateAlias", machine, "-> Run Start", [n for n in ALIAS_FROM if n in names], False, pos)
+    alias = g("AddStateAlias", machine, "-> Run Start", alias_from, False, pos)
     conduit = g("FindState", machine, "Conduit")
     Cmp = unreal.GSTN_RuleCompare
-    transition(alias, state, rule([cond("GetAnimOwnerRunStartTime", Cmp.GREATER_EQUAL, "0")]), 0.05)
+    transition(alias, state, rule([cond("GetAnimOwnerRunStartTime", Cmp.GREATER_EQUAL, "0"),
+                                    cond("GetAnimOwnerRunStartTime", Cmp.LESS, f"{ALIAS_WINDOW:.3f}")]), 0.05)
     transition(state, conduit, rule([cond("GetAnimOwnerRunStartTime", Cmp.LESS, "0")],
                                     [cond("GetAnimOwnerRunStartTime", Cmp.GREATER_EQUAL, f"{length - 0.1:.3f}")]), 0.15)
     unreal.BlueprintEditorLibrary.set_node_comment(alias, "Frantic run start (owner 2026-11-18, choice B): Tools/GAS/run_start/run_start_states.py")

@@ -374,7 +374,9 @@ def build_clip(sk, name, c, poses, feet, ax):
         if c.get("pin_feet"):
             for s in ("l", "r"):
                 max_stretch = max(max_stretch, solve_leg(sk, loc, s, ftgt[s][0], ftgt[s][1]))
-            loc = sync_ik_bones(sk, loc)
+        # Always: the game's leg IK pulls the feet to the ik_foot_* bones, so an air clip that left them on the fall pose
+        # showed the fall legs in game (air v7 review: feet 40-60 cm off the authored tuck)
+        loc = sync_ik_bones(sk, loc)
         frames.append(loc)
     # numeric checks
     w0 = fk(sk, frames[0])

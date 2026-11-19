@@ -90,6 +90,7 @@ void UGSTN_LocomotionStateLibrary::SetBlendStackFromStateName(const FAnimUpdateC
 	{
 		const FObjectProperty* Chosen = FindFProperty<FObjectProperty>(AnimInstance->GetClass(), GSTNLocomotionState::ChosenAnimVar);
 		const UObject* Clip = Chosen ? Chosen->GetObjectPropertyValue_InContainer(AnimInstance) : nullptr;
-		UE_LOG(LogTemp, Log, TEXT("LocoState enter state=%s key=%s clip=%s"), *StateName.ToString(), *Key.ToString(), *GetNameSafe(Clip));
+		UE_LOG(LogTemp, Log, TEXT("LocoState enter %s f=%llu state=%s key=%s clip=%s"), *GetNameSafe(AnimInstance->GetOwningActor()), GFrameCounter,
+			*StateName.ToString(), *Key.ToString(), *GetNameSafe(Clip));
 	}
 }
