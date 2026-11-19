@@ -444,8 +444,11 @@ def land_ring():
     s = _system("NS_GSTN_LandRing")
     if s:
         _surface(s)
-        _puffs(s, "Skirt", 16, (0.22, 0.50), (25, 55), 680, 7.0, ring=(36, 12), origin=(0, 0, -5), curl=(60.0, 0.02))  # A1 review: lingered, floated
-        _puffs(s, "Wisps", 8, (0.20, 0.32), (12, 25), 820, 6.0, ring=(28, 8), origin=(0, 0, -8), curl=(200.0, 0.03))
+        # A1b (owner: "size ok, too stylised; DK is realistic"): same layout on the soft billowy smoke flipbook (MI SmokeReal), a little
+        # longer life (soft smoke thins out instead of popping). The stylised A1 look is MI PuffDust (commit b16a0475)
+        _puffs(s, "Skirt", 16, (0.50, 0.95), (60, 120), 560, 6.0, look="SmokeReal", ring=(36, 12), origin=(0, 0, -5), curl=(60.0, 0.02),
+               gravity=35.0)  # A1b: the soft flipbook fills ~half its frame: 60-120 cm sprites show A1-sized puffs that grow and fade (owner), ~0.8 s, slight rise
+        _puffs(s, "Wisps", 8, (0.35, 0.60), (25, 50), 820, 6.0, look="SmokeReal", ring=(28, 8), origin=(0, 0, -8), curl=(200.0, 0.03))
         _puffs(s, "Clumps", 8, (0.40, 0.55), (8, 16), 430, 1.5, look="PuffClump", ring=None, cone=((0, 0, 1), 55), gravity=-1300.0)
         disc = _sprites(s, "Contact")
         disc.burst(1).particle((0.35, 0.35), (220, 220)).sized()  # A1 review: invisible at 170 / 0.22

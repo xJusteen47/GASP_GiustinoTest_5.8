@@ -129,7 +129,10 @@ def build_puff(tex):
     emissive = V3._eye_inverse(mat, _op(mat, U.MaterialExpressionMultiply, col, gain, 2400, 450),
                                2550, 450)
     alpha = _op(mat, U.MaterialExpressionMultiply, tx_a, pcol, 1850, 820, b_out="A")
-    alpha_m = _op(mat, U.MaterialExpressionMultiply, alpha, _scalar(mat, "OpacityMax", 1.0, 1850, 950), 2000, 850)
+    # Owner 2026-11-19: real dust thins out as it spreads, so the puff fades toward alpha 0 while it grows (FadeStart < 1; 1 = off)
+    fade = V3._fade(mat, t, one_c, "FadeStart", 1.0, 1700, 1100)
+    alpha_f = _op(mat, U.MaterialExpressionMultiply, alpha, fade, 1850, 1050)
+    alpha_m = _op(mat, U.MaterialExpressionMultiply, alpha_f, _scalar(mat, "OpacityMax", 1.0, 1850, 950), 2000, 850)
     depth = _node(mat, U.MaterialExpressionDepthFade, 2150, 850)
     if not any(MEL.connect_material_expressions(alpha_m, "", depth, nm) for nm in ("Opacity", "InOpacity")):
         raise RuntimeError("cannot connect the Depth Fade opacity")
@@ -173,6 +176,10 @@ LOOKS = {
     # Landing skirt / wisps: pop to full in 15 % of life, hold, shrink to 35 % from 55 % (the flipbook's lobes die on top of that)
     "PuffDust": dict(DarkSnow=0.85, Wrap=0.15, RampLo=0.18, RampHi=0.5, OccStrength=0.5, ShadeColor=(0.5, 0.58, 0.8), FlipRate=1.0, StartScale=0.55, GrowEnd=0.15, ShrinkStart=0.30, EndScale=0.15),
     # Snow clumps: little lumpy solids, the flipbook barely moves (they stay round), shrink at the end
+    # A1b (owner on the A1 video: "too stylised, DK is realistic"): the same material on the soft billowy smoke flipbook
+    # (make_vfx_smoke_flipbook.py): softer light wrap and ramp, grows and thins out instead of shrinking
+    "SmokeReal": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.85, Wrap=0.4, RampLo=0.1, RampHi=0.8, ShadeColor=(0.55, 0.62, 0.8),
+                      OccStrength=0.6, FlipRate=1.0, StartScale=0.45, GrowEnd=1.0, FadeStart=0.15, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0),
     "PuffClump": dict(DarkSnow=0.85, FlipRate=0.3, StartScale=0.8, GrowEnd=0.08, ShrinkStart=0.6, EndScale=0.0, OccStrength=0.5),
 }
 
@@ -181,13 +188,20 @@ def run():
     tex = V3.import_texture("T_GSTN_VFX_PuffFB")
     tex.set_editor_property("compression_settings", U.TextureCompressionSettings.TC_VECTOR_DISPLACEMENTMAP)  # RG are normals: no BC3 blocks
     EAL.save_loaded_asset(tex)
+    textures = {"T_GSTN_VFX_PuffFB": tex}
+    for name in ("T_GSTN_VFX_SmokeFB",):
+        textures[name] = V3.import_texture(name)
+        textures[name].set_editor_property("compression_settings", U.TextureCompressionSettings.TC_VECTOR_DISPLACEMENTMAP)
+        EAL.save_loaded_asset(textures[name])
     puff = build_puff(tex)
     disc = build_disc()
     made = []
     for name, look in LOOKS.items():
         mi = V3._instance(name, puff)
         for k, v in look.items():
-            if isinstance(v, tuple):
+            if k == "tex":
+                MEL.set_material_instance_texture_parameter_value(mi, "Tex", textures[v])
+            elif isinstance(v, tuple):
                 MEL.set_material_instance_vector_parameter_value(mi, k, U.LinearColor(*v, 1.0))
             else:
                 MEL.set_material_instance_scalar_parameter_value(mi, k, float(v))

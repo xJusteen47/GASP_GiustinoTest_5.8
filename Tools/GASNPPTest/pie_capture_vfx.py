@@ -48,7 +48,8 @@ FWD, BACK = (0, 1, 0), (0, -1, 0)   # stick, relative to the camera (as in scena
 # dummy; kit: the host's kit for this sequence (default KIT); strong: frames pressing Strong; blocks: boxes summoned for the sequence and
 # removed after it, (cm ahead, cm to the side, cm above the floor, size along, across, up), placed along the host's facing
 SEQUENCES = [
-    {'name': 'jump', 'frames': 160, 'jump': [0], 'dist': 700.0, 'follow': True, 'follow_z': 0.6},  # r4: the pawn left the frame upwards
+    {'name': 'jump', 'frames': 200,  # A1b: 1 s after the landing for slow-fading smoke
+     'jump': [0], 'dist': 700.0, 'follow': True, 'follow_z': 0.6},  # r4: the pawn left the frame upwards
     {'name': 'hit_small', 'frames': 60, 'tap': [0], 'dummy': (95.0, 0.0), 'dist': 480.0, 'follow': False},
     {'name': 'hit_medium', 'frames': 80, 'tap': [0], 'dummy': (95.0, 90.0), 'dist': 480.0, 'follow': False},
     # The launch, followed until the downed landing (~190 frames after the hit) and a little after

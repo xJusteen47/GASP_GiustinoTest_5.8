@@ -22,3 +22,10 @@ fix round, end of that file). Captures `Saved/VfxV3/a1/{light5,dark5}` (`a1-*.ou
 ## Open for A2
 `LightDir` is fixed in sprite space (gioco: set it from the sun in the presentation component); sprite rotation off because of that;
 size/count dial after the owner's look; rest of the dust kit still uses M_GSTN_VFX_Smoke cards. Cost estimate: ~9 $ (Opus) + Fable review.
+## A1b realistic round (owner on the A1 video: "size ok, too stylised; DK is realistic"; "fade to alpha 0 while growing")
+`make_vfx_smoke_flipbook.py` -> `T_GSTN_VFX_SmokeFB` (soft billows, same channels) drawn by the same material through MI `SmokeReal`
+(grows over the whole life, fades from 15 %); `land_ring` skirt/wisps use SmokeReal, sprites 60-120 cm (the soft shape fills ~half the
+frame), life 0.5-0.95 s, slight rise. Capture `jump` extended to 200 frames (1 s after landing). Fable `REVIEW-A1b.md`: partly closer to
+DK; flaw 1 (opaque core shrinking) fixed; open: flat lighting/uneven billows (posa), 16 equal balls on a ring and wisps as "ears" (dati).
+Video `video/A1b_atterraggio_stilizzato_vs_realistico.mp4`. YouTube ref not analysed (Gemini: metadata only; download blocked here).
+Stylised look kept as MI PuffDust. Cost: A1 ~9 $ + A1b ~6 $ (Opus) + 2 Fable reviews.
