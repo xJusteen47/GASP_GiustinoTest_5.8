@@ -28,3 +28,8 @@ Owner videos: video/A2r5_atterraggio_{dark,light}[_vicino].mp4 from Saved/VfxV3/
 - Dark-floor dust 1.90-2.04x the floor (r3 1.55-1.81x): owner colour decision; DarkSnow 0.26 -> 0.23 is an unmeasured estimate.
 - Not captured: OFF pass, low preset; no blind critic on r5d. Hub umap must be restored after captures (`git checkout` it).
 Cost estimate ~12 $ (3 capture pairs + probe, 1 critic, Fable review + 2 rechecks).
+## Owner on r5 (21:00Z): "sni, sembra ancora finto" + DK clip owner_clip_2059.mp4
+Breakdown and ranked fixes: `docs/notes/vfx-studies/dk-clip-2059/studio_dk_clip_2059.md`. Main causes: dust not lit by the scene (unlit,
+shading baked in sprite space), one layer only, uniform symmetric puffs, no motion stretch in the first frames, clean procedural flipbook.
+Next thread (fresh, laptop): round = fixes 2 (impact light flash) + 3 (grit debris) + 5 (variation) as presets; then 1 (lit dust).
+To confirm with the owner: does the never-shrink rule cover solid grit too (proposal: no, dust only).
