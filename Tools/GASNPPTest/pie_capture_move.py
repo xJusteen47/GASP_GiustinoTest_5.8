@@ -166,6 +166,9 @@ MOVE_SEQUENCES = [
     {'name': 'mv_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (170, None)]},
     # Skid at the BASE run stage (MinStage 0, 11-18): reverse before FramesToNextStage (40 sim f) so the run is still stage 1 (470 > MinSpeed 350)
     # skid-finish-4: released early (30 frames after the reverse, inside Skid Exit Run) and held long (1.5 s)
+    # dash-ganon: L3 boost from idle with the stick pushed on the same frame (Smash dash); 'boost' = frame of a RunBoost tap
+    {'name': 'mv_dash', 'taps': [], 'frames': 120, 'dummy': None, 'shoot': True, 'follow': True, 'boost': 20, 'sticks': [(20, (0, 1, 0)), (80, None)]},
+    {'name': 'mv_dash_base', 'taps': [], 'frames': 120, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(20, (0, 1, 0)), (80, None)]},
     {'name': 'mv_skid_release', 'taps': [], 'frames': 190, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (125, None)]},
     {'name': 'mv_skid_hold', 'taps': [], 'frames': 280, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (245, None)]},
     {'name': 'mv_skid_base', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (30, (0, -1, 0)), (110, None)]},
@@ -609,6 +612,11 @@ def _tick(_dt):
                     _log(f'{seq["name"]}: jump on v{frame}, held {held} frames')
                 elif held > 0 and frame == PRE + at + held:
                     g.combat_clear(0)
+            if seq.get('boost') is not None and frame == PRE + seq['boost']:   # dash-ganon: the L3 run boost through its combat button
+                # the boost is an input-data key read by the locomotion profile (not a combat button: a combat tap did nothing, dash r3 cap1)
+                g.IA.setdefault('runboost', '/Game/GASNPPTest/Input/IA_GASNPP_RunBoost')
+                g.press(0, 'runboost')
+                _log(f'{seq["name"]}: boost (IA_GASNPP_RunBoost press) on v{frame}')
             if seq.get('crouch_tap') is not None and frame == PRE + seq['crouch_tap']:
                 g.combat_tap(0, st['crouch'])
                 _log(f'{seq["name"]}: crouch tap on v{frame}')
