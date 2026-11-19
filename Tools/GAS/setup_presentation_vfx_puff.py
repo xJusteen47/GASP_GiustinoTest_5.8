@@ -196,11 +196,11 @@ LOOKS = {
     # underside reads below the light floor (Brightness 0.8: the light floor exposes near white whatever its albedo, auto exposure).
     # r2 first pass (DarkSnow 0.15, gain 0.85, brown edges 0.55, FadeDistance 35) went darker than the dark floor and nearly vanished. Owner idea (same day): slightly
     # brownish-dark soft edges and undersides, slightly whiter tops, so the puff carries its own value contrast on any floor
-    "SmokeReal": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.4, DarkBrightness=1.15, Brightness=0.8, Wrap=0.15, RampLo=0.25, RampHi=0.6,
+    "SmokeReal": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.4, DarkBrightness=1.15, Brightness=0.65, Wrap=0.15, RampLo=0.25, RampHi=0.6,
                       LitColor=(0.95, 1.0, 1.12), ShadeColor=(0.40, 0.40, 0.45), EdgeTint=(0.70, 0.62, 0.56), EdgeWidth=0.35, OccStrength=0.8, FlipRate=1.0, StartScale=0.8, GrowEnd=1.0,
-                      FadeStart=0.05, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0, OpacityMax=0.75),
+                      FadeStart=0.2, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0, OpacityMax=0.9),  # r2 pass 3: light floor nearly invisible at 0.75/0.05
     # A2: thin low haze layer under the skirt (replaces the 8 small wisps that read as "ears", REVIEW-A1b flaw 3)
-    "SmokeHaze": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.35, DarkBrightness=1.15, Brightness=0.8, Wrap=0.15, RampLo=0.25, RampHi=0.6,
+    "SmokeHaze": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.35, DarkBrightness=1.15, Brightness=0.65, Wrap=0.15, RampLo=0.25, RampHi=0.6,
                       LitColor=(0.95, 1.0, 1.12), ShadeColor=(0.40, 0.40, 0.45), EdgeTint=(0.70, 0.62, 0.56), EdgeWidth=0.35, OccStrength=0.8, FlipRate=1.0, StartScale=0.85, GrowEnd=1.0,
                       FadeStart=0.05, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0, OpacityMax=0.3),
     "PuffClump": dict(DarkSnow=0.3, FlipRate=0.3, StartScale=0.8, GrowEnd=0.08, ShrinkStart=0.6, EndScale=0.0, OccStrength=0.5),
