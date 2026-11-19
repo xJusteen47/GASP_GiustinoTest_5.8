@@ -12,6 +12,8 @@ La checklist per le review Fable sta in `vfx-theory/gstn-vfx-reviewer.SKILL.md`.
 
 Legenda: **[F n]** = detto da una fonte (§17). **[O]** = osservato nei riferimenti dell'owner (Astro Bot `astro_1-13`,
 clip DK Bananza 2026-11-19). **[A]** = adattamento o ragionamento nostro, da verificare in gioco.
+**[G]** = aggiunto dopo la peer review di Gemini (2026-11-19, `docs/notes/reviews/agy-vfx-theory/esito.md` su
+`claude/locomotion-finish-1` e04141c7); cosa è stato accettato e cosa no è in §16-bis.
 Frame: contati da 1; sim a 62,5 Hz, 1 frame ≈ 16 ms.
 
 ## 0. Cosa c'era già (non ripetuto, solo richiamato)
@@ -59,8 +61,15 @@ fumo e polvere, scelta tecnica, prestazioni, processo. Le contraddizioni trovate
 8. **Direzione nella forma** [F10]: allungare nella direzione del moto, bordo d'attacco più chiaro e netto, coda più
    scura e morbida. Così una forma ferma "va" da qualche parte. Un colpo si orienta lungo la direzione del colpo o del lancio.
 9. **Spazio negativo e ritmo** [F12]: buchi, pause e intervalli fanno leggere le forme piene; un effetto senza vuoti è una macchia.
+   Alternare zone dense ad alta frequenza (scintille, schegge) a superfici lisce di riposo (una massa di fumo pulita) [G].
 10. **Pochi e grandi > tanti e piccoli** [F13, F14]: il dettaglio va nella forma o nella texture, non nel numero di
     particelle. Conta la **densità** giusta, che Sakurai indica come il parametro più importante degli effetti [F15].
+11. **Squash and stretch anche negli effetti** [G, F5, F20]: stelle, sbuffi e onde non sono rigidi; si schiacciano contro
+    il punto di contatto e si allungano nel verso del moto (stretch dalla velocità) prima di espandersi. Un effetto che
+    cresce solo in scala uniforme sembra un adesivo che si ingrandisce.
+12. **Orientamento giusto per ogni forma** [G]: con camera in terza persona libera, uno sprite rivolto alla camera si vede
+    sempre di faccia ma non ha direzione nel mondo; dischi a terra e onde d'urto vanno **allineati al piano** d'impatto,
+    stelle e scie allungate **all'asse** del colpo; ciò che deve leggersi da ogni lato ha volume (mesh).
 
 ## 3. Timing: le tre fasi
 1. **Anticipazione → climax → dissipazione** [F10, F16, F11]. Ogni effetto ha queste tre fasi; si progettano come curve
@@ -89,6 +98,16 @@ fumo e polvere, scelta tecnica, prestazioni, processo. Le contraddizioni trovate
 9. **Ritmo emotivo** [F11]: pulsazione più veloce di un battito = aggressivo; più lenta = amichevole (cure, raccolta).
 10. **Bloccare il timing prima della rifinitura** [F11, F18]: forme grigie semplici + suono, si ritocca il timing finché
     "suona", solo dopo materiali e dettagli. Ritoccare il timing di un effetto rifinito costa molto di più.
+11. **Follow-through degli strati secondari** [G, F20]: quando il corpo si ferma (fine colpo, hitstop), l'aria e la materia
+    leggera spinte dal colpo continuano per inerzia nella direzione tangente e poi frenano. È l'overlap del corpo
+    applicato all'effetto.
+12. **Decadimento termico** dell'energia [G, F5]: nucleo bianco (massimo) → bordo giallo/arancio saturo → rosso scuro →
+    fumo freddo. Vale per fuoco, esplosioni e colpi "caldi"; saltare un gradino toglie credibilità. Per elementi non
+    termici (elettrico, ghiaccio) la stessa idea: bianco al nucleo, tinta satura, poi tinta spenta.
+13. **Morte per erosione o contrazione, non per velo** [G, F10]: lo stile Nintendo/Riot chiude le forme mangiandone il
+    bordo (soglia sulla maschera) o rimpicciolendole; l'opacità che cala in modo lineare lascia un velo grigio e
+    overdraw che dura. Eccezione: i gas (v3, categoria B) possono calare di opacità, ma solo a fine vita e a contrasto
+    già basso.
 
 **Intervalli indicativi (dal nostro sheet, frame a ~60 fps)** [A]: lampo del colpo 1-2 frame; colpo intero 12-20 frame
 (200-330 ms); polvere 15-27 frame (250-450 ms); anello d'atterraggio 15-21 frame; detriti < 1 s.
@@ -169,6 +188,11 @@ fumo e polvere, scelta tecnica, prestazioni, processo. Le contraddizioni trovate
 6. **Cosa si vede in Astro Bot** [O astro_1-5]: lampo bianco netto a raggi + streak colorate brevi + scintille, sopra
    polvere/foglie fisiche; ombra di contatto netta; fumo morbido traslucido colorato dal materiale; anelli emissivi
    saturi + coriandoli solidi lucidi; luce calda direzionale con rim light e foschia viola sullo sfondo.
+6-bis. **Cosa dice Team Asobi (CEDEC 2025, solo fisica e grafica, nulla su fumo o materiali degli effetti)** [F32]:
+   fino a ~7.500 particelle fisiche per scena a 60 fps (PS5) solo per oggetti piccoli e forme convesse semplici;
+   frammenti di distruzione con numero limitato e **rimossi dopo un tempo** per tenere i 60 fps; fontane ibride (colonna
+   = mesh, solo le gocce che cadono simulate); "sotto i 60 fps è un bug". Per noi vale il principio (tetto ai pezzi,
+   vita breve, mesh per la parte prevedibile), non i numeri, che sono di una PS5 [A].
 7. **Il "look Unreal generico"** si riconosce da: tanti puntini piccoli, bagliore diffuso ovunque, traslucido grigio non
    illuminato, rumore procedurale, colori smorti, scintille identiche dappertutto [A, già nello sheet D12].
 
@@ -189,14 +213,25 @@ fumo e polvere, scelta tecnica, prestazioni, processo. Le contraddizioni trovate
 7. **Non tagliare sui piani**: il fumo che tocca il pavimento o un muro deve sfumare (depth fade), altrimenti mostra la
    linea dura del quad [F26].
 8. **Varietà di forma**: non cerchi uguali che salgono; masse di taglia diversa, sovrapposte, con buchi [F5].
+9. **Versioni economiche del fumo semi-realistico** [G, A]: (a) gruppi di sfere mesh low-poly Masked che prendono luce e
+   ombre da ogni angolo e non hanno overdraw (la soluzione v2, adatta al preset basso); (b) sprite traslucidi con luce
+   finta a due toni (chiaro verso la luce, tinta d'ombra verso il basso, tipo half-Lambert) invece di mappe di luce
+   precalcolate; (c) chiusura per erosione della maschera. Il flipbook illuminato con motion vector resta per il preset alto.
+10. **Ancorato al terreno** [G]: la polvere d'appoggio nasce sul piano del suolo e segue la sua normale, non fluttua sopra.
 
 ## 9. Impatto, hitstop e frame d'impatto (Sakurai)
 Le regole dell'hitstop sono già nei documenti (§0). Qui il rapporto **fra hitstop e VFX** [F21, F27, A]:
 1. **Il frame del contatto è un evento unico**: nello stesso frame partono fermo, lampo, tremito, suono e inizio della
    reazione. Se il lampo arriva un frame dopo il fermo, il colpo sembra "molle".
-2. **Durante l'hitstop**: il lampo si vede comunque per intero (1-2 frame); il resto dell'effetto rallenta molto
-   (nostro default 0,15) invece di fermarsi, così il fermo non sembra un blocco del gioco; alla ripartenza
-   tutti gli strati ripartono insieme al personaggio.
+2. **Durante l'hitstop** (rivisto dopo la peer review): il contrasto fra **corpi fermi** ed **effetto che scoppia** vende
+   il peso del colpo. Gemini sostiene che in Smash, Street Fighter 6, Guilty Gear Strive e DMC5 lo **hit mark** (lampo,
+   stella) avanzi a velocità piena mentre i personaggi sono congelati, e che un effetto rallentato a 0,15 su 8 frame di
+   fermo avanzi di ~1 frame e sembri un errore di render [G]. Non l'abbiamo verificato su video (Sakurai letto solo da
+   riassunti), ma il ragionamento è coerente con §3.2 (impulso istantaneo) [A]. Proposta: **energia** (lampo, stella,
+   onda; categoria C) a velocità piena durante il fermo; **materia** (schegge, polvere, fumo; A e B) frenata o ferma,
+   poi riparte col personaggio. Il nostro default attuale, `HitstopVfxTimeScale` = 0,15 per tutti gli effetti del colpo,
+   è una **decisione dell'owner** (v2, 2A): cambiarlo spetta a lui (§15.4). Il rallentamento globale resta adatto allo
+   slow-motion cinematografico (zoom finale), non all'hitstop ordinario [G].
 3. **Proporzione**: più danno = hitstop più lungo, effetto più grande e un po' più lungo, con un **tetto**; proiettili
    meno hitstop; più giocatori = hitstop più corto (impostazione per modalità) [F27].
 4. **Direzione**: la forma primaria segue la direzione del colpo o del lancio; il tremito è orizzontale a terra,
@@ -214,11 +249,11 @@ Le regole dell'hitstop sono già nei documenti (§0). Qui il rapporto **fra hits
 | Tecnica | Quando | Look | Costo principale |
 |---|---|---|---|
 | **Sprite** (quad rivolto alla camera, texture singola) | lampi, stelle, scintille, nuclei | netto se Masked/emissivo | overdraw se grande e traslucido; si riduce tagliando il quad sulla forma (cutout) [F14, F26] |
-| **Flipbook** (sprite con sequenza di frame, sub-UV) | gas che si deforma: fumo, fuoco, esplosioni | ricco, "realistico" | memoria texture, overdraw; meno frame con i **motion vector** (es. da 121 a 32 frame, risoluzione doppia) [F30]; luce finta con mappe di luce precalcolate da 4 o 6 direzioni [F30] |
+| **Flipbook** (sprite con sequenza di frame, sub-UV) | gas che si deforma: fumo, fuoco, esplosioni | ricco, "realistico" | memoria texture, overdraw; meno frame con i **motion vector** (es. da 121 a 32 frame, risoluzione doppia) [F30]; luce finta con mappe di luce precalcolate da 4 o 6 direzioni [F30]. Ma motion vector + mappe di luce = 2-4 sampler e calcoli su quad traslucidi: **solo preset alto**; nel basso sfere mesh o sprite con luce finta a 2 toni (§8.9) [G] |
 | **Mesh particle** | detriti, schegge, onde d'urto, anelli, coriandoli | solido, illuminato, ombre | draw call per emitter, triangoli; quasi nessun overdraw se opaco |
 | **Mesh con texture che scorre** | trombe d'aria, scie volumetriche, onde | pulito, continuo | uno shader; sostituisce centinaia di particelle prevedibili [F14, F16] |
 | **Ribbon / trail** | scie di arti e lame, traiettorie | linea continua | vertici, traslucenza lungo la scia |
-| **Luce dinamica breve** | lampo che illumina il pavimento e il personaggio | molto "tangibile" | costo per pixel della luce; poche, brevi, senza ombre [A] |
+| **Luce dinamica breve** | lampo che illumina il pavimento e il personaggio | molto "tangibile" | costo per pixel della luce, pesante su GPU integrate [G]; solo preset medio/alto, poche, brevi, senza ombre; nel preset basso la sostituisce un **disco emissivo a terra** (finto rimbalzo di luce) + bloom del nucleo [G, A] |
 | **Decal / disco a terra** | segno d'impatto, ombra degli effetti | ancora l'effetto al suolo | proiezione; da noi il decal blob è risultato invisibile, si usa il disco [vfx-stile-v2] |
 Regole generali: **il dettaglio va nella texture, non nel numero di particelle** [F14]; "usa i sistemi di particelle
 solo quando devi", meglio una mesh che scorre per ciò che è prevedibile [F16]; texture in scala di grigi a canali
@@ -228,16 +263,22 @@ impacchettati e colore dal parametro, così una texture serve molti effetti [F16
 1. **L'overdraw è il primo nemico** [F14, F26, F10]: ogni strato traslucido sovrapposto ricalcola gli stessi pixel. Il fumo
    arriva facilmente a 5-20 strati. Raddoppiare lato di un quad = quadruplicare i pixel [F14]. Rimedi: meno strati,
    particelle più piccole a schermo, vita più breve, quad tagliati sulla forma, opaco/Masked dove si può, depth fade solo dove serve.
+   Obiettivo indicativo in combattimento: **3-5 strati traslucidi** sovrapposti al massimo nel punto peggiore [G].
 2. **Poche particelle per effetto** [F14]: 3-10 per effetti che possono partire in massa; un effetto da 30 particelle
    è sceso a 2 (lampo + onda) cuocendo il dettaglio in texture.
-3. **CPU per pochi, GPU per tanti** [F26, F31]: la simulazione GPU conviene sopra ~1000 particelle; sotto, la CPU è più
-   veloce. Ogni emitter ha un costo fisso: meno emitter, più renderer o array di mesh nello stesso emitter [F31].
+3. **CPU per pochi, GPU per tanti** [F26, F31]: Epic dice solo che la CPU conviene per emitter con poche particelle e
+   che va misurato per piattaforma [F31]; una fonte indica il pareggio attorno a ~1000 particelle [F26], Gemini attorno a
+   ~100-200 [G]. **Nessun numero è verificato**: per noi non cambia nulla, perché i nostri burst sono di decine di
+   particelle (tetto 12 per burst nello sheet) e restano su CPU; si misura solo se un effetto supera ~100 [A].
+   Ogni emitter ha un costo fisso: meno emitter, più renderer o array di mesh nello stesso emitter [F31].
 4. **Niagara** [F31]: Effect Type per ogni sistema con livelli di scalabilità (preset grafici), culling per distanza e
    tetto di istanze, **pooling**, **bound fissi**, niente warmup, ombre e collisioni delle mesh spente se non servono,
    burst grandi spalmati su più frame.
 5. **Shader** [F14, F26]: somme, prodotti, lerp costano poco; sin/cos/pow, SceneColor e rifrazione costano molto
-   (+20-80 istruzioni). Ordine di grandezza per effetti grandi: 100-150 istruzioni; mobile 80-120.
-6. **Budget di tempo indicativi** [F26]: tick Niagara < 1-2 ms su hardware debole. Da misurare, non da assumere.
+   (+20-80 istruzioni). Ordine di grandezza per effetti grandi: 100-150 istruzioni; mobile 80-120. Conta anche il
+   **numero di texture lette**: al massimo ~2 per uno shader traslucido grande; SceneColor e rifrazione vietati nel preset basso [G].
+6. **Budget di tempo indicativi**: una fonte dà < 1-2 ms di tick Niagara su hardware debole [F26]; per il tostapane
+   adottiamo come obiettivo **< 0,5 ms** per i VFX di combattimento, picchi fino a 1 ms [G]. Da misurare, non da assumere.
 7. **Moduli costosi** da evitare in massa [F14]: collisione (sostituire con frenata a quota fissa / piano analitico),
    rumore (sostituire con curve di velocità), trail.
 8. **Come si controlla**: viste Shader Complexity e Quad Overdraw, Niagara Debugger e `stat Niagara`, preset grafico
@@ -261,19 +302,25 @@ impacchettati e colore dal parametro, così una texture serve molti effetti [F16
 7. Si legge in scala di grigi, su fondo chiaro e scuro, dietro e di lato, alla distanza massima di camera?
 8. Non copre il personaggio, non mente sulla portata?
 9. Durante l'hitstop rallenta e riparte col personaggio?
-10. Costo: numero di particelle ed emitter, overdraw, CPU/GPU, preset basso?
+10. Costo: numero di particelle ed emitter, overdraw (≤3-5 strati), texture lette, preset basso?
+11. Si schiaccia e si allunga nel verso del moto? Ogni forma ha l'orientamento giusto (camera, piano, asse)?
+12. Muore per erosione o contrazione, senza velo grigio che resta?
 
 ## 14. Checklist per chi revisiona
-È la skill `vfx-theory/gstn-vfx-reviewer.SKILL.md` (domande sì/no, etichette di FAIL, formato del verdetto).
+È la skill `vfx-theory/gstn-vfx-reviewer.SKILL.md` (12 domande sì/no giudicabili dal video + 2 controlli strumentali, etichette di FAIL, formato del verdetto).
 
 ## 15. Contraddizioni fra i documenti esistenti (da confermare, regola 13d)
 1. `stile-sheet-vfx-review.md` D2 ("nessun fumo realistico") e D12 (il traslucido morbido come segnale di "Unreal
    generico") contraddicono la **v3** (categoria B: fumo realistico, traslucido, illuminato) e la scelta dell'owner
    11-18 (fumo morbido colorato dal materiale). Proposta: D2 e D12 valgono solo per energia e solidi; per i gas vale v3.
 2. Sheet A "Materiale: mai Translucent" e "Morte: mai dissolvenza in trasparenza": superati dalla v3 per la sola
-   categoria B (decadimento morbido di opacità permesso). Proposta: aggiornare lo sheet con l'ambito per categoria.
+   categoria B (decadimento morbido di opacità permesso). Proposta: aggiornare lo sheet con l'ambito per categoria,
+   con il vincolo di §3.13 (prima erosione o contrazione, l'opacità cala solo a fine vita) [G].
 3. Sheet B "Colpo: lampo + toro neon": la memoria dell'owner dice "luce, non anelli" per il colpo (VFX v3).
    Proposta: lo sheet B segue la v3; l'anello resta solo se l'owner lo rivuole.
+4. **Hitstop dei VFX** (da peer review): default 0,15 per tutti (decisione owner v2 2A) contro hit mark a velocità piena
+   e materia frenata (§9.2). Proposta: A) energia a 1,0 e materia a 0,15 (consigliata, una seconda impostazione);
+   B) tenere 0,15 per tutto. Si decide guardando le due versioni in gioco.
 Il coordinatore le porta all'owner; questo documento non cambia lo sheet.
 
 ## 16. Limiti
@@ -283,11 +330,26 @@ Il coordinatore le porta all'owner; questo documento non cambia lo sheet.
   Le osservazioni [O] vengono dai riferimenti dell'owner (la clip DK è ripresa da TV).
 - I numeri di prestazioni [F26] sono di un singolo autore; valgono come ordine di grandezza, da misurare sul nostro hardware.
 
+## 16-bis. Peer review di Gemini: cosa è entrato e cosa no
+- **Accettato**: nome Chamberlin (verificato) e Oona Salla; principi mancanti (squash and stretch, follow-through
+  degli strati, orientamento, decadimento termico, erosione invece del velo, contrasto di frequenza, impronta
+  sull'ambiente come idea); trappole del preset basso (luci dinamiche, flipbook con motion vector); tetto di 3-5
+  strati; numero di texture lette; budget < 0,5 ms come obiettivo; checklist del revisore ridotta da 26 a 12 domande
+  + 2 controlli strumentali, con la domanda nuova su camera e orientamento.
+- **Accettato come proposta all'owner**: hit mark a velocità piena nell'hitstop (§9.2, §15.4).
+- **Non accettato o corretto**: (1) "Miyamoto è a pagina 3": verificato, la frase è a **pagina 2** (link F9 giusto).
+  (2) Soglia GPU "~100-200 raccomandata da Epic": la pagina Epic non dà numeri; resta non verificato (§11.3) e non
+  cambia nulla per i nostri burst. (3) Fonti Astro Bot: la sessione CEDEC 2025 esiste [F32], ma riguarda fisica,
+  fluidi e distruzione; **non dice nulla** su clearcoat, fumo che campiona le sonde o stelle emissive di 1 frame, che
+  Gemini le attribuisce; il relatore grafico è Hikaru Yamaguchi, non "Futoshi". Quelle affermazioni restano
+  osservazioni, non fonti. (4) "Impronta ambientale" citata a Team Asobi: idea buona, fonte non trovata.
+  (5) "Mesh GPU = 1 draw call": anche le mesh su CPU sono istanziate per emitter; la scelta CPU resta (§11.3).
+
 ## 17. Fonti
 F1 vfxapprentice.com/blog/five-artistic-principles-gaming-vfx · F2 GDC 2017 "Visual Effects Bootcamp: Artistic Principles
-of VFX", J. Keyser (Riot) e H. Chamberlain (Blizzard), gdcvault.com/play/1024439 + thread realtimevfx.com/t/artistic-principles-of-vfx/4081 ·
+of VFX", J. Keyser (Riot) e H. Chamberlin (Blizzard, Hearthstone), gdcvault.com/play/1024439 + thread realtimevfx.com/t/artistic-principles-of-vfx/4081 ·
 F3 80.lv/articles/vfx-staples-shape-color-and-motion (Jevremović) · F4 J. Gilland, *Elemental Magic* vol. I-II, Focal Press
-2009/2012 (recensione parkablogs.com) · F5 S. Oona, tesi Theseus 2017 theseus.fi/bitstream/handle/10024/137717 (riassume Gilland) ·
+2009/2012 (recensione parkablogs.com) · F5 O. Salla, tesi Theseus 2017 theseus.fi/bitstream/handle/10024/137717 (riassume Gilland) ·
 F6 leagueoflegends.com/en-us/news/dev/clarity-in-league + realtimevfx.com/t/anatomy-of-a-league-of-legends-missile-part-2/13062 ·
 F7 gonintendo.com/contents/12076 (Sakurai, effetti e risalto dei personaggi) · F8 gdcvault.com/play/1034360 (Rocksteady, GDC 2024) ·
 F9 iwataasks.nintendo.com/interviews/wiiu/super-mario-3d-world/0/2 · F9-bis iwataasks.nintendo.com/interviews/3ds/super-mario-3d-land/0/3 ·
@@ -304,4 +366,5 @@ F24 dev.classmethod.jp/en/articles/cedec-2026-voxel (DK Bananza, CEDEC 2026) · 
 F26 adamkomarowski.github.io/unrealtechart/book/vfx · F27 sourcegaming.info/2015/11/11/thoughts-on-hitstop-sakurais-famitsu-column-vol-490-1 +
 nintendowire.com (Eight Hit Stop Techniques, 2022-12-12) · F28 80.lv/articles/learn-how-to-add-accents-to-your-animations-with-impact-frames ·
 F29 gonintendo.com/contents/30552 (Sakurai, blade trails) · F30 loronsodev.github.io/posts/explosion-fx (motion vector, luce TLRB) +
-forums.unrealengine.com flipbook motion vectors · F31 dev.epicgames.com/documentation/en-us/unreal-engine/scalability-and-best-practices-for-niagara
+forums.unrealengine.com flipbook motion vectors · F31 dev.epicgames.com/documentation/en-us/unreal-engine/scalability-and-best-practices-for-niagara ·
+F32 cgworld.jp/article/202510-cedec-astrobot.html (Team Asobi, CEDEC 2025: H. Yamaguchi, T. Yoshida) · G = peer review Gemini, `docs/notes/reviews/agy-vfx-theory/esito.md` (claude/locomotion-finish-1 e04141c7)

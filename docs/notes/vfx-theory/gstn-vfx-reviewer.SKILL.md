@@ -37,42 +37,36 @@ Se l'owner dice che il video non torna, ricontrolla la catena prima dell'effetto
 5. **Confronto** con un riferimento della stessa classe (Astro Bot / DK Bananza per stile, Smash per timing e peso del
    colpo). Immagini di altri giochi solo sul desktop, mai nel repo.
 
-## 4. Le domande (sì/no, ognuna con frame e vista)
-**A. Informazione e gerarchia**
-1. Si capisce cosa è successo, dove e quanto è forte senza leggere numeri?
-2. La taglia/luminosità/durata segue il voto d'importanza? L'occhio va prima al colpo più importante, la polvere non compete?
-3. Lo stesso effetto di gioco ha la stessa forma in tutti i kit?
-**B. Personaggio e portata**
-4. A VFX accesi il corpo e l'arto che colpisce si leggono ancora (nessuna copertura nei frame attivi)?
-5. La parte visibile nei frame attivi corrisponde alla hitbox (né più piccola né molto più grande)?
-**C. Forma**
-6. La forma segue l'energia (appuntita per scarica, tonda per spinta morbida) e ha una direzione coerente col colpo/lancio?
-7. Grande-medio-piccolo: c'è un primario chiaro e pochi elementi subordinati, nessuna "pioggia di puntini uguali"?
-8. Niente simmetria meccanica o ripetizioni uguali dove non sono una scelta di stile?
-**D. Timing**
-9. L'evento è al frame giusto (contatto, appoggio, partenza) e il frame 1 è già leggibile?
-10. Climax nel primo quarto, poi dissipazione morbida; curve non lineari, niente velocità costante?
-11. Durata: non "sembra lunga"; nessun pezzo resta dopo che il gioco è andato avanti?
-12. Gli strati sono sfasati (non nascono e muoiono tutti insieme)?
-**E. Hitstop (solo colpi)**
-13. Lampo, fermo, tremito e suono partono nello stesso frame?
-14. Durante il fermo l'effetto rallenta (non si blocca né corre) e riparte col personaggio?
-15. A segno e a vuoto si distinguono nettamente?
-**F. Valore, colore, luce**
-16. In scala di grigi il punto di contatto è il più contrastato dell'inquadratura?
-17. Si legge su fondo chiaro e su fondo scuro, senza diventare grigio né sparire?
-18. Il valore massimo è solo nel nucleo; il corpo è a valori medi; un colore domina?
-19. La materia (fumo, polvere, detriti) prende la luce della scena; l'energia (lampi, scie) la emette?
-**G. Materia e stile (Astro Bot / DK Bananza)**
-20. Gas: morbido, illuminato, colorato dal materiale, sale o ricade secondo la causa, frena, non taglia sui piani?
-21. Solidi: lucidi, arrotondati, con ombra, rimbalzano poco e si fermano senza scivolare o compenetrare?
-22. Energia: netta, breve, satura?
-23. Profondità: da dietro e di 3/4 si capisce dove ha colpito e verso dove va (ombra, segno a terra, luce a terra)?
-24. Non sembra "Unreal generico" (puntini, bagliore diffuso, grigio non illuminato, rumore)?
-**H. Costo (solo avviso, il verdetto resta visivo)**
-25. Pochi strati traslucidi grandi sovrapposti; numero di particelle ed emitter entro lo sheet; preset basso ancora leggibile?
-**I. Barra di qualità**
-26. Accanto ai riferimenti della stessa classe, l'effetto è alla pari di Astro Bot / DK Bananza / Smash per il suo ruolo?
+## 4. Le domande (12, sì/no, ognuna con frame e vista; v2 dopo la peer review Gemini)
+Tutte si giudicano guardando il video. Tra parentesi la sezione di `principi-vfx.md`.
+1. **Messaggio e gerarchia**: si capisce cosa è successo, dove e quanto è forte; taglia, luce e durata seguono il voto
+   d'importanza; l'occhio va prima al colpo, la polvere non compete (§1, §4).
+2. **Personaggio leggibile**: a VFX accesi corpo e arto che colpisce si leggono nei frame attivi; nessuna copertura (§1.4, §5.4).
+3. **Forma ed energia**: forma appuntita per la scarica, tonda per la spinta morbida; un primario chiaro, grande-medio-piccolo,
+   niente pioggia di puntini uguali né ripetizioni meccaniche non volute (§2).
+4. **Direzione e deformazione**: la forma va nel verso del colpo o del lancio, si schiaccia e si allunga, non cresce solo
+   in scala uniforme (§2.8, §2.11).
+5. **Camera e orientamento**: girando o spostando la camera l'effetto tiene volume; nessun quad piatto visto di taglio,
+   nessuna compenetrazione col corpo o col suolo; dischi sul piano, scie sull'asse (§2.12, §5.2).
+6. **Frame dell'evento**: parte al frame giusto (contatto, appoggio, partenza) e il frame 1 è già leggibile (§3.8, §5.6).
+7. **Curva di vita**: climax nel primo quarto, frenata non lineare, strati sfasati, follow-through della materia leggera,
+   durata che non sembra lunga (§3).
+8. **Morte pulita**: erosione o contrazione; nessun velo grigio o pezzo che resta dopo che il gioco è andato avanti (§3.13, §8.5).
+9. **Hitstop** (solo colpi): lampo, fermo, tremito e suono nello stesso frame; durante il fermo l'effetto si comporta come
+   l'impostazione dichiarata nel brief; tutto riparte col personaggio; a segno e a vuoto si distinguono nettamente (§9).
+10. **Valore e sfondo**: in scala di grigi il contatto è il punto più contrastato; si legge su fondo chiaro e scuro senza
+    diventare grigio; valore massimo solo nel nucleo, un colore domina (§6).
+11. **Materia e luce** (Astro Bot / DK Bananza): l'energia emette, netta e breve; il gas è morbido, illuminato, colorato dal
+    materiale, sale o ricade secondo la causa e non taglia sui piani; i solidi sono lucidi, con ombra, si fermano senza
+    scivolare; da dietro e di 3/4 si capisce dove ha colpito (ombra o segno a terra) (§7, §8, §5.3).
+12. **Barra di qualità**: accanto a un riferimento della stessa classe (Astro Bot / DK Bananza per lo stile, Smash per
+    timing e peso), l'effetto è alla pari per il suo ruolo? Nomina il riferimento e una cosa che torna e una che no (§12.5).
+
+**Controlli strumentali** (solo se la cattura li contiene; altrimenti scrivi "non verificato", non è un NO):
+- S1 **Portata onesta**: con l'overlay delle hitbox, la parte visibile nei frame attivi corrisponde alla hitbox (§5.5).
+- S2 **Costo**: con `stat Niagara` o la vista Quad Overdraw, particelle ed emitter entro lo sheet, ≤3-5 strati traslucidi,
+  preset basso ancora leggibile (§11).
+- La coerenza fra kit (stessa funzione = stessa forma) si controlla solo in una review di famiglia dichiarata nel brief.
 
 ## 5. Ordinare i NO
 Etichetta ogni NO: **forma / timing / colore-valore / materiale / gerarchia / perf / gioco**.
@@ -94,7 +88,7 @@ Scarti (max 3): frame, vista, etichetta, principio, correzione più piccola.
 Lato gioco: <difetti `gioco`>.
 Decisioni dell'owner: <solo se servono>.
 ```
-PASS solo se nessun NO nelle sezioni A-G e la domanda 26 è sì. Max 3 giri, poi decide l'owner con i difetti scritti chiari.
+PASS solo se tutte le 12 domande sono sì e nessun controllo strumentale eseguito è NO. Max 3 giri, poi decide l'owner con i difetti scritti chiari.
 
 ## 7. All'owner
 Italiano, breve: verdetto, al massimo tre scarti, l'unica decisione che serve. Allega il video finale e una griglia.

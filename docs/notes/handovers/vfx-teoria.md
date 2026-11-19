@@ -7,8 +7,9 @@ Branch `claude/project-thread-mn2nvi` (da feature/gas-npp-5.8), solo file in doc
 - `docs/notes/vfx-theory/principi-vfx.md` (project files `vfx-theory/`): teoria generale, 17 sezioni: informazione,
   forma, timing in tre fasi, strati, leggibilità a camera, valore/colore, stile Astro Bot/DK Bananza, fumo e polvere,
   hitstop e VFX, flipbook/sprite/mesh/ribbon/luce, prestazioni tostapane, processo, checklist costruttore, contraddizioni, fonti.
-- `docs/notes/vfx-theory/gstn-vfx-reviewer.SKILL.md`: checklist per le review Fable (catena di cattura, 26 domande
-  sì/no in 9 gruppi, etichette di FAIL, max 3 scarti, formato verdetto). È un file, non una skill installata.
+- `docs/notes/vfx-theory/gstn-vfx-reviewer.SKILL.md`: checklist per le review Fable (catena di cattura, 12 domande
+  sì/no giudicabili dal video + 2 controlli strumentali, etichette di FAIL, max 3 scarti). File, non skill installata.
+- v2 dopo la peer review Gemini (esito su claude/locomotion-finish-1 e04141c7): accettato/rifiutato in §16-bis del doc.
 - `handoffs/agy-vfx-theory-peer-review-prompt.md`: prompt autonomo per Gemini/agy sul desktop (solo lettura).
 
 ## Scelte applicate (regola 6)
@@ -19,11 +20,12 @@ Branch `claude/project-thread-mn2nvi` (da feature/gas-npp-5.8), solo file in doc
 1. Sheet D2/D12 ("nessun fumo realistico", traslucido = generico) contro v3 categoria B: proposta, valgono solo per energia e solidi.
 2. Sheet A "mai Translucent / mai dissolvenza": proposta, eccezione per i gas (v3).
 3. Sheet B "colpo = lampo + toro neon" contro la nota owner "luce, non anelli": proposta, segue v3.
-4. Installare la checklist come skill `gstn-vfx-reviewer` (propose_skills) dopo la peer review Gemini.
+4. Hitstop VFX: A) energia (lampo/stella) a velocità piena e materia a 0,15 (consigliata, seconda impostazione); B) tenere 0,15 per tutto (decisione v2 2A). Si sceglie guardando le due versioni.
+5. Installare la checklist come skill `gstn-vfx-reviewer` (propose_skills) dopo la peer review Gemini.
 
 ## Prove (regola 11)
 Fonti lette via WebFetch/WebSearch in questo thread, elencate in §17 del doc. Nessun video guardato (limiti in §16).
 Clip DK Bananza: solo NOTE.md e un fotogramma (dk_1.jpg) visto una volta.
 
 ## Costo stimato
-~6 $ (Opus medium, ~20 letture web + scrittura).
+~8 $ (Opus medium, ~25 letture web + scrittura + integrazione peer review).
