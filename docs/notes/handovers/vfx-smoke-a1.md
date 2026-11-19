@@ -29,3 +29,9 @@ frame), life 0.5-0.95 s, slight rise. Capture `jump` extended to 200 frames (1 s
 DK; flaw 1 (opaque core shrinking) fixed; open: flat lighting/uneven billows (posa), 16 equal balls on a ring and wisps as "ears" (dati).
 Video `video/A1b_atterraggio_stilizzato_vs_realistico.mp4`. YouTube ref not analysed (Gemini: metadata only; download blocked here).
 Stylised look kept as MI PuffDust. Cost: A1 ~9 $ + A1b ~6 $ (Opus) + 2 Fable reviews.
+## Owner verdict 2026-11-19 15:33 (scope: landing dust look)
+"Bella, mi piace" on A1b -> A1b (realistic, MI SmokeReal) is the base for A2. "Probabilmente troppo grande rispetto alla dimensione del
+personaggio l'entità dell'effetto (la polvere)": the dust's overall extent is too big for the character. A2 start values (to try):
+skirt sprites 60-120 -> 40-80 cm, ring 36 -> 26, speed 560 -> 420, wisps 25-50 -> 18-35 cm; then Fable flaws 2-3 of REVIEW-A1b
+(shading Wrap 0.25 / RampLo 0.2 / RampHi 0.65 / OccStrength 0.8 / ShadeColor (0.60,0.63,0.72); flipbook k 14, blur 2, noise 0.42,
+dens 0.55 + 0.75 billow; skirt 10 puffs uneven ring). Then convert the rest of the dust kit (REVIEW-SMOKE-LOOK A2).
