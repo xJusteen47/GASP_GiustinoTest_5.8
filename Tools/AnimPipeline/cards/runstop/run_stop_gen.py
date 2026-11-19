@@ -65,19 +65,20 @@ BALL_OFF = {s: P0[f"foot_{s}"] - P0[f"ball_{s}"] for s in "lr"}          # ankle
 # ---------------- the action, LEFT foot planted in front (component space, root at the origin) ----------------
 # Pelvis offset from the idle pelvis (2.1, -2.5, 90.6): 7 cm down on the plant (brief: 6-8), deeper while it absorbs, over the foot
 PELVIS_LOC = [(0, [0, 2.5, -7.0], "lin"), (2, [0, 2.5, -8.0], "lin"), (12, [0, 8.0, -10.5], "io"), (22, [0, 12.0, -9.0], "io"),
-              (STOP, [0, 13.0, -7.5], "io"), (STOP + 9, [0, 4.0, -1.5], "out"), (STOP + 17, [0, -0.5, 0.6], "io"), (STOP + 24, [0, 0, 0], "io")]
+              (STOP, [0, 13.0, -7.5], "io"), (STOP + 8, [0, 10.0, -6.5], "io"), (STOP + 18, [0, 4.0, -2.5], "io"),
+              (STOP + 27, [0, 0, 0], "io")]   # V2 (Fable r3 FAIL): stays low after the lunge, rises over ~19 frames, no pelvis bump
 # Pelvis rotation: forward tilt and the left hip forward (yaw), unwinding with the rise
 PELVIS_ROT = [(0, [-8, 0, 12], "lin"), (2, [-8, 0, 12], "lin"), (22, [-8, 0, 10], "io"), (STOP, [-7, 0, 8], "io"),
-              (STOP + 9, [2, 0, 3], "out"), (STOP + 20, [0, 0, 0], "io")]
+              (STOP + 18, [1, 0, 3], "io"), (STOP + 27, [0, 0, 0], "io")]   # V2: follows the slower rise
 # Total trunk pitch (pelvis + spine), the line the eye reads: run lean on the plant, a follow-through forward while the feet brake,
 # still leaning when the feet stop, rise with an ease-out to 4 deg past vertical (backward), settle (single overshoot)
-TRUNK_PITCH = [(0, -32, "lin"), (2, -32, "lin"), (8, -37, "out"), (20, -31, "io"), (STOP, -28, "io"), (STOP + 9, 4, "out"),
-               (STOP + 18, 0, "io")]
+TRUNK_PITCH = [(0, -32, "lin"), (2, -32, "lin"), (8, -37, "out"), (20, -31, "io"), (STOP, -28, "io"), (STOP + 8, -22, "io"),
+               (STOP + 18, -4, "io"), (STOP + 25, 2, "out"), (STOP + 29, 0, "io")]   # V2: rise delayed and spread (V1: -28 -> +4 in 9 f)
 TRUNK_YAW = [(0, -8, "lin"), (2, -8, "lin"), (STOP, -5, "io"), (STOP + 10, -1, "out"), (STOP + 18, 0, "io")]   # shoulders counter the hips
 TRUNK_ROLL = [(0, 0, "lin"), (10, -3, "io"), (STOP, -2, "io"), (STOP + 12, 0, "io")]                         # weight toward the front leg
 # Head WORLD pitch: eyes forward through the brake, then it follows the trunk 3 frames late (trait 3)
 # v1 capture: -10 read as the chin on the chest in game; eyes level now
-HEAD_PITCH = [(0, 2, "lin"), (2, 2, "lin"), (STOP, 3, "io"), (STOP + 3, 3, "io"), (STOP + 12, 8, "out"), (STOP + 21, 0, "io")]
+HEAD_PITCH = [(0, 2, "lin"), (2, 2, "lin"), (STOP, 3, "io"), (STOP + 3, 3, "io"), (STOP + 20, 8, "out"), (STOP + 28, 0, "io")]
 
 # Front (left) ankle: lands 50 cm ahead, heel first (toes up 14 deg), flat by frame 7, skids while the pelvis comes over it; after the
 # stop it steps back under the body (the end pose is the idle, root at rest)
@@ -96,9 +97,9 @@ RF_POLE = [(0, [-16, 40, 15], "lin"), (20, [-16, 60, 45], "io")]
 # Arms (hand targets in the chest frame): run swing on the plant (right arm forward, left back), open LOW to the sides for balance
 # (brief frames 4-10), hold through the brake, then a small forward swing and close to the idle 3-4 frames after the trunk (trait 3)
 HL = [(0, [24, -24, -42], "lin"), (2, [24, -24, -42], "lin"), (11, [46, 4, -40], "out"), (STOP, [44, 8, -42], "io"),
-      (STOP + 13, [31, 20, -44], "out"), (STOP + 23, None, "io")]
+      (STOP + 20, [31, 20, -44], "out"), (STOP + 29, None, "io")]
 HR = [(0, [-20, 28, -28], "lin"), (2, [-20, 28, -28], "lin"), (12, [-43, 13, -37], "out"), (STOP, [-41, 10, -39], "io"),
-      (STOP + 12, [-29, 13, -45], "out"), (STOP + 22, None, "io")]
+      (STOP + 19, [-29, 13, -45], "out"), (STOP + 28, None, "io")]
 POLE_L = [(0, [36, -45, -12], "lin"), (11, [55, -25, -20], "io"), (STOP + 22, [40, -30, -25], "io")]
 POLE_R = [(0, [-34, -15, -45], "lin"), (12, [-55, -25, -20], "io"), (STOP + 22, [-40, -30, -25], "io")]
 FINGERS = [(0, 0.45, "lin"), (12, 0.7, "io"), (STOP + 20, 0.45, "io")]
