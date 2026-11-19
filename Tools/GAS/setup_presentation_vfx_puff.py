@@ -123,7 +123,14 @@ def build_puff(tex):
                 _mask(mat, _vector(mat, "ShadeColor", U.LinearColor(0.58, 0.66, 0.86, 1), 1250, 450), 1400, 450, r=True, g=True, b=True),
                 1550, 400)
     occ = _lerp(mat, one_c, _mask(mat, tx, 1550, 600, b=True), _scalar(mat, "OccStrength", 0.7, 1550, 680), 1700, 600)
-    col = _op(mat, U.MaterialExpressionMultiply, _lerp(mat, shade, lit, smooth, 2100, 300), occ, 2250, 400)
+    col0 = _op(mat, U.MaterialExpressionMultiply, _lerp(mat, shade, lit, smooth, 2100, 300), occ, 2250, 400)
+    # Owner idea 2026-11-19 (A2 r2, scope: realistic smoke looks): dust readable on any floor through value contrast INSIDE the puff:
+    # soft brownish-dark thin edges (where the texture alpha is low), slightly whiter lit tops (LitColor). EdgeTint (1,1,1) = off
+    edge_k = _unary(mat, U.MaterialExpressionSaturate,
+                    _op(mat, U.MaterialExpressionDivide, tx_a, _scalar(mat, "EdgeWidth", 0.35, 2100, 750), 2200, 750), 2300, 750)
+    edge_c = _lerp(mat, _mask(mat, _vector(mat, "EdgeTint", U.LinearColor(1, 1, 1, 1), 2200, 650), 2300, 650, r=True, g=True, b=True),
+                   one_c, edge_k, 2400, 700)
+    col = _op(mat, U.MaterialExpressionMultiply, col0, edge_c, 2350, 400)
     # A1 review: on the dark floor the lit side came out darker than the floor (auto exposure lifts it): a brighter emissive there
     gain = _lerp(mat, _scalar(mat, "DarkBrightness", 1.6, 2100, 600), _scalar(mat, "Brightness", 1.0, 2100, 550), bright, 2250, 550)
     emissive = V3._eye_inverse(mat, _op(mat, U.MaterialExpressionMultiply, col, gain, 2400, 450),
@@ -157,7 +164,9 @@ def build_disc():
     r = _node(mat, U.MaterialExpressionMultiply, -350, 0, const_b=2.0)
     _link(_unary(mat, U.MaterialExpressionLength, centred, -420, 0), "", r, "A")
     edge = _ramp(mat, r, _scalar(mat, "Inner", 0.25, -350, 100), one_c, -200, 50)
-    inside = _unary(mat, U.MaterialExpressionOneMinus, _op(mat, U.MaterialExpressionMultiply, edge, edge, 0, 50), 120, 50)
+    # A2 r2 (REVIEW-A2 gap 2, hard dark rim under the feet): 1 - e^2 falls steepest at the rim; (1 - e)^2 reaches 0 with no slope
+    inv = _unary(mat, U.MaterialExpressionOneMinus, edge, 0, 50)
+    inside = _op(mat, U.MaterialExpressionMultiply, inv, inv, 120, 50)
     fade = V3._fade(mat, t, one_c, "FadeStart", 0.35, -400, 400)
     pcol = _node(mat, U.MaterialExpressionParticleColor, -200, -300)
     alpha = _op(mat, U.MaterialExpressionMultiply, _op(mat, U.MaterialExpressionMultiply, inside, fade, 250, 100),
@@ -182,14 +191,19 @@ LOOKS = {
     # slightly (StartScale 0.45 -> 0.8) while it fades; firmer form shading, neutral shade tint (the baby-blue cast is gone)
     # A2 critic (CRITIC-A2.md): white steam on dark (DarkSnow/DarkBrightness down), no shaded underside (darker ShadeColor, harder
     # ramp), legs melting into the dust (OpacityMax 0.6), growth then fade in sequence (fade from 5 % of life)
-    "SmokeReal": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.65, DarkBrightness=1.3, Wrap=0.15, RampLo=0.25, RampHi=0.6,
-                      ShadeColor=(0.45, 0.47, 0.52), OccStrength=0.8, FlipRate=1.0, StartScale=0.8, GrowEnd=1.0, FadeStart=0.05,
-                      ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0, OpacityMax=0.75),  # r1 at 0.6 / DarkSnow 0.5 nearly vanished
+    # A2 r2 (REVIEW-A2 gap 1, GASP hub light): on dark the dust was 3.3x the navy floor and neutral grey (white smoke): little snow lean,
+    # lower dark gain and a cool LitColor so it keeps the floor's blue cast (target lit top ~2x floor); darker cool ShadeColor so the
+    # underside reads below the light floor (Brightness 0.8: the light floor exposes near white whatever its albedo, auto exposure).
+    # r2 first pass (DarkSnow 0.15, gain 0.85, brown edges 0.55, FadeDistance 35) went darker than the dark floor and nearly vanished. Owner idea (same day): slightly
+    # brownish-dark soft edges and undersides, slightly whiter tops, so the puff carries its own value contrast on any floor
+    "SmokeReal": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.4, DarkBrightness=1.15, Brightness=0.8, Wrap=0.15, RampLo=0.25, RampHi=0.6,
+                      LitColor=(0.95, 1.0, 1.12), ShadeColor=(0.40, 0.40, 0.45), EdgeTint=(0.70, 0.62, 0.56), EdgeWidth=0.35, OccStrength=0.8, FlipRate=1.0, StartScale=0.8, GrowEnd=1.0,
+                      FadeStart=0.05, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0, OpacityMax=0.75),
     # A2: thin low haze layer under the skirt (replaces the 8 small wisps that read as "ears", REVIEW-A1b flaw 3)
-    "SmokeHaze": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.5, DarkBrightness=1.3, Wrap=0.15, RampLo=0.25, RampHi=0.6, ShadeColor=(0.45, 0.47, 0.52),
-                      OccStrength=0.8, FlipRate=1.0, StartScale=0.85, GrowEnd=1.0, FadeStart=0.05, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0,
-                      OpacityMax=0.3),
-    "PuffClump": dict(DarkSnow=0.85, FlipRate=0.3, StartScale=0.8, GrowEnd=0.08, ShrinkStart=0.6, EndScale=0.0, OccStrength=0.5),
+    "SmokeHaze": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.35, DarkBrightness=1.15, Brightness=0.8, Wrap=0.15, RampLo=0.25, RampHi=0.6,
+                      LitColor=(0.95, 1.0, 1.12), ShadeColor=(0.40, 0.40, 0.45), EdgeTint=(0.70, 0.62, 0.56), EdgeWidth=0.35, OccStrength=0.8, FlipRate=1.0, StartScale=0.85, GrowEnd=1.0,
+                      FadeStart=0.05, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0, OpacityMax=0.3),
+    "PuffClump": dict(DarkSnow=0.3, FlipRate=0.3, StartScale=0.8, GrowEnd=0.08, ShrinkStart=0.6, EndScale=0.0, OccStrength=0.5),
 }
 
 
@@ -218,7 +232,7 @@ def run():
         EAL.save_loaded_asset(mi)
         made.append(name)
     mi = V3._instance("ContactDisc", disc)
-    for k, v in dict(StartScale=0.6, GrowEnd=0.3, ShrinkStart=1.0, EndScale=1.0, MaxOpacity=0.25).items():  # A2: 0.40 read as a hole under the feet
+    for k, v in dict(StartScale=0.6, GrowEnd=0.3, ShrinkStart=1.0, EndScale=1.0, MaxOpacity=0.10).items():  # A2: 0.40 read as a hole under the feet; r2 0.25 -> 0.10 (still a black hole on dark at 0.18)
         MEL.set_material_instance_scalar_parameter_value(mi, k, float(v))
     MEL.update_material_instance(mi)
     EAL.save_loaded_asset(mi)

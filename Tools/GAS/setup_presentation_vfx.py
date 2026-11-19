@@ -451,9 +451,12 @@ def land_ring():
         # A2 (owner on A1b, 2026-11-19: "too big for the character"; target = A1b's extent ~2 frames after touchdown, about shoulder wide
         # and knee high, as the MAX): small ring and short throw, the puffs grow only slightly while they fade (MI SmokeReal StartScale
         # 0.8). CRITIC-A2: puffs off the shins (ring 26), mixed 30-90 cm, clumps as tiny grit. REVIEW-A1b flaw 3: 8 puffs of mixed size on a filled disc (not 16 equal balls on a ring), the wisps become a thin haze
-        _puffs(s, "Skirt", 8, (0.45, 0.80), (30, 90), 180, 4.5, look="SmokeReal", ring=(26, 8), origin=(0, 0, -5), curl=(40.0, 0.02),
-               gravity=10.0, ring_width=0.6)
-        _puffs(s, "Wisps", 4, (0.40, 0.60), (50, 80), 130, 6.0, look="SmokeHaze", ring=(12, 4), origin=(0, 0, -6), curl=(60.0, 0.03))
+        # A2 r2 (REVIEW-A2 gap 3: right lobe up to the knee at +15..+26, a wisp alive to +38): max 90 -> 65 cm, ring 26 -> 30 to keep the
+        # width, weaker rise, shorter life (all alpha 0 by ~+27 frames). Gap 2 (straight cut line in the dust base): centres raised from
+        # 5 cm under the floor to 6 cm over it, so less of each sprite is cut by the floor (the material depth fade softens the rest)
+        _puffs(s, "Skirt", 8, (0.40, 0.50), (30, 65), 180, 4.5, look="SmokeReal", ring=(30, 8), origin=(0, 0, 6), curl=(40.0, 0.02),
+               gravity=3.0, ring_width=0.6)
+        _puffs(s, "Wisps", 4, (0.35, 0.45), (45, 65), 130, 6.0, look="SmokeHaze", ring=(14, 4), origin=(0, 0, 4), curl=(60.0, 0.03))
         _puffs(s, "Clumps", 5, (0.30, 0.45), (3, 6), 220, 1.5, look="PuffClump", ring=None, cone=((0, 0, 1), 60), gravity=-1300.0)
         disc = _sprites(s, "Contact")
         disc.burst(1).particle((0.35, 0.35), (120, 120)).sized()  # A2: scaled with the dust (was 220)
