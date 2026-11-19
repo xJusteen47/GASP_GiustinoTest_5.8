@@ -22,7 +22,7 @@ sys.path.insert(0, TOOLS)
 from animpipe.author import Poser, rv, m2q   # noqa: E402
 
 FPS = 60
-N = 61                       # frames 0..60 (an even number of intervals: the 30 fps resample needs it)
+N = 73                       # frames 0..72 (V4: room for the arms/head to land after the trunk; even intervals for the 30 fps resample)
 # Root speed per frame, cm/s: the sim's brake measured in run-stop-1 (Saved/RunStop/clip/run.log.ue.log, player, entry 470 cm/s,
 # one value per presented frame from the first stop frame). Frames 0-2 = the run speed (the track's run speed and brake start).
 # The tail below 10 cm/s is cut to 0: the game starts the settle at StoppedSpeed (10 cm/s) and jumps the clip to its stop, so the
@@ -59,47 +59,51 @@ def curve(keys, f):
 POSER = Poser()
 P0, R0 = POSER.P0, POSER.R0
 IDLE_ANKLE = {s: P0[f"foot_{s}"].copy() for s in "lr"}
+# V4 (Fable lf3): the game idle stands with the feet ~10 cm apart front to back (the GASP idle frame 0 staggers them 32 cm): end there
+IDLE_ANKLE["l"][1], IDLE_ANKLE["r"][1] = 5.0, -5.0
 IDLE_HAND = {s: P0[f"hand_{s}"] - P0["spine_05"] for s in "lr"}          # chest frame = component axes at idle
 BALL_OFF = {s: P0[f"foot_{s}"] - P0[f"ball_{s}"] for s in "lr"}          # ankle relative to the ball, idle orientation
 
 # ---------------- the action, LEFT foot planted in front (component space, root at the origin) ----------------
 # Pelvis offset from the idle pelvis (2.1, -2.5, 90.6): 7 cm down on the plant (brief: 6-8), deeper while it absorbs, over the foot
-PELVIS_LOC = [(0, [0, 2.5, -7.0], "lin"), (2, [0, 2.5, -8.0], "lin"), (12, [0, 8.0, -11.5], "io"), (22, [0, 12.0, -12.0], "io"),
-              (STOP, [0, 13.0, -11.0], "io"), (STOP + 8, [0, 10.0, -8.0], "io"), (STOP + 18, [0, 4.0, -2.5], "io"),
-              (STOP + 27, [0, 0, 0], "io")]   # V2 (Fable r3 FAIL): stays low after the lunge, rises over ~19 frames, no pelvis bump
+PELVIS_LOC = [(0, [0, 2.5, -7.0], "lin"), (2, [0, 2.5, -8.0], "lin"), (12, [0, 8.0, -11.0], "io"), (18, [0, 10.5, -12.5], "io"),
+              (26, [0, 12.5, -11.5], "io"), (STOP, [0, 13.0, -11.5], "io"), (STOP + 3, [0, 14.5, -13.0], "out"), (STOP + 9, [0, 10.0, -8.5], "io"),
+              (STOP + 18, [0, 4.0, -2.5], "io"), (STOP + 27, [0, 0, 0], "io")]   # V4 (Fable lf3): a slow sink/recover in the slide, a dip at the stop
 # Pelvis rotation: forward tilt and the left hip forward (yaw), unwinding with the rise
 PELVIS_ROT = [(0, [-8, 0, 12], "lin"), (2, [-8, 0, 12], "lin"), (22, [-8, 0, 10], "io"), (STOP, [-7, 0, 8], "io"),
               (STOP + 18, [1, 0, 3], "io"), (STOP + 27, [0, 0, 0], "io")]   # V2: follows the slower rise
 # Total trunk pitch (pelvis + spine), the line the eye reads: run lean on the plant, a follow-through forward while the feet brake,
 # still leaning when the feet stop, rise with an ease-out to 4 deg past vertical (backward), settle (single overshoot)
-TRUNK_PITCH = [(0, -32, "lin"), (2, -32, "lin"), (8, -37, "out"), (20, -31, "io"), (STOP, -28, "io"), (STOP + 8, -22, "io"),
-               (STOP + 18, -4, "io"), (STOP + 25, 2, "out"), (STOP + 29, 0, "io")]   # V2: rise delayed and spread (V1: -28 -> +4 in 9 f)
+TRUNK_PITCH = [(0, -32, "lin"), (2, -32, "lin"), (8, -37, "out"), (16, -33, "io"), (24, -35, "io"), (STOP, -30, "io"),
+               (STOP + 3, -35, "out"), (STOP + 9, -24, "io"), (STOP + 18, -4, "io"), (STOP + 25, 2, "out"), (STOP + 29, 0, "io")]
+# V4: the brake breathes (16/24) instead of a frozen slide; at the stop the chest pushes on 3 f and recoils (overlap)
 TRUNK_YAW = [(0, -8, "lin"), (2, -8, "lin"), (STOP, -5, "io"), (STOP + 10, -1, "out"), (STOP + 18, 0, "io")]   # shoulders counter the hips
 TRUNK_ROLL = [(0, 0, "lin"), (10, -3, "io"), (STOP, -2, "io"), (STOP + 12, 0, "io")]                         # weight toward the front leg
 # Head WORLD pitch: eyes forward through the brake, then it follows the trunk 3 frames late (trait 3)
 # v1 capture: -10 read as the chin on the chest in game; eyes level now
-HEAD_PITCH = [(0, 2, "lin"), (2, 2, "lin"), (STOP, 3, "io"), (STOP + 3, 3, "io"), (STOP + 20, 8, "out"), (STOP + 28, 0, "io")]
+HEAD_PITCH = [(0, 2, "lin"), (2, 2, "lin"), (STOP, 3, "io"), (STOP + 3, -3, "out"), (STOP + 8, 3, "io"), (STOP + 25, 9, "out"),
+              (STOP + 31, -2, "io"), (STOP + 35, 0, "io")]   # V4: nod at the stop, lands 5-6 f after the trunk with a small overshoot
 
 # Front (left) ankle: lands 50 cm ahead, heel first (toes up 14 deg), flat by frame 7, skids while the pelvis comes over it; after the
 # stop it steps back under the body (the end pose is the idle, root at rest)
 LF_POS = [(0, [16, 42, 11.5], "lin"), (2, [16, 42, 11.5], "lin"), (7, [16.5, 40, 9.4], "io"), (22, [17, 33, 9.4], "io"),
           (STOP, [17, 31, 9.4], "io"), (STOP + 9, [17, 31, 9.4], "lin"), (STOP + 13, [18.5, 26, 15.0], "io"),
-          (STOP + 18, [20.0, 12.5, 9.4], "io")]
+          (STOP + 18, [20.0, 5.0, 9.4], "io")]
 LF_ROT = [(0, [14, 0, 6], "lin"), (2, [14, 0, 6], "lin"), (7, [0, 0, 6], "io"), (STOP + 9, [0, 0, 6], "lin"),
           (STOP + 13, [-8, 0, 3], "io"), (STOP + 18, [0, 0, 0], "io")]
 LF_POLE = [(0, [18, 110, 45], "lin")]
 # Back (right) foot: on its toes, dragged behind, then a quick step up beside the body
 RB_BALL = [(0, [-12, -50, 3.2], "lin"), (2, [-12, -50, 3.2], "lin"), (10, [-13, -45, 3.2], "io"), (STOP, [-13, -42, 3.2], "io")]   # V3: drags on its toes to the stop
-RF_POS = [(STOP + 5, [-14, -32, 17.0], "io"), (STOP + 9, [-14.5, -20.4, 9.4], "io")]   # V3 (Fable FAIL r2): step after the stop                 # ankle, after the toe drag
+RF_POS = [(STOP + 5, [-14, -32, 17.0], "io"), (STOP + 9, [-14.5, -5.0, 9.4], "io")]   # V3 (Fable FAIL r2): step after the stop                 # ankle, after the toe drag
 RF_ROT = [(0, [-48, 0, -4], "lin"), (2, [-48, 0, -4], "lin"), (10, [-42, 0, -4], "io"), (STOP, [-40, 0, -4], "io"), (STOP + 5, [-18, 0, -2], "io"), (STOP + 9, [0, 0, 0], "io")]
 RF_POLE = [(0, [-16, 40, 15], "lin"), (STOP, [-16, 40, 15], "lin"), (STOP + 9, [-16, 60, 45], "io")]
 
 # Arms (hand targets in the chest frame): run swing on the plant (right arm forward, left back), open LOW to the sides for balance
 # (brief frames 4-10), hold through the brake, then a small forward swing and close to the idle 3-4 frames after the trunk (trait 3)
 HL = [(0, [24, -24, -42], "lin"), (2, [24, -24, -42], "lin"), (11, [46, 4, -40], "out"), (STOP, [44, 8, -42], "io"),
-      (STOP + 20, [31, 20, -44], "out"), (STOP + 29, None, "io")]
+      (STOP + 3, [46, 13, -46], "out"), (STOP + 25, [31, 20, -44], "out"), (STOP + 35, None, "io")]   # V4: arms land after the trunk
 HR = [(0, [-20, 28, -28], "lin"), (2, [-20, 28, -28], "lin"), (12, [-43, 13, -37], "out"), (STOP, [-41, 10, -39], "io"),
-      (STOP + 19, [-29, 13, -45], "out"), (STOP + 28, None, "io")]
+      (STOP + 3, [-43, 15, -43], "out"), (STOP + 24, [-29, 13, -45], "out"), (STOP + 34, None, "io")]
 POLE_L = [(0, [36, -45, -12], "lin"), (11, [55, -25, -20], "io"), (STOP + 22, [40, -30, -25], "io")]
 POLE_R = [(0, [-34, -15, -45], "lin"), (12, [-55, -25, -20], "io"), (STOP + 22, [-40, -30, -25], "io")]
 FINGERS = [(0, 0.45, "lin"), (12, 0.7, "io"), (STOP + 20, 0.45, "io")]
