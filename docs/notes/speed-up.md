@@ -8,7 +8,8 @@
   (no file edits, per run only) and every 5 s opts each UnrealEditor* process in its job out of Windows EcoQoS / timer-resolution
   throttling (SetProcessInformation ProcessPowerThrottling) + ABOVE_NORMAL priority. `-KeepThrottle` = old behaviour. `-ExtraArgs` added.
 - Measure: Saved/SpeedUp/p1_before (KeepThrottle, 1 player PIE, 15 s): python dt flat 125 ms (clamped; real 333 ms per pie-perf-probe-2).
-  p1_after: run was still going when the thread stopped -> next thread reads Saved/SpeedUp/p1_after/result.txt.
+  p1_after (default, no throttle, same probe): 397 frames in 15 s, avg 37.8 ms, p50 37.3, p95 43.4 (26 fps) vs 46 frames before (~3 fps real).
+  Source: Saved/SpeedUp/p1_{before,after}/result.txt line 'frames'. Startup 24.3 s -> 19.0 s ('Total Editor Startup Time' in run.log.ue.log).
 - Also fixed: Run-Timed -SelfTest exited 1 with all PASS (matched "FAIL-case").
 
 ## 2. Builds
