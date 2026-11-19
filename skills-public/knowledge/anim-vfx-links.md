@@ -13,5 +13,7 @@ points; this file lists them so neither base has to repeat the other. Each item 
 | X-06 | **The character stays readable.** The effect never hides the silhouette that carries the action. | P-POSE-01, P-GAME-08 | V-INFO-03 |
 | X-07 | **Same review captures.** Game camera + side, in-game video; VFX adds a light and a dark background. | P-MEASURE-05 | V-PROC-02, V-READ-07 |
 | X-08 | **Strength is timing, not only size.** Heavier = longer hold and decay on both sides. | P-TIME-02 | V-IMPACT-03, V-TIME-04 |
+| X-09 | **The impact effect peaks briefly, then moves.** Its peak scale holds only a couple of frames; scale and position keep animating after the hit, following the force. | P-GAME-07 | V-TIME-02, V-SHAPE-07 |
+| X-10 | **Presentation shake is its own layer.** Camera or screen shake starts on the contact frame and decays over a few swings; it is neither animation nor VFX and must not hide the impact pose. | P-GAME-07, P-POSE-01 | V-INFO-03, V-LAYER-04 |
 
 Anything not in this table belongs to one side only.

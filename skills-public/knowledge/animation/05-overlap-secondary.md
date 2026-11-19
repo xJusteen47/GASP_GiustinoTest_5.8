@@ -48,6 +48,14 @@ belly, a loose hand), not a separate intention.
 - **Rule:** after a strike or a stop, the parts that were moving fastest continue past the end pose and settle last.
 - **Severity:** WARN (FAIL on attack recoveries that stop dead).
 
+### P-OVERLAP-06 — Every part arrives from where it was
+- **Rule:** the direction of travel of a limb, hand or foot is continuous across keys; a part never appears in a new
+  place "from nowhere"; when the body rotates, free limbs trail behind the rotation.
+- **Measure:** direction of the extremity's velocity relative to the pelvis between adjacent frames: no unexplained
+  reversals or jumps; onion-skin trails without gaps.
+- **Broken looks like:** a hand popping into view on the next key; two legs that jump to a new pose with nothing between.
+- **Severity:** FAIL.
+
 ## Sources
 Williams ("successive breaking of joints", overlap); Thomas & Johnston (follow-through and overlapping action);
 measurement on CMU 02_05, 16_08, 16_05, 16_41, 09_01 vs their lifeless rebuilds.

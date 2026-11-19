@@ -39,5 +39,13 @@ mechanical or as IK pulling a point through space.
 - **Exceptions:** gameplay-driven air motion (the root is the game's; the clip's own centre must not fight it).
 - **Severity:** WARN for clips; the game's trajectory is not the clip's fault.
 
+### P-ARC-05 — In the air, horizontal velocity is fixed at take-off
+- **Rule:** while airborne, the body's horizontal velocity stays constant (no speed-up, slow-down or turn without an
+  external force); only the vertical motion curves. Direction changes happen at take-off or on a contact.
+- **Why:** nothing pushes horizontally in the air; this complements `P-ARC-04`.
+- **Measure:** horizontal speed of the root/pelvis between the take-off and landing frames: near constant.
+- **Exceptions:** gameplay air control (the game moves the capsule; the clip should not add its own horizontal easing).
+- **Severity:** WARN (FAIL for authored jumps that ease horizontally).
+
 ## Sources
 Thomas & Johnston (arcs); Williams (arcs, "wave" in the in-between); measurement on CMU 16_41, 02_05.

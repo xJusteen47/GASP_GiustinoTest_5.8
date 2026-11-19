@@ -93,6 +93,37 @@ and leaves spacing to the interpolator. That is the single most common cause of 
 - **Broken looks like:** a "hold" that wobbles or bounces.
 - **Severity:** WARN.
 
+### P-TIME-04 — A strike pose stays long enough to read
+- **Rule:** the hit (or key action) pose is held or moves only slightly for a few frames; an extremity that goes out and
+  straight back within 1-2 frames reads as a flicker, even on the lightest move.
+- **Measure:** frames the striking part stays within a small tolerance of its extreme; at 60 fps indicatively ≥ 3-4 f
+  for light strikes, longer for heavier tiers (the profile scales it).
+- **Severity:** FAIL for attacks.
+
+### P-SPACE-06 — No spikes or sticks at the joins between actions
+- **Rule:** where one action hands over to the next inside a clip (landing → run, turn → push, strike → recovery) the
+  speed of the body changes smoothly unless a force explains the change; a sudden forward pop after a contact, or a pop
+  followed by a stall, is a defect.
+- **Measure:** second difference of the pelvis/COG speed (`pelvis_pop_ratio` and the speed curve); spikes not aligned with
+  a contact or an impact.
+- **Broken looks like:** the body "sucked into the ground" on landing, then shooting forward; a pop then a stick.
+- **Severity:** FAIL.
+
+### P-SPACE-07 — Check spacing in camera space too
+- **Rule:** spacing, arcs and pops are checked as the player sees them (projected through the game camera), not only in
+  world space; a part smooth in the world can stick or jump on screen when it moves toward the camera.
+- **Measure:** repeat the spacing and arc checks on the 2D positions from the game camera's view.
+- **Severity:** WARN (FAIL when the pop is visible from the game camera).
+
+### P-SPACE-08 — Spacing differs by the mass of the part
+- **Rule:** at the same timing, heavy central parts (pelvis, chest) take short steps and extremities travel far; a heavy
+  strike shows dense zones at wind-up, contact and recovery separated by a short burst of large steps (a few frames).
+- **Why:** mass resists acceleration; the extremity is the end of a whip.
+- **Measure:** per-frame displacement of pelvis vs the striking extremity over the same range (ratio well below 1);
+  frames above 50% of the extremity's peak speed (a short burst for heavy strikes).
+- **Broken looks like:** the whole body travels at the hand's speed (puppet), or a heavy strike with long even spacing.
+- **Severity:** WARN (FAIL on heavy attacks).
+
 ## Sources
 Williams, *The Animator's Survival Kit* (timing and spacing charts, contrast); Thomas & Johnston, *The Illusion of Life*
 (slow in and slow out, timing); measurements in `figures/metrics-cmu-vs-lifeless.json`.

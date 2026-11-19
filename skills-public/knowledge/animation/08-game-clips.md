@@ -68,6 +68,31 @@ blended, warped, cut and repeated by systems. It must be good **alone** (isolati
 - **Why:** a setup that needs per-clip numbers cannot accept a new animation set.
 - **Severity:** WARN (architecture).
 
+### P-GAME-11 — Helper nodes are clean on export
+- **Rule:** placement and helper controls the engine does not read (master/offset/temporary controls) are at identity on
+  the exported clip, and the baked result is the same pose frame by frame; the exported root carries only what the clip
+  documents (`P-GAME-03`).
+- **Measure:** export a test bake, compare joint world positions with the authoring scene; helpers' channels all zero.
+- **Severity:** FAIL.
+
+### P-GAME-12 — A displacement root rotates only in heading
+- **Rule:** when the root carries displacement, its rotation is limited to heading (yaw); flips, rolls and tilts live on
+  the pelvis, so the engine can extract travel and turning cleanly.
+- **Measure:** root pitch/roll within a couple of degrees on clips where only the body tilts.
+- **Severity:** FAIL on root-motion clips.
+
+### P-GAME-13 — Attack clips carry their frame data
+- **Rule:** an attack is partitioned into startup, active and recovery ranges authored as named markers/notifies on the
+  clip; the contact/extension frame lies inside the active range, which is short (a few frames).
+- **Measure:** markers present; frame counts per range; frame of maximum extension inside the active range.
+- **Severity:** FAIL ("data") when missing.
+
+### P-GAME-14 — Strength tiers are separable by timing
+- **Rule:** heavier tiers get longer startup (anticipation), longer holds on impact and longer recovery, bigger weight
+  shift and arcs, not only bigger or faster motion; the lightest tier still changes pose on the next frame after input.
+- **Measure:** startup/active/recovery counts and hold lengths compared across tiers of the same character.
+- **Severity:** WARN (FAIL when two tiers are indistinguishable in timing).
+
 ## Sources
 Cooper, *Game Anim: Video Game Animation Explained*; public engine documentation on root motion, motion matching and
 warping (concepts only); practice summarised in sources.md.

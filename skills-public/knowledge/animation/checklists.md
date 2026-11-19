@@ -39,12 +39,13 @@ Every list also includes the isolation report (`P-MEASURE-02`) and the LIFE axis
 ### Jump (take-off)
 - Load (dip) before the push; the lowest point precedes the take-off (P-WEIGHT-03).
 - Arms swing up with the push, leading the body (P-OVERLAP-02).
-- Airborne centre follows a parabola unless the game drives it (P-ARC-04).
+- Airborne centre follows a parabola, horizontal velocity fixed at take-off, unless the game drives it (P-ARC-04/05).
 
 ### Landing
 - First contact on the foot (or feet) with the body still travelling down; the lowest point comes after contact
   (indicatively 3-5 f realistic, shorter stylised) (P-WEIGHT-04).
 - Arms and head continue down after the body stops (P-OVERLAP-05).
+- No forward pop or stall after the contact (P-SPACE-06).
 - Recovery to a usable pose; feet re-plant one at a time if the stance changes (P-CONTACT-03, P-GAME-06).
 
 ### Return to idle
@@ -61,7 +62,10 @@ Every list also includes the isolation report (`P-MEASURE-02`) and the LIFE axis
 - Impact pose reads frozen from the game camera and the side; striking part out of the torso outline (P-POSE-01/03).
 - Hit-pause freezes the impact pose, not a passing pose (P-GAME-07).
 - Follow-through, then recovery to a pose the next action can start from (P-SETTLE-02, P-GAME-06).
-- Light vs heavy: heavier = longer anticipation and recovery, bigger arcs, deeper weight shift (P-TIME-02, P-ANTIC-02).
+- Anticipation bends the line of action against the strike; the spine whips C → reverse C (P-ANTIC-05, P-POSE-07).
+- Strike pose held long enough to read, no 1-2 f flicker (P-TIME-04); heavy strikes: dense wind-up, short burst, dense contact (P-SPACE-08).
+- Recovery has a designed breakdown and a small rebound (P-SETTLE-04); startup/active/recovery markers on the clip (P-GAME-13).
+- Light vs heavy: heavier = longer anticipation, hold and recovery, bigger arcs, deeper weight shift; tiers separable by timing (P-TIME-02, P-ANTIC-02, P-GAME-14).
 
 ### Hit reaction
 - First frame already shows the hit (P-ANTIC-04).

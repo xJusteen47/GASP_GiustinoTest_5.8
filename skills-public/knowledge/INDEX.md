@@ -23,7 +23,7 @@ small file for the points where they meet. Nothing here is specific to a game: e
 |---|---|---|
 | Animation index | [animation/INDEX.md](animation/INDEX.md) | criteria families P-*, figures, tools |
 | VFX index | [vfx/INDEX.md](vfx/INDEX.md) | criteria families V-*, theory |
-| Animation ↔ VFX | [anim-vfx-links.md](anim-vfx-links.md) | the eight shared points X-01..08 |
+| Animation ↔ VFX | [anim-vfx-links.md](anim-vfx-links.md) | the shared points X-01..10 |
 | Profile template | [PROFILE-TEMPLATE.md](PROFILE-TEMPLATE.md) | what a project's level-2 file contains |
 | Tools | [../tools/animkb/](../tools/animkb/) | life metrics, figures, FBX→BVH, diagrams |
 

@@ -35,6 +35,12 @@ Level 1. Key poses carry the story; their quality is judged frozen, at the size 
   straight and curved lines.
 - **Severity:** judgement; cite a reference.
 
+### P-POSE-07 — The line of action reverses through a strike
+- **Rule:** a strong strike winds up in one curve and whips through to the opposite one (C → reverse C, often via an S),
+  rather than travelling with a straight spine.
+- **Measure:** spine curvature sign per key pose; it flips between anticipation and contact.
+- **Severity:** WARN (FAIL on heavy attacks).
+
 ---
 
 ### P-STRETCH-01 — Volume is preserved

@@ -31,6 +31,18 @@ shaped rather than removed.
 - **Broken looks like:** "still, still, then go": two or three near-identical frames at the start.
 - **Severity:** FAIL for attacks and input-driven starts.
 
+### P-ANTIC-05 — Anticipation opposes the action's line
+- **Rule:** the anticipation pose bends the line of action the other way from the action pose: spine curve, pelvis and
+  chest rotation and weight go one way, the action the other. The contrast must read when the two poses are flipped.
+- **Measure:** sign of spine curvature and pelvis/chest yaw at the anticipation key vs the action key: opposite.
+- **Severity:** FAIL for strong attacks; WARN for light ones.
+
+### P-ANTIC-06 — Reach the loaded pose fast, spend the frames holding it
+- **Rule:** in game attacks the body gets to the anticipation pose quickly and spends the anticipation frames in a
+  (moving) hold, so the read is early and the responsiveness budget is kept.
+- **Measure:** frames from the first pose change to the anticipation extreme vs frames held there.
+- **Severity:** WARN (a common game choice; the profile may set it).
+
 ---
 
 ### P-SETTLE-01 — Overshoot then settle
@@ -52,6 +64,12 @@ shaped rather than removed.
 - **Rule:** each oscillation is smaller and shorter than the previous one; two or three at most.
 - **Broken looks like:** jelly: equal wobbles that keep going.
 - **Severity:** WARN.
+
+### P-SETTLE-04 — The recovery is designed, not interpolated
+- **Rule:** between the impact and the hand-off pose there is a designed breakdown (an arc, a favour) and a small rebound
+  of the parts that hit; the body does not travel in a straight eased line from hit to idle.
+- **Measure:** at least one breakdown in the recovery; the striking part shows a small reversal before settling.
+- **Severity:** WARN (FAIL when the recovery is a single eased segment, see `P-LIFE-02`).
 
 ## Sources
 Thomas & Johnston (anticipation, follow-through); Williams (anticipation, overshoot); game-animation practice on
