@@ -277,8 +277,9 @@ bool FGSTN_TestKitArchetypesContentTest::RunTest(const FString& Parameters)
 {
 	using namespace GSTNTestKitArchetypes;
 	const TCHAR* Names[] = { TEXT("KIT_Test_Light"), TEXT("KIT_Test_Medium"), TEXT("KIT_Test_Heavy") };
-	const FGameplayTag Keys[] = { GSTNTestTags::Stat_WalkSpeed, GSTNTestTags::Stat_JumpVelocity, GSTNTestTags::Stat_Weight, GSTNTestTags::Stat_MaxCarryWeight,
-		GSTNTestTags::Stat_Acceleration, GSTNTestTags::Stat_AirControl, GSTNTestTags::Stat_FallGravityScale, GSTNTestTags::Stat_AirJumpCount };
+	// Owner 2026-11-18 (playtest-bugs-1118 follow-up 9): every test kit has the same movement (walk speed, jump; acceleration, air control,
+	// fall gravity and air jumps come from DA_Locomotion_Default, not from stats). The archetypes differ only by Weight and MaxCarryWeight.
+	const FGameplayTag Keys[] = { GSTNTestTags::Stat_WalkSpeed, GSTNTestTags::Stat_JumpVelocity, GSTNTestTags::Stat_Weight, GSTNTestTags::Stat_MaxCarryWeight };
 	TArray<const UGSTN_PrimaryKitDefinition*> Kits;
 	for (const TCHAR* Name : Names)
 	{
@@ -300,7 +301,7 @@ bool FGSTN_TestKitArchetypesContentTest::RunTest(const FString& Parameters)
 	{
 		TestTrue(TEXT("heavier down the list"), StatOf(*Kits[Index], GSTNTestTags::Stat_Weight) > StatOf(*Kits[Index - 1], GSTNTestTags::Stat_Weight));
 		TestTrue(TEXT("carries more down the list"), StatOf(*Kits[Index], GSTNTestTags::Stat_MaxCarryWeight) > StatOf(*Kits[Index - 1], GSTNTestTags::Stat_MaxCarryWeight));
-		TestTrue(TEXT("slower down the list"), StatOf(*Kits[Index], GSTNTestTags::Stat_WalkSpeed) < StatOf(*Kits[Index - 1], GSTNTestTags::Stat_WalkSpeed));
+		TestEqual(TEXT("same walk speed on every kit"), StatOf(*Kits[Index], GSTNTestTags::Stat_WalkSpeed), StatOf(*Kits[Index - 1], GSTNTestTags::Stat_WalkSpeed));
 	}
 	return true;
 }
