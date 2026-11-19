@@ -162,6 +162,8 @@ AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after
 MOVE_SEQUENCES = [
     # Run stop at the BASE run stage (owner 2026-11-18, Ganondorf-style stop): stick let go at stage 1, 100 frames to see brake + settle into idle
     {'name': 'mv_run_stop_base', 'taps': [], 'frames': 135, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (35, None)]},
+    # run stop idle (locomotion-finish-4): 150+ frames of rest after the clip, to see which idle the game settles in (combat.anim)
+    {'name': 'mv_run_stop_rest', 'taps': [], 'frames': 420, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (160, None)]},
     {'name': 'mv_run_stop', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (160, None)]},
     {'name': 'mv_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (170, None)]},
     # Skid at the BASE run stage (MinStage 0, 11-18): reverse before FramesToNextStage (40 sim f) so the run is still stage 1 (470 > MinSpeed 350)

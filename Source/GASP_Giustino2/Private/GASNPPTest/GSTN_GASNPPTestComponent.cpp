@@ -1625,6 +1625,35 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 					CombatJson->SetObjectField(TEXT("run"), RunJson);
 				}
 			}
+			// The clips the main anim graph plays this frame (Blend Stack and motion matching players register tick records): asset,
+			// weight, time, heaviest first, at most 4. Python cannot read the state machine, so this is how a capture names the clip
+			if (const USkeletalMeshComponent* AnimMesh = Owner->FindComponentByClass<USkeletalMeshComponent>())
+			{
+				if (UAnimInstance* PlayAnim = AnimMesh->GetAnimInstance())
+				{
+					TArray<const FAnimTickRecord*> Records;
+					for (const FAnimTickRecord& Record : PlayAnim->GetUngroupedActivePlayersRead())
+					{
+						Records.Add(&Record);
+					}
+					for (const TPair<FName, FAnimGroupInstance>& Group : PlayAnim->GetSyncGroupMapRead())
+					{
+						for (const FAnimTickRecord& Record : Group.Value.ActivePlayers)
+						{
+							Records.Add(&Record);
+						}
+					}
+					Records.Sort([](const FAnimTickRecord& A, const FAnimTickRecord& B) { return A.EffectiveBlendWeight > B.EffectiveBlendWeight; });
+					TArray<TSharedPtr<FJsonValue>> Players;
+					for (int32 Index = 0; Index < FMath::Min(Records.Num(), 4); ++Index)
+					{
+						const FAnimTickRecord& Record = *Records[Index];
+						Players.Add(MakeShared<FJsonValueString>(FString::Printf(TEXT("%s %.2f %.3f"), *GetNameSafe(Record.SourceAsset),
+							Record.EffectiveBlendWeight, Record.TimeAccumulator ? *Record.TimeAccumulator : -1.f)));
+					}
+					CombatJson->SetArrayField(TEXT("anim"), Players);
+				}
+			}
 			CombatJson->SetBoolField(TEXT("inTimeline"), CombatState->Core.ActionState == EGSTN_ActionState::InTimeline);
 			CombatJson->SetNumberField(TEXT("timeline"), CombatState->Core.ActiveTimeline);
 			Json->SetObjectField(TEXT("combat"), CombatJson);
