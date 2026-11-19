@@ -50,6 +50,6 @@ $exe = Join-Path $engine 'Binaries\Win64\UnrealEditor-Cmd.exe'
 $log = Join-Path $root "Saved\Logs\ci\save_$Tag.log"
 $ue = Join-Path $root "Saved\Logs\ci\save_${Tag}_ue.log"
 $uproj = Join-Path $root 'GASP_Giustino2.uproject'
-$argLine = "`"$uproj`" -run=pythonscript -script=`"$full`" -unattended -nullrhi -nosplash -nopause -abslog=`"$ue`""
+$argLine = "`"$uproj`" -run=pythonscript -script=`"$($full -replace '\\', '/')`" -unattended -nullrhi -nosplash -nopause -abslog=`"$ue`""
 & (Join-Path $PSScriptRoot 'Run-Timed.ps1') -Kind Capture -Log $log -Exe $exe -ArgLine $argLine -WatchFile $ue -MaxMinutes 15
 exit $LASTEXITCODE
