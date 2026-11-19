@@ -521,6 +521,21 @@ UGSTN_CombatTableSet* FGSTN_CombatTableConverter::Convert(UObject* Outer, const 
 		BindingEntry.Add(EntryIndex);
 	}
 
+	// 3b. Query commands (the run boost): commands with a slot and no binding, after the bound ones. They are never candidates (step 7
+	// takes only commands with bindings), so they start nothing; the simulation asks WasCommandEnteredWithin about them
+	for (const FGSTN_CompiledBindingTable::FQueryCommand& Query : Set->Compiled.QueryCommands)
+	{
+		if (!Set->Compiled.Slots.IsValidIndex(Query.SlotIndex) || Set->Table.FindCommand(Query.Command) != INDEX_NONE)
+		{
+			continue;
+		}
+		FGSTN_CommandTable::FCommand& NewCommand = Set->Table.Commands.AddDefaulted_GetRef();
+		NewCommand.Tag = Query.Command;
+		NewCommand.Slot = &Set->Compiled.Slots[Query.SlotIndex];
+		NewCommand.LockTags = UGSTN_CommandLocks::GetLockTagsForCommand(Query.Command);
+		NewCommand.FirstBinding = Set->Table.Bindings.Num();
+	}
+
 	// 4. The timeline registry in the compiled order, then the adoptable timelines. Compiled.Registry entries that are not combat
 	// timelines keep no slot; the remap sends their bindings to "plain ability"
 	TArray<int32> RegistryRemap;

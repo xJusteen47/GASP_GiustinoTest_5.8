@@ -175,6 +175,43 @@ bool FGSTN_TableCompileOrderTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_TableQueryCommandsTest, "GSTNCombat.Core.Table.QueryCommands", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_TableQueryCommandsTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNCommandTags;
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = GSTNCombatTest::MakeSettings();
+	const TStrongObjectPtr<UGSTN_InputSlotSet> Base = TblMakeStandardSet();
+	const FGameplayTag Query = FGSTN_BindingTableCompiler::GetSuperSlotCommand(0);
+	const FGameplayTag Missing = TblGrounded();      // any tag no slot of the set has
+	Base->Slots.Add(TblMakeSlot(Query));
+
+	// Dash r3: a command the simulation reads with no ability (the run boost) keeps a slot from the set and makes no row
+	FGSTN_CompileInput Input = TblMakeInput(Base.Get());
+	Input.Kit.Bindings = { TblBind(Attack_Neutral, TblAbilityA()) };
+	const FGSTN_CompiledBindingTable Plain = FGSTN_BindingTableCompiler::Compile(Input, *Settings);
+	TArray<uint8> PlainBytes;
+	Plain.WriteBytes(PlainBytes);
+	Input.Kit.QueryCommands = { Query, Missing, Query, Attack_Neutral.GetTag() };
+	FGSTN_CompileReport Report;
+	const FGSTN_CompiledBindingTable Table = FGSTN_BindingTableCompiler::Compile(Input, *Settings, &Report);
+	TestEqual(TEXT("query commands make no row"), Table.Entries.Num(), 1);
+	if (TestEqual(TEXT("one query command: the duplicate, the missing one and the bound one are not"), Table.QueryCommands.Num(), 1))
+	{
+		TestEqual(TEXT("it is the queried command"), Table.QueryCommands[0].Command, Query);
+		TestTrue(TEXT("its slot is in the table"), Table.Slots.IsValidIndex(Table.QueryCommands[0].SlotIndex)
+			&& Table.Slots[Table.QueryCommands[0].SlotIndex].Command == Query);
+	}
+	TestEqual(TEXT("the command missing from the set is a warning"), TblCountContaining(Report.Warnings, TEXT("Query command")), 1);
+	TArray<uint8> Bytes;
+	Table.WriteBytes(Bytes);
+	TestTrue(TEXT("the query command changes the bytes"), Bytes != PlainBytes);
+	Input.Kit.QueryCommands.Reset();
+	TArray<uint8> AgainBytes;
+	FGSTN_BindingTableCompiler::Compile(Input, *Settings).WriteBytes(AgainBytes);
+	TestTrue(TEXT("without query commands the bytes are the old ones"), AgainBytes == PlainBytes);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_TableCommandSetTest, "GSTNCombat.Core.Table.CommandSetBaseMinusRemovedPlusAdded", GSTN_CORE_TEST_FLAGS)
 bool FGSTN_TableCommandSetTest::RunTest(const FString& Parameters)
 {

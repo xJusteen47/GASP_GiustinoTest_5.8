@@ -167,7 +167,9 @@ MOVE_SEQUENCES = [
     # Skid at the BASE run stage (MinStage 0, 11-18): reverse before FramesToNextStage (40 sim f) so the run is still stage 1 (470 > MinSpeed 350)
     # skid-finish-4: released early (30 frames after the reverse, inside Skid Exit Run) and held long (1.5 s)
     # dash-ganon: L3 boost from idle with the stick pushed on the same frame (Smash dash); 'boost' = frame of a RunBoost tap
-    {'name': 'mv_dash', 'taps': [], 'frames': 120, 'dummy': None, 'shoot': True, 'follow': True, 'boost': 20, 'sticks': [(20, (0, 1, 0)), (80, None)]},
+    # the boost goes 3 frames after the stick: the injected stick reaches the sim one frame after a press (dash cap1/cap2 history
+    # "+J" one frame before "8"), and a boost seen with the stick at rest is dropped by the stick-release branch of the run stages
+    {'name': 'mv_dash', 'taps': [], 'frames': 120, 'dummy': None, 'shoot': True, 'follow': True, 'boost': 23, 'sticks': [(20, (0, 1, 0)), (80, None)]},
     {'name': 'mv_dash_base', 'taps': [], 'frames': 120, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(20, (0, 1, 0)), (80, None)]},
     {'name': 'mv_skid_release', 'taps': [], 'frames': 190, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (125, None)]},
     {'name': 'mv_skid_hold', 'taps': [], 'frames': 280, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (245, None)]},

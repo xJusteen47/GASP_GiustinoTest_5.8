@@ -61,6 +61,12 @@ struct GSTNCOMBATCORE_API FGSTN_KitCompileInput
 	TArray<FSoftObjectPath> TriggeredAbilities;
 	TArray<FSoftObjectPath> Passives;
 	int32 SuperSlotCount = 0;
+
+	/**
+	 * Commands the simulation asks about by itself, with no ability bound (the run boost of the locomotion profile). Each gets its slot
+	 * from the command set like a binding, so its button stays in the input data; a command the set does not have is reported
+	 */
+	TArray<FGameplayTag> QueryCommands;
 };
 
 /** What one weapon contributes: its bindings after inheritance along the parent chain, and the passives it grants while active */
@@ -170,6 +176,14 @@ struct GSTNCOMBATCORE_API FGSTN_CompiledBindingTable
 
 	TArray<FGSTN_CompiledEntry> Entries;
 	TArray<FGSTN_TimelineRegistryEntry> Registry;
+
+	/** A query command (FGSTN_KitCompileInput::QueryCommands) and its index in Slots. Sorted by tag name, unique, never one a row has */
+	struct FQueryCommand
+	{
+		FGameplayTag Command;
+		int32 SlotIndex = INDEX_NONE;
+	};
+	TArray<FQueryCommand> QueryCommands;
 
 	/** Ability classes to grant: those of the rows, the kit's triggered abilities and passives, sorted and unique. A weapon's own passives are granted when it becomes active */
 	TArray<FSoftObjectPath> GrantedAbilities;

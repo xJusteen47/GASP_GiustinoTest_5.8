@@ -117,20 +117,30 @@ void FGSTN_LocomotionLoadout::AttachFromLoadout(const FGSTN_LoadoutExtensionCont
 {
 	const UActorComponent* Component = Cast<UActorComponent>(Context.WorldContext);
 	const AActor* Owner = Component ? Component->GetOwner() : nullptr;
+	const FGSTN_LocomotionKitExtension* Extension = FindKitExtension(Context.Resolved ? Context.Resolved->Kit : nullptr);
+	if (!Extension)
+	{
+		if (Owner)
+		{
+			FGSTN_LocomotionAttach::Clear(Owner);
+		}
+		return;
+	}
+	// Loaded here, where the loadout is compiled, never in a tick
+	const UGSTN_LocomotionProfile* Profile = Extension->Profile.IsNull() ? nullptr : Extension->Profile.LoadSynchronous();
+	const UGSTN_LocomotionProfile& Used = Profile ? *Profile : *GetDefault<UGSTN_LocomotionProfile>();
+	// The boost command has no ability, so the table would drop it: it enters as a query command (slot from the kit's command set, the
+	// button stays in the input data). Before the owner check, so a tool's compile builds the same table as the pawn's
+	if (Used.RunStages.BoostCommand.IsValid())
+	{
+		Input.Kit.QueryCommands.AddUnique(Used.RunStages.BoostCommand);
+	}
 	if (!Owner)
 	{
 		// A tool or a test compiles without a pawn
 		return;
 	}
-	const FGSTN_LocomotionKitExtension* Extension = FindKitExtension(Context.Resolved ? Context.Resolved->Kit : nullptr);
-	if (!Extension)
-	{
-		FGSTN_LocomotionAttach::Clear(Owner);
-		return;
-	}
-	// Loaded here, where the loadout is compiled, never in a tick
-	const UGSTN_LocomotionProfile* Profile = Extension->Profile.IsNull() ? nullptr : Extension->Profile.LoadSynchronous();
-	FGSTN_LocomotionAttach::Apply(Owner, FGSTN_LocomotionSimTuning::FromProfile(Profile ? *Profile : *GetDefault<UGSTN_LocomotionProfile>()));
+	FGSTN_LocomotionAttach::Apply(Owner, FGSTN_LocomotionSimTuning::FromProfile(Used));
 }
 
 FName FGSTN_LocomotionLoadout::GetLoadoutExtensionId()

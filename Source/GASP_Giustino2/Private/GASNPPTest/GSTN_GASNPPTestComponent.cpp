@@ -1607,6 +1607,24 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 				CombatJson->SetNumberField(TEXT("tableBindings"), TableSet->Table.Bindings.Num());
 			}
 			CombatJson->SetNumberField(TEXT("tableGateClosed"), Combat->GetGateClosedFrames());
+			// Run stages (dash r3: the L3 boost never fired in the captures): the stage counters and whether the boost command is in the
+			// table and seen this frame. Read on the game thread after the step, so "boostNow" is the frame's command, not the sim's view
+			if (const UMoverComponent* RunMover = Owner->FindComponentByClass<UMoverComponent>())
+			{
+				if (const FGSTN_RunStageState* Run = FGSTN_RunStageMover::Find(RunMover->GetSyncState()))
+				{
+					TSharedRef<FJsonObject> RunJson = MakeShared<FJsonObject>();
+					RunJson->SetNumberField(TEXT("stage"), Run->Stage);
+					RunJson->SetNumberField(TEXT("sinceMove"), Run->FramesSinceMoveStart);
+					RunJson->SetNumberField(TEXT("sinceRelease"), Run->FramesSinceStickRelease);
+					RunJson->SetNumberField(TEXT("stamp"), Run->StampFrames);
+					RunJson->SetNumberField(TEXT("dash"), Run->DashFrames);
+					const FGameplayTag BoostTag = FGameplayTag::RequestGameplayTag(TEXT("Command.Movement.RunBoost"), false);
+					RunJson->SetNumberField(TEXT("boostCmd"), BoostTag.IsValid() ? Combat->FindCommandIndex(BoostTag) : -2);
+					RunJson->SetBoolField(TEXT("boostNow"), BoostTag.IsValid() && Combat->WasCommandEnteredWithin(BoostTag, 0));
+					CombatJson->SetObjectField(TEXT("run"), RunJson);
+				}
+			}
 			CombatJson->SetBoolField(TEXT("inTimeline"), CombatState->Core.ActionState == EGSTN_ActionState::InTimeline);
 			CombatJson->SetNumberField(TEXT("timeline"), CombatState->Core.ActiveTimeline);
 			Json->SetObjectField(TEXT("combat"), CombatJson);

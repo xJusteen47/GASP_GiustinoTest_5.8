@@ -229,6 +229,17 @@ void FGSTN_CompiledBindingTable::WriteBytes(TArray<uint8>& OutBytes) const
 	{
 		Sink.Path(Ability);
 	}
+
+	// Only when there are some, so the bytes of a table without query commands stay what they were
+	if (QueryCommands.Num() > 0)
+	{
+		Sink.Int(QueryCommands.Num());
+		for (const FQueryCommand& Query : QueryCommands)
+		{
+			Sink.Tag(Query.Command);
+			Sink.Int(Query.SlotIndex);
+		}
+	}
 }
 
 FGSTN_CompiledBindingTable FGSTN_BindingTableCompiler::Compile(const FGSTN_CompileInput& Input, const UGSTN_InputSettings& Settings, FGSTN_CompileReport* OutReport)
@@ -516,6 +527,39 @@ FGSTN_CompiledBindingTable FGSTN_BindingTableCompiler::Compile(const FGSTN_Compi
 		}
 		Entry.Priority = Table.MakeEffectiveSlot(Entry).GetPriority(Settings);
 		Table.Entries.Add(MoveTemp(Entry));
+	}
+
+	// Query commands: a slot from the command set, no row. A command a row already has is skipped (the table has it anyway)
+	{
+		TArray<FGameplayTag> Queries;
+		for (const FGameplayTag& Command : Input.Kit.QueryCommands)
+		{
+			if (Command.IsValid() && !Queries.Contains(Command)
+				&& !Table.Entries.ContainsByPredicate([&Command](const FGSTN_CompiledEntry& Entry) { return Entry.Command == Command; }))
+			{
+				Queries.Add(Command);
+			}
+		}
+		Queries.Sort([](const FGameplayTag& A, const FGameplayTag& B) { return CommandLess(A, B); });
+		for (const FGameplayTag& Command : Queries)
+		{
+			const FGSTN_InputSlotSpec* const* Found = Input.Kit.CommandSet.RemovedCommands.HasTagExact(Command) ? nullptr : SetByCommand.Find(Command);
+			if (!Found)
+			{
+				Report.AddWarning(FString::Printf(TEXT("Query command %s is not in the kit's command set: the simulation never sees it."), *Command.ToString()));
+				continue;
+			}
+			FGSTN_InputSlotSpec Slot = **Found;
+			Slot.ApplyActiveButtonLayout();
+			const FString Key = SlotKey(Slot);
+			int32* Existing = SlotIndexByKey.Find(Key);
+			if (!Existing)
+			{
+				Existing = &SlotIndexByKey.Add(Key, Table.Slots.Num());
+				Table.Slots.Add(Slot);
+			}
+			Table.QueryCommands.Add({ Command, *Existing });
+		}
 	}
 
 	// Grants: the abilities of the rows and of the kit
