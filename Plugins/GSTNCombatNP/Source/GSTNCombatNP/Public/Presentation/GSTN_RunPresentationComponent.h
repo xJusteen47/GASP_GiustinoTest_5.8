@@ -119,6 +119,8 @@ public:
 	 * For the Skid state of the main locomotion ABP (ABP_GSTN_Locomotion, owner 2026-11-18): true while the run skid is on (rule in) and its
 	 * three-section clip time (Sequence Evaluator explicit time, clip SS_180_Turn_Root180). With the profile's bSkidInMainGraph the skid
 	 * override layer stays off, so the two never play together.
+	 * Routing fix 2026-11-19: the main ABP's state machine outputs no pose, so its states now play their clip through the Blend Stack
+	 * (UGSTN_LocomotionStateLibrary, chooser CHT_GSTN_OwnStates) at the clip's own rate; the clip-time getters here no longer drive the pose.
 	 */
 	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
 	bool IsSkidding() const { return SkidPlayTime >= 0.f || FootSlide.Source == EGSTN_FootSlideSource::RunSkid; }

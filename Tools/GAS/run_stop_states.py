@@ -137,3 +137,7 @@ except Exception:
     import traceback; p("ERROR", traceback.format_exc())
 open(OUT, "w").write("\n".join(log))
 unreal.SystemLibrary.quit_editor()
+
+# Routing fix 2026-11-19: this machine outputs no pose; route_states.py empties our states and binds them to the Blend Stack chooser rows
+import runpy
+runpy.run_path(unreal.Paths.project_dir() + "Tools/GAS/routing/route_states.py", run_name="__main__")
