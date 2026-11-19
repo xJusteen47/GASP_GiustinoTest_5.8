@@ -89,7 +89,7 @@ if SWATCH:
     WARMUP.append('NS_GSTN_Swatch')
 # PIE_PROBE=1: debug run. At the first sequence frame the kit's burst systems are spawned 6 m above the pawn (unscaled, hit at intensity
 # 0.56) and their particles (position / velocity) are written to capture.log for 12 frames (UGSTN_VfxAuthoringLibrary.DescribeParticles)
-PROBE = [('NS_GSTN_HitSpark', ['Stars', 'Accent']), ('NS_GSTN_RunStartDust', ['Big', 'Small']), ('NS_GSTN_LandRing', ['Puffs'])]     if os.environ.get('PIE_PROBE') == '1' else []
+PROBE = [('NS_GSTN_HitSpark', ['Stars', 'Accent']), ('NS_GSTN_RunStartDust', ['Big', 'Small']), ('NS_GSTN_LandRing', ['Skirt', 'Wisps'])]     if os.environ.get('PIE_PROBE') == '1' else []
 TIMEOUT = 840.0
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None,
       'blocks': [], 'kit': KIT}

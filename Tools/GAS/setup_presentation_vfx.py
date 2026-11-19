@@ -439,6 +439,35 @@ def _puffs(system, name, count, life, size, speed, drag, look="PuffDust", ring=(
     return e
 
 
+# Realistic dust, shared layer (owner 2026-11-19, scope: every dust event - landing, dash, skid, run start): the particle LOOK (MI SmokeReal /
+# SmokeHaze / PuffClump: material, floor colour, growth while fading to alpha 0) is shared and lives in setup_presentation_vfx_puff.py.
+# Only the SPAWN SHAPE and DIRECTION change per move: they are presets here. A preset is the generator: shape "ring" (radial shockwave
+# from one point: radius, height, push origin under the centre) or "cone" (directional: axis in the system's local space, half angle;
+# a dash/skid throws its dust backwards along -X), plus count, life, size, speed, drag, curl. Add a preset for a new move; never copy the look.
+DUST_SHAPES = {
+    # A2 r4 landing: one shockwave pushed out radially from the landing point (see land_ring)
+    # r4 pass 1: origin 12 cm under a ring of 8 cm radius threw the puffs up at ~55 deg (a column between the legs, no spread); the push
+    # origin must sit just under the ring's own height so the velocity is almost flat along the floor
+    "land_shockwave": dict(shape="ring", ring=(8, 8), origin=(0, 0, 6), count=14, life=(0.40, 0.50), size=(24, 40), speed=380, drag=5.0,
+                           curl=(20.0, 0.02), gravity=3.0),
+    "land_haze": dict(shape="ring", ring=(4, 4), origin=(0, 0, 3), count=6, life=(0.35, 0.45), size=(36, 46), speed=220, drag=5.0,
+                      curl=(30.0, 0.03)),
+    # Example for later moves (not wired yet): directional dust behind the feet, thrown back and a little out
+    "dash_back": dict(shape="cone", cone=((-1, 0, 0.15), 35), count=8, life=(0.35, 0.45), size=(24, 36), speed=320, drag=6.0,
+                      curl=(20.0, 0.02), gravity=3.0),
+}
+
+
+def _dust(system, name, preset, look="SmokeReal", **override):
+    """One realistic-dust emitter: the shared look (MI `look`) thrown by the generator preset DUST_SHAPES[preset] (keys overridable)"""
+    p = dict(DUST_SHAPES[preset], **override)
+    shape = p.pop("shape")
+    count, life, size, speed, drag = (p.pop(k) for k in ("count", "life", "size", "speed", "drag"))
+    if shape == "ring":
+        return _puffs(system, name, count, life, size, speed, drag, look=look, ring=p.pop("ring"), origin=p.pop("origin", None), **p)
+    return _puffs(system, name, count, life, size, speed, drag, look=look, ring=None, cone=p.pop("cone"), **p)
+
+
 def land_ring():
     """Landing (scaled by the fall speed; knockdown 1.2). Smoke redo A1 (REVIEW-SMOKE-LOOK.md option A, DK Bananza): a clustered skirt of
     16 small lumpy puffs (25-55 cm) thrown out low along the floor, 8 quick wisps, 8 snow clumps that hop and fall, and a soft contact disc
@@ -455,9 +484,13 @@ def land_ring():
         # width, weaker rise, shorter life (all alpha 0 by ~+27 frames). Gap 2 (straight cut line in the dust base): centres raised from
         # 5 cm under the floor to 6 cm over it, so less of each sprite is cut by the floor (the material depth fade softens the rest)
         # A2 r3 (REVIEW-A2r2 gap 3: top 68-76 px vs A1b early 48-53): max 65 -> 50 cm, ring 30 -> 36 to hold the width, wisps 65 -> 50
-        _puffs(s, "Skirt", 8, (0.40, 0.50), (30, 50), 180, 4.5, look="SmokeReal", ring=(36, 8), origin=(0, 0, 6), curl=(40.0, 0.02),
-               gravity=3.0, ring_width=0.6)
-        _puffs(s, "Wisps", 4, (0.35, 0.45), (40, 50), 130, 6.0, look="SmokeHaze", ring=(14, 4), origin=(0, 0, 4), curl=(60.0, 0.03))
+        # A2 r4 (owner on r3: "a few puffs generated independently, not one blow from the centre"): one shockwave. Every puff is born at
+        # the same instant on a tight ring round the landing point and is thrown straight out along the floor by the same radial push
+        # (origin under the centre), fast then braked hard (reach ~ speed/drag = 50 cm), so they travel together as one expanding band.
+        # More, smaller puffs (14 x 24-40 cm) so neighbours overlap into a continuous skirt; weak curl so the band stays coherent.
+        # (_puffs never applied ring_width: the r2/r3 "filled disc" was always the ring itself.)
+        _dust(s, "Skirt", "land_shockwave", look="SmokeReal")
+        _dust(s, "Wisps", "land_haze", look="SmokeHaze")
         _puffs(s, "Clumps", 5, (0.30, 0.45), (3, 6), 220, 1.5, look="PuffClump", ring=None, cone=((0, 0, 1), 60), gravity=-1300.0)
         disc = _sprites(s, "Contact")
         disc.burst(1).particle((0.35, 0.35), (120, 120)).sized()  # A2: scaled with the dust (was 220)
