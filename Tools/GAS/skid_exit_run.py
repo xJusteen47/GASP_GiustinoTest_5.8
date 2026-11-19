@@ -14,7 +14,7 @@ PROJ = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
 OUT = unreal.Paths.project_saved_dir() + "Skid/exit_run.txt"
 PHASE_JSON = os.path.join(PROJ, "Tools", "GAS", "routing", "skid_exit_run.json")
 RUN_LOOP = "/Game/Characters/UEFN_Mannequin/Animations/Run/M_Neutral_Run_Loop_F"
-EXIT_AT, RUN_MIN, HOLD, XF = 0.42, 200.0, 0.30, 0.20
+EXIT_AT, RUN_MIN, HOLD, XF = 0.42, 200.0, 0.75, 0.20   # Fable lf3 r1: hand back after one full run step (0.3 s froze f164-175)
 ELAPSED = "GetInstanceCurrentStateElapsedTime"
 log = []
 def p(*a): log.append(" ".join(str(x) for x in a))
