@@ -1,4 +1,4 @@
-# Locomotion finish 3 (desktop _ue59, Opus, 2026-11-19) - STOPPED: the 5.9 editor no longer starts (Fab plugin)
+# Locomotion finish 3 (desktop _ue59, Opus, 2026-11-19) - run stop V4 + skid 4 FAIL, 2 attempts each used; next thread
 Branch `claude/locomotion-finish-3` from locomotion-finish-2 (68975a98). Reviews: docs/notes/reviews/locomotion-finish-3/.
 
 ## BLOCKER (from 14:42 local): every UnrealEditor-Cmd start exits after 9 s
@@ -23,6 +23,15 @@ Branch `claude/locomotion-finish-3` from locomotion-finish-2 (68975a98). Reviews
 ## 3. Owner's note on GASP curves: offline name-table diff (no editor): our V3 stop and run start clips carry no curves and no notifies;
   GASP stops have Foley notifies + PoseSearchBlockTransition/BranchIn notify states. Check the curve list in the editor (or ask the
   editor's AI assistant, owner rule) before more clip work: it may explain the run-to-run pose differences of the run stop.
+## UPDATE 16:20 local: editor fixed (owner: UE 5.9 update + Verify + RiderLink reinstall; project rebuilt, 458 s).
+- Run stop V4 (owner 2A, follow-through) in UE (DA + rows V4, Mode Off). Fable FAIL review_fable_runstop_v4.md: brake breathes, stop push
+  reads, feet end 10 cm apart, no creep. BUG (mine): numbers(f,"R") in run_stop_gen.py blends ALL channels to idle by STOP+22, so the
+  late trunk/head/arm keys never play in the R clip (20 still frames v239-258). Fix: blend each channel to idle only after its own
+  last key (or true idle + mirror(action - idle)), ease in the push (STOP->STOP+3 "io"), cut the tail to 2-3 frames; capture L and R.
+- Skid attempt 4 (hold 0.75 s) in UE. Fable FAIL review_fable_skid_a4.md: first plant slide 111 -> 13 cm (fixed) but the stick release
+  (capture f193) lands in the hand-back blend: 20 frozen frames, 84 cm slide. Fix: Skid Exit Run leaves at once on release/reverse;
+  start the loop ~4 frames later (41 cm exit drag); capture held 1.5 s and released early; log state/asset/time in frames.jsonl.
+- Capture driver used: scratch lf3_all.py = run_stop2_write (RUNSTOP_VERSION) + run_stop_states + skid_exit_run + route_states.
 ## Not started: L3 dash, run start stomp height, air crouch landing. Stray empty files for the owner to delete by hand:
   _ue59 Tools/AnimPipeline/run_stop_gen.py and root IN-USO.txt. Lock released. Cost ~1 h 30 desktop, 1 build, 6 headless runs
   (2 failed on Fab), 2 captures, 2 Fable reviews (~230k subagent tokens).
