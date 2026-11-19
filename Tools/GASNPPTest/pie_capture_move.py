@@ -183,6 +183,8 @@ MOVE_SEQUENCES = [
     {'name': 'cr_ground', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True, 'follow': True, 'crouch_hold': (20, 70)},
     {'name': 'cr_air', 'taps': [], 'frames': 100, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 24), 'crouch_hold': (30, 20)},
     {'name': 'cr_land', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 24), 'crouch_hold': (30, 90)},
+    # Frantic run start (run-start-frantic-2): full stick from still after 20 idle frames, run 70 frames, release
+    {'name': 'rs_start', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(20, (0, 1, 0)), (90, None)]},
 ]
 if os.environ.get('PIE_CAPTURE_VIEWS'):
     VIEWS = [v for v in VIEWS if v[0] in os.environ['PIE_CAPTURE_VIEWS'].split(',')]

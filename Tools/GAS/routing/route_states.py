@@ -71,6 +71,8 @@ def rows_spec(da):
         "Crouch Enter": (soft_path(cr, "enter_clip"), 0.0, 0.03, False),
         "Crouch Idle": (CROUCH_IDLE, 0.0, 0.05, True),
         "Crouch Exit": (soft_path(cr, "exit_clip"), 0.0, 0.03, False),
+        # run-start-frantic-2: imported by Tools/GAS/run_start/run_start_states.py (not in the anim set yet)
+        "Run Start": ("/Game/GSTN/Animation/RunStart/AS_GSTN_RunStart_Frantic.AS_GSTN_RunStart_Frantic", 0.0, 0.05, False),
     }
 
 def set_loop(asset, looping):
