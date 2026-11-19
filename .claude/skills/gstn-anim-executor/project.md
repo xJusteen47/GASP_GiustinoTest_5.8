@@ -39,3 +39,12 @@ Antigravity cannot run git in its sandbox: the Claude session commits card and s
 - Engine questions: the **Unreal Editor's built-in AI assistant** (owner 11-19; editor open). UE 5.9 tools:
   `docs/notes/review/ue59-strumenti-per-skill.md`, only those marked as tried.
 - Max two attempts (rule 5); scripts print at most five lines (rule 4).
+
+## Audit 2026-11-20 (project rules 6, 10, 14; docs: project files audit_setup_agentico.md)
+- Missing tool = stop. If Cascadeur, the editor, asset saves or the machine named in the brief are not available,
+  stop at the first stable point and write what is needed. Never replace the authoring tool with a Python/Blender
+  generator interpolating poses: such output is `PROTO` only and never goes to review.
+- Every automatic fix step passes the conservation guard (amplitude per chain, peak speed, root_travel: max -15 %)
+  and ships a before/after grid. Splice at most 0.1 s and at most 10 % of the clip.
+- Every capture ends with `capture_assert.py` (`ASSERT: OK`); without it, no review.
+- Any change that departs from stock GASP Mover: first a line in `docs/notes/gasp-divergenze.md` (rule 14).
