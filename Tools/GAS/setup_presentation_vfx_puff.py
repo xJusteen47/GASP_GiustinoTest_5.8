@@ -146,7 +146,13 @@ def build_puff(tex):
                                2550, 450)
     alpha = _op(mat, U.MaterialExpressionMultiply, tx_a, pcol, 1850, 820, b_out="A")
     # Owner 2026-11-19: real dust thins out as it spreads, so the puff fades toward alpha 0 while it grows (FadeStart < 1; 1 = off)
-    fade = V3._fade(mat, t, one_c, "FadeStart", 1.0, 1700, 1100)
+    fade_lin = V3._fade(mat, t, one_c, "FadeStart", 1.0, 1700, 1100)
+    # A2 r5 (REVIEW-A2r5 / owner ref IMG_9543: full, then a quick fade): fade = 1 - ramp^FadeCurve (1 = linear, as before)
+    ramp = _unary(mat, U.MaterialExpressionOneMinus, fade_lin, 1750, 1200)
+    powr = _node(mat, U.MaterialExpressionPower, 1800, 1250)
+    _link(ramp, "", powr, "Base")
+    _link(_scalar(mat, "FadeCurve", 1.0, 1700, 1300), "", powr, "Exp")
+    fade = _unary(mat, U.MaterialExpressionOneMinus, powr, 1850, 1200)
     alpha_f = _op(mat, U.MaterialExpressionMultiply, alpha, fade, 1850, 1050)
     alpha_m = _op(mat, U.MaterialExpressionMultiply, alpha_f, _scalar(mat, "OpacityMax", 1.0, 1850, 950), 2000, 850)
     depth = _node(mat, U.MaterialExpressionDepthFade, 2150, 850)
@@ -208,16 +214,22 @@ LOOKS = {
     # A2 r3 (REVIEW-A2r2): dark floor 2.7-3.1x the floor and neutral (steam) -> DarkSnow 0.4 -> 0.26, gain 1.0, blue SnowColor/LitColor/shade
     # (target median 1.7-2.0x floor, B/R >= 1.3); light floor (owner 1A) warm brown underside and wide brown edges, Brightness 0.58;
     # crunchy creases OccStrength 0.8 -> 0.65. Light pass 1 stayed blue-grey (the lit side carried LitColor): warm LitColorLight
-    "SmokeReal": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.26, DarkBrightness=1.0, Brightness=0.58, Wrap=0.15, RampLo=0.25, RampHi=0.6,
+    # r5c (REVIEW-A2r5: dark lumps read as rock with black creases and seemed to shrink because only the lit rim showed): softer form
+    # ramp 0.25/0.6 -> 0.05/0.9, OccStrength 0.65 -> 0.4, fade 1 - ramp^2.5 from 0.40 (full, then a quick fade as in IMG_9543)
+    "SmokeReal": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.26, DarkBrightness=1.0, Brightness=0.58, Wrap=0.15, RampLo=0.05, RampHi=0.9,
                       LitColor=(0.88, 1.0, 1.22), LitColorLight=(1.0, 0.90, 0.76), SnowColor=(0.74, 0.82, 1.0), ShadeColor=(0.36, 0.40, 0.52), ShadeColorLight=(0.44, 0.36, 0.28),
-                      EdgeTint=(0.60, 0.50, 0.40), EdgeTintDark=(0.80, 0.84, 0.95), EdgeWidth=0.6, OccStrength=0.65, FlipRate=1.0, StartScale=0.8, GrowEnd=1.0,
-                      FadeStart=0.2, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0, OpacityMax=0.9),  # r2 pass 3: light floor nearly invisible at 0.75/0.05
+                      EdgeTint=(0.60, 0.50, 0.40), EdgeTintDark=(0.80, 0.84, 0.95), EdgeWidth=0.6, OccStrength=0.4, FlipRate=1.0, StartScale=0.8, GrowEnd=1.0,
+                      FadeStart=0.40, FadeCurve=2.5, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0, OpacityMax=0.9),  # r5b ref IMG_9543: full until ~half life, then a quick fade (was 0.2). r2 pass 3: light floor nearly invisible at 0.75/0.05
     # A2: thin low haze layer under the skirt (replaces the 8 small wisps that read as "ears", REVIEW-A1b flaw 3)
     "SmokeHaze": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.22, DarkBrightness=1.0, Brightness=0.58, Wrap=0.15, RampLo=0.25, RampHi=0.6,
                       LitColor=(0.88, 1.0, 1.22), LitColorLight=(1.0, 0.90, 0.76), SnowColor=(0.74, 0.82, 1.0), ShadeColor=(0.36, 0.40, 0.52), ShadeColorLight=(0.44, 0.36, 0.28),
-                      EdgeTint=(0.60, 0.50, 0.40), EdgeTintDark=(0.80, 0.84, 0.95), EdgeWidth=0.6, OccStrength=0.65, FlipRate=1.0, StartScale=0.85, GrowEnd=1.0,
-                      FadeStart=0.05, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0, OpacityMax=0.3),
-    "PuffClump": dict(DarkSnow=0.3, FlipRate=0.3, StartScale=0.8, GrowEnd=0.08, ShrinkStart=0.6, EndScale=0.0, OccStrength=0.5),
+                      EdgeTint=(0.60, 0.50, 0.40), EdgeTintDark=(0.80, 0.84, 0.95), EdgeWidth=0.6, OccStrength=0.65, FlipRate=1.0, StartScale=0.7, GrowEnd=1.0,
+                      FadeStart=0.30, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0, OpacityMax=0.45),
+    # A2 r5 (owner 2026-11-19, every dust particle: never shrinks, vanishes only through opacity; measured by
+    # Tools/GASNPPTest/vfx_size_monotonic.py): the haze grows more (StartScale 0.85 -> 0.7: its early fade ate the edges faster than it
+    # grew) and the clumps fade instead of shrinking to 0 (ShrinkStart 0.6/EndScale 0 -> fade from 0.5)
+    "PuffClump": dict(DarkSnow=0.3, FlipRate=0.3, StartScale=0.8, GrowEnd=0.08, ShrinkStart=1.0, EndScale=1.0, FadeStart=0.5,
+                      OccStrength=0.5),
 }
 
 

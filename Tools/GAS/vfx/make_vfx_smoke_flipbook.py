@@ -85,13 +85,17 @@ def _frame(lobes, n1, n2, t, x, y, seed_off):
     # Erosion from the thin parts inward; soft edge so wisps stay translucent
     # A1b review: the core stayed opaque and the puff died by erosion (shrank): low threshold, wide soft edge, never fully opaque,
     # so the material's fade-while-growing (owner) is what thins it out
-    th = 0.18 + 0.22 * _smooth(np.array(t), 0.4, 1.0)
-    alpha = 0.7 * _smooth(dens, th, th + 0.55)
+    # A2 r5 (owner 2026-11-19, scope: realistic dust: "the particles visibly shrink before they vanish"): the threshold no longer rises
+    # over life. Its rise (0.18 -> 0.40 from 40 % of life) ate the silhouette from the edge inward, -17 % radius by the end
+    # (Tools/GASNPPTest/vfx_size_monotonic.py). The puff only grows; it vanishes through the material's opacity fade
+    # r5b (ref IMG_9543: round lumps, not hair; r5 dark read fibrous): a little firmer, still constant over life
+    th = 0.24
+    alpha = 0.7 * _smooth(dens, th, th + 0.35)  # r5c REVIEW-A2r5: firmer soft edge (0.55)
     alpha *= _smooth(0.97 - np.maximum(np.abs(x), np.abs(y)), 0.0, 0.08)
     # Height field = smoothed density -> normal; occlusion = dense core and underside darker
     h = _blur(dens, 2)  # A2: sharper billow relief
     gy, gx = np.gradient(h)
-    k = 14.0  # A2: stronger form shading (A1b read flat)
+    k = 10.0  # r5c REVIEW-A2r5 (dark creases): 14 -> 10. A2: stronger form shading (A1b read flat)
     nx, ny = -gx * k, gy * k  # image rows go down, y goes up
     nz = np.ones_like(h)
     nrm = np.sqrt(nx * nx + ny * ny + nz * nz)

@@ -414,6 +414,13 @@ def _puffs(system, name, count, life, size, speed, drag, look="PuffDust", ring=(
     otherwise), wide lifetime spread so they die one after another. curl=(strength, frequency): Curl Noise Force swirl"""
     e = _sprites(system, name)
     e.burst(count).particle(life, size, rotation=False).sized()
+    # A2 r5c (REVIEW-A2r5 recheck: each puff scaled down as a whole over the last quarter of life; owner: dust never shrinks): the burst
+    # template carries its own update-stage size curve. Dust size over life is the material's (grow only), so every template size module
+    # in ParticleUpdate goes off. Logged so the next build shows what was there
+    for m in L.list_modules(system, e.name, "ParticleUpdate").split(" > "):
+        if m.startswith("ScaleSpriteSize") or m.startswith("SpriteSizeScale") or m.startswith("ScaleMeshSize"):
+            e.off("ParticleUpdate", m.replace("(off)", "").strip())
+            unreal.log(f"_puffs {name}: template size module off: {m}")
     e.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")
     if ring:
         e.set("ParticleSpawn", "ShapeLocation", "Shape Primitive", "Ring / Disc").set("ParticleSpawn", "ShapeLocation", "Ring Radius", ring[0])
@@ -425,7 +432,12 @@ def _puffs(system, name, count, life, size, speed, drag, look="PuffDust", ring=(
     else:
         e.radial(speed)
         if origin:
-            e.set("ParticleSpawn", "AddVelocity", "Velocity Origin", origin)
+            # A2 r5: "Velocity Origin" is a Position (LWC) input that set_input never writes (DescribeInput: no override pin, rapid
+            # iteration constant unset), so r4's origins were ignored and the module pushed from its default point under the pivot (puffs
+            # flew 60-70 deg up). The plain Vector "Origin Offset" moves the push point off the system origin and is honoured.
+            # _balls/_smoke have the same dead setting; left as is (their effects passed review with it)
+            e.set("ParticleSpawn", "AddVelocity", "Origin Offset", origin)
+            e.set("ParticleSpawn", "AddVelocity", "Origin Offset Coordinate Space", "Local")
     e.drag(drag)
     if gravity:
         e.gravity(gravity)
@@ -448,9 +460,15 @@ DUST_SHAPES = {
     # A2 r4 landing: one shockwave pushed out radially from the landing point (see land_ring)
     # r4 pass 1: origin 12 cm under a ring of 8 cm radius threw the puffs up at ~55 deg (a column between the legs, no spread); the push
     # origin must sit just under the ring's own height so the velocity is almost flat along the floor
-    "land_shockwave": dict(shape="ring", ring=(8, 8), origin=(0, 0, 6), count=14, life=(0.40, 0.50), size=(24, 40), speed=380, drag=5.0,
+    # r5: the origin now works (Origin Offset): 1.2 cm under a ring of 8 cm = ~8 deg up (vz ~0.15 vh), flat along the floor
+    # r5b (owner reference IMG_9543, docs/notes/vfx-studies/fumo-owner-IMG9543): the dust is born at the feet (contact outline), not
+    # between them (ring 8 -> 12), and almost all of its travel is in the first ~0.07 s, nearly still by ~0.15 s (drag 5 -> 10; speed
+    # 380 -> 600 keeps the reach speed/drag ~60 cm, so the skirt keeps the owner's width)
+    # r5c (REVIEW-A2r5: 81 % of the travel at 0.15 s, the ref is still by then; lumps drifted apart): drag 10 -> 22, speed 950 (reach
+    # ~43 cm, lumps overlap into one band), life 0.42-0.46 (they die together)
+    "land_shockwave": dict(shape="ring", ring=(12, 8), origin=(0, 0, 6.5), count=18, life=(0.42, 0.46), size=(24, 40), speed=950, drag=22.0,
                            curl=(20.0, 0.02), gravity=3.0),
-    "land_haze": dict(shape="ring", ring=(4, 4), origin=(0, 0, 3), count=6, life=(0.35, 0.45), size=(36, 46), speed=220, drag=5.0,
+    "land_haze": dict(shape="ring", ring=(4, 4), origin=(0, 0, 3.3), count=6, life=(0.35, 0.45), size=(36, 46), speed=400, drag=8.0,
                       curl=(30.0, 0.03)),
     # Example for later moves (not wired yet): directional dust behind the feet, thrown back and a little out
     "dash_back": dict(shape="cone", cone=((-1, 0, 0.15), 35), count=8, life=(0.35, 0.45), size=(24, 36), speed=320, drag=6.0,
