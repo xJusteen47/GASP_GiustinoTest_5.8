@@ -178,8 +178,17 @@ LOOKS = {
     # Snow clumps: little lumpy solids, the flipbook barely moves (they stay round), shrink at the end
     # A1b (owner on the A1 video: "too stylised, DK is realistic"): the same material on the soft billowy smoke flipbook
     # (make_vfx_smoke_flipbook.py): softer light wrap and ramp, grows and thins out instead of shrinking
-    "SmokeReal": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.85, Wrap=0.4, RampLo=0.1, RampHi=0.8, ShadeColor=(0.55, 0.62, 0.8),
-                      OccStrength=0.6, FlipRate=1.0, StartScale=0.45, GrowEnd=1.0, FadeStart=0.15, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0),
+    # A2 (owner on A1b: "the dust is too big for the character"; REVIEW-A1b flaw 2): the early extent is the max, so it grows only
+    # slightly (StartScale 0.45 -> 0.8) while it fades; firmer form shading, neutral shade tint (the baby-blue cast is gone)
+    # A2 critic (CRITIC-A2.md): white steam on dark (DarkSnow/DarkBrightness down), no shaded underside (darker ShadeColor, harder
+    # ramp), legs melting into the dust (OpacityMax 0.6), growth then fade in sequence (fade from 5 % of life)
+    "SmokeReal": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.65, DarkBrightness=1.3, Wrap=0.15, RampLo=0.25, RampHi=0.6,
+                      ShadeColor=(0.45, 0.47, 0.52), OccStrength=0.8, FlipRate=1.0, StartScale=0.8, GrowEnd=1.0, FadeStart=0.05,
+                      ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0, OpacityMax=0.75),  # r1 at 0.6 / DarkSnow 0.5 nearly vanished
+    # A2: thin low haze layer under the skirt (replaces the 8 small wisps that read as "ears", REVIEW-A1b flaw 3)
+    "SmokeHaze": dict(tex="T_GSTN_VFX_SmokeFB", DarkSnow=0.5, DarkBrightness=1.3, Wrap=0.15, RampLo=0.25, RampHi=0.6, ShadeColor=(0.45, 0.47, 0.52),
+                      OccStrength=0.8, FlipRate=1.0, StartScale=0.85, GrowEnd=1.0, FadeStart=0.05, ShrinkStart=1.0, EndScale=1.0, FadeDistance=20.0,
+                      OpacityMax=0.3),
     "PuffClump": dict(DarkSnow=0.85, FlipRate=0.3, StartScale=0.8, GrowEnd=0.08, ShrinkStart=0.6, EndScale=0.0, OccStrength=0.5),
 }
 
@@ -209,7 +218,7 @@ def run():
         EAL.save_loaded_asset(mi)
         made.append(name)
     mi = V3._instance("ContactDisc", disc)
-    for k, v in dict(StartScale=0.6, GrowEnd=0.3, ShrinkStart=1.0, EndScale=1.0, MaxOpacity=0.40).items():
+    for k, v in dict(StartScale=0.6, GrowEnd=0.3, ShrinkStart=1.0, EndScale=1.0, MaxOpacity=0.25).items():  # A2: 0.40 read as a hole under the feet
         MEL.set_material_instance_scalar_parameter_value(mi, k, float(v))
     MEL.update_material_instance(mi)
     EAL.save_loaded_asset(mi)

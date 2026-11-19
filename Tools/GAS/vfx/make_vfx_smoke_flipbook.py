@@ -68,20 +68,20 @@ def _blur(img, r):
 
 
 def _frame(lobes, n1, n2, t, x, y, seed_off):
-    grow = 0.80 + 0.30 * (1 - (1 - t) ** 2)  # fast expansion, then slow
+    grow = 0.90 + 0.15 * (1 - (1 - t) ** 2)  # A2 (owner: the early extent is the max): slight growth only
     lift = 0.10 * t
     mass = np.zeros(x.shape)
     for cx, cy, s in lobes:
         dx, dy = x - cx * grow, y - (cy * grow + lift)
         mass = np.maximum(mass, np.exp(-(dx * dx + dy * dy) / (2 * (s * grow) ** 2)))
     # Domain-warped billow noise, flowing up and out over life
-    u, v = x * 0.32 + seed_off, y * 0.32 + seed_off * 0.7  # big lumps (0.55 gave fur)
+    u, v = x * 0.42 + seed_off, y * 0.42 + seed_off * 0.7  # A2 review A1b flaw 2: more billows (0.55 gave fur)
     wu = _sample(n2, u * 0.7 + 0.13 * t, v * 0.7) - 0.5
     wv = _sample(n2, u * 0.7 + 0.37, v * 0.7 - 0.1 * t) - 0.5
     flow_u, flow_v = u + 0.12 * wu - 0.03 * t * x, v + 0.12 * wv - 0.08 * t  # light warp: strong warp drew hair
     billow = _sample(n1, flow_u, flow_v)
     billow = _smooth(billow, 0.2, 0.85)  # rounded lumps with clear gaps
-    dens = mass * (0.35 + 0.95 * billow)
+    dens = mass * (0.55 + 0.75 * billow)  # A2: the core cannot open holes (variant 3 square hole)
     # Erosion from the thin parts inward; soft edge so wisps stay translucent
     # A1b review: the core stayed opaque and the puff died by erosion (shrank): low threshold, wide soft edge, never fully opaque,
     # so the material's fade-while-growing (owner) is what thins it out
@@ -89,14 +89,14 @@ def _frame(lobes, n1, n2, t, x, y, seed_off):
     alpha = 0.7 * _smooth(dens, th, th + 0.55)
     alpha *= _smooth(0.97 - np.maximum(np.abs(x), np.abs(y)), 0.0, 0.08)
     # Height field = smoothed density -> normal; occlusion = dense core and underside darker
-    h = _blur(dens, 3)
+    h = _blur(dens, 2)  # A2: sharper billow relief
     gy, gx = np.gradient(h)
-    k = 9.0
+    k = 14.0  # A2: stronger form shading (A1b read flat)
     nx, ny = -gx * k, gy * k  # image rows go down, y goes up
     nz = np.ones_like(h)
     nrm = np.sqrt(nx * nx + ny * ny + nz * nz)
     big = _blur(dens, 10)
-    occ = np.clip(1.0 - 0.45 * _smooth(big, 0.5, 1.1) - 0.25 * np.clip(-y, 0, 1) * mass, 0, 1)
+    occ = np.clip(1.0 - 0.2 * _smooth(big, 0.5, 1.1) - 0.45 * np.clip(-y, 0, 1) * mass, 0, 1)  # A2 critic: core was darker than the rim (hollow shell); shade the underside instead
     return nx / nrm, ny / nrm, occ, alpha
 
 

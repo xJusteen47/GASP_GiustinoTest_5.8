@@ -274,6 +274,8 @@ def _balls(system, name, count, life, size, speed, drag, look="Dust", cone=None,
     if ring:
         e.set("ParticleSpawn", "ShapeLocation", "Shape Primitive", "Ring / Disc").set("ParticleSpawn", "ShapeLocation", "Ring Radius", ring[0])
         e.shape_offset((0, 0, ring[1]))
+        if ring_width is not None:  # A2: 0 = on the ring, 1 = anywhere on the disc (uneven spacing and radius)
+            e.set("ParticleSpawn", "ShapeLocation", "Ring Width", ring_width)
     elif box:
         e.set("ParticleSpawn", "ShapeLocation", "Shape Primitive", "Box / Plane").set("ParticleSpawn", "ShapeLocation", "Box Size", box[0])
         e.shape_offset(box[1])
@@ -406,7 +408,7 @@ def jump_puff():
 
 
 def _puffs(system, name, count, life, size, speed, drag, look="PuffDust", ring=(30, 15), origin=(0, 0, -6), curl=(0.0, 0.0), cone=None,
-           gravity=None):
+           gravity=None, ring_width=None):
     """Smoke redo A1 (docs/notes/reviews/vfx-v3/hd1/REVIEW-SMOKE-LOOK.md option A): small lumpy flipbook puffs (MI_GSTN_VFX_Puff*) in the
     floor's colour. No sprite rotation (the form shading's light is in the sprite's frame), sorted by view depth (shaded puffs pop
     otherwise), wide lifetime spread so they die one after another. curl=(strength, frequency): Curl Noise Force swirl"""
@@ -446,12 +448,15 @@ def land_ring():
         _surface(s)
         # A1b (owner: "size ok, too stylised; DK is realistic"): same layout on the soft billowy smoke flipbook (MI SmokeReal), a little
         # longer life (soft smoke thins out instead of popping). The stylised A1 look is MI PuffDust (commit b16a0475)
-        _puffs(s, "Skirt", 16, (0.50, 0.95), (60, 120), 560, 6.0, look="SmokeReal", ring=(36, 12), origin=(0, 0, -5), curl=(60.0, 0.02),
-               gravity=35.0)  # A1b: the soft flipbook fills ~half its frame: 60-120 cm sprites show A1-sized puffs that grow and fade (owner), ~0.8 s, slight rise
-        _puffs(s, "Wisps", 8, (0.35, 0.60), (25, 50), 820, 6.0, look="SmokeReal", ring=(28, 8), origin=(0, 0, -8), curl=(200.0, 0.03))
-        _puffs(s, "Clumps", 8, (0.40, 0.55), (8, 16), 430, 1.5, look="PuffClump", ring=None, cone=((0, 0, 1), 55), gravity=-1300.0)
+        # A2 (owner on A1b, 2026-11-19: "too big for the character"; target = A1b's extent ~2 frames after touchdown, about shoulder wide
+        # and knee high, as the MAX): small ring and short throw, the puffs grow only slightly while they fade (MI SmokeReal StartScale
+        # 0.8). CRITIC-A2: puffs off the shins (ring 26), mixed 30-90 cm, clumps as tiny grit. REVIEW-A1b flaw 3: 8 puffs of mixed size on a filled disc (not 16 equal balls on a ring), the wisps become a thin haze
+        _puffs(s, "Skirt", 8, (0.45, 0.80), (30, 90), 180, 4.5, look="SmokeReal", ring=(26, 8), origin=(0, 0, -5), curl=(40.0, 0.02),
+               gravity=10.0, ring_width=0.6)
+        _puffs(s, "Wisps", 4, (0.40, 0.60), (50, 80), 130, 6.0, look="SmokeHaze", ring=(12, 4), origin=(0, 0, -6), curl=(60.0, 0.03))
+        _puffs(s, "Clumps", 5, (0.30, 0.45), (3, 6), 220, 1.5, look="PuffClump", ring=None, cone=((0, 0, 1), 60), gravity=-1300.0)
         disc = _sprites(s, "Contact")
-        disc.burst(1).particle((0.35, 0.35), (220, 220)).sized()  # A1 review: invisible at 170 / 0.22
+        disc.burst(1).particle((0.35, 0.35), (120, 120)).sized()  # A2: scaled with the dust (was 220)
         disc.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")
         disc.sphere(0.01, offset=(0, 0, 1.5)).radial(0.0).facing((0, 0, 1)).material("ContactDisc")
     return s
