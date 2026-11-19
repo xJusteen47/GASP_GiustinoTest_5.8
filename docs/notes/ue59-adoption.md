@@ -42,3 +42,25 @@ MCP project Instructions: "GASP_Giustino2. Prefer GSTNAnimToolsets for AnimBP an
 Run `Tools/UE59/ue59_editor_checks.py` once in the open editor (MCP execute_python with the file content, or `py "<path>"` in the Output Log). Read-only, about a minute (loads ~20 rigs). Output: `Saved/UE59/ue59_editor_checks.txt`. Copy it to `docs/notes/ue59-editor-checks.txt` on this branch.
 
 Then run `Tools/UE59/ue59_ask_assistant.py` in the same open editor (owner: the Editor AI assistant is free, use it to confirm fit). It asks the 6 open questions (UAF notify, Control Rig replacements, frame-rate cap, toolset restriction, Pose Search roles, Python BP/StateTree editing) and writes `Saved/UE59/assistant_replies.txt` (ends with `== DONE ==`). Copy it to `docs/notes/ue59-assistant-replies.txt`; where a reply contradicts §1-2, the reply wins after a check.
+
+## 5. Querying the Unreal Assistant from our threads (no screen control)
+
+What 5.9 ships (plugin `Experimental/AIAssistant`, enabled with the editor; read from its headers):
+- `unreal.AIAssistantInstance` (Python/Blueprint, "entry point for external callers"): `get()` (opens the panel), `create_conversation(system_prompt, dev_options_json)`, `send_text_message(conv, msg, hidden_ctx)`, `send_text_message_and_get_reply(conv, msg, hidden_ctx)`, `send_message_and_get_reply`, `get_conversation_json(conv)`, delegate `on_conversation_updated`. Calls are async (`AsyncFunctionResultString`, poll `.is_complete` / `.value`). Empty conversation id = new conversation.
+- Tool access (Editor Preferences > Unreal Assistant, `UAIAssistantContextUser.DefaultToolAccessPreference`, per user): Ask / Read / Edit / Full / Auto, default Auto. The editor only advertises it; the assistant service enforces it. This is why the assistant could not inspect our assets before: give it Read to let it look at assets without editing.
+- Same settings page: a user `Prompt` (who we are, sent with every request), notification settings (taskbar flash/badge, sound).
+- External agent (`bUseExternalAgent`, presets Claude Code / Codex / Cursor / OpenCode / Custom, or an `AIAssistant.json` in the project): the panel runs THAT agent instead of the Epic service, after an approval per command line and project. This is the opposite direction (hand the panel to an agent), not a way for us to reach the Epic assistant, and it would bill our own agent. Keep it OFF.
+
+Recipe (ready, `Tools/UE59/ask_unreal_assistant.py`, uses `Tools/AnimPipeline/ue_builtin.py` for MCP execute_python):
+```
+python Tools/UE59/ask_unreal_assistant.py "How do I ...?"                 # one question, new conversation
+python Tools/UE59/ask_unreal_assistant.py --file Tools/UE59/qs.txt        # blank-line separated questions
+python Tools/UE59/ask_unreal_assistant.py "follow-up" --conv <id>         # continue a conversation
+```
+Prints <= 2 lines (`ESITO: n/m replies ... -> Saved/UE59/assistant_<id>.json`); exit 2 = no editor MCP, 3 = timeout (default 600 s). Project context is sent as hidden context. Needs an open editor that keeps ticking (the editor thread, or any thread holding the editor); it uses the editor's single active conversation, so one caller at a time. `Tools/UE59/ue59_ask_assistant.py` is the older one-shot batch of the 6 open 5.9 questions (same mechanism, output `Saved/UE59/assistant_replies.txt`).
+Suggested one-time settings (per user, not gameplay; editor thread or owner): Tool access = Read; Prompt = the PROJECT_CONTEXT text in the script.
+
+## 6. Machine Learning candidates (5.9 notes, not adopted, assessed offline)
+- UAF AI animation generation: plugins `AnimGen`, `UAFAnimGen`, `AnimGenOffline` (all experimental). AnimGen needs UAF, UAFAnimGraph, UAFPoseSearch and PythonFoundationPackages/PythonMLPackages: a UAF runtime we do not use. Offline variant (Sequencer, Control Rig physics) is the only one usable for authoring clips that we then bake to sequences. Candidate for a spike on the laptop, not now.
+- Rig Mapper AI authoring: `RigMapper` + `RigMapperOp` (retarget op that remaps curves). Relevant only for MetaHuman face/curve remapping; low value for us.
+- ML Deformer agent support: `MLDeformerFramework` (not experimental) + cloth/flesh data generators. For mesh deformation quality, not gameplay; skip.
