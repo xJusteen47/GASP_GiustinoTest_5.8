@@ -24,8 +24,18 @@ Branch `claude/pie-mp-perf` (worktree `GASP_Giustino2_mpperf`, base c09dfa04). D
 - `NetworkPredictionLog.h`: `UE_NP_LOG_THROTTLED(Verbosity, Seconds, Fmt, ...)`, max one line per call site per second with
   the count of folded lines. Applied to the 6 sites above. Nothing is silenced, only rate-limited.
 
+- Compile check: full `GASP_Giustino2Editor` build in this worktree, `Saved/Logs/ci/build.log.esito` = ESITO: OK (1207 s),
+  `grep -cE "error C[0-9]|): error" Saved/Logs/ci/build.log` = 0.
+
+## Repro attempt (19 Nov, editor thread, before the patch)
+- `_ue59/Saved/PiePerf/before_one{,_r2}/run.log.esito`: both TIMEOUT (361 s, 481 s). Both `run.log.ue.log` end at
+  `LogTurnkeySupport: Completed SDK detection: ExitCode = 0` (~1190 lines) and contain no DDC/Zen, dialog or error line,
+  so the stall is not proven to be DDC. No project source was newer than `Binaries/Win64/UnrealEditor-GASP_Giustino2.dll`
+  (find -newer, before 17:22), so a "modules out of date" box is unlikely; a modal box hidden by `-nosplash` on another
+  desktop, or a second editor on the same project, is still possible. Next try: look at the screen/desktop 2 when it hangs.
+
 ## Left / next
-1. Repro run (needs the editor slot, ~15 min): same 3-player listen server, `stat unit`, `stat game`, `stat net` on the
+1. Repro run (needs the editor slot, ~15 min; probe `Tools/GASNPPTest/pie_perf_probe.py`): same 3-player listen server, `stat unit`, `stat game`, `stat net` on the
    server window, Insights trace `-trace=cpu,frame,log,bookmark` 30 s, then the same with `RunUnderOneProcess=False`.
    Count warnings by category from the log. This tells PIE overhead apart from our tick cost.
 2. Owner-side setting (recommended): Play > Advanced Settings: `Run Under One Process` off (each client its own process)
