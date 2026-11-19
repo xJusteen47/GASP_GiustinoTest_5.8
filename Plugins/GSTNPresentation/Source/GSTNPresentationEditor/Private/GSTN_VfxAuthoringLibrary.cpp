@@ -15,6 +15,7 @@
 #include "NiagaraGraph.h"
 #include "NiagaraNodeFunctionCall.h"
 #include "NiagaraNodeOutput.h"
+#include "NiagaraLightRendererProperties.h"
 #include "NiagaraMeshRendererProperties.h"
 #include "NiagaraRendererProperties.h"
 #include "Engine/StaticMesh.h"
@@ -811,6 +812,36 @@ UNiagaraRendererProperties* UGSTN_VfxAuthoringLibrary::SetRibbonRenderer(UNiagar
 	Emitter->AddRenderer(Ribbon, Instance.Version);
 	System->MarkPackageDirty();
 	return Ribbon;
+}
+
+UNiagaraRendererProperties* UGSTN_VfxAuthoringLibrary::SetLightRenderer(UNiagaraSystem* System, const FString& EmitterName, float Radius,
+	float Exponent, bool bAffectsTranslucency)
+{
+	FNiagaraEmitterHandle* Handle = GSTNVfxAuthoring::FindHandle(System, EmitterName);
+	FVersionedNiagaraEmitterData* Data = Handle ? Handle->GetEmitterData() : nullptr;
+	if (!Data)
+	{
+		return nullptr;
+	}
+	const FVersionedNiagaraEmitter Instance = Handle->GetInstance();
+	UNiagaraEmitter* Emitter = Instance.Emitter;
+	Emitter->Modify();
+	const TArray<UNiagaraRendererProperties*> Old = Data->GetRenderers();
+	for (UNiagaraRendererProperties* Renderer : Old)
+	{
+		Emitter->RemoveRenderer(Renderer, Instance.Version);
+	}
+	UNiagaraLightRendererProperties* Light = NewObject<UNiagaraLightRendererProperties>(Emitter, NAME_None, RF_Transactional);
+	// Particles.LightRadius defaults to 100 (NiagaraConstants.cpp); GetDefaultRadius() is not exported (MinimalAPI class)
+	constexpr float DefaultRadius = 100.f;
+	Light->RadiusScale = FMath::Max(Radius, 1.f) / DefaultRadius;
+	Light->bUseInverseSquaredFalloff = false;
+	Light->DefaultExponent = FMath::Max(Exponent, 0.1f);
+	Light->bAffectsTranslucency = bAffectsTranslucency;
+	Light->bAlphaScalesBrightness = true;
+	Emitter->AddRenderer(Light, Instance.Version);
+	System->MarkPackageDirty();
+	return Light;
 }
 
 FString UGSTN_VfxAuthoringLibrary::SetEmitterSettings(UNiagaraSystem* System, const FString& EmitterName, bool bLocalSpace, float FixedBoundsHalfExtent)

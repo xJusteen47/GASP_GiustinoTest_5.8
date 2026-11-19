@@ -123,6 +123,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
 	static UNiagaraRendererProperties* SetRibbonRenderer(UNiagaraSystem* System, const FString& EmitterName);
 
+	/** Replaces the emitter's renderers with one light renderer and returns it; null if no emitter. Every particle is a point light of
+	 *  Radius cm (the particles carry no LightRadius, so the radius is the renderer's default times a scale computed here), coloured by
+	 *  Particles.Color with its alpha scaling the brightness (a fading colour curve dims the light). Exponent falloff, not inverse squared:
+	 *  the light must stop at its radius for a cheap, bounded impact flash. bAffectsTranslucency lets it reach lit translucent dust */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
+	static UNiagaraRendererProperties* SetLightRenderer(UNiagaraSystem* System, const FString& EmitterName, float Radius, float Exponent,
+		bool bAffectsTranslucency);
+
 	/** Emitter settings: CPU sim, local or world space, fixed bounds of this half extent around the system (0 = dynamic) */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|VFX Authoring")
 	static FString SetEmitterSettings(UNiagaraSystem* System, const FString& EmitterName, bool bLocalSpace, float FixedBoundsHalfExtent);

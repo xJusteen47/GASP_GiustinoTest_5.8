@@ -10,9 +10,11 @@ sprint lines, tumble) run in world space so their particles stay behind.
 
 Run in the open editor: python -I Tools/GAS/run_in_editor.py setup_presentation_vfx      (idempotent: systems are rebuilt)
 """
+import os
+
 import unreal
 
-ROOT = "/GSTNPresentation/VFX"
+ROOT ="/GSTNPresentation/VFX"
 MATS = f"{ROOT}/Materials"
 TPL = "/Niagara/DefaultAssets/Templates/Emitters"
 MOD = "/Niagara/Modules"
@@ -408,12 +410,15 @@ def jump_puff():
 
 
 def _puffs(system, name, count, life, size, speed, drag, look="PuffDust", ring=(30, 15), origin=(0, 0, -6), curl=(0.0, 0.0), cone=None,
-           gravity=None, ring_width=None):
+           gravity=None, ring_width=None, disc=0.0, spawn_time=0.0):
     """Smoke redo A1 (docs/notes/reviews/vfx-v3/hd1/REVIEW-SMOKE-LOOK.md option A): small lumpy flipbook puffs (MI_GSTN_VFX_Puff*) in the
     floor's colour. No sprite rotation (the form shading's light is in the sprite's frame), sorted by view depth (shaded puffs pop
-    otherwise), wide lifetime spread so they die one after another. curl=(strength, frequency): Curl Noise Force swirl"""
+    otherwise), wide lifetime spread so they die one after another. curl=(strength, frequency): Curl Noise Force swirl.
+    disc: ShapeLocation "Disc Coverage" (0 = on the ring, 1 = anywhere inside it); spawn_time: burst delay in s (staggered births)"""
     e = _sprites(system, name)
     e.burst(count).particle(life, size, rotation=False).sized()
+    if spawn_time:
+        e.set("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Time", spawn_time)
     # A2 r5c (REVIEW-A2r5 recheck: each puff scaled down as a whole over the last quarter of life; owner: dust never shrinks): the burst
     # template carries its own update-stage size curve. Dust size over life is the material's (grow only), so every template size module
     # in ParticleUpdate goes off. Logged so the next build shows what was there
@@ -425,6 +430,8 @@ def _puffs(system, name, count, life, size, speed, drag, look="PuffDust", ring=(
     if ring:
         e.set("ParticleSpawn", "ShapeLocation", "Shape Primitive", "Ring / Disc").set("ParticleSpawn", "ShapeLocation", "Ring Radius", ring[0])
         e.shape_offset((0, 0, ring[1]))
+        if disc:
+            e.set("ParticleSpawn", "ShapeLocation", "Disc Coverage", disc)
     else:
         e.sphere(6)
     if cone:
@@ -470,6 +477,18 @@ DUST_SHAPES = {
                            curl=(20.0, 0.02), gravity=3.0),
     "land_haze": dict(shape="ring", ring=(4, 4), origin=(0, 0, 3.3), count=6, life=(0.35, 0.45), size=(36, 46), speed=400, drag=8.0,
                       curl=(30.0, 0.03)),
+    # A2 r6 (DK clip study docs/notes/vfx-studies/dk-clip-2059, cause 3: 18 equal puffs born in one frame on a perfect ring): the skirt is
+    # split in two staggered bursts. Main: 13 puffs of 16-40 cm, born anywhere on the outer third of the disc (Disc Coverage), so the
+    # spacing and reach vary. Late: 1-2 frames after, 5 bigger slower lumps (30-50 cm, still under the r3 50 cm cap) closer in, so the
+    # band has a few big masses and many small ones. Lifetimes overlap less (0.36-0.48) so they do not all vanish in the same frame
+    "land_shockwave_v": dict(shape="ring", ring=(13, 8), origin=(0, 0, 6.5), count=13, life=(0.36, 0.48), size=(16, 40), speed=950,
+                             drag=22.0, curl=(20.0, 0.02), gravity=3.0, disc=0.35),
+    "land_lumps": dict(shape="ring", ring=(10, 9), origin=(0, 0, 7.0), count=5, life=(0.40, 0.50), size=(30, 50), speed=620, drag=20.0,
+                       curl=(25.0, 0.025), gravity=3.0, disc=0.5, spawn_time=0.025),
+    # Solid grit (owner 2026-11-19: "never shrinks" is for smoke/dust only, solids may shrink): small pieces thrown up and out, ballistic,
+    # gone about when they fall back to the floor. r6 first capture: at 300 cm/s / -1300 they hung at knee height for ~10 frames (read
+    # as floating snow): faster and heavier, apex ~0.15 s / ~25 cm, back on the floor at ~0.3 s, thrown further out
+    "land_grit": dict(shape="cone", cone=((0, 0, 1), 60), count=9, life=(0.26, 0.32), size=(3, 8), speed=440, drag=2.0, gravity=-2200.0),
     # Example for later moves (not wired yet): directional dust behind the feet, thrown back and a little out
     "dash_back": dict(shape="cone", cone=((-1, 0, 0.15), 35), count=8, life=(0.35, 0.45), size=(24, 36), speed=320, drag=6.0,
                       curl=(20.0, 0.02), gravity=3.0),
@@ -484,6 +503,32 @@ def _dust(system, name, preset, look="SmokeReal", **override):
     if shape == "ring":
         return _puffs(system, name, count, life, size, speed, drag, look=look, ring=p.pop("ring"), origin=p.pop("origin", None), **p)
     return _puffs(system, name, count, life, size, speed, drag, look=look, ring=None, cone=p.pop("cone"), **p)
+
+
+# A2 r6 impact flash (DK clip study, layer "light" and fix 2): a warm point light at the impact that peaks on frame 1 and is gone in 3-4
+# frames. It lights the floor, the legs and (once the dust is lit) the dust itself: the cheapest "physical event" cue. One particle, one
+# light, radius-bounded (exponent falloff), CPU sim: cheap on a Switch 2-class GPU. The template's ScaleColor stays on: its alpha curve
+# fades the light (the renderer's alpha scales brightness). Colour/brightness = User.FlashColor (linear, the light's intensity)
+# r6 first capture: (9, 6.6, 4.4) at 30 cm up only tinted the inner thighs, the floor did not change: x3 and lower
+FLASH_COLOR = unreal.LinearColor(27.0, 20.0, 13.0, 1.0)
+
+
+def _flash(system, name, radius=220.0, life=0.07, offset=(0, 0, 18), exponent=2.0):
+    L.add_user_color(system, "FlashColor", FLASH_COLOR)
+    e = Emitter(system, "OmnidirectionalBurst", name).settings(True)
+    e.burst(1).particle((life, life), (1, 1))
+    e.link("ParticleSpawn", "InitializeParticle", "Color", "User.FlashColor")
+    e.sphere(0.01, offset=offset).radial(0.0)
+    light = L.set_light_renderer(system, e.name, radius, exponent, True)
+    if light is None:
+        ERRORS.append(f"{e.name}: no light renderer")
+    else:
+        # Unreal Assistant: through MegaLights a 1-3 frame light is denoised stochastically and comes out smeared or late
+        try:
+            light.set_editor_property("allow_mega_lights", False)
+        except Exception as ex:
+            ERRORS.append(f"{e.name}: allow_mega_lights: {ex}")
+    return e
 
 
 def land_ring():
@@ -507,9 +552,15 @@ def land_ring():
         # (origin under the centre), fast then braked hard (reach ~ speed/drag = 50 cm), so they travel together as one expanding band.
         # More, smaller puffs (14 x 24-40 cm) so neighbours overlap into a continuous skirt; weak curl so the band stays coherent.
         # (_puffs never applied ring_width: the r2/r3 "filled disc" was always the ring itself.)
-        _dust(s, "Skirt", "land_shockwave", look="SmokeReal")
-        _dust(s, "Wisps", "land_haze", look="SmokeHaze")
-        _puffs(s, "Clumps", 5, (0.30, 0.45), (3, 6), 220, 1.5, look="PuffClump", ring=None, cone=((0, 0, 1), 60), gravity=-1300.0)
+        # A2 r6 (owner on r5: "still looks fake"; DK clip study fixes 2 + 3 + 5): staggered, uneven skirt (main + late lumps), a grit
+        # layer that flies and falls, and an impact light flash. Same shockwave and size target as r5
+        # Then the scene-lit dust (MI DustLit*, master M_GSTN_VFX_DustLit); GSTN_DUST_LIT=0 builds the r6a self-lit pass for comparison
+        real, haze = ("DustLit", "DustLitHaze") if os.environ.get("GSTN_DUST_LIT", "1") == "1" else ("SmokeReal", "SmokeHaze")
+        _dust(s, "Skirt", "land_shockwave_v", look=real)
+        _dust(s, "Lumps", "land_lumps", look=real)
+        _dust(s, "Wisps", "land_haze", look=haze)
+        _dust(s, "Clumps", "land_grit", look="GritLit" if real == "DustLit" else "PuffClump")
+        _flash(s, "Flash")
         disc = _sprites(s, "Contact")
         disc.burst(1).particle((0.35, 0.35), (120, 120)).sized()  # A2: scaled with the dust (was 220)
         disc.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")

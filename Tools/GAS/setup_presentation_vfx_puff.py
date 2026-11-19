@@ -54,8 +54,22 @@ def _pivot_uv(mat, size, x, y):
     return clamped
 
 
-def build_puff(tex):
-    mat = V3._material("M_GSTN_VFX_Puff", U.MaterialShadingModel.MSM_UNLIT, U.BlendMode.BLEND_TRANSLUCENT)
+def build_puff(tex, scene_lit=False):
+    """scene_lit=False: M_GSTN_VFX_Puff (self-lit, shading painted from LightDir). scene_lit=True: M_GSTN_VFX_DustLit, the same flipbook, frame,
+    size, colour and fade graph, but lit by the scene (A2 r6, DK clip study cause 1: our dust took neither the direction nor the colour
+    of the real light). Default Lit translucent, lighting mode Surface TranslucencyVolume: per-pixel normal (the flipbook's) against the
+    translucency lighting volume, which carries the directional light, the skylight and the Niagara impact flash (bAffectsTranslucency).
+    Cheaper than Surface ForwardShading (per-pixel lights per layer of overdraw), and unlike the Volumetric modes it uses the normal map,
+    which is what gives each lump a lit top and a shaded underside. Base colour = the old lit-side colour (surface colour, snow lean,
+    LitColor tints, crease occlusion, edge tint); the shaded side comes from the light now, ShadeColor is unused. EmissiveLift: a small
+    share of the base colour as emission (lit translucency gets less light than the opaque floor beside it), not eye-adapted: it follows
+    the exposure like the floor does. NormalScale (1, -1, 1): the flipbook's normal is y up in the frame, UE tangent space is y down"""
+    mat = V3._material("M_GSTN_VFX_DustLit" if scene_lit else "M_GSTN_VFX_Puff",
+                       U.MaterialShadingModel.MSM_DEFAULT_LIT if scene_lit else U.MaterialShadingModel.MSM_UNLIT, U.BlendMode.BLEND_TRANSLUCENT)
+    if scene_lit:
+        # Unreal Assistant (Saved/VfxV3/a2r6/assistant_reply.md): Volumetric Directional reads the per-pixel normal at the volume's cost;
+        # Surface TranslucencyVolume adds reflection captures, wasted on dust (first r6 capture used it)
+        mat.set_editor_property("translucency_lighting_mode", U.TranslucencyLightingMode.TLM_VOLUMETRIC_DIRECTIONAL)
     t = _node(mat, U.MaterialExpressionParticleRelativeTime, -3200, 0)
     one_c = _const(mat, 1, -3200, 400)
     size = V3._life_size(mat, t, one_c, -3000, 100)
@@ -161,7 +175,20 @@ def build_puff(tex):
     if not any(MEL.connect_material_expressions(_scalar(mat, "FadeDistance", 12.0, 2000, 1000), "", depth, nm)
                for nm in ("FadeDistance", "Fade Distance")):
         raise RuntimeError("cannot connect the Depth Fade distance")
-    MEL.connect_material_property(emissive, "", U.MaterialProperty.MP_EMISSIVE_COLOR)
+    if scene_lit:
+        base = _op(mat, U.MaterialExpressionMultiply, _op(mat, U.MaterialExpressionMultiply, lit, occ, 2250, 150), edge_c, 2400, 150)
+        base_g = _op(mat, U.MaterialExpressionMultiply, base, gain, 2550, 150)
+        lift = _op(mat, U.MaterialExpressionMultiply, base_g, _scalar(mat, "EmissiveLift", 0.15, 2550, 250), 2700, 250)
+        normal = _op(mat, U.MaterialExpressionMultiply, n,
+                     _mask(mat, _vector(mat, "NormalScale", U.LinearColor(1, -1, 1, 0), 560, -1050), 700, -1050, r=True, g=True, b=True),
+                     820, -1000)
+        MEL.connect_material_property(base_g, "", U.MaterialProperty.MP_BASE_COLOR)
+        MEL.connect_material_property(normal, "", U.MaterialProperty.MP_NORMAL)
+        MEL.connect_material_property(lift, "", U.MaterialProperty.MP_EMISSIVE_COLOR)
+        MEL.connect_material_property(_const(mat, 0, 2700, 350), "", U.MaterialProperty.MP_SPECULAR)
+        MEL.connect_material_property(_const(mat, 1, 2700, 420), "", U.MaterialProperty.MP_ROUGHNESS)
+    else:
+        MEL.connect_material_property(emissive, "", U.MaterialProperty.MP_EMISSIVE_COLOR)
     MEL.connect_material_property(depth, "", U.MaterialProperty.MP_OPACITY)
     MEL.recompile_material(mat)
     EAL.save_loaded_asset(mat)
@@ -231,6 +258,17 @@ LOOKS = {
     "PuffClump": dict(DarkSnow=0.3, FlipRate=0.3, StartScale=0.8, GrowEnd=0.08, ShrinkStart=1.0, EndScale=1.0, FadeStart=0.5,
                       OccStrength=0.5),
 }
+# A2 r6: the scene-lit twins (master M_GSTN_VFX_DustLit, see build_puff). Same r3 colour values (owner decisions 1-2 still open) and the
+# same r5 size/fade; only the brightness terms are retuned, because the scene light now sets the value: Brightness/DarkBrightness scale
+# the albedo, EmissiveLift adds the share the translucency volume does not deliver
+LIT_LOOKS = {
+    "DustLit": dict(LOOKS["SmokeReal"], Brightness=0.9, DarkBrightness=1.4, EmissiveLift=0.15),
+    "DustLitHaze": dict(LOOKS["SmokeHaze"], Brightness=0.9, DarkBrightness=1.4, EmissiveLift=0.15),
+    # Solid grit (r6 first capture: the self-lit PuffClump on dark leaned to snow and read as white popcorn): lit, darker than the floor
+    # (no snow lean, low albedo), crisp, nearly opaque, fades only at the very end (a solid; owner: solids may shrink)
+    "GritLit": dict(LOOKS["PuffClump"], DarkSnow=0.0, Brightness=0.45, DarkBrightness=0.6, EmissiveLift=0.05, OccStrength=0.8,
+                    FadeStart=0.8, OpacityMax=1.0),
+}
 
 
 def run():
@@ -243,10 +281,12 @@ def run():
         textures[name].set_editor_property("compression_settings", U.TextureCompressionSettings.TC_VECTOR_DISPLACEMENTMAP)
         EAL.save_loaded_asset(textures[name])
     puff = build_puff(tex)
+    dust_lit = build_puff(tex, scene_lit=True)
     disc = build_disc()
     made = []
-    for name, look in LOOKS.items():
-        mi = V3._instance(name, puff)
+    looks = [(n, lk, puff) for n, lk in LOOKS.items()] + [(n, lk, dust_lit) for n, lk in LIT_LOOKS.items()]
+    for name, look, parent in looks:
+        mi = V3._instance(name, parent)
         look = dict(look)
         if "ShadeColor" in look:
             look.setdefault("ShadeColorLight", look["ShadeColor"])
