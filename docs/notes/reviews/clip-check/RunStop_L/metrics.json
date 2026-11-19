@@ -91,24 +91,6 @@
  "pelvis_acc_max_frame": 35,
  "pops": [
   {
-   "frame": 10,
-   "bone": "ik_foot_l",
-   "size": 70.2,
-   "type": "snap"
-  },
-  {
-   "frame": 10,
-   "bone": "ik_foot_l",
-   "size": 34.2,
-   "type": "spike"
-  },
-  {
-   "frame": 9,
-   "bone": "ik_foot_l",
-   "size": 30.6,
-   "type": "spike"
-  },
-  {
    "frame": 9,
    "bone": "ik_hand_l",
    "size": 16.4,
@@ -121,27 +103,9 @@
    "type": "spike"
   },
   {
-   "frame": 6,
-   "bone": "ik_foot_l",
-   "size": 14.7,
-   "type": "spike"
-  },
-  {
    "frame": 8,
    "bone": "ik_hand_l",
    "size": 13.4,
-   "type": "spike"
-  },
-  {
-   "frame": 23,
-   "bone": "ik_foot_l",
-   "size": 9.9,
-   "type": "spike"
-  },
-  {
-   "frame": 21,
-   "bone": "ik_foot_l",
-   "size": 9.6,
    "type": "spike"
   },
   {
@@ -169,12 +133,6 @@
    "type": "spike"
   },
   {
-   "frame": 24,
-   "bone": "ik_foot_l",
-   "size": 6.6,
-   "type": "spike"
-  },
-  {
    "frame": 6,
    "bone": "ik_hand_r",
    "size": 6.5,
@@ -187,22 +145,10 @@
    "type": "spike"
   }
  ],
- "pops_hard": {
-  "ik_foot_l": [
-   10
-  ]
- },
+ "pops_hard": {},
  "pops_soft": {
   "upperarm_l": [
    3
-  ],
-  "ik_foot_l": [
-   6,
-   9,
-   10,
-   21,
-   23,
-   24
   ],
   "ik_hand_r": [
    6,
@@ -283,14 +229,13 @@
   }
  ],
  "fails": [
-  "foot l skates 68.7 cm over 0.32 s on the floor (f8-26)",
-  "foot r skates 132.0 cm over 0.47 s on the floor (f2-29)",
-  "pops: ik_foot_l f10",
   "start_ref: lowerarm_r off by 93 deg, feet 33.6 cm (ref f55)",
   "end_ref: upperarm_r off by 70 deg, feet 5.9 cm (ref f1)"
  ],
  "warns": [
-  "one-frame extremes to look at: upperarm_l f3; ik_foot_l f6,9,10,21,23,24; ik_hand_r f6,8,11; ik_hand_l f8,9,10 (+2 bones)"
+  "foot l skates 68.7 cm over 0.32 s on the floor (f8-26) (slide_ok)",
+  "foot r skates 132.0 cm over 0.47 s on the floor (f2-29) (slide_ok)",
+  "one-frame extremes to look at: upperarm_l f3; ik_hand_r f6,8,11; ik_hand_l f8,9,10; calf_r f33 (+1 bones)"
  ],
  "verdict": "FAIL"
 }

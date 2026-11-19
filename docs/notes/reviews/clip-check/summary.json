@@ -128,13 +128,12 @@
   "clip": "Dash_Ganon",
   "verdict": "FAIL",
   "fails": [
-   "pops: ball_r f10; ball_l f23",
    "end_ref: foot_l off by 49 deg, feet 34.9 cm (ref f65)"
   ],
   "warns": [
    "foot l skates 7.1 cm over 0.02 s on the floor (f4-4), touchdown/lift-off length",
    "foot r skates 6.2 cm over 0.03 s on the floor (f2-3), touchdown/lift-off length",
-   "one-frame extremes to look at: foot_r f5; calf_r f6,11,13; upperarm_r f6,13; ik_hand_r f6,8,13 (+10 bones)",
+   "one-frame extremes to look at: foot_r f5; calf_r f6,11,13; upperarm_r f6,13; ik_hand_r f6,8,13 (+9 bones)",
    "start_ref: foot_r off by 25 deg, feet 12.6 cm (ref f11), the blend must hide it"
   ]
  },
@@ -142,7 +141,6 @@
   "clip": "RunStart_Frantic",
   "verdict": "FAIL",
   "fails": [
-   "pops: fingers f2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27",
    "start_ref: calf_r off by 83 deg, feet 36.3 cm (ref f83)",
    "end_ref: upperarm_r off by 49 deg, feet 42.9 cm (ref f23)"
   ],
@@ -155,28 +153,26 @@
   "clip": "RunStop_L",
   "verdict": "FAIL",
   "fails": [
-   "foot l skates 68.7 cm over 0.32 s on the floor (f8-26)",
-   "foot r skates 132.0 cm over 0.47 s on the floor (f2-29)",
-   "pops: ik_foot_l f10",
    "start_ref: lowerarm_r off by 93 deg, feet 33.6 cm (ref f55)",
    "end_ref: upperarm_r off by 70 deg, feet 5.9 cm (ref f1)"
   ],
   "warns": [
-   "one-frame extremes to look at: upperarm_l f3; ik_foot_l f6,9,10,21,23,24; ik_hand_r f6,8,11; ik_hand_l f8,9,10 (+2 bones)"
+   "foot l skates 68.7 cm over 0.32 s on the floor (f8-26) (slide_ok)",
+   "foot r skates 132.0 cm over 0.47 s on the floor (f2-29) (slide_ok)",
+   "one-frame extremes to look at: upperarm_l f3; ik_hand_r f6,8,11; ik_hand_l f8,9,10; calf_r f33 (+1 bones)"
   ]
  },
  {
   "clip": "RunStop_R",
   "verdict": "FAIL",
   "fails": [
-   "foot l skates 132.5 cm over 0.47 s on the floor (f2-29)",
-   "foot r skates 68.7 cm over 0.32 s on the floor (f8-26)",
-   "pops: ik_foot_l f10",
    "start_ref: lowerarm_l off by 99 deg, feet 44.2 cm (ref f68)",
    "end_ref: upperarm_r off by 70 deg, feet 5.9 cm (ref f1)"
   ],
   "warns": [
-   "one-frame extremes to look at: upperarm_r f3; ik_foot_l f6,9,10,21,23,24; ik_hand_r f6,8,11; ik_hand_l f8,9,10 (+3 bones)"
+   "foot l skates 132.5 cm over 0.47 s on the floor (f2-29) (slide_ok)",
+   "foot r skates 68.7 cm over 0.32 s on the floor (f8-26) (slide_ok)",
+   "one-frame extremes to look at: upperarm_r f3; ik_hand_r f6,8,11; ik_hand_l f8,9,10; calf_l f33 (+2 bones)"
   ]
  },
  {

@@ -1,0 +1,169 @@
+{
+ "Dash_Ganon": {
+  "asset": "/Game/GSTN/Animation/Dash/AS_GSTN_Dash_Ganon.AS_GSTN_Dash_Ganon",
+  "dry": false,
+  "filters": {
+   "fps": 60.0,
+   "frames": 25,
+   "bones": {
+    "ball_l": {
+     "deflick": [
+      23
+     ],
+     "ease_snaps": []
+    },
+    "ball_r": {
+     "deflick": [],
+     "ease_snaps": [
+      10
+     ]
+    }
+   }
+  },
+  "saved": true
+ },
+ "RunStart_Frantic": {
+  "asset": "/Game/GSTN/Animation/RunStart/AS_GSTN_RunStart_Frantic.AS_GSTN_RunStart_Frantic",
+  "dry": false,
+  "filters": {
+   "fps": 30.0,
+   "frames": 27,
+   "bones": {
+    "index_03_l": {
+     "deflick": [
+      2,
+      3,
+      4,
+      6,
+      9,
+      11,
+      15,
+      19,
+      26
+     ],
+     "ease_snaps": []
+    },
+    "middle_03_l": {
+     "deflick": [
+      1,
+      4,
+      14,
+      17,
+      26
+     ],
+     "ease_snaps": []
+    },
+    "pinky_03_l": {
+     "deflick": [
+      7,
+      17,
+      22,
+      27
+     ],
+     "ease_snaps": []
+    },
+    "ring_03_l": {
+     "deflick": [
+      9,
+      10,
+      16,
+      19,
+      21,
+      25
+     ],
+     "ease_snaps": []
+    },
+    "index_03_r": {
+     "deflick": [
+      4,
+      7,
+      8,
+      10,
+      14,
+      16,
+      19,
+      20,
+      24
+     ],
+     "ease_snaps": []
+    },
+    "middle_03_r": {
+     "deflick": [
+      6,
+      7,
+      18,
+      20,
+      22,
+      24,
+      26
+     ],
+     "ease_snaps": []
+    },
+    "pinky_03_r": {
+     "deflick": [
+      3,
+      10,
+      16,
+      20
+     ],
+     "ease_snaps": []
+    },
+    "ring_03_r": {
+     "deflick": [
+      1,
+      8,
+      13,
+      15,
+      16,
+      18,
+      20
+     ],
+     "ease_snaps": []
+    }
+   }
+  },
+  "saved": true
+ },
+ "RunStop_L": {
+  "asset": "/Game/Blueprints/Animation/RunStop/AS_RunStop_Ganon_L_V5.AS_RunStop_Ganon_L_V5",
+  "dry": false,
+  "filters": {
+   "fps": 60.0,
+   "frames": 69,
+   "bones": {
+    "ik_foot_l": {
+     "deflick": [],
+     "ease_snaps": [
+      10
+     ]
+    }
+   }
+  },
+  "ik_feet": {
+   "frames": 69,
+   "ik_to_foot_max_cm": 0.0
+  },
+  "saved": true
+ },
+ "RunStop_R": {
+  "asset": "/Game/Blueprints/Animation/RunStop/AS_RunStop_Ganon_R_V5.AS_RunStop_Ganon_R_V5",
+  "dry": false,
+  "filters": {
+   "fps": 60.0,
+   "frames": 69,
+   "bones": {
+    "ik_foot_l": {
+     "deflick": [],
+     "ease_snaps": [
+      10
+     ]
+    }
+   }
+  },
+  "ik_feet": {
+   "frames": 69,
+   "ik_to_foot_max_cm": 0.0
+  },
+  "saved": true
+ }
+}
