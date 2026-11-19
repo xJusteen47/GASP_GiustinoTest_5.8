@@ -33,3 +33,13 @@
 - p3_one_after (PIE_PERF_PLAYERS=3, one process, -unattended, 15 s): 'PIE worlds: 3', frames 104, avg/p50/p95 125.0 ms = the engine's delta clamp, i.e. <= 8 fps (real may be lower). Source: Saved/SpeedUp/p3_one_after/result.txt line 'frames'.
 - The probe sets the players per run (LevelEditorPlaySettings CDO, not saved); pie_capture scripts should do the same and force 1 player for single-character captures.
 - Not measured: 3 players multi-process without throttle (owner's foreground 15 fps).
+
+## 5. Why captures show low fps (anim-setup-2, 2026-11-19 ~19:05 UTC, owner question)
+- The low fps the owner sees during a test run is the capture itself, not the game: pie_capture_move.py summons 6 SceneCapture2D
+  (az0..az315, 480 px, final colour) plus the game view, renders all 7 every frame and writes each to PNG (GPU readback per view).
+  Measured: mv_skid_release 210 frames in ~55 s, mv_skid_hold 300 frames in ~85 s = 3.5-4 fps real (Saved/AnimSetup2/cap_guard/
+  capture.log, "sequence ... done" lines). The sim is unaffected (frames are counted, not timed); PIE already runs 1 player
+  (PIE_CAPTURE_CLIENTS=0), -unattended and no background throttle (section 1).
+- Cheaper, no code change: PIE_CAPTURE_VIEWS=az90,az0,game (3 views instead of 7) -> about 2x faster; one review needs at most
+  2 side views + game. Further: write PNGs only for the frame window under review, or 320 px for numbers-only checks.
+- Applied from now on in this thread: 3 views per capture.

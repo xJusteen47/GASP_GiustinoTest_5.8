@@ -101,6 +101,35 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 	float ReverseConeDeg = 45.f;
 
 	/**
+	 * The body's turn follows the skid clip (anim-setup-2): share of the whole turn (0..1) reached at each sample of skid time, from the
+	 * skid's first frame, TurnCurveRate samples a second. Baked from the clip's root yaw (Tools/GAS/skid_turn_curve_bake.py; the clip plays
+	 * at 1x from the skid start), so the capsule turns when the clip turns and a planted foot never has to break its pin. The brake turns
+	 * along it; the exit finishes whatever is left by its last frame. Empty = the old rule: facing held in the brake, a linear turn in
+	 * the exit frames.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Turn")
+	TArray<float> TurnCurve;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Turn", meta = (ClampMin = "1", ForceUnits = "Hz"))
+	float TurnCurveRate = 30.f;
+
+	/** TurnCurve at Seconds after the skid start, linear between samples, 1 past the end; -1 when there is no curve */
+	float SampleTurnCurve(float Seconds) const
+	{
+		if (TurnCurve.Num() == 0)
+		{
+			return -1.f;
+		}
+		const float X = FMath::Max(Seconds, 0.f) * FMath::Max(TurnCurveRate, 1.f);
+		const int32 I = FMath::FloorToInt32(X);
+		if (I >= TurnCurve.Num() - 1)
+		{
+			return 1.f;
+		}
+		return FMath::Clamp(FMath::Lerp(TurnCurve[I], TurnCurve[I + 1], X - static_cast<float>(I)), 0.f, 1.f);
+	}
+
+	/**
 	 * The Movement.State.Skid.JumpWindow tag is on from this skid frame (0 = the first) to JumpWindowEnd included, so a kit binding
 	 * (a side somersault) can require it. Counted as the abilities see it: they read the state of the previous frame (CLAUDE.md rule 5),
 	 * the tag compensates that frame

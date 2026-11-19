@@ -65,6 +65,14 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_RunSkid : public FLayeredMoveBase
 	UPROPERTY()
 	int8 TurnSign = 0;
 
+	/** Facing of the first frame (unit, ground plane) and the signed whole turn from it to TurnDirection on TurnSign's side, degrees:
+	 *  the clip-following turn (FGSTN_RunSkidTuning::TurnCurve) places the facing at StartFacing + TurnTotalDeg * curve */
+	UPROPERTY()
+	FVector StartFacing = FVector::ZeroVector;
+
+	UPROPERTY()
+	float TurnTotalDeg = 0.f;
+
 	UPROPERTY()
 	float StartSpeed = 0.f;
 

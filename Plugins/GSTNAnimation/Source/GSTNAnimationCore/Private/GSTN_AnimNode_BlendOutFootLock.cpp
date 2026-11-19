@@ -14,6 +14,8 @@ namespace GSTNFootLock
 {
 	static TAutoConsoleVariable<int32> CVarEnable(TEXT("a.GSTN.BlendOutFootLock"), 1,
 		TEXT("1: plant the feet while a montage blends back to the game pose, then step (default). 0: the node passes the pose through."));
+	static TAutoConsoleVariable<int32> CVarPopGuard(TEXT("a.GSTN.FootPopGuard"), 1,
+		TEXT("1: a foot that jumps in one frame (PopDistance) fades the jump out over PopBlendTime (default). 0: off."));
 
 	/** The calf and thigh of a foot: its parent and grandparent in the compact pose */
 	void ResolveLeg(FGSTN_FootLockLeg& Leg, const FBoneContainer& Bones)
@@ -74,6 +76,7 @@ void FGSTN_AnimNode_BlendOutFootLock::Update_AnyThread(const FAnimationUpdateCon
 	bRequest = bEnabled && Instance && Instance->bFootLockRequest;
 	bInstantRelease = !bEnabled || !Instance || Instance->bFootLockInstantRelease;
 	bMoving = Instance && Instance->bFootLockMoving;
+	bPopGuard = bEnabled && GSTNFootLock::CVarPopGuard.GetValueOnAnyThread() != 0 && PopDistance > 0.f;
 	MontageWeight = Instance ? FMath::Max(Instance->FootLockMontageWeight, Instance->FootLockHandOffWeight) : 0.f;
 }
 
@@ -86,6 +89,7 @@ void FGSTN_AnimNode_BlendOutFootLock::FreeAll()
 		Leg->PhaseTime = 0.f;
 		Leg->SettledFrames = 0;
 		Leg->bHasLastInput = false;
+		Leg->bHasTrack = false;
 	}
 }
 
@@ -122,10 +126,11 @@ void FGSTN_AnimNode_BlendOutFootLock::Evaluate_AnyThread(FPoseContext& Output)
 	bPrevRequest = bRequest;
 
 	const bool bAnyHeld = LeftLeg.Phase != EGSTN_FootLockPhase::Free || RightLeg.Phase != EGSTN_FootLockPhase::Free;
-	if (bInstantRelease || (!bAnyHeld && !bRising))
+	if (bInstantRelease || (!bAnyHeld && !bRising && !bPopGuard))
 	{
-		// Nothing to hold (or a new montage took over: its first frame stays exactly as it is): the pose passes through untouched
-		if (bAnyHeld)
+		// Nothing to hold (or a new montage took over: its first frame stays exactly as it is): the pose passes through untouched. The
+		// pop guard's track restarts too, so the montage's first frame is never read as a pop.
+		if (bAnyHeld || LeftLeg.bHasTrack || RightLeg.bHasTrack)
 		{
 			FreeAll();
 		}
@@ -162,11 +167,44 @@ void FGSTN_AnimNode_BlendOutFootLock::Evaluate_AnyThread(FPoseContext& Output)
 		Leg.SettledFrames = bSlow ? Leg.SettledFrames + 1 : 0;
 		Leg.LastInputCS = InputCS.GetLocation();
 		Leg.bHasLastInput = true;
-		if (bRising && Leg.Phase == EGSTN_FootLockPhase::Free)
+
+		// Pop guard: the foot moved this frame much farther than its own speed explains. Only a jump counts, never a stop: a foot that
+		// plants (a run foot pinned at once) moves LESS than its speed, a pin letting go of a still foot moves far MORE. The shown foot
+		// stays where it was and that offset fades out; the jump frame never becomes the foot's new velocity.
+		const FVector InWorld = InputWorld[i].GetLocation();
+		bool bPopped = false;
+		const bool bGuardable = Leg.Phase == EGSTN_FootLockPhase::Free || Leg.Phase == EGSTN_FootLockPhase::Smoothing;
+		if (bPopGuard && bGuardable && Leg.bHasTrack && !bRising)
 		{
-			// Blend-out starts: the foot keeps the spot it has now (the montage's last pose)
-			Leg.Phase = EGSTN_FootLockPhase::Locked;
+			const double Jump = FVector::Dist(InWorld, Leg.LastInWorld) - Leg.LastInVelocity.Size() * Dt;
+			if (Jump > PopDistance)
+			{
+				Leg.PopOffset = Leg.LastOutWorld - InWorld;
+				Leg.PopRotationOffset = (Leg.LastOutRotation * InputWorld[i].GetRotation().Inverse()).GetNormalized();
+				Leg.Phase = EGSTN_FootLockPhase::Smoothing;
+				Leg.PhaseTime = 0.f;
+				Leg.Alpha = 1.f;
+				bPopped = true;
+			}
+		}
+		if (!bPopped)
+		{
+			Leg.LastInVelocity = Leg.bHasTrack ? (InWorld - Leg.LastInWorld) / Dt : FVector::ZeroVector;
+		}
+		Leg.LastInWorld = InWorld;
+		Leg.bHasTrack = true;
+
+		if (bRising && bGuardable)
+		{
+			// Blend-out starts: the foot keeps the spot it has now (the montage's last pose; a foot still fading out a pop keeps the spot
+			// it is shown at)
 			Leg.Held = InputWorld[i];
+			if (Leg.Phase == EGSTN_FootLockPhase::Smoothing)
+			{
+				const float A = 1.f - GSTNFootLock::SmoothStep(Leg.PhaseTime / FMath::Max(PopBlendTime, KINDA_SMALL_NUMBER));
+				Leg.Held.SetLocation(InWorld + Leg.PopOffset * A);
+			}
+			Leg.Phase = EGSTN_FootLockPhase::Locked;
 			Leg.Alpha = 1.f;
 			Leg.PhaseTime = 0.f;
 			Leg.SettledFrames = 0;
@@ -201,9 +239,13 @@ void FGSTN_AnimNode_BlendOutFootLock::Evaluate_AnyThread(FPoseContext& Output)
 		}
 	}
 
+	bool bAnyApplied = false;
 	for (int32 i = 0; i < 2; ++i)
 	{
 		FGSTN_FootLockLeg& Leg = *Legs[i];
+		// What the pop guard compares against next frame: the foot as shown (the input unless this node moves it below)
+		Leg.LastOutWorld = InputWorld[i].GetLocation();
+		Leg.LastOutRotation = InputWorld[i].GetRotation();
 		if (Leg.Phase == EGSTN_FootLockPhase::Free)
 		{
 			continue;
@@ -211,6 +253,21 @@ void FGSTN_AnimNode_BlendOutFootLock::Evaluate_AnyThread(FPoseContext& Output)
 		FTransform Target = Leg.Held;
 		switch (Leg.Phase)
 		{
+		case EGSTN_FootLockPhase::Smoothing:
+		{
+			Leg.PhaseTime += DeltaTime;
+			const float A = 1.f - GSTNFootLock::SmoothStep(Leg.PhaseTime / FMath::Max(PopBlendTime, KINDA_SMALL_NUMBER));
+			if (A <= 0.f)
+			{
+				Leg.Phase = EGSTN_FootLockPhase::Free;
+				Leg.Alpha = 0.f;
+				break;
+			}
+			Target.SetLocation(InputWorld[i].GetLocation() + Leg.PopOffset * A);
+			Target.SetRotation(FQuat::Slerp(InputWorld[i].GetRotation(), Leg.PopRotationOffset * InputWorld[i].GetRotation(), A).GetNormalized());
+			Leg.Alpha = 1.f;
+			break;
+		}
 		case EGSTN_FootLockPhase::Stepping:
 		{
 			if (bMoving)
@@ -264,9 +321,15 @@ void FGSTN_AnimNode_BlendOutFootLock::Evaluate_AnyThread(FPoseContext& Output)
 		Foot.SetRotation(TargetCS.GetRotation());
 		const FBoneTransform Chain[3] = {FBoneTransform(Leg.ThighIndex, Thigh), FBoneTransform(Leg.CalfIndex, Calf), FBoneTransform(Leg.FootIndex, Foot)};
 		CSPose.LocalBlendCSBoneTransforms(Chain, Leg.Alpha);
+		bAnyApplied = true;
+		Leg.LastOutWorld = FMath::Lerp(InputWorld[i].GetLocation(), Target.GetLocation(), static_cast<double>(Leg.Alpha));
+		Leg.LastOutRotation = FQuat::Slerp(InputWorld[i].GetRotation(), Target.GetRotation(), Leg.Alpha).GetNormalized();
 	}
 
-	FCSPose<FCompactPose>::ConvertComponentPosesToLocalPoses(MoveTemp(CSPose), Output.Pose);
+	if (bAnyApplied)
+	{
+		FCSPose<FCompactPose>::ConvertComponentPosesToLocalPoses(MoveTemp(CSPose), Output.Pose);
+	}
 }
 
 void FGSTN_AnimNode_BlendOutFootLock::GatherDebugData(FNodeDebugData& DebugData)

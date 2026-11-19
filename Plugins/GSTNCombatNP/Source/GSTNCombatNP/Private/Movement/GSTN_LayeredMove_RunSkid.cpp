@@ -147,6 +147,17 @@ bool FGSTN_LayeredMove_RunSkid::Decide(const FMoverTickStartData& StartState, co
 		{
 			TurnSign = AngleDeg > 0.0 ? 1 : -1;
 		}
+		StartFacing = Facing;
+		double Total = TurnSign == 0 ? 0.0 : AngleDeg;
+		if (TurnSign > 0 && Total < 0.0)
+		{
+			Total += 360.0;
+		}
+		else if (TurnSign < 0 && Total > 0.0)
+		{
+			Total -= 360.0;
+		}
+		TurnTotalDeg = static_cast<float>(Total);
 	}
 
 	// The floor's surface: its ledge rule wins over the kit's, its friction scales the brake (ice)
@@ -219,14 +230,32 @@ bool FGSTN_LayeredMove_RunSkid::GenerateMove(const FMoverTickStartData& StartSta
 		return false;
 	}
 
+	// Clip-following turn (anim-setup-2): the kit's TurnCurve, read from the owner's tuning each step (asset data, the same on every
+	// machine) so the move carries no array. The angular velocity puts the facing at StartFacing + TurnTotalDeg * share by the step's end
+	const FMoverDefaultSyncState* Sync = StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
+	const FGSTN_LocomotionSimTuning* Locomotion = FGSTN_LocomotionAttach::Find(Owner);
+	const FGSTN_RunSkidTuning* SkidTuning = Locomotion ? &Locomotion->RunStages.Skid : nullptr;
+	const float CurveShare = SkidTuning ? SkidTuning->SampleTurnCurve(static_cast<float>(CurrentLiveFrame + 1) * DeltaSeconds) : -1.f;
+	const auto AngularToShare = [&](float Share) -> FVector
+	{
+		const FVector Facing = Sync ? FVector::VectorPlaneProject(Sync->GetOrientation_WorldSpace().Vector(), Up).GetSafeNormal() : FVector::ZeroVector;
+		if (Facing.IsNearlyZero() || StartFacing.IsNearlyZero())
+		{
+			return FVector::ZeroVector;
+		}
+		const double CurrentDeg = FMath::RadiansToDegrees(FMath::Atan2(Up.Dot(StartFacing.Cross(Facing)), StartFacing.Dot(Facing)));
+		const double DeltaDeg = FMath::UnwindDegrees(static_cast<double>(TurnTotalDeg) * Share - CurrentDeg);
+		return Up * (DeltaDeg / (StepMs * 0.001));
+	};
+
 	if (Phase != EGSTN_RunSkidPhase::Exit)
 	{
 		const FVector SlideVelocity = Direction * FGSTN_RunSkidMath::SpeedAt(StartSpeed, Brake, CurrentLiveFrame, DeltaSeconds);
 		if (!bStopAtLedge || FGSTN_GroundProbe::HasFloorAhead(StartState, *MoverComp, SlideVelocity, StepMs))
 		{
-			// Facing held: the body slides along the old direction, the turn comes in the exit
+			// The body slides along the old direction; it turns with the clip when the kit has a TurnCurve, else the turn comes in the exit
 			OutProposedMove.LinearVelocity = SlideVelocity;
-			OutProposedMove.AngularVelocityDegrees = FVector::ZeroVector;
+			OutProposedMove.AngularVelocityDegrees = CurveShare >= 0.f ? AngularToShare(CurveShare) : FVector::ZeroVector;
 			return true;
 		}
 		// The edge: the skid comes to rest here and its exit starts now
@@ -244,8 +273,14 @@ bool FGSTN_LayeredMove_RunSkid::GenerateMove(const FMoverTickStartData& StartSta
 	}
 
 	FVector Angular = FVector::ZeroVector;
-	const FMoverDefaultSyncState* Sync = StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
-	if (Sync)
+	if (CurveShare >= 0.f)
+	{
+		// The clip's turn, and whatever it has left when the skid came to rest spread evenly over the exit (all done by its last frame)
+		const float RestShare = SkidTuning->SampleTurnCurve(static_cast<float>(RestFrame) * DeltaSeconds);
+		const float ExitShare = FMath::Lerp(RestShare, 1.f, static_cast<float>(ExitFrame + 1) / static_cast<float>(ExitLength));
+		Angular = AngularToShare(FMath::Max(CurveShare, ExitShare));
+	}
+	else if (Sync)
 	{
 		const FVector Facing = FVector::VectorPlaneProject(Sync->GetOrientation_WorldSpace().Vector(), Up).GetSafeNormal();
 		if (!Facing.IsNearlyZero())
@@ -310,6 +345,8 @@ void FGSTN_LayeredMove_RunSkid::NetSerialize(FArchive& Ar)
 	Ar << Direction;
 	Ar << TurnDirection;
 	Ar << TurnSign;
+	Ar << StartFacing;
+	Ar << TurnTotalDeg;
 	Ar << StartSpeed;
 	Ar << Brake;
 	Ar << EnterFrames;
