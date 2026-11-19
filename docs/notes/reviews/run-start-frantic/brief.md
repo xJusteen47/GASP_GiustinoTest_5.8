@@ -50,3 +50,12 @@ overshoot on the lean at the hand-over, no oscillation. Root: in place (the sim 
 2. When _ue59 is free: import, chooser row + state, build, capture base (GASP start) vs variant, Fable PASS/FAIL (rule 10).
 3. Only PASS goes to the owner.
 Estimate: authoring 8-10 $, integration 4 $, capture+review 3-4 $.
+
+## Update 2026-11-19 (owner choice B + L3)
+- Timing B (owner card 23:53Z): clip 27 frames at 30 fps = 0.9 s: f1-10 stamp almost in place (sim holds speed: StartStamp 21 frames,
+  accel x0.05), f11-27 three frantic run steps. Sim code 69feafe1; anim reads GetAnimOwnerRunStartTime (-1 = leave the state).
+- L3 (owner 00:05-00:07Z, scope: run start / boost): the frantic start is for precise platforming; in a fight L3 must SKIP it and launch at
+  once, like Smash Ultimate's dash. Code: the boost works during the whole stamp, ends it (run start time -> -1) and multiplies the
+  acceleration x8 for 6 frames (BoostDash, stage 2 top speed in ~4 frames). Anim: GetAnimOwnerBoostDashTime for a DASH state.
+- Dash clip = NEW move, own brief later (identity traits to agree): Ganon-style initial dash, one explosive lunge from the first frame,
+  no stamp; until it exists the dash state plays the normal run (no clip blocks the code).

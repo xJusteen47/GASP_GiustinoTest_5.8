@@ -386,4 +386,37 @@ bool FGSTN_RunStagesStartStampTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunStagesBoostDashTest, "GSTNCombat.Core.RunStages.BoostDash", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunStagesBoostDashTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-19: L3 skips the stamp and launches at once (Smash's dash)
+	FGSTN_RunStagesTuning Tuning = TestTuning();
+	Tuning.StartStamp.Frames = 21;
+	Tuning.BoostWindowFrames = 2;
+	Tuning.BoostDash.Frames = 3;
+	Tuning.BoostDash.AccelMultiplier = 8.f;
+
+	FGSTN_RunStageState State;
+	for (int32 Frame = 0; Frame < 10; ++Frame)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, Run(Frame, 1.f), State);
+	}
+	TestTrue(TEXT("stamping, past the plain boost window"), FGSTN_RunStageLogic::IsStartStamp(Tuning, State));
+	FGSTN_RunStageLogic::Step(Tuning, Run(10, 1.f, FVector(1.0, 0.0, 0.0), true), State);
+	TestEqual(TEXT("the boost works during the whole stamp"), (int32)State.Stage, Tuning.GetBoostTargetIndex());
+	TestFalse(TEXT("the stamp is over"), FGSTN_RunStageLogic::IsStartStamp(Tuning, State));
+	TestEqual(TEXT("no run start time after the boost"), State.StampFrames, -1);
+	TestTrue(TEXT("burst live"), FGSTN_RunStageLogic::IsBoostDash(Tuning, State));
+	TestEqual(TEXT("burst acceleration"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State), 8.f, 1e-4f);
+	for (int32 Frame = 11; Frame < 14; ++Frame)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, Run(Frame, 300.f), State);
+	}
+	TestFalse(TEXT("burst over after its frames"), FGSTN_RunStageLogic::IsBoostDash(Tuning, State));
+	TestEqual(TEXT("no new stamp on the boosted stage"), State.StampFrames, -1);
+	FGSTN_RunStageLogic::Step(Tuning, Run(14, 300.f, FVector::ZeroVector), State);
+	TestEqual(TEXT("stick at rest clears the dash"), State.DashFrames, -1);
+	return true;
+}
+
 #endif

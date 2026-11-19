@@ -77,7 +77,7 @@ bool FGSTN_RunStageState::operator==(const FGSTN_RunStageState& Other) const
 		&& FramesSinceStickRelease == Other.FramesSinceStickRelease && CarriedSpeed == Other.CarriedSpeed && FramesSinceCarry == Other.FramesSinceCarry
 		&& CarrySource == Other.CarrySource && PrevSpeed == Other.PrevSpeed && LastFrame == Other.LastFrame && CarryWindow == Other.CarryWindow
 		&& bAirborne == Other.bAirborne && TakeoffSpeed == Other.TakeoffSpeed && TakeoffStage == Other.TakeoffStage
-		&& RampFrames == Other.RampFrames && RampStage == Other.RampStage && StampFrames == Other.StampFrames && ExternalVelocity == Other.ExternalVelocity;
+		&& RampFrames == Other.RampFrames && RampStage == Other.RampStage && StampFrames == Other.StampFrames && DashFrames == Other.DashFrames && ExternalVelocity == Other.ExternalVelocity;
 }
 
 void FGSTN_RunStageState::SerializeCompact(FArchive& Ar)
@@ -102,6 +102,7 @@ void FGSTN_RunStageState::SerializeCompact(FArchive& Ar)
 	SerializeCounter(Ar, RampFrames);
 	Ar << RampStage;
 	SerializeCounter(Ar, StampFrames);
+	SerializeCounter(Ar, DashFrames);
 	for (int32 Axis = 0; Axis < 3; ++Axis)
 	{
 		float Component = static_cast<float>(ExternalVelocity[Axis]);
@@ -172,6 +173,8 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 			State.StampFrames = 0;
 		}
 	}
+	// Boost dash counter (set by the boost below), reset with the stick at rest
+	State.DashFrames = RampStick < Tuning.RampStickThreshold ? -1 : Advance(State.DashFrames);
 
 	// A skid of this frame (P2): the speed of before it is remembered for the attacks (P3), the run drops to stage 1
 	if (Input.bSkidStarted)
@@ -234,12 +237,17 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 	const int32 BoostTarget = Tuning.GetBoostTargetIndex();
 	if (Input.bBoostCommand && State.Stage < BoostTarget)
 	{
+		// The initial window also covers the whole start stamp: L3 is how the owner skips it (2026-11-19)
 		const bool bAllowed = Tuning.BoostMode == EGSTN_RunBoostMode::Anytime
-			|| (Tuning.BoostMode == EGSTN_RunBoostMode::InitialWindow && State.FramesSinceMoveStart <= Tuning.BoostWindowFrames);
+			|| (Tuning.BoostMode == EGSTN_RunBoostMode::InitialWindow
+				&& (State.FramesSinceMoveStart <= Tuning.BoostWindowFrames || IsStartStamp(Tuning, State)));
 		if (bAllowed)
 		{
 			State.Stage = static_cast<uint8>(BoostTarget);
 			State.FramesInStage = 0;
+			// Smash-style dash: the stamp is over (its clip leaves), the burst starts
+			State.StampFrames = -1;
+			State.DashFrames = Tuning.BoostDash.Frames > 0 ? 0 : -1;
 			return;
 		}
 	}
@@ -309,11 +317,20 @@ bool FGSTN_RunStageLogic::IsStartStamp(const FGSTN_RunStagesTuning& Tuning, cons
 		&& State.StampFrames >= 0 && State.StampFrames < Tuning.StartStamp.Frames;
 }
 
+bool FGSTN_RunStageLogic::IsBoostDash(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State)
+{
+	return Tuning.IsEnabled() && Tuning.BoostDash.Frames > 0 && State.DashFrames >= 0 && State.DashFrames < Tuning.BoostDash.Frames;
+}
+
 float FGSTN_RunStageLogic::GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State)
 {
 	if (!Tuning.IsEnabled())
 	{
 		return 1.f;
+	}
+	if (IsBoostDash(Tuning, State))
+	{
+		return FMath::Clamp(Tuning.BoostDash.AccelMultiplier, 1.f, 30.f);
 	}
 	const FGSTN_RunStartStampTuning& Stamp = Tuning.StartStamp;
 	if (Stamp.Frames > 0 && State.Stage == 0 && !State.bAirborne)
