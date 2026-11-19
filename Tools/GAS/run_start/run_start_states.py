@@ -17,6 +17,7 @@ SOURCE = "/Game/Characters/UEFN_Mannequin/Animations/Idle/M_Neutral_Stand_Idle_L
 ALIAS_FROM = ["Idle Loop", "Idle Transition", "Idle Break"]
 ALIAS_FROM_MOVING = ["Locomotion Transition", "Locomotion Loop"]  # GASP start states (v2)
 ALIAS_WINDOW = 0.25  # s from the push: later than this the run start is not entered any more
+EXIT_BLEND = float(os.environ.get("RUNSTART_EXIT_BLEND", "0.15"))  # crossfade into GASP's motion-matched run at the hand-off
 log = []
 def p(*a): log.append(" ".join(str(x) for x in a))
 
@@ -103,8 +104,11 @@ try:
     Cmp = unreal.GSTN_RuleCompare
     transition(alias, state, rule([cond("GetAnimOwnerRunStartTime", Cmp.GREATER_EQUAL, "0"),
                                     cond("GetAnimOwnerRunStartTime", Cmp.LESS, f"{ALIAS_WINDOW:.3f}")]), 0.05)
+    # v3 (run-start-handoff-1, owner 11-19 "resta fermo troppo, non fluisce nel loop"): leave on the hand-off flag (stamp over, then the
+    # clip's first foot plant; data in DA_AnimSet_Locomotion_Default RunStart|Hand-off), the clip end stays as a fallback
     transition(state, conduit, rule([cond("GetAnimOwnerRunStartTime", Cmp.LESS, "0")],
-                                    [cond("GetAnimOwnerRunStartTime", Cmp.GREATER_EQUAL, f"{length - 0.1:.3f}")]), 0.15)
+                                    [cond("GetAnimOwnerRunStartHandOff", Cmp.GREATER_EQUAL, "1")],
+                                    [cond("GetAnimOwnerRunStartTime", Cmp.GREATER_EQUAL, f"{length - 0.1:.3f}")]), EXIT_BLEND)
     unreal.BlueprintEditorLibrary.set_node_comment(alias, "Frantic run start (owner 2026-11-18, choice B): Tools/GAS/run_start/run_start_states.py")
     ok = unreal.BlueprintEditorLibrary.compile_blueprint(abp)
     status = abp.get_editor_property("status")

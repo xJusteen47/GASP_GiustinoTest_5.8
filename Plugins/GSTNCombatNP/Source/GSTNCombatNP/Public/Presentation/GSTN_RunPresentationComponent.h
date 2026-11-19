@@ -227,6 +227,15 @@ public:
 	static float GetAnimOwnerRunStartTime(const UAnimInstance* AnimInstance);
 
 	/**
+	 * 1 once the start clip should hand off to the run (stamp over, then the clip's first foot plant or RunStart.HandOffMaxAfterStamp;
+	 * FGSTN_RunStartScrambleSettings), 0 otherwise. Latched until the run start time goes back to -1. Exit rule of the "Run Start" state.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static float GetAnimOwnerRunStartHandOff(const UAnimInstance* AnimInstance);
+
+	bool IsRunStartHandOff() const { return bRunStartHandOff; }
+
+	/**
 	 * Boost dash (L3, owner 2026-11-19, Smash's dash): seconds since the boost on this push of the stick, -1 when none. The run start time
 	 * above goes to -1 on the boost, so the frantic start clip leaves and a dash clip (its own state) can take over with this time.
 	 */
@@ -275,6 +284,13 @@ private:
 	/** Cached on the game thread each tick (the anim worker reads them) */
 	float RunStartTime = -1.f;
 	bool bRunStartStamp = false;
+
+	/** Hand-off of the start clip (UpdateRunStartHandOff): latched flag, run start time when the stamp ended, last contact curve states */
+	void UpdateRunStartHandOff();
+	bool bRunStartHandOff = false;
+	float RunStartStampEndTime = -1.f;
+	bool bRunStartContactL = false;
+	bool bRunStartContactR = false;
 	float BoostDashTime = -1.f;
 	/**
 	 * Clip speed (cvar gstn.Skid.PlayAtClipSpeed, owner choice A): seconds since the skid started, < 0 = no skid shown. Runs on past the

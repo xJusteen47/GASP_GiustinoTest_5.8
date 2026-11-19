@@ -140,6 +140,7 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 		RunStartTime = RunState && RunState->StampFrames >= 0 ? (RunState->StampFrames + 1) * GSTNRunPresentation::StepSeconds : -1.f;
 		bRunStartStamp = RunState && RunTuning && FGSTN_RunStageLogic::IsStartStamp(RunTuning->RunStages, *RunState);
 		BoostDashTime = RunState && RunState->DashFrames >= 0 ? (RunState->DashFrames + 1) * GSTNRunPresentation::StepSeconds : -1.f;
+		UpdateRunStartHandOff();
 		if (GSTNRunPresentation::LogRunStart && RunState && (RunState->StampFrames >= 0 || RunState->Stage == 0))
 		{
 			const USkeletalMeshComponent* Mesh = GetOwner()->FindComponentByClass<USkeletalMeshComponent>();
@@ -284,6 +285,51 @@ float UGSTN_RunPresentationComponent::GetAnimOwnerRunStartTime(const UAnimInstan
 {
 	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
 	return Run ? Run->GetRunStartTime() : -1.f;
+}
+
+float UGSTN_RunPresentationComponent::GetAnimOwnerRunStartHandOff(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run && Run->IsRunStartHandOff() ? 1.f : 0.f;
+}
+
+void UGSTN_RunPresentationComponent::UpdateRunStartHandOff()
+{
+	static const FGSTN_RunStartScrambleSettings DefaultRunStart;
+	const UGSTN_LocomotionAnimSet* Profile = LeanProfile.Get();
+	const FGSTN_RunStartScrambleSettings& Settings = Profile ? Profile->RunStart : DefaultRunStart;
+
+	// Contact curves of the pose shown now: read every tick so a foot already down when the stamp ends is not taken for a new plant
+	bool bContactL = false;
+	bool bContactR = false;
+	if (Settings.bHandOffOnFootPlant)
+	{
+		const USkeletalMeshComponent* Mesh = GetOwner() ? GetOwner()->FindComponentByClass<USkeletalMeshComponent>() : nullptr;
+		if (const UAnimInstance* Anim = Mesh ? Mesh->GetAnimInstance() : nullptr)
+		{
+			bContactL = Anim->GetCurveValue(Settings.ContactCurveLeft) >= Settings.ContactThreshold;
+			bContactR = Anim->GetCurveValue(Settings.ContactCurveRight) >= Settings.ContactThreshold;
+		}
+	}
+	const bool bPlant = (bContactL && !bRunStartContactL) || (bContactR && !bRunStartContactR);
+	bRunStartContactL = bContactL;
+	bRunStartContactR = bContactR;
+
+	if (RunStartTime < 0.f)
+	{
+		bRunStartHandOff = false;
+		RunStartStampEndTime = -1.f;
+		return;
+	}
+	if (bRunStartHandOff || bRunStartStamp)
+	{
+		return;
+	}
+	if (RunStartStampEndTime < 0.f)
+	{
+		RunStartStampEndTime = RunStartTime;
+	}
+	bRunStartHandOff = bPlant || RunStartTime - RunStartStampEndTime >= Settings.HandOffMaxAfterStamp;
 }
 
 float UGSTN_RunPresentationComponent::GetAnimOwnerBoostDashTime(const UAnimInstance* AnimInstance)

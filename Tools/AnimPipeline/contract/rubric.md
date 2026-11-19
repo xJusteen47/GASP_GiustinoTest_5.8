@@ -36,6 +36,34 @@ principle, measure on the frames, explanation) with the questions of `animazione
 | `peso` | Does the body absorb contacts with the ground, and does the centre of mass follow a believable path in the air? |
 | `pulizia` | No interpenetration, no feet sliding, and a held pose or loop that stays alive without wobbling? |
 
+## The `vita` axis: every class, checked FIRST after the identity traits (owner 2026-11-19)
+Why: run start and run stop passed review on clean numbers (no pop, no slide) and the owner found them "tremendamente stiff,
+quasi una posa non animata, senza passaggio di peso". Clean is not alive. A review that answers only the technical questions
+is incomplete. Scope: all animations (attacks, reactions, locomotion clips, transitions, loops).
+
+| id | Question | Yes looks like | Typical no (= FAIL, label `posa`) |
+|---|---|---|---|
+| `vita` | Played at speed, from behind and from the side, does it read as a body moving, not as poses being blended? | Overlap: head, chest, arms and hands arrive 1-4 frames AFTER the pelvis on every change of direction, and overshoot then settle. Follow-through: what stops (feet, pelvis) is followed by what is loose (arms, head, hair, belt) still going. Arcs: hands and head trace curves, not straight lines. Weight shift: the pelvis moves over the support foot before the other foot leaves, and drops on each plant. | All parts start and stop on the same frame. Arms keep the same angle to the chest for 6+ frames while the body changes speed. Head locked to the chest. Pelvis height constant through a plant or a brake. A pose "held" while the capsule moves. Linear in-betweens. |
+
+Measure (cheap, on the clip in isolation or the capture's `body`): for each change of pelvis velocity, the frame lag and the
+overshoot of head and hands relative to the pelvis, and the pelvis drop on each plant. Reference = the GASP mocap clip of the
+same class (run start: `M_Relaxed_Run_Start_*` / sprint starts; run stop: `M_Relaxed_Sprint_Stop_F_*`; skid: GASP pivots)
+measured the same way: it is the FLOOR of life, not the style. Our clip with less lag, less overshoot or less pelvis drop than
+the GASP floor is a FAIL on `vita` even if it is clean. The style target above the floor stays "Ganondorf inside Astro Bot":
+broader arcs, more squash on plants, more overshoot than the mocap.
+
+## Locomotion clips and transitions (start, stop, skid, turn, landing): six questions
+| id | Question |
+|---|---|
+| `vita` | As above. Checked first. |
+| `peso` | Does the centre of mass lead the move? Start: body falls forward before the first step and the feet catch it. Stop: a lunge with the front foot planted ahead, pelvis drops and travels over it, then rises back (settle). |
+| `tempo` | Does the clip's phase fit the capsule? Time in place, speed ramp and stride length agree (feet do not skate, the body does not run on the spot while the capsule moves). Design timing from the move brief (e.g. run start: 0.3 s stomp, then frantic run). |
+| `root` | (owner 2026-11-19, ambito: every locomotion clip: run start, run stop, skid, dash, turns) Does the clip's root motion match the displacement and speed the sim gives the capsule (profile DA_Locomotion_Default: stamp, stage acceleration, stop/skid deceleration)? GASP reads it (motion matching trajectory, stride/orientation warping, foot lock). An in-place clip under a moving capsule, or root speed off the sim curve by more than ~15% over a 0.1 s window, is a FAIL (`dati montage`), measured by the clip check, not by eye. |
+| `aggancio` | Hand-off in and out: same foot phase, same lean and arm swing on both sides of the splice, no pose jump, no GASP transition clip slipped in between. |
+| `pulizia` | Feet planted when they should be, no pop, no interpenetration (the clip check numbers). |
+
+PASS needs all six yes; `pulizia` alone yes is never a PASS.
+
 ## Comparison with references
 - Two references of the **same class** (jab, tilt, smash, aerial, jump kick, reaction). The class, not the move: never trace
   a recognizable move pose by pose.

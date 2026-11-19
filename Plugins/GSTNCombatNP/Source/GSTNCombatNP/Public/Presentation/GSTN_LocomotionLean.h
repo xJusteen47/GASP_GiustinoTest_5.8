@@ -137,6 +137,30 @@ struct GSTNCOMBATNP_API FGSTN_RunStartScrambleSettings
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Start|Feel", meta = (ClampMin = "0.0", ForceUnits = "s"))
 	float BlendOutSeconds = 0.12f;
 
+	/**
+	 * Hand-off of the frantic start clip (state "Run Start" in ABP_GSTN_Locomotion) to the motion-matched run (owner 2026-11-19: "stays in
+	 * place too long, does not flow into the run loop"). The clip used to play to its end (0.87 s) while the capsule was already at run
+	 * speed, so the body stamped on the spot for ~0.45 s more. Now the state leaves once the sim's stamp is over, on the first foot plant
+	 * of the clip (a rising edge of either contact curve: pose search then finds a loop frame with the same foot down), and at the latest
+	 * HandOffMaxAfterStamp after the stamp. Generic: no clip time is written anywhere, any start clip with GASP contact curves works.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Start|Hand-off")
+	bool bHandOffOnFootPlant = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Start|Hand-off", meta = (ClampMin = "0.0", ClampMax = "1.0", ForceUnits = "s"))
+	float HandOffMaxAfterStamp = 0.15f;
+
+	/** Pose curves read for the plant (GASP's names, written on our clips by Tools/GAS/routing/curves_author.py) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Start|Hand-off")
+	FName ContactCurveLeft = TEXT("contact_l");
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Start|Hand-off")
+	FName ContactCurveRight = TEXT("contact_r");
+
+	/** A contact curve above this counts as planted */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Start|Hand-off", meta = (ClampMin = "0.01", ClampMax = "1.0"))
+	float ContactThreshold = 0.5f;
+
 	float StickFactor(float Stick) const
 	{
 		return FullStick > MinStick ? FMath::Clamp((Stick - MinStick) / (FullStick - MinStick), 0.f, 1.f) : (Stick >= MinStick ? 1.f : 0.f);
