@@ -1,0 +1,259 @@
+{
+ "clip": "RunStart_Frantic_r3_src",
+ "fbx": "../../../docs/notes/reviews/run-start-frantic/r3/AS_RunStart_Frantic_r3.fbx",
+ "fps": 30.0,
+ "frames": 27,
+ "kind": "start",
+ "root_travel_cm": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "root_motion": false,
+ "_fwd": [
+  0.10452842174180053,
+  -0.9945218997328155,
+  0.0
+ ],
+ "animated_bones": 30,
+ "foot_l": {
+  "min_ball_cm": -1.39,
+  "min_ball_frame": 16,
+  "min_heel_cm": -0.02,
+  "plants": [
+   {
+    "frames": [
+     1,
+     2
+    ],
+    "ball_back_speed_cms": 33.4,
+    "lateral_cm": 0.12
+   },
+   {
+    "frames": [
+     7,
+     8
+    ],
+    "ball_back_speed_cms": 29.1,
+    "lateral_cm": 0.1
+   },
+   {
+    "frames": [
+     14,
+     15
+    ],
+    "ball_back_speed_cms": 328.2,
+    "lateral_cm": 1.15
+   },
+   {
+    "frames": [
+     26,
+     27
+    ],
+    "ball_back_speed_cms": 328.2,
+    "lateral_cm": 1.15
+   }
+  ]
+ },
+ "foot_r": {
+  "min_ball_cm": -1.35,
+  "min_ball_frame": 11,
+  "min_heel_cm": -0.02,
+  "plants": [
+   {
+    "frames": [
+     4,
+     5
+    ],
+    "ball_back_speed_cms": 24.9,
+    "lateral_cm": 0.09
+   },
+   {
+    "frames": [
+     20,
+     21
+    ],
+    "ball_back_speed_cms": 328.2,
+    "lateral_cm": 1.15
+   }
+  ]
+ },
+ "pelvis_acc_max_cms2": 5566.0,
+ "pelvis_acc_max_frame": 9,
+ "pops": [
+  {
+   "frame": 20,
+   "bone": "pinky_03_r",
+   "size": 120.0,
+   "type": "spike"
+  },
+  {
+   "frame": 3,
+   "bone": "pinky_03_r",
+   "size": 120.0,
+   "type": "spike"
+  },
+  {
+   "frame": 10,
+   "bone": "pinky_03_r",
+   "size": 120.0,
+   "type": "spike"
+  },
+  {
+   "frame": 16,
+   "bone": "pinky_03_r",
+   "size": 120.0,
+   "type": "spike"
+  },
+  {
+   "frame": 18,
+   "bone": "ring_03_r",
+   "size": 120.0,
+   "type": "spike"
+  },
+  {
+   "frame": 19,
+   "bone": "ring_03_r",
+   "size": 120.0,
+   "type": "spike"
+  },
+  {
+   "frame": 14,
+   "bone": "index_03_r",
+   "size": 120.0,
+   "type": "spike"
+  },
+  {
+   "frame": 2,
+   "bone": "ring_03_r",
+   "size": 120.0,
+   "type": "snap"
+  },
+  {
+   "frame": 13,
+   "bone": "ring_03_r",
+   "size": 120.0,
+   "type": "spike"
+  },
+  {
+   "frame": 14,
+   "bone": "ring_03_r",
+   "size": 120.0,
+   "type": "spike"
+  },
+  {
+   "frame": 22,
+   "bone": "pinky_03_l",
+   "size": 120.0,
+   "type": "spike"
+  },
+  {
+   "frame": 17,
+   "bone": "pinky_03_l",
+   "size": 120.0,
+   "type": "spike"
+  },
+  {
+   "frame": 8,
+   "bone": "ring_03_r",
+   "size": 120.0,
+   "type": "spike"
+  },
+  {
+   "frame": 17,
+   "bone": "ring_03_r",
+   "size": 120.0,
+   "type": "spike"
+  },
+  {
+   "frame": 20,
+   "bone": "ring_03_r",
+   "size": 120.0,
+   "type": "spike"
+  },
+  {
+   "frame": 27,
+   "bone": "pinky_03_l",
+   "size": 120.0,
+   "type": "snap"
+  }
+ ],
+ "pops_hard": {
+  "fingers": [
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15,
+   16,
+   17,
+   18,
+   19,
+   20,
+   21,
+   22,
+   23,
+   24,
+   25,
+   26,
+   27
+  ]
+ },
+ "pops_soft": {
+  "calf_r": [
+   2,
+   3,
+   6,
+   8,
+   9,
+   11,
+   13
+  ],
+  "calf_l": [
+   3,
+   5,
+   6,
+   11
+  ],
+  "upperarm_r": [
+   4,
+   7,
+   10
+  ],
+  "upperarm_l": [
+   4,
+   7,
+   10
+  ],
+  "thigh_l": [
+   5,
+   6,
+   10,
+   11
+  ],
+  "thigh_r": [
+   8
+  ],
+  "foot_r": [
+   11
+  ]
+ },
+ "fails": [
+  "pops: fingers f2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27"
+ ],
+ "warns": [
+  "in-place clip without game_speed_cms: plant speeds listed, not judged",
+  "one-frame extremes to look at: calf_r f2,3,6,8,9,11,13; calf_l f3,5,6,11; upperarm_r f4,7,10; upperarm_l f4,7,10 (+3 bones)",
+  "no sidecar: curves/notifies not checked (export_clips_ue.py)"
+ ],
+ "verdict": "FAIL"
+}

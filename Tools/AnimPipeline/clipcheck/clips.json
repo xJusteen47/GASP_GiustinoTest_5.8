@@ -1,0 +1,40 @@
+{
+ "_note": "Clips judged on their own (clip_check.py). Paths relative to this file. 'asset' rows are exported first by export_clips_ue.py into ../../../Saved/ClipCheck/export/ (desktop, editor closed). GASP_* rows = references for handoffs AND calibration: GASP's own clips must pass, or the thresholds are wrong.",
+ "clips": {
+  "Dash_Ganon_r3_src":    {"fbx": "../../../docs/notes/reviews/dash-ganon/r3/AS_GSTN_Dash_Ganon_r3.fbx", "kind": "dash", "root_motion": true},
+  "RunStart_Frantic_r3_src": {"fbx": "../../../docs/notes/reviews/run-start-frantic/r3/AS_RunStart_Frantic_r3.fbx", "kind": "start", "root_motion": false},
+
+  "GASP_Idle":        {"asset": "M_Neutral_Stand_Idle_Loop", "fbx": "../../../Saved/ClipCheck/export/GASP_Idle.fbx", "meta": "../../../Saved/ClipCheck/export/GASP_Idle.meta.json", "kind": "idle", "loop": true, "root_motion": false},
+  "GASP_RelaxedIdle": {"asset": "M_Relaxed_Stand_Idle_Loop", "fbx": "../../../Saved/ClipCheck/export/GASP_RelaxedIdle.fbx", "meta": "../../../Saved/ClipCheck/export/GASP_RelaxedIdle.meta.json", "kind": "idle", "loop": true, "root_motion": false},
+  "GASP_RunLoop":     {"asset": "M_Neutral_Run_Loop_F", "fbx": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx", "meta": "../../../Saved/ClipCheck/export/GASP_RunLoop.meta.json", "kind": "loop", "loop": true, "root_motion": true},
+  "GASP_CrouchIdle":  {"asset": "M_Neutral_Crouch_Idle_Loop", "fbx": "../../../Saved/ClipCheck/export/GASP_CrouchIdle.fbx", "meta": "../../../Saved/ClipCheck/export/GASP_CrouchIdle.meta.json", "kind": "idle", "loop": true, "root_motion": false},
+  "GASP_LandLight":   {"asset": "M_Neutral_Jump_F_Land_Stand_Light_Lfoot", "fbx": "../../../Saved/ClipCheck/export/GASP_LandLight.fbx", "meta": "../../../Saved/ClipCheck/export/GASP_LandLight.meta.json", "kind": "land", "root_motion": true,
+                       "end_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_Idle.fbx", "frame": "nearest"}},
+
+  "Dash_Ganon":       {"asset": "/Game/GSTN/Animation/Dash/AS_GSTN_Dash_Ganon", "fbx": "../../../Saved/ClipCheck/export/Dash_Ganon.fbx", "meta": "../../../Saved/ClipCheck/export/Dash_Ganon.meta.json", "kind": "dash", "root_motion": true,
+                       "start_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_Idle.fbx", "frame": "nearest"},
+                       "end_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx", "frame": "nearest"}},
+  "RunStart_Frantic": {"asset": "/Game/GSTN/Animation/RunStart/AS_GSTN_RunStart_Frantic", "fbx": "../../../Saved/ClipCheck/export/RunStart_Frantic.fbx", "meta": "../../../Saved/ClipCheck/export/RunStart_Frantic.meta.json", "kind": "start", "root_motion": false,
+                       "_game_speed_cms": "fill from the sim (StartStamp 21 f, accel x0.05) to judge the planted feet",
+                       "start_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_Idle.fbx", "frame": "nearest"},
+                       "end_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx", "frame": "nearest"}},
+  "RunStop_L":        {"asset": "AS_RunStop_Ganon_L_V5", "fbx": "../../../Saved/ClipCheck/export/RunStop_L.fbx", "meta": "../../../Saved/ClipCheck/export/RunStop_L.meta.json", "kind": "stop", "root_motion": true,
+                       "start_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx", "frame": "nearest"},
+                       "end_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_RelaxedIdle.fbx", "frame": "first"}},
+  "RunStop_R":        {"asset": "AS_RunStop_Ganon_R_V5", "fbx": "../../../Saved/ClipCheck/export/RunStop_R.fbx", "meta": "../../../Saved/ClipCheck/export/RunStop_R.meta.json", "kind": "stop", "root_motion": true,
+                       "start_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx", "frame": "nearest"},
+                       "end_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_RelaxedIdle.fbx", "frame": "first"}},
+  "Skid_180":         {"asset": "SS_180_Turn_Root180", "fbx": "../../../Saved/ClipCheck/export/Skid_180.fbx", "meta": "../../../Saved/ClipCheck/export/Skid_180.meta.json", "kind": "pivot", "root_motion": true,
+                       "start_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx", "frame": "nearest"},
+                       "end_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx", "frame": "nearest"}},
+  "Crouch_Enter":     {"asset": "/Game/GSTN/Animation/Crouch/AS_GSTN_Crouch_Enter", "fbx": "../../../Saved/ClipCheck/export/Crouch_Enter.fbx", "meta": "../../../Saved/ClipCheck/export/Crouch_Enter.meta.json", "kind": "crouch_enter", "root_motion": false,
+                       "start_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_Idle.fbx", "frame": "nearest"},
+                       "end_ref": {"fbx": "../../../Saved/ClipCheck/export/Crouch_Idle.fbx", "frame": "first"}},
+  "Crouch_Idle":      {"asset": "/Game/GSTN/Animation/Crouch/AS_GSTN_Crouch_Idle", "fbx": "../../../Saved/ClipCheck/export/Crouch_Idle.fbx", "meta": "../../../Saved/ClipCheck/export/Crouch_Idle.meta.json", "kind": "crouch_idle", "loop": true, "root_motion": false},
+  "Crouch_Exit":      {"asset": "/Game/GSTN/Animation/Crouch/AS_GSTN_Crouch_Exit", "fbx": "../../../Saved/ClipCheck/export/Crouch_Exit.fbx", "meta": "../../../Saved/ClipCheck/export/Crouch_Exit.meta.json", "kind": "crouch_exit", "root_motion": false,
+                       "start_ref": {"fbx": "../../../Saved/ClipCheck/export/Crouch_Idle.fbx", "frame": "last"},
+                       "end_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_Idle.fbx", "frame": "nearest"}},
+  "AirCrouch_Enter":  {"asset": "AS_AirCrouch_Enter", "fbx": "../../../Saved/ClipCheck/export/AirCrouch_Enter.fbx", "meta": "../../../Saved/ClipCheck/export/AirCrouch_Enter.meta.json", "kind": "air", "root_motion": false, "air": true},
+  "AirCrouch_Loop":   {"asset": "AS_AirCrouch_Loop_PLACEHOLDER", "fbx": "../../../Saved/ClipCheck/export/AirCrouch_Loop.fbx", "meta": "../../../Saved/ClipCheck/export/AirCrouch_Loop.meta.json", "kind": "air", "loop": true, "root_motion": false, "air": true}
+ }
+}

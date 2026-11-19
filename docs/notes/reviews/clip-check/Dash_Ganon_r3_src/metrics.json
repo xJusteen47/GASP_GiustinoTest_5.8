@@ -1,0 +1,222 @@
+{
+ "clip": "Dash_Ganon_r3_src",
+ "fbx": "../../../docs/notes/reviews/dash-ganon/r3/AS_GSTN_Dash_Ganon_r3.fbx",
+ "fps": 60.0,
+ "frames": 25,
+ "kind": "dash",
+ "root_travel_cm": [
+  0.0,
+  -227.1,
+  0.0
+ ],
+ "root_motion": true,
+ "_fwd": [
+  0.0,
+  -1.0,
+  0.0
+ ],
+ "animated_bones": 26,
+ "foot_l": {
+  "min_ball_cm": -0.65,
+  "min_ball_frame": 4,
+  "min_heel_cm": -0.0,
+  "plants": [
+   {
+    "frames": [
+     1,
+     2
+    ],
+    "slide_cm": 1.62
+   },
+   {
+    "frames": [
+     19,
+     22
+    ],
+    "slide_cm": 0.17
+   }
+  ]
+ },
+ "foot_r": {
+  "min_ball_cm": 0.04,
+  "min_ball_frame": 1,
+  "min_heel_cm": -0.0,
+  "plants": [
+   {
+    "frames": [
+     1,
+     8
+    ],
+    "slide_cm": 6.22
+   }
+  ]
+ },
+ "pelvis_acc_max_cms2": 21717.0,
+ "pelvis_acc_max_frame": 6,
+ "pops": [
+  {
+   "frame": 10,
+   "bone": "ball_r",
+   "size": 62.0,
+   "type": "snap"
+  },
+  {
+   "frame": 23,
+   "bone": "ball_l",
+   "size": 52.0,
+   "type": "spike"
+  },
+  {
+   "frame": 9,
+   "bone": "ball_r",
+   "size": 37.0,
+   "type": "spike"
+  },
+  {
+   "frame": 24,
+   "bone": "ball_l",
+   "size": 36.0,
+   "type": "spike"
+  },
+  {
+   "frame": 10,
+   "bone": "ball_r",
+   "size": 31.0,
+   "type": "spike"
+  },
+  {
+   "frame": 21,
+   "bone": "ball_l",
+   "size": 20.0,
+   "type": "spike"
+  },
+  {
+   "frame": 23,
+   "bone": "foot_l",
+   "size": 19.2,
+   "type": "spike"
+  },
+  {
+   "frame": 21,
+   "bone": "ik_foot_l",
+   "size": 18.6,
+   "type": "spike"
+  },
+  {
+   "frame": 23,
+   "bone": "ik_foot_l",
+   "size": 18.0,
+   "type": "spike"
+  },
+  {
+   "frame": 21,
+   "bone": "foot_l",
+   "size": 14.5,
+   "type": "spike"
+  },
+  {
+   "frame": 13,
+   "bone": "lowerarm_r",
+   "size": 13.7,
+   "type": "spike"
+  },
+  {
+   "frame": 21,
+   "bone": "calf_l",
+   "size": 13.0,
+   "type": "spike"
+  },
+  {
+   "frame": 16,
+   "bone": "ik_foot_l",
+   "size": 12.0,
+   "type": "spike"
+  },
+  {
+   "frame": 11,
+   "bone": "calf_r",
+   "size": 10.4,
+   "type": "spike"
+  },
+  {
+   "frame": 10,
+   "bone": "lowerarm_r",
+   "size": 9.4,
+   "type": "spike"
+  },
+  {
+   "frame": 6,
+   "bone": "calf_r",
+   "size": 9.0,
+   "type": "spike"
+  }
+ ],
+ "pops_hard": {
+  "ball_r": [
+   10
+  ],
+  "ball_l": [
+   23
+  ]
+ },
+ "pops_soft": {
+  "foot_r": [
+   5
+  ],
+  "calf_r": [
+   6,
+   11,
+   13
+  ],
+  "upperarm_r": [
+   6,
+   13
+  ],
+  "ik_hand_r": [
+   6,
+   8,
+   13
+  ],
+  "lowerarm_r": [
+   8,
+   10,
+   13
+  ],
+  "ball_r": [
+   9,
+   10
+  ],
+  "ik_foot_l": [
+   16,
+   21,
+   23
+  ],
+  "calf_l": [
+   16,
+   21
+  ],
+  "ball_l": [
+   21,
+   24
+  ],
+  "foot_l": [
+   21,
+   23
+  ],
+  "thigh_l": [
+   21
+  ],
+  "lowerarm_l": [
+   22
+  ]
+ },
+ "fails": [
+  "foot r slides 6.2 cm while planted (f1-8)",
+  "pops: ball_r f10; ball_l f23"
+ ],
+ "warns": [
+  "one-frame extremes to look at: foot_r f5; calf_r f6,11,13; upperarm_r f6,13; ik_hand_r f6,8,13 (+8 bones)",
+  "no sidecar: curves/notifies not checked (export_clips_ue.py)"
+ ],
+ "verdict": "FAIL"
+}
