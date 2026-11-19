@@ -21,7 +21,10 @@ this file, the project layer wins. Without one, use the defaults here.
   dossier: write it first, once, from `../shared/dossier-template.md`, before the first review. No reference: judge by
   principles.
 - The cycle folder: `cycle.md` if it exists, the last `result.json`.
-- Animation theory: only the section of the principle you are about to cite.
+- Animation knowledge: `../knowledge/animation/review-rubric.md` (generic rubric with the LIFE, WEIGHT and ROOT
+  axes) and, only to cite or reason about one, the criterion file of the ID you are about to cite (`P-*`, index in
+  `../knowledge/animation/INDEX.md`). The clip's isolation report (`../tools/animkb/kb_motion.py metrics`) must be
+  attached; without it the cycle cannot start. A review that answers only cleanliness questions cannot PASS (`P-LIFE-07`).
 Never old sessions, chats, logs or earlier reviews unless the brief names them.
 
 ## 2. Can the cycle start?
@@ -113,6 +116,8 @@ Short: verdict first, at most three gaps, the one decision needed. On a PASS add
 `medium`/`minor` items. Attach the final video and one grid.
 
 ## 9. Default rubric (use the project's if it has one)
+The full generic rubric is `../knowledge/animation/review-rubric.md`; the tables below are its attack and reaction
+subset. Every "no" cites a criterion ID (e.g. `P-SPACE-03 f12-14 side`).
 Quality bar: "Is this animation on par with a AAA action/fighting game?" Doubt between yes and no is a no.
 
 **Attack — six questions**

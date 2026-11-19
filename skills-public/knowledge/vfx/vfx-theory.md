@@ -86,18 +86,17 @@ Frames are counted from 1; ~60 fps, 1 frame ≈ 16 ms.
 7. **Two mandatory backgrounds**: verify each hit on a light background and on a dark or saturated one. On snow and bright sky light VFX vanish: there a saturated edge or warm core works, not white [O DK, A].
 8. **Effects take the scene's light** when they are matter (smoke, dust, debris) and **emit** it when they are energy (flashes, trails) [O, F23]. Mixing the two roles produces "flat gray" or "dirty neon".
 
-## 7. The Astro Bot / DK Bananza look: real behavior, stylized palette
+## 7. Matter families and the style choice
+Level 1 keeps only what holds for any game. How a specific game's look sits on top (palette, reference games, what was
+observed in them) belongs to that game's style profile, not here.
 1. **Three families of matter, three treatments** [O, F23]:
    - *Energy* (flashes, stars, trails, lasers): emissive, crisp, short, pure colors; reads on any background.
    - *Gas* (smoke, dust, snow, steam): realistic, soft, translucent, **lit** by the scene, **colored by the material** that produced it (pink on the pink enemy, white on snow) [O].
    - *Solids* (debris, shards, confetti, coins): glossy meshes, rounded edges, shadows, physical bounce [O].
-2. **Real behavior, style in color** [F4, F5]: smoke rises and slows, dust disperses and falls, debris bounces and stops, scene light models them. What is "of style" is the palette: clean saturated colors, material tinting the gas, few tints per effect. Do not simplify gas into flat cartoon silhouettes: that is the cause of "clouds like big flat PNGs". For solids, clean rounded shapes remain fine (glossy meshes, §7.1), always with true physics. Avoid the word "stylized" for behavior.
-3. **The effect is born from material data** [F24]: in DK Bananza where it breaks, how much, and of what material drive the effect, and voice and sound are synced to the final blow. Destruction effects are generated automatically from the materials' textures (800+ types). The tactile feel comes from effects and sounds that **respond to every break**, not from fixed animations [F24]. For a project: surface hit → color and type of dust/debris [A].
-4. **"It is more fun to destroy what is beautiful"** [F25]: the effect is worth as much as its contrast with what it breaks; a poor environment makes even the best VFX poor. (Scope: levels/exploration, not PvP arenas.)
-5. **What is seen in the DK Bananza clip** [O, TV capture, approximate colors]: at each hit a short orange/yellow star with bright sparks, a fast ground shockwave, ice and snow chunks flying off the ground, dust puffs on landings; hits read well on blue snow because the core is warm and saturated, complementary to the cold background.
-6. **What is seen in Astro Bot** [O]: crisp white radial flash + short colored streaks + sparks, over physical dust/leaves; crisp contact shadow; soft translucent smoke colored by the material; saturated emissive rings + glossy solid confetti; warm directional light with rim light and purple haze in the background.
-6-bis. **What Team Asobi says (CEDEC 2025, physics and graphics only, nothing on smoke or effect materials)** [F32]: up to ~7,500 physics particles per scene at 60 fps (PS5), only for small objects and simple convex shapes; destruction fragments in limited number and **removed after a time** to hold 60 fps; hybrid fountains (column = mesh, only the falling drops simulated); "below 60 fps is a bug". The principle applies (cap on pieces, short life, mesh for the predictable part), not the numbers, which are for a PS5 [A].
-7. **The "generic Unreal look"** is recognized by: many small dots, diffuse glow everywhere, unlit gray translucency, procedural noise, dull colors, identical sparks everywhere [A].
+2. **Behaviour and style are separate knobs** [F4, F5]: one common choice is physically plausible behaviour (smoke rises
+   and slows, dust disperses and falls, debris bounces and stops, scene light models them) with a stylised palette. A
+   project states its choice in its profile; reviews judge behaviour by this document and palette by the profile.
+3. **The "generic Unreal look"** is recognized by: many small dots, diffuse glow everywhere, unlit gray translucency, procedural noise, dull colors, identical sparks everywhere [A].
 
 ## 8. Smoke and dust: how they behave
 1. **Different causes, different behaviors** [F5]. *Dust* is pushed by an external force and **falls back** by gravity. *Smoke* rises because it is hot, **slows** as it cools, **rolls up** where it meets cold air. *Steam* vanishes early (absorbed into the air). Lifted *snow* behaves like dust but lighter and brighter.

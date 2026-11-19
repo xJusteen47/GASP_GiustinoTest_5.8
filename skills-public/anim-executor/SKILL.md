@@ -17,7 +17,9 @@ differs from this file, the project layer wins.
 ## 1. Read only this
 The contract, the instruction, the move's source data and the project's rig/kit rules. The project's status command
 is the authority on what exists. Not the rubric, not the theory (only the section named in `principle`, if you need it
-to understand the words), not old sessions.
+to understand the words), not old sessions. One exception: before your first edit of a session, read
+`../knowledge/animation/06-holds-and-life.md` once (what lifeless animation looks like), and after every edit run
+`../tools/animkb/kb_motion.py metrics` on the result and put the json path in `result.json` (`life_metrics`).
 
 ## 2. One step
 1. **Validate.** Header and all eight fields present, `check` measurable, `control` a real control of the rig.

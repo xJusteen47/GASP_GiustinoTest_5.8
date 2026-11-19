@@ -45,3 +45,6 @@ Generic method: `skills-public/anim-reviewer/SKILL.md`. Section numbers below re
 - Owner keys and parts in `approved`: never in an instruction, only as a proposal to the owner.
 - Owner edited in Unreal: the re-import (`ue-import`, "integra | uniforma | cambia") does not exist yet. Tell the
   coordinator; do not ask for a build.
+- Knowledge base (2026-11-19): `docs/knowledge/INDEX.md` → generic rubric `skills-public/knowledge/animation/review-rubric.md`
+  (LIFE, WEIGHT, ROOT are FAIL axes; cite `P-*` IDs), style profile `docs/knowledge/profile-gstn.md`, cases
+  `docs/knowledge/cases/`. Isolation report `skills-public/tools/animkb/kb_motion.py metrics` is required.

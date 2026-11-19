@@ -14,7 +14,7 @@ Metodo generico: `skills-public/vfx-reviewer/SKILL.md` (i § qui sotto si riferi
   vince sulle righe in conflitto, `docs/notes/vfx-theory/principi-vfx.md` §15).
 - Strato di progetto della teoria: `docs/notes/vfx-theory/principi-vfx.md` (lezioni dell'owner 2026-11-19 in testa:
   leggibile *e* credibile; gas che crescono sfumando ad alpha 0; stile solo nella palette; si giudica sempre sul video di
-  riferimento). Teoria generale: `skills-public/vfx-reviewer/vfx-principles.md`, stessa numerazione dei §.
+  riferimento). Teoria generale: `skills-public/knowledge/vfx/vfx-theory.md`, stessa numerazione dei §.
 - Riferimenti dell'owner: `handoffs/ref-astrobot-vfx/NOTE.md` (+ clip DK Bananza sul branch `claude/ref-astrobot-vfx`).
 - Critico: `docs/notes/review/critico-estetico.md`. Dossier: `docs/notes/review/dossier-riferimento.md`, dossier in
   `docs/notes/reference-dossiers/`, griglie in project files `handoffs/<riferimento>/`.
@@ -34,3 +34,6 @@ Metodo generico: `skills-public/vfx-reviewer/SKILL.md` (i § qui sotto si riferi
 - Forma base, palette di un kit, voto d'importanza = design: decide l'owner. Tutti i kit condividono rifinitura e VFX
   (owner 11-18, `DA_Locomotion_Default`); la coerenza fra kit si controlla solo in una review di famiglia.
 - Hitstop: impostazione 2A (segno del colpo a piena velocità durante l'hitstop) approvata 11-19.
+- Base di conoscenza (2026-11-19): criteri `skills-public/knowledge/vfx/vfx-criteria.md` (ID `V-*`), teoria
+  `skills-public/knowledge/vfx/vfx-theory.md` (stessa numerazione dei §), punti in comune con l'animazione
+  `skills-public/knowledge/anim-vfx-links.md`, profilo `docs/knowledge/profile-gstn.md` §3.
