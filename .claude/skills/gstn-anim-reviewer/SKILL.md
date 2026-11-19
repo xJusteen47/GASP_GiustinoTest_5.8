@@ -63,6 +63,7 @@ Work from the mp4 files in `inizio/` or `fine/`: variant and base, the version t
    When you are unsure why the engine behaves as it does (a curve ignored, a montage or blend setting, warping), write
    the exact question for the Unreal Editor's built-in AI assistant (owner 11-19; it needs the editor open) into the
    `gioco` or `dati montage` item, so the desktop thread asks it instead of guessing. Never name a setting from memory.
+   UE 5.9 tools that may help (editor MCP debug toolsets, scriptable choosers): `docs/notes/review/ue59-strumenti-per-skill.md`.
 8. **Sort every no** into `posa`, `dati montage` (curves, notifies, blend times, play rate, root motion flags) or
    `gioco` (Anim BP, state machine, blend logic: a crouch or jump when the montage ends, a repeated `a` value, a slide
    of the capsule). Any `gioco` gap suspends the pose cycle: write what a code thread must check, and do not write

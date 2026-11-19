@@ -74,7 +74,8 @@ those files. Report the gate line and the paths, nothing about how it looks.
 - Never start, close or configure Unreal or Cascadeur unless the brief says the machine is free; exit 4 means ask.
 - An engine question you cannot answer from the contract (why a gate or an import behaves as it does): ask the Unreal
   Editor's built-in AI assistant (owner 11-19; editor open) and paste its answer in `note`. If it does not settle it,
-  refuse with the failing line; never guess a setting.
+  refuse with the failing line; never guess a setting. UE 5.9 tools (editor MCP debug toolsets for curve dumps,
+  choosers editable from Python): `docs/notes/review/ue59-strumenti-per-skill.md`, only those marked as tried.
 - Never delete a snapshot. Restore instead of repairing a card by hand.
 - Scripts write to files and print at most five lines. No full logs, reports or diffs in the reply.
 - No images, GIFs or videos of other games in the repo.

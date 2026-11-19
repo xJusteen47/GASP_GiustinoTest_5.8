@@ -312,7 +312,8 @@ impacchettati e colore dal parametro, così una texture serve molti effetti [F16
    video**: prima si scrive il dossier del riferimento (`docs/notes/review/dossier-riferimento.md`), chi costruisce lo
    usa come bersaglio e chi revisiona lo usa come metro. La checklist non sostituisce il confronto [owner 11-19].
 6. **Dubbi tecnici su Unreal** (Niagara, materiali, render): chiedere all'assistente AI integrato nell'Unreal Editor,
-   che dà consigli specifici del motore (owner 11-19; serve l'editor aperto).
+   che dà consigli specifici del motore (owner 11-19; serve l'editor aperto). Strumenti UE 5.9 utili (API Python di
+   Niagara, notify UAF che lanciano Niagara): `docs/notes/review/ue59-strumenti-per-skill.md`.
 
 ## 13. Checklist per chi costruisce un effetto
 1. Che cosa comunica, a chi (chi fa / chi subisce), con che voto d'importanza?
@@ -348,7 +349,7 @@ impacchettati e colore dal parametro, così una texture serve molti effetti [F16
    B) tenere 0,15 per tutto. Si decide guardando le due versioni in gioco.
 5. **Dissolvenza dei gas** (owner 11-19): lo sheet dice "mai dissolvenza in trasparenza" e la versione precedente
    di §3.13 permetteva ai gas di calare di opacità solo a fine vita. L'owner ha deciso: i gas crescono sfumando ad
-   alpha 0 per tutta la dissipazione. Risolta; lo sheet va aggiornato per la categoria B.
+   alpha 0 per tutta la dissipazione. Risolta; sheet allineato per la categoria B il 2026-11-19.
 Il coordinatore le porta all'owner; questo documento non cambia lo sheet.
 
 ## 16. Limiti

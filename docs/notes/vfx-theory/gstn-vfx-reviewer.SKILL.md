@@ -49,6 +49,8 @@ Se l'owner dice che il video non torna, ricontrolla la catena prima dell'effetto
    Nessun riferimento della classe: scrivilo come limite.
 6. **Dubbio tecnico** (perché Niagara o il materiale fanno così, quale modulo usare): la correzione proposta la verifica
    chi costruisce con l'assistente AI dell'Unreal Editor; tu scrivi la domanda da fargli, non inventi il nome del modulo.
+   Con UE 5.9 puoi chiedere il dump dei parametri Niagara (vita, curve di alpha e taglia) accanto al video:
+   `docs/notes/review/ue59-strumenti-per-skill.md`.
 
 ## 3b. Il critico (owner 2026-11-19; principio in `docs/notes/review/critico-estetico.md`)
 Ogni review ha accanto un critico: un agente Fable high separato, che riesce solo se trova cosa non è ottimale. Non
