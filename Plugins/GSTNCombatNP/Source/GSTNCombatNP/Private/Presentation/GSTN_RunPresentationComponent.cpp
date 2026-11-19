@@ -103,6 +103,14 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 	const bool bWas = FootSlide.IsSliding();
 	const bool bWasSkid = FootSlide.Source == EGSTN_FootSlideSource::RunSkid;
 	FootSlide = ReadFootSlide(Mover->GetSyncState(), GSTNRunPresentation::StepSeconds);
+	{
+		// Frantic run start: frames of the stamp counter turned into seconds (frame 0 of the stamp = one step played)
+		const FGSTN_RunStageState* RunState = FGSTN_RunStageMover::Find(Mover->GetSyncState());
+		const FGSTN_LocomotionSimTuning* RunTuning = FGSTN_LocomotionAttach::Find(GetOwner());
+		RunStartTime = RunState && RunState->StampFrames >= 0 ? (RunState->StampFrames + 1) * GSTNRunPresentation::StepSeconds : -1.f;
+		bRunStartStamp = RunState && RunTuning && FGSTN_RunStageLogic::IsStartStamp(RunTuning->RunStages, *RunState);
+		BoostDashTime = RunState && RunState->DashFrames >= 0 ? (RunState->DashFrames + 1) * GSTNRunPresentation::StepSeconds : -1.f;
+	}
 	// The skid's entry speed (highest over the enter frames): the hold of the three-section clip runs on the share of it left
 	if (FootSlide.Source == EGSTN_FootSlideSource::RunSkid)
 	{
@@ -203,6 +211,18 @@ float UGSTN_RunPresentationComponent::GetAnimOwnerSkidClipTime(const UAnimInstan
 {
 	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
 	return Run ? Run->GetSkidClipTime() : 0.f;
+}
+
+float UGSTN_RunPresentationComponent::GetAnimOwnerRunStartTime(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run ? Run->GetRunStartTime() : -1.f;
+}
+
+float UGSTN_RunPresentationComponent::GetAnimOwnerBoostDashTime(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run ? Run->GetBoostDashTime() : -1.f;
 }
 
 bool UGSTN_RunPresentationComponent::IsSkidInMainGraph() const

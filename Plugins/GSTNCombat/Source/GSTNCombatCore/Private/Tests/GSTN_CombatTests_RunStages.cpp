@@ -322,4 +322,101 @@ bool FGSTN_RunStagesAccelRampTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunStagesStartStampTest, "GSTNCombat.Core.RunStages.StartStamp", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunStagesStartStampTest::RunTest(const FString& Parameters)
+{
+	// Owner choice B (2026-11-18): a hard push from still stamps almost in place for Frames, then the stage 1 ramp starts from its beginning
+	FGSTN_RunStagesTuning Tuning = TestTuning();
+	Tuning.StartStamp.Frames = 3;
+	Tuning.StartStamp.AccelFraction = 0.05f;
+	Tuning.StartStamp.StickMin = 0.5f;
+	Tuning.StartStamp.MaxStartSpeed = 60.f;
+	Tuning.Stages[0].AccelRampFrames = 4;
+	Tuning.Stages[0].RampStartFraction = 0.2f;
+
+	FGSTN_RunStageState State;
+	TestEqual(TEXT("still, stick at rest: frame 0 already cut"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State), 0.05f, 1e-4f);
+	FGSTN_RunStageLogic::Step(Tuning, Run(0, 1.f), State);
+	TestEqual(TEXT("stamp started on the push"), State.StampFrames, 0);
+	TestTrue(TEXT("stamp live"), FGSTN_RunStageLogic::IsStartStamp(Tuning, State));
+	TestEqual(TEXT("stamp frame 1 cut"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State), 0.05f, 1e-4f);
+	FGSTN_RunStageLogic::Step(Tuning, Run(1, 2.f), State);
+	TestEqual(TEXT("stamp frame 2 cut"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State), 0.05f, 1e-4f);
+	FGSTN_RunStageLogic::Step(Tuning, Run(2, 3.f), State);
+	TestTrue(TEXT("last stamp frame stepped: still live in its end state"), FGSTN_RunStageLogic::IsStartStamp(Tuning, State));
+	TestEqual(TEXT("after the stamp: the ramp's first frame, no step"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State), 0.2f, 1e-4f);
+	FGSTN_RunStageLogic::Step(Tuning, Run(3, 10.f), State);
+	TestFalse(TEXT("stamp over"), FGSTN_RunStageLogic::IsStartStamp(Tuning, State));
+	TestTrue(TEXT("the ramp grows after the stamp"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State) > 0.2f);
+	TestTrue(TEXT("the counter keeps going for the clip time"), State.StampFrames == 3);
+
+	// One push stamps once: a pause in speed under MaxStartSpeed (a wall) does not stamp again
+	FGSTN_RunStageLogic::Step(Tuning, Run(4, 0.f), State);
+	TestFalse(TEXT("no second stamp on the same push"), FGSTN_RunStageLogic::IsStartStamp(Tuning, State));
+
+	// A light tilt walks without the stamp, and only its first frame lost acceleration
+	FGSTN_RunStageLogic::Step(Tuning, Run(5, 0.f, FVector::ZeroVector), State);
+	TestEqual(TEXT("stick at rest resets"), State.StampFrames, -1);
+	FGSTN_RunStageLogic::Step(Tuning, Run(6, 1.f, FVector(0.3, 0.0, 0.0)), State);
+	TestEqual(TEXT("light tilt: no stamp"), State.StampFrames, -1);
+	TestEqual(TEXT("light tilt: the ramp as usual"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State), 0.2f + 0.8f * 0.25f, 1e-4f);
+
+	// A re-push while running never stamps
+	FGSTN_RunStageState Running;
+	Running.PrevSpeed = 400.f;
+	FGSTN_RunStageLogic::Step(Tuning, Run(0, 400.f), Running);
+	FGSTN_RunStageLogic::Step(Tuning, Run(1, 380.f, FVector::ZeroVector), Running);
+	TestEqual(TEXT("running: not cut"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, Running), 0.2f, 1e-4f);
+	FGSTN_RunStageLogic::Step(Tuning, Run(2, 380.f), Running);
+	TestEqual(TEXT("running re-push: no stamp"), Running.StampFrames, -1);
+
+	// Stamp off by default (a profile without the setting keeps today's start)
+	FGSTN_RunStageState Plain;
+	TestEqual(TEXT("off: no cut"), FGSTN_RunStageLogic::GetAccelerationRamp(TestTuning(), Plain), 1.f);
+
+	// The counter survives the network form
+	TArray<uint8> Bytes;
+	FMemoryWriter Writer(Bytes);
+	State.StampFrames = 2;
+	State.SerializeCompact(Writer);
+	FGSTN_RunStageState Read;
+	FMemoryReader Reader(Bytes);
+	Read.SerializeCompact(Reader);
+	TestEqual(TEXT("stamp counter survives the network form"), Read.StampFrames, 2);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunStagesBoostDashTest, "GSTNCombat.Core.RunStages.BoostDash", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunStagesBoostDashTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-19: L3 skips the stamp and launches at once (Smash's dash)
+	FGSTN_RunStagesTuning Tuning = TestTuning();
+	Tuning.StartStamp.Frames = 21;
+	Tuning.BoostWindowFrames = 2;
+	Tuning.BoostDash.Frames = 3;
+	Tuning.BoostDash.AccelMultiplier = 8.f;
+
+	FGSTN_RunStageState State;
+	for (int32 Frame = 0; Frame < 10; ++Frame)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, Run(Frame, 1.f), State);
+	}
+	TestTrue(TEXT("stamping, past the plain boost window"), FGSTN_RunStageLogic::IsStartStamp(Tuning, State));
+	FGSTN_RunStageLogic::Step(Tuning, Run(10, 1.f, FVector(1.0, 0.0, 0.0), true), State);
+	TestEqual(TEXT("the boost works during the whole stamp"), (int32)State.Stage, Tuning.GetBoostTargetIndex());
+	TestFalse(TEXT("the stamp is over"), FGSTN_RunStageLogic::IsStartStamp(Tuning, State));
+	TestEqual(TEXT("no run start time after the boost"), State.StampFrames, -1);
+	TestTrue(TEXT("burst live"), FGSTN_RunStageLogic::IsBoostDash(Tuning, State));
+	TestEqual(TEXT("burst acceleration"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State), 8.f, 1e-4f);
+	for (int32 Frame = 11; Frame < 14; ++Frame)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, Run(Frame, 300.f), State);
+	}
+	TestFalse(TEXT("burst over after its frames"), FGSTN_RunStageLogic::IsBoostDash(Tuning, State));
+	TestEqual(TEXT("no new stamp on the boosted stage"), State.StampFrames, -1);
+	FGSTN_RunStageLogic::Step(Tuning, Run(14, 300.f, FVector::ZeroVector), State);
+	TestEqual(TEXT("stick at rest clears the dash"), State.DashFrames, -1);
+	return true;
+}
+
 #endif

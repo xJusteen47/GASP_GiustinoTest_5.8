@@ -77,7 +77,7 @@ bool FGSTN_RunStageState::operator==(const FGSTN_RunStageState& Other) const
 		&& FramesSinceStickRelease == Other.FramesSinceStickRelease && CarriedSpeed == Other.CarriedSpeed && FramesSinceCarry == Other.FramesSinceCarry
 		&& CarrySource == Other.CarrySource && PrevSpeed == Other.PrevSpeed && LastFrame == Other.LastFrame && CarryWindow == Other.CarryWindow
 		&& bAirborne == Other.bAirborne && TakeoffSpeed == Other.TakeoffSpeed && TakeoffStage == Other.TakeoffStage
-		&& RampFrames == Other.RampFrames && RampStage == Other.RampStage && ExternalVelocity == Other.ExternalVelocity;
+		&& RampFrames == Other.RampFrames && RampStage == Other.RampStage && StampFrames == Other.StampFrames && DashFrames == Other.DashFrames && ExternalVelocity == Other.ExternalVelocity;
 }
 
 void FGSTN_RunStageState::SerializeCompact(FArchive& Ar)
@@ -101,6 +101,8 @@ void FGSTN_RunStageState::SerializeCompact(FArchive& Ar)
 	Ar << TakeoffStage;
 	SerializeCounter(Ar, RampFrames);
 	Ar << RampStage;
+	SerializeCounter(Ar, StampFrames);
+	SerializeCounter(Ar, DashFrames);
 	for (int32 Axis = 0; Axis < 3; ++Axis)
 	{
 		float Component = static_cast<float>(ExternalVelocity[Axis]);
@@ -138,7 +140,8 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 
 	// Acceleration ramp: a push from rest starts the ramp of the current stage, a new stage starts its own, the stick at rest ends it
 	// (read by GetAccelerationRamp from the next frame's start state; counted before the early returns below so every grounded frame counts)
-	if (Input.StickWorld.Size() < Tuning.RampStickThreshold)
+	const float RampStick = static_cast<float>(Input.StickWorld.Size());
+	if (RampStick < Tuning.RampStickThreshold)
 	{
 		State.RampFrames = -1;
 	}
@@ -151,6 +154,27 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 	{
 		State.RampFrames = Advance(State.RampFrames);
 	}
+
+	// Run start stamp (owner choice B): counted like the ramp, before the early returns. Starts once per push, from (almost) still, on stage 1,
+	// when the stick is pushed hard enough; the stage changing (boost) or the stick resting ends it
+	{
+		const FGSTN_RunStartStampTuning& Stamp = Tuning.StartStamp;
+		if (Stamp.Frames <= 0 || RampStick < Tuning.RampStickThreshold)
+		{
+			State.StampFrames = -1;
+		}
+		else if (State.StampFrames >= 0)
+		{
+			State.StampFrames = Advance((State.Stage == 0) ? State.StampFrames : FMath::Max(State.StampFrames, Stamp.Frames));
+		}
+		else if (State.Stage == 0 && RampStick >= Stamp.StickMin && PrevSpeed < Stamp.MaxStartSpeed)
+		{
+			// Frame 0 of the stamp is this frame: GetAccelerationRamp already cut its acceleration (stick at rest at its start, see there)
+			State.StampFrames = 0;
+		}
+	}
+	// Boost dash counter (set by the boost below), reset with the stick at rest
+	State.DashFrames = RampStick < Tuning.RampStickThreshold ? -1 : Advance(State.DashFrames);
 
 	// A skid of this frame (P2): the speed of before it is remembered for the attacks (P3), the run drops to stage 1
 	if (Input.bSkidStarted)
@@ -213,12 +237,17 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 	const int32 BoostTarget = Tuning.GetBoostTargetIndex();
 	if (Input.bBoostCommand && State.Stage < BoostTarget)
 	{
+		// The initial window also covers the whole start stamp: L3 is how the owner skips it (2026-11-19)
 		const bool bAllowed = Tuning.BoostMode == EGSTN_RunBoostMode::Anytime
-			|| (Tuning.BoostMode == EGSTN_RunBoostMode::InitialWindow && State.FramesSinceMoveStart <= Tuning.BoostWindowFrames);
+			|| (Tuning.BoostMode == EGSTN_RunBoostMode::InitialWindow
+				&& (State.FramesSinceMoveStart <= Tuning.BoostWindowFrames || IsStartStamp(Tuning, State)));
 		if (bAllowed)
 		{
 			State.Stage = static_cast<uint8>(BoostTarget);
 			State.FramesInStage = 0;
+			// Smash-style dash: the stamp is over (its clip leaves), the burst starts
+			State.StampFrames = -1;
+			State.DashFrames = Tuning.BoostDash.Frames > 0 ? 0 : -1;
 			return;
 		}
 	}
@@ -282,11 +311,39 @@ float FGSTN_RunStageLogic::GetAirControlScale(const FGSTN_RunStagesTuning& Tunin
 	return Tuning.GetStage(State.TakeoffStage).AirControlScale;
 }
 
+bool FGSTN_RunStageLogic::IsStartStamp(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State)
+{
+	return Tuning.IsEnabled() && Tuning.StartStamp.Frames > 0 && State.Stage == 0 && !State.bAirborne
+		&& State.StampFrames >= 0 && State.StampFrames < Tuning.StartStamp.Frames;
+}
+
+bool FGSTN_RunStageLogic::IsBoostDash(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State)
+{
+	return Tuning.IsEnabled() && Tuning.BoostDash.Frames > 0 && State.DashFrames >= 0 && State.DashFrames < Tuning.BoostDash.Frames;
+}
+
 float FGSTN_RunStageLogic::GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State)
 {
 	if (!Tuning.IsEnabled())
 	{
 		return 1.f;
+	}
+	if (IsBoostDash(Tuning, State))
+	{
+		return FMath::Clamp(Tuning.BoostDash.AccelMultiplier, 1.f, 30.f);
+	}
+	const FGSTN_RunStartStampTuning& Stamp = Tuning.StartStamp;
+	if (Stamp.Frames > 0 && State.Stage == 0 && !State.bAirborne)
+	{
+		// The stamp's frames 1..Frames-1 (the counter of the start state is 0..Frames-2), and frame 0: the stick was at rest at the start of
+		// the frame and the character still, so a push on this frame may start a stamp. A light tilt then loses one frame of acceleration
+		// only (the stamp does not start, the next frame ramps as usual); a full push gets no one-frame jump before the stamp
+		const bool bStampNext = State.StampFrames >= 0 && State.StampFrames + 1 < Stamp.Frames;
+		const bool bMaybeFirst = State.RampFrames < 0 && State.StampFrames < 0 && State.PrevSpeed < Stamp.MaxStartSpeed;
+		if (bStampNext || bMaybeFirst)
+		{
+			return FMath::Clamp(Stamp.AccelFraction, 0.f, 1.f);
+		}
 	}
 	const FGSTN_RunStage& Stage = Tuning.GetStage(State.Stage);
 	if (Stage.AccelRampFrames <= 0)
@@ -294,7 +351,12 @@ float FGSTN_RunStageLogic::GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuni
 		return 1.f;
 	}
 	// At rest, or a stage the ramp has not caught up with yet (the stage changed at the end of the last frame): the ramp's first frame
-	const int32 Frames = (State.RampFrames < 0 || State.RampStage != State.Stage) ? 0 : State.RampFrames + 1;
+	int32 Frames = (State.RampFrames < 0 || State.RampStage != State.Stage) ? 0 : State.RampFrames + 1;
+	if (Stamp.Frames > 0 && State.Stage == 0 && State.StampFrames >= 0)
+	{
+		// After a stamp the stage 1 ramp starts where the stamp ended, not at the push: no acceleration step out of the stamp
+		Frames = FMath::Max(0, Frames - Stamp.Frames);
+	}
 	const float Alpha = FMath::Clamp(static_cast<float>(Frames) / static_cast<float>(Stage.AccelRampFrames), 0.f, 1.f);
 	return FMath::Lerp(FMath::Clamp(Stage.RampStartFraction, 0.f, 1.f), 1.f, Alpha);
 }

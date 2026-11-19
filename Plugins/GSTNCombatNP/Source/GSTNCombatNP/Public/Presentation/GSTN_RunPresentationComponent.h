@@ -193,6 +193,31 @@ public:
 	const FGSTN_RunStopSettings& GetRunStopSettings() const;
 	const FGSTN_RunStopState& GetRunStop() const { return RunStop; }
 
+	/**
+	 * Frantic run start (owner 2026-11-18, choice B): seconds since the run start stamp began on this push of the stick (the sim's
+	 * FGSTN_RunStageState::StampFrames), -1 when this push had no stamp or the stick rests. It keeps counting after the stamp, so the
+	 * start clip (stamp + frantic steps) plays to its end on a Sequence Evaluator with this as explicit time; the state leaves on the clip's
+	 * end or on -1. IsRunStartStamp: the almost-in-place part is live (the sim holds the speed down).
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
+	float GetRunStartTime() const { return RunStartTime; }
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
+	bool IsRunStartStamp() const { return bRunStartStamp; }
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static float GetAnimOwnerRunStartTime(const UAnimInstance* AnimInstance);
+
+	/**
+	 * Boost dash (L3, owner 2026-11-19, Smash's dash): seconds since the boost on this push of the stick, -1 when none. The run start time
+	 * above goes to -1 on the boost, so the frantic start clip leaves and a dash clip (its own state) can take over with this time.
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
+	float GetBoostDashTime() const { return BoostDashTime; }
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static float GetAnimOwnerBoostDashTime(const UAnimInstance* AnimInstance);
+
 	/** The profile moves the skid into the main ABP (the skid layer then never takes the pose) */
 	bool IsSkidInMainGraph() const;
 
@@ -229,6 +254,10 @@ private:
 	FSoftObjectPath ResolvedScramblePath;
 	FSoftObjectPath ResolvedSkidPath;
 	float SkidEntrySpeed = 0.f;
+	/** Cached on the game thread each tick (the anim worker reads them) */
+	float RunStartTime = -1.f;
+	bool bRunStartStamp = false;
+	float BoostDashTime = -1.f;
 	/**
 	 * Clip speed (cvar gstn.Skid.PlayAtClipSpeed, owner choice A): seconds since the skid started, < 0 = no skid shown. Runs on past the
 	 * sim's skid while the clip has frames left and the character stays on the ground with nothing else sliding (the restart is in the clip)

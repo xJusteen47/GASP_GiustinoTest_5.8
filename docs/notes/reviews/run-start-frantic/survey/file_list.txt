@@ -1,0 +1,62 @@
+zip	file	size_bytes
+Male Locomotion Pack.zip	loco/idle.fbx	710193
+Male Locomotion Pack.zip	loco/jump.fbx	495665
+Male Locomotion Pack.zip	loco/left strafe walking.fbx	376721
+Male Locomotion Pack.zip	loco/left strafe.fbx	344641
+Male Locomotion Pack.zip	loco/left turn 90.fbx	360081
+Male Locomotion Pack.zip	loco/right strafe walking.fbx	378545
+Male Locomotion Pack.zip	loco/right strafe.fbx	342737
+Male Locomotion Pack.zip	loco/right turn 90.fbx	363761
+Male Locomotion Pack.zip	loco/standard run.fbx	348849
+Male Locomotion Pack.zip	loco/walking.fbx	378545
+Male Locomotion Pack.zip	loco/X Bot.fbx	1750033
+Sword and Shield Pack.zip	sns/sheath sword 1.fbx	378977
+Sword and Shield Pack.zip	sns/sheath sword 2.fbx	348273
+Sword and Shield Pack.zip	sns/sword and shield 180 turn (2).fbx	336785
+Sword and Shield Pack.zip	sns/sword and shield 180 turn.fbx	334097
+Sword and Shield Pack.zip	sns/sword and shield attack (2).fbx	387473
+Sword and Shield Pack.zip	sns/sword and shield attack (3).fbx	429809
+Sword and Shield Pack.zip	sns/sword and shield attack (4).fbx	350113
+Sword and Shield Pack.zip	sns/sword and shield attack.fbx	484065
+Sword and Shield Pack.zip	sns/sword and shield block (2).fbx	323937
+Sword and Shield Pack.zip	sns/sword and shield block idle.fbx	380033
+Sword and Shield Pack.zip	sns/sword and shield block.fbx	319185
+Sword and Shield Pack.zip	sns/sword and shield casting (2).fbx	354177
+Sword and Shield Pack.zip	sns/sword and shield casting.fbx	483921
+Sword and Shield Pack.zip	sns/sword and shield crouch block (2).fbx	329953
+Sword and Shield Pack.zip	sns/sword and shield crouch block idle.fbx	375921
+Sword and Shield Pack.zip	sns/sword and shield crouch block.fbx	414593
+Sword and Shield Pack.zip	sns/sword and shield crouch idle.fbx	426321
+Sword and Shield Pack.zip	sns/sword and shield crouch.fbx	319329
+Sword and Shield Pack.zip	sns/sword and shield crouching (2).fbx	331649
+Sword and Shield Pack.zip	sns/sword and shield crouching (3).fbx	324737
+Sword and Shield Pack.zip	sns/sword and shield crouching.fbx	384993
+Sword and Shield Pack.zip	sns/sword and shield death (2).fbx	549041
+Sword and Shield Pack.zip	sns/sword and shield death.fbx	439857
+Sword and Shield Pack.zip	sns/sword and shield idle (2).fbx	683393
+Sword and Shield Pack.zip	sns/sword and shield idle (3).fbx	683137
+Sword and Shield Pack.zip	sns/sword and shield idle (4).fbx	458145
+Sword and Shield Pack.zip	sns/sword and shield idle.fbx	518449
+Sword and Shield Pack.zip	sns/sword and shield impact (2).fbx	343457
+Sword and Shield Pack.zip	sns/sword and shield impact (3).fbx	327105
+Sword and Shield Pack.zip	sns/sword and shield impact.fbx	347521
+Sword and Shield Pack.zip	sns/sword and shield jump (2).fbx	360337
+Sword and Shield Pack.zip	sns/sword and shield jump.fbx	336785
+Sword and Shield Pack.zip	sns/sword and shield kick.fbx	382113
+Sword and Shield Pack.zip	sns/sword and shield power up.fbx	443601
+Sword and Shield Pack.zip	sns/sword and shield run (2).fbx	316625
+Sword and Shield Pack.zip	sns/sword and shield run.fbx	326817
+Sword and Shield Pack.zip	sns/sword and shield slash (2).fbx	598225
+Sword and Shield Pack.zip	sns/sword and shield slash (3).fbx	399329
+Sword and Shield Pack.zip	sns/sword and shield slash (4).fbx	502065
+Sword and Shield Pack.zip	sns/sword and shield slash (5).fbx	377617
+Sword and Shield Pack.zip	sns/sword and shield slash.fbx	390401
+Sword and Shield Pack.zip	sns/sword and shield strafe (2).fbx	369617
+Sword and Shield Pack.zip	sns/sword and shield strafe (3).fbx	336897
+Sword and Shield Pack.zip	sns/sword and shield strafe (4).fbx	325313
+Sword and Shield Pack.zip	sns/sword and shield strafe.fbx	356945
+Sword and Shield Pack.zip	sns/sword and shield turn (2).fbx	341585
+Sword and Shield Pack.zip	sns/sword and shield turn.fbx	341585
+Sword and Shield Pack.zip	sns/sword and shield walk (2).fbx	368001
+Sword and Shield Pack.zip	sns/sword and shield walk.fbx	372321
+Sword and Shield Pack.zip	sns/X Bot.fbx	1750033
