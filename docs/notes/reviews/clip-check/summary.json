@@ -82,7 +82,7 @@
   "fails": [],
   "warns": [
    "one-frame extremes to look at: ik_hand_l f12,16,17,19,20,23,26,27,79; foot_r f45; ik_foot_r f45; calf_l f47,66 (+3 bones)",
-   "end_ref: thigh_l off by 9 deg, feet 8.2 cm (ref f69), the blend must hide it"
+   "end_ref: thigh_l off by 9 deg, feet 7.6 cm (ref f69), the blend must hide it"
   ]
  },
  {
@@ -92,7 +92,7 @@
   "warns": [
    "foot r skates 29.9 cm over 0.17 s on the floor (f23-27), touchdown/lift-off length",
    "one-frame extremes to look at: foot_r f6,43,44; ik_foot_r f6,25,44,48; calf_l f8; calf_r f19 (+4 bones)",
-   "end_ref: calf_l off by 32 deg, feet 42.5 cm (ref f27), the blend must hide it"
+   "end_ref: calf_l off by 32 deg, feet 25.9 cm (ref f27), the blend must hide it"
   ]
  },
  {
@@ -103,8 +103,8 @@
    "foot l skates 6.1 cm over 0.03 s on the floor (f33-33), touchdown/lift-off length",
    "foot r skates 43.8 cm over 0.10 s on the floor (f35-37), touchdown/lift-off length",
    "one-frame extremes to look at: foot_l f6,41; calf_r f8,23,25,35; calf_l f18,41; ik_foot_l f18 (+4 bones)",
-   "start_ref: hand_l off by 12 deg, feet 3.9 cm (ref f2), the blend must hide it",
-   "end_ref: upperarm_r off by 27 deg, feet 44.4 cm (ref f17), the blend must hide it"
+   "start_ref: hand_l off by 12 deg, feet 4.0 cm (ref f2), the blend must hide it",
+   "end_ref: upperarm_r off by 27 deg, feet 27.8 cm (ref f17), the blend must hide it"
   ]
  },
  {
@@ -126,70 +126,53 @@
  },
  {
   "clip": "Dash_Ganon",
-  "verdict": "FAIL",
-  "fails": [
-   "end_ref: foot_l off by 49 deg, feet 34.9 cm (ref f65)"
-  ],
+  "verdict": "PASS*",
+  "fails": [],
   "warns": [
    "foot l skates 7.1 cm over 0.02 s on the floor (f4-4), touchdown/lift-off length",
    "foot r skates 6.2 cm over 0.03 s on the floor (f2-3), touchdown/lift-off length",
-   "one-frame extremes to look at: foot_r f5; calf_r f6,11,13; upperarm_r f6,13; ik_hand_r f6,8,13 (+9 bones)",
-   "start_ref: foot_r off by 25 deg, feet 12.6 cm (ref f11), the blend must hide it"
+   "one-frame extremes to look at: foot_r f5; calf_r f6,11,13,19,20; upperarm_r f6,13; ik_hand_r f6,8,13 (+6 bones)",
+   "start_ref: foot_r off by 25 deg, feet 7.4 cm (ref f7), the blend must hide it"
   ]
  },
  {
   "clip": "RunStart_Frantic",
-  "verdict": "FAIL",
-  "fails": [
-   "start_ref: calf_r off by 83 deg, feet 36.3 cm (ref f83)",
-   "end_ref: upperarm_r off by 49 deg, feet 42.9 cm (ref f23)"
-  ],
+  "verdict": "PASS*",
+  "fails": [],
   "warns": [
    "in-place clip without game_speed_cms: feet not judged against the ground",
-   "one-frame extremes to look at: calf_r f2,3,6,8,9,11,13; calf_l f3,5,6,11; upperarm_r f4,7,10; upperarm_l f4,7,10 (+3 bones)"
+   "one-frame extremes to look at: upperarm_l f4,7,10; upperarm_r f4,7,10,25; calf_l f5,6,11; thigh_l f5,6,10,11 (+5 bones)"
   ]
  },
  {
   "clip": "RunStop_L",
-  "verdict": "FAIL",
-  "fails": [
-   "start_ref: lowerarm_r off by 93 deg, feet 33.6 cm (ref f55)",
-   "end_ref: upperarm_r off by 70 deg, feet 5.9 cm (ref f1)"
-  ],
+  "verdict": "PASS*",
+  "fails": [],
   "warns": [
    "foot l skates 68.7 cm over 0.32 s on the floor (f8-26) (slide_ok)",
-   "foot r skates 132.0 cm over 0.47 s on the floor (f2-29) (slide_ok)",
-   "one-frame extremes to look at: upperarm_l f3; ik_hand_r f6,8,11; ik_hand_l f8,9,10; calf_r f33 (+1 bones)"
+   "foot r skates 84.1 cm over 0.37 s on the floor (f8-29) (slide_ok)",
+   "one-frame extremes to look at: lowerarm_r f6,61; ik_hand_r f6,8,11; ik_hand_l f8,9,10; calf_r f33"
   ]
  },
  {
   "clip": "RunStop_R",
-  "verdict": "FAIL",
-  "fails": [
-   "start_ref: lowerarm_l off by 99 deg, feet 44.2 cm (ref f68)",
-   "end_ref: upperarm_r off by 70 deg, feet 5.9 cm (ref f1)"
-  ],
+  "verdict": "PASS*",
+  "fails": [],
   "warns": [
-   "foot l skates 132.5 cm over 0.47 s on the floor (f2-29) (slide_ok)",
+   "foot l skates 84.8 cm over 0.37 s on the floor (f8-29) (slide_ok)",
    "foot r skates 68.7 cm over 0.32 s on the floor (f8-26) (slide_ok)",
-   "one-frame extremes to look at: upperarm_r f3; ik_hand_r f6,8,11; ik_hand_l f8,9,10; calf_l f33 (+2 bones)"
+   "one-frame extremes to look at: lowerarm_l f2,6; ik_hand_r f6,8,11; ik_hand_l f8,9,10; calf_l f33 (+2 bones)"
   ]
  },
  {
   "clip": "Skid_180",
-  "verdict": "FAIL",
-  "fails": [
-   "ball l -2.4 cm through the floor at f19",
-   "ball r -5.8 cm through the floor at f15",
-   "heel r -4.0 cm through the floor",
-   "start_ref: lowerarm_l off by 44 deg, feet 24.8 cm (ref f71)",
-   "end_ref: lowerarm_l off by 40 deg, feet 62.9 cm (ref f51)"
-  ],
+  "verdict": "PASS*",
+  "fails": [],
   "warns": [
-   "foot r skates 32.9 cm over 0.17 s on the floor (f5-9) (slide_ok)",
-   "foot r skates 7.3 cm over 0.03 s on the floor (f12-12) (slide_ok)",
-   "foot r skates 18.0 cm over 0.10 s on the floor (f15-17) (slide_ok)",
-   "one-frame extremes to look at: ball_r f3; ball_l f24,25; ik_foot_l f26"
+   "foot r skates 52.8 cm over 0.27 s on the floor (f2-9) (slide_ok)",
+   "foot r skates 52.9 cm over 0.20 s on the floor (f12-17) (slide_ok)",
+   "foot r skates 17.2 cm over 0.10 s on the floor (f24-26), touchdown/lift-off length",
+   "one-frame extremes to look at: ik_foot_l f2,4; calf_l f23; ball_l f24"
   ]
  },
  {
@@ -211,7 +194,8 @@
   "clip": "Crouch_Exit",
   "verdict": "FAIL",
   "fails": [
-   "ball r -1.5 cm through the floor at f4"
+   "ball r -1.5 cm through the floor at f4",
+   "both feet in the air while returning to idle (f8-9): step one foot at a time"
   ],
   "warns": [
    "foot r skates 14.7 cm over 0.08 s on the floor (f2-6), touchdown/lift-off length",
