@@ -15,6 +15,10 @@ OUT = unreal.Paths.project_saved_dir() + "Skid/exit_run.txt"
 PHASE_JSON = os.path.join(PROJ, "Tools", "GAS", "routing", "skid_exit_run.json")
 RUN_LOOP = "/Game/Characters/UEFN_Mannequin/Animations/Run/M_Neutral_Run_Loop_F"
 EXIT_AT, RUN_MIN, HOLD, XF = 0.42, 200.0, 0.75, 0.20   # Fable lf3 r1: hand back after one full run step (0.3 s froze f164-175)
+# Attempt 5 (Fable lf3 a4: the release at capture f193 fell in the hand-back blend, 20 frozen frames, 84 cm slide): Skid Exit Run leaves
+# AT ONCE when the stick is let go or turned away (GetAnimOwnerStickAlong < STICK_MIN), and the loop starts LOOP_LEAD frames after the
+# matched phase (the 41 cm exit drag)
+STICK_MIN, LOOP_LEAD = 0.3, 4 / 60.0
 ELAPSED = "GetInstanceCurrentStateElapsedTime"
 log = []
 def p(*a): log.append(" ".join(str(x) for x in a))
@@ -92,6 +96,7 @@ try:
         s = str(clip.get_path_name()) if hasattr(clip, "get_path_name") else str(clip)
         clip = unreal.load_asset(s.split("'")[1] if "'" in s else s)
     t0 = phase(clip)
+    t0 = (t0 + LOOP_LEAD) % unreal.load_asset(RUN_LOOP).get_play_length()
     json.dump({"clip": RUN_LOOP + "." + RUN_LOOP.split("/")[-1], "start": round(t0, 4), "blend": 0.15, "exit_at": EXIT_AT},
               open(PHASE_JSON, "w"), indent=1)
     abp = unreal.load_asset("/Game/GSTN/Animation/Locomotion/ABP_GSTN_Locomotion")
@@ -114,12 +119,14 @@ try:
             t.transition.set_editor_property("priority_order", 1)
     tr = g("AddTransition", skid, run_state)
     p("skid->run", g("SetTransitionRule", tr, rule([cond(ELAPSED, Cmp.GREATER_EQUAL, f"{EXIT_AT:.3f}", True),
-                                                     cond("GetAnimOwnerGroundSpeed", Cmp.GREATER_EQUAL, f"{RUN_MIN:.1f}")])))
+                                                     cond("GetAnimOwnerGroundSpeed", Cmp.GREATER_EQUAL, f"{RUN_MIN:.1f}"),
+                                                     cond("GetAnimOwnerStickAlong", Cmp.GREATER_EQUAL, f"{STICK_MIN:.2f}")])))
     tr.set_editor_property("crossfade_duration", 0.15)
     tr.set_editor_property("priority_order", 0)
     tr2 = g("AddTransition", run_state, cnode)
     p("run->conduit", g("SetTransitionRule", tr2, rule([cond(ELAPSED, Cmp.GREATER_EQUAL, f"{HOLD:.3f}", True)],
-                                                        [cond("GetAnimOwnerGroundSpeed", Cmp.LESS, f"{RUN_MIN - 50:.1f}")])))
+                                                        [cond("GetAnimOwnerGroundSpeed", Cmp.LESS, f"{RUN_MIN - 50:.1f}")],
+                                                        [cond("GetAnimOwnerStickAlong", Cmp.LESS, f"{STICK_MIN:.2f}")])))
     tr2.set_editor_property("crossfade_duration", XF)
     unreal.BlueprintEditorLibrary.set_node_comment(run_state, "Skid Exit Run: stick still held after the turn -> run loop at the matched "
                                                    "foot phase (Tools/GAS/skid_exit_run.py), then motion matching")

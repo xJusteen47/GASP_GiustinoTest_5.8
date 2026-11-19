@@ -147,6 +147,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
 	static float GetAnimOwnerGroundSpeed(const UAnimInstance* AnimInstance);
 
+	/** Move input along the owner's horizontal velocity, -1..1 (stick size times the cosine; the stick size when still), cached on the
+	 *  game thread each tick: Skid Exit Run leaves at once when the stick is released or turned away (skid-finish-4) */
+	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static float GetAnimOwnerStickAlong(const UAnimInstance* AnimInstance);
+
 	/**
 	 * For the RunStop states of the main locomotion ABP (owner 2026-11-18, stick let go during a run with no reverse input; FGSTN_RunStopSettings):
 	 * IsRunStopping = the stop clip plays (state "Run Stop", Sequence Evaluator: clip GetRunStopClip, explicit time GetRunStopClipTime);
@@ -294,6 +299,8 @@ private:
 
 	/** GetAnimOwnerGroundSpeed */
 	float GroundSpeed = 0.f;
+	/** GetAnimOwnerStickAlong */
+	float StickAlong = 1.f;
 	FGSTN_RunStopSettings DefaultRunStopSettings;
 	FGSTN_FastCrouchState FastCrouch;
 	FGSTN_FastCrouchSettings DefaultFastCrouchSettings;

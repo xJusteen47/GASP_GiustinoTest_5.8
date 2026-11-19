@@ -186,6 +186,14 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 	// Time since this skid began (the Skid state's re-entry guard, locomotion-finish-2): -1 when not skidding
 	SkidElapsed = IsSkidding() ? (SkidElapsed < 0.f ? 0.f : SkidElapsed + DeltaTime) : -1.f;
 	GroundSpeed = GetOwner() ? GetOwner()->GetVelocity().Size2D() : 0.f;
+	// Stick along the motion (skid-finish-4): the Skid Exit Run state leaves at once when the stick is let go or turned away
+	StickAlong = 1.f;
+	if (const FCharacterDefaultInputs* Inputs = Mover ? Mover->GetLastInputCmd().InputCollection.FindDataByType<FCharacterDefaultInputs>() : nullptr)
+	{
+		const FVector Move = Inputs->GetMoveInput_WorldSpace().GetClampedToMaxSize2D(1.0);
+		const FVector Dir = GetOwner() ? GetOwner()->GetVelocity().GetSafeNormal2D() : FVector::ZeroVector;
+		StickAlong = Dir.IsNearlyZero() ? static_cast<float>(Move.Size2D()) : static_cast<float>(FVector::DotProduct(FVector(Move.X, Move.Y, 0.0), Dir));
+	}
 }
 
 namespace GSTNRunPresentation
@@ -264,6 +272,12 @@ float UGSTN_RunPresentationComponent::GetAnimOwnerGroundSpeed(const UAnimInstanc
 {
 	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
 	return Run ? Run->GroundSpeed : 0.f;
+}
+
+float UGSTN_RunPresentationComponent::GetAnimOwnerStickAlong(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run ? Run->StickAlong : 1.f;
 }
 
 float UGSTN_RunPresentationComponent::GetAnimOwnerRunStartTime(const UAnimInstance* AnimInstance)

@@ -61,6 +61,13 @@ P0, R0 = POSER.P0, POSER.R0
 IDLE_ANKLE = {s: P0[f"foot_{s}"].copy() for s in "lr"}
 # V4 (Fable lf3): the game idle stands with the feet ~10 cm apart front to back (the GASP idle frame 0 staggers them 32 cm): end there
 IDLE_ANKLE["l"][1], IDLE_ANKLE["r"][1] = 5.0, -5.0
+# V6 (Fable V5 FAIL item 1): the clip ends on the pose the GAME idles in (MM idle + Procedural_Feet), measured in the V5 capture and
+# mapped to component space (game_idle_component.json, fit 0.07 cm on f40-60). The GASP loop frame 0 above is twisted (shoulders 24 deg,
+# hips 15 deg right); the game idle is square. Feet end on the game stance; the upper body reaches the game idle through an additive
+# that ramps in during the rise (END_* below), so every late key still plays on top of it.
+GAME_IDLE = {k: np.array(v, float) for k, v in json.load(open(os.path.join(HERE, "game_idle_component.json"))).items()}
+IDLE_ANKLE["l"][:2], IDLE_ANKLE["r"][:2] = GAME_IDLE["foot_l"][:2], GAME_IDLE["foot_r"][:2]
+END_PELVIS_YAW, END_SPINE_YAW = -15.4, -8.2      # squares hips (15.4) and shoulders (23.6) of the GASP rest (measured on the solve)
 IDLE_HAND = {s: P0[f"hand_{s}"] - P0["spine_05"] for s in "lr"}          # chest frame = component axes at idle
 BALL_OFF = {s: P0[f"foot_{s}"] - P0[f"ball_{s}"] for s in "lr"}          # ankle relative to the ball, idle orientation
 
@@ -88,13 +95,13 @@ HEAD_PITCH = [(0, 2, "lin"), (2, 2, "lin"), (STOP, 3, "io"), (STOP + 3, -3, "io"
 # stop it steps back under the body (the end pose is the idle, root at rest)
 LF_POS = [(0, [16, 42, 11.5], "lin"), (2, [16, 42, 11.5], "lin"), (7, [16.5, 40, 9.4], "io"), (22, [17, 33, 9.4], "io"),
           (STOP, [17, 31, 9.4], "io"), (STOP + 9, [17, 31, 9.4], "lin"), (STOP + 13, [18.5, 26, 15.0], "io"),
-          (STOP + 18, [20.0, 5.0, 9.4], "io")]
+          (STOP + 18, list(IDLE_ANKLE["l"]), "io")]
 LF_ROT = [(0, [14, 0, 6], "lin"), (2, [14, 0, 6], "lin"), (7, [0, 0, 6], "io"), (STOP + 9, [0, 0, 6], "lin"),
           (STOP + 13, [-8, 0, 3], "io"), (STOP + 18, [0, 0, 0], "io")]
 LF_POLE = [(0, [18, 110, 45], "lin")]
 # Back (right) foot: on its toes, dragged behind, then a quick step up beside the body
 RB_BALL = [(0, [-12, -50, 3.2], "lin"), (2, [-12, -50, 3.2], "lin"), (10, [-13, -45, 3.2], "io"), (STOP, [-13, -42, 3.2], "io")]   # V3: drags on its toes to the stop
-RF_POS = [(STOP + 5, [-14, -32, 17.0], "io"), (STOP + 9, [-14.5, -5.0, 9.4], "io")]   # V3 (Fable FAIL r2): step after the stop                 # ankle, after the toe drag
+RF_POS = [(STOP + 5, [-14, -32, 17.0], "io"), (STOP + 9, list(IDLE_ANKLE["r"]), "io")]   # V3 (Fable FAIL r2): step after the stop                 # ankle, after the toe drag
 RF_ROT = [(0, [-48, 0, -4], "lin"), (2, [-48, 0, -4], "lin"), (10, [-42, 0, -4], "io"), (STOP, [-40, 0, -4], "io"), (STOP + 5, [-18, 0, -2], "io"), (STOP + 9, [0, 0, 0], "io")]
 RF_POLE = [(0, [-16, 40, 15], "lin"), (STOP, [-16, 40, 15], "lin"), (STOP + 9, [-16, 60, 45], "io")]
 
@@ -162,7 +169,41 @@ def idle_numbers():
     return d
 
 
+END_RAMP = (STOP, STOP + 27)
+UPPER = ("pelvis_loc", "pelvis_rot", "spine", "head", "hand_l", "hand_r")
+_END_FIX = {}
+
+
+def _game_end(side):
+    """Upper-body numbers that put the solved last frame on the game idle: pelvis/trunk yaw squared, pelvis and hands moved onto the
+    measured positions (hands iterated through the solver, they are chest-frame targets)."""
+    if side in _END_FIX:
+        return _END_FIX[side]
+    base = _raw(N - 1, side)
+    end = {k: np.array(base[k], float) for k in UPPER}
+    end["pelvis_rot"] = end["pelvis_rot"] + np.array([0, 0, END_PELVIS_YAW])
+    end["spine"] = end["spine"] + np.array([0, 0, END_SPINE_YAW])
+    _END_FIX[side] = end
+    for _ in range(4):
+        P, R = solve(N - 1, side)
+        pel = GAME_IDLE["pelvis"] - P["pelvis"]
+        end["pelvis_loc"] = end["pelvis_loc"] + pel
+        for s in "lr":
+            end[f"hand_{s}"] = end[f"hand_{s}"] + (R["spine_05"] @ R0["spine_05"].T).T @ (GAME_IDLE[f"hand_{s}"] - P[f"hand_{s}"])
+    return end
+
+
 def numbers(f, side):
+    d = _raw(f, side)
+    if side in _END_FIX or f >= END_RAMP[0]:
+        end, base = _game_end(side), _raw(N - 1, side)
+        w = ease(min(max((f - END_RAMP[0]) / (END_RAMP[1] - END_RAMP[0]), 0.0), 1.0), "io")
+        for k in UPPER:
+            d[k] = d[k] + w * (end[k] - base[k])
+    return d
+
+
+def _raw(f, side):
     d = action(f)
     if side == "R":
         d = mirrored(d)
