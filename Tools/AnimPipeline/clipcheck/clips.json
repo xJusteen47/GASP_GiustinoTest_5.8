@@ -1,5 +1,5 @@
 {
- "_note": "Clips judged on their own (clip_check.py). Paths relative to this file. 'asset' rows are exported first by export_clips_ue.py into ../../../Saved/ClipCheck/export/ (desktop, editor closed). GASP_* rows = references for handoffs AND calibration: GASP's own clips must pass, or the thresholds are wrong. 'slide_ok': [[from, to, why]] frames where a floor slide is the move's design (WARN instead of FAIL). In-place rows need game_speed_cms (0 = the capsule stands still) to judge the feet.",
+ "_note": "Clips judged on their own (clip_check.py). Paths relative to this file. 'asset' rows are exported first by export_clips_ue.py into ../../../Saved/ClipCheck/export/ (desktop, editor closed). GASP_* rows = references for handoffs AND calibration: GASP's own clips must pass, or the thresholds are wrong. 'slide_ok': [[from, to, why]] frames where a floor slide is the move's design (WARN instead of FAIL). In-place rows need game_speed_cms (0 = the capsule stands still) to judge the feet. 'fix': generic fixes fix_clips_ue.py applies to the asset ('filters' = remove the pops the check fails, 'ik_feet' = ik_foot bones from the feet).",
  "clips": {
   "Dash_Ganon_r3_src": {
    "fbx": "../../../docs/notes/reviews/dash-ganon/r3/AS_GSTN_Dash_Ganon_r3.fbx",
@@ -163,7 +163,10 @@
    "end_ref": {
     "fbx": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx",
     "frame": "nearest"
-   }
+   },
+   "fix": [
+    "filters"
+   ]
   },
   "RunStart_Frantic": {
    "asset": "/Game/GSTN/Animation/RunStart/AS_GSTN_RunStart_Frantic",
@@ -179,7 +182,10 @@
    "end_ref": {
     "fbx": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx",
     "frame": "nearest"
-   }
+   },
+   "fix": [
+    "filters"
+   ]
   },
   "RunStop_L": {
    "asset": "AS_RunStop_Ganon_L_V5",
@@ -194,7 +200,18 @@
    "end_ref": {
     "fbx": "../../../Saved/ClipCheck/export/GASP_RelaxedIdle.fbx",
     "frame": "first"
-   }
+   },
+   "fix": [
+    "filters",
+    "ik_feet"
+   ],
+   "slide_ok": [
+    [
+     1,
+     30,
+     "run stop identity trait 2: both feet slide to a stop before the torso rises (runstop-v6 review_fable)"
+    ]
+   ]
   },
   "RunStop_R": {
    "asset": "AS_RunStop_Ganon_R_V5",
@@ -209,7 +226,18 @@
    "end_ref": {
     "fbx": "../../../Saved/ClipCheck/export/GASP_RelaxedIdle.fbx",
     "frame": "first"
-   }
+   },
+   "fix": [
+    "filters",
+    "ik_feet"
+   ],
+   "slide_ok": [
+    [
+     1,
+     30,
+     "run stop identity trait 2: both feet slide to a stop before the torso rises (runstop-v6 review_fable)"
+    ]
+   ]
   },
   "Skid_180": {
    "asset": "SS_180_Turn_Root180",
