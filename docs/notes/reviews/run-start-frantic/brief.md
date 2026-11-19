@@ -59,3 +59,7 @@ Estimate: authoring 8-10 $, integration 4 $, capture+review 3-4 $.
   acceleration x8 for 6 frames (BoostDash, stage 2 top speed in ~4 frames). Anim: GetAnimOwnerBoostDashTime for a DASH state.
 - Dash clip = NEW move, own brief later (identity traits to agree): Ganon-style initial dash, one explosive lunge from the first frame,
   no stamp; until it exists the dash state plays the normal run (no clip blocks the code).
+- Dash ledge rule (owner 00:09Z, scope: L3 dash only): if the dash ends just past a platform edge the character does NOT fall, unless the
+  player keeps running. NOT in 024f787f (not cheap: the run stage code has no floor probe). For the dash move thread: reuse
+  UGSTN_CombatSimComponent::ProbeFloorAhead + FGSTN_LayeredMove_LedgeGuard (Ledge Check track, ujco9r) during the dash window; stop
+  only while the stick is not still pushed toward the edge after the window. Open: dash window length (today the burst is 6 frames).
