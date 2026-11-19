@@ -1,5 +1,9 @@
 # Rendere le skill di review riusabili (piano, 2026-11-19)
 
+**Stato 2026-11-19: passi 1-4 fatti** (branch `claude/project-thread-hdoy7s`, handover
+`docs/notes/handovers/skills-split.md`). Nucleo in `skills-public/`, strati in `.claude/skills/gstn-*/project.md`.
+Resta il passo 5 (pubblicazione: repo, nome, licenza = OK dell'owner).
+
 Owner 11-19: "possiamo pubblicarle su GitHub e renderle riusabili in altri contesti". **Nulla è pubblicato**: la
 pubblicazione è un'azione verso l'esterno e aspetta l'OK esplicito dell'owner. Questo file dice cosa è generico, cosa è
 del progetto e come separarli. Ambito: `gstn-anim-reviewer`, `gstn-anim-executor`, `gstn-vfx-reviewer`,
