@@ -160,6 +160,13 @@ AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after
 # 'follow' = the review cameras move with the pawn at the start yaw. Select with PIE_CAPTURE_SEQUENCES (the names below), and
 # PIE_CAPTURE_VIEWS=az90,az0,game keeps fewer views (one grid per view, project rule 4)
 MOVE_SEQUENCES = [
+    # Slopes (owner 2026-11-19): with PIE_CAPTURE_PARK=Z7:1 (foot of the 15 deg hill) or Z7_top:1 (its plateau). The pawn spawns facing +X;
+    # the hills rise toward -X, so (0, -1) runs uphill from the foot and (0, 1) runs downhill from the plateau
+    {'name': 'mv_slope_up_stop', 'taps': [], 'frames': 240, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, -1, 0)), (120, None)]},
+    {'name': 'mv_slope_up_skid', 'taps': [], 'frames': 240, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, -1, 0)), (100, (0, 1, 0)), (140, None)]},
+    {'name': 'mv_slope_down_stop', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (75, None)]},
+    {'name': 'mv_slope_down_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (55, (0, -1, 0)), (95, None)]},
+    {'name': 'mv_slope_idle', 'taps': [], 'frames': 90, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': []},
     # Run stop at the BASE run stage (owner 2026-11-18, Ganondorf-style stop): stick let go at stage 1, 100 frames to see brake + settle into idle
     {'name': 'mv_run_stop_base', 'taps': [], 'frames': 135, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (35, None)]},
     # run stop idle (locomotion-finish-4): 150+ frames of rest after the clip, to see which idle the game settles in (combat.anim)
@@ -488,6 +495,9 @@ def _tick(_dt):
             view = g._view(0, h._key(0)) or {}
             _log(f'loadout: {json.dumps(view.get("loadout"))[:300]}')
             _log(f'review stage: {_clear_stage()}')
+            if os.environ.get('PIE_CAPTURE_PARK'):   # 'Z7:1' = test_hub.park(host, zone, slot): slope captures
+                _z, _, _slot = os.environ['PIE_CAPTURE_PARK'].partition(':')
+                _log(f'park host: {h.park(0, _z, int(_slot) if _slot else None)}')
             st.update(phase='cameras', t=now)
         elif phase == 'cameras':
             if _make_cameras() and _make_lights():
