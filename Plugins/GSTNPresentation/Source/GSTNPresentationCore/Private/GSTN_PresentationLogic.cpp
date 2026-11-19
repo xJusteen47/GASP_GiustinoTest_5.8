@@ -333,6 +333,12 @@ void FGSTN_PresentationDeriver::Step(const FGSTN_PresentationSnapshot& C, const 
 		}
 	}
 
+	// The run stop clip begins: the front foot plants and slides while the run brakes (locomotion-finish-2)
+	if (C.bRunStopping && !P.bRunStopping && C.bGrounded)
+	{
+		Emit(Out, RunStopPlant, F, FMath::Max(HNow.Size(), HBefore.Size()), C.Location, HBefore.IsNearlyZero() ? HNow.GetSafeNormal() : HBefore.GetSafeNormal());
+	}
+
 	// Any drop of the stage, in the air too: the end of a sustained stage effect (sprint lines) must never be missed
 	if (C.RunStage < P.RunStage)
 	{

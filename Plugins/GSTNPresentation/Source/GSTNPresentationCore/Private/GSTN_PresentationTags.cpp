@@ -13,7 +13,8 @@ namespace GSTNPresentationTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(RunStart, "Presentation.Event.RunStart", "The run starts from below stage 1. Magnitude: horizontal speed (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(StageUp, "Presentation.Event.StageUp", "The run goes up a stage. Magnitude: the new stage (2, 3...)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(StageDown, "Presentation.Event.StageDown", "The run goes down a stage, to 0 included (ends a sustained effect such as sprint lines). Magnitude: the new stage");
-	UE_DEFINE_GAMEPLAY_TAG_COMMENT(StopRelease, "Presentation.Event.StopRelease", "The run ends without a skid (stick released). Magnitude: horizontal speed before (cm/s)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(RunStopPlant, "Presentation.Event.RunStopPlant", "The run stop clip begins: the front foot plants and slides. Magnitude: horizontal speed (cm/s)");
+UE_DEFINE_GAMEPLAY_TAG_COMMENT(StopRelease, "Presentation.Event.StopRelease", "The run ends without a skid (stick released). Magnitude: horizontal speed before (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Skid, "Presentation.Event.Skid", "Run skid phases");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Skid_Enter, "Presentation.Event.Skid.Enter", "Skid starts. Magnitude: sliding speed (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Skid_Loop, "Presentation.Event.Skid.Loop", "Skid reaches its sliding loop. Magnitude: sliding speed (cm/s)");

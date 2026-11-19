@@ -91,6 +91,10 @@ bool UGSTN_CombatPresentationEvents::ReadSnapshot(const AActor* Owner, FGSTN_Pre
 		Out.Up = Mover->GetUpDirection();
 		Out.SkidPhase = ToPresentation(UGSTN_RunPresentationComponent::ReadFootSlide(Mover->GetSyncState(), StepSeconds).SkidPhase);
 	}
+	if (const UGSTN_RunPresentationComponent* Run = Owner->FindComponentByClass<UGSTN_RunPresentationComponent>())
+	{
+		Out.bRunStopping = Run->IsRunStopping();
+	}
 	// The snapshot counts stages from 1 with 0 = not running; the simulation's stage is 0-based and stays 0 at rest. Running = stages on
 	// and faster than RunMinSpeed (in the air too: a jump keeps the sprint lines) (polish M2: with the raw index RunStart fired only when sprint 1 began, ~40 frames late)
 	const FVector Horizontal = Out.Velocity - Out.Up * FVector::DotProduct(Out.Velocity, Out.Up);

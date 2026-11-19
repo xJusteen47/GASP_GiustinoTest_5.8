@@ -60,6 +60,10 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationSnapshot
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
 	EGSTN_PresentationSkidPhase SkidPhase = EGSTN_PresentationSkidPhase::None;
 
+	/** The run stop clip plays (stick let go during a run, no reverse): its first frame is the front foot's plant */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
+	bool bRunStopping = false;
+
 	/** Reacting to a hit (hitstun or tumble): landings become bounces, wall contacts become wall bounces */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Snapshot")
 	bool bReacting = false;
