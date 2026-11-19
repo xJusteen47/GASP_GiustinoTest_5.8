@@ -70,6 +70,8 @@ def build_puff(tex, scene_lit=False):
         # Unreal Assistant (Saved/VfxV3/a2r6/assistant_reply.md): Volumetric Directional reads the per-pixel normal at the volume's cost;
         # Surface TranslucencyVolume adds reflection captures, wasted on dust (first r6 capture used it)
         mat.set_editor_property("translucency_lighting_mode", U.TranslucencyLightingMode.TLM_VOLUMETRIC_DIRECTIONAL)
+        # REVIEW-A2r6: the sun side barely showed (one volume cell per puff, ambient dominates): stronger directional term
+        mat.set_editor_property("translucency_directional_lighting_intensity", 2.5)
     t = _node(mat, U.MaterialExpressionParticleRelativeTime, -3200, 0)
     one_c = _const(mat, 1, -3200, 400)
     size = V3._life_size(mat, t, one_c, -3000, 100)
@@ -262,8 +264,13 @@ LOOKS = {
 # same r5 size/fade; only the brightness terms are retuned, because the scene light now sets the value: Brightness/DarkBrightness scale
 # the albedo, EmissiveLift adds the share the translucency volume does not deliver
 LIT_LOOKS = {
-    "DustLit": dict(LOOKS["SmokeReal"], Brightness=0.9, DarkBrightness=1.4, EmissiveLift=0.15),
-    "DustLitHaze": dict(LOOKS["SmokeHaze"], Brightness=0.9, DarkBrightness=1.4, EmissiveLift=0.15),
+    # r6c (REVIEW-A2r6): dark value 2.35-2.75x floor vs r5d 2.2-2.3 -> DarkBrightness 1.4 -> 1.15; the sun side did not show (L/R 1.04-1.12,
+    # the painted side): flat albedo (OccStrength 0.1) so only the light shades; plain alpha fade from 55 % (FadeCurve 1) so the late
+    # skirt fades instead of eroding (35 % of its area left at f184); FadeDistance 30 (hard edge at the foot line on light)
+    "DustLit": dict(LOOKS["SmokeReal"], Brightness=0.9, DarkBrightness=1.15, EmissiveLift=0.15, OccStrength=0.1, FadeStart=0.55,
+                    FadeCurve=1.0, FadeDistance=30.0),
+    "DustLitHaze": dict(LOOKS["SmokeHaze"], Brightness=0.9, DarkBrightness=1.15, EmissiveLift=0.15, OccStrength=0.1, FadeStart=0.55,
+                        FadeDistance=30.0),
     # Solid grit (r6 first capture: the self-lit PuffClump on dark leaned to snow and read as white popcorn): lit, darker than the floor
     # (no snow lean, low albedo), crisp, nearly opaque, fades only at the very end (a solid; owner: solids may shrink)
     "GritLit": dict(LOOKS["PuffClump"], DarkSnow=0.0, Brightness=0.45, DarkBrightness=0.6, EmissiveLift=0.05, OccStrength=0.8,

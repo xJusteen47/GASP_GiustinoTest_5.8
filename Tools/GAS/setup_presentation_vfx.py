@@ -481,14 +481,19 @@ DUST_SHAPES = {
     # split in two staggered bursts. Main: 13 puffs of 16-40 cm, born anywhere on the outer third of the disc (Disc Coverage), so the
     # spacing and reach vary. Late: 1-2 frames after, 5 bigger slower lumps (30-50 cm, still under the r3 50 cm cap) closer in, so the
     # band has a few big masses and many small ones. Lifetimes overlap less (0.36-0.48) so they do not all vanish in the same frame
-    "land_shockwave_v": dict(shape="ring", ring=(13, 8), origin=(0, 0, 6.5), count=13, life=(0.36, 0.48), size=(16, 40), speed=950,
+    # r6c (REVIEW-A2r6 item 2: lifetimes spread to 0.50 s, the skirt eroded piece by piece): every layer ends within ~2 frames, 0.42-0.45 s
+    "land_shockwave_v": dict(shape="ring", ring=(13, 8), origin=(0, 0, 6.5), count=13, life=(0.42, 0.45), size=(16, 40), speed=950,
                              drag=22.0, curl=(20.0, 0.02), gravity=3.0, disc=0.35),
-    "land_lumps": dict(shape="ring", ring=(10, 9), origin=(0, 0, 7.0), count=5, life=(0.40, 0.50), size=(30, 50), speed=620, drag=20.0,
+    "land_lumps": dict(shape="ring", ring=(10, 9), origin=(0, 0, 7.0), count=5, life=(0.40, 0.42), size=(30, 50), speed=620, drag=20.0,
                        curl=(25.0, 0.025), gravity=3.0, disc=0.5, spawn_time=0.025),
     # Solid grit (owner 2026-11-19: "never shrinks" is for smoke/dust only, solids may shrink): small pieces thrown up and out, ballistic,
     # gone about when they fall back to the floor. r6 first capture: at 300 cm/s / -1300 they hung at knee height for ~10 frames (read
     # as floating snow): faster and heavier, apex ~0.15 s / ~25 cm, back on the floor at ~0.3 s, thrown further out
-    "land_grit": dict(shape="cone", cone=((0, 0, 1), 60), count=9, life=(0.26, 0.32), size=(3, 8), speed=440, drag=2.0, gravity=-2200.0),
+    # r6c (REVIEW-A2r6 item 1: the up-cone threw them near-vertical to the knee, they hung and faded in the air): radial from the centre,
+    # pitched ~35 deg up (push origin 7 cm under a 10 cm ring), 450 cm/s, gravity -2000: back on the floor at ~0.3 s about 40-60 cm out;
+    # past the floor they are hidden by it (translucent, depth tested), which is the floor kill
+    "land_grit": dict(shape="ring", ring=(10, 7), origin=(0, 0, 0.0), count=12, life=(0.32, 0.38), size=(2, 5), speed=450, drag=1.5,
+                      gravity=-2000.0),
     # Example for later moves (not wired yet): directional dust behind the feet, thrown back and a little out
     "dash_back": dict(shape="cone", cone=((-1, 0, 0.15), 35), count=8, life=(0.35, 0.45), size=(24, 36), speed=320, drag=6.0,
                       curl=(20.0, 0.02), gravity=3.0),
@@ -510,12 +515,15 @@ def _dust(system, name, preset, look="SmokeReal", **override):
 # light, radius-bounded (exponent falloff), CPU sim: cheap on a Switch 2-class GPU. The template's ScaleColor stays on: its alpha curve
 # fades the light (the renderer's alpha scales brightness). Colour/brightness = User.FlashColor (linear, the light's intensity)
 # r6 first capture: (9, 6.6, 4.4) at 30 cm up only tinted the inner thighs, the floor did not change: x3 and lower
-FLASH_COLOR = unreal.LinearColor(27.0, 20.0, 13.0, 1.0)
+# r6c (REVIEW-A2r6 item 4: dark floor peak 1.73x one frame late, light floor 1.02x): x2, radius 300, 25 cm up, and the template's colour
+# curve off so the light is at full strength on its spawn frame (3 frames at full, then off)
+FLASH_COLOR = unreal.LinearColor(54.0, 40.0, 26.0, 1.0)
 
 
-def _flash(system, name, radius=220.0, life=0.07, offset=(0, 0, 18), exponent=2.0):
+def _flash(system, name, radius=300.0, life=0.05, offset=(0, 0, 25), exponent=2.0):
     L.add_user_color(system, "FlashColor", FLASH_COLOR)
     e = Emitter(system, "OmnidirectionalBurst", name).settings(True)
+    e.off("ParticleUpdate", "ScaleColor")
     e.burst(1).particle((life, life), (1, 1))
     e.link("ParticleSpawn", "InitializeParticle", "Color", "User.FlashColor")
     e.sphere(0.01, offset=offset).radial(0.0)
@@ -558,7 +566,7 @@ def land_ring():
         real, haze = ("DustLit", "DustLitHaze") if os.environ.get("GSTN_DUST_LIT", "1") == "1" else ("SmokeReal", "SmokeHaze")
         _dust(s, "Skirt", "land_shockwave_v", look=real)
         _dust(s, "Lumps", "land_lumps", look=real)
-        _dust(s, "Wisps", "land_haze", look=haze)
+        _dust(s, "Wisps", "land_haze", look=haze, life=(0.40, 0.44))  # r6c: ends with the skirt
         _dust(s, "Clumps", "land_grit", look="GritLit" if real == "DustLit" else "PuffClump")
         _flash(s, "Flash")
         disc = _sprites(s, "Contact")
