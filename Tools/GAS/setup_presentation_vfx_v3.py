@@ -176,7 +176,19 @@ def build_smoke_full(smoke):
                 _unary(mat, unreal.MaterialExpressionSaturate,
                        _op(mat, unreal.MaterialExpressionDivide, _component(mat, tex, "R", -100, 470), _scalar(mat, "RimWidth", 0.35, -100, 540),
                            50, 480), 180, 480), 300, 400)
-    base = _op(mat, unreal.MaterialExpressionMultiply, _op(mat, unreal.MaterialExpressionMultiply, pcol, shade, 250, 150), rim, 330, 200)
+    # hd1 DK review: on a near-white floor the puff was white on white (owner: "non si vedono"). The shaded side gets a cool tint, like
+    # snow in shadow (a neutral grey read as soot in r5), on bright floors only: tint = lerp(1, ShadeTint, bright), applied to the shade
+    # hd1 attempt 1 review: on the dark floor the dust read as dry earth (warm tan): there the tint is at half strength and the colour
+    # leans to snow, lerp(surface, SnowColor, DarkSnow), fading out from G 0.4 to 0.7 like the *Light twins
+    half_c = _node(mat, unreal.MaterialExpressionConstant, -450, 1050, r=0.5)
+    tint_k = _lerp(mat, half_c, one_c, bright, -250, 1050)
+    tint = _lerp(mat, one_c, _vector(mat, "ShadeTint", unreal.LinearColor(1, 1, 1, 1), -300, 1000), tint_k, -100, 1000)
+    snow_k = _op(mat, unreal.MaterialExpressionMultiply, _scalar(mat, "DarkSnow", 0.0, -450, 1150),
+                 _op(mat, unreal.MaterialExpressionSubtract, one_c, bright, -300, 1200), -200, 1150)
+    pcol_s = _lerp(mat, pcol, _vector(mat, "SnowColor", unreal.LinearColor(0.85, 0.88, 0.95, 1), -300, 1250), snow_k, -50, 1200)
+    shade_t = _lerp(mat, _op(mat, unreal.MaterialExpressionMultiply, shade, tint, 150, 1000), shade,
+                    _component(mat, tex, "G", 150, 1100), 250, 1000)
+    base = _op(mat, unreal.MaterialExpressionMultiply, _op(mat, unreal.MaterialExpressionMultiply, pcol_s, shade_t, 250, 150), rim, 330, 200)
     lift = _eye_inverse(mat, _op(mat, unreal.MaterialExpressionMultiply, base, _by_floor("EmissiveLift", 0.12, 100, 300), 400, 250),
                         550, 250)
 
@@ -274,20 +286,22 @@ SMOKE_LOOKS = {
     # floor (the lit translucent puff gets far less light than the floor): EmissiveLift 0.5 (eye-adapted, so ~half the surface colour on
     # screen whatever the exposure, still < 1: no bloom), ShadeMin 0.8, rim 0.8 keeps a soft edge. On-screen opacity was ~0.3-0.4 on the
     # dark floor -> OpacityMax 1.0 (the particle alpha and the erosion keep it below that)
-    "SmokeDust": dict(OpacityMax=1.0, ShadeMin=0.8, StartScale=0.45, GrowEnd=0.75, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.2,
-                      FadeDistance=35.0, EmissiveLift=0.5, Roughness=0.9, RimShade=0.72, RimWidth=0.35,
-                       ShadeMinLight=0.8, RimShadeLight=0.72, EmissiveLiftLight=0.5),
+    # hd1 DK review: white on white on the light floor -> a cool shaded underside and rim there (ShadeTint, *Light values), denser longer
+    # hd1 attempt 1 review, dark floor: brighter (lift 0.8), a little shaded (0.65), towards snow (DarkSnow 0.4)
+    "SmokeDust": dict(DarkSnow=0.4, OpacityMax=1.0, ShadeMin=0.65, StartScale=0.45, GrowEnd=0.75, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.3,
+                      FadeDistance=35.0, EmissiveLift=0.8, Roughness=0.9, RimShade=0.72, RimWidth=0.45,
+                       ShadeMinLight=0.62, RimShadeLight=0.60, EmissiveLiftLight=0.5, ShadeTint=(0.78, 0.86, 1.0)),
     # Impact / bounce cloud lobes (r7 Fable: one flat blob): lower ShadeMin and a wider, darker rim give each lobe a lit top and a shaded
     # underside so the overlapping lobes separate; OpacityMax 0.8 (dark v119 read as an opaque sticker). Lift 0.4: on the light floor the
     # extra shading must not read as soot (r5: ShadeMin 0.4 did)
-    "SmokeCloud": dict(OpacityMax=0.8, ShadeMin=0.62, StartScale=0.5, GrowEnd=0.7, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.25,
-                       FadeDistance=35.0, EmissiveLift=0.4, Roughness=0.9, RimShade=0.68, RimWidth=0.5,
+    "SmokeCloud": dict(DarkSnow=0.4, OpacityMax=1.0, ShadeMin=0.62, StartScale=0.5, GrowEnd=0.7, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.25,
+                       FadeDistance=35.0, EmissiveLift=0.7, Roughness=0.9, RimShade=0.68, RimWidth=0.5,
                        # r8 Fable: grey on the white floor -> paler on bright floors only
-                       ShadeMinLight=0.78, RimShadeLight=0.76, EmissiveLiftLight=0.55),
+                       ShadeMinLight=0.60, RimShadeLight=0.62, EmissiveLiftLight=0.55, ShadeTint=(0.78, 0.86, 1.0)),
     # Locomotion dust: thinner, quicker
-    "SmokeLight": dict(OpacityMax=0.9, ShadeMin=0.8, StartScale=0.6, GrowEnd=0.8, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.1,
-                       FadeDistance=25.0, EmissiveLift=0.5, Roughness=0.9, RimShade=0.8, RimWidth=0.35,
-                       ShadeMinLight=0.8, RimShadeLight=0.8, EmissiveLiftLight=0.5),
+    "SmokeLight": dict(DarkSnow=0.4, OpacityMax=1.0, ShadeMin=0.7, StartScale=0.6, GrowEnd=0.8, ShrinkStart=1.0, EndScale=1.0, ErodeStart=0.2,
+                       FadeDistance=25.0, EmissiveLift=0.75, Roughness=0.9, RimShade=0.8, RimWidth=0.35,
+                       ShadeMinLight=0.66, RimShadeLight=0.64, EmissiveLiftLight=0.5, ShadeTint=(0.78, 0.86, 1.0)),
 }
 
 
@@ -314,7 +328,10 @@ def build_instances(flash, smoke, shadow):
     for name, look in SMOKE_LOOKS.items():
         mi = _instance(name, smoke)
         for key, value in look.items():
-            MEL.set_material_instance_scalar_parameter_value(mi, key, float(value))
+            if key in ("ShadeTint", "SnowColor"):
+                MEL.set_material_instance_vector_parameter_value(mi, key, unreal.LinearColor(*value, 1.0))
+            else:
+                MEL.set_material_instance_scalar_parameter_value(mi, key, float(value))
         MEL.update_material_instance(mi)
         EAL.save_loaded_asset(mi)
         made.append(name)

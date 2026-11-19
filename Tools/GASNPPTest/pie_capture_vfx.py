@@ -30,10 +30,15 @@ KIT = os.environ.get('PIE_CAPTURE_KIT', 'KIT_Test_Hits')
 OUT = os.environ.get('PIE_CAPTURE_OUT') or os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()),
                                                         'PolishM2', f'vfx{VFX}')
 SIZE = int(os.environ.get('PIE_CAPTURE_SIZE', '480'))
+# Owner videos (2026-11-19, phone): PIE_CAPTURE_W/H give a wide render target (e.g. 1920x1080) instead of SIZE x SIZE
+WIDTH = int(os.environ.get('PIE_CAPTURE_W') or SIZE)
+HEIGHT = int(os.environ.get('PIE_CAPTURE_H') or SIZE)
 # 'side': on the pawn's right at the sequence start, follows the pawn (movement), the victim (follow_victim) or frames pawn + dummy (hits);
 # 'game': the player's camera; 'close': the player's camera at CLOSE x its field of view (review r1: the fighter was ~45 px high in 'game')
 VIEWS = ['side', 'game', 'close']
-CLOSE = 0.5
+CLOSE = float(os.environ.get('PIE_CLOSE', '0.5'))
+# PIE_EXPORT_VIEWS=game,close: render and save only these views (1080p frames are slow to export)
+EXPORT = os.environ.get('PIE_EXPORT_VIEWS', ','.join(VIEWS)).split(',')
 CUBE = '/Engine/BasicShapes/Cube'
 ELEVATION, FOV = 12.0, 50.0
 PRE = 20
@@ -125,7 +130,7 @@ def _make_cameras():
     st['cams'] = found[:len(VIEWS)]
     for cam in st['cams']:
         comp = cam.capture_component2d
-        rt = unreal.RenderingLibrary.create_render_target2d(_world(), SIZE, SIZE, unreal.TextureRenderTargetFormat.RTF_RGBA8)
+        rt = unreal.RenderingLibrary.create_render_target2d(_world(), WIDTH, HEIGHT, unreal.TextureRenderTargetFormat.RTF_RGBA8)
         st['rts'].append(rt)
         for prop, value in (('capture_every_frame', False), ('capture_on_movement', False), ('always_persist_rendering_state', True),
                             ('fov_angle', FOV), ('capture_source', unreal.SceneCaptureSource.SCS_FINAL_COLOR_LDR), ('texture_target', rt)):
@@ -315,6 +320,8 @@ def _shoot(seq, frame):
         cam.set_actor_location_and_rotation(manager.get_camera_location(), manager.get_camera_rotation(), False, False)
         cam.capture_component2d.set_editor_property('fov_angle', manager.get_fov_angle() * scale)
     for name, cam, rt in zip(VIEWS, st['cams'], st['rts']):
+        if name not in EXPORT:
+            continue
         cam.capture_component2d.capture_scene()
         folder = os.path.join(OUT, seq['name'], name)
         os.makedirs(folder, exist_ok=True)

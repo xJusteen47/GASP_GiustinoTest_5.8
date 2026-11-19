@@ -366,9 +366,11 @@ def run_start_dust():
     s = _system("NS_GSTN_RunStartDust")
     if s:
         _surface(s)
-        _smoke(s, "Puffs", 5, (0.45, 0.58), (110, 160), 150, 6.0, look="SmokeLight", cone=((-1, 0, 0.35), 55), sphere=(10, (1, 1, 0.3), (-6, 0, 14)),
+        # hd1 DK review (docs/notes/reviews/vfx-v3/hd1/REVIEW-DK.md): x1.4 count, bigger, faster, grains readable on a phone
+        # hd1 attempt 1: still invisible: the runner's body hid dust kicked straight back -> wider, flatter, faster, longer
+        _smoke(s, "Puffs", 9, (0.55, 0.70), (130, 180), 320, 6.0, look="SmokeLight", cone=((-1, 0, 0.15), 70), sphere=(10, (1, 1, 0.3), (-6, 0, 14)),
                rise=60.0)
-        _grains(s, "Grains", 4, (0.35, 0.45), (5, 8), 420, ((-1, 0, 0.8), 45))  # r5: 3-5 cm grains invisible on the dark floor
+        _grains(s, "Grains", 8, (0.35, 0.45), (12, 18), 420, ((-1, 0, 0.8), 45))  # r5: 3-5 cm grains invisible on the dark floor
     return s
 
 
@@ -381,15 +383,15 @@ def skid_dust():
         # RunStart v146). Spawn per unit never fired on the skid, so: a burst of 3 at Skid.Enter (dust on frame 1) and a steady rate while
         # the cue lives (it stops on Skid.Exit; a skid is ~15 frames, so the rate cannot pile up)
         kick = _sprites(s, "Kick", local=False)
-        kick.burst(3).particle((0.45, 0.55), (100, 140), rotation=True).sized()
+        kick.burst(6).particle((0.45, 0.55), (140, 190), rotation=True).sized()  # hd1 DK review (docs/notes/reviews/vfx-v3/hd1/REVIEW-DK.md):a wide low wedge, not one puff
         kick.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")
-        kick.sphere(10, (1, 1, 0.3), (0, 0, 14)).cone((0, 0, 1), 50, 120).drag(5.0).material("SmokeLight")
+        kick.sphere(35, (0.5, 1, 0.3), (0, 0, 14)).cone((0, 0, 1), 60, 200).drag(5.0).material("SmokeLight")
         e = _sprites(s, "Trail", "Fountain", local=False)
-        e.set("EmitterUpdate", "SpawnRate", "SpawnRate", 18.0)
-        e.particle((0.45, 0.55), (95, 135), rotation=True).sized()  # r4 Fable: x3, the skid row was invisible
+        e.set("EmitterUpdate", "SpawnRate", "SpawnRate", 30.0)
+        e.particle((0.45, 0.55), (120, 160), rotation=True).sized()  # r4 Fable: x3, the skid row was invisible
         e.link("ParticleSpawn", "InitializeParticle", "Color", "User.SurfaceColor")
-        e.sphere(4, (1, 1, 0.3), (0, 0, 14)).cone((0, 0, 1), 35, 70).drag(5.0).material("SmokeLight")
-        _grains(s, "Grains", 4, (0.35, 0.45), (5, 8), 380, ((0, 0, 1), 60))
+        e.sphere(30, (0.5, 1, 0.3), (0, 0, 14)).cone((0, 0, 1), 35, 70).drag(5.0).material("SmokeLight")
+        _grains(s, "Grains", 8, (0.35, 0.45), (12, 18), 380, ((0, 0, 1), 60))
     return s
 
 
@@ -398,7 +400,8 @@ def jump_puff():
     s = _system("NS_GSTN_JumpPuff")
     if s:
         _surface(s)
-        _smoke(s, "Puffs", 3, (0.30, 0.36), (30, 40), 260, 7.0, look="SmokeLight", ring=(18, 8), origin=(0, 0, -6))
+        # hd1 DK review (docs/notes/reviews/vfx-v3/hd1/REVIEW-DK.md): invisible at 3 x 30-40 cm
+        _smoke(s, "Puffs", 5, (0.30, 0.36), (70, 100), 260, 7.0, look="SmokeLight", ring=(18, 8), origin=(0, 0, -6))
     return s
 
 
@@ -408,8 +411,9 @@ def land_ring():
     s = _system("NS_GSTN_LandRing")
     if s:
         _surface(s)
-        _smoke(s, "Puffs", 6, (0.50, 0.62), (110, 150), 260, 6.0, ring=(30, 12), origin=(0, 0, -12), rise=40.0)
-        _grains(s, "Grains", 6, (0.40, 0.55), (5, 8), 520, ((0, 0, 1), 70), gravity=-900.0)
+        # hd1 DK review (docs/notes/reviews/vfx-v3/hd1/REVIEW-DK.md): a faint smudge at knee height: DK's ring is ~2x the character's width and flat on the floor
+        _smoke(s, "Puffs", 10, (0.50, 0.62), (150, 210), 380, 6.0, ring=(45, 12), origin=(0, 0, -4), rise=15.0)
+        _grains(s, "Grains", 12, (0.40, 0.55), (12, 20), 420, ((0, 0, 1), 50), gravity=-900.0)  # attempt 1: drifted at head height
     return s
 
 
@@ -449,21 +453,23 @@ def hit_spark():
         # r5 Fable: the strong star stayed near full size v35-v44 and hid both torsos: the hitstop slows the whole system to 0.15 after 2
         # free frames (owner 2A), so a 5-frame life became ~12 frames. 2.5 frames of life: 100 % on frame 1, ~15 % by frame 4, gone by
         # frame 6; the streaks and sparks carry the rest of the hitstop
-        star.burst(1).particle((0.042, 0.042), (210, 210), rotation=True).sized().sphere(0.01, offset=(10, 0, 0)).radial(0.0)
-        star.toward_camera(60.0).material("FlashStar")
+        star.burst(1).particle((0.042, 0.042), (240, 240), rotation=True).sized().sphere(0.01, offset=(10, 0, 0)).radial(0.0)
+        star.toward_camera(90.0).material("FlashStar")
         streaks = _sprites(s, "Streaks")
         streaks.burst(8).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.Count")
-        streaks.particle((0.13, 0.17), None, non_uniform=(12.0, 85.0)).sized()
-        streaks.sphere(10, offset=(5, 0, 0)).cone((1, 0, 0), 150, 2200).drag(14.0)
-        streaks.toward_camera(45.0).material("FlashStreak", velocity_aligned=True)
+        # hd1 DK review (docs/notes/reviews/vfx-v3/hd1/REVIEW-DK.md): thin 30 cm streaks hidden behind the attacker: longer, wider, a fan tilted up, nearer the camera
+        streaks.particle((0.18, 0.22), None, non_uniform=(16.0, 130.0)).sized()
+        streaks.sphere(10, offset=(5, 0, 0)).cone((1, 0, 0.5), 150, 2200).drag(14.0)
+        streaks.toward_camera(90.0).material("FlashStreak", velocity_aligned=True)
         sparks = _sprites(s, "Sparks")
-        sparks.burst(6).particle((0.22, 0.32), (7, 11), rotation=True).sized()
+        sparks.burst(10).particle((0.22, 0.32), (12, 18), rotation=True).sized()
         sparks.sphere(8, offset=(5, 0, 0)).cone((1, 0, 0.3), 170, 1300).drag(6.0).gravity(-900.0)
-        sparks.toward_camera(45.0).material("FlashSpark")
+        sparks.toward_camera(90.0).material("FlashSpark")
         debris = Emitter(s, "OmnidirectionalBurst", "Debris").settings(True)
         debris.off("ParticleUpdate", "ScaleColor")
         debris.burst(3).link("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Count", "User.StrongCount")
-        debris.mesh_particle((0.75, 0.90), (10, 13)).sphere(4, offset=(5, 0, 0)).cone((1, 0, 0.6), 110, 900).drag(2.5)
+        # hd1 DK review (docs/notes/reviews/vfx-v3/hd1/REVIEW-DK.md): 10-13 cm gems were specks; big solid chunks are the layer DK relies on most
+        debris.mesh_particle((1.0, 1.2), (22, 35)).sphere(4, offset=(5, 0, 0)).cone((1, 0, 0.6), 110, 1100).drag(2.5)
         debris.gravity(-2600).bounce()
         debris.link("ParticleSpawn", "InitializeParticle", "Color", "User.AccentTint")
         debris.mesh("Gem", "Debris", facing="velocity", shadow="Debris")
@@ -480,7 +486,7 @@ def impact():
         # r7 Fable: 7 equal puffs born together on one disc averaged into one flat blob (dark v119); dark v76, 4-5 separate lumps, is the
         # target. Billows = a few big lobes first, then smaller ones born 2-3 and 5 frames later, further out and higher, each with its own
         # shading (SmokeCloud: darker underside and rim) so overlapping lobes separate. Sizes 100-240 cm, 7 lobes in all
-        core = _smoke(s, "Core", 3, (0.65, 0.80), (200, 240), 300, 6.0, look="SmokeCloud", cone=((1, 0, 0), 70),
+        core = _smoke(s, "Core", 4, (0.65, 0.80), (200, 240), 300, 6.0, look="SmokeCloud", cone=((1, 0, 0), 70),
                       sphere=(40, (0.05, 1.4, 1.0), (20, 0, 0)), rise=25.0)
         lobes = _smoke(s, "Lobes", 2, (0.55, 0.70), (140, 180), 520, 6.0, look="SmokeCloud", cone=((1, 0, 0), 85),
                        sphere=(90, (0.05, 1.8, 1.3), (35, 0, 0)), rise=45.0)
@@ -488,7 +494,7 @@ def impact():
         tops = _smoke(s, "Tops", 2, (0.45, 0.60), (100, 130), 620, 6.0, look="SmokeCloud", cone=((1, 0, 0), 60),
                       sphere=(70, (0.05, 1.6, 1.0), (70, 0, 0)), rise=70.0)
         tops.set("EmitterUpdate", "SpawnBurst_Instantaneous", "Spawn Time", 0.085)
-        _grains(s, "Grains", 10, (0.45, 0.60), (9, 12), 650, ((1, 0, 0), 75), gravity=-900.0, offset=(10, 0, 0))
+        _grains(s, "Grains", 16, (0.45, 0.60), (16, 28), 800, ((1, 0, 0), 75), gravity=-900.0, offset=(10, 0, 0))
     return s
 
 
