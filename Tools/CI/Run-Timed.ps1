@@ -135,7 +135,7 @@ function Invoke-Timed {
         $lastSize = -1; $lastChange = Get-Date
         $unthrottled = @{}; $nextScan = Get-Date
         while ($true) {
-            if ($j.WaitMs(1000)) { $code = [int]$j.ExitCode(); break }
+            if ($j.WaitMs(1000)) { $code = [int][BitConverter]::ToInt32([BitConverter]::GetBytes($j.ExitCode()), 0); break }
             $now = Get-Date
             if ($script:Unthrottle -and $now -ge $nextScan) {
                 # the editor is a child of cmd.exe (and PIE clients children of the editor): opt each one out of EcoQoS once

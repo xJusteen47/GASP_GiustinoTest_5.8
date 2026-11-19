@@ -24,16 +24,27 @@
    {
     "frames": [
      1,
-     2
+     1
     ],
-    "slide_cm": 1.62
+    "drift_cm": 0.0
    },
    {
     "frames": [
      19,
      22
     ],
-    "slide_cm": 0.17
+    "drift_cm": 0.28
+   }
+  ],
+  "skates": [
+   {
+    "frames": [
+     4,
+     4
+    ],
+    "skate_cm": 7.1,
+    "skate_s": 0.017,
+    "vmax_cms": 427
    }
   ]
  },
@@ -45,14 +56,32 @@
    {
     "frames": [
      1,
+     1
+    ],
+    "drift_cm": 0.0
+   },
+   {
+    "frames": [
+     4,
      8
     ],
-    "slide_cm": 6.22
+    "drift_cm": 0.0
+   }
+  ],
+  "skates": [
+   {
+    "frames": [
+     2,
+     3
+    ],
+    "skate_cm": 6.2,
+    "skate_s": 0.033,
+    "vmax_cms": 275
    }
   ]
  },
- "pelvis_acc_max_cms2": 21717.0,
- "pelvis_acc_max_frame": 6,
+ "pelvis_acc_max_cms2": 15951.0,
+ "pelvis_acc_max_frame": 5,
  "pops": [
   {
    "frame": 10,
@@ -211,10 +240,11 @@
   ]
  },
  "fails": [
-  "foot r slides 6.2 cm while planted (f1-8)",
   "pops: ball_r f10; ball_l f23"
  ],
  "warns": [
+  "foot l skates 7.1 cm over 0.02 s on the floor (f4-4), touchdown/lift-off length",
+  "foot r skates 6.2 cm over 0.03 s on the floor (f2-3), touchdown/lift-off length",
   "one-frame extremes to look at: foot_r f5; calf_r f6,11,13; upperarm_r f6,13; ik_hand_r f6,8,13 (+8 bones)",
   "no sidecar: curves/notifies not checked (export_clips_ue.py)"
  ],

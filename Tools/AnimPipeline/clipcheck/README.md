@@ -23,13 +23,17 @@ New clip: add a row to `clips.json` (fields documented at the top of `clip_check
 | Check | FAIL when |
 |---|---|
 | tracks | no animated bone (the pose comes from elsewhere) |
-| slide, root-motion clip | planted ball travels > 2 cm in the world during one plant |
-| slide, in-place clip | planted ball speed off the capsule speed by > 20 %, or sideways drift > 2 cm |
+| feet | judged on the ground: root-motion clips as they are, in-place clips shifted by `game_speed_cms` (0 = capsule still; missing = feet not judged). Planted = ball within 1 cm of its flat-foot height and slower than 30 cm/s. FAIL: a planted ball creeps > 3.5 cm within 0.25 s, or a flat foot travels on the floor for >= 0.2 s ("skate"). Shorter floor sweeps >= 5 cm (touchdown/lift-off) are WARN. `slide_ok` frames = WARN (a skid). |
 | ground | ball > 1.5 cm below its flat-foot height (3.2 cm; foot bone 9.4 cm, UEFN mannequin) |
-| pops | a bone > 45 deg off the midway pose of its neighbours (one-frame flick), or a one-frame step > 20 deg and > 3x the steps around it (snap) |
+| pops | a bone > 45 deg off the midway pose of its neighbours (one-frame flick), a one-frame step > 20 deg and > 3x the steps around it (snap), pelvis jolt > 25000 cm/s2 at 30 fps |
 | seam | loop: last vs first pose > 3 deg on the main bones |
-| handoff | main-bone local rotation gap > 10 deg or feet (vs root) > 5 cm against the reference pose |
-| curves | required GASP curves of the kind missing (docs/notes/gasp-curves.md), root motion flag != the game's |
+| handoff | main-bone local rotation gap > 35 deg or feet (vs root) > 45 cm against the reference pose (WARN from 10 deg / 5 cm) |
+| curves | required GASP curves of the kind missing (contact_l/r, phase; never MoveData_Speed on our clips), or Enable Root Motion off on a clip whose root travels |
+
+Calibrated 2026-11-19 (anim-setup-3) on 13 GASP clips: idles, run loop, crouch idle, run stops L/R, run start, pivots F->B L/R,
+landings light L/R and heavy. All PASS; the first thresholds (height-only plants, 10 deg handoffs) failed 8 of them.
+Desktop without pip bpy: run it inside Blender 5.2 (`blender -b --factory-startup --python <wrapper> -- clip_check.py ...`, the
+wrapper sets sys.argv after `--` and adds a matplotlib folder to sys.path). The UE export takes no args when paths have spaces.
 
 WARN (look at it, not gating): one-frame extremes 6-45 deg (fast cycles at 30 fps produce these legitimately), contact
 curve agreeing < 85 % with the geometric plant, in-place clip without `game_speed_cms`, no sidecar.

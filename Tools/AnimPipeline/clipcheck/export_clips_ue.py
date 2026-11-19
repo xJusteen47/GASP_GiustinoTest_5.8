@@ -96,10 +96,15 @@ def markers(anim):
 
 
 def main():
-    cj, outdir = sys.argv[1], sys.argv[2]
+    # no args = defaults (the commandlet splits -script args on spaces, so paths with spaces cannot be passed)
+    here = os.path.dirname(os.path.abspath(__file__))
+    cj = sys.argv[1] if len(sys.argv) > 2 else os.path.join(here, 'clips.json')
+    outdir = sys.argv[2] if len(sys.argv) > 2 else os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()), 'ClipCheck', 'export')
     os.makedirs(outdir, exist_ok=True)
     C = json.load(open(cj))
     lines, ok, bad = [], 0, 0
+    # headless: the asset registry is empty until scanned (load_asset and get_assets miss existing clips)
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(['/Game'], True)
     for clip, cfg in C['clips'].items():
         if clip.startswith('_') or 'asset' not in cfg:
             continue

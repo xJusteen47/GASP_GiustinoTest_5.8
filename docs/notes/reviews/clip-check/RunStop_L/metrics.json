@@ -1,0 +1,296 @@
+{
+ "clip": "RunStop_L",
+ "fbx": "../../../Saved/ClipCheck/export/RunStop_L.fbx",
+ "fps": 60.0,
+ "frames": 70,
+ "kind": "stop",
+ "root_travel_cm": [
+  0.0,
+  -125.3,
+  0.0
+ ],
+ "root_motion": true,
+ "_fwd": [
+  0.0,
+  -1.0,
+  0.0
+ ],
+ "animated_bones": 53,
+ "foot_l": {
+  "min_ball_cm": 0.04,
+  "min_ball_frame": 55,
+  "min_heel_cm": -0.0,
+  "plants": [
+   {
+    "frames": [
+     27,
+     41
+    ],
+    "drift_cm": 0.87
+   },
+   {
+    "frames": [
+     51,
+     70
+    ],
+    "drift_cm": 0.0
+   }
+  ],
+  "skates": [
+   {
+    "frames": [
+     8,
+     26
+    ],
+    "skate_cm": 68.7,
+    "skate_s": 0.317,
+    "vmax_cms": 405
+   }
+  ]
+ },
+ "foot_r": {
+  "min_ball_cm": 0.0,
+  "min_ball_frame": 18,
+  "min_heel_cm": -0.0,
+  "plants": [
+   {
+    "frames": [
+     1,
+     1
+    ],
+    "drift_cm": 0.0
+   },
+   {
+    "frames": [
+     30,
+     32
+    ],
+    "drift_cm": 0.62
+   },
+   {
+    "frames": [
+     42,
+     70
+    ],
+    "drift_cm": 0.0
+   }
+  ],
+  "skates": [
+   {
+    "frames": [
+     2,
+     29
+    ],
+    "skate_cm": 132.0,
+    "skate_s": 0.467,
+    "vmax_cms": 497
+   }
+  ]
+ },
+ "pelvis_acc_max_cms2": 2899.0,
+ "pelvis_acc_max_frame": 35,
+ "pops": [
+  {
+   "frame": 10,
+   "bone": "ik_foot_l",
+   "size": 70.2,
+   "type": "snap"
+  },
+  {
+   "frame": 10,
+   "bone": "ik_foot_l",
+   "size": 34.2,
+   "type": "spike"
+  },
+  {
+   "frame": 9,
+   "bone": "ik_foot_l",
+   "size": 30.6,
+   "type": "spike"
+  },
+  {
+   "frame": 9,
+   "bone": "ik_hand_l",
+   "size": 16.4,
+   "type": "spike"
+  },
+  {
+   "frame": 10,
+   "bone": "ik_hand_l",
+   "size": 15.4,
+   "type": "spike"
+  },
+  {
+   "frame": 6,
+   "bone": "ik_foot_l",
+   "size": 14.7,
+   "type": "spike"
+  },
+  {
+   "frame": 8,
+   "bone": "ik_hand_l",
+   "size": 13.4,
+   "type": "spike"
+  },
+  {
+   "frame": 23,
+   "bone": "ik_foot_l",
+   "size": 9.9,
+   "type": "spike"
+  },
+  {
+   "frame": 21,
+   "bone": "ik_foot_l",
+   "size": 9.6,
+   "type": "spike"
+  },
+  {
+   "frame": 8,
+   "bone": "ik_hand_r",
+   "size": 8.8,
+   "type": "spike"
+  },
+  {
+   "frame": 11,
+   "bone": "ik_hand_r",
+   "size": 8.2,
+   "type": "spike"
+  },
+  {
+   "frame": 3,
+   "bone": "upperarm_l",
+   "size": 7.6,
+   "type": "spike"
+  },
+  {
+   "frame": 33,
+   "bone": "calf_r",
+   "size": 6.9,
+   "type": "spike"
+  },
+  {
+   "frame": 24,
+   "bone": "ik_foot_l",
+   "size": 6.6,
+   "type": "spike"
+  },
+  {
+   "frame": 6,
+   "bone": "ik_hand_r",
+   "size": 6.5,
+   "type": "spike"
+  },
+  {
+   "frame": 61,
+   "bone": "lowerarm_r",
+   "size": 6.2,
+   "type": "spike"
+  }
+ ],
+ "pops_hard": {
+  "ik_foot_l": [
+   10
+  ]
+ },
+ "pops_soft": {
+  "upperarm_l": [
+   3
+  ],
+  "ik_foot_l": [
+   6,
+   9,
+   10,
+   21,
+   23,
+   24
+  ],
+  "ik_hand_r": [
+   6,
+   8,
+   11
+  ],
+  "ik_hand_l": [
+   8,
+   9,
+   10
+  ],
+  "calf_r": [
+   33
+  ],
+  "lowerarm_r": [
+   61
+  ]
+ },
+ "start_ref": {
+  "ref": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx",
+  "ref_frame": 55,
+  "max_deg": 92.9,
+  "bone": "lowerarm_r",
+  "top3": [
+   [
+    "lowerarm_r",
+    92.9
+   ],
+   [
+    "lowerarm_l",
+    87.9
+   ],
+   [
+    "upperarm_r",
+    45.9
+   ]
+  ],
+  "feet_gap_cm": 33.6
+ },
+ "end_ref": {
+  "ref": "../../../Saved/ClipCheck/export/GASP_RelaxedIdle.fbx",
+  "ref_frame": 1,
+  "max_deg": 70.3,
+  "bone": "upperarm_r",
+  "top3": [
+   [
+    "upperarm_r",
+    70.3
+   ],
+   [
+    "foot_r",
+    35.3
+   ],
+   [
+    "thigh_r",
+    25.6
+   ]
+  ],
+  "feet_gap_cm": 5.9
+ },
+ "curves_missing": [],
+ "notifies": [
+  {
+   "name": "FoleyEvent: Run",
+   "time": null
+  },
+  {
+   "name": "FoleyEvent: Run",
+   "time": null
+  },
+  {
+   "name": "FoleyEvent: Run",
+   "time": null
+  },
+  {
+   "name": "FoleyEvent: Run",
+   "time": null
+  }
+ ],
+ "fails": [
+  "foot l skates 68.7 cm over 0.32 s on the floor (f8-26)",
+  "foot r skates 132.0 cm over 0.47 s on the floor (f2-29)",
+  "pops: ik_foot_l f10",
+  "start_ref: lowerarm_r off by 93 deg, feet 33.6 cm (ref f55)",
+  "end_ref: upperarm_r off by 70 deg, feet 5.9 cm (ref f1)"
+ ],
+ "warns": [
+  "one-frame extremes to look at: upperarm_l f3; ik_foot_l f6,9,10,21,23,24; ik_hand_r f6,8,11; ik_hand_l f8,9,10 (+2 bones)"
+ ],
+ "verdict": "FAIL"
+}

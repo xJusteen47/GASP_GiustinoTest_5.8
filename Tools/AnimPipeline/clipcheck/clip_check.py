@@ -35,9 +35,14 @@ import numpy as np
 
 PLANT_CM = 3.0          # ball within 3 cm of its standing height
 PLANT_VZ = 25.0         # and vertical speed under 25 cm/s
-SLIDE_FAIL_CM = 2.0     # root-motion clip: planted ball travel
-INPLACE_ERR_FAIL = 0.20 # in-place clip: planted ball speed off the capsule speed by > 20 %
-LATERAL_FAIL_CM = 2.0
+# Feet, calibrated on 13 GASP clips (idles, run loop, stops, start, pivots, landings; 2026-11-19 anim-setup-3):
+# height alone calls a low GASP shuffle (ball +2 cm, 200 cm/s) a plant, so contact also needs a slow ball.
+CONTACT_BAND_CM = 1.0   # ball within 1 cm of its standing height ...
+CONTACT_VH = 30.0       # ... and slower than 30 cm/s over the ground = planted
+SLIDE_FAIL_CM = 3.5     # planted ball creeping > 3.5 cm (GASP max 3.0: landing settle, pivot plant) ...
+DRIFT_WINDOW_S = 0.25   # ... within 0.25 s (GASP landings settle 3 cm over 1.7 s: not a slide)
+SKATE_FAIL_S = 0.2      # flat on the floor and moving for >= 0.2 s = skating (GASP max: 0.17 s, landing heavy shuffle)
+SKATE_WARN_CM = 5.0     # shorter floor slides >= 5 cm = touchdown/lift-off sweeps (GASP pivots: up to 71 cm in 0.13 s): WARN
 PEN_FAIL_CM = -1.5      # below standing height
 STAND_BALL_CM = 3.2     # UEFN mannequin, foot flat on the floor: ball bone height (dash r3 f1, run start r3 left foot)
 STAND_FOOT_CM = 9.4     # same, foot (ankle) bone height. Override per clip with "stand_ball_cm"/"stand_foot_cm".
@@ -45,12 +50,14 @@ SPIKE_DEG = 6.0         # pose off its neighbours' midway by > 6 deg (60 fps): W
 FLIP_DEG = 45.0         # > 45 deg off (any fps): FAIL, a flick / flip no cycle needs
 SNAP_DEG = 20.0         # one-frame step > 20 deg (60 fps) ...
 SNAP_REL = 3.0          # ... and > 3x the steps before and after
-PELVIS_JOLT = 20000.0   # pelvis position acceleration cm/s^2 ...
+PELVIS_JOLT = 25000.0   # pelvis position acceleration cm/s^2 at 30 fps (GASP landing impact: 20.7k) ...
 POP_REL = 5.0           # ... and > 5x its median
 POP_ABS = 6000.0        # plot reference line only (deg/s^2)
 SEAM_FAIL_DEG = 3.0
-HANDOFF_FAIL_DEG = 10.0
-HANDOFF_FAIL_CM = 5.0
+HANDOFF_WARN_DEG = 10.0  # the blend into/out of the clip has to hide this: look at it
+HANDOFF_WARN_CM = 5.0
+HANDOFF_FAIL_DEG = 35.0  # GASP pivots end 27-32 deg / 44 cm off their run loop (motion matching blends it): beyond = a pop
+HANDOFF_FAIL_CM = 45.0
 
 FINGERS = ('thumb_', 'index_', 'middle_', 'ring_', 'pinky_')
 KEY_BONES = ['pelvis', 'spine_01', 'spine_03', 'spine_05', 'neck_01', 'head', 'clavicle_l', 'upperarm_l', 'lowerarm_l', 'hand_l',
@@ -62,10 +69,12 @@ for _s in 'lr':
             (f'lowerarm_{_s}', f'hand_{_s}'), ('pelvis', f'thigh_{_s}'), (f'thigh_{_s}', f'calf_{_s}'), (f'calf_{_s}', f'foot_{_s}'),
             (f'foot_{_s}', f'ball_{_s}')]
 REQUIRED = {  # docs/notes/gasp-curves.md: a missing curve reads 0
-    'loop': ['contact_l', 'contact_r', 'phase', 'MoveData_Speed'],
+    # MoveData_Speed is NOT required: on our clips it makes Get_DynamicPlayRate play them at capsule speed / clip speed
+    # (skid stalled at speed 0, landing-sync-1 item 3). GASP's own clips carry it; ours must not.
+    'loop': ['contact_l', 'contact_r', 'phase'],
     'start': ['contact_l', 'contact_r', 'phase'],
-    'stop': ['contact_l', 'contact_r', 'MoveData_Speed'],
-    'pivot': ['contact_l', 'contact_r', 'phase', 'MoveData_Speed'],
+    'stop': ['contact_l', 'contact_r'],
+    'pivot': ['contact_l', 'contact_r', 'phase'],
     'dash': ['contact_l', 'contact_r'],
     'land': ['contact_l', 'contact_r'],
 }
@@ -211,39 +220,52 @@ def check(name, cfg, base, outdir):
             info['plants'] = []; plant[:] = False
             feet[s] = {'h': hb, 'plant': plant, 'ball': ball}; M[f'foot_{s}'] = info
             continue
-        for a, b in runs(plant):
-            if b - a < 1:
-                continue
-            seg = ball[a:b + 1]
-            d = seg - seg[0]
-            rec = {'frames': [a + 1, b + 1]}
-            if rm:
-                h = np.linalg.norm(d[:, :2], axis=1)
-                rec['slide_cm'] = round(float(h.max()), 2)
-                if h.max() > SLIDE_FAIL_CM:
-                    fails.append(f'foot {s} slides {h.max():.1f} cm while planted (f{a + 1}-{b + 1})')
+        # Judge the feet against the GROUND, not the clip root: root-motion clips already move in the world; an in-place
+        # clip is shifted by the capsule's travel (game_speed_cms along fwd), so a ball that should be planted stands still.
+        g = ball.copy()
+        if not rm:
+            v_game = cfg.get('game_speed_cms')
+            if v_game is None:
+                plant[:] = False   # no capsule speed: plants cannot be judged (warned below)
             else:
-                back = -(d @ fwd); side = d @ lat
-                v_clip = back[-1] / ((b - a) * dt)
-                rec['ball_back_speed_cms'] = round(float(v_clip), 1)
-                rec['lateral_cm'] = round(float(np.abs(side).max()), 2)
-                v_game = speed_at(cfg.get('game_speed_cms'), (a + b) / 2 * dt)
-                if v_game:
-                    err = (v_clip - v_game) / v_game
-                    rec['vs_game_speed'] = round(float(err), 3)
-                    if abs(err) > INPLACE_ERR_FAIL:
-                        fails.append(f'foot {s} plant f{a + 1}-{b + 1}: clip ground speed {v_clip:.0f} vs capsule {v_game:.0f} cm/s')
-                if rec['lateral_cm'] > LATERAL_FAIL_CM:
-                    fails.append(f'foot {s} drifts sideways {rec["lateral_cm"]:.1f} cm while planted (f{a + 1}-{b + 1})')
+                trav = np.cumsum([0.0] + [speed_at(v_game, (i - 0.5) * dt) * dt for i in range(1, N)])
+                g = g + np.outer(trav, fwd)
+        vh = np.r_[0.0, np.linalg.norm(np.diff(g[:, :2], axis=0), axis=1) * fps] if N > 1 else np.zeros(N)
+        low = (hb < CONTACT_BAND_CM) & plant
+        contact = low & (vh <= CONTACT_VH)
+        plant = contact
+        win = max(int(round(DRIFT_WINDOW_S * fps)), 1)
+        ok_win = [(w[0], w[1]) for w in cfg.get('slide_ok', [])]
+        def allowed(a, b):
+            return any(a + 1 >= w0 and b + 1 <= w1 for w0, w1 in ok_win)
+        for a, b in runs(contact):   # drift: a planted ball creeping (window, so a slow weight settle is not a slide)
+            seg = g[a:b + 1, :2]
+            d = max(np.linalg.norm(seg[i:i + win + 1] - seg[i], axis=1).max() for i in range(len(seg)))
+            rec = {'frames': [a + 1, b + 1], 'drift_cm': round(float(d), 2)}
+            if d > SLIDE_FAIL_CM:
+                (warns if allowed(a, b) else fails).append(
+                    f'foot {s} drifts {d:.1f} cm in {DRIFT_WINDOW_S:g} s while planted (f{a + 1}-{b + 1})')
             info['plants'].append(rec)
+        for a, b in runs(low & (vh > CONTACT_VH)):   # skate: flat on the floor and travelling
+            dur = (b - a + 1) / fps
+            d = float(np.linalg.norm(g[b, :2] - g[max(a - 1, 0), :2]))
+            if d < SKATE_WARN_CM:
+                continue
+            rec = {'frames': [a + 1, b + 1], 'skate_cm': round(d, 1), 'skate_s': round(dur, 3), 'vmax_cms': round(float(vh[a:b + 1].max()))}
+            info.setdefault('skates', []).append(rec)
+            msg = f'foot {s} skates {d:.1f} cm over {dur:.2f} s on the floor (f{a + 1}-{b + 1})'
+            if dur >= SKATE_FAIL_S and not allowed(a, b):
+                fails.append(msg)
+            else:
+                warns.append(msg + (' (slide_ok)' if allowed(a, b) else ', touchdown/lift-off length'))
         if hb.min() < PEN_FAIL_CM:
             fails.append(f'ball {s} {hb.min():.1f} cm through the floor at f{int(hb.argmin()) + 1}')
         if info['min_heel_cm'] < PEN_FAIL_CM - 1:
             fails.append(f'heel {s} {info["min_heel_cm"]:.1f} cm through the floor')
-        feet[s] = {'h': hb, 'plant': plant, 'ball': ball}
+        feet[s] = {'h': hb, 'plant': plant, 'ball': g}
         M[f'foot_{s}'] = info
-    if not rm and cfg.get('game_speed_cms') is None and any(M[f'foot_{s}']['plants'] for s in 'lr'):
-        warns.append('in-place clip without game_speed_cms: plant speeds listed, not judged')
+    if not rm and cfg.get('game_speed_cms') is None and not cfg.get('air'):
+        warns.append('in-place clip without game_speed_cms: feet not judged against the ground')
 
     # pops: per-bone angular acceleration
     jerk = np.zeros((N, len(S['names'])))
@@ -272,13 +294,15 @@ def check(name, cfg, base, outdir):
                 pops.append((st[i], i + 1, n, 'snap'))
     pops.sort(reverse=True)
     pelv = np.array([f['pos']['pelvis'] for f in F])
-    pacc = np.linalg.norm(np.diff(pelv, 2, axis=0), axis=1) * fps * fps if N >= 3 else np.array([0.0])
+    st30 = max(int(round(fps / 30.0)), 1)   # judged at 30 fps: a one-frame kink scales with fps, the threshold must not
+    p30 = pelv[::st30]
+    pacc = np.linalg.norm(np.diff(p30, 2, axis=0), axis=1) * 900.0 if len(p30) >= 3 else np.array([0.0])
     M['pelvis_acc_max_cms2'] = round(float(pacc.max()), 0)
-    M['pelvis_acc_max_frame'] = int(pacc.argmax()) + 2
+    M['pelvis_acc_max_frame'] = (int(pacc.argmax()) + 1) * st30 + 1
     pmed = max(float(np.median(pacc)), 1.0)
     for i, a in enumerate(pacc):
         if a > PELVIS_JOLT and a > POP_REL * pmed:
-            pops.append((a, i + 2, 'pelvis(pos)', 'jolt cm/s2'))
+            pops.append((a, (i + 1) * st30 + 1, 'pelvis(pos)', 'jolt cm/s2'))
     M['pops'] = [{'frame': p[1], 'bone': p[2], 'size': round(p[0], 1), 'type': p[3]} for p in pops[:16]]
     def group(sel):
         g = {}
@@ -324,6 +348,8 @@ def check(name, cfg, base, outdir):
                   'feet_gap_cm': round(fg, 1)}
         if mx > HANDOFF_FAIL_DEG or fg > HANDOFF_FAIL_CM:
             fails.append(f'{key}: {bone} off by {mx:.0f} deg, feet {fg:.1f} cm (ref f{ri + 1})')
+        elif mx > HANDOFF_WARN_DEG or fg > HANDOFF_WARN_CM:
+            warns.append(f'{key}: {bone} off by {mx:.0f} deg, feet {fg:.1f} cm (ref f{ri + 1}), the blend must hide it')
 
     # curves / notifies
     meta = cfg.get('meta')
@@ -340,8 +366,11 @@ def check(name, cfg, base, outdir):
             M['notifies'] = md.get('notifies', [])
             if md.get('bone_tracks') == 0:
                 fails.append('no bone tracks in the asset: the pose comes from elsewhere')
-            if 'enable_root_motion' in md and 'root_motion' in cfg and bool(md['enable_root_motion']) != bool(cfg['root_motion']):
-                fails.append(f'asset root motion = {md["enable_root_motion"]}, game expects {cfg["root_motion"]}')
+            # Enable Root Motion = the root track is extracted (locked in the pose). Outside montages the ABP
+            # (RootMotionFromMontagesOnly) throws the extracted motion away, so "on" is harmless for an in-place clip (every
+            # GASP clip has it on). Only "off" on a clip whose root travels is wrong: the mesh walks away from the capsule.
+            if 'enable_root_motion' in md and not md['enable_root_motion'] and np.linalg.norm(travel[:2]) > 5:
+                fails.append(f'root travels {np.linalg.norm(travel[:2]):.0f} cm but Enable Root Motion is off: the mesh leaves the capsule')
             if miss:
                 fails.append('missing curves: ' + ', '.join(miss))
             for s in 'lr':  # contact curve vs geometric plant
