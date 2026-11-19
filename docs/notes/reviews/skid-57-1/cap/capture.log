@@ -1,0 +1,12 @@
+    0.0s driver loaded: kit KIT_Test_Overlord, button Attack, out C:/Users/jacop/Documents/Unreal Projects/GASP_Giustino2_ue59/docs/notes/reviews/skid-57-1/cap
+    8.1s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '3', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   20.9s kit KIT_Test_Overlord: OK
+   23.9s loadout: {"revision": 2, "kit": "KIT_Test_Overlord", "additionalWeapons": [], "kitResolved": true, "tableEntries": 34, "grantedAbilities": 24, "derivedTimelines": 0, "tableCrc": "59873359"}
+   23.9s review stage: parked [('Z1', (3500.0, 300.0)), ('Z1', (3800.0, 300.0))], other pawns at [300, 600, 2369, 3451] cm
+   24.9s 7 cameras, 3 fill lights
+   27.0s sequence mv_skid_base: pawn at ((0, 450, 100), 0)
+   32.5s mv_skid_base: stick (0, 1, 0) on v20
+   41.8s mv_skid_base: stick (0, -1, 0) on v50
+   61.6s mv_skid_base: stick None on v130
+   71.0s sequence mv_skid_base done: 170 frames, pawn z 88.1, host shots 0
+   72.9s finish: ok
