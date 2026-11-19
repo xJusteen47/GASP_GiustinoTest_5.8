@@ -29,11 +29,16 @@ VFX = os.environ.get('PIE_VFX', '1')
 KIT = os.environ.get('PIE_CAPTURE_KIT', 'KIT_Test_Hits')
 OUT = os.environ.get('PIE_CAPTURE_OUT') or os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()),
                                                         'PolishM2', f'vfx{VFX}')
-SIZE = 480
+SIZE = int(os.environ.get('PIE_CAPTURE_SIZE', '480'))
+# Owner videos (2026-11-19, phone): PIE_CAPTURE_W/H give a wide render target (e.g. 1920x1080) instead of SIZE x SIZE
+WIDTH = int(os.environ.get('PIE_CAPTURE_W') or SIZE)
+HEIGHT = int(os.environ.get('PIE_CAPTURE_H') or SIZE)
 # 'side': on the pawn's right at the sequence start, follows the pawn (movement), the victim (follow_victim) or frames pawn + dummy (hits);
 # 'game': the player's camera; 'close': the player's camera at CLOSE x its field of view (review r1: the fighter was ~45 px high in 'game')
 VIEWS = ['side', 'game', 'close']
-CLOSE = 0.5
+CLOSE = float(os.environ.get('PIE_CLOSE', '0.5'))
+# PIE_EXPORT_VIEWS=game,close: render and save only these views (1080p frames are slow to export)
+EXPORT = os.environ.get('PIE_EXPORT_VIEWS', ','.join(VIEWS)).split(',')
 CUBE = '/Engine/BasicShapes/Cube'
 ELEVATION, FOV = 12.0, 50.0
 PRE = 20
@@ -43,13 +48,14 @@ FWD, BACK = (0, 1, 0), (0, -1, 0)   # stick, relative to the camera (as in scena
 # dummy; kit: the host's kit for this sequence (default KIT); strong: frames pressing Strong; blocks: boxes summoned for the sequence and
 # removed after it, (cm ahead, cm to the side, cm above the floor, size along, across, up), placed along the host's facing
 SEQUENCES = [
-    {'name': 'jump', 'frames': 100, 'jump': [0], 'dist': 520.0, 'follow': False},
+    {'name': 'jump', 'frames': 160, 'jump': [0], 'dist': 700.0, 'follow': True, 'follow_z': 0.6},  # r4: the pawn left the frame upwards
     {'name': 'hit_small', 'frames': 60, 'tap': [0], 'dummy': (95.0, 0.0), 'dist': 480.0, 'follow': False},
     {'name': 'hit_medium', 'frames': 80, 'tap': [0], 'dummy': (95.0, 90.0), 'dist': 480.0, 'follow': False},
     # The launch, followed until the downed landing (~190 frames after the hit) and a little after
     {'name': 'hit_large', 'frames': 260, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 650.0, 'follow': False, 'follow_victim': True},
     # VFX v2: the strong hit from a fixed camera on the hit point, so the debris' fall, bounces and shadows stay in frame
-    {'name': 'hit_debris', 'frames': 90, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 520.0, 'follow': False},
+    {'name': 'hit_debris', 'frames': 90, 'tap': [0], 'kit': 'KIT_Example_Impacts',  # r4: the KIT_Test_Hits jab is 31 hitstun frames at any percent (never strong), its strong misses; the Impacts jab is 68
+     'dummy': (95.0, 170.0), 'dist': 520.0, 'follow': False},
     # Wall and ceiling contacts of a launched victim (NS_GSTN_Impact): a wall across the launch and a low ceiling over it
     {'name': 'wall', 'frames': 120, 'tap': [0], 'dummy': (95.0, 170.0), 'dist': 650.0, 'follow': False, 'follow_victim': True,
      'blocks': [(420.0, 0.0, 0.0, 60.0, 700.0, 500.0)]},
@@ -64,8 +70,8 @@ SEQUENCES = [
     # KIT_Example_Impacts: strong = wall splat (a wall behind the victim), attack = spike with a ground bounce
     {'name': 'splat', 'frames': 120, 'strong': [0], 'kit': 'KIT_Example_Impacts', 'dummy': (95.0, 100.0), 'dist': 650.0, 'follow': False,
      'follow_victim': True, 'blocks': [(330.0, 0.0, 0.0, 60.0, 700.0, 500.0)]},
-    {'name': 'ground_bounce', 'frames': 120, 'tap': [0], 'kit': 'KIT_Example_Impacts', 'dummy': (95.0, 100.0), 'dist': 650.0,
-     'follow': False, 'follow_victim': True},
+    {'name': 'ground_bounce', 'frames': 120, 'tap': [0], 'kit': 'KIT_Example_Impacts', 'dummy': (95.0, 100.0), 'dist': 900.0,
+     'follow': False, 'follow_victim': True},  # r4: 650 lost the bouncing victim
     # Movement last: the sprint ends ~37 m away, near where the other players are parked
     {'name': 'run_skid', 'frames': 200, 'stick': [(0, 110, FWD), (110, 150, BACK)], 'dist': 650.0, 'follow': True},
     {'name': 'sprint', 'frames': 300, 'stick': [(0, 250, FWD)], 'dist': 700.0, 'follow': True},
@@ -124,7 +130,7 @@ def _make_cameras():
     st['cams'] = found[:len(VIEWS)]
     for cam in st['cams']:
         comp = cam.capture_component2d
-        rt = unreal.RenderingLibrary.create_render_target2d(_world(), SIZE, SIZE, unreal.TextureRenderTargetFormat.RTF_RGBA8)
+        rt = unreal.RenderingLibrary.create_render_target2d(_world(), WIDTH, HEIGHT, unreal.TextureRenderTargetFormat.RTF_RGBA8)
         st['rts'].append(rt)
         for prop, value in (('capture_every_frame', False), ('capture_on_movement', False), ('always_persist_rendering_state', True),
                             ('fov_angle', FOV), ('capture_source', unreal.SceneCaptureSource.SCS_FINAL_COLOR_LDR), ('texture_target', rt)):
@@ -154,6 +160,76 @@ def _victim():
     keys = h.dummies()
     comp = g.comps(_world()).get(keys[0]) if keys else None
     return comp.get_owner() if comp else None
+
+
+# VFX v3 (rule: clarity on LIGHT and DARK backgrounds): PIE_BACKDROP=light|dark lays a no-collision floor plane over the hub floor and a far
+# wall ahead, white snow (light) or dark rock (dark), material M_GSTN_VFX_CaptureBackdrop (setup_presentation_vfx_v3). PIE_SURFACE_COLOR="r,g,b"
+# (linear) is the presentation components' DefaultSurfaceColor for the run (the dust and snow colour). Capture only
+BACKDROP = os.environ.get('PIE_BACKDROP', '')
+BACKDROP_COLOURS = {'light': (0.95, 0.96, 0.98), 'dark': (0.035, 0.035, 0.045)}
+SURFACE = [float(v) for v in os.environ['PIE_SURFACE_COLOR'].split(',')] if os.environ.get('PIE_SURFACE_COLOR') else None
+
+
+def _backdrop():
+    """Summons the backdrop (floor plane + far wall + side wall), one actor per call; True when placed. r5: the movement sequences ran off
+    the 40 m floor (no sprint lines over it) and the side camera saw the black sky behind a jumping dark mannequin: an 80 m floor reaching
+    65 m ahead, a far wall 45 m ahead and a wall behind the subject on the side camera's axis"""
+    if not BACKDROP or len(st.setdefault('backdrop', [])) >= 3:
+        return True
+    known = st.setdefault('mesh_before', {a.get_name() for a in unreal.GameplayStatics.get_all_actors_of_class(_world(), unreal.StaticMeshActor)})
+    new = [a for a in unreal.GameplayStatics.get_all_actors_of_class(_world(), unreal.StaticMeshActor) if a.get_name() not in known]
+    if not new:
+        _console('Summon StaticMeshActor')
+        return False
+    actor = new[0]
+    known.add(actor.get_name())
+    pawn = _pawn()
+    p, yaw = pawn.get_actor_location(), pawn.get_actor_rotation().yaw
+    if SEQUENCES[st['seq']].get('stick'):
+        # r8: the sprint starts at yaw -180 but the camera-relative stick runs it along world +X: placed by the yaw, the floor and the far
+        # wall were behind it and the lines were drawn over the hub's blue floor and black sky (r5, r8 first light run)
+        yaw = 0.0
+    fx, fy = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+    floor = p.z - 92.0
+    try:   # r3 light: p.z - 92 put the plane ~4 cm UNDER the hub floor (no backdrop in any frame): use the real floor height
+        hit = unreal.SystemLibrary.line_trace_single(pawn, p, unreal.Vector(p.x, p.y, p.z - 300.0), unreal.TraceTypeQuery.TRACE_TYPE_QUERY1,
+                                                     False, [pawn], unreal.DrawDebugTrace.NONE, True)
+        if hit:
+            floor = hit.to_tuple()[4].z
+    except Exception as e:
+        _log(f'backdrop floor trace failed: {e}')
+    _log(f'backdrop floor z {floor:.1f} (pawn z {p.z:.1f})')
+    comp = actor.static_mesh_component
+    comp.set_mobility(unreal.ComponentMobility.MOVABLE)
+    comp.set_collision_profile_name('NoCollision')
+    comp.set_cast_shadow(False)
+    if not st['backdrop']:   # floor: 80 m square from 15 m behind to 65 m ahead, 1 cm over the hub floor (traces still hit the real floor)
+        comp.set_static_mesh(unreal.load_asset('/Engine/BasicShapes/Plane'))
+        actor.set_actor_scale3d(unreal.Vector(80.0, 80.0, 1.0))
+        actor.set_actor_location_and_rotation(unreal.Vector(p.x + fx * 2500, p.y + fy * 2500, floor + 1.0), unreal.Rotator(), False, True)
+    elif len(st['backdrop']) == 1:   # far wall 45 m ahead (past the sprint's end), 80 m wide, 30 m high
+        comp.set_static_mesh(unreal.load_asset(CUBE))
+        actor.set_actor_scale3d(unreal.Vector(0.4, 80.0, 30.0))
+        actor.set_actor_location_and_rotation(unreal.Vector(p.x + fx * 4500, p.y + fy * 4500, floor + 1500), unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw),
+                                              False, True)
+    else:                    # side wall: 16 m on the pawn's left (the side camera sits on its right), along the whole floor
+        comp.set_static_mesh(unreal.load_asset(CUBE))
+        actor.set_actor_scale3d(unreal.Vector(0.4, 80.0, 30.0))
+        lx, ly = fy, -fx
+        actor.set_actor_location_and_rotation(unreal.Vector(p.x + fx * 2500 + lx * 1600, p.y + fy * 2500 + ly * 1600, floor + 1500),
+                                              unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw + 90.0), False, True)
+    mid = comp.create_dynamic_material_instance(0, unreal.load_asset('/GSTNPresentation/VFX/Materials/M_GSTN_VFX_CaptureBackdrop'))
+    r, gr, b = BACKDROP_COLOURS[BACKDROP]
+    mid.set_vector_parameter_value('Color', unreal.LinearColor(r, gr, b, 1.0))
+    st['backdrop'].append(actor)
+    _log(f'backdrop {BACKDROP} {len(st["backdrop"])}/3')
+    return len(st['backdrop']) >= 3
+
+
+def _surface_colour():
+    """Through the cvar, never a property write: set_editor_property in Play reruns the pawn's construction script (r2: NP crash)"""
+    if SURFACE:
+        _console('GSTN.Presentation.SurfaceColor ' + ','.join(f'{v:.3f}' for v in SURFACE))
 
 
 def _blocks(seq):
@@ -200,7 +276,8 @@ def _aim(seq, follow):
     elif seq.get('follow_victim') and st.get('victim'):
         pass
     elif seq.get('follow'):
-        centre = unreal.Vector(centre.x, centre.y, st['centre'].z)
+        # follow_z: share of the height gained that the camera follows (keeps the floor and the take-off in frame)
+        centre = unreal.Vector(centre.x, centre.y, st['centre'].z + max(0.0, centre.z - st['centre'].z) * seq.get('follow_z', 0.0))
     else:
         centre = st['centre']
     yaw = st['yaw']
@@ -213,6 +290,29 @@ def _aim(seq, follow):
     return (round(centre.x), round(centre.y), round(centre.z)), round(yaw)
 
 
+def _contact(seq, frame):
+    """Logs '<seq>: land on vN' (the pawn back on the floor after a jump) and '<seq>: bounce on vN' (the victim's first floor contact after
+    the launch), so the review sheet can sample around them (r5: no landing and no bounce contact in the 8 frames)"""
+    if seq['name'] == 'jump':
+        actor, key, rise = _pawn(), 'land', 30.0
+    elif seq['name'] == 'ground_bounce' and st.get('victim'):
+        actor, key, rise = st['victim'], 'bounce', 40.0
+    else:
+        return
+    z = actor.get_actor_location().z
+    c = st.setdefault('contact', {})
+    if frame == 0 or c.get('seq') != seq['name']:
+        c.clear()
+        c.update(seq=seq['name'], z0=z, up=False, done=False)
+    if c['done']:
+        return
+    if z > c['z0'] + rise:
+        c['up'] = True
+    elif c['up'] and z <= c['z0'] + 8.0:
+        c['done'] = True
+        _log(f'{seq["name"]}: {key} on v{frame}')
+
+
 def _shoot(seq, frame):
     _aim(seq, True)
     manager = g._local_pawn(0)[0].get_editor_property('player_camera_manager')
@@ -220,6 +320,8 @@ def _shoot(seq, frame):
         cam.set_actor_location_and_rotation(manager.get_camera_location(), manager.get_camera_rotation(), False, False)
         cam.capture_component2d.set_editor_property('fov_angle', manager.get_fov_angle() * scale)
     for name, cam, rt in zip(VIEWS, st['cams'], st['rts']):
+        if name not in EXPORT:
+            continue
         cam.capture_component2d.capture_scene()
         folder = os.path.join(OUT, seq['name'], name)
         os.makedirs(folder, exist_ok=True)
@@ -313,8 +415,21 @@ def _tick(_dt):
                 _log(f'{seq["name"]}: dummy {keys[:1]} at {placed}, percent {percent}')
                 st.update(dummy_placed=True, t=now, victim=_victim())
                 return None
-            if not _blocks(seq):
+            if not seq.get('dummy') and not st.get('dummy_placed') and h.dummies():
+                # r5 light run_skid: the dummy left 43 cm ahead by the hit sequences overlapped the run-start puff. r7: "15 m behind the
+                # pawn's yaw" put it IN the sprint path (the sprint starts at yaw -180 and runs +X): the host ran into it 16 frames after
+                # StageUp and the lines stopped. Every movement sequence runs world +X, so park it 30 m on -X, whatever the yaw.
+                key = h.dummies()[0]
+                v = g.snap(g.worlds()[0])[h._key(0)]
+                x, y, z = v['location'][0] - 3000.0, v['location'][1], v['location'][2] + 2.0
+                g.comps(g.worlds()[0])[key].server_teleport_exact(unreal.Vector(x, y, z))
+                placed = (round(x), round(y))
+                _log(f'{seq["name"]}: dummy moved away to {placed}')
+                st.update(dummy_placed=True, t=now, victim=None)
                 return None
+            if not _blocks(seq) or not _backdrop():
+                return None
+            _surface_colour()
             _log(f'sequence {seq["name"]}: {_aim(seq, False)}')
             if SWATCH:
                 c, cam = st['centre'], st['cams'][0].get_actor_location()
@@ -345,6 +460,7 @@ def _tick(_dt):
                     for em in emitters:
                         _log(f'probe f{frame} {name}.{em}: {unreal.GSTN_VfxAuthoringLibrary.describe_particles(comp, em, 6)}')
             _shoot(seq, frame)
+            _contact(seq, frame)
             k = frame - PRE
             want = _stick_at(seq, k) if k >= 0 else None
             if want != st['stick']:
@@ -372,7 +488,9 @@ def _tick(_dt):
                 _log(f'sequence {seq["name"]} done: {st["frame"]} frames, pawn at ({p.x:.0f}, {p.y:.0f}, {p.z:.0f})')
                 for block in st['blocks']:
                     block.destroy_actor()
-                st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False, blocks=[], victim=None)
+                for actor in st.get('backdrop', []):
+                    actor.destroy_actor()
+                st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False, blocks=[], victim=None, backdrop=[])
         elif phase == 'ending' and not les.is_in_play_in_editor():
             unreal.unregister_slate_post_tick_callback(st['handle'])
             try:

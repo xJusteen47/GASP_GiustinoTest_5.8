@@ -4,11 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Chaos/ChaosEngineInterface.h"
 #include "GSTN_AdditiveReactionSource.h"
 #include "GSTN_PresentationLogic.h"
 #include "GSTN_PresentationComponent.generated.h"
 
 class UAnimSequenceBase;
+class UMaterialInterface;
+class UStaticMeshComponent;
+class AStaticMeshActor;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGSTN_OnPresentationEvent, const FGSTN_PresentationEvent&, Event, float, Intensity);
 DECLARE_DYNAMIC_DELEGATE_TwoParams(FGSTN_OnPresentationEventSingle, const FGSTN_PresentationEvent&, Event, float, Intensity);
@@ -80,6 +84,36 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation|Hitstop", meta = (ClampMin = "0", ClampMax = "8"))
 	int32 HitstopVfxFreeFrames = 2;
 
+	/**
+	 * VFX v3 (docs/notes/stile/vfx-stile-v3-design-sheet.md, owner ref astro_2): a crisp dark disc straight under the character, the
+	 * depth cue of a platformer camera. A flat mesh placed by one line trace per presented frame (SubmitSnapshot), never on a dedicated
+	 * server; it shrinks and fades with the height (custom primitive data 0 = opacity). Cosmetic only, a graphics setting.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation|ContactShadow")
+	bool bContactShadow = true;
+
+	/** Unlit translucent disc material (reads custom primitive data 0 as opacity) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation|ContactShadow")
+	TSoftObjectPtr<UMaterialInterface> ContactShadowMaterial;
+
+	/** Disc radius on the ground; 0 = the owner's collision radius x 1.15 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation|ContactShadow", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float ContactShadowRadius = 0.f;
+
+	/** Above this height over the floor there is no shadow; in between it shrinks to 60% and fades */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation|ContactShadow", meta = (ClampMin = "50", ForceUnits = "cm"))
+	float ContactShadowMaxHeight = 700.f;
+
+	/**
+	 * VFX v3 dust and snow take the colour of the floor they rise from (owner ref astro_3): a system exposing User.SurfaceColor gets the
+	 * colour of the surface type of the floor under the event (Physical Material), or DefaultSurfaceColor
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation|Surface")
+	TMap<TEnumAsByte<EPhysicalSurface>, FLinearColor> SurfaceColors;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation|Surface")
+	FLinearColor DefaultSurfaceColor = FLinearColor(0.78f, 0.74f, 0.68f, 1.f);
+
 	/** Thresholds and tag rules of SubmitSnapshot */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation")
 	FGSTN_PresentationDeriveRules DeriveRules;
@@ -129,6 +163,7 @@ public:
 	const FGSTN_PresentationSnapshot& GetLastSnapshot() const { return Deriver.GetPrevious(); }
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void GetAdditiveReaction(FGSTN_AdditiveReactionRequest& Out) const override;
 
 private:
@@ -181,6 +216,14 @@ private:
 	 * The particles bounce on that analytical plane (no Niagara trace, no depth buffer: the toaster target) and their shadows lie on it
 	 */
 	void SetGroundPlane(UNiagaraComponent* System, const FGSTN_PresentationEvent& Event) const;
+
+	/** Places the contact shadow under the owner (SubmitSnapshot, every presented frame) */
+	void UpdateContactShadow(const FGSTN_PresentationSnapshot& Snapshot);
+
+	UPROPERTY(Transient)
+	TObjectPtr<UStaticMeshComponent> ContactShadow;
+
+	TWeakObjectPtr<AStaticMeshActor> ContactShadowActor;
 
 	/** A cue waiting for the drawn body (FGSTN_PresentationCue::GroundedBone) */
 	struct FPendingGrounded

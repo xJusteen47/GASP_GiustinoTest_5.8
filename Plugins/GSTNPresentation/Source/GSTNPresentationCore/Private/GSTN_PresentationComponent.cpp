@@ -6,6 +6,11 @@
 #include "Camera/CameraShakeBase.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
+#include "Materials/MaterialInterface.h"
+#include "PhysicalMaterials/PhysicalMaterial.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/PlayerController.h"
@@ -27,6 +32,10 @@ namespace GSTNPresentationCVars
 	static TAutoConsoleVariable<int32> Effects(TEXT("GSTN.Presentation.Effects"), 1,
 		TEXT("1 = presentation cues play their Niagara/sound/shake/additive; 0 = events still fire, no effect plays"));
 	// One log line per accepted event (owner, tag, frame, magnitude, intensity, what played): the numbers of a review capture
+	// Captures and tests: "r,g,b" (linear) replaces DefaultSurfaceColor on every character. A cvar, not a property write: a property set
+	// from Python in Play reruns the Blueprint construction script and rebuilds the pawn's NP proxies (VFX v3 r2 capture crash)
+	static TAutoConsoleVariable<FString> SurfaceColor(TEXT("GSTN.Presentation.SurfaceColor"), TEXT(""),
+		TEXT("Debug: 'r,g,b' linear floor colour for dust and snow when the floor has no surface colour; empty = DefaultSurfaceColor"));
 	static TAutoConsoleVariable<int32> Log(TEXT("GSTN.Presentation.Log"), 0, TEXT("1 = log every accepted presentation event (LogGSTNPresentation)"));
 }
 
@@ -40,6 +49,8 @@ UGSTN_PresentationComponent::UGSTN_PresentationComponent()
 	SetIsReplicatedByDefault(false);
 	DeriveRules.TagRules = FGSTN_PresentationDeriveRules::MakeDefaultTagRules();
 	DeriveRules.QuietAirTags = FGSTN_PresentationDeriveRules::MakeDefaultQuietTags();
+	ContactShadowMaterial = TSoftObjectPtr<UMaterialInterface>(
+		FSoftObjectPath(TEXT("/GSTNPresentation/VFX/Materials/MI_GSTN_VFX_ContactShadow.MI_GSTN_VFX_ContactShadow")));
 }
 
 UGSTN_PresentationComponent* UGSTN_PresentationComponent::FindOrAdd(AActor* Owner)
@@ -74,6 +85,7 @@ void UGSTN_PresentationComponent::SubmitSnapshot(const FGSTN_PresentationSnapsho
 {
 	Scratch.Reset();
 	Deriver.Step(Snapshot, DeriveRules, Scratch);
+	UpdateContactShadow(Snapshot);
 	for (const FGSTN_PresentationEvent& Event : Scratch)
 	{
 		ReportEvent(Event);
@@ -428,10 +440,13 @@ void UGSTN_PresentationComponent::UpdateHitstopTime(double Now)
 void UGSTN_PresentationComponent::SetGroundPlane(UNiagaraComponent* System, const FGSTN_PresentationEvent& Event) const
 {
 	static const FNiagaraVariable PointVar(FNiagaraTypeDefinition::GetVec3Def(), TEXT("User.GroundPoint"));
+	static const FNiagaraVariable SurfaceVar(FNiagaraTypeDefinition::GetColorDef(), TEXT("User.SurfaceColor"));
 	UNiagaraSystem* Asset = System ? System->GetAsset() : nullptr;
-	if (!Asset || !Asset->GetExposedParameters().FindParameterOffset(PointVar))
+	const bool bWantsPlane = Asset && Asset->GetExposedParameters().FindParameterOffset(PointVar);
+	const bool bWantsSurface = Asset && Asset->GetExposedParameters().FindParameterOffset(SurfaceVar);
+	if (!bWantsPlane && !bWantsSurface)
 	{
-		return;  // no bounce in this effect: no trace
+		return;  // no bounce and no floor colour in this effect: no trace
 	}
 	const UWorld* World = GetWorld();
 	const AActor* Owner = GetOwner();
@@ -440,21 +455,122 @@ void UGSTN_PresentationComponent::SetGroundPlane(UNiagaraComponent* System, cons
 	// Fallback: the feet (the event of an airborne hit is at the body)
 	FVector Point = Owner ? Owner->GetActorLocation() - Up * Owner->GetSimpleCollisionHalfHeight() : Event.Location;
 	FVector Normal = Up;
+	FLinearColor Surface = DefaultSurfaceColor;
+	TArray<FString> Rgb;
+	if (GSTNPresentationCVars::SurfaceColor.GetValueOnGameThread().ParseIntoArray(Rgb, TEXT(",")) == 3)
+	{
+		Surface = FLinearColor(FCString::Atof(*Rgb[0]), FCString::Atof(*Rgb[1]), FCString::Atof(*Rgb[2]), 1.f);
+	}
 	if (World)
 	{
 		FHitResult Hit;
 		const FVector Start = Event.Location + Up * 20.0;
 		const FVector End = Event.Location - Up * 800.0;
-		if (World->LineTraceSingleByObjectType(Hit, Start, End, FCollisionObjectQueryParams(ECC_WorldStatic)))
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTN_PresentationGround), false, Owner);
+		Params.bReturnPhysicalMaterial = bWantsSurface;
+		if (World->LineTraceSingleByObjectType(Hit, Start, End, FCollisionObjectQueryParams(ECC_WorldStatic), Params))
 		{
 			Point = Hit.ImpactPoint;
 			Normal = Hit.ImpactNormal;
+			if (const FLinearColor* Found = SurfaceColors.Find(UPhysicalMaterial::DetermineSurfaceType(Hit.PhysMaterial.Get())))
+			{
+				Surface = *Found;
+			}
 		}
+	}
+	if (bWantsSurface)
+	{
+		System->SetVariableLinearColor(TEXT("SurfaceColor"), Surface);
+	}
+	if (!bWantsPlane)
+	{
+		return;
 	}
 	const FTransform& Transform = System->GetComponentTransform();
 	System->SetVariableVec3(TEXT("GroundPoint"), Transform.InverseTransformPosition(Point));
 	System->SetVariableVec3(TEXT("GroundNormal"), Transform.InverseTransformVectorNoScale(Normal).GetSafeNormal());
 	System->SetVariableFloat(TEXT("GroundHeight"), Point.Z);
+}
+
+void UGSTN_PresentationComponent::UpdateContactShadow(const FGSTN_PresentationSnapshot& Snapshot)
+{
+	AActor* Owner = GetOwner();
+	UWorld* World = GetWorld();
+	if (!Owner || !World || World->GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	if (!bContactShadow)
+	{
+		if (ContactShadow)
+		{
+			ContactShadow->SetVisibility(false);
+		}
+		return;
+	}
+	if (ContactShadow && !ContactShadowActor.IsValid())
+	{
+		ContactShadow = nullptr;
+	}
+	if (!ContactShadow)
+	{
+		UStaticMesh* Plane = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Plane.Plane"));
+		UMaterialInterface* Material = ContactShadowMaterial.LoadSynchronous();
+		if (!Plane || !Material)
+		{
+			bContactShadow = false;  // missing asset: off for this character, no retry every frame
+			return;
+		}
+		// Its own transient actor, never a component of the pawn: a component registered on a running Mover pawn can end up as its root
+		// and break the Network Prediction proxies (VFX v3 r1 capture: editor crash at the end of Play)
+		FActorSpawnParameters Spawn;
+		Spawn.ObjectFlags |= RF_Transient;
+		Spawn.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), FTransform::Identity, Spawn);
+		if (!Actor)
+		{
+			bContactShadow = false;
+			return;
+		}
+		ContactShadowActor = Actor;
+		ContactShadow = Actor->GetStaticMeshComponent();
+		ContactShadow->SetMobility(EComponentMobility::Movable);
+		ContactShadow->SetStaticMesh(Plane);
+		ContactShadow->SetMaterial(0, Material);
+		ContactShadow->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		ContactShadow->SetCastShadow(false);
+		ContactShadow->SetReceivesDecals(false);
+	}
+	const FVector Up = Snapshot.bValid && !Snapshot.Up.IsNearlyZero() ? Snapshot.Up.GetSafeNormal() : FVector::UpVector;
+	const FVector Feet = Owner->GetActorLocation() - Up * Owner->GetSimpleCollisionHalfHeight();
+	FHitResult Hit;
+	const FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTN_ContactShadow), false, Owner);
+	if (!World->LineTraceSingleByObjectType(Hit, Feet + Up * 30.0, Feet - Up * ContactShadowMaxHeight,
+			FCollisionObjectQueryParams(ECC_WorldStatic), Params))
+	{
+		ContactShadow->SetVisibility(false);
+		return;
+	}
+	const float Height = FMath::Max(0.f, static_cast<float>(FVector::DotProduct(Feet - Hit.ImpactPoint, Up)));
+	const float K = FMath::Clamp(Height / ContactShadowMaxHeight, 0.f, 1.f);
+	const float Radius = ContactShadowRadius > 0.f ? ContactShadowRadius : Owner->GetSimpleCollisionRadius() * 1.15f;
+	const float Diameter = 2.f * Radius * FMath::Lerp(1.f, 0.6f, K);
+	ContactShadow->SetVisibility(true);
+	// 1 cm above the floor: never z-fights, never floats visibly. The basic plane is 100 cm across
+	ContactShadow->SetWorldLocationAndRotation(Hit.ImpactPoint + Hit.ImpactNormal * 1.0, FRotationMatrix::MakeFromZ(Hit.ImpactNormal).ToQuat());
+	ContactShadow->SetWorldScale3D(FVector(Diameter / 100.f, Diameter / 100.f, 1.f));
+	ContactShadow->SetCustomPrimitiveDataFloat(0, 1.f - K);
+}
+
+void UGSTN_PresentationComponent::EndPlay(const EEndPlayReason::Type Reason)
+{
+	if (AStaticMeshActor* Actor = ContactShadowActor.Get())
+	{
+		Actor->Destroy();
+	}
+	ContactShadowActor.Reset();
+	ContactShadow = nullptr;
+	Super::EndPlay(Reason);
 }
 
 void UGSTN_PresentationComponent::StopSustained(const FGameplayTag& EventTag)
