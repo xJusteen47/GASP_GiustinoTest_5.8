@@ -95,6 +95,11 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_RunSkid : public FLayeredMoveBase
 	UPROPERTY()
 	int32 JumpWindowEnd = -1;
 
+	/** skid-fix-1: the capsule follows the kit's skid clip root (FGSTN_RunSkidTuning::FollowsClipRoot) until the clip's end, not the stick.
+	 *  +1 / -1: the clip's lateral drift as baked / mirrored (the turn goes to the other side than the clip's); 0 = the brake + exit rule */
+	UPROPERTY()
+	int8 ClipRootSign = 0;
+
 	/** The resolved ledge rule (kit or surface): true = stop at the edge */
 	UPROPERTY()
 	bool bStopAtLedge = true;

@@ -181,7 +181,10 @@ MOVE_SEQUENCES = [
     {'name': 'mv_run_start_v3', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
      'expect': [{'clip': 'AS_GSTN_RunStart_v3', 'window': [80, 167], 'min_weight': 0.8, 'coverage': 0.9},
                 {'clip': 'M_Neutral_Run_Loop_F', 'window': [172, 210], 'min_weight': 0.8, 'coverage': 0.9}]},
-    {'name': 'mv_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (170, None)]},
+    # skid-fix-1 gate: the owner's skid clip at >= 0.8 from the reverse input to the skid end. Rows count the PRE idle frames: stick f95 ->
+    # row f115, sim turns from f117; clip 0.83 s -> skid end ~f167. (First set as [97, 140] without the PRE offset: wrong frames, corrected)
+    {'name': 'mv_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (170, None)],
+     'expect': [{'clip': 'SS_180_Turn*', 'window': [117, 160], 'min_weight': 0.8, 'coverage': 0.9}]},
     # Skid at the BASE run stage (MinStage 0, 11-18): reverse before FramesToNextStage (40 sim f) so the run is still stage 1 (470 > MinSpeed 350)
     # skid-finish-4: released early (30 frames after the reverse, inside Skid Exit Run) and held long (1.5 s)
     # dash-ganon: L3 boost from idle with the stick pushed on the same frame (Smash dash); 'boost' = frame of a RunBoost tap

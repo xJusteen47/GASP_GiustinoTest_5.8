@@ -167,6 +167,14 @@ bool FGSTN_LayeredMove_RunSkid::Decide(const FMoverTickStartData& StartState, co
 	const EGSTN_SurfaceLedgeRule SurfaceLedge = bHasFloor ? Floor.Locomotion.SkidLedge : EGSTN_SurfaceLedgeRule::Inherit;
 	bStopAtLedge = SurfaceLedge == EGSTN_SurfaceLedgeRule::Inherit ? Tuning.Ledge == EGSTN_SkidLedge::StopAtLedge : SurfaceLedge == EGSTN_SurfaceLedgeRule::StopAtLedge;
 
+	// skid-fix-1: the clip's lateral drift goes to its own side; a turn latched to the other side mirrors it
+	ClipRootSign = 0;
+	if (Tuning.FollowsClipRoot())
+	{
+		const int32 ClipSide = Tuning.TurnSide == EGSTN_SkidTurnSide::Left ? -1 : 1;
+		ClipRootSign = static_cast<int8>(TurnSign != 0 && TurnSign != ClipSide ? -1 : 1);
+	}
+
 	Brake = FMath::Max(Tuning.Brake * Friction, 1.f);
 	EnterFrames = Tuning.EnterFrames;
 	ExitFrames = Tuning.ExitFrames;
@@ -197,6 +205,17 @@ bool FGSTN_LayeredMove_RunSkid::GenerateMove(const FMoverTickStartData& StartSta
 			return false;
 		}
 		RestFrame = FGSTN_RunSkidMath::FramesToRest(StartSpeed, Brake, DeltaSeconds);
+		if (ClipRootSign != 0)
+		{
+			// skid-fix-1: the skid lasts the clip. The brake's rest frame only splits the phases for the presentation (VFX, lean); the
+			// exit runs on to the clip's last frame instead of ExitFrames, so the walking mode (and the stick) never moves the capsule
+			// while the clip still has a planted foot
+			const FGSTN_LocomotionSimTuning* ClipLocomotion = FGSTN_LocomotionAttach::Find(MoverComp->GetOwner());
+			const float ClipSeconds = ClipLocomotion ? ClipLocomotion->RunStages.Skid.RootTrackSeconds() : 0.f;
+			const int32 ClipFrames = FMath::Max(FMath::CeilToInt32(ClipSeconds / DeltaSeconds), 2);
+			RestFrame = FMath::Clamp(RestFrame, 1, ClipFrames - 1);
+			ExitFrames = ClipFrames - RestFrame;
+		}
 		Life = static_cast<uint8>(EGSTN_RunSkidLife::Running);
 	}
 
@@ -247,6 +266,24 @@ bool FGSTN_LayeredMove_RunSkid::GenerateMove(const FMoverTickStartData& StartSta
 		const double DeltaDeg = FMath::UnwindDegrees(static_cast<double>(TurnTotalDeg) * Share - CurrentDeg);
 		return Up * (DeltaDeg / (StepMs * 0.001));
 	};
+
+	if (ClipRootSign != 0 && SkidTuning && SkidTuning->FollowsClipRoot())
+	{
+		// skid-fix-1 (owner 2026-11-20, back to stock GASP): from the first frame to the clip's end the capsule moves on the clip's root path
+		// (along the old direction, its own small drift to the side) and turns on the clip's yaw. No brake formula, no push toward the
+		// stick, no early finish of the turn: the planted foot of the clip stays planted. The stick takes over when the move ends
+		const float T0 = static_cast<float>(CurrentLiveFrame) * DeltaSeconds;
+		const FVector2D Delta = SkidTuning->SampleRootTrack(T0 + DeltaSeconds) - SkidTuning->SampleRootTrack(T0);
+		const FVector Side = Up.Cross(Direction);
+		FVector ClipVelocity = (Direction * Delta.X + Side * (Delta.Y * static_cast<double>(ClipRootSign))) / static_cast<double>(DeltaSeconds);
+		if (bStopAtLedge && !ClipVelocity.IsNearlyZero() && !FGSTN_GroundProbe::HasFloorAhead(StartState, *MoverComp, ClipVelocity, StepMs))
+		{
+			ClipVelocity = FVector::ZeroVector;
+		}
+		OutProposedMove.LinearVelocity = ClipVelocity;
+		OutProposedMove.AngularVelocityDegrees = AngularToShare(CurveShare);
+		return true;
+	}
 
 	if (Phase != EGSTN_RunSkidPhase::Exit)
 	{
@@ -347,6 +384,7 @@ void FGSTN_LayeredMove_RunSkid::NetSerialize(FArchive& Ar)
 	Ar << TurnSign;
 	Ar << StartFacing;
 	Ar << TurnTotalDeg;
+	Ar << ClipRootSign;
 	Ar << StartSpeed;
 	Ar << Brake;
 	Ar << EnterFrames;

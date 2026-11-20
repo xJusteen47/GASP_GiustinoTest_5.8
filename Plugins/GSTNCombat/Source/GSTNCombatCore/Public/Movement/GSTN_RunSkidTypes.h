@@ -130,6 +130,44 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 	}
 
 	/**
+	 * skid-fix-1 (owner 2026-11-20, stock GASP: the capsule never turns or moves toward the stick while a pivot clip plays its plant): the skid
+	 * clip's root path, cm from the clip's first frame, X along the old running direction, Y to the right of it (the clip's own turn side),
+	 * TurnCurveRate samples a second. Baked with TurnCurve (Tools/GAS/skid_turn_curve_bake.py). With TurnCurve and RootTrack both set the
+	 * skid lasts the clip: the capsule moves on this path and turns on TurnCurve from the first frame to the clip's end, with no brake
+	 * formula and no exit push toward the stick; the walking mode takes the stick back after it. Empty = the brake + exit rule above.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Turn")
+	TArray<FVector2D> RootTrack;
+
+	/** True when the skid follows its clip's root (RootTrack and TurnCurve both baked) */
+	bool FollowsClipRoot() const
+	{
+		return RootTrack.Num() >= 2 && TurnCurve.Num() >= 2;
+	}
+
+	/** Length of the baked clip root path, seconds */
+	float RootTrackSeconds() const
+	{
+		return RootTrack.Num() >= 2 ? static_cast<float>(RootTrack.Num() - 1) / FMath::Max(TurnCurveRate, 1.f) : 0.f;
+	}
+
+	/** RootTrack at Seconds after the skid start, linear between samples, held at the ends */
+	FVector2D SampleRootTrack(float Seconds) const
+	{
+		if (RootTrack.Num() == 0)
+		{
+			return FVector2D::ZeroVector;
+		}
+		const float X = FMath::Max(Seconds, 0.f) * FMath::Max(TurnCurveRate, 1.f);
+		const int32 I = FMath::FloorToInt32(X);
+		if (I >= RootTrack.Num() - 1)
+		{
+			return RootTrack.Last();
+		}
+		return FMath::Lerp(RootTrack[I], RootTrack[I + 1], X - static_cast<float>(I));
+	}
+
+	/**
 	 * The Movement.State.Skid.JumpWindow tag is on from this skid frame (0 = the first) to JumpWindowEnd included, so a kit binding
 	 * (a side somersault) can require it. Counted as the abilities see it: they read the state of the previous frame (CLAUDE.md rule 5),
 	 * the tag compensates that frame
