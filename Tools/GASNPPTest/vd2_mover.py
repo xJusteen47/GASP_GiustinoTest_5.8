@@ -29,6 +29,12 @@ _Move = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, wt.HWND, ctypes.POINT
 _target = GUID.of(TARGET)
 _pid = os.getpid()
 _moved = set()
+# Owner 2026-11-20 (speed-up.md 4): captures are low-res scene captures, so the editor's own windows are shrunk to EDITOR_WIN
+# ("WxH", default 960x540) and render less. EDITOR_WIN=full keeps them as they open: use it for owner-facing hi-res videos
+# (PIE_CAPTURE_HIRES viewport shots, screen recordings), which take the real window's size.
+_WIN = os.environ.get('EDITOR_WIN', '960x540').lower()
+_WIN = None if _WIN in ('', 'full', '0') else tuple(int(v) for v in _WIN.split('x'))
+_shrunk = set()
 _acc = [0.0]
 
 def _log(msg):
@@ -44,6 +50,13 @@ def sweep():
         p = wt.DWORD(); user32.GetWindowThreadProcessId(h, ctypes.byref(p))
         if p.value != _pid or not user32.IsWindowVisible(h):
             continue
+        if _WIN and h not in _shrunk:
+            r = wt.RECT(); user32.GetWindowRect(h, ctypes.byref(r))
+            if r.right - r.left > _WIN[0] or r.bottom - r.top > _WIN[1]:
+                user32.ShowWindow(h, 9)   # SW_RESTORE: a maximized window ignores SetWindowPos
+                user32.SetWindowPos(h, None, 0, 0, _WIN[0], _WIN[1], 0x0014)   # SWP_NOZORDER | SWP_NOACTIVATE
+                _log('shrink hwnd %s %dx%d -> %dx%d' % (h, r.right - r.left, r.bottom - r.top, _WIN[0], _WIN[1]))
+            _shrunk.add(h)
         cur = GUID()
         if _GetId(_mgr, h, ctypes.byref(cur)) != 0 or str(cur) == TARGET:
             continue

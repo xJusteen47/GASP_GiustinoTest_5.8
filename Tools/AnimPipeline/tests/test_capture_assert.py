@@ -127,6 +127,18 @@ def test_spec_and_cli():
         shutil.rmtree(d)
 
 
+def test_additive_layers_do_not_compete():
+    # cached-pose logging: base clip max(1-a, a) while the additive lean alpha a ramps; idle blending out still competes
+    rows = {f: row(f, [f'AS_V3 {max(1 - a, a):.2f} 0.1', f'BS_Relaxed_Walk_Leans {a:.2f} 0.1'])
+            for f, a in zip(range(0, 11), [i / 10 for i in range(11)])}
+    rows[11] = row(11, ['AS_V3 0.60 0.1', 'M_Idle 0.40 0.1', 'BS_Relaxed_Walk_Leans 0.30 0.1'])
+    assert not A.check_rows(rows, 'AS_V3', (0, 10))['ok']
+    r = A.check_rows(rows, 'AS_V3', (0, 10), additive=['BS_Relaxed_*Lean*'])
+    assert r['ok'] and r['min_in_window'] == 1.0, r
+    r = A.check_rows(rows, 'AS_V3', (11, 11), additive=['BS_Relaxed_*Lean*'])
+    assert not r['ok'] and abs(r['frames'][11] - 0.6) < 1e-3, r
+
+
 def test_real_capture():
     """jab-fk-3 variant capture (before montage weights were logged): the jab montage owns f30-f40 only with --montage-implicit."""
     if not os.path.exists(REAL):

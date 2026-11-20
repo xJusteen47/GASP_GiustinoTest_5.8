@@ -18,6 +18,11 @@ Pure Python, no editor: runs in the cloud, on the desktop, and inside the editor
                  checks <capture_dir>/<sequence>/frames.jsonl for every entry (same as the PIE_CAPTURE_ASSERT file of
                  pie_capture_move.py and the "expect" key of its sequences).
 
+Additive layers ("additive": ["BS_Relaxed_*Lean*", ...] in an expect entry, --additive "a|b" on the CLI): assets that are ADDED on
+top of the pose (GASP leans) do not compete with the clip. GASP applies them on a Use Cached Pose base, and the logger then gives the
+base clip max(1-a, a) while the additive alpha a ramps (runstart-v3: v3 0.50 + leans 0.50 at f90, both 1.00 at f99). With the option
+the clip's weight is its share of the NON-additive weights; a real competitor (idle blending out) still counts.
+
 Verdict: ASSERT: OK when the clip's weight is >= min_weight (0.8) on at least `coverage` (90 %) of the window's frames, and no frame
 of the window is missing. Coverage 90 % tolerates a one-frame dip (a sync-group tick record that skips a frame), never a
 different clip owning the pose. ASSERT: FAIL otherwise, with the clip that owned the worst frame. ASSERT: FAIL ... (catena di
@@ -97,11 +102,14 @@ def load_rows(path):
     return rows
 
 
-def check_rows(rows, clip, window, min_weight=MIN_WEIGHT, coverage=COVERAGE, montage_implicit=False):
+def check_rows(rows, clip, window, min_weight=MIN_WEIGHT, coverage=COVERAGE, montage_implicit=False, additive=None):
     """rows: {frame: row}. Returns a dict with 'ok' and every number the verdict uses."""
     first, last = int(window[0]), int(window[1])
     match = _matcher(clip)
+    add = _matcher('|'.join(additive)) if additive else None
     res = {'clip': clip, 'window': [first, last], 'min_weight': min_weight, 'coverage_needed': coverage, 'frames': {}}
+    if additive:
+        res['additive'] = list(additive)
     if last < first:
         res.update(ok=False, reason=f'window {first}:{last} is empty')
         return res
@@ -114,7 +122,12 @@ def check_rows(rows, clip, window, min_weight=MIN_WEIGHT, coverage=COVERAGE, mon
         players = frame_players(row, montage_implicit)
         if players is None:
             nodata.append(f); continue
-        w = sum(wt for n, wt in players if match(n))
+        if add:
+            players = [p for p in players if not add(p[0])]
+            tot = sum(wt for _, wt in players)
+            w = sum(wt for n, wt in players if match(n)) / tot if tot > 1e-6 else 0.0
+        else:
+            w = sum(wt for n, wt in players if match(n))
         top = max(players, key=lambda p: p[1]) if players else ('<nothing>', 0.0)
         res['frames'][f] = round(w, 3)
         if w >= min_weight - 1e-6:
@@ -164,7 +177,7 @@ def check_sequence(frames_path, expects, montage_implicit=False):
                 for e in expects]
     rows = load_rows(frames_path)
     return [check_rows(rows, e['clip'], e['window'], e.get('min_weight', MIN_WEIGHT), e.get('coverage', COVERAGE),
-                       e.get('montage_implicit', montage_implicit)) for e in expects]
+                       e.get('montage_implicit', montage_implicit), e.get('additive')) for e in expects]
 
 
 def check_spec(spec, capture_dir, montage_implicit=False):
@@ -204,6 +217,8 @@ def main(argv):
     minw = _arg(argv, '--min-weight', MIN_WEIGHT, float)
     cov = _arg(argv, '--coverage', COVERAGE, float)
     spec = _arg(argv, '--spec')
+    additive = _arg(argv, '--additive')
+    additive = [x for x in additive.split('|') if x] if additive else None
     implicit = '--montage-implicit' in argv
     if implicit:
         argv.remove('--montage-implicit')
@@ -225,7 +240,7 @@ def main(argv):
     if not os.path.exists(frames):
         print(f'ASSERT: FAIL no {frames}'); return 2
     a, b = win.split(':')
-    res = check_rows(load_rows(frames), clip, (int(a), int(b)), minw, cov, implicit)
+    res = check_rows(load_rows(frames), clip, (int(a), int(b)), minw, cov, implicit, additive)
     out = out or os.path.join(os.path.dirname(os.path.abspath(frames)), 'assert.json')
     json.dump(res, open(out, 'w', encoding='utf-8'), indent=1)
     print(line(res))
