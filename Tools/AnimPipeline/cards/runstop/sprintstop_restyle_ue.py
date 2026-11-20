@@ -21,6 +21,7 @@ SIDES = {
     "R": "/Game/Characters/UEFN_Mannequin/Animations/Sprint/M_Relaxed_Sprint_Stop_F_Rfoot",
 }
 VER = os.environ.get("RS_VER", "v2")
+V0 = os.environ.get("RS_V0", "v0")   # base export; must use the same Cascadeur export settings as VER (v3: v0e = export_joints, up Z, baked)
 EAL = unreal.EditorAssetLibrary
 AL = unreal.AnimationLibrary
 
@@ -85,7 +86,7 @@ def build(side, src_path, rep):
     src = unreal.load_asset(src_path)
     skel = src.get_editor_property("skeleton")
     n = src.get_editor_property("number_of_sampled_keys")
-    a = import_fbx(os.path.join(WORK, f"SprintStop_{side}_v0.fbx"), f"Casc_SprintStop_{side}_v0", skel)
+    a = import_fbx(os.path.join(WORK, f"SprintStop_{side}_{V0}.fbx"), f"Casc_SprintStop_{side}_{V0}", skel)
     b = import_fbx(os.path.join(WORK, f"SprintStop_{side}_{VER}.fbx"), f"Casc_SprintStop_{side}_{VER}", skel)
     na, nb = a.get_editor_property("number_of_sampled_keys"), b.get_editor_property("number_of_sampled_keys")
     r = rep.setdefault(side, {"frames": [n, na, nb]})
