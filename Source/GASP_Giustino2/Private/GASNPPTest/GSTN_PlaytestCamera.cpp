@@ -8,6 +8,10 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "HAL/FileManager.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "GameFramework/Actor.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 
@@ -22,6 +26,9 @@ namespace GSTNPlaytestCamera
 		TEXT("Tilt-shift toy look: -1 = camera settings (DA_CameraAnchor_Default TiltShift), 0 = off, 1 = Cinematic DOF, 2 = cheap screen band"));
 	static TAutoConsoleVariable<float> CVarTiltShiftIntensity(TEXT("gstn.Camera.TiltShift.Intensity"), -1.f,
 		TEXT("Tilt-shift intensity override (-1 = camera settings)"));
+	static TAutoConsoleVariable<int32> CVarTrace(TEXT("gstn.Camera.Trace"), 0,
+		TEXT("1 = write one CSV line per rendered frame to Saved/Logs/gstn_camera_trace.csv: frame time, the view GASP's rig produced, the anchor's ")
+		TEXT("values, the push back sweep and the final view. Diagnostics for camera jitter (2026-11-20), debug only"));
 	static constexpr float ProbeRadius = 12.f;
 	/** Shared camera anchor tuning, optional (C++ defaults when missing). Created by Tools/GASNPPTest/camera_anchor_setup.py */
 	static const TCHAR* AnchorSettingsPath = TEXT("/Game/Blueprints/Data/DA_CameraAnchor_Default.DA_CameraAnchor_Default");
@@ -109,6 +116,8 @@ void UGSTN_PlaytestCameraModifier::ApplyTiltShift(const FGSTN_CameraTiltShiftSet
 bool UGSTN_PlaytestCameraModifier::ModifyCamera(float DeltaTime, FMinimalViewInfo& InOutPOV)
 {
 	Super::ModifyCamera(DeltaTime, InOutPOV);
+	const FMinimalViewInfo TraceIn = InOutPOV;
+	bool bSweepHit = false;
 	// Camera anchor in ShiftView mode (or no camera component found): the view moves by the anchor's correction first
 	const AActor* ViewTarget = CameraOwner ? CameraOwner->GetViewTarget() : nullptr;
 	const UGSTN_CameraAnchorComponent* Anchor = ViewTarget ? ViewTarget->FindComponentByClass<UGSTN_CameraAnchorComponent>() : nullptr;
@@ -136,6 +145,7 @@ bool UGSTN_PlaytestCameraModifier::ModifyCamera(float DeltaTime, FMinimalViewInf
 			if (World->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, ECC_Camera, FCollisionShape::MakeSphere(GSTNPlaytestCamera::ProbeRadius), Query))
 			{
 				End = Hit.Location;
+				bSweepHit = true;
 			}
 		}
 		InOutPOV.Location = End;
@@ -146,7 +156,49 @@ bool UGSTN_PlaytestCameraModifier::ModifyCamera(float DeltaTime, FMinimalViewInf
 		const bool bAnchorRuns = Anchor && Anchor->IsActiveForOwner();
 		ApplyTiltShift(Tuning.TiltShift, InOutPOV, bAnchorRuns ? Anchor->GetDampedAnchor() : ViewTarget->GetActorLocation());
 	}
+	if (GSTNPlaytestCamera::CVarTrace.GetValueOnGameThread() != 0)
+	{
+		Trace(DeltaTime, TraceIn, InOutPOV, bSweepHit, Anchor);
+	}
+	else if (TraceLines.Num() > 0)
+	{
+		Trace(DeltaTime, TraceIn, InOutPOV, bSweepHit, nullptr);  // flushes the tail
+	}
 	return false;
+}
+
+void UGSTN_PlaytestCameraModifier::Trace(float DeltaTime, const FMinimalViewInfo& In, const FMinimalViewInfo& Out, bool bSweepHit, const UGSTN_CameraAnchorComponent* Anchor)
+{
+	const FString Path = FPaths::ProjectLogDir() / TEXT("gstn_camera_trace.csv");
+	const bool bOn = GSTNPlaytestCamera::CVarTrace.GetValueOnGameThread() != 0;
+	if (bOn)
+	{
+		if (!bTraceHeaderWritten)
+		{
+			bTraceHeaderWritten = true;
+			FFileHelper::SaveStringToFile(TEXT("frame,time,dt,in_x,in_y,in_z,in_pitch,in_yaw,out_x,out_y,out_z,out_pitch,out_yaw,sweep_hit,")
+				TEXT("anchor_on,in_air,root_x,root_y,root_z,stand_x,stand_y,stand_z,damped_z,corr_x,corr_y,corr_z,cam_comp_x,cam_comp_y,cam_comp_z\n"), *Path);
+		}
+		const AActor* Target = CameraOwner ? CameraOwner->GetViewTarget() : nullptr;
+		const FVector Root = Target ? Target->GetActorLocation() : FVector::ZeroVector;
+		const bool bAnchorOn = Anchor && Anchor->IsActiveForOwner();
+		const FVector Stand = Anchor ? Anchor->GetStandingRoot() : FVector::ZeroVector;
+		const FVector Corr = Anchor ? Anchor->GetLastCorrection() : FVector::ZeroVector;
+		const USceneComponent* Moved = Anchor ? Anchor->GetMovedCameraComponent() : nullptr;
+		const FVector CamComp = Moved ? Moved->GetComponentLocation() : FVector::ZeroVector;
+		const double Now = CameraOwner && CameraOwner->GetWorld() ? CameraOwner->GetWorld()->GetTimeSeconds() : 0.0;
+		TraceLines.Add(FString::Printf(TEXT("%llu,%.4f,%.4f,%.2f,%.2f,%.2f,%.3f,%.3f,%.2f,%.2f,%.2f,%.3f,%.3f,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f"),
+			(unsigned long long)GFrameCounter, Now, DeltaTime, In.Location.X, In.Location.Y, In.Location.Z, In.Rotation.Pitch, In.Rotation.Yaw,
+			Out.Location.X, Out.Location.Y, Out.Location.Z, Out.Rotation.Pitch, Out.Rotation.Yaw, bSweepHit ? 1 : 0, bAnchorOn ? 1 : 0,
+			Anchor && Anchor->WasInAirLastTick() ? 1 : 0, Root.X, Root.Y, Root.Z, Stand.X, Stand.Y, Stand.Z, Anchor ? Anchor->GetDampedAnchor().Z : 0.0,
+			Corr.X, Corr.Y, Corr.Z, CamComp.X, CamComp.Y, CamComp.Z));
+	}
+	if (TraceLines.Num() >= 60 || (!bOn && TraceLines.Num() > 0))
+	{
+		FFileHelper::SaveStringToFile(FString::Join(TraceLines, TEXT("\n")) + TEXT("\n"), *Path, FFileHelper::EEncodingOptions::AutoDetect,
+			&IFileManager::Get(), FILEWRITE_Append);
+		TraceLines.Reset();
+	}
 }
 
 bool UGSTN_PlaytestCameraSubsystem::ShouldCreateSubsystem(UObject* Outer) const

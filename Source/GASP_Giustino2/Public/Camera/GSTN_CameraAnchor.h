@@ -294,6 +294,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Camera|Anchor")
 	FVector GetStandingRoot() const { return LastStandingRoot; }
 
+	/** Diagnostics (gstn.Camera.Trace): the component the anchor moves (null = ShiftView), and the air state it read this frame */
+	USceneComponent* GetMovedCameraComponent() const { return CameraComponent.Get(); }
+	bool WasInAirLastTick() const { return bLastInAir; }
+
 	/** True once the damper holds a value (it resets while the anchor is off) */
 	bool HasDampedAnchor() const { return Damper.bValid; }
 
@@ -341,6 +345,7 @@ private:
 	FGSTN_CameraAnchorDamper Damper;
 	FVector LastCorrection = FVector::ZeroVector;
 	FVector LastStandingRoot = FVector::ZeroVector;
+	bool bLastInAir = false;
 	bool bShiftView = false;
 	/** 0..1 blend of the aim crouch offset */
 	float AimCrouchAlpha = 0.f;
