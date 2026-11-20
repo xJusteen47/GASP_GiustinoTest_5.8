@@ -10,6 +10,9 @@
 #include "HAL/IConsoleManager.h"
 #include "HAL/FileManager.h"
 #include "Misc/FileHelper.h"
+#include "Components/CapsuleComponent.h"
+#include "GameplayTagContainer.h"
+#include "MoverComponent.h"
 #include "Misc/Paths.h"
 #include "GameFramework/Actor.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -180,7 +183,7 @@ void UGSTN_PlaytestCameraModifier::Trace(float DeltaTime, const FMinimalViewInfo
 		{
 			bTraceHeaderWritten = true;
 			FFileHelper::SaveStringToFile(TEXT("frame,time,dt,in_x,in_y,in_z,in_pitch,in_yaw,out_x,out_y,out_z,out_pitch,out_yaw,sweep_hit,")
-				TEXT("anchor_on,in_air,root_x,root_y,root_z,stand_x,stand_y,stand_z,damped_z,corr_x,corr_y,corr_z,cam_comp_x,cam_comp_y,cam_comp_z\n"), *Path);
+				TEXT("anchor_on,in_air,root_x,root_y,root_z,stand_x,stand_y,stand_z,damped_z,corr_x,corr_y,corr_z,cam_comp_x,cam_comp_y,cam_comp_z,mesh_stand_z,half_height,crouch\n"), *Path);
 		}
 		const AActor* Target = CameraOwner ? CameraOwner->GetViewTarget() : nullptr;
 		const FVector Root = Target ? Target->GetActorLocation() : FVector::ZeroVector;
@@ -190,11 +193,17 @@ void UGSTN_PlaytestCameraModifier::Trace(float DeltaTime, const FMinimalViewInfo
 		const USceneComponent* Moved = Anchor ? Anchor->GetMovedCameraComponent() : nullptr;
 		const FVector CamComp = Moved ? Moved->GetComponentLocation() : FVector::ZeroVector;
 		const double Now = CameraOwner && CameraOwner->GetWorld() ? CameraOwner->GetWorld()->GetTimeSeconds() : 0.0;
-		TraceLines.Add(FString::Printf(TEXT("%llu,%.4f,%.4f,%.2f,%.2f,%.2f,%.3f,%.3f,%.2f,%.2f,%.2f,%.3f,%.3f,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f"),
+		// Capsule columns: a crouch, aerial or landing capsule change shows in half_height; mesh_stand_z is the first version's (DrawnMesh) height
+		const UCapsuleComponent* Capsule = Target ? Cast<UCapsuleComponent>(Target->GetRootComponent()) : nullptr;
+		const UMoverComponent* TargetMover = Target ? Target->FindComponentByClass<UMoverComponent>() : nullptr;
+		static const FGameplayTag CrouchTag = FGameplayTag::RequestGameplayTag(TEXT("Mover.IsCrouching"), false);
+		const bool bCrouch = TargetMover && CrouchTag.IsValid() && TargetMover->HasGameplayTag(CrouchTag, true);
+		TraceLines.Add(FString::Printf(TEXT("%llu,%.4f,%.4f,%.2f,%.2f,%.2f,%.3f,%.3f,%.2f,%.2f,%.2f,%.3f,%.3f,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%d"),
 			(unsigned long long)GFrameCounter, Now, DeltaTime, In.Location.X, In.Location.Y, In.Location.Z, In.Rotation.Pitch, In.Rotation.Yaw,
 			Out.Location.X, Out.Location.Y, Out.Location.Z, Out.Rotation.Pitch, Out.Rotation.Yaw, bSweepHit ? 1 : 0, bAnchorOn ? 1 : 0,
 			Anchor && Anchor->WasInAirLastTick() ? 1 : 0, Root.X, Root.Y, Root.Z, Stand.X, Stand.Y, Stand.Z, Anchor ? Anchor->GetDampedAnchor().Z : 0.0,
-			Corr.X, Corr.Y, Corr.Z, CamComp.X, CamComp.Y, CamComp.Z));
+			Corr.X, Corr.Y, Corr.Z, CamComp.X, CamComp.Y, CamComp.Z, Anchor ? Anchor->GetMeshStandingRoot().Z : 0.0,
+			Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 0.0, bCrouch ? 1 : 0));
 	}
 	if (TraceLines.Num() >= 60 || (!bOn && TraceLines.Num() > 0))
 	{

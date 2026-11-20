@@ -281,4 +281,23 @@ bool FGSTN_CameraAnchorLibraryNullTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraAnchorCapsuleBottomTest, "GSTN.Camera.Anchor.CapsuleChangeKeepsHeight", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraAnchorCapsuleBottomTest::RunTest(const FString&)
+{
+	// Owner 2026-11-20 (crouch spam bounce): a grounded capsule change keeps the bottom on the floor, so the capsule-bottom height must not move.
+	// Standing 86 -> crouch 55: the centre drops 31 cm, the height stays the standing centre's (floor + 86)
+	const FVector Up = FVector::UpVector;
+	const double Floor = 10.0;
+	const double Standing = FGSTN_CameraAnchorDamper::StandingHeightFromCapsule(FVector(0, 0, Floor + 86.0), Up, 86.0, 86.0);
+	const double Crouched = FGSTN_CameraAnchorDamper::StandingHeightFromCapsule(FVector(0, 0, Floor + 55.0), Up, 55.0, 86.0);
+	const double Knockdown = FGSTN_CameraAnchorDamper::StandingHeightFromCapsule(FVector(0, 0, Floor + 30.0), Up, 30.0, 86.0);
+	Near(*this, TEXT("standing = floor + standing half height"), Standing, Floor + 86.0, 1e-6);
+	Near(*this, TEXT("crouch does not move it"), Crouched, Standing, 1e-6);
+	Near(*this, TEXT("knockdown capsule does not move it"), Knockdown, Standing, 1e-6);
+	// Tilted gravity: measured along Up
+	const FVector Side = FVector(1, 0, 0);
+	Near(*this, TEXT("along a tilted up"), FGSTN_CameraAnchorDamper::StandingHeightFromCapsule(FVector(Floor + 55.0, 7, -3), Side, 55.0, 86.0), Floor + 86.0, 1e-6);
+	return true;
+}
+
 #endif

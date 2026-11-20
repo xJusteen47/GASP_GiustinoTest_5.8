@@ -23,8 +23,10 @@ class GASP_GIUSTINO2_API UGSTN_CameraAnchorLibrary : public UBlueprintFunctionLi
 
 public:
 	/**
-	 * The character's camera pivot this frame, undamped: its actor root as if its capsule were the standing one, read from the drawn (smoothed)
-	 * mesh. Follows every real movement at once (jumps included), never a capsule resize or a simulation step. Same height as the standing actor
+	 * The character's camera pivot this frame, undamped: its actor root as if its capsule were the standing one. Horizontal from the drawn
+	 * (smoothed) mesh; height from the capsule bottom + standing half height (EGSTN_CameraVerticalSource::CapsuleBottom), so no capsule change
+	 * on the ground (crouch, landing, knockdown) moves it at all. The height steps at the 62.5 Hz simulation rate on slopes, stairs and jumps:
+	 * damp it (or use GetDampedCameraPivot). Same height as the standing actor
 	 * location (capsule centre). Returns false and the actor location when the character has no mesh to read
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Camera", meta = (DefaultToSelf = "Character", ReturnDisplayName = "Found Mesh"))

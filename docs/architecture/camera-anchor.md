@@ -10,7 +10,7 @@ Use instead (Blueprint category **GSTN | Camera**, C++ `UGSTN_CameraAnchorLibrar
 
 | Node | Returns | Use it for |
 |---|---|---|
-| **Get Camera Pivot** (Character) | Where the actor root would be with the standing capsule, read from the drawn, smoothed mesh. Follows every real movement immediately (jumps too). Bool: false = no mesh found, actor location returned | Your own damping, aim, lock-on, framing |
+| **Get Camera Pivot** (Character) | Where the actor root would be with the standing capsule: horizontal from the drawn, smoothed mesh, height from the capsule's bottom + the standing half height, so no capsule change on the ground (crouch, landing, knockdown) moves it. The height steps at the 62.5 Hz logic rate on slopes and jumps: damp it. Bool: false = no mesh found, actor location returned | Your own damping, aim, lock-on, framing |
 | **Get Damped Camera Pivot** (Character) | The same pivot with the project camera's damping and Mario-style air hold (tuning in `DA_CameraAnchor_Default`). `Damped` false = the anchor is not running on that character, you get the undamped pivot | Matching the built-in camera's feel |
 | `GSTN_CameraAnchor` component: **Get Damped Anchor / Get Standing Root** | Same values, read straight from the component | When you already hold the component |
 
@@ -18,6 +18,6 @@ Use instead (Blueprint category **GSTN | Camera**, C++ `UGSTN_CameraAnchorLibrar
 camera component's view, or any tick in **TG_PostPhysics or earlier**. Never move a camera from a tick in **TG_PostUpdateWork**: Unreal
 builds the view of the frame before that group, so the camera shows one frame late and shakes (the 2026-11-20 jitter bug).
 
-Console: `gstn.Camera.Anchor 0/1` (anchor off/on), `gstn.Camera.Anchor.Early 1/0` (new/old update order, A/B only),
+Console: `gstn.Camera.Anchor.Vertical 1/2` (height from capsule bottom = default / from the drawn mesh, first version), `gstn.Camera.Anchor 0/1` (anchor off/on), `gstn.Camera.Anchor.Early 1/0` (new/old update order, A/B only),
 `gstn.Camera.Anchor.Debug 1` (red = pivot, green = damped pivot, yellow = raw actor location).
 Code: `Source/GASP_Giustino2/{Public,Private}/Camera/GSTN_CameraAnchor*`.

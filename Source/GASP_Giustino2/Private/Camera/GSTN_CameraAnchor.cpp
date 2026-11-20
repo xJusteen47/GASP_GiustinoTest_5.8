@@ -10,6 +10,8 @@
 #include "GameplayTagContainer.h"
 #include "HAL/IConsoleManager.h"
 #include "MoverComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Movement/GSTN_BodyCapsuleModifier.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_CameraAnchor)
@@ -22,6 +24,9 @@ namespace GSTNCameraAnchor
 		TEXT("1 = the anchor updates BEFORE the camera managers evaluate the view (TG_PostPhysics): the view of a frame uses that frame's anchor. ")
 		TEXT("0 = old order (TG_PostUpdateWork, after the view): the view used last frame's correction on top of this frame's actor root, which ")
 		TEXT("steps at the 62.5 Hz simulation rate = camera jitter on jumps, landings and fast moves. A/B only"));
+	static TAutoConsoleVariable<int32> CVarVertical(TEXT("gstn.Camera.Anchor.Vertical"), 0,
+		TEXT("Where the camera anchor's height comes from: 0 = settings (DA_CameraAnchor_Default, default CapsuleBottom), 1 = capsule bottom + ")
+		TEXT("standing half height (no capsule change moves it), 2 = drawn mesh (first version). A/B only"));
 	static TAutoConsoleVariable<int32> CVarDebug(TEXT("gstn.Camera.Anchor.Debug"), 0,
 		TEXT("1 = draw the camera anchor: red raw standing root, green damped anchor, yellow actor root"));
 
@@ -163,6 +168,11 @@ FVector FGSTN_CameraAnchorDamper::Step(const FVector& Target, const FVector& InU
 
 	Location = Plane + Vertical * Up;
 	return Location;
+}
+
+double FGSTN_CameraAnchorDamper::StandingHeightFromCapsule(const FVector& Root, const FVector& Up, double CurrentHalfHeight, double StandingHalfHeight)
+{
+	return FVector::DotProduct(Root, Up.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector)) - CurrentHalfHeight + StandingHalfHeight;
 }
 
 FVector FGSTN_CameraAnchorDamper::StandingRootFromVisual(const FTransform& VisualWorld, const FTransform& VisualStandingRelative, const FVector& ParentScale)
@@ -343,7 +353,37 @@ void UGSTN_CameraAnchorComponent::SetTickOrder(bool bEarly)
 	bOrderSet = true;
 }
 
-bool UGSTN_CameraAnchorComponent::ComputeStandingRoot(const AActor* Actor, FVector& OutLocation)
+EGSTN_CameraVerticalSource UGSTN_CameraAnchorComponent::ResolveVerticalSource(EGSTN_CameraVerticalSource FromSettings)
+{
+	const int32 Forced = GSTNCameraAnchor::CVarVertical.GetValueOnGameThread();
+	return Forced == 1 ? EGSTN_CameraVerticalSource::CapsuleBottom : (Forced == 2 ? EGSTN_CameraVerticalSource::DrawnMesh : FromSettings);
+}
+
+FVector UGSTN_CameraAnchorComponent::ApplyVerticalSource(const AActor& Actor, const FVector& MeshStandingRoot, const FVector& InUp, EGSTN_CameraVerticalSource VerticalSource)
+{
+	const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(Actor.GetRootComponent());
+	if (VerticalSource != EGSTN_CameraVerticalSource::CapsuleBottom || !Capsule)
+	{
+		return MeshStandingRoot;
+	}
+	// Standing half height: the pawn's own capsule (the body capsule modifier's reference), else the capsule's archetype, else the current one
+	double StandingHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+	FGSTN_BodyCapsuleShape Standing;
+	const UMoverComponent* Mover = Actor.FindComponentByClass<UMoverComponent>();
+	if (Mover && FGSTN_BodyCapsuleModifier::GetStanding(*Mover, Standing) && Standing.HalfHeight > 0.f)
+	{
+		StandingHalfHeight = Standing.HalfHeight * Capsule->GetComponentScale().Z;
+	}
+	else if (const UCapsuleComponent* Archetype = Cast<UCapsuleComponent>(Capsule->GetArchetype()))
+	{
+		StandingHalfHeight = Archetype->GetUnscaledCapsuleHalfHeight() * Capsule->GetComponentScale().Z;
+	}
+	const FVector Up = InUp.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+	const double Height = FGSTN_CameraAnchorDamper::StandingHeightFromCapsule(Capsule->GetComponentLocation(), Up, Capsule->GetScaledCapsuleHalfHeight(), StandingHalfHeight);
+	return MeshStandingRoot + (Height - FVector::DotProduct(MeshStandingRoot, Up)) * Up;
+}
+
+bool UGSTN_CameraAnchorComponent::ComputeStandingRoot(const AActor* Actor, FVector& OutLocation, EGSTN_CameraVerticalSource VerticalSource)
 {
 	OutLocation = Actor ? Actor->GetActorLocation() : FVector::ZeroVector;
 	if (!Actor)
@@ -370,6 +410,8 @@ bool UGSTN_CameraAnchorComponent::ComputeStandingRoot(const AActor* Actor, FVect
 	}
 	const FVector ParentScale = Actor->GetRootComponent() ? Actor->GetRootComponent()->GetComponentScale() : FVector::OneVector;
 	OutLocation = FGSTN_CameraAnchorDamper::StandingRootFromVisual(Visual->GetComponentTransform(), GSTNCameraAnchor::StandingRelative(*Visual), ParentScale);
+	const UMoverComponent* UpSource = Actor->FindComponentByClass<UMoverComponent>();
+	OutLocation = ApplyVerticalSource(*Actor, OutLocation, UpSource ? UpSource->GetUpDirection() : Actor->GetActorUpVector(), ResolveVerticalSource(VerticalSource));
 	return true;
 }
 
@@ -456,10 +498,13 @@ void UGSTN_CameraAnchorComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	const FVector Root = Owner->GetActorLocation();
 	const USceneComponent* Visual = VisualComponent.Get();
 	const FVector ParentScale = Owner->GetRootComponent() ? Owner->GetRootComponent()->GetComponentScale() : FVector::OneVector;
-	const FVector Raw = Visual ? FGSTN_CameraAnchorDamper::StandingRootFromVisual(Visual->GetComponentTransform(), VisualRelativeStanding, ParentScale) : Root;
-	LastStandingRoot = Raw;
+	const FVector MeshRaw = Visual ? FGSTN_CameraAnchorDamper::StandingRootFromVisual(Visual->GetComponentTransform(), VisualRelativeStanding, ParentScale) : Root;
 	const UMoverComponent* Mover = Owner->FindComponentByClass<UMoverComponent>();
 	const FVector Up = Mover ? Mover->GetUpDirection() : Owner->GetActorUpVector();
+	// Height from the capsule bottom (default): no capsule change moves the camera, whatever the mesh and the smoothing do meanwhile
+	const FVector Raw = ApplyVerticalSource(*Owner, MeshRaw, Up, ResolveVerticalSource(Tuning.VerticalSource));
+	LastMeshStandingRoot = MeshRaw;
+	LastStandingRoot = Raw;
 	// Airborne as Mover reports it (its own state tag, same source as the crouch); no Mover = always grounded (no air hold)
 	static const FGameplayTag InAirTag = FGameplayTag::RequestGameplayTag(TEXT("Mover.IsInAir"), false);
 	const bool bInAir = Mover && InAirTag.IsValid() && Mover->HasGameplayTag(InAirTag, true);
