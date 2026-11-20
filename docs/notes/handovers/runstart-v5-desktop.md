@@ -41,4 +41,15 @@ review_fable_r6.md. Owner videos owner/runstart_v4r5.mp4, _025x.mp4.
   stock rows. Warping is not enough: orientation warping corrects a few tens of degrees, not a 180/90 turn during the start (body
   would twist or pop). Recommended: new thread (Opus high, desktop, Cascadeur, ~15-20 $): v4r5-style clips over the stock B/LL/RL
   root and turn (same compose path as v4: stock root + frantic style), as sibling rows; brief with identity traits (rule 13a).
-COSTO: ~16 $ | ~12 min desktop | review ~0.08M token
+## Curves vs GASP (owner 20:16Z) and lock (20:17Z)
+v4r5 locked: tag approved/runstart-v4r5, line in docs/notes/anim-approvate.md. Upright variant NOT started (context limit): next thread.
+Compare (Tools/GAS/routing/curves_compare_pairs.py, headless, Saved/Routing/curves_compare_pairs.txt/.json, 11 samples per curve):
+- Sprint stop Ganon L/R and LandStand_Retime_v2: same curve set and ranges as their stock rows.
+- Run start v4r5 vs M_Relaxed_Run_Start_F_L/R: (1) movedata_speed MISSING (stock 0 -> 375 cm/s; curves_author removes it on
+  purpose since skid a5: dynamic play rate stalled the skid); with root motion + ramp it is the stock way to keep cadence matched to
+  the capsule (owner's foot-slide point), but it rescales the frantic timing: test A/B on the variant. (2) enable_warping: stock
+  0 at f0 -> 1 by ~10% of the clip, ours 1 from f0. (3) phase: stock signed (-1..1), ours 0..1: different convention; ask the
+  Unreal Assistant what reads phase before changing curves_author. Skid pair not found by name (pivot clip name differs).
+Recommended next thread (desktop, Opus high, ~15 $): upright variant v4r6 (less sprint lean, same rev-up) + curves (1)-(3) on it,
+capture A/B vs v4r5, Fable review. Then backward starts from the winner.
+COSTO: ~18 $ | ~12 min desktop | review ~0.08M token
