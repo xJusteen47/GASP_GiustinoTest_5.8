@@ -71,6 +71,29 @@ def phase(cl, cr, n):
                 out.append((pa + d * (f - fa) / max(fb - fa, 1)) % 1.0); break
     return out
 
+def phase_stock(cl, cr, n):
+    # Stock GASP convention (read 2026-11-20 from M_Neutral_Run_Loop_F and M_Relaxed_Run_Start_F_L/R, curves_dump_stock_start.py ->
+    # Saved/Routing/stock_start_curves.json): a TRIANGLE wave, +1 at each left contact onset, -1 at each right onset, linear between.
+    # Before the first step it ramps linearly from the opposite foot's value at f0 (stock start L: -1 at f0 -> +1 at the first L
+    # contact); after the last onset it keeps the last slope toward the other foot, clamped to +-1. Read by the Curve channel of
+    # PSS_Default_Mover / PSS_Relaxed_Loops (loop pose search), so it picks which loop foot follows our start.
+    # a foot already down at f0 (standing start) is not a step: only onsets after a lift count
+    ev = sorted([(i, 1.0) for i in onsets(cl) if i > 0] + [(i, -1.0) for i in onsets(cr) if i > 0])
+    ev = [e for k, e in enumerate(ev) if k == 0 or e[1] != ev[k - 1][1]]   # two onsets of the same foot in a row: keep the first
+    if len(ev) < 2:
+        return None
+    out = []
+    for f in range(n):
+        if f <= ev[0][0]:
+            t = f / float(max(ev[0][0], 1)); out.append(-ev[0][1] + 2.0 * ev[0][1] * t); continue
+        if f >= ev[-1][0]:
+            span = max(ev[-1][0] - ev[-2][0], 1)
+            out.append(max(-1.0, min(1.0, ev[-1][1] - 2.0 * ev[-1][1] * (f - ev[-1][0]) / span))); continue
+        for (fa, pa), (fb, pb) in zip(ev, ev[1:]):
+            if fa <= f <= fb:
+                out.append(pa + (pb - pa) * (f - fa) / float(max(fb - fa, 1))); break
+    return out
+
 def gasp_curve(seq, name, rows):
     try:
         return [AL.get_float_value_at_time(seq, name, r["t"]) for r in rows]
@@ -111,7 +134,21 @@ for path, kind in spec:
     # NO movedata_speed (2026-11-19, skid a5 FAIL): ABP Get_DynamicPlayRate plays any clip that has it at capsule speed / curve speed,
     # so our authored timing stalled near speed 0 (skid) and drifted (run stop). Our clips play at their own rate: removed if present
     curves = {"contact_l": cl, "contact_r": cr}
-    if not DRY and AL.does_curve_exist(seq, "movedata_speed", unreal.RawCurveTrackTypes.RCT_FLOAT):
+    # kind start_stock (runstart-v6, owner 2026-11-20): run start with the full stock GASP start set, A/B against kind start:
+    # movedata_speed = the clip's own root speed (smoothed, stock M_Relaxed_Run_Start_F_* is 0 -> 375 from its root), so dynamic
+    # play rate = capsule / root speed stays ~1 while the data ramp tracks the clip; enable_warping 0 at f0 -> 1 at 10 % (smoothstep)
+    # like stock; phase in the stock signed convention (phase_stock).
+    if kind == "start_stock":
+        k = 5
+        sm = [sum(sp[max(0, i - k):i + k + 1]) / len(sp[max(0, i - k):i + k + 1]) for i in range(n)]
+        sm[0] = 0.0
+        curves["movedata_speed"] = sm
+        e = max(1, int(round(0.10 * (n - 1))))
+        curves["enable_warping"] = [(lambda t: t * t * (3 - 2 * t))(min(1.0, i / float(e))) for i in range(n)]
+        ph = phase_stock(cl, cr, n)
+        if ph:
+            curves["phase"] = ph
+    elif not DRY and AL.does_curve_exist(seq, "movedata_speed", unreal.RawCurveTrackTypes.RCT_FLOAT):
         AL.remove_curve(seq, "movedata_speed", False)
     if kind in ("start", "pivot"):
         ph = phase(cl, cr, n)
