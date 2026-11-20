@@ -255,4 +255,16 @@ bool FGSTN_CameraTiltShiftMathTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraAnchorTicksBeforeViewTest, "GSTN.Camera.Anchor.TicksBeforeTheView", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraAnchorTicksBeforeViewTest::RunTest(const FString&)
+{
+	// 2026-11-20 jitter: UWorld::Tick updates the camera managers after TG_PostPhysics and before TG_PostUpdateWork. An anchor ticking in
+	// TG_PostUpdateWork moves the camera after the view was built: each view = last frame's correction + this frame's actor root, which steps at
+	// the 62.5 Hz simulation rate. The anchor must tick in the last group before the view
+	const UGSTN_CameraAnchorComponent* Default = GetDefault<UGSTN_CameraAnchorComponent>();
+	TestEqual(TEXT("anchor tick group"), static_cast<int32>(Default->PrimaryComponentTick.TickGroup), static_cast<int32>(TG_PostPhysics));
+	TestEqual(TEXT("early group constant"), static_cast<int32>(UGSTN_CameraAnchorComponent::EarlyTickGroup), static_cast<int32>(TG_PostPhysics));
+	return true;
+}
+
 #endif

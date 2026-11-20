@@ -10,6 +10,7 @@
 #include "GameplayTagContainer.h"
 #include "HAL/IConsoleManager.h"
 #include "MoverComponent.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_CameraAnchor)
 
@@ -17,6 +18,10 @@ namespace GSTNCameraAnchor
 {
 	static TAutoConsoleVariable<int32> CVarEnable(TEXT("gstn.Camera.Anchor"), 1,
 		TEXT("1 = the camera follows the damped, capsule-independent anchor (GSTN_CameraAnchor.h). 0 = GASP's actor-root camera (A/B). Presentation only"));
+	static TAutoConsoleVariable<int32> CVarEarly(TEXT("gstn.Camera.Anchor.Early"), 1,
+		TEXT("1 = the anchor updates BEFORE the camera managers evaluate the view (TG_PostPhysics): the view of a frame uses that frame's anchor. ")
+		TEXT("0 = old order (TG_PostUpdateWork, after the view): the view used last frame's correction on top of this frame's actor root, which ")
+		TEXT("steps at the 62.5 Hz simulation rate = camera jitter on jumps, landings and fast moves. A/B only"));
 	static TAutoConsoleVariable<int32> CVarDebug(TEXT("gstn.Camera.Anchor.Debug"), 0,
 		TEXT("1 = draw the camera anchor: red raw standing root, green damped anchor, yellow actor root"));
 
@@ -174,8 +179,10 @@ UGSTN_CameraAnchorComponent::UGSTN_CameraAnchorComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = true;
-	// After Mover placed and smoothed the mesh and FGSTN_BodyCapsuleModifier shifted it, before the camera managers evaluate the view
-	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
+	// After Network Prediction finalized and smoothed Mover's state (world pre actor tick) and the pawn's own presentation ticks, BEFORE the
+	// camera managers evaluate the view (UWorld::Tick updates the cameras between TG_PostPhysics and TG_PostUpdateWork). Ticking later
+	// (TG_PostUpdateWork, the first version) made every view use the previous frame's anchor: see gstn.Camera.Anchor.Early
+	PrimaryComponentTick.TickGroup = EarlyTickGroup;
 	SetIsReplicatedByDefault(false);
 }
 
@@ -279,6 +286,61 @@ void UGSTN_CameraAnchorComponent::ResolveComponents()
 		CameraRelativeStanding = GSTNCameraAnchor::StandingRelative(*Camera);
 		bCameraFollowsVisual = Visual && Camera->IsAttachedTo(Visual);
 	}
+	CombatComponent = Owner->FindComponentByClass<UGSTN_CombatSimComponent>();
+	bOrderSet = false;
+}
+
+void UGSTN_CameraAnchorComponent::SetTickOrder(bool bEarly)
+{
+	if (bOrderSet && bEarly == bOrderEarly)
+	{
+		return;
+	}
+	AActor* Owner = GetOwner();
+	TInlineComponentArray<UActorComponent*> Components(Owner);
+	USceneComponent* Camera = CameraComponent.Get();
+	// Early: after every other presentation tick of the pawn in the same group (grab offsets, run lean...), and before the camera component's
+	// own tick if it has one (a camera evaluated in its tick reads the moved component the same frame). Late: the first version's order
+	for (UActorComponent* Component : Components)
+	{
+		if (!Component || Component == this || Component == Camera || !Component->PrimaryComponentTick.bCanEverTick
+			|| Component->PrimaryComponentTick.TickGroup != EarlyTickGroup)
+		{
+			continue;
+		}
+		// Cameras come after the anchor, never before (UGSTN_CameraComponent ticks in this group too and reads the anchor)
+		bool bIsCamera = false;
+		for (const FName& ClassName : GSTNCameraAnchor::CameraClassNames)
+		{
+			bIsCamera = bIsCamera || GSTNCameraAnchor::IsOfClassNamed(Component, ClassName);
+		}
+		if (bIsCamera)
+		{
+			continue;
+		}
+		if (bEarly)
+		{
+			PrimaryComponentTick.AddPrerequisite(Component, Component->PrimaryComponentTick);
+		}
+		else
+		{
+			PrimaryComponentTick.RemovePrerequisite(Component, Component->PrimaryComponentTick);
+		}
+	}
+	if (Camera && Camera->PrimaryComponentTick.bCanEverTick)
+	{
+		if (bEarly)
+		{
+			Camera->PrimaryComponentTick.AddPrerequisite(this, PrimaryComponentTick);
+		}
+		else
+		{
+			Camera->PrimaryComponentTick.RemovePrerequisite(this, PrimaryComponentTick);
+		}
+	}
+	SetTickGroup(bEarly ? EarlyTickGroup : TG_PostUpdateWork);
+	bOrderEarly = bEarly;
+	bOrderSet = true;
 }
 
 bool UGSTN_CameraAnchorComponent::IsOwnerAiming() const
@@ -348,6 +410,17 @@ void UGSTN_CameraAnchorComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	if (!bResolved || (!VisualComponent.IsValid() && !CameraComponent.IsValid()))
 	{
 		ResolveComponents();
+	}
+	const bool bEarly = GSTNCameraAnchor::CVarEarly.GetValueOnGameThread() != 0;
+	SetTickOrder(bEarly);
+	// The body capsule's mesh correction normally lands in TG_PostUpdateWork, after the view: do it now so the anchor reads the mesh this frame
+	// draws (on a capsule shift frame it would otherwise read the mesh one correction off)
+	if (bEarly)
+	{
+		if (UGSTN_CombatSimComponent* Combat = CombatComponent.Get())
+		{
+			Combat->ApplyBodyCapsulePresentation();
+		}
 	}
 	const FGSTN_CameraAnchorSettings& Tuning = GetSettings();
 	const FVector Root = Owner->GetActorLocation();

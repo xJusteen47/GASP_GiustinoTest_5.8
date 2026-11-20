@@ -21,7 +21,7 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FGSTN_OnCrosshairUpdated, const FGST
  * server, reads the PRESENTED state of the view target (IGSTN_CameraSubject or an adapter) and writes nothing the simulation reads, except the
  * control rotation the input source samples CameraYaw and aim from (camera.md §1, §5).
  *
- * Each frame, after movement (TG_PostUpdateWork): read the subject, step the gravity frame, find the section, evaluate the rule table over the
+ * Each frame, after movement and before the camera managers evaluate the view (TG_PostPhysics): read the subject, step the gravity frame, find the section, evaluate the rule table over the
  * pawn tags (IGSTN_CameraTagSource) plus the synthetic ones, push the chosen mode on the stack, apply the look input to the orbit, compute and
  * blend the views, resolve occlusion, fill the view and write the control rotation back.
  */

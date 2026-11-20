@@ -107,6 +107,13 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
+	/**
+	 * Presentation: puts the drawn mesh where the body capsule of the presented Mover state wants it (FGSTN_BodyCapsuleModifier::ApplyPresentation).
+	 * The tick does it in TG_PostUpdateWork; a reader that runs earlier in the frame (the camera anchor, before the camera managers evaluate the
+	 * view) calls it first so it reads the same mesh the frame will draw. Idempotent within a frame: the second call changes nothing
+	 */
+	void ApplyBodyCapsulePresentation();
+
 	// Network Prediction driver and simulation
 	void InitializeSimulationState(FGSTN_CombatSyncState* Sync, FGSTN_CombatAuxState* Aux);
 	void ProduceInput(const int32 DeltaTimeMS, FGSTN_InputCmd* Cmd);

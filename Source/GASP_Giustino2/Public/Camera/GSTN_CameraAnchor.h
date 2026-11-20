@@ -16,6 +16,8 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Engine/DataAsset.h"
+class UGSTN_CombatSimComponent;
+
 #include "GSTN_CameraAnchor.generated.h"
 
 class USceneComponent;
@@ -290,6 +292,12 @@ public:
 	/** True when the anchor runs for this owner: enabled, the console switch on, and the owner viewed by a local player */
 	bool IsActiveForOwner() const;
 
+	/**
+	 * The tick group the anchor runs in: the last one before UWorld::Tick updates the camera managers, so the view of a frame is built from
+	 * that frame's anchor. Mover's state is finalized and smoothed earlier (Network Prediction, world pre actor tick)
+	 */
+	static constexpr ETickingGroup EarlyTickGroup = TG_PostPhysics;
+
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 protected:
@@ -299,9 +307,14 @@ protected:
 private:
 	void ResolveComponents();
 	void RestoreCamera();
+	/** Tick group and prerequisites for gstn.Camera.Anchor.Early (1 = before the view, 0 = the first version's TG_PostUpdateWork) */
+	void SetTickOrder(bool bEarly);
 
 	TWeakObjectPtr<USceneComponent> CameraComponent;
 	TWeakObjectPtr<USceneComponent> VisualComponent;
+	TWeakObjectPtr<UGSTN_CombatSimComponent> CombatComponent;
+	bool bOrderSet = false;
+	bool bOrderEarly = true;
 	FTransform CameraRelativeStanding = FTransform::Identity;
 	FTransform VisualRelativeStanding = FTransform::Identity;
 	bool bCameraFollowsVisual = false;

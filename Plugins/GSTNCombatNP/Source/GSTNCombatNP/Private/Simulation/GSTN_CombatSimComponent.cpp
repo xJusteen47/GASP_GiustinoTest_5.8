@@ -2075,6 +2075,14 @@ FString UGSTN_CombatSimComponent::GetDebugString(int32 MaxEvents) const
 		static_cast<int32>(Sync->Core.ActionState), static_cast<int32>(Sync->Core.ActiveTimeline), Sync->Core.TimelineStartFrame, Sync->Core.TimelinePausedFrames, static_cast<int32>(Sync->Core.ActiveSource));
 }
 
+void UGSTN_CombatSimComponent::ApplyBodyCapsulePresentation()
+{
+	if (UMoverComponent* Mover = GetOwner() ? GetOwner()->FindComponentByClass<UMoverComponent>() : nullptr)
+	{
+		FGSTN_BodyCapsuleModifier::ApplyPresentation(*Mover, &BodyCapsuleCorrectedAt);
+	}
+}
+
 void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
@@ -2087,10 +2095,7 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 	TryRegisterWithWorld();
 
 	// Per-move movement capsule: size and mesh offset of the presented Mover state, on every machine (simulated proxies run no modifier)
-	if (UMoverComponent* Mover = GetOwner() ? GetOwner()->FindComponentByClass<UMoverComponent>() : nullptr)
-	{
-		FGSTN_BodyCapsuleModifier::ApplyPresentation(*Mover, &BodyCapsuleCorrectedAt);
-	}
+	ApplyBodyCapsulePresentation();
 
 #if ENABLE_DRAW_DEBUG
 	if (CVarCombatDebugInput.GetValueOnGameThread() != 0)

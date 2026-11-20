@@ -33,8 +33,11 @@ using namespace GSTNCameraComponentPrivate;
 UGSTN_CameraComponent::UGSTN_CameraComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
-	// After movement and animation: the camera reads the PRESENTED state (camera.md §2.2)
-	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
+	// After movement: the camera reads the PRESENTED state (camera.md §2.2), finalized and smoothed by Network Prediction before the actor ticks.
+	// TG_PostPhysics, not TG_PostUpdateWork: UWorld::Tick updates the camera managers (GetCameraView) between the two, so a later tick would
+	// hand every frame the previous frame's view (2026-11-20, the camera anchor's jitter). A subject that needs its own update first is a
+	// tick prerequisite of this component
+	PrimaryComponentTick.TickGroup = TG_PostPhysics;
 	// Ticks only once activated (Activate enables the tick), so an Auto Activate off component costs nothing
 	PrimaryComponentTick.bStartWithTickEnabled = false;
 	// Nothing about the camera replicates, ever (camera.md §1)
