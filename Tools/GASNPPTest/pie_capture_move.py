@@ -176,6 +176,11 @@ MOVE_SEQUENCES = [
     {'name': 'mv_run_stop', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (160, None)]},
     # run start (idle -> run forward): 1 s idle, full stick forward, held 3 s (60 fps frames); stock check: PIE_CAPTURE_CVARS="gstn.Loco.Base 1"
     {'name': 'mv_run_start', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))]},
+    # run start v3 (runstart-v3-1), same frames as mv_run_start; gate set BEFORE the capture: stick on v80, sim sees it v82, the clip
+    # (1.5 s) hands over to the run loop at clip time 1.4 s (~v167); the loop then owns the pose (Run Start Exit Run, 0.75 s), no SS_180
+    {'name': 'mv_run_start_v3', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
+     'expect': [{'clip': 'AS_GSTN_RunStart_v3', 'window': [80, 167], 'min_weight': 0.8, 'coverage': 0.9},
+                {'clip': 'M_Neutral_Run_Loop_F', 'window': [172, 210], 'min_weight': 0.8, 'coverage': 0.9}]},
     {'name': 'mv_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (170, None)]},
     # Skid at the BASE run stage (MinStage 0, 11-18): reverse before FramesToNextStage (40 sim f) so the run is still stage 1 (470 > MinSpeed 350)
     # skid-finish-4: released early (30 frames after the reverse, inside Skid Exit Run) and held long (1.5 s)

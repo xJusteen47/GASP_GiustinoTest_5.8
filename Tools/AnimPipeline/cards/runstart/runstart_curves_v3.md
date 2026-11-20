@@ -18,3 +18,10 @@ docs/notes/briefs/runstart-identity.md; richieste: docs/notes/reviews/runstart-s
 
 Viaggio: 612 cm in 1.5 s (fine a 500 cm/s come il loop stock); prima dello stomp il bacino avanza 17 cm (passo d'impegno).
 Cosa NON e' nella clip: polvere sul contatto f8 (gioco), riga chooser e uscita senza SS_180_Turn (dati montage, UE).
+
+## UE (runstart-v3-1)
+Import AS_GSTN_RunStart_v3 (runstart_v3_ue.py): 46 f, 1.5 s; round trip v3base vs Frantic f0-7 median 0.0 deg (only calf/leg of the compose
+edit differ), pelvis f0 4.2 cm: no 8-11 deg offset, no diff fix. Root travel 613 cm on root -> root motion on + force root lock (as the loop).
+Curves from the clip's own bones (curves_author kind pivot): contact_l/r + phase; contact_r onset f8.5 (stomp). NO movedata_speed (decision:
+ABP dynamic play rate stalls our clips near speed 0, skid a5) and no enable_warping (stride warping would shrink the stomp at low capsule speed).
+Hand-off: Run Start -> "Run Start Exit Run" at 1.4 s = M_Neutral_Run_Loop_F from 1.789 s (composer phase; feet match 1.800 s, same cost).

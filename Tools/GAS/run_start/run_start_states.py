@@ -5,14 +5,26 @@
   2. state "Run Start" + alias "-> Run Start" (GASP idle states), enter when GetAnimOwnerRunStartTime >= 0, leave to Conduit when it is
      < 0 or past the clip's length. The state is routed by route_states.py (Blend Stack row "Run Start", plays at the clip's own rate).
 Report -> Saved/RunStart/run_start_states.txt, prints max 5 lines."""
+import json
 import os
 import unreal
 
 PROJ = unreal.Paths.project_dir()
 OUT = unreal.Paths.project_saved_dir() + "RunStart/run_start_states.txt"
 FBX = PROJ + "docs/notes/reviews/run-start-frantic/r3/AS_RunStart_Frantic_r3.fbx"
-FOLDER, NAME = "/Game/GSTN/Animation/RunStart", "AS_GSTN_RunStart_Frantic"
+# runstart-v3-1: RUNSTART_VARIANT=v3 (default) plays AS_GSTN_RunStart_v3 (imported by Tools/AnimPipeline/cards/runstart/runstart_v3_ue.py)
+# to EXIT_AT, then state "Run Start Exit Run" = stock run loop at the clip's own end phase (no Conduit/transition chooser in between, so
+# SS_180_Turn_Root180 cannot enter); RUNSTART_VARIANT=frantic = rollback (Frantic + foot-plant hand-off, no exit state). The variant is
+# written to Tools/GAS/routing/run_start.json, which route_states.py reads for the "Run Start" / "Run Start Exit Run" rows.
+VARIANT = os.environ.get("RUNSTART_VARIANT", "v3")
+FOLDER = "/Game/GSTN/Animation/RunStart"
+NAME = "AS_GSTN_RunStart_v3" if VARIANT == "v3" else "AS_GSTN_RunStart_Frantic"
 CLIP = f"{FOLDER}/{NAME}"
+RUN_LOOP = "/Game/Characters/UEFN_Mannequin/Animations/Run/M_Neutral_Run_Loop_F"
+V3_BUILD = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()) + "AnimPipeline/runstart/v3_build.json"
+RUN_JSON = unreal.Paths.convert_relative_path_to_full(PROJ) + "Tools/GAS/routing/run_start.json"
+RUN_MIN, STICK_MIN, HOLD, XF_RUN = 200.0, 0.3, 0.75, 0.10  # as Skid Exit Run (skid_exit_run.py)
+ELAPSED = "GetInstanceCurrentStateElapsedTime"
 SOURCE = "/Game/Characters/UEFN_Mannequin/Animations/Idle/M_Neutral_Stand_Idle_Loop"
 ALIAS_FROM = ["Idle Loop", "Idle Transition", "Idle Break"]
 ALIAS_FROM_MOVING = ["Locomotion Transition", "Locomotion Loop"]  # GASP start states (v2)
@@ -27,6 +39,11 @@ RUN = unreal.GSTN_RunPresentationComponent.static_class()
 
 
 def import_clip():
+    if VARIANT == "v3":
+        seq = unreal.load_asset(CLIP)
+        if not seq:
+            raise RuntimeError("missing " + CLIP + ": run runstart_v3_ue.py first")
+        return seq
     if unreal.EditorAssetLibrary.does_asset_exist(CLIP) and os.environ.get("RUNSTART_REIMPORT") != "1":
         p("clip exists", CLIP); return unreal.load_asset(CLIP)
     skel = unreal.load_asset(SOURCE).get_editor_property("skeleton")
@@ -49,11 +66,12 @@ def import_clip():
     return seq
 
 
-def cond(fn, compare, value=""):
+def cond(fn, compare, value="", getter=False):
     c = unreal.GSTN_RuleCondition()
-    c.set_editor_property("operand", unreal.GSTN_RuleOperand.FUNCTION)
+    c.set_editor_property("operand", unreal.GSTN_RuleOperand.ANIM_GETTER if getter else unreal.GSTN_RuleOperand.FUNCTION)
     c.set_editor_property("name", fn)
-    c.set_editor_property("function_class", RUN)
+    if not getter:
+        c.set_editor_property("function_class", RUN)
     c.set_editor_property("compare", compare)
     c.set_editor_property("value", value)
     return c
@@ -91,7 +109,7 @@ try:
     # covers GASP's moving ground states; the alias only fires in the first ALIAS_WINDOW s so the state cannot re-enter after its exit
     alias_from = [n for n in ALIAS_FROM + ALIAS_FROM_MOVING if n in names]
     p("alias from", alias_from)
-    for n in ["-> Run Start", "Run Start"]:
+    for n in ["-> Run Start", "Run Start", "Run Start Exit Run"]:
         if n in names:
             g("RemoveState", names[n].state); p("removed old", n)
     pos = unreal.IntPoint(0, 0)
@@ -109,9 +127,36 @@ try:
                                     cond("GetAnimOwnerRunStartTime", Cmp.LESS, f"{ALIAS_WINDOW:.3f}")]), 0.05)
     # v3 (run-start-handoff-1, owner 11-19 "resta fermo troppo, non fluisce nel loop"): leave on the hand-off flag (stamp over, then the
     # clip's first foot plant; data in DA_AnimSet_Locomotion_Default RunStart|Hand-off), the clip end stays as a fallback
-    transition(state, conduit, rule([cond("GetAnimOwnerRunStartTime", Cmp.LESS, "0")],
-                                    [cond("GetAnimOwnerRunStartHandOff", Cmp.GREATER_EQUAL, "1")],
-                                    [cond("GetAnimOwnerRunStartTime", Cmp.GREATER_EQUAL, f"{length - 0.1:.3f}")]), EXIT_BLEND)
+    if VARIANT == "v3":
+        # v3 is a whole run start (stomp + frantic run, 1.5 s) that ends on a run loop phase: it plays to EXIT_AT and hands over to the
+        # stock run loop at that phase (no foot-plant hand-off: the stomp at f8 is a plant); the Conduit only when the run start is over
+        b = json.load(open(V3_BUILD))
+        exit_at, loop_t = b["handoff"]["exit_at"], b["handoff"]["loop_start"]
+        run_state = g("AddState", machine, "Run Start Exit Run", unreal.GSTN_StateKind.STATE, unreal.IntPoint(pos.x + 750, pos.y))
+        tr = transition(state, run_state, rule([cond(ELAPSED, Cmp.GREATER_EQUAL, f"{exit_at:.3f}", True),
+                                                 cond("GetAnimOwnerGroundSpeed", Cmp.GREATER_EQUAL, f"{RUN_MIN:.1f}"),
+                                                 cond("GetAnimOwnerStickAlong", Cmp.GREATER_EQUAL, f"{STICK_MIN:.2f}")]), XF_RUN)
+        tr.set_editor_property("priority_order", 0)
+        tr = transition(state, conduit, rule([cond("GetAnimOwnerRunStartTime", Cmp.LESS, "0")],
+                                             [cond("GetAnimOwnerStickAlong", Cmp.LESS, f"{STICK_MIN:.2f}")],
+                                             [cond(ELAPSED, Cmp.GREATER_EQUAL, f"{length:.3f}", True)]), EXIT_BLEND)
+        tr.set_editor_property("priority_order", 1)
+        transition(run_state, conduit, rule([cond(ELAPSED, Cmp.GREATER_EQUAL, f"{HOLD:.3f}", True)],
+                                            [cond("GetAnimOwnerGroundSpeed", Cmp.LESS, f"{RUN_MIN - 50:.1f}")],
+                                            [cond("GetAnimOwnerStickAlong", Cmp.LESS, f"{STICK_MIN:.2f}")]), 0.20)
+        unreal.BlueprintEditorLibrary.set_node_comment(run_state, "Run Start Exit Run: v3 run start -> stock run loop at the clip's end phase "
+                                                       "(Tools/GAS/run_start/run_start_states.py), then motion matching")
+        spec = {"variant": "v3", "clip": CLIP + "." + NAME, "start": 0.0, "blend": 0.05,
+                "exit_run": {"clip": RUN_LOOP + "." + RUN_LOOP.split("/")[-1], "start": round(loop_t, 4), "blend": XF_RUN}}
+        p("v3 exit at", exit_at, "loop t", loop_t)
+    else:
+        # v3 (run-start-handoff-1, owner 11-19 "resta fermo troppo, non fluisce nel loop"): leave on the hand-off flag (stamp over, then
+        # the clip's first foot plant; data in DA_AnimSet_Locomotion_Default RunStart|Hand-off), the clip end stays as a fallback
+        transition(state, conduit, rule([cond("GetAnimOwnerRunStartTime", Cmp.LESS, "0")],
+                                        [cond("GetAnimOwnerRunStartHandOff", Cmp.GREATER_EQUAL, "1")],
+                                        [cond("GetAnimOwnerRunStartTime", Cmp.GREATER_EQUAL, f"{length - 0.1:.3f}")]), EXIT_BLEND)
+        spec = {"variant": "frantic", "clip": CLIP + "." + NAME, "start": 0.0, "blend": 0.05}
+    json.dump(spec, open(RUN_JSON, "w"), indent=1)
     unreal.BlueprintEditorLibrary.set_node_comment(alias, "Frantic run start (owner 2026-11-18, choice B): Tools/GAS/run_start/run_start_states.py")
     ok = unreal.BlueprintEditorLibrary.compile_blueprint(abp)
     status = abp.get_editor_property("status")
