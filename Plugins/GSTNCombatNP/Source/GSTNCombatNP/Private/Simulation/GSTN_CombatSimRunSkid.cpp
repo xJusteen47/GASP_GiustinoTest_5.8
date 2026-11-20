@@ -13,6 +13,14 @@
 #include "MoverDataModelTypes.h"
 #include "MoverTypes.h"
 #include "Simulation/GSTN_CombatVictim.h"
+#include "HAL/IConsoleManager.h"
+
+namespace GSTNRunSkidSim
+{
+	// skid-walkturn-2: 0 keeps our sim skid from starting, so GASP's stock pivot (Run/Sprint Loco Transitions, IsPivoting) shows on a
+	// reverse. A test switch: it changes the simulation, so set it the same on server and clients or they mispredict
+	TAutoConsoleVariable<int32> CVarSkidSim(TEXT("gstn.Skid.Sim"), 1, TEXT("1 our run skid (layered move) starts on a reverse, 0 never (stock GASP pivot only)"));
+}
 
 bool UGSTN_CombatSimComponent::IsFreeToMove() const
 {
@@ -22,6 +30,10 @@ bool UGSTN_CombatSimComponent::IsFreeToMove() const
 
 void UGSTN_CombatSimComponent::StepRunSkid(const FGSTN_CombatSyncCore& Core)
 {
+	if (GSTNRunSkidSim::CVarSkidSim.GetValueOnAnyThread() == 0)
+	{
+		return;
+	}
 	const FGSTN_LocomotionSimTuning* Locomotion = FGSTN_LocomotionAttach::Find(GetOwner());
 	if (!Locomotion || !Locomotion->RunStages.IsEnabled() || !Locomotion->RunStages.Skid.bEnabled || !AbilitySystem || !RunSkidEffect)
 	{

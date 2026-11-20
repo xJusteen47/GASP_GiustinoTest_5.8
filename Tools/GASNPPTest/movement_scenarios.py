@@ -390,6 +390,80 @@ def scenario_move_skid(client=1):
     q.run.run(steps)
 
 
+REV_TARGET_S = float(os.environ.get('QAM_REV_TARGET_S', '0.3'))   # owner's Toad reference, reverse stick -> running again
+REV_RUN_SPEED = float(os.environ.get('QAM_REV_RUN_SPEED', '420'))  # "running again": new-way speed, ~0.9 of stage 1 (470 cm/s)
+
+
+def _reversal_times(w, d):
+    """From the sim ticks of one copy: the reversal frame (first drop of the old-way speed while running steady), then the seconds to zero
+    old-way speed and to REV_RUN_SPEED / 300 cm/s the new way, the slide past the reversal, the speed before. Sim time, so 16 ms exact."""
+    sp = [_along(s['vel'], d) for s in w]
+    i0 = next((i for i in range(1, len(sp)) if sp[i - 1] > 300.0 and sp[i] < sp[i - 1] - 5.0), None)
+    if i0 is None:
+        return None
+    t0 = w[i0 - 1]['ms']
+    out = {'speed_before': round(sp[i0 - 1]), 'frame_ms': t0}
+    for key, test in (('zero_s', lambda v: v <= 0.0), ('new300_s', lambda v: v <= -300.0), ('run_s', lambda v: v <= -REV_RUN_SPEED)):
+        j = next((k for k in range(i0, len(sp)) if test(sp[k])), None)
+        out[key] = None if j is None else round((w[j]['ms'] - t0) / 1000.0, 3)
+    jz = next((k for k in range(i0, len(sp)) if sp[k] <= 0.0), len(sp) - 1)
+    out['slide_cm'] = round(_along([a - b for a, b in zip(w[jz]['loc'], w[i0 - 1]['loc'])], d))
+    out['curve'] = [round(v) for v in sp[i0 - 1:i0 + 45]]
+    return out
+
+
+def scenario_move_reversal(client=1):
+    """skid-reversal-1: run 1.6 s, then the stick full against the run, held 1.2 s, with the old skid sim off (gstn.Skid.Sim 0, the stock
+    pivot path). Measures on both copies the time from the reversal frame to running again the new way (REV_RUN_SPEED), against the owner's
+    Toad reference REV_TARGET_S (+-0.06 s)."""
+    q = _Q('move_reversal', client)
+    # wall-clock steps; the laptop's rendering PIE runs the sim slower than the wall clock, so the run is long and the window is the whole run
+    T, RUN, REV = 1.0, float(os.environ.get('QAM_REV_RUN', '3.0')), 2.0
+    TR = T + RUN
+    store = {}
+    cv = os.environ.get('QAM_REV_CVARS', 'gstn.Skid.Sim 0;gstn.Loco.Base 1')
+
+    def cvars():
+        for c in cv.split(';'):
+            if c.strip():
+                unreal.SystemLibrary.execute_console_command(None, c.strip())
+        q.metrics['cvars'] = cv
+        return 'cvars ' + cv, True
+
+    def timing():
+        def side(sd):
+            w = q.ticks(sd, 0.0, 1e9)
+            r = _reversal_times(w, store['dir'])
+            q.metrics.setdefault('reversal', {})[sd] = r
+            q.metrics.setdefault('raw', {})[sd] = [(s['ms'], round(_along(s['vel'], store['dir'])), s.get('mode'), s.get('stage')) for s in w][::3]
+            if not r or r['run_s'] is None:
+                return False, f'no reversal to {REV_RUN_SPEED:.0f} cm/s: {r}'
+            return abs(r['run_s'] - REV_TARGET_S) <= 0.06, (f"{r['speed_before']} cm/s -> zero {r['zero_s']} s, 300 the new way {r['new300_s']} s, "
+                                                            f"{REV_RUN_SPEED:.0f} {r['run_s']} s, slide {r['slide_cm']} cm")
+        return _both(side)
+
+    def go():
+        store['dir'] = q.dir
+        q.stick.update(dir=q.dir, mag=1.0)
+        return 'run', True
+
+    def rev():
+        q.stick.update(dir=q.flip(), mag=1.0)
+        return 'stick against the run', True
+
+    steps = [
+        (0.2, cvars),
+        (0.3, q.kit()),
+        (0.6, q.find_dir()),
+        (T, go),
+        (TR, rev),
+        (TR + REV, q.set_stick(None, 0.0, 'release')),
+        (TR + REV + 1.0, q.check(f'reverse stick -> running again in {REV_TARGET_S} s (+-0.06)', timing)),
+        (TR + REV + 1.2, q.finish()),
+    ]
+    q.run.run(steps)
+
+
 def scenario_move_analog_walk(client=1):
     """Stick tilts 0.1, 0.2, 0.35, 0.6, 1.0 held 1.1 s each along the free direction. Every tilt moves the pawn (no dead zone left over the
     player's own), the speed grows with the tilt and the lowest tilt is a slow walk (under 35 % of full), with no jump between the two lowest

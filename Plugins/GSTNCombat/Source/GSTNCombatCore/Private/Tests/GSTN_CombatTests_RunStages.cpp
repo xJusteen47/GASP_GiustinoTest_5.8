@@ -419,4 +419,76 @@ bool FGSTN_RunStagesBoostDashTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunStagesReversalTest, "GSTNCombat.Core.RunStages.Reversal", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunStagesReversalTest::RunTest(const FString& Parameters)
+{
+	// skid-reversal-1: the stick flipped against a run starts the reversal (multiplier, no ramp), the run the other way ends it; and the
+	// ramp restarted by the tight turn's stage drop no longer waits the run start stamp again
+	FGSTN_RunStagesTuning Tuning = TestTuning();
+	Tuning.StartStamp.Frames = 21;
+	for (FGSTN_RunStage& Stage : Tuning.Stages)
+	{
+		Stage.AccelRampFrames = 6;
+		Stage.RampStartFraction = 0.3f;
+	}
+	const FVector Back(-1.0, 0.0, 0.0);
+	const float Top = Tuning.Stages[0].MaxSpeed;
+	Tuning.TightTurnDropStages = 3;
+
+	// Off: the stamp-ramp fix alone. A push from rest stamps, the run reaches stage 2, then the stick flips
+	FGSTN_RunStageState State;
+	FGSTN_RunStageLogic::Step(Tuning, Run(0, 1.f), State);
+	int32 Frame = 1;
+	for (; Frame < 40; ++Frame)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, Run(Frame, Tuning.GetStage(State.Stage).MaxSpeed), State);
+	}
+	TestTrue(TEXT("climbed past stage 1"), State.Stage > 0);
+	FGSTN_RunStageLogic::Step(Tuning, Run(Frame++, Top, Back), State);
+	TestEqual(TEXT("the flip drops the run to stage 1"), (int32)State.Stage, 0);
+	for (int32 K = 0; K < 6; ++K)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, Run(Frame++, -100.f, Back), State);
+	}
+	TestEqual(TEXT("the restarted ramp is done after its 6 frames, not 21 + 6"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State), 1.f, 1e-4f);
+	TestFalse(TEXT("off: no reversal"), FGSTN_RunStageLogic::IsReversing(Tuning, State));
+
+	// On
+	Tuning.Reversal.bEnabled = true;
+	Tuning.Reversal.AccelerationMultiplier = 2.5f;
+	Tuning.Reversal.MaxFrames = 30;
+	FGSTN_RunStageState Rev;
+	RunAtStageSpeed(Tuning, Rev, 0, 10);
+	FGSTN_RunStageLogic::Step(Tuning, Run(10, Top, FVector(-0.2, 1.0, 0.0).GetSafeNormal()), Rev);
+	TestFalse(TEXT("a side push is no reversal"), FGSTN_RunStageLogic::IsReversing(Tuning, Rev));
+	FGSTN_RunStageLogic::Step(Tuning, Run(11, Top, Back * 0.3), Rev);
+	TestFalse(TEXT("a light tilt back is no reversal"), FGSTN_RunStageLogic::IsReversing(Tuning, Rev));
+	FGSTN_RunStageLogic::Step(Tuning, Run(12, Top, Back), Rev);
+	TestTrue(TEXT("full stick back: reversal"), FGSTN_RunStageLogic::IsReversing(Tuning, Rev));
+	TestEqual(TEXT("reversal acceleration"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, Rev), 2.5f, 1e-4f);
+	FGSTN_RunStageLogic::Step(Tuning, Run(13, -Top * 0.5f, Back), Rev);
+	TestTrue(TEXT("still under the end speed the other way"), FGSTN_RunStageLogic::IsReversing(Tuning, Rev));
+	FGSTN_RunStageLogic::Step(Tuning, Run(14, -Top, Back), Rev);
+	TestFalse(TEXT("running the other way: over"), FGSTN_RunStageLogic::IsReversing(Tuning, Rev));
+
+	FGSTN_RunStageLogic::Step(Tuning, Run(15, -Top, FVector(1.0, 0.0, 0.0)), Rev);
+	TestTrue(TEXT("flip again"), FGSTN_RunStageLogic::IsReversing(Tuning, Rev));
+	for (int32 K = 16; K < 16 + 31; ++K)
+	{
+		FGSTN_RunStageLogic::Step(Tuning, Run(K, -10.f, FVector(1.0, 0.0, 0.0)), Rev);
+	}
+	TestFalse(TEXT("MaxFrames ends a stuck reversal"), FGSTN_RunStageLogic::IsReversing(Tuning, Rev));
+
+	FGSTN_RunStageState Net;
+	Net.ReverseFrames = 7;
+	TArray<uint8> Bytes;
+	FMemoryWriter Writer(Bytes);
+	Net.SerializeCompact(Writer);
+	FGSTN_RunStageState Read;
+	FMemoryReader Reader(Bytes);
+	Read.SerializeCompact(Reader);
+	TestEqual(TEXT("reversal counter survives the network form"), Read.ReverseFrames, 7);
+	return true;
+}
+
 #endif

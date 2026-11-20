@@ -77,7 +77,7 @@ bool FGSTN_RunStageState::operator==(const FGSTN_RunStageState& Other) const
 		&& FramesSinceStickRelease == Other.FramesSinceStickRelease && CarriedSpeed == Other.CarriedSpeed && FramesSinceCarry == Other.FramesSinceCarry
 		&& CarrySource == Other.CarrySource && PrevSpeed == Other.PrevSpeed && LastFrame == Other.LastFrame && CarryWindow == Other.CarryWindow
 		&& bAirborne == Other.bAirborne && TakeoffSpeed == Other.TakeoffSpeed && TakeoffStage == Other.TakeoffStage
-		&& RampFrames == Other.RampFrames && RampStage == Other.RampStage && StampFrames == Other.StampFrames && DashFrames == Other.DashFrames && ExternalVelocity == Other.ExternalVelocity;
+		&& RampFrames == Other.RampFrames && RampStage == Other.RampStage && StampFrames == Other.StampFrames && DashFrames == Other.DashFrames && ReverseFrames == Other.ReverseFrames && ExternalVelocity == Other.ExternalVelocity;
 }
 
 void FGSTN_RunStageState::SerializeCompact(FArchive& Ar)
@@ -103,6 +103,7 @@ void FGSTN_RunStageState::SerializeCompact(FArchive& Ar)
 	Ar << RampStage;
 	SerializeCounter(Ar, StampFrames);
 	SerializeCounter(Ar, DashFrames);
+	SerializeCounter(Ar, ReverseFrames);
 	for (int32 Axis = 0; Axis < 3; ++Axis)
 	{
 		float Component = static_cast<float>(ExternalVelocity[Axis]);
@@ -173,6 +174,37 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 			State.StampFrames = 0;
 		}
 	}
+	// Run reversal (skid-reversal-1): starts on the frame the stick goes against a run, ends once the run the other way is back. Counted before
+	// the early returns (skid, stick release) like the ramp, so the multiplier never sticks
+	{
+		const FGSTN_RunReversalTuning& Rev = Tuning.Reversal;
+		if (!Rev.bEnabled || RampStick < FMath::Max(Rev.MinStickMagnitude, KINDA_SMALL_NUMBER))
+		{
+			State.ReverseFrames = -1;
+		}
+		else
+		{
+			const float RevFactor = FMath::Max(Input.SpeedFactor, 0.f);
+			const float Along = static_cast<float>((Input.StickWorld / RampStick).Dot(Input.GroundVelocity));
+			if (State.ReverseFrames < 0)
+			{
+				if (Speed > KINDA_SMALL_NUMBER && Speed >= Rev.MinSpeed * RevFactor && Along / Speed < Rev.StickCos)
+				{
+					State.ReverseFrames = 0;
+				}
+			}
+			else
+			{
+				State.ReverseFrames = Advance(State.ReverseFrames);
+				const float EndSpeed = Rev.EndSpeedFraction * Tuning.GetStage(State.Stage).MaxSpeed * RevFactor;
+				if (Along >= EndSpeed || State.ReverseFrames >= Rev.MaxFrames)
+				{
+					State.ReverseFrames = -1;
+				}
+			}
+		}
+	}
+
 	// Boost dash counter (set by the boost below), reset with the stick at rest
 	State.DashFrames = RampStick < Tuning.RampStickThreshold ? -1 : Advance(State.DashFrames);
 
@@ -317,6 +349,11 @@ bool FGSTN_RunStageLogic::IsStartStamp(const FGSTN_RunStagesTuning& Tuning, cons
 		&& State.StampFrames >= 0 && State.StampFrames < Tuning.StartStamp.Frames;
 }
 
+bool FGSTN_RunStageLogic::IsReversing(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State)
+{
+	return Tuning.IsEnabled() && Tuning.Reversal.bEnabled && !State.bAirborne && State.ReverseFrames >= 0;
+}
+
 bool FGSTN_RunStageLogic::IsBoostDash(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State)
 {
 	return Tuning.IsEnabled() && Tuning.BoostDash.Frames > 0 && State.DashFrames >= 0 && State.DashFrames < Tuning.BoostDash.Frames;
@@ -331,6 +368,11 @@ float FGSTN_RunStageLogic::GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuni
 	if (IsBoostDash(Tuning, State))
 	{
 		return FMath::Clamp(Tuning.BoostDash.AccelMultiplier, 1.f, 30.f);
+	}
+	if (IsReversing(Tuning, State))
+	{
+		// No ramp and no stamp cut: the stage drop of the tight turn would otherwise restart the ramp from its start fraction
+		return FMath::Clamp(Tuning.Reversal.AccelerationMultiplier, 1.f, 10.f);
 	}
 	const FGSTN_RunStartStampTuning& Stamp = Tuning.StartStamp;
 	if (Stamp.Frames > 0 && State.Stage == 0 && !State.bAirborne)
@@ -352,8 +394,11 @@ float FGSTN_RunStageLogic::GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuni
 	}
 	// At rest, or a stage the ramp has not caught up with yet (the stage changed at the end of the last frame): the ramp's first frame
 	int32 Frames = (State.RampFrames < 0 || State.RampStage != State.Stage) ? 0 : State.RampFrames + 1;
-	if (Stamp.Frames > 0 && State.Stage == 0 && State.StampFrames >= 0)
+	if (Stamp.Frames > 0 && State.Stage == 0 && State.StampFrames >= 0 && State.StampFrames <= State.RampFrames)
 	{
+		// Only for the ramp the stamp belongs to (both started on the push, the stamp on the same frame or later). A ramp restarted later
+		// (the tight turn's drop back to stage 1) is younger than the stamp counter and must not wait Stamp.Frames again (skid-reversal-1:
+		// it held the reversal at the ramp's start fraction for 21 frames)
 		// After a stamp the stage 1 ramp starts where the stamp ended, not at the push: no acceleration step out of the stamp
 		Frames = FMath::Max(0, Frames - Stamp.Frames);
 	}

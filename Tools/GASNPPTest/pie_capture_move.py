@@ -220,6 +220,13 @@ MOVE_SEQUENCES = [
     {'name': 'mv_dash_base', 'taps': [], 'frames': 120, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(20, (0, 1, 0)), (80, None)]},
     {'name': 'mv_skid_release', 'taps': [], 'frames': 190, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (125, None)]},
     {'name': 'mv_skid_hold', 'taps': [], 'frames': 280, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (245, None)]},
+    # skid-walkturn-3: run pivot through the stock chooser (gstn.Loco.Base 1, gstn.Skid.Sim 0). Stick reverse f95 -> row f115 (PRE 20); the
+    # pivot row enters on f117 and blends in over 0.3 s (QuadraticInOut): >= 0.8 weight f130-f136 (cap_var1, frames.jsonl), then the state
+    # machine re-picks a reface start (0.3 s of the clip seen).
+    {'name': 'mv_pivot', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (180, None)],
+     'expect': [{'clip': 'AS_GSTN_RunPivot_WalkTurn180*', 'window': [130, 134], 'min_weight': 0.8, 'coverage': 0.9}]},
+    {'name': 'mv_pivot_base', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (180, None)],
+     'expect': [{'clip': 'M_Relaxed_Run_Turn_*180*', 'window': [130, 134], 'min_weight': 0.8, 'coverage': 0.9}]},
     {'name': 'mv_skid_base', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (30, (0, -1, 0)), (110, None)]},
     {'name': 'mv_walk_low', 'taps': [], 'frames': 140, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 0.2, 0)), (110, None)]},
     {'name': 'mv_jump_full', 'taps': [], 'frames': 90, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 24)},
