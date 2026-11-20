@@ -24,6 +24,7 @@ prof = unreal.load_asset(PROFILE)
 rs = prof.get_editor_property("run_stages")
 rev = rs.get_editor_property("reversal")
 before = str(rev)
+stages_before = str(rs)
 for k, v in VALUES.items():
     rev.set_editor_property(k, v)
 rs.set_editor_property("reversal", rev)

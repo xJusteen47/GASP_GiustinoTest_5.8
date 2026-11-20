@@ -464,6 +464,68 @@ def scenario_move_reversal(client=1):
     q.run.run(steps)
 
 
+def scenario_move_cam_jitter(client=1):
+    """camera-jitter-1 A/B (playtest integration 11-20): the owner's view (PlayerCameraManager POV, read after each editor frame) during a
+    jump in place, a run, a running jump and its landing. A kick of one sim step that snaps back shows up as a large second difference of the
+    view position between rendered frames; smooth motion stays small (a few cm even with uneven frame times). QAM_CAM_CVARS sets the order
+    under test (default 'gstn.Camera.Anchor.Early 1'). Check: no frame with |d2 view| > CAM_KICK_CM cm."""
+    q = _Q('move_cam_jitter', client)
+    cv = os.environ.get('QAM_CAM_CVARS', 'gstn.Camera.Anchor.Early 1;gstn.Loco.Base 1')
+    kick = float(os.environ.get('CAM_KICK_CM', '5'))
+    cam = []
+
+    def sample(_dt):
+        try:
+            pcm = unreal.GameplayStatics.get_player_camera_manager(g.worlds()[client], 0)
+            l = pcm.get_camera_location()
+            cam.append((q.run.now(), l.x, l.y, l.z))
+        except Exception:
+            pass
+    h = unreal.register_slate_post_tick_callback(sample)
+
+    def cvars():
+        for c in cv.split(';'):
+            if c.strip():
+                unreal.SystemLibrary.execute_console_command(None, c.strip())
+        q.metrics['cvars'] = cv
+        return 'cvars ' + cv, True
+
+    def judge():
+        unreal.unregister_slate_post_tick_callback(h)
+        w = [c for c in cam if 1.0 <= c[0] <= 8.5]
+        d2 = []
+        for a, b, c in zip(w, w[1:], w[2:]):
+            d2.append((b[0], math.sqrt(sum((c[i] - 2 * b[i] + a[i]) ** 2 for i in (1, 2, 3)))))
+        big = [x for x in d2 if x[1] > kick]
+        mx = max((x[1] for x in d2), default=0.0)
+        dts = [b[0] - a[0] for a, b in zip(w, w[1:])]
+        fps = (len(dts) / sum(dts)) if dts and sum(dts) > 0 else 0.0
+        q.metrics['camera'] = {'frames': len(w), 'fps': round(fps, 1), 'kick_cm': kick, 'd2_max_cm': round(mx, 2),
+                               'frames_over_kick': len(big), 'over_kick_at_s': [round(x[0], 3) for x in big][:40],
+                               'd2_p95_cm': round(sorted(x[1] for x in d2)[int(0.95 * (len(d2) - 1))], 2) if d2 else None}
+        return len(w) > 30 and not big, f'{len(w)} frames at {fps:.0f} fps, d2 max {mx:.1f} cm, {len(big)} frames over {kick:.0f} cm'
+
+    def jump(hold):
+        return lambda: _jump(client, hold)
+
+    steps = [
+        (0.2, cvars),
+        (0.3, q.kit()),
+        (0.5, lambda: ('jump kit (no-op if the kit has it)', g._srv(q.key).server_set_jump_kit(True))),
+        (0.6, q.find_dir()),
+        (1.2, jump(0.4)),
+        (1.6, lambda: ('release', g.combat_clear(client))),
+        (3.0, lambda: (q.stick.update(dir=q.dir, mag=1.0), ('run', True))[1]),
+        (4.6, jump(0.4)),
+        (5.0, lambda: ('release', g.combat_clear(client))),
+        (6.4, q.set_stick(None, 0.0, 'stop')),
+        (7.4, jump(0.0)),
+        (8.6, q.check('view: no one-step kick (|d2| over the limit) on jump, running jump, landing', judge)),
+        (8.8, q.finish()),
+    ]
+    q.run.run(steps)
+
+
 def scenario_move_analog_walk(client=1):
     """Stick tilts 0.1, 0.2, 0.35, 0.6, 1.0 held 1.1 s each along the free direction. Every tilt moves the pawn (no dead zone left over the
     player's own), the speed grows with the tilt and the lowest tilt is a slow walk (under 35 % of full), with no jump between the two lowest
