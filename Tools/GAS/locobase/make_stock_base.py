@@ -42,7 +42,9 @@ def walk_tables(cht, seen=None):
         return seen
     seen.append(cht)
     try:
-        for n in cht.get_editor_property("nested_choosers"):
+        # nested_choosers is not a Python property: the GSTN chooser toolset lists them
+        info = unreal.GSTN_ChooserTableToolset.get_default_object().call_method("GetChooserTable", (cht,))
+        for n in info.nested_choosers:
             walk_tables(n, seen)
     except Exception as e:
         p("  nested_choosers not readable on", cht.get_name(), repr(e))
@@ -88,7 +90,16 @@ def main():
         if not eal.does_asset_exist(src):
             p("MISSING source", src); return False
     if eal.does_asset_exist(NEW_ABP):
-        p("already exists", NEW_ABP, "- nothing copied (delete the StockBase copies to redo)"); return False
+        # Second run: only retarget the context class (root + nested tables) and save
+        p("already exists", NEW_ABP, "- copy skipped, context retarget only")
+        gen = unreal.load_object(None, NEW_ABP + ".ABP_GSTN_StockMover_C")
+        ok = bool(gen)
+        for path in (NEW_CHT, NEW_MM):
+            _, good = retarget_context(path, gen)
+            ok = ok and good
+            if SAVE:
+                p("saved", path, eal.save_asset(path, only_if_is_dirty=False))
+        return ok
     # AdvancedCopyPackages is not exposed to Python: GSTNAnimToolsets wraps it (CopyPackagesRemapped)
     mapping = {SRC_ABP: NEW_ABP, SRC_CHT: NEW_CHT, SRC_MM: NEW_MM}
     toolset = unreal.GSTN_ChooserTableToolset.get_default_object()

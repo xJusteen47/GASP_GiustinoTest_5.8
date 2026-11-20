@@ -46,7 +46,7 @@ if abp:
 def tables(c, seen):
     if c and c not in seen:
         seen.append(c)
-        for n in c.get_editor_property("nested_choosers"):
+        for n in unreal.GSTN_ChooserTableToolset.get_default_object().call_method("GetChooserTable", (c,)).nested_choosers:
             tables(n, seen)
     return seen
 for k in ("cht", "mm"):
