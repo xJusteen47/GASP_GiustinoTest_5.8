@@ -531,6 +531,8 @@ def _run_asserts():
     if path:
         for name, exp in json.load(open(path, encoding='utf-8')).items():
             if not name.startswith('_'):
+                if os.environ.get('PIE_CAPTURE_ASSERT_REPLACE') == '1':   # runstart-v6: A/B of a variant clip replaces the built-in expect
+                    spec[name] = []
                 spec.setdefault(name, []).extend(exp if isinstance(exp, list) else [exp])
     ran = {s['name'] for s in SEQUENCES}
     spec = {k: v for k, v in spec.items() if k in ran}
