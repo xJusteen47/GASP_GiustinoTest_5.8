@@ -269,7 +269,7 @@
     6.2
    ]
   ],
-  "feet_gap_cm": 8.2
+  "feet_gap_cm": 7.6
  },
  "curves_missing": [],
  "notifies": [
@@ -321,7 +321,7 @@
  "fails": [],
  "warns": [
   "one-frame extremes to look at: ik_hand_l f12,16,17,19,20,23,26,27,79; foot_r f45; ik_foot_r f45; calf_l f47,66 (+3 bones)",
-  "end_ref: thigh_l off by 9 deg, feet 8.2 cm (ref f69), the blend must hide it"
+  "end_ref: thigh_l off by 9 deg, feet 7.6 cm (ref f69), the blend must hide it"
  ],
  "verdict": "PASS*"
 }

@@ -15,11 +15,11 @@
   -1.0,
   0.0
  ],
- "animated_bones": 53,
+ "animated_bones": 81,
  "foot_l": {
-  "min_ball_cm": 0.04,
-  "min_ball_frame": 55,
-  "min_heel_cm": -0.0,
+  "min_ball_cm": -0.02,
+  "min_ball_frame": 65,
+  "min_heel_cm": -0.02,
   "plants": [
    {
     "frames": [
@@ -31,10 +31,27 @@
    {
     "frames": [
      51,
+     64
+    ],
+    "drift_cm": 0.3
+   },
+   {
+    "frames": [
+     69,
      70
     ],
     "drift_cm": 0.0
    }
+  ],
+  "slide_ok": [
+   [
+    1,
+    30
+   ],
+   [
+    1,
+    16
+   ]
   ],
   "skates": [
    {
@@ -49,17 +66,10 @@
   ]
  },
  "foot_r": {
-  "min_ball_cm": 0.0,
-  "min_ball_frame": 18,
-  "min_heel_cm": -0.0,
+  "min_ball_cm": -0.41,
+  "min_ball_frame": 67,
+  "min_heel_cm": -0.36,
   "plants": [
-   {
-    "frames": [
-     1,
-     1
-    ],
-    "drift_cm": 0.0
-   },
    {
     "frames": [
      30,
@@ -70,25 +80,43 @@
    {
     "frames": [
      42,
+     64
+    ],
+    "drift_cm": 0.34
+   },
+   {
+    "frames": [
+     69,
      70
     ],
     "drift_cm": 0.0
    }
   ],
+  "slide_ok": [
+   [
+    1,
+    30
+   ],
+   [
+    1,
+    16
+   ]
+  ],
   "skates": [
    {
     "frames": [
-     2,
+     8,
      29
     ],
-    "skate_cm": 132.0,
-    "skate_s": 0.467,
-    "vmax_cms": 497
+    "skate_cm": 84.1,
+    "skate_s": 0.367,
+    "vmax_cms": 481
    }
   ]
  },
- "pelvis_acc_max_cms2": 2899.0,
- "pelvis_acc_max_frame": 35,
+ "return_idle_both_up": [],
+ "pelvis_acc_max_cms2": 4000.0,
+ "pelvis_acc_max_frame": 7,
  "pops": [
   {
    "frame": 9,
@@ -121,8 +149,8 @@
    "type": "spike"
   },
   {
-   "frame": 3,
-   "bone": "upperarm_l",
+   "frame": 6,
+   "bone": "lowerarm_r",
    "size": 7.6,
    "type": "spike"
   },
@@ -147,8 +175,9 @@
  ],
  "pops_hard": {},
  "pops_soft": {
-  "upperarm_l": [
-   3
+  "lowerarm_r": [
+   6,
+   61
   ],
   "ik_hand_r": [
    6,
@@ -162,52 +191,49 @@
   ],
   "calf_r": [
    33
-  ],
-  "lowerarm_r": [
-   61
   ]
  },
  "start_ref": {
   "ref": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx",
-  "ref_frame": 55,
-  "max_deg": 92.9,
-  "bone": "lowerarm_r",
+  "ref_frame": 57,
+  "max_deg": 0.0,
+  "bone": "spine_01",
   "top3": [
    [
-    "lowerarm_r",
-    92.9
+    "spine_01",
+    0.0
    ],
    [
-    "lowerarm_l",
-    87.9
+    "clavicle_r",
+    0.0
    ],
    [
-    "upperarm_r",
-    45.9
+    "clavicle_l",
+    0.0
    ]
   ],
-  "feet_gap_cm": 33.6
+  "feet_gap_cm": 0.5
  },
  "end_ref": {
   "ref": "../../../Saved/ClipCheck/export/GASP_RelaxedIdle.fbx",
   "ref_frame": 1,
-  "max_deg": 70.3,
-  "bone": "upperarm_r",
+  "max_deg": 0.0,
+  "bone": "calf_l",
   "top3": [
    [
+    "calf_l",
+    0.0
+   ],
+   [
+    "neck_01",
+    0.0
+   ],
+   [
     "upperarm_r",
-    70.3
-   ],
-   [
-    "foot_r",
-    35.3
-   ],
-   [
-    "thigh_r",
-    25.6
+    0.0
    ]
   ],
-  "feet_gap_cm": 5.9
+  "feet_gap_cm": 0.3
  },
  "curves_missing": [],
  "notifies": [
@@ -226,16 +252,17 @@
   {
    "name": "FoleyEvent: Run",
    "time": null
+  },
+  {
+   "name": "FoleyEvent: Run",
+   "time": null
   }
  ],
- "fails": [
-  "start_ref: lowerarm_r off by 93 deg, feet 33.6 cm (ref f55)",
-  "end_ref: upperarm_r off by 70 deg, feet 5.9 cm (ref f1)"
- ],
+ "fails": [],
  "warns": [
   "foot l skates 68.7 cm over 0.32 s on the floor (f8-26) (slide_ok)",
-  "foot r skates 132.0 cm over 0.47 s on the floor (f2-29) (slide_ok)",
-  "one-frame extremes to look at: upperarm_l f3; ik_hand_r f6,8,11; ik_hand_l f8,9,10; calf_r f33 (+1 bones)"
+  "foot r skates 84.1 cm over 0.37 s on the floor (f8-29) (slide_ok)",
+  "one-frame extremes to look at: lowerarm_r f6,61; ik_hand_r f6,8,11; ik_hand_l f8,9,10; calf_r f33"
  ],
- "verdict": "FAIL"
+ "verdict": "PASS*"
 }

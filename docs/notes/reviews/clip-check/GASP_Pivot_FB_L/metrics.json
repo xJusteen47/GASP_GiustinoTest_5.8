@@ -293,7 +293,7 @@
     30.0
    ]
   ],
-  "feet_gap_cm": 42.5
+  "feet_gap_cm": 25.9
  },
  "curves_missing": [],
  "notifies": [
@@ -362,7 +362,7 @@
  "warns": [
   "foot r skates 29.9 cm over 0.17 s on the floor (f23-27), touchdown/lift-off length",
   "one-frame extremes to look at: foot_r f6,43,44; ik_foot_r f6,25,44,48; calf_l f8; calf_r f19 (+4 bones)",
-  "end_ref: calf_l off by 32 deg, feet 42.5 cm (ref f27), the blend must hide it"
+  "end_ref: calf_l off by 32 deg, feet 25.9 cm (ref f27), the blend must hide it"
  ],
  "verdict": "PASS*"
 }

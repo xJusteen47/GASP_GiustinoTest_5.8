@@ -15,11 +15,11 @@
   -1.0,
   0.0
  ],
- "animated_bones": 26,
+ "animated_bones": 71,
  "foot_l": {
   "min_ball_cm": -0.65,
   "min_ball_frame": 4,
-  "min_heel_cm": -0.0,
+  "min_heel_cm": 0.0,
   "plants": [
    {
     "frames": [
@@ -27,13 +27,6 @@
      1
     ],
     "drift_cm": 0.0
-   },
-   {
-    "frames": [
-     19,
-     22
-    ],
-    "drift_cm": 0.28
    }
   ],
   "skates": [
@@ -84,48 +77,6 @@
  "pelvis_acc_max_frame": 5,
  "pops": [
   {
-   "frame": 23,
-   "bone": "ball_l",
-   "size": 34.0,
-   "type": "spike"
-  },
-  {
-   "frame": 21,
-   "bone": "ball_l",
-   "size": 20.0,
-   "type": "spike"
-  },
-  {
-   "frame": 23,
-   "bone": "foot_l",
-   "size": 19.2,
-   "type": "spike"
-  },
-  {
-   "frame": 21,
-   "bone": "ik_foot_l",
-   "size": 18.6,
-   "type": "spike"
-  },
-  {
-   "frame": 25,
-   "bone": "ball_l",
-   "size": 18.0,
-   "type": "spike"
-  },
-  {
-   "frame": 23,
-   "bone": "ik_foot_l",
-   "size": 18.0,
-   "type": "spike"
-  },
-  {
-   "frame": 21,
-   "bone": "foot_l",
-   "size": 14.6,
-   "type": "spike"
-  },
-  {
    "frame": 13,
    "bone": "lowerarm_r",
    "size": 13.7,
@@ -133,7 +84,7 @@
   },
   {
    "frame": 21,
-   "bone": "calf_l",
+   "bone": "ik_foot_l",
    "size": 13.0,
    "type": "spike"
   },
@@ -144,9 +95,27 @@
    "type": "spike"
   },
   {
+   "frame": 21,
+   "bone": "calf_l",
+   "size": 10.9,
+   "type": "spike"
+  },
+  {
+   "frame": 22,
+   "bone": "ik_foot_l",
+   "size": 10.8,
+   "type": "spike"
+  },
+  {
    "frame": 11,
    "bone": "calf_r",
    "size": 10.4,
+   "type": "spike"
+  },
+  {
+   "frame": 23,
+   "bone": "ik_foot_l",
+   "size": 10.0,
    "type": "spike"
   },
   {
@@ -156,15 +125,33 @@
    "type": "spike"
   },
   {
+   "frame": 20,
+   "bone": "ik_foot_l",
+   "size": 9.3,
+   "type": "spike"
+  },
+  {
    "frame": 6,
    "bone": "calf_r",
    "size": 9.0,
    "type": "spike"
   },
   {
-   "frame": 21,
-   "bone": "thigh_l",
+   "frame": 19,
+   "bone": "calf_r",
    "size": 8.8,
+   "type": "spike"
+  },
+  {
+   "frame": 21,
+   "bone": "foot_l",
+   "size": 8.6,
+   "type": "spike"
+  },
+  {
+   "frame": 20,
+   "bone": "foot_l",
+   "size": 8.5,
    "type": "spike"
   },
   {
@@ -174,9 +161,15 @@
    "type": "spike"
   },
   {
-   "frame": 16,
-   "bone": "calf_l",
-   "size": 8.1,
+   "frame": 22,
+   "bone": "foot_l",
+   "size": 8.3,
+   "type": "spike"
+  },
+  {
+   "frame": 23,
+   "bone": "foot_l",
+   "size": 8.2,
    "type": "spike"
   }
  ],
@@ -188,7 +181,9 @@
   "calf_r": [
    6,
    11,
-   13
+   13,
+   19,
+   20
   ],
   "upperarm_r": [
    6,
@@ -206,76 +201,70 @@
   ],
   "ik_foot_l": [
    16,
+   20,
    21,
+   22,
    23
   ],
   "calf_l": [
    16,
    21
   ],
-  "ball_l": [
-   21,
-   23,
-   25
-  ],
   "foot_l": [
+   19,
+   20,
    21,
+   22,
    23
   ],
   "thigh_l": [
    21
   ],
-  "lowerarm_l": [
-   22
-  ],
   "ik_hand_l": [
-   25
-  ],
-  "upperarm_l": [
    25
   ]
  },
  "start_ref": {
   "ref": "../../../Saved/ClipCheck/export/GASP_Idle.fbx",
-  "ref_frame": 11,
-  "max_deg": 24.9,
+  "ref_frame": 7,
+  "max_deg": 25.0,
   "bone": "foot_r",
   "top3": [
    [
     "foot_r",
-    24.9
+    25.0
    ],
    [
     "foot_l",
-    23.7
+    23.6
    ],
    [
     "calf_r",
     23.2
    ]
   ],
-  "feet_gap_cm": 12.6
+  "feet_gap_cm": 7.4
  },
  "end_ref": {
   "ref": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx",
-  "ref_frame": 65,
-  "max_deg": 49.1,
-  "bone": "foot_l",
+  "ref_frame": 11,
+  "max_deg": 0.0,
+  "bone": "clavicle_r",
   "top3": [
    [
-    "foot_l",
-    49.1
+    "clavicle_r",
+    0.0
    ],
    [
-    "lowerarm_l",
-    48.4
+    "hand_r",
+    0.0
    ],
    [
-    "calf_l",
-    42.0
+    "upperarm_l",
+    0.0
    ]
   ],
-  "feet_gap_cm": 34.9
+  "feet_gap_cm": 0.3
  },
  "curves_missing": [],
  "notifies": [
@@ -288,14 +277,12 @@
    "time": null
   }
  ],
- "fails": [
-  "end_ref: foot_l off by 49 deg, feet 34.9 cm (ref f65)"
- ],
+ "fails": [],
  "warns": [
   "foot l skates 7.1 cm over 0.02 s on the floor (f4-4), touchdown/lift-off length",
   "foot r skates 6.2 cm over 0.03 s on the floor (f2-3), touchdown/lift-off length",
-  "one-frame extremes to look at: foot_r f5; calf_r f6,11,13; upperarm_r f6,13; ik_hand_r f6,8,13 (+9 bones)",
-  "start_ref: foot_r off by 25 deg, feet 12.6 cm (ref f11), the blend must hide it"
+  "one-frame extremes to look at: foot_r f5; calf_r f6,11,13,19,20; upperarm_r f6,13; ik_hand_r f6,8,13 (+6 bones)",
+  "start_ref: foot_r off by 25 deg, feet 7.4 cm (ref f7), the blend must hide it"
  ],
- "verdict": "FAIL"
+ "verdict": "PASS*"
 }

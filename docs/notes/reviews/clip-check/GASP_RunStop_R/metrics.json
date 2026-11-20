@@ -90,6 +90,7 @@
    }
   ]
  },
+ "return_idle_both_up": [],
  "pelvis_acc_max_cms2": 2973.0,
  "pelvis_acc_max_frame": 27,
  "pops": [

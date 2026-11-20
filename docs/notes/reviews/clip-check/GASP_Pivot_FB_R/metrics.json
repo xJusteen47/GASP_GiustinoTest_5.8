@@ -276,7 +276,7 @@
     9.6
    ]
   ],
-  "feet_gap_cm": 3.9
+  "feet_gap_cm": 4.0
  },
  "end_ref": {
   "ref": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx",
@@ -297,7 +297,7 @@
     22.9
    ]
   ],
-  "feet_gap_cm": 44.4
+  "feet_gap_cm": 27.8
  },
  "curves_missing": [],
  "notifies": [
@@ -367,8 +367,8 @@
   "foot l skates 6.1 cm over 0.03 s on the floor (f33-33), touchdown/lift-off length",
   "foot r skates 43.8 cm over 0.10 s on the floor (f35-37), touchdown/lift-off length",
   "one-frame extremes to look at: foot_l f6,41; calf_r f8,23,25,35; calf_l f18,41; ik_foot_l f18 (+4 bones)",
-  "start_ref: hand_l off by 12 deg, feet 3.9 cm (ref f2), the blend must hide it",
-  "end_ref: upperarm_r off by 27 deg, feet 44.4 cm (ref f17), the blend must hide it"
+  "start_ref: hand_l off by 12 deg, feet 4.0 cm (ref f2), the blend must hide it",
+  "end_ref: upperarm_r off by 27 deg, feet 27.8 cm (ref f17), the blend must hide it"
  ],
  "verdict": "PASS*"
 }

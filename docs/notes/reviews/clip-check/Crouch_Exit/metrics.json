@@ -62,6 +62,12 @@
    }
   ]
  },
+ "return_idle_both_up": [
+  [
+   8,
+   9
+  ]
+ ],
  "pelvis_acc_max_cms2": 7852.0,
  "pelvis_acc_max_frame": 9,
  "pops": [
@@ -223,29 +229,30 @@
  },
  "end_ref": {
   "ref": "../../../Saved/ClipCheck/export/GASP_Idle.fbx",
-  "ref_frame": 14,
-  "max_deg": 1.6,
+  "ref_frame": 1,
+  "max_deg": 1.8,
   "bone": "lowerarm_r",
   "top3": [
    [
     "lowerarm_r",
-    1.6
-   ],
-   [
-    "clavicle_r",
-    1.5
+    1.8
    ],
    [
     "lowerarm_l",
-    1.5
+    1.8
+   ],
+   [
+    "head",
+    0.0
    ]
   ],
-  "feet_gap_cm": 0.1
+  "feet_gap_cm": 0.0
  },
  "curves_missing": [],
  "notifies": [],
  "fails": [
-  "ball r -1.5 cm through the floor at f4"
+  "ball r -1.5 cm through the floor at f4",
+  "both feet in the air while returning to idle (f8-9): step one foot at a time"
  ],
  "warns": [
   "foot r skates 14.7 cm over 0.08 s on the floor (f2-6), touchdown/lift-off length",
