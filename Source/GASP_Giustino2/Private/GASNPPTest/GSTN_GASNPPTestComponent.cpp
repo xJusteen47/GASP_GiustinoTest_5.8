@@ -1588,6 +1588,7 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 				JumpJson->SetBoolField(TEXT("fastFalling"), Jump.bFastFalling);
 				JumpJson->SetNumberField(TEXT("airJumpsUsed"), Jump.AirJumpsUsed);
 				JumpJson->SetNumberField(TEXT("coyote"), Jump.CoyoteFramesLeft);
+				JumpJson->SetNumberField(TEXT("squat"), Jump.SquatFramesLeft);
 				if (const UMoverComponent* GravityMover = Owner->FindComponentByClass<UMoverComponent>())
 				{
 					const FVector Gravity = GravityMover->GetGravityAcceleration();

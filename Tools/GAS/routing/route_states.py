@@ -22,7 +22,7 @@ DA_PATH = "/Game/GSTN/Animation/Locomotion/DA_AnimSet_Locomotion_Default"
 LIB_CLASS = "/Script/GSTNCombatNP.GSTN_LocomotionStateLibrary"
 ENTRY_FN = "SetBlendStackFromStateName"
 CROUCH_IDLE = "/Game/GSTN/Animation/Crouch/AS_GSTN_Crouch_Idle.AS_GSTN_Crouch_Idle"
-OUR_STATES = ["Skid", "Run Stop", "Run Stop Blend", "Crouch Enter", "Crouch Idle", "Crouch Exit", "Run Start", "Skid Exit Run", "Dash"]
+OUR_STATES = ["Skid", "Run Stop", "Run Stop Blend", "Crouch Enter", "Crouch Idle", "Crouch Exit", "Run Start", "Skid Exit Run", "Dash", "Jump Squat"]
 
 log = []
 def p(*a): log.append(" ".join(str(x) for x in a))
@@ -78,6 +78,8 @@ def rows_spec(da):
         "Dash": ("/Game/GSTN/Animation/Dash/AS_GSTN_Dash_Ganon.AS_GSTN_Dash_Ganon", 0.0, 0.03, False),
         # locomotion-finish-3: skid -> run loop at the matched foot phase (Tools/GAS/skid_exit_run.py writes routing/skid_exit_run.json)
         **_skid_exit_run(),
+        # jumpsquat-v0: placeholder squat pose (Tools/GAS/jump_squat/jump_squat_states.py writes routing/jump_squat.json)
+        **_json_row("jump_squat.json", "Jump Squat", False),
     }
 
 def _skid_exit_run():
@@ -87,6 +89,14 @@ def _skid_exit_run():
         return {}
     d = json.load(open(path))
     return {"Skid Exit Run": (d["clip"], d["start"], d["blend"], True)}
+
+def _json_row(name, key, looping):
+    import os
+    path = os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir()), "Tools", "GAS", "routing", name)
+    if not os.path.exists(path):
+        return {}
+    d = json.load(open(path))
+    return {key: (d["clip"], d["start"], d["blend"], looping)}
 
 def set_loop(asset, looping):
     for name in ("loop", "b_loop"):

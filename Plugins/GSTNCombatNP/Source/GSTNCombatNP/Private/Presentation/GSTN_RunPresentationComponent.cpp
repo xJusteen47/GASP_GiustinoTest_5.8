@@ -338,6 +338,14 @@ float UGSTN_RunPresentationComponent::GetAnimOwnerBoostDashTime(const UAnimInsta
 	return Run ? Run->GetBoostDashTime() : -1.f;
 }
 
+bool UGSTN_RunPresentationComponent::IsAnimOwnerJumpSquatting(const UAnimInstance* AnimInstance)
+{
+	const AActor* Owner = AnimInstance ? AnimInstance->GetOwningActor() : nullptr;
+	const UGSTN_CombatSimComponent* Sim = Owner ? Owner->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
+	FGSTN_JumpState Jump;
+	return Sim && Sim->ReadJumpState(Jump) && Jump.SquatFramesLeft > 0;
+}
+
 bool UGSTN_RunPresentationComponent::IsSkidInMainGraph() const
 {
 	const UGSTN_LocomotionAnimSet* Profile = LeanProfile.Get();

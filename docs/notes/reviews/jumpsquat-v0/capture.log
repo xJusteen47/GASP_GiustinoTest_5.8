@@ -1,0 +1,11 @@
+    0.0s driver loaded: kit KIT_Test_Playtest, button Attack, out C:/Users/jacop/Documents/Unreal Projects/GASP_Giustino2_ue59/Saved/JumpSquat/cap1
+    8.0s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '1', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   20.3s kit KIT_Test_Playtest: OK
+   35.3s loadout: {"revision": 1, "kit": "KIT_Test_Playtest", "additionalWeapons": [], "kitResolved": true, "tableEntries": 26, "grantedAbilities": 20, "derivedTimelines": 0, "tableCrc": "ee58bb22"}
+   35.3s review stage: parked [], other pawns at [2965, 3113, 3509, 3529] cm
+   35.7s 7 cameras, 3 fill lights
+   37.7s sequence mv_jump_rest: pawn at ((0, -150, 100), 0)
+   46.6s mv_jump_rest: jump on v40, held 24 frames
+   90.8s sequence mv_jump_rest done: 210 frames, pawn z 88.1, host shots 0
+   92.6s finish: ok
+   92.8s ASSERT: FAIL no expectations (empty spec)

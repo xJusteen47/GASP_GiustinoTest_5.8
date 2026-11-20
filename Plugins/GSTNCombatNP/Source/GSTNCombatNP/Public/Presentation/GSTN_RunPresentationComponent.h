@@ -245,6 +245,15 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
 	static float GetAnimOwnerBoostDashTime(const UAnimInstance* AnimInstance);
 
+	/**
+	 * Jump squat (owner 2026-11-17, 1A: 3 frames on the ground before the take-off; UGSTN_CombatSettings::JumpSquatFrames): true while the
+	 * combat sim's jump state counts the squat down (FGSTN_JumpState::SquatFramesLeft > 0). Read straight from the simulated jump state, not
+	 * cached in this component's tick (TG_PostPhysics, one frame late): the squat lasts 3 frames, a late frame would lose a third of it.
+	 * Entry/exit rule of the "Jump Squat" state of the main ABP (Tools/GAS/jump_squat/jump_squat_states.py)
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Jump", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static bool IsAnimOwnerJumpSquatting(const UAnimInstance* AnimInstance);
+
 	/** The profile moves the skid into the main ABP (the skid layer then never takes the pose) */
 	bool IsSkidInMainGraph() const;
 
