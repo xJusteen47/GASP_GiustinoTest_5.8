@@ -117,11 +117,11 @@ if drift > 2.0:
     rep["ik_foot_fixed_check_cm"] = round(math.dist((a.x, a.y, a.z), (b.x, b.y, b.z)), 2)
 # 4b. entry window: Pose Search Block Transition from BLOCK_FROM to the end
 TRACK = "PoseSearch"
-if not AL.is_valid_animation_notify_track_name(seq, TRACK):
+if TRACK not in [str(x) for x in AL.get_animation_notify_track_names(seq)]:
     AL.add_animation_notify_track(seq, TRACK, unreal.LinearColor(0.2, 0.6, 1.0, 1.0))
-AL.add_animation_notify_state_event(seq, TRACK, BLOCK_FROM, seq.get_play_length() - BLOCK_FROM,
-                                    unreal.AnimNotifyState_PoseSearchBlockTransition)
-rep["block_transition"] = [BLOCK_FROM, round(seq.get_play_length(), 4)]
+ev = AL.add_animation_notify_state_event(seq, TRACK, BLOCK_FROM, seq.get_play_length() - BLOCK_FROM,
+                                         unreal.AnimNotifyState_PoseSearchBlockTransition)
+rep["block_transition"] = [BLOCK_FROM, round(seq.get_play_length(), 4), type(ev).__name__ if ev else None]
 EAL.save_loaded_asset(seq, False)
 
 # 5. curves (curves_author saves the asset)
