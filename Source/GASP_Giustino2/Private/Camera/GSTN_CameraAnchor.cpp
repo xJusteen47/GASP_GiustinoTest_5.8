@@ -463,6 +463,7 @@ void UGSTN_CameraAnchorComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	// Airborne as Mover reports it (its own state tag, same source as the crouch); no Mover = always grounded (no air hold)
 	static const FGameplayTag InAirTag = FGameplayTag::RequestGameplayTag(TEXT("Mover.IsInAir"), false);
 	const bool bInAir = Mover && InAirTag.IsValid() && Mover->HasGameplayTag(InAirTag, true);
+	bLastInAir = bInAir;
 	// Look ahead along the horizontal velocity, slowly smoothed so a direction change does not swing the view
 	FVector LookAheadGoal = FVector::ZeroVector;
 	if (Tuning.LookAheadTime > 0.f && Tuning.MaxLookAhead > 0.f)

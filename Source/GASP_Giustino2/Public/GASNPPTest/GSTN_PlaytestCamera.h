@@ -11,6 +11,7 @@
 #include "GSTN_PlaytestCamera.generated.h"
 
 class UGSTN_CameraAnchorSettingsAsset;
+class UGSTN_CameraAnchorComponent;
 class UMaterialInstanceDynamic;
 struct FGSTN_CameraTiltShiftSettings;
 
@@ -42,6 +43,10 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> BandMaterial;
 	bool bBandMaterialTried = false;
+	/** gstn.Camera.Trace: CSV lines not yet written to Saved/Logs/gstn_camera_trace.csv */
+	TArray<FString> TraceLines;
+	bool bTraceHeaderWritten = false;
+	void Trace(float DeltaTime, const FMinimalViewInfo& In, const FMinimalViewInfo& Out, bool bSweepHit, const UGSTN_CameraAnchorComponent* Anchor);
 };
 
 /**

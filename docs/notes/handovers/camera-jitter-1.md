@@ -18,14 +18,10 @@ Same bug class in the unused GSTNCamera plugin: UGSTN_CameraComponent computed i
 - Owner 20:51Z: custom camera API `UGSTN_CameraAnchorLibrary` (BP GSTN|Camera): Get Camera Pivot (capsule- and step-free, undamped),
   Get Damped Camera Pivot (anchor's damping). Designer doc docs/architecture/camera-anchor.md.
 - Tests: `GSTN.Camera.Anchor.TicksBeforeTheView`, `GSTN.Camera.Anchor.LibraryNoCharacter`, `GSTNCamera.Runtime.TicksBeforeTheView` (tick group guards).
-## Desktop (Haiku/Sonnet, editor closed while building, ~3 $)
-1. Merge `origin/claude/project-thread-hiq1zx` into the playtest branch (touches only Camera files, GSTN_CameraComponent, CombatSimComponent tick).
-2. Build with Run-Timed (45 min). Tests: `GSTN.Camera+GSTNCamera+GSTNCombat.NP.BodyCapsule` (expect all pass, 2 new).
-3. PIE L_Test_Hub, Overlord: jump in place, run + jump, dropkick, dair stomp landing, crouch in/out. Same inputs with `gstn.Camera.Anchor.Early 1`
-   and `0`. Record both (EDITOR_WIN=full, owner hi-res), commit mp4 in docs/notes/reviews/camera-jitter-1/. Expect: 0 jitters, 1 stays smooth.
-4. If 1 still jitters: `stat unit` (frame time spikes?) and `gstn.Camera.Anchor.Debug 1` (green sphere smooth?) -> if green is smooth and the
-   view is not, GASP's rig evaluates elsewhere: ask the Unreal Assistant "when does a GameplayCameraComponent rig evaluate in 5.9 relative to
-   tick groups, and does it read the component's world location each frame?" and log the answer here.
-Risks: tick prerequisite cycle if a PostPhysics component of the pawn depends on the camera (none known; would log a cycle warning);
-changing the GameplayCamera component's effective tick group if it ticks earlier (harmless, it then reads newer data).
-COSTO: ~5 $ | 0 minuti desktop | 0 token review
+## Attempt 2 result (owner video 21:38, docs/notes/reviews/camera-jitter-1/owner-video-1.md): FAIL for what the owner sees
+Desktop measured 0 kicks (Early 1) vs 13 (Early 0) on jumps, but the owner's video shows a different jitter: the camera height
+bounces between two levels (~10-25 cm) every 1-3 frames while standing on flat ground, plus ~20 fps. Rule 5: stop here. Added
+diagnostics only: `gstn.Camera.Trace 1` (CSV per frame, Saved/Logs/gstn_camera_trace.csv) + Tools/GASNPPTest/camera_trace_check.py.
+## Desktop (next): build, PIE as the owner plays, `gstn.Camera.Trace 1`, stand still 5 s, walk in place, jump; `gstn.Camera.Trace 0`;
+run the checker (5 lines) for Early 1 and Anchor 0. The first column with zig-zag kicks names the culprit. `stat unit` for the fps.
+COSTO: ~8 $ | 0 minuti desktop | 0 token review
