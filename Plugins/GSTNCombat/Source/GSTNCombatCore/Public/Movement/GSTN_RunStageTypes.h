@@ -137,6 +137,55 @@ struct GSTNCOMBATCORE_API FGSTN_RunBoostDashTuning
 	float AccelMultiplier = 8.f;
 };
 
+/**
+ * Run reversal (skid-reversal-1, owner 2026-11-20, Toad reference): the stick flipped against a run must give back a run the other way in about
+ * 0.3 s; with the stage values alone it takes ~0.55 s (the walking mode's TurningStrength eats the old velocity, then the stage acceleration
+ * builds the new one). From the frame the stick goes against the ground velocity until the speed along the stick reaches EndSpeedFraction of
+ * the stage top speed, the stage acceleration is multiplied and the walking mode's turning strength is raised. Same walking mode, same
+ * properties (stock GASP has no reversal-specific braking: a 180 is just its walking parameters), only stronger for a few frames. Simulation
+ * side only; the pivot clip is the chooser's. Frames at 62.5 Hz
+ */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_RunReversalTuning
+{
+	GENERATED_BODY()
+
+	/** Off = a reversal uses the stage values like any turn */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal")
+	bool bEnabled = false;
+
+	/** Cosine between stick and ground velocity under which the stick counts as reversed (-0.5 = more than 120 degrees off) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal", meta = (ClampMin = "-1", ClampMax = "0"))
+	float StickCos = -0.5f;
+
+	/** Stick magnitude (0..1) needed: a light tilt back is a slow turn, not a reversal */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal", meta = (ClampMin = "0", ClampMax = "1"))
+	float MinStickMagnitude = 0.5f;
+
+	/** Ground speed (at the reference WalkSpeed) from which a flip is a reversal: a walk turns as usual */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float MinSpeed = 250.f;
+
+	/**
+	 * The walking mode's TurningStrength during the reversal (the larger of this and the stage's). It sets how fast the old velocity dies:
+	 * higher = shorter slide. Mover reads 10 as strong, 100 as near instant
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal", meta = (ClampMin = "0", ClampMax = "200"))
+	float TurningStrength = 30.f;
+
+	/** Multiplier of the stage acceleration during the reversal (replaces the stage's acceleration ramp). It sets how fast the run comes back */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal", meta = (ClampMin = "1", ClampMax = "10"))
+	float AccelerationMultiplier = 2.f;
+
+	/** The reversal ends when the speed along the stick reaches this fraction of the stage top speed */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal", meta = (ClampMin = "0.1", ClampMax = "1"))
+	float EndSpeedFraction = 0.9f;
+
+	/** The reversal never lasts more than this many frames (a wall, a slope) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal", meta = (ClampMin = "1", ClampMax = "120"))
+	int32 MaxFrames = 40;
+};
+
 /** The whole run tuning of a kit: the stages and the rules that move between them. Values only, copied out of the profile asset */
 USTRUCT(BlueprintType)
 struct GSTNCOMBATCORE_API FGSTN_RunStagesTuning
@@ -218,6 +267,10 @@ struct GSTNCOMBATCORE_API FGSTN_RunStagesTuning
 	/** The run skid (P2) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Skid")
 	FGSTN_RunSkidTuning Skid;
+
+	/** The run reversal: how fast a stick flipped against the run gives a run the other way (skid-reversal-1) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Reversal")
+	FGSTN_RunReversalTuning Reversal;
 
 	/**
 	 * P3, kit slipperiness (owner 10:12:59Z: "Luigi" slipperiness only as a kit setting, never the default): multiplies the braking of every
@@ -318,6 +371,10 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageState
 	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
 	int32 DashFrames = -1;
 
+	/** Run reversal: -1 = none, else frames since the stick went against the run (live until the run the other way is back, Reversal) */
+	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
+	int32 ReverseFrames = -1;
+
 	/**
 	 * External channel of the air momentum (FGSTN_AirMomentumLogic): the horizontal velocity a knockback, a launch or a bounce gave, cm/s,
 	 * world space. Zero on the ground and after a player-owned override move
@@ -376,6 +433,9 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageLogic
 
 	/** The boost dash burst is live in State */
 	static bool IsBoostDash(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
+
+	/** A run reversal is live in State: its acceleration multiplier and turning strength apply on the next frame */
+	static bool IsReversing(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
 
 	/** Acceleration multiplier of the current stage's ramp (1 = no ramp or ramp done). The state is the one at the start of the frame */
 	static float GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
