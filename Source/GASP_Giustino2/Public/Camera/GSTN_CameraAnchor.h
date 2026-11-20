@@ -285,6 +285,13 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorDamper
  * (or exposes the correction for the camera modifier). Added at runtime by UGSTN_PlaytestCameraSubsystem to locally viewed pawns that do
  * not have one; a character Blueprint may place its own to give that character different settings. Never ticks on a dedicated server
  */
+/**
+ * The presented capsule changed size (crouch, aerial, landing, knockdown, any body capsule track): half heights before and after, and how far its
+ * bottom moved along Up (0 on the ground: the bottom stays on the floor). Presentation, once per rendered frame with a change, never during a
+ * rollback re-simulation: what the screen shows, not each simulated step
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FGSTN_OnCameraCapsuleChanged, float, OldHalfHeight, float, NewHalfHeight, float, BottomShift);
+
 UCLASS(ClassGroup = (Camera), meta = (BlueprintSpawnableComponent))
 class GASP_GIUSTINO2_API UGSTN_CameraAnchorComponent : public UActorComponent
 {
@@ -300,6 +307,13 @@ public:
 	/** Optional shared tuning; wins over Settings when set */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor")
 	TObjectPtr<UGSTN_CameraAnchorSettingsAsset> SettingsAsset;
+
+	/**
+	 * Observer for custom cameras (owner 2026-11-20): fires when the drawn capsule changes size. The anchor already ignores these changes by
+	 * itself (VerticalSource); bind this only to react on purpose (e.g. a camera that WANTS to dip on crouch)
+	 */
+	UPROPERTY(BlueprintAssignable, Category = "Camera|Anchor")
+	FGSTN_OnCameraCapsuleChanged OnCapsuleChanged;
 
 	/** A component with this tag is the one moved; else the first GameplayCamera, then spring arm, then camera component of the owner */
 	static const FName CameraComponentTag;
@@ -391,6 +405,9 @@ private:
 	bool bLastInAir = false;
 	/** Capsule-bottom height minus mesh height on the last grounded frame (cm, along Up): carried through the air */
 	double AirBias = 0.0;
+	/** Last presented capsule (OnCapsuleChanged): half height and bottom height along Up; < 0 = not read yet */
+	float LastCapsuleHalfHeight = -1.f;
+	double LastCapsuleBottom = 0.0;
 	bool bShiftView = false;
 	/** 0..1 blend of the aim crouch offset */
 	float AimCrouchAlpha = 0.f;
