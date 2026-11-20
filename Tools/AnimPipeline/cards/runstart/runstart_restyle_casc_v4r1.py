@@ -13,7 +13,10 @@ import math
 import numpy as np
 
 F0, F1 = 0, 68
-R_IN, R_OUT = (11, 16), (42, 48)
+R_IN = (11, 16)
+# r1: (42, 48) = release in 0.2 s, Fable r2 FAIL (snap f166-182). r2: (39, 59) = peak ~1.1 deg per 60 fps frame for a 30 deg release, f0-39 unchanged
+R_OUT = tuple(globals().get('R_OUT_OVERRIDE', (39, 59)))
+SCENE_END = globals().get('SCENE_END', 'runstart/RunStart_v4r2.casc')
 
 
 def ss(a, b, x):
@@ -110,7 +113,7 @@ def bend_of(S, E, H):
 
 
 tab = app.get_scene_manager().current_scene()
-assert str(tab.get_path_name()).replace("\\", "/").endswith("runstart/RunStart_v4r1.casc"), tab.get_path_name()
+assert str(tab.get_path_name()).replace("\\", "/").endswith(SCENE_END), tab.get_path_name()
 scene = tab.domain_scene()
 mv = scene.model_viewer(); bv = mv.behaviour_viewer(); dv = mv.data_viewer()
 def pid(name):

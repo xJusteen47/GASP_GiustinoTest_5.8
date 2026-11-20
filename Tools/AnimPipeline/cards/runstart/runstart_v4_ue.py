@@ -167,7 +167,7 @@ rep["handoff"] = {"exit_at": EXIT_AT, "loop_t_analytic": round(t_an, 4), "cost_a
                   "loop_t_match": round(best[1], 4), "cost_match": round(best[0], 1)}
 # the analytic phase is the composer's own (same frames); the match only overrides it when clearly better
 rep["handoff"]["loop_start"] = rep["handoff"]["loop_t_match"] if best[0] < 0.5 * c_an - 2 else rep["handoff"]["loop_t_analytic"]
-json.dump(rep, open(os.path.join(OUT, "v4r1_build.json"), "w"), indent=1)
+json.dump(rep, open(os.path.join(OUT, NAME + "_build.json"), "w"), indent=1)
 print("RSV4 import %s: %d f %.3f s, block transition %s" % (NAME, n, rep["length"], rep["block_transition"]))
 print("RSV4 root %s (%s), ik drift %.1f cm" % (rep["root_travel_cm"], rep["root_motion"][:16], drift))
 print("RSV4 curves %s onsets L %s R %s" % (rep["curves"], rep["contact_l_onsets_f30"][:4], rep["contact_r_onsets_f30"][:4]))
