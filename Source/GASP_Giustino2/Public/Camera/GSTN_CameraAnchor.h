@@ -283,8 +283,26 @@ public:
 	/** World offset to add to the view when the mode is ShiftView (or no camera component was found). Zero otherwise */
 	FVector GetViewShift() const;
 
-	/** The damped anchor of the last frame (debug and tests) */
+	/**
+	 * The damped anchor of this frame (valid from TG_PostPhysics on; before that, last frame's): the standing root with the camera's damping and
+	 * air hold, without look ahead or aim offsets. Free of capsule size changes and of simulation step jitter
+	 */
+	UFUNCTION(BlueprintPure, Category = "Camera|Anchor")
 	FVector GetDampedAnchor() const { return Damper.Location; }
+
+	/** The undamped standing root this frame's anchor read (see UGSTN_CameraAnchorLibrary::GetCameraPivot) */
+	UFUNCTION(BlueprintPure, Category = "Camera|Anchor")
+	FVector GetStandingRoot() const { return LastStandingRoot; }
+
+	/** True once the damper holds a value (it resets while the anchor is off) */
+	bool HasDampedAnchor() const { return Damper.bValid; }
+
+	/**
+	 * The standing root of Actor as drawn this frame: where its actor root would be with its own (standing) capsule, read back from the drawn,
+	 * Mover-smoothed mesh. Capsule resizes and the 62.5 Hz simulation steps do not move it; the body's real motion does. Runs the body capsule's
+	 * mesh correction first, so it is right at any point of the frame after Mover's finalize. False (actor location returned) without a mesh
+	 */
+	static bool ComputeStandingRoot(const AActor* Actor, FVector& OutLocation);
 
 	/** The correction applied this frame: damped anchor minus what the camera component would follow without it */
 	FVector GetLastCorrection() const { return LastCorrection; }
@@ -322,6 +340,7 @@ private:
 	bool bCameraMoved = false;
 	FGSTN_CameraAnchorDamper Damper;
 	FVector LastCorrection = FVector::ZeroVector;
+	FVector LastStandingRoot = FVector::ZeroVector;
 	bool bShiftView = false;
 	/** 0..1 blend of the aim crouch offset */
 	float AimCrouchAlpha = 0.f;

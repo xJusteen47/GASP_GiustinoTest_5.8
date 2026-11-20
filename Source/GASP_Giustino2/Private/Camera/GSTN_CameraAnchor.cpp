@@ -343,6 +343,36 @@ void UGSTN_CameraAnchorComponent::SetTickOrder(bool bEarly)
 	bOrderSet = true;
 }
 
+bool UGSTN_CameraAnchorComponent::ComputeStandingRoot(const AActor* Actor, FVector& OutLocation)
+{
+	OutLocation = Actor ? Actor->GetActorLocation() : FVector::ZeroVector;
+	if (!Actor)
+	{
+		return false;
+	}
+	// Same reads as the component: the body capsule's mesh correction first (idempotent), then the drawn mesh minus its standing relative
+	if (UGSTN_CombatSimComponent* Combat = Actor->FindComponentByClass<UGSTN_CombatSimComponent>())
+	{
+		Combat->ApplyBodyCapsulePresentation();
+	}
+	const USceneComponent* Visual = nullptr;
+	if (const UMoverComponent* Mover = Actor->FindComponentByClass<UMoverComponent>())
+	{
+		Visual = Mover->GetPrimaryVisualComponent();
+	}
+	if (!Visual)
+	{
+		Visual = Actor->FindComponentByClass<USkeletalMeshComponent>();
+	}
+	if (!Visual || Visual == Actor->GetRootComponent())
+	{
+		return false;
+	}
+	const FVector ParentScale = Actor->GetRootComponent() ? Actor->GetRootComponent()->GetComponentScale() : FVector::OneVector;
+	OutLocation = FGSTN_CameraAnchorDamper::StandingRootFromVisual(Visual->GetComponentTransform(), GSTNCameraAnchor::StandingRelative(*Visual), ParentScale);
+	return true;
+}
+
 bool UGSTN_CameraAnchorComponent::IsOwnerAiming() const
 {
 	const AActor* Owner = GetOwner();
@@ -427,6 +457,7 @@ void UGSTN_CameraAnchorComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	const USceneComponent* Visual = VisualComponent.Get();
 	const FVector ParentScale = Owner->GetRootComponent() ? Owner->GetRootComponent()->GetComponentScale() : FVector::OneVector;
 	const FVector Raw = Visual ? FGSTN_CameraAnchorDamper::StandingRootFromVisual(Visual->GetComponentTransform(), VisualRelativeStanding, ParentScale) : Root;
+	LastStandingRoot = Raw;
 	const UMoverComponent* Mover = Owner->FindComponentByClass<UMoverComponent>();
 	const FVector Up = Mover ? Mover->GetUpDirection() : Owner->GetActorUpVector();
 	// Airborne as Mover reports it (its own state tag, same source as the crouch); no Mover = always grounded (no air hold)
