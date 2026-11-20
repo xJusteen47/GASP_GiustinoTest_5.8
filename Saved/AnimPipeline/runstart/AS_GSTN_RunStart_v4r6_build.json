@@ -1,0 +1,50 @@
+{
+ "frames": 59,
+ "length": 1.9333,
+ "fps": 30.0,
+ "tracks": 88,
+ "root_travel_cm": [
+  -1.2,
+  977.8,
+  0.0
+ ],
+ "pelvis_local_travel_cm": [
+  0.0,
+  0.0,
+  5.4
+ ],
+ "root_motion": "enabled + force root lock (stock loop settings)",
+ "ik_foot_drift_cm": 0.0,
+ "block_transition": [
+  0.05,
+  1.9333,
+  "AnimNotifyState_PoseSearchBlockTransition"
+ ],
+ "contact_l_onsets_f30": [
+  6.5,
+  16.5,
+  28.5,
+  46.5
+ ],
+ "contact_r_onsets_f30": [
+  3.0,
+  11.5,
+  21.5,
+  24.0,
+  37.5,
+  56.0
+ ],
+ "curves": [
+  "contact_l",
+  "contact_r",
+  "phase"
+ ],
+ "handoff": {
+  "exit_at": 1.0667,
+  "loop_t_analytic": 1.7894,
+  "cost_analytic": 120.7,
+  "loop_t_match": 0.8333,
+  "cost_match": 37.0,
+  "loop_start": 0.8333
+ }
+}
