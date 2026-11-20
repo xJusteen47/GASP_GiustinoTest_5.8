@@ -34,4 +34,5 @@ after = str(prof.get_editor_property("run_stages").get_editor_property("reversal
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 with open(OUT, "w", encoding="utf-8") as f:
     f.write("before %s\nafter  %s\nsaved %s\n" % (before, after, ok))
+    f.write("run_stages before %s\nrun_stages after  %s\n" % (stages_before, str(prof.get_editor_property("run_stages"))))
 print("REVSETUP: saved=%s %s" % (ok, after[:300]))
