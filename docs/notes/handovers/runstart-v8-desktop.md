@@ -28,4 +28,19 @@ editor reopened. Re-check (rule 11): brief's predicted N_NEW 38 / EXIT_AT 0.367 
 - NO review yet: cloud thread (rule 10) with docs/notes/reviews/runstart-v4r8/brief_review.md. Only PASS goes to the owner.
   If FAIL on feet: brief step 6 (CUT (0,0), TARGET_S 0.27) is attempt 2.
 - The owner already plays v4r8 + 14 f ramp in his editor (data only, no build).
-COSTO: ~8 $ | ~15 min desktop | review 0 token
+## Attempt 2 (after review FAIL 1e72ebf: planted foot skates clip f0-f3) - stopped offline, rule 5
+- Brief step 6 run (CUT (0,0), TARGET_S 0.27): N_REV 8, N_NEW 39, EXIT_AT 0.40, rate0 6.0. Saved RunStart_v4r8.casc/.fbx (attempt 1
+  kept as RunStart_v4r8_a1.*). NOT imported: offline skate check predicts the same FAIL.
+- Skate check (Cascadeur run_python, ball points, frames where the lower of 2 frames is < 12 cm high and moves > 4 cm): attempt 2
+  f1-f4 = 174 cm (whole clip 324); v4r7 f0-38 = 25 cm. Cause: 28 source frames of 6 pumps in 8 output frames = ~6 source frames per
+  output frame, so no foot is ever on the ground in two consecutive frames (aliasing, not a stride-scale tuning issue).
+- Probe A (RunStart_v4r8_probeA.casc, CUT (3, 21.5) same foot R3 -> R21.5, TARGET_S 0.27): rate0 1.38, skate f0-13 = 20 cm. Sheet
+  docs/notes/reviews/runstart-v4r8/casc_probeA_f0-12.png: ONE high-knee pump then normal strides = identity trait 1 changes
+  (owner decision, rule 13a). Not exported.
+- Warping: enable_warping on v4r8 = v4r7 (1.0 from f0; stock ramps 0 -> 1 over ~10 %), so GASP stride warping is on. It cannot fix
+  this: warping scales strides against the clip's own root, and in the 7-8 f rev-up no foot is planted in the clip itself.
+- Game put back on the approved version (owner not in PIE): rows v4r8 off / v4r7 on (Saved/AnimPipeline/rows/runstart_back_to_v4r7.txt;
+  it added new v4r7 rows, old disabled duplicates stay), DA stage 1 ramp back to 30 f / 0.15.
+- Owner decision needed: A) probe A (1 pump, feet planted, 0.27 s); B) keep the multi-pump scramble as a cartoon "wheel" with the feet
+  off the ground (Luigi's blur), new pose round; C) stay on v4r7.
+COSTO: ~11 $ | ~15 min desktop | review 0 token
