@@ -188,6 +188,11 @@ MOVE_SEQUENCES = [
     # walk start -> run start around f90 and reaches the start clip ~f97, so v3 must own f95-160 (clip 1.5 s, stock exits near its end)
     {'name': 'mv_run_start_v3s', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
      'expect': [{'clip': 'AS_GSTN_RunStart_v3', 'window': [95, 160], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
+    # run start v4 pose round 1 on the clean base (runstart-v3-pose-1): AS_GSTN_RunStart_v4r1 = 1.5 s authored + 0.75 s loop tail, Block
+    # Transition notify from 0.05 s (entry only at the start). Gate set BEFORE the capture: the row is reached ~f90-97 (v3s attempt), the
+    # authored 1.5 s = 90 frames at 1/60 s per frame, so v4r1 must own f100-180; the stock exit ("almost complete") falls in the tail
+    {'name': 'mv_run_start_v4s', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
+     'expect': [{'clip': 'AS_GSTN_RunStart_v4r1', 'window': [100, 180], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
     # skid-fix-1 gate: the owner's skid clip at >= 0.8 from the reverse input to the skid end. Rows count the PRE idle frames: stick f95 ->
     # row f115, sim turns from f117; clip 0.83 s -> skid end ~f167. (First set as [97, 140] without the PRE offset: wrong frames, corrected)
     {'name': 'mv_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (170, None)],
