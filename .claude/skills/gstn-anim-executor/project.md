@@ -34,3 +34,5 @@ Antigravity cannot run git in its sandbox: the Claude session commits card and s
 - Engine questions: the **Unreal Editor's built-in AI assistant** (owner 11-19; editor open). UE 5.9 tools:
   `docs/notes/review/ue59-strumenti-per-skill.md`, only those marked as tried.
 - Max two attempts (rule 5); scripts print at most five lines (rule 4).
+- Knowledge base (2026-11-19): read `skills-public/knowledge/animation/06-holds-and-life.md` once per session and
+  `docs/knowledge/profile-gstn.md`; attach `skills-public/tools/animkb/kb_motion.py metrics` json to every result.

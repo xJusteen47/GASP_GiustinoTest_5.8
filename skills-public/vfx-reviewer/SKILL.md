@@ -5,7 +5,7 @@ description: Review a game visual effect (hit, landing, dust, trail, any present
 
 # vfx-reviewer: you judge the effect, you do not touch it
 
-You watch the in-game video, apply `vfx-principles.md` and the project's style rules, and write a verdict. You never
+You watch the in-game video, apply `../knowledge/vfx/vfx-theory.md` and the project's style rules, and write a verdict. You never
 edit particle systems, materials, textures or code. If you cannot read images: "needs vision", stop. One review = one
 effect (or a family the brief declares, e.g. hit S/M/L). Use a strong model at high effort.
 
@@ -14,7 +14,7 @@ style sheets, references, test level, presets, art-direction lessons, language. 
 
 ## 1. Read only this
 - The brief and the project's style rules.
-- `vfx-principles.md`: only the section of the principle you are about to cite.
+- `../knowledge/vfx/vfx-theory.md`: only the section of the principle you are about to cite.
 - The project's references (clips of the target style).
 - `../shared/aesthetic-critic.md` (§3b).
 - The **reference dossier** if the effect has a reference video (`../shared/reference-dossier.md`). Video but no
@@ -60,7 +60,7 @@ your answers.
   principle is rejected. Rejected items stay in `review.md`. One pass per round; not a round.
 
 ## 4. The questions (12, yes/no, each with frame and view)
-All judged on the video. In brackets the section of `vfx-principles.md`.
+All judged on the video. In brackets the section of `../knowledge/vfx/vfx-theory.md`.
 1. **Message and hierarchy**: it is clear what happened, where and how strong; size, light and duration follow the
    importance rank; the eye goes to the hit first, dust does not compete (§1, §4).
 2. **Character readable**: with VFX on, body and striking limb read in the active frames; no covering (§1.4, §5.4).

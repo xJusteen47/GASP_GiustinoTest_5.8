@@ -1,6 +1,6 @@
 # Principi dei VFX di gioco: teoria generale e checklist
 
-La teoria generale (in inglese, pubblicabile) sta in `skills-public/vfx-reviewer/vfx-principles.md` con la stessa numerazione; questo file tiene solo ciò che è del progetto.
+La teoria generale (in inglese, pubblicabile) sta in `skills-public/knowledge/vfx/vfx-theory.md` con la stessa numerazione; questo file tiene solo ciò che è del progetto.
 
 Quarto documento di teoria, gemello di quelli sull'animazione (`docs/notes/anim-theory/`). Richiesta owner
 2026-11-19 02:05Z (cmsg_01CRvUdrWm1dJrM4q54YDBLNCY9bE6qgMhjbRePFkZtCLq): "indagare la teoria e i principi dei VFX allo
@@ -41,37 +41,37 @@ fumo e polvere, scelta tecnica, prestazioni, processo. Le contraddizioni trovate
 
 ---
 
-## 1. Che cos'è un VFX di gioco → `skills-public/vfx-reviewer/vfx-principles.md` §1
+## 1. Che cos'è un VFX di gioco → `skills-public/knowledge/vfx/vfx-theory.md` §1
 
-## 2. Forma (shape language) → `skills-public/vfx-reviewer/vfx-principles.md` §2
+## 2. Forma (shape language) → `skills-public/knowledge/vfx/vfx-theory.md` §2
 
-## 3. Timing: le tre fasi → `skills-public/vfx-reviewer/vfx-principles.md` §3
+## 3. Timing: le tre fasi → `skills-public/knowledge/vfx/vfx-theory.md` §3
 
-## 4. Volume e strati → `skills-public/vfx-reviewer/vfx-principles.md` §4
+## 4. Volume e strati → `skills-public/knowledge/vfx/vfx-theory.md` §4
 
-## 5. Leggibilità alla camera di gioco → `skills-public/vfx-reviewer/vfx-principles.md` §5
+## 5. Leggibilità alla camera di gioco → `skills-public/knowledge/vfx/vfx-theory.md` §5
 
-## 6. Colore e valore rispetto allo sfondo → `skills-public/vfx-reviewer/vfx-principles.md` §6
+## 6. Colore e valore rispetto allo sfondo → `skills-public/knowledge/vfx/vfx-theory.md` §6
 
-## 7. Il look Astro Bot / DK Bananza → `skills-public/vfx-reviewer/vfx-principles.md` §7
+## 7. Il look Astro Bot / DK Bananza → `docs/knowledge/profile-gstn.md` §3 (osservazioni) e `skills-public/knowledge/vfx/vfx-theory.md` §7
 
-## 8. Fumo e polvere → `skills-public/vfx-reviewer/vfx-principles.md` §8
+## 8. Fumo e polvere → `skills-public/knowledge/vfx/vfx-theory.md` §8
 
-## 9. Impatto, hitstop e frame d'impatto → `skills-public/vfx-reviewer/vfx-principles.md` §9
+## 9. Impatto, hitstop e frame d'impatto → `skills-public/knowledge/vfx/vfx-theory.md` §9
 
-## 10. Scelta tecnica → `skills-public/vfx-reviewer/vfx-principles.md` §10
+## 10. Scelta tecnica → `skills-public/knowledge/vfx/vfx-theory.md` §10
 
-## 11. Prestazioni sul "tostapane" → `skills-public/vfx-reviewer/vfx-principles.md` §11
+## 11. Prestazioni sul "tostapane" → `skills-public/knowledge/vfx/vfx-theory.md` §11
 
-## 12. Processo → `skills-public/vfx-reviewer/vfx-principles.md` §12
+## 12. Processo → `skills-public/knowledge/vfx/vfx-theory.md` §12
 
-## 13. Checklist per chi costruisce → `skills-public/vfx-reviewer/vfx-principles.md` §13
+## 13. Checklist per chi costruisce → `skills-public/knowledge/vfx/vfx-theory.md` §13
 
-## 14. Checklist per chi revisiona → `skills-public/vfx-reviewer/vfx-principles.md` §14
+## 14. Checklist per chi revisiona → `skills-public/knowledge/vfx/vfx-theory.md` §14
 
-## 16. Limiti → `skills-public/vfx-reviewer/vfx-principles.md` §16
+## 16. Limiti → `skills-public/knowledge/vfx/vfx-theory.md` §16
 
-## 17. Fonti → `skills-public/vfx-reviewer/vfx-principles.md` §17
+## 17. Fonti → `skills-public/knowledge/vfx/vfx-theory.md` §17
 
 ---
 
