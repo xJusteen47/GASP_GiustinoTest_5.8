@@ -4,7 +4,7 @@
 # in ~0.2 s) become linear acceleration ramps (FGSTN_RunStage AccelRampFrames / RampStartFraction, existing fields) from frame 1.
 # The frantic rev-up stays in the clip (its planted first step must be trimmed in a pose pass, or the feet slide).
 # Measure + target: docs/notes/runstart-accel/report.md. Hand tuning: DA_Locomotion_Default > Run Stages > Stages[i] >
-# Acceleration Ramp (frames at 62.5 Hz). Idempotent: a stage whose ramp is already on (AccelRampFrames > 0) is left alone.
+# Acceleration Ramp (frames at 62.5 Hz). Idempotent: a stage already at the target ramp is left alone (any other ramp is replaced).
 # RAMP_MODE=dump only writes the current values. Headless (editor closed):
 #   UnrealEditor-Cmd.exe <project>.uproject -run=pythonscript -script="<project>/Tools/GAS/setup_run_start_ramp.py"
 # Writes Saved/RunStages/setup_run_start_ramp.txt and prints one summary line.
@@ -49,7 +49,9 @@ def run():
             rs.set_editor_property('start_stamp', stamp)
             changed = True
         for i, (frames, start) in RAMPS.items():
-            if i >= len(stages) or stages[i].get_editor_property('accel_ramp_frames') > 0:
+            # idempotent on the TARGET values: a pre-existing short ramp (DA had stage 1 = 6 f / 0.3, the snap) is replaced
+            if i >= len(stages) or (stages[i].get_editor_property('accel_ramp_frames') == frames
+                                    and abs(stages[i].get_editor_property('ramp_start_fraction') - start) < 1e-4):
                 continue
             stages[i].set_editor_property('accel_ramp_frames', frames)
             stages[i].set_editor_property('ramp_start_fraction', start)

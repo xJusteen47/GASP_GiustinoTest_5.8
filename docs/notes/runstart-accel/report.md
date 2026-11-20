@@ -41,16 +41,34 @@ C Animation only: keep the capsule, make the clip carry the gradual feel (stride
   Cheapest on sim, but the capsule snap stays visible against the ground: not recommended alone.
 Rule 14: run stages are our divergence from stock GASP Mover; any change needs its line in docs/notes/gasp-divergenze.md.
 
+## Stock GASP Mover (Unreal Assistant, 2026-11-20, desktop; Saved/Assistant/replies.json, log Saved/Logs/ci/ask_accel.log)
+Stock shapes standstill -> run with the walking mode's Acceleration / MaxSpeed smoothed by a critically damped spring (exponential
+ease-in, no curve asset); the stock way to a gradual start is a longer acceleration smoothing time and/or lower Acceleration, no extra
+ramp. A linear ramp on top is "compatible" but double-eases and can drift from the GASP trajectory used by Motion Matching (names not
+confirmed by the docs; it asked for the header). Our run stages already replace the stock speed profile (divergence row 13).
+
+## Applied (desktop, runstart-accel-1-desktop)
+Stage values found in DA_Locomotion_Default differ from the code defaults: stage 1 470 cm/s / 2000 cm/s^2 with a 6 f / 0.3 ramp already,
+stage 2 610 / 1400, stage 3 850 / 1200, stamp 21 f (setup_run_start_ramp.txt). Set: stage 1 ramp 31 f / 0.15, stage 2 30 f / 0.25.
+Measured (capture Saved/RunStartAccel/measure, base 1, KIT_Test_Overlord, mv_run_start_v4s4, ASSERT: OK min 0.96; metrics_accel.json,
+`REF=../reviews/runstart-v4r3/metrics_v4r3.json python speed_curve.py metrics_accel.json speed_ramp.png`, F0 82 same as v4r3):
+t10/t50/t90 = 0.40 / 0.70 / 1.52 s (v4r3 0.37 / 0.52 / 1.30); distance after 1 s 183 cm (v4r3 251). Shelf at ~470 from 0.8 to 1.45 s
+still there (FramesToNextStage 40), then stage 2. No owner video made.
+
+## PAUSED (owner 19:12Z): the stomp was meant for the run STOP (see update below). DA_Locomotion_Default
+restored to its git version (ramp NOT applied); script and measure kept for when the brief is confirmed.
+
 ## Update 19:15Z: no stamp (owner: "stomp" meant the run STOP)
 Trait 1 of runstart-identity.md (0.3 s stomp) is withdrawn for the run start. New proposal, `setup_run_start_ramp.py`
 (not applied yet, paper model `ramp_preview.py` / `ramp_preview.png`, the model reproduces the v4r3 capture):
 - Start Stamp Frames 21 -> 0: the capsule moves from frame 1.
-- Stage 1: AccelRampFrames 62 (~1 s), RampStartFraction 0.15: ease-in, ~85 cm/s at 0.2 s, 450 at ~0.6 s, no snap.
-- Stage 2: AccelRampFrames 30, RampStartFraction 0.25: 450 -> 585 over ~0.25 s instead of a step.
-- Model: t50 0.46 s (v4r3 0.52), stage 1 top 0.6 s, steady 1.41 s; the flat run phase 0.6-1.2 s is the stage design
+- Stage 1 (DA: 470 cm/s, 2000 cm/s^2, ramp 6 f / 0.3): AccelRampFrames 62 (~1 s), RampStartFraction 0.15: ease-in, ~95 cm/s at 0.2 s,
+  470 at ~0.57 s, no snap.
+- Stage 2 (DA: 610 / 1400): AccelRampFrames 30, RampStartFraction 0.25: 470 -> 610 over ~0.25 s instead of a step.
+- Model (DA values, ramp_preview.py): t50 0.43 s (current 0.50), stage 1 top 0.57 s, steady 1.34 s; the flat run phase 0.6-1.2 s is the stage design
   (Stages[0] FramesToNextStage 40): shorten it by hand if the run should flow straight into sprint 1.
 Hand-tuning fields (DA_Locomotion_Default > Run Stages): Start Stamp > Frames; Stages[0|1] > Acceleration Ramp > Accel Ramp
 Frames, Ramp Start Fraction; Stages[0] > Acceleration, Frames To Next Stage.
 Needs from a pose thread before applying (else the feet slide in the first 0.3 s): AS_GSTN_RunStart_v4r* without the
-planted stomp step: frantic cadence from the first contact, stride growing with the ramp (~0.85 m/s at 0.2 s, 4.5 m/s at
-0.6 s), root motion off or matching; capture and Fable review together with this data change.
+planted stomp step: frantic cadence from the first contact, stride growing with the ramp (~1 m/s at 0.2 s, 4.7 m/s at
+0.57 s), root motion off or matching; capture and Fable review together with this data change.
