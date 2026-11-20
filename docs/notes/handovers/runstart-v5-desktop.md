@@ -31,4 +31,14 @@ v4r4 L36.6 R73.8, v4r5 L49.5 R43.8 cm.
 Capture 1p Saved/RunStartV5/warp1p: ASSERT: OK f95-170 93% (min 0.56). Evidence docs/notes/reviews/runstart-v4r5/. Fable r6: PASS (3 notes, review_fable_r6.md):
 review_fable_r6.md. Owner videos owner/runstart_v4r5.mp4, _025x.mp4.
 
-COSTO: ~14 $ | ~12 min desktop | review ~0.08M token
+## Playtest follow-ups (owner 19:54-19:58Z)
+- Flicker + low fps: flicker is scene-wide AND in the Unreal Assistant panel = whole editor drawing, not Lumen/game. Unreal Assistant
+  (Saved/UE59/assistant_flicker.json) listed Lumen/contact-shadow/eye-adaptation causes, ruled out by the panel flicker. Running on
+  the desktop: Sunshine + Parsec (stream hosts), Cascadeur (2 of my scenes closed). Asked the owner to test without Sunshine/Parsec,
+  HDR off, Cascadeur minimized, and stat unit (Frame >> GPU = a cap). No code change (contact-shadow Lumen flags written then
+  reverted: unproven). Waiting on the owner's answer.
+- Backward run start = stock: only F_Lfoot/F_Rfoot rows have a v4r5 sibling; B, LL, RL starts (M_Relaxed_Run_Start_B/LL/RL_*) are
+  stock rows. Warping is not enough: orientation warping corrects a few tens of degrees, not a 180/90 turn during the start (body
+  would twist or pop). Recommended: new thread (Opus high, desktop, Cascadeur, ~15-20 $): v4r5-style clips over the stock B/LL/RL
+  root and turn (same compose path as v4: stock root + frantic style), as sibling rows; brief with identity traits (rule 13a).
+COSTO: ~16 $ | ~12 min desktop | review ~0.08M token
