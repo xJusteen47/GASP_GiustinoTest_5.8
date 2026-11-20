@@ -1,1 +1,1 @@
-IN USO dal 2026-11-20 19:20 UTC: thread runstart coda desktop (frozen frames, v4r5 pose, accel ramp), branch claude/runstart-v5-desktop
+libero dal 2026-11-20 19:50 UTC (runstart-v5-desktop)
