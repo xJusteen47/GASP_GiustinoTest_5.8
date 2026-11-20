@@ -1,0 +1,17 @@
+{
+ "date": "2026-11-20",
+ "attempt": 1,
+ "compose": {"script": "runstart_compose_casc_v3.py", "ok": [true, true], "frames": 46, "fps": 30, "run_src_end_frame": 56.68,
+             "run_loop_phase_at_end": 0.756, "travel_cm": 612.4, "max_target_err": [6.76, "lowerarm_LimbDir_l", 11],
+             "base_max_frame_jump_deg": [47.6, "foot_l", 11]},
+ "restyle": {"script": "runstart_restyle_casc_v3.py", "ok": true, "frames": 46, "max_pin_drift_cm": 0.001, "max_target_err_cm": 0.344,
+             "top_delta_body_deg": [[18.5, "spine_04", 9], [18.1, "spine_03", 9], [17.0, "clavicle_r", 9]],
+             "top_delta_arms_deg": [[41.1, "upperarm_r", 35], [33.9, "upperarm_l", 28], [30.0, "lowerarm_l", 6]],
+             "max_frame_jump_deg": [51.2, "hand_r", 26], "arm_mean_deg": {"l": -1.5, "r": 16.5}},
+ "thresholds": {"body_delta_max_deg": 25, "arm_delta_max_deg": 50, "frame_jump_max_deg": 90},
+ "GATE": "OK",
+ "fbx": {"v3": "Saved/AnimPipeline/runstart/RunStart_v3.fbx", "v3base": "Saved/AnimPipeline/runstart/RunStart_v3base.fbx",
+         "frantic_roundtrip_v0e": "Saved/AnimPipeline/runstart/RunStart_v0e.fbx (use f0-26 only; f27-130 are leftovers of the template scene)"},
+ "scenes": ["Saved/AnimPipeline/runstart/RunStart_v0_gaspZ.casc", "Saved/AnimPipeline/runstart/RunLoop_v0_gaspZ.casc",
+            "Saved/AnimPipeline/runstart/RunStart_v3base.casc", "Saved/AnimPipeline/runstart/RunStart_v3.casc"]
+}
