@@ -17,8 +17,11 @@ def dump_ops(path):
     c = unreal.IKRetargeterController.get_controller(rtg)
     for i in range(c.get_num_retarget_ops()):
         name = c.get_op_name(i)
-        f.write(f'{path} op {i} {name} enabled={c.get_retarget_op_enabled(name)}\n')
-        oc = c.get_op_controller(name)
+        f.write(f'{path} op {i} {name} enabled={c.get_retarget_op_enabled(i)}\n')
+        try:
+            oc = c.get_op_controller(i)
+        except Exception:
+            oc = c.get_op_controller(name)
         if oc is None:
             continue
         try:
