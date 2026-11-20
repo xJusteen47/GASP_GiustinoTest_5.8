@@ -183,6 +183,11 @@ MOVE_SEQUENCES = [
      # BS are additive layers on a cached pose (logged base weight = max(1-a, a) while they ramp in), so they do not compete
      'expect': [{'clip': 'AS_GSTN_RunStart_v3', 'window': [86, 167], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']},
                 {'clip': 'M_Neutral_Run_Loop_F', 'window': [172, 210], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
+    # run start v3 on the CLEAN GASP base (runstart-v3-review-1, PIE_CAPTURE_CVARS="gstn.Loco.Base 1"): v3 as pose-matched sibling rows of
+    # M_Relaxed_Run_Start_F_L/Rfoot in CHT_GSTN_StockMover_PoseMatch (stops_rows_ue.py). Gate set BEFORE the capture: stock reselects
+    # walk start -> run start around f90 and reaches the start clip ~f97, so v3 must own f95-160 (clip 1.5 s, stock exits near its end)
+    {'name': 'mv_run_start_v3s', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
+     'expect': [{'clip': 'AS_GSTN_RunStart_v3', 'window': [95, 160], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
     # skid-fix-1 gate: the owner's skid clip at >= 0.8 from the reverse input to the skid end. Rows count the PRE idle frames: stick f95 ->
     # row f115, sim turns from f117; clip 0.83 s -> skid end ~f167. (First set as [97, 140] without the PRE offset: wrong frames, corrected)
     {'name': 'mv_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (170, None)],
