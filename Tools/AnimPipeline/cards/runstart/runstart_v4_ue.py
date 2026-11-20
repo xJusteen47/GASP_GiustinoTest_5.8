@@ -21,7 +21,7 @@ FRANTIC = FOLDER + "/AS_GSTN_RunStart_Frantic"
 LOOP = "/Game/Characters/UEFN_Mannequin/Animations/Run/M_Neutral_Run_Loop_F"
 RT_LIMIT = float(os.environ.get("RSV3_RT_LIMIT", "4.0"))
 EXIT_AT = float(os.environ.get("RSV3_EXIT_AT", "1.4"))   # f42: cadence and stride back to 1.0 (sheet), only stock loop frames after it
-RUN_SRC_END = 79.68                                       # runstart_compose_casc_v4.py src_end (loop frame at v4 f68)
+RUN_SRC_END = float(os.environ.get("RSV4_SRC_END", "79.68"))                                      # runstart_compose_casc_v4.py src_end (loop frame at v4 f68)
 OUT = os.path.join(PROJ, "Saved", "AnimPipeline", "runstart")
 rep = {}
 

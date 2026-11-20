@@ -24,8 +24,9 @@ def env(keys, f):
             t = (f - a) / float(b - a); t = t * t * (3 - 2 * t)
             return va + (vb - va) * t
 
-RATE = [(8, 0.6), (11, 0.6), (14, 1.45), (34, 1.45), (42, 1.0), (45, 1.0)]
-K = [(8, 0.72), (34, 0.72), (42, 1.0), (45, 1.0)]
+RATE = globals().get('RATE_OVERRIDE', [(8, 0.6), (11, 0.6), (14, 1.45), (34, 1.45), (42, 1.0), (45, 1.0)])
+K = globals().get('K_OVERRIDE', [(8, 0.72), (34, 0.72), (42, 1.0), (45, 1.0)])
+DST_END = globals().get('DST_END', 'runstart/RunStart_v4base.casc')   # v4r3: run on RunStart_v4r3.casc with the rev-up RATE/K
 WIDE = 4.0           # cm each foot outward in the run (heavier, wider Ganon track)
 PRE_DZ = [(0, 0), (1, 0.5), (2, 1.5), (3, 3.5), (4, 6), (5, 9), (6, 12), (7, 15), (8, 17)]
 PRE_DY_TARGET = [88.3, 86.5, 84.5, 84.5, 85.5, 86.0, 85.0, 82.0, 78.5]   # pelvis height: small dip, rise on the lift, fall into the plant
@@ -89,7 +90,7 @@ sm = app.get_scene_manager()
 def tab_of(end):
     return [t for t in sm.scenes() if str(t.get_path_name()).replace("\\", "/").endswith(end)][0]
 dst = sm.current_scene()
-assert str(dst.get_path_name()).replace("\\", "/").endswith("runstart/RunStart_v4base.casc"), dst.get_path_name()
+assert str(dst.get_path_name()).replace("\\", "/").endswith(DST_END), dst.get_path_name()
 src_run = tab_of("runstart/RunLoop_v0_gaspZ.casc")
 
 def reader(tab):
