@@ -16,6 +16,11 @@ NAME = 'DA_Locomotion_Default'
 # stage index -> (AccelRampFrames, RampStartFraction). Toad: ~0.33 s in place, then ~0.6 s of growing speed, no step.
 RAMPS = {0: (62, 0.15), 1: (30, 0.25)}
 STAMP_FRAMES = 0   # was 21 (0.33 s almost in place); set it back here or in the asset to restore the stamp
+# Env overrides (run start v4r8, Luigi timing): RAMP_STAGES="0:15:0.15[,1:30:0.25]" replaces RAMPS (stage:frames:start_fraction);
+# RAMP_KEEP_STAMP=1 leaves the start stamp as the owner set it. The 'before' dump in the report is the restore value.
+if os.environ.get('RAMP_STAGES'):
+    RAMPS = {int(a): (int(b), float(c)) for a, b, c in (x.split(':') for x in os.environ['RAMP_STAGES'].split(','))}
+KEEP_STAMP = os.environ.get('RAMP_KEEP_STAMP') == '1'
 FIELDS = ('max_speed', 'acceleration', 'frames_to_next_stage', 'next_stage_speed_fraction', 'accel_ramp_frames', 'ramp_start_fraction')
 
 
@@ -44,7 +49,7 @@ def run():
             continue
         stages, changed = list(rs.get_editor_property('stages')), False
         stamp = rs.get_editor_property('start_stamp')
-        if stamp.get_editor_property('frames') != STAMP_FRAMES:
+        if not KEEP_STAMP and stamp.get_editor_property('frames') != STAMP_FRAMES:
             stamp.set_editor_property('frames', STAMP_FRAMES)
             rs.set_editor_property('start_stamp', stamp)
             changed = True
