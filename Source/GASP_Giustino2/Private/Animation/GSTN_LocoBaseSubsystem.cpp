@@ -21,6 +21,36 @@ namespace GSTNLocoBase
 	// Generated class names of the current bases (compared by FName: no allocation in the per-frame check)
 	static const FName SandboxMoverAbp(TEXT("SandboxCharacter_Mover_ABP_C"));
 	static const FName GstnLocomotionAbp(TEXT("ABP_GSTN_Locomotion_C"));
+
+	// Run start variants (runstart-v8c, 2026-11-21): the stock pattern for switching chooser rows from a setting is a chooser
+	// filter column bound to an ABP variable filled every frame (Unreal Assistant). Only the clean base has the variable and the
+	// column (leaf table "Run F Loco Transitions", Tools/AnimPipeline/cards/runstart/runstart_variant_rows_ue.py), so it is
+	// written only while gstn.Loco.Base is 1. Divergence row in docs/notes/gasp-divergenze.md.
+	static TAutoConsoleVariable<int32> CVarRunStartVariant(
+		TEXT("gstn.RunStart.Variant"), 0,
+		TEXT("Run start clip on the clean base (gstn.Loco.Base 1). 0 = v4r7 (approved, default), 1 = v4r8c (run loop sped up at ")
+		TEXT("start), 2 = v4r8a (one high-knee pump), 3 = v4r8b (cartoon wheel). Read by the chooser on the next start."),
+		ECVF_Default);
+	static const FName RunStartVariantVar(TEXT("GSTN_RunStartVariant"));
+
+	static void ApplyRunStartVariant(USkeletalMeshComponent* Mesh)
+	{
+		UAnimInstance* Anim = Mesh->GetAnimInstance();
+		if (!Anim)
+		{
+			return;
+		}
+		FProperty* Prop = Anim->GetClass()->FindPropertyByName(RunStartVariantVar);
+		const double Value = CVarRunStartVariant.GetValueOnGameThread();
+		if (FDoubleProperty* D = CastField<FDoubleProperty>(Prop))
+		{
+			D->SetPropertyValue_InContainer(Anim, Value);
+		}
+		else if (FFloatProperty* F = CastField<FFloatProperty>(Prop))
+		{
+			F->SetPropertyValue_InContainer(Anim, static_cast<float>(Value));
+		}
+	}
 }
 
 int32 UGSTN_LocoBaseSubsystem::GetSelectedBase()
@@ -89,6 +119,7 @@ void UGSTN_LocoBaseSubsystem::Tick(float DeltaTime)
 			continue;
 		}
 		ApplyToMesh(Mesh);
+		GSTNLocoBase::ApplyRunStartVariant(Mesh);
 	}
 }
 

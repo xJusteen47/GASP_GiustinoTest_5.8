@@ -34,6 +34,7 @@ F0 = float(G.get('F0', 0.15))                     # DA Stages[0] RampStartFracti
 S_MIN = float(G.get('S_MIN', 0.3))
 UP = int(G.get('UP_AXIS', 1))                     # Cascadeur Y-up; asserted below on the root
 EXIT_SRC = float(G.get('EXIT_SRC', 32.0))         # v4r7 exit_at 1.0667 s = f32
+TAIL_START = int(G.get('TAIL_START', REV_END))     # v4r8c: tail copied from here (same foot phase as REV_END, one cycle earlier)
 LEG_PREFIX = ('calf_', 'foot_', 'ball_', 'ik_foot_l', 'ik_foot_r')
 
 tab = app.get_scene_manager().current_scene()
@@ -147,7 +148,7 @@ def v_src(t):                                        # source forward root speed
 
 
 V_END = v_src(REV_END)
-N_NEW = N_REV + (LAST - REV_END) + 1
+N_NEW = N_REV + (LAST - TAIL_START) + 1
 
 # root distance along the rev-up (linear speed ramp F0*V_END -> V_END), then the source tail 1:1
 dist = [0.0]
@@ -168,11 +169,11 @@ for u in range(N_NEW):
         rnew = hz(root[0]) + fwd * dist[u]
         s = s_sm[u]
     else:
-        t = REV_END + (u - N_REV)
+        t = TAIL_START + (u - N_REV)
         rt = root[t]
         P = {n: a[t] - hz(rt) for n, a in SP.items()}
         B = {n: (ra[t], pa[t]) for n, (ra, pa) in SB.items()}
-        rnew = hz(root[0]) + fwd * dist[N_REV] + hz(rt - root[REV_END])
+        rnew = hz(root[0]) + fwd * dist[N_REV] + hz(rt - root[TAIL_START])
         s = 1.0
     W = {}
     for n, v in P.items():
@@ -198,7 +199,7 @@ def change(me, ue, su):
 
 
 ok = scene.modify_update('runstart v4r8 retime (Luigi %.2f s)' % TARGET_S, change)
-exit_at = (N_REV + (EXIT_SRC - REV_END)) / FPS
+exit_at = (N_REV + (EXIT_SRC - TAIL_START)) / FPS
 result = {'ok': bool(ok), 'points': len(pts), 'boxes': len(boxes), 'N_REV': N_REV, 'N_NEW': N_NEW,
           'EXIT_AT': round(exit_at, 4), 'rate0': round(r0, 2), 'V_END_cms': round(V_END, 1),
           'rev_dist_cm': round(dist[N_REV], 1), 's_min_used': round(min(s_sm), 2),
