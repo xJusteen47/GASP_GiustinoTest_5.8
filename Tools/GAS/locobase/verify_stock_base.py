@@ -39,8 +39,8 @@ gen = unreal.load_object(None, NEW["abp"] + ".ABP_GSTN_StockMover_C")
 if abp:
     unreal.BlueprintEditorLibrary.compile_blueprint(abp)
     st = abp.get_editor_property("status")
-    log.append("abp status %s parent %s" % (st, abp.get_editor_property("parent_class").get_name()))
-    if "ERROR" in str(st).upper():
+    log.append("abp status %s parent %s" % (st, gen.get_super_class().get_name() if gen else None))
+    if "ERROR" in str(st).upper() or "UP_TO_DATE" not in str(st).upper():
         fails.append("abp compile error")
 
 def tables(c, seen):
