@@ -312,7 +312,10 @@
    "meta": "../../../Saved/ClipCheck/export/WalkTurn180_RunPivot.meta.json",
    "_note": "Mixamo sword and shield 180 turn (walk turn) retargeted to UEFN, root from pelvis turning 180, 0.8 s held tail (skid-walkturn-1)",
    "start_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx", "frame": "nearest"},
-   "end_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx", "frame": "nearest"}
+   "end_ref": {"fbx": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx", "frame": "nearest"},
+   "fix": ["splice", "floor_clamp", "ik_feet"],
+   "splice": {"start": {"asset": "M_Neutral_Run_Loop_F", "frame": "nearest"}, "end": {"asset": "M_Neutral_Run_Loop_F", "frame": "nearest"}, "seconds": 0.2},
+   "floor_clamp": {}
   },
   "Skid_180": {
    "asset": "SS_180_Turn_Root180",

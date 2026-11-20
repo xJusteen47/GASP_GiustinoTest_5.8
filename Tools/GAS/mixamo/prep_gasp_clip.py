@@ -1,8 +1,8 @@
 # Make a converted clip usable as a GASP chooser row (skid-walkturn-1, 2026-11-20). Docs: docs/knowledge/gasp/gasp-structure-5.9.md
 # section 10.3 (every clip: root motion, ik feet, length after the likely start > 0.75 s + blend, Pose Search notify states).
 #  1. TAIL: GASP leaves a non-looping clip when <= 0.75 s remain (IsAnimationAlmostComplete). A 0.8 s turn would be cut at once,
-#     so PREP_TAIL seconds are appended: body held on the last frame, root continuing at the clip's end velocity (the plan GASP
-#     warps against). The tail is only seen under the outgoing blend; it is excluded from the pose search database.
+#     so PREP_TAIL seconds are appended: body and root held on the last frame (PREP_TAIL_ROOT=move: root continues at the
+#     clip's end velocity, which skates the held feet). The tail is only seen under the outgoing blend; it is excluded from the pose search database.
 #  2. ik_foot_l/r baked from the feet (GASP leg IK pins the feet to them), same code as the animpipe export.
 #  3. enable_root_motion on, no root lock.
 #  4. Pose Search notify states: ExcludeFromDatabase from PREP_ENTRY_MAX s to the end (entry only at the start of the turn).
@@ -16,6 +16,8 @@ import unreal
 CLIP = os.environ.get('PREP_CLIP', '')
 SRC = os.environ.get('PREP_SRC', '')
 TAIL = float(os.environ.get('PREP_TAIL', '0.8'))
+# hold (default): root stops with the body, no skate under the held pose (clip_check 2026-11-20: 'move' skated 79 cm)
+TAIL_ROOT = os.environ.get('PREP_TAIL_ROOT', 'hold')
 ENTRY_MAX = float(os.environ.get('PREP_ENTRY_MAX', '0.2'))
 SAVE = os.environ.get('GSTN_SAVE') == '1'
 AL = unreal.AnimationLibrary
@@ -61,7 +63,7 @@ def add_tail(anim):
         xs = list(local[b])
         last = xs[-1]
         for j in range(1, extra + 1):
-            if b == 'root':
+            if b == 'root' and TAIL_ROOT == 'move':
                 xs.append(unreal.Transform(location=last.translation + vel * float(j), rotation=last.rotation.rotator(),
                                            scale=last.scale3d))
             else:
