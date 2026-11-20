@@ -188,6 +188,11 @@ MOVE_SEQUENCES = [
     {'name': 'mv_walk_low', 'taps': [], 'frames': 140, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 0.2, 0)), (110, None)]},
     {'name': 'mv_jump_full', 'taps': [], 'frames': 90, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 24)},
     {'name': 'mv_jump_tap', 'taps': [], 'frames': 70, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 0)},
+    # Phase 3 batch 2 (jump squat + land): settled idle, full jump, then 110 frames of rest to see the land and the return to idle;
+    # mv_run_jump: the same jump from a run (land while moving), stick released after the land to see the stop too
+    {'name': 'mv_jump_rest', 'taps': [], 'frames': 190, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (20, 24)},
+    {'name': 'mv_run_jump', 'taps': [], 'frames': 220, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (70, 24),
+     'sticks': [(0, (0, 1, 0)), (150, None)]},
     {'name': 'mv_air_reverse', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (55, 18),
      'sticks': [(0, (0, 1, 0)), (62, (0, -1, 0)), (115, None)]},
     # M1 depth marker clips (rule 10): 'marker' turns gstn.DepthMarker.Enable on; 'proj_volume' spawns a projection box around the start (owner-local sideways)

@@ -14,12 +14,18 @@ import json, math, os
 import unreal
 
 PROJ = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
-WORK = os.path.join(PROJ, "Saved/AnimPipeline/runstop")
-DST_DIR = "/Game/GSTN/Locomotion/StockBase/RunStop"
+WORK = os.path.join(PROJ, os.environ.get("RS_WORK", "Saved/AnimPipeline/runstop"))
+DST_DIR = os.environ.get("RS_DST_DIR", "/Game/GSTN/Locomotion/StockBase/RunStop")
 SIDES = {
     "L": "/Game/Characters/UEFN_Mannequin/Animations/Sprint/M_Relaxed_Sprint_Stop_F_Lfoot",
     "R": "/Game/Characters/UEFN_Mannequin/Animations/Sprint/M_Relaxed_Sprint_Stop_F_Rfoot",
 }
+# Other moves (jump land, phase3-batch2): RS_SIDES = json {side: source clip path}, RS_STEM = Cascadeur file stem (<stem>_<side>_<ver>.fbx),
+# RS_DST_NAME = destination asset name with {side}
+if os.environ.get("RS_SIDES"):
+    SIDES = json.loads(os.environ["RS_SIDES"])
+STEM = os.environ.get("RS_STEM", "SprintStop")
+DST_NAME = os.environ.get("RS_DST_NAME", "AS_GSTN_SprintStop_Ganon_{side}")
 VER = os.environ.get("RS_VER", "v2")
 V0 = os.environ.get("RS_V0", "v0")   # base export; must use the same Cascadeur export settings as VER (v3: v0e = export_joints, up Z, baked)
 EAL = unreal.EditorAssetLibrary
@@ -86,14 +92,14 @@ def build(side, src_path, rep):
     src = unreal.load_asset(src_path)
     skel = src.get_editor_property("skeleton")
     n = src.get_editor_property("number_of_sampled_keys")
-    a = import_fbx(os.path.join(WORK, f"SprintStop_{side}_{V0}.fbx"), f"Casc_SprintStop_{side}_{V0}", skel)
-    b = import_fbx(os.path.join(WORK, f"SprintStop_{side}_{VER}.fbx"), f"Casc_SprintStop_{side}_{VER}", skel)
+    a = import_fbx(os.path.join(WORK, f"{STEM}_{side}_{V0}.fbx"), f"Casc_{STEM}_{side}_{V0}", skel)
+    b = import_fbx(os.path.join(WORK, f"{STEM}_{side}_{VER}.fbx"), f"Casc_{STEM}_{side}_{VER}", skel)
     na, nb = a.get_editor_property("number_of_sampled_keys"), b.get_editor_property("number_of_sampled_keys")
     r = rep.setdefault(side, {"frames": [n, na, nb]})
     if not (n == na == nb):
         r["error"] = "frame count mismatch"
         return
-    dst_path = f"{DST_DIR}/AS_GSTN_SprintStop_Ganon_{side}"
+    dst_path = f"{DST_DIR}/" + DST_NAME.format(side=side)
     if not EAL.does_asset_exist(dst_path):
         EAL.duplicate_asset(src_path, dst_path)
     dst = unreal.load_asset(dst_path)
