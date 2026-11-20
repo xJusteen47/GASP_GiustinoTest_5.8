@@ -1651,6 +1651,17 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 						Players.Add(MakeShared<FJsonValueString>(FString::Printf(TEXT("%s %.2f %.3f"), *GetNameSafe(Record.SourceAsset),
 							Record.EffectiveBlendWeight, Record.TimeAccumulator ? *Record.TimeAccumulator : -1.f)));
 					}
+					// Montages are not tick records (a montage evaluates its segments itself), so the moves played as montages
+					// were invisible here: add every active montage with its blend weight and position, same "asset weight time"
+					// format. Tools/AnimPipeline/capture_assert.py sums the matching entries (project rule 10, ASSERT: OK)
+					for (const FAnimMontageInstance* MontageInstance : PlayAnim->MontageInstances)
+					{
+						if (MontageInstance && MontageInstance->Montage && MontageInstance->IsValid())
+						{
+							Players.Add(MakeShared<FJsonValueString>(FString::Printf(TEXT("%s %.2f %.3f"), *GetNameSafe(MontageInstance->Montage),
+								MontageInstance->GetWeight(), MontageInstance->GetPosition())));
+						}
+					}
 					CombatJson->SetArrayField(TEXT("anim"), Players);
 				}
 			}

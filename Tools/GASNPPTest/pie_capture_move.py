@@ -17,6 +17,8 @@
 # Output: <out>/<sequence>/<view>/f<frame>.png, <out>/<sequence>/frames.jsonl (the host's combat state per frame), <out>/capture.log and
 # <out>/done.txt ("ok" or the error). Nothing is saved: the level and the kits stay as they are on disk. Then QUIT_EDITOR.
 # The grids and the mp4 are made outside the editor by Tools/GASNPPTest/pie_capture_grid.py.
+# ASSERT (project rule 10): sequences with an 'expect' entry, or PIE_CAPTURE_ASSERT=<asserts.json>, are checked at the end by
+# Tools/AnimPipeline/capture_assert.py; <out>/assert.txt starts with ASSERT: OK or ASSERT: FAIL. A review starts only on OK.
 import json
 import math
 import os
@@ -455,6 +457,32 @@ def _row(frame, tapped, extra=None):
     st['rows'].write(json.dumps(row) + '\n')
 
 
+def _run_asserts():
+    """Project rule 10 (2026-11-20): a review starts only on ASSERT: OK. Expectations come from each sequence's 'expect' entry
+    ({'clip', 'window': [first, last] capture frames, 'min_weight'?, 'coverage'?} or a list of them) and from the JSON file named by
+    PIE_CAPTURE_ASSERT ({sequence: [expect, ...]}, same format as Tools/AnimPipeline/capture_assert.py --spec). Writes <out>/assert.txt
+    (first line = the gate) and logs it. No expectation at all = ASSERT: FAIL (nothing proves the video shows the clip)."""
+    sys.path.insert(0, os.path.join(_PROJ, 'Tools', 'AnimPipeline'))
+    import capture_assert as ca
+    spec = {}
+    for seq in SEQUENCES:
+        if seq.get('expect'):
+            spec[seq['name']] = seq['expect'] if isinstance(seq['expect'], list) else [seq['expect']]
+    path = os.environ.get('PIE_CAPTURE_ASSERT')
+    if path:
+        for name, exp in json.load(open(path, encoding='utf-8')).items():
+            if not name.startswith('_'):
+                spec.setdefault(name, []).extend(exp if isinstance(exp, list) else [exp])
+    ran = {s['name'] for s in SEQUENCES}
+    spec = {k: v for k, v in spec.items() if k in ran}
+    ok, results = ca.check_spec(spec, OUT)
+    lines = ca.summary_lines(ok, results)
+    with open(os.path.join(OUT, 'assert.txt'), 'w', encoding='utf-8') as f:
+        f.write(lines[0] + '\n' + '\n'.join(ca.line(r, s) for s, r in results) + '\n')
+    for ln in lines[:5]:
+        _log(ln)
+
+
 def _finish(status):
     _log(f'finish: {status}')
     st['phase'] = 'ending'
@@ -684,6 +712,12 @@ def _tick(_dt):
                 g.setup_editor(False)
             except Exception as e:
                 _log(f'setup_editor(False) failed: {e!r}')
+            try:
+                _run_asserts()
+            except Exception as e:  # noqa: BLE001
+                _log(f'ASSERT: FAIL assert step crashed: {e!r}')
+                with open(os.path.join(OUT, 'assert.txt'), 'w') as f:
+                    f.write(f'ASSERT: FAIL assert step crashed: {e!r}\n')
             with open(os.path.join(OUT, 'done.txt'), 'w') as f:
                 f.write(st.get('status', '?') + '\n')
             unreal.SystemLibrary.execute_console_command(None, 'QUIT_EDITOR')

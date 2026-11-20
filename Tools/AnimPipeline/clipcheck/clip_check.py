@@ -4,6 +4,7 @@ alone never passes in the full setup, however much the setup is iterated, and ma
 Offline, no editor, no GPU: needs `pip install bpy numpy matplotlib` (Blender module). Works in the cloud.
 
     python clip_check.py <clips.json> <outdir> [clip_name ...]
+    python clip_check.py --conserve <before.fbx> <after.fbx> [report.json]   (rule 10 guard: > 15 % less motion = FAIL, conserve.py)
 
 clips.json lists the clips (see clips.json next to this file). Per clip:
   "fbx":      path to the FBX (UE export, or our offline authoring output). Relative paths = relative to clips.json.
@@ -500,7 +501,40 @@ def draw(name, S, feet, jerk, pop_frames, fwd, lat, M, path):
     fig.tight_layout(); fig.savefig(path, dpi=100); plt.close(fig)
 
 
+def fbx_tracks(path):
+    """conserve.py tracks from an FBX: local rotations (x, y, z, w) and translations per bone (cm: the UE export's units), root = the root motion path."""
+    S = sample_fbx(path)
+    tr = {}
+    for b in S['names']:
+        tr[b] = {'q': [(fr['q'][b][1], fr['q'][b][2], fr['q'][b][3], fr['q'][b][0]) for fr in S['frames']],
+                 't': [tuple(float(v) for v in fr['t'][b]) for fr in S['frames']]}   # already cm (UE export)
+    tr['root'] = {'q': tr.get('root', {}).get('q'), 't': [tuple(fr['root_frame'][0]) for fr in S['frames']]}
+    return tr, S['fps']
+
+
+def conserve_main(before, after, out=None):
+    """clip_check.py --conserve <before.fbx> <after.fbx> [out.json]: the conservation guard of rule 10 on two exports of the same
+    clip (before / after an automatic fix, or a generator's v(n) / v(n+1) when only the keys' spacing was meant to change)."""
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import conserve
+    tb, fps = fbx_tracks(before)
+    ta, fps_a = fbx_tracks(after)
+    if abs(fps - fps_a) > 0.01 or len(tb['root']['t']) != len(ta['root']['t']):
+        print(f'CONSERVE: FAIL different timing ({len(tb["root"]["t"])} frames @ {fps:g} vs {len(ta["root"]["t"])} @ {fps_a:g})')
+        return 1
+    res = conserve.compare(tb, ta, fps)
+    out = out or os.path.splitext(after)[0] + '.conserve.json'
+    json.dump(res, open(out, 'w'), indent=1)
+    print(f"CONSERVE: {'OK' if res['ok'] else 'FAIL'} (max loss {res['max_loss'] * 100:.0f}%)")
+    for f in res['fails'][:3]:
+        print('  ' + f)
+    print(f'report: {out}')
+    return 0 if res['ok'] else 1
+
+
 if __name__ == '__main__':
+    if sys.argv[1:2] == ['--conserve']:
+        sys.exit(conserve_main(*sys.argv[2:5]))
     cj, outdir = sys.argv[1], sys.argv[2]
     only = set(sys.argv[3:])
     C = json.load(open(cj)); base = os.path.dirname(os.path.abspath(cj))

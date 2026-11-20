@@ -52,3 +52,14 @@ Generic method: `skills-public/anim-reviewer/SKILL.md`. Section numbers below re
 - Owner keys and parts in `approved`: never in an instruction, only as a proposal to the owner.
 - Owner edited in Unreal: the re-import (`ue-import`, "integra | uniforma | cambia") does not exist yet. Tell the
   coordinator; do not ask for a build.
+
+## Audit 2026-11-20 (project rules 6, 10, 14; docs: project files audit_setup_agentico.md)
+- No review without `ASSERT: OK` from `Tools/AnimPipeline/capture_assert.py` (expected clip weight >= 0.8 in the
+  expected window). Missing or FAIL -> review void, label "cattura". Until the script exists, check
+  `frames.jsonl` `combat.anim` weights by hand and quote the line.
+- Order: watch the video (real speed and 25 %) WITHOUT numbers first. Axis VITA: anticipation, arcs, weight on
+  contact, follow-through/overlap. Axis ROOT: clip root_travel within +-20 % of capsule travel. VITA or ROOT FAIL ->
+  FAIL "posa" before any technical check.
+- Automatic fix applied (splice, floor clamp, filters): compare before/after grid; amplitude, peak speed or
+  root motion lost over 15 % = FAIL.
+- Clips marked `PROTO` (procedural Python/Blender generators) are never reviewed.

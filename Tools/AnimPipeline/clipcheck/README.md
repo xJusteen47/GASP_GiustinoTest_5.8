@@ -65,6 +65,19 @@ an unlock curve, the marker becomes that curve and this name an alias.
 | ik_feet | ik_foot_l/r re-baked from the feet (always last) |
 Agents save through `Tools/CI/Save-Assets.ps1 -Script Tools\AnimPipeline\clipcheck\fix_clips_ue.py [-Only rows] [-Steps fixes]`.
 
+## Conservation guard (project rule 10, 2026-11-20)
+A fixer optimises its own metric and can flatten the motion while every check passes. So each step of `fix_clips_ue.py`
+(filters, splice, floor_clamp) is measured before/after by `conserve.py`: per bone of the arm, leg and spine chains the swing
+(largest angle between two of its poses) and the peak turn speed (over 2 frames), the pelvis movement and the root travel.
+One-frame flicks are ignored (median of 3), so a deflick is not a loss; a held pose or a whip is. A step that loses > 15 % of any
+of them (on a bone that moves at least 10 deg / 90 deg/s, pelvis 2 cm, root 5 cm) FAILS: nothing of it is written, the clip's
+next steps are skipped, the asset is not saved, `fix_report.json` says `guard_fail` and which bone. With `CLIPFIX_WRITE=1` the
+steps are also judged together against the original ("total"). Dry runs report the per-step verdict too.
+Offline on two exports: `python clip_check.py --conserve <before.fbx> <after.fbx> [report.json]` prints `CONSERVE: OK/FAIL`.
+A guard FAIL means the fix is wrong for that clip: fix the clip at its source or the generic fixer, never MAX_LOSS for one clip.
+First real case (dash r3, 2026-11-20): `ease_snaps` turns the right toe bend 0 -> 62 deg (f4-f9, released in one frame at f10)
+into a 12 deg bump: ball_r swing -77 %. The guard refuses it; the toe release belongs in the clip.
+
 ## Return to idle (owner 2026-11-19, scope: every move that hands to an idle)
 FAIL when both balls are > 2 cm up on the same frame in the last 0.5 s of a clip whose `end_ref` is an idle (or
 `"returns_idle": true`). In game the blend-out foot lock steps one foot at a time (SecondStepStart >= 1).

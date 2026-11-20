@@ -5,7 +5,8 @@ The wrapper STARTS the process itself, suspended, puts it in a Windows Job Objec
 (UnrealEditor, ShaderCompileWorker, cl.exe, python...) belongs to the job. On timeout, on a silent log, or when the wrapper dies,
 the whole job is terminated by the wrapper itself: no taskkill of foreign processes, so it works under Claude auto mode.
 
-Output goes to a file; the console gets at most 5 lines. Exit code: 0 OK, 1 FAIL, 124 TIMEOUT, 125 BLOCCATO (log silent).
+Output goes to a file; the console gets at most 5 lines. Exit code: 0 OK, 1 FAIL, 3 ASSERT not OK (with -AssertFile), 124 TIMEOUT,
+125 BLOCCATO (log silent).
 
   Run-Timed.ps1 -Preset Build   -Log Saved\Logs\ci\build.log
   Run-Timed.ps1 -Preset Test    -Log Saved\Logs\ci\test.log -Tests GSTN            (Automation RunTests <filter>)
@@ -17,6 +18,15 @@ Limits: Build 45 min, Test 30, Capture 15 (override: -MaxMinutes / -MaxSeconds).
 -SilentSeconds): no growth of the watched file (default = the log) => ESITO: BLOCCATO. Use -WatchFile for a process that
 writes elsewhere (UE: -abslog). The verdict is also written to <Log>.esito (first line "ESITO: ...").
 Engine: env UE_ENGINE_DIR, default C:\Program Files\Epic Games\UE_5.9\Engine.
+
+No blocking dialogs (audit 2026-11-20, skid-root-1 lost 2 attempts to them): before an editor starts (Test, Capture, or an -Exe that
+is UnrealEditor*), <project>\Saved\Autosaves\PackageRestoreData.json is renamed to PackageRestoreData.json.<date_time>.bak (the
+"restore packages?" dialog waits forever on a headless run); -KeepRestoreData skips it. <project> = the folder of the first
+.uproject in the command line, else this repo. Every editor run gets -unattended (also with -KeepThrottle, which now only keeps
+the background-throttle ini and EcoQoS as they are).
+Capture gate (project rule 10): -AssertFile <capture>\assert.txt (written by pie_capture_move.py) adds its first line
+("ASSERT: OK" / "ASSERT: FAIL ...", or "ASSERT: MANCANTE") to the output; ESITO OK with an ASSERT not OK exits 3, so no review
+starts on a video that does not show the expected clip.
 #>
 [CmdletBinding()]
 param(
@@ -35,8 +45,10 @@ param(
     [double]$SilentSeconds,
     [string]$Engine,
     [switch]$SelfTest,
-    [switch]$KeepThrottle,      # Capture: keep the editor's background throttle (default: off, see docs/notes/speed-up.md)
-    [string]$ExtraArgs = ''     # appended to the preset's command line
+    [switch]$KeepThrottle,      # Capture: keep the editor's background throttle ini and EcoQoS (default: off, see docs/notes/speed-up.md)
+    [string]$ExtraArgs = '',    # appended to the preset's command line
+    [switch]$KeepRestoreData,   # do not move Saved\Autosaves\PackageRestoreData.json aside before an editor run
+    [string]$AssertFile         # capture gate: the assert.txt to read after the run (exit 3 when ESITO OK but ASSERT not OK)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -172,6 +184,35 @@ function Invoke-Timed {
     return $exit
 }
 
+# Moves the autosave restore list aside so the editor never opens the modal "restore packages?" dialog on a headless run.
+# Returns a short note for the output ('' when there was nothing to move).
+function Clear-RestoreData {
+    param([string]$ProjectDir)
+    $f = Join-Path $ProjectDir 'Saved\Autosaves\PackageRestoreData.json'
+    if (-not (Test-Path -LiteralPath $f)) { return '' }
+    $bak = "$f.$(Get-Date -Format 'yyyyMMdd_HHmmss').bak"
+    try { Rename-Item -LiteralPath $f -NewName (Split-Path $bak -Leaf) -ErrorAction Stop; return "prestart: PackageRestoreData.json -> $(Split-Path $bak -Leaf)" }
+    catch { return "prestart: PackageRestoreData.json NOT moved ($($_.Exception.Message))" }
+}
+
+# The project folder of a command line: the first quoted (or bare) path ending in .uproject, else $Fallback.
+function Get-ProjectDir {
+    param([string]$Line, [string]$Fallback)
+    $m = [regex]::Match($Line, '"([^"]+\.uproject)"|(\S+\.uproject)')
+    if ($m.Success) { $p = if ($m.Groups[1].Success) { $m.Groups[1].Value } else { $m.Groups[2].Value }; return (Split-Path $p -Parent) }
+    return $Fallback
+}
+
+# First line of the capture's assert file, or the reason it is missing.
+function Read-AssertLine {
+    param([string]$Path)
+    if (-not $Path) { return '' }
+    if (-not (Test-Path -LiteralPath $Path)) { return "ASSERT: MANCANTE ($Path)" }
+    $l = Get-Content -LiteralPath $Path -TotalCount 1
+    if ($l -match '^ASSERT: ') { return $l.Trim() }
+    return "ASSERT: MANCANTE (prima riga non valida in $Path)"
+}
+
 function Resolve-EngineDir {
     if ($Engine) { return $Engine }
     if ($env:UE_ENGINE_DIR) { return $env:UE_ENGINE_DIR }
@@ -196,6 +237,18 @@ if ($SelfTest) {
     $res += "3 TIMEOUT-case: $(if ($r -eq 124 -and $alive -eq 0) {'PASS'} else {"FAIL (exit=$r, sleepers left=$alive)"})"
     $r = Invoke-Timed 'Test' "$d\silent.log" $ps '-NoProfile -Command "Start-Sleep 300"' $null 600 4 $d -Quiet | Select-Object -Last 1
     $res += "4 BLOCCATO-case: $(if ($r -eq 125) {'PASS'} else {'FAIL'})"
+    # 5: the restore list is moved aside, the project folder is found in a quoted command line, a second call finds nothing
+    $proj = Join-Path $d 'proj with space'; New-Item -ItemType Directory -Force (Join-Path $proj 'Saved\Autosaves') | Out-Null
+    Get-ChildItem (Join-Path $proj 'Saved\Autosaves') | Remove-Item -Force
+    Set-Content (Join-Path $proj 'Saved\Autosaves\PackageRestoreData.json') '{}'
+    $pd = Get-ProjectDir "`"$proj\X.uproject`" -run=pythonscript" $d
+    $n1 = Clear-RestoreData $pd; $n2 = Clear-RestoreData $pd
+    $baks = @(Get-ChildItem (Join-Path $proj 'Saved\Autosaves') -Filter 'PackageRestoreData.json.*.bak').Count
+    $ok5 = ($pd -eq $proj) -and ($n1 -match '-> PackageRestoreData') -and ($n2 -eq '') -and ($baks -eq 1) -and -not (Test-Path (Join-Path $proj 'Saved\Autosaves\PackageRestoreData.json'))
+    # 6: assert file: OK line, missing file, garbage
+    Set-Content "$d\a_ok.txt" "ASSERT: OK seq AS_X f1-f9"; Set-Content "$d\a_bad.txt" "hello"
+    $ok6 = ((Read-AssertLine "$d\a_ok.txt") -eq 'ASSERT: OK seq AS_X f1-f9') -and ((Read-AssertLine "$d\none.txt") -match '^ASSERT: MANCANTE') -and ((Read-AssertLine "$d\a_bad.txt") -match '^ASSERT: MANCANTE')
+    $res += "5 RESTORE-DATA + 6 ASSERT-FILE: $(if ($ok5 -and $ok6) {'PASS'} else {"FAIL (restore=$ok5 [$pd|$n1|$n2|$baks] assert=$ok6)"})"
     $res | Select-Object -First 5 | ForEach-Object { Write-Output $_ }
     exit $(if ($res -match ': FAIL') { 1 } else { 0 })
 }
@@ -212,7 +265,7 @@ $Log = if ([IO.Path]::IsPathRooted($Log)) { $Log } else { Join-Path $Root $Log }
 
 # -unattended: UEditorEngine::ShouldThrottleCPUUsage returns false (no 3 fps cap in the background, no modal dialogs).
 # The ini override also keeps editor viewports rendering when the window has no focus (EditorEngine.cpp, 'Background Process').
-$NoThrottleArgs = '-unattended -ini:EditorSettings:[/Script/UnrealEd.EditorPerformanceSettings]:bThrottleCPUWhenNotForeground=False'
+$NoThrottleIni = '-ini:EditorSettings:[/Script/UnrealEd.EditorPerformanceSettings]:bThrottleCPUWhenNotForeground=False'
 switch ($Preset) {
     'Build' {
         $Exe = "$eng\Build\BatchFiles\Build.bat"
@@ -227,10 +280,31 @@ switch ($Preset) {
         if (-not $Script) { Write-Output 'ERRORE: -Script obbligatorio per Capture'; exit 2 }
         $py = if ([IO.Path]::IsPathRooted($Script)) { $Script } else { Join-Path $Root $Script }
         $Exe = "$eng\Binaries\Win64\UnrealEditor.exe"
-        $ArgLine = "`"$uproject`" -windowed -nosplash -nosound $(if (-not $KeepThrottle) { $NoThrottleArgs }) -ExecCmds=`"py $($py -replace '\\', '/')`" -abslog=`"$Log.ue.log`""
+        $ArgLine = "`"$uproject`" -windowed -nosplash -nosound -unattended $(if (-not $KeepThrottle) { $NoThrottleIni }) -ExecCmds=`"py $($py -replace '\\', '/')`" -abslog=`"$Log.ue.log`""
         if (-not $WatchFile) { $WatchFile = "$Log.ue.log" }
     }
 }
 if (-not $Exe) { Write-Output 'ERRORE: serve -Preset oppure -Exe'; exit 2 }
 if ($ExtraArgs) { $ArgLine = "$ArgLine $ExtraArgs" }
-exit (Invoke-Timed $Kind $Log $Exe $ArgLine $WatchFile $maxSec $silentSec $Root | Select-Object -Last 1)
+$isEditor = (Split-Path $Exe -Leaf) -match '^UnrealEditor'
+$notes = @()
+if ($isEditor) {
+    if ($ArgLine -notmatch '(^|\s)-unattended(\s|$)') { $ArgLine = "$ArgLine -unattended" }
+    if (-not $KeepRestoreData) { $n = Clear-RestoreData (Get-ProjectDir $ArgLine $Root); if ($n) { $notes += $n } }
+}
+if ($AssertFile) {
+    $AssertFile = if ([IO.Path]::IsPathRooted($AssertFile)) { $AssertFile } else { Join-Path $Root $AssertFile }
+    Remove-Item -LiteralPath $AssertFile -ErrorAction SilentlyContinue   # a stale OK from an earlier run must never pass this one
+}
+$code = Invoke-Timed $Kind $Log $Exe $ArgLine $WatchFile $maxSec $silentSec $Root -Quiet | Select-Object -Last 1
+$esito = "$Log.esito"
+$lines = @(Get-Content -LiteralPath $esito)
+if ($notes) { $lines = @($lines[0], ((@($lines[1]) + $notes) -join ' | ')) + $lines[2..($lines.Count - 1)] }
+if ($AssertFile) {
+    $a = Read-AssertLine $AssertFile
+    $lines = @($lines[0], $a) + $lines[1..($lines.Count - 1)]
+    if ($code -eq 0 -and $a -notmatch '^ASSERT: OK') { $code = 3 }
+}
+$lines | Set-Content -Path $esito -Encoding UTF8
+$lines | Select-Object -First 5 | ForEach-Object { Write-Host $_ }
+exit $code
