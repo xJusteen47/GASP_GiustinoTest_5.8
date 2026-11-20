@@ -43,4 +43,14 @@ editor reopened. Re-check (rule 11): brief's predicted N_NEW 38 / EXIT_AT 0.367 
   it added new v4r7 rows, old disabled duplicates stay), DA stage 1 ramp back to 30 f / 0.15.
 - Owner decision needed: A) probe A (1 pump, feet planted, 0.27 s); B) keep the multi-pump scramble as a cartoon "wheel" with the feet
   off the ground (Luigi's blur), new pose round; C) stay on v4r7.
-COSTO: ~11 $ | ~15 min desktop | review 0 token
+## Owner 2026-11-20 23:36Z: "proverei entrambe" -> A and B both, separate variants; v4r7 stays default and locked until he picks
+Thread closed at budget (rule 8); next thread (desktop, editor needed for import + 2 captures):
+- v4r8a = probe A: RunStart_v4r8_probeA.casc already retimed (CUT (3, 21.5), TARGET_S 0.27, N_NEW 39, EXIT_AT 0.40): delete keys
+  39-58, range 0-38, export -> RunStart_v4r8a.fbx; runstart_v4r8_ue.py RSV8_NAME=AS_GSTN_RunStart_v4r8a RSV8_EXIT_AT=0.4 RSV8_ROWS=none.
+- v4r8b = cartoon wheel: start from RunStart_v4r8.casc (attempt 2, 8 f rev-up, rate0 6) and pose the rev-up feet OFF the ground
+  (ball height >= ~8 cm on f1-f7, wheel arc), feet planted again from the first normal contact. Review brief must say the airborne
+  scramble is intended (not a skate FAIL) and judge it as a cartoon wheel. Fable judges poses (rule 3).
+- Switchable rows: ask Unreal Assistant how stock GASP gates chooser rows by a setting (rule 14) before adding rows; v4r7 row stays the
+  default. Each variant: own capture (assert window f97-115 or per EXIT_AT) + review before the owner sees it.
+- In the open editor, the rows script runs need GSTN_SAVE=1 or a manual save of CHT_GSTN_StockMover_PoseMatch.
+COSTO: ~12 $ | ~15 min desktop | review 0 token
