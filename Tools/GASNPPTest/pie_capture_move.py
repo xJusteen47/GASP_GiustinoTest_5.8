@@ -9,7 +9,7 @@
 #   UnrealEditor.exe <uproject> /Game/Levels/Test/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
 #   boot.py:  exec(open(r"<project>/Tools/GASNPPTest/pie_capture_move.py").read())
 # Environment (all optional): PIE_CAPTURE_KIT (KIT_Test_Overlord), PIE_CAPTURE_OUT (default Saved/AnimJab3/capture_<date>_<time>),
-# PIE_CAPTURE_SEQUENCES (default: all of SEQUENCES, or all of DAIR_SEQUENCES when the kit's name contains DAir)
+# PIE_CAPTURE_SEQUENCES (default: all of SEQUENCES, or all of DAIR_SEQUENCES when the kit's name contains DAir), PIE_CAPTURE_NOVFX=1 (no dust)
 # Down-air captures (ANIM-DAIR-1): PIE_CAPTURE_KIT=KIT_Test_OverlordDAirV8 (or ...V7, one kit per Play session) and PIE_CAPTURE_OUT=<dir>; the
 # sequences with an 'air' entry jump first and press crouch + attack on the way down, see DAIR_SEQUENCES
 # Review stage, this Play session only: the other players are parked in Z1, the kit's placeholder cube is hidden and three shadowless
@@ -211,6 +211,11 @@ MOVE_SEQUENCES = [
     {'name': 'cr_land', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (0, 24), 'crouch_hold': (30, 90)},
     # Frantic run start (run-start-frantic-2): full stick from still after 20 idle frames, run 70 frames, release
     {'name': 'rs_start', 'taps': [], 'frames': 130, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(20, (0, 1, 0)), (90, None)]},
+    # Land v2 (land-v2-1): jump from idle with 4.5 s of rest after the land (recovery to idle measured from the log), and the same jump
+    # with the stick pushed forward ~5 frames before the land and held (recovery to locomotion). Use with PIE_CAPTURE_NOVFX=1
+    {'name': 'ld_jump_idle', 'taps': [], 'frames': 380, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (20, 24)},
+    {'name': 'ld_jump_fwd', 'taps': [], 'frames': 190, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (20, 24),
+     'sticks': [(80, (0, 1, 0))]},
 ]
 if os.environ.get('PIE_CAPTURE_VIEWS'):
     VIEWS = [v for v in VIEWS if v[0] in os.environ['PIE_CAPTURE_VIEWS'].split(',')]
@@ -464,6 +469,19 @@ def _row(frame, tapped, extra=None):
     st['rows'].write(json.dumps(row) + '\n')
 
 
+def _presentation_off():
+    """PIE_CAPTURE_NOVFX=1: UGSTN_PresentationComponent.bPlayEffects = false on every pawn (events still derive, no dust/sparks spawn). There
+    is no cvar for it. Do NOT turn UGSTN_CombatPresentationEvents.bEnabled off instead: the Mover sim then stops reaching the component
+    (land-v2-1, pawn stuck in the air), and set the flag without set_editor_property (same symptom). Returns how many were muted."""
+    n = 0
+    for w in g.worlds():
+        for a in unreal.GameplayStatics.get_all_actors_of_class(w, unreal.Pawn):
+            for c in a.get_components_by_class(unreal.GSTN_PresentationComponent):
+                c.play_effects = False   # plain set: set_editor_property sends PostEditChange (suspected: reruns the pawn's construction in PIE)
+                n += 1
+    return n
+
+
 def _run_asserts():
     """Project rule 10 (2026-11-20): a review starts only on ASSERT: OK. Expectations come from each sequence's 'expect' entry
     ({'clip', 'window': [first, last] capture frames, 'min_weight'?, 'coverage'?} or a list of them) and from the JSON file named by
@@ -567,6 +585,8 @@ def _tick(_dt):
                 # Per sequence: the standing height is not the same before and after the first landing (100 then 88 cm on the first run)
                 st['ground_z'] = z
                 _log(f'{seq["name"]}: standing height z {z:.1f}')
+            if os.environ.get('PIE_CAPTURE_NOVFX') == '1':   # land-v2-1: no presentation events (landing/jump dust, sparks) on any pawn
+                _log(f'{seq["name"]}: presentation events off on {_presentation_off()} components')
             _log(f'sequence {seq["name"]}: pawn at {_place_cameras()}')
             os.makedirs(os.path.join(OUT, seq['name']), exist_ok=True)
             st['rows'] = open(os.path.join(OUT, seq['name'], 'frames.jsonl'), 'w')

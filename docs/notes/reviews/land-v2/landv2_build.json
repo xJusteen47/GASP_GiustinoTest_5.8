@@ -1,0 +1,28 @@
+{
+ "src_frames": 131,
+ "fps": 30.0,
+ "pelvis_min_frame": 34,
+ "A": 40,
+ "S": 80,
+ "K": 2.5,
+ "new_frames": 84,
+ "src_len": 4.333,
+ "new_len": 2.767,
+ "curves_resampled": 0,
+ "notifies": "unread: AnimNotifyEvent: Failed to find property 'trigger_time_offset' for attribute 'trigger_time_offset' on 'AnimNotifyEvent'",
+ "impact_drop_cm": [
+  5.94,
+  5.94
+ ],
+ "root_motion_cm": [
+  734.73,
+  734.73
+ ],
+ "dst_frames": 84,
+ "row": [
+  "Stand Mode Transitions",
+  5,
+  "0.050000",
+  false
+ ]
+}
