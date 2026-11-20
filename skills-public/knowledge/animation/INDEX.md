@@ -1,7 +1,7 @@
 # Animation knowledge index (level 1)
 
 ## Read this first
-- **Authoring or generating:** [06-holds-and-life.md](06-holds-and-life.md) (what "lifeless" looks like and how it is measured), then [checklists.md](checklists.md).
+- **Authoring or generating:** [06-holds-and-life.md](06-holds-and-life.md) (what "lifeless" looks like and how it is measured), [10-reference.md](10-reference.md) (start from reference), then [checklists.md](checklists.md).
 - **Reviewing:** [review-rubric.md](review-rubric.md); open a family file only to cite or to reason about a criterion.
 - **Measuring:** [09-measurement.md](09-measurement.md); `python ../../tools/animkb/kb_motion.py metrics <clip.bvh>`.
 
@@ -17,6 +17,7 @@ Frames are at 60 fps and counted from 1. Numbers are indicative ranges with a re
 | P-HOLD, P-LIFE | [06-holds-and-life.md](06-holds-and-life.md) | no dead frames, moving holds; seven measurable signatures of interpolated animation |
 | P-POSE, P-STRETCH | [07-pose-silhouette.md](07-pose-silhouette.md) | silhouette, line of action, every game view, no twinning, line of action reverses through a strike; volume, stretch on speed |
 | P-GAME | [08-game-clips.md](08-game-clips.md) | isolation first; root motion matches the body; loops; responsiveness; hand-off poses; hit-pause; engine data; clean export; yaw-only root; attack frame data; strength tiers |
+| P-REF | [10-reference.md](10-reference.md) | start from reference; keys at events not intervals; keep mechanics, push timing; breakdowns before splines; procedure |
 | P-MEASURE | [09-measurement.md](09-measurement.md) | four-step judgement; isolation report fields and calibrated ranges; figure list |
 | Checklists | [checklists.md](checklists.md) | start, stop, skid, pivot, loop, jump, landing, return to idle, attack, hit reaction, idle |
 | Rubric | [review-rubric.md](review-rubric.md) | ten axes; LIFE, WEIGHT and ROOT are FAIL axes; verdict format |

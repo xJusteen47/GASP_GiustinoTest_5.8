@@ -19,6 +19,7 @@ only what is specific to this game.
 | Locomotion cases (level 3) | [cases/locomotion.md](cases/locomotion.md) | run stop, run start, skid/turn, landing, return to idle |
 | Attack cases (level 3) | [cases/attacks.md](cases/attacks.md) | light / medium / heavy, frame data, impact and hit-pause |
 | Course study notes (private) | [study/](study/) | paraphrased notes from licensed courses, with timestamps; never copied to public repos |
+| Course notes present | [study/](study/) | `body-mechanics.md`, `stylized-attacks-part1.md`, `stylized-attacks-part2.md`, `video-reference.md` (Gnomon, 24 fps for the attack course) |
 | How to ingest a course | [study/INGESTION.md](study/INGESTION.md) | audio → transcript → notes → frames → integrate |
 | Measuring tools | `skills-public/tools/animkb/` | `kb_motion.py` (life metrics, figures, lifeless rebuild), `fbx_to_bvh.py`, `kb_diagrams.py` |
 

@@ -5,7 +5,7 @@ small file for the points where they meet. Nothing here is specific to a game: e
 (template: [PROFILE-TEMPLATE.md](PROFILE-TEMPLATE.md)).
 
 ## Read this first
-1. Making or editing an animation clip (any tool, script, solver or model): [animation/06-holds-and-life.md](animation/06-holds-and-life.md),
+1. Making or editing an animation clip (any tool, script, solver or model): [animation/06-holds-and-life.md](animation/06-holds-and-life.md) and [animation/10-reference.md](animation/10-reference.md),
    then the checklist of your move type in [animation/checklists.md](animation/checklists.md), then measure with
    `tools/animkb/kb_motion.py metrics` **before** anyone looks at the clip.
 2. Reviewing an animation: [animation/review-rubric.md](animation/review-rubric.md). A review that checks only cleanliness cannot pass a clip.
