@@ -1,4 +1,4 @@
-# Playtest integration 11-20 (fisso, Opus as Sonnet-medium task, 2026-11-20 ~21:15-21:40 UTC)
+# Playtest integration 11-20 (fisso, 2026-11-20 ~21:15-21:40 UTC)
 Branch `claude/playtest-cam-render-skid` from `claude/runstart-v6-desktop` 0c487b54 (run start v4r6 active). Checkout _ue59.
 
 ## Fatto
