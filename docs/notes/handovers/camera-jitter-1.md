@@ -15,7 +15,9 @@ Same bug class in the unused GSTNCamera plugin: UGSTN_CameraComponent computed i
   (`UGSTN_CombatSimComponent::ApplyBodyCapsulePresentation`, new, idempotent; the combat tick in PostUpdateWork then changes nothing).
 - A/B: `gstn.Camera.Anchor.Early 1` (default, new) / `0` (old order). `gstn.Camera.Anchor 0` = no anchor at all, as before.
 - UGSTN_CameraComponent (GSTNCamera plugin) -> TG_PostPhysics (P0 brief spike C1 answered in code).
-- Tests: `GSTN.Camera.Anchor.TicksBeforeTheView`, `GSTNCamera.Runtime.TicksBeforeTheView` (tick group guards).
+- Owner 20:51Z: custom camera API `UGSTN_CameraAnchorLibrary` (BP GSTN|Camera): Get Camera Pivot (capsule- and step-free, undamped),
+  Get Damped Camera Pivot (anchor's damping). Designer doc docs/architecture/camera-anchor.md.
+- Tests: `GSTN.Camera.Anchor.TicksBeforeTheView`, `GSTN.Camera.Anchor.LibraryNoCharacter`, `GSTNCamera.Runtime.TicksBeforeTheView` (tick group guards).
 ## Desktop (Haiku/Sonnet, editor closed while building, ~3 $)
 1. Merge `origin/claude/project-thread-hiq1zx` into the playtest branch (touches only Camera files, GSTN_CameraComponent, CombatSimComponent tick).
 2. Build with Run-Timed (45 min). Tests: `GSTN.Camera+GSTNCamera+GSTNCombat.NP.BodyCapsule` (expect all pass, 2 new).
