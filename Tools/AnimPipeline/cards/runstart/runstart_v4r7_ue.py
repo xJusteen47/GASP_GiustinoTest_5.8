@@ -25,7 +25,7 @@ def curve_names(path):
 
 def markers(path):
     s = unreal.load_asset(path)
-    if not s:
+    if not isinstance(s, unreal.AnimSequence):
         return None
     return [(str(m.marker_name), round(float(m.time), 3)) for m in AL.get_animation_sync_markers(s)]
 
