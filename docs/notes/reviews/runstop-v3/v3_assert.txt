@@ -1,0 +1,2 @@
+ASSERT: OK
+ASSERT: OK mv_run_stop *SprintStop_Ganon* f200-f259: weight >= 0.8 on 100% (min 0.88)
