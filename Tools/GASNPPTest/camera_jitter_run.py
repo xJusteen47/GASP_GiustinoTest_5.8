@@ -19,7 +19,9 @@ LOGS = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_log_dir()
 os.makedirs(OUT, exist_ok=True)
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'rows': None, 'h': None, 'flip': 0}
 # (phase, seconds): what happens while the trace is on
-PLAN = [('stand', 5.0), ('walk', 4.0), ('stand2', 1.5), ('jump', 2.5)]
+# camera-jitter-3 (owner 22:14: the bounce was crouch spam; also FAir and landings): crouch toggled every 0.15 s for 3 s, then a jump with a
+# forward air attack (FAir: aerial capsule) and its landing. The checker's capsule line reads these
+PLAN = [('stand', 5.0), ('walk', 4.0), ('stand2', 1.5), ('jump', 2.5), ('crouchspam', 3.0), ('fair', 3.0)]
 
 
 def _log(m):
@@ -109,11 +111,38 @@ def _tick(dt):
                     g.combat_tap(0, m)
                     g.combat_hold(0, m)
                     st['jt'] = now
+                if ph == 'crouchspam':
+                    g.combat_clear(0)
+                if nxt == 'fair':
+                    st['fs'] = 0
                 st.update(phase=nxt, t=now, i=i + 1)
                 _log(nxt)
             if ph == 'jump' and st.get('jt') and now - st['jt'] > 0.4:
                 g.combat_clear(0)
                 st['jt'] = None
+            if ph == 'crouchspam' and now - st.get('ct', 0) > 0.15:
+                st['crouch'] = not st.get('crouch', False)
+                if st['crouch']:
+                    g.combat_hold(0, g.button_mask('Crouch'))
+                else:
+                    g.combat_clear(0)
+                st['ct'] = now
+            if ph == 'fair':
+                age = now - st['t']
+                if st.get('fs') == 0:                       # take off
+                    g.combat_clear(0)
+                    m = g.button_mask('Jump')
+                    g.combat_tap(0, m)
+                    g.combat_hold(0, m)
+                    st['fs'] = 1
+                elif st.get('fs') == 1 and age > 0.3:       # near the apex: stick forward + Attack = FAir
+                    g.combat_clear(0)
+                    g.hold(0, 'move', (0, 1, 0))
+                    g.combat_tap(0, g.button_mask('Attack'))
+                    st['fs'] = 2
+                elif st.get('fs') == 2 and age > 0.6:
+                    g.release(0, 'move')
+                    st['fs'] = 3
         elif ph == 'flush':
             _sample(dt)                                    # one more frame: the C++ side flushes its tail when Trace is 0
             if now - st['t'] > 1.0:

@@ -33,6 +33,23 @@ enum class EGSTN_CameraAnchorMode : uint8
 	ShiftView,
 };
 
+/**
+ * Where the anchor's HEIGHT comes from (owner 2026-11-20: no capsule change, from any source, may move the camera: crouch spam, aerials,
+ * dropkick, knockdown, landing). The horizontal position always comes from the drawn, smoothed mesh
+ */
+UENUM(BlueprintType)
+enum class EGSTN_CameraVerticalSource : uint8
+{
+	/**
+	 * The capsule's BOTTOM plus the standing half height: on the ground the bottom never moves when the capsule changes (it is kept on the
+	 * floor), so crouch, knockdown and landing capsules cannot move the camera at all, whatever the smoothing or the mesh does in between.
+	 * Steps at the 62.5 Hz simulation rate on slopes and stairs: the vertical damping smooths it. In the air the air hold keeps the height
+	 */
+	CapsuleBottom,
+	/** The drawn mesh read back to a standing root (first version): smooth, but follows any transient between capsule, mesh offset and smoothing */
+	DrawnMesh,
+};
+
 /** How the tilt-shift "toy / miniature" look is made (GSTN_CameraAnchor.h, FGSTN_CameraTiltShiftSettings) */
 UENUM(BlueprintType)
 enum class EGSTN_TiltShiftMode : uint8
@@ -110,6 +127,10 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorSettings
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor")
 	EGSTN_CameraAnchorMode Mode = EGSTN_CameraAnchorMode::MoveCameraComponent;
+
+	/** Where the anchor's height comes from. Console override gstn.Camera.Anchor.Vertical (A/B) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Vertical")
+	EGSTN_CameraVerticalSource VerticalSource = EGSTN_CameraVerticalSource::CapsuleBottom;
 
 	/**
 	 * Vertical spring half life when the anchor goes UP (jumps, standing up). Higher = softer. After a sudden step the camera has covered
@@ -250,6 +271,12 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorDamper
 	 * Where the actor root would be with the standing capsule, read back from the drawn mesh: the mesh world transform minus its standing
 	 * relative location (the template's, which FGSTN_BodyCapsuleModifier offsets by the capsule change). Unchanged when only the capsule moves
 	 */
+	/**
+	 * The standing root's height along Up from the capsule: its bottom (Root - Up * CurrentHalfHeight) raised by the standing half height. Root is
+	 * the capsule centre. Independent of every capsule size change that keeps the bottom where it is
+	 */
+	static double StandingHeightFromCapsule(const FVector& Root, const FVector& Up, double CurrentHalfHeight, double StandingHalfHeight);
+
 	static FVector StandingRootFromVisual(const FTransform& VisualWorld, const FTransform& VisualStandingRelative, const FVector& ParentScale = FVector::OneVector);
 };
 
@@ -306,7 +333,17 @@ public:
 	 * Mover-smoothed mesh. Capsule resizes and the 62.5 Hz simulation steps do not move it; the body's real motion does. Runs the body capsule's
 	 * mesh correction first, so it is right at any point of the frame after Mover's finalize. False (actor location returned) without a mesh
 	 */
-	static bool ComputeStandingRoot(const AActor* Actor, FVector& OutLocation);
+	static bool ComputeStandingRoot(const AActor* Actor, FVector& OutLocation, EGSTN_CameraVerticalSource VerticalSource = EGSTN_CameraVerticalSource::CapsuleBottom);
+
+	/** The vertical source this frame: the console override (gstn.Camera.Anchor.Vertical 0 = settings, 1 = CapsuleBottom, 2 = DrawnMesh), else Settings */
+	static EGSTN_CameraVerticalSource ResolveVerticalSource(EGSTN_CameraVerticalSource FromSettings);
+
+	/** Replaces the height of a mesh-based standing root by the capsule-bottom one (CapsuleBottom), else returns it as is */
+	static FVector ApplyVerticalSource(const AActor& Actor, const FVector& MeshStandingRoot, const FVector& Up, EGSTN_CameraVerticalSource VerticalSource);
+
+	/** Diagnostics: the mesh-based standing root before the vertical source (same as GetStandingRoot with DrawnMesh) */
+	FVector GetMeshStandingRoot() const { return LastMeshStandingRoot; }
+
 
 	/** The correction applied this frame: damped anchor minus what the camera component would follow without it */
 	FVector GetLastCorrection() const { return LastCorrection; }
@@ -345,6 +382,7 @@ private:
 	FGSTN_CameraAnchorDamper Damper;
 	FVector LastCorrection = FVector::ZeroVector;
 	FVector LastStandingRoot = FVector::ZeroVector;
+	FVector LastMeshStandingRoot = FVector::ZeroVector;
 	bool bLastInAir = false;
 	bool bShiftView = false;
 	/** 0..1 blend of the aim crouch offset */
