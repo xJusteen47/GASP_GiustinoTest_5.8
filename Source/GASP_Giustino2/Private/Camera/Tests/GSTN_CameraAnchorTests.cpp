@@ -284,6 +284,7 @@ bool FGSTN_CameraAnchorLibraryNullTest::RunTest(const FString&)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraAnchorCapsuleBottomTest, "GSTN.Camera.Anchor.CapsuleChangeKeepsHeight", GSTNCameraAnchorTest::TestFlags)
 bool FGSTN_CameraAnchorCapsuleBottomTest::RunTest(const FString&)
 {
+	using namespace GSTNCameraAnchorTest;
 	// Owner 2026-11-20 (crouch spam bounce): a grounded capsule change keeps the bottom on the floor, so the capsule-bottom height must not move.
 	// Standing 86 -> crouch 55: the centre drops 31 cm, the height stays the standing centre's (floor + 86)
 	const FVector Up = FVector::UpVector;
