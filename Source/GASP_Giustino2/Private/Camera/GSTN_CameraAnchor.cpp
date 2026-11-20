@@ -359,12 +359,18 @@ EGSTN_CameraVerticalSource UGSTN_CameraAnchorComponent::ResolveVerticalSource(EG
 	return Forced == 1 ? EGSTN_CameraVerticalSource::CapsuleBottom : (Forced == 2 ? EGSTN_CameraVerticalSource::DrawnMesh : FromSettings);
 }
 
-FVector UGSTN_CameraAnchorComponent::ApplyVerticalSource(const AActor& Actor, const FVector& MeshStandingRoot, const FVector& InUp, EGSTN_CameraVerticalSource VerticalSource)
+FVector UGSTN_CameraAnchorComponent::ApplyVerticalSource(const AActor& Actor, const FVector& MeshStandingRoot, const FVector& InUp, EGSTN_CameraVerticalSource VerticalSource,
+	bool bInAir, double AirBias)
 {
 	const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(Actor.GetRootComponent());
 	if (VerticalSource != EGSTN_CameraVerticalSource::CapsuleBottom || !Capsule)
 	{
 		return MeshStandingRoot;
+	}
+	if (bInAir)
+	{
+		// Aerial capsules shrink and grow around the body, moving the bottom: the drawn body is the reference up here
+		return MeshStandingRoot + AirBias * InUp.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
 	}
 	// Standing half height: the pawn's own capsule (the body capsule modifier's reference), else the capsule's archetype, else the current one
 	double StandingHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
@@ -411,7 +417,9 @@ bool UGSTN_CameraAnchorComponent::ComputeStandingRoot(const AActor* Actor, FVect
 	const FVector ParentScale = Actor->GetRootComponent() ? Actor->GetRootComponent()->GetComponentScale() : FVector::OneVector;
 	OutLocation = FGSTN_CameraAnchorDamper::StandingRootFromVisual(Visual->GetComponentTransform(), GSTNCameraAnchor::StandingRelative(*Visual), ParentScale);
 	const UMoverComponent* UpSource = Actor->FindComponentByClass<UMoverComponent>();
-	OutLocation = ApplyVerticalSource(*Actor, OutLocation, UpSource ? UpSource->GetUpDirection() : Actor->GetActorUpVector(), ResolveVerticalSource(VerticalSource));
+	static const FGameplayTag AirTag = FGameplayTag::RequestGameplayTag(TEXT("Mover.IsInAir"), false);
+	const bool bAir = UpSource && AirTag.IsValid() && UpSource->HasGameplayTag(AirTag, true);
+	OutLocation = ApplyVerticalSource(*Actor, OutLocation, UpSource ? UpSource->GetUpDirection() : Actor->GetActorUpVector(), ResolveVerticalSource(VerticalSource), bAir);
 	return true;
 }
 
@@ -501,14 +509,20 @@ void UGSTN_CameraAnchorComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	const FVector MeshRaw = Visual ? FGSTN_CameraAnchorDamper::StandingRootFromVisual(Visual->GetComponentTransform(), VisualRelativeStanding, ParentScale) : Root;
 	const UMoverComponent* Mover = Owner->FindComponentByClass<UMoverComponent>();
 	const FVector Up = Mover ? Mover->GetUpDirection() : Owner->GetActorUpVector();
-	// Height from the capsule bottom (default): no capsule change moves the camera, whatever the mesh and the smoothing do meanwhile
-	const FVector Raw = ApplyVerticalSource(*Owner, MeshRaw, Up, ResolveVerticalSource(Tuning.VerticalSource));
-	LastMeshStandingRoot = MeshRaw;
-	LastStandingRoot = Raw;
 	// Airborne as Mover reports it (its own state tag, same source as the crouch); no Mover = always grounded (no air hold)
 	static const FGameplayTag InAirTag = FGameplayTag::RequestGameplayTag(TEXT("Mover.IsInAir"), false);
 	const bool bInAir = Mover && InAirTag.IsValid() && Mover->HasGameplayTag(InAirTag, true);
 	bLastInAir = bInAir;
+	// Height (default CapsuleBottom): on the ground the capsule bottom, which no capsule change moves; in the air the drawn body plus the
+	// bias of the last grounded frame, which no aerial capsule moves either
+	const EGSTN_CameraVerticalSource VerticalSource = ResolveVerticalSource(Tuning.VerticalSource);
+	const FVector Raw = ApplyVerticalSource(*Owner, MeshRaw, Up, VerticalSource, bInAir, AirBias);
+	if (!bInAir)
+	{
+		AirBias = FVector::DotProduct(Raw - MeshRaw, Up.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector));
+	}
+	LastMeshStandingRoot = MeshRaw;
+	LastStandingRoot = Raw;
 	// Look ahead along the horizontal velocity, slowly smoothed so a direction change does not swing the view
 	FVector LookAheadGoal = FVector::ZeroVector;
 	if (Tuning.LookAheadTime > 0.f && Tuning.MaxLookAhead > 0.f)

@@ -12,7 +12,9 @@ same for FAir and landings. Rule (owner): no capsule change, from any source, mo
 - `FGSTN_CameraAnchorSettings::VerticalSource` (new, default **CapsuleBottom**): height = capsule bottom + standing half height
   (`FGSTN_CameraAnchorDamper::StandingHeightFromCapsule`). On the ground the bottom is kept on the floor by every capsule change
   (KeepBottomOnFloor), so crouch/knockdown/landing capsules give 0 cm by construction. Horizontal stays the smoothed mesh. Steps at 62.5 Hz on
-  slopes/stairs: the vertical spring (0.07 s) smooths it; in the air the air hold keeps the height. `gstn.Camera.Anchor.Vertical 1/2` A/B.
+  slopes/stairs: the vertical spring (0.07 s) smooths it. `gstn.Camera.Anchor.Vertical 1/2` A/B.
+- In the AIR (owner 22:30: aerial capsules shrink around the body, the bottom rises): height = drawn body + AirBias (bottom-minus-mesh of the
+  last grounded frame), so FAir/dair capsules do not move it either; the air hold works on top as before.
 - Get Camera Pivot (custom camera API) uses the same height. Doc: docs/architecture/camera-anchor.md.
 - Trace: + mesh_stand_z, half_height, crouch. camera_trace_check.py: new line "grounded capsule changes N: max height move in 0.5 s" per stage.
 - camera_jitter_run.py: + crouch spam (toggle every 0.15 s, 3 s) and a jump with FAir + landing. Dair/dropkick need their own input: not added.

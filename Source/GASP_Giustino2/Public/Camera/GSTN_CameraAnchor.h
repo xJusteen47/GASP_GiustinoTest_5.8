@@ -338,8 +338,13 @@ public:
 	/** The vertical source this frame: the console override (gstn.Camera.Anchor.Vertical 0 = settings, 1 = CapsuleBottom, 2 = DrawnMesh), else Settings */
 	static EGSTN_CameraVerticalSource ResolveVerticalSource(EGSTN_CameraVerticalSource FromSettings);
 
-	/** Replaces the height of a mesh-based standing root by the capsule-bottom one (CapsuleBottom), else returns it as is */
-	static FVector ApplyVerticalSource(const AActor& Actor, const FVector& MeshStandingRoot, const FVector& Up, EGSTN_CameraVerticalSource VerticalSource);
+	/**
+	 * Replaces the height of a mesh-based standing root by the capsule-bottom one (CapsuleBottom, ON THE GROUND only), else returns it as is.
+	 * In the air an aerial's capsule shrinks around the body (owner 2026-11-20, FAir/dair): its bottom rises, so the bottom is no reference
+	 * there; the mesh-based height is, plus AirBias (the bottom-minus-mesh difference of the last grounded frame, so take off does not step)
+	 */
+	static FVector ApplyVerticalSource(const AActor& Actor, const FVector& MeshStandingRoot, const FVector& Up, EGSTN_CameraVerticalSource VerticalSource,
+		bool bInAir = false, double AirBias = 0.0);
 
 	/** Diagnostics: the mesh-based standing root before the vertical source (same as GetStandingRoot with DrawnMesh) */
 	FVector GetMeshStandingRoot() const { return LastMeshStandingRoot; }
@@ -384,6 +389,8 @@ private:
 	FVector LastStandingRoot = FVector::ZeroVector;
 	FVector LastMeshStandingRoot = FVector::ZeroVector;
 	bool bLastInAir = false;
+	/** Capsule-bottom height minus mesh height on the last grounded frame (cm, along Up): carried through the air */
+	double AirBias = 0.0;
 	bool bShiftView = false;
 	/** 0..1 blend of the aim crouch offset */
 	float AimCrouchAlpha = 0.f;
