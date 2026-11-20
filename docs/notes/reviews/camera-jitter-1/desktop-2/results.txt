@@ -1,0 +1,62 @@
+== p1_early1b (Saved/CamJitter/p1_early1b, python Tools/GASNPPTest/camera_jitter_summary.py + camera_trace_check.py)
+stand: 316 f, fps 75 (dt max 125 ms), same-view 315  tr.root_z 0/0cm  tr.stand_z 0/0cm  tr.damped_z 0/0cm  tr.cam_comp_z 0/0cm  tr.in_z 0/0cm  tr.out_z 0/0cm  py.root_z 0/0cm  py.mesh_z 0/0cm  py.gcc_z 0/0cm  py.pov_z 0/0cm  flips sweep 0 anchor 0 air 0
+walk: 290 f, fps 70 (dt max 22 ms), same-view 3  tr.root_z 0/0cm  tr.stand_z 0/0cm  tr.damped_z 0/0cm  tr.cam_comp_z 1/2cm  tr.in_z 0/0cm  tr.out_z 0/0cm  py.root_z 0/0cm  py.mesh_z 0/0cm  py.gcc_z 1/2cm  py.pov_z 0/0cm  flips sweep 0 anchor 0 air 0
+stand2: 118 f, fps 74 (dt max 17 ms), same-view 71  tr.root_z 0/0cm  tr.stand_z 0/0cm  tr.damped_z 0/0cm  tr.cam_comp_z 0/0cm  tr.in_z 0/0cm  tr.out_z 0/0cm  py.root_z 0/0cm  py.mesh_z 0/0cm  py.gcc_z 0/0cm  py.pov_z 0/0cm  flips sweep 0 anchor 0 air 0
+jump: 189 f, fps 72 (dt max 25 ms), same-view 61  tr.root_z 0/0cm  tr.stand_z 0/0cm  tr.damped_z 0/0cm  tr.cam_comp_z 0/0cm  tr.in_z 0/0cm  tr.out_z 0/0cm  py.root_z 0/0cm  py.mesh_z 0/0cm  py.gcc_z 0/0cm  py.pov_z 0/0cm  flips sweep 0 anchor 0 air 2
+frames 909  dt median 13.7 ms  max 400.0 ms  (fps 73)
+zig-zag kicks >2cm: root_z 0  stand_z 0  damped_z 0  cam_comp_z 1  in_z 0  out_z 0
+boom (camera to drawn body) zig-zags >2cm: in 0  out 0  yaw zig-zags >0.3deg: in 0
+pitch zig-zags >0.3deg: in 0  out 0
+flips: sweep_hit 0  anchor_on 0  in_air 2
+first stage with kicks (z or boom) = the culprit (root/stand = movement, cam_comp = anchor, in = GASP rig, out only = our push back/sweep)
+== p3_early1 (Saved/CamJitter/p3_early1, python Tools/GASNPPTest/camera_jitter_summary.py + camera_trace_check.py)
+stand: 96 f, fps 24 (dt max 125 ms), same-view 95  tr.root_z 0/0cm  tr.stand_z 0/0cm  tr.damped_z 0/0cm  tr.cam_comp_z 0/0cm  tr.in_z 0/0cm  tr.out_z 0/0cm  py.root_z 0/0cm  py.mesh_z 0/0cm  py.gcc_z 0/0cm  py.pov_z 0/0cm  flips sweep 0 anchor 0 air 0
+walk: 79 f, fps 20 (dt max 74 ms), same-view 1  tr.root_z 0/0cm  tr.stand_z 0/0cm  tr.damped_z 0/0cm  tr.cam_comp_z 1/7cm  tr.in_z 0/0cm  tr.out_z 0/0cm  py.root_z 0/0cm  py.mesh_z 0/0cm  py.gcc_z 1/7cm  py.pov_z 0/0cm  flips sweep 0 anchor 0 air 0
+stand2: 35 f, fps 23 (dt max 51 ms), same-view 13  tr.root_z 0/0cm  tr.stand_z 0/0cm  tr.damped_z 0/0cm  tr.cam_comp_z 0/0cm  tr.in_z 0/0cm  tr.out_z 0/0cm  py.root_z 0/0cm  py.mesh_z 0/0cm  py.gcc_z 0/0cm  py.pov_z 0/0cm  flips sweep 0 anchor 0 air 0
+jump: 58 f, fps 23 (dt max 58 ms), same-view 24  tr.root_z 1/3cm  tr.stand_z 0/0cm  tr.damped_z 1/3cm  tr.cam_comp_z 2/5cm  tr.in_z 0/0cm  tr.out_z 0/0cm  py.root_z 1/3cm  py.mesh_z 0/0cm  py.gcc_z 2/5cm  py.pov_z 0/0cm  flips sweep 0 anchor 0 air 2
+frames 267  dt median 44.7 ms  max 400.0 ms  (fps 22)
+zig-zag kicks >2cm: root_z 1  stand_z 0  damped_z 1  cam_comp_z 3  in_z 0  out_z 0
+boom (camera to drawn body) zig-zags >2cm: in 5  out 5  yaw zig-zags >0.3deg: in 0
+pitch zig-zags >0.3deg: in 0  out 0
+flips: sweep_hit 0  anchor_on 0  in_air 2
+first stage with kicks (z or boom) = the culprit (root/stand = movement, cam_comp = anchor, in = GASP rig, out only = our push back/sweep)
+-- client trace_1.csv
+zig-zag kicks >2cm: root_z 0  stand_z 0  damped_z 0  cam_comp_z 0  in_z 0  out_z 0
+boom (camera to drawn body) zig-zags >2cm: in 0  out 0  yaw zig-zags >0.3deg: in 0
+-- client trace_2.csv
+zig-zag kicks >2cm: root_z 0  stand_z 0  damped_z 0  cam_comp_z 0  in_z 0  out_z 0
+boom (camera to drawn body) zig-zags >2cm: in 0  out 0  yaw zig-zags >0.3deg: in 0
+== p3_anchor0 (Saved/CamJitter/p3_anchor0, python Tools/GASNPPTest/camera_jitter_summary.py + camera_trace_check.py)
+stand: 81 f, fps 21 (dt max 125 ms), same-view 80  tr.root_z 0/0cm  tr.stand_z 0/0cm  tr.damped_z 0/0cm  tr.cam_comp_z 0/0cm  tr.in_z 0/0cm  tr.out_z 0/0cm  py.root_z 0/0cm  py.mesh_z 0/0cm  py.gcc_z 0/0cm  py.pov_z 0/0cm  flips sweep 0 anchor 0 air 0
+walk: 76 f, fps 19 (dt max 84 ms), same-view 2  tr.root_z 0/0cm  tr.stand_z 0/0cm  tr.damped_z 0/0cm  tr.cam_comp_z 0/0cm  tr.in_z 0/0cm  tr.out_z 0/0cm  py.root_z 0/0cm  py.mesh_z 0/0cm  py.gcc_z 0/0cm  py.pov_z 0/0cm  flips sweep 0 anchor 0 air 0
+stand2: 31 f, fps 21 (dt max 72 ms), same-view 13  tr.root_z 0/0cm  tr.stand_z 0/0cm  tr.damped_z 0/0cm  tr.cam_comp_z 0/0cm  tr.in_z 0/0cm  tr.out_z 0/0cm  py.root_z 0/0cm  py.mesh_z 0/0cm  py.gcc_z 0/0cm  py.pov_z 0/0cm  flips sweep 0 anchor 0 air 0
+jump: 57 f, fps 22 (dt max 125 ms), same-view 22  tr.root_z 1/3cm  tr.stand_z 0/0cm  tr.damped_z 0/0cm  tr.cam_comp_z 1/4cm  tr.in_z 1/3cm  tr.out_z 1/3cm  py.root_z 1/3cm  py.mesh_z 1/4cm  py.gcc_z 1/4cm  py.pov_z 1/3cm  flips sweep 0 anchor 0 air 0
+frames 226  dt median 49.7 ms  max 400.0 ms  (fps 20)
+zig-zag kicks >2cm: root_z 1  stand_z 0  damped_z 0  cam_comp_z 1  in_z 1  out_z 1
+boom (camera to drawn body) zig-zags >2cm: in 0  out 0  yaw zig-zags >0.3deg: in 0
+pitch zig-zags >0.3deg: in 0  out 0
+flips: sweep_hit 0  anchor_on 0  in_air 0
+first stage with kicks (z or boom) = the culprit (root/stand = movement, cam_comp = anchor, in = GASP rig, out only = our push back/sweep)
+-- client trace_1.csv
+zig-zag kicks >2cm: root_z 0  stand_z 0  damped_z 0  cam_comp_z 0  in_z 0  out_z 0
+boom (camera to drawn body) zig-zags >2cm: in 0  out 0  yaw zig-zags >0.3deg: in 0
+-- client trace_2.csv
+zig-zag kicks >2cm: root_z 0  stand_z 0  damped_z 0  cam_comp_z 0  in_z 0  out_z 0
+boom (camera to drawn body) zig-zags >2cm: in 0  out 0  yaw zig-zags >0.3deg: in 0
+== p3_early1_base0 (Saved/CamJitter/p3_early1_base0, python Tools/GASNPPTest/camera_jitter_summary.py + camera_trace_check.py)
+stand: 108 f, fps 22 (dt max 66 ms), same-view 107  tr.root_z 0/0cm  tr.stand_z 0/0cm  tr.damped_z 0/0cm  tr.cam_comp_z 0/0cm  tr.in_z 0/0cm  tr.out_z 0/0cm  py.root_z 0/0cm  py.mesh_z 0/0cm  py.gcc_z 0/0cm  py.pov_z 0/0cm  flips sweep 0 anchor 0 air 0
+walk: 84 f, fps 21 (dt max 69 ms), same-view 2  tr.root_z 0/0cm  tr.stand_z 0/0cm  tr.damped_z 0/0cm  tr.cam_comp_z 1/7cm  tr.in_z 0/0cm  tr.out_z 0/0cm  py.root_z 0/0cm  py.mesh_z 0/0cm  py.gcc_z 1/7cm  py.pov_z 0/0cm  flips sweep 0 anchor 0 air 0
+stand2: 32 f, fps 21 (dt max 76 ms), same-view 11  tr.root_z 0/0cm  tr.stand_z 0/0cm  tr.damped_z 0/0cm  tr.cam_comp_z 0/0cm  tr.in_z 0/0cm  tr.out_z 0/0cm  py.root_z 0/0cm  py.mesh_z 0/0cm  py.gcc_z 0/0cm  py.pov_z 0/0cm  flips sweep 0 anchor 0 air 0
+jump: 52 f, fps 21 (dt max 68 ms), same-view 22  tr.root_z 0/0cm  tr.stand_z 1/4cm  tr.damped_z 1/3cm  tr.cam_comp_z 2/6cm  tr.in_z 1/2cm  tr.out_z 1/2cm  py.root_z 0/0cm  py.mesh_z 1/4cm  py.gcc_z 2/6cm  py.pov_z 1/2cm  flips sweep 0 anchor 0 air 2
+frames 274  dt median 47.1 ms  max 70.7 ms  (fps 21)
+zig-zag kicks >2cm: root_z 0  stand_z 1  damped_z 1  cam_comp_z 3  in_z 1  out_z 1
+boom (camera to drawn body) zig-zags >2cm: in 7  out 4  yaw zig-zags >0.3deg: in 0
+pitch zig-zags >0.3deg: in 0  out 0
+flips: sweep_hit 0  anchor_on 0  in_air 2
+first stage with kicks (z or boom) = the culprit (root/stand = movement, cam_comp = anchor, in = GASP rig, out only = our push back/sweep)
+-- client trace_1.csv
+zig-zag kicks >2cm: root_z 0  stand_z 0  damped_z 0  cam_comp_z 0  in_z 0  out_z 0
+boom (camera to drawn body) zig-zags >2cm: in 0  out 0  yaw zig-zags >0.3deg: in 0
+-- client trace_2.csv
+zig-zag kicks >2cm: root_z 0  stand_z 0  damped_z 0  cam_comp_z 0  in_z 0  out_z 0
+boom (camera to drawn body) zig-zags >2cm: in 0  out 0  yaw zig-zags >0.3deg: in 0

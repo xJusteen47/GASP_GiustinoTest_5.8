@@ -15,6 +15,10 @@ def flips(k): v = [r[k] for r in rows]; return sum(1 for a, b in zip(v, v[1:]) i
 dt = col("dt")
 print(f"frames {len(rows)}  dt median {statistics.median(dt)*1000:.1f} ms  max {max(dt)*1000:.1f} ms  (fps {1/statistics.median(dt):.0f})")
 print("zig-zag kicks >2cm: " + "  ".join(f"{k} {kicks(col(k))}" for k in ("root_z", "stand_z", "damped_z", "cam_comp_z", "in_z", "out_z")))
+import math
+def boom(k): return [math.dist((float(r[k+"_x"]), float(r[k+"_y"]), float(r[k+"_z"])), (float(r["stand_x"]), float(r["stand_y"]), float(r["stand_z"]))) for r in rows]
+# a pitched-down camera moving back and forth along its boom also reads as a vertical bounce on screen (parallax): camera-to-body distance
+print("boom (camera to drawn body) zig-zags >2cm: " + "  ".join(f"{k} {kicks(boom(k))}" for k in ("in", "out")) + f"  yaw zig-zags >0.3deg: in {kicks(col('in_yaw'), 0.3)}")
 print(f"pitch zig-zags >0.3deg: in {kicks(col('in_pitch'), 0.3)}  out {kicks(col('out_pitch'), 0.3)}")
 print(f"flips: sweep_hit {flips('sweep_hit')}  anchor_on {flips('anchor_on')}  in_air {flips('in_air')}")
-print("first stage with kicks = the culprit (root/stand = movement, cam_comp = anchor, in = GASP rig, out only = our push back/sweep)")
+print("first stage with kicks (z or boom) = the culprit (root/stand = movement, cam_comp = anchor, in = GASP rig, out only = our push back/sweep)")

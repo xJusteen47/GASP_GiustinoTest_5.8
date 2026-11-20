@@ -169,7 +169,10 @@ bool UGSTN_PlaytestCameraModifier::ModifyCamera(float DeltaTime, FMinimalViewInf
 
 void UGSTN_PlaytestCameraModifier::Trace(float DeltaTime, const FMinimalViewInfo& In, const FMinimalViewInfo& Out, bool bSweepHit, const UGSTN_CameraAnchorComponent* Anchor)
 {
-	const FString Path = FPaths::ProjectLogDir() / TEXT("gstn_camera_trace.csv");
+	// One file per PIE instance (3 players in one process would interleave their rows and fake zig-zags): _0 = listen host
+	const UWorld* TraceWorld = CameraOwner ? CameraOwner->GetWorld() : nullptr;
+	const int32 Instance = TraceWorld && TraceWorld->GetOutermost() ? FMath::Max(0, TraceWorld->GetOutermost()->GetPIEInstanceID()) : 0;
+	const FString Path = FPaths::ProjectLogDir() / (Instance == 0 ? FString(TEXT("gstn_camera_trace.csv")) : FString::Printf(TEXT("gstn_camera_trace_%d.csv"), Instance));
 	const bool bOn = GSTNPlaytestCamera::CVarTrace.GetValueOnGameThread() != 0;
 	if (bOn)
 	{
