@@ -203,6 +203,10 @@ MOVE_SEQUENCES = [
     # extra pose round 4 (v4r4: elbows back to v4r2 height, hands unchanged; runstart-v4r4-elbows): same rows and gate
     {'name': 'mv_run_start_v4s4', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
      'expect': [{'clip': 'AS_GSTN_RunStart_v4r4', 'window': [100, 180], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
+    # runstart-v5-desktop: v4r5 = v4r4 without its planted first step (f0-9 cut, 59 f) + the DA acceleration ramp (stamp off); the
+    # clip is 0.33 s shorter, so the gate stops at f170
+    {'name': 'mv_run_start_v5', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
+     'expect': [{'clip': 'AS_GSTN_RunStart_v4r5', 'window': [95, 170], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
     # skid-fix-1 gate: the owner's skid clip at >= 0.8 from the reverse input to the skid end. Rows count the PRE idle frames: stick f95 ->
     # row f115, sim turns from f117; clip 0.83 s -> skid end ~f167. (First set as [97, 140] without the PRE offset: wrong frames, corrected)
     {'name': 'mv_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (170, None)],
