@@ -1,9 +1,13 @@
-// Locomotion base switch (loco-base-1): chooses which main anim graph the GASP Mover character runs.
-//   gstn.Loco.Base 0 = current base  /Game/Blueprints/SandboxCharacter_Mover_ABP (GASP + our GSTN nodes and layers)
-//   gstn.Loco.Base 1 = clean base    /Game/GSTN/Locomotion/StockBase/ABP_GSTN_StockMover (untouched GASP sample copy)
-// Only meshes whose anim class is one of the two are touched, so ragdolls, NPCs and other ABPs keep theirs.
-// Set it before Play (DefaultEngine.ini [ConsoleVariables] or the console); changing it during Play swaps live meshes too,
-// but layers the pawn linked at BeginPlay are lost on the swapped instance, so restart Play to compare fairly.
+// Locomotion base switch (loco-base-1): chooses which main anim graph the GASP Mover characters run.
+//   gstn.Loco.Base 0 = current base: whatever the pawn or its skin sets (SandboxCharacter_Mover_ABP, or ABP_GSTN_Locomotion
+//                      from the kit skin), both carrying our GSTN nodes and layers
+//   gstn.Loco.Base 1 = clean base: /Game/GSTN/Locomotion/StockBase/ABP_GSTN_StockMover (untouched GASP sample copy with its
+//                      own chooser copies)
+// Only pawn meshes running one of the current base classes are swapped, so ragdolls, NPCs and other ABPs keep theirs.
+// The skin component sets its AnimClass after spawn (and again on kit/skin changes), so the swap is re-checked every frame
+// instead of once at spawn: a class change by anyone else is caught on the next tick. Setting 0 again restores the class each
+// mesh had. Layers linked by the anim set component are relinked by it on the new instance; a montage playing during a swap
+// is cut. The cvar is per process: in a networked session every process must set the same value (ini or console).
 
 #pragma once
 
@@ -14,29 +18,38 @@
 class USkeletalMeshComponent;
 
 UCLASS()
-class GASP_GIUSTINO2_API UGSTN_LocoBaseSubsystem : public UWorldSubsystem
+class GASP_GIUSTINO2_API UGSTN_LocoBaseSubsystem : public UTickableWorldSubsystem
 {
 	GENERATED_BODY()
 
 public:
-	static constexpr const TCHAR* CurrentBaseClassPath = TEXT("/Game/Blueprints/SandboxCharacter_Mover_ABP.SandboxCharacter_Mover_ABP_C");
 	static constexpr const TCHAR* StockBaseClassPath = TEXT("/Game/GSTN/Locomotion/StockBase/ABP_GSTN_StockMover.ABP_GSTN_StockMover_C");
 
 	/** 0 = current base, 1 = clean stock base. */
 	static int32 GetSelectedBase();
 
-	/** Swaps Mesh to the selected base if it runs one of the two base classes. Returns true when it changed the class. */
-	static bool ApplyToMesh(USkeletalMeshComponent* Mesh);
-
-	/** Applies the selected base to every matching mesh of this world. */
-	void ApplyToWorld();
+	/** True for the anim classes that count as "current base" (swapped out when the clean base is selected). */
+	static bool IsCurrentBaseClass(const UClass* AnimClass);
 
 	virtual bool ShouldCreateSubsystem(UObject* Outer) const override;
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual void Deinitialize() override;
+	virtual void Tick(float DeltaTime) override;
+	virtual TStatId GetStatId() const override;
 
 private:
 	void HandleActorSpawned(AActor* Actor);
+	void ApplyToMesh(USkeletalMeshComponent* Mesh);
+	UClass* GetStockClass();
 
 	FDelegateHandle SpawnHandle;
+
+	/** Pawn meshes seen since BeginPlay. */
+	TArray<TWeakObjectPtr<USkeletalMeshComponent>> Meshes;
+
+	/** The class each swapped mesh ran before, restored when the cvar goes back to 0. */
+	TMap<TWeakObjectPtr<USkeletalMeshComponent>, TWeakObjectPtr<UClass>> Originals;
+
+	TWeakObjectPtr<UClass> StockClass;
+	bool bStockLoadFailed = false;
 };

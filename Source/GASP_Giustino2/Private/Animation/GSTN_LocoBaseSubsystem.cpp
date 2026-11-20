@@ -1,46 +1,26 @@
 #include "Animation/GSTN_LocoBaseSubsystem.h"
 
+#include "Animation/AnimInstance.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/Pawn.h"
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNLocoBase, Log, All);
 
 namespace GSTNLocoBase
 {
-	static void OnBaseChanged(IConsoleVariable* Var);
-
 	static TAutoConsoleVariable<int32> CVarLocoBase(
 		TEXT("gstn.Loco.Base"), 0,
-		TEXT("Main anim graph of the GASP Mover character. 0 = current base (SandboxCharacter_Mover_ABP with our nodes), ")
-		TEXT("1 = clean GASP stock copy (ABP_GSTN_StockMover + CHT_GSTN_StockMover_PoseMatch). Set before Play."),
-		FConsoleVariableDelegate::CreateStatic(&OnBaseChanged), ECVF_Default);
+		TEXT("Main anim graph of the GASP Mover characters. 0 = current base (SandboxCharacter_Mover_ABP / ABP_GSTN_Locomotion ")
+		TEXT("with our nodes), 1 = clean GASP stock copy (ABP_GSTN_StockMover + CHT_GSTN_StockMover_PoseMatch). Live: applied on ")
+		TEXT("the next frame; restart Play for a fair comparison (pose history, montages)."),
+		ECVF_Default);
 
-	static UClass* LoadBaseClass(const TCHAR* Path)
-	{
-		return LoadClass<UAnimInstance>(nullptr, Path);
-	}
-
-	static void OnBaseChanged(IConsoleVariable* /*Var*/)
-	{
-		if (!GEngine)
-		{
-			return;
-		}
-		for (const FWorldContext& Context : GEngine->GetWorldContexts())
-		{
-			UWorld* World = Context.World();
-			if (World && World->IsGameWorld())
-			{
-				if (UGSTN_LocoBaseSubsystem* Subsystem = World->GetSubsystem<UGSTN_LocoBaseSubsystem>())
-				{
-					Subsystem->ApplyToWorld();
-				}
-			}
-		}
-	}
+	// Generated class names of the current bases (compared by FName: no allocation in the per-frame check)
+	static const FName SandboxMoverAbp(TEXT("SandboxCharacter_Mover_ABP_C"));
+	static const FName GstnLocomotionAbp(TEXT("ABP_GSTN_Locomotion_C"));
 }
 
 int32 UGSTN_LocoBaseSubsystem::GetSelectedBase()
@@ -48,53 +28,9 @@ int32 UGSTN_LocoBaseSubsystem::GetSelectedBase()
 	return GSTNLocoBase::CVarLocoBase.GetValueOnGameThread() == 1 ? 1 : 0;
 }
 
-bool UGSTN_LocoBaseSubsystem::ApplyToMesh(USkeletalMeshComponent* Mesh)
+bool UGSTN_LocoBaseSubsystem::IsCurrentBaseClass(const UClass* AnimClass)
 {
-	if (!Mesh)
-	{
-		return false;
-	}
-	UClass* Current = Mesh->GetAnimClass();
-	if (!Current)
-	{
-		return false;
-	}
-	// Match by path first so the stock class is only loaded when a GASP Mover mesh exists
-	const FString CurrentPath = Current->GetPathName();
-	const bool bIsCurrentBase = CurrentPath == CurrentBaseClassPath;
-	const bool bIsStockBase = CurrentPath == StockBaseClassPath;
-	if (!bIsCurrentBase && !bIsStockBase)
-	{
-		return false;
-	}
-	const bool bWantStock = GetSelectedBase() == 1;
-	if (bWantStock == bIsStockBase)
-	{
-		return false;
-	}
-	UClass* Target = GSTNLocoBase::LoadBaseClass(bWantStock ? StockBaseClassPath : CurrentBaseClassPath);
-	if (!Target)
-	{
-		UE_LOG(LogGSTNLocoBase, Warning, TEXT("gstn.Loco.Base: cannot load %s, %s keeps %s"),
-			bWantStock ? StockBaseClassPath : CurrentBaseClassPath, *GetNameSafe(Mesh->GetOwner()), *Current->GetName());
-		return false;
-	}
-	Mesh->SetAnimInstanceClass(Target);
-	UE_LOG(LogGSTNLocoBase, Log, TEXT("gstn.Loco.Base=%d: %s now runs %s"), GetSelectedBase(), *GetNameSafe(Mesh->GetOwner()), *Target->GetName());
-	return true;
-}
-
-void UGSTN_LocoBaseSubsystem::ApplyToWorld()
-{
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-	for (TActorIterator<AActor> It(World); It; ++It)
-	{
-		HandleActorSpawned(*It);
-	}
+	return AnimClass && (AnimClass->GetFName() == GSTNLocoBase::SandboxMoverAbp || AnimClass->GetFName() == GSTNLocoBase::GstnLocomotionAbp);
 }
 
 bool UGSTN_LocoBaseSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -107,7 +43,10 @@ void UGSTN_LocoBaseSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	Super::OnWorldBeginPlay(InWorld);
 	SpawnHandle = InWorld.AddOnActorSpawnedHandler(FOnActorSpawned::FDelegate::CreateUObject(this, &UGSTN_LocoBaseSubsystem::HandleActorSpawned));
-	ApplyToWorld();
+	for (TActorIterator<APawn> It(&InWorld); It; ++It)
+	{
+		HandleActorSpawned(*It);
+	}
 }
 
 void UGSTN_LocoBaseSubsystem::Deinitialize()
@@ -121,14 +60,80 @@ void UGSTN_LocoBaseSubsystem::Deinitialize()
 
 void UGSTN_LocoBaseSubsystem::HandleActorSpawned(AActor* Actor)
 {
-	// Default 0 never loads or swaps anything: the current game is untouched unless someone opts in
-	if (!Actor || (GetSelectedBase() == 0 && !IsValid(FindObject<UClass>(nullptr, StockBaseClassPath))))
+	if (!Cast<APawn>(Actor))
 	{
 		return;
 	}
-	TInlineComponentArray<USkeletalMeshComponent*> Meshes(Actor);
-	for (USkeletalMeshComponent* Mesh : Meshes)
+	TInlineComponentArray<USkeletalMeshComponent*> ActorMeshes(Actor);
+	for (USkeletalMeshComponent* Mesh : ActorMeshes)
 	{
+		Meshes.AddUnique(Mesh);
+	}
+}
+
+void UGSTN_LocoBaseSubsystem::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+	// Nothing to do at 0 unless a mesh still has to be restored: the default game pays one cvar read per frame
+	if (GetSelectedBase() == 0 && Originals.IsEmpty())
+	{
+		return;
+	}
+	for (int32 Index = Meshes.Num() - 1; Index >= 0; --Index)
+	{
+		USkeletalMeshComponent* Mesh = Meshes[Index].Get();
+		if (!Mesh)
+		{
+			Originals.Remove(Meshes[Index]);
+			Meshes.RemoveAtSwap(Index);
+			continue;
+		}
 		ApplyToMesh(Mesh);
+	}
+}
+
+TStatId UGSTN_LocoBaseSubsystem::GetStatId() const
+{
+	RETURN_QUICK_DECLARE_CYCLE_STAT(UGSTN_LocoBaseSubsystem, STATGROUP_Tickables);
+}
+
+UClass* UGSTN_LocoBaseSubsystem::GetStockClass()
+{
+	if (!StockClass.IsValid() && !bStockLoadFailed)
+	{
+		StockClass = LoadClass<UAnimInstance>(nullptr, StockBaseClassPath);
+		bStockLoadFailed = !StockClass.IsValid();
+		if (bStockLoadFailed)
+		{
+			UE_LOG(LogGSTNLocoBase, Warning, TEXT("gstn.Loco.Base: cannot load %s, meshes keep their class"), StockBaseClassPath);
+		}
+	}
+	return StockClass.Get();
+}
+
+void UGSTN_LocoBaseSubsystem::ApplyToMesh(USkeletalMeshComponent* Mesh)
+{
+	UClass* Current = Mesh->GetAnimClass();
+	if (GetSelectedBase() == 1)
+	{
+		if (!IsCurrentBaseClass(Current))
+		{
+			return;
+		}
+		UClass* Stock = GetStockClass();
+		if (!Stock)
+		{
+			return;
+		}
+		Originals.Add(Mesh, Current);
+		Mesh->SetAnimInstanceClass(Stock);
+		UE_LOG(LogGSTNLocoBase, Log, TEXT("gstn.Loco.Base=1: %s %s -> %s"), *GetNameSafe(Mesh->GetOwner()), *Current->GetName(), *Stock->GetName());
+		return;
+	}
+	TWeakObjectPtr<UClass> Original;
+	if (Originals.RemoveAndCopyValue(Mesh, Original) && Current == StockClass.Get() && Original.IsValid())
+	{
+		Mesh->SetAnimInstanceClass(Original.Get());
+		UE_LOG(LogGSTNLocoBase, Log, TEXT("gstn.Loco.Base=0: %s back to %s"), *GetNameSafe(Mesh->GetOwner()), *Original->GetName());
 	}
 }
