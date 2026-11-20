@@ -43,3 +43,10 @@
 - Cheaper, no code change: PIE_CAPTURE_VIEWS=az90,az0,game (3 views instead of 7) -> about 2x faster; one review needs at most
   2 side views + game. Further: write PNGs only for the frame window under review, or 320 px for numbers-only checks.
 - Applied from now on in this thread: 3 views per capture.
+
+## 4. Small editor window for low-res captures (owner 2026-11-20, skid-walkturn-2)
+- Captures are 512-ish scene captures (pie_capture_move SIZE), so a full-size editor window only costs render time.
+  `Tools/GASNPPTest/vd2_mover.py` (run by every *_boot_vd2.py and ask_assistant_boot.py) now shrinks each editor window of its
+  own process to `EDITOR_WIN` (default `960x540`, restored first if maximized) and logs it to VD_LOG.
+- Owner-facing hi-res videos (PIE_CAPTURE_HIRES viewport shots, screen recordings) take the real window size: set
+  `EDITOR_WIN=full` for those runs. New capture boots must run vd2_mover.py (or do the same) so this stays the default.
