@@ -1,1 +1,1 @@
-libero dal 2026-11-20 22:50 UTC (runstart-v7-desktop finito; editor riaperto per il playtest, build claude/runstart-v7-desktop con camera hiq1zx c2257557)
+libero dal 2026-11-21 00:35 UTC (runstart-v8-desktop finito; editor riaperto per l'owner)
