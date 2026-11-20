@@ -18,6 +18,7 @@
 # After it: delete keys from N_NEW to the old end (58), scene size N_NEW (as v4r5: keys 59-68 deleted), export_joints up Z.
 # Result = short dict (N_NEW, EXIT_AT for runstart_v4r8_ue.py, speeds, s range).
 import math
+import csc
 import numpy as np
 
 G = globals()
@@ -58,7 +59,11 @@ for o in mv.get_objects():
         pass
 assert 'root' in pts, 'root point not found'
 
-vec = lambda i, f: np.array([float(c) for c in dv.get_data_value(i, f)], dtype=np.float64)
+def vec(i, f):                                       # Rotation -> [w, x, y, z]; vectors as is
+    v = dv.get_data_value(i, f)
+    if hasattr(v, 'to_quaternion'):
+        q = v.to_quaternion(); return np.array([q.w(), q.x(), q.y(), q.z()], dtype=np.float64)
+    return np.array([float(c) for c in v], dtype=np.float64)
 SP = {n: np.stack([vec(i, f) for f in range(LAST + 1)]) for n, i in pts.items()}
 SB = {n: (np.stack([vec(r, f) for f in range(LAST + 1)]), np.stack([vec(p, f) for f in range(LAST + 1)]))
       for n, (r, p) in boxes.items()}
@@ -187,7 +192,7 @@ def change(me, ue, su):
         for n, v in W.items():
             de.set_data_value(pts[n], u, v.tolist())
         for n, (rv, pv) in B.items():
-            de.set_data_value(boxes[n][0], u, rv.tolist())
+            de.set_data_value(boxes[n][0], u, csc.math.Rotation.from_quaternion(*[float(c) for c in rv]) if rv.shape[0] == 4 else rv.tolist())
             de.set_data_value(boxes[n][1], u, pv.tolist())
         su.run_update(ids, u)
 

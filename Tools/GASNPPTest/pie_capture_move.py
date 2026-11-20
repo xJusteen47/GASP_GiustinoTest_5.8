@@ -206,7 +206,9 @@ MOVE_SEQUENCES = [
     # runstart-v5-desktop: v4r5 = v4r4 without its planted first step (f0-9 cut, 59 f) + the DA acceleration ramp (stamp off); the
     # clip is 0.33 s shorter, so the gate stops at f170
     {'name': 'mv_run_start_v5', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
-     'expect': [{'clip': 'AS_GSTN_RunStart_v4r5', 'window': [95, 170], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
+     # runstart-v8-desktop: expect moved to the current clip v4r8 (Luigi rev-up, 38 f, exit_at 0.367 s): reached ~f93, may hand off
+     # to the loop from ~f115, so the gate is f97-115 (was v4r5 f95-170, stale since v4r6)
+     'expect': [{'clip': 'AS_GSTN_RunStart_v4r8', 'window': [97, 115], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
     # skid-fix-1 gate: the owner's skid clip at >= 0.8 from the reverse input to the skid end. Rows count the PRE idle frames: stick f95 ->
     # row f115, sim turns from f117; clip 0.83 s -> skid end ~f167. (First set as [97, 140] without the PRE offset: wrong frames, corrected)
     {'name': 'mv_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (170, None)],

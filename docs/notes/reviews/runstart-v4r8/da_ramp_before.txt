@@ -1,0 +1,5 @@
+/Game/GASNPPTest/Combat/DA_Locomotion_Default
+  before stamp frames=0 accel_fraction=0.050 max_start_speed=60
+  before stage 1 max_speed=470.0 acceleration=2000.0 frames_to_next_stage=180 next_stage_speed_fraction=0.9 accel_ramp_frames=30 ramp_start_fraction=0.15
+  before stage 2 max_speed=610.0 acceleration=1400.0 frames_to_next_stage=94 next_stage_speed_fraction=0.9 accel_ramp_frames=30 ramp_start_fraction=0.25
+  before stage 3 max_speed=850.0 acceleration=1200.0 frames_to_next_stage=1 next_stage_speed_fraction=0.9 accel_ramp_frames=0 ramp_start_fraction=1.0
