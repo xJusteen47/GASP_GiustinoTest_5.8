@@ -174,6 +174,8 @@ MOVE_SEQUENCES = [
     # run stop idle (locomotion-finish-4): 150+ frames of rest after the clip, to see which idle the game settles in (combat.anim)
     {'name': 'mv_run_stop_rest', 'taps': [], 'frames': 420, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (160, None)]},
     {'name': 'mv_run_stop', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (160, None)]},
+    # run start (idle -> run forward): 1 s idle, full stick forward, held 3 s (60 fps frames); stock check: PIE_CAPTURE_CVARS="gstn.Loco.Base 1"
+    {'name': 'mv_run_start', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))]},
     {'name': 'mv_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (170, None)]},
     # Skid at the BASE run stage (MinStage 0, 11-18): reverse before FramesToNextStage (40 sim f) so the run is still stage 1 (470 > MinSpeed 350)
     # skid-finish-4: released early (30 frames after the reverse, inside Skid Exit Run) and held long (1.5 s)
