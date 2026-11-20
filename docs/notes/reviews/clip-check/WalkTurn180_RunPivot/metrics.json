@@ -1,0 +1,148 @@
+{
+ "clip": "WalkTurn180_RunPivot",
+ "fbx": "../../../Saved/ClipCheck/export/WalkTurn180_RunPivot.fbx",
+ "fps": 30.0,
+ "frames": 50,
+ "kind": "pivot",
+ "root_travel_cm": [
+  -9.9,
+  -22.8,
+  0.0
+ ],
+ "root_motion": true,
+ "_fwd": [
+  -0.39897584915161133,
+  -0.9169613718986511,
+  0.0
+ ],
+ "animated_bones": 28,
+ "foot_l": {
+  "min_ball_cm": -0.05,
+  "min_ball_frame": 19,
+  "min_heel_cm": 1.96,
+  "plants": [
+   {
+    "frames": [
+     9,
+     18
+    ],
+    "drift_cm": 4.39
+   }
+  ]
+ },
+ "foot_r": {
+  "min_ball_cm": -0.19,
+  "min_ball_frame": 7,
+  "min_heel_cm": -0.11,
+  "plants": [
+   {
+    "frames": [
+     1,
+     10
+    ],
+    "drift_cm": 4.88
+   },
+   {
+    "frames": [
+     12,
+     12
+    ],
+    "drift_cm": 0.0
+   },
+   {
+    "frames": [
+     18,
+     50
+    ],
+    "drift_cm": 1.58
+   }
+  ],
+  "skates": [
+   {
+    "frames": [
+     13,
+     17
+    ],
+    "skate_cm": 14.6,
+    "skate_s": 0.167,
+    "vmax_cms": 111
+   }
+  ]
+ },
+ "pelvis_acc_max_cms2": 3218.0,
+ "pelvis_acc_max_frame": 25,
+ "pops": [],
+ "pops_hard": {},
+ "pops_soft": {},
+ "start_ref": {
+  "ref": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx",
+  "ref_frame": 71,
+  "max_deg": 54.7,
+  "bone": "calf_l",
+  "top3": [
+   [
+    "calf_l",
+    54.7
+   ],
+   [
+    "upperarm_l",
+    42.6
+   ],
+   [
+    "hand_r",
+    33.5
+   ]
+  ],
+  "feet_gap_cm": 31.7
+ },
+ "end_ref": {
+  "ref": "../../../Saved/ClipCheck/export/GASP_RunLoop.fbx",
+  "ref_frame": 15,
+  "max_deg": 44.6,
+  "bone": "upperarm_l",
+  "top3": [
+   [
+    "upperarm_l",
+    44.6
+   ],
+   [
+    "calf_l",
+    44.0
+   ],
+   [
+    "hand_r",
+    39.5
+   ]
+  ],
+  "feet_gap_cm": 41.2
+ },
+ "curves_missing": [],
+ "notifies": [
+  {
+   "name": "FoleyEvent: Run",
+   "time": null
+  },
+  {
+   "name": "PoseSearchExcludeFromDatabase",
+   "time": null
+  },
+  {
+   "name": "FoleyEvent: Run",
+   "time": null
+  },
+  {
+   "name": "FoleyEvent: Run",
+   "time": null
+  }
+ ],
+ "fails": [
+  "foot l drifts 4.4 cm in 0.25 s while planted (f9-18)",
+  "foot r drifts 4.9 cm in 0.25 s while planted (f1-10)",
+  "start_ref: calf_l off by 55 deg, feet 31.7 cm (ref f71)",
+  "end_ref: upperarm_l off by 45 deg, feet 41.2 cm (ref f15)"
+ ],
+ "warns": [
+  "foot r skates 14.6 cm over 0.17 s on the floor (f13-17), touchdown/lift-off length"
+ ],
+ "verdict": "FAIL"
+}

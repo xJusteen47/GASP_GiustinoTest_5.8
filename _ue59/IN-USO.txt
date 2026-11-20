@@ -1,1 +1,1 @@
-IN USO dal 2026-11-20 11:25 UTC: thread skid-walkturn-1 (walk turn 180 Mixamo come skid corsa), branch claude/skid-walkturn-1
+libero dal 2026-11-20 11:35 UTC (skid-walkturn-1, branch claude/skid-walkturn-1)
