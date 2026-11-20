@@ -85,3 +85,12 @@ Totale ~40-45 $.
    lo sprint 1 + lean additivo marcato, clip nuove solo per carica e sprint 2 (consigliata, ~20-25 $; si passa ad A se
    lo stock non si legge abbastanza piegato in review).
 Intanto resta ferma solo l'implementazione; nessun altro lavoro dipende da queste risposte.
+
+## 8. Decisioni owner 2026-11-20 20:47Z: 1A 2A 3B
+- 1A: rampa solo da fermo (stadio 1); 1->2 e 2->3 a gradino (stadio 2 AccelRampFrames -> 0, burst per stadio).
+- 2A: tell = scintille dai talloni + lean che si approfondisce (~0,33 s) + 0,1 s di posa di carica, poi scoppio.
+- 3B come PONTE: sprint stock GASP + lean marcato finché le clip nuove non ci sono.
+- Clip richieste dall'owner (3 loop Overlord, riferimento in arrivo dall'owner; lettura scelta: "fase 2" = stadio 2):
+  stadio 1 = corsa LENTA alla Ganon; stadio 2 (sprint 1) = corsa a BRACCIA APERTE; stadio 3 (sprint 2) = sprint un po'
+  più veloce. Ciascuna = riga con colonna RunStage sopra la riga stock (fallback stock). S3 parte quando arriva il riferimento;
+  la posa di carica dello stadio 3 resta una clip corta a parte. Se "fase 2" voleva dire sprint 2, si scambiano solo le righe.
