@@ -17,7 +17,8 @@ GRID = os.path.join(HERE, '..', '..', '..', 'GASNPPTest', 'pie_capture_grid.py')
 stock, v3, out = sys.argv[1:4]
 opt = dict(a[2:].split('=', 1) for a in sys.argv[4:] if a.startswith('--'))
 f0, f1, step = int(opt.get('from', 80)), int(opt.get('to', 176)), int(opt.get('step', 6))
-CAPS = (('v3', stock, 'mv_run_start_v3s'), ('v4r1', v3, 'mv_run_start_v4s'))
+TAGS = os.environ.get('EV_CAPS', 'v3:mv_run_start_v3s,v4r1:mv_run_start_v4s').split(',')   # top,bottom = tag:sequence
+CAPS = tuple((t.split(':')[0], c, t.split(':')[1]) for t, c in zip(TAGS, (stock, v3)))
 os.makedirs(out, exist_ok=True)
 tmp = os.path.join(out, '_tmp')
 os.makedirs(tmp, exist_ok=True)
@@ -40,7 +41,7 @@ for view in ('az90', 'az0', 'game'):
 for f in os.listdir(tmp):
     os.remove(os.path.join(tmp, f))
 os.rmdir(tmp)
-subprocess.run([sys.executable, GRID, 'video', v3, 'mv_run_start_v4s', os.path.join(out, 'runstart_v4r1.mp4'), '--from=60', '--to=240'],
+subprocess.run([sys.executable, GRID, 'video', v3, CAPS[1][2], os.path.join(out, 'runstart_%s.mp4' % CAPS[1][0]), '--from=60', '--to=240'],
                check=True, capture_output=True)
 
 
@@ -76,9 +77,8 @@ for tag, cap, seq in CAPS:
     summ[tag] = {'ss180_max_w': round(max(sum(float(x.split()[1]) for x in r['anim'] if x.startswith('SS_180')) for r in win), 2),
                  'actor_x_f200': next((r['actor_x'] for r in per if r['f'] == 200), None),
                  'planted_feet_travel_cm_f80_240': slide}
-    clip = 'AS_GSTN_RunStart_v3' if tag == 'v3' else 'AS_GSTN_RunStart_v4r1'
+    clip = 'AS_GSTN_RunStart_' + tag
     summ[tag]['clip_weight_f80_210'] = [(r['f'], round(weight(r, clip), 2)) for r in per if 80 <= r['f'] <= 210 and r['f'] % 5 == 0]
 json.dump(summ, open(os.path.join(out, 'metrics_summary.json'), 'w'), indent=1)
 print('evidence: ' + ', '.join(sorted(x for x in os.listdir(out) if x.endswith(('.png', '.mp4', '.json')))))
-print('planted feet travel v3 %s v4r1 %s; actor x f200 v3 %s v4r1 %s' % (summ['v3']['planted_feet_travel_cm_f80_240'],
-      summ['v4r1']['planted_feet_travel_cm_f80_240'], summ['v3']['actor_x_f200'], summ['v4r1']['actor_x_f200']))
+print('; '.join('%s feet %s x200 %s' % (t, summ[t]['planted_feet_travel_cm_f80_240'], summ[t]['actor_x_f200']) for t, _, _ in CAPS))
