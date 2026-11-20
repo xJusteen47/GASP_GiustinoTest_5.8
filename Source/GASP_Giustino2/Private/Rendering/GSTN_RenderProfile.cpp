@@ -2,10 +2,11 @@
 // Doc: docs/notes/rendering-profiles.md
 //
 // gstn.Render.Profile
-//   0 = project default (deferred + Lumen, nothing overridden)
-//   1 = flicker probe A: Lumen kept, auto exposure frozen      -> if the flicker stops, the cause is eye adaptation
-//   2 = no Lumen (still deferred): no dynamic GI, SSR, DFAO     -> if the flicker stops, the cause is Lumen
+//   0 = project default (since 11-20, owner 1A: deferred, no Lumen, SSR, TSR; nothing overridden)
+//   1 = flicker probe A: auto exposure frozen      -> if the flicker stops, the cause is eye adaptation
+//   2 = Lumen hard-off (still deferred): no dynamic GI, SSR, DFAO, even if a post process volume asks for Lumen     -> if the flicker stops, the cause is Lumen
 //   3 = low-end preview: profile 2 + cheaper shadows/fog/resolution (a rough look at a Switch 2-class budget, NOT a perf measure)
+//   4 = Lumen back (the pre-11-20 default: Lumen GI + Lumen reflections), for A/B comparisons
 // Every value this sets is put back exactly when the profile goes back to 0 (or to another profile).
 // r.ForwardShading is read-only at runtime (restart + shader recompile): see Tools/Rendering/Open-Editor-Forward.ps1.
 // gstn.Render.Info prints the active renderer and the main lighting settings.
@@ -46,6 +47,14 @@ namespace GSTNRenderProfile
 		{ TEXT("r.SSR.Quality"), TEXT("1") },
 		{ TEXT("r.DistanceFieldAO"), TEXT("0") },
 		{ TEXT("r.AmbientOcclusionLevels"), TEXT("1") },
+	};
+
+	// The pre-11-20 project default, for A/B
+	static const FOverride LumenOn[] = {
+		{ TEXT("r.Lumen.DiffuseIndirect.Allow"), TEXT("1") },
+		{ TEXT("r.Lumen.Reflections.Allow"), TEXT("1") },
+		{ TEXT("r.DynamicGlobalIlluminationMethod"), TEXT("1") },
+		{ TEXT("r.ReflectionMethod"), TEXT("1") },
 	};
 
 	static int32 Profile = 0;
@@ -92,7 +101,7 @@ namespace GSTNRenderProfile
 
 	static void OnProfileChanged(IConsoleVariable* /*Var*/)
 	{
-		const int32 Wanted = FMath::Clamp(Profile, 0, 3);
+		const int32 Wanted = FMath::Clamp(Profile, 0, 4);
 		if (Wanted == AppliedProfile)
 		{
 			return;
@@ -103,6 +112,7 @@ namespace GSTNRenderProfile
 		case 1: ApplyList(ExposureFrozen); break;
 		case 2: ApplyList(NoLumen); break;
 		case 3: ApplyList(NoLumen); ApplyList(LowEnd); break;
+		case 4: ApplyList(LumenOn); break;
 		default: break;
 		}
 		AppliedProfile = Wanted;
@@ -111,8 +121,8 @@ namespace GSTNRenderProfile
 
 	static FAutoConsoleVariableRef CVarProfile(
 		TEXT("gstn.Render.Profile"), Profile,
-		TEXT("Rendering profile, reversible at runtime. 0 = project default (Lumen). 1 = Lumen + frozen auto exposure (flicker probe). ")
-		TEXT("2 = no Lumen, still deferred (flicker probe / forward look preview). 3 = 2 + low-end savings (rough Switch 2-class look). ")
+		TEXT("Rendering profile, reversible at runtime. 0 = project default (deferred, no Lumen, SSR, TSR). 1 = frozen auto exposure (flicker probe). ")
+		TEXT("2 = Lumen hard-off even where a post process volume asks for it. 3 = 2 + low-end savings (rough Switch 2-class look). 4 = Lumen back (old default, A/B). ")
 		TEXT("Forward shading itself needs a restart: Tools/Rendering/Open-Editor-Forward.ps1. Doc: docs/notes/rendering-profiles.md"),
 		FConsoleVariableDelegate::CreateStatic(&OnProfileChanged));
 

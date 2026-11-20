@@ -11,9 +11,11 @@ Done
   written to config. NOT RUN. Verify with `gstn.Render.Info` -> `r.ForwardShading = 1`.
 - `docs/notes/rendering-profiles.md`: what forward changes, flicker test order, decisions.
 
+- Owner 1A/2A applied (second commit): DefaultEngine.ini GI 1->0, reflections 1->2 (SSR), TSR kept; profile 4 = Lumen back.
+
 Not done / next
 - Desktop: build, then in the viewport `gstn.Render.Profile 1`, then `2`, note which stops the flicker (2 min, no restart).
 - Forward launch costs a long first shader compile: only on owner go (decision 1 in the doc).
-- Default renderer and AA: owner decisions, in the doc.
+- Desktop: check the test hub look without GI (sky light / fill) and whether a volume forces Lumen (profile 2 vs 0).
 
-COSTO: ~3 $ | 0 min desktop | 0 token review
+COSTO: ~4 $ | 0 min desktop | 0 token review
