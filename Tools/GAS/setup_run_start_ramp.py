@@ -1,7 +1,8 @@
 # Gradual run start (owner 2026-11-20, Toad reference: "takes a while to get going" = gradual acceleration, not a standstill).
-# Data only, shared profile DA_Locomotion_Default (all kits). Keeps the 0.33 s stamp (identity trait) and replaces the two
-# acceleration steps after it (stamp -> stage 1 top in ~0.23 s, stage 1 -> 2 in ~0.2 s) with linear acceleration ramps
-# (FGSTN_RunStage AccelRampFrames / RampStartFraction, existing fields; the stage 1 ramp starts at the end of the stamp).
+# Data only, shared profile DA_Locomotion_Default (all kits). Owner 19:12Z: the "stomp" was meant for the run STOP, so the run
+# start has no standstill: the start stamp goes off (Frames 0) and the two acceleration steps (stage 1 top in ~0.23 s, stage 1 -> 2
+# in ~0.2 s) become linear acceleration ramps (FGSTN_RunStage AccelRampFrames / RampStartFraction, existing fields) from frame 1.
+# The frantic rev-up stays in the clip (its planted first step must be trimmed in a pose pass, or the feet slide).
 # Measure + target: docs/notes/runstart-accel/report.md. Hand tuning: DA_Locomotion_Default > Run Stages > Stages[i] >
 # Acceleration Ramp (frames at 62.5 Hz). Idempotent: a stage whose ramp is already on (AccelRampFrames > 0) is left alone.
 # RAMP_MODE=dump only writes the current values. Headless (editor closed):
@@ -13,7 +14,8 @@ import unreal
 
 NAME = 'DA_Locomotion_Default'
 # stage index -> (AccelRampFrames, RampStartFraction). Toad: ~0.33 s in place, then ~0.6 s of growing speed, no step.
-RAMPS = {0: (31, 0.15), 1: (30, 0.25)}
+RAMPS = {0: (62, 0.15), 1: (30, 0.25)}
+STAMP_FRAMES = 0   # was 21 (0.33 s almost in place); set it back here or in the asset to restore the stamp
 FIELDS = ('max_speed', 'acceleration', 'frames_to_next_stage', 'next_stage_speed_fraction', 'accel_ramp_frames', 'ramp_start_fraction')
 
 
@@ -41,6 +43,11 @@ def run():
         if dump_only:
             continue
         stages, changed = list(rs.get_editor_property('stages')), False
+        stamp = rs.get_editor_property('start_stamp')
+        if stamp.get_editor_property('frames') != STAMP_FRAMES:
+            stamp.set_editor_property('frames', STAMP_FRAMES)
+            rs.set_editor_property('start_stamp', stamp)
+            changed = True
         for i, (frames, start) in RAMPS.items():
             if i >= len(stages) or stages[i].get_editor_property('accel_ramp_frames') > 0:
                 continue
