@@ -5,7 +5,7 @@ Sources (both untouched GASP sample, see docs/notes/handovers/loco-base-1.md):
             extract_src.ps1 to /Game/GSTN/Locomotion/StockBase/_Src/SandboxCharacter_Mover_ABP
   choosers = the sample CHT_MoverCharacterAnimations_PoseMatch (internal PoseSearch databases) and
             CHT_PoseSearchDatabases_Relaxed (motion matching node), never edited in this project
-Copies them with AssetTools.AdvancedCopyPackages (remaps references between the copied packages), then points the
+Copies them with AssetTools.AdvancedCopyPackages (GSTN_ChooserTableToolset.CopyPackagesRemapped) (remaps references between the copied packages), then points the
 chooser context class (root + every nested table) to the copy's generated class and compiles the ABP.
 Dry run unless GSTN_SAVE=1 (Tools/CI/Save-Assets.ps1). Report: Saved/LocoBase/make_stock_base.txt
 """
@@ -89,10 +89,12 @@ def main():
             p("MISSING source", src); return False
     if eal.does_asset_exist(NEW_ABP):
         p("already exists", NEW_ABP, "- nothing copied (delete the StockBase copies to redo)"); return False
-    tools = unreal.AssetToolsHelpers.get_asset_tools()
+    # AdvancedCopyPackages is not exposed to Python: GSTNAnimToolsets wraps it (CopyPackagesRemapped)
     mapping = {SRC_ABP: NEW_ABP, SRC_CHT: NEW_CHT, SRC_MM: NEW_MM}
-    ok = tools.advanced_copy_packages(mapping, False, True)
-    p("advanced_copy_packages", ok)
+    toolset = unreal.GSTN_ChooserTableToolset.get_default_object()
+    ok = toolset.call_method("CopyPackagesRemapped", (mapping,))
+    p("CopyPackagesRemapped", ok)
+    reg.scan_paths_synchronous([DST[:-1]], True)
     abp = unreal.load_asset(NEW_ABP)
     if not abp:
         p("copy failed: no", NEW_ABP); return False

@@ -244,4 +244,15 @@ public:
 	 */
 	UFUNCTION(meta = (AICallable, AIAccessMode = "Write"), Category = "GSTN|ChooserToolset")
 	static void SetChooserCell(UChooserTable* Chooser, int32 Column, int32 Row, const FString& Value);
+
+	/**
+	 * Copies packages to new paths and remaps references between the copied packages only (AssetTools AdvancedCopyPackages,
+	 * no dependency gathering, no UI). Use it to copy an AnimBlueprint together with its choosers so the copies point at each
+	 * other; anything outside the map stays shared. References to objects of packages outside the map (e.g. a chooser's
+	 * context class) are not touched: retarget them afterwards.
+	 * @param SourceToDestPackages Long package names, e.g. {"/Game/A/ABP_X": "/Game/B/ABP_Y"}.
+	 * @return true if the copy succeeded.
+	 */
+	UFUNCTION(meta = (AICallable, AIAccessMode = "Write"), Category = "GSTN|ChooserToolset")
+	static bool CopyPackagesRemapped(const TMap<FString, FString>& SourceToDestPackages);
 };

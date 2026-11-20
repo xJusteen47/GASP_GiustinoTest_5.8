@@ -1,6 +1,8 @@
 #include "GSTN_ChooserTableToolset.h"
 
+#include "AssetToolsModule.h"
 #include "Chooser.h"
+#include "IAssetTools.h"
 #include "ChooserTableEditorLibrary.h"
 #include "Misc/OutputDevice.h"
 #include "Misc/OutputDeviceRedirector.h"
@@ -323,4 +325,14 @@ void UGSTN_ChooserTableToolset::SetChooserCell(UChooserTable* Chooser, int32 Col
 	FScopedWarningCapture Capture;
 	const bool bSet = Row == INDEX_NONE ? Lib::SetFallbackCellValue(Chooser, Column, Value) : Lib::SetCellValue(Chooser, Column, Row, Value);
 	Check(bSet, Capture, FString::Printf(TEXT("Setting cell (column %d, row %d)"), Column, Row));
+}
+
+bool UGSTN_ChooserTableToolset::CopyPackagesRemapped(const TMap<FString, FString>& SourceToDestPackages)
+{
+	if (SourceToDestPackages.IsEmpty())
+	{
+		return false;
+	}
+	const IAssetTools& AssetTools = FModuleManager::LoadModuleChecked<FAssetToolsModule>(TEXT("AssetTools")).Get();
+	return AssetTools.AdvancedCopyPackages(SourceToDestPackages, /*bForceAutosave*/ false, /*bCopyOverAllDestinationOverlaps*/ true);
 }
