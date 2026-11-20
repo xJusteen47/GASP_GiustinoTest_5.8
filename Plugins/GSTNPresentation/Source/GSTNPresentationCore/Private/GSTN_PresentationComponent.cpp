@@ -102,8 +102,43 @@ void UGSTN_PresentationComponent::SetTableLayer(FName Source, UGSTN_Presentation
 		Layer.Table = Table;
 		Layer.Priority = Priority;
 		Layers.Add(Layer);
+		WarmTable(Table);
 		Layers.StableSort([](const FGSTN_PresentationTableLayer& A, const FGSTN_PresentationTableLayer& B) { return A.Priority > B.Priority; });
 	}
+}
+
+void UGSTN_PresentationComponent::BeginPlay()
+{
+	Super::BeginPlay();
+	WarmTable(DefaultTable);
+	if (!ProjectDefaultTable.IsNull())
+	{
+		WarmTable(ProjectDefaultTable.LoadSynchronous());  // here, not on the first event that falls back on it
+	}
+	for (const FGSTN_PresentationTableLayer& Layer : Layers)
+	{
+		WarmTable(Layer.Table);
+	}
+}
+
+void UGSTN_PresentationComponent::WarmTable(const UGSTN_PresentationTable* Table)
+{
+#if WITH_EDITORONLY_DATA
+	if (!Table)
+	{
+		return;
+	}
+	for (const FGSTN_PresentationCue& Cue : Table->Cues)
+	{
+		for (UNiagaraSystem* System : {Cue.Niagara.Get(), Cue.MatterNiagara.Get()})
+		{
+			if (System)
+			{
+				System->WaitForCompilationComplete(/*bIncludingGPUShaders*/ false, /*bShowProgress*/ false);  // no-op once compiled; one wait per system per editor session
+			}
+		}
+	}
+#endif
 }
 
 UGSTN_PresentationTable* UGSTN_PresentationComponent::GetTableLayer(FName Source) const

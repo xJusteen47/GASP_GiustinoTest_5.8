@@ -163,10 +163,19 @@ public:
 	const FGSTN_PresentationSnapshot& GetLastSnapshot() const { return Deriver.GetPrevious(); }
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void GetAdditiveReaction(FGSTN_AdditiveReactionRequest& Out) const override;
 
 private:
+	/**
+	 * Loads a table's effects before they are needed (runstart-v5, 2026-11-20). ProjectDefaultTable used to load on the first event that
+	 * reached it, and in the editor its Niagara systems were compiled right then: the first run start of a session stalled ~0.5 s
+	 * (FlushAsyncLoading + "Compiling System NS_GSTN_RunStartDust"), seen as one frozen simulation frame in every base-1 run start capture.
+	 * Editor only for the compile wait; cooked builds ship compiled scripts.
+	 */
+	static void WarmTable(const UGSTN_PresentationTable* Table);
+
 	void PlayCue(const FGSTN_PresentationCue& Cue, const FGSTN_PresentationEvent& Event, float Intensity);
 
 	struct FBound
