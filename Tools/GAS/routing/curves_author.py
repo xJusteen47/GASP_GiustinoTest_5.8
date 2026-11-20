@@ -145,7 +145,8 @@ for path, kind in spec:
         curves["movedata_speed"] = sm
         e = max(1, int(round(0.10 * (n - 1))))
         curves["enable_warping"] = [(lambda t: t * t * (3 - 2 * t))(min(1.0, i / float(e))) for i in range(n)]
-        ph = phase_stock(cl, cr, n)
+        # CURVES_PHASE=ours keeps our 0..1 phase (A/B of the phase convention alone, runstart-v6)
+        ph = phase(cl, cr, n) if os.environ.get("CURVES_PHASE") == "ours" else phase_stock(cl, cr, n)
         if ph:
             curves["phase"] = ph
     elif not DRY and AL.does_curve_exist(seq, "movedata_speed", unreal.RawCurveTrackTypes.RCT_FLOAT):
