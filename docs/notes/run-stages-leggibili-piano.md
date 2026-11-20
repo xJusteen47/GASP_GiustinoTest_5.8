@@ -90,7 +90,8 @@ Intanto resta ferma solo l'implementazione; nessun altro lavoro dipende da quest
 - 1A: rampa solo da fermo (stadio 1); 1->2 e 2->3 a gradino (stadio 2 AccelRampFrames -> 0, burst per stadio).
 - 2A: tell = scintille dai talloni + lean che si approfondisce (~0,33 s) + 0,1 s di posa di carica, poi scoppio.
 - 3B come PONTE: sprint stock GASP + lean marcato finché le clip nuove non ci sono.
-- Clip richieste dall'owner (3 loop Overlord, riferimento in arrivo dall'owner; lettura scelta: "fase 2" = stadio 2):
-  stadio 1 = corsa LENTA alla Ganon; stadio 2 (sprint 1) = corsa a BRACCIA APERTE; stadio 3 (sprint 2) = sprint un po'
-  più veloce. Ciascuna = riga con colonna RunStage sopra la riga stock (fallback stock). S3 parte quando arriva il riferimento;
-  la posa di carica dello stadio 3 resta una clip corta a parte. Se "fase 2" voleva dire sprint 2, si scambiano solo le righe.
+- Clip richieste dall'owner (3 loop Overlord, riferimento in arrivo dall'owner; lettura del coordinatore 20:48Z:
+  "fase 2" = sprint 2, come la sua terminologia): stadio 1 = corsa LENTA alla Ganon; stadio 2 (sprint 1) = sprint un po'
+  più veloce; stadio 3 (sprint 2) = corsa a BRACCIA APERTE (come Luigi). Ciascuna = riga con colonna RunStage sopra la riga
+  stock (fallback stock). S3 parte quando arriva il riferimento, che conferma la lettura; la posa di carica dello stadio 3
+  resta una clip corta a parte.

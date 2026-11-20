@@ -10,7 +10,7 @@ Branch claude/project-thread-le0tc7 (da feature/gas-npp-5.8). Solo piano, nessun
 - Tensione segnalata: rampa continua (Toad) vs gradini istantanei del riferimento -> decisione 1 del piano.
 - Owner 20:38Z: ignorare che in 3D World lo sprint è a tasto. Owner 20:43Z: tutto regolabile (piano §4b).
 - Da chiedere all'Unreal Assistant prima di S1: come GASP stock gestisce Run->Sprint (blend, transizione) - piano §4.
-- Decisioni owner 20:47Z: 1A 2A 3B (piano §8). Owner vuole 3 loop Overlord: corsa lenta Ganon (stadio 1), braccia aperte
-  (stadio 2, lettura scelta), sprint più veloce (stadio 3); riferimento in arrivo. Prossimo: thread S1 codice+dati (nuovo),
+- Decisioni owner 20:47Z: 1A 2A 3B (piano §8). Owner vuole 3 loop Overlord: corsa lenta Ganon (stadio 1), sprint più veloce
+  (stadio 2), braccia aperte (stadio 3 = "fase 2" = sprint 2, da confermare col riferimento); riferimento in arrivo. Prossimo: thread S1 codice+dati (nuovo),
   poi S2 VFX, S3 clip dopo il riferimento.
 COSTO: ~4 $ | 0 min desktop | 0 token review
