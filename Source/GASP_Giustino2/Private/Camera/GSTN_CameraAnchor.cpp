@@ -523,6 +523,18 @@ void UGSTN_CameraAnchorComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	}
 	LastMeshStandingRoot = MeshRaw;
 	LastStandingRoot = Raw;
+	// Observer: the presented capsule changed size since the last rendered frame
+	if (const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(Owner->GetRootComponent()))
+	{
+		const float HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+		const double Bottom = FVector::DotProduct(Capsule->GetComponentLocation(), Up.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector)) - HalfHeight;
+		if (LastCapsuleHalfHeight >= 0.f && !FMath::IsNearlyEqual(HalfHeight, LastCapsuleHalfHeight, 0.01f))
+		{
+			OnCapsuleChanged.Broadcast(LastCapsuleHalfHeight, HalfHeight, float(Bottom - LastCapsuleBottom));
+		}
+		LastCapsuleHalfHeight = HalfHeight;
+		LastCapsuleBottom = Bottom;
+	}
 	// Look ahead along the horizontal velocity, slowly smoothed so a direction change does not swing the view
 	FVector LookAheadGoal = FVector::ZeroVector;
 	if (Tuning.LookAheadTime > 0.f && Tuning.MaxLookAhead > 0.f)

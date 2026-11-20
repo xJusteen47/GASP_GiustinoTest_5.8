@@ -14,6 +14,13 @@ Use instead (Blueprint category **GSTN | Camera**, C++ `UGSTN_CameraAnchorLibrar
 | **Get Damped Camera Pivot** (Character) | The same pivot with the project camera's damping and Mario-style air hold (tuning in `DA_CameraAnchor_Default`). `Damped` false = the anchor is not running on that character, you get the undamped pivot | Matching the built-in camera's feel |
 | `GSTN_CameraAnchor` component: **Get Damped Anchor / Get Standing Root** | Same values, read straight from the component | When you already hold the component |
 
+**Capsule observer.** `GSTN_CameraAnchor` component › **On Capsule Changed** (Old Half Height, New Half Height, Bottom Shift): fires once per
+rendered frame when the drawn capsule changes size (crouch, aerials, landing, knockdown). Not needed to ignore those changes (the pivot already
+does); bind it only to react on purpose. Presentation event: never fired by rollback re-simulations.
+
+**ABP warping is safe.** Stride/orientation warping and GASP's offset root move BONES inside the mesh; the pivot reads the mesh COMPONENT and
+the capsule, never a bone, so they do not move it. A camera that follows a bone (pelvis, head) would see them.
+
 **When to call it.** Inside the camera's own update: Player Camera Manager (`BlueprintUpdateCamera`), a camera modifier (`ModifyCamera`), a
 camera component's view, or any tick in **TG_PostPhysics or earlier**. Never move a camera from a tick in **TG_PostUpdateWork**: Unreal
 builds the view of the frame before that group, so the camera shows one frame late and shakes (the 2026-11-20 jitter bug).
