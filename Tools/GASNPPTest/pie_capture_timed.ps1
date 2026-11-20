@@ -18,5 +18,7 @@ $boot = Join-Path $env:TEMP 'gstn_pie_capture_boot.py'
 $real = (Join-Path $PSScriptRoot 'pie_capture_boot_vd2.py') -replace '\\', '/'
 [IO.File]::WriteAllText($boot, "__file__ = r'$real'`nexec(open(__file__).read())`n", (New-Object Text.UTF8Encoding $false))
 & (Join-Path $PSScriptRoot '..\CI\Run-Timed.ps1') -Preset Capture -Log (Join-Path $outAbs 'run.log') -Script $boot -MaxMinutes $MaxMinutes -AssertFile (Join-Path $outAbs 'assert.txt')
+$rc = $LASTEXITCODE
 $done = Join-Path $outAbs 'done.txt'
 if (Test-Path $done) { "done: " + (Get-Content $done -TotalCount 1) } else { 'done.txt missing' }
+exit $rc  # 3 = capture ran but ASSERT not OK (Run-Timed); was lost before (loco-runstop-1)
