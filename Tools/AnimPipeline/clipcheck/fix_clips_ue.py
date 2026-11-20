@@ -10,6 +10,11 @@ Only the changed bone tracks are rewritten (translation and scale keys kept); cu
 untouched. Saves the asset. Report: Saved/ClipCheck/fix_report.json; prints max 5 lines. Re-export + clip_check to verify.
   "splice"   first/last ~0.1 s eased to the neighbour clip's pose (row "splice": {"start": {"asset", "frame"}, "end": {...}, "seconds"})
   "floor_clamp" feet lifted out of the floor by leg IK, vertical only (row "floor_clamp": {"stand_ball_cm", "stand_foot_cm"})
+Conservation guard (project rule 10, 2026-11-20): every step above (except ik_feet and slide_marker, which touch no FK bone)
+is measured before/after by conserve.py: if it takes away > 15 % of a chain's swing or peak speed, the pelvis movement or the
+root travel, the step FAILS, nothing of it is written, the clip's later steps are skipped and the asset is not saved
+(report "guard"). Also in dry run, so a dry run says which fixes would be refused. With CLIPFIX_WRITE=1 the steps of a clip are
+also judged TOGETHER against the original ("total"), so small losses cannot add up past 15 %.
 Default = DRY RUN (report only, nothing saved). CLIPFIX_WRITE=1 writes and saves. CLIPFIX_ONLY="RowA,RowB" limits the rows,
 CLIPFIX_STEPS="splice,ik_feet" limits the fixes. Agents save through Tools/CI/Save-Assets.ps1 (sets CLIPFIX_WRITE=1).
 """
@@ -20,6 +25,7 @@ import unreal
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import clip_filters  # noqa: E402
+import conserve  # noqa: E402
 
 AL, EAL = unreal.AnimationLibrary, unreal.EditorAssetLibrary
 
@@ -46,25 +52,53 @@ def q2t(q):
     return (q.x, q.y, q.z, q.w)
 
 
-def filters(anim, dry):
+def filters(anim):
+    """Returns (report, edits): edits = {bone: {'t': [Vector], 'q': [(x,y,z,w)], 's': [Vector]}}, written by _apply if the guard passes."""
     n = int(anim.get_editor_property('number_of_sampled_keys'))
     fps = (n - 1) / max(anim.get_play_length(), 1e-6)
-    ctrl = anim.get_editor_property('controller')
-    rep = {}
-    if not dry:
-        ctrl.open_bracket(unreal.Text('clipfix filters'), False)
+    rep, edits = {}, {}
     for b in [str(x) for x in AL.get_animation_track_names(anim)]:
         tfs = [AL.get_bone_pose_for_frame(anim, b, f, False) for f in range(n)]
         new, r = clip_filters.clean_track([q2t(t.rotation) for t in tfs], fps)
         if r is None:
             continue
         rep[b] = r
-        if not dry:
-            ctrl.set_bone_track_keys(b, [t.translation for t in tfs], [unreal.Quat(*q) for q in new],
-                                     [t.scale3d for t in tfs], False)
-    if not dry:
-        ctrl.close_bracket(False)
-    return {'fps': round(fps, 2), 'frames': n, 'bones': rep}
+        edits[b] = {'t': [t.translation for t in tfs], 'q': list(new), 's': [t.scale3d for t in tfs]}
+    return {'fps': round(fps, 2), 'frames': n, 'bones': rep}, edits
+
+
+def _fps(anim):
+    return (_nkeys(anim) - 1) / max(anim.get_play_length(), 1e-6)
+
+
+def _tracks(anim, bones):
+    """conserve.py tracks of the guarded bones present in the clip (local rotation + translation per frame)."""
+    n = _nkeys(anim)
+    have = {str(x) for x in AL.get_animation_track_names(anim)}
+    out = {}
+    for b in bones:
+        if b not in have:
+            continue
+        tfs = [_local(anim, b, f) for f in range(n)]
+        out[b] = {'q': [q2t(t.rotation) for t in tfs], 't': [(t.translation.x, t.translation.y, t.translation.z) for t in tfs]}
+    return out
+
+
+def _guard(anim, edits):
+    """Conservation guard of one fix step: the clip as it is vs the clip with this step's edits."""
+    before = _tracks(anim, conserve.GUARD_BONES)
+    after = conserve.overlay(before, {b: {'q': e['q'], 't': [(v.x, v.y, v.z) for v in e['t']]} for b, e in edits.items()})
+    return conserve.compare(before, after, _fps(anim))
+
+
+def _apply(anim, edits, label):
+    if not edits:
+        return
+    ctrl = anim.get_editor_property('controller')
+    ctrl.open_bracket(unreal.Text(label), False)
+    for b, e in edits.items():
+        ctrl.set_bone_track_keys(b, e['t'], [q if isinstance(q, unreal.Quat) else unreal.Quat(*q) for q in e['q']], e['s'], False)
+    ctrl.close_bracket(False)
 
 
 APE = unreal.AnimPoseExtensions
@@ -99,7 +133,7 @@ def _ref_frame(ref, spec, anim, at):
     return bi
 
 
-def splice(anim, cfg, dry):
+def splice(anim, cfg):
     """Hand-off splice (owner rule: solve in code, not per clip; anim-setup-3 decision 1A). The first / last `seconds` of every bone
     track (root and ik bones excepted: root motion stays, ik feet are re-baked after) are eased toward the neighbour clip's pose:
     weight 1 on the boundary frame, smoothstep to 0 at the window's inner edge, so the clip starts exactly in the pose it takes over
@@ -115,12 +149,10 @@ def splice(anim, cfg, dry):
             continue
         ref = resolve(spec['asset'])
         if ref is None:
-            return {'error': f'{side} ref missing: {spec["asset"]}'}
+            return {'error': f'{side} ref missing: {spec["asset"]}'}, {}
         sides.append((side, at, ref, _ref_frame(ref, spec, anim, at)))
     rep = {'frames_each_side': k, 'refs': {s: [r.get_name(), f] for s, _, r, f in sides}, 'max_gap_deg': {}}
-    ctrl = anim.get_editor_property('controller')
-    if not dry:
-        ctrl.open_bracket(unreal.Text('clipfix hand-off splice'), False)
+    edits = {}
     ref_tracks = {id(r): {str(x) for x in AL.get_animation_track_names(r)} for _, _, r, _ in sides}
     for b in [str(x) for x in AL.get_animation_track_names(anim)]:
         if b in SKIP_SPLICE:
@@ -145,14 +177,12 @@ def splice(anim, cfg, dry):
                 if b == 'pelvis':
                     ts[i] = ts[i] + (rt.translation - ts[i]) * w
             changed = True
-        if changed and not dry:
-            ctrl.set_bone_track_keys(b, ts, [unreal.Quat(*q) for q in qs], [t.scale3d for t in tfs], False)
-    if not dry:
-        ctrl.close_bracket(False)
-    return rep
+        if changed:
+            edits[b] = {'t': ts, 'q': qs, 's': [t.scale3d for t in tfs]}
+    return rep, edits
 
 
-def floor_clamp(anim, cfg, dry):
+def floor_clamp(anim, cfg):
     """Feet never go under the floor (anim-setup-3 decision 2A: skid ball r -5.8 cm). Per frame, the lowest of ball/heel below its
     flat-foot height lifts the FOOT straight up by the missing height (two-bone IK on thigh-calf-foot, knee kept in its plane);
     only vertical, so an intended slide (GSTN_FootSlide) keeps its travel. cfg: {"stand_ball_cm": 3.2, "stand_foot_cm": 9.4}"""
@@ -182,15 +212,12 @@ def floor_clamp(anim, cfg, dry):
             footw = APE.get_bone_pose(pose, f'foot_{s}', W)   # the foot keeps its world rotation (flat stays flat)
             edits.setdefault(f'foot_{s}', {})[f] = unreal.MathLibrary.make_relative_transform(footw, nc).rotation
             rep['frames'].setdefault(s, []).append([f + 1, round(lift, 2)])
-    if edits and not dry:
-        ctrl = anim.get_editor_property('controller')
-        ctrl.open_bracket(unreal.Text('clipfix floor clamp'), False)
-        for b, fr in edits.items():
-            tfs = [_local(anim, b, f) for f in range(n)]
-            ctrl.set_bone_track_keys(b, [t.translation for t in tfs], [fr.get(f, tfs[f].rotation) for f in range(n)],
-                                     [t.scale3d for t in tfs], False)
-        ctrl.close_bracket(False)
-    return rep
+    full = {}
+    for b, fr in edits.items():
+        tfs = [_local(anim, b, f) for f in range(n)]
+        full[b] = {'t': [t.translation for t in tfs], 'q': [q2t(fr[f]) if f in fr else q2t(tfs[f].rotation) for f in range(n)],
+                   's': [t.scale3d for t in tfs]}
+    return rep, full
 
 
 def _two_bone(thigh, calf, foot, tgt):
@@ -265,14 +292,43 @@ def main():
             lines.append(f'MISSING {clip}'); continue
         r = {'asset': anim.get_path_name(), 'dry': dry}
         fx = [x for x in cfg['fix'] if not steps or x in steps]
-        if 'filters' in fx:
-            r['filters'] = filters(anim, dry)
-        if 'splice' in fx:
-            r['splice'] = splice(anim, cfg.get('splice', {}), dry)
-        if 'slide_marker' in fx:
-            r['slide_marker'] = slide_marker(anim, cfg['slide_marker'], dry)
-        if 'floor_clamp' in fx:
-            r['floor_clamp'] = floor_clamp(anim, cfg.get('floor_clamp', {}), dry)
+        guarded = (('filters', lambda: filters(anim)), ('splice', lambda: splice(anim, cfg.get('splice', {}))),
+                   ('floor_clamp', lambda: floor_clamp(anim, cfg.get('floor_clamp', {}))))
+        r['guard'] = {}
+        orig = _tracks(anim, conserve.GUARD_BONES) if not dry else None
+        for name, run in guarded:
+            if name == 'floor_clamp' and 'slide_marker' in fx:
+                r['slide_marker'] = slide_marker(anim, cfg['slide_marker'], dry)   # curves only: no FK bone, no guard
+            if name not in fx:
+                continue
+            r[name], edits = run()
+            g = _guard(anim, edits) if edits else {'ok': True, 'fails': [], 'metrics': {}}
+            r['guard'][name] = g
+            if not g['ok']:
+                r['guard_fail'] = name
+                break
+            if not dry:
+                _apply(anim, edits, f'clipfix {name}')
+        if orig is not None and not r.get('guard_fail') and len(r['guard']) > 1:
+            # the steps together: three -10 % steps would each pass and lose 27 % (write mode only; a dry run reads the original)
+            g = conserve.compare(orig, _tracks(anim, conserve.GUARD_BONES), _fps(anim))
+            r['guard']['total'] = g
+            if not g['ok']:
+                r['guard_fail'] = 'total'
+        if r.get('guard_fail'):
+            # nothing of the failing step was written and the asset is NOT saved; earlier steps of this clip exist in memory only
+            # (the headless run never saves on exit). Reload from disk so a later row that references this clip sees the original.
+            if not dry:
+                r['saved'] = False
+                try:
+                    pkg = unreal.load_package(anim.get_path_name().split('.')[0])
+                    unreal.EditorLoadingAndSavingUtils.reload_packages([pkg])
+                    r['reverted'] = True
+                except Exception as e:  # noqa: BLE001
+                    r['reverted'] = f'not saved, reload failed: {e!r}'[:120]
+            report[clip] = r
+            lines.append(f'{clip}: GUARD FAIL {r["guard_fail"]}: {r["guard"][r["guard_fail"]]["fails"][0]}')
+            continue
         if 'ik_feet' in fx and not dry:
             rig = rig or _ue_rig()
             r['ik_feet'] = rig._bake_ik_feet(anim)
@@ -286,7 +342,8 @@ def main():
     out = os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()), 'ClipCheck', 'fix_report.json')
     os.makedirs(os.path.dirname(out), exist_ok=True)
     json.dump(report, open(out, 'w'), indent=1, default=str)
-    print(f'clipfix: {len(report)} clips, report {out}')
+    nfail = sum(1 for v in report.values() if v.get('guard_fail'))
+    print(f'clipfix: {len(report)} clips, guard {"FAIL " + str(nfail) if nfail else "OK"}, report {out}')
     for s in lines[:4]:
         print(s)
 
