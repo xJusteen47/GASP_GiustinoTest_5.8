@@ -7,6 +7,7 @@
 
 #include "Camera/GSTN_CameraAnchor.h"
 #include "GASNPPTest/GSTN_PlaytestCamera.h"
+#include "Camera/GSTN_CameraAnchorLibrary.h"
 #include "Misc/AutomationTest.h"
 
 namespace GSTNCameraAnchorTest
@@ -252,6 +253,31 @@ bool FGSTN_CameraTiltShiftMathTest::RunTest(const FString&)
 	Near(*this, TEXT("intensity 2 halves the f-stop"), UGSTN_PlaytestCameraModifier::TiltShiftFstop(T), 1.0, 0.001);
 	T.Intensity = 10.f;
 	Near(*this, TEXT("f-stop floor 0.7"), UGSTN_PlaytestCameraModifier::TiltShiftFstop(T), 0.7, 0.001);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraAnchorTicksBeforeViewTest, "GSTN.Camera.Anchor.TicksBeforeTheView", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraAnchorTicksBeforeViewTest::RunTest(const FString&)
+{
+	// 2026-11-20 jitter: UWorld::Tick updates the camera managers after TG_PostPhysics and before TG_PostUpdateWork. An anchor ticking in
+	// TG_PostUpdateWork moves the camera after the view was built: each view = last frame's correction + this frame's actor root, which steps at
+	// the 62.5 Hz simulation rate. The anchor must tick in the last group before the view
+	const UGSTN_CameraAnchorComponent* Default = GetDefault<UGSTN_CameraAnchorComponent>();
+	TestEqual(TEXT("anchor tick group"), static_cast<int32>(Default->PrimaryComponentTick.TickGroup), static_cast<int32>(TG_PostPhysics));
+	TestEqual(TEXT("early group constant"), static_cast<int32>(UGSTN_CameraAnchorComponent::EarlyTickGroup), static_cast<int32>(TG_PostPhysics));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraAnchorLibraryNullTest, "GSTN.Camera.Anchor.LibraryNoCharacter", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraAnchorLibraryNullTest::RunTest(const FString&)
+{
+	// The custom camera queries never crash on a missing character: no mesh found, origin, not damped
+	FVector Pivot(1, 2, 3);
+	TestFalse(TEXT("no character, no mesh"), UGSTN_CameraAnchorLibrary::GetCameraPivot(nullptr, Pivot));
+	TestTrue(TEXT("origin"), Pivot.IsZero());
+	bool bDamped = true;
+	TestTrue(TEXT("damped query origin"), UGSTN_CameraAnchorLibrary::GetDampedCameraPivot(nullptr, bDamped).IsZero());
+	TestFalse(TEXT("not damped"), bDamped);
 	return true;
 }
 

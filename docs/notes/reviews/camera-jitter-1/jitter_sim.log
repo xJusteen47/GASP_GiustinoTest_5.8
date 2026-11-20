@@ -1,0 +1,6 @@
+fps 60 old: camera off its target max 27.6 cm, frames >2cm 52%
+fps 60 new: camera off its target max 0.0 cm, frames >2cm 0%
+fps 120 old: camera off its target max 14.1 cm, frames >2cm 28%
+fps 120 new: camera off its target max 0.0 cm, frames >2cm 0%
+fps 144 old: camera off its target max 14.1 cm, frames >2cm 23%
+fps 144 new: camera off its target max 0.0 cm, frames >2cm 0%

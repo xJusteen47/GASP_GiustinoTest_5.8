@@ -597,4 +597,12 @@ GSTN_CAM_RT_TEST(InactiveComponentNeverWritesControlRotation)
 	return true;
 }
 
+GSTN_CAM_RT_TEST(TicksBeforeTheView)
+{
+	// UWorld::Tick updates the camera managers (GetCameraView) between TG_PostPhysics and TG_PostUpdateWork: a later tick serves the previous
+	// frame's view every frame (2026-11-20 camera jitter)
+	TestEqual(TEXT("camera tick group"), static_cast<int32>(GetDefault<UGSTN_CameraComponent>()->PrimaryComponentTick.TickGroup), static_cast<int32>(TG_PostPhysics));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
