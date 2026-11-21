@@ -253,6 +253,10 @@ elif 'Dropkick' in KIT:
     SEQUENCES = DROPKICK_SEQUENCES
 elif 'DAir' in KIT:
     SEQUENCES = DAIR_SEQUENCES
+# PIE_CAPTURE_FRAMES=<n> (dropkick-tb-4): every selected sequence runs n frames after the press setup, e.g. to see a landing clip to its end
+# (the dropkick sequences stop 12 frames into the tech bounce)
+if os.environ.get('PIE_CAPTURE_FRAMES'):
+    SEQUENCES = [dict(s, frames=int(os.environ['PIE_CAPTURE_FRAMES'])) for s in SEQUENCES]
 TIMEOUT = 900.0
 # PIE_CAPTURE_COLLISION=1: draw collision (the pawn's movement capsule) in every view and the game viewport (DROPKICK-CAPSULE, 2026-11-15)
 COLLISION = os.environ.get('PIE_CAPTURE_COLLISION', '') == '1'

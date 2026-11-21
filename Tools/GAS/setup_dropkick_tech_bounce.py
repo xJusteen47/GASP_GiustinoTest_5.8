@@ -150,7 +150,9 @@ def _kit(move_cls, bounce_cls):
             kit.set_editor_property('primary_weapon', wcopy)
             saves.append(wcopy)
     trig = list(kit.get_editor_property('triggered_abilities'))
-    if not any(str(t).find('GA_Overlord_DropkickTechBounce') >= 0 for t in trig):
+    # The exact class of this round: KIT_Test_Playtest already lists the owner's round (R3 since 11-17), and a match on the name prefix left a
+    # new round unregistered, so the model fell back to the generic GA_GroundBounce_Test (dropkick-tb-4, capture 1)
+    if not any(t and t.get_path_name() == bounce_cls.get_path_name() for t in trig):
         trig.append(bounce_cls)
         kit.set_editor_property('triggered_abilities', trig)
     rules = unreal.load_asset(RULES)
