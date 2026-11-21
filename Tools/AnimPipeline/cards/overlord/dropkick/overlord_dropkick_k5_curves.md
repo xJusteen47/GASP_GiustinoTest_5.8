@@ -47,4 +47,14 @@ Montage AM_OverlordDropkickK6: Startup K6 (16 f) + SETTLE K6 (12 f, once) + Loop
 Order of the follow-through: pelvis and legs first (f2), head 2 frames later (f4), arms last (f4-f7). Legs stay locked straight (only pitch and toes move).
 Offline (make_k6_cards.py, fold3 shapes): min clearance 0.22 cm at f4 (press), every key and blend >= 0.22 except the f0 -> f4 blend,
 which the build does not take (the build interpolates f0 -> f4 itself, as in K5).
+OWNER POSE DIRECTION (2026-11-21 18:39Z, rule 13a; scope: the strike / extended pose = startup f14 (2/3) and f15, the settle and the
+fall loop; not the tuck, not the landing): torso pushed BACK and bent, legs FORWARD, never lower than the body's plane, like Big Band's
+j.HK. K6 line: pelvis +8 deg further back, hips flexed 12 deg (legs still locked straight and together), trunk curled 8 deg up toward
+the legs: a shallow V with the hips lowest. Offline (Poser): legs 6.7 deg ABOVE the horizontal (K5: 13.6 deg below), balls 34 cm higher
+relative to the hips (96 vs 62 cm, hips at 81), lower trunk 172 deg (K5 168), chest-head line unchanged (smug head kept). Settle peak:
+legs +11.7 deg; rebound +4.2 deg: never below the horizontal. Fall loop = K6 loop (K5 smug hold on the new line).
+HITBOX NOTE for the owner (not touched): the feet at the strike are ~34 cm higher relative to the hips than K5.
+Gemini notes (docs/notes/reviews/dropkick-kick-k5/gemini-k6.md) folded in: settle peak 1-2 f after the strike and rebound sooner, toes
+overshoot then relax, head chin +6 peak; not taken: spine wave on the tuck (startup has only 6 build keys), forearm drag at f14
+(clearance), loop sway with a 24 f period (the loop is 12 f), landing (other clip, code queue).
 Landing: a 480 cm press lands at a19-a20 = settle f3-f4: the overshoot peak shows, the rebound only on a high press.

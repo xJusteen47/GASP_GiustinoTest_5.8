@@ -11,7 +11,7 @@ Writes, next to the K5 cards (which are not touched):
 Curves: ../overlord_dropkick_k5_curves.md, section "K6".  Run (cwd Tools/AnimPipeline): python cards/overlord/dropkick/k6/make_k6_cards.py
 Prints the offline fold metrics of every key (fold3.report: arm block over the sternum, elbows, min clearance).
 """
-import copy, json, os, sys
+import copy, json, math, os, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DK = os.path.dirname(HERE)
@@ -54,7 +54,7 @@ PRESS = dict(clav=float(os.environ.get("K6_PRESS_CLAV", 12)), shrug=float(os.env
              across=float(os.environ.get("K6_PRESS_ACROSS", 3)), curl=-3.0)
 RELAX = dict(clav=-4.0, shrug=-0.0, across=-1.0, curl=1.0)
 CLAMP = dict(clav=float(os.environ.get("K6_CLAMP_CLAV", 8)), shrug=0.0, across=float(os.environ.get("K6_CLAMP_ACROSS", 2)), curl=0.0)
-LOOSE = dict(clav=-3.0, shrug=0.0, across=-1.0, curl=0.0)
+LOOSE = dict(clav=-1.5, shrug=0.0, across=-1.0, curl=0.0)
 
 
 def head(p, d=(0, 0, 0), neck=None, chin=None):
@@ -65,6 +65,31 @@ def head(p, d=(0, 0, 0), neck=None, chin=None):
         nc["neck_01"] = add(nc["neck_01"], [neck or 0.0, 0, 0])
         nc["head"] = add(nc["head"], [chin or 0.0, 0, 0])
         q["neck_chain"] = nc
+    return q
+
+
+# --- owner 2026-11-21 18:39Z (scope: the strike / extended pose, startup f14-f15, settle, fall loop): "torso pushed BACK and bent,
+# legs FORWARD, so the legs are never lower than the body's plane, a bit like Big Band's j.HK". K5's strike was a straight plank with
+# the legs 13.6 deg BELOW the horizontal (feet 18 cm under the hips). K6: pelvis +8 deg further back, hips flexed 12 deg (legs rotate
+# up about the hips, still locked straight and together), trunk curled 8 deg up toward the legs: a shallow V with the hips lowest,
+# legs ~7 deg ABOVE the horizontal (balls ~33 cm higher than K5 relative to the hips), chest and head raised. Offline numbers: k6/README
+# (plank_try). Toe point unchanged (foot_rot is relative to the shin: 25 deg either way).
+PLANK = dict(pitch=float(os.environ.get("K6_PLANK_PITCH", 8)), flex=float(os.environ.get("K6_PLANK_FLEX", 12)),
+             curl=float(os.environ.get("K6_PLANK_CURL", -8)))
+
+
+def _rotx(v, d):
+    s_, c_ = math.sin(math.radians(d)), math.cos(math.radians(d)); x, y, z = v
+    return [round(x, 3), round(y * c_ - z * s_, 3), round(y * s_ + z * c_, 3)]
+
+
+def plank(p, t=1.0):
+    q = copy.deepcopy(p)
+    q["pelvis"]["rot"] = add(q["pelvis"]["rot"], [t * PLANK["pitch"], 0, 0])
+    q["spine"] = add(q["spine"], [t * PLANK["curl"], 0, 0])
+    for s in "lr":
+        lg = q[f"leg_{s}"]
+        lg["foot"] = _rotx(lg["foot"], t * PLANK["flex"]); lg["pole"] = _rotx(lg["pole"], t * PLANK["flex"])
     return q
 
 
@@ -84,13 +109,15 @@ for s in "lr":
 st[11] = arms(st[11], **{k: v * 0.5 for k, v in PRESS.items()})
 # a14 smear: K5 (fold3.fit_path key, clear over its blends). a15 STRIKE: legs, pitch and the smug flick exactly K5 (crisp, no delay);
 # the lying fold CLAMPS (shoulders in, wrap deeper): the arms brace on the impact and let go in the settle clip.
-st[15] = arms(st[15], **CLAMP)
+st[14] = plank(st[14], 0.66)           # smear: the legs are 2/3 out, so 2/3 of the new line
+st[15] = arms(plank(st[15]), **CLAMP)
 STRIKE_K6 = st[15]
 
 # --- settle: 12 f one-shot after the strike (replaces loop repetition 1) -----------------------------------------------------
 # Order of the follow-through: pelvis and legs peak first (f2), the head 2 frames later (f4), the arms let go last (f4 -> f7).
 # f11 = the K5 loop's f11 so settle f11 -> loop f0 is the loop's own wrap step.
-LOOP11 = copy.deepcopy(L[11])
+LOOP_K6 = {int(k): plank(v) for k, v in K5L["author"]["poses"].items()}   # fall loop K6: K5's smug hold on the new line
+LOOP11 = copy.deepcopy(A.frames({"frames": 12, "poses": {str(k): v for k, v in LOOP_K6.items()}})[11])
 PEAK = copy.deepcopy(STRIKE_K6)
 PEAK["pelvis"]["rot"] = add(PEAK["pelvis"]["rot"], [float(os.environ.get("K6_PEAK_PITCH", 5.0)), 0, 0])   # 82 -> 87: carried past
 PEAK["pelvis"]["loc"] = add(PEAK["pelvis"]["loc"], [0, 2.0, 0])                                          # the hips drive on 2 cm
@@ -123,7 +150,7 @@ st_loose = arms(LOOP11, **LOOSE)
 se = {}
 se[0] = head_of(STRIKE_K6, arms_of(STRIKE_K6, lerp(STRIKE_K6, PEAK, 0.55)))                  # body on its way past; head held
 se[2] = head_of(lerp(STRIKE_K6, head(STRIKE_K6, **HEAD_PEAK), 0.5), arms_of(STRIKE_K6, PEAK))  # body peak; head halfway; arms clamped
-se[4] = head_of(head(STRIKE_K6, **HEAD_PEAK), arms_of(lerp(STRIKE_K6, st_loose, 0.35), lerp(PEAK, UNDER, 0.6)))  # head peak
+se[4] = head_of(head(STRIKE_K6, **HEAD_PEAK), arms_of(lerp(STRIKE_K6, st_loose, 0.35), lerp(PEAK, UNDER, 0.7)))  # head peak
 se[7] = head_of(head(LOOP11, **HEAD_DIP), arms_of(st_loose, UNDER))                            # body under; head dips; arms loose
 se[11] = LOOP11                                                                                 # = loop f11: the wrap into loop f0
 
@@ -162,9 +189,13 @@ if __name__ == "__main__":
                "NEW strike settle: body overshoot f2, head overshoot f4, arms loosen f4-f7, rebound f7, = loop f11 at f11.",
                anim=("/Game/AnimPipeline/Rig/Overlord/Dropkick/Loop/AS_OverlordDropkick_SettleK6",
                      "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordDropkick_SettleK6", "AS_Pilot_OverlordDropkick_SettleK6"))
+    loop = copy.deepcopy(K5L)
+    o3 = write("overlord_dropkick_loop_k6", loop, LOOP_K6, [(q["frame"], q.get("spacing")) for q in K5L["poses"]],
+               "K5 smug hold on the owner's Big Band line (torso back and curled, legs forward above the body plane).")
+    print(o3)
     po = A.Poser("along")
     rows = []
-    for tag, poses in (("startup", st), ("settle", se)):
+    for tag, poses in (("startup", st), ("settle", se), ("loop", LOOP_K6)):
         for f in sorted(poses):
             rows.append(f"{tag} " + F3.report(po, poses[f], f))
         ks = sorted(poses)
