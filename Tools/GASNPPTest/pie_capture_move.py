@@ -664,12 +664,37 @@ def _tick(_dt):
                 return _finish('ok')
             seq = SEQUENCES[st['seq']]
             if seq.get('run_first') and st.get('run_ready') != st['seq']:   # PIE_CAPTURE_RUNS: next variant, same Play session
+                # The spawn reset moves the host but keeps its facing (a 180 run left it at -168 deg and the next run's stick, camera
+                # relative, made a forward start: ASSERT FAIL, turn2 t1). So: camera yaw back to the first run's, a short stick
+                # forward (the pawn turns to face it, orient to movement), release, settle, then the spawn reset.
+                pc, pawn = g._local_pawn(0)
+                step = st.get('reorient', 0)
+                if 'yaw0' not in st:
+                    st.update(yaw0=pawn.get_actor_rotation().yaw, cyaw0=pc.get_control_rotation().yaw, reorient=3)
+                    _log(f'run start facing: actor {st["yaw0"]:.1f}, camera {st["cyaw0"]:.1f}')
+                    step = 3
+                off = abs((pawn.get_actor_rotation().yaw - st['yaw0'] + 180.0) % 360.0 - 180.0)
+                if step == 0:
+                    pc.set_control_rotation(unreal.Rotator(roll=0.0, pitch=pc.get_control_rotation().pitch, yaw=st['cyaw0']))
+                    if off > 2.0:
+                        g.hold(0, 'move', (0, 1, 0))
+                        st.update(reorient=1, t=now)
+                        return None
+                    step = 2
+                if step == 1:
+                    if now - st['t'] < 0.6:
+                        return None
+                    g.release(0, 'move')
+                    st.update(reorient=2, t=now)
+                    return None
+                if step == 2 and now - st['t'] < 1.5:
+                    return None
                 for cv in [c.strip() for c in seq['run_cvars'].split(';') if c.strip()]:
                     _console(cv)
                 comp = g.comps(g.worlds()[0])[h._key(0)]
                 comp.server_reset_to_spawn(unreal.Vector(0.0, 0.0, 0.0))
-                st.update(run_ready=st['seq'], t=now + 1.0)                 # 3 s real time: the reset lands and the idle settles
-                _log(f'run {seq["run"]}: cvars [{seq["run_cvars"]}], host reset to spawn')
+                st.update(run_ready=st['seq'], t=now + 1.0, reorient=0)    # 3 s real time: the reset lands and the idle settles
+                _log(f'run {seq["run"]}: cvars [{seq["run_cvars"]}], facing off by {off:.1f} deg before the reset, host reset to spawn')
                 return None
             if seq['dummy'] and not st.get('dummy_placed'):
                 keys = h.dummies()
