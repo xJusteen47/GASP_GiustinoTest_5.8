@@ -83,7 +83,8 @@ namespace
 		}
 		// m10-m11-leftovers (2026-11-21): the held objects' presentation switches (hand attach, blend, arc preview, prompt, wind-up) and the
 		// equipment look's (gstn.Equipment.*), one control each
-		if (Name.StartsWith(TEXT("gstn.Held."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Equipment."), ESearchCase::IgnoreCase))
+		if (Name.StartsWith(TEXT("gstn.Held."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Equipment."), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("gstn.Combat.KitPlaceholderLook"), ESearchCase::IgnoreCase))
 		{
 			return true;
 		}
