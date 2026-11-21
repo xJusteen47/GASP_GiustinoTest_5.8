@@ -23,3 +23,13 @@ DA_Locomotion_Default (owner's uncommitted change) untouched. Re-check of the pr
   B faster Mover turn end (feel, owner), C clip on the capsule pace (rev only after the capsule ends, ~v104: slow).
 - 180 R / 090 L / 090 R not built; C++ debug drop-down does not list 27 yet (cvar works).
 COSTO: ~13 $ | ~35 min desktop | 0 token review
+## Round A + arms (22:20-22:55Z)
+- Option A (coordinator): no ABP change needed (Offset Root Bone Max Rotation Error -1, steering_dump.txt); the clips now carry their
+  own enable_warping / steeringtargettime timed on the hand-off -> body follows the clip, -171 deg by v106 (180a_A/facing csv).
+- Owner on that: T-rex hands through the leg, R foot rolled, "arms lead the turn: back and out, elbows to their own side, never still".
+  Arms rebuilt that way (turns only), R heel lift on the foot's own axis + knee over toes. New gates: hand-thigh/hand-hips clearance,
+  foot twist vs knee, foot roll from UE foot axes. Capture t3f ASSERT OK, evidence 180a_arms/ (A/B 27A vs 27arms). Not verified that
+  the roll gate fails the previous clip (its joints file was overwritten).
+- Video "snap": capture chain, not clip: sim 62.5 Hz vs capture 60 fps -> a double tick every 24 frames (v85, v109, v133: dloc 2x).
+- Next (owner OK 22:51): style pass in Cascadeur (key poses + curve sheet), no Python-decided poses: new thread.
+COSTO: ~5 $ (this part) | ~15 min desktop | 0 token review
