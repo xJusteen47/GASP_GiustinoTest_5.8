@@ -50,6 +50,7 @@ def arms(p, clav=0.0, shrug=0.0, across=0.0, curl=0.0):
     return q
 
 
+# round 1 values (superseded below by the round-2 PRESS; RELAX is unused since round 2)
 PRESS = dict(clav=float(os.environ.get("K6_PRESS_CLAV", 12)), shrug=float(os.environ.get("K6_PRESS_SHRUG", 0)),
              across=float(os.environ.get("K6_PRESS_ACROSS", 3)), curl=-3.0)
 RELAX = dict(clav=-4.0, shrug=-0.0, across=-1.0, curl=1.0)
@@ -103,16 +104,46 @@ def plank(p, t=1.0):
 # Re-keying on the build frames (0, 4, 8, 11, 14, 15) makes what the build samples exactly the key: K5's author keys 1, 2, 3, 7, 13
 # reached the build only through the take's in-betweens (the build keeps the card's pose frames only, round 3 trap).
 st = {f: copy.deepcopy(S[f]) for f in (0, 4, 8, 11, 14, 15)}
-# a4 PRESS: the arms arrive in the fold harder than they stay (overshoot into the body); the head LAGS the tuck by ~a frame (6 deg
-# less tucked than the body asks), so the 4 -> 8 segment carries it past.
-st[4] = head(arms(st[4], **PRESS), (6.0, 0, 0))
-# a8 RELAX: the arms let go a little (shoulders back, wrap 1 cm looser, chest opens 1 deg); the head overshoots the tuck by 6 deg
-# (follow-through of the lag), the knees overshoot toward the chest by 2 cm (the weight of the legs arriving in the ball).
-st[8] = head(arms(st[8], **RELAX), (-6.0, 0, 0))
+# ROUND 2 (review k6a FAIL posa, 2026-11-21): the round-1 press was a POSE difference (3-4 cm), not a movement. The arms now OPEN
+# first (a3 = key 2: elbows flared ~38 cm from the press, left hand high, right low and off the chest so the crossing path keeps
+# left over right), SLAM into the press (key 4 = a5, arrive_1_2: fast out of the open, soft arrival), hold it (key 5) and RELEASE at
+# a8 (key 7: elbows out ~8 cm, shoulders down, forearms off the chest). Key 8 is gone (its head/knee overshoot moved to key 7).
+# Clearance: the press compresses the chest 6 deg (curl -6) and shrugs 4, bought back by riding the block 2 cm off the chest.
+del st[8]
+PRESS = dict(clav=12.0, shrug=4.0, across=3.0, curl=-6.0)
+PRESS_OFF = 2.0                        # chest-frame +y of hands and poles in the press (clearance for the curl and shrug)
+OPEN = dict(t=0.3, out=15.0, hout=8.0, up=5.0, hl_up=10.0, hr_down=8.0, hr_fwd=4.0)
+REL = dict(out=16.0, down=8.0, hout=1.0, off=3.0, hl_off=2.5, clav=-6.0, shrug=-5.0, across=-1.0, curl=2.0)
+
+
+def elbows(p, out=0.0, down=0.0, hout=0.0, off=0.0):
+    """Elbows out/down through the pole targets, hands out (sg: left +x); off = whole arm block off the chest (+y)."""
+    q = copy.deepcopy(p)
+    for s, sg in (("l", 1), ("r", -1)):
+        a = q[f"arm_{s}"]
+        a["pole"] = add(a["pole"], [sg * out, off, -down]); a["hand"] = add(a["hand"], [sg * hout, off, 0])
+    return q
+
+
+def hands(p, l=(0, 0, 0), r=(0, 0, 0)):
+    q = copy.deepcopy(p)
+    q["arm_l"]["hand"] = add(q["arm_l"]["hand"], list(l)); q["arm_r"]["hand"] = add(q["arm_r"]["hand"], list(r))
+    return q
+
+
+press_arms = lambda p, k=1.0: elbows(arms(p, **{kk: v * k for kk, v in PRESS.items()}), off=k * PRESS_OFF)
+st[2] = hands(elbows(lerp(st[0], st[4], OPEN["t"]), out=OPEN["out"], down=-OPEN["up"], hout=OPEN["hout"]),
+              l=(0, 0, OPEN["hl_up"]), r=(0, OPEN["hr_fwd"], -OPEN["hr_down"]))
+# a5 PRESS: the head LAGS the tuck by ~a frame (6 deg less tucked), so the following segment carries it past
+st[4] = head(press_arms(st[4]), (6.0, 0, 0))
+st[5] = head(press_arms(S[5], 0.9), (3.0, 0, 0))             # a6: held, still squeezing
+# a8 RELEASE + the head overshoots the tuck by 6 deg, the knees overshoot toward the chest by 2 cm (weight of the legs)
+st[7] = head(hands(arms(elbows(S[7], out=REL["out"], down=REL["down"], hout=REL["hout"], off=REL["off"]),
+                        clav=REL["clav"], shrug=REL["shrug"], across=REL["across"], curl=REL["curl"]), l=(0, REL["hl_off"], 0)), (-6.0, 0, 0))
 for s in "lr":
-    st[8][f"leg_{s}"]["foot"] = add(st[8][f"leg_{s}"]["foot"], [0, 0, 2.0])
+    st[7][f"leg_{s}"]["foot"] = add(st[7][f"leg_{s}"]["foot"], [0, 0, 2.0])
 # a11 the load: the arms gather again (half a press) and the head settles back on the target (K5's -40): tension before the shot.
-st[11] = arms(st[11], **{k: v * 0.5 for k, v in PRESS.items()})
+st[11] = press_arms(st[11], 0.5)
 # a14 smear: K5 (fold3.fit_path key, clear over its blends). a15 STRIKE: legs, pitch and the smug flick exactly K5 (crisp, no delay);
 # the lying fold CLAMPS (shoulders in, wrap deeper): the arms brace on the impact and let go in the settle clip.
 st[14] = plank(st[14], 0.66)           # smear: the legs are 2/3 out, so 2/3 of the new line
@@ -125,18 +156,18 @@ STRIKE_K6 = st[15]
 LOOP_K6 = {int(k): plank(v) for k, v in K5L["author"]["poses"].items()}   # fall loop K6: K5's smug hold on the new line
 LOOP11 = copy.deepcopy(A.frames({"frames": 12, "poses": {str(k): v for k, v in LOOP_K6.items()}})[11])
 PEAK = copy.deepcopy(STRIKE_K6)
-PEAK["pelvis"]["rot"] = add(PEAK["pelvis"]["rot"], [float(os.environ.get("K6_PEAK_PITCH", 5.0)), 0, 0])   # 82 -> 87: carried past
-PEAK["pelvis"]["loc"] = add(PEAK["pelvis"]["loc"], [0, 2.0, 0])                                          # the hips drive on 2 cm
-PEAK["spine"] = add(PEAK["spine"], [-4.0, 0, 0])                                                         # chest out (whip of the trunk)
+PEAK["pelvis"]["rot"] = add(PEAK["pelvis"]["rot"], [float(os.environ.get("K6_PEAK_PITCH", 11.0)), 0, 0])   # 82 -> 87: carried past
+PEAK["pelvis"]["loc"] = add(PEAK["pelvis"]["loc"], [0, 3.5, 0])                                          # the hips drive on 3.5 cm
+PEAK["spine"] = add(PEAK["spine"], [-7.0, 0, 0])                                                         # chest out (whip of the trunk)
 for s in "lr":
-    PEAK[f"leg_{s}"]["foot_rot"] = add(PEAK[f"leg_{s}"]["foot_rot"], [-10.0, 0, 0])                      # toes snap further (-60)
+    PEAK[f"leg_{s}"]["foot_rot"] = add(PEAK[f"leg_{s}"]["foot_rot"], [-14.0, 0, 0])                      # toes snap further (-60)
 UNDER = copy.deepcopy(LOOP11)
-UNDER["pelvis"]["rot"] = add(UNDER["pelvis"]["rot"], [-2.5, 0, 0])                                       # rebound under the hold (79.5)
-UNDER["spine"] = add(UNDER["spine"], [2.0, 0, 0])
+UNDER["pelvis"]["rot"] = add(UNDER["pelvis"]["rot"], [-3.5, 0, 0])                                       # rebound under the hold (79.5)
+UNDER["spine"] = add(UNDER["spine"], [3.5, 0, 0])
 for s in "lr":
     UNDER[f"leg_{s}"]["foot_rot"] = add(UNDER[f"leg_{s}"]["foot_rot"], [4.0, 0, 0])                      # toes relax a touch (-46)
-HEAD_PEAK = dict(d=(0, -6.0, 3.0), neck=-3.0, chin=6.0)     # chin flicks 6 deg past the smug attitude, turns 6 more, tilts 3 more
-HEAD_DIP = dict(d=(0, 2.0, -1.0), neck=1.0, chin=-3.0)      # and comes back 3 deg under it before it settles (a nod of satisfaction)
+HEAD_PEAK = dict(d=(0, -9.0, 5.0), neck=-5.0, chin=11.0)  # round 2: >= 10 past the smug     # chin flicks 6 deg past the smug attitude, turns 6 more, tilts 3 more
+HEAD_DIP = dict(d=(0, 3.0, -2.0), neck=2.0, chin=-5.0)      # and comes back 3 deg under it before it settles (a nod of satisfaction)
 
 
 def head_of(src, dst):
@@ -154,10 +185,12 @@ def arms_of(src, dst):
 
 st_loose = arms(LOOP11, **LOOSE)
 se = {}
+lift = lambda p, off: hands(elbows(p, off=off), l=(0, 0.5 * off, 0))   # the top (left) forearm rides higher: clears the right one
+LIFT = (2.5, 5.0, 2.0)     # round 2: the forearms come 4-5 cm off the chest after the impact and fall back LAST (chest frame +y)
 se[0] = head_of(STRIKE_K6, arms_of(STRIKE_K6, lerp(STRIKE_K6, PEAK, 0.55)))                  # body on its way past; head held
-se[2] = head_of(lerp(STRIKE_K6, head(STRIKE_K6, **HEAD_PEAK), 0.5), arms_of(STRIKE_K6, PEAK))  # body peak; head halfway; arms clamped
-se[4] = head_of(head(STRIKE_K6, **HEAD_PEAK), arms_of(lerp(STRIKE_K6, st_loose, 0.35), lerp(PEAK, UNDER, 0.7)))  # head peak
-se[7] = head_of(head(LOOP11, **HEAD_DIP), arms_of(st_loose, UNDER))                            # body under; head dips; arms loose
+se[2] = head_of(lerp(STRIKE_K6, head(STRIKE_K6, **HEAD_PEAK), 0.5), arms_of(lift(STRIKE_K6, LIFT[0]), PEAK))  # body peak
+se[4] = head_of(head(STRIKE_K6, **HEAD_PEAK), arms_of(lift(lerp(STRIKE_K6, st_loose, 0.35), LIFT[1]), lerp(PEAK, UNDER, 0.7)))
+se[7] = head_of(head(LOOP11, **HEAD_DIP), arms_of(lift(st_loose, LIFT[2]), UNDER))     # body under; head dips; arms coming down
 se[11] = LOOP11                                                                                 # = loop f11: the wrap into loop f0
 
 
@@ -182,8 +215,10 @@ def write(name, src, poses, frames_spacing, extra_change, anim=None):
 
 if __name__ == "__main__":
     sp = {q["frame"]: q.get("spacing") for q in K5S["poses"]}
-    o1 = write("overlord_dropkick_startup_k6", K5S, st, [(f, sp.get(f)) for f in sorted(st)],
-               "re-keyed on the build frames; a4 arms PRESS into the fold (shoulders in, wrap deeper, chest curls), a8 relax a little, "
+    SPACING = {2: "arrive_1_2", 4: "hold_recoil", 5: "hold_recoil", 7: "charge_long"}   # open -> slam -> hold -> release -> load
+    o1 = write("overlord_dropkick_startup_k6", K5S, st, [(f, SPACING.get(f, sp.get(f))) for f in sorted(st)],
+               "ROUND 2: arms OPEN a3 (key 2), SLAM into the press a5 (key 4, chest curls 6, shoulders up), hold a6, RELEASE a8 (key 7, "
+               "elbows out, shoulders down); key 8 removed. Round 1: re-keyed on the build frames; a4 arms PRESS into the fold (shoulders in, wrap deeper, chest curls), a8 relax a little, "
                "a11 gather; head lags the tuck at a4 and overshoots at a8; knees overshoot 2 cm at a8; a15 lying fold clamps.")
     settle = copy.deepcopy(K5L)
     settle["_design"] = ("Overlord Dropkick strike settle (K6): one-shot 12 f after the strike, before the falling loop. Pelvis and legs "
