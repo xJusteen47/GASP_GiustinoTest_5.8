@@ -22,4 +22,4 @@ Watch: A dati v114-120 R long-stride landing 20 cm (was 33.9); B dati v132-138 L
 catches up a bit faster after the pin (do not pin longer); gioco: first L 14.6 + fold v86-88 under the idle blend (code queue).
 ## Open / to the owner
 - w2 to become the standard (default 21, lock w1 stays)? Next: turnarounds, brief runstart-turnaround-brief.md (new thread).
-COSTO: ~7 $ (w1 lock + menu + w2) | ~9 min desktop | ~90k token review
+COSTO: ~7 $ (w1 lock + menu + w2) | ~9 min desktop | ~105k token review
