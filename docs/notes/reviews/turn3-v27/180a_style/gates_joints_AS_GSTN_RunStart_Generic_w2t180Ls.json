@@ -1,0 +1,101 @@
+{
+ "gap_min_win": [
+  13.6,
+  10
+ ],
+ "gap_min_tail": -2.0,
+ "gap_loop_min": -2.0,
+ "toe_range_loop": [
+  24.8,
+  43.9
+ ],
+ "bone_worst": [
+  0.0,
+  "thigh_l f58"
+ ],
+ "jit_elbow_l": [
+  4.9,
+  4,
+  8.0
+ ],
+ "jit_knee_l": [
+  11.8,
+  3,
+  10.0
+ ],
+ "jit_hand_l": [
+  10.9,
+  1,
+  8.0
+ ],
+ "jit_elbow_r": [
+  7.2,
+  7,
+  8.0
+ ],
+ "jit_knee_r": [
+  7.3,
+  18,
+  10.0
+ ],
+ "jit_hand_r": [
+  11.6,
+  7,
+  8.0
+ ],
+ "twist_l": [
+  25.4,
+  3,
+  48.2
+ ],
+ "twist_r": [
+  34.8,
+  5,
+  48.2
+ ],
+ "clear_hand_l-thigh_l": [
+  15.8,
+  10,
+  14.0
+ ],
+ "clear_hand_l-thigh_r": [
+  29.9,
+  10,
+  14.0
+ ],
+ "clear_hand_l-hips": [
+  24.7,
+  10,
+  21.0
+ ],
+ "clear_hand_r-thigh_l": [
+  32.8,
+  52,
+  14.0
+ ],
+ "clear_hand_r-thigh_r": [
+  18.7,
+  53,
+  14.0
+ ],
+ "clear_hand_r-hips": [
+  25.8,
+  53,
+  21.0
+ ],
+ "roll_l": [
+  14.3,
+  10,
+  25.0
+ ],
+ "roll_r": [
+  10.3,
+  7,
+  25.0
+ ],
+ "fails": [
+  "jitter knee_l f3 11.8>10.0",
+  "jitter hand_l f1 10.9>8.0",
+  "jitter hand_r f7 11.6>8.0"
+ ]
+}
