@@ -946,6 +946,258 @@ GSTN_CAM_TEST(ArenaFocusClampedToBounds)
 	return true;
 }
 
+// ---- Platform camera P1a ----
+
+GSTN_CAM_TEST(PivotAsymmetricSettlesFasterThanItCatchesUp)
+{
+	GSTN_CAM_FOR_EACH_UP
+	{
+		const FVector Run = SomeFlatDirection(U);
+		const FVector Target = Run * 100.0;
+		// Moving away along the lag (running): the catch-up time; not moving (braked): the settle time
+		const FVector Running = FGSTN_CameraMath::StepPivotAsymmetric(FVector::ZeroVector, Target, U, Run * 600.0, 0.18f, 0.10f, 300.f, 0.2f, 1.f / 60.f);
+		const FVector Braked = FGSTN_CameraMath::StepPivotAsymmetric(FVector::ZeroVector, Target, U, FVector::ZeroVector, 0.18f, 0.10f, 300.f, 0.2f, 1.f / 60.f);
+		CHECK(Braked.Size() > Running.Size());
+		CHECK(Running.Size() > 0.0 && Running.Size() < 100.0);
+		// Horizontal and vertical lags are separate: a pure vertical error moves only along Up, with its own time
+		const FVector Vertical = FGSTN_CameraMath::StepPivotAsymmetric(FVector::ZeroVector, U * 100.0, U, FVector::ZeroVector, 0.18f, 0.10f, 300.f, 0.2f, 1.f / 60.f);
+		CHECK(FGSTN_CameraMath::ProjectOnUpPlane(Vertical, U).IsNearlyZero() || FVector::CrossProduct(Vertical, U).Size() < 1.0e-3);
+		CHECK(FMath::IsNearlyEqual(FVector::DotProduct(Vertical, U), 100.0 * (1.0 - FMath::Exp(-(1.0 / 60.0) / 0.2)), 1.0e-2));
+		// Frame rate independent: 2 steps of dt equal 1 step of 2 dt (no velocity, so the time is fixed)
+		const FVector Two = FGSTN_CameraMath::StepPivotAsymmetric(FGSTN_CameraMath::StepPivotAsymmetric(FVector::ZeroVector, Target, U, FVector::ZeroVector, 0.18f, 0.1f, 300.f, 0.2f, 0.01f), Target, U, FVector::ZeroVector, 0.18f, 0.1f, 300.f, 0.2f, 0.01f);
+		const FVector One = FGSTN_CameraMath::StepPivotAsymmetric(FVector::ZeroVector, Target, U, FVector::ZeroVector, 0.18f, 0.1f, 300.f, 0.2f, 0.02f);
+		CHECK(Two.Equals(One, 1.0e-3));
+		// Zero seconds snaps
+		CHECK(FGSTN_CameraMath::StepPivotAsymmetric(FVector::ZeroVector, Target + U * 30.0, U, FVector::ZeroVector, 0.f, 0.f, 300.f, 0.f, 0.01f).Equals(Target + U * 30.0, 1.0e-3));
+	}
+	return true;
+}
+
+GSTN_CAM_TEST(EasedFloatReachesTargetInTimeAndRestartsFromCurrent)
+{
+	FGSTN_CameraEasedFloat State;
+	TestEqual(TEXT("first call snaps"), FGSTN_CameraMath::StepEasedFloat(State, 1.f, 0.45f, 1.f / 60.f), 1.f);
+	float Previous = 1.f;
+	float Value = 1.f;
+	for (int32 Frame = 0; Frame < 27; ++Frame) // 0.45 s
+	{
+		Value = FGSTN_CameraMath::StepEasedFloat(State, 1.25f, 0.45f, 1.f / 60.f);
+		TestTrue(TEXT("monotonic"), Value + 1.0e-6f >= Previous);
+		TestTrue(TEXT("never overshoots"), Value <= 1.25f + 1.0e-5f);
+		Previous = Value;
+	}
+	TestTrue(TEXT("reaches the target in the time"), FMath::IsNearlyEqual(Value, 1.25f, 1.0e-3f));
+	// Half way, change the target: no jump, it continues from where it is
+	FGSTN_CameraMath::StepEasedFloat(State, 0.8f, 0.45f, 0.2f);
+	const float Mid = State.Value;
+	const float Next = FGSTN_CameraMath::StepEasedFloat(State, 1.f, 0.45f, 1.f / 60.f);
+	TestTrue(TEXT("restart has no jump"), FMath::Abs(Next - Mid) < 0.02f);
+	return true;
+}
+
+GSTN_CAM_TEST(DistancePresetsCycleAndClamp)
+{
+	FGSTN_CameraDistancePresets Presets;
+	using P = EGSTN_CameraDistancePreset;
+	TestEqual(TEXT("near"), FGSTN_CameraMath::DistancePresetScale(Presets, P::Near, 1.f), 0.8f);
+	TestEqual(TEXT("medium"), FGSTN_CameraMath::DistancePresetScale(Presets, P::Medium, 1.f), 1.f);
+	TestEqual(TEXT("far"), FGSTN_CameraMath::DistancePresetScale(Presets, P::Far, 1.f), 1.25f);
+	TestEqual(TEXT("custom clamped to the slider"), FGSTN_CameraMath::DistancePresetScale(Presets, P::Custom, 3.f), 1.25f);
+	TestTrue(TEXT("medium +1 = far"), FGSTN_CameraMath::CycleDistancePreset(P::Medium, 1) == P::Far);
+	TestTrue(TEXT("far +1 stays far"), FGSTN_CameraMath::CycleDistancePreset(P::Far, 1) == P::Far);
+	TestTrue(TEXT("medium -1 = near"), FGSTN_CameraMath::CycleDistancePreset(P::Medium, -1) == P::Near);
+	TestTrue(TEXT("custom steps from medium"), FGSTN_CameraMath::CycleDistancePreset(P::Custom, -1) == P::Near);
+	return true;
+}
+
+GSTN_CAM_TEST(AutoFollowIsGentleAndYieldsToTheStick)
+{
+	FGSTN_CameraAutoFollowTuning Tuning;
+	const float Dt = 1.f / 60.f;
+	FGSTN_CameraAutoFollowState State;
+	float Yaw = 0.f;
+	// Running at heading 90 for 0.9 s: below the sustain time, no turn
+	for (int32 Frame = 0; Frame < 54; ++Frame)
+	{
+		Yaw = FGSTN_CameraMath::StepAutoFollow(State, Tuning, Yaw, 90.f, 600.f, true, 5.f, 1.f, Dt);
+	}
+	TestEqual(TEXT("no turn before the run is sustained"), Yaw, 0.f);
+	float MaxStep = 0.f;
+	for (int32 Frame = 0; Frame < 240; ++Frame)
+	{
+		const float Before = Yaw;
+		Yaw = FGSTN_CameraMath::StepAutoFollow(State, Tuning, Yaw, 90.f, 600.f, true, 5.f, 1.f, Dt);
+		MaxStep = FMath::Max(MaxStep, FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(Before, Yaw)));
+	}
+	TestTrue(TEXT("it turned towards the run"), Yaw > 45.f && Yaw <= 90.f);
+	TestTrue(TEXT("never faster than the cap"), MaxStep <= Tuning.MaxDegPerSecond * Dt + 1.0e-4f);
+	// Look input this frame: the stick wins at once
+	const float Held = FGSTN_CameraMath::StepAutoFollow(State, Tuning, 30.f, 90.f, 600.f, true, 0.f, 1.f, Dt);
+	TestEqual(TEXT("no turn on a look frame"), Held, 30.f);
+	TestEqual(TEXT("speed dropped to zero"), State.RateDegPerSecond, 0.f);
+	TestEqual(TEXT("no turn during the stick idle time"), FGSTN_CameraMath::StepAutoFollow(State, Tuning, 30.f, 90.f, 600.f, true, 0.5f, 1.f, Dt), 30.f);
+	// Running towards the camera: never a spin
+	FGSTN_CameraAutoFollowState Toward;
+	float Away = 0.f;
+	for (int32 Frame = 0; Frame < 300; ++Frame)
+	{
+		Away = FGSTN_CameraMath::StepAutoFollow(Toward, Tuning, Away, 170.f, 600.f, true, 5.f, 1.f, Dt);
+	}
+	TestEqual(TEXT("no turn beyond MaxAngleDeg"), Away, 0.f);
+	// Blocked (scale 0), standing, or in the air: no turn
+	FGSTN_CameraAutoFollowState Other;
+	float Blocked = 0.f;
+	float Standing = 0.f;
+	float Air = 0.f;
+	FGSTN_CameraAutoFollowState S2;
+	FGSTN_CameraAutoFollowState S3;
+	for (int32 Frame = 0; Frame < 300; ++Frame)
+	{
+		Blocked = FGSTN_CameraMath::StepAutoFollow(Other, Tuning, Blocked, 90.f, 600.f, true, 5.f, 0.f, Dt);
+		Standing = FGSTN_CameraMath::StepAutoFollow(S2, Tuning, Standing, 90.f, 50.f, true, 5.f, 1.f, Dt);
+		Air = FGSTN_CameraMath::StepAutoFollow(S3, Tuning, Air, 90.f, 600.f, false, 5.f, 1.f, Dt);
+	}
+	TestEqual(TEXT("blocked"), Blocked, 0.f);
+	TestEqual(TEXT("standing"), Standing, 0.f);
+	TestEqual(TEXT("in the air"), Air, 0.f);
+	return true;
+}
+
+GSTN_CAM_TEST(StickLatchKeepsTheOldReferenceUntilReleased)
+{
+	FGSTN_CameraStickLatchTuning Tuning;
+	FGSTN_CameraStickLatchState State;
+	TestEqual(TEXT("unlatched: camera yaw"), FGSTN_CameraMath::ResolveStickReference(State, Tuning, 1.f, 50.f, 0.016f), 50.f);
+	FGSTN_CameraMath::LatchStickReference(State, Tuning, 10.f);
+	TestEqual(TEXT("held stick: old reference"), FGSTN_CameraMath::ResolveStickReference(State, Tuning, 1.f, 100.f, 0.016f), 10.f);
+	FGSTN_CameraMath::LatchStickReference(State, Tuning, 100.f);
+	TestEqual(TEXT("a second turn keeps the first reference"), FGSTN_CameraMath::ResolveStickReference(State, Tuning, 0.9f, 150.f, 0.016f), 10.f);
+	TestEqual(TEXT("released: new reference"), FGSTN_CameraMath::ResolveStickReference(State, Tuning, 0.1f, 150.f, 0.016f), 150.f);
+	TestFalse(TEXT("unlatched"), State.bLatched);
+	FGSTN_CameraMath::LatchStickReference(State, Tuning, 0.f);
+	TestEqual(TEXT("max hold releases"), FGSTN_CameraMath::ResolveStickReference(State, Tuning, 1.f, 80.f, Tuning.MaxHoldSeconds + 0.1f), 80.f);
+	FGSTN_CameraStickLatchTuning Off;
+	Off.bEnabled = false;
+	FGSTN_CameraStickLatchState OffState;
+	FGSTN_CameraMath::LatchStickReference(OffState, Off, 0.f);
+	TestEqual(TEXT("disabled never latches"), FGSTN_CameraMath::ResolveStickReference(OffState, Off, 1.f, 80.f, 0.016f), 80.f);
+	return true;
+}
+
+GSTN_CAM_TEST(BoxFalloffIsSmoothAndZeroOutside)
+{
+	const FVector Extent(500, 500, 300);
+	TestEqual(TEXT("outside"), FGSTN_CameraMath::BoxFalloffWeight(FVector(600, 0, 0), Extent, 200.f), 0.f);
+	TestEqual(TEXT("on the edge"), FGSTN_CameraMath::BoxFalloffWeight(FVector(500, 0, 0), Extent, 200.f), 0.f);
+	TestEqual(TEXT("deep inside"), FGSTN_CameraMath::BoxFalloffWeight(FVector(0, 0, 0), Extent, 200.f), 1.f);
+	const float Half = FGSTN_CameraMath::BoxFalloffWeight(FVector(400, 0, 0), Extent, 200.f);
+	TestTrue(TEXT("half way is 0.5 (smoothstep)"), FMath::IsNearlyEqual(Half, 0.5f, 1.0e-4f));
+	float Previous = 0.f;
+	for (int32 X = 500; X >= 0; X -= 5)
+	{
+		const float W = FGSTN_CameraMath::BoxFalloffWeight(FVector(X, 0, 0), Extent, 200.f);
+		TestTrue(TEXT("rises monotonically inwards"), W + 1.0e-6f >= Previous);
+		Previous = W;
+	}
+	TestEqual(TEXT("no falloff: 1 inside"), FGSTN_CameraMath::BoxFalloffWeight(FVector(499, 0, 0), Extent, 0.f), 1.f);
+	return true;
+}
+
+GSTN_CAM_TEST(CombineBiasPriorityAndWrap)
+{
+	FGSTN_CameraBiasInput A;
+	A.Weight = 1.f;
+	A.bBiasYaw = true;
+	A.HeadingDeg = 170.f;
+	A.Priority = 0;
+	FGSTN_CameraBiasInput B = A;
+	B.HeadingDeg = -170.f;
+	// Equal priority, A first: A takes 1, nothing left for B
+	FGSTN_CameraBiasResult Full = FGSTN_CameraMath::CombineBias({ A, B });
+	TestTrue(TEXT("weight never above 1"), Full.YawWeight <= 1.f + 1.0e-5f);
+	TestTrue(TEXT("the first full one wins"), FMath::IsNearlyEqual(Full.HeadingDeg, 170.f, 1.0e-2f));
+	// Two halves across the 180 wrap average to 180, not 0
+	A.Weight = 0.5f;
+	B.Weight = 1.f;
+	const FGSTN_CameraBiasResult Wrap = FGSTN_CameraMath::CombineBias({ A, B });
+	TestTrue(TEXT("circular mean across the wrap"), FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(Wrap.HeadingDeg, 180.f)) < 1.f);
+	TestTrue(TEXT("weights add up to 1"), FMath::IsNearlyEqual(Wrap.YawWeight, 1.f, 1.0e-4f));
+	// Higher priority is served first
+	FGSTN_CameraBiasInput High = A;
+	High.Priority = 5;
+	High.Weight = 1.f;
+	High.HeadingDeg = 45.f;
+	const FGSTN_CameraBiasResult Prio = FGSTN_CameraMath::CombineBias({ B, High });
+	TestTrue(TEXT("priority wins"), FMath::IsNearlyEqual(Prio.HeadingDeg, 45.f, 1.0e-2f));
+	// View terms blend from neutral
+	FGSTN_CameraBiasInput Zoom;
+	Zoom.Weight = 0.5f;
+	Zoom.DistanceScale = 1.4f;
+	Zoom.FovOffsetDeg = 10.f;
+	const FGSTN_CameraBiasResult View = FGSTN_CameraMath::CombineBias({ Zoom });
+	TestTrue(TEXT("half a 1.4 zoom is 1.2"), FMath::IsNearlyEqual(View.DistanceScale, 1.2f, 1.0e-4f));
+	TestTrue(TEXT("half a 10 degree FOV is 5"), FMath::IsNearlyEqual(View.FovOffsetDeg, 5.f, 1.0e-4f));
+	TestFalse(TEXT("no direction, no pull"), View.HasPull());
+	TestEqual(TEXT("nothing: neutral"), FGSTN_CameraMath::CombineBias({}).DistanceScale, 1.f);
+	return true;
+}
+
+GSTN_CAM_TEST(BiasOrbitIsSoftNeverALock)
+{
+	FGSTN_CameraBiasInput In;
+	In.Weight = 1.f;
+	In.bBiasYaw = true;
+	In.HeadingDeg = 90.f;
+	In.ResumeDelaySeconds = 1.5f;
+	In.MaxPullDegPerSecond = 45.f;
+	const FGSTN_CameraBiasResult Bias = FGSTN_CameraMath::CombineBias({ In });
+	const float Dt = 1.f / 60.f;
+	FGSTN_CameraOrbitState Orbit;
+	Orbit.YawDeg = 0.f;
+	TestFalse(TEXT("no pull right after look input"), FGSTN_CameraMath::StepBiasOrbit(Orbit, Bias, 1.f, Dt));
+	TestEqual(TEXT("yaw kept"), Orbit.YawDeg, 0.f);
+	float MaxStep = 0.f;
+	for (int32 Frame = 0; Frame < 600; ++Frame)
+	{
+		const float Before = Orbit.YawDeg;
+		FGSTN_CameraMath::StepBiasOrbit(Orbit, Bias, 2.f, Dt);
+		MaxStep = FMath::Max(MaxStep, FMath::Abs(Orbit.YawDeg - Before));
+	}
+	TestTrue(TEXT("reaches the framing"), FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(Orbit.YawDeg, 90.f)) < 1.f);
+	TestTrue(TEXT("never faster than the cap"), MaxStep <= 45.f * Dt + 1.0e-4f);
+	// A half weight volume edge pulls slower
+	FGSTN_CameraBiasInput Edge = In;
+	Edge.Weight = 0.25f;
+	FGSTN_CameraOrbitState A;
+	FGSTN_CameraOrbitState B;
+	FGSTN_CameraMath::StepBiasOrbit(A, Bias, 2.f, Dt);
+	FGSTN_CameraMath::StepBiasOrbit(B, FGSTN_CameraMath::CombineBias({ Edge }), 2.f, Dt);
+	TestTrue(TEXT("the edge pulls less"), FMath::Abs(B.YawDeg) < FMath::Abs(A.YawDeg));
+	// Suppressed (in the air): no pull
+	FGSTN_CameraBiasInput Air = In;
+	Air.bPullSuppressed = true;
+	FGSTN_CameraOrbitState C;
+	TestFalse(TEXT("suppressed: no pull"), FGSTN_CameraMath::StepBiasOrbit(C, FGSTN_CameraMath::CombineBias({ Air }), 5.f, Dt));
+	// Firm: the stick is free inside the range, held at its border beyond it, even during look input
+	FGSTN_CameraBiasInput Firm = In;
+	Firm.Strength = EGSTN_CameraBiasStrength::Firm;
+	Firm.FirmRangeDeg = 30.f;
+	FGSTN_CameraOrbitState D;
+	D.YawDeg = 90.f - 20.f;
+	FGSTN_CameraMath::StepBiasOrbit(D, FGSTN_CameraMath::CombineBias({ Firm }), 0.f, Dt);
+	TestEqual(TEXT("inside the firm range: untouched"), D.YawDeg, 70.f);
+	D.YawDeg = 90.f - 80.f;
+	FGSTN_CameraMath::StepBiasOrbit(D, FGSTN_CameraMath::CombineBias({ Firm }), 0.f, Dt);
+	TestTrue(TEXT("beyond: at the border"), FMath::IsNearlyEqual(D.YawDeg, 60.f, 1.0e-3f));
+	// At the volume edge (low weight) the firm range widens
+	Firm.Weight = 0.2f;
+	FGSTN_CameraOrbitState E;
+	E.YawDeg = 90.f - 80.f;
+	FGSTN_CameraMath::StepBiasOrbit(E, FGSTN_CameraMath::CombineBias({ Firm }), 0.f, Dt);
+	TestEqual(TEXT("edge: wider range, untouched"), E.YawDeg, 10.f);
+	return true;
+}
+
 #undef CHECK
 
 #endif // WITH_DEV_AUTOMATION_TESTS

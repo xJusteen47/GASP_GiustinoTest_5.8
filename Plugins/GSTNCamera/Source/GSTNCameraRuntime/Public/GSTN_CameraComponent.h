@@ -10,7 +10,9 @@
 #include "GameplayTagContainer.h"
 #include "GSTN_CameraComponent.generated.h"
 
+class AGSTN_CameraBiasVolume;
 class AGSTN_CameraSection;
+class UGSTN_CameraProfile;
 class UPrimitiveComponent;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FGSTN_OnReferenceFrameChangedNative, const FGSTN_CameraFrameChange&);
@@ -33,7 +35,14 @@ class GSTNCAMERARUNTIME_API UGSTN_CameraComponent : public UCameraComponent
 public:
 	UGSTN_CameraComponent();
 
-	/** Pawn rule set: replaces the settings one, replaced in turn by the active section override */
+	/** All the tuning of this camera (a Data Asset, one for every kit). Null = the code defaults of UGSTN_CameraProfile */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	TObjectPtr<UGSTN_CameraProfile> Profile;
+
+	/** The profile in force (never null) */
+	const UGSTN_CameraProfile& GetProfile() const;
+
+	/** Pawn rule set: replaces the profile one, replaced in turn by the active section override */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
 	TSoftObjectPtr<UGSTN_CameraRuleSet> RuleSetOverride;
 
@@ -58,6 +67,52 @@ public:
 	/** Ease the heading behind the facing of the subject (camera.md §2.4) */
 	UFUNCTION(BlueprintCallable, Category = "Camera")
 	void RequestRecenter();
+
+	// ---- Player options (saved per local player by UGSTN_CameraLocalPlayerSubsystem::SaveUserOptions) ----
+
+	/** The options of this camera's local player (a copy) */
+	UFUNCTION(BlueprintCallable, Category = "Camera|Options")
+	FGSTN_CameraUserOptions GetUserOptions();
+
+	UFUNCTION(BlueprintCallable, Category = "Camera|Options")
+	void SetUserOptions(const FGSTN_CameraUserOptions& NewOptions);
+
+	/** Distance from the character; the change eases in DistancePresets.ChangeSeconds */
+	UFUNCTION(BlueprintCallable, Category = "Camera|Options")
+	void SetDistancePreset(EGSTN_CameraDistancePreset Preset);
+
+	/** +1 farther, -1 nearer (Near, Medium, Far; clamped at the ends). Returns the new preset */
+	UFUNCTION(BlueprintCallable, Category = "Camera|Options")
+	EGSTN_CameraDistancePreset CycleDistancePreset(int32 Direction);
+
+	/** The eased player distance scale in use (section limits applied) */
+	UFUNCTION(BlueprintCallable, Category = "Camera|Options")
+	float GetDistanceScale();
+
+	// ---- Move reference (stick latching) ----
+
+	/**
+	 * The rotation the move stick should be read against this frame (use it instead of the control rotation in the move input code).
+	 * After the CAMERA turned the reference (section, cut, respawn) it stays the old one until the stick returns near the centre or
+	 * StickLatch.MaxHoldSeconds pass; otherwise it is the camera heading. Call once per frame with the raw move stick
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Camera|Input")
+	FRotator ResolveMoveReferenceRotation(FVector2D MoveStick);
+
+	UFUNCTION(BlueprintCallable, Category = "Camera|Input")
+	bool IsStickLatched();
+
+	/** Camera Assist is steering the camera with the move stick: the project's move code should not move the character this frame */
+	UFUNCTION(BlueprintPure, Category = "Camera|Input")
+	bool IsCameraAssistActive() const { return bAssistActive; }
+
+	/** The gentle follow behind turned the camera this frame */
+	UFUNCTION(BlueprintPure, Category = "Camera")
+	bool IsAutoFollowing() const { return bAutoFollowing; }
+
+	/** Combined yaw weight of the soft framing volumes (0 outside every volume) */
+	UFUNCTION(BlueprintPure, Category = "Camera")
+	float GetFramingWeight() const { return FMath::Max(LastBias.YawWeight, LastBias.PitchWeight); }
 
 	/** The opponent of the Duel mode (project glue chooses it); null = none. Same as SetOpponents with one entry */
 	UFUNCTION(BlueprintCallable, Category = "Camera")
@@ -132,8 +187,9 @@ public:
 	/** The definition on top of the stack, or null */
 	UGSTN_CameraModeDefinition* GetTopDefinition() const;
 
-	/** Fadeable: the settings fade tag on the component or its actor */
+	/** Fadeable: the default profile fade tag on the component or its actor */
 	static bool IsFadeable(const UPrimitiveComponent* Component);
+	static bool IsFadeableWithTag(const UPrimitiveComponent* Component, FName Tag);
 
 	/** Components currently fading or faded, for the tests and the debug view */
 	int32 GetNumFadedComponents() const { return Fades.Num(); }
@@ -162,6 +218,8 @@ private:
 	void UpdateSection(const FGSTN_CameraSubjectState& Subject);
 	void RaiseFrameChange(const FVector& From, const FVector& To, EGSTN_CameraFrameChangeReason Reason, bool bCut, float MinDeltaDeg);
 	void ApplyLook(const FGSTN_CameraSubjectState& Subject, FGSTN_CameraPlayerState& Player, float DeltaSeconds);
+	void UpdateFraming(const FGSTN_CameraSubjectState& Subject, const FGSTN_CameraPlayerState& Player, bool bActive, float DeltaSeconds);
+	FGSTN_CameraUserOptions& Options();
 	void ResolveOcclusion(const FGSTN_CameraView& View, const FGSTN_CameraOcclusionTuning& Tuning, float DeltaSeconds, FGSTN_CameraPose& InOutPose);
 	void UpdateAim(const FGSTN_CameraSubjectState& Subject, const FGSTN_CameraPose& Pose, UGSTN_CameraModeDefinition* Top);
 	void ReleaseFades();
@@ -216,6 +274,21 @@ private:
 	bool bHasSubjectOverride = false;
 
 	FVector2D PendingLook = FVector2D::ZeroVector;
+	/** Options when there is no local player (tests, spectator rigs) */
+	FGSTN_CameraUserOptions FallbackOptions;
+	/** The tags the rules read this frame (auto follow blocks) */
+	FGameplayTagContainer FrameTags;
+	/** Soft framing: smoothed weight and focus per volume, the combined result and its view terms */
+	TMap<TWeakObjectPtr<AGSTN_CameraBiasVolume>, float> BiasWeights;
+	TMap<TWeakObjectPtr<AGSTN_CameraBiasVolume>, FVector> BiasFocus;
+	FGSTN_CameraBiasResult LastBias;
+	float FramingDistanceScale = 1.f;
+	float FramingFovOffsetDeg = 0.f;
+	FVector FramingPivotOffset = FVector::ZeroVector;
+	bool bAutoFollowing = false;
+	bool bAssistActive = false;
+	float RecenterHeldSeconds = 0.f;
+	int32 LastDistanceDirection = 0;
 	bool bRecentering = false;
 	float RecenterRate = 0.f;
 	float RecenterTargetYaw = 0.f;

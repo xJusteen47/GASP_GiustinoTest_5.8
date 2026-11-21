@@ -32,8 +32,9 @@ Binding rules: [modularity-and-tags.md](../../docs/architecture/modularity-and-t
 2. Add `UGSTN_CameraComponent` to the pawn the local player follows (pawn data, a Game Feature `AddComponents` action or Blueprint) and
    make it the view target camera. It is not replicated and inert on a dedicated server. **Nothing in the project does this yet**:
    no pawn or Blueprint was changed.
-3. Tune Project Settings > Plugins > GSTN Camera. The plugin ships no content: set the look action, the recenter action and the
-   mapping context (soft references) to get plugin look input, or call `AddLookInput` from your own input code.
+3. Make a `GSTN Camera Profile` Data Asset (one for every kit) and set it on the component's `Profile`; without one the code defaults of
+   `UGSTN_CameraProfile` apply. There are no Project Settings any more (owner rule, P1a 2026-11-21). The plugin ships no content: set the look,
+   recenter, distance and assist-move actions and the mapping context (soft references) in the profile, or call `AddLookInput` from your own input code.
 4. Let the pawn tell the camera about itself (all optional): `IGSTN_CameraSubject` (presented pivot, Up, suppressed), `IGSTN_CameraTagSource`
    (the tags the rule table reads; implement it from the ability system), `IGSTN_CameraAimOrigin` (where shots leave from). Without them an
    adapter reads the actor (a character reads its movement component gravity) and the tag container is empty, which yields Follow.
@@ -43,7 +44,7 @@ Binding rules: [modularity-and-tags.md](../../docs/architecture/modularity-and-t
 | Tag | Role |
 |---|---|
 | `Camera.Mode.Follow` | Far follow (650 cm arm, -25 degrees, FOV 65), damped pivot, free manual orbit, never turns with the character. The built-in default. |
-| `Camera.Mode.Free` | Follow plus the Astro Bot reading of spec §2.4: the pivot height follows the last ground not the jump arc, look-ahead, pitch help near drops, recentre action. Select it in the rule set (or `DefaultModeTag`) for Expedition and free areas. |
+| `Camera.Mode.Free` | **The default** (owner 2026-11-21: free by default). Follow plus the Astro Bot reading of spec §2.4: the pivot height follows the last ground not the jump arc (falls followed past `FallFollowCm` 120 or after 0.25 s), asymmetric pivot lag (softer while running away, quicker when braking), look-ahead (halved in the air), fall pitch proportional to the falling speed, distance/FOV from pitch curves, player distance presets, gentle follow-behind in a sustained run, soft framing volumes, recenter and Camera Assist. Tuning: profile `FreeView`, `Free`, `FreePitchCurves`, `DistancePresets`, `AutoFollow`. |
 | `Camera.Mode.Shoulder` | Arm 220 cm, shoulder and Up offsets, FOV 55; look input becomes aim input (scale 0.6); pull-in occlusion; converged aim and crosshair data. The side is `Shoulder.ShoulderSide` (Right by default); `SetShoulderSide`, `ToggleShoulderSide` (BlueprintCallable) or the optional `SwapShoulderAction` override it per player, and the camera slides across in `ShoulderSwapBlendTime` (0.2 s), never snapping. The converged aim is computed from the resulting pose, so it is correct on both sides. |
 | `Camera.Mode.Section` | The active section: `Orbit` (far follow at the designer angle), `FixedPoint`, `Rail`. |
 | `Camera.Mode.Duel` | Exactly one opponent: midpoint of the local pawn and the opponent, looking perpendicular to the line between them projected on the plane normal to Up (both fighters parallel to the screen), arm from the separation. A jump over the opponent does not spin the view: the camera keeps its side of the line and the yaw never exceeds `DuelMaxYawRateDegPerSec` (90); the side only swaps after the fighters stayed crossed `DuelSideSwapDelay` (0.5 s) with both grounded, or `DuelSideSwapMaxDelay` (3 s) regardless. Closer than `DuelMinSeparation` (150 cm, e.g. one right above the other) the axis is frozen. |
@@ -66,6 +67,24 @@ the manual offset; leaving one keeps the current angle as the free orbit. With m
 `OnReferenceFrameChanged` (component, local-player subsystem, plus a native delegate) is raised when the camera itself turns the stick reference by at
 least `HoldMinYawDeltaDeg`; manual orbit never raises it. The hold itself lives in the input source and is not part of this pass.
 
+## Soft framing volumes (P1a)
+
+`AGSTN_CameraBiasVolume` ("GSTN Camera Framing Volume"): the designer steers the free camera towards a direction (`VolumeForward`) or a part of the
+level (`TowardFocus`: the volume's Focus point or a `FocusActor`), optionally a pitch, a zoom (`DistanceScale`), a FOV offset and a pivot shift towards
+the focus, **never a hard lock**: the weight rises smoothly inside the volume (`FalloffCm`) and blends on enable/disable; look input stops the pull at
+once and it resumes after `ResumeDelaySeconds`; the pull is exponential (`PullSeconds`) and capped (`MaxPullDegPerSecond`). `Firm` keeps the yaw within
+`FirmRangeDeg` of the framing (wider at the edge) while the stick stays free inside it. Off in the air (`bSuppressInAir`) and when the framing is more
+than `MaxEngageAngleDeg` from the current heading. Overlaps: higher `Priority` first, each takes its `Weight` of what is left. Inside an
+`AGSTN_CameraSection` (hard framing) the volumes let go. Maths: `FGSTN_CameraMath::CombineBias`, `StepBiasOrbit`, `BoxFalloffWeight`.
+
+## Player options (P1a)
+
+`FGSTN_CameraUserOptions` on `UGSTN_CameraLocalPlayerSubsystem::Options` (component: `GetUserOptions`/`SetUserOptions`), saved per local player with
+`SaveUserOptions` (slot `GSTNCamera_Options_<controller id>`, loaded at start): invert X/Y, sensitivity, distance preset (Near 0.8 / Medium 1 / Far 1.25 /
+Custom slider; `CycleDistancePreset`, eased in 0.45 s, limited by a section's `DistanceScaleLimit`), auto follow on/off, Camera Assist (hold recenter:
+the move stick turns the camera; `IsCameraAssistActive` tells the move code to stand still). Stick latching: the project's move code reads
+`ResolveMoveReferenceRotation(MoveStick)` instead of the control rotation; after a camera-made turn it keeps the old reference until the stick is released.
+
 ## Occlusion
 
 One sphere sweep per camera per frame on `TraceChannel`. `FadeThenPullIn` (default for Follow, Free, Section, Duel) fades blockers tagged
@@ -81,7 +100,7 @@ The simulation never grants or reads any of them.
 
 ## Console variables
 
-`gstn.Camera.Enable` (0 = off on this machine), `gstn.Camera.Debug` (pivot, line, mode, section, stack), `gstn.Camera.Occlusion` (0 = no probe).
+`gstn.Camera.Enable` (0 = off on this machine; the only master switch now), `gstn.Camera.Debug` (pivot, line, mode, section, stack), `gstn.Camera.Occlusion` (0 = no probe).
 
 ## Tests
 
@@ -92,6 +111,12 @@ change ignores manual orbit, free ground height, duel framing, occlusion decisio
 server creates nothing, component not replicated, subject lost holds then cuts, two players independent, fade versus pull-in, look consumed when manual
 control is off, section priority and shoulder policy, frame event on a section cut, duel and free modes, tags and library, shoulder side swap, rules choose Duel or Arena by opponent count, arena frames everybody with a stable yaw.
 The new Core tests (`DuelCrossOverDoesNotSpin`, `DuelDegenerateAxisFrozen`, `DuelSideSwapsAfterDelay`, `ShoulderSwapBlendsAndAimStaysConverged`, `GroupFramingByCount`, `ArenaFramesAllFighters`, `ArenaYawStableWhenPlayersCircle`, `ArenaZoomDamped`, `ArenaFocusClampedToBounds`) and the three new Runtime ones (`ArenaFramesEveryoneWithStableYaw` replaces the target switch one) were written without being run: the editor was open on the owner machine, so only the build was checked.
+
+P1a tests (2026-11-21, written in the cloud, **not run yet**): Core `PivotAsymmetricSettlesFasterThanItCatchesUp`, `EasedFloatReachesTargetInTimeAndRestartsFromCurrent`,
+`DistancePresetsCycleAndClamp`, `AutoFollowIsGentleAndYieldsToTheStick`, `StickLatchKeepsTheOldReferenceUntilReleased`, `BoxFalloffIsSmoothAndZeroOutside`,
+`CombineBiasPriorityAndWrap`, `BiasOrbitIsSoftNeverALock`; Runtime `ProfileOnComponentReplacesDefaults`, `DistancePresetEasesAndSectionLimits`,
+`AutoFollowTurnsBehindOnlyInASustainedRun`, `FramingVolumePullsSoftlyAndYieldsToTheStick`, `FramingVolumeZoomBlendsAndSectionWins`,
+`MoveReferenceIsTheCameraWithoutALatch`. Five older Runtime checks now expect Free instead of Follow as the default.
 
 ## Next steps (not built)
 
