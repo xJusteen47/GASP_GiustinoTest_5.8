@@ -29,7 +29,8 @@ namespace GSTNLocoBase
 	static TAutoConsoleVariable<int32> CVarRunStartVariant(
 		TEXT("gstn.RunStart.Variant"), 0,
 		TEXT("Run start clip on the clean base (gstn.Loco.Base 1). 0 = v4r7 (approved, default), 1 = v4r8c (run loop sped up at ")
-		TEXT("start), 2 = v4r8a (one high-knee pump), 3 = v4r8b (cartoon wheel). Read by the chooser on the next start."),
+		TEXT("start), 2 = v4r8a (one high-knee pump), 3 = v4r8b (cartoon wheel), 4 = stock relaxed start, 5/6/7 = generic rev-up ")
+		TEXT("g1/g2/g3, 8 = generic sprinter drive. Read by the chooser on the next start."),
 		ECVF_Default);
 	static const FName RunStartVariantVar(TEXT("GSTN_RunStartVariant"));
 

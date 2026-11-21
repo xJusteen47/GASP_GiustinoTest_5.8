@@ -72,8 +72,19 @@ else:
     c0 = float(C0)
 
 
+HOLD = os.environ.get('HOLD')                   # g3: full push until HOLD, release HOLD..N_REV (review g2: rev died by f12)
+HOLD = int(HOLD) if HOLD else None
+RATE_SAG = float(os.environ.get('RATE_SAG', 0.3))  # g3: fraction of the extra rate lost during the push (rest after HOLD)
+
+
 def rate(u):
-    return R0 + (1.0 - R0) * min(u, N_REV) / N_REV
+    if HOLD is None:
+        return R0 + (1.0 - R0) * min(u, N_REV) / N_REV
+    if u <= HOLD:
+        e = 1.0 - RATE_SAG * u / HOLD
+    else:
+        e = (1.0 - RATE_SAG) * (1.0 - ss(min((u - HOLD) / float(N_REV - HOLD), 1.0)))
+    return 1.0 + (R0 - 1.0) * e
 
 
 cs = [c0]
@@ -99,17 +110,32 @@ LEAN_IN = float(os.environ.get('LEAN_IN', 5.0))
 UPPER = ('spine', 'neck', 'head')
 ARMP = ('lowerarm', 'hand')
 PEL_MEAN = float(LP['P|pelvis_MainPoint'][:, UP].mean())
+ENTRY_LEAD = float(os.environ.get('ENTRY_LEAD', 0.0))   # g3: pelvis/legs finish the entry this many frames before the chest
+KNEE_DEG = float(os.environ.get('KNEE_DEG', 0.0))       # g3: extra hip flexion of the swing leg (high knees), shin folds back
+KNEE_A, KNEE_B = float(os.environ.get('KNEE_A', 4)), float(os.environ.get('KNEE_B', 13))   # frame window (steps 2-3)
+
+
+def rot_x(v, c, t):                                      # about lateral X through c; positive t swings a hanging segment forward
+    d = v - c
+    return c + np.array([d[0], d[1] * math.cos(t) + d[2] * math.sin(t), -d[1] * math.sin(t) + d[2] * math.cos(t)])
+
+
 ARM_MEAN = {n: (LP['P|' + n] - LP['P|upperarm_MainPoint_' + n[-1]]).mean(axis=0) for n in pnames if n.startswith(ARMP)}
 out = {}
 for u in range(N_NEW):
     P, Bx = loop_at(cs[u])
     w = ss(u / ENTRY) if ENTRY > 0 else 1.0
+    wl = ss(u / max(ENTRY - ENTRY_LEAD, 1.0)) if ENTRY > 0 else 1.0     # g3: pelvis and legs lead the entry, upper body follows
     if w < 1.0:
-        P = {n: S0[n] * (1 - w) + P[n] * w for n in pnames}
+        lead = lambda n: n.startswith(LEG) or 'thigh' in n or n.startswith('pelvis')
+        P = {n: S0[n] * (1 - (wl if lead(n) else w)) + P[n] * (wl if lead(n) else w) for n in pnames}
         Bx = {n: (nlerp(SB0[n][0], Bx[n][0], w), SB0[n][1] * (1 - w) + Bx[n][1] * w) for n in bnames}
     # g2 (review g1 FAIL posa): during the rev, damp the vertical bounce (hop), add a forward drive lean, pump the arms harder.
     # 0 at frame 0 (= stock idle entry pose, no clash), full by LEAN_IN frames, back to 0 at the end of the rev
-    g = (ss(u / LEAN_IN) * ss(1.0 - u / N_REV)) if u < N_REV else 0.0
+    if HOLD is None:
+        g = (ss(u / LEAN_IN) * ss(1.0 - u / N_REV)) if u < N_REV else 0.0
+    else:                                                    # g3: plateau, full from LEAN_IN to HOLD, ease out to N_REV
+        g = (ss(u / LEAN_IN) * ((1.0 - ss((u - HOLD) / float(N_REV - HOLD))) if u > HOLD else 1.0)) if u < N_REV else 0.0
     if g > 0 and (BOUNCE != 1.0 or LEAN_DEG or ARM != 1.0):
         dy = (BOUNCE - 1.0) * g * (P['pelvis_MainPoint'][UP] - PEL_MEAN)
         th = math.radians(LEAN_DEG) * g; cth, sth = math.cos(th), math.sin(th)
@@ -128,6 +154,20 @@ for u in range(N_NEW):
                 v = pel + np.array([d[0], d[1] * cth - d[2] * sth, d[1] * sth + d[2] * cth])
             Q[n] = v
         P = Q
+    if KNEE_DEG and KNEE_A - 2 < u < KNEE_B + 2:
+        h = ss((u - KNEE_A + 2) / 2.0) * ss((KNEE_B + 2 - u) / 2.0)
+        for sd_, ot in (('l', 'r'), ('r', 'l')):
+            sw = ss((P['foot_MainPoint_' + sd_][UP] - P['foot_MainPoint_' + ot][UP] - 2.0) / 8.0)   # swing side only
+            a = math.radians(KNEE_DEG) * h * sw
+            if a <= 0:
+                continue
+            H = P['thigh_MainPoint_' + sd_]
+            K1 = rot_x(P['calf_MainPoint_' + sd_], H, a)
+            for n in [n for n in P if n.endswith('_' + sd_) and n.startswith(LEG)]:
+                v = rot_x(P[n], H, a)
+                if not n.startswith('calf_'):
+                    v = rot_x(v, K1, -0.75 * a)                 # shin folds back under the raised knee
+                P[n] = v
     s = s_sm[u]
     rnew = hz(sroot[0]) + FWD * dist[u]
     W = {}
