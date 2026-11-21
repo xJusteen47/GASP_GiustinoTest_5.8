@@ -512,6 +512,15 @@ def _row(frame, tapped, extra=None):
             _v = mesh.get_socket_location(_b)
             row['body'][_b] = [round(_v.x - _al.x, 1), round(_v.y - _al.y, 1), round(_v.z - _al.z, 1)]
         row['body']['actor'] = [round(_al.x, 1), round(_al.y, 1), round(_al.z, 1)]
+        # turnarounds-3 (review v27 r1, item 1): body facing seen in game vs the clip's root yaw. Hips and shoulders lines (world
+        # yaw of the facing = lateral L->R line rotated -90) and the root bone's world yaw (Offset Root Bone result)
+        import math as _m
+        def _face(a, b):
+            _p, _q = mesh.get_socket_location(a), mesh.get_socket_location(b)
+            return round((_m.degrees(_m.atan2(_p.y - _q.y, _p.x - _q.x)) + 90.0 + 180.0) % 360.0 - 180.0, 1)   # r->l (= -Y when facing +X) to forward
+        row['body']['face_hips'] = _face('thigh_l', 'thigh_r')
+        row['body']['face_chest'] = _face('clavicle_l', 'clavicle_r')
+        row['body']['root_yaw'] = round(mesh.get_socket_rotation('root').yaw, 1)
         _fl_row(mesh, row['body'])
     except Exception as e:
         row['body_err'] = repr(e)[:80]

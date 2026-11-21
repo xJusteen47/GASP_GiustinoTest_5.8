@@ -13,7 +13,7 @@ W2 = dict(R0='2.3', N_REV='19', HOLD='12', RATE_SAG='0.15', LEAN_OUT='22', ENTRY
 turns = (sys.argv[1] if len(sys.argv) > 1 else '180L').split(',')
 over = dict(a.split('=', 1) for a in sys.argv[2:])
 py = sys.executable
-for side, c0 in (('L', '1'), ('R', '12')):
+for side, c0 in (('L', '1.25'), ('R', '12.25')):   # stance of the step foot; pivot foot lands on rev f3 (review r1 item 3)
     if any(t.endswith(side) for t in turns):
         r = subprocess.run([py, os.path.join(HERE, 'runstart_generic_compose.py')], env=dict(os.environ, **W2, C0=c0, TAG='p27rev' + side),
                            capture_output=True, text=True)

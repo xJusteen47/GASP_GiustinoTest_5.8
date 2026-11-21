@@ -26,18 +26,23 @@ DEG, SIDE = int(TURN[:3]), TURN[3]
 SG = 1.0 if SIDE == 'L' else -1.0               # Cascadeur yaw a: L turns go a0 = -deg -> 0 (stock reface L: UE yaw +deg -> 0)
 E = lambda k, d: float(os.environ.get(k, d))
 BIG = DEG == 180
-H = int(E('H', 4 if BIG else 3))                 # hand-off frame (rev frame 0)
-FRAC = [float(x) for x in os.environ.get('FRAC', '0,0.05,0.27,0.58,0.85,0.95,0.99,1' if BIG else '0,0.1,0.5,0.82,0.95,0.99,1').split(',')]
-LO, PL = E('LO', 0.4), E('PL', 3 if BIG else 2)   # step foot lift-off / plant
-TO = E('TO', 3 if BIG else 2)                    # pivot foot toe-off
+# FRAC = fraction of the turn per clip frame (root yaw = pelvis yaw). Round 1 used Gemini's 8 game frames (0,.05,.27,.58,.85,...);
+# in game the body could not follow it (review v27 r1 item 1: the visible turn followed the capsule, ~17 frames), so the default is
+# the turn measured in the capture (actor yaw, clip f0 = v83, 2 game frames per clip frame) unless FRAC is given.
+FRAC = [float(x) for x in os.environ.get('FRAC', '0,0.12,0.27,0.40,0.53,0.67,0.78,0.88,0.93,0.96,0.98,1' if BIG else
+                                         '0,0.15,0.35,0.55,0.72,0.86,0.94,0.98,1').split(',')]
+H = int(E('H', next(k for k, f in enumerate(FRAC) if f >= 0.85)))     # hand-off (rev frame 0): pelvis within ~25 deg (Gemini)
+PL = E('PL', next(k for k, f in enumerate(FRAC) if f >= 0.5))          # step foot plant: half the turn, planted turned
+LO = E('LO', max(0.4, PL - 3.0))                                        # step foot lift-off
+TO = E('TO', H - 1)                                                     # pivot foot toe-off (lands on the rev's first plant)
 STEP = math.radians(E('STEP_DEG', 150 if BIG else 75)) * SG     # step-out: step foot ankle rotated about the pivot ankle
 LAG = math.radians(E('PLANT_LAG', 35 if BIG else 20)) * SG      # step foot lands this much less turned, pivots on the ball
 PIV = math.radians(E('PIV_DEG', 60 if BIG else 35)) * SG        # pivot foot heel swing about its ball until toe-off
 HEEL = math.radians(E('HEEL_DEG', 25))           # pivot foot heel lift at toe-off
 DROP = E('DROP', 3.5)                            # pelvis dip during the pivot (cm)
 LEAD_C, LEAD_H = math.radians(E('LEAD_C', 18)) * SG, math.radians(E('LEAD_H', 35)) * SG
-TUCK = E('TUCK', 0.35)
-ARC_STEP, ARC_SWING = E('ARC_STEP', 12), E('ARC_SWING', 24)
+TUCK = E('TUCK', 0.6)          # review r1 item 4: arms stay tucked (elbows at the ribs, hands at the chest) through H + 2
+ARC_STEP, ARC_SWING = E('ARC_STEP', 8), E('ARC_SWING', 14)     # r1 item 3: low drive swing, shin never above horizontal
 REV = os.environ.get('REV', 'p27rev' + ('L' if SIDE == 'L' else 'R'))
 UP = 1
 st, pv = ('l', 'r') if SIDE == 'L' else ('r', 'l')     # step foot, pivot foot
@@ -199,27 +204,35 @@ W_all = {}
 for u in range(NT):
     if u < H:
         w = (u / H) ** 2          # ease-in only: the body is moving at the rev's speed when the rev takes over (no stop at H)
+        # review r1 item 2: the torso stays upright (<= ~10 deg) until the hand-off; the rev's lean comes after H
+        w_up = (u / H) ** 3
+        UPB = ('spine', 'neck', 'head', 'clavicle', 'upperarm', 'lowerarm', 'hand')
         lead_w = ss(u / 1.0) * (1.0 - ss((u - (H - 2)) / 2.0))
-        pel_rel = {n: (S0[n] - S0['pelvis_MainPoint']) * (1 - w) + (R0[n] - R0['pelvis_MainPoint']) * w for n in pnames}
+        pel_rel = {n: (S0[n] - S0['pelvis_MainPoint']) * (1 - (w_up if n.startswith(UPB) else w))
+                   + (R0[n] - R0['pelvis_MainPoint']) * (w_up if n.startswith(UPB) else w) for n in pnames}
         pw0 = W0['pelvis_MainPoint']; pwH = root[H] + ry(R0['pelvis_MainPoint'], yaw[H])
         Pw = pw0 + (pwH - pw0) * ss(u / H) - upv * DROP * math.sin(math.pi * min(u / H, 1.0))
         W = {n: Pw + ry(pel_rel[n], seg_yaw(n, u, lead_w)) for n in pnames}
         W['root'] = root[u].copy()
         for n in ('ik_foot_root', 'ik_hand_root'):
             W[n] = root[u] + ry(R0[n] * w + S0[n] * (1 - w), yaw[u])
-        # arms tucked toward the chest during the pivot
-        tk = TUCK * math.sin(math.pi * u / H)
-        if tk > 0:
-            fwd = ry(np.array([0.0, 0.0, 1.0]), yaw[u] + LEAD_C * lead_w)
-            for s in 'lr':
-                tgt = W['spine_04_MainPoint'] + fwd * 14.0 - upv * 6.0 + (W['clavicle_MainPoint_' + s] - W['spine_04_MainPoint']) * 0.6
-                dh = (tgt - W['hand_MainPoint_' + s]) * tk
-                for n in [n for n in W if n.startswith('hand_') and n.endswith('_' + s)]:
-                    W[n] = W[n] + dh
-                for n in [n for n in W if n.startswith('lowerarm_') and n.endswith('_' + s)]:
-                    W[n] = W[n] + dh * 0.45
     else:
         W = world_rev(u)
+    # arms tucked (review r1 item 4): elbows down at the ribs, fists in front of the chest, from f1, held through H, released into
+    # the rev's pump by H + 2
+    tk = TUCK * ss(u / 1.5) * (1.0 - ss((u - H) / 2.0))
+    if tk > 0:
+        fwd = ry(np.array([0.0, 0.0, 1.0]), yaw[u] + (LEAD_C * ss(u / 1.0) * (1.0 - ss((u - (H - 2)) / 2.0)) if u < H else 0.0))
+        for s in 'lr':
+            sh = W['upperarm_MainPoint_' + s]
+            inward = hz(W['spine_04_MainPoint'] - sh)
+            e_tgt = sh - upv * 24.0 - fwd * 4.0 + inward * 0.3
+            h_tgt = W['spine_04_MainPoint'] + fwd * 16.0 - upv * 8.0 + (W['clavicle_MainPoint_' + s] - W['spine_04_MainPoint']) * 0.5
+            dh, de = (h_tgt - W['hand_MainPoint_' + s]) * tk, (e_tgt - W['lowerarm_MainPoint_' + s]) * tk
+            for n in [n for n in W if n.startswith('hand_') and n.endswith('_' + s)]:
+                W[n] = W[n] + dh
+            for n in [n for n in W if n.startswith('lowerarm_') and n.endswith('_' + s)]:
+                W[n] = W[n] + de
     # step foot
     if u < H:
         if u <= LO:
@@ -264,16 +277,16 @@ for s in 'lr':
     for u, fw in zip(us, fws):
         leg_ik(W_all[u], s, fw / np.linalg.norm(fw))
 # arms: hand and elbow relative to the shoulder smoothed over the hand-off (template + tuck -> rev pump), then rig lengths
-AW = range(1, H + 2)
+AW = range(1, H + 4)
 for s in 'lr':
     grp = [n for n in pnames if n.startswith(('hand_', 'lowerarm_')) and n.endswith('_' + s)]
-    rel = {u: {n: W_all[u][n] - W_all[u]['upperarm_MainPoint_' + s] for n in grp} for u in range(0, H + 4)}
+    rel = {u: {n: W_all[u][n] - W_all[u]['upperarm_MainPoint_' + s] for n in grp} for u in range(0, H + 5)}
     for _ in range(2):
         rel = {u: ({n: 0.25 * rel[u - 1][n] + 0.5 * rel[u][n] + 0.25 * rel[u + 1][n] for n in grp} if u in AW else rel[u]) for u in rel}
     for u in AW:
         for n in grp:
             W_all[u][n] = W_all[u]['upperarm_MainPoint_' + s] + rel[u][n]
-for u in range(H + 3):
+for u in range(H + 4):
     for s in 'lr':
         arm_ik(W_all[u], s, 0.85 if u < H else 0.999)     # rev frames are already soft-reached once
 
@@ -289,7 +302,8 @@ for n in bnames:
     qs, ts = [], []
     for u in range(NT):
         if u < H:
-            w = ss(u / H)
+            # fingers: the rev's loose fists from f1 (review r1 item 4: no open hanging hands), the rest blends over the pivot
+            w = ss(u / 1.0) if n.startswith(('thumb', 'index', 'middle', 'ring', 'pinky')) else ss(u / H)
             qs.append(nlerp(SB0[n][0], RV['R|' + n][0], w)); ts.append(SB0[n][1] * (1 - w) + RV['T|' + n][0] * w)
         else:
             qs.append(RV['R|' + n][u - H]); ts.append(RV['T|' + n][u - H])

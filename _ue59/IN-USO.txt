@@ -1,1 +1,1 @@
-IN-USO: libero dal 2026-11-21 21:55 UTC (turnarounds-3: 180 L v27 in UE, catture ASSERT OK; editor chiuso dallo script, mai aperto a mano)
+IN-USO: turnarounds-3 (Unreal Assistant + fix 180 L v27) dal 2026-11-21 22:10 UTC
