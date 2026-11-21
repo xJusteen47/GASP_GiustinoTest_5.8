@@ -28,9 +28,11 @@ E = lambda k, d: float(os.environ.get(k, d))
 BIG = DEG == 180
 # FRAC = fraction of the turn per clip frame (root yaw = pelvis yaw). Round 1 used Gemini's 8 game frames (0,.05,.27,.58,.85,...);
 # in game the body could not follow it (review v27 r1 item 1: the visible turn followed the capsule, ~17 frames), so the default is
-# the turn measured in the capture (actor yaw, clip f0 = v83, 2 game frames per clip frame) unless FRAC is given.
-FRAC = [float(x) for x in os.environ.get('FRAC', '0,0.12,0.27,0.40,0.53,0.67,0.78,0.88,0.93,0.96,0.98,1' if BIG else
-                                         '0,0.15,0.35,0.55,0.72,0.86,0.94,0.98,1').split(',')]
+# round 2 capture (hips facing logged): the body DOES follow the clip's root yaw (Offset Root Bone Accumulate) once the clip owns
+# the pose; round 1 lost its yaw in the 0.2 s blend-in (clip f0-2, Unreal Assistant: docs/notes/research/unreal-assistant-turn-yaw.md)
+# and steering caught up at ~capsule pace. So: little yaw in f0-2 (blend), the turn at full weight f3-6, 88 % at the hand-off.
+FRAC = [float(x) for x in os.environ.get('FRAC', '0,0.05,0.15,0.33,0.55,0.75,0.88,0.95,0.99,1' if BIG else
+                                         '0,0.06,0.2,0.45,0.7,0.88,0.96,1').split(',')]
 H = int(E('H', next(k for k, f in enumerate(FRAC) if f >= 0.85)))     # hand-off (rev frame 0): pelvis within ~25 deg (Gemini)
 PL = E('PL', next(k for k, f in enumerate(FRAC) if f >= 0.5))          # step foot plant: half the turn, planted turned
 LO = E('LO', max(0.4, PL - 3.0))                                        # step foot lift-off
