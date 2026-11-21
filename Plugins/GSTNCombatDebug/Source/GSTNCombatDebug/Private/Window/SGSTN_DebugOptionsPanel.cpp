@@ -65,6 +65,22 @@ namespace
 		const int32 Second = Name.Find(TEXT("."), ESearchCase::CaseSensitive, ESearchDir::FromStart, First + 1);
 		return Second == INDEX_NONE ? Name : Name.Mid(Second + 1);
 	}
+
+	/** Playtest switches without "Debug" in their name that the owner wants in this window (2026-11-21): the locomotion base and
+	 *  the run start clip choice. Their cvars live in the game module (GSTN_LocoBaseSubsystem.cpp); this plugin only lists them. */
+	bool IsPlaytestVariable(const FString& Name)
+	{
+		return Name.StartsWith(TEXT("gstn.RunStart."), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.Base"), ESearchCase::IgnoreCase);
+	}
+
+	/** Readable name of a gstn.RunStart.Variant value (keep in step with that cvar's help text), shown next to the number */
+	FString RunStartVariantLabel(int32 Value)
+	{
+		static const TCHAR* const Labels[] = {
+			TEXT("v4r7 (approved)"), TEXT("v4r8c loop sped up"), TEXT("v4r8a high-knee pump"), TEXT("v4r8b cartoon wheel"),
+			TEXT("stock relaxed"), TEXT("generic g1"), TEXT("generic g2"), TEXT("generic g3"), TEXT("sprinter s1"), TEXT("sprinter s2")};
+		return Value >= 0 && Value < UE_ARRAY_COUNT(Labels) ? FString(Labels[Value]) : FString(TEXT("?"));
+	}
 }
 
 TArray<FString> SGSTN_DebugOptionsPanel::CollectVariableNames()
@@ -78,7 +94,7 @@ TArray<FString> SGSTN_DebugOptionsPanel::CollectVariableNames()
 				return;
 			}
 			const FString NameString(Name);
-			if (NameString.Contains(TEXT("Debug"), ESearchCase::IgnoreCase))
+			if (NameString.Contains(TEXT("Debug"), ESearchCase::IgnoreCase) || IsPlaytestVariable(NameString))
 			{
 				Names.Add(NameString);
 			}
@@ -307,7 +323,12 @@ TSharedRef<SWidget> SGSTN_DebugOptionsPanel::MakeRow(const FString& Name, IConso
 	.Padding(6.f, 0.f)
 	[
 		SNew(STextBlock)
-		.Text(FText::FromString(ShortName(Name)))
+		.Text_Lambda([Name]()
+		{
+			// The run start variant shows which clip its number picks (gstn.RunStart.Handoff adds 10 in the ABP); other rows show their name
+			const IConsoleVariable* V = Name.Equals(TEXT("gstn.RunStart.Variant"), ESearchCase::IgnoreCase) ? FindVariable(Name) : nullptr;
+			return FText::FromString(V ? FString::Printf(TEXT("%s: %s"), *ShortName(Name), *RunStartVariantLabel(V->GetInt())) : ShortName(Name));
+		})
 	];
 
 	if (Variable->IsVariableInt())
