@@ -92,6 +92,14 @@ for u in range(1, N_NEW):
 spd = [0.0] + [dist[u] - dist[u - 1] for u in range(1, N_NEW)]
 s_raw = [min(1.0, max(S_MIN, spd[u] / (rate(u) * VL))) for u in range(N_NEW)]
 s_sm = [s_raw[0]] + [(s_raw[i - 1] + s_raw[i] + s_raw[i + 1]) / 3 for i in range(1, N_NEW - 1)] + [s_raw[-1]]
+BOUNCE = float(os.environ.get('BOUNCE', 1.0))         # pelvis vertical bounce scale at frame 0 (g2: 0.3)
+LEAN_DEG = float(os.environ.get('LEAN_DEG', 0.0))      # extra forward lean at frame 0, upper body about the pelvis (g2: 22)
+ARM = float(os.environ.get('ARM', 1.0))                # arm swing amplitude at frame 0 about the loop mean (g2: 1.7)
+LEAN_IN = float(os.environ.get('LEAN_IN', 5.0))
+UPPER = ('spine', 'neck', 'head')
+ARMP = ('lowerarm', 'hand')
+PEL_MEAN = float(LP['P|pelvis_MainPoint'][:, UP].mean())
+ARM_MEAN = {n: (LP['P|' + n] - LP['P|upperarm_MainPoint_' + n[-1]]).mean(axis=0) for n in pnames if n.startswith(ARMP)}
 out = {}
 for u in range(N_NEW):
     P, Bx = loop_at(cs[u])
@@ -99,6 +107,27 @@ for u in range(N_NEW):
     if w < 1.0:
         P = {n: S0[n] * (1 - w) + P[n] * w for n in pnames}
         Bx = {n: (nlerp(SB0[n][0], Bx[n][0], w), SB0[n][1] * (1 - w) + Bx[n][1] * w) for n in bnames}
+    # g2 (review g1 FAIL posa): during the rev, damp the vertical bounce (hop), add a forward drive lean, pump the arms harder.
+    # 0 at frame 0 (= stock idle entry pose, no clash), full by LEAN_IN frames, back to 0 at the end of the rev
+    g = (ss(u / LEAN_IN) * ss(1.0 - u / N_REV)) if u < N_REV else 0.0
+    if g > 0 and (BOUNCE != 1.0 or LEAN_DEG or ARM != 1.0):
+        dy = (BOUNCE - 1.0) * g * (P['pelvis_MainPoint'][UP] - PEL_MEAN)
+        th = math.radians(LEAN_DEG) * g; cth, sth = math.cos(th), math.sin(th)
+        pel = P['pelvis_MainPoint'] + np.eye(3)[UP] * dy
+        A = 1.0 + (ARM - 1.0) * g
+        Q = {}
+        for n, v in P.items():
+            if n.startswith(LEG) or n == 'ik_foot_root' or n == 'root':
+                Q[n] = v; continue
+            v = v + np.eye(3)[UP] * dy
+            if n.startswith(ARMP):
+                sh = P['upperarm_MainPoint_' + n[-1]] + np.eye(3)[UP] * dy
+                v = sh + ARM_MEAN[n] + (v - sh - ARM_MEAN[n]) * A
+            if n.startswith(UPPER) or n.startswith(ARMP) or n.startswith('upperarm') or n.startswith('clavicle'):
+                d = v - pel                                    # forward lean about the lateral (X) axis, top goes +Z
+                v = pel + np.array([d[0], d[1] * cth - d[2] * sth, d[1] * sth + d[2] * cth])
+            Q[n] = v
+        P = Q
     s = s_sm[u]
     rnew = hz(sroot[0]) + FWD * dist[u]
     W = {}
