@@ -277,7 +277,23 @@ elif 'Dropkick' in KIT:
     SEQUENCES = DROPKICK_SEQUENCES
 elif 'DAir' in KIT:
     SEQUENCES = DAIR_SEQUENCES
-TIMEOUT = 900.0
+# capture-speed (2026-11-21, owner "tutte le varianti in una sessione"): PIE_CAPTURE_RUNS=<runs.json> = several variants in ONE Play session
+# (editor boot + Play start + quit paid once, ~100 s of the ~139 s of a capture). runs.json: [{"name": "v25_h1", "cvars": "a 1;b 2",
+# "sequences": ["mv_run_start_v5"], "assert": {sequence: [expect, ...]}}, ...]. Each run writes to <out>/<name>/ as a one-run capture did
+# (frames, frames.jsonl, assert.txt); before each run its cvars are set (give every cvar a run changes in EVERY run: nothing is undone) and
+# the host goes back to its spawn spot (server_reset_to_spawn), so every run starts from the same place and yaw. <out>/assert.txt = OK only
+# if every run is OK. PIE_CAPTURE_SEQUENCES is ignored.
+RUNS = json.load(open(os.environ['PIE_CAPTURE_RUNS'], encoding='utf-8')) if os.environ.get('PIE_CAPTURE_RUNS') else None
+if RUNS:
+    _ALL = {s['name']: s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES
+            + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES}
+    SEQUENCES = []
+    for _r in RUNS:
+        for _n in _r['sequences']:
+            SEQUENCES.append(dict(_ALL[_n], run=_r['name'], run_cvars=_r.get('cvars', ''), run_out=os.path.join(OUT, _r['name']),
+                                  run_first=_n == _r['sequences'][0]))
+SHOOT = [int(v) for v in os.environ['PIE_CAPTURE_SHOOT'].split(',')] if os.environ.get('PIE_CAPTURE_SHOOT') else None
+TIMEOUT = 900.0 if not RUNS else 900.0 + 60.0 * len(SEQUENCES)
 # PIE_CAPTURE_COLLISION=1: draw collision (the pawn's movement capsule) in every view and the game viewport (DROPKICK-CAPSULE, 2026-11-15)
 COLLISION = os.environ.get('PIE_CAPTURE_COLLISION', '') == '1'
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None, 'log': None, 'rows': None}
@@ -407,10 +423,18 @@ def _shoot(seq, frame):
         if az is None:
             cam.set_actor_location_and_rotation(manager.get_camera_location(), manager.get_camera_rotation(), False, False)
             comp.set_editor_property('fov_angle', manager.get_fov_angle())
+        t0 = time.perf_counter()
         comp.capture_scene()
-        folder = os.path.join(OUT, seq['name'], name)
+        folder = os.path.join(_seq_dir(seq), name)
         os.makedirs(folder, exist_ok=True)
+        t1 = time.perf_counter()
         unreal.RenderingLibrary.export_render_target(_world(), rt, folder, f'f{frame:03d}.png')
+        st['t_cap'] = st.get('t_cap', 0.0) + t1 - t0          # capture-speed: where a frame's time goes (logged per sequence)
+        st['t_exp'] = st.get('t_exp', 0.0) + time.perf_counter() - t1
+
+
+def _seq_dir(seq):
+    return os.path.join(seq.get('run_out', OUT), seq['name'])
 
 
 def _montage():
@@ -556,6 +580,25 @@ def _run_asserts():
                 if os.environ.get('PIE_CAPTURE_ASSERT_REPLACE') == '1':   # runstart-v6: A/B of a variant clip replaces the built-in expect
                     spec[name] = []
                 spec.setdefault(name, []).extend(exp if isinstance(exp, list) else [exp])
+    if RUNS:
+        oks, top = [], []
+        for r in RUNS:
+            rspec = {k: (v if isinstance(v, list) else [v]) for k, v in r.get('assert', {}).items() if k in r['sequences']}
+            for s in SEQUENCES:
+                if s.get('run') == r['name'] and s.get('expect') and s['name'] not in rspec:
+                    rspec[s['name']] = s['expect'] if isinstance(s['expect'], list) else [s['expect']]
+            rok, rres = ca.check_spec(rspec, os.path.join(OUT, r['name']))
+            rl = ca.summary_lines(rok, rres)
+            with open(os.path.join(OUT, r['name'], 'assert.txt'), 'w', encoding='utf-8') as f:
+                f.write(rl[0] + '\n' + '\n'.join(ca.line(x, s) for s, x in rres) + '\n')
+            oks.append(rok)
+            top.append(f'{r["name"]}: {rl[0]}')
+            _log(f'{r["name"]}: ' + ' | '.join(rl[:3]))
+        head = 'ASSERT: OK' if all(oks) else f'ASSERT: FAIL {oks.count(False)}/{len(oks)} runs'
+        with open(os.path.join(OUT, 'assert.txt'), 'w', encoding='utf-8') as f:
+            f.write(head + '\n' + '\n'.join(top) + '\n')
+        _log(head)
+        return
     ran = {s['name'] for s in SEQUENCES}
     spec = {k: v for k, v in spec.items() if k in ran}
     ok, results = ca.check_spec(spec, OUT)
@@ -601,7 +644,7 @@ def _tick(_dt):
         elif phase == 'kit_wait' and now - st['t'] > 3:
             # F4 (2026-11-17): the two clients' players can join after the host's input is ready; parking ran with [] and a hub pawn stood
             # next to ours in the R4/playtest_r3 captures. Wait up to 15 s for all three players before staging
-            if len(h._players()) < 3 and now - st['t'] < 15:
+            if len(h._players()) < int(os.environ.get('PIE_CAPTURE_CLIENTS', '2')) + 1 and now - st['t'] < 15:   # capture-speed: 1 player = no 15 s wait
                 return
             view = g._view(0, h._key(0)) or {}
             _log(f'loadout: {json.dumps(view.get("loadout"))[:300]}')
@@ -620,6 +663,14 @@ def _tick(_dt):
             if st['seq'] >= len(SEQUENCES):
                 return _finish('ok')
             seq = SEQUENCES[st['seq']]
+            if seq.get('run_first') and st.get('run_ready') != st['seq']:   # PIE_CAPTURE_RUNS: next variant, same Play session
+                for cv in [c.strip() for c in seq['run_cvars'].split(';') if c.strip()]:
+                    _console(cv)
+                comp = g.comps(g.worlds()[0])[h._key(0)]
+                comp.server_reset_to_spawn(unreal.Vector(0.0, 0.0, 0.0))
+                st.update(run_ready=st['seq'], t=now + 1.0)                 # 3 s real time: the reset lands and the idle settles
+                _log(f'run {seq["run"]}: cvars [{seq["run_cvars"]}], host reset to spawn')
+                return None
             if seq['dummy'] and not st.get('dummy_placed'):
                 keys = h.dummies()
                 _log(f'dummy {keys[:1]} ahead: {h._place_ahead(0, keys[0], seq["dummy"]) if keys else "NO DUMMY"}')
@@ -646,16 +697,20 @@ def _tick(_dt):
             if os.environ.get('PIE_CAPTURE_NOVFX') == '1':   # land-v2-1: no presentation events (landing/jump dust, sparks) on any pawn
                 _log(f'{seq["name"]}: presentation events off on {_presentation_off()} components')
             _log(f'sequence {seq["name"]}: pawn at {_place_cameras()}')
-            os.makedirs(os.path.join(OUT, seq['name']), exist_ok=True)
-            st['rows'] = open(os.path.join(OUT, seq['name'], 'frames.jsonl'), 'w')
+            os.makedirs(_seq_dir(seq), exist_ok=True)
+            st['rows'] = open(os.path.join(_seq_dir(seq), 'frames.jsonl'), 'w')
             _console('t.OverrideFPS 60')
             if os.environ.get('PIE_CAPTURE_PUSHLOG') == '1':
                 _console('gstn.Pushbox.Log 1')
             st.update(shots=0, host_proj=0)
+            st.update(seq_t0=now)
             st.update(phase='seq_run', frame=0, mask=g.button_mask(BUTTON), crouch=g.button_mask('Crouch'), jumped=None, fired=None, prev_z=None)
         elif phase == 'seq_run':
             seq, frame = SEQUENCES[st['seq']], st['frame']
-            if seq['shoot']:
+            _tp = time.perf_counter()
+            # capture-speed: PIE_CAPTURE_SHOOT='70,210' shoots only those frames (the PNG export is ~28 ms per view and frame, 85% of a
+            # sequence's time); frames.jsonl still has every frame, so the ASSERT is unchanged
+            if seq['shoot'] and (not SHOOT or SHOOT[0] <= frame <= SHOOT[1]):
                 _shoot(seq, frame)
             # The scene captures do not show the debug draw (hitboxes, body): PIE_CAPTURE_HIRES='86,91' takes a real viewport shot on those
             # frames (Saved/Screenshots/WindowsEditor/HighresScreenshot*.png, in frame order)
@@ -773,12 +828,15 @@ def _tick(_dt):
                 elif frame == walk_base + walk[0] + walk[1]:
                     g.release(0, 'move')
             st['frame'] = frame + 1
+            st['t_drv'] = st.get('t_drv', 0.0) + time.perf_counter() - _tp
             if st['frame'] >= PRE + seq['frames']:
                 st['rows'].close()
                 g.combat_clear(0)
                 if seq.get('sticks'):
                     g.release(0, 'move')
                 _console('t.OverrideFPS 0')
+                _log(f'timing {seq["name"]}: wall {now - st["seq_t0"]:.1f} s, capture_scene {st.get("t_cap", 0):.1f} s, export png {st.get("t_exp", 0):.1f} s, driver {st.get("t_drv", 0):.1f} s')
+                st.update(t_cap=0.0, t_exp=0.0, t_drv=0.0)
                 _log(f'sequence {seq["name"]} done: {st["frame"]} frames, pawn z {_pawn().get_actor_location().z:.1f}, host shots {st.get("shots", 0)}')
                 if seq.get('dummy_percent') is not None and st.get('dummy_key'):   # NIGHT-KD-1: why the landing did (not) down the dummy
                     try:

@@ -338,6 +338,69 @@ if PIN_U:
                         leg_ik(W)
                 pinned.append((sd_, run[0], run[-1]))
             run = []
+# ANKLE_MIN (turnarounds-2, owner 2026-11-21 "piedi che si incrociano", Gemini agile numbers: clamp 10-12 cm): in the turn the
+# feet crossed (lateral L-R gap 0-1 cm at f8-13 in w2t180). Each frame the lateral gap (root frame X, L on +X) is kept >= ANKLE_MIN
+# cm by moving the SWING foot (higher one; foot, ball, ik_foot together) outward, knees by leg_ik; planted feet and their pins stay.
+# Full until ANKLE_HOLD (authored frame), smooth to 0 at ANKLE_OUT, so the tail is still the stock loop (its own passing gap is
+# ~5 cm at f17-23 and f38-44; clamping there would pop at the hand-off). ANKLE_MIN=0 (default) = clip unchanged.
+ANKLE_MIN = float(os.environ.get('ANKLE_MIN', 0.0))
+ANKLE_HOLD, ANKLE_OUT = float(os.environ.get('ANKLE_HOLD', 14)), float(os.environ.get('ANKLE_OUT', 20))
+ankle = []
+if ANKLE_MIN:
+    for k in range(N_NEW):
+        w = 1.0 if U[k] <= ANKLE_HOLD else (0.0 if U[k] >= ANKLE_OUT else 1.0 - ss((U[k] - ANKLE_HOLD) / (ANKLE_OUT - ANKLE_HOLD)))
+        W = out[k][0]
+        gap = float(W['foot_MainPoint_l'][0] - W['foot_MainPoint_r'][0])
+        push = (ANKLE_MIN - gap) * w
+        if push <= 0.01:
+            continue
+        sw = 'l' if W['foot_MainPoint_l'][UP] > W['foot_MainPoint_r'][UP] else 'r'
+        dx = np.array([push if sw == 'l' else -push, 0.0, 0.0])
+        for n in [n for n in W if n.endswith('_' + sw) and n.startswith(('foot_', 'ball_'))] + ['ik_foot_' + sw]:
+            if n in W:
+                W[n] = W[n] + dx
+        if LEG_IK:
+            leg_ik(W)
+        ankle.append((k, sw, round(push, 1)))
+# ARM_IK (turnarounds-2, owner 2026-11-21 "le braccia tremano a 90/180"): the rev pumps the arms by scaling hand/elbow points about
+# the loop mean (ARM, ARM_BACK, chest lead in the turns), which stretches the upper arm to 26-50 cm and the forearm to 17-37 cm (rig
+# 26.65 / 22.35). Cascadeur's solve then misses the targets by up to 43 cm and the elbow zigzags frame to frame (w2t180 R elbow
+# f3-6, measured on the solved scene). ARM_IK=1 rebuilds each arm with the rig lengths: shoulder kept, hand on the shoulder->hand
+# target line (pulled in only when out of reach), elbow by two-bone IK bending toward the target elbow, hand/forearm helper points
+# moved with their joint. The tail (stock loop, exact lengths) is unchanged. ARM_IK=0 (default) = clip unchanged.
+ARM_IK = os.environ.get('ARM_IK', '0') == '1'
+ARM_SOFT = float(os.environ.get('ARM_SOFT', 0.85))
+LU = {sd_: float(np.linalg.norm(LP['P|lowerarm_MainPoint_' + sd_][0] - LP['P|upperarm_MainPoint_' + sd_][0])) for sd_ in 'lr'}
+LF = {sd_: float(np.linalg.norm(LP['P|hand_MainPoint_' + sd_][0] - LP['P|lowerarm_MainPoint_' + sd_][0])) for sd_ in 'lr'}
+arm_fix = []
+if ARM_IK:
+    for k in range(N_NEW):
+        W = out[k][0]
+        for sd_ in 'lr':
+            S, E0, H0 = W['upperarm_MainPoint_' + sd_], W['lowerarm_MainPoint_' + sd_], W['hand_MainPoint_' + sd_]
+            d = H0 - S; dl = float(np.linalg.norm(d)); ax = d / dl
+            # soft reach (ARM_SOFT, fraction of full reach where the softening starts): near full extension the two-bone elbow
+            # moves a lot for a tiny hand change (the elbow zigzag came back with a hard clamp); distances above the start are
+            # compressed exponentially toward the full reach, never reaching it
+            reach = LU[sd_] + LF[sd_]
+            r0 = ARM_SOFT * reach
+            dsoft = dl if dl <= r0 else r0 + (reach - r0) * (1.0 - math.exp(-(dl - r0) / (reach - r0)))
+            H = S + ax * dsoft
+            dc = float(np.linalg.norm(H - S))
+            # bend side: toward the arm's pole point (lowerarm_LimbDir, smooth in time). The target elbow's own offset from the
+            # shoulder-hand line is small and flips side frame to frame when the arm is near straight (zigzag at f3-12)
+            b = W['lowerarm_LimbDir_' + sd_] - S; b = b - ax * float(np.dot(b, ax))
+            if np.linalg.norm(b) < 1e-3:
+                b = (E0 - S) - ax * float(np.dot(E0 - S, ax))
+            b /= np.linalg.norm(b)
+            x = (LU[sd_] ** 2 - LF[sd_] ** 2 + dc ** 2) / (2 * dc)
+            hh = math.sqrt(max(LU[sd_] ** 2 - x * x, 0.0))
+            E = S + ax * x + b * hh
+            for n in [n for n in W if n.startswith('hand_') and n.endswith('_' + sd_)]:
+                W[n] = W[n] - H0 + H
+            for n in [n for n in W if n.startswith('lowerarm_') and n.endswith('_' + sd_)]:
+                W[n] = W[n] - E0 + E
+            arm_fix.append(float(max(np.linalg.norm(E - E0), np.linalg.norm(H - H0))))
 D = {}
 for n in pnames:
     D['P|' + n] = np.stack([out[u][0][n] for u in range(N_NEW)])
@@ -364,7 +427,10 @@ for sd_ in 'lr':
 info = {'TAG': TAG, 'c0': c0, 'c_end': round(c_end, 3), 'tail_loop_frame': round(c_end % NL, 3), 'N_REV': N_REV, 'N_NEW': N_NEW,
         'R0': R0, 'VL_cm_f': round(VL, 3), 'dist_end': round(dist[-1], 1), 's_min': round(min(s_sm), 3), 'slip_cm': slip,
         'steps_in_rev': round((c_end - c0) / 11.0, 2), 'cs': [round(x, 3) for x in C], 'spd': [round(x, 2) for x in spd], 'pinned': pinned,
-        'yaw_ue_deg': [round(-math.degrees(yaw_at(U[k])), 3) for k in range(N_NEW)], 'src': SRC or ''}
+        'ankle_push': ankle, 'arm_ik_max_cm': round(max(arm_fix), 1) if arm_fix else 0.0, 'ankle_min': ANKLE_MIN, 'yaw_ue_deg': [round(-math.degrees(yaw_at(U[k])), 3) for k in range(N_NEW)], 'src': SRC or ''}
 json.dump({'info': info, 'curves': cur}, open(os.path.join(odir, 'generic_%s_curves.json' % TAG), 'w'))
 print('ESITO: OK %s N_NEW %d c0 %.0f c_end %.2f (loop f %.2f) steps_in_rev %.2f' % (TAG, N_NEW, c0, c_end, c_end % NL, info['steps_in_rev']))
 print('root end %.1f cm  s_min %.2f  slip L/R %s' % (dist[-1], min(s_sm), slip))
+_g = D['P|foot_MainPoint_l'][:, 0] - D['P|foot_MainPoint_r'][:, 0]
+_n = int(ANKLE_OUT) if ANKLE_MIN else N_REV
+print('ankle gap min f0-%d %.1f cm (f%d), pushed %d frames' % (_n, float(_g[:_n].min()), int(_g[:_n].argmin()), len(ankle)))

@@ -116,6 +116,10 @@ namespace
 		{
 			return TEXT("23 + toe fix (w2vf) + torso lean gstn.Loco.TorsoLean");
 		}
+		if (Value == 26)
+		{
+			return TEXT("24 + turnarounds 2 (w2t*f: toe fix, feet >= 11 cm apart, arm IK against elbow jitter)");
+		}
 		return Value >= 0 && Value < UE_ARRAY_COUNT(Labels) ? FString(Labels[Value]) : FString(TEXT("?"));
 	}
 
@@ -130,7 +134,7 @@ namespace
 		static TArray<TSharedPtr<int32>> Options;
 		if (Options.Num() == 0)
 		{
-			for (const int32 Value : {21, 22, 23, 24, 25, 20, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+			for (const int32 Value : {21, 22, 23, 24, 25, 26, 20, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
 			{
 				Options.Add(MakeShared<int32>(Value));
 			}
