@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Animation/AnimNodeBase.h"
 #include "BoneContainer.h"
+#include "BonePose.h"
 #include "GSTN_AnimNode_StanceWidth.generated.h"
 
 /**
@@ -18,6 +19,10 @@
  *   MinHalfWidth gstn.Loco.StanceMinHalf (cm from the root's midline; a foot closer than this, or crossing, is pushed out to it)
  *   weight       per foot: the anim curve LeftCurve / RightCurve of the pose (blended by the blend stack like any curve, 0 when the playing
  *                clip has no such curve), or gstn.Loco.StanceWidth.Force when larger (try the layer on any clip).
+ *
+ * Torso lean (owner 2026-11-21, variant 25: "un additivo regolabile che alza e abbassa il busto"): the spine bones TorsoBones pitch about
+ * the same lateral axis by gstn.Loco.TorsoLean degrees (+ = leans further forward, - = more upright) x the curve TorsoCurve of the pose,
+ * spread evenly over the bones; NeckCounter of it is given back on NeckBone so the gaze does not drop. No curve = untouched.
  *
  * The IK foot bones (ik_foot_l / _r) get the same move, so a later reader of them stays in step. Place it at the END of the main AnimGraph
  * (after GASP's leg IK, which would otherwise snap the feet back). With every weight 0 the pose passes through untouched.
@@ -53,6 +58,20 @@ struct GSTNANIMATIONCORE_API FGSTN_AnimNode_StanceWidth : public FAnimNode_Base
 	UPROPERTY(EditAnywhere, Category = "Settings")
 	FName RightCurve = TEXT("GSTN_StanceWidth_R");
 
+	/** Torso lean: spine bones that share the pitch, root to chest */
+	UPROPERTY(EditAnywhere, Category = "Torso")
+	TArray<FName> TorsoBones = {TEXT("spine_01"), TEXT("spine_02"), TEXT("spine_03"), TEXT("spine_04"), TEXT("spine_05")};
+
+	UPROPERTY(EditAnywhere, Category = "Torso")
+	FName TorsoCurve = TEXT("GSTN_TorsoLean");
+
+	UPROPERTY(EditAnywhere, Category = "Torso")
+	FName NeckBone = TEXT("neck_01");
+
+	/** Fraction of the torso pitch given back on the neck (0..1) */
+	UPROPERTY(EditAnywhere, Category = "Torso", meta = (ClampMin = "0", ClampMax = "1"))
+	float NeckCounter = 0.5f;
+
 	/** Softness of the MinHalfWidth floor (cm): 0 = hard clamp */
 	UPROPERTY(EditAnywhere, Category = "Settings")
 	float FloorSoftness = 2.f;
@@ -80,6 +99,13 @@ private:
 	};
 
 	FLeg Legs[2];
+	TArray<FCompactPoseBoneIndex> Torso;
+	FCompactPoseBoneIndex Neck = FCompactPoseBoneIndex(INDEX_NONE);
+	float TorsoDeg = 0.f;
+	float LastTorso = 0.f;
+
+	/** Pitches the torso in CSPose; true when it changed something */
+	bool ApplyTorso(FCSPose<FCompactPose>& CSPose, const FTransform& AxisCS, float Weight);
 	FCompactPoseBoneIndex Axis = FCompactPoseBoneIndex(INDEX_NONE);
 	FVector SideAxis = FVector(1.0, 0.0, 0.0);   // in the axis bone's frame, horizontal, from the right foot to the left foot
 	bool bValid = false;

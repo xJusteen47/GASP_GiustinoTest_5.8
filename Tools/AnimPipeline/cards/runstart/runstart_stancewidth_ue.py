@@ -23,6 +23,7 @@ ABP = "/Game/GSTN/Locomotion/StockBase/ABP_GSTN_StockMover"
 RS = "/Game/GSTN/Animation/RunStart/"
 PAIRS = [p.split("=") for p in os.environ.get("SW_PAIRS", RS + "AS_GSTN_RunStart_Generic_w2=" + RS + "AS_GSTN_RunStart_Generic_w2s").split(",")]
 K = int(os.environ.get("SW_K", "22"))
+TORSO = [int(x) for x in os.environ.get("SW_TORSO", "").split(",") if x.strip()]   # 4 frames: in 0->1, out 1->0 of GSTN_TorsoLean (variant 25)
 SCHED = [float(x) for x in os.environ.get("SW_SCHEDULE", "").split(",") if x.strip()]
 SAVE = os.environ.get("GSTN_SAVE") == "1" or os.environ.get("CLIPFIX_WRITE") == "1"
 EAL, AL = unreal.EditorAssetLibrary, unreal.AnimationLibrary
@@ -129,6 +130,14 @@ try:
                 AL.remove_curve(seq, name, False)
             AL.add_curve(seq, name, FLT, False)
             AL.add_float_curve_keys(seq, name, keys[side][0], keys[side][1])
+        if TORSO:
+            name = "GSTN_TorsoLean"
+            if AL.does_curve_exist(seq, name, FLT):
+                AL.remove_curve(seq, name, False)
+            AL.add_curve(seq, name, FLT, False)
+            fr = [0] + TORSO
+            AL.add_float_curve_keys(seq, name, [t[f] for f in fr], [0.0, 0.0, 1.0, 1.0, 0.0])
+            log.append("  torso curve f%s" % TORSO)
         log.append("  saved clip %s" % EAL.save_asset(dst, only_if_is_dirty=False))
 
     # 3. chooser rows

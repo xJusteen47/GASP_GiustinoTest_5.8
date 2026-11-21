@@ -83,7 +83,7 @@ namespace
 		}
 		// crouch-mesh-pop-1 (2026-11-21): gstn.Mesh.* (CapsuleShiftBeforeAnim, the crouch flash fix A/B); stance width layer (runstart-stancewidth): gstn.Loco.Stance*
 		return Name.StartsWith(TEXT("gstn.RunStart."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Mesh."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Camera."), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.Base"), ESearchCase::IgnoreCase)
-			|| Name.StartsWith(TEXT("gstn.Loco.Stance"), ESearchCase::IgnoreCase);
+			|| Name.StartsWith(TEXT("gstn.Loco.Stance"), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.TorsoLean"), ESearchCase::IgnoreCase);
 	}
 
 	/** Readable name of a gstn.RunStart.Variant value (keep in step with that cvar's help text), shown next to the number */
@@ -114,7 +114,7 @@ namespace
 		}
 		if (Value == 25)
 		{
-			return TEXT("23 + toe fix (w2vf)");
+			return TEXT("23 + toe fix (w2vf) + torso lean gstn.Loco.TorsoLean");
 		}
 		return Value >= 0 && Value < UE_ARRAY_COUNT(Labels) ? FString(Labels[Value]) : FString(TEXT("?"));
 	}

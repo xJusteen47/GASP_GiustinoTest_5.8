@@ -14,6 +14,8 @@ namespace GSTNStanceWidth
 		TEXT("Stance width layer: cm each foot moves outward where a clip opts in (curves GSTN_StanceWidth_L/_R, e.g. run start variant 22). 0 = off."));
 	static TAutoConsoleVariable<float> CVarMinHalf(TEXT("gstn.Loco.StanceMinHalf"), 0.f,
 		TEXT("Stance width layer: minimum distance (cm) of each foot from the midline where a clip opts in; a closer or crossing foot is pushed out to it. 0 = off."));
+	static TAutoConsoleVariable<float> CVarTorso(TEXT("gstn.Loco.TorsoLean"), 0.f,
+		TEXT("Torso lean additive (deg) where a clip opts in (curve GSTN_TorsoLean, e.g. run start variant 25): + = torso further forward / lower, - = more upright (toward the feel of 22). 0 = off."));
 	static TAutoConsoleVariable<float> CVarForce(TEXT("gstn.Loco.StanceWidth.Force"), 0.f,
 		TEXT("Stance width layer: weight (0..1) applied to every clip, also without the curves (try the layer on idle, loop, turns). 0 = only clips with the curves."));
 
@@ -80,6 +82,17 @@ void FGSTN_AnimNode_StanceWidth::CacheBones_AnyThread(const FAnimationCacheBones
 		}
 	}
 
+	Torso.Reset();
+	for (const FName Name : TorsoBones)
+	{
+		const FCompactPoseBoneIndex Bone = GSTNStanceWidth::Resolve(Bones, Name);
+		if (Bone != INDEX_NONE)
+		{
+			Torso.Add(Bone);
+		}
+	}
+	Neck = GSTNStanceWidth::Resolve(Bones, NeckBone);
+
 	// Lateral axis from the reference pose, in the axis bone's frame: from the right foot to the left foot, flattened
 	const FTransform AxisRef = Axis != INDEX_NONE ? GSTNStanceWidth::RefComponentSpace(Bones, Axis) : FTransform::Identity;
 	FVector Across = AxisRef.InverseTransformVectorNoScale(GSTNStanceWidth::RefComponentSpace(Bones, Legs[0].Foot).GetLocation()
@@ -101,6 +114,41 @@ void FGSTN_AnimNode_StanceWidth::Update_AnyThread(const FAnimationUpdateContext&
 	Offset = GSTNStanceWidth::CVarWidth.GetValueOnAnyThread();
 	MinHalfWidth = GSTNStanceWidth::CVarMinHalf.GetValueOnAnyThread();
 	Force = FMath::Clamp(GSTNStanceWidth::CVarForce.GetValueOnAnyThread(), 0.f, 1.f);
+	TorsoDeg = GSTNStanceWidth::CVarTorso.GetValueOnAnyThread();
+}
+
+bool FGSTN_AnimNode_StanceWidth::ApplyTorso(FCSPose<FCompactPose>& CSPose, const FTransform& AxisCS, float Weight)
+{
+	LastTorso = TorsoDeg * Weight;
+	if (Torso.Num() == 0 || FMath::Abs(LastTorso) < 0.01f)
+	{
+		return false;
+	}
+	// Forward = lateral (right -> left) x up in the axis bone's frame; the pitch axis tips up toward forward for + angles
+	const FVector Up = AxisCS.TransformVectorNoScale(FVector::UpVector);
+	const FVector Forward = AxisCS.TransformVectorNoScale(FVector::CrossProduct(SideAxis, FVector::UpVector));
+	const FVector PitchAxis = FVector::CrossProduct(Up, Forward).GetSafeNormal();
+	if (PitchAxis.IsNearlyZero())
+	{
+		return false;
+	}
+	const float Step = FMath::DegreesToRadians(LastTorso) / Torso.Num();
+	auto Rotate = [&CSPose, &PitchAxis](FCompactPoseBoneIndex Bone, float Radians)
+	{
+		FTransform T = CSPose.GetComponentSpaceTransform(Bone);
+		T.SetRotation(FQuat(PitchAxis, Radians) * T.GetRotation());   // about the bone's own position: children follow by their local pose
+		const FBoneTransform One[1] = {FBoneTransform(Bone, T)};
+		CSPose.LocalBlendCSBoneTransforms(One, 1.f);
+	};
+	for (const FCompactPoseBoneIndex Bone : Torso)
+	{
+		Rotate(Bone, Step);
+	}
+	if (Neck != INDEX_NONE && NeckCounter > 0.f)
+	{
+		Rotate(Neck, -Step * Torso.Num() * NeckCounter);
+	}
+	return true;
 }
 
 void FGSTN_AnimNode_StanceWidth::Evaluate_AnyThread(FPoseContext& Output)
@@ -108,7 +156,23 @@ void FGSTN_AnimNode_StanceWidth::Evaluate_AnyThread(FPoseContext& Output)
 	Source.Evaluate(Output);
 	Legs[0].LastMove = Legs[1].LastMove = 0.0;
 	Legs[0].LastWeight = Legs[1].LastWeight = 0.f;
-	if (!bValid || (Offset == 0.f && MinHalfWidth <= 0.f))
+	LastTorso = 0.f;
+	if (!bValid)
+	{
+		return;
+	}
+	const float TorsoWeight = (TorsoDeg != 0.f && !TorsoCurve.IsNone()) ? FMath::Clamp(Output.Curve.Get(TorsoCurve), 0.f, 1.f) : 0.f;
+	if (TorsoWeight > ZERO_ANIMWEIGHT_THRESH)
+	{
+		FCSPose<FCompactPose> TorsoPose;
+		TorsoPose.InitPose(Output.Pose);
+		const FTransform AxisTorso = Axis != INDEX_NONE ? TorsoPose.GetComponentSpaceTransform(Axis) : FTransform::Identity;
+		if (ApplyTorso(TorsoPose, AxisTorso, TorsoWeight))
+		{
+			FCSPose<FCompactPose>::ConvertComponentPosesToLocalPoses(MoveTemp(TorsoPose), Output.Pose);
+		}
+	}
+	if (Offset == 0.f && MinHalfWidth <= 0.f)
 	{
 		return;
 	}
@@ -177,7 +241,7 @@ void FGSTN_AnimNode_StanceWidth::Evaluate_AnyThread(FPoseContext& Output)
 
 void FGSTN_AnimNode_StanceWidth::GatherDebugData(FNodeDebugData& DebugData)
 {
-	DebugData.AddDebugItem(FString::Printf(TEXT("%s (offset %.1f, min half %.1f, force %.2f; L w %.2f move %.1f cm, R w %.2f move %.1f cm)"),
-		*DebugData.GetNodeName(this), Offset, MinHalfWidth, Force, Legs[0].LastWeight, Legs[0].LastMove, Legs[1].LastWeight, Legs[1].LastMove));
+	DebugData.AddDebugItem(FString::Printf(TEXT("%s (offset %.1f, min half %.1f, force %.2f, torso %.1f deg; L w %.2f move %.1f cm, R w %.2f move %.1f cm)"),
+		*DebugData.GetNodeName(this), Offset, MinHalfWidth, Force, LastTorso, Legs[0].LastWeight, Legs[0].LastMove, Legs[1].LastWeight, Legs[1].LastMove));
 	Source.GatherDebugData(DebugData);
 }
