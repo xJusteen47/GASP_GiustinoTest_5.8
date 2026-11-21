@@ -1,4 +1,4 @@
-﻿"""Dropkick K5 (2026-11-21, owner feedback on the r4 videos): the KICK itself, not the tech bounce.
+"""Dropkick K5 (2026-11-21, owner feedback on the r4 videos): the KICK itself, not the tech bounce.
 Owner: no oomph, does not read as a dropkick with a strong sweetspot at the start ("someone extending the legs"); arms NOT crossed;
 while falling he must look smug ("compiaciuto di se stesso, con quella posa").
 Writes overlord_dropkick_{startup,loop}_k5.json next to the originals (the originals and the game copies are untouched: variant).
@@ -68,6 +68,15 @@ SMUG = pose([0, 50.5, -9.5], [81.0, 0, 0], [-5.0, 0, 0], [-15.0, 0, 12.0], CROSS
             legs([2.0, -5.5, -84.0], [-8.0, -5.5, -84.0], [15.0, 15.0, -45.0], -48.0))
 SMUG["arm_l"]["hand"] = [-13.5, 22.6, -11.7]
 SMUG["arm_r"]["hand"] = [0.2, 21.0, -17.6]
+# Round 3 (review k5r2b, smug FAIL: head in line with the body looking at the sky, 6 -> 12 deg tilt invisible at 250 cm):
+# a HELD attitude. Neck lifted (neck_01 flexed) with the head tipped back on top (chin up), so he looks down his nose along the
+# body at the target (face ~35 deg above the horizon instead of 54), turned ~25 deg toward his right (the az90 side camera)
+# and tilted ~25 deg. Key 14 keeps the eyes on the target (head -36): the strike is the flick into this attitude. The loop
+# (12 f = 0.2 s, so any cycle pulses at 5 Hz) only breathes: chin up 3 deg more and tilt 3 deg more at f6, chest out (spine -5).
+STRIKE["head"] = [-30.0, -28.0, 10.0]
+STRIKE["neck_chain"] = {"neck_01": [-12.0, 0.0, 0.0], "head": [12.0, 0.0, 0.0]}
+SMUG["head"] = [-28.0, -31.0, 13.0]
+SMUG["neck_chain"] = {"neck_01": [-12.0, 0.0, 0.0], "head": [15.0, 0.0, 0.0]}
 loop = {"0": STRIKE, "6": SMUG, "11": lerp(STRIKE, SMUG, 0.067)}
 
 # Round 2 (review k5b FAIL, posa: the round-1 cross read as a guard: elbows at the sides, hands pushed 5-8 cm out by the
@@ -80,6 +89,14 @@ R2 = json.load(open(os.path.join(HERE, "fold_r2.json")))
 for _poses, _sec in ((startup, "startup"), (loop, "loop")):
     for _k, _p in _poses.items():
         _poses[_k] = dict(_p, **copy.deepcopy(R2[_sec][_k]))
+# Round 3 (review k5r2b, posa FAIL lying back: round 2's elbows-forward fold built a tent ~20-25 cm over the chest once the torso
+# lies back = a raised guard). The LYING keys (startup 14-15, loop 0/6/11) take the fold of k5/fold3.py (fold_r3.json): upper
+# arms down along the ribs, elbows out at the sides (18-22 cm) and 8-16 cm forward, forearms on the chest left over right, the
+# whole arm block <= 11.3 cm above the sternum (round 2: 18.7), clearance >= 0.98 cm offline. Keys 1-13 (upright, passed) keep round 2.
+R3 = json.load(open(os.path.join(HERE, "fold_r3.json")))
+for _poses, _sec in ((startup, "startup"), (loop, "loop")):
+    for _k, _v in R3[_sec].items():
+        _poses[_k] = dict(_poses[_k], **copy.deepcopy(_v))
 # f2 breakdown: eased straight from f0 to the fold, the right fist passes 2 cm through the left upper arm at f2. The right arm
 # (the lower one) leads and the left (top) one lags, so the right forearm is already under the left elbow when it closes.
 _old0 = json.load(open(os.path.join(DK, "overlord_dropkick_startup.json")))["author"]["poses"]["0"]
@@ -112,6 +129,12 @@ def write(name, src, poses, delays, extra_change):
     keep0 = {"0": old0} if name.endswith("startup_k5") else {}
     c["author"]["poses"] = dict(keep0, **poses)
     c["part_delays"] = delays
+    if name.endswith("startup_k5") and not any(p["frame"] == 14 for p in c["poses"]):
+        # Round 3: the build keeps only these pose frames (0, 4, 8, 11, 15) and lets the rig interpolate the rest, so the arms went
+        # from the upright fold (f11) to the lying fold (f15) on their own path and the right forearm crossed the belly at clip f14
+        # (-0.34 cm). A build key at f14 (the smear, author key 14 fitted with fold3.fit_path) pins that frame; 11 -> 14 keeps
+        # pre_launch's charge_long (slow leave = a13 still the ball), 14 -> 15 is one frame.
+        c["poses"] = sorted(c["poses"] + [{"name": "smear", "frame": 14, "source": None, "spacing": "hold_recoil"}], key=lambda p: p["frame"])
     c["_changes"] = ("k5 (2026-11-21, owner on the r4 videos): " + extra_change + " Previous: " + str(c.get("_changes", ""))[:300])
     out = os.path.join(DK, name + ".json")
     with open(out, "w") as f:

@@ -17,3 +17,13 @@ Gameplay unchanged: startup 16 f, active from f15 (timing csv), loop 12 f x LOOP
 Overshoot / follow-through: the strike overshoots in pitch (82 vs 81 in the loop) and in the head flick; part_delays are 0 on purpose
 (r0's chest1/head2/forearm2/hand3 put the head 2 frames after the active frame and blurred the snap).
 Base for comparison: r4e (AM_OverlordDropkick, r0 restore + a0c7bf9f arms) frames v122-v156 of dropkick_low_hit.
+
+## Round 3 (2026-11-21, review k5r2b "Round 3"): what changed against the table above
+| frames | beat | what moves now |
+|---|---|---|
+| f3 -> f13 | upright fold | unchanged (round 2, passed): elbows forward and in, forearms level, left over right |
+| f13 -> f14 | SMEAR + arms lie down | 1 f: the fold switches to the LYING fold (k5/fold3.py, fold_r3.json) while the legs smear: upper arms down along the ribs, elbows out at the sides (18-22 cm) and 8-16 cm forward of spine_05, forearms on the chest, left (on top, toward the chin) over right, hands on the other arm. Arm block <= 11.3 cm above the sternum (round 2: 18.7), below the top of the head in the side view (offline 28 vs 33 cm above the pelvis; round 2: 41 vs 31). Head still on the target (-36). |
+| f14 -> f15 | STRIKE + smug flick | head: neck_01 flexed 12 deg (head lifted off the body line), head tipped back 12 deg on top (chin up), turned ~25 deg to his right (toward the az90 camera) and tilted ~25 deg: face 35 deg above the horizon, looking down the body at the target (round 2: 54 deg, at the sky). Arms held. |
+| loop f0 -> f6 -> f11 | smug hold, period 12 (0.2 s) | a held attitude, not a cycle: f6 chin up 3 deg more, tilt 3 deg more, chest out (spine -8 -> -5); arms identical on every loop key (a cycle of 0.2 s would read as a 5 Hz jitter). |
+Overshoot at f15-f17 (owner's OOMPH note): NOT done. Startup (16 f) and loop (12 f) lengths are gameplay timing; an overshoot settling
+after f15 would sit in the loop and pulse every 0.2 s. It needs a one-shot segment after the strike (a montage change): owner's call.
