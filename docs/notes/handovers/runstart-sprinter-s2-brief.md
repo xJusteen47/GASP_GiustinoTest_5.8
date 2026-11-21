@@ -19,3 +19,9 @@ Check torso angle f4-12 (40-46 deg in s1) and pelvis (~80 cm) with the one-off i
 4. Review: brief like runstart-s1_h1/brief_review.md (compare with s1); Fable subagent; mp4 frame n = capture v(n+60) - tell the
    reviewer; look yourself at an az45 strip v86-v120 (ffmpeg crop=360:360:360:0). Only PASS + video to the owner.
 5. Reopen the editor (UnrealEditor.exe GASP_Giustino2.uproject), free lock, push, handover with COSTO line.
+## Also (owner 2026-11-21 13:33): footstep foley on our run start clips
+Add the STOCK GASP foley notifies (copy the notify class, track and settings from M_Relaxed_Run_Start_F_Lfoot / M_Relaxed_Run_Loop_F;
+ask the Unreal Assistant how stock GASP does it, rule 14) to AS_GSTN_RunStart_Generic_g3 and _s2 (and s1 if kept), timed to the
+real plants: frames where contact_l / contact_r go 0 -> 1 in the clip's own curves (stock convention). Do it in
+runstart_generic_g_ue.py (re-import keeps them) so it is reproducible; check in the capture that the events fire (audio log or
+notify log), one event per plant, none during the churning foot spin.
