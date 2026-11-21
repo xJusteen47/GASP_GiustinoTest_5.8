@@ -1,4 +1,4 @@
-<#
+﻿<#
 Run-Timed.ps1 - run a build / test / capture under a hard time limit (project rule 5).
 
 The wrapper STARTS the process itself, suspended, puts it in a Windows Job Object and only then resumes it, so every child
@@ -196,6 +196,31 @@ function Clear-RestoreData {
 }
 
 # The project folder of a command line: the first quoted (or bare) path ending in .uproject, else $Fallback.
+# Owner 2026-11-21 ("ci sono ancora i 3 pie"): agent editor runs on the owner's checkout set the PIE multiplayer options in memory
+# (pie_capture_move.py: listen host + 2 clients) and the editor SAVES them to Saved\Config\WindowsEditor\EditorPerProjectUserSettings.ini
+# when Play starts, so the owner's next editor opened with 3 players. Every editor run now puts these keys back as they were.
+$PieKeys = @('PlayNumberOfClients', 'PlayNetMode', 'RunUnderOneProcess', 'bLaunchSeparateServer')
+function Get-PieIni([string]$ProjectDir) {
+    $f = Join-Path $ProjectDir 'Saved\Config\WindowsEditor\EditorPerProjectUserSettings.ini'
+    $snap = @{}
+    if (Test-Path -LiteralPath $f) {
+        foreach ($l in [IO.File]::ReadAllLines($f)) { foreach ($k in $PieKeys) { if ($l -like "$k=*") { $snap[$k] = $l } } }
+    }
+    return @{ File = $f; Lines = $snap }
+}
+function Restore-PieIni($Snap) {
+    if (-not $Snap -or -not (Test-Path -LiteralPath $Snap.File) -or $Snap.Lines.Count -eq 0) { return '' }
+    $lines = [IO.File]::ReadAllLines($Snap.File); $changed = @()
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        foreach ($k in $Snap.Lines.Keys) {
+            if ($lines[$i] -like "$k=*" -and $lines[$i] -ne $Snap.Lines[$k]) { $changed += "$($lines[$i]) -> $($Snap.Lines[$k])"; $lines[$i] = $Snap.Lines[$k] }
+        }
+    }
+    if (-not $changed) { return '' }
+    [IO.File]::WriteAllLines($Snap.File, $lines)
+    return "poststop: PIE ini restored ($($changed -join ', '))"
+}
+
 function Get-ProjectDir {
     param([string]$Line, [string]$Fallback)
     $m = [regex]::Match($Line, '"([^"]+\.uproject)"|(\S+\.uproject)')
@@ -291,12 +316,14 @@ $notes = @()
 if ($isEditor) {
     if ($ArgLine -notmatch '(^|\s)-unattended(\s|$)') { $ArgLine = "$ArgLine -unattended" }
     if (-not $KeepRestoreData) { $n = Clear-RestoreData (Get-ProjectDir $ArgLine $Root); if ($n) { $notes += $n } }
+    $pieSnap = Get-PieIni (Get-ProjectDir $ArgLine $Root)
 }
 if ($AssertFile) {
     $AssertFile = if ([IO.Path]::IsPathRooted($AssertFile)) { $AssertFile } else { Join-Path $Root $AssertFile }
     Remove-Item -LiteralPath $AssertFile -ErrorAction SilentlyContinue   # a stale OK from an earlier run must never pass this one
 }
 $code = Invoke-Timed $Kind $Log $Exe $ArgLine $WatchFile $maxSec $silentSec $Root -Quiet | Select-Object -Last 1
+if ($isEditor) { $n = Restore-PieIni $pieSnap; if ($n) { $notes += $n } }
 $esito = "$Log.esito"
 $lines = @(Get-Content -LiteralPath $esito)
 if ($notes) { $lines = @($lines[0], ((@($lines[1]) + $notes) -join ' | ')) + $lines[2..($lines.Count - 1)] }
