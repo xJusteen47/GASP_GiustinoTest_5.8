@@ -1,0 +1,2 @@
+ASSERT: OK
+ASSERT: OK mv_turn_180a AS_GSTN_RunStart_Generic_w2t180Lp f88-f132: weight >= 0.8 on 100% (min 0.86)
