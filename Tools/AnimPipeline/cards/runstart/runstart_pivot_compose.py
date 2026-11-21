@@ -191,7 +191,10 @@ U_RP = H + k_rp
 def pivot_foot(u):
     if u <= TO:
         G = turn_group(G0_pv, ball_pv, PIV * ss(u / TO))
-        lat = ry(np.array([1.0, 0.0, 0.0]), yaw[int(u)])
+        # heel lift about the FOOT's own lateral axis (owner 2026-11-21 "il piede destro è rotto": the body's lateral axis, while the
+        # foot is yawed differently on its ball, rolled the foot on its side and bent the ankle)
+        fd = hz(G['ball_MainPoint_' + pv] - G['foot_MainPoint_' + pv])
+        lat = np.cross(upv, fd / max(float(np.linalg.norm(fd)), 1e-6))
         return {n: ball_pv + rot_axis(v - ball_pv, lat, HEEL * ss((u - (TO - 1.5)) / 1.5)) for n, v in G.items()}
     return None
 
@@ -222,17 +225,24 @@ for u in range(NT):
         W = world_rev(u)
     # arms tucked (review r1 item 4): elbows down at the ribs, fists in front of the chest, from f1, held through H, released into
     # the rev's pump by H + 2
-    tk = TUCK * ss(u / 1.5) * (1.0 - ss((u - H) / 2.0))
-    if tk > 0:
+    # Arms lead the turn (owner 2026-11-21, all four turns, replaces "arms tucked"): the hands travel back and outward like a
+    # person who turns and starts to run, never stuck to the body and never still: the target moves every frame (swing grows
+    # through the pivot, the turn-side arm a frame ahead), then hands over to the rev's pump by H + 2. Rejected before: tucked
+    # elbows + fists at the hip ("T-rex", hands through the leg).
+    for s in 'lr':
+        lead = 1.0 if s == st else 0.0                        # turn-side arm leads by one frame
+        p = min(max((u + lead) / H, 0.0), 1.2)
+        tk = TUCK * ss((u + lead) / 1.5) * (1.0 - ss((u - H) / 2.0))
+        if tk <= 0:
+            continue
         fwd = ry(np.array([0.0, 0.0, 1.0]), yaw[u] + (LEAD_C * ss(u / 1.0) * (1.0 - ss((u - (H - 2)) / 2.0)) if u < H else 0.0))
-        for s in 'lr':
-            sh = W['upperarm_MainPoint_' + s]
-            inward = hz(W['spine_04_MainPoint'] - sh)
-            # owner 2026-11-21 on r2 ("mani a T rex", hands through the leg): elbow less closed, longer forearm reach, the fist
-            # in front of the ribs and outside the hip/thigh outline (was: tight elbow, hands crossed in front of the hip)
-            out_s = -inward / max(float(np.linalg.norm(inward)), 1e-6)
-            e_tgt = sh - upv * 23.0 - fwd * 2.0 + out_s * 3.0
-            h_tgt = e_tgt + fwd * 18.0 - upv * 4.0 + out_s * 7.0
+        sh = W['upperarm_MainPoint_' + s]
+        inward = hz(W['spine_04_MainPoint'] - sh)
+        out_s = -inward / max(float(np.linalg.norm(inward)), 1e-6)
+        sw = ss(p / 0.8) * (1.15 if lead else 0.9)            # swing back/out grows through the pivot (continuous motion)
+        e_tgt = sh - upv * (22.0 - 4.0 * sw) - fwd * (6.0 + 10.0 * sw) + out_s * (6.0 + 8.0 * sw)
+        h_tgt = e_tgt - upv * (16.0 - 6.0 * sw) - fwd * (6.0 + 10.0 * sw) + out_s * (5.0 + 9.0 * sw)
+        if True:
             dh, de = (h_tgt - W['hand_MainPoint_' + s]) * tk, (e_tgt - W['lowerarm_MainPoint_' + s]) * tk
             for n in [n for n in W if n.startswith('hand_') and n.endswith('_' + s)]:
                 W[n] = W[n] + dh
@@ -276,7 +286,7 @@ for s in 'lr':
     for u in us:
         W = W_all[u]
         fdir = hz(W['ball_MainPoint_' + s] - W['foot_MainPoint_' + s]); nf = float(np.linalg.norm(fdir))
-        fw = ry(np.array([0.0, 0.0, 1.0]), yaw[u]) + (fdir / nf * min(nf / 10.0, 1.0) if nf > 1e-3 else 0.0)
+        fw = ry(np.array([0.0, 0.0, 1.0]), yaw[u]) + (2.0 * fdir / nf * min(nf / 10.0, 1.0) if nf > 1e-3 else 0.0)   # knee over the toes (owner: twisted R foot)
         fws.append(fw / np.linalg.norm(fw))
     fws = SM(SM(SM(fws)))
     for u, fw in zip(us, fws):

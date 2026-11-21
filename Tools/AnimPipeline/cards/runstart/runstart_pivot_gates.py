@@ -16,6 +16,8 @@ ROOT = os.path.dirname(os.path.abspath(__file__)).split(os.sep + 'Tools' + os.se
 RS = os.path.join(ROOT, 'Saved', 'AnimPipeline', 'runstart')
 GAP_MIN, TOE_TOL, BONE_TOL, JIT_MIN, JIT_DEG, JIT_K = 10.0, 5.0, 0.05, 8.0, 12.0, 2.0
 CLR_HIPS = 21.0  # hand to mid-hips (old v27 r2 UE clip: 19 cm at f1-2, the owner's 'hands through the leg')
+ROLL_MAX = 25.0   # foot lateral axis tilt, deg (UE clip)
+TWIST_MIN = 35.0  # foot vs knee direction, deg (stock loop max + 10 if larger)
 CLR_MIN = 14.0   # hand / forearm to thigh axis: thigh ~9 cm + hand ~4 cm radius + 1
 UP = 1
 SEG = [('thigh_MainPoint_%s', 'calf_MainPoint_%s'), ('calf_MainPoint_%s', 'foot_MainPoint_%s'), ('foot_MainPoint_%s', 'ball_MainPoint_%s'),
@@ -66,6 +68,17 @@ def measures(J):
     def seg_dist(P, A, B):
         d = B - A; t = np.clip(np.sum((P - A) * d, axis=1) / np.maximum(np.sum(d * d, axis=1), 1e-6), 0, 1)
         return np.linalg.norm(P - (A + d * t[:, None]), axis=1)
+    # foot twist (owner 2026-11-21 "il piede destro è rotto": foot turned out and rolled vs the shin): horizontal angle between the
+    # foot (ankle -> ball) and the knee's bend direction, on frames where the knee is bent (offset > 4 cm)
+    m['twist'] = {}
+    for s in 'lr':
+        T_, K_, F_, B_ = (J[n + s] for n in ('thigh_MainPoint_', 'calf_MainPoint_', 'foot_MainPoint_', 'ball_MainPoint_'))
+        kn = K_ - 0.5 * (T_ + F_); kn[:, UP] = 0; fd = B_ - F_; fd[:, UP] = 0
+        nk, nf = np.linalg.norm(kn, axis=1), np.linalg.norm(fd, axis=1)
+        cosv = np.sum(kn * fd, axis=1) / np.maximum(nk * nf, 1e-6)
+        ang = np.degrees(np.arccos(np.clip(cosv, -1, 1)))
+        ang = np.minimum(ang, 180.0 - ang)   # the rig's knee point can sit on either side of the hip-ankle line: deviation from colinear
+        m['twist'][s] = np.where((nk > 4.0) & (nf > 4.0), ang, 0.0)
     m['clear'] = {}
     for s in 'lr':
         H_ = J['hand_MainPoint_' + s]; F_ = 0.5 * (H_ + J['lowerarm_MainPoint_' + s])
@@ -82,10 +95,14 @@ def loop_ref():
     return measures({k[2:]: L[k] for k in L.files if k.startswith('P|')})
 
 
+AXES = {}
+
+
 def main():
     args = sys.argv[1:]
     if args[0] == '--json':
         src = args[1]; d = json.load(open(src)); J = {k: np.array(v, float) for k, v in d['joints'].items()}
+        AXES.update(d.get('axes') or {})
         tag = os.path.splitext(os.path.basename(src))[0]; rest = args[2:]
     else:
         tag = args[0]; rest = args[1:]
@@ -127,11 +144,29 @@ def main():
         rep['jit_' + k] = [round(float(v.max()), 1), int(v.argmax()) + 1, round(lim, 1)]
         if v.max() > lim:
             fails.append('jitter %s f%d %.1f>%.1f' % (k, int(v.argmax()) + 1, v.max(), lim))
+    tw_lim = max(TWIST_MIN, max(float(ref['twist'][s].max()) for s in 'lr') + 10.0)
+    for s in 'lr':
+        v = m['twist'][s][:win]
+        rep['twist_' + s] = [round(float(v.max()), 1), int(v.argmax()), round(tw_lim, 1)]
+        if v.max() > tw_lim:
+            fails.append('foot twist %s f%d %.0f>%.0f deg' % (s, int(v.argmax()), v.max(), tw_lim))
     for k, v in m['clear'].items():
         lim = min(CLR_HIPS if k.endswith('hips') else CLR_MIN, 0.9 * float(ref['clear'][k].min()))   # never stricter than the stock loop's own closest pass
         rep['clear_' + k] = [round(float(v.min()), 1), int(v.argmin()), round(lim, 1)]
         if v.min() < lim:
             fails.append('clearance %s f%d %.1f<%.1f cm' % (k, int(v.argmin()), v.min(), lim))
+    # foot roll (UE clip only: needs the foot bone axes): the foot's lateral axis tilting out of the horizontal = foot on its side
+    # (owner 2026-11-21, R foot on the toe "flattened sideways"). Lateral axis = the bone axis most perpendicular to up and to the
+    # foot direction at frame 0 (flat foot). Heel lift does not tilt it; a roll does.
+    if AXES:
+        for s in 'lr':
+            A = np.array(AXES['foot_axes_' + s], float)            # frames x 3 axes x 3
+            fd0 = J['ball_MainPoint_' + s][0] - J['foot_MainPoint_' + s][0]; fd0 /= np.linalg.norm(fd0)
+            i = int(np.argmin([abs(A[0, k, UP]) + abs(float(np.dot(A[0, k], fd0))) for k in range(3)]))
+            roll = np.degrees(np.arcsin(np.clip(np.abs(A[:win, i, UP]), 0, 1)))
+            rep['roll_' + s] = [round(float(roll.max()), 1), int(roll.argmax()), ROLL_MAX]
+            if roll.max() > ROLL_MAX:
+                fails.append('foot roll %s f%d %.0f>%.0f deg' % (s, int(roll.argmax()), roll.max(), ROLL_MAX))
     rep['fails'] = fails
     json.dump(rep, open(os.path.join(RS, 'gates_%s.json' % tag), 'w'), indent=1)
     print('%s: gap min f0-%d %.1f cm (f%d), tail %s (loop %s); toe L %s R %s (loop %s)' % (

@@ -23,10 +23,14 @@ for name in [a for a in os.environ.get("RCJ_ASSETS", "").split(",") if a]:
     n = int(seq.get_editor_property("number_of_sampled_frames")) if hasattr(seq, "number_of_sampled_frames") else AL.get_num_frames(seq) + 1
     opts = unreal.AnimPoseEvaluationOptions()
     J = {k: [] for k in MAP}
+    AX = {"foot_axes_" + s: [] for s in "lr"}   # foot bone X/Y/Z axes (Y up), for the roll gate (owner: rolled right foot)
     for f in range(n):
         pose = unreal.AnimPoseExtensions.get_anim_pose_at_time(seq, f / 30.0, opts)
         for k, b in MAP.items():
             t = unreal.AnimPoseExtensions.get_bone_pose(pose, b, unreal.AnimPoseSpaces.WORLD).translation
             J[k].append([t.x, t.z, t.y])
-    json.dump({"fps": 30, "joints": J}, open(os.path.join(OUT, "joints_%s.json" % name), "w"))
+        for s in "lr":
+            q = unreal.AnimPoseExtensions.get_bone_pose(pose, "foot_" + s, unreal.AnimPoseSpaces.WORLD).rotation
+            AX["foot_axes_" + s].append([[a.x, a.z, a.y] for a in (q.get_axis_x(), q.get_axis_y(), q.get_axis_z())])
+    json.dump({"fps": 30, "joints": J, "axes": AX}, open(os.path.join(OUT, "joints_%s.json" % name), "w"))
     print("RCJ %s: %d frames" % (name, n))
