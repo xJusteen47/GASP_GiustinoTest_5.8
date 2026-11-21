@@ -120,6 +120,10 @@ LEAN_OUT = float(os.environ.get('LEAN_OUT', N_REV))     # lean/arm envelope end 
 DROP_CM = float(os.environ.get('DROP_CM', 0.0))          # sprinter: pelvis drop (cm) during the drive steps
 DROP_IN, DROP_HOLD, DROP_OUT = (float(os.environ.get(k, d)) for k, d in (('DROP_IN', 4), ('DROP_HOLD', 10), ('DROP_OUT', 16)))
 ARM_BACK = float(os.environ.get('ARM_BACK', 0.0))        # sprinter: elbows / hands drawn back (cm, -Z) with the lean envelope
+LEG_IK = os.environ.get('LEG_IK', '1') == '1'           # rebuild knees + poles (fix for backward knees, see below)
+POLE_CM = float(os.environ.get('POLE_CM', 45.0))
+LT = {sd_: float(np.linalg.norm(LP['P|calf_MainPoint_' + sd_][0] - LP['P|thigh_MainPoint_' + sd_][0])) for sd_ in 'lr'}
+LC = {sd_: float(np.linalg.norm(LP['P|foot_MainPoint_' + sd_][0] - LP['P|calf_MainPoint_' + sd_][0])) for sd_ in 'lr'}
 ENTRY_LEAD = float(os.environ.get('ENTRY_LEAD', 0.0))   # g3: pelvis/legs finish the entry this many frames before the chest
 KNEE_DEG = float(os.environ.get('KNEE_DEG', 0.0))       # g3: extra hip flexion of the swing leg (high knees), shin folds back
 KNEE_A, KNEE_B = float(os.environ.get('KNEE_A', 4)), float(os.environ.get('KNEE_B', 13))   # frame window (steps 2-3)
@@ -194,6 +198,23 @@ for u in range(N_NEW):
             if hip is not None:
                 d = v - hip; v = hip + hz(d) * s + (d - hz(d))
         W[n] = v + rnew
+    if LEG_IK:
+        # Owner 2026-11-21 "le gambe sono rotte" (g3 and s1): stride scaling and the pelvis drop are not rigid, so the knee point and
+        # the pole (calf_LimbDir) ended near the hip-foot line and Cascadeur's leg IK bent the knee BACKWARD (-16..-37 cm, s1 f1-6).
+        # Rebuild each knee by two-bone IK with the rig lengths, bending toward the character's forward, and put the pole in front.
+        for sd_ in 'lr':
+            H, F = W['thigh_MainPoint_' + sd_], W['foot_MainPoint_' + sd_]
+            K_old = W['calf_MainPoint_' + sd_]
+            d = F - H; dl = float(np.linalg.norm(d)); ax = d / dl
+            fw = FWD - ax * float(np.dot(FWD, ax)); fw /= np.linalg.norm(fw)          # forward, perpendicular to hip-foot line
+            dc = min(dl, LT[sd_] + LC[sd_] - 0.01)
+            x = (LT[sd_] ** 2 - LC[sd_] ** 2 + dc ** 2) / (2 * dc)
+            h = math.sqrt(max(LT[sd_] ** 2 - x * x, 0.0))
+            K = H + ax * x + fw * h
+            for n in [n for n in W if n.startswith('calf_') and n.endswith('_' + sd_) and n not in ('calf_MainPoint_' + sd_, 'calf_LimbDir_' + sd_)]:
+                W[n] = W[n] - K_old + K
+            W['calf_MainPoint_' + sd_] = K
+            W['calf_LimbDir_' + sd_] = K + fw * POLE_CM
     out[u] = (W, Bx)
 D = {}
 for n in pnames:
