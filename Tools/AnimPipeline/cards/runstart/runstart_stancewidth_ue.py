@@ -6,6 +6,9 @@
    swing of the second half of the clip (no planted foot slides; 0 at the hand-off, the stock loop stays as it is).
 3. Rows: runstart_generic_rows_ue.py with RSG_ASSET=dst at gstn.RunStart.Variant SW_K (default 22) and SW_K + 10 (Handoff),
    siblings of the stock rows (env RSG_STOCK / RSG_SPLIT passed through for the turnarounds).
+SW_SCHEDULE (optional, Variant 23 "agile"): comma-separated weights, one per foot contact in time order across both feet
+   (e.g. "0.8,0.8,0.8,0.4,0" = 4/4/4/2/0 cm at 5 cm/foot); a foot's weight changes only in the swing before its contact (no
+   planted slide), ramps in from 0 at f0, and is 0 after the last listed contact.
 Headless via Tools/CI/Save-Assets.ps1 (dry run otherwise). Report Saved/AnimPipeline/stancewidth/setup.txt; prints max 3 lines.
 Divergence row: docs/notes/gasp-divergenze.md (21d)."""
 import os
@@ -20,6 +23,7 @@ ABP = "/Game/GSTN/Locomotion/StockBase/ABP_GSTN_StockMover"
 RS = "/Game/GSTN/Animation/RunStart/"
 PAIRS = [p.split("=") for p in os.environ.get("SW_PAIRS", RS + "AS_GSTN_RunStart_Generic_w2=" + RS + "AS_GSTN_RunStart_Generic_w2s").split(",")]
 K = int(os.environ.get("SW_K", "22"))
+SCHED = [float(x) for x in os.environ.get("SW_SCHEDULE", "").split(",") if x.strip()]
 SAVE = os.environ.get("GSTN_SAVE") == "1" or os.environ.get("CLIPFIX_WRITE") == "1"
 EAL, AL = unreal.EditorAssetLibrary, unreal.AnimationLibrary
 FLT = unreal.RawCurveTrackTypes.RCT_FLOAT
@@ -48,6 +52,30 @@ def ramps(contact, n):
     if out_end - out_start < 3:
         out_start, out_end = max(in_end + 1, n - 8), n - 3
     return in_end, out_start, out_end
+
+
+def schedule(cl, cr, n):
+    """{side: (frames, vals)} from SCHED: rising edges of contact_* in time order get SCHED[k]; the value changes over the swing
+    before that contact (from the previous lift-off to the frame before the plant)."""
+    ev = []
+    for side, c in (("L", cl), ("R", cr)):
+        on = [x > 0.5 for x in c]
+        for i in range(n):
+            if on[i] and (i == 0 or not on[i - 1]):
+                ev.append((i, side, on))
+    ev.sort()
+    out = {"L": ([0], [0.0]), "R": ([0], [0.0])}
+    for k, (i, side, on) in enumerate(ev):
+        w = SCHED[k] if k < len(SCHED) else 0.0
+        fr, va = out[side]
+        if va[-1] == w:
+            continue
+        lift = max((j for j in range(fr[-1], i) if not on[j] and (j == 0 or on[j - 1])), default=fr[-1])
+        a, b = max(lift, fr[-1]), max(i - 1, fr[-1] + 1)
+        if a > fr[-1]:
+            fr.append(a); va.append(va[-1])
+        fr.append(b); va.append(w)
+    return out
 
 
 try:
@@ -80,11 +108,16 @@ try:
         _, cr = AL.get_float_keys(src_seq, "contact_r")
         n = len(t)
         keys = {}
+        sch = schedule(list(cl), list(cr), n) if SCHED else None
         for side, contact in (("L", cl), ("R", cr)):
-            a, b, c = ramps(list(contact), n)
-            frames, vals = [0, a, b, c], [0.0, 1.0, 1.0, 0.0]
+            if sch:
+                frames, vals = sch[side]
+                log.append("%s %s: schedule %s" % (dst.split("/")[-1], side, list(zip(frames, vals))))
+            else:
+                a, b, c = ramps(list(contact), n)
+                frames, vals = [0, a, b, c], [0.0, 1.0, 1.0, 0.0]
+                log.append("%s %s: ramp in f0-%d, out f%d-%d of %d" % (dst.split("/")[-1], side, a, b, c, n))
             keys[side] = ([t[f] for f in frames], vals)
-            log.append("%s %s: ramp in f0-%d, out f%d-%d of %d" % (dst.split("/")[-1], side, a, b, c, n))
         if not SAVE:
             continue
         if not EAL.does_asset_exist(dst):

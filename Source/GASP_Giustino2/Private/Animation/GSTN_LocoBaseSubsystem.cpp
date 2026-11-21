@@ -28,7 +28,7 @@ namespace GSTNLocoBase
 	// written only while gstn.Loco.Base is 1. Divergence row in docs/notes/gasp-divergenze.md.
 	static TAutoConsoleVariable<int32> CVarRunStartVariant(
 		TEXT("gstn.RunStart.Variant"), 21,
-		TEXT("Run start clip on the clean base (gstn.Loco.Base 1). 21 = generic w2 (owner 2026-11-21 14:57Z: new default; forward start plus the backward / left / right turnaround starts). 22 = w2 with wider feet (stance width layer, gstn.Loco.StanceWidth). 20 = generic w1 (approved, locked). 0 = v4r7 (approved), 1 = v4r8c (run loop sped up at ")
+		TEXT("Run start clip on the clean base (gstn.Loco.Base 1). 21 = generic w2 (owner 2026-11-21 14:57Z: new default; forward start plus the backward / left / right turnaround starts). 22 = w2 with wider feet (stance width layer, gstn.Loco.StanceWidth). 23 = w2v, 22 made livelier for the agile base character (hip sway, shoulder twist, rear elbow back, forward lean, feet 4/2/0 cm). 20 = generic w1 (approved, locked). 0 = v4r7 (approved), 1 = v4r8c (run loop sped up at ")
 		TEXT("start), 2 = v4r8a (one high-knee pump), 3 = v4r8b (cartoon wheel), 4 = stock relaxed start, 5/6/7 = generic rev-up ")
 		TEXT("g1/g2/g3, 8 = generic sprinter drive s1, 9 = sprinter s2 (longer drive), 20 = generic w1 (sprinter weight transfer, ")
 		TEXT("frantic limbs from frame 1), 21 = generic w2 (w1 on the game timing, root on the capsule: no drive slide; 10-19 are the Handoff copies of 0-9, so new variants start at 20). Read by the chooser on the ")
