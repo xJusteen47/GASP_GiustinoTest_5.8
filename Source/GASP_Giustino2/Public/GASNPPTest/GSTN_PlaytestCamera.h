@@ -38,14 +38,6 @@ protected:
 	virtual bool ModifyCamera(float DeltaTime, FMinimalViewInfo& InOutPOV) override;
 
 private:
-public:
-	/** Control rotation change since the end of the last frame's camera update: the look input GASP applied to the controller (P1a feeds it to the GSTN camera) */
-	FRotator ConsumeControlRotationDelta() const;
-
-private:
-	FRotator LastControlRotation = FRotator::ZeroRotator;
-	bool bHasLastControlRotation = false;
-
 	void ApplyTiltShift(const FGSTN_CameraTiltShiftSettings& TiltShift, const FMinimalViewInfo& POV, const FVector& Focus);
 
 	UPROPERTY(Transient)

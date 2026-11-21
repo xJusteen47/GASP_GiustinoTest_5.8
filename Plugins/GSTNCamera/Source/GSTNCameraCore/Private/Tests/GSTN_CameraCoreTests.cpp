@@ -1222,6 +1222,25 @@ GSTN_CAM_TEST(DeadZoneHoldsInsideAndDragsAtTheEdge)
 	return true;
 }
 
+GSTN_CAM_TEST(ControlRotationLookIsOnlyThePlayersChange)
+{
+	// The P1a pitch lock (2026-11-21): the look input is the controller change since the camera's last write, read before the new write
+	const FRotator Left(-18.f, 90.f, 0.f);
+	// No player input this frame: zero, whatever the camera does with its own pitch afterwards (no integrator)
+	TestTrue(TEXT("no input = no look"), FGSTN_CameraMath::ControlRotationLookDelta(Left, Left, true, 0.5f).IsNearlyZero(1.0e-4f));
+	// The player turned 3 deg right and 1 deg up: 6 and 2 look units at 0.5 deg per unit
+	const FVector2D Turn = FGSTN_CameraMath::ControlRotationLookDelta(FRotator(-17.f, 93.f, 0.f), Left, true, 0.5f);
+	TestTrue(TEXT("yaw units"), FMath::IsNearlyEqual(Turn.X, 6.f, 1.0e-3f));
+	TestTrue(TEXT("pitch units"), FMath::IsNearlyEqual(Turn.Y, 2.f, 1.0e-3f));
+	// Stored pitch 0..360: 350 -> 355 is 5 up, not -355
+	const FVector2D Wrap = FGSTN_CameraMath::ControlRotationLookDelta(FRotator(355.f, 359.f, 0.f), FRotator(350.f, 1.f, 0.f), true, 1.f);
+	TestTrue(TEXT("pitch wraps"), FMath::IsNearlyEqual(Wrap.Y, 5.f, 1.0e-3f));
+	TestTrue(TEXT("yaw wraps"), FMath::IsNearlyEqual(Wrap.X, -2.f, 1.0e-3f));
+	// First frame (the test hub controller starts at another pitch): no jump
+	TestTrue(TEXT("not continuous = no look"), FGSTN_CameraMath::ControlRotationLookDelta(FRotator(-70.f, 0.f, 0.f), Left, false, 0.5f).IsNearlyZero());
+	return true;
+}
+
 #undef CHECK
 
 #endif // WITH_DEV_AUTOMATION_TESTS

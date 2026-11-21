@@ -45,3 +45,23 @@ Then the original P0 brief (handoffs/camera-p0-brief.md) with these additions on
 9. Camera Assist option on: hold recenter, left stick turns the camera; tap still recenters.
 10. Capture (timed script, 15 min): current GASP camera vs P0/P1a camera, same inputs: run+stop, jump in place, jump on step, crouch in/out, stomp, a circle run (auto follow), walk into a framing volume. mp4 + grids in docs/notes/reviews/camera-p0/; Fable looks before the owner.
 Still open from research: Astro Bot auto rotation conflict (8 frames from a video, P0 item); Gameplay Cameras 5.9 status (ask the editor AI assistant).
+
+## Pitch lock fix (2026-11-21, cloud diagnosis, not compiled)
+
+Symptom (desktop PIE, gstn.Camera.P1a 1): distance works, but the pitch sits at -70 (top down) running and idle, and at +20 after a jump; the stick does not turn the camera.
+
+Cause (code reading, exact): the first wiring (bcee4afc) measured the look input in `UGSTN_PlaytestCameraSubsystem::Tick` as the control rotation change
+since the modifier's last view. But the GSTN camera writes the control rotation back (`ControlRotationPolicy WriteBack`) in TG_PostPhysics, BEFORE
+that measure. So the "delta" was the camera's own motion of this frame, fed back as look input next frame with gain 1: an integrator,
+pitch(t+1) = pitch(t) + (pitch(t) - pitch(t-1)). Any first step (the hub controller's start pitch vs the Free default -25, or the air framing on a jump)
+became a constant speed that ran until the Free clamp: MinPitchDeg -70, MaxPitchDeg +20 (FGSTN_CameraFollowTuning). The real stick input was
+overwritten by the write back before it was read, so it was lost. LookFeed 0 removed the loop; the camera then sat at -25, which looks close to GASP's.
+
+Fix: the plugin implements its `LookInputSource::ControlRotation` (it was declared but never read): inside `ApplyLook`, before the write back, the input
+is the control rotation change since the camera's own write of the previous frame (`FGSTN_CameraMath::ControlRotationLookDelta`, test
+`GSTNCamera.Core.ControlRotationLookIsOnlyThePlayersChange`). First frame or after a gap = no input (no jump). The playtest wiring gives the P1a
+camera its own transient profile with that source (`gstn.Camera.P1a.LookFeed` 1 = ControlRotation, 0 = no look) and no longer feeds AddLookInput.
+Log: `gstn.Camera.LookLog 1` -> `Saved/Logs/gstn_camera_look_<pawn>.csv`; checker `Tools/GASNPPTest/camera_look_check.py` (ESITO PASS/FAIL).
+
+Seen, not changed (out of scope): the subsystem hands the camera its subject in a tickable (after the camera evaluated), so the P1a pivot is one frame
+late; if P1a shows jitter on the run, that is the next suspect (fix: write the subject before TG_PostPhysics, rule of [camera-tick-order]).

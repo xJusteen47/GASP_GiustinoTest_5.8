@@ -772,6 +772,18 @@ EGSTN_CameraDistancePreset FGSTN_CameraMath::CycleDistancePreset(EGSTN_CameraDis
 	return Index == 0 ? EGSTN_CameraDistancePreset::Near : (Index == 2 ? EGSTN_CameraDistancePreset::Far : EGSTN_CameraDistancePreset::Medium);
 }
 
+FVector2D FGSTN_CameraMath::ControlRotationLookDelta(const FRotator& Now, const FRotator& LeftLastFrame, bool bContinuous, float DegreesPerUnit)
+{
+	if (!bContinuous)
+	{
+		return FVector2D::ZeroVector;
+	}
+	// Control rotation pitch is stored 0..360 (350 = 10 down): the normalized difference takes the short way
+	const FRotator Delta = (Now - LeftLastFrame).GetNormalized();
+	const float Unit = FMath::Max(DegreesPerUnit, Tiny);
+	return FVector2D(Delta.Yaw / Unit, Delta.Pitch / Unit);
+}
+
 float FGSTN_CameraMath::StepAutoFollow(FGSTN_CameraAutoFollowState& InOutState, const FGSTN_CameraAutoFollowTuning& Tuning, float YawDeg, float MoveHeadingDeg,
 	float HorizontalSpeed, bool bGrounded, float SecondsSinceLook, float Scale, float DeltaSeconds)
 {

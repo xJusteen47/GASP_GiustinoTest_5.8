@@ -12,6 +12,7 @@
 
 class AGSTN_CameraBiasVolume;
 class AGSTN_CameraSection;
+class APlayerController;
 class UGSTN_CameraProfile;
 class UPrimitiveComponent;
 
@@ -274,6 +275,26 @@ private:
 	bool bHasSubjectOverride = false;
 
 	FVector2D PendingLook = FVector2D::ZeroVector;
+	/** LookInputSource ControlRotation: the control rotation this camera left at the end of its last frame (after its write back) and that frame.
+	 *  This frame's look input is the change since then, read before the new write back (FGSTN_CameraMath::ControlRotationLookDelta) */
+	FRotator LeftControlRotation = FRotator::ZeroRotator;
+	uint64 LeftControlRotationFrame = 0;
+	bool bHasLeftControlRotation = false;
+	/** gstn.Camera.LookLog: the look values of this frame (filled through the frame, written as one CSV row at its end) and the buffered rows */
+	struct FLookLogRow
+	{
+		FRotator ControlBefore = FRotator::ZeroRotator;
+		FRotator ControlLeft = FRotator::ZeroRotator;
+		FVector2D LookDeltaDeg = FVector2D::ZeroVector;
+		bool bContinuous = false;
+		float OrbitPitchDeg = 0.f;
+		float OrbitYawDeg = 0.f;
+		float MinPitchDeg = 0.f;
+		float MaxPitchDeg = 0.f;
+	};
+	FLookLogRow LookRow;
+	TArray<FString> LookLogLines;
+	void WriteLookLog(const FGSTN_CameraSubjectState& Subject, const APlayerController* Controller, bool bFlushOnly);
 	/** Options when there is no local player (tests, spectator rigs) */
 	FGSTN_CameraUserOptions FallbackOptions;
 	/** The tags the rules read this frame (auto follow blocks) */

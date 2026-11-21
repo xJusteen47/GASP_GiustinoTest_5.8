@@ -169,6 +169,15 @@ struct GSTNCAMERACORE_API FGSTN_CameraMath
 	/** The player distance scale of a preset (Custom clamps CustomScale to the slider range) */
 	static float DistancePresetScale(const FGSTN_CameraDistancePresets& Presets, EGSTN_CameraDistancePreset Preset, float CustomScale);
 
+	/**
+	 * Look input of the ControlRotation source (2026-11-21, P1a pitch lock): the change of the controller's control rotation since the camera left
+	 * it at the end of its previous frame (after its write back), in look units (deg / DegreesPerUnit), X = yaw, Y = pitch. It must be read BEFORE
+	 * this frame's write back: read after it, the change is the camera's own motion and feeding it back as input makes an integrator that runs the
+	 * pitch to its clamp (-70 / +20). bContinuous false (first frame, after a pause or a reactivation) = no input, never a jump to where the
+	 * controller was
+	 */
+	static FVector2D ControlRotationLookDelta(const FRotator& Now, const FRotator& LeftLastFrame, bool bContinuous, float DegreesPerUnit);
+
 	/** Next preset in Near, Medium, Far order (Direction > 0 farther, < 0 nearer), clamped at the ends; Custom steps from Medium */
 	static EGSTN_CameraDistancePreset CycleDistancePreset(EGSTN_CameraDistancePreset Current, int32 Direction);
 
