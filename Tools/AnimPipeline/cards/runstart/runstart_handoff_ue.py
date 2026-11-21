@@ -7,12 +7,14 @@ is out of phase. Causes, from the v8c captures (frames.jsonl, clip/weight/time p
          (Saved/Routing/pss_channels.txt): the phase curve is the ONLY foot information. Our clips carry `phase` in our 0..1 sawtooth
          (0 = L contact, 0.5 = R), the loop the stock triangle (+1 at L contact onset, -1 at R onset), so the match lands on the other
          foot (a: R just planted, loop entered ~0.03 s before its L plant) and the 0.5 s crossfade averages two feet.
+runstart-entry-desktop (2026-11-21): 0.05 s CircularOut read as a one-frame cut (weight 0 -> 0.69 in one frame, support foot slide 7-11 cm in one step):
+0.1 s Linear spreads it over 6 frames. Re-run this script with other RSH_BLEND / RSH_CURVE to tune.
 Fix, stock knobs only (Unreal Assistant: Saved/Assistant/replies_runstart_phase.json; divergence row 19):
   1. clip COPY <src>h per start (sources never touched; v4r7 stays locked): `phase` rewritten in the stock triangle from the clip's
      own contact_l/contact_r onsets (the convention the loop schema reads). Nothing else in the clip changes (pose, root, timing).
   2. sibling rows of every enabled source row in "Run F Loco Transitions", variant range k + 10 (cvar gstn.RunStart.Handoff 1 adds
-     10 to gstn.RunStart.Variant in UGSTN_LocoBaseSubsystem): OUT BlendTime RSH_BLEND (0.05 s = 3 frames at 60 fps, owner 2026-11-21: the Luigi/Mario reference
-     enters the start almost instantly; the Unreal Assistant suggested 0.15-0.2) with RSH_CURVE (CircularOut), profile
+     10 to gstn.RunStart.Variant in UGSTN_LocoBaseSubsystem): OUT BlendTime RSH_BLEND (0.1 s = 6 frames at 60 fps, owner 2026-11-21: the Luigi/Mario reference
+     enters the start almost instantly; the Unreal Assistant suggested 0.15-0.2) with RSH_CURVE (Linear), profile
      kept (FastFeet_FastRoot); PoseSearchColumn SamplingRange 0..RSH_ENTRY_MAX (0.02 s) so the start enters on its first frame.
 Env RSH_BLEND, RSH_CURVE, RSH_ENTRY_MAX, RSH_SRC "k=/Game/...;k=..." (default the 4 run starts). Dry run unless GSTN_SAVE=1 or
 CLIPFIX_WRITE=1 (Tools/CI/Save-Assets.ps1). Report Saved/AnimPipeline/rows/runstart_handoff.txt; prints max 3 lines."""
@@ -29,8 +31,8 @@ for part in os.environ.get("RSH_SRC", "0=%sv4r7;1=%sv4r8c;2=%sv4r8a;3=%sv4r8b" %
     k, p = part.split("=", 1)
     SRC[p.strip()] = int(k)
 OFFSET = 10
-BLEND = float(os.environ.get("RSH_BLEND", "0.05"))
-CURVE = os.environ.get("RSH_CURVE", "CircularOut")
+BLEND = float(os.environ.get("RSH_BLEND", "0.1"))
+CURVE = os.environ.get("RSH_CURVE", "Linear")
 ENTRY_MAX = float(os.environ.get("RSH_ENTRY_MAX", "0.02"))
 SAVE = os.environ.get("GSTN_SAVE") == "1" or os.environ.get("CLIPFIX_WRITE") == "1"
 AL = unreal.AnimationLibrary

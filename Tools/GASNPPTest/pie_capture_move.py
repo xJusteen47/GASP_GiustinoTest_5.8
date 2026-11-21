@@ -22,6 +22,7 @@
 import json
 import math
 import os
+import re
 import sys
 import time
 import traceback
@@ -455,6 +456,12 @@ def _row(frame, tapped, extra=None):
             row['dummy']['snap'] = {k: se.get(k) for k in ('actionState', 'reactionFlags', 'damagePercent', 'stateTags') if k in se}
         except Exception as e:
             row['dummy_err'] = repr(e)[:80]
+    if os.environ.get('PIE_CAPTURE_ABPVARS'):   # runstart-entry (2026-11-21): main ABP variables whose name matches this regex (Gait, state names...)
+        try:
+            _pv = json.loads(g.comps(g.worlds()[0])[h._key(0)].get_presentation_snapshot() or '{}').get('abp') or {}
+            row['abpv'] = {k: v for k, v in _pv.items() if re.search(os.environ['PIE_CAPTURE_ABPVARS'], k)}
+        except Exception as e:  # noqa: BLE001
+            row['abpv_err'] = repr(e)[:80]
     if os.environ.get('PIE_CAPTURE_HOST_SNAP') == '1':   # DROPKICK-BOUNCE-1: the host's own step snapshot (action state, state tags, reaction flags)
         try:
             se = json.loads(g.comps(g.worlds()[0])[h._key(0)].read_snapshot_entry(-1) or '{}')
