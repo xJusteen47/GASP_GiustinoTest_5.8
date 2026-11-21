@@ -13,8 +13,11 @@
 #include "GSTN_CameraTags.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "InputAction.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 namespace GSTNCameraComponentPrivate
 {
@@ -24,6 +27,7 @@ namespace GSTNCameraComponentPrivate
 	static TAutoConsoleVariable<int32> CVarAutoFollow(TEXT("gstn.Camera.AutoFollow"), 1, TEXT("0 turns the gentle auto follow (camera turns behind the runner) off, 1 on."));
 	static TAutoConsoleVariable<int32> CVarAssist(TEXT("gstn.Camera.Assist"), 0, TEXT("1 turns Camera Assist on: hold recenter and the move stick turns the camera."));
 	static TAutoConsoleVariable<int32> CVarDistance(TEXT("gstn.Camera.Distance"), 1, TEXT("Camera distance: 0 = near, 1 = medium, 2 = far."));
+	static TAutoConsoleVariable<int32> CVarLookLog(TEXT("gstn.Camera.LookLog"), 0, TEXT("1 = one CSV row per camera frame in Saved/Logs/gstn_camera_look_<pawn>.csv: control rotation before the camera, look delta, orbit pitch and its clamp, view pitch, written control rotation. Diagnostics for the P1a pitch lock (2026-11-21)."));
 	static TAutoConsoleVariable<int32> CVarOcclusion(TEXT("gstn.Camera.Occlusion"), 1, TEXT("0 turns the occlusion probe (fade and pull-in) off."));
 
 	/** True when the entry of this definition belongs to a section */
@@ -68,6 +72,7 @@ void UGSTN_CameraComponent::BeginPlay()
 void UGSTN_CameraComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	ReleaseFades();
+	WriteLookLog(FGSTN_CameraSubjectState(), nullptr, true);
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -555,6 +560,24 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 		}
 	}
 
+	// The project feeds the controller (GASP's look adds to the control rotation): only the change since this camera's own last write is input
+	LookRow = FLookLogRow();
+	if (Controller)
+	{
+		LookRow.ControlBefore = Controller->GetControlRotation();
+		LookRow.ControlLeft = LeftControlRotation;
+	}
+	if (Settings.LookInputSource == EGSTN_CameraLookInputSource::ControlRotation && Controller && Controller->IsLocalController())
+	{
+		const FRotator Now = Controller->GetControlRotation();
+		const bool bContinuous = bHasLeftControlRotation && GFrameCounter == LeftControlRotationFrame + 1;
+		const float Unit = FMath::Max(UE_SMALL_NUMBER, Settings.LookDegreesPerUnit);
+		const FVector2D Units = FGSTN_CameraMath::ControlRotationLookDelta(Now, LeftControlRotation, bContinuous, Unit);
+		PendingLook += Units;
+		LookRow.LookDeltaDeg = Units * Unit;
+		LookRow.bContinuous = bContinuous;
+	}
+
 	// Recenter button: a tap recenters; with Camera Assist on, holding it lets the move stick turn the camera (Astro Bot accessibility)
 	if (bRecenterDown)
 	{
@@ -650,7 +673,11 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 			Mode->GetPitchRange(MinPitch, MaxPitch);
 		}
 		Orbit.PitchDeg = FMath::Clamp(Orbit.PitchDeg, MinPitch, MaxPitch);
+		LookRow.MinPitchDeg = MinPitch;
+		LookRow.MaxPitchDeg = MaxPitch;
 	}
+	LookRow.OrbitPitchDeg = Orbit.PitchDeg;
+	LookRow.OrbitYawDeg = Orbit.YawDeg;
 
 	// The player distance: the preset of the options, limited by the section, always eased (never a snap)
 	float DistanceTarget = FGSTN_CameraMath::DistancePresetScale(Settings.DistancePresets, UserOptions.DistancePreset, UserOptions.CustomDistanceScale);
@@ -1227,6 +1254,14 @@ void UGSTN_CameraComponent::EvaluateCamera(float DeltaSeconds)
 		{
 			Controller->SetControlRotation(FRotationMatrix::MakeFromXZ(Pose.Forward, Pose.Up).Rotator());
 		}
+		if (Controller->IsLocalController())
+		{
+			// After the write back: next frame's look input is the change from here (the camera's own motion is never read as input)
+			LeftControlRotation = Controller->GetControlRotation();
+			LeftControlRotationFrame = GFrameCounter;
+			bHasLeftControlRotation = true;
+		}
+		WriteLookLog(Subject, Controller, false);
 	}
 
 	UpdateAim(Subject, Pose, TopDefinition);
@@ -1241,6 +1276,36 @@ void UGSTN_CameraComponent::EvaluateCamera(float DeltaSeconds)
 				FString::Printf(TEXT("Camera %s mode=%s section=%s stack=%d dist=%.2f framing yaw=%.2f pitch=%.2f pull=%.2f autofollow=%d assist=%d latch=%d"), *GetNameSafe(GetOwner()), *ActiveModeTag.ToString(), *GetNameSafe(ActiveSection.Get()), Stack.Num(),
 					Player.Orbit.DistanceScale, LastBias.YawWeight, LastBias.PitchWeight, LastBias.PullWeight, bAutoFollowing ? 1 : 0, bAssistActive ? 1 : 0, Player.StickLatch.bLatched ? 1 : 0));
 		}
+	}
+}
+
+void UGSTN_CameraComponent::WriteLookLog(const FGSTN_CameraSubjectState& Subject, const APlayerController* Controller, bool bFlushOnly)
+{
+	const bool bOn = CVarLookLog.GetValueOnGameThread() != 0;
+	if (bOn && !bFlushOnly && Controller)
+	{
+		const FRotator Written = Controller->GetControlRotation();
+		const UWorld* World = GetWorld();
+		LookLogLines.Add(FString::Printf(TEXT("%llu,%.4f,%d,%.3f,%.3f,%.3f,%.3f,%.4f,%.4f,%d,%.3f,%.3f,%.1f,%.1f,%.3f,%.3f,%.3f,%d,%s"),
+			(unsigned long long)GFrameCounter, World ? World->GetTimeSeconds() : 0.0, static_cast<int32>(GetProfile().LookInputSource),
+			FRotator::NormalizeAxis(LookRow.ControlBefore.Pitch), FRotator::NormalizeAxis(LookRow.ControlBefore.Yaw),
+			FRotator::NormalizeAxis(LookRow.ControlLeft.Pitch), FRotator::NormalizeAxis(LookRow.ControlLeft.Yaw),
+			LookRow.LookDeltaDeg.Y, LookRow.LookDeltaDeg.X, LookRow.bContinuous ? 1 : 0, LookRow.OrbitPitchDeg, LookRow.OrbitYawDeg,
+			LookRow.MinPitchDeg, LookRow.MaxPitchDeg, LastView.PitchDeg, FRotator::NormalizeAxis(Written.Pitch), FRotator::NormalizeAxis(Written.Yaw),
+			Subject.bGrounded ? 1 : 0, *ActiveModeTag.ToString()));
+	}
+	if (LookLogLines.Num() >= 60 || ((!bOn || bFlushOnly) && LookLogLines.Num() > 0))
+	{
+		// One file per pawn (several PIE players in one process would interleave their rows)
+		const FString Path = FPaths::ProjectLogDir() / FString::Printf(TEXT("gstn_camera_look_%s.csv"), *GetNameSafe(GetOwner()));
+		FString Text;
+		if (!IFileManager::Get().FileExists(*Path))
+		{
+			Text = TEXT("frame,time,source,ctrl_before_pitch,ctrl_before_yaw,ctrl_left_pitch,ctrl_left_yaw,look_pitch_deg,look_yaw_deg,continuous,orbit_pitch,orbit_yaw,pitch_min,pitch_max,view_pitch,written_pitch,written_yaw,grounded,mode\n");
+		}
+		Text += FString::Join(LookLogLines, TEXT("\n")) + TEXT("\n");
+		FFileHelper::SaveStringToFile(Text, *Path, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
+		LookLogLines.Reset();
 	}
 }
 

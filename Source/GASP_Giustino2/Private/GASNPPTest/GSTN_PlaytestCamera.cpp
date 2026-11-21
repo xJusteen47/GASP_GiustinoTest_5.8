@@ -3,6 +3,8 @@
 #include "Camera/GSTN_CameraAnchor.h"
 #include "GameFramework/Pawn.h"
 #include "GSTN_CameraComponent.h"
+#include "GSTN_CameraProfile.h"
+#include "GSTN_CameraRuntimeTypes.h"
 #include "MoverTypes.h"
 
 #include "Camera/PlayerCameraManager.h"
@@ -37,7 +39,7 @@ namespace GSTNPlaytestCamera
 	static TAutoConsoleVariable<int32> CVarP1a(TEXT("gstn.Camera.P1a"), 0,
 		TEXT("1 = the playtest view is the new GSTN free platform camera (plugin GSTNCamera, P1a; EXPERIMENTAL, wiring not verified), 0 = GASP's own camera. Playtest switch"));
 	static TAutoConsoleVariable<int32> CVarP1aLookFeed(TEXT("gstn.Camera.P1a.LookFeed"), 1,
-		TEXT("1 = GASP's look input (control rotation change) steers the P1a camera orbit, 0 = off (diagnostics)"));
+		TEXT("1 = GASP's look input (the control rotation change since the P1a camera's own write) steers its orbit, 0 = no look input (diagnostics)"));
 	static constexpr float ProbeRadius = 12.f;
 	/** Shared camera anchor tuning, optional (C++ defaults when missing). Created by Tools/GASNPPTest/camera_anchor_setup.py */
 	static const TCHAR* AnchorSettingsPath = TEXT("/Game/Blueprints/Data/DA_CameraAnchor_Default.DA_CameraAnchor_Default");
@@ -142,11 +144,6 @@ bool UGSTN_PlaytestCameraModifier::ModifyCamera(float DeltaTime, FMinimalViewInf
 			P1a = nullptr;
 		}
 	}
-	if (CameraOwner)
-	{
-		LastControlRotation = CameraOwner->GetOwningPlayerController() ? CameraOwner->GetOwningPlayerController()->GetControlRotation() : FRotator::ZeroRotator;
-		bHasLastControlRotation = true;
-	}
 	// Camera anchor in ShiftView mode (or no camera component found): the view moves by the anchor's correction first
 	const AActor* ViewTarget = CameraOwner ? CameraOwner->GetViewTarget() : nullptr;
 	const UGSTN_CameraAnchorComponent* Anchor = ViewTarget ? ViewTarget->FindComponentByClass<UGSTN_CameraAnchorComponent>() : nullptr;
@@ -194,16 +191,6 @@ bool UGSTN_PlaytestCameraModifier::ModifyCamera(float DeltaTime, FMinimalViewInf
 		Trace(DeltaTime, TraceIn, InOutPOV, bSweepHit, nullptr);  // flushes the tail
 	}
 	return false;
-}
-
-FRotator UGSTN_PlaytestCameraModifier::ConsumeControlRotationDelta() const
-{
-	const APlayerController* Controller = CameraOwner ? CameraOwner->GetOwningPlayerController() : nullptr;
-	if (!Controller || !bHasLastControlRotation)
-	{
-		return FRotator::ZeroRotator;
-	}
-	return (Controller->GetControlRotation() - LastControlRotation).GetNormalized();
 }
 
 void UGSTN_PlaytestCameraModifier::Trace(float DeltaTime, const FMinimalViewInfo& In, const FMinimalViewInfo& Out, bool bSweepHit, const UGSTN_CameraAnchorComponent* Anchor)
@@ -288,6 +275,9 @@ void UGSTN_PlaytestCameraSubsystem::Tick(float DeltaTime)
 				Cam = NewObject<UGSTN_CameraComponent>(Viewed, TEXT("GSTN_P1aCamera"), RF_Transient);
 				Cam->SetupAttachment(Viewed->GetRootComponent());
 				Cam->bAutoActivate = false;
+				// Own copy of the code default profile (never the shared default object): GASP's look already turns the controller, so the camera
+				// reads the control rotation change (LookInputSource ControlRotation) inside its own frame, before its write back
+				Cam->Profile = NewObject<UGSTN_CameraProfile>(Cam, TEXT("GSTN_P1aProfile"), RF_Transient);
 				Cam->RegisterComponent();
 			}
 			if (Cam)
@@ -314,17 +304,13 @@ void UGSTN_PlaytestCameraSubsystem::Tick(float DeltaTime)
 					Subject.bGrounded = Mover ? Mover->HasGameplayTag(Mover_IsOnGround, true) : FMath::Abs(Subject.Velocity.Z) < 30.0;
 					Cam->SetSubjectOverride(Subject);
 				}
-				if (bWanted && Cam->IsActive() && Manager && GSTNPlaytestCamera::CVarP1aLookFeed.GetValueOnGameThread() != 0)
+				// Look input (2026-11-21 fix of the pitch lock): the camera reads the control rotation change itself, BEFORE it writes the control
+				// rotation back. The first wiring measured it here, after the write back, so the camera's own motion came back as input every frame
+				// (an integrator: the pitch ran to the Free clamp, -70 on the ground, +20 after a jump) and the stick was lost
+				if (Cam->Profile && Cam->Profile->GetOuter() == Cam)
 				{
-					if (const UGSTN_PlaytestCameraModifier* Modifier = Cast<UGSTN_PlaytestCameraModifier>(Manager->FindCameraModifierByClass(UGSTN_PlaytestCameraModifier::StaticClass())))
-					{
-						const FRotator Delta = Modifier->ConsumeControlRotationDelta();
-						const float Scale = FMath::Max(0.01f, Cam->GetProfile().LookDegreesPerUnit * Cam->GetUserOptions().LookSensitivityMultiplier);
-						if (!FMath::IsNearlyZero(Delta.Yaw, 1.e-4f) || !FMath::IsNearlyZero(Delta.Pitch, 1.e-4f))
-						{
-							Cam->AddLookInput(FVector2D(Delta.Yaw / Scale, Delta.Pitch / Scale));
-						}
-					}
+					Cam->Profile->LookInputSource = GSTNPlaytestCamera::CVarP1aLookFeed.GetValueOnGameThread() != 0
+						? EGSTN_CameraLookInputSource::ControlRotation : EGSTN_CameraLookInputSource::Plugin;
 				}
 			}
 		}
