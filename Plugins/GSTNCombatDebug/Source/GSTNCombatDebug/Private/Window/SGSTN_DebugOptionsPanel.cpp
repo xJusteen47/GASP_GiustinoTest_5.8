@@ -81,7 +81,8 @@ namespace
 				return true;
 			}
 		}
-		return Name.StartsWith(TEXT("gstn.RunStart."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Camera."), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.Base"), ESearchCase::IgnoreCase);
+		return Name.StartsWith(TEXT("gstn.RunStart."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Camera."), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.Base"), ESearchCase::IgnoreCase)
+			|| Name.StartsWith(TEXT("gstn.Loco.Stance"), ESearchCase::IgnoreCase);	// stance width layer (runstart-stancewidth, 2026-11-21)
 	}
 
 	/** Readable name of a gstn.RunStart.Variant value (keep in step with that cvar's help text), shown next to the number */
@@ -98,6 +99,10 @@ namespace
 		{
 			return TEXT("generic w2 (default: forward + back/left/right turns)");
 		}
+		if (Value == 22)
+		{
+			return TEXT("w2 wide feet (w2 + gstn.Loco.StanceWidth)");
+		}
 		return Value >= 0 && Value < UE_ARRAY_COUNT(Labels) ? FString(Labels[Value]) : FString(TEXT("?"));
 	}
 
@@ -112,7 +117,7 @@ namespace
 		static TArray<TSharedPtr<int32>> Options;
 		if (Options.Num() == 0)
 		{
-			for (const int32 Value : {21, 20, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+			for (const int32 Value : {21, 22, 20, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
 			{
 				Options.Add(MakeShared<int32>(Value));
 			}
