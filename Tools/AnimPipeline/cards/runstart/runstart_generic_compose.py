@@ -77,7 +77,13 @@ HOLD = int(HOLD) if HOLD else None
 RATE_SAG = float(os.environ.get('RATE_SAG', 0.3))  # g3: fraction of the extra rate lost during the push (rest after HOLD)
 
 
+PRE = float(os.environ.get('PRE', 0))             # sprinter: rate ramps RATE_PRE -> R0 over the first PRE frames (the set/load)
+RATE_PRE = float(os.environ.get('RATE_PRE', 1.0))
+
+
 def rate(u):
+    if PRE and u < PRE:
+        return RATE_PRE + (R0 - RATE_PRE) * ss(u / PRE)
     if HOLD is None:
         return R0 + (1.0 - R0) * min(u, N_REV) / N_REV
     if u <= HOLD:
@@ -110,6 +116,10 @@ LEAN_IN = float(os.environ.get('LEAN_IN', 5.0))
 UPPER = ('spine', 'neck', 'head')
 ARMP = ('lowerarm', 'hand')
 PEL_MEAN = float(LP['P|pelvis_MainPoint'][:, UP].mean())
+LEAN_OUT = float(os.environ.get('LEAN_OUT', N_REV))     # lean/arm envelope end (default: end of the rev)
+DROP_CM = float(os.environ.get('DROP_CM', 0.0))          # sprinter: pelvis drop (cm) during the drive steps
+DROP_IN, DROP_HOLD, DROP_OUT = (float(os.environ.get(k, d)) for k, d in (('DROP_IN', 4), ('DROP_HOLD', 10), ('DROP_OUT', 16)))
+ARM_BACK = float(os.environ.get('ARM_BACK', 0.0))        # sprinter: elbows / hands drawn back (cm, -Z) with the lean envelope
 ENTRY_LEAD = float(os.environ.get('ENTRY_LEAD', 0.0))   # g3: pelvis/legs finish the entry this many frames before the chest
 KNEE_DEG = float(os.environ.get('KNEE_DEG', 0.0))       # g3: extra hip flexion of the swing leg (high knees), shin folds back
 KNEE_A, KNEE_B = float(os.environ.get('KNEE_A', 4)), float(os.environ.get('KNEE_B', 13))   # frame window (steps 2-3)
@@ -135,7 +145,14 @@ for u in range(N_NEW):
     if HOLD is None:
         g = (ss(u / LEAN_IN) * ss(1.0 - u / N_REV)) if u < N_REV else 0.0
     else:                                                    # g3: plateau, full from LEAN_IN to HOLD, ease out to N_REV
-        g = (ss(u / LEAN_IN) * ((1.0 - ss((u - HOLD) / float(N_REV - HOLD))) if u > HOLD else 1.0)) if u < N_REV else 0.0
+        g = (ss(u / LEAN_IN) * ((1.0 - ss((u - HOLD) / float(LEAN_OUT - HOLD))) if u > HOLD else 1.0)) if u < LEAN_OUT else 0.0
+    # sprinter: low centre of mass (pelvis and everything above it down, feet stay, knees bend by IK) and elbows drawn back
+    gd = (ss(u / DROP_IN) * ((1.0 - ss((u - DROP_HOLD) / float(DROP_OUT - DROP_HOLD))) if u > DROP_HOLD else 1.0)) if DROP_CM and u < DROP_OUT else 0.0
+    if gd > 0:
+        P = {n: (v if (n.startswith(LEG) or n == 'ik_foot_root' or n == 'root') else v - np.eye(3)[UP] * DROP_CM * gd) for n, v in P.items()}
+    if ARM_BACK and g > 0:
+        P = {n: (v - np.array([0.0, 0.0, ARM_BACK * g * (1.0 if n.startswith('lowerarm') else 0.6)]) if n.startswith(ARMP) else v)
+             for n, v in P.items()}
     if g > 0 and (BOUNCE != 1.0 or LEAN_DEG or ARM != 1.0):
         dy = (BOUNCE - 1.0) * g * (P['pelvis_MainPoint'][UP] - PEL_MEAN)
         th = math.radians(LEAN_DEG) * g; cth, sth = math.cos(th), math.sin(th)
