@@ -1,1 +1,1 @@
-libero dal 2026-11-21 13:51 UTC (sprinter s2 + foley + menu debug; editor owner riaperto)
+IN USO dal 2026-11-21 14:21 UTC: thread runstart generic 10 (sprinter weight transfer), desktop
