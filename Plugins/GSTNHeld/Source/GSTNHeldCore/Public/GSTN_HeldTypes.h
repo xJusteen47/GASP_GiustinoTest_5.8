@@ -261,6 +261,21 @@ struct GSTNHELDCORE_API FGSTN_HeldObjectTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Hold", meta = (ForceUnits = "cm"))
 	FVector HoldOffset = FVector(45.0, 0.0, 70.0);
 
+	/**
+	 * M10 G12 (spike S2): the socket or bone of the holder's drawn body mesh (FGSTN_EquipmentVisualUtils::FindShownBodyMesh) the object rides
+	 * while held, with gstn.Held.HandAttach on. None, or a mesh without it: HoldOffset at the root as before. Presentation only, every machine
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Hold")
+	FName HandSocket = FName(TEXT("hand_r"));
+
+	/** Where the object's centre sits in HandSocket's space (the mannequin's hand_r: X along the fingers). TEST VALUE: a fist's width out of the palm */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Hold", meta = (ForceUnits = "cm"))
+	FVector HandOffset = FVector(8.0, 0.0, 0.0);
+
+	/** The object's rotation in HandSocket's space */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Hold")
+	FRotator HandRotation = FRotator::ZeroRotator;
+
 	/** Half height of the object at rest: a landed object is placed this far above the floor it lands on */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Held|Rest", meta = (ClampMin = "0.0", ForceUnits = "cm"))
 	float RestHalfHeight = 20.f;
@@ -413,6 +428,24 @@ struct GSTNHELDCORE_API FGSTN_HeldRules
 
 	/** Where a held object is drawn: the holder's transform with the hold offset applied in its space (rotation = the holder's) */
 	static FTransform HoldTransform(const FTransform& Holder, const FVector& HoldOffset);
+
+	/** Where a held object is drawn on a hand: Offset and Rotation in the socket's space (G12, spike S2) */
+	static FTransform HandTransform(const FTransform& Socket, const FVector& Offset, const FRotator& Rotation);
+
+	/**
+	 * The release/pickup blend (G12): what is left, Elapsed seconds in, of the jump between where the object was drawn and where it must be
+	 * now (Offset), eased out (smoothstep) to zero at Duration. Duration <= 0 or Elapsed >= Duration: zero (no blend). Presentation only
+	 */
+	static FVector BlendOffset(const FVector& Offset, float Elapsed, float Duration);
+
+	/**
+	 * The throw's flight in closed form for a preview (G12 arc preview): Steps + 1 points from Origin at t = 0 to t = Seconds, under a constant
+	 * Gravity. The projectile itself steps at the fixed tick, so the drawn arc matches it to the step's rounding, not exactly. Steps clamped to 1..256
+	 */
+	static void ThrowArcPoints(const FVector& Origin, const FVector& Velocity, const FVector& Gravity, float Seconds, int32 Steps, TArray<FVector>& OutPoints);
+
+	/** A throw's launch velocity along Yaw (degrees), raised by PitchDeg, at Speed: the facing aim with the ability's LaunchPitchDeg */
+	static FVector ThrowLaunchVelocity(float YawDeg, float PitchDeg, float Speed);
 
 	/** Does the holder lose its object for a state it has (DropWhenHolderHasAny)? Empty rules never break */
 	static bool BreaksOnState(const FGameplayTagContainer& HolderTags, const FGSTN_HeldBreakRules& Rules);

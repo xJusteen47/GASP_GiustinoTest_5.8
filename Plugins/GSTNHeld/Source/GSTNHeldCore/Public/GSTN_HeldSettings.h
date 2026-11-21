@@ -135,6 +135,23 @@ public:
 	UPROPERTY(config, EditAnywhere, Category = "Input|Buttons")
 	TArray<FGSTN_InputSlotSpec> SlotOverrides;
 
+	/**
+	 * G12 prompts (presentation only, local player, gstn.Held.Prompt): the text over the object a pickup would take, and over the object in
+	 * the local player's hand. Placeholder look (a text in the world) until the UI pass; empty = not shown
+	 */
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Prompt")
+	FText PickupPromptText = NSLOCTEXT("GSTNHeld", "PickupPrompt", "B: prendi");
+
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Prompt")
+	FText ThrowPromptText = NSLOCTEXT("GSTNHeld", "ThrowPrompt", "RT: lancia");
+
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Prompt", meta = (ClampMin = "5.0", ForceUnits = "cm"))
+	float PromptWorldSize = 40.f;
+
+	/** Above the object's root */
+	UPROPERTY(config, EditAnywhere, BlueprintReadOnly, Category = "Prompt", meta = (ForceUnits = "cm"))
+	float PromptHeight = 80.f;
+
 	/** Hands CommandTiers to the input settings under this plugin's contribution source */
 	void PushToInputSettings() const;
 	static void RemoveFromInputSettings();

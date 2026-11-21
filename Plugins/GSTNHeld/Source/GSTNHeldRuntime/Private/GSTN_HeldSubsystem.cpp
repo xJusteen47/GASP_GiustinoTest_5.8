@@ -1151,6 +1151,20 @@ namespace GSTNHeldConsole
 		TEXT("gstn.Held.Windup"),
 		TEXT("PIE only (one process): the throw's wind-up of every object without its own, in frames (0 = instant), and of thrown enemies (default: the same). No args: logs them. Args: [ObjectFrames] [EnemyFrames]"),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Windup));
+
+	// The same as gstn.Held.Windup N, as a variable so GSTN Debug Options shows it (owner rule 2026-11-21: every setting in that window).
+	// PIE only, like the command: the settings object is per process
+	TAutoConsoleVariable<int32> CVarHeldWindupFrames(
+		TEXT("gstn.Held.WindupFrames"), -1,
+		TEXT("PIE only: throw wind-up of every object without its own and of thrown enemies, in frames. -1 = the data (default); 0 = instant; e.g. 12 = a short heave before the release."),
+		FConsoleVariableDelegate::CreateLambda([](IConsoleVariable* Variable)
+		{
+			if (Variable && Variable->GetInt() >= 0)
+			{
+				Windup({ FString::FromInt(Variable->GetInt()) }, nullptr);
+			}
+		}),
+		ECVF_Default);
 }
 
 AActor* UGSTN_HeldSubsystem::FindLiftedEnemy(const AActor* Holder, const FGSTN_LinkState& Body, float* OutLoadRatio, FString* OutWhyNot)
