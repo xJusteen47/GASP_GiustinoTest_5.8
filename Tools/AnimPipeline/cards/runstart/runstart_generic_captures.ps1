@@ -5,7 +5,7 @@
 # runstart-generic-desktop: -Variant 5 -Clip AS_GSTN_RunStart_Generic_g1 -Name g1 -RefName generic_h1 (base = stock start capture)
 param([int[]]$Handoff = @(1), [string]$SavedDir = 'RunStartGeneric', [string]$Ref = 'Saved\RunStartEntry\v4r7h',
       [int]$Variant = 4, [string]$Clip = 'M_Relaxed_Run_Start_F_*', [string]$Name = 'generic', [string]$RefName = 'v4r7h',
-      [string]$Sequence = 'mv_run_start_v5', [string]$Window = '97, 140')
+      [string]$Sequence = 'mv_run_start_v5', [string]$Window = '97, 140', [string]$ExtraCvars = '')
 # runstart-turnaround-desktop: -Sequence mv_turn_180a|b / mv_turn_090a|b (stick reversed / sideways), -Window of the ASSERT
 $proj = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
 $cap = Join-Path $proj 'Tools\GASNPPTest\pie_capture_timed.ps1'
@@ -14,7 +14,7 @@ foreach ($h in $Handoff) {
     $n = "${Name}_h$h"
     $spec = Join-Path $proj "Saved\$SavedDir\assert_$n.json"
     [IO.File]::WriteAllText($spec, "{`"$Sequence`": [{`"clip`": `"$Clip`", `"window`": [$Window], `"min_weight`": 0.8, `"coverage`": 0.9, `"additive`": [`"BS_Relaxed_*Lean*`"]}]}")
-    $env:PIE_CAPTURE_CVARS = "gstn.Loco.Base 1;gstn.RunStart.Variant $Variant;gstn.RunStart.Handoff $h"
+    $env:PIE_CAPTURE_CVARS = "gstn.Loco.Base 1;gstn.RunStart.Variant $Variant;gstn.RunStart.Handoff $h" + $(if ($ExtraCvars) { ";$ExtraCvars" } else { "" })   # -ExtraCvars "gstn.Loco.TorsoLean -5" (runstart-v23)
     $env:PIE_CAPTURE_ASSERT_REPLACE = '1'
     $out = Join-Path $proj "Saved\$SavedDir\$n"
     & $cap -Kit KIT_Test_Overlord -Out $out -Sequences $Sequence -Assert $spec | Out-File (Join-Path $proj "Saved\$SavedDir\$n.console.txt")
