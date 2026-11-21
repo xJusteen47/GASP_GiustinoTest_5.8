@@ -122,6 +122,20 @@ else:
     seq.set_editor_property("enable_root_motion", True)
     seq.set_editor_property("force_root_lock", True)
     seq.set_editor_property("root_motion_root_lock", unreal.RootMotionRootLock.REF_POSE)
+    # Turnarounds (runstart-turnaround-desktop): RSGG_SRC = meta json of the stock REFACE start the clip replaces
+    # (runstart_turn_export_ue.py). The clip comes from Cascadeur in the root frame; the stock root yaw (180/90 -> 0, sampled by
+    # the composer on its own timing: info.yaw_ue_deg) goes on the root bone, so the body turns in the component like stock.
+    SRCM = os.environ.get("RSGG_SRC", "")
+    if SRCM:
+        yaw = json.load(open(os.path.join(OUT, "generic_%s_curves.json" % TAG)))["info"]["yaw_ue_deg"]
+        tfs = [AL.get_bone_pose_for_frame(seq, "root", f, False) for f in range(n)]
+        rep["root_rot_before_deg"] = round(max(abs(t.rotation.rotator().yaw) for t in tfs), 3)
+        rot = [unreal.Rotator(roll=0.0, pitch=0.0, yaw=float(yaw[min(f, len(yaw) - 1)])).quaternion() for f in range(n)]
+        ctrl = seq.get_editor_property("controller")
+        ctrl.open_bracket(unreal.Text("stock reface root yaw"), False)
+        ctrl.set_bone_track_keys("root", [t.translation for t in tfs], rot, [t.scale3d for t in tfs], False)
+        ctrl.close_bracket(False)
+        rep["root_yaw_deg"] = [round(AL.get_bone_pose_for_frame(seq, "root", f, False).rotation.rotator().yaw, 1) for f in (0, 4, 8, 12, 16, 20, 24)]
 
     opts = unreal.AnimPoseEvaluationOptions()
     poses = [unreal.AnimPoseExtensions.get_anim_pose_at_time(seq, f / 30.0, opts) for f in range(n)]
@@ -159,6 +173,9 @@ else:
     curves = {k: cj["curves"][k][:n] for k in ("contact_l", "contact_r", "phase")}
     curves["movedata_speed"] = [round(v, 2) for v in spd]
     ew = list(mc["enable_warping"])
+    if SRCM:                                 # the reface clip's own enable_warping, frame for frame (stock keys sampled at 30 fps)
+        sk = json.load(open(SRCM))["curves"]["enable_warping"]
+        ew = [sk[1][max([i for i, t in enumerate(sk[0]) if t <= f / 30.0 + 1e-4] or [0])] for f in range(n)]
     curves["enable_warping"] = [ew[min(f, len(ew) - 1)] for f in range(n)]
     for name, vals in curves.items():
         if AL.does_curve_exist(seq, name, unreal.RawCurveTrackTypes.RCT_FLOAT):

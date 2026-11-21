@@ -100,6 +100,33 @@ c_end = cs[N_REV]
 N_NEW = N_REV + int(round(TAIL_CYCLES * 22)) + 1
 # root: stock ramp until stock speed >= loop speed, then loop speed
 sd = [float(np.dot(sroot[u] - sroot[0], FWD)) for u in range(sroot.shape[0])]
+# Turnarounds (runstart-turnaround-desktop, 2026-11-21): SRC = meta json of a stock REFACE start (runstart_turn_export_ue.py: root
+# per frame [x, y, z, yaw] in UE mesh space). The root path (UE +Y = Cascadeur +Z) and the root YAW (180/90 -> 0) come from it.
+# The clip is composed in the ROOT frame (body facing the run direction, the w1/w2 recipe unchanged) and the UE import writes the
+# stock root yaw on the root bone (runstart_generic_g_ue.py, RSGG_SRC): body in world = root yaw x root-frame pose, like stock.
+# Contacts are pinned in WORLD (PIN_U), the lean tips the body toward the run direction in world (LEAN_WORLD=1).
+SRC = os.environ.get('SRC')
+YAW = None
+if SRC:
+    _rr = json.load(open(SRC))['root']
+    sd = [float(r[1] - _rr[0][1]) for r in _rr]
+    YAW = [math.radians(-float(r[3])) for r in _rr]          # Cascadeur yaw about +Y (X = UE X, Z = UE Y: handedness flips)
+LEAN_WORLD = os.environ.get('LEAN_WORLD', '1') == '1'
+LEAN_TURN = float(os.environ.get('LEAN_TURN', 17.0))
+
+
+def yaw_at(x):
+    if YAW is None:
+        return 0.0
+    if x >= len(YAW) - 1:
+        return YAW[-1]
+    a = int(math.floor(x)); w = x - a
+    return YAW[a] * (1 - w) + YAW[a + 1] * w
+
+
+def ry(v, a):                                            # rotate a vector about +Y by a (rad): +Z goes to (sin a, 0, cos a)
+    c, s_ = math.cos(a), math.sin(a)
+    return np.array([v[0] * c + v[2] * s_, v[1], -v[0] * s_ + v[2] * c])
 dist = [0.0]
 for u in range(1, N_NEW):
     v = (sd[u] - sd[u - 1]) if u < len(sd) else VL
@@ -176,6 +203,7 @@ def leg_ik(W):
 
 
 out = {}
+roots = {}
 for k in range(N_NEW):
     u = U[k]
     P, Bx = loop_at(C[k])
@@ -200,7 +228,10 @@ for k in range(N_NEW):
              for n, v in P.items()}
     if g > 0 and (BOUNCE != 1.0 or LEAN_DEG or ARM != 1.0):
         dy = (BOUNCE - 1.0) * g * (P['pelvis_MainPoint'][UP] - PEL_MEAN)
-        th = math.radians(LEAN_DEG) * g; cth, sth = math.cos(th), math.sin(th)
+        # turnaround: the loop's own forward lean (~LEAN_TURN deg, along the body) points away from the run direction while the body
+        # still faces back; the extra (1 - cos yaw) x LEAN_TURN keeps the fall toward the new heading at ~w1's 40 deg (trait 1)
+        th = math.radians(LEAN_DEG + (LEAN_TURN * (1.0 - math.cos(yaw_at(u))) if LEAN_WORLD else 0.0)) * g
+        cth, sth = math.cos(th), math.sin(th)
         pel = P['pelvis_MainPoint'] + np.eye(3)[UP] * dy
         A = 1.0 + (ARM - 1.0) * g
         Q = {}
@@ -213,7 +244,10 @@ for k in range(N_NEW):
                 v = sh + ARM_MEAN[n] + (v - sh - ARM_MEAN[n]) * A
             if n.startswith(UPPER) or n.startswith(ARMP) or n.startswith('upperarm') or n.startswith('clavicle'):
                 d = v - pel                                    # forward lean about the lateral (X) axis, top goes +Z
-                v = pel + np.array([d[0], d[1] * cth - d[2] * sth, d[1] * sth + d[2] * cth])
+                ya = yaw_at(u) if LEAN_WORLD else 0.0           # turnaround: tip toward the RUN direction (root frame: ry(+Z, -yaw))
+                d = ry(d, ya)
+                d = np.array([d[0], d[1] * cth - d[2] * sth, d[1] * sth + d[2] * cth])
+                v = pel + ry(d, -ya)
             Q[n] = v
         P = Q
     if KNEE_DEG and KNEE_A - 2 < u < KNEE_B + 2:
@@ -232,6 +266,7 @@ for k in range(N_NEW):
                 P[n] = v
     s = s_sm[k]
     rnew = hz(sroot[0]) + FWD * dist[k]
+    roots[k] = rnew
     W = {}
     for n, v in P.items():
         if s < 1.0 and n.startswith(LEG) and n != 'ik_foot_root':
@@ -254,9 +289,10 @@ if PIN_U:
             if k is not None and U[k] < PIN_U and out[k][0][fk][UP] < 14:
                 run.append(k); continue
             if len(run) > 1:
-                tgt = sum(hz(out[q][0][fk]) for q in run) / len(run)
+                wf = lambda q: roots[q] + ry(out[q][0][fk] - roots[q], yaw_at(U[q]))     # foot in world (root yaw applied)
+                tgt = sum(hz(wf(q)) for q in run) / len(run)
                 for q in run:
-                    W = out[q][0]; dlt = tgt - hz(W[fk])
+                    W = out[q][0]; dlt = ry(tgt - hz(wf(q)), -yaw_at(U[q]))
                     for n in [n for n in W if n.endswith('_' + sd_) and n.startswith(('foot_', 'ball_'))] + ['ik_foot_' + sd_]:
                         if n in W:
                             W[n] = W[n] + dlt
@@ -284,12 +320,13 @@ for k, arr in lc.items():
 # foot slip in world while planted (foot MainPoint y < 14 cm), per side
 slip = {}
 for sd_ in 'lr':
-    fp = D['P|foot_MainPoint_' + sd_]
+    fp = np.stack([roots[k] + ry(D['P|foot_MainPoint_' + sd_][k] - roots[k], yaw_at(U[k])) for k in range(N_NEW)])   # world
     sl = [float(np.linalg.norm(hz(fp[u] - fp[u - 1]))) for u in range(1, N_NEW) if fp[u, UP] < 14 and fp[u - 1, UP] < 14]
     slip[sd_] = round(sum(sl), 1)
 info = {'TAG': TAG, 'c0': c0, 'c_end': round(c_end, 3), 'tail_loop_frame': round(c_end % NL, 3), 'N_REV': N_REV, 'N_NEW': N_NEW,
         'R0': R0, 'VL_cm_f': round(VL, 3), 'dist_end': round(dist[-1], 1), 's_min': round(min(s_sm), 3), 'slip_cm': slip,
-        'steps_in_rev': round((c_end - c0) / 11.0, 2), 'cs': [round(x, 3) for x in C], 'spd': [round(x, 2) for x in spd], 'pinned': pinned}
+        'steps_in_rev': round((c_end - c0) / 11.0, 2), 'cs': [round(x, 3) for x in C], 'spd': [round(x, 2) for x in spd], 'pinned': pinned,
+        'yaw_ue_deg': [round(-math.degrees(yaw_at(U[k])), 3) for k in range(N_NEW)], 'src': SRC or ''}
 json.dump({'info': info, 'curves': cur}, open(os.path.join(odir, 'generic_%s_curves.json' % TAG), 'w'))
 print('ESITO: OK %s N_NEW %d c0 %.0f c_end %.2f (loop f %.2f) steps_in_rev %.2f' % (TAG, N_NEW, c0, c_end, c_end % NL, info['steps_in_rev']))
 print('root end %.1f cm  s_min %.2f  slip L/R %s' % (dist[-1], min(s_sm), slip))

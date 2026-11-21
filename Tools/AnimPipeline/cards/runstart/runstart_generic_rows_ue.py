@@ -17,6 +17,13 @@ LEAF = "Run F Loco Transitions"
 VAR = "GSTN_RunStartVariant"
 STOCK = ["/Game/Characters/UEFN_Mannequin/Animations/Run/M_Relaxed_Run_Start_F_Lfoot",
          "/Game/Characters/UEFN_Mannequin/Animations/Run/M_Relaxed_Run_Start_F_Rfoot"]
+# Turnarounds (runstart-turnaround-desktop, 2026-11-21): RSG_STOCK = comma-separated stock clips whose rows get the siblings (the
+# REFACE starts 090/180 L/R of the same leaf). Those stock rows are ENABLED (unlike F, disabled since v3), so RSG_SPLIT=1 keeps
+# them for every other variant: the source row gets variant range (.., K-0.5] and two stock copies cover [K+0.5, K+9.5] and
+# [K+10.5, ..): at K and K+10 only our clip is a candidate (no pose-search coin toss between stock and ours).
+if os.environ.get("RSG_STOCK"):
+    STOCK = ["/Game/Characters/UEFN_Mannequin/Animations/Run/" + x.strip() for x in os.environ["RSG_STOCK"].split(",")]
+SPLIT = os.environ.get("RSG_SPLIT") == "1"
 K = int(os.environ.get("RSG_K", "4"))
 # RSG_ASSET (runstart-generic-desktop g1): siblings play this clip instead of the stock one; RSG_SRC limits the source rows
 ASSET = os.environ.get("RSG_ASSET", "")
@@ -77,6 +84,38 @@ rows = list(info.rows)
 # source = the stock start rows as they were before our variants (disabled, variant column "any")
 srcs = [i for i, r in enumerate(rows) if asset_of(r) in STOCK and "bNoMin=True" in str(r.cells[c_var]) and SRC in asset_of(r)]
 log.append("stock source rows %s" % srcs)
+for i in srcs:
+    log.append("  src %d %s disabled=%s var=%s" % (i, asset_of(rows[i]).split("/")[-1], rows[i].get_editor_property("bDisabled"), str(rows[i].cells[c_var])))
+
+
+def rng2(lo, hi):
+    f = lambda v: "%.6f" % (v if v is not None else 0.0)
+    return "(Min=%s,Max=%s,bNoMin=%s,bNoMax=%s)" % (f(lo), f(hi), lo is None, hi is None)
+
+
+if SPLIT:
+    for i in reversed(srcs):
+        if rows[i].get_editor_property("bDisabled"):
+            continue
+        for lo, hi in ((K + 10 + 0.5, None), (K + 0.5, K + 9.5)):         # stock copies, inserted right below the source
+            rows = list(call("GetChooserTable", leaf).rows)
+            st = asset_of(rows[i])
+            j = next((n for n, r in enumerate(rows) if asset_of(r) == st and str(r.cells[c_var]) == rng2(lo, hi)
+                      and filters(r) == filters(rows[i])), None)
+            if not SAVE:
+                log.append("row %d %s: would %s stock copy %s" % (i, st.split("/")[-1], "update" if j is not None else "add", rng2(lo, hi)))
+                continue
+            if j is None:
+                j = call("AddChooserRow", leaf, rows[i].result_type, i + 1, unreal.load_asset(st))
+            for c, cell in enumerate(rows[i].cells):
+                call("SetChooserCell", leaf, c, j, rng2(lo, hi) if c == c_var else str(cell))
+            call("SetChooserRowDisabled", leaf, j, False)
+            log.append("row %d %s: stock copy %s at row %d" % (i, st.split("/")[-1], rng2(lo, hi), j))
+        if SAVE:
+            call("SetChooserCell", leaf, c_var, i, rng2(None, K - 0.5))
+            log.append("row %d: source variant range -> %s" % (i, rng2(None, K - 0.5)))
+    rows = list(call("GetChooserTable", leaf).rows)
+    srcs = [i for i, r in enumerate(rows) if asset_of(r) in STOCK and "bNoMin=True" in str(r.cells[c_var]) and SRC in asset_of(r)]
 for i in reversed(srcs):
     for k, tune in ((K + 10, True), (K, False)):   # inserted right below i: K ends up first, then K + 10
         rows = list(call("GetChooserTable", leaf).rows)
