@@ -108,6 +108,14 @@ namespace
 		{
 			return TEXT("w2 lively agile (w2v: sway, twist, rear elbow, lean; feet 4/2/0 cm)");
 		}
+		if (Value == 24)
+		{
+			return TEXT("22 + toe fix (w2f: foot rigid in the rev, toe no longer folds)");
+		}
+		if (Value == 25)
+		{
+			return TEXT("23 + toe fix (w2vf)");
+		}
 		return Value >= 0 && Value < UE_ARRAY_COUNT(Labels) ? FString(Labels[Value]) : FString(TEXT("?"));
 	}
 
@@ -122,7 +130,7 @@ namespace
 		static TArray<TSharedPtr<int32>> Options;
 		if (Options.Num() == 0)
 		{
-			for (const int32 Value : {21, 22, 23, 20, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+			for (const int32 Value : {21, 22, 23, 24, 25, 20, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
 			{
 				Options.Add(MakeShared<int32>(Value));
 			}

@@ -183,6 +183,8 @@ LEAN_OUT = float(os.environ.get('LEAN_OUT', N_REV))     # lean/arm envelope end 
 DROP_CM = float(os.environ.get('DROP_CM', 0.0))          # sprinter: pelvis drop (cm) during the drive steps
 DROP_IN, DROP_HOLD, DROP_OUT = (float(os.environ.get(k, d)) for k, d in (('DROP_IN', 4), ('DROP_HOLD', 10), ('DROP_OUT', 16)))
 ARM_BACK = float(os.environ.get('ARM_BACK', 0.0))        # sprinter: elbows / hands drawn back (cm, -Z) with the lean envelope
+FOOT_RIGID = os.environ.get('FOOT_RIGID', '1') == '1'     # 0 = bit-exact rebuild of clips made before 2026-11-21 20:00Z (w1, w2, w2t*)
+FOOT_GROUP = ('foot_', 'ball_', 'ik_foot_l', 'ik_foot_r')
 LEG_IK = os.environ.get('LEG_IK', '1') == '1'           # rebuild knees + poles (fix for backward knees, see below)
 POLE_CM = float(os.environ.get('POLE_CM', 45.0))
 LT = {sd_: float(np.linalg.norm(LP['P|calf_MainPoint_' + sd_][0] - LP['P|thigh_MainPoint_' + sd_][0])) for sd_ in 'lr'}
@@ -304,7 +306,11 @@ for k in range(N_NEW):
         if s < 1.0 and n.startswith(LEG) and n != 'ik_foot_root':
             hip = P.get('thigh_MainPoint_' + n[-1])
             if hip is not None:
-                d = v - hip; v = hip + hz(d) * s + (d - hz(d))
+                # FOOT_RIGID (owner 2026-11-21 "la punta si piega"): scaling every foot point's offset from the hip squeezed the
+                # foot -> ball distance (15 -> 2.6 cm) and bent the toe 5-119 deg in the rev (stock loop 25-44). Only foot_MainPoint
+                # is scaled; the rest of the foot (ball, toe, ik_foot) follows it rigidly, so the foot keeps the loop's shape.
+                src = 'foot_MainPoint_' + n[-1] if (FOOT_RIGID and n.startswith(FOOT_GROUP)) else n
+                d = P[src] - hip; v = v - P[src] + hip + hz(d) * s + (d - hz(d))
         W[n] = v + rnew
     if LEG_IK:
         leg_ik(W)
