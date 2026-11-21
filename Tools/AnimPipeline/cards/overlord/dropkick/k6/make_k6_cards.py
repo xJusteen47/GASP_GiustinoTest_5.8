@@ -58,6 +58,13 @@ CLAMP = dict(clav=float(os.environ.get("K6_CLAMP_CLAV", 8)), shrug=0.0, across=f
 LOOSE = dict(clav=-1.5, shrug=0.0, across=-1.0, curl=0.0)
 
 
+def arms_of(src, dst):
+    q = copy.deepcopy(dst)
+    for k in ("arm_l", "arm_r", "clavicle_l", "clavicle_r"):
+        q[k] = copy.deepcopy(src[k])      # arms in the chest frame: the trunk (dst) carries them
+    return q
+
+
 def head(p, d=(0, 0, 0), neck=None, chin=None):
     q = copy.deepcopy(p)
     q["head"] = add(q["head"], list(d))
@@ -132,8 +139,11 @@ def hands(p, l=(0, 0, 0), r=(0, 0, 0)):
 
 
 press_arms = lambda p, k=1.0: elbows(arms(p, **{kk: v * k for kk, v in PRESS.items()}), off=k * PRESS_OFF)
-st[2] = hands(elbows(lerp(st[0], st[4], OPEN["t"]), out=OPEN["out"], down=-OPEN["up"], hout=OPEN["hout"]),
-              l=(0, 0, OPEN["hl_up"]), r=(0, OPEN["hr_fwd"], -OPEN["hr_down"]))
+# open v2 (after the first r2 build: at a3 the v1 open read as the guard, the elbows were already near their reach): the arms of
+# the guard pose WINGED - elbows lifted ~12 cm to shoulder height and back, left fist up and out (+15 cm), right fist out and
+# forward, shoulders back (clav -10), chest open (curl +4); the body is the 0->4 tuck at 30 %.
+open_arms = hands(arms(elbows(st[0], out=15.0, down=-20.0, hout=16.0), clav=-10.0, curl=4.0), l=(0, 0, 14.0), r=(0, 6.0, 2.0))
+st[2] = arms_of(open_arms, lerp(st[0], st[4], OPEN["t"]))
 # a5 PRESS: the head LAGS the tuck by ~a frame (6 deg less tucked), so the following segment carries it past
 st[4] = head(press_arms(st[4]), (6.0, 0, 0))
 st[5] = head(press_arms(S[5], 0.9), (3.0, 0, 0))             # a6: held, still squeezing
