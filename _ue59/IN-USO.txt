@@ -1,1 +1,1 @@
-libero dal 2026-11-21 02:25 UTC (runloop-desktop finito; editor owner riaperto)
+libero dal 2026-11-21 02:53 UTC (runstart-generic-desktop finito; editor owner chiuso, da riaprire)
