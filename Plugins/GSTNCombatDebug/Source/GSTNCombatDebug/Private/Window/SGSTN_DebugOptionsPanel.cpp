@@ -71,7 +71,7 @@ namespace
 	 *  the run start clip choice. Their cvars live in the game module (GSTN_LocoBaseSubsystem.cpp); this plugin only lists them. */
 	bool IsPlaytestVariable(const FString& Name)
 	{
-		return Name.StartsWith(TEXT("gstn.RunStart."), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.Base"), ESearchCase::IgnoreCase);
+		return Name.StartsWith(TEXT("gstn.RunStart."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Camera."), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.Base"), ESearchCase::IgnoreCase);
 	}
 
 	/** Readable name of a gstn.RunStart.Variant value (keep in step with that cvar's help text), shown next to the number */

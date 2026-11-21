@@ -4,6 +4,11 @@
 #include "GSTN_CameraSection.h"
 #include "GSTN_CameraTags.h"
 
+#include "HAL/IConsoleManager.h"
+
+static TAutoConsoleVariable<float> CVarDeadZoneWidth(TEXT("gstn.Camera.DeadZoneWidthCm"), -1.f, TEXT("Free camera dead zone width in cm (sideways): small steps inside it never move the camera. 0 = off, negative = use the camera profile (80)."));
+static TAutoConsoleVariable<float> CVarDeadZoneDepth(TEXT("gstn.Camera.DeadZoneDepthCm"), -1.f, TEXT("Free camera dead zone depth in cm (forward/back). 0 = off, negative = use the camera profile (60)."));
+
 namespace GSTNCameraModePrivate
 {
 	/** Exponential smoothing of a pivot, independent of the frame rate. The first call snaps */
@@ -117,7 +122,8 @@ void UGSTN_CameraMode_Free::AdjustFollow(const FGSTN_CameraModeContext& Context,
 		bHasDeadZone = true;
 	}
 	DeadZoneAnchor = FGSTN_CameraMath::StepDeadZone(DeadZoneAnchor, InOutPivot, Up, FGSTN_CameraMath::HeadingToDirection(Context.Frame, Context.Orbit.YawDeg),
-		FreeTuning.DeadZoneWidthCm, FreeTuning.DeadZoneDepthCm);
+		CVarDeadZoneWidth.GetValueOnGameThread() >= 0.f ? CVarDeadZoneWidth.GetValueOnGameThread() : FreeTuning.DeadZoneWidthCm,
+		CVarDeadZoneDepth.GetValueOnGameThread() >= 0.f ? CVarDeadZoneDepth.GetValueOnGameThread() : FreeTuning.DeadZoneDepthCm);
 	InOutPivot = DeadZoneAnchor;
 
 	const FVector Horizontal = Context.Subject.Velocity - Up * FVector::DotProduct(Context.Subject.Velocity, Up);
