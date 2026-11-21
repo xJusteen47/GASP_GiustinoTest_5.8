@@ -1,1 +1,1 @@
-IN-USO: libero dal 2026-11-21 21:15 UTC (turnarounds-2: catture v26 ASSERT OK; editor chiuso dall'owner, non riaperto)
+IN-USO: turnarounds-3 (variante 27, desktop) dal 2026-11-21 21:30 UTC

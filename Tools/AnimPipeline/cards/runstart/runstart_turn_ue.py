@@ -22,10 +22,17 @@ K = int(os.environ.get("RST_K", "26"))
 FWD = os.environ.get("RST_FWD", "AS_GSTN_RunStart_Generic_w2fs")
 SAVE = os.environ.get("GSTN_SAVE") == "1"
 CLIPS = {"180L": "180_L_Lfoot", "180R": "180_R_Rfoot", "090L": "090_L_Lfoot", "090R": "090_R_Rfoot"}
+# turnarounds-3 (variant 27): RST_KEYS = the directions built this run (default all); the others get rows with the RST_FALLBACK
+# suffix clip (already imported), so every direction keeps exactly one candidate at K. RST_LO1 / RST_LO2 = lower bound of the stock
+# copies to split (21.5 / 31.5 the first time; 26.5 / 36.5 once variant 26 split them).
+KEYS = os.environ.get("RST_KEYS", ",".join(CLIPS)).split(",")
+FALLBACK = os.environ.get("RST_FALLBACK", SUF)
+SUFK = {k: (SUF if k in KEYS else FALLBACK) for k in CLIPS}
+LO1, LO2 = float(os.environ.get("RST_LO1", "21.5")), float(os.environ.get("RST_LO2", "31.5"))
 log = []
 
 # 1. clips
-for key, src in CLIPS.items():
+for key, src in [(k, s) for k, s in CLIPS.items() if k in KEYS]:
     os.environ["RSGG_TAG"] = "w2t%s%s" % (key, SUF)
     os.environ["RSGG_SRC"] = os.path.join(RS, "turn", "M_Relaxed_Run_Reface_Start_%s.meta.json" % src)
     try:
@@ -77,7 +84,7 @@ def rng2(lo, hi):
 
 rows = lambda: list(call("GetChooserTable", leaf).rows)
 STOCK = ["/Game/Characters/UEFN_Mannequin/Animations/Run/M_Relaxed_Run_Reface_Start_" + s for s in CLIPS.values()]
-for lo, hi, lo2, hi2 in ((21.5, 30.5, K + 0.5, 30.5), (31.5, None, K + 10.5, None)):
+for lo, hi, lo2, hi2 in ((LO1, 30.5, K + 0.5, 30.5), (LO2, None, K + 10.5, None)):
     for st in STOCK:
         rr = rows()
         i = next((n for n, r in enumerate(rr) if asset_of(r) == st and str(r.cells[c_var]) == rng2(lo, hi)), None)
@@ -94,7 +101,7 @@ for lo, hi, lo2, hi2 in ((21.5, 30.5, K + 0.5, 30.5), (31.5, None, K + 10.5, Non
         call("SetChooserCell", leaf, c_var, i, rng2(lo, K - 0.5 if hi == 30.5 else K + 9.5))
         log.append("split %s: row %d -> %s, new row %d %s" % (st.split("_Start_")[-1], i, rng2(lo, K - 0.5 if hi == 30.5 else K + 9.5), j, rng2(lo2, hi2)))
 for key in CLIPS:
-    old, new = FOLDER + "AS_GSTN_RunStart_Generic_w2t" + key, FOLDER + "AS_GSTN_RunStart_Generic_w2t%s%s" % (key, SUF)
+    old, new = FOLDER + "AS_GSTN_RunStart_Generic_w2t" + key, FOLDER + "AS_GSTN_RunStart_Generic_w2t%s%s" % (key, SUFK[key])
     for v_old, v_new in ((21, K), (31, K + 10)):
         rr = rows()
         srcs = [n for n, r in enumerate(rr) if asset_of(r) == old and str(r.cells[c_var]) == rng2(v_old - 0.5, v_old + 0.5)]
@@ -113,7 +120,7 @@ rr = rows()
 bad = []
 for v in (K, K + 10):
     for key, st in zip(CLIPS, STOCK):
-        new = FOLDER + "AS_GSTN_RunStart_Generic_w2t%s%s" % (key, SUF)
+        new = FOLDER + "AS_GSTN_RunStart_Generic_w2t%s%s" % (key, SUFK[key])
         cand = []
         for r in rr:
             if r.get_editor_property("bDisabled") or asset_of(r) not in (st, new):
