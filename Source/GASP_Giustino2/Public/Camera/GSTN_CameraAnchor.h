@@ -60,6 +60,12 @@ enum class EGSTN_TiltShiftMode : uint8
 	/** A cheap screen-space band: sharp around the character's height on screen, blurred toward the top and bottom of the frame (post process
 	 *  material M_GSTN_TiltShift, ~12 texture reads per blurred pixel, made by Tools/GASNPPTest/camera_tiltshift_setup.py). Works on any preset */
 	ScreenBand,
+	/**
+	 * The real TILT (Scheimpflug): the plane of focus goes through the character but is rotated by TiltAngle around the camera's right axis,
+	 * instead of staying parallel to the sensor. Blur grows with each pixel's distance from that plane (post process material M_GSTN_TiltPlane,
+	 * same cost as the band, reads scene depth). Missing material = Cinematic DOF
+	 */
+	TiltedPlane,
 };
 
 /**
@@ -72,9 +78,9 @@ struct GASP_GIUSTINO2_API FGSTN_CameraTiltShiftSettings
 {
 	GENERATED_BODY()
 
-	/** On/off (console gstn.Camera.TiltShift 0/1/2 overrides it for A/B: 0 off, 1 Cinematic DOF, 2 screen band, -1 = this data) */
+	/** On/off (console gstn.Camera.TiltShift overrides it for A/B: 0 off, 1 Cinematic DOF, 2 screen band, 3 tilted plane, -1 = this data). Off by default: owner 2026-11-21, the toy look comes without blur */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift")
-	bool bEnabled = true;
+	bool bEnabled = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift", meta = (EditCondition = "bEnabled"))
 	EGSTN_TiltShiftMode Mode = EGSTN_TiltShiftMode::CinematicDOF;
@@ -110,9 +116,58 @@ struct GASP_GIUSTINO2_API FGSTN_CameraTiltShiftSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Band", meta = (ClampMin = "0", ClampMax = "40", EditCondition = "bEnabled"))
 	float BandMaxRadius = 3.f;
 
+	/**
+	 * Tilted plane: rotation of the plane of focus from "parallel to the sensor" (0, ordinary depth of field) around the camera's right axis.
+	 * Negative leans the plane's top toward the camera: with a camera looking down, the plane cuts the ground more steeply and the sharp slice
+	 * of the ground gets thinner (the "reverse tilt" of miniature photos). Positive leans it toward the ground: more of the floor stays sharp
+	 * (what architecture photographers use tilt for). At 90 - pitch the plane lies on a flat floor
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Plane", meta = (ClampMin = "-80", ClampMax = "80", Units = "deg", EditCondition = "bEnabled"))
+	float TiltAngle = -20.f;
+
+	/** Tilted plane: blur radius in pixels (1080p) per unit of (distance from the plane / distance from the camera), at Intensity 1 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Plane", meta = (ClampMin = "0", ClampMax = "200", EditCondition = "bEnabled"))
+	float PlaneBlurScale = 12.f;
+
+	/** Tilted plane: blur radius cap in pixels (1080p) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Plane", meta = (ClampMin = "0", ClampMax = "40", EditCondition = "bEnabled"))
+	float PlaneMaxRadius = 4.f;
+
+	/** Tilted plane material (parameters PlanePoint and PlaneNormal camera relative, BlurScale, Radius). Missing = Cinematic DOF */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Plane", meta = (EditCondition = "bEnabled"))
+	TSoftObjectPtr<UMaterialInterface> PlaneMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Blueprints/Camera/M_GSTN_TiltPlane.M_GSTN_TiltPlane")));
+
 	/** Band: the post process material (parameters BandCenter, BandHalfHeight, BandFeather, Radius). Missing = falls back to Cinematic DOF */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Band", meta = (EditCondition = "bEnabled"))
 	TSoftObjectPtr<UMaterialInterface> BandMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Blueprints/Camera/M_GSTN_TiltShift.M_GSTN_TiltShift")));
+};
+
+/**
+ * The SHIFT half of a tilt-shift lens (owner 2026-11-18: tilt and shift are two independent things). Shift slides the lens parallel to the
+ * sensor: the camera keeps its orientation and the picture is reframed (off-axis projection). It changes no focus and no blur. Its classic use
+ * is perspective control: a camera kept level does not make verticals converge, and the shift brings the ground back into the frame.
+ * Presentation only: applied by UGSTN_PlaytestCameraModifier through the view's off-center projection
+ */
+USTRUCT(BlueprintType)
+struct GASP_GIUSTINO2_API FGSTN_CameraShiftSettings
+{
+	GENERATED_BODY()
+
+	/** On/off (console gstn.Camera.Shift 0/1 overrides it, -1 = this data) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Shift")
+	bool bEnabled = false;
+
+	/**
+	 * Straighten verticals: 0 = the camera keeps its pitch (no change), 1 = the camera is levelled (verticals parallel) and the lens shift
+	 * keeps the character exactly where it was on screen. In between, part of the pitch becomes shift. The ground near the character looks the
+	 * same; walls and towers stop leaning, the top of the frame shows less sky
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Shift", meta = (ClampMin = "0", ClampMax = "1", EditCondition = "bEnabled"))
+	float StraightenVerticals = 0.5f;
+
+	/** Extra manual shift, in half screens (X right, Y up), on top of the straightening. Moves the framing without turning the camera */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Shift", meta = (ClampMin = "-1", ClampMax = "1", EditCondition = "bEnabled"))
+	FVector2D Offset = FVector2D::ZeroVector;
 };
 
 /** Tuning of the camera anchor. Data, never project settings: on the component (per character) or in a UGSTN_CameraAnchorSettingsAsset */
@@ -219,8 +274,22 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Framing", meta = (ClampMin = "-500", ClampMax = "1000", ForceUnits = "cm"))
 	float ExtraHeight = 45.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift")
+	/**
+	 * Telephoto framing (miniature optics): a narrower field of view with the camera moved back so the character keeps the same size and
+	 * place on screen. Flatter perspective, less wide-angle stretch, the world reads more like a model. Horizontal degrees; 0 = off (GASP's
+	 * FOV). Only narrows: a value above the current FOV does nothing. Try 55, then 45 (Super Mario Galaxy's default). If a wall stops the
+	 * camera short, the FOV opens again to keep the character's size
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Framing", meta = (ClampMin = "0", ClampMax = "120", Units = "deg"))
+	float TelephotoFOV = 0.f;
+
+	/** TILT half (focus): which slice of the world is sharp. Independent from Shift */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift", meta = (DisplayName = "Tilt (focus)"))
 	FGSTN_CameraTiltShiftSettings TiltShift;
+
+	/** SHIFT half (framing): off-axis projection. Independent from the tilt */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Shift")
+	FGSTN_CameraShiftSettings Shift;
 };
 
 /** Shared default tuning. The camera anchor subsystem loads /Game/Blueprints/Data/DA_CameraAnchor_Default when it exists, else C++ defaults */
