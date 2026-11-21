@@ -78,6 +78,9 @@ PLANK = dict(pitch=float(os.environ.get("K6_PLANK_PITCH", 8)), flex=float(os.env
              curl=float(os.environ.get("K6_PLANK_CURL", -8)))
 
 
+ARM_OFF = float(os.environ.get("K6_ARM_OFF", 2.0))
+
+
 def _rotx(v, d):
     s_, c_ = math.sin(math.radians(d)), math.cos(math.radians(d)); x, y, z = v
     return [round(x, 3), round(y * c_ - z * s_, 3), round(y * s_ + z * c_, 3)]
@@ -90,6 +93,9 @@ def plank(p, t=1.0):
     for s in "lr":
         lg = q[f"leg_{s}"]
         lg["foot"] = _rotx(lg["foot"], t * PLANK["flex"]); lg["pole"] = _rotx(lg["pole"], t * PLANK["flex"])
+        # the curl brings spine_03/04 up into the lying fold (first build: lowerarm_l|spine_03 -0.10 cm): the fold rides 2 cm
+        # further off the chest (chest frame +y), keeping its shape
+        a = q[f"arm_{s}"]; a["hand"] = add(a["hand"], [0, t * ARM_OFF, 0]); a["pole"] = add(a["pole"], [0, t * ARM_OFF, 0])
     return q
 
 

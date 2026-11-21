@@ -1293,5 +1293,148 @@
    10,
    11
   ]
+ },
+ "overlord_dropkick_startup_k6": {
+  "move": "aerial",
+  "anim": "/Game/AnimPipeline/Rig/Overlord/Dropkick/Startup/AS_OverlordDropkick_StartupK6",
+  "contact": [
+   14,
+   14
+  ],
+  "faf": 15,
+  "hold_window": [
+   15,
+   15
+  ],
+  "effector": "ball_l",
+  "reference": "",
+  "strike_limb": "leg_l",
+  "strike_side": "leg_l",
+  "balance_exempt_frames": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15
+  ],
+  "planted_exempt_frames": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11,
+   12,
+   13,
+   14,
+   15
+  ]
+ },
+ "overlord_dropkick_settle_k6": {
+  "move": "aerial",
+  "anim": "/Game/AnimPipeline/Rig/Overlord/Dropkick/Loop/AS_OverlordDropkick_SettleK6",
+  "contact": [
+   0,
+   11
+  ],
+  "faf": 12,
+  "hold_window": [
+   11,
+   11
+  ],
+  "effector": "ball_l",
+  "reference": "",
+  "strike_limb": "leg_l",
+  "strike_side": "leg_l",
+  "balance_exempt_frames": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11
+  ],
+  "planted_exempt_frames": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11
+  ]
+ },
+ "overlord_dropkick_loop_k6": {
+  "move": "aerial",
+  "anim": "/Game/AnimPipeline/Rig/Overlord/Dropkick/Loop/AS_OverlordDropkick_LoopK6",
+  "contact": [
+   0,
+   11
+  ],
+  "faf": 12,
+  "hold_window": [
+   0,
+   11
+  ],
+  "effector": "ball_l",
+  "reference": "",
+  "strike_limb": "leg_l",
+  "strike_side": "leg_l",
+  "balance_exempt_frames": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11
+  ],
+  "planted_exempt_frames": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   9,
+   10,
+   11
+  ]
  }
 }
