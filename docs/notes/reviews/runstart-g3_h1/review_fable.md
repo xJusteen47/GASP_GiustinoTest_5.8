@@ -45,3 +45,5 @@ Cadence and smoothness in motion are inferred from stills 6 frames apart: one hu
 - Item 2 (per-contact L foot travel, foot z < 13 cm, f80-240): g3 13.6 / 12.3 / 31.9 / 33.3 / 23.3 / 28.7 cm; base 2.2 / 27.1 /
   14.3 / 11.0 / 23.4; g2 12.8 / 16.6 / 30.2 / 22.0 / 21.6. Max 33 cm, below the 40 cm treadmill bar; the two 30+ contacts are at
   v124-168 (end of the release / loop). Open as dati, not posa.
+- Thread look at the start (mp4 frame n = v(n+60), az45 strip v87-v120 step 3): knees and arms pump from v90, lean held through
+  ~v108, release v111-v117, upright loop by v120 with no hitch. Agrees with the PASS.
