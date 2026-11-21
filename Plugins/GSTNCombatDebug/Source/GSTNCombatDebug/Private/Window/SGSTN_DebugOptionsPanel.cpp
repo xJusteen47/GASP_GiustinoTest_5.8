@@ -8,6 +8,7 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "Internationalization/Regex.h"
 #include "Styling/AppStyle.h"
 #include "Widgets/Input/SButton.h"
 #include "Widgets/Input/SCheckBox.h"
@@ -84,6 +85,33 @@ namespace
 			return TEXT("generic w1 (sprinter weight)");	// 10-19 are the Handoff copies of 0-9: new variants start at 20
 		}
 		return Value >= 0 && Value < UE_ARRAY_COUNT(Labels) ? FString(Labels[Value]) : FString(TEXT("?"));
+	}
+
+	bool IsRunStartVariant(const FString& Name)
+	{
+		return Name.Equals(TEXT("gstn.RunStart.Variant"), ESearchCase::IgnoreCase);
+	}
+
+	/** The run start variants the drop-down offers, the standard first (10-19 are the Handoff copies: never picked directly) */
+	const TArray<TSharedPtr<int32>>& RunStartVariantOptions()
+	{
+		static TArray<TSharedPtr<int32>> Options;
+		if (Options.Num() == 0)
+		{
+			for (const int32 Value : {20, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+			{
+				Options.Add(MakeShared<int32>(Value));
+			}
+		}
+		return Options;
+	}
+
+	/** Owner 2026-11-21: one control per variable, no check box AND number for the same value. An int whose help names a value of 2 or
+	 *  more ("2 = also log") has levels and gets a number only; any other int or bool is an on/off switch and gets a check box only. */
+	bool HasLevels(const IConsoleVariable* Variable)
+	{
+		FRegexMatcher Matcher(FRegexPattern(TEXT("(^|[^0-9.])([2-9]|[1-9][0-9]+) *=")), Variable->GetHelp());
+		return Matcher.FindNext();
 	}
 }
 
@@ -297,9 +325,11 @@ TSharedRef<SWidget> SGSTN_DebugOptionsPanel::MakeRow(const FString& Name, IConso
 
 	TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox).ToolTipText(Tooltip);
 
-	if (Variable->IsVariableBool() || Variable->IsVariableInt())
+	const bool bVariant = IsRunStartVariant(Name);
+	const bool bLevels = Variable->IsVariableInt() && !bVariant && HasLevels(Variable);
+	if (Variable->IsVariableBool() || (Variable->IsVariableInt() && !bVariant && !bLevels))
 	{
-		// A check box for on (anything but 0) and off; an int keeps its exact value next to it, for the levels some variables have (2 = also log)
+		// On/off switch: check box only (on = 1)
 		Row->AddSlot()
 		.AutoWidth()
 		.VAlign(VAlign_Center)
@@ -327,15 +357,45 @@ TSharedRef<SWidget> SGSTN_DebugOptionsPanel::MakeRow(const FString& Name, IConso
 	.Padding(6.f, 0.f)
 	[
 		SNew(STextBlock)
-		.Text_Lambda([Name]()
-		{
-			// The run start variant shows which clip its number picks (gstn.RunStart.Handoff adds 10 in the ABP); other rows show their name
-			const IConsoleVariable* V = Name.Equals(TEXT("gstn.RunStart.Variant"), ESearchCase::IgnoreCase) ? FindVariable(Name) : nullptr;
-			return FText::FromString(V ? FString::Printf(TEXT("%s: %s"), *ShortName(Name), *RunStartVariantLabel(V->GetInt())) : ShortName(Name));
-		})
+		.Text(FText::FromString(ShortName(Name)))
 	];
 
-	if (Variable->IsVariableInt())
+	if (bVariant)
+	{
+		// Run start clip: a drop-down of readable names (gstn.RunStart.Handoff adds 10 in the ABP)
+		Row->AddSlot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		[
+			SNew(SBox)
+			.WidthOverride(220.f)
+			[
+				SNew(SComboBox<TSharedPtr<int32>>)
+				.IsEnabled(!bReadOnly)
+				.OptionsSource(&RunStartVariantOptions())
+				.OnGenerateWidget_Lambda([](TSharedPtr<int32> Option)
+				{
+					return SNew(STextBlock).Text(FText::FromString(FString::Printf(TEXT("%d  %s"), *Option, *RunStartVariantLabel(*Option))));
+				})
+				.OnSelectionChanged_Lambda([Name](TSharedPtr<int32> Option, ESelectInfo::Type)
+				{
+					IConsoleVariable* V = FindVariable(Name);
+					if (Option.IsValid() && V)
+					{
+						V->Set(*Option, ECVF_SetByConsole);
+					}
+				})
+				[
+					SNew(STextBlock).Text_Lambda([Name]()
+					{
+						const IConsoleVariable* V = FindVariable(Name);
+						return FText::FromString(V ? FString::Printf(TEXT("%d  %s"), V->GetInt(), *RunStartVariantLabel(V->GetInt())) : FString());
+					})
+				]
+			]
+		];
+	}
+	else if (bLevels)
 	{
 		Row->AddSlot()
 		.AutoWidth()

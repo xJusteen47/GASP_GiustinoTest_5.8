@@ -12,7 +12,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogGSTNLocoBase, Log, All);
 namespace GSTNLocoBase
 {
 	static TAutoConsoleVariable<int32> CVarLocoBase(
-		TEXT("gstn.Loco.Base"), 0,
+		TEXT("gstn.Loco.Base"), 1,
 		TEXT("Main anim graph of the GASP Mover characters. 0 = current base (SandboxCharacter_Mover_ABP / ABP_GSTN_Locomotion ")
 		TEXT("with our nodes), 1 = clean GASP stock copy (ABP_GSTN_StockMover + CHT_GSTN_StockMover_PoseMatch). Live: applied on ")
 		TEXT("the next frame; restart Play for a fair comparison (pose history, montages)."),

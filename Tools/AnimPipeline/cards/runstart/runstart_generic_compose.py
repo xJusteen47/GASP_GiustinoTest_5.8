@@ -108,6 +108,22 @@ for u in range(1, N_NEW):
     dist.append(dist[-1] + min(max(v, 0.0), VL))
 spd = [0.0] + [dist[u] - dist[u - 1] for u in range(1, N_NEW)]
 s_raw = [min(1.0, max(S_MIN, spd[u] / (rate(u) * VL))) for u in range(N_NEW)]
+U = list(range(N_NEW)); C = [cs[u] for u in range(N_NEW)]
+TMAP = os.environ.get('TMAP')
+# w2 (owner 2026-11-21 "rifinisci lo scivolamento"): in game the capsule (Mover, DA ramp) runs 2-3x ahead of the stock start root ramp
+# during the drive and the dynamic play rate (capsule speed / movedata_speed) speeds the clip up (w1: 1.0 -> 1.27x), so the planted
+# drive feet slide (w1 capture: R 15 cm v94-100, L 22 cm v104-108). TMAP = json {"uf": authored frame of the source variant per 1/30 s
+# of game time, "dist": capsule distance} measured in that variant's capture: the clip is resampled on the timing the game showed and
+# its root follows the capsule, so movedata_speed = capsule speed (play rate ~1, same timing as seen) and strides match the capsule.
+if TMAP:
+    tm = json.load(open(TMAP)); UF, DS = list(tm['uf']), list(tm['dist'])
+    cint = lambda x: cs[int(x)] + (cs[int(x) + 1] - cs[int(x)]) * (x - int(x))
+    while UF[-1] < N_NEW - 1:                                   # past the measured window: keep the last slope and speed
+        UF.append(min(UF[-1] + (UF[-1] - UF[-2]), N_NEW - 1.0)); DS.append(DS[-1] + (DS[-1] - DS[-2]))
+    N_NEW = len(UF); U = UF; C = [cint(x) for x in UF]; dist = DS
+    spd = [0.0] + [dist[k] - dist[k - 1] for k in range(1, N_NEW)]
+    rk = [(C[min(k + 1, N_NEW - 1)] - C[max(k - 1, 0)]) / (min(k + 1, N_NEW - 1) - max(k - 1, 0)) for k in range(N_NEW)]
+    s_raw = [min(1.0, max(S_MIN, spd[k] / (rk[k] * VL))) for k in range(N_NEW)]
 s_sm = [s_raw[0]] + [(s_raw[i - 1] + s_raw[i] + s_raw[i + 1]) / 3 for i in range(1, N_NEW - 1)] + [s_raw[-1]]
 BOUNCE = float(os.environ.get('BOUNCE', 1.0))         # pelvis vertical bounce scale at frame 0 (g2: 0.3)
 LEAN_DEG = float(os.environ.get('LEAN_DEG', 0.0))      # extra forward lean at frame 0, upper body about the pelvis (g2: 22)
@@ -135,9 +151,29 @@ def rot_x(v, c, t):                                      # about lateral X throu
 
 
 ARM_MEAN = {n: (LP['P|' + n] - LP['P|upperarm_MainPoint_' + n[-1]]).mean(axis=0) for n in pnames if n.startswith(ARMP)}
+def leg_ik(W):
+    # Owner 2026-11-21 "le gambe sono rotte" (g3 and s1): stride scaling and the pelvis drop are not rigid, so the knee point and
+    # the pole (calf_LimbDir) ended near the hip-foot line and Cascadeur's leg IK bent the knee BACKWARD (-16..-37 cm, s1 f1-6).
+    # Rebuild each knee by two-bone IK with the rig lengths, bending toward the character's forward, and put the pole in front.
+    for sd_ in 'lr':
+        H, F = W['thigh_MainPoint_' + sd_], W['foot_MainPoint_' + sd_]
+        K_old = W['calf_MainPoint_' + sd_]
+        d = F - H; dl = float(np.linalg.norm(d)); ax = d / dl
+        fw = FWD - ax * float(np.dot(FWD, ax)); fw /= np.linalg.norm(fw)          # forward, perpendicular to hip-foot line
+        dc = min(dl, LT[sd_] + LC[sd_] - 0.01)
+        x = (LT[sd_] ** 2 - LC[sd_] ** 2 + dc ** 2) / (2 * dc)
+        h = math.sqrt(max(LT[sd_] ** 2 - x * x, 0.0))
+        K = H + ax * x + fw * h
+        for n in [n for n in W if n.startswith('calf_') and n.endswith('_' + sd_) and n not in ('calf_MainPoint_' + sd_, 'calf_LimbDir_' + sd_)]:
+            W[n] = W[n] - K_old + K
+        W['calf_MainPoint_' + sd_] = K
+        W['calf_LimbDir_' + sd_] = K + fw * POLE_CM
+
+
 out = {}
-for u in range(N_NEW):
-    P, Bx = loop_at(cs[u])
+for k in range(N_NEW):
+    u = U[k]
+    P, Bx = loop_at(C[k])
     w = ss(u / ENTRY) if ENTRY > 0 else 1.0
     wl = ss(u / max(ENTRY - ENTRY_LEAD, 1.0)) if ENTRY > 0 else 1.0     # g3: pelvis and legs lead the entry, upper body follows
     if w < 1.0:
@@ -189,8 +225,8 @@ for u in range(N_NEW):
                 if not n.startswith('calf_'):
                     v = rot_x(v, K1, -0.75 * a)                 # shin folds back under the raised knee
                 P[n] = v
-    s = s_sm[u]
-    rnew = hz(sroot[0]) + FWD * dist[u]
+    s = s_sm[k]
+    rnew = hz(sroot[0]) + FWD * dist[k]
     W = {}
     for n, v in P.items():
         if s < 1.0 and n.startswith(LEG) and n != 'ik_foot_root':
@@ -199,23 +235,30 @@ for u in range(N_NEW):
                 d = v - hip; v = hip + hz(d) * s + (d - hz(d))
         W[n] = v + rnew
     if LEG_IK:
-        # Owner 2026-11-21 "le gambe sono rotte" (g3 and s1): stride scaling and the pelvis drop are not rigid, so the knee point and
-        # the pole (calf_LimbDir) ended near the hip-foot line and Cascadeur's leg IK bent the knee BACKWARD (-16..-37 cm, s1 f1-6).
-        # Rebuild each knee by two-bone IK with the rig lengths, bending toward the character's forward, and put the pole in front.
-        for sd_ in 'lr':
-            H, F = W['thigh_MainPoint_' + sd_], W['foot_MainPoint_' + sd_]
-            K_old = W['calf_MainPoint_' + sd_]
-            d = F - H; dl = float(np.linalg.norm(d)); ax = d / dl
-            fw = FWD - ax * float(np.dot(FWD, ax)); fw /= np.linalg.norm(fw)          # forward, perpendicular to hip-foot line
-            dc = min(dl, LT[sd_] + LC[sd_] - 0.01)
-            x = (LT[sd_] ** 2 - LC[sd_] ** 2 + dc ** 2) / (2 * dc)
-            h = math.sqrt(max(LT[sd_] ** 2 - x * x, 0.0))
-            K = H + ax * x + fw * h
-            for n in [n for n in W if n.startswith('calf_') and n.endswith('_' + sd_) and n not in ('calf_MainPoint_' + sd_, 'calf_LimbDir_' + sd_)]:
-                W[n] = W[n] - K_old + K
-            W['calf_MainPoint_' + sd_] = K
-            W['calf_LimbDir_' + sd_] = K + fw * POLE_CM
-    out[u] = (W, Bx)
+        leg_ik(W)
+    out[k] = (W, Bx)
+PIN_U = float(os.environ.get('PIN_U', 0))
+# w2: drive contacts (authored frame < PIN_U) pinned in the world: each planted run (foot below 14 cm) holds the run's mean horizontal
+# position (foot, ball, ik_foot of that side move together), knees rebuilt by leg_ik. Removes the residual slide of the stride scaling.
+pinned = []
+if PIN_U:
+    for sd_ in 'lr':
+        fk = 'foot_MainPoint_' + sd_
+        run = []
+        for k in list(range(N_NEW)) + [None]:
+            if k is not None and U[k] < PIN_U and out[k][0][fk][UP] < 14:
+                run.append(k); continue
+            if len(run) > 1:
+                tgt = sum(hz(out[q][0][fk]) for q in run) / len(run)
+                for q in run:
+                    W = out[q][0]; dlt = tgt - hz(W[fk])
+                    for n in [n for n in W if n.endswith('_' + sd_) and n.startswith(('foot_', 'ball_'))] + ['ik_foot_' + sd_]:
+                        if n in W:
+                            W[n] = W[n] + dlt
+                    if LEG_IK:
+                        leg_ik(W)
+                pinned.append((sd_, run[0], run[-1]))
+            run = []
 D = {}
 for n in pnames:
     D['P|' + n] = np.stack([out[u][0][n] for u in range(N_NEW)])
@@ -230,7 +273,7 @@ for k, arr in lc.items():
     arr = list(arr); n = len(arr)
     vals = []
     for u in range(N_NEW):
-        c = cs[u]; a = int(math.floor(c)); w = c - a
+        c = C[u]; a = int(math.floor(c)); w = c - a
         vals.append(round(arr[a % n] * (1 - w) + arr[(a + 1) % n] * w, 5))
     cur[k] = vals
 # foot slip in world while planted (foot MainPoint y < 14 cm), per side
@@ -241,7 +284,7 @@ for sd_ in 'lr':
     slip[sd_] = round(sum(sl), 1)
 info = {'TAG': TAG, 'c0': c0, 'c_end': round(c_end, 3), 'tail_loop_frame': round(c_end % NL, 3), 'N_REV': N_REV, 'N_NEW': N_NEW,
         'R0': R0, 'VL_cm_f': round(VL, 3), 'dist_end': round(dist[-1], 1), 's_min': round(min(s_sm), 3), 'slip_cm': slip,
-        'steps_in_rev': round((c_end - c0) / 11.0, 2), 'cs': [round(x, 3) for x in cs[:N_NEW]], 'spd': [round(x, 2) for x in spd]}
+        'steps_in_rev': round((c_end - c0) / 11.0, 2), 'cs': [round(x, 3) for x in C], 'spd': [round(x, 2) for x in spd], 'pinned': pinned}
 json.dump({'info': info, 'curves': cur}, open(os.path.join(odir, 'generic_%s_curves.json' % TAG), 'w'))
 print('ESITO: OK %s N_NEW %d c0 %.0f c_end %.2f (loop f %.2f) steps_in_rev %.2f' % (TAG, N_NEW, c0, c_end, c_end % NL, info['steps_in_rev']))
 print('root end %.1f cm  s_min %.2f  slip L/R %s' % (dist[-1], min(s_sm), slip))
