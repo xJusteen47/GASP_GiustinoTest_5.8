@@ -1,1 +1,1 @@
-IN-USO: libero dal 2026-11-21 23:36 UTC (turnarounds-4 pose round 2: v28 gates OK, cattura t4b ASSERT OK)
+IN-USO: libero dal 2026-11-21 23:50 UTC (turnarounds-4 pose round 3: v28 gates OK, cattura t4c ASSERT OK)

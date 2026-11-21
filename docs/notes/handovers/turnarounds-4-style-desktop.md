@@ -17,8 +17,14 @@ Re-check of turnarounds-3 (rule 11): 27 (w2t180Lp) UE clip gates rerun now -> GA
 - G (game/root) re-measured, frames.jsonl body.face_hips: v28 0 (v84) -27 (v86) -66 (v88) -107 (v90) -138 (v92) -155 (v94)
   -160 (v96): ONE continuous beat ~20 deg/frame v85-v93, then ~10 deg tail; the last ~20 deg are never reached (cap facing).
 - Evidence 180a_style_r2/: ab_27_vs_28_{az180,az90,game}_{real,slow4x}.mp4, grid_ab_*.jpg, grid_pivot_az180_game_v84-102.jpg,
-  grid_game_crop_v84-102.jpg (game camera cropped on the character, as asked), gates json, casc. My look (not a review): wider
-  arms v90-96 and hand beside the hip v96-98 read also in the game crop; the lead at v84-86 is small because the clip enters
-  under a 0.1 s blend from idle (weight 0.15-0.41).
-- Next: cloud review round 2 (base 27). 180R/090L/090R still on the f clips at 28.
-COSTO: ~14 $ total (6 r1 + 3 A + 5 r2) | ~25 min desktop | 0 token review
+## Pose round 3 (coordinator 23:39Z, last before the owner, budget 5 $) -> 180a_style_r3/
+- P6: the pump moved front/back in depth only, so from behind it read as a hand on the hip. Shoulder swing about the lateral
+  axis +-25 deg with the pump phase (+20/15 deg extra lift and elbow flex on the forward swing), f6-f27, faded in/out:
+  L hand vertical range 23 -> 35 cm, peak speed 24.4 -> 32.9 (more, not less). Fix try 1: elbow_r zigzag f12-13 -> one
+  smoothing pass f10-16 on the R arm -> GATES OK. Capture Saved/Turn4/t4c, ASSERT OK both.
+- P5 = GAME item (not a round): the UE clip HAS the R foot spin (foot-pelvis gap f3-f6 -17/-31/-48/-44 deg vs 27's
+  -34/-61/-95/-87, joints json), the game shows it only from v91. Suspects: entry blend from idle 0.1 s (clip weight
+  0.15-0.55 at v84-88, idle foot dominates), ik_foot / leg IK or foot lock. Needs a capture that logs foot_r yaw per frame
+  (pie_capture_move body.*) and the leg IK alpha; code queue.
+- R arm "elbow out to the side": owner question (coordinator).
+COSTO: ~18 $ total (6 r1 + 3 A + 5 r2 + 4 r3) | ~30 min desktop | 0 token review
