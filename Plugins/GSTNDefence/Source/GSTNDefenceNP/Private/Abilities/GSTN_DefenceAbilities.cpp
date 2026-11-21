@@ -6,6 +6,7 @@
 #include "Timeline/GSTN_TimelineTypes.h"
 
 #include "AbilitySystemComponent.h"
+#include "HAL/IConsoleManager.h"
 #include "Data/GSTN_DefenceRules.h"
 #include "GSTN_DefenceLibrary.h"
 #include "Input/GSTN_CombatCommandTags.h"
@@ -84,15 +85,67 @@ bool UGSTN_GA_Shield::CanActivateAbility(const FGameplayAbilitySpecHandle Handle
 
 namespace
 {
-	/** The plain timeline of a thin defence ability: TotalFrames long, actionable at its end, no track (content adds its own) */
+	/**
+	 * The plain timeline of a thin defence ability: TotalFrames long, actionable at its end, no track (content adds its own). A timeline
+	 * with a cancellable tail keeps its own FAF (the get-ups, owner 2026-11-21: control returns before the clip ends, the tail plays after)
+	 */
 	void BuildFixedTimeline(FGSTN_CombatTimelineData& Timeline, int32 TotalFrames)
 	{
 		if (Timeline.Tracks.IsEmpty())
 		{
 			Timeline.TotalFrames = FMath::Max(TotalFrames, 1);
-			Timeline.FirstActionableFrame = Timeline.TotalFrames;
+			const bool bKeepFaf = Timeline.Tail.bHasTail && Timeline.FirstActionableFrame > 0 && Timeline.FirstActionableFrame <= Timeline.TotalFrames;
+			if (!bKeepFaf)
+			{
+				Timeline.FirstActionableFrame = Timeline.TotalFrames;
+			}
 		}
 	}
+
+	// Debug knobs for the get-up exit momentum (GSTN Debug window, one control each). -1 = the ability's data. Read only by the simulation of
+	// the get-up end, the same value on every machine of a PIE session
+	TAutoConsoleVariable<float> CVarRollExitSpeed(TEXT("gstn.Getup.RollExitSpeed"), -1.f,
+		TEXT("Speed (cm/s) a get-up roll toward the feet hands to the next move when cut in its tail. -1 = ability data, 0 = none"));
+	TAutoConsoleVariable<float> CVarRollBackExitSpeed(TEXT("gstn.Getup.RollBackExitSpeed"), -1.f,
+		TEXT("Speed (cm/s) a get-up roll toward the head hands to the next move when cut in its tail. -1 = ability data, 0 = none"));
+	TAutoConsoleVariable<float> CVarStandExitSpeed(TEXT("gstn.Getup.StandExitSpeed"), -1.f,
+		TEXT("Speed (cm/s) the neutral get-up hands to the next move along the facing when cut in its tail. -1 = ability data, 0 = none"));
+}
+
+float FGSTN_GetupExit::ResolveSpeed(float DataSpeedCmPerSecond, float CVarSpeedCmPerSecond)
+{
+	return FMath::Max(CVarSpeedCmPerSecond >= 0.f ? CVarSpeedCmPerSecond : DataSpeedCmPerSecond, 0.f);
+}
+
+FVector FGSTN_GetupExit::ExitVelocity(EGSTN_MoveEndReason Reason, const FVector& Along, float SpeedCmPerSecond)
+{
+	if (Reason != EGSTN_MoveEndReason::TailCancelled || SpeedCmPerSecond <= 0.f)
+	{
+		return FVector::ZeroVector;
+	}
+	return Along.GetSafeNormal2D() * SpeedCmPerSecond;
+}
+
+void FGSTN_GetupExit::Apply(UAbilitySystemComponent& AbilitySystem, const FVector& Velocity)
+{
+	if (Velocity.IsNearlyZero() || !FGSTN_TumbleLanding::CanQueueMoves(&AbilitySystem))
+	{
+		return;
+	}
+	const FGameplayEffectSpecHandle Spec = AbilitySystem.MakeOutgoingSpec(UGSTN_GE_PushBack::StaticClass(), 1.f, AbilitySystem.MakeEffectContext());
+	if (!Spec.IsValid())
+	{
+		return;
+	}
+	// One frame of the roll's own push, no decay: the push leaves its velocity to the movement mode when it ends (the reason the roll
+	// zeroes its last key), so walking, a jump or a move's momentum slide starts from it
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityX, static_cast<float>(Velocity.X));
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityY, static_cast<float>(Velocity.Y));
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityZ, 0.f);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveDecay, 0.f);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveGravityScale, 1.f);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveSeconds, FGSTN_TumbleLanding::FrameSeconds);
+	AbilitySystem.ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
 }
 
 UGSTN_GA_Tech::UGSTN_GA_Tech(const FObjectInitializer& ObjectInitializer)
@@ -293,6 +346,32 @@ void UGSTN_GA_GetupRoll::OnSimulationTick(const FAbilitySystemTimeStep& TimeStep
 		AbilitySystem->ApplyGameplayEffectSpecToSelf(*Spec.Data.Get());
 	}
 	LastTravelFrame.Value = Frame;
+}
+
+void UGSTN_GA_GetupRoll::OnMoveEnded(EGSTN_MoveEndReason Reason)
+{
+	Super::OnMoveEnded(Reason);
+	UAbilitySystemComponent* AbilitySystem = GetAbilitySystemComponentFromActorInfo();
+	if (!AbilitySystem)
+	{
+		return;
+	}
+	const bool bTowardFeet = TravelDirection == EGSTN_GetupTravelDirection::Facing;
+	const float Speed = FGSTN_GetupExit::ResolveSpeed(ExitSpeed, (bTowardFeet ? CVarRollExitSpeed : CVarRollBackExitSpeed).GetValueOnAnyThread());
+	const FVector Facing = FGSTN_TumbleLanding::ReadFacing(GetAvatarActorFromActorInfo());
+	FGSTN_GetupExit::Apply(*AbilitySystem, FGSTN_GetupExit::ExitVelocity(Reason, bTowardFeet ? Facing : -Facing, Speed));
+}
+
+void UGSTN_GA_GetupNeutral::OnMoveEnded(EGSTN_MoveEndReason Reason)
+{
+	Super::OnMoveEnded(Reason);
+	UAbilitySystemComponent* AbilitySystem = GetAbilitySystemComponentFromActorInfo();
+	if (!AbilitySystem)
+	{
+		return;
+	}
+	const float Speed = FGSTN_GetupExit::ResolveSpeed(ExitSpeed, CVarStandExitSpeed.GetValueOnAnyThread());
+	FGSTN_GetupExit::Apply(*AbilitySystem, FGSTN_GetupExit::ExitVelocity(Reason, FGSTN_TumbleLanding::ReadFacing(GetAvatarActorFromActorInfo()), Speed));
 }
 
 void UGSTN_GA_GetupNeutral::PostInitProperties()

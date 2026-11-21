@@ -6,6 +6,8 @@
 #include "Abilities/GSTN_GA_BaseCombat.h"
 #include "GSTN_DefenceAbilities.generated.h"
 
+class UAbilitySystemComponent;
+
 /**
  * The tech ability (m6 spec 6, a pluggable kit ability): one class per tech kind in the kit's FGSTN_TechSet, started Forced by the model
  * at a successful tech (F8). A thin timeline ability: its frame data (the tech's intangible window, its movement) is data of the class or
@@ -61,6 +63,24 @@ enum class EGSTN_GetupTravelDirection : uint8
 	AgainstFacing,
 };
 
+/**
+ * The momentum a get-up hands to the next move (owner 2026-11-21, "rialzate": rolls and the stand-up keep a bit of momentum into what the
+ * player does next). Only a get-up cut inside its cancellable tail (a stick move, a jump, a command after FAF) passes it on: a tail that
+ * plays out leaves the body at rest, so nothing slides under an idle pose or skates the planted feet while rising. Pure, for the abilities
+ * and the tests.
+ */
+struct GSTNDEFENCENP_API FGSTN_GetupExit
+{
+	/** The speed the get-up passes on: the cvar's value when it is 0 or more (a debug knob, gstn.Getup.*ExitSpeed), else the data's */
+	static float ResolveSpeed(float DataSpeedCmPerSecond, float CVarSpeedCmPerSecond);
+
+	/** The velocity handed on when the move ended for Reason: Speed along Along (flattened to the ground plane), zero unless TailCancelled */
+	static FVector ExitVelocity(EGSTN_MoveEndReason Reason, const FVector& Along, float SpeedCmPerSecond);
+
+	/** Queues Velocity on the entity's Mover for one frame (a push with no decay): the movement mode that follows starts from it */
+	static void Apply(UAbilitySystemComponent& AbilitySystem, const FVector& Velocity);
+};
+
 /** One point of a get-up roll's travel: at this frame of the timeline the capsule has covered Fraction of TravelDistanceCm */
 USTRUCT(BlueprintType)
 struct GSTNDEFENCENP_API FGSTN_GetupTravelKey
@@ -104,6 +124,13 @@ public:
 	TArray<FGSTN_GetupTravelKey> TravelKeys;
 
 	/**
+	 * Speed handed to the next move along the travel direction when the roll is cut inside its tail (FGSTN_GetupExit); 0 = the next move
+	 * starts at rest, as before. Overridden by gstn.Getup.RollExitSpeed (toward the feet) or gstn.Getup.RollBackExitSpeed (toward the head)
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Exit", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
+	float ExitSpeed = 0.f;
+
+	/**
 	 * The push that starts at timeline frame Frame: true with its speed (cm/s along the travel direction) and length in frames when a segment
 	 * with travel starts there. Pure, for the ability and the tests
 	 */
@@ -117,6 +144,7 @@ public:
 
 protected:
 	virtual void OnTimelineBegan(int32 StateStartFrame) override;
+	virtual void OnMoveEnded(EGSTN_MoveEndReason Reason) override;
 
 private:
 	/** The last timeline frame whose segment start was handled (sync var: a resimulation queues the same pushes again) */
@@ -140,10 +168,20 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Timeline", meta = (ClampMin = "1", ForceUnits = "Frames"))
 	int32 TotalFrames = 20;
 
+	/**
+	 * Speed handed to the next move along the facing when the stand-up is cut inside its tail (FGSTN_GetupExit); 0 = the next move starts
+	 * at rest, as before. Overridden by gstn.Getup.StandExitSpeed
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Exit", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
+	float ExitSpeed = 0.f;
+
 	virtual void PostInitProperties() override;
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif
+
+protected:
+	virtual void OnMoveEnded(EGSTN_MoveEndReason Reason) override;
 };
 
 /**

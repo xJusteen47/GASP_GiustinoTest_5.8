@@ -41,4 +41,19 @@ bool FGSTN_DefenceGetupTravelSegmentsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DefenceGetupExitTest, "GSTNDefence.NP.Getup.ExitMomentum", GetupTravelTestFlags)
+bool FGSTN_DefenceGetupExitTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-21: only a get-up cut in its tail passes momentum on; a tail played out, a hit or a finished move leave the body at rest
+	const FVector Along(0.0, 2.0, 0.5);
+	TestEqual(TEXT("tail cancelled: speed along the flattened direction"), FGSTN_GetupExit::ExitVelocity(EGSTN_MoveEndReason::TailCancelled, Along, 220.f), FVector(0.0, 220.0, 0.0));
+	TestTrue(TEXT("finished: nothing"), FGSTN_GetupExit::ExitVelocity(EGSTN_MoveEndReason::Finished, Along, 220.f).IsZero());
+	TestTrue(TEXT("interrupted (a hit): nothing"), FGSTN_GetupExit::ExitVelocity(EGSTN_MoveEndReason::Interrupted, Along, 220.f).IsZero());
+	TestTrue(TEXT("no speed: nothing"), FGSTN_GetupExit::ExitVelocity(EGSTN_MoveEndReason::TailCancelled, Along, 0.f).IsZero());
+	TestEqual(TEXT("cvar -1: the data"), FGSTN_GetupExit::ResolveSpeed(160.f, -1.f), 160.f);
+	TestEqual(TEXT("cvar 0: off"), FGSTN_GetupExit::ResolveSpeed(160.f, 0.f), 0.f);
+	TestEqual(TEXT("cvar set: the cvar"), FGSTN_GetupExit::ResolveSpeed(160.f, 330.f), 330.f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
