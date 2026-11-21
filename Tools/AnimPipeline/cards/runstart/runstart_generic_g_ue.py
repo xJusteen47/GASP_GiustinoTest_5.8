@@ -177,6 +177,14 @@ else:
         sk = json.load(open(SRCM))["curves"]["enable_warping"]
         ew = [sk[1][max([i for i, t in enumerate(sk[0]) if t <= f / 30.0 + 1e-4] or [0])] for f in range(n)]
     curves["enable_warping"] = [ew[min(f, len(ew) - 1)] for f in range(n)]
+    # turnarounds-3 (review v27 r1 item 1): a clip that authors its own turn timing gives its own enable_warping and
+    # steeringtargettime (the stock reface clips carry both; the stock copy above has warping on from stock f5 and no steering
+    # time, which in game held the body at the capsule's facing for the last ~40 deg). Values per frame from the composer, under
+    # "own_<curve>" keys (the plain keys in the composer json are the loop's own curves sampled on the rev, not used here).
+    for k in ("enable_warping", "steeringtargettime"):
+        if "own_" + k in cj["curves"]:
+            v = cj["curves"]["own_" + k]
+            curves[k] = [v[min(f, len(v) - 1)] for f in range(n)]
     for name, vals in curves.items():
         if AL.does_curve_exist(seq, name, unreal.RawCurveTrackTypes.RCT_FLOAT):
             AL.remove_curve(seq, name, False)

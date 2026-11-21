@@ -312,6 +312,13 @@ for n in bnames:
     D['R|' + n] = np.stack(qs); D['T|' + n] = np.stack(ts)
 np.savez(os.path.join(RS, 'generic_%s_pose.npz' % TAG), **D)
 cur = {k: [v[0]] * H + list(v) for k, v in RC['curves'].items()}
+# Stock reface curves re-timed to this turn (round 2 capture: the stock-copied enable_warping switched orientation warping on at
+# clip f5 and there was no steeringtargettime, so in game the body stopped at the capsule's facing for the last ~40 deg).
+# Stock 180_L_Lfoot: enable_warping 0 until its turn is nearly done (f5 -> 1 at f15), steeringtargettime 1.0 through the turn,
+# down to 0 over 13 frames after it. Here: warping 0 until H + WARP_IN, ramp WARP_RAMP; steering time 1.0 until H + 2, ramp 6.
+WARP_IN, WARP_RAMP = E('WARP_IN', 2), E('WARP_RAMP', 4)
+cur['own_enable_warping'] = [round(ss((u - H - WARP_IN) / WARP_RAMP), 4) for u in range(NT)]
+cur['own_steeringtargettime'] = [round(1.0 - ss((u - H - 2) / 6.0), 4) for u in range(NT)]
 slip = {}
 for s in 'lr':
     fp = [W_all[u]['foot_MainPoint_' + s] for u in range(NT)]
