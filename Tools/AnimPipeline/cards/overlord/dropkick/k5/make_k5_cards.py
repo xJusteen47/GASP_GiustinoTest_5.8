@@ -14,12 +14,13 @@ DK = os.path.dirname(HERE)
 # the forearms then pointed AWAY from the chest (in game they read as a raised guard). Here the hands go further across and lower,
 # just outside the chest surface, and the elbow poles come forward so the forearms lie along the chest.
 # Folded: elbow under the shoulder and forward (upper arm ~29 cm), forearm (~26 cm) straight across, hand at the far chest edge.
+# Check 1 (clearance): forearms 3-7 cm into spine_03/04 and into each other -> hands 5-8 cm further out, left 2 cm higher.
 # Targets fitted (k5/fit, chest frame of spine_05) so the wrists sit at -6/+6 cm across the midline, 19/15 cm out of spine_05,
 # and the elbows at +15/-16 cm to the sides and 12/11 cm forward: both forearms flat across the chest, left over right.
-CROSS = {"arm_l": {"hand": [-13.0, 14.4, -14.7], "pole": [85.7, 33.7, -59.1]},
-         "arm_r": {"hand": [-0.3, 15.4, -19.6], "pole": [-92.6, -3.9, -95.5]}}
-TIGHT = {"arm_l": {"hand": [-14.5, 14.0, -14.7], "pole": [85.7, 33.7, -59.1]},     # squeeze during the coil
-         "arm_r": {"hand": [1.2, 15.0, -19.6], "pole": [-92.6, -3.9, -95.5]}}
+CROSS = {"arm_l": {"hand": [-13.0, 22.0, -12.7], "pole": [85.7, 33.7, -59.1]},
+         "arm_r": {"hand": [-0.3, 20.4, -18.6], "pole": [-92.6, -3.9, -95.5]}}
+TIGHT = {"arm_l": {"hand": [-14.5, 21.6, -12.7], "pole": [85.7, 33.7, -59.1]},     # squeeze during the coil
+         "arm_r": {"hand": [1.2, 20.0, -18.6], "pole": [-92.6, -3.9, -95.5]}}
 
 
 def legs(fl, fr, pole, rot):
@@ -65,8 +66,8 @@ def lerp(a, b, t):
 # a slow pleased head tilt and a small settle of the crossed arms; no flailing. Period 12, f0 = STRIKE so the seam is exact.
 SMUG = pose([0, 50.5, -9.5], [81.0, 0, 0], [-5.0, 0, 0], [-15.0, 0, 12.0], CROSS,
             legs([2.0, -5.5, -84.0], [-8.0, -5.5, -84.0], [15.0, 15.0, -45.0], -48.0))
-SMUG["arm_l"]["hand"] = [-13.5, 15.0, -13.7]
-SMUG["arm_r"]["hand"] = [0.2, 16.0, -18.6]
+SMUG["arm_l"]["hand"] = [-13.5, 22.6, -11.7]
+SMUG["arm_r"]["hand"] = [0.2, 21.0, -17.6]
 loop = {"0": STRIKE, "6": SMUG, "11": lerp(STRIKE, SMUG, 0.067)}
 
 

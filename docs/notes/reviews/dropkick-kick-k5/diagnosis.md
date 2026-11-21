@@ -3,9 +3,9 @@
 Source: Saved/DropkickTB4/r4e (the capture behind r4b/dropkick_low_*.mp4), frames.jsonl + az90/az180 shots. Images in this folder.
 
 ## 1. Capture chain (checked first, rule 10)
-- **The "hit" video never hits.** dropkick_low_hit frames.jsonl: the dummy stays at (255,-460,90) for all 260 frames, its combat
-  `history` is empty, no montage on it; the attacker lands at x 207, 48 cm short. So no hitstop, no reaction: the owner never saw the
-  kick connect. Command: python over frames.jsonl, `d['dummy']['loc']`, `d['dummy']['combat']['history']` (same in base, base2, r4..r4e).
+- **The "hit" video never hits.** dropkick_low_hit frames.jsonl: the dummy stays at (255,-460,90) for all 260 frames, no reaction on it (host snap
+  damagePercent 0; `combat.history` is the INPUT history, not hits); the attacker lands at x 207, 48 cm short. So no hitstop, no reaction: the owner never saw the
+  kick connect. Command: python over frames.jsonl, `d['dummy']['loc']`, `d['dummy']['snap']` (same in base, base2, r4..r4e). k5b (sweetspot, feet inside the dummy at f15-f18): still no reaction = gioco.
 - **The "low" dropkick is pressed 7.8 m up.** capture.log: "crouch on v120 (height 785 cm, falling)". The playtest kit jumps ~919 cm
   (max `h` in frames.jsonl), the press waits for trigger_h 90 cm but gives up after AIR_GIVE_UP = 100 frames
   (pie_capture_move.py:159). The video is a 35-frame passive fall in the loop pose (v122-v156), then the landing.
