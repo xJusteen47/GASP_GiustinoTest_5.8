@@ -5,7 +5,7 @@
 #   Every run sets Variant, Handoff and the extra cvars; give every extra cvar a value in EVERY run (nothing is undone between runs).
 # Output: Saved\<SavedDir>\<batch>\<run>\<sequence>\<view>\f*.png + assert.txt per run, timing.txt (seconds per step), 1 line per run.
 param([string[]]$Runs, [string]$SavedDir = 'CaptureSpeed', [string]$Batch = 'batch', [int]$Handoff = 1,
-      [string]$Views = 'az180,az90,az0,game', [string]$Shoot = '70,210')   # frames shot (A/B and evidence use v77-v197)
+      [string]$Views = 'az180,az90,az0,game', [string]$Shoot = '70,210', [int]$Size = 480)   # frames shot (A/B and evidence use v77-v197)
 $proj = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
 $cap = Join-Path $proj 'Tools\GASNPPTest\pie_capture_timed.ps1'
 $dir = Join-Path $proj "Saved\$SavedDir"
@@ -26,12 +26,13 @@ $env:PIE_CAPTURE_VIEWS = $Views
 $env:PIE_CAPTURE_CLIENTS = '0'   # one character: 1 PIE world (speed-up.md 4)
 $env:PIE_CAPTURE_ASSERT_REPLACE = '1'
 $env:PIE_CAPTURE_SHOOT = $Shoot
+$env:PIE_CAPTURE_SIZE = "$Size"
 Remove-Item Env:PIE_CAPTURE_ASSERT -ErrorAction SilentlyContinue
 $t0 = Get-Date
 & $cap -Kit KIT_Test_Overlord -Out $out -MaxMinutes (15 + 2 * $Runs.Count) | Out-File (Join-Path $out 'console.txt')
 $rc = $LASTEXITCODE
 $t1 = Get-Date
-Remove-Item Env:PIE_CAPTURE_RUNS, Env:PIE_CAPTURE_VIEWS, Env:PIE_CAPTURE_CLIENTS, Env:PIE_CAPTURE_SHOOT -ErrorAction SilentlyContinue
+Remove-Item Env:PIE_CAPTURE_RUNS, Env:PIE_CAPTURE_VIEWS, Env:PIE_CAPTURE_CLIENTS, Env:PIE_CAPTURE_SHOOT, Env:PIE_CAPTURE_SIZE -ErrorAction SilentlyContinue
 $a = if (Test-Path (Join-Path $out 'assert.txt')) { Get-Content (Join-Path $out 'assert.txt') -TotalCount 1 } else { 'ASSERT: MANCANTE' }
 "batch $Batch rc=$rc $a editor=$([int]($t1 - $t0).TotalSeconds)s runs=$($Runs.Count)"
 foreach ($r in $list) {

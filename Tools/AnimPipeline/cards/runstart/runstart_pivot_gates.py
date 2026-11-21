@@ -93,7 +93,7 @@ def main():
         fails.append('ankles tail %.1f < loop %.1f' % (g[win:].min(), min(ref['gap'])))
     lo, hi = min(min(ref['toe'][s]) for s in 'lr') - TOE_TOL, max(max(ref['toe'][s]) for s in 'lr') + TOE_TOL
     rep['toe_range_loop'] = [round(lo + TOE_TOL, 1), round(hi - TOE_TOL, 1)]
-    for s in 'lr':
+    for s in [s for s in 'lr' if m['toe'][s]]:          # UE joints have no toe-tip point: toe checked on the composer clip
         t = np.array(m['toe'][s]); bad = np.where((t < lo) | (t > hi))[0]
         rep['toe_' + s] = [round(float(t.min()), 1), round(float(t.max()), 1)]
         if len(bad):
@@ -115,7 +115,7 @@ def main():
     rep['fails'] = fails
     json.dump(rep, open(os.path.join(RS, 'gates_%s.json' % tag), 'w'), indent=1)
     print('%s: gap min f0-%d %.1f cm (f%d), tail %s (loop %s); toe L %s R %s (loop %s)' % (
-        tag, win - 1, gw.min(), int(gw.argmin()), rep['gap_min_tail'], rep['gap_loop_min'], rep['toe_l'], rep['toe_r'], rep['toe_range_loop']))
+        tag, win - 1, gw.min(), int(gw.argmin()), rep['gap_min_tail'], rep['gap_loop_min'], rep.get('toe_l'), rep.get('toe_r'), rep['toe_range_loop']))
     print('bone worst %s%% %s; jitter max %s' % (rep['bone_worst'][0], rep['bone_worst'][1],
           max(((v[0], k) for k, v in rep.items() if k.startswith('jit_')), key=lambda x: x[0])))
     print('GATES: OK' if not fails else 'GATES: FAIL ' + '; '.join(fails[:4]))
