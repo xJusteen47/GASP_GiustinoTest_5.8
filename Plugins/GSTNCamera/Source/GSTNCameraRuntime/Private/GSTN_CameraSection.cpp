@@ -4,7 +4,7 @@
 #include "Components/SplineComponent.h"
 #include "Engine/World.h"
 #include "GSTN_CameraMath.h"
-#include "GSTN_CameraSettings.h"
+#include "GSTN_CameraBiasVolume.h"
 #include "PhysicsEngine/BodySetup.h"
 
 AGSTN_CameraSection::AGSTN_CameraSection()
@@ -119,7 +119,7 @@ UGSTN_CameraSectionSubsystem* UGSTN_CameraSectionSubsystem::Get(const UWorld* Wo
 bool UGSTN_CameraSectionSubsystem::ShouldCreateSubsystem(UObject* Outer) const
 {
 	const UWorld* World = Cast<UWorld>(Outer);
-	return Super::ShouldCreateSubsystem(Outer) && World && ShouldCreateFor(World->GetNetMode(), World->IsGameWorld(), UGSTN_CameraSettings::Get().bEnabled);
+	return Super::ShouldCreateSubsystem(Outer) && World && ShouldCreateFor(World->GetNetMode(), World->IsGameWorld(), true);
 }
 
 void UGSTN_CameraSectionSubsystem::RegisterSection(AGSTN_CameraSection* Section)
@@ -144,6 +144,31 @@ void UGSTN_CameraSectionSubsystem::GatherContaining(const FVector& Point, TArray
 		if (Section && Section->ContainsPoint(Point))
 		{
 			OutSections.Add(Section);
+		}
+	}
+}
+
+void UGSTN_CameraSectionSubsystem::RegisterBiasVolume(AGSTN_CameraBiasVolume* Volume)
+{
+	if (Volume)
+	{
+		BiasVolumes.AddUnique(Volume);
+	}
+}
+
+void UGSTN_CameraSectionSubsystem::UnregisterBiasVolume(AGSTN_CameraBiasVolume* Volume)
+{
+	BiasVolumes.Remove(Volume);
+}
+
+void UGSTN_CameraSectionSubsystem::GetBiasVolumes(TArray<AGSTN_CameraBiasVolume*>& OutVolumes) const
+{
+	OutVolumes.Reset();
+	for (const TWeakObjectPtr<AGSTN_CameraBiasVolume>& Weak : BiasVolumes)
+	{
+		if (AGSTN_CameraBiasVolume* Volume = Weak.Get())
+		{
+			OutVolumes.Add(Volume);
 		}
 	}
 }

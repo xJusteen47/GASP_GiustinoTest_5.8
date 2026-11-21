@@ -35,5 +35,17 @@ if rows and "half_height" in rows[0]:
             while j < len(rows) and t[j] - t[i] < 0.5:
                 worst = max(worst, abs(v[j] - v[i-1])); j += 1
         return worst
+    # Crouch only: changes on a crouch flip, window cut at take off (jumps are not crouch)
+    air = [r["in_air"] == "1" for r in rows]
+    cflip = [i for i in range(1, len(rows)) if rows[i].get("crouch") != rows[i-1].get("crouch") and not air[i]]
+    def moved_crouch(k):
+        v = col(k); worst = 0.0
+        for i in cflip:
+            j = i
+            while j < len(rows) and t[j] - t[i] < 0.5 and not air[j]:
+                worst = max(worst, abs(v[j] - v[i-1])); j += 1
+        return worst
+    print(f"CROUCH ONLY ({len(cflip)} flips on the ground; 0 = the crouch input never landed): max height move in 0.5 s, cm: "
+          + "  ".join(f"{k} {moved_crouch(k):.1f}" for k in ("root_z", "mesh_stand_z", "stand_z", "cam_comp_z", "in_z", "out_z")))
     print(f"grounded capsule changes {len(changes)} (crouch flips {flips('crouch')}): max height move in 0.5 s, cm: "
           + "  ".join(f"{k} {moved(k):.1f}" for k in ("root_z", "mesh_stand_z", "stand_z", "cam_comp_z", "in_z", "out_z")))

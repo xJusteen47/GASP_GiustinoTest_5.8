@@ -337,12 +337,50 @@ struct GSTNCAMERACORE_API FGSTN_CameraFreeTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "cm"))
 	float JumpDeadZoneUpCm = 250.f;
 
-	/** The pivot follows down at once when the character drops further than this below the last ground */
+	/**
+	 * Horizontal dead zone (Mario style): a rectangle on the ground around the camera's anchor, oriented with the camera. While the character
+	 * stays inside it the camera does not move; when he leaves it the anchor is dragged so he sits on its edge, then the usual lag follows.
+	 * Width = left/right on screen, depth = towards/away from the camera. 0 = off on that axis. Vertical is the jump band below
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "cm"))
-	float FallFollowCm = 50.f;
+	float DeadZoneWidthCm = 80.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "cm"))
-	float LookAheadCm = 150.f;
+	float DeadZoneDepthCm = 60.f;
+
+	/** The pivot follows down at once when the character drops further than this below the last ground (stairs and bumps below it never move the camera) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float FallFollowCm = 120.f;
+
+	/** ...or once the character has been falling (airborne and below the last ground) this long. 0 = only the distance */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "s"))
+	float FallFollowAfterSeconds = 0.25f;
+
+	/**
+	 * Horizontal pivot lag while the character pulls away from the camera (accelerating, running): softer, so the weight shows.
+	 * Half-life style time constant of the exponential follow. 0 = the Follow PivotDampingSeconds
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "s"))
+	float PivotCatchUpSeconds = 0.18f;
+
+	/** Horizontal pivot lag while the character brakes or turns back towards the camera: quicker, the camera settles at once */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "s"))
+	float PivotSettleSeconds = 0.10f;
+
+	/** Speed (along the lag) at which the catch-up time is fully used; below it the time blends towards the settle time */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "1", ForceUnits = "cm/s"))
+	float PivotCatchUpFullSpeed = 300.f;
+
+	/** Vertical pivot lag (landing realign: about 3x this to settle) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "s"))
+	float PivotVerticalSeconds = 0.2f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float LookAheadCm = 100.f;
+
+	/** Look-ahead multiplier in the air (a jump never swings the camera) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ClampMax = "1"))
+	float LookAheadAirScale = 0.5f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0.01", ForceUnits = "s"))
 	float LookAheadSeconds = 0.6f;
@@ -354,8 +392,12 @@ struct GSTNCAMERACORE_API FGSTN_CameraFreeTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow")
 	bool bPitchDownWhenFalling = true;
 
+	/** Extra downward pitch at FallPitchFullSpeed of falling speed, proportional below it (never a step) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "deg"))
-	float FallPitchExtraDeg = 12.f;
+	float FallPitchExtraDeg = 10.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "1", ForceUnits = "cm/s"))
+	float FallPitchFullSpeed = 1500.f;
 
 	/** The recentre action eases the heading behind the character's facing in this time */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0.01", ForceUnits = "s"))
@@ -633,4 +675,192 @@ struct GSTNCAMERACORE_API FGSTN_CameraSubjectState
 	/** KO, shattering: the camera holds its last view */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Camera|Subject")
 	bool bSuppressed = false;
+};
+
+// ---- Platform camera P1a (docs/notes/camera-platforming/p1a.md) ----
+
+/** Gentle "follow behind" of the free camera (owner decision 2A, 2026-11-19): only in a sustained run, never against the stick */
+USTRUCT(BlueprintType)
+struct GSTNCAMERACORE_API FGSTN_CameraAutoFollowTuning
+{
+	GENERATED_BODY()
+
+	/** Designer switch (the player switch is in the user options; both must be on) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|AutoFollow")
+	bool bEnabled = true;
+
+	/** Below this horizontal speed the character is not running: the run timer restarts */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|AutoFollow", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float MinSpeed = 250.f;
+
+	/** The run must last this long before the camera starts to follow */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|AutoFollow", meta = (ClampMin = "0", ForceUnits = "s"))
+	float SustainSeconds = 1.f;
+
+	/** Seconds without look input before the camera may turn by itself */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|AutoFollow", meta = (ClampMin = "0", ForceUnits = "s"))
+	float StickIdleSeconds = 1.f;
+
+	/** Top turning speed (anti-nausea) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|AutoFollow", meta = (ClampMin = "0", ForceUnits = "deg/s"))
+	float MaxDegPerSecond = 30.f;
+
+	/** Below this angle from the run direction the speed eases down proportionally (no stop with a jerk) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|AutoFollow", meta = (ClampMin = "1", ForceUnits = "deg"))
+	float EaseAngleDeg = 30.f;
+
+	/** Smaller angles are left alone */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|AutoFollow", meta = (ClampMin = "0", ForceUnits = "deg"))
+	float DeadAngleDeg = 5.f;
+
+	/** Running more towards the camera than this never turns it (no 180 degree spin) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|AutoFollow", meta = (ClampMin = "0", ClampMax = "180", ForceUnits = "deg"))
+	float MaxAngleDeg = 120.f;
+
+	/** Time to reach the turning speed once allowed (it drops to zero at once on look input) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|AutoFollow", meta = (ClampMin = "0", ForceUnits = "s"))
+	float RampSeconds = 0.5f;
+
+	/** In the air it never turns (the run timer pauses, it does not restart) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|AutoFollow")
+	bool bOnlyGrounded = true;
+};
+
+/** Runtime state of the auto follow, per player */
+struct FGSTN_CameraAutoFollowState
+{
+	float RunSeconds = 0.f;
+	float RateDegPerSecond = 0.f;
+};
+
+UENUM(BlueprintType)
+enum class EGSTN_CameraDistancePreset : uint8
+{
+	Near,
+	Medium,
+	Far,
+	/** The player slider (CustomDistanceScale in the user options) */
+	Custom
+};
+
+/** Player distance from the character: preset scales of the designer distance (design.md §3.3) */
+USTRUCT(BlueprintType)
+struct GSTNCAMERACORE_API FGSTN_CameraDistancePresets
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Distance", meta = (ClampMin = "0.1"))
+	float NearScale = 0.8f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Distance", meta = (ClampMin = "0.1"))
+	float MediumScale = 1.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Distance", meta = (ClampMin = "0.1"))
+	float FarScale = 1.25f;
+
+	/** Range of the Custom slider */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Distance", meta = (ClampMin = "0.1"))
+	float CustomMinScale = 0.8f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Distance", meta = (ClampMin = "0.1"))
+	float CustomMaxScale = 1.25f;
+
+	/** Ease-in-out time of a distance change (preset, section limit, entering or leaving one) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Distance", meta = (ClampMin = "0", ForceUnits = "s"))
+	float ChangeSeconds = 0.45f;
+};
+
+/** A value that eases to a target in a fixed time; a new target restarts the ease from the current value */
+struct FGSTN_CameraEasedFloat
+{
+	float Value = 1.f;
+	float From = 1.f;
+	float To = 1.f;
+	float Elapsed = 0.f;
+	bool bInit = false;
+};
+
+/**
+ * Stick latching (Nesky; Mario 3D World): after the CAMERA turns the reference (a section, a cut), the move stick keeps the old reference
+ * until it returns near the centre, so the character never changes direction under a held stick. Manual orbit never latches.
+ */
+USTRUCT(BlueprintType)
+struct GSTNCAMERACORE_API FGSTN_CameraStickLatchTuning
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|StickLatch")
+	bool bEnabled = true;
+
+	/** Stick magnitude (0..1) under which the latch releases */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|StickLatch", meta = (ClampMin = "0", ClampMax = "1"))
+	float ReleaseMagnitude = 0.25f;
+
+	/** The latch also releases after this long. 0 = only when the stick is released */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|StickLatch", meta = (ClampMin = "0", ForceUnits = "s"))
+	float MaxHoldSeconds = 3.f;
+};
+
+struct FGSTN_CameraStickLatchState
+{
+	bool bLatched = false;
+	float LatchedYawDeg = 0.f;
+	float Seconds = 0.f;
+};
+
+/** How a soft framing volume treats the player's stick (owner decision 2026-11-21: never a hard lock) */
+UENUM(BlueprintType)
+enum class EGSTN_CameraBiasStrength : uint8
+{
+	/** The stick is free everywhere; the pull stops on look input and resumes after ResumeDelaySeconds */
+	Soft,
+	/** The stick is free inside FirmRangeDeg of the framing (wider near the volume edge); the pull resumes quickly */
+	Firm
+};
+
+/** One soft framing contribution, already weighted by the volume falloff and its enable blend (runtime fills it) */
+struct FGSTN_CameraBiasInput
+{
+	int32 Priority = 0;
+	/** 0..1 */
+	float Weight = 0.f;
+	bool bBiasYaw = false;
+	float HeadingDeg = 0.f;
+	bool bBiasPitch = false;
+	float PitchDeg = -20.f;
+	/** Multiplies the arm; 1 = neutral */
+	float DistanceScale = 1.f;
+	float FovOffsetDeg = 0.f;
+	/** Added to the pivot (framing towards a focus point) */
+	FVector PivotOffset = FVector::ZeroVector;
+	EGSTN_CameraBiasStrength Strength = EGSTN_CameraBiasStrength::Soft;
+	float FirmRangeDeg = 35.f;
+	float ResumeDelaySeconds = 1.5f;
+	/** Time constant of the pull towards the framing */
+	float PullSeconds = 0.6f;
+	/** Cap of the pull speed (anti-nausea) */
+	float MaxPullDegPerSecond = 45.f;
+	/** The orbit pull (yaw, pitch) is off this frame (in the air, focus outside its engage cone); view terms still apply */
+	bool bPullSuppressed = false;
+};
+
+/** The combined framing of every active volume: higher priority first, each takes its weight of what is left */
+struct FGSTN_CameraBiasResult
+{
+	float YawWeight = 0.f;
+	float HeadingDeg = 0.f;
+	float PitchWeight = 0.f;
+	float PitchDeg = 0.f;
+	/** Weight of the yaw/pitch pull that is not suppressed */
+	float PullWeight = 0.f;
+	float DistanceScale = 1.f;
+	float FovOffsetDeg = 0.f;
+	FVector PivotOffset = FVector::ZeroVector;
+	float FirmWeight = 0.f;
+	float FirmRangeDeg = 35.f;
+	float ResumeDelaySeconds = 1.5f;
+	float PullSeconds = 0.6f;
+	float MaxPullDegPerSecond = 45.f;
+
+	bool HasPull() const { return PullWeight > 0.f && (YawWeight > 0.f || PitchWeight > 0.f); }
 };

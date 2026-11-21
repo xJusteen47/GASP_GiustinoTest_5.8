@@ -146,6 +146,60 @@ struct GSTNCAMERACORE_API FGSTN_CameraMath
 	/** One damped zoom step: exponential, ZoomOutSeconds when the wanted arm is larger, ZoomInSeconds when smaller. 0 seconds snaps. Never overshoots */
 	static float StepArenaZoom(float CurrentArmCm, float WantedArmCm, float ZoomInSeconds, float ZoomOutSeconds, float DeltaSeconds);
 
+	// ---- Platform camera P1a (docs/notes/camera-platforming/p1a.md) ----
+
+	/**
+	 * Asymmetric pivot follow: the part of the lag on the plane normal to Up uses CatchUpSeconds while the subject moves away along the lag
+	 * (accelerating, running: softer) and SettleSeconds when it does not (braking, turning back: quicker), blended by the speed along the lag
+	 * over FullSpeed. The part along Up uses VerticalSeconds. Exponential, frame rate independent; 0 seconds snaps that part
+	 */
+	static FVector StepPivotAsymmetric(const FVector& Smoothed, const FVector& Target, const FVector& Up, const FVector& Velocity,
+		float CatchUpSeconds, float SettleSeconds, float FullSpeed, float VerticalSeconds, float DeltaSeconds);
+
+	/**
+	 * Horizontal dead zone: returns the new anchor. The offset Target - Anchor on the plane normal to Up is split along the camera right and
+	 * forward (from HeadingForward); each part beyond its half size (Width/2, Depth/2) moves the anchor, the part inside does not. The part along
+	 * Up always follows (the vertical band is handled elsewhere). A size of 0 turns that axis off (the anchor follows exactly)
+	 */
+	static FVector StepDeadZone(const FVector& Anchor, const FVector& Target, const FVector& Up, const FVector& HeadingForward, float WidthCm, float DepthCm);
+
+	/** Ease a value to Target in Seconds (ease-in-out); a new target restarts from the current value. The first call snaps. Returns the value */
+	static float StepEasedFloat(FGSTN_CameraEasedFloat& InOutState, float Target, float Seconds, float DeltaSeconds);
+
+	/** The player distance scale of a preset (Custom clamps CustomScale to the slider range) */
+	static float DistancePresetScale(const FGSTN_CameraDistancePresets& Presets, EGSTN_CameraDistancePreset Preset, float CustomScale);
+
+	/** Next preset in Near, Medium, Far order (Direction > 0 farther, < 0 nearer), clamped at the ends; Custom steps from Medium */
+	static EGSTN_CameraDistancePreset CycleDistancePreset(EGSTN_CameraDistancePreset Current, int32 Direction);
+
+	/**
+	 * One step of the gentle follow behind (decision 2A). MoveHeadingDeg is the heading of the horizontal velocity; Scale in [0, 1] is how much
+	 * it is allowed now (0 when blocked by a tag, an option, an aim or a soft framing volume). SecondsSinceLook == 0 drops the speed at once.
+	 * Returns the new yaw
+	 */
+	static float StepAutoFollow(FGSTN_CameraAutoFollowState& InOutState, const FGSTN_CameraAutoFollowTuning& Tuning, float YawDeg, float MoveHeadingDeg,
+		float HorizontalSpeed, bool bGrounded, float SecondsSinceLook, float Scale, float DeltaSeconds);
+
+	/** Latch the move reference on a camera-made turn of the reference (OldYawDeg is the heading before the turn) */
+	static void LatchStickReference(FGSTN_CameraStickLatchState& InOutState, const FGSTN_CameraStickLatchTuning& Tuning, float OldYawDeg);
+
+	/** The heading the move stick should be read against: the latched one until the stick returns under ReleaseMagnitude (or MaxHoldSeconds), else CameraYawDeg */
+	static float ResolveStickReference(FGSTN_CameraStickLatchState& InOutState, const FGSTN_CameraStickLatchTuning& Tuning, float StickMagnitude, float CameraYawDeg, float DeltaSeconds);
+
+	/** Weight of a point in an oriented box given in box space: 0 outside, 1 deeper than FalloffCm inside, smooth in between. FalloffCm 0 = 1 inside */
+	static float BoxFalloffWeight(const FVector& LocalPoint, const FVector& Extent, float FalloffCm);
+
+	/** Combine soft framing contributions: higher priority first, each takes its weight of the weight left (ties in input order) */
+	static FGSTN_CameraBiasResult CombineBias(const TArray<FGSTN_CameraBiasInput>& Inputs);
+
+	/**
+	 * Apply the combined framing to the player orbit. Never a hard lock: the pull only runs once SecondsSinceLook passed the resume delay
+	 * (look input stops it at once) and moves exponentially in PullSeconds, scaled by the pull weight, capped at MaxPullDegPerSecond.
+	 * Firm framing also keeps the yaw within FirmRangeDeg of the framing heading, widened towards 180 as the firm weight drops (volume edge).
+	 * Call after the look input was applied. Returns true when it moved the orbit
+	 */
+	static bool StepBiasOrbit(FGSTN_CameraOrbitState& InOutOrbit, const FGSTN_CameraBiasResult& Bias, float SecondsSinceLook, float DeltaSeconds);
+
 	// ---- Occlusion (camera.md §7.1) ----
 
 	static EGSTN_CameraOcclusionAction DecideOcclusion(EGSTN_CameraOcclusionPolicy Policy, bool bFadeable, float BlockerDistanceFromCameraCm, float NearClipSafeCm);

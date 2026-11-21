@@ -21,7 +21,8 @@ st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'rows': None, 'h'
 # (phase, seconds): what happens while the trace is on
 # camera-jitter-3 (owner 22:14: the bounce was crouch spam; also FAir and landings): crouch toggled every 0.15 s for 3 s, then a jump with a
 # forward air attack (FAir: aerial capsule) and its landing. The checker's capsule line reads these
-PLAN = [('stand', 5.0), ('walk', 4.0), ('stand2', 1.5), ('jump', 2.5), ('crouchspam', 3.0), ('fair', 3.0)]
+# camera-jitter-3b: the 0.15 s taps never crouched (desktop run 22:40): now 1.5 s still first, then crouch held 0.5 s / released 0.5 s, 4 times
+PLAN = [('stand', 5.0), ('walk', 4.0), ('stand2', 1.5), ('jump', 2.5), ('stand3', 1.5), ('crouchspam', 4.0), ('fair', 3.0)]
 
 
 def _log(m):
@@ -120,7 +121,7 @@ def _tick(dt):
             if ph == 'jump' and st.get('jt') and now - st['jt'] > 0.4:
                 g.combat_clear(0)
                 st['jt'] = None
-            if ph == 'crouchspam' and now - st.get('ct', 0) > 0.15:
+            if ph == 'crouchspam' and now - st.get('ct', 0) > 0.5:
                 st['crouch'] = not st.get('crouch', False)
                 if st['crouch']:
                     g.combat_hold(0, g.button_mask('Crouch'))
