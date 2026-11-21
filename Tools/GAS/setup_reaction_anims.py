@@ -33,6 +33,7 @@ DEFENCE_TEST = '/GSTNDefence/Test'
 KIT_ROOT = '/Game/GASNPPTest'
 SIM_HZ = 62.5
 HOLD_BLEND_FRAMES = 20      # simulation frames the held last pose of a get-up blends out over (crouch mitigation; 0-30 to tune)
+TAIL_BLEND_FRAMES = 6       # getup-momentum-1: frames the get-up blends out over when the player cuts its tail (the next move takes over)
 
 # name, required, blocked, priority, animation, then, end, blend in, chain blend, blend out, restart event (60 fps frames)
 # Owner rule 2026-11-14: the first frame of a new animation/state must read as a clear change (feel): blend in 0-1 frames, never soft.
@@ -49,11 +50,13 @@ RULES = [
 ENTRY_DROPS = {'Knockdown': (85.0, 5, ['Tumble'])}
 
 # ability, parent class, montage, travel cm, direction, keys (simulation frames, fraction): roll-travel.md converted from 60 to 62.5 Hz
+# then FAF (clip frame at 60 fps) and exit speed (cm/s), getup-momentum-1: FAF = first frame the pelvis stays >= 85 % of its standing
+# height with both feet planted (Tools/AnimPipeline/cards/reaction/getup_faf_measure_ue.py -> Saved/Getup/faf_measure.txt: f20 in all three)
 GETUPS = [
-    ('GA_GetupNeutral_Test', 'GSTN_GA_GetupNeutral', 'AM_React_GetUp', 0.0, None, []),
-    ('GA_GetupRoll_Test', 'GSTN_GA_GetupRoll', 'AM_React_Roll', 80.0, 'FACING', [(0, 0.0), (6, 0.0), (10, 0.7), (16, 1.0)]),
+    ('GA_GetupNeutral_Test', 'GSTN_GA_GetupNeutral', 'AM_React_GetUp', 0.0, None, [], 20, 120.0),
+    ('GA_GetupRoll_Test', 'GSTN_GA_GetupRoll', 'AM_React_Roll', 80.0, 'FACING', [(0, 0.0), (6, 0.0), (10, 0.7), (16, 1.0)], 20, 220.0),
     ('GA_GetupRollBack_Test', 'GSTN_GA_GetupRoll', 'AM_React_RollBack', 65.0, 'AGAINST_FACING',
-     [(0, 0.0), (5, 0.0), (8, 0.17), (10, 0.68), (12, 0.97), (13, 1.0)]),
+     [(0, 0.0), (5, 0.0), (8, 0.17), (10, 0.68), (12, 0.97), (13, 1.0)], 20, 160.0),
 ]
 
 _lines = []
@@ -147,7 +150,9 @@ def character_component(rset):
     log(f'SandboxCharacter_Mover reaction component: {"written" if added else "unchanged"}')
 
 
-def getup(name, parent, montage_name, distance, direction, keys):
+def getup(name, parent, montage_name, distance, direction, keys, faf_clip=None, exit_speed=0.0):
+    """faf_clip (getup-momentum-1, owner 2026-11-21): the clip frame (60 fps) control returns on; the rest of the clip is the cancellable
+    tail, cut when the player acts, played to the end otherwise. exit_speed: cm/s handed to the next move when the tail is cut"""
     cls = dl._ability(DEFENCE_TEST, name, parent)
     cdo = unreal.get_default_object(cls)
     montage = unreal.load_asset(f'{REACT}/{montage_name}')
@@ -159,12 +164,19 @@ def getup(name, parent, montage_name, distance, direction, keys):
     cdo.set_editor_property('total_frames', frames)
     tl = cdo.get_editor_property('timeline')
     tl.set_editor_property('total_frames', frames)
-    tl.set_editor_property('first_actionable_frame', frames)
+    faf = frames if faf_clip is None else min(frames, max(1, math.ceil(faf_clip / 60.0 * SIM_HZ)))
+    tl.set_editor_property('first_actionable_frame', faf)
+    tail = tl.get_editor_property('tail')
+    tail.set_editor_property('has_tail', faf < frames)
+    tail.set_editor_property('start_frame', -1)                    # = FAF
+    tail.set_editor_property('blend_out_frames', TAIL_BLEND_FRAMES)
+    tl.set_editor_property('tail', tail)
     tl.set_editor_property('montage', montage)
     tl.set_editor_property('end_blend_out_frames', HOLD_BLEND_FRAMES)
     tl.set_editor_property('hold_pose_on_end', True)
     tl.set_editor_property('ignore_move_input', True)   # the stick neither walks nor turns a get-up (react-hook-1 review)
     cdo.set_editor_property('timeline', tl)
+    cdo.set_editor_property('exit_speed', float(exit_speed))
     if direction:
         cdo.set_editor_property('travel_distance_cm', distance)
         cdo.set_editor_property('travel_direction', getattr(unreal.GSTN_GetupTravelDirection, direction))
@@ -176,8 +188,10 @@ def getup(name, parent, montage_name, distance, direction, keys):
             tk.append(k)
         cdo.set_editor_property('travel_keys', tk)
     path = f'{DEFENCE_TEST}/{name}'
-    unreal.EditorAssetLibrary.save_asset(path, only_if_is_dirty=False)
-    log(f'{name}: {frames} frames, {montage_name}, travel {distance:.0f} cm' + ('' if before != tl.export_text() else ' (timeline unchanged)'))
+    if os.environ.get('REACTION_NO_SAVE') != '1':   # getup-momentum-1: in memory only for a capture before the owner OKs the Blueprints
+        unreal.EditorAssetLibrary.save_asset(path, only_if_is_dirty=False)
+    log(f'{name}: {frames} frames, FAF {faf} (tail cut [{faf},{frames})), exit {exit_speed:.0f} cm/s, {montage_name}, travel {distance:.0f} cm'
+        + ('' if before != tl.export_text() else ' (timeline unchanged)'))
     return cls
 
 
@@ -209,11 +223,19 @@ def kits(rollback_cls):
 
 def run():
     del _lines[:]
+    if os.environ.get('REACTION_ONLY_GETUPS') == '1':   # getup-momentum-1: only the get-up abilities (FAF, tail, exit speed)
+        for g in GETUPS:
+            getup(*g)
+        return _finish_log()
     rset = reaction_set()
     character_component(rset)
     classes = {g[0]: getup(*g) for g in GETUPS}
     ground_bounce_plays_nothing()
     kits(classes['GA_GetupRollBack_Test'])
+    return _finish_log()
+
+
+def _finish_log():
     out_dir = os.path.join(unreal.Paths.project_saved_dir(), 'Reaction')
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, 'setup_reaction_anims.log'), 'w') as f:
