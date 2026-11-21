@@ -23,3 +23,9 @@ DA_Locomotion_Default (owner's uncommitted change) untouched. Re-check (rule 11)
 - gioco (code queue, unchanged): entry blend 0.1 s + lean layer half-hide the first step (weight 0.29/0.5/0.81 at v85/90/95).
 ## Next: owner picks (g3, s1, or s1 with the longer-drive fix); posa rounds for g-line are now 3 of 3 (rule 10: owner decides).
 COSTO: ~11 $ | ~8 min desktop | ~192k token review
+## Addendum 03:20Z: owner "le gambe sono rotte" (both) = knees bending BACKWARD (owner confirmed). Cause: stride scaling + pelvis drop
+are not rigid; knee and pole (calf_LimbDir) ended near the hip-foot line, Cascadeur leg IK flipped (s1 f1-6 knee -16..-37 cm behind).
+Fix f0421df5: composer rebuilds knees by two-bone IK toward forward, pole 45 cm ahead (LEG_IK=1 default). Cascadeur: 0 backward
+frames in g3 and s1. Reimported, recaptured: ASSERT OK both; az45 strips v86-108 show forward knees. g1/g2 clips have the same flaw
+(not rebuilt). Cherry-picked 3a13fc01 (VFX off by default): captures show no dust VFX. Earlier PASS reviews predate the fix.
+COSTO addendum: ~3 $ | ~6 min desktop | 0 token review

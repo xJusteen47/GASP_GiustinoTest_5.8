@@ -120,10 +120,10 @@
  },
  "g3_h1": {
   "ss180_max_w": 0,
-  "actor_x_f200": 968.2,
+  "actor_x_f200": 1017.0,
   "planted_feet_travel_cm_f80_240": {
-   "l": 114.1,
-   "r": 71.8
+   "l": 97.1,
+   "r": 59.7
   },
   "clip": "AS_GSTN_RunStart_Generic_g3",
   "clip_weight_f80_210": [
