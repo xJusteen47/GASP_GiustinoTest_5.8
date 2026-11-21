@@ -66,4 +66,4 @@ Experiences. Choices applied (rule 6):
 - **Kit drop on death** stays GSTNHeld's `KitSwap.DeathDrop` (one owner per rule), in the same GameRules asset.
 - Invulnerability after respawn: data only until a channel into the simulation exists (game-modes 2.5).
 - `.uproject`: the two plugins are enabled (normal plugin entries; **no** GameFeatures/ModularGameplay: that is G1/D5).
-Left: G0 spikes, G1 (D5), G2 `GSTNModeVerbs`, G5-G8. Handover: `docs/notes/handovers/m12-parte1-cloud.md`.
+**D5 answered 2026-11-21 21:41Z by the owner: A** (Game Features + Experiences, as planned in G1). Left: G0 spikes, G1, G2 `GSTNModeVerbs`, G5-G8; next brief: `handoffs/m12-g0-g1-brief.md` (project files). Handover: `docs/notes/handovers/m12-parte1-cloud.md`.
