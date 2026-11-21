@@ -15,6 +15,8 @@ import numpy as np
 ROOT = os.path.dirname(os.path.abspath(__file__)).split(os.sep + 'Tools' + os.sep)[0]
 RS = os.path.join(ROOT, 'Saved', 'AnimPipeline', 'runstart')
 GAP_MIN, TOE_TOL, BONE_TOL, JIT_MIN, JIT_DEG, JIT_K = 10.0, 5.0, 0.05, 8.0, 12.0, 2.0
+CLR_HIPS = 21.0  # hand to mid-hips (old v27 r2 UE clip: 19 cm at f1-2, the owner's 'hands through the leg')
+CLR_MIN = 14.0   # hand / forearm to thigh axis: thigh ~9 cm + hand ~4 cm radius + 1
 UP = 1
 SEG = [('thigh_MainPoint_%s', 'calf_MainPoint_%s'), ('calf_MainPoint_%s', 'foot_MainPoint_%s'), ('foot_MainPoint_%s', 'ball_MainPoint_%s'),
        ('upperarm_MainPoint_%s', 'lowerarm_MainPoint_%s'), ('lowerarm_MainPoint_%s', 'hand_MainPoint_%s')]
@@ -59,6 +61,19 @@ def measures(J):
             m['jit'][nm + '_' + s] = zig(off[2:] - 2 * off[1:-1] + off[:-2])
         P = J['hand_MainPoint_' + s] - J['upperarm_MainPoint_' + s]
         m['jit']['hand_' + s] = zig(P[2:] - 2 * P[1:-1] + P[:-2])
+    # clearance (owner 2026-11-21: tucked hands passed through the leg and no gate caught it): hand and wrist-side forearm point to
+    # each thigh's axis (hip -> knee), per frame, cm between the axes (subtract ~9 cm thigh + ~4 cm hand radius for the gap)
+    def seg_dist(P, A, B):
+        d = B - A; t = np.clip(np.sum((P - A) * d, axis=1) / np.maximum(np.sum(d * d, axis=1), 1e-6), 0, 1)
+        return np.linalg.norm(P - (A + d * t[:, None]), axis=1)
+    m['clear'] = {}
+    for s in 'lr':
+        H_ = J['hand_MainPoint_' + s]; F_ = 0.5 * (H_ + J['lowerarm_MainPoint_' + s])
+        for t_ in 'lr':
+            A, B = J['thigh_MainPoint_' + t_], J['calf_MainPoint_' + t_]
+            m['clear']['hand_%s-thigh_%s' % (s, t_)] = np.minimum(seg_dist(H_, A, B), seg_dist(F_, A, B))
+        # hand to the middle of the hips (the owner's case: fists crossed in front of the hip read as inside the leg from behind)
+        m['clear']['hand_%s-hips' % s] = np.linalg.norm(H_ - 0.5 * (J['thigh_MainPoint_l'] + J['thigh_MainPoint_r']), axis=1)
     return m
 
 
@@ -112,6 +127,11 @@ def main():
         rep['jit_' + k] = [round(float(v.max()), 1), int(v.argmax()) + 1, round(lim, 1)]
         if v.max() > lim:
             fails.append('jitter %s f%d %.1f>%.1f' % (k, int(v.argmax()) + 1, v.max(), lim))
+    for k, v in m['clear'].items():
+        lim = min(CLR_HIPS if k.endswith('hips') else CLR_MIN, 0.9 * float(ref['clear'][k].min()))   # never stricter than the stock loop's own closest pass
+        rep['clear_' + k] = [round(float(v.min()), 1), int(v.argmin()), round(lim, 1)]
+        if v.min() < lim:
+            fails.append('clearance %s f%d %.1f<%.1f cm' % (k, int(v.argmin()), v.min(), lim))
     rep['fails'] = fails
     json.dump(rep, open(os.path.join(RS, 'gates_%s.json' % tag), 'w'), indent=1)
     print('%s: gap min f0-%d %.1f cm (f%d), tail %s (loop %s); toe L %s R %s (loop %s)' % (

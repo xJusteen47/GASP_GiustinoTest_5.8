@@ -43,7 +43,7 @@ PIV = math.radians(E('PIV_DEG', 60 if BIG else 35)) * SG        # pivot foot hee
 HEEL = math.radians(E('HEEL_DEG', 25))           # pivot foot heel lift at toe-off
 DROP = E('DROP', 3.5)                            # pelvis dip during the pivot (cm)
 LEAD_C, LEAD_H = math.radians(E('LEAD_C', 18)) * SG, math.radians(E('LEAD_H', 35)) * SG
-TUCK = E('TUCK', 0.6)          # review r1 item 4: arms stay tucked (elbows at the ribs, hands at the chest) through H + 2
+TUCK = E('TUCK', 0.5)          # review r1 item 4: arms stay tucked (elbows at the ribs, hands at the chest) through H + 2
 ARC_STEP, ARC_SWING = E('ARC_STEP', 8), E('ARC_SWING', 14)     # r1 item 3: low drive swing, shin never above horizontal
 REV = os.environ.get('REV', 'p27rev' + ('L' if SIDE == 'L' else 'R'))
 UP = 1
@@ -228,8 +228,11 @@ for u in range(NT):
         for s in 'lr':
             sh = W['upperarm_MainPoint_' + s]
             inward = hz(W['spine_04_MainPoint'] - sh)
-            e_tgt = sh - upv * 24.0 - fwd * 4.0 + inward * 0.3
-            h_tgt = W['spine_04_MainPoint'] + fwd * 16.0 - upv * 8.0 + (W['clavicle_MainPoint_' + s] - W['spine_04_MainPoint']) * 0.5
+            # owner 2026-11-21 on r2 ("mani a T rex", hands through the leg): elbow less closed, longer forearm reach, the fist
+            # in front of the ribs and outside the hip/thigh outline (was: tight elbow, hands crossed in front of the hip)
+            out_s = -inward / max(float(np.linalg.norm(inward)), 1e-6)
+            e_tgt = sh - upv * 23.0 - fwd * 2.0 + out_s * 3.0
+            h_tgt = e_tgt + fwd * 18.0 - upv * 4.0 + out_s * 7.0
             dh, de = (h_tgt - W['hand_MainPoint_' + s]) * tk, (e_tgt - W['lowerarm_MainPoint_' + s]) * tk
             for n in [n for n in W if n.startswith('hand_') and n.endswith('_' + s)]:
                 W[n] = W[n] + dh
