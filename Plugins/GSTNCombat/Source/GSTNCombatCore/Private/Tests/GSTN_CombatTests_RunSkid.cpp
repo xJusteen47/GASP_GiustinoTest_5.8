@@ -330,4 +330,59 @@ bool FGSTN_MomentumSlideStickTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// skid-physics-1: the Physics motion is continuous (no velocity jump on the first frame, none at rest, none at the hand-off), brakes to rest
+// along the old direction, pushes off to PushSpeed, and its curves shape it without breaking either end
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunSkidPhysicsTest, "GSTNCombat.Core.RunSkid.Physics", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunSkidPhysicsTest::RunTest(const FString& Parameters)
+{
+	const FGSTN_RunSkidTuning Tuning;
+	TestEqual(TEXT("Physics is the default motion"), Tuning.Motion, EGSTN_RunSkidMotion::Physics);
+	const FGSTN_RunSkidPhysicsTuning& Physics = Tuning.Physics;
+	const float Start = 472.f;
+	const float Brake = Physics.BrakeDecel;
+
+	// No jolt: the first frame loses at most a full frame of brake times the onset share, never jumps to the clip or to zero
+	const float First = FGSTN_RunSkidMath::PhysicsBrakeSpeedAt(Physics, Start, Brake, 0, Dt);
+	TestTrue(TEXT("first frame keeps almost all the run speed"), First < Start && Start - First <= Brake * Dt * 0.5f + 0.01f);
+	TestTrue(TEXT("onset: the brake grows over the first frames"),
+		(Start - First) < (FGSTN_RunSkidMath::PhysicsBrakeSpeedAt(Physics, Start, Brake, 0, Dt) - FGSTN_RunSkidMath::PhysicsBrakeSpeedAt(Physics, Start, Brake, 1, Dt)) + 0.01f);
+
+	// Monotonic to rest, and the rest frame is where it reaches 0
+	const int32 Rest = FGSTN_RunSkidMath::PhysicsFramesToRest(Physics, Start, Brake, Dt);
+	float Previous = Start;
+	bool bMonotonic = true;
+	for (int32 Frame = 0; Frame < Rest; ++Frame)
+	{
+		const float Speed = FGSTN_RunSkidMath::PhysicsBrakeSpeedAt(Physics, Start, Brake, Frame, Dt);
+		bMonotonic &= Speed <= Previous;
+		Previous = Speed;
+	}
+	TestTrue(TEXT("the brake only slows"), bMonotonic);
+	TestEqual(TEXT("the last brake frame ends at rest"), FGSTN_RunSkidMath::PhysicsBrakeSpeedAt(Physics, Start, Brake, Rest - 1, Dt), 0.f);
+	TestTrue(TEXT("the frame before rest still slides"), Rest < 2 || FGSTN_RunSkidMath::PhysicsBrakeSpeedAt(Physics, Start, Brake, Rest - 2, Dt) > 0.f);
+	// ~0.15 s at the default values (Toad reversal ~0.3 s with the push)
+	TestTrue(TEXT("brake time in the Toad range"), Rest * Dt > 0.08f && Rest * Dt < 0.25f);
+
+	// The push: from 0, a frame of acceleration at a time, to PushSpeed on its last frame
+	const int32 Push = FGSTN_RunSkidMath::PhysicsPushFrames(Physics, Physics.PushAccel, Physics.PushSpeed, Dt);
+	TestTrue(TEXT("push first frame is small"), FGSTN_RunSkidMath::PhysicsPushSpeedAt(Physics, Physics.PushAccel, Physics.PushSpeed, 0, Dt) <= Physics.PushAccel * Dt + 0.01f);
+	TestEqual(TEXT("push ends at the hand-off speed"), FGSTN_RunSkidMath::PhysicsPushSpeedAt(Physics, Physics.PushAccel, Physics.PushSpeed, Push - 1, Dt), Physics.PushSpeed);
+	TestTrue(TEXT("whole reversal in the Toad range"), (Rest + Push) * Dt > 0.2f && (Rest + Push) * Dt < 0.4f);
+	TestEqual(TEXT("no push speed, no push"), FGSTN_RunSkidMath::PhysicsPushFrames(Physics, Physics.PushAccel, 0.f, Dt), 0);
+
+	// A curve shapes the brake: stronger at the start = shorter; a zero curve still comes to rest (floor 0.05)
+	FGSTN_RunSkidPhysicsTuning Shaped = Physics;
+	Shaped.BrakeCurve.GetRichCurve()->AddKey(0.f, 0.5f);
+	Shaped.BrakeCurve.GetRichCurve()->AddKey(1.f, 2.f);
+	TestTrue(TEXT("a strong bite stops sooner"), FGSTN_RunSkidMath::PhysicsFramesToRest(Shaped, Start, Brake, Dt) < Rest);
+	FGSTN_RunSkidPhysicsTuning Zero = Physics;
+	Zero.BrakeCurve.GetRichCurve()->AddKey(0.f, 0.f);
+	TestTrue(TEXT("a zero curve still rests within the cap"), FGSTN_RunSkidMath::PhysicsFramesToRest(Zero, Start, Brake, Dt) <= Zero.MaxFrames);
+
+	// The facing follows the progress: none at the start, all of it at rest with the defaults
+	TestEqual(TEXT("turn share at the start"), FGSTN_RunSkidMath::PhysicsTurnShare(Physics, 0.f), 0.f);
+	TestEqual(TEXT("turn share at rest"), FGSTN_RunSkidMath::PhysicsTurnShare(Physics, 1.f), 1.f);
+	return true;
+}
+
 #endif

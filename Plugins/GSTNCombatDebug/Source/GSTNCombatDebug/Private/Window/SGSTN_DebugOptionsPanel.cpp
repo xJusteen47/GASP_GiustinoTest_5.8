@@ -67,10 +67,20 @@ namespace
 		return Second == INDEX_NONE ? Name : Name.Mid(Second + 1);
 	}
 
-	/** Playtest switches without "Debug" in their name that the owner wants in this window (2026-11-21): the locomotion base and
-	 *  the run start clip choice. Their cvars live in the game module (GSTN_LocoBaseSubsystem.cpp); this plugin only lists them. */
+	/** Playtest switches without "Debug" in their name that the owner wants in this window (2026-11-21): the locomotion base,
+	 *  the run start clip choice, the camera and the run skid. Their cvars live in the game module (GSTN_LocoBaseSubsystem.cpp); this plugin only lists them. */
 	bool IsPlaytestVariable(const FString& Name)
 	{
+		// skid-physics-1 (2026-11-21): the skid's switches, one control each (Motion has levels, Sim and PlayAtClipSpeed are on/off). TurnSide
+		// stays out: a capture override whose help has no "2 =" would get a check box that cannot reach its value 2
+		static const TCHAR* const SkidSwitches[] = { TEXT("gstn.Skid.Sim"), TEXT("gstn.Skid.Motion"), TEXT("gstn.Skid.PlayAtClipSpeed") };
+		for (const TCHAR* Skid : SkidSwitches)
+		{
+			if (Name.Equals(Skid, ESearchCase::IgnoreCase))
+			{
+				return true;
+			}
+		}
 		return Name.StartsWith(TEXT("gstn.RunStart."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Camera."), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.Base"), ESearchCase::IgnoreCase);
 	}
 

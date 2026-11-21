@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Curves/CurveFloat.h"
 #include "Movement/GSTN_AirMomentumTypes.h"
 #include "GSTN_RunSkidTypes.generated.h"
 
@@ -46,6 +47,83 @@ enum class EGSTN_RunSkidPhase : uint8
 };
 
 /**
+ * How the run skid moves the capsule (skid-physics-1, owner 2026-11-21: "the skid is locked instead of an organic change of speed").
+ * Every model brakes along the old running direction and pushes off toward the stick; they differ in who decides the velocity.
+ */
+UENUM(BlueprintType)
+enum class EGSTN_RunSkidMotion : uint8
+{
+	/** Default. The velocity is physics: from the run speed of the frame it brakes continuously (BrakeDecel, BrakeCurve, a short onset so
+	 *  the brake bites without a jolt), comes through zero and accelerates toward the stick (PushAccel, PushCurve) up to PushSpeed, where
+	 *  the walking mode takes over at the same speed. The facing follows that progress. The animation follows the capsule, never the reverse */
+	Physics,
+	/** skid-fix-1 (2026-11-20): the capsule follows the skid clip's baked root (RootTrack + TurnCurve) for the whole clip, stick ignored.
+	 *  Falls back to BrakeExit when the clip root is not baked */
+	ClipRoot,
+	/** The first version (P2): constant Brake to rest, then a linear push to ExitSpeed over ExitFrames */
+	BrakeExit
+};
+
+/** The Physics motion of the run skid. Speeds and accelerations at the reference WalkSpeed, frames at the 62.5 Hz fixed tick */
+USTRUCT(BlueprintType)
+struct GSTNCOMBATCORE_API FGSTN_RunSkidPhysicsTuning
+{
+	GENERATED_BODY()
+
+	/** Braking deceleration along the old running direction, cm/s^2 (times BrakeCurve, times the floor's FrictionScale). 3600 stops a
+	 *  472 cm/s run in ~0.15 s over ~35 cm */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "1", ForceUnits = "cm/s^2"))
+	float BrakeDecel = 3600.f;
+
+	/** Frames over which the brake grows from 0 to full: the run had no deceleration the frame before, a full brake at once reads as a hit
+	 *  wall. 0 = full brake from the first frame */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
+	int32 BrakeOnsetFrames = 3;
+
+	/** Shape of the brake: X = speed left / speed at the skid start (1 at the start, 0 at rest), Y = multiplier of BrakeDecel (values under
+	 *  0.05 count as 0.05 so the skid always comes to rest). No keys = 1 everywhere (constant deceleration, like kinetic friction) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics")
+	FRuntimeFloatCurve BrakeCurve;
+
+	/** Acceleration of the push-off toward the stick, cm/s^2 (times PushCurve, times the floor's FrictionScale) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "1", ForceUnits = "cm/s^2"))
+	float PushAccel = 3000.f;
+
+	/** Shape of the push: X = speed / PushSpeed (0 at rest, 1 at the hand-off), Y = multiplier of PushAccel (min 0.05). No keys = 1 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics")
+	FRuntimeFloatCurve PushCurve;
+
+	/** Speed of the push at which the skid ends and the walking mode (the run stages, the reversal boost) carries on from the same velocity.
+	 *  0 = no push: the skid ends at rest */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float PushSpeed = 420.f;
+
+	/**
+	 * The facing turns on the skid's progress, not on a clock: progress 0 = the skid start, 1 = at rest, 2 = the push at PushSpeed. The turn
+	 * runs (smoothstep) from TurnStartProgress to TurnEndProgress, so a longer slide turns later on its own. Defaults: the body turns while
+	 * it brakes and faces the new way when it comes to rest
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "0", ClampMax = "2"))
+	float TurnStartProgress = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "0", ClampMax = "2"))
+	float TurnEndProgress = 1.f;
+
+	/** The stick back along the old direction during the brake (cosine at or over this) ends the skid: the walking mode runs on from the
+	 *  speed left. -1 = never */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "-1", ClampMax = "1"))
+	float ForwardCancelCos = 0.5f;
+
+	/** Stick magnitude under which there is no push: a skid with the stick released ends at rest */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "0", ClampMax = "1"))
+	float PushStickMin = 0.2f;
+
+	/** Safety cap of each half (brake, push), frames */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "1", ClampMax = "240", ForceUnits = "Frames"))
+	int32 MaxFrames = 90;
+};
+
+/**
  * The run skid of a kit (Mario-style run P2): the stick pushed against a fast run brakes the character on its feet along the old
  * direction with a real deceleration, then it turns and pushes off the other way. Below the threshold (stage 1, or a slow walk) the
  * walking mode's own tight turn handles it, no skid.
@@ -59,6 +137,14 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid")
 	bool bEnabled = true;
+
+	/** Who moves the capsule in the skid (skid-physics-1). Console override: gstn.Skid.Motion */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid")
+	EGSTN_RunSkidMotion Motion = EGSTN_RunSkidMotion::Physics;
+
+	/** The Physics motion's values (Motion = Physics) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ShowOnlyInnerProperties))
+	FGSTN_RunSkidPhysicsTuning Physics;
 
 	/** Lowest 0-based run stage that skids (1 = stage 2: at stage 1 a reversal is a quick pivot of the walking mode, the plan's rule) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid", meta = (ClampMin = "0"))
@@ -265,4 +351,25 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidMath
 
 	/** Stopping distance of a skid (tuning aid and the anim layer's distance matching) */
 	static float StopDistance(float StartSpeed, float Brake);
+
+	/** A shape curve at X; 1 when it has no keys, never under 0.05 (a skid always reaches rest and the hand-off) */
+	static float EvalShape(const FRuntimeFloatCurve& Curve, float X);
+
+	/**
+	 * Physics motion, the brake: ground speed along the old direction at the END of live frame LiveFrame (0 = the first), integrated frame by
+	 * frame from StartSpeed (pure function of the arguments: a rollback or a refunded substep gets the same value). 0 from the rest frame on
+	 */
+	static float PhysicsBrakeSpeedAt(const FGSTN_RunSkidPhysicsTuning& Physics, float StartSpeed, float BrakeDecel, int32 LiveFrame, float DeltaSeconds);
+
+	/** Physics motion: frames of the brake, the last one ends at 0 (capped at MaxFrames) */
+	static int32 PhysicsFramesToRest(const FGSTN_RunSkidPhysicsTuning& Physics, float StartSpeed, float BrakeDecel, float DeltaSeconds);
+
+	/** Physics motion, the push: speed toward the new direction at the END of push frame PushFrame (0 = the first after rest) */
+	static float PhysicsPushSpeedAt(const FGSTN_RunSkidPhysicsTuning& Physics, float PushAccel, float PushSpeed, int32 PushFrame, float DeltaSeconds);
+
+	/** Physics motion: frames of the push, the last one reaches PushSpeed (0 when PushSpeed is 0; capped at MaxFrames) */
+	static int32 PhysicsPushFrames(const FGSTN_RunSkidPhysicsTuning& Physics, float PushAccel, float PushSpeed, float DeltaSeconds);
+
+	/** Share (0..1) of the whole turn at a skid progress (0 start, 1 rest, 2 hand-off) */
+	static float PhysicsTurnShare(const FGSTN_RunSkidPhysicsTuning& Physics, float Progress);
 };

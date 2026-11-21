@@ -17,6 +17,8 @@ bool FGSTN_DebugOptionsWindowTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a gstn.*Debug* variable registered now is listed"), Names.Contains(TEXT("gstn.TestProbe.Debug.Switch")));
 	TestFalse(TEXT("a gstn variable without Debug in its name is not"), Names.Contains(TEXT("gstn.TestProbe.Speed")));
 	TestTrue(TEXT("the hitbox switch of GSTNCombatNP is listed"), Names.Contains(TEXT("gstn.Combat.Debug.Hitboxes")));
+	TestTrue(TEXT("the skid motion switch of GSTNCombatNP is listed (skid-physics-1)"), Names.Contains(TEXT("gstn.Skid.Motion")));
+	TestTrue(TEXT("the stock / our skid switch is listed"), Names.Contains(TEXT("gstn.Skid.Sim")));
 	TestEqual(TEXT("the group is the second part of the name"), SGSTN_DebugOptionsPanel::GroupOf(TEXT("gstn.Minion.Debug.LOD")), FString(TEXT("Minion")));
 	TestEqual(TEXT("a short name falls in Other"), SGSTN_DebugOptionsPanel::GroupOf(TEXT("gstn.Debug")), FString(TEXT("Other")));
 

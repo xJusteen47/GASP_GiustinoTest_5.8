@@ -409,6 +409,10 @@ def _reversal_times(w, d):
     jz = next((k for k in range(i0, len(sp)) if sp[k] <= 0.0), len(sp) - 1)
     out['slide_cm'] = round(_along([a - b for a, b in zip(w[jz]['loc'], w[i0 - 1]['loc'])], d))
     out['curve'] = [round(v) for v in sp[i0 - 1:i0 + 45]]
+    # skid-physics-1: the largest one-tick change of the along speed over the reversal. A locked skid shows a jump (the clip root replacing
+    # the run speed); a physics skid stays near brake * 0.016 s (3600 -> ~58 cm/s per tick)
+    seg = sp[i0 - 1:i0 + 45]
+    out['max_step_cms'] = round(max((abs(b - a) for a, b in zip(seg, seg[1:])), default=0.0))
     return out
 
 
@@ -438,8 +442,11 @@ def scenario_move_reversal(client=1):
             q.metrics.setdefault('raw', {})[sd] = [(s['ms'], round(_along(s['vel'], store['dir'])), s.get('mode'), s.get('stage')) for s in w][::3]
             if not r or r['run_s'] is None:
                 return False, f'no reversal to {REV_RUN_SPEED:.0f} cm/s: {r}'
-            return abs(r['run_s'] - REV_TARGET_S) <= 0.06, (f"{r['speed_before']} cm/s -> zero {r['zero_s']} s, 300 the new way {r['new300_s']} s, "
-                                                            f"{REV_RUN_SPEED:.0f} {r['run_s']} s, slide {r['slide_cm']} cm")
+            # QAM_REV_MAX_STEP (cm/s per tick, 0 = not checked): the reversal must not jump (skid-physics-1, owner: no locked skid)
+            max_step = float(os.environ.get('QAM_REV_MAX_STEP', '0'))
+            smooth = max_step <= 0.0 or r['max_step_cms'] <= max_step
+            return abs(r['run_s'] - REV_TARGET_S) <= 0.06 and smooth, (f"{r['speed_before']} cm/s -> zero {r['zero_s']} s, 300 the new way {r['new300_s']} s, "
+                                                            f"{REV_RUN_SPEED:.0f} {r['run_s']} s, slide {r['slide_cm']} cm, max step {r['max_step_cms']} cm/s")
         return _both(side)
 
     def go():

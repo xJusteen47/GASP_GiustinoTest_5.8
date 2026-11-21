@@ -96,6 +96,8 @@ FGSTN_FootSlideState UGSTN_RunPresentationComponent::ReadFootSlide(const FMoverS
 			State.Frame = FMath::Max(Skid->CurrentLiveFrame == INDEX_NONE ? Skid->LiveFrames - 1 : Skid->CurrentLiveFrame, 0);
 			State.RestFrame = Skid->RestFrame;
 			State.DistanceToStop = FGSTN_RunSkidMath::StopDistance(State.Speed, Skid->Brake);
+			State.ExitFrames = Skid->Motion == static_cast<uint8>(EGSTN_RunSkidMotion::Physics) ? Skid->ExitFrames : 0;
+			State.bClipTimed = Skid->IsClipTimed();
 			return State;
 		}
 	}
@@ -172,6 +174,12 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 	LeanDeg = Locomotion && bPlaceholderSkidLean ? Locomotion->RunStages.Skid.PlaceholderLeanDeg : 0.f;
 	EnterFrames = Locomotion ? Locomotion->RunStages.Skid.EnterFrames : 0;
 	ExitFrames = Locomotion ? Locomotion->RunStages.Skid.ExitFrames : 0;
+	if (FootSlide.Source == EGSTN_FootSlideSource::RunSkid)
+	{
+		// skid-physics-1: the push length is the simulation's (a physics skid's push is as long as its acceleration takes)
+		ExitFrames = FootSlide.ExitFrames > 0 ? FootSlide.ExitFrames : ExitFrames;
+		bLastSkidClipTimed = FootSlide.bClipTimed;
+	}
 
 	if (bWas != FootSlide.IsSliding())
 	{
@@ -206,9 +214,14 @@ namespace GSTNRunPresentation
 	}
 }
 
+bool UGSTN_RunPresentationComponent::IsSkidClipSpeed() const
+{
+	return GSTNRunPresentation::SkidAtClipSpeed() && bLastSkidClipTimed;
+}
+
 void UGSTN_RunPresentationComponent::TickSkidPlayTime(float DeltaTime)
 {
-	if (!SkidSectionClip || !GSTNRunPresentation::SkidAtClipSpeed())
+	if (!SkidSectionClip || !IsSkidClipSpeed())
 	{
 		SkidPlayTime = -1.f;
 		return;
