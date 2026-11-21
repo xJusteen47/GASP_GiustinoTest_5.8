@@ -1,0 +1,42 @@
+{
+  "project_name": "MyProject",
+  "owner_name": "Owner",
+  "language": "it",
+  "machines": {
+    "desktop": "PC fisso (editor, build, catture)",
+    "laptop": "portatile (opzionale)",
+    "cloud_max_threads": 2
+  },
+  "engine": {
+    "type": "unreal",
+    "version": "5.9",
+    "dir": "C:\\Program Files\\Epic Games\\UE_5.9\\Engine",
+    "uproject": "MyProject.uproject",
+    "editor_target": "MyProjectEditor",
+    "test_filter": "MyProject",
+    "mcp_url": "http://127.0.0.1:8000/mcp",
+    "assistant_context": "Project MyProject: UE 5.9, <base template>, <movement/anim systems>. Answer for this setup, name exact classes, settings and cvars."
+  },
+  "limits_minutes": { "build": 45, "test": 30, "capture": 15, "silent": 10 },
+  "budget": { "default_thread_usd": 5, "coordinator_extension_pct": 30, "owner_threshold_usd": 15 },
+  "context_tokens": { "close_at": 120000, "hard_max": 160000 },
+  "branch_prefix": "claude/",
+  "protected_branches": ["main", "feature/*"],
+  "paths": {
+    "handovers": "docs/notes/handovers",
+    "divergences": "docs/notes/divergenze.md",
+    "approved": "docs/notes/approvate.md",
+    "reviews": "docs/notes/reviews",
+    "costs_csv": "handoffs/costi.csv",
+    "logs": "Saved/Logs/ci"
+  },
+  "guard": {
+    "protected_paths": [
+      "Content/**/DA_*_Default.uasset",
+      "Saved/**",
+      "**/.env",
+      "**/*.pem"
+    ],
+    "max_file_mb": 50
+  }
+}

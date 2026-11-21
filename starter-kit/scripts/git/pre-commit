@@ -1,0 +1,6 @@
+#!/bin/sh
+# Installed by harness/scripts/python/install_hooks.py. Runs the kit's pre-commit guard.
+ROOT="$(git rev-parse --show-toplevel)"
+PY="$(command -v python3 || command -v python || command -v py)"
+[ -z "$PY" ] && { echo "GUARDIA: python non trovato, commit bloccato"; exit 1; }
+exec "$PY" "$ROOT/harness/scripts/python/precommit_guard.py"

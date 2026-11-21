@@ -1,0 +1,2 @@
+# Lock della copia condivisa (regola 7). Un thread alla volta.
+# Libero: file vuoto sotto questa riga. Occupato: una riga "thread | macchina | da HH:MM | branch".

@@ -1,0 +1,29 @@
+# <ProjectName>
+
+<Una riga: motore/versione, template di base, prefisso dei tipi, focus del progetto.>
+
+Read the linked docs only when the task touches that area. Do not read engine/third-party trees.
+
+## Where things are
+| Area | Path | Doc |
+|---|---|---|
+| Project code | `<Source/...>` | this file |
+| Working notes, plans, handovers | `docs/notes/` | handovers in `docs/notes/handovers/` |
+| Agent harness (rules, scripts, templates) | `harness/` | `harness/README.md`, `harness/RULES.md` |
+
+## Conventions
+- <prefissi, struttura cartelle, stile dei commenti, dove vanno i valori regolabili>
+- Every tunable value is exposed (editor property or debug-menu cvar), never a hard-coded tweak.
+
+## Rules that are easy to break
+1. <invarianti del codice>
+2. Scripts write to files and print at most 5 lines; long runs only through `harness/scripts/windows/Run-Timed.ps1`.
+3. Never commit the owner's local files: the pre-commit guard (`kit.config.json` > `guard`) blocks them.
+
+## Build and run
+- Build: `powershell -File harness/scripts/windows/Run-Timed.ps1 -Preset Build -Log Saved/Logs/ci/build.log`
+- Tests: `... -Preset Test -Log Saved/Logs/ci/test.log` then `harness/scripts/windows/Check-TestLog.ps1 -UeLog Saved/Logs/ci/test.log.ue.log`
+- Editor questions: `python harness/scripts/python/ask_unreal_assistant.py "question"`
+
+## Git
+Agents work on `claude/*` branches only; the owner merges. Commit messages: short imperative subject, body with the reason.
