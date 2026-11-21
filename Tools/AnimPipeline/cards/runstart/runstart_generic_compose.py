@@ -118,8 +118,13 @@ TMAP = os.environ.get('TMAP')
 if TMAP:
     tm = json.load(open(TMAP)); UF, DS = list(tm['uf']), list(tm['dist'])
     cint = lambda x: cs[int(x)] + (cs[int(x) + 1] - cs[int(x)]) * (x - int(x))
-    while UF[-1] < N_NEW - 1:                                   # past the measured window: keep the last slope and speed
-        UF.append(min(UF[-1] + (UF[-1] - UF[-2]), N_NEW - 1.0)); DS.append(DS[-1] + (DS[-1] - DS[-2]))
+    # w2 capture: following the capsule past the rev made the hand-off contacts slide MORE (capsule 600 cm/s > loop stride at the
+    # measured clip rate; L 25.6 -> 37.3, R 28.8 -> 35.0 cm). From the first frame at authored frame >= TMAP_CUT (default N_REV) the
+    # clip is the source variant again (1 authored frame per frame, root at loop speed) and the game's dynamic play rate does the rest.
+    cut = next(k for k, x in enumerate(UF) if x >= float(os.environ.get('TMAP_CUT', N_REV)))
+    UF, DS = UF[:cut + 1], DS[:cut + 1]
+    while UF[-1] < N_NEW - 1:
+        UF.append(min(UF[-1] + 1.0, N_NEW - 1.0)); DS.append(DS[-1] + VL * (UF[-1] - UF[-2]))
     N_NEW = len(UF); U = UF; C = [cint(x) for x in UF]; dist = DS
     spd = [0.0] + [dist[k] - dist[k - 1] for k in range(1, N_NEW)]
     rk = [(C[min(k + 1, N_NEW - 1)] - C[max(k - 1, 0)]) / (min(k + 1, N_NEW - 1) - max(k - 1, 0)) for k in range(N_NEW)]
