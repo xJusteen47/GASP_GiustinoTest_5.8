@@ -94,6 +94,30 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGSTN_OnRunStageChangedSignature, i
  *
  * Add it to a pawn that also has a UNpAbilitySystemComponent. Replicated; interpolated simulated proxies do not tick it.
  */
+/**
+ * Puts the drawn mesh where the body capsule wants it BEFORE the mesh animates (crouch-mesh-pop-1, owner 2026-11-21: "the mesh flashes when I
+ * crouch / stand with ZL"). Network Prediction places the mesh from the smoothed state before any actor ticks (OnWorldPreActorTick); the body
+ * capsule's smoothing correction used to run only in TG_PostUpdateWork, so the animation of that frame (GASP's Offset Root, foot placement)
+ * saw the mesh up to the whole capsule shift (~31 cm on crouch) away for the rendered frames that interpolate the shift frame, and kept
+ * that error in the pose. This tick runs in TG_PrePhysics as a prerequisite of the primary visual component's tick. gstn.Mesh.CapsuleShiftBeforeAnim
+ */
+USTRUCT()
+struct FGSTN_BodyCapsulePresentTickFunction : public FTickFunction
+{
+	GENERATED_BODY()
+
+	class UGSTN_CombatSimComponent* Target = nullptr;
+
+	virtual void ExecuteTick(float DeltaTime, ELevelTick TickType, ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent) override;
+	virtual FString DiagnosticMessage() override { return TEXT("GSTN body capsule presentation (before anim)"); }
+};
+
+template<>
+struct TStructOpsTypeTraits<FGSTN_BodyCapsulePresentTickFunction> : public TStructOpsTypeTraitsBase2<FGSTN_BodyCapsulePresentTickFunction>
+{
+	enum { WithCopy = false };
+};
+
 UCLASS(ClassGroup = (Combat), Blueprintable, meta = (BlueprintSpawnableComponent))
 class GSTNCOMBATNP_API UGSTN_CombatSimComponent : public UNetworkPredictionComponent, public IGSTN_InputSimHost, public IGSTN_CommandSourceInterface, public IGSTN_SnapshotSource, public IGSTN_CombatTickServices,
 	public IMoverInputProducerInterface, public IGSTN_InputConfigSource
@@ -106,6 +130,7 @@ public:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void RegisterComponentTickFunctions(bool bRegister) override;
 
 	/**
 	 * Presentation: puts the drawn mesh where the body capsule of the presented Mover state wants it (FGSTN_BodyCapsuleModifier::ApplyPresentation).
@@ -1389,6 +1414,15 @@ private:
 
 	/** The mesh location the body capsule's smoothing correction wrote last (FGSTN_BodyCapsuleModifier::ApplyPresentation). Presentation only */
 	FVector BodyCapsuleCorrectedAt = FVector(TNumericLimits<float>::Max());
+
+	/** The before-anim presentation tick (FGSTN_BodyCapsulePresentTickFunction) and the mesh it was made a prerequisite of */
+	FGSTN_BodyCapsulePresentTickFunction BodyCapsulePresentTick;
+	TWeakObjectPtr<USceneComponent> BodyCapsulePresentTickVisual;
+
+	/** Makes the primary visual component's tick wait for BodyCapsulePresentTick (Mover may set its visual component after BeginPlay) */
+	void LinkBodyCapsulePresentTick();
+
+	friend struct FGSTN_BodyCapsulePresentTickFunction;
 
 	/**
 	 * What the attacker side predicted about each hit of the last frames, for the presentation component of this pawn (M4 H10). Local data

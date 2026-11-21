@@ -19,6 +19,7 @@ bool FGSTN_DebugOptionsWindowTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the hitbox switch of GSTNCombatNP is listed"), Names.Contains(TEXT("gstn.Combat.Debug.Hitboxes")));
 	TestTrue(TEXT("the skid motion switch of GSTNCombatNP is listed (skid-physics-1)"), Names.Contains(TEXT("gstn.Skid.Motion")));
 	TestTrue(TEXT("the stock / our skid switch is listed"), Names.Contains(TEXT("gstn.Skid.Sim")));
+	TestTrue(TEXT("the crouch mesh pop switch is listed (crouch-mesh-pop-1)"), Names.Contains(TEXT("gstn.Mesh.CapsuleShiftBeforeAnim")));
 	TestEqual(TEXT("the group is the second part of the name"), SGSTN_DebugOptionsPanel::GroupOf(TEXT("gstn.Minion.Debug.LOD")), FString(TEXT("Minion")));
 	TestEqual(TEXT("a short name falls in Other"), SGSTN_DebugOptionsPanel::GroupOf(TEXT("gstn.Debug")), FString(TEXT("Other")));
 

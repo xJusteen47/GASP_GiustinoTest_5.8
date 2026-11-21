@@ -81,8 +81,9 @@ namespace
 				return true;
 			}
 		}
-		return Name.StartsWith(TEXT("gstn.RunStart."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Camera."), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.Base"), ESearchCase::IgnoreCase)
-			|| Name.StartsWith(TEXT("gstn.Loco.Stance"), ESearchCase::IgnoreCase);	// stance width layer (runstart-stancewidth, 2026-11-21)
+		// crouch-mesh-pop-1 (2026-11-21): gstn.Mesh.* (CapsuleShiftBeforeAnim, the crouch flash fix A/B); stance width layer (runstart-stancewidth): gstn.Loco.Stance*
+		return Name.StartsWith(TEXT("gstn.RunStart."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Mesh."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Camera."), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.Base"), ESearchCase::IgnoreCase)
+			|| Name.StartsWith(TEXT("gstn.Loco.Stance"), ESearchCase::IgnoreCase);
 	}
 
 	/** Readable name of a gstn.RunStart.Variant value (keep in step with that cvar's help text), shown next to the number */
