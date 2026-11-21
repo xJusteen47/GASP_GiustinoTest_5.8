@@ -20,7 +20,7 @@ namespace GSTNCameraComponentPrivate
 {
 	static TAutoConsoleVariable<int32> CVarEnable(TEXT("gstn.Camera.Enable"), 1, TEXT("0 turns the GSTN camera off on this machine (the camera component keeps its own default view)."));
 	static TAutoConsoleVariable<int32> CVarDebug(TEXT("gstn.Camera.Debug"), 0, TEXT("1 draws the pivot and prints the active mode, section and stack of every GSTN camera."));
-	// Playtest switches (listed in the GSTN Debug Options window). They override the player option every frame: a debug aid, not saved.
+	// Playtest switches (listed in the GSTN Debug Options window). They set the player option when the value changes (a debug aid).
 	static TAutoConsoleVariable<int32> CVarAutoFollow(TEXT("gstn.Camera.AutoFollow"), 1, TEXT("0 turns the gentle auto follow (camera turns behind the runner) off, 1 on."));
 	static TAutoConsoleVariable<int32> CVarAssist(TEXT("gstn.Camera.Assist"), 0, TEXT("1 turns Camera Assist on: hold recenter and the move stick turns the camera."));
 	static TAutoConsoleVariable<int32> CVarDistance(TEXT("gstn.Camera.Distance"), 1, TEXT("Camera distance: 0 = near, 1 = medium, 2 = far."));
@@ -486,9 +486,12 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 	const APawn* Pawn = Cast<APawn>(GetOwner());
 	APlayerController* Controller = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
 	FGSTN_CameraUserOptions& UserOptions = Options();
-	UserOptions.bAutoFollow = CVarAutoFollow.GetValueOnGameThread() != 0;
-	UserOptions.bCameraAssist = CVarAssist.GetValueOnGameThread() != 0;
-	UserOptions.DistancePreset = static_cast<EGSTN_CameraDistancePreset>(FMath::Clamp(CVarDistance.GetValueOnGameThread(), 0, 2));
+	// A cvar acts when it CHANGES (the player's own menu choice is not overwritten every frame)
+	static int32 LastAutoFollow = 1, LastAssist = 0, LastDistance = 1;
+	const int32 NowAutoFollow = CVarAutoFollow.GetValueOnGameThread(), NowAssist = CVarAssist.GetValueOnGameThread(), NowDistance = FMath::Clamp(CVarDistance.GetValueOnGameThread(), 0, 2);
+	if (NowAutoFollow != LastAutoFollow) { LastAutoFollow = NowAutoFollow; UserOptions.bAutoFollow = NowAutoFollow != 0; }
+	if (NowAssist != LastAssist) { LastAssist = NowAssist; UserOptions.bCameraAssist = NowAssist != 0; }
+	if (NowDistance != LastDistance) { LastDistance = NowDistance; UserOptions.DistancePreset = static_cast<EGSTN_CameraDistancePreset>(NowDistance); }
 
 	UGSTN_CameraLocalPlayerSubsystem* Subsystem = UGSTN_CameraLocalPlayerSubsystem::Get(Controller);
 	if (Subsystem)
