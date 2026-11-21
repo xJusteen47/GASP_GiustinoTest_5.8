@@ -125,6 +125,12 @@ DROPKICK_SEQUENCES = [
      'air': {'trigger_h': float(os.environ.get('PIE_CAPTURE_DROPKICK_LOW_H', 90.0)), 'stick': True}},
     {'name': 'dropkick_low_hit', 'taps': [], 'frames': 150, 'dummy': float(os.environ.get('PIE_CAPTURE_DROPKICK_LOW_DIST', 150.0)), 'shoot': True,
      'air': {'trigger_h': float(os.environ.get('PIE_CAPTURE_DROPKICK_LOW_H', 90.0)), 'stick': True}},
+    # dropkick-k5: the SWEETSPOT case, the strike pose (startup f15) meets the dummy's chest: pressed falling at PIE_CAPTURE_DROPKICK_SWEET_H
+    # (default 380 cm: the move drops ~300 cm in its 15 startup frames, measured r4e v122-v137) with PIE_CAPTURE_AIR_GIVE_UP=200, frames 300
+    {'name': 'dropkick_sweet_hit', 'taps': [], 'frames': 300, 'dummy': float(os.environ.get('PIE_CAPTURE_DROPKICK_LOW_DIST', 150.0)), 'shoot': True,
+     'air': {'trigger_h': float(os.environ.get('PIE_CAPTURE_DROPKICK_SWEET_H', 380.0)), 'stick': True}},
+    {'name': 'dropkick_sweet_whiff', 'taps': [], 'frames': 300, 'dummy': None, 'shoot': True,
+     'air': {'trigger_h': float(os.environ.get('PIE_CAPTURE_DROPKICK_SWEET_H', 380.0)), 'stick': True}},
 ]
 # CP3 double-shot examples (PIE_CAPTURE_KIT=KIT_Example_DoubleShotA / B, PIE_CAPTURE_BUTTON=Special): one press, two presses 8 frames apart (a double
 # press), two presses 40 frames apart (two single shots)
@@ -157,6 +163,9 @@ BUG_SEQUENCES = [
     {'name': 'inside_escape', 'taps': [], 'frames': 160, 'dummy': 10.0, 'shoot': True, 'walk': (20, 120), 'walk_dir': (0, -1, 0)},
 ]
 AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after the attack press
+# dropkick-k5 (2026-11-21): the playtest kits jump ~9 m (apex ~86 frames after the press), so trigger_h was never reached inside 100
+# frames and every dropkick_low_* capture pressed at the give-up, 785 cm up: a 35-frame fall that never touched the dummy. Override it here.
+AIR_GIVE_UP = int(os.environ.get('PIE_CAPTURE_AIR_GIVE_UP', AIR_GIVE_UP))
 # Movement QA clips (qa-movement-1117): no attack. 'sticks' = [(frame from PRE, IA_Move value or None = release)], camera relative ((0, 1) = away
 # from the game camera); 'jump' = (frame, frames held) through the combat Jump button; 'crouch_tap' = frame of a Crouch tap (fast fall);
 # 'follow' = the review cameras move with the pawn at the start yaw. Select with PIE_CAPTURE_SEQUENCES (the names below), and
