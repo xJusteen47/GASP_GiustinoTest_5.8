@@ -28,8 +28,10 @@
 
 namespace GSTNPresentationCVars
 {
-	// Effects off with the events still firing: the "VFX off" half of a review capture (same frames, rule 10), or a player's choice later
-	static TAutoConsoleVariable<int32> Effects(TEXT("GSTN.Presentation.Effects"), 1,
+	// Effects off with the events still firing: the "VFX off" half of a review capture (same frames, rule 10), or a player's choice later.
+	// Default 0 (owner 2026-11-21): the VFX kit is still in review, so a playtest starts without it; `GSTN.Presentation.Effects 1` in the
+	// console turns it on. VFX captures set it explicitly (pie_capture_vfx.py PIE_VFX, pie_capture_move.py PIE_CAPTURE_CVARS).
+	static TAutoConsoleVariable<int32> Effects(TEXT("GSTN.Presentation.Effects"), 0,
 		TEXT("1 = presentation cues play their Niagara/sound/shake/additive; 0 = events still fire, no effect plays"));
 	// One log line per accepted event (owner, tag, frame, magnitude, intensity, what played): the numbers of a review capture
 	// Captures and tests: "r,g,b" (linear) replaces DefaultSurfaceColor on every character. A cvar, not a property write: a property set
