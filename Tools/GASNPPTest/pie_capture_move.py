@@ -199,6 +199,17 @@ MOVE_SEQUENCES = [
     # machine re-picks a reface start (0.3 s of the clip seen).
     {'name': 'mv_pivot', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (180, None)],
      'expect': [{'clip': 'AS_GSTN_RunPivot_WalkTurn180*', 'window': [130, 134], 'min_weight': 0.8, 'coverage': 0.9}]},
+    # wc8ksn: Overlord run pivot (stock Turn_R_180 retimed to a 0.3 s core + baked mirror), PivotSet rows on. The reversal is ~0.3 s
+    # since skid-reversal-1, so the clip is expected right after the row enters (blend 0.1 s). A slight sideways stick picks the side
+    # (FutureFacingDelta sign); window = the retimed core seen in cap_ovl1 (row in f118, full weight f124).
+    {'name': 'mv_pivot_ovl', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (180, None)],
+     'expect': [{'clip': 'AS_GSTN_RunPivot_Overlord_L', 'window': [122, 130], 'min_weight': 0.8, 'coverage': 0.9}]},
+    {'name': 'mv_pivot_ovl_l', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (-0.25, -1, 0)), (180, None)],
+     'expect': [{'clip': 'AS_GSTN_RunPivot_Overlord_L', 'window': [122, 130], 'min_weight': 0.8, 'coverage': 0.9}]},
+    {'name': 'mv_pivot_ovl_r', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0.25, -1, 0)), (180, None)],
+     'expect': [{'clip': 'AS_GSTN_RunPivot_Overlord_R', 'window': [122, 130], 'min_weight': 0.8, 'coverage': 0.9}]},
+    {'name': 'mv_pivot_base_r', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0.25, -1, 0)), (180, None)],
+     'expect': [{'clip': 'M_Relaxed_Run_Turn_*180*', 'window': [130, 134], 'min_weight': 0.8, 'coverage': 0.9}]},
     {'name': 'mv_pivot_base', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (180, None)],
      'expect': [{'clip': 'M_Relaxed_Run_Turn_*180*', 'window': [130, 134], 'min_weight': 0.8, 'coverage': 0.9}]},
     {'name': 'mv_skid_base', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (30, (0, -1, 0)), (110, None)]},
