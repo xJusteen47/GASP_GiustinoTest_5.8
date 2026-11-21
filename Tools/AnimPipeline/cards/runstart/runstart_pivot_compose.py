@@ -232,7 +232,7 @@ for u in range(NT):
     for s in 'lr':
         lead = 1.0 if s == st else 0.0                        # turn-side arm leads by one frame
         p = min(max((u + lead) / H, 0.0), 1.2)
-        tk = TUCK * ss((u + lead) / 1.5) * (1.0 - ss((u - H) / 2.0))
+        tk = TUCK * ss((u + lead) / 1.5) * (1.0 - ss((u - H) / 3.0))
         if tk <= 0:
             continue
         fwd = ry(np.array([0.0, 0.0, 1.0]), yaw[u] + (LEAD_C * ss(u / 1.0) * (1.0 - ss((u - (H - 2)) / 2.0)) if u < H else 0.0))
@@ -240,7 +240,8 @@ for u in range(NT):
         inward = hz(W['spine_04_MainPoint'] - sh)
         out_s = -inward / max(float(np.linalg.norm(inward)), 1e-6)
         sw = ss(p / 0.8) * (1.15 if lead else 0.9)            # swing back/out grows through the pivot (continuous motion)
-        e_tgt = sh - upv * (22.0 - 4.0 * sw) - fwd * (6.0 + 10.0 * sw) + out_s * (6.0 + 8.0 * sw)
+        # owner 22:47: each elbow moves out to its own side (right elbow to the right, left to the left), the lead arm also back
+        e_tgt = sh - upv * (21.0 - 5.0 * sw) - fwd * ((6.0 + 10.0 * sw) if lead else 3.0) + out_s * (7.0 + 13.0 * sw)
         h_tgt = e_tgt - upv * (16.0 - 6.0 * sw) - fwd * (6.0 + 10.0 * sw) + out_s * (5.0 + 9.0 * sw)
         if True:
             dh, de = (h_tgt - W['hand_MainPoint_' + s]) * tk, (e_tgt - W['lowerarm_MainPoint_' + s]) * tk
@@ -292,16 +293,18 @@ for s in 'lr':
     for u, fw in zip(us, fws):
         leg_ik(W_all[u], s, fw / np.linalg.norm(fw))
 # arms: hand and elbow relative to the shoulder smoothed over the hand-off (template + tuck -> rev pump), then rig lengths
-AW = range(1, H + 4)
+AW = range(1, H + 6)
 for s in 'lr':
     grp = [n for n in pnames if n.startswith(('hand_', 'lowerarm_')) and n.endswith('_' + s)]
-    rel = {u: {n: W_all[u][n] - W_all[u]['upperarm_MainPoint_' + s] for n in grp} for u in range(0, H + 5)}
+    rel0 = {u: {n: W_all[u][n] - W_all[u]['upperarm_MainPoint_' + s] for n in grp} for u in range(0, H + 7)}
+    rel = rel0
     for _ in range(2):
         rel = {u: ({n: 0.25 * rel[u - 1][n] + 0.5 * rel[u][n] + 0.25 * rel[u + 1][n] for n in grp} if u in AW else rel[u]) for u in rel}
     for u in AW:
+        tw = 1.0 - ss((u - (H + 2)) / 3.0)     # smoothing fades out into the rev's own pump (no step at the window's edge)
         for n in grp:
-            W_all[u][n] = W_all[u]['upperarm_MainPoint_' + s] + rel[u][n]
-for u in range(H + 4):
+            W_all[u][n] = W_all[u]['upperarm_MainPoint_' + s] + rel[u][n] * tw + rel0[u][n] * (1.0 - tw)
+for u in range(H + 6):
     for s in 'lr':
         arm_ik(W_all[u], s, 0.85 if u < H else 0.999)     # rev frames are already soft-reached once
 
