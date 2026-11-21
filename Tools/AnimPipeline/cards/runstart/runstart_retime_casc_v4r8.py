@@ -1,6 +1,8 @@
 # Run start v4r8 (runstart-v8, 2026-11-20): owner "measure Luigi's run start and shorten ours to match, let's see".
 # Reference IMG_9588.mov (Mario 3D World, Luigi, phone 30 fps): rev-up (first move -> first normal stride) = 6 f = 0.20 s
-# (straight start, t 10.13-10.33) and 8 f = 0.27 s (start with a ~120 deg turn, t 1.33-1.60). Target 0.23 s (14 sim frames).
+# (straight start, t 10.13-10.33) and 8 f = 0.27 s (start with a ~120 deg turn, t 1.33-1.60). Owner 2026-11-21 00:38Z: the
+# rev-up is the time Luigi takes to cross the FIRST BLOCK from his first move: IMG_9590 f24 -> f38 = 14 f = 0.47 s (one floor
+# tile ~= 1.35 x Luigi's height). Target 0.47 s (29 sim frames); D_TARGET (cm) = 1.35 x Overlord height sets the ramp start F0.
 # v4r7 (approved, LOCKED, not touched): frantic cadence R3 L6.5 R11.5 L16.5 R21.5 L28.5 (step every ~5 f), normal cadence from
 # L28.5 (R37.5 L46.5 R56, every 9 f) = rev-up 0.95 s; in game the clip hands off at t 1.28-1.42.
 # What this does (identity kept: frantic pumps from frame 1, same poses, same arms, same loop-matched tail f>=REV_END bit-identical):
@@ -22,7 +24,7 @@ import numpy as np
 
 G = globals()
 SCENE_END = G.get('SCENE_END', 'runstart/RunStart_v4r8.casc')
-TARGET_S = float(G.get('TARGET_S', 0.23))          # Luigi: 0.20 straight / 0.27 with turn. v4r8b: 0.46 (2x Luigi)
+TARGET_S = float(G.get('TARGET_S', 0.47))          # Luigi first tile 0.47 s (IMG_9590). First-stride mark was 0.20-0.27
 FPS = 30.0
 LAST = int(G.get('LAST', 58))                     # v4r7 last frame (59 f)
 REV_END = int(G.get('REV_END', 28))               # first normal-cadence contact (L28.5): tail from here is copied 1:1
@@ -30,6 +32,7 @@ CUT0, CUT1 = G.get('CUT', (6, 16))                # same-foot contacts (L6.5 / L
 XF = float(G.get('XF', 1.5))                      # crossfade half-width at the cut, source frames
 RATE_SHAPE = G.get('RATE_SHAPE', 'decay')
 F0 = float(G.get('F0', 0.15))                     # DA Stages[0] RampStartFraction (setup_run_start_ramp.py value)
+D_TARGET = G.get('D_TARGET')                      # cm covered during the rev-up (1.35 x character height); None = keep F0
 S_MIN = float(G.get('S_MIN', 0.3))
 UP = int(G.get('UP_AXIS', 1))                     # Cascadeur Y-up; asserted below on the root
 EXIT_SRC = float(G.get('EXIT_SRC', 32.0))         # v4r7 exit_at 1.0667 s = f32
@@ -142,6 +145,8 @@ def v_src(t):                                        # source forward root speed
 
 
 V_END = v_src(REV_END)
+if D_TARGET:                                         # D = V_END*(F0+1)/2*T  ->  F0
+    F0 = min(1.0, max(0.0, 2.0 * float(D_TARGET) / (V_END * N_REV / FPS) - 1.0))
 N_NEW = N_REV + (LAST - REV_END) + 1
 
 # root distance along the rev-up (linear speed ramp F0*V_END -> V_END), then the source tail 1:1
@@ -196,5 +201,5 @@ ok = scene.modify_update('runstart v4r8 retime (Luigi %.2f s)' % TARGET_S, chang
 exit_at = (N_REV + (EXIT_SRC - REV_END)) / FPS
 result = {'ok': bool(ok), 'points': len(pts), 'boxes': len(boxes), 'N_REV': N_REV, 'N_NEW': N_NEW,
           'EXIT_AT': round(exit_at, 4), 'rate0': round(r0, 2), 'V_END_cms': round(V_END, 1),
-          'rev_dist_cm': round(dist[N_REV], 1), 's_min_used': round(min(s_sm), 2),
+          'rev_dist_cm': round(dist[N_REV], 1), 'F0': round(F0, 3), 's_min_used': round(min(s_sm), 2),
           'delete_keys': [N_NEW, LAST]}
