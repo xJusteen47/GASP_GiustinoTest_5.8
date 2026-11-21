@@ -80,6 +80,7 @@ void UGSTN_CameraMode_Free::ResetState()
 	Super::ResetState();
 	bHasGround = false;
 	FallingSeconds = 0.f;
+	bHasDeadZone = false;
 	LookAhead = FVector::ZeroVector;
 }
 
@@ -107,6 +108,17 @@ void UGSTN_CameraMode_Free::AdjustFollow(const FGSTN_CameraModeContext& Context,
 	}
 	// The pivot height follows the last ground, not the jump arc
 	InOutPivot -= Up * (Height - GroundHeight);
+
+	// Horizontal dead zone (Mario style): the camera ignores small moves inside the rectangle, oriented with the current view heading.
+	// It acts on the pivot target, so the lag and the look-ahead below still apply once the character leaves it
+	if (!bHasDeadZone)
+	{
+		DeadZoneAnchor = InOutPivot;
+		bHasDeadZone = true;
+	}
+	DeadZoneAnchor = FGSTN_CameraMath::StepDeadZone(DeadZoneAnchor, InOutPivot, Up, FGSTN_CameraMath::HeadingToDirection(Context.Frame, Context.Orbit.YawDeg),
+		FreeTuning.DeadZoneWidthCm, FreeTuning.DeadZoneDepthCm);
+	InOutPivot = DeadZoneAnchor;
 
 	const FVector Horizontal = Context.Subject.Velocity - Up * FVector::DotProduct(Context.Subject.Velocity, Up);
 	const float Speed = static_cast<float>(Horizontal.Size());

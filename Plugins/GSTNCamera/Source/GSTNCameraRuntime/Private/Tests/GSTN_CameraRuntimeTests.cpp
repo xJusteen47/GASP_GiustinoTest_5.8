@@ -817,4 +817,46 @@ GSTN_CAM_RT_TEST(MoveReferenceIsTheCameraWithoutALatch)
 	return true;
 }
 
+GSTN_CAM_RT_TEST(FreeDeadZoneKeepsTheCameraStillForSmallMoves)
+{
+	UGSTN_CameraMode_Free* Free = NewObject<UGSTN_CameraMode_Free>(GetTransientPackage());
+	Free->FreeTuning.DeadZoneWidthCm = 80.f;
+	Free->FreeTuning.DeadZoneDepthCm = 60.f;
+	Free->FreeTuning.LookAheadCm = 0.f;
+	FGSTN_CameraModeContext Context;
+	Context.Frame = FGSTN_CameraMath::MakeFrame(FVector::UpVector, FVector::ZeroVector);
+	Context.DeltaSeconds = Dt;
+	Context.Orbit.YawDeg = 0.f; // looking along +X: screen right is +Y
+	Context.Subject = MakeSubject(FVector(0, 0, 100));
+	Free->ComputeView(Context);
+	// Step 30 cm sideways and 20 cm forward: inside the rectangle, the camera stays
+	Context.Subject = MakeSubject(FVector(20, 30, 100));
+	FGSTN_CameraView View;
+	for (int32 Frame = 0; Frame < 60; ++Frame)
+	{
+		View = Free->ComputeView(Context);
+	}
+	TestTrue(TEXT("small move: the camera does not move"), View.Pivot.Equals(FVector(0, 0, 100), 1.0e-2));
+	// Walk 300 cm to the right: the camera follows and settles with the character on the edge of the zone (40 cm)
+	Context.Subject = MakeSubject(FVector(20, 300, 100));
+	for (int32 Frame = 0; Frame < 180; ++Frame)
+	{
+		View = Free->ComputeView(Context);
+	}
+	TestTrue(TEXT("leaving the zone: the camera follows to the edge"), FMath::IsNearlyEqual(View.Pivot.Y, 260.0, 1.0) && FMath::IsNearlyEqual(View.Pivot.X, 0.0, 1.0e-2));
+	// Off: the camera follows exactly
+	Free->FreeTuning.DeadZoneWidthCm = 0.f;
+	Free->FreeTuning.DeadZoneDepthCm = 0.f;
+	Free->ResetState();
+	Context.Subject = MakeSubject(FVector(0, 0, 100));
+	Free->ComputeView(Context);
+	Context.Subject = MakeSubject(FVector(20, 30, 100));
+	for (int32 Frame = 0; Frame < 180; ++Frame)
+	{
+		View = Free->ComputeView(Context);
+	}
+	TestTrue(TEXT("off: follows exactly"), View.Pivot.Equals(FVector(20, 30, 100), 0.5));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

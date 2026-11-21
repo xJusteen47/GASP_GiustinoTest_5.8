@@ -979,3 +979,22 @@ bool FGSTN_CameraMath::StepBiasOrbit(FGSTN_CameraOrbitState& InOutOrbit, const F
 	}
 	return bMoved;
 }
+
+FVector FGSTN_CameraMath::StepDeadZone(const FVector& Anchor, const FVector& Target, const FVector& Up, const FVector& HeadingForward, float WidthCm, float DepthCm)
+{
+	const FVector U = SafeUp(Up);
+	FVector Forward = ProjectOnUpPlane(HeadingForward, U);
+	if (Forward.IsNearlyZero())
+	{
+		Forward = ReferenceForward(U);
+	}
+	const FVector Right = FVector::CrossProduct(U, Forward).GetSafeNormal();
+	const FVector Delta = Target - Anchor;
+	const double Side = FVector::DotProduct(Delta, Right);
+	const double Depth = FVector::DotProduct(Delta, Forward);
+	const double HalfW = FMath::Max(0.f, WidthCm) * 0.5;
+	const double HalfD = FMath::Max(0.f, DepthCm) * 0.5;
+	const double SideOut = Side - FMath::Clamp(Side, -HalfW, HalfW);
+	const double DepthOut = Depth - FMath::Clamp(Depth, -HalfD, HalfD);
+	return Anchor + U * FVector::DotProduct(Delta, U) + Right * SideOut + Forward * DepthOut;
+}

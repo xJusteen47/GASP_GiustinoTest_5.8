@@ -337,6 +337,17 @@ struct GSTNCAMERACORE_API FGSTN_CameraFreeTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "cm"))
 	float JumpDeadZoneUpCm = 250.f;
 
+	/**
+	 * Horizontal dead zone (Mario style): a rectangle on the ground around the camera's anchor, oriented with the camera. While the character
+	 * stays inside it the camera does not move; when he leaves it the anchor is dragged so he sits on its edge, then the usual lag follows.
+	 * Width = left/right on screen, depth = towards/away from the camera. 0 = off on that axis. Vertical is the jump band below
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float DeadZoneWidthCm = 80.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float DeadZoneDepthCm = 60.f;
+
 	/** The pivot follows down at once when the character drops further than this below the last ground (stairs and bumps below it never move the camera) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "cm"))
 	float FallFollowCm = 120.f;

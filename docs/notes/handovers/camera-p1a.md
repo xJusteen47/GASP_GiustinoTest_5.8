@@ -9,8 +9,9 @@ Built in the plugin:
 - Auto follow behind (2A) with player switch; Camera Assist; stick latching (ResolveMoveReferenceRotation).
 - AGSTN_CameraBiasVolume: soft framing (direction/focus/pitch/zoom/FOV/pivot shift, Soft/Firm, never a hard lock) = owner decision 1.
 - FGSTN_CameraUserOptions + save slot per local player.
-Tests: 8 new Core + 6 new Runtime, 5 old Runtime checks Follow->Free (list in plugin README). NOT compiled, NOT run: no engine in the cloud (rule 11: no numbers claimed).
+- Addendum (owner 01:37Z): horizontal dead zone 80 x 60 cm (profile Free.DeadZoneWidthCm/DepthCm, 0 = off), + 1 Core + 1 Runtime test.
+Tests: 9 new Core + 7 new Runtime, 5 old Runtime checks Follow->Free (list in plugin README). NOT compiled, NOT run: no engine in the cloud (rule 11: no numbers claimed).
 Self-check done: brace/paren balance of every touched file (python count, 0 except a pre-existing comment paren in GSTN_CameraMath.h).
 Risks: compile errors in UE 5.9 API spots (FRuntimeFloatCurve eval, UGameplayStatics save, TMap FindOrAdd with weak keys); the anchor adapter is still P0 (game module has no dependency on the plugin yet).
 Next: desktop P0 (handoffs/camera-p0-brief.md + p1a.md list): build, run GSTNCamera.*, adapter, C1/C4, captures. Then P1b tuning on video.
-COSTO: ~9 $ | 0 minuti desktop | 0 token review
+COSTO: ~11 $ | 0 minuti desktop | 0 token review

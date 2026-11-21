@@ -44,7 +44,7 @@ Binding rules: [modularity-and-tags.md](../../docs/architecture/modularity-and-t
 | Tag | Role |
 |---|---|
 | `Camera.Mode.Follow` | Far follow (650 cm arm, -25 degrees, FOV 65), damped pivot, free manual orbit, never turns with the character. The built-in default. |
-| `Camera.Mode.Free` | **The default** (owner 2026-11-21: free by default). Follow plus the Astro Bot reading of spec §2.4: the pivot height follows the last ground not the jump arc (falls followed past `FallFollowCm` 120 or after 0.25 s), asymmetric pivot lag (softer while running away, quicker when braking), look-ahead (halved in the air), fall pitch proportional to the falling speed, distance/FOV from pitch curves, player distance presets, gentle follow-behind in a sustained run, soft framing volumes, recenter and Camera Assist. Tuning: profile `FreeView`, `Free`, `FreePitchCurves`, `DistancePresets`, `AutoFollow`. |
+| `Camera.Mode.Free` | **The default** (owner 2026-11-21: free by default). Follow plus the Astro Bot reading of spec §2.4: the pivot height follows the last ground not the jump arc (falls followed past `FallFollowCm` 120 or after 0.25 s), asymmetric pivot lag (softer while running away, quicker when braking), look-ahead (halved in the air), fall pitch proportional to the falling speed, a horizontal dead zone (rectangle 80 x 60 cm around the camera anchor, turned with the view, 0 = off), distance/FOV from pitch curves, player distance presets, gentle follow-behind in a sustained run, soft framing volumes, recenter and Camera Assist. Tuning: profile `FreeView`, `Free`, `FreePitchCurves`, `DistancePresets`, `AutoFollow`. |
 | `Camera.Mode.Shoulder` | Arm 220 cm, shoulder and Up offsets, FOV 55; look input becomes aim input (scale 0.6); pull-in occlusion; converged aim and crosshair data. The side is `Shoulder.ShoulderSide` (Right by default); `SetShoulderSide`, `ToggleShoulderSide` (BlueprintCallable) or the optional `SwapShoulderAction` override it per player, and the camera slides across in `ShoulderSwapBlendTime` (0.2 s), never snapping. The converged aim is computed from the resulting pose, so it is correct on both sides. |
 | `Camera.Mode.Section` | The active section: `Orbit` (far follow at the designer angle), `FixedPoint`, `Rail`. |
 | `Camera.Mode.Duel` | Exactly one opponent: midpoint of the local pawn and the opponent, looking perpendicular to the line between them projected on the plane normal to Up (both fighters parallel to the screen), arm from the separation. A jump over the opponent does not spin the view: the camera keeps its side of the line and the yaw never exceeds `DuelMaxYawRateDegPerSec` (90); the side only swaps after the fighters stayed crossed `DuelSideSwapDelay` (0.5 s) with both grounded, or `DuelSideSwapMaxDelay` (3 s) regardless. Closer than `DuelMinSeparation` (150 cm, e.g. one right above the other) the axis is frozen. |
@@ -114,9 +114,9 @@ The new Core tests (`DuelCrossOverDoesNotSpin`, `DuelDegenerateAxisFrozen`, `Due
 
 P1a tests (2026-11-21, written in the cloud, **not run yet**): Core `PivotAsymmetricSettlesFasterThanItCatchesUp`, `EasedFloatReachesTargetInTimeAndRestartsFromCurrent`,
 `DistancePresetsCycleAndClamp`, `AutoFollowIsGentleAndYieldsToTheStick`, `StickLatchKeepsTheOldReferenceUntilReleased`, `BoxFalloffIsSmoothAndZeroOutside`,
-`CombineBiasPriorityAndWrap`, `BiasOrbitIsSoftNeverALock`; Runtime `ProfileOnComponentReplacesDefaults`, `DistancePresetEasesAndSectionLimits`,
+`CombineBiasPriorityAndWrap`, `BiasOrbitIsSoftNeverALock`, `DeadZoneHoldsInsideAndDragsAtTheEdge`; Runtime `ProfileOnComponentReplacesDefaults`, `DistancePresetEasesAndSectionLimits`,
 `AutoFollowTurnsBehindOnlyInASustainedRun`, `FramingVolumePullsSoftlyAndYieldsToTheStick`, `FramingVolumeZoomBlendsAndSectionWins`,
-`MoveReferenceIsTheCameraWithoutALatch`. Five older Runtime checks now expect Free instead of Follow as the default.
+`MoveReferenceIsTheCameraWithoutALatch`, `FreeDeadZoneKeepsTheCameraStillForSmallMoves`. Five older Runtime checks now expect Free instead of Follow as the default.
 
 ## Next steps (not built)
 

@@ -166,6 +166,9 @@ public:
 	/** The last-ground height the pivot follows, for the tests and the debug draw */
 	float GetGroundHeight() const { return GroundHeight; }
 
+	/** Where the horizontal dead zone is centred (the camera follows this, not the character, while he stays inside) */
+	FVector GetDeadZoneAnchor() const { return DeadZoneAnchor; }
+
 protected:
 	virtual void AdjustFollow(const FGSTN_CameraModeContext& Context, FVector& InOutPivot, float& OutPitchExtraDeg, float& OutArmExtraCm) override;
 	virtual void DampPivot(const FGSTN_CameraModeContext& Context, const FVector& Target) override;
@@ -175,6 +178,8 @@ private:
 	float GroundHeight = 0.f;
 	bool bHasGround = false;
 	float FallingSeconds = 0.f;
+	FVector DeadZoneAnchor = FVector::ZeroVector;
+	bool bHasDeadZone = false;
 	FVector LookAhead = FVector::ZeroVector;
 };
 

@@ -1198,6 +1198,30 @@ GSTN_CAM_TEST(BiasOrbitIsSoftNeverALock)
 	return true;
 }
 
+GSTN_CAM_TEST(DeadZoneHoldsInsideAndDragsAtTheEdge)
+{
+	GSTN_CAM_FOR_EACH_UP
+	{
+		const FVector Forward = SomeFlatDirection(U);
+		const FVector Right = FVector::CrossProduct(U, Forward).GetSafeNormal();
+		const FVector Anchor(10, 20, 30);
+		// Inside the 80 x 60 rectangle: the anchor does not move horizontally; the part along Up always follows
+		const FVector Inside = FGSTN_CameraMath::StepDeadZone(Anchor, Anchor + Right * 35.0 + Forward * -25.0 + U * 50.0, U, Forward, 80.f, 60.f);
+		CHECK(Inside.Equals(Anchor + U * 50.0, 1.0e-3));
+		// Out to the right by 100: the anchor moves 60, so the character sits on the right edge (40); depth untouched
+		const FVector Target = Anchor + Right * 100.0 + Forward * 20.0;
+		const FVector Out = FGSTN_CameraMath::StepDeadZone(Anchor, Target, U, Forward, 80.f, 60.f);
+		CHECK(Out.Equals(Anchor + Right * 60.0, 1.0e-3));
+		CHECK(FMath::IsNearlyEqual(FVector::DotProduct(Target - Out, Right), 40.0, 1.0e-3));
+		// Out in depth
+		const FVector Deep = FGSTN_CameraMath::StepDeadZone(Anchor, Anchor + Forward * -100.0, U, Forward, 80.f, 60.f);
+		CHECK(Deep.Equals(Anchor + Forward * -70.0, 1.0e-3));
+		// 0 = off: the anchor follows exactly
+		CHECK(FGSTN_CameraMath::StepDeadZone(Anchor, Anchor + Right * 5.0 + Forward * 3.0, U, Forward, 0.f, 0.f).Equals(Anchor + Right * 5.0 + Forward * 3.0, 1.0e-3));
+	}
+	return true;
+}
+
 #undef CHECK
 
 #endif // WITH_DEV_AUTOMATION_TESTS

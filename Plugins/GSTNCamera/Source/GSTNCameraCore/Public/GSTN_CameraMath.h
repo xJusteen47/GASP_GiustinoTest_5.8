@@ -156,6 +156,13 @@ struct GSTNCAMERACORE_API FGSTN_CameraMath
 	static FVector StepPivotAsymmetric(const FVector& Smoothed, const FVector& Target, const FVector& Up, const FVector& Velocity,
 		float CatchUpSeconds, float SettleSeconds, float FullSpeed, float VerticalSeconds, float DeltaSeconds);
 
+	/**
+	 * Horizontal dead zone: returns the new anchor. The offset Target - Anchor on the plane normal to Up is split along the camera right and
+	 * forward (from HeadingForward); each part beyond its half size (Width/2, Depth/2) moves the anchor, the part inside does not. The part along
+	 * Up always follows (the vertical band is handled elsewhere). A size of 0 turns that axis off (the anchor follows exactly)
+	 */
+	static FVector StepDeadZone(const FVector& Anchor, const FVector& Target, const FVector& Up, const FVector& HeadingForward, float WidthCm, float DepthCm);
+
 	/** Ease a value to Target in Seconds (ease-in-out); a new target restarts from the current value. The first call snaps. Returns the value */
 	static float StepEasedFloat(FGSTN_CameraEasedFloat& InOutState, float Target, float Seconds, float DeltaSeconds);
 
