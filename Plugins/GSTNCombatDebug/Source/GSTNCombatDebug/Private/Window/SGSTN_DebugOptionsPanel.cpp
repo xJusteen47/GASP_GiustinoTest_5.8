@@ -79,6 +79,10 @@ namespace
 		static const TCHAR* const Labels[] = {
 			TEXT("v4r7 (approved)"), TEXT("v4r8c loop sped up"), TEXT("v4r8a high-knee pump"), TEXT("v4r8b cartoon wheel"),
 			TEXT("stock relaxed"), TEXT("generic g1"), TEXT("generic g2"), TEXT("generic g3"), TEXT("sprinter s1"), TEXT("sprinter s2")};
+		if (Value == 20)
+		{
+			return TEXT("generic w1 (sprinter weight)");	// 10-19 are the Handoff copies of 0-9: new variants start at 20
+		}
 		return Value >= 0 && Value < UE_ARRAY_COUNT(Labels) ? FString(Labels[Value]) : FString(TEXT("?"));
 	}
 }

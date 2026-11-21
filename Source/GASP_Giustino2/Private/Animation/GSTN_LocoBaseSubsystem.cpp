@@ -30,7 +30,9 @@ namespace GSTNLocoBase
 		TEXT("gstn.RunStart.Variant"), 0,
 		TEXT("Run start clip on the clean base (gstn.Loco.Base 1). 0 = v4r7 (approved, default), 1 = v4r8c (run loop sped up at ")
 		TEXT("start), 2 = v4r8a (one high-knee pump), 3 = v4r8b (cartoon wheel), 4 = stock relaxed start, 5/6/7 = generic rev-up ")
-		TEXT("g1/g2/g3, 8 = generic sprinter drive s1, 9 = sprinter s2 (longer drive). Read by the chooser on the next start."),
+		TEXT("g1/g2/g3, 8 = generic sprinter drive s1, 9 = sprinter s2 (longer drive), 20 = generic w1 (sprinter weight transfer, ")
+		TEXT("frantic limbs from frame 1; 10-19 are the Handoff copies of 0-9, so new variants start at 20). Read by the chooser on the ")
+		TEXT("next start."),
 		ECVF_Default);
 	static const FName RunStartVariantVar(TEXT("GSTN_RunStartVariant"));
 
