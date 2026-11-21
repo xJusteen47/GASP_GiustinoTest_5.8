@@ -27,8 +27,8 @@ namespace GSTNLocoBase
 	// column (leaf table "Run F Loco Transitions", Tools/AnimPipeline/cards/runstart/runstart_variant_rows_ue.py), so it is
 	// written only while gstn.Loco.Base is 1. Divergence row in docs/notes/gasp-divergenze.md.
 	static TAutoConsoleVariable<int32> CVarRunStartVariant(
-		TEXT("gstn.RunStart.Variant"), 0,
-		TEXT("Run start clip on the clean base (gstn.Loco.Base 1). 0 = v4r7 (approved, default), 1 = v4r8c (run loop sped up at ")
+		TEXT("gstn.RunStart.Variant"), 20,
+		TEXT("Run start clip on the clean base (gstn.Loco.Base 1). 20 = generic w1 (owner 2026-11-21: new standard, default). 0 = v4r7 (approved), 1 = v4r8c (run loop sped up at ")
 		TEXT("start), 2 = v4r8a (one high-knee pump), 3 = v4r8b (cartoon wheel), 4 = stock relaxed start, 5/6/7 = generic rev-up ")
 		TEXT("g1/g2/g3, 8 = generic sprinter drive s1, 9 = sprinter s2 (longer drive), 20 = generic w1 (sprinter weight transfer, ")
 		TEXT("frantic limbs from frame 1; 10-19 are the Handoff copies of 0-9, so new variants start at 20). Read by the chooser on the ")
@@ -41,9 +41,9 @@ namespace GSTNLocoBase
 	// first-frame entry (Tools/AnimPipeline/cards/runstart/runstart_handoff_ue.py). The offset keeps the approved rows (v4r7)
 	// untouched at 0. Divergence row 19 in docs/notes/gasp-divergenze.md.
 	static TAutoConsoleVariable<int32> CVarRunStartHandoff(
-		TEXT("gstn.RunStart.Handoff"), 0,
-		TEXT("Run start hand-off fix on the clean base (gstn.Loco.Base 1). 0 = approved rows as they are (default), 1 = rows with ")
-		TEXT("stock-phase clip copies, entry from frame 0 and short blend-in. Combines with gstn.RunStart.Variant."),
+		TEXT("gstn.RunStart.Handoff"), 1,
+		TEXT("Run start hand-off fix on the clean base (gstn.Loco.Base 1). 0 = rows as they are, 1 = rows with ")
+		TEXT("stock-phase clip copies, entry from frame 0 and short blend-in (default: the w1 standard was reviewed with it). Combines with gstn.RunStart.Variant."),
 		ECVF_Default);
 	static constexpr int32 RunStartHandoffOffset = 10;
 
