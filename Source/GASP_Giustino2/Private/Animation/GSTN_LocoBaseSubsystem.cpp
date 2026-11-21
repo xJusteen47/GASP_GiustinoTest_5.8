@@ -33,6 +33,17 @@ namespace GSTNLocoBase
 		ECVF_Default);
 	static const FName RunStartVariantVar(TEXT("GSTN_RunStartVariant"));
 
+	// Run start hand-off fix (runstart-phase-desktop, 2026-11-21): each run start row has a sibling at variant + 10 playing a copy
+	// of the clip with the stock `phase` convention (the run loop's pose search reads it to pick the loop foot) and a short,
+	// first-frame entry (Tools/AnimPipeline/cards/runstart/runstart_handoff_ue.py). The offset keeps the approved rows (v4r7)
+	// untouched at 0. Divergence row 19 in docs/notes/gasp-divergenze.md.
+	static TAutoConsoleVariable<int32> CVarRunStartHandoff(
+		TEXT("gstn.RunStart.Handoff"), 0,
+		TEXT("Run start hand-off fix on the clean base (gstn.Loco.Base 1). 0 = approved rows as they are (default), 1 = rows with ")
+		TEXT("stock-phase clip copies, entry from frame 0 and short blend-in. Combines with gstn.RunStart.Variant."),
+		ECVF_Default);
+	static constexpr int32 RunStartHandoffOffset = 10;
+
 	static void ApplyRunStartVariant(USkeletalMeshComponent* Mesh)
 	{
 		UAnimInstance* Anim = Mesh->GetAnimInstance();
@@ -41,7 +52,8 @@ namespace GSTNLocoBase
 			return;
 		}
 		FProperty* Prop = Anim->GetClass()->FindPropertyByName(RunStartVariantVar);
-		const double Value = CVarRunStartVariant.GetValueOnGameThread();
+		const double Value = CVarRunStartVariant.GetValueOnGameThread()
+			+ (CVarRunStartHandoff.GetValueOnGameThread() != 0 ? RunStartHandoffOffset : 0);
 		if (FDoubleProperty* D = CastField<FDoubleProperty>(Prop))
 		{
 			D->SetPropertyValue_InContainer(Anim, Value);
