@@ -113,6 +113,21 @@ if SRC:
     YAW = [math.radians(-float(r[3])) for r in _rr]          # Cascadeur yaw about +Y (X = UE X, Z = UE Y: handedness flips)
 LEAN_WORLD = os.environ.get('LEAN_WORLD', '1') == '1'
 LEAN_TURN = float(os.environ.get('LEAN_TURN', 17.0))
+# Review t180 r1 (Fable FAIL trait 1, v88-96): with the lean fixed to the final heading while the body still faced back, the body
+# tipped BACKWARD (head thrown back, a slip, not a sprinter). TURN_LEAN=chest: the chest LEADS the turn (CHEST_LEAD deg ahead of the
+# root yaw, head HEAD_LEAD more, ramped in over LEAD_IN frames: anticipation) and the lean tips along the CHEST facing, faded in only
+# once the chest yaw is below LEAN_YAW0 deg (full by LEAN_YAW0 - LEAN_YAW_RAMP): sink upright -> turn -> fall forward.
+TURN_LEAN = os.environ.get('TURN_LEAN', 'world')
+CHEST_LEAD, HEAD_LEAD = math.radians(float(os.environ.get('CHEST_LEAD', 45))), math.radians(float(os.environ.get('HEAD_LEAD', 20)))
+LEAD_IN = float(os.environ.get('LEAD_IN', 2))
+LEAN_YAW0, LEAN_YAW_RAMP = float(os.environ.get('LEAN_YAW0', 120)), float(os.environ.get('LEAN_YAW_RAMP', 60))
+
+
+def chest_lead(u):                                       # local rotation (rad) of the chest about the pelvis: toward the run direction
+    t = yaw_at(u)
+    if YAW is None or TURN_LEAN != 'chest' or abs(t) < 1e-6:
+        return 0.0
+    return -math.copysign(min(abs(t), CHEST_LEAD), t) * ss(u / LEAD_IN)
 
 
 def yaw_at(x):
@@ -230,7 +245,12 @@ for k in range(N_NEW):
         dy = (BOUNCE - 1.0) * g * (P['pelvis_MainPoint'][UP] - PEL_MEAN)
         # turnaround: the loop's own forward lean (~LEAN_TURN deg, along the body) points away from the run direction while the body
         # still faces back; the extra (1 - cos yaw) x LEAN_TURN keeps the fall toward the new heading at ~w1's 40 deg (trait 1)
-        th = math.radians(LEAN_DEG + (LEAN_TURN * (1.0 - math.cos(yaw_at(u))) if LEAN_WORLD else 0.0)) * g
+        if TURN_LEAN == 'chest' and YAW is not None:
+            phi = chest_lead(u)
+            cy = math.degrees(abs(yaw_at(u) + phi))           # chest yaw left to turn (world)
+            th = math.radians(LEAN_DEG) * g * ss((LEAN_YAW0 - cy) / LEAN_YAW_RAMP)
+        else:
+            th = math.radians(LEAN_DEG + (LEAN_TURN * (1.0 - math.cos(yaw_at(u))) if LEAN_WORLD else 0.0)) * g
         cth, sth = math.cos(th), math.sin(th)
         pel = P['pelvis_MainPoint'] + np.eye(3)[UP] * dy
         A = 1.0 + (ARM - 1.0) * g
@@ -245,11 +265,23 @@ for k in range(N_NEW):
             if n.startswith(UPPER) or n.startswith(ARMP) or n.startswith('upperarm') or n.startswith('clavicle'):
                 d = v - pel                                    # forward lean about the lateral (X) axis, top goes +Z
                 ya = yaw_at(u) if LEAN_WORLD else 0.0           # turnaround: tip toward the RUN direction (root frame: ry(+Z, -yaw))
+                if TURN_LEAN == 'chest' and YAW is not None:
+                    ya = 0.0     # chest-led: tip along +Z, the lead rotation below carries it to the chest facing
                 d = ry(d, ya)
                 d = np.array([d[0], d[1] * cth - d[2] * sth, d[1] * sth + d[2] * cth])
                 v = pel + ry(d, -ya)
             Q[n] = v
         P = Q
+    phi = chest_lead(u)
+    if phi:
+        pel = P['pelvis_MainPoint']
+        hl = math.copysign(min(HEAD_LEAD, max(abs(yaw_at(u)) - abs(phi), 0.0)), phi) * ss(u / LEAD_IN)
+        for n in list(P):
+            if n.startswith(LEG) or n in ('ik_foot_root', 'root') or n.startswith('pelvis') or 'thigh' in n:
+                continue
+            k_ = 0.5 if n.startswith('spine_02') else (0.8 if n.startswith('spine_04') else 1.0)
+            a_ = phi * k_ + (hl if n.startswith(('head', 'neck')) else 0.0)
+            P[n] = pel + ry(P[n] - pel, a_)
     if KNEE_DEG and KNEE_A - 2 < u < KNEE_B + 2:
         h = ss((u - KNEE_A + 2) / 2.0) * ss((KNEE_B + 2 - u) / 2.0)
         for sd_, ot in (('l', 'r'), ('r', 'l')):
