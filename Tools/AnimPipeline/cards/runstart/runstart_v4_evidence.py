@@ -78,6 +78,10 @@ for tag, cap, seq in CAPS:
                  'actor_x_f200': next((r['actor_x'] for r in per if r['f'] == 200), None),
                  'planted_feet_travel_cm_f80_240': slide}
     clip = 'AS_GSTN_RunStart_' + tag
+    if not any(weight(r, clip) for r in per):   # generic/stock tags (g1_h1, generic_h1): the run start clip actually seen
+        seen = [s.split()[0] for r in per for s in r['anim'] if 'RunStart' in s.split()[0] or 'Run_Start' in s.split()[0]]
+        clip = max(set(seen), key=seen.count) if seen else clip
+    summ[tag]['clip'] = clip
     summ[tag]['clip_weight_f80_210'] = [(r['f'], round(weight(r, clip), 2)) for r in per if 80 <= r['f'] <= 210 and r['f'] % 5 == 0]
 json.dump(summ, open(os.path.join(out, 'metrics_summary.json'), 'w'), indent=1)
 print('evidence: ' + ', '.join(sorted(x for x in os.listdir(out) if x.endswith(('.png', '.mp4', '.json')))))
