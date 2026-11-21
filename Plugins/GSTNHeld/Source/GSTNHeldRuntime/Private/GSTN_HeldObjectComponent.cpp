@@ -346,7 +346,7 @@ void UGSTN_HeldObjectComponent::UpdatePrompt()
 			Text = &Settings->PickupPromptText;
 		}
 	}
-	else if (PromptLevel >= 2 && State == EGSTN_HeldObjectState::Held && Pawn && Holder == Pawn && !Settings->ThrowPromptText.IsEmpty())
+	else if (PromptLevel >= 2 && State == EGSTN_HeldObjectState::Held && Pawn && Holder.Get() == Pawn && !Settings->ThrowPromptText.IsEmpty())
 	{
 		Text = &Settings->ThrowPromptText;
 	}
@@ -429,7 +429,7 @@ void UGSTN_HeldObjectComponent::DrawArcPreview() const
 		return;
 	}
 	const APlayerController* Player = World->GetFirstPlayerController();
-	if (!Player || !Player->IsLocalController() || Player->GetPawn() != Holder)
+	if (!Player || !Player->IsLocalController() || Player->GetPawn() != Holder.Get())
 	{
 		return;
 	}
@@ -453,7 +453,7 @@ void UGSTN_HeldObjectComponent::DrawArcPreview() const
 	{
 		// Stops at the first world hit, where the object would land or bounce
 		FHitResult Hit;
-		if (World->LineTraceSingleByChannel(Hit, Points[Index - 1], Points[Index], ECC_WorldStatic, FCollisionQueryParams(TEXT("HeldArcPreview"), false, Holder)))
+		if (World->LineTraceSingleByChannel(Hit, Points[Index - 1], Points[Index], ECC_WorldStatic, FCollisionQueryParams(TEXT("HeldArcPreview"), false, Holder.Get())))
 		{
 			DrawDebugLine(World, Points[Index - 1], Hit.ImpactPoint, FColor::Yellow, false, -1.f, 0, 2.f);
 			DrawDebugSphere(World, Hit.ImpactPoint, 12.f, 8, FColor::Yellow, false, -1.f, 0, 1.f);
