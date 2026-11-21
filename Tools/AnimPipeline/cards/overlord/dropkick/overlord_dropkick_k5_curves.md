@@ -27,3 +27,24 @@ Base for comparison: r4e (AM_OverlordDropkick, r0 restore + a0c7bf9f arms) frame
 | loop f0 -> f6 -> f11 | smug hold, period 12 (0.2 s) | a held attitude, not a cycle: f6 chin up 3 deg more, tilt 3 deg more, chest out (spine -8 -> -5); arms identical on every loop key (a cycle of 0.2 s would read as a 5 Hz jitter). |
 Overshoot at f15-f17 (owner's OOMPH note): NOT done. Startup (16 f) and loop (12 f) lengths are gameplay timing; an overshoot settling
 after f15 would sit in the loop and pulse every 0.2 s. It needs a one-shot segment after the strike (a montage change): owner's call.
+
+## K6 (2026-11-21, owner on the K5 round 3 videos): weight, follow-through, force in the arms. K5 stays as it is
+Owner: more follow-through, secondary motion and weight (head, limbs); the arms PRESS in toward the body into the cross and then relax
+a little; yes to an overshoot after the strike (new montage segment). Antigravity/Gemini not on the laptop: our own proposal.
+Identity traits unchanged. Cards: k6/make_k6_cards.py (startup re-keyed on its build frames 0/4/8/11/14/15 = K5 sampled + K6 layers).
+Montage AM_OverlordDropkickK6: Startup K6 (16 f) + SETTLE K6 (12 f, once) + Loop K5 x (LOOP_REPS-1) + Land: same length, same timeline frames.
+
+| frames | beat | timing / easing | what moves (K6 layer on K5) |
+|---|---|---|---|
+| f0 -> f4 | arms SLAM into the fold | charge_long, arrive hard | PRESS at f4: clavicles +12 deg protraction, hands 3 cm further across, spine curls 3 deg: elbows 3-4 cm toward the midline, chest hollows around the arms. Head LAGS: 6 deg less tucked than the body |
+| f4 -> f8 | arms let go a little | charge_long | RELAX at f8: clavicles -4 deg vs K5, wrap 1 cm looser, chest opens 1 deg. Head OVERSHOOTS the tuck by 6 deg; feet 2 cm higher (the legs' weight arriving in the ball) |
+| f8 -> f11 | the load | charge_long | arms gather again (half a press), head back on K5's -40 |
+| f14 -> f15 | smear, STRIKE | 1 f each | legs, pitch, smug flick = K5 (crisp, no delay). The lying fold CLAMPS on the impact: clavicles +8, wrap 2 cm deeper |
+| settle f0 -> f2 | body carried PAST the lock | arrive_1_2 (fast leave, slow-in) | pelvis 82 -> 87, hips 2 cm on, chest out 4 deg, toes -50 -> -60; head held (lag); arms clamped |
+| settle f2 -> f4 | head follows through | hold_recoil | head flicks past the smug attitude: chin +6, turn +6, tilt +3; body starts back; arms 35% loose |
+| settle f4 -> f7 | rebound | hold_recoil | pelvis under the hold (79.5), toes -46; head dips 3 deg under the smug attitude (a nod); arms LOOSE (clav -3, wrap 1 cm looser) |
+| settle f7 -> f11 | settle | arrive_1_2 | = loop f11 of K5, so settle f11 -> loop f0 is the loop's own wrap step |
+Order of the follow-through: pelvis and legs first (f2), head 2 frames later (f4), arms last (f4-f7). Legs stay locked straight (only pitch and toes move).
+Offline (make_k6_cards.py, fold3 shapes): min clearance 0.22 cm at f4 (press), every key and blend >= 0.22 except the f0 -> f4 blend,
+which the build does not take (the build interpolates f0 -> f4 itself, as in K5).
+Landing: a 480 cm press lands at a19-a20 = settle f3-f4: the overshoot peak shows, the rebound only on a high press.

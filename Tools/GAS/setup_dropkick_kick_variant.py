@@ -16,6 +16,11 @@ import unreal
 
 R = os.environ.get('DROPKICK_KICK_ROUND', 'K5')
 BASE = os.environ.get('DROPKICK_KICK_BASE', 'R4')          # the tech bounce round the variant sits on
+# K6 (2026-11-21, owner yes to an overshoot after the strike): a one-shot SETTLE clip (loop length) between the startup and the loop,
+# in place of the first loop repetition, so the montage length and every timeline frame stay the same. The loop can come from an
+# earlier round (K6 reuses K5's loop: DROPKICK_KICK_LOOP_ROUND=K5); that copy is never refreshed (the K5 montage plays it).
+LOOP_R = os.environ.get('DROPKICK_KICK_LOOP_ROUND', R)
+SETTLE = os.environ.get('DROPKICK_KICK_SETTLE', '')         # e.g. 'K6' -> AS_OverlordDropkick_SettleK6
 SRC = '/Game/AnimPipeline/Rig/Overlord/Dropkick'
 DIR = '/Game/GASNPPTest/Combat/Overlord'
 ROOT = '/Game/GASNPPTest/Combat'
@@ -54,9 +59,13 @@ def _segment(anim, start, reps):
 
 def _montage(refresh):
     clips = {'Startup': _dup(f'{SRC}/Startup/AS_OverlordDropkick_Startup{R}', f'{DIR}/AS_OverlordDropkick_Startup{R}', refresh),
-             'Loop': _dup(f'{SRC}/Loop/AS_OverlordDropkick_Loop{R}', f'{DIR}/AS_OverlordDropkick_Loop{R}', refresh),
+             'Loop': _dup(f'{SRC}/Loop/AS_OverlordDropkick_Loop{LOOP_R}', f'{DIR}/AS_OverlordDropkick_Loop{LOOP_R}', refresh and LOOP_R == R),
              'Land': unreal.load_asset(f'{DIR}/AS_OverlordDropkick_Land')}
+    if SETTLE:
+        clips['Settle'] = _dup(f'{SRC}/Loop/AS_OverlordDropkick_Settle{SETTLE}', f'{DIR}/AS_OverlordDropkick_Settle{SETTLE}', refresh)
     lens = {k: v.get_play_length() for k, v in clips.items()}
+    if SETTLE and abs(lens['Settle'] - lens['Loop']) > 0.5 / ANIM_FPS:
+        raise RuntimeError(f"settle length {lens['Settle']:.4f} s != loop {lens['Loop']:.4f} s: it would shift the timeline, stop")
     for name in ('Startup', 'Loop'):
         ref = unreal.load_asset(f'{DIR}/AS_OverlordDropkick_{name}').get_play_length()
         if abs(lens[name] - ref) > 0.5 / ANIM_FPS:
@@ -68,8 +77,13 @@ def _montage(refresh):
     factory.set_editor_property('source_animation', clips['Startup'])
     factory.set_editor_property('target_skeleton', clips['Startup'].get_editor_property('skeleton'))
     montage = unreal.AssetToolsHelpers.get_asset_tools().create_asset(f'AM_OverlordDropkick{R}', DIR, unreal.AnimMontage, factory)
-    segs = [_segment(clips['Startup'], 0.0, 1), _segment(clips['Loop'], lens['Startup'], LOOP_REPS),
-            _segment(clips['Land'], lens['Startup'] + LOOP_REPS * lens['Loop'], 1)]
+    if SETTLE:
+        segs = [_segment(clips['Startup'], 0.0, 1), _segment(clips['Settle'], lens['Startup'], 1),
+                _segment(clips['Loop'], lens['Startup'] + lens['Settle'], LOOP_REPS - 1),
+                _segment(clips['Land'], lens['Startup'] + lens['Settle'] + (LOOP_REPS - 1) * lens['Loop'], 1)]
+    else:
+        segs = [_segment(clips['Startup'], 0.0, 1), _segment(clips['Loop'], lens['Startup'], LOOP_REPS),
+                _segment(clips['Land'], lens['Startup'] + LOOP_REPS * lens['Loop'], 1)]
     track = unreal.AnimTrack()
     track.set_editor_property('anim_segments', segs)
     slot = unreal.SlotAnimationTrack()
@@ -86,8 +100,9 @@ def _montage(refresh):
     original = unreal.load_asset(f'{DIR}/AM_OverlordDropkick')
     if abs(montage.get_play_length() - original.get_play_length()) > 0.5 / ANIM_FPS:
         raise RuntimeError(f'montage length {montage.get_play_length():.4f} s differs from AM_OverlordDropkick {original.get_play_length():.4f} s')
-    log(f'AM_OverlordDropkick{R}: {montage.get_play_length() * ANIM_FPS:.1f} frames (= original)')
-    return [clips['Startup'], clips['Loop']], montage
+    log(f'AM_OverlordDropkick{R}: {montage.get_play_length() * ANIM_FPS:.1f} frames (= original), segments '
+        + ', '.join(f"{sg.get_editor_property('anim_reference').get_name()} x{sg.get_editor_property('looping_count')}" for sg in segs))
+    return [clips[k] for k in ('Startup', 'Loop', 'Settle') if k in clips], montage
 
 
 def _swap(bindings, old_cls, new_cls):
