@@ -1,1 +1,1 @@
-IN-USO: libero dal 2026-11-21 22:55 UTC (turnarounds-3: 180 L braccia+piede, cattura t3f ASSERT OK)
+IN-USO: libero dal 2026-11-22 00:05 locale (turnarounds-4 style 180 L: variant 28 gates FAIL, handover)
