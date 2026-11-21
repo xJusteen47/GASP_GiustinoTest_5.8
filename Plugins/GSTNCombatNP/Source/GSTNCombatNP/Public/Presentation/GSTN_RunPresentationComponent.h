@@ -59,6 +59,15 @@ struct GSTNCOMBATNP_API FGSTN_FootSlideState
 	UPROPERTY(BlueprintReadOnly, Category = "Foot Slide")
 	float DistanceToStop = 0.f;
 
+	/** Skid only (skid-physics-1): the frames of this skid's push (its Exit phase), from the simulation; 0 = the kit's ExitFrames */
+	UPROPERTY(BlueprintReadOnly, Category = "Foot Slide")
+	int32 ExitFrames = 0;
+
+	/** Skid only: the capsule follows the skid clip (ClipRoot motion), so the clip may play at its own speed (gstn.Skid.PlayAtClipSpeed).
+	 *  False = the clip follows the simulation's phases (the animation follows the physics) */
+	UPROPERTY(BlueprintReadOnly, Category = "Foot Slide")
+	bool bClipTimed = false;
+
 	bool IsSliding() const { return Source != EGSTN_FootSlideSource::None; }
 };
 
@@ -128,6 +137,10 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
 	bool IsSkidding() const { return SkidPlayTime >= 0.f || FootSlide.Source == EGSTN_FootSlideSource::RunSkid; }
+
+	/** gstn.Skid.PlayAtClipSpeed on AND the last skid moved the capsule on its clip (ClipRoot): only then the clip plays at its own speed.
+	 *  A Physics skid always stretches the clip on the simulation's phases (skid-physics-1: the animation follows the physics) */
+	bool IsSkidClipSpeed() const;
 
 	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
 	float GetSkidClipTime() const;
@@ -307,6 +320,8 @@ private:
 	 */
 	float SkidPlayTime = -1.f;
 	void TickSkidPlayTime(float DeltaTime);
+	/** FGSTN_FootSlideState::bClipTimed of the last live skid frame, kept for the clip's tail after the sim's skid */
+	bool bLastSkidClipTimed = false;
 	FVector ScrambleDirection = FVector::ForwardVector;
 
 	/** Run stop: the two clips (left foot, right foot in front), their root speed tracks, the idle of the blend mode, and the state */
