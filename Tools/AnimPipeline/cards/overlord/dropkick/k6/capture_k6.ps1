@@ -16,10 +16,9 @@ $env:PIE_CAPTURE_AIR_GIVE_UP = '200'
 $env:PIE_CAPTURE_DROPKICK_LOW_DIST = '190'
 $env:PIE_CAPTURE_DIST = '250'
 $runs = @(
-    @{ n = 'k6w'; d = '250'; kit = 'KIT_Test_PlaytestTBK6'; h = '480'; seq = 'dropkick_sweet_whiff'; assert = "$P\Saved\DropkickK6\assert_k5.json" },
-    @{ n = 'k6hit'; d = '250'; kit = 'KIT_Test_PlaytestTBK6'; h = '480'; seq = 'dropkick_sweet_hit'; assert = "$P\Saved\DropkickK6ssert_k6_hit.json" },
-    @{ n = 'k6high'; d = '160'; kit = 'KIT_Test_PlaytestTBK6'; h = '700'; seq = 'dropkick_sweet_whiff'; assert = "$P\Saved\DropkickK6ssert_k6_high.json" },
-    @{ n = 'baser2'; d = '250'; kit = 'KIT_Test_PlaytestTBR4'; h = '480'; seq = 'dropkick_sweet_whiff'; assert = "$P\Saved\DropkickK6\assert_base.json" }
+    @{ n = 'k6w'; d = '250'; kit = 'KIT_Test_PlaytestTBK6'; h = '480'; seq = 'dropkick_sweet_whiff'; assert = "$P\Saved\DropkickK6\assert_k6_w.json" },
+    @{ n = 'k6hit'; d = '250'; kit = 'KIT_Test_PlaytestTBK6'; h = '480'; seq = 'dropkick_sweet_hit'; assert = "$P\Saved\DropkickK6\assert_k6_hit.json" },
+    @{ n = 'k6high'; d = '160'; kit = 'KIT_Test_PlaytestTBK6'; h = '700'; seq = 'dropkick_sweet_whiff'; assert = "$P\Saved\DropkickK6\assert_k6_high.json" }
 )
 foreach ($r in ($runs | Where-Object { $Only -contains $_.n })) {
     $out = "$P\Saved\DropkickK6\$($r.n)"
