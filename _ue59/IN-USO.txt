@@ -1,1 +1,1 @@
-libero dal 2026-11-21 18:30 UTC (camera shift P1a + fix landing dropkick compilati; editor owner riaperto)
+IN-USO: libero dal 2026-11-21 19:31 UTC (runstart-v23: w2v rows 23/33, captures v22/v23 ASSERT OK; editor owner riaperto su monitor 2)

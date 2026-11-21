@@ -36,6 +36,32 @@ _WIN = os.environ.get('EDITOR_WIN', '960x540').lower()
 _WIN = None if _WIN in ('', 'full', '0') else tuple(int(v) for v in _WIN.split('x'))
 _shrunk = set()
 _acc = [0.0]
+# Owner 2026-11-21 (runstart-v23): editor and Play windows on his SECOND MONITOR, so nothing flashes over his work.
+# WINDOW_PLACE=monitor2 (default): every window of this process goes to the first non-primary monitor of the current desktop
+# (top-left of its work area, size kept or EDITOR_WIN); no virtual desktop move. WINDOW_PLACE=vd2: the old rule (virtual desktop
+# VD_TARGET_GUID). With one monitor only, monitor2 falls back to vd2.
+_PLACE = os.environ.get('WINDOW_PLACE', 'monitor2').lower()
+
+
+def _second_monitor():
+    mons = []
+    MONITORENUMPROC = ctypes.WINFUNCTYPE(wt.BOOL, wt.HMONITOR, wt.HDC, ctypes.POINTER(wt.RECT), wt.LPARAM)
+
+    class MI(ctypes.Structure):
+        _fields_ = [('cbSize', wt.DWORD), ('rcMonitor', wt.RECT), ('rcWork', wt.RECT), ('dwFlags', wt.DWORD)]
+
+    def cb(hm, hdc, r, l):
+        mi = MI(); mi.cbSize = ctypes.sizeof(MI)
+        user32.GetMonitorInfoW(hm, ctypes.byref(mi))
+        if not (mi.dwFlags & 1):
+            w = mi.rcWork; mons.append((w.left, w.top, w.right - w.left, w.bottom - w.top))
+        return True
+    user32.EnumDisplayMonitors(None, None, MONITORENUMPROC(cb), 0)
+    return mons[0] if mons else None
+
+
+_MON = _second_monitor() if _PLACE == 'monitor2' else None
+_placed = set()
 
 def _log(msg):
     if LOG:
@@ -49,6 +75,15 @@ def sweep():
     for h in hwnds:
         p = wt.DWORD(); user32.GetWindowThreadProcessId(h, ctypes.byref(p))
         if p.value != _pid or not user32.IsWindowVisible(h):
+            continue
+        if _MON:
+            if h not in _placed:
+                r = wt.RECT(); user32.GetWindowRect(h, ctypes.byref(r))
+                w, hh = (_WIN if _WIN else (r.right - r.left, r.bottom - r.top))
+                w, hh = min(w, _MON[2]), min(hh, _MON[3])
+                user32.ShowWindow(h, 9)   # SW_RESTORE: a maximized window ignores SetWindowPos
+                user32.SetWindowPos(h, None, _MON[0], _MON[1], w, hh, 0x0014)   # SWP_NOZORDER | SWP_NOACTIVATE
+                _placed.add(h); _log('monitor2 hwnd %s -> %s %dx%d' % (h, _MON[:2], w, hh))
             continue
         if _WIN and h not in _shrunk:
             r = wt.RECT(); user32.GetWindowRect(h, ctypes.byref(r))
@@ -73,6 +108,6 @@ def _tick(dt):
         except Exception as e:
             _log('sweep error %r' % e)
 
-_log('vd2_mover start pid=%d mgr=%s' % (_pid, _mgr.value))
+_log('vd2_mover start pid=%d mgr=%s place=%s mon=%s' % (_pid, _mgr.value, _PLACE, _MON))
 sweep()
 HANDLE = unreal.register_slate_post_tick_callback(_tick)
