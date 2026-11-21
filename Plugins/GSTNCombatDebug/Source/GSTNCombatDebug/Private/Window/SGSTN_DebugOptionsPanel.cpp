@@ -84,6 +84,10 @@ namespace
 		{
 			return TEXT("generic w1 (sprinter weight)");	// 10-19 are the Handoff copies of 0-9: new variants start at 20
 		}
+		if (Value == 21)
+		{
+			return TEXT("generic w2 (w1, feet on the capsule)");
+		}
 		return Value >= 0 && Value < UE_ARRAY_COUNT(Labels) ? FString(Labels[Value]) : FString(TEXT("?"));
 	}
 
@@ -98,7 +102,7 @@ namespace
 		static TArray<TSharedPtr<int32>> Options;
 		if (Options.Num() == 0)
 		{
-			for (const int32 Value : {20, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
+			for (const int32 Value : {20, 21, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9})
 			{
 				Options.Add(MakeShared<int32>(Value));
 			}
