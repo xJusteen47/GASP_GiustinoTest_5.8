@@ -1,1 +1,1 @@
-IN-USO: turnarounds-3 (variante 27, desktop) dal 2026-11-21 21:30 UTC
+IN-USO: libero dal 2026-11-21 21:55 UTC (turnarounds-3: 180 L v27 in UE, catture ASSERT OK; editor chiuso dallo script, mai aperto a mano)
