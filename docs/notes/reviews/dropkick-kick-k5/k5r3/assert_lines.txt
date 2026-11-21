@@ -1,0 +1,9 @@
+k5 whiff (assert.txt): ASSERT: OK
+k5 whiff (assert.txt): ASSERT: OK dropkick_sweet_whiff AM_OverlordDropkickK5 f143-f150: weight >= 0.8 on 100% (min 1.00)
+k5 whiff (assert_offline.txt): ASSERT: OK AM_OverlordDropkickK5 f140-f157: weight >= 0.8 on 100% (min 1.00)
+k5 hit (assert.txt): ASSERT: FAIL no expectations (empty spec)
+k5 hit (assert_offline.txt): ASSERT: OK AM_OverlordDropkickK5 f140-f161: weight >= 0.8 on 100% (min 1.00)
+k5 high (assert.txt): ASSERT: FAIL no expectations (empty spec)
+k5 high (assert_offline.txt): ASSERT: OK AM_OverlordDropkickK5 f131-f157: weight >= 0.8 on 100% (min 1.00)
+base whiff (assert.txt): ASSERT: OK
+base whiff (assert.txt): ASSERT: OK dropkick_sweet_whiff AM_OverlordDropkick f143-f150: weight >= 0.8 on 100% (min 1.00)

@@ -105,14 +105,17 @@ for i, f in enumerate(frames):
         if os.path.exists(p):
             G.paste(label(Image.open(p).convert('RGB').resize((C, C)), f'a{f - h0} v{f} {view}'), ((i % 11) * C, ((i // 11) * 2 + j) * C))
 G.save(os.path.join(out, 'grid_k5high_fall.jpg'), quality=88)
-# close-up: two loop frames of the high press (cameras at 160 cm), side and quarter, cropped on the upper body (CROP env: x0,y0,size)
-cx, cy, cs = (int(v) for v in os.environ.get('CROP', '120,120,240').split(','))
+# close-up of the head and arms in the fall, 2x crops: side az90 from the 480 cm whiff (250 cm cameras; the 160 cm high run cuts the
+# head out of the side view) at a16 and a18 (a19 is the blend into the landing clip), quarter az315 from the high run at a20 and a26.
+s0w = start(k5w, seq)
 CL = Image.new('RGB', (2 * 480, 2 * 480), 'white')
-for i, a in enumerate((20, 26)):
-    for j, view in enumerate(('az90', 'az315')):
-        p = os.path.join(high, seq, view, f'f{h0 + a:03d}.png')
-        if os.path.exists(p):
-            CL.paste(label(Image.open(p).convert('RGB').crop((cx, cy, cx + cs, cy + cs)).resize((480, 480)), f'k5high a{a} v{h0 + a} {view} close-up'), (i * 480, j * 480))
+for i, (cap, view, f0, a, (x, y, sz)) in enumerate(((k5w, 'az90', s0w, 16, (20, 60, 280)), (k5w, 'az90', s0w, 18, (20, 60, 280)),
+                                                    (high, 'az315', h0, 20, (180, 40, 300)), (high, 'az315', h0, 26, (180, 40, 300)))):
+    p = os.path.join(cap, seq, view, f'f{f0 + a:03d}.png')
+    if os.path.exists(p):
+        tag = 'k5 whiff 250cm' if cap == k5w else 'k5high 160cm'
+        CL.paste(label(Image.open(p).convert('RGB').crop((x, y, x + sz, y + sz)).resize((480, 480)), f'{tag} a{a} v{f0 + a} {view} close-up'),
+                 ((i % 2) * 480, (i // 2) * 480))
 CL.save(os.path.join(out, 'closeup_loop.jpg'), quality=90)
 with open(os.path.join(out, 'assert_lines.txt'), 'w') as fh:
     for name, cap in (('k5 whiff', k5w), ('k5 hit', k5h), ('k5 high', high), ('base whiff', base)):
