@@ -17,11 +17,14 @@ PELVIS_IDLE_Z = 90.6          # comp z of the pelvis bone = 90.6 + pelvis.loc z 
 LEG = 85.0                    # hip -> ankle, straight (r3 f0 solved)
 ROOT = [3.3, 9.3, 14.5, 18.8, 22.3, 25.0, 26.9, 28.0, 28.2, 27.4, 24.6, 21.6]   # measured capsule hop, f0..f11
 # key: world pelvis z, pitch, spine, head, leg angle (deg above the floor, None = heels on the floor), knee, L arc %, R arc %, fingers, legs parted %
-KEYS = {0: (15, 82, -8, -22, 15, 0, 0, 0, 0.0, 0), 1: (12, 90, -2, -16, 10, 5, 0, 0, 0.0, 0),
-        2: (11, 92, 4, -6, None, 10, 0, 0, 0.0, 0), 3: (12, 91, 6, 8, None, 6, 0, 0, 0.0, 0),
+# r4b (review-r4.md, instructions 2 and 3): f0 weight arrives on the contact frame (pelvis down, head 37 -> ~26), f1 head ~18, f2/f3 no
+# longer a near hold; f9-f11 no sit-up crunch (spine no more than -8, head lower) so the head does not drop 40 cm into GroundHit.
+# f0 world pelvis 12: the 1-frame blend from the move's last frame lifted the planned 15 to 18 in game (r4 frames.md v159)
+KEYS = {0: (12, 86, -2, -8, 15, 0, 0, 0, 0.0, 0), 1: (11, 91, 2, 0, 10, 5, 0, 0, 0.0, 0),
+        2: (12, 92, 5, 4, None, 10, 0, 0, 0.0, 0), 3: (13, 90, 8, 10, None, 6, 0, 0, 0.0, 0),
         4: (23, 94, 10, 10, None, 0, 0, 0, 0.0, 0), 6: (40, 93, 4, 2, 9, 0, 25, 0, 0.2, 0),
-        8: (45, 90, -4, -8, 16, 0, 60, 20, 0.4, 0), 10: (41, 86, -10, -14, 22, 0, 80, 55, 0.6, 30),
-        11: (36.5, 83, -13, -13, 18, 0, 90, 75, 0.7, 65)}
+        8: (45, 90, -2, -4, 16, 0, 60, 20, 0.4, 0), 10: (41, 87, -6, -6, 22, 0, 80, 55, 0.6, 30),
+        11: (36.5, 85, -8, -4, 18, 0, 90, 75, 0.7, 65)}
 dense = R3['author']['poses']
 
 
