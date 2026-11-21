@@ -1,1 +1,1 @@
-IN-USO: libero dal 2026-11-22 00:05 locale (turnarounds-4 style 180 L: variant 28 gates FAIL, handover)
+IN-USO: libero dal 2026-11-21 23:15 UTC (turnarounds-4 round A: variant 28 gates OK, cattura t4a ASSERT OK)

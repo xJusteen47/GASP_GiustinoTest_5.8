@@ -22,3 +22,8 @@ Pelvis (dense, all layers above the legs): +0.5 / +3 / +4 / +5.5 / +5 / +2 cm at
 | f4 | 0.33 | 0.25 | quicker push out of the plant |
 | f6 | 0.20 | 0.33 | short in-handle = arrive fast, overshoot |
 | f8 | 0.55 | - | ease into the pump (follow-through) |
+
+## Round A (gates)
+- Breakdowns f1/3/5/7 on the arm layers: world-space midpoint of the neighbouring keys (the turn is on the root, so a root-frame
+  midpoint is not smooth in game). The table above stays the key poses; the weights now act on 1-frame intervals.
+- Pelvis heights f0-8: 89.5 88.6 87.6 87.0 85.1 84.8 84.8 82.7 83.8 (monotone into H); knee L f4 swung 6.8 deg (bend smoothing).

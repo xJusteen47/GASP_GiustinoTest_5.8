@@ -1,4 +1,4 @@
-# turnarounds-4 style (desktop, 2026-11-22 00:00): 180 L style pass in Cascadeur = variant 28; GATES FAIL after 2 tries, stopped (rule 5)
+# turnarounds-4 style (desktop, 2026-11-22): 180 L style pass in Cascadeur = variant 28; gates OK after round A, captured, ASSERT OK
 Branch claude/runstart-generic-desktop (from 5b92370a). Lock _ue59 22:58-23:05Z, editor never opened (headless Save-Assets only).
 Re-check of turnarounds-3 (rule 11): 27 (w2t180Lp) UE clip gates rerun now -> GATES: OK (joints json, gates script below).
 ## Done
@@ -18,10 +18,13 @@ Re-check of turnarounds-3 (rule 11): 27 (w2t180Lp) UE clip gates rerun now -> GA
 - The scene is in the ROOT frame and the 180 deg turn is added on the root bone at import, accelerating (9, 18, 33, 40 deg/frame).
   Sparse arm keys are interpolated in the root frame, so in component space the hand-vs-shoulder second difference is ~11-13 cm
   every frame with sign flips (27 dense: 5-8). Knee_l f3: the pelvis lift changes the near-straight support leg's bend f1-f3.
-- Options for the next thread (coordinator picks; A/B are Cascadeur work, C is a pipeline change -> owner, rule 6):
-  A (recommended) breakdown keys in Cascadeur at f1, f3, f5, f7 on the arm layers (skill: "add breakdown keys where arcs go
-     off"), tuned until the UE-clip gate passes; pelvis lift eased over f1-f3. ~4 $.
-  B keep sparse keys, loosen the jitter gate for keyed turn arcs: NOT recommended (gate was asked for by the coordinator).
-  C bake the root yaw into the Cascadeur scene (pose in world, importer re-extracts yaw): clean for all turnarounds, ~10 $.
-- Then: capture behind+side (variant 28 vs 27 base, same frames), ASSERT, commit to 180a_style/, cloud review.
-COSTO: ~6 $ | ~8 min desktop | 0 token review
+## Round A (coordinator 23:04Z, new item, budget 4 $)
+- Breakdown keys f1/3/5/7 on the arm layers = world-space midpoint of the neighbour keys (root yaw from the curves json, casc =
+  R(+yaw) world, checked 0.0 cm vs the UE clip); the first write was dropped because those layers had NO key there (keys.set first).
+- Pelvis made monotone (89.5 88.6 87.6 87.0 85.1 84.8 84.8, drop 4.7 cm by H), knee L f4 swung 6.8 deg about hip-ankle.
+- GATES: OK (knee_l 9.7 max, bones 0.0 %, gap 13.6). Capture Saved/Turn4/t4a (runstart_batch_captures.ps1 -Size 960, runs
+  v27_180a / v28_180a, views az180,az90,game): ASSERT OK both, v28 w2t180Ls f88-f132 min 0.86.
+- Evidence 180a_style/: ab_27_vs_28_{az180,az90,game}_{real,slow4x}.mp4, grid_ab_*.jpg, grid_pivot_az180_v86-102.jpg.
+  My look (not a review): v28 more upright in v88-94, elbows out wider; hands in front of the pelvis at v96-98 = rev (composer).
+- Next: cloud review (rule 10), 27 = base. 180R/090L/090R still on the f clips at 28.
+COSTO: ~9 $ total (6 + 3 round A) | ~15 min desktop | 0 token review
