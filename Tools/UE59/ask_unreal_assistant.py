@@ -47,6 +47,7 @@ def _tick(_dt):
         unreal.unregister_slate_post_tick_callback(s["h"])
 _save(False)
 _st["h"] = unreal.register_slate_post_tick_callback(_tick)
+json.dumps("started")   # ue_builtin.execute parses the last expression as json (it raised on the empty result: the replies came anyway)
 '''
 
 
