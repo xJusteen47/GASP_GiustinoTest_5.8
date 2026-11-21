@@ -72,9 +72,37 @@ struct GSTNCOMBATNP_API FGSTN_LocomotionLeanSettings
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Lean|States", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float SlideScale = 0.f;
 
+	/**
+	 * Readable run stages (owner 2026-11-20, docs/notes/run-stages-leggibili-piano.md): extra FORWARD lean held at each run stage, degrees over
+	 * the spine chain, on top of the acceleration lean (index = stage; a missing stage uses the last entry; empty = none). Decision 3B: with the
+	 * stock GASP sprint as the bridge, sprint 1 must read "bent forward" until the character's own clips come
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Lean|Run Stages")
+	TArray<float> StageForwardLeanDeg;
+
+	/** Extra forward lean that grows with the tell of the next stage (decision 2A: the lean deepens for ~0.33 s before sprint 2); 0 = none */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Lean|Run Stages", meta = (ClampMin = "0.0", ClampMax = "30.0", ForceUnits = "deg"))
+	float TellForwardLeanDeg = 0.f;
+
 	float GetStageScale(int32 Stage) const
 	{
 		return StageScale.Num() == 0 ? 1.f : StageScale[FMath::Clamp(Stage, 0, StageScale.Num() - 1)];
+	}
+
+	float GetStageForwardLeanDeg(int32 Stage) const
+	{
+		return StageForwardLeanDeg.Num() == 0 ? 0.f : FMath::Max(StageForwardLeanDeg[FMath::Clamp(Stage, 0, StageForwardLeanDeg.Num() - 1)], 0.f);
+	}
+
+	/** The largest extra forward lean the run stages can ask for (the solver's and the additive node's limit) */
+	float GetMaxExtraForwardLeanDeg() const
+	{
+		float Max = 0.f;
+		for (const float Deg : StageForwardLeanDeg)
+		{
+			Max = FMath::Max(Max, Deg);
+		}
+		return Max + FMath::Max(TellForwardLeanDeg, 0.f);
 	}
 };
 
@@ -458,9 +486,11 @@ struct GSTNCOMBATNP_API FGSTN_LocomotionLeanSolver
 
 	/**
 	 * One presented frame. Velocity: presented world velocity; Forward: the facing (used while too slow for a heading); StateScale: run stage
-	 * x air / attack / slide scale. Returns Lean
+	 * x air / attack / slide scale; ExtraForwardDeg: forward lean along the run added to the target (the readable run stages: the stage's
+	 * and the tell's), faded by the same speed weight. Returns Lean
 	 */
-	FVector Step(const FGSTN_LocomotionLeanSettings& Settings, const FVector& Velocity, const FVector& Forward, float DeltaSeconds, float StateScale);
+	FVector Step(const FGSTN_LocomotionLeanSettings& Settings, const FVector& Velocity, const FVector& Forward, float DeltaSeconds, float StateScale,
+		float ExtraForwardDeg = 0.f);
 
 	/** The target lean of an acceleration at a speed (no smoothing): the tests check the directions on it */
 	static FVector TargetLean(const FGSTN_LocomotionLeanSettings& Settings, const FVector& HorizontalVelocity, const FVector& HorizontalAccel,
