@@ -26,3 +26,15 @@ DA_Locomotion_Default (owner's uncommitted change) untouched. Re-check (rule 11)
 - Rule 10 cloud frame review not done; owner verdict on 26 (and 23/24/25) pending. Same arm issue exists in the forward starts
   (w2/w2f: same ARM scaling): ARM_IK could be applied there as a variant if the owner confirms the fix on the turns.
 COSTO: ~13 $ | ~25 min desktop | 0 token review
+## Owner 21:19Z on v26 poses: "parecchio strane" -> NEW DESIGN for the turnarounds (brief for the next thread)
+Owner screenshot from behind: hunched forward, twisted, arms hanging, feet close. His principle (scope: turnarounds 90/180 L/R):
+the first step is taken with the foot on the side you turn toward, placed so the body rotates on that step, then straight into
+the frantic run start. Cause in the current clips: the composer plays the w2 forward rev from frame 0 in the root frame and only
+yaws the root (stock reface yaw 180/90 -> 0 by f24), so legs run forward while the body is still turning.
+Brief: new variant 27/37 (keep 21 and 26). Identity traits: 1 pivot step: turn-side foot steps out toward the new heading and
+plants turned (~90 deg in the 180, ~45-60 in the 90), hips lead then chest, other foot pushes off; 2 body upright-ish during the
+pivot (no hunch), arms counter-swing, not hanging; 3 from the second contact the w2 frantic rev (same rev as 24, ends on the
+stock loop). Pipeline: gstn-move-animation skill + Cascadeur keyed poses (owner rule, clips via Cascadeur), w2 rev appended from
+the plant (composer can supply f>=plant; ARM_IK=1, ANKLE_MIN=11 kept). Root: stock reface root yaw/path or re-timed to the pivot
+(rule 14: ask the Unreal Assistant how stock reface/pivot clips place the first plant). Captures: runstart_batch_captures.ps1, 21/26/27 x 4.
+Suggested: Opus high, desktop, ~12 $, owner verdict on the first 180 L before doing the other three.

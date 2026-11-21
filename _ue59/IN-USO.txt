@@ -1,1 +1,1 @@
-IN-USO: libero dal 2026-11-21 20:24 UTC (runstart-v23: varianti 24/25 + busto, catture ASSERT OK; editor owner riaperto su monitor 2)
+IN-USO: libero dal 2026-11-21 21:15 UTC (turnarounds-2: catture v26 ASSERT OK; editor chiuso dall'owner, non riaperto)
