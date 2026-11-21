@@ -36,8 +36,8 @@ namespace GSTNPlaytestCamera
 	static TAutoConsoleVariable<int32> CVarTrace(TEXT("gstn.Camera.Trace"), 0,
 		TEXT("1 = write one CSV line per rendered frame to Saved/Logs/gstn_camera_trace.csv: frame time, the view GASP's rig produced, the anchor's ")
 		TEXT("values, the push back sweep and the final view. Diagnostics for camera jitter (2026-11-20), debug only"));
-	static TAutoConsoleVariable<int32> CVarP1a(TEXT("gstn.Camera.P1a"), 0,
-		TEXT("1 = the playtest view is the new GSTN free platform camera (plugin GSTNCamera, P1a; EXPERIMENTAL, wiring not verified), 0 = GASP's own camera. Playtest switch"));
+	static TAutoConsoleVariable<int32> CVarP1a(TEXT("gstn.Camera.P1a"), 1,
+		TEXT("1 = the playtest view is the new GSTN free platform camera (plugin GSTNCamera, P1a; scripted run PASS, stick to be tried by hand), 0 = GASP's own camera. Playtest switch"));
 	static TAutoConsoleVariable<int32> CVarP1aLookFeed(TEXT("gstn.Camera.P1a.LookFeed"), 1,
 		TEXT("1 = GASP's look input (the control rotation change since the P1a camera's own write) steers its orbit, 0 = no look input (diagnostics)"));
 	static constexpr float ProbeRadius = 12.f;
@@ -307,6 +307,11 @@ void UGSTN_PlaytestCameraSubsystem::Tick(float DeltaTime)
 				// Look input (2026-11-21 fix of the pitch lock): the camera reads the control rotation change itself, BEFORE it writes the control
 				// rotation back. The first wiring measured it here, after the write back, so the camera's own motion came back as input every frame
 				// (an integrator: the pitch ran to the Free clamp, -70 on the ground, +20 after a jump) and the stick was lost
+				if (bWanted && Cam->IsActive() && (!Cam->Profile || Cam->Profile->GetOuter() != Cam))
+				{
+					// A component the character Blueprint already has: give it an own copy of its profile (or of the code default)
+					Cam->Profile = Cam->Profile ? DuplicateObject<UGSTN_CameraProfile>(Cam->Profile, Cam) : NewObject<UGSTN_CameraProfile>(Cam, TEXT("GSTN_P1aProfile"), RF_Transient);
+				}
 				if (Cam->Profile && Cam->Profile->GetOuter() == Cam)
 				{
 					Cam->Profile->LookInputSource = GSTNPlaytestCamera::CVarP1aLookFeed.GetValueOnGameThread() != 0
