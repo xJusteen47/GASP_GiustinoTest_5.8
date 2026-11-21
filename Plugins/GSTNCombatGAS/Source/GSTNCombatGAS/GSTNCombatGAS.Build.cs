@@ -30,5 +30,7 @@ public class GSTNCombatGAS : ModuleRules
 
 		// The loadout screen's rows list content the Asset Manager does not scan (GSTN_LoadoutComponent::ListAssetsOfClass)
 		PrivateDependencyModuleNames.Add("AssetRegistry");
+		// Surface feedback: the skin's footwear goes to the pawn's UGSTN_SurfaceFeedbackComponent (presentation only)
+		PrivateDependencyModuleNames.Add("GSTNPresentationCore");
 	}
 }
