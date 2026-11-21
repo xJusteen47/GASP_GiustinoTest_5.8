@@ -18,13 +18,16 @@ VAR = "GSTN_RunStartVariant"
 STOCK = ["/Game/Characters/UEFN_Mannequin/Animations/Run/M_Relaxed_Run_Start_F_Lfoot",
          "/Game/Characters/UEFN_Mannequin/Animations/Run/M_Relaxed_Run_Start_F_Rfoot"]
 K = int(os.environ.get("RSG_K", "4"))
+# RSG_ASSET (runstart-generic-desktop g1): siblings play this clip instead of the stock one; RSG_SRC limits the source rows
+ASSET = os.environ.get("RSG_ASSET", "")
+SRC = os.environ.get("RSG_SRC", "")
 BLEND = float(os.environ.get("RSH_BLEND", "0.1"))
 CURVE = os.environ.get("RSH_CURVE", "Linear")
 ENTRY_MAX = float(os.environ.get("RSH_ENTRY_MAX", "0.02"))
 SAVE = os.environ.get("GSTN_SAVE") == "1" or os.environ.get("CLIPFIX_WRITE") == "1"
 EAL = unreal.EditorAssetLibrary
 TS = unreal.GSTN_ChooserTableToolset.get_default_object()
-OUT = os.path.join(unreal.Paths.project_saved_dir(), "AnimPipeline", "rows", "runstart_generic.txt")
+OUT = os.path.join(unreal.Paths.project_saved_dir(), "AnimPipeline", "rows", os.environ.get("RSG_REPORT", "runstart_generic") + ".txt")
 log = []
 
 
@@ -72,18 +75,19 @@ def filters(row):
 
 rows = list(info.rows)
 # source = the stock start rows as they were before our variants (disabled, variant column "any")
-srcs = [i for i, r in enumerate(rows) if asset_of(r) in STOCK and "bNoMin=True" in str(r.cells[c_var])]
+srcs = [i for i, r in enumerate(rows) if asset_of(r) in STOCK and "bNoMin=True" in str(r.cells[c_var]) and SRC in asset_of(r)]
 log.append("stock source rows %s" % srcs)
 for i in reversed(srcs):
     for k, tune in ((K + 10, True), (K, False)):   # inserted right below i: K ends up first, then K + 10
         rows = list(call("GetChooserTable", leaf).rows)
-        j = next((n for n, r in enumerate(rows) if asset_of(r) == asset_of(rows[i]) and str(r.cells[c_var]) == rng(k)
+        dst = ASSET or asset_of(rows[i])
+        j = next((n for n, r in enumerate(rows) if asset_of(r) == dst and str(r.cells[c_var]) == rng(k)
                   and filters(r) == filters(rows[i])), None)
         if not SAVE:
             log.append("row %d %s: would %s sibling at %d" % (i, asset_of(rows[i]).split("/")[-1], "update" if j is not None else "add", k))
             continue
         if j is None:
-            j = call("AddChooserRow", leaf, rows[i].result_type, i + 1, unreal.load_asset(asset_of(rows[i])))
+            j = call("AddChooserRow", leaf, rows[i].result_type, i + 1, unreal.load_asset(dst))
             log.append("row %d %s: added sibling at %d (row %d)" % (i, asset_of(rows[i]).split("/")[-1], k, j))
         for c, cell in enumerate(rows[i].cells):
             val = rng(k) if c == c_var else (tuned(c, str(cell)) if tune else str(cell))
@@ -93,17 +97,17 @@ for i in reversed(srcs):
 rows = list(call("GetChooserTable", leaf).rows)
 n = 0
 for i, r in enumerate(rows):
-    if asset_of(r) in STOCK:
+    if asset_of(r) in STOCK + [ASSET]:
         o = str(r.cells[c_out])
         b = re.search(r"BlendTime_[0-9A-F_]+=([0-9.]+)", o)
         sr = re.search(r"SamplingRange=\(([^)]*)\)", str(r.cells[c_ps]))
-        n += (not r.get_editor_property("bDisabled")) and str(r.cells[c_var]) in (rng(K), rng(K + 10))
+        n += (not r.get_editor_property("bDisabled")) and str(r.cells[c_var]) in (rng(K), rng(K + 10)) and (asset_of(r) == ASSET or not ASSET)
         log.append("check row %d %s disabled=%s var=%s blend=%s sampling=%s" % (
             i, asset_of(r).split("/")[-1], r.get_editor_property("bDisabled"), str(r.cells[c_var]),
             b.group(1) if b else "?", sr.group(1) if sr else "?"))
 if SAVE:
     log.append("saved chooser %s" % EAL.save_asset(CHT, False))
-log.append("ESITO: %s generic rows enabled %d (expected 4)" % ("OK" if (n == 4 or not SAVE) else "FAIL", n))
+log.append("ESITO: %s generic rows enabled %d (expected %d)" % ("OK" if (n == 2 * len(srcs) or not SAVE) else "FAIL", n, 2 * len(srcs)))
 os.makedirs(os.path.dirname(OUT), exist_ok=True)
 open(OUT, "w", encoding="utf-8").write("\n".join(log) + "\n")
 print("\n".join(log[-3:]))

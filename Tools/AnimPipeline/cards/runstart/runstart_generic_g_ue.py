@@ -1,0 +1,106 @@
+"""Generic run start g<N> into UE (runstart-generic-desktop, 2026-11-21): headless through Tools/CI/Save-Assets.ps1 (GSTN_SAVE=1).
+Env RSGG_TAG (default g1): Saved/AnimPipeline/runstart/RunStart_Generic_<tag>.fbx -> /Game/GSTN/Animation/RunStart/
+AS_GSTN_RunStart_Generic_<tag>. Steps as runstart_v4_ue.py (import on the mannequin skeleton, stock loop root motion settings,
+ik_foot = feet, Pose Search Block Transition from 0.05 s) but the curves are the STOCK set, not curves_author:
+  contact_l, contact_r, phase (stock triangle)  = M_Relaxed_Run_Loop_F's own curves sampled at the composer's warped loop time c(u)
+  movedata_speed                                = the clip's own root speed (stock convention: the stock start carries 0 -> 375)
+  enable_warping                                = M_Relaxed_Run_Start_F_Lfoot's curve, frame for frame (0 -> 1 like stock)
+from generic_<tag>_curves.json (runstart_generic_compose.py) and Saved/RunLoop/export/Relaxed_RunStart_F_L.meta.json.
+Report Saved/AnimPipeline/runstart/AS_GSTN_RunStart_Generic_<tag>_build.json; prints <= 4 lines."""
+import json
+import math
+import os
+
+import unreal
+
+AL, EAL = unreal.AnimationLibrary, unreal.EditorAssetLibrary
+PROJ = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
+FOLDER = "/Game/GSTN/Animation/RunStart"
+TAG = os.environ.get("RSGG_TAG", "g1")
+NAME = "AS_GSTN_RunStart_Generic_" + TAG
+SKEL_FROM = "/Game/Characters/UEFN_Mannequin/Animations/Run/M_Relaxed_Run_Start_F_Lfoot"
+OUT = os.path.join(PROJ, "Saved", "AnimPipeline", "runstart")
+rep = {}
+
+
+def imp(fbx, name):
+    skel = unreal.load_asset(SKEL_FROM).get_editor_property("skeleton")
+    ui = unreal.FbxImportUI()
+    ui.set_editor_property("import_mesh", False)
+    ui.set_editor_property("import_animations", True)
+    ui.set_editor_property("import_as_skeletal", True)
+    ui.set_editor_property("mesh_type_to_import", unreal.FBXImportType.FBXIT_ANIMATION)
+    ui.set_editor_property("skeleton", skel)
+    ad = ui.get_editor_property("anim_sequence_import_data")
+    ad.set_editor_property("animation_length", unreal.FBXAnimationLengthImportType.FBXALIT_EXPORTED_TIME)
+    ad.set_editor_property("import_bone_tracks", True)
+    t = unreal.AssetImportTask()
+    for k, v in (("filename", fbx), ("destination_path", FOLDER), ("destination_name", name), ("automated", True),
+                 ("replace_existing", True), ("save", True), ("options", ui)):
+        t.set_editor_property(k, v)
+    unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([t])
+    return unreal.load_asset(FOLDER + "/" + name)
+
+
+def cs(pose, bone):
+    return unreal.AnimPoseExtensions.get_bone_pose(pose, bone, unreal.AnimPoseSpaces.WORLD)
+
+
+seq = imp(PROJ + "Saved/AnimPipeline/runstart/RunStart_Generic_%s.fbx" % TAG, NAME)
+n = int(seq.get_editor_property("number_of_sampled_keys"))
+rep.update(frames=n, length=round(seq.get_play_length(), 4))
+r0, r1 = AL.get_bone_pose_for_frame(seq, "root", 0, False).translation, AL.get_bone_pose_for_frame(seq, "root", n - 1, False).translation
+rep["root_travel_cm"] = [round(r1.x - r0.x, 1), round(r1.y - r0.y, 1), round(r1.z - r0.z, 1)]
+seq.set_editor_property("enable_root_motion", True)
+seq.set_editor_property("force_root_lock", True)
+seq.set_editor_property("root_motion_root_lock", unreal.RootMotionRootLock.REF_POSE)
+
+opts = unreal.AnimPoseEvaluationOptions()
+poses = [unreal.AnimPoseExtensions.get_anim_pose_at_time(seq, f / 30.0, opts) for f in range(n)]
+names = set(str(x) for x in AL.get_animation_track_names(seq))
+drift = 0.0
+for pose in poses:
+    for s in ("l", "r"):
+        a, b = cs(pose, "ik_foot_" + s).translation, cs(pose, "foot_" + s).translation
+        drift = max(drift, math.dist((a.x, a.y, a.z), (b.x, b.y, b.z)))
+rep["ik_foot_drift_cm"] = round(drift, 2)
+if drift > 2.0:
+    ctrl = seq.get_editor_property("controller")
+    ctrl.open_bracket(unreal.Text("ik_foot = feet"), False)
+    for s in ("l", "r"):
+        bone = "ik_foot_" + s
+        if bone not in names:
+            ctrl.add_bone_curve(bone, False)
+        ks = [cs(pose, "foot_" + s).make_relative(cs(pose, "ik_foot_root")) for pose in poses]
+        ctrl.set_bone_track_keys(bone, [k.translation for k in ks], [k.rotation for k in ks], [k.scale3d for k in ks], False)
+    ctrl.close_bracket(False)
+TRACK = "PoseSearch"
+if TRACK not in [str(x) for x in AL.get_animation_notify_track_names(seq)]:
+    AL.add_animation_notify_track(seq, TRACK, unreal.LinearColor(0.2, 0.6, 1.0, 1.0))
+    AL.add_animation_notify_state_event(seq, TRACK, 0.05, seq.get_play_length() - 0.05,
+                                        unreal.AnimNotifyState_PoseSearchBlockTransition)
+
+# stock curve set
+cj = json.load(open(os.path.join(OUT, "generic_%s_curves.json" % TAG)))
+meta = json.load(open(os.path.join(PROJ, "Saved", "RunLoop", "export", "Relaxed_RunStart_F_L.meta.json")))
+mc = meta["curves"] if isinstance(meta["curves"], dict) else eval(meta["curves"])
+times = [i / 30.0 for i in range(n)]
+root_x = [AL.get_bone_pose_for_frame(seq, "root", f, False).translation for f in range(n)]
+spd = [0.0] + [math.hypot(root_x[f].x - root_x[f - 1].x, root_x[f].y - root_x[f - 1].y) * 30.0 for f in range(1, n)]
+spd[0] = spd[1]
+curves = {k: cj["curves"][k][:n] for k in ("contact_l", "contact_r", "phase")}
+curves["movedata_speed"] = [round(v, 2) for v in spd]
+ew = list(mc["enable_warping"])
+curves["enable_warping"] = [ew[min(f, len(ew) - 1)] for f in range(n)]
+for name, vals in curves.items():
+    if AL.does_curve_exist(seq, name, unreal.RawCurveTrackTypes.RCT_FLOAT):
+        AL.remove_curve(seq, name, False)
+    AL.add_curve(seq, name, unreal.RawCurveTrackTypes.RCT_FLOAT, False)
+    AL.add_float_curve_keys(seq, name, times, [float(v) for v in vals])
+EAL.save_loaded_asset(seq, False)
+rep["curves"] = sorted(str(x) for x in AL.get_animation_curve_names(seq, unreal.RawCurveTrackTypes.RCT_FLOAT))
+rep["phase_last5"] = curves["phase"][-5:]
+rep["movedata_speed"] = [curves["movedata_speed"][i] for i in (1, 5, 10, 15, 20, 25, n - 1)]
+json.dump(rep, open(os.path.join(OUT, NAME + "_build.json"), "w"), indent=1)
+print("RSGG %s: %d f %.3f s root %s ik drift %.1f" % (NAME, n, rep["length"], rep["root_travel_cm"], drift))
+print("RSGG curves %s speed %s" % (rep["curves"], rep["movedata_speed"]))
