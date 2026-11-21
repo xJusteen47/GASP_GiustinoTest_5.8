@@ -273,6 +273,14 @@
 		{
 			"Name": "GSTNHeld",
 			"Enabled": true
+		},
+		{
+			"Name": "GSTNRespawn",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNMission",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"

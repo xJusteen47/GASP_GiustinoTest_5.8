@@ -53,3 +53,17 @@ it. G5: camera spike C1 shows a resimulation visible inside one frame → stop, 
 
 Lives pool 4, refill 20 s, checkpoints on, restart from checkpoint; respawn delay 2 s, 60 invulnerable frames; kit drop on death **on**
 in Levels and Versus (owner rule; the fallen player respawns with their lobby kit), dropped kit stays until picked up; goal = all alive players inside; collectibles per level, no save.
+
+## 7. Status 2026-11-21 (part 1, cloud, not compiled yet)
+
+Done without waiting for D5 (both answers keep it): `GSTNRespawn` (G3 core: pool, refill, checkpoints, placement, team restart, new-pawn respawn
+through the game mode or `IGSTN_PawnSpawnService`) and `GSTNMission` (G4 core: count/reach/defend rules, sequential and graph order, failures,
+time limits, zones, collectibles, replicated state). Rules are **GameRules pieces** (GR-1), chosen per level or mode, so they do not need
+Experiences. Choices applied (rule 6):
+- **D-2**: no `Message.*` republisher. The authoritative event stream (`UGSTN_SimEventSubsystem`) is already a tag-filtered bus published once by
+  the host; Respawn and Mission listen to it and publish `Message.Respawn.*` / `Message.Mission.*` on it. No GameplayMessageRouter in the project.
+- **D-1** already exists (`FGSTN_TimelineTrack_Event::OutboxEventTag`): an `Activate` objective counts a verb's event key directly.
+- **Kit drop on death** stays GSTNHeld's `KitSwap.DeathDrop` (one owner per rule), in the same GameRules asset.
+- Invulnerability after respawn: data only until a channel into the simulation exists (game-modes 2.5).
+- `.uproject`: the two plugins are enabled (normal plugin entries; **no** GameFeatures/ModularGameplay: that is G1/D5).
+Left: G0 spikes, G1 (D5), G2 `GSTNModeVerbs`, G5-G8. Handover: `docs/notes/handovers/m12-parte1-cloud.md`.

@@ -83,7 +83,9 @@ namespace
 		}
 		// crouch-mesh-pop-1 (2026-11-21): gstn.Mesh.* (CapsuleShiftBeforeAnim, the crouch flash fix A/B); stance width layer (runstart-stancewidth): gstn.Loco.Stance*
 		return Name.StartsWith(TEXT("gstn.RunStart."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Mesh."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Camera."), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.Base"), ESearchCase::IgnoreCase)
-			|| Name.StartsWith(TEXT("gstn.Loco.Stance"), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.TorsoLean"), ESearchCase::IgnoreCase);
+			|| Name.StartsWith(TEXT("gstn.Loco.Stance"), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.TorsoLean"), ESearchCase::IgnoreCase)
+			// M12 part 1 (2026-11-21): lives/checkpoints and missions (plugins GSTNRespawn, GSTNMission; listed only when they are loaded)
+			|| Name.StartsWith(TEXT("gstn.Respawn."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Mission."), ESearchCase::IgnoreCase);
 	}
 
 	/** Readable name of a gstn.RunStart.Variant value (keep in step with that cvar's help text), shown next to the number */
