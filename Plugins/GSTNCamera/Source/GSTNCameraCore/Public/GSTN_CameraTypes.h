@@ -399,6 +399,15 @@ struct GSTNCAMERACORE_API FGSTN_CameraFreeTuning
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "1", ForceUnits = "cm/s"))
 	float FallPitchFullSpeed = 1500.f;
 
+	/**
+	 * The fall pitch eases in and out in this time (exponential, seconds to ~63%). 2026-11-21 dropkick landing: the extra pitch followed the
+	 * falling speed and dropped to 0 on the landing frame, a 9 deg pitch step that moved the camera ~110 cm in one frame (owner: camera bobs
+	 * up and down on the dropkick landing). Only a real fall (below the last ground) pitches down; a jump or an air attack landing where it
+	 * started does not
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0", ForceUnits = "s"))
+	float FallPitchBlendSeconds = 0.3f;
+
 	/** The recentre action eases the heading behind the character's facing in this time */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow", meta = (ClampMin = "0.01", ForceUnits = "s"))
 	float RecenterSeconds = 0.25f;

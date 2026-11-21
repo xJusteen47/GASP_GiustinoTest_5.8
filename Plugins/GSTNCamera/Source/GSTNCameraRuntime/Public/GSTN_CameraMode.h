@@ -178,6 +178,8 @@ private:
 	float GroundHeight = 0.f;
 	bool bHasGround = false;
 	float FallingSeconds = 0.f;
+	/** Eased fall pitch (deg, negative = down) */
+	float FallPitch = 0.f;
 	FVector DeadZoneAnchor = FVector::ZeroVector;
 	bool bHasDeadZone = false;
 	FVector LookAhead = FVector::ZeroVector;

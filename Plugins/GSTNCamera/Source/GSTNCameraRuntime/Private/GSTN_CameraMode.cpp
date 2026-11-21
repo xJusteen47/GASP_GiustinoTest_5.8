@@ -7,6 +7,8 @@
 #include "HAL/IConsoleManager.h"
 
 static TAutoConsoleVariable<float> CVarDeadZoneWidth(TEXT("gstn.Camera.DeadZoneWidthCm"), -1.f, TEXT("Free camera dead zone width in cm (sideways): small steps inside it never move the camera. 0 = off, negative = use the camera profile (80)."));
+static TAutoConsoleVariable<int32> CVarFallPitch(TEXT("gstn.Camera.FallPitch"), -1, TEXT("Free camera pitch down on a real fall (below the last ground): 0 = off, 1 = on, -1 = camera profile (on)."));
+ static TAutoConsoleVariable<float> CVarFallPitchBlend(TEXT("gstn.Camera.FallPitchBlendSeconds"), -1.f, TEXT("Free camera fall pitch ease in/out time in s (0 = instant, the old landing step). Negative = camera profile (0.3)."));
 static TAutoConsoleVariable<float> CVarDeadZoneDepth(TEXT("gstn.Camera.DeadZoneDepthCm"), -1.f, TEXT("Free camera dead zone depth in cm (forward/back). 0 = off, negative = use the camera profile (60)."));
 
 namespace GSTNCameraModePrivate
@@ -85,6 +87,7 @@ void UGSTN_CameraMode_Free::ResetState()
 	Super::ResetState();
 	bHasGround = false;
 	FallingSeconds = 0.f;
+	FallPitch = 0.f;
 	bHasDeadZone = false;
 	LookAhead = FVector::ZeroVector;
 }
@@ -135,11 +138,16 @@ void UGSTN_CameraMode_Free::AdjustFollow(const FGSTN_CameraModeContext& Context,
 	LookAhead += (Wanted - LookAhead) * Alpha;
 	InOutPivot += LookAhead;
 
-	if (FreeTuning.bPitchDownWhenFalling && !Context.Subject.bGrounded && UpSpeed < 0.f)
-	{
-		// Proportional to the falling speed, never a step (Gemini review)
-		OutPitchExtraDeg = -FreeTuning.FallPitchExtraDeg * FMath::Clamp(-UpSpeed / FMath::Max(1.f, FreeTuning.FallPitchFullSpeed), 0.f, 1.f);
-	}
+	// Fall pitch: only a real fall (airborne, going down, below the last ground), eased in and out so a landing is never a pitch step
+	const int32 FallPitchMode = CVarFallPitch.GetValueOnGameThread();
+	const bool bPitchDown = FallPitchMode >= 0 ? FallPitchMode > 0 : FreeTuning.bPitchDownWhenFalling;
+	const bool bRealFall = FallingSeconds > 0.f;   // bFalling above (read before FallFollowAfterSeconds moves the ground down to the body)
+	// Proportional to the falling speed, never a step (Gemini review)
+	const float FallTarget = bPitchDown && bRealFall ? -FreeTuning.FallPitchExtraDeg * FMath::Clamp(-UpSpeed / FMath::Max(1.f, FreeTuning.FallPitchFullSpeed), 0.f, 1.f) : 0.f;
+	const float BlendOverride = CVarFallPitchBlend.GetValueOnGameThread();
+	const float Blend = BlendOverride >= 0.f ? BlendOverride : FreeTuning.FallPitchBlendSeconds;
+	FallPitch = Blend > 0.f ? FallPitch + (FallTarget - FallPitch) * static_cast<float>(1.0 - FMath::Exp(-Context.DeltaSeconds / Blend)) : FallTarget;
+	OutPitchExtraDeg = FallPitch;
 	OutArmExtraCm = FreeTuning.SpeedZoomOutCm * Factor;
 }
 
