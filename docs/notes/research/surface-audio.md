@@ -9,33 +9,39 @@ Companion to `haptics.md`. Research only. Confidence: from Epic docs/forum title
 
 ## 2. Tools for context-dependent sound
 - **Physical Material / Surface Type** (Project Settings > Physics > Physical Surfaces): the standard floor key. Needs Physical Materials on materials/landscape layers and "Return Physical Material" on the trace.
-- **MetaSounds**: one MetaSound per event family with integer/enum inputs (footwear, floor) choosing between sample banks, plus float inputs (speed, weight, fall speed) for volume/pitch/layers. Set from BP via Audio Parameter interface (verify). Per-voice cost higher than a plain wave: cap footstep voices and give a simple variant for the Switch 2 profile.
+- **MetaSounds**: one MetaSound per event family with integer/enum inputs (footwear, floor) and float inputs (speed, weight, fall speed). Set from BP via Audio Parameter interface (verify). Per-voice cost higher than a plain wave: cap footstep voices and give a simple variant for the Switch 2 profile.
 - **Sound Cue** with Switch/Random nodes: lighter fallback.
 - **Audio Modulation**: not for picking sounds; for global behavior (ducking, SFX/Footsteps/Haptics volume sliders, mix states). Optional phase 2.
 - **Attenuation + concurrency** assets so a brawler with many characters does not spam steps.
 
 ## 3. One table for sound and rumble
-Single data asset keyed by **(event tag, footwear, floor)** with columns: Sound (MetaSound or wave), volume/pitch scale, Haptic effect (Force Feedback Effect), haptic scale, optional Niagara (dust/splash). Fallback chain: exact row -> footwear x Default floor -> event default -> parent event tag. Magnitude (speed, fall speed, hitstun) goes to both the MetaSound and the haptic scale. The floor is resolved once per event by the stock GASP trace and passed to both consumers, so sound and rumble never disagree.
+Single data asset keyed by **(event tag, footwear, floor)**. Sound columns are not full-matrix samples (see 4): they hold the footwear layer and the floor layer. Other columns: haptic effect (Force Feedback Effect), haptic scale, optional Niagara. Fallback chain: exact row -> footwear x Default floor -> event default -> parent event tag. Magnitude (speed, fall speed, hitstun) goes to both the MetaSound and the haptic scale. The floor is resolved once per event by the stock GASP trace and shared by sound and rumble.
 
 ### 3b. Owner decision: two axes (2026-11-21)
-Owner: start from stock GASP sounds and basic materials. The four types he named are **footwear, set per skin**, not floors:
+Start from stock GASP sounds and basic materials. The four types named are **footwear, set per skin**:
 - **Metal** (knight boots), **Clay-like** (what GASP has now = stock, the default), **Barefoot**, **Shoe sole**.
-- Axis 1 = **footwear**, a per-skin property (enum/tag on the skin data; same per-skin override pattern as our choosers, stock fallback). Axis 2 = **floor** from GASP Physical Materials (start with what stock GASP already distinguishes; add floors later, only if needed).
-- Footwear `Clay` = stock GASP behavior, so a skin without a footwear set sounds exactly as today.
-- Metal and Barefoot rows can reuse stock sounds first (pitch/volume/EQ variants) and get proper samples later.
+- Axis 1 = **footwear** (enum/tag on the skin data; per-skin override pattern like our choosers, stock fallback). Axis 2 = **floor** from GASP Physical Materials (start with what stock distinguishes; add floors only if needed).
+- `Clay` = stock behavior: a skin without footwear sounds exactly as today.
 
-## 4. Recommendation (extends stock GASP)
-Keep the stock foley notify + floor trace; extend only the lookup:
-1. `GSTN_SurfaceResponseTable` (DataAsset, Content/GSTN) as in 3/3b, referenced by the stock foley bank as an override with stock fallback (stock content untouched; add a row in `docs/notes/gasp-divergenze.md`, rule 14).
-2. `Footwear` enum on the skin/character data (Clay default, Metal, Barefoot, ShoeSole), passed into the lookup; BP-readable.
-3. One MetaSound per family (Footstep, Landing, Scuff) with footwear and floor inputs; start with stock samples.
+## 4. Recommended design: layered MetaSound (owner confirmed 2026-11-21)
+Instead of a footwear x floor matrix of samples, **one MetaSound per event family (Footstep, Landing, Scuff) mixes two layers**:
+- **Footwear layer** (the contact: metal clank, soft clay thud, bare slap, rubber sole squeak) chosen by the `Footwear` input.
+- **Floor layer** (the texture: stone, grass, sand, wood...) chosen by the `Floor` input (surface type).
+- Inputs: `Footwear` (int), `Floor` (int), `Speed`, `Weight`, plus optional `Wetness`. Speed/weight drive both layers' gain, pitch and layer balance; each layer has random variation. Mix ratio per footwear/floor is a small tunable curve in the DataAsset.
+- Benefit: N footwear + M floors = N+M sample sets, not N x M; new skins and floors are cheap; the haptic response uses the same two params. First pass uses stock GASP samples for both layers (pitch/EQ variants), proper samples later.
+- Cost: two voices per step; cap concurrency and offer a one-layer Switch 2 profile (footwear layer only, or a pre-mixed cue).
+
+Steps for the implementation thread:
+1. `Footwear` enum on skin data (Clay default, Metal, Barefoot, ShoeSole), BP-readable.
+2. `GSTN_SurfaceResponseTable` (DataAsset, Content/GSTN) referenced from the stock foley bank as override with stock fallback; gasp-divergenze.md row (rule 14).
+3. The layered MetaSounds, first Footstep then Landing and Scuff.
 4. Same lookup feeds the haptic backend (`haptics.md`); sim events use it through the presentation component.
-5. Debug menu (every setting also in GSTN Debug Options): checkbox "Surface audio", checkbox "Surface haptics", dropdown "Footwear override" (Skin default / Clay / Metal / Barefoot / Shoe sole), dropdown "Surface debug" (Off / Print / Draw trace).
+5. Debug menu (one control per option): checkbox "Surface audio", checkbox "Surface haptics", dropdown "Footwear override" (Skin default / Clay / Metal / Barefoot / Shoe sole), dropdown "Layer mode" (Both / Footwear only / Floor only), dropdown "Surface debug" (Off / Print / Draw trace).
 
-Cost ~6-8 $ (table + enum + footstep/landing wiring, stock sounds); extra samples are content work.
+Cost ~6-8 $; extra samples are content work.
 
-**Alternatives**: B. Sound Cue switch per footwear x floor (simplest, Switch 2 fallback profile). C. Wwise/FMOD switches (powerful, heavy dependency, not now).
+**Alternatives**: B. Sound Cue switch per footwear x floor (simplest, full matrix, Switch 2 fallback). C. Wwise/FMOD switches (powerful, heavy dependency, not now).
 
 ## 5. Open points
 - Does stock GASP already read a floor type we can reuse? Verify first in editor via the Unreal Assistant.
-- Which floors beyond stock appear in real levels (only add when needed).
+- Which floors beyond stock appear in real levels (add only when needed).
