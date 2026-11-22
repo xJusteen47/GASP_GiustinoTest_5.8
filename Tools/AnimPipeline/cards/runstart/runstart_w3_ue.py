@@ -312,14 +312,20 @@ if SAVE:
     ctrl.open_bracket(unreal.Text("runstart w3 additive"), False)
     for b, (pos, rot, scl) in tracks.items():
         ctrl.set_bone_track_keys(b, pos, rot, scl, False)
-    # Smooth arm local rotations in f1..f15 (3 passes, fading out f10..f15) to eliminate w2 elbow/hand jitter
-    for b in ("upperarm_l", "lowerarm_l", "hand_l", "upperarm_r", "lowerarm_r", "hand_r"):
+    # Relax excessive w2 toe curl on ball_l/ball_r toward f0 neutral pose during f1..f25
+    for b in ("ball_l", "ball_r"):
+        tfs = [AL.get_bone_pose_for_frame(seq, b, f, False) for f in range(n)]
+        q0 = tfs[0].rotation
+        rots = [qnlerp(t.rotation, q0, 0.5 * env(f)) for f, t in enumerate(tfs)]
+        ctrl.set_bone_track_keys(b, [t.translation for t in tfs], rots, [t.scale3d for t in tfs], False)
+    # Smooth clavicle + arm local rotations in f1..f18 (4 passes, fading out f12..f18) to keep jitter < 8.0 cm
+    for b in ("clavicle_l", "upperarm_l", "lowerarm_l", "hand_l", "clavicle_r", "upperarm_r", "lowerarm_r", "hand_r"):
         tfs = [AL.get_bone_pose_for_frame(seq, b, f, False) for f in range(n)]
         rots = [t.rotation for t in tfs]
-        for _ in range(3):
+        for _ in range(4):
             nr = list(rots)
-            for f in range(1, min(16, n - 1)):
-                w_sm = 0.5 * (1.0 - ss(10.0, 16.0, float(f)))
+            for f in range(1, min(19, n - 1)):
+                w_sm = 0.5 * (1.0 - ss(12.0, 19.0, float(f)))
                 q_mid = qnlerp(rots[f - 1], rots[f + 1], 0.5)
                 nr[f] = qnlerp(rots[f], q_mid, w_sm)
             rots = nr
