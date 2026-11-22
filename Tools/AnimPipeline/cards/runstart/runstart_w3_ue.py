@@ -20,6 +20,7 @@ PELVIS_DZ = float(os.environ.get("W3_PELVIS_DZ", "-1.5"))    # cm vertical
 SPINE_PITCH = float(os.environ.get("W3_SPINE_PITCH", "6.0")) # deg forward
 KNEE_DROP = float(os.environ.get("W3_KNEE_DROP", "0.35"))    # fraction of swing foot height above 14 cm
 SWING_LAG = float(os.environ.get("W3_SWING_LAG", "2.0"))     # cm trailing (-Y) on swing foot
+LAT_WIDEN = float(os.environ.get("W3_LAT_WIDEN", "6.0"))     # cm lateral widening per foot for >= 10 cm ankle gap
 
 
 def ss(a, b, x):
@@ -33,6 +34,10 @@ def ss(a, b, x):
 
 def env(f):
     return ss(0.0, 4.0, float(f)) * (1.0 - ss(12.0, 22.0, float(f)))
+
+
+def env_lat(f):
+    return ss(0.0, 2.0, float(f)) * (1.0 - ss(19.0, 22.0, float(f)))
 
 
 def vsub(a, b):
@@ -156,8 +161,11 @@ for f in range(n):
         q_nk = pitch_quat(-0.5 * SPINE_PITCH * e, unreal.Vector(0.0, 0.0, 10.0))
         nw["neck_01"] = mk_tf(nk_pos, q_nk * q_sp * w["neck_01"].rotation, w["neck_01"].scale3d)
 
-        # 4. Legs 2-bone IK
-        for s in ("l", "r"):
+        # 4. Legs 2-bone IK + lateral ankle clearance
+        lat_vec = vsub(w["thigh_l"].translation, w["thigh_r"].translation)
+        lat_vec = vnorm(unreal.Vector(lat_vec.x, lat_vec.y, 0.0))
+        el = env_lat(f)
+        for s, sign in (("l", 1.0), ("r", -1.0)):
             th, ca, fo = "thigh_" + s, "calf_" + s, "foot_" + s
             hip_old = w[th].translation
             knee_old = w[ca].translation
@@ -170,7 +178,7 @@ for f in range(n):
             else:
                 fz_new = fz
                 fy_new = foot_old.y
-            foot_new = unreal.Vector(foot_old.x, fy_new, fz_new)
+            foot_new = vadd(unreal.Vector(foot_old.x, fy_new, fz_new), vmul(lat_vec, sign * LAT_WIDEN * el))
             knee_new = solve_2bone_ik(hip_new, foot_new, hip_old, knee_old, foot_old)
 
             q_th_delta = quat_between(vsub(knee_old, hip_old), vsub(knee_new, hip_new))
@@ -178,7 +186,9 @@ for f in range(n):
 
             nw[th] = mk_tf(hip_new, q_th_delta * w[th].rotation, w[th].scale3d)
             nw[ca] = mk_tf(knee_new, q_ca_delta * w[ca].rotation, w[ca].scale3d)
-            nw[fo] = mk_tf(foot_new, w[fo].rotation, w[fo].scale3d)
+            # Slight yaw correction on R foot in f2..f8 to keep twist within stock loop range
+            q_f_yaw = unreal.Quat(0.0, 0.0, math.sin(math.radians(-4.0 * e)), math.cos(math.radians(-4.0 * e))) if s == "r" else unreal.Quat(0.0, 0.0, 0.0, 1.0)
+            nw[fo] = mk_tf(foot_new, q_f_yaw * w[fo].rotation, w[fo].scale3d)
 
     # Convert modified bones to parent-local space
     parents = {
@@ -215,6 +225,17 @@ if SAVE:
     ctrl.open_bracket(unreal.Text("runstart w3 additive"), False)
     for b, (pos, rot, scl) in tracks.items():
         ctrl.set_bone_track_keys(b, pos, rot, scl, False)
+    # Smooth arm local rotations in f1..f10 (2 passes) to eliminate w2 f3/f8 elbow/hand jitter
+    for b in ("upperarm_l", "lowerarm_l", "hand_l", "upperarm_r", "lowerarm_r", "hand_r"):
+        tfs = [AL.get_bone_pose_for_frame(seq, b, f, False) for f in range(n)]
+        rots = [t.rotation for t in tfs]
+        for _ in range(2):
+            nr = list(rots)
+            for f in range(1, min(11, n - 1)):
+                q_mid = unreal.Quat.slerp(rots[f - 1], rots[f + 1], 0.5)
+                nr[f] = unreal.Quat.slerp(rots[f], q_mid, 0.5)
+            rots = nr
+        ctrl.set_bone_track_keys(b, [t.translation for t in tfs], rots, [t.scale3d for t in tfs], False)
     ctrl.close_bracket(False)
     rep["saved"] = bool(EAL.save_asset(DST, only_if_is_dirty=False))
 
