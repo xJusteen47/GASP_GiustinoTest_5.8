@@ -295,6 +295,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNMode_Levels",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNModeVerbs",
 			"Enabled": true
 		}
