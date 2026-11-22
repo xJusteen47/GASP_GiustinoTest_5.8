@@ -164,12 +164,22 @@ function Acquire-Ue59Lock {
 
     if (-not $acquiredMeta) { return "Impossibile acquisire lock atomico: $metaPath" }
 
-    # Check human-readable IN-USO.txt (e.g. manual lock held by owner or Claude session without .lock)
+    # Check human-readable IN-USO.txt (manual lock, other host, alive PID, or crashed worker on this host)
     if (Test-Path -LiteralPath $LockPath) {
         foreach ($line in [IO.File]::ReadAllLines($LockPath, [Text.Encoding]::UTF8)) {
             $t = $line.Trim()
             if (-not $t) { continue }
             if ($t -match '^IN-USO:') {
+                if ($t -match '\(host=([^\s\)]+)\s+pid=(\d+)\)' -and $Matches[1] -eq $env:COMPUTERNAME) {
+                    $txtPid = [int]$Matches[2]
+                    $txtAlive = Get-Process -Id $txtPid -ErrorAction SilentlyContinue
+                    if ($null -eq $txtAlive) {
+                        # Crashed worker left IN-USO.txt with a dead local PID: recover and overwrite cleanly.
+                        break
+                    }
+                    Remove-Item -LiteralPath $metaPath -Force -ErrorAction SilentlyContinue
+                    return "Lock worker _ue59 ancora attivo: $t"
+                }
                 Remove-Item -LiteralPath $metaPath -Force -ErrorAction SilentlyContinue
                 return "Lock manuale _ue59 gia' occupato: $t"
             }
@@ -178,6 +188,11 @@ function Acquire-Ue59Lock {
     }
     [IO.File]::WriteAllText($LockPath, "IN-USO: $OwnerTag (host=$env:COMPUTERNAME pid=$PID) dal $utc UTC`n", [Text.Encoding]::UTF8)
     return $null
+}
+
+function Normalize-ChildExitCode([int]$Code) {
+    if ($Code -eq 2) { return 1 }
+    return $Code
 }
 
 function Release-Ue59Lock {
@@ -267,23 +282,35 @@ if ($SelfTest) {
     $gVram   = Test-WorkerGuards $rM0L $cleanDir 'Small grep' '' $true $gs.EulaPatterns $gs.EulaDirs
     $ok2 = ($null -ne $gFsBad) -and ($null -ne $gTxtBad) -and ($null -eq $gOk) -and ($null -ne $gVram)
 
-    # 3. Atomic CreateNew lock + stale dead-PID recovery + manual IN-USO refusal + release
+    # 3. Atomic CreateNew lock + stale dead-PID recovery (.lock & IN-USO.txt) + manual/alive/other-host refusal + release
     $lk = Join-Path $tmp 'IN-USO.txt'
     $a1 = Acquire-Ue59Lock $lk 'test-obj (M1_CODE)'
     $a2 = Acquire-Ue59Lock $lk 'other-obj'
     try { throw 'simulated-crash' } catch { $null = $_ } finally { Release-Ue59Lock $lk 'test-obj' }
     $after = (Get-Content -LiteralPath $lk -Raw).Trim()
-    # Stale dead-PID lock recovery on same host
+    # Find an unused PID on this host
     $deadPid = 9999999
     while (Get-Process -Id $deadPid -ErrorAction SilentlyContinue) { $deadPid++ }
     $staleJson = @{ host = $env:COMPUTERNAME; pid = $deadPid; owner = 'crashed'; utc = '2026-01-01' } | ConvertTo-Json -Compress
+    # 3a. Crashed worker leaving BOTH .lock (dead PID) and IN-USO.txt (dead PID, same host)
     [IO.File]::WriteAllText("$lk.lock", $staleJson, [Text.Encoding]::UTF8)
-    $aStale = Acquire-Ue59Lock $lk 'recovered-obj'
-    Release-Ue59Lock $lk 'recovered-obj'
-    # Manual lock without .lock file must still block
+    [IO.File]::WriteAllText($lk, "IN-USO: crashed (host=$env:COMPUTERNAME pid=$deadPid) dal 2026-01-01 00:00 UTC`n", [Text.Encoding]::UTF8)
+    $aCrashedBoth = Acquire-Ue59Lock $lk 'recovered-both'
+    Release-Ue59Lock $lk 'recovered-both'
+    # 3b. Crashed worker leaving ONLY IN-USO.txt (dead PID, same host, no .lock)
+    [IO.File]::WriteAllText($lk, "IN-USO: crashed2 (host=$env:COMPUTERNAME pid=$deadPid) dal 2026-01-01 00:00 UTC`n", [Text.Encoding]::UTF8)
+    $aCrashedTxt = Acquire-Ue59Lock $lk 'recovered-txt'
+    Release-Ue59Lock $lk 'recovered-txt'
+    # 3c. Active worker PID on same host in IN-USO.txt must block
+    [IO.File]::WriteAllText($lk, "IN-USO: alive (host=$env:COMPUTERNAME pid=$PID) dal 2026-01-01 00:00 UTC`n", [Text.Encoding]::UTF8)
+    $aAlive = Acquire-Ue59Lock $lk 'worker-alive-check'
+    # 3d. Dead PID on another host in IN-USO.txt must block
+    [IO.File]::WriteAllText($lk, "IN-USO: remote (host=OTHER-PC pid=$deadPid) dal 2026-01-01 00:00 UTC`n", [Text.Encoding]::UTF8)
+    $aOtherHost = Acquire-Ue59Lock $lk 'worker-other-host'
+    # 3e. Manual lock without host/pid must still block
     [IO.File]::WriteAllText($lk, "IN-USO: manual owner lock`n", [Text.Encoding]::UTF8)
     $aManual = Acquire-Ue59Lock $lk 'worker-x'
-    $ok3 = ($null -eq $a1) -and ($null -ne $a2) -and ($after -like 'LIBERO*') -and ($null -eq $aStale) -and (-not (Test-Path "$lk.lock")) -and ($null -ne $aManual)
+    $ok3 = ($null -eq $a1) -and ($null -ne $a2) -and ($after -like 'LIBERO*') -and ($null -eq $aCrashedBoth) -and ($null -eq $aCrashedTxt) -and (-not (Test-Path "$lk.lock")) -and ($null -ne $aAlive) -and ($null -ne $aOtherHost) -and ($null -ne $aManual)
 
     # 4. Child helper strips GSTN_OWNER_UNLOCK and kills hanging tree on hard timeout (exit 124)
     $envCheckLog = Join-Path $tmp 'env_check.log'
@@ -311,10 +338,13 @@ if ($SelfTest) {
     $cols = @($rows[0].PSObject.Properties.Name)
     $ok5 = ($rows.Count -eq 1) -and ($cols.Count -eq 11) -and ($rows[0].provider -eq 'deepseek') -and ($rows[0].minuti_desktop -eq '0.25')
 
+    # 6. Child exit=2 normalization (prevents Run-Queue infinite deferrals on argparse errors)
+    $ok6 = ((Normalize-ChildExitCode 0) -eq 0) -and ((Normalize-ChildExitCode 2) -eq 1) -and ((Normalize-ChildExitCode 1) -eq 1) -and ((Normalize-ChildExitCode 124) -eq 124)
+
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
-    $allOk = $ok1 -and $ok2 -and $ok3 -and $ok4 -and $ok5
+    $allOk = $ok1 -and $ok2 -and $ok3 -and $ok4 -and $ok5 -and $ok6
     Write-Output "ESITO SELFTEST: $(if ($allOk) {'PASS'} else {'FAIL'})"
-    Write-Output "1 Route:$ok1 | 2 Guards:$ok2 | 3 Lock:$ok3 | 4 Env+Timeout:$ok4 | 5 CostCsv:$ok5"
+    Write-Output "1 Route:$ok1 | 2 Guards:$ok2 | 3 Lock:$ok3 | 4 Env+Timeout:$ok4 | 5 CostCsv:$ok5 | 6 ExitNorm:$ok6"
     exit $(if ($allOk) { 0 } else { 1 })
 }
 
@@ -371,6 +401,7 @@ if ($UsesUe59) {
 $tmpPrompt = Join-Path $logDir "prompt_${safeObj}_${stamp}.txt"
 [IO.File]::WriteAllText($tmpPrompt, $promptBody, [Text.Encoding]::UTF8)
 
+$rawChildExit = 1
 $exitCode = 1
 $timedOut = $false
 $usd = ''
@@ -383,7 +414,8 @@ try {
     $quotedArgs = ($cliArgs | ForEach-Object { "`"$_`"" }) -join ' '
     $cmdLine = "`"python $quotedArgs > `"$logPath`" 2>&1`""
     $runRes = Invoke-ChildCommandWithTimeout $cmdLine $Cwd ($TimeoutSec + 60) $logPath
-    $exitCode = $runRes.ExitCode
+    $rawChildExit = $runRes.ExitCode
+    $exitCode = Normalize-ChildExitCode $rawChildExit
     $timedOut = $runRes.TimedOut
     if (Test-Path -LiteralPath $logPath) {
         $txt = Get-Content -Raw -LiteralPath $logPath -Encoding UTF8
@@ -396,7 +428,7 @@ try {
 
 $secs = [int]((Get-Date) - $t0).TotalSeconds
 $minDesk = if ($Machine -eq 'fisso') { [string][math]::Round($secs / 60.0, 2) } else { '0' }
-$outcome = if ($timedOut) { 'ESITO: TIMEOUT' } elseif ($exitCode -eq 0) { 'PASS' } else { "FAIL (exit=$exitCode)" }
+$outcome = if ($timedOut) { 'ESITO: TIMEOUT' } elseif ($exitCode -eq 0) { 'PASS' } elseif ($rawChildExit -eq 2) { 'FAIL (child exit=2->1)' } else { "FAIL (exit=$exitCode)" }
 Append-CostCsvRow $CostCsv "worker-$Tier" $Obiettivo $Machine $route.Provider $route.Model $minDesk '0' $usd '' $outcome
 
 Write-Output "ESITO WORKER: $outcome tier=$Tier provider=$($route.Provider) dur=${secs}s"
