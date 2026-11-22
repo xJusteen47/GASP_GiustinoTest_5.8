@@ -15,11 +15,11 @@ DST = "/Game/GSTN/Animation/RunStart/AS_GSTN_RunStart_Generic_w3"
 SAVE = os.environ.get("GSTN_SAVE") == "1" or os.environ.get("CLIPFIX_WRITE") == "1"
 OUT = os.path.join(PROJ, "Saved", "AnimPipeline", "runstart", "AS_GSTN_RunStart_Generic_w3_build.json")
 
-PELVIS_DY = float(os.environ.get("W3_PELVIS_DY", "14.0"))    # cm forward (+Y)
-PELVIS_DZ = float(os.environ.get("W3_PELVIS_DZ", "-4.5"))    # cm vertical (lower COM/head)
+PELVIS_DY = float(os.environ.get("W3_PELVIS_DY", "12.0"))    # cm forward (+Y)
+PELVIS_DZ = float(os.environ.get("W3_PELVIS_DZ", "-4.0"))    # cm vertical (lower COM/head)
 SPINE_PITCH = float(os.environ.get("W3_SPINE_PITCH", "10.0")) # deg forward
 KNEE_DROP = float(os.environ.get("W3_KNEE_DROP", "0.35"))    # fraction of swing foot height above 14 cm
-SWING_LAG = float(os.environ.get("W3_SWING_LAG", "3.0"))     # cm trailing (-Y) on swing foot
+SWING_LAG = float(os.environ.get("W3_SWING_LAG", "1.5"))     # cm trailing (-Y) on swing foot
 LAT_WIDEN = float(os.environ.get("W3_LAT_WIDEN", "6.0"))     # cm lateral widening per foot for >= 10 cm ankle gap
 
 
@@ -112,7 +112,8 @@ def solve_2bone_ik(hip_new, foot_new, hip_old, knee_old, foot_old):
     cos_a = max(-1.0, min(1.0, (L1 * L1 + d_clamped * d_clamped - L2 * L2) / (2.0 * L1 * d_clamped)))
     sin_a = math.sqrt(max(0.0, 1.0 - cos_a * cos_a))
     knee_new = vadd(hip_new, vadd(vmul(dir_hf, L1 * cos_a), vmul(pole, L1 * sin_a)))
-    return knee_new
+    foot_clamped = vadd(hip_new, vmul(dir_hf, d_clamped))
+    return knee_new, foot_clamped
 
 
 def pitch_quat(deg, ref_vec):
@@ -190,7 +191,7 @@ for f in range(n):
                 fz_new = fz
                 fy_new = foot_old.y
             foot_new = vadd(unreal.Vector(foot_old.x, fy_new, fz_new), vmul(lat_vec, sign * LAT_WIDEN * el))
-            knee_new = solve_2bone_ik(hip_new, foot_new, hip_old, knee_old, foot_old)
+            knee_new, foot_new = solve_2bone_ik(hip_new, foot_new, hip_old, knee_old, foot_old)
 
             q_th_delta = quat_between(vsub(knee_old, hip_old), vsub(knee_new, hip_new))
             q_ca_delta = quat_between(vsub(foot_old, knee_old), vsub(foot_new, knee_new))
