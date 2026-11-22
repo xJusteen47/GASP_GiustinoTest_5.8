@@ -15,11 +15,11 @@ DST = "/Game/GSTN/Animation/RunStart/AS_GSTN_RunStart_Generic_w3"
 SAVE = os.environ.get("GSTN_SAVE") == "1" or os.environ.get("CLIPFIX_WRITE") == "1"
 OUT = os.path.join(PROJ, "Saved", "AnimPipeline", "runstart", "AS_GSTN_RunStart_Generic_w3_build.json")
 
-PELVIS_DY = float(os.environ.get("W3_PELVIS_DY", "9.0"))     # cm forward (+Y)
-PELVIS_DZ = float(os.environ.get("W3_PELVIS_DZ", "-1.5"))    # cm vertical
-SPINE_PITCH = float(os.environ.get("W3_SPINE_PITCH", "6.0")) # deg forward
+PELVIS_DY = float(os.environ.get("W3_PELVIS_DY", "14.0"))    # cm forward (+Y)
+PELVIS_DZ = float(os.environ.get("W3_PELVIS_DZ", "-4.5"))    # cm vertical (lower COM/head)
+SPINE_PITCH = float(os.environ.get("W3_SPINE_PITCH", "10.0")) # deg forward
 KNEE_DROP = float(os.environ.get("W3_KNEE_DROP", "0.35"))    # fraction of swing foot height above 14 cm
-SWING_LAG = float(os.environ.get("W3_SWING_LAG", "2.0"))     # cm trailing (-Y) on swing foot
+SWING_LAG = float(os.environ.get("W3_SWING_LAG", "3.0"))     # cm trailing (-Y) on swing foot
 LAT_WIDEN = float(os.environ.get("W3_LAT_WIDEN", "6.0"))     # cm lateral widening per foot for >= 10 cm ankle gap
 
 
@@ -33,7 +33,7 @@ def ss(a, b, x):
 
 
 def env(f):
-    return ss(0.0, 4.0, float(f)) * (1.0 - ss(12.0, 22.0, float(f)))
+    return ss(0.0, 4.0, float(f)) * (1.0 - ss(14.0, 26.0, float(f)))
 
 
 def env_lat(f):
@@ -166,10 +166,10 @@ for f in range(n):
         q_sp = pitch_quat(SPINE_PITCH * e, vsub(w["neck_01"].translation, w["spine_01"].translation))
         nw["spine_01"] = mk_tf(sp_pos, q_sp * w["spine_01"].rotation, w["spine_01"].scale3d)
 
-        # 3. Neck_01 counter-pitch 50% to keep gaze forward
+        # 3. Neck_01 slight counter-pitch 20% to keep gaze forward without lifting head
         nk_off = vsub(w["neck_01"].translation, w["spine_01"].translation)
         nk_pos = vadd(sp_pos, q_sp.rotate_vector(nk_off))
-        q_nk = pitch_quat(-0.5 * SPINE_PITCH * e, unreal.Vector(0.0, 0.0, 10.0))
+        q_nk = unreal.Quat(q_sp.x * -0.2, 0.0, 0.0, math.sqrt(max(0.0, 1.0 - (q_sp.x * -0.2) ** 2)))
         nw["neck_01"] = mk_tf(nk_pos, q_nk * q_sp * w["neck_01"].rotation, w["neck_01"].scale3d)
 
         # 4. Legs 2-bone IK + lateral ankle clearance
