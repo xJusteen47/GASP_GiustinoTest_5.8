@@ -1,4 +1,5 @@
 {
+  "ue59_lock_path": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2_ue59\\_ue59\\IN-USO.txt",
   "owner_local_patterns": [
     "(^|/)DA_Locomotion_Default\\.uasset$",
     "(^|/)CHT_[^/]*_PoseMatch\\.uasset$",
@@ -20,6 +21,10 @@
   ],
   "allowed_push_prefixes": [
     "claude/"
+  ],
+  "epic_eula_dirs": [
+    "Plugins/EngineOverrides",
+    "Plugins/GASNPP"
   ],
   "epic_eula_patterns": [
     "plugins/engineoverrides",

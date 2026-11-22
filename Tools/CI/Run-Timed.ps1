@@ -52,7 +52,8 @@ param(
     [string]$LockFile,          # optional _ue59/IN-USO.txt path: refuse with exit 2 if occupied by someone else
     [string]$LockOwner = '',    # optional owner tag allowed to proceed when present in LockFile
     [string]$PreCheck,          # optional .py or .ps1 gate executed BEFORE launching main command (exit 4 on failure)
-    [string]$PreCheckArgs = ''  # optional arguments for PreCheck script
+    [string]$PreCheckArgs = '', # optional arguments for PreCheck script
+    [int]$PreCheckTimeoutSec = 120 # hard timeout for PreCheck (kills tree and exits 124 on timeout)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -248,7 +249,7 @@ function Resolve-EngineDir {
     return 'C:\Program Files\Epic Games\UE_5.9\Engine'
 }
 
-# Checks optional lock file (e.g. _ue59/IN-USO.txt). Returns $null if free or owned by $Owner, else refusal message.
+# Checks optional lock file (e.g. _ue59/IN-USO.txt). Returns $null if free or exact owner prefix matches, else refusal message.
 function Test-LockFree {
     param([string]$Path, [string]$Owner)
     if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return $null }
@@ -257,30 +258,38 @@ function Test-LockFree {
         if ($line.Trim()) { $first = $line.Trim(); break }
     }
     if ($first -match '^IN-USO:') {
-        if ($Owner -and ($first -like "*$Owner*")) { return $null }
+        if ($Owner) {
+            $esc = [regex]::Escape($Owner)
+            if ($first -match "^IN-USO:\s+$esc(\s|\(|$)") { return $null }
+        }
         return "ESITO: RIFIUTATO - lock occupato: $first"
     }
     return $null
 }
 
-# Runs optional PreCheck gate (.py or .ps1) before launching main command. Returns @{ Ok; Detail }.
+# Runs optional PreCheck gate (.py or .ps1) with hard timeout and tree kill before launching main command.
 function Invoke-PreCheck {
-    param([string]$ScriptPath, [string]$ArgsText, [string]$OutLog, [string]$WorkDir)
+    param([string]$ScriptPath, [string]$ArgsText, [string]$OutLog, [string]$WorkDir, [int]$TimeoutSec = 120)
     $full = if ([IO.Path]::IsPathRooted($ScriptPath)) { $ScriptPath } else { Join-Path $WorkDir $ScriptPath }
-    if (-not (Test-Path -LiteralPath $full)) { return @{ Ok = $false; Detail = "PreCheck mancante: $ScriptPath" } }
+    if (-not (Test-Path -LiteralPath $full)) { return @{ Ok = $false; TimedOut = $false; Detail = "PreCheck mancante: $ScriptPath" } }
     $dir = Split-Path $OutLog -Parent
     if ($dir) { New-Item -ItemType Directory -Force $dir | Out-Null }
     $runner = if ($full -match '\.py$') { 'python' } else { 'powershell.exe' }
     $runnerArgs = if ($full -match '\.py$') { "`"$full`" $ArgsText" } else { "-NoProfile -ExecutionPolicy Bypass -File `"$full`" $ArgsText" }
     $cmdLine = "`"`"$runner`" $runnerArgs > `"$OutLog`" 2>&1`""
-    $p = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d', '/s', '/c', $cmdLine -WorkingDirectory $WorkDir -WindowStyle Hidden -Wait -PassThru
-    if ($p.ExitCode -eq 0) { return @{ Ok = $true; Detail = '' } }
+    $p = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d', '/s', '/c', $cmdLine -WorkingDirectory $WorkDir -WindowStyle Hidden -PassThru
+    if (-not $p.WaitForExit($TimeoutSec * 1000)) {
+        Start-Process -FilePath 'taskkill.exe' -ArgumentList "/F /T /PID $($p.Id)" -WindowStyle Hidden -Wait | Out-Null
+        try { $p.WaitForExit(3000) | Out-Null } catch {}
+        return @{ Ok = $false; TimedOut = $true; Detail = "PreCheck TIMEOUT dopo ${TimeoutSec}s (process tree terminato)" }
+    }
+    if ($p.ExitCode -eq 0) { return @{ Ok = $true; TimedOut = $false; Detail = '' } }
     $first = ''
     if (Test-Path -LiteralPath $OutLog) {
         $l = Get-Content -LiteralPath $OutLog -TotalCount 1
         if ($l) { $first = $l.Trim() }
     }
-    return @{ Ok = $false; Detail = "PreCheck exit=$($p.ExitCode) ($first)" }
+    return @{ Ok = $false; TimedOut = $false; Detail = "PreCheck exit=$($p.ExitCode) ($first)" }
 }
 
 # ---- self test: needs only Windows PowerShell, no engine ------------------------------------------------------------
@@ -312,16 +321,19 @@ if ($SelfTest) {
     # 6: assert file: OK line, missing file, garbage
     Set-Content "$d\a_ok.txt" "ASSERT: OK seq AS_X f1-f9"; Set-Content "$d\a_bad.txt" "hello"
     $ok6 = ((Read-AssertLine "$d\a_ok.txt") -eq 'ASSERT: OK seq AS_X f1-f9') -and ((Read-AssertLine "$d\none.txt") -match '^ASSERT: MANCANTE') -and ((Read-AssertLine "$d\a_bad.txt") -match '^ASSERT: MANCANTE')
-    # 7: lock check + precheck failure/success (including end-to-end exit codes 2 and 4 without running main)
+    # 7: lock check (exact prefix) + precheck fail/timeout/ok
     Set-Content "$d\inuso.txt" "IN-USO: owner-task dal 2026-11-22"
     $lkBusy = Test-LockFree "$d\inuso.txt" ''
     $lkMine = Test-LockFree "$d\inuso.txt" 'owner-task'
+    Set-Content "$d\inuso.txt" "IN-USO: owner-task2 dal 2026-11-22"
+    $lkPrefix = Test-LockFree "$d\inuso.txt" 'owner-task'
     Set-Content "$d\inuso.txt" "LIBERO"
     $lkFree = Test-LockFree "$d\inuso.txt" ''
     Set-Content "$d\pc_fail.ps1" "Write-Output 'gate15b failed'; exit 1"
     Set-Content "$d\pc_ok.ps1" "Write-Output 'gate15b ok'; exit 0"
-    $pcFailRes = Invoke-PreCheck "$d\pc_fail.ps1" '' "$d\pc_fail.log" $d
-    $pcOkRes   = Invoke-PreCheck "$d\pc_ok.ps1" '' "$d\pc_ok.log" $d
+    Set-Content "$d\pc_hang.ps1" "Start-Sleep -Seconds 60"
+    $pcFailRes = Invoke-PreCheck "$d\pc_fail.ps1" '' "$d\pc_fail.log" $d 30
+    $pcOkRes   = Invoke-PreCheck "$d\pc_ok.ps1" '' "$d\pc_ok.log" $d 30
     $ranMarker = "$d\should_not_exist.txt"; Remove-Item $ranMarker -ErrorAction SilentlyContinue
     Set-Content "$d\noop.ps1" "Write-Output ok"
     Set-Content "$d\mark.ps1" "Set-Content -LiteralPath '$ranMarker' -Value 'ran'"
@@ -330,8 +342,10 @@ if ($SelfTest) {
     Set-Content "$d\inuso_busy.txt" "IN-USO: other-owner"
     $e2eLockProc = Start-Process -FilePath $ps -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Kind Test -Log `"$d\e2e_lk.log`" -Exe `"$ps`" -ArgLine `"-NoProfile -File $d\noop.ps1`" -LockFile `"$d\inuso_busy.txt`"" -WindowStyle Hidden -Wait -PassThru
     $e2eOkProc = Start-Process -FilePath $ps -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Kind Test -Log `"$d\e2e_ok.log`" -Exe `"$ps`" -ArgLine `"-NoProfile -File $d\noop.ps1`" -PreCheck `"$d\pc_ok.ps1`"" -WindowStyle Hidden -Wait -PassThru
-    $ok7 = ($null -ne $lkBusy) -and ($null -eq $lkMine) -and ($null -eq $lkFree) -and (-not $pcFailRes.Ok) -and ($pcOkRes.Ok) -and ($e2eExit -eq 4) -and ($e2eLockProc.ExitCode -eq 2) -and ($e2eOkProc.ExitCode -eq 0) -and (-not (Test-Path $ranMarker))
-    $res += "5 RESTORE + 6 ASSERT + 7 LOCK/PRECHECK: $(if ($ok5 -and $ok6 -and $ok7) {'PASS'} else {"FAIL (r=$ok5 a=$ok6 lp=$ok7 e2e=$e2eExit lk=$($e2eLockProc.ExitCode) ok=$($e2eOkProc.ExitCode))"})"
+    $e2eToProc = Start-Process -FilePath $ps -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Kind Test -Log `"$d\e2e_to.log`" -Exe `"$ps`" -ArgLine `"-NoProfile -File $d\noop.ps1`" -PreCheck `"$d\pc_hang.ps1`" -PreCheckTimeoutSec 2" -WindowStyle Hidden -Wait -PassThru
+    $toEsito = if (Test-Path "$d\e2e_to.log.esito") { Get-Content -Raw "$d\e2e_to.log.esito" } else { '' }
+    $ok7 = ($null -ne $lkBusy) -and ($null -eq $lkMine) -and ($null -ne $lkPrefix) -and ($null -eq $lkFree) -and (-not $pcFailRes.Ok) -and ($pcOkRes.Ok) -and ($e2eExit -eq 4) -and ($e2eLockProc.ExitCode -eq 2) -and ($e2eOkProc.ExitCode -eq 0) -and ($e2eToProc.ExitCode -eq 124) -and ($toEsito -match 'ESITO: TIMEOUT') -and (-not (Test-Path $ranMarker))
+    $res += "5 RESTORE + 6 ASSERT + 7 LOCK/PRECHECK: $(if ($ok5 -and $ok6 -and $ok7) {'PASS'} else {"FAIL (r=$ok5 a=$ok6 lp=$ok7 e2e=$e2eExit lk=$($e2eLockProc.ExitCode) ok=$($e2eOkProc.ExitCode) to=$($e2eToProc.ExitCode))"})"
     $res | Select-Object -First 5 | ForEach-Object { Write-Output $_ }
     exit $(if ($res -match ': FAIL') { 1 } else { 0 })
 }
@@ -381,13 +395,15 @@ if ($LockFile) {
 }
 if ($PreCheck) {
     $pcLog = "$Log.precheck.log"
-    $pc = Invoke-PreCheck $PreCheck $PreCheckArgs $pcLog $Root
+    $pc = Invoke-PreCheck $PreCheck $PreCheckArgs $pcLog $Root $PreCheckTimeoutSec
     if (-not $pc.Ok) {
         $ld = Split-Path "$Log.esito" -Parent; if ($ld) { New-Item -ItemType Directory -Force $ld | Out-Null }
-        $pcOut = @("ESITO: PRECHECK_FAIL", $pc.Detail, "log=$pcLog")
+        $hdr = if ($pc.TimedOut) { 'ESITO: TIMEOUT' } else { 'ESITO: PRECHECK_FAIL' }
+        $pcExit = if ($pc.TimedOut) { 124 } else { 4 }
+        $pcOut = @($hdr, $pc.Detail, "log=$pcLog")
         $pcOut | Set-Content -Path "$Log.esito" -Encoding UTF8
         $pcOut | Select-Object -First 5 | ForEach-Object { Write-Host $_ }
-        exit 4
+        exit $pcExit
     }
 }
 $isEditor = (Split-Path $Exe -Leaf) -match '^UnrealEditor'

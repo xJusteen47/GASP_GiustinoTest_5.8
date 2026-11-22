@@ -1,24 +1,23 @@
-# Handover: harness-v2 (setup multi-modello, guardie e export cloud)
+# Handover: harness-v2 Round 2 (fix review Claude 52256143)
 
-- **Branch / Base:** `claude/harness-v2` off `claude/runstart-generic-desktop` (`3c779b08`)
-- **Macchina:** fisso (senza editor, nessuna modifica a `GASP_Giustino2_ue59`)
+- **Branch / Base:** `claude/harness-v2` (commit Round 1 `52256143` -> Round 2)
+- **Macchina:** fisso (senza editor; `GASP_Giustino2_ue59` intatto)
 
-## Modifiche completate
-1. **Export cloud e regole:** copiati in repo `docs/notes/memoria-progetto.md`, `docs/notes/audit_setup_agentico.md`, `handoffs/INDICE.md`; normalizzato `handoffs/costi.csv` a 11 colonne (`provider`, `quota_pro_pct`, 52 righe storiche intatte); creato `handoffs/queue.json` (14 voci da `## Coda`).
-2. **Governance unificata:** creata `docs/notes/regole-progetto-2026-11-22.md` (regole 1–15 + tier `M0`–`M3`, EULA Epic, segreti env-only, VRAM guard); marcate `SUPERSEDED` `regole-progetto-2026-11-20.md` e `docs/notes/anim-process.md` (backup `anim-process.backup-2026-11-22.md`, OK owner `1A`); aggiornato `CLAUDE.md` a UE 5.9 senza Rider MCP.
-3. **Guardie git e runner:** aggiunti `Tools/CI/protected-paths.json`, `Test-GitGuard.ps1`, `Install-GitHooks.ps1`, `.githooks/pre-commit`, `.githooks/pre-push`; esteso `Run-Timed.ps1` con `-LockFile`/`-LockOwner` (exit 2) e `-PreCheck` (exit 4); creati `Invoke-Worker.ps1` e `Run-Queue.ps1` (R5-bis deterministica, 0 token).
-4. **Hardening `C:\Users\jacop\Tools\agent-bridge\`:** `DEEPSEEK_API_KEY` solo env, guard EULA Epic (`--disallowedTools` + check path), guard VRAM su `call_local`.
+## Fix applicati su review Claude (obbligatori 1–7 + opz. c)
+1. `Test-GitGuard.ps1`: `git -c core.quotepath=false diff --cached --name-only --no-renames -z` UTF-8 per intercettare `git mv` su file protetti e path non-ASCII.
+2. `.githooks/pre-push` + `Test-GitGuard.ps1`: blocco force-push via `merge-base --is-ancestor`, `-RemoteSha`, e `</dev/null` su `powershell.exe`.
+3. `Invoke-Worker.ps1` + `protected-paths.json`: lock atomico `FileMode.CreateNew` (`.lock` con host+PID, recupero stale PID morto, rispetto lock manuali `IN-USO:`), path assoluto unico `ue59_lock_path` condiviso tra worktree.
+4. `Invoke-Worker.ps1` + `Run-Timed.ps1`: hard timeout proprio (`WaitForExit` + `taskkill /F /T`) in entrambi (`exit 124` + `ESITO: TIMEOUT`); `Test-LockFree` con match esatto su prefisso owner (opz. c).
+5. `Invoke-Worker.ps1` + `New-DeepSeekWorktree.ps1` + `agent-bridge/bridge_core.py`: guard EULA Epic su filesystem (rifiuta DeepSeek se `Plugins/GASNPP` o `EngineOverrides` esistono sotto `Cwd`/repo); helper worktree sparse senza cartelle Epic.
+6. `Invoke-Worker.ps1` + `bridge_core.py`: `GSTN_OWNER_UNLOCK` rimosso dall'env dei processi figli.
+7. `Run-Queue.ps1` + `handoffs/queue.json`: `rc=2` (`RIFIUTATO`) non consuma tentativi R5-bis; `-Cwd` esplicito obbligatorio per voce (rifiuta `_ue59` se `uses_ue59=false`).
 
 ## Verifiche (tutte verdi dopo ultima modifica)
-- `Tools/CI/Run-Timed.ps1 -SelfTest`: PASS (casi 1–7, rc=0)
-- `Tools/CI/Test-GitGuard.ps1 -SelfTest`: PASS (6/6 casi, rc=0)
-- `Tools/CI/Invoke-Worker.ps1 -SelfTest`: PASS (routing, guardie, lock `IN-USO.txt`, CSV 11 col, rc=0)
-- `Tools/CI/Run-Queue.ps1 -SelfTest`: PASS (dipendenze, blocked, R5-bis `needs_diagnosis`, dryrun, rc=0)
+- `Test-GitGuard.ps1 -SelfTest`: PASS (`DA+Mv`, `Pose+Utf8`, `ApprovedAnim`, `SecretScan`, `CleanAllow`, `Push+Force`, rc=0)
+- `Run-Timed.ps1 -SelfTest`: PASS (casi 1–7 incl. exact owner e PreCheck timeout 124, rc=0)
+- `New-DeepSeekWorktree.ps1 -SelfTest`: PASS (sparse checkout senza `Plugins/GASNPP`/`EngineOverrides`, rc=0)
+- `Invoke-Worker.ps1 -SelfTest`: PASS (`Route`, `Guards`, `Lock+Stale`, `Env+Timeout`, `CostCsv`, rc=0)
+- `Run-Queue.ps1 -SelfTest`: PASS (`Rc2NoCount`, `TimeoutR5bis`, `BadCwd+Skip`, `ExplicitCwd`, rc=0)
 - `C:\Users\jacop\Tools\agent-bridge\test_bridge.py`: `ALL TESTS PASSED` (rc=0)
-- Validazione Python `queue.json` (14 voci) + `costi.csv` (52 righe, 11 colonne): `JSON+CSV_OK`
-
-## Prossimi passi
-- Review cloud singolo giro su `origin/claude/harness-v2` (Claude Pro).
-- Dopo merge/OK: `Tools\CI\Install-GitHooks.ps1`, test DeepSeek 10 min con `DEEPSEEK_API_KEY` in env, calibrazione cieca 2C `Gemini 4 Neon (High)` sulle 4 review.
 
 COSTO: 0 $ | 0 min desktop | 0 tok review | provider=agy_student | quota_pro=0%
