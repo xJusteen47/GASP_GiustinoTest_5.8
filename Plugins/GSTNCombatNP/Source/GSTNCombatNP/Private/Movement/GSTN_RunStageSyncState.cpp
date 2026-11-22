@@ -7,6 +7,7 @@
 #include "Attributes/GSTN_CombatAttributeSet.h"
 #include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "GameFramework/Actor.h"
+#include "HAL/IConsoleManager.h"
 #include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Movement/GSTN_LayeredMove_RunSkid.h"
 #include "Movement/GSTN_StatsMovementModifier.h"
@@ -25,6 +26,20 @@
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_RunStageSyncState)
 
+namespace GSTNRunStageMover
+{
+	// Playtest A/B of the readable stage steps (owner rule: ship both behaviours as a setting). Listed in GSTN Debug Options (one check box)
+	static TAutoConsoleVariable<int32> CVarReadable(TEXT("gstn.RunStage.Readable"), 1,
+		TEXT("Readable run stage steps (Mario 3D World reference): 1 = on, from the kit data (DA_Locomotion_Default > Run Stages > Readable Step: "
+			"entry burst, tell, charge; a stage with a burst has no acceleration ramp), 0 = off, the old continuous run. Changes the simulation: "
+			"same value on server and clients"));
+}
+
+bool FGSTN_RunStageMover::IsReadableSteps()
+{
+	return GSTNRunStageMover::CVarReadable.GetValueOnAnyThread() != 0;
+}
+
 bool FGSTN_RunStageSyncState::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
 {
 	Super::NetSerialize(Ar, Map, bOutSuccess);
@@ -36,9 +51,9 @@ bool FGSTN_RunStageSyncState::NetSerialize(FArchive& Ar, UPackageMap* Map, bool&
 void FGSTN_RunStageSyncState::ToString(FAnsiStringBuilderBase& Out) const
 {
 	Super::ToString(Out);
-	Out.Appendf("RunStage: %d  InStage: %d  SinceStart: %d  SinceRelease: %d  Carried: %.1f (%d/%d frames, source %d)  Air: %d takeoff %.1f stage %d  Stamp: %d  Dash: %d  Reverse: %d\n", Run.Stage + 1, Run.FramesInStage,
+	Out.Appendf("RunStage: %d  InStage: %d  SinceStart: %d  SinceRelease: %d  Carried: %.1f (%d/%d frames, source %d)  Air: %d takeoff %.1f stage %d  Stamp: %d  Dash: %d  Reverse: %d  Entry: %d (stage from frame %d)\n", Run.Stage + 1, Run.FramesInStage,
 		Run.FramesSinceMoveStart, Run.FramesSinceStickRelease, Run.CarriedSpeed, Run.FramesSinceCarry, Run.CarryWindow, static_cast<int32>(Run.CarrySource),
-		Run.bAirborne ? 1 : 0, Run.TakeoffSpeed, Run.TakeoffStage + 1, Run.StampFrames, Run.DashFrames, Run.ReverseFrames);
+		Run.bAirborne ? 1 : 0, Run.TakeoffSpeed, Run.TakeoffStage + 1, Run.StampFrames, Run.DashFrames, Run.ReverseFrames, Run.EntryFrames, Run.StageEnteredFrame);
 }
 
 bool FGSTN_RunStageSyncState::ShouldReconcile(const FMoverDataStructBase& AuthorityState) const
@@ -50,7 +65,7 @@ bool FGSTN_RunStageSyncState::ShouldReconcile(const FMoverDataStructBase& Author
 		|| Run.CarrySource != Authority.CarrySource || !FMath::IsNearlyEqual(Run.CarriedSpeed, Authority.CarriedSpeed, 0.5f)
 		|| Run.CarryWindow != Authority.CarryWindow || Run.bAirborne != Authority.bAirborne || Run.TakeoffStage != Authority.TakeoffStage
 		|| !FMath::IsNearlyEqual(Run.TakeoffSpeed, Authority.TakeoffSpeed, 0.5f)
-		|| Run.StampFrames != Authority.StampFrames || Run.DashFrames != Authority.DashFrames || Run.ReverseFrames != Authority.ReverseFrames || !Run.ExternalVelocity.Equals(Authority.ExternalVelocity, 0.5);
+		|| Run.StampFrames != Authority.StampFrames || Run.DashFrames != Authority.DashFrames || Run.ReverseFrames != Authority.ReverseFrames || Run.EntryFrames != Authority.EntryFrames || !Run.ExternalVelocity.Equals(Authority.ExternalVelocity, 0.5);
 }
 
 void FGSTN_RunStageSyncState::Interpolate(const FMoverDataStructBase& From, const FMoverDataStructBase& To, float Pct)
@@ -161,7 +176,7 @@ void FGSTN_RunStageMover::PreMovement(UMoverComponent& MoverComp, float Factor)
 		GroundSpeed = static_cast<float>((Velocity - Up * Velocity.Dot(Up)).Size());
 	}
 	ApplyStageValues(MoverComp, *Tuning, State ? State->Stage : 0, Factor, GroundSpeed,
-		State ? FGSTN_RunStageLogic::GetAccelerationRamp(Tuning->RunStages, *State) : 1.f,
+		State ? FGSTN_RunStageLogic::GetAccelerationRamp(Tuning->RunStages, *State, IsReadableSteps()) : 1.f,
 		State && FGSTN_RunStageLogic::IsReversing(Tuning->RunStages, *State) ? Tuning->RunStages.Reversal.TurningStrength : -1.f);
 	ApplyAirValues(MoverComp, *Tuning, State, Factor);
 }
@@ -276,6 +291,7 @@ void FGSTN_RunStageMover::PostMovement(UMoverComponent& MoverComp, const FMoverT
 	Input.StickWorld = StickSize > 0.0 ? FGSTN_CombatVictim::StickToPlane(Stick, CameraYaw, Up).GetSafeNormal() * StickSize : FVector::ZeroVector;
 	Input.bBoostCommand = Tuning->RunStages.BoostCommand.IsValid() && Combat->WasCommandEnteredWithin(Tuning->RunStages.BoostCommand, 0);
 	Input.SpeedFactor = Factor;
+	Input.bReadableSteps = IsReadableSteps();
 	// A run skid whose first live frame was this step (P2): the run drops (or freezes, bResumeStageAfterSkid) and remembers the speed of before it
 	if (const FGSTN_LayeredMove_RunSkid* Skid = FGSTN_LayeredMove_RunSkid::FindActive(OutputSyncState))
 	{

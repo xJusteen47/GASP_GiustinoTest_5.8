@@ -33,7 +33,7 @@ FVector FGSTN_LocomotionLeanSolver::TargetLean(const FGSTN_LocomotionLeanSetting
 }
 
 FVector FGSTN_LocomotionLeanSolver::Step(const FGSTN_LocomotionLeanSettings& Settings, const FVector& Velocity, const FVector& Forward,
-	float DeltaSeconds, float StateScale)
+	float DeltaSeconds, float StateScale, float ExtraForwardDeg)
 {
 	const FVector Horizontal(Velocity.X, Velocity.Y, 0.f);
 	const float Dt = FMath::Min(DeltaSeconds, GSTNLocomotionLean::MaxStepSeconds);
@@ -58,7 +58,16 @@ FVector FGSTN_LocomotionLeanSolver::Step(const FGSTN_LocomotionLeanSettings& Set
 	const float Alpha = Settings.AccelSmoothingSeconds > 0.f ? 1.f - FMath::Exp(-Dt / Settings.AccelSmoothingSeconds) : 1.f;
 	FilteredAccel += (Accel - FilteredAccel) * Alpha;
 
-	const FVector Target = Settings.bEnabled ? TargetLean(Settings, Horizontal, FilteredAccel, Forward, StateScale) : FVector::ZeroVector;
+	FVector Target = Settings.bEnabled ? TargetLean(Settings, Horizontal, FilteredAccel, Forward, StateScale) : FVector::ZeroVector;
+	if (Settings.bEnabled && ExtraForwardDeg > 0.f)
+	{
+		// The readable run stages' forward lean: along the run, faded in with speed like the rest (a standing character stays straight)
+		const float Speed = Horizontal.Size();
+		const float SpeedRange = FMath::Max(Settings.FullLeanSpeed - Settings.MinSpeed, 1.f);
+		const float SpeedWeight = FMath::Clamp((Speed - Settings.MinSpeed) / SpeedRange, 0.f, 1.f);
+		const FVector Heading = Speed > KINDA_SMALL_NUMBER ? Horizontal / Speed : Forward.GetSafeNormal2D();
+		Target += Heading * (ExtraForwardDeg * SpeedWeight);
+	}
 
 	// Damped spring (semi-implicit Euler): damping under 1 overshoots a little on the way back, the follow-through of a cartoon run
 	// Sub-steps of at most 1/120 s keep it stable at any frame rate and frequency
@@ -74,7 +83,7 @@ FVector FGSTN_LocomotionLeanSolver::Step(const FGSTN_LocomotionLeanSettings& Set
 	Lean.Z = 0.f;
 	LeanRate.Z = 0.f;
 	// Overshoot may pass the limit a little, never by more than a fifth
-	Lean = Lean.GetClampedToMaxSize(Settings.MaxAngleDeg * 1.2f);
+	Lean = Lean.GetClampedToMaxSize(Settings.MaxAngleDeg * 1.2f + Settings.GetMaxExtraForwardLeanDeg());
 	return Lean;
 }
 

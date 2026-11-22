@@ -59,6 +59,13 @@ struct GSTNCOMBATNP_API FGSTN_RunStageMover
 	/** Makes FGSTN_RunStageSyncState persistent on MoverComp (idempotent; outside the simulation, when the modifier is queued) */
 	static void RegisterPersistentState(UMoverComponent& MoverComp);
 
+	/**
+	 * gstn.RunStage.Readable (owner 2026-11-20, docs/notes/run-stages-leggibili-piano.md): 1 = the readable stage steps of the kit's data
+	 * (entry burst, tell, charge; a stage with a burst has no ramp), 0 = the old continuous run. It changes the simulation: same value on
+	 * server and clients. Read by the sim adapter and the presentation
+	 */
+	static bool IsReadableSteps();
+
 	/** The run state in SyncState, null when it has none */
 	static const FGSTN_RunStageState* Find(const FMoverSyncState& SyncState);
 
