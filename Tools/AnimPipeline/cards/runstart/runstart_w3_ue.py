@@ -219,9 +219,17 @@ for f in range(1, n - 1):
     hd_sig[f] = 0.2 * raw_hd[f - 1] + 0.6 * raw_hd[f] + 0.2 * raw_hd[f + 1]
 
 max_dy = 0.0
+w0 = None
+foot_air_w = {"l": [], "r": []}
 for f in range(n):
     pose = unreal.AnimPoseExtensions.get_anim_pose_at_time(seq, f / 30.0, opts)
     w = {b: unreal.AnimPoseExtensions.get_bone_pose(pose, b, unreal.AnimPoseSpaces.WORLD) for b in bones_needed}
+    if w0 is None:
+        w0 = w
+    for s_ in ("l", "r"):
+        fz_ = w["foot_" + s_].translation.z
+        w_air = ss(15.0, 22.0, float(fz_)) * ss(0.0, 2.0, float(f)) * (1.0 - ss(22.0, 26.0, float(f)))
+        foot_air_w[s_].append(w_air)
     e = env(f)
     es = env_trunk_settle(f)
     if e <= 1e-6 and es <= 1e-6:
@@ -286,7 +294,11 @@ for f in range(n):
             nw[ca] = mk_tf(knee_new, q_ca_delta * w[ca].rotation, w[ca].scale3d)
             # Slight yaw correction on R foot in f2..f8 to keep twist within stock loop range
             q_f_yaw = unreal.Quat(0.0, 0.0, math.sin(math.radians(8.0 * e)), math.cos(math.radians(8.0 * e))) if s == "r" else unreal.Quat(0.0, 0.0, 0.0, 1.0)
-            nw[fo] = mk_tf(foot_new, q_f_yaw * w[fo].rotation, w[fo].scale3d)
+            q_fo = q_f_yaw * w[fo].rotation
+            w_air = foot_air_w[s][f]
+            if w_air > 1e-4:
+                q_fo = qnlerp(q_fo, w0[fo].rotation, 0.35 * w_air)
+            nw[fo] = mk_tf(foot_new, q_fo, w[fo].scale3d)
 
     # Convert modified bones to parent-local space
     # For neck_01 and clavicles, parent is spine_05 (rotated by q_sp with spine_01)
@@ -396,11 +408,12 @@ if SAVE:
     ctrl.open_bracket(unreal.Text("runstart w3 additive"), False)
     for b, (pos, rot, scl) in tracks.items():
         ctrl.set_bone_track_keys(b, pos, rot, scl, False)
-    # Relax excessive w2 toe curl on ball_l/ball_r toward f0 neutral pose during f1..f25
-    for b in ("ball_l", "ball_r"):
+    # Release useless toe curl on ball_l/ball_r toward neutral f0 ONLY when in flight/recovery (keep stance/push-off intact)
+    for s_ in ("l", "r"):
+        b = "ball_" + s_
         tfs = [AL.get_bone_pose_for_frame(seq, b, f, False) for f in range(n)]
         q0 = tfs[0].rotation
-        rots = [qnlerp(t.rotation, q0, 0.5 * env(f)) for f, t in enumerate(tfs)]
+        rots = [qnlerp(t.rotation, q0, 0.9 * foot_air_w[s_][f]) for f, t in enumerate(tfs)]
         ctrl.set_bone_track_keys(b, [t.translation for t in tfs], rots, [t.scale3d for t in tfs], False)
     # Smooth clavicle + arm local rotations in f1..f18 (4 passes, fading out f12..f18) to keep jitter < 8.0 cm
     for b in ("clavicle_l", "upperarm_l", "lowerarm_l", "hand_l", "clavicle_r", "upperarm_r", "lowerarm_r", "hand_r"):
