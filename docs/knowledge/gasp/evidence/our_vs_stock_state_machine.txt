@@ -1,0 +1,61 @@
+STOCK STATES:
+  Idle Loop  entry=?
+  Idle Transition  entry=?
+  Locomotion -> Idle
+  Locomotion Transition  entry=?
+  Locomotion Loop  entry=?
+  Idle -> Locomotion
+  In Air Transition  entry=?
+  In Air Loop  entry=?
+  -> In Air
+  -> Grounded
+  Re-Enter
+  Re-Enter 
+  Idle Break  entry=?
+  Conduit
+  Slide Transition  entry=?
+  Slide Loop  entry=?
+  -> Slide
+  Re-Enter  
+  Re-Enter   
+  -> Debug Fly
+  Debug Flying Loop  entry=?
+ONLY OURS STATES:
+  Skid  entry=?
+  -> Skid
+  Crouch Enter  entry=?
+  Crouch Idle  entry=?
+  Crouch Exit  entry=?
+  -> Fast Crouch
+  Skid Exit Run  entry=?
+  Run Stop  entry=?
+  Run Stop Blend  entry=?
+  -> Run Stop
+  Dash  entry=?
+  -> Dash
+  Run Start  entry=?
+  -> Run Start
+ONLY STOCK STATES:
+ONLY OURS TR:
+  Skid -> Conduit : (!IsAnimOwnerSkidding() || ((Current State Time (State Controller) >= 0.420) && (GetAnimOwnerGroundSpeed() < 200.0)))  [xf 0.20]
+  -> Skid -> Skid : (IsAnimOwnerSkidding() && (GetAnimOwnerSkidElapsed() < 0.400))  [xf 0.08]
+  -> Fast Crouch -> Crouch Enter : IsAnimOwnerFastCrouchEntering()  [xf 0.03]
+  -> Fast Crouch -> Crouch Idle : IsAnimOwnerFastCrouchIdle()  [xf 0.05]
+  Crouch Enter -> Crouch Idle : IsAnimOwnerFastCrouchIdle()  [xf 0.00]
+  Crouch Enter -> Crouch Exit : IsAnimOwnerFastCrouchExiting()  [xf 0.03]
+  Crouch Idle -> Crouch Exit : IsAnimOwnerFastCrouchExiting()  [xf 0.03]
+  Crouch Exit -> Crouch Enter : IsAnimOwnerFastCrouchEntering()  [xf 0.03]
+  Crouch Enter -> Conduit : !IsAnimOwnerFastCrouching()  [xf 0.10]
+  Crouch Idle -> Conduit : !IsAnimOwnerFastCrouching()  [xf 0.10]
+  Crouch Exit -> Idle Loop : !IsAnimOwnerFastCrouching()  [xf 0.10]
+  Skid -> Skid Exit Run : (((Current State Time (State Controller) >= 0.420) && (GetAnimOwnerGroundSpeed() >= 200.0)) && (GetAnimOwnerStickAlong() >= 0.30))  [xf 0.15]
+  Skid Exit Run -> Conduit : (((Current State Time (State Controller) >= 0.750) || (GetAnimOwnerGroundSpeed() < 150.0)) || (GetAnimOwnerStickAlong() < 0.30))  [xf 0.20]
+  -> Run Stop -> Run Stop : IsAnimOwnerRunStopping()  [xf 0.06]
+  -> Run Stop -> Run Stop Blend : IsAnimOwnerRunStopBlending()  [xf 0.30]
+  Run Stop -> Conduit : !IsAnimOwnerRunStopping()  [xf 0.20]
+  Run Stop Blend -> Conduit : !IsAnimOwnerRunStopBlending()  [xf 0.20]
+  -> Dash -> Dash : ((GetAnimOwnerBoostDashTime() >= 0.0) && (GetAnimOwnerBoostDashTime() < 0.100))  [xf 0.03]
+  Dash -> Conduit : ((GetAnimOwnerBoostDashTime() < 0.0) || (GetAnimOwnerBoostDashTime() >= 0.280))  [xf 0.12]
+  -> Run Start -> Run Start : ((GetAnimOwnerRunStartTime() >= 0.0) && (GetAnimOwnerRunStartTime() < 0.250))  [xf 0.05]
+  Run Start -> Conduit : (((GetAnimOwnerRunStartTime() < 0.0) || (GetAnimOwnerRunStartHandOff() >= 1)) || (GetAnimOwnerRunStartTime() >= 0.767))  [xf 0.15]
+ONLY STOCK TR:

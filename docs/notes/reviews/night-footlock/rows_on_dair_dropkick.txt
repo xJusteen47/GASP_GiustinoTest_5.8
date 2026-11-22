@@ -1,0 +1,2 @@
+dair/dair_land f116 n8 slide L 12.9 R 17.5  step L 0.0 R 0.0  end L 10.1 R 16.8
+dropkick/dropkick_hit f137 n4 slide L 1.5 R 1.9  step L 5.2 R 7.0  end L 6.7 R 8.9

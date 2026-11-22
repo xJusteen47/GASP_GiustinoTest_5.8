@@ -1,0 +1,60 @@
+diff --git a/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Private/Simulation/GSTN_CombatSimComponent.cpp b/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Private/Simulation/GSTN_CombatSimComponent.cpp
+index 1e30208..771c54c 100644
+--- a/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Private/Simulation/GSTN_CombatSimComponent.cpp
++++ b/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Private/Simulation/GSTN_CombatSimComponent.cpp
+@@ -10,6 +10,7 @@
+ #include "Abilities/NpAbilitySystemComponent.h"
+ #include "AbilitySystemComponent.h"
+ #include "AbilitySystemGlobals.h"
++#include "Animation/AnimMontage.h"
+ #include "AttributeSet.h"
+ #include "Context/GSTN_InputContextProvider.h"
+ #include "DataTypes/AbilitySimulationDataTypes.h"
+@@ -798,6 +799,10 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
+ 	{
+ 		OutSync.Core.HitstopStartFrame = Frame;
+ 		OutSync.Core.HitstopEndFrame = Frame + HitstopTestFrames;
++		if (SpikeMontage && AbilitySystem)
++		{
++			AbilitySystem->PlaySyncedMontage(SpikeMontage, 0.f, 1.f, NAME_None, 0.f);
++		}
+ 	}
+ 
+ 	Extensions.Run(EGSTN_CombatHookPoint::BeforeTagProjection, HookContext);
+@@ -995,3 +1000,13 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
+ 		AbilitySystem->ResumeCurrentSyncedMontage();
+ 	}
+ }
++
++// THROWAWAY H0c spike
++FString UGSTN_CombatSimComponent::Spike_GetMontage() const
++{
++	const FGSTN_CombatSyncState* Sync = GetSyncState();
++	float Time = -1.f;
++	const bool bPlaying = AbilitySystem && AbilitySystem->GetPlayingSyncedMontage(Time) != nullptr;
++	const int32 Latest = Sync ? Sync->Core.Input.History.GetLatestFrame() : -1;
++	return FString::Printf(TEXT("%d,%.4f,%d,%d,%d"), bPlaying ? 1 : 0, Time, Latest, Sync ? Sync->Core.HitstopStartFrame : -1, Sync ? Sync->Core.HitstopEndFrame : -1);
++}
+diff --git a/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Public/Simulation/GSTN_CombatSimComponent.h b/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Public/Simulation/GSTN_CombatSimComponent.h
+index d214733..cd449c8 100644
+--- a/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Public/Simulation/GSTN_CombatSimComponent.h
++++ b/Plugins/GSTNCombatNP/Source/GSTNCombatNP/Public/Simulation/GSTN_CombatSimComponent.h
+@@ -286,7 +286,17 @@ public:
+ 	int32 HitstopTestButton = INDEX_NONE;
+ 
+ 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Spike", meta = (ClampMin = "1"))
+-	int32 HitstopTestFrames = 8;
++	int32 HitstopTestFrames = 40;
++
++	// THROWAWAY H0c spike
++	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Spike")
++	TObjectPtr<class UAnimMontage> SpikeMontage = nullptr;
++
++	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
++	FString Spike_GetMontage() const;
++
++	UFUNCTION(BlueprintCallable, Category = "Combat|Spike")
++	void Spike_SetMontage(class UAnimMontage* Montage) { SpikeMontage = Montage; }
+ 
+ 	/**
+ 	 * Server only, from outside the simulation (a plain game thread call, like the loadout component's apply): writes the revision

@@ -1,0 +1,22 @@
+{
+ "run": "weak",
+ "damage": 0.0,
+ "contact_frame": 44,
+ "speed_into_wall_before": 432,
+ "impact_info_last": "1161,2,4,432,0",
+ "counts_last": "0,1,0",
+ "bump_frames": [
+  46,
+  59,
+  14
+ ],
+ "max_wall_cm_after_contact": 82.7,
+ "montages_after_contact": [
+  "AnimMontage_0",
+  "AnimMontage_3",
+  "AnimMontage_6"
+ ],
+ "tags_at_contact": [
+  "Tumble"
+ ]
+}

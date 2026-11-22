@@ -1,0 +1,80 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Held",
+	"Description": "Held and thrown objects for the GSTN combat (M10). An object at rest is a dormant replicated actor; the host decides pickups (earliest request, then lower entity id), every machine draws a held object at its holder, and a throw is a GSTNProjectile shot with the object's hit data, so the hit, the credit to the thrower and the predicted ghost come from the projectile plugin unchanged. GSTNHeldCore is pure; GSTNHeldRuntime is the world side (needs the GAS-NPP fork).",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNHeldCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNHeldRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GSTNCore",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNProjectile",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNLink",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInteract",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombat",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInput",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatNP",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatGAS",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNPickups",
+			"Enabled": true
+		},
+		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
+		},
+		{
+			"Name": "AbilitySystemSimulation",
+			"Enabled": true
+		},
+		{
+			"Name": "NetworkPrediction",
+			"Enabled": true
+		}
+	]
+}

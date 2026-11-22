@@ -1,0 +1,181 @@
+{
+ "card_path": "cards/reaction/reaction_lieup.json",
+ "take": "AS_Pilot_React_LieUp",
+ "frames": 4,
+ "card": {
+  "move": "reaction_lieup",
+  "class": "reaction",
+  "anim": "/Game/AnimPipeline/Rig/Reaction/AS_React_LieUp",
+  "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+  "fps": 60,
+  "timing_csv": "refs/ufd/React_LieUp_timing.csv",
+  "effector": "head",
+  "_design": "Lying on the back (knockdown): supine, head toward -y, left arm out palm up, right hand on the belly, right knee slightly raised. Still pose = last frame of GroundHit.",
+  "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_React_LieUp",
+  "spacing": {
+   "startup": "limb_led_recovery",
+   "active": "limb_led_recovery",
+   "recovery": "limb_led_recovery"
+  },
+  "part_delays": {
+   "chest": 0,
+   "head": 0,
+   "forearm": 0,
+   "hand": 0
+  }
+ },
+ "keys": {
+  "0": {
+   "pelvis": {
+    "loc": [
+     -2,
+     -7.5,
+     -78.5
+    ],
+    "rot_e": {
+     "pitch": 90,
+     "twist": 0
+    }
+   },
+   "spine": [
+    0,
+    0,
+    0
+   ],
+   "head": [
+    -6,
+    0,
+    14
+   ],
+   "fingers": [
+    0.8,
+    0,
+    0
+   ],
+   "arm_l": {
+    "hand_w": [
+     60,
+     -42,
+     4
+    ],
+    "pole_w": [
+     36,
+     -30,
+     5
+    ]
+   },
+   "arm_r": {
+    "hand_w": [
+     -8,
+     -24,
+     23
+    ],
+    "pole_w": [
+     -36,
+     -28,
+     6
+    ]
+   },
+   "leg_l": {
+    "foot_w": [
+     17,
+     71,
+     7
+    ],
+    "pole_w": [
+     15,
+     30,
+     60
+    ]
+   },
+   "leg_r": {
+    "foot_w": [
+     -21,
+     56,
+     7
+    ],
+    "pole_w": [
+     -26,
+     26,
+     60
+    ]
+   }
+  },
+  "3": {
+   "pelvis": {
+    "loc": [
+     -2,
+     -7.5,
+     -78.5
+    ],
+    "rot_e": {
+     "pitch": 90,
+     "twist": 0
+    }
+   },
+   "spine": [
+    0,
+    0,
+    0
+   ],
+   "head": [
+    -6,
+    0,
+    14
+   ],
+   "fingers": [
+    0.8,
+    0,
+    0
+   ],
+   "arm_l": {
+    "hand_w": [
+     60,
+     -42,
+     4
+    ],
+    "pole_w": [
+     36,
+     -30,
+     5
+    ]
+   },
+   "arm_r": {
+    "hand_w": [
+     -8,
+     -24,
+     23
+    ],
+    "pole_w": [
+     -36,
+     -28,
+     6
+    ]
+   },
+   "leg_l": {
+    "foot_w": [
+     17,
+     71,
+     7
+    ],
+    "pole_w": [
+     15,
+     30,
+     60
+    ]
+   },
+   "leg_r": {
+    "foot_w": [
+     -21,
+     56,
+     7
+    ],
+    "pole_w": [
+     -26,
+     26,
+     60
+    ]
+   }
+  }
+ }
+}

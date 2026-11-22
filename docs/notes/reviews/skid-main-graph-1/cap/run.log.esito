@@ -1,0 +1,4 @@
+ESITO: OK
+tipo=Capture durata=112s limite=900s exit=0 figli_rimasti_uccisi=3
+log=C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_ue59\docs\notes\reviews\skid-main-graph-1\cap\run.log
+ultima riga errore: [2026-11-18 18:46:48.934] [default] [error] UnrealEditorServer-GASP_Giustino2: accepting failed, reason: Invalid socket handle.

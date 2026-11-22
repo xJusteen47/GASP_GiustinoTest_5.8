@@ -1,0 +1,20 @@
+#!/bin/sh
+# GSTN git guard (pre-push): allows pushes only to claude/*; blocks main, feature/*, deletes, and force-pushes.
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+HOOK_DIR=$(cd "$(dirname "$0")" && (pwd -W 2>/dev/null || pwd))
+GUARD="$ROOT/Tools/CI/Test-GitGuard.ps1"
+if [ ! -f "$GUARD" ]; then
+    GUARD="$HOOK_DIR/../Tools/CI/Test-GitGuard.ps1"
+fi
+if [ ! -f "$GUARD" ]; then
+    echo "ESITO: BLOCKED - Test-GitGuard.ps1 mancante ($GUARD)" >&2
+    exit 2
+fi
+while read local_ref local_sha remote_ref remote_sha; do
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$GUARD" -Mode Push -RepoRoot "$ROOT" -TargetRef "$remote_ref" -LocalSha "$local_sha" -RemoteSha "$remote_sha" </dev/null
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        exit $rc
+    fi
+done
+exit 0

@@ -1,0 +1,47 @@
+{
+ "clip": "AS_GSTN_RunStart_Generic_w2t180Lp",
+ "window": [
+  82,
+  104
+ ],
+ "min_weight": 0.8,
+ "coverage_needed": 0.9,
+ "frames": {
+  "82": 0.0,
+  "83": 0.0,
+  "84": 0.167,
+  "85": 0.345,
+  "86": 0.526,
+  "87": 0.7,
+  "88": 0.859,
+  "89": 1.0,
+  "90": 1.0,
+  "91": 1.0,
+  "92": 1.0,
+  "93": 1.0,
+  "94": 1.0,
+  "95": 1.0,
+  "96": 1.0,
+  "97": 1.0,
+  "98": 1.0,
+  "99": 1.0,
+  "100": 1.0,
+  "101": 1.0,
+  "102": 1.0,
+  "103": 1.0,
+  "104": 1.0
+ },
+ "additive": [
+  "BS_Relaxed_*Lean*"
+ ],
+ "missing_frames": [],
+ "no_clip_data_frames": [],
+ "coverage": 0.739,
+ "min_in_window": 0.0,
+ "worst_frame": 82,
+ "worst_owner": [
+  "M_Relaxed_Stand_Idle_Break_v04",
+  0.99
+ ],
+ "ok": false
+}

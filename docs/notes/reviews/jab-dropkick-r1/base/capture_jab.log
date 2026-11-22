@@ -1,0 +1,11 @@
+    0.0s driver loaded: kit KIT_Test_Overlord, button Attack, out C:/Users/jacop/Documents/Unreal Projects/GASP_Giustino2_ue59/Saved/AnimR2/jdr1/base_jab
+    8.0s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '3', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   20.7s kit KIT_Test_Overlord: OK
+   23.7s loadout: {"revision": 2, "kit": "KIT_Test_Overlord", "additionalWeapons": [], "kitResolved": true, "tableEntries": 12, "grantedAbilities": 11, "derivedTimelines": 0, "tableCrc": "8e8d28ac"}
+   23.7s review stage: parked [('Z1', (3500.0, 300.0)), ('Z1', (3800.0, 300.0))], other pawns at [300, 300, 2965, 3113] cm
+   24.2s 7 cameras, 3 fill lights
+   26.2s sequence jab1: pawn at ((0, -150, 100), 0)
+   47.5s sequence jab1 done: 95 frames, pawn z 100.0, host shots 0
+   49.3s sequence jab1_jab2_faf: pawn at ((0, -150, 100), 0)
+   83.3s sequence jab1_jab2_faf done: 150 frames, pawn z 100.0, host shots 0
+   85.1s finish: ok

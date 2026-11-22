@@ -1,0 +1,50 @@
+# R3-1 M3 suite stability (laptop, 2026-11-06)
+
+Branch claude/project-thread-2jy4k8 from b72c608. Build green (UBT editor, Development). No C++ or harness change was needed.
+
+Result: the M3 suite (first 28 names of SUITE_DEFAULT up to `slide_jump`, plus `loadout_change` = 29 scenarios) passed
+**29/29 on four consecutive runs**: listen host + 2 clients at 60/15 ms 0 % loss, three passes (p1-p3) and one dedicated server + 2 clients (d1).
+Each run restarts the editor (fresh PIE, nullrhi). Reports: Saved/R31/report-{p1,p2,p3,d1}.txt (untracked).
+
+Why the HANDOVER 14 flakes did not show up: not diagnosed, no failure to diagnose. Likely already fixed by later harness work
+(lane reset with `lanes_settled`, apex/settle changes in M4-M7 commits). Not proven: 4 passes is evidence, not a guarantee.
+Open from the gate, NOT done: `spike_triggers` T3, O-CameraYaw (command yaw 0 vs 64 in reconcile dumps) — CLOSED 2026-11-09: harness leak, scenario_combat_main_inputs now restores yaw (Docs alignment + O-CameraYaw section), S-MaxSpeed. Not touched; they are
+diagnostics outside the 29 scenarios. R3-2 canary (`Tools/Canary/make_canary.py`) also not done.
+
+Added: `Tools/GASNPPTest/m3_suite_driver.py` (headless driver; env R31_TAG, R31_MODE=listen|dedicated, R31_ONLY=a,b).
+Recipe: copy it to a path without spaces (TEMP), run `UnrealEditor.exe <uproject> -nullrhi -unattended -nosplash -ExecCmds="py <abs/driver>"
+-abslog=<file>`; it starts PIE, runs `run_suite`, writes the report, QUIT_EDITOR. ~8-10 min per run. It rewrites the PIE ini
+(setup_editor); I restored PlayNetMode=PIE_ListenServer, PlayNumberOfClients=3.
+Not done: no map saved, nothing pushed to feature. Cost: about 1.5 build + 4 editor runs, token cost est. ~$1.5 (well under budget).
+Next for R3-1 (cheap): decide with the owner if the three leftover diagnostics are worth a thread; else mark the gate met.
+
+## R3-2 canary build (laptop, 2026-11-08): script DONE, run once on GSTNCore
+- `Tools/Canary/make_canary.py <Plugin> [--out] [--no-build] [--no-tests]` (stdlib Python): blank .uproject in `Saved/Canary/<Plugin>/` enabling the
+  plugin and its .uplugin deps (project plugins copied, engine plugins enabled by name), builds UnrealEditor, runs `Automation RunTests <Plugin>`,
+  writes `summary.txt` (modularity-and-tags.md §3.7 rule 7). How to run: Plugins/README.md "Canary build".
+- GSTNCore: no deps, build Succeeded (~56 s), tests 1/0, 0 ensures.
+- Untested: plugins that depend on Mover or the GASNPP forks (a fork plugin with the same name as an engine plugin may clash in the canary).
+  Next: run it per plugin before each milestone closes; start with GSTNInput, GSTNSurface, GSTNCombat.
+- Cost: ~$1.5 (Sonnet).
+- Canary on all 23 GSTN plugins (2026-11-08): first pass 9/23; the 14 red failed for one reason: a code-less canary builds the engine's
+  UnrealEditor target, and engine plugins may not reference the project copies of GameplayAbilities / Mover / NetworkPrediction (forks
+  and overrides). Fix: the canary is generated as a tiny code project (`CanaryEditor` target, empty `Canary` module). After it: **23/23 build**.
+  Tests: Core 1, Input 108, Surface 18, Animation 3, Camera 48, DepthMarker 65, Interact 31, Combat 152, Platform 17, PlatformParts 5,
+  LevelObjects 5, Parts 136, Defence 76, Link 118, Piggyback 29, SpinDrill 32, Minion 92, all 0 fail / 0 ensure. CombatGAS, InputNP,
+  CombatNP, CombatDebug, CombatEditor, ExtensionTest report 0 because their tests are named `GSTNCombat.*` / `GSTNExtTest.*`, not after the
+  plugin: a `--tests <prefix>` option is the next small step. Results: `Saved/Canary/all.txt`, `retry.txt`. Cost of the full run ~$1.
+- Canary `--tests <filter>` (2026-11-08): default = the plugin name, or a known prefix for the six plugins whose tests are named otherwise
+  (CombatGAS -> GSTNCombat.GAS, CombatNP -> GSTNCombat.NP, CombatDebug -> GSTNCombat.Debug, CombatEditor -> GSTNCombat.Editor, InputNP ->
+  GSTNInput.NP, ExtensionTest -> GSTNExtTest). Checked on GSTNCombatDebug alone: build ok, 17/0 (the main project runs 34 GSTNCombat.Debug
+  tests: the rest need plugins the canary does not enable, which is the point of the canary). No PERF-DEBT. Cost ~$0.5.
+
+## Docs alignment + O-CameraYaw (laptop, 2026-11-09)
+- Branch `claude/laptop-docs-m3` from merge j 03ea8334. Haiku docs pass (66ff3125): READMEs of GSTNMinion, GSTNParts, GSTNPartsMinion,
+  GSTNCombatDebug, GSTNCombatGAS aligned with today's merges (facts from the handovers), perf-debt history made consistent, takeover-state
+  "State of merge j" block.
+- O-CameraYaw closed: not an input-source bug (CameraYaw comes from ControlRotation.Yaw, serialized symmetrically; 64 = 90 deg quantised).
+  `scenario_combat_main_inputs` (gasnpp_test.py) set the client's control rotation to yaw 90 and never restored it: one step now restores yaw 0.
+  SUITE_DEFAULT on DefaultLevel after the fix: 50/50. (A different 0-vs-64 source is not excluded: the original dump was not available.)
+- Skipped: spike_triggers T3 (needs a PIE investigation; it passes today), and the movement / editor / rendering items (R3-1, S-MaxSpeed,
+  T4, T7, P10-P12, P17, TM3, E19 designer scenario).
+- Gate: no C++ changed since the rebased build (1455/0, 208 s); SUITE_DEFAULT 50/50. Cost: ~$2 (Haiku docs ~190k tokens, Sonnet ~90k, 1 suite run).

@@ -1,0 +1,2 @@
+segments UE/owner: clavicle_l 1.0, clavicle_r 1.0, forearm_l 1.0, forearm_r 1.0, hand_l 1.0, hand_r 1.0, neck_head 1.001, shin_l 1.0, shin_r 1.0, thigh_l 1.0, thigh_r 1.0, upperarm_l 1.0, upperarm_r 1.0
+applied arm_l 1.0, arm_r 1.0, leg_l 1.0, leg_r 1.0

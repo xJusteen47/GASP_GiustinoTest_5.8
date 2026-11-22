@@ -1,0 +1,4 @@
+AS_RunStop_Ganon_L_V1: best RMS 4.0 cm at offset 188 (clip frame 0 = game v188), window v184-v230
+M_Neutral_Stand_Idle_Loop (reference): best RMS 11.5 cm at offset 193
+SS_180_Turn_Root180: best RMS 1.4 cm at offset 53 (clip frame 0 = game v53), window v52-v100
+M_Neutral_Stand_Idle_Loop (reference): best RMS 22.6 cm at offset 52

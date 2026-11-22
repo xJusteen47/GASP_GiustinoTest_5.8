@@ -1,0 +1,14 @@
+#!/bin/sh
+# GSTN git guard (pre-commit): blocks owner-local files, locked anims, secrets, and commits to main/feature/*.
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+HOOK_DIR=$(cd "$(dirname "$0")" && (pwd -W 2>/dev/null || pwd))
+GUARD="$ROOT/Tools/CI/Test-GitGuard.ps1"
+if [ ! -f "$GUARD" ]; then
+    GUARD="$HOOK_DIR/../Tools/CI/Test-GitGuard.ps1"
+fi
+if [ ! -f "$GUARD" ]; then
+    echo "ESITO: BLOCKED - Test-GitGuard.ps1 mancante ($GUARD)" >&2
+    exit 2
+fi
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$GUARD" -Mode Commit -RepoRoot "$ROOT"
+exit $?

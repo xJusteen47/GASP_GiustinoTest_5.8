@@ -1,0 +1,169 @@
+{
+ "clip": "GASP_LandLight_R",
+ "fbx": "../../../Saved/ClipCheck/export/GASP_LandLight_R.fbx",
+ "fps": 30.0,
+ "frames": 76,
+ "kind": "land",
+ "root_travel_cm": [
+  0.0,
+  -427.5,
+  -474.0
+ ],
+ "root_motion": true,
+ "_fwd": [
+  0.0,
+  -1.0,
+  0.0
+ ],
+ "animated_bones": 83,
+ "foot_l": {
+  "min_ball_cm": -0.29,
+  "min_ball_frame": 21,
+  "min_heel_cm": -0.38,
+  "plants": [
+   {
+    "frames": [
+     19,
+     76
+    ],
+    "drift_cm": 0.31
+   }
+  ]
+ },
+ "foot_r": {
+  "min_ball_cm": -0.55,
+  "min_ball_frame": 20,
+  "min_heel_cm": -0.58,
+  "plants": [
+   {
+    "frames": [
+     17,
+     76
+    ],
+    "drift_cm": 2.62
+   }
+  ]
+ },
+ "pelvis_acc_max_cms2": 20720.0,
+ "pelvis_acc_max_frame": 16,
+ "pops": [
+  {
+   "frame": 15,
+   "bone": "foot_r",
+   "size": 21.6,
+   "type": "spike"
+  },
+  {
+   "frame": 15,
+   "bone": "calf_r",
+   "size": 21.4,
+   "type": "spike"
+  },
+  {
+   "frame": 15,
+   "bone": "upperarm_l",
+   "size": 18.0,
+   "type": "spike"
+  },
+  {
+   "frame": 15,
+   "bone": "ik_hand_l",
+   "size": 16.9,
+   "type": "spike"
+  },
+  {
+   "frame": 16,
+   "bone": "ik_foot_l",
+   "size": 15.8,
+   "type": "spike"
+  },
+  {
+   "frame": 15,
+   "bone": "upperarm_twist_01_l",
+   "size": 15.5,
+   "type": "spike"
+  },
+  {
+   "frame": 12,
+   "bone": "ik_hand_l",
+   "size": 15.2,
+   "type": "spike"
+  },
+  {
+   "frame": 16,
+   "bone": "calf_l",
+   "size": 15.1,
+   "type": "spike"
+  },
+  {
+   "frame": 13,
+   "bone": "ik_hand_l",
+   "size": 12.9,
+   "type": "spike"
+  },
+  {
+   "frame": 16,
+   "bone": "thigh_l",
+   "size": 12.9,
+   "type": "spike"
+  },
+  {
+   "frame": 12,
+   "bone": "ik_hand_gun",
+   "size": 12.2,
+   "type": "spike"
+  }
+ ],
+ "pops_hard": {},
+ "pops_soft": {
+  "ik_hand_l": [
+   12,
+   13,
+   15
+  ],
+  "ik_hand_gun": [
+   12
+  ],
+  "foot_r": [
+   15
+  ],
+  "calf_r": [
+   15
+  ],
+  "upperarm_l": [
+   15
+  ],
+  "upperarm_twist_01_l": [
+   15
+  ],
+  "ik_foot_l": [
+   16
+  ],
+  "calf_l": [
+   16
+  ],
+  "thigh_l": [
+   16
+  ]
+ },
+ "curves_missing": [],
+ "notifies": [
+  {
+   "name": "PoseSearchBranchIn",
+   "time": null
+  },
+  {
+   "name": "PoseSearchBlockTransition",
+   "time": null
+  },
+  {
+   "name": "FoleyEvent: Land",
+   "time": null
+  }
+ ],
+ "fails": [],
+ "warns": [
+  "one-frame extremes to look at: ik_hand_l f12,13,15; ik_hand_gun f12; foot_r f15; calf_r f15 (+5 bones)"
+ ],
+ "verdict": "PASS*"
+}

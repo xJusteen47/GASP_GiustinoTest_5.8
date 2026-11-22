@@ -1,0 +1,63 @@
+{
+ "clip": "GASP_Idle",
+ "fbx": "../../../Saved/ClipCheck/export/GASP_Idle.fbx",
+ "fps": 30.0,
+ "frames": 302,
+ "kind": "idle",
+ "root_travel_cm": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "root_motion": false,
+ "_fwd": [
+  -0.26775265243694785,
+  -0.9634876839446257,
+  0.0
+ ],
+ "animated_bones": 78,
+ "foot_l": {
+  "min_ball_cm": -0.03,
+  "min_ball_frame": 107,
+  "min_heel_cm": -0.06,
+  "plants": [
+   {
+    "frames": [
+     1,
+     302
+    ],
+    "drift_cm": 0.16
+   }
+  ]
+ },
+ "foot_r": {
+  "min_ball_cm": -0.01,
+  "min_ball_frame": 176,
+  "min_heel_cm": -0.09,
+  "plants": [
+   {
+    "frames": [
+     1,
+     302
+    ],
+    "drift_cm": 0.23
+   }
+  ]
+ },
+ "pelvis_acc_max_cms2": 25.0,
+ "pelvis_acc_max_frame": 301,
+ "pops": [],
+ "pops_hard": {},
+ "pops_soft": {},
+ "seam_max_deg": 0.04,
+ "curves_missing": [],
+ "notifies": [
+  {
+   "name": "PoseSearchBranchIn",
+   "time": null
+  }
+ ],
+ "fails": [],
+ "warns": [],
+ "verdict": "PASS"
+}

@@ -1,0 +1,8 @@
+asset	root_motion_on	length_s	root_travel_cm	root_yaw_deg	pelvis_travel_cm	pelvis_vs_root_cm
+/Game/Blueprints/Animation/Ported57/Skid/Skid_Revised	False	0.77	98.6	0.0	181.6	7.0
+/Game/Blueprints/Animation/Ported57/Skid/SS_180_Turn	False	0.83	45.0	0.0	42.8	0.0
+/Game/Blueprints/Animation/Ported57/Skid/SS_180_Turn1	False	0.80	47.8	180.0	42.6	0.3
+/Game/Blueprints/Animation/Ported57/Skid/SS_180_Turn2	False	0.83	47.8	179.7	42.6	0.3
+/Game/Blueprints/Animation/Ported57/SkidOwner/SS_180_Turn2	True	0.83	47.8	-188.2	46.7	2.7
+/Game/Blueprints/Animation/Ported57/SkidOwner/SS_180_Turn2_Src	True	0.83	47.8	179.7	42.6	0.3
+/Game/Blueprints/Animation/Ported57/WallSlide/WallSlideIdle	False	2.47	0.0	0.0	0.0	0.0

@@ -1,0 +1,6 @@
+{"move":"overlord_jab2_fk","keys_file":"owner_keys_2026-11-15b.json","frames":53,
+ "keys":[{"frame":0,"key":"7"},{"frame":5,"key":"16","ease":"out"},{"frame":9,"key":"19","ease":"in"},{"frame":12,"key":"22","ease":"out"},{"frame":20,"key":"22","ease":"hold"},{"frame":52,"key":"0","shift":[0,18]}],
+ "root_forward":{"0":0,"5":2,"9":22,"12":24,"22":24,"32":18,"52":18},
+ "foot_paths":[
+  {"bone":"foot_l","keys":{"0":"pose","22":"pose","30":[7,0],"52":[7,0]}},
+  {"bone":"foot_r","keys":{"0":"pose","2":"pose","8":[-32,16],"28":[-32,16],"34":[-24,0],"52":[-24,0]}}]}

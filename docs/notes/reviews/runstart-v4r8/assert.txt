@@ -1,0 +1,3 @@
+ASSERT: OK
+ASSERT: OK mv_run_start_v5 AS_GSTN_RunStart_v4r8 f97-f115: weight >= 0.8 on 100% (min 1.00)
+ASSERT: OK mv_run_start_v5 AS_GSTN_RunStart_v4r8 f97-f115: weight >= 0.8 on 100% (min 1.00)

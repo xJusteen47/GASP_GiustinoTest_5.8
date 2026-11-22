@@ -1,0 +1,51 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Kit Mods Editor",
+	"Description": "Editor tooling of kit mods (M11 L8, combat-loadout-mods.md §15): the mod rules in the M5 validation panel and Data Validation (mod data, fit, limits, derived timelines checked with the timeline rules, reach against the blade mesh, mod slots, loadouts), and the preview of a modded move in the M5 timeline editor. Bridge between GSTNKitMods and GSTNCombatEditor: neither names the other. Editor only.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNKitModsEditor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GSTNCombat",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatGAS",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNKitMods",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatEditor",
+			"Enabled": true
+		},
+		{
+			"Name": "DataValidation",
+			"Enabled": true
+		},
+		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
+		}
+	]
+}

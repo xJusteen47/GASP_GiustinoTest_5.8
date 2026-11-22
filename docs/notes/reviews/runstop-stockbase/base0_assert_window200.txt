@@ -1,0 +1,1 @@
+ASSERT: OK *Stop* f200-f259: weight >= 0.8 on 100% (min 0.88)

@@ -1,0 +1,2 @@
+ASSERT: FAIL 1/1
+ASSERT: FAIL mv_skid SS_180_Turn* f97-f140: weight >= 0.8 on 43% (< 90%), f97 weight 0.00, owned by AS_GSTN_RunStart_v3 1.00

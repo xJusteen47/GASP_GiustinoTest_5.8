@@ -1,0 +1,8 @@
+sampled M_Relaxed_Jump_F_Start_Stand_Rfoot first pelvis z 92.1
+sampled M_Relaxed_Jump_F_Land_Stand_Heavy_Lfoot first pelvis z 779.7
+pick M_Relaxed_Jump_F_Start_Stand_Rfoot t 0.633 pelvis z 64.0
+alias from ['Idle Loop', 'Idle Transition', 'Idle Break', 'Locomotion Transition', 'Locomotion Loop', 'Run Start', 'Dash', 'Skid', 'Skid Exit Run', 'Run Stop', 'Run Stop Blend']
+rule IsAnimOwnerJumpSquatting()
+rule !IsAnimOwnerJumpSquatting()
+compile True <BlueprintStatus.BS_UP_TO_DATE_WITH_WARNINGS: 5>
+save True

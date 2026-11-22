@@ -1,0 +1,58 @@
+{
+ "clip": "Crouch_Idle",
+ "fbx": "../../../Saved/ClipCheck/export/Crouch_Idle.fbx",
+ "fps": 60.0,
+ "frames": 122,
+ "kind": "crouch_idle",
+ "root_travel_cm": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "root_motion": false,
+ "_fwd": [
+  -0.29736248470367893,
+  -0.9547646582749355,
+  0.0
+ ],
+ "animated_bones": 9,
+ "foot_l": {
+  "min_ball_cm": -0.06,
+  "min_ball_frame": 43,
+  "min_heel_cm": 0.04,
+  "plants": [
+   {
+    "frames": [
+     1,
+     122
+    ],
+    "drift_cm": 0.0
+   }
+  ]
+ },
+ "foot_r": {
+  "min_ball_cm": -0.85,
+  "min_ball_frame": 2,
+  "min_heel_cm": 7.12,
+  "plants": [
+   {
+    "frames": [
+     1,
+     122
+    ],
+    "drift_cm": 0.0
+   }
+  ]
+ },
+ "pelvis_acc_max_cms2": 3.0,
+ "pelvis_acc_max_frame": 61,
+ "pops": [],
+ "pops_hard": {},
+ "pops_soft": {},
+ "seam_max_deg": 0.05,
+ "curves_missing": [],
+ "notifies": [],
+ "fails": [],
+ "warns": [],
+ "verdict": "PASS"
+}

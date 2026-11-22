@@ -1,0 +1,12 @@
+104c104
+<     out Pose [struct:PoseLink] -> GSTN_AnimGraphNode_StanceOffset_0.Source
+---
+>     out Pose [struct:PoseLink] -> GSTN_AnimGraphNode_DirectionalHitAdditive_0.Source
+106c106
+<     in  Source [struct:PoseLink] = (LinkID=-1,SourceLinkID=-1) -> GSTN_AnimGraphNode_BlendOutFootLock_0.Pose
+---
+>     in  Source [struct:PoseLink] = (LinkID=-1,SourceLinkID=-1) -> GSTN_AnimGraphNode_DirectionalHitAdditive_0.Pose
+107a108,110
+>   GSTN_AnimGraphNode_DirectionalHitAdditive "GSTN Directional Hit Additive" (GSTN_AnimGraphNode_DirectionalHitAdditive_0)
+>     in  Source [struct:PoseLink] = (LinkID=-1,SourceLinkID=-1) -> GSTN_AnimGraphNode_BlendOutFootLock_0.Pose
+>     out Pose [struct:PoseLink] -> GSTN_AnimGraphNode_StanceOffset_0.Source

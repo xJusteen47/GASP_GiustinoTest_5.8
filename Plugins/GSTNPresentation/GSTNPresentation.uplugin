@@ -1,0 +1,40 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Presentation",
+	"Description": "Presentation events (Presentation.Event.*: jump, land, run start, skid, hit, bounces, shield...) derived from the synchronized state on every machine, deduplicated per (event, frame) so a resimulation never plays an effect twice, and a per-kit/per-skin table that maps each event to a Niagara system, a sound, a camera shake and a short additive, scaled by the event's magnitude. Blueprint events for every type (online: they fire on clients too). Presentation only: nothing here is read by a simulation. No GAS, Network Prediction or Mover.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNPresentationCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNPresentationEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GSTNAnimation",
+			"Enabled": true
+		},
+		{
+			"Name": "Niagara",
+			"Enabled": true
+		}
+	]
+}

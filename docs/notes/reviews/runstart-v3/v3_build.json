@@ -1,0 +1,90 @@
+{
+ "frames": 46,
+ "length": 1.5,
+ "fps": 30.0,
+ "tracks": 88,
+ "rt_v3base_vs_frantic_f0_7": {
+  "median": 0.0,
+  "top": [
+   [
+    69.31,
+    "calf_l"
+   ],
+   [
+    60.65,
+    "calf_r"
+   ],
+   [
+    38.46,
+    "thigh_l"
+   ],
+   [
+    35.07,
+    "thigh_r"
+   ]
+  ],
+  "bones": 81
+ },
+ "rt_v3_vs_frantic_f0": {
+  "median": 0.0,
+  "top": [
+   [
+    0.97,
+    "foot_l"
+   ],
+   [
+    0.91,
+    "upperarm_l"
+   ],
+   [
+    0.89,
+    "clavicle_l"
+   ],
+   [
+    0.77,
+    "calf_r"
+   ]
+  ],
+  "bones": 81
+ },
+ "rt_pelvis_f0_cm": 4.16,
+ "rt_offset": false,
+ "root_travel_cm": [
+  -5.5,
+  612.7,
+  0.0
+ ],
+ "pelvis_local_travel_cm": [
+  0.0,
+  0.0,
+  -3.3
+ ],
+ "root_motion": "enabled + force root lock (stock loop settings)",
+ "ik_foot_drift_cm": 0.0,
+ "contact_l_onsets_f30": [
+  0.0,
+  18.0,
+  30.5
+ ],
+ "contact_r_onsets_f30": [
+  0.0,
+  8.5,
+  12.5,
+  24.5,
+  37.5,
+  40.0
+ ],
+ "curves": [
+  "contact_l",
+  "contact_r",
+  "phase"
+ ],
+ "handoff": {
+  "exit_at": 1.4,
+  "loop_t_analytic": 1.7893,
+  "cost_analytic": 19.3,
+  "loop_t_match": 1.8,
+  "cost_match": 20.1,
+  "loop_start": 1.7893
+ }
+}

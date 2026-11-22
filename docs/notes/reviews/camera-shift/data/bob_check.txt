@@ -1,0 +1,2 @@
+dk_base2: max cam z step/frame 112.3 cm, max pitch step 9.48 deg, cam z range 289-460, reversals after landing 3
+dk_fix: max cam z step/frame 6.4 cm, max pitch step 0.44 deg, cam z range 289-377, reversals after landing 1

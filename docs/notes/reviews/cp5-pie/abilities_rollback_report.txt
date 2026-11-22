@@ -1,0 +1,40 @@
+setup ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '3', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+topology ('listen', [])
+start abilities
+=== abilities
+mode=listen worlds=3
+w0 P256 host-local  rb=0   rbMs=0      ticks=938   resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w0 P257 server-copy rb=0   rbMs=0      ticks=938   resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w0 P258 server-copy rb=0   rbMs=0      ticks=938   resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w1 P256 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w1 P257 autonomous  rb=2   rbMs=0      ticks=962   resim=19   abResim=2    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w1 P258 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w2 P256 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w2 P257 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w2 P258 autonomous  rb=3   rbMs=0      ticks=971   resim=28   abResim=2    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+CMP P256 host-local(w0) vs simulated(w1): OK
+CMP P256 host-local(w0) vs simulated(w2): OK
+CMP P257 server-copy(w0) vs autonomous(w1): OK
+CMP P257 server-copy(w0) vs simulated(w2): OK
+CMP P258 server-copy(w0) vs simulated(w1): OK
+CMP P258 server-copy(w0) vs autonomous(w2): OK
+CMP RESULT: 6/6 OK
+start forced_rollback
+=== forced_rollback
+mode=listen worlds=3
+w0 P256 host-local  rb=0   rbMs=0      ticks=751   resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w0 P257 server-copy rb=0   rbMs=0      ticks=751   resim=0    abResim=0    hp=100 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w0 P258 server-copy rb=0   rbMs=0      ticks=751   resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w1 P256 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w1 P257 autonomous  rb=4   rbMs=0      ticks=807   resim=58   abResim=0    hp=100 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+w1 P258 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w2 P256 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w2 P257 simulated   rb=0   rbMs=0      ticks=0     resim=0    abResim=0    hp=100 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=0 mode=Walking
+w2 P258 autonomous  rb=2   rbMs=0      ticks=785   resim=35   abResim=0    hp=80 st=100 tags=[] cd={'Dash': 0, 'Buff': 0} eff=1 mode=Walking
+CMP P256 host-local(w0) vs simulated(w1): OK
+CMP P256 host-local(w0) vs simulated(w2): OK
+CMP P257 server-copy(w0) vs autonomous(w1): OK
+CMP P257 server-copy(w0) vs simulated(w2): OK
+CMP P258 server-copy(w0) vs simulated(w1): OK
+CMP P258 server-copy(w0) vs autonomous(w2): OK
+CMP RESULT: 6/6 OK

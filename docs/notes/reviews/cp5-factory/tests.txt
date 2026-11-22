@@ -1,0 +1,14 @@
+Result={Success} Name={BindingUpsert} Path={GSTNCombat.Editor.MoveFactory.BindingUpsert}
+Result={Success} Name={CreatesAndBinds} Path={GSTNCombat.Editor.MoveFactory.CreatesAndBinds}
+Result={Success} Name={StarterTimeline} Path={GSTNCombat.Editor.MoveFactory.StarterTimeline}
+Result={Success} Name={BuildsAndCompiles} Path={GSTNCombat.Editor.MoveGraph.BuildsAndCompiles}
+Result={Success} Name={Classify} Path={GSTNCombat.Editor.SimGraph.Classify}
+Result={Success} Name={WalksSimulationEvents} Path={GSTNCombat.Editor.SimGraph.WalksSimulationEvents}
+Result={Success} Name={HitstopShake} Path={GSTNCombat.GAS.ReactionAnim.HitstopShake}
+Result={Success} Name={Select} Path={GSTNCombat.GAS.ReactionAnim.Select}
+Result={Success} Name={CancelAndCorrection} Path={GSTNCombat.NP.MoveCosmetics.CancelAndCorrection}
+Result={Success} Name={HitCueParameters} Path={GSTNCombat.NP.MoveCosmetics.HitCueParameters}
+Result={Success} Name={HitstopHoldsTheFrame} Path={GSTNCombat.NP.MoveCosmetics.HitstopHoldsTheFrame}
+Result={Success} Name={SlowScreenCrossing} Path={GSTNCombat.NP.MoveCosmetics.SlowScreenCrossing}
+Result={Success} Name={WindowsAndTail} Path={GSTNCombat.NP.MoveCosmetics.WindowsAndTail}
+577 Success / 0 Fail, filter GSTNCombat (Saved/Logs/ci/test2.log)

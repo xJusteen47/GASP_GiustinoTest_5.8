@@ -1,0 +1,262 @@
+{
+ "clip": "Crouch_Exit",
+ "fbx": "../../../Saved/ClipCheck/export/Crouch_Exit.fbx",
+ "fps": 60.0,
+ "frames": 14,
+ "kind": "crouch_exit",
+ "root_travel_cm": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "root_motion": false,
+ "_fwd": [
+  -0.29736248470367893,
+  -0.9547646582749355,
+  0.0
+ ],
+ "animated_bones": 71,
+ "foot_l": {
+  "min_ball_cm": -0.06,
+  "min_ball_frame": 1,
+  "min_heel_cm": -0.02,
+  "plants": [
+   {
+    "frames": [
+     1,
+     1
+    ],
+    "drift_cm": 0.0
+   },
+   {
+    "frames": [
+     12,
+     14
+    ],
+    "drift_cm": 0.0
+   }
+  ]
+ },
+ "foot_r": {
+  "min_ball_cm": -1.52,
+  "min_ball_frame": 4,
+  "min_heel_cm": -0.03,
+  "plants": [
+   {
+    "frames": [
+     12,
+     14
+    ],
+    "drift_cm": 0.0
+   }
+  ],
+  "skates": [
+   {
+    "frames": [
+     2,
+     6
+    ],
+    "skate_cm": 14.7,
+    "skate_s": 0.083,
+    "vmax_cms": 190
+   }
+  ]
+ },
+ "return_idle_both_up": [
+  [
+   8,
+   9
+  ]
+ ],
+ "pelvis_acc_max_cms2": 7852.0,
+ "pelvis_acc_max_frame": 9,
+ "pops": [
+  {
+   "frame": 8,
+   "bone": "calf_r",
+   "size": 18.8,
+   "type": "spike"
+  },
+  {
+   "frame": 8,
+   "bone": "calf_l",
+   "size": 16.9,
+   "type": "spike"
+  },
+  {
+   "frame": 8,
+   "bone": "thigh_r",
+   "size": 9.9,
+   "type": "spike"
+  },
+  {
+   "frame": 8,
+   "bone": "thigh_l",
+   "size": 9.7,
+   "type": "spike"
+  },
+  {
+   "frame": 10,
+   "bone": "lowerarm_r",
+   "size": 8.2,
+   "type": "spike"
+  },
+  {
+   "frame": 3,
+   "bone": "lowerarm_r",
+   "size": 8.0,
+   "type": "spike"
+  },
+  {
+   "frame": 8,
+   "bone": "foot_l",
+   "size": 7.4,
+   "type": "spike"
+  },
+  {
+   "frame": 2,
+   "bone": "upperarm_l",
+   "size": 7.3,
+   "type": "spike"
+  },
+  {
+   "frame": 9,
+   "bone": "upperarm_l",
+   "size": 7.3,
+   "type": "spike"
+  },
+  {
+   "frame": 8,
+   "bone": "index_02_r",
+   "size": 7.1,
+   "type": "spike"
+  },
+  {
+   "frame": 8,
+   "bone": "index_02_l",
+   "size": 7.1,
+   "type": "spike"
+  },
+  {
+   "frame": 8,
+   "bone": "middle_02_l",
+   "size": 7.1,
+   "type": "spike"
+  },
+  {
+   "frame": 11,
+   "bone": "calf_l",
+   "size": 7.0,
+   "type": "spike"
+  },
+  {
+   "frame": 8,
+   "bone": "ring_02_l",
+   "size": 6.9,
+   "type": "spike"
+  },
+  {
+   "frame": 8,
+   "bone": "pinky_02_l",
+   "size": 6.7,
+   "type": "spike"
+  },
+  {
+   "frame": 10,
+   "bone": "lowerarm_l",
+   "size": 6.5,
+   "type": "spike"
+  }
+ ],
+ "pops_hard": {},
+ "pops_soft": {
+  "upperarm_l": [
+   2,
+   9
+  ],
+  "lowerarm_r": [
+   3,
+   10
+  ],
+  "lowerarm_l": [
+   3,
+   10
+  ],
+  "calf_r": [
+   7,
+   8
+  ],
+  "calf_l": [
+   8,
+   11
+  ],
+  "thigh_r": [
+   8
+  ],
+  "thigh_l": [
+   8
+  ],
+  "foot_l": [
+   8
+  ],
+  "fingers": [
+   8
+  ],
+  "foot_r": [
+   8
+  ]
+ },
+ "start_ref": {
+  "ref": "../../../Saved/ClipCheck/export/Crouch_Idle.fbx",
+  "ref_frame": 122,
+  "max_deg": 0.0,
+  "bone": "foot_l",
+  "top3": [
+   [
+    "foot_l",
+    0.0
+   ],
+   [
+    "lowerarm_l",
+    0.0
+   ],
+   [
+    "thigh_l",
+    0.0
+   ]
+  ],
+  "feet_gap_cm": 0.0
+ },
+ "end_ref": {
+  "ref": "../../../Saved/ClipCheck/export/GASP_Idle.fbx",
+  "ref_frame": 1,
+  "max_deg": 1.8,
+  "bone": "lowerarm_r",
+  "top3": [
+   [
+    "lowerarm_r",
+    1.8
+   ],
+   [
+    "lowerarm_l",
+    1.8
+   ],
+   [
+    "head",
+    0.0
+   ]
+  ],
+  "feet_gap_cm": 0.0
+ },
+ "curves_missing": [],
+ "notifies": [],
+ "fails": [
+  "ball r -1.5 cm through the floor at f4",
+  "both feet in the air while returning to idle (f8-9): step one foot at a time"
+ ],
+ "warns": [
+  "foot r skates 14.7 cm over 0.08 s on the floor (f2-6), touchdown/lift-off length",
+  "one-frame extremes to look at: upperarm_l f2,9; lowerarm_r f3,10; lowerarm_l f3,10; calf_r f7,8 (+6 bones)"
+ ],
+ "verdict": "FAIL"
+}

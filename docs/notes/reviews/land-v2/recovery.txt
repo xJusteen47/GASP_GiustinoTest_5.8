@@ -1,0 +1,7 @@
+# python Tools/AnimPipeline/cards/jumpland/land_recovery.py <cap> ld_jump_idle ld_jump_fwd   (cap = Saved/LandV2/base5 | Saved/LandV2/v2, copies of frames.jsonl here)
+base:
+ld_jump_idle: land v104 -> M_Relaxed_Stand_Idle_Loop owns the pose v281 = 177 frames = 2950 ms
+ld_jump_fwd: land v102 -> M_Relaxed_Jump_F_Land_Walk_Light_Lfoot owns the pose v107 = 5 frames = 83 ms
+v2:
+ld_jump_idle: land v104 -> M_Relaxed_Stand_Idle_Loop owns the pose v187 = 83 frames = 1383 ms
+ld_jump_fwd: land v102 -> M_Relaxed_Jump_F_Land_Run_Light_Rfoot owns the pose v108 = 6 frames = 100 ms

@@ -1,0 +1,2 @@
+v000-v279 idle
+combat keys: ['activeWeapon', 'anim', 'heldButtons', 'history', 'historyFrame', 'inTimeline', 'jump', 'loadoutRevision', 'pausedTotal', 'request', 'run', 'tableBindings', 'tableCrc', 'tableGateClosed', 'tableRevision', 'timeline', 'timelinePaused', 'timelineStarted', 'weaponSwitched']

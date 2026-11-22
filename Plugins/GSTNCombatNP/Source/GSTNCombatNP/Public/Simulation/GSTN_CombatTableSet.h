@@ -1,0 +1,307 @@
+// Combat simulation (GAS-NPP fork).
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Bindings/GSTN_CommandBindingSet.h"
+#include "Hits/GSTN_HurtboxPose.h"
+#include "Input/GSTN_BufferResetRules.h"
+#include "Input/GSTN_StickThresholds.h"
+#include "Loadout/GSTN_CompiledBindingTable.h"
+#include "Movement/GSTN_DodgeLanding.h"
+#include "Rules/GSTN_AirCrouch.h"
+#include "Rules/GSTN_GroundCrouch.h"
+#include "Simulation/GSTN_WeaponStatsSwap.h"
+#include "StructUtils/InstancedStruct.h"
+#include "Timeline/GSTN_TimelineTypes.h"
+#include "UObject/Object.h"
+#include "GSTN_CombatTableSet.generated.h"
+
+class UGameplayAbility;
+class UGSTN_CombatTimeline;
+
+class UGSTN_CombatSettings;
+class UGSTN_GA_BaseCombat;
+class UGSTN_GA_PlatformJump;
+class UGSTN_InputSettings;
+
+/**
+ * Everything the combat tick reads that depends on the loadout, as one immutable bundle: the command table the input simulation
+ * resolves against, the timeline registry and its tiers, the per-binding timeline and jump role, the weapon stats of the loadout.
+ * The sync state refers to rows and registry slots by index, so these arrays are the meaning of the indices of one loadout revision.
+ *
+ * A set is built once (game thread, outside any tick), never changed afterwards, and found by revision: the active table is a pure
+ * function of the rolled-back state (FGSTN_CombatSyncCore::LoadoutRevision), so a re-simulated frame meets the table that frame had
+ * the first time. Revision 0 is the Blueprint binding set; a loadout's set replaces it wholesale.
+ *
+ * The command table points into this object (the slots of Compiled and OwnedSlots), so a set is never copied or resized.
+ */
+UCLASS(Transient)
+class GSTNCOMBATNP_API UGSTN_CombatTableSet : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	/** The loadout revision the set was built for (0 = the Blueprint binding set) */
+	int32 Revision = 0;
+
+	/** IO-2b: FGSTN_ActiveGameRules::GetSerial() when the set was built; a revision recompiled under other rules replaces it */
+	uint32 RulesSerial = 0;
+
+	/** The compiled loadout table the command table was converted from (empty for revision 0). Its Slots are what Table points into */
+	FGSTN_CompiledBindingTable Compiled;
+
+	FGSTN_CommandTable Table;
+
+	/** Slots of bindings whose priority offset or buffer differs from their command's; Binding.Slot points at them */
+	TArray<TUniquePtr<FGSTN_InputSlotSpec>> OwnedSlots;
+
+	/**
+	 * The timeline abilities that something starts (combat-m3 7.1), the index the combat sync state stores. For a loadout set in the
+	 * order of the compiled registry, then the adoptable ones; for revision 0 the bound classes in binding order, then the adoptable
+	 */
+	UPROPERTY(Transient)
+	TArray<TSubclassOf<UGSTN_GA_BaseCombat>> TimelineRegistry;
+
+	/**
+	 * Per registry entry: the timeline the entry runs instead of its class default's, null for the class default's (M11 L5b). Set from
+	 * the compiled registry's TimelineOverride: a binding's own timeline asset, or a kit mod's derived transient timeline. Two entries
+	 * of one class with different overrides are two moves with their own frame data; the sim and the ability read GetTimelineData.
+	 */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UGSTN_CombatTimeline>> TimelineOverrides;
+
+	/**
+	 * The frame data registry entry Index runs: its override's, else its class default's (UGSTN_GA_BaseCombat::GetTimelineData).
+	 * Null if the index is not an entry. The one place the simulation, the abilities and the extensions read a move's frame data from
+	 */
+	const FGSTN_CombatTimelineData* GetTimelineData(int32 Index) const;
+
+	/** The timeline assets and montages of the registry classes, loaded with the set and kept alive by it */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UObject>> TimelineContent;
+
+	/** Per binding: registry index, INDEX_NONE for a plain ability */
+	TArray<int16> BindingTimeline;
+
+	/** Per binding: EGSTN_PlatformJumpRole + 1 for a UGSTN_GA_PlatformJump binding, 0 for any other */
+	TArray<uint8> BindingJumpRole;
+
+	/**
+	 * Per binding: the ability's reaction flags (ReactionIgnoresHitstun, ReactionEndsReaction), read from the class defaults when the set is built.
+	 * The gate reads them every frame, so they are data of the loadout and not looked up on the class in the simulation
+	 */
+	TArray<uint8> BindingReaction;
+
+	static constexpr uint8 ReactionIgnoresHitstun = 1;
+	static constexpr uint8 ReactionEndsReaction = 2;
+
+	/** The flags of an ability class: Combat.Ability.IgnoreHitstunOnActivation in its tags, UGSTN_GA_Base::bEndReactionOnActivation */
+	static uint8 MakeReactionFlags(const UClass* AbilityClass);
+	static uint8 MakeReactionFlags(const UGameplayAbility* Default);
+
+	/** Per registry entry: the priority tier of the first command bound to it (the running tier of the override rule) and its default window */
+	TArray<int32> TimelineTier;
+	TArray<int32> TimelineDefaultOverride;
+
+	/** The class default of the Jump-role binding of the table (the kit's jump data), null without one */
+	const UGSTN_GA_PlatformJump* TableJumpData = nullptr;
+
+	/** The stats effect of each weapon, in loadout order (0 = primary; an entry may leave Effect empty) */
+	UPROPERTY(Transient)
+	TArray<FGSTN_WeaponStatsEntry> WeaponStats;
+
+	/**
+	 * The ricochet fallbacks of the loadout (combat-m4-hits 3b, M4 H12): one per weapon in loadout order, then the kit's. An attack that
+	 * authors no response of its own recoils with the active weapon's, else the kit's. RecoilFrames 0 = not authored. Their montages are
+	 * in TimelineContent
+	 */
+	UPROPERTY(Transient)
+	TArray<FGSTN_RicochetResponse> WeaponRicochet;
+
+	UPROPERTY(Transient)
+	FGSTN_RicochetResponse KitRicochet;
+
+	/**
+	 * The kit's own movement hurtbox (FGSTN_MovementHurtboxExtension, owner 2026-11-16), copied when the set is built: the simulation reads it from the
+	 * table of the revision it runs, never from the kit asset, so a rollback across a kit swap places the hurtboxes of the kit of that frame
+	 */
+	UPROPERTY(Transient)
+	bool bHasKitMovementHurtbox = false;
+
+	UPROPERTY(Transient)
+	FGSTN_MovementHurtboxExtension KitMovementHurtbox;
+
+	/**
+	 * The kit's air crouch (FGSTN_AirCrouchKitExtension, owner 2026-11-16), copied when the set is built for the same reason as the movement
+	 * hurtbox. bHasKitAirCrouch false = the kit has none: the combatant never air-crouches
+	 */
+	UPROPERTY(Transient)
+	bool bHasKitAirCrouch = false;
+
+	/** The player's stick zones and flick window of this revision (FGSTN_LoadoutInputFeelExt), what the input simulation classifies with */
+	FGSTN_StickThresholds StickThresholds;
+
+	UPROPERTY(Transient)
+	FGSTN_AirCrouchKitExtension KitAirCrouch;
+
+	/**
+	 * The kit's ground crouch (FGSTN_GroundCrouchKitExtension, owner 2026-11-16), copied when the set is built like the air crouch. Always valid:
+	 * a kit without the extension (or a set built without a kit) gets the defaults, so every kit crouches unless its extension switches it off
+	 */
+	UPROPERTY(Transient)
+	FGSTN_GroundCrouchKitExtension KitGroundCrouch;
+
+	/**
+	 * The kit's dodge landing (FGSTN_DodgeLandingKitExtension, owner 2026-11-17): ending lag, re-dodge lock, roll-out, belly slide. Always valid like
+	 * the ground crouch: a kit without the extension gets the defaults (8 f lag from the move, 10 f lock, slide on, roll-out off)
+	 */
+	UPROPERTY(Transient)
+	FGSTN_DodgeLandingKitExtension KitDodgeLanding;
+
+	/** The project defaults per strike kind (UGSTN_CombatSettings::SwingRicochetDefault / StabRicochetDefault), copied when the set is built */
+	UPROPERTY(Transient)
+	FGSTN_RicochetResponse SwingRicochet;
+
+	UPROPERTY(Transient)
+	FGSTN_RicochetResponse StabRicochet;
+
+	/**
+	 * The fallback for an attack that runs with the weapon at WeaponIndex: the weapon's when authored, else the kit's, else the project default
+	 * of the hitbox group's strike kind; null when none is
+	 */
+	const FGSTN_RicochetResponse* GetRicochetFallback(int32 WeaponIndex, EGSTN_StrikeKind Kind = EGSTN_StrikeKind::Unspecified) const
+	{
+		if (WeaponRicochet.IsValidIndex(WeaponIndex) && WeaponRicochet[WeaponIndex].IsAuthored())
+		{
+			return &WeaponRicochet[WeaponIndex];
+		}
+		if (KitRicochet.IsAuthored())
+		{
+			return &KitRicochet;
+		}
+		const FGSTN_RicochetResponse* KindDefault = Kind == EGSTN_StrikeKind::Swing ? &SwingRicochet : Kind == EGSTN_StrikeKind::Stab ? &StabRicochet : nullptr;
+		return KindDefault && KindDefault->IsAuthored() ? KindDefault : nullptr;
+	}
+
+	/** The loadout's reserved extension block (mods, backpacks), kept so its CRC is part of the checksum */
+	TArray<uint8> ReservedExtension;
+
+	/** Deterministic CRC of everything above that two machines must agree on; see ComputeChecksum */
+	uint32 Checksum = 0;
+
+	/** Registers the timeline classes of Table.Bindings (binding order, each once) and the per-binding facts. Revision 0 uses it; a converted set fills the same arrays itself */
+	void DeriveFromBindings(const UGSTN_InputSettings& InputSettings, const UGSTN_CombatSettings& CombatSettings);
+
+	/**
+	 * Appends the adoptable timelines after the bound ones, with no tier and no default window (combat-m3 6.3), then the follow-up timelines
+	 * (AppendFollowUps): every set is built through here, so the registry holds them on every machine
+	 */
+	void AppendAdoptable(TConstArrayView<TSubclassOf<UGSTN_GA_BaseCombat>> Adoptable);
+
+	/**
+	 * Registers the FollowUpTimeline (and the Landing and Ledge Check tracks' ContinueMove) of every registered timeline that is not in the registry yet (no tier, no default window), the follow-ups' own
+	 * follow-ups included: the combat model starts them by registry index when a move ends by itself. Deterministic: registry order
+	 */
+	void AppendFollowUps();
+
+	/** The registry index of the follow-up of entry Index (its timeline's FollowUpTimeline), INDEX_NONE when it has none or it is not registered */
+	int32 FindFollowUpEntry(int32 Index) const;
+
+	/**
+	 * The registry index of the ContinueMove of entry Index's Landing or Ledge Check track TrackIndex (FGSTN_TimelineTrack_Landing or _LedgeCheck, registered by
+	 * AppendFollowUps like a follow-up), INDEX_NONE when it has none or it is not registered
+	 */
+	int32 FindLandingContinueEntry(int32 Index, int32 TrackIndex) const;
+
+	/**
+	 * Coyote time per move (owner 2026-11-16): the bindings of a ground move that may take off (FGSTN_CombatTimelineData::AllowsTakeoff) take
+	 * Input.Context.Coyote as Grounded. Derived from the frame data once the bindings and the registry are built; never edited by hand
+	 */
+	void ApplyCoyoteFlags();
+
+	/**
+	 * Registers, for every class in the registry, each timeline of its Playable Timelines (UGSTN_GA_BaseCombat::PlayableTimelines) as an entry
+	 * (that class, that timeline) with no tier and no default window: what the Play Combat Timeline And Wait node starts by registry index.
+	 * Deterministic: registry order, then list order. Called by AppendAdoptable before the follow-ups, so a played timeline's follow-up is found too
+	 */
+	void AppendPlayableTimelines();
+
+	/**
+	 * The registry entry an ability of class AbilityClass plays Timeline with: the entry of that class whose override is Timeline, else (Timeline
+	 * is the class's own default data) its entry with no override. INDEX_NONE when the pair is not registered
+	 */
+	int32 FindPlayEntry(const UClass* AbilityClass, const UGSTN_CombatTimeline* Timeline) const;
+
+	/** The first registry entry of AbilityClass, the one a command, a forced start or Start Combat Move runs. INDEX_NONE when it is not registered */
+	int32 FindMoveEntry(const UClass* AbilityClass) const;
+
+	/** True for a combat ability class that does not play a timeline when activated (a host: Play Timeline On Activation off). Its bindings are plain */
+	static bool IsHostClass(const UClass* AbilityClass);
+
+	/**
+	 * Registers one timeline class and loads its content. Returns its registry index; with bShareExisting an entry of the same class
+	 * and the same override is not added twice. Override (may be null) replaces the class default's frame data for this entry only
+	 */
+	int32 AddTimelineClass(TSubclassOf<UGSTN_GA_BaseCombat> TimelineClass, int32 Tier, int32 DefaultOverrideFrames, bool bShareExisting, UGSTN_CombatTimeline* Override = nullptr);
+
+	/**
+	 * CRC32 of the table as bytes: the compiled table, the commands by tag name, the bindings (command, source mask, class path,
+	 * registry index, jump role), the registry (class path, override path, tier, default window, total frames of the data the entry
+	 * runs), the weapon stats and the reserved
+	 * block. No pointer and no index that depends on load order, so two machines with the same loadout get the same value.
+	 */
+	uint32 ComputeChecksum() const;
+};
+
+/** What a conversion reads besides the compiled table. The settings are the project's, the loader is injected so a test needs no content */
+struct GSTNCOMBATNP_API FGSTN_CombatTableConvertInput
+{
+	FGSTN_CombatTableConvertInput(TFunction<UClass*(const FSoftObjectPath&)> InLoadClass);
+
+	const UGSTN_InputSettings* InputSettings = nullptr;
+	const UGSTN_CombatSettings* CombatSettings = nullptr;
+
+	/** The host's global reset rules: their watched tags join the table's (the Blueprint path passes the same list to BuildTable) */
+	TConstArrayView<TInstancedStruct<FGSTN_BufferResetRule>> GlobalResetRules;
+
+	/** Timelines nothing binds but something else starts; they follow the compiled registry */
+	TConstArrayView<TSubclassOf<UGSTN_GA_BaseCombat>> Adoptable;
+
+	/** Ability class of a compiled soft path, null if it does not load. Synchronous: the converter runs outside any tick */
+	TFunction<UClass*(const FSoftObjectPath&)> LoadClass;
+
+	/**
+	 * The timeline of a registry entry's TimelineOverride, null if it does not load (the entry then runs its class default's, with an
+	 * error). Default: the object already in memory (a kit mod's derived timeline is a transient object), else a synchronous load
+	 */
+	TFunction<UGSTN_CombatTimeline*(const FSoftObjectPath&)> LoadTimeline;
+
+	TArray<FGSTN_WeaponStatsEntry> WeaponStats;
+	TArray<FGSTN_RicochetResponse> WeaponRicochet;
+	FGSTN_RicochetResponse KitRicochet;
+	TArray<uint8> ReservedExtension;
+};
+
+/**
+ * Compiled loadout table (Core) to combat table set. Pure: no world, no ability system instance; game thread only, never inside a tick.
+ *
+ * Mapping, all deterministic: commands are the distinct commands of the entries, sorted by tag name; bindings are sorted by (command name,
+ * entry order), the entry order being the Core one (kit, weapons 0..N, supers). A binding's source becomes the opaque SourceMask the
+ * input resolver filters by; a binding whose effective slot differs from the command's gets its own slot. Entries whose class does not
+ * load, whose source has no mask bit, or past the table limits are dropped with an error in the report.
+ */
+struct GSTNCOMBATNP_API FGSTN_CombatTableConverter
+{
+	using FExtension = TFunction<void(const FGSTN_CompiledBindingTable&, UGSTN_CombatTableSet&)>;
+
+	/** Never null; the report says what was dropped */
+	static UGSTN_CombatTableSet* Convert(UObject* Outer, const FGSTN_CompiledBindingTable& Compiled, const FGSTN_CombatTableConvertInput& Input, FGSTN_CompileReport* OutReport = nullptr);
+
+	/**
+	 * A converter extension (the seam for mods and backpacks): runs after the base conversion, in id order, may append bindings or registry
+	 * entries, and is part of the checksum through what it changes. Registering an id again replaces it
+	 */
+	static void RegisterExtension(FName Id, FExtension Extension);
+	static void UnregisterExtension(FName Id);
+};

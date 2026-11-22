@@ -1,0 +1,24 @@
+13c13
+<     out Pose [struct:PoseLink] -> AnimGraphNode_DeadBlending_2.Source
+---
+>     out Pose [struct:PoseLink] -> AnimGraphNode_LocalToComponentSpace_0.LocalPose
+76c76
+<     in  Source [struct:PoseLink] = (LinkID=-1,SourceLinkID=-1) -> AnimGraphNode_Slot_0.Pose
+---
+>     in  Source [struct:PoseLink] = (LinkID=-1,SourceLinkID=-1) -> AnimGraphNode_ComponentToLocalSpace_0.Pose
+101a102,116
+>   AnimGraphNode_LocalToComponentSpace "Da locale a componente" (AnimGraphNode_LocalToComponentSpace_0)
+>     in  LocalPose [struct:PoseLink] = (LinkID=-1,SourceLinkID=-1) -> AnimGraphNode_Slot_0.Pose
+>     out ComponentPose [struct:ComponentSpacePoseLink] -> AnimGraphNode_ModifyBone_0.ComponentPose
+>   AnimGraphNode_ModifyBone "Transform (Modify) Bone - Bone: root" (AnimGraphNode_ModifyBone_0)
+>     in  ComponentPose [struct:ComponentSpacePoseLink] = (LinkID=-1,SourceLinkID=-1) -> AnimGraphNode_LocalToComponentSpace_0.ComponentPose
+>     in  Alpha [real] = 1.000000 -> K2Node_VariableGet_2.MontageRootLockAlpha
+>     in  Translation [struct:Vector] = 0.000000,0.000000,0.000000
+>     in  Rotation [struct:Rotator] = 0.000000,0.000000,0.000000
+>     in  Scale [struct:Vector] = 1.000000,1.000000,1.000000
+>     out Pose [struct:ComponentSpacePoseLink] -> AnimGraphNode_ComponentToLocalSpace_0.ComponentPose
+>   AnimGraphNode_ComponentToLocalSpace "Da componente a locale" (AnimGraphNode_ComponentToLocalSpace_0)
+>     in  ComponentPose [struct:ComponentSpacePoseLink] = (LinkID=-1,SourceLinkID=-1) -> AnimGraphNode_ModifyBone_0.Pose
+>     out Pose [struct:PoseLink] -> AnimGraphNode_DeadBlending_2.Source
+>   K2Node_VariableGet "Get MontageRootLockAlpha" (K2Node_VariableGet_2)
+>     out MontageRootLockAlpha [real] = 0.0 -> AnimGraphNode_ModifyBone_0.Alpha

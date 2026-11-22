@@ -1,0 +1,4 @@
+jab/jab1 f44 n51 slide L 0.0 R 0.6  step L 8.1 R 11.6  end L 8.0 R 12.0
+jab/jab1_jab2_faf f83 n67 slide L 0.2 R 0.6  step L 11.0 R 12.8  end L 11.1 R 13.1
+react/hitstand f80 n71 slide L 0.0 R 3.9  step L 10.6 R 31.6  end L 10.5 R 34.7
+react/knockdown_getup f163 n72 slide L 0.0 R 1.1  step L 11.6 R 11.5  end L 11.6 R 12.0
