@@ -17,7 +17,7 @@ OUT = os.path.join(PROJ, "Saved", "AnimPipeline", "runstart", "AS_GSTN_RunStart_
 
 PELVIS_DY = float(os.environ.get("W3_PELVIS_DY", "12.0"))    # cm forward (+Y)
 PELVIS_DZ = float(os.environ.get("W3_PELVIS_DZ", "-4.0"))    # cm vertical (lower COM/head)
-SPINE_PITCH = float(os.environ.get("W3_SPINE_PITCH", "10.0")) # deg forward
+SPINE_PITCH = float(os.environ.get("W3_SPINE_PITCH", "3.5")) # deg forward (continuous diagonal line, no chest collapse)
 KNEE_DROP = float(os.environ.get("W3_KNEE_DROP", "0.35"))    # fraction of swing foot height above 14 cm
 SWING_LAG = float(os.environ.get("W3_SWING_LAG", "4.0"))     # cm trailing (-Y) on swing foot in f0-f10 (torso leads)
 CATCH_FWD = float(os.environ.get("W3_CATCH_FWD", "5.5"))     # cm forward (+Y) on swing foot in f10-f22 (legs catch up)
@@ -225,7 +225,7 @@ for f in range(n):
         # 2. Spine_01 forward pitch (1-frame elastic lag + impact nod) + slight chest counter-rotation
         sp_pos = vadd(w["spine_01"].translation, unreal.Vector(0.0, dy, dz))
         e_sp = env(max(0, f - 1))
-        sp_deg = SPINE_PITCH * e_sp - 0.8 * contact_dip(max(0, f - 1))
+        sp_deg = SPINE_PITCH * e_sp - 0.3 * contact_dip(max(0, f - 1))
         q_sp_pit = pitch_quat(sp_deg, vsub(w["neck_01"].translation, w["spine_01"].translation))
         q_sp_yaw = yaw_quat(CHEST_TWIST * e * hd_sig[f])
         q_sp = q_sp_yaw * q_sp_pit
