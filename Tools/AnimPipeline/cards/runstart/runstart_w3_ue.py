@@ -341,10 +341,21 @@ for f in range(n):
             la_pos = vadd(ua_pos, q_ua.rotate_vector(la_dir0))
             ha_dir0 = (q_ua * q_cl * q_sp).rotate_vector(vsub(w[ha].translation, w[la].translation))
             q_la_fwd = pitch_quat(ARM_FWD_EL * e * w_fwd, ha_dir0) if ARM_FWD_EL else unreal.Quat(0.0, 0.0, 0.0, 1.0)
-            rf = math.radians(ARM_BACK_FL * e * w_rear + (ARM_R_FL5 * ss(1.0, 5.0, float(f)) * (1.0 - ss(7.0, 13.0, float(f))) if s == "r" else 0.0))
-            q_fp = unreal.Quat(math.sin(0.5 * rf), 0.0, 0.0, math.cos(0.5 * rf))
-            q_fn = qinv(q_fp)
-            q_la_back = q_fp if q_fp.rotate_vector(ha_dir0).z >= q_fn.rotate_vector(ha_dir0).z else q_fn
+            rf_deg = ARM_BACK_FL * e * w_rear + (ARM_R_FL5 * ss(1.0, 5.0, float(f)) * (1.0 - ss(7.0, 13.0, float(f))) if s == "r" else 0.0)
+            if rf_deg > 1e-3:
+                rf = math.radians(rf_deg)
+                # Bend around the true anatomical elbow hinge axis (perpendicular to upperarm & forearm)
+                ax = unreal.Vector(la_dir0.y * ha_dir0.z - la_dir0.z * ha_dir0.y,
+                                   la_dir0.z * ha_dir0.x - la_dir0.x * ha_dir0.z,
+                                   la_dir0.x * ha_dir0.y - la_dir0.y * ha_dir0.x)
+                ax = vnorm(ax) if vlen(ax) > 1e-3 else unreal.Vector(1.0, 0.0, 0.0)
+                s_h, c_h = math.sin(0.5 * rf), math.cos(0.5 * rf)
+                q_fp = unreal.Quat(ax.x * s_h, ax.y * s_h, ax.z * s_h, c_h)
+                q_fn = qinv(q_fp)
+                # Closing the elbow increases dot(-la_dir0, ha_dir_new)
+                q_la_back = q_fp if vdot(vmul(la_dir0, -1.0), q_fp.rotate_vector(ha_dir0)) >= vdot(vmul(la_dir0, -1.0), q_fn.rotate_vector(ha_dir0)) else q_fn
+            else:
+                q_la_back = unreal.Quat(0.0, 0.0, 0.0, 1.0)
             q_la_l = unreal.Quat(0.0, 0.0, 0.0, 1.0)
             if s == "l":
                 e_hook = ss(1.0, 5.0, float(f)) * (1.0 - ss(7.0, 12.0, float(f)))
