@@ -69,6 +69,17 @@ def mk_tf(pos, quat, scl):
     return unreal.Transform(location=pos, rotation=quat.rotator(), scale=scl)
 
 
+def qnlerp(a, b, t):
+    dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w
+    s = -1.0 if dot < 0.0 else 1.0
+    x = a.x * (1.0 - t) + s * b.x * t
+    y = a.y * (1.0 - t) + s * b.y * t
+    z = a.z * (1.0 - t) + s * b.z * t
+    w = a.w * (1.0 - t) + s * b.w * t
+    l = math.sqrt(x * x + y * y + z * z + w * w)
+    return unreal.Quat(x / l, y / l, z / l, w / l)
+
+
 def quat_between(u, v):
     u, v = vnorm(u), vnorm(v)
     d = max(-1.0, min(1.0, vdot(u, v)))
@@ -232,8 +243,8 @@ if SAVE:
         for _ in range(2):
             nr = list(rots)
             for f in range(1, min(11, n - 1)):
-                q_mid = unreal.Quat.slerp(rots[f - 1], rots[f + 1], 0.5)
-                nr[f] = unreal.Quat.slerp(rots[f], q_mid, 0.5)
+                q_mid = qnlerp(rots[f - 1], rots[f + 1], 0.5)
+                nr[f] = qnlerp(rots[f], q_mid, 0.5)
             rots = nr
         ctrl.set_bone_track_keys(b, [t.translation for t in tfs], rots, [t.scale3d for t in tfs], False)
     ctrl.close_bracket(False)
