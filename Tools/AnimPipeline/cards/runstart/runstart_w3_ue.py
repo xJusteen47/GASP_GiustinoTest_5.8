@@ -21,6 +21,11 @@ SPINE_PITCH = float(os.environ.get("W3_SPINE_PITCH", "10.0")) # deg forward
 KNEE_DROP = float(os.environ.get("W3_KNEE_DROP", "0.35"))    # fraction of swing foot height above 14 cm
 SWING_LAG = float(os.environ.get("W3_SWING_LAG", "1.5"))     # cm trailing (-Y) on swing foot
 LAT_WIDEN = float(os.environ.get("W3_LAT_WIDEN", "6.0"))     # cm lateral widening per foot for >= 10 cm ankle gap
+ARM_FWD_SH = float(os.environ.get("W3_ARM_FWD_SH", "16.0"))  # deg forward swing on lead upperarm
+ARM_FWD_EL = float(os.environ.get("W3_ARM_FWD_EL", "14.0"))  # deg elbow extension on lead forearm
+ARM_FWD_OUT = float(os.environ.get("W3_ARM_FWD_OUT", "6.0")) # deg outward open on lead upperarm
+ARM_BACK_SH = float(os.environ.get("W3_ARM_BACK_SH", "15.0"))# deg back-swing on rear upperarm
+CLAV_SWING = float(os.environ.get("W3_CLAV_SWING", "5.0"))   # deg clavicle protraction/retraction
 
 
 def ss(a, b, x):
@@ -125,6 +130,11 @@ def pitch_quat(deg, ref_vec):
     return q_neg
 
 
+def yaw_quat(deg):
+    r = math.radians(deg)
+    return unreal.Quat(0.0, 0.0, math.sin(0.5 * r), math.cos(0.5 * r))
+
+
 unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(["/Game/GSTN", "/Game/Characters"], True)
 
 if SAVE:
@@ -138,11 +148,29 @@ else:
 n = int(seq.get_editor_property("number_of_sampled_keys"))
 opts = unreal.AnimPoseEvaluationOptions()
 bones_needed = ["root", "pelvis", "spine_01", "neck_01", "ik_foot_root",
-                "thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r"]
+                "thigh_l", "calf_l", "foot_l", "thigh_r", "calf_r", "foot_r",
+                "clavicle_l", "upperarm_l", "lowerarm_l", "hand_l",
+                "clavicle_r", "upperarm_r", "lowerarm_r", "hand_r"]
 
 tracks = {b: ([], [], []) for b in ["pelvis", "spine_01", "neck_01",
+                                     "clavicle_l", "upperarm_l", "lowerarm_l",
+                                     "clavicle_r", "upperarm_r", "lowerarm_r",
                                      "thigh_l", "calf_l", "foot_l", "ik_foot_l",
                                      "thigh_r", "calf_r", "foot_r", "ik_foot_r"]}
+
+# Precompute smoothed arm-lead signal (+ = L hand ahead, - = R hand ahead)
+raw_hd = []
+for f in range(n):
+    p0 = unreal.AnimPoseExtensions.get_anim_pose_at_time(seq, f / 30.0, opts)
+    hl = unreal.AnimPoseExtensions.get_bone_pose(p0, "hand_l", unreal.AnimPoseSpaces.WORLD).translation.y
+    hr = unreal.AnimPoseExtensions.get_bone_pose(p0, "hand_r", unreal.AnimPoseSpaces.WORLD).translation.y
+    raw_hd.append(math.tanh((hl - hr) / 18.0))
+hd_sig = list(raw_hd)
+for _ in range(2):
+    tmp = list(hd_sig)
+    for f in range(1, n - 1):
+        tmp[f] = 0.25 * hd_sig[f - 1] + 0.5 * hd_sig[f] + 0.25 * hd_sig[f + 1]
+    hd_sig = tmp
 
 max_dy = 0.0
 for f in range(n):
@@ -203,28 +231,60 @@ for f in range(n):
             nw[fo] = mk_tf(foot_new, q_f_yaw * w[fo].rotation, w[fo].scale3d)
 
     # Convert modified bones to parent-local space
-    parents = {
-        "pelvis": "root",
-        "spine_01": "pelvis",
-        "neck_01": "spine_01",  # note: spine_02..05 are untouched in local space, wait!
-        "thigh_l": "pelvis", "calf_l": "thigh_l", "foot_l": "calf_l", "ik_foot_l": "ik_foot_root",
-        "thigh_r": "pelvis", "calf_r": "thigh_r", "foot_r": "calf_r", "ik_foot_r": "ik_foot_root",
-    }
-    # For neck_01, its actual parent is spine_05 (which rotated by q_sp with spine_01!).
-    # So we only need pelvis, spine_01, and legs; neck_01's parent is spine_05, so we compute neck_01 relative to spine_05_new!
+    # For neck_01 and clavicles, parent is spine_05 (rotated by q_sp with spine_01)
     sp05_old = unreal.AnimPoseExtensions.get_bone_pose(pose, "spine_05", unreal.AnimPoseSpaces.WORLD)
     if e <= 1e-6:
         sp05_new = sp05_old
     else:
         sp05_off = vsub(sp05_old.translation, w["spine_01"].translation)
         sp05_new = mk_tf(vadd(nw["spine_01"].translation, q_sp.rotate_vector(sp05_off)), q_sp * sp05_old.rotation, sp05_old.scale3d)
+        # 5. Synchronize arms & shoulders to the forward fall
+        hd = hd_sig[f]
+        for s, sign in (("l", 1.0), ("r", -1.0)):
+            cl, ua, la, ha = "clavicle_" + s, "upperarm_" + s, "lowerarm_" + s, "hand_" + s
+            w_fwd = max(0.0, hd if s == "l" else -hd)
+            w_rear = max(0.0, -hd if s == "l" else hd)
+            # Clavicle protraction/retraction about Z
+            cl_off = vsub(w[cl].translation, w["spine_01"].translation)
+            cl_pos = vadd(nw["spine_01"].translation, q_sp.rotate_vector(cl_off))
+            ua_dir0 = q_sp.rotate_vector(vsub(w[ua].translation, w[cl].translation))
+            q_cl_pos = yaw_quat(CLAV_SWING * e * (w_fwd - w_rear))
+            q_cl = q_cl_pos if (q_cl_pos.rotate_vector(ua_dir0).y - ua_dir0.y) * (w_fwd - w_rear) >= 0 else q_cl_pos.inverse()
+            nw[cl] = mk_tf(cl_pos, q_cl * q_sp * w[cl].rotation, w[cl].scale3d)
+
+            # Upperarm: forward swing + slight outward open (lead), or back-swing (rear)
+            ua_pos = vadd(cl_pos, q_cl.rotate_vector(ua_dir0))
+            la_dir0 = (q_cl * q_sp).rotate_vector(vsub(w[la].translation, w[ua].translation))
+            q_sh_fwd = pitch_quat(ARM_FWD_SH * e * w_fwd, la_dir0)
+            q_sh_back = pitch_quat(ARM_BACK_SH * e * w_rear, la_dir0).inverse()
+            q_out_pos = yaw_quat(ARM_FWD_OUT * e * w_fwd)
+            # Outward = same sign as lat_vec (L - R)
+            q_out = q_out_pos if vdot(vsub(q_out_pos.rotate_vector(la_dir0), la_dir0), vmul(lat_vec, sign)) >= 0 else q_out_pos.inverse()
+            q_ua = q_out * q_sh_fwd * q_sh_back
+            nw[ua] = mk_tf(ua_pos, q_ua * q_cl * q_sp * w[ua].rotation, w[ua].scale3d)
+
+            # Lowerarm: extend slightly forward on lead arm so forearm drives into run direction
+            la_pos = vadd(ua_pos, q_ua.rotate_vector(la_dir0))
+            ha_dir0 = (q_ua * q_cl * q_sp).rotate_vector(vsub(w[ha].translation, w[la].translation))
+            q_la = pitch_quat(ARM_FWD_EL * e * w_fwd, ha_dir0)
+            nw[la] = mk_tf(la_pos, q_la * q_ua * q_cl * q_sp * w[la].rotation, w[la].scale3d)
+
+    parents = {
+        "pelvis": "root",
+        "spine_01": "pelvis",
+        "neck_01": "spine_05",
+        "clavicle_l": "spine_05", "upperarm_l": "clavicle_l", "lowerarm_l": "upperarm_l",
+        "clavicle_r": "spine_05", "upperarm_r": "clavicle_r", "lowerarm_r": "upperarm_r",
+        "thigh_l": "pelvis", "calf_l": "thigh_l", "foot_l": "calf_l", "ik_foot_l": "ik_foot_root",
+        "thigh_r": "pelvis", "calf_r": "thigh_r", "foot_r": "calf_r", "ik_foot_r": "ik_foot_root",
+    }
 
     for b, par in parents.items():
         if b.startswith("ik_foot_"):
             src_fo = "foot_" + b[-1]
             loc = nw[src_fo].make_relative(nw["ik_foot_root"])
-        elif b == "neck_01":
-            loc = nw["neck_01"].make_relative(sp05_new)
+        elif par == "spine_05":
+            loc = nw[b].make_relative(sp05_new)
         else:
             loc = nw[b].make_relative(nw[par])
         tracks[b][0].append(loc.translation)
