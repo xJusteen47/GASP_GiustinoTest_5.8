@@ -198,7 +198,7 @@ for f in range(n):
             nw[th] = mk_tf(hip_new, q_th_delta * w[th].rotation, w[th].scale3d)
             nw[ca] = mk_tf(knee_new, q_ca_delta * w[ca].rotation, w[ca].scale3d)
             # Slight yaw correction on R foot in f2..f8 to keep twist within stock loop range
-            q_f_yaw = unreal.Quat(0.0, 0.0, math.sin(math.radians(-4.0 * e)), math.cos(math.radians(-4.0 * e))) if s == "r" else unreal.Quat(0.0, 0.0, 0.0, 1.0)
+            q_f_yaw = unreal.Quat(0.0, 0.0, math.sin(math.radians(8.0 * e)), math.cos(math.radians(8.0 * e))) if s == "r" else unreal.Quat(0.0, 0.0, 0.0, 1.0)
             nw[fo] = mk_tf(foot_new, q_f_yaw * w[fo].rotation, w[fo].scale3d)
 
     # Convert modified bones to parent-local space
@@ -236,15 +236,16 @@ if SAVE:
     ctrl.open_bracket(unreal.Text("runstart w3 additive"), False)
     for b, (pos, rot, scl) in tracks.items():
         ctrl.set_bone_track_keys(b, pos, rot, scl, False)
-    # Smooth arm local rotations in f1..f10 (2 passes) to eliminate w2 f3/f8 elbow/hand jitter
+    # Smooth arm local rotations in f1..f15 (3 passes, fading out f10..f15) to eliminate w2 elbow/hand jitter
     for b in ("upperarm_l", "lowerarm_l", "hand_l", "upperarm_r", "lowerarm_r", "hand_r"):
         tfs = [AL.get_bone_pose_for_frame(seq, b, f, False) for f in range(n)]
         rots = [t.rotation for t in tfs]
-        for _ in range(2):
+        for _ in range(3):
             nr = list(rots)
-            for f in range(1, min(11, n - 1)):
+            for f in range(1, min(16, n - 1)):
+                w_sm = 0.5 * (1.0 - ss(10.0, 16.0, float(f)))
                 q_mid = qnlerp(rots[f - 1], rots[f + 1], 0.5)
-                nr[f] = qnlerp(rots[f], q_mid, 0.5)
+                nr[f] = qnlerp(rots[f], q_mid, w_sm)
             rots = nr
         ctrl.set_bone_track_keys(b, [t.translation for t in tfs], rots, [t.scale3d for t in tfs], False)
     ctrl.close_bracket(False)
