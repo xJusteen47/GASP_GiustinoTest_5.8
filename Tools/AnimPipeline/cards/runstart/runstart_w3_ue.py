@@ -19,7 +19,8 @@ PELVIS_DY = float(os.environ.get("W3_PELVIS_DY", "12.0"))    # cm forward (+Y)
 PELVIS_DZ = float(os.environ.get("W3_PELVIS_DZ", "-4.0"))    # cm vertical (lower COM/head)
 SPINE_PITCH = float(os.environ.get("W3_SPINE_PITCH", "10.0")) # deg forward
 KNEE_DROP = float(os.environ.get("W3_KNEE_DROP", "0.35"))    # fraction of swing foot height above 14 cm
-SWING_LAG = float(os.environ.get("W3_SWING_LAG", "1.5"))     # cm trailing (-Y) on swing foot
+SWING_LAG = float(os.environ.get("W3_SWING_LAG", "4.0"))     # cm trailing (-Y) on swing foot in f0-f10 (torso leads)
+CATCH_FWD = float(os.environ.get("W3_CATCH_FWD", "5.5"))     # cm forward (+Y) on swing foot in f10-f22 (legs catch up)
 LAT_WIDEN = float(os.environ.get("W3_LAT_WIDEN", "6.0"))     # cm lateral widening per foot for >= 10 cm ankle gap
 ARM_FWD_SH = float(os.environ.get("W3_ARM_FWD_SH", "16.0"))  # deg forward swing on lead upperarm
 ARM_FWD_EL = float(os.environ.get("W3_ARM_FWD_EL", "14.0"))  # deg elbow extension on lead forearm
@@ -43,6 +44,18 @@ def env(f):
 
 def env_lat(f):
     return ss(0.0, 2.0, float(f)) * (1.0 - ss(19.0, 22.0, float(f)))
+
+
+def env_lag(f):
+    return ss(0.0, 3.0, float(f)) * (1.0 - ss(9.0, 16.0, float(f)))
+
+
+def env_catch(f):
+    return ss(9.0, 14.0, float(f)) * (1.0 - ss(19.0, 25.0, float(f)))
+
+
+def qinv(q):
+    return unreal.Quat(-q.x, -q.y, -q.z, q.w)
 
 
 def vsub(a, b):
@@ -201,10 +214,12 @@ for f in range(n):
         q_nk = unreal.Quat(q_sp.x * -0.2, 0.0, 0.0, math.sqrt(max(0.0, 1.0 - (q_sp.x * -0.2) ** 2)))
         nw["neck_01"] = mk_tf(nk_pos, q_nk * q_sp * w["neck_01"].rotation, w["neck_01"].scale3d)
 
-        # 4. Legs 2-bone IK + lateral ankle clearance
+        # 4. Legs 2-bone IK + lateral ankle clearance + staggered torso-lead / leg-catch-up
         lat_vec = vsub(w["thigh_l"].translation, w["thigh_r"].translation)
         lat_vec = vnorm(unreal.Vector(lat_vec.x, lat_vec.y, 0.0))
         el = env_lat(f)
+        elag = env_lag(f)
+        ecat = env_catch(f)
         for s, sign in (("l", 1.0), ("r", -1.0)):
             th, ca, fo = "thigh_" + s, "calf_" + s, "foot_" + s
             hip_old = w[th].translation
@@ -214,7 +229,7 @@ for f in range(n):
             fz = foot_old.z
             if fz > 15.0:
                 fz_new = fz - KNEE_DROP * (fz - 14.0) * e
-                fy_new = foot_old.y - SWING_LAG * e
+                fy_new = foot_old.y - SWING_LAG * elag + CATCH_FWD * ecat
             else:
                 fz_new = fz
                 fy_new = foot_old.y
@@ -249,17 +264,17 @@ for f in range(n):
             cl_pos = vadd(nw["spine_01"].translation, q_sp.rotate_vector(cl_off))
             ua_dir0 = q_sp.rotate_vector(vsub(w[ua].translation, w[cl].translation))
             q_cl_pos = yaw_quat(CLAV_SWING * e * (w_fwd - w_rear))
-            q_cl = q_cl_pos if (q_cl_pos.rotate_vector(ua_dir0).y - ua_dir0.y) * (w_fwd - w_rear) >= 0 else q_cl_pos.inverse()
+            q_cl = q_cl_pos if (q_cl_pos.rotate_vector(ua_dir0).y - ua_dir0.y) * (w_fwd - w_rear) >= 0 else qinv(q_cl_pos)
             nw[cl] = mk_tf(cl_pos, q_cl * q_sp * w[cl].rotation, w[cl].scale3d)
 
             # Upperarm: forward swing + slight outward open (lead), or back-swing (rear)
             ua_pos = vadd(cl_pos, q_cl.rotate_vector(ua_dir0))
             la_dir0 = (q_cl * q_sp).rotate_vector(vsub(w[la].translation, w[ua].translation))
             q_sh_fwd = pitch_quat(ARM_FWD_SH * e * w_fwd, la_dir0)
-            q_sh_back = pitch_quat(ARM_BACK_SH * e * w_rear, la_dir0).inverse()
+            q_sh_back = qinv(pitch_quat(ARM_BACK_SH * e * w_rear, la_dir0))
             q_out_pos = yaw_quat(ARM_FWD_OUT * e * w_fwd)
             # Outward = same sign as lat_vec (L - R)
-            q_out = q_out_pos if vdot(vsub(q_out_pos.rotate_vector(la_dir0), la_dir0), vmul(lat_vec, sign)) >= 0 else q_out_pos.inverse()
+            q_out = q_out_pos if vdot(vsub(q_out_pos.rotate_vector(la_dir0), la_dir0), vmul(lat_vec, sign)) >= 0 else qinv(q_out_pos)
             q_ua = q_out * q_sh_fwd * q_sh_back
             nw[ua] = mk_tf(ua_pos, q_ua * q_cl * q_sp * w[ua].rotation, w[ua].scale3d)
 
