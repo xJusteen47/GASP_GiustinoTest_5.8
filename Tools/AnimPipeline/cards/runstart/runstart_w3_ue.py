@@ -60,6 +60,10 @@ def vdot(a, b):
     return a.x * b.x + a.y * b.y + a.z * b.z
 
 
+def mk_tf(pos, quat, scl):
+    return unreal.Transform(location=pos, rotation=quat.rotator(), scale=scl)
+
+
 def solve_2bone_ik(hip_new, foot_new, hip_old, knee_old, foot_old):
     L1 = vlen(vsub(knee_old, hip_old))
     L2 = vlen(vsub(foot_old, knee_old))
@@ -124,21 +128,19 @@ for f in range(n):
         dy = PELVIS_DY * e
         dz = PELVIS_DZ * e
         max_dy = max(max_dy, dy)
-        p_tf = unreal.Transform(location=vadd(w["pelvis"].translation, unreal.Vector(0.0, dy, dz)),
-                                rotation=w["pelvis"].rotation,
-                                scale=w["pelvis"].scale3d)
+        p_tf = mk_tf(vadd(w["pelvis"].translation, unreal.Vector(0.0, dy, dz)), w["pelvis"].rotation, w["pelvis"].scale3d)
         nw["pelvis"] = p_tf
 
         # 2. Spine_01 forward pitch (about +X, increasing +Y of neck-spine)
         sp_pos = vadd(w["spine_01"].translation, unreal.Vector(0.0, dy, dz))
         q_sp = pitch_quat(SPINE_PITCH * e, vsub(w["neck_01"].translation, w["spine_01"].translation))
-        nw["spine_01"] = unreal.Transform(location=sp_pos, rotation=q_sp * w["spine_01"].rotation, scale=w["spine_01"].scale3d)
+        nw["spine_01"] = mk_tf(sp_pos, q_sp * w["spine_01"].rotation, w["spine_01"].scale3d)
 
         # 3. Neck_01 counter-pitch 50% to keep gaze forward
         nk_off = vsub(w["neck_01"].translation, w["spine_01"].translation)
         nk_pos = vadd(sp_pos, q_sp.rotate_vector(nk_off))
         q_nk = pitch_quat(-0.5 * SPINE_PITCH * e, unreal.Vector(0.0, 0.0, 10.0))
-        nw["neck_01"] = unreal.Transform(location=nk_pos, rotation=q_nk * q_sp * w["neck_01"].rotation, scale=w["neck_01"].scale3d)
+        nw["neck_01"] = mk_tf(nk_pos, q_nk * q_sp * w["neck_01"].rotation, w["neck_01"].scale3d)
 
         # 4. Legs 2-bone IK
         for s in ("l", "r"):
@@ -160,9 +162,9 @@ for f in range(n):
             q_th_delta = unreal.Quat.find_between_vectors(vnorm(vsub(knee_old, hip_old)), vnorm(vsub(knee_new, hip_new)))
             q_ca_delta = unreal.Quat.find_between_vectors(vnorm(vsub(foot_old, knee_old)), vnorm(vsub(foot_new, knee_new)))
 
-            nw[th] = unreal.Transform(location=hip_new, rotation=q_th_delta * w[th].rotation, scale=w[th].scale3d)
-            nw[ca] = unreal.Transform(location=knee_new, rotation=q_ca_delta * w[ca].rotation, scale=w[ca].scale3d)
-            nw[fo] = unreal.Transform(location=foot_new, rotation=w[fo].rotation, scale=w[fo].scale3d)
+            nw[th] = mk_tf(hip_new, q_th_delta * w[th].rotation, w[th].scale3d)
+            nw[ca] = mk_tf(knee_new, q_ca_delta * w[ca].rotation, w[ca].scale3d)
+            nw[fo] = mk_tf(foot_new, w[fo].rotation, w[fo].scale3d)
 
     # Convert modified bones to parent-local space
     parents = {
@@ -179,7 +181,7 @@ for f in range(n):
         sp05_new = sp05_old
     else:
         sp05_off = vsub(sp05_old.translation, w["spine_01"].translation)
-        sp05_new = unreal.Transform(location=vadd(nw["spine_01"].translation, q_sp.rotate_vector(sp05_off)), rotation=q_sp * sp05_old.rotation, scale=sp05_old.scale3d)
+        sp05_new = mk_tf(vadd(nw["spine_01"].translation, q_sp.rotate_vector(sp05_off)), q_sp * sp05_old.rotation, sp05_old.scale3d)
 
     for b, par in parents.items():
         if b.startswith("ik_foot_"):
