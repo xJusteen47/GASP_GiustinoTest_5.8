@@ -26,6 +26,10 @@ class GSTNBACKPACKGAS_API UGSTN_BackpackDefinition : public UPrimaryDataAsset
 public:
 	static const FPrimaryAssetType AssetType;
 
+	/** The name the loadout screen shows (M11 leftover); empty = the asset name without its prefix (DA_Backpack_JetPack -> Backpack JetPack) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Backpack")
+	FText DisplayName;
+
 	/** Identity: exactly one leaf under Backpack (Backpack.JetPack); other tags only classify */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Backpack", meta = (Categories = "Backpack"))
 	FGameplayTagContainer BackpackTags;

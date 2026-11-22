@@ -82,7 +82,7 @@ using FGSTN_LoadoutChoiceProvider = TFunction<void(const FGSTN_LoadoutChoiceCont
  * The rows of the loadout screen (M11 loadout screen). The combat layer gives the kit row and one row per special that has alternatives;
  * an optional plugin registers its own rows from its module startup (mods: GSTNKitModsGAS, backpacks: GSTNBackpackGAS) and removes
  * them at shutdown, so a disabled plugin is simply absent from the screen. Providers run by priority, then id: the built-in rows sit
- * at 0 (kit) and 100 (specials). Rows with no option are dropped. Game thread only.
+ * at 0 (kit), 50 (support weapons, one row per MaxAdditionalWeapons slot), 60 (supers, one per SuperSlotCount slot) and 100 (specials). Rows with no option are dropped. Game thread only.
  */
 struct GSTNCOMBATGAS_API FGSTN_LoadoutChoiceRegistry
 {

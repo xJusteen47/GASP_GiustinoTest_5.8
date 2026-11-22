@@ -41,7 +41,9 @@ void FGSTN_BackpackChoices::Gather(const FGSTN_LoadoutChoiceContext& Context, TA
 	for (const FSoftObjectPath& Backpack : Backpacks)
 	{
 		FGSTN_LoadoutChoiceOption& Option = Row.Options.AddDefaulted_GetRef();
-		Option.Label = FGSTN_LoadoutChoiceRegistry::PrettyName(Backpack);
+		// The asset's DisplayName when set (the backpack is loaded here anyway: Equip below reads it)
+		const UGSTN_BackpackDefinition* Definition = Cast<UGSTN_BackpackDefinition>(Backpack.TryLoad());
+		Option.Label = Definition && !Definition->DisplayName.IsEmpty() ? Definition->DisplayName : FGSTN_LoadoutChoiceRegistry::PrettyName(Backpack);
 		if (Backpack == Current)
 		{
 			Option.Result = Context.Draft;

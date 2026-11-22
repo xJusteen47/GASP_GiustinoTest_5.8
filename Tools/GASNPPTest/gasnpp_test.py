@@ -2346,10 +2346,12 @@ def scenario_jump_squat(client=1):
     key, st, marks = run.key, {}, {}
     base = (_loadout_view(0, key)[0].get('revision') or 0)
     tag, jump, frame_ms = 'Test.State.JumpSquat', button_mask('Jump'), 1000.0 / 60.0
+    # The jump goes 2.4 s after the kit request (was 1.4 s): in long suites the owner's copy had not applied the kit yet at 1.9 s (m11-merge-ue59)
+    JS = 3.0
 
     def ticks(side):
         # one entry per sim tick (a resimulated tick keeps its last version), in sim order
-        by_ms = {x[side]['ms']: x[side] for x in run.sim if 2.0 <= x['t'] <= 4.5 and x.get(side)}
+        by_ms = {x[side]['ms']: x[side] for x in run.sim if JS + 0.0 <= x['t'] <= JS + 2.5 and x.get(side)}
         return [by_ms[k] for k in sorted(by_ms)]
 
     def squat_shape(side):
@@ -2374,23 +2376,23 @@ def scenario_jump_squat(client=1):
         return d['srv'] is not None and d['cli'] is not None and abs(d["srv"] - d["cli"]) <= 3, f"sim ticks from the request to the first rising tick: authority {d['srv']}, owner {d['cli']} (want within 3: the velocity sample moves in steps of 2 to 3 ticks and the two copies sample on different phases)"
 
     def same_requests():
-        s, c = run.new_bindings(1.95, 4.4, 'srv'), run.new_bindings(1.95, 4.4, 'cli')
+        s, c = run.new_bindings(JS - 0.05, JS + 2.4, 'srv'), run.new_bindings(JS - 0.05, JS + 2.4, 'cli')
         return s == c, f'request bindings authority {s}, owner {c} (want equal; the refused press shows in the squat tag count of 6, a second squat would run longer)'
 
     steps = [
         (0.3, _mark(run, marks, 'start')),
         (0.4, lambda: ('clear', combat_clear(client))),
         (0.6, _c18_apply(key, st, 'S', 'KIT_Test_Squat')),
-        (1.8, _c18_accepted(run, st, 'S')),
-        (1.9, _c18_state(run, key, client, 'KIT_Test_Squat', base + 1, 'Squat kit applied on both, same table')),
-        (2.0, lambda: ('jump', combat_tap(client, jump))),
-        (2.04, lambda: ('second press inside the squat', combat_tap(client, jump))),
-        (4.4, squat_shape('srv')),
-        (4.4, squat_shape('cli')),
-        (4.4, run.at('the squat jump takes off at the same delay (within the sample step) on both', same_delay)),
-        (4.4, run.at('the same requests on both', same_requests)),
-        (4.5, lambda: ('cleanup', combat_clear(client))),
-        (4.6, run.finish()),
+        (JS - 0.2, _c18_accepted(run, st, 'S')),
+        (JS - 0.1, _c18_state(run, key, client, 'KIT_Test_Squat', base + 1, 'Squat kit applied on both, same table')),
+        (JS, lambda: ('jump', combat_tap(client, jump))),
+        (JS + 0.04, lambda: ('second press inside the squat', combat_tap(client, jump))),
+        (JS + 2.4, squat_shape('srv')),
+        (JS + 2.4, squat_shape('cli')),
+        (JS + 2.4, run.at('the squat jump takes off at the same delay (within the sample step) on both', same_delay)),
+        (JS + 2.4, run.at('the same requests on both', same_requests)),
+        (JS + 2.5, lambda: ('cleanup', combat_clear(client))),
+        (JS + 2.6, run.finish()),
     ]
     run.run(steps)
 
@@ -6664,6 +6666,10 @@ SUITE_DEFAULT = ['weapon_switch','combat_context', 'combat_main_inputs', 'combat
                  'dodge_feet', 'air_dodge_feet', 'ricochet', 'kit_escape_in_hitstun',
                  # M4 H13b: the burst flag (swaps the dodger's loadout)
                  'burst_ends_reaction']
+# Known timing flakes (m11-merge-ue59: jump_squat, client kit not applied yet; m11-slice18-20: hit_on_wall_hit, wall-grab count): red in about 1
+# of 25 suites, green alone. testing.md's rule (a flaky one is re-run once before it counts as red) is applied here, right away and in place, so
+# the order the suite depends on is kept. The report shows the first failure: 'PASS on rerun' is green, 'FAIL ... (rerun)' is a real red.
+SUITE_FLAKY = ('jump_squat', 'hit_on_wall_hit')
 _suite = {'handle': None, 'results': [], 'queue': [], 'current': None, 'started': 0.0, 'prev': None, 'settle_until': 0.0, 'timeout': 120.0}
 
 
@@ -6678,7 +6684,7 @@ def run_suite(names=None, timeout=240.0, settle=2.0, client=1, reset_wait=2.5, a
             return f'refused: restart PIE first, these pawns still carry a loadout: {dirty}'
     if st['handle'] is not None:
         unreal.unregister_slate_post_tick_callback(st['handle'])
-    st.update(results=[], queue=list(names or SUITE_DEFAULT), current=None, timeout=timeout, settle=settle, settle_until=0.0, resetting=None, reset_done=False, reset_wait=reset_wait)
+    st.update(results=[], rerun=set(), first_fail={}, queue=list(names or SUITE_DEFAULT), current=None, timeout=timeout, settle=settle, settle_until=0.0, resetting=None, reset_done=False, reset_wait=reset_wait)
     st['client'] = client
 
     def tick(_dt):
@@ -6689,11 +6695,11 @@ def run_suite(names=None, timeout=240.0, settle=2.0, client=1, reset_wait=2.5, a
                 if done:
                     res = _last_run
                     bad = [f'{l} -> {d[:200]}' for ok, l, d in res['results'] if ok is False]
-                    st['results'].append((st['current'], res['verdict'], bad))
+                    _suite_record(st, st['current'], res['verdict'], bad)
                     st['current'] = None
                     st['settle_until'] = now + st['settle']
                 elif now - st['started'] > st['timeout']:
-                    st['results'].append((st['current'], 'TIMEOUT', []))
+                    _suite_record(st, st['current'], 'TIMEOUT', [])
                     st['current'] = None
                     st['settle_until'] = now + st['settle']
                 return
@@ -6745,6 +6751,21 @@ def run_suite(names=None, timeout=240.0, settle=2.0, client=1, reset_wait=2.5, a
 
     st['handle'] = unreal.register_slate_post_tick_callback(tick)
     return f"suite of {len(st['queue'])} started"
+
+
+def _suite_record(st, name, verdict, bad):
+    """Stores a scenario's verdict; a red SUITE_FLAKY scenario on its first run goes back to the head of the queue once (same place in the order)
+    and its first failure is kept for the report."""
+    if name in SUITE_FLAKY and not str(verdict).startswith('PASS') and name not in st['rerun']:
+        st['rerun'].add(name)
+        st['first_fail'][name] = (verdict, bad)
+        st['queue'].insert(0, name)
+        return
+    if name in st['first_fail']:
+        fv, fb = st['first_fail'][name]
+        first = f' (rerun; first run {fv} {fb[:2]})'
+        verdict = (f'{verdict} on rerun' if str(verdict).startswith('PASS') else f'{verdict} (rerun)') + first
+    st['results'].append((name, verdict, bad))
 
 
 def suite_report():

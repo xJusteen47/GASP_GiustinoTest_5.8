@@ -19,6 +19,12 @@
 #include "GSTN_ProjectileActor.h"
 #include "Net/UnrealNetwork.h"
 #include "Animation/AnimMontage.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Cosmetics/GSTN_EquipmentVisual.h"
+#include "DrawDebugHelpers.h"
+#include "GameFramework/Character.h"
+#include "GSTN_HeldAbilities.h"
+#include "HAL/IConsoleManager.h"
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"
 #endif
@@ -63,6 +69,20 @@ EDataValidationResult UGSTN_HeldObjectDefinition::IsDataValid(FDataValidationCon
 	return Result;
 }
 #endif
+
+// G12 presentation switches (owner rule: both behaviours shipped as a setting; all listed in GSTN Debug Options through the gstn.Held. prefix)
+static TAutoConsoleVariable<int32> CVarHeldHandAttach(TEXT("gstn.Held.HandAttach"), 1,
+	TEXT("Held object drawn in the holder's hand (the object's HandSocket on the drawn body mesh) instead of HoldOffset at the root. 1 = hand (default), 0 = root offset (slice 1-10 look)."),
+	ECVF_Default);
+static TAutoConsoleVariable<float> CVarHeldPlacementBlend(TEXT("gstn.Held.PlacementBlend"), 0.1f,
+	TEXT("Seconds the held object takes to ease from where it was drawn into the hand on pickup and out of the hand into its flight on release (0 = snap, as before). Default 0.1."),
+	ECVF_Default);
+static TAutoConsoleVariable<int32> CVarHeldArcPreview(TEXT("gstn.Held.ArcPreview"), 1,
+	TEXT("Throw arc preview while the local player holds an object (debug lines, not in Shipping). 0 = off, 1 = on (default)."),
+	ECVF_Default);
+static TAutoConsoleVariable<int32> CVarHeldPrompt(TEXT("gstn.Held.Prompt"), 2,
+	TEXT("Interact prompt of held objects (local player). 0 = none, 1 = pickup prompt over the targeted object, 2 = also the throw prompt over the object in hand (default)."),
+	ECVF_Default);
 
 UGSTN_HeldObjectComponent::UGSTN_HeldObjectComponent()
 {
@@ -301,6 +321,7 @@ void UGSTN_HeldObjectComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 		UpdatePlacement();
 	}
 	UpdatePrompt();
+	DrawArcPreview();
 }
 
 void UGSTN_HeldObjectComponent::UpdatePrompt()
@@ -311,24 +332,31 @@ void UGSTN_HeldObjectComponent::UpdatePrompt()
 	{
 		return;
 	}
-	bool bShown = false;
+	const int32 PromptLevel = CVarHeldPrompt.GetValueOnGameThread();
+	const UGSTN_HeldSettings* Settings = GetDefault<UGSTN_HeldSettings>();
+	const FText* Text = nullptr;
 	const APlayerController* Player = World->GetFirstPlayerController();
 	const APawn* Pawn = Player && Player->IsLocalController() ? Player->GetPawn() : nullptr;
 	const UAbilitySystemComponent* Abilities = Pawn ? UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Pawn) : nullptr;
-	if (State == EGSTN_HeldObjectState::Idle && Abilities && Abilities->HasMatchingGameplayTag(GSTNHeldTags::Interact_Target_Pickup))
+	if (PromptLevel >= 1 && State == EGSTN_HeldObjectState::Idle && Abilities && Abilities->HasMatchingGameplayTag(GSTNHeldTags::Interact_Target_Pickup))
 	{
 		const UGSTN_HeldSubsystem* Held = UGSTN_HeldSubsystem::Get(World);
-		bShown = Held && Held->FindPickupTarget(Pawn->GetActorLocation()) == this;
+		if (Held && Held->FindPickupTarget(Pawn->GetActorLocation()) == this)
+		{
+			Text = &Settings->PickupPromptText;
+		}
 	}
+	else if (PromptLevel >= 2 && State == EGSTN_HeldObjectState::Held && Pawn && Holder.Get() == Pawn && !Settings->ThrowPromptText.IsEmpty())
+	{
+		Text = &Settings->ThrowPromptText;
+	}
+	const bool bShown = Text != nullptr && !Text->IsEmpty();
 	if (bShown && !Prompt)
 	{
 		Prompt = NewObject<UTextRenderComponent>(Owner, TEXT("HeldPrompt"), RF_Transient);
 		Prompt->SetupAttachment(Owner->GetRootComponent());
-		Prompt->SetText(FText::FromString(TEXT("B")));
 		Prompt->SetHorizontalAlignment(EHTA_Center);
-		Prompt->SetWorldSize(40.f);
 		Prompt->SetTextRenderColor(FColor::White);
-		Prompt->SetRelativeLocation(FVector(0.f, 0.f, 80.f));
 		Prompt->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Prompt->RegisterComponent();
 	}
@@ -337,6 +365,9 @@ void UGSTN_HeldObjectComponent::UpdatePrompt()
 		Prompt->SetVisibility(bShown);
 		if (bShown)
 		{
+			Prompt->SetText(*Text);
+			Prompt->SetWorldSize(Settings->PromptWorldSize);
+			Prompt->SetRelativeLocation(FVector(0.f, 0.f, Settings->PromptHeight));
 			// Faces the camera of the local player
 			if (const APlayerCameraManager* Camera = Player->PlayerCameraManager)
 			{
@@ -345,6 +376,92 @@ void UGSTN_HeldObjectComponent::UpdatePrompt()
 			}
 		}
 	}
+}
+
+FTransform UGSTN_HeldObjectComponent::ComputeHoldTransform(const AActor& InHolder) const
+{
+	const FGSTN_HeldObjectTuning& Tuning = GetTuning();
+	if (CVarHeldHandAttach.GetValueOnGameThread() != 0 && !Tuning.HandSocket.IsNone() && !InHolder.IsNetMode(NM_DedicatedServer))
+	{
+		const ACharacter* Character = Cast<ACharacter>(&InHolder);
+		if (const USkeletalMeshComponent* Body = FGSTN_EquipmentVisualUtils::FindShownBodyMesh(InHolder, Character ? Character->GetMesh() : nullptr))
+		{
+			if (Body->DoesSocketExist(Tuning.HandSocket))
+			{
+				return FGSTN_HeldRules::HandTransform(Body->GetSocketTransform(Tuning.HandSocket), Tuning.HandOffset, Tuning.HandRotation);
+			}
+		}
+	}
+	return FGSTN_HeldRules::HoldTransform(InHolder.GetActorTransform(), Tuning.HoldOffset);
+}
+
+void UGSTN_HeldObjectComponent::PlaceBlended(const FTransform& Target, bool bRotate, uint8 PlacementKind)
+{
+	AActor* Owner = GetOwner();
+	const UWorld* World = GetWorld();
+	const double Now = World ? World->GetTimeSeconds() : 0.0;
+	const float Duration = Owner->IsNetMode(NM_DedicatedServer) ? 0.f : CVarHeldPlacementBlend.GetValueOnGameThread();
+	// A new kind of placement (picked up, released, the ghost handed over): absorb the jump from where it was drawn over Duration
+	if (PlacementKind != LastPlacementKind)
+	{
+		BlendJump = LastPlacementKind != 0 || State == EGSTN_HeldObjectState::Held ? Owner->GetActorLocation() - Target.GetLocation() : FVector::ZeroVector;
+		BlendStartSeconds = Now;
+		LastPlacementKind = PlacementKind;
+	}
+	const FVector Location = Target.GetLocation() + FGSTN_HeldRules::BlendOffset(BlendJump, static_cast<float>(Now - BlendStartSeconds), Duration);
+	if (bRotate)
+	{
+		Owner->SetActorLocationAndRotation(Location, Target.GetRotation());
+	}
+	else
+	{
+		Owner->SetActorLocation(Location);
+	}
+}
+
+void UGSTN_HeldObjectComponent::DrawArcPreview() const
+{
+#if ENABLE_DRAW_DEBUG
+	const UWorld* World = GetWorld();
+	if (!World || CVarHeldArcPreview.GetValueOnGameThread() == 0 || State != EGSTN_HeldObjectState::Held || !IsValid(Holder)
+		|| World->GetNetMode() == NM_DedicatedServer)
+	{
+		return;
+	}
+	const APlayerController* Player = World->GetFirstPlayerController();
+	if (!Player || !Player->IsLocalController() || Player->GetPawn() != Holder.Get())
+	{
+		return;
+	}
+	// The throw ability's muzzle and pitch (the configured class, else the plugin's), the object's speed and gravity: the shot a facing
+	// throw would make now. A stick or camera aim turns it at the release; the preview follows the facing
+	const UGSTN_HeldSettings* Settings = GetDefault<UGSTN_HeldSettings>();
+	UClass* ThrowClass = Settings->ThrowAbility.TryLoadClass<UGSTN_GA_HeldThrow>();
+	const UGSTN_GA_HeldThrow* Throw = GetDefault<UGSTN_GA_HeldThrow>(ThrowClass ? ThrowClass : UGSTN_GA_HeldThrow::StaticClass());
+	FGSTN_ProjectileParams Shot = GetTuning().Throw;
+	if (const FGSTN_HeldSizeClass* SizeClass = UGSTN_HeldRules::Get().FindSizeClass(GetTuning().SizeTag))
+	{
+		Shot.Speed *= SizeClass->ThrowSpeedScale;
+	}
+	const FTransform HolderTransform = Holder->GetActorTransform();
+	const FVector Origin = HolderTransform.TransformPosition(Throw->MuzzleOffset);
+	const FVector Velocity = FGSTN_HeldRules::ThrowLaunchVelocity(HolderTransform.Rotator().Yaw, Throw->LaunchPitchDeg, Shot.Speed);
+	const float Seconds = FMath::Min(Shot.LifetimeFrames / 62.5f, 2.f);
+	TArray<FVector> Points;
+	FGSTN_HeldRules::ThrowArcPoints(Origin, Velocity, Shot.GravityAccel, Seconds, 32, Points);
+	for (int32 Index = 1; Index < Points.Num(); ++Index)
+	{
+		// Stops at the first world hit, where the object would land or bounce
+		FHitResult Hit;
+		if (World->LineTraceSingleByChannel(Hit, Points[Index - 1], Points[Index], ECC_WorldStatic, FCollisionQueryParams(TEXT("HeldArcPreview"), false, Holder.Get())))
+		{
+			DrawDebugLine(World, Points[Index - 1], Hit.ImpactPoint, FColor::Yellow, false, -1.f, 0, 2.f);
+			DrawDebugSphere(World, Hit.ImpactPoint, 12.f, 8, FColor::Yellow, false, -1.f, 0, 1.f);
+			return;
+		}
+		DrawDebugLine(World, Points[Index - 1], Points[Index], FColor::Yellow, false, -1.f, 0, 2.f);
+	}
+#endif
 }
 
 void UGSTN_HeldObjectComponent::UpdatePlacement()
@@ -382,30 +499,32 @@ void UGSTN_HeldObjectComponent::UpdatePlacement()
 		}
 		else
 		{
-			Owner->SetActorLocation(Predicted->GetActorLocation());
+			PlaceBlended(FTransform(Predicted->GetActorLocation()), false, 3);
 			return;
 		}
 	}
 	switch (State)
 	{
 	case EGSTN_HeldObjectState::Broken:
+		LastPlacementKind = 0;
 		break;
 	case EGSTN_HeldObjectState::Held:
 		if (IsValid(Holder))
 		{
-			const FTransform Hold = FGSTN_HeldRules::HoldTransform(Holder->GetActorTransform(), GetTuning().HoldOffset);
-			Owner->SetActorLocationAndRotation(Hold.GetLocation(), Hold.GetRotation());
+			PlaceBlended(ComputeHoldTransform(*Holder), true, 1);
 		}
 		break;
 	case EGSTN_HeldObjectState::Flying:
 		// The projectile places itself at its frame; until a client has it, the object stays where it was (at the thrower)
 		if (IsValid(Flight))
 		{
-			Owner->SetActorLocation(Flight->GetActorLocation());
+			// The host's flight after the predicted ghost (kind 3) continues the same path: no new blend
+			PlaceBlended(FTransform(Flight->GetActorLocation()), false, LastPlacementKind == 3 ? 3 : 2);
 		}
 		break;
 	default:
 		Owner->SetActorLocation(RestLocation);
+		LastPlacementKind = 0;
 		break;
 	}
 }

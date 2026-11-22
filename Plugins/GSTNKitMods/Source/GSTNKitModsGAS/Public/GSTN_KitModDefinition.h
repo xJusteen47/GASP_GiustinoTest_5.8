@@ -27,6 +27,10 @@ class GSTNKITMODSGAS_API UGSTN_KitModDefinition : public UPrimaryDataAsset
 public:
 	static const FPrimaryAssetType AssetType;
 
+	/** The name the loadout screen shows (M11 leftover); empty = the asset name without its prefix (MOD_Long_Blade -> Long Blade) */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Mod")
+	FText DisplayName;
+
 	/** Identity: exactly one leaf under Mod (Mod.LongBlade); other tags only classify */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Mod", meta = (Categories = "Mod"))
 	FGameplayTagContainer ModTags;

@@ -170,11 +170,22 @@ Slice 2 adds to the core: `FGSTN_HeldBreakRules`, `FGSTN_HeldThrowInput`, `EGSTN
    `Command.Kit.Swap`, as GSTNLink's `ThrowSlotOverrides`. Which key or pad button is each logical button stays in the input config
    (`Content/Input`). Changing a button takes effect when a kit is compiled again (take a kit, or restart PIE). Test `GSTNHeld.Core.SlotInputs`.
 
+20. **G12 presentation (2026-11-21, cloud, compiled later)**. Every switch is a `gstn.Held.*` cvar in GSTN Debug Options. *Hand*:
+   `HandAttach` 1 draws a held object on the tuning's `HandSocket` (default `hand_r`) of the drawn body mesh
+   (`FGSTN_EquipmentVisualUtils::FindShownBodyMesh`) with `HandOffset` / `HandRotation`; 0, a dedicated server or a mesh without the socket
+   keep `HoldOffset` at the root. *Blend*: `PlacementBlend` seconds (default 0.1, 0 = snap) ease the object from where it was drawn into the
+   hand and out of the hand into its flight (or ghost). *Arc preview* (instead of an editor module): `ArcPreview` 1 draws, for the local
+   holder only and never in Shipping, the facing throw (the throw ability's muzzle and LaunchPitchDeg, the object's speed and gravity) up
+   to the first world hit; a stick or camera aim turns the real throw at the release. *Prompt*: `Prompt` 0/1/2 (pickup text over the
+   target, and a throw hint over the object in hand); texts `PickupPromptText` / `ThrowPromptText` in the held settings. *Wind-up*:
+   `WindupFrames` (-1 = data) is `gstn.Held.Windup N` as a variable, PIE only. Pure math `FGSTN_HeldRules::HandTransform`, `BlendOffset`,
+   `ThrowArcPoints`, `ThrowLaunchVelocity`; test `GSTNHeld.Core.PresentationMath`.
+
 ## Not yet (later slices of the plan)
 
 Friendly fire by mode is `UGSTN_CombatRules::FriendlyFireSources` (slice 7; projectiles only, melee keeps `bFriendlyFire`). The camera
 side of the shoulder aim (a pawn tag source that reports the precision aim component's view tags). G9 thrown
-enemies are in step 14 (fighters only). G12 left: hand-socket attach and release blend (spike S2), the arc preview in an editor module, the interact prompt and the HoldFrames validator; G13 left: the run with rendering and the per-update bytes of a flying object (the run above only measures totals). Minion hit delegates (`OnMinionHit`) carry no source tag
+enemies are in step 14 (fighters only). G12 left: the HoldFrames validator and the G12 video (hand attach, blend, arc preview and prompts: step 20, not yet seen in PIE); G13 left: the run with rendering and the per-update bytes of a flying object (the run above only measures totals). Minion hit delegates (`OnMinionHit`) carry no source tag
 (only the KO event does).
 
 Harness: `Tools/GASNPPTest/held_scenarios.py` (`SUITE_HELD`: `held_pickup_throw_hit`, `held_drop_and_break`, `held_carry_load`, `held_throw_break`, `held_throw_explode`, `held_throw_ghost`, `held_throw_enemy`, `held_throw_windup`). `SUITE_HELD_BYTES` = `held_bytes_perf` (G13, recorded: idle objects 0 B/s within the ±1 KB/s noise of the baseline; 32-64 projectiles alive +0.75 ms on the editor's whole frame, listen and dedicated, -nullrhi).

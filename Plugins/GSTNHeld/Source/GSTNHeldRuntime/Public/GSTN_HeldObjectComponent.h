@@ -161,6 +161,23 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<class UTextRenderComponent> Prompt;
 
+	/**
+	 * G12: where the object is drawn while held (every machine, presentation only): on HandSocket of the holder's drawn body mesh with
+	 * gstn.Held.HandAttach on and a mesh that has it, else HoldOffset at the root (also always on a dedicated server, whose mesh may not animate)
+	 */
+	FTransform ComputeHoldTransform(const AActor& InHolder) const;
+
+	/** Places the owner at Target plus what is left of the pickup/release blend (gstn.Held.PlacementBlend). Rotation only when bRotate */
+	void PlaceBlended(const FTransform& Target, bool bRotate, uint8 PlacementKind);
+
+	/** G12 arc preview: the local holder's throw arc as debug lines (gstn.Held.ArcPreview; never in Shipping, never on a dedicated server) */
+	void DrawArcPreview() const;
+
+	/** The release/pickup blend: the jump left to absorb and when it started; Kind = 0 none, 1 held, 2 flying, 3 predicted */
+	FVector BlendJump = FVector::ZeroVector;
+	double BlendStartSeconds = 0.0;
+	uint8 LastPlacementKind = 0;
+
 	UPROPERTY(ReplicatedUsing = OnRep_RestLocation, VisibleInstanceOnly, BlueprintReadOnly, Category = "Held", meta = (AllowPrivateAccess = "true"))
 	EGSTN_HeldObjectState State = EGSTN_HeldObjectState::Idle;
 

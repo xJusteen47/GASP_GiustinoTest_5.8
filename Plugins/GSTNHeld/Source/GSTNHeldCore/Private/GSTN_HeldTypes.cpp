@@ -110,6 +110,37 @@ FTransform FGSTN_HeldRules::HoldTransform(const FTransform& Holder, const FVecto
 	return FTransform(Holder.GetRotation(), Holder.TransformPosition(HoldOffset));
 }
 
+FTransform FGSTN_HeldRules::HandTransform(const FTransform& Socket, const FVector& Offset, const FRotator& Rotation)
+{
+	return FTransform(Rotation, Offset) * Socket;
+}
+
+FVector FGSTN_HeldRules::BlendOffset(const FVector& Offset, float Elapsed, float Duration)
+{
+	if (Duration <= 0.f || Elapsed >= Duration)
+	{
+		return FVector::ZeroVector;
+	}
+	const float Alpha = FMath::Clamp(Elapsed / Duration, 0.f, 1.f);
+	return Offset * (1.f - FMath::SmoothStep(0.f, 1.f, Alpha));
+}
+
+void FGSTN_HeldRules::ThrowArcPoints(const FVector& Origin, const FVector& Velocity, const FVector& Gravity, float Seconds, int32 Steps, TArray<FVector>& OutPoints)
+{
+	Steps = FMath::Clamp(Steps, 1, 256);
+	OutPoints.Reset(Steps + 1);
+	for (int32 Index = 0; Index <= Steps; ++Index)
+	{
+		const float T = Seconds * Index / Steps;
+		OutPoints.Add(Origin + Velocity * T + 0.5f * Gravity * T * T);
+	}
+}
+
+FVector FGSTN_HeldRules::ThrowLaunchVelocity(float YawDeg, float PitchDeg, float Speed)
+{
+	return FRotator(PitchDeg, YawDeg, 0.f).Vector() * Speed;
+}
+
 bool FGSTN_HeldRules::BreaksOnState(const FGameplayTagContainer& HolderTags, const FGSTN_HeldBreakRules& Rules)
 {
 	return !Rules.DropWhenHolderHasAny.IsEmpty() && HolderTags.HasAny(Rules.DropWhenHolderHasAny);
