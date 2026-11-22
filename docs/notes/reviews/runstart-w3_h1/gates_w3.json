@@ -14,18 +14,18 @@
   "thigh_r f60"
  ],
  "jit_elbow_l": [
-  0.9,
+  1.0,
   1,
   8.0
  ],
  "jit_knee_l": [
-  3.5,
-  12,
+  9.0,
+  14,
   10.0
  ],
  "jit_hand_l": [
-  4.2,
-  3,
+  0.7,
+  50,
   8.0
  ],
  "jit_elbow_r": [
@@ -69,13 +69,13 @@
   21.0
  ],
  "clear_hand_r-thigh_l": [
-  25.9,
+  31.2,
   11,
   14.0
  ],
  "clear_hand_r-thigh_r": [
-  17.7,
-  1,
+  18.8,
+  0,
   14.0
  ],
  "clear_hand_r-hips": [
