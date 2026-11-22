@@ -28,6 +28,8 @@ ARM_FWD_OUT = float(os.environ.get("W3_ARM_FWD_OUT", "5.0")) # deg outward open 
 ARM_BACK_SH = float(os.environ.get("W3_ARM_BACK_SH", "16.0"))# deg back & up swing on rear upperarm
 ARM_BACK_FL = float(os.environ.get("W3_ARM_BACK_FL", "22.0"))# deg extra elbow flexion on rear forearm (athletic sprint drive)
 CLAV_SWING = float(os.environ.get("W3_CLAV_SWING", "6.0"))   # deg clavicle protraction/retraction
+CHEST_TWIST = float(os.environ.get("W3_CHEST_TWIST", "3.5")) # deg chest counter-rotation vs pelvis
+ARM_DRAG = float(os.environ.get("W3_ARM_DRAG", "0.20"))      # 1-frame elastic drag on forearms/wrists
 
 
 def ss(a, b, x):
@@ -220,15 +222,21 @@ for f in range(n):
         p_tf = mk_tf(vadd(w["pelvis"].translation, unreal.Vector(0.0, dy, dz)), w["pelvis"].rotation, w["pelvis"].scale3d)
         nw["pelvis"] = p_tf
 
-        # 2. Spine_01 forward pitch (about +X, increasing +Y of neck-spine)
+        # 2. Spine_01 forward pitch (1-frame elastic lag + impact nod) + slight chest counter-rotation
         sp_pos = vadd(w["spine_01"].translation, unreal.Vector(0.0, dy, dz))
-        q_sp = pitch_quat(SPINE_PITCH * e, vsub(w["neck_01"].translation, w["spine_01"].translation))
+        e_sp = env(max(0, f - 1))
+        sp_deg = SPINE_PITCH * e_sp - 0.8 * contact_dip(max(0, f - 1))
+        q_sp_pit = pitch_quat(sp_deg, vsub(w["neck_01"].translation, w["spine_01"].translation))
+        q_sp_yaw = yaw_quat(CHEST_TWIST * e * hd_sig[f])
+        q_sp = q_sp_yaw * q_sp_pit
         nw["spine_01"] = mk_tf(sp_pos, q_sp * w["spine_01"].rotation, w["spine_01"].scale3d)
 
-        # 3. Neck_01 slight counter-pitch 20% to keep gaze forward without lifting head
+        # 3. Neck_01 2-frame elastic lag keeping gaze forward
         nk_off = vsub(w["neck_01"].translation, w["spine_01"].translation)
         nk_pos = vadd(sp_pos, q_sp.rotate_vector(nk_off))
-        q_nk = unreal.Quat(q_sp.x * -0.2, 0.0, 0.0, math.sqrt(max(0.0, 1.0 - (q_sp.x * -0.2) ** 2)))
+        e_nk = env(max(0, f - 2))
+        nk_frac = -0.25 * (e_nk / max(e_sp, 1e-3)) if e_sp > 1e-3 else 0.0
+        q_nk = unreal.Quat(q_sp_pit.x * nk_frac, 0.0, 0.0, math.sqrt(max(0.0, 1.0 - (q_sp_pit.x * nk_frac) ** 2)))
         nw["neck_01"] = mk_tf(nk_pos, q_nk * q_sp * w["neck_01"].rotation, w["neck_01"].scale3d)
 
         # 4. Legs 2-bone IK + lateral ankle clearance + staggered torso-lead / leg-catch-up
@@ -355,6 +363,11 @@ if SAVE:
                 q_mid = qnlerp(rots[f - 1], rots[f + 1], 0.5)
                 nr[f] = qnlerp(rots[f], q_mid, w_sm)
             rots = nr
+        if b.startswith(("lowerarm_", "hand_")) and ARM_DRAG > 0.0:
+            dr = list(rots)
+            for f in range(1, min(25, n)):
+                dr[f] = qnlerp(rots[f], rots[f - 1], ARM_DRAG * env(f))
+            rots = dr
         ctrl.set_bone_track_keys(b, [t.translation for t in tfs], rots, [t.scale3d for t in tfs], False)
     ctrl.close_bracket(False)
     rep["saved"] = bool(EAL.save_asset(DST, only_if_is_dirty=False))
