@@ -23,15 +23,15 @@
       "obiettivo": "disk-report-ue59",
       "machine": "fisso",
       "tier": "M0",
-      "status": "pending",
+      "status": "done",
       "uses_ue59": false,
-      "worktree": "C:\\Users\\jacop\\.gemini\\antigravity\\worktrees\\GASP_Giustino2\\harness-v2",
-      "attempts": 0,
+      "worktree": "C:\\Users\\jacop\\.gemini\\antigravity\\worktrees\\GASP_Giustino2\\integ-playtest",
+      "attempts": 1,
       "max_attempts": 2,
       "depends_on": [],
       "blocked_reason": null,
-      "branch": "claude/harness-v2",
-      "notes": "Misura worktree vecchi (categoria A) e DDC/Saved di _ue59 (categoria B); solo report, nessuna cancellazione senza OK owner"
+      "branch": "claude/integ-playtest-2026-11-22",
+      "notes": "Completato 2026-11-22 con 1A+2A: rimossi 10 wt (~85 GB) e 72 dir catture _ue59/Saved (~169 GB); C: a 300.22 GB liberi"
     },
     {
       "id": "desktop-integrazione-gpu",
@@ -45,8 +45,8 @@
       "max_attempts": 2,
       "depends_on": [],
       "blocked_reason": null,
-      "branch": "claude/integ-playtest",
-      "notes": "Merge branch cloud (S1 njoso3, haptics c2dfra, M12 p1 cf4bdc5a, M10/M11 ca4b2e8a) + build + cattura GPU split-screen 4 viste"
+      "branch": "claude/integ-playtest-2026-11-22",
+      "notes": "Merge git completato su claude/integ-playtest-2026-11-22 (S1 njoso3, haptics c2dfra, M12 p1 0f3p4m, M10/M11 476gv2 + main); restano build UE + cattura GPU split-screen 4 viste"
     },
     {
       "id": "desktop-s1-build-test",

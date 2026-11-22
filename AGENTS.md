@@ -3,12 +3,14 @@
 - **Lingua e stile:** rispondi a Giustino (`xJusteen47`) in **italiano**, sintetico, con passi manuali numerati quando serve azione owner.
 
 ## Memoria indicizzata su git (leggi SOLO ciò che serve al task)
-1. `handoffs/INDICE.md` — indice thread, branch, commit, esiti, task attivi.
+1. `handoffs/INDICE.md` — indice thread, branch, commit, esiti, task attivi (incluso automaticamente sotto).
 2. Handover del task attivo in `docs/notes/handovers/` (max 30 righe).
 3. `docs/notes/memoria-progetto.md` — stato progetto, hardware, decisioni, coda aperta.
 4. `docs/notes/regole-progetto-2026-11-22.md` — regole attive (Regole 1–15 + routing M0–M3).
 5. `handoffs/queue.json` e `handoffs/costi.csv` — coda deterministica e registro costi.
 - Mai rileggere vecchie chat/log completi se non espressamente richiesto dal brief.
+
+@[INDICE](handoffs/INDICE.md)
 
 ## Guardrail rigidi
 - **MAI** modificare file sporchi dell'owner in `C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_ue59` (`DA_Locomotion_Default.uasset`, `CHT_*_PoseMatch.uasset`, `_ue59/IN-USO.txt`, `Mixamo/`, ecc.).
