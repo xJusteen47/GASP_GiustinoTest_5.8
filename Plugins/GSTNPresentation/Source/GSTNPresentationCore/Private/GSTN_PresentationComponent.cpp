@@ -2,6 +2,8 @@
 
 #include "GSTN_PresentationComponent.h"
 
+#include "GSTN_SurfaceFeedbackComponent.h"
+
 #include "Animation/AnimSequenceBase.h"
 #include "Camera/CameraShakeBase.h"
 #include "Camera/PlayerCameraManager.h"
@@ -112,6 +114,10 @@ void UGSTN_PresentationComponent::SetTableLayer(FName Source, UGSTN_Presentation
 void UGSTN_PresentationComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	if (bSurfaceFeedback)
+	{
+		SurfaceFeedback = UGSTN_SurfaceFeedbackComponent::FindOrAdd(GetOwner());
+	}
 	WarmTable(DefaultTable);
 	if (!ProjectDefaultTable.IsNull())
 	{
@@ -212,6 +218,10 @@ bool UGSTN_PresentationComponent::ReportEvent(const FGSTN_PresentationEvent& InE
 	if (Cue && bPlayEffects && GSTNPresentationCVars::Effects.GetValueOnGameThread() != 0 && Cue->HasEffect() && GetNetMode() != NM_DedicatedServer)
 	{
 		PlayCue(*Cue, Event, Intensity);
+	}
+	if (bSurfaceFeedback && SurfaceFeedback)
+	{
+		SurfaceFeedback->HandlePresentationEvent(Event);  // its own switches; it plays nothing on a dedicated server
 	}
 
 	if (GSTNPresentationCVars::Log.GetValueOnGameThread() != 0)

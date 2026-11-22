@@ -26,7 +26,12 @@ bool FGSTN_DebugOptionsWindowTest::RunTest(const FString& Parameters)
 		const FString Help = Readable->GetHelp();
 		TestFalse(TEXT("its help names no level 2 or more: one check box, no number field"), Help.Contains(TEXT("2 =")) || Help.Contains(TEXT("3 =")));
 	}
-		TestEqual(TEXT("the group is the second part of the name"), SGSTN_DebugOptionsPanel::GroupOf(TEXT("gstn.Minion.Debug.LOD")), FString(TEXT("Minion")));
+	for (const TCHAR* Surface : {TEXT("gstn.Audio.Surface"), TEXT("gstn.Audio.FootwearOverride"), TEXT("gstn.Audio.LayerMode"),
+		TEXT("gstn.Audio.SurfaceDebug"), TEXT("gstn.Haptics.Enable"), TEXT("gstn.Haptics.Intensity")})
+	{
+		TestTrue(FString::Printf(TEXT("the surface feedback switch %s is listed"), Surface), Names.Contains(Surface));
+	}
+	TestEqual(TEXT("the group is the second part of the name"), SGSTN_DebugOptionsPanel::GroupOf(TEXT("gstn.Minion.Debug.LOD")), FString(TEXT("Minion")));
 	TestEqual(TEXT("a short name falls in Other"), SGSTN_DebugOptionsPanel::GroupOf(TEXT("gstn.Debug")), FString(TEXT("Other")));
 
 	IConsoleManager::Get().UnregisterConsoleObject(Probe, false);

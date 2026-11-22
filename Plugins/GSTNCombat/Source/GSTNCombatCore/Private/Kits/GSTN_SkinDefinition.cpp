@@ -14,7 +14,7 @@ FPrimaryAssetId UGSTN_SkinDefinition::GetPrimaryAssetId() const
 
 bool UGSTN_SkinDefinition::ChangesAnything() const
 {
-	if (!Mesh.IsNull() || !AnimClass.IsNull())
+	if (!Mesh.IsNull() || !AnimClass.IsNull() || Footwear.IsValid())
 	{
 		return true;
 	}

@@ -47,6 +47,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skin|Look")
 	TSoftClassPtr<UAnimInstance> AnimClass;
 
+	/**
+	 * Footwear of the skin (Presentation.Footwear.*: Clay, Metal, Barefoot, Shoe sole): the contact layer of its footsteps and their rumble
+	 * (surface feedback, docs/notes/surface-feedback.md). Empty = Clay, the stock GASP footstep. A tag, so this module needs no presentation code
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skin|Sound", meta = (Categories = "Presentation.Footwear"))
+	FGameplayTag Footwear;
+
 	/** True when the skin changes at least one thing */
 	bool ChangesAnything() const;
 

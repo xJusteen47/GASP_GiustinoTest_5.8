@@ -93,6 +93,11 @@ namespace
 		{
 			return true;
 		}
+		// surface feedback (2026-11-21): gstn.Audio.* (footwear x floor footsteps) and gstn.Haptics.* (pad rumble), cvars in GSTNPresentationCore
+		if (Name.StartsWith(TEXT("gstn.Audio."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Haptics."), ESearchCase::IgnoreCase))
+		{
+			return true;
+		}
 		// crouch-mesh-pop-1 (2026-11-21): gstn.Mesh.* (CapsuleShiftBeforeAnim, the crouch flash fix A/B); stance width layer (runstart-stancewidth): gstn.Loco.Stance*
 		return Name.StartsWith(TEXT("gstn.RunStart."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Mesh."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Camera."), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.Base"), ESearchCase::IgnoreCase)
 			|| Name.StartsWith(TEXT("gstn.Loco.Stance"), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.TorsoLean"), ESearchCase::IgnoreCase)
