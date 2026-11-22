@@ -25,6 +25,7 @@ LAT_WIDEN = float(os.environ.get("W3_LAT_WIDEN", "6.0"))     # cm lateral wideni
 ARM_FWD_SH = float(os.environ.get("W3_ARM_FWD_SH", "12.0"))  # deg forward swing on lead upperarm
 ARM_FWD_EL = float(os.environ.get("W3_ARM_FWD_EL", "0.0"))   # keep lead elbow bent ~80-90 deg (no straight extension)
 ARM_FWD_OUT = float(os.environ.get("W3_ARM_FWD_OUT", "5.0")) # deg outward open on lead upperarm
+ARM_R_OUT = float(os.environ.get("W3_ARM_R_OUT", "10.0"))    # deg outward abduction on arm_r (f5-f13 silhouette)
 ARM_BACK_SH = float(os.environ.get("W3_ARM_BACK_SH", "16.0"))# deg back & up swing on rear upperarm
 ARM_BACK_FL = float(os.environ.get("W3_ARM_BACK_FL", "22.0"))# deg extra elbow flexion on rear forearm (athletic sprint drive)
 CLAV_SWING = float(os.environ.get("W3_CLAV_SWING", "6.0"))   # deg clavicle protraction/retraction
@@ -301,10 +302,18 @@ for f in range(n):
             q_bn = qinv(q_bp)
             vp, vn = q_bp.rotate_vector(la_dir0), q_bn.rotate_vector(la_dir0)
             q_sh_back = q_bp if (vp.z - vp.y) >= (vn.z - vn.y) else q_bn
-            q_out_pos = yaw_quat(ARM_FWD_OUT * e * w_fwd)
+            q_out_pos = yaw_quat(ARM_FWD_OUT * e * w_fwd + (ARM_R_OUT * ss(1.0, 5.0, float(f)) * (1.0 - ss(13.0, 21.0, float(f))) if s == "r" else 0.0))
             # Outward = same sign as lat_vec (L - R)
             q_out = q_out_pos if vdot(vsub(q_out_pos.rotate_vector(la_dir0), la_dir0), vmul(lat_vec, sign)) >= 0 else qinv(q_out_pos)
-            q_ua = q_out * q_sh_fwd * q_sh_back
+            # Also roll upperarm_r outward about +Y (front axis) so elbow/forearm clear the flank in back view
+            q_r_abd = unreal.Quat(0.0, 0.0, 0.0, 1.0)
+            if s == "r":
+                er_out = ss(1.0, 5.0, float(f)) * (1.0 - ss(13.0, 21.0, float(f)))
+                ra = math.radians(ARM_R_OUT * er_out)
+                qp_a = unreal.Quat(0.0, math.sin(0.5 * ra), 0.0, math.cos(0.5 * ra))
+                qn_a = qinv(qp_a)
+                q_r_abd = qp_a if vdot(vsub(qp_a.rotate_vector(la_dir0), la_dir0), vmul(lat_vec, sign)) >= 0 else qn_a
+            q_ua = q_r_abd * q_out * q_sh_fwd * q_sh_back
             nw[ua] = mk_tf(ua_pos, q_ua * q_cl * q_sp * w[ua].rotation, w[ua].scale3d)
 
             # Lowerarm: keep lead elbow bent (~80-90 deg); increase flexion on rear elbow (fold forearm up behind back)
