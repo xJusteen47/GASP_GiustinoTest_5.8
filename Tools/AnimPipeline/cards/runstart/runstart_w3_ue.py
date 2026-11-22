@@ -87,8 +87,9 @@ def solve_2bone_ik(hip_new, foot_new, hip_old, knee_old, foot_old):
 
 
 def pitch_quat(deg, ref_vec):
-    q_pos = unreal.Quat(unreal.Vector(1.0, 0.0, 0.0), math.radians(deg))
-    q_neg = unreal.Quat(unreal.Vector(1.0, 0.0, 0.0), math.radians(-deg))
+    r = math.radians(deg)
+    q_pos = unreal.Quat(math.sin(0.5 * r), 0.0, 0.0, math.cos(0.5 * r))
+    q_neg = unreal.Quat(-math.sin(0.5 * r), 0.0, 0.0, math.cos(0.5 * r))
     if q_pos.rotate_vector(ref_vec).y >= q_neg.rotate_vector(ref_vec).y:
         return q_pos
     return q_neg
