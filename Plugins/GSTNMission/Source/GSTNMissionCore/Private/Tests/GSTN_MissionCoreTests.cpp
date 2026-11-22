@@ -11,9 +11,9 @@ using namespace GSTNMissionTags;
 namespace
 {
 	/** The counted event of these tests (stands for Combat.Event.KO + Minion.Type.X) */
-	const FGameplayTag& KillTag() { return Message_Mission_Collected; }
+	FGameplayTag KillTag() { return Message_Mission_Collected; }
 	/** An event that fails things (stands for the defended target's KO) */
-	const FGameplayTag& LossTag() { return Mission_Def; }
+	FGameplayTag LossTag() { return Mission_Def; }
 
 	FGSTN_SimEvent MakeEvent(const FGameplayTag& Type, int32 Frame = INDEX_NONE, AActor* Target = nullptr)
 	{
