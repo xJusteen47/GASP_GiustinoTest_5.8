@@ -1245,10 +1245,12 @@ GM.1. Realizziamo prima la modalità Livelli (con il framework di missioni, resp
 GM.2. Quanti giocatori per le modalità PvE (1–4?), e deve funzionare anche da solo (l'host senza altri client)?
    Perché conta: dimensiona i budget dell'host ([game-modes.md](game-modes.md) §7.3), il numero di rinforzi, la difficoltà e i moduli caricati contemporaneamente.
    Ipotesi nella specifica: da 1 a 4 giocatori, giocabile anche da soli, difficoltà scalata sul numero di giocatori.
+   **Risposta (2026-11-22):** **A** — 1–4 giocatori co-op, giocabile anche da solo; gli attributi e i parametri di difficoltà che scalano restano data-driven da valutare/regolare.
 
 GM.3. Come si scelgono e si sbloccano i livelli (mappa del mondo, elenco, ordine fisso), e c'è salvataggio o progressione tra le partite?
    Perché conta: decide se serve una `UGSTN_LevelSetDefinition` a grafo e un sistema di salvataggio, oggi fuori ambito.
    Ipotesi nella specifica: elenco ordinato di mappe, nessun salvataggio nella prima versione.
+   **Risposta (2026-11-22):** **A** — Elenco ordinato di mappe, nessun salvataggio nella prima versione; la lobby (alla Warframe) si affronterà in seguito. **Nota importante (2026-11-22):** la lobby farà da hub condiviso per tutte le modalità (Livelli, Spedizione, Versus): navicella tipo Warframe con piedistalli su cui stanno i giocatori (stile lobby Fortnite) per scegliere tutto velocemente via menu senza doversi muovere in giro.
 
 GM.4. Nei Livelli, come funziona il respawn: vite infinite o limitate, checkpoint condivisi dalla squadra, cosa succede se muoiono tutti e quanto dura l'attesa?
    Perché conta: è la regola che più cambia il senso di una caduta in un burrone (KO zone) e va nei dati di `UGSTN_RespawnRules`.
@@ -1259,6 +1261,7 @@ GM.4. Nei Livelli, come funziona il respawn: vite infinite o limitate, checkpoin
 GM.5. Qual è il traguardo di un livello (basta uno che arrivi o devono arrivare tutti i vivi), ci sono collezionabili (stelle, francobolli), contano per giocatore o per squadra, e c'è un punteggio?
    Perché conta: il traguardo è un obiettivo `Reach` con parametro `Require`; collezionabili e punteggio aggiungono stato replicato e una schermata dei risultati.
    Ipotesi nella specifica: arriva uno qualsiasi dei giocatori vivi, collezionabili contati per livello e per squadra, punteggio semplice a dati (`UGSTN_ScoreRules`).
+   **Risposta (2026-11-22):** **A** — Ne basta uno nella zona goal; parte un timer di attesa configurabile e allo scadere il livello termina anche se gli altri non sono arrivati. Collezionabili per livello/squadra e punteggio a dati.
 
 GM.6. Che telecamera hanno i livelli: fissa o su binario per sezione come Mario 3D World, libera, o mista; una per giocatore o condivisa che inquadra tutti?
    Perché conta: la telecamera fissa peggiora la percezione della profondità (collegata a `depth-marker.md`), e l'orientamento della telecamera entra come input nella simulazione (serve il "latch" dello stick ai tagli).
@@ -1283,7 +1286,7 @@ GM.9. Come si torna in gioco da morti: solo rinforzo con un pool condiviso alla 
 GM.10. Come si chiamano rinforzi e rifornimenti: codice di direzioni come gli stratagemmi di Helldivers, menu, o un tasto? Cooldown condivisi o per giocatore? Si lancia un faro (oggetto tenuto, M10) o si sceglie un punto?
    Perché conta: cambia l'input (pattern in `GSTNInput`), l'interfaccia e se serve M10; l'abilità resta la stessa.
    Ipotesi nella specifica: stessa abilità con binding a dati, punto di mira nella prima versione, il faro lanciato come opzione successiva.
-   *Spedizione a bassa priorità (23/10): si può rispondere più avanti.*
+   **Risposta (2026-11-22):** Niente codici direzionali alla Helldivers; le "speciali" useranno probabilmente motion input veri senza modificatore (tutto legato via `UGSTN_GA_ModeVerb` + `GSTNInput` data-driven).
 
 GM.11. Quanto deve essere "intelligente" il direttore dei nemici: pattuglie, irruzioni (breach) e ondate decise da una pressione che dipende da come stanno i giocatori, oppure schemi fissi e casuali? I nemici possono comparire alle spalle?
    Perché conta: un direttore adattivo è più complesso da bilanciare e da testare, e cambia la percezione di equità; i limiti di budget restano comunque quelli di M8.
@@ -1297,6 +1300,7 @@ GM.12. L'ingresso a partita in corso è ammesso (Livelli, Spedizione)? Come entr
 GM.13. In ogni modalità: fuoco amico (già aperto come M4.12), cambio kit a metà partita raccogliendo un kit (permesso ovunque? kit trovati o solo dai rifornimenti?), zaini e armi di supporto solo nella Spedizione?
    Perché conta: sono i valori degli interruttori di §2.3; quelli che toccano la simulazione si fissano al caricamento dell'Experience, mai a partita in corso.
    Ipotesi nella specifica: cambio kit consentito in Livelli e Spedizione (kit piazzati dal designer nei primi, rifornimenti e kit trovati nei secondi), zaini e armi di supporto solo nella Spedizione, fuoco amico ancora da decidere.
+   **Risposta (2026-11-22):** Nei **Livelli** fuoco amico **ON di base** (data-driven). Cambio kit e zaini come da ipotesi.
 
 GM.14. In Spedizione i giocatori possono allontanarsi quanto vogliono, o c'è un guinzaglio / un teletrasporto verso il gruppo?
    Perché conta: ogni giocatore lontano obbliga l'host a tenere caricati i moduli (collisione e navmesh) e a simulare nemici in più zone.
@@ -1306,6 +1310,7 @@ GM.14. In Spedizione i giocatori possono allontanarsi quanto vogliono, o c'è un
 GM.15. Il PvP (Versus) userà la stessa infrastruttura (arene d'autore, vite/stock, respawn a tempo, scudo, niente missioni né minion) e va rimandato dopo la Spedizione? Quali valori di fuoco amico e squadre?
    Perché conta: decide se `GSTNRespawn` deve già supportare gli "stock" e se M14 viene pianificato ora.
    Ipotesi nella specifica: sì, stessa infrastruttura, progettazione rimandata a M14; scudo acceso solo lì (indicazione già data).
+   **Risposta (2026-11-22, M14):** 1v1, 2v2 **e FFA** presenti; fuoco amico valutato **ON anche in PvP**; **nessun input delay sull'host** (rollback netcode come nei picchiaduro).
 
 ## Telecamera (23/10)
 
