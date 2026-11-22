@@ -64,6 +64,19 @@ def mk_tf(pos, quat, scl):
     return unreal.Transform(location=pos, rotation=quat.rotator(), scale=scl)
 
 
+def quat_between(u, v):
+    u, v = vnorm(u), vnorm(v)
+    d = max(-1.0, min(1.0, vdot(u, v)))
+    if d > 0.999999:
+        return unreal.Quat(0.0, 0.0, 0.0, 1.0)
+    if d < -0.999999:
+        return unreal.Quat(1.0, 0.0, 0.0, 0.0)
+    c = unreal.Vector(u.y * v.z - u.z * v.y, u.z * v.x - u.x * v.z, u.x * v.y - u.y * v.x)
+    w = 1.0 + d
+    l = math.sqrt(c.x * c.x + c.y * c.y + c.z * c.z + w * w)
+    return unreal.Quat(c.x / l, c.y / l, c.z / l, w / l)
+
+
 def solve_2bone_ik(hip_new, foot_new, hip_old, knee_old, foot_old):
     L1 = vlen(vsub(knee_old, hip_old))
     L2 = vlen(vsub(foot_old, knee_old))
@@ -160,8 +173,8 @@ for f in range(n):
             foot_new = unreal.Vector(foot_old.x, fy_new, fz_new)
             knee_new = solve_2bone_ik(hip_new, foot_new, hip_old, knee_old, foot_old)
 
-            q_th_delta = unreal.Quat.find_between_vectors(vnorm(vsub(knee_old, hip_old)), vnorm(vsub(knee_new, hip_new)))
-            q_ca_delta = unreal.Quat.find_between_vectors(vnorm(vsub(foot_old, knee_old)), vnorm(vsub(foot_new, knee_new)))
+            q_th_delta = quat_between(vsub(knee_old, hip_old), vsub(knee_new, hip_new))
+            q_ca_delta = quat_between(vsub(foot_old, knee_old), vsub(foot_new, knee_new))
 
             nw[th] = mk_tf(hip_new, q_th_delta * w[th].rotation, w[th].scale3d)
             nw[ca] = mk_tf(knee_new, q_ca_delta * w[ca].rotation, w[ca].scale3d)
