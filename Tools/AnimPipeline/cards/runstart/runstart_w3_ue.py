@@ -28,6 +28,7 @@ ARM_FWD_EL = float(os.environ.get("W3_ARM_FWD_EL", "0.0"))   # keep lead elbow b
 ARM_FWD_OUT = float(os.environ.get("W3_ARM_FWD_OUT", "5.0")) # deg outward open on lead upperarm
 ARM_R_OUT = float(os.environ.get("W3_ARM_R_OUT", "10.0"))    # deg outward abduction on arm_r (f5-f13 silhouette)
 ARM_R_FL5 = float(os.environ.get("W3_ARM_R_FL5", "40.0"))     # deg extra elbow flexion on arm_r around f5 (soften 171->~118 deg)
+HEAD_UP13 = float(os.environ.get("W3_HEAD_UP13", "6.5"))     # deg chin/gaze lift on neck_01 at f13 (v107), f5-f21
 ARM_L_OUT = float(os.environ.get("W3_ARM_L_OUT", "10.0"))    # deg outward abduction on arm_l (f5-f13 silhouette)
 ARM_L_FORE_OUT = float(os.environ.get("W3_ARM_L_FORE_OUT", "16.0")) # deg forearm_l outward unhook at f5
 ARM_L_FWD13 = float(os.environ.get("W3_ARM_L_FWD13", "14.0"))       # deg arm_l forward arc at f13 (v107)
@@ -254,12 +255,20 @@ for f in range(n):
         q_sp = q_sp_yaw * q_sp_pit
         nw["spine_01"] = mk_tf(sp_pos, q_sp * w["spine_01"].rotation, w["spine_01"].scale3d)
 
-        # 3. Neck_01 2-frame elastic lag keeping gaze forward
+        # 3. Neck_01 2-frame elastic lag keeping gaze forward + chin lift at f13 (f5-f21)
         nk_off = vsub(w["neck_01"].translation, w["spine_01"].translation)
         nk_pos = vadd(sp_pos, q_sp.rotate_vector(nk_off))
         e_nk = env(max(0, f - 2))
         nk_frac = -0.25 * (e_nk / max(e_sp, 1e-3)) if e_sp > 1e-3 else 0.0
         q_nk = unreal.Quat(q_sp_pit.x * nk_frac, 0.0, 0.0, math.sqrt(max(0.0, 1.0 - (q_sp_pit.x * nk_frac) ** 2)))
+        e_h13 = ss(5.0, 13.0, float(f)) * (1.0 - ss(13.0, 21.0, float(f)))
+        if e_h13 > 1e-4:
+            rh = math.radians(HEAD_UP13 * e_h13)
+            q_hp = unreal.Quat(math.sin(0.5 * rh), 0.0, 0.0, math.cos(0.5 * rh))
+            q_hn = qinv(q_hp)
+            vfwd = unreal.Vector(0.0, 10.0, 0.0)
+            q_hup = q_hp if q_hp.rotate_vector(vfwd).z >= q_hn.rotate_vector(vfwd).z else q_hn
+            q_nk = q_hup * q_nk
         nw["neck_01"] = mk_tf(nk_pos, q_nk * q_sp * w["neck_01"].rotation, w["neck_01"].scale3d)
 
         # 4. Legs 2-bone IK + lateral ankle clearance + staggered torso-lead / leg-catch-up
