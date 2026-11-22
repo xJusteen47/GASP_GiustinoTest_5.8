@@ -27,6 +27,7 @@ ARM_FWD_SH = float(os.environ.get("W3_ARM_FWD_SH", "12.0"))  # deg forward swing
 ARM_FWD_EL = float(os.environ.get("W3_ARM_FWD_EL", "0.0"))   # keep lead elbow bent ~80-90 deg (no straight extension)
 ARM_FWD_OUT = float(os.environ.get("W3_ARM_FWD_OUT", "5.0")) # deg outward open on lead upperarm
 ARM_R_OUT = float(os.environ.get("W3_ARM_R_OUT", "10.0"))    # deg outward abduction on arm_r (f5-f13 silhouette)
+ARM_R_FL5 = float(os.environ.get("W3_ARM_R_FL5", "40.0"))     # deg extra elbow flexion on arm_r around f5 (soften 171->~118 deg)
 ARM_L_OUT = float(os.environ.get("W3_ARM_L_OUT", "10.0"))    # deg outward abduction on arm_l (f5-f13 silhouette)
 ARM_L_FORE_OUT = float(os.environ.get("W3_ARM_L_FORE_OUT", "16.0")) # deg forearm_l outward unhook at f5
 ARM_L_FWD13 = float(os.environ.get("W3_ARM_L_FWD13", "14.0"))       # deg arm_l forward arc at f13 (v107)
@@ -340,7 +341,7 @@ for f in range(n):
             la_pos = vadd(ua_pos, q_ua.rotate_vector(la_dir0))
             ha_dir0 = (q_ua * q_cl * q_sp).rotate_vector(vsub(w[ha].translation, w[la].translation))
             q_la_fwd = pitch_quat(ARM_FWD_EL * e * w_fwd, ha_dir0) if ARM_FWD_EL else unreal.Quat(0.0, 0.0, 0.0, 1.0)
-            rf = math.radians(ARM_BACK_FL * e * w_rear)
+            rf = math.radians(ARM_BACK_FL * e * w_rear + (ARM_R_FL5 * ss(1.0, 5.0, float(f)) * (1.0 - ss(7.0, 13.0, float(f))) if s == "r" else 0.0))
             q_fp = unreal.Quat(math.sin(0.5 * rf), 0.0, 0.0, math.cos(0.5 * rf))
             q_fn = qinv(q_fp)
             q_la_back = q_fp if q_fp.rotate_vector(ha_dir0).z >= q_fn.rotate_vector(ha_dir0).z else q_fn
