@@ -1,17 +1,21 @@
-# Handover: harness-v2 checkpoint (hook _ue59 attivi, calibrazione 2C 1/4, memoria AGENTS.md)
+# Handover: harness-v2 (hook _ue59 attivi, calibrazione 2C 4/4 SUPERATA, memoria AGENTS.md)
 
-- **Branch / Commit:** `claude/harness-v2` (`52256143` -> `a0134cfc` Claude PASS r2 -> `01d060d3` fix post-PASS -> questo checkpoint)
-- **Macchina:** fisso (editor chiuso; `GASP_Giustino2_ue59` intatto, 0 file sporchi toccati; `_ue59/IN-USO.txt` allineato)
+- **Branch / Commit:** `claude/harness-v2` (`52256143` -> `a0134cfc` -> `01d060d3` -> `65b8f0ba` -> questo checkpoint)
+- **Macchina:** fisso (editor chiuso; `GASP_Giustino2_ue59` intatto)
 
-## Completato dopo PASS Claude r2 (`a0134cfc`)
-1. `Invoke-Worker.ps1` (`01d060d3`): recupero automatico di `_ue59/IN-USO.txt` dopo crash worker su stesso host con PID morto (lock manuali/PID attivi/altri host restano bloccati); normalizzazione exit figlio `cli.py` `2 -> 1` per evitare loop infiniti in `Run-Queue.ps1`.
-2. `.githooks/pre-commit`, `.githooks/pre-push` (LF-only UTF-8) + `Install-GitHooks.ps1`: installati in `C:/Users/jacop/Tools/gstn-gitguard/.githooks` con fallback a `Tools/CI/Test-GitGuard.ps1`; verificati attivi anche dentro `_ue59` (`pre-commit` OK rc=0, `pre-push` su `main` bloccato rc=2).
-3. Verifiche verdi dopo ultima modifica PowerShell: tutti i 5 `-SelfTest` (`Test-GitGuard`, `Run-Timed`, `New-DeepSeekWorktree`, `Invoke-Worker` 6/6, `Run-Queue`) + `agent-bridge/test_bridge.py` (`ALL TESTS PASSED`).
-4. `AGENTS.md` root creato per auto-bootstrap della memoria indicizzata nelle nuove chat (`INDICE.md` -> handover -> `memoria-progetto.md` -> `regole-progetto-2026-11-22.md`).
-5. Calibrazione cieca 2C `gemini-4-neon-high` (`docs/notes/reviews/calibrazione-2c-neon-2026-11-22.md`): **`K6 r1` completato (`FAIL posa` = match perfetto 1/1 con Fable `2bd9b2ef`, 0 falsi PASS, `0 $`)**; pausa voluta al ~60% finestra 5h.
+## Completato
+1. `Invoke-Worker.ps1` (`01d060d3`): recupero automatico `_ue59/IN-USO.txt` dopo crash su stesso host con PID morto; normalizzazione exit figlio `cli.py` `2 -> 1`.
+2. `.githooks/pre-commit`, `.githooks/pre-push` + `Install-GitHooks.ps1`: attivi in `C:/Users/jacop/Tools/gstn-gitguard/.githooks` con fallback `Test-GitGuard.ps1`; verificati anche in `_ue59`.
+3. Tutti i 5 `-SelfTest` (`Test-GitGuard`, `Run-Timed`, `New-DeepSeekWorktree`, `Invoke-Worker`, `Run-Queue`) + `agent-bridge/test_bridge.py` verdi (`65b8f0ba`).
+4. **Calibrazione cieca 2C `gemini-4-neon-high` (`docs/notes/reviews/calibrazione-2c-neon-2026-11-22.md`) — COMPLETATA (`3/4` match, `0` falsi PASS):**
+   - `K6 r1` (`5a821c53`): `FAIL (posa)` vs Fable `FAIL (posa)` -> **Match (1/1)**, 0 falsi PASS (`412.4 s`).
+   - `K6 r2` (`84b7c354`, solo `.jpg`): `FAIL (posa)` vs Fable `FAIL (posa)` -> **Match (2/2)**, 0 falsi PASS (`418.8 s`, session `b2866026-ff4c-4521-adc7-a29b7f070178`).
+   - `v27 r2` (`22300411`, solo `.jpg`): `FAIL (posa)` vs Fable `PASS` -> **Falso FAIL (2/3)**, 0 falsi PASS (`377.9 s`, session `cdd7d469-e4ca-4426-bf93-cd1f816ff248`).
+   - `v28 r3` (`3c779b08`, solo `.jpg`): `FAIL (posa)` vs Fable `FAIL (posa)` -> **Match (3/4)**, 0 falsi PASS (`354.8 s`, session `c0af673f-d3d7-497e-8d99-7191204273f6`).
+   - **Esito Regola 2C:** `gemini-4-neon-high` abilitato per `PASS` autonomo su `M3` (solo griglie `.jpg` + spot-check Claude su `1 PASS su 3`).
 
-## Prossimi passi alla ripresa (in chat nuova su `Hydrogen High`)
-1. Eseguire i 3 casi ciechi restanti (`K6 r2` `84b7c354`, `v27 r2` `22300411`, `v28 r3` `3c779b08`) **solo con griglie `.jpg`** (no `.mp4` in blocco; cartelle pronte in `%TEMP%\cal2c\`, fonti anche in git) e chiudere `calibrazione-2c-neon-2026-11-22.md` (`>=3/4` + `0` falsi PASS).
-2. Quando l'owner ha completato il pagamento DeepSeek e impostato `DEEPSEEK_API_KEY` (env User Windows), eseguire test 10 min su worktree sparse via `Tools/CI/New-DeepSeekWorktree.ps1`.
+## Prossimi passi
+1. Quando l'owner ha completato il pagamento DeepSeek e impostato `DEEPSEEK_API_KEY` (env User Windows), eseguire test 10 min su worktree sparse via `Tools/CI/New-DeepSeekWorktree.ps1`.
+2. Usare `gemini-4-neon-high` (`M3`) solo con griglie `.jpg` (includere `clip-check/metrics.json` nelle locomotion review).
 
-COSTO: 0 $ | 7 min desktop | 0 tok review | provider=agy_student | quota_pro=0%
+COSTO: 0 $ | 19.2 min Neon + ~10 min coord | 0 tok Claude | provider=agy_student | quota_pro=0%

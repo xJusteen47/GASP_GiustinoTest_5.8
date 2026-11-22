@@ -52,3 +52,6 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-21,Review turnaround 180 L v28 pose round 3,turn4-style,cloud,claude_max,Fable,0,80000,4,,FAIL pose round 3 of 3 (arms hand-over v95-v101 folded/fist in front of pelvis; right foot v86-v90 = game); pivot v84-v94 good; owner decides A/B/C; review claude/project-thread-bjvo40 52802e1e reviews/turn3-v27/180a_style_r3/review.md
 2026-11-22,Verify cheaper AI stack proposal,stack-economico,cloud,claude_max,Opus,0,0,2,,DONE verdict handoffs/stack-economico-verdetto-2026-11-22.md (1B 2B 3A + rule 3 rewrite)
 2026-11-22,calibrazione-2c-k6-r1,Calibrazione cieca 2C Neon su K6 r1,fisso,agy_student,gemini-4-neon-high,6.87,0,0,,CALIB-2C K6 r1: FAIL posa (match Fable 1/1; 0 falsi PASS)
+2026-11-22,calibrazione-2c-k6-r2,Calibrazione cieca 2C Neon su K6 r2 (solo jpg),fisso,agy_student,gemini-4-neon-high,6.98,0,0,,CALIB-2C K6 r2: FAIL posa (match Fable 2/2; 0 falsi PASS)
+2026-11-22,calibrazione-2c-v27-r2,Calibrazione cieca 2C Neon su v27 r2 (solo jpg),fisso,agy_student,gemini-4-neon-high,6.30,0,0,,CALIB-2C v27 r2: FAIL posa vs PASS Fable (falso FAIL 2/3; 0 falsi PASS)
+2026-11-22,calibrazione-2c-v28-r3,Calibrazione cieca 2C Neon su v28 r3 (solo jpg),fisso,agy_student,gemini-4-neon-high,5.91,0,0,,CALIB-2C v28 r3: FAIL posa (match Fable 3/4; 0 falsi PASS -> 2C SUPERATA)
