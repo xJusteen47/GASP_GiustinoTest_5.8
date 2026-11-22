@@ -48,7 +48,11 @@ param(
     [switch]$KeepThrottle,      # Capture: keep the editor's background throttle ini and EcoQoS (default: off, see docs/notes/speed-up.md)
     [string]$ExtraArgs = '',    # appended to the preset's command line
     [switch]$KeepRestoreData,   # do not move Saved\Autosaves\PackageRestoreData.json aside before an editor run
-    [string]$AssertFile         # capture gate: the assert.txt to read after the run (exit 3 when ESITO OK but ASSERT not OK)
+    [string]$AssertFile,        # capture gate: the assert.txt to read after the run (exit 3 when ESITO OK but ASSERT not OK)
+    [string]$LockFile,          # optional _ue59/IN-USO.txt path: refuse with exit 2 if occupied by someone else
+    [string]$LockOwner = '',    # optional owner tag allowed to proceed when present in LockFile
+    [string]$PreCheck,          # optional .py or .ps1 gate executed BEFORE launching main command (exit 4 on failure)
+    [string]$PreCheckArgs = ''  # optional arguments for PreCheck script
 )
 
 $ErrorActionPreference = 'Stop'
@@ -244,6 +248,41 @@ function Resolve-EngineDir {
     return 'C:\Program Files\Epic Games\UE_5.9\Engine'
 }
 
+# Checks optional lock file (e.g. _ue59/IN-USO.txt). Returns $null if free or owned by $Owner, else refusal message.
+function Test-LockFree {
+    param([string]$Path, [string]$Owner)
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return $null }
+    $first = ''
+    foreach ($line in [IO.File]::ReadAllLines($Path, [Text.Encoding]::UTF8)) {
+        if ($line.Trim()) { $first = $line.Trim(); break }
+    }
+    if ($first -match '^IN-USO:') {
+        if ($Owner -and ($first -like "*$Owner*")) { return $null }
+        return "ESITO: RIFIUTATO - lock occupato: $first"
+    }
+    return $null
+}
+
+# Runs optional PreCheck gate (.py or .ps1) before launching main command. Returns @{ Ok; Detail }.
+function Invoke-PreCheck {
+    param([string]$ScriptPath, [string]$ArgsText, [string]$OutLog, [string]$WorkDir)
+    $full = if ([IO.Path]::IsPathRooted($ScriptPath)) { $ScriptPath } else { Join-Path $WorkDir $ScriptPath }
+    if (-not (Test-Path -LiteralPath $full)) { return @{ Ok = $false; Detail = "PreCheck mancante: $ScriptPath" } }
+    $dir = Split-Path $OutLog -Parent
+    if ($dir) { New-Item -ItemType Directory -Force $dir | Out-Null }
+    $runner = if ($full -match '\.py$') { 'python' } else { 'powershell.exe' }
+    $runnerArgs = if ($full -match '\.py$') { "`"$full`" $ArgsText" } else { "-NoProfile -ExecutionPolicy Bypass -File `"$full`" $ArgsText" }
+    $cmdLine = "`"`"$runner`" $runnerArgs > `"$OutLog`" 2>&1`""
+    $p = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d', '/s', '/c', $cmdLine -WorkingDirectory $WorkDir -WindowStyle Hidden -Wait -PassThru
+    if ($p.ExitCode -eq 0) { return @{ Ok = $true; Detail = '' } }
+    $first = ''
+    if (Test-Path -LiteralPath $OutLog) {
+        $l = Get-Content -LiteralPath $OutLog -TotalCount 1
+        if ($l) { $first = $l.Trim() }
+    }
+    return @{ Ok = $false; Detail = "PreCheck exit=$($p.ExitCode) ($first)" }
+}
+
 # ---- self test: needs only Windows PowerShell, no engine ------------------------------------------------------------
 if ($SelfTest) {
     $d = Join-Path $env:TEMP 'runtimed-selftest'; New-Item -ItemType Directory -Force $d | Out-Null
@@ -273,7 +312,26 @@ if ($SelfTest) {
     # 6: assert file: OK line, missing file, garbage
     Set-Content "$d\a_ok.txt" "ASSERT: OK seq AS_X f1-f9"; Set-Content "$d\a_bad.txt" "hello"
     $ok6 = ((Read-AssertLine "$d\a_ok.txt") -eq 'ASSERT: OK seq AS_X f1-f9') -and ((Read-AssertLine "$d\none.txt") -match '^ASSERT: MANCANTE') -and ((Read-AssertLine "$d\a_bad.txt") -match '^ASSERT: MANCANTE')
-    $res += "5 RESTORE-DATA + 6 ASSERT-FILE: $(if ($ok5 -and $ok6) {'PASS'} else {"FAIL (restore=$ok5 [$pd|$n1|$n2|$baks] assert=$ok6)"})"
+    # 7: lock check + precheck failure/success (including end-to-end exit codes 2 and 4 without running main)
+    Set-Content "$d\inuso.txt" "IN-USO: owner-task dal 2026-11-22"
+    $lkBusy = Test-LockFree "$d\inuso.txt" ''
+    $lkMine = Test-LockFree "$d\inuso.txt" 'owner-task'
+    Set-Content "$d\inuso.txt" "LIBERO"
+    $lkFree = Test-LockFree "$d\inuso.txt" ''
+    Set-Content "$d\pc_fail.ps1" "Write-Output 'gate15b failed'; exit 1"
+    Set-Content "$d\pc_ok.ps1" "Write-Output 'gate15b ok'; exit 0"
+    $pcFailRes = Invoke-PreCheck "$d\pc_fail.ps1" '' "$d\pc_fail.log" $d
+    $pcOkRes   = Invoke-PreCheck "$d\pc_ok.ps1" '' "$d\pc_ok.log" $d
+    $ranMarker = "$d\should_not_exist.txt"; Remove-Item $ranMarker -ErrorAction SilentlyContinue
+    Set-Content "$d\noop.ps1" "Write-Output ok"
+    Set-Content "$d\mark.ps1" "Set-Content -LiteralPath '$ranMarker' -Value 'ran'"
+    $e2eProc = Start-Process -FilePath $ps -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Kind Test -Log `"$d\e2e_pc.log`" -Exe `"$ps`" -ArgLine `"-NoProfile -File $d\mark.ps1`" -PreCheck `"$d\pc_fail.ps1`"" -WindowStyle Hidden -Wait -PassThru
+    $e2eExit = $e2eProc.ExitCode
+    Set-Content "$d\inuso_busy.txt" "IN-USO: other-owner"
+    $e2eLockProc = Start-Process -FilePath $ps -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Kind Test -Log `"$d\e2e_lk.log`" -Exe `"$ps`" -ArgLine `"-NoProfile -File $d\noop.ps1`" -LockFile `"$d\inuso_busy.txt`"" -WindowStyle Hidden -Wait -PassThru
+    $e2eOkProc = Start-Process -FilePath $ps -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Kind Test -Log `"$d\e2e_ok.log`" -Exe `"$ps`" -ArgLine `"-NoProfile -File $d\noop.ps1`" -PreCheck `"$d\pc_ok.ps1`"" -WindowStyle Hidden -Wait -PassThru
+    $ok7 = ($null -ne $lkBusy) -and ($null -eq $lkMine) -and ($null -eq $lkFree) -and (-not $pcFailRes.Ok) -and ($pcOkRes.Ok) -and ($e2eExit -eq 4) -and ($e2eLockProc.ExitCode -eq 2) -and ($e2eOkProc.ExitCode -eq 0) -and (-not (Test-Path $ranMarker))
+    $res += "5 RESTORE + 6 ASSERT + 7 LOCK/PRECHECK: $(if ($ok5 -and $ok6 -and $ok7) {'PASS'} else {"FAIL (r=$ok5 a=$ok6 lp=$ok7 e2e=$e2eExit lk=$($e2eLockProc.ExitCode) ok=$($e2eOkProc.ExitCode))"})"
     $res | Select-Object -First 5 | ForEach-Object { Write-Output $_ }
     exit $(if ($res -match ': FAIL') { 1 } else { 0 })
 }
@@ -311,6 +369,27 @@ switch ($Preset) {
 }
 if (-not $Exe) { Write-Output 'ERRORE: serve -Preset oppure -Exe'; exit 2 }
 if ($ExtraArgs) { $ArgLine = "$ArgLine $ExtraArgs" }
+
+if ($LockFile) {
+    $lockMsg = Test-LockFree $LockFile $LockOwner
+    if ($lockMsg) {
+        $ld = Split-Path "$Log.esito" -Parent; if ($ld) { New-Item -ItemType Directory -Force $ld | Out-Null }
+        @($lockMsg, "lock=$LockFile") | Set-Content -Path "$Log.esito" -Encoding UTF8
+        Write-Output $lockMsg
+        exit 2
+    }
+}
+if ($PreCheck) {
+    $pcLog = "$Log.precheck.log"
+    $pc = Invoke-PreCheck $PreCheck $PreCheckArgs $pcLog $Root
+    if (-not $pc.Ok) {
+        $ld = Split-Path "$Log.esito" -Parent; if ($ld) { New-Item -ItemType Directory -Force $ld | Out-Null }
+        $pcOut = @("ESITO: PRECHECK_FAIL", $pc.Detail, "log=$pcLog")
+        $pcOut | Set-Content -Path "$Log.esito" -Encoding UTF8
+        $pcOut | Select-Object -First 5 | ForEach-Object { Write-Host $_ }
+        exit 4
+    }
+}
 $isEditor = (Split-Path $Exe -Leaf) -match '^UnrealEditor'
 $notes = @()
 if ($isEditor) {

@@ -1,0 +1,5 @@
+#!/bin/sh
+# GSTN git guard (pre-commit): blocks owner-local files, locked anims, secrets, and commits to main/feature/*.
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ROOT/Tools/CI/Test-GitGuard.ps1" -Mode Commit -RepoRoot "$ROOT"
+exit $?

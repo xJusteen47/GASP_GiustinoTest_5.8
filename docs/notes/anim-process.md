@@ -1,5 +1,14 @@
 # Processo Ufficiale di Animazione 3D e Pipeline Autoriale (GASP / Overlord)
 
+> [!CAUTION]
+> **SUPERSEDED (2026-11-22 — OK esplicito owner `1A`, backup in [anim-process.backup-2026-11-22.md](anim-process.backup-2026-11-22.md))**:
+> Questo documento **NON è più attivo** ed è sostituito da:
+> - [.claude/skills/gstn-anim-executor/project.md](../../.claude/skills/gstn-anim-executor/project.md) (executor applica solo una `istruzione.json` alla volta via `animpipe` / Cascadeur)
+> - [.claude/skills/gstn-anim-reviewer/project.md](../../.claude/skills/gstn-anim-reviewer/project.md) (reviewer indipendente su `.mp4` + griglie + `ASSERT: OK`)
+> - [regole-progetto-2026-11-22.md](regole-progetto-2026-11-22.md) (Regole 6, 10, 13, 15) e [memoria-progetto.md](memoria-progetto.md).
+>
+> **Pipeline unica:** tutto il lavoro di animazione (locomotion compresa, salvo banalità come additivi) usa la pipeline completa Cascadeur (pose chiave + sheet delle curve; lo script importa soltanto). Eventuali generatori Python/Blender producono solo prototipi `PROTO` e **non vanno mai in review né all'owner**.
+
 > [!IMPORTANT]
 > **PRIORITÀ ASSOLUTA E DISCIPLINA DI MODIFICA**:
 > 1. Questo processo **ha priorità assoluta su qualsiasi vecchio flusso, brief o procedura precedente** (inclusi i vecchi brief rig-points / Cascadeur roundtrip documentati in `docs/notes/handovers/` e `Tools/AnimPipeline/HANDOFF_2026-11-02.md`).
