@@ -26,6 +26,9 @@ ARM_FWD_SH = float(os.environ.get("W3_ARM_FWD_SH", "12.0"))  # deg forward swing
 ARM_FWD_EL = float(os.environ.get("W3_ARM_FWD_EL", "0.0"))   # keep lead elbow bent ~80-90 deg (no straight extension)
 ARM_FWD_OUT = float(os.environ.get("W3_ARM_FWD_OUT", "5.0")) # deg outward open on lead upperarm
 ARM_R_OUT = float(os.environ.get("W3_ARM_R_OUT", "10.0"))    # deg outward abduction on arm_r (f5-f13 silhouette)
+ARM_L_OUT = float(os.environ.get("W3_ARM_L_OUT", "10.0"))    # deg outward abduction on arm_l (f5-f13 silhouette)
+ARM_L_FORE_OUT = float(os.environ.get("W3_ARM_L_FORE_OUT", "16.0")) # deg forearm_l outward unhook at f5
+ARM_L_FWD13 = float(os.environ.get("W3_ARM_L_FWD13", "14.0"))       # deg arm_l forward arc at f13 (v107)
 ARM_BACK_SH = float(os.environ.get("W3_ARM_BACK_SH", "16.0"))# deg back & up swing on rear upperarm
 ARM_BACK_FL = float(os.environ.get("W3_ARM_BACK_FL", "22.0"))# deg extra elbow flexion on rear forearm (athletic sprint drive)
 CLAV_SWING = float(os.environ.get("W3_CLAV_SWING", "6.0"))   # deg clavicle protraction/retraction
@@ -302,21 +305,25 @@ for f in range(n):
             q_bn = qinv(q_bp)
             vp, vn = q_bp.rotate_vector(la_dir0), q_bn.rotate_vector(la_dir0)
             q_sh_back = q_bp if (vp.z - vp.y) >= (vn.z - vn.y) else q_bn
-            q_out_pos = yaw_quat(ARM_FWD_OUT * e * w_fwd + (ARM_R_OUT * ss(1.0, 5.0, float(f)) * (1.0 - ss(13.0, 21.0, float(f))) if s == "r" else 0.0))
+            el_out_env = ss(1.0, 5.0, float(f)) * (1.0 - ss(13.0, 21.0, float(f)))
+            arm_out_deg = ARM_FWD_OUT * e * w_fwd + (ARM_R_OUT * el_out_env if s == "r" else ARM_L_OUT * el_out_env)
+            q_out_pos = yaw_quat(arm_out_deg)
             # Outward = same sign as lat_vec (L - R)
             q_out = q_out_pos if vdot(vsub(q_out_pos.rotate_vector(la_dir0), la_dir0), vmul(lat_vec, sign)) >= 0 else qinv(q_out_pos)
-            # Also roll upperarm_r outward about +Y (front axis) so elbow/forearm clear the flank in back view
-            q_r_abd = unreal.Quat(0.0, 0.0, 0.0, 1.0)
-            if s == "r":
-                er_out = ss(1.0, 5.0, float(f)) * (1.0 - ss(13.0, 21.0, float(f)))
-                ra = math.radians(ARM_R_OUT * er_out)
-                qp_a = unreal.Quat(0.0, math.sin(0.5 * ra), 0.0, math.cos(0.5 * ra))
-                qn_a = qinv(qp_a)
-                q_r_abd = qp_a if vdot(vsub(qp_a.rotate_vector(la_dir0), la_dir0), vmul(lat_vec, sign)) >= 0 else qn_a
-            q_ua = q_r_abd * q_out * q_sh_fwd * q_sh_back
+            # Also roll upperarm outward about +Y (front axis) so elbow/forearm clear the flank in back view
+            ra = math.radians((ARM_R_OUT if s == "r" else ARM_L_OUT) * el_out_env)
+            qp_a = unreal.Quat(0.0, math.sin(0.5 * ra), 0.0, math.cos(0.5 * ra))
+            q_r_abd = qp_a if vdot(vsub(qp_a.rotate_vector(la_dir0), la_dir0), vmul(lat_vec, sign)) >= 0 else qinv(qp_a)
+            # Extra forward pitch on arm_l at f13 (v107)
+            q_l_fwd13 = unreal.Quat(0.0, 0.0, 0.0, 1.0)
+            if s == "l":
+                e_f13 = ss(8.0, 13.0, float(f)) * (1.0 - ss(13.0, 21.0, float(f)))
+                if e_f13 > 1e-4:
+                    q_l_fwd13 = pitch_quat(ARM_L_FWD13 * e_f13, la_dir0)
+            q_ua = q_l_fwd13 * q_r_abd * q_out * q_sh_fwd * q_sh_back
             nw[ua] = mk_tf(ua_pos, q_ua * q_cl * q_sp * w[ua].rotation, w[ua].scale3d)
 
-            # Lowerarm: keep lead elbow bent (~80-90 deg); increase flexion on rear elbow (fold forearm up behind back)
+            # Lowerarm: keep lead elbow bent (~80-90 deg); increase flexion on rear elbow; unhook arm_l at f5 + forward arc at f13
             la_pos = vadd(ua_pos, q_ua.rotate_vector(la_dir0))
             ha_dir0 = (q_ua * q_cl * q_sp).rotate_vector(vsub(w[ha].translation, w[la].translation))
             q_la_fwd = pitch_quat(ARM_FWD_EL * e * w_fwd, ha_dir0) if ARM_FWD_EL else unreal.Quat(0.0, 0.0, 0.0, 1.0)
@@ -324,7 +331,16 @@ for f in range(n):
             q_fp = unreal.Quat(math.sin(0.5 * rf), 0.0, 0.0, math.cos(0.5 * rf))
             q_fn = qinv(q_fp)
             q_la_back = q_fp if q_fp.rotate_vector(ha_dir0).z >= q_fn.rotate_vector(ha_dir0).z else q_fn
-            q_la = q_la_fwd * q_la_back
+            q_la_l = unreal.Quat(0.0, 0.0, 0.0, 1.0)
+            if s == "l":
+                e_hook = ss(1.0, 5.0, float(f)) * (1.0 - ss(7.0, 12.0, float(f)))
+                if e_hook > 1e-4:
+                    qh_p = yaw_quat(ARM_L_FORE_OUT * e_hook)
+                    q_la_l = qh_p if vdot(vsub(qh_p.rotate_vector(ha_dir0), ha_dir0), lat_vec) >= 0 else qinv(qh_p)
+                e_f13 = ss(8.0, 13.0, float(f)) * (1.0 - ss(13.0, 21.0, float(f)))
+                if e_f13 > 1e-4:
+                    q_la_l = pitch_quat(0.5 * ARM_L_FWD13 * e_f13, ha_dir0) * q_la_l
+            q_la = q_la_l * q_la_fwd * q_la_back
             nw[la] = mk_tf(la_pos, q_la * q_ua * q_cl * q_sp * w[la].rotation, w[la].scale3d)
 
     parents = {
