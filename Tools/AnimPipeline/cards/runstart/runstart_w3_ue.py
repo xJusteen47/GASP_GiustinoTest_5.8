@@ -22,11 +22,12 @@ KNEE_DROP = float(os.environ.get("W3_KNEE_DROP", "0.35"))    # fraction of swing
 SWING_LAG = float(os.environ.get("W3_SWING_LAG", "4.0"))     # cm trailing (-Y) on swing foot in f0-f10 (torso leads)
 CATCH_FWD = float(os.environ.get("W3_CATCH_FWD", "5.5"))     # cm forward (+Y) on swing foot in f10-f22 (legs catch up)
 LAT_WIDEN = float(os.environ.get("W3_LAT_WIDEN", "6.0"))     # cm lateral widening per foot for >= 10 cm ankle gap
-ARM_FWD_SH = float(os.environ.get("W3_ARM_FWD_SH", "16.0"))  # deg forward swing on lead upperarm
-ARM_FWD_EL = float(os.environ.get("W3_ARM_FWD_EL", "14.0"))  # deg elbow extension on lead forearm
-ARM_FWD_OUT = float(os.environ.get("W3_ARM_FWD_OUT", "6.0")) # deg outward open on lead upperarm
-ARM_BACK_SH = float(os.environ.get("W3_ARM_BACK_SH", "15.0"))# deg back-swing on rear upperarm
-CLAV_SWING = float(os.environ.get("W3_CLAV_SWING", "5.0"))   # deg clavicle protraction/retraction
+ARM_FWD_SH = float(os.environ.get("W3_ARM_FWD_SH", "12.0"))  # deg forward swing on lead upperarm
+ARM_FWD_EL = float(os.environ.get("W3_ARM_FWD_EL", "0.0"))   # keep lead elbow bent ~80-90 deg (no straight extension)
+ARM_FWD_OUT = float(os.environ.get("W3_ARM_FWD_OUT", "5.0")) # deg outward open on lead upperarm
+ARM_BACK_SH = float(os.environ.get("W3_ARM_BACK_SH", "16.0"))# deg back & up swing on rear upperarm
+ARM_BACK_FL = float(os.environ.get("W3_ARM_BACK_FL", "22.0"))# deg extra elbow flexion on rear forearm (athletic sprint drive)
+CLAV_SWING = float(os.environ.get("W3_CLAV_SWING", "6.0"))   # deg clavicle protraction/retraction
 
 
 def ss(a, b, x):
@@ -39,7 +40,24 @@ def ss(a, b, x):
 
 
 def env(f):
-    return ss(0.0, 4.0, float(f)) * (1.0 - ss(14.0, 26.0, float(f)))
+    # Contact-anchored envelope: accelerated ease-in f0->f6 (1st contact R), hold through f14 (2nd contact L at f11-13), fade f14->f26
+    x = float(f)
+    if x <= 0.0 or x >= 26.0:
+        return 0.0
+    if x < 6.0:
+        t = x / 6.0
+        return t * t * (1.2 - 0.2 * t)   # accelerated ease-in into 1st contact
+    if x <= 14.0:
+        return 1.0
+    return 1.0 - ss(14.0, 26.0, x)
+
+
+def contact_dip(f):
+    # Extra pelvis/spine absorption (-Z) at 1st contact (R f6-f8) and 2nd contact (L f11-f13), rebound between
+    x = float(f)
+    d1 = math.exp(-((x - 7.0) / 1.4) ** 2)   # 1st contact R at f6-f8
+    d2 = math.exp(-((x - 12.0) / 1.4) ** 2)  # 2nd contact L at f11-f13
+    return -2.2 * d1 - 1.6 * d2
 
 
 def env_lat(f):
@@ -171,19 +189,18 @@ tracks = {b: ([], [], []) for b in ["pelvis", "spine_01", "neck_01",
                                      "thigh_l", "calf_l", "foot_l", "ik_foot_l",
                                      "thigh_r", "calf_r", "foot_r", "ik_foot_r"]}
 
-# Precompute smoothed arm-lead signal (+ = L hand ahead, - = R hand ahead)
+# Precompute w2 contralateral arm-lead signal (+ = L arm ahead, - = R arm ahead), 1-tap smoothed to preserve exact L/R phase
 raw_hd = []
 for f in range(n):
     p0 = unreal.AnimPoseExtensions.get_anim_pose_at_time(seq, f / 30.0, opts)
-    hl = unreal.AnimPoseExtensions.get_bone_pose(p0, "hand_l", unreal.AnimPoseSpaces.WORLD).translation.y
-    hr = unreal.AnimPoseExtensions.get_bone_pose(p0, "hand_r", unreal.AnimPoseSpaces.WORLD).translation.y
-    raw_hd.append(math.tanh((hl - hr) / 18.0))
+    el = unreal.AnimPoseExtensions.get_bone_pose(p0, "lowerarm_l", unreal.AnimPoseSpaces.WORLD).translation.y - unreal.AnimPoseExtensions.get_bone_pose(p0, "upperarm_l", unreal.AnimPoseSpaces.WORLD).translation.y
+    er = unreal.AnimPoseExtensions.get_bone_pose(p0, "lowerarm_r", unreal.AnimPoseSpaces.WORLD).translation.y - unreal.AnimPoseExtensions.get_bone_pose(p0, "upperarm_r", unreal.AnimPoseSpaces.WORLD).translation.y
+    hl = unreal.AnimPoseExtensions.get_bone_pose(p0, "hand_l", unreal.AnimPoseSpaces.WORLD).translation.y - unreal.AnimPoseExtensions.get_bone_pose(p0, "upperarm_l", unreal.AnimPoseSpaces.WORLD).translation.y
+    hr = unreal.AnimPoseExtensions.get_bone_pose(p0, "hand_r", unreal.AnimPoseSpaces.WORLD).translation.y - unreal.AnimPoseExtensions.get_bone_pose(p0, "upperarm_r", unreal.AnimPoseSpaces.WORLD).translation.y
+    raw_hd.append(math.tanh(((el - er) + 0.5 * (hl - hr)) / 18.0))
 hd_sig = list(raw_hd)
-for _ in range(2):
-    tmp = list(hd_sig)
-    for f in range(1, n - 1):
-        tmp[f] = 0.25 * hd_sig[f - 1] + 0.5 * hd_sig[f] + 0.25 * hd_sig[f + 1]
-    hd_sig = tmp
+for f in range(1, n - 1):
+    hd_sig[f] = 0.2 * raw_hd[f - 1] + 0.6 * raw_hd[f] + 0.2 * raw_hd[f + 1]
 
 max_dy = 0.0
 for f in range(n):
@@ -196,9 +213,9 @@ for f in range(n):
         nw = {}
         nw["root"] = w["root"]
         nw["ik_foot_root"] = w["ik_foot_root"]
-        # 1. Pelvis forward shift + slight sink
+        # 1. Pelvis forward shift + contact-anchored absorption dip
         dy = PELVIS_DY * e
-        dz = PELVIS_DZ * e
+        dz = PELVIS_DZ * e + contact_dip(f)
         max_dy = max(max_dy, dy)
         p_tf = mk_tf(vadd(w["pelvis"].translation, unreal.Vector(0.0, dy, dz)), w["pelvis"].rotation, w["pelvis"].scale3d)
         nw["pelvis"] = p_tf
@@ -267,21 +284,30 @@ for f in range(n):
             q_cl = q_cl_pos if (q_cl_pos.rotate_vector(ua_dir0).y - ua_dir0.y) * (w_fwd - w_rear) >= 0 else qinv(q_cl_pos)
             nw[cl] = mk_tf(cl_pos, q_cl * q_sp * w[cl].rotation, w[cl].scale3d)
 
-            # Upperarm: forward swing + slight outward open (lead), or back-swing (rear)
+            # Upperarm: forward swing + slight outward open (lead), or back & up swing (rear)
             ua_pos = vadd(cl_pos, q_cl.rotate_vector(ua_dir0))
             la_dir0 = (q_cl * q_sp).rotate_vector(vsub(w[la].translation, w[ua].translation))
             q_sh_fwd = pitch_quat(ARM_FWD_SH * e * w_fwd, la_dir0)
-            q_sh_back = qinv(pitch_quat(ARM_BACK_SH * e * w_rear, la_dir0))
+            rb = math.radians(ARM_BACK_SH * e * w_rear)
+            q_bp = unreal.Quat(math.sin(0.5 * rb), 0.0, 0.0, math.cos(0.5 * rb))
+            q_bn = qinv(q_bp)
+            vp, vn = q_bp.rotate_vector(la_dir0), q_bn.rotate_vector(la_dir0)
+            q_sh_back = q_bp if (vp.z - vp.y) >= (vn.z - vn.y) else q_bn
             q_out_pos = yaw_quat(ARM_FWD_OUT * e * w_fwd)
             # Outward = same sign as lat_vec (L - R)
             q_out = q_out_pos if vdot(vsub(q_out_pos.rotate_vector(la_dir0), la_dir0), vmul(lat_vec, sign)) >= 0 else qinv(q_out_pos)
             q_ua = q_out * q_sh_fwd * q_sh_back
             nw[ua] = mk_tf(ua_pos, q_ua * q_cl * q_sp * w[ua].rotation, w[ua].scale3d)
 
-            # Lowerarm: extend slightly forward on lead arm so forearm drives into run direction
+            # Lowerarm: keep lead elbow bent (~80-90 deg); increase flexion on rear elbow (fold forearm up behind back)
             la_pos = vadd(ua_pos, q_ua.rotate_vector(la_dir0))
             ha_dir0 = (q_ua * q_cl * q_sp).rotate_vector(vsub(w[ha].translation, w[la].translation))
-            q_la = pitch_quat(ARM_FWD_EL * e * w_fwd, ha_dir0)
+            q_la_fwd = pitch_quat(ARM_FWD_EL * e * w_fwd, ha_dir0) if ARM_FWD_EL else unreal.Quat(0.0, 0.0, 0.0, 1.0)
+            rf = math.radians(ARM_BACK_FL * e * w_rear)
+            q_fp = unreal.Quat(math.sin(0.5 * rf), 0.0, 0.0, math.cos(0.5 * rf))
+            q_fn = qinv(q_fp)
+            q_la_back = q_fp if q_fp.rotate_vector(ha_dir0).z >= q_fn.rotate_vector(ha_dir0).z else q_fn
+            q_la = q_la_fwd * q_la_back
             nw[la] = mk_tf(la_pos, q_la * q_ua * q_cl * q_sp * w[la].rotation, w[la].scale3d)
 
     parents = {
