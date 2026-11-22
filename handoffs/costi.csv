@@ -55,3 +55,4 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-22,integ-playtest-2026-11-22,disk-cleanup+integrazione-3a,fisso,agy_student,gemini-4-hydrogen-high,15,0,0,,1A+2A (~254 GB liberati) + merge M12p1/M10M11/S1/haptics/main su claude/integ-playtest-2026-11-22 (build UE pending)
 2026-11-22,unreal-main-milestones,m12-p1-verify+m12-g0-g1,fisso,claude_pro+agy_student,sonnet+gemini-4-hydrogen-medium,15,0,0.46,1,PASS build UE 5.9 + GSTNRespawn+GSTNMission 7/7 + GSTNExperience 7/7 (G4 PIE pending)
 2026-11-22,unreal-main-milestones-g2,m12-g2,fisso,claude_pro+agy_student,sonnet+gemini-4-hydrogen-medium,10,0,1.20,2,PASS build UE 5.9 + GSTNModeVerbs 3/3 + verbs-vs-commands-guide.md
+2026-11-22,unreal-main-milestones-g5,m12-g5,fisso,claude_pro+agy_student,sonnet+gemini-4-hydrogen-medium,10,0,2.09,3,PASS build UE 5.9 + GSTNInteract+GSTNCamera+GSTN.PawnRig 108/108

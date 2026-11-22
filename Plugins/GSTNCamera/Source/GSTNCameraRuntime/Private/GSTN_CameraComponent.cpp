@@ -1003,11 +1003,16 @@ void UGSTN_CameraComponent::EvaluateCamera(float DeltaSeconds)
 
 	// 4. The tag container the rules read: pawn tags plus the synthetic local ones (camera.md §3.2)
 	FGameplayTagContainer Tags = RequestTags;
-	if (AActor* Owner = GetOwner(); Owner && Owner->Implements<UGSTN_CameraTagSource>())
+	if (AActor* Owner = GetOwner())
 	{
-		FGameplayTagContainer FromSource;
-		IGSTN_CameraTagSource::Execute_GetCameraTags(Owner, FromSource);
-		Tags.AppendTags(FromSource);
+		// The pawn or one of its components may be the tag source (a project rig component needs no pawn change)
+		UObject* TagSource = Owner->Implements<UGSTN_CameraTagSource>() ? static_cast<UObject*>(Owner) : Owner->FindComponentByInterface(UGSTN_CameraTagSource::StaticClass());
+		if (TagSource)
+		{
+			FGameplayTagContainer FromSource;
+			IGSTN_CameraTagSource::Execute_GetCameraTags(TagSource, FromSource);
+			Tags.AppendTags(FromSource);
+		}
 	}
 	if (Section)
 	{

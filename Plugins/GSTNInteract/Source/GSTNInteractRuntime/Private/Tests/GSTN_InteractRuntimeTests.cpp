@@ -280,4 +280,100 @@ GSTN_INTERACT_RT_TEST(SettingsAndRulesAssetAreSane)
 	return true;
 }
 
+// ---- M12 G5: the prompt ----
+
+GSTN_INTERACT_RT_TEST(PromptTextIsAPureFunctionOfTheView)
+{
+	FGSTN_InteractPresentationView View;
+	View.Display.Name = FText::FromString(TEXT("Chest"));
+	View.Display.TapVerb = FText::FromString(TEXT("Look"));
+	View.Display.HoldVerb = FText::FromString(TEXT("Open"));
+
+	FString Text = UGSTN_InteractPresenter_Prompt::FormatPrompt(View).ToString();
+	TestTrue(TEXT("the name leads"), Text.StartsWith(TEXT("Chest")));
+	TestTrue(TEXT("the tap verb is shown"), Text.Contains(TEXT("[Tap] Look")));
+	TestTrue(TEXT("the hold verb is shown"), Text.Contains(TEXT("[Hold] Open")));
+	TestFalse(TEXT("no bar while nothing is held"), Text.Contains(TEXT("%")));
+	TestFalse(TEXT("an actionable target is not greyed"), Text.Contains(TEXT("unavailable")));
+
+	View.HoldProgress = 0.5f;
+	Text = UGSTN_InteractPresenter_Prompt::FormatPrompt(View, 10).ToString();
+	TestTrue(TEXT("half a hold fills half the bar"), Text.Contains(TEXT("[#####.....]")));
+	TestTrue(TEXT("and shows the percent"), Text.Contains(TEXT("50%")));
+
+	View.Display.TapVerb = FText::GetEmpty();
+	View.Display.HoldVerb = FText::GetEmpty();
+	View.bUnactionable = true;
+	Text = UGSTN_InteractPresenter_Prompt::FormatPrompt(View).ToString();
+	TestFalse(TEXT("empty verbs are not drawn"), Text.Contains(TEXT("[Tap]")) || Text.Contains(TEXT("[Hold]")));
+	TestTrue(TEXT("a greyed target says so"), Text.Contains(TEXT("(unavailable)")));
+
+	TestEqual(TEXT("bar below zero"), UGSTN_InteractPresenter_Prompt::MakeHoldBar(-1.f, 4), FString(TEXT("[....]")));
+	TestEqual(TEXT("bar above one"), UGSTN_InteractPresenter_Prompt::MakeHoldBar(2.f, 4), FString(TEXT("[####]")));
+	return true;
+}
+
+GSTN_INTERACT_RT_TEST(PawnFocusFeedsThePrompt)
+{
+	SetMeaning();
+	FRig Rig;
+	UGSTN_InteractPresentationSubsystem* Presentation = UGSTN_InteractPresentationSubsystem::Get(Rig.World);
+	if (!TestNotNull(TEXT("interact and presentation subsystems"), Rig.Subsystem) || !TestNotNull(TEXT("presentation"), Presentation))
+	{
+		return false;
+	}
+	AActor* Item = Rig.SpawnActor(FVector(150.f, 0.f, 0.f));
+	UGSTN_InteractableComponent* ItemComponent = Rig.AddInteractable(Item);
+	ItemComponent->DisplayName = FText::FromString(TEXT("Chest"));
+	ItemComponent->HoldVerbOverride = FText::FromString(TEXT("Open"));
+	Rig.Subsystem->SetFrameOverride(0);
+	ItemComponent->RegisterRecord();
+
+	// A real pawn (not a plain actor): the interactor probes for it and the view is built from its focus
+	APawn* Pawn = Rig.World->SpawnActor<APawn>(FVector::ZeroVector, FRotator::ZeroRotator);
+	UGSTN_InteractorComponent* Interactor = NewObject<UGSTN_InteractorComponent>(Pawn);
+	Interactor->RegisterComponent();
+	Presentation->RegisterInteractor(Interactor);
+
+	const int32 Frame = 5000;
+	Rig.Subsystem->SetFrameOverride(Frame);
+	const FGSTN_InteractFocusResult Focus = Interactor->ProbeAtFrame(Frame);
+	TestTrue(TEXT("the pawn's interactor focuses the item in front"), Focus.FocusId == ItemComponent->GetCandidateId());
+
+	FGSTN_InteractPresentationView View;
+	if (!TestTrue(TEXT("a view is built for the focus"), Presentation->BuildView(*Interactor, View)))
+	{
+		return false;
+	}
+	TestTrue(TEXT("the view targets the item"), View.Target.Get() == Item);
+	TestEqual(TEXT("the view carries the item name"), View.Display.Name.ToString(), FString(TEXT("Chest")));
+	TestEqual(TEXT("nothing is held yet"), View.HoldProgress, 0.f);
+
+	UGSTN_InteractPresenter_Prompt* Prompt = NewObject<UGSTN_InteractPresenter_Prompt>(GetTransientPackage());
+	Prompt->bDrawOnScreen = false;
+	Prompt->OnFocusEntered(View);
+	TestTrue(TEXT("the prompt shows"), Prompt->IsPromptVisible());
+	TestTrue(TEXT("with the name"), Prompt->GetPromptText().ToString().Contains(TEXT("Chest")));
+	TestTrue(TEXT("and the hold verb"), Prompt->GetPromptText().ToString().Contains(TEXT("Open")));
+
+	// Hold half the meaning's 30 frames: the view and the prompt carry the progress
+	Interactor->SetInteractHeld(true);
+	Rig.Subsystem->SetFrameOverride(Frame + 15);
+	Interactor->ProbeAtFrame(Frame + 15);
+	TestTrue(TEXT("a view is still built"), Presentation->BuildView(*Interactor, View));
+	TestTrue(TEXT("half the hold is in the view"), FMath::IsNearlyEqual(View.HoldProgress, 0.5f, 0.05f));
+	Prompt->OnFocusUpdated(View, 0.016f);
+	TestTrue(TEXT("and in the prompt"), Prompt->GetPromptText().ToString().Contains(TEXT("%")) && Prompt->GetPromptHoldProgress() > 0.4f);
+
+	Prompt->OnFocusLeft(View);
+	TestFalse(TEXT("the prompt hides when the focus ends"), Prompt->IsPromptVisible());
+	TestTrue(TEXT("and clears its text"), Prompt->GetPromptText().IsEmpty());
+
+	// The target goes away: an id with no object draws nothing
+	Item->Destroy();
+	Interactor->ProbeAtFrame(Frame + 16);
+	TestFalse(TEXT("a destroyed target has no view"), Presentation->BuildView(*Interactor, View));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
