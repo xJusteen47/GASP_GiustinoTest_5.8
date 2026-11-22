@@ -37,7 +37,7 @@
       "id": "desktop-integrazione-gpu",
       "obiettivo": "integrazione-gpu",
       "machine": "fisso",
-      "tier": "M1_CODE",
+      "tier": "M0",
       "status": "pending",
       "uses_ue59": true,
       "worktree": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2_ue59",
