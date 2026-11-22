@@ -1,0 +1,30 @@
+{
+  "mossa": "runstart-w3",
+  "ciclo": 2,
+  "passo": 3,
+  "tentativo": 1,
+  "livello": "principio",
+  "vista": "lato",
+  "non_peggiorare": [
+    "restano invariati trunk (f0 -1.7°, f5 41.2°, f13 43.3°, f17 29.0°, f21 24.9°, f25 17.3°, f29 11.9°), arm_r di c2/passo-01 (elb_r_deg f5 133.9°, f13 91.1°, f21 90.1°), arm_l di c1/passo-03, leg_l di c1/passo-05 e ball_l/ball_r di c2/passo-02 (roll_l_deg 13.0°, roll_r_deg 13.7°)",
+    "a f0 (v77) e f21 (v122) head e neck restano neutri e raccordati senza pop né oscillazioni oltre f21",
+    "a f13 (v107) da dietro (game) la testa resta leggibile sopra le spalle senza iper-estensione cervicale innaturale"
+  ],
+  "chiave": {
+    "anim": 13,
+    "video": 107,
+    "esiste": null,
+    "tratto": [5, 21]
+  },
+  "tipo": "posa",
+  "parte": "head",
+  "controllo": "head, neck, spazio del personaggio",
+  "intento": "overlap e silhouette: stabilizzare mento e sguardo di head/neck su f5–f21 (picco a f13/v107) alzando leggermente il mento in avanti così che la testa non resti bassa col torace ma legga chiaramente sopra le spalle da dietro",
+  "modifica": "attorno a f13 (v107), sfumando su f5–f21 con f0 (v77) e f21 (v122) ancorati, ruotare leggermente verso l'alto head/neck (circa 5–8° per sollevare il mento e mantenere lo sguardo avanti lungo la corsia), senza modificare trunk né creare oscillazioni cervicali",
+  "principio": "testa stabilizzata sulla direzione di spinta e overlap colonna–collo–testa (principi-animazione-corporea §7.2 e §12 Teste mobili)",
+  "verifica": {
+    "testo": "a f13 (v107) in az90 il mento è sollevato con sguardo orientato avanti (circa +5–8° rispetto a prima) e in game (dietro) il capo emerge nitido sopra le spalle, con raccordo fluido su f5–f21 senza pop a f0 e f21",
+    "req": null,
+    "misura": null
+  }
+}
