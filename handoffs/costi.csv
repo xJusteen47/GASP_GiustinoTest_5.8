@@ -53,3 +53,6 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-22,Verify cheaper AI stack proposal,stack-economico,cloud,claude_max,Opus,0,0,2,,DONE verdict handoffs/stack-economico-verdetto-2026-11-22.md (1B 2B 3A + rule 3 rewrite)
 2026-11-22,calibrazione-2c-k6-r1,Calibrazione cieca 2C Neon su K6 r1,fisso,agy_student,gemini-4-neon-high,6.87,0,0,,CALIB-2C K6 r1: FAIL posa (match Fable 1/1; 0 falsi PASS)
 2026-11-22,integ-playtest-2026-11-22,disk-cleanup+integrazione-3a,fisso,agy_student,gemini-4-hydrogen-high,15,0,0,,1A+2A (~254 GB liberati) + merge M12p1/M10M11/S1/haptics/main su claude/integ-playtest-2026-11-22 (build UE pending)
+2026-11-22,worker-M0,deepseek-smoke-m0,fisso,deepseek,deepseek-flash,0.2,0,0.1746,,PASS
+2026-11-22,worker-M1_CODE,deepseek-smoke-m1,fisso,deepseek,deepseek-v4-pro,0.98,0,0.4233,,PASS
+2026-11-22,deepseek_smoke_test,deepseek-smoke-test,fisso,agy_student,gemini-4-hydrogen-medium,3,0,0,0,PASS (M0+M1_CODE+EULA guard verificati su worktree sparse)
