@@ -1,23 +1,17 @@
-# Handover: harness-v2 Round 2 (fix review Claude 52256143)
+# Handover: harness-v2 checkpoint (hook _ue59 attivi, calibrazione 2C 1/4, memoria AGENTS.md)
 
-- **Branch / Base:** `claude/harness-v2` (commit Round 1 `52256143` -> Round 2)
-- **Macchina:** fisso (senza editor; `GASP_Giustino2_ue59` intatto)
+- **Branch / Commit:** `claude/harness-v2` (`52256143` -> `a0134cfc` Claude PASS r2 -> `01d060d3` fix post-PASS -> questo checkpoint)
+- **Macchina:** fisso (editor chiuso; `GASP_Giustino2_ue59` intatto, 0 file sporchi toccati; `_ue59/IN-USO.txt` allineato)
 
-## Fix applicati su review Claude (obbligatori 1–7 + opz. c)
-1. `Test-GitGuard.ps1`: `git -c core.quotepath=false diff --cached --name-only --no-renames -z` UTF-8 per intercettare `git mv` su file protetti e path non-ASCII.
-2. `.githooks/pre-push` + `Test-GitGuard.ps1`: blocco force-push via `merge-base --is-ancestor`, `-RemoteSha`, e `</dev/null` su `powershell.exe`.
-3. `Invoke-Worker.ps1` + `protected-paths.json`: lock atomico `FileMode.CreateNew` (`.lock` con host+PID, recupero stale PID morto, rispetto lock manuali `IN-USO:`), path assoluto unico `ue59_lock_path` condiviso tra worktree.
-4. `Invoke-Worker.ps1` + `Run-Timed.ps1`: hard timeout proprio (`WaitForExit` + `taskkill /F /T`) in entrambi (`exit 124` + `ESITO: TIMEOUT`); `Test-LockFree` con match esatto su prefisso owner (opz. c).
-5. `Invoke-Worker.ps1` + `New-DeepSeekWorktree.ps1` + `agent-bridge/bridge_core.py`: guard EULA Epic su filesystem (rifiuta DeepSeek se `Plugins/GASNPP` o `EngineOverrides` esistono sotto `Cwd`/repo); helper worktree sparse senza cartelle Epic.
-6. `Invoke-Worker.ps1` + `bridge_core.py`: `GSTN_OWNER_UNLOCK` rimosso dall'env dei processi figli.
-7. `Run-Queue.ps1` + `handoffs/queue.json`: `rc=2` (`RIFIUTATO`) non consuma tentativi R5-bis; `-Cwd` esplicito obbligatorio per voce (rifiuta `_ue59` se `uses_ue59=false`).
+## Completato dopo PASS Claude r2 (`a0134cfc`)
+1. `Invoke-Worker.ps1` (`01d060d3`): recupero automatico di `_ue59/IN-USO.txt` dopo crash worker su stesso host con PID morto (lock manuali/PID attivi/altri host restano bloccati); normalizzazione exit figlio `cli.py` `2 -> 1` per evitare loop infiniti in `Run-Queue.ps1`.
+2. `.githooks/pre-commit`, `.githooks/pre-push` (LF-only UTF-8) + `Install-GitHooks.ps1`: installati in `C:/Users/jacop/Tools/gstn-gitguard/.githooks` con fallback a `Tools/CI/Test-GitGuard.ps1`; verificati attivi anche dentro `_ue59` (`pre-commit` OK rc=0, `pre-push` su `main` bloccato rc=2).
+3. Verifiche verdi dopo ultima modifica PowerShell: tutti i 5 `-SelfTest` (`Test-GitGuard`, `Run-Timed`, `New-DeepSeekWorktree`, `Invoke-Worker` 6/6, `Run-Queue`) + `agent-bridge/test_bridge.py` (`ALL TESTS PASSED`).
+4. `AGENTS.md` root creato per auto-bootstrap della memoria indicizzata nelle nuove chat (`INDICE.md` -> handover -> `memoria-progetto.md` -> `regole-progetto-2026-11-22.md`).
+5. Calibrazione cieca 2C `gemini-4-neon-high` (`docs/notes/reviews/calibrazione-2c-neon-2026-11-22.md`): **`K6 r1` completato (`FAIL posa` = match perfetto 1/1 con Fable `2bd9b2ef`, 0 falsi PASS, `0 $`)**; pausa voluta al ~60% finestra 5h.
 
-## Verifiche (tutte verdi dopo ultima modifica)
-- `Test-GitGuard.ps1 -SelfTest`: PASS (`DA+Mv`, `Pose+Utf8`, `ApprovedAnim`, `SecretScan`, `CleanAllow`, `Push+Force`, rc=0)
-- `Run-Timed.ps1 -SelfTest`: PASS (casi 1–7 incl. exact owner e PreCheck timeout 124, rc=0)
-- `New-DeepSeekWorktree.ps1 -SelfTest`: PASS (sparse checkout senza `Plugins/GASNPP`/`EngineOverrides`, rc=0)
-- `Invoke-Worker.ps1 -SelfTest`: PASS (`Route`, `Guards`, `Lock+Stale`, `Env+Timeout`, `CostCsv`, rc=0)
-- `Run-Queue.ps1 -SelfTest`: PASS (`Rc2NoCount`, `TimeoutR5bis`, `BadCwd+Skip`, `ExplicitCwd`, rc=0)
-- `C:\Users\jacop\Tools\agent-bridge\test_bridge.py`: `ALL TESTS PASSED` (rc=0)
+## Prossimi passi alla ripresa (in chat nuova su `Hydrogen High`)
+1. Eseguire i 3 casi ciechi restanti (`K6 r2` `84b7c354`, `v27 r2` `22300411`, `v28 r3` `3c779b08`) **solo con griglie `.jpg`** (no `.mp4` in blocco; cartelle pronte in `%TEMP%\cal2c\`, fonti anche in git) e chiudere `calibrazione-2c-neon-2026-11-22.md` (`>=3/4` + `0` falsi PASS).
+2. Quando l'owner ha completato il pagamento DeepSeek e impostato `DEEPSEEK_API_KEY` (env User Windows), eseguire test 10 min su worktree sparse via `Tools/CI/New-DeepSeekWorktree.ps1`.
 
-COSTO: 0 $ | 0 min desktop | 0 tok review | provider=agy_student | quota_pro=0%
+COSTO: 0 $ | 7 min desktop | 0 tok review | provider=agy_student | quota_pro=0%
