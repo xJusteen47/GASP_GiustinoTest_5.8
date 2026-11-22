@@ -48,7 +48,15 @@
 			"Enabled": true
 		},
 		{
-			"Name": "GSTNMission",
+			"Name": "GSTNExperience",
+				"Enabled": true
+			},
+			{
+				"Name": "GSTNModeVerbs",
+				"Enabled": true
+			},
+			{
+				"Name": "GSTNMission",
 			"Enabled": true
 		}
 	]

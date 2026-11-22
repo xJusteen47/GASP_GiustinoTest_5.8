@@ -8,3 +8,4 @@
 - 2026-11-22 | m12-g2 GSTNModeVerbs + verbs-vs-commands guide | claude/m12-g2 | build UE 5.9 OK, GSTNModeVerbs 3/3 PASS, guida verbs-vs-commands-guide.md | ~$1.20 (claude_pro+agy_student)
 - 2026-11-22 | m12-g5 GSTNInteract + GSTNCamera su pawn vero | claude/m12-g5 | build UE 5.9 OK, GSTNInteract+GSTNCamera+GSTN.PawnRig 108/108 PASS | ~$2.09 (claude_pro+agy_student)
 - 2026-11-23 | m12-g6 GSTNMode_Levels Game Feature | claude/m12-g6 | build UE 5.9 OK, GSTNMode_Levels 6/6 PASS | ~$0.75 (claude_pro+agy_student)
+- 2026-11-23 | m12-g7-g8 L_Test_Level01 script + M12 Sweep | claude/m12-g7-g8 | build UE 5.9 OK, GSTNMode_Levels 11/11 PASS (G6+G8) | ~$1.59 (claude_pro+agy_student)
