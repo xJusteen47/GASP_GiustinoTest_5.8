@@ -58,6 +58,14 @@ def env(f):
     return 1.0 - ss(14.0, 26.0, x)
 
 
+def env_trunk_settle(f):
+    # Residual acceleration lean at f21 (v122) with slow-in damped settle to f29 (v137); 0 for f <= 13
+    x = float(f)
+    if x <= 13.0 or x >= 29.0:
+        return 0.0
+    return ss(13.0, 19.0, x) * ((1.0 - ss(21.0, 29.0, x)) ** 1.5)
+
+
 def contact_dip(f):
     # Extra pelvis/spine absorption (-Z) at 1st contact (R f6-f8) and 2nd contact (L f11-f13), rebound between
     x = float(f)
@@ -213,7 +221,8 @@ for f in range(n):
     pose = unreal.AnimPoseExtensions.get_anim_pose_at_time(seq, f / 30.0, opts)
     w = {b: unreal.AnimPoseExtensions.get_bone_pose(pose, b, unreal.AnimPoseSpaces.WORLD) for b in bones_needed}
     e = env(f)
-    if e <= 1e-6:
+    es = env_trunk_settle(f)
+    if e <= 1e-6 and es <= 1e-6:
         nw = dict(w)
     else:
         nw = {}
@@ -229,7 +238,7 @@ for f in range(n):
         # 2. Spine_01 forward pitch (1-frame elastic lag + impact nod) + slight chest counter-rotation
         sp_pos = vadd(w["spine_01"].translation, unreal.Vector(0.0, dy, dz))
         e_sp = env(max(0, f - 1))
-        sp_deg = SPINE_PITCH * e_sp - 0.3 * contact_dip(max(0, f - 1))
+        sp_deg = SPINE_PITCH * e_sp - 0.3 * contact_dip(max(0, f - 1)) + 9.0 * env_trunk_settle(f)
         q_sp_pit = pitch_quat(sp_deg, vsub(w["neck_01"].translation, w["spine_01"].translation))
         q_sp_yaw = yaw_quat(CHEST_TWIST * e * hd_sig[f])
         q_sp = q_sp_yaw * q_sp_pit
@@ -277,7 +286,7 @@ for f in range(n):
     # Convert modified bones to parent-local space
     # For neck_01 and clavicles, parent is spine_05 (rotated by q_sp with spine_01)
     sp05_old = unreal.AnimPoseExtensions.get_bone_pose(pose, "spine_05", unreal.AnimPoseSpaces.WORLD)
-    if e <= 1e-6:
+    if e <= 1e-6 and es <= 1e-6:
         sp05_new = sp05_old
     else:
         sp05_off = vsub(sp05_old.translation, w["spine_01"].translation)
