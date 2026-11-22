@@ -21,6 +21,7 @@ SPINE_PITCH = float(os.environ.get("W3_SPINE_PITCH", "3.5")) # deg forward (cont
 KNEE_DROP = float(os.environ.get("W3_KNEE_DROP", "0.35"))    # fraction of swing foot height above 14 cm
 SWING_LAG = float(os.environ.get("W3_SWING_LAG", "4.0"))     # cm trailing (-Y) on swing foot in f0-f10 (torso leads)
 CATCH_FWD = float(os.environ.get("W3_CATCH_FWD", "5.5"))     # cm forward (+Y) on swing foot in f10-f22 (legs catch up)
+LEG_L_PUSH13 = float(os.environ.get("W3_LEG_L_PUSH13", "10.0")) # cm back (-Y) on foot_l push-off at f13 (v107)
 LAT_WIDEN = float(os.environ.get("W3_LAT_WIDEN", "6.0"))     # cm lateral widening per foot for >= 10 cm ankle gap
 ARM_FWD_SH = float(os.environ.get("W3_ARM_FWD_SH", "12.0"))  # deg forward swing on lead upperarm
 ARM_FWD_EL = float(os.environ.get("W3_ARM_FWD_EL", "0.0"))   # keep lead elbow bent ~80-90 deg (no straight extension)
@@ -271,6 +272,9 @@ for f in range(n):
             else:
                 fz_new = fz
                 fy_new = foot_old.y
+            if s == "l":
+                e_l13 = ss(8.0, 13.0, float(f)) * (1.0 - ss(13.0, 20.0, float(f)))
+                fy_new -= LEG_L_PUSH13 * e_l13
             foot_new = vadd(unreal.Vector(foot_old.x, fy_new, fz_new), vmul(lat_vec, sign * LAT_WIDEN * el))
             knee_new, foot_new = solve_2bone_ik(hip_new, foot_new, hip_old, knee_old, foot_old)
 
