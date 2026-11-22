@@ -46,6 +46,7 @@ Network Prediction, so the Core can be reused in a project without the GAS-NPP f
 | [GSTNLoadoutMenu](GSTNLoadoutMenu/README.md) | Game UI | `GSTNLoadoutMenu` | Pre-mission loadout screen (M11): kit, specials, mods and backpack chosen with the pad per local player, rows from data (`FGSTN_LoadoutChoiceRegistry`), sent with `ServerRequestLoadout`. Slate, opens by itself in the hub. `EnabledByDefault` false, enabled in the project. |
 | [GSTNKitModsEditor](GSTNKitModsEditor/README.md) | Bridge, editor only | `GSTNKitModsEditor` | Mod editor tooling (M11 L8): mod rules in the M5 validation panel and Data Validation, preview of a modded move in the timeline editor (bridge of GSTNKitMods and GSTNCombatEditor). Optional, `EnabledByDefault` false. |
 | [GSTNExtensionTest](GSTNExtensionTest/README.md) | Test only | `GSTNExtTestLink`, `GSTNExtTestDefence` | A fake consumer of both M6 plugins: a carry link type and a brace defence step added from outside them, with the tests that prove nothing in the plugins or the combat tick changed for it (m6 spec 12 item 7). Off by default, never shipped. | Yes |
+| [GSTNModeVerbs](GSTNModeVerbs/README.md) | L3b (mode verbs) | `GSTNModeVerbsCore`, `GSTNModeVerbsNP` | Mode verb ability (`UGSTN_GA_ModeVerb`), frame-stamped `UGSTN_RequestableComponent`, and `UGSTN_VerbSubsystem` (`M12 G2`). | Yes |
 
 ## GAS-NPP fork
 

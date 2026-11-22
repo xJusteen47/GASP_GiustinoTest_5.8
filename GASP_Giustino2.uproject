@@ -293,6 +293,10 @@
 		{
 			"Name": "GSTNMission",
 			"Enabled": true
+		},
+		{
+			"Name": "GSTNModeVerbs",
+			"Enabled": true
 		}
 	],
 	"EpicSampleNameHash": "1673045636"
