@@ -1,0 +1,30 @@
+{
+  "mossa": "runstart-w3",
+  "ciclo": 2,
+  "passo": 2,
+  "tentativo": 1,
+  "livello": "principio",
+  "vista": "lato",
+  "non_peggiorare": [
+    "restano invariati trunk (f0 -1.7°, f5 41.2°, f13 43.3°, f17 29.0°, f21 24.9°, f25 17.3°, f29 11.9°), arm_r di c2/passo-01 (elb_r_deg f5 133.9°, f13 91.1°, f21 90.1°; el_r_vs_sh_x_cm f5 -9.1, f13 -17.5) e arm_l di c1/passo-03",
+    "a f13 (v107) resta preservata la spinta posteriore di leg_l (knee_l_deg 134.7°, foot_l_vs_hip_l_fwd_cm -41.4 cm, foot_l_z_cm 13.4 cm)",
+    "nei frame in cui ciascun piede spinge a terra (f5 su ball_l/ball_r e f13 su ball_l fino allo stacco) il contatto sull'avampiede resta naturale senza appiattire prematuramente la spinta né introdurre slittamenti o compenetrazioni"
+  ],
+  "chiave": {
+    "anim": 13,
+    "video": 107,
+    "esiste": null,
+    "tratto": [1, 25]
+  },
+  "tipo": "posa",
+  "parte": "leg_l, leg_r",
+  "controllo": "ball_l, ball_r (roll avampiede su foot_l_ik_ctrl, foot_r_ik_ctrl, spazio locale del piede)",
+  "intento": "pulizia e arco (gesto unico su ball_l e ball_r come singola regola di rilascio in volo): eliminare la curvatura/flessione a vuoto delle punte nei frame f1–f25 quando il piede è sollevato in recupero o volo, conservando l'estensione naturale solo durante la spinta a terra",
+  "modifica": "su f1–f25 scaricare verso neutro (allineato alla pianta del piede) la curvatura inutile delle punte su ball_r nei frame di recupero in volo (attorno a f9–f21, inclusa v107/f13 fino all'appoggio a f21/v122) e su ball_l dopo lo stacco da terra nel recupero verso f25, lasciando intatta la flessione dell'avampiede nei soli frame di spinta a terra (f5 su ball_r/ball_l, f13 su ball_l)",
+  "principio": "pulizia articolare, archi e contatto/stacco del piede (principi-animazione-corporea §9 e §10; rubric.md pulizia)",
+  "verifica": {
+    "testo": "in az90 tra f1 e f25 le punte in volo/recupero (ball_r a v107–v122, ball_l dopo lo stacco verso f25) risultano distese/allineate alla pianta senza uncino a vuoto, mentre la spinta a terra a f5–f13 conserva roll naturale e tutti i gate (inclusi roll_l/roll_r <= 25.0) restano PASS",
+    "req": null,
+    "misura": null
+  }
+}
