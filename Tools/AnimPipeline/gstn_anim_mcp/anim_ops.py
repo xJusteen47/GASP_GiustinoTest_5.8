@@ -431,6 +431,10 @@ def validate_intent(intent: dict[str, Any]) -> dict[str, Any]:
             if not (0 <= v <= hi):
                 raise ValueError(f"{k}={v} out of range [0, {hi}]")
             clean[k] = v
+        elif k == "envelope":
+            if v not in ("range", "turnaround"):
+                raise ValueError("envelope must be 'range' or 'turnaround'")
+            clean[k] = v
         elif k in ("handoff_smooth_range", "frame_range"):
             if not (isinstance(v, (list, tuple)) and len(v) == 2):
                 raise ValueError(f"{k} must be [start_frame, end_frame]")
@@ -441,6 +445,23 @@ def validate_intent(intent: dict[str, Any]) -> dict[str, Any]:
         else:
             raise ValueError(f"Unknown intent parameter: {k!r}")
     return clean
+
+
+def _clip_frame_count(repo: Path, asset: str, ue59_dir: str = "") -> int | None:
+    """Frame count of a clip from its joints dump (worktree first, then _ue59); None when no dump exists."""
+    name = asset.rsplit("/", 1)[-1]
+    cands = [_joints_path(repo, name)]
+    if ue59_dir:
+        cands.append(_joints_path(Path(ue59_dir), name))
+    for jp in cands:
+        if jp.exists():
+            try:
+                joints = json.loads(jp.read_text(encoding="utf-8")).get("joints", {})
+                if joints:
+                    return len(next(iter(joints.values())))
+            except (OSError, ValueError):
+                continue
+    return None
 
 
 def _snapshot_asset(repo: Path, asset: str) -> Path | None:
@@ -474,6 +495,16 @@ def anim_apply_intent(
     repo = _repo_root(root)
     raw = json.loads(intent_json) if isinstance(intent_json, str) else intent_json
     clean = validate_intent(raw)
+    if clean.get("frame_range"):
+        # frame_range is CLIP-LOCAL (0..n-1); a range outside the clip used to be a silent no-op
+        n_frames = _clip_frame_count(repo, src, ue59_dir)
+        if n_frames is not None:
+            a, b = clean["frame_range"]
+            if b > n_frames - 1:
+                raise ValueError(
+                    f"frame_range [{a}, {b}] is outside clip {src!r}: valid clip-local frames are 0..{n_frames - 1} "
+                    f"(n={n_frames}); frame_range is clip-local, not the global v-frame of the capture"
+                )
 
     snap_dir = _snapshot_asset(repo, dst)
     payload = {"src": src, "dst": dst, "intent": clean}
@@ -510,6 +541,10 @@ def anim_apply_intent(
         "-Tag", f"intent_{dst_name[:24]}",
     ]
     proc = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    engine_error = [ln for ln in (proc.stdout or "").splitlines() if "GEOM_INTENT ERROR" in ln]
+    if engine_error:
+        return {"ok": False, "error": engine_error[0].strip(), "returncode": proc.returncode, "src": src, "dst": dst,
+                "stdout": (proc.stdout or "")[-1500:]}
     return {
         "ok": proc.returncode == 0,
         "returncode": proc.returncode,
@@ -816,6 +851,129 @@ def anim_capture_ab(
         "videos": all_videos,
         "runs_sent": runs,
     }
+
+
+CHOOSER_REL = Path("Content") / "GSTN" / "Locomotion" / "StockBase" / "CHT_GSTN_StockMover_PoseMatch"
+ROWS_SCRIPT_REL = "Tools\\AnimPipeline\\cards\\runstart\\runstart_generic_rows_ue.py"
+
+
+def _sha(path: Path) -> str:
+    import hashlib
+    return hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else ""
+
+
+def _asset_files(root: Path, name: str) -> list[Path]:
+    return [m for ext in (".uasset", ".uexp") for m in (root / "Content").rglob(f"{name}{ext}")]
+
+
+def _variant_manifest(repo: Path, variant_id: int) -> Path:
+    return repo / "Saved" / "AnimPipeline" / "variants" / f"variant_{variant_id}.json"
+
+
+def anim_register_variant(
+    asset: str,
+    variant_id: int = 60,
+    root: str | Path | None = None,
+    worktree_dir: str | None = None,
+    ue59_dir: str = r"C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_ue59",
+    allow_dirty_chooser: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Register a clip as run start variant `variant_id` (+ its Handoff sibling variant_id+10) in the CAPTURE project (_ue59).
+
+    The tracked chooser CHT_GSTN_StockMover_PoseMatch is backed up byte-for-byte first; anim_unregister_variant puts it
+    back (sha256 checked), so no tracked asset stays dirty. The clip is copied into _ue59 only for the capture.
+    Refuses when the clip is missing, a variant manifest exists, or the chooser already has uncommitted (owner) changes
+    (unless allow_dirty_chooser; the restore then returns the owner's exact bytes). Needs the _ue59 lock and no open editor.
+    """
+    repo = _repo_root(root)
+    wt = Path(worktree_dir).resolve() if worktree_dir else repo
+    ue59 = Path(ue59_dir).resolve()
+    variant_id = int(variant_id)
+    name = asset.rsplit("/", 1)[-1]
+    if not name.replace("_", "").isalnum():
+        raise ValueError(f"invalid asset name {name!r}")
+    if not (30 <= variant_id <= 179):
+        raise ValueError("variant_id must be 30..179 (0-29 are reviewed variants; N+10 is the Handoff sibling, so keep registered ids 20 apart)")
+    files = _asset_files(wt, name)
+    if not any(f.suffix == ".uasset" for f in files):
+        return {"ok": False, "error": f"clip {name} not found under {wt / 'Content'} (run anim_apply_intent first)"}
+    chooser = ue59 / (str(CHOOSER_REL) + ".uasset")
+    chooser_uexp = ue59 / (str(CHOOSER_REL) + ".uexp")
+    mf = _variant_manifest(wt, variant_id)
+    if mf.exists():
+        return {"ok": False, "error": f"variant {variant_id} already registered ({mf}); call anim_unregister_variant first"}
+    dirty = subprocess.run(
+        ["git", "-C", str(ue59), "status", "--porcelain", "--", str(CHOOSER_REL).replace("\\", "/") + ".uasset"],
+        capture_output=True, text=True,
+    ).stdout.strip()
+    plan = {"asset": name, "variant_id": variant_id, "handoff_variant_id": variant_id + 10,
+            "chooser_dirty_before": bool(dirty), "chooser_sha_before": _sha(chooser), "files": [f.name for f in files]}
+    if dirty and not allow_dirty_chooser:
+        return {"ok": False, "plan": plan,
+                "error": "chooser CHT_GSTN_StockMover_PoseMatch has uncommitted (owner) changes in _ue59; pass "
+                         "allow_dirty_chooser=true only with the owner's OK (the restore returns the same bytes)"}
+    if dry_run:
+        return {"ok": True, "dry_run": True, "plan": plan}
+
+    bak = mf.parent / f"chooser_backup_{variant_id}"
+    bak.mkdir(parents=True, exist_ok=True)
+    for f in (chooser, chooser_uexp):
+        if f.exists():
+            shutil.copy2(f, bak / f.name)
+    copied: list[str] = []
+    for f in files:
+        rel = f.relative_to(wt)
+        dst = ue59 / rel
+        if dst.exists():
+            return {"ok": False, "plan": plan, "error": f"{dst} already exists in _ue59; not overwriting"}
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(f, dst)
+        copied.append(str(rel))
+    manifest = dict(plan, backup_dir=str(bak), copied=copied, ue59=str(ue59))
+    mf.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+    env = os.environ.copy()
+    env.update({"GSTN_SAVE": "1", "RSG_ASSET": f"/Game/GSTN/Animation/RunStart/{name}", "RSG_K": str(variant_id),
+                "RSG_REPORT": f"register_variant_{variant_id}"})
+    cmd = ["pwsh", "-NoProfile", "-File", str(wt / "Tools" / "CI" / "Run-SparseAnimStep.ps1"), "-WorktreeDir", str(wt),
+           "-Script", ROWS_SCRIPT_REL, "-Ue59Dir", str(ue59), "-Tag", f"register_{variant_id}", "-KeepUe59Content"]
+    proc = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    manifest["chooser_sha_after"] = _sha(chooser)
+    mf.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    ok = proc.returncode == 0 and manifest["chooser_sha_after"] != plan["chooser_sha_before"]
+    return {"ok": ok, "returncode": proc.returncode, "plan": manifest,
+            "next": f"capture with gstn.RunStart.Variant {variant_id} (variant_a_id/variant_b_id in anim_capture_ab), "
+                    "then ALWAYS call anim_unregister_variant to restore the chooser",
+            "stdout": (proc.stdout or "")[-800:], "stderr": (proc.stderr or "")[-500:]}
+
+
+def anim_unregister_variant(
+    variant_id: int = 60,
+    root: str | Path | None = None,
+    worktree_dir: str | None = None,
+) -> dict[str, Any]:
+    """Undo anim_register_variant: restore the chooser bytes (sha256 verified) and delete the clip copies from _ue59."""
+    repo = _repo_root(root)
+    wt = Path(worktree_dir).resolve() if worktree_dir else repo
+    mf = _variant_manifest(wt, int(variant_id))
+    if not mf.exists():
+        return {"ok": False, "error": f"no registration manifest for variant {variant_id}"}
+    m = json.loads(mf.read_text(encoding="utf-8"))
+    ue59 = Path(m["ue59"])
+    bak = Path(m["backup_dir"])
+    for f in (ue59 / (str(CHOOSER_REL) + ".uasset"), ue59 / (str(CHOOSER_REL) + ".uexp")):
+        b = bak / f.name
+        if b.exists():
+            shutil.copy2(b, f)
+    for rel in m["copied"]:
+        p = ue59 / rel
+        if p.exists():
+            p.unlink()
+    ok = _sha(ue59 / (str(CHOOSER_REL) + ".uasset")) == m["chooser_sha_before"]
+    if ok:
+        mf.unlink()
+    return {"ok": ok, "chooser_restored_sha_ok": ok, "removed": m["copied"]}
 
 
 def anim_rollback(asset: str, root: str | Path | None = None) -> dict[str, Any]:

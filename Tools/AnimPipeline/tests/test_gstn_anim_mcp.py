@@ -109,7 +109,8 @@ class TestGstnAnimMcp(unittest.TestCase):
         names = [t["name"] for t in lst["result"]["tools"]]
         self.assertEqual(
             names,
-            ["anim_inspect", "anim_apply_intent", "anim_gate_check", "anim_capture_ab", "anim_rollback"],
+            ["anim_inspect", "anim_apply_intent", "anim_gate_check", "anim_capture_ab",
+             "anim_register_variant", "anim_unregister_variant", "anim_rollback"],
         )
 
     def test_validate_intent_v1_and_v2_bounds(self) -> None:
@@ -627,6 +628,87 @@ class TestGstnAnimMcp(unittest.TestCase):
             )
             self.assertEqual(p_slash.returncode, 1, msg=p_slash.stdout + p_slash.stderr)
             self.assertIn("ESITO: FAIL - gates falliti per AssetA", p_slash.stdout)
+
+
+    def test_frame_range_outside_clip_is_an_error(self) -> None:
+        import geom_intent_ue
+
+        self.assertEqual(geom_intent_ue.check_frame_range([8, 14], 62), (8, 14))
+        with self.assertRaises(ValueError):
+            geom_intent_ue.check_frame_range([105, 109], 62)
+        with self.assertRaises(ValueError):
+            geom_intent_ue.check_frame_range([8, 62], 62)
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            jp = root / "Saved" / "AnimPipeline" / "runstart" / "joints_w3.json"
+            jp.parent.mkdir(parents=True)
+            jp.write_text(json.dumps(_make_fake_joints(n=62)), encoding="utf-8")
+            with self.assertRaises(ValueError) as cm:
+                anim_ops.anim_apply_intent("w3", "w3x", {"head_lift_deg": 5, "frame_range": [105, 109]}, root=root, dry_run=True)
+            self.assertIn("clip-local", str(cm.exception))
+            ok = anim_ops.anim_apply_intent("w3", "w3x", {"head_lift_deg": 5, "frame_range": [8, 20]}, root=root, dry_run=True)
+            self.assertTrue(ok["ok"])
+
+    def test_range_envelope_reaches_full_amplitude_and_moves_with_range(self) -> None:
+        import geom_intent_ue
+
+        def peak(a, b, key="arm_clr"):
+            return max(geom_intent_ue.compute_envelopes(f, 62, turn_side="none", frame_range=[a, b], mode="range")[key]
+                       for f in range(62))
+
+        self.assertAlmostEqual(peak(8, 20), 1.0, places=6)
+        self.assertAlmostEqual(peak(30, 45), 1.0, places=6)      # a later range is no longer a no-op (turnaround mode: 0)
+        late = geom_intent_ue.compute_envelopes(36, 62, turn_side="none", frame_range=[30, 45], mode="turnaround")
+        self.assertAlmostEqual(late["arm_clr"], 0.0, places=6)
+        env = [geom_intent_ue.compute_envelopes(f, 62, turn_side="none", frame_range=[8, 14], mode="range")["head"] for f in range(62)]
+        self.assertEqual([i for i, e in enumerate(env) if e > 0][0], 8)
+        self.assertEqual(env[7], 0.0)
+        self.assertEqual(env[15], 0.0)
+        self.assertEqual(anim_ops.validate_intent({"frame_range": [8, 20], "envelope": "range"})["envelope"], "range")
+        with self.assertRaises(ValueError):
+            anim_ops.validate_intent({"envelope": "banana"})
+        self.assertEqual(geom_intent_ue.map_v1_to_v2_intent({"frame_range": [8, 20]})["envelope"], "range")
+        self.assertEqual(geom_intent_ue.map_v1_to_v2_intent({"head_lift_deg": 5})["envelope"], "turnaround")
+
+    def test_tool_description_lists_envelope_timings(self) -> None:
+        tools = {t["name"]: t for t in mcp_server._tool_defs()}
+        d = tools["anim_apply_intent"]["description"]
+        for needle in ("CLIP-LOCAL", "arm_clr_deg 6.5-9.5", "head_lift_deg 3.5-7.5", "'range'", "envelope"):
+            self.assertIn(needle, d)
+
+    def test_register_variant_guards_and_dry_run(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            wt = Path(td) / "wt"
+            ue = Path(td) / "ue59"
+            clip = wt / "Content" / "GSTN" / "Animation" / "RunStart" / "AS_test_clip.uasset"
+            clip.parent.mkdir(parents=True)
+            clip.write_bytes(b"x")
+            ch = ue / "Content" / "GSTN" / "Locomotion" / "StockBase" / "CHT_GSTN_StockMover_PoseMatch.uasset"
+            ch.parent.mkdir(parents=True)
+            ch.write_bytes(b"chooser")
+            r = anim_ops.anim_register_variant("AS_test_clip", 60, root=wt, worktree_dir=str(wt), ue59_dir=str(ue), dry_run=True)
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(r["plan"]["handoff_variant_id"], 70)
+            self.assertFalse(anim_ops.anim_register_variant("AS_missing", 60, root=wt, worktree_dir=str(wt), ue59_dir=str(ue), dry_run=True)["ok"])
+            with self.assertRaises(ValueError):
+                anim_ops.anim_register_variant("AS_test_clip", 21, root=wt, worktree_dir=str(wt), ue59_dir=str(ue))
+            # unregister restores the exact chooser bytes and removes the clip copy
+            import hashlib
+            mf = anim_ops._variant_manifest(wt, 60)
+            bak = mf.parent / "chooser_backup_60"
+            bak.mkdir(parents=True)
+            (bak / ch.name).write_bytes(b"chooser")
+            copied = ue / "Content" / "GSTN" / "Animation" / "RunStart" / "AS_test_clip.uasset"
+            copied.parent.mkdir(parents=True)
+            copied.write_bytes(b"x")
+            ch.write_bytes(b"chooser+variant")
+            mf.write_text(json.dumps({"ue59": str(ue), "backup_dir": str(bak), "copied": [str(copied.relative_to(ue))],
+                                      "chooser_sha_before": hashlib.sha256(b"chooser").hexdigest()}), encoding="utf-8")
+            u = anim_ops.anim_unregister_variant(60, root=wt, worktree_dir=str(wt))
+            self.assertTrue(u["ok"], u)
+            self.assertEqual(ch.read_bytes(), b"chooser")
+            self.assertFalse(copied.exists())
+            self.assertFalse(mf.exists())
 
 
 if __name__ == "__main__":

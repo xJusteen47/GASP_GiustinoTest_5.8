@@ -11,7 +11,8 @@ param(
     [string]$Ue59Dir = 'C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_ue59',
     [string]$Assets = '',
     [int]$GateWin = 18,
-    [string]$Tag = 'sparse_step'
+    [string]$Tag = 'sparse_step',
+    [switch]$KeepUe59Content   # anim_register_variant: leave the edited chooser + copied clips in _ue59 (the tool restores them)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -159,7 +160,7 @@ try {
             }
     }
 
-    $statusAfter = & git -C $ue59 status --porcelain -uall 2>$null
+    $statusAfter = if ($KeepUe59Content) { @() } else { & git -C $ue59 status --porcelain -uall 2>$null }
     foreach ($line in $statusAfter) {
         if ($line.Length -lt 4) { continue }
         $p = ($line.Substring(3) -split ' -> ')[-1].Trim('"') -replace '/', '\'
@@ -200,7 +201,7 @@ finally {
     } elseif (-not $hadScript -and (Test-Path -LiteralPath $dstScript)) {
         Remove-Item -LiteralPath $dstScript -Force -ErrorAction SilentlyContinue
     }
-    $statusCleanup = & git -C $ue59 status --porcelain -uall 2>$null
+    $statusCleanup = if ($KeepUe59Content) { @() } else { & git -C $ue59 status --porcelain -uall 2>$null }
     foreach ($line in $statusCleanup) {
         if ($line.Length -lt 4) { continue }
         $code = $line.Substring(0, 2)

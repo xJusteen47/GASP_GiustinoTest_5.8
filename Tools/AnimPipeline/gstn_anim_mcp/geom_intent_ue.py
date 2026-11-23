@@ -279,6 +279,30 @@ def compute_character_axes(pelvis_pos, thigh_l_pos, thigh_r_pos):
     return lat_vecs, fwd_vecs
 
 
+ENVELOPE_KEYS = (
+    "w3", "piv_lean", "run_lean", "bank", "head", "sh",
+    "arm_st_back", "arm_pv_fwd", "arm_clr", "lag", "catch", "piv_foot", "widen", "win",
+)
+
+
+def check_frame_range(frame_range, n: int):
+    """frame_range is in CLIP-LOCAL frames (0..n-1). Raise ValueError if it is not inside the clip."""
+    if frame_range is None:
+        return None
+    a, b = int(frame_range[0]), int(frame_range[1])
+    if a < 0 or b < a or b > n - 1:
+        raise ValueError(
+            f"frame_range [{a}, {b}] is outside the clip: valid clip-local frames are 0..{n - 1} (n={n} frames)"
+        )
+    return a, b
+
+
+def range_envelope(f: int, f0: int, f1: int) -> float:
+    """Trapezoid over [f0, f1]: smoothstep ramp in/out (<= 3 frames each), plateau 1.0 in the middle."""
+    ramp = float(max(1, min(3, (f1 - f0) // 3)))
+    return ss(f0 - 1.0, f0 - 1.0 + ramp, float(f)) * (1.0 - ss(f1 - ramp, f1 + 1.0, float(f)))
+
+
 def compute_envelopes(
     f: int,
     n: int,
@@ -287,8 +311,14 @@ def compute_envelopes(
     start_from_frame=None,
     frame_range=None,
     handoff_smooth_range=None,
+    mode: str = "turnaround",
 ) -> dict[str, float]:
-    """Compute per-frame smoothstep envelopes; strictly 0.0 before start_from_frame."""
+    """Compute per-frame smoothstep envelopes; strictly 0.0 before start_from_frame.
+
+    mode "turnaround" (legacy): channel timings are FIXED on the turnaround pivot (see tool description);
+    frame_range only clips them. mode "range": every channel is the same trapezoid over frame_range
+    (ramp in/out <= 3 frames, plateau 1.0), so the requested degrees are reached inside the range.
+    """
     if frame_range:
         f0 = max(0, int(frame_range[0]))
         f1 = min(max(0, n - 1), int(frame_range[1]))
@@ -299,15 +329,15 @@ def compute_envelopes(
     sff = 2 if (start_from_frame is None and turn_side in ("L", "R")) else (0 if start_from_frame is None else int(start_from_frame))
     f_eff0 = max(f0, sff)
 
-    keys = (
-        "w3", "piv_lean", "run_lean", "bank", "head", "sh",
-        "arm_st_back", "arm_pv_fwd", "arm_clr", "lag", "catch", "piv_foot", "widen", "win",
-    )
+    keys = ENVELOPE_KEYS
     if f < f_eff0 or f > f1:
         return {k: 0.0 for k in keys}
 
     smooth = tuple(handoff_smooth_range) if handoff_smooth_range else None
     win = _window_weight(f, f_eff0, f1, smooth)
+    if mode == "range":
+        e = range_envelope(f, f_eff0, f1) * win
+        return {k: e for k in keys}
     piv_scale = 0.8 if 45.0 <= float(turn_deg) <= 135.0 else 1.0
     atk = float(f_eff0) - 1.0
     ff = float(f)
@@ -408,6 +438,7 @@ def map_v1_to_v2_intent(intent: dict) -> dict:
         "arm_pv_fwd_deg": arm_pv_fwd,
         "arm_pv_elbow_deg": float(intent.get("arm_pv_elbow_deg", 0.0)),
         "arm_clr_deg": float(intent.get("arm_clr_deg", 0.0)),
+        "envelope": intent.get("envelope") or ("range" if intent.get("frame_range") else "turnaround"),
     }
 
 
@@ -494,6 +525,11 @@ def main() -> int:
     turn_deg = v["turn_deg"]
     st, pv, bank_sign = ("r", "l", -1.0) if turn_side == "R" else ("l", "r", 1.0)
 
+    try:
+        check_frame_range(v["frame_range"], n)
+    except ValueError as exc:
+        print(f"GEOM_INTENT ERROR: {exc}")
+        return 2
     fr = v["frame_range"] or [0, n - 1]
     f0, f1 = max(0, int(fr[0])), min(n - 1, int(fr[1]))
     sff = 2 if (v["start_from_frame"] is None and turn_side in ("L", "R")) else (0 if v["start_from_frame"] is None else int(v["start_from_frame"]))
@@ -533,7 +569,7 @@ def main() -> int:
         env = compute_envelopes(
             f, n, turn_deg=turn_deg, turn_side=turn_side,
             start_from_frame=sff, frame_range=[f0, f1],
-            handoff_smooth_range=v["handoff_smooth_range"],
+            handoff_smooth_range=v["handoff_smooth_range"], mode=v["envelope"],
         )
 
         if f >= f_eff0 and f <= f1:
