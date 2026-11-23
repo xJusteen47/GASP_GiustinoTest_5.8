@@ -159,6 +159,13 @@ MINION_SEQUENCES = [
 # PUSHBOX-P5, owner PIE bug 2026-11-16 (run with PIE_CAPTURE_BUTTON=Strong): strong_walk hits a dummy 95 cm ahead with the strong attack, then
 # walks at it (the owner stopped ~2 m short for seconds); inside_escape puts the dummy 10 cm ahead (bodies overlapping) and walks away
 # ('walk_dir': the stick, default forward). Log the constraint with gstn.Pushbox.Log 1 (PIE_CAPTURE_PUSHLOG=1)
+# fthrow-overlord-1 (2026-11-23): grab throws. 'presses' = [(frame after PRE, button name in the input config, stick or None)]: the stick (camera
+# relative, as 'sticks') is held on that frame only and the button tapped, so Attack + stick forward = the F. throw of the Notation mode.
+# The dummy is grabbed with Interact on frame 0 (it must stand inside the grab reach: PIE_CAPTURE_GRAB_DIST, default 80 cm) and thrown on 45.
+GRAB_SEQUENCES = [
+    {'name': 'fthrow_hit', 'taps': [], 'frames': 140, 'dummy': float(os.environ.get('PIE_CAPTURE_GRAB_DIST', 80.0)), 'shoot': True,
+     'presses': [(0, 'Interact', None), (int(os.environ.get('PIE_CAPTURE_THROW_AT', 45)), 'Attack', (0, 1, 0))]},
+]
 BUG_SEQUENCES = [
     {'name': 'strong_walk', 'taps': [0], 'frames': 300, 'dummy': 95.0, 'shoot': True, 'walk': (40, 240)},
     {'name': 'inside_escape', 'taps': [], 'frames': 160, 'dummy': 10.0, 'shoot': True, 'walk': (20, 120), 'walk_dir': (0, -1, 0)},
@@ -290,7 +297,7 @@ MOVE_SEQUENCES = [
 if os.environ.get('PIE_CAPTURE_VIEWS'):
     VIEWS = [v for v in VIEWS if v[0] in os.environ['PIE_CAPTURE_VIEWS'].split(',')]
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
-    SEQUENCES = [s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
+    SEQUENCES = [s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES + GRAB_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
 elif 'DoubleShot' in KIT:
     SEQUENCES = DOUBLE_SHOT_SEQUENCES
 elif 'Dropkick' in KIT:
@@ -311,7 +318,7 @@ if os.environ.get('PIE_CAPTURE_FRAMES'):
 RUNS = json.load(open(os.environ['PIE_CAPTURE_RUNS'], encoding='utf-8')) if os.environ.get('PIE_CAPTURE_RUNS') else None
 if RUNS:
     _ALL = {s['name']: s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES
-            + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES}
+            + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES + GRAB_SEQUENCES}
     SEQUENCES = []
     for _r in RUNS:
         for _n in _r['sequences']:
@@ -862,6 +869,14 @@ def _tick(_dt):
                     _log(f'{seq["name"]}: projection volume spawned at {loc}')
                 except Exception as e:  # noqa: BLE001
                     _log(f'{seq["name"]}: projection volume FAILED: {e!r}')
+            for at, button, stick in seq.get('presses', []):          # grab throws (fthrow-overlord-1)
+                if frame == PRE + at:
+                    if stick is not None:
+                        g.hold(0, 'move', stick)
+                    g.combat_tap(0, g.button_mask(button))
+                    _log(f'{seq["name"]}: {button} tap{" + stick " + str(stick) if stick else ""} on v{frame}')
+                elif stick is not None and frame == PRE + at + 2:
+                    g.release(0, 'move')
             for at, value in seq.get('sticks', []):                 # movement QA clips
                 if frame == PRE + at:
                     if value is None:
@@ -958,5 +973,10 @@ def _tick(_dt):
 for _cv in [c.strip() for c in os.environ.get('PIE_CAPTURE_CVARS', '').split(';') if c.strip()]:
     unreal.SystemLibrary.execute_console_command(None, _cv)
     _log(f'cvar: {_cv}')
+# fthrow-overlord-1: PIE_CAPTURE_PRE_PY=<file.py> is exec'd once before Play (in-memory data for the capture, e.g. fthrow_capture_pre.py)
+if os.environ.get('PIE_CAPTURE_PRE_PY'):
+    _pre = {}
+    exec(open(os.environ['PIE_CAPTURE_PRE_PY'], encoding='utf-8').read(), _pre)
+    _log(_pre.get('_pre_msg', 'pre script run: ' + os.environ['PIE_CAPTURE_PRE_PY']))
 _log(f'driver loaded: kit {KIT}, button {BUTTON}, out {OUT}')
 st['handle'] = unreal.register_slate_post_tick_callback(_tick)
