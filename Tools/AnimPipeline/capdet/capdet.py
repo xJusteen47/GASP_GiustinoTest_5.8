@@ -21,6 +21,13 @@ Spec (json), paths relative to the repo root:
   clients                         PIE_CAPTURE_CLIENTS (default 0: one world, ~3x faster)
   max_minutes                     default 15 (project limit for captures)
   monitor                         screen number the editor window goes to (default 2 if it exists, else the primary)
+  cache                           {"inputs": [poses, curve sheet, data...], "build_inputs": [...]} for the hash cache (cache.py)
+  ab                              {"hit": f, "faf": f, "around": 3, "video": [a, b]} for the A/B montage (montage.py)
+
+Cache (addition no. 6): on `--stage all` the inputs are hashed first (cache.py: the spec, the poses/curve sheet/data of "cache.inputs"
+and the C++ of "cache.build_inputs"). An unchanged key reuses the stored outputs and the editor NEVER starts: "CACHE: HIT". A run that
+passes is stored. `--no-cache` skips both the lookup and the store, `--refresh` forces the capture and stores the new outputs.
+
 Prints at most 5 lines to the console; everything else is in <out>/capdet.json and the stage reports. Exit: 0 OK, 1 a gate or the ASSERT
 failed, 2 usage, 3 capture did not finish (ESITO not OK), 124 timeout.
 """
@@ -34,6 +41,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
 sys.path.insert(0, HERE)
 import basecmp  # noqa: E402
+import cache    # noqa: E402
 import post     # noqa: E402
 
 GATES_PY = os.path.join(ROOT, 'Tools', 'AnimPipeline', 'cards', 'runstart', 'runstart_pivot_gates.py')
@@ -107,12 +115,29 @@ def main(argv):
             else: out = v
     if '--dry' in argv: argv.remove('--dry'); dry = True
     if '--no-gates' in argv: argv.remove('--no-gates'); nogates = True
+    use_cache = '--no-cache' not in argv
+    if not use_cache: argv.remove('--no-cache')
+    refresh = '--refresh' in argv
+    if refresh: argv.remove('--refresh')
     if len(argv) != 1 or not os.path.exists(argv[0]) or stage not in ('gates', 'capture', 'post', 'all'):
         print(__doc__.split('\n\n')[0]); return 2
     spec = json.load(open(argv[0], encoding='utf-8'))
     out = P(out or os.path.join('Saved', 'Capdet', spec['name']))
     os.makedirs(out, exist_ok=True)
     rep, lines, rc = {'spec': spec, 'seed': spec.get('seed', 1), 'stages': {}}, [], 0
+    # The cache comes BEFORE the gates: a hit means these exact inputs already passed gates, capture and ASSERT, and the editor
+    # must not start. A miss only costs a few file hashes.
+    cached = use_cache and not dry and stage == 'all'
+    if cached and not refresh:
+        hit, man, _ = cache.check(spec, 'capture')
+        if hit:
+            _, _, ls = cache.reuse(spec, out, 'capture')
+            rep['stages']['cache'] = {'hit': True, 'key': man['key'], 'lines': ls}
+            json.dump(rep, open(os.path.join(out, 'capdet.json'), 'w', encoding='utf-8'), indent=1)
+            print('\n'.join((ls + ['CATTURA: SALTATA (inputs identici: niente editor)'])[:5]))
+            return 0
+        rep['stages']['cache'] = {'hit': False, 'key': man['key']}
+        lines.append(f'CACHE: MISS {man["key"]}' + (f' ({len(man["missing"])} inputs missing)' if man['missing'] else ''))
     if stage in ('gates', 'all') and not nogates:
         ok, ls = run_gates(spec, out); rep['stages']['gates'] = {'ok': ok, 'lines': ls}; lines += ls
         if not ok:
@@ -125,6 +150,11 @@ def main(argv):
     if rc == 0 and stage in ('post', 'all') and not dry:
         ok, ls = post.run(out, spec['sequence'], spec); rep['stages']['post'] = {'ok': ok, 'lines': ls}; lines += ls
         rc = 0 if ok else 1
+    if cached and rc == 0:
+        # Only a run that PASSED is stored: a cache that can serve a failed capture would hide the failure on the next run.
+        man, _ = cache.save(spec, out, 'capture', with_frames=bool(spec.get('cache', {}).get('with_frames')))
+        rep['stages']['cache'] = {'hit': False, 'key': man['key'], 'saved': True}
+        lines.append(f'CACHE: SAVED {man["key"]}')
     json.dump(rep, open(os.path.join(out, 'capdet.json'), 'w', encoding='utf-8'), indent=1)
     print('\n'.join(lines[:5]))
     return rc

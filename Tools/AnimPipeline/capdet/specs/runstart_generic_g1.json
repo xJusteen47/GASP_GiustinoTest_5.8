@@ -7,6 +7,9 @@
  "frames": 240,
  "expect": {"clip": "AS_GSTN_RunStart_Generic_g1", "window": [97, 140], "additive": ["BS_Relaxed_*Lean*"]},
  "gates": {"joints": "Saved/AnimPipeline/runstart/g1_joints.json", "base_joints": "Saved/AnimPipeline/runstart/stock_joints.json", "win": 18},
+ "cache": {"inputs": ["Saved/AnimPipeline/runstart/RunStart_Generic_g1.casc", "Saved/AnimPipeline/runstart/g1_joints.json",
+                      "Content/GSTN/Animation/RunStart/AS_GSTN_RunStart_Generic_g1.uasset"]},
+ "ab": {"hit": 110, "faf": 140, "around": 3, "video": [97, 150]},
  "max_minutes": 15,
  "monitor": 2
 }

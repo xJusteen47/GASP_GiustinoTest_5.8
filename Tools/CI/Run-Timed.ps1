@@ -27,6 +27,9 @@ the background-throttle ini and EcoQoS as they are).
 Capture gate (project rule 10): -AssertFile <capture>\assert.txt (written by pie_capture_move.py) adds its first line
 ("ASSERT: OK" / "ASSERT: FAIL ...", or "ASSERT: MANCANTE") to the output; ESITO OK with an ASSERT not OK exits 3, so no review
 starts on a video that does not show the expected clip.
+Approved-pose gate (project rule 13b, "7 deterministic additions" no. 7): -Preset Build runs
+Tools\AnimPipeline\capdet\regress.py first and REFUSES to build when a locked version changed (exit 4, nothing is compiled), so a
+thread cannot build and hand over work that silently overwrote an approved pose. -SkipRegress bypasses it and the output says so.
 #>
 [CmdletBinding()]
 param(
@@ -48,7 +51,8 @@ param(
     [switch]$KeepThrottle,      # Capture: keep the editor's background throttle ini and EcoQoS (default: off, see docs/notes/speed-up.md)
     [string]$ExtraArgs = '',    # appended to the preset's command line
     [switch]$KeepRestoreData,   # do not move Saved\Autosaves\PackageRestoreData.json aside before an editor run
-    [string]$AssertFile         # capture gate: the assert.txt to read after the run (exit 3 when ESITO OK but ASSERT not OK)
+    [string]$AssertFile,        # capture gate: the assert.txt to read after the run (exit 3 when ESITO OK but ASSERT not OK)
+    [switch]$SkipRegress        # Build: do not run the approved-pose regression first (stated in the output when used)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -293,6 +297,23 @@ $Log = if ([IO.Path]::IsPathRooted($Log)) { $Log } else { Join-Path $Root $Log }
 $NoThrottleIni = '-ini:EditorSettings:[/Script/UnrealEd.EditorPerformanceSettings]:bThrottleCPUWhenNotForeground=False'
 switch ($Preset) {
     'Build' {
+        # Rule 13b gate: an approved pose that changed must stop the build, not be discovered after the capture.
+        if (-not $SkipRegress) {
+            $rg = Join-Path $Root 'Tools\AnimPipeline\capdet\regress.py'
+            if (Test-Path -LiteralPath $rg) {
+                $rgOut = & python -I $rg --out "$Log.regress.json" 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    $txt = @("ESITO: FAIL (regressione pose approvate)") + (@($rgOut) | Select-Object -First 4)
+                    $txt | Set-Content -LiteralPath "$Log.esito" -Encoding UTF8
+                    $txt | Write-Output
+                    Write-Output 'BUILD: SALTATA (-SkipRegress per forzare)'
+                    exit 4
+                }
+                $script:RegressNote = @($rgOut) | Where-Object { $_ -match '^REGRESS:' } | Select-Object -First 1
+            }
+        } else {
+            $script:RegressNote = 'REGRESS: SALTATO (-SkipRegress)'
+        }
         $Exe = "$eng\Build\BatchFiles\Build.bat"
         $ArgLine = "$Target Win64 Development `"-Project=$uproject`" -WaitMutex -NoHotReload"
     }
@@ -313,6 +334,7 @@ if (-not $Exe) { Write-Output 'ERRORE: serve -Preset oppure -Exe'; exit 2 }
 if ($ExtraArgs) { $ArgLine = "$ArgLine $ExtraArgs" }
 $isEditor = (Split-Path $Exe -Leaf) -match '^UnrealEditor'
 $notes = @()
+if ($script:RegressNote) { $notes += $script:RegressNote }   # the Build preset's rule-13b gate ran before this point
 if ($isEditor) {
     if ($ArgLine -notmatch '(^|\s)-unattended(\s|$)') { $ArgLine = "$ArgLine -unattended" }
     if (-not $KeepRestoreData) { $n = Clear-RestoreData (Get-ProjectDir $ArgLine $Root); if ($n) { $notes += $n } }
