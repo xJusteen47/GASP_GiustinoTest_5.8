@@ -120,11 +120,11 @@ bool FGSTN_LinkKitThrowsStickTest::RunTest(const FString& Parameters)
 
 namespace
 {
-	/** The grabber's slots in Notation mode: the moved pummel and the mode's throws */
+	/** The grabber's slots in Notation mode: the mode's throws (no pummel: the owner removed it) */
 	TArray<FGSTN_InputSlotSpec> NotationSlots(EGSTN_GrabTurnErgonomics Ergonomics)
 	{
 		// The put-down slot is left out: the scripts' button map has no dodge
-		TArray<FGSTN_InputSlotSpec> Slots = { UGSTN_LinkSlots::BuildNotationPummelSlot() };
+		TArray<FGSTN_InputSlotSpec> Slots;
 		for (const FGameplayTag& Throw : UGSTN_LinkSlots::GetThrowCommands(EGSTN_LinkThrowInputMode::Notation, Ergonomics))
 		{
 			Slots.Add(UGSTN_LinkSlots::BuildThrowSlot(Throw, EGSTN_LinkThrowInputMode::Notation, Ergonomics));
@@ -148,7 +148,7 @@ bool FGSTN_LinkKitThrowsNotationTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("instant: attack + side = F."), CommandFor(*this, Slots, TEXT("4:6t 5:+A"), *Settings), Name(Command_Link_Throw_Forward));
 	TestEqual(TEXT("crouch + attack = Cr."), CommandFor(*this, Slots, TEXT("2:+D 5:+A"), *Settings), Name(Command_Link_Throw_Down));
 	TestEqual(TEXT("crouch + tilt + attack = Cr.F."), CommandFor(*this, Slots, TEXT("2:+D 4:8t 5:+A"), *Settings), Name(Command_Link_Throw_CrouchForward));
-	TestEqual(TEXT("strong, neutral = pummel"), CommandFor(*this, Slots, TEXT("5:+B"), *Settings), Name(Command_Link_Pummel));
+	TestEqual(TEXT("strong, neutral = nothing (no pummel)"), CommandFor(*this, Slots, TEXT("5:+B"), *Settings), FString());
 
 	const TArray<FGSTN_InputSlotSpec> WithBack = NotationSlots(EGSTN_GrabTurnErgonomics::BackThrow);
 	TestEqual(TEXT("back throw mode: attack + back = B."), CommandFor(*this, WithBack, TEXT("4:2t 5:+A"), *Settings), Name(Command_Link_Throw_Back));
@@ -156,7 +156,7 @@ bool FGSTN_LinkKitThrowsNotationTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("instant binds no back throw"), UGSTN_LinkSlots::GetThrowCommands(EGSTN_LinkThrowInputMode::Notation, EGSTN_GrabTurnErgonomics::Instant)
 		.Contains(Command_Link_Throw_Back.GetTag()));
 
-	// The fill: N./Cr.F. added from the common set, the authored up throw hidden, the pummel moved, the put-down row bound to the release ability
+	// The fill: N./Cr.F. added from the common set, the authored up throw hidden, the pummel hidden, the put-down row bound to the release ability
 	FGSTN_LinkThrowSet Fallback;
 	Fallback.Forward = FSoftClassPath(TEXT("/Script/GSTNLinkTest.F"));
 	Fallback.Down = FSoftClassPath(TEXT("/Script/GSTNLinkTest.D"));
@@ -189,8 +189,8 @@ bool FGSTN_LinkKitThrowsNotationTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("Cr.F. from the common set"), FindRow(Bindings, Command_Link_Throw_CrouchForward, true) != nullptr);
 	const FGSTN_BindingInput* UpRow = FindRow(Bindings, Command_Link_Throw_Up, false);
 	TestTrue(TEXT("the authored up throw is hidden"), UpRow && UpRow->Ability.IsNull());
-	const FGSTN_BindingInput* PummelRow = FindRow(Bindings, Command_Link_Pummel, true);
-	TestTrue(TEXT("the pummel moved to strong"), PummelRow != nullptr);
+	const FGSTN_BindingInput* PummelRow = FindRow(Bindings, Command_Link_Pummel, false);
+	TestTrue(TEXT("the pummel is hidden (owner: no pummel)"), PummelRow && PummelRow->Ability.IsNull());
 	const FGSTN_BindingInput* PutDown = FindRow(Bindings, Command_Link_Release_PutDown, true);
 	TestTrue(TEXT("the put-down row plays the release ability"), PutDown && PutDown->Ability == ReleaseAbility
 		&& PutDown->Requirements.RequireTags.HasTagExact(Role_Grabber));

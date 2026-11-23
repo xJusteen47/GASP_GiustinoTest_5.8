@@ -11,7 +11,7 @@ Branch `claude/grab-link`, NON compilato (cloud). Da integrare nel branch di int
 ## Da guardare in PIE (KIT_Test_Overlord contro manichino, L_Test_Hub)
 1. Presa (tap Interact): il collo del manichino sta circa sulla mano destra davanti, sollevato (`gstn.Combat.Debug.Links 1` mostra la capsula parcheggiata). Se il manichino non ha `neck_01` nel mesh, la presa resta all'offset del tipo (90 cm davanti).
 2. Camminata con lo stick: si cammina più lenti (0.75); A salta più basso (0.7); il nemico segue. Crouch: nessun cambio di animazione (voluto).
-3. X neutro = N., X + stick in qualunque direzione = F. con girata istantanea verso lo stick, LT + X = Cr., LT + stick + X = Cr.F., RT neutro = pummel.
+3. X neutro = N., X + stick in qualunque direzione = F. con girata istantanea verso lo stick, LT + X = Cr., LT + stick + X = Cr.F.. Niente pummel (tolto dall'owner): RT neutro non fa nulla di link.
 4. RB (schivata) = mette giù senza lancio. DA CONFERMARE con l'owner che il tasto è giusto.
 5. Senza mash il nemico si libera entro MaxFrames del kit; `gstn.Grab.MaxHoldFrames 300` lo forza a 4,8 s. `gstn.Grab.EscapeHitForAll 1`: alla liberazione il grabber prende il colpo (log `GrabEscapeHit`).
 6. Menu GSTN Debug: voci `Grab.*` presenti, un controllo ciascuna (TurnMode e HoldByNeck come numero, EscapeHitForAll come casella).

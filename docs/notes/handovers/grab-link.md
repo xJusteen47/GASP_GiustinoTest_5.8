@@ -6,13 +6,13 @@ OBIETTIVO: presa al collo con camminata/salto e lanci N./F./Cr./Cr.F. per l'Over
 - Riusato senza riscrivere: GSTNLink F12/M11 K2 (link, mash, watchdog, Release, lanci, LinkEffect, AnchorOverride) e AimPolicy di GSTNCombat (girata istantanea = SnapIfAimOrTilt + MaxTurnDegrees 180 sui lanci F. e Cr.F.).
 - Presa al collo: `FGSTN_GrabHoldPose` (settings + override kit), `UGSTN_LinkMath::NeckHoldAnchor`, `FGSTN_LinkTickExtension::StepNeckHold`, neck_01 aggiunto al bake.
 - Camminata/salto in presa: `UGSTN_GE_GrabHold` (LinkEffect del Grabber, scritto da setup_defence_link_content.py).
-- Modalità `Notation` (nuovo default): stick libero, X = N./F., LT+X = Cr./Cr.F., pummel su RT; tag `Throw.Neutral`, `Throw.CrouchForward`; classi fallback N. e Cr.F.
+- Modalità `Notation` (nuovo default): stick libero, X = N./F., LT+X = Cr./Cr.F., pummel TOLTO (owner 17:37); tag `Throw.Neutral`, `Throw.CrouchForward`; classi fallback N. e Cr.F.
 - Ergonomia `GrabTurnErgonomics` Instant/BackThrow. Put-down su RB (`Command.Link.Release.PutDown`).
 - Danno alla liberazione: `FGSTN_GrabEscapeHit` sul kit del BERSAGLIO (spento di default), postato dal watchdog.
 - cvar `gstn.Grab.*` nel menu GSTN Debug; test `GSTNLink.Core.KitThrows.NotationPicksThrow`, `GSTNLink.Core.GrabHold.*`; README GSTNLink.
 
 ## Scelte applicate (regola 6), da portare all'owner
-1. Tasto put-down = RB schivata (owner: "credo"). 2. Pummel spostato su RT neutro (X è dei lanci). 3. Default progetto passato a `Notation` (lo Stick lanciava con lo stick e A, incompatibile con camminare e saltare). 4. Punto mano e scale (0.75 camminata, 0.7 salto) = VALORI DI PROVA. 5. Frame dei lanci N./Cr.F. = placeholder copiati da Up/Down.
+1. Tasto put-down = RB schivata (owner: "credo"). 2. Pummel: DECISO dall'owner 17:37, tolto (righe nascoste in Notation). 3. Default progetto passato a `Notation` (lo Stick lanciava con lo stick e A, incompatibile con camminare e saltare). 4. Punto mano e scale (0.75 camminata, 0.7 salto) = VALORI DI PROVA. 5. Frame dei lanci N./Cr.F. = placeholder copiati da Up/Down.
 
 ## Prossimo
 Fisso: build + test + setup script + PIE secondo docs/notes/grab-link-verifica-editor.md (subagente Haiku). Harness `kit_throw_stick_*` da adeguare a Notation. Pose: aspettano reference F. throw (elenco animazioni nello stesso doc).

@@ -28,7 +28,7 @@ enum class EGSTN_LinkThrowInputMode : uint8
 	Buttons,
 	/**
 	 * grab-link (owner 2026-11-23): the project's move notation, with the stick left free to WALK while holding. Attack neutral = N. throw, attack +
-	 * stick tilted = F. throw, attack + crouch held = Cr. throw, attack + crouch held + stick tilted = Cr.F. throw. The pummel moves to strong neutral.
+	 * stick tilted = F. throw, attack + crouch held = Cr. throw, attack + crouch held + stick tilted = Cr.F. throw. No pummel (owner 2026-11-23: removed).
 	 * Which way F. goes is the grab turn ergonomics (EGSTN_GrabTurnErgonomics). Up and back throws are not bound (back only with BackThrow)
 	 */
 	Notation

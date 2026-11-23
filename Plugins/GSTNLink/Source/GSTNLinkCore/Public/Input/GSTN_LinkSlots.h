@@ -109,9 +109,8 @@ public:
 	/** The throw commands a mode binds (Notation: N., F., Cr., Cr.F., plus B. with BackThrow; the other modes: forward, back, up, down) */
 	static TArray<FGameplayTag> GetThrowCommands(EGSTN_LinkThrowInputMode Mode, EGSTN_GrabTurnErgonomics Ergonomics);
 
-	/** grab-link: the put-down slot (a dodge press), and the pummel's slot in Notation mode (strong + neutral stick: attack is the throws') */
+	/** grab-link: the put-down slot (a dodge press). Notation mode has no pummel (owner 2026-11-23): its rows are hidden by ApplyKitThrows */
 	static FGSTN_InputSlotSpec BuildPutDownSlot();
-	static FGSTN_InputSlotSpec BuildNotationPummelSlot();
 
 	/** The second grab slot (owner decision 2): special pressed with crouch held, falling through without a grab target */
 	static FGSTN_InputSlotSpec BuildSpecialCrouchGrabSlot();

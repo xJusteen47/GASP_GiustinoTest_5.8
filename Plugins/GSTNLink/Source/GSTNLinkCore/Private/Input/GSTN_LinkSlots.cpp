@@ -196,7 +196,8 @@ FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildThrowSlot(const FGameplayTag& ThrowCom
 		: static_cast<FGSTN_DirectionMask>(GSTN_DirectionMasks::AnyTilted & ~GSTN_DirectionMasks::FacingBack);
 	if (ThrowCommand == Command_Link_Throw_Neutral)
 	{
-		return WithLayout(MakeSlot(ThrowCommand, { MakePress({ Attack }), MakeNeutralStick() }, Role), { ThrowAttack });
+		// One above the slot set's pummel shape (attack + neutral), whose rows Notation hides: the N. throw never depends on the fall-through
+		return WithLayout(MakeSlot(ThrowCommand, { MakePress({ Attack }), MakeNeutralStick() }, Role + 1), { ThrowAttack });
 	}
 	if (ThrowCommand == Command_Link_Throw_Forward)
 	{
@@ -238,12 +239,6 @@ FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildPutDownSlot()
 	// One above the role slots: the dodge's own command (its tier is below Command.Link anyway) never reads the press while holding
 	return WithLayout(MakeSlot(GSTNLinkTags::Command_Link_Release_PutDown, { MakePress({ GSTNCombatButtonTags::Button_Dodge }) }, RoleSlotPriorityOffset),
 		{ { TEXT("Link.PutDown"), &GSTNCombatButtonTags::Button_Dodge } });
-}
-
-FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildNotationPummelSlot()
-{
-	return WithLayout(MakeSlot(GSTNLinkTags::Command_Link_Pummel, { MakePress({ GSTNCombatButtonTags::Button_Strong }), MakeNeutralStick() }, RoleSlotPriorityOffset),
-		{ { TEXT("Link.ThrowStrong"), &GSTNCombatButtonTags::Button_Strong } });
 }
 
 FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildThrowSlot(const FGameplayTag& ThrowCommand, EGSTN_LinkThrowInputMode Mode)
@@ -329,7 +324,7 @@ int32 UGSTN_LinkSlots::ApplyKitThrows(const FGSTN_KitThrowFill& Fill, TArray<FGS
 	int32 Bound = 0;
 	const TArray<FGameplayTag> Throws = GetThrowCommands(Fill.Mode, Fill.Ergonomics);
 	// grab-link: a throw the mode does not use is hidden (its rows bound to nothing), so a kit's authored up throw cannot keep the strong press the
-	// Notation pummel takes, nor a back throw the back tilt an instant F. answers
+	// strong press of another plugin, nor a back throw the back tilt an instant F. answers
 	const FGameplayTag AllThrows[] = { Command_Link_Throw_Forward, Command_Link_Throw_Back, Command_Link_Throw_Up, Command_Link_Throw_Down,
 		Command_Link_Throw_Neutral, Command_Link_Throw_CrouchForward };
 	for (const FGameplayTag& Command : AllThrows)
@@ -404,14 +399,13 @@ int32 UGSTN_LinkSlots::ApplyKitThrows(const FGSTN_KitThrowFill& Fill, TArray<FGS
 
 	if (Fill.Mode == EGSTN_LinkThrowInputMode::Notation)
 	{
-		// Attack belongs to the throws: the pummel moves to strong + neutral stick (unless the settings give it a slot of their own)
+		// Owner 2026-11-23: no pummel ("lo leviamo, non ci serve"). Its rows are hidden (bound to nothing), so attack neutral is the N. throw's alone
 		const FGameplayTag Pummel = Command_Link_Pummel;
 		for (FGSTN_BindingInput& Binding : Bindings)
 		{
-			if (Binding.Command == Pummel && !Binding.Ability.IsNull())
+			if (Binding.Command == Pummel)
 			{
-				Binding.bHasSlotOverride = true;
-				Binding.SlotOverride = SlotOrOverride(Fill.SlotOverrides, Pummel, []() { return BuildNotationPummelSlot(); });
+				Binding.Ability.Reset();
 			}
 		}
 	}

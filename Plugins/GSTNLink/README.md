@@ -260,7 +260,7 @@ Scope: the Overlord grabbing a human-size target; every kit gets it through the 
 - **Walk and jump while holding**: `UGSTN_GE_GrabHold` is the grab type's grabber `LinkEffect` (written by `Tools/GAS/setup_defence_link_content.py`):
   `MultiplyCompound` on `WalkSpeed`, `JumpVelocity`, `AirJumpVelocity` by `HoldWalkScale` / `HoldJumpScale` (TEST VALUES 0.75 / 0.7).
 - **Notation throw input** (`ThrowInputMode=Notation`, the plugin default now): the stick walks; Attack neutral = N. (`Command.Link.Throw.Neutral`), Attack +
-  tilt = F., Attack + Crouch held = Cr. (`Throw.Down`), Attack + Crouch + tilt = Cr.F. (`Throw.CrouchForward`); the pummel moves to Strong neutral; up and
+  tilt = F., Attack + Crouch held = Cr. (`Throw.Down`), Attack + Crouch + tilt = Cr.F. (`Throw.CrouchForward`); no pummel (owner 2026-11-23: its rows are hidden); up and
   back throws are hidden. `FGSTN_LinkThrowSet` gained `Neutral` and `CrouchForward`; fallback `UGSTN_GA_LinkThrowNeutral` / `CrouchForward` (placeholders).
   The harness scenarios `kit_throw_stick_*` need `ThrowInputMode=Stick`.
 - **Turn ergonomics** (`GrabTurnErgonomics`): `Instant` (default) = F. on every tilt, and the F. / Cr.F. throws start with `AimPolicy = SnapIfAimOrTilt`,
