@@ -56,3 +56,10 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-23,turnaround-180l-c1,Turnaround 180L v28 (w2t180Ls) gstn-anim-cycle-cheap,fisso,deepseek+agy_student,deepseek-v4-pro+hydrogen-medium,25,0,0.21,0,PASS (GATES OK + ASSERT OK + review jpg PASS)
 2026-11-23,harness-deepseek-fix,Fix agent-bridge stream-json/async + Run-SparseAnimStep + Invoke-RunStartPipeline + LFS pre-push,fisso,agy_student,gemini-4-hydrogen-medium,6,0,0,0,PASS (test_bridge.py + PS parse + hook LFS)
 2026-11-23,turnaround-all-c2,Turnaround 180R/090L/090R 2 round (turnall_c2+c3) + review Pro r1/r2,fisso,agy_student,gemini-4-hydrogen-medium+pro,8,0,0,0,FAIL pivot v88-112 (ASSERT OK + uscita OK; Regola 10 a owner con slow4x)
+2026-11-23,worker-M1_CODE,build-base27-ue,fisso,deepseek,deepseek-v4-pro,5,0,,,FAIL (exit=1)
+2026-11-23,worker-M1_CODE,refactor-turnall-ue,fisso,deepseek,deepseek-v4-pro,5,0,,,FAIL (exit=1)
+2026-11-23,worker-M1_CODE,refactor-turnall-ue,fisso,deepseek,deepseek-v4-pro,5.12,0,1.0198,,PASS
+2026-11-23,worker-M1_CODE,build-base27-ue,fisso,deepseek,deepseek-v4-pro,10.02,0,,,FAIL (exit=1)
+2026-11-23,worker-M1_CODE,build-base27-part1,fisso,deepseek,deepseek-v4-pro,6.02,0,,,FAIL (exit=1)
+2026-11-23,worker-M0,build-base27-ue-draft,fisso,deepseek,deepseek-flash,3,0,,,FAIL (exit=1)
+2026-11-23,anim-mcp-v2-verify-1,unit-test-only,fisso,claude,sonnet-5-5,0.5,5,,,PARZIALE (smoke/cost-test bloccati da lock _ue59)
