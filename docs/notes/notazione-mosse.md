@@ -6,4 +6,5 @@ Sostituisce light/strong/smash di Smash.
 - Esempi Overlord: dropkick = F.L Aerial; dair stomp = Cr.N.L Aerial; F.S = clone fsmash di Ganondorf (slash verticale, penetrazione media); N.S = slash orizzontale medio tipo ftilt di Ike adattato (decisioni owner 11-23). Slash centrati; curva regolabile per altezza/inclinazione; frame data da Ultimate.
 - Regola owner 11-23: in aria "giu" si nota con Cr. (dair stomp = Cr.N.L Aerial).
 - "Back" non previsto per ora; "up" era solo gergo (owner 11-23).
+- Jab = N.L (Neutral Light a terra), sinonimi. Overlord: Cr.F.Sp = ex "Special alto" (nome informale).
 - Da definire: down a terra (down tilt/smash), Cr.S e Cr.Sp, notazione di jab 2/3.
