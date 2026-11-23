@@ -524,6 +524,15 @@ def _geom():
     return g
 
 
+def _manifest():
+    try:
+        import manifest as m
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import manifest as m
+    return m
+
+
 def _ft():
     try:
         import follow_through as m
@@ -586,11 +595,17 @@ def anim_apply_intent(
     dry_run: bool = False,
     worktree_dir: str | None = None,
     ue59_dir: str = r"C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_ue59",
+    allow_geom: bool = False,
 ) -> dict[str, Any]:
     """Apply semantic intent parameters via the unified UE 5.9 geometric engine."""
     repo = _repo_root(root)
     raw = json.loads(intent_json) if isinstance(intent_json, str) else intent_json
     clean = validate_intent(raw)
+    if "follow_through" not in clean and not allow_geom and not any("runstart" in n.rsplit("/", 1)[-1].lower() for n in (src, dst)):
+        raise ValueError(
+            f"geometric (run-start) intent parameters refused on {dst!r}: the character axes come from pelvis travel and are wrong "
+            "on in-place moves. Use follow_through, or pass allow_geom=true if the clip really is a run-start clip")
+    ihash = _manifest().intent_hash(src, dst, clean)
     if clean.get("frame_range"):
         # frame_range is CLIP-LOCAL (0..n-1); a range outside the clip used to be a silent no-op
         n_frames = _clip_frame_count(repo, src, ue59_dir)
@@ -610,9 +625,9 @@ def anim_apply_intent(
             m.resolve_window(m.validate_follow_through(clean["follow_through"]), n_frames)  # ValueError if outside clip
 
     if dry_run:
-        # no snapshot, no intent file, no UE: only the plan
+        # no snapshot, no intent file, no UE: only the plan (mcp_server records the hash in the manifest: anim_capture_move needs a dry run)
         return {
-            "ok": True, "dry_run": True, "src": src, "dst": dst, "validated_intent": clean,
+            "ok": True, "dry_run": True, "src": src, "dst": dst, "validated_intent": clean, "intent_hash": ihash,
             "plan": plan_intent(clean, _clip_frame_count(repo, src, ue59_dir)),
         }
 
@@ -681,6 +696,18 @@ def anim_run_intent(
     applied = anim_apply_intent(src, dst, intent_json, root=root, dry_run=dry_run, **apply_kwargs)
     if dry_run or not applied.get("ok"):
         return applied
+    repo = _repo_root(root)
+    ihash = _manifest().intent_hash(src, dst, validate_intent(json.loads(intent_json) if isinstance(intent_json, str) else intent_json))
+    res = _run_intent_verdict(applied, src, dst, gate_win, root)
+    res["intent_hash"] = ihash
+    try:
+        _manifest().record_report(repo, dst, ihash, res)   # bookkeeping for anim_capture_move's gate; never breaks the verdict
+    except OSError:
+        pass
+    return res
+
+
+def _run_intent_verdict(applied: dict[str, Any], src: str, dst: str, gate_win: int, root: str | Path | None) -> dict[str, Any]:
     if applied.get("follow_through_report") is not None:
         return follow_through_verdict(applied, src, dst)
     gates = anim_gate_check(dst, ref_asset=src, root=root, gate_win=gate_win)
@@ -1051,8 +1078,8 @@ def anim_register_variant(
     name = asset.rsplit("/", 1)[-1]
     if not name.replace("_", "").isalnum():
         raise ValueError(f"invalid asset name {name!r}")
-    if not (30 <= variant_id <= 179):
-        raise ValueError("variant_id must be 30..179 (0-29 are reviewed variants; N+10 is the Handoff sibling, so keep registered ids 20 apart)")
+    if not (40 <= variant_id <= 179):
+        raise ValueError("variant_id must be 40..179 (0-29 are reviewed variants, 30-39 are the Handoff rows of approved variants 20-29; N+10 is the Handoff sibling, so keep registered ids 20 apart)")
     files = _asset_files(wt, name)
     if not any(f.suffix == ".uasset" for f in files):
         return {"ok": False, "error": f"clip {name} not found under {wt / 'Content'} (run anim_apply_intent first)"}

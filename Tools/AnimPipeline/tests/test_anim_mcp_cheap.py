@@ -42,7 +42,7 @@ class TestCompactIsOptIn(unittest.TestCase):
     def _call(self, args: dict) -> str:
         req = {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                "params": {"name": "anim_apply_intent",
-                          "arguments": {"src": "A", "dst": "B", "intent_json": {"head_lift_deg": 5}, "dry_run": True, **args}}}
+                          "arguments": {"src": "A", "dst": "B", "intent_json": {"head_lift_deg": 5}, "dry_run": True, "allow_geom": True, **args}}}
         return mcp_server.process_request(req)["result"]["content"][0]["text"]
 
     def test_default_is_full_unindented_json(self) -> None:
@@ -94,7 +94,7 @@ class TestDryRunPlan(unittest.TestCase):
                 json.dumps(_make_fake_joints(30)), encoding="utf-8")
             before = sorted(p.name for p in root.rglob("*"))
             res = anim_ops.anim_apply_intent("AS_Base", "AS_New", {"head_lift_deg": 5, "frame_range": [4, 20]},
-                                             root=root, dry_run=True)
+                                             root=root, dry_run=True, allow_geom=True)
             self.assertTrue(res["dry_run"])
             self.assertEqual(res["plan"]["n_frames"], 30)
             self.assertFalse(res["plan"]["n_frames_assumed"])
