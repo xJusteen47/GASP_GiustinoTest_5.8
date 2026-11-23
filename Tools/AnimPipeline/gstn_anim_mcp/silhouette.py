@@ -1,11 +1,18 @@
 """anim_silhouette_check: is the pose readable from this view? Projects joints to 2D per view and, per frame, measures the
-silhouette hull area and how close each limb end (hands, elbows, feet, knees, head) is to the torso polygon.
-A frame is FLAGGED ("unreadable from this view") when >= 2 limb ends are inside / within `near_cm` of the torso.
-The torso is the hull of pelvis, spines, neck, clavicles (upperarms when the dump has no clavicles) and hips, grown by
-`torso_pad_cm` because the body has depth (a hand in front of the chest is hidden from the side). Offline, from the joints dump.
+silhouette hull and how far each limb end (hands, elbows, feet, knees, head) sticks OUT of the torso outline.
+
+A frame is FLAGGED ("unreadable from this view", reason "blob") when nothing sticks out of the torso by `blob_cm` or more AND the
+body hull is round (circularity 4*pi*A/P^2 >= `blob_circ`): the pose reads as a shapeless ball. Before 2026-11-23 the flag was
+">= 2 limb ends within 3 cm of the torso", which flagged every tucked pose (head and feet are near the torso in any tuck, also when
+the knees and the arms read fine from the side) and so hid the real finding: the dropkick K6/K7 tuck IS a ball from behind. Limb ends
+near the torso are still listed per frame ("hidden"), as information. The torso is the hull of pelvis, spines, neck, clavicles
+(upperarms when the dump has no clavicles) and hips, grown by `torso_pad_cm` because the body has depth. Offline, from the joints dump.
+The JSON (per-frame numbers) is written next to the PNGs; `out` puts both in the review folder so the numbers can be re-verified.
 """
 from __future__ import annotations
 
+import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -13,14 +20,31 @@ import viewproj as vp
 
 NEAR_CM = 3.0
 PAD_CM = 7.0
+BLOB_CM = 12.0     # a limb end this far outside the padded torso outline is a readable shape (about a forearm's width x 2)
+BLOB_CIRC = 0.65   # body hull circularity at or above which the outline is a ball (a 2:3 box is 0.75, a standing body ~0.3)
+
+
+def _not_body(key: str) -> bool:
+    k = key.lower()
+    return k == "root" or k.startswith(("ik_", "vb ", "vb_"))
+
+
+def circularity(poly: list[tuple[float, float]]) -> float:
+    """4*pi*area / perimeter^2 of a polygon: 1 for a disc, lower for elongated or spiky outlines."""
+    if len(poly) < 3:
+        return 0.0
+    per = sum(math.dist(poly[i], poly[(i + 1) % len(poly)]) for i in range(len(poly)))
+    return 4.0 * math.pi * vp.area(poly) / (per * per) if per > 1e-9 else 0.0
 
 
 def analyze_view(joints: dict[str, list], f0: int, f1: int, view: str, game_yaw: float, game_pitch: float,
-                 near_cm: float = NEAR_CM, pad_cm: float = PAD_CM) -> dict[str, Any]:
+                 near_cm: float = NEAR_CM, pad_cm: float = PAD_CM, blob_cm: float = BLOB_CM,
+                 blob_circ: float = BLOB_CIRC) -> dict[str, Any]:
     az, pitch = vp.view_angles(view, game_yaw, game_pitch)
     frames = []
     for f in range(f0, f1 + 1):
-        allp = [vp.project(p, az, pitch) for k in joints if (p := vp.point(joints, k, f)) is not None]
+        # body outline: the root and the IK/virtual bones are not body (the root sits on the floor under an airborne tuck)
+        allp = [vp.project(p, az, pitch) for k in joints if not _not_body(k) and (p := vp.point(joints, k, f)) is not None]
         torso = [vp.project(p, az, pitch) for k in vp.TORSO_KEYS if (p := vp.point(joints, k, f)) is not None]
         th = vp.hull(torso)
         ends = {}
@@ -29,14 +53,32 @@ def analyze_view(joints: dict[str, list], f0: int, f1: int, view: str, game_yaw:
             if p is not None:
                 ends[name] = round(vp.signed_dist(vp.project(p, az, pitch), th) - pad_cm, 2)
         hidden = sorted(n for n, d in ends.items() if d <= near_cm)
-        frames.append({"f": f, "hull_area_cm2": round(vp.area(vp.hull(allp)), 1), "limb_dist_cm": ends,
-                       "hidden": hidden, "flag": len(hidden) >= 2})
+        sticking = sorted(n for n, d in ends.items() if d >= blob_cm)
+        top = max(ends.items(), key=lambda kv: kv[1], default=(None, 0.0))
+        bh = vp.hull(allp)
+        circ = round(circularity(bh), 3)
+        blob = not sticking and circ >= blob_circ
+        frames.append({"f": f, "hull_area_cm2": round(vp.area(bh), 1), "circularity": circ, "limb_dist_cm": ends,
+                       "max_protrusion_cm": round(max(0.0, top[1]), 2), "max_protrusion_limb": top[0], "sticking_out": sticking,
+                       "hidden": hidden, "flag": blob, "reason": "blob" if blob else None})
     return {"view": view, "az": az, "pitch": pitch, "frames": frames}
+
+
+def finding(view: str, frames: list[dict[str, Any]], blob_cm: float, blob_circ: float) -> str | None:
+    """One line for the reviewer when a view has blob frames, with the metric (worst frame = least protrusion)."""
+    bl = [fr for fr in frames if fr["flag"]]
+    if not bl:
+        return None
+    w = min(bl, key=lambda fr: (fr["max_protrusion_cm"], -fr["circularity"]))
+    return (f"{view}: {len(bl)}/{len(frames)} frames read as a shapeless ball (f{bl[0]['f']}-f{bl[-1]['f']}): no limb end sticks out of "
+            f"the torso by >= {blob_cm:g} cm and the outline is round (circularity >= {blob_circ:g}); worst f{w['f']}: max protrusion "
+            f"{w['max_protrusion_cm']} cm ({w['max_protrusion_limb']}), circularity {w['circularity']}")
 
 
 def anim_silhouette_check(asset: str, frame_range: Any = None, views: Any = None, base_asset: str | None = None,
                           root: str | Path | None = None, game_yaw: float = 0.0, game_pitch: float = 10.0,
-                          near_cm: float = NEAR_CM, torso_pad_cm: float = PAD_CM, max_cells: int = 12) -> dict[str, Any]:
+                          near_cm: float = NEAR_CM, torso_pad_cm: float = PAD_CM, max_cells: int = 12, out: str | Path | None = None,
+                          blob_cm: float = BLOB_CM, blob_circ: float = BLOB_CIRC) -> dict[str, Any]:
     repo = anim_ops_root(root)
     try:
         data = vp.load_joints(repo, asset)
@@ -47,22 +89,33 @@ def anim_silhouette_check(asset: str, frame_range: Any = None, views: Any = None
     total = len(next(iter(joints.values())))
     f0, f1 = vp.anim_ops._parse_frame_range(frame_range, total)
     views_l = vp.parse_views(views)
-    out = vp.out_dir(repo, asset)
-    result: dict[str, Any] = {"ok": True, "asset": asset, "base_asset": base_asset, "frame_range": [f0, f1], "views": {}}
+    if out:
+        out = Path(out) if Path(out).is_absolute() else repo / out
+        out.mkdir(parents=True, exist_ok=True)
+    else:
+        out = vp.out_dir(repo, asset)
+    result: dict[str, Any] = {"ok": True, "asset": asset, "base_asset": base_asset, "frame_range": [f0, f1], "views": {},
+                              "thresholds": {"blob_cm": blob_cm, "blob_circ": blob_circ, "near_cm": near_cm, "torso_pad_cm": torso_pad_cm},
+                              "findings": []}
     summary: list[str] = []
     for v in views_l:
-        a = analyze_view(joints, f0, f1, v, game_yaw, game_pitch, near_cm, torso_pad_cm)
+        a = analyze_view(joints, f0, f1, v, game_yaw, game_pitch, near_cm, torso_pad_cm, blob_cm, blob_circ)
         b = None
         if base is not None:
             bj = base["joints"]
             bt = len(next(iter(bj.values())))
-            b = analyze_view(bj, min(f0, bt - 1), min(f1, bt - 1), v, game_yaw, game_pitch, near_cm, torso_pad_cm)
+            b = analyze_view(bj, min(f0, bt - 1), min(f1, bt - 1), v, game_yaw, game_pitch, near_cm, torso_pad_cm, blob_cm, blob_circ)
         flagged = [fr["f"] for fr in a["frames"] if fr["flag"]]
-        worst = sorted(a["frames"], key=lambda fr: (-len(fr["hidden"]), min(fr["limb_dist_cm"].values(), default=0)))[:5]
-        entry = {"flagged_frames": flagged, "worst": [{"f": w["f"], "hidden": w["hidden"]} for w in worst if w["hidden"]],
+        worst = sorted(a["frames"], key=lambda fr: (fr["max_protrusion_cm"], -fr["circularity"]))[:5]
+        fnd = finding(v, a["frames"], blob_cm, blob_circ)
+        entry = {"flagged_frames": flagged, "finding": fnd,
+                 "worst": [{"f": w["f"], "max_protrusion_cm": w["max_protrusion_cm"], "circularity": w["circularity"]} for w in worst],
                  "hull_area_min": min(fr["hull_area_cm2"] for fr in a["frames"]),
                  "hull_area_mean": round(sum(fr["hull_area_cm2"] for fr in a["frames"]) / len(a["frames"]), 1), "frames": a["frames"]}
-        line = f"{v}: {len(flagged)}/{len(a['frames'])} frames unreadable" + (f" (worst f{worst[0]['f']}: {','.join(worst[0]['hidden'])})" if flagged else "")
+        if fnd:
+            result["findings"].append(fnd)
+        line = f"{v}: {len(flagged)}/{len(a['frames'])} frames unreadable (ball)" + (
+            f" (worst f{worst[0]['f']}: protrusion {worst[0]['max_protrusion_cm']} cm, circ {worst[0]['circularity']})" if flagged else "")
         if b is not None:
             bfl = [fr["f"] for fr in b["frames"] if fr["flag"]]
             ma, mb = entry["hull_area_mean"], sum(fr["hull_area_cm2"] for fr in b["frames"]) / len(b["frames"])
@@ -75,11 +128,13 @@ def anim_silhouette_check(asset: str, frame_range: Any = None, views: Any = None
         result["views"][v] = entry
         summary.append(line)
     jpath = out / "silhouette.json"
-    jpath.write_text(__import__("json").dumps(result, indent=1), encoding="utf-8")
+    jpath.write_text(json.dumps(result, indent=1), encoding="utf-8")
     result["details"] = str(jpath)
     for e in result["views"].values():
         e.pop("frames", None)   # per-frame numbers stay in the JSON file, the reply stays small
     result["summary"] = summary[:4] + [f"details: {jpath}"]
+    if result["findings"]:
+        result["summary"].insert(0, "FINDING " + result["findings"][0])
     return result
 
 
@@ -126,7 +181,7 @@ def draw_sheet(joints: dict, base_joints: dict | None, analysis: dict, png: Path
                 pa, pb = vp.point(base_joints, a, f), vp.point(base_joints, b, f)
                 if pa and pb:
                     d.line([xy(pa, ox, oy), xy(pb, ox, oy)], fill=(170, 170, 170), width=2)
-        allp = [xy(p, ox, oy) for k in joints if (p := vp.point(joints, k, f)) is not None]
+        allp = [xy(p, ox, oy) for k in joints if not _not_body(k) and (p := vp.point(joints, k, f)) is not None]
         h = vp.hull(allp)
         if len(h) >= 3:
             d.polygon(h, outline=(200, 40, 40) if red else (90, 120, 200))
@@ -134,7 +189,7 @@ def draw_sheet(joints: dict, base_joints: dict | None, analysis: dict, png: Path
             pa, pb = vp.point(joints, a, f), vp.point(joints, b, f)
             if pa and pb:
                 d.line([xy(pa, ox, oy), xy(pb, ox, oy)], fill=(20, 20, 20), width=3)
-        for name in by_f[f]["hidden"]:
+        for name in (by_f[f]["hidden"] if red else []):   # limb ends inside the ball, only on flagged frames
             p = vp.point(joints, vp.LIMB_ENDS[name], f)
             if p:
                 x, y = xy(p, ox, oy)

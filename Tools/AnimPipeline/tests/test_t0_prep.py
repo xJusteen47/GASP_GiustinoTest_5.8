@@ -380,28 +380,71 @@ def _pose(n: int = 12, arm_z: float = 50.0) -> dict:
     return J
 
 
+def _tuck(n: int = 12) -> dict:
+    """Tight dropkick-like tuck facing +x: knees forward to the chest, heels at the glutes, arms folded on the chest, head down."""
+    J: dict = {}
+
+    def put(k, p):
+        J[k] = [list(p) for _ in range(n)]
+
+    put("root", (0, 0, 0)); put("pelvis", (0, 100, 0))
+    for i, y in enumerate((110, 120, 130, 140, 150), 1):
+        put(f"spine_0{i}", (0, y, 0))
+    put("neck_01", (0, 160, 0)); put("head", (8, 158, 0))
+    for s, sg in (("l", -1), ("r", 1)):
+        put(f"thigh_MainPoint_{s}", (0, 95, 10 * sg)); put(f"calf_MainPoint_{s}", (35, 120, 9 * sg))
+        put(f"foot_MainPoint_{s}", (5, 100, 8 * sg)); put(f"ball_MainPoint_{s}", (12, 100, 8 * sg))
+        put(f"upperarm_MainPoint_{s}", (0, 150, 18 * sg)); put(f"lowerarm_MainPoint_{s}", (5, 135, 20 * sg))
+        put(f"hand_MainPoint_{s}", (15, 145, 8 * sg))
+    return J
+
+
 class TestSilhouette(unittest.TestCase):
-    def test_arms_out_flagged_from_side_not_from_behind(self) -> None:
+    def test_standing_is_readable_hidden_arms_only_listed(self) -> None:
+        # skill-gaps 2026-11-23: arms on the torso line from the side are listed as hidden but the legs read: NOT flagged
         with tempfile.TemporaryDirectory() as t:
             root = Path(t)
             _write_joints(root, "AS_pose", _pose(arm_z=50))
             r = silhouette.anim_silhouette_check("AS_pose", "0-11", "az90,az180", root=root)
             self.assertTrue(r["ok"], r)
             side, behind = r["views"]["az90"], r["views"]["az180"]
-            self.assertEqual(len(side["flagged_frames"]), 12)    # both arms project onto the torso line
+            self.assertEqual(side["flagged_frames"], [])
             self.assertEqual(behind["flagged_frames"], [])
+            self.assertEqual(r["findings"], [])
+            fr = json.loads(Path(r["details"]).read_text(encoding="utf-8"))["views"]["az90"]["frames"][0]
+            self.assertIn("hand_l", fr["hidden"])
+            self.assertGreaterEqual(fr["max_protrusion_cm"], 12.0)
             self.assertTrue(Path(side["png"]).exists() and Path(behind["png"]).exists())
             self.assertLessEqual(len(r["summary"]), 5)
-            self.assertTrue(Path(r["details"]).exists())
             from PIL import Image
             self.assertLess(Image.open(side["png"]).size[0], 1100)
+
+    def test_tuck_is_a_ball_from_behind_not_from_the_side(self) -> None:
+        # the dropkick K6/K7 finding: a tight tuck reads from the side (knees out front) and is a shapeless ball from behind
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            _write_joints(root, "AS_tuck", _tuck())
+            r = silhouette.anim_silhouette_check("AS_tuck", "0-11", "az90,az180", root=root, out="docs/notes/reviews/x/r1")
+            side, behind = r["views"]["az90"], r["views"]["az180"]
+            self.assertEqual(side["flagged_frames"], [])
+            self.assertEqual(len(behind["flagged_frames"]), 12)
+            self.assertEqual(len(r["findings"]), 1)
+            self.assertIn("az180: 12/12 frames read as a shapeless ball", r["findings"][0])
+            self.assertIn("max protrusion", r["findings"][0])
+            self.assertTrue(r["summary"][0].startswith("FINDING az180"))
+            # the JSON lands in the review folder (committable), with the per-frame metric
+            self.assertEqual(Path(r["details"]), root / "docs/notes/reviews/x/r1/silhouette.json")
+            fr = json.loads(Path(r["details"]).read_text(encoding="utf-8"))["views"]["az180"]["frames"][0]
+            self.assertEqual(fr["reason"], "blob")
+            self.assertLess(fr["max_protrusion_cm"], 12.0)
+            self.assertGreaterEqual(fr["circularity"], 0.65)
 
     def test_delta_vs_base_and_game_view(self) -> None:
         with tempfile.TemporaryDirectory() as t:
             root = Path(t)
             _write_joints(root, "AS_pose", _pose(arm_z=50))
-            _write_joints(root, "AS_tight", _pose(arm_z=10))
-            r = silhouette.anim_silhouette_check("AS_tight", None, "az180,game", base_asset="AS_pose", root=root)
+            _write_joints(root, "AS_tuck", _tuck())
+            r = silhouette.anim_silhouette_check("AS_tuck", None, "az180,game", base_asset="AS_pose", root=root)
             v = r["views"]["az180"]
             self.assertGreater(v["delta_vs_base"]["flagged"], 0)
             self.assertLess(v["delta_vs_base"]["hull_area_mean_pct"], 0)

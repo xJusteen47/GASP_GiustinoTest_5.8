@@ -226,14 +226,18 @@ def _tool_defs() -> list[dict[str, Any]]:
                 "[{\"name\": \"base\", \"asset\": \"AS_OverlordDropkick_SettleK6\", \"clips\": [\"/Game/.../AS_OverlordDropkick_SettleK6\"]}, "
                 "{\"name\": \"ft\", \"asset\": \"AS_OverlordDropkick_SettleK6_ft\", \"intent_hash\": \"<from dry_run>\", \"clips\": [..]}], "
                 "\"move\": \"dropkick-k6\", \"round\": \"ft1\", \"objective\": \"settle-readable\", \"edit_window\": [20, 40], "
-                "\"anchor\": 140, \"faf\": 200, \"assert_spec\": {\"dropkick_hit\": [{\"clip\": \"AM_*\", \"window\": [100, 220]}]}}."
+                "\"anchor\": 140, \"faf\": 200, \"assert_spec\": {\"dropkick_hit\": [{\"clip\": \"AM_*\", \"window\": [100, 220]}]}}. "
+                "Card-authored poses: give the variant \"card\": \"Tools/AnimPipeline/cards/.../x.json\" instead of intent_hash (its "
+                "animpipe check PASS is the report). Each run may set \"kit\" (base and variant kits in one session) and \"assert\". "
+                "Writes gate_report.json and alignment.json (montage-aligned grids/videos); runs with gstn.Combat.Debug.Hitboxes 1 get "
+                "the hitboxes drawn into the pictures."
             ),
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "kit": {"type": "string"},
                     "sequences": {"type": "array", "items": {"type": "string"}},
-                    "variant_runs": {"type": "array", "items": {"type": "object"}, "description": "First = base, then variants: {name, asset, clips[/Game paths], cvars, intent_hash}."},
+                    "variant_runs": {"type": "array", "items": {"type": "object"}, "description": "First = base, then variants: {name, asset, clips[/Game paths], cvars, intent_hash | card, kit?, assert?}."},
                     "views": {"type": "string", "default": "az90,az180,game"},
                     "out": {"type": "string", "default": "", "description": "Default docs/notes/reviews/<move>/<round>."},
                     "assert_spec": {"type": "object", "description": "{sequence: [{clip, window: [first, last]}]} in capture frames."},
@@ -252,14 +256,16 @@ def _tool_defs() -> list[dict[str, Any]]:
             "description": (
                 "Offline readability check from the joints dump: per view (az90 side, az180 behind, az315, game) projects the pose, "
                 "measures the silhouette area and how close hands/elbows/feet/knees/head are to the torso; frames with >= 2 limb ends "
-                "inside or within 3 cm of the torso are 'unreadable from this view'. Writes one PNG sheet per view (flagged frames "
-                "red) + JSON; reply = 5 lines. Example: {\"asset\": \"AS_X_ft\", \"frame_range\": \"20-60\", \"views\": \"az90,az180\", \"base_asset\": \"AS_X\"}."
+                "inside or within 3 cm of the torso are listed; a frame is 'unreadable from this view' only when it is a shapeless ball "
+                "(no limb end >= 12 cm outside the torso and a round outline): the finding line gives the metric. Writes one PNG "
+                "sheet per view (flagged frames red) + silhouette.json, in `out` (e.g. the review folder, to commit) or Saved; reply = 5 lines. Example: {\"asset\": \"AS_X_ft\", \"frame_range\": \"20-60\", \"views\": \"az90,az180\", \"base_asset\": \"AS_X\"}."
             ),
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "asset": {"type": "string"}, "frame_range": {}, "views": {"type": "string", "default": "az90,az180,az315"},
                     "base_asset": {"type": "string"}, "game_yaw": {"type": "number", "default": 0}, "game_pitch": {"type": "number", "default": 10},
+                    "out": {"type": "string", "description": "Folder for PNGs + silhouette.json (default Saved/AnimPipeline/analysis/<asset>)."},
                 },
                 "required": ["asset"],
             },
@@ -372,8 +378,9 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
     if name in ("anim_silhouette_check", "anim_motion_overlay"):
         mod = __import__("silhouette" if name == "anim_silhouette_check" else "motion_overlay")
         fn = getattr(mod, name)
+        extra = {"out": args["out"]} if args.get("out") and name == "anim_silhouette_check" else {}
         return fn(args["asset"], args.get("frame_range"), args.get("views"), args.get("base_asset"),
-                  game_yaw=float(args.get("game_yaw", 0.0)), game_pitch=float(args.get("game_pitch", 10.0)))
+                  game_yaw=float(args.get("game_yaw", 0.0)), game_pitch=float(args.get("game_pitch", 10.0)), **extra)
     raise KeyError(f"Unknown tool: {name}")
 
 

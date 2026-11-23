@@ -306,7 +306,8 @@ if os.environ.get('PIE_CAPTURE_FRAMES'):
 # "sequences": ["mv_run_start_v5"], "assert": {sequence: [expect, ...]}}, ...]. Each run writes to <out>/<name>/ as a one-run capture did
 # (frames, frames.jsonl, assert.txt); before each run its cvars are set (give every cvar a run changes in EVERY run: nothing is undone) and
 # the host goes back to its spawn spot (server_reset_to_spawn), so every run starts from the same place and yaw. <out>/assert.txt = OK only
-# if every run is OK. PIE_CAPTURE_SEQUENCES is ignored.
+# if every run is OK. PIE_CAPTURE_SEQUENCES is ignored. A run may carry "kit": the host gets that kit before the run (default: the
+# session's PIE_CAPTURE_KIT), so a combat move's base and variant kits are captured in ONE session (skill-gaps 2026-11-23).
 RUNS = json.load(open(os.environ['PIE_CAPTURE_RUNS'], encoding='utf-8')) if os.environ.get('PIE_CAPTURE_RUNS') else None
 if RUNS:
     _ALL = {s['name']: s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES
@@ -314,7 +315,7 @@ if RUNS:
     SEQUENCES = []
     for _r in RUNS:
         for _n in _r['sequences']:
-            SEQUENCES.append(dict(_ALL[_n], run=_r['name'], run_cvars=_r.get('cvars', ''), run_out=os.path.join(OUT, _r['name']),
+            SEQUENCES.append(dict(_ALL[_n], run=_r['name'], run_cvars=_r.get('cvars', ''), run_kit=_r.get('kit'), run_out=os.path.join(OUT, _r['name']),
                                   run_first=_n == _r['sequences'][0]))
 SHOOT = [int(v) for v in os.environ['PIE_CAPTURE_SHOOT'].split(',')] if os.environ.get('PIE_CAPTURE_SHOOT') else None
 TIMEOUT = 900.0 if not RUNS else 900.0 + 60.0 * len(SEQUENCES)
@@ -447,6 +448,12 @@ def _shoot(seq, frame):
         if az is None:
             cam.set_actor_location_and_rotation(manager.get_camera_location(), manager.get_camera_rotation(), False, False)
             comp.set_editor_property('fov_angle', manager.get_fov_angle())
+        # skill-gaps 2026-11-23: the camera of every view per frame, so pie_capture_grid.py can draw the logged hitboxes into the picture
+        # (scene captures do not render debug lines)
+        _cl, _cr = cam.get_actor_location(), cam.get_actor_rotation()
+        st.setdefault('cam_rows', {})[name] = [[round(_cl.x, 2), round(_cl.y, 2), round(_cl.z, 2)],
+                                                [round(_cr.pitch, 3), round(_cr.yaw, 3), round(_cr.roll, 3)],
+                                                round(float(comp.get_editor_property('fov_angle')), 3), SIZE]
         t0 = time.perf_counter()
         comp.capture_scene()
         folder = os.path.join(_seq_dir(seq), name)
@@ -494,6 +501,14 @@ def _fl_row(mesh, body):
 def _row(frame, tapped, extra=None):
     view = g._view(0, h._key(0)) or {}
     row = {'f': frame, 'tap': tapped, 'combat': view.get('combat'), 'tags': view.get('tags'), 'loc': view.get('location'), 'montage': _montage()}
+    if st.get('cam_rows'):
+        row['cams'] = st.pop('cam_rows')
+    try:   # skill-gaps 2026-11-23: the hitbox shapes gstn.Combat.Debug.Hitboxes draws (world, on the mesh), drawn later on the pictures
+        _hb = g.comps(g.worlds()[0])[h._key(0)].get_debug_hitbox_shapes()
+        if _hb and _hb != '[]':
+            row['hb'] = json.loads(_hb)
+    except Exception as e:   # an editor built before GetDebugHitboxShapes: no shapes, the grid says so
+        row['hb_err'] = repr(e)[:80]
     try:   # skid "two poses for the same input": actor and mesh yaw (world), logged every frame
         _pw = _pawn()
         _mesh = _pw.get_component_by_class(unreal.SkeletalMeshComponent)
@@ -722,6 +737,11 @@ def _tick(_dt):
                     return None
                 if step == 2 and now - st['t'] < 1.5:
                     return None
+                # skill-gaps 2026-11-23: a run can name its own kit ("kit" in runs.json), so base and variant of a MOVE share one Play
+                # session (the kit is given after the reorient, before the spawn reset; kits are server state, the reset waits 3 s)
+                if seq.get('run_kit') and seq['run_kit'] != st.get('kit_now', KIT):
+                    _log(f'run {seq["run"]}: kit {seq["run_kit"]}: {h.kit(0, seq["run_kit"])}')
+                    st['kit_now'] = seq['run_kit']
                 for cv in [c.strip() for c in seq['run_cvars'].split(';') if c.strip()]:
                     _console(cv)
                 comp = g.comps(g.worlds()[0])[h._key(0)]

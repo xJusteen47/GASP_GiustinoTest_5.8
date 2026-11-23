@@ -12,6 +12,11 @@ Then it builds PIE_CAPTURE_RUNS (base + variant, per-run cvars), the pie_capture
 captures (base: same clip sha + sequence + cvars + views + build; variant: same intent hash) and writes the review pack
 (docs/notes/reviews/<move>/<round>/: mp4 real + slow4x and ONE grid per view, base row over variant row, same frames).
 The PIE capture itself runs only through `runner` (pwsh): offline tests inject a fake one.
+
+skill-gaps (2026-11-23, after the dropkick K7 test): poses authored from a CARD (animpipe author/build/check, no anim_run_intent) pass
+(a)+(b) through card_report(): a variant run with "card" gets its report from the card's `animpipe check` JSON (verdict PASS, newer
+than the card and the build), keyed by the card's content hash. Every run may name its own "kit" (base and variant kits in one
+session); the gate report is written to <out_dir>/gate_report.json pass or fail; grids and videos are montage-aligned per run.
 """
 from __future__ import annotations
 
@@ -174,6 +179,55 @@ def precapture_gate(root: str | Path | None, asset: str, base_asset: str | None 
             "error": "; ".join(c["msg"] for c in failed) if failed else None}
 
 
+# ------------------------------------------------------------------------------------------------------------ card path
+def card_hash(card: Path) -> str:
+    return _sha(Path(card))[:16]
+
+
+def card_report(root: str | Path | None, asset: str, card: str | Path, check_json: str | Path | None = None,
+                build_json: str | Path | None = None) -> dict[str, Any]:
+    """Report for a variant whose poses come from a card (no anim_run_intent): reads `animpipe check <card>`'s JSON and, when it is a
+    PASS of THIS card, records it in the manifest as the variant's run report + dry run under the card's content hash, so the
+    capture gate checks card poses with the same (a)/(b) rules. Refused (reported, nothing recorded) when the card names another
+    clip, the check is missing / FAIL, or the check is older than the card or the last build (stale)."""
+    repo = _repo(root)
+    cp = Path(card) if Path(card).is_absolute() else repo / card
+    checks: list[dict[str, Any]] = []
+    if not cp.exists():
+        return {"ok": False, "error": f"card not found: {cp}", "checks": []}
+    c = json.loads(cp.read_text(encoding="utf-8"))
+    move = c.get("move", cp.stem)
+    anim = _name(c.get("anim", ""))
+    ok_n = anim == _name(asset)
+    checks.append({"check": "card_names_asset", "ok": ok_n, "msg": "ok" if ok_n else f"card anim {anim} != asset {_name(asset)}"})
+    out = repo / "Saved" / "AnimPipeline" / "animpipe"
+    chk = Path(check_json) if check_json else out / f"{move}_check.json"
+    bld = Path(build_json) if build_json else out / f"{move}_build.json"
+    rep: dict[str, Any] = {}
+    if chk.exists():
+        rep = json.loads(chk.read_text(encoding="utf-8"))
+    ok_c = rep.get("verdict") == "PASS"
+    blocks = {k: bool(v.get("ok")) for k, v in (rep.get("block") or {}).items()}
+    checks.append({"check": "animpipe_check_pass", "ok": ok_c, "msg": "ok" if ok_c else
+                   (f"no animpipe check for {move} ({chk}): run animpipe check" if not rep else
+                    f"animpipe check is {rep.get('verdict')} (blocking: {', '.join(k for k, v in blocks.items() if not v) or '?'})"),
+                   "blocks": blocks})
+    stale = [n for n, f in (("card", cp), ("build", bld)) if chk.exists() and f.exists() and f.stat().st_mtime > chk.stat().st_mtime]
+    checks.append({"check": "check_fresh", "ok": not stale and chk.exists(),
+                   "msg": "ok" if not stale and chk.exists() else f"check older than the {', '.join(stale) or 'card'}: rerun animpipe build + check"})
+    ok = all(x["ok"] for x in checks)
+    ihash = card_hash(cp)
+    if ok:
+        manifest.record_dry_run(repo, asset, ihash)
+        manifest.record_report(repo, asset, ihash, {"ok": True, "verdict": "PASS", "gates": {"status": "PASS"}})
+        m = manifest.load(repo, asset)
+        m["last_report"].update({"source": "card", "card": str(cp.relative_to(repo)) if cp.is_relative_to(repo) else str(cp),
+                                 "check_json": str(chk), "blocks": blocks})
+        manifest.save(repo, asset, m)
+    return {"ok": ok, "source": "card", "asset": _name(asset), "intent_hash": ihash, "checks": checks,
+            "error": None if ok else "; ".join(x["msg"] for x in checks if not x["ok"])}
+
+
 # ------------------------------------------------------------------------------------------------------------- capture
 def default_runner(cmd: list, env: dict, cwd: str) -> Any:
     return subprocess.run(cmd, env=env, cwd=cwd, capture_output=True, text=True)
@@ -201,6 +255,21 @@ def _cached_dir(root: Path, run: dict[str, Any], key: str, sequences: list[str])
     return d if d.is_dir() and all((d / s).is_dir() for s in sequences) else None
 
 
+def video_commands(repo: Path, runs: list[dict[str, Any]], run_dirs: dict[str, str], sequences: list[str], out_rel: str,
+                   cap_win: tuple[int, int], alignment: dict[str, Any]) -> list[list[str]]:
+    """pie_capture_grid video per run/sequence, real + slow4x; each run's window is shifted by its montage offset (same animation
+    frames on the same video frame index as the base)."""
+    cmds = []
+    for r in runs:
+        for s in sequences:
+            k = int((alignment.get(s) or {}).get("offsets", {}).get(r["name"], 0))
+            for tag, fps in (("real", 60), ("slow4x", 15)):
+                cmds.append(["python", str(repo / GRID_PY), "video", run_dirs[r["name"]], s,
+                             str(repo / out_rel / f"{r['name']}_{s}_{tag}.mp4"), f"--fps={fps}",
+                             f"--from={cap_win[0] + k}", f"--to={cap_win[1] + k}"])
+    return cmds
+
+
 def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[str, Any]], views: str = DEFAULT_VIEWS,
                       out: str = "", assert_spec: dict[str, Any] | None = None, dry_run: bool = False, move: str = "",
                       round: str = "r1", objective: str = "", edit_window: list[int] | None = None,
@@ -208,8 +277,9 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
                       root: str | Path | None = None, runner: Runner | None = None, build: str | None = None,
                       hitbox_required: bool = True, min_move_cm: float = 2.0, min_rot_deg: float = 3.0,
                       raw_dir: str = "", max_images: int = 8, dense_radius: int = 4) -> dict[str, Any]:
-    """variant_runs[0] is the base: {"name","asset","clips":["/Game/.."],"cvars":"a 1;b 2"}; the others are variants with
-    "intent_hash" (hash of anim_run_intent dry run; see manifest.intent_hash). All runs share ONE Play session."""
+    """variant_runs[0] is the base: {"name","asset","clips":["/Game/.."],"cvars":"a 1;b 2","kit"?}; the others are variants with
+    "intent_hash" (hash of anim_run_intent dry run; see manifest.intent_hash) or "card" (card-authored poses, see card_report), and
+    an optional "kit" (default: `kit`) and "assert" (default: assert_spec). All runs share ONE Play session."""
     repo = _repo(root)
     if not sequences:
         return {"ok": False, "error": "sequences is empty"}
@@ -223,17 +293,31 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
     raw_rel = raw_dir or f"Saved/AnimPipeline/captures/{move}/{round}"
     base, variants = variant_runs[0], variant_runs[1:]
 
-    # 1. hard gate for every variant: nothing is captured (or planned for real) if one fails
-    gates = {}
+    # 1. hard gate for every variant: nothing is captured (or planned for real) if one fails. A variant with "card" and no
+    #    intent_hash gets its report from the card's animpipe check first (card_report), then the same gate
+    gates, cards = {}, {}
     for v in variants:
+        if v.get("card") and not v.get("intent_hash"):
+            cards[v["name"]] = card_report(repo, v["asset"], v["card"], v.get("check_json"), v.get("build_json"))
+            v = dict(v, intent_hash=cards[v["name"]]["intent_hash"])
+            variant_runs[[r["name"] for r in variant_runs].index(v["name"])] = v
         gates[v["name"]] = precapture_gate(
             repo, v["asset"], base["asset"], v.get("intent_hash"), v.get("clips") or [v["asset"]],
             tuple(edit_window) if edit_window else None, objective or v["name"], hitbox_required, min_move_cm, min_rot_deg)
+        if v["name"] in cards:
+            gates[v["name"]]["card_report"] = cards[v["name"]]
+    variants = variant_runs[1:]
     failed = {k: g for k, g in gates.items() if not g["ok"]}
+    gate_file = repo / out_rel / "gate_report.json"
+    gate_file.parent.mkdir(parents=True, exist_ok=True)
+    gate_file.write_text(json.dumps({"verdict": "FAIL" if failed else "PASS", "gates": gates}, indent=1), encoding="utf-8")
     if failed:
         first = next(iter(failed.values()))
-        return {"ok": False, "verdict": "FAIL", "stage": "precapture_gate", "error": first["error"], "gates": gates,
-                "captured": False}
+        err = first["error"]
+        if first.get("card_report") and not first["card_report"]["ok"]:
+            err = first["card_report"]["error"] + "; " + err
+        return {"ok": False, "verdict": "FAIL", "stage": "precapture_gate", "error": err, "gates": gates,
+                "captured": False, "gate_report": str(gate_file.relative_to(repo))}
 
     # 2. cache: reuse what is already captured
     build_id = build if build is not None else manifest.build_id(repo)
@@ -248,7 +332,9 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
 
     # 3. plan
     asserts = assert_spec or {}
-    runs_json = [{"name": r["name"], "cvars": r.get("cvars", ""), "sequences": list(sequences), "assert": asserts} for r in todo]
+    # every run carries its kit (the base kit's runs too): base and variant kits of a move share ONE Play session
+    runs_json = [{"name": r["name"], "kit": r.get("kit") or kit, "cvars": r.get("cvars", ""), "sequences": list(sequences),
+                  "assert": r.get("assert") or asserts} for r in todo]
     cap_win = tuple(window) if window else None
     if cap_win is None:
         ws = [e["window"] for es in asserts.values() for e in es if e.get("window")]
@@ -259,13 +345,6 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
     cmd = ["pwsh", "-NoProfile", "-File", ps1, "-Kit", kit, "-Out", raw_rel, "-Assert", assert_file] if todo else None
     env = {"PIE_CAPTURE_RUNS": runs_file, "PIE_CAPTURE_VIEWS": vstr}
     run_dirs = {r["name"]: str(reuse[r["name"]]) if r["name"] in reuse else str(repo / raw_rel / r["name"]) for r in variant_runs}
-    video_cmds = []
-    for r in variant_runs:
-        for s in sequences:
-            for tag, fps in (("real", 60), ("slow4x", 15)):
-                video_cmds.append(["python", str(repo / GRID_PY), "video", run_dirs[r["name"]], s,
-                                   str(repo / out_rel / f"{r['name']}_{s}_{tag}.mp4"), f"--fps={fps}",
-                                   f"--from={cap_win[0]}", f"--to={cap_win[1]}"])
     plan = {"kit": kit, "sequences": sequences, "views": vstr, "out_dir": out_rel, "raw_dir": raw_rel, "build_id": build_id,
             "capture_runs": [r["name"] for r in todo], "reused": {k: str(v) for k, v in reuse.items()},
             "command": cmd, "env": env, "runs_json": runs_json, "pack_window": list(cap_win), "anchor": anchor, "faf": faf,
@@ -304,9 +383,14 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
     (repo / out_rel).mkdir(parents=True, exist_ok=True)
     pack = review_pack.build_pack({r["name"]: Path(run_dirs[r["name"]]) for r in variant_runs}, sequences, _views_list(views),
                                   repo / out_rel, cap_win, anchor, faf, dense_radius, 1, max_images)
+    video_cmds = video_commands(repo, variant_runs, run_dirs, sequences, out_rel, cap_win, pack["alignment"])
     video_rc = [_rc((runner or default_runner)(c, os.environ.copy(), str(repo))) for c in video_cmds]
+    (repo / out_rel / "alignment.json").write_text(json.dumps(pack["alignment"], indent=1), encoding="utf-8")
     return {"ok": True, "verdict": "PASS", "captured": bool(todo), "reused": sorted(reuse), "out_dir": out_rel,
             "pack": {"frames": pack["frames"], "grids": [g["png"] for g in pack["grids"]],
-                     "missing_frames": sum(len(g["missing"]) for g in pack["grids"])},
+                     "missing_frames": sum(len(g["missing"]) for g in pack["grids"]),
+                     "offsets": {s: a["offsets"] for s, a in pack["alignment"].items()},
+                     "unaligned": {s: a["unknown"] for s, a in pack["alignment"].items() if a["unknown"]},
+                     "hitbox_cells": sum(g.get("hitbox_cells", 0) for g in pack["grids"])},
             "videos_failed": sum(1 for c in video_rc if c != 0), "minutes": float(f"{minutes:.2f}"), "plan": plan,
             "next": "review pack = the grids only (blind critic gets nothing else); commit the out_dir"}
