@@ -1,0 +1,241 @@
+{
+ "name": "k8r3",
+ "doc": "K8 round 3 import as data (import-veloce-1). Order = dropkick-k8-4-piano-r3.md: take copy, author/build/check, dumps, no_stop_gate on startup + settle + loop (a FAIL stops the round before the variant: no capture), variant K8R3 (never REFRESH=1), hitboxes. Capture stays with the capture engine (capture_k8_fast.py on claude/project-thread-bazqb1).",
+ "cwd": "Tools/AnimPipeline",
+ "session": {
+  "max_minutes": 120
+ },
+ "steps": [
+  {
+   "id": "cards",
+   "editor": false,
+   "cmd": [
+    "python",
+    "cards/overlord/dropkick/k8/make_k8r3_cards.py"
+   ],
+   "inputs": [
+    "cards/overlord/dropkick/k8/make_k8r3_cards.py",
+    "cards/overlord/dropkick/overlord_dropkick_startup_k8.json"
+   ],
+   "outputs": [
+    "cards/overlord/dropkick/overlord_dropkick_startup_k8r3.json"
+   ]
+  },
+  {
+   "id": "card_ok",
+   "editor": false,
+   "cmd": [
+    "python",
+    "-m",
+    "animpipe",
+    "card",
+    "cards/overlord/dropkick/overlord_dropkick_startup_k8r3.json"
+   ],
+   "inputs": [
+    "cards/overlord/dropkick/overlord_dropkick_startup_k8r3.json",
+    "animpipe/card.py"
+   ],
+   "ok_pattern": "card \\S+ OK"
+  },
+  {
+   "id": "take_copy",
+   "job": {
+    "script": "Tools/AnimPipeline/cards/overlord/dropkick/k8/ue_step.py",
+    "entry": "copy",
+    "kwargs": {
+     "src": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordDropkick_StartupK7",
+     "dst": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordDropkick_StartupK8R3"
+    }
+   },
+   "inputs": [],
+   "always": true
+  },
+  {
+   "id": "author",
+   "editor": true,
+   "cmd": [
+    "python",
+    "-m",
+    "animpipe",
+    "author",
+    "cards/overlord/dropkick/overlord_dropkick_startup_k8r3.json"
+   ],
+   "inputs": [
+    "cards/overlord/dropkick/overlord_dropkick_startup_k8r3.json",
+    "animpipe/author.py",
+    "ue_write_take.py"
+   ],
+   "timeout_min": 15,
+   "ok_pattern": "exit 0\\)"
+  },
+  {
+   "id": "build",
+   "editor": true,
+   "cmd": [
+    "python",
+    "-m",
+    "animpipe",
+    "build",
+    "cards/overlord/dropkick/overlord_dropkick_startup_k8r3.json"
+   ],
+   "inputs": [
+    "cards/overlord/dropkick/overlord_dropkick_startup_k8r3.json",
+    "animpipe/ue_rig.py",
+    "animpipe/__main__.py",
+    "animpipe/card.py",
+    "../../Content/AnimPipeline/Pilot/AS_Pilot_OverlordDropkick_StartupK8R3.uasset"
+   ],
+   "outputs": [
+    "../../Saved/AnimPipeline/animpipe/overlord_dropkick_startup_k8r3_build.json",
+    "../../Content/AnimPipeline/Rig/Overlord/Dropkick/Startup/AS_OverlordDropkick_StartupK8R3.uasset"
+   ],
+   "timeout_min": 45,
+   "ok_pattern": "export True"
+  },
+  {
+   "id": "check",
+   "editor": true,
+   "cmd": [
+    "python",
+    "-m",
+    "animpipe",
+    "check",
+    "cards/overlord/dropkick/overlord_dropkick_startup_k8r3.json"
+   ],
+   "inputs": [
+    "cards/overlord/dropkick/overlord_dropkick_startup_k8r3.json",
+    "../../Content/AnimPipeline/Rig/Overlord/Dropkick/Startup/AS_OverlordDropkick_StartupK8R3.uasset",
+    "animpipe/checks.py",
+    "legibility.py",
+    "clearance.py",
+    "bone_lengths.py",
+    "motion_curves.py",
+    "motion_check.py",
+    "legibility_thresholds.json"
+   ],
+   "outputs": [
+    "../../Saved/AnimPipeline/animpipe/overlord_dropkick_startup_k8r3_check.json"
+   ],
+   "timeout_min": 30,
+   "ok_pattern": "check \\S+: (PASS|FAIL)"
+  },
+  {
+   "id": "dump_startup",
+   "job": {
+    "script": "Tools/AnimPipeline/gstn_anim_mcp/clip_joints_dump_ue.py",
+    "env": {
+     "CJD_ASSETS": "/Game/AnimPipeline/Rig/Overlord/Dropkick/Startup/AS_OverlordDropkick_StartupK8R3",
+     "CJD_FACING": "y",
+     "CJD_RANGE": ""
+    }
+   },
+   "inputs": [
+    "../../Content/AnimPipeline/Rig/Overlord/Dropkick/Startup/AS_OverlordDropkick_StartupK8R3.uasset",
+    "gstn_anim_mcp/clip_joints_dump_ue.py"
+   ],
+   "outputs": [
+    "../../Saved/AnimPipeline/runstart/joints_AS_OverlordDropkick_StartupK8R3.json"
+   ]
+  },
+  {
+   "id": "dump_settle_loop",
+   "job": {
+    "script": "Tools/AnimPipeline/gstn_anim_mcp/clip_joints_dump_ue.py",
+    "env": {
+     "CJD_ASSETS": "/Game/AnimPipeline/Rig/Overlord/Dropkick/Loop/AS_OverlordDropkick_SettleK6,/Game/AnimPipeline/Rig/Overlord/Dropkick/Loop/AS_OverlordDropkick_LoopK6",
+     "CJD_FACING": "y",
+     "CJD_RANGE": ""
+    }
+   },
+   "inputs": [
+    "../../Content/AnimPipeline/Rig/Overlord/Dropkick/Loop/AS_OverlordDropkick_SettleK6.uasset",
+    "../../Content/AnimPipeline/Rig/Overlord/Dropkick/Loop/AS_OverlordDropkick_LoopK6.uasset",
+    "gstn_anim_mcp/clip_joints_dump_ue.py"
+   ],
+   "outputs": [
+    "../../Saved/AnimPipeline/runstart/joints_AS_OverlordDropkick_SettleK6.json",
+    "../../Saved/AnimPipeline/runstart/joints_AS_OverlordDropkick_LoopK6.json"
+   ]
+  },
+  {
+   "id": "no_stop_startup",
+   "editor": false,
+   "cmd": [
+    "python",
+    "cards/overlord/dropkick/k8/no_stop_gate.py",
+    "../../Saved/AnimPipeline/runstart/joints_AS_OverlordDropkick_StartupK8R3.json"
+   ]
+  },
+  {
+   "id": "no_stop_settle",
+   "editor": false,
+   "cmd": [
+    "python",
+    "cards/overlord/dropkick/k8/no_stop_gate.py",
+    "../../Saved/AnimPipeline/runstart/joints_AS_OverlordDropkick_SettleK6.json"
+   ]
+  },
+  {
+   "id": "no_stop_loop",
+   "editor": false,
+   "cmd": [
+    "python",
+    "cards/overlord/dropkick/k8/no_stop_gate.py",
+    "../../Saved/AnimPipeline/runstart/joints_AS_OverlordDropkick_LoopK6.json"
+   ]
+  },
+  {
+   "id": "variant_delete",
+   "job": {
+    "script": "Tools/AnimPipeline/cards/overlord/dropkick/k8/ue_step.py",
+    "entry": "delete",
+    "kwargs": {
+     "path": "/Game/GASNPPTest/Combat/Overlord/AS_OverlordDropkick_StartupK8R3"
+    }
+   },
+   "inputs": [
+    "../../Content/AnimPipeline/Rig/Overlord/Dropkick/Startup/AS_OverlordDropkick_StartupK8R3.uasset",
+    "../GAS/setup_dropkick_kick_variant.py"
+   ]
+  },
+  {
+   "id": "variant",
+   "job": {
+    "script": "Tools/AnimPipeline/cards/overlord/dropkick/k8/ue_step.py",
+    "entry": "run",
+    "kwargs": {
+     "script": "Tools/GAS/setup_dropkick_kick_variant.py",
+     "env": {
+      "DROPKICK_KICK_ROUND": "K8R3",
+      "DROPKICK_KICK_SETTLE": "K6",
+      "DROPKICK_KICK_LOOP_ROUND": "K6"
+     }
+    }
+   },
+   "inputs": [
+    "../../Content/AnimPipeline/Rig/Overlord/Dropkick/Startup/AS_OverlordDropkick_StartupK8R3.uasset",
+    "../GAS/setup_dropkick_kick_variant.py"
+   ]
+  },
+  {
+   "id": "hitboxes",
+   "job": {
+    "script": "Tools/AnimPipeline/cards/overlord/dropkick/k8/ue_step.py",
+    "entry": "run",
+    "kwargs": {
+     "script": "Tools/GAS/setup_dropkick_hitboxes.py",
+     "env": {
+      "DROPKICK_TL": "TL_Overlord_DropkickTBK8R3",
+      "DROPKICK_HITBOX_DRY": "0",
+      "SETUP_FORCE": "TL_Overlord_DropkickTBK8R3"
+     }
+    }
+   },
+   "inputs": [
+    "../../Content/AnimPipeline/Rig/Overlord/Dropkick/Startup/AS_OverlordDropkick_StartupK8R3.uasset",
+    "../GAS/setup_dropkick_hitboxes.py",
+    "../../Content/GASNPPTest/Combat/Overlord/AM_OverlordDropkickK8R3.uasset"
+   ]
+  }
+ ]
+}
