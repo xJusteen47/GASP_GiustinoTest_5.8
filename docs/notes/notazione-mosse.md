@@ -4,6 +4,7 @@ Sostituisce light/strong/smash di Smash.
 - Strong: "light" diventa "strong" (F.S, N.S, Cr.F.S). Special: diventa "special" (F.Sp, N.Sp).
 - In aria: "Aerial" in fondo (F.L Aerial).
 - Esempi Overlord: dropkick = F.L Aerial; dair stomp = Cr.N.L Aerial; F.S = clone fsmash di Ganondorf (slash verticale, penetrazione media); N.S = slash orizzontale medio tipo ftilt di Ike adattato (decisioni owner 11-23). Slash centrati; curva regolabile per altezza/inclinazione; frame data da Ultimate.
+- I nomi Smash (ftilt, fsmash...) sono solo riferimenti; la notazione nomina le nostre mosse. N.S Overlord = ftilt di Ike adattata (come l'fsmash di Ganondorf e' quello di Ike adattato); la curva regolabile di altezza/inclinazione vale solo per N.S, F.S senza.
 - Regola owner 11-23: in aria "giu" si nota con Cr. (dair stomp = Cr.N.L Aerial).
 - "Back" non previsto per ora; "up" era solo gergo (owner 11-23).
 - Regola owner 11-23: senza direzione si sottintende NEUTRALE (N): .L = N.L, .S = N.S, .Sp = N.Sp, "L Aerial" = N.L Aerial. Il foglio usa la forma completa.
