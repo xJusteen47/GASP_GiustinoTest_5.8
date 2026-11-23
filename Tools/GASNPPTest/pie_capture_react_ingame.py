@@ -70,6 +70,7 @@ if os.environ.get('PIE_CAPTURE_SEQUENCES'):
 #   {"name": "roll_run_v220", "getup": "jump"|"facing"|"against", "follow": "idle"|"run"|"jab", "cvars": {"gstn.Getup.RollExitSpeed": 220}}
 #   getup-momentum-2: "angle": degrees the roll's stick is turned off the get-up axis (+ = to the right of it, seen from above: UE yaw), held 10 frames
 #   (the directional roll turns while it is held); 'run' then pushes along the NEW facing at FAF
+#   "hold": true keeps the roll's stick held from the roll input to the end (straight run-out, no re-press at FAF)
 # follow: idle = no input after the get-up starts (the tail plays out), run = stick toward the get-up's travel (the facing for the stand-up)
 # held from the get-up start (ignored until FAF, then it cuts the tail), jab = Attack tapped on the FAF frame. cvars are set when the
 # sequence starts and put back to -1 when it ends. Replaces SEQUENCES.
@@ -362,7 +363,8 @@ def _follow(seq, frame):
         # The roll's stick is let go once the roll has started. A stick HELD through the get-up does not cut the tail (new3: the tail cancel
         # wants a stick move), so 'run' pushes it again on the FAF frame, toward the get-up's travel. getup-momentum-2: with an 'angle' (the
         # directional roll) the stick stays held until the turn is over (gstn.Getup.WarpFrames, about 6 frames), so it is let go later
-        if not seq.get('angle'):
+        # getup-momentum-2 "hold": the stick stays held through the get-up (a roll's tail is 3 frames, a press on the FAF frame comes too late)
+        if not seq.get('angle') and not seq.get('hold'):
             g.release(0, 'move')
     if 'gu_at' not in s:
         return tap, False
