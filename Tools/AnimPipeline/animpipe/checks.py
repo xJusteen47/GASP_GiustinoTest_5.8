@@ -4,10 +4,10 @@
            cameras), contact/FAF (the effector peaks inside the contact window, the clip reaches the FAF), planted feet,
            closed fists, hitstop_snap (default on every move: no bone travels more than HITSTOP_MAX cm from a
            hitbox-active frame to the next one, since a hit freezes the clip on that frame and the next frame would pop),
-           co_motion (no limb glued to the trunk through the startup while the body moves), stop_and_go (cards with
-           curve "spline": no frame of the startup with the whole body under 3.5 cm/frame outside the declared holds, and
+           co_motion (no limb glued to the trunk through the startup while the body moves), stop_and_go (every card, any
+           curve, always blocking: no frame of the startup with the whole body under 3.5 cm/frame outside the declared holds, and
            the largest step <= 4x the median, and in the whole clip no run of more than 3 still steps, so take-off and
-           landing count too; on "tangents" cards it is reported under measure, see animpipe/curves.py).
+           landing count too; see animpipe/curves.py; clips without a card: gstn_anim_mcp/no_stop_gate.py).
   measure  reported, never block: motion_curves (+ motion_ref against the card's reference), twist_chain, motion_check
            (weight, overlap, balance, pose rules), spacing of the built curves, distance from the source poses.
   rules    (opt-in) the README's owner rules as blocking checks, declared in the card under `rules` with their thresholds;
@@ -437,10 +437,10 @@ def run(path, src=False):
     res["warn"] += _arm_jump(F, Q, w, exempt.get("arm_jump", set()))
     res["block"]["co_motion"] = _co_motion(F, Q, w, co_skip, exempt.get("co_motion", set()))
     sg_ok, sg_line = _stop_and_go(c, F, w, exempt.get("stop_and_go", set()))
-    if c.get("curve", "tangents") == "spline":
-        res["block"]["stop_and_go"] = (sg_ok, sg_line)
-    else:
-        res["measure"]["stop_and_go"] = (0, ("PASS " if sg_ok else "FAIL ") + sg_line)
+    # skill audit 2026-11-23 (option A) + owner 2026-11-24 (no quality cut, no false-positive compromise): blocking on EVERY card,
+    # tangent builds too; no switch turns it into a measure. Owner-wanted frozen poses are declared as holds, a wrong alarm is
+    # fixed in curves.py, never silenced here
+    res["block"]["stop_and_go"] = (sg_ok, sg_line)
     res["measure"]["near_equal_keys"], res["measure"]["same_frame_arrivals"] = [(0, x) for x in _key_warnings(c, F, w)]
 
     for name, args in (("motion_curves", ["motion_curves.py", take, f"--sheet={move}", "--quiet"]),

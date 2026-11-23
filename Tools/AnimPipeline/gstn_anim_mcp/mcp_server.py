@@ -250,6 +250,10 @@ def _tool_defs() -> list[dict[str, Any]]:
                     "window": {"type": "array", "items": {"type": "integer"}, "description": "Capture frames of the pack (default: the assert windows)."},
                     "anchor": {"type": "integer"}, "faf": {"type": "integer"},
                     "hitbox_required": {"type": "boolean", "default": True},
+                    "no_stop": {"type": "object", "description": "Anti-stop gate on EVERY clip in each run's clips (startup, loop, settle), "
+                                "inherited clips included, always blocking: {stop_cm 3.5, still_run 3, max_ratio 4, holds {clip: 'a-b'} (owner-wanted "
+                                "holds only), startup {clip: 'a-b'}}."},
+                    "motion": {"type": "object", "description": "Life images of the pack: {views 'az90,az180', frame_range, slowmo_cells 24, slowmo_cols 8}."},
                 },
                 "required": ["kit", "sequences", "variant_runs"],
             },
@@ -277,8 +281,9 @@ def _tool_defs() -> list[dict[str, Any]]:
             "name": "anim_motion_overlay",
             "description": (
                 "Offline motion check from the joints dump: per view, trails of wrists, ankles, head and pelvis with per-frame velocity "
-                "arrows and arc tangents. Flags arc breaks (direction change > 60 deg between frames while moving) and pops (speed > 3x "
-                "both neighbours). One PNG per view for the reviewer + JSON; reply = 5 lines. Example: "
+                "arrows and arc tangents. Flags arc breaks (direction change > 60 deg between frames while moving), pops (speed > 3x "
+                "both neighbours) and STOPS (whole body < 3.5 cm/frame, red dots + red bands), with a per-frame speed strip under the "
+                "trails. One PNG per view for the reviewer + JSON; reply = 5 lines. Example: "
                 "{\"asset\": \"AS_X_ft\", \"frame_range\": [20, 60], \"views\": \"az90,az180\", \"base_asset\": \"AS_X\"}."
             ),
             "inputSchema": {
@@ -286,6 +291,7 @@ def _tool_defs() -> list[dict[str, Any]]:
                 "properties": {
                     "asset": {"type": "string"}, "frame_range": {}, "views": {"type": "string", "default": "az90,az180,az315"},
                     "base_asset": {"type": "string"}, "game_yaw": {"type": "number", "default": 0}, "game_pitch": {"type": "number", "default": 10},
+                    "out": {"type": "string"}, "holds": {"type": "string", "description": "owner-wanted holds 'a-b,c-d' (steps not marked STOP)"},
                 },
                 "required": ["asset"],
             },
@@ -376,12 +382,14 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
             assert_spec=args.get("assert_spec"), dry_run=bool(args.get("dry_run", False)), move=args.get("move") or "",
             round=args.get("round") or "r1", objective=args.get("objective") or "", edit_window=args.get("edit_window"),
             window=args.get("window"), anchor=args.get("anchor"), faf=args.get("faf"),
-            hitbox_required=bool(args.get("hitbox_required", True)),
+            hitbox_required=bool(args.get("hitbox_required", True)), no_stop=args.get("no_stop"), motion=args.get("motion"),
         )
     if name in ("anim_silhouette_check", "anim_motion_overlay"):
         mod = __import__("silhouette" if name == "anim_silhouette_check" else "motion_overlay")
         fn = getattr(mod, name)
-        extra = {"out": args["out"]} if args.get("out") and name == "anim_silhouette_check" else {}
+        extra = {"out": args["out"]} if args.get("out") else {}
+        if name == "anim_motion_overlay" and args.get("holds"):
+            extra["holds"] = args["holds"]
         return fn(args["asset"], args.get("frame_range"), args.get("views"), args.get("base_asset"),
                   game_yaw=float(args.get("game_yaw", 0.0)), game_pitch=float(args.get("game_pitch", 10.0)), **extra)
     raise KeyError(f"Unknown tool: {name}")

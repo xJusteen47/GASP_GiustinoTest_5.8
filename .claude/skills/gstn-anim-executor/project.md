@@ -75,3 +75,22 @@ Antigravity cannot run git in its sandbox: the Claude session commits card and s
    since cvars are never undone and whiffs of a hitbox run now precede hits of review runs; otherwise
    `anim_capture_move` refuses (`stage: hitbox_cvars`). The pack fails if a review grid or video carries hitboxes;
    hitbox videos only in `<out>/hitbox/` (owner only).
+
+## Life and speed (2026-11-23, skill audit option A; owner: same quality as the OG, speed comes from tools, never from cutting the review)
+6. **Anti-stop gate on every clip, blocking.** List EVERY clip the montage plays in the run's `clips` (startup, loop,
+   settle, landing). `anim_capture_move` runs `gstn_anim_mcp/no_stop_gate.py` on each joints dump (`clip_joints_dump_ue.py`
+   first; a missing dump blocks): no run of more than 3 steps with the whole body under 3.5 cm/frame outside the holds,
+   and with `no_stop.startup {clip: "a-b"}` no still step and largest step <= 4x the median. Thresholds are parameters
+   (`no_stop.stop_cm/still_run/max_ratio`, rule 15c); `no_stop.holds` only for holds the owner wants. A clip shared with
+   the approved base is judged again and blocks ("ereditato"): the approved version stays locked, fix it in a variant
+   (first case: K6 settle, still ~6 frames on the ground, v158-163). There is no switch to turn it off: a false alarm is
+   fixed in `animpipe/curves.py` with its cause written down. `animpipe check` `stop_and_go` now blocks on every card
+   (tangent builds too) and is never inherited. Manual run: `python Tools/AnimPipeline/gstn_anim_mcp/no_stop_gate.py
+   Saved/AnimPipeline/runstart/joints_<clip>.json [--startup=a-b] [--holds=a-b]`.
+7. **Life images in every pack.** `anim_capture_move` writes, for every move: `slowmo_<seq>_az90.png` (the startup one
+   tick per cell, base band over variant band), `velocity_<variant>_az90.png` and `_az180.png` (trails of hands, feet,
+   head, pelvis with a velocity arrow per frame, red STOP dots, and the per-frame SPEED STRIP under the trails), and
+   `pack.json` with the reviewer's order (slowmo, velocity sheets, every grid) plus the `slow4x` mp4 paths. Grids are never
+   dropped to fit 8 images: `over_budget: true` goes in the handover. Commit them with the out_dir.
+8. **Before/after for an instruction:** keep motion trails on the touched keys AND add the velocity sheet of the whole clip
+   (`anim_motion_overlay`, holds from the card), so a stop created outside the touched keys is seen.

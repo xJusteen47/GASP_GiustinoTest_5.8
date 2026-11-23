@@ -72,3 +72,17 @@ Generic method: `skills-public/anim-reviewer/SKILL.md`. Section numbers below re
   leads for the eye, not verdicts.
 - Blocks marked inherited in `gate_report.json` exist identically on the approved version: do not FAIL the variant for
   them; list them once as "ereditati dalla base approvata" for the owner.
+
+## Life and speed (2026-11-23, skill audit option A; owner: same quality as the OG, speed comes from tools, never from cutting the review)
+- Nothing of the final review is shortened: watch the movement, life before numbers, identity traits, comparison with the
+  base, all as above. The tools below are added to it, they replace nothing.
+- Look in this order: (1) the **slow4x mp4** of base and variant (`pack.json` `slowmo_mp4`), or, if you cannot read video,
+  the **startup slowmo tile** `slowmo_<seq>_az90.png` (one tick per cell) as the frame-by-frame sequence; (2) the two
+  **velocity sheets** `velocity_<variant>_az90/az180.png`: arrows per frame, red dots and red bands = whole body STOP, the
+  speed strip (black = whole body, dashed = stop threshold) shows stops AND pops; (3) every grid; (4) real speed.
+- **Blocking** (rubric `statua`, `carica_viva`): the whole body still like a statue outside a hold the card declares, in
+  ANY clip (startup, loop, settle, landing), inherited clips included. A still frame in a grid is not a "good held pose"
+  until the speed strip says it moves. `no_stop` failing in `gate_report.json` means no capture happened: report it.
+- Inherited stops are judged again and FAIL the variant (label `posa`); the approved version stays locked, the fix goes in a
+  variant. Do not file them as "ereditati dalla base approvata".
+- `pack.json` `over_budget: true`: the pack was kept whole on purpose; review all of it.

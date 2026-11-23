@@ -35,6 +35,7 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 import manifest  # noqa: E402
+import no_stop_gate  # noqa: E402
 import review_pack  # noqa: E402
 
 TIMED_PS1 = "Tools/GASNPPTest/pie_capture_timed.ps1"
@@ -49,6 +50,9 @@ SEGMENTS = [("upperarm_MainPoint_l", "lowerarm_MainPoint_l"), ("lowerarm_MainPoi
             ("neck_01", "head")]
 
 Runner = Callable[[list, dict, str], Any]
+# Blocks that are never inherited from an approved base (skill audit 2026-11-23): a stop is judged again on every variant, the
+# approved version stays locked and the fix goes in a variant (K6 settle, still ~6 frames, was inherited and never re-judged)
+NON_INHERITABLE = ("stop_and_go",)
 
 
 def _repo(root: str | Path | None) -> Path:
@@ -144,8 +148,15 @@ def check_hitbox_sync(root: Path, clips: list[str]) -> tuple[bool, str]:
 def precapture_gate(root: str | Path | None, asset: str, base_asset: str | None = None, ihash: str | None = None,
                     clips: list[str] | None = None, edit_window: tuple[int, int] | None = None, objective: str = "",
                     hitbox_required: bool = True, min_move_cm: float = 2.0, min_rot_deg: float = 3.0,
-                    max_attempts: int = manifest.MAX_ATTEMPTS) -> dict[str, Any]:
-    """Run every gate and report all of them; ok only if all pass. Pure and offline (reads manifest, joints, uassets)."""
+                    max_attempts: int = manifest.MAX_ATTEMPTS, no_stop: dict[str, Any] | None = None,
+                    base_clips: list[str] | None = None) -> dict[str, Any]:
+    """Run every gate and report all of them; ok only if all pass. Pure and offline (reads manifest, joints, uassets).
+
+    no_stop (skill audit 2026-11-23, option A): every clip in `clips` (startup, loop, settle, landing: list them all) passes
+    no_stop_gate.check on its joints dump. Options {"stop_cm", "max_ratio", "still_run", "holds": {clip name: "a-b,.."},
+    "startup": {clip name: "a-b"}}. A clip also in `base_clips` is INHERITED: judged again and blocking all the same (the
+    approved version stays locked, the fix goes in a variant); the line says "ereditato". Always blocking (owner 2026-11-24: no
+    quality cut, a false alarm is fixed in the measure, never silenced): there is no option to turn it off."""
     repo = _repo(root)
     checks: list[dict[str, Any]] = []
 
@@ -172,6 +183,25 @@ def precapture_gate(root: str | Path | None, asset: str, base_asset: str | None 
                 **{k: v for k, v in ch.items() if k != "ok"})
     else:
         add("readable", False, "base_asset missing: cannot measure the change")
+    ns = dict(no_stop or {})
+    bnames = {_name(b) for b in (base_clips or [])}
+    bad, lines = [], []
+    for clip in (clips or [asset]):
+        nm = _name(clip)
+        j = _joints(repo, clip)
+        if not j:
+            bad.append(nm)
+            lines.append(f"{nm}: joints dump missing (clip_joints_dump_ue.py), cannot measure stops")
+            continue
+        r = no_stop_gate.check(j, (ns.get("holds") or {}).get(nm), (ns.get("startup") or {}).get(nm),
+                               float(ns.get("stop_cm", no_stop_gate.DEFAULTS["stop_cm"])),
+                               float(ns.get("max_ratio", no_stop_gate.DEFAULTS["max_ratio"])),
+                               int(ns.get("still_run", no_stop_gate.DEFAULTS["still_run"])))
+        if not r["ok"]:
+            bad.append(nm)
+            lines.append(f"{nm}{' (ereditato dalla base: rigiudicato, blocca; la versione approvata resta bloccata, correggi in una variante)' if nm in bnames else ''}: "
+                         + "; ".join(r["lines"]))
+    add("no_stop", not bad, "ok" if not bad else " | ".join(lines), clips_failed=bad)
     n = int(m.get("attempts", {}).get(objective, 0))
     add("attempts", n < max_attempts, f"{n}/{max_attempts} attempts used" if n < max_attempts else
         f"attempt {n + 1} refused: max {max_attempts} per objective {objective!r}; stop and report")
@@ -209,7 +239,7 @@ def inherited_blocks(repo: Path, failing: dict[str, str], base_asset: str | None
         return {}, "no animpipe check for the approved base card: run animpipe check on it"
     bblk = brep.get("block") or {}
     inh = {k: bblk[k].get("line", "") for k, line in failing.items()
-           if k in bblk and not bblk[k].get("ok") and bblk[k].get("line", "") == line}
+           if k not in NON_INHERITABLE and k in bblk and not bblk[k].get("ok") and bblk[k].get("line", "") == line}
     return inh, "ok"
 
 
@@ -328,7 +358,8 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
                       window: list[int] | None = None, anchor: int | None = None, faf: int | None = None,
                       root: str | Path | None = None, runner: Runner | None = None, build: str | None = None,
                       hitbox_required: bool = True, min_move_cm: float = 2.0, min_rot_deg: float = 3.0,
-                      raw_dir: str = "", max_images: int = 8, dense_radius: int = 4) -> dict[str, Any]:
+                      raw_dir: str = "", max_images: int = 8, dense_radius: int = 4,
+                      no_stop: dict[str, Any] | None = None, motion: dict[str, Any] | None = None) -> dict[str, Any]:
     """variant_runs[0] is the base: {"name","asset","clips":["/Game/.."],"cvars":"a 1;b 2","kit"?}; the others are variants with
     "intent_hash" (hash of anim_run_intent dry run; see manifest.intent_hash) or "card" (card-authored poses, see card_report), and
     an optional "kit" (default: `kit`) and "assert" (default: assert_spec). All runs share ONE Play session. A run with
@@ -361,7 +392,8 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
             variant_runs[[r["name"] for r in variant_runs].index(v["name"])] = v
         gates[v["name"]] = precapture_gate(
             repo, v["asset"], base["asset"], v.get("intent_hash"), v.get("clips") or [v["asset"]],
-            tuple(edit_window) if edit_window else None, objective or v["name"], hitbox_required, min_move_cm, min_rot_deg)
+            tuple(edit_window) if edit_window else None, objective or v["name"], hitbox_required, min_move_cm, min_rot_deg,
+            no_stop=no_stop, base_clips=base.get("clips") or [base["asset"]])
         if v["name"] in cards:
             gates[v["name"]]["card_report"] = cards[v["name"]]
     variants = variant_runs[1:]
@@ -466,11 +498,59 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
     video_cmds += hb_cmds
     video_rc = [_rc((runner or default_runner)(c, os.environ.copy(), str(repo))) for c in video_cmds]
     (repo / out_rel / "alignment.json").write_text(json.dumps(pack["alignment"], indent=1), encoding="utf-8")
+    life = life_images(repo, review, sequences, _views_list(views), out_rel, cap_win, anchor, pack["alignment"], run_dirs,
+                       no_stop, motion)
+    order = review_pack.order_pack(life["slowmo"], life["motion"], [g["png"] for g in pack["grids"]], max_images)
+    slow_mp4 = [f"{out_rel}/{r['name']}_{s}_slow4x.mp4" for r in review for s in sequences]
+    (repo / out_rel / "pack.json").write_text(json.dumps(dict(order, slowmo_mp4=slow_mp4, stops=life["stops"],
+                                                                errors=life["errors"]), indent=1), encoding="utf-8")
     return {"ok": True, "verdict": "PASS", "captured": bool(todo), "reused": sorted(reuse), "out_dir": out_rel,
             "pack": {"frames": pack["frames"], "grids": [g["png"] for g in pack["grids"]],
                      "missing_frames": sum(len(g["missing"]) for g in pack["grids"]),
                      "offsets": {s: a["offsets"] for s, a in pack["alignment"].items()},
                      "unaligned": {s: a["unknown"] for s, a in pack["alignment"].items() if a["unknown"]},
-                     "hitbox_cells": sum(g.get("hitbox_cells", 0) for g in pack["grids"])},
+                     "hitbox_cells": sum(g.get("hitbox_cells", 0) for g in pack["grids"]),
+                     "images": order["images"], "over_budget": order["over_budget"], "slowmo_mp4": slow_mp4,
+                     "stops": life["stops"], "life_errors": life["errors"]},
             "videos_failed": sum(1 for c in video_rc if c != 0), "minutes": float(f"{minutes:.2f}"), "plan": plan,
-            "next": "review pack = the grids only (blind critic gets nothing else); commit the out_dir"}
+            "next": "review pack = pack.json images (slowmo startup tile, velocity sheets, every grid) + the slow4x mp4 of each run "
+                    "(or the slowmo tile as the frame-by-frame sequence); commit the out_dir"
+                    + ("; PACK OVER 8 IMAGES: nothing was cut, write it in the handover" if order["over_budget"] else "")}
+
+
+def life_images(repo: Path, review: list[dict[str, Any]], sequences: list[str], views: list[str], out_rel: str,
+                cap_win: tuple[int, int], anchor: int | None, alignment: dict[str, Any], run_dirs: dict[str, str],
+                no_stop: dict[str, Any] | None = None, motion: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The images that measure LIFE, added to the pack for EVERY move (skill audit 2026-11-23, option A; K7 had them by hand only):
+      - slowmo_<seq>_<view>.png: the startup frame by frame (1 tick per cell), base band over variant band, first sequence, az90;
+      - velocity_<run>_az90.png, velocity_<run>_az180.png: the variant's trails of wrists, ankles, head, pelvis with velocity
+        arrows, STOP dots and the speed strip (motion_overlay), base trails in grey. Clip = the variant's first clip (the startup).
+    Errors (no Pillow, no joints dump) are reported, never fatal: the grids are still the review."""
+    import motion_overlay
+    mo = dict(motion or {})
+    out = {"slowmo": [], "motion": [], "stops": {}, "errors": []}
+    seq = sequences[0]
+    view = "az90" if "az90" in views else views[0]
+    try:
+        rd = {r["name"]: Path(run_dirs[r["name"]]) for r in review}
+        tile = review_pack.build_slowmo_tile(rd, seq, view, review_pack.startup_frames(cap_win, anchor, int(mo.get("slowmo_cells", 24))),
+                                             repo / out_rel / f"slowmo_{seq}_{view}.png", int(mo.get("slowmo_cols", 8)),
+                                             offsets=(alignment.get(seq) or {}).get("offsets"))
+        out["slowmo"].append(tile["png"])
+    except Exception as exc:  # noqa: BLE001 - reported in pack.json, the grids stay valid
+        out["errors"].append(f"slowmo tile: {exc}")
+    base = review[0]
+    for r in review[1:2]:   # the variant under review (the first one): two velocity sheets, the pack's budget
+        clip = (r.get("clips") or [r["asset"]])[0]
+        holds = ((no_stop or {}).get("holds") or {}).get(_name(clip))
+        res = motion_overlay.anim_motion_overlay(clip, mo.get("frame_range"), mo.get("views", "az90,az180"),
+                                                 base_asset=(base.get("clips") or [base["asset"]])[0], root=repo,
+                                                 out=out_rel, holds=holds, prefix=f"velocity_{r['name']}",
+                                                 stop_cm=float((no_stop or {}).get("stop_cm", no_stop_gate.DEFAULTS["stop_cm"])),
+                                                 still_run=int((no_stop or {}).get("still_run", no_stop_gate.DEFAULTS["still_run"])))
+        if res.get("ok"):
+            out["motion"] += list(res["images"].values())
+            out["stops"][r["name"]] = {"stops": res["stops"], "blocking_runs": res["still_runs_blocking"]}
+        else:
+            out["errors"].append(f"velocity sheets {r['name']}: {res.get('error')}")
+    return out

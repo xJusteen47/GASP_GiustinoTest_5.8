@@ -38,6 +38,7 @@ def _shifted(delta_cm: float) -> dict:
     j = copy.deepcopy(_make_fake_joints(20)["joints"])
     for k in ("hand_MainPoint_l", "hand_MainPoint_r"):
         j[k] = [[p[0], p[1] + delta_cm, p[2]] for p in j[k]]
+    j["pelvis"] = [[0.0, 95.0, 5.0 * i] for i in range(20)]   # a moving body: the no_stop gate (2026-11-23) needs a pelvis
     return j
 
 
@@ -61,8 +62,8 @@ def _make_repo(root: Path, delta_cm: float = 5.0, hitbox: str = "fresh") -> str:
 
 
 def _runs(h: str) -> list:
-    return [{"name": "base", "asset": BASE, "clips": [CLIP_BASE], "cvars": "a 1"},
-            {"name": "ft", "asset": VAR, "clips": [CLIP_VAR], "cvars": "a 1", "intent_hash": h}]
+    return [{"name": "base", "asset": BASE, "clips": [CLIP_BASE], "cvars": "a 1;gstn.Combat.Debug.Hitboxes 0"},
+            {"name": "ft", "asset": VAR, "clips": [CLIP_VAR], "cvars": "a 1;gstn.Combat.Debug.Hitboxes 0", "intent_hash": h}]
 
 
 class TestGate(unittest.TestCase):
@@ -75,7 +76,7 @@ class TestGate(unittest.TestCase):
             h = _make_repo(root)
             g = self._gate(root, h)
             self.assertTrue(g["ok"], g)
-            self.assertEqual({c["check"] for c in g["checks"]}, {"report_pass", "dry_run_exists", "hitbox_fresh", "readable", "attempts"})
+            self.assertEqual({c["check"] for c in g["checks"]}, {"report_pass", "dry_run_exists", "hitbox_fresh", "readable", "no_stop", "attempts"})
 
     def test_report_not_pass_or_other_intent(self) -> None:
         with tempfile.TemporaryDirectory() as t:

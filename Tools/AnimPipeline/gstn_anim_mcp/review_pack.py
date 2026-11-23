@@ -147,3 +147,56 @@ def build_pack(runs: dict[str, Path], sequences: list[str], views: list[str], ou
         for v in views:
             grids.append(build_grid(runs, seq, v, frames, Path(out_dir) / f"grid_{seq}_{v}.png", cell, al["offsets"]))
     return {"frames": frames, "grids": grids, "images_per_view": len(frames), "alignment": alignment}
+
+
+def startup_frames(window: tuple[int, int], anchor: int | None, max_cells: int = 24) -> list[int]:
+    """Every capture frame (1 tick per frame, no skipping) of the startup: from the window start to the frame before the anchor,
+    the LAST max_cells of them when longer (the middle and end of the startup, where K7/K8 stopped, a6-a12)."""
+    a = int(window[0])
+    b = int(anchor) - 1 if anchor is not None else int(window[1])
+    fr = list(range(a, max(a, b) + 1))
+    return fr[-max_cells:]
+
+
+def build_slowmo_tile(runs: dict[str, Path], seq: str, view: str, frames: list[int], out_png: Path, cols: int = 8,
+                      cell: int = 160, offsets: dict[str, int] | None = None) -> dict[str, Any]:
+    """ONE image, the startup in slow motion: consecutive capture frames (1 tick each) wrapped in rows of `cols`, a band per run
+    (base band on top, variant band below, same frames). Skill audit 2026-11-23 (option A): the pack's grids sit around the
+    anchor and the FAF, so the startup middle was never seen frame by frame and a stop read as a held pose."""
+    from PIL import Image, ImageDraw
+
+    offsets = offsets or {}
+    nrow = max(1, -(-len(frames) // cols))
+    band = nrow * cell + 16
+    sheet = Image.new("RGB", (cols * cell, len(runs) * band), (40, 40, 40))
+    draw = ImageDraw.Draw(sheet)
+    missing: list[str] = []
+    for r, (name, cap) in enumerate(runs.items()):
+        k = int(offsets.get(name, 0))
+        y0 = r * band
+        draw.rectangle([0, y0, cols * cell, y0 + 15], fill=(0, 0, 0))
+        draw.text((4, y0 + 2), f"{name}  {seq}  {view}  startup slowmo, 1 tick per cell, f{frames[0] + k}-{frames[-1] + k}"
+                  if frames else name, fill=(255, 255, 0))
+        for i, f0 in enumerate(frames):
+            f = f0 + k
+            x, y = (i % cols) * cell, y0 + 16 + (i // cols) * cell
+            p = frame_path(cap, seq, view, f)
+            if p.exists():
+                im = Image.open(p).convert("RGB")
+                im.thumbnail((cell, cell))
+                sheet.paste(im, (x + (cell - im.width) // 2, y + (cell - im.height) // 2))
+            else:
+                missing.append(str(p))
+            draw.rectangle([x, y, x + 34, y + 11], fill=(0, 0, 0))
+            draw.text((x + 2, y), f"f{f}", fill=(255, 255, 255))
+    out_png = Path(out_png)
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(out_png)
+    return {"png": str(out_png), "frames": frames, "rows": list(runs), "missing": missing}
+
+
+def order_pack(slowmo: list[str], motion: list[str], grids: list[str], max_images: int = MAX_IMAGES) -> dict[str, Any]:
+    """The reviewer's image list, in reading order: the startup slowmo tile, the velocity sheets, then EVERY grid. Nothing of the
+    final review is dropped to fit the budget (owner 2026-11-23): over max_images the pack is flagged, never trimmed."""
+    images = list(slowmo) + list(motion) + list(grids)
+    return {"images": images, "count": len(images), "max_images": max_images, "over_budget": len(images) > max_images}
