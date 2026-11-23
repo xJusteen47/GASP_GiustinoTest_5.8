@@ -81,6 +81,8 @@ class TestGstnAnimMcp(unittest.TestCase):
             )
             self.assertTrue(apply_res["ok"])
             self.assertTrue(apply_res["dry_run"])
+            self.assertFalse((root / "Saved" / "AnimPipeline" / "snapshots").exists(), "dry_run must not snapshot")
+            anim_ops._snapshot_asset(root, "AS_TestClip")
 
             # Mutate joints file, then rollback
             jpath.write_text(json.dumps(_make_fake_joints(20, scale=0.1)), encoding="utf-8")
@@ -109,7 +111,7 @@ class TestGstnAnimMcp(unittest.TestCase):
         names = [t["name"] for t in lst["result"]["tools"]]
         self.assertEqual(
             names,
-            ["anim_inspect", "anim_apply_intent", "anim_gate_check", "anim_capture_ab",
+            ["anim_inspect", "anim_apply_intent", "anim_run_intent", "anim_gate_check", "anim_capture_ab",
              "anim_register_variant", "anim_unregister_variant", "anim_rollback"],
         )
 
@@ -250,7 +252,10 @@ class TestGstnAnimMcp(unittest.TestCase):
         self.assertNotIn("variant_a", required)
         self.assertNotIn("variant_b", required)
 
-        res = mcp_server.process_request(
+        out_tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(out_tmp.cleanup)
+        with mock.patch.object(mcp_server, "_out_dir", return_value=Path(out_tmp.name)):
+          res = mcp_server.process_request(
             {
                 "jsonrpc": "2.0",
                 "id": 3,
@@ -272,9 +277,12 @@ class TestGstnAnimMcp(unittest.TestCase):
         )
         self.assertNotIn("error", res)
         self.assertFalse(res["result"]["isError"])
-        payload = json.loads(res["result"]["content"][0]["text"])
+        text = res["result"]["content"][0]["text"]
+        self.assertLessEqual(len(text.splitlines()), 5)
+        payload = json.loads(Path(text.splitlines()[-1].split("details: ", 1)[1]).read_text(encoding="utf-8"))
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["validated_intent"]["turn_side"], "L")
+        self.assertIn("plan", payload)
 
     def test_geom_intent_math_tuck_in_and_start_from_frame(self) -> None:
         import geom_intent_ue

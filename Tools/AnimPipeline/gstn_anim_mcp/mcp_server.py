@@ -1,13 +1,16 @@
 """Stdio MCP JSON-RPC 2.0 server for gstn-anim-mcp (pure Python 3.14 stdlib).
 
-Exposes 7 semantic animation tools so flash models never have to write 300+ lines of
+Exposes 8 semantic animation tools so flash models never have to write 300+ lines of
 quaternions/2-bone IK Python:
   - anim_inspect(asset, frame_range)
   - anim_apply_intent(src, dst, intent_json)
   - anim_gate_check(asset, ref_asset)
   - anim_capture_ab(variant_a, variant_b, seq, window)
   - anim_register_variant(asset, variant_id) / anim_unregister_variant(variant_id)
+  - anim_run_intent(src, dst, intent_json): snapshot + intent + gates in one call
   - anim_rollback(asset)
+
+Replies are compact (<= 5 lines, details in a file): see compact.py. The tool list is a FIXED-order, constant\ntext prefix so provider prompt caches (DeepSeek prefix cache) keep hitting; never put variable data in it.
 
 Never writes non-JSON-RPC output to stdout; logs only to stderr.
 """
@@ -23,6 +26,7 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 import anim_ops  # noqa: E402
+import compact  # noqa: E402
 
 SERVER_INFO = {"name": "gstn-anim-mcp", "version": "1.0.0"}
 DEFAULT_PROTOCOL_VERSION = "2025-03-26"
@@ -82,6 +86,25 @@ def _tool_defs() -> list[dict[str, Any]]:
                     "src": {"type": "string", "description": "Source AnimSequence name or path."},
                     "dst": {"type": "string", "description": "Destination AnimSequence name or path."},
                     "intent_json": {"type": "object", "description": "Semantic intent parameters."},
+                    "dry_run": {"type": "boolean", "default": False, "description": "No side effects: returns the plan (bones, active/peak frames, degrees actually reached) without snapshot or edit."},
+                },
+                "required": ["src", "dst", "intent_json"],
+            },
+        },
+        {
+            "name": "anim_run_intent",
+            "description": (
+                "One call = snapshot + anim_apply_intent + anim_gate_check (conservation vs src). Same intent_json rules "
+                "as anim_apply_intent (clip-local frames, envelopes). Returns PASS/FAIL; on FAIL the next step is "
+                "anim_rollback. dry_run=true returns only the plan, like anim_apply_intent."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "src": {"type": "string", "description": "Source AnimSequence name or path."},
+                    "dst": {"type": "string", "description": "Destination AnimSequence name or path."},
+                    "intent_json": {"type": "object", "description": "Semantic intent parameters."},
+                    "gate_win": {"type": "integer", "default": 18},
                     "dry_run": {"type": "boolean", "default": False},
                 },
                 "required": ["src", "dst", "intent_json"],
@@ -192,6 +215,14 @@ def handle_tool_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
             intent_json=args["intent_json"],
             dry_run=bool(args.get("dry_run", False)),
         )
+    if name == "anim_run_intent":
+        return anim_ops.anim_run_intent(
+            src=args["src"],
+            dst=args["dst"],
+            intent_json=args["intent_json"],
+            gate_win=int(args.get("gate_win", 18)),
+            dry_run=bool(args.get("dry_run", False)),
+        )
     if name == "anim_gate_check":
         return anim_ops.anim_gate_check(
             asset=args["asset"],
@@ -235,6 +266,14 @@ def handle_tool_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
     raise KeyError(f"Unknown tool: {name}")
 
 
+def _out_dir() -> Path | None:
+    """Where full tool results go (details path is returned in the reply)."""
+    try:
+        return anim_ops._repo_root(None) / "Saved" / "AnimPipeline" / "mcp_out"
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _write_msg(msg: dict[str, Any]) -> None:
     sys.stdout.write(json.dumps(msg, ensure_ascii=False) + "\n")
     sys.stdout.flush()
@@ -271,7 +310,7 @@ def process_request(req: dict[str, Any]) -> dict[str, Any] | None:
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "content": [{"type": "text", "text": json.dumps(res, indent=2, ensure_ascii=False)}],
+                    "content": [{"type": "text", "text": compact.compact_reply(tname, res, _out_dir())}],
                     "isError": not bool(res.get("ok", True)),
                 },
             }

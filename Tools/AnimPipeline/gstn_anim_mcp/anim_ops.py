@@ -482,6 +482,85 @@ def _snapshot_asset(repo: Path, asset: str) -> Path | None:
     return snap_dir if copied else snap_dir
 
 
+# parameter -> (envelope channel in geom_intent_ue.compute_envelopes, bones it moves, unit). Mirrors main() of the engine.
+PARAM_PLAN: dict[str, tuple[str, tuple[str, ...], str]] = {
+    "pelvis_fwd_cm": ("w3", ("pelvis",), "cm"),
+    "pelvis_drop_cm": ("w3", ("pelvis",), "cm"),
+    "knee_drop": ("w3", ("foot_l", "foot_r", "calf_l", "calf_r"), "ratio"),
+    "spine_lean_pivot_deg": ("piv_lean", ("spine_01", "spine_02", "spine_03"), "deg"),
+    "spine_lean_run_deg": ("run_lean", ("spine_01", "spine_02", "spine_03"), "deg"),
+    "torso_bank_deg": ("bank", ("spine_01", "spine_02", "spine_03"), "deg"),
+    "head_lift_deg": ("head", ("neck_01", "head"), "deg"),
+    "lat_widen_cm": ("widen", ("foot_l", "foot_r"), "cm"),
+    "step_narrow_cm": ("widen", ("foot_l", "foot_r"), "cm"),
+    "swing_lag_cm": ("lag", ("foot_l", "foot_r"), "cm"),
+    "catch_fwd_cm": ("catch", ("foot_l", "foot_r"), "cm"),
+    "pivot_heel_deg": ("piv_foot", ("foot_l", "foot_r", "ball_l", "ball_r"), "deg"),
+    "clav_st_elev_deg": ("sh", ("clavicle_l", "clavicle_r"), "deg"),
+    "clav_pv_elev_deg": ("sh", ("clavicle_l", "clavicle_r"), "deg"),
+    "clav_open_deg": ("sh", ("clavicle_l", "clavicle_r"), "deg"),
+    "arm_pv_out_deg": ("sh", ("upperarm_l", "upperarm_r"), "deg"),
+    "arm_st_tuck_in_deg": ("arm_st_back", ("upperarm_l", "upperarm_r"), "deg"),
+    "arm_st_back_deg": ("arm_st_back", ("upperarm_l", "upperarm_r"), "deg"),
+    "arm_st_elbow_deg": ("arm_st_back", ("lowerarm_l", "lowerarm_r"), "deg"),
+    "arm_pv_fwd_deg": ("arm_pv_fwd", ("upperarm_l", "upperarm_r"), "deg"),
+    "arm_pv_elbow_deg": ("arm_pv_fwd", ("lowerarm_l", "lowerarm_r"), "deg"),
+    "arm_clr_deg": ("arm_clr", ("upperarm_l", "upperarm_r"), "deg"),
+}
+# v1 keys have no direct row: the engine maps them (map_v1_to_v2_intent); the plan runs on the mapped values.
+
+
+def _geom():
+    try:
+        import geom_intent_ue as g
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import geom_intent_ue as g
+    return g
+
+
+def plan_intent(clean: dict[str, Any], n_frames: int | None) -> dict[str, Any]:
+    """What an intent would change, with no side effects: per parameter the bones, the active clip-local frames,
+    the peak frames and the degrees (cm) actually reached at the peak after the envelope. Uses the engine's own
+    compute_envelopes, so the plan cannot drift from what is applied."""
+    g = _geom()
+    v = g.map_v1_to_v2_intent(clean)
+    assumed = n_frames is None
+    n = n_frames if n_frames is not None else (clean["frame_range"][1] + 1 if clean.get("frame_range") else 62)
+    envs = [
+        g.compute_envelopes(
+            f, n, turn_deg=v["turn_deg"], turn_side=v["turn_side"], start_from_frame=v["start_from_frame"],
+            frame_range=v["frame_range"], handoff_smooth_range=v["handoff_smooth_range"], mode=v["envelope"],
+        )
+        for f in range(n)
+    ]
+    params: dict[str, Any] = {}
+    bones: set[str] = set()
+    touched: set[int] = set()
+    for key, (chan, bone_list, unit) in PARAM_PLAN.items():
+        val = float(v.get(key, 0.0))
+        if abs(val) < 1e-9:
+            continue
+        series = [e[chan] for e in envs]
+        peak = max(series)
+        active = [f for f, x in enumerate(series) if x > 0.01]
+        if not active:
+            params[key] = {"value": val, "unit": unit, "reached": 0.0, "frames": None, "note": "envelope never active"}
+            continue
+        top = [f for f, x in enumerate(series) if x >= 0.98 * peak]
+        params[key] = {
+            "value": val, "unit": unit, "reached": round(val * peak, 2),
+            "frames": [active[0], active[-1]], "peak_frames": [top[0], top[-1]], "bones": list(bone_list),
+        }
+        bones.update(bone_list)
+        touched.update(active)
+    return {
+        "envelope": v["envelope"], "turn_side": v["turn_side"], "n_frames": n, "n_frames_assumed": assumed,
+        "frames_touched": [min(touched), max(touched)] if touched else None,
+        "bones": sorted(bones), "params": params,
+    }
+
+
 def anim_apply_intent(
     src: str,
     dst: str,
@@ -506,22 +585,18 @@ def anim_apply_intent(
                     f"(n={n_frames}); frame_range is clip-local, not the global v-frame of the capture"
                 )
 
+    if dry_run:
+        # no snapshot, no intent file, no UE: only the plan
+        return {
+            "ok": True, "dry_run": True, "src": src, "dst": dst, "validated_intent": clean,
+            "plan": plan_intent(clean, _clip_frame_count(repo, src, ue59_dir)),
+        }
+
     snap_dir = _snapshot_asset(repo, dst)
     payload = {"src": src, "dst": dst, "intent": clean}
     intent_file = repo / "Saved" / "AnimPipeline" / "runstart" / f"intent_{dst.rsplit('/', 1)[-1]}.json"
     intent_file.parent.mkdir(parents=True, exist_ok=True)
     intent_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-
-    if dry_run:
-        return {
-            "ok": True,
-            "dry_run": True,
-            "src": src,
-            "dst": dst,
-            "validated_intent": clean,
-            "intent_file": str(intent_file),
-            "snapshot_dir": str(snap_dir) if snap_dir else None,
-        }
 
     wt = Path(worktree_dir).resolve() if worktree_dir else repo
     sparse_ps1 = wt / "Tools" / "CI" / "Run-SparseAnimStep.ps1"
@@ -554,6 +629,36 @@ def anim_apply_intent(
         "snapshot_dir": str(snap_dir) if snap_dir else None,
         "stdout": (proc.stdout or "")[-1500:],
         "stderr": (proc.stderr or "")[-1000:],
+    }
+
+
+def anim_run_intent(
+    src: str,
+    dst: str,
+    intent_json: dict[str, Any] | str,
+    gate_win: int = 18,
+    root: str | Path | None = None,
+    dry_run: bool = False,
+    **apply_kwargs: Any,
+) -> dict[str, Any]:
+    """snapshot + intent + gates in one call: replaces apply_intent -> gate_check (the usual pair) with one verdict.
+
+    Conservation is checked against `src`. A failing apply stops before the gates; a failing gate leaves the result in
+    place and reports rollback=anim_rollback(dst) as the next step (the caller decides, as with the separate tools)."""
+    applied = anim_apply_intent(src, dst, intent_json, root=root, dry_run=dry_run, **apply_kwargs)
+    if dry_run or not applied.get("ok"):
+        return applied
+    gates = anim_gate_check(dst, ref_asset=src, root=root, gate_win=gate_win)
+    ok = bool(gates.get("ok"))
+    return {
+        "ok": ok,
+        "verdict": "PASS" if ok else "FAIL",
+        "src": src,
+        "dst": dst,
+        "gates": gates.get("gates"),
+        "conservation": gates.get("conservation"),
+        "apply": {k: applied.get(k) for k in ("returncode", "intent_file", "snapshot_dir")},
+        "next": "anim_inspect for review" if ok else f"anim_rollback asset={dst}",
     }
 
 
