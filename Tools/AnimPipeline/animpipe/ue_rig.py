@@ -174,6 +174,18 @@ def _seg_profile(segments, f):
 
 
 
+def _curves(spec):
+    """animpipe/curves.py inside Unreal: the bridge runs this file by path, so the package may not be on sys.path yet;
+    reloaded so an edit is seen without restarting the editor."""
+    import importlib, sys
+    try:
+        from animpipe import curves
+    except ImportError:
+        sys.path.insert(0, spec["tools_dir"])
+        from animpipe import curves
+    return importlib.reload(curves)
+
+
 # --- owner's "Manuale" layer -------------------------------------------------------------------------------------------
 # The build deletes and recreates LS_<name> from the card, so hand edits on the base section would be lost. The owner keys
 # his tweaks on an ADDITIVE section of the rig track instead (the build creates it empty and makes it the section to key):
@@ -249,7 +261,10 @@ def build(spec):
     segments [[f0, f1, profile]], part_delays {part: frames}, planted [control names], out}.
     The poses are sampled from source_anim (an existing move now; the owner's Step FBX once imported): bake the anim onto
     the rig, keep only the pose frames, shape the in-betweens with tangents per spacing profile, lag the parts, pin the
-    planted IK feet to their first key. No per-frame keys are ever written."""
+    planted IK feet to their first key.
+    spec["curve"] "tangents" (default, the old build): sparse keys, flat weighted tangents on the keys of weighted segments.
+    "spline": after the same key edits, a key on EVERY frame sampled from animpipe/curves.py (through the keys without
+    stopping; flat only on spec["hold"] frames, shifted with their part's delay); spacing profiles do not shape it."""
     rate = unreal.FrameRate(int(spec["fps_num"]), int(spec["fps_den"]))
     name = spec["name"]
     folder = spec.get("folder") or (spec["anim"].rsplit("/", 1)[0] if ("anim" in spec and "/" in spec["anim"]) else DIR)
@@ -273,6 +288,11 @@ def build(spec):
     res["keys_before"] = sum(len(c.get_keys()) for c in chans)
     planted = tuple(spec.get("planted", []))
     delays = {p: int(d) for p, d in spec.get("part_delays", {}).items() if int(d)}
+    dense = spec.get("curve", "tangents") == "spline"
+    CV = _curves(spec) if dense else None
+    hold = set(int(f) for f in spec.get("hold", []))
+    mode = spec.get("spline_mode", "monotone")
+    densified = 0
     shifted, pinned = {}, set()
     dropped = edited = blended = 0
     last = max(keep)
@@ -316,8 +336,10 @@ def build(spec):
             for k in keys[1:]:
                 if 0 < abs(k.get_value() - v0) <= tol:
                     k.set_value(v0); pinned.add(ctrl)
+        chan_d = 0
         for part, d in delays.items():
             if any(s in ctrl for s in PART_CTRLS.get(part, ())):
+                chan_d = d
                 for k in reversed(keys[1:-1]):                        # back to front: a key never lands on an unmoved one
                     f = _frame(k)
                     if f + d < last:
@@ -328,6 +350,19 @@ def build(spec):
                 break
         keys = c.get_keys()
         frames = [_frame(k) for k in keys]
+        if dense and keys:
+            span = list(range(frames[0], frames[-1] + 1))
+            vals = CV.sample(frames, [k.get_value() for k in keys], span, {h + chan_d for h in hold}, mode,
+                             angle=".Rotation." in cname)
+            by = dict(zip(frames, keys))
+            for f, v in zip(span, vals):
+                k = by.get(f)
+                if k is None:      # add_key alone lost the value on 5.x (see _apply_manual): set it again
+                    k = c.add_key(unreal.FrameNumber(f), float(v), 0.0, unreal.MovieSceneTimeUnit.DISPLAY_RATE)
+                    densified += 1
+                k.set_value(float(v))
+                k.set_interpolation_mode(unreal.RichCurveInterpMode.RCIM_LINEAR)   # a key per frame: nothing between to shape
+            continue
         for i, k in enumerate(keys):
             out_w = PROFILE_W.get(_seg_profile(segs, frames[i])) if i + 1 < len(keys) else None
             in_w = PROFILE_W.get(_seg_profile(segs, frames[i - 1])) if i else None
@@ -348,6 +383,7 @@ def build(spec):
             if in_w is not None:
                 k.set_arrive_tangent_weight(in_w[1] * (frames[i] - frames[i - 1]) * spf)
     res.update({"keys_after": sum(len(c.get_keys()) for c in chans), "pinned": sorted(pinned), "dropped": dropped, "edited": edited, "blended": blended,
+                "curve": "spline" if dense else "tangents", "densified": densified,
                 "shifted": {p: sorted(v) for p, v in shifted.items()}})
     res["manual"] = _apply_manual(track, end, manual, spec.get("manual_out"))
     skel = unreal.load_asset(spec["source_anim"]).get_editor_property("skeleton")
