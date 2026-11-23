@@ -1,5 +1,25 @@
 [
-  {"name": "stand_run_warmup", "getup": "jump", "follow": "run"},
-  {"name": "roll_held_run", "getup": "facing", "follow": "run", "hold": true},
-  {"name": "rollback_held_run", "getup": "against", "follow": "run", "hold": true}
+  {
+    "name": "stand_run_warmup",
+    "getup": "jump",
+    "follow": "run"
+  },
+  {
+    "name": "roll_held_run",
+    "getup": "facing",
+    "follow": "run",
+    "hold": true
+  },
+  {
+    "name": "rollback_held_run",
+    "getup": "against",
+    "follow": "run",
+    "hold": true
+  },
+  {
+    "name": "roll_a45_run",
+    "getup": "facing",
+    "follow": "run",
+    "angle": 45
+  }
 ]
