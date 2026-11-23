@@ -24,6 +24,8 @@ SEG = [('thigh_MainPoint_%s', 'calf_MainPoint_%s'), ('calf_MainPoint_%s', 'foot_
        ('upperarm_MainPoint_%s', 'lowerarm_MainPoint_%s'), ('lowerarm_MainPoint_%s', 'hand_MainPoint_%s')]
 JIT = ['lowerarm_MainPoint_%s', 'hand_MainPoint_%s', 'calf_MainPoint_%s', 'foot_MainPoint_%s']
 
+HEAD_STEP_MAX = 12   # deg/frame: head pitch relative to the neck must not snap
+
 
 def ry(v, a):
     c, s_ = np.cos(a)[:, 0], np.sin(a)[:, 0]
@@ -173,6 +175,22 @@ def main():
         tag, win - 1, gw.min(), int(gw.argmin()), rep['gap_min_tail'], rep['gap_loop_min'], rep.get('toe_l'), rep.get('toe_r'), rep['toe_range_loop']))
     print('bone worst %s%% %s; jitter max %s' % (rep['bone_worst'][0], rep['bone_worst'][1],
           max(((v[0], k) for k, v in rep.items() if k.startswith('jit_')), key=lambda x: x[0])))
+    if all(k in J for k in ('spine_05', 'neck_01', 'head', 'thigh_MainPoint_l', 'thigh_MainPoint_r')):   # head/neck gate (anim-mcp v2)
+        fw = []
+        for u in range(n):
+            lat = J['thigh_MainPoint_l'][u] - J['thigh_MainPoint_r'][u]; lat[UP] = 0
+            fw.append(np.array([lat[2], 0.0, -lat[0]]) / max(np.linalg.norm(lat), 1e-9))
+        # character frame sign is arbitrary: use the head-fwd vs spine direction to orient, then measure |pitch| and its frame-to-frame step
+        pit = []
+        for u in range(n):
+            d1 = J['neck_01'][u] - J['spine_05'][u]; d2 = J['head'][u] - J['neck_01'][u]
+            pit.append(np.degrees(np.arctan2(np.dot(d2, fw[u]), d2[UP]) - np.arctan2(np.dot(d1, fw[u]), d1[UP])))
+        pit = np.array(pit)
+        step = np.abs(np.diff(pit))
+        step = np.minimum(step, 360 - step)
+        rep['head_pitch_rel_neck'] = [round(float(np.abs(pit).min()), 1), round(float(np.abs(pit).max()), 1)]
+        if len(step) and step.max() > HEAD_STEP_MAX:
+            fails.append('head pitch step f%d %.0f>%d deg/frame' % (int(step.argmax()) + 1, step.max(), HEAD_STEP_MAX))
     print('GATES: OK' if not fails else 'GATES: FAIL ' + '; '.join(fails[:4]))
 
 

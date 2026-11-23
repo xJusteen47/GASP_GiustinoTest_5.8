@@ -304,8 +304,19 @@ def anim_inspect(
                     v2 = _norm3(_sub3(ha, lo))
                     efl_lst.append(math.degrees(math.acos(max(-1.0, min(1.0, _dot3(v1, v2))))))
 
+        head_pitch: list[float] = []   # neck->head vs spine_05->neck, sagittal plane, + = chin up (head tilts back)
+        head_fwd_cm: list[float] = []  # head forward of spine_05, character frame
+        if all(k in joints and len(joints[k]) > wb for k in ("spine_05", "neck_01", "head")):
+            for f in range(wa, wb + 1):
+                d1 = _sub3(joints["neck_01"][f], joints["spine_05"][f])
+                d2 = _sub3(joints["head"][f], joints["neck_01"][f])
+                a1 = math.atan2(_dot3(d1, fwd_vecs[f]), d1[1])
+                a2 = math.atan2(_dot3(d2, fwd_vecs[f]), d2[1])
+                head_pitch.append(-math.degrees(a2 - a1))
+                head_fwd_cm.append(_dot3(_sub3(joints["head"][f], joints["spine_05"][f]), fwd_vecs[f]))
         return {
             "frame_range": [wa, wb],
+            "head_neck": {"head_pitch_rel_neck_deg": _stats(head_pitch), "head_fwd_of_spine5_cm": _stats(head_fwd_cm)},
             "torso_angles_deg": {
                 "lean": _stats(lean),
                 "lean_local_deg": _stats(lean_local),
@@ -372,6 +383,7 @@ def anim_inspect(
             "shoulder_l": _stats(_ys("upperarm_MainPoint_l")),
             "shoulder_r": _stats(_ys("upperarm_MainPoint_r")),
         },
+        "head_neck": main_summary["head_neck"],
         "torso_angles_deg": main_summary["torso_angles_deg"],
         "arm_angles_deg": main_summary["arm_angles_deg"],
         "jitter_max": main_summary["jitter_max"],

@@ -96,6 +96,8 @@ try {
 
     if ($assetsCsv) {
         $rcj = Join-Path $ue59 'Tools\AnimPipeline\cards\runstart\runstart_clip_joints_ue.py'
+        $rcjWt = Join-Path $wt 'Tools\AnimPipeline\cards\runstart\runstart_clip_joints_ue.py'   # the worktree dump script wins (head/neck keys)
+        if (Test-Path -LiteralPath $rcjWt) { $rcj = $rcjWt }
         $env:RCJ_ASSETS = $assetsCsv
         $rcjLog = Join-Path $ue59 "Saved\Logs\ci\sparse_${Tag}_rcj.log"
         $rcjUe = Join-Path $ue59 "Saved\Logs\ci\sparse_${Tag}_rcj_ue.log"

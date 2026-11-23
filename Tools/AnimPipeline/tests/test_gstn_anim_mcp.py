@@ -371,6 +371,23 @@ class TestGstnAnimMcp(unittest.TestCase):
         self.assertAlmostEqual(mapped["knee_drop"], 6.0 / 25.0)
         self.assertEqual(mapped["pivot_heel_deg"], 10.0)
 
+    def test_anim_inspect_head_neck_metrics(self) -> None:
+        n = 20
+        j = _make_fake_joints(n)["joints"]
+        j["root"] = [[0.0, 0.0, -float(i)] for i in range(n)]
+        j["spine_05"] = [[0.0, 150.0, -float(i)] for i in range(n)]
+        j["neck_01"] = [[0.0, 160.0, -float(i)] for i in range(n)]
+        j["head"] = [[0.0, 170.0, -float(i)] for i in range(n)]   # straight: pitch ~0
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td) / "Saved" / "AnimPipeline" / "runstart"
+            d.mkdir(parents=True)
+            (d / "joints_AS_hn.json").write_text(json.dumps({"fps": 30, "joints": j}), encoding="utf-8")
+            res = anim_ops.anim_inspect("AS_hn", root=td)
+            self.assertTrue(res["ok"])
+            hn = res["head_neck"]["head_pitch_rel_neck_deg"]
+            self.assertIsNotNone(hn)
+            self.assertAlmostEqual(abs(hn["max"]), 0.0, places=3)
+
     def test_anim_inspect_v2_metrics_and_splits(self) -> None:
         n = 40
 
