@@ -88,6 +88,14 @@ struct FGSTN_AttackerHit
 
 	bool bRicochet = false;
 
+	/**
+	 * The defence steps' verdict on the hit as the attacker predicted it (FGSTN_HitOutcome::bBlocked, bParried, bClank): read by the hit bounce
+	 * (a move that bounces off a target does not bounce off a shield). Simulation facts of the attacker's own pipeline run, the same on every machine
+	 */
+	bool bBlocked = false;
+	bool bParried = false;
+	bool bClank = false;
+
 	/** The hitbox group (index into the timeline's Tracks) of the hitbox that landed: whose strike settings and recoil a ricochet uses */
 	int32 TrackIndex = INDEX_NONE;
 

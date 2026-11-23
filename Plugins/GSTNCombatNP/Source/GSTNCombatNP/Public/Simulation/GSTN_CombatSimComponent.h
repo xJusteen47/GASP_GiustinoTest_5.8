@@ -1114,6 +1114,7 @@ private:
 	// IGSTN_CombatTickServices
 	virtual bool StartForcedTimeline(const UClass* AbilityClass) override;
 	virtual const FGSTN_StepSnapshot* GetViewSnapshot() override;
+	virtual bool CancelRunningTimeline() override;
 
 	/** ResolveAttackerSnapshot at most once per tick for the frame's step snapshot (the attacker step and the extensions share it) */
 	const FGSTN_StepSnapshot* ResolveViewOnce(const FNetSimTimeStep& TimeStep, const FGSTN_StepSnapshot* Shared);

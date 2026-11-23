@@ -1975,6 +1975,16 @@ bool UGSTN_CombatSimComponent::StartForcedTimeline(const UClass* AbilityClass)
 	return true;
 }
 
+bool UGSTN_CombatSimComponent::CancelRunningTimeline()
+{
+	if (!ServiceSync || ServiceSync->Core.ActionState != EGSTN_ActionState::InTimeline)
+	{
+		return false;
+	}
+	FGSTN_CombatTimelineLogic::CancelForOtherCommand(ServiceSync->Core, ServiceFrame);
+	return true;
+}
+
 void UGSTN_CombatSimComponent::StartTimelineEntry(FGSTN_CombatSyncCore& Core, int32 Frame, const UGSTN_CombatTableSet& Set, int32 Entry, const FGSTN_TrackHookEnvironment* Environment)
 {
 	// What step 8 does for a command, source Forced; the ability system's pre-tick of the frame activates the ability (ActivateEntry), which finds its

@@ -84,4 +84,18 @@ public:
 	/** Authoring helper: a copy of Data without any Landing track */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
 	static FGSTN_CombatTimelineData RemoveLandingTracks(const FGSTN_CombatTimelineData& Data);
+
+	/**
+	 * Authoring helper: a copy of Data whose Hit Bounce track (FGSTN_TimelineTrack_HitBounce, owner 2026-11-23) is the one given: hits on
+	 * [StartFrame, EndFrame) bounce the user. A track of that type already there is replaced, so a setup script can run again. BounceMove may be
+	 * null (the move just ends on the bounce)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
+	static FGSTN_CombatTimelineData SetHitBounceTrack(const FGSTN_CombatTimelineData& Data, int32 StartFrame, int32 EndFrame, int32 MaxConsecutiveBounces = 2,
+		float ApexHeightCm = 150.f, int32 RiseFrames = 18, float BackDistanceCm = 40.f, int32 ActionableFrames = 24, bool bBounceOnBlock = false,
+		TSoftClassPtr<UObject> BounceMove = nullptr);
+
+	/** Authoring helper: a copy of Data without its Hit Bounce track */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
+	static FGSTN_CombatTimelineData RemoveHitBounceTracks(const FGSTN_CombatTimelineData& Data);
 };
