@@ -25,7 +25,6 @@ identici senza le mie modifiche (git stash: 168/11; file locali mancanti, pwsh).
   (correggere + ritarare su K7 con log) o se K7 ha il difetto (correggere in K8 o esenzione dell'owner). Non diagnosticabile
   in cloud: manca Saved/AnimPipeline/refs/ufd/OverlordDropkick_timing.csv.
 - Merge con 1uvcac (life.py): conflitto atteso in checks.py vicino a stop_and_go (tenere entrambi: life + hold_reason).
-- Pacchetto mai provato su una cattura vera; prima cattura: passare identity e key_frames, elencare tutte le clip.
-- Copie skill (project files, account) e voce INDICE-PROGETTO: al merge.
+- Copie skill (project files, account) e voce INDICE-PROGETTO al merge. Pacchetto mai provato su una cattura vera; prima cattura: passare identity e key_frames, elencare tutte le clip.
 SUBAGENTI: 0
 COSTO: ~4,5 $ (stima) | 0 minuti desktop | 0 token review
