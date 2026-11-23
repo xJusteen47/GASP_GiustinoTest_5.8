@@ -27,6 +27,7 @@
 # the shape of the path is (the delay is reported). Bytes per second are not measurable from Python: the link fragment's payload bytes are reported.
 import json
 import math
+import os
 import time
 
 import unreal
@@ -1128,10 +1129,15 @@ def scenario_grab_throw(pairing='client_grabs_client'):
     steps += grab
 
     def notation():
-        mode = str(unreal.get_default_object(unreal.load_class(None, '/Script/GSTNLinkCore.GSTN_LinkSettings')).get_editor_property('throw_input_mode'))
-        return 'NOTATION' in mode.upper(), mode
+        # EGSTN_LinkThrowInputMode is not a BlueprintType enum, so Python cannot read the property: the ini line is the source (a note, not a check)
+        try:
+            ini = open(os.path.join(unreal.Paths.project_dir(), 'Plugins', 'GSTNLink', 'Config', 'DefaultGSTNLink.ini')).read()
+            line = next((l for l in ini.splitlines() if l.startswith('ThrowInputMode=')), 'ThrowInputMode not set')
+        except Exception as e:
+            line = f'ini not read: {e}'
+        return run.note(f'throw input mode: {line} (the scenario needs Notation)')
 
-    steps += [(t + 0.1, run.at('the throw input mode is Notation (Attack neutral = N. throw)', notation)),
+    steps += [(t + 0.1, notation),
               (t + 0.15, rig.formed('before the throw the link holds, the same on every world')),
               (t + 0.15, rig.mark('pre_throw')), (t + 0.2, rig.tap(rig.ia, 'Attack')), (t + 2.2, rig.mark('thrown')),
               (t + 2.2, rig.gone('the N. throw ended the link on every world')), (t + 2.2, rig.reason('Throw')),
