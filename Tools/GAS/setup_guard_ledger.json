@@ -92,6 +92,10 @@
    "script": "setup_dropkick_hitboxes",
    "sha256": "e947938555e72e56e00ac4712535f86d07e9d4383b0e48197a3ad2331c650e47"
   },
+  "/Game/GASNPPTest/Combat/Overlord/TL_Overlord_DropkickTBK8": {
+   "script": "setup_dropkick_hitboxes",
+   "sha256": "09010b68e1ad6ce86253ce77a661868b5806fc73556071afbf348224a7a5e354"
+  },
   "/Game/GASNPPTest/Combat/Overlord/TL_Overlord_Jab1": {
    "script": "seed integ-cp3 069287f7",
    "sha256": "3767824ab7ad97ff1279caefe68fb70b92e68228feefa05322690f168c0f7f95"

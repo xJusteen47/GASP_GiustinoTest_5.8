@@ -1,0 +1,161 @@
+{
+ "verdict": "FAIL",
+ "gates": {
+  "k8": {
+   "ok": false,
+   "asset": "AS_OverlordDropkick_StartupK8",
+   "intent_hash": "4dc799547b1c79e8",
+   "checks": [
+    {
+     "check": "report_pass",
+     "ok": false,
+     "msg": "no run_intent report for this variant: run anim_run_intent first"
+    },
+    {
+     "check": "dry_run_exists",
+     "ok": false,
+     "msg": "no dry_run with intent hash 4dc799547b1c79e8: run anim_run_intent dry_run=true first"
+    },
+    {
+     "check": "hitbox_fresh",
+     "ok": false,
+     "msg": "no Saved/AnimR2/*hitboxes*.json names AS_OverlordDropkick_StartupK8: rerun the hitbox script"
+    },
+    {
+     "check": "readable",
+     "ok": true,
+     "msg": "ok",
+     "window": [
+      0,
+      12
+     ],
+     "peak_cm": 85.23,
+     "peak_cm_joint": "hand_MainPoint_r",
+     "peak_cm_frame": 9,
+     "peak_deg": 132.6,
+     "peak_deg_segment": "upperarm_MainPoint_r>lowerarm_MainPoint_r",
+     "peak_deg_frame": 5
+    },
+    {
+     "check": "attempts",
+     "ok": true,
+     "msg": "0/2 attempts used"
+    }
+   ],
+   "error": "no run_intent report for this variant: run anim_run_intent first; no dry_run with intent hash 4dc799547b1c79e8: run anim_run_intent dry_run=true first; no Saved/AnimR2/*hitboxes*.json names AS_OverlordDropkick_StartupK8: rerun the hitbox script",
+   "card_report": {
+    "ok": false,
+    "source": "card",
+    "asset": "AS_OverlordDropkick_StartupK8",
+    "intent_hash": "4dc799547b1c79e8",
+    "checks": [
+     {
+      "check": "card_names_asset",
+      "ok": true,
+      "msg": "ok"
+     },
+     {
+      "check": "animpipe_check_pass",
+      "ok": false,
+      "msg": "animpipe check is FAIL (blocking: legibility, contact_faf, hitstop_snap)",
+      "blocks": {
+       "legibility": false,
+       "bone_lengths": true,
+       "clearance": true,
+       "contact_faf": false,
+       "planted_feet": true,
+       "fists": true,
+       "source_fidelity": true,
+       "hitstop_snap": false,
+       "co_motion": true
+      }
+     },
+     {
+      "check": "check_fresh",
+      "ok": true,
+      "msg": "ok"
+     }
+    ],
+    "error": "animpipe check is FAIL (blocking: legibility, contact_faf, hitstop_snap)"
+   }
+  },
+  "k8_hitbox": {
+   "ok": false,
+   "asset": "AS_OverlordDropkick_StartupK8",
+   "intent_hash": "4dc799547b1c79e8",
+   "checks": [
+    {
+     "check": "report_pass",
+     "ok": false,
+     "msg": "no run_intent report for this variant: run anim_run_intent first"
+    },
+    {
+     "check": "dry_run_exists",
+     "ok": false,
+     "msg": "no dry_run with intent hash 4dc799547b1c79e8: run anim_run_intent dry_run=true first"
+    },
+    {
+     "check": "hitbox_fresh",
+     "ok": false,
+     "msg": "no Saved/AnimR2/*hitboxes*.json names AS_OverlordDropkick_StartupK8: rerun the hitbox script"
+    },
+    {
+     "check": "readable",
+     "ok": true,
+     "msg": "ok",
+     "window": [
+      0,
+      12
+     ],
+     "peak_cm": 85.23,
+     "peak_cm_joint": "hand_MainPoint_r",
+     "peak_cm_frame": 9,
+     "peak_deg": 132.6,
+     "peak_deg_segment": "upperarm_MainPoint_r>lowerarm_MainPoint_r",
+     "peak_deg_frame": 5
+    },
+    {
+     "check": "attempts",
+     "ok": true,
+     "msg": "0/2 attempts used"
+    }
+   ],
+   "error": "no run_intent report for this variant: run anim_run_intent first; no dry_run with intent hash 4dc799547b1c79e8: run anim_run_intent dry_run=true first; no Saved/AnimR2/*hitboxes*.json names AS_OverlordDropkick_StartupK8: rerun the hitbox script",
+   "card_report": {
+    "ok": false,
+    "source": "card",
+    "asset": "AS_OverlordDropkick_StartupK8",
+    "intent_hash": "4dc799547b1c79e8",
+    "checks": [
+     {
+      "check": "card_names_asset",
+      "ok": true,
+      "msg": "ok"
+     },
+     {
+      "check": "animpipe_check_pass",
+      "ok": false,
+      "msg": "animpipe check is FAIL (blocking: legibility, contact_faf, hitstop_snap)",
+      "blocks": {
+       "legibility": false,
+       "bone_lengths": true,
+       "clearance": true,
+       "contact_faf": false,
+       "planted_feet": true,
+       "fists": true,
+       "source_fidelity": true,
+       "hitstop_snap": false,
+       "co_motion": true
+      }
+     },
+     {
+      "check": "check_fresh",
+      "ok": true,
+      "msg": "ok"
+     }
+    ],
+    "error": "animpipe check is FAIL (blocking: legibility, contact_faf, hitstop_snap)"
+   }
+  }
+ }
+}

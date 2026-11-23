@@ -504,7 +504,9 @@ def _row(frame, tapped, extra=None):
     if st.get('cam_rows'):
         row['cams'] = st.pop('cam_rows')
     try:   # skill-gaps 2026-11-23: the hitbox shapes gstn.Combat.Debug.Hitboxes draws (world, on the mesh), drawn later on the pictures
-        _hb = g.comps(g.worlds()[0])[h._key(0)].get_debug_hitbox_shapes()
+        # k8 capture 2026-11-23: g.comps() holds the test component, not the combat one (AttributeError on every frame)
+        _cs = _pawn().get_component_by_class(unreal.GSTN_CombatSimComponent)
+        _hb = _cs.get_debug_hitbox_shapes() if _cs else ''
         if _hb and _hb != '[]':
             row['hb'] = json.loads(_hb)
     except Exception as e:   # an editor built before GetDebugHitboxShapes: no shapes, the grid says so

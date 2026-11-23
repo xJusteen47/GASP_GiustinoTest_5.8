@@ -121,7 +121,7 @@ for k, d in PEL.items():
     body[k]["pelvis"]["rot"] = K6.add(body[k]["pelvis"]["rot"], [d, 0, 0])
 
 k8 = {}
-for k, (drift, pre) in {0: (0.0, 0.0), 1: (0.5, 0.0), 2: (1.0, 0.0), 4: (1.5, 0.0), 7: (2.0, 0.0), 9: (2.0, 1.0)}.items():
+for k, (drift, pre) in {0: (0.0, 0.0), 1: (1.5, 0.0), 2: (3.0, 0.0), 4: (5.0, 0.0), 7: (7.5, 0.0), 9: (8.0, 1.5)}.items():
     k8[k] = goal_post(body[k], drift, pre)
 fold_pose, FJ, FTERMS, FX = wide_fold(hump(K6.arms_of(K7.k7[11], body[11]), shrug=0.0))
 k8[11] = hump(fold_pose, neck=0.0)          # shrug after the fit (the fit owns the clavicle yaw); the neck is already sunk
@@ -133,7 +133,7 @@ k8[10] = hump(A._lerp(goal_post(body[9]), k8[11], 0.5), shrug=0.0, neck=0.0)
 for s, sg, dz in (("l", 1, E("K8_BD_DZ", 6.0)), ("r", -1, -E("K8_BD_DZ", 6.0))):
     set_arm(k8[10], s, [sg * BD["hx"], BD["hy"], BD["hz"] + dz], [sg * BD["ex"], BD["ey"], BD["ez"] + dz])
 k8[14] = K7.k7[14]; k8[15] = K7.k7[15]
-SPACING = {0: None, 1: "arrive_1_2", 2: "hold_recoil", 4: "hold_recoil", 7: "hold_recoil", 9: "hold_recoil", 10: "arrive_1_2",
+SPACING = {0: None, 1: "arrive_1_2", 2: "limb_led_recovery", 4: "limb_led_recovery", 7: "limb_led_recovery", 9: "hold_recoil", 10: "arrive_1_2",
            11: "charge_long", 14: "hold_recoil", 15: "hold_recoil"}
 NAMES = {0: "goalpost_in", 1: "goalpost", 2: "goalpost_hold", 4: "goalpost_ball", 7: "goalpost_charge", 9: "goalpost_last",
          10: "close_breakdown", 11: "closed_doom", 14: "smear", 15: "thrust_end"}
