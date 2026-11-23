@@ -76,3 +76,4 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-23,Anim skill gaps K7,anim-skill-gaps-k7,cloud,claude,opus-medium,0,0,3.5,,6 fix skill (card gate, kit per run, hitbox in cattura, allineamento, silhouette palla); C++ non compilato
 2026-11-23,Dropkick K8 Doom,dropkick-k8-1,portatile,claude,opus-medium,35,0,8,,K8 catturata ASSERT OK; build jcugce OK; hitbox in cattura rotte (fix non verificato)
 2026-11-23,Dropkick K8 giro 2,dropkick-k8-2,portatile,claude,opus-medium,25,0,2.5,,giro 2 catturato ASSERT OK; hitbox in cattura verificate
+2026-11-24,Dropkick K8 diagnosi scatti,dropkick-k8-3-diagnosi,portatile,claude,opus-medium,0,0,0.8,,causa comune K7/K8: tangenti piatte su ogni chiave del build; cattura OK
