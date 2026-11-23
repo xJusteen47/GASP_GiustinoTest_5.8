@@ -25,5 +25,6 @@ Branch `claude/skin-cosmetici-ricerca`, base `feature/gas-npp-5.8` (a5b2095). Th
 ## Seguito
 Nessun thread finché l'owner non sblocca (coda: prima skill di animazione e architettura skin). F0-F2 stimati 16-26 $ (cache su disco +1-2 $).
 
+- 11-23: owner accetta latenza per i giocatori remoti: costruzione asincrona con placeholder "amorfo" (sezione 2c).
 SUBAGENTI: nessuno
-COSTO: ~3 $ | 0 min desktop | 0 token review
+COSTO: ~3,5 $ | 0 min desktop | 0 token review

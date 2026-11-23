@@ -29,7 +29,7 @@ quindi niente bake per coppia arma/tema; il bake resta solo come cache opzionale
 solo esempi di cosa si intende, non nomi da usare.
 
 **2. Quando si costruisce l'oggetto decorato (nuova decisione, idea dell'owner sull'armadietto)**
-- **A (consigliata)**: un solo assemblatore che fonde pezzi e spline in una mesh per oggetto, lanciato in due momenti fuori dalla partita: **all'armadietto** quando il giocatore salva il loadout (salvato in una cache locale su disco) e **nel caricamento della partita** per i loadout degli altri giocatori, che arrivano solo come ID. In partita zero costo di costruzione. Vedi 2c.
+- **A (consigliata)**: un solo assemblatore che fonde pezzi e spline in una mesh per oggetto, lanciato in due momenti fuori dalla partita: **all'armadietto** quando il giocatore salva il loadout (salvato in una cache locale su disco) e **in asincrono per i loadout degli altri giocatori** (arrivano solo come ID), dal caricamento in poi e anche per chi entra a partita iniziata, con un effetto "amorfo" che maschera l'attesa. Nessun blocco. Vedi 2c.
 - B: solo armadietto. Non basta in multiplayer: i loadout degli altri non passano dal tuo armadietto, quindi servirebbe comunque la costruzione al caricamento o il download di mesh (pesante).
 - C: solo runtime puro all'equipaggiamento, anche in partita. Più semplice, ma qualche ms nel momento sbagliato e nessuna cache su disco.
 
@@ -134,6 +134,19 @@ solo con quello che il giocatore usa davvero.
 **Multiplayer**: viaggia solo il loadout come ID (già previsto, sezione 5). Ogni client costruisce in locale le mesh che
 vede; l'assemblatore dev'essere deterministico (stesso input, stessa mesh) così tutti vedono la stessa cosa. È cosmetica:
 se un client non ha ancora finito, mostra il fallback senza effetti sul gioco. Il server dedicato non costruisce niente.
+
+**Latenza accettata per i giocatori remoti (owner, 2026-11-23)**: un po' di ritardo sulle skin di chi arriva va bene. Quindi
+la costruzione per i loadout altrui **non deve bloccare il caricamento**: parte in asincrono e, finché non è pronta, l'oggetto
+mostra un **effetto "amorfo"** che maschera l'attesa, poi passa alla mesh finita con una transizione. Vale uguale per chi
+entra a partita iniziata, che smette di essere un caso a parte.
+- Placeholder: l'arma base (o la sua silhouette) con un materiale amorfo del tema (rumore animato, dissolvenza con bordo
+  emissivo) e, facoltativo, poche particelle Niagara; costo minimo, nessuna mesh nuova.
+- Transizione: dissolvenza mascherata (dither o bordo emissivo) da placeholder a mesh finita, ~0,3-0,6 s, stile dell'effetto
+  da decidere con l'owner come le altre VFX (oggi in pausa).
+- Silhouette e hitbox non cambiano durante l'attesa: il placeholder usa la forma dell'arma base, quindi la portata letta dal
+  giocatore resta vera.
+- Coda di costruzione con priorità: prima i personaggi vicini e in vista, al massimo N oggetti per frame, così un ingresso
+  di molti giocatori non crea picchi.
 
 **Raccomandazione**: decisione 2 opzione A (armadietto + caricamento, stesso assemblatore). Il runtime puro resta solo
 come rete di sicurezza per chi entra a partita in corso. Lo si aggiunge senza costo di progetto in più rispetto al runtime
