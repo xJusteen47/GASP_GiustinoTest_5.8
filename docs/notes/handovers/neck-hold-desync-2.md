@@ -23,5 +23,10 @@ OBIETTIVO: campo del Mover che riconcilia con la presa al collo, causa, fix. Bra
 - Dato nuovo, stessa sessione H: fps dell'editor 11,5/12 col collo contro 17,9/16,9 senza (numeri di frame tra `play setup` e `timeline done` nei .ue.log). Col collo il frame costa ~30 % in più; con anticipo di ~100 frame ogni rollback risimula ~100 frame, quindi un primo errore innesca la cascata (fps giù, input in ritardo, altri rollback).
 - RunStage riconcilia anche da fermo e PRIMA della presa (`SinceRelease` locale 6 contro autorità 33): sintomo di frame saltati dal server, c'è anche senza collo.
 - Terzo giro sullo stesso obiettivo: per la regola 5 serve una DIAGNOSI DI SISTEMA. Proposta: una traccia Unreal Insights (`-trace=cpu,frame` + `np` stat) di una run col collo e una senza, ~10 min fisso, per trovare cosa costa il 30 % (presentazione del preso sulla mano viva? hurtbox piazzata?).
+## Giro 4: traccia Insights (fisso, ~4 min editor)
+- CORREZIONE: il "30 % di frame in più" del giro 3 era un errore di misura (il numero di frame nei log UE è modulo 1000). Traccia `Saved/Profiling/neck/T-{neck,noneck}.utrace`, export GameThread (`UnrealInsights -ExecOnAnalysisCompleteCmd=TimingInsights.ExportTimerStatistics`): Frame 5704 col collo contro 5789 senza in ~80 s (~70 fps entrambi), FrameTime 79,99 contro 79,87 s. Nessun timer di gioco costa di più col collo.
+- L'unica differenza grande è WinPumpMessages 5,3 s contro 0,04 s: messaggi di Windows (attività esterna sul PC), non il gioco. Rollback NP 21 contro 17.
+- In queste due run: camminata 5 rollback col collo (3 forzati) contro 4 (2 forzati), 0 buchi di input in entrambe: la cascata non si è presentata.
+- Lettura: la cascata (buchi di input, anticipo oltre la storia) sembra legata a intoppi della macchina (carico esterno 45 % CPU, G con 6054 buchi a macchina carica), non a un costo della presa al collo. Il legame col collo resta statistico (H: 57 buchi contro 0) e non spiegato. Prossimo passo: N=5 per lato a macchina scarica (owner fuori dal PC) prima di altro codice.
 SUBAGENTI: 0
-COSTO: ~5,5 $ (giro 2 ~4 $, giro 3 ~1,5 $) | ~22 min desktop | 0 token review
+COSTO: ~7,5 $ (giro 2 ~4, giro 3 ~1,5, giro 4 ~2) | ~26 min desktop | 0 token review
