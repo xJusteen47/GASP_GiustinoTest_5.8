@@ -18,5 +18,10 @@ OBIETTIVO: campo del Mover che riconcilia con la presa al collo, causa, fix. Bra
 ## Warning con 3 PIE (riepilogo in `Saved/Logs/netgrab/warnings-3pie.txt`, run H-neck)
 - Legati al desync: Gap in input stream (57), Lag Compensation Rewind Exceeded (55), Ignoring server state (27), ReconcileFromInputOffset (14).
 - Rumore: ABP_GSTN_Locomotion chiamate non thread-safe (82: GetAnimOwnerBoostDashTime, RunStartTime, IsJumpSquatting, IsSkidding: servono metadati BlueprintThreadSafe), PoseSearch indici async (10), Oodle dictionaries (8), SaveGames mancanti (6), GSTNSurfaceTypes all'ingresso (4), SmartObjects S_SmartObject mancante, DA_GSTN_SurfaceResponse_Default non trovato (riordino contenuti?), enum duplicati in Python. Stima pulizia: ~1-2 $ Sonnet, 1 thread.
+## Giro 3 (stessa sera, sola lettura, 0 min desktop)
+- Ipotesi "ShouldReconcile del preso sull'anchor senza tolleranza" FALSA: `GSTN_LinkFragment.cpp:156` ha già la tolleranza `PredictedPlacementToleranceCm`, e StepNeckHold scrive l'anchor una volta sola per link. Le run F (LogFragmentReconcile) davano 2 righe di fragment per run. Nessun fix applicato.
+- Dato nuovo, stessa sessione H: fps dell'editor 11,5/12 col collo contro 17,9/16,9 senza (numeri di frame tra `play setup` e `timeline done` nei .ue.log). Col collo il frame costa ~30 % in più; con anticipo di ~100 frame ogni rollback risimula ~100 frame, quindi un primo errore innesca la cascata (fps giù, input in ritardo, altri rollback).
+- RunStage riconcilia anche da fermo e PRIMA della presa (`SinceRelease` locale 6 contro autorità 33): sintomo di frame saltati dal server, c'è anche senza collo.
+- Terzo giro sullo stesso obiettivo: per la regola 5 serve una DIAGNOSI DI SISTEMA. Proposta: una traccia Unreal Insights (`-trace=cpu,frame` + `np` stat) di una run col collo e una senza, ~10 min fisso, per trovare cosa costa il 30 % (presentazione del preso sulla mano viva? hurtbox piazzata?).
 SUBAGENTI: 0
-COSTO: ~4 $ | ~22 min desktop (2 build 1 min, 3 batch 9 min) | 0 token review
+COSTO: ~5,5 $ (giro 2 ~4 $, giro 3 ~1,5 $) | ~22 min desktop | 0 token review
