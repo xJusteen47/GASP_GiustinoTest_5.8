@@ -63,3 +63,4 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-23,worker-M1_CODE,build-base27-part1,fisso,deepseek,deepseek-v4-pro,6.02,0,,,FAIL (exit=1)
 2026-11-23,worker-M0,build-base27-ue-draft,fisso,deepseek,deepseek-flash,3,0,,,FAIL (exit=1)
 2026-11-23,anim-mcp-v2-verify-1,unit-test-only,fisso,claude,sonnet-5-5,0.5,5,,,PARZIALE (smoke/cost-test bloccati da lock _ue59)
+2026-11-23,anim-mcp-v2-verify-1,smoke+costtest-w3-chin,fisso,deepseek+claude,flash+sonnet-5-5,25,0,0.6,,PARZIALE (head non verificabile da dump)
