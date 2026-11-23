@@ -1,0 +1,5 @@
+game                   f0-22 n23 capsule 0.0 footL 0.1 footR 0.0 root-capsule max 0.0 pelvis-capsule z 4.0..4.0
+Tumble                 f23-84 n62 capsule 375.5 footL 311.0 footR 290.0 root-capsule max 17.9 pelvis-capsule z 4.1..14.6
+Knockdown              f85-135 n51 capsule 0.0 footL 8.5 footR 10.0 root-capsule max 16.3 pelvis-capsule z -76.0..6.0
+getup                  f136-161 n26 capsule 0.0 footL 58.3 footR 76.7 root-capsule max 16.3 pelvis-capsule z -76.0..2.0
+game                   f162-232 n71 capsule 0.0 footL 11.6 footR 13.6 root-capsule max 16.2 pelvis-capsule z -5.5..4.1

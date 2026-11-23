@@ -1,0 +1,32 @@
+group,move,role,damage,angle,old_base,new_bkb_cms,new_kbg,class,old_K0,new_K0,new_tier0,old_K40,new_K40,new_tier40,old_K100,new_K100,new_tier100,old_K150,new_K150,new_tier150,old_launch_from,new_launch_from,old_tumble_from,new_tumble_from,new_K100_w80,old_K100_w80,new_K100_w100,old_K100_w100,new_K100_w140,old_K100_w140,source
+Light,GA_Light_Jab,jab,3.0,30,300.0,327,40,combo,300,498,stagger,614,624,push,1400,813,launch,1850,971,launch,54,80,145,,850,1750,813,1400,759,1000,setup_test_kit_archetypes.py
+Light,GA_Light_Tilt,tilt,5.0,30,780.0,366,90,mid,780,780,launch,1597,1177,launch,3640,1772,launch,4810,2268,tumble,0,0,49,103,1888,4550,1772,3640,1599,2600,setup_playtest_launch_1117.py
+Light,GA_Light_Special,special,5.0,80,780.0,504,60,combo,780,780,launch,1597,1045,launch,3640,1442,launch,4810,1772,launch,0,0,49,155,1519,4550,1442,3640,1326,2600,setup_playtest_launch_1117.py
+Light,GA_Playtest_Strong,strong,14.0,30,1100.0,35,100,KO,1100,793,launch,2252,1801,tumble,5133,3313,tumble,6783,4573,tumble,0,0,26,40,3632,6417,3313,5133,2834,3667,setup_playtest_launch_1117.py (shared by L/M/H)
+Light,GA_Light_ThrowForward,throw_Forward,5.0,20,1300.0,1024,60,combo,1300,1300,launch,2662,1565,launch,6067,1962,tumble,8017,2292,tumble,0,0,17,76,2039,7583,1962,6067,1846,4333,setup_test_kit_archetypes.py
+Light,GA_Light_ThrowBack,throw_Back,6.0,160,1500.0,1116,80,mid,1500,1500,launch,3071,1904,tumble,7000,2508,tumble,9250,3012,tumble,0,0,9,30,2627,8750,2508,7000,2330,5000,setup_test_kit_archetypes.py
+Light,GA_Light_ThrowUp,throw_Up,4.0,90,1500.0,1191,70,mid,1500,1501,launch,3071,1766,launch,7000,2162,tumble,9250,2493,tumble,0,0,9,46,2239,8750,2162,7000,2048,5000,setup_test_kit_archetypes.py
+Light,GA_Light_ThrowDown,throw_Down,4.0,70,700.0,523,40,combo,700,700,push,1433,851,launch,3267,1078,launch,4317,1267,launch,4,14,56,291,1122,4083,1078,3267,1013,2333,setup_test_kit_archetypes.py
+Medium,GA_Medium_Jab,jab,7.0,35,550.0,259,30,combo,550,410,stagger,1126,580,push,2567,836,launch,3392,1048,launch,16,80,74,,886,3208,836,2567,760,1833,setup_test_kit_archetypes.py
+Medium,GA_Medium_Tilt,tilt,8.0,30,780.0,409,70,mid,780,781,launch,1597,1222,launch,3640,1883,tumble,4810,2434,tumble,0,0,49,93,2016,4550,1883,3640,1685,2600,setup_playtest_launch_1117.py
+Medium,GA_Medium_Special,special,10.0,30,850.0,375,80,mid,850,850,launch,1740,1455,launch,3967,2362,tumble,5242,3118,tumble,0,0,43,63,2547,4958,2362,3967,2085,2833,setup_playtest_launch_1117.py
+Medium,GA_Playtest_Strong,strong,14.0,30,1100.0,35,100,KO,1100,793,launch,2252,1801,tumble,5133,3313,tumble,6783,4573,tumble,0,0,26,40,3632,6417,3313,5133,2834,3667,shared
+Medium,GA_Medium_ThrowForward,throw_Forward,8.0,45,1700.0,1382,60,combo,1700,1701,launch,3481,2079,tumble,7933,2646,tumble,10483,3118,tumble,0,0,3,11,2759,9917,2646,7933,2476,5667,setup_test_kit_archetypes.py
+Medium,GA_Medium_ThrowBack,throw_Back,10.0,135,1900.0,1425,80,mid,1900,1900,tumble,3890,2505,tumble,8867,3412,tumble,11717,4168,tumble,0,0,0,0,3597,11083,3412,8867,3135,6333,setup_test_kit_archetypes.py
+Medium,GA_Medium_ThrowUp,throw_Up,7.0,85,1800.0,1448,70,mid,1800,1801,tumble,3686,2198,tumble,8400,2793,tumble,11100,3289,tumble,0,0,0,0,2911,10500,2793,8400,2616,6000,setup_test_kit_archetypes.py
+Medium,GA_Medium_ThrowDown,throw_Down,6.0,75,1000.0,808,40,combo,1000,1000,launch,2048,1202,launch,4667,1504,launch,6167,1756,launch,0,0,32,159,1564,5833,1504,4667,1415,3333,setup_test_kit_archetypes.py
+Heavy,GA_Heavy_Jab,jab,14.0,40,900.0,196,20,combo,900,348,stagger,1843,549,push,4200,852,launch,5550,1104,launch,0,80,39,289,915,5250,852,4200,756,3000,setup_test_kit_archetypes.py
+Heavy,GA_Heavy_Tilt,tilt,12.0,30,780.0,312,70,mid,780,781,launch,1597,1398,launch,3640,2324,tumble,4810,3096,tumble,0,0,49,67,2516,4550,2324,3640,2036,2600,setup_playtest_launch_1117.py
+Heavy,GA_Heavy_Special,special,18.0,60,1200.0,228,100,KO,1200,1200,launch,2457,2460,tumble,5600,4350,tumble,7400,5925,tumble,0,0,21,20,4763,7000,4350,5600,3730,4000,setup_playtest_launch_1117.py
+Heavy,GA_Playtest_Strong,strong,14.0,30,1100.0,35,100,KO,1100,793,launch,2252,1801,tumble,5133,3313,tumble,6783,4573,tumble,0,0,26,40,3632,6417,3313,5133,2834,3667,shared
+Heavy,GA_Heavy_ThrowForward,throw_Forward,13.0,55,2300.0,1873,60,combo,2300,2300,tumble,4710,2867,tumble,10733,3718,tumble,14183,4427,tumble,0,0,0,0,3896,13417,3718,10733,3451,7667,setup_test_kit_archetypes.py
+Heavy,GA_Heavy_ThrowBack,throw_Back,15.0,120,2500.0,1694,100,KO,2500,2501,tumble,5119,3572,tumble,11667,5178,tumble,15417,6517,tumble,0,0,0,0,5520,14583,5178,11667,4665,8333,setup_test_kit_archetypes.py
+Heavy,GA_Heavy_ThrowUp,throw_Up,11.0,89,2600.0,2159,70,mid,2600,2600,tumble,5324,3173,tumble,12133,4033,tumble,16033,4750,tumble,0,0,0,0,4210,15167,4033,12133,3768,8667,setup_test_kit_archetypes.py
+Heavy,GA_Heavy_ThrowDown,throw_Down,10.0,85,1300.0,1063,40,combo,1300,1301,launch,2662,1603,launch,6067,2057,tumble,8017,2435,tumble,0,0,17,67,2149,7583,2057,6067,1918,4333,setup_test_kit_archetypes.py
+Playtest,GA_Playtest_GroundHit,ground_hit,8.0,30,780.0,462,60,combo,780,781,launch,1597,1159,launch,3640,1726,launch,4810,2198,tumble,0,0,49,108,1839,4550,1726,3640,1556,2600,setup_playtest_launch_1117.py (root hitbox; other hitboxes keep K at 0 % too)
+Overlord,GA_Overlord_Jab1,overlord_jab1,3.0,30,150.0,315,20,combo,150,401,stagger,307,464,stagger,700,558,push,925,637,push,112,222,,,576,875,558,700,531,500,setup_overlord_jab_kit.py
+Overlord,GA_Overlord_Jab2,overlord_jab2,7.0,35,550.0,923,74,mid,550,1296,launch,1126,1716,launch,2567,2345,tumble,3392,2870,tumble,16,0,74,49,2470,3208,2345,2567,2158,1833,setup_overlord_jab_kit.py
+Overlord,GA_Overlord_Dropkick,overlord,10.0,40,400.0,0,80,mid,400,475,stagger,819,1080,launch,1867,1987,tumble,2467,2743,tumble,35,19,98,88,2172,2333,1987,1867,1710,1333,setup_overlord_dropkick_kit.py
+Overlord,GA_Overlord_DAirV9,overlord,11.0,75,450.0,9,70,mid,450,450,stagger,921,1023,launch,2100,1883,tumble,2775,2600,tumble,28,21,89,95,2060,2625,1883,2100,1618,1500,setup_overlord_dair_kit.py
+Examples,GA_Example_GroundBounce,other,12.0,-45,1900.0,1432,70,mid,1900,1901,tumble,3890,2518,tumble,8867,3444,tumble,11717,4216,tumble,0,0,0,0,3636,11083,3444,8867,3156,6333,setup_launch_impacts.py
+Examples,GA_Example_WallSplat,other,12.0,15,2000.0,1532,70,mid,2000,2001,tumble,4095,2618,tumble,9333,3544,tumble,12333,4316,tumble,0,0,0,0,3736,11667,3544,9333,3256,6667,setup_launch_impacts.py

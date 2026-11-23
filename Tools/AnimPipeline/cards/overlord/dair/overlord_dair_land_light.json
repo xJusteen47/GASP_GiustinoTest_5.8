@@ -1,0 +1,465 @@
+{
+ "move": "overlord_dair_land_light",
+ "class": "aerial",
+ "anim": "/Game/AnimPipeline/Rig/Overlord/DAir/AS_OverlordDAirLandLight",
+ "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+ "fps": 60,
+ "timing_csv": "refs/ufd/OverlordDAir_land_light_timing.csv",
+ "effector": "foot_l",
+ "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordDAirLandLight",
+ "spacing": {
+  "startup": "hold_recoil",
+  "active": "hold_recoil",
+  "recovery": "arrive_1_2"
+ },
+ "planted": [
+  "foot_l",
+  "foot_r"
+ ],
+ "exemptions": [],
+ "part_delays": {
+  "chest": 0,
+  "head": 0,
+  "forearm": 0,
+  "hand": 0
+ },
+ "_design": "Overlord DAir light landing lag (4 frames at 60 fps). Stomp lands with reduced lag: arms stay crossed on chest (Bison crossed arms from dair hold), weight drives down into a small cushion squat on both feet shoulder-width, knees over toes, head counter-pitches level. f0 contact (pelvis -6), f1 small dip (pelvis -14, spine -6, head counter +3), f2 bottom (-16, 1 cm overshoot), f3 back to pelvis -8 with spine -2 (ready to blend to idle). Ease out of contact, ease in at f3, never a snap.",
+ "poses": [
+  {
+   "name": "contact",
+   "frame": 0,
+   "source": null
+  },
+  {
+   "name": "dip",
+   "frame": 1,
+   "source": null
+  },
+  {
+   "name": "bottom_overshoot",
+   "frame": 2,
+   "source": null
+  },
+  {
+   "name": "stand_blend",
+   "frame": 3,
+   "source": null
+  }
+ ],
+ "author": {
+  "take": "AS_Pilot_OverlordDAirLandLight",
+  "frames": 4,
+  "thumb": "along",
+  "poses": {
+   "0": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      0.0,
+      -6.0
+     ],
+     "rot": [
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    "spine": [
+     4.0,
+     0.0,
+     0.0
+    ],
+    "head": [
+     -2.0,
+     0.0,
+     0.0
+    ],
+    "clavicle_l": [
+     -10.1,
+     -7.5,
+     2.4
+    ],
+    "clavicle_r": [
+     -13.8,
+     -9.1,
+     -2.5
+    ],
+    "fingers": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "wrist_out": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "arm_l": {
+     "hand": [
+      -10.4,
+      9.7,
+      -14.3
+     ],
+     "pole": [
+      38.0,
+      52.0,
+      -24.0
+     ],
+     "hand_rot": [
+      0.0,
+      -0.2,
+      0.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      4.8,
+      14.4,
+      -17.4
+     ],
+     "pole": [
+      -56.0,
+      6.0,
+      -42.0
+     ],
+     "hand_rot": [
+      1.6,
+      4.2,
+      -1.1
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      15.87,
+      6.51,
+      -69.59
+     ],
+     "pole": [
+      19.87,
+      32.51,
+      -36.59
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -20.13,
+      6.51,
+      -69.59
+     ],
+     "pole": [
+      -24.13,
+      32.51,
+      -36.59
+     ]
+    }
+   },
+   "1": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      -1.6,
+      -14.0
+     ],
+     "rot": [
+      -2.0,
+      0.0,
+      0.0
+     ]
+    },
+    "spine": [
+     -6.0,
+     0.0,
+     0.0
+    ],
+    "head": [
+     3.0,
+     0.0,
+     0.0
+    ],
+    "clavicle_l": [
+     -10.1,
+     -7.5,
+     2.4
+    ],
+    "clavicle_r": [
+     -13.8,
+     -9.1,
+     -2.5
+    ],
+    "fingers": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "wrist_out": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "arm_l": {
+     "hand": [
+      -10.4,
+      9.7,
+      -14.3
+     ],
+     "pole": [
+      38.0,
+      52.0,
+      -24.0
+     ],
+     "hand_rot": [
+      0.0,
+      -0.2,
+      0.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      4.8,
+      14.4,
+      -17.4
+     ],
+     "pole": [
+      -56.0,
+      6.0,
+      -42.0
+     ],
+     "hand_rot": [
+      1.6,
+      4.2,
+      -1.1
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      15.87,
+      10.25,
+      -61.27
+     ],
+     "pole": [
+      20.87,
+      41.25,
+      -32.17
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -20.13,
+      10.25,
+      -61.27
+     ],
+     "pole": [
+      -25.13,
+      41.25,
+      -32.17
+     ]
+    }
+   },
+   "2": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      -2.0,
+      -16.0
+     ],
+     "rot": [
+      -2.8,
+      0.0,
+      0.0
+     ]
+    },
+    "spine": [
+     -7.5,
+     0.0,
+     0.0
+    ],
+    "head": [
+     4.0,
+     0.0,
+     0.0
+    ],
+    "clavicle_l": [
+     -10.1,
+     -7.5,
+     2.4
+    ],
+    "clavicle_r": [
+     -13.8,
+     -9.1,
+     -2.5
+    ],
+    "fingers": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "wrist_out": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "arm_l": {
+     "hand": [
+      -10.4,
+      9.7,
+      -14.3
+     ],
+     "pole": [
+      38.0,
+      52.0,
+      -24.0
+     ],
+     "hand_rot": [
+      0.0,
+      -0.2,
+      0.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      4.8,
+      14.4,
+      -17.4
+     ],
+     "pole": [
+      -56.0,
+      6.0,
+      -42.0
+     ],
+     "hand_rot": [
+      1.6,
+      4.2,
+      -1.1
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      15.87,
+      11.41,
+      -59.1
+     ],
+     "pole": [
+      21.37,
+      44.07,
+      -30.97
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -20.13,
+      11.41,
+      -59.1
+     ],
+     "pole": [
+      -25.63,
+      44.07,
+      -30.97
+     ]
+    }
+   },
+   "3": {
+    "pelvis": {
+     "loc": [
+      0.0,
+      -1.0,
+      -8.0
+     ],
+     "rot": [
+      -1.0,
+      0.0,
+      0.0
+     ]
+    },
+    "spine": [
+     -2.0,
+     0.0,
+     0.0
+    ],
+    "head": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "clavicle_l": [
+     -10.1,
+     -7.5,
+     2.4
+    ],
+    "clavicle_r": [
+     -13.8,
+     -9.1,
+     -2.5
+    ],
+    "fingers": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "wrist_out": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "arm_l": {
+     "hand": [
+      -10.4,
+      9.7,
+      -14.3
+     ],
+     "pole": [
+      38.0,
+      52.0,
+      -24.0
+     ],
+     "hand_rot": [
+      0.0,
+      -0.2,
+      0.0
+     ]
+    },
+    "arm_r": {
+     "hand": [
+      4.8,
+      14.4,
+      -17.4
+     ],
+     "pole": [
+      -56.0,
+      6.0,
+      -42.0
+     ],
+     "hand_rot": [
+      1.6,
+      4.2,
+      -1.1
+     ]
+    },
+    "leg_l": {
+     "foot": [
+      15.87,
+      8.69,
+      -67.45
+     ],
+     "pole": [
+      19.87,
+      36.13,
+      -35.47
+     ]
+    },
+    "leg_r": {
+     "foot": [
+      -20.13,
+      8.69,
+      -67.45
+     ],
+     "pole": [
+      -24.13,
+      36.13,
+      -35.47
+     ]
+    }
+   }
+  }
+ },
+ "_plan": "cards/overlord/dair/overlord_dair_land_light.plan.json"
+}

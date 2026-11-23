@@ -1,0 +1,19 @@
+    0.0s cvar: gstn.Loco.Base 1
+    0.0s driver loaded: kit KIT_Test_Playtest, button Attack, out C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_ue59\Saved\LandV2\v2
+    8.0s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '1', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   20.2s kit KIT_Test_Playtest: OK
+   35.2s loadout: {"revision": 1, "kit": "KIT_Test_Playtest", "additionalWeapons": [], "kitResolved": true, "tableEntries": 26, "grantedAbilities": 20, "derivedTimelines": 0, "tableCrc": "ee58bb22"}
+   35.2s review stage: parked [], other pawns at [2975, 3264, 3500, 3579] cm
+   35.5s 3 cameras, 3 fill lights
+   37.5s ld_jump_idle: presentation events off on 11 components
+   37.5s sequence ld_jump_idle: pawn at ((0, -450, 100), 0)
+   41.6s ld_jump_idle: jump on v40, held 24 frames
+   86.9s sequence ld_jump_idle done: 400 frames, pawn z 88.1, host shots 0
+   88.8s ld_jump_fwd: presentation events off on 11 components
+   88.8s sequence ld_jump_fwd: pawn at ((0, -450, 88), 0)
+   92.8s ld_jump_fwd: jump on v40, held 24 frames
+   99.8s ld_jump_fwd: stick (0, 1, 0) on v100
+  113.5s sequence ld_jump_fwd done: 210 frames, pawn z 88.1, host shots 0
+  115.4s finish: ok
+  115.5s ASSERT: FAIL 1/1
+  115.5s ASSERT: FAIL ld_jump_idle AS_GSTN_LandStand_Retime_v2 f110-f150: weight >= 0.8 on 83% (< 90%), f111 weight 0.25, owned by BS_Relaxed_Walk_Leans 0.25

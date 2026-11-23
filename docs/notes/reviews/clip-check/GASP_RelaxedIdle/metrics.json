@@ -1,0 +1,63 @@
+{
+ "clip": "GASP_RelaxedIdle",
+ "fbx": "../../../Saved/ClipCheck/export/GASP_RelaxedIdle.fbx",
+ "fps": 30.0,
+ "frames": 302,
+ "kind": "idle",
+ "root_travel_cm": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "root_motion": false,
+ "_fwd": [
+  -0.13248813410870483,
+  -0.9911845914462117,
+  0.0
+ ],
+ "animated_bones": 76,
+ "foot_l": {
+  "min_ball_cm": -0.12,
+  "min_ball_frame": 141,
+  "min_heel_cm": -0.26,
+  "plants": [
+   {
+    "frames": [
+     1,
+     302
+    ],
+    "drift_cm": 0.08
+   }
+  ]
+ },
+ "foot_r": {
+  "min_ball_cm": -0.09,
+  "min_ball_frame": 235,
+  "min_heel_cm": -0.13,
+  "plants": [
+   {
+    "frames": [
+     1,
+     302
+    ],
+    "drift_cm": 0.08
+   }
+  ]
+ },
+ "pelvis_acc_max_cms2": 29.0,
+ "pelvis_acc_max_frame": 301,
+ "pops": [],
+ "pops_hard": {},
+ "pops_soft": {},
+ "seam_max_deg": 0.02,
+ "curves_missing": [],
+ "notifies": [
+  {
+   "name": "PoseSearchBlockTransition",
+   "time": null
+  }
+ ],
+ "fails": [],
+ "warns": [],
+ "verdict": "PASS"
+}

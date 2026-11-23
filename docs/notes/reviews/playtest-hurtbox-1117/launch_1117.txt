@@ -1,0 +1,17 @@
+created /Game/GASNPPTest/Combat/Playtest/GA_Playtest_GroundHit (child of GSTN_GA_TestHitMove)
+WPN_Test_OverlordDropkick Command.Attack.Neutral: GSTN_GA_TestHitMove -> GA_Playtest_GroundHit_C (1 bindings)
+playtest GA_Playtest_GroundHit_C: 4 hitboxes: inline [8% b500 g0 f-1 a30] [8% b500 g0 f-1 a30] [8% b500 g0 f-1 a30] [6% b500 g0 f-1 a30]  -> 4 hitboxes: inline [8% b780 g0 f-1 a30] [8% b780 g0 f-1 a30] [8% b780 g0 f-1 a30] [6% b780 g0 f-1 a30]  changed=True
+created /Game/GASNPPTest/Combat/Playtest/GA_Playtest_Special (child of GSTN_GA_TestSpecial)
+KIT_Test_Playtest Command.Special.Neutral: GSTN_GA_TestSpecial -> GA_Playtest_Special_C (1 bindings)
+playtest GA_Playtest_Special_C: not a combat move -> not a combat move changed=False
+light GA_Light_Tilt_C: 1 hitboxes: inline [5% b560 g0 f-1 a40]  -> 1 hitboxes: inline [5% b780 g0 f-1 a30]  changed=True
+light GA_Light_Special_C: 1 hitboxes: inline [5% b700 g0 f-1 a80]  -> 1 hitboxes: inline [5% b780 g0 f-1 a80]  changed=True
+created /Game/GASNPPTest/Combat/Playtest/GA_Playtest_Strong (child of GA_Example_Strong_C)
+strong GA_Playtest_Strong_C: 1 hitboxes: inline [14% b1100 g0 f-1 a40]  -> 1 hitboxes: inline [14% b1100 g0 f-1 a30]  changed=True
+KIT_Test_Light: strong -> GA_Playtest_Strong_C (2 bindings)
+medium GA_Medium_Tilt_C: 1 hitboxes: inline [8% b620 g0 f-1 a40]  -> 1 hitboxes: inline [8% b780 g0 f-1 a30]  changed=True
+medium GA_Medium_Special_C: 1 hitboxes: inline [10% b850 g0 f-1 a30]  -> 1 hitboxes: inline [10% b850 g0 f-1 a30]  changed=False
+KIT_Test_Medium: strong -> GA_Playtest_Strong_C (2 bindings)
+heavy GA_Heavy_Tilt_C: 1 hitboxes: inline [12% b700 g0 f-1 a45]  -> 1 hitboxes: inline [12% b780 g0 f-1 a30]  changed=True
+heavy GA_Heavy_Special_C: 1 hitboxes: inline [18% b1200 g0 f-1 a60]  -> 1 hitboxes: inline [18% b1200 g0 f-1 a60]  changed=False
+KIT_Test_Heavy: strong -> GA_Playtest_Strong_C (2 bindings)

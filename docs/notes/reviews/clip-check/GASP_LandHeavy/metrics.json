@@ -1,0 +1,182 @@
+{
+ "clip": "GASP_LandHeavy",
+ "fbx": "../../../Saved/ClipCheck/export/GASP_LandHeavy.fbx",
+ "fps": 30.0,
+ "frames": 115,
+ "kind": "land",
+ "root_travel_cm": [
+  0.0,
+  -223.2,
+  -700.0
+ ],
+ "root_motion": true,
+ "_fwd": [
+  0.0,
+  -1.0,
+  0.0
+ ],
+ "animated_bones": 83,
+ "foot_l": {
+  "min_ball_cm": -0.23,
+  "min_ball_frame": 57,
+  "min_heel_cm": -0.05,
+  "plants": [
+   {
+    "frames": [
+     31,
+     44
+    ],
+    "drift_cm": 0.97
+   },
+   {
+    "frames": [
+     50,
+     73
+    ],
+    "drift_cm": 1.46
+   },
+   {
+    "frames": [
+     79,
+     115
+    ],
+    "drift_cm": 0.58
+   }
+  ],
+  "skates": [
+   {
+    "frames": [
+     74,
+     78
+    ],
+    "skate_cm": 9.3,
+    "skate_s": 0.167,
+    "vmax_cms": 69
+   }
+  ]
+ },
+ "foot_r": {
+  "min_ball_cm": -0.63,
+  "min_ball_frame": 36,
+  "min_heel_cm": -0.45,
+  "plants": [
+   {
+    "frames": [
+     32,
+     57
+    ],
+    "drift_cm": 0.47
+   },
+   {
+    "frames": [
+     65,
+     115
+    ],
+    "drift_cm": 0.19
+   }
+  ]
+ },
+ "return_idle_both_up": [],
+ "pelvis_acc_max_cms2": 19857.0,
+ "pelvis_acc_max_frame": 29,
+ "pops": [
+  {
+   "frame": 29,
+   "bone": "calf_l",
+   "size": 21.9,
+   "type": "spike"
+  },
+  {
+   "frame": 29,
+   "bone": "foot_l",
+   "size": 13.4,
+   "type": "spike"
+  },
+  {
+   "frame": 27,
+   "bone": "ik_hand_l",
+   "size": 12.7,
+   "type": "spike"
+  },
+  {
+   "frame": 29,
+   "bone": "thigh_l",
+   "size": 12.3,
+   "type": "spike"
+  },
+  {
+   "frame": 27,
+   "bone": "ik_hand_gun",
+   "size": 12.3,
+   "type": "spike"
+  }
+ ],
+ "pops_hard": {},
+ "pops_soft": {
+  "ik_hand_l": [
+   27
+  ],
+  "ik_hand_gun": [
+   27
+  ],
+  "calf_l": [
+   29
+  ],
+  "foot_l": [
+   29
+  ],
+  "thigh_l": [
+   29
+  ]
+ },
+ "end_ref": {
+  "ref": "../../../Saved/ClipCheck/export/GASP_Idle.fbx",
+  "ref_frame": 1,
+  "max_deg": 0.0,
+  "bone": "spine_01",
+  "top3": [
+   [
+    "spine_01",
+    0.0
+   ],
+   [
+    "spine_05",
+    0.0
+   ],
+   [
+    "thigh_r",
+    0.0
+   ]
+  ],
+  "feet_gap_cm": 0.0
+ },
+ "curves_missing": [],
+ "notifies": [
+  {
+   "name": "PoseSearchBranchIn",
+   "time": null
+  },
+  {
+   "name": "PoseSearchBlockTransition",
+   "time": null
+  },
+  {
+   "name": "FoleyEvent: Land",
+   "time": null
+  },
+  {
+   "name": "FoleyEvent: Walk",
+   "time": null
+  },
+  {
+   "name": "FoleyEvent: Walk",
+   "time": null
+  }
+ ],
+ "fails": [],
+ "warns": [
+  "foot l skates 9.3 cm over 0.17 s on the floor (f74-78), touchdown/lift-off length",
+  "one-frame extremes to look at: ik_hand_l f27; ik_hand_gun f27; calf_l f29; foot_l f29 (+1 bones)"
+ ],
+ "verdict": "PASS*"
+}

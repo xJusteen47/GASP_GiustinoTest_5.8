@@ -1,0 +1,106 @@
+{
+ "a": {
+  "frames_60fps": 246,
+  "units": "% of standing height; frames at 60 fps",
+  "even_spacing_run_max": {
+   "l_wrist": 12,
+   "r_wrist": 10,
+   "head": 12,
+   "l_ankle": 10,
+   "r_ankle": 6,
+   "pelvis": 14
+  },
+  "arc_bulge_median": {
+   "l_wrist": 0.122,
+   "r_wrist": 0.128,
+   "head": 0.201
+  },
+  "overlap_lag_frames": {
+   "arm_r": [
+    -1,
+    -2,
+    -6,
+    11
+   ],
+   "arm_l": [
+    -1,
+    0,
+    9,
+    1
+   ],
+   "spine": [
+    1,
+    -1,
+    -1
+   ]
+  },
+  "chain_zero_lag_share": 0.09,
+  "stop_sync_share": 0.01,
+  "dead_frames": 3,
+  "moving_hold_frames": 86,
+  "foot_contacts": {
+   "l": {
+    "contacts": 2,
+    "max_slide_pct_height": 1.12
+   },
+   "r": {
+    "contacts": 1,
+    "max_slide_pct_height": 1.16
+   }
+  },
+  "pelvis_pop_ratio": 1133.3,
+  "pelvis_vertical_range": 14.45
+ },
+ "b": {
+  "frames_60fps": 138,
+  "units": "% of standing height; frames at 60 fps",
+  "even_spacing_run_max": {
+   "l_wrist": 8,
+   "r_wrist": 6,
+   "head": 6,
+   "l_ankle": 6,
+   "r_ankle": 6,
+   "pelvis": 6
+  },
+  "arc_bulge_median": {
+   "l_wrist": 0.113,
+   "r_wrist": 0.099,
+   "head": 0.027
+  },
+  "overlap_lag_frames": {
+   "arm_r": [
+    0,
+    1,
+    -1,
+    0
+   ],
+   "arm_l": [
+    0,
+    1,
+    -2,
+    0
+   ],
+   "spine": [
+    0,
+    0,
+    0
+   ]
+  },
+  "chain_zero_lag_share": 0.64,
+  "stop_sync_share": 0.25,
+  "dead_frames": 1,
+  "moving_hold_frames": 32,
+  "foot_contacts": {
+   "l": {
+    "contacts": 2,
+    "max_slide_pct_height": 6.61
+   },
+   "r": {
+    "contacts": 2,
+    "max_slide_pct_height": 4.71
+   }
+  },
+  "pelvis_pop_ratio": 4624.9,
+  "pelvis_vertical_range": 9.55
+ }
+}

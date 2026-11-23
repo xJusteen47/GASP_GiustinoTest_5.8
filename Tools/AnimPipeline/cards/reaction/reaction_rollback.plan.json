@@ -1,0 +1,571 @@
+{
+ "card_path": "cards/reaction/reaction_rollback.json",
+ "take": "AS_Pilot_React_RollBack",
+ "frames": 24,
+ "card": {
+  "move": "reaction_rollback",
+  "class": "reaction",
+  "anim": "/Game/AnimPipeline/Rig/Reaction/AS_React_RollBack",
+  "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+  "fps": 60,
+  "timing_csv": "refs/ufd/React_Roll_timing.csv",
+  "effector": "head",
+  "_design": "Get-up roll from the lying pose, in place: legs swing up into a tuck (f4), the trunk tips 30-40 degrees to the side and the legs pass diagonally over the RIGHT shoulder with both hands planted by the head, head turned left and off the floor (f6-f10), feet land and the hands push off, face down (f12), low crouch rising (f17), standing idle (f23). A BACK roll: in the world the body travels toward the character's back; the ability gives the travel (0 until f4, f4-f12, 0 after).",
+  "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_React_RollBack",
+  "spacing": {
+   "startup": "limb_led_recovery",
+   "active": "limb_led_recovery",
+   "recovery": "limb_led_recovery"
+  },
+  "part_delays": {
+   "chest": 0,
+   "head": 0,
+   "forearm": 0,
+   "hand": 0
+  }
+ },
+ "keys": {
+  "0": {
+   "pelvis": {
+    "loc": [
+     -2,
+     -7.5,
+     -78.5
+    ],
+    "rot_e": {
+     "pitch": 90,
+     "twist": 0
+    }
+   },
+   "spine": [
+    0,
+    0,
+    0
+   ],
+   "head": [
+    -6,
+    0,
+    14
+   ],
+   "fingers": [
+    0.8,
+    0,
+    0
+   ],
+   "arm_l": {
+    "hand_w": [
+     60,
+     -42,
+     4
+    ],
+    "pole_w": [
+     36,
+     -30,
+     5
+    ]
+   },
+   "arm_r": {
+    "hand_w": [
+     -8,
+     -24,
+     23
+    ],
+    "pole_w": [
+     -36,
+     -28,
+     6
+    ]
+   },
+   "leg_l": {
+    "foot_w": [
+     17,
+     71,
+     7
+    ],
+    "pole_w": [
+     15,
+     30,
+     60
+    ]
+   },
+   "leg_r": {
+    "foot_w": [
+     -21,
+     56,
+     7
+    ],
+    "pole_w": [
+     -26,
+     26,
+     60
+    ]
+   },
+   "hold": true
+  },
+  "4": {
+   "pelvis": {
+    "loc": [
+     -4,
+     -5.5,
+     -72.4
+    ],
+    "rot_e": {
+     "pitch": 110,
+     "roll": 12
+    }
+   },
+   "spine": [
+    -22,
+    0,
+    0
+   ],
+   "head": [
+    -18,
+    -10,
+    12
+   ],
+   "fingers": [
+    0.8,
+    0,
+    0
+   ],
+   "arm_l": {
+    "hand_w": [
+     30,
+     -56,
+     6
+    ],
+    "pole_w": [
+     46,
+     -40,
+     34
+    ]
+   },
+   "arm_r": {
+    "hand_w": [
+     -34,
+     -52,
+     6
+    ],
+    "pole_w": [
+     -50,
+     -36,
+     30
+    ]
+   },
+   "leg_l": {
+    "foot": [
+     10,
+     50,
+     -14
+    ],
+    "pole": [
+     10,
+     30,
+     25
+    ]
+   },
+   "leg_r": {
+    "foot": [
+     -10,
+     48,
+     -10
+    ],
+    "pole": [
+     -10,
+     30,
+     25
+    ]
+   }
+  },
+  "8": {
+   "pelvis": {
+    "loc": [
+     -24,
+     4.5,
+     -46
+    ],
+    "rot_e": {
+     "pitch": 170,
+     "roll": 42
+    }
+   },
+   "spine": [
+    -40,
+    -15,
+    0
+   ],
+   "head": [
+    -30,
+    -54,
+    26
+   ],
+   "fingers": [
+    1,
+    0,
+    0
+   ],
+   "arm_l": {
+    "hand_w": [
+     34,
+     -30,
+     3
+    ],
+    "pole_w": [
+     50,
+     -16,
+     40
+    ]
+   },
+   "arm_r": {
+    "hand_w": [
+     -36,
+     -28,
+     3
+    ],
+    "pole_w": [
+     -56,
+     -12,
+     30
+    ]
+   },
+   "leg_l": {
+    "foot": [
+     12,
+     52,
+     -10
+    ],
+    "pole": [
+     10,
+     30,
+     25
+    ]
+   },
+   "leg_r": {
+    "foot": [
+     -10,
+     44,
+     -14
+    ],
+    "pole": [
+     -10,
+     30,
+     25
+    ]
+   }
+  },
+  "10": {
+   "pelvis": {
+    "loc": [
+     -13,
+     12.5,
+     -28
+    ],
+    "rot_e": {
+     "pitch": 222,
+     "roll": 32
+    }
+   },
+   "spine": [
+    -30,
+    -10,
+    0
+   ],
+   "head": [
+    0,
+    -48,
+    22
+   ],
+   "fingers": [
+    1,
+    0,
+    0
+   ],
+   "arm_l": {
+    "hand_w": [
+     36,
+     2,
+     3
+    ],
+    "pole_w": [
+     54,
+     14,
+     40
+    ]
+   },
+   "arm_r": {
+    "hand_w": [
+     -30,
+     6,
+     3
+    ],
+    "pole_w": [
+     -52,
+     20,
+     36
+    ]
+   },
+   "leg_l": {
+    "foot": [
+     10,
+     50,
+     -14
+    ],
+    "pole": [
+     10,
+     30,
+     25
+    ]
+   },
+   "leg_r": {
+    "foot": [
+     -10,
+     48,
+     -10
+    ],
+    "pole": [
+     -10,
+     30,
+     25
+    ]
+   }
+  },
+  "12": {
+   "pelvis": {
+    "loc": [
+     -2,
+     16.5,
+     -44.6
+    ],
+    "rot_e": {
+     "pitch": 262,
+     "roll": 10
+    }
+   },
+   "spine": [
+    -26,
+    0,
+    0
+   ],
+   "head": [
+    30,
+    0,
+    8
+   ],
+   "fingers": [
+    0.8,
+    0,
+    0
+   ],
+   "arm_l": {
+    "hand": [
+     24,
+     30,
+     -10
+    ],
+    "pole": [
+     46,
+     0,
+     -20
+    ]
+   },
+   "arm_r": {
+    "hand": [
+     -24,
+     30,
+     -10
+    ],
+    "pole": [
+     -46,
+     0,
+     -20
+    ]
+   },
+   "leg_l": {
+    "foot_w": [
+     20,
+     12.5,
+     9.5
+    ],
+    "pole_w": [
+     24,
+     52,
+     28
+    ],
+    "flat": true
+   },
+   "leg_r": {
+    "foot_w": [
+     -14.5,
+     -20.4,
+     9.1
+    ],
+    "pole_w": [
+     -20,
+     24,
+     28
+    ],
+    "flat": true
+   }
+  },
+  "17": {
+   "pelvis": {
+    "loc": [
+     -1.1,
+     4.5,
+     -28.6
+    ],
+    "rot_e": {
+     "pitch": 330
+    }
+   },
+   "spine": [
+    -20,
+    0,
+    0
+   ],
+   "head": [
+    20,
+    0,
+    0
+   ],
+   "fingers": [
+    0.4,
+    0,
+    0
+   ],
+   "arm_l": {
+    "hand": [
+     28,
+     26,
+     -30
+    ],
+    "pole": [
+     40,
+     -5,
+     -25
+    ]
+   },
+   "arm_r": {
+    "hand": [
+     -28,
+     22,
+     -30
+    ],
+    "pole": [
+     -40,
+     -8,
+     -25
+    ]
+   },
+   "leg_l": "idle_w",
+   "leg_r": "idle_w"
+  },
+  "23": {
+   "pelvis": {
+    "loc": [
+     0,
+     0,
+     0
+    ],
+    "rot_e": {
+     "pitch": 360
+    }
+   },
+   "spine": [
+    0,
+    0,
+    0
+   ],
+   "head": [
+    0,
+    0,
+    0
+   ],
+   "fingers": [
+    0,
+    0,
+    0
+   ],
+   "leg_l": "idle_w",
+   "leg_r": "idle_w",
+   "hold": true
+  },
+  "6": {
+   "pelvis": {
+    "loc": [
+     -14,
+     -1,
+     -56.5
+    ],
+    "rot_e": {
+     "pitch": 140,
+     "roll": 30
+    }
+   },
+   "spine": [
+    -32,
+    -8,
+    0
+   ],
+   "head": [
+    -26,
+    -44,
+    20
+   ],
+   "fingers": [
+    1,
+    0,
+    0
+   ],
+   "arm_l": {
+    "hand_w": [
+     32,
+     -44,
+     3
+    ],
+    "pole_w": [
+     48,
+     -30,
+     38
+    ]
+   },
+   "arm_r": {
+    "hand_w": [
+     -36,
+     -40,
+     3
+    ],
+    "pole_w": [
+     -54,
+     -26,
+     30
+    ]
+   },
+   "leg_l": {
+    "foot": [
+     10,
+     50,
+     -14
+    ],
+    "pole": [
+     10,
+     30,
+     25
+    ]
+   },
+   "leg_r": {
+    "foot": [
+     -10,
+     48,
+     -10
+    ],
+    "pole": [
+     -10,
+     30,
+     25
+    ]
+   }
+  }
+ }
+}

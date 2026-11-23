@@ -1,0 +1,201 @@
+{
+ "clip": "AirCrouch_Enter",
+ "fbx": "../../../Saved/ClipCheck/export/AirCrouch_Enter.fbx",
+ "fps": 60.0,
+ "frames": 10,
+ "kind": "air",
+ "root_travel_cm": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "root_motion": false,
+ "_fwd": [
+  0.0050376599081923355,
+  -0.9999873109108182,
+  0.0
+ ],
+ "animated_bones": 49,
+ "foot_l": {
+  "min_ball_cm": 30.4,
+  "min_ball_frame": 3,
+  "min_heel_cm": 24.72,
+  "plants": []
+ },
+ "foot_r": {
+  "min_ball_cm": 3.85,
+  "min_ball_frame": 1,
+  "min_heel_cm": 6.35,
+  "plants": []
+ },
+ "pelvis_acc_max_cms2": 0.0,
+ "pelvis_acc_max_frame": 3,
+ "pops": [
+  {
+   "frame": 4,
+   "bone": "calf_l",
+   "size": 29.4,
+   "type": "spike"
+  },
+  {
+   "frame": 6,
+   "bone": "lowerarm_r",
+   "size": 28.1,
+   "type": "spike"
+  },
+  {
+   "frame": 4,
+   "bone": "middle_02_l",
+   "size": 27.3,
+   "type": "spike"
+  },
+  {
+   "frame": 4,
+   "bone": "ik_foot_l",
+   "size": 26.9,
+   "type": "spike"
+  },
+  {
+   "frame": 4,
+   "bone": "index_02_l",
+   "size": 26.7,
+   "type": "spike"
+  },
+  {
+   "frame": 4,
+   "bone": "middle_02_r",
+   "size": 25.8,
+   "type": "spike"
+  },
+  {
+   "frame": 4,
+   "bone": "pinky_02_r",
+   "size": 24.9,
+   "type": "spike"
+  },
+  {
+   "frame": 5,
+   "bone": "upperarm_l",
+   "size": 23.8,
+   "type": "spike"
+  },
+  {
+   "frame": 4,
+   "bone": "ik_foot_r",
+   "size": 23.5,
+   "type": "spike"
+  },
+  {
+   "frame": 4,
+   "bone": "ring_02_r",
+   "size": 23.3,
+   "type": "spike"
+  },
+  {
+   "frame": 4,
+   "bone": "index_02_r",
+   "size": 23.0,
+   "type": "spike"
+  },
+  {
+   "frame": 4,
+   "bone": "ring_02_l",
+   "size": 23.0,
+   "type": "spike"
+  },
+  {
+   "frame": 4,
+   "bone": "calf_r",
+   "size": 22.5,
+   "type": "spike"
+  },
+  {
+   "frame": 4,
+   "bone": "pinky_02_l",
+   "size": 22.4,
+   "type": "spike"
+  },
+  {
+   "frame": 4,
+   "bone": "index_01_r",
+   "size": 21.0,
+   "type": "spike"
+  },
+  {
+   "frame": 4,
+   "bone": "ring_01_r",
+   "size": 20.9,
+   "type": "spike"
+  }
+ ],
+ "pops_hard": {},
+ "pops_soft": {
+  "calf_l": [
+   2,
+   3,
+   4
+  ],
+  "fingers": [
+   2,
+   3,
+   4
+  ],
+  "calf_r": [
+   2,
+   3,
+   4
+  ],
+  "ik_foot_l": [
+   2,
+   3,
+   4,
+   5,
+   6
+  ],
+  "ik_foot_r": [
+   2,
+   4,
+   5,
+   6
+  ],
+  "upperarm_l": [
+   3,
+   4,
+   5
+  ],
+  "thigh_l": [
+   4
+  ],
+  "hand_l": [
+   4
+  ],
+  "lowerarm_r": [
+   4,
+   5,
+   6
+  ],
+  "thigh_r": [
+   4
+  ],
+  "foot_l": [
+   4,
+   5,
+   6
+  ],
+  "foot_r": [
+   4,
+   5,
+   6
+  ],
+  "upperarm_r": [
+   5
+  ]
+ },
+ "curves_missing": [],
+ "notifies": [],
+ "fails": [],
+ "warns": [
+  "one-frame extremes to look at: calf_l f2,3,4; fingers f2,3,4; calf_r f2,3,4; ik_foot_l f2,3,4,5,6 (+9 bones)"
+ ],
+ "verdict": "PASS*"
+}

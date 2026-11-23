@@ -1,0 +1,47 @@
+{
+ "clip": "AirCrouch_Loop",
+ "fbx": "../../../Saved/ClipCheck/export/AirCrouch_Loop.fbx",
+ "fps": 60.0,
+ "frames": 62,
+ "kind": "air",
+ "root_travel_cm": [
+  0.0,
+  0.0,
+  0.0
+ ],
+ "root_motion": false,
+ "_fwd": [
+  0.0050376599081923355,
+  -0.9999873109108182,
+  0.0
+ ],
+ "animated_bones": 3,
+ "foot_l": {
+  "min_ball_cm": 49.79,
+  "min_ball_frame": 1,
+  "min_heel_cm": 41.68,
+  "plants": []
+ },
+ "foot_r": {
+  "min_ball_cm": 35.18,
+  "min_ball_frame": 1,
+  "min_heel_cm": 37.68,
+  "plants": []
+ },
+ "pelvis_acc_max_cms2": 23.0,
+ "pelvis_acc_max_frame": 31,
+ "pops": [],
+ "pops_hard": {},
+ "pops_soft": {},
+ "seam_max_deg": 0.03,
+ "curves_missing": [],
+ "notifies": [
+  {
+   "name": "PoseSearchBranchIn",
+   "time": null
+  }
+ ],
+ "fails": [],
+ "warns": [],
+ "verdict": "PASS"
+}

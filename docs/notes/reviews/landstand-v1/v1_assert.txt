@@ -1,0 +1,2 @@
+ASSERT: OK
+ASSERT: OK mv_jump_rest AS_GSTN_LandStand_Ganon_L f114-f180: weight >= 0.8 on 98% (min 0.76)

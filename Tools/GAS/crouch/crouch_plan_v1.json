@@ -1,0 +1,48 @@
+{
+  "_note": "Fast crouch round 1 (crouch-veloce-2). Angles deg in CHARACTER axes [pitch fwd+, roll right+, twist right+], cm [fwd, right, up]. Fable tunes the numbers; timing from the curve sheet (brief crouch-veloce-1).",
+  "axes_from": "stand",
+  "sources": {
+    "stand": {"hints": ["/Game/Characters/UEFN_Mannequin/Animations/Idle/M_Neutral_Stand_Idle_Loop"], "frame": 0},
+    "gasp_crouch": {"hints": ["/Game/Characters/UEFN_Mannequin/Animations/Idle/M_Neutral_Crouch_Idle_Loop", ["neutral", "crouch", "idle", "loop"]], "frame": 0},
+    "fall": {"hints": ["/Game/Characters/UEFN_Mannequin/Animations/Jump/M_Neutral_Jump_Loop_Fall"], "frame": 0}
+  },
+  "poses": {
+    "crouch": {"base": "gasp_crouch", "pelvis": [4, 0, -16], "hands": "Fist",
+      "feet": {"foot_l": [7, 0, 0], "foot_r": [-6, 0, 0]},
+      "rot": {"spine_01": [8, 0, 0], "spine_03": [10, 0, 0], "spine_05": [6, 0, 0],
+              "neck_01": [-8, 0, 0], "head": [-14, 0, 0],
+              "clavicle_l": [8, 0, 4], "clavicle_r": [8, 0, -4],
+              "upperarm_l": [35, 15, 20], "upperarm_r": [35, -15, -20],
+              "lowerarm_l": [55, 0, 25], "lowerarm_r": [55, 0, -25]}},
+    "crouch_over": {"base": "crouch", "pelvis": [0, 0, -3],
+      "rot": {"spine_03": [4, 0, 0], "upperarm_l": [7, 0, 0], "upperarm_r": [7, 0, 0], "head": [-4, 0, 0]}},
+    "crouch_breath": {"base": "crouch", "pelvis": [0, 0, 0.5],
+      "rot": {"spine_03": [-1, 0, 0], "clavicle_l": [-1, 0, 0], "clavicle_r": [-1, 0, 0]}},
+    "stand_over": {"base": "stand", "pelvis": [0, 0, 1.5],
+      "rot": {"spine_03": [-3, 0, 0], "lowerarm_l": [-5, 0, 0], "lowerarm_r": [-5, 0, 0]}},
+    "air": {"base": "fall", "pelvis": [0, 0, 0], "hands": "Fist",
+      "rot": {"thigh_l": [72, -6, 0], "thigh_r": [58, 6, 0], "calf_l": [-95, 0, 0], "calf_r": [-85, 0, 0],
+              "foot_l": [-20, 0, 0], "foot_r": [-15, 0, 0],
+              "spine_01": [6, 0, 0], "spine_03": [8, 0, 0], "spine_05": [6, 0, 0], "neck_01": [-6, 0, 0], "head": [-12, 0, 0],
+              "upperarm_l": [40, 20, 15], "upperarm_r": [40, -20, -15], "lowerarm_l": [70, 0, 20], "lowerarm_r": [70, 0, -20]}},
+    "air_over": {"base": "air", "rot": {"thigh_l": [8, 0, 0], "thigh_r": [8, 0, 0], "spine_03": [4, 0, 0]}},
+    "air_bob": {"base": "air", "pelvis": [0, 0, 1]}
+  },
+  "clips": {
+    "AS_GSTN_Crouch_Enter": {"folder": "/Game/GSTN/Animation/Crouch", "frames": 13, "pin_feet": true, "check_slide": false,
+      "keys": [{"frame": 0, "pose": "stand"}, {"frame": 4, "pose": "crouch_over", "ease": "in"}, {"frame": 9, "pose": "crouch", "ease": "inout"}],
+      "lag": {"neck_01": 1, "head": 1, "clavicle_l": 1, "clavicle_r": 1, "upperarm_l": 1, "upperarm_r": 1,
+              "lowerarm_l": 2, "lowerarm_r": 2, "hand_l": 3, "hand_r": 3}},
+    "AS_GSTN_Crouch_Idle": {"folder": "/Game/GSTN/Animation/Crouch", "frames": 121, "pin_feet": true, "loop": true,
+      "keys": [{"frame": 0, "pose": "crouch"}, {"frame": 60, "pose": "crouch_breath"}, {"frame": 120, "pose": "crouch"}],
+      "lag": {"hand_l": 4, "hand_r": 4, "lowerarm_l": 2, "lowerarm_r": 2}},
+    "AS_GSTN_Crouch_Exit": {"folder": "/Game/GSTN/Animation/Crouch", "frames": 11, "pin_feet": true, "check_slide": false,
+      "keys": [{"frame": 0, "pose": "crouch"}, {"frame": 4, "pose": "stand_over", "ease": "out"}, {"frame": 9, "pose": "stand", "ease": "inout"}],
+      "lag": {"clavicle_l": 1, "clavicle_r": 1, "upperarm_l": 1, "upperarm_r": 1, "lowerarm_l": 2, "lowerarm_r": 2, "hand_l": 2, "hand_r": 2}},
+    "AS_AirCrouch_Enter": {"folder": "/Game/GASNPPTest/Combat/AirCrouch", "frames": 9,
+      "keys": [{"frame": 0, "pose": "fall"}, {"frame": 3, "pose": "air_over", "ease": "in"}, {"frame": 8, "pose": "air", "ease": "inout"}],
+      "lag": {"upperarm_l": 1, "upperarm_r": 1, "lowerarm_l": 2, "lowerarm_r": 2, "foot_l": 2, "foot_r": 2}},
+    "AS_AirCrouch_Loop_PLACEHOLDER": {"folder": "/Game/GASNPPTest/Combat/AirCrouch", "frames": 61, "loop": true,
+      "keys": [{"frame": 0, "pose": "air"}, {"frame": 30, "pose": "air_bob"}, {"frame": 60, "pose": "air"}]}
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "_doc": "Landing dust (A2 r6c, Tools/GAS/setup_presentation_vfx.py land_ring): one central shockwave + lumps + low haze + grit. Checked by Tools/VFX/vfx_spec_check.py.",
+  "effect": "landing_dust",
+  "kind": "dust",
+  "min_layers": 2,
+  "setup": "Tools/GAS/setup_presentation_vfx_puff.py",
+  "textures": "Tools/GAS/vfx",
+  "layers": [
+    {"name": "Skirt", "preset": "DustLit"},
+    {"name": "Lumps", "preset": "DustLit"},
+    {"name": "Wisps", "preset": "DustLitHaze"},
+    {"name": "Clumps", "preset": "GritLit", "kind": "solid"}
+  ]
+}

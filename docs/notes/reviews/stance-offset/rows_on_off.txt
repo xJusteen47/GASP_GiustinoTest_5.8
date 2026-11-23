@@ -1,0 +1,14 @@
+== Saved\Stance\cap_on
+jab1: moving_with_stance_alpha_max=0.0 events=f0:st3(t13.029) f21:st1(t13.379) f21:montage=AM_OverlordJab1V3 f44:montage=None f45:fl11 f85:fl22 f86:st3(t0.0) f93:fl2
+jab1: shown_frames=21 head=[48.6, 0.9, 48.4] hand_l=[37.4, -22.2, -16.9] hand_r=[51.6, 17.4, -19.3] foot_l=[41.2, -15.3, -90.7] foot_r=[31.1, 14.8, -90.5]
+jump_only: moving_with_stance_alpha_max=0.0 events=f0:st3(t2.226) f21:st4(t2.559) f62:st3(t0.0) f64:st4(t0.017) f103:st3(t0.0)
+jump_only: shown_frames=21 head=[7.0, 0.6, 49.2] hand_l=[-3.7, -22.2, -16.5] hand_r=[11.9, 17.8, -18.0] foot_l=[1.5, -15.1, -90.5] foot_r=[-8.3, 15.4, -90.5]
+walk_into: moving_with_stance_alpha_max=0.0 events=f0:st3(t4.465) f22:st4(t4.815) f237:st3(t0.0)
+walk_into: shown_frames=22 head=[7.5, 0.3, 61.1] hand_l=[-4.0, -22.2, -4.5] hand_r=[12.4, 16.8, -6.4] foot_l=[1.2, -15.3, -79.0] foot_r=[-8.8, 14.7, -78.5]
+== Saved\Stance\cap_off
+jab1: moving_with_stance_alpha_max=0.0 events=f0:st0(t-1.0) f21:montage=AM_OverlordJab1V3 f45:montage=None f46:fl11 f85:fl22 f93:fl20
+jab1: idle_first15 head=[33.8, 0.6, 50.7] hand_l=[33.3, -25.7, -14.8] hand_r=[32.2, 26.3, -15.3] foot_l=[27.6, -14.8, -90.5] foot_r=[25.6, 14.8, -90.5]
+jump_only: moving_with_stance_alpha_max=0.0 events=f0:st0(t-1.0)
+jump_only: idle_first15 head=[3.8, 0.8, 50.7] hand_l=[3.6, -25.7, -14.7] hand_r=[2.2, 26.5, -15.2] foot_l=[1.5, -15.2, -90.5] foot_r=[-8.3, 15.4, -90.6]
+walk_into: moving_with_stance_alpha_max=0.0 events=f0:st0(t-1.0)
+walk_into: idle_first15 head=[4.1, 0.5, 62.6] hand_l=[2.9, -25.8, -2.8] hand_r=[3.1, 25.8, -3.4] foot_l=[1.2, -15.3, -79.0] foot_r=[-8.8, 14.7, -78.4]

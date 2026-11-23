@@ -1,0 +1,1492 @@
+{
+ "summary": {
+  "lean_max_err": 0.0,
+  "E_range": {
+   "l": [
+    90.6,
+    96.1
+   ],
+   "r": [
+    90.6,
+    96.1
+   ]
+  },
+  "S_range": {
+   "l": [
+    -62.0,
+    35.0
+   ],
+   "r": [
+    -62.0,
+    35.0
+   ]
+  },
+  "abd_max": {
+   "l": 12.0,
+   "r": 12.0
+  },
+  "elbow_below_sh_min": {
+   "l": 0.122,
+   "r": 0.122
+  },
+  "pelvis_z": {
+   "1": 0.856,
+   "3": 0.821,
+   "6": 0.801,
+   "9": 0.791,
+   "10": 0.836,
+   "11": 0.876,
+   "13": 0.831,
+   "16": 0.876,
+   "19": 0.836,
+   "25": 0.846
+  },
+  "contact_ahead": {
+   "l13": 0.18,
+   "l25": 0.18,
+   "r19": 0.18
+  },
+  "feet_apart_max_run": 0.38,
+  "inplace_spread": {
+   "l": 0.06,
+   "r": 0.04
+  },
+  "inplace_lift_max": {
+   "l": 0.32,
+   "r": 0.33
+  },
+  "min_ankle_z": 0.094,
+  "min_ball_z": 0.018,
+  "knee_range": {
+   "l": [
+    64.2,
+    135.0
+   ],
+   "r": [
+    66.0,
+    136.0
+   ]
+  },
+  "thigh_drive": {
+   "l11": 71.1,
+   "r11": 25.8,
+   "l16": 17.5,
+   "r16": 70.3,
+   "l17": 33.2,
+   "r17": 66.7,
+   "l22": 70.3,
+   "r22": 18.3,
+   "l23": 66.5,
+   "r23": 27.9
+  },
+  "head_ahead": [
+   0.021,
+   0.022
+  ],
+  "fist_below_sh_min": {
+   "l": 0.067,
+   "r": 0.07
+  },
+  "fist_to_head_min": {
+   "l": 0.367,
+   "r": 0.369
+  },
+  "back_extremes": {
+   "l7": {
+    "behind_back": 0.143,
+    "below_sh": 0.168,
+    "S": -50.0
+   },
+   "l14": {
+    "behind_back": 0.201,
+    "below_sh": 0.122,
+    "S": -62.0
+   },
+   "l26": {
+    "behind_back": 0.232,
+    "below_sh": 0.122,
+    "S": -62.0
+   },
+   "r4": {
+    "behind_back": 0.157,
+    "below_sh": 0.168,
+    "S": -50.0
+   },
+   "r10": {
+    "behind_back": 0.143,
+    "below_sh": 0.168,
+    "S": -50.0
+   },
+   "r20": {
+    "behind_back": 0.215,
+    "below_sh": 0.122,
+    "S": -62.0
+   }
+  },
+  "back_bend_max": 11.0,
+  "curl_middle_f1": {
+   "l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "r": [
+    80.0,
+    144.0,
+    0.0
+   ]
+  }
+ },
+ "per_frame": [
+  {
+   "f": 1,
+   "lean_keyed": 18,
+   "lean_meas": 18.0,
+   "pelvis_z": 0.856,
+   "pelvis_y": 0.025,
+   "S_l": -10.0,
+   "E_l": 92.7,
+   "abd_l": 7.2,
+   "elbow_below_sh_l": 0.26,
+   "S_world_l": -10.0,
+   "fist_below_sh_l": 0.296,
+   "fist_to_head_l": 0.483,
+   "elbow_behind_back_l": -0.014,
+   "ankle_l": [
+    0.0,
+    0.094
+   ],
+   "ball_z_l": 0.032,
+   "thigh_from_vert_l": 29.4,
+   "knee_l": 129.7,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": 10.0,
+   "E_r": 92.6,
+   "abd_r": 6.0,
+   "elbow_below_sh_r": 0.261,
+   "S_world_r": 10.0,
+   "fist_below_sh_r": 0.206,
+   "fist_to_head_r": 0.429,
+   "elbow_behind_back_r": -0.081,
+   "ankle_r": [
+    -0.08,
+    0.32
+   ],
+   "ball_z_r": 0.218,
+   "thigh_from_vert_r": 64.8,
+   "knee_r": 80.1,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.021,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.08
+  },
+  {
+   "f": 2,
+   "lean_keyed": 19.2,
+   "lean_meas": 19.2,
+   "pelvis_z": 0.847,
+   "pelvis_y": 0.025,
+   "S_l": 0.0,
+   "E_l": 92.1,
+   "abd_l": 6.0,
+   "elbow_below_sh_l": 0.265,
+   "S_world_l": 0.0,
+   "fist_below_sh_l": 0.256,
+   "fist_to_head_l": 0.459,
+   "elbow_behind_back_l": -0.064,
+   "ankle_l": [
+    0.013,
+    0.094
+   ],
+   "ball_z_l": 0.035,
+   "thigh_from_vert_l": 30.2,
+   "knee_l": 127.0,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -5.0,
+   "E_r": 93.4,
+   "abd_r": 6.6,
+   "elbow_below_sh_r": 0.264,
+   "S_world_r": -5.0,
+   "fist_below_sh_r": 0.275,
+   "fist_to_head_r": 0.462,
+   "elbow_behind_back_r": -0.02,
+   "ankle_r": [
+    -0.061,
+    0.263
+   ],
+   "ball_z_r": 0.18,
+   "thigh_from_vert_r": 57.5,
+   "knee_r": 88.1,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.021,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.074
+  },
+  {
+   "f": 3,
+   "lean_keyed": 21.0,
+   "lean_meas": 21.0,
+   "pelvis_z": 0.821,
+   "pelvis_y": 0.025,
+   "S_l": 20.0,
+   "E_l": 91.1,
+   "abd_l": 6.0,
+   "elbow_below_sh_l": 0.249,
+   "S_world_l": 20.0,
+   "fist_below_sh_l": 0.157,
+   "fist_to_head_l": 0.414,
+   "elbow_behind_back_l": -0.149,
+   "ankle_l": [
+    0.02,
+    0.094
+   ],
+   "ball_z_l": 0.032,
+   "thigh_from_vert_l": 33.8,
+   "knee_l": 119.4,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -35.0,
+   "E_r": 95.2,
+   "abd_r": 10.2,
+   "elbow_below_sh_r": 0.215,
+   "S_world_r": -35.0,
+   "fist_below_sh_r": 0.348,
+   "fist_to_head_r": 0.515,
+   "elbow_behind_back_r": 0.108,
+   "ankle_r": [
+    -0.04,
+    0.094
+   ],
+   "ball_z_r": 0.032,
+   "thigh_from_vert_r": 37.0,
+   "knee_r": 120.0,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.021,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.06
+  },
+  {
+   "f": 4,
+   "lean_keyed": 22.3,
+   "lean_meas": 22.3,
+   "pelvis_z": 0.829,
+   "pelvis_y": 0.025,
+   "S_l": 30.0,
+   "E_l": 90.6,
+   "abd_l": 6.0,
+   "elbow_below_sh_l": 0.23,
+   "S_world_l": 30.0,
+   "fist_below_sh_l": 0.099,
+   "fist_to_head_l": 0.378,
+   "elbow_behind_back_l": -0.174,
+   "ankle_l": [
+    -0.02,
+    0.24
+   ],
+   "ball_z_l": 0.135,
+   "thigh_from_vert_l": 54.0,
+   "knee_l": 88.0,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -50.0,
+   "E_r": 96.1,
+   "abd_r": 12.0,
+   "elbow_below_sh_r": 0.168,
+   "S_world_r": -50.0,
+   "fist_below_sh_r": 0.354,
+   "fist_to_head_r": 0.534,
+   "elbow_behind_back_r": 0.157,
+   "ankle_r": [
+    -0.03,
+    0.094
+   ],
+   "ball_z_r": 0.037,
+   "thigh_from_vert_r": 35.6,
+   "knee_r": 122.9,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.021,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.01
+  },
+  {
+   "f": 5,
+   "lean_keyed": 23.7,
+   "lean_meas": 23.7,
+   "pelvis_z": 0.822,
+   "pelvis_y": 0.025,
+   "S_l": 10.0,
+   "E_l": 91.9,
+   "abd_l": 6.0,
+   "elbow_below_sh_l": 0.261,
+   "S_world_l": 10.0,
+   "fist_below_sh_l": 0.211,
+   "fist_to_head_l": 0.415,
+   "elbow_behind_back_l": -0.105,
+   "ankle_l": [
+    -0.04,
+    0.32
+   ],
+   "ball_z_l": 0.206,
+   "thigh_from_vert_l": 65.3,
+   "knee_l": 72.3,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -30.0,
+   "E_r": 94.7,
+   "abd_r": 9.6,
+   "elbow_below_sh_r": 0.228,
+   "S_world_r": -30.0,
+   "fist_below_sh_r": 0.342,
+   "fist_to_head_r": 0.502,
+   "elbow_behind_back_r": 0.06,
+   "ankle_r": [
+    -0.021,
+    0.094
+   ],
+   "ball_z_r": 0.037,
+   "thigh_from_vert_r": 36.6,
+   "knee_r": 121.3,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.022,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.019
+  },
+  {
+   "f": 6,
+   "lean_keyed": 25.0,
+   "lean_meas": 25.0,
+   "pelvis_z": 0.801,
+   "pelvis_y": 0.025,
+   "S_l": -30.0,
+   "E_l": 94.7,
+   "abd_l": 9.6,
+   "elbow_below_sh_l": 0.228,
+   "S_world_l": -30.0,
+   "fist_below_sh_l": 0.339,
+   "fist_to_head_l": 0.491,
+   "elbow_behind_back_l": 0.069,
+   "ankle_l": [
+    0.0,
+    0.094
+   ],
+   "ball_z_l": 0.032,
+   "thigh_from_vert_l": 36.9,
+   "knee_l": 113.6,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": 10.0,
+   "E_r": 91.9,
+   "abd_r": 6.0,
+   "elbow_below_sh_r": 0.261,
+   "S_world_r": 10.0,
+   "fist_below_sh_r": 0.217,
+   "fist_to_head_r": 0.429,
+   "elbow_behind_back_r": -0.124,
+   "ankle_r": [
+    -0.02,
+    0.094
+   ],
+   "ball_z_r": 0.032,
+   "thigh_from_vert_r": 39.9,
+   "knee_r": 116.0,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.022,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.02
+  },
+  {
+   "f": 7,
+   "lean_keyed": 26.2,
+   "lean_meas": 26.2,
+   "pelvis_z": 0.81,
+   "pelvis_y": 0.025,
+   "S_l": -50.0,
+   "E_l": 96.1,
+   "abd_l": 12.0,
+   "elbow_below_sh_l": 0.168,
+   "S_world_l": -50.0,
+   "fist_below_sh_l": 0.352,
+   "fist_to_head_l": 0.521,
+   "elbow_behind_back_l": 0.143,
+   "ankle_l": [
+    0.012,
+    0.094
+   ],
+   "ball_z_l": 0.036,
+   "thigh_from_vert_l": 35.3,
+   "knee_l": 116.3,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": 30.0,
+   "E_r": 90.6,
+   "abd_r": 6.0,
+   "elbow_below_sh_r": 0.23,
+   "S_world_r": 30.0,
+   "fist_below_sh_r": 0.102,
+   "fist_to_head_r": 0.371,
+   "elbow_behind_back_r": -0.182,
+   "ankle_r": [
+    -0.06,
+    0.24
+   ],
+   "ball_z_r": 0.145,
+   "thigh_from_vert_r": 59.9,
+   "knee_r": 86.3,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.022,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.072
+  },
+  {
+   "f": 8,
+   "lean_keyed": 27.3,
+   "lean_meas": 27.3,
+   "pelvis_z": 0.806,
+   "pelvis_y": 0.025,
+   "S_l": -30.0,
+   "E_l": 94.7,
+   "abd_l": 9.6,
+   "elbow_below_sh_l": 0.228,
+   "S_world_l": -30.0,
+   "fist_below_sh_l": 0.339,
+   "fist_to_head_l": 0.487,
+   "elbow_behind_back_l": 0.045,
+   "ankle_l": [
+    0.02,
+    0.094
+   ],
+   "ball_z_l": 0.032,
+   "thigh_from_vert_l": 35.8,
+   "knee_l": 115.4,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": 10.0,
+   "E_r": 91.9,
+   "abd_r": 6.0,
+   "elbow_below_sh_r": 0.261,
+   "S_world_r": 10.0,
+   "fist_below_sh_r": 0.216,
+   "fist_to_head_r": 0.41,
+   "elbow_behind_back_r": -0.116,
+   "ankle_r": [
+    -0.08,
+    0.33
+   ],
+   "ball_z_r": 0.228,
+   "thigh_from_vert_r": 72.6,
+   "knee_r": 69.9,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.022,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.1
+  },
+  {
+   "f": 9,
+   "lean_keyed": 28.0,
+   "lean_meas": 28.0,
+   "pelvis_z": 0.791,
+   "pelvis_y": 0.025,
+   "S_l": 10.0,
+   "E_l": 91.9,
+   "abd_l": 6.0,
+   "elbow_below_sh_l": 0.261,
+   "S_world_l": 10.0,
+   "fist_below_sh_l": 0.213,
+   "fist_to_head_l": 0.414,
+   "elbow_behind_back_l": -0.133,
+   "ankle_l": [
+    0.03,
+    0.094
+   ],
+   "ball_z_l": 0.032,
+   "thigh_from_vert_l": 37.3,
+   "knee_l": 111.8,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -30.0,
+   "E_r": 94.7,
+   "abd_r": 9.6,
+   "elbow_below_sh_r": 0.228,
+   "S_world_r": -30.0,
+   "fist_below_sh_r": 0.342,
+   "fist_to_head_r": 0.49,
+   "elbow_behind_back_r": 0.057,
+   "ankle_r": [
+    -0.04,
+    0.094
+   ],
+   "ball_z_r": 0.032,
+   "thigh_from_vert_r": 41.5,
+   "knee_r": 112.3,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.022,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.07
+  },
+  {
+   "f": 10,
+   "lean_keyed": 27.8,
+   "lean_meas": 27.8,
+   "pelvis_z": 0.836,
+   "pelvis_y": 0.025,
+   "S_l": 30.0,
+   "E_l": 90.6,
+   "abd_l": 6.0,
+   "elbow_below_sh_l": 0.23,
+   "S_world_l": 30.0,
+   "fist_below_sh_l": 0.099,
+   "fist_to_head_l": 0.367,
+   "elbow_behind_back_l": -0.191,
+   "ankle_l": [
+    0.06,
+    0.2
+   ],
+   "ball_z_l": 0.086,
+   "thigh_from_vert_l": 41.8,
+   "knee_l": 97.5,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -50.0,
+   "E_r": 96.1,
+   "abd_r": 12.0,
+   "elbow_below_sh_r": 0.168,
+   "S_world_r": -50.0,
+   "fist_below_sh_r": 0.354,
+   "fist_to_head_r": 0.526,
+   "elbow_behind_back_r": 0.143,
+   "ankle_r": [
+    0.0,
+    0.094
+   ],
+   "ball_z_r": 0.032,
+   "thigh_from_vert_r": 32.2,
+   "knee_r": 124.1,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.022,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.06
+  },
+  {
+   "f": 11,
+   "lean_keyed": 27.0,
+   "lean_meas": 27.0,
+   "pelvis_z": 0.876,
+   "pelvis_y": 0.025,
+   "S_l": 16.5,
+   "E_l": 91.4,
+   "abd_l": 6.0,
+   "elbow_below_sh_l": 0.254,
+   "S_world_l": 16.5,
+   "fist_below_sh_l": 0.179,
+   "fist_to_head_l": 0.395,
+   "elbow_behind_back_l": -0.144,
+   "ankle_l": [
+    -0.135,
+    0.35
+   ],
+   "ball_z_l": 0.255,
+   "thigh_from_vert_l": 71.1,
+   "knee_l": 80.9,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -37.6,
+   "E_r": 95.3,
+   "abd_r": 10.5,
+   "elbow_below_sh_r": 0.208,
+   "S_world_r": -37.6,
+   "fist_below_sh_r": 0.351,
+   "fist_to_head_r": 0.507,
+   "elbow_behind_back_r": 0.086,
+   "ankle_r": [
+    0.06,
+    0.12
+   ],
+   "ball_z_r": 0.018,
+   "thigh_from_vert_r": 25.8,
+   "knee_r": 128.8,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.022,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.195
+  },
+  {
+   "f": 12,
+   "lean_keyed": 26.7,
+   "lean_meas": 26.7,
+   "pelvis_z": 0.865,
+   "pelvis_y": 0.025,
+   "S_l": -16.0,
+   "E_l": 93.3,
+   "abd_l": 7.9,
+   "elbow_below_sh_l": 0.254,
+   "S_world_l": -16.0,
+   "fist_below_sh_l": 0.309,
+   "fist_to_head_l": 0.46,
+   "elbow_behind_back_l": -0.005,
+   "ankle_l": [
+    -0.17,
+    0.2
+   ],
+   "ball_z_l": 0.127,
+   "thigh_from_vert_l": 53.8,
+   "knee_l": 110.4,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -7.5,
+   "E_r": 93.2,
+   "abd_r": 6.9,
+   "elbow_below_sh_r": 0.262,
+   "S_world_r": -7.5,
+   "fist_below_sh_r": 0.293,
+   "fist_to_head_r": 0.459,
+   "elbow_behind_back_r": -0.054,
+   "ankle_r": [
+    0.13,
+    0.26
+   ],
+   "ball_z_r": 0.14,
+   "thigh_from_vert_r": 38.5,
+   "knee_r": 93.4,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.022,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.3
+  },
+  {
+   "f": 13,
+   "lean_keyed": 26.0,
+   "lean_meas": 26.0,
+   "pelvis_z": 0.831,
+   "pelvis_y": 0.025,
+   "S_l": -48.5,
+   "E_l": 95.4,
+   "abd_l": 11.8,
+   "elbow_below_sh_l": 0.173,
+   "S_world_l": -48.5,
+   "fist_below_sh_l": 0.354,
+   "fist_to_head_l": 0.523,
+   "elbow_behind_back_l": 0.147,
+   "ankle_l": [
+    -0.155,
+    0.094
+   ],
+   "ball_z_l": 0.032,
+   "thigh_from_vert_l": 41.2,
+   "knee_l": 128.4,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": 22.6,
+   "E_r": 91.4,
+   "abd_r": 6.0,
+   "elbow_below_sh_r": 0.245,
+   "S_world_r": 22.6,
+   "fist_below_sh_r": 0.146,
+   "fist_to_head_r": 0.398,
+   "elbow_behind_back_r": -0.17,
+   "ankle_r": [
+    0.125,
+    0.38
+   ],
+   "ball_z_r": 0.258,
+   "thigh_from_vert_r": 52.3,
+   "knee_r": 66.0,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.022,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.28
+  },
+  {
+   "f": 14,
+   "lean_keyed": 25.5,
+   "lean_meas": 25.5,
+   "pelvis_z": 0.856,
+   "pelvis_y": 0.025,
+   "S_l": -62.0,
+   "E_l": 96.1,
+   "abd_l": 12.0,
+   "elbow_below_sh_l": 0.122,
+   "S_world_l": -62.0,
+   "fist_below_sh_l": 0.343,
+   "fist_to_head_l": 0.539,
+   "elbow_behind_back_l": 0.201,
+   "ankle_l": [
+    -0.045,
+    0.094
+   ],
+   "ball_z_l": 0.032,
+   "thigh_from_vert_l": 31.4,
+   "knee_l": 130.5,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": 35.0,
+   "E_r": 90.6,
+   "abd_r": 6.0,
+   "elbow_below_sh_r": 0.217,
+   "S_world_r": 35.0,
+   "fist_below_sh_r": 0.07,
+   "fist_to_head_r": 0.369,
+   "elbow_behind_back_r": -0.199,
+   "ankle_r": [
+    0.005,
+    0.38
+   ],
+   "ball_z_r": 0.268,
+   "thigh_from_vert_r": 64.8,
+   "knee_r": 68.8,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.022,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.05
+  },
+  {
+   "f": 15,
+   "lean_keyed": 24.9,
+   "lean_meas": 24.9,
+   "pelvis_z": 0.871,
+   "pelvis_y": 0.025,
+   "S_l": -55.5,
+   "E_l": 95.8,
+   "abd_l": 12.0,
+   "elbow_below_sh_l": 0.148,
+   "S_world_l": -55.5,
+   "fist_below_sh_l": 0.351,
+   "fist_to_head_l": 0.533,
+   "elbow_behind_back_l": 0.175,
+   "ankle_l": [
+    0.065,
+    0.094
+   ],
+   "ball_z_l": 0.032,
+   "thigh_from_vert_l": 21.0,
+   "knee_l": 135.0,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": 28.5,
+   "E_r": 91.0,
+   "abd_r": 6.0,
+   "elbow_below_sh_r": 0.233,
+   "S_world_r": 28.5,
+   "fist_below_sh_r": 0.11,
+   "fist_to_head_r": 0.38,
+   "elbow_behind_back_r": -0.178,
+   "ankle_r": [
+    -0.075,
+    0.37
+   ],
+   "ball_z_r": 0.268,
+   "thigh_from_vert_r": 69.7,
+   "knee_r": 74.7,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.022,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.14
+  },
+  {
+   "f": 16,
+   "lean_keyed": 24.2,
+   "lean_meas": 24.2,
+   "pelvis_z": 0.876,
+   "pelvis_y": 0.025,
+   "S_l": -37.7,
+   "E_l": 94.8,
+   "abd_l": 10.5,
+   "elbow_below_sh_l": 0.207,
+   "S_world_l": -37.7,
+   "fist_below_sh_l": 0.359,
+   "fist_to_head_l": 0.517,
+   "elbow_behind_back_l": 0.098,
+   "ankle_l": [
+    0.175,
+    0.14
+   ],
+   "ball_z_l": 0.018,
+   "thigh_from_vert_l": 17.5,
+   "knee_l": 125.8,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": 10.7,
+   "E_r": 91.9,
+   "abd_r": 6.0,
+   "elbow_below_sh_r": 0.26,
+   "S_world_r": 10.7,
+   "fist_below_sh_r": 0.203,
+   "fist_to_head_r": 0.415,
+   "elbow_behind_back_r": -0.115,
+   "ankle_r": [
+    -0.125,
+    0.35
+   ],
+   "ball_z_r": 0.263,
+   "thigh_from_vert_r": 70.3,
+   "knee_r": 81.0,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.022,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.3
+  },
+  {
+   "f": 17,
+   "lean_keyed": 23.5,
+   "lean_meas": 23.5,
+   "pelvis_z": 0.871,
+   "pelvis_y": 0.025,
+   "S_l": -13.5,
+   "E_l": 93.3,
+   "abd_l": 7.6,
+   "elbow_below_sh_l": 0.257,
+   "S_world_l": -13.5,
+   "fist_below_sh_l": 0.313,
+   "fist_to_head_l": 0.477,
+   "elbow_behind_back_l": -0.013,
+   "ankle_l": [
+    0.161,
+    0.26
+   ],
+   "ball_z_l": 0.122,
+   "thigh_from_vert_l": 33.2,
+   "knee_l": 94.9,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -13.5,
+   "E_r": 93.3,
+   "abd_r": 7.6,
+   "elbow_below_sh_r": 0.257,
+   "S_world_r": -13.5,
+   "fist_below_sh_r": 0.303,
+   "fist_to_head_r": 0.469,
+   "elbow_behind_back_r": -0.005,
+   "ankle_r": [
+    -0.165,
+    0.3
+   ],
+   "ball_z_r": 0.229,
+   "thigh_from_vert_r": 66.7,
+   "knee_r": 91.2,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.022,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.326
+  },
+  {
+   "f": 18,
+   "lean_keyed": 22.8,
+   "lean_meas": 22.8,
+   "pelvis_z": 0.858,
+   "pelvis_y": 0.025,
+   "S_l": 10.7,
+   "E_l": 91.9,
+   "abd_l": 6.0,
+   "elbow_below_sh_l": 0.26,
+   "S_world_l": 10.7,
+   "fist_below_sh_l": 0.209,
+   "fist_to_head_l": 0.428,
+   "elbow_behind_back_l": -0.118,
+   "ankle_l": [
+    0.125,
+    0.38
+   ],
+   "ball_z_l": 0.235,
+   "thigh_from_vert_l": 48.9,
+   "knee_l": 69.2,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -37.8,
+   "E_r": 94.8,
+   "abd_r": 10.5,
+   "elbow_below_sh_r": 0.207,
+   "S_world_r": -37.8,
+   "fist_below_sh_r": 0.353,
+   "fist_to_head_r": 0.518,
+   "elbow_behind_back_r": 0.112,
+   "ankle_r": [
+    -0.16,
+    0.18
+   ],
+   "ball_z_r": 0.118,
+   "thigh_from_vert_r": 51.2,
+   "knee_r": 113.1,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.021,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.285
+  },
+  {
+   "f": 19,
+   "lean_keyed": 22.0,
+   "lean_meas": 22.0,
+   "pelvis_z": 0.836,
+   "pelvis_y": 0.025,
+   "S_l": 28.5,
+   "E_l": 91.0,
+   "abd_l": 6.0,
+   "elbow_below_sh_l": 0.233,
+   "S_world_l": 28.5,
+   "fist_below_sh_l": 0.107,
+   "fist_to_head_l": 0.392,
+   "elbow_behind_back_l": -0.179,
+   "ankle_l": [
+    0.055,
+    0.38
+   ],
+   "ball_z_l": 0.245,
+   "thigh_from_vert_l": 60.4,
+   "knee_l": 64.2,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -55.5,
+   "E_r": 95.8,
+   "abd_r": 12.0,
+   "elbow_below_sh_r": 0.148,
+   "S_world_r": -55.5,
+   "fist_below_sh_r": 0.353,
+   "fist_to_head_r": 0.544,
+   "elbow_behind_back_r": 0.189,
+   "ankle_r": [
+    -0.155,
+    0.094
+   ],
+   "ball_z_r": 0.032,
+   "thigh_from_vert_r": 40.2,
+   "knee_r": 130.4,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.021,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.21
+  },
+  {
+   "f": 20,
+   "lean_keyed": 21.2,
+   "lean_meas": 21.2,
+   "pelvis_z": 0.858,
+   "pelvis_y": 0.025,
+   "S_l": 35.0,
+   "E_l": 90.6,
+   "abd_l": 6.0,
+   "elbow_below_sh_l": 0.217,
+   "S_world_l": 35.0,
+   "fist_below_sh_l": 0.067,
+   "fist_to_head_l": 0.377,
+   "elbow_behind_back_l": -0.192,
+   "ankle_l": [
+    -0.025,
+    0.37
+   ],
+   "ball_z_l": 0.248,
+   "thigh_from_vert_l": 66.5,
+   "knee_l": 70.2,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -62.0,
+   "E_r": 96.1,
+   "abd_r": 12.0,
+   "elbow_below_sh_r": 0.122,
+   "S_world_r": -62.0,
+   "fist_below_sh_r": 0.345,
+   "fist_to_head_r": 0.55,
+   "elbow_behind_back_r": 0.215,
+   "ankle_r": [
+    -0.045,
+    0.094
+   ],
+   "ball_z_r": 0.032,
+   "thigh_from_vert_r": 31.1,
+   "knee_r": 131.8,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.022,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.02
+  },
+  {
+   "f": 21,
+   "lean_keyed": 20.3,
+   "lean_meas": 20.3,
+   "pelvis_z": 0.871,
+   "pelvis_y": 0.025,
+   "S_l": 28.5,
+   "E_l": 91.0,
+   "abd_l": 6.0,
+   "elbow_below_sh_l": 0.233,
+   "S_world_l": 28.5,
+   "fist_below_sh_l": 0.104,
+   "fist_to_head_l": 0.388,
+   "elbow_behind_back_l": -0.168,
+   "ankle_l": [
+    -0.095,
+    0.36
+   ],
+   "ball_z_l": 0.255,
+   "thigh_from_vert_l": 70.0,
+   "knee_l": 76.3,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -55.5,
+   "E_r": 95.8,
+   "abd_r": 12.0,
+   "elbow_below_sh_r": 0.148,
+   "S_world_r": -55.5,
+   "fist_below_sh_r": 0.355,
+   "fist_to_head_r": 0.548,
+   "elbow_behind_back_r": 0.19,
+   "ankle_r": [
+    0.065,
+    0.094
+   ],
+   "ball_z_r": 0.032,
+   "thigh_from_vert_r": 21.2,
+   "knee_r": 136.0,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.021,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.16
+  },
+  {
+   "f": 22,
+   "lean_keyed": 19.4,
+   "lean_meas": 19.4,
+   "pelvis_z": 0.876,
+   "pelvis_y": 0.025,
+   "S_l": 10.8,
+   "E_l": 91.9,
+   "abd_l": 6.0,
+   "elbow_below_sh_l": 0.26,
+   "S_world_l": 10.8,
+   "fist_below_sh_l": 0.2,
+   "fist_to_head_l": 0.424,
+   "elbow_behind_back_l": -0.098,
+   "ankle_l": [
+    -0.125,
+    0.35
+   ],
+   "ball_z_l": 0.255,
+   "thigh_from_vert_l": 70.3,
+   "knee_l": 80.0,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -37.8,
+   "E_r": 94.8,
+   "abd_r": 10.5,
+   "elbow_below_sh_r": 0.207,
+   "S_world_r": -37.8,
+   "fist_below_sh_r": 0.361,
+   "fist_to_head_r": 0.532,
+   "elbow_behind_back_r": 0.117,
+   "ankle_r": [
+    0.175,
+    0.14
+   ],
+   "ball_z_r": 0.033,
+   "thigh_from_vert_r": 18.3,
+   "knee_r": 126.7,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.021,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.3
+  },
+  {
+   "f": 23,
+   "lean_keyed": 18.5,
+   "lean_meas": 18.5,
+   "pelvis_z": 0.873,
+   "pelvis_y": 0.025,
+   "S_l": -13.5,
+   "E_l": 93.3,
+   "abd_l": 7.6,
+   "elbow_below_sh_l": 0.257,
+   "S_world_l": -13.5,
+   "fist_below_sh_l": 0.3,
+   "fist_to_head_l": 0.476,
+   "elbow_behind_back_l": 0.015,
+   "ankle_l": [
+    -0.165,
+    0.3
+   ],
+   "ball_z_l": 0.227,
+   "thigh_from_vert_l": 66.5,
+   "knee_l": 90.6,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": -13.5,
+   "E_r": 93.3,
+   "abd_r": 7.6,
+   "elbow_below_sh_r": 0.257,
+   "S_world_r": -13.5,
+   "fist_below_sh_r": 0.316,
+   "fist_to_head_r": 0.496,
+   "elbow_behind_back_r": 0.007,
+   "ankle_r": [
+    0.215,
+    0.26
+   ],
+   "ball_z_r": 0.14,
+   "thigh_from_vert_r": 27.9,
+   "knee_r": 98.9,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.021,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.38
+  },
+  {
+   "f": 24,
+   "lean_keyed": 17.7,
+   "lean_meas": 17.7,
+   "pelvis_z": 0.863,
+   "pelvis_y": 0.025,
+   "S_l": -37.7,
+   "E_l": 94.8,
+   "abd_l": 10.5,
+   "elbow_below_sh_l": 0.207,
+   "S_world_l": -37.7,
+   "fist_below_sh_l": 0.35,
+   "fist_to_head_l": 0.521,
+   "elbow_behind_back_l": 0.131,
+   "ankle_l": [
+    -0.16,
+    0.18
+   ],
+   "ball_z_l": 0.118,
+   "thigh_from_vert_l": 50.5,
+   "knee_l": 113.5,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": 10.7,
+   "E_r": 91.9,
+   "abd_r": 6.0,
+   "elbow_below_sh_r": 0.26,
+   "S_world_r": 10.7,
+   "fist_below_sh_r": 0.212,
+   "fist_to_head_r": 0.449,
+   "elbow_behind_back_r": -0.101,
+   "ankle_r": [
+    0.125,
+    0.38
+   ],
+   "ball_z_r": 0.258,
+   "thigh_from_vert_r": 49.2,
+   "knee_r": 71.0,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.021,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.285
+  },
+  {
+   "f": 25,
+   "lean_keyed": 17.0,
+   "lean_meas": 17.0,
+   "pelvis_z": 0.846,
+   "pelvis_y": 0.025,
+   "S_l": -55.5,
+   "E_l": 95.8,
+   "abd_l": 12.0,
+   "elbow_below_sh_l": 0.148,
+   "S_world_l": -55.5,
+   "fist_below_sh_l": 0.351,
+   "fist_to_head_l": 0.544,
+   "elbow_behind_back_l": 0.205,
+   "ankle_l": [
+    -0.155,
+    0.094
+   ],
+   "ball_z_l": 0.032,
+   "thigh_from_vert_l": 38.2,
+   "knee_l": 132.9,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": 28.5,
+   "E_r": 91.0,
+   "abd_r": 6.0,
+   "elbow_below_sh_r": 0.233,
+   "S_world_r": 28.5,
+   "fist_below_sh_r": 0.111,
+   "fist_to_head_r": 0.414,
+   "elbow_behind_back_r": -0.166,
+   "ankle_r": [
+    0.055,
+    0.38
+   ],
+   "ball_z_r": 0.263,
+   "thigh_from_vert_r": 59.8,
+   "knee_r": 66.9,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.021,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.21
+  },
+  {
+   "f": 26,
+   "lean_keyed": 15.0,
+   "lean_meas": 15.0,
+   "pelvis_z": 0.857,
+   "pelvis_y": 0.025,
+   "S_l": -62.0,
+   "E_l": 96.1,
+   "abd_l": 12.0,
+   "elbow_below_sh_l": 0.122,
+   "S_world_l": -62.0,
+   "fist_below_sh_l": 0.343,
+   "fist_to_head_l": 0.55,
+   "elbow_behind_back_l": 0.232,
+   "ankle_l": [
+    -0.045,
+    0.094
+   ],
+   "ball_z_l": 0.032,
+   "thigh_from_vert_l": 31.0,
+   "knee_l": 130.6,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": 35.0,
+   "E_r": 90.6,
+   "abd_r": 6.0,
+   "elbow_below_sh_r": 0.217,
+   "S_world_r": 35.0,
+   "fist_below_sh_r": 0.07,
+   "fist_to_head_r": 0.402,
+   "elbow_behind_back_r": -0.178,
+   "ankle_r": [
+    -0.005,
+    0.38
+   ],
+   "ball_z_r": 0.273,
+   "thigh_from_vert_r": 65.4,
+   "knee_r": 68.9,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.021,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.04
+  },
+  {
+   "f": 27,
+   "lean_keyed": 16,
+   "lean_meas": 16.0,
+   "pelvis_z": 0.861,
+   "pelvis_y": 0.025,
+   "S_l": -55.5,
+   "E_l": 95.8,
+   "abd_l": 12.0,
+   "elbow_below_sh_l": 0.148,
+   "S_world_l": -55.5,
+   "fist_below_sh_l": 0.353,
+   "fist_to_head_l": 0.547,
+   "elbow_behind_back_l": 0.204,
+   "ankle_l": [
+    0.065,
+    0.094
+   ],
+   "ball_z_l": 0.032,
+   "thigh_from_vert_l": 22.5,
+   "knee_l": 131.3,
+   "curl_middle_l": [
+    80.0,
+    132.0,
+    0.0
+   ],
+   "S_r": 28.5,
+   "E_r": 91.0,
+   "abd_r": 6.0,
+   "elbow_below_sh_r": 0.233,
+   "S_world_r": 28.5,
+   "fist_below_sh_r": 0.107,
+   "fist_to_head_r": 0.408,
+   "elbow_behind_back_r": -0.157,
+   "ankle_r": [
+    -0.035,
+    0.38
+   ],
+   "ball_z_r": 0.285,
+   "thigh_from_vert_r": 68.0,
+   "knee_r": 69.9,
+   "curl_middle_r": [
+    80.0,
+    144.0,
+    0.0
+   ],
+   "head_ahead_of_chest_line": 0.021,
+   "back_bend_deg": 11.0,
+   "feet_apart_y": 0.1
+  }
+ ]
+}

@@ -1,0 +1,2 @@
+ASSERT: OK
+ASSERT: OK mv_run_start_v4s AS_GSTN_RunStart_v4r1 f100-f180: weight >= 0.8 on 100% (min 0.98)

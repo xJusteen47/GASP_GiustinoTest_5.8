@@ -1,0 +1,3 @@
+combat rules extensions: []
+/GSTNDefence/Test/DA_DefenceRules_Test: MaxDownedFrames 0 -> 90
+/GSTNDefence/Test/DA_DefenceRules_TestPvE: MaxDownedFrames 0 -> 90

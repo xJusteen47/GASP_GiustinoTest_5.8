@@ -1,0 +1,75 @@
+node Evento On Move Started [FDCA7F2F]
+  Evento On Move Started.then -> Set FollowUpState.execute
+node Set FollowUpState [5A71D1E2]
+node Make Sync Integer [89B7FA9D] Value=0
+  Make Sync Integer.SyncInteger -> Set FollowUpState.FollowUpState
+node Evento On Move Key [6503B34A]
+  Evento On Move Key.then -> Ramo.execute
+  Evento On Move Key.KeyTag -> MatchesTag.TagOne
+  Evento On Move Key.KeyTag -> MatchesTag.TagOne
+node MatchesTag [690F38D3] TagTwo=(TagName="Example.Key.DoubleShot.Fire"), bExactMatch=true
+  MatchesTag.ReturnValue -> Ramo.Condition
+node Ramo [DC416935]
+  Ramo.then -> Fire Move Projectile.execute
+  Ramo.else -> Ramo.execute
+node Fire Move Projectile [5189E964]
+  Fire Move Projectile.then -> Set FollowUpState.execute
+node Get Projectile [B44177A0]
+  Get Projectile.Projectile -> Fire Move Projectile.Definition
+node Get FirstShotAdjust [F4938DA2]
+  Get FirstShotAdjust.FirstShotAdjust -> Fire Move Projectile.Adjust
+node Set FollowUpState [653EA1DA]
+node Make Sync Integer [9209ACB4] Value=1
+  Make Sync Integer.SyncInteger -> Set FollowUpState.FollowUpState
+node MatchesTag [416121C7] TagTwo=(TagName="Example.Key.DoubleShot.WindowEnd"), bExactMatch=true
+  MatchesTag.ReturnValue -> Ramo.Condition
+node Ramo [66300A8F]
+  Ramo.then -> Set FollowUpState.execute
+node Set FollowUpState [D797DC84]
+node Make Sync Integer [36F9CAE4] Value=2
+  Make Sync Integer.SyncInteger -> Set FollowUpState.FollowUpState
+node Evento On Move Frame [2A1982E7]
+  Evento On Move Frame.then -> Ramo.execute
+node Break Sync Integer [481FA787]
+  Break Sync Integer.Value -> Equal (Integer).A
+node Get FollowUpState [A8469228]
+  Get FollowUpState.FollowUpState -> Break Sync Integer.SyncInteger
+node Equal (Integer) [A1CEFEB5] B=1
+  Equal (Integer).ReturnValue -> AND Boolean.A
+node GetCombatComponent [538361AF]
+  GetCombatComponent.ReturnValue -> WasCommandEnteredWithin.self
+  GetCombatComponent.ReturnValue -> WasCommandEnteredWithin.self
+node WasCommandEnteredWithin [3BC0F78F]
+  WasCommandEnteredWithin.ReturnValue -> OR Boolean.A
+node Get FollowUpCommand [C5F6F775]
+  Get FollowUpCommand.FollowUpCommand -> WasCommandEnteredWithin.Command
+node Get FollowUpBufferFrames [8886C4F2]
+  Get FollowUpBufferFrames.FollowUpBufferFrames -> WasCommandEnteredWithin.Frames
+node WasCommandEnteredWithin [ADC29D70]
+  WasCommandEnteredWithin.ReturnValue -> OR Boolean.B
+node Get FollowUpCommandAlt [7396E266]
+  Get FollowUpCommandAlt.FollowUpCommandAlt -> WasCommandEnteredWithin.Command
+node Get FollowUpBufferFrames [4FE471DF]
+  Get FollowUpBufferFrames.FollowUpBufferFrames -> WasCommandEnteredWithin.Frames
+node OR Boolean [4795804C]
+  OR Boolean.ReturnValue -> AND Boolean.B
+node AND Boolean [916FD21D]
+  AND Boolean.ReturnValue -> Ramo.Condition
+node Ramo [DA047B6D]
+  Ramo.then -> Set FollowUpState.execute
+node Open Move Tag Window [1D6882A5] Tag=(TagName="Example.State.DoubleShotFollowUp"), Frames=30
+  Open Move Tag Window.then -> WaitCombatFrames.execute
+node WaitCombatFrames [39DADD29]
+node Get SecondShotDelayFrames [94DD8D31]
+  Get SecondShotDelayFrames.SecondShotDelayFrames -> WaitCombatFrames.Frames
+node Set FollowUpState [1A202ABF]
+  Set FollowUpState.then -> Open Move Tag Window.execute
+node Make Sync Integer [AF68B09E] Value=2
+  Make Sync Integer.SyncInteger -> Set FollowUpState.FollowUpState
+node Evento On Combat Frames Elapsed [FA8BE86A]
+  Evento On Combat Frames Elapsed.then -> Fire Move Projectile.execute
+node Fire Move Projectile [1086E67D]
+node Get Projectile [87E78530]
+  Get Projectile.Projectile -> Fire Move Projectile.Definition
+node Get SecondShotAdjust [DC928A84]
+  Get SecondShotAdjust.SecondShotAdjust -> Fire Move Projectile.Adjust

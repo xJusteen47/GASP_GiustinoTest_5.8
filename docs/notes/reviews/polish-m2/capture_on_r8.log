@@ -1,0 +1,30 @@
+    0.0s driver loaded: vfx 1, kit KIT_Test_Hits, out C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2\Saved\PolishM2\r8\vfx1
+    8.1s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '3', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   22.0s kit KIT_Test_Hits: OK
+   25.1s parked [('Z1', (3500.0, 300.0)), ('Z1', (3800.0, 300.0))]; effects cvar 1
+   27.9s warm-up: 8 systems
+   37.7s sequence jump: ((0, 150, 100), 0)
+   41.3s jump: jump on v20
+   56.7s sequence jump done: 120 frames, pawn at (0, 150, 88)
+   59.3s hit_small: dummy ['BP_GASNPP_TestCharacter_C_3'] at (95, 150), percent 0.0
+   62.0s sequence hit_small: ((48, 150, 88), 0)
+   65.2s hit_small: attack on v20
+   74.7s sequence hit_small done: 80 frames, pawn at (0, 150, 88)
+   77.4s hit_medium: dummy ['BP_GASNPP_TestCharacter_C_3'] at (95, 150), percent 90.0
+   80.1s sequence hit_medium: ((48, 150, 88), 0)
+   83.5s hit_medium: attack on v20
+   96.3s sequence hit_medium done: 100 frames, pawn at (0, 150, 88)
+   98.9s hit_large: dummy ['BP_GASNPP_TestCharacter_C_3'] at (95, 150), percent 170.0
+  101.6s sequence hit_large: ((48, 150, 88), 0)
+  105.0s hit_large: attack on v20
+  133.6s sequence hit_large done: 200 frames, pawn at (0, 150, 88)
+  136.1s sequence run_skid: ((0, 150, 88), 0)
+  139.5s run_skid: stick (0, 1, 0) from v20
+  156.5s run_skid: stick (0, -1, 0) from v130
+  162.6s run_skid: stick None from v170
+  170.2s sequence run_skid done: 220 frames, pawn at (713, 150, 88)
+  172.8s sequence sprint: ((713, 150, 88), -180)
+  175.9s sprint: stick (0, 1, 0) from v20
+  214.9s sprint: stick None from v270
+  222.8s sequence sprint done: 320 frames, pawn at (3713, 150, 88)
+  225.5s finish: ok

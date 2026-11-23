@@ -1,0 +1,73 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Defence",
+	"Description": "Defence for the GSTN combat: a fixed-size shield bubble, the parry (one resolution, two sources: the shield's perfect shield and a move's parry window), optional tech, the downed state and get-up, and the DI and SDI rules, as data and pure integer-safe math (GSTNDefenceCore, no fork) the ability-system half (GSTNDefenceGAS: the shield attribute mirror, the shield effects, the loadout contribution; stock GAS, no Network Prediction) and the Network Prediction half (GSTNDefenceNP: the sync fragment, the bubble as an extra hurtbox, the Parry and Shield steps, the abilities; needs the GAS-NPP fork). Enabling it changes nothing until a kit or a rules asset carries a defence extension.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNDefenceCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNDefenceGAS",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNDefenceNP",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GSTNCombat",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatGAS",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInput",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInputNP",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatNP",
+			"Enabled": true
+		},
+		{
+			"Name": "GameplayAbilities",
+			"Enabled": true
+		},
+		{
+			"Name": "NetworkPrediction",
+			"Enabled": true
+		},
+		{
+			"Name": "AbilitySystemSimulation",
+			"Enabled": true
+		},
+		{
+			"Name": "Mover",
+			"Enabled": true
+		}
+	]
+}

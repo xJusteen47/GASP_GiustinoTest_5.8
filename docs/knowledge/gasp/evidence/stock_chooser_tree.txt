@@ -1,0 +1,101 @@
+## CHT_MoverCharacterAnimations_PoseMatch  cols: ChooserName("StateName")
+   -> nested: r0 Idle Loops\, r1 Idle Breaks\, r2 Idle Transitions\, r3 Locomotion Loops\, r4 Locomotion Transitions\, r5 In Air Loops\, r6 In Air Transitions\, r7 Slide Loops\, r8 Slide Transitions\
+   clips(1): M_Relaxed_Jump_Loop_Fall\
+## Idle Loops  cols: Enum("Stance"), OutputStruct
+   clips(2): M_Relaxed_Stand_Idle_Loop\, M_Neutral_Crouch_Idle_Loop\
+## Idle Breaks  cols: Enum("Stance"), FloatRange("AO","X"), OutputStruct, Randomize
+   clips(13): M_Relaxed_Stand_Idle_Break_v01\, M_Relaxed_Stand_Idle_Break_v02\, M_Relaxed_Stand_Idle_Break_v03\, M_Relaxed_Stand_Idle_Break_v04\, M_Relaxed_Stand_Idle_Break_v05\, M_Relaxed_Stand_Idle_Break_v06\, M_Relaxed_Stand_Idle_Break_v07\, M_Relaxed_Stand_Idle_Break_v08\ ...
+## Idle Transitions  cols: Enum("Stance"), MultiEnum("MovementMode_Recent"), FloatRange("Speed2D"), Bool("ShouldTurnInPlace")
+   -> nested: Stand Mode Transitions\, Stand Turn In Place\, Stand Stops\, Stand Stance Transitions\, Crouch Mode Transitions\, Crouch Turn In Place\, Crouch Stops\, Crouch Stance Transitions\
+## Locomotion Loops  cols: Enum("Stance"), Enum("Gait")
+   -> nested: Walk Loops\, Run Loops\, Sprint Loops\, Crouch Loops\
+## Locomotion Transitions  cols: Enum("Stance"), Enum("Gait"), Enum("MovementDirection"), Enum("MovementMode_Recent")
+   -> nested: Walk F Mode Transitions\, Walk F Loco Transitions\, Walk B Mode Transitions\, Walk B Loco Transitions\, Walk LL Mode Transitions\, Walk LL Loco Transitions\, Walk RL Mode Transitions\, Walk RL Loco Transitions\, Run F Mode Transitions\, Run F Loco Transitions\, Run B Mode Transitions\, Run B Loco Transitions\, Run LL Mode Transitions\, Run LL Loco Transitions\, Run RL Mode Transitions\, Run RL Loco Transitions\, Sprint Mode Transitions\, Sprint Loco Transitions\, Crouch F Mode Transitions\, Crouch F Loco Transitions\, Crouch B Loco Transitions\, Crouch LL Loco Transitions\, Crouch RL Loco Transitions\
+## In Air Loops  cols: OutputStruct
+   clips(1): M_Relaxed_Jump_Loop_Fall\
+## In Air Transitions  cols: MultiEnum("MovementDirection"), FloatRange("Speed2D")
+   -> nested: Jump Idle\, Jump F\, Jump B\, Jump LL\, Jump RL\
+## Slide Loops  cols: MultiEnum("MovementDirection")
+   clips(2): M_Relaxed_Slide_FootOut_Loop\, M_Relaxed_Slide_KneesOut_Loop\
+## Slide Transitions  cols: MultiEnum("MovementDirection"), Enum("MovementDirection_LastFrame"), OutputStruct
+   clips(2): M_Relaxed_Slide_FootOut_Into_Rfoot\, M_Relaxed_Slide_KneesOut_Into_Rfoot\
+## Walk Loops  cols: Enum("MovementDirection"), OutputStruct, PoseSearch
+   clips(4): BS_Relaxed_Walk_Loop_F_Slopes\, M_Relaxed_Walk_Loop_B\, M_Relaxed_Walk_Loop_LL\, M_Relaxed_Walk_Loop_RL\
+## Run Loops  cols: Enum("MovementDirection"), OutputStruct, PoseSearch
+   clips(4): BS_Relaxed_Run_Loop_F_Slopes\, M_Relaxed_Run_Loop_B\, M_Relaxed_Run_Loop_LL\, M_Relaxed_Run_Loop_RL\
+## Sprint Loops  cols: OutputStruct, PoseSearch
+   clips(1): M_Relaxed_Sprint_Loop_F\
+## Crouch Loops  cols: Enum("MovementDirection"), OutputStruct, PoseSearch
+   clips(4): M_Relaxed_Crouch_Loop_F\, M_Relaxed_Crouch_Loop_B\, M_Relaxed_Crouch_Loop_LL\, M_Relaxed_Crouch_Loop_RL\
+## Walk F Loco Transitions  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), Bool("IsPivoting"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(38): M_Relaxed_Walk_Start_F_Lfoot\, M_Relaxed_Walk_Start_F_Rfoot\, M_Relaxed_Walk_Reface_Start_090_L_Lfoot\, M_Relaxed_Walk_Reface_Start_180_L_Lfoot\, M_Relaxed_Walk_Reface_Start_090_R_Rfoot\, M_Relaxed_Walk_Reface_Start_180_R_Rfoot\, M_Relaxed_Transition_Run_to_Walk_Lfoot\, M_Relaxed_Transition_Run_to_Walk_Rfoot\ ...
+## Walk F Mode Transitions  cols: MultiEnum("MovementMode_Recent"), Bool("IsPivoting"), Bool("JustLanded_Heavy"), Bool("JustTraversed"), OutputStruct, PoseSearch
+   clips(11): M_Relaxed_Jump_F_Land_Walk_Light_Lfoot\, M_Relaxed_Jump_F_Land_Walk_Light_Rfoot\, M_Relaxed_Jump_F_Land_Walk_Heavy_Lfoot\, M_Relaxed_Jump_F_Land_Walk_Heavy_Rfoot\, M_Relaxed_Traversal_Hurdle_1_0_walk_F_Lfoot\, M_Relaxed_Traversal_Hurdle_1_0_walk_F_Rfoot\, M_Relaxed_Traversal_Hurdle_1_0_walk_F_V2_Lfoot\, M_Relaxed_Traversal_Hurdle_1_0_walk_F_V2_Rfoot\ ...
+## Walk B Loco Transitions  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), Bool("IsPivoting"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(22): M_Relaxed_Walk_Start_B_Rfoot\, M_Relaxed_Walk_Start_B_Lfoot\, M_Relaxed_Walk_Reface_Start_B_090_L_Rfoot\, M_Relaxed_Walk_Reface_Start_B_180_L_Rfoot\, M_Relaxed_Walk_Reface_Start_B_090_R_Lfoot\, M_Relaxed_Walk_Reface_Start_B_180_R_Lfoot\, M_Relaxed_Walk_Spin_RL_B_Lfoot\, M_Relaxed_Walk_Spin_RL_B_Rfoot\ ...
+## Walk B Mode Transitions  cols: MultiEnum("MovementMode_Recent"), Bool("IsPivoting"), Bool("JustLanded_Heavy"), OutputStruct, PoseSearch
+   clips(2): M_Relaxed_Jump_B_Land_Walk_Light\, M_Relaxed_Jump_B_Land_Walk_Heavy\
+## Walk LL Loco Transitions  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), Bool("IsPivoting"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(9): M_Relaxed_Walk_Start_LL_Lfoot\, M_Relaxed_Walk_Spin_F_LL_Lfoot\, M_Relaxed_Walk_Spin_F_LL_Rfoot\, M_Relaxed_Walk_Pivot_RL_LL_Lfoot\, M_Relaxed_Walk_Pivot_RL_LL_Rfoot\, M_Relaxed_Walk_Box_F_LL_Lfoot\, M_Relaxed_Walk_Box_F_LL_Rfoot\, M_Relaxed_Walk_Box_B_LL_Lfoot\ ...
+## Walk LL Mode Transitions  cols: MultiEnum("MovementMode_Recent"), Bool("IsPivoting"), Bool("JustLanded_Heavy"), OutputStruct, PoseSearch
+   clips(2): M_Relaxed_Jump_LL_Land_Walk_Light\, M_Relaxed_Jump_LL_Land_Walk_Heavy\
+## Walk RL Loco Transitions  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), Bool("IsPivoting"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(9): M_Relaxed_Walk_Start_RL_Rfoot\, M_Relaxed_Walk_Spin_B_RL_Lfoot\, M_Relaxed_Walk_Spin_B_RL_Lfoot\, M_Relaxed_Walk_Pivot_LL_RL_Lfoot\, M_Relaxed_Walk_Pivot_LL_RL_Rfoot\, M_Relaxed_Walk_Box_F_RL_Lfoot\, M_Relaxed_Walk_Box_F_RL_Rfoot\, M_Relaxed_Walk_Box_B_RL_Lfoot\ ...
+## Walk RL Mode Transitions  cols: MultiEnum("MovementMode_Recent"), Bool("IsPivoting"), Bool("JustLanded_Heavy"), OutputStruct, PoseSearch
+   clips(2): M_Relaxed_Jump_RL_Land_Walk_Light\, M_Relaxed_Jump_RL_Land_Walk_Heavy\
+## Run F Loco Transitions  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), Bool("IsPivoting"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(38): M_Relaxed_Run_Start_F_Lfoot\, M_Relaxed_Run_Start_F_Rfoot\, M_Relaxed_Run_Reface_Start_090_L_Lfoot\, M_Relaxed_Run_Reface_Start_180_L_Lfoot\, M_Relaxed_Run_Reface_Start_090_R_Rfoot\, M_Relaxed_Run_Reface_Start_180_R_Rfoot\, M_Relaxed_Transition_Walk_to_Run_Lfoot\, M_Relaxed_Transition_Walk_to_Run_Rfoot\ ...
+## Run F Mode Transitions  cols: MultiEnum("MovementMode_Recent"), Bool("IsPivoting"), Bool("JustLanded_Heavy"), Bool("JustTraversed"), OutputStruct, PoseSearch
+   clips(11): M_Relaxed_Jump_F_Land_Run_Light_Lfoot\, M_Relaxed_Jump_F_Land_Run_Light_Rfoot\, M_Relaxed_Jump_F_Land_Run_Heavy_Lfoot\, M_Relaxed_Jump_F_Land_Run_Heavy_Rfoot\, M_Relaxed_Traversal_Mantle_1_0_run_F_Lfoot\, M_Relaxed_Traversal_Mantle_1_0_run_F_Rfoot\, M_Relaxed_Traversal_Hurdle_1_0_run_F_V2_Lfoot\, M_Relaxed_Traversal_Hurdle_1_0_run_F_V2_Rfoot\ ...
+## Run B Loco Transitions  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), Bool("IsPivoting"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(22): M_Relaxed_Run_Start_B_Lfoot\, M_Relaxed_Run_Start_B_Rfoot\, M_Relaxed_Run_Reface_Start_B_090_L_Rfoot\, M_Relaxed_Run_Reface_Start_B_180_L_Rfoot\, M_Relaxed_Run_Reface_Start_B_090_R_Lfoot\, M_Relaxed_Run_Reface_Start_B_180_R_Lfoot\, M_Relaxed_Run_Spin_RL_B_Rfoot\, M_Relaxed_Run_Spin_F_B_L_Lfoot\ ...
+## Run B Mode Transitions  cols: MultiEnum("MovementMode_Recent"), Bool("IsPivoting"), Bool("JustLanded_Heavy"), OutputStruct, PoseSearch
+   clips(2): M_Relaxed_Jump_B_Land_Run_Light\, M_Relaxed_Jump_B_Land_Run_Heavy\
+## Run LL Loco Transitions  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), Bool("IsPivoting"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(9): M_Relaxed_Run_Start_LL_Lfoot\, M_Relaxed_Run_Switch_LR_LL_Lfoot\, M_Relaxed_Run_Switch_LR_LL_Rfoot\, M_Relaxed_Run_Pivot_RL_LL_Lfoot\, M_Relaxed_Run_Pivot_RL_LL_Rfoot\, M_Relaxed_Run_Box_F_LL_Lfoot\, M_Relaxed_Run_Box_F_LL_Rfoot\, M_Relaxed_Run_Box_B_LL_Lfoot\ ...
+## Run LL Mode Transitions  cols: MultiEnum("MovementMode_Recent"), Bool("IsPivoting"), Bool("JustLanded_Heavy"), OutputStruct, PoseSearch
+   clips(2): M_Relaxed_Jump_LL_Land_Run_Light\, M_Relaxed_Jump_LL_Land_Run_Heavy\
+## Run RL Loco Transitions  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), Bool("IsPivoting"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(8): M_Relaxed_Run_Start_RL_Rfoot\, M_Relaxed_Run_Switch_RR_RL_Lfoot\, M_Relaxed_Run_Pivot_LL_RL_Lfoot\, M_Relaxed_Run_Pivot_LL_RL_Rfoot\, M_Relaxed_Run_Box_F_RL_Lfoot\, M_Relaxed_Run_Box_F_RL_Rfoot\, M_Relaxed_Run_Box_B_RL_Lfoot\, M_Relaxed_Run_Box_B_RL_Rfoot\
+## Run RL Mode Transitions  cols: MultiEnum("MovementMode_Recent"), Bool("IsPivoting"), Bool("JustLanded_Heavy"), OutputStruct, PoseSearch
+   clips(2): M_Relaxed_Jump_RL_Land_Run_Light\, M_Relaxed_Jump_RL_Land_Run_Heavy\
+## Sprint Loco Transitions  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), Bool("IsPivoting"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(33): M_Relaxed_Sprint_Start_F_Lfoot\, M_Relaxed_Sprint_Reface_Start_090_L\, M_Relaxed_Sprint_Reface_Start_180_L\, M_Relaxed_Sprint_Reface_Start_090_R\, M_Relaxed_Sprint_Reface_Start_180_R\, M_Relaxed_Transition_Walk_to_Sprint_Lfoot\, M_Relaxed_Transition_Walk_to_Sprint_Rfoot\, M_Relaxed_Transition_Run_to_Sprint_Lfoot\ ...
+## Sprint Mode Transitions  cols: MultiEnum("MovementMode_Recent"), Bool("IsPivoting"), Bool("JustLanded_Heavy"), OutputStruct, PoseSearch
+   clips(5): M_Relaxed_Jump_F_Land_Sprint_Light_Lfoot\, M_Relaxed_Jump_F_Land_Sprint_Light_Rfoot\, M_Relaxed_Jump_F_Land_Sprint_Heavy_Lfoot\, M_Relaxed_Jump_F_Land_Sprint_Heavy_Rfoot\, M_Relaxed_Slide_FootOut_Out_Moving_Run\
+## Crouch F Loco Transitions  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), Bool("IsPivoting"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(34): M_Relaxed_Crouch_Start_F_Lfoot\, M_Relaxed_Crouch_Start_F_Rfoot\, M_Relaxed_Crouch_Reface_Start_090_L_Lfoot\, M_Relaxed_Crouch_Reface_Start_180_L_Rfoot\, M_Relaxed_Crouch_Reface_Start_090_R_Rfoot\, M_Relaxed_Crouch_Reface_Start_180_R_Lfoot\, M_Relaxed_Crouch_Spin_LL_F_Lfoot\, M_Relaxed_Crouch_Spin_LL_F_Rfoot\ ...
+## Crouch F Mode Transitions  cols: MultiEnum("MovementMode_Recent"), Bool("IsPivoting"), OutputStruct, PoseSearch
+   clips(1): M_Relaxed_Slide_FootOut_Out_Moving_Crouch\
+## Crouch B Loco Transitions  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), Bool("IsPivoting"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(22): M_Relaxed_Crouch_Start_B_Rfoot\, M_Relaxed_Crouch_Start_B_Lfoot\, M_Relaxed_Crouch_Reface_Start_B_090_L_Rfoot\, M_Relaxed_Crouch_Reface_Start_B_180_L_Rfoot\, M_Relaxed_Crouch_Reface_Start_B_090_R_Lfoot\, M_Relaxed_Crouch_Reface_Start_B_180_R_Lfoot\, M_Relaxed_Crouch_Spin_RL_B_Lfoot\, M_Relaxed_Crouch_Spin_RL_B_Rfoot\ ...
+## Crouch LL Loco Transitions  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), Bool("IsPivoting"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(9): M_Relaxed_Crouch_Start_LL_Lfoot\, M_Relaxed_Crouch_Spin_F_LL_Lfoot\, M_Relaxed_Crouch_Spin_F_LL_Rfoot\, M_Relaxed_Crouch_Pivot_RL_LL_Lfoot\, M_Relaxed_Crouch_Pivot_RL_LL_Rfoot\, M_Relaxed_Crouch_Box_F_LL_Lfoot\, M_Relaxed_Crouch_Box_F_LL_Rfoot\, M_Relaxed_Crouch_Box_B_LL_Lfoot\ ...
+## Crouch RL Loco Transitions  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), Bool("IsPivoting"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(9): M_Relaxed_Crouch_Start_RL_Rfoot\, M_Relaxed_Crouch_Spin_B_RL_Lfoot\, M_Relaxed_Crouch_Spin_B_RL_Rfoot\, M_Relaxed_Crouch_Pivot_LL_RL_Lfoot\, M_Relaxed_Crouch_Pivot_LL_RL_Rfoot\, M_Relaxed_Crouch_Box_F_RL_Lfoot\, M_Relaxed_Crouch_Box_F_RL_Rfoot\, M_Relaxed_Crouch_Box_B_RL_Lfoot\ ...
+## Stand Mode Transitions  cols: MultiEnum("MovementMode_Recent"), Bool("JustLanded_Heavy"), FloatRange("Speed2D"), OutputStruct, PoseSearch
+   clips(9): M_Relaxed_Jump_F_Land_Stand_Light_Lfoot\, M_Relaxed_Jump_F_Land_Stand_Light_Rfoot\, M_Relaxed_Jump_B_Land_Stand_Light_Lfoot\, M_Relaxed_Jump_B_Land_Stand_Light_Rfoot\, M_Relaxed_Jump_F_Land_Stand_Heavy_Lfoot\, M_Relaxed_Jump_F_Land_Stand_Heavy_Rfoot\, M_Relaxed_Jump_B_Land_Stand_Heavy_Lfoot\, M_Relaxed_Jump_B_Land_Stand_Heavy_Rfoot\ ...
+## Stand Stops  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(34): M_Relaxed_Walk_Stop_F_Lfoot\, M_Relaxed_Walk_Stop_F_Rfoot\, M_Relaxed_Walk_Reface_Stop_090_L_Lfoot\, M_Relaxed_Walk_Reface_Stop_090_L_Rfoot\, M_Relaxed_Walk_Reface_Stop_180_L_Lfoot\, M_Relaxed_Walk_Reface_Stop_180_L_Rfoot\, M_Relaxed_Walk_Reface_Stop_090_R_Lfoot\, M_Relaxed_Walk_Reface_Stop_090_R_Rfoot\ ...
+## Stand Turn In Place  cols: FloatRange("FutureFacingDelta"), OutputStruct
+   clips(4): M_Relaxed_Stand_Turn_090_L\, M_Relaxed_Stand_Turn_180_L\, M_Relaxed_Stand_Turn_090_R\, M_Relaxed_Stand_Turn_180_R\
+## Stand Stance Transitions  cols: Enum("Stance_LastFrame"), OutputStruct, PoseSearch
+   clips(2): M_Relaxed_Stand_Idle_Loop\, M_Relaxed_Transition_Crouch_to_Stand\
+## Jump Idle  cols: FloatRange("Velocity","Z"), OutputStruct, PoseSearch
+   clips(2): M_Relaxed_Jump_F_Start_Stand_Lfoot\, M_Relaxed_Jump_F_Start_Stand_Rfoot\
+## Jump F  cols: FloatRange("Velocity","Z"), FloatRange("Speed2D"), Enum("MovementMode_LastFrame"), OutputStruct, PoseSearch
+   clips(14): M_Relaxed_Jump_F_Start_Walk_Lfoot\, M_Relaxed_Jump_F_Start_Walk_Rfoot\, M_Relaxed_Jump_F_Start_Run_Lfoot\, M_Relaxed_Jump_F_Start_Run_Rfoot\, M_Relaxed_Jump_F_Start_Sprint_Lfoot\, M_Relaxed_Jump_F_Start_Sprint_Rfoot\, M_Relaxed_Jump_F_Off_Walk_Lfoot\, M_Relaxed_Jump_F_Off_Walk_Rfoot\ ...
+## Jump B  cols: FloatRange("Velocity","Z"), Enum("MovementMode_LastFrame"), OutputStruct, PoseSearch
+   clips(4): M_Relaxed_Jump_B_Start_Lfoot\, M_Relaxed_Jump_B_Start_Rfoot\, M_Relaxed_Jump_B_Off_Rfoot\, M_Relaxed_Jump_B_Off_Rfoot\
+## Jump LL  cols: FloatRange("Velocity","Z"), Enum("MovementMode_LastFrame"), OutputStruct, PoseSearch
+   clips(4): M_Relaxed_Jump_LR_Start_Lfoot\, M_Relaxed_Jump_LR_Start_Rfoot\, M_Relaxed_Jump_LR_Off_Lfoot\, M_Relaxed_Jump_LR_Off_Lfoot\
+## Jump RL  cols: FloatRange("Velocity","Z"), Enum("MovementMode_LastFrame"), OutputStruct, PoseSearch
+   clips(4): M_Relaxed_Jump_RL_Start_Lfoot\, M_Relaxed_Jump_RL_Start_Rfoot\, M_Relaxed_Jump_RL_Off_Rfoot\, M_Relaxed_Jump_RL_Off_Rfoot\
+## Crouch Mode Transitions  cols: MultiEnum("MovementMode_Recent"), OutputStruct, PoseSearch
+   clips(1): M_Relaxed_Slide_FootOut_Out_Idle_Crouch\
+## Crouch Turn In Place  cols: FloatRange("FutureFacingDelta"), OutputStruct
+   clips(4): M_Neutral_Crouch_Idle_Turn_090_L\, M_Neutral_Crouch_Idle_Turn_180_L\, M_Neutral_Crouch_Idle_Turn_090_R\, M_Neutral_Crouch_Idle_Turn_180_R\
+## Crouch Stops  cols: FloatRange("Speed2D"), FloatRange("FutureFacingDelta"), MultiEnum("MovementDirection_Recent"), OutputStruct, PoseSearch
+   clips(16): M_Relaxed_Crouch_Stop_F_Lfoot\, M_Relaxed_Crouch_Stop_F_Rfoot\, M_Relaxed_Crouch_Reface_Stop_090_L_Lfoot\, M_Relaxed_Crouch_Reface_Stop_090_L_Rfoot\, M_Relaxed_Crouch_Reface_Stop_180_L_Lfoot\, M_Relaxed_Crouch_Reface_Stop_180_L_Rfoot\, M_Relaxed_Crouch_Reface_Stop_090_R_Lfoot\, M_Relaxed_Crouch_Reface_Stop_090_R_Rfoot\ ...
+## Crouch Stance Transitions  cols: Enum("Stance_LastFrame"), OutputStruct, PoseSearch
+   clips(2): M_Neutral_Crouch_Idle_Loop\, M_Relaxed_Transition_Stand_to_Crouch\

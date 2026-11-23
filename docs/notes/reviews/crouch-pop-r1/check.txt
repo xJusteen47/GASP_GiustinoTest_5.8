@@ -1,0 +1,3 @@
+spam_fix: mesh_step 0.00 cm, root_step 0.00 cm, spikes 0, crouches 24, 84 fps
+spam_old: mesh_step 0.00 cm, root_step 30.54 cm, spikes 24, crouches 24, 79 fps
+ESITO: PASS (limits mesh_step <= 0.5, root_step <= 1.0, spikes 0 on spam_fix)

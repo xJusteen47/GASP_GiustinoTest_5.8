@@ -1,0 +1,15 @@
+[2026.11.15-03.10.27:681][346]LogPython: GASNPP combat_spike: PASS 11 checks
+  PASS dash at 1.0s: Test.State.Dashing on the server 
+  PASS dash at 1.0s: predicted on the client 
+[2026.11.15-03.10.27:681][346]LogPython: GASNPP combat_spike: PASS 11 checks
+  PASS dash at 1.0s: Test.State.Dashing on the server 
+  PASS dash at 1.0s: predicted on the client 
+  PASS dash at 1.0s: cooldown applied 
+  PASS dash at 1.0s: stamina spent drop 25.0
+  PASS hitstop: the pawn stood still in the window (owner) spread 0.0 cm
+  PASS dash at 3.4s: Test.State.Dashing on the server 
+  PASS dash at 3.4s: predicted on the client 
+  PASS dash at 3.4s: cooldown applied 
+  PASS dash at 3.4s: stamina spent drop 23.0
+  PASS no unexplained reconciles 0 unexplained {} [], forced=0
+  PASS forced reconciles happened (rollbacks went up) +4 (np.ForceReconcile is one global cvar: another client may take it)

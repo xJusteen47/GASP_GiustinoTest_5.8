@@ -1,0 +1,52 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Extension Test",
+	"Description": "Test only (M6 F14, m6 spec 12 item 7 and 14): a fake consumer plugin that extends GSTNLink and GSTNDefence from outside, through their public API only. GSTNExtTestLink adds a link type (a carry, its roles and a request rule subclass) and GSTNExtTestDefence adds a defensive pipeline step (a brace); their tests prove both work through the existing steps, applier, inbox and fragment with no change to the plugins or the combat model's tick. Never enabled in a shipped configuration.",
+	"Category": "Testing",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNExtTestLink",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNExtTestDefence",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GSTNCombat",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombatNP",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInteract",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNLink",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNDefence",
+			"Enabled": true
+		}
+	]
+}

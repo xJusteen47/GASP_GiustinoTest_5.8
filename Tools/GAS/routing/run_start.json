@@ -1,0 +1,11 @@
+{
+ "variant": "v3",
+ "clip": "/Game/GSTN/Animation/RunStart/AS_GSTN_RunStart_v3.AS_GSTN_RunStart_v3",
+ "start": 0.0,
+ "blend": 0.05,
+ "exit_run": {
+  "clip": "/Game/Characters/UEFN_Mannequin/Animations/Run/M_Neutral_Run_Loop_F.M_Neutral_Run_Loop_F",
+  "start": 1.7893,
+  "blend": 0.1
+ }
+}

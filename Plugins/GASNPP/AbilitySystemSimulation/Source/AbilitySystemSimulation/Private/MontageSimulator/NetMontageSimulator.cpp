@@ -1,0 +1,1068 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+
+#include "MontageSimulator/NetMontageSimulator.h"
+
+#include "MoverComponent.h"
+#include "Abilities/NpAbilitySystemComponent.h"
+#include "DataTypes/AbilitySimulationDataTypes.h"
+#include "Engine/SkeletalMeshSocket.h"
+#include "Engine/World.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "MontageSimulator/SyncedNotifyInterface.h"
+
+
+UNetMontageSimulator::UNetMontageSimulator(const FObjectInitializer& ObjectInitializer)
+	:Super(ObjectInitializer)
+{
+	
+}
+
+void UNetMontageSimulator::SimulationTick(const FAbilitySystemTimeStep& TimeStep,
+	const FMontageSimSyncState& InputState, FMontageSimSyncState& OutputState)
+{
+	LatestTimeStep = TimeStep;
+
+	// A montage started in this tick (abilities tick before the montage) holds its start time until the next tick: after the tick that is
+	// frame N of the ability it is then at N steps, the pose of that frame. Advancing it here too put it one step ahead of the ability for
+	// its whole run, and the first paused tick (a hitstop) pulled it back by that step
+	const bool bHoldStartTick = bStartedSinceLastTick
+		&& !(AbilitySystemComponent && AbilitySystemComponent->bAdvanceSyncedMontageOnStartTick);
+	bStartedSinceLastTick = false;
+
+	// now step the montage forward if we have one
+	if (SimulationState.GetPlayingMontage() && !bHoldStartTick)
+	{
+		const float DeltaTime = TimeStep.StepMs / 1000.f;
+		const float NexTime = FMath::Clamp(SimulationState.GetCurrentTime() + DeltaTime,
+										   0.f,SimulationState.GetPlayingMontage()->GetPlayLength());
+		const float MontageStepTime = (NexTime - SimulationState.GetCurrentTime());
+		constexpr float MinStepTime = 0.001f; // max step time is 1 MS
+		if (MontageStepTime > MinStepTime)
+		{
+			// advance montage
+			AdvanceSimMontage(MontageStepTime,TimeStep, SimulationState);
+		}
+		// step time is too small assume montage ended
+		else
+		{
+			CompleteSimMontage(TimeStep,SimulationState);
+		}
+	}
+	OutputState = SimulationState;
+}
+
+void UNetMontageSimulator::RestoreFrame(const FMontageSimSyncState& AuthorityState)
+{
+	// A start before the restored frame belongs to a tick that is being thrown away
+	bStartedSinceLastTick = false;
+	// First Check If Authority wants to play montage
+	if(AuthorityState.GetPlayingMontage())
+	{
+		// check if we are currently playing a montage
+		if(SimulationState.GetPlayingMontage())
+		{
+			// is it the same montage?
+			if (AuthorityState.GetPlayingMontage() == SimulationState.GetPlayingMontage())
+			{
+				RestoreMontage(SimulationState,AuthorityState);
+				SimulationState = AuthorityState;
+				return;
+			}
+			// Not Same Montage
+			{
+				ForceEndMontage(SimulationState);
+				ForceStartMontage(AuthorityState);
+			}
+			SimulationState = AuthorityState;
+			return;
+		}
+		// we are currently not playing a montage
+		{
+			ForceStartMontage(AuthorityState);
+			SimulationState = AuthorityState;
+			return;
+		}
+	}
+	// Authority State is not playing a montage
+	if (SimulationState.GetPlayingMontage())
+	{
+		ForceEndMontage(SimulationState);
+	}
+
+	SimulationState = AuthorityState;
+}
+
+void UNetMontageSimulator::FinalizeFrame(const FMontageSimSyncState& SyncState, bool bSmoothedState)
+{
+	FinalizeMontageFrame(SyncState, bSmoothedState);
+}
+
+UNpAbilitySystemComponent* UNetMontageSimulator::GetNpAbilitySystemComponent() const
+{
+	return AbilitySystemComponent;
+}
+
+AActor* UNetMontageSimulator::GetAvatarActor() const
+{
+	return AbilitySystemComponent ? AbilitySystemComponent->GetAvatarActor() : nullptr;
+}
+
+UAnimInstance* UNetMontageSimulator::GetAnimInstance() const
+{
+	if (!AbilitySystemComponent || !AbilitySystemComponent->AbilityActorInfo)
+	{
+		return nullptr;
+	}
+	return AbilitySystemComponent->AbilityActorInfo->GetAnimInstance();
+}
+
+USkeletalMeshComponent* UNetMontageSimulator::GetMeshComponent() const
+{
+	UAnimInstance* AnimInst = GetAnimInstance();
+	return AnimInst ? AnimInst->GetOwningComponent() : nullptr;
+}
+
+FMontageBlendSettings UNetMontageSimulator::MakeMontageBlendOut(const UAnimMontage& Montage, float BlendOutSeconds)
+{
+	FMontageBlendSettings Settings(FAlphaBlendArgs(Montage.BlendOut));
+	Settings.BlendMode = Montage.BlendModeOut;
+	Settings.BlendProfile = Montage.BlendProfileOut;
+	if (BlendOutSeconds >= 0.f)
+	{
+		Settings.Blend.BlendTime = BlendOutSeconds;
+	}
+	return Settings;
+}
+
+float UNetMontageSimulator::GetMontageBlendOutTime(const UAnimMontage* Montage)
+{
+	if (!Montage)
+	{
+		return 0.0f;
+	}
+	const bool bCustomBlendOutTriggerTime = (Montage->BlendOutTriggerTime >= 0);
+	const float DefaultBlendOutTime = Montage->BlendOut.GetBlendTime();
+	const float BlendOutTriggerTime = bCustomBlendOutTriggerTime ? Montage->BlendOutTriggerTime : DefaultBlendOutTime;
+	return Montage->GetPlayLength() - BlendOutTriggerTime;
+}
+
+bool UNetMontageSimulator::ShouldFinalizeMontage(const FMontageSimSyncState& SyncState)
+{
+	if (!SyncState.Montage)
+	{
+		return false;
+	}
+
+	if (SyncState.GetCurrentTime() > GetMontageBlendOutTime(SyncState.Montage))
+	{
+		return false;
+	}
+	return true;
+}
+
+void UNetMontageSimulator::PlayMontage(const FAbilityMontagePlayback& MontagePlayback)
+{
+	if (!GetNpAbilitySystemComponent() || GetNpAbilitySystemComponent()->GetIsRestoringFrame() || !MontagePlayback.MontageToPlay)
+	{
+		return;
+	}
+	FMontageSimSyncState OldState = SimulationState;
+	SimulationState.SetIsPaused(false);
+	if (MontagePlayback.IsValidQueue())
+	{
+		// check if we have a currently playing montage,
+		if (SimulationState.GetPlayingMontage())
+		{
+			// if we do , check if it's same montage
+			if (SimulationState.GetPlayingMontage() == MontagePlayback.MontageToPlay)
+			{
+				//if same montage, check if queued time is negative,
+				// this will happen when we call montage set play rate
+				if (!FMath::IsNearlyEqual(SimulationState.GetCurrentTime() ,MontagePlayback.MontageStartTime))
+				{
+					// we have valid time , this would happen when we want to jump montage section for example
+					//We Are Changing current montage time, Notifies will trigger correctly in the simulation
+					SimulationState.SetCurrentTime(MontagePlayback.MontageStartTime);
+					// GSTN fork (start jitter, 2026-11-15): the same montage played again from a time is a new start (a move that cancels into
+					// itself): it holds its start tick like a new montage does, and the next rendered frame shows that start
+					if (MontagePlayback.MontageStartTime >= 0.f)
+					{
+						bStartedSinceLastTick = true;
+						RecordPresentationAnchor(MontagePlayback.MontageToPlay, MontagePlayback.MontageStartTime);
+					}
+				}
+				// time is negative , if play rate is not negative set it
+				if (MontagePlayback.MontagePlayRate >= 0)
+				{
+					SimulationState.SetPlayRate(MontagePlayback.MontagePlayRate);
+				}
+			}
+			// it's a different montage, stop current one and start new one
+			else
+			{
+				CancelSimMontage(LatestTimeStep,OldState,true);
+				SimulationState.Reset();
+				StartSimMontage(MontagePlayback, SimulationState);
+				bStartedSinceLastTick = true;
+				RecordPresentationAnchor(MontagePlayback.MontageToPlay, SimulationState.GetCurrentTime());
+			}
+		}
+		// we don't have a currently playing montage, just start new one
+		else
+		{
+			StartSimMontage(MontagePlayback, SimulationState);
+			bStartedSinceLastTick = true;
+			RecordPresentationAnchor(MontagePlayback.MontageToPlay, SimulationState.GetCurrentTime());
+		}
+	}
+}
+
+void UNetMontageSimulator::StopMontage(const FAbilityMontageCancel& MontageCancel, bool bInterrupted/* = false*/)
+{
+	if (!GetNpAbilitySystemComponent() || GetNpAbilitySystemComponent()->GetIsRestoringFrame() || !MontageCancel.MontageToCancel)
+	{
+		return;
+	}
+	SimulationState.SetIsPaused(false);
+	if (MontageCancel.IsValidQueue())
+	{
+		if (SimulationState.GetPlayingMontage() == MontageCancel.MontageToCancel)
+		{
+			CancelSimMontage(LatestTimeStep,SimulationState,bInterrupted);
+		}
+	}
+}
+
+void UNetMontageSimulator::StopMontageWithBlend(const FAbilityMontageCancel& MontageCancel, bool bInterrupted, float BlendOutSeconds, bool bHoldPose)
+{
+	const bool bWasPlaying = MontageCancel.MontageToCancel != nullptr && SimulationState.GetPlayingMontage() == MontageCancel.MontageToCancel;
+	StopMontage(MontageCancel, bInterrupted);
+	// Only a stop that happened: a restore (StopMontage returned early) or another montage on the slot leaves the presentation alone
+	if (BlendOutSeconds >= 0.f && bWasPlaying && SimulationState.GetPlayingMontage() == nullptr)
+	{
+		PendingStop.Montage = MontageCancel.MontageToCancel;
+		PendingStop.BlendOutSeconds = BlendOutSeconds;
+		PendingStop.bHoldPose = bHoldPose;
+	}
+}
+
+void UNetMontageSimulator::MontageJumpToSection(UAnimMontage* Montage, FName SectionName)
+{
+	if (!GetNpAbilitySystemComponent() || GetNpAbilitySystemComponent()->GetIsRestoringFrame() || !Montage)
+	{
+		return;
+	}
+	float CurrentTime = 0.f;
+	UAnimMontage* PlayingMontage = GetPlayingMontage(CurrentTime);
+	if (PlayingMontage && Montage == PlayingMontage)
+	{
+		const int32 SectionIndex = PlayingMontage->GetSectionIndex(SectionName);
+		if (SectionIndex != INDEX_NONE)
+		{
+			float SectionStartTime = 0.f;
+			float SectionEndTime = 0.f;
+			PlayingMontage->GetSectionStartAndEndTime(SectionIndex,SectionStartTime,SectionEndTime);
+			SimulationState.SetCurrentTime(SectionStartTime);
+		}
+	}
+}
+
+void UNetMontageSimulator::SetMontageTime(UAnimMontage* Montage, float Time, bool bRestart)
+{
+	if (!GetNpAbilitySystemComponent() || GetNpAbilitySystemComponent()->GetIsRestoringFrame() || !Montage || SimulationState.GetPlayingMontage() != Montage)
+	{
+		return;
+	}
+	const float Clamped = FMath::Clamp(Time, 0.f, Montage->GetPlayLength());
+	SimulationState.SetCurrentTime(Clamped);
+	if (bRestart)
+	{
+		// The start tick rule of PlayMontage: after this tick the montage shows Clamped, the frame the caller's timeline evaluates in it
+		bStartedSinceLastTick = true;
+		RecordPresentationAnchor(Montage, Clamped);
+	}
+}
+
+void UNetMontageSimulator::RecordPresentationAnchor(UAnimMontage* Montage, float Time)
+{
+	const int32 Frame = AbilitySystemComponent ? AbilitySystemComponent->GetCurrentSimFrame() : INDEX_NONE;
+	for (const FPresentationAnchor& Consumed : ConsumedAnchors)
+	{
+		// The same start on the same frame was drawn already: a re-simulation, not a new start
+		if (Consumed.Montage.Get() == Montage && Consumed.Frame == Frame && FMath::IsNearlyEqual(Consumed.Time, Time, 1.e-4f))
+		{
+			return;
+		}
+	}
+	PendingAnchor.Montage = Montage;
+	PendingAnchor.Time = Time;
+	PendingAnchor.Frame = Frame;
+	bAnchorPending = true;
+}
+
+void UNetMontageSimulator::ResetPresentationClock()
+{
+	bAnchorPending = false;
+	PendingAnchor = FPresentationAnchor();
+	PresentedMontage.Reset();
+	PresentedTime = 0.f;
+	CarriedStepperSeconds = 0.f;
+	CarriedStepperInstanceId = INDEX_NONE;
+}
+
+float UNetMontageSimulator::ComputePresentedTime(const FSyncedMontagePresentationClockInput& Input)
+{
+	constexpr float Tolerance = 1.e-4f;
+	if (Input.AnchorTime >= 0.f && Input.AnchorTime <= Input.LatestTime + Tolerance)
+	{
+		return Input.AnchorTime;
+	}
+	if (!Input.bHasPrevious || Input.LatestTime < Input.PreviousTime - Tolerance)
+	{
+		return Input.LatestTime;
+	}
+	const float Candidate = Input.PreviousTime + FMath::Max(Input.Rate, 0.f) * FMath::Max(Input.DeltaSeconds, 0.f);
+	const float MaxLag = FMath::Max(Input.MaxLagSeconds, 0.f);
+	if (Input.LatestTime - Candidate > 2.f * MaxLag + Tolerance)
+	{
+		return Input.LatestTime;
+	}
+	return FMath::Clamp(Candidate, Input.LatestTime - MaxLag, Input.LatestTime);
+}
+
+float UNetMontageSimulator::PresentMontageTime(const UAnimInstance& AnimInstance, UAnimMontage* DesiredMontage, const FMontageSimSyncState& SyncState,
+	bool bSmoothedState, float RateMultiplier)
+{
+	FSyncedMontagePresentationClockInput Clock;
+	// The latest simulated time: this simulator's own state when NP hands an interpolated one (it holds the last tick of the local simulation)
+	Clock.LatestTime = bSmoothedState && SimulationState.GetPlayingMontage() == DesiredMontage ? SimulationState.GetCurrentTime() : SyncState.GetCurrentTime();
+	Clock.bHasPrevious = PresentedMontage.Get() == DesiredMontage;
+	Clock.PreviousTime = PresentedTime;
+	const bool bAnchor = bAnchorPending && PendingAnchor.Montage.Get() == DesiredMontage;
+	Clock.AnchorTime = bAnchor ? PendingAnchor.Time : -1.f;
+	Clock.Rate = FMath::Max(SyncState.GetPlayRate() * RateMultiplier, 0.f);
+	const UWorld* World = AnimInstance.GetWorld();
+	Clock.DeltaSeconds = World ? World->GetDeltaSeconds() : 0.f;
+	const float StepSeconds = (AbilitySystemComponent ? AbilitySystemComponent->GetFixedStepMs() : 16.f) / 1000.f;
+	Clock.MaxLagSeconds = 2.f * StepSeconds * Clock.Rate;
+	const float Shown = ComputePresentedTime(Clock);
+
+	if (bAnchor && FMath::IsNearlyEqual(Shown, PendingAnchor.Time, 1.e-4f))
+	{
+		ConsumedAnchors[NextConsumedAnchor] = PendingAnchor;
+		NextConsumedAnchor = (NextConsumedAnchor + 1) % static_cast<int32>(UE_ARRAY_COUNT(ConsumedAnchors));
+	}
+	// An anchor not shown this frame is dropped: a start a rollback undid must not come back later
+	bAnchorPending = false;
+	PendingAnchor = FPresentationAnchor();
+	PresentedMontage = DesiredMontage;
+	PresentedTime = Shown;
+	return Shown;
+}
+
+void UNetMontageSimulator::PauseCurrentMontage()
+{
+	SimulationState.SetIsPaused(true);
+}
+
+void UNetMontageSimulator::ResumeCurrentMontage()
+{
+	SimulationState.SetIsPaused(false);
+}
+
+void UNetMontageSimulator::SetMontagePlayRate(const float& PlayRate)
+{
+	SimulationState.SetPlayRate(PlayRate);
+}
+
+UAnimMontage* UNetMontageSimulator::GetPlayingMontage(float& OutCurrentTime) const
+{
+	OutCurrentTime = SimulationState.GetCurrentTime();
+	return SimulationState.GetPlayingMontage();
+}
+
+FTransform UNetMontageSimulator::GetAttachedSocketWorldTransformFromMontage(UAnimMontage* Montage, float MontageTime,
+	FTransform MeshRelativeTransform, FTransform ActorTransform, const USkeletalMeshComponent* MeshComp,
+	FName AttachementSocket, const USkeletalMeshComponent* AttachedMeshComponent, FName AttachedMeshSocket)
+{
+	if (!MeshComp || !AttachedMeshComponent)
+		return FTransform::Identity;
+
+	// --- 1. Get attachment socket world transform on parent mesh ---
+	FTransform AttachmentWorld = GetSocketWorldTransformFromMontage(
+		Montage, MontageTime, MeshRelativeTransform, ActorTransform, MeshComp, AttachementSocket);
+
+	// --- 2. Get attached mesh socket bone hierarchy ---
+	FName SocketBoneName = AttachedMeshSocket;
+	if (const USkeletalMeshSocket* Socket = AttachedMeshComponent->GetSocketByName(AttachedMeshSocket))
+	{
+		SocketBoneName = AttachedMeshComponent->GetSocketBoneName(AttachedMeshSocket);
+	}
+
+	const USkeleton* AttachedMeshSkeleton = AttachedMeshComponent->GetSkeletalMeshAsset()->GetSkeleton();
+	if (!AttachedMeshSkeleton)
+		return AttachmentWorld;
+
+	const FReferenceSkeleton& RefSkeleton = AttachedMeshSkeleton->GetReferenceSkeleton();
+	int32 BoneIndex = RefSkeleton.FindRawBoneIndex(SocketBoneName);
+	if (BoneIndex == INDEX_NONE)
+		return AttachmentWorld;
+
+	// --- 3. Walk from socket bone to root to calculate component-space transform ---
+	TArray<FTransform> Bones;
+	while (BoneIndex != INDEX_NONE)
+	{
+		FTransform BoneLocal = AttachedMeshComponent->GetBoneTransform(BoneIndex);
+		Bones.Add(BoneLocal);
+		BoneIndex = RefSkeleton.GetRawParentIndex(BoneIndex);
+	}
+
+	// Multiply up the chain from root to socket
+	FTransform SocketCompSpace = FTransform::Identity;
+	for (int32 i = Bones.Num() - 1; i >= 0; --i)
+	{
+		SocketCompSpace = Bones[i] * SocketCompSpace;
+	}
+
+	// --- 4. Apply socket local offset ---
+	if (const USkeletalMeshSocket* Socket = AttachedMeshComponent->GetSocketByName(AttachedMeshSocket))
+	{
+		SocketCompSpace = Socket->GetSocketLocalTransform() * SocketCompSpace;
+	}
+
+	// --- 5. Multiply by parent attachment socket world transform ---
+	FTransform FinalWorld = SocketCompSpace * AttachmentWorld;
+	return FinalWorld;
+}
+
+FTransform UNetMontageSimulator::GetSocketWorldTransformFromMontage(UAnimMontage* Montage, float MontageTime,
+                                                                    FTransform MeshRelativeTransform, FTransform ActorTransform ,const USkeletalMeshComponent* MeshComp, FName SocketName)
+{
+	 if (!Montage || !Montage->GetSkeleton() || !MeshComp)
+    {
+        return FTransform::Identity;
+    }
+
+    const USkeleton* Skeleton = Montage->GetSkeleton();
+    FName TargetBoneName = SocketName;
+	const USkeletalMeshSocket* Socket = MeshComp->GetSocketByName(SocketName);
+    // If it's a socket, use its bone
+    if (Socket)
+    {
+        TargetBoneName = MeshComp->GetSocketBoneName(SocketName);
+    }
+
+    // Find the current segment in the first slot track
+    const FAnimTrack& AnimTrack = Montage->SlotAnimTracks[0].AnimTrack;
+    if (const FAnimSegment* Segment = AnimTrack.GetSegmentAtTime(MontageTime))
+    {
+        if (const UAnimSequence* Sequence = Cast<UAnimSequence>(Segment->GetAnimReference()))
+        {
+            // Build local transforms up to root
+            TArray<FTransform> LocalChain;
+            int32 BoneIndex = Skeleton->GetReferenceSkeleton().FindRawBoneIndex(TargetBoneName);
+            while (BoneIndex != INDEX_NONE)
+            {
+                FSkeletonPoseBoneIndex SkeletonBoneIndex(BoneIndex);
+                FTransform BoneLocal = FTransform::Identity;
+            	FAnimExtractContext ExtractionContext(static_cast<double>(MontageTime));
+                Sequence->GetBoneTransform(BoneLocal, SkeletonBoneIndex, ExtractionContext, false);
+                LocalChain.Add(BoneLocal);
+
+                BoneIndex = Skeleton->GetReferenceSkeleton().GetRawParentIndex(BoneIndex);
+            }
+
+            // Multiply from root to target to get component-space
+            FTransform CompSpace = FTransform::Identity;
+            for (int32 i = LocalChain.Num() - 1; i >= 0; --i)
+            {
+                CompSpace = LocalChain[i] * CompSpace;
+            }
+
+            // If socket, apply socket relative transform
+            if (Socket)
+            {
+                CompSpace = Socket->GetSocketLocalTransform() * CompSpace;
+            }
+
+            // Apply mesh + actor transforms to get world space
+            return CompSpace * MeshRelativeTransform * ActorTransform;
+        }
+    }
+
+    return FTransform::Identity;
+}
+
+void UNetMontageSimulator::StartSimMontage(const FAbilityMontagePlayback& Montage, FMontageSimSyncState& SyncState) const
+{
+	SyncState.Montage = Montage.MontageToPlay;
+	SyncState.SetCurrentTime(Montage.MontageStartTime);
+	SyncState.SetPlayRate(Montage.MontagePlayRate);
+	SyncState.SetRootMotionScale(Montage.RootMotionScale);
+	// Setup The Synced Notifies
+	const FSyncedNotifiesArray AnimNotifies(SyncState.Montage);
+	SyncState.NotifySyncStates.ActiveNotifySyncStates.Reset(AnimNotifies.Num());
+	for (int32 i = 0; i < AnimNotifies.Num(); ++i)
+	{
+		const FAnimNotifyEvent& NotifyEvent = AnimNotifies[i];
+		TObjectPtr<UObject> NotifyObject = SyncState.NotifySyncStates.GetNotifyObject(NotifyEvent);
+		check(NotifyObject->Implements<USyncedNotifyInterface>());
+		UScriptStruct* Type = ISyncedNotifyInterface::Execute_GetRequiredType(NotifyObject);
+		SyncState.NotifySyncStates.AddNotifySyncState(Type,i);
+	}
+	AbilitySystemComponent->OnMontageStarted.Broadcast(SyncState.Montage);
+}
+
+void UNetMontageSimulator::AdvanceSimMontage(const float& StepTime, const FAbilitySystemTimeStep& TimeStep,FMontageSimSyncState& SyncState)
+{
+	check(SyncState.Montage);
+	FRootMotionMovementParams RootMotionMovementParams;
+	const float PreviousTime = SyncState.GetCurrentTime();
+	float NewPosition = SyncState.GetCurrentTime();
+	float RateMultiplier = 1.f;
+	UNpAbilitySystemComponent* Asc = GetNpAbilitySystemComponent();
+	if (Asc)
+	{
+		RateMultiplier = Asc->GetMontagePlayRateMultiplier();
+	}
+	MontageAdvanceInstance.Initialize(SyncState.GetPlayingMontage());
+	MontageAdvanceInstance.SetPosition(SyncState.GetCurrentTime());
+	MontageAdvanceInstance.SetPlayRate(SyncState.GetPlayRate() * RateMultiplier);
+	MontageAdvanceInstance.SetPlaying(true);
+	if (SyncState.GetIsPaused())
+	{
+		MontageAdvanceInstance.SetPlayRate(0.f);
+	}
+	MontageAdvanceInstance.bEnableAutoBlendOut = false;
+	MontageAdvanceInstance.SimulateAdvance(StepTime,NewPosition,RootMotionMovementParams);
+	SyncState.SetCurrentTime(NewPosition);
+	
+	RootMotionMovementParams.ScaleRootMotionTranslation(SyncState.GetRootMotionScale());
+	FTransform RootMotionTransform = RootMotionMovementParams.GetRootMotionTransform();
+	TickSyncedNotifies(StepTime,TimeStep,PreviousTime,SyncState,RootMotionTransform);
+	if (!SyncState.GetPlayingMontage())
+	{
+		return;
+	}
+	if (MontageAdvanceInstance.Montage->HasRootMotion() && SyncState.GetCurrentTime() < GetMontageBlendOutTime(MontageAdvanceInstance.Montage))
+	{
+		//ToDo @Kai : Remove This GetComponentByClass Every Sim Frame cache mover component like cmc used to be.
+		if (AbilitySystemComponent->GetAvatarActor())
+		{
+			if(UMoverComponent* MoverComp = AbilitySystemComponent->GetAvatarActor()->GetComponentByClass<UMoverComponent>())
+			{
+				FSyncedMontageRootMotion RootMotionToConsume;
+				RootMotionToConsume.Montage = MontageAdvanceInstance.Montage;
+				RootMotionToConsume.CurrentTime = SyncState.GetCurrentTime();
+				RootMotionToConsume.HasRootMotion = true;
+				RootMotionToConsume.RootMotionTranslation = RootMotionTransform.GetTranslation();
+				RootMotionToConsume.RootMotionRotation = RootMotionTransform.Rotator();
+				// if montage is paused make sure to override any root motion to 0
+				if (SyncState.GetIsPaused())
+				{
+					RootMotionToConsume.RootMotionTranslation = FVector::ZeroVector;
+					RootMotionToConsume.RootMotionRotation = FRotator::ZeroRotator;
+				}
+				FLayeredMove_SyncMontageRootMotion RootMotionMove = FLayeredMove_SyncMontageRootMotion(RootMotionToConsume);
+				MoverComp->QueueLayeredMove(MakeShared<FLayeredMove_SyncMontageRootMotion>(RootMotionMove));
+			}
+		}
+	}
+	// call montage blend out if previous time was before it and new time is after it.
+	if (SyncState.GetCurrentTime() >= GetMontageBlendOutTime(SyncState.GetPlayingMontage()) && PreviousTime < GetMontageBlendOutTime(SyncState.GetPlayingMontage()))
+	{
+		AbilitySystemComponent->OnMontageBlendOut.Broadcast(SyncState.GetPlayingMontage());
+	}
+	
+}
+
+void UNetMontageSimulator::CompleteSimMontage(const FAbilitySystemTimeStep& TimeStep,FMontageSimSyncState& SyncState)
+{
+	AbilitySystemComponent->OnMontageCompleted.Broadcast(SyncState.GetPlayingMontage());
+	EndSyncedNotifies(TimeStep,SyncState);
+	SyncState.Reset();
+}
+
+void UNetMontageSimulator::CancelSimMontage(const FAbilitySystemTimeStep& TimeStep,FMontageSimSyncState& SyncState, const bool& InterruptedByAnother)
+{
+	// if we have no montage
+	if (!SyncState.GetPlayingMontage())
+	{
+		SyncState.Reset();
+		return;
+	}
+	// montage technically ended (we keep ticking it until end in simulation for synced notifies)
+	// so assume it is completed
+	if (SyncState.GetCurrentTime() >= GetMontageBlendOutTime(SyncState.GetPlayingMontage()))
+	{
+		EndSyncedNotifies(TimeStep,SyncState);
+		AbilitySystemComponent->OnMontageCompleted.Broadcast(SyncState.GetPlayingMontage());
+		SyncState.Reset();
+		return;
+	}
+	EndSyncedNotifies(TimeStep,SyncState);
+	if (InterruptedByAnother)
+	{
+		AbilitySystemComponent->OnMontageInterrupted.Broadcast(SyncState.GetPlayingMontage());
+	}
+	AbilitySystemComponent->OnMontageCanceled.Broadcast(SyncState.GetPlayingMontage());
+	// call on blend out for this montage
+	AbilitySystemComponent->OnMontageBlendOut.Broadcast(SyncState.GetPlayingMontage());
+	SyncState.Reset();
+}
+
+void UNetMontageSimulator::RestoreMontage(const FMontageSimSyncState& CurrentSyncState,
+	const FMontageSimSyncState& AuthoritySyncState)
+{
+	const FSyncedNotifiesArray AnimNotifies(AuthoritySyncState.GetPlayingMontage());
+	FRestoreNotifyData InputData;
+	InputData.AnimMontage = AuthoritySyncState.GetPlayingMontage();
+	InputData.MontagePlayer = this;
+	// make sure current time doesn't exceed montage time
+	InputData.CurrentMontageTime = FMath::Min(AuthoritySyncState.GetCurrentTime(), AuthoritySyncState.GetPlayingMontage()->GetPlayLength());
+
+	for (int32 i = 0; i < AnimNotifies.Num(); ++i)
+	{
+		// can only restore notify states because they have duration
+		const FAnimNotifyEvent& NotifyEvent = AnimNotifies[i];
+		TObjectPtr<UObject> NotifyObject = AuthoritySyncState.NotifySyncStates.GetNotifyObject(NotifyEvent);
+		check(NotifyObject->Implements<USyncedNotifyInterface>());// we should never have invalid interface at this point
+		if (AuthoritySyncState.NotifySyncStates.IsNotifyState(NotifyEvent))
+		{
+			InputData.NotifyStartTime = NotifyEvent.GetTriggerTime();
+			InputData.NotifyEndTime = NotifyEvent.GetEndTriggerTime();
+			FSyncedNotifyDataContainer AuthorityContainer = AuthoritySyncState.NotifySyncStates[i];
+			FSyncedNotifyDataContainer LocalContainer = CurrentSyncState.NotifySyncStates[i];
+			// if authority is not active , it won't send us any data to rollback to.
+			// there isn't any. so if this has data, just provide default data
+			if (!AuthorityContainer.IsActive && LocalContainer.SyncStatePointer.IsValid())
+			{
+				AuthorityContainer.SyncStatePointer = FSyncedNotifyDataArray::CreateDataByType(LocalContainer.SyncStatePointer->GetScriptStruct());
+			}
+			
+			ISyncedNotifyInterface::Execute_RestoreFrame(NotifyObject,InputData,AuthorityContainer,LocalContainer, this);
+		}
+	}
+}
+
+void UNetMontageSimulator::ForceEndMontage(const FMontageSimSyncState& CurrentSyncState)
+{
+	const FSyncedNotifiesArray AnimNotifies(CurrentSyncState.GetPlayingMontage());
+	FRestoreNotifyData InputData;
+	InputData.AnimMontage = CurrentSyncState.GetPlayingMontage();
+	InputData.MontagePlayer = this;
+	// make sure current time doesn't exceed montage time
+	InputData.CurrentMontageTime = FMath::Min(CurrentSyncState.GetCurrentTime(), CurrentSyncState.GetPlayingMontage()->GetPlayLength());
+	for (int32 i = 0; i < AnimNotifies.Num(); ++i)
+	{
+		// can only restore notify states because they have duration
+		const FAnimNotifyEvent& NotifyEvent = AnimNotifies[i];
+		TObjectPtr<UObject> NotifyObject = CurrentSyncState.NotifySyncStates.GetNotifyObject(NotifyEvent);
+		check(NotifyObject->Implements<USyncedNotifyInterface>());// we should never have invalid interface at this point
+		if (CurrentSyncState.NotifySyncStates.IsNotifyState(NotifyEvent))
+		{
+			InputData.NotifyStartTime = NotifyEvent.GetTriggerTime();
+			InputData.NotifyEndTime = NotifyEvent.GetEndTriggerTime();
+			FSyncedNotifyDataContainer LocalContainer = CurrentSyncState.NotifySyncStates[i];
+			// montage is force ended, there's no authority data for it, Set is active to false and copy the current data
+			FSyncedNotifyDataContainer AuthorityContainer = LocalContainer;
+			AuthorityContainer.IsActive = false;
+			ISyncedNotifyInterface::Execute_RestoreFrame(NotifyObject,InputData,AuthorityContainer,LocalContainer, this);
+		}
+	}
+}
+
+void UNetMontageSimulator::ForceStartMontage(const FMontageSimSyncState& AuthoritySyncState)
+{
+	const FSyncedNotifiesArray AnimNotifies(AuthoritySyncState.GetPlayingMontage());
+	FRestoreNotifyData InputData;
+	InputData.AnimMontage = AuthoritySyncState.GetPlayingMontage();
+	InputData.MontagePlayer = this;
+	// make sure current time doesn't exceed montage time
+	InputData.CurrentMontageTime = FMath::Min(AuthoritySyncState.GetCurrentTime(), AuthoritySyncState.GetPlayingMontage()->GetPlayLength());
+	for (int32 i = 0; i < AnimNotifies.Num(); ++i)
+	{
+		// can only restore notify states because they have duration
+		const FAnimNotifyEvent& NotifyEvent = AnimNotifies[i];
+		TObjectPtr<UObject> NotifyObject = AuthoritySyncState.NotifySyncStates.GetNotifyObject(NotifyEvent);
+		check(NotifyObject->Implements<USyncedNotifyInterface>());// we should never have invalid interface at this point
+		if (AuthoritySyncState.NotifySyncStates.IsNotifyState(NotifyEvent))
+		{
+			InputData.NotifyStartTime = NotifyEvent.GetTriggerTime();
+			InputData.NotifyEndTime = NotifyEvent.GetEndTriggerTime();
+			FSyncedNotifyDataContainer AuthorityContainer = AuthoritySyncState.NotifySyncStates[i];
+			// montage is force ended, there's no authority data for it, Set is active to false and copy the current data
+			FSyncedNotifyDataContainer LocalContainer = AuthorityContainer;
+			LocalContainer.IsActive = false;
+			ISyncedNotifyInterface::Execute_RestoreFrame(NotifyObject,InputData,AuthorityContainer,LocalContainer, this);
+		}
+	}
+}
+
+void UNetMontageSimulator::TickSyncedNotifies(const float& MontageStepTime,const FAbilitySystemTimeStep& TimeStep,const float& PreviousTime,
+                                              FMontageSimSyncState& SyncOutput,OUT FTransform& ExtractedRootMotion)
+{
+	// Shared Input Data between All Active Notify States
+	static FSimTickNotifyData InputData;
+	InputData.AnimMontage = SyncOutput.GetPlayingMontage();
+	InputData.MontagePlayer = this;
+	// since notifies tick after advancing the montage , let's try using previous time for them if it's less than current time
+	// previous time would be higher than current only in a loop situation
+	
+	// ToDo : Setting the time notifies will start ticking from (time before the animation pose was advance ei previous time)
+	// to current time , in the case of loop is a naive implementation, in truth we should keep tack of the section we looped on
+	// and do sub-tick for the : (Section end - pre-advance time) and (Post-Advance time - Section Start)
+	// handled outside in AdvanceMontage so this function always gets a proper previous and current times.
+	if (PreviousTime < SyncOutput.GetCurrentTime())
+	{
+		InputData.NotifyTickStartTime = PreviousTime;
+	}
+	else
+	{
+		InputData.NotifyTickStartTime = SyncOutput.GetCurrentTime();
+	}
+	InputData.CurrentSimTimeMS = TimeStep.BaseSimTimeMs;
+	const FSyncedNotifiesArray AnimNotifies(SyncOutput.GetPlayingMontage());
+	for (int32 i = 0; i < AnimNotifies.Num(); ++i)
+	{
+		// Notifies Can End the Montage And Make the current playing montage null, break if it happens
+		if (!SyncOutput.GetPlayingMontage())
+		{
+			break;
+		}
+		const FAnimNotifyEvent& NotifyEvent = AnimNotifies[i];
+		TObjectPtr<UObject> NotifyObject = SyncOutput.NotifySyncStates.GetNotifyObject(NotifyEvent);
+		check(NotifyObject->Implements<USyncedNotifyInterface>());// we should never have invalid interface at this point
+		InputData.DeltaSeconds = MontageStepTime;
+		// make sure advancing with delta time does not exceed the notify time
+		if (SyncOutput.NotifySyncStates.IsNotifyState(NotifyEvent))
+		{
+			// by clamping the time we also clamp the delta time.
+			const float TimeAfterAdvance = FMath::Clamp(InputData.NotifyTickStartTime + InputData.DeltaSeconds,
+				NotifyEvent.GetTriggerTime(), NotifyEvent.GetEndTriggerTime());
+			InputData.DeltaSeconds = TimeAfterAdvance - InputData.NotifyTickStartTime;
+		}
+		InputData.NotifyStartTime = NotifyEvent.GetTriggerTime();
+		InputData.NotifyEndTime = NotifyEvent.GetEndTriggerTime();
+		InputData.RootMotionTransform = ExtractedRootMotion;
+		// Set the tick input data for this specific notify
+		//Output
+		static FSimTickNotifyEndData OutputData;
+		OutputData.SharedNotifyDataState = nullptr;
+		OutputData.ExtractionData = ExtractedRootMotion;
+		if (SyncOutput.NotifySyncStates.IsValidStateIndex(i))
+		{
+			if (const FSyncedNotifyDataContainer& SyncState = SyncOutput.NotifySyncStates[i];
+				SyncState.SyncStatePointer.IsValid())
+			{
+				// create new data blocks here and copy it, don't give the simulation data as it for safety.
+				InputData.SharedNotifyDataState = SyncState.SyncStatePointer->CloneShared();
+				OutputData.SharedNotifyDataState = SyncState.SyncStatePointer->CloneShared();
+			}
+		}
+		if (SyncOutput.NotifySyncStates.ShouldNotifyTriggerThisFrame(SyncOutput.GetPlayingMontage(),i, SyncOutput.GetCurrentTime(), InputData.NotifyTickStartTime))
+		{
+			//Set Triggered Flag To false
+			FSyncedNotifyDataContainer& SyncState = SyncOutput.NotifySyncStates[i];
+			SyncState.IsActive = true;
+			SyncOutput.NotifySyncStates.SetupDataForNotifyAtIndex(SyncOutput.GetPlayingMontage(),i);
+			OutputData.SharedNotifyDataState = nullptr;
+			OutputData.ExtractionData = ExtractedRootMotion;
+			if (SyncState.SyncStatePointer.IsValid())
+			{
+				InputData.SharedNotifyDataState = SyncState.SyncStatePointer->CloneShared();
+				OutputData.SharedNotifyDataState = SyncState.SyncStatePointer->CloneShared();
+			}
+			// set trigger to true in input and output data for this notify tick
+			ISyncedNotifyInterface::Execute_SimulationBegin(NotifyObject, TimeStep.bIsResimulating, InputData, OutputData);
+
+			// if notify event causes montage to end, then break the loop
+			if (!SyncOutput.GetPlayingMontage())
+			{
+				break;
+			}
+		}
+		// Triggered This frame , So Called triggered Then Tick , we still want to tick on first frame
+		if (SyncOutput.NotifySyncStates.ShouldNotifyTickThisFrame(SyncOutput.GetPlayingMontage(),i, InputData.NotifyTickStartTime)
+			&& ISyncedNotifyInterface::Execute_CanTick(NotifyObject))
+		{
+			//ToDo @Kai : Bring The Cycle Counter Back
+			//SCOPE_CYCLE_COUNTER(STAT_NetMontagePlayer_Notifies_Tick);
+			// clamp delta time so it is max to end of notify
+			const int32 MaxTickDeltaMS = FMath::RoundToInt32(NotifyEvent.GetEndTriggerTime() * 1000.f) -  FMath::RoundToInt32(InputData.NotifyTickStartTime * 1000.f);
+			const int32 DeltaSecondsMS = FMath::RoundToInt32(InputData.DeltaSeconds * 1000.f);
+			InputData.DeltaSeconds = FMath::Clamp(DeltaSecondsMS, 0.f, MaxTickDeltaMS) / 1000.f;
+			// call the interface
+			ISyncedNotifyInterface::Execute_SimulationTick(NotifyObject, TimeStep, InputData, OutputData);
+
+			// if notify event causes montage to end, then break the loop
+			if (!SyncOutput.GetPlayingMontage())
+			{
+				break;
+			}
+		}
+
+		// Triggered This frame , So Called triggered Then Tick , we still want to tick on first frame
+		if (SyncOutput.NotifySyncStates.ShouldNotifyEndThisFrame(SyncOutput.GetPlayingMontage(),i, SyncOutput.GetCurrentTime()))
+		{
+			//SCOPE_CYCLE_COUNTER(STAT_NetMontagePlayer_Notifies_End);
+			//Set Triggered Flag To True
+			SyncOutput.NotifySyncStates[i].IsActive = false;
+			// clamp delta time so it is max to end of notify
+			const float MaxTickDelta = NotifyEvent.GetEndTriggerTime() - InputData.NotifyTickStartTime;
+			InputData.DeltaSeconds = FMath::Clamp(InputData.DeltaSeconds, 0.f, MaxTickDelta);
+			ISyncedNotifyInterface::Execute_SimulationEnd(NotifyObject, TimeStep.bIsResimulating, InputData, OutputData);
+
+			// if notify event causes montage to end, then break the loop
+			if (!SyncOutput.GetPlayingMontage())
+			{
+				break;
+			}
+			SyncOutput.NotifySyncStates[i].SyncStatePointer = nullptr;
+		}
+		
+		//copy Root Motion From Notify State
+		ExtractedRootMotion = OutputData.ExtractionData;
+
+		if (SyncOutput.NotifySyncStates.IsValidStateIndex(i)
+			&& SyncOutput.NotifySyncStates[i].SyncStatePointer.IsValid()
+			&& OutputData.SharedNotifyDataState.IsValid())
+		{
+			SyncOutput.NotifySyncStates[i].SyncStatePointer = OutputData.SharedNotifyDataState->CloneShared();
+		}
+	}
+}
+
+void UNetMontageSimulator::EndSyncedNotifies(const FAbilitySystemTimeStep& TimeStep,FMontageSimSyncState& State)
+{
+	if (State.GetPlayingMontage())
+	{
+		const float DeltaSeconds = TimeStep.StepMs / 1000.f;
+		// Shared Input Data between All Active Notify States
+		static FSimTickNotifyData InputData;
+		InputData.AnimMontage = State.GetPlayingMontage();
+		InputData.MontagePlayer = this;
+		// make sure current time doesn't exceed montage time
+		InputData.NotifyTickStartTime = FMath::Min(State.GetCurrentTime(), State.GetPlayingMontage()->GetPlayLength());
+		InputData.DeltaSeconds = DeltaSeconds;
+		InputData.CurrentSimTimeMS = TimeStep.BaseSimTimeMs;
+		const FSyncedNotifiesArray AnimNotifies(State.GetPlayingMontage());
+
+		checkf(AnimNotifies.Num() == State.NotifySyncStates.Num(),TEXT("Montage %s Notifies Num %d but SyncState Notifies Num %d ??"),*GetNameSafe(State.GetPlayingMontage()),AnimNotifies.Num(),State.NotifySyncStates.Num())
+		for (int32 i = 0; i < AnimNotifies.Num(); i++)
+		{
+			const FAnimNotifyEvent& NotifyEvent = AnimNotifies[i];
+			InputData.NotifyStartTime = NotifyEvent.GetTriggerTime();
+			InputData.NotifyEndTime = NotifyEvent.GetEndTriggerTime();
+			//Output
+			static FSimTickNotifyEndData OutputData;
+			OutputData.SharedNotifyDataState = nullptr;
+			OutputData.ExtractionData = FTransform::Identity;
+			// Set the tick data for this specific notify
+			if (State.NotifySyncStates.IsValidStateIndex(i)
+			   && State.NotifySyncStates[i].SyncStatePointer.IsValid())
+			{
+				const FSyncedNotifyDataContainer& NotifySyncState = State.NotifySyncStates[i];
+				InputData.SharedNotifyDataState = NotifySyncState.SyncStatePointer->CloneShared();
+				OutputData.SharedNotifyDataState = NotifySyncState.SyncStatePointer->CloneShared();
+			}
+
+			if (State.NotifySyncStates.IsNotifyState(NotifyEvent) && State.NotifySyncStates.IsNotifyTriggered(i))
+			{
+				// Set Activation Flag To false
+				State.NotifySyncStates[i].IsActive = false;
+				State.NotifySyncStates[i].SyncStatePointer = nullptr;
+				ISyncedNotifyInterface::Execute_SimulationEnd(State.NotifySyncStates.GetNotifyObject(NotifyEvent),
+					TimeStep.bIsResimulating, InputData, OutputData);
+			}
+		}
+	}
+}
+
+void UNetMontageSimulator::FinalizeMontageFrame(const FMontageSimSyncState& SyncState, bool bSmoothedState)
+{
+	UAnimInstance* AnimInstance = AbilitySystemComponent->AbilityActorInfo->GetAnimInstance();
+	if (!IsValid(AnimInstance))
+	{
+		return;
+	}
+	float RateMultiplier = 1.f;
+	ESyncedMontagePresentation Presentation = ESyncedMontagePresentation::LandOnSimTime;
+	if (UNpAbilitySystemComponent* Asc = GetNpAbilitySystemComponent())
+	{
+		RateMultiplier = Asc->GetMontagePlayRateMultiplier();
+		Presentation = Asc->SyncedMontagePresentation;
+	}
+	const bool bLandOnSimTime = Presentation == ESyncedMontagePresentation::LandOnSimTime;
+	//if we want to play a montage
+	if (UAnimMontage* DesiredMontage = SyncState.GetPlayingMontage())
+	{
+		// A montage plays again (a new move, a rollback that restored one): a stop asked for before it no longer applies
+		PendingStop = FPendingStopPresentation();
+		// LandOnSimTime: the presentation clock picks the time this frame shows (the start on a start's first frame, then a steady advance)
+		const float ShownTime = bLandOnSimTime ? PresentMontageTime(*AnimInstance, DesiredMontage, SyncState, bSmoothedState, RateMultiplier) : SyncState.GetCurrentTime();
+		// if there's an active instance of the montage (is not blending out) , end it
+		if (FAnimMontageInstance* MontageInstance = AnimInstance->GetActiveInstanceForMontage(DesiredMontage))
+		{
+			// if time is past the blend out time, we active montage instance
+			if (SyncState.GetCurrentTime() >= GetMontageBlendOutTime(DesiredMontage))
+			{
+				// make sure the instance is past the blend out time , if it's not blend it out (with the montage's blend-out, see MakeMontageBlendOut)
+				MontageInstance->Stop(MakeMontageBlendOut(*DesiredMontage), false);
+				return;
+			}
+			if (bLandOnSimTime)
+			{
+				LandInstanceOnSimTime(*AnimInstance, *MontageInstance, SyncState, RateMultiplier, ShownTime);
+				LastPlayingMontage = DesiredMontage;
+				return;
+			}
+			// if position is too far , restart the montage from desired new position, this makes it blend to target time
+			if (SyncState.GetCurrentTime() - MontageInstance->GetPosition() > 0.1f)
+			{
+				MontageInstance->Stop(MontageInstance->GetBlend(), false);
+				AnimInstance->Montage_Play(DesiredMontage, SyncState.GetPlayRate() * RateMultiplier, EMontagePlayReturnType::MontageLength, SyncState.GetCurrentTime());
+				LastPlayingMontage = DesiredMontage;
+				return;
+			}
+			//Set position if there's enough divergence ,
+			//otherwise let it be to try and eliminate notifies that triggered last frame from triggering again
+			if (FMath::Abs(SyncState.GetCurrentTime() - MontageInstance->GetPosition()) > 0.01)
+			{
+				MontageInstance->SetPosition(SyncState.GetCurrentTime());
+			}
+			MontageInstance->SetPlayRate(SyncState.GetPlayRate() * RateMultiplier);
+			LastPlayingMontage = DesiredMontage;
+			return;
+		}
+		// there's no active instance , if our time is less than blend out time , start the montage
+		if (SyncState.GetCurrentTime() < GetMontageBlendOutTime(DesiredMontage))
+		{
+			AnimInstance->Montage_Play(DesiredMontage, SyncState.GetPlayRate() * RateMultiplier, EMontagePlayReturnType::MontageLength, ShownTime);
+			if (bLandOnSimTime)
+			{
+				// Started on the shown time: hold it there through this frame's animation update instead of drawing one frame ahead
+				if (FAnimMontageInstance* NewInstance = AnimInstance->GetActiveInstanceForMontage(DesiredMontage))
+				{
+					LandInstanceOnSimTime(*AnimInstance, *NewInstance, SyncState, RateMultiplier, ShownTime);
+				}
+			}
+			LastPlayingMontage = DesiredMontage;
+			return;
+		}
+	}
+
+	//We Don't want to be playing any montage. check if we have a valid last playing montage
+	// if we do, and it has a valid active instance, Stop it , then invalidate it.
+	ResetPresentationClock();
+	if (LastPlayingMontage)
+	{
+		if (FAnimMontageInstance* LastMontageInstance = AnimInstance->GetActiveInstanceForMontage(LastPlayingMontage))
+		{
+			if (PendingStop.Montage.Get() == LastPlayingMontage && PendingStop.BlendOutSeconds >= 0.f)
+			{
+				// The caller's blend (StopMontageWithBlend). Holding the pose: the instance stops advancing, so the blend fades the last pose
+				// of the move instead of the animation that follows it in the montage
+				if (PendingStop.bHoldPose)
+				{
+					LastMontageInstance->SetPlayRate(0.f);
+				}
+				LastMontageInstance->Stop(MakeMontageBlendOut(*LastPlayingMontage, PendingStop.BlendOutSeconds));
+			}
+			else
+			{
+				LastMontageInstance->Stop(MakeMontageBlendOut(*LastPlayingMontage));
+			}
+		}
+		PendingStop = FPendingStopPresentation();
+		LastPlayingMontage = nullptr;
+	}
+}
+
+FSyncedMontagePresentationStep UNetMontageSimulator::ComputeLandOnSimTimeStep(float InstancePosition, float TargetTime, float NominalPlayRate,
+	float AnimDeltaSeconds, float MaxRateScale, float CarriedSeconds)
+{
+	// Below this the instance is on the target: a tenth of a millisecond, far under one frame of any animation
+	constexpr float PositionTolerance = 1.e-4f;
+	FSyncedMontagePresentationStep Step;
+	Step.Position = InstancePosition;
+	const float Carried = FMath::Max(CarriedSeconds, 0.f);
+
+	// No advance coming (the mesh is paused, or no time passes): put it on the target. Rate 0 too, so a pause lifted later in this same frame
+	// does not let the update carry it past the target. Nothing is added to the stepper, what it holds stays
+	if (AnimDeltaSeconds <= UE_SMALL_NUMBER)
+	{
+		Step.bSetPosition = !FMath::IsNearlyEqual(InstancePosition, TargetTime, PositionTolerance);
+		Step.Position = TargetTime;
+		Step.PlayRate = 0.f;
+		Step.CarriedSecondsAfter = Carried;
+		return Step;
+	}
+
+	// The time the coming update spends if the rate is not 0: its own delta plus what earlier holds left in the stepper
+	const float StepSeconds = AnimDeltaSeconds + Carried;
+	const float Gap = TargetTime - InstancePosition;
+	// Ahead of the simulation: go back and hold. A teleport, so the notifies already passed do not fire again. A hold keeps the delta
+	if (Gap < -PositionTolerance)
+	{
+		Step.bSetPosition = true;
+		Step.Position = TargetTime;
+		Step.PlayRate = 0.f;
+		Step.CarriedSecondsAfter = StepSeconds;
+		return Step;
+	}
+
+	// Behind (or on it): cover the gap in this update, so every notify in it fires once. On it: rate 0, the stepper keeps the delta
+	const float NeededRate = FMath::Max(Gap, 0.f) / StepSeconds;
+	const float MaxRate = FMath::Max(NominalPlayRate, 1.f) * MaxRateScale;
+	if (NeededRate <= MaxRate)
+	{
+		Step.PlayRate = NeededRate;
+		Step.CarriedSecondsAfter = NeededRate > 0.f ? 0.f : StepSeconds;
+		return Step;
+	}
+
+	// Too far behind to run there (a correction, a long hitch): skip to where the nominal rate lands on the target
+	Step.bSetPosition = true;
+	Step.Position = FMath::Max(TargetTime - FMath::Max(NominalPlayRate, 0.f) * StepSeconds, 0.f);
+	Step.PlayRate = (TargetTime - Step.Position) / StepSeconds;
+	Step.CarriedSecondsAfter = Step.PlayRate > 0.f ? 0.f : StepSeconds;
+	return Step;
+}
+
+void UNetMontageSimulator::LandInstanceOnSimTime(const UAnimInstance& AnimInstance, FAnimMontageInstance& MontageInstance,
+	const FMontageSimSyncState& SyncState, float RateMultiplier, float TargetTime)
+{
+	// The delta the mesh's animation update will use this frame: FinalizeFrame runs before it (NP finalizes in the world's pre-actor tick)
+	float AnimDeltaSeconds = 0.f;
+	if (const UWorld* World = AnimInstance.GetWorld())
+	{
+		AnimDeltaSeconds = World->GetDeltaSeconds();
+	}
+	if (const USkeletalMeshComponent* Mesh = AnimInstance.GetOwningComponent())
+	{
+		AnimDeltaSeconds *= Mesh->GlobalAnimRateScale;
+		if (const AActor* Owner = Mesh->GetOwner())
+		{
+			AnimDeltaSeconds *= Owner->CustomTimeDilation;
+		}
+	}
+	const float NominalRate = SyncState.GetIsPaused() ? 0.f : SyncState.GetPlayRate() * RateMultiplier;
+	// A new instance (a start, a restart after a stop) has an empty sub-stepper. SetPosition does not empty it (the dropkick loop wrap kept it)
+	if (MontageInstance.GetInstanceID() != CarriedStepperInstanceId)
+	{
+		CarriedStepperInstanceId = MontageInstance.GetInstanceID();
+		CarriedStepperSeconds = 0.f;
+	}
+	const FSyncedMontagePresentationStep Step = ComputeLandOnSimTimeStep(MontageInstance.GetPosition(), TargetTime,
+		NominalRate, AnimDeltaSeconds, 4.f, CarriedStepperSeconds);
+	if (Step.bSetPosition)
+	{
+		MontageInstance.SetPosition(Step.Position);
+	}
+	MontageInstance.SetPlayRate(Step.PlayRate);
+	CarriedStepperSeconds = Step.CarriedSecondsAfter;
+}

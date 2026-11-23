@@ -1,0 +1,9 @@
+AS_React_HitStand tracks=93 frames=4 fixed=head,thigh_l,foot_l,thigh_r,foot_r max|scale-1|=0.00000 at - len 0.0500->0.0500 pelvis_f0_shift=0.0000 cm
+AS_React_Tumble tracks=93 frames=4 fixed=head,thigh_l,foot_l,thigh_r,foot_r max|scale-1|=0.00000 at - len 0.0500->0.0500 pelvis_f0_shift=0.0000 cm
+AS_React_Splat tracks=93 frames=4 fixed=head,thigh_l,foot_l,thigh_r,foot_r max|scale-1|=0.00000 at - len 0.0500->0.0500 pelvis_f0_shift=0.0000 cm
+AS_React_GroundHit tracks=93 frames=18 fixed=head,thigh_l,foot_l,thigh_r,foot_r max|scale-1|=0.00000 at - len 0.2833->0.2833 pelvis_f0_shift=0.0000 cm
+AS_React_LieUp tracks=93 frames=4 fixed=head,thigh_l,foot_l,thigh_r,foot_r max|scale-1|=0.00000 at - len 0.0500->0.0500 pelvis_f0_shift=0.0000 cm
+AS_React_GetUp tracks=93 frames=26 fixed=head,thigh_l,foot_l,thigh_r,foot_r max|scale-1|=0.00000 at - len 0.4167->0.4167 pelvis_f0_shift=0.0000 cm
+AS_React_Roll tracks=93 frames=24 fixed=head,thigh_l,foot_l,thigh_r,foot_r max|scale-1|=0.00000 at - len 0.3833->0.3833 pelvis_f0_shift=0.0000 cm
+AS_React_RollBack tracks=93 frames=24 fixed=head,thigh_l,foot_l,thigh_r,foot_r max|scale-1|=0.00000 at - len 0.3833->0.3833 pelvis_f0_shift=0.0000 cm
+DONE_MARK

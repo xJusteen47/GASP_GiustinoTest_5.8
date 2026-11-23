@@ -1,0 +1,319 @@
+{
+ "card_path": "cards/reaction/reaction_getup.json",
+ "take": "AS_Pilot_React_GetUp",
+ "frames": 26,
+ "card": {
+  "move": "reaction_getup",
+  "class": "reaction",
+  "anim": "/Game/AnimPipeline/Rig/Reaction/AS_React_GetUp",
+  "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
+  "fps": 60,
+  "timing_csv": "refs/ufd/React_GetUp_timing.csv",
+  "effector": "head",
+  "_design": "Get up in place from the lying pose: sit up pushing on both hands with the knees drawing in (f6), weight onto the feet in a low crouch (f12), rise (f18), standing idle (f25). No travel: the ability keeps the character where it is.",
+  "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_React_GetUp",
+  "spacing": {
+   "startup": "limb_led_recovery",
+   "active": "limb_led_recovery",
+   "recovery": "limb_led_recovery"
+  },
+  "part_delays": {
+   "chest": 0,
+   "head": 0,
+   "forearm": 0,
+   "hand": 0
+  }
+ },
+ "keys": {
+  "0": {
+   "pelvis": {
+    "loc": [
+     -2,
+     -7.5,
+     -78.5
+    ],
+    "rot_e": {
+     "pitch": 90,
+     "twist": 0
+    }
+   },
+   "spine": [
+    0,
+    0,
+    0
+   ],
+   "head": [
+    -6,
+    0,
+    14
+   ],
+   "fingers": [
+    0.8,
+    0,
+    0
+   ],
+   "arm_l": {
+    "hand_w": [
+     60,
+     -42,
+     4
+    ],
+    "pole_w": [
+     36,
+     -30,
+     5
+    ]
+   },
+   "arm_r": {
+    "hand_w": [
+     -8,
+     -24,
+     23
+    ],
+    "pole_w": [
+     -36,
+     -28,
+     6
+    ]
+   },
+   "leg_l": {
+    "foot_w": [
+     17,
+     71,
+     7
+    ],
+    "pole_w": [
+     15,
+     30,
+     60
+    ]
+   },
+   "leg_r": {
+    "foot_w": [
+     -21,
+     56,
+     7
+    ],
+    "pole_w": [
+     -26,
+     26,
+     60
+    ]
+   },
+   "hold": true
+  },
+  "6": {
+   "pelvis": {
+    "loc": [
+     -2.1,
+     -5.5,
+     -78.1
+    ],
+    "rot_e": {
+     "pitch": 50
+    }
+   },
+   "spine": [
+    -26,
+    0,
+    0
+   ],
+   "head": [
+    -14,
+    0,
+    0
+   ],
+   "fingers": [
+    0.8,
+    0,
+    0
+   ],
+   "arm_l": {
+    "hand_w": [
+     34,
+     -36,
+     3
+    ],
+    "pole_w": [
+     48,
+     -56,
+     24
+    ]
+   },
+   "arm_r": {
+    "hand_w": [
+     -30,
+     -38,
+     3
+    ],
+    "pole_w": [
+     -46,
+     -58,
+     24
+    ]
+   },
+   "leg_l": {
+    "foot_w": [
+     18,
+     48,
+     9.5
+    ],
+    "pole_w": [
+     16,
+     30,
+     70
+    ],
+    "flat": true
+   },
+   "leg_r": {
+    "foot_w": [
+     -17,
+     40,
+     9.5
+    ],
+    "pole_w": [
+     -20,
+     22,
+     70
+    ],
+    "flat": true
+   }
+  },
+  "12": {
+   "pelvis": {
+    "loc": [
+     -2.1,
+     -2.5,
+     -50.6
+    ],
+    "rot_e": {
+     "pitch": -30
+    }
+   },
+   "spine": [
+    -24,
+    0,
+    0
+   ],
+   "head": [
+    26,
+    0,
+    0
+   ],
+   "fingers": [
+    0.8,
+    0,
+    0
+   ],
+   "arm_l": {
+    "hand_w": [
+     30,
+     24,
+     18
+    ],
+    "pole_w": [
+     48,
+     -10,
+     44
+    ]
+   },
+   "arm_r": {
+    "hand_w": [
+     -28,
+     10,
+     20
+    ],
+    "pole_w": [
+     -46,
+     -20,
+     44
+    ]
+   },
+   "leg_l": {
+    "foot_w": [
+     20,
+     14,
+     9.5
+    ],
+    "pole_w": [
+     32,
+     70,
+     45
+    ],
+    "flat": true
+   },
+   "leg_r": {
+    "foot_w": [
+     -15,
+     -14,
+     9.5
+    ],
+    "pole_w": [
+     -34,
+     55,
+     45
+    ],
+    "flat": true
+   }
+  },
+  "18": {
+   "pelvis": {
+    "loc": [
+     -0.6,
+     1.0,
+     -20.6
+    ],
+    "rot_e": {
+     "pitch": -12
+    }
+   },
+   "spine": [
+    -12,
+    0,
+    0
+   ],
+   "head": [
+    8,
+    0,
+    0
+   ],
+   "fingers": [
+    0.4,
+    0,
+    0
+   ],
+   "leg_l": "idle_w",
+   "leg_r": "idle_w"
+  },
+  "25": {
+   "pelvis": {
+    "loc": [
+     0,
+     0,
+     0
+    ],
+    "rot_e": {
+     "pitch": 0
+    }
+   },
+   "spine": [
+    0,
+    0,
+    0
+   ],
+   "head": [
+    0,
+    0,
+    0
+   ],
+   "fingers": [
+    0,
+    0,
+    0
+   ],
+   "leg_l": "idle_w",
+   "leg_r": "idle_w",
+   "hold": true
+  }
+ }
+}

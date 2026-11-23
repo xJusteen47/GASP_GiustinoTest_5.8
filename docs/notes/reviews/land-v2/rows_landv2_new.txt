@@ -1,0 +1,6 @@
+table Stand Mode Transitions rows 11 columns 5
+  row 4 M_Relaxed_Jump_F_Land_Stand_Heavy_Lfoot disabled=False -> sibling missing
+    added row 5 (AS_GSTN_LandStand_Retime_v2)
+  check row 5 AS_GSTN_LandStand_Retime_v2 disabled=False, source row disabled=True, cells differing=[4]
+saved /Game/GSTN/Locomotion/StockBase/CHT_GSTN_StockMover_PoseMatch
+ESITO: OK mode=new pairs=1

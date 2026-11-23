@@ -1,0 +1,1 @@
+NON E' UN LOCK. File creato per errore dal thread hit-reactions (2026-11-18); il lock vero e' _ue59/IN-USO.txt. Si puo' cancellare.

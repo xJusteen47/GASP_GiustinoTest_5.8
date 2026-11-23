@@ -1,0 +1,20 @@
+    0.0s driver loaded: kit KIT_Test_OverlordDAirV9, out C:/Users/jacop/Documents/Unreal Projects/GASP_Giustino2_ue59/Saved/AnimR2/cp5/dair_variant
+    8.0s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '3', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   20.5s kit KIT_Test_OverlordDAirV9: OK
+   23.5s loadout: {"revision": 2, "kit": "KIT_Test_OverlordDAirV9", "additionalWeapons": [], "kitResolved": true, "tableEntries": 8, "grantedAbilities": 8, "derivedTimelines": 0, "tableCrc": "3571066b"}
+   23.5s review stage: parked [('Z1', (3500.0, 300.0)), ('Z1', (3800.0, 300.0))], other pawns at [61, 300, 2965, 3113] cm
+   24.0s 7 cameras, 3 fill lights
+   26.0s dair_whiff: standing height z 100.0
+   26.0s sequence dair_whiff: pawn at ((0, -150, 100), 0)
+   33.9s dair_whiff: crouch on v36 (height 152 cm, rising), attack on v37
+   60.2s sequence dair_whiff done: 150 frames, pawn z 88.1
+   62.1s dair_land: standing height z 88.1
+   62.1s sequence dair_land: pawn at ((0, -150, 88), 0)
+   79.8s dair_land: crouch on v82 (height 183 cm, falling), attack on v83
+   95.7s sequence dair_land done: 150 frames, pawn z 88.2
+   97.5s dummy ['BP_GASNPP_TestCharacter_C_3'] ahead: (62, -150)
+   99.5s dair_hit: standing height z 88.2
+   99.5s sequence dair_hit: pawn at ((0, -150, 88), 0)
+  115.7s dair_hit: crouch on v74 (height 223 cm, falling), attack on v75
+  133.4s sequence dair_hit done: 150 frames, pawn z 88.1
+  135.2s finish: ok

@@ -1,0 +1,3 @@
+ASSERT: OK AS_GSTN_LandStand_Retime_v2 f118-f175: weight >= 0.8 on 100% (min 0.88)
+in-editor gate (window 110-150 guessed before the build) said: ASSERT: FAIL ld_jump_idle AS_GSTN_LandStand_Retime_v2 f110-f150: weight >= 0.8 on 83% (< 90%), f111 weight 0.25, owned by BS_Relaxed_Walk_Leans 0.25
+f104-117 = the state machine's 0.2 s In Air -> Idle Transition cross-fade: most likely BOTH states' Blend Stacks hold AS_GSTN_LandStand_Retime_v2 (3-frame blend in) and the capture logs one record per asset, so the logged weight follows the state weight (0.76 -> 0.34 -> 1.0); pelvis_z is already at the contact low (58.8 cm) on f106.
