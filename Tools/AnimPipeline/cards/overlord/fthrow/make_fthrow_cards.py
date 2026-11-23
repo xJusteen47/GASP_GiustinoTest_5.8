@@ -30,7 +30,7 @@ ARM = np.linalg.norm(po.lt["lowerarm_l"]) + np.linalg.norm(po.lt["hand_l"])   # 
 # --- the victim (component space). Neck = hold point; its face looks back at Overlord (-Y).
 NECK = np.array([5.0, 38.0, 136.0])     # victim neck_01; a same-size victim stands ~9 cm into the floor: see handover
 FACE = NECK + np.array([0.0, -9.0, 15.0])          # front surface of the victim's face/forehead (headbutt target)
-GRIP = {"l": NECK + np.array([11.0, -8.0, -7.0]), "r": NECK + np.array([-11.0, -8.0, -7.0])}   # v1c: base of the neck, wider (hands clear each other and the own head)   # wrists either side of the neck
+GRIP = {"l": NECK + np.array([11.0, -2.0, -7.0]), "r": NECK + np.array([-11.0, -2.0, -7.0])}   # r2: wrists at the SIDES of the neck (in front they met the own head at the impact)   # v1c: base of the neck, wider (hands clear each other and the own head)   # wrists either side of the neck
 ELBOW = {"l": [40.0, -5.0, -45.0], "r": [-40.0, -5.0, -45.0]}                               # elbow poles, chest frame: down/out
 FOOT0 = {s: P0[f"foot_{s}"].copy() for s in "lr"}
 TOE = {s: (lambda d: d / np.linalg.norm(d))(np.array([*(P0[f"ball_{s}"] - P0[f"foot_{s}"])[:2], 0.0])) for s in "lr"}
@@ -87,13 +87,16 @@ K = {
     # jerk: shoulders up, hands tug, knees load, head starts back
     4: pose(pel=(-1, 0, -5), prot=(2, 0, -7), spine=(2, 0, -11), head=(6, 0, 2), clav=(10, 10), hand_dw=TUG, fingers=0.2),
     # P1 charge: the body rises out of the load, trunk and head back, weight onto the back (right) foot, elbows tight
-    8: pose(pel=(-1, -3, -1.5), prot=(3, 0, -7), spine=(6, 0, -11), head=(14, 0, 2), clav=(4, 4), fingers=0.2, elbow=TIGHT),
+    8: pose(pel=(-1, -1.5, -1.5), prot=(3, 0, -7), spine=(6, 0, -11), head=(14, 0, 2), clav=(4, 4), fingers=0.2, elbow=TIGHT),
     # P2 peak: forehead at its highest and furthest back, held a12-a14 with a small drift (moving hold)
-    12: pose(pel=(-2, -4, -0.5), prot=(4, 0, -7), spine=(8, 0, -11), head=(20, 0, 2), clav=(3, 3), fingers=0.2, elbow=TIGHT),
-    14: pose(pel=(-2, -4, -0.5), prot=(4.5, 0, -7), spine=(8.5, 0, -11), head=(22, 0, 2), clav=(3, 3), fingers=0.2, elbow=TIGHT),
+    12: pose(pel=(-1, -2, -0.5), prot=(4, 0, -7), spine=(8, 0, -11), head=(20, 0, 2), clav=(3, 3), fingers=0.2, elbow=TIGHT),
+    14: pose(pel=(-1, -2, -0.5), prot=(4.5, 0, -7), spine=(8.5, 0, -11), head=(22, 0, 2), clav=(3, 3), fingers=0.2, elbow=TIGHT),
     # P3 snap, kinetic chain (v1b, motion_check "no overlap"): the pelvis leads (70 % of its travel at a17, all at a18), the chest
     # follows, the head lags still back and takes the last frame into contact (impact spacing on the head)
-    17: pose(pel=(0, 5, -4.5), prot=(0, 0, -7), spine=(4, 0, -11), head=(16, 0, 2), clav=(8, 8), fingers=0.2,
+    # r2 overlap: the pelvis starts at a15-a16 while the chest and the head still hold the peak (motion_check lag 0.15 -> >= 0.5)
+    16: pose(pel=(-0.5, 2.5, -3), prot=(2.5, 0, -7), spine=(7.5, 0, -11), head=(21, 0, 2), clav=(4, 4), fingers=0.2, elbow=TIGHT,
+             feet={"l": FOOT0["l"] + np.array([0.0, 4.0, 2.5]), "l_toe": 6.0}),
+    17: pose(pel=(0, 5.5, -4.5), prot=(0, 0, -7), spine=(4, 0, -11), head=(16, 0, 2), clav=(8, 8), fingers=0.2,
              feet={"l": L_MID, "l_toe": 12.0}),
     18: pose(pel=(0, 8.5, -5.5), prot=(-1.5, 0, -7), spine=(-1, 0, -11), head=(6, 0, 2), clav=(12, 12), fingers=0.2,
              feet={"l": L_STEP + np.array([0.0, 0.0, 1.5]), "l_toe": 4.0}),
@@ -105,9 +108,9 @@ K = {
     23: pose(pel=(0, 8.5, -7), prot=(-2.5, 0, -7), spine=(-6, 0, -11), head=(-16, 0, 2), clav=(10, 10), fingers=OPEN, wrist_out=18,
              hands={s: GRIP[s] + np.array([(6 if s == "l" else -6), 6, -8]) for s in "lr"}, feet={"l": L_STEP}),
     # P6 settle: trunk rises (head 2 frames behind the chest), hands come down in the chest frame, the front foot comes back
-    28: pose(pel=(0, 6, -7), prot=(-2, 0, -5), spine=(-3, 0, -8), head=(-9, 0, 1), clav=(4, 4), fingers=0.7, wrist_out=10,
+    28: pose(pel=(0, 6, -7), prot=(-2, 0, -5), spine=(-3, 0, -8), head=(-12, 0, 1), clav=(4, 4), fingers=0.7, wrist_out=10,
              hands_chest=(0.0, 16.0, 16.0), feet={"l": L_STEP}),
-    34: pose(pel=(0, 2, -3), prot=(-1, 0, -2), spine=(0, 0, -3), head=(-1, 0, 0), clav=(1, 1), fingers=0.3,
+    34: pose(pel=(0, 2, -3), prot=(-1, 0, -2), spine=(0, 0, -3), head=(-4, 0, 0), clav=(1, 1), fingers=0.3,
              hands_chest=(0.0, 7.0, 7.0), feet={"l": L_BACK, "l_toe": 6.0}),
     # P7 FAF (g46 -> a44): back on the idle stance, fists, a small settle past upright at a39
     39: pose(pel=(0, -1, -1.5), prot=(1, 0, 0), spine=(2, 0, 0), head=(1, 0, 0), clav=(0, 0), fingers=0.0,
@@ -115,10 +118,10 @@ K = {
     44: {},
     50: {},
 }
-SPACING = {0: "arrive_1_2", 4: "ease_from", 8: "charge_long", 12: "hold_recoil", 14: "charge_long", 17: "hold_recoil", 18: "hold_recoil",
+SPACING = {0: "arrive_1_2", 4: "ease_from", 8: "charge_long", 12: "hold_recoil", 14: "ease_from", 16: "charge_long", 17: "hold_recoil", 18: "hold_recoil",
            19: "hold_recoil", 20: "limb_led_recovery", 23: "limb_led_recovery", 28: "limb_led_recovery", 34: "ease_into", 39: "ease_into",
            44: "hold_recoil"}
-NAMES = {0: "grip", 4: "jerk", 8: "charge", 12: "peak", 14: "peak_hold", 17: "snap", 18: "pre_contact", 19: "impact", 20: "overshoot", 23: "release",
+NAMES = {0: "grip", 4: "jerk", 8: "charge", 12: "peak", 14: "peak_hold", 16: "pelvis_leads", 17: "snap", 18: "pre_contact", 19: "impact", 20: "overshoot", 23: "release",
          28: "settle", 34: "foot_back", 39: "settle_past", 44: "faf", 50: "tail_end"}
 
 
@@ -154,7 +157,7 @@ if __name__ == "__main__":
         "_strike_note": "headbutt: legibility knows only limbs (arm/leg); arm_r stands in, its fist rules do not judge a headbutt (by eye)",
         "planted": ["foot_r_ik_ctrl"],
         "exemptions": [{"check": "balance", "frames": list(range(15, 23)) + list(range(29, 39)), "why": "the headbutt lunge: CoM goes over the stepping foot, caught at a19; the foot coming back a29-a38"},
-                       {"check": "fists", "frames": list(range(21, 39)), "why": "release: Overlord's villain hands open forward to let the victim go (cards/README owner rule), fists again by a39"},
+                       {"check": "fists", "frames": list(range(0, 39)), "why": "a0-a20 the grip (hands half closed on the neck, not a fist); a21-a38 release: Overlord's villain hands open forward to let the victim go (cards/README owner rule), fists again by a39"},
                        {"check": "co_motion", "frames": list(range(0, 15)), "why": "2A planted: the front foot stays planted through the jerk and the charge (weight shifts back), it steps only from a15"},
                        {"check": "planted", "frames": list(range(15, 19)) + list(range(29, 39)), "why": "left foot steps out (a15-a18) and back (a29-a38)"}],
         "author": {"take": "AS_Pilot_OverlordFThrowV1", "frames": 51, "thumb": "along", "poses": {str(f): K[f] for f in sorted(K)}},

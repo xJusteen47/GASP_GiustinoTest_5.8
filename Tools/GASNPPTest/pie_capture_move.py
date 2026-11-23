@@ -976,7 +976,14 @@ for _cv in [c.strip() for c in os.environ.get('PIE_CAPTURE_CVARS', '').split(';'
 # fthrow-overlord-1: PIE_CAPTURE_PRE_PY=<file.py> is exec'd once before Play (in-memory data for the capture, e.g. fthrow_capture_pre.py)
 if os.environ.get('PIE_CAPTURE_PRE_PY'):
     _pre = {}
-    exec(open(os.environ['PIE_CAPTURE_PRE_PY'], encoding='utf-8').read(), _pre)
-    _log(_pre.get('_pre_msg', 'pre script run: ' + os.environ['PIE_CAPTURE_PRE_PY']))
+    try:
+        exec(open(os.environ['PIE_CAPTURE_PRE_PY'], encoding='utf-8').read(), _pre)
+        _log(_pre.get('_pre_msg', 'pre script run: ' + os.environ['PIE_CAPTURE_PRE_PY']))
+    except Exception:  # noqa: BLE001  a broken pre script must not leave the editor idle until the time limit
+        _log('ERROR pre script: ' + traceback.format_exc())
+        with open(os.path.join(OUT, 'done.txt'), 'w') as _f:
+            _f.write('error in the pre script (see capture.log)\n')
+        unreal.SystemLibrary.execute_console_command(None, 'QUIT_EDITOR')
+        raise
 _log(f'driver loaded: kit {KIT}, button {BUTTON}, out {OUT}')
 st['handle'] = unreal.register_slate_post_tick_callback(_tick)
