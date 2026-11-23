@@ -6,7 +6,7 @@ Esito: doc docs/notes/skin-lyra-confronto.md (copia in project files skin-cosmet
 - Da prendere: parti temporanee con handle, tag dalle parti, collisione per parte nel validatore, forza skin/tema da GSTN Debug.
 - Da non prendere: cambio del corpo invisibile per corporatura, ChildActorComponent per pezzo, riferimenti hard.
 - Stima prova cosmetica: 16-25 $ (prima 16-26).
-Decisioni proposte all'owner: 1A corpo invisibile fisso, 2A parti con handle in F3, 3A idea riscritta, non copia.
+Decisioni CONFERMATE dall owner 2026-11-23: 1A corpo invisibile fisso, 2A parti con handle in F3, 3A idea riscritta, non copia.
 Da verificare: nomi esatti delle classi Lyra e testo EULA della versione in uso.
 SUBAGENTI: 0
 COSTO: ~1,5 $ | 0 min desktop | 0 token review

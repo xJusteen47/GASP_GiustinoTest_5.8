@@ -56,7 +56,7 @@ Quasi nulla: **16-25 $**. Lyra non tocca l'assemblatore né la cache; risparmia 
 raccolta di tag si scrivono sul modello Lyra dentro il `UGSTN_SkinComponent` esistente invece di un componente nuovo. Il debug
 "forza skin/tema" costa ~0,5-1 $ e si paga da solo nelle catture. La migrazione proporzioni (16-24 $) non cambia con 1A.
 
-## Decisioni per l'owner (risposta tipo "1A 2A 3A")
+## Decisioni per l'owner: **1A 2A 3A CONFERMATE dall'owner il 2026-11-23** (corpo invisibile fisso, parti con handle in F3, idea riscritta non copia)
 **1. Corpo invisibile che guida l'animazione**
 - **A (consigliata)**: uno solo, fisso (manichino base); proporzioni nella skin entro i limiti. Costo 0, hitbox e prese sicure.
 - B: come Lyra, un corpo invisibile per corporatura (3 corpi). Piedi e mani più precisi su skin lontane dalla base, ma ogni bake e
