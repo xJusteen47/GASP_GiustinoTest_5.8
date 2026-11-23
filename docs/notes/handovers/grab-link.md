@@ -11,6 +11,9 @@ OBIETTIVO: presa al collo con camminata/salto e lanci N./F./Cr./Cr.F. per l'Over
 - Danno alla liberazione: `FGSTN_GrabEscapeHit` sul kit del BERSAGLIO (spento di default), postato dal watchdog.
 - cvar `gstn.Grab.*` nel menu GSTN Debug; test `GSTNLink.Core.KitThrows.NotationPicksThrow`, `GSTNLink.Core.GrabHold.*`; README GSTNLink.
 
+## Input: solo azioni logiche, mai tasti
+Gli slot usano i pulsanti logici `Combat.Button.*` (mappati a tastiera/pad dalla config di input) con funzioni di layout rimappabili: N./F. = `Combat.Button.Attack` (`Link.ThrowAttack`, default X), Cr./Cr.F. + `Combat.Button.Crouch` (`Link.Crouch`, default LT), put-down = `Combat.Button.Dodge` (`Link.PutDown`, default RB), presa = `Combat.Button.Interact` (`Link.Grab`, default B). Nessun tasto fisico nel codice; ogni slot si sostituisce anche da `ThrowSlotOverrides`.
+
 ## Scelte applicate (regola 6), da portare all'owner
 1. Tasto put-down = RB schivata (owner: "credo"). 2. Pummel: DECISO dall'owner 17:37, tolto (righe nascoste in Notation). 3. Default progetto passato a `Notation` (lo Stick lanciava con lo stick e A, incompatibile con camminare e saltare). 4. Punto mano e scale (0.75 camminata, 0.7 salto) = VALORI DI PROVA. 5. Frame dei lanci N./Cr.F. = placeholder copiati da Up/Down.
 

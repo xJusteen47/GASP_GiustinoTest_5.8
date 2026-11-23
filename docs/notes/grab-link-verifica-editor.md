@@ -8,6 +8,8 @@ Branch `claude/grab-link`, NON compilato (cloud). Da integrare nel branch di int
 3. Contenuto: `Tools/GAS/setup_defence_link_content.py` (idempotente) mette `UGSTN_GE_GrabHold` come LinkEffect del ruolo Grabber di `/GSTNLink/Test/DA_LinkType_Grab_Test`; poi `Tools/GAS/validate_defence_content.py`. Editor chiuso dopo se non l'ha aperto l'owner.
 4. Harness: `SUITE_LINK` e `kit_scenarios`. ATTENZIONE: `scenario_kit_throw_stick_*` presuppongono `ThrowInputMode=Stick`; con il nuovo default `Notation` vanno lanciati con Stick in memoria o aggiornati (voce di coda codice, non un fallimento della presa).
 
+Nota input: i tasti qui sotto sono solo i DEFAULT. Il codice usa le azioni logiche (`Combat.Button.Attack`, `.Crouch`, `.Dodge`, `.Interact`) con le funzioni di layout `Link.ThrowAttack`, `Link.Crouch`, `Link.PutDown`, `Link.Grab`: rimappando l'azione la presa segue.
+
 ## Da guardare in PIE (KIT_Test_Overlord contro manichino, L_Test_Hub)
 1. Presa (tap Interact): il collo del manichino sta circa sulla mano destra davanti, sollevato (`gstn.Combat.Debug.Links 1` mostra la capsula parcheggiata). Se il manichino non ha `neck_01` nel mesh, la presa resta all'offset del tipo (90 cm davanti).
 2. Camminata con lo stick: si cammina più lenti (0.75); A salta più basso (0.7); il nemico segue. Crouch: nessun cambio di animazione (voluto).
