@@ -163,8 +163,14 @@ MINION_SEQUENCES = [
 # relative, as 'sticks') is held on that frame only and the button tapped, so Attack + stick forward = the F. throw of the Notation mode.
 # The dummy is grabbed with Interact on frame 0 (it must stand inside the grab reach: PIE_CAPTURE_GRAB_DIST, default 80 cm) and thrown on 45.
 GRAB_SEQUENCES = [
+    # fthrow-capture-fix (2026-11-24): the grab setup of the network link tests. The v1r2 run grabbed nothing (KIT_Test_Overlord has no link
+    # slots): run with PIE_CAPTURE_KIT=KIT_Test_Link and PIE_CAPTURE_PRE_PY=fthrow_capture_pre.py (link steps, the kit's forward throw), and the
+    # dummy gets the same kit as the link tests' pawns ('dummy_kit', PIE_CAPTURE_DUMMY_KIT, '' = keep its own). 'link_probe' logs the grab
+    # probe 2 frames before the Interact tap and the host's Body link 15 frames after it (formed = role 1, phase 2), so a run that grabs
+    # nothing says why in capture.log before anyone reads the assert
     {'name': 'fthrow_hit', 'taps': [], 'frames': 140, 'dummy': float(os.environ.get('PIE_CAPTURE_GRAB_DIST', 80.0)), 'shoot': True,
-     'presses': [(0, 'Interact', None), (int(os.environ.get('PIE_CAPTURE_THROW_AT', 45)), 'Attack', (0, 1, 0))]},
+     'presses': [(0, 'Interact', None), (int(os.environ.get('PIE_CAPTURE_THROW_AT', 45)), 'Attack', (0, 1, 0))],
+     'dummy_kit': os.environ.get('PIE_CAPTURE_DUMMY_KIT', 'KIT_Test_Link'), 'link_probe': (-2, 15)},
 ]
 BUG_SEQUENCES = [
     {'name': 'strong_walk', 'taps': [0], 'frames': 300, 'dummy': 95.0, 'shoot': True, 'walk': (40, 240)},
@@ -762,6 +768,8 @@ def _tick(_dt):
                 if keys and seq.get('dummy_percent') is not None:   # test harness only (server write of the health set's DamagePercent)
                     ok = g.comps(g.worlds()[0])[keys[0]].server_set_damage_percent(seq['dummy_percent'])
                     _log(f'dummy {keys[0]} percent {seq["dummy_percent"]}: {ok}')
+                if keys and seq.get('dummy_kit'):   # fthrow-capture-fix: the grab target carries the link kit, as in link_scenarios
+                    _log(f'dummy {keys[0]} kit {seq["dummy_kit"]}: {g._apply_loadout(keys[0], seq["dummy_kit"])}')
                 st.update(dummy_placed=True, dummy_key=keys[0] if keys else None, t=now)         # one more wait for the teleport to settle
                 return None
             if seq.get('minions') and not st.get('minions_spawned'):
@@ -869,6 +877,20 @@ def _tick(_dt):
                     _log(f'{seq["name"]}: projection volume spawned at {loc}')
                 except Exception as e:  # noqa: BLE001
                     _log(f'{seq["name"]}: projection volume FAILED: {e!r}')
+            if seq.get('link_probe'):                                   # fthrow-capture-fix: why a grab did (not) form
+                before, after = seq['link_probe']
+                if frame in (PRE + before, PRE + after):
+                    try:
+                        import link_scenarios as ls
+                        host = h._key(0)
+                        if frame == PRE + before:
+                            _log(f'{seq["name"]}: grab probe v{frame}: {ls.Lib.describe_grab_probe(ls.actor(0, host))}')
+                        else:
+                            b = ls.body(0, host)
+                            _log(f'{seq["name"]}: host Body link v{frame}: {b} ({"FORMED" if b and b[0] == 1 and b[1] == 2 else "NOT FORMED"})'
+                                 f' text {ls.link_text(0, host)}')
+                    except Exception as e:  # noqa: BLE001  a diagnostic must not stop the capture
+                        _log(f'{seq["name"]}: link probe failed: {e!r}')
             for at, button, stick in seq.get('presses', []):          # grab throws (fthrow-overlord-1)
                 if frame == PRE + at:
                     if stick is not None:
