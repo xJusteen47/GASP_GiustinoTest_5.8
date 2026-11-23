@@ -12,3 +12,10 @@ def run(script, env=None):
     path = os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir()), script)
     runpy.run_path(path, run_name="__main__")
     return "OK " + script
+
+
+def delete(path):
+    """Delete one asset of this round's own (e.g. the game copy of the startup before the variant script re-copies it). Never use it
+    on a shared clip: DROPKICK_KICK_REFRESH=1 would also delete AS_OverlordDropkick_SettleK6, which the APPROVED K7 montage plays."""
+    lib = unreal.EditorAssetLibrary
+    return f"deleted {path} {lib.delete_asset(path)}" if lib.does_asset_exist(path) else f"absent {path}"

@@ -113,7 +113,15 @@ def hump(p, shrug=None, neck=None):
 body = {k: K7.BODY(K7.body[k]) for k in (0, 1, 2, 4, 7, 11)}
 body[9] = A._lerp(body[7], body[11], 0.45)
 FOOT = {4: 0.0, 7: E("K8_FOOT7", -4.0), 9: E("K8_FOOT", 0.0), 11: E("K8_FOOT", 0.0)}    # K7: -6 / -15 / -22 (pointed toes)
-PEL = {9: E("K8_PEL", 16.0) * 0.4, 11: E("K8_PEL", 16.0)}
+# round 2 (cloud review 1 FAIL posa, 2026-11-23): a11-a12 the shins fell straight under the tipped-back pelvis and the snap then swung
+# them forward. The extra ball tilt is gone (pelvis = K7) and the feet come 6 cm forward in the pelvis frame at a12 (3 at a10): the
+# shins point at the target like the a15 smear (shin fwd 0.83 vs K7 0.48) and the knees come 5 cm closer to the chest (tighter tuck).
+PEL = {9: E("K8_PEL", 0.0) * 0.4, 11: E("K8_PEL", 0.0)}
+LEGF = {9: E("K8_LEGF", 6.0) * 0.5, 11: E("K8_LEGF", 6.0)}
+for k, d in LEGF.items():
+    for s in "lr":
+        f_ = body[k][f"leg_{s}"]["foot"]
+        body[k][f"leg_{s}"]["foot"] = [f_[0], round(f_[1] + d, 3), f_[2]]
 for k, fr in FOOT.items():
     for s in "lr":
         body[k][f"leg_{s}"]["foot_rot"] = [fr, 0.0, 0.0]
@@ -123,6 +131,8 @@ for k, d in PEL.items():
 k8 = {}
 for k, (drift, pre) in {0: (0.0, 0.0), 1: (1.5, 0.0), 2: (3.0, 0.0), 4: (5.0, 0.0), 7: (7.5, 0.0), 9: (8.0, 1.5)}.items():
     k8[k] = goal_post(body[k], drift, pre)
+# round 2 (review 1, minor): a0 -> a1 put the whole goal-post in one frame; a1 (key 0) is now halfway from the jump's wide arms (K7 key 0)
+k8[0] = K6.arms_of(A._lerp(K7.k7[0], k8[0], E("K8_A1", 0.5)), k8[0])
 fold_pose, FJ, FTERMS, FX = wide_fold(hump(K6.arms_of(K7.k7[11], body[11]), shrug=0.0))
 k8[11] = hump(fold_pose, neck=0.0)          # shrug after the fit (the fit owns the clavicle yaw); the neck is already sunk
 # a11 = key 10, the breakdown of the 2-frame close: elbows drop and come forward first, the fists swing down IN FRONT of the face
