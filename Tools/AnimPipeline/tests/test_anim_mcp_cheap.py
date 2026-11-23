@@ -38,6 +38,28 @@ class TestCompact(unittest.TestCase):
         self.assertLessEqual(len(text.splitlines()), 5)
 
 
+class TestCompactIsOptIn(unittest.TestCase):
+    def _call(self, args: dict) -> str:
+        req = {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+               "params": {"name": "anim_apply_intent",
+                          "arguments": {"src": "A", "dst": "B", "intent_json": {"head_lift_deg": 5}, "dry_run": True, **args}}}
+        return mcp_server.process_request(req)["result"]["content"][0]["text"]
+
+    def test_default_is_full_unindented_json(self) -> None:
+        with mock.patch.dict("os.environ", {}, clear=False):
+            text = self._call({})
+        d = json.loads(text)
+        self.assertEqual(len(text.splitlines()), 1)
+        self.assertIn("plan", d)
+        self.assertIn("bones", d["plan"])
+
+    def test_opt_in_by_arg_and_env(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(mcp_server, "_out_dir", return_value=Path(tmp)):
+            self.assertIn("details: ", self._call({"compact": True}))
+            with mock.patch.dict("os.environ", {"GSTN_MCP_COMPACT": "1"}):
+                self.assertIn("details: ", self._call({}))
+
+
 class TestStablePrefix(unittest.TestCase):
     def test_tools_list_is_byte_identical_and_unique(self) -> None:
         a = json.dumps(mcp_server._tool_defs(), sort_keys=False)

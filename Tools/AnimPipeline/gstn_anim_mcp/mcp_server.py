@@ -10,13 +10,14 @@ quaternions/2-bone IK Python:
   - anim_run_intent(src, dst, intent_json): snapshot + intent + gates in one call
   - anim_rollback(asset)
 
-Replies are compact (<= 5 lines, details in a file): see compact.py. The tool list is a FIXED-order, constant\ntext prefix so provider prompt caches (DeepSeek prefix cache) keep hitting; never put variable data in it.
+Replies are the full JSON (no indentation) by default; compact mode (<= 5 lines, details in a file, see compact.py) is\nopt-in: env GSTN_MCP_COMPACT=1 or a `compact: true` argument on the call. The tool list is a FIXED-order, constant\ntext prefix so provider prompt caches (DeepSeek prefix cache) keep hitting; never put variable data in it.
 
 Never writes non-JSON-RPC output to stdout; logs only to stderr.
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -274,6 +275,12 @@ def _out_dir() -> Path | None:
         return None
 
 
+def _render(tool: str, res: dict[str, Any], use_compact: bool) -> str:
+    if use_compact:
+        return compact.compact_reply(tool, res, _out_dir())
+    return json.dumps(res, ensure_ascii=False)
+
+
 def _write_msg(msg: dict[str, Any]) -> None:
     sys.stdout.write(json.dumps(msg, ensure_ascii=False) + "\n")
     sys.stdout.flush()
@@ -303,14 +310,15 @@ def process_request(req: dict[str, Any]) -> dict[str, Any] | None:
         return {"jsonrpc": "2.0", "id": req_id, "result": {"tools": _tool_defs()}}
     if method == "tools/call":
         tname = params.get("name", "")
-        targs = params.get("arguments") or {}
+        targs = dict(params.get("arguments") or {})
+        use_compact = bool(targs.pop("compact", False)) or os.environ.get("GSTN_MCP_COMPACT", "") == "1"
         try:
             res = handle_tool_call(tname, targs)
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "content": [{"type": "text", "text": compact.compact_reply(tname, res, _out_dir())}],
+                    "content": [{"type": "text", "text": _render(tname, res, use_compact)}],
                     "isError": not bool(res.get("ok", True)),
                 },
             }

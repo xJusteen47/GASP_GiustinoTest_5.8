@@ -67,3 +67,4 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-23,anim-mcp-v2-verify-1,t2-head-dump+costtest-arm,fisso,deepseek+claude,flash+sonnet-5-5,55,0,2.0,,PARZIALE (no video in-game: variante non registrabile dal tool)
 2026-11-23,anim-mcp-v2-turn4,4fix+retest-arm_clr,fisso,claude,sonnet-5-5,50,0,2.2,,OK numerico (no cattura GPU: chooser dirty)
 2026-11-23,anim-mcp-cheap-1,compact+dryrun+run_intent+cachelog,cloud,claude,sonnet-5-5,0,0,1.5,,OK (pwsh test da rilanciare su desktop)
+2026-11-23,anim-mcp-cheap-1b,compact-opt-in,cloud,claude,sonnet-5-5,0,0,0.3,,OK

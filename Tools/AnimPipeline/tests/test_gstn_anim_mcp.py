@@ -271,6 +271,7 @@ class TestGstnAnimMcp(unittest.TestCase):
                             "start_from_frame": 2,
                         },
                         "dry_run": True,
+                        "compact": True,
                     },
                 },
             }
