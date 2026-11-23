@@ -33,6 +33,8 @@ def summary_lines(tool: str, res: dict[str, Any]) -> list[str]:
         head += " (dry_run)"
     if not ok and res.get("error"):
         return [head, _clip(str(res["error"]), 300)]
+    if res.get("summary"):
+        return [head] + [str(x) for x in res["summary"] if not str(x).startswith("details")]
     facts: list[str] = []
     if "gates" in res:
         facts.append(f"gates={res['gates'].get('status')}")

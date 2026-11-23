@@ -78,6 +78,7 @@ class TestGstnAnimMcp(unittest.TestCase):
                 {"torso_lean_pivot_deg": 10.0, "com_shift_fwd_cm": 3.0},
                 root=root,
                 dry_run=True,
+                allow_geom=True,
             )
             self.assertTrue(apply_res["ok"])
             self.assertTrue(apply_res["dry_run"])
@@ -112,7 +113,8 @@ class TestGstnAnimMcp(unittest.TestCase):
         self.assertEqual(
             names,
             ["anim_inspect", "anim_apply_intent", "anim_run_intent", "anim_gate_check", "anim_capture_ab",
-             "anim_register_variant", "anim_unregister_variant", "anim_rollback"],
+             "anim_register_variant", "anim_unregister_variant", "anim_rollback", "anim_capture_move",
+             "anim_silhouette_check", "anim_motion_overlay"],
         )
 
     def test_validate_intent_v1_and_v2_bounds(self) -> None:
@@ -271,6 +273,7 @@ class TestGstnAnimMcp(unittest.TestCase):
                             "start_from_frame": 2,
                         },
                         "dry_run": True,
+                        "allow_geom": True,
                         "compact": True,
                     },
                 },
@@ -653,9 +656,9 @@ class TestGstnAnimMcp(unittest.TestCase):
             jp.parent.mkdir(parents=True)
             jp.write_text(json.dumps(_make_fake_joints(n=62)), encoding="utf-8")
             with self.assertRaises(ValueError) as cm:
-                anim_ops.anim_apply_intent("w3", "w3x", {"head_lift_deg": 5, "frame_range": [105, 109]}, root=root, dry_run=True)
+                anim_ops.anim_apply_intent("w3", "w3x", {"head_lift_deg": 5, "frame_range": [105, 109]}, root=root, dry_run=True, allow_geom=True)
             self.assertIn("clip-local", str(cm.exception))
-            ok = anim_ops.anim_apply_intent("w3", "w3x", {"head_lift_deg": 5, "frame_range": [8, 20]}, root=root, dry_run=True)
+            ok = anim_ops.anim_apply_intent("w3", "w3x", {"head_lift_deg": 5, "frame_range": [8, 20]}, root=root, dry_run=True, allow_geom=True)
             self.assertTrue(ok["ok"])
 
     def test_range_envelope_reaches_full_amplitude_and_moves_with_range(self) -> None:
@@ -700,7 +703,7 @@ class TestGstnAnimMcp(unittest.TestCase):
             self.assertEqual(r["plan"]["handoff_variant_id"], 70)
             self.assertFalse(anim_ops.anim_register_variant("AS_missing", 60, root=wt, worktree_dir=str(wt), ue59_dir=str(ue), dry_run=True)["ok"])
             with self.assertRaises(ValueError):
-                anim_ops.anim_register_variant("AS_test_clip", 21, root=wt, worktree_dir=str(wt), ue59_dir=str(ue))
+                anim_ops.anim_register_variant("AS_test_clip", 39, root=wt, worktree_dir=str(wt), ue59_dir=str(ue))
             # unregister restores the exact chooser bytes and removes the clip copy
             import hashlib
             mf = anim_ops._variant_manifest(wt, 60)

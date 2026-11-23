@@ -1,6 +1,6 @@
 """Stdio MCP JSON-RPC 2.0 server for gstn-anim-mcp (pure Python 3.14 stdlib).
 
-Exposes 8 semantic animation tools so flash models never have to write 300+ lines of
+Exposes 11 semantic animation tools so flash models never have to write 300+ lines of
 quaternions/2-bone IK Python:
   - anim_inspect(asset, frame_range)
   - anim_apply_intent(src, dst, intent_json)
@@ -9,6 +9,7 @@ quaternions/2-bone IK Python:
   - anim_register_variant(asset, variant_id) / anim_unregister_variant(variant_id)
   - anim_run_intent(src, dst, intent_json): snapshot + intent + gates in one call
   - anim_rollback(asset)
+  - anim_capture_move(...): gated combat-move capture; anim_silhouette_check / anim_motion_overlay: offline reviewer images
 
 Replies are the full JSON (no indentation) by default; compact mode (<= 5 lines, details in a file, see compact.py) is\nopt-in: env GSTN_MCP_COMPACT=1 or a `compact: true` argument on the call. The tool list is a FIXED-order, constant\ntext prefix so provider prompt caches (DeepSeek prefix cache) keep hitting; never put variable data in it.
 
@@ -100,6 +101,7 @@ def _tool_defs() -> list[dict[str, Any]]:
                     "dst": {"type": "string", "description": "Destination AnimSequence name or path."},
                     "intent_json": {"type": "object", "description": "Semantic intent parameters."},
                     "dry_run": {"type": "boolean", "default": False, "description": "No side effects: returns the plan (bones, active/peak frames, degrees actually reached) without snapshot or edit."},
+                    "allow_geom": {"type": "boolean", "default": False, "description": "Allow run-start geometric parameters on a clip whose name has no 'RunStart' (wrong axes on in-place moves; follow_through is always allowed)."},
                 },
                 "required": ["src", "dst", "intent_json"],
             },
@@ -119,6 +121,7 @@ def _tool_defs() -> list[dict[str, Any]]:
                     "intent_json": {"type": "object", "description": "Semantic intent parameters."},
                     "gate_win": {"type": "integer", "default": 18},
                     "dry_run": {"type": "boolean", "default": False},
+                    "allow_geom": {"type": "boolean", "default": False, "description": "See anim_apply_intent."},
                 },
                 "required": ["src", "dst", "intent_json"],
             },
@@ -179,7 +182,7 @@ def _tool_defs() -> list[dict[str, Any]]:
                 "editor. The tracked chooser CHT_GSTN_StockMover_PoseMatch is backed up byte-for-byte and the clip copied "
                 "into _ue59 only for the capture: ALWAYS call anim_unregister_variant afterwards (restores the chooser, "
                 "sha256 verified, removes the copy). Refuses when the chooser already has owner changes unless "
-                "allow_dirty_chooser=true (only with the owner's OK). variant_id: 30..179 (N+10 is the Handoff sibling: keep registered ids 20 apart)."
+                "allow_dirty_chooser=true (only with the owner's OK). variant_id: 40..179 (30-39 are Handoff rows of approved 20-29; N+10 is the Handoff sibling: keep registered ids 20 apart)."
             ),
             "inputSchema": {
                 "type": "object",
@@ -211,10 +214,88 @@ def _tool_defs() -> list[dict[str, Any]]:
                 "required": ["asset"],
             },
         },
+        {
+            "name": "anim_capture_move",
+            "description": (
+                "Capture a COMBAT move (base + variants in ONE Play session) behind a hard gate: refused unless the last "
+                "anim_run_intent is PASS for the same intent hash, a dry_run with that hash exists, the hitbox sync file is fresh, "
+                "the edit moves a hand/foot/head >= 2 cm or a limb >= 3 deg inside edit_window (else 'too small to read') and the "
+                "objective has < 2 attempts. Reuses cached captures (same clips/sequence/cvars/views/build). Writes "
+                "docs/notes/reviews/<move>/<round>/ (mp4 real + slow4x, one grid per view, base over variant). dry_run=true returns the "
+                "plan + gate only. Example: {\"kit\": \"KIT_Test_PlaytestTBK6\", \"sequences\": [\"dropkick_hit\"], \"variant_runs\": "
+                "[{\"name\": \"base\", \"asset\": \"AS_OverlordDropkick_SettleK6\", \"clips\": [\"/Game/.../AS_OverlordDropkick_SettleK6\"]}, "
+                "{\"name\": \"ft\", \"asset\": \"AS_OverlordDropkick_SettleK6_ft\", \"intent_hash\": \"<from dry_run>\", \"clips\": [..]}], "
+                "\"move\": \"dropkick-k6\", \"round\": \"ft1\", \"objective\": \"settle-readable\", \"edit_window\": [20, 40], "
+                "\"anchor\": 140, \"faf\": 200, \"assert_spec\": {\"dropkick_hit\": [{\"clip\": \"AM_*\", \"window\": [100, 220]}]}}."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "kit": {"type": "string"},
+                    "sequences": {"type": "array", "items": {"type": "string"}},
+                    "variant_runs": {"type": "array", "items": {"type": "object"}, "description": "First = base, then variants: {name, asset, clips[/Game paths], cvars, intent_hash}."},
+                    "views": {"type": "string", "default": "az90,az180,game"},
+                    "out": {"type": "string", "default": "", "description": "Default docs/notes/reviews/<move>/<round>."},
+                    "assert_spec": {"type": "object", "description": "{sequence: [{clip, window: [first, last]}]} in capture frames."},
+                    "dry_run": {"type": "boolean", "default": False},
+                    "move": {"type": "string"}, "round": {"type": "string", "default": "r1"}, "objective": {"type": "string"},
+                    "edit_window": {"type": "array", "items": {"type": "integer"}, "description": "Clip-local frames of the edit (readability check)."},
+                    "window": {"type": "array", "items": {"type": "integer"}, "description": "Capture frames of the pack (default: the assert windows)."},
+                    "anchor": {"type": "integer"}, "faf": {"type": "integer"},
+                    "hitbox_required": {"type": "boolean", "default": True},
+                },
+                "required": ["kit", "sequences", "variant_runs"],
+            },
+        },
+        {
+            "name": "anim_silhouette_check",
+            "description": (
+                "Offline readability check from the joints dump: per view (az90 side, az180 behind, az315, game) projects the pose, "
+                "measures the silhouette area and how close hands/elbows/feet/knees/head are to the torso; frames with >= 2 limb ends "
+                "inside or within 3 cm of the torso are 'unreadable from this view'. Writes one PNG sheet per view (flagged frames "
+                "red) + JSON; reply = 5 lines. Example: {\"asset\": \"AS_X_ft\", \"frame_range\": \"20-60\", \"views\": \"az90,az180\", \"base_asset\": \"AS_X\"}."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "asset": {"type": "string"}, "frame_range": {}, "views": {"type": "string", "default": "az90,az180,az315"},
+                    "base_asset": {"type": "string"}, "game_yaw": {"type": "number", "default": 0}, "game_pitch": {"type": "number", "default": 10},
+                },
+                "required": ["asset"],
+            },
+        },
+        {
+            "name": "anim_motion_overlay",
+            "description": (
+                "Offline motion check from the joints dump: per view, trails of wrists, ankles, head and pelvis with per-frame velocity "
+                "arrows and arc tangents. Flags arc breaks (direction change > 60 deg between frames while moving) and pops (speed > 3x "
+                "both neighbours). One PNG per view for the reviewer + JSON; reply = 5 lines. Example: "
+                "{\"asset\": \"AS_X_ft\", \"frame_range\": [20, 60], \"views\": \"az90,az180\", \"base_asset\": \"AS_X\"}."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "asset": {"type": "string"}, "frame_range": {}, "views": {"type": "string", "default": "az90,az180,az315"},
+                    "base_asset": {"type": "string"}, "game_yaw": {"type": "number", "default": 0}, "game_pitch": {"type": "number", "default": 10},
+                },
+                "required": ["asset"],
+            },
+        },
     ]
 
 
 def handle_tool_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
+    res = _dispatch(name, args)
+    if name in ("anim_apply_intent", "anim_run_intent") and args.get("dry_run") and res.get("ok") and res.get("intent_hash"):
+        try:  # bookkeeping for the pre-capture gate (a dry_run with the same intent hash must exist); never breaks the call
+            import manifest
+            manifest.record_dry_run(anim_ops._repo_root(None), args["dst"], res["intent_hash"])
+        except Exception as exc:  # noqa: BLE001
+            print(f"manifest not written: {exc}", file=sys.stderr)
+    return res
+
+
+def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
     if name == "anim_inspect":
         return anim_ops.anim_inspect(
             asset=args["asset"],
@@ -227,6 +308,7 @@ def handle_tool_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
             dst=args["dst"],
             intent_json=args["intent_json"],
             dry_run=bool(args.get("dry_run", False)),
+            allow_geom=bool(args.get("allow_geom", False)),
         )
     if name == "anim_run_intent":
         return anim_ops.anim_run_intent(
@@ -235,6 +317,7 @@ def handle_tool_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
             intent_json=args["intent_json"],
             gate_win=int(args.get("gate_win", 18)),
             dry_run=bool(args.get("dry_run", False)),
+            allow_geom=bool(args.get("allow_geom", False)),
         )
     if name == "anim_gate_check":
         return anim_ops.anim_gate_check(
@@ -276,6 +359,21 @@ def handle_tool_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
         return anim_ops.anim_unregister_variant(variant_id=int(args.get("variant_id", 60)))
     if name == "anim_rollback":
         return anim_ops.anim_rollback(asset=args["asset"])
+    if name == "anim_capture_move":
+        import capture_move
+        return capture_move.anim_capture_move(
+            kit=args["kit"], sequences=list(args["sequences"]), variant_runs=list(args["variant_runs"]),
+            views=args.get("views") or capture_move.DEFAULT_VIEWS, out=args.get("out") or "",
+            assert_spec=args.get("assert_spec"), dry_run=bool(args.get("dry_run", False)), move=args.get("move") or "",
+            round=args.get("round") or "r1", objective=args.get("objective") or "", edit_window=args.get("edit_window"),
+            window=args.get("window"), anchor=args.get("anchor"), faf=args.get("faf"),
+            hitbox_required=bool(args.get("hitbox_required", True)),
+        )
+    if name in ("anim_silhouette_check", "anim_motion_overlay"):
+        mod = __import__("silhouette" if name == "anim_silhouette_check" else "motion_overlay")
+        fn = getattr(mod, name)
+        return fn(args["asset"], args.get("frame_range"), args.get("views"), args.get("base_asset"),
+                  game_yaw=float(args.get("game_yaw", 0.0)), game_pitch=float(args.get("game_pitch", 10.0)))
     raise KeyError(f"Unknown tool: {name}")
 
 
