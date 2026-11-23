@@ -29,3 +29,23 @@ Index entry (docs/INDICE-PROGETTO.md, steer section): add "get-up tail stick cut
 Decision 2026-11-23 (coordinator, recommended default): roll travel left as is (80 / 65 cm, clip-bound), only the exit speed is shared.
 SUBAGENTI: 0
 COSTO: ~6 $ | 0 min desktop | 0 token review
+
+## Laptop run (2026-11-23 evening, getup-momentum-2 thread, worktree GASP_Giustino2_qjfnc0, content junctions to the main folder)
+- Build OK 1424 s: `Run-Timed.ps1 -Preset Build -Log Saved\Logs\ci\build_m2.log` (no fix needed). Tests: `Run-Timed.ps1 -Preset Test -Tests "GSTNCombat+GSTNDefence"
+  -Log Saved\Logs\ci\test_m2.log` + `Check-TestLog.ps1 -UeLog Saved\Logs\ci\test_m2.log.ue.log` -> PASS ok=799 fail=0; the 4 new tests Success
+  (data/new_tests.txt, data/build_test_esito.txt). Data step (setup_reaction_anims.py) skipped: knob already 160, BP save on the laptop needs an owner OK.
+- Capture `getup_capture_timed.ps1 -Runs Tools\GASNPPTest\getup_runs_momentum2.json -Out Saved\Getup\m2 -MaxMinutes 15`: 501 s, ASSERT: OK
+  (data/m2.assert.txt). Media: `getup_review_media.py docs\notes\reviews\getup-momentum-2 Saved\Getup\m2:m2` -> m2/<run>.mp4 + _az180/_az90.png.
+- Speeds `python Tools/GASNPPTest/getup_speeds.py Saved\Getup\m2 21 60` (data/speeds.txt; cm/s, heading deg; method checked = getup-momentum-1 new3):
+  stand_run 96 / 160 | roll_run 6 / 119 | rollback_run 10 / 118 | roll_idle 0 / 0 | roll_a45_run 132 / 386 heading -138 (axis 180: 42 deg off)
+  rollback_a45_run 100 / 368 heading 41 (axis 0: 41 off) | roll_a80_max90_run 99 / 369 heading -101 (79 off) | roll_a45_warpoff_run 94 / 294 heading -171 (straight).
+- Straight roll_run/rollback_run ~0 in FAF..+6 = CAPTURE DRIVER, not the cut: for runs without "angle" the driver lets the stick go when the get-up starts
+  and presses it again on the FAF video frame (pie_capture_react_ingame.py:365, :373); the roll tail is 3 sim frames, the montage plays to its natural end
+  and the push never comes (data/speed_trace.txt: 0 until +24, then the walk ramp). The held-stick runs (all *_a45*, a80) cut at FAF with the push; stand_run
+  (6-frame tail) cuts 2 frames after the press (156 cm/s at +23). Open question for the owner/coordinator: a stick PRESSED on the FAF of a roll arrives after
+  its 3-frame tail; widen the roll tail or accept it.
+- Extra try (rule 5, 2nd capture): straight rolls with the stick held (`angle` 0.01, data/runs_m2held.json, -Out Saved\Getup\m2held) -> ASSERT: FAIL
+  "no get-up" on both runs (data/m2held.assert.txt), not investigated. Frames (2 grids): a45 stands up on the turned facing and runs diagonally;
+  a80/max90 stands facing the side camera, no snap seen in +12..+37.
+SUBAGENTI: 0
+COSTO: ~4 $ | 55 min laptop (build 24, test 3, captures 16, media) | 0 token review

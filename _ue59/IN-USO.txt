@@ -1,1 +1,1 @@
-IN-USO: libero dal 2026-11-21 21:15 UTC (turnarounds-2: catture v26 ASSERT OK; editor chiuso dall'owner, non riaperto)
+﻿libero dal 2026-11-23 22:16 (getup-momentum-2: capture m2 ASSERT OK, editor closed)
