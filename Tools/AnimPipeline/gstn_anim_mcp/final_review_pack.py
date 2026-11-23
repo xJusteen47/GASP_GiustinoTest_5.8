@@ -136,7 +136,7 @@ def build_final_pack(out: str, runs: dict[str, str], sequences: list[str], windo
             errors.append(f"velocity {cname}: {res.get('error')}")
     inv["INV-04"].update(ok=bool(vclips) and len(vel) >= 2 * len(vclips), files=vel,
                          note="" if vclips else "list every clip of the montage in variant_clips (startup, loop, settle, landing)")
-    life = life_metrics(repo, [Path(c).name for c in vclips])
+    life = life_metrics(repo, [Path(c).name for c in vclips], holds, hold_reasons)
     inv["INV-11"].update(ok=inv["INV-04"]["ok"], stops=stops, life=life,
                          note="stops measured; " + ("OG life metrics from animpipe life attached" if life and all(
                              "error" not in v for v in life.values()) else "OG life metrics (impact spacing, hold/recoil, cascade, "
@@ -195,9 +195,10 @@ def build_final_pack(out: str, runs: dict[str, str], sequences: list[str], windo
     return res
 
 
-def life_metrics(repo: Path, clips: list[str]) -> dict[str, Any]:
+def life_metrics(repo: Path, clips: list[str], holds: dict[str, Any] | None = None,
+                 hold_reasons: dict[str, str] | None = None) -> dict[str, Any]:
     """OG life metrics per clip from `python -m animpipe life <joints.json> --json` (thread "Restore OG life metrics",
-    animpipe/life.py). {} while that module does not exist; an error per clip is reported, never hidden."""
+    animpipe/life.py, branch claude/project-thread-1uvcac 1018a4fb). {} while that module does not exist; an error per clip is reported, never hidden."""
     ap = repo / "Tools" / "AnimPipeline"
     if not (ap / "animpipe" / "life.py").exists():
         return {}
@@ -208,9 +209,13 @@ def life_metrics(repo: Path, clips: list[str]) -> dict[str, Any]:
         if not j.exists():
             out[c] = {"error": f"joints dump missing: {_rel(repo, j)}"}
             continue
-        r = subprocess.run([sys.executable, "-m", "animpipe", "life", str(j), "--json"], cwd=str(ap), capture_output=True, text=True)
+        cmd = [sys.executable, "-m", "animpipe", "life", str(j), "--json"]
+        if (holds or {}).get(c):     # declared holds travel with their reason (INV-12), format a-b:why
+            cmd.append(f"--holds={holds[c]}:{(hold_reasons or {}).get(c, '')}")
+        r = subprocess.run(cmd, cwd=str(ap), capture_output=True, text=True)
         try:
-            out[c] = json.loads(r.stdout.strip().splitlines()[-1])
+            txt = r.stdout.strip()
+            out[c] = json.loads(txt) if txt.startswith("{") else json.loads(txt.splitlines()[-1])
         except (ValueError, IndexError):
             out[c] = {"error": f"animpipe life rc={r.returncode}: {(r.stderr or r.stdout)[-200:]}"}
     return out
