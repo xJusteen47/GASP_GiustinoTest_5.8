@@ -65,4 +65,4 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-23,anim-mcp-v2-verify-1,unit-test-only,fisso,claude,sonnet-5-5,0.5,5,,,PARZIALE (smoke/cost-test bloccati da lock _ue59)
 2026-11-23,anim-mcp-v2-verify-1,smoke+costtest-w3-chin,fisso,deepseek+claude,flash+sonnet-5-5,25,0,0.6,,PARZIALE (head non verificabile da dump)
 2026-11-23,anim-mcp-v2-verify-1,t2-head-dump+costtest-arm,fisso,deepseek+claude,flash+sonnet-5-5,55,0,2.0,,PARZIALE (no video in-game: variante non registrabile dal tool)
-2026-11-23,anim-mcp-v2-turn4,4fix+retest-arm_clr,fisso,claude,sonnet-5-5,50,0,2.2,,OK numerico (no cattura GPU: chooser dirty)
+2026-11-23,anim-mcp-v2-turn4,4fix+retest-arm_clr,fisso,claude,sonnet-5-5,70,0,3.0,,OK numerico + cattura az180/az90 ASSERT OK (review cloud da fare)

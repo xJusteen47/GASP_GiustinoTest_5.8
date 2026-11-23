@@ -22,3 +22,9 @@ Obiettivo: 4 fix dal cost test + UN retest "gomiti piu aperti, arm_clr 12". Esit
 - Asset di prova w3m5/m6/m7 e w2t090* restano UNTRACKED nella worktree (non committati). Fermo prima di R2.
 
 COSTO: ~2.2 $ | 50 min desktop | 0 token review
+
+## AGGIORNAMENTO cattura (owner A, 2026-11-23 17:3x UTC)
+- w3m7 registrata come variante 60 (anim_register_variant, allow_dirty_chooser), cattura UNICA mv_run_start_v5 (partenza in avanti: w3 non e' un turnaround, quindi non 180 L), viste az180+az90, a=variante 21 (w2 default, NON w3: confronto non omogeneo). ASSERT: OK per entrambe (Saved/CaptureSpeed/w3m7_t4/*/assert.txt, nel _ue59).
+- Griglia da dietro (grid_ab_az180.jpg, guardata una volta): in w3m7 v92-v107 i gomiti sono visibilmente piu larghi della base; nessuna compenetrazione evidente. Review cloud indipendente (regola 10/15a) NON fatta: va aperta prima di mostrare all'owner.
+- anim_unregister_variant: chooser ripristinato, sha256 OK (chooser_restored_sha_ok True), copia clip rimossa da _ue59; sporco _ue59 identico a prima; lock liberato.
+COSTO: ~3.0 $ totali | 70 min desktop | 0 token review
