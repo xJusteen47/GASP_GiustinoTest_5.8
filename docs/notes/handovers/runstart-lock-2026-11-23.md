@@ -16,7 +16,7 @@ Macchina: cloud, solo git. Modello: Haiku medium. Budget: 1 $.
 
 ## Push
 - Branch `claude/runstart-lock-2026-11-23` (52dfbc95): PUSHATO.
-- Tag `approved/runstart-v29w3` e `approved/runstart-v4r5` (force): NON PUSHATI. Il proxy chiude la connessione (`send-pack: unexpected disconnect`), 2 tentativi per tag; `ls-remote` mostra ancora v4r5 su af857cff.
+- Owner scelta A (2026-11-23): tag remoti bloccati dalla guardia. Branch al loro posto: `claude/approved-runstart-v4r5` -> 9fe083bd, `claude/approved-runstart-v29w3` -> 967de748, pushati normali.
 - Comandi se il push tag viene negato:
   `git push origin refs/tags/approved/runstart-v29w3`
   `git push --force origin refs/tags/approved/runstart-v4r5`  (sovrascrive: serve il permesso dell'owner)
