@@ -1,0 +1,98 @@
+[
+ {
+  "name": "stock_land_idle",
+  "status": "MATCH",
+  "expect": "PASS",
+  "got": "PASS",
+  "failed": {},
+  "why": "GASP stock mocap (alive reference)"
+ },
+ {
+  "name": "stock_land_fwd",
+  "status": "MATCH",
+  "expect": "PASS",
+  "got": "PASS",
+  "failed": {},
+  "why": "GASP stock mocap"
+ },
+ {
+  "name": "stock_skid",
+  "status": "MATCH",
+  "expect": "PASS",
+  "got": "PASS",
+  "failed": {},
+  "why": "GASP stock mocap"
+ },
+ {
+  "name": "stock_jumpsquat",
+  "status": "MATCH",
+  "expect": "PASS",
+  "got": "PASS",
+  "failed": {},
+  "why": "GASP stock mocap"
+ },
+ {
+  "name": "jabfk3_tangents",
+  "status": "MATCH",
+  "expect": "FAIL",
+  "got": "FAIL",
+  "failed": {
+   "stop_sync": "0.84 of 31 speed minima shared by most parts (max 0.5)"
+  },
+  "why": "flat-tangent card build, lockstep stops (not an owner verdict: confirms the K7 cause on a second move)"
+ },
+ {
+  "name": "runstart_w3",
+  "status": "MATCH",
+  "expect": "PASS",
+  "got": "PASS",
+  "failed": {},
+  "why": "approved 29w3, owner 2026-11-23 10:08Z"
+ },
+ {
+  "name": "runstart_w2",
+  "status": "MATCH",
+  "expect": "PASS",
+  "got": "PASS",
+  "failed": {},
+  "why": "approved w2"
+ },
+ {
+  "name": "ftilt_v31",
+  "status": "MATCH",
+  "expect": "PASS",
+  "got": "PASS",
+  "failed": {},
+  "why": "approved F.L = ftilt v3.1"
+ },
+ {
+  "name": "jab_v12",
+  "status": "MISMATCH",
+  "expect": "PASS",
+  "got": "FAIL",
+  "failed": {
+   "stop_sync": "0.73 of 11 speed minima shared by most parts (max 0.5)"
+  },
+  "why": "approved pilot jab v12 (consult 11-24)"
+ },
+ {
+  "name": "dair_approved",
+  "status": "ERROR",
+  "err": "card C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2_lifecal\\Tools\\AnimPipeline\\cards/overlord/dair/overlord_dair_v4.json: approved[0] ref overlord/over"
+ },
+ {
+  "name": "dropkick_k7",
+  "status": "MISSING",
+  "path": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2_lifecal\\Saved\\AnimPipeline\\runstart\\joints_AS_OverlordDropkick_StartupK7.json"
+ },
+ {
+  "name": "dropkick_k8r2",
+  "status": "MISSING",
+  "path": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2_lifecal\\Saved\\AnimPipeline\\runstart\\joints_AS_OverlordDropkick_StartupK8.json"
+ },
+ {
+  "name": "dropkick_k6_settle",
+  "status": "MISSING",
+  "path": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2_lifecal\\Saved\\AnimPipeline\\runstart\\joints_SET_ME: K6 settle AnimSequence.json"
+ }
+]
