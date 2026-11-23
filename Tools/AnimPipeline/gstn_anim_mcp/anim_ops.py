@@ -398,6 +398,11 @@ def validate_intent(intent: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(intent, dict):
         raise ValueError("intent_json must be a JSON object")
     clean: dict[str, Any] = {}
+    if "follow_through" in intent:
+        if len(intent) != 1:
+            raise ValueError("follow_through is its own intent: send it alone (no other parameters in the same call)")
+        _ft().validate_follow_through(intent["follow_through"])
+        return {"follow_through": dict(intent["follow_through"])}
     for k, v in intent.items():
         if k in INTENT_BOUNDS:
             lo, hi = INTENT_BOUNDS[k]
@@ -519,10 +524,22 @@ def _geom():
     return g
 
 
+def _ft():
+    try:
+        import follow_through as m
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import follow_through as m
+    return m
+
+
 def plan_intent(clean: dict[str, Any], n_frames: int | None) -> dict[str, Any]:
     """What an intent would change, with no side effects: per parameter the bones, the active clip-local frames,
     the peak frames and the degrees (cm) actually reached at the peak after the envelope. Uses the engine's own
     compute_envelopes, so the plan cannot drift from what is applied."""
+    if "follow_through" in clean:
+        m = _ft()
+        return m.plan(m.validate_follow_through(clean["follow_through"]), n_frames)
     g = _geom()
     v = g.map_v1_to_v2_intent(clean)
     assumed = n_frames is None
@@ -585,6 +602,13 @@ def anim_apply_intent(
                     f"(n={n_frames}); frame_range is clip-local, not the global v-frame of the capture"
                 )
 
+    is_ft = "follow_through" in clean
+    if is_ft:
+        n_frames = _clip_frame_count(repo, src, ue59_dir)
+        if n_frames is not None:
+            m = _ft()
+            m.resolve_window(m.validate_follow_through(clean["follow_through"]), n_frames)  # ValueError if outside clip
+
     if dry_run:
         # no snapshot, no intent file, no UE: only the plan
         return {
@@ -600,12 +624,20 @@ def anim_apply_intent(
 
     wt = Path(worktree_dir).resolve() if worktree_dir else repo
     sparse_ps1 = wt / "Tools" / "CI" / "Run-SparseAnimStep.ps1"
-    geom_rel = r"Tools\AnimPipeline\gstn_anim_mcp\geom_intent_ue.py"
+    geom_rel = (
+        r"Tools\AnimPipeline\gstn_anim_mcp\follow_through_ue.py" if is_ft
+        else r"Tools\AnimPipeline\gstn_anim_mcp\geom_intent_ue.py"
+    )
     dst_name = dst.rsplit("/", 1)[-1]
 
     env = os.environ.copy()
     env["GSTN_INTENT_JSON"] = str(intent_file)
     env["GSTN_SAVE"] = "1"
+    report_file = repo / "Saved" / "AnimPipeline" / "runstart" / f"followthru_{dst_name}.json"
+    if is_ft:
+        env["GSTN_MCP_DIR"] = str(wt / "Tools" / "AnimPipeline" / "gstn_anim_mcp")
+        env["GSTN_FT_REPORT"] = str(report_file)
+        report_file.unlink(missing_ok=True)
 
     cmd = [
         "pwsh", "-NoProfile", "-File", str(sparse_ps1),
@@ -616,7 +648,7 @@ def anim_apply_intent(
         "-Tag", f"intent_{dst_name[:24]}",
     ]
     proc = subprocess.run(cmd, env=env, capture_output=True, text=True)
-    engine_error = [ln for ln in (proc.stdout or "").splitlines() if "GEOM_INTENT ERROR" in ln]
+    engine_error = [ln for ln in (proc.stdout or "").splitlines() if "GEOM_INTENT ERROR" in ln or "FOLLOW_THROUGH ERROR" in ln]
     if engine_error:
         return {"ok": False, "error": engine_error[0].strip(), "returncode": proc.returncode, "src": src, "dst": dst,
                 "stdout": (proc.stdout or "")[-1500:]}
@@ -627,6 +659,7 @@ def anim_apply_intent(
         "dst": dst,
         "intent_file": str(intent_file),
         "snapshot_dir": str(snap_dir) if snap_dir else None,
+        "follow_through_report": str(report_file) if is_ft else None,
         "stdout": (proc.stdout or "")[-1500:],
         "stderr": (proc.stderr or "")[-1000:],
     }
@@ -648,6 +681,8 @@ def anim_run_intent(
     applied = anim_apply_intent(src, dst, intent_json, root=root, dry_run=dry_run, **apply_kwargs)
     if dry_run or not applied.get("ok"):
         return applied
+    if applied.get("follow_through_report") is not None:
+        return follow_through_verdict(applied, src, dst)
     gates = anim_gate_check(dst, ref_asset=src, root=root, gate_win=gate_win)
     ok = bool(gates.get("ok"))
     return {
@@ -658,6 +693,24 @@ def anim_run_intent(
         "gates": gates.get("gates"),
         "conservation": gates.get("conservation"),
         "apply": {k: applied.get(k) for k in ("returncode", "intent_file", "snapshot_dir")},
+        "next": "anim_inspect for review" if ok else f"anim_rollback asset={dst}",
+    }
+
+
+def follow_through_verdict(applied: dict[str, Any], src: str, dst: str) -> dict[str, Any]:
+    """run_intent verdict for follow_through: the engine's own report (peaks per bone + conservation on the data).
+    The run-start pivot gates do not apply (they read run-start joints); conservation here is exact, not a 15% span guard."""
+    rp = applied.get("follow_through_report")
+    if not rp or not Path(rp).exists():
+        return {"ok": False, "verdict": "FAIL", "src": src, "dst": dst, "error": f"follow-through report missing: {rp}",
+                "next": f"anim_rollback asset={dst}"}
+    rep = json.loads(Path(rp).read_text(encoding="utf-8"))
+    ok = bool(rep.get("ok"))
+    return {
+        "ok": ok, "verdict": "PASS" if ok else "FAIL", "src": src, "dst": dst, "window": rep.get("window"),
+        "links": [{k: l[k] for k in ("bone", "peak_deg", "peak_frame", "frames", "residual_deg")} for l in rep.get("links", [])],
+        "conservation": rep.get("conservation"), "warnings": rep.get("warnings"),
+        "apply": {k: applied.get(k) for k in ("returncode", "intent_file", "snapshot_dir", "follow_through_report")},
         "next": "anim_inspect for review" if ok else f"anim_rollback asset={dst}",
     }
 

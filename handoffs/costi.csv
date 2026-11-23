@@ -68,3 +68,4 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-23,anim-mcp-v2-turn4,4fix+retest-arm_clr,fisso,claude,sonnet-5-5,50,0,2.2,,OK numerico (no cattura GPU: chooser dirty)
 2026-11-23,anim-mcp-cheap-1,compact+dryrun+run_intent+cachelog,cloud,claude,sonnet-5-5,0,0,1.5,,OK (pwsh test da rilanciare su desktop)
 2026-11-23,anim-mcp-cheap-1b,compact-opt-in,cloud,claude,sonnet-5-5,0,0,0.3,,OK
+2026-11-23,Add procedural follow-through tool to anim MCP,anim-mcp-followthrough,cloud,claude_pro,Sonnet medium,0,0,1.6,,PARTIAL (offline tests OK; UE run pending desktop)

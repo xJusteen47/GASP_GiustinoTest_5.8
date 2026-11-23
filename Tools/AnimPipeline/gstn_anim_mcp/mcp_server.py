@@ -79,7 +79,19 @@ def _tool_defs() -> list[dict[str, Any]]:
                 "8-12 down; catch_fwd 6-10.5 up, 18-25 down; pivot_heel 1-2.8 up, 5.5-9.5 down; lat_widen 1-4 up, 11-16 down. "
                 "Pass envelope='range' or 'turnaround' to force one. Unit: degrees (cm for *_cm). Intent example: "
                 "{\"arm_clr_deg\": 12, \"frame_range\": [8, 20]} = elbows opened by ~12 deg between clip frames 8 and 20. "
-                "Always follow with anim_gate_check, then anim_inspect (upperarm_abduction_deg / head_neck)."
+                "Always follow with anim_gate_check, then anim_inspect (upperarm_abduction_deg / head_neck). "
+                "FOLLOW-THROUGH (separate intent, send ALONE): {\"follow_through\": {chain, mass, overshoot_pct, "
+                "delay_frames, settle_frames, anchor}}. The math is deterministic, you only pick intent. chain: preset "
+                "arm_l|arm_r|arms|arm_fingers_l|arms_fingers|shoulder_arms|spine_head|neck_head, or 'shoulder>elbow>wrist>fingers' "
+                "with side l|r|both, or a bone list (upper body only; root/pelvis/legs/IK are refused so feet stay planted). "
+                "mass light|normal|heavy or a number (1=normal; heavier = slower, later). overshoot_pct 0-80 (default 25; or "
+                "damping 0.05-1.5 instead). delay_frames = lag added per link along the chain (default sqrt(mass)). "
+                "anchor: 'hit' + hit_frame, 'faf' + faf_frame, or a clip-local frame; the window is anchor..anchor+settle_frames "
+                "(default auto) or give frame_range [anchor, end] instead. The anchor frame is never modified. Optional: "
+                "link_gain (>1 whips more at the tip), max_extra_deg (cap, default 40), blend_in 1-6, ease smooth|linear. "
+                "Example: {\"follow_through\": {\"chain\": \"arm_fingers_l\", \"mass\": \"light\", \"overshoot_pct\": 30, "
+                "\"anchor\": \"hit\", \"hit_frame\": 24}}. dry_run=true lists bones, frames and peak degrees; anim_run_intent "
+                "reports measured peaks per bone and the conservation check (anchor pose, outside-window, chain-only)."
             ),
             "inputSchema": {
                 "type": "object",
