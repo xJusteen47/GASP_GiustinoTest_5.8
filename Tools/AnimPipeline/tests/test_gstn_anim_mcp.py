@@ -711,5 +711,22 @@ class TestGstnAnimMcp(unittest.TestCase):
             self.assertFalse(mf.exists())
 
 
+    def test_arm_clr_quat_always_opens_elbow_outward(self) -> None:
+        import math
+        import geom_intent_ue as g
+
+        V = g.Vec3
+        out, fwd = V(1, 0, 0), V(0, 1, 0)
+        for d in (V(0, 0, -1), V(0.1, 0.99, -0.1), V(0.3, 0.9, 0.3), V(0.5, 0.2, 0.8)):   # hanging, forward, forward-up, up-out
+            d = g.vnorm(d)
+            q = g.arm_clr_quat(d, out, fwd, 12.0)
+            r = q.rotate_vector(d)
+            ang = math.degrees(math.acos(max(-1.0, min(1.0, g.vdot(d, r)))))
+            self.assertAlmostEqual(ang, 12.0, delta=0.05)
+            self.assertGreater(g.vdot(r, out), g.vdot(d, out) + 0.05, msg=str(d))          # outward, never inward
+            qn = g.arm_clr_quat(d, out, fwd, -12.0).rotate_vector(d)
+            self.assertLess(g.vdot(qn, out), g.vdot(d, out) - 0.05)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -197,6 +197,21 @@ def signed_axis_quat_directed(ax, deg: float, ref_vec, target_dir):
     return signed_axis_quat(ax, -deg, ref_vec, vmul(target_dir, -1.0))
 
 
+def arm_clr_quat(la_dir0, out_dir, fwd_vec, deg: float):
+    """Open the elbow: swing the upperarm by `deg` toward the outward direction, whatever its orientation.
+
+    The axis is cross(upperarm, out): the arm moves in the plane spanned by itself and `out`, so the elbow always moves
+    outward (the old rotation about the forward axis moved it up/down, or even inward, when the arm pointed forward or
+    sideways during the run start swing). Falls back to the forward axis if the arm already points along `out`.
+    """
+    if abs(deg) < 1e-5:
+        return _quat(0.0, 0.0, 0.0, 1.0)
+    ax = vcross(la_dir0, out_dir)
+    if vlen(ax) < 0.2 * vlen(la_dir0):
+        return signed_axis_quat_directed(fwd_vec, deg, la_dir0, out_dir)
+    return signed_axis_quat_directed(ax, deg, la_dir0, out_dir)
+
+
 def tuck_in_quat(fwd_vec, out_dir, up_vec, la_dir0, req_deg: float, theta_min_deg: float = -5.0):
     """Tuck upperarm toward body without outward winging in any quadrant (L or R)."""
     out_c = vdot(la_dir0, out_dir)
@@ -632,6 +647,11 @@ def main() -> int:
                 cl, ua, la, ha = "clavicle_" + s, "upperarm_" + s, "lowerarm_" + s, "hand_" + s
                 out_dir = vmul(lat_vec, sign)
                 clav_elev = v["clav_st_elev_deg"] if s == st else v["clav_pv_elev_deg"]
+                # TRUE outward direction of this arm from the shoulders (lat_vec can point to the character's right after
+                # compute_character_axes flips axes to follow the run direction, which made arm_clr open the elbows INWARD)
+                other_ua = w["upperarm_" + ("r" if s == "l" else "l")].translation
+                sh_vec = vsub(w[ua].translation, other_ua)
+                out_true = vnorm(_vec(sh_vec.x, sh_vec.y, 0.0)) if math.hypot(sh_vec.x, sh_vec.y) > 1e-3 else out_dir
 
                 cl_pos = vadd(nw["spine_05"].translation, q_sp_cum.rotate_vector(vsub(w[cl].translation, w["spine_05"].translation)))
                 ua_dir0 = q_sp_cum.rotate_vector(vsub(w[ua].translation, w[cl].translation))
@@ -650,9 +670,12 @@ def main() -> int:
                         la_dir1 = q_ua_lat.rotate_vector(la_dir0)
                         q_ua_swing = signed_axis_quat_directed(lat_vec, v["arm_st_back_deg"] * env["arm_st_back"], la_dir1, vmul(fwd_vec, -1.0))
                     if env["arm_clr"] > 1e-4 and abs(v["arm_clr_deg"]) > 1e-4:
-                        q_ua_lat = signed_axis_quat_directed(fwd_vec, v["arm_clr_deg"] * env["arm_clr"], la_dir0, out_dir) * q_ua_lat
+                        q_ua_lat = arm_clr_quat(la_dir0, out_true, fwd_vec, v["arm_clr_deg"] * env["arm_clr"]) * q_ua_lat
                 else:
                     q_ua_lat = signed_axis_quat_directed(fwd_vec, v["arm_pv_out_deg"] * env["sh"], la_dir0, out_dir)
+                    if turn_side == "none" and env["arm_clr"] > 1e-4 and abs(v["arm_clr_deg"]) > 1e-4:
+                        # no turn = no stance/pivot arm: arm_clr opens BOTH elbows
+                        q_ua_lat = arm_clr_quat(la_dir0, out_true, fwd_vec, v["arm_clr_deg"] * env["arm_clr"]) * q_ua_lat
                     if env["arm_pv_fwd"] > 1e-4:
                         la_dir1 = q_ua_lat.rotate_vector(la_dir0)
                         q_ua_swing = signed_axis_quat_directed(lat_vec, v["arm_pv_fwd_deg"] * env["arm_pv_fwd"], la_dir1, fwd_vec)
