@@ -1,6 +1,6 @@
 # Handover: inventario animazioni (cloud, Sonnet medium, 2026-11-23)
 Branch `claude/anim-inventario-2026-11-23` da main. Solo lettura repo, un file: `docs/notes/anim-inventario.xlsx` (copia in project files `anim-inventario/anim-inventario.xlsx`).
-Fogli: Inventario (~200 righe (4 kit, armi di supporto, 16 super): personaggio x mossa), Base gameplay P0, Gaps, Legenda.
+Fogli: Inventario (~200 righe (Overlord, BirdKnight, FlameFury, Voyager; 2 armi di supporto; 4 super): personaggio x mossa), Base gameplay P0, Gaps, Legenda.
 Fonti: anim-approvate.md e milestones-stato-2026-11-21.md (via API dai branch lock/yepa62), memoria-progetto.md, handovers/, Tools/AnimPipeline/cards, tag remoti approved/*.
 Cosa risulta: tag remoti solo runstart-v4r5/v4r7/w1/w2; 29w3 approvata ma tag solo locale; nessuna mossa di combattimento bloccata.
 NON INIZIATI (richiesta owner 11-23): wall slide/jump (tutte le porzioni), cavalluccio, presa/pummel/lanci, oggetti in mano e attacchi, set animazioni nemici, test nemici multi-parte.
