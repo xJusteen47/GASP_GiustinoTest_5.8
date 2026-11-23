@@ -4,7 +4,7 @@
 # listen host + 2 clients, the third pawn parked in Z1, fixed fill lights, t.OverrideFPS 60 so one image = one 60 fps frame.
 #
 # Launch (editor with a real renderer; the script path must have no space, so boot through a one-line exec in a path without spaces):
-#   UnrealEditor.exe <uproject> /Game/Levels/Test/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
+#   UnrealEditor.exe <uproject> /Game/GSTN/Maps/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
 #   boot.py:  exec(open(r"<project>/Tools/GASNPPTest/pie_capture_react_ingame.py").read())
 # Environment (optional): PIE_CAPTURE_OUT (default Saved/AnimReact/ingame_<date>_<time>), PIE_CAPTURE_SEQUENCES (subset of hitstand,
 # knockdown_getup, roll, rollback, roll_late, back_hitstand, back_knockdown).

@@ -1,4 +1,4 @@
-# Builds the wall slide A/B test map /Game/Levels/L_WallSlideAB (wall-slide-v2.md section 4, W6). Idempotent: the geometry is a pure function
+# Builds the wall slide A/B test map /Game/GSTN/_Test/Maps/L_WallSlideAB (wall-slide-v2.md section 4, W6). Idempotent: the geometry is a pure function
 # of the lane table below, hashed into a tag on a "spec" actor; a run that finds the same hash in the saved map changes and saves nothing.
 #
 # Headless (editor closed):
@@ -18,7 +18,7 @@
 import json, hashlib, math
 import unreal
 
-MAP = '/Game/Levels/L_WallSlideAB'
+MAP = '/Game/GSTN/_Test/Maps/L_WallSlideAB'
 GAME_MODE = '/Game/GASNPPTest/GM_GASNPPTest'
 SPEC_VERSION = 1
 

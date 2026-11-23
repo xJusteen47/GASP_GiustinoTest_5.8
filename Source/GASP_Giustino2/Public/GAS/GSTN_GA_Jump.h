@@ -40,6 +40,9 @@ public:
 };
 
 /**
+ * TEST CHARACTER ONLY (2026-11-23): used by the harness/test characters (BP_GASNPP_TestCharacter, wall movement tests).
+ * Playable characters with a combat kit jump with UGSTN_GA_PlatformJump; do not grant this to new game characters.
+ *
  * Ground jump as a gameplay ability. Input: IA_Jump (Started). TO BE REPLACED LATER by the combat plugin's UGSTN_GA_PlatformJump
  * (variable height, air jump, fast fall) for characters with a combat kit; kept for the ones without.
  *
@@ -50,7 +53,7 @@ public:
  * the avatar so the same press does not jump twice. Jumps off walls stay with the wall movement modes (WallJump
  * settings), which read the jump press from Mover's own input.
  */
-UCLASS()
+UCLASS(DisplayName = "GSTN Jump (test character only)")
 class GASP_GIUSTINO2_API UGSTN_GA_Jump : public UGSTN_GameplayAbility
 {
 	GENERATED_BODY()

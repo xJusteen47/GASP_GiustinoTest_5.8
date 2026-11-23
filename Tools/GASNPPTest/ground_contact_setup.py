@@ -11,7 +11,7 @@ import shutil
 import unreal
 
 ABP = '/Game/Blueprints/SandboxCharacter_Mover_ABP'
-DA_DIR = '/Game/Blueprints/Data'
+DA_DIR = '/Game/GSTN/Data/Movement'
 DA_NAME = 'DA_GroundContact_Default'
 # Montage names that count as "reaction on the floor" (any montage whose name contains one of these, under /Game)
 MONTAGE_KEYS = ['TechBounce', 'GroundHit', 'GroundBounce', 'Knockdown', 'Lying', 'GetUp']

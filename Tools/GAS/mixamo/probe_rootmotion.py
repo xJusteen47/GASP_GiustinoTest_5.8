@@ -32,7 +32,7 @@ def dump_ops(path):
             f.write(f'    settings error {e}\n')
 
 
-dump_ops('/Game/Blueprints/Animation/Ported57/SkidOwner/RTG_RootCorrection')
+dump_ops('/Game/GSTN/Animation/Ported57/SkidOwner/RTG_RootCorrection')
 dump_ops('/Game/GSTN/Animation/Mixamo/Source/RTG_Mixamo_to_UEFN')
 
 

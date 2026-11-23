@@ -31,7 +31,7 @@ except ImportError:
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.abspath(os.path.join(HERE, '..', '..'))
 UPROJECT = os.path.join(PROJECT_DIR, 'GASP_Giustino2.uproject')
-MAP = '/Game/Levels/L_WallSlideAB'
+MAP = '/Game/GSTN/_Test/Maps/L_WallSlideAB'
 METRICS_DIR = os.path.join(PROJECT_DIR, 'Saved', 'Metrics')
 SUMMARY = os.path.join(METRICS_DIR, 'surface-scenarios-summary.md')
 INI = os.path.join(PROJECT_DIR, 'Saved', 'Config', 'WindowsEditor', 'EditorPerProjectUserSettings.ini')

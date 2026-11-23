@@ -28,7 +28,7 @@ $env:GSTN_SA_NOLINK = if ($NoLink) { '1' } else { '' }
 $extra = @(); if ($NullRhi) { $extra = @('-nullrhi') }
 $common = @('-game', '-windowed', '-ResX=640', '-ResY=360', '-WinY=40', '-nosplash', '-nosound', '-notimeouts') + $extra
 $hostLog = "$dir\$Tag-host.log"
-$map = '/Game/Levels/DefaultLevel_Harness?listen?game=/Game/GASNPPTest/GM_GASNPPTest.GM_GASNPPTest_C'
+$map = '/Game/GSTN/_Test/Maps/DefaultLevel_Harness?listen?game=/Game/GASNPPTest/GM_GASNPPTest.GM_GASNPPTest_C'
 function WaitFor($file, $pattern, $secs) { for ($i = 0; $i -lt $secs; $i++) { if ((Test-Path $file) -and (Select-String -Path $file -Pattern $pattern -Quiet)) { return $true }; [System.Threading.Thread]::Sleep(1000) }; return $false }
 $t0 = Get-Date
 $h = Start-Process -FilePath $Engine -PassThru -ArgumentList (@("`"$uproject`"", $map, '-WinX=0', "-abslog=`"$hostLog`"", "-ExecCmds=`"py $($py -replace '\\', '/')`"") + $common)
@@ -38,7 +38,7 @@ $c = @()
 foreach ($i in 1, 2) {
     $cl = "$dir\$Tag-c$i.log"
     $c += Start-Process -FilePath $Engine -PassThru -ArgumentList (@("`"$uproject`"", '127.0.0.1', "-WinX=$(660 * $i)", "-abslog=`"$cl`"") + $common)
-    if (WaitFor $cl 'LogLoad: Took .* to LoadMap\(/Game/Levels/DefaultLevel_Harness\)' 300) { "client $i in after $([int]((Get-Date) - $t0).TotalSeconds) s" } else { "client $i not in after 300 s" }
+    if (WaitFor $cl 'LogLoad: Took .* to LoadMap\(/Game/GSTN/_Test/Maps/DefaultLevel_Harness\)' 300) { "client $i in after $([int]((Get-Date) - $t0).TotalSeconds) s" } else { "client $i not in after 300 s" }
     [System.Threading.Thread]::Sleep(5000)
 }
 for ($i = 0; $i -lt 900; $i++) { if ((Test-Path $rep) -or $h.HasExited) { break }; [System.Threading.Thread]::Sleep(1000) }

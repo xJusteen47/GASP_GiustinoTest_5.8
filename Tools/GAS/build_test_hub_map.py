@@ -1,4 +1,4 @@
-# Fills the OPEN level with the playable test hub /Game/Levels/Test/L_Test_Hub (TH-1, docs/notes/handovers/test-level-brief.md). It never saves
+# Fills the OPEN level with the playable test hub /Game/GSTN/Maps/L_Test_Hub (TH-1, docs/notes/handovers/test-level-brief.md). It never saves
 # the map: the owner makes the empty level (File > New Level > Empty Level) and saves it with Ctrl+S. It only saves the hub's colour material
 # instances under /Game/GASNPPTest/TestMaps/Hub (test-maps.md section 0.1).
 #
@@ -25,7 +25,7 @@ import build_test_combat_map as combat   # noqa: E402
 import build_wall_slide_ab_map as wallab  # noqa: E402
 
 TAG = 'TestHub'
-MAP_PATH = '/Game/Levels/Test/L_Test_Hub'
+MAP_PATH = '/Game/GSTN/Maps/L_Test_Hub'
 GAME_MODE = '/Game/GASNPPTest/GM_GASNPPTest.GM_GASNPPTest_C'
 CUBE = '/Engine/BasicShapes/Cube.Cube'
 CYLINDER = '/Engine/BasicShapes/Cylinder.Cylinder'

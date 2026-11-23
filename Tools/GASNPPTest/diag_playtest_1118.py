@@ -90,7 +90,7 @@ def _tick(_dt):
         if ph != 'ending' and now - st['start'] > 600:
             return _finish('timeout ' + ph)
         if ph == 'boot' and now - st['t'] > 3:
-            da = unreal.load_asset('/Game/Blueprints/Data/DA_CameraAnchor_Default')
+            da = unreal.load_asset('/Game/GSTN/Data/Camera/DA_CameraAnchor_Default')
             s = da.get_editor_property('settings')
             s.set_editor_property('mode', getattr(unreal.GSTN_CameraAnchorMode, os.environ.get('DIAG_ANCHOR_MODE', 'MOVE_CAMERA_COMPONENT')))
             da.set_editor_property('settings', s)

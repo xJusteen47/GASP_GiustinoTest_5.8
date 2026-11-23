@@ -1,4 +1,4 @@
-# Wall slide A/B driver (wall-slide-v2.md section 4, W6): runs every lane of the map /Game/Levels/L_WallSlideAB with the legacy slide
+# Wall slide A/B driver (wall-slide-v2.md section 4, W6): runs every lane of the map /Game/GSTN/_Test/Maps/L_WallSlideAB with the legacy slide
 # ("WallSliding") and the v2 slide ("WallSlidingV2") through the PIE network harness (gasnpp_test.py) and writes one summary table,
 # Saved/Metrics/wallslide-ab-summary.md, plus the per-run CSVs of gstn.Wall.Metrics next to it.
 #
@@ -31,7 +31,7 @@ except ImportError:
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.abspath(os.path.join(HERE, '..', '..'))
 UPROJECT = os.path.join(PROJECT_DIR, 'GASP_Giustino2.uproject')
-MAP = '/Game/Levels/L_WallSlideAB'
+MAP = '/Game/GSTN/_Test/Maps/L_WallSlideAB'
 METRICS_DIR = os.path.join(PROJECT_DIR, 'Saved', 'Metrics')
 SUMMARY = os.path.join(METRICS_DIR, 'wallslide-ab-summary.md')
 INI = os.path.join(PROJECT_DIR, 'Saved', 'Config', 'WindowsEditor', 'EditorPerProjectUserSettings.ini')

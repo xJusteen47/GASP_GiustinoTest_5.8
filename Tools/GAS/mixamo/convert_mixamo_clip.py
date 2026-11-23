@@ -15,7 +15,7 @@ DST = '/Game/GSTN/Animation/Mixamo'
 SRC_DIR = f'{DST}/Source'
 UEFN_MESH = '/Game/Characters/UEFN_Mannequin/Meshes/SKM_UEFN_Mannequin'
 UEFN_RIG = '/Game/Characters/UEFN_Mannequin/Rigs/IK_UEFN_Mannequin'
-ROOTFIX = '/Game/Blueprints/Animation/Ported57/SkidOwner/RTG_RootCorrection'
+ROOTFIX = '/Game/GSTN/Animation/Ported57/SkidOwner/RTG_RootCorrection'
 LOG = os.path.join(unreal.Paths.project_saved_dir(), 'Mixamo', f'convert_{NAME}.log')
 os.makedirs(os.path.dirname(LOG), exist_ok=True)
 _f = open(LOG, 'w', encoding='utf-8')
