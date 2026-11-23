@@ -796,7 +796,8 @@ bool UGSTN_GA_BaseCombat::FinishTimelinePlay(bool bWasCancelled, bool bAbilityEn
 		// Why it ends, read before the cleanup below resets the recoil and the entry
 		{
 			const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
-			EndReason = FGSTN_MoveEventRules::ResolveEndReason(bWasCancelled, bRecoilPlayed.Value, EvaluatedFrame.Value, Data.TotalFrames, Data.GetTailStartFrame());
+			EndReason = FGSTN_MoveEventRules::ResolveEndReason(bWasCancelled, bRecoilPlayed.Value,
+				FGSTN_MoveEventRules::EndReasonFrame(bWasCancelled, EvaluatedFrame.Value, GetEndRuleFrame(Data)), Data.TotalFrames, Data.GetTailStartFrame());
 			bRaiseEnded = CanRaiseMoveEvents() && IsActive();
 		}
 

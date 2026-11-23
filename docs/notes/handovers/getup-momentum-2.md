@@ -56,3 +56,14 @@ COSTO: ~4 $ | 55 min laptop (build 24, test 3, captures 16, media) | 0 token rev
 - Note: an editor of another thread (cp1verify, animpipe editor_session.py, pid 4956) started at 22:19:52, the same second as this capture; possible interference, not checked.
 - No Blueprint saved, setup_reaction_anims.py not run. Lock freed.
 COSTO: ~1 $ | 6 min laptop (capture 2) | 0 token review
+
+## Round 2 (cloud, 2026-11-23 late, after the cloud review FAIL on "same speed")
+- Cause of the roll ramp 8 -> 140 (speed_trace.txt, roll_a45_run +21..+26): with the stick held the cut lands ON the first tail frame; the cancel
+  reaches the ability in the ASC pre-tick before its own tick moves EvaluatedFrame there (20 < tail 21) -> end reason Interrupted -> NO exit push,
+  only the walk accelerating from 0. The stand-up was cut a frame later (stick re-pressed), so it got its 156. Fix: `FGSTN_MoveEventRules::EndReasonFrame`
+  (a cancel takes the combat clock's frame when further on), used in `UGSTN_GA_BaseCombat::FinishTimelinePlay`; test lines in GSTNCombat.NP.MoveEvents.EndReason.
+  Generic (all moves): a cancel exactly on a tail's first frame now reports TailCancelled instead of Interrupted. Tail/FAF timing untouched.
+- Spike 140 -> 378 -> 234 at roll_a45 +27 (one frame, not in warpoff): NOT explained, not fixed. Guess: the pushbox against the attacker (the
+  diagonal run passes it) or the run-start layer; check on the next capture whether it survives (frames.jsonl attacker position at +27).
+- Laptop retry m2held2 FAILED before any sequence (KeyError in _apply_loadout, another thread's editor started at the same second): capture still owed.
+  Next: build + MoveEvents/Defence tests + `getup_capture_timed.ps1 -Runs Tools\GASNPPTest\getup_runs_momentum2_held.json` plus roll_a45_run, laptop ALONE.
