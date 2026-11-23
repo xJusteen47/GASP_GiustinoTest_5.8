@@ -30,10 +30,12 @@ ARM = np.linalg.norm(po.lt["lowerarm_l"]) + np.linalg.norm(po.lt["hand_l"])   # 
 # --- the victim (component space). Neck = hold point; its face looks back at Overlord (-Y).
 NECK = np.array([5.0, 38.0, 136.0])     # victim neck_01; a same-size victim stands ~9 cm into the floor: see handover
 FACE = NECK + np.array([0.0, -9.0, 15.0])          # front surface of the victim's face/forehead (headbutt target)
-GRIP = {"l": NECK + np.array([8.0, -8.0, -1.0]), "r": NECK + np.array([-8.0, -8.0, -1.0])}   # wrists either side of the neck
+GRIP = {"l": NECK + np.array([11.0, -8.0, -7.0]), "r": NECK + np.array([-11.0, -8.0, -7.0])}   # v1c: base of the neck, wider (hands clear each other and the own head)   # wrists either side of the neck
 ELBOW = {"l": [40.0, -5.0, -45.0], "r": [-40.0, -5.0, -45.0]}                               # elbow poles, chest frame: down/out
 FOOT0 = {s: P0[f"foot_{s}"].copy() for s in "lr"}
-KNEE_POLE = lambda a: [a[0], a[1] + 45.0, 50.0]
+TOE = {s: (lambda d: d / np.linalg.norm(d))(np.array([*(P0[f"ball_{s}"] - P0[f"foot_{s}"])[:2], 0.0])) for s in "lr"}
+KNEE_POLE = lambda a, s: (np.array(a, float) + TOE[s] * 45.0 + np.array([0.0, 0.0, 40.0])).tolist()   # knee over the toes (v1b)
+IDLE_HAND = {s: P0[f"hand_{s}"] - P0["spine_05"] for s in "lr"}    # idle hand offset in the (unturned) chest frame
 
 
 def rotvec(m):
@@ -42,7 +44,7 @@ def rotvec(m):
 
 
 def pose(pel=(0, 0, 0), prot=(0, 0, 0), spine=(0, 0, 0), head=(0, 0, 0), clav=(0, 0), hands=None, hand_dw=None, feet=None,
-         fingers=0.0, wrist_out=0.0, elbow=None):
+         fingers=0.0, wrist_out=0.0, elbow=None, hands_chest=None):
     """A key pose from body angles plus WORLD targets for the wrists and ankles (converted into the chest / pelvis frames)."""
     p = {"pelvis": {"loc": list(map(float, pel)), "rot": list(map(float, prot))}, "spine": list(map(float, spine)),
          "head": list(map(float, head)), "clavicle_l": [0.0, 0.0, float(clav[0])], "clavicle_r": [0.0, 0.0, -float(clav[1])],
@@ -55,10 +57,12 @@ def pose(pel=(0, 0, 0), prot=(0, 0, 0), spine=(0, 0, 0), head=(0, 0, 0), clav=(0
     for s in "lr":
         w = np.array(hands[s], float) + np.array((hand_dw or {}).get(s, (0, 0, 0)), float)
         p[f"arm_{s}"] = {"hand": (Dch.T @ (w - P["spine_05"])).tolist(), "pole": (elbow or ELBOW)[s]}
+        if hands_chest is not None:                  # recovery: hands placed in the CHEST frame (they follow the trunk, never cross it)
+            p[f"arm_{s}"]["hand"] = (IDLE_HAND[s] + np.array(hands_chest[s] if isinstance(hands_chest, dict) else hands_chest, float)).tolist()
     feet = feet or {}
     for s in "lr":
         a = np.array(feet.get(s, FOOT0[s]), float)
-        p[f"leg_{s}"] = {"foot": (Dp.T @ (a - P["pelvis"])).tolist(), "pole": (Dp.T @ (np.array(KNEE_POLE(a)) - P["pelvis"])).tolist(),
+        p[f"leg_{s}"] = {"foot": (Dp.T @ (a - P["pelvis"])).tolist(), "pole": (Dp.T @ (np.array(KNEE_POLE(a, s)) - P["pelvis"])).tolist(),
                          "foot_rot": [0.0, 0.0, 0.0]}
     P, R = po.solve(p)
     for s in "lr":                                   # keep the foot's idle world orientation (flat, same toe-out)
@@ -87,31 +91,34 @@ K = {
     # P2 peak: forehead at its highest and furthest back, held a12-a14 with a small drift (moving hold)
     12: pose(pel=(-2, -4, -0.5), prot=(4, 0, -7), spine=(8, 0, -11), head=(20, 0, 2), clav=(3, 3), fingers=0.2, elbow=TIGHT),
     14: pose(pel=(-2, -4, -0.5), prot=(4.5, 0, -7), spine=(8.5, 0, -11), head=(22, 0, 2), clav=(3, 3), fingers=0.2, elbow=TIGHT),
-    # P3 snap: the trunk passes the vertical, the step is in the air, the head leads down
-    17: pose(pel=(0, 3, -2), prot=(-1, 0, -7), spine=(-2, 0, -11), head=(-2, 0, 2), clav=(8, 8), fingers=0.2,
+    # P3 snap, kinetic chain (v1b, motion_check "no overlap"): the pelvis leads (70 % of its travel at a17, all at a18), the chest
+    # follows, the head lags still back and takes the last frame into contact (impact spacing on the head)
+    17: pose(pel=(0, 5, -4.5), prot=(0, 0, -7), spine=(4, 0, -11), head=(16, 0, 2), clav=(8, 8), fingers=0.2,
              feet={"l": L_MID, "l_toe": 12.0}),
+    18: pose(pel=(0, 8.5, -5.5), prot=(-1.5, 0, -7), spine=(-1, 0, -11), head=(6, 0, 2), clav=(12, 12), fingers=0.2,
+             feet={"l": L_STEP + np.array([0.0, 0.0, 1.5]), "l_toe": 4.0}),
     # P4 impact (throw key g20): forehead on the victim's face from above, shoulders closed, front foot planted, hands on the neck
-    19: pose(pel=(0, 9, -7), prot=(-2, 0, -7), spine=(-6, 0, -11), head=(-12, 0, 2), clav=(14, 14), fingers=0.15, feet={"l": L_STEP}),
-    # overshoot 1 frame (follow-through: the head keeps going down)
-    20: pose(pel=(0, 10, -8), prot=(-3, 0, -7), spine=(-8, 0, -11), head=(-18, 0, 2), clav=(14, 14), fingers=0.15, feet={"l": L_STEP}),
-    # P5 release: the hands open forward (villain hands), the head still goes down
-    23: pose(pel=(0, 9, -8), prot=(-3, 0, -7), spine=(-9, 0, -11), head=(-26, 0, 2), clav=(10, 10), fingers=OPEN, wrist_out=18,
-             hands={s: GRIP[s] + np.array([(6 if s == "l" else -6), 8, -8]) for s in "lr"}, feet={"l": L_STEP}),
-    # P6 settle: trunk rises, hands come down and in, the front foot comes back
-    28: pose(pel=(0, 6, -7), prot=(-2, 0, -5), spine=(-5, 0, -8), head=(-8, 0, 1), clav=(4, 4), fingers=0.7, wrist_out=10,
-             hands={s: P0[f"hand_{s}"] + np.array([0, 22, 22]) for s in "lr"}, feet={"l": L_STEP}),
-    34: pose(pel=(0, 2, -3), prot=(-1, 0, -2), spine=(-1, 0, -3), head=(2, 0, 0), clav=(1, 1), fingers=0.3,
-             hands={s: P0[f"hand_{s}"] + np.array([0, 10, 10]) for s in "lr"}, feet={"l": L_BACK, "l_toe": 6.0}),
+    19: pose(pel=(0, 9, -5.5), prot=(-2, 0, -7), spine=(-6, 0, -11), head=(-10, 0, 2), clav=(14, 14), fingers=0.15, feet={"l": L_STEP}),
+    # overshoot 1 frame (follow-through: the head keeps going DOWN, not further forward: contact_faf reach peak in the window)
+    20: pose(pel=(0, 9.5, -6.5), prot=(-2.5, 0, -7), spine=(-7, 0, -11), head=(-13, 0, 2), clav=(14, 14), fingers=0.15, feet={"l": L_STEP}),
+    # P5 release: the hands open forward (villain hands), the chest starts back up, the head still lags down
+    23: pose(pel=(0, 8.5, -7), prot=(-2.5, 0, -7), spine=(-6, 0, -11), head=(-16, 0, 2), clav=(10, 10), fingers=OPEN, wrist_out=18,
+             hands={s: GRIP[s] + np.array([(6 if s == "l" else -6), 6, -8]) for s in "lr"}, feet={"l": L_STEP}),
+    # P6 settle: trunk rises (head 2 frames behind the chest), hands come down in the chest frame, the front foot comes back
+    28: pose(pel=(0, 6, -7), prot=(-2, 0, -5), spine=(-3, 0, -8), head=(-9, 0, 1), clav=(4, 4), fingers=0.7, wrist_out=10,
+             hands_chest=(0.0, 16.0, 16.0), feet={"l": L_STEP}),
+    34: pose(pel=(0, 2, -3), prot=(-1, 0, -2), spine=(0, 0, -3), head=(-1, 0, 0), clav=(1, 1), fingers=0.3,
+             hands_chest=(0.0, 7.0, 7.0), feet={"l": L_BACK, "l_toe": 6.0}),
     # P7 FAF (g46 -> a44): back on the idle stance, fists, a small settle past upright at a39
     39: pose(pel=(0, -1, -1.5), prot=(1, 0, 0), spine=(2, 0, 0), head=(1, 0, 0), clav=(0, 0), fingers=0.0,
-             hands={s: P0[f"hand_{s}"] + np.array([0, 3, 3]) for s in "lr"}),
+             hands_chest=(0.0, 2.0, 2.0)),
     44: {},
     50: {},
 }
-SPACING = {0: "arrive_1_2", 4: "ease_from", 8: "charge_long", 12: "hold_recoil", 14: "charge_long", 17: "hold_recoil",
+SPACING = {0: "arrive_1_2", 4: "ease_from", 8: "charge_long", 12: "hold_recoil", 14: "charge_long", 17: "hold_recoil", 18: "hold_recoil",
            19: "hold_recoil", 20: "limb_led_recovery", 23: "limb_led_recovery", 28: "limb_led_recovery", 34: "ease_into", 39: "ease_into",
            44: "hold_recoil"}
-NAMES = {0: "grip", 4: "jerk", 8: "charge", 12: "peak", 14: "peak_hold", 17: "snap", 19: "impact", 20: "overshoot", 23: "release",
+NAMES = {0: "grip", 4: "jerk", 8: "charge", 12: "peak", 14: "peak_hold", 17: "snap", 18: "pre_contact", 19: "impact", 20: "overshoot", 23: "release",
          28: "settle", 34: "foot_back", 39: "settle_past", 44: "faf", 50: "tail_end"}
 
 
@@ -133,7 +140,7 @@ if __name__ == "__main__":
     card = {
         "move": "overlord_fthrow_v1", "class": "tilt",
         "anim": "/Game/AnimPipeline/Rig/Overlord/FThrow/AS_OverlordFThrowV1_Build", "rig": "/Game/Characters/UE5_Mannequins/Rigs/CR_Mannequin_Body",
-        "fps": 60, "timing_csv": "cards/overlord/fthrow/OverlordFThrow_timing.csv", "faf_game": 46, "effector": "head",
+        "fps": 60, "timing_csv": "refs/ufd/OverlordFThrow_timing.csv", "faf_game": 46, "effector": "head",
         "source_anim": "/Game/AnimPipeline/Pilot/AS_Pilot_OverlordFThrowV1",
         "_design": ("Overlord F. throw (owner 1C 2A 3A, 2026-11-23): both hands on the victim's neck; a4 jerk (shoulders up, hands tug, "
                     "knees load); a8-a14 short head-back charge on the back foot (moving hold a12-a14); a17 the trunk passes the vertical "
@@ -143,9 +150,12 @@ if __name__ == "__main__":
         "poses": [dict({"name": NAMES[f], "frame": f, "source": None}, **({"spacing": SPACING[f]} if f in SPACING else {})) for f in sorted(K)],
         "spacing": {"startup": "charge_long", "active": "hold_recoil", "recovery": "limb_led_recovery"},
         "part_delays": {"chest": 0, "head": 0, "forearm": 0, "hand": 0},
-        "sheet_extra": {"hold_window": [19, 21], "strike_limb": "head", "strike_side": "head"},
+        "sheet_extra": {"hold_window": [19, 21], "strike_limb": "arm_r", "strike_side": "arm_r"},
+        "_strike_note": "headbutt: legibility knows only limbs (arm/leg); arm_r stands in, its fist rules do not judge a headbutt (by eye)",
         "planted": ["foot_r_ik_ctrl"],
-        "exemptions": [{"check": "balance", "frames": list(range(15, 23)), "why": "the headbutt lunge: CoM goes over the stepping foot, caught at a19"},
+        "exemptions": [{"check": "balance", "frames": list(range(15, 23)) + list(range(29, 39)), "why": "the headbutt lunge: CoM goes over the stepping foot, caught at a19; the foot coming back a29-a38"},
+                       {"check": "fists", "frames": list(range(21, 39)), "why": "release: Overlord's villain hands open forward to let the victim go (cards/README owner rule), fists again by a39"},
+                       {"check": "co_motion", "frames": list(range(0, 15)), "why": "2A planted: the front foot stays planted through the jerk and the charge (weight shifts back), it steps only from a15"},
                        {"check": "planted", "frames": list(range(15, 19)) + list(range(29, 39)), "why": "left foot steps out (a15-a18) and back (a29-a38)"}],
         "author": {"take": "AS_Pilot_OverlordFThrowV1", "frames": 51, "thumb": "along", "poses": {str(f): K[f] for f in sorted(K)}},
         "hold_point_component_cm": NECK.tolist(),
