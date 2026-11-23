@@ -6,7 +6,7 @@ log = []
 def p(*a): log.append(" ".join(str(x) for x in a))
 try:
     T = unreal.GSTN_AnimBlueprintToolset
-    da = unreal.load_asset("/Game/Blueprints/Animation/DA_AnimSet_Locomotion_Default")
+    da = unreal.load_asset("/Game/GSTN/Animation/Layers/DA_AnimSet_Locomotion_Default")
     gen = unreal.load_object(None, "/Game/GSTN/Animation/Locomotion/ABP_GSTN_Locomotion.ABP_GSTN_Locomotion_C")
     da.set_editor_property("main_anim_class", gen)
     da.set_editor_property("skid_in_main_graph", True)

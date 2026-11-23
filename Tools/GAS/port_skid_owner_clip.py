@@ -18,7 +18,7 @@ def log(s):
     _f.flush()
 
 
-DST = '/Game/Blueprints/Animation/Ported57/SkidOwner'
+DST = '/Game/GSTN/Animation/Ported57/SkidOwner'
 MESH = '/Game/Characters/UEFN_Mannequin/Meshes/SKM_UEFN_Mannequin'
 at = unreal.AssetToolsHelpers.get_asset_tools()
 eal = unreal.EditorAssetLibrary

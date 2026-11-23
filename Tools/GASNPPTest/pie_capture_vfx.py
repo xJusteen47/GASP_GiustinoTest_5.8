@@ -6,7 +6,7 @@
 # PIE_VFX=0 and PIE_VFX=1 (console GSTN.Presentation.Effects; the events still fire and are logged either way).
 #
 # Launch (editor with a real renderer; the -ExecCmds script path must have no space: boot through a copy, see Run-Timed -Kind Capture):
-#   UnrealEditor.exe <uproject> /Game/Levels/Test/L_Test_Hub -ExecCmds="py <boot.py>" -windowed -nosplash
+#   UnrealEditor.exe <uproject> /Game/GSTN/Maps/L_Test_Hub -ExecCmds="py <boot.py>" -windowed -nosplash
 #   boot.py:  exec(open(r"<project>/Tools/GASNPPTest/pie_capture_vfx.py").read())
 # Environment: PIE_VFX (1), PIE_CAPTURE_OUT (Saved/PolishM2/vfx<0|1>), PIE_CAPTURE_SEQUENCES (comma list, default all), PIE_CAPTURE_KIT
 # (KIT_Test_Hits). Output: <out>/<sequence>/<view>/f<frame>.png, <out>/capture.log, <out>/done.txt; the presentation events of every
