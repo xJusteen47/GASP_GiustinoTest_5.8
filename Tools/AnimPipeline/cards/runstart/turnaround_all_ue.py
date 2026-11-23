@@ -12,27 +12,32 @@ PROJ = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
 SAVE = os.environ.get("GSTN_SAVE") == "1" or os.environ.get("CLIPFIX_WRITE") == "1"
 TURNS = [t.strip() for t in os.environ.get("TURN_LIST", "180R,090L,090R").split(",") if t.strip()]
 
-PELVIS_FWD_CM = float(os.environ.get("T_PELVIS_FWD", "12.0"))
-PELVIS_DROP_CM = float(os.environ.get("T_PELVIS_DROP", "-1.5"))
-SPINE_LEAN_PIVOT_DEG = float(os.environ.get("T_SPINE_LEAN_PIVOT", "10.0"))
-SPINE_LEAN_RUN_DEG = float(os.environ.get("T_SPINE_LEAN_RUN", "5.0"))
-TORSO_BANK_DEG = float(os.environ.get("T_TORSO_BANK", "5.0"))
-HEAD_LIFT_DEG = float(os.environ.get("T_HEAD_LIFT", "6.5"))
-KNEE_DROP = float(os.environ.get("T_KNEE_DROP", "0.30"))
-SWING_LAG_CM = float(os.environ.get("T_SWING_LAG", "4.0"))
-CATCH_FWD_CM = float(os.environ.get("T_CATCH_FWD", "5.5"))
-LAT_WIDEN_CM = float(os.environ.get("T_LAT_WIDEN", "2.5"))
-PIVOT_HEEL_DEG = float(os.environ.get("T_PIVOT_HEEL", "14.0"))
-
-CLAV_ST_ELEV_DEG = float(os.environ.get("T_CLAV_ST_ELEV", "7.0"))
-CLAV_PV_ELEV_DEG = float(os.environ.get("T_CLAV_PV_ELEV", "3.0"))
-CLAV_OPEN_DEG = float(os.environ.get("T_CLAV_OPEN", "6.0"))
-ARM_ST_TUCK_IN_DEG = float(os.environ.get("T_ARM_ST_TUCK_IN", "14.0"))
-ARM_PV_OUT_DEG = float(os.environ.get("T_ARM_PV_OUT", "3.0"))
-ARM_ST_BACK_DEG = float(os.environ.get("T_ARM_ST_BACK", "24.0"))
-ARM_ST_ELBOW_DEG = float(os.environ.get("T_ARM_ST_ELBOW", "16.0"))
-ARM_PV_FWD_DEG = float(os.environ.get("T_ARM_PV_FWD", "22.0"))
-ARM_PV_ELBOW_DEG = float(os.environ.get("T_ARM_PV_ELBOW", "24.0"))
+TURN_PARAMS = {
+    "180R": {
+        "pelvis_fwd": 8.0, "pelvis_drop": 0.0, "spine_lean_pivot": 5.0, "spine_lean_run": 6.0,
+        "torso_bank": 0.0, "head_lift": 10.0, "knee_drop": 0.12, "swing_lag": 2.0,
+        "catch_fwd": 6.5, "lat_widen": 4.0, "pivot_heel": 18.0,
+        "clav_st_elev": 10.0, "clav_pv_elev": 2.0, "clav_open": 2.0,
+        "arm_st_tuck_in": 26.0, "arm_pv_out": 3.0, "arm_st_back": 24.0,
+        "arm_st_elbow": 28.0, "arm_pv_fwd": 20.0, "arm_pv_elbow": 26.0, "arm_clr": 0.0,
+    },
+    "090L": {
+        "pelvis_fwd": 8.0, "pelvis_drop": 0.0, "spine_lean_pivot": 0.0, "spine_lean_run": 5.0,
+        "torso_bank": 0.0, "head_lift": 9.0, "knee_drop": 0.15, "swing_lag": 2.0,
+        "catch_fwd": 6.0, "lat_widen": 4.0, "pivot_heel": 18.0,
+        "clav_st_elev": 10.0, "clav_pv_elev": 2.0, "clav_open": 2.0,
+        "arm_st_tuck_in": 24.0, "arm_pv_out": 3.0, "arm_st_back": 20.0,
+        "arm_st_elbow": 28.0, "arm_pv_fwd": 18.0, "arm_pv_elbow": 26.0, "arm_clr": 0.0,
+    },
+    "090R": {
+        "pelvis_fwd": 8.0, "pelvis_drop": 0.0, "spine_lean_pivot": 0.0, "spine_lean_run": 5.0,
+        "torso_bank": 0.0, "head_lift": 9.0, "knee_drop": 0.15, "swing_lag": 2.0,
+        "catch_fwd": 6.0, "lat_widen": 4.0, "pivot_heel": 18.0,
+        "clav_st_elev": 10.0, "clav_pv_elev": 2.0, "clav_open": 2.0,
+        "arm_st_tuck_in": 26.0, "arm_pv_out": 3.0, "arm_st_back": 22.0,
+        "arm_st_elbow": 28.0, "arm_pv_fwd": 18.0, "arm_pv_elbow": 26.0, "arm_clr": 0.0,
+    },
+}
 
 
 def ss(a, b, x):
@@ -138,6 +143,29 @@ def solve_2bone_ik(hip_new, foot_new, hip_old, knee_old, foot_old):
 
 
 def process_turn(turn):
+    p = TURN_PARAMS[turn]
+    PELVIS_FWD_CM = p["pelvis_fwd"]
+    PELVIS_DROP_CM = p["pelvis_drop"]
+    SPINE_LEAN_PIVOT_DEG = p["spine_lean_pivot"]
+    SPINE_LEAN_RUN_DEG = p["spine_lean_run"]
+    TORSO_BANK_DEG = p["torso_bank"]
+    HEAD_LIFT_DEG = p["head_lift"]
+    KNEE_DROP = p["knee_drop"]
+    SWING_LAG_CM = p["swing_lag"]
+    CATCH_FWD_CM = p["catch_fwd"]
+    LAT_WIDEN_CM = p["lat_widen"]
+    PIVOT_HEEL_DEG = p["pivot_heel"]
+    CLAV_ST_ELEV_DEG = p["clav_st_elev"]
+    CLAV_PV_ELEV_DEG = p["clav_pv_elev"]
+    CLAV_OPEN_DEG = p["clav_open"]
+    ARM_ST_TUCK_IN_DEG = p["arm_st_tuck_in"]
+    ARM_PV_OUT_DEG = p["arm_pv_out"]
+    ARM_ST_BACK_DEG = p["arm_st_back"]
+    ARM_ST_ELBOW_DEG = p["arm_st_elbow"]
+    ARM_PV_FWD_DEG = p["arm_pv_fwd"]
+    ARM_PV_ELBOW_DEG = p["arm_pv_elbow"]
+    ARM_CLR_DEG = p["arm_clr"]
+
     deg = int(turn[:3])
     side = turn[3]
     st, pv = ("l", "r") if side == "L" else ("r", "l")
@@ -226,14 +254,14 @@ def process_turn(turn):
         fwd_vec = fwd_vecs[f]
         inward_dir = vmul(lat_vec, bank_sign)
 
-        e_w3 = ss(0.8, 3.2, float(f)) * (1.0 - ss(18.0, 33.0, float(f)))
-        e_piv_lean = ss(0.8, 3.0, float(f)) * (1.0 - ss(6.5 * piv_scale, 11.0 * piv_scale, float(f)))
-        e_run_lean = ss(6.0 * piv_scale, 10.0 * piv_scale, float(f)) * ((1.0 - ss(18.0, 34.0, float(f))) ** 1.4)
-        e_bank = ss(0.8, 3.0, float(f)) * (1.0 - ss(10.0 * piv_scale, 22.0, float(f)))
+        e_w3 = ss(0.5, 4.0, float(f)) * (1.0 - ss(22.0, 40.0, float(f)))
+        e_piv_lean = ss(0.5, 3.8, float(f)) * (1.0 - ss(7.0 * piv_scale, 13.0 * piv_scale, float(f)))
+        e_run_lean = ss(6.0 * piv_scale, 11.0 * piv_scale, float(f)) * ((1.0 - ss(22.0, 42.0, float(f))) ** 1.2)
+        e_bank = ss(0.5, 4.0, float(f)) * (1.0 - ss(10.0 * piv_scale, 22.0, float(f)))
         e_head = ss(3.5, 7.5, float(f)) * (1.0 - ss(16.0, 25.0, float(f)))
-        e_sh = ss(1.2, 3.5, float(f)) * (1.0 - ss(20.0, 31.0, float(f)))
-        e_arm_st_back = ss(1.0, 3.2, float(f)) * (1.0 - ss(6.0 * piv_scale, 9.5 * piv_scale, float(f)))
-        e_arm_pv_fwd = ss(1.0, 3.2, float(f)) * (1.0 - ss(7.5 * piv_scale, 13.0 * piv_scale, float(f)))
+        e_sh = ss(1.0, 3.8, float(f)) * (1.0 - ss(20.0, 31.0, float(f)))
+        e_arm_st_back = ss(1.0, 3.8, float(f)) * (1.0 - ss(6.0 * piv_scale, 9.5 * piv_scale, float(f)))
+        e_arm_pv_fwd = ss(1.0, 3.8, float(f)) * (1.0 - ss(7.5 * piv_scale, 13.0 * piv_scale, float(f)))
 
         pel_pos = vadd(w["pelvis"].translation, vmul(fwd_vec, PELVIS_FWD_CM * e_w3))
         pel_pos.z = pel_z_sm[f] + PELVIS_DROP_CM * e_w3
@@ -259,10 +287,10 @@ def process_turn(turn):
         q_nk = signed_axis_quat(lat_vec, HEAD_LIFT_DEG * e_head, fwd_vec, up_vec)
         nw["neck_01"] = mk_tf(nk_pos, q_nk * q_sp_cum * w["neck_01"].rotation, w["neck_01"].scale3d)
 
-        e_lag = ss(1.5, 4.5, float(f)) * (1.0 - ss(10.0, 16.0, float(f)))
-        e_catch = ss(9.0, 14.0, float(f)) * (1.0 - ss(20.0, 26.0, float(f)))
-        e_piv_foot = ss(1.2, 3.2, float(f)) * (1.0 - ss(5.5 * piv_scale, 9.5 * piv_scale, float(f)))
-        e_widen = ss(2.0, 6.0, float(f)) * (1.0 - ss(11.0, 16.0, float(f)))
+        e_lag = ss(1.5, 4.5, float(f)) * (1.0 - ss(8.0, 12.0, float(f)))
+        e_catch = ss(6.0, 10.5, float(f)) * (1.0 - ss(18.0, 25.0, float(f)))
+        e_piv_foot = ss(0.8, 2.5, float(f)) * (1.0 - ss(5.5 * piv_scale, 9.5 * piv_scale, float(f)))
+        e_widen = ss(1.0, 4.0, float(f)) * (1.0 - ss(11.0, 16.0, float(f)))
         for s in ("l", "r"):
             th, ca, fo = "thigh_" + s, "calf_" + s, "foot_" + s
             hip_old, knee_old, foot_old = w[th].translation, w[ca].translation, w[fo].translation
@@ -308,12 +336,13 @@ def process_turn(turn):
             q_ua_swing = unreal.Quat(0.0, 0.0, 0.0, 1.0)
             if s == st:
                 if e_arm_st_back > 1e-4:
-                    q_ua_lat = signed_axis_quat(fwd_vec, ARM_ST_TUCK_IN_DEG * e_arm_st_back, la_dir0, vmul(up_vec, -1.0))
+                    in_down = vnorm(vsub(vmul(up_vec, -1.0), out_dir))
+                    q_ua_lat = signed_axis_quat(fwd_vec, ARM_ST_TUCK_IN_DEG * e_arm_st_back, la_dir0, in_down)
                     la_dir1 = q_ua_lat.rotate_vector(la_dir0)
                     q_ua_swing = signed_axis_quat(lat_vec, ARM_ST_BACK_DEG * e_arm_st_back, la_dir1, vmul(fwd_vec, -1.0))
                 e_clr = ss(6.5, 9.5, float(f)) * (1.0 - ss(12.0, 16.0, float(f)))
                 if e_clr > 1e-4:
-                    q_ua_lat = signed_axis_quat(fwd_vec, 10.0 * e_clr, la_dir0, out_dir) * q_ua_lat
+                    q_ua_lat = signed_axis_quat(fwd_vec, ARM_CLR_DEG * e_clr, la_dir0, out_dir) * q_ua_lat
             else:
                 q_ua_lat = signed_axis_quat(fwd_vec, ARM_PV_OUT_DEG * e_sh, la_dir0, out_dir)
                 if e_arm_pv_fwd > 1e-4:
