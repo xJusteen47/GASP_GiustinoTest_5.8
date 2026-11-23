@@ -348,4 +348,47 @@ bool FGSTN_CameraTiltPlaneTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraAnchorFloorSourceTest, "GSTN.Camera.Anchor.FloorSourceIgnoresEveryCapsule", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraAnchorFloorSourceTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	// Owner 2026-11-23, dropkick K6 (frames.jsonl): in the air the mesh standing root is the clip's root, ~55 cm under the body in the loop; the
+	// 35 cm torso capsule touches down with its bottom on the floor. CapsuleBottom switched from the root (floor + 31) to floor + 86 in one frame.
+	// The Floor source must give floor + 86 on both sides of the touchdown, and never follow the clip root under it
+	const double Floor = 10.0;
+	const double Stand = 86.0;
+	const double CapsuleFallback = 999.0;  // must never be used while a floor is found
+	const double ClipRootInAir = Floor + 31.0;  // standing root read from the dropkick loop's mesh right before touchdown
+	const double Air = FGSTN_CameraAnchorDamper::FloorSourceHeight(true, ClipRootInAir, 0.0, true, Floor, Stand, CapsuleFallback, true);
+	const double Ground = FGSTN_CameraAnchorDamper::FloorSourceHeight(false, ClipRootInAir, 0.0, true, Floor, Stand, CapsuleFallback, true);
+	Near(*this, TEXT("air: never under floor + standing"), Air, Floor + Stand, 1e-6);
+	Near(*this, TEXT("touchdown is continuous"), Ground, Air, 1e-6);
+	// The old source for reference: the +55 cm step this replaces
+	const double OldAir = ClipRootInAir;
+	const double OldGround = FGSTN_CameraAnchorDamper::StandingHeightFromCapsule(FVector(0, 0, Floor + 35.0), FVector::UpVector, 35.0, Stand);
+	TestTrue(TEXT("old CapsuleBottom stepped at touchdown"), OldGround - OldAir > 50.0);
+	// A capsule lifted onto the torso while Mover still says ground (a3, +48 cm): the floor does not move, the height does not either
+	Near(*this, TEXT("grounded lifted capsule"), FGSTN_CameraAnchorDamper::FloorSourceHeight(false, Floor + Stand + 48.0, 0.0, true, Floor, Stand, CapsuleFallback, true), Floor + Stand, 1e-6);
+	// A real jump: the body above the floor is followed (air hold and damping act later, in the damper)
+	Near(*this, TEXT("jump follows the body"), FGSTN_CameraAnchorDamper::FloorSourceHeight(true, Floor + Stand + 120.0, 0.0, true, Floor, Stand, CapsuleFallback, true), Floor + Stand + 120.0, 1e-6);
+	// The take off bias is kept in the air
+	Near(*this, TEXT("air bias"), FGSTN_CameraAnchorDamper::FloorSourceHeight(true, Floor + Stand + 100.0, 5.0, true, Floor, Stand, CapsuleFallback, true), Floor + Stand + 105.0, 1e-6);
+	// No floor in reach (off a ledge): the body only, then the capsule fallback on the ground
+	Near(*this, TEXT("no floor in the air = body"), FGSTN_CameraAnchorDamper::FloorSourceHeight(true, -300.0, 0.0, false, Floor, Stand, CapsuleFallback, true), -300.0, 1e-6);
+	Near(*this, TEXT("no floor on the ground = capsule"), FGSTN_CameraAnchorDamper::FloorSourceHeight(false, 0.0, 0.0, false, Floor, Stand, CapsuleFallback, true), CapsuleFallback, 1e-6);
+	// Clamp off (A/B): the body only in the air
+	Near(*this, TEXT("clamp off"), FGSTN_CameraAnchorDamper::FloorSourceHeight(true, ClipRootInAir, 0.0, true, Floor, Stand, CapsuleFallback, false), ClipRootInAir, 1e-6);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraAnchorFloorDefaultTest, "GSTN.Camera.Anchor.FloorIsTheDefault", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraAnchorFloorDefaultTest::RunTest(const FString&)
+{
+	const FGSTN_CameraAnchorSettings Defaults;
+	TestTrue(TEXT("default vertical source is Floor"), Defaults.VerticalSource == EGSTN_CameraVerticalSource::Floor);
+	TestTrue(TEXT("clamp in air on"), Defaults.bFloorClampInAir);
+	TestTrue(TEXT("probe distance positive"), Defaults.FloorProbeDistance > 0.f);
+	return true;
+}
+
 #endif

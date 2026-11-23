@@ -48,6 +48,18 @@ enum class EGSTN_CameraVerticalSource : uint8
 	CapsuleBottom,
 	/** The drawn mesh read back to a standing root (first version): smooth, but follows any transient between capsule, mesh offset and smoothing */
 	DrawnMesh,
+	/**
+	 * Default since 2026-11-23 (owner: "solve the camera anchored to the collision once and for all"). The camera's height never reads the
+	 * capsule's size or place. On the ground: the FLOOR under the character (a trace from the capsule centre with the capsule's own collision
+	 * responses) plus the standing half height. In the air: the drawn body (mesh standing root + the take off bias, as CapsuleBottom does) but
+	 * never below floor + standing half height when a floor is within FloorProbeDistance.
+	 * Why CapsuleBottom was not enough (dropkick K6, frames.jsonl 2026-11-23): in the air the mesh standing root is the CLIP's root, which the
+	 * dropkick loop carries ~55 cm under the body; when the small torso capsule touched down, the height switched from that root to the capsule
+	 * bottom in one frame (+57 cm), after the camera had followed the root down below the take off height. Any capsule whose bottom leaves the
+	 * floor while Mover still reports ground (a capsule lifted onto the torso) moved the camera the same way. The floor has neither problem.
+	 * No floor in reach = CapsuleBottom
+	 */
+	Floor,
 };
 
 /** How the tilt-shift "toy / miniature" look is made (GSTN_CameraAnchor.h, FGSTN_CameraTiltShiftSettings) */
@@ -185,7 +197,22 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorSettings
 
 	/** Where the anchor's height comes from. Console override gstn.Camera.Anchor.Vertical (A/B) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Vertical")
-	EGSTN_CameraVerticalSource VerticalSource = EGSTN_CameraVerticalSource::CapsuleBottom;
+	EGSTN_CameraVerticalSource VerticalSource = EGSTN_CameraVerticalSource::Floor;
+
+	/**
+	 * Floor source: how far below the capsule's bottom the floor is searched. In the air a floor farther than this does not hold the camera up
+	 * (a fall off a ledge is followed down as before until the new floor comes in reach). On the ground the floor is always well inside it
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Vertical", meta = (ClampMin = "10", ClampMax = "2000", ForceUnits = "cm",
+		EditCondition = "VerticalSource == EGSTN_CameraVerticalSource::Floor"))
+	float FloorProbeDistance = 300.f;
+
+	/**
+	 * Floor source, in the air: the height never goes below floor + standing half height. A body cannot be under the floor, so a lower value
+	 * is the clip's root or a move's capsule, never real motion (dropkick, dair, knockdown bounces). Off = the drawn body only (A/B)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Vertical", meta = (EditCondition = "VerticalSource == EGSTN_CameraVerticalSource::Floor"))
+	bool bFloorClampInAir = true;
 
 	/**
 	 * Vertical spring half life when the anchor goes UP (jumps, standing up). Higher = softer. After a sudden step the camera has covered
@@ -346,6 +373,13 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorDamper
 	 */
 	static double StandingHeightFromCapsule(const FVector& Root, const FVector& Up, double CurrentHalfHeight, double StandingHalfHeight);
 
+	/**
+	 * The Floor source's height (EGSTN_CameraVerticalSource::Floor), pure. Grounded: FloorHeight + StandingHalfHeight, or CapsuleFallback without a
+	 * floor. In the air: MeshHeight + AirBias, raised to FloorHeight + StandingHalfHeight when bClampInAir and a floor was found. All along Up
+	 */
+	static double FloorSourceHeight(bool bInAir, double MeshHeight, double AirBias, bool bHasFloor, double FloorHeight, double StandingHalfHeight,
+		double CapsuleFallback, bool bClampInAir);
+
 	static FVector StandingRootFromVisual(const FTransform& VisualWorld, const FTransform& VisualStandingRelative, const FVector& ParentScale = FVector::OneVector);
 };
 
@@ -360,6 +394,14 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorDamper
  * rollback re-simulation: what the screen shows, not each simulated step
  */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FGSTN_OnCameraCapsuleChanged, float, OldHalfHeight, float, NewHalfHeight, float, BottomShift);
+
+class UGSTN_CameraAnchorComponent;
+/**
+ * Native: the anchor finished this frame's update (TG_PostPhysics, before every camera that ticks in that group: they take the anchor as a
+ * prerequisite). A camera that is handed its subject from outside (the P1a GSTN camera) gets it here, the same frame, instead of from a
+ * tickable that runs after the view (the one-frame-late pivot noted on 2026-11-21)
+ */
+DECLARE_MULTICAST_DELEGATE_OneParam(FGSTN_OnCameraAnchorUpdated, const UGSTN_CameraAnchorComponent&);
 
 UCLASS(ClassGroup = (Camera), meta = (BlueprintSpawnableComponent))
 class GASP_GIUSTINO2_API UGSTN_CameraAnchorComponent : public UActorComponent
@@ -383,6 +425,9 @@ public:
 	 */
 	UPROPERTY(BlueprintAssignable, Category = "Camera|Anchor")
 	FGSTN_OnCameraCapsuleChanged OnCapsuleChanged;
+
+	/** See FGSTN_OnCameraAnchorUpdated. Fires at the end of every active tick */
+	FGSTN_OnCameraAnchorUpdated OnAnchorUpdated;
 
 	/** A component with this tag is the one moved; else the first GameplayCamera, then spring arm, then camera component of the owner */
 	static const FName CameraComponentTag;
@@ -416,9 +461,9 @@ public:
 	 * Mover-smoothed mesh. Capsule resizes and the 62.5 Hz simulation steps do not move it; the body's real motion does. Runs the body capsule's
 	 * mesh correction first, so it is right at any point of the frame after Mover's finalize. False (actor location returned) without a mesh
 	 */
-	static bool ComputeStandingRoot(const AActor* Actor, FVector& OutLocation, EGSTN_CameraVerticalSource VerticalSource = EGSTN_CameraVerticalSource::CapsuleBottom);
+	static bool ComputeStandingRoot(const AActor* Actor, FVector& OutLocation, EGSTN_CameraVerticalSource VerticalSource = EGSTN_CameraVerticalSource::Floor);
 
-	/** The vertical source this frame: the console override (gstn.Camera.Anchor.Vertical 0 = settings, 1 = CapsuleBottom, 2 = DrawnMesh), else Settings */
+	/** The vertical source this frame: the console override (gstn.Camera.Anchor.Vertical 0 = settings, 1 = CapsuleBottom, 2 = DrawnMesh, 3 = Floor), else Settings */
 	static EGSTN_CameraVerticalSource ResolveVerticalSource(EGSTN_CameraVerticalSource FromSettings);
 
 	/**
@@ -427,7 +472,16 @@ public:
 	 * there; the mesh-based height is, plus AirBias (the bottom-minus-mesh difference of the last grounded frame, so take off does not step)
 	 */
 	static FVector ApplyVerticalSource(const AActor& Actor, const FVector& MeshStandingRoot, const FVector& Up, EGSTN_CameraVerticalSource VerticalSource,
-		bool bInAir = false, double AirBias = 0.0);
+		bool bInAir = false, double AirBias = 0.0, const FGSTN_CameraAnchorSettings* Tuning = nullptr);
+
+	/**
+	 * The floor under the actor's capsule, along Up: a line from the capsule centre down to FloorProbeDistance below its bottom, on the capsule's
+	 * object channel with its own responses (what Mover's floor check collides with), ignoring the actor. False when nothing is in reach
+	 */
+	static bool FindFloorHeight(const AActor& Actor, const FVector& Up, float FloorProbeDistance, double& OutFloorHeight);
+
+	/** The standing (pawn's own) capsule half height, scaled: the body capsule modifier's reference, else the capsule archetype's, else the current one */
+	static double GetStandingHalfHeight(const AActor& Actor);
 
 	/** Diagnostics: the mesh-based standing root before the vertical source (same as GetStandingRoot with DrawnMesh) */
 	FVector GetMeshStandingRoot() const { return LastMeshStandingRoot; }

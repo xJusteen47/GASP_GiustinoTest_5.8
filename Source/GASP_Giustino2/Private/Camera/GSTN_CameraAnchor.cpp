@@ -2,6 +2,7 @@
 
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "CollisionQueryParams.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -25,8 +26,9 @@ namespace GSTNCameraAnchor
 		TEXT("0 = old order (TG_PostUpdateWork, after the view): the view used last frame's correction on top of this frame's actor root, which ")
 		TEXT("steps at the 62.5 Hz simulation rate = camera jitter on jumps, landings and fast moves. A/B only"));
 	static TAutoConsoleVariable<int32> CVarVertical(TEXT("gstn.Camera.Anchor.Vertical"), 0,
-		TEXT("Where the camera anchor's height comes from: 0 = settings (DA_CameraAnchor_Default, default CapsuleBottom), 1 = capsule bottom + ")
-		TEXT("standing half height (no capsule change moves it), 2 = drawn mesh (first version). A/B only"));
+		TEXT("Where the camera anchor's height comes from: 0 = settings (DA_CameraAnchor_Default, default Floor), 1 = capsule bottom + ")
+		TEXT("standing half height (11-20 version: grounded capsule changes ignored, airborne ones and touchdowns not), 2 = drawn mesh (first version), ")
+		TEXT("3 = floor under the character + standing half height, never below it in the air (2026-11-23: no capsule ever moves it). A/B only"));
 	static TAutoConsoleVariable<int32> CVarDebug(TEXT("gstn.Camera.Anchor.Debug"), 0,
 		TEXT("1 = draw the camera anchor: red raw standing root, green damped anchor, yellow actor root"));
 
@@ -173,6 +175,18 @@ FVector FGSTN_CameraAnchorDamper::Step(const FVector& Target, const FVector& InU
 double FGSTN_CameraAnchorDamper::StandingHeightFromCapsule(const FVector& Root, const FVector& Up, double CurrentHalfHeight, double StandingHalfHeight)
 {
 	return FVector::DotProduct(Root, Up.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector)) - CurrentHalfHeight + StandingHalfHeight;
+}
+
+double FGSTN_CameraAnchorDamper::FloorSourceHeight(bool bInAir, double MeshHeight, double AirBias, bool bHasFloor, double FloorHeight, double StandingHalfHeight,
+	double CapsuleFallback, bool bClampInAir)
+{
+	const double OnFloor = FloorHeight + StandingHalfHeight;
+	if (!bInAir)
+	{
+		return bHasFloor ? OnFloor : CapsuleFallback;
+	}
+	const double Body = MeshHeight + AirBias;
+	return (bHasFloor && bClampInAir) ? FMath::Max(Body, OnFloor) : Body;
 }
 
 FVector FGSTN_CameraAnchorDamper::StandingRootFromVisual(const FTransform& VisualWorld, const FTransform& VisualStandingRelative, const FVector& ParentScale)
@@ -326,6 +340,15 @@ void UGSTN_CameraAnchorComponent::SetTickOrder(bool bEarly)
 		}
 		if (bIsCamera)
 		{
+			// Every camera of the pawn in this group (GASP's and the GSTN P1a one) evaluates after the anchor, so it reads this frame's anchor
+			if (bEarly)
+			{
+				Component->PrimaryComponentTick.AddPrerequisite(this, PrimaryComponentTick);
+			}
+			else
+			{
+				Component->PrimaryComponentTick.RemovePrerequisite(this, PrimaryComponentTick);
+			}
 			continue;
 		}
 		if (bEarly)
@@ -356,37 +379,87 @@ void UGSTN_CameraAnchorComponent::SetTickOrder(bool bEarly)
 EGSTN_CameraVerticalSource UGSTN_CameraAnchorComponent::ResolveVerticalSource(EGSTN_CameraVerticalSource FromSettings)
 {
 	const int32 Forced = GSTNCameraAnchor::CVarVertical.GetValueOnGameThread();
-	return Forced == 1 ? EGSTN_CameraVerticalSource::CapsuleBottom : (Forced == 2 ? EGSTN_CameraVerticalSource::DrawnMesh : FromSettings);
+	switch (Forced)
+	{
+	case 1: return EGSTN_CameraVerticalSource::CapsuleBottom;
+	case 2: return EGSTN_CameraVerticalSource::DrawnMesh;
+	case 3: return EGSTN_CameraVerticalSource::Floor;
+	default: return FromSettings;
+	}
 }
 
-FVector UGSTN_CameraAnchorComponent::ApplyVerticalSource(const AActor& Actor, const FVector& MeshStandingRoot, const FVector& InUp, EGSTN_CameraVerticalSource VerticalSource,
-	bool bInAir, double AirBias)
+double UGSTN_CameraAnchorComponent::GetStandingHalfHeight(const AActor& Actor)
 {
 	const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(Actor.GetRootComponent());
-	if (VerticalSource != EGSTN_CameraVerticalSource::CapsuleBottom || !Capsule)
+	if (!Capsule)
 	{
-		return MeshStandingRoot;
+		return 0.0;
 	}
-	if (bInAir)
-	{
-		// Aerial capsules shrink and grow around the body, moving the bottom: the drawn body is the reference up here
-		return MeshStandingRoot + AirBias * InUp.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
-	}
-	// Standing half height: the pawn's own capsule (the body capsule modifier's reference), else the capsule's archetype, else the current one
-	double StandingHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+	// The pawn's own capsule (the body capsule modifier's reference), else the capsule's archetype, else the current one
 	FGSTN_BodyCapsuleShape Standing;
 	const UMoverComponent* Mover = Actor.FindComponentByClass<UMoverComponent>();
 	if (Mover && FGSTN_BodyCapsuleModifier::GetStanding(*Mover, Standing) && Standing.HalfHeight > 0.f)
 	{
-		StandingHalfHeight = Standing.HalfHeight * Capsule->GetComponentScale().Z;
+		return Standing.HalfHeight * Capsule->GetComponentScale().Z;
 	}
-	else if (const UCapsuleComponent* Archetype = Cast<UCapsuleComponent>(Capsule->GetArchetype()))
+	if (const UCapsuleComponent* Archetype = Cast<UCapsuleComponent>(Capsule->GetArchetype()))
 	{
-		StandingHalfHeight = Archetype->GetUnscaledCapsuleHalfHeight() * Capsule->GetComponentScale().Z;
+		return Archetype->GetUnscaledCapsuleHalfHeight() * Capsule->GetComponentScale().Z;
+	}
+	return Capsule->GetScaledCapsuleHalfHeight();
+}
+
+bool UGSTN_CameraAnchorComponent::FindFloorHeight(const AActor& Actor, const FVector& InUp, float FloorProbeDistance, double& OutFloorHeight)
+{
+	const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(Actor.GetRootComponent());
+	const UWorld* World = Actor.GetWorld();
+	if (!Capsule || !World)
+	{
+		return false;
+	}
+	// From the capsule centre: the one point guaranteed to be in free space whatever shape a move gave the capsule. A line, not a sweep: the
+	// height under the character's middle, the same on a flat floor as the capsule bottom, and no ledge edge caught by the capsule's radius
+	const FVector Up = InUp.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
+	const FVector Start = Capsule->GetComponentLocation();
+	const FVector End = Start - Up * (Capsule->GetScaledCapsuleHalfHeight() + FMath::Max(FloorProbeDistance, 1.f));
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNCameraAnchorFloor), false, &Actor);
+	FCollisionResponseParams Responses(Capsule->GetCollisionResponseToChannels());
+	FHitResult Hit;
+	if (!World->LineTraceSingleByChannel(Hit, Start, End, Capsule->GetCollisionObjectType(), Params, Responses) || !Hit.bBlockingHit)
+	{
+		return false;
+	}
+	OutFloorHeight = FVector::DotProduct(Hit.ImpactPoint, Up);
+	return true;
+}
+
+FVector UGSTN_CameraAnchorComponent::ApplyVerticalSource(const AActor& Actor, const FVector& MeshStandingRoot, const FVector& InUp, EGSTN_CameraVerticalSource VerticalSource,
+	bool bInAir, double AirBias, const FGSTN_CameraAnchorSettings* Tuning)
+{
+	const UCapsuleComponent* Capsule = Cast<UCapsuleComponent>(Actor.GetRootComponent());
+	if (VerticalSource == EGSTN_CameraVerticalSource::DrawnMesh || !Capsule)
+	{
+		return MeshStandingRoot;
 	}
 	const FVector Up = InUp.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector);
-	const double Height = FGSTN_CameraAnchorDamper::StandingHeightFromCapsule(Capsule->GetComponentLocation(), Up, Capsule->GetScaledCapsuleHalfHeight(), StandingHalfHeight);
-	return MeshStandingRoot + (Height - FVector::DotProduct(MeshStandingRoot, Up)) * Up;
+	const double MeshHeight = FVector::DotProduct(MeshStandingRoot, Up);
+	const double StandingHalfHeight = GetStandingHalfHeight(Actor);
+	const double CapsuleHeight = FGSTN_CameraAnchorDamper::StandingHeightFromCapsule(Capsule->GetComponentLocation(), Up, Capsule->GetScaledCapsuleHalfHeight(), StandingHalfHeight);
+	double Height = CapsuleHeight;
+	if (VerticalSource == EGSTN_CameraVerticalSource::Floor)
+	{
+		static const FGSTN_CameraAnchorSettings Defaults;
+		const FGSTN_CameraAnchorSettings& Use = Tuning ? *Tuning : Defaults;
+		double FloorHeight = 0.0;
+		const bool bHasFloor = FindFloorHeight(Actor, Up, Use.FloorProbeDistance, FloorHeight);
+		Height = FGSTN_CameraAnchorDamper::FloorSourceHeight(bInAir, MeshHeight, AirBias, bHasFloor, FloorHeight, StandingHalfHeight, CapsuleHeight, Use.bFloorClampInAir);
+	}
+	else if (bInAir)
+	{
+		// CapsuleBottom in the air: aerial capsules shrink and grow around the body, moving the bottom: the drawn body is the reference up here
+		Height = MeshHeight + AirBias;
+	}
+	return MeshStandingRoot + (Height - MeshHeight) * Up;
 }
 
 bool UGSTN_CameraAnchorComponent::ComputeStandingRoot(const AActor* Actor, FVector& OutLocation, EGSTN_CameraVerticalSource VerticalSource)
@@ -419,7 +492,10 @@ bool UGSTN_CameraAnchorComponent::ComputeStandingRoot(const AActor* Actor, FVect
 	const UMoverComponent* UpSource = Actor->FindComponentByClass<UMoverComponent>();
 	static const FGameplayTag AirTag = FGameplayTag::RequestGameplayTag(TEXT("Mover.IsInAir"), false);
 	const bool bAir = UpSource && AirTag.IsValid() && UpSource->HasGameplayTag(AirTag, true);
-	OutLocation = ApplyVerticalSource(*Actor, OutLocation, UpSource ? UpSource->GetUpDirection() : Actor->GetActorUpVector(), ResolveVerticalSource(VerticalSource), bAir);
+	// The anchor's own tuning and take off bias when the character has one, so the library's pivot is the anchor's undamped height exactly
+	const UGSTN_CameraAnchorComponent* Anchor = Actor->FindComponentByClass<UGSTN_CameraAnchorComponent>();
+	OutLocation = ApplyVerticalSource(*Actor, OutLocation, UpSource ? UpSource->GetUpDirection() : Actor->GetActorUpVector(), ResolveVerticalSource(VerticalSource), bAir,
+		Anchor ? Anchor->AirBias : 0.0, Anchor ? &Anchor->GetSettings() : nullptr);
 	return true;
 }
 
@@ -513,10 +589,10 @@ void UGSTN_CameraAnchorComponent::TickComponent(float DeltaTime, ELevelTick Tick
 	static const FGameplayTag InAirTag = FGameplayTag::RequestGameplayTag(TEXT("Mover.IsInAir"), false);
 	const bool bInAir = Mover && InAirTag.IsValid() && Mover->HasGameplayTag(InAirTag, true);
 	bLastInAir = bInAir;
-	// Height (default CapsuleBottom): on the ground the capsule bottom, which no capsule change moves; in the air the drawn body plus the
-	// bias of the last grounded frame, which no aerial capsule moves either
+	// Height (default Floor): on the ground the floor under the character, which no capsule touches; in the air the drawn body plus the bias of
+	// the last grounded frame, never below the floor (the dropkick's clip root and touchdown, 2026-11-23)
 	const EGSTN_CameraVerticalSource VerticalSource = ResolveVerticalSource(Tuning.VerticalSource);
-	const FVector Raw = ApplyVerticalSource(*Owner, MeshRaw, Up, VerticalSource, bInAir, AirBias);
+	const FVector Raw = ApplyVerticalSource(*Owner, MeshRaw, Up, VerticalSource, bInAir, AirBias, &Tuning);
 	if (!bInAir)
 	{
 		AirBias = FVector::DotProduct(Raw - MeshRaw, Up.GetSafeNormal(UE_SMALL_NUMBER, FVector::UpVector));
@@ -575,4 +651,5 @@ void UGSTN_CameraAnchorComponent::TickComponent(float DeltaTime, ELevelTick Tick
 		DrawDebugSphere(GetWorld(), Root, 6.f, 8, FColor::Yellow, false, -1.f, SDPG_Foreground);
 	}
 #endif
+	OnAnchorUpdated.Broadcast(*this);
 }

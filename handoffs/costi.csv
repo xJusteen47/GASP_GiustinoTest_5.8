@@ -54,3 +54,4 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-22,calibrazione-2c-k6-r1,Calibrazione cieca 2C Neon su K6 r1,fisso,agy_student,gemini-4-neon-high,6.87,0,0,,CALIB-2C K6 r1: FAIL posa (match Fable 1/1; 0 falsi PASS)
 2026-11-22,integ-playtest-2026-11-22,disk-cleanup+integrazione-3a,fisso,agy_student,gemini-4-hydrogen-high,15,0,0,,1A+2A (~254 GB liberati) + merge M12p1/M10M11/S1/haptics/main su claude/integ-playtest-2026-11-22 (build UE pending)
 2026-11-23,integ-2026-11-23,compilare main + integrazione branch cloud,portatile,claude,opus,0,0,4,,main non compilava (C4172 GSTNMission) + 2 test loadout rotti: fissati; main 1877/1877; +grab-link 1880/1880; anim-mcp non fuso (clip non in review)
+2026-11-23,camera-floor-anchor,camera dal pavimento non dalla capsula + P1a pivot stesso frame + opzione capsula dropkick,cloud,claude,opus-medium,5,0,60,,non compilato; da provare su fisso (build GSTN.Camera.* + A/B dropkick)
