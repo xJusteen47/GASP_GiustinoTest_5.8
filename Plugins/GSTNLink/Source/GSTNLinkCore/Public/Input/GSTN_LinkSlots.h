@@ -10,6 +10,7 @@
 
 class UGSTN_InputSlotSet;
 enum class EGSTN_LinkThrowInputMode : uint8;
+enum class EGSTN_GrabTurnErgonomics : uint8;
 struct FGSTN_BindingInput;
 struct FGSTN_LinkThrowSet;
 
@@ -17,6 +18,10 @@ struct FGSTN_LinkThrowSet;
 struct GSTNLINKCORE_API FGSTN_KitThrowFill
 {
 	EGSTN_LinkThrowInputMode Mode;
+	/** Notation mode: which stick directions fire the F. throw (instant = all of them, the default) */
+	EGSTN_GrabTurnErgonomics Ergonomics;
+	/** grab-link: add a Command.Link.Release.PutDown row (the dodge press) bound to the grabber's Release ability */
+	bool bPutDownWithDodge = false;
 	/** Add a second grab row: special + crouch held */
 	bool bSpecialCrouchGrab = false;
 	/** The kit's own set (its link extension), or null */
@@ -30,7 +35,7 @@ struct GSTNLINKCORE_API FGSTN_KitThrowFill
 	/** Tags that switch off only the throws the stick alone triggers (forward and back in Stick mode) */
 	FGameplayTagContainer BlockStickOnly;
 
-	explicit FGSTN_KitThrowFill(EGSTN_LinkThrowInputMode InMode) : Mode(InMode) {}
+	explicit FGSTN_KitThrowFill(EGSTN_LinkThrowInputMode InMode);
 };
 
 /** The requirement a kit's binding of one link command carries (the slot is the input, the requirement the context it means something in) */
@@ -93,6 +98,19 @@ public:
 	 * held. The buttons are the combat's logical buttons (Combat.Button.*), which the input config maps to physical keys and pad buttons
 	 */
 	static FGSTN_InputSlotSpec BuildThrowSlot(const FGameplayTag& ThrowCommand, EGSTN_LinkThrowInputMode Mode);
+
+	/**
+	 * As above, with the grab turn ergonomics of the Notation mode (grab-link): N. = attack + neutral stick, F. = attack + tilt (Instant: any
+	 * direction; BackThrow: any but back), B. = attack + back tilt (BackThrow only), Cr. = attack + crouch held + neutral, Cr.F. = attack + crouch held
+	 * + any tilt. Every crouch shape ranks above the standing ones and every directed shape above the neutral one, as the standard attack set ranks them
+	 */
+	static FGSTN_InputSlotSpec BuildThrowSlot(const FGameplayTag& ThrowCommand, EGSTN_LinkThrowInputMode Mode, EGSTN_GrabTurnErgonomics Ergonomics);
+
+	/** The throw commands a mode binds (Notation: N., F., Cr., Cr.F., plus B. with BackThrow; the other modes: forward, back, up, down) */
+	static TArray<FGameplayTag> GetThrowCommands(EGSTN_LinkThrowInputMode Mode, EGSTN_GrabTurnErgonomics Ergonomics);
+
+	/** grab-link: the put-down slot (a dodge press). Notation mode has no pummel (owner 2026-11-23): its rows are hidden by ApplyKitThrows */
+	static FGSTN_InputSlotSpec BuildPutDownSlot();
 
 	/** The second grab slot (owner decision 2): special pressed with crouch held, falling through without a grab target */
 	static FGSTN_InputSlotSpec BuildSpecialCrouchGrabSlot();

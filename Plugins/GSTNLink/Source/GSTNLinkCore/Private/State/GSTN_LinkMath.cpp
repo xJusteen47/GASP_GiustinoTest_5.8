@@ -132,6 +132,15 @@ FTransform UGSTN_LinkMath::ParkedTransformOnSocket(const FTransform& PartnerTran
 	return ParkedRole.SocketOffset * SocketRootRelative * PartnerTransform;
 }
 
+FVector UGSTN_LinkMath::NeckHoldAnchor(const FTransform& SocketRootRelative, const FTransform& DefinitionOffset, const FVector& NeckRootRelative,
+	const FGSTN_GrabHoldPose& Pose)
+{
+	// The parked root sits at Socket(T) and turns by Socket.Rot * Offset.Rot, so its neck sits at Socket(T) + Socket.Rot * Offset.Rot * Neck. Asking
+	// that to be the hold point (plus the nudge, which moves the whole body) gives T = Socket^-1(Hold + Extra) - Offset.Rot * Neck
+	const FVector Target = Pose.HoldPointCm + Pose.ExtraOffsetCm;
+	return SocketRootRelative.InverseTransformPositionNoScale(Target) - DefinitionOffset.GetRotation().RotateVector(NeckRootRelative);
+}
+
 bool UGSTN_LinkMath::TryGetParkedTransform(const UGSTN_LinkTypeDefinition& Definition, int32 RoleIndex, const FTransform& PartnerTransform,
 	const FTransform& SocketRootRelative, FTransform& OutTransform)
 {
