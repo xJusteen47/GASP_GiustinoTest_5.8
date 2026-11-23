@@ -11,8 +11,9 @@ confronto aeh8di 78b6f2f5, sguardo slowmo qsgab4 d7222a0a.
 - Proposta: livello 1 a 0 token che scarta ma non promuove; livello 2 completo (slowmo intera mossa 3 viste, schede velocità,
   identità, base, critico cieco), tetto = "nessun frame scoperto"; protetto da sezione INVARIANTI + test + riga nelle istruzioni.
 - Ereditati: bloccano salvo controllo ritarato con prova o esenzione scritta dall'owner in anim-approvate.md.
-- Opzioni: A ~2-3 $ (protezione), B consigliata ~5-6 $ (A + strumenti aeh8di A), C ~9-11 $ (B + kb_motion + taratura).
+- Principio owner 24/11: qualità = OG; risparmi solo da automazione deterministica e processi più rapidi.
+- Opzioni: A consigliata ~10-12 $ (invarianti+test+MCP pacchetto, poi metriche OG tarate), B ~6-7 $ (solo primo thread), C ~16-20 $ (A + render/import veloci).
 ## Aperto
 - Owner: A/B/C; testo da incollare nelle regole 4 e 10. Skill account gstn-move-animation ancora installata (da aeh8di).
 SUBAGENTI: 0
-COSTO: ~2 $ (stima) | 0 minuti desktop | 0 token review (nessuna immagine guardata)
+COSTO: ~2,5 $ (stima) | 0 minuti desktop | 0 token review (nessuna immagine guardata)
