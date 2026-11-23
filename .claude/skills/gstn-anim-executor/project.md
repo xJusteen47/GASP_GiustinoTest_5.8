@@ -2,6 +2,30 @@
 
 Generic method: `skills-public/anim-executor/SKILL.md`. Section numbers below refer to it. This file wins on conflicts.
 
+## INVARIANTI (non toccare per costo)
+Owner 2026-11-24 (scope: whole animation skill and review): quality equal to the OG skill, no compromise on false
+positives, savings only from automatic tools. Source with the reason for each item: `Tools/AnimPipeline/contract/invarianti-review.md`.
+Only the owner changes them, with a written decision; whoever slims this skill keeps this section as it is.
+`Tools/AnimPipeline/tests/test_review_invariants.py` fails if an id or a pack step goes missing.
+Level 1 (0-token gates, silhouette, trails, previews) only DISCARDS a round. Level 2 (the final review) always runs on every
+variant that can reach the owner, on the pack of `anim_review_pack` (`final/review_pack.json`, `complete: true`, else no review).
+- INV-01 identity traits first (rule 13a); a changed trait = FAIL until the owner decides.
+- INV-02 life before numbers, on the moving video: real + slow4x mp4 of base and variant before any number.
+- INV-03 slow motion of the WHOLE move (startup, actives, recovery, settle), 1 tick per cell, az90 + az180 + game, no frame uncovered.
+- INV-04 velocity sheets with stops and trails for EVERY clip (startup, loop, settle, landing).
+- INV-05 large images of every key pose per view, base beside variant, looked at before the numbers; bone paths; OG pose checks.
+- INV-06 before/after against the base on the same montage-aligned frames, inherited parts included.
+- INV-07 blind critic: independent subagent, never the editor, gets only pack, criteria, brief (`final/critico_brief.md`).
+- INV-08 level 1 may discard a round, never promote it: PASS comes only from level 2.
+- INV-09 no image cap on level 2: the cap is "no frame uncovered"; cost caps (rule 4) apply to level 1 only.
+- INV-10 a check that gives false alarms is FIXED (measure corrected, recalibrated on an approved version with proof), never
+  softened or switched off; a block failing identically on the approved base still BLOCKS (only way out: the owner's exemption
+  row in `docs/notes/anim-approvate.md`, section "Esenzioni dei controlli").
+- INV-11 OG life metrics (impact spacing, hold + recoil, cascade, arc jitter, stops) and pose checks are part of level 2.
+- INV-12 stops are defects by default: a hold is accepted only as intended motion, exceptional, declared WITH a written reason
+  (card `hold_reason` / `hold_reasons`, capture `no_stop.hold_reasons`); the declaration never skips the judgement: the review
+  judges every declared hold on the video.
+
 ## Who runs it
 Antigravity through the `agy-bridge` MCP (`delegate`, then `follow_up` in the same session), started by a Claude session
 on the desktop. Fallback: Sonnet medium for the card edit, Haiku low for build, checks and captures.
@@ -62,12 +86,14 @@ Antigravity cannot run git in its sandbox: the Claude session commits card and s
    parked off stage and a dummy still within 15 m writes `<run>/<seq>/dummy_in_view.txt`, which makes
    `anim_capture_move` refuse the review pack (`stage: scene`). `PIE_CAPTURE_KEEP_ORDER=1` = old order (debug only).
    Untried in the editor until the K8 round 2 capture.
-3. **Gate: inherited blocks.** `anim_capture_move` no longer refuses a card whose failing `animpipe check` blocks ALL
-   fail with the SAME line on the approved base (K8 r1: legibility, contact_faf, hitstop_snap 14->15 of the snap, identical
-   on K7). Conditions: the base asset is listed in `docs/notes/anim-approvate.md`, and the base card's check JSON exists
-   (base run `"card"` or variant `"approved_base_card"`; run `animpipe check` on the base once). A new failure, or an
-   inherited one whose numbers changed, still blocks. `gate_report.json` lists the inherited blocks: copy them into the
-   handover. The hitbox-sync file must still name the edited clip (K8 r1's other gate failure; not changed).
+3. **Gate: inherited blocks BLOCK (changed 2026-11-24, INV-10; the 2026-11-23 rule that let them pass is revoked).**
+   A failing `animpipe check` block that fails with the SAME line on the approved base (K8 r1: legibility, contact_faf,
+   hitstop_snap 14->15, identical on K7) is reported as inherited in `gate_report.json` and still blocks the capture.
+   Only two ways out: a) the check measures wrong: fix it in `animpipe/checks.py` (or the script it runs), recalibrate on
+   the approved version and write the proof (log + command) in the handover; b) the base really has the defect: fix it in
+   the variant, or the owner writes an exemption row in `docs/notes/anim-approvate.md`, section `## Esenzioni dei controlli`
+   (`| <base asset> | <block> | <exact failing line> | owner <date>: "<words>" |`; a thread never writes it). The
+   hitbox-sync file must still name the edited clip.
 4. **Arm jump warning.** `animpipe check` warns `arm_jump <bone> fA->fB` when a hand or elbow (chest frame) moves
    >= 20 cm in one frame and >= 2.5x its neighbours, outside the hitbox-active frames (K8 r1: goal-post closing in one
    frame). Spread it over 2+ frames or add a breakdown; an intended snap goes in the card's `exemptions` (`arm_jump`).

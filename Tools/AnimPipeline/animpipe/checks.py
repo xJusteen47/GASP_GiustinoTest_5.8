@@ -441,6 +441,11 @@ def run(path, src=False):
     # tangent builds too; no switch turns it into a measure. Owner-wanted frozen poses are declared as holds, a wrong alarm is
     # fixed in curves.py, never silenced here
     res["block"]["stop_and_go"] = (sg_ok, sg_line)
+    # owner 2026-11-24: a hold exempts frames from stop_and_go only when it is declared WITH a reason; the review judges it on video anyway
+    from animpipe.card import holds_without_reason
+    nr = holds_without_reason(c)
+    res["block"]["hold_reason"] = (not nr, "holds declared with a reason" if not nr else
+                                   f"FAIL holds without a written reason at frames {nr}: add hold_reason / hold_reasons")
     res["measure"]["near_equal_keys"], res["measure"]["same_frame_arrivals"] = [(0, x) for x in _key_warnings(c, F, w)]
 
     for name, args in (("motion_curves", ["motion_curves.py", take, f"--sheet={move}", "--quiet"]),

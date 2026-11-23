@@ -2,6 +2,30 @@
 
 Generic method: `skills-public/anim-reviewer/SKILL.md`. Section numbers below refer to it. This file wins on conflicts.
 
+## INVARIANTI (non toccare per costo)
+Owner 2026-11-24 (scope: whole animation skill and review): quality equal to the OG skill, no compromise on false
+positives, savings only from automatic tools. Source with the reason for each item: `Tools/AnimPipeline/contract/invarianti-review.md`.
+Only the owner changes them, with a written decision; whoever slims this skill keeps this section as it is.
+`Tools/AnimPipeline/tests/test_review_invariants.py` fails if an id or a pack step goes missing.
+Level 1 (0-token gates, silhouette, trails, previews) only DISCARDS a round. Level 2 (the final review) always runs on every
+variant that can reach the owner, on the pack of `anim_review_pack` (`final/review_pack.json`, `complete: true`, else no review).
+- INV-01 identity traits first (rule 13a); a changed trait = FAIL until the owner decides.
+- INV-02 life before numbers, on the moving video: real + slow4x mp4 of base and variant before any number.
+- INV-03 slow motion of the WHOLE move (startup, actives, recovery, settle), 1 tick per cell, az90 + az180 + game, no frame uncovered.
+- INV-04 velocity sheets with stops and trails for EVERY clip (startup, loop, settle, landing).
+- INV-05 large images of every key pose per view, base beside variant, looked at before the numbers; bone paths; OG pose checks.
+- INV-06 before/after against the base on the same montage-aligned frames, inherited parts included.
+- INV-07 blind critic: independent subagent, never the editor, gets only pack, criteria, brief (`final/critico_brief.md`).
+- INV-08 level 1 may discard a round, never promote it: PASS comes only from level 2.
+- INV-09 no image cap on level 2: the cap is "no frame uncovered"; cost caps (rule 4) apply to level 1 only.
+- INV-10 a check that gives false alarms is FIXED (measure corrected, recalibrated on an approved version with proof), never
+  softened or switched off; a block failing identically on the approved base still BLOCKS (only way out: the owner's exemption
+  row in `docs/notes/anim-approvate.md`, section "Esenzioni dei controlli").
+- INV-11 OG life metrics (impact spacing, hold + recoil, cascade, arc jitter, stops) and pose checks are part of level 2.
+- INV-12 stops are defects by default: a hold is accepted only as intended motion, exceptional, declared WITH a written reason
+  (card `hold_reason` / `hold_reasons`, capture `no_stop.hold_reasons`); the declaration never skips the judgement: the review
+  judges every declared hold on the video.
+
 ## Roles, model, language
 - Model: Fable, high effort (project rule 3). One move per thread. Rule 10: nobody sends a move to the owner without
   having looked at the in-game video. Max 3 pose rounds (rule 10), then the owner decides.
@@ -70,8 +94,10 @@ Generic method: `skills-public/anim-reviewer/SKILL.md`. Section numbers below re
 - Read the `warn` lines of `<move>_check.txt`: `pose_coherence` (pelvis tilted, legs not re-keyed: look at the shins
   under the pelvis on those poses) and `arm_jump` (an arm crossing in one frame: look for the pop at 25 %). They are
   leads for the eye, not verdicts.
-- Blocks marked inherited in `gate_report.json` exist identically on the approved version: do not FAIL the variant for
-  them; list them once as "ereditati dalla base approvata" for the owner.
+- Blocks marked inherited in `gate_report.json` fail identically on the approved version. Since 2026-11-24 (INV-10) they
+  BLOCK: no capture happens unless the owner wrote an exemption row for that exact line in `anim-approvate.md`. Judge the
+  inherited parts on the video like the rest (INV-06); a defect shared with the base is still a FAIL `posa` for the variant
+  (the approved version stays locked, the fix goes in the variant). Report exempted blocks once to the owner.
 
 ## Life and speed (2026-11-23, skill audit option A; owner: same quality as the OG, speed comes from tools, never from cutting the review)
 - Nothing of the final review is shortened: watch the movement, life before numbers, identity traits, comparison with the

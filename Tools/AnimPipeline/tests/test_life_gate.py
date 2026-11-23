@@ -72,7 +72,8 @@ class TestGateOnEveryClip(unittest.TestCase):
             self.assertIn("ereditato", ns["msg"])
             # the owner-declared hold is the only way through
             g2 = capture_move.precapture_gate(root, VAR, BASE, h, [CLIP_VAR, shared], (0, 19), "settle", hitbox_required=False,
-                                              base_clips=[CLIP_BASE, shared], no_stop={"holds": {"AS_K6_SettleShared": "6-12"}})
+                                              base_clips=[CLIP_BASE, shared], no_stop={"holds": {"AS_K6_SettleShared": "6-12"},
+                                                       "hold_reasons": {"AS_K6_SettleShared": "test: owner-wanted landing hold"}})
             self.assertTrue(g2["ok"], g2["error"])
 
     def test_missing_dump_blocks(self):

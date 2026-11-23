@@ -1,6 +1,8 @@
-"""Compact review pack: dense frames only around the anchor and the FAF, at most 8 images per view, ONE grid per view.
+"""Review pack grids: dense frames around the anchor and the FAF, ONE grid per view (level 1 preview and part of level 2).
 
-The reviewer gets nothing else (project rule 4). Each grid has one row per run (base on top, variant below) on the SAME
+Level 2 (the final review) is NOT limited to these grids: final_review_pack.py adds the whole-move slowmo in 3 views, the velocity
+sheets of every clip and the key poses (contract/invarianti-review.md, owner rule 2026-11-24). MAX_IMAGES is the grid frame count
+of one view, never a cap on what the reviewer sees. Each grid has one row per run (base on top, variant below) on the SAME
 frames, so the A/B is homogeneous. Frames are capture frames (the f<NNN>.png of pie_capture_move.py).
 """
 from __future__ import annotations
@@ -159,7 +161,7 @@ def startup_frames(window: tuple[int, int], anchor: int | None, max_cells: int =
 
 
 def build_slowmo_tile(runs: dict[str, Path], seq: str, view: str, frames: list[int], out_png: Path, cols: int = 8,
-                      cell: int = 160, offsets: dict[str, int] | None = None) -> dict[str, Any]:
+                      cell: int = 160, offsets: dict[str, int] | None = None, label: str = "startup slowmo") -> dict[str, Any]:
     """ONE image, the startup in slow motion: consecutive capture frames (1 tick each) wrapped in rows of `cols`, a band per run
     (base band on top, variant band below, same frames). Skill audit 2026-11-23 (option A): the pack's grids sit around the
     anchor and the FAF, so the startup middle was never seen frame by frame and a stop read as a held pose."""
@@ -175,7 +177,7 @@ def build_slowmo_tile(runs: dict[str, Path], seq: str, view: str, frames: list[i
         k = int(offsets.get(name, 0))
         y0 = r * band
         draw.rectangle([0, y0, cols * cell, y0 + 15], fill=(0, 0, 0))
-        draw.text((4, y0 + 2), f"{name}  {seq}  {view}  startup slowmo, 1 tick per cell, f{frames[0] + k}-{frames[-1] + k}"
+        draw.text((4, y0 + 2), f"{name}  {seq}  {view}  {label}, 1 tick per cell, f{frames[0] + k}-{frames[-1] + k}"
                   if frames else name, fill=(255, 255, 0))
         for i, f0 in enumerate(frames):
             f = f0 + k

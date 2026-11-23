@@ -90,6 +90,16 @@ def hold_keys(c):
     return sorted({int(p["frame"]) for p in c["poses"] if p.get("hold") or p.get("impact")} | {int(f) for f in c.get("holds", [])})
 
 
+def holds_without_reason(c):
+    """Declared holds with no written reason (owner 2026-11-24: a stop is a defect by default, accepted only as intended motion,
+    exceptional and declared with its reason). Poses with "hold": true need "hold_reason"; card-level "holds" frames need an
+    entry in "hold_reasons" {frame: why}. Impact keys are contact keys (hitstop is the game's), not holds. Returns frames."""
+    hr = {str(k): v for k, v in (c.get("hold_reasons") or {}).items()}
+    bad = [int(p["frame"]) for p in c["poses"] if p.get("hold") and not str(p.get("hold_reason", "")).strip()]
+    bad += [int(f) for f in c.get("holds", []) if not str(hr.get(str(int(f)), "")).strip()]
+    return sorted(set(bad))
+
+
 def g2k(c, g):
     """0-based game frame -> anim frame (the clip at c.fps samples the 62.5 Hz game; at 62.5 the map is identity)."""
     return int(round(g * float(c["fps"]) / GAME_HZ))

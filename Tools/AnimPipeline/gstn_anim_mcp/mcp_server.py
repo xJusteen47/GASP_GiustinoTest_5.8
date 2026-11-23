@@ -1,6 +1,6 @@
 """Stdio MCP JSON-RPC 2.0 server for gstn-anim-mcp (pure Python 3.14 stdlib).
 
-Exposes 11 semantic animation tools so flash models never have to write 300+ lines of
+Exposes 12 semantic animation tools so flash models never have to write 300+ lines of
 quaternions/2-bone IK Python:
   - anim_inspect(asset, frame_range)
   - anim_apply_intent(src, dst, intent_json)
@@ -10,6 +10,7 @@ quaternions/2-bone IK Python:
   - anim_run_intent(src, dst, intent_json): snapshot + intent + gates in one call
   - anim_rollback(asset)
   - anim_capture_move(...): gated combat-move capture; anim_silhouette_check / anim_motion_overlay: offline reviewer images
+  - anim_review_pack(...): level-2 final review pack (whole-move slowmo 3 views, velocity sheets, key poses, critic brief)
 
 Replies are the full JSON (no indentation) by default; compact mode (<= 5 lines, details in a file, see compact.py) is\nopt-in: env GSTN_MCP_COMPACT=1 or a `compact: true` argument on the call. The tool list is a FIXED-order, constant\ntext prefix so provider prompt caches (DeepSeek prefix cache) keep hitting; never put variable data in it.
 
@@ -232,7 +233,7 @@ def _tool_defs() -> list[dict[str, Any]]:
                 "Writes gate_report.json and alignment.json (montage-aligned grids/videos). A run with \"hitbox_view\": true (cvars "
                 "gstn.Combat.Debug.Hitboxes 1) stays out of the review and gets hitbox-drawn videos in <out>/hitbox/ (owner only). Every run must set "
                 "gstn.Combat.Debug.Hitboxes (0 review, 1 hitbox_view). Card blocks failing identically on an approved base "
-                "(anim-approvate.md; base \"card\" or \"approved_base_card\") are inherited, not blocking. Whiffs are captured "
+                "(anim-approvate.md; base \"card\" or \"approved_base_card\") are reported as inherited and STILL BLOCK unless the owner wrote an exemption row in anim-approvate.md (owner rule 2026-11-24: a false alarm is fixed, never softened). Whiffs are captured "
                 "before hits; a dummy in view during a whiff voids the pack."
             ),
             "inputSchema": {
@@ -252,7 +253,9 @@ def _tool_defs() -> list[dict[str, Any]]:
                     "hitbox_required": {"type": "boolean", "default": True},
                     "no_stop": {"type": "object", "description": "Anti-stop gate on EVERY clip in each run's clips (startup, loop, settle), "
                                 "inherited clips included, always blocking: {stop_cm 3.5, still_run 3, max_ratio 4, holds {clip: 'a-b'} (owner-wanted "
-                                "holds only), startup {clip: 'a-b'}}."},
+                                "holds only, exceptional), hold_reasons {clip: 'why'} (required for each hold), startup {clip: 'a-b'}}."},
+                    "identity": {"type": "array", "items": {"type": "string"}, "description": "2-3 identity traits of the brief (rule 13a), for the level-2 pack."},
+                    "key_frames": {"type": "array", "items": {"type": "integer"}, "description": "Capture frames of the key poses (large images in the level-2 pack)."},
                     "motion": {"type": "object", "description": "Life images of the pack: {views 'az90,az180', frame_range, slowmo_cells 24, slowmo_cols 8}."},
                 },
                 "required": ["kit", "sequences", "variant_runs"],
@@ -294,6 +297,34 @@ def _tool_defs() -> list[dict[str, Any]]:
                     "out": {"type": "string"}, "holds": {"type": "string", "description": "owner-wanted holds 'a-b,c-d' (steps not marked STOP)"},
                 },
                 "required": ["asset"],
+            },
+        },
+        {
+            "name": "anim_review_pack",
+            "description": (
+                "Level-2 (final) review pack, deterministic, 0 tokens, never trimmed (contract/invarianti-review.md): real + slow4x "
+                "videos listed, WHOLE-move slowmo 1 tick per cell in az90+az180+game with base band over variant and frame "
+                "coverage, velocity sheets (stops, trails, speed strip) for EVERY variant clip, large key poses base vs variant, "
+                "declared holds with their reasons to judge on video, blind-critic brief. Writes <out>/final/review_pack.json; "
+                "complete=false lists the missing invariants and means no level-2 review. Example: {\"out\": "
+                "\"docs/notes/reviews/dk/r3\", \"runs\": {\"base\": \"Saved/.../base\", \"k8\": \"Saved/.../k8\"}, "
+                "\"sequences\": [\"dropkick_hit\"], \"window\": [100, 220], \"identity\": [\"legs together\", \"arms "
+                "crossed\"], \"anchor\": 140, \"faf\": 200, \"variant_clips\": [\"AS_X_Startup\", \"AS_X_Settle\"], "
+                "\"base_clips\": [\"AS_B_Startup\", \"AS_B_Settle\"]}."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "out": {"type": "string"}, "runs": {"type": "object"}, "sequences": {"type": "array", "items": {"type": "string"}},
+                    "window": {"type": "array", "items": {"type": "integer"}}, "identity": {"type": "array", "items": {"type": "string"}},
+                    "key_frames": {"type": "array", "items": {"type": "integer"}}, "anchor": {"type": "integer"},
+                    "faf": {"type": "integer"}, "views": {"type": "string", "default": "az90,az180,game"},
+                    "variant_clips": {"type": "array", "items": {"type": "string"}},
+                    "base_clips": {"type": "array", "items": {"type": "string"}}, "holds": {"type": "object"},
+                    "hold_reasons": {"type": "object"}, "videos": {"type": "array", "items": {"type": "string"}},
+                    "brief": {"type": "string"},
+                },
+                "required": ["out", "runs", "sequences", "window", "identity"],
             },
         },
     ]
@@ -383,7 +414,11 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
             round=args.get("round") or "r1", objective=args.get("objective") or "", edit_window=args.get("edit_window"),
             window=args.get("window"), anchor=args.get("anchor"), faf=args.get("faf"),
             hitbox_required=bool(args.get("hitbox_required", True)), no_stop=args.get("no_stop"), motion=args.get("motion"),
+            identity=args.get("identity"), key_frames=args.get("key_frames"),
         )
+    if name == "anim_review_pack":
+        import final_review_pack
+        return final_review_pack.build_final_pack(**{k: v for k, v in args.items() if k != "compact"})
     if name in ("anim_silhouette_check", "anim_motion_overlay"):
         mod = __import__("silhouette" if name == "anim_silhouette_check" else "motion_overlay")
         fn = getattr(mod, name)

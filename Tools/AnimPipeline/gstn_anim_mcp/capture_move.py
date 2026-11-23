@@ -52,7 +52,7 @@ SEGMENTS = [("upperarm_MainPoint_l", "lowerarm_MainPoint_l"), ("lowerarm_MainPoi
 Runner = Callable[[list, dict, str], Any]
 # Blocks that are never inherited from an approved base (skill audit 2026-11-23): a stop is judged again on every variant, the
 # approved version stays locked and the fix goes in a variant (K6 settle, still ~6 frames, was inherited and never re-judged)
-NON_INHERITABLE = ("stop_and_go",)
+NON_INHERITABLE = ("stop_and_go", "hold_reason")
 
 
 def _repo(root: str | Path | None) -> Path:
@@ -154,7 +154,7 @@ def precapture_gate(root: str | Path | None, asset: str, base_asset: str | None 
 
     no_stop (skill audit 2026-11-23, option A): every clip in `clips` (startup, loop, settle, landing: list them all) passes
     no_stop_gate.check on its joints dump. Options {"stop_cm", "max_ratio", "still_run", "holds": {clip name: "a-b,.."},
-    "startup": {clip name: "a-b"}}. A clip also in `base_clips` is INHERITED: judged again and blocking all the same (the
+    "hold_reasons": {clip name: "why the owner wants it still"} (required for every clip with holds), "startup": {clip name: "a-b"}}. A clip also in `base_clips` is INHERITED: judged again and blocking all the same (the
     approved version stays locked, the fix goes in a variant); the line says "ereditato". Always blocking (owner 2026-11-24: no
     quality cut, a false alarm is fixed in the measure, never silenced): there is no option to turn it off."""
     repo = _repo(root)
@@ -193,6 +193,13 @@ def precapture_gate(root: str | Path | None, asset: str, base_asset: str | None 
             bad.append(nm)
             lines.append(f"{nm}: joints dump missing (clip_joints_dump_ue.py), cannot measure stops")
             continue
+        if (ns.get("holds") or {}).get(nm) and not str((ns.get("hold_reasons") or {}).get(nm, "")).strip():
+            # owner 2026-11-24: a stop is a defect by default; a hold is accepted only as intended motion, exceptional and
+            # declared WITH its reason. A hold without a written reason does not count as declared (and the review still judges
+            # every declared hold on the video: INV-12)
+            bad.append(nm)
+            lines.append(f"{nm}: hold {ns['holds'][nm]} declared without a reason: add no_stop.hold_reasons {{\"{nm}\": \"why\"}}")
+            continue
         r = no_stop_gate.check(j, (ns.get("holds") or {}).get(nm), (ns.get("startup") or {}).get(nm),
                                float(ns.get("stop_cm", no_stop_gate.DEFAULTS["stop_cm"])),
                                float(ns.get("max_ratio", no_stop_gate.DEFAULTS["max_ratio"])),
@@ -224,11 +231,15 @@ def _check_json(repo: Path, card: str | Path, check_json: str | Path | None = No
 
 def inherited_blocks(repo: Path, failing: dict[str, str], base_asset: str | None, base_card: str | Path | None,
                      base_check_json: str | Path | None = None) -> tuple[dict[str, str], str]:
-    """skill-k8 (K8 round 1, 2026-11-23): K8 failed the gate on 3 blocks (legibility, contact_faf, hitstop_snap of the 14->15 snap) that
-    fail IDENTICALLY on K7, which the owner approved; the variant never touched those keys, so the gate blocked on a false positive.
-    A failing block is INHERITED (reported, not blocking) only when ALL hold: the base asset is a locked version in
-    docs/notes/anim-approvate.md, the base card's animpipe check exists, and the same block fails there with the SAME line (same numbers).
-    Anything else stays blocking: a new failure, or an inherited one that got worse or changed. Returns ({block: base line}, reason)."""
+    """Which failing blocks also fail, with the SAME line, on the approved base. INFORMATION ONLY: an inherited block still blocks.
+    History: skill-k8 (btrk7b, 2026-11-23) made these blocks non-blocking after K8 r1 failed legibility, contact_faf and hitstop_snap
+    exactly like the approved K7. Owner rule 2026-11-24 (scope: whole animation skill and review): no compromise on false positives,
+    a check that errs is FIXED, never softened. So a block failing on the base too has only two ways out:
+      a) the check measures wrong: fix the measure in animpipe/checks.py, recalibrate on the approved version with proof (handover);
+      b) the base really has that defect and the owner accepts it: an exemption row in docs/notes/anim-approvate.md written with the
+         owner's words, per base, block and exact failing line (owner_exemptions below).
+    Without one of the two it blocks. stop_and_go (NON_INHERITABLE) is never even reported as inherited.
+    Returns ({block: base line}, reason)."""
     if not failing or not base_asset or not (base_card or base_check_json):
         return {}, "no approved base card to compare with"
     appr = repo / "docs" / "notes" / "anim-approvate.md"
@@ -241,6 +252,34 @@ def inherited_blocks(repo: Path, failing: dict[str, str], base_asset: str | None
     inh = {k: bblk[k].get("line", "") for k, line in failing.items()
            if k not in NON_INHERITABLE and k in bblk and not bblk[k].get("ok") and bblk[k].get("line", "") == line}
     return inh, "ok"
+
+
+EXEMPT_HEADING = "## Esenzioni dei controlli"
+
+
+def owner_exemptions(repo: Path, base_asset: str | None) -> dict[str, list[str]]:
+    """Owner-written exemptions for an approved base, read from docs/notes/anim-approvate.md under EXEMPT_HEADING. Row format:
+    | <base asset> | <block> | <exact failing line of animpipe check> | owner <date>: "<owner's words>" |
+    A row without the owner's quoted words (a "\"" pair) is ignored: an exemption is the owner's decision, never a thread's.
+    The line must match the variant's failing line exactly, so the exemption covers those frames and numbers only: if the variant
+    changes them (worse or different), it blocks again. stop_and_go is never exempted here (NON_INHERITABLE)."""
+    appr = repo / "docs" / "notes" / "anim-approvate.md"
+    if not base_asset or not appr.exists():
+        return {}
+    txt = appr.read_text(encoding="utf-8")
+    if EXEMPT_HEADING not in txt:
+        return {}
+    out: dict[str, list[str]] = {}
+    for row in txt.split(EXEMPT_HEADING, 1)[1].splitlines():
+        if row.startswith("## "):
+            break
+        cells = [c.strip() for c in row.strip().strip("|").split("|")]
+        if len(cells) < 4 or cells[0] != _name(base_asset) or cells[1] in NON_INHERITABLE:
+            continue
+        if "owner" not in cells[3].lower() or cells[3].count('"') < 2:
+            continue
+        out.setdefault(cells[1], []).append(cells[2].strip("`"))
+    return out
 
 
 def card_report(root: str | Path | None, asset: str, card: str | Path, check_json: str | Path | None = None,
@@ -269,14 +308,18 @@ def card_report(root: str | Path | None, asset: str, card: str | Path, check_jso
     blocks = {k: bool(v.get("ok")) for k, v in (rep.get("block") or {}).items()}
     failing = {k: v.get("line", "") for k, v in (rep.get("block") or {}).items() if not v.get("ok")}
     inh, why = inherited_blocks(repo, failing, base_asset, base_card, base_check_json)
-    new_fail = [k for k in failing if k not in inh]
-    ok_c = rep.get("verdict") == "PASS" or (bool(rep) and not new_fail)
-    checks.append({"check": "animpipe_check_pass", "ok": ok_c, "msg": "ok" + (f" (inherited from the approved base, not blocking: "
-                   f"{', '.join(inh)})" if inh else "") if ok_c else
+    ex = owner_exemptions(repo, base_asset)
+    exempted = {k: line for k, line in failing.items() if line and line in ex.get(k, [])}
+    still = [k for k in failing if k not in exempted]          # inherited blocks stay here: they block (owner rule 2026-11-24)
+    ok_c = rep.get("verdict") == "PASS" or (bool(rep) and not still)
+    inh_note = (f"; also failing identically on the approved base (still blocking: fix the check with proof, or the owner writes an "
+                f"exemption in anim-approvate.md): {', '.join(k for k in inh if k in still)}" if any(k in still for k in inh)
+                else f"; base comparison: {why}" if why != "ok" else "")
+    checks.append({"check": "animpipe_check_pass", "ok": ok_c, "msg": "ok" + (f" (owner exemptions: {', '.join(exempted)})"
+                   if exempted else "") if ok_c else
                    (f"no animpipe check for {move} ({chk}): run animpipe check" if not rep else
-                    f"animpipe check is {rep.get('verdict')} (blocking: {', '.join(new_fail) or '?'}"
-                    + (f"; inherited, not blocking: {', '.join(inh)}" if inh else f"; inheritance: {why}") + ")"),
-                   "blocks": blocks, "inherited": inh})
+                    f"animpipe check is {rep.get('verdict')} (blocking: {', '.join(still) or '?'}" + inh_note + ")"),
+                   "blocks": blocks, "inherited": inh, "exempted": exempted})
     stale = [n for n, f in (("card", cp), ("build", bld)) if chk.exists() and f.exists() and f.stat().st_mtime > chk.stat().st_mtime]
     checks.append({"check": "check_fresh", "ok": not stale and chk.exists(),
                    "msg": "ok" if not stale and chk.exists() else f"check older than the {', '.join(stale) or 'card'}: rerun animpipe build + check"})
@@ -287,10 +330,11 @@ def card_report(root: str | Path | None, asset: str, card: str | Path, check_jso
         manifest.record_report(repo, asset, ihash, {"ok": True, "verdict": "PASS", "gates": {"status": "PASS"}})
         m = manifest.load(repo, asset)
         m["last_report"].update({"source": "card", "card": str(cp.relative_to(repo)) if cp.is_relative_to(repo) else str(cp),
-                                 "check_json": str(chk), "blocks": blocks, "inherited": inh})
+                                 "check_json": str(chk), "blocks": blocks, "inherited": inh,
+                                 "exempted": exempted})
         manifest.save(repo, asset, m)
     return {"ok": ok, "source": "card", "asset": _name(asset), "intent_hash": ihash, "checks": checks, "inherited": inh,
-            "error": None if ok else "; ".join(x["msg"] for x in checks if not x["ok"])}
+            "exempted": exempted, "error": None if ok else "; ".join(x["msg"] for x in checks if not x["ok"])}
 
 
 # ------------------------------------------------------------------------------------------------------------- capture
@@ -359,7 +403,8 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
                       root: str | Path | None = None, runner: Runner | None = None, build: str | None = None,
                       hitbox_required: bool = True, min_move_cm: float = 2.0, min_rot_deg: float = 3.0,
                       raw_dir: str = "", max_images: int = 8, dense_radius: int = 4,
-                      no_stop: dict[str, Any] | None = None, motion: dict[str, Any] | None = None) -> dict[str, Any]:
+                      no_stop: dict[str, Any] | None = None, motion: dict[str, Any] | None = None,
+                      identity: list[str] | None = None, key_frames: list[int] | None = None) -> dict[str, Any]:
     """variant_runs[0] is the base: {"name","asset","clips":["/Game/.."],"cvars":"a 1;b 2","kit"?}; the others are variants with
     "intent_hash" (hash of anim_run_intent dry run; see manifest.intent_hash) or "card" (card-authored poses, see card_report), and
     an optional "kit" (default: `kit`) and "assert" (default: assert_spec). All runs share ONE Play session. A run with
@@ -504,7 +549,25 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
     slow_mp4 = [f"{out_rel}/{r['name']}_{s}_slow4x.mp4" for r in review for s in sequences]
     (repo / out_rel / "pack.json").write_text(json.dumps(dict(order, slowmo_mp4=slow_mp4, stops=life["stops"],
                                                                 errors=life["errors"]), indent=1), encoding="utf-8")
+    # Level 2 (final review) material, never trimmed: whole-move slowmo in 3 views, velocity sheets of every clip, key poses,
+    # base comparison, critic brief (contract/invarianti-review.md). complete false = no level-2 review (INV-08: the gates above
+    # only discard, they never promote)
+    import final_review_pack
+    var = review[1] if len(review) > 1 else review[0]
+    try:
+        fin = final_review_pack.build_final_pack(
+            out_rel, {r["name"]: run_dirs[r["name"]] for r in review}, sequences, list(cap_win), list(identity or []),
+            key_frames, anchor, faf, _views_list(views), [_name(c) for c in (var.get("clips") or [var["asset"]])],
+            [_name(c) for c in (review[0].get("clips") or [review[0]["asset"]])], (no_stop or {}).get("holds"),
+            (no_stop or {}).get("hold_reasons"), [v for v in slow_mp4 + [x.replace("_slow4x", "_real") for x in slow_mp4]],
+            root=repo)
+    except Exception as exc:  # noqa: BLE001 - reported: an incomplete pack is never reviewed
+        fin = {"complete": False, "missing": ["build"], "invariants": {}, "errors": [str(exc)]}
+    final = {"complete": fin["complete"], "missing": fin["missing"], "json": f"{out_rel}/final/review_pack.json",
+             "notes": {k: fin["invariants"][k]["note"] for k in fin["missing"] if k in fin.get("invariants", {})},
+             "errors": fin.get("errors", [])}
     return {"ok": True, "verdict": "PASS", "captured": bool(todo), "reused": sorted(reuse), "out_dir": out_rel,
+            "final_pack": final, "review_ready": fin["complete"],
             "pack": {"frames": pack["frames"], "grids": [g["png"] for g in pack["grids"]],
                      "missing_frames": sum(len(g["missing"]) for g in pack["grids"]),
                      "offsets": {s: a["offsets"] for s, a in pack["alignment"].items()},
@@ -513,8 +576,10 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
                      "images": order["images"], "over_budget": order["over_budget"], "slowmo_mp4": slow_mp4,
                      "stops": life["stops"], "life_errors": life["errors"]},
             "videos_failed": sum(1 for c in video_rc if c != 0), "minutes": float(f"{minutes:.2f}"), "plan": plan,
-            "next": "review pack = pack.json images (slowmo startup tile, velocity sheets, every grid) + the slow4x mp4 of each run "
-                    "(or the slowmo tile as the frame-by-frame sequence); commit the out_dir"
+            "next": ("level-2 review = final/review_pack.json in its order (videos, whole-move slowmo 3 views, velocity sheets, "
+                     "key poses) + pack.json grids; blind critic gets final/critico_brief.md; commit the out_dir"
+                     if fin["complete"] else "NO level-2 review: final pack incomplete (" + ", ".join(fin["missing"])
+                     + "); fix and rebuild with final_review_pack.py, the gates passing is not a PASS")
                     + ("; PACK OVER 8 IMAGES: nothing was cut, write it in the handover" if order["over_budget"] else "")}
 
 
