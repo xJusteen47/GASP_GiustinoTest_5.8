@@ -48,6 +48,9 @@ UGSTN_GA_LinkThrowForward::UGSTN_GA_LinkThrowForward(const FObjectInitializer& O
 	: Super(ObjectInitializer)
 {
 	BuildThrow(30, 24, 8, 8.f, 1600.f, 40.f);
+	// grab-link, instant turn ergonomics: the F. slot answers every tilt, the start aim turns the grabber (and its parked partner) to the stick
+	Timeline.AimPolicy = EGSTN_AimPolicy::SnapIfAimOrTilt;
+	Timeline.MaxTurnDegrees = 180.f;
 }
 
 UGSTN_GA_LinkThrowBack::UGSTN_GA_LinkThrowBack(const FObjectInitializer& ObjectInitializer)
@@ -66,4 +69,18 @@ UGSTN_GA_LinkThrowDown::UGSTN_GA_LinkThrowDown(const FObjectInitializer& ObjectI
 	: Super(ObjectInitializer)
 {
 	BuildThrow(34, 28, 14, 6.f, 900.f, 80.f);
+}
+
+UGSTN_GA_LinkThrowNeutral::UGSTN_GA_LinkThrowNeutral(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	BuildThrow(32, 26, 10, 7.f, 1700.f, 88.f);
+}
+
+UGSTN_GA_LinkThrowCrouchForward::UGSTN_GA_LinkThrowCrouchForward(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+	BuildThrow(34, 28, 14, 6.f, 900.f, 80.f);
+	Timeline.AimPolicy = EGSTN_AimPolicy::SnapIfAimOrTilt;
+	Timeline.MaxTurnDegrees = 180.f;
 }

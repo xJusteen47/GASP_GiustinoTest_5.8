@@ -248,6 +248,32 @@ class default of a Blueprint child of a `UGSTN_GA_LinkThrow*`, via the shared `U
 The project's three hub archetypes (`KIT_Test_Light/Medium/Heavy`) are written with them by `Tools/GAS/setup_test_kit_archetypes.py`; harness
 `kit_scenarios.SUITE_ARCHETYPES`.
 
+## Grab hold, walking throws (grab-link, owner 2026-11-23)
+
+Scope: the Overlord grabbing a human-size target; every kit gets it through the project settings. Not compiled in the cloud: see
+`docs/notes/grab-link-verifica-editor.md` for the desktop checks.
+
+- **Hold by the neck**: `FGSTN_GrabHoldPose` (settings `HoldPose`, a kit's `bOverrideHoldPose` + `HoldPose`): the grabbed entity's baked `NeckSocketName`
+  (`neck_01`, reference pose, baked with the role sockets) on `HoldPointCm` of the grabber's root space. `FGSTN_LinkTickExtension::StepNeckHold` writes it
+  once per link as the grabbed side's `AnchorOverride` (`UGSTN_LinkMath::NeckHoldAnchor`), so the snapshot, the leash and the presentation use it as they
+  use a drill anchor. One frame of the type's offset on the first Active frame. Test `GSTNLink.Core.GrabHold.NeckOnHoldPoint`.
+- **Walk and jump while holding**: `UGSTN_GE_GrabHold` is the grab type's grabber `LinkEffect` (written by `Tools/GAS/setup_defence_link_content.py`):
+  `MultiplyCompound` on `WalkSpeed`, `JumpVelocity`, `AirJumpVelocity` by `HoldWalkScale` / `HoldJumpScale` (TEST VALUES 0.75 / 0.7).
+- **Notation throw input** (`ThrowInputMode=Notation`, the plugin default now): the stick walks; Attack neutral = N. (`Command.Link.Throw.Neutral`), Attack +
+  tilt = F., Attack + Crouch held = Cr. (`Throw.Down`), Attack + Crouch + tilt = Cr.F. (`Throw.CrouchForward`); the pummel moves to Strong neutral; up and
+  back throws are hidden. `FGSTN_LinkThrowSet` gained `Neutral` and `CrouchForward`; fallback `UGSTN_GA_LinkThrowNeutral` / `CrouchForward` (placeholders).
+  The harness scenarios `kit_throw_stick_*` need `ThrowInputMode=Stick`.
+- **Turn ergonomics** (`GrabTurnErgonomics`): `Instant` (default) = F. on every tilt, and the F. / Cr.F. throws start with `AimPolicy = SnapIfAimOrTilt`,
+  `MaxTurnDegrees = 180` (GSTNCombat's move start aim: no turning code here); `BackThrow` = F. on any tilt but back, B. on back.
+- **Put-down with dodge** (`bPutDownWithDodge`, owner: to confirm): `Command.Link.Release.PutDown`, a dodge press bound to the grabber's own Release ability.
+- **Escape hit** (`FGSTN_GrabEscapeHit` on the GRABBED kit's link extension, off by default = off for players): on an Escape break the watchdog posts the
+  hit to the grabber, stamped on the break frame (`UGSTN_LinkWatchdog::PostEscapeHit`, log `GrabEscapeHit`).
+- **Max hold**: the kit's `FGSTN_MashRule` (`MinFrames`/`MaxFrames`), unchanged.
+- **GSTN Debug** (`gstn.Grab.*`, one control each): `TurnMode` (0 setting, 1 instant, 2 back throw; next kit compile), `WalkScale`, `JumpScale` (< 0 =
+  setting), `HoldByNeck` (0 data, 1 on, 2 off), `MaxHoldFrames` (0 = mash rule), `EscapeHitForAll`. Same values on every machine (PIE: one process).
+
+Tests `GSTNLink.Core.KitThrows.NotationPicksThrow`, `GSTNLink.Core.GrabHold.{NeckOnHoldPoint, EscapeHitOffByDefault}`.
+
 ## Predicted partner presentation (FP G1)
 
 On the machine of the INITIATOR of a partner move (a client whose owner is locally controlled), the partner's authored reaction is shown from the initiator's own predicted fragment, about one network round trip earlier than the synced copy. `FGSTN_LinkPartnerWindow::BuildFromInitiator` (`Sim/GSTN_LinkPartnerWindow.h`, pure, deterministic) derives the window from the fragment's active move: start = S + max(PartnerStartOffsetFrames, 1), end = start + the partner timeline's TotalFrames (else MaxDurationFrames). G4 reuses the same window to promote the partner to forward prediction. The presentation component ticks an early function (TG_PrePhysics, after the Network Prediction finalize) that publishes the reaction on the partner's component (`GetPredictedPartnerMove`, `OnPredictedPartnerMove` Started / Ended / Dropped) and, when the partner timeline's montage is already loaded, leads it on the partner's mesh (the instance shows the later of its position and the predicted one; at the montage's end it is stopped and the late synced copy is kept off until the partner's shown state is past the move). A vanished initiator record before the partner's start, or an abort, drops it at once (a snap). Presentation only, no simulation state. cvar `gstn.Link.PredictPartnerPresentation` (default 1); never on a dedicated server, on the partner's own machine or on a listen host. Harness: `scenario_link_pair_move_delay` and `scenario_link_pair_move_delay_throw` in `Tools/GASNPPTest/mount_scenarios.py` (in `SUITE_MOUNT`).

@@ -70,6 +70,9 @@ public:
 			const FGSTN_LinkKitExtension* KitExtension = UGSTN_LinkRequirementLibrary::FindKitExtension(Kit);
 			FGSTN_KitThrowFill Fill(Settings.ThrowInputMode);
 			Fill.bSpecialCrouchGrab = Settings.bGrabWithSpecialCrouch;
+			// grab-link: the turn ergonomics (cvar gstn.Grab.TurnMode over the setting) and the dodge put-down
+			Fill.Ergonomics = Settings.GetEffectiveGrabTurn();
+			Fill.bPutDownWithDodge = Settings.bPutDownWithDodge;
 			Fill.KitThrows = KitExtension ? &KitExtension->Throws : nullptr;
 			Fill.Fallback = &Settings.FallbackThrows;
 			Fill.SlotOverrides = &Settings.ThrowSlotOverrides;

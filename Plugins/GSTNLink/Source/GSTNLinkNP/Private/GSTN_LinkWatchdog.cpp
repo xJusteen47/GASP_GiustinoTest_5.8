@@ -14,7 +14,11 @@
 #include "GSTN_LinkTags.h"
 #include "Placement/GSTN_LinkExitPlacer.h"
 #include "Rules/GSTN_LinkRule_Grab.h"
+#include "Sim/GSTN_LinkAttach.h"
 #include "Sim/GSTN_LinkFragment.h"
+#include "Sim/GSTN_LinkThrow.h"
+#include "Simulation/GSTN_HitInbox.h"
+#include "Data/GSTN_LinkKitExtension.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 #include "State/GSTN_LinkMath.h"
@@ -401,6 +405,46 @@ void UGSTN_LinkWatchdog::OnPostActorTick(UWorld* World, ELevelTick TickType, flo
 	}
 }
 
+void UGSTN_LinkWatchdog::PostEscapeHit(UGSTN_CombatWorldSubsystem& Combat, const UGSTN_LinkRegistry& Registry, const FGSTN_LinkWatchdogBreak& Break,
+	const TArray<FGSTN_LinkWatchdogEntity>& Entities, const TMap<int32, const AActor*>& Actors, int32 Frame)
+{
+	// grab-link (owner 2026-11-23): a PVE enemy that mashes free hurts its grabber. Which side is the grabbed: the one holding the parked role
+	const UGSTN_LinkTypeDefinition* Definition = Registry.GetDefinition(Break.LinkTypeIndex);
+	if (!Definition || Break.Channel != EGSTN_LinkChannel::Body || Break.PartnerId == INDEX_NONE)
+	{
+		return;
+	}
+	const int32 ParkedRole = Definition->GetParkedRoleIndex();
+	const FGSTN_LinkWatchdogEntity* Grabbed = nullptr;
+	const FGSTN_LinkWatchdogEntity* Grabber = nullptr;
+	for (const FGSTN_LinkWatchdogEntity& Entity : Entities)
+	{
+		if (Entity.EntityId != Break.EntityId && Entity.EntityId != Break.PartnerId)
+		{
+			continue;
+		}
+		(Entity.Links.Body.Role == ParkedRole ? Grabbed : Grabber) = &Entity;
+	}
+	if (!Grabbed || !Grabber || Definition->GetRoleDef(ParkedRole).bActsWhileLinked)
+	{
+		return;
+	}
+	const AActor* const* GrabbedActor = Actors.Find(Grabbed->EntityId);
+	const FGSTN_LinkBodyData* Body = GrabbedActor ? FGSTN_LinkAttach::Find(*GrabbedActor) : nullptr;
+	const FGSTN_LinkKitExtension* Kit = Body ? Body->GetKitExtension() : nullptr;
+	const bool bForAll = UGSTN_LinkSettings::GetEscapeHitForAll();
+	if (!(Kit && Kit->EscapeHit.bDamageGrabberOnEscape) && !bForAll)
+	{
+		return;
+	}
+	const FGSTN_HitData& Hit = Kit ? Kit->EscapeHit.Hit : FGSTN_GrabEscapeHit().Hit;
+	// Stamped on the break frame, as the Break command: both are consumed on Frame + 1, so the grabber is free when the hit lands
+	const FGSTN_HitInboxEntry Entry = FGSTN_LinkThrow::MakeEscapeEntry(Hit, Frame, Grabbed->EntityId, Grabbed->Transform, Grabber->Transform.GetLocation());
+	Combat.PostHit(Grabber->EntityId, Entry);
+	UE_LOG(LogGSTNLinkWatchdog, Log, TEXT("GrabEscapeHit frame=%d grabbed=%d grabber=%d damage=%.1f kb=%.0f"), Frame, Grabbed->EntityId, Grabber->EntityId,
+		Hit.Damage, Hit.BaseKnockback);
+}
+
 int32 UGSTN_LinkWatchdog::Evaluate()
 {
 	UWorld* World = GetWorld();
@@ -536,6 +580,10 @@ int32 UGSTN_LinkWatchdog::Evaluate()
 		NumOrphans += Break.bOrphan ? 1 : 0;
 		LastBreak = Break;
 		LastBreakFrame = Frame;
+		if (Break.Reason == EGSTN_LinkBreakReason::Escape)
+		{
+			PostEscapeHit(*Combat, *Registry, Break, Entities, Actors, Frame);
+		}
 		UE_LOG(LogGSTNLinkWatchdog, Log, TEXT("Link break at frame %d: entity %d and %d, type %d, serial %d, reason %d%s%s"), Frame, Break.EntityId, Break.PartnerId,
 			Break.LinkTypeIndex, Break.Serial, static_cast<int32>(Break.Reason), Break.bOrphan ? TEXT(", orphan") : TEXT(""),
 			Break.bExitFallback ? TEXT(", exit fallback (no free place)") : TEXT(""));

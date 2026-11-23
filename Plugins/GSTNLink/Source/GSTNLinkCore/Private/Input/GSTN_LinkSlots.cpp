@@ -172,6 +172,80 @@ namespace
 	}
 }
 
+FGSTN_KitThrowFill::FGSTN_KitThrowFill(EGSTN_LinkThrowInputMode InMode)
+	: Mode(InMode)
+	, Ergonomics(EGSTN_GrabTurnErgonomics::Instant)
+{
+}
+
+FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildThrowSlot(const FGameplayTag& ThrowCommand, EGSTN_LinkThrowInputMode Mode, EGSTN_GrabTurnErgonomics Ergonomics)
+{
+	using namespace GSTNLinkTags;
+	if (Mode != EGSTN_LinkThrowInputMode::Notation)
+	{
+		return BuildThrowSlot(ThrowCommand, Mode);
+	}
+	const int32 Role = RoleSlotPriorityOffset;
+	const FNativeGameplayTag& Attack = GSTNCombatButtonTags::Button_Attack;
+	const FNativeGameplayTag& Crouch = GSTNCombatButtonTags::Button_Crouch;
+	const FLayoutFunction ThrowAttack(TEXT("Link.ThrowAttack"), &Attack);
+	const FLayoutFunction LinkCrouch(TEXT("Link.Crouch"), &Crouch);
+	const bool bInstant = Ergonomics == EGSTN_GrabTurnErgonomics::Instant;
+	// Instant: F. answers every tilt and its start aim (SnapIfAimOrTilt) turns the grabber to the stick; with a back throw the back sector is B.'s
+	const FGSTN_DirectionMask ForwardMask = bInstant ? GSTN_DirectionMasks::AnyTilted
+		: static_cast<FGSTN_DirectionMask>(GSTN_DirectionMasks::AnyTilted & ~GSTN_DirectionMasks::FacingBack);
+	if (ThrowCommand == Command_Link_Throw_Neutral)
+	{
+		return WithLayout(MakeSlot(ThrowCommand, { MakePress({ Attack }), MakeNeutralStick() }, Role), { ThrowAttack });
+	}
+	if (ThrowCommand == Command_Link_Throw_Forward)
+	{
+		return WithLayout(MakeSlot(ThrowCommand, { MakePress({ Attack }), MakeTilted(ForwardMask) }, Role + 1), { ThrowAttack });
+	}
+	if (ThrowCommand == Command_Link_Throw_Back && !bInstant)
+	{
+		return WithLayout(MakeSlot(ThrowCommand, { MakePress({ Attack }), MakeTilted(GSTN_DirectionMasks::FacingBack) }, Role + 1), { ThrowAttack });
+	}
+	if (ThrowCommand == Command_Link_Throw_Down)
+	{
+		return WithLayout(MakeSlot(ThrowCommand, { MakePress({ Attack }), MakeHold(Crouch), MakeNeutralStick() }, Role + 2), { ThrowAttack, LinkCrouch });
+	}
+	if (ThrowCommand == Command_Link_Throw_CrouchForward)
+	{
+		return WithLayout(MakeSlot(ThrowCommand, { MakePress({ Attack }), MakeHold(Crouch), MakeTilted(GSTN_DirectionMasks::AnyTilted) }, Role + 3),
+			{ ThrowAttack, LinkCrouch });
+	}
+	return FGSTN_InputSlotSpec();
+}
+
+TArray<FGameplayTag> UGSTN_LinkSlots::GetThrowCommands(EGSTN_LinkThrowInputMode Mode, EGSTN_GrabTurnErgonomics Ergonomics)
+{
+	using namespace GSTNLinkTags;
+	if (Mode == EGSTN_LinkThrowInputMode::Notation)
+	{
+		TArray<FGameplayTag> Commands = { Command_Link_Throw_Neutral, Command_Link_Throw_Forward, Command_Link_Throw_Down, Command_Link_Throw_CrouchForward };
+		if (Ergonomics == EGSTN_GrabTurnErgonomics::BackThrow)
+		{
+			Commands.Add(Command_Link_Throw_Back);
+		}
+		return Commands;
+	}
+	return { Command_Link_Throw_Forward, Command_Link_Throw_Back, Command_Link_Throw_Up, Command_Link_Throw_Down };
+}
+
+FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildPutDownSlot()
+{
+	// One above the role slots: the dodge's own command (its tier is below Command.Link anyway) never reads the press while holding
+	return WithLayout(MakeSlot(GSTNLinkTags::Command_Link_Release_PutDown, { MakePress({ GSTNCombatButtonTags::Button_Dodge }) }, RoleSlotPriorityOffset),
+		{ { TEXT("Link.PutDown"), &GSTNCombatButtonTags::Button_Dodge } });
+}
+
+FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildNotationPummelSlot()
+{
+	return WithLayout(MakeSlot(GSTNLinkTags::Command_Link_Pummel, { MakePress({ GSTNCombatButtonTags::Button_Strong }), MakeNeutralStick() }, RoleSlotPriorityOffset),
+		{ { TEXT("Link.ThrowStrong"), &GSTNCombatButtonTags::Button_Strong } });
+}
+
 FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildThrowSlot(const FGameplayTag& ThrowCommand, EGSTN_LinkThrowInputMode Mode)
 {
 	using namespace GSTNLinkTags;
@@ -253,7 +327,24 @@ int32 UGSTN_LinkSlots::ApplyKitThrows(const FGSTN_KitThrowFill& Fill, TArray<FGS
 	const FGSTN_BindingInput GrabCopy = *GrabRow;
 
 	int32 Bound = 0;
-	const FGameplayTag Throws[] = { Command_Link_Throw_Forward, Command_Link_Throw_Back, Command_Link_Throw_Up, Command_Link_Throw_Down };
+	const TArray<FGameplayTag> Throws = GetThrowCommands(Fill.Mode, Fill.Ergonomics);
+	// grab-link: a throw the mode does not use is hidden (its rows bound to nothing), so a kit's authored up throw cannot keep the strong press the
+	// Notation pummel takes, nor a back throw the back tilt an instant F. answers
+	const FGameplayTag AllThrows[] = { Command_Link_Throw_Forward, Command_Link_Throw_Back, Command_Link_Throw_Up, Command_Link_Throw_Down,
+		Command_Link_Throw_Neutral, Command_Link_Throw_CrouchForward };
+	for (const FGameplayTag& Command : AllThrows)
+	{
+		if (!Throws.Contains(Command))
+		{
+			for (FGSTN_BindingInput& Binding : Bindings)
+			{
+				if (Binding.Command == Command)
+				{
+					Binding.Ability.Reset();
+				}
+			}
+		}
+	}
 	for (const FGameplayTag& Command : Throws)
 	{
 		const FSoftClassPath* KitEntry = Fill.KitThrows ? Fill.KitThrows->Find(Command) : nullptr;
@@ -305,10 +396,45 @@ int32 UGSTN_LinkSlots::ApplyKitThrows(const FGSTN_KitThrowFill& Fill, TArray<FGS
 			if (Fill.Mode != EGSTN_LinkThrowInputMode::Buttons || bOverridden)
 			{
 				Binding.bHasSlotOverride = true;
-				Binding.SlotOverride = SlotOrOverride(Fill.SlotOverrides, Command, [&Command, &Fill]() { return BuildThrowSlot(Command, Fill.Mode); });
+				Binding.SlotOverride = SlotOrOverride(Fill.SlotOverrides, Command, [&Command, &Fill]() { return BuildThrowSlot(Command, Fill.Mode, Fill.Ergonomics); });
 			}
 		}
 		++Bound;
+	}
+
+	if (Fill.Mode == EGSTN_LinkThrowInputMode::Notation)
+	{
+		// Attack belongs to the throws: the pummel moves to strong + neutral stick (unless the settings give it a slot of their own)
+		const FGameplayTag Pummel = Command_Link_Pummel;
+		for (FGSTN_BindingInput& Binding : Bindings)
+		{
+			if (Binding.Command == Pummel && !Binding.Ability.IsNull())
+			{
+				Binding.bHasSlotOverride = true;
+				Binding.SlotOverride = SlotOrOverride(Fill.SlotOverrides, Pummel, []() { return BuildNotationPummelSlot(); });
+			}
+		}
+	}
+
+	// grab-link: the dodge press sets the partner down, through the grabber's own Release ability (its release reason, the ring exit). Its own
+	// command, a child of Release: a second Release row with the same requirement would be ambiguous to the loadout validator
+	const FGameplayTag PutDown = Command_Link_Release_PutDown;
+	if (Fill.bPutDownWithDodge && !Bindings.ContainsByPredicate([&PutDown](const FGSTN_BindingInput& Binding) { return Binding.Command == PutDown; }))
+	{
+		const FGameplayTag Release = Command_Link_Release;
+		const FGameplayTag Grabber = Role_Grabber;
+		const FGSTN_BindingInput* ReleaseRow = Bindings.FindByPredicate([&Release, &Grabber](const FGSTN_BindingInput& Binding)
+		{
+			return Binding.Command == Release && !Binding.Ability.IsNull() && Binding.Requirements.RequireTags.HasTagExact(Grabber);
+		});
+		if (ReleaseRow)
+		{
+			const FGSTN_BindingInput ReleaseCopy = *ReleaseRow;
+			FGSTN_BindingInput& Added = Bindings.Add_GetRef(ReleaseCopy);
+			Added.Command = PutDown;
+			Added.bHasSlotOverride = true;
+			Added.SlotOverride = SlotOrOverride(Fill.SlotOverrides, PutDown, []() { return BuildPutDownSlot(); });
+		}
 	}
 
 	// Its own command (a child of the grab) bound to the grab's ability: a second row of Command.Link.Grab with the same requirement would be

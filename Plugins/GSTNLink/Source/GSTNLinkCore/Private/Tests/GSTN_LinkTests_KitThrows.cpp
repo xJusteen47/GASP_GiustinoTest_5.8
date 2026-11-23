@@ -118,6 +118,88 @@ bool FGSTN_LinkKitThrowsStickTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+namespace
+{
+	/** The grabber's slots in Notation mode: the moved pummel and the mode's throws */
+	TArray<FGSTN_InputSlotSpec> NotationSlots(EGSTN_GrabTurnErgonomics Ergonomics)
+	{
+		// The put-down slot is left out: the scripts' button map has no dodge
+		TArray<FGSTN_InputSlotSpec> Slots = { UGSTN_LinkSlots::BuildNotationPummelSlot() };
+		for (const FGameplayTag& Throw : UGSTN_LinkSlots::GetThrowCommands(EGSTN_LinkThrowInputMode::Notation, Ergonomics))
+		{
+			Slots.Add(UGSTN_LinkSlots::BuildThrowSlot(Throw, EGSTN_LinkThrowInputMode::Notation, Ergonomics));
+		}
+		return Slots;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LinkKitThrowsNotationTest, "GSTNLink.Core.KitThrows.NotationPicksThrow", GSTNLinkTest::Flags)
+
+bool FGSTN_LinkKitThrowsNotationTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNLinkTags;
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = MakeInputSettings();
+	const TArray<FGSTN_InputSlotSpec> Slots = NotationSlots(EGSTN_GrabTurnErgonomics::Instant);
+	TestEqual(TEXT("the stick alone throws nothing (it walks)"), CommandFor(*this, Slots, TEXT("0:5 5:8t"), *Settings), FString());
+	TestEqual(TEXT("jump alone throws nothing (it jumps)"), CommandFor(*this, Slots, TEXT("5:+F"), *Settings), FString());
+	TestEqual(TEXT("attack, neutral = N."), CommandFor(*this, Slots, TEXT("5:+A"), *Settings), Name(Command_Link_Throw_Neutral));
+	TestEqual(TEXT("attack + forward = F."), CommandFor(*this, Slots, TEXT("4:8t 5:+A"), *Settings), Name(Command_Link_Throw_Forward));
+	TestEqual(TEXT("instant: attack + back = F. too (the start aim turns)"), CommandFor(*this, Slots, TEXT("4:2t 5:+A"), *Settings), Name(Command_Link_Throw_Forward));
+	TestEqual(TEXT("instant: attack + side = F."), CommandFor(*this, Slots, TEXT("4:6t 5:+A"), *Settings), Name(Command_Link_Throw_Forward));
+	TestEqual(TEXT("crouch + attack = Cr."), CommandFor(*this, Slots, TEXT("2:+D 5:+A"), *Settings), Name(Command_Link_Throw_Down));
+	TestEqual(TEXT("crouch + tilt + attack = Cr.F."), CommandFor(*this, Slots, TEXT("2:+D 4:8t 5:+A"), *Settings), Name(Command_Link_Throw_CrouchForward));
+	TestEqual(TEXT("strong, neutral = pummel"), CommandFor(*this, Slots, TEXT("5:+B"), *Settings), Name(Command_Link_Pummel));
+
+	const TArray<FGSTN_InputSlotSpec> WithBack = NotationSlots(EGSTN_GrabTurnErgonomics::BackThrow);
+	TestEqual(TEXT("back throw mode: attack + back = B."), CommandFor(*this, WithBack, TEXT("4:2t 5:+A"), *Settings), Name(Command_Link_Throw_Back));
+	TestEqual(TEXT("back throw mode: attack + forward = F."), CommandFor(*this, WithBack, TEXT("4:8t 5:+A"), *Settings), Name(Command_Link_Throw_Forward));
+	TestFalse(TEXT("instant binds no back throw"), UGSTN_LinkSlots::GetThrowCommands(EGSTN_LinkThrowInputMode::Notation, EGSTN_GrabTurnErgonomics::Instant)
+		.Contains(Command_Link_Throw_Back.GetTag()));
+
+	// The fill: N./Cr.F. added from the common set, the authored up throw hidden, the pummel moved, the put-down row bound to the release ability
+	FGSTN_LinkThrowSet Fallback;
+	Fallback.Forward = FSoftClassPath(TEXT("/Script/GSTNLinkTest.F"));
+	Fallback.Down = FSoftClassPath(TEXT("/Script/GSTNLinkTest.D"));
+	Fallback.Neutral = FSoftClassPath(TEXT("/Script/GSTNLinkTest.N"));
+	Fallback.CrouchForward = FSoftClassPath(TEXT("/Script/GSTNLinkTest.CF"));
+	FGSTN_KitThrowFill Fill(EGSTN_LinkThrowInputMode::Notation);
+	Fill.Fallback = &Fallback;
+	Fill.bPutDownWithDodge = true;
+	const FSoftObjectPath ReleaseAbility(TEXT("/Script/GSTNLinkTest.Release"));
+	TArray<FGSTN_BindingInput> Bindings;
+	auto AddRow = [&Bindings](const FGameplayTag& Command, const TCHAR* Ability, bool bGrabber)
+	{
+		// By value into the array: a reference into it would not survive the next add
+		FGSTN_BindingInput Row;
+		Row.Command = Command;
+		Row.Ability = FSoftObjectPath(Ability);
+		if (bGrabber)
+		{
+			Row.Requirements.RequireTags.AddTag(Role_Grabber);
+		}
+		Bindings.Add(MoveTemp(Row));
+	};
+	AddRow(Command_Link_Grab, TEXT("/Script/GSTNLinkTest.Grab"), false);
+	AddRow(Command_Link_Release, TEXT("/Script/GSTNLinkTest.Release"), true);
+	AddRow(Command_Link_Pummel, TEXT("/Script/GSTNLinkTest.Pummel"), true);
+	AddRow(Command_Link_Throw_Up, TEXT("/Script/GSTNLinkTest.Up"), false);
+	TestEqual(TEXT("four throws bound"), UGSTN_LinkSlots::ApplyKitThrows(Fill, Bindings), 4);
+	const FGSTN_BindingInput* Neutral = FindRow(Bindings, Command_Link_Throw_Neutral, true);
+	TestTrue(TEXT("N. from the common set"), Neutral && Neutral->Ability == static_cast<const FSoftObjectPath&>(Fallback.Neutral));
+	TestTrue(TEXT("Cr.F. from the common set"), FindRow(Bindings, Command_Link_Throw_CrouchForward, true) != nullptr);
+	const FGSTN_BindingInput* UpRow = FindRow(Bindings, Command_Link_Throw_Up, false);
+	TestTrue(TEXT("the authored up throw is hidden"), UpRow && UpRow->Ability.IsNull());
+	const FGSTN_BindingInput* PummelRow = FindRow(Bindings, Command_Link_Pummel, true);
+	TestTrue(TEXT("the pummel moved to strong"), PummelRow != nullptr);
+	const FGSTN_BindingInput* PutDown = FindRow(Bindings, Command_Link_Release_PutDown, true);
+	TestTrue(TEXT("the put-down row plays the release ability"), PutDown && PutDown->Ability == ReleaseAbility
+		&& PutDown->Requirements.RequireTags.HasTagExact(Role_Grabber));
+	const int32 Rows = Bindings.Num();
+	UGSTN_LinkSlots::ApplyKitThrows(Fill, Bindings);
+	TestEqual(TEXT("a second fill adds nothing"), Bindings.Num(), Rows);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LinkKitThrowsSpecialTest, "GSTNLink.Core.KitThrows.StickPlusSpecial", GSTNLinkTest::Flags)
 
 bool FGSTN_LinkKitThrowsSpecialTest::RunTest(const FString& Parameters)
@@ -247,7 +329,12 @@ bool FGSTN_LinkKitThrowsSettingsTest::RunTest(const FString& Parameters)
 {
 	// The owner's decisions of 2026-11-11 in DefaultGSTNLink.ini
 	const UGSTN_LinkSettings& Settings = UGSTN_LinkSettings::Get();
-	TestEqual(TEXT("the stick picks the throw"), Settings.ThrowInputMode, EGSTN_LinkThrowInputMode::Stick);
+	// grab-link (owner 2026-11-23): the project notation, the stick free to walk while holding; instant turn; dodge puts down
+	TestEqual(TEXT("the notation picks the throw"), Settings.ThrowInputMode, EGSTN_LinkThrowInputMode::Notation);
+	TestEqual(TEXT("instant turn ergonomics"), Settings.GrabTurnErgonomics, EGSTN_GrabTurnErgonomics::Instant);
+	TestTrue(TEXT("dodge puts down"), Settings.bPutDownWithDodge);
+	TestTrue(TEXT("N. and Cr.F. in the common set"), Settings.FallbackThrows.Neutral.IsValid() && Settings.FallbackThrows.CrouchForward.IsValid());
+	TestTrue(TEXT("held by the neck"), Settings.HoldPose.bHoldByNeck);
 	TestTrue(TEXT("applied"), Settings.bApplyKitThrows);
 	TestTrue(TEXT("special + crouch grabs"), Settings.bGrabWithSpecialCrouch);
 	TestTrue(TEXT("a full common set"), Settings.FallbackThrows.Forward.IsValid() && Settings.FallbackThrows.Back.IsValid()

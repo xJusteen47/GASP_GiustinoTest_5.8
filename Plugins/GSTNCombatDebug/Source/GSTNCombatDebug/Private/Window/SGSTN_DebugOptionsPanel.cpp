@@ -88,6 +88,11 @@ namespace
 		{
 			return true;
 		}
+		// grab-link (2026-11-23): the grab hold's playtest switches (turn ergonomics, walk/jump scales, neck hold, max hold, escape hit), one control each
+		if (Name.StartsWith(TEXT("gstn.Grab."), ESearchCase::IgnoreCase))
+		{
+			return true;
+		}
 		// run-stages-leggibili S1 (2026-11-21): gstn.RunStage.Readable, the readable run stage steps on/off (one check box)
 		if (Name.StartsWith(TEXT("gstn.RunStage."), ESearchCase::IgnoreCase))
 		{

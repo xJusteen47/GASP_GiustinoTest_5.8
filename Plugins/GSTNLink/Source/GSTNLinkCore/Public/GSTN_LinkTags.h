@@ -142,6 +142,15 @@ namespace GSTNLinkTags
 	/** Down throw command of the grabber role. Part of the standard command set */
 	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Link_Throw_Down);
 
+	/** Neutral throw (N.) of the grabber role: the attack press with a neutral stick in the Notation throw input mode (grab-link, owner 2026-11-23) */
+	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Link_Throw_Neutral);
+
+	/** Crouch forward throw (Cr.F.) of the grabber role: attack with crouch held and the stick tilted, Notation mode (grab-link) */
+	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Link_Throw_CrouchForward);
+
+	/** Put-down of the grabber role (grab-link): the dodge press bound to the kit's Release ability, so the partner is set down without a throw */
+	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Link_Release_PutDown);
+
 	/** Attack command of the latcher role (a move whose hitbox lands only on the partner it rides). Part of the standard command set (F12b) */
 	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Link_Latch_Attack);
 

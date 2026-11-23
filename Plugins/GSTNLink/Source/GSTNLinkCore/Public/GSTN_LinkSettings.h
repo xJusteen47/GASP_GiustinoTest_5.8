@@ -25,7 +25,27 @@ enum class EGSTN_LinkThrowInputMode : uint8
 	/** The stick plus the special button: special + forward / back, special alone = up, special + crouch held = down */
 	StickPlusSpecial,
 	/** The F12 shapes of the link slot set as authored (attack or strong + tilt, strong = up, crouch + attack = down): no slot is overridden */
-	Buttons
+	Buttons,
+	/**
+	 * grab-link (owner 2026-11-23): the project's move notation, with the stick left free to WALK while holding. Attack neutral = N. throw, attack +
+	 * stick tilted = F. throw, attack + crouch held = Cr. throw, attack + crouch held + stick tilted = Cr.F. throw. The pummel moves to strong neutral.
+	 * Which way F. goes is the grab turn ergonomics (EGSTN_GrabTurnErgonomics). Up and back throws are not bound (back only with BackThrow)
+	 */
+	Notation
+};
+
+/**
+ * How a grabber turns before a throw in Notation mode (grab-link, owner 2026-11-23: "per ora ergonomia istantanea"). Both reuse the move start aim
+ * (EGSTN_AimPolicy on the throw's timeline: SnapIfAimOrTilt, MaxTurnDegrees 180), so there is no second turning logic: the mode only decides which
+ * stick directions fire the F. throw slot.
+ */
+UENUM(BlueprintType)
+enum class EGSTN_GrabTurnErgonomics : uint8
+{
+	/** F. throw in EVERY direction: attack + any tilt fires F., whose start snaps the grabber to the stick. No back throw (default) */
+	Instant,
+	/** F. only on a forward tilt; a back tilt fires the B. throw (Command.Link.Throw.Back) */
+	BackThrow
 };
 
 /**
@@ -111,6 +131,51 @@ public:
 	 */
 	UPROPERTY(Config, EditAnywhere, Category = "Link|Throws")
 	TArray<FGSTN_InputSlotSpec> ThrowSlotOverrides;
+
+	/** grab-link: Notation mode only. Overridden by the cvar gstn.Grab.TurnMode (GSTN Debug) at the next kit compile */
+	UPROPERTY(Config, EditAnywhere, Category = "Link|Throws")
+	EGSTN_GrabTurnErgonomics GrabTurnErgonomics = EGSTN_GrabTurnErgonomics::Instant;
+
+	/**
+	 * grab-link (owner 2026-11-23, "con il tasto della schivata, credo": TO CONFIRM): the dodge press, while grabbing, sets the partner down without a
+	 * throw. It binds Command.Link.Release.PutDown to the kit's own Release ability (the release reason and the ring exit, as the interact tap)
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Link|Throws")
+	bool bPutDownWithDodge = true;
+
+	/** grab-link: how every kit holds its grabbed partner (by the neck by default); a kit's link extension can replace it (bOverrideHoldPose) */
+	UPROPERTY(Config, EditAnywhere, Category = "Link|Hold")
+	FGSTN_GrabHoldPose HoldPose;
+
+	/**
+	 * The grabbed entity's bone or socket placed on the hold point (the reference pose's, baked at attach with the role sockets). A mesh without it
+	 * holds by the root (the type's offset then decides alone)
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Link|Hold")
+	FName NeckSocketName = TEXT("neck_01");
+
+	/** grab-link: the grabber's walk speed multiplier while holding (UGSTN_GE_GrabHold). TEST VALUE; cvar gstn.Grab.WalkScale */
+	UPROPERTY(Config, EditAnywhere, Category = "Link|Hold", meta = (ClampMin = "0.0", ClampMax = "2.0"))
+	float HoldWalkScale = 0.75f;
+
+	/** grab-link: the grabber's jump speed multiplier while holding (owner: "salto più basso"). TEST VALUE; cvar gstn.Grab.JumpScale */
+	UPROPERTY(Config, EditAnywhere, Category = "Link|Hold", meta = (ClampMin = "0.0", ClampMax = "2.0"))
+	float HoldJumpScale = 0.7f;
+
+	/**
+	 * grab-link playtest overrides from the GSTN Debug window (gstn.Grab.*), one control per option. They are read by the simulation at the
+	 * points named on each, so all machines must have the same values: true in a PIE session (one process); a networked test sets them on every
+	 * machine. 0 (a negative scale) means "the data's own"
+	 */
+	EGSTN_GrabTurnErgonomics GetEffectiveGrabTurn() const;
+	float GetEffectiveHoldWalkScale() const;
+	float GetEffectiveHoldJumpScale() const;
+	/** The hold pose a grabber with this kit extension (may be null) uses, with the cvar gstn.Grab.HoldByNeck applied */
+	FGSTN_GrabHoldPose GetEffectiveHoldPose(const FGSTN_LinkKitExtension* GrabberKit) const;
+	/** gstn.Grab.MaxHoldFrames: when above 0, replaces the mash rule's MaxFrames AND caps its initial frames (the hold ends by then without mashing) */
+	static int32 GetMaxHoldFramesOverride();
+	/** gstn.Grab.EscapeHitForAll: every grabbed entity hits its grabber on escape, with its kit's hit data (or the default), for testing on mannequins */
+	static bool GetEscapeHitForAll();
 
 	/** Hands CommandTiers to the input settings under this plugin's contribution source */
 	void PushToInputSettings() const;

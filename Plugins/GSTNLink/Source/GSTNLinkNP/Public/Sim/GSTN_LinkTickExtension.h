@@ -157,6 +157,16 @@ public:
 	static bool StepMash(const FGSTN_CombatTickContext& Context, FGSTN_LinkFragment& Fragment);
 
 	/**
+	 * grab-link, hold by the neck: on the parked, non-acting side of an Active Body link (the grabbed) that has no per-link anchor yet, writes the
+	 * anchor that puts its baked neck (UGSTN_LinkSettings::NeckSocketName) on the grabber's hold point (the grabber kit's or the project's
+	 * FGSTN_GrabHoldPose, UGSTN_LinkMath::NeckHoldAnchor). Once per link: the flag stays until the link ends, so a re-simulation writes the same
+	 * anchor on the same frame. Reads only link content (reference-pose sockets, kit data) and the settings, the same on every machine. The first
+	 * Active frame still shows the type's offset (the snapshot of the previous frame), one frame. False when nothing changed
+	 */
+	static bool StepNeckHold(FGSTN_LinkFragment& Fragment, const UGSTN_LinkRegistry* Registry, const struct FGSTN_LinkBodyData* SelfBody,
+		const struct FGSTN_LinkBodyData* PartnerBody);
+
+	/**
 	 * The optimistic accept of AfterClocks (M7 G1), for a channel whose predicted request (Pending, flag Predicted) is of a type with
 	 * bInitiatorPredicts and is PendingFrames old: Active, role 1, flag Predicted kept, unless the target's snapshot entry (end of the previous
 	 * frame; TargetExtOf gives it by entity id, null when the target is not in the snapshot) shows its channel linked to someone else, which

@@ -38,6 +38,9 @@ namespace GSTNLinkTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Throw_Back, "Command.Link.Throw.Back", "Back throw command of the grabber role. Part of the standard command set");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Throw_Up, "Command.Link.Throw.Up", "Up throw command of the grabber role. Part of the standard command set");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Throw_Down, "Command.Link.Throw.Down", "Down throw command of the grabber role. Part of the standard command set");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Throw_Neutral, "Command.Link.Throw.Neutral", "Neutral throw (N.) of the grabber role: attack with a neutral stick in the Notation throw input mode");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Throw_CrouchForward, "Command.Link.Throw.CrouchForward", "Crouch forward throw (Cr.F.) of the grabber role: attack with crouch held and the stick tilted, Notation throw input mode");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Release_PutDown, "Command.Link.Release.PutDown", "Put-down of the grabber role: the dodge press bound to the kit's Release ability (the partner is set down, not thrown)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Latch_Attack, "Command.Link.Latch.Attack", "Attack command of the latcher role, an attack press, its hitbox landing only on the ridden partner. Part of the standard command set");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Lock_Command_Link, "Input.Lock.Command.Link", "Locks the link command family. An ordinary count granted by abilities and gameplay effects");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_LinkFormed, "Combat.Event.LinkFormed", "A link formed. Authoritative event published once per key by the watchdog or the pipeline when the response is sent");
@@ -59,6 +62,7 @@ UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Link_PartnerMoveAborted, "Combat.Event.Link
 			Mover_Linked, Interact_Target_Grab,
 			Command_Link_Grab, Command_Link_Grab_Special, Command_Link_Pummel, Command_Link_Release,
 			Command_Link_Throw_Forward, Command_Link_Throw_Back, Command_Link_Throw_Up, Command_Link_Throw_Down,
+			Command_Link_Throw_Neutral, Command_Link_Throw_CrouchForward, Command_Link_Release_PutDown,
 			Command_Link_Latch_Attack, Input_Lock_Command_Link,
 			Event_LinkFormed, Event_LinkBroken, Event_Throw, Event_GrabEscaped, Event_Link_PartnerMoveAborted });
 	}
