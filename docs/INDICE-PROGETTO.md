@@ -1,16 +1,34 @@
 # Indice del progetto GASP_Giustino2
 
 Pagina di benvenuto per chi arriva sul progetto (persona o agente): cosa esiste già, dove sta, se funziona.
-Si legge in 5 minuti. Fotografia del 2026-11-23 su `main` (a5b20950). Se un percorso qui non esiste più, l'indice è
+Si legge in 5 minuti. Fotografia del 2026-11-23 su `main` (a5b20950); ricontrollata dal bibliotecario il 2026-11-23 alle 18:30 (main invariato). Se un percorso qui non esiste più, l'indice è
 vecchio: aggiornalo nello stesso commit che sposta il codice.
 
 **Regola per ogni brief e ogni thread:** _prima di scrivere codice consulta `docs/INDICE-PROGETTO.md` e dichiara cosa
 riusi._ Esempio vero: l'ergonomia di mira (AimPolicy, finestra di reverse, momentum) esisteva dal 16-11 e un thread
 successivo stava per riscriverla.
 
+Decisioni vive, versioni approvate, cose sospese: **[STATO-ATTUALE.md](STATO-ATTUALE.md)** (vince sugli altri documenti). Per agenti esterni: [BRIEFING-ANTIGRAVITY.md](BRIEFING-ANTIGRAVITY.md).
+
 Pagine sorelle: [DOVE-METTO-MANO.md](DOVE-METTO-MANO.md) (15 casi "voglio cambiare X") ·
 [notes/audit-codice.md](notes/audit-codice.md) (doppioni, buchi di documentazione, cose da snellire) ·
 `handoffs/INDICE.md` nei project files (un rigo per thread, con costi: è un registro dei lavori, non questa mappa).
+
+## Artefatti
+Guide pubblicate su claude.ai (11). Stato dal giro del bibliotecario del 2026-11-23 (`docs/notes/archivio-proposta.md` §E). ARCHIVIO = superato, resta online solo come storia.
+| Titolo | Link | Data | Stato |
+|---|---|---|---|
+| Mosse di esempio GSTN (guida designer) | https://claude.ai/artifact/DyiBrsycoRfXNSMoZUBxun | 16-11 | DA AGGIORNARE (stato rami/test del 16-11; copia repo del 14-11) |
+| Architettura plugin combattimento | https://claude.ai/artifact/CLq2srEECQnd6bKDbBmm72 | 15-11 | DA AGGIORNARE (rami vecchi, sezione rete) |
+| Guida mosse Blueprint GSTN | https://claude.ai/artifact/La2oqPzCkPdcqL2kERy9D6 | 15-11 | DA FONDERE in Mosse di esempio |
+| Analisi regole di lavoro | https://claude.ai/artifact/1LEUDPK4VjC1bRgKj8qYqP | 15-11 | ARCHIVIO (regole riscritte 20-11 e 23-11) |
+| Silhouette multi-angolo e VFX | https://claude.ai/artifact/MySdFXExJmvrDviYWkatdb | 15-11 | VALIDO (VFX in pausa) |
+| Cose da fare a mano | https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk | 13-11 | ARCHIVIO (push su feature non più permessi) |
+| Networking di GASP Giustino | https://claude.ai/artifact/J6v4JZMLmDAMuemuXYxJhn | 08-11 | DA AGGIORNARE (dice 5.8; manca la ricerca 1v1 del 23-11) |
+| Strumenti AI per animare le mosse | https://claude.ai/artifact/LsLBLG476QD5dZ8pcvsFtd | 31-10 | ARCHIVIO |
+| Cascadeur per animare le mosse | https://claude.ai/artifact/E7KV71LLBD47zLF4HBAXzc | 30-10 | ARCHIVIO (vale `docs/architecture/anim-pipeline.md`) |
+| Pipeline agentica per animare le mosse | https://claude.ai/artifact/V3EDNzjL6oQ56Y8Tos4nii | 29-10 | ARCHIVIO |
+| Depth marker diegetico: opzioni | https://claude.ai/artifact/SXR2GcJHbrVTnR7p9SvE3d | 24-10 | ARCHIVIO (vale `docs/architecture/depth-marker.md`) |
 
 ## Contenuti
 1. [Il gioco in un minuto](#1-il-gioco-in-un-minuto)
@@ -195,16 +213,21 @@ I branch S1 (`project-thread-njoso3`), haptics (`c2dfra`), M12 p1 (`0f3p4m`), M1
 | M12 G5 prompt interazione + camera sul pawn | `m12-g5` | codice ("108/108" nel messaggio di commit, da verificare) |
 | M12 G6 plugin livelli | `m12-g6` | codice ("6/6", da verificare) |
 | M12 G7+G8 livello di test | `m12-g7-g8` | codice + script |
-| Presa al collo, lanci N/F/Cr/Cr.F | `grab-link` (b26ef5ed) | codice, "non compilato" (`handoffs/costi.csv`, 23-11) |
+| Presa al collo, lanci N/F/Cr/Cr.F | `grab-link` (d4714a4c) | codice "non compilato" (`handoffs/costi.csv`, 23-11); verifica in editor `docs/notes/grab-link-verifica-editor.md`; input come azioni logiche in `Plugins/GSTNLink/README.md` |
+| Mappa input e piano "un solo canale" P0-P5 | `project-thread-uvefj5` (76d839a9) | documento `docs/notes/input-azioni-mappa.md`; decisioni owner aperte |
+| Ricerca 1v1 in rete senza server dedicato | `ricerca-server-dedicato` (1af67606) | documento `docs/notes/server-dedicato-ricerca.md`; un thread sulla latenza del ranked è ancora aperto |
+| Bibliotecario: rapporto, STATO-ATTUALE, briefing agenti esterni | `docs-bibliotecario-2026-11-23` | documenti |
 | MCP animazione `gstn-anim-mcp` | `anim-mcp-followthrough` (contiene `anim-mcp-v2-turn4`) | strumento, "mai eseguito in UE" |
 | Cattura deterministica `capdet` | `project-thread-uvohng`, `project-thread-nfhw4i` | strumento |
 | Strumenti di moto per Sequencer | `project-thread-t93zat` | codice vecchio (base feature) |
 | Promozione minion G9b, ferite parti | `desktop-g9b`, `parts-rest-laptop` | codice vecchio, da verificare se superato |
-| Riorganizzazione Content | `content-riorganizzazione` | piano, fase 2 non fatta |
+| Riorganizzazione Content | `content-riorganizzazione` (d0b56728) | piano `docs/notes/content-riorganizzazione.md` (decisioni 1A 2A 3A), fase 2 sul fisso non fatta |
 | Ricerche skin, mesh, inventario animazioni, mappa cartelle | `skin-cosmetici-ricerca`, `project-thread-4pj7kf`, `project-thread-nfz4at`, `anim-inventario-2026-11-23`, `project-thread-f4ovn9` | solo documenti |
 `feature/gas-npp-5.8` non è un antenato di main ed è indietro: non partire da lì.
 
 ## 7. Dove sono i documenti
 - `CLAUDE.md`: regole e tabella "Where things are". `Plugins/README.md`: indice dei plugin (in parte vecchio, vedi audit).
 - `docs/architecture/`: progetto di ogni sistema. `docs/notes/`: note di lavoro, piani, `handovers/` (una per thread), `memoria-progetto.md`, `regole-progetto-2026-11-22.md`.
-- Guide pubblicate per l'owner: `Artifacts/` (Designer, Combattimento, Progetto).
+- Guide pubblicate per l'owner: sezione [Artefatti](#artefatti) in cima; copie in `Artifacts/` (Designer, Combattimento, Progetto), copie nuove solo sul branch `claude/artifacts`.
+- Rapporto settimanale sulla documentazione (orfani, contraddizioni, archivio): `docs/notes/archivio-proposta.md`, rifatto ogni venerdì dal bibliotecario.
+- Documenti non citati da nessun indice: 130 (elenco in `archivio-proposta.md` §A); `docs/architecture/` andrebbe elencato qui intero.
