@@ -16,5 +16,7 @@ Branch `claude/project-thread-oclodp` (base `claude/integ-2026-11-23`). Cloud, O
 - Mancano: tipi primari dei temi in `DefaultGame.ini`, estensione del loadout con tema/stile, assemblatore, cache armadietto, coda asincrona con placeholder amorfo, strumento editor che copia socket/bounds. Niente VFX.
 - INDICE-PROGETTO 5.13 (branch `claude/indice-progetto`): aggiungere "GSTNCosmetics fase 1 + proporzioni + gstn.Debug.Skin" quando il branch dell'indice entra in main.
 
+Scelte fase 2 applicate dal coordinatore (2026-11-23): 1A verificare in editor e spostare la skin sulla mesh visibile se serve; 2A compilazione e test sul portatile (in coda dopo dropkick giro 3 e review), editor sul fisso dopo il riordino Content; 3A verifica F0 Geometry Script 5.9 prima dell assemblatore.
+
 SUBAGENTI: 0
 COSTO: ~5 $ | 0 min desktop | 0 token review
