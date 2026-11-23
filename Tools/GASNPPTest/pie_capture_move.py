@@ -317,6 +317,14 @@ if RUNS:
         for _n in _r['sequences']:
             SEQUENCES.append(dict(_ALL[_n], run=_r['name'], run_cvars=_r.get('cvars', ''), run_kit=_r.get('kit'), run_out=os.path.join(OUT, _r['name']),
                                   run_first=_n == _r['sequences'][0]))
+    # skill-k8 (owner 2026-11-23, K8 round 1): EVERY whiff (no dummy) of every run is captured before ANY hit, else the dummy placed by a
+    # hit run is still in front of the next run's whiff (K8 r1: seen under K8 in the whiff views). Stable sort, so each run keeps its own
+    # order; a run met again after the switch re-runs its setup (kit, cvars, spawn reset), so every block starts from a reset scene.
+    # PIE_CAPTURE_KEEP_ORDER=1 keeps the runs.json order.
+    if os.environ.get('PIE_CAPTURE_KEEP_ORDER') != '1':
+        SEQUENCES.sort(key=lambda s: s.get('dummy') is not None)
+        for _i, _s in enumerate(SEQUENCES):
+            _s['run_first'] = _i == 0 or SEQUENCES[_i - 1]['run'] != _s['run']
 SHOOT = [int(v) for v in os.environ['PIE_CAPTURE_SHOOT'].split(',')] if os.environ.get('PIE_CAPTURE_SHOOT') else None
 TIMEOUT = 900.0 if not RUNS else 900.0 + 60.0 * len(SEQUENCES)
 # PIE_CAPTURE_COLLISION=1: draw collision (the pawn's movement capsule) in every view and the game viewport (DROPKICK-CAPSULE, 2026-11-15)
@@ -393,6 +401,26 @@ def _clear_stage():
     _console('gstn.Combat.KitPlaceholderLook 0')
     others = [round(c.get_owner().get_actor_location().distance(me)) for c in g.comps(_world()).values() if c.get_owner() != _pawn()]
     return f'parked {parked}, other pawns at {sorted(others)[:4]} cm'
+
+
+def _park_dummies():
+    """skill-k8 (owner 2026-11-23): before a whiff the level's dummies leave the stage (same server reset _clear_stage uses for the other
+    players), so no dummy stands in the behind (az180) or side view of a whiff. Returns the log text; a dummy still within 1500 cm of the
+    host is logged as DUMMY IN VIEW (the review pack must not be built on that capture)."""
+    spots = h.hub.PARK['Z1']
+    out = []
+    for n, key in enumerate(h.dummies()):
+        comp = g.comps(g.worlds()[0])[key]
+        x, y = spots[(n + 3) % len(spots)]
+        spawn = comp.get_spawn_location()
+        comp.server_reset_to_spawn(unreal.Vector(x - spawn.x, y - spawn.y, 0.0))
+        out.append(key)
+    return f'dummies parked {out}'
+
+
+def _dummies_in_view(limit=1500.0):
+    me = _pawn().get_actor_location()
+    return [k for k in h.dummies() if g.comps(g.worlds()[0])[k].get_owner().get_actor_location().distance(me) < limit]
 
 
 def _make_lights():
@@ -751,6 +779,17 @@ def _tick(_dt):
                 st.update(run_ready=st['seq'], t=now + 1.0, reorient=0)    # 3 s real time: the reset lands and the idle settles
                 _log(f'run {seq["run"]}: cvars [{seq["run_cvars"]}], facing off by {off:.1f} deg before the reset, host reset to spawn')
                 return None
+            if not seq['dummy'] and not st.get('dummy_placed'):   # skill-k8: whiff = empty stage, checked after the teleport settles
+                if not st.get('dummies_parked'):
+                    _log(_park_dummies())
+                    st.update(dummies_parked=True, t=now)
+                    return None
+                near = _dummies_in_view()
+                if near:
+                    _log(f'DUMMY IN VIEW before whiff {seq["name"]} ({seq.get("run", "")}): {near}')
+                    os.makedirs(_seq_dir(seq), exist_ok=True)   # read by capture_move: no review pack on a dirty whiff
+                    open(os.path.join(_seq_dir(seq), 'dummy_in_view.txt'), 'w', encoding='utf-8').write(' '.join(near) + '\n')
+                st.update(dummy_placed=True, dummy_key=None)
             if seq['dummy'] and not st.get('dummy_placed'):
                 keys = h.dummies()
                 _log(f'dummy {keys[:1]} ahead: {h._place_ahead(0, keys[0], seq["dummy"]) if keys else "NO DUMMY"}')
@@ -928,7 +967,7 @@ def _tick(_dt):
                         _log(f'dummy diag failed: {e}')
                 if st.get('minions_spawned'):
                     _console('gstn.Minion.Bench.Clear')
-                st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False, minions_spawned=False)
+                st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False, dummies_parked=False, minions_spawned=False)
         elif phase == 'ending' and not les.is_in_play_in_editor():
             unreal.unregister_slate_post_tick_callback(st['handle'])
             try:

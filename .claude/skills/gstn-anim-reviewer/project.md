@@ -63,3 +63,12 @@ Generic method: `skills-public/anim-reviewer/SKILL.md`. Section numbers below re
 - Automatic fix applied (splice, floor clamp, filters): compare before/after grid; amplitude, peak speed or
   root motion lost over 15 % = FAIL.
 - Clips marked `PROTO` (procedural Python/Blender generators) are never reviewed.
+
+## After K8 round 1 (2026-11-23; scope: combat-move reviews)
+- Before judging: a review video or grid with hitbox shapes, or a whiff with the dummy in frame (also from behind), is
+  void, label `cattura`. Hitboxes live only in `<out>/hitbox/` and never go to the critic.
+- Read the `warn` lines of `<move>_check.txt`: `pose_coherence` (pelvis tilted, legs not re-keyed: look at the shins
+  under the pelvis on those poses) and `arm_jump` (an arm crossing in one frame: look for the pop at 25 %). They are
+  leads for the eye, not verdicts.
+- Blocks marked inherited in `gate_report.json` exist identically on the approved version: do not FAIL the variant for
+  them; list them once as "ereditati dalla base approvata" for the owner.

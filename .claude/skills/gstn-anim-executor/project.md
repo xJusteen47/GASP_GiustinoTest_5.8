@@ -49,3 +49,29 @@ Antigravity cannot run git in its sandbox: the Claude session commits card and s
 - Every capture ends with `capture_assert.py` (`ASSERT: OK`); without it, no review.
 - Any change that departs from stock GASP Mover: first a line in `docs/notes/gasp-divergenze.md` (rule 14).
 - **Deterministic zero-token steps:** run `runstart_pivot_gates.py` (incl. contralateral arm–leg phase check on start/additive clips), `clipcheck`, headless UE import (`Save-Assets`), `runstart_batch_captures.ps1` / `Run-Timed.ps1`, grid extraction and `capture_assert.py` as deterministic scripts before calling any reviewer model.
+
+## After K8 round 1 (2026-11-23; owner OK 22:28; scope: combat-move cards and `anim_capture_move` captures)
+1. **Pelvis tilt = re-key the legs.** Legs are authored in the PELVIS frame (`animpipe/author.py`): turning `pelvis.rot`
+   swings knees and ankles with it (K8 r1: ball +16 deg at a11, shins fell under the pelvis; K7 shows the same drop).
+   Give a variant card `"base_card": "cards/<kit>/.../<approved>.json"`: `animpipe check` then warns
+   `pose_coherence aN` (pelvis >= 3 deg off the base, leg foot/pole unchanged) and also flags, inside one card,
+   consecutive poses whose pelvis turns >= 9 deg with identical leg targets. Answer it by re-keying the leg targets where
+   the feet must BE, or write why they ride along in `_changes`. Warning only, never blocking.
+2. **Whiffs first, clean stage.** `pie_capture_move` (PIE_CAPTURE_RUNS) now runs EVERY whiff of every run before ANY hit
+   (stable order inside a run; a run met again redoes kit, cvars and spawn reset); before each whiff the dummies are
+   parked off stage and a dummy still within 15 m writes `<run>/<seq>/dummy_in_view.txt`, which makes
+   `anim_capture_move` refuse the review pack (`stage: scene`). `PIE_CAPTURE_KEEP_ORDER=1` = old order (debug only).
+   Untried in the editor until the K8 round 2 capture.
+3. **Gate: inherited blocks.** `anim_capture_move` no longer refuses a card whose failing `animpipe check` blocks ALL
+   fail with the SAME line on the approved base (K8 r1: legibility, contact_faf, hitstop_snap 14->15 of the snap, identical
+   on K7). Conditions: the base asset is listed in `docs/notes/anim-approvate.md`, and the base card's check JSON exists
+   (base run `"card"` or variant `"approved_base_card"`; run `animpipe check` on the base once). A new failure, or an
+   inherited one whose numbers changed, still blocks. `gate_report.json` lists the inherited blocks: copy them into the
+   handover. The hitbox-sync file must still name the edited clip (K8 r1's other gate failure; not changed).
+4. **Arm jump warning.** `animpipe check` warns `arm_jump <bone> fA->fB` when a hand or elbow (chest frame) moves
+   >= 20 cm in one frame and >= 2.5x its neighbours, outside the hitbox-active frames (K8 r1: goal-post closing in one
+   frame). Spread it over 2+ frames or add a breakdown; an intended snap goes in the card's `exemptions` (`arm_jump`).
+5. **Hitboxes never in review videos.** Every run sets `gstn.Combat.Debug.Hitboxes` itself (0 review, 1 `hitbox_view`),
+   since cvars are never undone and whiffs of a hitbox run now precede hits of review runs; otherwise
+   `anim_capture_move` refuses (`stage: hitbox_cvars`). The pack fails if a review grid or video carries hitboxes;
+   hitbox videos only in `<out>/hitbox/` (owner only).

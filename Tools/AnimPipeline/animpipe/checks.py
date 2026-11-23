@@ -23,6 +23,12 @@ from animpipe.__main__ import OUT, TOOLS
 PLANT_TOL = 2.0          # cm a planted foot (ankle and ball) may drift from frame 0
 HITSTOP_MAX = 10.0       # cm per anim frame (60 fps) out of a hitbox-active frame; card `hitstop_max_cm` overrides
 FIST_MAX = 0.7           # fingertip-to-wrist distance / finger chain length; open hand ~0.95, closed fist ~0.5
+# skill-k8 WARNINGS (owner 2026-11-23, after K8 round 1): reported in <move>_check.json "warn" and the .txt, never blocking (the
+# verdict is unchanged, so the capture gate and its inherited-block rule see the same blocks as before).
+TILT_DEG = 3.0           # pelvis rotation change (deg, any axis) vs the base card that asks for the legs to be re-keyed
+LEG_SAME_CM = 1.0        # a leg target (foot, pole) moved less than this vs the base = not re-keyed
+ARM_JUMP_CM = 20.0       # a hand/elbow step (cm per anim frame, in the chest frame) at least this big ...
+ARM_JUMP_RATIO = 2.5     # ... and this many times the median of the 4 neighbouring steps = the arm jumps in ONE frame
 EYE = ["arcs and silhouette on the review grid", "weight and snap at 1x and 0.25x", "face/head follow-through"]
 
 
@@ -207,6 +213,77 @@ def _spacing(F, segs, eff):
 PART_END = {"arm_l": "hand_l", "arm_r": "hand_r", "leg_l": "foot_l", "leg_r": "foot_r", "trunk": "spine_05", "head": "head"}
 
 
+def _pose_coherence(c, base):
+    """Warn: the legs are authored in the PELVIS frame (author.py), so a pelvis tilt carries feet and shins with it. K8 r1 tilted the
+    ball +16 deg back and kept K7's leg targets: the shins fell under the pelvis at a11-a12 (review FAIL pose; K7 shows the same drop).
+    Per author pose present in both cards: pelvis rot changed >= TILT_DEG while a leg's foot and pole are unchanged -> re-key that leg
+    in world terms (where should the foot BE now?) or say why it rides along. Also inside one card: consecutive poses whose pelvis turns
+    >= 3x TILT_DEG with identical leg targets."""
+    out = []
+    P = (c.get("author") or {}).get("poses") or {}
+
+    def legs_same(a, b, s):
+        la, lb = a.get(f"leg_{s}") or {}, b.get(f"leg_{s}") or {}
+        return all(np.linalg.norm(np.array(la.get(k, [0, 0, 0]), float) - np.array(lb.get(k, [0, 0, 0]), float)) < LEG_SAME_CM
+                   for k in ("foot", "pole"))
+
+    def tilt(a, b):
+        return float(np.max(np.abs(np.array((a.get("pelvis") or {}).get("rot", [0, 0, 0]), float)
+                                   - np.array((b.get("pelvis") or {}).get("rot", [0, 0, 0]), float))))
+
+    def shift(pose, s, deg):   # how far the leg targets (ankle, knee pole) swing when the pelvis turns by deg, held in the pelvis frame
+        lg = pose.get(f"leg_{s}") or {}
+        r = max(float(np.linalg.norm(np.array(lg.get(k, [0, 0, 0]), float))) for k in ("foot", "pole"))
+        return 2 * r * math.sin(math.radians(deg) / 2)
+
+    B = ((base or {}).get("author") or {}).get("poses") or {}
+    for k in sorted(set(P) & set(B), key=int):
+        d = tilt(P[k], B[k])
+        same = [s for s in "lr" if legs_same(P[k], B[k], s)]
+        if d >= TILT_DEG and same:
+            out.append(f"pose_coherence a{k}: pelvis turned {d:.1f} deg vs the base, leg_{'/leg_'.join(same)} not re-keyed "
+                       f"(knee/ankle targets swing up to ~{shift(P[k], same[0], d):.0f} cm with it): re-key the legs")
+    ks = sorted(P, key=int)
+    for a, b in zip(ks, ks[1:]):
+        d = tilt(P[a], P[b])
+        same = [s for s in "lr" if legs_same(P[a], P[b], s)]
+        if d >= 3 * TILT_DEG and same:
+            out.append(f"pose_coherence a{a}->a{b}: pelvis turns {d:.1f} deg, leg_{'/leg_'.join(same)} targets identical: "
+                       f"feet ride with the pelvis, check the shins")
+    return out
+
+
+def _arm_jump(F, Q, w, exempt=()):
+    """Warn: a hand or elbow (in the chest frame, so body travel does not count) makes one step far bigger than its neighbours: the
+    arm jumps in a single frame (K8 r1: the goal-post closed in one frame, wrist_r 58 cm/frame at f9; the review asked for 2 frames).
+    Hitbox-active frames are skipped (a strike may snap on purpose); card exemption frames `arm_jump`."""
+    out = []
+    act = set(range(w["active"][0], w["active"][1] + 1))
+    for s in "lr":
+        for b in (f"hand_{s}", f"lowerarm_{s}"):
+            if b not in F[0] or "spine_05" not in F[0]:
+                continue
+            d = [float(np.linalg.norm(_local(F, Q, f + 1, b, "spine_05") - _local(F, Q, f, b, "spine_05"))) for f in range(len(F) - 1)]
+            for f in range(len(d)):
+                nb = [d[g] for g in (f - 2, f - 1, f + 1, f + 2) if 0 <= g < len(d)]
+                if f + 1 in exempt or f + 1 in act or not nb:
+                    continue
+                if d[f] >= ARM_JUMP_CM and d[f] >= ARM_JUMP_RATIO * max(1.0, float(np.median(nb))):
+                    out.append(f"arm_jump {b} f{f}->f{f + 1}: {d[f]:.0f} cm in one frame (neighbours ~{np.median(nb):.0f}): "
+                               f"spread it over 2+ frames or add a breakdown")
+    return out
+
+
+def _base_card(c, path):
+    p = c.get("base_card")
+    if not p:
+        return None
+    for cand in (p, os.path.join(TOOLS, p), os.path.join(os.path.dirname(os.path.abspath(path)), p)):
+        if os.path.exists(cand):
+            return load(cand)
+    return {"_missing": p}
+
+
 def _dist(a, b):
     return float(np.linalg.norm(a - b))
 
@@ -291,7 +368,11 @@ def run(path, src=False):
     ms = json.load(open(ms_path)); ms[move] = to_move_sheet(c); json.dump(ms, open(ms_path, "w"), indent=1)
     exempt = {e["check"]: set(e["frames"]) for e in c.get("exemptions", [])}
     contact, faf = f"{w['active'][0]}-{w['active'][1]}", str(w["faf"])
-    res = {"block": {}, "measure": {}, "eye": EYE}
+    res = {"block": {}, "measure": {}, "eye": EYE, "warn": []}
+    base = _base_card(c, path)
+    if base and base.get("_missing"):
+        res["warn"].append(f"pose_coherence: base_card {base['_missing']} not found")
+    res["warn"] += _pose_coherence(c, None if not base or base.get("_missing") else base)
 
     rc, ln = _run("legibility", ["legibility.py", "measure", anim, take, contact, faf], outdir)
     if rc and not any("VERDICT" in l for l in ln):   # a source-control dialog after a save can block the bridge: once more
@@ -317,6 +398,7 @@ def run(path, src=False):
     res["block"]["hitstop_snap"] = _hitstop_snap(F, w, float(c.get("hitstop_max_cm", HITSTOP_MAX)), exempt.get("hitstop_snap", set()), Q)
     # a planted foot is still on purpose: its leg is not judged
     co_skip = list(c.get("co_motion_skip", [])) + [f"leg_{s}" for s in sides]
+    res["warn"] += _arm_jump(F, Q, w, exempt.get("arm_jump", set()))
     res["block"]["co_motion"] = _co_motion(F, Q, w, co_skip, exempt.get("co_motion", set()))
 
     for name, args in (("motion_curves", ["motion_curves.py", take, f"--sheet={move}", "--quiet"]),
@@ -338,12 +420,15 @@ def run(path, src=False):
     res["verdict"] = "FAIL" if fails else "PASS"
     jp = os.path.join(OUT, f"{move}_check.json")
     json.dump({"verdict": res["verdict"], "block": {k: {"ok": ok, "line": l} for k, (ok, l) in res["block"].items()},
-               "measure": {k: {"rc": rc, "line": l} for k, (rc, l) in res["measure"].items()}, "eye": EYE}, open(jp, "w"), indent=1)
+               "measure": {k: {"rc": rc, "line": l} for k, (rc, l) in res["measure"].items()}, "eye": EYE, "warn": res["warn"]},
+              open(jp, "w"), indent=1)
     txt = os.path.join(OUT, f"{move}_check.txt")
     open(txt, "w", encoding="utf-8").write("\n".join([f"{move}: {res['verdict']}"] +
                                                      [f"block {k}: {'PASS' if ok else 'FAIL'} | {l}" for k, (ok, l) in res["block"].items()] +
                                                      [f"measure {k}: {l}" for k, (_, l) in res["measure"].items()] +
+                                                     [f"warn {x}" for x in res["warn"]] +
                                                      [f"eye: {e}" for e in EYE]) + "\n")
     print(f"check {move}: {res['verdict']}" + (f" (blocking: {', '.join(fails)})" if fails else ""))
-    print(f"block {sum(ok for ok, _ in res['block'].values())}/{len(res['block'])}, measures {len(res['measure'])}, eye {len(EYE)}")
+    print(f"block {sum(ok for ok, _ in res['block'].values())}/{len(res['block'])}, measures {len(res['measure'])}, eye {len(EYE)}, "
+          f"warn {len(res['warn'])}")
     print(txt)

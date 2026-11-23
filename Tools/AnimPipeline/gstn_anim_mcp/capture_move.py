@@ -185,8 +185,37 @@ def card_hash(card: Path) -> str:
     return _sha(Path(card))[:16]
 
 
+def _check_json(repo: Path, card: str | Path, check_json: str | Path | None = None) -> tuple[Path, dict[str, Any]]:
+    cp = Path(card) if Path(card).is_absolute() else repo / card
+    move = json.loads(cp.read_text(encoding="utf-8")).get("move", cp.stem) if cp.exists() else cp.stem
+    chk = Path(check_json) if check_json else repo / "Saved" / "AnimPipeline" / "animpipe" / f"{move}_check.json"
+    return chk, (json.loads(chk.read_text(encoding="utf-8")) if chk.exists() else {})
+
+
+def inherited_blocks(repo: Path, failing: dict[str, str], base_asset: str | None, base_card: str | Path | None,
+                     base_check_json: str | Path | None = None) -> tuple[dict[str, str], str]:
+    """skill-k8 (K8 round 1, 2026-11-23): K8 failed the gate on 3 blocks (legibility, contact_faf, hitstop_snap of the 14->15 snap) that
+    fail IDENTICALLY on K7, which the owner approved; the variant never touched those keys, so the gate blocked on a false positive.
+    A failing block is INHERITED (reported, not blocking) only when ALL hold: the base asset is a locked version in
+    docs/notes/anim-approvate.md, the base card's animpipe check exists, and the same block fails there with the SAME line (same numbers).
+    Anything else stays blocking: a new failure, or an inherited one that got worse or changed. Returns ({block: base line}, reason)."""
+    if not failing or not base_asset or not (base_card or base_check_json):
+        return {}, "no approved base card to compare with"
+    appr = repo / "docs" / "notes" / "anim-approvate.md"
+    if not appr.exists() or _name(base_asset) not in appr.read_text(encoding="utf-8"):
+        return {}, f"base {_name(base_asset)} is not in docs/notes/anim-approvate.md"
+    _, brep = _check_json(repo, base_card or "", base_check_json)
+    if not brep:
+        return {}, "no animpipe check for the approved base card: run animpipe check on it"
+    bblk = brep.get("block") or {}
+    inh = {k: bblk[k].get("line", "") for k, line in failing.items()
+           if k in bblk and not bblk[k].get("ok") and bblk[k].get("line", "") == line}
+    return inh, "ok"
+
+
 def card_report(root: str | Path | None, asset: str, card: str | Path, check_json: str | Path | None = None,
-                build_json: str | Path | None = None) -> dict[str, Any]:
+                build_json: str | Path | None = None, base_asset: str | None = None, base_card: str | Path | None = None,
+                base_check_json: str | Path | None = None) -> dict[str, Any]:
     """Report for a variant whose poses come from a card (no anim_run_intent): reads `animpipe check <card>`'s JSON and, when it is a
     PASS of THIS card, records it in the manifest as the variant's run report + dry run under the card's content hash, so the
     capture gate checks card poses with the same (a)/(b) rules. Refused (reported, nothing recorded) when the card names another
@@ -207,12 +236,17 @@ def card_report(root: str | Path | None, asset: str, card: str | Path, check_jso
     rep: dict[str, Any] = {}
     if chk.exists():
         rep = json.loads(chk.read_text(encoding="utf-8"))
-    ok_c = rep.get("verdict") == "PASS"
     blocks = {k: bool(v.get("ok")) for k, v in (rep.get("block") or {}).items()}
-    checks.append({"check": "animpipe_check_pass", "ok": ok_c, "msg": "ok" if ok_c else
+    failing = {k: v.get("line", "") for k, v in (rep.get("block") or {}).items() if not v.get("ok")}
+    inh, why = inherited_blocks(repo, failing, base_asset, base_card, base_check_json)
+    new_fail = [k for k in failing if k not in inh]
+    ok_c = rep.get("verdict") == "PASS" or (bool(rep) and not new_fail)
+    checks.append({"check": "animpipe_check_pass", "ok": ok_c, "msg": "ok" + (f" (inherited from the approved base, not blocking: "
+                   f"{', '.join(inh)})" if inh else "") if ok_c else
                    (f"no animpipe check for {move} ({chk}): run animpipe check" if not rep else
-                    f"animpipe check is {rep.get('verdict')} (blocking: {', '.join(k for k, v in blocks.items() if not v) or '?'})"),
-                   "blocks": blocks})
+                    f"animpipe check is {rep.get('verdict')} (blocking: {', '.join(new_fail) or '?'}"
+                    + (f"; inherited, not blocking: {', '.join(inh)}" if inh else f"; inheritance: {why}") + ")"),
+                   "blocks": blocks, "inherited": inh})
     stale = [n for n, f in (("card", cp), ("build", bld)) if chk.exists() and f.exists() and f.stat().st_mtime > chk.stat().st_mtime]
     checks.append({"check": "check_fresh", "ok": not stale and chk.exists(),
                    "msg": "ok" if not stale and chk.exists() else f"check older than the {', '.join(stale) or 'card'}: rerun animpipe build + check"})
@@ -223,13 +257,30 @@ def card_report(root: str | Path | None, asset: str, card: str | Path, check_jso
         manifest.record_report(repo, asset, ihash, {"ok": True, "verdict": "PASS", "gates": {"status": "PASS"}})
         m = manifest.load(repo, asset)
         m["last_report"].update({"source": "card", "card": str(cp.relative_to(repo)) if cp.is_relative_to(repo) else str(cp),
-                                 "check_json": str(chk), "blocks": blocks})
+                                 "check_json": str(chk), "blocks": blocks, "inherited": inh})
         manifest.save(repo, asset, m)
-    return {"ok": ok, "source": "card", "asset": _name(asset), "intent_hash": ihash, "checks": checks,
+    return {"ok": ok, "source": "card", "asset": _name(asset), "intent_hash": ihash, "checks": checks, "inherited": inh,
             "error": None if ok else "; ".join(x["msg"] for x in checks if not x["ok"])}
 
 
 # ------------------------------------------------------------------------------------------------------------- capture
+HB_CVAR = "gstn.Combat.Debug.Hitboxes"
+
+
+def hitbox_cvar_errors(runs: list[dict[str, Any]]) -> list[str]:
+    """skill-k8 (owner 2026-11-23: hitboxes never in the animation-review videos, only in the separate hitbox video). The capture never
+    undoes a cvar and the whiffs run before the hits (pie_capture_move), so a hitbox run can sit right before a review run: EVERY run must
+    set the cvar itself, 0 for review runs and 1 for "hitbox_view" runs (K8 r1: the hitbox videos came out with no shapes)."""
+    errs = []
+    for r in runs:
+        vals = [c.split()[-1] for c in str(r.get("cvars", "")).split(";") if c.strip().startswith(HB_CVAR) and len(c.split()) > 1]
+        want = "1" if r.get("hitbox_view") else "0"
+        if not vals or vals[-1] != want:
+            errs.append(f"run {r.get('name')}: cvars must end with '{HB_CVAR} {want}' "
+                        f"({'hitbox video' if want == '1' else 'review run: no hitboxes in the review'})")
+    return errs
+
+
 def default_runner(cmd: list, env: dict, cwd: str) -> Any:
     return subprocess.run(cmd, env=env, cwd=cwd, capture_output=True, text=True)
 
@@ -295,13 +346,17 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
     out_rel = out or f"docs/notes/reviews/{move}/{round}"
     raw_rel = raw_dir or f"Saved/AnimPipeline/captures/{move}/{round}"
     base, variants = variant_runs[0], variant_runs[1:]
+    hb_errs = hitbox_cvar_errors(variant_runs)
+    if hb_errs:
+        return {"ok": False, "verdict": "FAIL", "stage": "hitbox_cvars", "error": "; ".join(hb_errs), "captured": False}
 
     # 1. hard gate for every variant: nothing is captured (or planned for real) if one fails. A variant with "card" and no
     #    intent_hash gets its report from the card's animpipe check first (card_report), then the same gate
     gates, cards = {}, {}
     for v in variants:
         if v.get("card") and not v.get("intent_hash"):
-            cards[v["name"]] = card_report(repo, v["asset"], v["card"], v.get("check_json"), v.get("build_json"))
+            cards[v["name"]] = card_report(repo, v["asset"], v["card"], v.get("check_json"), v.get("build_json"), base["asset"],
+                                           v.get("approved_base_card") or base.get("card"), v.get("approved_base_check_json"))
             v = dict(v, intent_hash=cards[v["name"]]["intent_hash"])
             variant_runs[[r["name"] for r in variant_runs].index(v["name"])] = v
         gates[v["name"]] = precapture_gate(
@@ -384,6 +439,12 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
 
     # 5. review pack (grids need Pillow; videos need ffmpeg through the runner)
     (repo / out_rel).mkdir(parents=True, exist_ok=True)
+    # skill-k8: a whiff with a dummy still near the host (pie_capture_move writes dummy_in_view.txt) is not a clean stage: no review pack
+    dirty = sorted(str(p.relative_to(repo)) if p.is_relative_to(repo) else str(p)
+                   for r in variant_runs for p in Path(run_dirs[r["name"]]).glob("*/dummy_in_view.txt"))
+    if dirty:
+        return {"ok": False, "verdict": "FAIL", "stage": "scene", "plan": plan, "captured": bool(todo),
+                "error": f"dummy in view during a whiff ({len(dirty)} sequence(s)): {', '.join(dirty[:3])}; recapture"}
     # Hitbox runs ("hitbox_view": true, cvars with gstn.Combat.Debug.Hitboxes 1) stay OUT of the animation review (grids and videos):
     # owner 2026-11-23, the hitboxes are for the owner's check, not for the animator. They get their own videos in <out>/hitbox/
     review = [r for r in variant_runs if not r.get("hitbox_view")]
@@ -394,7 +455,15 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
     if hbruns:
         al = {s: review_pack.run_offsets({r["name"]: Path(run_dirs[r["name"]]) for r in [variant_runs[0]] + hbruns}, s)
               for s in sequences}
-        video_cmds += [c + ["--hitboxes=1"] for c in video_commands(repo, hbruns, run_dirs, sequences, f"{out_rel}/hitbox", cap_win, al)]
+        hb_cmds = [c + ["--hitboxes=1"] for c in video_commands(repo, hbruns, run_dirs, sequences, f"{out_rel}/hitbox", cap_win, al)]
+    else:
+        hb_cmds = []
+    if pack.get("grids") and sum(g.get("hitbox_cells", 0) for g in pack["grids"]):   # review grids are drawn without hitboxes
+        return {"ok": False, "verdict": "FAIL", "stage": "hitbox_in_review", "plan": plan,
+                "error": "hitboxes drawn in the review grids: they belong only in <out>/hitbox/"}
+    if any("--hitboxes=1" in c for c in video_cmds):
+        return {"ok": False, "verdict": "FAIL", "stage": "hitbox_in_review", "plan": plan, "error": "a review video asks for hitboxes"}
+    video_cmds += hb_cmds
     video_rc = [_rc((runner or default_runner)(c, os.environ.copy(), str(repo))) for c in video_cmds]
     (repo / out_rel / "alignment.json").write_text(json.dumps(pack["alignment"], indent=1), encoding="utf-8")
     return {"ok": True, "verdict": "PASS", "captured": bool(todo), "reused": sorted(reuse), "out_dir": out_rel,

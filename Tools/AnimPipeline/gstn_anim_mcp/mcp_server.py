@@ -230,7 +230,10 @@ def _tool_defs() -> list[dict[str, Any]]:
                 "Card-authored poses: give the variant \"card\": \"Tools/AnimPipeline/cards/.../x.json\" instead of intent_hash (its "
                 "animpipe check PASS is the report). Each run may set \"kit\" (base and variant kits in one session) and \"assert\". "
                 "Writes gate_report.json and alignment.json (montage-aligned grids/videos). A run with \"hitbox_view\": true (cvars "
-                "gstn.Combat.Debug.Hitboxes 1) stays out of the review and gets hitbox-drawn videos in <out>/hitbox/ (owner only)."
+                "gstn.Combat.Debug.Hitboxes 1) stays out of the review and gets hitbox-drawn videos in <out>/hitbox/ (owner only). Every run must set "
+                "gstn.Combat.Debug.Hitboxes (0 review, 1 hitbox_view). Card blocks failing identically on an approved base "
+                "(anim-approvate.md; base \"card\" or \"approved_base_card\") are inherited, not blocking. Whiffs are captured "
+                "before hits; a dummy in view during a whiff voids the pack."
             ),
             "inputSchema": {
                 "type": "object",

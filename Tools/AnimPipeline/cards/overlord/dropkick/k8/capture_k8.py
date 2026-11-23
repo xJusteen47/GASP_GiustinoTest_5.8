@@ -18,10 +18,12 @@ runs = [
      "kit": "KIT_Test_PlaytestTBK7", "cvars": "gstn.Combat.Debug.Hitboxes 0", "assert": ASSERT("AM_OverlordDropkickK7")},
     {"name": "k8", "asset": f"{D}/AS_OverlordDropkick_StartupK8", "clips": [f"{D}/AS_OverlordDropkick_StartupK8"],
      "kit": "KIT_Test_PlaytestTBK8", "cvars": "gstn.Combat.Debug.Hitboxes 0", "assert": ASSERT("AM_OverlordDropkickK8"),
-     "card": "Tools/AnimPipeline/cards/overlord/dropkick/overlord_dropkick_startup_k8.json"},
+     "card": "Tools/AnimPipeline/cards/overlord/dropkick/overlord_dropkick_startup_k8.json",
+     "approved_base_card": "Tools/AnimPipeline/cards/overlord/dropkick/overlord_dropkick_startup_k7.json"},
     {"name": "k8_hitbox", "asset": f"{D}/AS_OverlordDropkick_StartupK8", "clips": [f"{D}/AS_OverlordDropkick_StartupK8"],
      "kit": "KIT_Test_PlaytestTBK8", "cvars": "gstn.Combat.Debug.Hitboxes 1", "assert": ASSERT("AM_OverlordDropkickK8"),
-     "card": "Tools/AnimPipeline/cards/overlord/dropkick/overlord_dropkick_startup_k8.json", "hitbox_view": True},
+     "card": "Tools/AnimPipeline/cards/overlord/dropkick/overlord_dropkick_startup_k8.json",
+     "approved_base_card": "Tools/AnimPipeline/cards/overlord/dropkick/overlord_dropkick_startup_k7.json", "hitbox_view": True},
 ]
 
 
