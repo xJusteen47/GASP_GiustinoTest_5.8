@@ -1,0 +1,8 @@
+﻿stand_run_warmup 14:0M 15:0M 16:0M 17:0M 18:0M 19:0M 20:0M 21:0M 22:0M 23:150 24:126 25:90 26:72g 27:66g 28:72g 29:72g 30:90g 31:90g 32:108g 33:120g
+  taps [(-105, 'attack c1'), (-1, 'jump'), (0, 'getup started (FAF sim 21/27, video +21)'), (21, 'stick facing yaw 180 at getup+21'), (66, 'stick released')]
+roll_held_run 14:240M 15:240M 16:0M 17:0M 18:0M 19:0M 20:156 21:126 22:114 23:114 24:132 25:156 26:186g 27:216g 28:246g 29:276g 30:306g 31:336g 32:372g 33:396g
+  taps [(-75, 'attack c1'), (-19, 'stick facing yaw 180; dodge'), (-13, 'dodge'), (-7, 'dodge'), (-1, 'dodge'), (0, 'getup started (FAF sim 21/24, video +21)'), (21, 'stick facing yaw 180 at getup+21'), (66, 'stick released')]
+rollback_held_run 14:0M 15:0M 16:0M 17:0M 18:0M 19:0M 20:156 21:132 22:108 23:114 24:132 25:156 26:186g 27:216g 28:246g 29:277g 30:307g 31:336g 32:367g 33:397g
+  taps [(-76, 'attack c1'), (-19, 'stick against yaw 360; dodge'), (-13, 'dodge'), (-7, 'dodge'), (-1, 'dodge'), (0, 'getup started (FAF sim 21/24, video +21)'), (21, 'stick against yaw 356 at getup+21'), (66, 'stick released')]
+roll_a45_run 14:242M 15:0M 16:0M 17:0M 18:0M 19:0M 20:149 21:136 22:111 23:115 24:132 25:157 26:183g 27:217g 28:246g 29:272g 30:310g 31:340g 32:366g 33:395g
+  taps [(-85, 'attack c1'), (-19, 'stick facing yaw 225; dodge'), (-13, 'dodge'), (-7, 'dodge'), (-1, 'dodge'), (0, 'getup started (FAF sim 21/24, video +21)'), (21, 'stick facing yaw -139 at getup+21'), (66, 'stick released')]

@@ -67,3 +67,13 @@ COSTO: ~1 $ | 6 min laptop (capture 2) | 0 token review
   diagonal run passes it) or the run-start layer; check on the next capture whether it survives (frames.jsonl attacker position at +27).
 - Laptop retry m2held2 FAILED before any sequence (KeyError in _apply_loadout, another thread's editor started at the same second): capture still owed.
   Next: build + MoveEvents/Defence tests + `getup_capture_timed.ps1 -Runs Tools\GASNPPTest\getup_runs_momentum2_held.json` plus roll_a45_run, laptop ALONE.
+
+## Round 2 laptop capture 2026-11-23 22:15 UTC (portatile, coordinator brief, 5d9da72e)
+- Build `Run-Timed -Preset Build` OK 234 s; tests `-Tests GSTNCombat+GSTNDefence` + Check-TestLog: PASS 799/799, GSTNCombat.NP.MoveEvents.EndReason Success (data/build_test_esito_r2.txt, Saved\Logs\ci\m2r2_test.log.ue.log).
+- `getup_capture_timed.ps1 -Runs Tools\GASNPPTest\getup_runs_momentum2_held.json -Out Saved\Getup\m2r2 -MaxMinutes 15` -> ESITO OK 272 s, ASSERT: OK (data/m2r2_assert.txt), no other editor running.
+- First frame after the cut (`getup_speed_trace.py Saved\Getup\m2r2 <4 runs>` -> data/speed_trace_r2.txt): roll_held +20 = 156, rollback_held 156, roll_a45 149 cm/s; no ramp from 0 (r1 roll_a45 was 8 -> 140). Then 114..136 dip, back to ~156 at +25, run builds to ~395 at +33. Stand warmup 150 at +23.
+- `getup_speeds.py Saved\Getup\m2r2 21 60` -> data/speeds_r2.txt: FAF..+6 = 153 / 152 / 152 cm/s on the three rolls (same speed), stand 84.
+- roll_a45 +26..+28 = 183, 217, 246: the 378 one-frame spike is gone (data/spike_r2.txt).
+- Media: grids only in m2r2/m2r2/ (getup_review_media.py); no mp4s, because there's no ffmpeg on the laptop. Frames are in Saved\Getup\m2r2 (not versioned). No Blueprint saved; editor closed by the timed script, lock freed.
+SUBAGENTI: 0
+COSTO: ~2 $ | 15 min laptop (build 4, test 2, capture 5, media) | 0 token review

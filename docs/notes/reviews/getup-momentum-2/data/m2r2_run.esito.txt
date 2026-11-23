@@ -1,0 +1,4 @@
+﻿ESITO: OK
+ASSERT: OK
+tipo=Capture durata=272s limite=900s exit=0 figli_rimasti_uccisi=3 | prestart: PackageRestoreData.json -> PackageRestoreData.json.20261123_230753.bak | poststop: PIE ini restored (PlayNetMode=PIE_ListenServer -> PlayNetMode=PIE_Standalone, PlayNumberOfClients=3 -> PlayNumberOfClients=1)
+log=C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_qjfnc0\Saved\Getup\m2r2\run.log
