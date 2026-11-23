@@ -66,6 +66,28 @@ Criteri di PASS della SKILL (non della mossa)
 Se il test passa: merge in integrazione, compilazione sul PC, e la skill si dichiara finita. Se fallisce per "gioco"
 o "strumento", fix nel tool (non conta come giro di posa).
 
+## Decisione owner (2026-11-23 19:01Z): 1A 2A 3A, ma SOLO DOPO la critica di Opus al dropkick
+- Ordine: 1) thread separato con la critica Opus del dropkick K6 (severita' massima), 2) T0 preparazione, 3) T1 + T2 sul
+  Settle. L'intent di T1 (catene, massa, overshoot, finestra) si scrive dai difetti trovati dalla critica, non da questo piano.
+- w3m7 archiviata: "catena tecnica OK, estetica non giudicata", nulla all'owner.
+
+## T0: in piu', tutto cio' che fa sprecare di meno (richiesta owner)
+1. Dry run obbligatorio: `anim_run_intent` rifiuta il run vero se non c'e' un dry_run con lo stesso intent hash.
+2. Cancello prima della cattura (blocco duro in `anim_capture_move`): niente cattura senza FOLLOW_THROUGH OK, gate 15b OK,
+   conservazione OK, bake non stale. Un fallimento qui costa secondi, non una sessione editor.
+3. Soglia di leggibilita' numerica: se lo spostamento misurato della mano/testa nella finestra e' sotto una soglia
+   (proposta 2 cm o 3 gradi), niente cattura: sarebbe FAIL "troppo piccolo da leggere" (come K6 r1).
+4. Cache della base: la cattura base si riusa se hash clip + seq + cvar + viste + build sono uguali (manifest); si cattura
+   solo la variante. Stesso intent hash gia' catturato = nessuna nuova cattura.
+5. Build solo se cambia C++ (hash di Source/ e Plugins/*/Source); altrimenti si salta.
+6. Una sola sessione editor per base, variante e tutte le viste; una cattura per giro.
+7. Pacchetto review compatto: griglia fitta solo attorno ad anchor e FAF, max 8 immagini per vista; il revisore non riceve
+   altro (regola 4).
+8. Contatore tentativi per obiettivo nel manifest: al terzo il tool si rifiuta (regola 5).
+9. Costi automatici: `cache_log` cablato e minuti desktop per passo scritti nel manifest, cosi' costi.csv si compila da solo.
+10. Prefisso tool stabile (gia' fatto) per la cache dei prompt; risposte compatte opt-in per i passi ripetuti.
+Costo T0 rivisto: ~3.5 $ (era 2.5 $). Totale test ~10.5 $, con un giro di correzione ~17 $.
+
 ## Decisioni per l'owner (risposta tipo "1A 2A 3A")
 1. Mossa del test. **A (consigliata)** dropkick K6 Settle, follow-through braccia e testa: caso reale e aperto. B run-start
    w3 con A/B omogeneo: piu economico (~4 $) ma prova solo la locomotion, non il combattimento.
