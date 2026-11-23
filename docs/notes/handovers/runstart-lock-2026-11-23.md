@@ -15,7 +15,8 @@ Macchina: cloud, solo git. Modello: Haiku medium. Budget: 1 $.
 - Doc: riga 29w3 e nota v4r5 in `docs/notes/anim-approvate.md` su `claude/runstart-lock-2026-11-23`.
 
 ## Push
-- Tag e branch: vedi riga Push nel messaggio finale del thread (esito reale del comando push).
+- Branch `claude/runstart-lock-2026-11-23` (52dfbc95): PUSHATO.
+- Tag `approved/runstart-v29w3` e `approved/runstart-v4r5` (force): NON PUSHATI. Il proxy chiude la connessione (`send-pack: unexpected disconnect`), 2 tentativi per tag; `ls-remote` mostra ancora v4r5 su af857cff.
 - Comandi se il push tag viene negato:
   `git push origin refs/tags/approved/runstart-v29w3`
   `git push --force origin refs/tags/approved/runstart-v4r5`  (sovrascrive: serve il permesso dell'owner)
