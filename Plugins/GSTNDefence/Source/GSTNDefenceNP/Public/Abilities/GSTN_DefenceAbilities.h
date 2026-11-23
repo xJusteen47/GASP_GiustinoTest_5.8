@@ -74,6 +74,12 @@ struct GSTNDEFENCENP_API FGSTN_GetupExit
 	/** The speed the get-up passes on: the cvar's value when it is 0 or more (a debug knob, gstn.Getup.*ExitSpeed), else the data's */
 	static float ResolveSpeed(float DataSpeedCmPerSecond, float CVarSpeedCmPerSecond);
 
+	/**
+	 * The same with the shared knob (owner 2026-11-23: every get-up hands on the same speed): the move's own cvar when it is 0 or more, else
+	 * the shared one (gstn.Getup.ExitSpeed) when it is 0 or more, else the data's
+	 */
+	static float ResolveSpeed(float DataSpeedCmPerSecond, float CVarSpeedCmPerSecond, float SharedCVarSpeedCmPerSecond);
+
 	/** The velocity handed on when the move ended for Reason: Speed along Along (flattened to the ground plane), zero unless TailCancelled */
 	static FVector ExitVelocity(EGSTN_MoveEndReason Reason, const FVector& Along, float SpeedCmPerSecond);
 
@@ -92,6 +98,33 @@ struct GSTNDEFENCENP_API FGSTN_GetupTravelKey
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Travel", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float Fraction = 0.f;
+};
+
+/**
+ * The get-up's tail cut by the stick and the roll's turn toward the stick (owner 2026-11-23). Pure, for the abilities and the tests; the
+ * abilities write the result into their timeline data (rebuilt on init, load, edit and when a gstn.Getup.* knob changes), so the combat tick
+ * reads plain data and every machine sees the same values.
+ */
+struct GSTNDEFENCENP_API FGSTN_GetupShape
+{
+	/** Data bool, overridden by the knob: -1 = the data, 0 = off, 1 = on */
+	static bool ResolveFlag(bool bData, int32 CVarValue);
+
+	/** Data value, overridden by the knob when it is 0 or more */
+	static float ResolveValue(float DataValue, float CVarValue);
+
+	/**
+	 * The frame the roll's turn must be over by: the start of the first segment that travels (the body is still curled on its back before it,
+	 * so the turn reads as a pivot on the back, not a slide). INDEX_NONE without travel
+	 */
+	static int32 FirstTravelFrame(const TArray<FGSTN_GetupTravelKey>& Keys);
+
+	/**
+	 * Writes the roll's turn into the timeline's steer data: the move stick turns the facing toward itself (away from it for a roll toward the
+	 * head) by at most MaxDegrees, over [0, Frames), at the rate that covers MaxDegrees in Frames. MaxDegrees <= 0 or Frames <= 0: no turn
+	 * (MaxSteerDegrees 0), the roll goes straight along its axis as before
+	 */
+	static void ApplyWarp(FGSTN_CombatTimelineData& Timeline, float MaxDegrees, int32 Frames, bool bAwayFromStick, float StepSeconds);
 };
 
 /**
@@ -133,6 +166,25 @@ public:
 	/** Frame control comes back (the FAF); the frames after it are the cancellable tail (owner 2026-11-21). 0 = at the end, no tail */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Timeline", meta = (ClampMin = "0", ForceUnits = "Frames"))
 	int32 ActionableFrame = 0;
+
+	/** The move stick alone cuts the tail (owner 2026-11-23: running away from a get-up keeps its momentum). gstn.Getup.StickCutsTail overrides */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Timeline")
+	bool bStickCutsTail = true;
+
+	/**
+	 * Directional roll (owner 2026-11-23, "warped toward the right angle"): the lying body turns toward the stick, at most this far from the axis
+	 * the knockdown left, while it is still curled on its back; the travel then follows the new facing. With the forward / back split at 90
+	 * degrees, 90 covers every direction. 0 = off (straight along the axis, as before). gstn.Getup.WarpMaxDeg overrides
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Travel", meta = (ClampMin = "0.0", ClampMax = "90.0", ForceUnits = "deg"))
+	float WarpMaxDegrees = 45.f;
+
+	/** Frames the turn takes, from the roll's start. -1 = until the first frame that travels (FGSTN_GetupShape::FirstTravelFrame). gstn.Getup.WarpFrames overrides */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Travel", meta = (ClampMin = "-1", ForceUnits = "Frames"))
+	int32 WarpFrames = -1;
+
+	/** Rebuilds the timeline from the class data and the gstn.Getup.* knobs (the knobs call it on every get-up class default when they change) */
+	void RebuildGetupTimeline();
 
 	/**
 	 * The push that starts at timeline frame Frame: true with its speed (cm/s along the travel direction) and length in frames when a segment
@@ -183,6 +235,13 @@ public:
 	/** Frame control comes back (the FAF); the frames after it are the cancellable tail (owner 2026-11-21). 0 = at the end, no tail */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Timeline", meta = (ClampMin = "0", ForceUnits = "Frames"))
 	int32 ActionableFrame = 0;
+
+	/** The move stick alone cuts the tail (owner 2026-11-23: running away from a get-up keeps its momentum). gstn.Getup.StickCutsTail overrides */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Timeline")
+	bool bStickCutsTail = true;
+
+	/** Rebuilds the timeline from the class data and the gstn.Getup.* knobs (the knobs call it on every get-up class default when they change) */
+	void RebuildGetupTimeline();
 
 	virtual void PostInitProperties() override;
 	virtual void PostLoad() override;

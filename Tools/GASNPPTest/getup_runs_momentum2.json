@@ -1,0 +1,10 @@
+[
+  {"name": "stand_run", "getup": "jump", "follow": "run"},
+  {"name": "roll_run", "getup": "facing", "follow": "run"},
+  {"name": "rollback_run", "getup": "against", "follow": "run"},
+  {"name": "roll_idle", "getup": "facing", "follow": "idle"},
+  {"name": "roll_a45_run", "getup": "facing", "follow": "run", "angle": 45},
+  {"name": "rollback_a45_run", "getup": "against", "follow": "run", "angle": 45},
+  {"name": "roll_a80_max90_run", "getup": "facing", "follow": "run", "angle": 80, "cvars": {"gstn.Getup.WarpMaxDeg": 90}},
+  {"name": "roll_a45_warpoff_run", "getup": "facing", "follow": "run", "angle": 45, "cvars": {"gstn.Getup.WarpMaxDeg": 0}}
+]

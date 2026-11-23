@@ -68,6 +68,8 @@ if os.environ.get('PIE_CAPTURE_SEQUENCES'):
     SEQUENCES = [s for s in SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
 # getup-momentum-1 (2026-11-21): get-up variants in ONE Play session. PIE_CAPTURE_GETUP_RUNS = a JSON file with a list of
 #   {"name": "roll_run_v220", "getup": "jump"|"facing"|"against", "follow": "idle"|"run"|"jab", "cvars": {"gstn.Getup.RollExitSpeed": 220}}
+#   getup-momentum-2: "angle": degrees the roll's stick is turned off the get-up axis (+ = to the right of it, seen from above: UE yaw), held 10 frames
+#   (the directional roll turns while it is held); 'run' then pushes along the NEW facing at FAF
 # follow: idle = no input after the get-up starts (the tail plays out), run = stick toward the get-up's travel (the facing for the stand-up)
 # held from the get-up start (ignored until FAF, then it cuts the tail), jab = Attack tapped on the FAF frame. cvars are set when the
 # sequence starts and put back to -1 when it ends. Replaces SEQUENCES.
@@ -286,8 +288,10 @@ def _turn_to_attacker(behind=False, side=0):
     g.hold(0, 'move', g._steer_value(0, (alo[0], alo[1])))
 
 
-def _stick(direction):
-    loc, yaw = _pawn().get_actor_location(), math.radians(_pawn().get_actor_rotation().yaw + (0.0 if direction == 'facing' else 180.0))
+def _stick(direction, angle=0.0):
+    """Holds the stick along (facing) or against the facing, turned by angle degrees (getup-momentum-2: the directional roll)"""
+    loc = _pawn().get_actor_location()
+    yaw = math.radians(_pawn().get_actor_rotation().yaw + (0.0 if direction == 'facing' else 180.0) + angle)
     target = (loc.x + 300.0 * math.cos(yaw), loc.y + 300.0 * math.sin(yaw))
     g.hold(0, 'move', g._steer_value(0, target))
     return round(math.degrees(yaw))
@@ -318,7 +322,7 @@ def _step(seq, frame, states):
             g.combat_tap(0, g.button_mask('Jump'))
             tap = 'jump'
         else:
-            tap = f'stick {seq["getup"]} yaw {_stick(seq["getup"])}'
+            tap = f'stick {seq["getup"]} yaw {_stick(seq["getup"], seq.get("angle", 0.0))}'
     if 'input_at' in s and not down and 'up_at' not in s:
         s['up_at'] = frame
     if seq.get('follow'):
@@ -356,11 +360,16 @@ def _follow(seq, frame):
         s['faf_v'], s['total_v'], s['faf'], s['total'] = _getup_faf_video(seq['getup'])
         tap = f'getup started (FAF sim {s["faf"]}/{s["total"]}, video +{s["faf_v"]})'
         # The roll's stick is let go once the roll has started. A stick HELD through the get-up does not cut the tail (new3: the tail cancel
-        # wants a stick move), so 'run' pushes it again on the FAF frame, toward the get-up's travel
-        g.release(0, 'move')
+        # wants a stick move), so 'run' pushes it again on the FAF frame, toward the get-up's travel. getup-momentum-2: with an 'angle' (the
+        # directional roll) the stick stays held until the turn is over (gstn.Getup.WarpFrames, about 6 frames), so it is let go later
+        if not seq.get('angle'):
+            g.release(0, 'move')
     if 'gu_at' not in s:
         return tap, False
     at = frame - s['gu_at']
+    if seq.get('angle') and at == 10 and seq['follow'] != 'run':
+        g.release(0, 'move')
+        tap = 'stick released after the turn'
     if seq['follow'] == 'run' and at == s['faf_v']:
         tap = f'stick {"against" if seq["getup"] == "against" else "facing"} yaw {_stick("against" if seq["getup"] == "against" else "facing")} at getup+{at}'
     if seq['follow'] == 'jab' and at in (s['faf_v'], s['faf_v'] + 2):

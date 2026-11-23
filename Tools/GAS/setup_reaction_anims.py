@@ -52,11 +52,13 @@ ENTRY_DROPS = {'Knockdown': (85.0, 5, ['Tumble'])}
 # ability, parent class, montage, travel cm, direction, keys (simulation frames, fraction): roll-travel.md converted from 60 to 62.5 Hz
 # then FAF (clip frame at 60 fps) and exit speed (cm/s), getup-momentum-1: FAF = first frame the pelvis stays >= 85 % of its standing
 # height with both feet planted (Tools/AnimPipeline/cards/reaction/getup_faf_measure_ue.py -> Saved/Getup/faf_measure.txt: f20 in all three)
+# getup-momentum-2 (owner 2026-11-23): every get-up hands on the SAME speed; in game gstn.Getup.ExitSpeed (default the same value) overrides it
+GETUP_EXIT_SPEED = 160.0
 GETUPS = [
-    ('GA_GetupNeutral_Test', 'GSTN_GA_GetupNeutral', 'AM_React_GetUp', 0.0, None, [], 20, 120.0),
-    ('GA_GetupRoll_Test', 'GSTN_GA_GetupRoll', 'AM_React_Roll', 80.0, 'FACING', [(0, 0.0), (6, 0.0), (10, 0.7), (16, 1.0)], 20, 220.0),
+    ('GA_GetupNeutral_Test', 'GSTN_GA_GetupNeutral', 'AM_React_GetUp', 0.0, None, [], 20, GETUP_EXIT_SPEED),
+    ('GA_GetupRoll_Test', 'GSTN_GA_GetupRoll', 'AM_React_Roll', 80.0, 'FACING', [(0, 0.0), (6, 0.0), (10, 0.7), (16, 1.0)], 20, GETUP_EXIT_SPEED),
     ('GA_GetupRollBack_Test', 'GSTN_GA_GetupRoll', 'AM_React_RollBack', 65.0, 'AGAINST_FACING',
-     [(0, 0.0), (5, 0.0), (8, 0.17), (10, 0.68), (12, 0.97), (13, 1.0)], 20, 160.0),
+     [(0, 0.0), (5, 0.0), (8, 0.17), (10, 0.68), (12, 0.97), (13, 1.0)], 20, GETUP_EXIT_SPEED),
 ]
 
 _lines = []

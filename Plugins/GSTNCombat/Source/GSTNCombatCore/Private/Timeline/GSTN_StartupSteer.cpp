@@ -148,10 +148,12 @@ EGSTN_SteerPhase FGSTN_StartupSteer::ResolveFrame(const FGSTN_CombatTimelineData
 
 	const float Start = FRotator::NormalizeAxis(In.StartYawDeg);
 	OutStickActive = IsSteering(In.Stick, MaxSteer, Data.Steer.StickDeadZone);
+	// A backward move aims its back at the stick: the opposite stick, same dead zone
+	const FVector2D Stick = Data.Steer.bAwayFromStick ? -In.Stick : In.Stick;
 	float Target = 0.f;
 	if (OutStickActive || !IsMoveStickSource(Data.Steer.Source))
 	{
-		Target = SteerYaw(Start, In.Stick, In.CameraYawDeg, MaxSteer, Data.Steer.StickDeadZone);
+		Target = SteerYaw(Start, Stick, In.CameraYawDeg, MaxSteer, Data.Steer.StickDeadZone);
 	}
 	else
 	{
