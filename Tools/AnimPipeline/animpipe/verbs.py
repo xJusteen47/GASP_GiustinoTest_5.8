@@ -547,6 +547,7 @@ def v_variant(move, a, o):
         letter = next(L for L in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" if L not in used)
         v = json.loads(json.dumps(c))
         v["move"] = f"{move}_var{letter}"; v["anim"] = f"{c['anim']}_Var{letter}"
+        v.setdefault("curve", "spline")          # stop-and-go fix (2026-11-24): a variant is built through its keys
         v["variant"] = {"of": move, "letter": letter, "why": o["why"], "base_sha": S.sha(card), "at": stamp()}
         for e in v.get("approved", []):          # a lock on the card itself: the variant compares with the original
             if os.path.normcase(os.path.join(K.CARDS, e["ref"])) == os.path.normcase(card):

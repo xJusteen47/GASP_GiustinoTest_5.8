@@ -4,7 +4,10 @@
            cameras), contact/FAF (the effector peaks inside the contact window, the clip reaches the FAF), planted feet,
            closed fists, hitstop_snap (default on every move: no bone travels more than HITSTOP_MAX cm from a
            hitbox-active frame to the next one, since a hit freezes the clip on that frame and the next frame would pop),
-           co_motion (no limb glued to the trunk through the startup while the body moves).
+           co_motion (no limb glued to the trunk through the startup while the body moves), stop_and_go (cards with
+           curve "spline": no frame of the startup with the whole body under 3.5 cm/frame outside the declared holds, and
+           the largest step <= 4x the median, and in the whole clip no run of more than 3 still steps, so take-off and
+           landing count too; on "tangents" cards it is reported under measure, see animpipe/curves.py).
   measure  reported, never block: motion_curves (+ motion_ref against the card's reference), twist_chain, motion_check
            (weight, overlap, balance, pose rules), spacing of the built curves, distance from the source poses.
   rules    (opt-in) the README's owner rules as blocking checks, declared in the card under `rules` with their thresholds;
@@ -170,6 +173,39 @@ def _co_motion(F, Q, w, skip_limbs=(), exempt=()):
     if not runs:
         return True, f"no limb glued >= {CO_RUN} frames in the startup 0-{end} (limbs {', '.join(limbs)})"
     return False, "glued while the body moves: " + ", ".join(f"{k} {a}-{b}" for k, a, b in runs)
+
+
+def _stop_and_go(c, F, w, exempt=()):
+    """Gate against the stop-and-go build (diagnosis dropkick-k8-3): see animpipe/curves.stop_and_go. Window: the card's
+    stop_and_go.window, default the startup (frame 0 to the first active frame)."""
+    from animpipe import curves as CV
+    from animpipe.card import hold_keys, key_frames
+    p = c.get("stop_and_go", {})
+    win = p.get("window", [0, w["active"][0]])
+    held = CV.held_frames(hold_keys(c), key_frames(c)) | set(exempt)
+    Fl = [{b: tuple(float(x) for x in v) for b, v in f.items()} for f in F]
+    mn = float(p.get("min_cm", CV.STOP_CM))
+    ok, line, _ = CV.stop_and_go(Fl, win, held, mn, float(p.get("max_ratio", CV.JUMP_RATIO)))
+    # take-off and landing: the whole clip, no run of more than STILL_RUN still steps outside the holds
+    runs = CV.long_stills(Fl, held, mn, int(p.get("still_run", CV.STILL_RUN)))
+    if runs:
+        ok = False
+    line += f"; whole clip still runs > {p.get('still_run', CV.STILL_RUN)} steps: " + (", ".join(f"{a}-{b + 1}" for a, b in runs) if runs else "none")
+    return ok, line
+
+
+def _key_warnings(c, F, w):
+    """Measure (warnings, never block): near-identical consecutive keys (the body stays still between them even with
+    continuous tangents) and frames where arms, head and legs all arrive together (no overlap)."""
+    from animpipe import curves as CV
+    from animpipe.card import hold_keys, key_frames
+    Fl = [{b: tuple(float(x) for x in v) for b, v in f.items()} for f in F]
+    mn = float(c.get("stop_and_go", {}).get("min_cm", CV.STOP_CM))
+    ne = CV.near_equal_keys(Fl, key_frames(c), hold_keys(c), mn)
+    same = CV.same_frame_arrivals(Fl, tol=int(c.get("stop_and_go", {}).get("arrival_tol", 0)))
+    near = ("WARN near-equal keys " + ", ".join(f"{a}-{b} {d} cm" for a, b, d in ne)) if ne else f"no consecutive keys closer than {mn} cm"
+    arr = ("WARN arms, head and legs arrive together at " + ", ".join(map(str, same))) if same else "no frame where arms, head and legs all arrive together"
+    return near, arr
 
 
 def _clearance(path, rc, exemptions):
@@ -400,6 +436,12 @@ def run(path, src=False):
     co_skip = list(c.get("co_motion_skip", [])) + [f"leg_{s}" for s in sides]
     res["warn"] += _arm_jump(F, Q, w, exempt.get("arm_jump", set()))
     res["block"]["co_motion"] = _co_motion(F, Q, w, co_skip, exempt.get("co_motion", set()))
+    sg_ok, sg_line = _stop_and_go(c, F, w, exempt.get("stop_and_go", set()))
+    if c.get("curve", "tangents") == "spline":
+        res["block"]["stop_and_go"] = (sg_ok, sg_line)
+    else:
+        res["measure"]["stop_and_go"] = (0, ("PASS " if sg_ok else "FAIL ") + sg_line)
+    res["measure"]["near_equal_keys"], res["measure"]["same_frame_arrivals"] = [(0, x) for x in _key_warnings(c, F, w)]
 
     for name, args in (("motion_curves", ["motion_curves.py", take, f"--sheet={move}", "--quiet"]),
                        ("twist_chain", ["twist_chain.py", take, "--quiet"]),
