@@ -3,9 +3,9 @@
 Branch `claude/project-thread-t1yn9x` da `claude/integ-2026-11-23` (e0fcf520). NON compilato, NON provato in editor.
 Riuso: `UGSTN_CameraAnchorComponent` (camera-anchor.md), sorgente altezza esistente (`EGSTN_CameraVerticalSource`), camera P1a.
 
-## Causa (lettura codice + dati dropkick K6, Saved/DropkickK6/k6r2hit/dropkick_sweet_hit/frames.jsonl, branch l1dcng)
-1. La fix 11-20 (CapsuleBottom) usava la base della capsula A TERRA e la radice della mesh IN ARIA. Nel loop del dropkick la radice della clip
-   sta ~55 cm sotto il corpo: in aria la camera la seguiva in giù (sotto la quota di stacco), all'atterraggio la capsula da 35 cm sul torso
+## Causa (lettura codice; numeri dal thread dropkick, Saved/DropkickK6/k6r2hit/dropkick_sweet_hit/frames.jsonl sul portatile, NON riletti qui)
+1. La fix 11-20 (CapsuleBottom) usava la base della capsula A TERRA e la radice della mesh IN ARIA. Dedotto (da verificare con la trace): nel loop la radice della
+   mesh sta ~55 cm sotto dove starebbe in piedi: in aria la camera la seguiva in giù (sotto la quota di stacco), all'atterraggio la capsula da 35 cm sul torso
    tocca terra e la sorgente passa a base capsula + 86: +57 cm in un frame. Una capsula alzata sul torso mentre Mover dice ancora "a terra" (a3) idem.
 2. La camera P1a (quella in gioco, `gstn.Camera.P1a 1`) riceveva il pivot dal subsystem tickable, che gira DOPO la vista: un frame di ritardo
    (aperto dal 11-21). E non aveva l'ancora come prerequisito di tick.
