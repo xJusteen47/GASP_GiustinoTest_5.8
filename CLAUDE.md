@@ -1,6 +1,6 @@
 # GASP_Giustino2
 
-Unreal Engine **5.8** project built on the Game Animation Sample (GASP). One C++ module, `GASP_Giustino2` (prefix `GSTN_`).
+Unreal Engine **5.9** project built on the Game Animation Sample (GASP). One C++ module, `GASP_Giustino2` (prefix `GSTN_`).
 Focus: wall movement for **Mover**, driven by **Gameplay Abilities** simulated by **Network Prediction** (the "GAS-NPP fork").
 
 Read the linked docs only when the task touches that area. Every plugin has a README next to its `.uplugin`; the index is [Plugins/README.md](Plugins/README.md). Do not read the whole `Plugins/` tree: it is engine-level code.
@@ -57,10 +57,12 @@ Headers carry long doc comments that explain intent and invariants: read the hea
 
 ## Build and run
 
-- Engine association `5.8`; Rider is the IDE (Rider MCP tools are available: prefer `search_symbol`, `get_class_hierarchy`, `get_symbol_info` over reading files).
-- C++ changes: Live Coding in the open editor, or a full build from Rider for header/reflection changes.
-- Editor automation: the `unreal-mcp` server (`.mcp.json`) and the `unreal-mcp` skill, when the editor is running.
-- Network behaviour is verified with the PIE harness in `Tools/GASNPPTest/gasnpp_test.py` (dedicated server + 2 clients). Anything touching abilities or movement simulation should be checked with it; see testing.md.
+- Engine association `5.9` (`C:\Program Files\Epic Games\UE_5.9\Engine`); no Rider IDE/MCP in active use.
+- Project governance, model tiers and project memory: [regole-progetto-2026-11-22.md](docs/notes/regole-progetto-2026-11-22.md) and [memoria-progetto.md](docs/notes/memoria-progetto.md).
+- C++ changes: Live Coding only for quick probes, real build via `Tools/CI/Run-Timed.ps1 -Preset Build` (with `-WaitMutex -NoHotReload`) before captures; test parsing via `Tools/CI/Check-TestLog.ps1`.
+- Git safety: install hooks with `Tools/CI/Install-GitHooks.ps1` (`Tools/CI/Test-GitGuard.ps1` blocks owner-local files like `DA_Locomotion_Default`, locked `anim-approvate.md` assets, secrets, and pushes to `feature/*` / `main`).
+- Editor automation: the `unreal-mcp` server (`.mcp.json`) and the `unreal-mcp` skill, when the editor is running; engine questions via `Tools/UE59/ask_unreal_assistant.py`.
+- Network behaviour is verified with the PIE harness in `Tools/GASNPPTest/gasnpp_test.py` (dedicated server + 2 clients) run inside `Tools/CI/Run-Timed.ps1`. Anything touching abilities or movement simulation should be checked with it; see testing.md.
 
 ## Git
 

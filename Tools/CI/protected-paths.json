@@ -1,0 +1,37 @@
+{
+  "ue59_lock_path": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2_ue59\\_ue59\\IN-USO.txt",
+  "owner_local_patterns": [
+    "(^|/)DA_Locomotion_Default\\.uasset$",
+    "(^|/)CHT_[^/]*_PoseMatch\\.uasset$",
+    "^Saved/Config/WindowsEditor/EditorPerProjectUserSettings\\.ini$",
+    "^Mixamo(/|$)"
+  ],
+  "secret_file_patterns": [
+    "(^|/)secrets\\.json$",
+    "(^|/)\\.env$",
+    "\\.env$",
+    "\\.key$",
+    "\\.pem$",
+    "(^|/)[^/]*api[_-]?key[^/]*$"
+  ],
+  "protected_branches": [
+    "main",
+    "master",
+    "feature/*"
+  ],
+  "allowed_push_prefixes": [
+    "claude/"
+  ],
+  "epic_eula_dirs": [
+    "Plugins/EngineOverrides",
+    "Plugins/GASNPP"
+  ],
+  "epic_eula_patterns": [
+    "plugins/engineoverrides",
+    "plugins/gasnpp",
+    "program files/epic games",
+    "epic games/ue_",
+    "ue_5.9",
+    "ue_5.8"
+  ]
+}

@@ -185,6 +185,7 @@ void UGSTN_RunPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 	{
 		OnFootSlideChanged.Broadcast(FootSlide.IsSliding(), FootSlide);
 	}
+	TickRunStage();
 	TickLean(DeltaTime);
 	ResolveClips();
 	TickSkidPlayTime(DeltaTime);
@@ -262,6 +263,70 @@ namespace
 		const AActor* Owner = AnimInstance ? AnimInstance->GetOwningActor() : nullptr;
 		return Owner ? Owner->FindComponentByClass<UGSTN_RunPresentationComponent>() : nullptr;
 	}
+}
+
+void UGSTN_RunPresentationComponent::TickRunStage()
+{
+	// Readable run stages: the cues of the presented frame, from the simulated state (read only; the sim never sees these)
+	const FGSTN_RunStageState* Run = Mover ? FGSTN_RunStageMover::Find(Mover->GetSyncState()) : nullptr;
+	const FGSTN_LocomotionSimTuning* Tuning = FGSTN_LocomotionAttach::Find(GetOwner());
+	const int32 OldStage = PresentedRunStage;
+	if (!Run || !Tuning || !Tuning->RunStages.IsEnabled())
+	{
+		PresentedRunStage = 0;
+		bRunStageTell = bRunStageCharge = bRunStageEntryBurst = false;
+		RunStageTellAlpha = 0.f;
+		RunStageTime = 0.f;
+		RunStageEnteredFrame = INDEX_NONE;
+	}
+	else
+	{
+		const FGSTN_RunStagesTuning& Stages = Tuning->RunStages;
+		const bool bReadable = FGSTN_RunStageMover::IsReadableSteps();
+		PresentedRunStage = static_cast<int32>(Run->Stage) + 1;
+		bRunStageTell = FGSTN_RunStageLogic::IsStageTell(Stages, *Run, bReadable);
+		RunStageTellAlpha = FGSTN_RunStageLogic::GetStageTellAlpha(Stages, *Run, bReadable);
+		bRunStageCharge = FGSTN_RunStageLogic::IsStageCharge(Stages, *Run, bReadable);
+		bRunStageEntryBurst = FGSTN_RunStageLogic::IsStageEntryBurst(Stages, *Run, bReadable);
+		RunStageEnteredFrame = Run->StageEnteredFrame;
+		// Frame 0 of the stage = one step played, like the run start time
+		RunStageTime = (Run->StageEnteredFrame != INDEX_NONE && Run->LastFrame >= Run->StageEnteredFrame)
+			? (Run->LastFrame - Run->StageEnteredFrame + 1) * GSTNRunPresentation::StepSeconds : 0.f;
+	}
+	if (OldStage != PresentedRunStage && OldStage > 0 && PresentedRunStage > 0)
+	{
+		OnRunStageChanged.Broadcast(OldStage, PresentedRunStage, PresentedRunStage > OldStage);
+	}
+}
+
+int32 UGSTN_RunPresentationComponent::GetAnimOwnerRunStage(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run ? Run->GetRunStage() : 0;
+}
+
+bool UGSTN_RunPresentationComponent::IsAnimOwnerRunStageTell(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run && Run->IsRunStageTell();
+}
+
+float UGSTN_RunPresentationComponent::GetAnimOwnerRunStageTellAlpha(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run ? Run->GetRunStageTellAlpha() : 0.f;
+}
+
+bool UGSTN_RunPresentationComponent::IsAnimOwnerRunStageCharge(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run && Run->IsRunStageCharge();
+}
+
+float UGSTN_RunPresentationComponent::GetAnimOwnerRunStageTime(const UAnimInstance* AnimInstance)
+{
+	const UGSTN_RunPresentationComponent* Run = FindRunPresentation(AnimInstance);
+	return Run ? Run->GetRunStageTime() : 0.f;
 }
 
 bool UGSTN_RunPresentationComponent::IsAnimOwnerSkidding(const UAnimInstance* AnimInstance)
@@ -461,36 +526,45 @@ void UGSTN_RunPresentationComponent::TickLean(float DeltaTime)
 	// State scale: run stage, air, attack timeline, skid or attack slide (the spring blends in and out of each)
 	const FMoverSyncState& Sync = Mover->GetSyncState();
 	const FGSTN_RunStageState* Run = FGSTN_RunStageMover::Find(Sync);
-	float StateScale = Settings.GetStageScale(Run ? Run->Stage : 0) * FMath::Max(GSTNRunPresentation::CVarLean.GetValueOnGameThread(), 0.f);
+	// The state gate (air, slide, attack, run stop, console scale) fades both the acceleration lean and the run stages' forward lean
+	float StateGate = FMath::Max(GSTNRunPresentation::CVarLean.GetValueOnGameThread(), 0.f);
 	if (Mover->HasGameplayTag(Mover_IsInAir, true))
 	{
-		StateScale *= Settings.AirScale;
+		StateGate *= Settings.AirScale;
 	}
 	if (FootSlide.IsSliding())
 	{
-		StateScale *= Settings.SlideScale;
+		StateGate *= Settings.SlideScale;
 	}
 	if (const UGSTN_CombatSimComponent* Sim = GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>())
 	{
 		if (Sim->IsInTimeline())
 		{
-			StateScale *= Settings.AttackScale;
+			StateGate *= Settings.AttackScale;
 		}
 	}
 	// The run stop clip carries its own weight (torso still leaning FORWARD over the planted foot, brief section 2 trait 2). The braking
 	// would make the solver lean the body BACK by up to MaxAngleDeg and cancel it (run-stop-2 capture), so the lean springs out instead
 	if (RunStop.IsClip())
 	{
-		StateScale = 0.f;
+		StateGate = 0.f;
 	}
-	LeanSolver.Step(Settings, Mover->GetVelocity(), GetOwner()->GetActorForwardVector(), DeltaTime, StateScale);
+	const float StateScale = Settings.GetStageScale(Run ? Run->Stage : 0) * StateGate;
+	// Readable run stages (decisions 2A 3B): the stage's own forward lean, deepened over the tell of the next stage. The stage part follows
+	// the readable switch too, so gstn.RunStage.Readable 0 shows the old run whole
+	float ExtraForward = 0.f;
+	if (Run && FGSTN_RunStageMover::IsReadableSteps())
+	{
+		ExtraForward = (Settings.GetStageForwardLeanDeg(Run->Stage) + Settings.TellForwardLeanDeg * RunStageTellAlpha) * StateGate;
+	}
+	LeanSolver.Step(Settings, Mover->GetVelocity(), GetOwner()->GetActorForwardVector(), DeltaTime, StateScale, ExtraForward);
 }
 
 void UGSTN_RunPresentationComponent::GetAdditiveReaction(FGSTN_AdditiveReactionRequest& Out) const
 {
 	// Layer 1: the locomotion lean, the placeholder bend held at its peak with the weight carrying the angle
 	const float LocoLeanDeg = LeanSolver.Lean.Size();
-	const float MaxDeg = GetLeanSettings().MaxAngleDeg * 1.2f;
+	const float MaxDeg = GetLeanSettings().MaxAngleDeg * 1.2f + GetLeanSettings().GetMaxExtraForwardLeanDeg();
 	if (LocoLeanDeg > 0.05f && MaxDeg > 0.f)
 	{
 		FGSTN_AdditiveReactionLayer& Lean = Out.Layers[1];

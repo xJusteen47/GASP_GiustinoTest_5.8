@@ -39,4 +39,10 @@ UE_DEFINE_GAMEPLAY_TAG_COMMENT(StopRelease, "Presentation.Event.StopRelease", "T
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Shield_On, "Presentation.Event.Shield.On", "Shield raised");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Shield_Hit, "Presentation.Event.Shield.Hit", "A hit blocked by the shield");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Shield_Break, "Presentation.Event.Shield.Break", "Shield broken");
+
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Footwear, "Presentation.Footwear", "Footwear of a skin: the contact layer of footsteps and their rumble (surface audio). Never in a sync state");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Footwear_Clay, "Presentation.Footwear.Clay", "Soft clay-like contact: the stock GASP footstep (default of a skin without footwear)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Footwear_Metal, "Presentation.Footwear.Metal", "Metal boots (knight): clank, heavier rumble");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Footwear_Barefoot, "Presentation.Footwear.Barefoot", "Bare feet: soft slap, very light rumble");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Footwear_ShoeSole, "Presentation.Footwear.ShoeSole", "Rubber shoe sole: squeak and tap");
 }

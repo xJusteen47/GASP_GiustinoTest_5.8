@@ -1620,6 +1620,10 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 					RunJson->SetNumberField(TEXT("sinceRelease"), Run->FramesSinceStickRelease);
 					RunJson->SetNumberField(TEXT("stamp"), Run->StampFrames);
 					RunJson->SetNumberField(TEXT("dash"), Run->DashFrames);
+					// Readable run stages S1: the step's burst counter, the frame the stage began and the frames counted towards the next
+					RunJson->SetNumberField(TEXT("entry"), Run->EntryFrames);
+					RunJson->SetNumberField(TEXT("stageFrom"), Run->StageEnteredFrame);
+					RunJson->SetNumberField(TEXT("inStage"), Run->FramesInStage);
 					const FGameplayTag BoostTag = FGameplayTag::RequestGameplayTag(TEXT("Command.Movement.RunBoost"), false);
 					RunJson->SetNumberField(TEXT("boostCmd"), BoostTag.IsValid() ? Combat->FindCommandIndex(BoostTag) : -2);
 					RunJson->SetBoolField(TEXT("boostNow"), BoostTag.IsValid() && Combat->WasCommandEnteredWithin(BoostTag, 0));

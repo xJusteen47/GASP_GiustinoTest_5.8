@@ -4,6 +4,7 @@
 
 #include "Kits/GSTN_CombatAssetTypes.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
+#include "Kits/GSTN_SuperDefinition.h"
 #include "Kits/GSTN_WeaponDefinition.h"
 #include "Loadout/GSTN_LoadoutAssembly.h"
 #include "Loadout/GSTN_LoadoutComponent.h"
@@ -49,6 +50,141 @@ namespace
 			Option.Result.Skin = Context.Draft.Skin;
 			Option.Result.Extensions = Context.Draft.Extensions;
 			Option.Result.DesignerValues = Context.Draft.DesignerValues;
+		}
+	}
+
+	/** The label of a weapon or super: its DisplayName, else the readable asset name */
+	FText AssetLabel(const FText& DisplayName, const FPrimaryAssetId& Id)
+	{
+		return DisplayName.IsEmpty() ? FGSTN_LoadoutChoiceRegistry::PrettyNameFromString(Id.PrimaryAssetName.ToString()) : DisplayName;
+	}
+
+	/**
+	 * Support weapon rows (M11 leftover, priority 50): one per additional weapon slot of the kit (MaxAdditionalWeapons), each shown once the
+	 * slot before it is filled. Options: none, then every weapon whose tags match the kit's AllowedAdditionalWeapons (not the primary one).
+	 * A change drops the special picks of the support weapons (their indexes move); the primary weapon's stay
+	 */
+	void GatherSupportWeaponRows(const FGSTN_LoadoutChoiceContext& Context, TArray<FGSTN_LoadoutChoiceRow>& OutRows)
+	{
+		const UGSTN_PrimaryKitDefinition* Kit = Context.Resolved.Kit;
+		if (!Kit || Kit->MaxAdditionalWeapons <= 0)
+		{
+			return;
+		}
+		TArray<FPrimaryAssetId> Ids;
+		Context.ListAssetIds(GSTNCombatAssetTypes::Weapon(), Ids);
+		Ids.Sort([](const FPrimaryAssetId& A, const FPrimaryAssetId& B) { return A.PrimaryAssetName.LexicalLess(B.PrimaryAssetName); });
+		const FSoftObjectPath PrimaryPath = Kit->PrimaryWeapon.ToSoftObjectPath();
+		TArray<TPair<FPrimaryAssetId, FText>> Allowed;
+		for (const FPrimaryAssetId& Id : Ids)
+		{
+			const UGSTN_WeaponDefinition* Weapon = Cast<UGSTN_WeaponDefinition>(Context.ResolveAsset(Id));
+			if (Weapon && FSoftObjectPath(Weapon) != PrimaryPath
+				&& (Kit->AllowedAdditionalWeapons.IsEmpty() || Kit->AllowedAdditionalWeapons.Matches(Weapon->WeaponTags)))
+			{
+				Allowed.Emplace(Id, AssetLabel(Weapon->DisplayName, Id));
+			}
+		}
+		if (Allowed.IsEmpty())
+		{
+			return;
+		}
+		const TArray<FPrimaryAssetId>& Current = Context.Draft.AdditionalWeapons;
+		const int32 Slots = FMath::Min(Kit->MaxAdditionalWeapons, Current.Num() + 1);
+		for (int32 Slot = 0; Slot < Slots; ++Slot)
+		{
+			FGSTN_LoadoutChoiceRow& Row = OutRows.AddDefaulted_GetRef();
+			Row.Id = FName(*FString::Printf(TEXT("Support.%d"), Slot));
+			Row.Label = Kit->MaxAdditionalWeapons == 1 ? LOCTEXT("SupportRow", "Arma di supporto")
+				: FText::Format(LOCTEXT("SupportRowN", "Arma di supporto {0}"), FText::AsNumber(Slot + 1));
+			const FPrimaryAssetId Held = Current.IsValidIndex(Slot) ? Current[Slot] : FPrimaryAssetId();
+			auto With = [&Context, Slot](const FPrimaryAssetId& Id)
+			{
+				FGSTN_LoadoutData Result = Context.Draft;
+				if (Id.IsValid())
+				{
+					if (Result.AdditionalWeapons.IsValidIndex(Slot))
+					{
+						Result.AdditionalWeapons[Slot] = Id;
+					}
+					else
+					{
+						Result.AdditionalWeapons.Add(Id);
+					}
+				}
+				else if (Result.AdditionalWeapons.IsValidIndex(Slot))
+				{
+					Result.AdditionalWeapons.RemoveAt(Slot);
+				}
+				Result.SlotCustomisations.RemoveAll([](const FGSTN_SlotCustomisation& Entry) { return Entry.WeaponIndex > 0; });
+				return Result;
+			};
+			FGSTN_LoadoutChoiceOption& None = Row.Options.AddDefaulted_GetRef();
+			None.Label = LOCTEXT("NoSupport", "Nessuna");
+			None.Result = Held.IsValid() ? With(FPrimaryAssetId()) : Context.Draft;
+			for (const TPair<FPrimaryAssetId, FText>& Entry : Allowed)
+			{
+				// A weapon already in another slot is not offered twice
+				if (Entry.Key != Held && Current.Contains(Entry.Key))
+				{
+					continue;
+				}
+				FGSTN_LoadoutChoiceOption& Option = Row.Options.AddDefaulted_GetRef();
+				Option.Label = Entry.Value;
+				Option.Result = Entry.Key == Held ? Context.Draft : With(Entry.Key);
+			}
+		}
+	}
+
+	/**
+	 * Super rows (M11 leftover, priority 60): one per super slot of the kit (SuperSlotCount). Options: none, then every super whose SuperTags
+	 * match the kit's AllowedSupers. A pick writes the slot (the list is sized to the kit's slots; an invalid id is an empty slot)
+	 */
+	void GatherSuperRows(const FGSTN_LoadoutChoiceContext& Context, TArray<FGSTN_LoadoutChoiceRow>& OutRows)
+	{
+		const UGSTN_PrimaryKitDefinition* Kit = Context.Resolved.Kit;
+		if (!Kit || Kit->SuperSlotCount <= 0)
+		{
+			return;
+		}
+		TArray<FPrimaryAssetId> Ids;
+		Context.ListAssetIds(GSTNCombatAssetTypes::Super(), Ids);
+		Ids.Sort([](const FPrimaryAssetId& A, const FPrimaryAssetId& B) { return A.PrimaryAssetName.LexicalLess(B.PrimaryAssetName); });
+		TArray<TPair<FPrimaryAssetId, FText>> Allowed;
+		for (const FPrimaryAssetId& Id : Ids)
+		{
+			const UGSTN_SuperDefinition* Super = Cast<UGSTN_SuperDefinition>(Context.ResolveAsset(Id));
+			if (Super && (Kit->AllowedSupers.IsEmpty() || Kit->AllowedSupers.Matches(Super->SuperTags)))
+			{
+				Allowed.Emplace(Id, AssetLabel(Super->DisplayName, Id));
+			}
+		}
+		if (Allowed.IsEmpty())
+		{
+			return;
+		}
+		for (int32 Slot = 0; Slot < Kit->SuperSlotCount; ++Slot)
+		{
+			FGSTN_LoadoutChoiceRow& Row = OutRows.AddDefaulted_GetRef();
+			Row.Id = FName(*FString::Printf(TEXT("Super.%d"), Slot));
+			Row.Label = Kit->SuperSlotCount == 1 ? LOCTEXT("SuperRow", "Super") : FText::Format(LOCTEXT("SuperRowN", "Super {0}"), FText::AsNumber(Slot + 1));
+			const FPrimaryAssetId Held = Context.Draft.Supers.IsValidIndex(Slot) ? Context.Draft.Supers[Slot] : FPrimaryAssetId();
+			auto With = [&Context, Kit, Slot](const FPrimaryAssetId& Id)
+			{
+				FGSTN_LoadoutData Result = Context.Draft;
+				Result.Supers.SetNum(FMath::Max(Result.Supers.Num(), Kit->SuperSlotCount));
+				Result.Supers[Slot] = Id;
+				return Result;
+			};
+			FGSTN_LoadoutChoiceOption& None = Row.Options.AddDefaulted_GetRef();
+			None.Label = LOCTEXT("NoSuper", "Nessuna");
+			None.Result = Held.IsValid() ? With(FPrimaryAssetId()) : Context.Draft;
+			for (const TPair<FPrimaryAssetId, FText>& Entry : Allowed)
+			{
+				FGSTN_LoadoutChoiceOption& Option = Row.Options.AddDefaulted_GetRef();
+				Option.Label = Entry.Value;
+				Option.Result = Entry.Key == Held ? Context.Draft : With(Entry.Key);
+			}
 		}
 	}
 
@@ -127,8 +263,10 @@ void FGSTN_LoadoutChoiceRegistry::Gather(const FGSTN_LoadoutChoiceContext& Conte
 	check(IsInGameThread());
 	OutRows.Reset();
 
-	// Built-in rows at their documented priorities (kit 0, specials 100), registered ones around them
+	// Built-in rows at their documented priorities (kit 0, support weapons 50, supers 60, specials 100), registered ones around them
 	bool bKitDone = false;
+	bool bSupportDone = false;
+	bool bSupersDone = false;
 	bool bSpecialsDone = false;
 	auto RunBuiltInsUpTo = [&](int32 Priority)
 	{
@@ -136,6 +274,16 @@ void FGSTN_LoadoutChoiceRegistry::Gather(const FGSTN_LoadoutChoiceContext& Conte
 		{
 			GatherKitRow(Context, OutRows);
 			bKitDone = true;
+		}
+		if (!bSupportDone && Priority >= 50)
+		{
+			GatherSupportWeaponRows(Context, OutRows);
+			bSupportDone = true;
+		}
+		if (!bSupersDone && Priority >= 60)
+		{
+			GatherSuperRows(Context, OutRows);
+			bSupersDone = true;
 		}
 		if (!bSpecialsDone && Priority >= 100)
 		{

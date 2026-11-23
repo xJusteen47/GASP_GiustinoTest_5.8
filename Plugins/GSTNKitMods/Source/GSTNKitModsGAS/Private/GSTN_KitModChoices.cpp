@@ -133,7 +133,7 @@ void FGSTN_KitModChoices::Gather(const FGSTN_LoadoutChoiceContext& Context, TArr
 		{
 			if (Mod.Value->Slot == SlotType)
 			{
-				AddOption(Mod.Key, FGSTN_LoadoutChoiceRegistry::PrettyName(Mod.Key));
+				AddOption(Mod.Key, Mod.Value->DisplayName.IsEmpty() ? FGSTN_LoadoutChoiceRegistry::PrettyName(Mod.Key) : Mod.Value->DisplayName);
 			}
 		}
 		if (Row.Options.Num() < 2)

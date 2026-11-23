@@ -1,0 +1,35 @@
+#!/bin/sh
+# GSTN git guard (pre-push): allows pushes only to claude/*; blocks main, feature/*, deletes, and force-pushes.
+# Also forwards refspecs to git-lfs pre-push so .uasset LFS objects are uploaded automatically before push.
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+HOOK_DIR=$(cd "$(dirname "$0")" && (pwd -W 2>/dev/null || pwd))
+GUARD="$ROOT/Tools/CI/Test-GitGuard.ps1"
+if [ ! -f "$GUARD" ]; then
+    GUARD="$HOOK_DIR/../Tools/CI/Test-GitGuard.ps1"
+fi
+if [ ! -f "$GUARD" ]; then
+    echo "ESITO: BLOCKED - Test-GitGuard.ps1 mancante ($GUARD)" >&2
+    exit 2
+fi
+
+REFS_INPUT=$(cat)
+if [ -n "$REFS_INPUT" ]; then
+    printf '%s\n' "$REFS_INPUT" | while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
+        [ -z "$local_ref" ] && continue
+        powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$GUARD" -Mode Push -RepoRoot "$ROOT" -TargetRef "$remote_ref" -LocalSha "$local_sha" -RemoteSha "$remote_sha" </dev/null
+        rc=$?
+        if [ $rc -ne 0 ]; then
+            exit $rc
+        fi
+    done
+    rc=$?
+    if [ $rc -ne 0 ]; then
+        exit $rc
+    fi
+fi
+
+if command -v git-lfs >/dev/null 2>&1; then
+    printf '%s\n' "$REFS_INPUT" | git lfs pre-push "$@"
+    exit $?
+fi
+exit 0

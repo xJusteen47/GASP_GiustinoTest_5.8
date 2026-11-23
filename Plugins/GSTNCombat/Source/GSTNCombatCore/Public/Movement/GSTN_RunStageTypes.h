@@ -88,6 +88,37 @@ struct GSTNCOMBATCORE_API FGSTN_RunStage
 	/** Fraction of Acceleration on the first frame of the ramp */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stage|Acceleration Ramp", meta = (ClampMin = "0", ClampMax = "1"))
 	float RampStartFraction = 1.f;
+
+	/**
+	 * Readable stage step (owner 2026-11-20, decision 1A, docs/notes/run-stages-leggibili-piano.md): when the run CLIMBS into this stage
+	 * (FramesToNextStage of the stage below, not a boost or a drop) the acceleration is multiplied by EntryAccelMultiplier for this many
+	 * frames, so the new top speed comes in a few frames, in the same frame as the clip and the effects (a step, not a ramp). A stage with
+	 * a burst has no acceleration ramp while the readable steps are on (gstn.RunStage.Readable): the ramp stays for the start from rest
+	 * (stage 1). 0 = off (the stage keeps its ramp, the old continuous run). Frames at 62.5 Hz
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stage|Readable Step", meta = (ClampMin = "0", ClampMax = "60"))
+	int32 EntryBurstFrames = 0;
+
+	/** Multiplier of this stage's Acceleration during the entry burst. Mover still stops at MaxSpeed, so a large value only shortens it */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stage|Readable Step", meta = (ClampMin = "1", ClampMax = "30"))
+	float EntryAccelMultiplier = 8.f;
+
+	/**
+	 * Announcement of the NEXT stage (owner decision 2A, sprint 2: heel sparks and a deepening lean for ~0.33 s): the last TellFrames frames
+	 * this stage counts towards FramesToNextStage expose "tell live" (FGSTN_RunStageLogic::IsStageTell), for the presentation (VFX, lean).
+	 * Simulation side it changes nothing: no slow-down, the speed stays the stage's. Lives on the stage being LEFT (on stage 2 for the sprint
+	 * 2 tell). Ends without a change if the run stops qualifying. 0 = no tell. Ignored on the last stage
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stage|Readable Step", meta = (ClampMin = "0", ClampMax = "120"))
+	int32 TellFrames = 0;
+
+	/**
+	 * Charge pose before the next stage (decision 2A: ~0.1 s throw-forward pose, the anticipation before the burst): the last ChargeFrames
+	 * frames before the stage change expose "charge live" (IsStageCharge), the clip's cue. Usually inside the tell (ChargeFrames <= TellFrames).
+	 * Presentation only, like the tell. 0 = no charge pose. Ignored on the last stage
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stage|Readable Step", meta = (ClampMin = "0", ClampMax = "60"))
+	int32 ChargeFrames = 0;
 };
 
 /**
@@ -375,6 +406,16 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageState
 	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
 	int32 ReverseFrames = -1;
 
+	/** Readable stage step: -1 = none, else frames since the run climbed into the current stage (the entry burst is live while under its
+	 *  EntryBurstFrames). Reset by a boost, a drop, a skid and the stick at rest */
+	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
+	int32 EntryFrames = -1;
+
+	/** The simulation frame the current stage began (any cause: climb, boost, drop, reset), INDEX_NONE before the first change. With
+	 *  LastFrame it gives the time in the stage (presentation: the stage clip's start, the burst VFX) */
+	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
+	int32 StageEnteredFrame = INDEX_NONE;
+
 	/**
 	 * External channel of the air momentum (FGSTN_AirMomentumLogic): the horizontal velocity a knockback, a launch or a bounce gave, cm/s,
 	 * world space. Zero on the ground and after a player-owned override move
@@ -411,6 +452,8 @@ struct GSTNCOMBATCORE_API FGSTN_RunFrameInput
 	bool bSkidActive = false;
 	/** The stats speed factor of the frame (WalkSpeed / reference; 0 under a movement lock) */
 	float SpeedFactor = 1.f;
+	/** The readable stage steps are on (cvar gstn.RunStage.Readable, read by the NP adapter; same value on every machine). Off = no entry burst */
+	bool bReadableSteps = true;
 };
 
 /** The stage rules, pure: same input, same output on every machine */
@@ -437,6 +480,21 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageLogic
 	/** A run reversal is live in State: its acceleration multiplier and turning strength apply on the next frame */
 	static bool IsReversing(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
 
-	/** Acceleration multiplier of the current stage's ramp (1 = no ramp or ramp done). The state is the one at the start of the frame */
-	static float GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
+	/**
+	 * Acceleration multiplier of the current stage's ramp (1 = no ramp or ramp done). The state is the one at the start of the frame.
+	 * bReadableSteps (gstn.RunStage.Readable): the entry burst replaces the ramp of a stage that has one (decision 1A); off = the old ramps
+	 */
+	static float GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State, bool bReadableSteps = true);
+
+	/** The entry burst of the current stage is live in State (readable step, FGSTN_RunStage::EntryBurstFrames) */
+	static bool IsStageEntryBurst(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State, bool bReadableSteps = true);
+
+	/** The tell of the next stage is live in State (FGSTN_RunStage::TellFrames of the current stage): grounded, qualifying, near the change */
+	static bool IsStageTell(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State, bool bReadableSteps = true);
+
+	/** Progress of the tell, (0, 1]: 1 on the frame before the change (the lean deepens with it); 0 when no tell is live */
+	static float GetStageTellAlpha(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State, bool bReadableSteps = true);
+
+	/** The charge pose before the next stage is live in State (FGSTN_RunStage::ChargeFrames of the current stage) */
+	static bool IsStageCharge(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State, bool bReadableSteps = true);
 };
