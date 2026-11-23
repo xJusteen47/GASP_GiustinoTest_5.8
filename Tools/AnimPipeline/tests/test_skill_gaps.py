@@ -155,6 +155,27 @@ class TestAlignment(unittest.TestCase):
             self.assertTrue((root / "docs/notes/reviews/dk/k7/alignment.json").exists())
 
 
+class TestHitboxRunSeparate(unittest.TestCase):
+    def test_hitbox_run_out_of_review_with_own_videos(self) -> None:
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t)
+            card = _card_repo(root)
+            runs = _card_runs(card) + [dict(_card_runs(card)[1], name="k7_hb", cvars="gstn.Combat.Debug.Hitboxes 1", hitbox_view=True)]
+            fr = FakeRunner(root)
+            r = capture_move.anim_capture_move(variant_runs=runs, root=root, runner=fr, **KW)
+            self.assertTrue(r["ok"], r)
+            vids = [c for c, _ in fr.calls if c[0] == "python"]
+            review = [c for c in vids if "--hitboxes=1" not in c]
+            hb = [c for c in vids if "--hitboxes=1" in c]
+            self.assertEqual(len(review), 4)
+            self.assertFalse(any("k7_hb" in x for c in review for x in c))
+            self.assertEqual(len(hb), 2)
+            self.assertTrue(all("/hitbox/k7_hb_" in c[5].replace("\\", "/") for c in hb))
+            from PIL import Image
+            g = Image.open(root / "docs/notes/reviews/dk/k7/grid_dropkick_sweet_whiff_az90.png")
+            self.assertEqual(g.size[1] // 256, 2, "grid rows = base + k7 only")
+
+
 class TestHitboxOverlay(unittest.TestCase):
     CAM = [[-350.0, 0.0, 100.0], [0.0, 0.0, 0.0], 90.0, 480]
 
@@ -190,7 +211,9 @@ class TestHitboxOverlay(unittest.TestCase):
                 (d / "s" / "az90").mkdir(parents=True)
                 for f in range(95, 125):
                     Image.new("RGB", (32, 32), (0, 0, 0)).save(d / "s" / "az90" / f"f{f:03d}.png")
-            g = review_pack.build_grid(runs, "s", "az90", [110, 111], root / "g.png", cell=64)
+            clean = review_pack.build_grid(runs, "s", "az90", [110, 111], root / "c.png", cell=64)
+            self.assertEqual(clean["hitbox_cells"], 0, "review grids stay clean by default")
+            g = review_pack.build_grid(runs, "s", "az90", [110, 111], root / "g.png", cell=64, hitboxes=True)
             self.assertEqual(g["hitbox_cells"], 2)
             im = Image.open(root / "g.png").convert("RGB")
             red_k7 = sum(1 for x in range(128) for y in range(80, 128) if im.getpixel((x, y))[0] > 120 and im.getpixel((x, y))[1] < 60)
@@ -207,7 +230,12 @@ class TestHitboxOverlay(unittest.TestCase):
             Image.new("RGB", (32, 32), (0, 0, 0)).save(d / "s" / "az90" / "f110.png")
             row = {"f": 110, "tl": None, "hitstop": False, "cams": {"az90": [[-350.0, 0.0, 100.0], [0, 0, 0], 90.0, 32]},
                    "hb": [{"t": 0, "s": 0, "c": [0, 0, 100], "e": [50, 50, 50]}]}
-            im = pcg.cell(str(d), "s", "az90", row, 128)
+            self.assertFalse(any(pcg.cell(str(d), "s", "az90", row, 128).getpixel((x, 64))[0] > 120 for x in range(128)))
+            pcg.HITBOXES = True
+            try:
+                im = pcg.cell(str(d), "s", "az90", row, 128)
+            finally:
+                pcg.HITBOXES = False
             self.assertTrue(any(im.getpixel((x, 64))[0] > 120 for x in range(128)))
             self.assertEqual(capture_overlay.has_overlay({"hb_err": "x"}, "az90")[0], False)
 

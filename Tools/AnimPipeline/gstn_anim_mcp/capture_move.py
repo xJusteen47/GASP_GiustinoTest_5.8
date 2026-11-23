@@ -17,6 +17,7 @@ skill-gaps (2026-11-23, after the dropkick K7 test): poses authored from a CARD 
 (a)+(b) through card_report(): a variant run with "card" gets its report from the card's `animpipe check` JSON (verdict PASS, newer
 than the card and the build), keyed by the card's content hash. Every run may name its own "kit" (base and variant kits in one
 session); the gate report is written to <out_dir>/gate_report.json pass or fail; grids and videos are montage-aligned per run.
+Hitboxes are drawn only for "hitbox_view" runs, in separate videos under <out_dir>/hitbox/; the review grids/videos stay clean.
 """
 from __future__ import annotations
 
@@ -279,7 +280,9 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
                       raw_dir: str = "", max_images: int = 8, dense_radius: int = 4) -> dict[str, Any]:
     """variant_runs[0] is the base: {"name","asset","clips":["/Game/.."],"cvars":"a 1;b 2","kit"?}; the others are variants with
     "intent_hash" (hash of anim_run_intent dry run; see manifest.intent_hash) or "card" (card-authored poses, see card_report), and
-    an optional "kit" (default: `kit`) and "assert" (default: assert_spec). All runs share ONE Play session."""
+    an optional "kit" (default: `kit`) and "assert" (default: assert_spec). All runs share ONE Play session. A run with
+    "hitbox_view": true (give it cvars gstn.Combat.Debug.Hitboxes 1) is left out of the review grids/videos and gets videos with the
+    hitboxes drawn in <out>/hitbox/ (the owner's check, not the animator's)."""
     repo = _repo(root)
     if not sequences:
         return {"ok": False, "error": "sequences is empty"}
@@ -381,9 +384,17 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
 
     # 5. review pack (grids need Pillow; videos need ffmpeg through the runner)
     (repo / out_rel).mkdir(parents=True, exist_ok=True)
-    pack = review_pack.build_pack({r["name"]: Path(run_dirs[r["name"]]) for r in variant_runs}, sequences, _views_list(views),
+    # Hitbox runs ("hitbox_view": true, cvars with gstn.Combat.Debug.Hitboxes 1) stay OUT of the animation review (grids and videos):
+    # owner 2026-11-23, the hitboxes are for the owner's check, not for the animator. They get their own videos in <out>/hitbox/
+    review = [r for r in variant_runs if not r.get("hitbox_view")]
+    hbruns = [r for r in variant_runs if r.get("hitbox_view")]
+    pack = review_pack.build_pack({r["name"]: Path(run_dirs[r["name"]]) for r in review}, sequences, _views_list(views),
                                   repo / out_rel, cap_win, anchor, faf, dense_radius, 1, max_images)
-    video_cmds = video_commands(repo, variant_runs, run_dirs, sequences, out_rel, cap_win, pack["alignment"])
+    video_cmds = video_commands(repo, review, run_dirs, sequences, out_rel, cap_win, pack["alignment"])
+    if hbruns:
+        al = {s: review_pack.run_offsets({r["name"]: Path(run_dirs[r["name"]]) for r in [variant_runs[0]] + hbruns}, s)
+              for s in sequences}
+        video_cmds += [c + ["--hitboxes=1"] for c in video_commands(repo, hbruns, run_dirs, sequences, f"{out_rel}/hitbox", cap_win, al)]
     video_rc = [_rc((runner or default_runner)(c, os.environ.copy(), str(repo))) for c in video_cmds]
     (repo / out_rel / "alignment.json").write_text(json.dumps(pack["alignment"], indent=1), encoding="utf-8")
     return {"ok": True, "verdict": "PASS", "captured": bool(todo), "reused": sorted(reuse), "out_dir": out_rel,

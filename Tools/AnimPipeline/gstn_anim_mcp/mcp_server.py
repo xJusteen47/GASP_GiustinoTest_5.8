@@ -229,15 +229,15 @@ def _tool_defs() -> list[dict[str, Any]]:
                 "\"anchor\": 140, \"faf\": 200, \"assert_spec\": {\"dropkick_hit\": [{\"clip\": \"AM_*\", \"window\": [100, 220]}]}}. "
                 "Card-authored poses: give the variant \"card\": \"Tools/AnimPipeline/cards/.../x.json\" instead of intent_hash (its "
                 "animpipe check PASS is the report). Each run may set \"kit\" (base and variant kits in one session) and \"assert\". "
-                "Writes gate_report.json and alignment.json (montage-aligned grids/videos); runs with gstn.Combat.Debug.Hitboxes 1 get "
-                "the hitboxes drawn into the pictures."
+                "Writes gate_report.json and alignment.json (montage-aligned grids/videos). A run with \"hitbox_view\": true (cvars "
+                "gstn.Combat.Debug.Hitboxes 1) stays out of the review and gets hitbox-drawn videos in <out>/hitbox/ (owner only)."
             ),
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "kit": {"type": "string"},
                     "sequences": {"type": "array", "items": {"type": "string"}},
-                    "variant_runs": {"type": "array", "items": {"type": "object"}, "description": "First = base, then variants: {name, asset, clips[/Game paths], cvars, intent_hash | card, kit?, assert?}."},
+                    "variant_runs": {"type": "array", "items": {"type": "object"}, "description": "First = base, then variants: {name, asset, clips[/Game paths], cvars, intent_hash | card, kit?, assert?, hitbox_view?}."},
                     "views": {"type": "string", "default": "az90,az180,game"},
                     "out": {"type": "string", "default": "", "description": "Default docs/notes/reviews/<move>/<round>."},
                     "assert_spec": {"type": "object", "description": "{sequence: [{clip, window: [first, last]}]} in capture frames."},

@@ -92,11 +92,12 @@ def frame_path(cap_dir: Path, seq: str, view: str, frame: int) -> Path:
 
 
 def build_grid(runs: dict[str, Path], seq: str, view: str, frames: list[int], out_png: Path, cell: int = 256,
-               offsets: dict[str, int] | None = None, hitboxes: bool = True) -> dict[str, Any]:
+               offsets: dict[str, int] | None = None, hitboxes: bool = False) -> dict[str, Any]:
     """One PNG: a row per run (dict order, base first), a column per frame, labelled cells. Missing frames stay grey.
 
     `frames` are base frames; a run with offset k shows frame f+k in the same column (montage-aligned A/B), labelled with both.
-    Logged hitboxes (rows with 'hb' and 'cams') are drawn into the cell; the label ends with hb<N>."""
+    hitboxes=True draws the logged hitboxes (rows with 'hb' and 'cams') into the cell, label hb<N>. Off by default: the animation
+    review stays clean (owner 2026-11-23); capture_move draws them only in the separate hitbox videos."""
     from PIL import Image, ImageDraw
 
     offsets = offsets or {}

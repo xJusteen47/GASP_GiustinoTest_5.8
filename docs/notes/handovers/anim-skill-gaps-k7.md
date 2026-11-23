@@ -9,15 +9,15 @@ pie_capture_move PIE_CAPTURE_RUNS, cvar gstn.Combat.Debug.Hitboxes e il debug dr
    (lo sfondo diverso base/K7 sparisce).
 3. Hitbox nella cattura: le scene capture non disegnano le linee di debug. C++ `UGSTN_CombatSimComponent::GetDebugHitboxShapes` (JSON
    delle forme disegnate, stesso offset mesh, linger compreso; debug, non stato); pie_capture_move logga per frame `hb` + camere per vista
-   (`cams`); `capture_overlay.py` le proietta e le disegna in griglie (review_pack) e video/sheet (pie_capture_grid, `--hitboxes=0` per
-   toglierle). Etichetta `hb<N>` sulle celle con hitbox.
+   (`cams`); `capture_overlay.py` le proietta. Owner 20:37Z: le hitbox NON vanno all'animatore. Run con `"hitbox_view": true` = fuori
+   da griglie e video di review, video propri in `<out>/hitbox/` solo per l'owner; disegno off di default (`--hitboxes=1` per accenderlo).
 4. Silhouette: parametro `out` (anche nel tool MCP): PNG + `silhouette.json` nella cartella review, da committare.
 5. Allineamento A/B: offset per run = inizio montage (frames.jsonl) - inizio base; griglie, video e `alignment.json` allineati; inizio
    sconosciuto = offset 0 e run elencata in `unaligned`, mai indovinato.
 6. Silhouette "illeggibile" = palla informe: nessuna estremita' >= 12 cm fuori dal torso E circolarita' del contorno >= 0,65 (root e
    ossa IK escluse). Riga FINDING con sporgenza massima e circolarita'. Le estremita' vicine al torso restano solo elencate.
 ## Test
-- Offline: tests/test_skill_gaps.py 10/10 (+3 subtest), test_t0_prep 29/29 (2 test silhouette riscritti per la nuova regola),
+- Offline: tests/test_skill_gaps.py 11/11 (+3 subtest), test_t0_prep 29/29 (2 test silhouette riscritti per la nuova regola),
   gstn_anim_mcp/cheap/capture_assert ok. Comando: `python -m pytest -q tests/test_skill_gaps.py tests/test_t0_prep.py` (cwd Tools/AnimPipeline).
 - Falliscono anche prima di questo lavoro: test_ps1_gate_fail_propagation (pwsh assente in cloud), test_capture (fixture dair_v4 mancante).
 ## NON provato (coda portatile)

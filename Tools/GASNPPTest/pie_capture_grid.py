@@ -4,7 +4,7 @@
     python pie_capture_grid.py state <capture_dir> <sequence>          (the combat state per frame, compressed to runs, at most 40 lines)
 video: every frame as one image, the seven views side by side (4 x 2, the last cell is the frame's state), at 60 fps = real time; --fps=15 is 0.25x.
 sheet: one view, consecutive frames left to right, top to bottom; every cell carries its label.
-Logged hitboxes (runs with gstn.Combat.Debug.Hitboxes 1) are drawn into every view; --hitboxes=0 leaves them out; the label then ends hb<N>.
+--hitboxes=1: the logged hitboxes (runs with gstn.Combat.Debug.Hitboxes 1) are drawn into every view, the label ends hb<N>. Off by default.
 Labels: v<video frame>, m<timeline index>:<timeline frame>, a<animation frame the montage shows, 60 fps from 0>, H while the attacker is in
 hitstop, T on the frame a press was sent.
 Video frames are rendered frames at 60 fps; timeline frames are the simulation's (62.5 Hz), so now and then one video frame spans two of them."""
@@ -19,8 +19,9 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import capture_overlay  # noqa: E402
 
-# --hitboxes=0 turns the drawing of the logged hitboxes off (rows with 'hb' + 'cams', runs with gstn.Combat.Debug.Hitboxes 1)
-HITBOXES = True
+# --hitboxes=1 draws the logged hitboxes (rows with 'hb' + 'cams', runs with gstn.Combat.Debug.Hitboxes 1). Off by default: the
+# animation review videos stay clean (owner 2026-11-23: hitboxes are for the owner's own check, not for the animator)
+HITBOXES = False
 VIEWS = ['az0', 'az45', 'az90', 'game', 'az180', 'az270', 'az315']
 
 
@@ -89,7 +90,7 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     o = opts()
     global HITBOXES
-    HITBOXES = o.get('hitboxes', '1') != '0'
+    HITBOXES = o.get('hitboxes', '0') == '1'
     mode, cap, seq = args[0], args[1], args[2]
     rows = rows_of(cap, seq)
     lo, hi = int(o.get('from', 0)), int(o.get('to', len(rows) - 1))
