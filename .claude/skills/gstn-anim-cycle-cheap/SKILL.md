@@ -8,7 +8,14 @@ description: Variante economica del ciclo animazioni (gstn-anim-reviewer + gstn-
 Variante a basso consumo di `gstn-anim-reviewer` + `gstn-anim-executor`. **Non modifica né sostituisce le skill originali.**
 
 ## 1. Ruoli e modelli
-- **Authoring Python (`run_deepseek` — `deepseek-v4-pro` / `deepseek-flash`):** scrive/modifica **solo** lo script `.py` di posa in `Tools/AnimPipeline/` dentro una sparse worktree (`Tools/CI/New-DeepSeekWorktree.ps1`) + `python -m py_compile`.
+- **Authoring semantico via MCP `gstn-anim-mcp` (preferito per modelli `flash`):**
+  - Usa i 5 tool semantici di `Tools/AnimPipeline/gstn_anim_mcp/mcp_server.py` sopra il motore geometrico UE 5.9 (`geom_intent_ue.py`):
+    1. `anim_inspect(asset, frame_range)` — legge altezze `hip/foot/elbow/shoulder`, angoli `lean/bank`, clearance e stato `GATES`.
+    2. `anim_apply_intent(src, dst, intent_json)` — modifica solo 8–10 parametri JSON (`com_shift_fwd_cm`, `torso_lean_pivot_deg`, `torso_bank_deg`, `shoulder_level_compensate`, `arm_back_arc`, `foot_pushoff_deg`, `w3_knee_drop`, `handoff_smooth_range`, `frame_range`), con snapshot automatico per rollback; zero script di quaternioni/IK da scrivere.
+    3. `anim_gate_check(asset, ref_asset)` — esegue `runstart_pivot_gates` + `Conservation Guard (<= 15%)` + `clipcheck`.
+    4. `anim_capture_ab(variant_a, variant_b, seq, window)` — genera video `_real.mp4` + `_slow4x.mp4` e griglie `.jpg` (`az180,az90,game`, `grid_pivot_v84_116.jpg`) a `0` token.
+    5. `anim_rollback(asset)` — ripristina lo snapshot pre-intent se i gate o la review falliscono.
+- **Fallback Authoring Python (`run_deepseek` — `deepseek-v4-pro` / `deepseek-flash`):** scrive/modifica **solo** lo script `.py` di posa in `Tools/AnimPipeline/` dentro una sparse worktree (`Tools/CI/New-DeepSeekWorktree.ps1`) + `python -m py_compile`.
   - Timeout corto: `90–120s`, `disable_search_tools=true` (disabilita `Glob`/`Grep` e letture `Saved/`/`Content/` per evitare stalli su repo UE grandi).
   - Non deve lanciare `Save-Assets.ps1`, catture GPU o `ffmpeg` dentro la sessione LLM.
   - Per task >120s via MCP usare `async_mode=true` + `bridge_job_status` oppure `cli.py` direttamente.
