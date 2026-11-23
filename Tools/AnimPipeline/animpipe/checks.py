@@ -7,7 +7,9 @@
            co_motion (no limb glued to the trunk through the startup while the body moves), stop_and_go (cards with
            curve "spline": no frame of the startup with the whole body under 3.5 cm/frame outside the declared holds, and
            the largest step <= 4x the median, and in the whole clip no run of more than 3 still steps, so take-off and
-           landing count too; on "tangents" cards it is reported under measure, see animpipe/curves.py).
+           landing count too; blocking on every card since 2026-11-24), life_* (OG life
+           metrics, animpipe/life.py, on every card: declared holds, stop synchrony, overlap cascade, impact spacing,
+           anticipation; calibration in tests/test_life.py and life_calibrate.py).
   measure  reported, never block: motion_curves (+ motion_ref against the card's reference), twist_chain, motion_check
            (weight, overlap, balance, pose rules), spacing of the built curves, distance from the source poses.
   rules    (opt-in) the README's owner rules as blocking checks, declared in the card under `rules` with their thresholds;
@@ -170,22 +172,31 @@ def _co_motion(F, Q, w, skip_limbs=(), exempt=()):
 
 
 def _stop_and_go(c, F, w, exempt=()):
-    """Gate against the stop-and-go build (diagnosis dropkick-k8-3): see animpipe/curves.stop_and_go. Window: the card's
-    stop_and_go.window, default the startup (frame 0 to the first active frame)."""
-    from animpipe import curves as CV
-    from animpipe.card import hold_keys, key_frames
-    p = c.get("stop_and_go", {})
-    win = p.get("window", [0, w["active"][0]])
-    held = CV.held_frames(hold_keys(c), key_frames(c)) | set(exempt)
+    """Gate against the stop-and-go build (diagnosis dropkick-k8-3), now computed by animpipe/life.py (OG life metrics,
+    calibrated 2026-11-24): the first version (every startup step >= 3.5 cm, largest <= 4x median, whole clip no run of
+    more than 3 steps under 3.5 cm) failed a textbook OG strike (ease-in + 1-2 frame snap) and every stock GASP landing
+    recovery, see tests/test_life.py. Window: the card's stop_and_go.window, default the startup."""
+    r = _life(c, F, w, exempt, window=c.get("stop_and_go", {}).get("window"))
+    ok = r["block"]["stops"][0] and r["block"]["still_runs"][0]
+    return ok, r["block"]["stops"][1] + "; whole clip " + r["block"]["still_runs"][1]
+
+
+def _life(c, F, w, exempt=(), window=None):
+    """animpipe/life.py on the built clip. Holds: the card's `life_holds` [{frames: [a, b], why}] plus every pose marked
+    hold/impact (its `why` field is the reason; none = FAIL, owner 2026-11-24: stops only when intended and declared)."""
+    from animpipe import life, curves as CV
+    from animpipe.card import key_frames
     Fl = [{b: tuple(float(x) for x in v) for b, v in f.items()} for f in F]
-    mn = float(p.get("min_cm", CV.STOP_CM))
-    ok, line, _ = CV.stop_and_go(Fl, win, held, mn, float(p.get("max_ratio", CV.JUMP_RATIO)))
-    # take-off and landing: the whole clip, no run of more than STILL_RUN still steps outside the holds
-    runs = CV.long_stills(Fl, held, mn, int(p.get("still_run", CV.STILL_RUN)))
-    if runs:
-        ok = False
-    line += f"; whole clip still runs > {p.get('still_run', CV.STILL_RUN)} steps: " + (", ".join(f"{a}-{b + 1}" for a, b in runs) if runs else "none")
-    return ok, line
+    holds = life.parse_holds(c.get("life_holds", []))
+    keys = key_frames(c)
+    for p in c["poses"]:
+        if p.get("hold") or p.get("impact"):
+            fr = sorted(CV.held_frames([int(p["frame"])], keys))
+            if fr:
+                holds.append((fr[0], fr[-1] + 1, str(p.get("why", "")).strip() or ("impact pose" if p.get("impact") and not p.get("hold") else "")))
+    holds += [(int(f), int(f) + 1, "card exemption") for f in sorted(exempt)]
+    eff = c.get("effector", "middle_01_l").replace("middle_01", "hand").replace("ball", "foot")
+    return life.run(Fl, window=window or [0, w["active"][0]], contact=w["active"][0], effector=eff, holds=holds, cls=c.get("class", ""))
 
 
 def _key_warnings(c, F, w):
@@ -355,10 +366,13 @@ def run(path, src=False):
     co_skip = list(c.get("co_motion_skip", [])) + [f"leg_{s}" for s in sides]
     res["block"]["co_motion"] = _co_motion(F, Q, w, co_skip, exempt.get("co_motion", set()))
     sg_ok, sg_line = _stop_and_go(c, F, w, exempt.get("stop_and_go", set()))
-    if c.get("curve", "tangents") == "spline":
-        res["block"]["stop_and_go"] = (sg_ok, sg_line)
-    else:
-        res["measure"]["stop_and_go"] = (0, ("PASS " if sg_ok else "FAIL ") + sg_line)
+    # blocking on every card (owner 2026-11-24: K7, a tangents card, has the defect and must fail; an approved card that
+    # fails is either a real defect or a calibration error, settled with life_calibrate.py, never by switching it off)
+    res["block"]["stop_and_go"] = (sg_ok, sg_line)
+    lr = _life(c, F, w, exempt.get("life", set()))
+    for k, (ok, line) in lr["block"].items():
+        if k not in ("stops", "still_runs"):                # those two are the stop_and_go line above
+            res["block"]["life_" + k] = (ok, line)
     res["measure"]["near_equal_keys"], res["measure"]["same_frame_arrivals"] = [(0, x) for x in _key_warnings(c, F, w)]
 
     for name, args in (("motion_curves", ["motion_curves.py", take, f"--sheet={move}", "--quiet"]),

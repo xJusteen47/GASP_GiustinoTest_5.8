@@ -1,0 +1,48 @@
+"""Calibration proof of animpipe/life.py (owner 2026-11-24): every clip in life_calibration.json must give its expected
+verdict, approved moves PASS with no exemption, known defects FAIL. A mismatch is a calibration error to FIX (threshold or
+metric, with this run as proof), never a reason to soften a metric. Prints <= 5 lines; full table in
+Saved/AnimPipeline/life_calibration_result.json. Exit 0 only on CALIB: OK (all present, all match)."""
+import json, os, sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+from animpipe import life
+
+PROJ = os.path.dirname(os.path.dirname(HERE))
+DUMPS = os.path.join(PROJ, "Saved", "AnimPipeline", "runstart")
+
+
+def one(e):
+    path = os.path.join(HERE, e["dump"]) if "dump" in e else os.path.join(DUMPS, f"joints_{e.get('asset', '')}.json")
+    if not os.path.exists(path):
+        return {"name": e["name"], "status": "MISSING", "path": path}
+    kw = life.from_card(os.path.join(HERE, e["card"])) if "card" in e else {}
+    for k in ("window", "contact", "effector"):
+        if k in e:
+            kw[k] = e[k]
+    F = life.dedupe(life.load(path))
+    r = life.run(F, **kw)
+    return {"name": e["name"], "status": "MATCH" if r["verdict"] == e["expect"] else "MISMATCH", "expect": e["expect"],
+            "got": r["verdict"], "failed": {k: v[1] for k, v in r["block"].items() if not v[0]}, "why": e.get("why", "")}
+
+
+def main():
+    man = json.load(open(os.path.join(HERE, "life_calibration.json")))
+    rows = [one(e) for e in man["clips"]]
+    out = os.path.join(PROJ, "Saved", "AnimPipeline", "life_calibration_result.json")
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    json.dump(rows, open(out, "w"), indent=1)
+    miss = [r["name"] for r in rows if r["status"] == "MISSING"]
+    bad = [r["name"] for r in rows if r["status"] == "MISMATCH"]
+    verdict = "FAIL" if bad else ("INCOMPLETE" if miss else "OK")
+    print(f"CALIB: {verdict} {sum(r['status'] == 'MATCH' for r in rows)}/{len(rows)} match")
+    if bad:
+        print("mismatch: " + ", ".join(bad))
+    if miss:
+        print("missing dumps: " + ", ".join(miss))
+    print("table: " + out)
+    return 0 if verdict == "OK" else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
