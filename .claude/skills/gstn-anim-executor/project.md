@@ -48,3 +48,4 @@ Antigravity cannot run git in its sandbox: the Claude session commits card and s
   and ships a before/after grid. Splice at most 0.1 s and at most 10 % of the clip.
 - Every capture ends with `capture_assert.py` (`ASSERT: OK`); without it, no review.
 - Any change that departs from stock GASP Mover: first a line in `docs/notes/gasp-divergenze.md` (rule 14).
+- **Deterministic zero-token steps:** run `runstart_pivot_gates.py` (incl. contralateral arm–leg phase check on start/additive clips), `clipcheck`, headless UE import (`Save-Assets`), `runstart_batch_captures.ps1` / `Run-Timed.ps1`, grid extraction and `capture_assert.py` as deterministic scripts before calling any reviewer model.

@@ -1,0 +1,30 @@
+{
+  "mossa": "runstart-w3",
+  "ciclo": 1,
+  "passo": 1,
+  "tentativo": 1,
+  "livello": "principio",
+  "vista": "lato",
+  "non_peggiorare": [
+    "a v77 (lato e dietro) bacino, tronco e gambe restano in idle verticale neutro",
+    "in v92–v107 (lato) il peso resta proteso avanti sulle caviglie senza arretramento sui talloni e senza slittamento dei piedi",
+    "in v107 (dietro/game) la testa torna leggibile sopra la linea delle spalle"
+  ],
+  "chiave": {
+    "anim": null,
+    "video": 107,
+    "esiste": null,
+    "tratto": [92, 122]
+  },
+  "tipo": "posa",
+  "parte": "trunk",
+  "controllo": "spine_04, spine_05 / chest, spazio del personaggio (distribuzione vertebrale a scelta dell'esecutore)",
+  "intento": "linea d'azione, peso e silhouette: sostenere il busto in caduta avanti continua in v92–v107 evitando il collasso su petto/cosce a v107 e mantenendo la testa leggibile sopra le spalle da dietro",
+  "modifica": "sui frame video v92–v107 (mappati via --video sui corrispondenti frame anim), ridurre la flessione eccessiva in avanti del torace così che a v107 il busto mantenga una linea d'azione diagonale continua senza collassare sulle cosce, raccordando l'apertura in modo progressivo verso v122 (braccia demandate al passo-02)",
+  "principio": "linea d'azione, peso e catena cinetica della colonna (principi-animazione-corporea §4.1, §7.2 e §11)",
+  "verifica": {
+    "testo": "a v107 (az90) il busto forma una linea continua con il bacino senza collasso sul petto, a v107 (game) la sagoma della testa è leggibile sopra le spalle, e tra v107 e v122 l'apertura del torace è graduale senza scatto a molla",
+    "req": null,
+    "misura": null
+  }
+}

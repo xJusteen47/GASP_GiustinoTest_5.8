@@ -1,0 +1,2 @@
+ASSERT: OK
+ASSERT: OK mv_turn_090b AS_GSTN_RunStart_Generic_w2t090Rs f88-f132: weight >= 0.8 on 100% (min 1.00)
