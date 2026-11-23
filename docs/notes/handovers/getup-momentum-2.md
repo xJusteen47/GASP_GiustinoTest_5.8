@@ -26,5 +26,6 @@ GSTNDefence.NP.Getup.SharedExitSpeed, GSTNDefence.NP.Getup.DirectionalWarp.
 `Tools/GASNPPTest/getup_capture_timed.ps1 -Runs Tools\GASNPPTest\getup_runs_momentum2.json -Out Saved\Getup\m2` (8 runs; new `angle` key:
 stick turned off the axis, held 10 frames). Check: run variants move > 100 cm/s in FAF..+6 (was ~0); roll_idle 0; a45 travels diagonal.
 Index entry (docs/INDICE-PROGETTO.md, steer section): add "get-up tail stick cut (bStickCuts, step 8b) and directional roll (bAwayFromStick)".
+Decision 2026-11-23 (coordinator, recommended default): roll travel left as is (80 / 65 cm, clip-bound), only the exit speed is shared.
 SUBAGENTI: 0
 COSTO: ~6 $ | 0 min desktop | 0 token review
