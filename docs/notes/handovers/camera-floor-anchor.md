@@ -17,13 +17,16 @@ Riuso: `UGSTN_CameraAnchorComponent` (camera-anchor.md), sorgente altezza esiste
 - P1a: pivot consegnato da `OnAnchorUpdated` alla fine del tick dell'ancora (stesso frame); ogni camera del pawn ticka dopo l'ancora.
 - Dropkick: `setup_dropkick_body_capsule.py` ha `DROPKICK_CAPSULE_AIR_PIN=torso|feet|head` (default torso, invariato). Regola 12: "feet"
   riporta l'atterraggio anticipato che il torso (owner 11-15) aveva tolto; con la camera sul pavimento la scelta è solo di collisione.
+- Owner 19:14Z (chiarimento): la capsula si restringe VERSO L'ALTO, cioè sparisce il volume sotto i piedi e il bordo alto resta dov'è. Il default
+  di AIR_PIN ora è `head`. Lo script scrive la distanza tra il bordo basso e il torso del loop (WARNING sopra 15 cm = calo o atterraggio anticipato).
+  `DROPKICK_TIMELINE` serve a puntare su TL_Overlord_DropkickTBK6 (K6). Un bordo basso che sale non spinge mai contro il pavimento: nessun controllo di collisione in più.
 - Test: `GSTN.Camera.Anchor.FloorSourceIgnoresEveryCapsule`, `.FloorIsTheDefault`. Doc: camera-anchor.md.
 
 ## Da fare in editor (fisso, dopo build)
 1. Build + `GSTN.Camera.*` (atteso tutto verde). 2. `DA_CameraAnchor_Default`: Vertical Source deve leggere Floor (se salvato a mano su
 CapsuleBottom, rimetterlo). 3. Cattura A/B dropkick sweet hit + whiff, camera di gioco, `gstn.Camera.Anchor.Vertical 1` vs `3`, con
 `gstn.Camera.Trace 1` + `camera_trace_check.py`: niente salto all'atterraggio, niente discesa in aria. 4. Giro rapido: crouch spam, FAir/dair,
-knockdown, salto su piattaforma, caduta da bordo, scale. 5. Se l'owner vuole provare la capsula: rilanciare lo script con AIR_PIN e catturare.
+knockdown, salto su piattaforma, caduta da bordo, scale. 5. Rilanciare lo script (default head, DROPKICK_TIMELINE della K6), leggere la riga gap e catturare l'atterraggio.
 INDICE-PROGETTO (branch indice-progetto) §5.9: aggiungere "altezza camera dal pavimento (Floor), P1a pivot stesso frame".
 
 SUBAGENTI: 1, critica animazione dropkick K6 (griglie k6r2b), Opus
