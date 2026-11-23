@@ -1,1 +1,1 @@
-﻿libero dal 2026-11-23 22:16 (getup-momentum-2: capture m2 ASSERT OK, editor closed)
+﻿libero dal 2026-11-23 22:22 (getup-momentum-2 retry: ASSERT FAIL, editor closed by timed script)

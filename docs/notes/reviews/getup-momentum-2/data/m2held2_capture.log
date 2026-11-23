@@ -1,0 +1,15 @@
+    0.0s driver loaded: out C:/Users/jacop/Documents/Unreal Projects/GASP_Giustino2_qjfnc0/Saved/Getup/m2held2, sequences ['stand_run_warmup', 'roll_held_run', 'rollback_held_run']
+    8.0s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '3', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   29.6s review stage: parked []; host P256, attacker BP_GASNPP_TestCharacter_C_0
+   29.6s defence steps saved in the rules: True
+   29.7s ERROR Traceback (most recent call last):
+  File "<string>", line 482, in _tick
+  File "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_qjfnc0\Tools\GASNPPTest\gasnpp_test.py", line 2952, in _apply_loadout
+    return _srv(key).server_apply_test_loadout(kit, support)
+           ^^^^^^^^^
+  File "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_qjfnc0\Tools\GASNPPTest\gasnpp_test.py", line 1802, in _srv
+    return _ServerProxy(comps(worlds()[0])[key])
+                        ~~~~~~~~~~~~~~~~~~^^^^^
+KeyError: 'BP_GASNPP_TestCharacter_C_0'
+
+   29.7s finish: error (see capture.log)

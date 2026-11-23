@@ -1,6 +1,6 @@
-# getup-momentum-2 handover: stick cuts the get-up tail, one exit speed, directional roll (cloud, 2026-11-23). CODE DONE, NOT COMPILED
+﻿# getup-momentum-2 handover: stick cuts the get-up tail, one exit speed, directional roll (cloud, 2026-11-23). CODE DONE, NOT COMPILED
 Branch `claude/project-thread-qjfnc0` (from `claude/project-thread-rqxsn8` 5c3f3470). Owner answers 2026-11-23: 1A, 2A (FAF stays at 85 %),
-"i roll di getup rendili tutti della stessa velocità", "qualche animazione multidirezionale warpata verso l'angolo giusto?".
+"i roll di getup rendili tutti della stessa velocitÃ ", "qualche animazione multidirezionale warpata verso l'angolo giusto?".
 Reused (rule 1): FGSTN_TimelineTail, FGSTN_SteerWindow + FGSTN_StartupSteer::ResolveFrame + StepStartupSteer (SetFacing requests, the input
 producer's hold already reads them), CancelForOtherCommand, FGSTN_GetupExit. Nothing new in Mover, no new sync state.
 ## Cause of "the stick does not cut the tail" (getup-momentum-1)
@@ -49,3 +49,10 @@ COSTO: ~6 $ | 0 min desktop | 0 token review
   a80/max90 stands facing the side camera, no snap seen in +12..+37.
 SUBAGENTI: 0
 COSTO: ~4 $ | 55 min laptop (build 24, test 3, captures 16, media) | 0 token review
+
+## Retry 2026-11-23 22:19 (portatile, coordinator brief, 1 capture)
+- `getup_capture_timed.ps1 -Runs Tools\GASNPPTest\getup_runs_momentum2_held.json -Out Saved\Getup\m2held2 -MaxMinutes 15` at b0d557d5 -> ESITO: OK (123 s), ASSERT: FAIL "no get-up" on all 3 runs (data/m2held2_assert.txt).
+- Cause in data/m2held2_capture.log at 29.7 s: `_apply_loadout` -> `_srv` KeyError 'BP_GASNPP_TestCharacter_C_0' (gasnpp_test.py:1802), so the sequences never ran; no speeds, no media. Not investigated (brief).
+- Note: an editor of another thread (cp1verify, animpipe editor_session.py, pid 4956) started at 22:19:52, the same second as this capture; possible interference, not checked.
+- No Blueprint saved, setup_reaction_anims.py not run. Lock freed.
+COSTO: ~1 $ | 6 min laptop (capture 2) | 0 token review
