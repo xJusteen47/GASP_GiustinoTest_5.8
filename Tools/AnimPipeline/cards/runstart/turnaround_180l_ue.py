@@ -20,25 +20,29 @@ DST = "/Game/GSTN/Animation/RunStart/AS_GSTN_RunStart_Generic_w2t180Ls"
 SAVE = os.environ.get("GSTN_SAVE") == "1" or os.environ.get("CLIPFIX_WRITE") == "1"
 OUT_JSON = os.path.join(PROJ, "Saved", "AnimPipeline", "runstart", "AS_GSTN_RunStart_Generic_w2t180Ls_build.json")
 
-# 29 (w3) weight-unbalance parameters adapted for continuous 180L pivot -> sprint
-PELVIS_FWD_CM = float(os.environ.get("T180L_PELVIS_FWD", "11.0"))     # COM shift along character fwd (+11 cm)
-PELVIS_DROP_CM = float(os.environ.get("T180L_PELVIS_DROP", "-5.0"))   # smooth athletic drop (-5 cm already in pivot)
-SPINE_LEAN_PIVOT_DEG = float(os.environ.get("T180L_SPINE_LEAN_PIVOT", "14.0")) # lean ALREADY strong at f3-f5 (v88-v92)
-SPINE_LEAN_RUN_DEG = float(os.environ.get("T180L_SPINE_LEAN_RUN", "5.5"))      # residual lean settling gradually to f32 (v152)
-TORSO_BANK_DEG = float(os.environ.get("T180L_TORSO_BANK", "14.0"))    # clear inward roll toward L already at v88-v92
-HEAD_LIFT_DEG = float(os.environ.get("T180L_HEAD_LIFT", "6.5"))       # keep head proud in f4-f22
-KNEE_DROP = float(os.environ.get("T180L_KNEE_DROP", "0.28"))          # w3 lower knee lift in swing
-SWING_LAG_CM = float(os.environ.get("T180L_SWING_LAG", "3.5"))        # swing foot trails behind COM early
-CATCH_FWD_CM = float(os.environ.get("T180L_CATCH_FWD", "4.5"))        # swing foot catches up under COM
+# 29 (w3) agile platform / Link-OoT weight-unbalance parameters (no crouching in place)
+PELVIS_FWD_CM = float(os.environ.get("T180L_PELVIS_FWD", "12.0"))     # COM falls forward immediately (29 w3)
+PELVIS_DROP_CM = float(os.environ.get("T180L_PELVIS_DROP", "-1.5"))   # minimal drop (agile, no crouch-in-place)
+SPINE_LEAN_PIVOT_DEG = float(os.environ.get("T180L_SPINE_LEAN_PIVOT", "10.0")) # lean forward into run already at f2-f5
+SPINE_LEAN_RUN_DEG = float(os.environ.get("T180L_SPINE_LEAN_RUN", "5.0"))      # settles gradually to f34 (v152)
+TORSO_BANK_DEG = float(os.environ.get("T180L_TORSO_BANK", "5.0"))     # subtle agile bank (no dropped L shoulder)
+HEAD_LIFT_DEG = float(os.environ.get("T180L_HEAD_LIFT", "6.5"))       # gaze ahead
+KNEE_DROP = float(os.environ.get("T180L_KNEE_DROP", "0.35"))          # exact 29 w3 knee drop
+SWING_LAG_CM = float(os.environ.get("T180L_SWING_LAG", "4.0"))        # exact 29 w3 swing lag
+CATCH_FWD_CM = float(os.environ.get("T180L_CATCH_FWD", "5.5"))        # exact 29 w3 catch-up
+STEP_NARROW_CM = float(os.environ.get("T180L_STEP_NARROW", "2.5"))    # narrow wide A-stance on L step foot (keeps gap >= 10cm)
+PIVOT_HEEL_DEG = float(os.environ.get("T180L_PIVOT_HEEL", "14.0"))    # reactive R pivot push-off on ball in f2-f6
 
-# Shoulders & arms (single continuous arc f2-f30, f0-f1 untouched)
-CLAV_ELEV_DEG = float(os.environ.get("T180L_CLAV_ELEV", "4.0"))       # subtle high athletic shoulders
-CLAV_OPEN_DEG = float(os.environ.get("T180L_CLAV_OPEN", "9.0"))       # open chest/shoulders
-ARM_L_TUCK_IN_DEG = float(os.environ.get("T180L_ARM_L_TUCK_IN", "7.0"))  # pull L upperarm in/down at v92-96 while keeping f10 clearance >=14cm
-ARM_R_OUT_DEG = float(os.environ.get("T180L_ARM_R_OUT", "6.0"))       # R arm clearance
-ARM_L_BACK_DEG = float(os.environ.get("T180L_ARM_L_BACK", "30.0"))    # L arm drives cleanly BACK behind torso plane f2-f10
-ARM_L_ELBOW_DEG = float(os.environ.get("T180L_ARM_L_ELBOW", "6.0"))   # open/extended natural sweep (no rigid triangle under armpit)
-ARM_R_FWD_DEG = float(os.environ.get("T180L_ARM_R_FWD", "18.0"))      # R arm counterbalances forward/open in pivot
+# Shoulders & arms (agile Link-OoT: level/high shoulders, bent/snappy arms, no wing)
+CLAV_L_ELEV_DEG = float(os.environ.get("T180L_CLAV_L_ELEV", "7.0"))   # lift L shoulder so it never drops below R
+CLAV_R_ELEV_DEG = float(os.environ.get("T180L_CLAV_R_ELEV", "3.0"))
+CLAV_OPEN_DEG = float(os.environ.get("T180L_CLAV_OPEN", "6.0"))
+ARM_L_TUCK_IN_DEG = float(os.environ.get("T180L_ARM_L_TUCK_IN", "14.0")) # pull L arm down/in from 27's flare (kills v92 wing)
+ARM_R_OUT_DEG = float(os.environ.get("T180L_ARM_R_OUT", "3.0"))       # compact R arm
+ARM_L_BACK_DEG = float(os.environ.get("T180L_ARM_L_BACK", "24.0"))    # L arm drives back behind torso
+ARM_L_ELBOW_DEG = float(os.environ.get("T180L_ARM_L_ELBOW", "16.0"))  # athletic elbow bend
+ARM_R_FWD_DEG = float(os.environ.get("T180L_ARM_R_FWD", "22.0"))      # R arm drives forward in opposition
+ARM_R_ELBOW_DEG = float(os.environ.get("T180L_ARM_R_ELBOW", "24.0"))  # snappy bent R elbow (no stiff straight arm)
 
 
 def ss(a, b, x):
@@ -271,17 +275,20 @@ for f in range(n):
     q_nk = signed_axis_quat(lat_vec, HEAD_LIFT_DEG * e_head, fwd_vec, up_vec)
     nw["neck_01"] = mk_tf(nk_pos, q_nk * q_sp_cum * w["neck_01"].rotation, w["neck_01"].scale3d)
 
-    # 3. Legs: 29 (w3) trailing/catching swing feet + lower knee lift + 2-bone IK (keeps planted feet & bone lengths)
+    # 3. Legs: 29 (w3) trailing/catching swing feet + reactive pivot push-off & narrower step stance
     e_lag = ss(1.5, 4.5, float(f)) * (1.0 - ss(10.0, 16.0, float(f)))
     e_catch = ss(9.0, 14.0, float(f)) * (1.0 - ss(20.0, 26.0, float(f)))
+    e_piv_foot = ss(1.5, 3.5, float(f)) * (1.0 - ss(5.5, 8.5, float(f)))
     for s in ("l", "r"):
         th, ca, fo = "thigh_" + s, "calf_" + s, "foot_" + s
         hip_old, knee_old, foot_old = w[th].translation, w[ca].translation, w[fo].translation
         hip_new = vadd(nw["pelvis"].translation, vsub(hip_old, w["pelvis"].translation))
         w_air = foot_air_w[s][f]
         foot_tgt = unreal.Vector(foot_old.x, foot_old.y, foot_old.z)
+        if s == "l" and e_piv_foot > 1e-4:
+            # Narrow wide A-stance slightly toward pelvis centerline in pivot
+            foot_tgt = vadd(foot_tgt, vmul(lat_vec, -STEP_NARROW_CM * e_piv_foot))
         if w_air > 1e-4:
-            # Lower knee lift + swing lag early / catch-up late (feet recovering unbalanced COM)
             excess_z = max(0.0, foot_old.z - 14.0)
             foot_tgt.z = foot_old.z - KNEE_DROP * excess_z * e_w3 * w_air
             foot_tgt = vadd(foot_tgt, vmul(fwd_vec, (-SWING_LAG_CM * e_lag + CATCH_FWD_CM * e_catch) * w_air))
@@ -292,18 +299,24 @@ for f in range(n):
         q_ca = axis_quat(vcross(vsub(foot_old, knee_old), vsub(foot_new, knee_new)),
                          math.degrees(math.acos(max(-1.0, min(1.0, vdot(vnorm(vsub(foot_old, knee_old)), vnorm(vsub(foot_new, knee_new)))))))) \
             if vlen(vcross(vsub(foot_old, knee_old), vsub(foot_new, knee_new))) > 1e-4 else unreal.Quat(0.0, 0.0, 0.0, 1.0)
+        q_fo_push = unreal.Quat(0.0, 0.0, 0.0, 1.0)
+        if s == "r" and e_piv_foot > 1e-4:
+            # Reactive ankle push-off (heel lift) on R pivot foot so it doesn't sit flat
+            ball_dir = vsub(w["ball_r"].translation, foot_old)
+            q_fo_push = signed_axis_quat(lat_vec, PIVOT_HEEL_DEG * e_piv_foot, ball_dir, vmul(up_vec, -1.0))
         nw[th] = mk_tf(hip_new, q_th * w[th].rotation, w[th].scale3d)
         nw[ca] = mk_tf(knee_new, q_ca * w[ca].rotation, w[ca].scale3d)
-        nw[fo] = mk_tf(foot_new, w[fo].rotation, w[fo].scale3d)
+        nw[fo] = mk_tf(foot_new, q_fo_push * w[fo].rotation, w[fo].scale3d)
 
-    # 4. Shoulders & Arms: high/open clavicles, L arm cleanly BACK behind torso (not sideways wing), R arm counterbalancing
+    # 4. Shoulders & Arms: level/high shoulders (compensate bank), L arm behind without wing, R arm bent forward
     for s, sign in (("l", 1.0), ("r", -1.0)):
         cl, ua, la, ha = "clavicle_" + s, "upperarm_" + s, "lowerarm_" + s, "hand_" + s
         out_dir = vmul(lat_vec, sign)
+        clav_elev = CLAV_L_ELEV_DEG if s == "l" else CLAV_R_ELEV_DEG
 
         cl_pos = vadd(nw["spine_05"].translation, q_sp_cum.rotate_vector(vsub(w[cl].translation, w["spine_05"].translation)))
         ua_dir0 = q_sp_cum.rotate_vector(vsub(w[ua].translation, w[cl].translation))
-        q_cl_elev = signed_axis_quat(fwd_vec, CLAV_ELEV_DEG * e_sh, ua_dir0, up_vec)
+        q_cl_elev = signed_axis_quat(fwd_vec, clav_elev * e_sh, ua_dir0, up_vec)
         q_cl_open = signed_axis_quat(up_vec, CLAV_OPEN_DEG * e_sh, ua_dir0, vmul(fwd_vec, -1.0))
         q_cl = q_cl_open * q_cl_elev
         nw[cl] = mk_tf(cl_pos, q_cl * q_sp_cum * w[cl].rotation, w[cl].scale3d)
@@ -314,14 +327,12 @@ for f in range(n):
         q_ua_swing = unreal.Quat(0.0, 0.0, 0.0, 1.0)
         if s == "l":
             if e_arm_l_back > 1e-4:
-                # Pull L upperarm in/down at v92-96 while keeping f10 clearance >=14cm
                 q_ua_lat = signed_axis_quat(fwd_vec, ARM_L_TUCK_IN_DEG * e_arm_l_back, la_dir0, vmul(up_vec, -1.0))
                 la_dir1 = q_ua_lat.rotate_vector(la_dir0)
                 q_ua_swing = signed_axis_quat(lat_vec, ARM_L_BACK_DEG * e_arm_l_back, la_dir1, vmul(fwd_vec, -1.0))
-            # Safe outward clearance as arm_l swings past thigh_l around f10
             e_l_clr = ss(6.5, 9.5, float(f)) * (1.0 - ss(12.0, 16.0, float(f)))
             if e_l_clr > 1e-4:
-                q_ua_lat = signed_axis_quat(fwd_vec, 9.0 * e_l_clr, la_dir0, out_dir) * q_ua_lat
+                q_ua_lat = signed_axis_quat(fwd_vec, 10.0 * e_l_clr, la_dir0, out_dir) * q_ua_lat
         else:
             q_ua_lat = signed_axis_quat(fwd_vec, ARM_R_OUT_DEG * e_sh, la_dir0, out_dir)
             if e_arm_r_fwd > 1e-4:
@@ -332,10 +343,11 @@ for f in range(n):
         la_pos = vadd(ua_pos, q_ua.rotate_vector(la_dir0))
         ha_dir0 = (q_ua * q_cl * q_sp_cum).rotate_vector(vsub(w[ha].translation, w[la].translation))
         q_la = unreal.Quat(0.0, 0.0, 0.0, 1.0)
-        if s == "l" and e_arm_l_back > 1e-4:
+        el_deg = (ARM_L_ELBOW_DEG * e_arm_l_back) if s == "l" else (ARM_R_ELBOW_DEG * e_arm_r_fwd)
+        if el_deg > 1e-3:
             hinge = vcross(la_dir0, ha_dir0)
             ax = vnorm(hinge) if vlen(hinge) > 1e-3 else lat_vec
-            qp = axis_quat(ax, ARM_L_ELBOW_DEG * e_arm_l_back)
+            qp = axis_quat(ax, el_deg)
             qn = qinv(qp)
             q_la = qp if vdot(vmul(la_dir0, -1.0), qp.rotate_vector(ha_dir0)) >= vdot(vmul(la_dir0, -1.0), qn.rotate_vector(ha_dir0)) else qn
         nw[la] = mk_tf(la_pos, q_la * q_ua * q_cl * q_sp_cum * w[la].rotation, w[la].scale3d)
@@ -386,8 +398,10 @@ rep = {
         "pelvis_fwd_cm": PELVIS_FWD_CM, "pelvis_drop_cm": PELVIS_DROP_CM,
         "spine_lean_pivot_deg": SPINE_LEAN_PIVOT_DEG, "spine_lean_run_deg": SPINE_LEAN_RUN_DEG,
         "torso_bank_deg": TORSO_BANK_DEG, "head_lift_deg": HEAD_LIFT_DEG,
+        "step_narrow_cm": STEP_NARROW_CM, "pivot_heel_deg": PIVOT_HEEL_DEG,
+        "clav_l_elev_deg": CLAV_L_ELEV_DEG, "clav_r_elev_deg": CLAV_R_ELEV_DEG,
         "arm_l_back_deg": ARM_L_BACK_DEG, "arm_l_elbow_deg": ARM_L_ELBOW_DEG,
-        "arm_l_tuck_in_deg": ARM_L_TUCK_IN_DEG, "arm_r_fwd_deg": ARM_R_FWD_DEG, "arm_r_out_deg": ARM_R_OUT_DEG,
+        "arm_l_tuck_in_deg": ARM_L_TUCK_IN_DEG, "arm_r_fwd_deg": ARM_R_FWD_DEG, "arm_r_elbow_deg": ARM_R_ELBOW_DEG,
     },
 }
 os.makedirs(os.path.dirname(OUT_JSON), exist_ok=True)
