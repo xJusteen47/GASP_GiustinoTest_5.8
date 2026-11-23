@@ -23,6 +23,8 @@ except Exception as e:
     open(_report + '.setup', 'w').write(f'grab hold effect NOT set: {e}\n')
 
 # NETGRAB_CVARS: ';'-separated console commands run once before the batch (one process: they reach every PIE world), e.g. 'gstn.Grab.HoldByNeck 2'
+# Diagnosis of an unforced reconcile stream: 'np.LogReconcileField 1;gstn.Combat.LogFragmentReconcile 1', then
+#   python Tools/GASNPPTest/reconcile_fields.py <the .ue.log> link_spike   (a rollback with no field logged is Mover's: its ShouldReconcile does not trace)
 for _cmd in [c.strip() for c in os.environ.get('NETGRAB_CVARS', '').split(';') if c.strip()]:
     unreal.SystemLibrary.execute_console_command(None, _cmd)
     open(_report + '.setup', 'a').write(f'cvar: {_cmd}\n')

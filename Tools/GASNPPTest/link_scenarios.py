@@ -142,7 +142,9 @@ def body(wi, key):
     r = Lib.get_shown_body_link(actor(wi, key))
     if r is None:
         return None
-    vals = [x for x in (r if isinstance(r, tuple) else (r,)) if not isinstance(x, bool)]
+    # A None out value (the actor or its fragment missing on that world for a frame) reads as "no link shown", never as an exception that hides the
+    # check's verdict (net grab test 2026-11-23: grab_immunity and link_rollback_host_grabs_client died on int(None))
+    vals = [x for x in (r if isinstance(r, tuple) else (r,)) if not isinstance(x, bool) and x is not None]
     if isinstance(r, tuple) and isinstance(r[0], bool) and not r[0]:
         return None
     return tuple(int(x) for x in vals[:5]) if len(vals) >= 5 else None
@@ -175,14 +177,14 @@ def mover_mode(wi, key):
 def watchdog():
     """(breaks, orphans, last reason index, last frame) of the server's link watchdog"""
     r = Lib.get_watchdog_stats(next(iter(g.comps(g.worlds()[0]).values())).get_owner())   # any pawn of the server's world (dedicated: no host pawn)
-    vals = [int(x) for x in (r if isinstance(r, tuple) else (r,)) if not isinstance(x, bool)]
+    vals = [int(x) for x in (r if isinstance(r, tuple) else (r,)) if not isinstance(x, bool) and x is not None]
     return tuple(vals[:4]) if len(vals) >= 4 else (0, 0, 0, -1)
 
 
 def shown_break(wi, key):
     """(reason, serial, grab immunity end) the Body channel of world wi shows for `key` after a break"""
     r = Lib.get_shown_body_break(actor(wi, key))
-    vals = [int(x) for x in (r if isinstance(r, tuple) else (r,)) if not isinstance(x, bool)]
+    vals = [int(x) for x in (r if isinstance(r, tuple) else (r,)) if not isinstance(x, bool) and x is not None]
     return tuple(vals[:3]) if len(vals) >= 3 else (0, 0, 0)
 
 
@@ -915,7 +917,7 @@ def grab_content_reset():
 def numbers(wi, key):
     """(mash end, mash processed, cooldown end, grab immunity end, break reason) world wi shows for `key`"""
     r = Lib.get_shown_link_numbers(actor(wi, key))
-    vals = [int(x) for x in (r if isinstance(r, tuple) else (r,)) if not isinstance(x, bool)]
+    vals = [int(x) for x in (r if isinstance(r, tuple) else (r,)) if not isinstance(x, bool) and x is not None]
     return tuple(vals[:5]) if len(vals) >= 5 else (0, 0, 0, 0, 0)
 
 
@@ -1115,35 +1117,34 @@ class _GrabRig:
 
 
 def scenario_grab_throw(pairing='client_grabs_client'):
-    """A grabs B with a tap of Interact, pummels twice (Attack), throws (Crouch + Attack: the down throw). Every world shows the same link before, after the pummels
-    and after the throw: the pummels land on the partner only (damage 3 each, the link stays), the throw ends both sides with reason Throw (the thrown
-    side at the thrower's socket, then launched), the thrown side carries the AfterThrow grab immunity and the thrower its cooldown, equal everywhere"""
+    """A grabs B with a tap of Interact and throws with a neutral Attack (grab-link, owner 2026-11-23: ThrowInputMode=Notation, Attack neutral = the N.
+    throw, no pummel). Every world shows the same link before the throw; the throw ends both sides with reason Throw (the thrown side at the thrower's
+    socket, then launched), the thrown side carries the AfterThrow grab immunity and the thrower its cooldown, equal everywhere; the N. throw's damage
+    (7, UGSTN_GA_LinkThrowNeutral) is the same on every world. With ThrowInputMode=Stick an Attack is a pummel: the scenario checks the mode first"""
     rig = _GrabRig('grab_throw', pairing)
     run = rig.run
     steps = [(0.2, rig.setup())]
     grab, t = rig.grab_steps()
     steps += grab
-    # The grab lasts 150 frames (2.4 s) without a mash: the pummels and the throw come well inside it
-    # The second pummel is pressed once the first has landed and A is free again on its own world (F15), not a fixed 0.3 s later
-    steps += [(t + 0.15, rig.mark('pre_pummel')), (t + 0.2, rig.tap(rig.ia, 'Attack')), (t + 0.25, rig.tap_when_free(rig.ia, 'Attack', 'pre_pummel')),
-              (t + 0.95, rig.mark('pummeled')),
-              (t + 0.95, rig.formed('after two pummels the link still holds, the same on every world')),
-              (t + 0.95, run.at('the pummels did 3 + 3 damage to B on the authority', lambda: (
-                  abs((rig.marks['pummeled']['dmg'][0] - rig.marks['pre_pummel']['dmg'][0]) - 6.0) < 0.6,
-                  f"{rig.marks['pre_pummel']['dmg']} -> {rig.marks['pummeled']['dmg']}"))),
-              (t + 0.97, rig.equal_texts('the link states are equal on every world after the pummels')),
-              (t + 1.0, rig.throw()), (t + 1.3, rig.unhold()), (t + 3.1, rig.mark('thrown')),
-              (t + 3.1, rig.gone('the throw ended the link on every world')), (t + 3.1, rig.reason('Throw')),
-              (t + 3.1, rig.seen_equal('B carried the after-throw grab immunity, the same end frame on every world', 'immunity')),
-              (t + 3.1, rig.seen_equal('A carried its grab cooldown, the same end frame on every world', 'cooldown')),
-              (t + 3.1, run.at('B left the parked mode everywhere', lambda: (all(mover_mode(wi, rig.bkey) != LINKED_MODE for wi in range(len(g.worlds()))),
+
+    def notation():
+        mode = str(unreal.get_default_object(unreal.load_class(None, '/Script/GSTNLinkCore.GSTN_LinkSettings')).get_editor_property('throw_input_mode'))
+        return 'NOTATION' in mode.upper(), mode
+
+    steps += [(t + 0.1, run.at('the throw input mode is Notation (Attack neutral = N. throw)', notation)),
+              (t + 0.15, rig.formed('before the throw the link holds, the same on every world')),
+              (t + 0.15, rig.mark('pre_throw')), (t + 0.2, rig.tap(rig.ia, 'Attack')), (t + 2.2, rig.mark('thrown')),
+              (t + 2.2, rig.gone('the N. throw ended the link on every world')), (t + 2.2, rig.reason('Throw')),
+              (t + 2.2, rig.seen_equal('B carried the after-throw grab immunity, the same end frame on every world', 'immunity')),
+              (t + 2.2, rig.seen_equal('A carried its grab cooldown, the same end frame on every world', 'cooldown')),
+              (t + 2.2, run.at('B left the parked mode everywhere', lambda: (all(mover_mode(wi, rig.bkey) != LINKED_MODE for wi in range(len(g.worlds()))),
                                                                            {wi: mover_mode(wi, rig.bkey) for wi in range(len(g.worlds()))}))),
-              (t + 3.1, run.at('the throw did its damage (8), and every world shows the same damage after it', lambda: (
-                  rig.marks['thrown']['dmg'][0] - rig.marks['pummeled']['dmg'][0] > 7.0 and len({round(d, 1) for d in rig.marks['thrown']['dmg']}) == 1,
-                  f"{rig.marks['pre_pummel']['dmg']} -> {rig.marks['pummeled']['dmg']} -> {rig.marks['thrown']['dmg']}"))),
-              (t + 3.15, rig.equal_texts('the link states are equal on every world after the throw')),
-              (t + 3.2, lambda: run.note(f"rollbacks per mark: {[(n, m['rb']) for n, m in rig.marks.items()]}"))]
-    steps += rig.end(t + 3.3)
+              (t + 2.2, run.at('the N. throw did its damage (7) on the authority, and every world shows the same damage after it', lambda: (
+                  abs((rig.marks['thrown']['dmg'][0] - rig.marks['pre_throw']['dmg'][0]) - 7.0) < 0.6 and len({round(d, 1) for d in rig.marks['thrown']['dmg']}) == 1,
+                  f"{rig.marks['pre_throw']['dmg']} -> {rig.marks['thrown']['dmg']}"))),
+              (t + 2.25, rig.equal_texts('the link states are equal on every world after the throw')),
+              (t + 2.3, lambda: run.note(f"rollbacks per mark: {[(n, m['rb']) for n, m in rig.marks.items()]}"))]
+    steps += rig.end(t + 2.4)
     run.run(steps)
 
 
