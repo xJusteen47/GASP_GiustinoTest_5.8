@@ -162,7 +162,7 @@ class TestHitboxRunSeparate(unittest.TestCase):
             card = _card_repo(root)
             runs = _card_runs(card) + [dict(_card_runs(card)[1], name="k7_hb", cvars="gstn.Combat.Debug.Hitboxes 1", hitbox_view=True)]
             fr = FakeRunner(root)
-            r = capture_move.anim_capture_move(variant_runs=runs, root=root, runner=fr, **KW)
+            r = capture_move.anim_capture_move(variant_runs=runs, root=root, runner=fr, final_round=True, **KW)
             self.assertTrue(r["ok"], r)
             vids = [c for c, _ in fr.calls if c[0] == "python"]
             review = [c for c in vids if "--hitboxes=1" not in c]
