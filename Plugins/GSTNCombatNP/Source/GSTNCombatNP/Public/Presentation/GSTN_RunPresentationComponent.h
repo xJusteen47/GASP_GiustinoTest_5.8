@@ -59,10 +59,23 @@ struct GSTNCOMBATNP_API FGSTN_FootSlideState
 	UPROPERTY(BlueprintReadOnly, Category = "Foot Slide")
 	float DistanceToStop = 0.f;
 
+	/** Skid only (skid-physics-1): the frames of this skid's push (its Exit phase), from the simulation; 0 = the kit's ExitFrames */
+	UPROPERTY(BlueprintReadOnly, Category = "Foot Slide")
+	int32 ExitFrames = 0;
+
+	/** Skid only: the capsule follows the skid clip (ClipRoot motion), so the clip may play at its own speed (gstn.Skid.PlayAtClipSpeed).
+	 *  False = the clip follows the simulation's phases (the animation follows the physics) */
+	UPROPERTY(BlueprintReadOnly, Category = "Foot Slide")
+	bool bClipTimed = false;
+
 	bool IsSliding() const { return Source != EGSTN_FootSlideSource::None; }
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGSTN_OnFootSlideChanged, bool, bSliding, const FGSTN_FootSlideState&, State);
+
+/** The presented run stage changed (1-based like the owner names them: 1 run, 2 sprint 1, 3 sprint 2). bUp: a higher stage (a climb or a
+ *  boost); the readable step's burst is IsRunStageEntryBurst on the same tick */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FGSTN_OnRunStageChanged, int32, OldStage, int32, NewStage, bool, bUp);
 
 /**
  * Reads the presented Mover state (game thread, after the movement of the frame) and turns the sliding moves into presentation:
@@ -128,6 +141,10 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
 	bool IsSkidding() const { return SkidPlayTime >= 0.f || FootSlide.Source == EGSTN_FootSlideSource::RunSkid; }
+
+	/** gstn.Skid.PlayAtClipSpeed on AND the last skid moved the capsule on its clip (ClipRoot): only then the clip plays at its own speed.
+	 *  A Physics skid always stretches the clip on the simulation's phases (skid-physics-1: the animation follows the physics) */
+	bool IsSkidClipSpeed() const;
 
 	UFUNCTION(BlueprintPure, Category = "Combat|Run", meta = (BlueprintThreadSafe))
 	float GetSkidClipTime() const;
@@ -246,6 +263,55 @@ public:
 	static float GetAnimOwnerBoostDashTime(const UAnimInstance* AnimInstance);
 
 	/**
+	 * Readable run stages (owner 2026-11-20, decisions 1A 2A 3B, docs/notes/run-stages-leggibili-piano.md): the presented run stage and its
+	 * cues, cached on the game thread each tick from the simulated run state (FGSTN_RunStageState), so the ABP, the chooser and the VFX read the
+	 * same frame. Stage is 1-based (1 run, 2 sprint 1, 3 sprint 2; 0 = no run stages). Tell = the next stage is announced (heel sparks, deeper
+	 * lean; alpha 0..1 over it), Charge = the short pose before the burst, EntryBurst = the step's speed jump is live. StageTime = seconds since
+	 * the stage began. All off with gstn.RunStage.Readable 0 (the stage itself still shows)
+	 */
+	UFUNCTION(BlueprintPure, Category = "Combat|Run Stages", meta = (BlueprintThreadSafe))
+	int32 GetRunStage() const { return PresentedRunStage; }
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run Stages", meta = (BlueprintThreadSafe))
+	bool IsRunStageTell() const { return bRunStageTell; }
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run Stages", meta = (BlueprintThreadSafe))
+	float GetRunStageTellAlpha() const { return RunStageTellAlpha; }
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run Stages", meta = (BlueprintThreadSafe))
+	bool IsRunStageCharge() const { return bRunStageCharge; }
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run Stages", meta = (BlueprintThreadSafe))
+	bool IsRunStageEntryBurst() const { return bRunStageEntryBurst; }
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run Stages", meta = (BlueprintThreadSafe))
+	float GetRunStageTime() const { return RunStageTime; }
+
+	/** The simulation frame the presented stage began (FGSTN_RunStageState::StageEnteredFrame), INDEX_NONE before the first change */
+	UFUNCTION(BlueprintPure, Category = "Combat|Run Stages", meta = (BlueprintThreadSafe))
+	int32 GetRunStageEnteredFrame() const { return RunStageEnteredFrame; }
+
+	/** The stage changed on the presented frame (VFX hook for S2: the burst when bUp and IsRunStageEntryBurst) */
+	UPROPERTY(BlueprintAssignable, Category = "Combat|Run Stages")
+	FGSTN_OnRunStageChanged OnRunStageChanged;
+
+	/** The same cues from an Animation Blueprint without a component reference (the chooser's RunStage column, the charge state's rule) */
+	UFUNCTION(BlueprintPure, Category = "Combat|Run Stages", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static int32 GetAnimOwnerRunStage(const UAnimInstance* AnimInstance);
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run Stages", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static bool IsAnimOwnerRunStageTell(const UAnimInstance* AnimInstance);
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run Stages", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static float GetAnimOwnerRunStageTellAlpha(const UAnimInstance* AnimInstance);
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run Stages", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static bool IsAnimOwnerRunStageCharge(const UAnimInstance* AnimInstance);
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Run Stages", meta = (BlueprintThreadSafe, DefaultToSelf = "AnimInstance", HidePin = "AnimInstance"))
+	static float GetAnimOwnerRunStageTime(const UAnimInstance* AnimInstance);
+
+	/**
 	 * Jump squat (owner 2026-11-17, 1A: 3 frames on the ground before the take-off; UGSTN_CombatSettings::JumpSquatFrames): true while the
 	 * combat sim's jump state counts the squat down (FGSTN_JumpState::SquatFramesLeft > 0). Read straight from the simulated jump state, not
 	 * cached in this component's tick (TG_PostPhysics, one frame late): the squat lasts 3 frames, a late frame would lose a third of it.
@@ -301,12 +367,24 @@ private:
 	bool bRunStartContactL = false;
 	bool bRunStartContactR = false;
 	float BoostDashTime = -1.f;
+
+	/** Readable run stages (TickRunStage): cached for the anim worker; PresentedRunStage 0 = no run stages */
+	void TickRunStage();
+	int32 PresentedRunStage = 0;
+	bool bRunStageTell = false;
+	float RunStageTellAlpha = 0.f;
+	bool bRunStageCharge = false;
+	bool bRunStageEntryBurst = false;
+	float RunStageTime = 0.f;
+	int32 RunStageEnteredFrame = INDEX_NONE;
 	/**
 	 * Clip speed (cvar gstn.Skid.PlayAtClipSpeed, owner choice A): seconds since the skid started, < 0 = no skid shown. Runs on past the
 	 * sim's skid while the clip has frames left and the character stays on the ground with nothing else sliding (the restart is in the clip)
 	 */
 	float SkidPlayTime = -1.f;
 	void TickSkidPlayTime(float DeltaTime);
+	/** FGSTN_FootSlideState::bClipTimed of the last live skid frame, kept for the clip's tail after the sim's skid */
+	bool bLastSkidClipTimed = false;
 	FVector ScrambleDirection = FVector::ForwardVector;
 
 	/** Run stop: the two clips (left foot, right foot in front), their root speed tracks, the idle of the blend mode, and the state */

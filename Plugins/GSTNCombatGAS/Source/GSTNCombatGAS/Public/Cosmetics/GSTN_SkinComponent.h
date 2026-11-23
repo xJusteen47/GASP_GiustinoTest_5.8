@@ -142,6 +142,9 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Combat|Skin")
 	UGSTN_SkinDefinition* GetAppliedSkin() const { return AppliedSkin.Get(); }
 
+	/** How many equipment pieces this component drew (backpacks, mod visuals, and the kit's own when bIncludeLoadoutVisuals) */
+	int32 GetAttachmentCount() const { return Attachments.Num(); }
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;

@@ -19,6 +19,25 @@ namespace GSTNRunSkid
 	// Test override of the kit's turn side (captures compare both sides); -1 = the kit's data. Same value on every machine or the sides diverge
 	TAutoConsoleVariable<int32> CVarTurnSide(TEXT("gstn.Skid.TurnSide"), -1, TEXT("Skid exit turn side for a near-reverse: -1 kit data, 0 shortest, 1 right (+yaw), 2 left"));
 
+	// skid-physics-1: test/playtest override of the kit's skid motion (FGSTN_RunSkidTuning::Motion). It changes the simulation: same value on
+	// server and clients or they mispredict
+	TAutoConsoleVariable<int32> CVarMotion(TEXT("gstn.Skid.Motion"), -1,
+		TEXT("Run skid motion: -1 = the kit's data (DA, default Physics), 0 = physics (brake through zero, push off, organic), 1 = clip root (old: capsule glued to the clip), 2 = brake + exit (first version)"));
+
+	/** The angular velocity that puts the facing at StartFacing + TurnTotalDeg * Share by the end of the step (ground plane, about Up) */
+	FVector TurnToShare(const FMoverTickStartData& StartState, const FVector& Up, const FVector& StartFacing, float TurnTotalDeg, float Share, double StepMs)
+	{
+		const FMoverDefaultSyncState* Sync = StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
+		const FVector Facing = Sync ? FVector::VectorPlaneProject(Sync->GetOrientation_WorldSpace().Vector(), Up).GetSafeNormal() : FVector::ZeroVector;
+		if (Facing.IsNearlyZero() || StartFacing.IsNearlyZero())
+		{
+			return FVector::ZeroVector;
+		}
+		const double CurrentDeg = FMath::RadiansToDegrees(FMath::Atan2(Up.Dot(StartFacing.Cross(Facing)), StartFacing.Dot(Facing)));
+		const double DeltaDeg = FMath::UnwindDegrees(static_cast<double>(TurnTotalDeg) * Share - CurrentDeg);
+		return Up * (DeltaDeg / (FMath::Max(StepMs, UE_SMALL_NUMBER) * 0.001));
+	}
+
 	/** A safety net only: the move ends itself long before */
 	constexpr float MaxLifeMs = 10000.f;
 
@@ -72,6 +91,11 @@ EGSTN_RunSkidPhase FGSTN_LayeredMove_RunSkid::GetPhase() const
 float FGSTN_LayeredMove_RunSkid::GetSlideSpeed(float DeltaSeconds) const
 {
 	const int32 Frame = CurrentLiveFrame == INDEX_NONE ? LiveFrames - 1 : CurrentLiveFrame;
+	if (Motion == static_cast<uint8>(EGSTN_RunSkidMotion::Physics))
+	{
+		// Written by the simulation step (the brake shape is a kit curve the move does not carry)
+		return Frame >= 0 && Frame < RestFrame ? PhysicsSlideSpeed : 0.f;
+	}
 	return Frame >= 0 && Frame < RestFrame ? FGSTN_RunSkidMath::SpeedAt(StartSpeed, Brake, Frame, DeltaSeconds) : 0.f;
 }
 
@@ -167,18 +191,37 @@ bool FGSTN_LayeredMove_RunSkid::Decide(const FMoverTickStartData& StartState, co
 	const EGSTN_SurfaceLedgeRule SurfaceLedge = bHasFloor ? Floor.Locomotion.SkidLedge : EGSTN_SurfaceLedgeRule::Inherit;
 	bStopAtLedge = SurfaceLedge == EGSTN_SurfaceLedgeRule::Inherit ? Tuning.Ledge == EGSTN_SkidLedge::StopAtLedge : SurfaceLedge == EGSTN_SurfaceLedgeRule::StopAtLedge;
 
+	// skid-physics-1: the velocity model of this skid, latched. ClipRoot needs the baked clip root, else the first version's brake + exit
+	{
+		int32 MotionValue = static_cast<int32>(Tuning.Motion);
+		const int32 MotionOverride = GSTNRunSkid::CVarMotion.GetValueOnAnyThread();
+		if (MotionOverride >= 0 && MotionOverride <= static_cast<int32>(EGSTN_RunSkidMotion::BrakeExit))
+		{
+			MotionValue = MotionOverride;
+		}
+		if (MotionValue == static_cast<int32>(EGSTN_RunSkidMotion::ClipRoot) && !Tuning.FollowsClipRoot())
+		{
+			MotionValue = static_cast<int32>(EGSTN_RunSkidMotion::BrakeExit);
+		}
+		Motion = static_cast<uint8>(MotionValue);
+	}
+	const bool bPhysics = Motion == static_cast<uint8>(EGSTN_RunSkidMotion::Physics);
+
 	// skid-fix-1: the clip's lateral drift goes to its own side; a turn latched to the other side mirrors it
 	ClipRootSign = 0;
-	if (Tuning.FollowsClipRoot())
+	if (Motion == static_cast<uint8>(EGSTN_RunSkidMotion::ClipRoot))
 	{
 		const int32 ClipSide = Tuning.TurnSide == EGSTN_SkidTurnSide::Left ? -1 : 1;
 		ClipRootSign = static_cast<int8>(TurnSign != 0 && TurnSign != ClipSide ? -1 : 1);
 	}
 
-	Brake = FMath::Max(Tuning.Brake * Friction, 1.f);
+	// Physics: the floor's friction scales both halves (ice brakes AND pushes off weaker); ExitSpeed carries the hand-off speed
+	Brake = FMath::Max((bPhysics ? Tuning.Physics.BrakeDecel : Tuning.Brake) * Friction, 1.f);
+	PushAccel = bPhysics ? FMath::Max(Tuning.Physics.PushAccel * Friction, 1.f) : 0.f;
+	PhysicsSlideSpeed = bPhysics ? StartSpeed : 0.f;
 	EnterFrames = Tuning.EnterFrames;
 	ExitFrames = Tuning.ExitFrames;
-	ExitSpeed = Tuning.ExitSpeed;
+	ExitSpeed = bPhysics ? FMath::Max(Tuning.Physics.PushSpeed, 0.f) : Tuning.ExitSpeed;
 	JumpWindowStart = Tuning.JumpWindowStart;
 	JumpWindowEnd = Tuning.JumpWindowEnd;
 	LiveFrames = 0;
@@ -205,7 +248,17 @@ bool FGSTN_LayeredMove_RunSkid::GenerateMove(const FMoverTickStartData& StartSta
 			return false;
 		}
 		RestFrame = FGSTN_RunSkidMath::FramesToRest(StartSpeed, Brake, DeltaSeconds);
-		if (ClipRootSign != 0)
+		if (Motion == static_cast<uint8>(EGSTN_RunSkidMotion::Physics))
+		{
+			// skid-physics-1: the phases come from the physics (the presentation stretches the clip on them): brake frames to rest, push
+			// frames to the hand-off speed. Both from the kit's curves, the same on every machine
+			const FGSTN_LocomotionSimTuning* PhysicsLocomotion = FGSTN_LocomotionAttach::Find(MoverComp->GetOwner());
+			static const FGSTN_RunSkidPhysicsTuning DefaultPhysics;
+			const FGSTN_RunSkidPhysicsTuning& Physics = PhysicsLocomotion ? PhysicsLocomotion->RunStages.Skid.Physics : DefaultPhysics;
+			RestFrame = FGSTN_RunSkidMath::PhysicsFramesToRest(Physics, StartSpeed, Brake, DeltaSeconds);
+			ExitFrames = FGSTN_RunSkidMath::PhysicsPushFrames(Physics, PushAccel, ExitSpeed, DeltaSeconds);
+		}
+		else if (ClipRootSign != 0)
 		{
 			// skid-fix-1: the skid lasts the clip. The brake's rest frame only splits the phases for the presentation (VFX, lean); the
 			// exit runs on to the clip's last frame instead of ExitFrames, so the walking mode (and the stick) never moves the capsule
@@ -266,6 +319,11 @@ bool FGSTN_LayeredMove_RunSkid::GenerateMove(const FMoverTickStartData& StartSta
 		const double DeltaDeg = FMath::UnwindDegrees(static_cast<double>(TurnTotalDeg) * Share - CurrentDeg);
 		return Up * (DeltaDeg / (StepMs * 0.001));
 	};
+
+	if (Motion == static_cast<uint8>(EGSTN_RunSkidMotion::Physics))
+	{
+		return GeneratePhysics(StartState, TimeStep, *MoverComp, SkidTuning, Phase, OutProposedMove);
+	}
 
 	if (ClipRootSign != 0 && SkidTuning && SkidTuning->FollowsClipRoot())
 	{
@@ -345,6 +403,71 @@ bool FGSTN_LayeredMove_RunSkid::GenerateMove(const FMoverTickStartData& StartSta
 	return true;
 }
 
+bool FGSTN_LayeredMove_RunSkid::GeneratePhysics(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, const UMoverComponent& MoverComp,
+	const FGSTN_RunSkidTuning* SkidTuning, EGSTN_RunSkidPhase Phase, FProposedMove& OutProposedMove)
+{
+	static const FGSTN_RunSkidPhysicsTuning DefaultPhysics;
+	const FGSTN_RunSkidPhysicsTuning& Physics = SkidTuning ? SkidTuning->Physics : DefaultPhysics;
+	const double StepMs = FMath::Max<double>(TimeStep.StepMs, UE_SMALL_NUMBER);
+	const float DeltaSeconds = static_cast<float>(StepMs * 0.001);
+	const FVector Up = MoverComp.GetUpDirection();
+
+	// The stick of this frame (input of the frame: a rollback or a refunded substep reads the same one)
+	const AActor* Owner = MoverComp.GetOwner();
+	const UGSTN_CombatSimComponent* Combat = Owner ? Owner->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
+	FVector2D Stick = FVector2D::ZeroVector;
+	float CameraYaw = 0.f;
+	if (Combat)
+	{
+		Combat->GetFrameStick(Stick, CameraYaw);
+	}
+	const float StickSize = static_cast<float>(FMath::Min(Stick.Size(), 1.0));
+	const FVector StickDir = StickSize > KINDA_SMALL_NUMBER ? FGSTN_CombatVictim::StickToPlane(Stick, CameraYaw, Up).GetSafeNormal() : FVector::ZeroVector;
+
+	if (Phase != EGSTN_RunSkidPhase::Exit)
+	{
+		// The player runs on: the stick back along the old direction ends the skid, the walking mode carries on from the speed left
+		if (Physics.ForwardCancelCos > -1.f && StickSize >= Physics.PushStickMin && StickDir.Dot(Direction) >= Physics.ForwardCancelCos)
+		{
+			PhysicsSlideSpeed = 0.f;
+			Finish(TimeStep);
+			return false;
+		}
+		// The brake: continuous from the run speed of the frame before (onset ramp, kit curve), along the old direction
+		const float Speed = FGSTN_RunSkidMath::PhysicsBrakeSpeedAt(Physics, StartSpeed, Brake, CurrentLiveFrame, DeltaSeconds);
+		const FVector SlideVelocity = Direction * Speed;
+		if (!bStopAtLedge || Speed <= 0.f || FGSTN_GroundProbe::HasFloorAhead(StartState, MoverComp, SlideVelocity, StepMs))
+		{
+			PhysicsSlideSpeed = Speed;
+			const float Progress = StartSpeed > KINDA_SMALL_NUMBER ? 1.f - Speed / StartSpeed : 1.f;
+			OutProposedMove.LinearVelocity = SlideVelocity;
+			OutProposedMove.AngularVelocityDegrees = GSTNRunSkid::TurnToShare(StartState, Up, StartFacing, TurnTotalDeg,
+				FGSTN_RunSkidMath::PhysicsTurnShare(Physics, Progress), StepMs);
+			return true;
+		}
+		// The edge: the skid comes to rest here and its push starts now
+		RestFrame = CurrentLiveFrame;
+	}
+
+	// The push: from rest toward the new direction (latched on the first frame, like the turn side), only with the stick held
+	PhysicsSlideSpeed = 0.f;
+	if (StickSize < Physics.PushStickMin || ExitSpeed <= 0.f)
+	{
+		Finish(TimeStep);
+		return false;
+	}
+	const float Push = FGSTN_RunSkidMath::PhysicsPushSpeedAt(Physics, PushAccel, ExitSpeed, CurrentLiveFrame - RestFrame, DeltaSeconds);
+	FVector PushVelocity = TurnDirection * Push;
+	if (bStopAtLedge && Push > 0.f && !FGSTN_GroundProbe::HasFloorAhead(StartState, MoverComp, PushVelocity, StepMs))
+	{
+		PushVelocity = FVector::ZeroVector;
+	}
+	OutProposedMove.LinearVelocity = PushVelocity;
+	OutProposedMove.AngularVelocityDegrees = GSTNRunSkid::TurnToShare(StartState, Up, StartFacing, TurnTotalDeg,
+		FGSTN_RunSkidMath::PhysicsTurnShare(Physics, 1.f + Push / ExitSpeed), StepMs);
+	return true;
+}
+
 void FGSTN_LayeredMove_RunSkid::GetGameplayTags(FGameplayTagContainer& InOutTags) const
 {
 	if (Life != static_cast<uint8>(EGSTN_RunSkidLife::Running))
@@ -385,6 +508,9 @@ void FGSTN_LayeredMove_RunSkid::NetSerialize(FArchive& Ar)
 	Ar << StartFacing;
 	Ar << TurnTotalDeg;
 	Ar << ClipRootSign;
+	Ar << Motion;
+	Ar << PushAccel;
+	Ar << PhysicsSlideSpeed;
 	Ar << StartSpeed;
 	Ar << Brake;
 	Ar << EnterFrames;
@@ -405,7 +531,8 @@ UScriptStruct* FGSTN_LayeredMove_RunSkid::GetScriptStruct() const
 
 FString FGSTN_LayeredMove_RunSkid::ToSimpleString() const
 {
-	return FString::Printf(TEXT("RunSkid (phase %d, frame %d, rest %d)"), static_cast<int32>(GetPhase()), CurrentLiveFrame, RestFrame);
+	return FString::Printf(TEXT("RunSkid (motion %d, phase %d, frame %d, rest %d, exit %d)"), static_cast<int32>(Motion), static_cast<int32>(GetPhase()),
+		CurrentLiveFrame, RestFrame, ExitFrames);
 }
 
 FEffectMoveContainer UGSTN_RunSkidMoveCreator::MakeMove_Implementation(UMoverComponent* TargetMoverComponent, UAbilitySystemComponent* TargetAbilitySystemComponent,

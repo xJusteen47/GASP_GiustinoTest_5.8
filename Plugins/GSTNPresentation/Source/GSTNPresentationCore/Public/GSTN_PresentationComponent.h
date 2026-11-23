@@ -13,6 +13,7 @@ class UAnimSequenceBase;
 class UMaterialInterface;
 class UStaticMeshComponent;
 class AStaticMeshActor;
+class UGSTN_SurfaceFeedbackComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGSTN_OnPresentationEvent, const FGSTN_PresentationEvent&, Event, float, Intensity);
 DECLARE_DYNAMIC_DELEGATE_TwoParams(FGSTN_OnPresentationEventSingle, const FGSTN_PresentationEvent&, Event, float, Intensity);
@@ -60,6 +61,14 @@ public:
 	/** Off = events still fire, no effect plays */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation")
 	bool bPlayEffects = true;
+
+	/**
+	 * Forward every accepted event to the owner's UGSTN_SurfaceFeedbackComponent (added at BeginPlay): landings and hits rumble the pad and
+	 * may play a footwear x floor sound from the surface response table. Not gated by bPlayEffects nor GSTN.Presentation.Effects (the VFX
+	 * switch): its own switches are gstn.Audio.Surface and gstn.Haptics.Enable
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation")
+	bool bSurfaceFeedback = true;
 
 	/** Asked after every layer; null = ProjectDefaultTable */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation")
@@ -163,10 +172,19 @@ public:
 	const FGSTN_PresentationSnapshot& GetLastSnapshot() const { return Deriver.GetPrevious(); }
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 	virtual void GetAdditiveReaction(FGSTN_AdditiveReactionRequest& Out) const override;
 
 private:
+	/**
+	 * Loads a table's effects before they are needed (runstart-v5, 2026-11-20). ProjectDefaultTable used to load on the first event that
+	 * reached it, and in the editor its Niagara systems were compiled right then: the first run start of a session stalled ~0.5 s
+	 * (FlushAsyncLoading + "Compiling System NS_GSTN_RunStartDust"), seen as one frozen simulation frame in every base-1 run start capture.
+	 * Editor only for the compile wait; cooked builds ship compiled scripts.
+	 */
+	static void WarmTable(const UGSTN_PresentationTable* Table);
+
 	void PlayCue(const FGSTN_PresentationCue& Cue, const FGSTN_PresentationEvent& Event, float Intensity);
 
 	struct FBound
@@ -175,6 +193,10 @@ private:
 		FGSTN_OnPresentationEventSingle Delegate;
 	};
 	TArray<FBound> Bound;
+
+	/** The owner's surface feedback (bSurfaceFeedback), found or added at BeginPlay */
+	UPROPERTY(Transient)
+	TObjectPtr<UGSTN_SurfaceFeedbackComponent> SurfaceFeedback;
 
 	struct FActiveAdditive
 	{

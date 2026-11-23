@@ -113,6 +113,14 @@ struct GSTNLINKNP_API FGSTN_LinkThrow
 	 */
 	static bool EndOwnLink(FGSTN_LinkFragment& Fragment, int32 Frame, const FGSTN_GrabRules* Rules);
 
+	/**
+	 * grab-link: the hit a grabbed entity that mashed free deals its grabber (FGSTN_GrabEscapeHit, data of the GRABBED entity's kit: PVE enemies), as a
+	 * direct inbox entry from the grabbed, stamped Frame (the break frame: the watchdog posts it beside the Break command, consumed with it on Frame + 1).
+	 * The attacker's facing is the grabbed's, which faced the grabber while parked, so the knockback pushes the grabber away from it. Relationship Enemy,
+	 * no team: a grab only forms on enemies (the type's team rule), and the entry needs no pipeline that resolves teams itself
+	 */
+	static FGSTN_HitInboxEntry MakeEscapeEntry(const FGSTN_HitData& Hit, int32 Frame, int32 GrabbedId, const FTransform& GrabbedTransform, const FVector& GrabberLocation);
+
 	/** The grab rules of a link: the initiator kit's when it carries a link extension, else the type's own grab rule, else null */
 	static const FGSTN_GrabRules* FindGrabRules(const UGSTN_LinkTypeDefinition* Definition, const FGSTN_LinkKitExtension* InitiatorKit);
 

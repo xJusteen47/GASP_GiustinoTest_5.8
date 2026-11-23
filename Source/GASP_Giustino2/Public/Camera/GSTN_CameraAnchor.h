@@ -16,6 +16,8 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Engine/DataAsset.h"
+class UGSTN_CombatSimComponent;
+
 #include "GSTN_CameraAnchor.generated.h"
 
 class USceneComponent;
@@ -31,6 +33,23 @@ enum class EGSTN_CameraAnchorMode : uint8
 	ShiftView,
 };
 
+/**
+ * Where the anchor's HEIGHT comes from (owner 2026-11-20: no capsule change, from any source, may move the camera: crouch spam, aerials,
+ * dropkick, knockdown, landing). The horizontal position always comes from the drawn, smoothed mesh
+ */
+UENUM(BlueprintType)
+enum class EGSTN_CameraVerticalSource : uint8
+{
+	/**
+	 * The capsule's BOTTOM plus the standing half height: on the ground the bottom never moves when the capsule changes (it is kept on the
+	 * floor), so crouch, knockdown and landing capsules cannot move the camera at all, whatever the smoothing or the mesh does in between.
+	 * Steps at the 62.5 Hz simulation rate on slopes and stairs: the vertical damping smooths it. In the air the air hold keeps the height
+	 */
+	CapsuleBottom,
+	/** The drawn mesh read back to a standing root (first version): smooth, but follows any transient between capsule, mesh offset and smoothing */
+	DrawnMesh,
+};
+
 /** How the tilt-shift "toy / miniature" look is made (GSTN_CameraAnchor.h, FGSTN_CameraTiltShiftSettings) */
 UENUM(BlueprintType)
 enum class EGSTN_TiltShiftMode : uint8
@@ -41,6 +60,12 @@ enum class EGSTN_TiltShiftMode : uint8
 	/** A cheap screen-space band: sharp around the character's height on screen, blurred toward the top and bottom of the frame (post process
 	 *  material M_GSTN_TiltShift, ~12 texture reads per blurred pixel, made by Tools/GASNPPTest/camera_tiltshift_setup.py). Works on any preset */
 	ScreenBand,
+	/**
+	 * The real TILT (Scheimpflug): the plane of focus goes through the character but is rotated by TiltAngle around the camera's right axis,
+	 * instead of staying parallel to the sensor. Blur grows with each pixel's distance from that plane (post process material M_GSTN_TiltPlane,
+	 * same cost as the band, reads scene depth). Missing material = Cinematic DOF
+	 */
+	TiltedPlane,
 };
 
 /**
@@ -53,9 +78,9 @@ struct GASP_GIUSTINO2_API FGSTN_CameraTiltShiftSettings
 {
 	GENERATED_BODY()
 
-	/** On/off (console gstn.Camera.TiltShift 0/1/2 overrides it for A/B: 0 off, 1 Cinematic DOF, 2 screen band, -1 = this data) */
+	/** On/off (console gstn.Camera.TiltShift overrides it for A/B: 0 off, 1 Cinematic DOF, 2 screen band, 3 tilted plane, -1 = this data). Off by default: owner 2026-11-21, the toy look comes without blur */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift")
-	bool bEnabled = true;
+	bool bEnabled = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift", meta = (EditCondition = "bEnabled"))
 	EGSTN_TiltShiftMode Mode = EGSTN_TiltShiftMode::CinematicDOF;
@@ -91,9 +116,58 @@ struct GASP_GIUSTINO2_API FGSTN_CameraTiltShiftSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Band", meta = (ClampMin = "0", ClampMax = "40", EditCondition = "bEnabled"))
 	float BandMaxRadius = 3.f;
 
+	/**
+	 * Tilted plane: rotation of the plane of focus from "parallel to the sensor" (0, ordinary depth of field) around the camera's right axis.
+	 * Negative leans the plane's top toward the camera: with a camera looking down, the plane cuts the ground more steeply and the sharp slice
+	 * of the ground gets thinner (the "reverse tilt" of miniature photos). Positive leans it toward the ground: more of the floor stays sharp
+	 * (what architecture photographers use tilt for). At 90 - pitch the plane lies on a flat floor
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Plane", meta = (ClampMin = "-80", ClampMax = "80", Units = "deg", EditCondition = "bEnabled"))
+	float TiltAngle = -20.f;
+
+	/** Tilted plane: blur radius in pixels (1080p) per unit of (distance from the plane / distance from the camera), at Intensity 1 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Plane", meta = (ClampMin = "0", ClampMax = "200", EditCondition = "bEnabled"))
+	float PlaneBlurScale = 12.f;
+
+	/** Tilted plane: blur radius cap in pixels (1080p) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Plane", meta = (ClampMin = "0", ClampMax = "40", EditCondition = "bEnabled"))
+	float PlaneMaxRadius = 4.f;
+
+	/** Tilted plane material (parameters PlanePoint and PlaneNormal camera relative, BlurScale, Radius). Missing = Cinematic DOF */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Plane", meta = (EditCondition = "bEnabled"))
+	TSoftObjectPtr<UMaterialInterface> PlaneMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Blueprints/Camera/M_GSTN_TiltPlane.M_GSTN_TiltPlane")));
+
 	/** Band: the post process material (parameters BandCenter, BandHalfHeight, BandFeather, Radius). Missing = falls back to Cinematic DOF */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift|Band", meta = (EditCondition = "bEnabled"))
 	TSoftObjectPtr<UMaterialInterface> BandMaterial = TSoftObjectPtr<UMaterialInterface>(FSoftObjectPath(TEXT("/Game/Blueprints/Camera/M_GSTN_TiltShift.M_GSTN_TiltShift")));
+};
+
+/**
+ * The SHIFT half of a tilt-shift lens (owner 2026-11-18: tilt and shift are two independent things). Shift slides the lens parallel to the
+ * sensor: the camera keeps its orientation and the picture is reframed (off-axis projection). It changes no focus and no blur. Its classic use
+ * is perspective control: a camera kept level does not make verticals converge, and the shift brings the ground back into the frame.
+ * Presentation only: applied by UGSTN_PlaytestCameraModifier through the view's off-center projection
+ */
+USTRUCT(BlueprintType)
+struct GASP_GIUSTINO2_API FGSTN_CameraShiftSettings
+{
+	GENERATED_BODY()
+
+	/** On/off (console gstn.Camera.Shift 0/1 overrides it, -1 = this data) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Shift")
+	bool bEnabled = false;
+
+	/**
+	 * Straighten verticals: 0 = the camera keeps its pitch (no change), 1 = the camera is levelled (verticals parallel) and the lens shift
+	 * keeps the character exactly where it was on screen. In between, part of the pitch becomes shift. The ground near the character looks the
+	 * same; walls and towers stop leaning, the top of the frame shows less sky
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Shift", meta = (ClampMin = "0", ClampMax = "1", EditCondition = "bEnabled"))
+	float StraightenVerticals = 0.5f;
+
+	/** Extra manual shift, in half screens (X right, Y up), on top of the straightening. Moves the framing without turning the camera */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Shift", meta = (ClampMin = "-1", ClampMax = "1", EditCondition = "bEnabled"))
+	FVector2D Offset = FVector2D::ZeroVector;
 };
 
 /** Tuning of the camera anchor. Data, never project settings: on the component (per character) or in a UGSTN_CameraAnchorSettingsAsset */
@@ -108,6 +182,10 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorSettings
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor")
 	EGSTN_CameraAnchorMode Mode = EGSTN_CameraAnchorMode::MoveCameraComponent;
+
+	/** Where the anchor's height comes from. Console override gstn.Camera.Anchor.Vertical (A/B) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor|Vertical")
+	EGSTN_CameraVerticalSource VerticalSource = EGSTN_CameraVerticalSource::CapsuleBottom;
 
 	/**
 	 * Vertical spring half life when the anchor goes UP (jumps, standing up). Higher = softer. After a sudden step the camera has covered
@@ -196,8 +274,22 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Framing", meta = (ClampMin = "-500", ClampMax = "1000", ForceUnits = "cm"))
 	float ExtraHeight = 45.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift")
+	/**
+	 * Telephoto framing (miniature optics): a narrower field of view with the camera moved back so the character keeps the same size and
+	 * place on screen. Flatter perspective, less wide-angle stretch, the world reads more like a model. Horizontal degrees; 0 = off (GASP's
+	 * FOV). Only narrows: a value above the current FOV does nothing. Try 55, then 45 (Super Mario Galaxy's default). If a wall stops the
+	 * camera short, the FOV opens again to keep the character's size
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Framing", meta = (ClampMin = "0", ClampMax = "120", Units = "deg"))
+	float TelephotoFOV = 0.f;
+
+	/** TILT half (focus): which slice of the world is sharp. Independent from Shift */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|TiltShift", meta = (DisplayName = "Tilt (focus)"))
 	FGSTN_CameraTiltShiftSettings TiltShift;
+
+	/** SHIFT half (framing): off-axis projection. Independent from the tilt */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Shift")
+	FGSTN_CameraShiftSettings Shift;
 };
 
 /** Shared default tuning. The camera anchor subsystem loads /Game/Blueprints/Data/DA_CameraAnchor_Default when it exists, else C++ defaults */
@@ -248,6 +340,12 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorDamper
 	 * Where the actor root would be with the standing capsule, read back from the drawn mesh: the mesh world transform minus its standing
 	 * relative location (the template's, which FGSTN_BodyCapsuleModifier offsets by the capsule change). Unchanged when only the capsule moves
 	 */
+	/**
+	 * The standing root's height along Up from the capsule: its bottom (Root - Up * CurrentHalfHeight) raised by the standing half height. Root is
+	 * the capsule centre. Independent of every capsule size change that keeps the bottom where it is
+	 */
+	static double StandingHeightFromCapsule(const FVector& Root, const FVector& Up, double CurrentHalfHeight, double StandingHalfHeight);
+
 	static FVector StandingRootFromVisual(const FTransform& VisualWorld, const FTransform& VisualStandingRelative, const FVector& ParentScale = FVector::OneVector);
 };
 
@@ -256,6 +354,13 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorDamper
  * (or exposes the correction for the camera modifier). Added at runtime by UGSTN_PlaytestCameraSubsystem to locally viewed pawns that do
  * not have one; a character Blueprint may place its own to give that character different settings. Never ticks on a dedicated server
  */
+/**
+ * The presented capsule changed size (crouch, aerial, landing, knockdown, any body capsule track): half heights before and after, and how far its
+ * bottom moved along Up (0 on the ground: the bottom stays on the floor). Presentation, once per rendered frame with a change, never during a
+ * rollback re-simulation: what the screen shows, not each simulated step
+ */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FGSTN_OnCameraCapsuleChanged, float, OldHalfHeight, float, NewHalfHeight, float, BottomShift);
+
 UCLASS(ClassGroup = (Camera), meta = (BlueprintSpawnableComponent))
 class GASP_GIUSTINO2_API UGSTN_CameraAnchorComponent : public UActorComponent
 {
@@ -272,6 +377,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Anchor")
 	TObjectPtr<UGSTN_CameraAnchorSettingsAsset> SettingsAsset;
 
+	/**
+	 * Observer for custom cameras (owner 2026-11-20): fires when the drawn capsule changes size. The anchor already ignores these changes by
+	 * itself (VerticalSource); bind this only to react on purpose (e.g. a camera that WANTS to dip on crouch)
+	 */
+	UPROPERTY(BlueprintAssignable, Category = "Camera|Anchor")
+	FGSTN_OnCameraCapsuleChanged OnCapsuleChanged;
+
 	/** A component with this tag is the one moved; else the first GameplayCamera, then spring arm, then camera component of the owner */
 	static const FName CameraComponentTag;
 
@@ -281,14 +393,57 @@ public:
 	/** World offset to add to the view when the mode is ShiftView (or no camera component was found). Zero otherwise */
 	FVector GetViewShift() const;
 
-	/** The damped anchor of the last frame (debug and tests) */
+	/**
+	 * The damped anchor of this frame (valid from TG_PostPhysics on; before that, last frame's): the standing root with the camera's damping and
+	 * air hold, without look ahead or aim offsets. Free of capsule size changes and of simulation step jitter
+	 */
+	UFUNCTION(BlueprintPure, Category = "Camera|Anchor")
 	FVector GetDampedAnchor() const { return Damper.Location; }
+
+	/** The undamped standing root this frame's anchor read (see UGSTN_CameraAnchorLibrary::GetCameraPivot) */
+	UFUNCTION(BlueprintPure, Category = "Camera|Anchor")
+	FVector GetStandingRoot() const { return LastStandingRoot; }
+
+	/** Diagnostics (gstn.Camera.Trace): the component the anchor moves (null = ShiftView), and the air state it read this frame */
+	USceneComponent* GetMovedCameraComponent() const { return CameraComponent.Get(); }
+	bool WasInAirLastTick() const { return bLastInAir; }
+
+	/** True once the damper holds a value (it resets while the anchor is off) */
+	bool HasDampedAnchor() const { return Damper.bValid; }
+
+	/**
+	 * The standing root of Actor as drawn this frame: where its actor root would be with its own (standing) capsule, read back from the drawn,
+	 * Mover-smoothed mesh. Capsule resizes and the 62.5 Hz simulation steps do not move it; the body's real motion does. Runs the body capsule's
+	 * mesh correction first, so it is right at any point of the frame after Mover's finalize. False (actor location returned) without a mesh
+	 */
+	static bool ComputeStandingRoot(const AActor* Actor, FVector& OutLocation, EGSTN_CameraVerticalSource VerticalSource = EGSTN_CameraVerticalSource::CapsuleBottom);
+
+	/** The vertical source this frame: the console override (gstn.Camera.Anchor.Vertical 0 = settings, 1 = CapsuleBottom, 2 = DrawnMesh), else Settings */
+	static EGSTN_CameraVerticalSource ResolveVerticalSource(EGSTN_CameraVerticalSource FromSettings);
+
+	/**
+	 * Replaces the height of a mesh-based standing root by the capsule-bottom one (CapsuleBottom, ON THE GROUND only), else returns it as is.
+	 * In the air an aerial's capsule shrinks around the body (owner 2026-11-20, FAir/dair): its bottom rises, so the bottom is no reference
+	 * there; the mesh-based height is, plus AirBias (the bottom-minus-mesh difference of the last grounded frame, so take off does not step)
+	 */
+	static FVector ApplyVerticalSource(const AActor& Actor, const FVector& MeshStandingRoot, const FVector& Up, EGSTN_CameraVerticalSource VerticalSource,
+		bool bInAir = false, double AirBias = 0.0);
+
+	/** Diagnostics: the mesh-based standing root before the vertical source (same as GetStandingRoot with DrawnMesh) */
+	FVector GetMeshStandingRoot() const { return LastMeshStandingRoot; }
+
 
 	/** The correction applied this frame: damped anchor minus what the camera component would follow without it */
 	FVector GetLastCorrection() const { return LastCorrection; }
 
 	/** True when the anchor runs for this owner: enabled, the console switch on, and the owner viewed by a local player */
 	bool IsActiveForOwner() const;
+
+	/**
+	 * The tick group the anchor runs in: the last one before UWorld::Tick updates the camera managers, so the view of a frame is built from
+	 * that frame's anchor. Mover's state is finalized and smoothed earlier (Network Prediction, world pre actor tick)
+	 */
+	static constexpr ETickingGroup EarlyTickGroup = TG_PostPhysics;
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
@@ -299,9 +454,14 @@ protected:
 private:
 	void ResolveComponents();
 	void RestoreCamera();
+	/** Tick group and prerequisites for gstn.Camera.Anchor.Early (1 = before the view, 0 = the first version's TG_PostUpdateWork) */
+	void SetTickOrder(bool bEarly);
 
 	TWeakObjectPtr<USceneComponent> CameraComponent;
 	TWeakObjectPtr<USceneComponent> VisualComponent;
+	TWeakObjectPtr<UGSTN_CombatSimComponent> CombatComponent;
+	bool bOrderSet = false;
+	bool bOrderEarly = true;
 	FTransform CameraRelativeStanding = FTransform::Identity;
 	FTransform VisualRelativeStanding = FTransform::Identity;
 	bool bCameraFollowsVisual = false;
@@ -309,6 +469,14 @@ private:
 	bool bCameraMoved = false;
 	FGSTN_CameraAnchorDamper Damper;
 	FVector LastCorrection = FVector::ZeroVector;
+	FVector LastStandingRoot = FVector::ZeroVector;
+	FVector LastMeshStandingRoot = FVector::ZeroVector;
+	bool bLastInAir = false;
+	/** Capsule-bottom height minus mesh height on the last grounded frame (cm, along Up): carried through the air */
+	double AirBias = 0.0;
+	/** Last presented capsule (OnCapsuleChanged): half height and bottom height along Up; < 0 = not read yet */
+	float LastCapsuleHalfHeight = -1.f;
+	double LastCapsuleBottom = 0.0;
 	bool bShiftView = false;
 	/** 0..1 blend of the aim crouch offset */
 	float AimCrouchAlpha = 0.f;

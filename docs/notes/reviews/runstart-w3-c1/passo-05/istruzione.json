@@ -1,0 +1,30 @@
+{
+  "mossa": "runstart-w3",
+  "ciclo": 1,
+  "passo": 5,
+  "tentativo": 1,
+  "livello": "principio",
+  "vista": "lato",
+  "non_peggiorare": [
+    "restano invariati trunk di passo-01 e passo-04 (f0 -1.7°, f5 41.2°, f13 43.3°, f17 29.0°, f21 24.9°, f25 17.3°, f29 11.9°)",
+    "restano invariati arm_r di passo-02 (el_r_vs_sh_x_cm f5 -9.1, f13 -17.6) e arm_l di passo-03 (el_l_vs_sh_x_cm f5 +13.6, f13 +17.3; hand_l_vs_hip_x_cm f5 +9.6, f13 +28.5)",
+    "tra f5 (v92) e f13 (v107) l'avampiede sinistro mantiene appoggio pulito senza compenetrare il suolo né introdurre slittamenti rispetto alla capsula, e f21 (v122) resta invariato senza pop"
+  ],
+  "chiave": {
+    "anim": 13,
+    "video": 107,
+    "esiste": null,
+    "tratto": [5, 21]
+  },
+  "tipo": "posa",
+  "parte": "leg_l",
+  "controllo": "foot_l_ik_ctrl, spazio del personaggio (eventuale roll/avampiede a scelta dell'esecutore)",
+  "intento": "linea d'azione e peso: aprire la falcata compressa sotto la capsula a f13 (v107) portando la spinta posteriore di leg_l dietro il bacino in linea continua con il busto verso f21 (v122)",
+  "modifica": "a f13 (v107), tenendo ancorati f5 (v92) e f21 (v122), spostare leggermente indietro (-Y) foot_l_ik_ctrl sull'appoggio dell'avampiede così da aprire la flessione eccessiva del ginocchio sinistro sotto il bacino e allineare gamba di spinta e busto in una diagonale unica verso l'estensione di f21 (v122)",
+  "principio": "linea d'azione, peso e stretch nella fase di spinta (principi-animazione-corporea §4.1, §10 e §11)",
+  "verifica": {
+    "testo": "a f13 (v107) in az90 l'avampiede sinistro spinge dietro la verticale del bacino con ginocchio sinistro visibilmente più aperto rispetto a prima (meno compresso sotto l'anca), senza compenetrazione col suolo né pop verso f21 (v122)",
+    "req": null,
+    "misura": null
+  }
+}

@@ -1,0 +1,4 @@
+w2base_h1 L planted lateral drift max 4.90 cm/frame at f83
+w2base_h1 R planted lateral drift max 1.00 cm/frame at f115
+w2s_h1 L planted lateral drift max 3.80 cm/frame at f83
+w2s_h1 R planted lateral drift max 1.00 cm/frame at f115

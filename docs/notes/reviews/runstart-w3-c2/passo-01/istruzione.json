@@ -1,0 +1,30 @@
+{
+  "mossa": "runstart-w3",
+  "ciclo": 2,
+  "passo": 1,
+  "tentativo": 1,
+  "livello": "principio",
+  "vista": "lato",
+  "non_peggiorare": [
+    "restano invariati trunk di ciclo 1 (f0 -1.7°, f5 41.2°, f13 43.3°, f17 29.0°, f21 24.9°, f25 17.3°, f29 11.9°), arm_l di passo-03 e leg_l di passo-05 (f13 134.7°)",
+    "a f0 (v77) arm_r resta rilassato lungo il fianco in idle neutro senza pre-piega",
+    "a f5 (v92) e f13 (v107) da dietro (game) spalla e gomito destro mantengono luce visibile fuori dal fianco (+distacco laterale senza rientrare nella sagoma)"
+  ],
+  "chiave": {
+    "anim": 5,
+    "video": 92,
+    "esiste": null,
+    "tratto": [0, 21]
+  },
+  "tipo": "posa",
+  "parte": "arm_r",
+  "controllo": "upperarm_r_fk_ctrl, lowerarm_r_fk_ctrl, spazio del personaggio (eventuale rifinitura su clavicle_r_ctrl e hand_r_fk_ctrl a scelta dell'esecutore)",
+  "intento": "contrappeso, archi e catena cinetica: eliminare la tensione omolaterale di arm_r dietro i glutei a f5 (v92) e il doppio rimbalzo f5->f13->f21, portando il braccio destro in opposizione naturale a leg_l con gomito piegato morbido lungo un arco continuo",
+  "modifica": "tra f5 (v92) e f13 (v107), mantenere f0 (v77) neutro e f21 (v122) raccordato, invertire il picco anomalo di f5 portando upperarm_r e lowerarm_r in avanti/piegati in opposizione a leg_l (o ammorbidendo la carica posteriore con gomito flesso ~110°–125° senza blocco rigido dietro i glutei), così che tra f5, f13 e f21 il braccio destro compia un unico swing fluido e continuo staccato dalla sagoma del torso",
+  "principio": "contrappeso controlaterale, archi e drag di gomito/polso (principi-animazione-corporea §4.2, §7.2 e §9)",
+  "verifica": {
+    "testo": "a f5 (v92) e f13 (v107) in az90 arm_r mostra il gomito piegato in modo morbido (niente leva rigida a ~160° dietro i glutei) e segue un arco continuo senza inversioni tra f5, f13 e f21 (v122), restando visibile fuori dal torso in game",
+    "req": null,
+    "misura": null
+  }
+}

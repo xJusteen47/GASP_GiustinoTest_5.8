@@ -8,17 +8,26 @@
 #include "GSTN_CameraMath.h"
 #include "GSTN_CameraRuntimeTypes.h"
 #include "GSTN_CameraSection.h"
-#include "GSTN_CameraSettings.h"
+#include "GSTN_CameraBiasVolume.h"
+#include "GSTN_CameraProfile.h"
 #include "GSTN_CameraTags.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "InputAction.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 namespace GSTNCameraComponentPrivate
 {
 	static TAutoConsoleVariable<int32> CVarEnable(TEXT("gstn.Camera.Enable"), 1, TEXT("0 turns the GSTN camera off on this machine (the camera component keeps its own default view)."));
 	static TAutoConsoleVariable<int32> CVarDebug(TEXT("gstn.Camera.Debug"), 0, TEXT("1 draws the pivot and prints the active mode, section and stack of every GSTN camera."));
+	// Playtest switches (listed in the GSTN Debug Options window). They set the player option when the value changes (a debug aid).
+	static TAutoConsoleVariable<int32> CVarAutoFollow(TEXT("gstn.Camera.AutoFollow"), 1, TEXT("0 turns the gentle auto follow (camera turns behind the runner) off, 1 on."));
+	static TAutoConsoleVariable<int32> CVarAssist(TEXT("gstn.Camera.Assist"), 0, TEXT("1 turns Camera Assist on: hold recenter and the move stick turns the camera."));
+	static TAutoConsoleVariable<int32> CVarDistance(TEXT("gstn.Camera.Distance"), 1, TEXT("Camera distance: 0 = near, 1 = medium, 2 = far."));
+	static TAutoConsoleVariable<int32> CVarLookLog(TEXT("gstn.Camera.LookLog"), 0, TEXT("1 = one CSV row per camera frame in Saved/Logs/gstn_camera_look_<pawn>.csv: control rotation before the camera, look delta, orbit pitch and its clamp, view pitch, written control rotation. Diagnostics for the P1a pitch lock (2026-11-21)."));
 	static TAutoConsoleVariable<int32> CVarOcclusion(TEXT("gstn.Camera.Occlusion"), 1, TEXT("0 turns the occlusion probe (fade and pull-in) off."));
 
 	/** True when the entry of this definition belongs to a section */
@@ -33,8 +42,11 @@ using namespace GSTNCameraComponentPrivate;
 UGSTN_CameraComponent::UGSTN_CameraComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
-	// After movement and animation: the camera reads the PRESENTED state (camera.md §2.2)
-	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
+	// After movement: the camera reads the PRESENTED state (camera.md §2.2), finalized and smoothed by Network Prediction before the actor ticks.
+	// TG_PostPhysics, not TG_PostUpdateWork: UWorld::Tick updates the camera managers (GetCameraView) between the two, so a later tick would
+	// hand every frame the previous frame's view (2026-11-20, the camera anchor's jitter). A subject that needs its own update first is a
+	// tick prerequisite of this component
+	PrimaryComponentTick.TickGroup = TG_PostPhysics;
 	// Ticks only once activated (Activate enables the tick), so an Auto Activate off component costs nothing
 	PrimaryComponentTick.bStartWithTickEnabled = false;
 	// Nothing about the camera replicates, ever (camera.md §1)
@@ -51,7 +63,7 @@ void UGSTN_CameraComponent::BeginPlay()
 {
 	Super::BeginPlay();
 	const UWorld* World = GetWorld();
-	if (!World || !ShouldRunFor(World->GetNetMode(), World->IsGameWorld(), UGSTN_CameraSettings::Get().bEnabled))
+	if (!World || !ShouldRunFor(World->GetNetMode(), World->IsGameWorld(), true))
 	{
 		SetComponentTickEnabled(false);
 	}
@@ -60,6 +72,7 @@ void UGSTN_CameraComponent::BeginPlay()
 void UGSTN_CameraComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	ReleaseFades();
+	WriteLookLog(FGSTN_CameraSubjectState(), nullptr, true);
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -137,7 +150,7 @@ void UGSTN_CameraComponent::SetOpponents(const TArray<AActor*>& Opponents)
 
 EGSTN_ShoulderSide UGSTN_CameraComponent::GetShoulderSide() const
 {
-	return bHasShoulderSideOverride ? ShoulderSideOverride : UGSTN_CameraSettings::Get().Shoulder.ShoulderSide;
+	return bHasShoulderSideOverride ? ShoulderSideOverride : GetProfile().Shoulder.ShoulderSide;
 }
 
 void UGSTN_CameraComponent::SetShoulderSide(EGSTN_ShoulderSide Side)
@@ -196,7 +209,15 @@ bool UGSTN_CameraComponent::IsFadeable(const UPrimitiveComponent* Component)
 	{
 		return false;
 	}
-	const FName Tag = UGSTN_CameraSettings::Get().FadeTag;
+	return IsFadeableWithTag(Component, UGSTN_CameraProfile::GetDefaultProfile().FadeTag);
+}
+
+bool UGSTN_CameraComponent::IsFadeableWithTag(const UPrimitiveComponent* Component, FName Tag)
+{
+	if (!Component)
+	{
+		return false;
+	}
 	return Component->ComponentHasTag(Tag) || (Component->GetOwner() && Component->GetOwner()->ActorHasTag(Tag));
 }
 
@@ -208,7 +229,7 @@ UGSTN_CameraModeDefinition* UGSTN_CameraComponent::GetBuiltinDefinition(const FG
 	{
 		return Existing->Get();
 	}
-	const UGSTN_CameraSettings& Settings = UGSTN_CameraSettings::Get();
+	const UGSTN_CameraProfile& Settings = GetProfile();
 	UGSTN_CameraModeDefinition* Definition = NewObject<UGSTN_CameraModeDefinition>(this);
 	Definition->ModeTag = Tag;
 	Definition->Occlusion = Settings.Occlusion;
@@ -223,9 +244,12 @@ UGSTN_CameraModeDefinition* UGSTN_CameraComponent::GetBuiltinDefinition(const FG
 	else if (Tag.MatchesTagExact(GSTNCameraTags::Mode_Free.GetTag()))
 	{
 		UGSTN_CameraMode_Free* Mode = NewObject<UGSTN_CameraMode_Free>(Definition);
-		Mode->Tuning = Settings.Follow;
+		Mode->Tuning = Settings.FreeView;
 		Mode->FreeTuning = Settings.Free;
+		Mode->PitchCurves = Settings.FreePitchCurves;
 		Definition->Mode = Mode;
+		Definition->bAllowAutoFollow = true;
+		Definition->bAllowFramingVolumes = true;
 	}
 	else if (Tag.MatchesTagExact(GSTNCameraTags::Mode_Shoulder.GetTag()))
 	{
@@ -293,7 +317,7 @@ UGSTN_CameraModeDefinition* UGSTN_CameraComponent::ResolveDefinition(const FGSTN
 	{
 		Definition = GetBuiltinDefinition(Rule.ModeTag);
 	}
-	return Definition ? Definition : GetBuiltinDefinition(GSTNCameraTags::Mode_Follow.GetTag());
+	return Definition ? Definition : GetBuiltinDefinition(GSTNCameraTags::Mode_Free.GetTag());
 }
 
 int32 UGSTN_CameraComponent::KeyFor(UGSTN_CameraModeDefinition* Definition, AGSTN_CameraSection* Section)
@@ -310,7 +334,7 @@ int32 UGSTN_CameraComponent::KeyFor(UGSTN_CameraModeDefinition* Definition, AGST
 
 UGSTN_CameraRuleSet* UGSTN_CameraComponent::ChooseRuleSet()
 {
-	const UGSTN_CameraSettings& Settings = UGSTN_CameraSettings::Get();
+	const UGSTN_CameraProfile& Settings = GetProfile();
 	if (const AGSTN_CameraSection* Section = ActiveSection.Get())
 	{
 		if (!Section->Spec.RuleSetOverride.IsNull())
@@ -440,6 +464,8 @@ void UGSTN_CameraComponent::RaiseFrameChange(const FVector& From, const FVector&
 	{
 		return;
 	}
+	// The camera turned the reference: the move stick keeps the old one until it returns to the centre
+	FGSTN_CameraMath::LatchStickReference(Player.StickLatch, GetProfile().StickLatch, FGSTN_CameraMath::DirectionToHeading(Player.Frame, From));
 	FGSTN_CameraFrameChange Change;
 	Change.FromForward = From;
 	Change.ToForward = To;
@@ -461,17 +487,26 @@ void UGSTN_CameraComponent::RaiseFrameChange(const FVector& From, const FVector&
 
 void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, FGSTN_CameraPlayerState& Player, float DeltaSeconds)
 {
-	const UGSTN_CameraSettings& Settings = UGSTN_CameraSettings::Get();
+	const UGSTN_CameraProfile& Settings = GetProfile();
 	const APawn* Pawn = Cast<APawn>(GetOwner());
 	APlayerController* Controller = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+	FGSTN_CameraUserOptions& UserOptions = Options();
+	// A cvar acts when it CHANGES (the player's own menu choice is not overwritten every frame)
+	static int32 LastAutoFollow = 1, LastAssist = 0, LastDistance = 1;
+	const int32 NowAutoFollow = CVarAutoFollow.GetValueOnGameThread(), NowAssist = CVarAssist.GetValueOnGameThread(), NowDistance = FMath::Clamp(CVarDistance.GetValueOnGameThread(), 0, 2);
+	if (NowAutoFollow != LastAutoFollow) { LastAutoFollow = NowAutoFollow; UserOptions.bAutoFollow = NowAutoFollow != 0; }
+	if (NowAssist != LastAssist) { LastAssist = NowAssist; UserOptions.bCameraAssist = NowAssist != 0; }
+	if (NowDistance != LastDistance) { LastDistance = NowDistance; UserOptions.DistancePreset = static_cast<EGSTN_CameraDistancePreset>(NowDistance); }
 
 	UGSTN_CameraLocalPlayerSubsystem* Subsystem = UGSTN_CameraLocalPlayerSubsystem::Get(Controller);
 	if (Subsystem)
 	{
-		Subsystem->EnsureInputContext(Controller);
+		Subsystem->EnsureInputContext(Controller, Settings);
 	}
 
 	// The Enhanced Input actions are polled, so the plugin needs no input component of its own
+	bool bRecenterDown = false;
+	FVector2D AssistMove = FVector2D::ZeroVector;
 	if (Settings.LookInputSource == EGSTN_CameraLookInputSource::Plugin && Controller && Controller->IsLocalController())
 	{
 		if (const UEnhancedPlayerInput* Input = Cast<UEnhancedPlayerInput>(Controller->PlayerInput))
@@ -499,19 +534,78 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 			{
 				if (const UInputAction* Recenter = Settings.RecenterAction.LoadSynchronous())
 				{
-					const bool bDown = Input->GetActionValue(Recenter).Get<bool>();
-					if (bDown && !bRecenterWasDown)
+					bRecenterDown = Input->GetActionValue(Recenter).Get<bool>();
+				}
+			}
+			if (!Settings.DistanceAction.IsNull())
+			{
+				if (const UInputAction* Distance = Settings.DistanceAction.LoadSynchronous())
+				{
+					const float Value = Input->GetActionValue(Distance).Get<float>();
+					const int32 Direction = Value > 0.5f ? 1 : (Value < -0.5f ? -1 : 0);
+					if (Direction != 0 && Direction != LastDistanceDirection)
 					{
-						RequestRecenter();
+						CycleDistancePreset(Direction);
 					}
-					bRecenterWasDown = bDown;
+					LastDistanceDirection = Direction;
+				}
+			}
+			if (!Settings.AssistMoveAction.IsNull())
+			{
+				if (const UInputAction* Move = Settings.AssistMoveAction.LoadSynchronous())
+				{
+					AssistMove = Input->GetActionValue(Move).Get<FVector2D>();
 				}
 			}
 		}
 	}
 
-	const FVector2D Look = PendingLook;
+	// The project feeds the controller (GASP's look adds to the control rotation): only the change since this camera's own last write is input
+	LookRow = FLookLogRow();
+	if (Controller)
+	{
+		LookRow.ControlBefore = Controller->GetControlRotation();
+		LookRow.ControlLeft = LeftControlRotation;
+	}
+	if (Settings.LookInputSource == EGSTN_CameraLookInputSource::ControlRotation && Controller && Controller->IsLocalController())
+	{
+		const FRotator Now = Controller->GetControlRotation();
+		const bool bContinuous = bHasLeftControlRotation && GFrameCounter == LeftControlRotationFrame + 1;
+		const float Unit = FMath::Max(UE_SMALL_NUMBER, Settings.LookDegreesPerUnit);
+		const FVector2D Units = FGSTN_CameraMath::ControlRotationLookDelta(Now, LeftControlRotation, bContinuous, Unit);
+		PendingLook += Units;
+		LookRow.LookDeltaDeg = Units * Unit;
+		LookRow.bContinuous = bContinuous;
+	}
+
+	// Recenter button: a tap recenters; with Camera Assist on, holding it lets the move stick turn the camera (Astro Bot accessibility)
+	if (bRecenterDown)
+	{
+		RecenterHeldSeconds += DeltaSeconds;
+		if (!UserOptions.bCameraAssist && !bRecenterWasDown)
+		{
+			RequestRecenter();
+		}
+	}
+	else
+	{
+		if (UserOptions.bCameraAssist && bRecenterWasDown && RecenterHeldSeconds < Settings.CameraAssist.HoldSeconds)
+		{
+			RequestRecenter();
+		}
+		RecenterHeldSeconds = 0.f;
+	}
+	bRecenterWasDown = bRecenterDown;
+	bAssistActive = UserOptions.bCameraAssist && bRecenterDown && RecenterHeldSeconds >= Settings.CameraAssist.HoldSeconds;
+
+	FVector2D Look = PendingLook;
 	PendingLook = FVector2D::ZeroVector;
+	const float LookUnit = FMath::Max(UE_SMALL_NUMBER, Settings.LookDegreesPerUnit);
+	if (bAssistActive && !AssistMove.IsNearlyZero())
+	{
+		// In look units, so the sensitivity options apply the same way
+		Look += AssistMove * (Settings.CameraAssist.DegPerSecond * DeltaSeconds / LookUnit);
+	}
 	const bool bHasInput = !Look.IsNearlyZero();
 
 	const UGSTN_CameraModeDefinition* Definition = GetTopDefinition();
@@ -535,15 +629,43 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 		{
 			bRecentering = false;
 			Player.SecondsSinceLookInput = 0.f;
-			const float LookScale = Settings.LookDegreesPerUnit * (Subsystem ? Subsystem->LookSensitivityMultiplier : 1.f) * Definition->LookSensitivityScale;
-			const bool bInvert = Subsystem ? Subsystem->bInvertLookY : Settings.bInvertLookY;
-			Orbit.YawDeg = FMath::UnwindDegrees(Orbit.YawDeg + Look.X * LookScale);
-			Orbit.PitchDeg += Look.Y * LookScale * (bInvert ? -1.f : 1.f);
+			const float LookScale = Settings.LookDegreesPerUnit * UserOptions.LookSensitivityMultiplier * Definition->LookSensitivityScale;
+			Orbit.YawDeg = FMath::UnwindDegrees(Orbit.YawDeg + Look.X * LookScale * (UserOptions.bInvertLookX ? -1.f : 1.f));
+			Orbit.PitchDeg += Look.Y * LookScale * (UserOptions.bInvertLookY ? -1.f : 1.f);
 		}
 		else
 		{
 			Player.SecondsSinceLookInput += DeltaSeconds;
 		}
+	}
+
+	// Soft framing volumes and the gentle follow behind: free areas only (a section is the designer's hard framing and wins), never in aim
+	const bool bFreeArea = !Section && !bAim && Definition && bAllowed;
+	UpdateFraming(Subject, Player, Definition && Definition->bAllowFramingVolumes && bFreeArea, DeltaSeconds);
+	bAutoFollowing = false;
+	if (bFreeArea && !bRecentering)
+	{
+		FGSTN_CameraMath::StepBiasOrbit(Orbit, LastBias, Player.SecondsSinceLookInput, DeltaSeconds);
+
+		bool bBlocked = !Definition->bAllowAutoFollow || !UserOptions.bAutoFollow || bAssistActive
+			|| FrameTags.HasTag(GSTNCameraTags::Request_Aim) || FrameTags.HasTag(GSTNCameraTags::State_OneOpponent) || FrameTags.HasTag(GSTNCameraTags::State_ManyOpponents)
+			|| FrameTags.HasAny(Settings.AutoFollowBlockTags);
+		const FVector Flat = FGSTN_CameraMath::ProjectOnUpPlane(Subject.Velocity, Player.Frame.Up);
+		const float Speed = static_cast<float>((Subject.Velocity - Player.Frame.Up * FVector::DotProduct(Subject.Velocity, Player.Frame.Up)).Size());
+		const float MoveHeading = Flat.IsNearlyZero() ? Orbit.YawDeg : FGSTN_CameraMath::DirectionToHeading(Player.Frame, Flat);
+		const float Scale = bBlocked ? 0.f : FMath::Clamp(1.f - LastBias.YawWeight, 0.f, 1.f);
+		const float Before = Orbit.YawDeg;
+		Orbit.YawDeg = FGSTN_CameraMath::StepAutoFollow(Player.AutoFollow, Settings.AutoFollow, Orbit.YawDeg, MoveHeading, Speed, Subject.bGrounded,
+			Player.SecondsSinceLookInput, Scale, DeltaSeconds);
+		bAutoFollowing = !FMath::IsNearlyEqual(Before, Orbit.YawDeg, 1.0e-4f);
+	}
+	else
+	{
+		Player.AutoFollow.RateDegPerSecond = 0.f;
+	}
+
+	if (bAllowed)
+	{
 		float MinPitch = -80.f;
 		float MaxPitch = 80.f;
 		if (Mode)
@@ -551,7 +673,14 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 			Mode->GetPitchRange(MinPitch, MaxPitch);
 		}
 		Orbit.PitchDeg = FMath::Clamp(Orbit.PitchDeg, MinPitch, MaxPitch);
+		LookRow.MinPitchDeg = MinPitch;
+		LookRow.MaxPitchDeg = MaxPitch;
 	}
+	LookRow.OrbitPitchDeg = Orbit.PitchDeg;
+	LookRow.OrbitYawDeg = Orbit.YawDeg;
+
+	// The player distance: the preset of the options, limited by the section, always eased (never a snap)
+	float DistanceTarget = FGSTN_CameraMath::DistancePresetScale(Settings.DistancePresets, UserOptions.DistancePreset, UserOptions.CustomDistanceScale);
 
 	if (Section)
 	{
@@ -566,12 +695,14 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 			const float Idle = (Spec.bOnlyWhileMoving && Subject.Velocity.SizeSquared() < 100.0) ? 0.f : Player.SecondsSinceLookInput;
 			FGSTN_CameraMath::StepRecenter(Orbit, DesiredYaw, Spec.DesiredPitchDeg, Idle, Spec.RecenterDelaySeconds, Spec.RecenterDegPerSecond, DeltaSeconds);
 			Orbit = FGSTN_CameraMath::ClampOrbitAroundDesired(Orbit, DesiredYaw, Spec.DesiredPitchDeg, Spec.Limits);
+			const float Limit = FMath::Max(1.f, Spec.Limits.DistanceScaleLimit);
+			DistanceTarget = FMath::Clamp(DistanceTarget, 1.f / Limit, Limit);
 		}
 		else
 		{
 			Orbit.YawDeg = DesiredYaw;
 			Orbit.PitchDeg = Spec.DesiredPitchDeg;
-			Orbit.DistanceScale = 1.f;
+			DistanceTarget = 1.f;
 		}
 	}
 	else if (bRecentering && Definition)
@@ -589,6 +720,84 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 			bRecentering = false;
 		}
 	}
+	if (bAim)
+	{
+		// The shoulder camera has its own arm: keep the player distance where it is
+		DistanceTarget = Player.Distance.bInit ? Player.Distance.To : DistanceTarget;
+	}
+	Orbit.DistanceScale = FGSTN_CameraMath::StepEasedFloat(Player.Distance, DistanceTarget, Settings.DistancePresets.ChangeSeconds, DeltaSeconds);
+}
+
+void UGSTN_CameraComponent::UpdateFraming(const FGSTN_CameraSubjectState& Subject, const FGSTN_CameraPlayerState& Player, bool bActive, float DeltaSeconds)
+{
+	TArray<AGSTN_CameraBiasVolume*> Volumes;
+	if (const UGSTN_CameraSectionSubsystem* Registry = UGSTN_CameraSectionSubsystem::Get(GetWorld()))
+	{
+		Registry->GetBiasVolumes(Volumes);
+	}
+	const FGSTN_CameraFrame& Frame = Player.Frame;
+	const float Speed = static_cast<float>((Subject.Velocity - Frame.Up * FVector::DotProduct(Subject.Velocity, Frame.Up)).Size());
+	TArray<FGSTN_CameraBiasInput> Inputs;
+	for (AGSTN_CameraBiasVolume* Volume : Volumes)
+	{
+		const FGSTN_CameraBiasSpec& Spec = Volume->Spec;
+		const float Raw = (bActive && Spec.bEnabled) ? Spec.Weight * Volume->GetSpatialWeight(Subject.Pivot) : 0.f;
+		float& Weight = BiasWeights.FindOrAdd(Volume);
+		const float Seconds = Raw > Weight ? Spec.BlendInSeconds : Spec.BlendOutSeconds;
+		Weight = Seconds <= UE_SMALL_NUMBER ? Raw : Weight + (Raw - Weight) * static_cast<float>(1.0 - FMath::Exp(-DeltaSeconds / Seconds));
+		if (Weight < 1.0e-3f && Raw <= 0.f)
+		{
+			Weight = 0.f;
+			BiasFocus.Remove(Volume);
+			continue;
+		}
+
+		// The focus, smoothed when it moves (an enemy, a platform)
+		const FVector FocusTarget = Volume->GetFocusLocation();
+		FVector& Focus = BiasFocus.FindOrAdd(Volume, FocusTarget);
+		Focus = Spec.FocusDampingSeconds <= UE_SMALL_NUMBER ? FocusTarget : Focus + (FocusTarget - Focus) * (1.0 - FMath::Exp(-DeltaSeconds / Spec.FocusDampingSeconds));
+
+		FGSTN_CameraBiasInput& In = Inputs.AddDefaulted_GetRef();
+		In.Priority = Spec.Priority;
+		In.Weight = Weight;
+		In.bBiasYaw = Spec.bBiasYaw;
+		if (Spec.YawSource == EGSTN_CameraBiasYawSource::TowardFocus)
+		{
+			const FVector ToFocus = FGSTN_CameraMath::ProjectOnUpPlane(Focus - Subject.Pivot, Frame.Up);
+			In.HeadingDeg = (ToFocus.IsNearlyZero() ? Player.Orbit.YawDeg : FGSTN_CameraMath::DirectionToHeading(Frame, ToFocus)) + Spec.YawOffsetDeg;
+		}
+		else
+		{
+			In.HeadingDeg = Volume->GetBaseHeading(Frame) + Spec.YawOffsetDeg;
+		}
+		In.bBiasPitch = Spec.bBiasPitch;
+		In.PitchDeg = Spec.PitchDeg;
+		In.DistanceScale = Spec.DistanceScale;
+		In.FovOffsetDeg = Spec.FovOffsetDeg;
+		if (Spec.FramePivotFraction > 0.f)
+		{
+			In.PivotOffset = ((Focus - Subject.Pivot) * Spec.FramePivotFraction).GetClampedToMaxSize(Spec.MaxPivotShiftCm);
+		}
+		In.Strength = Spec.Strength;
+		In.FirmRangeDeg = Spec.FirmRangeDeg;
+		In.ResumeDelaySeconds = Spec.ResumeDelaySeconds;
+		In.PullSeconds = Spec.PullSeconds;
+		In.MaxPullDegPerSecond = Spec.MaxPullDegPerSecond;
+		const bool bEngaged = !Spec.bBiasYaw || FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(Player.Orbit.YawDeg, In.HeadingDeg)) <= Spec.MaxEngageAngleDeg;
+		In.bPullSuppressed = (Spec.bSuppressInAir && !Subject.bGrounded) || (Spec.bOnlyWhileMoving && Speed < 50.f) || !bEngaged;
+	}
+	for (auto It = BiasWeights.CreateIterator(); It; ++It)
+	{
+		if (!It.Key().IsValid())
+		{
+			It.RemoveCurrent();
+		}
+	}
+	LastBias = FGSTN_CameraMath::CombineBias(Inputs);
+	// The view terms come from the smoothed weights already, so they blend in and out with them
+	FramingDistanceScale = LastBias.DistanceScale;
+	FramingFovOffsetDeg = LastBias.FovOffsetDeg;
+	FramingPivotOffset = LastBias.PivotOffset;
 }
 
 // ---- Occlusion ----
@@ -599,7 +808,7 @@ void UGSTN_CameraComponent::ReleaseFades()
 	{
 		if (UPrimitiveComponent* Component = Fade.Component.Get())
 		{
-			Component->SetCustomPrimitiveDataFloat(UGSTN_CameraSettings::Get().FadeCustomDataIndex, 1.f);
+			Component->SetCustomPrimitiveDataFloat(GetProfile().FadeCustomDataIndex, 1.f);
 		}
 	}
 	Fades.Reset();
@@ -607,7 +816,7 @@ void UGSTN_CameraComponent::ReleaseFades()
 
 void UGSTN_CameraComponent::ResolveOcclusion(const FGSTN_CameraView& View, const FGSTN_CameraOcclusionTuning& Tuning, float DeltaSeconds, FGSTN_CameraPose& InOutPose)
 {
-	const UGSTN_CameraSettings& Settings = UGSTN_CameraSettings::Get();
+	const UGSTN_CameraProfile& Settings = GetProfile();
 	UWorld* World = GetWorld();
 	for (FFade& Fade : Fades)
 	{
@@ -636,7 +845,7 @@ void UGSTN_CameraComponent::ResolveOcclusion(const FGSTN_CameraView& View, const
 			}
 			UPrimitiveComponent* Blocker = Hit.GetComponent();
 			const float FromCamera = static_cast<float>(FVector::Dist(InOutPose.Location, Hit.Location));
-			const EGSTN_CameraOcclusionAction Action = FGSTN_CameraMath::DecideOcclusion(Tuning.Policy, IsFadeable(Blocker), FromCamera, Tuning.NearClipSafeCm);
+			const EGSTN_CameraOcclusionAction Action = FGSTN_CameraMath::DecideOcclusion(Tuning.Policy, IsFadeableWithTag(Blocker, Settings.FadeTag), FromCamera, Tuning.NearClipSafeCm);
 			if (Action == EGSTN_CameraOcclusionAction::PullIn)
 			{
 				TargetFraction = FMath::Clamp(Hit.Time, 0.1f, 1.f);
@@ -707,7 +916,7 @@ void UGSTN_CameraComponent::UpdateAim(const FGSTN_CameraSubjectState& Subject, c
 	const float Max = FMath::Max(Min, Shoulder->Tuning.ConvergeMaxCm);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNCameraAim), false, GetOwner());
 	FHitResult Hit;
-	const bool bHit = World->LineTraceSingleByChannel(Hit, Pose.Location + Pose.Forward * Min, Pose.Location + Pose.Forward * Max, UGSTN_CameraSettings::Get().TraceChannel, Params);
+	const bool bHit = World->LineTraceSingleByChannel(Hit, Pose.Location + Pose.Forward * Min, Pose.Location + Pose.Forward * Max, GetProfile().TraceChannel, Params);
 
 	FVector AimOrigin = Subject.Pivot;
 	if (GetOwner() && GetOwner()->Implements<UGSTN_CameraAimOrigin>())
@@ -728,8 +937,8 @@ void UGSTN_CameraComponent::UpdateAim(const FGSTN_CameraSubjectState& Subject, c
 
 void UGSTN_CameraComponent::EvaluateCamera(float DeltaSeconds)
 {
-	const UGSTN_CameraSettings& Settings = UGSTN_CameraSettings::Get();
-	if (!Settings.bEnabled || CVarEnable.GetValueOnGameThread() == 0)
+	const UGSTN_CameraProfile& Settings = GetProfile();
+	if (CVarEnable.GetValueOnGameThread() == 0)
 	{
 		bHasView = false;
 		return;
@@ -831,6 +1040,8 @@ void UGSTN_CameraComponent::EvaluateCamera(float DeltaSeconds)
 		}
 	}
 
+	FrameTags = Tags;
+
 	// 5. The rule table: highest priority match, debounced
 	UGSTN_CameraRuleSet* RuleSet = ChooseRuleSet();
 	if (RuleSet != CurrentRuleSet)
@@ -852,7 +1063,7 @@ void UGSTN_CameraComponent::EvaluateCamera(float DeltaSeconds)
 		Eval.ExitDelaySeconds = Rule.ExitDelaySeconds;
 	}
 	const int32 Chosen = FGSTN_CameraMath::StepRuleChoice(Player.RuleState, Evals, Dt, RuleSet->MinDwellSeconds);
-	UGSTN_CameraModeDefinition* Definition = RuleSet->Rules.IsValidIndex(Chosen) ? ResolveDefinition(RuleSet->Rules[Chosen]) : GetBuiltinDefinition(GSTNCameraTags::Mode_Follow.GetTag());
+	UGSTN_CameraModeDefinition* Definition = RuleSet->Rules.IsValidIndex(Chosen) ? ResolveDefinition(RuleSet->Rules[Chosen]) : GetBuiltinDefinition(GSTNCameraTags::Mode_Free.GetTag());
 	const bool bSectionEntry = IsSectionDefinition(Definition) || (Definition && RuleSet->Rules.IsValidIndex(Chosen) && RuleSet->Rules[Chosen].bModeFromSection);
 	AGSTN_CameraSection* EntrySection = bSectionEntry ? Section : nullptr;
 	if (bSectionEntry && !EntrySection)
@@ -868,7 +1079,7 @@ void UGSTN_CameraComponent::EvaluateCamera(float DeltaSeconds)
 	if (!Player.bOrbitInit)
 	{
 		Player.Orbit.YawDeg = Settings.DefaultYawDeg;
-		Player.Orbit.PitchDeg = (Definition && Definition->Mode) ? Definition->Mode->GetDefaultPitchDeg() : Settings.Follow.PitchDeg;
+		Player.Orbit.PitchDeg = (Definition && Definition->Mode) ? Definition->Mode->GetDefaultPitchDeg() : Settings.FreeView.PitchDeg;
 		Player.Orbit.DistanceScale = 1.f;
 		Player.bOrbitInit = true;
 	}
@@ -958,6 +1169,9 @@ void UGSTN_CameraComponent::EvaluateCamera(float DeltaSeconds)
 	Context.Orbit = Player.Orbit;
 	Context.DeltaSeconds = Dt;
 	Context.AspectRatio = FMath::Max(0.1f, AspectRatio);
+	Context.FramingDistanceScale = FramingDistanceScale;
+	Context.FramingFovOffsetDeg = FramingFovOffsetDeg;
+	Context.FramingPivotOffset = FramingPivotOffset;
 	if (const TWeakObjectPtr<AGSTN_CameraSection>* TopSection = SlotSections.Find(Stack.TopKey()))
 	{
 		Context.Section = TopSection->Get();
@@ -1040,6 +1254,14 @@ void UGSTN_CameraComponent::EvaluateCamera(float DeltaSeconds)
 		{
 			Controller->SetControlRotation(FRotationMatrix::MakeFromXZ(Pose.Forward, Pose.Up).Rotator());
 		}
+		if (Controller->IsLocalController())
+		{
+			// After the write back: next frame's look input is the change from here (the camera's own motion is never read as input)
+			LeftControlRotation = Controller->GetControlRotation();
+			LeftControlRotationFrame = GFrameCounter;
+			bHasLeftControlRotation = true;
+		}
+		WriteLookLog(Subject, Controller, false);
 	}
 
 	UpdateAim(Subject, Pose, TopDefinition);
@@ -1051,21 +1273,113 @@ void UGSTN_CameraComponent::EvaluateCamera(float DeltaSeconds)
 		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(static_cast<uint64>(GetUniqueID()) + 0x47535443ull, 0.f, FColor::White,
-				FString::Printf(TEXT("Camera %s mode=%s section=%s stack=%d"), *GetNameSafe(GetOwner()), *ActiveModeTag.ToString(), *GetNameSafe(ActiveSection.Get()), Stack.Num()));
+				FString::Printf(TEXT("Camera %s mode=%s section=%s stack=%d dist=%.2f framing yaw=%.2f pitch=%.2f pull=%.2f autofollow=%d assist=%d latch=%d"), *GetNameSafe(GetOwner()), *ActiveModeTag.ToString(), *GetNameSafe(ActiveSection.Get()), Stack.Num(),
+					Player.Orbit.DistanceScale, LastBias.YawWeight, LastBias.PitchWeight, LastBias.PullWeight, bAutoFollowing ? 1 : 0, bAssistActive ? 1 : 0, Player.StickLatch.bLatched ? 1 : 0));
 		}
+	}
+}
+
+void UGSTN_CameraComponent::WriteLookLog(const FGSTN_CameraSubjectState& Subject, const APlayerController* Controller, bool bFlushOnly)
+{
+	const bool bOn = CVarLookLog.GetValueOnGameThread() != 0;
+	if (bOn && !bFlushOnly && Controller)
+	{
+		const FRotator Written = Controller->GetControlRotation();
+		const UWorld* World = GetWorld();
+		LookLogLines.Add(FString::Printf(TEXT("%llu,%.4f,%d,%.3f,%.3f,%.3f,%.3f,%.4f,%.4f,%d,%.3f,%.3f,%.1f,%.1f,%.3f,%.3f,%.3f,%d,%s"),
+			(unsigned long long)GFrameCounter, World ? World->GetTimeSeconds() : 0.0, static_cast<int32>(GetProfile().LookInputSource),
+			FRotator::NormalizeAxis(LookRow.ControlBefore.Pitch), FRotator::NormalizeAxis(LookRow.ControlBefore.Yaw),
+			FRotator::NormalizeAxis(LookRow.ControlLeft.Pitch), FRotator::NormalizeAxis(LookRow.ControlLeft.Yaw),
+			LookRow.LookDeltaDeg.Y, LookRow.LookDeltaDeg.X, LookRow.bContinuous ? 1 : 0, LookRow.OrbitPitchDeg, LookRow.OrbitYawDeg,
+			LookRow.MinPitchDeg, LookRow.MaxPitchDeg, LastView.PitchDeg, FRotator::NormalizeAxis(Written.Pitch), FRotator::NormalizeAxis(Written.Yaw),
+			Subject.bGrounded ? 1 : 0, *ActiveModeTag.ToString()));
+	}
+	if (LookLogLines.Num() >= 60 || ((!bOn || bFlushOnly) && LookLogLines.Num() > 0))
+	{
+		// One file per pawn (several PIE players in one process would interleave their rows)
+		const FString Path = FPaths::ProjectLogDir() / FString::Printf(TEXT("gstn_camera_look_%s.csv"), *GetNameSafe(GetOwner()));
+		FString Text;
+		if (!IFileManager::Get().FileExists(*Path))
+		{
+			Text = TEXT("frame,time,source,ctrl_before_pitch,ctrl_before_yaw,ctrl_left_pitch,ctrl_left_yaw,look_pitch_deg,look_yaw_deg,continuous,orbit_pitch,orbit_yaw,pitch_min,pitch_max,view_pitch,written_pitch,written_yaw,grounded,mode\n");
+		}
+		Text += FString::Join(LookLogLines, TEXT("\n")) + TEXT("\n");
+		FFileHelper::SaveStringToFile(Text, *Path, FFileHelper::EEncodingOptions::AutoDetect, &IFileManager::Get(), FILEWRITE_Append);
+		LookLogLines.Reset();
 	}
 }
 
 void UGSTN_CameraComponent::GetCameraView(float DeltaTime, FMinimalViewInfo& DesiredView)
 {
 	Super::GetCameraView(DeltaTime, DesiredView);
-	const UGSTN_CameraSettings& Settings = UGSTN_CameraSettings::Get();
+	const UGSTN_CameraProfile& Settings = GetProfile();
 	const bool bHoldExpired = bHolding && Settings.KOHoldSeconds > 0.f && HoldSeconds > Settings.KOHoldSeconds;
-	if (!bHasView || bHoldExpired || !Settings.bEnabled || CVarEnable.GetValueOnGameThread() == 0)
+	if (!bHasView || bHoldExpired || CVarEnable.GetValueOnGameThread() == 0)
 	{
 		return;
 	}
 	DesiredView.Location = LastPose.Location;
 	DesiredView.Rotation = FRotationMatrix::MakeFromXZ(LastPose.Forward, LastPose.Up).Rotator();
 	DesiredView.FOV = LastView.FovDeg;
+}
+
+// ---- Profile, options, distance, stick reference (P1a) ----
+
+const UGSTN_CameraProfile& UGSTN_CameraComponent::GetProfile() const
+{
+	return Profile ? *Profile : UGSTN_CameraProfile::GetDefaultProfile();
+}
+
+FGSTN_CameraUserOptions& UGSTN_CameraComponent::Options()
+{
+	const APawn* Pawn = Cast<APawn>(GetOwner());
+	const APlayerController* Controller = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
+	if (UGSTN_CameraLocalPlayerSubsystem* Subsystem = UGSTN_CameraLocalPlayerSubsystem::Get(Controller))
+	{
+		return Subsystem->Options;
+	}
+	return FallbackOptions;
+}
+
+FGSTN_CameraUserOptions UGSTN_CameraComponent::GetUserOptions()
+{
+	return Options();
+}
+
+void UGSTN_CameraComponent::SetUserOptions(const FGSTN_CameraUserOptions& NewOptions)
+{
+	Options() = NewOptions;
+}
+
+void UGSTN_CameraComponent::SetDistancePreset(EGSTN_CameraDistancePreset Preset)
+{
+	Options().DistancePreset = Preset;
+}
+
+EGSTN_CameraDistancePreset UGSTN_CameraComponent::CycleDistancePreset(int32 Direction)
+{
+	FGSTN_CameraUserOptions& UserOptions = Options();
+	UserOptions.DistancePreset = FGSTN_CameraMath::CycleDistancePreset(UserOptions.DistancePreset, Direction);
+	return UserOptions.DistancePreset;
+}
+
+float UGSTN_CameraComponent::GetDistanceScale()
+{
+	return State().Orbit.DistanceScale;
+}
+
+FRotator UGSTN_CameraComponent::ResolveMoveReferenceRotation(FVector2D MoveStick)
+{
+	FGSTN_CameraPlayerState& Player = State();
+	const float Dt = Player.LastStickResolveClock < 0.0 ? 0.f : static_cast<float>(FMath::Max(0.0, Clock - Player.LastStickResolveClock));
+	Player.LastStickResolveClock = Clock;
+	const float CameraYaw = FGSTN_CameraMath::DirectionToHeading(Player.Frame, LastPose.Forward);
+	const float Yaw = FGSTN_CameraMath::ResolveStickReference(Player.StickLatch, GetProfile().StickLatch, static_cast<float>(MoveStick.Size()), CameraYaw, Dt);
+	const FVector Forward = FGSTN_CameraMath::HeadingToDirection(Player.Frame, Yaw);
+	return FRotationMatrix::MakeFromXZ(Forward, Player.Frame.Up).Rotator();
+}
+
+bool UGSTN_CameraComponent::IsStickLatched()
+{
+	return State().StickLatch.bLatched;
 }

@@ -1,0 +1,30 @@
+{
+  "mossa": "runstart-w3",
+  "ciclo": 1,
+  "passo": 2,
+  "tentativo": 1,
+  "livello": "principio",
+  "vista": "dietro",
+  "non_peggiorare": [
+    "i valori trunk di passo-01 (f0 -1.7°, f5 41.2°, f13 43.3° e sh_above_hip_cm 31.6 cm a f13) restano preservati",
+    "tra f5 (v92) e f13 (v107) di lato (az90) il braccio destro mantiene flessione naturale al gomito senza iper-estendersi rigido dietro i glutei",
+    "a f21 (v122) in az90 e game il back-swing di arm_r si raccorda senza pop alla falcata base"
+  ],
+  "chiave": {
+    "anim": 13,
+    "video": 107,
+    "esiste": null,
+    "tratto": [0, 21]
+  },
+  "tipo": "posa",
+  "parte": "arm_r",
+  "controllo": "upperarm_r_fk_ctrl, lowerarm_r_fk_ctrl, spazio del personaggio (eventuale rifinitura su hand_r_fk_ctrl a scelta dell'esecutore)",
+  "intento": "silhouette, arco e overlap: azzerare la pre-piega di arm_r a f0 (v77) e staccare spalla e gomito destro fuori dal fianco su un arco fluido in f5–f13 (v92–v107) verso il back-swing di f21 (v122)",
+  "modifica": "a f0 (v77) riportare arm_r lungo il fianco in posa neutra coerente con l'idle; tra f5 (v92) e f13 (v107) aprire leggermente in fuori spalla e gomito destro così che a f5 l'avambraccio non rientri verso l'anca ma legga staccato dal fianco in vista dietro, e a f13 passi su un arco esterno dietro il torso verso il back-swing di f21 (v122), lasciando arm_l al passo-03",
+  "principio": "silhouette, archi e overlap/drag nella catena spalla–gomito–polso (principi-animazione-corporea §7.1–§7.2, §9 e §11)",
+  "verifica": {
+    "testo": "a f0 (v77) arm_r è rilassato lungo il fianco senza pre-piega; a f5 (v92) e f13 (v107) da dietro (game) spalla e gomito destro mostrano luce visibile rispetto al fianco, e a f13 (az90) arm_r inizia già l'arco posteriore verso il back-swing di f21 (v122)",
+    "req": null,
+    "misura": null
+  }
+}

@@ -309,7 +309,11 @@ def _write_link_type():
     a = _data_asset(LINK_DIR, LINK_TYPE, unreal.GSTN_LinkTypeDefinition)
     a.set('link_type', _tag('Combat.Link.Type.Grab'))
     a.set('channel', unreal.GSTN_LinkChannel.BODY)
-    _role(a, 'initiator_role', role_tag=_tag('Combat.Link.Role.Grabber'), parked=False, acts_while_linked=True)
+    # grab-link (owner 2026-11-23): the grabber walks and jumps lower while holding, through its role effect (UGSTN_GE_GrabHold, scales in the
+    # GSTN Link settings and gstn.Grab.WalkScale / JumpScale). The hold by the neck is a per-link anchor the link tick writes: the offset below stays
+    hold = unreal.GSTN_LinkEffectDef()
+    hold.set_editor_property('effect', unreal.SoftClassPath('/Script/GSTNLinkNP.GSTN_GE_GrabHold'))
+    _role(a, 'initiator_role', role_tag=_tag('Combat.Link.Role.Grabber'), parked=False, acts_while_linked=True, link_effect=hold)
     _role(a, 'target_role', role_tag=_tag('Combat.Link.Role.Grabbed'), parked=True, acts_while_linked=False, collision_with_partner=False,
           socket_on_partner='None', socket_offset=unreal.Transform(location=[90.0, 0.0, 0.0], rotation=[0.0, 0.0, 180.0], scale=[1.0, 1.0, 1.0]))
     _rule(a, unreal.GSTN_LinkRule_Grab, _grab_mash)

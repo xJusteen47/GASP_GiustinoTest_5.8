@@ -1,0 +1,30 @@
+{
+  "mossa": "runstart-w3",
+  "ciclo": 1,
+  "passo": 3,
+  "tentativo": 1,
+  "livello": "principio",
+  "vista": "dietro",
+  "non_peggiorare": [
+    "restano invariati trunk di passo-01 (f0 -1.7°, f5 41.2°, f13 43.3°, f21 17.9°, sh_above_hip_f13_cm 31.6) e arm_r di passo-02 (el_r_vs_sh_x_cm f5 -9.1 cm, f13 -17.6 cm; hand_r_vs_hip_x_cm f5 -29.9 cm, f13 -29.8 cm)",
+    "a f0 (v77) arm_l resta neutro lungo il fianco senza pre-piega anticipata",
+    "a f21 (v122) in az90 e game il raccordo di arm_l alla falcata base resta fluido e senza pop"
+  ],
+  "chiave": {
+    "anim": 13,
+    "video": 107,
+    "esiste": null,
+    "tratto": [0, 21]
+  },
+  "tipo": "posa",
+  "parte": "arm_l",
+  "controllo": "upperarm_l_fk_ctrl, lowerarm_l_fk_ctrl, spazio del personaggio (eventuale rifinitura su hand_l_fk_ctrl a scelta dell'esecutore)",
+  "intento": "silhouette, arco e overlap: eliminare la tangenza di arm_l contro l'anca a f5 (v92) e aprire spalla, gomito e mano sinistra fuori (+X) e avanti (+Y) in f5–f13 (v92–v107) su un arco fluido verso il lead-swing di f21 (v122), mantenendo f0 (v77) neutro",
+  "modifica": "a f0 (v77) mantenere arm_l rilassato lungo il fianco senza pre-piega; a f5 (v92) ruotare in fuori (+X) spalla e avambraccio sinistro così che la mano non rientri ad uncino contro l'anca in vista dietro; a f13 (v107) mantenere il gomito staccato dal fianco (+X) portando l'avambraccio sinistro su un arco aperto in avanti (+Y) come braccio guida verso f21 (v122)",
+  "principio": "silhouette, tangenze, archi e catena cinetica spalla–gomito–polso (principi-animazione-corporea §7.1–§7.2, §9 e §11)",
+  "verifica": {
+    "testo": "a f0 (v77) arm_l è disteso lungo il fianco senza pre-piega; a f5 (v92) e f13 (v107) da dietro (game) spalla, gomito e mano sinistra restano staccati all'esterno (+X) senza rientrare nella sagoma di fianco/anca, e a f13 (az90) arm_l mostra un arco aperto in avanti verso f21 (v122)",
+    "req": null,
+    "misura": null
+  }
+}

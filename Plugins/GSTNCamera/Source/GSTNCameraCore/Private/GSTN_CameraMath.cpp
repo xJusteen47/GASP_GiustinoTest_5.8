@@ -699,3 +699,314 @@ void FGSTN_CameraModeStack::Cut(TArray<int32>* OutRemoved)
 		Entries[0].Progress = 1.f;
 	}
 }
+
+// ---- Platform camera P1a ----
+
+namespace GSTNCameraMathPrivate
+{
+	/** Exponential follow fraction for one step; 0 seconds snaps */
+	static double FollowAlpha(float Seconds, float DeltaSeconds)
+	{
+		return Seconds <= Tiny ? 1.0 : 1.0 - FMath::Exp(-static_cast<double>(DeltaSeconds) / Seconds);
+	}
+}
+
+FVector FGSTN_CameraMath::StepPivotAsymmetric(const FVector& Smoothed, const FVector& Target, const FVector& Up, const FVector& Velocity,
+	float CatchUpSeconds, float SettleSeconds, float FullSpeed, float VerticalSeconds, float DeltaSeconds)
+{
+	const FVector U = SafeUp(Up);
+	const FVector Error = Target - Smoothed;
+	const FVector Vertical = U * FVector::DotProduct(Error, U);
+	const FVector Horizontal = Error - Vertical;
+	const double Lag = Horizontal.Size();
+	float Seconds = SettleSeconds;
+	if (Lag > 1.0e-3)
+	{
+		const double Along = FVector::DotProduct(Velocity, Horizontal / Lag);
+		const float Fraction = FMath::Clamp(static_cast<float>(Along / FMath::Max(1.f, FullSpeed)), 0.f, 1.f);
+		Seconds = FMath::Lerp(SettleSeconds, CatchUpSeconds, Fraction);
+	}
+	return Smoothed + Horizontal * FollowAlpha(Seconds, DeltaSeconds) + Vertical * FollowAlpha(VerticalSeconds, DeltaSeconds);
+}
+
+float FGSTN_CameraMath::StepEasedFloat(FGSTN_CameraEasedFloat& InOutState, float Target, float Seconds, float DeltaSeconds)
+{
+	if (!InOutState.bInit || Seconds <= Tiny)
+	{
+		InOutState = FGSTN_CameraEasedFloat();
+		InOutState.Value = InOutState.From = InOutState.To = Target;
+		InOutState.bInit = true;
+		return Target;
+	}
+	if (!FMath::IsNearlyEqual(Target, InOutState.To, 1.0e-4f))
+	{
+		InOutState.From = InOutState.Value;
+		InOutState.To = Target;
+		InOutState.Elapsed = 0.f;
+	}
+	InOutState.Elapsed = FMath::Min(InOutState.Elapsed + DeltaSeconds, Seconds);
+	const float Alpha = BlendAlpha(EGSTN_CameraBlendFunction::EaseInOut, InOutState.Elapsed / Seconds, 2.f);
+	InOutState.Value = FMath::Lerp(InOutState.From, InOutState.To, Alpha);
+	return InOutState.Value;
+}
+
+float FGSTN_CameraMath::DistancePresetScale(const FGSTN_CameraDistancePresets& Presets, EGSTN_CameraDistancePreset Preset, float CustomScale)
+{
+	switch (Preset)
+	{
+	case EGSTN_CameraDistancePreset::Near:
+		return Presets.NearScale;
+	case EGSTN_CameraDistancePreset::Far:
+		return Presets.FarScale;
+	case EGSTN_CameraDistancePreset::Custom:
+		return FMath::Clamp(CustomScale, FMath::Min(Presets.CustomMinScale, Presets.CustomMaxScale), FMath::Max(Presets.CustomMinScale, Presets.CustomMaxScale));
+	default:
+		return Presets.MediumScale;
+	}
+}
+
+EGSTN_CameraDistancePreset FGSTN_CameraMath::CycleDistancePreset(EGSTN_CameraDistancePreset Current, int32 Direction)
+{
+	int32 Index = Current == EGSTN_CameraDistancePreset::Near ? 0 : (Current == EGSTN_CameraDistancePreset::Far ? 2 : 1);
+	Index = FMath::Clamp(Index + FMath::Sign(Direction), 0, 2);
+	return Index == 0 ? EGSTN_CameraDistancePreset::Near : (Index == 2 ? EGSTN_CameraDistancePreset::Far : EGSTN_CameraDistancePreset::Medium);
+}
+
+FVector2D FGSTN_CameraMath::ControlRotationLookDelta(const FRotator& Now, const FRotator& LeftLastFrame, bool bContinuous, float DegreesPerUnit)
+{
+	if (!bContinuous)
+	{
+		return FVector2D::ZeroVector;
+	}
+	// Control rotation pitch is stored 0..360 (350 = 10 down): the normalized difference takes the short way
+	const FRotator Delta = (Now - LeftLastFrame).GetNormalized();
+	const float Unit = FMath::Max(DegreesPerUnit, Tiny);
+	return FVector2D(Delta.Yaw / Unit, Delta.Pitch / Unit);
+}
+
+float FGSTN_CameraMath::StepAutoFollow(FGSTN_CameraAutoFollowState& InOutState, const FGSTN_CameraAutoFollowTuning& Tuning, float YawDeg, float MoveHeadingDeg,
+	float HorizontalSpeed, bool bGrounded, float SecondsSinceLook, float Scale, float DeltaSeconds)
+{
+	const bool bRunning = HorizontalSpeed >= Tuning.MinSpeed && HorizontalSpeed > Tiny;
+	const bool bAirPause = Tuning.bOnlyGrounded && !bGrounded;
+	if (!bRunning)
+	{
+		InOutState.RunSeconds = 0.f;
+	}
+	else if (!bAirPause)
+	{
+		InOutState.RunSeconds += DeltaSeconds;
+	}
+
+	const float Delta = ShortestAngleDelta(YawDeg, MoveHeadingDeg);
+	const float Abs = FMath::Abs(Delta);
+	const bool bAllowed = Tuning.bEnabled && Scale > 0.f && bRunning && !bAirPause && InOutState.RunSeconds >= Tuning.SustainSeconds
+		&& SecondsSinceLook >= Tuning.StickIdleSeconds && Abs > Tuning.DeadAngleDeg && Abs <= Tuning.MaxAngleDeg;
+	if (SecondsSinceLook <= 0.f)
+	{
+		// The stick wins at once
+		InOutState.RateDegPerSecond = 0.f;
+		return YawDeg;
+	}
+	const float Wanted = bAllowed ? Tuning.MaxDegPerSecond * FMath::Clamp(Scale, 0.f, 1.f) * FMath::Min(1.f, Abs / FMath::Max(1.f, Tuning.EaseAngleDeg)) : 0.f;
+	InOutState.RateDegPerSecond += (Wanted - InOutState.RateDegPerSecond) * static_cast<float>(FollowAlpha(Tuning.RampSeconds, DeltaSeconds));
+	if (InOutState.RateDegPerSecond <= Tiny || Abs <= Tiny)
+	{
+		return YawDeg;
+	}
+	return FMath::UnwindDegrees(StepAngleToward(YawDeg, MoveHeadingDeg, InOutState.RateDegPerSecond * DeltaSeconds));
+}
+
+void FGSTN_CameraMath::LatchStickReference(FGSTN_CameraStickLatchState& InOutState, const FGSTN_CameraStickLatchTuning& Tuning, float OldYawDeg)
+{
+	if (!Tuning.bEnabled)
+	{
+		return;
+	}
+	if (!InOutState.bLatched)
+	{
+		// A second turn while latched keeps the first reference: the stick still means what it meant when it was pushed
+		InOutState.LatchedYawDeg = OldYawDeg;
+	}
+	InOutState.bLatched = true;
+	InOutState.Seconds = 0.f;
+}
+
+float FGSTN_CameraMath::ResolveStickReference(FGSTN_CameraStickLatchState& InOutState, const FGSTN_CameraStickLatchTuning& Tuning, float StickMagnitude, float CameraYawDeg, float DeltaSeconds)
+{
+	if (!InOutState.bLatched || !Tuning.bEnabled)
+	{
+		InOutState.bLatched = false;
+		return CameraYawDeg;
+	}
+	InOutState.Seconds += DeltaSeconds;
+	if (StickMagnitude < Tuning.ReleaseMagnitude || (Tuning.MaxHoldSeconds > 0.f && InOutState.Seconds >= Tuning.MaxHoldSeconds))
+	{
+		InOutState.bLatched = false;
+		return CameraYawDeg;
+	}
+	return InOutState.LatchedYawDeg;
+}
+
+float FGSTN_CameraMath::BoxFalloffWeight(const FVector& LocalPoint, const FVector& Extent, float FalloffCm)
+{
+	const double Depth = FMath::Min3(Extent.X - FMath::Abs(LocalPoint.X), Extent.Y - FMath::Abs(LocalPoint.Y), Extent.Z - FMath::Abs(LocalPoint.Z));
+	if (Depth < 0.0)
+	{
+		return 0.f;
+	}
+	if (FalloffCm <= Tiny)
+	{
+		return 1.f;
+	}
+	const float Linear = FMath::Clamp(static_cast<float>(Depth / FalloffCm), 0.f, 1.f);
+	return Linear * Linear * (3.f - 2.f * Linear);
+}
+
+FGSTN_CameraBiasResult FGSTN_CameraMath::CombineBias(const TArray<FGSTN_CameraBiasInput>& Inputs)
+{
+	FGSTN_CameraBiasResult Result;
+	TArray<int32> Order;
+	for (int32 Index = 0; Index < Inputs.Num(); ++Index)
+	{
+		if (Inputs[Index].Weight > 0.f)
+		{
+			Order.Add(Index);
+		}
+	}
+	Order.StableSort([&Inputs](int32 A, int32 B) { return Inputs[A].Priority > Inputs[B].Priority; });
+
+	float Left = 1.f;
+	double YawX = 0.0;
+	double YawY = 0.0;
+	float PitchSum = 0.f;
+	float PullYawPitch = 0.f;
+	float FirmRangeSum = 0.f;
+	float ResumeSum = 0.f;
+	float PullSecondsSum = 0.f;
+	float MaxPullSum = 0.f;
+	float ParamWeight = 0.f;
+	for (const int32 Index : Order)
+	{
+		const FGSTN_CameraBiasInput& In = Inputs[Index];
+		const float Share = FMath::Clamp(In.Weight, 0.f, 1.f) * Left;
+		Left -= Share;
+		Result.DistanceScale += Share * (In.DistanceScale - 1.f);
+		Result.FovOffsetDeg += Share * In.FovOffsetDeg;
+		Result.PivotOffset += In.PivotOffset * Share;
+		if (In.bBiasYaw)
+		{
+			Result.YawWeight += Share;
+			YawX += Share * FMath::Cos(FMath::DegreesToRadians(In.HeadingDeg));
+			YawY += Share * FMath::Sin(FMath::DegreesToRadians(In.HeadingDeg));
+		}
+		if (In.bBiasPitch)
+		{
+			Result.PitchWeight += Share;
+			PitchSum += Share * In.PitchDeg;
+		}
+		if ((In.bBiasYaw || In.bBiasPitch) && !In.bPullSuppressed)
+		{
+			PullYawPitch += Share;
+		}
+		if (In.bBiasYaw || In.bBiasPitch)
+		{
+			ParamWeight += Share;
+			ResumeSum += Share * In.ResumeDelaySeconds;
+			PullSecondsSum += Share * In.PullSeconds;
+			MaxPullSum += Share * In.MaxPullDegPerSecond;
+			if (In.Strength == EGSTN_CameraBiasStrength::Firm)
+			{
+				Result.FirmWeight += Share;
+				FirmRangeSum += Share * In.FirmRangeDeg;
+			}
+		}
+		if (Left <= Tiny)
+		{
+			break;
+		}
+	}
+	if (Result.YawWeight > Tiny)
+	{
+		Result.HeadingDeg = (FMath::Abs(YawX) + FMath::Abs(YawY) > 1.0e-9) ? FMath::RadiansToDegrees(static_cast<float>(FMath::Atan2(YawY, YawX))) : 0.f;
+	}
+	if (Result.PitchWeight > Tiny)
+	{
+		Result.PitchDeg = PitchSum / Result.PitchWeight;
+	}
+	if (ParamWeight > Tiny)
+	{
+		Result.ResumeDelaySeconds = ResumeSum / ParamWeight;
+		Result.PullSeconds = PullSecondsSum / ParamWeight;
+		Result.MaxPullDegPerSecond = MaxPullSum / ParamWeight;
+		Result.PullWeight = PullYawPitch / ParamWeight * FMath::Max(Result.YawWeight, Result.PitchWeight);
+	}
+	if (Result.FirmWeight > Tiny)
+	{
+		Result.FirmRangeDeg = FirmRangeSum / Result.FirmWeight;
+	}
+	return Result;
+}
+
+bool FGSTN_CameraMath::StepBiasOrbit(FGSTN_CameraOrbitState& InOutOrbit, const FGSTN_CameraBiasResult& Bias, float SecondsSinceLook, float DeltaSeconds)
+{
+	bool bMoved = false;
+	// Firm: a limit inside which the stick is free, never a lock; at the volume edge (low weight) it widens to no limit
+	if (Bias.FirmWeight > Tiny && Bias.YawWeight > Tiny)
+	{
+		const float Range = FMath::Lerp(180.f, FMath::Clamp(Bias.FirmRangeDeg, 0.f, 180.f), FMath::Clamp(Bias.FirmWeight, 0.f, 1.f));
+		const float Offset = ShortestAngleDelta(Bias.HeadingDeg, InOutOrbit.YawDeg);
+		if (FMath::Abs(Offset) > Range)
+		{
+			InOutOrbit.YawDeg = FMath::UnwindDegrees(Bias.HeadingDeg + FMath::Sign(Offset) * Range);
+			bMoved = true;
+		}
+	}
+	if (!Bias.HasPull() || SecondsSinceLook < Bias.ResumeDelaySeconds)
+	{
+		return bMoved;
+	}
+	const float MaxStep = FMath::Max(0.f, Bias.MaxPullDegPerSecond) * DeltaSeconds;
+	if (Bias.YawWeight > Tiny)
+	{
+		const float Delta = ShortestAngleDelta(InOutOrbit.YawDeg, Bias.HeadingDeg);
+		const float Step = Delta * static_cast<float>(FollowAlpha(Bias.PullSeconds, DeltaSeconds)) * FMath::Clamp(Bias.PullWeight, 0.f, 1.f);
+		const float Clamped = FMath::Clamp(Step, -MaxStep, MaxStep);
+		if (!FMath::IsNearlyZero(Clamped))
+		{
+			InOutOrbit.YawDeg = FMath::UnwindDegrees(InOutOrbit.YawDeg + Clamped);
+			bMoved = true;
+		}
+	}
+	if (Bias.PitchWeight > Tiny)
+	{
+		const float Delta = Bias.PitchDeg - InOutOrbit.PitchDeg;
+		const float Step = Delta * static_cast<float>(FollowAlpha(Bias.PullSeconds, DeltaSeconds)) * FMath::Clamp(Bias.PullWeight, 0.f, 1.f);
+		const float Clamped = FMath::Clamp(Step, -MaxStep, MaxStep);
+		if (!FMath::IsNearlyZero(Clamped))
+		{
+			InOutOrbit.PitchDeg += Clamped;
+			bMoved = true;
+		}
+	}
+	return bMoved;
+}
+
+FVector FGSTN_CameraMath::StepDeadZone(const FVector& Anchor, const FVector& Target, const FVector& Up, const FVector& HeadingForward, float WidthCm, float DepthCm)
+{
+	const FVector U = SafeUp(Up);
+	FVector Forward = ProjectOnUpPlane(HeadingForward, U);
+	if (Forward.IsNearlyZero())
+	{
+		Forward = ReferenceForward(U);
+	}
+	const FVector Right = FVector::CrossProduct(U, Forward).GetSafeNormal();
+	const FVector Delta = Target - Anchor;
+	const double Side = FVector::DotProduct(Delta, Right);
+	const double Depth = FVector::DotProduct(Delta, Forward);
+	const double HalfW = FMath::Max(0.f, WidthCm) * 0.5;
+	const double HalfD = FMath::Max(0.f, DepthCm) * 0.5;
+	const double SideOut = Side - FMath::Clamp(Side, -HalfW, HalfW);
+	const double DepthOut = Depth - FMath::Clamp(Depth, -HalfD, HalfD);
+	return Anchor + U * FVector::DotProduct(Delta, U) + Right * SideOut + Forward * DepthOut;
+}

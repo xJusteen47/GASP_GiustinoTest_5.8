@@ -1,0 +1,1 @@
+{"mv_run_start_v5": [{"clip": "AS_GSTN_RunStart_v4r7", "window": [95, 170], "min_weight": 0.8, "coverage": 0.9, "additive": ["BS_Relaxed_*Lean*"]}]}

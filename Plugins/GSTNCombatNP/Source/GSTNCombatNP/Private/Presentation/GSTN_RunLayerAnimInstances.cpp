@@ -17,7 +17,7 @@ namespace GSTNRunLayers
 	 * the three sections stretched on the sim's phases. 0 = the three-section timing (the behaviour before).
 	 */
 	static TAutoConsoleVariable<int32> CVarSkidClipSpeed(TEXT("gstn.Skid.PlayAtClipSpeed"), 1,
-		TEXT("1 = the run skid clip plays at its own speed from start to end; 0 = three sections stretched on the skid phases"));
+		TEXT("1 = the run skid clip plays at its own speed from start to end (only with gstn.Skid.Motion clip root: a physics skid always stretches the clip on its phases); 0 = three sections stretched on the skid phases"));
 }
 
 float FGSTN_SkidClipTime::Compute(EGSTN_RunSkidPhase Phase, int32 Frame, int32 RestFrame, float Length, float StopTime, float StopFraction, float ExitPlayRate,
@@ -93,7 +93,7 @@ void UGSTN_SkidAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		bActive = true;
 		TailSeconds = -1.f;
 		LastPhase = Slide.SkidPhase;
-		if (SectionClip && ActiveClip == SectionClip && GSTNRunLayers::CVarSkidClipSpeed.GetValueOnGameThread() != 0)
+		if (SectionClip && ActiveClip == SectionClip && Run->IsSkidClipSpeed())
 		{
 			// Clip speed: the time since the skid started, whatever the sim's phase (bActive was false on the first frame: start at 0)
 			ClipTime = bWasActive ? FMath::Min(ClipTime + DeltaSeconds, ActiveClip->GetPlayLength()) : 0.f;
@@ -118,7 +118,7 @@ void UGSTN_SkidAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		Mover = Owner ? Owner->FindComponentByClass<UMoverComponent>() : nullptr;
 	}
 	const bool bOnGround = Mover.IsValid() && Mover->HasGameplayTag(Mover_IsOnGround, false);
-	const bool bClipSpeed = GSTNRunLayers::CVarSkidClipSpeed.GetValueOnGameThread() != 0 && ActiveClip && Run && ActiveClip == Run->GetSkidSectionClip();
+	const bool bClipSpeed = Run && Run->IsSkidClipSpeed() && ActiveClip && ActiveClip == Run->GetSkidSectionClip();
 	if (bActive && ActiveClip && LastPhase != EGSTN_RunSkidPhase::None && !Slide.IsSliding() && bOnGround && (MaxTailSeconds > 0.f || bClipSpeed)
 		&& (bClipSpeed || LastPhase == EGSTN_RunSkidPhase::Exit))
 	{

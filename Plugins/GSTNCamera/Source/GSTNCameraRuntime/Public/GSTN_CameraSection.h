@@ -9,6 +9,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "GSTN_CameraSection.generated.h"
 
+class AGSTN_CameraBiasVolume;
 class AGSTN_CameraSection;
 class UGSTN_CameraComponent;
 class UGSTN_CameraRuleSet;
@@ -262,6 +263,13 @@ public:
 	/** Every registered section whose volume contains the point */
 	void GatherContaining(const FVector& Point, TArray<AGSTN_CameraSection*>& OutSections) const;
 
+	/** Soft framing volumes (owner 2026-11-21): registered the same way, evaluated by every local camera on its own pivot */
+	void RegisterBiasVolume(AGSTN_CameraBiasVolume* Volume);
+	void UnregisterBiasVolume(AGSTN_CameraBiasVolume* Volume);
+	int32 GetNumBiasVolumes() const { return BiasVolumes.Num(); }
+	void GetBiasVolumes(TArray<AGSTN_CameraBiasVolume*>& OutVolumes) const;
+
 private:
 	TArray<TWeakObjectPtr<AGSTN_CameraSection>> Sections;
+	TArray<TWeakObjectPtr<AGSTN_CameraBiasVolume>> BiasVolumes;
 };

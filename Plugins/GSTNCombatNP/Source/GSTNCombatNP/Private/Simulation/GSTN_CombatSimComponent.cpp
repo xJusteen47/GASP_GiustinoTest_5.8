@@ -91,6 +91,11 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNCombatSim, Log, All);
 
+static TAutoConsoleVariable<bool> CVarMeshCapsuleShiftBeforeAnim(TEXT("gstn.Mesh.CapsuleShiftBeforeAnim"), true,
+	TEXT("Crouch / body capsule mesh pop fix (crouch-mesh-pop-1, 2026-11-21). On = the capsule shift's smoothing correction is applied to the mesh ")
+	TEXT("before it animates (TG_PrePhysics), so the pose of that frame sees the mesh where it is drawn. Off = the first version: correction only ")
+	TEXT("in TG_PostUpdateWork, after the animation (one-frame mesh flash on crouch / stand)."), ECVF_Default);
+
 static TAutoConsoleVariable<int32> CVarCombatDebugInput(TEXT("gstn.Combat.Debug.Input"), 0,
 	TEXT("Draws the combat input history above the locally controlled pawns (the notation of FGSTN_InputScript, oldest first)."), ECVF_Default);
 
@@ -118,6 +123,11 @@ UGSTN_CombatSimComponent::UGSTN_CombatSimComponent()
 	// Only for the debug display; the simulation is ticked by Network Prediction
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
+	// Before-anim presentation (gstn.Mesh.CapsuleShiftBeforeAnim): after Network Prediction placed the mesh, before the mesh ticks its animation
+	BodyCapsulePresentTick.bCanEverTick = true;
+	BodyCapsulePresentTick.bStartWithTickEnabled = true;
+	BodyCapsulePresentTick.TickGroup = TG_PrePhysics;
+	BodyCapsulePresentTick.bTickEvenWhenPaused = false;
 	bWantsInitializeComponent = true;
 	SetIsReplicatedByDefault(true);
 	FreezeEffect = UGSTN_GE_Freeze::StaticClass();
@@ -2075,6 +2085,63 @@ FString UGSTN_CombatSimComponent::GetDebugString(int32 MaxEvents) const
 		static_cast<int32>(Sync->Core.ActionState), static_cast<int32>(Sync->Core.ActiveTimeline), Sync->Core.TimelineStartFrame, Sync->Core.TimelinePausedFrames, static_cast<int32>(Sync->Core.ActiveSource));
 }
 
+void FGSTN_BodyCapsulePresentTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType, ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
+{
+	if (Target && IsValid(Target) && CVarMeshCapsuleShiftBeforeAnim.GetValueOnGameThread())
+	{
+		Target->ApplyBodyCapsulePresentation();
+	}
+}
+
+void UGSTN_CombatSimComponent::RegisterComponentTickFunctions(bool bRegister)
+{
+	Super::RegisterComponentTickFunctions(bRegister);
+	if (bRegister)
+	{
+		if (SetupActorComponentTickFunction(&BodyCapsulePresentTick))
+		{
+			BodyCapsulePresentTick.Target = this;
+		}
+	}
+	else if (BodyCapsulePresentTick.IsTickFunctionRegistered())
+	{
+		if (USceneComponent* Visual = BodyCapsulePresentTickVisual.Get())
+		{
+			Visual->PrimaryComponentTick.RemovePrerequisite(this, BodyCapsulePresentTick);
+		}
+		BodyCapsulePresentTickVisual.Reset();
+		BodyCapsulePresentTick.UnRegisterTickFunction();
+	}
+}
+
+void UGSTN_CombatSimComponent::LinkBodyCapsulePresentTick()
+{
+	const UMoverComponent* Mover = GetOwner() ? GetOwner()->FindComponentByClass<UMoverComponent>() : nullptr;
+	USceneComponent* Visual = Mover ? Mover->GetPrimaryVisualComponent() : nullptr;
+	if (Visual == BodyCapsulePresentTickVisual.Get())
+	{
+		return;
+	}
+	if (USceneComponent* Old = BodyCapsulePresentTickVisual.Get())
+	{
+		Old->PrimaryComponentTick.RemovePrerequisite(this, BodyCapsulePresentTick);
+	}
+	if (Visual && Visual != Mover->GetUpdatedComponent())
+	{
+		// The mesh's tick updates its animation: it waits for the correction (takes effect from the next frame)
+		Visual->PrimaryComponentTick.AddPrerequisite(this, BodyCapsulePresentTick);
+	}
+	BodyCapsulePresentTickVisual = Visual;
+}
+
+void UGSTN_CombatSimComponent::ApplyBodyCapsulePresentation()
+{
+	if (UMoverComponent* Mover = GetOwner() ? GetOwner()->FindComponentByClass<UMoverComponent>() : nullptr)
+	{
+		FGSTN_BodyCapsuleModifier::ApplyPresentation(*Mover, &BodyCapsuleCorrectedAt);
+	}
+}
+
 void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
@@ -2086,11 +2153,10 @@ void UGSTN_CombatSimComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 	PollLoadoutComponent();
 	TryRegisterWithWorld();
 
-	// Per-move movement capsule: size and mesh offset of the presented Mover state, on every machine (simulated proxies run no modifier)
-	if (UMoverComponent* Mover = GetOwner() ? GetOwner()->FindComponentByClass<UMoverComponent>() : nullptr)
-	{
-		FGSTN_BodyCapsuleModifier::ApplyPresentation(*Mover, &BodyCapsuleCorrectedAt);
-	}
+	// Per-move movement capsule: size and mesh offset of the presented Mover state, on every machine (simulated proxies run no modifier).
+	// With gstn.Mesh.CapsuleShiftBeforeAnim the before-anim tick already did it this frame and this call changes nothing (idempotent)
+	ApplyBodyCapsulePresentation();
+	LinkBodyCapsulePresentTick();
 
 #if ENABLE_DRAW_DEBUG
 	if (CVarCombatDebugInput.GetValueOnGameThread() != 0)

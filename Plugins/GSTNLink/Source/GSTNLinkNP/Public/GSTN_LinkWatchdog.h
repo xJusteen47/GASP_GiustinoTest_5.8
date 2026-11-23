@@ -230,6 +230,14 @@ private:
 	void OnPostActorTick(UWorld* World, ELevelTick TickType, float DeltaSeconds);
 	bool IsAuthority() const;
 
+	/**
+	 * grab-link: on an Escape break, the grabbed entity's kit escape hit (FGSTN_GrabEscapeHit, PVE enemies; every grabbed with the cvar
+	 * gstn.Grab.EscapeHitForAll) posted to its grabber as a direct entry stamped on the break frame. The watchdog is already the only author of the
+	 * escape (the mash end), so the hit joins the Break command on the same authority path and reaches the clients by correction like it
+	 */
+	void PostEscapeHit(class UGSTN_CombatWorldSubsystem& Combat, const class UGSTN_LinkRegistry& Registry, const FGSTN_LinkWatchdogBreak& Break,
+		const TArray<FGSTN_LinkWatchdogEntity>& Entities, const TMap<int32, const AActor*>& Actors, int32 Frame);
+
 	FDelegateHandle PostActorTickHandle;
 
 	/** (entity id << 8 | channel << 7 ... ) -> frame a command for that serial was posted; see Evaluate */

@@ -39,6 +39,11 @@ enum class EGSTN_RunSkidLife : uint8
  * rollback restores them; the combat tick copies them into the input context (kit bindings) and the presentation reads the phase.
  *
  * Mixing: OverrideVelocity at priority 0, like the momentum slide (a freeze, HitstopPriority, wins).
+ *
+ * skid-physics-1 (owner 2026-11-21): the velocity model is latched on the first frame (Motion, EGSTN_RunSkidMotion; kit data, console
+ * gstn.Skid.Motion). Physics, the default: the brake starts from the velocity of the frame before (no jump), slides along the old direction
+ * through zero, then the push accelerates toward the stick and hands the same velocity to the walking mode. The stick pushed forward again
+ * during the brake, or released before the push, ends the skid early: the walking mode carries on from the velocity of that frame.
  */
 USTRUCT()
 struct GSTNCOMBATNP_API FGSTN_LayeredMove_RunSkid : public FLayeredMoveBase
@@ -100,6 +105,18 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_RunSkid : public FLayeredMoveBase
 	UPROPERTY()
 	int8 ClipRootSign = 0;
 
+	/** EGSTN_RunSkidMotion latched on the first frame (kit data or gstn.Skid.Motion; ClipRoot without a baked root falls back to BrakeExit) */
+	UPROPERTY()
+	uint8 Motion = static_cast<uint8>(EGSTN_RunSkidMotion::BrakeExit);
+
+	/** Physics motion: the push acceleration after the surface's friction scale, cm/s^2 (Brake holds the brake, ExitSpeed the hand-off speed) */
+	UPROPERTY()
+	float PushAccel = 0.f;
+
+	/** Physics motion: the slide speed of the current live frame along Direction (0 in the push), for the presentation */
+	UPROPERTY()
+	float PhysicsSlideSpeed = 0.f;
+
 	/** The resolved ledge rule (kit or surface): true = stop at the edge */
 	UPROPERTY()
 	bool bStopAtLedge = true;
@@ -126,6 +143,9 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_RunSkid : public FLayeredMoveBase
 	/** The phase of the current live frame (None before the first frame and after the exit) */
 	EGSTN_RunSkidPhase GetPhase() const;
 
+	/** True when the presentation should play the skid clip at its own speed (the capsule follows the clip root): only the ClipRoot motion */
+	bool IsClipTimed() const { return Motion == static_cast<uint8>(EGSTN_RunSkidMotion::ClipRoot); }
+
 	/** The ground speed of the current live frame along Direction (0 in the exit) */
 	float GetSlideSpeed(float DeltaSeconds) const;
 
@@ -143,6 +163,9 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_RunSkid : public FLayeredMoveBase
 
 private:
 	void Finish(const FMoverTimeStep& TimeStep);
+	/** The Physics motion's frame (skid-physics-1); false = the skid ended on this frame */
+	bool GeneratePhysics(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, const UMoverComponent& MoverComp,
+		const struct FGSTN_RunSkidTuning* SkidTuning, EGSTN_RunSkidPhase Phase, FProposedMove& OutProposedMove);
 	bool Decide(const FMoverTickStartData& StartState, const UMoverComponent& MoverComp);
 };
 

@@ -22,6 +22,7 @@
 import json
 import math
 import os
+import re
 import sys
 import time
 import traceback
@@ -36,7 +37,7 @@ import test_hub as h      # noqa: E402
 KIT = os.environ.get('PIE_CAPTURE_KIT', 'KIT_Test_Overlord')
 OUT = os.environ.get('PIE_CAPTURE_OUT') or os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()), 'AnimJab3',
                                                         time.strftime('capture_%Y%m%d_%H%M%S'))
-SIZE = 480
+SIZE = int(os.environ.get('PIE_CAPTURE_SIZE', 480))   # review captures (coordinator 2026-11-21): 960 for the cloud appeal review
 # Review cameras around the pawn: (name, azimuth in degrees from the pawn's forward, as a yaw: 0 = in front of it, 90 = on its RIGHT, 270 = on
 # its left, 45 = front right, 315 = front left). 'game' = the player's camera
 VIEWS = [('az0', 0.0), ('az45', 45.0), ('az90', 90.0), ('az180', 180.0), ('az270', 270.0), ('az315', 315.0), ('game', None)]
@@ -188,8 +189,42 @@ MOVE_SEQUENCES = [
     # run start v3 (runstart-v3-1), same frames as mv_run_start; gate set BEFORE the capture: stick on v80, sim sees it v82, the clip
     # (1.5 s) hands over to the run loop at clip time 1.4 s (~v167); the loop then owns the pose (Run Start Exit Run, 0.75 s), no SS_180
     {'name': 'mv_run_start_v3', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
-     'expect': [{'clip': 'AS_GSTN_RunStart_v3', 'window': [80, 167], 'min_weight': 0.8, 'coverage': 0.9},
-                {'clip': 'M_Neutral_Run_Loop_F', 'window': [172, 210], 'min_weight': 0.8, 'coverage': 0.9}]},
+     # runstart-v3-review-1 (set BEFORE the recapture): window from the end of the idle->v3 blend (input f83 + 0.05 s), the GASP lean
+     # BS are additive layers on a cached pose (logged base weight = max(1-a, a) while they ramp in), so they do not compete
+     'expect': [{'clip': 'AS_GSTN_RunStart_v3', 'window': [86, 167], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']},
+                {'clip': 'M_Neutral_Run_Loop_F', 'window': [172, 210], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
+    # run start v3 on the CLEAN GASP base (runstart-v3-review-1, PIE_CAPTURE_CVARS="gstn.Loco.Base 1"): v3 as pose-matched sibling rows of
+    # M_Relaxed_Run_Start_F_L/Rfoot in CHT_GSTN_StockMover_PoseMatch (stops_rows_ue.py). Gate set BEFORE the capture: stock reselects
+    # walk start -> run start around f90 and reaches the start clip ~f97, so v3 must own f95-160 (clip 1.5 s, stock exits near its end)
+    {'name': 'mv_run_start_v3s', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
+     'expect': [{'clip': 'AS_GSTN_RunStart_v3', 'window': [95, 160], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
+    # run start v4 pose round 1 on the clean base (runstart-v3-pose-1): AS_GSTN_RunStart_v4r1 = 1.5 s authored + 0.75 s loop tail, Block
+    # Transition notify from 0.05 s (entry only at the start). Gate set BEFORE the capture: the row is reached ~f90-97 (v3s attempt), the
+    # authored 1.5 s = 90 frames at 1/60 s per frame, so v4r1 must own f100-180; the stock exit ("almost complete") falls in the tail
+    {'name': 'mv_run_start_v4s', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
+     'expect': [{'clip': 'AS_GSTN_RunStart_v4r1', 'window': [100, 180], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
+    # pose round 2 (v4r2: slower torso release clip f39-59, Fable r2): same gate as v4s, set before the capture
+    {'name': 'mv_run_start_v4s2', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
+     'expect': [{'clip': 'AS_GSTN_RunStart_v4r2', 'window': [100, 180], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
+    # pose round 3 (v4r3: arms clear of the body, faster first steps; runstart-v3-pose-2): same clip length and rows, same gate, set before
+    # the capture
+    {'name': 'mv_run_start_v4s3', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
+     'expect': [{'clip': 'AS_GSTN_RunStart_v4r3', 'window': [100, 180], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
+    # extra pose round 4 (v4r4: elbows back to v4r2 height, hands unchanged; runstart-v4r4-elbows): same rows and gate
+    {'name': 'mv_run_start_v4s4', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
+     'expect': [{'clip': 'AS_GSTN_RunStart_v4r4', 'window': [100, 180], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
+    # runstart-v5-desktop: v4r5 = v4r4 without its planted first step (f0-9 cut, 59 f) + the DA acceleration ramp (stamp off); the
+    # clip is 0.33 s shorter, so the gate stops at f170
+    {'name': 'mv_run_start_v5', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0, 1, 0))],
+     # runstart-v8-desktop: expect moved to the current clip v4r8 (Luigi rev-up, 38 f, exit_at 0.367 s): reached ~f93, may hand off
+     # to the loop from ~f115, so the gate is f97-115 (was v4r5 f95-170, stale since v4r6)
+     'expect': [{'clip': 'AS_GSTN_RunStart_v4r8', 'window': [97, 115], 'min_weight': 0.8, 'coverage': 0.9, 'additive': ['BS_Relaxed_*Lean*']}]},
+    # runstart-turnaround-desktop: start from idle with the stick reversed (a hair to one side so GASP's FutureFacingDelta picks the
+    # 180 L or R reface start, Run F Loco Transitions); same timing as mv_run_start_v5. The gate comes from -Assert (capture script).
+    {'name': 'mv_turn_180a', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (-0.2, -1, 0))]},
+    {'name': 'mv_turn_180b', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (0.2, -1, 0))]},
+    {'name': 'mv_turn_090a', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (-1, 0, 0))]},
+    {'name': 'mv_turn_090b', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(60, (1, 0, 0))]},
     # skid-fix-1 gate: the owner's skid clip at >= 0.8 from the reverse input to the skid end. Rows count the PRE idle frames: stick f95 ->
     # row f115, sim turns from f117; clip 0.83 s -> skid end ~f167. (First set as [97, 140] without the PRE offset: wrong frames, corrected)
     {'name': 'mv_skid', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (170, None)],
@@ -266,7 +301,23 @@ elif 'DAir' in KIT:
 # (the dropkick sequences stop 12 frames into the tech bounce)
 if os.environ.get('PIE_CAPTURE_FRAMES'):
     SEQUENCES = [dict(s, frames=int(os.environ['PIE_CAPTURE_FRAMES'])) for s in SEQUENCES]
-TIMEOUT = 900.0
+# capture-speed (2026-11-21, owner "tutte le varianti in una sessione"): PIE_CAPTURE_RUNS=<runs.json> = several variants in ONE Play session
+# (editor boot + Play start + quit paid once, ~100 s of the ~139 s of a capture). runs.json: [{"name": "v25_h1", "cvars": "a 1;b 2",
+# "sequences": ["mv_run_start_v5"], "assert": {sequence: [expect, ...]}}, ...]. Each run writes to <out>/<name>/ as a one-run capture did
+# (frames, frames.jsonl, assert.txt); before each run its cvars are set (give every cvar a run changes in EVERY run: nothing is undone) and
+# the host goes back to its spawn spot (server_reset_to_spawn), so every run starts from the same place and yaw. <out>/assert.txt = OK only
+# if every run is OK. PIE_CAPTURE_SEQUENCES is ignored.
+RUNS = json.load(open(os.environ['PIE_CAPTURE_RUNS'], encoding='utf-8')) if os.environ.get('PIE_CAPTURE_RUNS') else None
+if RUNS:
+    _ALL = {s['name']: s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES
+            + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES}
+    SEQUENCES = []
+    for _r in RUNS:
+        for _n in _r['sequences']:
+            SEQUENCES.append(dict(_ALL[_n], run=_r['name'], run_cvars=_r.get('cvars', ''), run_out=os.path.join(OUT, _r['name']),
+                                  run_first=_n == _r['sequences'][0]))
+SHOOT = [int(v) for v in os.environ['PIE_CAPTURE_SHOOT'].split(',')] if os.environ.get('PIE_CAPTURE_SHOOT') else None
+TIMEOUT = 900.0 if not RUNS else 900.0 + 60.0 * len(SEQUENCES)
 # PIE_CAPTURE_COLLISION=1: draw collision (the pawn's movement capsule) in every view and the game viewport (DROPKICK-CAPSULE, 2026-11-15)
 COLLISION = os.environ.get('PIE_CAPTURE_COLLISION', '') == '1'
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None, 'log': None, 'rows': None}
@@ -396,10 +447,18 @@ def _shoot(seq, frame):
         if az is None:
             cam.set_actor_location_and_rotation(manager.get_camera_location(), manager.get_camera_rotation(), False, False)
             comp.set_editor_property('fov_angle', manager.get_fov_angle())
+        t0 = time.perf_counter()
         comp.capture_scene()
-        folder = os.path.join(OUT, seq['name'], name)
+        folder = os.path.join(_seq_dir(seq), name)
         os.makedirs(folder, exist_ok=True)
+        t1 = time.perf_counter()
         unreal.RenderingLibrary.export_render_target(_world(), rt, folder, f'f{frame:03d}.png')
+        st['t_cap'] = st.get('t_cap', 0.0) + t1 - t0          # capture-speed: where a frame's time goes (logged per sequence)
+        st['t_exp'] = st.get('t_exp', 0.0) + time.perf_counter() - t1
+
+
+def _seq_dir(seq):
+    return os.path.join(seq.get('run_out', OUT), seq['name'])
 
 
 def _montage():
@@ -451,6 +510,12 @@ def _row(frame, tapped, extra=None):
             row['dummy']['snap'] = {k: se.get(k) for k in ('actionState', 'reactionFlags', 'damagePercent', 'stateTags') if k in se}
         except Exception as e:
             row['dummy_err'] = repr(e)[:80]
+    if os.environ.get('PIE_CAPTURE_ABPVARS'):   # runstart-entry (2026-11-21): main ABP variables whose name matches this regex (Gait, state names...)
+        try:
+            _pv = json.loads(g.comps(g.worlds()[0])[h._key(0)].get_presentation_snapshot() or '{}').get('abp') or {}
+            row['abpv'] = {k: v for k, v in _pv.items() if re.search(os.environ['PIE_CAPTURE_ABPVARS'], k)}
+        except Exception as e:  # noqa: BLE001
+            row['abpv_err'] = repr(e)[:80]
     if os.environ.get('PIE_CAPTURE_HOST_SNAP') == '1':   # DROPKICK-BOUNCE-1: the host's own step snapshot (action state, state tags, reaction flags)
         try:
             se = json.loads(g.comps(g.worlds()[0])[h._key(0)].read_snapshot_entry(-1) or '{}')
@@ -471,6 +536,15 @@ def _row(frame, tapped, extra=None):
             _v = mesh.get_socket_location(_b)
             row['body'][_b] = [round(_v.x - _al.x, 1), round(_v.y - _al.y, 1), round(_v.z - _al.z, 1)]
         row['body']['actor'] = [round(_al.x, 1), round(_al.y, 1), round(_al.z, 1)]
+        # turnarounds-3 (review v27 r1, item 1): body facing seen in game vs the clip's root yaw. Hips and shoulders lines (world
+        # yaw of the facing = lateral L->R line rotated -90) and the root bone's world yaw (Offset Root Bone result)
+        import math as _m
+        def _face(a, b):
+            _p, _q = mesh.get_socket_location(a), mesh.get_socket_location(b)
+            return round((_m.degrees(_m.atan2(_p.y - _q.y, _p.x - _q.x)) + 90.0 + 180.0) % 360.0 - 180.0, 1)   # r->l (= -Y when facing +X) to forward
+        row['body']['face_hips'] = _face('thigh_l', 'thigh_r')
+        row['body']['face_chest'] = _face('clavicle_l', 'clavicle_r')
+        row['body']['root_yaw'] = round(mesh.get_socket_rotation('root').yaw, 1)
         _fl_row(mesh, row['body'])
     except Exception as e:
         row['body_err'] = repr(e)[:80]
@@ -536,7 +610,28 @@ def _run_asserts():
     if path:
         for name, exp in json.load(open(path, encoding='utf-8')).items():
             if not name.startswith('_'):
+                if os.environ.get('PIE_CAPTURE_ASSERT_REPLACE') == '1':   # runstart-v6: A/B of a variant clip replaces the built-in expect
+                    spec[name] = []
                 spec.setdefault(name, []).extend(exp if isinstance(exp, list) else [exp])
+    if RUNS:
+        oks, top = [], []
+        for r in RUNS:
+            rspec = {k: (v if isinstance(v, list) else [v]) for k, v in r.get('assert', {}).items() if k in r['sequences']}
+            for s in SEQUENCES:
+                if s.get('run') == r['name'] and s.get('expect') and s['name'] not in rspec:
+                    rspec[s['name']] = s['expect'] if isinstance(s['expect'], list) else [s['expect']]
+            rok, rres = ca.check_spec(rspec, os.path.join(OUT, r['name']))
+            rl = ca.summary_lines(rok, rres)
+            with open(os.path.join(OUT, r['name'], 'assert.txt'), 'w', encoding='utf-8') as f:
+                f.write(rl[0] + '\n' + '\n'.join(ca.line(x, s) for s, x in rres) + '\n')
+            oks.append(rok)
+            top.append(f'{r["name"]}: {rl[0]}')
+            _log(f'{r["name"]}: ' + ' | '.join(rl[:3]))
+        head = 'ASSERT: OK' if all(oks) else f'ASSERT: FAIL {oks.count(False)}/{len(oks)} runs'
+        with open(os.path.join(OUT, 'assert.txt'), 'w', encoding='utf-8') as f:
+            f.write(head + '\n' + '\n'.join(top) + '\n')
+        _log(head)
+        return
     ran = {s['name'] for s in SEQUENCES}
     spec = {k: v for k, v in spec.items() if k in ran}
     ok, results = ca.check_spec(spec, OUT)
@@ -582,7 +677,7 @@ def _tick(_dt):
         elif phase == 'kit_wait' and now - st['t'] > 3:
             # F4 (2026-11-17): the two clients' players can join after the host's input is ready; parking ran with [] and a hub pawn stood
             # next to ours in the R4/playtest_r3 captures. Wait up to 15 s for all three players before staging
-            if len(h._players()) < 3 and now - st['t'] < 15:
+            if len(h._players()) < int(os.environ.get('PIE_CAPTURE_CLIENTS', '2')) + 1 and now - st['t'] < 15:   # capture-speed: 1 player = no 15 s wait
                 return
             view = g._view(0, h._key(0)) or {}
             _log(f'loadout: {json.dumps(view.get("loadout"))[:300]}')
@@ -601,6 +696,39 @@ def _tick(_dt):
             if st['seq'] >= len(SEQUENCES):
                 return _finish('ok')
             seq = SEQUENCES[st['seq']]
+            if seq.get('run_first') and st.get('run_ready') != st['seq']:   # PIE_CAPTURE_RUNS: next variant, same Play session
+                # The spawn reset moves the host but keeps its facing (a 180 run left it at -168 deg and the next run's stick, camera
+                # relative, made a forward start: ASSERT FAIL, turn2 t1). So: camera yaw back to the first run's, a short stick
+                # forward (the pawn turns to face it, orient to movement), release, settle, then the spawn reset.
+                pc, pawn = g._local_pawn(0)
+                step = st.get('reorient', 0)
+                if 'yaw0' not in st:
+                    st.update(yaw0=pawn.get_actor_rotation().yaw, cyaw0=pc.get_control_rotation().yaw, reorient=3)
+                    _log(f'run start facing: actor {st["yaw0"]:.1f}, camera {st["cyaw0"]:.1f}')
+                    step = 3
+                off = abs((pawn.get_actor_rotation().yaw - st['yaw0'] + 180.0) % 360.0 - 180.0)
+                if step == 0:
+                    pc.set_control_rotation(unreal.Rotator(roll=0.0, pitch=pc.get_control_rotation().pitch, yaw=st['cyaw0']))
+                    if off > 2.0:
+                        g.hold(0, 'move', (0, 1, 0))
+                        st.update(reorient=1, t=now)
+                        return None
+                    step = 2
+                if step == 1:
+                    if now - st['t'] < 0.6:
+                        return None
+                    g.release(0, 'move')
+                    st.update(reorient=2, t=now)
+                    return None
+                if step == 2 and now - st['t'] < 1.5:
+                    return None
+                for cv in [c.strip() for c in seq['run_cvars'].split(';') if c.strip()]:
+                    _console(cv)
+                comp = g.comps(g.worlds()[0])[h._key(0)]
+                comp.server_reset_to_spawn(unreal.Vector(0.0, 0.0, 0.0))
+                st.update(run_ready=st['seq'], t=now + 1.0, reorient=0)    # 3 s real time: the reset lands and the idle settles
+                _log(f'run {seq["run"]}: cvars [{seq["run_cvars"]}], facing off by {off:.1f} deg before the reset, host reset to spawn')
+                return None
             if seq['dummy'] and not st.get('dummy_placed'):
                 keys = h.dummies()
                 _log(f'dummy {keys[:1]} ahead: {h._place_ahead(0, keys[0], seq["dummy"]) if keys else "NO DUMMY"}')
@@ -627,16 +755,20 @@ def _tick(_dt):
             if os.environ.get('PIE_CAPTURE_NOVFX') == '1':   # land-v2-1: no presentation events (landing/jump dust, sparks) on any pawn
                 _log(f'{seq["name"]}: presentation events off on {_presentation_off()} components')
             _log(f'sequence {seq["name"]}: pawn at {_place_cameras()}')
-            os.makedirs(os.path.join(OUT, seq['name']), exist_ok=True)
-            st['rows'] = open(os.path.join(OUT, seq['name'], 'frames.jsonl'), 'w')
+            os.makedirs(_seq_dir(seq), exist_ok=True)
+            st['rows'] = open(os.path.join(_seq_dir(seq), 'frames.jsonl'), 'w')
             _console('t.OverrideFPS 60')
             if os.environ.get('PIE_CAPTURE_PUSHLOG') == '1':
                 _console('gstn.Pushbox.Log 1')
             st.update(shots=0, host_proj=0)
+            st.update(seq_t0=now)
             st.update(phase='seq_run', frame=0, mask=g.button_mask(BUTTON), crouch=g.button_mask('Crouch'), jumped=None, fired=None, prev_z=None)
         elif phase == 'seq_run':
             seq, frame = SEQUENCES[st['seq']], st['frame']
-            if seq['shoot']:
+            _tp = time.perf_counter()
+            # capture-speed: PIE_CAPTURE_SHOOT='70,210' shoots only those frames (the PNG export is ~28 ms per view and frame, 85% of a
+            # sequence's time); frames.jsonl still has every frame, so the ASSERT is unchanged
+            if seq['shoot'] and (not SHOOT or SHOOT[0] <= frame <= SHOOT[1]):
                 _shoot(seq, frame)
             # The scene captures do not show the debug draw (hitboxes, body): PIE_CAPTURE_HIRES='86,91' takes a real viewport shot on those
             # frames (Saved/Screenshots/WindowsEditor/HighresScreenshot*.png, in frame order)
@@ -754,12 +886,15 @@ def _tick(_dt):
                 elif frame == walk_base + walk[0] + walk[1]:
                     g.release(0, 'move')
             st['frame'] = frame + 1
+            st['t_drv'] = st.get('t_drv', 0.0) + time.perf_counter() - _tp
             if st['frame'] >= PRE + seq['frames']:
                 st['rows'].close()
                 g.combat_clear(0)
                 if seq.get('sticks'):
                     g.release(0, 'move')
                 _console('t.OverrideFPS 0')
+                _log(f'timing {seq["name"]}: wall {now - st["seq_t0"]:.1f} s, capture_scene {st.get("t_cap", 0):.1f} s, export png {st.get("t_exp", 0):.1f} s, driver {st.get("t_drv", 0):.1f} s')
+                st.update(t_cap=0.0, t_exp=0.0, t_drv=0.0)
                 _log(f'sequence {seq["name"]} done: {st["frame"]} frames, pawn z {_pawn().get_actor_location().z:.1f}, host shots {st.get("shots", 0)}')
                 if seq.get('dummy_percent') is not None and st.get('dummy_key'):   # NIGHT-KD-1: why the landing did (not) down the dummy
                     try:

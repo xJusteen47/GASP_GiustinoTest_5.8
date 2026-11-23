@@ -1,0 +1,40 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Mission",
+	"Description": "Missions and objectives of a mode (M12 G4): objectives as data (count events: eliminate, collect, activate; reach a zone; defend for a time), sequential, parallel or prerequisite chains, failure rules and time limits. Progress comes only from the authoritative event stream (counted once, never from a re-simulation) and lives outside the rollback simulation; the server replicates a small state for UI. Missions are chosen by the level's GameRules asset, so they work with a classic GameMode and with Experiences alike. GSTNMissionCore is pure; GSTNMissionRuntime is the server side.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNMissionCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "GSTNMissionRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GSTNCore",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInput",
+			"Enabled": true
+		}
+	]
+}

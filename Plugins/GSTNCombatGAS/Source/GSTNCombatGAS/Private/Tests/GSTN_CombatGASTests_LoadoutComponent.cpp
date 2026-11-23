@@ -17,6 +17,7 @@
 #include "Kits/GSTN_AbilityBinding.h"
 #include "Kits/GSTN_CombatAssetTypes.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
+#include "Kits/GSTN_SuperDefinition.h"
 #include "Kits/GSTN_WeaponDefinition.h"
 #include "Loadout/GSTN_LoadoutComponent.h"
 #include "Loadout/GSTN_LoadoutDraft.h"
@@ -578,6 +579,8 @@ bool FGSTN_LoadoutScreenTest::RunTest(const FString& Parameters)
 	Fixture.Weapon->AllowedAlternatives.Add(Special).Abilities = { AbilityB() };
 	UGSTN_TestLoadoutComponent& Component = *Fixture.Component;
 	Component.Assets.Add(KitId(TEXT("KitC")), nullptr);
+	// Kit B has no primary weapon, so with a support slot it would offer W1 as support: support rows are ScreenSupportAndSuper's job
+	Fixture.KitB->MaxAdditionalWeapons = 0;
 
 	TArray<FGSTN_LoadoutChoiceRow> Rows;
 	Component.GatherChoices(Fixture.RequestKit(TEXT("KitA")), Rows);
@@ -628,6 +631,46 @@ bool FGSTN_LoadoutScreenTest::RunTest(const FString& Parameters)
 	FGSTN_LoadoutDraft Stale;
 	Stale.Begin(Component, Fixture.RequestKit(TEXT("KitC")));
 	TestTrue(TEXT("a stale start falls back to kit A"), Stale.GetData().PrimaryKit == KitId(TEXT("KitA")));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LoadoutScreenSupportSuperTest, "GSTNCombat.GAS.Loadout.ScreenSupportAndSuper", LoadoutComponentTestFlags)
+bool FGSTN_LoadoutScreenSupportSuperTest::RunTest(const FString& Parameters)
+{
+	// M11 leftover: the screen offers a support weapon row (MaxAdditionalWeapons slots, the primary weapon never offered) and a row per super
+	// slot (SuperSlotCount), each with "none" first and the assets' DisplayName as labels
+	FLoadoutFixture Fixture;
+	UGSTN_TestLoadoutComponent& Component = *Fixture.Component;
+	TStrongObjectPtr<UGSTN_WeaponDefinition> Support(NewObject<UGSTN_WeaponDefinition>(GetTransientPackage()));
+	Support->DisplayName = FText::FromString(TEXT("Lanciarazzi"));
+	TStrongObjectPtr<UGSTN_SuperDefinition> Super(NewObject<UGSTN_SuperDefinition>(GetTransientPackage()));
+	Component.Assets.Add(WeaponId(TEXT("W2")), Support.Get());
+	Component.Assets.Add(SuperId(TEXT("S1")), Super.Get());
+	Fixture.KitA->SuperSlotCount = 1;
+
+	TArray<FGSTN_LoadoutChoiceRow> Rows;
+	Component.GatherChoices(Fixture.RequestKit(TEXT("KitA")), Rows, false);
+	TestEqual(TEXT("kit, support weapon, super"), Rows.Num(), 3);
+	if (Rows.Num() != 3)
+	{
+		return false;
+	}
+	TestEqual(TEXT("support row id"), Rows[1].Id, FName(TEXT("Support.0")));
+	TestEqual(TEXT("support: none and W2 (W1 is the primary)"), Rows[1].Options.Num(), 2);
+	TestEqual(TEXT("none is selected"), Rows[1].Selected, 0);
+	TestEqual(TEXT("the weapon's DisplayName is the label"), Rows[1].Options[1].Label.ToString(), FString(TEXT("Lanciarazzi")));
+	TestTrue(TEXT("picking W2 adds it"), Rows[1].Options[1].Result.AdditionalWeapons == TArray<FPrimaryAssetId>{ WeaponId(TEXT("W2")) });
+	TestEqual(TEXT("super row id"), Rows[2].Id, FName(TEXT("Super.0")));
+	TestEqual(TEXT("super: none and S1"), Rows[2].Options.Num(), 2);
+	TestEqual(TEXT("an unnamed super shows its asset name"), Rows[2].Options[1].Label.ToString(), FString(TEXT("S1")));
+	TestTrue(TEXT("picking S1 fills slot 0"), Rows[2].Options[1].Result.Supers.Num() == 1 && Rows[2].Options[1].Result.Supers[0] == SuperId(TEXT("S1")));
+
+	// With W2 picked, its option is the draft itself (selected) and "none" removes it
+	// Copied first: GatherChoices empties Rows, so passing the option's Result by reference would read freed memory
+	const FGSTN_LoadoutData WithW2 = Rows[1].Options[1].Result;
+	Component.GatherChoices(WithW2, Rows, false);
+	TestTrue(TEXT("W2 selected"), Rows.Num() == 3 && Rows[1].Selected == 1);
+	TestTrue(TEXT("none removes it"), Rows.Num() == 3 && Rows[1].Options[0].Result.AdditionalWeapons.IsEmpty());
 	return true;
 }
 

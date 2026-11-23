@@ -7,6 +7,7 @@
 
 #include "Camera/GSTN_CameraAnchor.h"
 #include "GASNPPTest/GSTN_PlaytestCamera.h"
+#include "Camera/GSTN_CameraAnchorLibrary.h"
 #include "Misc/AutomationTest.h"
 
 namespace GSTNCameraAnchorTest
@@ -246,12 +247,104 @@ bool FGSTN_CameraTiltShiftMathTest::RunTest(const FString&)
 	Near(*this, TEXT("point ahead: screen centre"), UGSTN_PlaytestCameraModifier::ScreenV(View, FVector(500, 0, 0)), 0.5, 0.001);
 	Near(*this, TEXT("45 deg up: top edge"), UGSTN_PlaytestCameraModifier::ScreenV(View, FVector(500, 0, 500)), 0.0, 0.001);
 	Near(*this, TEXT("45 deg down: bottom edge"), UGSTN_PlaytestCameraModifier::ScreenV(View, FVector(500, 0, -500)), 1.0, 0.001);
+	// Telephoto: 90 -> 45 deg needs tan(45)/tan(22.5) = 2.414 times the distance; the inverse gives the FOV back
+	Near(*this, TEXT("telephoto 90->45 distance scale"), UGSTN_PlaytestCameraModifier::TelephotoDistanceScale(90.f, 45.f), 2.41421, 0.001);
+	Near(*this, TEXT("FOV for that scale"), UGSTN_PlaytestCameraModifier::FOVForDistanceScale(90.f, 2.41421f), 45.0, 0.01);
+	Near(*this, TEXT("scale 1 keeps the FOV"), UGSTN_PlaytestCameraModifier::FOVForDistanceScale(70.f, 1.f), 70.0, 0.01);
 	FGSTN_CameraTiltShiftSettings T;
 	T.Fstop = 2.f;
 	T.Intensity = 2.f;
 	Near(*this, TEXT("intensity 2 halves the f-stop"), UGSTN_PlaytestCameraModifier::TiltShiftFstop(T), 1.0, 0.001);
 	T.Intensity = 10.f;
 	Near(*this, TEXT("f-stop floor 0.7"), UGSTN_PlaytestCameraModifier::TiltShiftFstop(T), 0.7, 0.001);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraAnchorTicksBeforeViewTest, "GSTN.Camera.Anchor.TicksBeforeTheView", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraAnchorTicksBeforeViewTest::RunTest(const FString&)
+{
+	// 2026-11-20 jitter: UWorld::Tick updates the camera managers after TG_PostPhysics and before TG_PostUpdateWork. An anchor ticking in
+	// TG_PostUpdateWork moves the camera after the view was built: each view = last frame's correction + this frame's actor root, which steps at
+	// the 62.5 Hz simulation rate. The anchor must tick in the last group before the view
+	const UGSTN_CameraAnchorComponent* Default = GetDefault<UGSTN_CameraAnchorComponent>();
+	TestEqual(TEXT("anchor tick group"), static_cast<int32>(Default->PrimaryComponentTick.TickGroup), static_cast<int32>(TG_PostPhysics));
+	TestEqual(TEXT("early group constant"), static_cast<int32>(UGSTN_CameraAnchorComponent::EarlyTickGroup), static_cast<int32>(TG_PostPhysics));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraAnchorLibraryNullTest, "GSTN.Camera.Anchor.LibraryNoCharacter", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraAnchorLibraryNullTest::RunTest(const FString&)
+{
+	// The custom camera queries never crash on a missing character: no mesh found, origin, not damped
+	FVector Pivot(1, 2, 3);
+	TestFalse(TEXT("no character, no mesh"), UGSTN_CameraAnchorLibrary::GetCameraPivot(nullptr, Pivot));
+	TestTrue(TEXT("origin"), Pivot.IsZero());
+	bool bDamped = true;
+	TestTrue(TEXT("damped query origin"), UGSTN_CameraAnchorLibrary::GetDampedCameraPivot(nullptr, bDamped).IsZero());
+	TestFalse(TEXT("not damped"), bDamped);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraAnchorCapsuleBottomTest, "GSTN.Camera.Anchor.CapsuleChangeKeepsHeight", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraAnchorCapsuleBottomTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	// Owner 2026-11-20 (crouch spam bounce): a grounded capsule change keeps the bottom on the floor, so the capsule-bottom height must not move.
+	// Standing 86 -> crouch 55: the centre drops 31 cm, the height stays the standing centre's (floor + 86)
+	const FVector Up = FVector::UpVector;
+	const double Floor = 10.0;
+	const double Standing = FGSTN_CameraAnchorDamper::StandingHeightFromCapsule(FVector(0, 0, Floor + 86.0), Up, 86.0, 86.0);
+	const double Crouched = FGSTN_CameraAnchorDamper::StandingHeightFromCapsule(FVector(0, 0, Floor + 55.0), Up, 55.0, 86.0);
+	const double Knockdown = FGSTN_CameraAnchorDamper::StandingHeightFromCapsule(FVector(0, 0, Floor + 30.0), Up, 30.0, 86.0);
+	Near(*this, TEXT("standing = floor + standing half height"), Standing, Floor + 86.0, 1e-6);
+	Near(*this, TEXT("crouch does not move it"), Crouched, Standing, 1e-6);
+	Near(*this, TEXT("knockdown capsule does not move it"), Knockdown, Standing, 1e-6);
+	// Tilted gravity: measured along Up
+	const FVector Side = FVector(1, 0, 0);
+	Near(*this, TEXT("along a tilted up"), FGSTN_CameraAnchorDamper::StandingHeightFromCapsule(FVector(Floor + 55.0, 7, -3), Side, 55.0, 86.0), Floor + 86.0, 1e-6);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraShiftTest, "GSTN.Camera.Shift.StraightenKeepsCharacterOnScreen", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraShiftTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	// Camera 400 cm back and 250 cm up looking 26 deg down at the character: levelling it fully with the shift leaves the character exactly
+	// where it was on screen, and a vertical edge projects as a vertical line (same x at both ends)
+	FMinimalViewInfo View;
+	View.Location = FVector(-400, 0, 250);
+	View.Rotation = FRotator(-26, 0, 0);
+	View.FOV = 90.f;
+	View.AspectRatio = 16.f / 9.f;
+	const FVector Character(0, 30, 90);
+	const FVector2D Before = UGSTN_PlaytestCameraModifier::ProjectNDC(View, Character);
+	FMinimalViewInfo Shifted = View;
+	const FVector2D Offset = UGSTN_PlaytestCameraModifier::StraightenWithShift(Shifted, Character, 1.f);
+	Shifted.OffCenterProjectionOffset = decltype(Shifted.OffCenterProjectionOffset)(Offset.X, Offset.Y);
+	const FVector2D After = UGSTN_PlaytestCameraModifier::ProjectNDC(Shifted, Character);
+	Near(*this, TEXT("pitch levelled"), Shifted.Rotation.Pitch, 0.0, 0.001);
+	Near(*this, TEXT("character x kept"), After.X, Before.X, 0.001);
+	Near(*this, TEXT("character y kept"), After.Y, Before.Y, 0.001);
+	const FVector2D Top = UGSTN_PlaytestCameraModifier::ProjectNDC(Shifted, FVector(200, 300, 400));
+	const FVector2D Bottom = UGSTN_PlaytestCameraModifier::ProjectNDC(Shifted, FVector(200, 300, 0));
+	Near(*this, TEXT("verticals stay vertical"), Top.X, Bottom.X, 0.001);
+	// Straighten 0: nothing changes
+	FMinimalViewInfo Same = View;
+	const FVector2D None = UGSTN_PlaytestCameraModifier::StraightenWithShift(Same, Character, 0.f);
+	Near(*this, TEXT("straighten 0: no offset"), None.Size(), 0.0, 0.0001);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CameraTiltPlaneTest, "GSTN.Camera.TiltShift.TiltedPlaneNormal", GSTNCameraAnchorTest::TestFlags)
+bool FGSTN_CameraTiltPlaneTest::RunTest(const FString&)
+{
+	using namespace GSTNCameraAnchorTest;
+	// Tilt 0 = plane parallel to the sensor (normal = view forward); tilt 90 - pitch = the plane lies on the floor (normal = world up)
+	const FRotator Down30(-30, 0, 0);
+	const FVector N0 = UGSTN_PlaytestCameraModifier::TiltedPlaneNormal(Down30, 0.f);
+	Near(*this, TEXT("tilt 0 = forward"), FVector::DotProduct(N0, Down30.Vector()), 1.0, 0.0001);
+	const FVector NFloor = UGSTN_PlaytestCameraModifier::TiltedPlaneNormal(Down30, 60.f);
+	Near(*this, TEXT("tilt 60 at pitch -30 = floor"), FMath::Abs(FVector::DotProduct(NFloor, FVector::UpVector)), 1.0, 0.0001);
 	return true;
 }
 

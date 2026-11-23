@@ -1,0 +1,73 @@
+data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_stimati,quota_pro_pct,esito
+2026-11-19,Audit agentic setup and costs,audit-setup,cloud,claude_max,Opus,0,0,4,,PASS
+2026-11-20,Build capture and review guard scripts,guard-scripts,cloud,claude_max,Opus,0,0,9,,PARTIAL (desktop checks pending)
+2026-11-20,Diagnose Cascadeur restyle of run stop,loco-runstop-diagnosis,cloud,claude_max,Opus,0,0,2,,PASS (cause found; option A recommended)
+2026-11-20,claude/runstart-v3-review-1,runstart-v3-review-1,desktop,claude_max,Opus/Fable,~10 min desktop,~0.09M token,~11 $,,LEGACY
+2026-11-20,claude/runstart-v3-pose-1,runstart-v3-pose-1,desktop,claude_max,Opus/Fable,~14 min desktop,~0.21M token,~22 $,,LEGACY
+2026-11-20,claude/runstart-v3-pose-2,runstart-v3-pose-2,desktop,claude_max,Opus/Fable,~8 min desktop,~0.10M token,~16 $,,LEGACY
+2026-11-20,claude/runstart-v4r4-elbows,runstart-v4r4-elbows,desktop,claude_max,Opus/Fable,~5 min desktop,~0.12M token,~6 $,,LEGACY
+2026-11-20,Compare run start acceleration with Astro Bot,runstart-accel-1,cloud+desktop,claude_max,Opus,6,0,11,,PARZIALE (rampa pronta non applicata)
+2026-11-20,claude/runstart-v5-desktop,runstart-v5-desktop,desktop,claude_max,Opus/Fable,~12 min desktop,~0.08M token,~14 $,,LEGACY
+2026-11-20,Lay groundwork for forward rendering,claude/project-thread-xmve9g,cloud,claude_max,Opus,4,0,0,,FATTO (1A 2A applicati; non compilato)
+2026-11-20,Fix camera jitter,claude/project-thread-hiq1zx,cloud,claude_max,Opus,8,0,0,,PARZIALE (fix ordine tick misurato; rimbalzo a 2 livelli ancora da diagnosticare con gstn.Camera.Trace)
+2026-11-20,Design readable run stages from Luigi reference,claude/project-thread-le0tc7,cloud,claude_max,Fable,4,0,0,,FATTO (piano; 3 decisioni owner)
+2026-11-20,Camera: capsule changes must not move it,claude/project-thread-hiq1zx,cloud,claude_max,Opus,5,0,0,,FATTO (non compilato; A/B Vertical 1/2 sul fisso)
+2026-11-20,Shorten run start to Luigi timing (prep v4r8),claude/project-thread-64vizj,cloud,claude_max,Opus,5,0,0,,PRONTO (script; applicazione sul fisso)
+2026-11-20,Review shorter Luigi-timed run start,runstart-v4r8,cloud,claude_max,Fable,0,45000,2,,FAIL
+2026-11-21,Review three run start variants,runstart-v4r8abc,cloud,claude_max,Fable,0,231000,6,,a PASS / b c FAIL dati montage
+2026-11-21,Build Mario-style camera code P1a,camera-p1a,cloud,claude_max,Opus,0,0,11,,code+tests written not compiled (5509f341 + dead zone)
+2026-11-21,Plan Overlord run loop from Ganon refs,overlord-run-loop-piano,cloud,claude_max,Fable,0,0,3,,plan + grids done (claude/project-thread-l8warz)
+2026-11-21,Polish sprinter run start with footsteps,runstart-sprinter-s2,desktop,claude_max,Opus,0,0,6,,s2 Variant 9 PASS + foley + debug menu
+2026-11-21,Build generic run start on sprinter weight shift (w1),runstart-generic-w1,desktop,claude_max,Opus,4,105000,4.5,,w1 Variant 20 PASS approved locked
+2026-11-21,Build generic run start on sprinter weight shift (w2),runstart-generic-w2,desktop,claude_max,Opus,9,105000,7,,w2 Variant 21 PASS slide fixed + menu tidy + PIE 1
+2026-11-21,Give dropkick more impact and crossed arms,dropkick-k5,laptop,claude_max,Opus,0,0,7,,K5 poses ready; blocked on laptop editor permission
+2026-11-21,Review dropkick K5 kick,dropkick-k5-review-1,cloud,claude_max,Fable,0,80000,3,,FAIL posa: arms not crossed; snap PASS; smug fall not verifiable
+2026-11-21,Make skid an organic speed change,skid-physics-1,cloud,claude_max,Opus,0,0,5,,code ready NOT compiled (claude/project-thread-4adnj1 588b378e); desktop build+tests+move_reversal A/B
+2026-11-21,Diagnose why Mario camera pitch locks,camera-p1a-pitch-1,cloud,claude_max,Opus,0,0,4,,cause found (look feedback loop after control rotation write back); fix NOT compiled (claude/project-thread-aq82ak ea5e13fb); desktop build+GSTNCamera.Core+camera_look_check
+2026-11-21,Review dropkick K5 round 3,dropkick-k5-review-3,cloud,claude_max,Fable,0,95000,3,,PASS posa (claude/project-thread-98wtdn 001a1a02): identity traits read; overshoot = montage owner call; a19 arm spring = landing clip
+2026-11-21,Fix mesh flash on ZL crouch,crouch-mesh-pop-1,cloud,claude_max,Opus,0,0,3,,"fix attempt 1 NOT compiled (claude/project-thread-qncgfg 9828bca5): capsule shift correction before anim, gstn.Mesh.CapsuleShiftBeforeAnim; desktop build + crouch_pop_timed.ps1"
+2026-11-21,Review dropkick K6 follow-through,dropkick-k6-review-1,cloud,claude_max,Fable,0,60000,3,,FAIL posa round 1 (claude/project-thread-1akb6a 2bd9b2ef): identity + Big Band line PASS; arm press and settle too small to read; capture crops head/feet and lacks behind view
+2026-11-21,Update milestone status from the repo,milestones-stato-1,cloud,claude_max,Opus,0,0,2,,DONE (claude/project-thread-yepa62 f237af8f): M10/M11 done; M12-M14 not started; parallel proposal cloud A M12 core + cloud B leftovers
+2026-11-21,Add haptics and surface footstep audio (C++/data),surface-feedback-1,cloud,claude_max,Opus,0,0,5,,DONE code (claude/project-thread-c2dfra 8ff53b1a) not compiled; desktop steps 1-9 in docs/notes/surface-feedback.md
+2026-11-21,Widen run start feet with an additive,runstart-stancewidth,desktop,claude_max,Opus,30,0,8,,PASS approved v22 (claude/runstart-generic-desktop e44b6692) + crouch pop merged PASS
+2026-11-21,Add weight and follow-through to dropkick,dropkick-k6-1,laptop,claude_max,Opus,0,0,7,,built K6 r1 (claude/project-thread-jx1fv2 5a821c53); review FAIL posa
+2026-11-21,Fix turnaround feet crossing and arms,runstart-v23,desktop,claude_max,Opus,45,0,16,,DONE v23/24/25 + TorsoLean + toe fix (claude/runstart-generic-desktop 8cb52ea7); owner verdict pending
+2026-11-21,Fix turnaround feet and speed up captures,turnarounds-2,desktop,claude_max,Opus,25,0,14,,DONE v26 + fast capture (claude/runstart-generic-desktop 84cc0057); owner redesign -> v27
+2026-11-21,Make dropkick arm press and settle readable,dropkick-k6-2,laptop,claude_max,Opus,0,0,6,,built K6 r2 (claude/project-thread-l1dcng 84b7c354); awaiting cloud review
+2026-11-21,Code readable run stages S1,run-stages-s1,cloud,claude_max,Opus,0,0,4,,DONE code (claude/project-thread-njoso3 88e3424c) not compiled
+2026-11-21,Finish M10 and M11 leftovers,m10-m11-leftovers,cloud,claude_max,Opus,0,0,7,,DONE code (claude/project-thread-476gv2 ca4b2e8a) not compiled
+2026-11-21,Review dropkick K6 round 2,dropkick-k6-review-2,cloud,claude_max,Fable,0,75000,3,,FAIL posa giro 2/3 (claude/project-thread-oqfyxp f6adaef8): settle PASS; startup arms pop + release hidden
+2026-11-21,Build mission lives and checkpoints,m12-parte1,cloud,claude_max,Opus,0,0,7,,DONE code (claude/project-thread-0f3p4m 04a766c5) not compiled; D5 parts not done
+2026-11-21,Package the harness as a starter kit,harness-starter-kit,cloud,claude_max,Opus,0,0,3,,PASS (Windows scripts not run)
+2026-11-21,Review turnaround 180 left variant 27,turn3-v27-review-1,cloud,claude_max,Fable,0,70000,4,,FAIL giro 1 (claude/project-thread-lnbke8 7f0002c5): pivot step v85-88 PASS; in-game yaw stalls side-on v89-97 (gioco) + early hunch/arms (posa) + ASSERT window (cattura)
+2026-11-21,Turnarounds pivot variant 27 desktop,turn3-v27,fisso,claude_max,Opus,45,0,15,,180 L round 2 + option A ready for review (claude/runstart-generic-desktop 22300411); r1 FAIL; 3 other directions not built
+2026-11-21,Review turnaround 180 left v27 round 2,turn3-v27-review-2,cloud,claude_max,Fable,0,60000,4,,PASS giro 2 (claude/project-thread-7q0nby a42d8c8a): r1 items 1-5 fixed; pivot v84-93 one beat; R foot lands v97-99; 5 notes not blocking; other 3 directions not built
+2026-11-21,Turnarounds pivot variant 27 desktop,turn3-v27,fisso,claude_max,Opus,60,0,18,,180 L r2 + A + arms/foot: in game follows the clip; review r2 pending; style pass next thread
+2026-11-21,Style pass turnaround 180 L desktop,turn4-style,fisso,claude_max,Opus,8,0,6,,v28 Cascadeur keys + curve sheet; gates FAIL jitter after 2 tries; option A breakdowns next (claude/runstart-generic-desktop 9ca0abcb)
+2026-11-21,Style pass turnaround 180 L desktop round A,turn4-style,fisso,claude_max,Opus,7,0,3,,v28 breakdowns gates OK + capture (claude/runstart-generic-desktop b49ec08a); review pending
+2026-11-21,Review turnaround 180 L v28 style pass round 1,turn4-style,cloud,claude_max,Fable,0,75000,3,,FAIL pose (arms do not lead / hold / hand on hip / belly fist / right foot); review claude/project-thread-rdcazm 15cbd0c5 reviews/turn3-v27/180a_style/review.md
+2026-11-21,Style pass turnaround 180 L desktop pose r2,turn4-style,fisso,claude_max,Opus,10,0,5,,v28 pose round 2 gates+capture OK (claude/runstart-generic-desktop 41cbc8e9); review pending
+2026-11-21,Review turnaround 180 L v28 pose round 2,turn4-style,cloud,claude_max,Fable,0,70000,3,,FAIL pose round 2 of 3 (right foot still old heading v87-v90 pose-or-game / arms parked v96-v100); P1-P4 fixed; review claude/project-thread-orqz14 daf9f606 reviews/turn3-v27/180a_style_r2/review.md
+2026-11-21,Style pass turnaround 180 L desktop pose r3,turn4-style,fisso,claude_max,Opus,5,0,4,,v28 pose round 3 gates+capture OK (claude/runstart-generic-desktop 3c779b08); P5 foot = game item queued
+2026-11-21,Review turnaround 180 L v28 pose round 3,turn4-style,cloud,claude_max,Fable,0,80000,4,,FAIL pose round 3 of 3 (arms hand-over v95-v101 folded/fist in front of pelvis; right foot v86-v90 = game); pivot v84-v94 good; owner decides A/B/C; review claude/project-thread-bjvo40 52802e1e reviews/turn3-v27/180a_style_r3/review.md
+2026-11-22,Verify cheaper AI stack proposal,stack-economico,cloud,claude_max,Opus,0,0,2,,DONE verdict handoffs/stack-economico-verdetto-2026-11-22.md (1B 2B 3A + rule 3 rewrite)
+2026-11-22,calibrazione-2c-k6-r1,Calibrazione cieca 2C Neon su K6 r1,fisso,agy_student,gemini-4-neon-high,6.87,0,0,,CALIB-2C K6 r1: FAIL posa (match Fable 1/1; 0 falsi PASS)
+2026-11-22,integ-playtest-2026-11-22,disk-cleanup+integrazione-3a,fisso,agy_student,gemini-4-hydrogen-high,15,0,0,,1A+2A (~254 GB liberati) + merge M12p1/M10M11/S1/haptics/main su claude/integ-playtest-2026-11-22 (build UE pending)
+2026-11-23,integ-2026-11-23,compilare main + integrazione branch cloud,portatile,claude,opus,0,0,4,,main non compilava (C4172 GSTNMission) + 2 test loadout rotti: fissati; main 1877/1877; +grab-link 1880/1880; anim-mcp non fuso (clip non in review)
+2026-11-23,turnaround-180l-c1,Turnaround 180L v28 (w2t180Ls) gstn-anim-cycle-cheap,fisso,deepseek+agy_student,deepseek-v4-pro+hydrogen-medium,25,0,0.21,0,PASS (GATES OK + ASSERT OK + review jpg PASS)
+2026-11-23,harness-deepseek-fix,Fix agent-bridge stream-json/async + Run-SparseAnimStep + Invoke-RunStartPipeline + LFS pre-push,fisso,agy_student,gemini-4-hydrogen-medium,6,0,0,0,PASS (test_bridge.py + PS parse + hook LFS)
+2026-11-23,turnaround-all-c2,Turnaround 180R/090L/090R 2 round (turnall_c2+c3) + review Pro r1/r2,fisso,agy_student,gemini-4-hydrogen-medium+pro,8,0,0,0,FAIL pivot v88-112 (ASSERT OK + uscita OK; Regola 10 a owner con slow4x)
+2026-11-23,worker-M1_CODE,build-base27-ue,fisso,deepseek,deepseek-v4-pro,5,0,,,FAIL (exit=1)
+2026-11-23,worker-M1_CODE,refactor-turnall-ue,fisso,deepseek,deepseek-v4-pro,5,0,,,FAIL (exit=1)
+2026-11-23,worker-M1_CODE,refactor-turnall-ue,fisso,deepseek,deepseek-v4-pro,5.12,0,1.0198,,PASS
+2026-11-23,worker-M1_CODE,build-base27-ue,fisso,deepseek,deepseek-v4-pro,10.02,0,,,FAIL (exit=1)
+2026-11-23,worker-M1_CODE,build-base27-part1,fisso,deepseek,deepseek-v4-pro,6.02,0,,,FAIL (exit=1)
+2026-11-23,worker-M0,build-base27-ue-draft,fisso,deepseek,deepseek-flash,3,0,,,FAIL (exit=1)
+2026-11-23,anim-mcp-v2-verify-1,unit-test-only,fisso,claude,sonnet-5-5,0.5,5,,,PARZIALE (smoke/cost-test bloccati da lock _ue59)
+2026-11-23,anim-mcp-v2-verify-1,smoke+costtest-w3-chin,fisso,deepseek+claude,flash+sonnet-5-5,25,0,0.6,,PARZIALE (head non verificabile da dump)
+2026-11-23,anim-mcp-v2-verify-1,t2-head-dump+costtest-arm,fisso,deepseek+claude,flash+sonnet-5-5,55,0,2.0,,PARZIALE (no video in-game: variante non registrabile dal tool)
+2026-11-23,anim-mcp-v2-turn4,4fix+retest-arm_clr,fisso,claude,sonnet-5-5,50,0,2.2,,OK numerico (no cattura GPU: chooser dirty)
+2026-11-23,anim-mcp-cheap-1,compact+dryrun+run_intent+cachelog,cloud,claude,sonnet-5-5,0,0,1.5,,OK (pwsh test da rilanciare su desktop)
+2026-11-23,anim-mcp-cheap-1b,compact-opt-in,cloud,claude,sonnet-5-5,0,0,0.3,,OK
+2026-11-23,Add procedural follow-through tool to anim MCP,anim-mcp-followthrough,cloud,claude_pro,Sonnet medium,0,0,1.6,,PARTIAL (offline tests OK; UE run pending desktop)
+2026-11-23,Anim skill T0 prep + dropkick hitboxes,anim-skill-t0,cloud,Opus high,0,0,3.5,FATTO codice T0 (73 test offline) + hitbox script; UE non eseguito; brief fisso K7

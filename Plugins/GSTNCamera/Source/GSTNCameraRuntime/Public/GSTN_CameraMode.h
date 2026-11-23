@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GSTN_CameraProfile.h"
 #include "GSTN_CameraTypes.h"
 #include "GameplayTagContainer.h"
 #include "Engine/DataAsset.h"
@@ -71,6 +72,16 @@ struct GSTNCAMERARUNTIME_API FGSTN_CameraModeContext
 	/** Aspect ratio of the view, for framing */
 	UPROPERTY(BlueprintReadOnly, Category = "Camera|Mode")
 	float AspectRatio = 16.f / 9.f;
+
+	/** Soft framing volumes, already smoothed by the component (neutral outside them): arm multiplier, FOV offset, pivot offset */
+	UPROPERTY(BlueprintReadOnly, Category = "Camera|Mode")
+	float FramingDistanceScale = 1.f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Camera|Mode")
+	float FramingFovOffsetDeg = 0.f;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Camera|Mode")
+	FVector FramingPivotOffset = FVector::ZeroVector;
 };
 
 /**
@@ -125,6 +136,12 @@ protected:
 	/** Free camera extension point: adjust the pivot, add to the pitch and the arm before the damping */
 	virtual void AdjustFollow(const FGSTN_CameraModeContext& Context, FVector& InOutPivot, float& OutPitchExtraDeg, float& OutArmExtraCm) {}
 
+	/** Free camera extension point: the pivot damping (Follow: one exponential time) */
+	virtual void DampPivot(const FGSTN_CameraModeContext& Context, const FVector& Target);
+
+	/** Free camera extension point: arm multiplier and FOV offset for the final pitch */
+	virtual void ShapeForPitch(float PitchDeg, float& InOutArmCm, float& InOutFovDeg) const {}
+
 	FVector SmoothedPivot = FVector::ZeroVector;
 	bool bHasPivot = false;
 	float AutoAlignOffsetDeg = 0.f;
@@ -140,14 +157,31 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow")
 	FGSTN_CameraFreeTuning FreeTuning;
 
+	/** Distance and FOV derived from the pitch (empty curves are neutral) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Follow")
+	FGSTN_CameraPitchCurves PitchCurves;
+
 	virtual void ResetState() override;
+
+	/** The last-ground height the pivot follows, for the tests and the debug draw */
+	float GetGroundHeight() const { return GroundHeight; }
+
+	/** Where the horizontal dead zone is centred (the camera follows this, not the character, while he stays inside) */
+	FVector GetDeadZoneAnchor() const { return DeadZoneAnchor; }
 
 protected:
 	virtual void AdjustFollow(const FGSTN_CameraModeContext& Context, FVector& InOutPivot, float& OutPitchExtraDeg, float& OutArmExtraCm) override;
+	virtual void DampPivot(const FGSTN_CameraModeContext& Context, const FVector& Target) override;
+	virtual void ShapeForPitch(float PitchDeg, float& InOutArmCm, float& InOutFovDeg) const override;
 
 private:
 	float GroundHeight = 0.f;
 	bool bHasGround = false;
+	float FallingSeconds = 0.f;
+	/** Eased fall pitch (deg, negative = down) */
+	float FallPitch = 0.f;
+	FVector DeadZoneAnchor = FVector::ZeroVector;
+	bool bHasDeadZone = false;
 	FVector LookAhead = FVector::ZeroVector;
 };
 
@@ -273,6 +307,13 @@ public:
 	/** Look input moves the orbit in this mode (otherwise it is consumed) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
 	bool bAllowManualControl = true;
+
+	/** The gentle follow behind (decision 2A) and the soft framing volumes act in this mode (the built-in Free definition) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	bool bAllowAutoFollow = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")
+	bool bAllowFramingVolumes = false;
 
 	/** Look input is aim input (Shoulder): ignores a section manual-control flag and uses the shoulder limits */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera")

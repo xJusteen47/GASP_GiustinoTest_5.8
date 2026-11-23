@@ -24,6 +24,14 @@ namespace GSTNKitPlaceholderLook
 	static TAutoConsoleVariable<bool> CVarEnabled(TEXT("gstn.Combat.KitPlaceholderLook"), true,
 		TEXT("Coloured box on the back of a player whose kit has no skin (stand-in look of the kit, presentation only)"));
 
+	// M11 leftover (backpack on the back): both default on, both in GSTN Debug Options (gstn.Equipment.*)
+	static TAutoConsoleVariable<bool> CVarAutoLook(TEXT("gstn.Equipment.AutoLook"), true,
+		TEXT("Every player pawn without a skin component gets one that draws its worn equipment (backpacks, mod visuals) on the drawn body mesh. Off removes it (no backpack drawn)."));
+	static TAutoConsoleVariable<bool> CVarHideBoxWhenWorn(TEXT("gstn.Equipment.HideKitBoxWhenWorn"), true,
+		TEXT("Hide the kit's stand-in box while the pawn wears drawn equipment (a backpack sits where the box is). Off = box and backpack together, as before."));
+
+	static const FName EquipmentLookName(TEXT("GSTN_EquipmentLook"));
+
 	// Engine content, always present: the basic cube and the material with a Color parameter that the editor's shapes use
 	static const TCHAR* CubePath = TEXT("/Engine/BasicShapes/Cube.Cube");
 	static const TCHAR* MaterialPath = TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial");
@@ -76,7 +84,7 @@ namespace GSTNKitPlaceholderLook
 	 */
 	void AddEquipmentLook(APawn& Pawn)
 	{
-		UGSTN_SkinComponent* Look = NewObject<UGSTN_SkinComponent>(&Pawn, TEXT("GSTN_EquipmentLook"), RF_Transient);
+		UGSTN_SkinComponent* Look = NewObject<UGSTN_SkinComponent>(&Pawn, EquipmentLookName, RF_Transient);
 		Look->bApplySkin = false;
 		Look->bIncludeLoadoutVisuals = false;
 		Look->RegisterComponent();
@@ -174,15 +182,24 @@ void UGSTN_KitPlaceholderLookSubsystem::Refresh()
 			continue;
 		}
 		const UGSTN_LoadoutComponent* Loadout = PlayerState->FindComponentByClass<UGSTN_LoadoutComponent>();
-		if (Loadout && !Pawn->FindComponentByClass<UGSTN_SkinComponent>())
+		UGSTN_SkinComponent* Look = Pawn->FindComponentByClass<UGSTN_SkinComponent>();
+		const bool bAutoLook = GSTNKitPlaceholderLook::CVarAutoLook.GetValueOnGameThread();
+		if (Loadout && !Look && bAutoLook)
 		{
 			GSTNKitPlaceholderLook::AddEquipmentLook(*Pawn);
+		}
+		else if (Look && !bAutoLook && Look->GetFName() == GSTNKitPlaceholderLook::EquipmentLookName)
+		{
+			// Only the component this subsystem added, never a designer's
+			Look->DestroyComponent();
+			Look = nullptr;
 		}
 		if (!Loadout)
 		{
 			Loadout = Pawn->FindComponentByClass<UGSTN_LoadoutComponent>();
 		}
-		const bool bShow = bEnabled && Loadout && Loadout->HasLoadout() && !Loadout->GetResolvedSkin();
+		const bool bWearsEquipment = Look && Look->GetAttachmentCount() > 0 && GSTNKitPlaceholderLook::CVarHideBoxWhenWorn.GetValueOnGameThread();
+		const bool bShow = bEnabled && Loadout && Loadout->HasLoadout() && !Loadout->GetResolvedSkin() && !bWearsEquipment;
 		const FPrimaryAssetId Kit = bShow ? Loadout->GetApplied().PrimaryKit : FPrimaryAssetId();
 
 		FMarker* Marker = Markers.Find(Pawn);

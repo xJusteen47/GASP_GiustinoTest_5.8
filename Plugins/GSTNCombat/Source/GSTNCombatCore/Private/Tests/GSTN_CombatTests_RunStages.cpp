@@ -491,4 +491,79 @@ bool FGSTN_RunStagesReversalTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunStagesReadableStepsTest, "GSTNCombat.Core.RunStages.ReadableSteps", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunStagesReadableStepsTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-20, decisions 1A 2A (docs/notes/run-stages-leggibili-piano.md): ramp only from rest, the climbs are steps (entry burst);
+	// before sprint 2 a tell and a charge window; all of it off with the readable steps off (gstn.RunStage.Readable 0)
+	FGSTN_RunStagesTuning Tuning = TestTuning();
+	for (FGSTN_RunStage& Stage : Tuning.Stages)
+	{
+		Stage.FramesToNextStage = 10;
+		Stage.AccelRampFrames = 30;
+		Stage.RampStartFraction = 0.25f;
+	}
+	Tuning.Stages[1].EntryBurstFrames = 3;
+	Tuning.Stages[1].EntryAccelMultiplier = 6.f;
+	Tuning.Stages[2].EntryBurstFrames = 2;
+	Tuning.Stages[2].EntryAccelMultiplier = 8.f;
+	Tuning.Stages[1].TellFrames = 4;
+	Tuning.Stages[1].ChargeFrames = 2;
+
+	FGSTN_RunStageState State;
+	int32 Frame = RunAtStageSpeed(Tuning, State, 0, 10);
+	TestEqual(TEXT("climbed to stage 2"), (int32)State.Stage, 1);
+	TestEqual(TEXT("the stage began on the climb frame"), State.StageEnteredFrame, 9);
+	TestTrue(TEXT("entry burst live on the climb"), FGSTN_RunStageLogic::IsStageEntryBurst(Tuning, State));
+	TestEqual(TEXT("burst acceleration, not the ramp's start"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State), 6.f, 1e-4f);
+	TestFalse(TEXT("off: no burst"), FGSTN_RunStageLogic::IsStageEntryBurst(Tuning, State, false));
+	TestEqual(TEXT("off: the old ramp of stage 2"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State, false), 0.25f, 1e-4f);
+	Frame = RunAtStageSpeed(Tuning, State, Frame, Frame + 3);
+	TestFalse(TEXT("burst over after its frames"), FGSTN_RunStageLogic::IsStageEntryBurst(Tuning, State));
+	TestEqual(TEXT("a stage with a step has no ramp"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State), 1.f, 1e-4f);
+
+	// Stage 2 has counted 3 frames: the tell covers the last 4 of its 10 (FramesInStage 6..9 = never 10, the change resets it), so 6..9
+	Frame = RunAtStageSpeed(Tuning, State, Frame, Frame + 2);
+	TestEqual(TEXT("5 frames counted"), State.FramesInStage, 5);
+	TestFalse(TEXT("no tell yet"), FGSTN_RunStageLogic::IsStageTell(Tuning, State));
+	Frame = RunAtStageSpeed(Tuning, State, Frame, Frame + 1);
+	TestTrue(TEXT("tell starts"), FGSTN_RunStageLogic::IsStageTell(Tuning, State));
+	TestEqual(TEXT("tell alpha 1/4"), FGSTN_RunStageLogic::GetStageTellAlpha(Tuning, State), 0.25f, 1e-4f);
+	TestFalse(TEXT("off: no tell"), FGSTN_RunStageLogic::IsStageTell(Tuning, State, false));
+	TestFalse(TEXT("no charge yet"), FGSTN_RunStageLogic::IsStageCharge(Tuning, State));
+	Frame = RunAtStageSpeed(Tuning, State, Frame, Frame + 2);
+	TestTrue(TEXT("charge in the last 2 frames"), FGSTN_RunStageLogic::IsStageCharge(Tuning, State));
+	Frame = RunAtStageSpeed(Tuning, State, Frame, Frame + 1);
+	TestEqual(TEXT("tell alpha 1 on the frame before the change"), FGSTN_RunStageLogic::GetStageTellAlpha(Tuning, State), 1.f, 1e-4f);
+	Frame = RunAtStageSpeed(Tuning, State, Frame, Frame + 1);
+	TestEqual(TEXT("sprint 2"), (int32)State.Stage, 2);
+	TestFalse(TEXT("no tell on the last stage"), FGSTN_RunStageLogic::IsStageTell(Tuning, State));
+	TestEqual(TEXT("sprint 2 burst"), FGSTN_RunStageLogic::GetAccelerationRamp(Tuning, State), 8.f, 1e-4f);
+
+	// A tell that stops qualifying (slow) ends without a change
+	FGSTN_RunStageState Slow;
+	int32 F2 = RunAtStageSpeed(Tuning, Slow, 0, 10);
+	F2 = RunAtStageSpeed(Tuning, Slow, F2, F2 + 7);
+	TestTrue(TEXT("tell live"), FGSTN_RunStageLogic::IsStageTell(Tuning, Slow));
+	FGSTN_RunStageLogic::Step(Tuning, Run(F2++, 10.f), Slow);
+	TestFalse(TEXT("too slow: the tell ends"), FGSTN_RunStageLogic::IsStageTell(Tuning, Slow));
+
+	// A boost into stage 2 is the dash's, not the step's; a drop clears the burst
+	FGSTN_RunStageState Boosted;
+	FGSTN_RunStageLogic::Step(Tuning, Run(0, 1.f, FVector(1.0, 0.0, 0.0), true), Boosted);
+	TestEqual(TEXT("boosted to stage 2"), (int32)Boosted.Stage, 1);
+	TestEqual(TEXT("no entry burst on a boost"), Boosted.EntryFrames, -1);
+	TestEqual(TEXT("the boost frame is the stage's start"), Boosted.StageEnteredFrame, 0);
+
+	// Rollback contract and the network form keep the new fields
+	TArray<uint8> Bytes;
+	FMemoryWriter Writer(Bytes);
+	State.SerializeCompact(Writer);
+	FGSTN_RunStageState Read;
+	FMemoryReader Reader(Bytes);
+	Read.SerializeCompact(Reader);
+	TestTrue(TEXT("network form keeps the readable step fields"), Read.EntryFrames == State.EntryFrames && Read.StageEnteredFrame == State.StageEnteredFrame);
+	return true;
+}
+
 #endif

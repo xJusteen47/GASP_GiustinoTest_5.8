@@ -86,6 +86,22 @@ bool FGSTN_RunSkidMoveNetTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("window end"), Got.JumpWindowEnd, Sent.JumpWindowEnd);
 	TestEqual(TEXT("same phase"), Got.GetPhase(), Sent.GetPhase());
 	TestEqual(TEXT("same speed"), Got.GetSlideSpeed(0.016f), Sent.GetSlideSpeed(0.016f));
+
+	// skid-physics-1: the motion and the physics fields travel too
+	FGSTN_LayeredMove_RunSkid SentPhysics = MakeRunningSkid(3);
+	SentPhysics.Motion = static_cast<uint8>(EGSTN_RunSkidMotion::Physics);
+	SentPhysics.PushAccel = 2900.f;
+	SentPhysics.PhysicsSlideSpeed = 377.f;
+	TArray<uint8> PhysicsBytes;
+	FMemoryWriter PhysicsWriter(PhysicsBytes);
+	SentPhysics.NetSerialize(PhysicsWriter);
+	FGSTN_LayeredMove_RunSkid GotPhysics;
+	FMemoryReader PhysicsReader(PhysicsBytes);
+	GotPhysics.NetSerialize(PhysicsReader);
+	TestEqual(TEXT("motion"), GotPhysics.Motion, SentPhysics.Motion);
+	TestEqual(TEXT("push accel"), GotPhysics.PushAccel, SentPhysics.PushAccel);
+	TestEqual(TEXT("physics slide speed for the presentation"), GotPhysics.GetSlideSpeed(0.016f), 377.f);
+	TestFalse(TEXT("a physics skid is not clip timed"), GotPhysics.IsClipTimed());
 	return true;
 }
 

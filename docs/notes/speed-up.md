@@ -50,3 +50,7 @@
   own process to `EDITOR_WIN` (default `960x540`, restored first if maximized) and logs it to VD_LOG.
 - Owner-facing hi-res videos (PIE_CAPTURE_HIRES viewport shots, screen recordings) take the real window size: set
   `EDITOR_WIN=full` for those runs. New capture boots must run vd2_mover.py (or do the same) so this stays the default.
+
+## Power plan (owner, 2026-11-19 ~19:58 local)
+- Owner set the desktop Windows power plan to best performance; the PIE lag he saw disappeared (owner report, no measurement).
+- Recommendation: same plan on the laptop when plugged in (on battery keep the default).

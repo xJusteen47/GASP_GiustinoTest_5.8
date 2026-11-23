@@ -32,6 +32,28 @@ namespace
 	{
 		State.Stage = 0;
 		State.FramesInStage = 0;
+		State.EntryFrames = -1;
+	}
+
+	/** Frames the current stage has counted towards the next one, 0 when not qualifying; -1 when it cannot climb (last stage, air) */
+	int32 RunStageFramesTowardsNext(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State)
+	{
+		if (!Tuning.IsEnabled() || State.bAirborne || State.Stage >= Tuning.Stages.Num() - 1)
+		{
+			return -1;
+		}
+		return State.FramesInStage;
+	}
+
+	/** The last Window frames before the change: FramesInStage runs 1..FramesToNextStage-1 while qualifying (the change resets it) */
+	bool IsInLastRunStageFrames(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State, int32 Window)
+	{
+		const int32 Counted = RunStageFramesTowardsNext(Tuning, State);
+		if (Window <= 0 || Counted <= 0)
+		{
+			return false;
+		}
+		return Counted >= Tuning.GetStage(State.Stage).FramesToNextStage - Window;
 	}
 }
 
@@ -73,7 +95,7 @@ FGSTN_RunStagesTuning FGSTN_RunStagesTuning::MakeDefault()
 
 bool FGSTN_RunStageState::operator==(const FGSTN_RunStageState& Other) const
 {
-	return Stage == Other.Stage && FramesInStage == Other.FramesInStage && FramesSinceMoveStart == Other.FramesSinceMoveStart
+	return Stage == Other.Stage && EntryFrames == Other.EntryFrames && StageEnteredFrame == Other.StageEnteredFrame && FramesInStage == Other.FramesInStage && FramesSinceMoveStart == Other.FramesSinceMoveStart
 		&& FramesSinceStickRelease == Other.FramesSinceStickRelease && CarriedSpeed == Other.CarriedSpeed && FramesSinceCarry == Other.FramesSinceCarry
 		&& CarrySource == Other.CarrySource && PrevSpeed == Other.PrevSpeed && LastFrame == Other.LastFrame && CarryWindow == Other.CarryWindow
 		&& bAirborne == Other.bAirborne && TakeoffSpeed == Other.TakeoffSpeed && TakeoffStage == Other.TakeoffStage
@@ -104,6 +126,8 @@ void FGSTN_RunStageState::SerializeCompact(FArchive& Ar)
 	SerializeCounter(Ar, StampFrames);
 	SerializeCounter(Ar, DashFrames);
 	SerializeCounter(Ar, ReverseFrames);
+	SerializeCounter(Ar, EntryFrames);
+	Ar << StageEnteredFrame;
 	for (int32 Axis = 0; Axis < 3; ++Axis)
 	{
 		float Component = static_cast<float>(ExternalVelocity[Axis]);
@@ -112,12 +136,9 @@ void FGSTN_RunStageState::SerializeCompact(FArchive& Ar)
 	}
 }
 
-void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunFrameInput& Input, FGSTN_RunStageState& State)
+// The stage rules of one frame (Step wraps it to stamp the frame a stage began, whichever of the returns below changed it)
+static void StepRunStages(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunFrameInput& Input, FGSTN_RunStageState& State)
 {
-	if (!Tuning.IsEnabled() || Input.Frame == State.LastFrame)
-	{
-		return;
-	}
 	State.LastFrame = Input.Frame;
 	State.FramesSinceCarry = Advance(State.FramesSinceCarry);
 
@@ -207,6 +228,8 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 
 	// Boost dash counter (set by the boost below), reset with the stick at rest
 	State.DashFrames = RampStick < Tuning.RampStickThreshold ? -1 : Advance(State.DashFrames);
+	// Readable step's entry burst counter (set by the climb below), reset with the stick at rest like the dash
+	State.EntryFrames = RampStick < Tuning.RampStickThreshold ? -1 : Advance(State.EntryFrames);
 
 	// A skid of this frame (P2): the speed of before it is remembered for the attacks (P3), the run drops to stage 1
 	if (Input.bSkidStarted)
@@ -215,6 +238,7 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 		State.FramesSinceCarry = 0;
 		State.CarrySource = EGSTN_RunCarrySource::Skid;
 		State.CarryWindow = Tuning.Skid.CarryFrames;
+		State.EntryFrames = -1;
 		if (Tuning.Skid.bResetsStage && !Tuning.Skid.bResumeStageAfterSkid)
 		{
 			ResetToFirstStage(State);
@@ -272,7 +296,7 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 		// The initial window also covers the whole start stamp: L3 is how the owner skips it (2026-11-19)
 		const bool bAllowed = Tuning.BoostMode == EGSTN_RunBoostMode::Anytime
 			|| (Tuning.BoostMode == EGSTN_RunBoostMode::InitialWindow
-				&& (State.FramesSinceMoveStart <= Tuning.BoostWindowFrames || IsStartStamp(Tuning, State)));
+				&& (State.FramesSinceMoveStart <= Tuning.BoostWindowFrames || FGSTN_RunStageLogic::IsStartStamp(Tuning, State)));
 		if (bAllowed)
 		{
 			State.Stage = static_cast<uint8>(BoostTarget);
@@ -280,6 +304,7 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 			// Smash-style dash: the stamp is over (its clip leaves), the burst starts
 			State.StampFrames = -1;
 			State.DashFrames = Tuning.BoostDash.Frames > 0 ? 0 : -1;
+			State.EntryFrames = -1;	// the dash is the boost's burst; the readable step's is for a climb only
 			return;
 		}
 	}
@@ -301,6 +326,7 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 		{
 			State.Stage = static_cast<uint8>(FMath::Max(0, State.Stage - Tuning.TightTurnDropStages));
 		}
+		State.EntryFrames = -1;
 		State.FramesInStage = 0;
 		return;
 	}
@@ -317,6 +343,22 @@ void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_
 	{
 		++State.Stage;
 		State.FramesInStage = 0;
+		// Readable step (decision 1A): the climb starts the new stage's burst, in the frame the clip and the effects change
+		State.EntryFrames = (Input.bReadableSteps && Tuning.GetStage(State.Stage).EntryBurstFrames > 0) ? 0 : -1;
+	}
+}
+
+void FGSTN_RunStageLogic::Step(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunFrameInput& Input, FGSTN_RunStageState& State)
+{
+	if (!Tuning.IsEnabled() || Input.Frame == State.LastFrame)
+	{
+		return;
+	}
+	const uint8 StageBefore = State.Stage;
+	StepRunStages(Tuning, Input, State);
+	if (State.Stage != StageBefore)
+	{
+		State.StageEnteredFrame = Input.Frame;
 	}
 }
 
@@ -359,7 +401,36 @@ bool FGSTN_RunStageLogic::IsBoostDash(const FGSTN_RunStagesTuning& Tuning, const
 	return Tuning.IsEnabled() && Tuning.BoostDash.Frames > 0 && State.DashFrames >= 0 && State.DashFrames < Tuning.BoostDash.Frames;
 }
 
-float FGSTN_RunStageLogic::GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State)
+bool FGSTN_RunStageLogic::IsStageEntryBurst(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State, bool bReadableSteps)
+{
+	return bReadableSteps && Tuning.IsEnabled() && !State.bAirborne && State.EntryFrames >= 0
+		&& State.EntryFrames < Tuning.GetStage(State.Stage).EntryBurstFrames;
+}
+
+bool FGSTN_RunStageLogic::IsStageTell(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State, bool bReadableSteps)
+{
+	return bReadableSteps && Tuning.IsEnabled() && IsInLastRunStageFrames(Tuning, State, Tuning.GetStage(State.Stage).TellFrames);
+}
+
+float FGSTN_RunStageLogic::GetStageTellAlpha(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State, bool bReadableSteps)
+{
+	if (!IsStageTell(Tuning, State, bReadableSteps))
+	{
+		return 0.f;
+	}
+	const FGSTN_RunStage& Stage = Tuning.GetStage(State.Stage);
+	// The tell window's frames counted from 1; a window longer than the stage starts at the first qualifying frame
+	const int32 Window = FMath::Min(Stage.TellFrames, FMath::Max(Stage.FramesToNextStage - 1, 1));
+	const int32 Into = State.FramesInStage - (Stage.FramesToNextStage - 1 - Window);
+	return FMath::Clamp(static_cast<float>(Into) / static_cast<float>(Window), 0.f, 1.f);
+}
+
+bool FGSTN_RunStageLogic::IsStageCharge(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State, bool bReadableSteps)
+{
+	return bReadableSteps && Tuning.IsEnabled() && IsInLastRunStageFrames(Tuning, State, Tuning.GetStage(State.Stage).ChargeFrames);
+}
+
+float FGSTN_RunStageLogic::GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State, bool bReadableSteps)
 {
 	if (!Tuning.IsEnabled())
 	{
@@ -368,6 +439,10 @@ float FGSTN_RunStageLogic::GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuni
 	if (IsBoostDash(Tuning, State))
 	{
 		return FMath::Clamp(Tuning.BoostDash.AccelMultiplier, 1.f, 30.f);
+	}
+	if (IsStageEntryBurst(Tuning, State, bReadableSteps))
+	{
+		return FMath::Clamp(Tuning.GetStage(State.Stage).EntryAccelMultiplier, 1.f, 30.f);
 	}
 	if (IsReversing(Tuning, State))
 	{
@@ -390,6 +465,11 @@ float FGSTN_RunStageLogic::GetAccelerationRamp(const FGSTN_RunStagesTuning& Tuni
 	const FGSTN_RunStage& Stage = Tuning.GetStage(State.Stage);
 	if (Stage.AccelRampFrames <= 0)
 	{
+		return 1.f;
+	}
+	if (bReadableSteps && State.Stage > 0 && Stage.EntryBurstFrames > 0)
+	{
+		// Decision 1A: the ramp is only for the start from rest; a stage with a step has none (after its burst, and on a boost or a drop into it)
 		return 1.f;
 	}
 	// At rest, or a stage the ramp has not caught up with yet (the stage changed at the end of the last frame): the ramp's first frame

@@ -4,6 +4,13 @@
 #include "GSTN_CameraSection.h"
 #include "GSTN_CameraTags.h"
 
+#include "HAL/IConsoleManager.h"
+
+static TAutoConsoleVariable<float> CVarDeadZoneWidth(TEXT("gstn.Camera.DeadZoneWidthCm"), -1.f, TEXT("Free camera dead zone width in cm (sideways): small steps inside it never move the camera. 0 = off, negative = use the camera profile (80)."));
+static TAutoConsoleVariable<int32> CVarFallPitch(TEXT("gstn.Camera.FallPitch"), -1, TEXT("Free camera pitch down on a real fall (below the last ground): 0 = off, 1 = on, -1 = camera profile (on)."));
+ static TAutoConsoleVariable<float> CVarFallPitchBlend(TEXT("gstn.Camera.FallPitchBlendSeconds"), -1.f, TEXT("Free camera fall pitch ease in/out time in s (0 = instant, the old landing step). Negative = camera profile (0.3)."));
+static TAutoConsoleVariable<float> CVarDeadZoneDepth(TEXT("gstn.Camera.DeadZoneDepthCm"), -1.f, TEXT("Free camera dead zone depth in cm (forward/back). 0 = off, negative = use the camera profile (60)."));
+
 namespace GSTNCameraModePrivate
 {
 	/** Exponential smoothing of a pivot, independent of the frame rate. The first call snaps */
@@ -45,7 +52,7 @@ FGSTN_CameraView UGSTN_CameraMode_Follow::ComputeView_Implementation(const FGSTN
 	float PitchExtra = 0.f;
 	float ArmExtra = 0.f;
 	AdjustFollow(Context, Pivot, PitchExtra, ArmExtra);
-	Damp(SmoothedPivot, bHasPivot, Pivot, Tuning.PivotDampingSeconds, Context.DeltaSeconds);
+	DampPivot(Context, Pivot + Context.FramingPivotOffset);
 
 	if (Tuning.bAutoAlignToMovement)
 	{
@@ -61,9 +68,16 @@ FGSTN_CameraView UGSTN_CameraMode_Follow::ComputeView_Implementation(const FGSTN
 	View.Pivot = SmoothedPivot;
 	View.HeadingDeg = Context.Orbit.YawDeg + AutoAlignOffsetDeg;
 	View.PitchDeg = FMath::Clamp(Context.Orbit.PitchDeg + PitchExtra, -89.f, 89.f);
-	View.ArmCm = Tuning.DistanceCm * Context.Orbit.DistanceScale + ArmExtra;
+	View.ArmCm = Tuning.DistanceCm * Context.Orbit.DistanceScale * FMath::Max(0.05f, Context.FramingDistanceScale) + ArmExtra;
 	View.FovDeg = Tuning.FovDeg;
+	ShapeForPitch(View.PitchDeg, View.ArmCm, View.FovDeg);
+	View.FovDeg = FMath::Clamp(View.FovDeg + Context.FramingFovOffsetDeg, 5.f, 170.f);
 	return View;
+}
+
+void UGSTN_CameraMode_Follow::DampPivot(const FGSTN_CameraModeContext& Context, const FVector& Target)
+{
+	Damp(SmoothedPivot, bHasPivot, Target, Tuning.PivotDampingSeconds, Context.DeltaSeconds);
 }
 
 // ---- Free ----
@@ -72,6 +86,9 @@ void UGSTN_CameraMode_Free::ResetState()
 {
 	Super::ResetState();
 	bHasGround = false;
+	FallingSeconds = 0.f;
+	FallPitch = 0.f;
+	bHasDeadZone = false;
 	LookAhead = FVector::ZeroVector;
 }
 
@@ -79,32 +96,79 @@ void UGSTN_CameraMode_Free::AdjustFollow(const FGSTN_CameraModeContext& Context,
 {
 	const FVector Up = Context.Frame.Up;
 	const double Height = FVector::DotProduct(InOutPivot, Up);
+	const float UpSpeed = static_cast<float>(FVector::DotProduct(Context.Subject.Velocity, Up));
 	if (!bHasGround)
 	{
 		GroundHeight = static_cast<float>(Height);
 		bHasGround = true;
+		FallingSeconds = 0.f;
 	}
 	else
 	{
 		GroundHeight = FGSTN_CameraMath::StepGroundHeight(GroundHeight, static_cast<float>(Height), Context.Subject.bGrounded, FreeTuning.JumpDeadZoneUpCm, FreeTuning.FallFollowCm);
+		// A real fall (airborne, below the last ground, going down) follows down after FallFollowAfterSeconds even inside the distance band
+		const bool bFalling = !Context.Subject.bGrounded && Height < GroundHeight && UpSpeed < 0.f;
+		FallingSeconds = bFalling ? FallingSeconds + Context.DeltaSeconds : 0.f;
+		if (FreeTuning.FallFollowAfterSeconds > 0.f && FallingSeconds >= FreeTuning.FallFollowAfterSeconds)
+		{
+			GroundHeight = static_cast<float>(Height);
+		}
 	}
 	// The pivot height follows the last ground, not the jump arc
 	InOutPivot -= Up * (Height - GroundHeight);
 
+	// Horizontal dead zone (Mario style): the camera ignores small moves inside the rectangle, oriented with the current view heading.
+	// It acts on the pivot target, so the lag and the look-ahead below still apply once the character leaves it
+	if (!bHasDeadZone)
+	{
+		DeadZoneAnchor = InOutPivot;
+		bHasDeadZone = true;
+	}
+	DeadZoneAnchor = FGSTN_CameraMath::StepDeadZone(DeadZoneAnchor, InOutPivot, Up, FGSTN_CameraMath::HeadingToDirection(Context.Frame, Context.Orbit.YawDeg),
+		CVarDeadZoneWidth.GetValueOnGameThread() >= 0.f ? CVarDeadZoneWidth.GetValueOnGameThread() : FreeTuning.DeadZoneWidthCm,
+		CVarDeadZoneDepth.GetValueOnGameThread() >= 0.f ? CVarDeadZoneDepth.GetValueOnGameThread() : FreeTuning.DeadZoneDepthCm);
+	InOutPivot = DeadZoneAnchor;
+
 	const FVector Horizontal = Context.Subject.Velocity - Up * FVector::DotProduct(Context.Subject.Velocity, Up);
 	const float Speed = static_cast<float>(Horizontal.Size());
 	const float Factor = FMath::Clamp(Speed / FMath::Max(1.f, FreeTuning.LookAheadFullSpeed), 0.f, 1.f);
-	const FVector Wanted = Speed > UE_SMALL_NUMBER ? Horizontal / Speed * FreeTuning.LookAheadCm * Factor * (Context.Subject.bGrounded ? 1.0 : 0.5) : FVector::ZeroVector;
+	const float AirScale = Context.Subject.bGrounded ? 1.f : FreeTuning.LookAheadAirScale;
+	const FVector Wanted = Speed > UE_SMALL_NUMBER ? Horizontal / Speed * FreeTuning.LookAheadCm * Factor * AirScale : FVector::ZeroVector;
 	const double Alpha = 1.0 - FMath::Exp(-Context.DeltaSeconds / FMath::Max(0.01f, FreeTuning.LookAheadSeconds));
 	LookAhead += (Wanted - LookAhead) * Alpha;
 	InOutPivot += LookAhead;
 
-	if (FreeTuning.bPitchDownWhenFalling && !Context.Subject.bGrounded)
-	{
-		const float Below = FMath::Max(0.f, GroundHeight - static_cast<float>(Height));
-		OutPitchExtraDeg = -FreeTuning.FallPitchExtraDeg * FMath::Clamp(Below / 300.f, 0.f, 1.f);
-	}
+	// Fall pitch: only a real fall (airborne, going down, below the last ground), eased in and out so a landing is never a pitch step
+	const int32 FallPitchMode = CVarFallPitch.GetValueOnGameThread();
+	const bool bPitchDown = FallPitchMode >= 0 ? FallPitchMode > 0 : FreeTuning.bPitchDownWhenFalling;
+	const bool bRealFall = FallingSeconds > 0.f;   // bFalling above (read before FallFollowAfterSeconds moves the ground down to the body)
+	// Proportional to the falling speed, never a step (Gemini review)
+	const float FallTarget = bPitchDown && bRealFall ? -FreeTuning.FallPitchExtraDeg * FMath::Clamp(-UpSpeed / FMath::Max(1.f, FreeTuning.FallPitchFullSpeed), 0.f, 1.f) : 0.f;
+	const float BlendOverride = CVarFallPitchBlend.GetValueOnGameThread();
+	const float Blend = BlendOverride >= 0.f ? BlendOverride : FreeTuning.FallPitchBlendSeconds;
+	FallPitch = Blend > 0.f ? FallPitch + (FallTarget - FallPitch) * static_cast<float>(1.0 - FMath::Exp(-Context.DeltaSeconds / Blend)) : FallTarget;
+	OutPitchExtraDeg = FallPitch;
 	OutArmExtraCm = FreeTuning.SpeedZoomOutCm * Factor;
+}
+
+void UGSTN_CameraMode_Free::DampPivot(const FGSTN_CameraModeContext& Context, const FVector& Target)
+{
+	if (!bHasPivot)
+	{
+		SmoothedPivot = Target;
+		bHasPivot = true;
+		return;
+	}
+	const float CatchUp = FreeTuning.PivotCatchUpSeconds > 0.f ? FreeTuning.PivotCatchUpSeconds : Tuning.PivotDampingSeconds;
+	const float Settle = FreeTuning.PivotSettleSeconds > 0.f ? FreeTuning.PivotSettleSeconds : Tuning.PivotDampingSeconds;
+	SmoothedPivot = FGSTN_CameraMath::StepPivotAsymmetric(SmoothedPivot, Target, Context.Frame.Up, Context.Subject.Velocity,
+		CatchUp, Settle, FreeTuning.PivotCatchUpFullSpeed, FreeTuning.PivotVerticalSeconds, Context.DeltaSeconds);
+}
+
+void UGSTN_CameraMode_Free::ShapeForPitch(float PitchDeg, float& InOutArmCm, float& InOutFovDeg) const
+{
+	InOutArmCm *= PitchCurves.EvalDistanceScale(PitchDeg);
+	InOutFovDeg += PitchCurves.EvalFovOffset(PitchDeg);
 }
 
 // ---- Shoulder ----
@@ -307,7 +371,7 @@ UGSTN_CameraRuleSet* UGSTN_CameraRuleSet::MakeDefault(UObject* Outer, const FGam
 	InSection.ExitDelaySeconds = ExitDelaySeconds;
 
 	FGSTN_CameraModeRule& Default = Set->Rules.AddDefaulted_GetRef();
-	Default.ModeTag = DefaultModeTag.IsValid() ? DefaultModeTag : GSTNCameraTags::Mode_Follow.GetTag();
+	Default.ModeTag = DefaultModeTag.IsValid() ? DefaultModeTag : GSTNCameraTags::Mode_Free.GetTag();
 	Default.Priority = 0;
 	Default.ExitDelaySeconds = ExitDelaySeconds;
 	return Set;

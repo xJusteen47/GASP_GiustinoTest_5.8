@@ -15,7 +15,6 @@ public class GSTNCameraRuntime : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"GameplayTags",
-			"DeveloperSettings",
 			"InputCore",
 			"EnhancedInput",
 			"GSTNCameraCore"

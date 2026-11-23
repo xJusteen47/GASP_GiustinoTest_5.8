@@ -20,5 +20,6 @@ public class GSTNPresentationCore : ModuleRules
 		});
 
 		PrivateDependencyModuleNames.Add("Niagara");
+		PrivateDependencyModuleNames.Add("AudioExtensions");  // MetaSound inputs on the surface feedback's audio component (Set*Parameter)
 	}
 }

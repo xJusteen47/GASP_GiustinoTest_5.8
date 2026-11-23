@@ -18,6 +18,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerState.h"
 #include "Kits/GSTN_SkinDefinition.h"
+#include "GSTN_SurfaceFeedbackComponent.h"
 #include "Loadout/GSTN_LoadoutComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "TimerManager.h"
@@ -458,6 +459,10 @@ void UGSTN_SkinComponent::RestoreOriginal()
 		RestoreLook(*Mesh);
 	}
 	AppliedSkin.Reset();
+	if (UGSTN_SurfaceFeedbackComponent* Feedback = GetOwner() ? GetOwner()->FindComponentByClass<UGSTN_SurfaceFeedbackComponent>() : nullptr)
+	{
+		Feedback->SetSkinFootwear(FGameplayTag());  // back to the stock footstep
+	}
 }
 
 bool UGSTN_SkinComponent::ApplySkin(UGSTN_SkinDefinition* Skin)
@@ -482,6 +487,18 @@ bool UGSTN_SkinComponent::ApplySkin(UGSTN_SkinDefinition* Skin)
 	CaptureOriginal(*Mesh);
 	RestoreLook(*Mesh);
 	AppliedSkin = Wanted;
+	// Footwear first, also for "no skin": the steps of the pawn's own look are the stock ones (Clay)
+	if (Wanted && Wanted->Footwear.IsValid())
+	{
+		if (UGSTN_SurfaceFeedbackComponent* Feedback = UGSTN_SurfaceFeedbackComponent::FindOrAdd(GetOwner()))
+		{
+			Feedback->SetSkinFootwear(Wanted->Footwear);
+		}
+	}
+	else if (UGSTN_SurfaceFeedbackComponent* Feedback = GetOwner() ? GetOwner()->FindComponentByClass<UGSTN_SurfaceFeedbackComponent>() : nullptr)
+	{
+		Feedback->SetSkinFootwear(FGameplayTag());
+	}
 	if (!Wanted)
 	{
 		return true;

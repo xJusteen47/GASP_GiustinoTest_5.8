@@ -12,7 +12,8 @@
 #include "GSTN_CameraMode.h"
 #include "GSTN_CameraRuntimeTypes.h"
 #include "GSTN_CameraSection.h"
-#include "GSTN_CameraSettings.h"
+#include "GSTN_CameraBiasVolume.h"
+#include "GSTN_CameraProfile.h"
 #include "GSTN_CameraSubjectAdapters.h"
 #include "GSTN_CameraTags.h"
 #include "GameFramework/Actor.h"
@@ -104,6 +105,25 @@ namespace GSTNCameraRuntimeTest
 		Tags.AddTag(GSTNCameraTags::Request_Aim);
 		return Tags;
 	}
+
+	AGSTN_CameraBiasVolume* SpawnFraming(FRig& Rig, const FVector& Location, float YawDeg, const FVector& Extent)
+	{
+		AGSTN_CameraBiasVolume* Volume = Rig.World->SpawnActor<AGSTN_CameraBiasVolume>(Location, FRotator(0.f, YawDeg, 0.f));
+		Volume->FallbackExtent = Extent;
+		Volume->Spec.FalloffCm = 0.f;
+		Volume->Spec.BlendInSeconds = 0.f;
+		Volume->Spec.BlendOutSeconds = 0.f;
+		if (!Volume->HasActorBegunPlay())
+		{
+			Volume->DispatchBeginPlay();
+		}
+		return Volume;
+	}
+
+	float HeadingOf(UGSTN_CameraComponent* Camera, const FVector& Direction)
+	{
+		return FGSTN_CameraMath::DirectionToHeading(Camera->GetFrame(), Direction);
+	}
 }
 
 #define GSTN_CAM_RT_TEST(Name) \
@@ -119,7 +139,7 @@ GSTN_CAM_RT_TEST(StackPushPopBlend)
 	UGSTN_CameraComponent* Camera = Rig.AddCamera(Subject);
 
 	Run(Camera, 0.2f);
-	TestTrue(TEXT("starts in Follow"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Follow.GetTag()));
+	TestTrue(TEXT("starts in Free (the default, owner 2026-11-21)"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Free.GetTag()));
 	TestEqual(TEXT("one entry"), Camera->GetStackDepth(), 1);
 
 	Camera->SetRequestTags(AimTags());
@@ -136,7 +156,7 @@ GSTN_CAM_RT_TEST(StackPushPopBlend)
 
 	Camera->SetRequestTags(FGameplayTagContainer());
 	Run(Camera, 1.5f);
-	TestTrue(TEXT("popping returns to Follow"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Follow.GetTag()));
+	TestTrue(TEXT("popping returns to Free"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Free.GetTag()));
 	TestEqual(TEXT("one entry again"), Camera->GetStackDepth(), 1);
 	TestTrue(TEXT("far again"), Camera->GetBlendedView().ArmCm > 500.f);
 	return true;
@@ -198,7 +218,7 @@ GSTN_CAM_RT_TEST(MissingTagSourceFallsBackToFollow)
 	TestFalse(TEXT("a plain actor implements no tag source"), Subject->Implements<UGSTN_CameraTagSource>());
 	UGSTN_CameraComponent* Camera = Rig.AddCamera(Subject);
 	Run(Camera, 1.0f);
-	TestTrue(TEXT("empty container yields Follow"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Follow.GetTag()));
+	TestTrue(TEXT("empty container yields the default Free"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Free.GetTag()));
 	TestTrue(TEXT("a plain actor is read by the actor adapter"), FGSTN_CameraAdapterRegistry::Find(Subject) != nullptr);
 	return true;
 }
@@ -283,14 +303,14 @@ GSTN_CAM_RT_TEST(FadeVersusPullIn)
 	FRig Rig;
 	AActor* Wall = Rig.SpawnSubject(FVector::ZeroVector);
 	UBoxComponent* Fadeable = NewObject<UBoxComponent>(Wall, TEXT("Fadeable"));
-	Fadeable->ComponentTags.Add(UGSTN_CameraSettings::Get().FadeTag);
+	Fadeable->ComponentTags.Add(UGSTN_CameraProfile::GetDefaultProfile().FadeTag);
 	UBoxComponent* Hard = NewObject<UBoxComponent>(Wall, TEXT("Hard"));
 	TestTrue(TEXT("tagged component fades"), UGSTN_CameraComponent::IsFadeable(Fadeable));
 	TestFalse(TEXT("untagged does not"), UGSTN_CameraComponent::IsFadeable(Hard));
 	TestFalse(TEXT("no component"), UGSTN_CameraComponent::IsFadeable(nullptr));
 
 	// A tagged actor makes all its components fadeable
-	Wall->Tags.Add(UGSTN_CameraSettings::Get().FadeTag);
+	Wall->Tags.Add(UGSTN_CameraProfile::GetDefaultProfile().FadeTag);
 	TestTrue(TEXT("actor tag"), UGSTN_CameraComponent::IsFadeable(Hard));
 
 	const FGSTN_CameraOcclusionTuning Far;
@@ -298,7 +318,7 @@ GSTN_CAM_RT_TEST(FadeVersusPullIn)
 	TestEqual(TEXT("far camera fades a fadeable wall"), FGSTN_CameraMath::DecideOcclusion(Far.Policy, true, 400.f, Far.NearClipSafeCm), Action::Fade);
 	TestEqual(TEXT("and ignores a far hard blocker"), FGSTN_CameraMath::DecideOcclusion(Far.Policy, false, 400.f, Far.NearClipSafeCm), Action::None);
 	TestEqual(TEXT("a close hard blocker pulls in"), FGSTN_CameraMath::DecideOcclusion(Far.Policy, false, 10.f, Far.NearClipSafeCm), Action::PullIn);
-	TestEqual(TEXT("Shoulder default is plain pull-in"), FGSTN_CameraMath::DecideOcclusion(UGSTN_CameraSettings::Get().ShoulderOcclusion.Policy, true, 400.f, 50.f), Action::PullIn);
+	TestEqual(TEXT("Shoulder default is plain pull-in"), FGSTN_CameraMath::DecideOcclusion(UGSTN_CameraProfile::GetDefaultProfile().ShoulderOcclusion.Policy, true, 400.f, 50.f), Action::PullIn);
 
 	// Without physics the probe finds nothing and the view is untouched
 	UGSTN_CameraComponent* Camera = Rig.AddCamera(Rig.SpawnSubject(FVector(0, 0, 100)));
@@ -497,7 +517,7 @@ GSTN_CAM_RT_TEST(ShoulderSideSwapSlides)
 	// The component API: the override, the toggle
 	FRig Rig;
 	UGSTN_CameraComponent* Camera = Rig.AddCamera(Rig.SpawnSubject(FVector(0, 0, 100)));
-	const EGSTN_ShoulderSide Default = UGSTN_CameraSettings::Get().Shoulder.ShoulderSide;
+	const EGSTN_ShoulderSide Default = UGSTN_CameraProfile::GetDefaultProfile().Shoulder.ShoulderSide;
 	TestEqual(TEXT("the settings side by default"), Camera->GetShoulderSide(), Default);
 	Camera->ToggleShoulderSide();
 	TestTrue(TEXT("toggle flips"), Camera->GetShoulderSide() != Default);
@@ -516,7 +536,7 @@ GSTN_CAM_RT_TEST(RuleChoosesDuelOrArenaByCount)
 	UGSTN_CameraComponent* Camera = Rig.AddCamera(Self);
 
 	Run(Camera, 0.5f);
-	TestTrue(TEXT("no opponent: Follow"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Follow.GetTag()));
+	TestTrue(TEXT("no opponent: Free"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Free.GetTag()));
 
 	Camera->SetOpponent(One);
 	Run(Camera, 1.5f);
@@ -532,7 +552,7 @@ GSTN_CAM_RT_TEST(RuleChoosesDuelOrArenaByCount)
 
 	Camera->SetOpponents({});
 	Run(Camera, 1.5f);
-	TestTrue(TEXT("none again: Follow"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Follow.GetTag()));
+	TestTrue(TEXT("none again: Free"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Free.GetTag()));
 
 	// Aim still wins over the group framing
 	Camera->SetOpponent(One);
@@ -594,6 +614,248 @@ GSTN_CAM_RT_TEST(InactiveComponentNeverWritesControlRotation)
 
 	Camera->Activate(true);
 	TestTrue(TEXT("activating enables the tick"), Camera->IsComponentTickEnabled());
+	return true;
+}
+
+GSTN_CAM_RT_TEST(TicksBeforeTheView)
+{
+	// UWorld::Tick updates the camera managers (GetCameraView) between TG_PostPhysics and TG_PostUpdateWork: a later tick serves the previous
+	// frame's view every frame (2026-11-20 camera jitter)
+	TestEqual(TEXT("camera tick group"), static_cast<int32>(GetDefault<UGSTN_CameraComponent>()->PrimaryComponentTick.TickGroup), static_cast<int32>(TG_PostPhysics));
+	return true;
+}
+
+// ---- Platform camera P1a ----
+
+GSTN_CAM_RT_TEST(ProfileOnComponentReplacesDefaults)
+{
+	FRig Rig;
+	AActor* Subject = Rig.SpawnSubject(FVector(0, 0, 100));
+	UGSTN_CameraComponent* Camera = Rig.AddCamera(Subject);
+	UGSTN_CameraProfile* Profile = NewObject<UGSTN_CameraProfile>(GetTransientPackage());
+	Profile->FreeView.DistanceCm = 900.f;
+	Profile->FreePitchCurves = FGSTN_CameraPitchCurves();
+	Camera->Profile = Profile;
+	Run(Camera, 0.5f);
+	TestTrue(TEXT("free by default"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Free.GetTag()));
+	TestTrue(TEXT("the profile arm is used"), FMath::IsNearlyEqual(Camera->GetBlendedView().ArmCm, 900.f, 1.f));
+	TestTrue(TEXT("the profile pitch is used"), FMath::IsNearlyEqual(Camera->GetOrbit().PitchDeg, Profile->FreeView.PitchDeg, 0.01f));
+
+	UGSTN_CameraProfile* FollowProfile = NewObject<UGSTN_CameraProfile>(GetTransientPackage());
+	FollowProfile->DefaultModeTag = GSTNCameraTags::Mode_Follow.GetTag();
+	UGSTN_CameraComponent* Other = Rig.AddCamera(Rig.SpawnSubject(FVector(5000, 0, 100)));
+	Other->Profile = FollowProfile;
+	Run(Other, 0.5f);
+	TestTrue(TEXT("a profile can pick another default mode"), Other->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Follow.GetTag()));
+	return true;
+}
+
+GSTN_CAM_RT_TEST(DistancePresetEasesAndSectionLimits)
+{
+	FRig Rig;
+	AActor* Subject = Rig.SpawnSubject(FVector(0, 0, 100));
+	UGSTN_CameraComponent* Camera = Rig.AddCamera(Subject);
+	Camera->SetSubjectOverride(MakeSubject(FVector(0, 0, 100)));
+	Run(Camera, 0.5f);
+	TestTrue(TEXT("medium by default"), FMath::IsNearlyEqual(Camera->GetDistanceScale(), 1.f, 1.0e-3f));
+	const float Arm = Camera->GetBlendedView().ArmCm;
+
+	TestTrue(TEXT("+1 is Far"), Camera->CycleDistancePreset(1) == EGSTN_CameraDistancePreset::Far);
+	Run(Camera, 0.1f);
+	const float Early = Camera->GetDistanceScale();
+	TestTrue(TEXT("eases, never snaps"), Early > 1.f && Early < 1.2f);
+	Run(Camera, 0.5f);
+	TestTrue(TEXT("reaches Far"), FMath::IsNearlyEqual(Camera->GetDistanceScale(), 1.25f, 1.0e-3f));
+	TestTrue(TEXT("the arm grew with it"), FMath::IsNearlyEqual(Camera->GetBlendedView().ArmCm, Arm * 1.25f, 2.f));
+
+	// A section that limits the distance to 1.1 (manual control on): the player choice is clamped, smoothly
+	AGSTN_CameraSection* Section = Rig.SpawnSection(FVector::ZeroVector, FVector(1000), 0);
+	Section->Spec.bAllowManualControl = true;
+	Section->Spec.Limits.DistanceScaleLimit = 1.1f;
+	Run(Camera, 1.0f);
+	TestTrue(TEXT("section limit applies"), FMath::IsNearlyEqual(Camera->GetDistanceScale(), 1.1f, 1.0e-3f));
+	FGSTN_CameraUserOptions Options = Camera->GetUserOptions();
+	TestTrue(TEXT("the player choice is kept"), Options.DistancePreset == EGSTN_CameraDistancePreset::Far);
+	return true;
+}
+
+GSTN_CAM_RT_TEST(AutoFollowTurnsBehindOnlyInASustainedRun)
+{
+	FRig Rig;
+	AActor* Subject = Rig.SpawnSubject(FVector(0, 0, 100));
+	UGSTN_CameraComponent* Camera = Rig.AddCamera(Subject);
+	FGSTN_CameraSubjectState Running = MakeSubject(FVector(0, 0, 100));
+	Running.Velocity = FVector(0, 600, 0);
+	Camera->SetSubjectOverride(Running);
+	Run(Camera, 0.1f);
+	const float Start = Camera->GetOrbit().YawDeg;
+	const float RunHeading = HeadingOf(Camera, FVector(0, 1, 0));
+	Run(Camera, 0.8f);
+	TestEqual(TEXT("not yet: the run is not sustained and the stick idle time has not passed"), Camera->GetOrbit().YawDeg, Start);
+
+	float MaxStep = 0.f;
+	for (int32 Frame = 0; Frame < 240; ++Frame)
+	{
+		const float Before = Camera->GetOrbit().YawDeg;
+		Camera->EvaluateCamera(Dt);
+		MaxStep = FMath::Max(MaxStep, FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(Before, Camera->GetOrbit().YawDeg)));
+	}
+	const float After = Camera->GetOrbit().YawDeg;
+	TestTrue(TEXT("turned towards the run"), FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(After, RunHeading)) < FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(Start, RunHeading)) - 20.f);
+	TestTrue(TEXT("gently (30 deg/s cap)"), MaxStep <= 30.f * Dt + 1.0e-3f);
+
+	// The stick wins: after look input the camera waits StickIdleSeconds
+	Camera->AddLookInput(FVector2D(-40.0, 0.0));
+	Camera->EvaluateCamera(Dt);
+	const float Looked = Camera->GetOrbit().YawDeg;
+	Run(Camera, 0.8f);
+	TestTrue(TEXT("no auto turn during the stick idle time"), FMath::IsNearlyEqual(Camera->GetOrbit().YawDeg, Looked, 1.0e-3f));
+
+	// The player switch
+	FGSTN_CameraUserOptions Options = Camera->GetUserOptions();
+	Options.bAutoFollow = false;
+	Camera->SetUserOptions(Options);
+	Camera->AddLookInput(FVector2D(-40.0, 0.0));
+	Camera->EvaluateCamera(Dt);
+	const float Off = Camera->GetOrbit().YawDeg;
+	Run(Camera, 3.f);
+	TestTrue(TEXT("option off: never turns"), FMath::IsNearlyEqual(Camera->GetOrbit().YawDeg, Off, 1.0e-3f));
+	return true;
+}
+
+GSTN_CAM_RT_TEST(FramingVolumePullsSoftlyAndYieldsToTheStick)
+{
+	FRig Rig;
+	AActor* Subject = Rig.SpawnSubject(FVector(0, 0, 100));
+	UGSTN_CameraComponent* Camera = Rig.AddCamera(Subject);
+	Camera->SetSubjectOverride(MakeSubject(FVector(0, 0, 100)));
+	Run(Camera, 0.1f);
+	const float Start = Camera->GetOrbit().YawDeg;
+	TestEqual(TEXT("no volume: weight 0"), Camera->GetFramingWeight(), 0.f);
+
+	AGSTN_CameraBiasVolume* Volume = SpawnFraming(Rig, FVector::ZeroVector, 90.f, FVector(2000, 2000, 1000));
+	const float Target = HeadingOf(Camera, FVector(0, 1, 0));
+	Run(Camera, 1.0f);
+	TestTrue(TEXT("inside: full weight"), FMath::IsNearlyEqual(Camera->GetFramingWeight(), 1.f, 1.0e-3f));
+	TestEqual(TEXT("waits the resume delay before pulling"), Camera->GetOrbit().YawDeg, Start);
+
+	float MaxStep = 0.f;
+	for (int32 Frame = 0; Frame < 360; ++Frame)
+	{
+		const float Before = Camera->GetOrbit().YawDeg;
+		Camera->EvaluateCamera(Dt);
+		MaxStep = FMath::Max(MaxStep, FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(Before, Camera->GetOrbit().YawDeg)));
+	}
+	TestTrue(TEXT("pulled onto the framing"), FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(Camera->GetOrbit().YawDeg, Target)) < 3.f);
+	TestTrue(TEXT("never faster than the cap"), MaxStep <= Volume->Spec.MaxPullDegPerSecond * Dt + 1.0e-3f);
+
+	// The stick moves the camera freely; the pull waits
+	Camera->AddLookInput(FVector2D(-120.0, 0.0));
+	Camera->EvaluateCamera(Dt);
+	const float Looked = Camera->GetOrbit().YawDeg;
+	TestTrue(TEXT("the stick moved it away (no lock)"), FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(Looked, Target)) > 50.f);
+	Run(Camera, 1.3f);
+	TestTrue(TEXT("the pull waits for the stick to rest"), FMath::IsNearlyEqual(Camera->GetOrbit().YawDeg, Looked, 1.0e-3f));
+	Run(Camera, 5.f);
+	TestTrue(TEXT("then comes back"), FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(Camera->GetOrbit().YawDeg, Target)) < 3.f);
+
+	// Firm: free inside the range, held at its border beyond it
+	Volume->Spec.Strength = EGSTN_CameraBiasStrength::Firm;
+	Volume->Spec.FirmRangeDeg = 30.f;
+	Camera->AddLookInput(FVector2D(-160.0, 0.0));
+	Camera->EvaluateCamera(Dt);
+	TestTrue(TEXT("firm range holds"), FMath::Abs(FGSTN_CameraMath::ShortestAngleDelta(Camera->GetOrbit().YawDeg, Target)) <= 30.f + 1.0e-2f);
+
+	// Disabled: it lets go
+	Volume->Spec.Strength = EGSTN_CameraBiasStrength::Soft;
+	Volume->SetBiasEnabled(false);
+	Camera->AddLookInput(FVector2D(-120.0, 0.0));
+	Camera->EvaluateCamera(Dt);
+	const float Free = Camera->GetOrbit().YawDeg;
+	Run(Camera, 4.f);
+	TestTrue(TEXT("disabled: no pull"), FMath::IsNearlyEqual(Camera->GetOrbit().YawDeg, Free, 1.0e-3f));
+	TestEqual(TEXT("disabled: weight 0"), Camera->GetFramingWeight(), 0.f);
+	return true;
+}
+
+GSTN_CAM_RT_TEST(FramingVolumeZoomBlendsAndSectionWins)
+{
+	FRig Rig;
+	AActor* Subject = Rig.SpawnSubject(FVector(0, 0, 100));
+	UGSTN_CameraComponent* Camera = Rig.AddCamera(Subject);
+	Camera->SetSubjectOverride(MakeSubject(FVector(0, 0, 100)));
+	Run(Camera, 0.3f);
+	const float Arm = Camera->GetBlendedView().ArmCm;
+
+	AGSTN_CameraBiasVolume* Volume = SpawnFraming(Rig, FVector::ZeroVector, 0.f, FVector(2000, 2000, 1000));
+	Volume->Spec.bBiasYaw = false;
+	Volume->Spec.DistanceScale = 1.4f;
+	Volume->Spec.BlendInSeconds = 0.6f;
+	Camera->EvaluateCamera(Dt);
+	TestTrue(TEXT("the zoom blends in, no pop"), Camera->GetBlendedView().ArmCm < Arm * 1.1f);
+	Run(Camera, 4.f);
+	TestTrue(TEXT("then reaches the volume zoom"), FMath::IsNearlyEqual(Camera->GetBlendedView().ArmCm, Arm * 1.4f, Arm * 0.02f));
+
+	// A section is the designer's hard framing: the soft volumes let go inside it
+	Rig.SpawnSection(FVector::ZeroVector, FVector(1000), 0);
+	Run(Camera, 3.f);
+	TestTrue(TEXT("section: framing weight fades out"), Camera->GetFramingWeight() < 0.05f);
+	return true;
+}
+
+GSTN_CAM_RT_TEST(MoveReferenceIsTheCameraWithoutALatch)
+{
+	FRig Rig;
+	AActor* Subject = Rig.SpawnSubject(FVector(0, 0, 100));
+	UGSTN_CameraComponent* Camera = Rig.AddCamera(Subject);
+	Camera->SetSubjectOverride(MakeSubject(FVector(0, 0, 100)));
+	Run(Camera, 0.3f);
+	const FRotator Reference = Camera->ResolveMoveReferenceRotation(FVector2D(1.0, 0.0));
+	const FVector CameraFlat = FGSTN_CameraMath::ProjectOnUpPlane(Camera->GetPose().Forward, FVector::UpVector);
+	TestTrue(TEXT("same heading as the camera"), Reference.Vector().Equals(CameraFlat, 1.0e-3));
+	TestFalse(TEXT("not latched"), Camera->IsStickLatched());
+	return true;
+}
+
+GSTN_CAM_RT_TEST(FreeDeadZoneKeepsTheCameraStillForSmallMoves)
+{
+	UGSTN_CameraMode_Free* Free = NewObject<UGSTN_CameraMode_Free>(GetTransientPackage());
+	Free->FreeTuning.DeadZoneWidthCm = 80.f;
+	Free->FreeTuning.DeadZoneDepthCm = 60.f;
+	Free->FreeTuning.LookAheadCm = 0.f;
+	FGSTN_CameraModeContext Context;
+	Context.Frame = FGSTN_CameraMath::MakeFrame(FVector::UpVector, FVector::ZeroVector);
+	Context.DeltaSeconds = Dt;
+	Context.Orbit.YawDeg = 0.f; // looking along +X: screen right is +Y
+	Context.Subject = MakeSubject(FVector(0, 0, 100));
+	Free->ComputeView(Context);
+	// Step 30 cm sideways and 20 cm forward: inside the rectangle, the camera stays
+	Context.Subject = MakeSubject(FVector(20, 30, 100));
+	FGSTN_CameraView View;
+	for (int32 Frame = 0; Frame < 60; ++Frame)
+	{
+		View = Free->ComputeView(Context);
+	}
+	TestTrue(TEXT("small move: the camera does not move"), View.Pivot.Equals(FVector(0, 0, 100), 1.0e-2));
+	// Walk 300 cm to the right: the camera follows and settles with the character on the edge of the zone (40 cm)
+	Context.Subject = MakeSubject(FVector(20, 300, 100));
+	for (int32 Frame = 0; Frame < 180; ++Frame)
+	{
+		View = Free->ComputeView(Context);
+	}
+	TestTrue(TEXT("leaving the zone: the camera follows to the edge"), FMath::IsNearlyEqual(View.Pivot.Y, 260.0, 1.0) && FMath::IsNearlyEqual(View.Pivot.X, 0.0, 1.0e-2));
+	// Off: the camera follows exactly
+	Free->FreeTuning.DeadZoneWidthCm = 0.f;
+	Free->FreeTuning.DeadZoneDepthCm = 0.f;
+	Free->ResetState();
+	Context.Subject = MakeSubject(FVector(0, 0, 100));
+	Free->ComputeView(Context);
+	Context.Subject = MakeSubject(FVector(20, 30, 100));
+	for (int32 Frame = 0; Frame < 180; ++Frame)
+	{
+		View = Free->ComputeView(Context);
+	}
+	TestTrue(TEXT("off: follows exactly"), View.Pivot.Equals(FVector(20, 30, 100), 0.5));
 	return true;
 }
 

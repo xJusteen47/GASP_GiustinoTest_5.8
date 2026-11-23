@@ -1,0 +1,30 @@
+{
+  "mossa": "runstart-w3",
+  "ciclo": 1,
+  "passo": 4,
+  "tentativo": 1,
+  "livello": "principio",
+  "vista": "lato",
+  "non_peggiorare": [
+    "restano invariati i valori trunk a f0 (-1.7°), f5 (41.2°) e f13 (43.3°)",
+    "restano preservati arm_r di passo-02 (el_r_vs_sh_x_cm f5 -9.1 cm, f13 -17.6 cm; hand_r_vs_hip_x_cm f5 -29.9 cm, f13 -29.8 cm) e arm_l di passo-03 (el_l_vs_sh_x_cm f5 +13.6 cm, f13 +17.3 cm; hand_l_vs_hip_x_cm f5 +9.6 cm, f13 +28.5 cm; hand_l_fwd_cm f13 -0.6 cm)",
+    "nessun rimbalzo o oscillazione multipla oltre f21 nel raccordo verso la corsa di regime (v137+)"
+  ],
+  "chiave": {
+    "anim": 21,
+    "video": 122,
+    "esiste": null,
+    "tratto": [13, 21]
+  },
+  "tipo": "posa",
+  "parte": "trunk",
+  "controllo": "spine_04, spine_05 / chest, pelvis, spazio del personaggio (distribuzione vertebrale a scelta dell'esecutore)",
+  "intento": "overshoot / settle, follow-through e spacing: eliminare lo scatto a molla del busto tra f13 (43.3°) e f21 (17.9°) conservando inclinazione residua d'accelerazione a f21 (v122) con assestamento smorzato oltre f21",
+  "modifica": "ammorbidire l'apertura di trunk tra f13 (v107, 43.3°) e f21 (v122) così che a f21 il busto mantenga ancora un'inclinazione residua d'accelerazione intorno a ~25–28° invece di scattare già a 17.9°, proseguendo poi con un settle lento e smorzato (slow-in senza rimbalzi) oltre f21 fino al raccordo col ciclo base verso v137",
+  "principio": "spacing (slow-in), settle smorzato e follow-through (principi-animazione-corporea §2.1, §6 e §7.1–§7.3)",
+  "verifica": {
+    "testo": "a f21 (v122) il busto mantiene inclinazione residua di accelerazione (~24°–29°, riducendo lo scatto da 43.3° di f13) e si assesta progressivamente oltre f21 verso v137 senza effetto molla",
+    "req": null,
+    "misura": "trunk_lean_deg a f21 (v122) compreso tra 24.0 e 29.0 deg (delta f13->f21 <= 19.5 deg)"
+  }
+}
