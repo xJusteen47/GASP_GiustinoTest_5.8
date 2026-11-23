@@ -130,6 +130,10 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Exit", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
 	float ExitSpeed = 0.f;
 
+	/** Frame control comes back (the FAF); the frames after it are the cancellable tail (owner 2026-11-21). 0 = at the end, no tail */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Timeline", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 ActionableFrame = 0;
+
 	/**
 	 * The push that starts at timeline frame Frame: true with its speed (cm/s along the travel direction) and length in frames when a segment
 	 * with travel starts there. Pure, for the ability and the tests
@@ -137,6 +141,7 @@ public:
 	static bool SegmentStartingAt(const TArray<FGSTN_GetupTravelKey>& Keys, float DistanceCm, int32 Frame, float& OutSpeed, int32& OutFrames);
 
 	virtual void PostInitProperties() override;
+	virtual void PostLoad() override;
 	virtual void OnSimulationTick(const FAbilitySystemTimeStep& TimeStep) override;
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
@@ -175,7 +180,12 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Exit", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
 	float ExitSpeed = 0.f;
 
+	/** Frame control comes back (the FAF); the frames after it are the cancellable tail (owner 2026-11-21). 0 = at the end, no tail */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Defence|Timeline", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 ActionableFrame = 0;
+
 	virtual void PostInitProperties() override;
+	virtual void PostLoad() override;
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif

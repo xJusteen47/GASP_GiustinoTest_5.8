@@ -355,13 +355,14 @@ def _follow(seq, frame):
         s['gu_at'] = frame
         s['faf_v'], s['total_v'], s['faf'], s['total'] = _getup_faf_video(seq['getup'])
         tap = f'getup started (FAF sim {s["faf"]}/{s["total"]}, video +{s["faf_v"]})'
-        if seq['follow'] == 'idle' or seq['follow'] == 'jab':
-            g.release(0, 'move')   # the roll's stick is let go once the roll has started: nothing cuts the tail but the jab
-        elif seq['follow'] == 'run' and seq['getup'] == 'jump':
-            tap += f'; stick facing yaw {_stick("facing")}'
+        # The roll's stick is let go once the roll has started. A stick HELD through the get-up does not cut the tail (new3: the tail cancel
+        # wants a stick move), so 'run' pushes it again on the FAF frame, toward the get-up's travel
+        g.release(0, 'move')
     if 'gu_at' not in s:
         return tap, False
     at = frame - s['gu_at']
+    if seq['follow'] == 'run' and at == s['faf_v']:
+        tap = f'stick {"against" if seq["getup"] == "against" else "facing"} yaw {_stick("against" if seq["getup"] == "against" else "facing")} at getup+{at}'
     if seq['follow'] == 'jab' and at in (s['faf_v'], s['faf_v'] + 2):
         g.combat_tap(0, g.button_mask('Attack'))
         tap = f'attack at getup+{at}'

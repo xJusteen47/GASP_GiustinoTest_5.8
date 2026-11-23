@@ -85,21 +85,33 @@ bool UGSTN_GA_Shield::CanActivateAbility(const FGameplayAbilitySpecHandle Handle
 
 namespace
 {
-	/**
-	 * The plain timeline of a thin defence ability: TotalFrames long, actionable at its end, no track (content adds its own). A timeline
-	 * with a cancellable tail keeps its own FAF (the get-ups, owner 2026-11-21: control returns before the clip ends, the tail plays after)
-	 */
+	/** The plain timeline of a thin defence ability: TotalFrames long, actionable at its end, no track (content adds its own) */
 	void BuildFixedTimeline(FGSTN_CombatTimelineData& Timeline, int32 TotalFrames)
 	{
 		if (Timeline.Tracks.IsEmpty())
 		{
 			Timeline.TotalFrames = FMath::Max(TotalFrames, 1);
-			const bool bKeepFaf = Timeline.Tail.bHasTail && Timeline.FirstActionableFrame > 0 && Timeline.FirstActionableFrame <= Timeline.TotalFrames;
-			if (!bKeepFaf)
-			{
-				Timeline.FirstActionableFrame = Timeline.TotalFrames;
-			}
+			Timeline.FirstActionableFrame = Timeline.TotalFrames;
 		}
+	}
+
+	/**
+	 * A get-up's timeline: BuildFixedTimeline, then control back on ActionableFrame (owner 2026-11-21) with the rest of the clip as the
+	 * cancellable tail. ActionableFrame lives outside the timeline struct on purpose: an FAF written into the struct of the Blueprint came
+	 * back as TotalFrames after a save and reload (getup-momentum-1), while plain properties of the class survive; applying it on every
+	 * init, load and edit makes the result independent of the order those run in. 0 or >= TotalFrames = actionable at the end, no tail
+	 */
+	void BuildGetupTimeline(FGSTN_CombatTimelineData& Timeline, int32 TotalFrames, int32 ActionableFrame)
+	{
+		BuildFixedTimeline(Timeline, TotalFrames);
+		if (!Timeline.Tracks.IsEmpty())
+		{
+			return;
+		}
+		const bool bTail = ActionableFrame > 0 && ActionableFrame < Timeline.TotalFrames;
+		Timeline.FirstActionableFrame = bTail ? ActionableFrame : Timeline.TotalFrames;
+		Timeline.Tail.bHasTail = bTail;
+		Timeline.Tail.StartFrame = INDEX_NONE;
 	}
 
 	// Debug knobs for the get-up exit momentum (GSTN Debug window, one control each). -1 = the ability's data. Read only by the simulation of
@@ -249,17 +261,23 @@ void UGSTN_GA_GroundBounce::PostEditChangeProperty(FPropertyChangedEvent& Proper
 }
 #endif
 
+void UGSTN_GA_GetupRoll::PostLoad()
+{
+	Super::PostLoad();
+	BuildGetupTimeline(Timeline, TotalFrames, ActionableFrame);
+}
+
 void UGSTN_GA_GetupRoll::PostInitProperties()
 {
 	Super::PostInitProperties();
-	BuildFixedTimeline(Timeline, TotalFrames);
+	BuildGetupTimeline(Timeline, TotalFrames, ActionableFrame);
 }
 
 #if WITH_EDITOR
 void UGSTN_GA_GetupRoll::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
-	BuildFixedTimeline(Timeline, TotalFrames);
+	BuildGetupTimeline(Timeline, TotalFrames, ActionableFrame);
 }
 #endif
 
@@ -374,16 +392,22 @@ void UGSTN_GA_GetupNeutral::OnMoveEnded(EGSTN_MoveEndReason Reason)
 	FGSTN_GetupExit::Apply(*AbilitySystem, FGSTN_GetupExit::ExitVelocity(Reason, FGSTN_TumbleLanding::ReadFacing(GetAvatarActorFromActorInfo()), Speed));
 }
 
+void UGSTN_GA_GetupNeutral::PostLoad()
+{
+	Super::PostLoad();
+	BuildGetupTimeline(Timeline, TotalFrames, ActionableFrame);
+}
+
 void UGSTN_GA_GetupNeutral::PostInitProperties()
 {
 	Super::PostInitProperties();
-	BuildFixedTimeline(Timeline, TotalFrames);
+	BuildGetupTimeline(Timeline, TotalFrames, ActionableFrame);
 }
 
 #if WITH_EDITOR
 void UGSTN_GA_GetupNeutral::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
-	BuildFixedTimeline(Timeline, TotalFrames);
+	BuildGetupTimeline(Timeline, TotalFrames, ActionableFrame);
 }
 #endif

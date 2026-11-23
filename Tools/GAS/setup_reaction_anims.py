@@ -165,6 +165,9 @@ def getup(name, parent, montage_name, distance, direction, keys, faf_clip=None, 
     tl = cdo.get_editor_property('timeline')
     tl.set_editor_property('total_frames', frames)
     faf = frames if faf_clip is None else min(frames, max(1, math.ceil(faf_clip / 60.0 * SIM_HZ)))
+    # The class property is what survives a save (an FAF only in the timeline struct came back as the end after a reload); the
+    # ability rebuilds the timeline's FAF and tail from it on init, load and edit
+    cdo.set_editor_property('actionable_frame', faf if faf < frames else 0)
     tl.set_editor_property('first_actionable_frame', faf)
     tail = tl.get_editor_property('tail')
     tail.set_editor_property('has_tail', faf < frames)
