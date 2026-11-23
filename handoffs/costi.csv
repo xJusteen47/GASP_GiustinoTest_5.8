@@ -76,3 +76,4 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-23,Anim skill gaps K7,anim-skill-gaps-k7,cloud,claude,opus-medium,0,0,3.5,,6 fix skill (card gate, kit per run, hitbox in cattura, allineamento, silhouette palla); C++ non compilato
 2026-11-23,Dropkick K8 Doom,dropkick-k8-1,portatile,claude,opus-medium,35,0,8,,K8 catturata ASSERT OK; build jcugce OK; hitbox in cattura rotte (fix non verificato)
 2026-11-23,Skill vita e velocita (opzione A),skill-vita-velocita-1,cloud,claude,opus-medium,0,0,3.5,,no_stop bloccante su ogni clip anche ereditata; schede velocita con STOP e striscia; slowmo startup nel pacchetto; statua bloccante
+2026-11-24,audit-stop-2026-11-24,Audit stop-and-go clip costruite,cloud,claude,opus-low,0,0,1.6,,parziale: nessun dump nel repo; rischio dalla carta (K7 settle/loop K6 ftilt v3.1 dair v4); dump+tabella pronti per il fisso
