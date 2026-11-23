@@ -1,4 +1,4 @@
-# DROPKICK-BOUNCE-1 (2026-11-17, thread dair-dropkick-anim, brief handoffs/dropkick-tech-bounce-anim-brief.md): the dropkick USER's own landing
+# DROPKICK-BOUNCE-1 (2026-11-17, thread dair-dropkick-anim, brief handoffs/archivio/2026-11/dropkick-tech-bounce-anim-brief.md): the dropkick USER's own landing
 # hop clip, as a VARIANT chain next to the current dropkick (nothing the owner plays today changes). Data only, rerun-safe, saves .uasset only.
 #   AS/AM_OverlordDropkickTechBounce  copy of the animpipe build (card overlord_dropkick_techbounce, Antigravity blocking + curve sheet); montage
 #                                     blend in 1 f (the BREAK from the active pose must read), blend out 3 f into the Knockdown rule's GroundHit

@@ -14,7 +14,7 @@ Kits WITHOUT a defence extension (e.g. KIT_Test_OverlordDAirV7/V8/V9, jab kits) 
 rule to the rest (adding an extension is a design step: check with the coordinator).
 Tests `Run-Timed.ps1 -Preset Test -Tests GSTN`: 1744 Success / 0 Fail (Saved/Logs/ci/test_dair_r4.log.ue.log). No C++ this round, build current.
 **F4 build list (not built here)**: (1) claude/project-thread-z9mi0s 615bd9a5: landing fixes (capsule sink, touchdown latency -> 0 f, land-crouch replay
-after landing-lag montage, bounce events), steps in project files handoffs/landing-capsule-bounce-fixes.md; once built, the dair tucked heavy window goes
+after landing-lag montage, bounce events), steps in project files handoffs/archivio/2026-11/landing-capsule-bounce-fixes.md; once built, the dair tucked heavy window goes
 back to designer f4-12 (from f4-14) and the R4 contact-frame dip should go. (2) claude/project-thread-27htqa: ground-contact fix, steps in
 docs/notes/handovers/ground-contact-fix-1.md on that branch: build, run Tools/GASNPPTest/ground_contact_setup.py (it edits the shared Mover ABP, like the
 z9mi0s covered-landing script: run them ONE AFTER THE OTHER, never in parallel), capture with the fix on and off, then a Fable review.

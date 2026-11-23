@@ -227,7 +227,7 @@ I branch S1 (`project-thread-njoso3`), haptics (`c2dfra`), M12 p1 (`0f3p4m`), M1
 
 ## 7. Dove sono i documenti
 - `CLAUDE.md`: regole e tabella "Where things are". `Plugins/README.md`: indice dei plugin (in parte vecchio, vedi audit).
-- `docs/architecture/`: progetto di ogni sistema. `docs/notes/`: note di lavoro, piani, `handovers/` (una per thread), `memoria-progetto.md`, `regole-progetto-2026-11-22.md`.
+- `docs/architecture/`: progetto di ogni sistema. `docs/notes/`: note di lavoro, piani, `handovers/` (una per thread), `memoria-progetto.md` (storia), `regole-progetto-2026-11-23.md` (regole in vigore).
 - Guide pubblicate per l'owner: sezione [Artefatti](#artefatti) in cima; copie in `Artifacts/` (Designer, Combattimento, Progetto), copie nuove solo sul branch `claude/artifacts`.
 - Rapporto settimanale sulla documentazione (orfani, contraddizioni, archivio): `docs/notes/archivio-proposta.md`, rifatto ogni venerdì dal bibliotecario.
 - Documenti non citati da nessun indice: 130 (elenco in `archivio-proposta.md` §A); `docs/architecture/` andrebbe elencato qui intero.

@@ -10,10 +10,11 @@ contraddizione va segnalata nel rapporto del bibliotecario.
 Pagine sorelle: `docs/INDICE-PROGETTO.md` (cosa esiste nel codice), `docs/BRIEFING-ANTIGRAVITY.md` (per agenti esterni),
 `docs/notes/archivio-proposta.md` (ultimo rapporto del bibliotecario).
 
-## 1. Regole di lavoro in vigore (sintesi; testo pieno = istruzioni di progetto, aggiornate 2026-11-23)
-Fonte: istruzioni di progetto del coordinatore (regole 1-16, 15-11 → 20-11 → 23-11). **Superano**
-`docs/notes/regole-progetto-2026-11-20.md` e `-2026-11-22.md` (che dicono Antigravity coordinatore e DeepSeek esecutore) e
-l'artefatto "Analisi regole di lavoro" (15-11).
+## 1. Regole di lavoro in vigore (sintesi; testo pieno = `docs/notes/regole-progetto-2026-11-23.md`)
+Fonte: istruzioni di progetto del coordinatore (regole 1-16, 15-11 → 20-11 → 23-11), copiate parola per parola in
+`docs/notes/regole-progetto-2026-11-23.md` (23-11, decisione 3A dell'owner). Sono segnati **SUPERATI** (riga in cima, 23-11):
+`docs/notes/regole-progetto-2026-11-20.md`, `-2026-11-22.md` (Antigravity coordinatore e DeepSeek esecutore: non vale più),
+`decisioni/istruzioni-progetto-2026-11-15/20.md` (project files) e l'artefatto "Analisi regole di lavoro" (15-11).
 | # | In breve | Data |
 |---|---|---|
 | 1 | Si parte da un brief (max 1 pagina, `handoffs/`): UNA macchina, budget $, modello. Prima del codice si consulta `docs/INDICE-PROGETTO.md` e si dichiara cosa si riusa; a fine lavoro si aggiorna la voce toccata. | 23-11 |
@@ -22,7 +23,7 @@ l'artefatto "Analisi regole di lavoro" (15-11).
 | 4 | Script: output su file, max 5 righe a schermo. Review max 8 immagini. | 20-11 |
 | 5 | Max 2 tentativi di fix; build/test/catture solo da `Tools/CI/Run-Timed.ps1` (45/30/15 min). Dopo 2 thread falliti su un obiettivo: thread di diagnosi, non un terzo tentativo. | 20-11 |
 | 6 | Le decisioni reversibili si applicano (la consigliata) e si scrivono nell'handover. Mai cambiare strumento o pipeline da soli. All'owner: max 3 decisioni per messaggio, a lettera ("1A 2B"). | 20-11 |
-| 7 | 1 thread con editor per macchina + max 2 solo cloud. `_ue59` un thread alla volta (`_ue59/IN-USO.txt`). | 23-11 |
+| 7 | 1 thread con editor per macchina + max 2 solo cloud. Un secondo editor sulla stessa macchina solo in un worktree suo (disco permettendo) e MAI durante una cattura video. `_ue59` un thread alla volta (`_ue59/IN-USO.txt`). | 23-11 |
 | 8 | Al budget ci si ferma al primo punto stabile; una estensione +30% dal coordinatore; oltre decide l'owner. | 20-11 |
 | 9 | L'owner scrive al coordinatore, non ai thread (eccezione: approvazioni di macchina). Un thread non chiede mai l'altra macchina: si passa via git. | 20-11 |
 | 10 | Nessuna variante d'animazione va all'owner senza video in-game GUARDATO e review cloud indipendente (PASS/FAIL, max 3 giri di posa). Prima la vita, poi i numeri. | 20-11 |
@@ -32,7 +33,7 @@ l'artefatto "Analisi regole di lavoro" (15-11).
 | 14 | GASP stock è il default; ogni deviazione ha una riga in `docs/notes/gasp-divergenze.md` prima del commit. | 20-11 |
 | 15 | Ritocchi "un po' di più/meno" = cvar o additivo nel menu GSTN Debug, non clip nuove; controlli automatici prima di ogni cattura; catture da dietro E di lato; mai committare file locali dell'owner. | 21-11 |
 | 16 | Il codice usa AZIONI di input (Enhanced Input/comandi), mai tasti fisici; i tasti nei brief sono solo default rimappabili. | 23-11 |
-Git (memoria, 22-11): push solo su `claude/*`; vietati push su `feature/*` e `main`, force, cancellazione di branch, `reset --hard`, `clean`. Il branch di base è `main` (non `feature/gas-npp-5.8`, che `CLAUDE.md:69` cita ancora: da correggere).
+Git (memoria, 22-11): push solo su `claude/*`; vietati push su `feature/*` e `main`, force, cancellazione di branch, `reset --hard`, `clean`. Il branch di base è `main` (non `feature/gas-npp-5.8`; `CLAUDE.md` corretto il 23-11).
 
 ## 2. Gioco, kit e notazione
 | Cosa | Stato | Data, fonte |
@@ -41,10 +42,10 @@ Git (memoria, 22-11): push solo su `claude/*`; vietati push su `feature/*` e `ma
 | Corporature: Overlord = tipo Ganondorf (molto largo); BirdKnight = robusto intermedio, è anche lo scheletro base invisibile; Voyager e FlameFury = "ragazzi" proporzioni Link OOT. | vivo | 23-11, memoria "SKIN PROPORTIONS"; `docs/notes/skin-proporzioni-analisi.md` (branch `claude/project-thread-4pj7kf`) |
 | Personaggio base = agile stile Link; stile visivo "Ganondorf dentro Astro Bot". | vivo | memoria (data da confermare) |
 | **Notazione mosse** (vale per TUTTE le nostre mosse; i nomi Smash sono solo riferimenti): F.L avanti leggero, N.L neutro leggero (= jab), Cr.L / Cr.F.L accovacciato; "strong" = S (F.S, N.S), "special" = Sp (F.Sp, Cr.F.Sp); in aria si aggiunge "Aerial"; senza direzione = neutro; in aria "giù" = Cr. (dair = Cr.N.L Aerial). Non definiti: down tilt/smash a terra, Cr.S/Cr.Sp, jab 2/3. | vivo | 23-11, `docs/notes/notazione-mosse.md` (branch `claude/anim-inventario-2026-11-23`) |
-| Overlord: F.S = fendente verticale (rif. forward smash di Ganondorf); N.S = fendente orizzontale con curva regolabile (rif. ftilt di Ike); F.L Aerial = dropkick (braccia CONSERTE, gambe unite, aria spavalda in caduta); Cr.N.L Aerial = stomp. Frame data di riferimento: Smash Ultimate. | vivo; da confermare se N.S sostituisce ftilt v3.1 | 23-11, memoria "OVERLORD MOVES" |
-| Presa (Overlord, bersagli umanoidi): tiene il nemico AL COLLO con una mano, può camminare e saltare (salto più basso), posa a terra con il tasto schivata (RB, **da confermare**); lanci N., F., Cr., Cr.F. (F. = come il lancio F di Zetterburn in Rivals 2); tempo massimo di presa regolabile. Pose in attesa dei riferimenti dell'owner. | in corso, codice non compilato | 23-11, memoria "GRAB"; branch `claude/grab-link`, `docs/notes/grab-link-verifica-editor.md` |
+| Overlord: **ftilt v3.1 = F.L**; F.S = fendente verticale (rif. forward smash di Ganondorf); **N.S = mossa a parte** (non sostituisce ftilt v3.1), fendente orizzontale con curva regolabile (rif. ftilt di Ike); F.L Aerial = dropkick (braccia CONSERTE, gambe unite, aria spavalda in caduta); Cr.N.L Aerial = stomp. Frame data di riferimento: Smash Ultimate. | vivo | 23-11, owner (via coordinatore); memoria "OVERLORD MOVES" |
+| Presa (Overlord, bersagli umanoidi): tiene il nemico AL COLLO con una mano, può camminare e saltare (salto più basso), **pummel tolto**; schema dei lanci di default (azioni rimappabili, regola 16): X neutro = N., X+stick = F., LT+X = Cr., LT+stick+X = Cr.F., RB = mette giù senza lancio; niente lancio indietro (F. = come il lancio F di Zetterburn in Rivals 2); tempo massimo di presa regolabile. Pose in attesa dei riferimenti dell'owner. | in corso, codice non compilato | 23-11, owner (via coordinatore), memoria "GRAB"; branch `claude/grab-link`, `docs/notes/grab-link-verifica-editor.md` |
 | Tasti di default (Xbox, rimappabili, regola 16): X leggero, A salto, Y special, B presa/cambio kit, RT strong, LT accovacciata, RB schivata, LB scudo, L3 dash. | **da confermare L3**: oggi nel codice L3 = run boost e il dash non ha tasto pad | memoria "DESIGN"; `docs/notes/input-azioni-mappa.md:53-54` (branch `claude/project-thread-uvefj5`) |
-| Rete 1v1: all'inizio niente server dedicato; host (listen server) o P2P via Epic Online Services. | ricerca chiusa, decisioni aperte | 23-11, `docs/notes/server-dedicato-ricerca.md` (branch `claude/ricerca-server-dedicato`) |
+| Rete 1v1: **nessun server dedicato** (costo). Host (listen server) + Epic Online Services; si PREDICE anche l'avversario (rollback misto), limite di ping per il matchmaking; ritardo di input all'host regolabile, **spento di default**. Supera la 3A della mappa input ("server dedicato per il ranked"). | deciso | 23-11, `docs/notes/server-dedicato-ricerca.md` (branch `claude/ricerca-server-dedicato`) |
 | Camera libera di default; rendering deferred senza Lumen + TSR (`gstn.Render.Profile 0-4`); VFX spenti di default e in pausa. | vivo | memoria (21-22/11) |
 | Tutti i kit hanno la stessa sensazione di movimento via `DA_Locomotion_Default` (file LOCALE dell'owner, mai committato). Locomotion = GASP Mover stock (`gstn.Loco.Base 1`). | vivo | memoria; `docs/INDICE-PROGETTO.md` §5.3 |
 
@@ -56,7 +57,8 @@ Git (memoria, 22-11): push solo su `claude/*`; vietati push su `feature/*` e `ma
 | Run start generico | w1 (Variant 20) | `approved/runstart-w1` (sul remoto) | 21-11, `docs/notes/anim-approvate.md` |
 | Run start generico | w2 (Variant 21, default) | `approved/runstart-w2` (sul remoto) | 21-11, `docs/notes/anim-approvate.md` |
 | Run start generico | **29w3** | `approved/runstart-v29w3` **NON sul remoto** (push fallito; va fatto da un PC) | 23-11, memoria "STATE"; branch `claude/runstart-lock-2026-11-23` |
-| Turnaround / cambi direzione 21-26 | verdetti dell'owner su 23, 24, 25 (+TorsoLean) e 26 **ancora aperti**; v27 180 L: owner chiede braccia che guidano la svolta, una direzione alla volta | — | memoria "RUN START", "TURNAROUNDS" |
+| Run start generico 29w3 | approvata con la review Gemini; i verdetti 23, 24, 25 (+TorsoLean) e 26 sono **obsoleti** | vedi riga sopra | 23-11, owner (via coordinatore) |
+| Turnaround / cambi direzione | si allineano alla 29w3; v27 180 L: owner chiede braccia che guidano la svolta, una direzione alla volta | — | 23-11; memoria "TURNAROUNDS" |
 Elenco completo e regole: `docs/notes/anim-approvate.md`. Verifica: `git ls-remote --tags origin 'approved/*'`.
 
 ## 4. Sospeso (non iniziare senza parola dell'owner)
@@ -79,6 +81,7 @@ Elenco completo e regole: `docs/notes/anim-approvate.md`. Verifica: `git ls-remo
 | Dropkick K6 giro 3 (portatile), getups (attendono "ok salva") | memoria "QUEUE" | 21-23/11 |
 
 ## 6. Cambiato negli ultimi 7 giorni (17-23/11)
+- 23-11 sera (decisioni dell'owner): ftilt v3.1 = F.L e N.S mossa a parte; pummel tolto; schema lanci di default; 29w3 approvata con Gemini e verdetti 23-26 obsoleti; nessun server dedicato (host + EOS + predizione avversario + limite di ping + ritardo input all'host spento di default); regola 16 (input via azioni) e regola 7 (secondo editor in worktree proprio, mai durante cattura). Regole 1-16 copiate in `docs/notes/regole-progetto-2026-11-23.md`; 103 handoff vecchi in `handoffs/archivio/2026-11/` (project files); artefatti superati segnati ARCHIVIO.
 - 23-11: regole 1, 3, 7 aggiornate e regola 16 nuova (istruzioni di progetto). Fable ridimensionato.
 - 23-11: nuovi documenti: indice del progetto, audit del codice, mappa input, riordino Content, cosmetica skin, proporzioni skin, ricerca rete 1v1, presa al collo, inventario animazioni e notazione mosse.
 - 23-11: run start 29w3 approvata (tag da pushare). Antigravity senza crediti: coordina Claude.
@@ -87,10 +90,7 @@ Elenco completo e regole: `docs/notes/anim-approvate.md`. Verifica: `git ls-remo
 - 20-11: regole riscritte dopo l'audit; v4r5/v4r7 approvate; regola 14 (GASP stock).
 
 ## 7. Da confermare (lista per l'owner)
-1. RB = posa a terra del nemico preso? (memoria GRAB: "credo")
-2. L3 = dash (tuo schema) o run boost (codice di oggi)?
-3. N.S di Overlord sostituisce ftilt v3.1 o è una variante?
-4. Ri-tag v4r5 con force (opzione A) e push del tag 29w3: chi lo fa e quando.
-5. Verdetti sui turnaround 23, 24, 25 (+TorsoLean), 26.
-6. `regole-progetto-2026-11-20/22.md` vanno segnate come superate? (vedi decisione 3 del rapporto)
-7. Data della scelta "personaggio base agile stile Link" (fonte solo in memoria).
+1. L3 = dash (tuo schema) o run boost (codice di oggi)?
+2. Ri-tag v4r5 con force (opzione A) e push del tag 29w3: chi lo fa e quando.
+3. Data della scelta "personaggio base agile stile Link" (fonte solo in memoria).
+(Chiusi il 23-11: RB mette giù, N.S mossa a parte, verdetti 23-26 obsoleti, regole vecchie segnate superate.)

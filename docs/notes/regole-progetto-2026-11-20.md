@@ -1,3 +1,4 @@
+> **SUPERATO (2026-11-23):** vale [regole-progetto-2026-11-23.md](regole-progetto-2026-11-23.md) (regole 1-16 in vigore). Tenuto solo come storia.
 > **SUPERSEDED (2026-11-22):** sostituita da [regole-progetto-2026-11-22.md](regole-progetto-2026-11-22.md) (regole complete 1–15 + nuovo routing `M0`–`M3` e guardie harness-v2).
 
 REGOLE DI LAVORO E DI SPESA (owner, 2026-11-15, aggiornate 2026-11-20 dopo l'audit audit_setup_agentico.md; sostituiscono quelle del 2026-11-02). Ogni thread le segue.

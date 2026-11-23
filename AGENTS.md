@@ -6,7 +6,7 @@
 1. `handoffs/INDICE.md` — indice thread, branch, commit, esiti, task attivi (incluso automaticamente sotto).
 2. Handover del task attivo in `docs/notes/handovers/` (max 30 righe).
 3. `docs/notes/memoria-progetto.md` — stato progetto, hardware, decisioni, coda aperta.
-4. `docs/notes/regole-progetto-2026-11-22.md` — regole attive (Regole 1–15 + routing M0–M3).
+4. `docs/notes/regole-progetto-2026-11-23.md` — regole attive (1-16, dal 2026-11-23) e `docs/STATO-ATTUALE.md` (decisioni vive). Il file del 22-11 e il routing M0-M3 sono SUPERATI: il coordinatore è Claude, Antigravity solo review quando tornano i crediti.
 5. `handoffs/queue.json` e `handoffs/costi.csv` — coda deterministica e registro costi.
 - Mai rileggere vecchie chat/log completi se non espressamente richiesto dal brief.
 

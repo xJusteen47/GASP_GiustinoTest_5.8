@@ -7,7 +7,7 @@ Capture preset run ended TIMEOUT only because the full editor does not quit, the
 `hitdir_abp_insert.py` (commandlet, 17 s, OK), chain is Slot ... -> Foot Lock -> **Directional Hit Additive** -> Stance Offset; diff
 = only the new node + 2 links (`docs/notes/reviews/hit-react-directional/abp_diff.txt`). Backup: `Saved/Backups/GAS/hitdir/`.
 **NOT CAPTURED / NOT LOOKED AT (rule 10)**: budget reached; nothing goes to the owner yet.
-## What was done (option B of handoffs/reazioni-ricerca.md)
+## What was done (option B of handoffs/archivio/2026-11/reazioni-ricerca.md)
 - `UGSTN_ReactionAnimComponent` now implements `IGSTN_AdditiveReactionSource` (new, GSTNAnimationCore). On `Combat.Event.Hit.Received`:
   push = victim - attacker (horizontal); side = `FGSTN_DirectionalHitMath::SelectSide` (dot with actor forward/right, ties to front/back);
   weight = `IntensityWeight` (unstaggered 0.3, staggered 0.5..1 linear in hitstun up to 40 frames). Air set while `AirTags` (Tumble), fades

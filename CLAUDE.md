@@ -58,7 +58,7 @@ Headers carry long doc comments that explain intent and invariants: read the hea
 ## Build and run
 
 - Engine association `5.9` (`C:\Program Files\Epic Games\UE_5.9\Engine`); no Rider IDE/MCP in active use.
-- Project governance, model tiers and project memory: [regole-progetto-2026-11-22.md](docs/notes/regole-progetto-2026-11-22.md) and [memoria-progetto.md](docs/notes/memoria-progetto.md).
+- Working and spending rules 1-16 (in force since 2026-11-23, full text): [regole-progetto-2026-11-23.md](docs/notes/regole-progetto-2026-11-23.md). Short version with dates and the live owner decisions: [STATO-ATTUALE.md](docs/STATO-ATTUALE.md), which wins over older docs. The coordinator is Claude (Sonnet/Opus); Antigravity is not the coordinator and only returns for reviews when its credits do. `regole-progetto-2026-11-20/22.md` and [memoria-progetto.md](docs/notes/memoria-progetto.md) (22-11 export) are history.
 - C++ changes: Live Coding only for quick probes, real build via `Tools/CI/Run-Timed.ps1 -Preset Build` (with `-WaitMutex -NoHotReload`) before captures; test parsing via `Tools/CI/Check-TestLog.ps1`.
 - Git safety: install hooks with `Tools/CI/Install-GitHooks.ps1` (`Tools/CI/Test-GitGuard.ps1` blocks owner-local files like `DA_Locomotion_Default`, locked `anim-approvate.md` assets, secrets, and pushes to `feature/*` / `main`).
 - Editor automation: the `unreal-mcp` server (`.mcp.json`) and the `unreal-mcp` skill, when the editor is running; engine questions via `Tools/UE59/ask_unreal_assistant.py`.
@@ -66,4 +66,4 @@ Headers carry long doc comments that explain intent and invariants: read the hea
 
 ## Git
 
-Branch `feature/gas-npp-5.8`, base `main`. Commit messages: short imperative subject, a body that explains the reason.
+Base branch `main` (`feature/gas-npp-5.8` is old and not an ancestor of main: never start from it). Work on `claude/*` branches; pushes to `main` and `feature/*`, force pushes and branch deletion are blocked. Commit messages: short imperative subject, a body that explains the reason.

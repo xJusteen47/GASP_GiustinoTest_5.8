@@ -1,5 +1,5 @@
 # Run stop 2: pose-based Ganondorf stop clip - desktop, 2026-11-19 - clip DONE, in-game FAIL (gioco), stopped at 2 attempts (rule 5)
-Brief: coordinator note (owner "A": pose-based run stop, Ganondorf in Smash) + project file handoffs/run-start-stop-skid-brief.md section 2.
+Brief: coordinator note (owner "A": pose-based run stop, Ganondorf in Smash) + project file handoffs/archivio/2026-11/run-start-stop-skid-brief.md section 2.
 Owner style 2026-11-18: fluid and cartoony but in character, "a Ganondorf inside Astro Bot".
 
 ## Done

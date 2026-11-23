@@ -1,6 +1,6 @@
 # GSTN Presentation
 
-Presentation events of a character and the table of their effects (polish plan M0, `handoffs/polish-movimento-vfx-piano.md`).
+Presentation events of a character and the table of their effects (polish plan M0, `handoffs/archivio/2026-11/polish-movimento-vfx-piano.md`).
 Presentation only: nothing here is read by a simulation, nothing is replicated. Depends on GSTNAnimation (short additives) and Niagara.
 
 ## Pieces

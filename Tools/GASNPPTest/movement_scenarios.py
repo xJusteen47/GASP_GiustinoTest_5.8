@@ -6,7 +6,7 @@
 # What is read: the sim ticks of both copies (UGSTN_GASNPPTestComponent.DrainSimHistory: loc, vel, yaw, mode, run stage, skid phase and the
 # skid's Mover tags) and, every editor tick, the owner's presented frame (GetPresentationSnapshot: foot slide, skid lean, montage, override
 # layer, bone heights over the capsule bottom, the anim Blueprint's own variables). Targets come from the Mario 3D World preset
-# (handoffs/preset-mario3dw.md), the jump from the hold-gravity model of 2026-11-18 (docs/notes/handovers/jump-hold-gravity.md): full jump
+# (handoffs/archivio/2026-11/preset-mario3dw.md), the jump from the hold-gravity model of 2026-11-18 (docs/notes/handovers/jump-hold-gravity.md): full jump
 # apex about 1.9 character heights, air time about 0.75 s, tap about 0.32 of the full jump; a run start
 # ramp of about 6 frames, air turn of 180 degrees in about 3 frames. Checks have a tolerance band around the target and print the measure.
 import json
