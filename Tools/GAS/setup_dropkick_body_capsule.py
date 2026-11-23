@@ -12,7 +12,15 @@
 # Torso = midpoint of pelvis and spine_03, in the clip's root space, measured here from the clips (nothing hand typed).
 # Mesh axes: the Mannequin faces +Y in mesh space and the pawn's mesh is turned -90 yaw, so capsule X forward = mesh +Y, capsule Y right = mesh -X.
 #
-# Env: DROPKICK_CAPSULE_HH (cm, default 35), DROPKICK_CAPSULE_AIR_LEAD (frames before the loop, default 6).
+# Env: DROPKICK_CAPSULE_HH (cm, default 35), DROPKICK_CAPSULE_AIR_LEAD (frames before the loop, default 6),
+#      DROPKICK_CAPSULE_AIR_PIN (owner 2026-11-23: "it shrinks moving UP: the volume under the feet goes away, not above the head"):
+#        head (DEFAULT since 2026-11-23): the top stays where the standing capsule's top is (DROPKICK_STANDING_HH, default 86), only the
+#              bottom comes up. Shrinking upward never pushes into the floor; it lands when the raised bottom reaches it (logged below).
+#        torso (11-15 default): centred on the loop's torso, both ends move in (86 -> 35 around the centre).
+#        feet: the bottom stays on the mesh root (where the standing capsule's bottom is), only the top comes down. It touches down when the
+#              clip ROOT reaches the floor, (loop torso z - hh) cm before torso does (logged): the back is still in the air at touchdown and the
+#              land clip shows its own drop (the 11-15 problem torso fixed).
+#      The camera no longer reads the capsule (camera anchor Floor source, 2026-11-23): this choice changes collision and landing only.
 # Editor:    import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import setup_dropkick_body_capsule as s; s.run()
 # Output:    Saved/AnimR2/setup_dropkick_body_capsule.txt, at most 5 printed lines.
 import os
@@ -21,7 +29,8 @@ import runpy
 import unreal
 
 DIR = '/Game/GASNPPTest/Combat/Overlord'
-TIMELINE = f'{DIR}/TL_Overlord_Dropkick'
+# DROPKICK_TIMELINE: another dropkick timeline with the same clips (e.g. TL_Overlord_DropkickTBK6 on the K6 branch); default the original
+TIMELINE = os.environ.get('DROPKICK_TIMELINE', f'{DIR}/TL_Overlord_Dropkick')
 CLIPS = {name: f'{DIR}/AS_OverlordDropkick_{name}' for name in ('Startup', 'Loop', 'Land')}
 ANIM_FPS = 60.0
 CHAIN = ('pelvis', 'spine_01', 'spine_02', 'spine_03')
@@ -61,6 +70,10 @@ def run():
                 raise RuntimeError(f'{path} missing: run Tools/GAS/setup_overlord_dropkick_kit.py first')
         hh = float(os.environ.get('DROPKICK_CAPSULE_HH', '35'))
         lead = int(os.environ.get('DROPKICK_CAPSULE_AIR_LEAD', '6'))
+        pin = os.environ.get('DROPKICK_CAPSULE_AIR_PIN', 'head').strip().lower()
+        standing_hh = float(os.environ.get('DROPKICK_STANDING_HH', '86'))
+        if pin not in ('torso', 'feet', 'head'):
+            raise RuntimeError(f'DROPKICK_CAPSULE_AIR_PIN={pin!r}: use torso, feet or head')
         anims = {name: unreal.load_asset(path) for name, path in CLIPS.items()}
         asset = unreal.load_asset(TIMELINE)
         data = asset.get_editor_property('data')
@@ -75,7 +88,8 @@ def run():
 
         air = _capsule_local(_torso(anims['Loop'], 0))
         land_torso = _capsule_local(_torso(anims['Land'], 0))
-        air_offset = unreal.Vector(air.x, air.y, air.z)
+        air_z = {'torso': air.z, 'feet': hh, 'head': 2.0 * standing_hh - hh}[pin]
+        air_offset = unreal.Vector(air.x, air.y, air_z)
         land_offset = unreal.Vector(land_torso.x, land_torso.y, hh)
 
         utils = unreal.GSTN_TimelineUtils
@@ -84,8 +98,14 @@ def run():
         data = utils.add_body_capsule_track(data, land, total, hh, 0.0, land_offset, unreal.GSTN_BodyCapsuleAnchor.CAPSULE, 0.0)
         asset.set_editor_property('data', data)
         lib.save_loaded_asset(asset, False)
+        # Touchdown check (owner rule 12 on this change): where the air capsule's bottom is against the loop's torso. Positive = the bottom is
+        # ABOVE the torso, so at touchdown the drawn torso is that far under the floor until the land track puts the mesh back (a visible drop
+        # or sink); negative = the capsule lands first with the torso that far above the floor (an early landing, then the land clip's drop)
+        gap = (air_z - hh) - air.z
+        log(f'air capsule bottom {air_z - hh:.1f} cm above the mesh root, loop torso {air.z:.1f}: gap {gap:+.1f} cm'
+            + ('  WARNING: > 15 cm, check the touchdown in the capture (drop or early landing)' if abs(gap) > 15.0 else ''))
         log(f'torso loop f0 {air.x:.1f},{air.y:.1f},{air.z:.1f} land f0 {land_torso.x:.1f},{land_torso.y:.1f},{land_torso.z:.1f} (capsule frame, cm)')
-        log(f'TL_Overlord_Dropkick: air [{air_from}, {land}) hh {hh:.0f} Body; land [{land}, {total}) hh {hh:.0f} Capsule; '
+        log(f'TL_Overlord_Dropkick: air [{air_from}, {land}) hh {hh:.0f} Body pin {pin} (centre z {air_z:.1f}); land [{land}, {total}) hh {hh:.0f} Capsule; '
             f'torso drop at touchdown ~{hh - land_torso.z:.0f} cm (was {air.z - land_torso.z:.0f} cm in the clips); saved')
         ok = True
     except Exception as e:
