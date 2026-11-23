@@ -24,16 +24,16 @@ non controllato su 5.9: va chiesto all'Unreal Assistant (`Tools/UE59/ask_unreal_
 - B: solo materiale e maschere alla Fortnite, più charm su socket. Economico (~5 $), ma niente 3D vero sull'arma.
 - C: skin 3D fatte a mano per coppia arma/tema. Nessun codice, ma è esattamente ciò che non vuoi (non scala).
 
-**Decise dall'owner il 2026-11-23**: 1A confermata. Assemblaggio **a runtime**: il tema si applica a qualsiasi oggetto,
+**Decise dall'owner il 2026-11-23**: **1A CONFERMATA**, **2A CONFERMATA** (sotto). Assemblaggio **a runtime**: il tema si applica a qualsiasi oggetto,
 quindi niente bake per coppia arma/tema; il bake resta solo come cache opzionale (sezione 2b). Orokin, Dax, Sentient erano
 solo esempi di cosa si intende, non nomi da usare.
 
-**2. Quando si costruisce l'oggetto decorato (nuova decisione, idea dell'owner sull'armadietto)**
+**2. Quando si costruisce l'oggetto decorato: CONFERMATA 2A dall'owner il 2026-11-23**
 - **A (consigliata)**: un solo assemblatore che fonde pezzi e spline in una mesh per oggetto, lanciato in due momenti fuori dalla partita: **all'armadietto** quando il giocatore salva il loadout (salvato in una cache locale su disco) e **in asincrono per i loadout degli altri giocatori** (arrivano solo come ID), dal caricamento in poi e anche per chi entra a partita iniziata, con un effetto "amorfo" che maschera l'attesa. Nessun blocco. Vedi 2c.
 - B: solo armadietto. Non basta in multiplayer: i loadout degli altri non passano dal tuo armadietto, quindi servirebbe comunque la costruzione al caricamento o il download di mesh (pesante).
 - C: solo runtime puro all'equipaggiamento, anche in partita. Più semplice, ma qualche ms nel momento sbagliato e nessuna cache su disco.
 
-Fermo finché non decidi: nulla, la decisione 2 serve solo a F1. È ricerca; F1 parte solo quando lo dici (vedi coda: dopo la skill di animazione).
+Nessuna decisione aperta. La prova a fasi (F0-F2, 16-26 $) è **NON avviata** finché l'owner non dà il via. È ricerca; F1 parte solo quando lo dici (vedi coda: dopo la skill di animazione).
 
 ---
 

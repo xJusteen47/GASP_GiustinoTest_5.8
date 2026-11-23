@@ -14,7 +14,7 @@ Branch `claude/skin-cosmetici-ricerca`, base `feature/gas-npp-5.8` (a5b2095). Th
 - Owner 11-23: 1A confermata; il tema si vende una volta e va su qualsiasi oggetto, quindi niente bake per coppia;
   Orokin/Dax/Sentient erano solo esempi. Nuove sezioni 2b (costo runtime per oggetto, fusione in una mesh, cache,
   limiti, LOD a solo materiale) e 2c (idea owner: costruzione all'armadietto + al caricamento per i loadout altrui).
-- Pendente owner: decisione 2 nuova, consigliata A (armadietto + caricamento, stesso assemblatore, runtime solo rete di sicurezza).
+- Owner 11-23 13:10: 2A CONFERMATA (armadietto + costruzione asincrona per i remoti con placeholder amorfo). Nessuna decisione aperta; F0-F2 NON avviate.
 
 ## Non verificato
 - Stato in UE 5.9 di Geometry Script (spline deform, bake), PCG su superfici mesh, Nanite displacement: marcati [da verificare 5.9],
