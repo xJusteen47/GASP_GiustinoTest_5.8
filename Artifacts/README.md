@@ -10,3 +10,6 @@ Convenzione: `Artifacts/<Area>/<argomento-in-minuscolo>.html`, nome cartella in 
 | `Designer/mosse-di-esempio.html` | Mosse di esempio GSTN: come copiare e cambiare le mosse | https://claude.ai/artifact/DyiBrsycoRfXNSMoZUBxun |
 | `Progetto/piano-ci-e-branch.html` | Piano CI e flusso dei branch | (vedi il file) |
 | `Progetto/branch-cleanup-2026-11-15.md` | Piano ed esito della pulizia dei branch claude/* | (vedi il file) |
+
+## Aggiornamento 2026-11-23 (decisione 1A dell'owner)
+Copie delle versioni pubblicate oggi: `Designer/mosse-di-esempio.html` (guida designer, ora contiene anche la Combat Move passo passo), `Combattimento/architettura-plugin.html`, `Rete/networking.html` (aggiornate); `Designer/guida-mosse-blueprint.html` (ARCHIVIO, fusa in Mosse di esempio), `Progetto/cose-da-fare-a-mano.html` e `Progetto/analisi-regole-di-lavoro.html` (ARCHIVIO). Segnati ARCHIVIO anche i 4 documenti di fine ottobre (strumenti AI, Cascadeur, pipeline agentica, depth marker), senza copia locale. Nessun artefatto cancellato.

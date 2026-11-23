@@ -1,0 +1,407 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+
+
+
+
+
+
+
+
+<title>Cose da fare a mano — GASP Giustino</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: una colonna stretta da lista di lavoro, sezioni con intestazione e voci spuntabili */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --fg:#1b2230; --muted:#5d6676; --line:#dde1e8;
+  --accent:#2f5bd3; --code-bg:#eef1f6; --done:#2f8a57; --warn:#b26a00;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12151b; --surface:#1a1f28; --fg:#e4e8ef; --muted:#98a2b3; --line:#2b323e;
+  --accent:#86a6ff; --code-bg:#222936; --done:#5cc58a; --warn:#e8a447; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12151b; --surface:#1a1f28; --fg:#e4e8ef; --muted:#98a2b3; --line:#2b323e;
+  --accent:#86a6ff; --code-bg:#222936; --done:#5cc58a; --warn:#e8a447; color-scheme:dark}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.55}
+.wrap{max-width:760px;margin:0 auto;padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:22px}
+h1{font-size:1.6rem;font-weight:600;margin:0;text-wrap:balance}
+.meta{color:var(--muted);font-size:.85rem;margin-top:4px}
+section{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+h2{font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin:0;font-weight:600}
+ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+li{display:grid;grid-template-columns:22px 1fr;gap:8px;align-items:start;min-width:0}
+li input{margin-top:4px;accent-color:var(--done);width:16px;height:16px}
+li label{min-width:0}
+li.checked label{color:var(--muted);text-decoration:line-through}
+ol.steps{margin:6px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+ol.steps li{display:list-item}
+.note{color:var(--muted);font-size:.86rem}
+.tag{font-size:.72rem;font-weight:600;color:var(--warn);border:1px solid currentColor;border-radius:4px;padding:0 5px;margin-left:4px;white-space:nowrap}
+.new{font-size:.72rem;font-weight:600;color:var(--accent);border:1px solid currentColor;border-radius:4px;padding:0 5px;margin-left:4px;white-space:nowrap}
+code{font-family:var(--mono);font-size:.86em;background:var(--code-bg);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+.cmd{background:var(--code-bg);border-radius:6px;padding:10px 12px;font-family:var(--mono);font-size:.84rem;overflow-x:auto;white-space:pre;margin-top:6px}
+.copy{font:inherit;font-size:.78rem;color:var(--accent);background:none;border:1px solid var(--line);border-radius:4px;padding:2px 8px;cursor:pointer;margin-top:6px}
+.copy:focus-visible,li input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.done li{grid-template-columns:1fr;color:var(--muted)}
+.done li::before{content:"✓ ";color:var(--done)}
+.archivio{border:2px solid var(--warn);background:var(--surface);color:var(--fg);border-radius:8px;padding:14px 18px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.archivio strong{color:var(--warn);font-size:.82rem;letter-spacing:.08em;text-transform:uppercase}
+.archivio p{margin:0}
+.archivio a{color:var(--accent)}
+</style>
+<div class="wrap">
+<div class="archivio" role="note"><strong>ARCHIVIO · 2026-11-23</strong><p>Elenco del 13-11, non più valido. I push su <code>feature/gas-npp-5.8</code> che chiede oggi sono bloccati dalla guardia git: si lavora su branch <code>claude/*</code> con base <code>main</code>. Percorsi e Rider sono vecchi. <b>NON eseguire questi passi.</b></p><p>Le cose da fare a mano attuali le manda il coordinatore; le domande aperte sono in <code>docs/STATO-ATTUALE.md</code> §7.</p></div>
+<header>
+  <h1>Cose da fare a mano</h1>
+  <div class="meta">GASP Giustino · aggiornato 2026-11-13 22:55 UTC · le spunte restano solo in questo browser</div>
+</header>
+
+<section>
+  <h2>0 · Lavoro M11 di oggi su 5.9</h2>
+  <ul>
+    <li><input type="checkbox" id="git-push-79454ebc"><label for="git-push-79454ebc"><strong>Menu del carico col pad e tasti GASP</strong> (branch <code>claude/project-thread-vzctjx</code>, commit <code>79454ebc</code>, sopra <code>3f615f49</code> = keexim). Il menu ora risponde a levetta, A e B (prima il suo mapping context nasceva vuoto); il personaggio resta fermo finché è aperto. Il mapping context IMC_Sandbox di GASP viene tolto dai nostri dati (config input) e sostituito da IMC_GSTN_Locomotion: solo movimento, camera e C per accovacciarsi; DPad (cambio pawn), click delle levette, Spazio/R/J/N/M di GASP non fanno più niente. Nuova pedana "LOADOUT DEBUG" nell'hub, accanto alla pedana rossa dei hitbox: salendoci si apre la lista spartana del carico. Build ok, test headless 1584/0, provato in PIE sul portatile coi tasti del pad iniettati, non col pad vero. Commit successivi: ogni cambio di kit (menu, B tenuto su un kit a terra) ora arriva alla simulazione, prima X, Y, RT e presa non facevano niente; LEGGERO, MEDIO e PESANTE hanno RT (il forte di ESEMPIO); layout del pad: X leggero, Y speciale, RT forte, RB schivata, LT abbassarsi, A salto, B presa, scudo su LB; abbassarsi non fa più partire lo slide di GASP; nell'hub ogni colpo scrive a schermo COLPITO con il danno. <span class="new">nuovo</span>
+      <ol class="steps">
+        <li>Fisso, terminale (fast-forward da <code>3f615f49</code>, niente force; sostituisce il push di keexim qui sotto, che è dentro):
+      <div class="cmd" id="cmd7c0e">cd "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_ue59"
+git fetch origin claude/project-thread-vzctjx
+git push origin 79454ebc:refs/heads/feature/gas-npp-5.8</div>
+      <button class="copy" data-target="cmd7c0e" type="button">Copia</button></li>
+        <li>Cartella <code>_ue59</code> del fisso: quando chiudi l'editor dimmelo, la porto su questo commit e la compilo (header cambiati).</li>
+        <li>In <code>L_Test_Hub</code>, Play: nel menu levetta su/giù = riga, destra/sinistra = valore, <strong>A</strong> conferma, <strong>B</strong> esce. Poi sali sulla pedana LOADOUT DEBUG. Console: <code>GSTN.LoadoutMenu</code>, <code>GSTN.LoadoutMenuDebug</code>, <code>GSTN.InputDump</code> (scrive nel log i mapping context attivi). Se il menu non si apre, ora scrive il motivo a schermo.</li>
+        <li>Nota: Spazio non salta più (era il salto di GASP); il nostro salto è Y / A del pad.</li>
+      </ol></label></li>
+    <li><input type="checkbox" id="fisso-playtest-ue59"><label for="fisso-playtest-ue59"><strong>Playtest sul fisso (UE 5.9)</strong> · 2026-11-13 <span class="new">nuovo</span>
+      <ol class="steps">
+        <li>La cartella <code>GASP_Giustino2_ue59</code> ora è sul branch <code>claude/project-thread-keexim</code> (<code>fde5585f</code> + correzioni), già compilata: apri con <code>Apri editor 5.9.bat</code>. Non chiede più "Target Upgrade Required".</li>
+        <li>Push su feature (dal fisso, nella cartella <code>GASP_Giustino2_ue59</code>; fast-forward da <code>fde5585f</code>):
+      <div class="cmd" id="cmdkeexim">git push origin claude/project-thread-keexim:feature/gas-npp-5.8</div>
+      <button class="copy" data-target="cmdkeexim" type="button">Copia</button> Superato dal push di <code>79454ebc</code> qui sopra, che lo contiene.</li>
+        <li>In <code>L_Test_Hub</code> all'avvio si apre la schermata <strong>SCEGLI IL TUO KIT</strong>: scegli e conferma. Tasti di gioco: <strong>Y</strong> salto, <strong>click sinistro</strong> attacco, <strong>O tenuto</strong> = prendi/cambia kit.</li>
+        <li>Gli hurtbox verdi sono la forma della simulazione: stanno sulla capsula, il corpo animato si sposta (corsa, inclinazione) fino a 30 cm. <strong>Decisione tua</strong>: hurtbox che seguono la locomozione oppure fissi come nei picchiaduro.</li>
+      </ol></label></li>
+    <li><input type="checkbox" id="git-push-fde5585f"><label for="git-push-fde5585f"><strong>Gli zaini indossati ora si vedono sulla schiena</strong> (branch <code>claude/project-thread-2v2slw</code>, commit <code>fde5585f</code>, sopra <code>2d505953</code>). Ogni zaino ha forme semplici colorate nei suoi dati: <strong>jet-pack</strong> = due serbatoi arancioni con ugelli scuri, <strong>cupola</strong> = scatola blu con cupola azzurra, <strong>zaino d'esempio</strong> = scatola viola con disco giallo. Il personaggio prende da solo il componente che disegna l'equipaggiamento: nessun Blueprint. Su server e client, sparisce quando lo lasci o lo cambi. Build ok, test headless 1584/0. <strong>Nessuno l'ha guardato in Play.</strong> <span class="new">nuovo</span>
+      <ol class="steps">
+        <li><strong>Fisso</strong>, terminale (fast-forward da <code>2d505953</code>, niente force; sostituisce il push di <code>2d505953</code> qui sotto, che è dentro):
+      <div class="cmd" id="cmdfde5">cd "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2"
+git fetch origin claude/project-thread-2v2slw
+git push origin fde5585f:refs/heads/feature/gas-npp-5.8</div>
+      <button class="copy" data-target="cmdfde5" type="button">Copia</button></li>
+        <li><strong>Portatile</strong>: è già su questo branch e già compilato.</li>
+        <li>In <code>L_Test_Hub</code>, Play: nella schermata del carico scegli uno zaino (o prendine uno a terra tenendo B). Guarda la schiena, anche dalla finestra di un altro giocatore; poi cambia zaino e controlla che il vecchio sparisca. Dimmi se sono troppo staccati o dentro il cubo del kit (le misure si cambiano nell'asset, <em>Visual → Parts → Offset</em>, o in <code>Tools/GAS/setup_backpack_visuals.py</code>).</li>
+      </ol>
+      <div class="note">Il look del kit resta il cubo segnaposto: gli impianti sulla schiena dei kit di prova hanno misure sbagliate per quell'osso e per ora non vengono disegnati (dettagli in <code>docs/notes/handovers/backpack-look.md</code>).</div></label></li>
+    <li><input type="checkbox" id="git-push-2d505953"><label for="git-push-2d505953"><strong>Il cubo sulla schiena ora segue il corpo</strong> (branch <code>claude/project-thread-tor00h</code>, commit <code>2d505953</code>, sopra <code>dc3a7602</code>). Quel cubo è il segnaposto del <strong>kit</strong>, non lo zaino: era attaccato alla capsula. Ora sta sull'osso della schiena della mesh che vedi (anche quella del VisualOverride di GASP), nello stesso punto di prima a riposo. Build ok, test headless 1584/0. <strong>Nessuno l'ha guardato in Play.</strong> <span class="new">nuovo</span>
+      <ol class="steps">
+        <li><strong>Fisso</strong>, terminale (fast-forward da <code>dc3a7602</code>, niente force; sostituisce il push di <code>dc3a7602</code> qui sotto, che è dentro):
+      <div class="cmd" id="cmd2d50">cd "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2"
+git fetch origin claude/project-thread-tor00h
+git push origin 2d505953:refs/heads/feature/gas-npp-5.8</div>
+      <button class="copy" data-target="cmd2d50" type="button">Copia</button></li>
+        <li><strong>Portatile</strong>: è già su questo branch e già compilato.</li>
+        <li>In <code>L_Test_Hub</code>, Play: corri, salta, attacca e guarda se il cubo colorato resta incollato alla schiena. Dimmi se è troppo dentro o troppo fuori.</li>
+      </ol><div class="note">Superato dal push di fde5585f qui sopra, che lo contiene (e ora gli zaini si vedono).</div></label></li>
+    <li><input type="checkbox" id="git-push-dc3a7602"><label for="git-push-dc3a7602"><strong>Mosse di esempio per il designer</strong> (branch <code>claude/project-thread-vc4k9v</code>, commit <code>dc3a7602</code>, sopra <code>3d684fba</code>, la schermata del carico). Quattro mosse fatte solo di dati in <code>Content/GASNPPTest/Examples</code>: leggero X, forte RT, speciale Y, cupola dello zaino. Guida: <a href="https://claude.ai/artifact/DyiBrsycoRfXNSMoZUBxun">Mosse di esempio GSTN</a>. Test headless 1584/0; in gioco i tre colpi tolgono il danno giusto. <span class="new">nuovo</span>
+      <ol class="steps">
+        <li><strong>Fisso</strong>, terminale (fast-forward da <code>3d684fba</code>, niente force; sostituisce il push di <code>3d684fba</code> qui sotto, che è dentro):
+      <div class="cmd" id="cmddc3a">cd "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2"
+git fetch origin claude/project-thread-vc4k9v
+git push origin dc3a7602:refs/heads/feature/gas-npp-5.8</div>
+      <button class="copy" data-target="cmddc3a" type="button">Copia</button></li>
+        <li><strong>Portatile</strong>: è già su questo branch. Nessuna build nuova (solo asset, script e un file di tag).</li>
+        <li>In <code>L_Test_Hub</code>, Play: nella schermata del carico scegli kit <strong>ESEMPIO</strong> e zaino <strong>Example Backpack Dome</strong>, conferma con A. Oppure il kit a terra ESEMPIO DESIGNER (a sinistra della fila dei kit) e lo zaino d'esempio (a destra). Prova X, RT, Y sui manichini.</li>
+        <li><strong>Prova la cupola dello zaino d'esempio col pad</strong> (LB con lo stick fermo): nessuno l'ha provata. Nel test automatico, aggiungere lo zaino al carico da script ha fatto chiudere l'editor due volte: se si chiude anche scegliendolo nella schermata del carico, dimmelo, è un bug vero.</li>
+      </ol><div class="note">Superato dal push di 2d505953 qui sopra, che lo contiene.</div></label></li>
+    <li><input type="checkbox" id="git-push-3d684fba"><label for="git-push-3d684fba"><strong>Porta su <code>feature/gas-npp-5.8</code> la schermata del carico</strong>, unita al lavoro 5.9 (branch <code>claude/project-thread-tixkmv</code>, nessun conflitto). Sul portatile con UE 5.9: build ok, test headless 1584/0, suite 49/50 (<code>trampoline</code> rosso una volta, verde rifatto da solo). <span class="new">nuovo</span>
+      <ol class="steps">
+        <li><strong>Fisso</strong>, apri un terminale e incolla (fast-forward da <code>61086557</code>, niente force):
+      <div class="cmd" id="cmd3d68">cd "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2"
+git fetch origin claude/project-thread-tixkmv
+git push origin 3d684fba:refs/heads/feature/gas-npp-5.8</div>
+      <button class="copy" data-target="cmd3d68" type="button">Copia</button></li>
+        <li><strong>Portatile</strong>: è già su questo lavoro e già compilato con UE 5.9. Apri il progetto con UE 5.9; chiudi con <strong>Don't Save</strong>.</li>
+        <li>Fisso, nella cartella principale dopo il push: <code>git pull</code> e build completa da Rider (nuovo plugin <code>GSTNLoadoutMenu</code>). (fatto 2026-11-13)</li>
+      </ol><div class="note">Superato dal push di dc3a7602 qui sopra, che lo contiene.</div></label></li>
+    <li><input type="checkbox" id="hub-try-61086557"><label for="hub-try-61086557"><strong>Cosa provare in <code>L_Test_Hub</code></strong> (si apre da solo). Premi Play (listen, 3 giocatori) e aspetta 4 secondi: compaiono manichini, kit e zaini a terra. Prendi ogni cosa tenendo <strong>B</strong> mezzo secondo. Nessuno l'ha ancora visto in una finestra: dimmi cosa non torna. <span class="new">nuovo</span>
+      <ol class="steps">
+        <li><strong>Schermata del carico</strong> (sul portatile subito, sul fisso dopo il push e la build): appena compari si apre <strong>SCEGLI IL TUO KIT</strong>. Levetta su/giù = riga (kit, speciale, mod, zaino), destra/sinistra = valore, <strong>A</strong> conferma, <strong>B</strong> esce. Riaprila con la console <code>GSTN.LoadoutMenu</code>. Nessuno l'ha ancora usata col pad. <span class="new">nuovo</span></li>
+        <li><strong>Kit</strong>, 8 m davanti alla partenza: LEGGERO, MEDIO, PESANTE al centro; a sinistra <strong>TIRATORE</strong>, a destra <strong>TIRATORE + MOD POTENZA</strong>. Le 7 pedane più avanti hanno gli altri kit di prova.</li>
+        <li><strong>TIRATORE</strong>: click dello stick destro (reticolo) e <strong>RT</strong> = sparo istantaneo dove guarda la camera (6 danni, 50 m). Spara a un manichino.</li>
+        <li><strong>MOD POTENZA</strong>: jab e speciale con hitbox più grandi, più forti e più lenti. Confronta col TIRATORE senza mod.</li>
+        <li><strong>Jet-pack</strong>: lo zaino in fondo a sinistra della stessa fila. Un salto in aria in più; dopo un salto, tieni A scendendo = discesa lenta.</li>
+        <li><strong>Cupola</strong>: lo zaino in fondo a destra della stessa fila. A terra, schivata con lo stick fermo = cupola di 4 m finché tieni (max 10 s, 2 cariche). Dalla finestra del giocatore 1 colpisci da fuori il giocatore 0 nella cupola: il colpo si ferma e chi colpisce rimbalza indietro. Da dentro si può colpire fuori. La cupola stessa non si vede ancora (niente grafica); lo zaino sulla schiena sì.</li>
+        <li>Il cubo sulla schiena (segnaposto del kit) ora segue il corpo, e lo zaino indossato si vede dietro di lui: vedi le prime due voci.</li>
+      </ol></label></li>
+  </ul>
+</section>
+
+<section>
+  <h2>0b · Passaggio a UE 5.9</h2>
+  <ul>
+    <li><input type="checkbox" id="ue59-cut-done"><label for="ue59-cut-done">Push di <code>8eab9ced</code> su <code>feature/gas-npp-5.8</code>: <strong>fatto da te</strong>. Restano i passi sul portatile (installare 5.9, <em>Generate project files</em>, build) quando ti dico di fare il pull, e nella cartella principale del fisso quando il thread del down-air ha finito. Da qui in poi apri il progetto solo con 5.9. Dettagli: <code>docs/notes/handovers/ue59-1.md</code>.</label></li>
+  </ul>
+</section>
+
+<section>
+  <h2>1 · Git</h2>
+  <ul>
+    <li><input type="checkbox" id="git-push-7c6c441f"><label for="git-push-7c6c441f">Porta tutto su <code>feature/gas-npp-5.8</code> con un solo push: tip <code>7c6c441f</code> del branch <code>claude/desktop-m11-verify</code>. <strong>Sostituisce il push di <code>b00a916e</code></strong> (che è dentro). Contiene IO-2b/2c/2d e in più le <strong>fette M11 L1-L8 del portatile</strong> (mod dei kit, zaini, editor dei mod), verificate sul fisso: build Editor, Game e Shipping ok, test headless 1554/0, primo mod e primo zaino di prova. <span class="new">nuovo</span>
+      <ol class="steps">
+        <li>Apri un terminale e incolla:
+      <div class="cmd" id="cmd1">cd "C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2"
+git fetch origin claude/desktop-m11-verify
+git push origin 7c6c441f:refs/heads/feature/gas-npp-5.8</div>
+      <button class="copy" data-target="cmd1" type="button">Copia</button></li>
+        <li>Nella cartella principale <code>git pull</code> (porta anche molti asset Git LFS: i 30 kit e armi di prova col look segnaposto, il nuovo kit, mod e zaino).</li>
+        <li>Build completa da Rider (nuovi plugin <code>GSTNKitMods</code>, <code>GSTNKitModsEditor</code>, <code>GSTNBackpack</code>, <code>GSTNBackpackPickups</code> e header cambiati).</li>
+      </ol>
+      <div class="note">Fast-forward da <code>747ce8b9</code>, niente force. Superato ogni volta che arriva un tip più nuovo: usa sempre lo sha più recente scritto qui. <strong>Se fai il passaggio a 5.9 (punto 0), salta questo push: è già dentro.</strong></div></label></li>
+  </ul>
+</section>
+
+<section>
+  <h2>2 · Editor (salva tu con Ctrl+S)</h2>
+  <ul>
+    <li><input type="checkbox" id="ed-m11-loadout-screen"><label for="ed-m11-loadout-screen"><strong>Prova la schermata del carico prima della missione</strong> (M11, portatile, branch <code>claude/project-thread-ulc64s</code>, che contiene anche zaini e cupola). Scegli kit, speciali, mod e zaino col pad prima di giocare; in partita poi il kit cambia solo raccogliendolo. Si apre da sola nell'hub; l'ho vista aprirsi da sola (24 kit, riga zaino) ma <strong>nessuno l'ha usata col pad</strong>. Dopo il merge di questo branch e una build: <span class="new">nuovo</span>
+      <ol class="steps">
+        <li><code>L_Test_Hub</code>, Play (listen, anche con più giocatori). Appena compari, ogni giocatore vede nella sua finestra il pannello <strong>SCEGLI IL TUO KIT</strong>; il personaggio resta fermo finché è aperto.</li>
+        <li><strong>Levetta su/giù</strong> = riga (Kit, Speciale, Mod, Zaino: compaiono solo quelle che il kit permette), <strong>levetta destra/sinistra</strong> = cambia valore (salta quelli non validi). Le righe Mod compaiono con un kit che ha slot per mod (per esempio <code>KIT_Test_Modded</code>).</li>
+        <li><strong>A</strong> = conferma: il carico arriva al server e lo hai subito; resta salvato per la prossima volta. <strong>B</strong> = esci senza cambiare.</li>
+        <li>Per riaprirla in qualsiasi livello: console (tasto <code>`</code>) <code>GSTN.LoadoutMenu</code>.</li>
+      </ol>
+      <div class="note">Tutto da dati, nessun Blueprint: i kit, le mod e gli zaini che crei negli asset compaiono da soli (nome del kit = <code>Display Name</code> del kit, mod e zaini col nome dell'asset). In quali livelli si apre da sola: <code>Plugins/GSTNLoadoutMenu/Config/DefaultGSTNLoadoutMenu.ini</code> o il pezzo <em>Loadout screen</em> di un asset <code>GSTN_GameRules</code>. Tasti A/B: righe <code>Menu.Confirm</code> e <code>Menu.Back</code> in <code>DefaultGSTNInput.ini</code>. Mancano (dopo): "tutti pronti" prima di partire, arma di supporto e super, anteprima del personaggio. Dettagli: <code>docs/notes/handovers/m11-slice20.md</code>.</div></label></li>
+    <li><input type="checkbox" id="ed-m11-l7b-backpacks"><label for="ed-m11-l7b-backpacks"><strong>Prova jet-pack e zaino cupola</strong> (M11 L7b-L7d, portatile, ultimo branch <code>claude/project-thread-wmlass</code>, che contiene anche L7b e L7c). <strong>Nessuno l'ha visto in PIE</strong>: solo test automatici. I due zaini di prova esistono già: <code>/Game/GAS/Backpacks/DA_Backpack_JetPack</code> e <code>DA_Backpack_ShieldDome</code>. Facoltativo, dopo il merge di questo branch e una build: <span class="new">nuovo</span>
+      <ol class="steps">
+        <li>Metti uno dei due su una pickup dello hub (payload <code>Backpack</code>) o nel carico, come lo zaino di prova <code>BPK_Test_JetPack</code>, e prova in una partita.</li>
+        <li><strong>Jet-pack</strong>: un salto in aria in più; dopo un salto, tieni A mentre scendi = discesa lenta (gravità 0,25, max 300 cm/s). Numeri da tarare nell'asset (<em>Movement</em>).</li>
+        <li><strong>Cupola</strong>: a terra, schivata premuta con lo stick fermo = cupola di 4 m finché tieni premuto (max 10 s), 2 cariche, una torna ogni 20 s; con lo stick inclinato resta la schivata. Blocca ogni colpo che arriva da fuori (chi è dentro può colpire fuori). Chi la colpisce da fuori corpo a corpo rimbalza indietro: di default 700 cm/s per 12 frame, dritto fuori dalla cupola. Si tara nell'asset, traccia <em>Backpack Dome → Pushback</em> (velocità, frame, direzione: fuori dalla cupola oppure indietro lungo il colpo). Vale anche per i minion. I proiettili si fermano e basta. Niente grafica della cupola per ora.</li>
+      </ol></label></li>
+    <li><input type="checkbox" id="ed-m11-l10-ranger"><label for="ed-m11-l10-ranger"><strong>Prova il kit TIRATORE e la mod POTENZA</strong> (M11 L10, portatile, branch <code>claude/laptop-m11-l10</code>, pushato come <code>claude/project-thread-60cg1f</code>). In PIE l'ho fatto solo da script: lo sparo mirato colpisce, la mod arriva col kit raccolto, l'arma di supporto resta a te nel cambio kit. <strong>Nessuno l'ha guardato col pad.</strong> Facoltativo, dopo il merge di questo branch e una build: <span class="new">nuovo</span>
+      <ol class="steps">
+        <li><code>L_Test_Hub</code>, <code>h.prepare()</code> come nella voce del playtest dei kit, Play. Nella fila dei tre kit (8 m avanti) ci sono due kit in più senza pedana: a sinistra <strong>TIRATORE</strong>, a destra <strong>TIRATORE + MOD POTENZA</strong>.</li>
+        <li>Prendi TIRATORE (B tenuto). Accendi il reticolo (click dello stick destro) e premi <strong>RT</strong>: sparo istantaneo dove guarda la camera, anche in alto e in basso (max 60°), 6 danni, 50 m. Col reticolo spento RT non fa niente (il kit medio non ha un forte suo).</li>
+        <li>Prendi TIRATORE + MOD POTENZA: jab e speciale hanno hitbox più grandi (x1,4), colpiscono più forte e sono più lenti (x1,2). Il kit che lasci a terra resta senza mod.</li>
+        <li>Pedane e scritte per i due kit nuovi: rilancia lo script della mappa dell'hub (<code>Tools/GAS/build_test_hub_map.py</code>) e salva tu la mappa; senza, i kit compaiono lo stesso, solo senza pedana.</li>
+      </ol>
+      <div class="note">Numeri segnaposto: sparo in <code>UGSTN_GA_AimedHitscanShot</code> (o una sua figlia Blueprint), mod e kit in <code>Tools/GAS/setup_m11_ranger_content.py</code> (rilancialo a editor chiuso). Lo sparo non ha recupero: spari quanto premi. Dettagli: <code>docs/notes/handovers/m11-slice17.md</code>.</div></label></li>
+    <li><input type="checkbox" id="ed-m11-mods"><label for="ed-m11-mods"><strong>Guarda mod e zaino col pad</strong> (M11 L1-L8). Io li ho visti in PIE solo da script: il kit a terra con il mod si prende tenendo B (l'impianto sulla schiena passa da giallo a blu), lo zaino a terra pure, e il carico finale ha kit, mod e zaino. <strong>Non ho visto lo zaino addosso</strong> (l'impianto segnaposto è un cubo grande che copre la schiena e la testa) né la mossa più lenta (la mossa di prova non ha animazione). Facoltativo, dopo il push del punto 1: <span class="new">nuovo</span>
+      <ol class="steps">
+        <li>Content Browser, <code>/Game/GASNPPTest/Combat</code>: tasto destro su <code>MOD_Test_LongBlade</code> → <strong>Preview on kit</strong> → <code>KIT_Test_Modded</code> → una mossa. Si apre la timeline derivata (tutto x1,5 più lungo) in una finestra sua; nel viewport scegli kit o skin per vedere il personaggio. Chiudila senza salvare (è in <code>/Temp</code>).</li>
+        <li>Sempre lì: tasto destro su <code>KIT_Test_Modded</code> → <em>Validate</em>, poi <em>Validate all</em> dal pannello del M5: guarda se le righe <code>Mod.*</code> sono chiare.</li>
+        <li>Lo zaino ha solo il look (un cubo): un'abilità vera (jet-pack) richiede un Blueprint d'abilità, da fare quando decidi come si comporta.</li>
+      </ol>
+      <div class="note">Mod, zaino e kit di prova sono dati creati da <code>Tools/GAS/setup_kit_mod_test.py</code> (rilancialo a editor chiuso). Dettagli e immagini: <code>docs/notes/handovers/m11-verify-1.md</code>, <code>docs/notes/reviews/m11-verify/</code>. Lo snippet Python della voce "Tasti per giocatore" usa <code>SubsystemBlueprintLibrary</code>, che in questa build non esiste: darà errore.</div></label></li>
+    <li><input type="checkbox" id="ed-io1-keys"><label for="ed-io1-keys"><strong>Tasti per giocatore</strong> (IO-1): ogni giocatore locale, anche in split screen, ha i suoi tasti fisici, salvati nel suo file (<code>GSTNInputBindings_P0</code>, <code>_P1</code>…). Default = come oggi; la rete e i bottoni logici non cambiano. Non c'è ancora il menu: il sistema è pronto per lui (<code>UGSTN_KeyBindingsSubsystem</code>: lista, cambia, reset, salva, carica). <strong>Nessuno l'ha provato in PIE.</strong> Prova facoltativa, dopo il push e la build del punto 1: <span class="new">nuovo</span>
+      <ol class="steps">
+        <li>Play (listen). Nella console Python incolla:
+          <div class="cmd" id="cmd6">import unreal; w=unreal.EditorLevelLibrary.get_game_world()
+s=unreal.SubsystemBlueprintLibrary.get_local_player_subsystem(unreal.GameplayStatics.get_player_controller(w,0), unreal.GSTN_KeyBindingsSubsystem)
+for r in s.list_bindable_mappings(): print(r.action, r.default_key, r.current_key)</div>
+          <button class="copy" data-target="cmd6" type="button">Copia</button></li>
+        <li>Scegli una riga (per esempio il salto) e spostala: <code>s.rebind(&lt;action&gt;, &lt;default_key della riga&gt;, unreal.Key(key_name="J"))</code>. Il nuovo tasto fa l'azione, il vecchio no, solo per il giocatore 0. Lo snippet non è stato provato: se dà errore dimmelo.</li>
+        <li><code>s.reset_all_to_default()</code> per tornare come prima. Niente da salvare.</li>
+      </ol></label></li>
+    <li><input type="checkbox" id="ed-buttons-data"><label for="ed-buttons-data"><strong>Dove cambi un tasto</strong> (IO-2): un solo <strong>layout dei bottoni</strong> per tutti i plugin, niente più tasti in Project Settings. Default uguali a oggi (B prendi/posa, RT lancia, B tenuto cambia kit). <strong>Nessuno l'ha provato in PIE col pad.</strong> <span class="new">nuovo</span>
+      <ol class="steps">
+        <li><strong>Tasto fisico o del pad → bottone logico</strong> (<code>Input.Button.Interact</code>, <code>Input.Button.Strong</code>…): Input Action e mapping context in <code>Content/Input</code>.</li>
+        <li><strong>Bottone logico → azione</strong>: il layout dei bottoni. Default in <code>Plugins/GSTNInput/Config/DefaultGSTNInput.ini</code> (sezione <code>GSTN_ButtonLayout</code>): <code>Held.PickupDrop</code> (B), <code>Held.Throw</code> (RT), <code>Held.KitSwap</code> (B tenuto), <code>Mount.Interact</code>, <code>Mount.Crouch</code>, <code>Spin.Drill</code>, <code>Drill.Exit</code>, <code>Surface.LaunchBoost</code>. Per una modalità o un livello: Content Browser → Data Asset → <code>GSTN_GameRules</code>, aggiungi il pezzo <strong>Button layout</strong> e scrivi le righe da cambiare. <span class="new">nuovo</span></li>
+        <li><strong>Forma intera di un comando</strong> (tenuto, rilascio, combinazione): <em>GSTN Held → Input | Buttons → Slot Overrides</em>, come prima. Cambio kit: <code>Hold Seconds</code> in <code>DefaultGSTNHeld.ini</code> (KitSwap).</li>
+        <li><strong>Lanci della presa</strong>: <em>GSTN Link → Throws</em> (<code>Throw Input Mode</code>, <code>Throw Slot Overrides</code>), come prima.</li>
+        <li>Vale dal prossimo cambio kit o Play. Restano fissi nel codice: scudo (parata, tech), i tasti delle prese di GSTNLink e i set standard e movimento di GSTNCombat: elenco in <code>docs/notes/handovers/io-2.md</code>. Un layout scelto da un asset GameRules può non arrivare ai kit già caricati (limite noto, stesso file). Nessuno ha provato in PIE a spostare un tasto.</li>
+      </ol></label></li>
+    <li><input type="checkbox" id="ed-kit-playtest"><label for="ed-kit-playtest"><strong>Playtest dei kit col pad</strong> (M11 K4: raccoglie le prove delle slice 1, 2, 3 e 3b). Serve il push e la build del punto 1. <strong>Nessuno l'ha ancora visto in PIE né provato col pad</strong>: i test automatici premono i tasti dal codice e controllano che scambio e lanci vadano uguali su tutte le macchine (anche con il 2 % di pacchetti persi e col server dedicato), ma nessuno ha guardato scritte, archi, animazioni e sensazione. <span class="new">nuovo</span>
+      <ol class="steps">
+        <li>Apri l'editor nella cartella principale <code>GASP_Giustino2</code> e la mappa <code>L_Test_Hub</code>.</li>
+        <li>Nella console Python (Output Log, menu a sinistra su <em>Python</em>) incolla:
+          <div class="cmd" id="cmd5">import sys; sys.path.insert(0, r"C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2\Tools\GASNPPTest"); import test_hub as h
+h.prepare()</div>
+          <button class="copy" data-target="cmd5" type="button">Copia</button></li>
+        <li>Premi Play (listen, 3 giocatori) e aspetta circa 4 secondi: sulle 7 pedane in fila compaiono i kit a terra col nome sopra; tutti partite con <code>KIT_Test_Hits</code>. Davanti alla partenza, circa 8 m avanti, c'è anche una fila di tre kit senza pedana: a sinistra <code>KIT_Test_Light</code>, al centro <code>KIT_Test_Medium</code>, a destra <code>KIT_Test_Heavy</code>.</li>
+        <li><strong>Cambio kit</strong> (finestra del giocatore 0): vai sulla pedana <strong>PRESE</strong>. A 1,5 m, guardando il kit, compare la scritta gialla <strong>"Tieni B: KIT_Test_Link"</strong>. B corto = niente cambio. <strong>B tenuto</strong> mezzo secondo e rilasciato = hai <code>KIT_Test_Link</code> e sulla pedana resta il tuo. Rifallo per tornare indietro. Se stavi attaccando, la mossa si interrompe nel frame del cambio.</li>
+        <li><strong>Vince la cosa inquadrata</strong>: console dell'host (tasto <code>`</code>) <code>gstn.Held.Spawn 0</code>, porta il cubo accanto a una pedana e gira lo stick sinistro: verso il cubo compare la "B" e B lo prende, verso il kit compare "Tieni B".</li>
+        <li><strong>I tre kit</strong>: prendi in fila leggero, medio e pesante (B tenuto). Per ognuno corri e salta (leggero veloce con due salti in aria, medio normale, pesante lento e pesante in caduta), <strong>X</strong> = jab su un manichino, <strong>speciale</strong> (leggero lancia in alto, medio calcio laterale, pesante schianto intorno).</li>
+        <li><strong>Lanci alla Smash</strong>: porta il giocatore 1 (sua finestra) davanti al giocatore 0 e afferralo con <strong>B</strong> corto, oppure con <strong>speciale + accovacciato</strong>. Col leggero e col medio non si solleva: stick <strong>avanti</strong> o <strong>indietro</strong> = lancio, <strong>A</strong> = su, <strong>accovacciati</strong> = giù. Uno stick già tenuto mentre afferri non lancia: lascialo e spingilo di nuovo. Confronta gli archi (leggero bassi e piatti, medio classici, pesante ripidi e lontani).</li>
+        <li>Col <strong>pesante</strong> il giocatore 1 si solleva: lo stick mira e <strong>RT</strong> lo lancia come un oggetto (tap = verso lo stick, tenuto = reticolo e camera); <strong>A</strong> e <strong>accovacciati</strong> restano i lanci su e giù. Presa più lunga (1,5 / 2 / 3 s).</li>
+        <li><strong>Da un client</strong>: rifai cambio kit e un lancio dalla finestra del giocatore 1 contro il giocatore 2. Deve essere uguale, senza scatti.</li>
+        <li><strong>Kit alla morte</strong>: dalla finestra del giocatore 1 porta il giocatore 0 al KO. Il suo kit cade dove muore, lui torna a <code>KIT_Test_Hits</code>, il kit a terra sparisce dopo 30 s.</li>
+        <li><strong>Cambia un tasto</strong> (facoltativo, per vedere che sono dati): ferma il Play, in <code>Plugins/GSTNInput/Config/DefaultGSTNInput.ini</code> cambia la riga <code>Held.KitSwap</code> in un altro bottone (per esempio <code>Input.Button.Special</code>), riapri l'editor e Play: ora il kit si cambia tenendo quel tasto (la pressione fa partire anche lo speciale: serve solo a vedere che il tasto si sposta). Rimetti <code>Input.Button.Interact</code> alla fine. Gli altri tasti: le righe <code>Held.*</code> dello stesso file (B prendi/posa, RT lancia) e <em>GSTN Link → Throws</em> (<code>Throw Input Mode</code>: Stick, Stick Plus Special, Buttons).</li>
+        <li>Ferma il Play, <code>h.restore()</code>. Niente da salvare. Dimmi: scritta e cambio chiari? archi dei lanci giusti per ogni kit? differenza tra i tre kit abbastanza forte? scatti da client?</li>
+      </ol>
+      <div class="note">Numeri e animazioni sono <strong>segnaposto</strong>: si cambiano in <code>Tools/GAS/setup_test_kit_archetypes.py</code> (rilancialo a editor chiuso) o nei Blueprint <code>GA_Light_*</code>, <code>GA_Medium_*</code>, <code>GA_Heavy_*</code> in <code>/Game/GASNPPTest/Combat/Archetypes</code>; statistiche nei kit (<code>Stats</code>). Su <code>KIT_Test_Link</code> i quattro lanci sono lo stesso lancio di prova. Di default un combattente normale con <code>KIT_Test_Link</code> si solleva (capacità 100): per lanciarlo con lo stick <em>GSTN Held → Thrown Enemies → Kit Throws While Lifting</em> = <code>All</code>. Scelte del cambio kit in <em>GSTN Held → Kits</em> (<code>Hold Seconds</code>, <code>Takes Focused Kit</code>, <code>Death Drop</code>, <code>Respawn Kit</code>, durata, <code>Show Prompt</code>).</div></label></li>
+    <li><input type="checkbox" id="ed-held-windup"><label for="ed-held-windup"><strong>Prova il caricamento del lancio in PIE, nelle due modalità</strong> (M10 slice 10). Serve il push e la build del punto 1. Nessuno l'ha ancora visto in PIE: i test automatici usano un lancio dal server, il tasto RT vero passa dalla versione predetta. <span class="new">nuovo</span>
+      <ol class="steps">
+        <li>Apri l'editor nella cartella principale <code>GASP_Giustino2</code> e la mappa <code>L_Test_Hub</code>.</li>
+        <li>Nella console Python (Output Log, menu a sinistra su <em>Python</em>) incolla:
+          <div class="cmd" id="cmd4">import sys; sys.path.insert(0, r"C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2\Tools\GASNPPTest"); import test_hub as h
+h.prepare()</div>
+          <button class="copy" data-target="cmd4" type="button">Copia</button></li>
+        <li>Premi Play (listen, 3 giocatori). Nella console della finestra dell'<strong>host</strong> (tasto <code>`</code>): <code>gstn.Held.Spawn 0</code>, poi <code>gstn.Held.Debug 1</code> (cerchi colorati sugli oggetti: verde a terra, giallo in mano, rosso in volo; puntini bianchi = traiettoria).</li>
+        <li>Nella finestra del giocatore 0 prendi il cubo con <strong>B</strong>.</li>
+        <li><strong>Modalità istantanea</strong>: console host <code>gstn.Held.Windup 0</code>. <strong>RT tap</strong>: il cubo parte nel frame in cui rilasci, come prima.</li>
+        <li><strong>Modalità con caricamento</strong>: console host <code>gstn.Held.Windup 30</code> (30 frame = 0,48 s). Riprendi il cubo, <strong>RT tap</strong>: parte l'animazione segnaposto (la spinta in avanti del sample, non è un lancio vero), il cubo resta in mano e parte dopo mezzo secondo. Durante il caricamento puoi ancora girare lo stick: la direzione è quella del momento in cui l'oggetto lascia la mano.</li>
+        <li>Con caricamento, <strong>RT tenuto</strong> (reticolo) e rilascio: il reticolo resta finché il cubo non parte, il cubo va dove guarda la camera in quell'istante.</li>
+        <li><strong>Colpito durante il caricamento</strong>: imposta <code>gstn.Held.Windup 90</code> (1,4 s), riprendi il cubo, premi RT e subito nella console host <code>gstn.Projectile.Ability 1 0</code> (un proiettile dal giocatore 1 a te). Il lancio si annulla, l'animazione si ferma e il cubo cade davanti a te.</li>
+        <li>Prova anche da un <strong>client</strong> (finestra del giocatore 1 o 2): stesso comportamento, il cubo deve restare in mano durante il caricamento e partire senza scatti.</li>
+        <li><strong>Nemici sollevati</strong>: il secondo numero vale per loro, per esempio <code>gstn.Held.Windup 30 20</code>. Afferra un altro giocatore con B e lancialo con RT: parte dopo 20 frame.</li>
+        <li>Finito: <code>gstn.Held.Windup 0</code> (torna istantaneo), <code>gstn.Held.Debug 0</code>, ferma il Play, <code>h.restore()</code>. Niente da salvare: <code>gstn.Held.Windup</code> cambia il valore solo finché l'editor è aperto.</li>
+      </ol>
+      <div class="note">Per tenerlo: <em>Project Settings → Plugins → GSTN Held → Throw → Default Throw Windup</em> (<code>Release Frames</code>, <code>Montage</code>, <code>Montage Play Rate</code>) per tutti gli oggetti, oppure in una definizione d'oggetto <code>Override Windup</code> + <code>Windup</code> per uno solo; per i nemici <em>Thrown Enemies → Windup</em>. Il frame di rilascio decide quando parte l'oggetto, la montage è solo la figura: metti il momento del rilascio della tua animazione a <code>Release Frames / 62,5</code> secondi.</div></label></li>
+    <li><input type="checkbox" id="ed-held-pie3"><label for="ed-held-pie3"><strong>Prova gli oggetti coi tasti veri in PIE</strong> (M10 slice 3-9). Serve il push e la build del punto 1. Cubo segnaposto, prompt "B" provvisorio, valori di prova.
+      <ol class="steps">
+        <li>Apri l'editor nella cartella principale <code>GASP_Giustino2</code> e la mappa <code>L_Test_Hub</code>.</li>
+        <li>Nella console Python (Output Log, menu a sinistra su <em>Python</em>) incolla:
+          <div class="cmd" id="cmd3">import sys; sys.path.insert(0, r"C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2\Tools\GASNPPTest"); import test_hub as h
+h.prepare()</div>
+          <button class="copy" data-target="cmd3" type="button">Copia</button></li>
+        <li>Premi Play (listen, 3 giocatori: lo imposta <code>h.prepare()</code>). Tutti hanno il kit <code>KIT_Test_Hits</code>, che ha già i tasti degli oggetti.</li>
+        <li>Nella console della finestra dell'<strong>host</strong> (tasto <code>`</code>): <code>gstn.Held.Spawn 0</code>. Compare un cubo davanti al giocatore 0. La "B" compare circa 0,6 s dopo che il cubo si è fermato (anche dopo una posa o un lancio): è il ritardo di rete del bersaglio.</li>
+        <li>Nella finestra del giocatore 0 avvicinati: sopra il cubo compare una <strong>"B"</strong> (sei a portata). Premi <strong>B</strong> (Interact): lo prendi, la "B" sparisce.</li>
+        <li><strong>B</strong> di nuovo: lo posi 60 cm davanti. Riprendilo con B.</li>
+        <li><strong>RT tap</strong> (tasto forte, premi e rilascia subito): il cubo parte verso dove punta lo stick sinistro (davanti a te con lo stick fermo). Riprendilo.</li>
+        <li><strong>RT tenuto</strong> (più di 12 frame): compare il reticolo; al rilascio il cubo va dove guarda la camera.</li>
+        <li>Slice 4: metti il cubo accanto a un altro giocatore e avvicinati a entrambi: B ha un solo bersaglio (a pari distanza la presa del giocatore vince sul cubo). Gira lo stick sinistro verso l'uno o l'altro per scegliere.</li>
+        <li>Slice 5: fai un secondo cubo (<code>gstn.Held.Spawn 0</code> di nuovo, spostati un po' prima) e mettiti tra i due: gira lo stick verso uno dei due, la "B" va sopra quello e B prende <strong>proprio quello</strong>.</li>
+        <li>Slice 7, le tue due impostazioni (Project Settings → Plugins → GSTN Held, sezione Interact, oppure <code>Plugins/GSTNHeld/Config/DefaultGSTNHeld.ini</code>): <code>Pickup Takes Focused Object</code> spento = B prende sempre il più vicino, l'inquadrato non conta; <code>Focus Miss Falls Back To Nearest</code> spento = se l'oggetto inquadrato lo prende prima un altro, la tua mano si chiude a vuoto. Tutte e due accese di default (come prima).</li>
+        <li>Slice 8, esplosione: <code>gstn.Held.Spawn 0 120 Light 5 Explode</code>. Lancialo contro un giocatore o il pavimento: esplode dove tocca (raggio 2,5 m), colpisce tutti quelli vicini spingendoli via dal centro, poi sparisce e ricompare dopo 3 s.</li>
+        <li>Slice 8, mira di spalla: RT tenuto ora chiede alla camera di andare sopra la spalla e il lancio va dritto verso il mirino (senza l'alzo di 15°). La camera però <strong>non si sposta ancora</strong>: la camera GSTNCamera non è su nessun pawn (serve una scelta, vedi punto 3). Vedi il reticolo e un lancio più basso di prima; se non ti piace, Project Settings → Plugins → GSTN Held → <code>Aim View</code> = <code>Keep View</code> torna a prima.</li>
+        <li>Slice 8, da un <strong>client</strong>: con RT il cubo deve lasciare la mano subito e volare senza scatti quando arriva quello dell'host (prima restava in mano un attimo).</li>
+        <li>Slice 9, nemici lanciati: avvicinati a un altro giocatore e afferralo con <strong>B</strong> (la presa normale). Ora <strong>RT tap</strong> lo lancia verso lo stick sinistro e <strong>RT tenuto</strong> mostra il reticolo e lo lancia verso la camera, come un oggetto. Vola via e colpisce chi incontra (fino a 3, credito a te); non può essere riafferrato per 1 s. <strong>B</strong> durante la presa lo posa (il rilascio della presa). In <em>Project Settings → Plugins → GSTN Held → Thrown Enemies</em>: <code>Lift Rule</code> = <code>Weight Vs Capacity</code> (default: si solleva chi pesa al massimo 100, un combattente normale) o <code>Any Grabbed</code> (tutti); il tag <code>Combat.Held.NoLift</code> su un nemico lo vieta sempre, e allora RT resta il lancio della presa. Il corpo vola col suo movimento e la hitbox con il colpo: possono separarsi un po', guardalo.</li>
+        <li>Lontano dal cubo (niente "B") il tasto B fa quello di prima (presa, raccolta kit tenendo premuto). Senza oggetto in mano RT fa lo smash forte come prima.</li>
+        <li>Slice 6, taglie: <code>gstn.Held.Spawn 0 120 Medium 50</code> fa un cubo Medio da 50 kg (carico pieno con la capacità di default di 50 kg). Prendilo: corri e salti al 70 %, niente scudo né attacchi aerei. Con <code>Heavy 50</code> solo cammini (metà velocità), posi e lanci. <code>Huge 100</code>: B non lo prende (troppo pesante), prende l'altro cubo se c'è.</li>
+        <li>Slice 6, impatti: quinto argomento <code>Break</code>, <code>Bounce</code> o <code>Stick</code>, per esempio <code>gstn.Held.Spawn 0 120 Light 5 Bounce</code>. Lancialo contro il pavimento o un muro: Bounce rimbalza (fino a 2 volte), Stick resta attaccato dove tocca (anche al muro, e si riprende da lì), Break sparisce e dopo 3 s ricompare dove si era fermato la prima volta. Da slice 7 un rimbalzo non colpisce di nuovo chi il lancio ha già colpito.</li>
+        <li><code>gstn.Held.Report</code> in ogni finestra: <code>HeldHandReport ... carrying=1 target=0 size=1 walk=...</code> dice chi tiene qualcosa, chi ha un oggetto a portata, la taglia e la velocità di corsa. Ferma il Play, <code>h.restore()</code>. Niente da salvare.</li>
+      </ol>
+      <div class="note">Quali kit hanno i tasti: <code>KitsWithDefaultBindings</code> in <code>Plugins/GSTNHeld/Config/DefaultGSTNHeld.ini</code> (o Project Settings → Plugins → GSTN Held). Ora <code>KIT_Test_Hits</code>, <code>KIT_Test_Link</code> e i tre kit della slice 3; c'è l'opzione "tutti i kit". Nessun Blueprint da toccare. Con i comandi di prima (<code>gstn.Held.Pickup 0</code>, <code>Drop</code>, <code>Throw 0 1</code>) funziona ancora tutto anche su <code>DefaultLevel_Harness</code>.</div></label></li>
+    <li><input type="checkbox" id="ed-held-validate"><label for="ed-held-validate">Le definizioni d'oggetto (<code>UGSTN_HeldObjectDefinition</code>) ora si controllano con <em>Validate</em> nel Content Browser: errore senza raggio di raccolta o con velocità di lancio 0; avviso per una taglia che non esiste, un caricamento senza montage o che rilascia dopo la fine della montage. <span class="new">nuovo</span></label></li>
+    <li><input type="checkbox" id="ed-friendly-sources"><label for="ed-friendly-sources">Fuoco amico per modalità (M10 slice 7): nelle regole di combattimento della modalità (<code>UGSTN_CombatRules</code>, Teams) c'è <code>Friendly Fire Sources</code>. Metti <code>Combat.Source.Thrown</code> e gli oggetti lanciati colpiscono anche gli alleati, mentre i colpi corpo a corpo restano sicuri. Vuoto (default) = alleati ignorati, come il piano. <code>Friendly Fire</code> acceso vale ancora per tutto.</label></li>
+    <li><input type="checkbox" id="ed-recoil-pie"><label for="ed-recoil-pie"><strong>Guarda i recoil segnaposto in PIE</strong> con la mossa di test <code>KIT_Test_StrikeKinds</code> (solo test, non è una mossa vera: uno swing da destra ai frame 8-14, un affondo dritto ai frame 22-26, nessun recoil proprio). Serve il push e la build del punto 1.
+      <ol class="steps">
+        <li>Apri l'editor nella cartella principale <code>GASP_Giustino2</code> e apri la mappa <code>L_Test_Hub</code>.</li>
+        <li>Nella console Python (Output Log, menu a sinistra su <em>Python</em>) incolla:
+          <div class="cmd" id="cmd2">import sys; sys.path.insert(0, r"C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2\Tools\GASNPPTest"); import test_hub as h
+h.prepare()</div>
+          <button class="copy" data-target="cmd2" type="button">Copia</button></li>
+        <li>Premi Play (listen, 3 giocatori: lo imposta <code>h.prepare()</code>) e aspetta che compaiano i manichini.</li>
+        <li>Nella console Python: <code>h.strike_kinds(0)</code>. Dà il kit di test al giocatore 0, fa rimbalzare ogni colpo (bersaglio duro forzato) e mette un manichino 120 cm davanti a te.</li>
+        <li>Clicca nella finestra di gioco del giocatore 0 e premi <strong>attacco</strong> (tasto sinistro del mouse, o X sul pad). Lo swing prende il manichino: la lama finisce lo swing, poi parte il rinculo <strong>Swing</strong> (montage <code>…shove_stand_B_A…</code>, 30 frame) al posto del recupero.</li>
+        <li>Per l'affondo: <strong>accendi il reticolo</strong> (click dello stick destro), poi tieni lo <strong>stick destro tutto a destra</strong> mentre premi attacco (sterzata di 20° durante l'avvio). Senza reticolo lo stick destro non gira più il personaggio: in alternativa gira il personaggio di circa 30° a destra prima di attaccare. Lo swing passa accanto al manichino, l'affondo lo prende e parte subito il rinculo <strong>Stab</strong> (<code>…shove_stand_B_V…</code>, 24 frame).</li>
+        <li>Finito: <code>h.strike_kinds(0, False)</code> (kit normale, niente rimbalzo forzato), ferma il Play, poi <code>h.restore()</code>. Nessun asset da salvare.</li>
+      </ol>
+      <div class="note">Se uno swing prende la faccia "di taglio" (caso B) non c'è rinculo: è previsto. Le montage sono del sample (UEFN Mannequin): se mancano resta solo la durata del rinculo.</div></label></li>
+    <li><input type="checkbox" id="ed-steer"><label for="ed-steer">Prova la <strong>sterzata con lo stick destro</strong> e il <strong>reticolo</strong> in PIE con un pad. Click dello stick destro = reticolo on/off (cerchio bianco dove guarda la camera, solo PvE e TDM). <strong>Reticolo spento</strong>: lo stick destro muove solo la camera, il sinistro gira il personaggio come prima. <strong>Reticolo acceso</strong>: durante l'avvio di un attacco lo stick destro gira la mossa fino a <code>Max Steer Degrees</code> (20° di default) e vince sul sinistro; a stick destro fermo la mossa resta dove è partita. Freccia gialla ai piedi quando muovi lo stick destro. Grafica provvisoria (linee di debug).</label></li>
+    <li><input type="checkbox" id="ed-strike-group"><label for="ed-strike-group"><code>Strike Kind</code> ora si imposta <strong>per gruppo di hitbox</strong>: su ogni traccia Hitbox della timeline spunta <code>Override Strike</code> e scegli Swing o Stab (categoria <code>Hitbox|Strike</code>). Una mossa slash + affondo = due tracce, una Swing e una Stab. Senza override il gruppo usa il valore della mossa (<code>Timeline|Ricochet</code>), che resta come default; finché tutto è Unspecified la mossa rimbalza subito come prima. Vale anche per pugni e calci: un gruppo di pugno marcato Swing rincula come una spada.</label></li>
+    <li><input type="checkbox" id="ed-recoil-group"><label for="ed-recoil-group">Recoil per attacco: sulla traccia Hitbox <code>Has Ricochet Response</code> → <code>Recoil Montage</code>, <code>Recoil Frames</code>, <code>Movement</code>. Ordine di ripiego: gruppo → mossa → arma → kit → default del progetto per tipo (Swing/Stab) in <em>Project Settings → GSTN Combat → Ricochet</em>.</label></li>
+    <li><input type="checkbox" id="ed-staboonly"><label for="ed-staboonly">Sui weakpoint interni (nucleo dentro un guscio) spunta <code>Stab Only</code> sulla hurtbox (angolo <code>Stab Max Angle Deg</code>, 30° di default) e mettila qualche cm fuori dal guscio. Ora conta il tipo del gruppo che colpisce, non della mossa.</label></li>
+    <li><input type="checkbox" id="ed-yard"><label for="ed-yard">Crea <code>L_MinionYard</code> con <code>setup_yard</code>.</label></li>
+    <li><input type="checkbox" id="ed-p10"><label for="ed-p10">Aggancio tinta P10: <code>GSTNPartsPresentation</code> non è ancora collegato alle parti vive.</label></li>
+    <li><input type="checkbox" id="ed-tm3"><label for="ed-tm3">Contenuto TM3: gamba cava + piastra imbullonata alla stazione 5 (passi in <code>docs/notes/handovers/m8-minion.md</code>).</label></li>
+    <li><input type="checkbox" id="ed-ltc"><label for="ed-ltc">Ricostruisci <code>L_Test_Combat</code> <span class="tag">facoltativo</span></label></li>
+    <li><input type="checkbox" id="ed-pair"><label for="ed-pair">Guarda la mossa in coppia (pair-move) in PIE.</label></li>
+    <li><input type="checkbox" id="ed-simproxy"><label for="ed-simproxy">In PIE prova <code>gstn.Net.SimProxySendEveryNTicks 2</code> e dimmi se vedi scatti (pop).</label></li>
+    <li><input type="checkbox" id="ed-proj"><label for="ed-proj">Test veloce in PIE: <code>gstn.Projectile.Fire</code> (sparo grezzo) oppure <code>gstn.Projectile.Ability 0 1</code> (via abilità): sparo → colpo → reazione della vittima.</label></li>
+    <li><input type="checkbox" id="ed-ghost"><label for="ed-ghost">Guarda il ghost del proiettile in PIE (server dedicato + 2 client) con 100-250 ms di lag: nella console di un client <code>gstn.Projectile.GhostFire</code>; il colpo deve partire subito, senza salto quando arriva quello dell'host. Confronto: <code>gstn.Projectile.PredictGhost 0</code> (parte un RTT dopo). Col binding del tasto di sparo vale lo stesso per lo sparo vero.</label></li>
+    <li><input type="checkbox" id="ed-harness"><label for="ed-harness">Sul desktop la suite harness completa su <code>DefaultLevel</code> è rossa già sulla base (il pawn cade, salti e scatti non partono): manca probabilmente il contenuto del pavimento nel worktree <code>GASP_Giustino2_m7</code>. Anche su <code>DefaultLevel_Harness</code> <code>kit_without_dodge</code> fallisce per lo stesso motivo (il pawn parte in caduta), e <code>hit_basic</code>/<code>hit_trade</code>/<code>hit_host</code> sono rossi perché la vittima nasce già a portata dell'attaccante (la fase di controllo colpisce). È la mappa, non il codice. Da controllare quando apri l'editor lì.</label></li>
+    <li><input type="checkbox" id="ed-oodle"><label for="ed-oodle">Dizionari Oodle: li riaddestri su ogni macchina quando servono (ricetta in <code>docs/notes/handovers/m8-hover-oodle.md</code>). <span class="tag">facoltativo</span></label></li>
+  </ul>
+</section>
+
+<section>
+  <h2>3 · Decisioni da prendere</h2>
+  <ul>
+    <li><input type="checkbox" id="dec-kit-throws"><label for="dec-kit-throws"><strong>Lanci alla Smash</strong> (M11 slice 2), scelte fatte da confermare dopo la prova: in 3D lo stick ha solo avanti e indietro, quindi <strong>su = salto, giù = accovacciato</strong>; con un nemico sollevabile lo stick mira il lancio M10 e i lanci avanti/indietro del kit sono spenti, su e giù restano (impostazione <code>Kit Throws While Lifting</code>: questa, <code>None</code> = solo lancio M10 come diceva il piano, <code>All</code>). Slice 3: la capacità ora è <strong>per kit</strong> (leggero 60, medio 90, pesante 200 contro peso 100 di un combattente normale), quindi solo il pesante solleva e gli altri due lanciano con lo stick. Anche la presa dura di più col pesante (1,5 / 2 / 3 s). Va bene così? <span class="new">nuovo</span></label></li>
+    <li><input type="checkbox" id="dec-kit-death"><label for="dec-kit-death"><strong>Kit alla morte</strong> (M11 slice 1): di default "il kit cade e lo perdi, torni a <code>KIT_Test_Hits</code>"; l'altra lettura (cade una copia, tu lo tieni) è pronta come impostazione. Dopo la prova dimmi quale tieni e con che kit si rinasce. In M12 diventa una regola della modalità. <span class="new">nuovo</span></label></li>
+    <li><input type="checkbox" id="dec-windup"><label for="dec-windup"><strong>Caricamento del lancio</strong> (M10 slice 10): dopo averlo provato, quale tieni di default, istantaneo (ora) o con caricamento, e quanti frame? Scelte già fatte, da confermare: la direzione si legge quando l'oggetto lascia la mano (puoi ancora correggere durante il caricamento); se ti colpiscono durante il caricamento niente lancio e l'oggetto cade; i nemici sollevati hanno la loro impostazione. <span class="new">nuovo</span></label></li>
+    <li><input type="checkbox" id="dec-camera"><label for="dec-camera"><strong>Camera di spalla</strong>: per farla muovere davvero col lancio mirato bisogna mettere la camera GSTNCamera sul pawn del giocatore (Blueprint) e decidere se comanda sempre o solo mentre miri (così la vista di default resta quella di GASP). Consiglio: solo mentre miri, in una fetta dedicata con le due verifiche aperte (ordine di tick con la rete, rotazione del controller). <span class="new">nuovo</span></label></li>
+    <li><input type="checkbox" id="dec-weak"><label for="dec-weak">Leve aperte sui weakpoint: scala hurtbox 1.3-1.5×, priorità weakpoint sul corpo, magnetismo leggero solo PvE (§6 di <code>docs/architecture/plans/precisione-weakpoint-2026-11-09.md</code>). Si può decidere dopo il primo test giocato.</label></li>
+    <li><input type="checkbox" id="dec-m10-feel"><label for="dec-m10-feel"><strong>Oggetti, sensazione</strong> (M10): archi e danni veri per tipo di oggetto, quanto deve durare il tap prima che diventi mira (ora 12 frame), quali stati fanno cadere l'oggetto (ora colpito, lanciato in aria, afferrato, KO). Dopo il playtest; intanto valori di prova.</label></li>
+    <li><input type="checkbox" id="dec-m10-kits"><label for="dec-m10-kits"><strong>Oggetti, quali kit</strong> (M10): ora hanno i tasti solo i kit di prova (<code>KIT_Test_Hits</code>, <code>KIT_Test_Link</code>). Tutti i kit con un'opzione, o una lista dei tuoi kit veri? Consiglio la lista finché non c'è il kit vero.</label></li>
+    <li><input type="checkbox" id="dec-m10-delay"><label for="dec-m10-delay"><strong>Oggetti, ritardo di ripresa</strong> (M10 slice 4): un oggetto posato o atterrato diventa bersaglio di B dopo 40 frame (0,64 s), il margine perché ogni client lo sappia prima di simularlo. Va bene, o lo vuoi più corto (rischio: un client predice la raccolta e poi viene corretto)? Valore <code>MinAgeFrames</code> in <em>Project Settings → GSTN Interact</em> (vale per tutti i record).</label></li>
+    <li><input type="checkbox" id="dec-m10-g6"><label for="dec-m10-g6"><strong>Oggetti, peso e taglie</strong> (M10 G6, fatto con valori di prova): quanto rallenta ogni taglia a carico pieno (ora Leggero -10 %, Medio -30 %, Pesante -50 % e niente salto, Enorme -70 %), quali oggetti si possono sollevare (ora solo l'Enorme chiede capacità; capacità di default 50 kg se il personaggio non ha <code>MaxCarryWeight</code>), forza del lancio per taglia (ora x1 / 0,85 / 0,7 / 0,5), cosa togliere con Medio e Pesante in mano (ora come il piano). Tutto in <code>Plugins/GSTNHeld/Config/DefaultGSTNHeld.ini</code> (<code>SizeClasses</code>) o Project Settings → Plugins → GSTN Held.</label></li>
+    <li><input type="checkbox" id="dec-m10-g9"><label for="dec-m10-g9"><strong>Nemici lanciati</strong> (M10 G9, valori di prova): si solleva chi pesa al massimo quanto la tua capacità (100 = un combattente normale; regola alternativa "tutti quelli afferrati" già pronta come opzione); hitbox del corpo 12 m/s, 45 cm, 14 danni, fino a 3 bersagli, più lento se pesante (x0,75 a pieno carico); non riafferrabile per 60 frame. I minion non si possono ancora afferrare, quindi niente lancio di minion. Va bene così? In <code>Plugins/GSTNHeld/Config/DefaultGSTNHeld.ini</code> (<code>ThrownEnemies</code>).</label></li>
+    <li><input type="checkbox" id="dec-m10-impact"><label for="dec-m10-impact"><strong>Oggetti, impatti</strong> (M10 slice 6): un oggetto Break si rompe anche colpendo un nemico. Va bene? Valori (rimbalzo 0,45, max 2, respawn 3 s) per oggetto. Il rimbalzo che colpiva di nuovo lo stesso bersaglio è sistemato in slice 7 (un colpo per bersaglio per lancio, opzione per oggetto).</label></li>
+  </ul>
+</section>
+
+<section>
+  <h2>4 · Animazioni da fare</h2>
+  <ul>
+    <li><input type="checkbox" id="an-throw"><label for="an-throw"><strong>Animazione di lancio</strong> (caricamento e rilascio) per gli oggetti e per i nemici sollevati. Ora c'è un <strong>segnaposto</strong>: la spinta in avanti del sample (<code>AM_M_relaxed_ragdoll_shove_stand_F_A</code>) in <em>Project Settings → Plugins → GSTN Held → Default Throw Windup</em>. Dimmi a che frame l'oggetto lascia la mano e lo metto in <code>Release Frames</code>. <span class="tag">segnaposto da sostituire</span> <span class="new">nuovo</span></label></li>
+    <li><input type="checkbox" id="an-recoil-kind"><label for="an-recoil-kind">Rinculo dopo il colpo su superficie dura, almeno uno per tipo: <strong>Swing</strong> e <strong>Stab</strong>. Ora c'è un <strong>segnaposto</strong>: le montage di spinta del sample (<code>M_relaxed_ragdoll_shove_stand_B_A__Montage</code> per Swing, <code>_B_V__</code> per Stab) in <em>Project Settings → GSTN Combat → Ricochet</em> (<code>Config/DefaultGSTNCombat.ini</code>). Vanno sostituite con le tue animazioni. Per un attacco speciale puoi mettere il suo recoil direttamente sul gruppo di hitbox. <span class="tag">segnaposto da sostituire</span></label></li>
+    <li><input type="checkbox" id="an-hand"><label for="an-hand">Blend di rotazione della mano per il riallineamento del piatto della lama (caso "faccia di taglio") <span class="tag">quando si arriva lì</span></label></li>
+  </ul>
+</section>
+
+<section>
+  <h2>5 · Pulizia branch (weekend)</h2>
+  <ul>
+    <li><input type="checkbox" id="br-1"><label for="br-1">Cancella su GitHub: <code>claude/netcode-confronto</code>, <code>claude/minion-control-valutazione</code>, <code>claude/entita-dinamiche-valutazione</code>, <code>claude/laptop-hitstop</code>, <code>claude/laptop-hitstop-2</code>, <code>claude/laptop-walkpen</code>, <code>claude/desktop-g11b</code>, <code>claude/desktop-g12b</code>, <code>claude/desktop-assets</code>, <code>claude/desktop-queue</code>, <code>claude/merge-feature-2026-11-08*</code>.</label></li>
+    <li><input type="checkbox" id="br-2"><label for="br-2">Dopo il push del punto 1: <code>claude/laptop-hover</code>, <code>claude/laptop-hover2</code>, <code>claude/laptop-netcode-34</code>, <code>claude/desktop-netcode-step3</code>, <code>claude/desktop-hover</code>, <code>claude/desktop-projectile-1</code>, <code>claude/desktop-projectile-2</code>, <code>claude/desktop-projectile-3</code>, <code>claude/desktop-weakpoint-1</code>, <code>claude/desktop-weakpoint-2</code>, <code>claude/desktop-weakpoint-3</code>, <code>claude/project-thread-dcewfp</code>, <code>claude/laptop-weakpoint-doc</code>, <code>claude/laptop-weakpoint-2b</code>, <code>claude/laptop-weakpoint-3b</code>, <code>claude/desktop-m10-1</code>, <code>claude/desktop-m10-2</code>, <code>claude/desktop-m10-3</code>, <code>claude/desktop-m10-4</code>, <code>claude/desktop-m10-5</code>, <code>claude/desktop-m10-6</code>, <code>claude/desktop-m10-7</code>, <code>claude/desktop-m10-8</code>, <code>claude/desktop-m10-9</code>, <code>claude/laptop-m11-plan</code>, <code>claude/desktop-m10-10</code>, <code>claude/desktop-m11-1</code>, <code>claude/desktop-m11-2</code>, <code>claude/desktop-m11-3</code>, <code>claude/desktop-m11-3b</code> (dentro <code>claude/desktop-m11-4</code>).</label></li>
+    <li><input type="checkbox" id="br-3"><label for="br-3">Sul portatile, branch locale vuoto da cancellare: <code>git branch -d claude/laptop-projectile-1</code></label></li>
+  </ul>
+</section>
+
+<section class="done">
+  <h2>Fatto</h2>
+  <ul>
+    <li>2026-11-13 · Push di <code>61086557</code> su <code>feature/gas-npp-5.8</code> (fatto da te): lavoro M11 di oggi su 5.9, editor e Play su <code>L_Test_Hub</code>.</li>
+    <li>2026-11-13 · Schermata del carico unita alla linea 5.9 senza conflitti, branch <code>claude/project-thread-tixkmv</code> (<code>3d684fba</code>). Portatile passato a UE 5.9 (Visual Studio aggiornato da te): build ok, headless 1584/0, suite 49/50 (<code>trampoline</code> verde rifatto da solo).</li>
+    <li>2026-11-13 · Lavoro M11 di oggi (L7b-L7d zaini, L9, L10, SWAP) unito alla linea 5.9; editor e Play su <code>L_Test_Hub</code>; zaini a terra nello hub. Headless 1583/0, suite 49/50 (<code>jump_squat</code> instabile, verde da solo). Branch <code>claude/project-thread-vevoas</code> (<code>61086557</code>).</li>
+    <li>2026-11-13 · Push di <code>8eab9ced</code> su <code>feature/gas-npp-5.8</code> (fatto da te): la linea è su Unreal 5.9.</li>
+    <li>2026-11-13 · M11 L10 (portatile): kit <code>KIT_Test_Ranger</code> con lo sparo mirato hitscan (reticolo + RT) e mod <code>MOD_Test_Power</code>, tutto da script, due kit in più nell'hub; il binding del tasto di sparo (vecchia voce "figlia Blueprint dello sparo") è fatto in automatico, senza Blueprint. Scenari nuovi in PIE: arma di supporto e Ex nel cambio kit, mod nel cambio kit, sparo mirato, tutti PASS; headless 1570/0, suite 50/50. Branch <code>claude/laptop-m11-l10</code> (<code>8d6ade33</code>).</li>
+    <li>2026-11-13 · Prova di Unreal 5.9 e preparazione del passaggio: 6 fix piccoli (toolset, fork GAS, voce doppia nel .uproject, impostazioni di build del gioco), build Editor, Game e Shipping ok, headless 1554/0, suite listen 50/50 due volte, dedicato 49/50. Tag <code>ue5.8-cut</code>. Branch <code>claude/desktop-ue59-1</code> (<code>8eab9ced</code>).</li>
+    <li>2026-11-12 · M11 verifica sul fisso delle fette L1-L8 del portatile: build Editor, Game e Shipping al primo colpo, headless 1554/0, look segnaposto su 30 kit e armi, primo mod (<code>MOD_Test_LongBlade</code>), primo zaino (<code>BPK_Test_JetPack</code>) e kit con slot (<code>KIT_Test_Modded</code>); in PIE presi tenendo B, anteprima del mod aperta. Branch <code>claude/desktop-m11-verify</code> (<code>7c6c441f</code>).</li>
+    <li>2026-11-12 · IO-2d: <strong>l'editor non crasha più quando lo chiudi</strong> (il plugin degli oggetti toccava le impostazioni input dopo che il motore le aveva già smontate). 3 chiusure pulite su 3. Headless 1514/0, suite di default 49/50 (<code>combat_spike</code> rosso una volta, verde rifatto da solo: instabile, non legato alla correzione), Shipping compila. Branch <code>claude/desktop-io-2d</code> (<code>b00a916e</code>).</li>
+    <li>2026-11-11 · Push di <code>747ce8b9</code> su <code>feature/gas-npp-5.8</code> (fatto da te).</li>
+    <li>2026-11-11 · IO-2: <strong>un solo layout dei bottoni</strong> (bottone logico → funzione), pezzo delle regole di gioco: sostituisce i tasti di GSTN Held in Project Settings (prendi/posa, lancia, cambio kit) e i tasti fissi nel codice di cavalcatura, spin, uscita dal trapano e lancio da superficie. Stessi tasti di oggi. Headless 1513/0, suite di default 50/50, Shipping compila. Restano scudo, prese e set standard (handover). Nessuno l'ha visto in PIE. Branch <code>claude/desktop-io-2</code> (<code>747ce8b9</code>).</li>
+    <li>2026-11-11 · GR-1: <strong>regole di gioco per modalità o livello</strong> (asset <code>GSTN_GameRules</code>, scelto dal server e mandato ai client), primo pezzo "Held objects" con i valori degli oggetti; default uguali a prima, non più in Project Settings. Headless 1512/0, suite 50/50, Shipping compila. Nessun asset creato né visto in PIE. Branch <code>claude/desktop-gr-1</code> (<code>b934f808</code>).</li>
+    <li>2026-11-11 · IO-1: <strong>tasti per giocatore locale</strong> (tue decisioni sulle opzioni input, piano in <code>docs/architecture/plans/input-opzioni-per-giocatore.md</code>): ogni giocatore locale ha i suoi tasti fisici e il suo salvataggio, API pronta per il menu, niente in Project Settings, nessun Blueprint. Test: due giocatori con tasti diversi, headless 1511/0, suite di default 50/50, Shipping compila, nessun ensure. Nessuno l'ha ancora visto in PIE. Branch <code>claude/desktop-io-1</code> (<code>769b1fe8</code>).</li>
+    <li>2026-11-11 · M11 K4: <strong>controllo prima del playtest</strong>. Kit (scambio con B tenuto, lanci con lo stick, i tre kit) 8/8 e oggetti 8/8 in listen 0 % e 2 % e col server dedicato 0 % e 2 % (il 2 % dedicato è nuovo), suite di default 50/50, headless 1508/0, nessun ensure. Le build del gioco (Development e Shipping) non compilavano per colpa di alcuni test che usavano funzioni solo-editor: sistemato, ora compilano tutte e tre le configurazioni. Nessuno l'ha ancora visto in PIE col pad: i passi sono nella voce "Playtest dei kit col pad". Branch <code>claude/desktop-m11-4</code> (<code>614a0cff</code>).</li>
+    <li>2026-11-11 · M11 slice 3b: i tasti degli oggetti (B prendi/posa, RT lancia) e del cambio kit (B tenuto) sono ora <strong>impostazioni</strong>, non codice, con gli stessi valori di oggi. Headless 1508/0, harness oggetti 8/8 e kit 8/8 listen 0 % e 2 % e dedicato 0 %, suite di default 50/50. Nessuno l'ha ancora visto in PIE. Branch <code>claude/desktop-m11-3b</code> (<code>253e11d2</code>).</li>
+    <li>2026-11-11 · M11 slice 3: <strong>tre kit di prova davvero diversi</strong> (leggero, medio, pesante): velocità, salto, peso, capacità di sollevare, controllo in aria, gravità, salti in aria, jab, speciale, durata della presa e 4 lanci con archi diversi, con animazioni segnaposto del sample. Creati da uno script, nessun Blueprint toccato a mano, in fila davanti alla partenza dell'hub. Headless 1507/0, test dei kit (statistiche, lancio con lo stick del leggero e del medio, sollevamento del pesante) 4/4 PASS listen 0 % e 2 % e dedicato 0 %, suite di default 50/50. Nessuno l'ha ancora visto in PIE. Branch <code>claude/desktop-m11-3</code> (<code>48fe6528</code>).</li>
+    <li>2026-11-11 · M11 slice 2: <strong>lanci alla Smash</strong> (tue decisioni): nella presa lo stick sceglie il lancio (avanti, indietro; su = salto, giù = accovacciato), ogni kit ha i suoi 4 lanci con un set comune di riserva, presa anche con speciale + accovacciato; modalità alternativa stick + speciale e quella di prima come impostazioni; nemico sollevabile = lo stick mira il lancio M10. Tutto automatico, nessun Blueprint; i tasti sono dati. Headless 1505/0, lanci con lo stick simulato PASS listen 0 % e 2 % e dedicato 0 %, prese di prima 5/5, suite di default 50/50. Nessuno l'ha ancora visto in PIE col pad. Branch <code>claude/desktop-m11-2</code> (<code>de12900b</code>).</li>
+    <li>2026-11-11 · M11 slice 1: <strong>cambio kit con B tenuto</strong> (tue decisioni): il kit a terra è un bersaglio di B come oggetti e prese (vince quello inquadrato), B tenuto 0,5 s e rilasciato lo scambia, scritta provvisoria "Tieni B: kit", ogni kit ha il tasto in automatico; un giocatore KO lascia il kit (impostazione con tre scelte). Headless 1500/0, suite di default in un solo PIE 50/50 (un'attesa aggiornata: ogni kit ha un binding in più), scambio con B simulato PASS in listen 0 % e 2 % e dedicato 0 %. Nessuno l'ha ancora visto in PIE col pad. Branch <code>claude/desktop-m11-1</code> (<code>3cbf4b68</code>).</li>
+    <li>2026-11-11 · M10 slice 10: <strong>caricamento del lancio</strong> (tua richiesta): frame di rilascio e montage per oggetto, default di progetto e nemici sollevati; 0 = istantaneo come prima, ed è il valore spedito. Colpito durante il caricamento = niente lancio, l'oggetto cade. Debug <code>gstn.Held.Debug 1</code> e validatore delle definizioni (parte di G12); misure G13: oggetti fermi 0 B/s, 32-64 proiettili vivi +0,75 ms a frame. Corretto il fork: le abilità solo-server ora ricevono il tick (prima non potevano aspettare). Suite di default in un solo PIE 50/50, oggetti 8/8 listen 2 % e dedicato 0 %, headless 1498/0. Nessuno l'ha ancora visto in PIE. Restano di M10: aggancio alla mano, anteprima dell'arco nell'editor, prompt, misure con rendering. Branch <code>claude/desktop-m10-10</code> (<code>c3ffe3a0</code>).</li>
+    <li>2026-11-11 · M10 slice 9: suite di default in un solo PIE 50/50 PASS (i 12 rossi della slice 8 venivano dal driver, non erano regressioni); nemici lanciati (G9): un nemico afferrato che puoi sollevare si lancia con RT come un oggetto, colpisce gli altri con credito a te, B lo posa. Headless 1497/0, harness oggetti 7/7 listen 2 % e dedicato 0 %. Branch <code>claude/desktop-m10-9</code> (<code>1efef002</code>).</li>
+    <li>2026-11-11 · Decisioni M11 1-7 approvate (tue) come consigliate; il kit si cambia con il tasto di interazione, cioè grab (B) tenuto. Le fette essenziali partono sul fisso dopo la coda di M10. Piano su <code>claude/laptop-m11-plan</code> (<code>4f192aa5</code>), ora anche dentro <code>claude/desktop-m10-10</code>.</li>
+    <li>2026-11-11 · M10 slice 8: mira di spalla per il lancio tenuto (impostazione <code>Aim View</code>, Shoulder o Keep View), impatto Esplodi (raggio 2,5 m, colpisce tutti, credito a chi lancia), l'oggetto lanciato parte subito dalla mano sul client di chi lancia. Headless 1495/0, harness oggetti 6/6 listen 2 % e dedicato 0 %. Branch <code>claude/desktop-m10-8</code> (<code>3cb19a4f</code>).</li>
+    <li>2026-11-11 · Piano a fette di M11 "Kit in gioco": 4 fette essenziali prima del playtest ($19-30), 10 dopo il playtest ($52-87), 7 decisioni per te. Branch <code>claude/laptop-m11-plan</code> (<code>626ec505</code>), solo documenti.</li>
+    <li>2026-11-10 · M10 slice 7: un rimbalzo non colpisce più chi il lancio ha già colpito (un colpo per bersaglio per lancio, opzione per oggetto); fuoco amico per tipo di colpo nelle regole della modalità (<code>Friendly Fire Sources</code>); le tue due impostazioni di raccolta (inquadrato o più vicino; se conteso, mano vuota o il più vicino), accese come prima. Headless 1495/0, harness PASS oggetti 4/4 listen 2 % e dedicato 0 %, cavalcatura 12/12. Branch <code>claude/desktop-m10-7</code> (<code>f9d5e0a3</code>).</li>
+    <li>2026-11-10 · Decisione presa (tua): bersaglio di B e bersaglio conteso diventano due impostazioni per provarle in playtest (fatto in slice 7).</li>
+    <li>2026-11-10 · M10 slice 6: peso e taglie degli oggetti (G6) e impatti Atterra/Rompi/Rimbalza/Attacca (parte di G7); corretto un bug del fork GAS-NPP (finito un effetto su una statistica, gli altri client la vedevano a 0). Headless 1495/0, harness PASS oggetti 4/4 listen 2 % e dedicato 0 %, presa 5/5 a 2 %. Branch <code>claude/desktop-m10-6</code> (<code>5f67ffb5</code>).</li>
+    <li>2026-11-10 · M10 slice 5: l'oggetto in mano è un legame Hand di GSTNLink (G1); B prende l'oggetto che il probe inquadra; i KO dei minion da oggetto lanciato hanno <code>Combat.Source.Thrown</code> e il credito a chi lancia. Headless 1490/0, harness PASS. Branch <code>claude/desktop-m10-5</code> (<code>d912e837</code>).</li>
+    <li>2026-11-10 · M10 slice 4: gli oggetti a terra entrano nel probe di interazione di GSTNLink; i colpi degli oggetti lanciati hanno il tag <code>Combat.Source.Thrown</code> e il credito va a chi lancia. Headless 1489/0, harness PASS listen 2 % e dedicato 0 %. Branch <code>claude/desktop-m10-4</code> (<code>2a343957</code>).</li>
+    <li>2026-11-10 · M10 slice 3: tasti B/RT degli oggetti collegati in automatico ai kit di prova; RT con l'oggetto in mano lancia davvero; B prende solo con un oggetto a portata; prompt "B" sopra l'oggetto. Headless 1484/0, harness PASS. Branch <code>claude/desktop-m10-3</code> (<code>82bf38b2</code>).</li>
+    <li>2026-11-10 · M10 slice 2: l'oggetto in mano entra nello stato predetto del personaggio; cade se chi lo tiene viene colpito, lanciato in aria, afferrato o va KO; tasti di default come dati. Headless 1481/0, harness PASS. Branch <code>claude/desktop-m10-2</code> (<code>880f8c7b</code>).</li>
+    <li>2026-11-10 · Decisione presa (tua): tasti degli oggetti come sopra, tutto da rivedere col playtest. Nemici presi che si sollevano come oggetti e lanci del kit alla smash: design per M11.</li>
+    <li>2026-11-10 · M10 slice 1: nuovo plugin <code>GSTNHeld</code>: raccogli, tieni, lancia (colpo di <code>GSTNProjectile</code>), atterraggio e di nuovo raccoglibile. Headless 1477/0, harness PASS. Branch <code>claude/desktop-m10-1</code> (<code>1bbfa0c8</code>).</li>
+    <li>2026-11-10 · Weakpoint slice 3b: lo stick destro gira il personaggio solo col reticolo acceso e in quel caso vince sul sinistro (headless 1475/0). Branch <code>claude/laptop-weakpoint-3b</code> (<code>ceb9d1c2</code>).</li>
+    <li>2026-11-10 · Decisione presa: stick destro e stick sinistro in attacco (destro solo col reticolo, e allora ha la precedenza).</li>
+    <li>2026-11-10 · Weakpoint slice 3: sterzata predetta via Mover, reticolo PvE/TDM, freccia di mira, mossa e kit di test per i recoil (headless 1474/0, harness PASS). Branch <code>claude/desktop-weakpoint-3</code> (<code>7487fa51</code>).</li>
+    <li>2026-11-09 · Push di <code>92e9b029</code> su <code>feature/gas-npp-5.8</code> (fatto da te).</li>
+    <li>2026-11-09 · Strike Kind, comportamento su superficie dura e recoil per gruppo di hitbox, recoil segnaposto per Swing/Stab (headless 1472/0). Unito al merge (<code>92e9b029</code>).</li>
+    <li>2026-11-09 · Decisione Oodle: riaddestri i dizionari su ogni macchina (niente Git LFS).</li>
+    <li>2026-11-09 · Push di <code>35f15178</code> su <code>feature/gas-npp-5.8</code> (fatto da te).</li>
+    <li>2026-11-09 · Weakpoint slice 2 (stick destro nell'input predetto, <code>Max Steer Degrees</code>), slice 1 (superficie dura, scivolata della lama, rinculo, hurtbox solo-affondo), proiettile slice 1-3 e piano weakpoint: tutti uniti ai merge (<code>35f15178</code>, <code>8cd88880</code>, <code>dbda3046</code>, <code>d9253d56</code>, <code>38af9c68</code>, <code>642f5165</code>).</li>
+  </ul>
+</section>
+</div>
+
+<script>
+document.querySelectorAll('li input[type=checkbox]').forEach(function(cb){
+  var key='todo:'+cb.id;
+  try{ if(localStorage.getItem(key)==='1'){cb.checked=true;} }catch(e){}
+  function paint(){cb.closest('li').classList.toggle('checked',cb.checked);}
+  paint();
+  cb.addEventListener('change',function(){ try{localStorage.setItem(key,cb.checked?'1':'0');}catch(e){} paint(); });
+});
+document.querySelectorAll('.copy').forEach(function(b){
+  b.addEventListener('click',function(){
+    var el=document.getElementById(b.dataset.target);
+    function sel(){var r=document.createRange();r.selectNodeContents(el);var s=getSelection();s.removeAllRanges();s.addRange(r);}
+    try{ navigator.clipboard.writeText(el.textContent).then(function(){b.textContent='Copiato';},sel); }catch(e){ sel(); }
+  });
+});
+</script>
+
+</body></html>

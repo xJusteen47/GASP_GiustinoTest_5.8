@@ -1,0 +1,345 @@
+<title>Networking di GASP Giustino</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: una colonna di lettura, tabelle e diagrammi a tutta larghezza; colori = tipo di gestione (predetto, interpolato, presentazione, snap) */
+:root{
+  --bg:#f3f5f7; --paper:#ffffff; --fg:#17202b; --muted:#56616f; --line:#d5dbe2;
+  --pred:#2357c9; --pred-bg:#e5ecfb;
+  --interp:#0f7d6b; --interp-bg:#ddf2ec;
+  --pres:#7a3fc0; --pres-bg:#efe6fa;
+  --snap:#c2560d; --snap-bg:#fbe9dc;
+  --warn:#9a6a00; --warn-bg:#fbf1d4;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11161d; --paper:#18202a; --fg:#e4e9ef; --muted:#9aa6b4; --line:#2c3746;
+  --pred:#7fa6ff; --pred-bg:#1d2a47; --interp:#4cc9b0; --interp-bg:#143430;
+  --pres:#c29bf2; --pres-bg:#2c2140; --snap:#f39a5a; --snap-bg:#3a2516;
+  --warn:#e8c25a; --warn-bg:#332a12; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11161d; --paper:#18202a; --fg:#e4e9ef; --muted:#9aa6b4; --line:#2c3746;
+  --pred:#7fa6ff; --pred-bg:#1d2a47; --interp:#4cc9b0; --interp-bg:#143430;
+  --pres:#c29bf2; --pres-bg:#2c2140; --snap:#f39a5a; --snap-bg:#3a2516;
+  --warn:#e8c25a; --warn-bg:#332a12; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.6}
+.wrap{max-width:980px;margin:0 auto;padding-block:32px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:40px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:clamp(30px,5vw,46px);font-weight:800;letter-spacing:-.01em}
+h2{font-size:26px;font-weight:800}
+h3{font-size:18px;font-weight:600}
+p{margin:0;max-width:68ch}
+section{display:flex;flex-direction:column;gap:14px;min-width:0}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lead{font-size:18px;color:var(--muted);max-width:62ch}
+code,.mono{font-family:var(--mono);font-size:.86em}
+code{background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:0 4px;overflow-wrap:anywhere}
+.chip{display:inline-block;font-family:var(--mono);font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.c-pred{color:var(--pred);background:var(--pred-bg)} .c-interp{color:var(--interp);background:var(--interp-bg)}
+.c-pres{color:var(--pres);background:var(--pres-bg)} .c-snap{color:var(--snap);background:var(--snap-bg)}
+.c-warn{color:var(--warn);background:var(--warn-bg)}
+.kinds{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.kind{background:var(--paper);border:1px solid var(--line);border-top:4px solid var(--k);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.kind h3{color:var(--k)}
+.kind p{font-size:15px}
+.tbl{overflow-x:auto;background:var(--paper);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:15px;min-width:640px}
+th,td{text-align:left;vertical-align:top;padding:10px 12px;border-bottom:1px solid var(--line)}
+th{font-family:var(--mono);font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--bg)}
+tr:last-child td{border-bottom:0}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.fig{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:16px;overflow-x:auto}
+.fig svg{display:block;min-width:680px;width:100%;height:auto}
+.fig figcaption{font-size:14px;color:var(--muted);margin-top:10px;max-width:none}
+figure{margin:0}
+svg text{font-family:var(--mono);font-size:12px;fill:var(--fg)}
+svg .mut{fill:var(--muted)}
+svg .lane{stroke:var(--line);stroke-width:1}
+svg .ax{stroke:var(--muted);stroke-width:1}
+.note{border-left:4px solid var(--warn);background:var(--warn-bg);padding:12px 16px;border-radius:0 8px 8px 0;display:flex;flex-direction:column;gap:6px}
+.note p{max-width:none}
+ol,ul{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px;max-width:70ch}
+.steps li::marker{font-family:var(--mono);color:var(--muted)}
+nav.toc{display:flex;flex-wrap:wrap;gap:8px}
+nav.toc a{font-family:var(--mono);font-size:13px;color:var(--fg);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:4px 10px;background:var(--paper)}
+nav.toc a:hover,nav.toc a:focus-visible{border-color:var(--pred);color:var(--pred);outline:none}
+.src{font-size:13px;color:var(--muted)}
+</style>
+
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">GASP GiustinoTest 5.9 · rete · 8 novembre 2026 · Aggiornato 2026-11-23</span>
+  <h1>Come il gioco tiene d'accordo server e giocatori</h1>
+  <p class="lead">Cosa vedi subito, cosa vedi un po' nel passato, cosa salta di colpo, e chi ha l'ultima parola. Valori letti nel codice e nella config del ramo con il lavoro di predizione (FP), che sarà il prossimo merge in feature.</p>
+  <nav class="toc" aria-label="Indice">
+    <a href="#decisione-1v1">Decisione 1v1</a><a href="#tipi">I quattro tipi</a><a href="#mappa">Chi è cosa</a><a href="#mossa">Una mossa nel tempo</a>
+    <a href="#tempo">Frame, timestamp, RTT</a><a href="#buffer">I due buffer</a><a href="#rollback">Rollback</a>
+    <a href="#lagcomp">Lag compensation</a><a href="#precedenze">Precedenze</a><a href="#snap">Teletrasporti</a>
+    <a href="#minion">Minion</a><a href="#opzioni">Opzioni</a><a href="#aperti">Cose da sapere</a>
+  </nav>
+</header>
+
+<section id="decisione-1v1">
+  <span class="eyebrow">Aggiornamento 2026-11-23</span>
+  <h2>Decisione 1v1 (2026-11-23)</h2>
+  <p>Per il combattimento 1 contro 1 l'owner ha deciso: <b>niente server dedicato</b> (per il costo). Questa pagina, scritta l'8 novembre, descrive un server che decide sempre; per l'1v1 quel ruolo lo fa l'host.</p>
+  <ul>
+    <li><b>Host (listen server) più Epic Online Services</b> per collegare i due giocatori.</li>
+    <li><b>Anche l'avversario è predetto</b> (rollback misto): il giocatore locale è predetto; combat, GAS e Mover sono ri-simulati quando arriva la correzione.</li>
+    <li><b>Limite di ping per il matchmaking</b>: non si accoppiano giocatori troppo lontani.</li>
+    <li><b>Input delay sull'host</b>: regolabile e <b>spento di default</b>.</li>
+  </ul>
+  <p>Ricerca completa: <code>docs/notes/server-dedicato-ricerca.md</code> sul branch <code>claude/ricerca-server-dedicato</code>. Il motore è UE 5.9; il codice è in <code>main</code> (commit <code>a5b20950</code>), che non è ancora stato compilato dopo il merge della PR #37 del 22-11 (integrazione in corso su <code>claude/integ-2026-11-23</code>). Le sezioni sotto restano la descrizione tecnica del modello di rete valida in generale; i valori in tabella sono quelli dell'8 novembre.</p>
+</section>
+
+<section id="tipi">
+  <span class="eyebrow">Il principio</span>
+  <h2>Il server decide sempre. Lo schermo sceglie come aspettarlo.</h2>
+  <p>Tra il tuo tasto e la risposta del server passano circa 120 ms con la rete di prova (60 ms per direzione). Aspettarli a ogni tasto sarebbe ingiocabile, quindi ogni cosa sullo schermo è gestita in uno di questi quattro modi.</p>
+  <div class="kinds">
+    <div class="kind" style="--k:var(--pred)"><h3>Predetto</h3><p>Il tuo PC lo calcola subito, poi lo confronta con il server. Se il server dice altro, torna indietro e ricalcola (rollback).</p></div>
+    <div class="kind" style="--k:var(--interp)"><h3>Interpolato</h3><p>Mostrato un po' nel passato, tra due stati già confermati dal server. Sempre fluido e corretto, ma in ritardo.</p></div>
+    <div class="kind" style="--k:var(--pres)"><h3>Presentazione predetta</h3><p>Solo l'aspetto (animazione, flash) parte subito. Danno, posizione e stato aspettano il server.</p></div>
+    <div class="kind" style="--k:var(--snap)"><h3>Snap / teletrasporto</h3><p>Salto netto alla posizione o al frame giusto, senza sfumatura. Succede quando sfumare sarebbe sbagliato.</p></div>
+  </div>
+</section>
+
+<section id="mappa">
+  <span class="eyebrow">La mappa</span>
+  <h2>Chi è cosa, sullo schermo di chi</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Cosa vedi</th><th>Gestione</th><th>Chi decide</th><th>Quando il server non è d'accordo</th></tr></thead>
+    <tbody>
+      <tr><td>Il tuo personaggio: movimento, attacchi, schivate, abilità</td><td><span class="chip c-pred">predetto</span></td><td>Il tuo PC subito, il server alla fine</td><td>Rollback: torna allo stato del server e rigioca i frame. Il corpo (capsula) salta subito al punto giusto; l'aspetto si raddrizza con un piccolo smoothing visivo.</td></tr>
+      <tr><td>Altri giocatori, avversari</td><td><span class="chip c-interp">interpolato</span></td><td>Il server</td><td>Nessuna correzione: mostri solo stati già confermati, 50 ms nel passato più il viaggio.</td></tr>
+      <tr><td>Il partner di una mossa di coppia, sullo schermo di chi la lancia</td><td><span class="chip c-pres">presentazione predetta</span></td><td>La reazione la mostra il tuo PC; posizione e stato il server</td><td>Se il server rifiuta, la reazione si ferma di colpo e il partner salta al frame vero (snap accettato da te, decisione D3).</td></tr>
+      <tr><td>Il partner, sul suo schermo</td><td><span class="chip c-pred">predetto</span> per sé</td><td>Il server, per la mossa dell'altro</td><td>La mossa dell'altro arriva come una correzione: la vede circa 250-280 ms dopo il tasto dell'altro.</td></tr>
+      <tr><td>Minion (nemici di massa)</td><td><span class="chip c-interp">interpolato</span> via marionetta</td><td>Il server, che li simula tutti</td><td>La marionetta sfuma verso il punto giusto in 200 ms; con il flag teletrasporto salta e basta.</td></tr>
+      <tr><td>Flash e pausa quando colpisci un minion</td><td><span class="chip c-pres">presentazione predetta</span></td><td>Il tuo PC parte, il server conferma</td><td>Conferma entro 0,5 s o l'effetto finisce; se il colpo sparisce dalla lista bersagli, si annulla subito.</td></tr>
+      <tr><td>Colpi tra giocatori</td><td><span class="chip c-pred">predetto</span> dall'attaccante</td><td>Il server, con la lag compensation</td><td>Se il server non vede il colpo, l'attaccante fa rollback; la vittima lo riceve solo dal server.</td></tr>
+      <tr><td>Uscita da un link (smonto, lancio, rottura)</td><td><span class="chip c-snap">teletrasporto</span></td><td>Il server (watchdog), o chi smonta se predice</td><td>Chi era "parcheggiato" viene messo nel punto di uscita valido.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="mossa">
+  <span class="eyebrow">Diagramma 1</span>
+  <h2>Una mossa di coppia nel tempo</h2>
+  <p>Tu (A) premi il tasto per un boost jump con il partner (B). Rete di prova: 60 ms per direzione. Le frecce sono il viaggio dei dati, le barre l'attesa.</p>
+  <figure class="fig">
+    <svg viewBox="0 0 760 300" role="img" aria-label="Linea temporale di una mossa di coppia tra giocatore A, server e giocatore B">
+      <!-- scala: x = 110 + ms*1.5 -->
+      <line class="lane" x1="110" y1="70" x2="740" y2="70"/><line class="lane" x1="110" y1="150" x2="740" y2="150"/><line class="lane" x1="110" y1="230" x2="740" y2="230"/>
+      <text x="8" y="74">Schermo A</text><text x="8" y="154">Server</text><text x="8" y="234">Schermo B</text>
+      <line class="ax" x1="110" y1="268" x2="740" y2="268"/>
+      <g class="mut"><text x="106" y="286" class="mut">0</text><text x="252" y="286" class="mut">100</text><text x="402" y="286" class="mut">200</text><text x="552" y="286" class="mut">300</text><text x="694" y="286" class="mut">400 ms</text></g>
+      <g stroke="var(--line)"><line x1="260" y1="264" x2="260" y2="272"/><line x1="410" y1="264" x2="410" y2="272"/><line x1="560" y1="264" x2="560" y2="272"/></g>
+      <!-- A: tasto + presentazione -->
+      <circle cx="110" cy="70" r="6" fill="var(--pred)"/><text x="118" y="52">tasto</text>
+      <rect x="110" y="78" width="630" height="10" rx="3" fill="var(--pres-bg)" stroke="var(--pres)"/>
+      <text x="170" y="104" style="fill:var(--pres)">la tua mossa + la reazione di B partono subito (38-68 ms)</text>
+      <!-- A -> server -->
+      <line x1="110" y1="74" x2="200" y2="146" stroke="var(--pred)" stroke-width="2" marker-end="url(#ah)"/>
+      <text x="128" y="128" class="mut">rete ~60</text>
+      <!-- coda input -->
+      <rect x="200" y="143" width="96" height="14" rx="3" fill="var(--warn-bg)" stroke="var(--warn)"/>
+      <text x="204" y="176" style="fill:var(--warn)">coda input 4 frame = 64</text>
+      <circle cx="296" cy="150" r="6" fill="var(--fg)"/><text x="304" y="140">il server esegue la mossa</text>
+      <!-- server -> A conferma -->
+      <line x1="296" y1="146" x2="386" y2="74" stroke="var(--fg)" stroke-width="2" marker-end="url(#ah2)"/>
+      <text x="350" y="62">conferma o rollback su A</text>
+      <!-- server -> B -->
+      <line x1="296" y1="154" x2="386" y2="226" stroke="var(--fg)" stroke-width="2" marker-end="url(#ah2)"/>
+      <text x="300" y="206" class="mut">rete ~60</text>
+      <rect x="386" y="223" width="75" height="14" rx="3" fill="var(--interp-bg)" stroke="var(--interp)"/>
+      <text x="390" y="254" style="fill:var(--interp)">buffer 50</text>
+      <circle cx="500" cy="230" r="6" fill="var(--interp)"/><text x="508" y="222">B vede la mossa (~250-280 misurato)</text>
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--pred)"/></marker>
+        <marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--fg)"/></marker>
+      </defs>
+    </svg>
+    <figcaption>Schema a scala con i valori di rete teorici. Le misure vere aggiungono variazione di rete (15 ms) e allineamento ai frame: il tratto A → server misura 180-220 ms, server → B 70-130 ms. Sotto ~170-190 ms sullo schermo di B non si scende comunque: servono due viaggi di rete.</figcaption>
+  </figure>
+  <ol class="steps">
+    <li><b>Tasto.</b> Il tuo PC avvia la mossa nello stesso frame. Il server non sa ancora niente.</li>
+    <li><b>Presentazione.</b> Animazione, suoni e (dal lavoro G1) anche la reazione del partner partono subito sul tuo schermo.</li>
+    <li><b>Viaggio e coda.</b> L'input arriva al server e aspetta in coda 4 frame, così il server non resta mai a secco.</li>
+    <li><b>Il server esegue</b> la stessa mossa sullo stesso numero di frame e manda lo stato a tutti.</li>
+    <li><b>Conferma.</b> Se lo stato coincide con quello che avevi predetto, non vedi niente. Se no, rollback (sotto).</li>
+  </ol>
+</section>
+
+<section id="tempo">
+  <span class="eyebrow">Orologi</span>
+  <h2>Frame, timestamp e RTT</h2>
+  <p>Il gioco non ragiona in secondi né in ping. Ragiona in <b>numeri di frame</b>: server e client simulano a passi fissi di 16 ms (62,5 frame al secondo), e ogni input, stato e colpo porta il numero del frame in cui è successo.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Cosa</th><th>Come è fatto davvero</th></tr></thead>
+    <tbody>
+      <tr><td>Timestamp di un input</td><td>Il numero di frame del client, più il suo <code>InterpolationTimeMS</code>: "a che ora del server stavo guardando gli altri quando ho premuto". Serve alla lag compensation.</td></tr>
+      <tr><td>Timestamp di un colpo</td><td>Il frame in cui l'attaccante lo scrive. La vittima lo legge al frame dopo (F → F+1), uguale su tutte le macchine.</td></tr>
+      <tr><td>RTT / ping</td><td>Il codice di gioco <b>non lo usa</b> per decidere niente. L'unico uso trovato: dimensiona per quanto tempo tenere i gameplay cue già visti sugli altri giocatori (<code>2 × ping / 16 ms</code>, minimo 2 frame), per non riprodurli due volte.</td></tr>
+      <tr><td>"60 ms per direzione"</td><td>È la rete finta dei test (emulazione), non un valore nel codice.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Perché non serve il ping: quanto sei avanti tu rispetto al server lo dice la distanza tra i numeri di frame, e quanto sei indietro sugli altri lo dice <code>InterpolationTimeMS</code>. Sono misure esatte, il ping è una media.</p>
+</section>
+
+<section id="buffer">
+  <span class="eyebrow">Attese volute</span>
+  <h2>I due buffer</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Buffer</th><th>Dove</th><th>Valore</th><th>Cosa compra</th><th>Cosa costa</th></tr></thead>
+    <tbody>
+      <tr><td><b>Coda di input del server</b></td><td>Server, per ogni giocatore</td><td class="num">4 frame = 64 ms</td><td>Il server ha sempre un input pronto anche se la rete balbetta.</td><td>64 ms in più prima che il server veda il tuo tasto. Portarla a 0 guadagna 25-40 ms ma il server resta senza input 3-4 volte più spesso: lasciata così (misura G0c).</td></tr>
+      <tr><td><b>Buffer di interpolazione</b></td><td>Ogni client, per gli altri</td><td class="num">50 ms (era 100)</td><td>Il client ha sempre due stati confermati tra cui sfumare: niente scatti.</td><td>Gli altri si vedono 50 ms più nel passato. Sotto 50 ms il movimento s'inceppa di più. Deciso da te (D1).</td></tr>
+    </tbody>
+  </table></div>
+  <p>Due regole collegate. Il client manda sempre i suoi <b>ultimi 6 input</b> in ogni pacchetto, così se un pacchetto si perde il successivo li ricopre. Se la coda del server si svuota, il server aspetta di avere di nuovo input accumulati prima di ripartire (limite 6).</p>
+</section>
+
+<section id="rollback">
+  <span class="eyebrow">Correzioni</span>
+  <h2>Rollback: cosa succede quando il tuo PC ha sbagliato</h2>
+  <ol class="steps">
+    <li>Arriva lo stato del server per il frame F. Il tuo PC lo confronta con quello che aveva salvato per F.</li>
+    <li>Uguale: niente. Diverso: torna allo stato del server a F e <b>rigioca in un istante</b> tutti i frame da F a oggi con i tuoi input (con la rete di prova, circa 8 frame).</li>
+    <li>La capsula del personaggio salta subito al punto giusto. Lo smoothing (velocità fissa 0,2) sposta solo la parte visiva, così il salto non si vede tutto in un frame.</li>
+    <li>Per le animazioni il gioco salta al frame giusto della mossa, come nei picchiaduro con rollback netcode. Niente smussamento extra: l'hai accettato tu.</li>
+  </ol>
+  <p>Gli altri giocatori, essendo interpolati, non fanno rollback: mostrano solo stati già confermati. I minion non rientrano mai nel rollback (il server li simula, il client non li ricalcola).</p>
+</section>
+
+<section id="lagcomp">
+  <span class="eyebrow">Diagramma 2</span>
+  <h2>Lag compensation: il server guarda dove guardavi tu</h2>
+  <p>Tu vedi gli altri nel passato. Se il server controllasse il tuo colpo contro la posizione di adesso, mancheresti colpi che sul tuo schermo prendono. Quindi riavvolge.</p>
+  <figure class="fig">
+    <svg viewBox="0 0 760 190" role="img" aria-label="Il server riavvolge la posizione della vittima all'ora che vedeva l'attaccante, al massimo 400 ms">
+      <!-- scala: x = 700 - ms*1.4 (0 a destra = adesso sul server) -->
+      <line class="ax" x1="80" y1="120" x2="720" y2="120"/>
+      <text x="676" y="142">adesso</text><text x="676" y="156" class="mut">(server)</text>
+      <line x1="700" y1="112" x2="700" y2="128" stroke="var(--fg)" stroke-width="2"/>
+      <rect x="140" y="128" width="560" height="10" rx="3" fill="var(--warn-bg)" stroke="var(--warn)"/>
+      <text x="140" y="160" style="fill:var(--warn)">riavvolgimento massimo 400 ms (oltre: tagliato a 400)</text>
+      <line x1="140" y1="112" x2="140" y2="128" stroke="var(--warn)" stroke-width="2"/><text x="118" y="106" class="mut">−400</text>
+      <!-- vittima ora -->
+      <circle cx="700" cy="70" r="14" fill="var(--interp-bg)" stroke="var(--interp)" stroke-width="2"/>
+      <text x="606" y="40">B, dov'è davvero</text>
+      <!-- vittima vista da A -->
+      <circle cx="546" cy="70" r="14" fill="var(--pred-bg)" stroke="var(--pred)" stroke-width="2"/>
+      <text x="436" y="40">B, come lo vedeva A</text>
+      <line x1="546" y1="86" x2="546" y2="120" stroke="var(--pred)" stroke-dasharray="3 3"/>
+      <text x="406" y="104" style="fill:var(--pred)">InterpolationTimeMS di A</text>
+      <path d="M690 70 Q623 92 562 72" fill="none" stroke="var(--fg)" stroke-width="1.5" marker-end="url(#ah3)"/>
+      <text x="586" y="100" class="mut">il server riporta B qui</text>
+      <defs><marker id="ah3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--fg)"/></marker></defs>
+    </svg>
+    <figcaption>Il punto di riavvolgimento non è calcolato dal ping: è il tempo che A dichiara con ogni input. Il server lo usa così com'è, tenuto tra "adesso" e "adesso − 400 ms".</figcaption>
+  </figure>
+  <ul>
+    <li><b>Chi viene riavvolto:</b> solo il personaggio di un giocatore remoto, sul server. Il personaggio dell'host, l'IA e i client che predicono no.</li>
+    <li><b>Il prezzo:</b> chi viene colpito può esserlo "dopo" essersi spostato sul suo schermo. Si accetta perché è meno fastidioso di mancare un colpo che si vedeva andare a segno.</li>
+    <li><b>Primi frame di una connessione</b> (il client non ha ancora un tempo valido): nessun riavvolgimento.</li>
+    <li><b>Minion:</b> il server tiene 512 ms di storia delle loro posizioni (32 frame), più dei 400 ms massimi.</li>
+    <li><b>X4</b> è solo un problema di prestazioni: per ogni attaccante che riavvolge, oggi il server ripassa tutti i minion uno per uno. Il rimedio esiste (cercare solo i vicini) ma non è collegato. Da sistemare prima del PvP.</li>
+  </ul>
+</section>
+
+<section id="precedenze">
+  <span class="eyebrow">Pareggi</span>
+  <h2>Chi vince quando due cose succedono insieme</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Situazione</th><th>Regola</th></tr></thead>
+    <tbody>
+      <tr><td>Due giocatori si colpiscono nello stesso frame</td><td><b>Scambio (trade): entrambi i colpi vanno a segno.</b> Ogni colpo è scritto al frame F e letto a F+1, quindi nessuno arriva "prima". Entrambi restano in hitstop.</td></tr>
+      <tr><td>Più hitbox dello stesso attacco sulla stessa vittima</td><td>Vince quella con priorità più alta; a pari priorità, la prima nella lista.</td></tr>
+      <tr><td>Hurtbox sovrapposte (corpo e scudo)</td><td>Vince la priorità più alta; a pari priorità vince lo scudo.</td></tr>
+      <tr><td>Due prese sullo stesso bersaglio nello stesso frame</td><td>Vince la prima richiesta letta dal server; la seconda è rifiutata perché il bersaglio è già occupato.</td></tr>
+      <tr><td>Un link si rompe per più motivi insieme</td><td>Un solo motivo, in quest'ordine: rottura già in corso, la tua morte, morte del partner, stato del partner, colpo che rompe, distanza, divincolarsi, tempo scaduto.</td></tr>
+      <tr><td>Link rimasto da un lato solo</td><td>Si rompe da solo dopo 3 frame di tolleranza.</td></tr>
+      <tr><td>Colpi del partner durante un link</td><td>Non rompono il link, salvo regola contraria: si può tempestare di colpi chi tieni.</td></tr>
+      <tr><td>Rottura di un link</td><td>Il server la timbra al frame F; entrambi i lati la applicano a F+1, insieme.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="snap">
+  <span class="eyebrow">Salti voluti</span>
+  <h2>Cosa si teletrasporta, e perché</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Cosa</th><th>Quando</th><th>Perché non sfuma</th></tr></thead>
+    <tbody>
+      <tr><td>Chi esce da un link (smonto, lancio, rottura)</td><td>All'uscita; il punto lo sceglie il server, o chi smonta se lo ha predetto (tolleranza 5 cm / 5°)</td><td>Durante il link era agganciato all'altro; deve finire in un posto valido nello stesso frame su tutte le macchine.</td></tr>
+      <tr><td>Uscita dal drill</td><td>Fine del drill</td><td>Come sopra; il punto viene rifiutato se tocca il bersaglio.</td></tr>
+      <tr><td>Partner di una mossa di coppia predetta</td><td>Se il server rifiuta la mossa</td><td>La reazione mostrata era solo un'anticipazione: si torna al frame vero (snap accettato, D3).</td></tr>
+      <tr><td>Marionetta di un minion</td><td>Spawn, respawn, teletrasporto, rientro in un gruppo</td><td>Quello che c'era prima non c'entra niente con la nuova posizione.</td></tr>
+      <tr><td>Piattaforme nemiche e scriptate</td><td>Ogni frame</td><td>Il collider segue la piattaforma per teletrasporto: è il modo previsto per i collider mossi a mano.</td></tr>
+      <tr><td>Cavalcatura</td><td>Si <b>rompe</b> se chi porta salta più di 500 cm in un frame</td><td>Un salto così è un respawn o teletrasporto: il rider non deve volare dietro.</td></tr>
+      <tr><td>Il tuo personaggio dopo un rollback</td><td>Correzione del server</td><td>La capsula salta subito; solo la parte visiva viene smussata.</td></tr>
+      <tr><td><code>gstn.Wall.Teleport</code></td><td>Solo test</td><td>Mette i personaggi sulla partenza delle corsie dei test.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="minion">
+  <span class="eyebrow">Nemici di massa</span>
+  <h2>Minion: simulati sul server, mostrati con le marionette</h2>
+  <p>I minion non sono personaggi completi sui client. Il server li simula tutti insieme; ai client arrivano solo dati compatti, a gruppi di 16, e ogni client li mostra con marionette riciclate.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Cosa</th><th>Valore</th><th>Significato</th></tr></thead>
+    <tbody>
+      <tr><td>Gruppo (pack)</td><td class="num">16 minion</td><td>Unità di invio: 40 nemici costano 3-5 canali di rete. Un gruppo tutto lontano e fermo va a dormire.</td></tr>
+      <tr><td>Aggiornamenti per distanza</td><td class="num">15 / 5 / 1 Hz</td><td>Vicini 15 volte al secondo, medi 5, lontani una volta al secondo.</td></tr>
+      <tr><td>Quanti ne vede ogni client</td><td class="num">max 64, entro 80 m</td><td>In ordine: chi ti attacca, chi è stato colpito da poco, il più vicino. Cambi di lista con 1 s di isteresi.</td></tr>
+      <tr><td>Banda dell'host per i minion</td><td class="num">40 KB/s</td><td>Divisa tra i client collegati.</td></tr>
+      <tr><td>Marionette visibili</td><td class="num">60</td><td>Le più vicine.</td></tr>
+      <tr><td>Ritardo di visualizzazione</td><td class="num">come gli altri (50 ms)</td><td>I vicini usano lo stesso orologio interpolato dei giocatori. Medi e lontani: stimati dalla velocità, poi corretti.</td></tr>
+      <tr><td>Correzione della marionetta</td><td class="num">200 ms</td><td>L'errore sfuma in 200 ms, mai di colpo (salvo teletrasporto). Stima al massimo 150 ms oltre l'ultimo dato, poi si ferma.</td></tr>
+      <tr><td>Flash quando colpisci</td><td class="num">0,12 s flash, 0,1 s pausa</td><td>Parte subito. Confermato se il contatore colpi del server cambia entro 0,5 s.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="opzioni">
+  <span class="eyebrow">Manopole</span>
+  <h2>Le opzioni e dove stanno</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Opzione</th><th>Valore</th><th>Dove</th></tr></thead>
+    <tbody>
+      <tr><td>Passo di simulazione</td><td class="num">62,5 /s</td><td><code>Config/DefaultNetworkPrediction.ini</code> · FixedTickFrameRate</td></tr>
+      <tr><td>Altri giocatori interpolati</td><td class="num">Interpolated</td><td>stesso ini · SimulatedProxyNetworkLOD</td></tr>
+      <tr><td>Buffer di interpolazione</td><td class="num">50 ms</td><td>stesso ini · FixedTickInterpolationBufferedMS</td></tr>
+      <tr><td>Smoothing delle correzioni</td><td class="num">acceso</td><td>stesso ini · bEnableFixedTickSmoothing</td></tr>
+      <tr><td>Input ripetuti per pacchetto</td><td class="num">6</td><td>stesso ini · FixedTickInputSendCount</td></tr>
+      <tr><td>Limite di ripartenza dopo coda vuota</td><td class="num">6</td><td>stesso ini · MaximumRemoteInputFaultLimit</td></tr>
+      <tr><td>Coda di input del server</td><td class="num">4 frame</td><td>valore predefinito del motore (non nell'ini)</td></tr>
+      <tr><td>Riavvolgimento massimo</td><td class="num">400 ms</td><td>regole di combattimento · MaxRewindMs, bUseLagCompensation</td></tr>
+      <tr><td>Reazione del partner anticipata</td><td class="num">1 (acceso)</td><td>cvar <code>gstn.Link.PredictPartnerPresentation</code></td></tr>
+      <tr><td>Marionette visibili</td><td class="num">60</td><td>cvar <code>gstn.Minion.Present.MaxVisible</code></td></tr>
+      <tr><td>Minion per client</td><td class="num">64</td><td>cvar <code>gstn.Minion.Net.MaxRelevantPerClient</code></td></tr>
+      <tr><td>Banda minion dell'host</td><td class="num">40 KB/s</td><td>cvar <code>gstn.Minion.HostUploadBudgetKBps</code></td></tr>
+      <tr><td>Solo per test</td><td class="num">−1 = spento</td><td><code>np.FixedTickInterpolationBufferedMSOverride</code>, <code>np.FixedTickDesiredBufferedInputCountOverride</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="aperti">
+  <span class="eyebrow">Note</span>
+  <h2>Cose da sapere</h2>
+  <div class="note">
+    <p><span class="chip c-warn">feature</span> Sul ramo feature di oggi il buffer è ancora <b>100 ms</b> e la reazione anticipata del partner non c'è: arrivano con il merge dei rami FP (già in coda).</p>
+    <p><span class="chip c-warn">doc vecchio</span> Il README del plugin di rete dice ancora "100 ms". Va aggiornato al merge.</p>
+    <p><span class="chip c-warn">non verificato</span> Lo smoothing ha una velocità scritta fissa (0,2) nel codice del motore; non ho verificato se l'impostazione omonima viene letta. Non ho verificato nemmeno come si combinano la coda di 4 frame e il limite di ripartenza 6 nel ramo attuale.</p>
+    <p><span class="chip c-warn">non trovato</span> Nessuno snap per i cadaveri dei minion e nessun teletrasporto al respawn dei giocatori (il respawn azzera lo stato, non sposta).</p>
+    <p><span class="chip c-warn">limite noto</span> Se il rifiuto di una mossa di coppia viene dal lato del partner, chi lancia la mossa vede comunque la reazione fino alla fine.</p>
+  </div>
+  <p class="src">Fonti: <code>docs/notes/networking-spiegato.md</code>, <code>docs/architecture/plans/fwd-prediction-2026-11-07.md</code>, <code>docs/notes/handovers/fwd-prediction.md</code>, <code>docs/notes/handovers/m8-minion.md</code>, README dei plugin GSTNCombatNP, GSTNLink, GSTNMinion e del fork NetworkPrediction, codice e config del ramo <code>claude/fp-g0c-laptop</code> (confrontato con feature b4149a8).</p>
+</section>
+
+</div>

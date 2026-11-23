@@ -1,4 +1,3 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Mosse di esempio GSTN</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -61,6 +60,13 @@ td.num { font-variant-numeric: tabular-nums; font-family: var(--mono); white-spa
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip { font-size: 0.82rem; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-variant-numeric: tabular-nums; }
 a { color: var(--accent); }
+pre { font-family: var(--mono); font-size: .82rem; background: var(--code-bg); padding: .9rem 1rem; border-radius: 6px; overflow-x: auto; line-height: 1.5; margin: 0; }
+pre code { background: none; padding: 0; }
+.sev { font-family: var(--mono); font-size: .78rem; font-weight: 600; padding: .05rem .4rem; border-radius: 3px; white-space: nowrap; }
+.sev.err { color: var(--active); border: 1px solid var(--active); }
+.sev.warn { color: var(--accent); border: 1px solid var(--accent); }
+.small { font-size: .85rem; color: var(--muted); }
+.agg { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
 @media (max-width: 520px) { h1 { font-size: 1.6rem; } .move { padding: 16px; } }
 </style>
 
@@ -68,8 +74,19 @@ a { color: var(--accent); }
   <header style="display:flex;flex-direction:column;gap:10px">
     <div class="eyebrow">GASP Giustino · UE 5.9 · per il designer</div>
     <h1>Mosse di esempio: come sono fatte e come copiarle</h1>
+    <div class="agg">Aggiornato 2026-11-23 · include la ex "Guida mosse Blueprint GSTN" (fusa qui)</div>
     <p class="lead">Quattro mosse costruite solo con dati, come le farebbe un designer: un attacco leggero, uno forte, uno speciale e la mossa di uno zaino. Aprile, guarda dove stanno i numeri, duplicale e cambiale. Nessun Blueprint da collegare a mano.</p>
   </header>
+
+  <section id="stato">
+    <h2>Stato del progetto (2026-11-23)</h2>
+    <ul>
+      <li>Il codice è in <code>main</code>, commit <code>a5b20950</code> (PR #37 del 22-11: corsa S1, haptics, M12 p1, M10 e M11 uniti in main). <b>Da quel merge main non è ancora stato compilato</b>: l'integrazione sul portatile è in corso sul branch <code>claude/integ-2026-11-23</code>.</li>
+      <li>Il branch di base è <code>main</code>. <code>feature/gas-npp-5.8</code> è vecchio e non è un antenato di main; i push su <code>feature/*</code> e su <code>main</code> sono bloccati dalla guardia git. Si lavora su branch <code>claude/*</code>. Il motore è UE 5.9.</li>
+      <li>Test headless al 21-11: <b>1614</b> (<code>docs/INDICE-PROGETTO.md</code> §4). Il numero più vecchio di questa pagina (579) è superato.</li>
+      <li>La finestra Combat Move e le scoperte qui sotto non sono ancora state provate da un designer nell'editor.</li>
+    </ul>
+  </section>
 
   <section>
     <h2>Provale subito</h2>
@@ -210,7 +227,7 @@ a { color: var(--accent); }
         <tr><td>Domande sugli input</td><td><code>Was Button Pressed Within</code>, <code>Get Frames Since Button Pressed</code>, <code>Count Button Presses Within</code>, <code>Get Button Held Frames</code>, <code>Was Command Entered Within</code>, <code>Get Move Stick</code>, <code>Get Stick Direction</code></td><td>Doppia pressione, tenuto premuto, direzione dello stick. Si chiede per <b>tag</b>, mai per tasto fisico. I frame contano il tempo di combattimento (la pausa dell'impatto non conta).</td></tr>
       </tbody>
     </table></div>
-    <p>Un controllo automatico (validatore) segnala nel grafo di simulazione variabili non sincronizzate o nodi che aspettano nel tempo: così non si rompe la rete senza accorgersene. Le regole sono nella <a href="https://claude.ai/artifact/La2oqPzCkPdcqL2kERy9D6">Guida mosse Blueprint</a>.</p>
+    <p>Un controllo automatico (validatore) segnala nel grafo di simulazione variabili non sincronizzate o nodi che aspettano nel tempo: così non si rompe la rete senza accorgersene. Le regole sono nella sezione <a href="#combat-move-passo">Creare una mossa con Combat Move (passo passo)</a> qui sotto (la vecchia Guida mosse Blueprint è stata fusa in questa pagina).</p>
 
     <h3>3 · Ganci visivi: scie, scintille, eventi</h3>
     <ul>
@@ -247,7 +264,32 @@ a { color: var(--accent); }
     </table></div>
 
     <h3>6 · Editor delle hitbox</h3>
-    <p>Le hitbox si spostano col mouse nell'<b>Open Timeline Editor</b> (vedi «Le tre mosse d'attacco»). Il funzionamento passo per passo è nel <a href="https://github.com/xJusteen47/GASP_GiustinoTest_5.8/blob/claude/integ-cp3/Plugins/GSTNCombatEditor/README.md">README dell'editor</a> (sul ramo del plugin). Renderlo più comodo è in coda e non è ancora fatto.</p>
+    <p>Le hitbox si spostano col mouse nell'<b>Open Timeline Editor</b> (vedi «Le tre mosse d'attacco»). Il funzionamento passo per passo è nel README dell'editor, <code>Plugins/GSTNCombatEditor/README.md</code> nel repository (branch <code>main</code>; per i dettagli vedi <code>docs/INDICE-PROGETTO.md</code>). Renderlo più comodo è in coda e non è ancora fatto.</p>
+
+    <h3>7 · Leggere lo stato e ascoltare gli eventi (anche online)</h3>
+    <p>Per UI, Animation Blueprint, telecamera ed effetti. Ogni nodo prende l'attore (Self di default), categoria <b>Combat › State</b>: <code>Get Combat State</code> (tutto insieme), <code>Get Hitstun Frames Left</code>, <code>Get Hitstop Frames Left</code>, <code>Is In Hitstun</code>, <code>Is In Tumble</code>, <code>Is Knocked Out</code>, <code>Get Current Move</code> (mossa, frame, durata), <code>Get Current Move Tags</code>, <code>Get Run Stage</code>, <code>Get Coyote Frames Left</code>, <code>Is Combat Airborne</code>, <code>Get Frames Since Landed</code>, <code>Get Last Hit Received / Landed</code> (attaccante, danno, angolo di lancio).</p>
+    <p>Gli eventi stanno sul componente di combattimento (<code>Get Combat Component</code> › Bind Event, o nel pannello Events del componente):</p>
+    <div class="tablebox"><table>
+      <thead><tr><th>Tipo</th><th>Eventi</th><th>Quando usarli</th></tr></thead>
+      <tbody>
+        <tr><td>Confermati</td><td><code>On Hit Received</code>, <code>On Hit Landed</code>, <code>On Knocked Out</code>, <code>On Combat Event</code> (tutti i <code>Combat.Event.*</code>, anche atterrato/tech/scudo rotto dei plugin)</td><td>Punteggio, UI, kill feed, flusso di gioco. Decisi dal server, arrivano <b>una volta</b> su ogni macchina, client compresi (con il ritardo della rete).</td></tr>
+        <tr><td>Di stato</td><td><code>On Move Started / Ended</code>, <code>On Hitstun Started / Ended</code>, <code>On Tumble Started / Ended</code>, <code>On Landed</code>, <code>On Left Ground</code>, <code>On Run Stage Changed</code></td><td>Animazione, camera, effetti. Subito sul proprio personaggio; i rollback non li fanno scattare due volte.</td></tr>
+        <tr><td>Predetti</td><td><code>On Hit Predicted</code> (Hit Presentation)</td><td>Feeling del colpo senza ritardo; possono essere annullati.</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">Stato: scritto e con test automatici, nel codice di <code>main</code> ma <b>main non è ancora stato compilato dopo il merge della PR #37</b> (integrazione in corso sul branch <code>claude/integ-2026-11-23</code>) e non provato in gioco (prova host + client da fare). Dagli eventi non si cambia la simulazione: per far partire una mossa si usa un comando.</p>
+
+    <h3 id="camera-pivot">8 · Telecamera custom: il punto da seguire senza tremolii</h3>
+    <p>Se fai una telecamera tua (Blueprint, camera modifier, Sequencer, una modalità nuova) <b>non seguire <code>Get Actor Location</code></b> del personaggio: è il centro della capsula, che salta quando la capsula cambia misura (accucciata, dair, dropkick, a terra) e a ogni passo della logica (62,5 al secondo, mentre lo schermo va a 144). Usa invece questi nodi, categoria <b>GSTN › Camera</b>:</p>
+    <div class="tablebox"><table>
+      <thead><tr><th>Nodo</th><th>Cosa restituisce</th><th>Quando usarlo</th></tr></thead>
+      <tbody>
+        <tr><td><code>Get Camera Pivot</code> (Character)</td><td>Dove sarebbe il personaggio con la capsula in piedi, letto dal corpo disegnato (già fluido). Segue subito ogni movimento vero, salti compresi. Il booleano è falso se non trova la mesh (allora dà la posizione dell'attore).</td><td>Smorzamento tuo, mira, lock-on, inquadrature.</td></tr>
+        <tr><td><code>Get Damped Camera Pivot</code> (Character)</td><td>Lo stesso punto con lo smorzamento della nostra telecamera e la tenuta in aria stile Mario (valori in <code>DA_CameraAnchor_Default</code>). <code>Damped</code> falso = l'ancora non gira su quel personaggio: ricevi il punto non smorzato.</td><td>Avere lo stesso feeling della telecamera di gioco.</td></tr>
+        <tr><td>componente <code>GSTN_CameraAnchor</code>: <code>Get Damped Anchor</code>, <code>Get Standing Root</code></td><td>Gli stessi valori letti dal componente.</td><td>Quando hai già il componente in mano.</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">Chiamali dentro l'aggiornamento della telecamera (<code>BlueprintUpdateCamera</code> del Player Camera Manager, un camera modifier) o da un tick in <b>Post Physics</b> o prima. Mai spostare una telecamera da un tick in <b>Post Update Work</b>: Unreal ha già costruito l'immagine, la telecamera arriva un frame dopo e trema (il bug del 20 novembre). Stato: scritto e con test automatici, <b>main non ancora compilato dopo il merge della PR #37</b>. Dettagli: <code>docs/architecture/camera-anchor.md</code>.</p>
 
     <h3>Cosa non è ancora pronto</h3>
     <ul>
@@ -255,6 +297,123 @@ a { color: var(--accent); }
       <li>Effetti e suoni veri mancano (vedi sopra).</li>
       <li>Il plugin non è ancora pubblico: la confezione per pubblicarlo è una decisione a parte (prima si sceglie tra fork e GAS standard).</li>
     </ul>
+  </section>
+
+  <section id="combat-move-passo">
+    <h2>Creare una mossa con Combat Move (passo passo)</h2>
+    <p>Questa sezione raccoglie il contenuto della ex "Guida mosse Blueprint GSTN" che qui non c'era già: i campi della finestra, la scelta tra dati e grafo, le tracce della timeline, le regole del validatore e come provare la mossa. Il pulsante e il menu sono descritti sopra nel punto 1.</p>
+
+    <h3>Passo 1 · I campi della finestra Combat Move</h3>
+    <p>Add › Gameplay › Combat › Combat Move. Ogni valore è solo un punto di partenza, poi lo cambi nell'editor timeline e nel kit.</p>
+    <div class="tablebox"><table>
+      <thead><tr><th>Campo</th><th>Cosa fa</th><th>Default</th></tr></thead>
+      <tbody>
+        <tr><td><code>Template</code></td><td><b>Strike</b>: una hitbox a sfera che avanza nei frame attivi (un colpo corpo a corpo). <b>Action</b>: nessuna hitbox, una chiave Event sul primo frame attivo, a cui aggiungi azioni (sparo, evento, effetto) o che il grafo legge. <b>Empty</b>: solo i frame.</td><td>Strike</td></tr>
+        <tr><td><code>Parent Class</code></td><td>La classe da cui deriva: l'abilità di combattimento, o una sua figlia del gioco.</td><td>GSTN_GA_BaseCombat</td></tr>
+        <tr><td><code>Total / Active Start / Active End / First Actionable</code></td><td>In frame di simulazione (62,5 Hz). Se sono fuori ordine vengono messi in ordine, mai rifiutati.</td><td>30 / 6 / 9 / 24</td></tr>
+        <tr><td><code>Montage</code>, <code>Montage Play Rate</code></td><td>L'animazione, facoltativa.</td><td>vuoto, 1</td></tr>
+        <tr><td><code>Key Tag</code></td><td>Solo Action: il tag della chiave, quello che On Move Key confronta (es. <code>Example.Key.Fire</code>).</td><td>vuoto</td></tr>
+        <tr><td><code>Timeline As Asset</code></td><td>Spento: la timeline vive dentro la mossa (Class Defaults › Timeline › Open Timeline Editor). Acceso: crea anche <code>TL_&lt;nome&gt;</code> accanto, per una timeline che più mosse o armi condividono.</td><td>spento</td></tr>
+        <tr><td><code>Add Move Events</code></td><td>Mette nel grafo, scollegati, On Move Started / Key / Hit Confirmed / Ended. Solo per la strada B.</td><td>spento</td></tr>
+        <tr><td><code>Hookup</code>: Kit, Weapon, Command, Requirements</td><td>Facoltativo. Lega subito la mossa a un comando del kit e/o dell'arma, così è giocabile. Un binding con stesso comando e stessi requisiti viene sostituito, gli altri restano.</td><td>vuoto</td></tr>
+      </tbody>
+    </table></div>
+    <div class="strip" role="img" aria-label="Timeline di partenza di 30 frame: avvio 0-5, attivi 6-9, recupero 10-23, libero da 24">
+      <span class="s" style="flex:6"></span><span class="a" style="flex:4"></span><span class="r" style="flex:14"></span><span class="t" style="flex:6"></span>
+    </div>
+    <div class="legend"><span><i class="s"></i>avvio 0–5</span><span><i class="a"></i>attivi 6–9 (hitbox o chiave)</span><span><i class="r"></i>recupero 10–23</span><span><i class="t"></i>libero da 24, finisce a 30</span></div>
+    <p class="small">Il template Strike: sfera di 50 cm, da 80 a 160 cm davanti, spazzata fra i frame; danno 6, knockback base 500, angolo 30°. Sono i numeri del jab di esempio, non un bilanciamento.</p>
+
+    <h3>Passo 2 · Legare una mossa che esiste già, da script o da agente</h3>
+    <p>Tasto destro su una o più mosse › <b>Add to Kit or Weapon...</b>: stessa finestra Hookup, un solo Ctrl+Z annulla. Dopo, salva il kit e fai <b>Validate</b> su di esso: il validatore dice se il comando non è nel set di comandi del kit. La mossa non ha tasti: risponde a un tag di comando (<code>Command.Attack.Neutral</code>, <code>Command.Special.Directional</code>...); quale tasto inserisce quel comando lo decide il set di comandi del kit e il plugin input.</p>
+    <p>La finestra chiama la stessa libreria che usano Python e gli agenti dell'editor, così una mossa non si cabla mai a mano:</p>
+    <pre><code>o = unreal.GSTN_NewCombatMoveOptions()
+o.set_editor_property('template', unreal.GSTN_CombatMoveTemplate.ACTION)
+o.set_editor_property('add_move_events', True)
+bp, report, error = unreal.GSTN_CombatMoveAuthoring.create_combat_move('/Game/Moves', 'GA_Uppercut', o)
+unreal.EditorAssetLibrary.save_loaded_asset(bp)   # la libreria non salva mai da sola</code></pre>
+    <p class="small">Altre chiamate: <code>make_starter_timeline</code>, <code>sanitize_options</code>, <code>add_move_to_kit</code>, <code>add_move_to_kit_assets</code>, <code>is_combat_move_blueprint</code>. Per il grafo: <code>GSTN_MoveGraphAuthoring</code> (variabili, nodi, collegamenti, compila, controlla le regole).</p>
+
+    <h3>Passo 3 · Dati o grafo: quale strada</h3>
+    <div class="tablebox"><table>
+      <thead><tr><th></th><th>A · Solo dati (la maggior parte delle mosse)</th><th>B · Grafo Blueprint (quando serve una decisione)</th></tr></thead>
+      <tbody>
+        <tr><td>Cosa fai</td><td>Tutto nella timeline: hitbox, chiavi Event con azioni, finestre Tags e Cancel. Catene (jab1 → jab2) con una finestra Tags e un binding con <code>RequireTags</code>.</td><td>"Se ha colpito, allora...", "se ha ripremuto entro N frame...", contatori, stati. Si decide per chiave e per evento, non per frame (On Move Frame è opt-in).</td></tr>
+        <tr><td>Costo e regole</td><td>Zero costo di Blueprint per frame, zero regole da rispettare.</td><td>Solo variabili Sync e nodi sicuri per il rollback: il validatore controlla.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Regola pratica: parti dai dati. Passa al grafo solo per la parte che i dati non sanno dire, e tieni nel grafo solo quella.</p>
+
+    <h3>Passo 4A · Strada solo dati: le tracce della timeline</h3>
+    <p>Si lavora nell'editor timeline (Open Timeline Editor nelle Class Defaults, o doppio clic su un <code>TL_</code>).</p>
+    <div class="tablebox"><table>
+      <thead><tr><th>Traccia</th><th>A cosa serve</th></tr></thead>
+      <tbody>
+        <tr><td><b>Hitbox</b></td><td>Forme, chiavi di posizione, spazio (Root o <code>BakedSocket</code> + Bake Sockets), dati del colpo (danno, angolo, knockback, hitstop, <code>Cue Tag</code> per scintille e suono).</td></tr>
+        <tr><td><b>Event</b> (chiave)</td><td>Un frame preciso. Fa partire, in quest'ordine: cue, gameplay event, <b>Actions</b>, poi On Move Key. Una volta per passaggio, anche in re-simulazione.</td></tr>
+        <tr><td><b>Actions</b> della chiave</td><td><b>Fire Projectile</b> (un data asset <code>ProjectileDefinition</code> + variazione di angolo e velocità), <b>Send Event</b>, <b>Apply Effect</b> (movimento = GE con mossa Mover in coda), <b>Open Tag Window</b> (un tag per N frame o fino a fine mossa).</td></tr>
+        <tr><td><b>Tags</b></td><td>Un tag sul personaggio per un tratto di frame: la base delle catene e dei follow-up.</td></tr>
+        <tr><td><b>Cancel Window</b></td><td>Da quale frame a quale la mossa può essere interrotta dai comandi indicati.</td></tr>
+        <tr><td><b>Movement</b>, <b>Hurtbox Modifier</b></td><td>Spinte della mossa; parti del corpo invulnerabili o corazzate per alcuni frame.</td></tr>
+      </tbody>
+    </table></div>
+    <p><b>Catena senza grafo (come jab1 → jab2):</b></p>
+    <ol>
+      <li>Mossa 1: finestra Tags <code>Move.Chain.X</code> sui frame in cui si può continuare, più una Cancel Window verso lo stesso comando.</li>
+      <li>Mossa 2: una mossa normale.</li>
+      <li>Kit: il comando legato alla mossa 1 con <code>IgnoreTags = Move.Chain.X</code>, e alla mossa 2 con <code>RequireTags = Move.Chain.X</code>.</li>
+    </ol>
+    <p>Fuori finestra la pressione fa ripartire la mossa 1; una pressione un po' anticipata la prende il buffer.</p>
+
+    <h3>Passo 4B · Strada con grafo: eventi e nodi</h3>
+    <p>Crea la mossa con <b>Add Move Events</b> acceso (o aggiungi gli eventi dal pannello Override). Gli eventi sono di <b>simulazione</b>: girano su ogni macchina, anche quando il gioco corregge e rigioca dei frame.</p>
+    <div class="tablebox"><table>
+      <thead><tr><th>Evento</th><th>Quando</th></tr></thead>
+      <tbody>
+        <tr><td>On Move Started</td><td>La mossa parte (frame di inizio).</td></tr>
+        <tr><td>On Move Key</td><td>La timeline passa una chiave Event. Confronta <code>KeyTag</code> per sapere quale.</td></tr>
+        <tr><td>On Move Hit Confirmed</td><td>Un gruppo di hitbox ha colpito o è stato parato (bit = gruppo).</td></tr>
+        <tr><td>On Move Ended</td><td>Fine, con il motivo (finita, sostituita, cancellata).</td></tr>
+        <tr><td>On Move Frame</td><td>Ogni frame, solo con <code>Tick Move In Blueprint</code>. Costa su PC deboli: usalo solo se serve.</td></tr>
+        <tr><td>On Combat Frames Elapsed</td><td>Dopo un <b>Wait Combat Frames</b> (al posto di Delay).</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tablebox"><table>
+      <thead><tr><th>Tipo</th><th>Nodi</th></tr></thead>
+      <tbody>
+        <tr><td>Azioni (richieste)</td><td>Fire Move Projectile, Send Move Event, Apply Move Effect, Open / Close Move Tag Window, Run Move Action</td></tr>
+        <tr><td>Domande di input (sul componente combat)</td><td>Was Command Entered Within (per tag di comando), Was Button Pressed Within, Count Button Presses Within, Get Button Held Frames, Get Frames Since Button Pressed, Get Move Stick, Get Stick Direction</td></tr>
+        <tr><td>Stato della mossa</td><td>Get Move Timeline Frame, Get Timeline Frame, Get Move Hit Confirm Groups</td></tr>
+        <tr><td>Caso</td><td>Get Move Random Float / Integer (stesso numero su ogni macchina)</td></tr>
+        <tr><td>Memoria</td><td>Variabili <b>Sync</b> (Sync Integer, Sync Bool...): il rollback le ripristina</td></tr>
+      </tbody>
+    </table></div>
+    <p class="small">Le azioni rispondono <code>false</code> e non fanno nulla fuori dal passo di simulazione di una mossa attiva: chiamarle da un evento visivo o dopo la fine non rompe niente, semplicemente non succede.</p>
+
+    <h3>Passo 5 · Regole del validatore</h3>
+    <p>Al salvataggio e con Validate all, il validatore guarda tutto ciò che gli eventi di simulazione raggiungono. Il messaggio dice il nodo e la correzione.</p>
+    <div class="tablebox"><table>
+      <thead><tr><th>Codice</th><th>Livello</th><th>Cosa trova</th><th>Correzione</th></tr></thead>
+      <tbody>
+        <tr><td><code>Ability.SimLatent</code></td><td><span class="sev err">errore</span></td><td>Delay, timer, nodi latenti: riprendono fuori dalla simulazione e il rollback non li annulla</td><td>Wait Combat Frames + On Combat Frames Elapsed, o una chiave Event</td></tr>
+        <tr><td><code>Ability.SimNonSyncVariable</code></td><td><span class="sev warn">avviso</span></td><td>Una variabile normale scritta in un evento di simulazione</td><td>Usa un tipo Sync (Sync Integer, Sync Bool...)</td></tr>
+        <tr><td><code>Ability.SimWorldRead</code></td><td><span class="sev warn">avviso</span></td><td>Letture di mondo o Mover: posizione, velocità, tempo, trace, overlap</td><td>Leggi lo stato combat e le domande di input</td></tr>
+        <tr><td><code>Ability.SimRandom</code></td><td><span class="sev warn">avviso</span></td><td>Random del motore: diverso su ogni macchina</td><td>Get Move Random Float / Integer</td></tr>
+        <tr><td>Async task</td><td><span class="sev warn">avviso</span></td><td>Task asincroni nell'evento</td><td>Eventi della mossa e Wait Combat Frames</td></tr>
+        <tr><td><code>Timeline.MoveAction</code></td><td><span class="sev warn">avviso</span></td><td>Un'azione della chiave che non può girare (es. sparo senza definizione)</td><td>Completa l'azione nella timeline</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note"><b>Tre cose da non fare mai in un grafo di mossa:</b> aspettare con Delay, ricordare con una variabile non Sync, guardare il mondo invece dello stato combat. Tutto il resto si può.</p>
+
+    <h3>Passo 6 · Provare la mossa</h3>
+    <ol>
+      <li>Salva la mossa (e il kit, se l'hai legata). <b>Validate</b> su entrambi: zero errori.</li>
+      <li>Nell'editor timeline guarda la barra delle fasi e la scheda Frame Data: avvio, attivi, recupero sono quelli che volevi.</li>
+      <li><code>L_Test_Hub</code>, Play, prendi il kit dal suo pad, prova il comando. Per una mossa a grafo, prova anche con più client e ritardo (harness): niente doppi colpi, niente colpi persi.</li>
+    </ol>
+
+    <h3>Cosa manca per pubblicare il plugin</h3>
+    <p class="small">Dalla Guida: la decisione sul fork GAS + Network Prediction (percorso con GAS standard o pubblicare il fork) blocca tutto il resto; poi tag, config ed esempi dentro il plugin, dipendenze dal progetto, canary e CI su 5.8 / 5.9, documentazione per estranei. Sul server: il modello di rete per l'1v1 è deciso il 2026-11-23 (host listen server + Epic Online Services, niente server dedicato), vedi <code>docs/notes/server-dedicato-ricerca.md</code> sul branch <code>claude/ricerca-server-dedicato</code>.</p>
   </section>
 
   <section>
@@ -278,7 +437,7 @@ a { color: var(--accent); }
       <li>Il forte non si carica tenendo il tasto: è un colpo singolo più lento.</li>
       <li>Leggero, forte e speciale sono stati provati in gioco (host e due client): ognuno toglie al bersaglio esattamente il danno scritto. La cupola dello zaino d'esempio non è ancora stata provata col pad: è la cupola standard con i suoi numeri in un Blueprint proprio.</li>
       <li>Lo zaino a volte non segue la schiena del personaggio: è un problema noto, aperto a parte.</li>
-      <li>Il plugin e i suoi campi nuovi sono provati con 579 test automatici (0 falliti) e con la prova in gioco di host e client; la prova da designer nell'editor è ancora da fare.</li>
+      <li>Il plugin e i suoi campi nuovi sono provati con i test automatici headless (1614 al 21-11, <code>docs/INDICE-PROGETTO.md</code> §4) e con la prova in gioco di host e client fatta in passato; <b>main non è ancora stato compilato dopo il merge del 22-11</b>, e la prova da designer nell'editor è ancora da fare.</li>
       <li>Gli esempi sono stati creati da <code>Tools/GAS/setup_designer_examples.py</code>. Rilanciarlo non tocca le tue modifiche: crea solo ciò che manca.</li>
     </ul>
   </section>
@@ -291,4 +450,3 @@ a { color: var(--accent); }
     <p>Da tastiera: <span class="btn">Y</span> salto, <b>clic sinistro</b> attacco, <span class="btn">O</span> <b>tenuto premuto</b> per cambiare kit. Il pad usa il layout Xbox, come scritto nelle altre sezioni.</p>
   </section>
 </div>
-</body></html>
