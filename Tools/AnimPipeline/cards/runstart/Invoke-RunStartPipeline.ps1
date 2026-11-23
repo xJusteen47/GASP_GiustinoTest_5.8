@@ -26,7 +26,7 @@ param(
     [int]$PivotFrom = 84,
     [int]$PivotTo = 116,
     [int]$PivotStep = 4,
-    [int]$GateWin = 40,
+    [int]$GateWin = 18,
     [string]$BeforeFbx = '',
     [string]$AfterFbx = '',
     [string]$Tag = 'runstart_pipe'
@@ -36,12 +36,15 @@ $ErrorActionPreference = 'Stop'
 $ue59 = (Resolve-Path -LiteralPath $Ue59Dir).Path
 $ciDir = Join-Path $ue59 'Tools\CI'
 $rsDir = Join-Path $ue59 'Tools\AnimPipeline\cards\runstart'
+$assetList = @($Asset -split ',' | ForEach-Object { ($_.Trim().TrimEnd('/') -split '/')[-1] } | Where-Object { $_ })
+if ($assetList.Count -eq 0) { throw "Asset list is empty" }
+$assetsCsv = $assetList -join ','
 
 if ($WorktreeDir) {
     $wt = (Resolve-Path -LiteralPath $WorktreeDir).Path
     $sparseHelper = Join-Path $wt 'Tools\CI\Run-SparseAnimStep.ps1'
     if (-not (Test-Path -LiteralPath $sparseHelper)) { $sparseHelper = Join-Path $ciDir 'Run-SparseAnimStep.ps1' }
-    & $sparseHelper -WorktreeDir $wt -Script $Script -Ue59Dir $ue59 -Assets $Asset -GateWin $GateWin -Tag $Tag
+    & $sparseHelper -WorktreeDir $wt -Script $Script -Ue59Dir $ue59 -Assets $assetsCsv -GateWin $GateWin -Tag $Tag
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } else {
     & (Join-Path $ciDir 'Save-Assets.ps1') -Script $Script -Tag $Tag
@@ -51,7 +54,7 @@ if ($WorktreeDir) {
     $exe = Join-Path $engine 'Binaries\Win64\UnrealEditor-Cmd.exe'
     $uproj = Join-Path $ue59 'GASP_Giustino2.uproject'
     $rcj = Join-Path $rsDir 'runstart_clip_joints_ue.py'
-    $env:RCJ_ASSETS = $Asset
+    $env:RCJ_ASSETS = $assetsCsv
     try {
         & (Join-Path $ciDir 'Run-Timed.ps1') -Kind Capture -Log (Join-Path $ue59 "Saved\Logs\ci\${Tag}_rcj.log") -Exe $exe `
             -ArgLine "`"$uproj`" -run=pythonscript -script=`"$($rcj -replace '\\', '/')`" -unattended -nullrhi -nosplash -nopause" -MaxMinutes 10
@@ -59,14 +62,29 @@ if ($WorktreeDir) {
     } finally {
         Remove-Item Env:RCJ_ASSETS -ErrorAction SilentlyContinue
     }
-    $jFile = Join-Path $ue59 "Saved\AnimPipeline\runstart\joints_$Asset.json"
-    & python (Join-Path $rsDir 'runstart_pivot_gates.py') --json $jFile $GateWin
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    foreach ($aItem in $assetList) {
+        $jFile = Join-Path $ue59 "Saved\AnimPipeline\runstart\joints_$aItem.json"
+        $prevNativePref = $PSNativeCommandUseErrorActionPreference
+        $PSNativeCommandUseErrorActionPreference = $false
+        try {
+            $gOut = & python (Join-Path $rsDir 'runstart_pivot_gates.py') --json $jFile $GateWin 2>&1
+            $gExit = $LASTEXITCODE
+        } finally {
+            $PSNativeCommandUseErrorActionPreference = $prevNativePref
+        }
+        $gOut | ForEach-Object { Write-Output "$_" }
+        $gTxt = ($gOut | Out-String)
+        if ($gExit -ne 0) { exit $gExit }
+        if ($gTxt -match 'GATES:\s*FAIL') {
+            Write-Output "PIPELINE: FAIL - gates falliti per $aItem"
+            exit 1
+        }
+    }
 }
 
 if ($BeforeFbx -and $AfterFbx) {
     $ccPy = Join-Path $ue59 'Tools\AnimPipeline\clipcheck\clip_check.py'
-    $conserveOut = Join-Path $ue59 "Saved\AnimPipeline\runstart\conserve_$Asset.json"
+    $conserveOut = Join-Path $ue59 "Saved\AnimPipeline\runstart\conserve_$($assetList[0]).json"
     & python $ccPy --conserve $BeforeFbx $AfterFbx $conserveOut
     if ($LASTEXITCODE -ne 0) { Write-Error "CONSERVATION GUARD FAIL (>15% loss)"; exit $LASTEXITCODE }
 }

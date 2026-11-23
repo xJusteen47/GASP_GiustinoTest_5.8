@@ -34,6 +34,7 @@ def _tool_defs() -> list[dict[str, Any]]:
             "description": (
                 "Inspect an animation asset's dumped joints and return readable metrics: "
                 "hip/foot/elbow/shoulder heights (cm), torso lean/bank angles (deg), "
+                "lean_local_deg, upperarm_abduction_deg, elbow_flex_deg, jitter_max, splits, "
                 "hand-thigh/ankle clearance (cm), and runstart_pivot_gates status."
             ),
             "inputSchema": {
@@ -41,7 +42,7 @@ def _tool_defs() -> list[dict[str, Any]]:
                 "properties": {
                     "asset": {"type": "string", "description": "AnimSequence name or /Game/... path."},
                     "frame_range": {"description": "Optional range like '84-116' or [84, 116]."},
-                    "gate_win": {"type": "integer", "default": 40},
+                    "gate_win": {"type": "integer", "default": 18},
                 },
                 "required": ["asset"],
             },
@@ -49,10 +50,17 @@ def _tool_defs() -> list[dict[str, Any]]:
         {
             "name": "anim_apply_intent",
             "description": (
-                "Apply 8-10 semantic JSON parameters (com_shift_fwd_cm, torso_lean_pivot_deg, "
-                "torso_bank_deg, shoulder_level_compensate, arm_back_arc, foot_pushoff_deg, "
-                "w3_knee_drop, handoff_smooth_range, frame_range) via the unified UE 5.9 "
-                "geometric engine, automatically taking a rollback snapshot first."
+                "Apply semantic JSON intent parameters via the unified UE 5.9 geometric engine, "
+                "automatically taking a rollback snapshot first. v2 character-anchored parameters: "
+                "turn_side, turn_deg, start_from_frame, pelvis_fwd_cm, pelvis_drop_cm, "
+                "spine_lean_pivot_deg, spine_lean_run_deg, torso_bank_deg, head_lift_deg, "
+                "knee_drop, swing_lag_cm, catch_fwd_cm, step_narrow_cm, lat_widen_cm, "
+                "pivot_heel_deg, clav_st_elev_deg, clav_pv_elev_deg, clav_open_deg, "
+                "arm_st_tuck_in_deg, arm_pv_out_deg, arm_st_back_deg, arm_st_elbow_deg, "
+                "arm_pv_fwd_deg, arm_pv_elbow_deg, arm_clr_deg, smooth_pelvis_z, "
+                "smooth_upper_passes, smooth_leg_passes. v1 backward-compatible keys: "
+                "com_shift_fwd_cm, torso_lean_pivot_deg, torso_bank_deg, shoulder_level_compensate, "
+                "arm_back_arc, foot_pushoff_deg, w3_knee_drop, handoff_smooth_range, frame_range."
             ),
             "inputSchema": {
                 "type": "object",
@@ -76,7 +84,7 @@ def _tool_defs() -> list[dict[str, Any]]:
                 "properties": {
                     "asset": {"type": "string", "description": "Candidate AnimSequence name."},
                     "ref_asset": {"type": "string", "default": "", "description": "Baseline AnimSequence name."},
-                    "gate_win": {"type": "integer", "default": 40},
+                    "gate_win": {"type": "integer", "default": 18},
                     "before_fbx": {"type": "string", "default": ""},
                     "after_fbx": {"type": "string", "default": ""},
                 },
@@ -92,14 +100,25 @@ def _tool_defs() -> list[dict[str, Any]]:
             "inputSchema": {
                 "type": "object",
                 "properties": {
+                    "pairs": {"type": "array", "items": {"type": "object"}},
                     "variant_a": {"type": "string"},
                     "variant_b": {"type": "string"},
+                    "variant_a_id": {"type": "string"},
+                    "variant_b_id": {"type": "string"},
+                    "clip_a": {"type": "string"},
+                    "clip_b": {"type": "string"},
                     "seq": {"type": "string", "default": "mv_run_start_v5"},
                     "window": {"type": "string", "default": "77-197"},
                     "views": {"type": "string", "default": "az180,az90,game"},
+                    "assert_win": {"type": "string"},
+                    "cvars_a": {"type": "string"},
+                    "cvars_b": {"type": "string"},
+                    "pivot_window": {"type": "string"},
+                    "pivot_step": {"type": "integer"},
+                    "saved_dir": {"type": "string", "default": "CaptureSpeed"},
+                    "batch": {"type": "string", "default": "batch"},
                     "run_gpu": {"type": "boolean", "default": False},
                 },
-                "required": ["variant_a", "variant_b"],
             },
         },
         {
@@ -121,7 +140,7 @@ def handle_tool_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
         return anim_ops.anim_inspect(
             asset=args["asset"],
             frame_range=args.get("frame_range"),
-            gate_win=int(args.get("gate_win", 40)),
+            gate_win=int(args.get("gate_win", 18)),
         )
     if name == "anim_apply_intent":
         return anim_ops.anim_apply_intent(
@@ -134,17 +153,29 @@ def handle_tool_call(name: str, args: dict[str, Any]) -> dict[str, Any]:
         return anim_ops.anim_gate_check(
             asset=args["asset"],
             ref_asset=args.get("ref_asset", ""),
-            gate_win=int(args.get("gate_win", 40)),
+            gate_win=int(args.get("gate_win", 18)),
             before_fbx=args.get("before_fbx", ""),
             after_fbx=args.get("after_fbx", ""),
         )
     if name == "anim_capture_ab":
         return anim_ops.anim_capture_ab(
-            variant_a=args["variant_a"],
-            variant_b=args["variant_b"],
-            seq=args.get("seq", "mv_run_start_v5"),
-            window=args.get("window", "77-197"),
-            views=args.get("views", anim_ops.DEFAULT_VIEWS),
+            pairs=args.get("pairs"),
+            variant_a=args.get("variant_a"),
+            variant_b=args.get("variant_b"),
+            variant_a_id=args.get("variant_a_id") or "",
+            variant_b_id=args.get("variant_b_id") or "",
+            clip_a=args.get("clip_a") or "",
+            clip_b=args.get("clip_b") or "",
+            seq=args.get("seq") or "mv_run_start_v5",
+            window=args.get("window") or "77-197",
+            views=args.get("views") or anim_ops.DEFAULT_VIEWS,
+            assert_win=args.get("assert_win") or "85,120",
+            cvars_a=args.get("cvars_a") or "",
+            cvars_b=args.get("cvars_b") or "",
+            pivot_window=args.get("pivot_window") or "84-116",
+            pivot_step=int(args.get("pivot_step") or 4),
+            saved_dir=args.get("saved_dir") or "CaptureSpeed",
+            batch=args.get("batch") or "batch",
             run_gpu=bool(args.get("run_gpu", False)),
         )
     if name == "anim_rollback":

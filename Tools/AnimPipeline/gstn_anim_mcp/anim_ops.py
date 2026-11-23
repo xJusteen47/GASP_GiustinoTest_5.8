@@ -22,6 +22,28 @@ INTENT_BOUNDS: dict[str, tuple[float, float]] = {
     "arm_back_arc": (-45.0, 45.0),
     "foot_pushoff_deg": (-45.0, 45.0),
     "w3_knee_drop": (-25.0, 25.0),
+    "pelvis_fwd_cm": (-40.0, 40.0),
+    "pelvis_drop_cm": (-15.0, 15.0),
+    "spine_lean_pivot_deg": (-35.0, 45.0),
+    "spine_lean_run_deg": (-35.0, 45.0),
+    "head_lift_deg": (-25.0, 30.0),
+    "knee_drop": (0.0, 0.9),
+    "swing_lag_cm": (-15.0, 20.0),
+    "catch_fwd_cm": (-15.0, 20.0),
+    "step_narrow_cm": (-10.0, 15.0),
+    "lat_widen_cm": (-10.0, 15.0),
+    "pivot_heel_deg": (-30.0, 45.0),
+    "clav_st_elev_deg": (-25.0, 35.0),
+    "clav_pv_elev_deg": (-25.0, 35.0),
+    "clav_open_deg": (-25.0, 30.0),
+    "arm_st_tuck_in_deg": (-30.0, 45.0),
+    "arm_pv_out_deg": (-30.0, 45.0),
+    "arm_st_back_deg": (-45.0, 55.0),
+    "arm_st_elbow_deg": (-30.0, 55.0),
+    "arm_pv_fwd_deg": (-45.0, 55.0),
+    "arm_pv_elbow_deg": (-30.0, 55.0),
+    "arm_clr_deg": (-20.0, 30.0),
+    "turn_deg": (0.0, 180.0),
 }
 
 DEFAULT_VIEWS = "az180,az90,game"
@@ -41,16 +63,28 @@ def _joints_path(root: Path, asset: str) -> Path:
 def _parse_frame_range(frame_range: Any, total: int) -> tuple[int, int]:
     if frame_range is None:
         return 0, max(0, total - 1)
+    max_f = max(0, total - 1)
     if isinstance(frame_range, str):
         parts = [p.strip() for p in frame_range.replace("..", "-").split("-") if p.strip()]
         if len(parts) == 2:
             f0, f1 = int(parts[0]), int(parts[1])
-            return max(0, f0), min(max(0, total - 1), f1)
+            if f0 > f1:
+                raise ValueError(f"Inverted frame_range: {frame_range!r}")
+            a, b = max(0, f0), min(max_f, f1)
+            if a > b:
+                raise ValueError(f"Invalid frame_range {frame_range!r} for total={total}")
+            return a, b
         if len(parts) == 1:
-            f = max(0, min(max(0, total - 1), int(parts[0])))
+            f = max(0, min(max_f, int(parts[0])))
             return f, f
     if isinstance(frame_range, (list, tuple)) and len(frame_range) == 2:
-        return max(0, int(frame_range[0])), min(max(0, total - 1), int(frame_range[1]))
+        f0, f1 = int(frame_range[0]), int(frame_range[1])
+        if f0 > f1:
+            raise ValueError(f"Inverted frame_range: {frame_range!r}")
+        a, b = max(0, f0), min(max_f, f1)
+        if a > b:
+            raise ValueError(f"Invalid frame_range {frame_range!r} for total={total}")
+        return a, b
     raise ValueError(f"Invalid frame_range: {frame_range!r}")
 
 
@@ -72,7 +106,7 @@ def anim_inspect(
     asset: str,
     frame_range: Any = None,
     root: str | Path | None = None,
-    gate_win: int = 40,
+    gate_win: int = 18,
 ) -> dict[str, Any]:
     """Return readable joint metrics, lean/bank estimates, clearance, and gate status."""
     repo = _repo_root(root)
@@ -90,48 +124,120 @@ def anim_inspect(
         return {"ok": False, "error": f"empty joints in {jpath}"}
 
     total = len(next(iter(joints.values())))
+    if total <= 0:
+        return {"ok": False, "error": f"zero frames in {jpath}"}
     f0, f1 = _parse_frame_range(frame_range, total)
     frames = range(f0, f1 + 1)
 
-    # joints_*.json is Y-up (x, y_up, z_fwd) from runstart_clip_joints_ue.py
-    def _ys(key: str) -> list[float]:
-        pts = joints.get(key, [])
-        return [pts[f][1] for f in frames] if len(pts) > f1 else []
+    def _sub3(a: list[float], b: list[float]) -> list[float]:
+        return [a[i] - b[i] for i in range(3)]
 
-    hip_ys = [
-        0.5 * (joints["thigh_MainPoint_l"][f][1] + joints["thigh_MainPoint_r"][f][1])
-        for f in frames
-        if "thigh_MainPoint_l" in joints and "thigh_MainPoint_r" in joints
-    ]
+    def _dot3(a: list[float], b: list[float]) -> float:
+        return sum(a[i] * b[i] for i in range(3))
 
-    lean_degs: list[float] = []
-    bank_degs: list[float] = []
-    clear_l: list[float] = []
-    clear_r: list[float] = []
-    ankle_gaps: list[float] = []
+    def _norm3(v: list[float]) -> list[float]:
+        n = math.sqrt(sum(x * x for x in v))
+        return [x / n for x in v] if n > 1e-9 else [1.0, 0.0, 0.0]
 
-    for f in frames:
-        if all(k in joints for k in ("thigh_MainPoint_l", "thigh_MainPoint_r", "upperarm_MainPoint_l", "upperarm_MainPoint_r")):
-            mid_hip = [0.5 * (joints["thigh_MainPoint_l"][f][i] + joints["thigh_MainPoint_r"][f][i]) for i in range(3)]
-            mid_sh = [0.5 * (joints["upperarm_MainPoint_l"][f][i] + joints["upperarm_MainPoint_r"][f][i]) for i in range(3)]
-            dy = max(1e-4, mid_sh[1] - mid_hip[1])
-            dz = mid_sh[2] - mid_hip[2]
-            lean_degs.append(math.degrees(math.atan2(dz, dy)))
+    # Per-frame character axes across ALL frames (joints_*.json is Cascadeur Y-up
+    # [x, y_up, z_fwd]).
+    lat_vecs: list[list[float]] = []
+    mid_hip: list[list[float]] = []
+    for f in range(total):
+        if all(k in joints and len(joints[k]) > f for k in ("thigh_MainPoint_l", "thigh_MainPoint_r")):
+            tl = joints["thigh_MainPoint_l"][f]
+            tr = joints["thigh_MainPoint_r"][f]
+        else:
+            tl = [0.0, 0.0, 0.0]
+            tr = [0.0, 0.0, 0.0]
+        lat = [tl[0] - tr[0], 0.0, tl[2] - tr[2]]
+        lat_vecs.append(_norm3(lat) if math.sqrt(sum(x * x for x in lat)) > 1e-9 else [1.0, 0.0, 0.0])
+        mid_hip.append([0.5 * (tl[i] + tr[i]) for i in range(3)])
 
-            sh_l = joints["upperarm_MainPoint_l"][f]
-            sh_r = joints["upperarm_MainPoint_r"][f]
-            horiz = math.hypot(sh_l[0] - sh_r[0], sh_l[2] - sh_r[2])
-            bank_degs.append(math.degrees(math.atan2(sh_l[1] - sh_r[1], max(1e-4, horiz))))
+    i_end = min(24, total - 1)
+    i_start = min(14, max(0, i_end - 4))
+    run_seg = _sub3(mid_hip[i_end], mid_hip[i_start])
+    run_flat = [run_seg[0], 0.0, run_seg[2]]
+    if math.sqrt(sum(x * x for x in run_flat)) > 1e-9:
+        run_dir = _norm3(run_flat)
+    else:
+        fb = _sub3(mid_hip[-1], mid_hip[0])
+        fb_flat = [fb[0], 0.0, fb[2]]
+        run_dir = _norm3(fb_flat) if math.sqrt(sum(x * x for x in fb_flat)) > 1e-9 else [0.0, 0.0, 1.0]
 
-        for s, out_lst in (("l", clear_l), ("r", clear_r)):
-            hk = f"hand_MainPoint_{s}"
-            tk = f"thigh_MainPoint_{s}"
-            ck = f"calf_MainPoint_{s}"
-            if hk in joints and tk in joints and ck in joints:
-                out_lst.append(_seg_dist(joints[hk][f], joints[tk][f], joints[ck][f]))
+    fwd_vecs: list[list[float]] = []
+    for f in range(total):
+        lat = lat_vecs[f]
+        fwd_vecs.append(_norm3([lat[2], 0.0, -lat[0]]))
 
-        if all(k in joints for k in ("foot_MainPoint_l", "foot_MainPoint_r")):
-            ankle_gaps.append(_dist(joints["foot_MainPoint_l"][f], joints["foot_MainPoint_r"][f]))
+    # Backward continuity pass anchored against run_dir.
+    ref_fwd = run_dir
+    for f in range(total - 1, -1, -1):
+        if _dot3(fwd_vecs[f], ref_fwd) < 0.0:
+            fwd_vecs[f] = [-x for x in fwd_vecs[f]]
+        ref_fwd = fwd_vecs[f]
+
+    def _zig_max(wa: int, wb: int) -> dict[str, Any]:
+        if wb - wa + 1 < 4:
+            return {"value": 0.0, "joint": None, "frame": None, "per_joint": {}}
+
+        def _chain_off(a_key: str, b_key: str, c_key: str) -> list[list[float]]:
+            pa, pb, pc = joints.get(a_key, []), joints.get(b_key, []), joints.get(c_key, [])
+            if min(len(pa), len(pb), len(pc)) <= wb:
+                return []
+            out: list[list[float]] = []
+            for f in range(wa, wb + 1):
+                ba = _sub3(pb[f], pa[f])
+                ca = _sub3(pc[f], pa[f])
+                ax = _norm3(ca)
+                proj = _dot3(ba, ax)
+                out.append([ba[i] - ax[i] * proj for i in range(3)])
+            return out
+
+        def _hand_rel(h_key: str, u_key: str) -> list[list[float]]:
+            ph, pu = joints.get(h_key, []), joints.get(u_key, [])
+            if min(len(ph), len(pu)) <= wb:
+                return []
+            return [_sub3(ph[f], pu[f]) for f in range(wa, wb + 1)]
+
+        series_map: dict[str, list[list[float]]] = {
+            "elbow_l": _chain_off("upperarm_MainPoint_l", "lowerarm_MainPoint_l", "hand_MainPoint_l"),
+            "elbow_r": _chain_off("upperarm_MainPoint_r", "lowerarm_MainPoint_r", "hand_MainPoint_r"),
+            "knee_l": _chain_off("thigh_MainPoint_l", "calf_MainPoint_l", "foot_MainPoint_l"),
+            "knee_r": _chain_off("thigh_MainPoint_r", "calf_MainPoint_r", "foot_MainPoint_r"),
+            "hand_l": _hand_rel("hand_MainPoint_l", "upperarm_MainPoint_l"),
+            "hand_r": _hand_rel("hand_MainPoint_r", "upperarm_MainPoint_r"),
+        }
+
+        per_joint: dict[str, dict[str, Any]] = {}
+        best_value = 0.0
+        best_joint: str | None = None
+        best_frame: int | None = None
+        for label, seg in series_map.items():
+            if len(seg) < 4:
+                continue
+            d2: list[list[float]] = [
+                [seg[t + 2][i] - 2.0 * seg[t + 1][i] + seg[t][i] for i in range(3)]
+                for t in range(len(seg) - 2)
+            ]
+            zigs: list[float] = []
+            for t in range(len(d2) - 1):
+                n0 = math.sqrt(sum(x * x for x in d2[t]))
+                n1 = math.sqrt(sum(x * x for x in d2[t + 1]))
+                if _dot3(d2[t + 1], d2[t]) < -0.5 * n1 * n0:
+                    zigs.append(min(n1, n0))
+                else:
+                    zigs.append(0.0)
+            if not zigs:
+                continue
+            m = max(zigs)
+            m_frame = wa + zigs.index(m) + 1
+            per_joint[label] = {"max": round(m, 2), "frame": m_frame}
+            if m > best_value:
+                best_value = m
+                best_joint = label
+                best_frame = m_frame
+        return {"value": round(best_value, 2), "joint": best_joint, "frame": best_frame, "per_joint": per_joint}
 
     def _stats(vals: list[float]) -> dict[str, float] | None:
         if not vals:
@@ -141,6 +247,97 @@ def anim_inspect(
             "max": round(max(vals), 2),
             "mean": round(sum(vals) / len(vals), 2),
         }
+
+    def _summarize_window(wa: int, wb: int) -> dict[str, Any]:
+        if wa > wb:
+            wa, wb = wb, wa
+        lean: list[float] = []
+        lean_local: list[float] = []
+        bank: list[float] = []
+        abd_l: list[float] = []
+        abd_r: list[float] = []
+        efl_l: list[float] = []
+        efl_r: list[float] = []
+        clear_l: list[float] = []
+        clear_r: list[float] = []
+        ankle_gaps: list[float] = []
+        for f in range(wa, wb + 1):
+            if all(k in joints and len(joints[k]) > f for k in (
+                "thigh_MainPoint_l", "thigh_MainPoint_r",
+                "upperarm_MainPoint_l", "upperarm_MainPoint_r",
+            )):
+                tl = joints["thigh_MainPoint_l"][f]
+                tr = joints["thigh_MainPoint_r"][f]
+                ul = joints["upperarm_MainPoint_l"][f]
+                ur = joints["upperarm_MainPoint_r"][f]
+                mh = [0.5 * (tl[i] + tr[i]) for i in range(3)]
+                ms = [0.5 * (ul[i] + ur[i]) for i in range(3)]
+                d = _sub3(ms, mh)
+                lean.append(math.degrees(math.atan2(d[2], max(1e-4, d[1]))))
+                lean_local.append(math.degrees(math.atan2(_dot3(d, fwd_vecs[f]), max(1e-4, d[1]))))
+                horiz = math.hypot(ul[0] - ur[0], ul[2] - ur[2])
+                bank.append(math.degrees(math.atan2(ul[1] - ur[1], max(1e-4, horiz))))
+
+            for s, out_lst in (("l", clear_l), ("r", clear_r)):
+                hk = f"hand_MainPoint_{s}"
+                tk = f"thigh_MainPoint_{s}"
+                ck = f"calf_MainPoint_{s}"
+                if all(k in joints and len(joints[k]) > f for k in (hk, tk, ck)):
+                    out_lst.append(_seg_dist(joints[hk][f], joints[tk][f], joints[ck][f]))
+
+            if all(k in joints and len(joints[k]) > f for k in ("foot_MainPoint_l", "foot_MainPoint_r")):
+                ankle_gaps.append(_dist(joints["foot_MainPoint_l"][f], joints["foot_MainPoint_r"][f]))
+
+            for s, abd_lst, efl_lst in (("l", abd_l, efl_l), ("r", abd_r, efl_r)):
+                uk = f"upperarm_MainPoint_{s}"
+                lk = f"lowerarm_MainPoint_{s}"
+                hk = f"hand_MainPoint_{s}"
+                if all(k in joints and len(joints[k]) > f for k in (uk, lk, hk)):
+                    up = joints[uk][f]
+                    lo = joints[lk][f]
+                    ha = joints[hk][f]
+                    u = _norm3(_sub3(lo, up))
+                    out_dir = lat_vecs[f] if s == "l" else [-x for x in lat_vecs[f]]
+                    sagittal = math.hypot(_dot3(u, fwd_vecs[f]), u[1])
+                    abd_lst.append(math.degrees(math.atan2(_dot3(u, out_dir), max(1e-6, sagittal))))
+                    v1 = _norm3(_sub3(lo, up))
+                    v2 = _norm3(_sub3(ha, lo))
+                    efl_lst.append(math.degrees(math.acos(max(-1.0, min(1.0, _dot3(v1, v2))))))
+
+        return {
+            "frame_range": [wa, wb],
+            "torso_angles_deg": {
+                "lean": _stats(lean),
+                "lean_local_deg": _stats(lean_local),
+                "bank": _stats(bank),
+            },
+            "arm_angles_deg": {
+                "upperarm_abduction_deg": {"l": _stats(abd_l), "r": _stats(abd_r)},
+                "elbow_flex_deg": {"l": _stats(efl_l), "r": _stats(efl_r)},
+            },
+            "clearance_cm": {
+                "hand_l_thigh_l": _stats(clear_l),
+                "hand_r_thigh_r": _stats(clear_r),
+                "ankle_gap": _stats(ankle_gaps),
+            },
+            "jitter_max": _zig_max(wa, wb),
+        }
+
+    # joints_*.json is Y-up (x, y_up, z_fwd) from runstart_clip_joints_ue.py
+    def _ys(key: str) -> list[float]:
+        pts = joints.get(key, [])
+        return [pts[f][1] for f in frames] if len(pts) > f1 else []
+
+    hip_ys = [
+        0.5 * (joints["thigh_MainPoint_l"][f][1] + joints["thigh_MainPoint_r"][f][1])
+        for f in frames
+        if (
+            "thigh_MainPoint_l" in joints
+            and "thigh_MainPoint_r" in joints
+            and len(joints["thigh_MainPoint_l"]) > f
+            and len(joints["thigh_MainPoint_r"]) > f
+        )
+    ]
 
     gates_py = repo / "Tools" / "AnimPipeline" / "cards" / "runstart" / "runstart_pivot_gates.py"
     gates_status = "UNKNOWN"
@@ -152,7 +349,13 @@ def anim_inspect(
             text=True,
         )
         gates_output = (proc.stdout or proc.stderr or "").strip()
-        gates_status = "OK" if proc.returncode == 0 else "FAIL"
+        gates_status = "OK" if (proc.returncode == 0 and "GATES: FAIL" not in gates_output) else "FAIL"
+
+    main_summary = _summarize_window(f0, f1)
+    splits = {
+        "f0_15": _summarize_window(0, min(15, total - 1)),
+        "f16_35": _summarize_window(16, min(35, total - 1)) if total > 16 else None,
+    }
 
     return {
         "ok": True,
@@ -169,15 +372,11 @@ def anim_inspect(
             "shoulder_l": _stats(_ys("upperarm_MainPoint_l")),
             "shoulder_r": _stats(_ys("upperarm_MainPoint_r")),
         },
-        "torso_angles_deg": {
-            "lean": _stats(lean_degs),
-            "bank": _stats(bank_degs),
-        },
-        "clearance_cm": {
-            "hand_l_thigh_l": _stats(clear_l),
-            "hand_r_thigh_r": _stats(clear_r),
-            "ankle_gap": _stats(ankle_gaps),
-        },
+        "torso_angles_deg": main_summary["torso_angles_deg"],
+        "arm_angles_deg": main_summary["arm_angles_deg"],
+        "jitter_max": main_summary["jitter_max"],
+        "splits": splits,
+        "clearance_cm": main_summary["clearance_cm"],
         "gates": {"status": gates_status, "detail": gates_output},
     }
 
@@ -190,10 +389,36 @@ def validate_intent(intent: dict[str, Any]) -> dict[str, Any]:
     for k, v in intent.items():
         if k in INTENT_BOUNDS:
             lo, hi = INTENT_BOUNDS[k]
+            if isinstance(v, bool):
+                raise ValueError(f"{k} must be numeric, got bool")
             fv = float(v)
+            if not math.isfinite(fv):
+                raise ValueError(f"{k} must be finite, got {fv!r}")
             if not (lo <= fv <= hi):
                 raise ValueError(f"{k}={fv} out of safe bounds [{lo}, {hi}]")
             clean[k] = fv
+        elif k == "turn_side":
+            norm = {"l": "L", "r": "R", "none": "none"}
+            if not isinstance(v, str) or v.strip().lower() not in norm:
+                raise ValueError(f"turn_side must be 'l', 'r' or 'none', got {v!r}")
+            clean[k] = norm[v.strip().lower()]
+        elif k == "start_from_frame":
+            if isinstance(v, bool) or not isinstance(v, int):
+                raise ValueError("start_from_frame must be an int")
+            if not (0 <= v <= 300):
+                raise ValueError(f"start_from_frame={v} out of range [0, 300]")
+            clean[k] = v
+        elif k == "smooth_pelvis_z":
+            if not isinstance(v, bool):
+                raise ValueError("smooth_pelvis_z must be a bool")
+            clean[k] = v
+        elif k in ("smooth_upper_passes", "smooth_leg_passes"):
+            hi = 8 if k == "smooth_upper_passes" else 6
+            if isinstance(v, bool) or not isinstance(v, int):
+                raise ValueError(f"{k} must be an int")
+            if not (0 <= v <= hi):
+                raise ValueError(f"{k}={v} out of range [0, {hi}]")
+            clean[k] = v
         elif k in ("handoff_smooth_range", "frame_range"):
             if not (isinstance(v, (list, tuple)) and len(v) == 2):
                 raise ValueError(f"{k} must be [start_frame, end_frame]")
@@ -325,7 +550,7 @@ def anim_gate_check(
     asset: str,
     ref_asset: str = "",
     root: str | Path | None = None,
-    gate_win: int = 40,
+    gate_win: int = 18,
     before_fbx: str = "",
     after_fbx: str = "",
 ) -> dict[str, Any]:
@@ -343,8 +568,9 @@ def anim_gate_check(
         capture_output=True,
         text=True,
     )
-    gates_ok = proc.returncode == 0
-    result["gates"] = {"status": "OK" if gates_ok else "FAIL", "output": (proc.stdout or proc.stderr or "").strip()}
+    gates_out = (proc.stdout or proc.stderr or "").strip()
+    gates_ok = proc.returncode == 0 and "GATES: FAIL" not in gates_out
+    result["gates"] = {"status": "OK" if gates_ok else "FAIL", "output": gates_out}
     if not gates_ok:
         result["ok"] = False
 
@@ -380,8 +606,8 @@ def anim_gate_check(
 
 
 def anim_capture_ab(
-    variant_a: str,
-    variant_b: str,
+    variant_a: str | None = None,
+    variant_b: str | None = None,
     seq: str = "mv_run_start_v5",
     window: str = "77-197",
     root: str | Path | None = None,
@@ -392,61 +618,191 @@ def anim_capture_ab(
     batch: str = "batch",
     run_gpu: bool = False,
     ue59_dir: str = r"C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_ue59",
+    pairs: list[dict[str, Any]] | None = None,
+    variant_a_id: str = "",
+    variant_b_id: str = "",
+    clip_a: str = "",
+    clip_b: str = "",
+    assert_win: str = "85,120",
+    cvars_a: str = "",
+    cvars_b: str = "",
 ) -> dict[str, Any]:
     """Generate A/B videos (_real + _slow4x) and mandatory grids (az180, az90, game, grid_pivot)."""
     repo = _repo_root(root)
-    f0, f1 = _parse_frame_range(window, 10000)
-    pf0, pf1 = _parse_frame_range(pivot_window, 10000)
 
-    if "az180" not in views.split(","):
-        views = "az180," + views
+    # Enforce az180 first in the view list.
+    views_list = [v.strip() for v in views.split(",") if v.strip()]
+    if "az180" in views_list:
+        views_list.remove("az180")
+    views_list.insert(0, "az180")
+    views = ",".join(views_list)
 
     ue59 = Path(ue59_dir).resolve()
     rs_dir = ue59 / "Tools" / "AnimPipeline" / "cards" / "runstart"
     batch_root = ue59 / "Saved" / saved_dir / batch
-    out_dir = batch_root / "ab_out"
+
+    # Normalize pairs (single-pair fallback uses the legacy positional args).
+    norm_pairs: list[dict[str, Any]] = []
+    if pairs is not None:
+        if not isinstance(pairs, list) or not pairs:
+            raise ValueError("pairs must be a non-empty list")
+        for p in pairs:
+            if not isinstance(p, dict):
+                raise ValueError("each pair must be a dict")
+            a = p.get("a")
+            b = p.get("b")
+            if not a or not b:
+                raise ValueError("each pair requires 'a' and 'b'")
+            p_seq = p.get("seq", seq)
+            name = p.get("name") or p.get("label") or p_seq
+            raw_assert = p.get("assert_win") or assert_win
+            if raw_assert is None or raw_assert == "":
+                raw_assert = "85,120"
+            if isinstance(raw_assert, (list, tuple)):
+                raw_assert = ",".join(str(x) for x in raw_assert)
+            norm_pairs.append({
+                "a": a,
+                "b": b,
+                "seq": p_seq,
+                "name": name,
+                "variant_a": p.get("variant_a") or p.get("variant_a_id") or a,
+                "variant_b": p.get("variant_b") or p.get("variant_b_id") or b,
+                "clip_a": p.get("clip_a", a),
+                "clip_b": p.get("clip_b", b),
+                "assert_win": str(raw_assert),
+                "cvars_a": p.get("cvars_a", cvars_a),
+                "cvars_b": p.get("cvars_b", cvars_b),
+                "label_a": p.get("label_a") or a,
+                "label_b": p.get("label_b") or b,
+                "window": p.get("window", window),
+                "pivot_window": p.get("pivot_window", pivot_window),
+                "pivot_step": p.get("pivot_step", pivot_step),
+                "out_subdir": p.get("out_subdir", f"ab_{name}"),
+            })
+    else:
+        if not variant_a or not variant_b:
+            raise ValueError("variant_a and variant_b are required when pairs is not provided")
+        raw_single_assert = assert_win if (assert_win is not None and assert_win != "") else "85,120"
+        if isinstance(raw_single_assert, (list, tuple)):
+            raw_single_assert = ",".join(str(x) for x in raw_single_assert)
+        norm_pairs.append({
+            "a": variant_a,
+            "b": variant_b,
+            "seq": seq,
+            "name": seq,
+            "variant_a": variant_a_id or variant_a,
+            "variant_b": variant_b_id or variant_b,
+            "clip_a": clip_a or variant_a,
+            "clip_b": clip_b or variant_b,
+            "assert_win": str(raw_single_assert),
+            "cvars_a": cvars_a,
+            "cvars_b": cvars_b,
+            "label_a": variant_a,
+            "label_b": variant_b,
+            "window": window,
+            "pivot_window": pivot_window,
+            "pivot_step": pivot_step,
+            "out_subdir": "ab_out",
+        })
+
+    # Build deduplicated pipe-delimited runs.
+    runs: list[str] = []
+    seen_runs: dict[str, str] = {}
+    for p in norm_pairs:
+        win_csv = str(p["assert_win"]).replace("..", ",").replace("-", ",")
+        for run_name, variant, clip, cvars in (
+            (p["a"], p["variant_a"], p["clip_a"], p["cvars_a"]),
+            (p["b"], p["variant_b"], p["clip_b"], p["cvars_b"]),
+        ):
+            entry = f"{run_name}|{variant}|{clip}|{p['seq']}|{win_csv}"
+            if cvars:
+                entry += f"|{cvars}"
+            if run_name in seen_runs:
+                if seen_runs[run_name] != entry:
+                    raise ValueError(f"conflicting duplicate run_name: {run_name!r}")
+                continue
+            seen_runs[run_name] = entry
+            runs.append(entry)
 
     if run_gpu:
         batch_ps1 = rs_dir / "runstart_batch_captures.ps1"
-        runs = [f"{variant_a}|1", f"{variant_b}|1"]
+        runs_arg = ",".join("'" + r.replace("'", "''") + "'" for r in runs)
+        ps_cmd = (
+            f"& '{str(batch_ps1).replace(chr(39), chr(39) * 2)}' "
+            f"-Runs @({runs_arg}) -SavedDir '{saved_dir}' -Batch '{batch}' -Views '{views}'"
+        )
         gproc = subprocess.run(
-            ["pwsh", "-NoProfile", "-File", str(batch_ps1), "-Runs", ",".join(runs), "-SavedDir", saved_dir, "-Batch", batch, "-Views", views],
+            ["pwsh", "-NoProfile", "-Command", ps_cmd],
             capture_output=True,
             text=True,
         )
         if gproc.returncode != 0:
-            return {"ok": False, "stage": "gpu_capture", "stdout": gproc.stdout, "stderr": gproc.stderr}
+            return {"ok": False, "stage": "gpu_capture", "stdout": gproc.stdout, "stderr": gproc.stderr, "runs_sent": runs}
 
     ab_py = repo / "Tools" / "AnimPipeline" / "cards" / "runstart" / "runstart_ab_video.py"
-    cap_a = batch_root / variant_a
-    cap_b = batch_root / variant_b
-    if not (cap_a.exists() and cap_b.exists()):
-        return {
-            "ok": False,
-            "error": "Capture directories not found (set run_gpu=true to capture).",
-            "expected": [str(cap_a), str(cap_b)],
-        }
+    pair_results: list[dict[str, Any]] = []
+    all_grids: list[str] = []
+    all_videos: list[str] = []
+    all_ok = True
+    for p in norm_pairs:
+        out_dir = batch_root / p["out_subdir"]
+        cap_a = batch_root / p["a"]
+        cap_b = batch_root / p["b"]
+        if not (cap_a.exists() and cap_b.exists()):
+            pair_results.append({
+                "name": p["name"],
+                "seq": p["seq"],
+                "ok": False,
+                "error": "Capture directories not found (set run_gpu=true to capture).",
+                "expected": [str(cap_a), str(cap_b)],
+            })
+            all_ok = False
+            continue
 
-    vproc = subprocess.run(
-        [
-            sys.executable, str(ab_py),
-            str(cap_a), str(cap_b), str(out_dir),
-            f"--a={variant_a}", f"--b={variant_b}",
-            f"--seq={seq}", f"--from={f0}", f"--to={f1}",
-            f"--views={views}",
-            f"--pivot-from={pf0}", f"--pivot-to={pf1}", f"--pivot-step={pivot_step}",
-        ],
-        capture_output=True,
-        text=True,
-    )
-    grids = sorted(str(p) for p in out_dir.glob("*.jpg"))
-    videos = sorted(str(p) for p in out_dir.glob("*.mp4"))
+        af0, af1 = _parse_frame_range(p["window"], 10000)
+        pf0, pf1 = _parse_frame_range(p["pivot_window"], 10000)
+        assert_csv = str(p["assert_win"]).replace("..", ",").replace("-", ",")
+        vproc = subprocess.run(
+            [
+                sys.executable, str(ab_py),
+                str(cap_a), str(cap_b), str(out_dir),
+                f"--a={p['label_a']}", f"--b={p['label_b']}",
+                f"--seq={p['seq']}", f"--from={af0}", f"--to={af1}",
+                f"--views={views}",
+                f"--pivot-from={pf0}", f"--pivot-to={pf1}", f"--pivot-step={p['pivot_step']}",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        grids = sorted(str(x) for x in out_dir.glob("*.jpg"))
+        videos = sorted(str(x) for x in out_dir.glob("*.mp4"))
+        ok = vproc.returncode == 0
+        all_ok = all_ok and ok
+        all_grids.extend(grids)
+        all_videos.extend(videos)
+        assert_info: dict[str, Any] = {"window": assert_csv}
+        for label_k, ap in (("a", cap_a / "assert.txt"), ("b", cap_b / "assert.txt"), ("batch", batch_root / "assert.txt")):
+            if ap.exists():
+                assert_info[label_k] = ap.read_text(encoding="utf-8", errors="replace").splitlines()[0]
+        pair_results.append({
+            "name": p["name"],
+            "seq": p["seq"],
+            "out_dir": str(out_dir),
+            "ok": ok,
+            "views": views_list,
+            "grids": grids,
+            "videos": videos,
+            "assert": assert_info,
+            "output": (vproc.stdout or vproc.stderr or "").strip(),
+        })
+
     return {
-        "ok": vproc.returncode == 0,
-        "views": views.split(","),
-        "grids": grids,
-        "videos": videos,
-        "output": (vproc.stdout or vproc.stderr or "").strip(),
+        "ok": all_ok,
+        "views": views_list,
+        "pairs": pair_results,
+        "grids": all_grids,
+        "videos": all_videos,
+        "runs_sent": runs,
     }
 
 
