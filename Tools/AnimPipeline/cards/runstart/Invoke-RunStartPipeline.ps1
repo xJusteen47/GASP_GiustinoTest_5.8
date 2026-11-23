@@ -22,8 +22,13 @@ param(
     [string]$Seq = 'mv_run_start_v5',
     [int]$From = 77,
     [int]$To = 197,
-    [string]$Views = 'az90,game',
+    [string]$Views = 'az180,az90,game',
+    [int]$PivotFrom = 84,
+    [int]$PivotTo = 116,
+    [int]$PivotStep = 4,
     [int]$GateWin = 40,
+    [string]$BeforeFbx = '',
+    [string]$AfterFbx = '',
     [string]$Tag = 'runstart_pipe'
 )
 
@@ -59,6 +64,13 @@ if ($WorktreeDir) {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
+if ($BeforeFbx -and $AfterFbx) {
+    $ccPy = Join-Path $ue59 'Tools\AnimPipeline\clipcheck\clip_check.py'
+    $conserveOut = Join-Path $ue59 "Saved\AnimPipeline\runstart\conserve_$Asset.json"
+    & python $ccPy --conserve $BeforeFbx $AfterFbx $conserveOut
+    if ($LASTEXITCODE -ne 0) { Write-Error "CONSERVATION GUARD FAIL (>15% loss)"; exit $LASTEXITCODE }
+}
+
 # GPU Capture in _ue59 (needs editor closed)
 & (Join-Path $rsDir 'runstart_batch_captures.ps1') -Runs $Runs -SavedDir $SavedDir -Batch $Batch -Views $Views
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -71,7 +83,8 @@ $bName = if ($CandidateRun) { $CandidateRun } else { $runNames[-1] }
 $outVideoDir = Join-Path $batchRoot 'ab_out'
 & python (Join-Path $rsDir 'runstart_ab_video.py') `
     (Join-Path $batchRoot $aName) (Join-Path $batchRoot $bName) $outVideoDir `
-    "--a=$BaselineLabel" "--b=$CandidateLabel" "--seq=$Seq" "--from=$From" "--to=$To" "--views=$Views"
+    "--a=$BaselineLabel" "--b=$CandidateLabel" "--seq=$Seq" "--from=$From" "--to=$To" "--views=$Views" `
+    "--pivot-from=$PivotFrom" "--pivot-to=$PivotTo" "--pivot-step=$PivotStep"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 if ($WorktreeDir) {
