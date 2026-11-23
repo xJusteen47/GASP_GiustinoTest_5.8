@@ -25,5 +25,6 @@ Thread 1 (invarianti + pacchetto MCP, claude/project-thread-y073op) legge `pytho
    AS_GSTN_RunStart_Generic_w3,AS_GSTN_RunStart_Generic_w2,AS_GanonFTiltV31_Build,AS_JabV12_Build,AS_OverlordDAirV4_Build
    + il settle K6 (nome da trovare); K7/K8 sono gia' in Saved/AnimPipeline/runstart. 2. `python life_calibrate.py`.
 3. Mismatch = correggere la metrica con prova, mai esentare. Da confermare: quale dair e' approvata (anim-approvate.md non ha la riga).
+Merge con y073op: conflitto atteso in checks.py accanto a stop_and_go (loro hold_reason + card.holds_without_reason): tenere entrambi.
 SUBAGENTI: 0
 COSTO: ~4 $ (stima) | 0 minuti desktop | 0 token review
