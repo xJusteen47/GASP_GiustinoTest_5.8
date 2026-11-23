@@ -10,15 +10,20 @@ Branch `claude/skin-cosmetici-ricerca`, base `feature/gas-npp-5.8` (a5b2095). Th
 - Idea chiave: il costo passa da temi x armi a temi + armi (l'arma dichiara dove decorare, il tema come decorare,
   un assemblatore unisce e fa bake). Slot del corpo una volta sullo scheletro unico.
 
-## Decisioni proposte all'owner (consigliate)
-1A grammatica slot + spline + materiale a strati; 2A runtime per il prototipo poi bake; 3A nomi Orokin/Dax/Sentient solo interni (IP Warframe).
+## Decisioni
+- Owner 11-23: 1A confermata; il tema si vende una volta e va su qualsiasi oggetto, quindi niente bake per coppia;
+  Orokin/Dax/Sentient erano solo esempi. Nuove sezioni 2b (costo runtime per oggetto, fusione in una mesh, cache,
+  limiti, LOD a solo materiale) e 2c (idea owner: costruzione all'armadietto + al caricamento per i loadout altrui).
+- Pendente owner: decisione 2 nuova, consigliata A (armadietto + caricamento, stesso assemblatore, runtime solo rete di sicurezza).
 
 ## Non verificato
 - Stato in UE 5.9 di Geometry Script (spline deform, bake), PCG su superfici mesh, Nanite displacement: marcati [da verificare 5.9],
   fonte = conoscenza fino a 5.6/5.7. F0 del piano li verifica con Tools/UE59/ask_unreal_assistant.py.
+- Costi runtime (draw call, ms, KB) della 2b/2c sono ordini di grandezza, non misurati: F1 li misura.
 - Valori di silhouette (+5% lunghezza, +15% larghezza) e i tempi per arma (30-60 min) sono stime di partenza, non misurati.
 
 ## Seguito
-Nessun thread finché l'owner non sblocca (coda: prima skill di animazione e architettura skin). F0-F2 stimati 15-24 $.
+Nessun thread finché l'owner non sblocca (coda: prima skill di animazione e architettura skin). F0-F2 stimati 16-26 $ (cache su disco +1-2 $).
 
-COSTO: ~2 $ | 0 min desktop | 0 token review
+SUBAGENTI: nessuno
+COSTO: ~3 $ | 0 min desktop | 0 token review
