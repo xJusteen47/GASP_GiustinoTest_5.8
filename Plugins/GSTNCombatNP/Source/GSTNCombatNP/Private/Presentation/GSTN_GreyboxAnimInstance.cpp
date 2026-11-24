@@ -45,12 +45,37 @@ float UGSTN_GreyboxAnimInstance::PelvisSquashTarget(const FGSTN_GreyboxShapeSett
 	return FMath::Clamp(PelvisHeight / ReferenceHeight, FMath::Min(Settings.MinPelvisSquash, 1.f), 1.f);
 }
 
-float UGSTN_GreyboxAnimInstance::LimbScaleTarget(const FGSTN_GreyboxShapeSettings& Settings, float MontageWeight)
+float UGSTN_GreyboxAnimInstance::LimbScaleTarget(const FGSTN_GreyboxShapeSettings& Settings, float AttackWeight)
 {
-	const float Weight = FMath::Clamp(MontageWeight, 0.f, 1.f);
+	const float Weight = FMath::Clamp(AttackWeight, 0.f, 1.f);
 	const float Locomotion = Settings.bShowLimbsInLocomotion ? 1.f : 0.f;
 	const float Moves = Settings.bShowLimbsInMoves ? 1.f : 0.f;
 	return FMath::Lerp(Locomotion, Moves, Weight);
+}
+
+float UGSTN_GreyboxAnimInstance::FranticAlpha(const FGSTN_GreyboxShapeSettings& Settings, float TimeSinceStart)
+{
+	if (TimeSinceStart < 0.f)
+	{
+		return 0.f;
+	}
+	return 1.f - FMath::Clamp((TimeSinceStart - Settings.FranticSeconds) / FMath::Max(Settings.FranticFadeSeconds, 0.01f), 0.f, 1.f);
+}
+
+float UGSTN_GreyboxAnimInstance::SwayCadenceHz(const FGSTN_GreyboxShapeSettings& Settings, float Speed2D, float Frantic)
+{
+	const float BySpeed = FMath::Max(Speed2D, 0.f) / FMath::Max(Settings.StrideLength, 1.f);
+	return FMath::Lerp(BySpeed, FMath::Max(Settings.FranticCadenceHz, BySpeed), FMath::Clamp(Frantic, 0.f, 1.f));
+}
+
+FVector UGSTN_GreyboxAnimInstance::RunSway(const FGSTN_GreyboxShapeSettings& Settings, float Phase, float Amplitude, float& OutPitch)
+{
+	// Footfalls at phase 0 and PI: the bob dips and the nod tips forward there (|sin| shapes a bounce, not a sine wobble); the rock and
+	// the twist swing once per cycle, toward the stepping side
+	const float Footfall = 1.f - FMath::Abs(FMath::Sin(Phase));
+	OutPitch = -Settings.NodPitchDeg * Footfall * Amplitude;
+	return FVector(-Settings.BobSquash * Footfall * Amplitude, Settings.RockRollDeg * FMath::Cos(Phase) * Amplitude,
+		Settings.TwistYawDeg * FMath::Sin(Phase) * Amplitude);
 }
 
 FRotator UGSTN_GreyboxAnimInstance::LeanTarget(const FGSTN_GreyboxShapeSettings& Settings, const FVector& LocalAcceleration)
@@ -119,17 +144,29 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	PitchSpring.Step(LeanGoal.Pitch, DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
 	RollSpring.Step(LeanGoal.Roll, DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
 
-	Shape.Squash = FMath::Clamp(SquashSpring.Value, ShapeSettings.MinSquash * 0.8f, ShapeSettings.MaxStretch * 1.1f);
+	// Run sway: cadence from the speed, or the frantic cadence right after leaving rest; amplitude from the speed, eased
+	const float Speed2D = FVector(Velocity.X, Velocity.Y, 0.f).Size();
+	const bool bMoving = bOnGround && Speed2D > 10.f;
+	TimeSinceStart = bMoving ? (TimeSinceStart < 0.f ? 0.f : TimeSinceStart + DeltaSeconds) : -1.f;
+	const float Frantic = FranticAlpha(ShapeSettings, TimeSinceStart);
+	const float AmplitudeGoal = bMoving ? FMath::Max(FMath::Clamp(Speed2D / FMath::Max(ShapeSettings.FullSwaySpeed, 1.f), 0.f, 1.f),
+		Frantic * ShapeSettings.FranticAmplitude) : 0.f;
+	SwayAmplitude = FMath::FInterpTo(SwayAmplitude, AmplitudeGoal, DeltaSeconds, 10.f);
+	SwayPhase = FMath::Fmod(SwayPhase + 2.f * PI * SwayCadenceHz(ShapeSettings, Speed2D, Frantic) * DeltaSeconds, 2.f * PI);
+	float SwayPitch = 0.f;
+	const FVector Sway = RunSway(ShapeSettings, SwayPhase, SwayAmplitude, SwayPitch);
+
+	Shape.Squash = FMath::Clamp(SquashSpring.Value + Sway.X, ShapeSettings.MinSquash * 0.8f, ShapeSettings.MaxStretch * 1.1f);
 	// The lean is in the component's frame; the mesh is rotated -90 yaw from the actor in GASP pawns, so turn the actor-frame lean into it
 	const FQuat ActorToComponent = GetSkelMeshComponent() ? (GetSkelMeshComponent()->GetComponentQuat().Inverse() * Owner->GetActorQuat()) : FQuat::Identity;
 	// Rotation axis scaled by degrees, actor frame: tipping the top toward +X is a turn around +Y by the forward lean (-Pitch), toward +Y a
 	// turn around -X by the side lean (Roll)
-	const FVector Axis = ActorToComponent.RotateVector(FVector(-RollSpring.Value, -PitchSpring.Value, 0.f));
-	Shape.Lean = FQuat(Axis.GetSafeNormal(), FMath::DegreesToRadians(Axis.Size())).Rotator();
-	if (Axis.IsNearlyZero())
-	{
-		Shape.Lean = FRotator::ZeroRotator;
-	}
+	const float Roll = RollSpring.Value + Sway.Y;
+	const float Pitch = PitchSpring.Value + SwayPitch;
+	const FVector Axis = ActorToComponent.RotateVector(FVector(-Roll, -Pitch, 0.f));
+	const FQuat Tip = Axis.IsNearlyZero() ? FQuat::Identity : FQuat(Axis.GetSafeNormal(), FMath::DegreesToRadians(Axis.Size()));
+	// Twist about the up axis (same in actor and component frames), under the tip
+	Shape.Lean = (Tip * FQuat(FVector::UpVector, FMath::DegreesToRadians(Sway.Z))).Rotator();
 
 	float PelvisHeight = 0.f;
 	float PelvisReference = 0.f;
@@ -139,7 +176,10 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	Shape.PelvisSquash = FMath::FInterpTo(Shape.PelvisSquash, PelvisGoal, DeltaSeconds, ShapeSettings.PelvisSquashBlendSpeed);
 
 	UpdateMoveOverride();
-	Shape.LimbScale = FMath::FInterpTo(Shape.LimbScale, LimbScaleTarget(ShapeSettings, DriverMontageWeight), DeltaSeconds,
+	// Bones only where strictly needed, in attacks (owner 2026-11-24): the body follows the pose and the markers show only while an
+	// attack's capsule clip plays; everything else (locomotion, hit reactions, rolls) is the rigid capsule swaying
+	Shape.PoseWeight = Shape.OverrideWeight;
+	Shape.LimbScale = FMath::FInterpTo(Shape.LimbScale, LimbScaleTarget(ShapeSettings, Shape.OverrideWeight), DeltaSeconds,
 		ShapeSettings.LimbBlendSpeed);
 }
 
@@ -174,7 +214,6 @@ void UGSTN_GreyboxAnimInstance::UpdateMoveOverride()
 {
 	Shape.OverrideClip = nullptr;
 	Shape.OverrideWeight = 0.f;
-	DriverMontageWeight = 0.f;
 	const USkeletalMeshComponent* Capsule = GetSkelMeshComponent();
 	const USkeletalMeshComponent* Driver = Capsule ? Cast<USkeletalMeshComponent>(Capsule->GetAttachParent()) : nullptr;
 	UAnimInstance* DriverAnim = Driver ? Driver->GetAnimInstance() : nullptr;
@@ -184,7 +223,6 @@ void UGSTN_GreyboxAnimInstance::UpdateMoveOverride()
 	{
 		return;
 	}
-	DriverMontageWeight = Instance->GetWeight();
 	if (MoveOverrides.IsEmpty() && SequenceMoveOverrides.IsEmpty())
 	{
 		return;

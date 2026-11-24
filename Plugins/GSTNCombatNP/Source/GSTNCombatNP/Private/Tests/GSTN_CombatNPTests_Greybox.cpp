@@ -69,6 +69,17 @@ bool FGSTN_GreyboxShapeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("raised pelvis does not stretch"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, true, 120.f, 95.f), 1.f));
 	TestTrue(TEXT("limbs hidden in locomotion"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::LimbScaleTarget(Settings, 0.f)));
 	TestTrue(TEXT("limbs shown in a move"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::LimbScaleTarget(Settings, 1.f), 1.f));
+	TestTrue(TEXT("frantic right after leaving rest"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::FranticAlpha(Settings, 0.1f), 1.f));
+	TestTrue(TEXT("frantic over after its window"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::FranticAlpha(Settings,
+		Settings.FranticSeconds + Settings.FranticFadeSeconds + 0.01f)));
+	TestTrue(TEXT("not frantic at rest"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::FranticAlpha(Settings, -1.f)));
+	TestTrue(TEXT("run start cadence faster than the speed's"), UGSTN_GreyboxAnimInstance::SwayCadenceHz(Settings, 150.f, 1.f)
+		> 2.f * UGSTN_GreyboxAnimInstance::SwayCadenceHz(Settings, 150.f, 0.f));
+	TestTrue(TEXT("still = no cadence"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::SwayCadenceHz(Settings, 0.f, 0.f)));
+	float NodPitch = 0.f;
+	const FVector AtFootfall = UGSTN_GreyboxAnimInstance::RunSway(Settings, 0.f, 1.f, NodPitch);
+	TestTrue(TEXT("footfall bobs down and nods forward"), AtFootfall.X < 0.f && NodPitch < 0.f);
+	TestTrue(TEXT("no amplitude = no sway"), UGSTN_GreyboxAnimInstance::RunSway(Settings, 1.f, 0.f, NodPitch).IsNearlyZero());
 	TestTrue(TEXT("no pelvis squash in the air"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, false, 40.f, 95.f), 1.f));
 	return true;
 }

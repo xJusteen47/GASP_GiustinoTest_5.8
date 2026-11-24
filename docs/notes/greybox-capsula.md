@@ -115,3 +115,10 @@ All reversible; class defaults, so the owner retunes them on ABP_GSTN_GreyboxCap
   it is chubbier (radius 34); `GREYBOX_SHAPE="radius,bottom,top"` overrides. The hand and foot markers are hidden in locomotion and shown
   while the driver plays a montage (`bShowLimbsInMoves` / `bShowLimbsInLocomotion`, `LimbBlendSpeed`; GSTN Greybox Shape scales the
   `LimbBones` by `LimbScale`).
+- **Owner note 2026-11-24 14:05 (bones only in attacks)**: outside attacks the capsule body is rigid (`PoseWeight` = the attack clip's weight;
+  GSTN Greybox Shape blends to the reference pose and moves the crouch squash to the root). The run is read only by a procedural sway
+  on the root: footfall bob and nod twice per stride, side rock and nose twist once per stride, cadence = speed / `StrideLength`, amplitude
+  by speed. Run start = frantic: for `FranticSeconds` (0.6 s, Toad timing of run-start-frantic) after leaving rest the sway runs at
+  `FranticCadenceHz` (6) with `FranticAmplitude` (1.4), then fades to the speed's cadence. `make_capsule_clips.py` now keeps only attack
+  overrides (`MOVE_FILTER` Overlord, sequences Jab/Punch/Kick/Attack) and replaces the old map, so hit reactions and rolls are the rigid
+  capsule too.

@@ -24,6 +24,12 @@ struct GSTNANIMATIONCORE_API FGSTN_GreyboxShape
 	/** Scale of the hand and foot markers, 0..1 (owner 2026-11-24: limbs hidden in locomotion and most of the time, shown in moves) */
 	float LimbScale = 1.f;
 
+	/**
+	 * How much the capsule body follows the copied pose, 0..1 (owner 2026-11-24: in locomotion the capsule does not use the bones, it only
+	 * sways). 0 = body in the reference pose, the whole read comes from Squash and Lean; 1 = it bends with the driver (moves).
+	 */
+	float PoseWeight = 1.f;
+
 	/** Tilt of the whole body around the ground point, component space, degrees (pitch forward, roll sideways) */
 	FRotator Lean = FRotator::ZeroRotator;
 
