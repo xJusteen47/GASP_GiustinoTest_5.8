@@ -10,9 +10,9 @@ contraddizione va segnalata nel rapporto del bibliotecario.
 Pagine sorelle: `docs/INDICE-PROGETTO.md` (cosa esiste nel codice), `docs/BRIEFING-ANTIGRAVITY.md` (per agenti esterni),
 `docs/notes/archivio-proposta.md` (ultimo rapporto del bibliotecario).
 
-## 1. Regole di lavoro in vigore (sintesi; testo pieno = `docs/notes/regole-progetto-2026-11-23.md`)
+## 1. Regole di lavoro in vigore (sintesi; testo pieno = `docs/notes/regole-progetto.md`)
 Fonte: istruzioni di progetto del coordinatore (regole 1-16, 15-11 → 20-11 → 23-11), copiate parola per parola in
-`docs/notes/regole-progetto-2026-11-23.md` (23-11, decisione 3A dell'owner). Sono segnati **SUPERATI** (riga in cima, 23-11):
+`docs/notes/regole-progetto.md` (23-11, decisione 3A dell'owner). Sono segnati **SUPERATI** (riga in cima, 23-11):
 `docs/notes/regole-progetto-2026-11-20.md`, `-2026-11-22.md` (Antigravity coordinatore e DeepSeek esecutore: non vale più),
 `decisioni/istruzioni-progetto-2026-11-15/20.md` (project files) e l'artefatto "Analisi regole di lavoro" (15-11).
 | # | In breve | Data |
@@ -81,7 +81,7 @@ Elenco completo e regole: `docs/notes/anim-approvate.md`. Verifica: `git ls-remo
 | Dropkick K6 giro 3 (portatile), getups (attendono "ok salva") | memoria "QUEUE" | 21-23/11 |
 
 ## 6. Cambiato negli ultimi 7 giorni (17-23/11)
-- 23-11 sera (decisioni dell'owner): ftilt v3.1 = F.L e N.S mossa a parte; pummel tolto; schema lanci di default; 29w3 approvata con Gemini e verdetti 23-26 obsoleti; nessun server dedicato (host + EOS + predizione avversario + limite di ping + ritardo input all'host spento di default); regola 16 (input via azioni) e regola 7 (secondo editor in worktree proprio, mai durante cattura). Regole 1-16 copiate in `docs/notes/regole-progetto-2026-11-23.md`; 103 handoff vecchi in `handoffs/archivio/2026-11/` (project files); artefatti superati segnati ARCHIVIO.
+- 23-11 sera (decisioni dell'owner): ftilt v3.1 = F.L e N.S mossa a parte; pummel tolto; schema lanci di default; 29w3 approvata con Gemini e verdetti 23-26 obsoleti; nessun server dedicato (host + EOS + predizione avversario + limite di ping + ritardo input all'host spento di default); regola 16 (input via azioni) e regola 7 (secondo editor in worktree proprio, mai durante cattura). Regole 1-16 copiate in `docs/notes/regole-progetto.md`; 103 handoff vecchi in `handoffs/archivio/2026-11/` (project files); artefatti superati segnati ARCHIVIO.
 - 23-11: regole 1, 3, 7 aggiornate e regola 16 nuova (istruzioni di progetto). Fable ridimensionato.
 - 23-11: nuovi documenti: indice del progetto, audit del codice, mappa input, riordino Content, cosmetica skin, proporzioni skin, ricerca rete 1v1, presa al collo, inventario animazioni e notazione mosse.
 - 23-11: run start 29w3 approvata (tag da pushare). Antigravity senza crediti: coordina Claude.
