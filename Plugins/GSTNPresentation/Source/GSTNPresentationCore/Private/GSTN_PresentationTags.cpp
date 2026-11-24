@@ -31,6 +31,7 @@ UE_DEFINE_GAMEPLAY_TAG_COMMENT(StopRelease, "Presentation.Event.StopRelease", "T
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tumble, "Presentation.Event.Tumble", "Tumble (launched hard enough to tumble)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tumble_Start, "Presentation.Event.Tumble.Start", "Tumble starts (Combat.State.Tumble added)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Tumble_End, "Presentation.Event.Tumble.End", "Tumble ends (Combat.State.Tumble removed)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Launch, "Presentation.Event.Launch", "A hit launches the character: the puff at the take-off, magnitude = speed (cm/s)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Knockdown, "Presentation.Event.Knockdown", "Downed on the ground");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(GetUp, "Presentation.Event.GetUp", "Getting up from the ground");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Roll, "Presentation.Event.Roll", "Roll (downed roll or tech roll)");

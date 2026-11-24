@@ -16,6 +16,9 @@ public class GASP_Giustino2 : ModuleRules
 		// Traversal surface data contract: the wall surface filter resolves the surface of a hit (traversal-surfaces.md section 5.2)
 		PrivateDependencyModuleNames.Add("GSTNSurfaceCore");
 
+		// Launch readability (owner 2026-11-24, 3A): project settings, the off-screen arrow layer, the launch class of GSTNPresentation
+		PrivateDependencyModuleNames.AddRange(new string[] { "DeveloperSettings", "UMG", "Slate", "SlateCore", "GSTNPresentationCore" });
+
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
 		

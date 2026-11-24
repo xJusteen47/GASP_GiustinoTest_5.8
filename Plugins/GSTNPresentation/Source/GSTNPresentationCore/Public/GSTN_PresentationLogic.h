@@ -168,6 +168,13 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationDeriveRules
 	float BounceMinSpeed = 200.f;
 
 	/**
+	 * A hit's launch (owner 2026-11-24, 3A): the first frame out of the hit freeze in hitstun moving at least this fast is a Launch event (the
+	 * puff at the take-off). Below it the hit pushed or staggered the character: nothing. Magnitude = the speed
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Derive", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float LaunchMinSpeed = 700.f;
+
+	/**
 	 * A bounce read from the velocity (no count covers it) is not repeated for this many frames after a bounce of the same kind (floor, or
 	 * walls and ceilings), nor after a wall or ceiling contact the simulation stamped (SurfaceImpactFrame): a victim that grinds along a face
 	 * turns its velocity more than once (polish M2 r3: WallBounce twice 3 to 6 frames apart)
@@ -218,6 +225,8 @@ private:
 	int32 LastGroundBounceFrame = INDEX_NONE;
 	int32 LastSurfaceBounceFrame = INDEX_NONE;
 	int32 FramesSinceSkid = -1;
+	/** Frames since a hit reaction left its freeze, while the Launch event waits for the launch speed (the move starts a frame or two late); -1 = not waiting */
+	int32 FramesSinceFlyStart = -1;
 };
 
 /**

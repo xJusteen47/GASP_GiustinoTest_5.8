@@ -16,6 +16,8 @@
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
+#include "GSTN_PresentationTags.h"
 #include "HAL/IConsoleManager.h"
 #include "CollisionQueryParams.h"
 #include "Engine/HitResult.h"
@@ -41,6 +43,31 @@ namespace GSTNPresentationCVars
 	static TAutoConsoleVariable<FString> SurfaceColor(TEXT("GSTN.Presentation.SurfaceColor"), TEXT(""),
 		TEXT("Debug: 'r,g,b' linear floor colour for dust and snow when the floor has no surface colour; empty = DefaultSurfaceColor"));
 	static TAutoConsoleVariable<int32> Log(TEXT("GSTN.Presentation.Log"), 0, TEXT("1 = log every accepted presentation event (LogGSTNPresentation)"));
+	// Owner 2026-11-24 (3A, "make each one switchable"): the launch puff and the tumble trail have their own switch, independent of the VFX kit
+	// switch above, so the launch readability can be judged (and kept) while the rest of the VFX stays off
+	static TAutoConsoleVariable<int32> LaunchEffects(TEXT("gstn.Launch.Debug.Effects"), 1,
+		TEXT("1 = launch puff and tumble trail play (players: both; small enemies: puff only; important enemies: both, max 3 trails); 0 = never"));
+}
+
+namespace GSTNPresentationLaunch
+{
+	/** The tumble trails of non player characters alive in any world of this process: the cap is per screen, and a screen shows one world */
+	static TArray<TWeakObjectPtr<UNiagaraComponent>> EnemyTrails;
+
+	static bool IsLaunchEvent(const FGameplayTag& Tag)
+	{
+		return Tag == GSTNPresentationTags::Launch || Tag == GSTNPresentationTags::Tumble_Start;
+	}
+}
+
+EGSTN_LaunchEffectClass UGSTN_PresentationComponent::ResolveLaunchEffectClass(const AActor* Owner, EGSTN_LaunchEffectClass Requested)
+{
+	if (Requested != EGSTN_LaunchEffectClass::Auto)
+	{
+		return Requested;
+	}
+	const APawn* Pawn = Cast<APawn>(Owner);
+	return Pawn && Pawn->GetPlayerState() ? EGSTN_LaunchEffectClass::Player : EGSTN_LaunchEffectClass::Minor;
 }
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNPresentation, Log, All);
@@ -215,9 +242,35 @@ bool UGSTN_PresentationComponent::ReportEvent(const FGSTN_PresentationEvent& InE
 	{
 		return false;  // below the row's threshold: not an event worth showing
 	}
-	if (Cue && bPlayEffects && GSTNPresentationCVars::Effects.GetValueOnGameThread() != 0 && Cue->HasEffect() && GetNetMode() != NM_DedicatedServer)
+	// Launch effects follow their own switch and the character's class; every other cue the VFX kit switch
+	bool bEffectsOn = GSTNPresentationCVars::Effects.GetValueOnGameThread() != 0;
+	EGSTN_LaunchEffectClass LaunchClass = EGSTN_LaunchEffectClass::Auto;
+	const bool bLaunchEvent = GSTNPresentationLaunch::IsLaunchEvent(Event.EventTag);
+	if (bLaunchEvent)
 	{
+		LaunchClass = ResolveLaunchEffectClass(GetOwner(), LaunchEffectClass);
+		bEffectsOn = GSTNPresentationCVars::LaunchEffects.GetValueOnGameThread() != 0
+			&& !(LaunchClass == EGSTN_LaunchEffectClass::Minor && Event.EventTag == GSTNPresentationTags::Tumble_Start);
+	}
+	if (Cue && bPlayEffects && bEffectsOn && Cue->HasEffect() && GetNetMode() != NM_DedicatedServer)
+	{
+		const int32 SustainedBefore = Sustained.Num();
 		PlayCue(*Cue, Event, Intensity);
+		// The cap on enemy trails: the new trail is the last sustained entry; past the cap the oldest one stops
+		if (bLaunchEvent && LaunchClass == EGSTN_LaunchEffectClass::Important && Sustained.Num() > SustainedBefore)
+		{
+			TArray<TWeakObjectPtr<UNiagaraComponent>>& Trails = GSTNPresentationLaunch::EnemyTrails;
+			Trails.RemoveAll([](const TWeakObjectPtr<UNiagaraComponent>& T) { return !T.IsValid() || !T->IsActive(); });
+			Trails.Add(Sustained.Last().System);
+			while (Trails.Num() > MaxEnemyLaunchTrails)
+			{
+				if (UNiagaraComponent* Oldest = Trails[0].Get())
+				{
+					Oldest->Deactivate();
+				}
+				Trails.RemoveAt(0);
+			}
+		}
 	}
 	if (bSurfaceFeedback && SurfaceFeedback)
 	{
