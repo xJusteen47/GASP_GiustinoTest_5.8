@@ -171,6 +171,9 @@ def review(path, opt):
 def main():
     from animpipe import verbs
     cmd, args = (sys.argv[1] if len(sys.argv) > 1 else ""), [a for a in sys.argv[2:] if not a.startswith("--")]
+    if cmd == "life":                            # OG life metrics on a joints dump / capture (animpipe/life.py)
+        from animpipe import life
+        sys.exit(life.main(sys.argv[2:]))
     if cmd in verbs.VERBS and not (args and args[0].endswith(".json")) or cmd in ("", "help"):
         sys.exit(verbs.run(sys.argv[1:]))       # the public surface: animpipe <verb> <move>
     opt = dict((a[2:].split("=", 1) + [""])[:2] for a in sys.argv[2:] if a.startswith("--"))

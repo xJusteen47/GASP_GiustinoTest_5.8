@@ -33,7 +33,8 @@ What each `next` asks of you:
 - `interp`: write the in-betweens you propose to a json file `{"poses": [{"frame", "why", "author": {...}, "spacing"?}]}`
   and run `interp <move> --from=<file>`; only free frames are accepted, each pose needs a `why`. If none is needed:
   `interp <move> --none --why="..."`. `--drop=6,11` removes your own in-betweens.
-- `build`, `check`, `export`: run them as they are.
+- `build`, `check`, `export`: run them as they are. `check` includes the OG life metrics (`stop_and_go`, `life_*`,
+  docs/architecture/anim-pipeline.md): never soften or exempt one to pass; a stop is allowed only as a declared hold with a `why`.
 - `render`: run it; it writes `visual/<move>/r<N>/grid.png` + `manifest.json`.
 - `verdict`: do the visual review (section 3), then run `verdict <move>`.
 - `owner-ok`, `variant apply|discard`, `ask_owner`: the owner decides (section 4).
