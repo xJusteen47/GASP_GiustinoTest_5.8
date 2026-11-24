@@ -34,3 +34,10 @@ move after the air hooks). Off by default.
 - Distances (21 m at 100 %) come from the balloon rules: owner's call.
 - No VFX review (gstn-vfx-reviewer) of puff/arrow yet; the test wall is invisible, so the rebound video happens in mid-air.
 - Not merged into claude/integ-*/main: PR from this branch.
+
+## Floor bounce momentum (owner 2026-11-24, choice A; 077b9c83, test tolerance e578f9e5)
+The Defence landing bounce (the normal one: the game has no tech) keeps GroundBounceMomentumKeep 0.4 of the landing horizontal plus
+GroundBounceStickSpeed 400 cm/s along the stick (FGSTN_GroundBounceRules, Landing|Momentum; both 0 = old hop). Desktop: neutral want (615 0 435)
+= 0.4 x 1538, slides 1.05 m; stick forward (1372 0 377), 2.51 m; back (-220 0 377), back 0.32 m. The stick numbers also include the existing
+angle steer (GroundBounceSteerDeg 30: 435 x sin30 = 218 horizontal, 435 x cos30 = 377 vertical): 0.4x1886+400+218 = 1372, 0.4x994-400-218 = -220.
+Tests GSTNDefence 84 + NP.Hits 89 + Core.Reaction 31 = 204/204.
