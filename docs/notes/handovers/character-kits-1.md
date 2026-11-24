@@ -20,6 +20,8 @@ Model: 200 cm/s at 0.22 s (Default 0.21), 600 at 0.66 s (0.88), 800 at 1.26 s (1
 Saved/CharacterKits/setup_character_kits.txt, play the 3 kits from the GSTN Debug Options kit list, commit the 6 new .uasset (never
 DA_Locomotion_Default). Optional: setup_kit_visuals.py does NOT recolour them (Visual copied from Playtest, not empty).
 
+Owner 2026-11-24 23:00Z: 1A (stamp 10 f x0.15) 2A (values above) confirmed.
+
 ESITO: PARZIALE script pronto, non eseguito sul fisso (coda del fisso)
 SUBAGENTI: 0
 COSTO: ~3 $ | 0 min desktop | 0
