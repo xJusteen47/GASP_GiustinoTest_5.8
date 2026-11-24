@@ -60,3 +60,38 @@ must only not contradict it. Stop searching the run start feel inside the clip.
   and bone-following hurtboxes do not change.
 - 4A: placeholders, no level-2 review; the owner looks at them in game. Retouch: edit the key poses at the top of the script and rerun, or
   edit the clips by hand (a rerun overwrites them: rename a clip you hand-edit).
+
+## Desktop run 2026-11-24 (thread "Prototype run start feel without animations", `_ue59`)
+Status: build, tests, assets and the capsule clips work; first in-game video below. Evidence: `docs/notes/reviews/greybox-capsula/`
+(`*_1x.mp4` real speed, `*_025x.mp4` 0.25x; side | back | game, frame label bottom left).
+- **Build** fixes (UE 5.9): `GetAnimClass()` is non-const (read `AnimClass`), bitfields passed by value to `Emplace`, mission test tag
+  helpers return by value (C4172 as error). `GeometryScripting` enabled in the .uproject, `TargetAllowList` Editor (reversible).
+- **Tests**: Greybox / SpeedGraph 6/6. Full GSTN suite 1880/1883: `ChooserPlayerTime` (float tolerance, fixed) and 2 Loadout screen tests
+  (`GSTNCombat.GAS.Loadout.Screen`, `.ScreenSupportAndSuper`) that fail because the Backpack / KitMods plugins register global loadout
+  rows: pre-existing (M11), not greybox.
+- **Assets**: `SK_GSTN_GreyboxCapsule` (624 vertices, manual weights; needed `copy_bones_from_skeleton` + `mesh_create_bone_weights`
+  first), `ABP_GSTN_GreyboxCapsule`, `CHT_GSTN_SimpleLoco` (7 rows), `ABP_GSTN_SimpleLoco` (state machine, inertialization, slot,
+  orientation + stride warping copied from the stock ABP). The chooser toolset functions are toolset-only: Python calls them with
+  `call_method`. Warning on compile: the editor nodes live in an `Editor` module, UE wants `UncookedOnly` (works in editor/PIE; must move
+  before any packaging).
+- **Clips**: 7 locomotion clips in the chooser rows, 23 move clips in `MoveOverrides` (`check_greybox_assets.py` confirms the CDO and the
+  clip rotations). Every combat montage uses `DefaultSlot`: no extra slot in the simple ABP.
+- **1A ramp** applied to the owner-local `DA_Locomotion_Default` (stage 1 `AccelRampFrames` 20 -> 62; restore 20). Not committed.
+- **Speed graph**: fixed a double-speed spike (62.5 Hz sim in 60 fps frames) that broke t50/t90; now measured over 0.1 s. Run start from
+  rest on the capture: plateau ~576 cm/s, t50 0.45 s, t90 0.80 s (graph) / 0.47 / 0.70 s (computed from the capture rows).
+  Only `Shot showui` captures it (`PIE_CAPTURE_SHOT_UI=1`); HighResShot and the scene captures leave the canvas out.
+
+What the video shows (watched frame by frame):
+- The capsule follows the hidden driver everywhere (run, stop, skid turn, jump, crouch, moves); the mannequin is not visible.
+- Lean: clear forward bend on the run start and the run (spine chain), back bend in the skid and the dropkick. It bends like a banana
+  rather than tilting as a block (the bottom is weighted to the ground). Squash on landing/crouch is weak: the crouch reads as a curl, not
+  as a shorter capsule.
+- Nose: points the facing; it swings round in the skid (back view f316-324).
+- Moves: the dropkick and the dair play the capsule clips (pelvis stays level, feet markers go forward/tuck; the real montage would tilt the
+  body). The jab of KIT_Test_Playtest plays a dynamic montage (`AnimMontage_0`, no asset), so it has no override and the capsule copies the
+  real jab pose. The blocking moves read weakly on a capsule (only the markers show the limbs).
+- Hitboxes stay on the hidden mannequin (dropkick foot sphere drawn where the driver's foot is, not on the capsule markers).
+- Stride warping in Graph mode: not judged (capsule feet are markers); the clips have no root motion, so Graph mode is likely a no-op.
+
+Left: Playtest jab override (dynamic montage: key the override by sequence too, or play the jab from an asset); stronger squash/tilt on
+the capsule if the owner wants the shape to read more; editor nodes to an UncookedOnly module before packaging; the 2 Loadout tests.
