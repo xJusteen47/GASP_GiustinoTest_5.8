@@ -152,10 +152,13 @@ def body_weights(z, chain_z):
 
 def step_mesh():
     path = '%s/%s' % (DIR, MESH_NAME)
+    existing = None
     if eal.does_asset_exist(path) and os.environ.get('GREYBOX_REBUILD_MESH') == '1':
-        # Recreate in place (same path, so the capsule ABP and the subsystem keep pointing at it)
-        p('mesh: rebuilding', path, 'deleted', eal.delete_asset(path))
-    if eal.does_asset_exist(path):
+        # Rewrite in place (same asset, so the capsule ABP and the subsystem keep pointing at it). delete_asset + create does not work
+        # here: the referenced asset stays loaded and the path still exists (desktop run 2, 2026-11-24)
+        existing = eal.load_asset(path)
+        p('mesh: rebuilding in place', path)
+    if existing is None and eal.does_asset_exist(path):
         p('mesh: exists', path)
         return eal.load_asset(path)
     gs_names = ['GeometryScript_Primitives', 'GeometryScript_NewAssetUtils']
@@ -229,6 +232,15 @@ def step_mesh():
         smooth(mesh, skeleton, unreal.GeometryScriptSmoothBoneWeightsOptions())
         p('mesh: WARNING smooth auto weights (set_vertex_bone_weights missing): the capsule may follow the legs and arms')
 
+    if existing is not None:
+        outcome = unreal.GeometryScript_AssetUtils.copy_mesh_to_skeletal_mesh(
+            mesh, existing, unreal.GeometryScriptCopyMeshToAssetOptions(), unreal.GeometryScriptMeshWriteLOD())
+        p('mesh: rewritten', path, 'vertices', vcount(), 'outcome', outcome)
+        if 'SUCCESS' not in str(outcome).upper():
+            fail('copy_mesh_to_skeletal_mesh: %s' % (outcome,))
+            return None
+        save(path)
+        return existing
     new_utils = unreal.GeometryScript_NewAssetUtils
     options = unreal.GeometryScriptCreateNewSkeletalMeshAssetOptions()
     result = new_utils.create_new_skeletal_mesh_asset_from_mesh(mesh, skeleton, path, options)
