@@ -90,6 +90,21 @@ public:
 	void RestoreOriginal();
 
 	/**
+	 * Debug (GSTN Debug window, gstn.Debug.Skin; the Lyra cosmetic cheat idea, rewritten): shows Skin whatever the loadout says, until
+	 * ClearForcedSkin. Null forces the pawn's original look (the base mannequin, to compare proportions). Local to this machine and
+	 * presentation only like every skin; applied even on an equipment-only component (bApplySkin false), so any player pawn can be forced
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Skin")
+	void SetForcedSkin(UGSTN_SkinDefinition* Skin);
+
+	/** Back to the loadout's skin (or the original look when this component does not apply skins) */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Skin")
+	void ClearForcedSkin();
+
+	UFUNCTION(BlueprintPure, Category = "Combat|Skin")
+	bool IsSkinForced() const { return bSkinForced; }
+
+	/**
 	 * A standard socket the pawn's mesh lacks goes to this bone or socket instead (placeholder content on the GASP mannequin before the
 	 * Implant_* sockets are authored). Defaults are the UE5 mannequin bones
 	 */
@@ -172,6 +187,14 @@ private:
 	void RetryBind();
 	void CaptureOriginal(const USkeletalMeshComponent& Mesh);
 	void RestoreLook(USkeletalMeshComponent& Mesh);
+
+	/** The forced skin when one is set, else the loadout's skin when this component applies skins */
+	void ApplyWantedSkin();
+
+	bool bSkinForced = false;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UGSTN_SkinDefinition> ForcedSkin;
 
 	TWeakObjectPtr<UGSTN_LoadoutComponent> BoundLoadout;
 	TWeakObjectPtr<UGSTN_SkinDefinition> AppliedSkin;

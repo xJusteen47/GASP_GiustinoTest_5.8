@@ -49,6 +49,13 @@ private:
 	TSharedPtr<FString> SelectedKit;
 	FText KitStatus;
 
+	/** Skin row (owner 2026-11-23): forces a skin on this machine only, presentation only (FGSTN_DebugSkinPicker) */
+	FReply OnForceSkin(bool bAllPawns);
+	FReply OnReleaseSkin();
+	TArray<TSharedPtr<FString>> SkinOptions;
+	TSharedPtr<FString> SelectedSkin;
+	FText SkinStatus;
+
 	TSharedPtr<SVerticalBox> Rows;
 	FString Filter;
 };

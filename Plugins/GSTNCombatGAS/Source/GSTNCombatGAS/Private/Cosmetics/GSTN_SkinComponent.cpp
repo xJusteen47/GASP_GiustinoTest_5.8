@@ -149,21 +149,49 @@ void UGSTN_SkinComponent::BindToLoadout(UGSTN_LoadoutComponent* Loadout)
 	}
 	if (Loadout->HasLoadout())
 	{
-		if (bApplySkin)
-		{
-			ApplySkin(Loadout->GetResolvedSkin());
-		}
+		ApplyWantedSkin();
 		RefreshAttachments();
 	}
 }
 
 void UGSTN_SkinComponent::HandleLoadoutApplied(UGSTN_LoadoutComponent* Component, int32 Revision)
 {
+	ApplyWantedSkin();
+	RefreshAttachments();
+}
+
+void UGSTN_SkinComponent::ApplyWantedSkin()
+{
+	if (bSkinForced)
+	{
+		ApplySkin(ForcedSkin);
+		return;
+	}
 	if (bApplySkin)
 	{
-		ApplySkin(Component ? Component->GetResolvedSkin() : nullptr);
+		const UGSTN_LoadoutComponent* Loadout = BoundLoadout.Get();
+		ApplySkin(Loadout ? Loadout->GetResolvedSkin() : nullptr);
 	}
-	RefreshAttachments();
+}
+
+void UGSTN_SkinComponent::SetForcedSkin(UGSTN_SkinDefinition* Skin)
+{
+	bSkinForced = true;
+	ForcedSkin = Skin;
+	ApplySkin(Skin);
+}
+
+void UGSTN_SkinComponent::ClearForcedSkin()
+{
+	if (!bSkinForced)
+	{
+		return;
+	}
+	bSkinForced = false;
+	ForcedSkin = nullptr;
+	const UGSTN_LoadoutComponent* Loadout = BoundLoadout.Get();
+	// Without a loadout skin to go back to, the original look: ApplySkin(null) restores it
+	ApplySkin(bApplySkin && Loadout && Loadout->HasLoadout() ? Loadout->GetResolvedSkin() : nullptr);
 }
 
 void UGSTN_SkinComponent::ClearAttachments()
