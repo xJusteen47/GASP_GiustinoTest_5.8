@@ -170,3 +170,41 @@ What the frames show (r2_d, Base 2; r2_c Base 1 same behaviour):
 - **Owner 14:38**: "skirts / rolls of flesh" at the end of the dropkick instead of a plain squash: body and nose now rigid on the pelvis
   (`RIGID_BODY`, `GREYBOX_RIGID_BODY=0` restores the spine blend) and the clips put the whole lean on the pelvis (`PELVIS_LEAN_SHARE` 1).
   Hand markers radius 7 -> 10 and red (material id 1). Needs `GREYBOX_REBUILD_MESH=1 GREYBOX_STEPS=mesh` before make_capsule_clips.py.
+
+## Desktop run 3 (2026-11-24, round 3, `_ue59` fast-forwarded to 38c923f3 + merge of 8de77741)
+Evidence: `docs/notes/reviews/greybox-capsula/round3/` (videos side | back | game, `*_1x` real speed, `*_025x` 0.25x; `sheet_*.jpg`).
+Captures `Saved/Greybox/r3_a` (KIT_Test_Playtest: gb_loco + dropkick_whiff) and `r3_b` (KIT_Test_OverlordDAirV10: dair_whiff), Base 2.
+- Build OK, no compile fixes. Tests GSTNAnimation.Core.Greybox + GSTNCombat.NP.Greybox + SpeedGraph: 6/6 (SquashScale included).
+- `setup_greybox_assets.py` (mesh, rebuild in place, 624 vertices, materials Body/Nose) and `make_capsule_clips.py`: PASS. Dropkick
+  segments: Startup role startup (8 frames), Loop role loop (6), Land role land (15); the montage is found under /Game/GASNPPTest (no
+  root added). 19 montage + 20 sequence overrides. `ShapeSettings.FranticAmplitude` on the ABP was already 0.7 (the script now resets a
+  saved 1.4; first try read it off the CDO instead of `shape_settings` and failed before saving, fixed in the same commit).
+- **Playtest jab (cause)**: Attack.Neutral of KIT_Test_Playtest is `GA_Playtest_GroundHit` (WPN_Test_OverlordDropkick), a Blueprint
+  child of `UGSTN_GA_TestHitMove`: timeline of 32 frames with hitboxes only, `Montage` None, no timeline asset, empty event graph. Nothing
+  presents it: frames.jsonl of run 2 shows timeline 6 / `Test.State.HitMove` on v495-520 with the hands still (hand_r moves < 2 cm). No
+  montage, sequence, anim set or linked layer to hook; the run 1 `AnimMontage_0` was not this move. Options (owner): A give the ability a
+  reference montage (e.g. an Overlord jab) so the existing montage override works with no code; B a capsule map keyed by ability class /
+  running timeline, timed by the timeline frame (new code + clip).
+What the frames show:
+- Crouch: shorter and wider, the bottom stays above the floor (v461-485): fixed.
+- Dropkick: lies near horizontal from v51 to the landing: fixed. Surface smooth most of the time, but a crease along the top shows late in
+  the loop (v126-138) and small dents during the turn (v42-48). Hand markers red and bigger; two grey markers float ~60 cm above the
+  body while it lies flat (foot markers where the driver's feet are, not on the capsule).
+- Run start sway (v40-94): rigid rocking, amplitude by eye about the same as run 2 (not clearly smaller).
+- Jab: the capsule stays rigid (expected, see cause).
+- Dair: tilts on the move, red hands shown and hidden, upright again after it.
+ESITO: build/test/asset OK; crouch and dropkick pose fixed; jab not hookable (no animation on the driver); dropkick crease and floating
+foot markers left.
+SUBAGENTI: none.
+COSTO: not measured (one thread, ~45 min, captures 144 s + 90 s).
+
+### Playtest jab, owner 2A (same day)
+`Tools/GAS/greybox/set_playtest_jab_montage.py` (Save-Assets, backup in Saved/Backups/GAS) copies TL_Overlord_Jab1's montage into
+GA_Playtest_GroundHit's timeline: `AM_OverlordJab1V3`, no section, rate 1.0417 (62.5/60). Montage 0.467 s = 0.448 s at that rate =
+28.0 sim frames against the ability's TotalFrames 32 (0.512 s): the montage ends 4 frames before the move. Hitboxes, frames and cancel
+window unchanged. The capsule override for AM_OverlordJab1V3 already existed (no make_capsule_clips rerun).
+Capture `Saved/Greybox/r3_jab` (jab1_long, Base 2): the driver plays AM_OverlordJab1V3 from v22 (frames.jsonl), the capsule tilts back
+then forward and the red hand marker grows and swings forward (v24-46), then fades. Evidence `round3/jab_*.mp4`, `sheet_jab_2A_side.jpg`.
+The hitbox debug draw does not show in the scene captures, so "hitboxes unchanged" rests on the untouched timeline data, not on the video.
+Note "play timeline": Play Combat Timeline And Wait / `PlayableTimelines` (move-timeline-decoupling 1A) plays a timeline asset, and the
+montage it shows is still the timeline's Montage field; with none set, nothing is presented, so it did not cover the jab by itself.

@@ -442,6 +442,14 @@ def update_move_overrides(overrides, sequence_overrides=None):
         by_sequence = dict(sequence_overrides)
         cdo.set_editor_property('sequence_move_overrides', by_sequence)
         p('sequence move overrides on the capsule ABP:', len(by_sequence))
+    # Run 3 (owner 14:32): the run start sway default went 1.4 -> 0.7 in C++; a value saved on the ABP before that would keep 1.4
+    shape = cdo.get_editor_property('shape_settings')
+    frantic = shape.get_editor_property('frantic_amplitude')
+    p('ShapeSettings.FranticAmplitude on the capsule ABP:', frantic)
+    if abs(frantic - 1.4) < 1e-3:
+        shape.set_editor_property('frantic_amplitude', 0.7)
+        cdo.set_editor_property('shape_settings', shape)
+        p('ShapeSettings.FranticAmplitude set to 0.7')
     unreal.BlueprintEditorLibrary.compile_blueprint(bp)
     p('move overrides on the capsule ABP:', len(current))
     if SAVE:
