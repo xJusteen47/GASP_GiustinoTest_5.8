@@ -21,11 +21,10 @@ FATTO
   jab v12 e ftilt v3.1: uasset NON in git (solo Content/AnimPipeline del fisso). K7 e' approvata ma e' anche un FAIL atteso.
 PER L'OWNER
 - Tag (la guardia li blocca): `git tag approved/runstart-w3 967de748`, `git tag approved/jab-v12 <commit righe>`,
-  `git tag approved/ftilt-v31 <commit righe>`, `git tag approved/dropkick-k7 ac8d6201`, poi `git push origin --tags`.
-- dair: quale versione? Candidati: V4 (carta con pose bloccate dall'owner 03/11, usata da taratura e audit), V7..V10
-  (AM/KIT_Test in Content/GASNPPTest/Combat, le piu' recenti). Nessuna riga scritta.
+  `git tag approved/ftilt-v31 <commit righe>`, `git tag approved/dropkick-k7 ac8d6201`, `git tag approved/dair-v9 916338ad`, poi `git push origin --tags`.
+- dair: owner 01:26Z sceglie v9 (riga scritta, AM con la sua modifica locale = 916338ad). Migliorarla (silhouette,
+  studio Doom) = variante nuova, thread separato. Taratura: dair_approved punta ancora a V4, va spostata su V9; le FAIL v9 (cp5, cp5b, blendout) erano lato gioco.
 - Antigravity: togliere la vecchia skill (bloccato dal classificatore): `cmd /c rmdir "%USERPROFILE%\.gemini\config\skills\gstn-anim-cycle-cheap"`
-  e `New-Item -ItemType Junction -Path "$HOME\.gemini\config\skills\gstn-anim-cycle" -Target "<GASP_Giustino2>\.claude\skills\gstn-anim-cycle"`
-  (attivo quando il branch arriva nel checkout principale). Account claude.ai: togliere gstn-move-animation.
+  e `New-Item -ItemType Junction -Path "$HOME\.gemini\config\skills\gstn-anim-cycle" -Target "<GASP_Giustino2>\.claude\skills\gstn-anim-cycle"` (attiva dopo il merge).
 SUBAGENTI: 0 (lavoro meccanico breve fatto con script a log, non delegato)
 COSTO: ~6 $ (stima) | 40 minuti desktop (build 25 + 4 run headless) | 0 token review
