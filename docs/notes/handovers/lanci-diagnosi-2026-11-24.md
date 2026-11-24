@@ -1,6 +1,6 @@
 # Lanci e gameplay mancante: diagnosi (cloud, sola lettura del codice, 2026-11-24)
 Branch `claude/project-thread-5yaz54` da main a5b20950. Niente compilato, niente cambiato nel gioco. Numeri delle mosse: `docs/notes/reviews/feel-f2/knockback_table.csv`
-(F2, applicato sul fisso in F4 con `setup_knockback_smash.py`, `docs/notes/handovers/feel-f4-desktop.md`). Traiettorie: script in fondo, gravità 980, passo 16 ms.
+(F2, applicato sul fisso in F4 con `setup_knockback_smash.py`, `docs/notes/handovers/feel-f4-desktop.md`). Traiettorie: `handoffs/lanci-traiettorie.py` nei project files, gravità 980, passo 16 ms.
 
 ## Perché "non lanciava" (3 cause, in ordine di peso)
 1. **Il lancio non è un "lancio" per il salto.** `FGSTN_LayeredMove_Knockback` deriva da `FLayeredMoveBase`, non da `FLayeredMove_Launch`
