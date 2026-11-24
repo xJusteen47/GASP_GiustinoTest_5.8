@@ -39,7 +39,7 @@ dove ora il documento e' citato e quindi considerato in ogni review finale (INV-
 ## VFX (hanno la loro skill `gstn-vfx-reviewer`)
 `docs/notes/vfx-theory/principi-vfx.md` (usato dalla skill VFX), `skills-public/vfx-reviewer/vfx-principles.md`,
 `pf:handoffs/archivio/2026-11/silhouette-vfx-ricerca.md`, `vfx-clarity-ricerca.md` §2-4, `vfx-stile-v2-astrobot.md`,
-`vfx-stile-v3-categorie.md`, `pf:studio_dk_clip_2059.md`, `pf:studio_fumo_breakdown.md`, KB `m6s9y2:skills-public/knowledge/vfx/`.
+`vfx-stile-v3-categorie.md`, `pf:riferimenti/vfx-colpo-dk-bananza/studio_dk_clip_2059.md`, `pf:riferimenti/vfx-fumo-dk-bananza/studio_fumo_breakdown.md`, KB `m6s9y2:skills-public/knowledge/vfx/`.
 Non toccati qui: il loro posto e' la review VFX.
 
 ## Da far controllare all'owner
