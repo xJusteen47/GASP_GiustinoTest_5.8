@@ -65,7 +65,10 @@ Runner = Callable[[list, dict, str], Any]
 NON_INHERITABLE = ("stop_and_go", "hold_reason")
 # Version of the capture chain (driver + engine + light). Part of the cache key: a cached capture from another chain is never mixed with a
 # new one in the same A/B (rule 10). Bump it when the pictures change for the same clip (light, size, camera framing, engine).
-CAPTURE_CHAIN = "fastcap-1"
+CAPTURE_CHAIN = "fastcap-2"
+# fastcap-2 (C5 2026-11-24): fixed host spot + spawn reset before every sequence (pie_capture_move PIE_CAPTURE_HOST_SPOT /
+# PIE_CAPTURE_RESET_EACH). Before it two fresh captures of the same run differed by ~34 cm, so a cached base was not the variant's twin.
+HOST_SPOT = "0,150"
 FAST_WINDOW = (20, 90)
 
 
@@ -581,7 +584,7 @@ def anim_capture_move(kit: str, sequences: list[str], variant_runs: list[dict[st
     assert_file = f"{raw_rel}/assert_spec.json"
     ps1 = str(repo / TIMED_PS1)
     cmd = ["pwsh", "-NoProfile", "-File", ps1, "-Kit", kit, "-Out", raw_rel, "-Assert", assert_file] if todo else None
-    env = {"PIE_CAPTURE_RUNS": runs_file, "PIE_CAPTURE_VIEWS": vstr}
+    env = {"PIE_CAPTURE_RUNS": runs_file, "PIE_CAPTURE_VIEWS": vstr, "PIE_CAPTURE_HOST_SPOT": HOST_SPOT, "PIE_CAPTURE_RESET_EACH": "1"}
     if fast:
         env.update({"PIE_FASTCAP": "1", "PIE_FASTCAP_WINDOW": f"{win[0]},{win[1]}"})
     run_dirs = {r["name"]: str(reuse[r["name"]]) if r["name"] in reuse else str(repo / raw_rel / r["name"]) for r in variant_runs}

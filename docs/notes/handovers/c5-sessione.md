@@ -1,5 +1,19 @@
 # C5 pulizia: sessione editor unica + cache capdet, kit TBK5/6, dump dair in gioco (fisso, 2026-11-24) - branch claude/c5-session-2026-11-24
-ESITO: PARZIALE | cattura nella sessione viva e base K7 dalla cache funzionano (giro editor K8 191,7 s -> 107,2 s), ma la cattura NON e' deterministica nemmeno a editor nuovo
+ESITO: OK | giro editor K8 191,7 s -> 107,2 s (sessione unica + K7 dalla cache); cattura resa deterministica (catena fastcap-2): traiettoria 0,0 cm e pose <= 0,71 cm in f118-228 fra due editor nuovi, editor nuovo e sessione, due lavori della stessa sessione
+## SEGUITO (coordinatore 03:28Z: rendere valida la base in cache) - le sezioni sotto "DETERMINISMO" descrivono lo stato PRIMA del fix
+- 4 cause trovate e tolte in `pie_capture_move.py` (attive con PIE_CAPTURE_HOST_SPOT / PIE_CAPTURE_RESET_EACH, che capture_move ora passa sempre):
+  1. spawn: PIE da' all'host un PlayerStart diverso (y 150/-450/450) -> teletrasporto a un punto fisso (0,150);
+  2. reset solo alla prima sequenza della run -> reset (riorientamento, kit, cvar, punto) prima di OGNI sequenza;
+  3. idle break di GASP casuale (Idle Loop -> Break dopo 3 s, chooser Randomize, v05/v07 visti): attese in tempo reale lo facevano partire
+     prima del frame 0 -> passo "idle fresco" a fotogrammi contati (t.OverrideFPS 60: spinta di 12 f, stop 60 f, teletrasporto, 15 f);
+  4. fase sim 62,5 Hz / render 60 fps: ogni 24 frame un frame porta 2 tick; le due catture erano uguali tick per tick ma 22 cm diverse sul
+     frame col doppio tick -> la sequenza parte 5 frame dopo un doppio tick osservato (historyFrame), log "sim phase ALIGNED".
+- `capture_move.CAPTURE_CHAIN` = fastcap-2: le basi in cache della catena vecchia non si riusano (chiave diversa).
+- `Run-Timed.ps1 -NoEsitoClose` (nuovo): la chiusura su "ESITO:" di C2 uccideva la sessione dopo il PRIMO lavoro (il driver scrive ESITO);
+  session_capture e round_runner lo passano. Due catture nella stessa sessione: 66,6 s e 65,1 s, ASSERT OK.
+- Gate: `capture_pair_diff.py <A>/<run> <B>/<run> <seq> --window=118-228 [--max-cm=1]` -> "DETERMINISM: OK|FAIL", exit 1 su FAIL; sulla
+  catena vecchia da' FAIL (34 cm), sulla nuova OK in 6/6 confronti. Fuori finestra (f0-60, coda dello stop) restano fino a 7 cm.
+- Il passo idle fresco aggiunge ~1,5 s per sequenza; cattura K8 solo a editor nuovo 99 s (era 92).
 Riuso: editor_session.py (coda lavori, modo boot), round_runner.py (submit/ping), capture_move._run_key/_cached_dir + manifest (cache capdet), pie_capture_move.py, Save-Assets.ps1.
 FATTO (base integ 314b04a7; _ue59 portata qui, file locali dell'owner intatti, copie in `_scratch/c5-backup-2026-11-24/`)
 - `session_capture.py`: il comando pie_capture_timed diventa un lavoro "boot" della sessione viva (editor sul 2o monitor via vd2_mover);
@@ -27,4 +41,4 @@ DAIR v9 IN GIOCO (domanda C3, dalla cattura C1, `ingame_motion_dump.py`, docs/no
 - a4-a11: la capsula sale 17-19 cm a frame; la posa rispetto all'attore si muove 1,1-1,9 cm ad a4-a5, 3-5,7 cm ad a6-a8. La a4 "vive"
   solo come blocco che sale: dentro il corpo e' ferma. Giudizio (vivo o statua che sale) al critico, i numeri dicono quale dei due.
 SUBAGENTI: 0
-COSTO: ~5 $ (stima, oltre il budget di 4 per i 3 bug) | ~35 minuti desktop (build 6, sessioni fallite 20, misure 7) | 0 token review
+COSTO: ~8 $ (stima, totale C5: 5 primo giro + 3 seguito) | ~55 minuti desktop (build 6, sessioni fallite 20, misure e prove 29) | 0 token review

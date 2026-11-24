@@ -120,7 +120,7 @@ def boot_session(max_minutes, logf):
     os.makedirs(os.path.join(ROOT, "Saved", "Logs", "ci"), exist_ok=True)
     args = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", os.path.join(ROOT, "Tools", "CI", "Run-Timed.ps1"),
             "-Preset", "Capture", "-Script", r"Tools\AnimPipeline\editor_session.py", "-Log", logf,
-            "-MaxMinutes", str(max_minutes), "-SilentMinutes", "30"]
+            "-MaxMinutes", str(max_minutes), "-SilentMinutes", "30", "-NoEsitoClose"]
     # CREATE_NO_WINDOW: under DETACHED_PROCESS powershell does nothing and exits 0 (found by C5 2026-11-24)
     flags = (getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)) if os.name == "nt" else 0
     return subprocess.Popen(args, cwd=ROOT, creationflags=flags, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

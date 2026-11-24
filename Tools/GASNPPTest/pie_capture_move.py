@@ -368,6 +368,13 @@ COLLISION = os.environ.get('PIE_CAPTURE_COLLISION', '') == '1'
 #  - no frame limit: t.MaxFPS 0 and the editor's background CPU throttle off, so a window on the second monitor runs at full speed.
 # An editor built without the plugin falls back to _shoot() and says so in capture.log ("FASTCAP: unavailable").
 FAST = os.environ.get('PIE_FASTCAP', '') == '1'
+# Determinism (C5 2026-11-24): the host spawns at whichever PlayerStart PIE gives it (y 150 / -450 / 450 seen in three captures of the
+# same run) and only a run's FIRST sequence was reset, so the hit of a whiff+hit run started where the whiff ended. Two fresh captures
+# of one run differed by ~34 cm in the move window. PIE_CAPTURE_HOST_SPOT="x,y" teleports the host to that world point (same facing
+# rule as before) and PIE_CAPTURE_RESET_EACH=1 does the run reset (reorient, kit, cvars, teleport) before EVERY sequence.
+HOST_SPOT = tuple(float(v) for v in os.environ['PIE_CAPTURE_HOST_SPOT'].split(',')) if os.environ.get('PIE_CAPTURE_HOST_SPOT') else None
+RESET_EACH = os.environ.get('PIE_CAPTURE_RESET_EACH', '') == '1'
+FRESH_HOLD, FRESH_STOP, FRESH_SETTLE, FRESH_ALIGN = 12, 60, 15, 5   # frames of the fresh-idle step (see 'fresh idle' in _tick)
 FAST_PRE, FAST_POST = (int(v) for v in os.environ.get('PIE_FASTCAP_WINDOW', '20,90').split(','))
 FAST_EARLY_END = os.environ.get('PIE_FASTCAP_EARLY_END', '1') != '0'
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None, 'log': None, 'rows': None}
@@ -912,7 +919,7 @@ def _tick(_dt):
             if st['seq'] >= len(SEQUENCES):
                 return _finish('ok')
             seq = SEQUENCES[st['seq']]
-            if seq.get('run_first') and st.get('run_ready') != st['seq']:   # PIE_CAPTURE_RUNS: next variant, same Play session
+            if (seq.get('run_first') or RESET_EACH) and st.get('run_ready') != st['seq']:   # PIE_CAPTURE_RUNS: next variant, same Play session
                 # The spawn reset moves the host but keeps its facing (a 180 run left it at -168 deg and the next run's stick, camera
                 # relative, made a forward start: ASSERT FAIL, turn2 t1). So: camera yaw back to the first run's, a short stick
                 # forward (the pawn turns to face it, orient to movement), release, settle, then the spawn reset.
@@ -943,12 +950,15 @@ def _tick(_dt):
                 if seq.get('run_kit') and seq['run_kit'] != st.get('kit_now', KIT):
                     _log(f'run {seq["run"]}: kit {seq["run_kit"]}: {h.kit(0, seq["run_kit"])}')
                     st['kit_now'] = seq['run_kit']
-                for cv in [c.strip() for c in seq['run_cvars'].split(';') if c.strip()]:
+                for cv in [c.strip() for c in seq.get('run_cvars', '').split(';') if c.strip()]:
                     _console(cv)
                 comp = g.comps(g.worlds()[0])[h._key(0)]
-                comp.server_reset_to_spawn(unreal.Vector(0.0, 0.0, 0.0))
+                spawn = comp.get_spawn_location()
+                comp.server_reset_to_spawn(unreal.Vector(HOST_SPOT[0] - spawn.x, HOST_SPOT[1] - spawn.y, 0.0) if HOST_SPOT
+                                           else unreal.Vector(0.0, 0.0, 0.0))
                 st.update(run_ready=st['seq'], t=now + 1.0, reorient=0)    # 3 s real time: the reset lands and the idle settles
-                _log(f'run {seq["run"]}: cvars [{seq["run_cvars"]}], facing off by {off:.1f} deg before the reset, host reset to spawn')
+                _log(f'run {seq.get("run", "-")}: cvars [{seq.get("run_cvars", "")}], facing off by {off:.1f} deg before the reset, '
+                     f'host reset to {"spot " + str(HOST_SPOT) if HOST_SPOT else "spawn"} (PlayerStart at {spawn.x:.0f},{spawn.y:.0f})')
                 return None
             if not seq['dummy'] and not st.get('dummy_placed'):   # skill-k8: whiff = empty stage, checked after the teleport settles
                 if not st.get('dummies_parked'):
@@ -986,6 +996,43 @@ def _tick(_dt):
                 # Per sequence: the standing height is not the same before and after the first landing (100 then 88 cm on the first run)
                 st['ground_z'] = z
                 _log(f'{seq["name"]}: standing height z {z:.1f}')
+            if RESET_EACH and st.get('fresh_done') != st['seq']:
+                # C5 determinism: GASP's Idle Loop -> Idle Break after 3 s in state, and the break clip is RANDOM (chooser Randomize,
+                # 13 clips): two captures of one run showed v05 / v07 and 23 cm at the press frame. The real-time waits above let the
+                # break start before frame 0. So, frame-stepped from here (t.OverrideFPS 60, ticks counted, no wall clock): a short
+                # stick nudge along the start facing leaves Idle Loop, the walk stops, the host is teleported back to the spot and the
+                # sequence starts with a FRESH Idle Loop (state time << 3 s at the press). Same frames every time.
+                pc, pawn = g._local_pawn(0)
+                n = st.get('fresh_n', 0)
+                if n == 0:
+                    _console('t.OverrideFPS 60')
+                    if 'cyaw0' in st:
+                        pc.set_control_rotation(unreal.Rotator(roll=0.0, pitch=pc.get_control_rotation().pitch, yaw=st['cyaw0']))
+                    g.hold(0, 'move', (0, 1, 0))
+                elif n == FRESH_HOLD:
+                    g.release(0, 'move')
+                elif n == FRESH_HOLD + FRESH_STOP:
+                    comp = g.comps(g.worlds()[0])[h._key(0)]
+                    spawn = comp.get_spawn_location()
+                    tgt = HOST_SPOT or (spawn.x, spawn.y)
+                    comp.server_reset_to_spawn(unreal.Vector(tgt[0] - spawn.x, tgt[1] - spawn.y, 0.0))
+                elif n >= FRESH_HOLD + FRESH_STOP + FRESH_SETTLE:
+                    # Sim/render phase: the sim ticks at 62.5 Hz, the capture renders 60 fps, so every 24 frames one frame carries
+                    # TWO sim ticks. Its place decides which tick each frame shows (two captures were identical tick by tick but 22 cm
+                    # apart on the frame where one had the double tick). Start a fixed number of frames after an observed double tick.
+                    hf = ((g._view(0, h._key(0)) or {}).get('combat') or {}).get('historyFrame')
+                    prev = st.get('fresh_hf')
+                    st['fresh_hf'] = hf
+                    if st.get('fresh_go') is None and hf is not None and prev is not None and hf - prev >= 2:
+                        st['fresh_go'] = n + FRESH_ALIGN
+                    if st.get('fresh_go') is not None and n >= st['fresh_go'] or n > FRESH_HOLD + FRESH_STOP + FRESH_SETTLE + 60:
+                        aligned = st.get('fresh_go') is not None
+                        st.update(fresh_done=st['seq'], fresh_n=0, fresh_go=None, fresh_hf=None)
+                        _log(f'{seq["name"]}: fresh idle (nudge {FRESH_HOLD} + stop {FRESH_STOP} + settle {FRESH_SETTLE} frames, '
+                             f'frame-stepped), sim phase {"ALIGNED (start " + str(FRESH_ALIGN) + " frames after a double tick)" if aligned else "NOT ALIGNED (no double tick seen)"}')
+                        return None
+                st['fresh_n'] = n + 1
+                return None
             if os.environ.get('PIE_CAPTURE_NOVFX') == '1':   # land-v2-1: no presentation events (landing/jump dust, sparks) on any pawn
                 _log(f'{seq["name"]}: presentation events off on {_presentation_off()} components')
             _log(f'sequence {seq["name"]}: pawn at {_place_cameras()}')

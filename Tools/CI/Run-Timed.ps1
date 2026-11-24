@@ -70,7 +70,8 @@ param(
     [string[]]$RequireAsset,    # /Game/... assets that must exist under the Content of the project the command opens (default gate)
     [switch]$AllowLocalLlm,     # Capture: do not refuse when a local LLM server holds the GPU
     [string]$DoneFile,          # editor runs: extra file the driver writes "ESITO: OK|FAIL" to (the UE log is always read as well)
-    [int]$DoneGraceSec = 25     # editor runs: seconds the editor gets to quit by itself after the driver wrote ESITO, then the job is closed
+    [int]$DoneGraceSec = 25,    # editor runs: seconds the editor gets to quit by itself after the driver wrote ESITO, then the job is closed
+    [switch]$NoEsitoClose       # long-lived editor (Tools/AnimPipeline editor_session.py): its jobs log ESITO lines, the editor must stay up
 )
 
 $ErrorActionPreference = 'Stop'
@@ -516,7 +517,7 @@ if ($AssertFile) {
     $AssertFile = if ([IO.Path]::IsPathRooted($AssertFile)) { $AssertFile } else { Join-Path $Root $AssertFile }
     Remove-Item -LiteralPath $AssertFile -ErrorAction SilentlyContinue   # a stale OK from an earlier run must never pass this one
 }
-$code = Invoke-Timed $Kind $Log $Exe $ArgLine $WatchFile $maxSec $silentSec $Root -Quiet -Done:$isEditor -DoneFile $DoneFile -GraceSec $DoneGraceSec | Select-Object -Last 1
+$code = Invoke-Timed $Kind $Log $Exe $ArgLine $WatchFile $maxSec $silentSec $Root -Quiet -Done:($isEditor -and -not $NoEsitoClose) -DoneFile $DoneFile -GraceSec $DoneGraceSec | Select-Object -Last 1
 if ($isEditor) { $n = Restore-PieIni $pieSnap; if ($n) { $notes += $n } }
 $esito = "$Log.esito"
 $lines = @(Get-Content -LiteralPath $esito)

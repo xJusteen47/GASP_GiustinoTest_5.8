@@ -32,7 +32,21 @@ def diff(a_dir, b_dir, seq, ranges):
     return {"start_a": a0, "start_b": b0, "ranges": out}
 
 
+def verdict(a_dir, b_dir, seq, first, last, max_cm=1.0):
+    """DETERMINISM: OK when trajectory and pose differ by <= max_cm on every frame of [first, last] (the review window: fastcap
+    shoots press-20 .. press+90). C5 2026-11-24 measured 0.0 cm trajectory and <= 0.71 cm pose there, fresh/fresh and fresh/session."""
+    r = diff(a_dir, b_dir, seq, [(first, last + 1)])["ranges"][0]
+    ok = r["traj_cm"] <= max_cm and r["pose_cm"] <= max_cm
+    return ok, f"DETERMINISM: {'OK' if ok else 'FAIL'} {seq} f{first}-{last}: traj {r['traj_cm']} cm, pose {r['pose_cm']} cm ({r['where']}), max {max_cm}"
+
+
 if __name__ == "__main__":
+    win = next((x.split("=", 1)[1] for x in sys.argv if x.startswith("--window=")), None)
+    if win:   # gate form: --window=118-228 [--max-cm=1]
+        mx = float(next((x.split("=", 1)[1] for x in sys.argv if x.startswith("--max-cm=")), 1.0))
+        ok, line = verdict(sys.argv[1], sys.argv[2], sys.argv[3], *(int(v) for v in win.split("-")), max_cm=mx)
+        print(line)
+        sys.exit(0 if ok else 1)
     rg = next((x.split("=", 1)[1] for x in sys.argv if x.startswith("--ranges=")), "0-60,60-138,138-160,160-200,200-230")
     ranges = [tuple(int(v) for v in r.split("-")) for r in rg.split(",")]
     print(json.dumps(diff(sys.argv[1], sys.argv[2], sys.argv[3], ranges)))

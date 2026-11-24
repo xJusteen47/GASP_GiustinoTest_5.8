@@ -47,7 +47,7 @@ def boot_session(max_minutes, logf):
             os.remove(q)
     os.makedirs(os.path.dirname(os.path.join(ROOT, logf)), exist_ok=True)
     args = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", os.path.join(ROOT, "Tools", "CI", "Run-Timed.ps1"),
-            "-Preset", "Capture", "-Script", _boot_script(), "-Log", logf, "-MaxMinutes", str(max_minutes), "-SilentMinutes", "30"]
+            "-Preset", "Capture", "-Script", _boot_script(), "-Log", logf, "-MaxMinutes", str(max_minutes), "-SilentMinutes", "30", "-NoEsitoClose"]
     # CREATE_NO_WINDOW, not DETACHED_PROCESS: a powershell started without a console does nothing and exits 0 (C5 2026-11-24, the
     # session never booted and the runner waited its 15 min for ready.txt)
     flags = (getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)) if os.name == "nt" else 0
