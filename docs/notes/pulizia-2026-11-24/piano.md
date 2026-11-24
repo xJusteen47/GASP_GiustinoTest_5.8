@@ -76,7 +76,7 @@ Categorie in `branch-elenco.csv`: A 37 già dentro `anim-skill-t3`; B 22 sottoin
 | P5 | fisso, Haiku | publish jab v12, ftilt v3.1, dair v9, tag; `Sync-AgentSkills.ps1` | 1 $ + 20 min |
 | P6 | owner | `Cleanup-Branches.ps1 -Apply`, chiude 5 PR, toglie skill di account | 10 min |
 
-Totale stimato circa 14 $, 110 minuti di fisso, 15 minuti dell'owner.
+Totale stimato circa 14 $ (21 $ con i fix del §8), 110 minuti di fisso, 15 minuti dell'owner.
 
 ## 7. Decisioni per l'owner
 
@@ -87,3 +87,23 @@ Totale stimato circa 14 $, 110 minuti di fisso, 15 minuti dell'owner.
 3. Asset approvati. **A (consigliata)** cartella `Published/` in LFS con lock, publish obbligatorio. B solo registro e tag, asset sul fisso come oggi (resta il rischio di perdere jab v12 e ftilt v3.1).
 
 In attesa: via del coordinatore dopo la review cieca dair v9 sul fisso.
+
+## 8. Altre perdite di tempo (richiesta owner 2026-11-24 01:52 UTC)
+
+Fonti: handover dei branch recenti e dei project files (459 file), `handoffs/tempi-import-cattura-2026-11-23.md` (giro 2 di K8: 25 min = 6 import + 9 cattura + ~10 attese), `skill-anim-unica-t3/t4.md`, `Tools/CI/Run-Timed.ps1` su t3. Dove c'è scritto "stima" il numero non è misurato.
+
+| # | Perdita | Tempo perso | Fix | Costo |
+|---|---|---|---|---|
+| 1 | Cattura PNG per fotogramma, 3 viste lette dalla GPU (~7 fps) | ~3,5 di 9 min a giro | P0: GSTNCapture in tempo reale | in P0 |
+| 2 | Ogni giro ricattura cose che non cambiano: 2 run su 5 sono K7 approvata, 1 serve solo all'owner | ~3-4 min a giro (stima) | unire `nfhw4i` (capdet 2: cache per hash della clip, già scritta e testata) e ricatturare la base solo se cambia l'hash | gruppo 1 di P3 |
+| 3 | Avvii dell'editor separati per import, montage e cattura, e 5 Play/stop | ~5 min a giro (stima; 19-24 s a caldo, minuti se ricompila shader dopo un cambio branch) | un'unica sessione editor per giro (import + montage + cattura) tramite MCP; `_ue59` non cambia branch durante una serie di giri; DDC condivisa fra worktree | 4 $ cloud + 30 min fisso |
+| 4 | L'editor non si chiude dopo `QUIT_EDITOR` -> TIMEOUT di 15 min che vale un tentativo (skid, PiePerf, preset di cattura) | 10-15 min per caso, più un tentativo bruciato | Run-Timed legge `ESITO:` dal driver e chiude l'editor subito; un TIMEOUT dopo `ESITO: OK` non conta come tentativo | 1,5 $ |
+| 5 | Driver Python con errore di sintassi scoperto a editor avviato (una notte: un'ora a vuoto) | fino a 60 min | PreCheck di default in Run-Timed: `py -m py_compile` di ogni .py passato (il gancio `-PreCheck` esiste già ma è facoltativo) | 0,5 $ |
+| 6 | Passo headless lanciato dal progetto sbagliato: dump dair di T3 statico perché il worktree lifecal non ha lo scheletro, un giro di taratura perso | un giro intero | PreCheck: l'asset chiesto esiste nel progetto del comando; i passi UE di animazione girano solo su `_ue59` (scritto in skill e AGENTS.md) | 0,5 $ |
+| 7 | Attrito di permessi: tag `approved/*` rifiutati dal guard, cancellazioni rifiutate, push FF negato dal classificatore, catture ferme ore ad aspettare "Allow" sul portatile | ore di calendario | guard accetta `refs/tags/approved/*`; regole allow in `.claude/settings.json` per Run-Timed e salvataggi headless in `_ue59`; il messaggio unico di inizio sessione (regola 9) elenca anche gli Allow del portatile | 1 $ |
+| 8 | Modello locale sul 4080 che occupa VRAM mentre si cattura -> catture lente o TIMEOUT | un tentativo per caso | PreCheck di cattura rifiuta se un processo LLM locale usa la GPU (nvidia-smi) | 0,5 $ |
+| 9 | Il cloud non legge i .uasset e il fetch di 183 branch è lento: fatti "INFERITI" (inventario clip) e linee non clonate | lavoro rifatto | potatura (P6), `GIT_LFS_SKIP_SMUDGE=1` nei thread cloud, dump JSON dei metadati asset committati da `animpipe publish` | in P4/P6 |
+| 10 | `costi.csv` con colonne mescolate (token nella colonna minuti, 105 righe con schemi diversi): il controllo del venerdì non è affidabile | il controllo costi | indice e costi generati (2A) con controllo dello schema | in P2 |
+| 11 | Documenti di avvio pesanti o vecchi: CLAUDE.md manda a `takeover-state.md` (963 righe) e a `feature/gas-npp-5.8`; `INDICE-PROGETTO.md` non è in `main` | contesto sprecato in ogni thread | CLAUDE.md punta a `INDICE-PROGETTO.md` in `main`; `takeover-state.md` va in archivio | in P2 |
+
+I fix 4, 5, 6 e 8 sono un solo lavoro: PreCheck di default in `Run-Timed.ps1`, che si fa in P2 (aggiunge ~3 $ alla fase). Il fix 3 è il più grande e va dopo P0, quando si vede quanto resta della cattura con il video in tempo reale. Nuovo totale stimato: circa 21 $.
