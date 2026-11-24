@@ -315,7 +315,12 @@ def update_chooser(made):
     if not cht:
         fail('chooser %s missing: run setup_greybox_assets.py first' % CHOOSER)
         return
-    tool = unreal.GSTN_ChooserTableToolset
+    # Toolset-only UFUNCTIONs (not Python exposed): call them by name on the CDO
+    cdo = unreal.GSTN_ChooserTableToolset.get_default_object()
+
+    class tool:
+        get_chooser_table = staticmethod(lambda *a: cdo.call_method('GetChooserTable', a))
+        set_chooser_row_result = staticmethod(lambda *a: cdo.call_method('SetChooserRowResult', a))
     info = tool.get_chooser_table(cht)
     state_col = 0
     for row_index, row in enumerate(info.rows):

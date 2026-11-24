@@ -102,6 +102,15 @@ def call_first(owner, names, *args):
     return None
 
 
+class _Toolset:
+    """GSTN_ChooserTableToolset UFUNCTIONs are toolset-only (not Blueprint/Python exposed): call them by name on the CDO."""
+
+    def __getattr__(self, name):
+        cdo = unreal.GSTN_ChooserTableToolset.get_default_object()
+        method = ''.join(w.capitalize() for w in name.split('_'))
+        return lambda *args: cdo.call_method(method, tuple(args))
+
+
 def find_anim(name):
     reg = unreal.AssetRegistryHelpers.get_asset_registry()
     for root in (ANIMS, '/Game'):
@@ -192,6 +201,10 @@ def step_mesh():
     ref = unreal.AnimPoseExtensions.get_bone_names(unreal.AnimPoseExtensions.get_reference_pose(skeleton))
     for i, name in enumerate(ref):
         bone_index[str(name)] = i
+    # The skin weight attribute and the bone hierarchy must exist on the dynamic mesh before weights are set, or the new asset
+    # fails with 'LOD 0 has no skin weight attributes' (UE 5.9)
+    bw.copy_bones_from_skeleton(skeleton, mesh)
+    bw.mesh_create_bone_weights(mesh)
     set_fn = getattr(bw, 'set_vertex_bone_weights', None)
     if set_fn:
         for first, last, kind in parts:
@@ -289,7 +302,7 @@ def step_chooser():
     for index in range(ed.get_num_parameters(cht)):
         p('chooser: parameter', index, ed.get_parameter_type(cht, index), ed.get_parameter_property(cht, index, ''))
 
-    tool = unreal.GSTN_ChooserTableToolset
+    tool = _Toolset()
     state_col = tool.add_chooser_column(cht, 'EnumColumn')
     tool.set_chooser_column_input(cht, state_col, '', 0, ['LocoState'])
     outputs = [('StartTime', 1), ('PlayRate', 1), ('BlendTime', 1), ('OrientationWarpTarget', 0), ('StrideWarpTarget', 0)]
@@ -306,7 +319,7 @@ def step_chooser():
         clip = find_anim(clip_name)
         if not clip:
             fail('chooser: placeholder clip %s for %s not found (row left empty)' % (clip_name, state))
-        row = tool.add_chooser_row(cht, 'AssetChooser', None, clip)
+        row = tool.add_chooser_row(cht, 'AssetChooser', len(tool.get_chooser_table(cht).rows), clip)
         tool.set_chooser_cell(cht, state_col, row, '(Value=%s)' % state)
         tool.set_chooser_cell(cht, out_cols['StartTime'], row, '0.0')
         tool.set_chooser_cell(cht, out_cols['PlayRate'], row, '1.0')
