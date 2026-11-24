@@ -32,6 +32,28 @@ FVector FGSTN_AnimNode_GreyboxShape::AxisSquashScale(int32 UpAxis, float Squash,
 	return Scale;
 }
 
+int32 FGSTN_AnimNode_GreyboxShape::UpAxisOf(const FQuat& ComponentRotation)
+{
+	int32 UpAxis = 0;
+	float Best = -1.f;
+	const FVector Axes[3] = {ComponentRotation.GetAxisX(), ComponentRotation.GetAxisY(), ComponentRotation.GetAxisZ()};
+	for (int32 Axis = 0; Axis < 3; ++Axis)
+	{
+		const float Dot = FMath::Abs(static_cast<float>(Axes[Axis].Z));
+		if (Dot > Best)
+		{
+			Best = Dot;
+			UpAxis = Axis;
+		}
+	}
+	return UpAxis;
+}
+
+float FGSTN_AnimNode_GreyboxShape::PelvisHeightAfterSquash(float Height, float Squash)
+{
+	return Height * FMath::Clamp(Squash, 0.2f, 3.f);
+}
+
 void FGSTN_AnimNode_GreyboxShape::Initialize_AnyThread(const FAnimationInitializeContext& Context)
 {
 	FAnimNode_Base::Initialize_AnyThread(Context);
@@ -109,29 +131,38 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 		}
 		Output.Pose[Root] = CopiedRoot;
 	}
-	// A rigid body cannot lower its pelvis: its share of the ground squash goes to the root instead (around the feet)
-	const float RootPelvisSquash = FMath::Lerp(Shape.PelvisSquash, 1.f, PoseWeight);
-	const float BonePelvisSquash = FMath::Lerp(1.f, Shape.PelvisSquash, PoseWeight);
-	// Ground squash on the pelvis, along the local axis that is the body's up in the reference pose (measured in component space)
+	// Squash of the whole body around the ground point (run 3). Never a non-uniform scale on the root: a bone's scale composes per local
+	// axis (FTransform keeps no shear), and the mannequin's pelvis and spine bones have their local X as the body's up, so a root scale
+	// (wide, wide, short) became (tall, wide, short) on them: the crouch pushed the lower hemisphere through the floor and an air stretch
+	// made the bent spine lumpy. Instead the pelvis bone takes the squash along its own up axis (its spine children share that axis),
+	// and its height above the root is scaled by the same amount, which is the same as squashing about the ground: the bottom of a
+	// capsule hanging from the pelvis ends at Squash times its height and never goes under the feet.
+	// A rigid body cannot lower its pelvis: its share of the ground squash goes to the height as well (PoseWeight 0); a posed body (an
+	// attack) already lowers it, so only the bone squashes for it.
+	const float HeightSquash = Shape.Squash * FMath::Lerp(Shape.PelvisSquash, 1.f, PoseWeight);
+	const float BodySquash = Shape.Squash * Shape.PelvisSquash;
 	const FCompactPoseBoneIndex Pelvis = PelvisBone.GetCompactPoseIndex(Output.Pose.GetBoneContainer());
-	if (Output.Pose.IsValidIndex(Pelvis) && BonePelvisSquash < 0.999f)
+	if (Output.Pose.IsValidIndex(Pelvis))
 	{
-		const FQuat RefPelvis = Output.Pose.GetRefPose(Root).GetRotation() * Output.Pose.GetRefPose(Pelvis).GetRotation();
-		int32 UpAxis = 0;
-		float Best = -1.f;
-		for (int32 Axis = 0; Axis < 3; ++Axis)
+		if (!FMath::IsNearlyEqual(BodySquash, 1.f, 1.e-3f))
 		{
-			const float Dot = FMath::Abs(RefPelvis.GetAxisX().Z * (Axis == 0) + RefPelvis.GetAxisY().Z * (Axis == 1) + RefPelvis.GetAxisZ().Z * (Axis == 2));
-			if (Dot > Best)
-			{
-				Best = Dot;
-				UpAxis = Axis;
-			}
+			// The local axis that is the body's up in the reference pose (measured in component space)
+			const FQuat RefPelvis = Output.Pose.GetRefPose(Root).GetRotation() * Output.Pose.GetRefPose(Pelvis).GetRotation();
+			const int32 UpAxis = UpAxisOf(RefPelvis);
+			const FQuat Current = Output.Pose[Root].GetRotation() * Output.Pose[Pelvis].GetRotation();
+			const FVector CurrentUp = UpAxis == 0 ? Current.GetAxisX() : (UpAxis == 1 ? Current.GetAxisY() : Current.GetAxisZ());
+			// Lying flat fades the squash out (a body lying down must not be squashed through its thickness); the rigid capsule is always
+			// upright enough, so it keeps all of it
+			const float Verticality = FMath::Lerp(1.f, FMath::Square(FMath::Abs(static_cast<float>(CurrentUp.Z))), PoseWeight);
+			Output.Pose[Pelvis].SetScale3D(Output.Pose[Pelvis].GetScale3D() * AxisSquashScale(UpAxis, BodySquash, Verticality));
 		}
-		const FQuat Current = Output.Pose[Root].GetRotation() * Output.Pose[Pelvis].GetRotation();
-		const FVector CurrentUp = UpAxis == 0 ? Current.GetAxisX() : (UpAxis == 1 ? Current.GetAxisY() : Current.GetAxisZ());
-		const float Verticality = FMath::Square(FMath::Abs(static_cast<float>(CurrentUp.Z)));
-		Output.Pose[Pelvis].SetScale3D(Output.Pose[Pelvis].GetScale3D() * AxisSquashScale(UpAxis, BonePelvisSquash, Verticality));
+		if (!FMath::IsNearlyEqual(HeightSquash, 1.f, 1.e-3f))
+		{
+			// The pelvis is a child of the root: its local Z is its height above the feet along the (leaned) up axis
+			FVector Location = Output.Pose[Pelvis].GetTranslation();
+			Location.Z = PelvisHeightAfterSquash(static_cast<float>(Location.Z), HeightSquash);
+			Output.Pose[Pelvis].SetTranslation(Location);
+		}
 	}
 	// Limb markers: shrunk into the body when hidden (never exactly 0, a zero scale breaks the bone matrices' inverse)
 	if (Shape.LimbScale < 0.999f)
@@ -146,10 +177,9 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 			}
 		}
 	}
-	// The root's parent is the component, so its local transform is in component space: rotate it around the ground point, scale it
+	// The root's parent is the component, so its local transform is in component space: rotate it around the ground point
 	FTransform& RootTransform = Output.Pose[Root];
 	RootTransform.SetRotation(FQuat(Shape.Lean) * RootTransform.GetRotation());
-	RootTransform.SetScale3D(RootTransform.GetScale3D() * SquashToScale(Shape.Squash * RootPelvisSquash));
 }
 
 void FGSTN_AnimNode_GreyboxShape::GatherDebugData(FNodeDebugData& DebugData)

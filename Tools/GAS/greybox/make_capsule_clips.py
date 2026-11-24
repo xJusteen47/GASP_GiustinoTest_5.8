@@ -93,7 +93,7 @@ JAB_B = {'lean': 14, 'twist': 25, 'arm_r': 85, 'elbow_r': 5, 'arm_l': 20, 'elbow
 KICK_A = {'lean': -10, 'leg_r': 60, 'knee_r': 100, 'arm_l': 30, 'arm_r': -20, 'out_l': 30, 'out_r': 30}
 KICK_B = {'lean': -35, 'leg_r': 95, 'knee_r': 5, 'leg_l': 10, 'arm_l': -30, 'arm_r': -30, 'out_l': 50, 'out_r': 50}
 DROPKICK_A = {'lean': -20, 'leg_l': 70, 'knee_l': 110, 'leg_r': 70, 'knee_r': 110, 'out_l': 40, 'out_r': 40}
-DROPKICK_B = {'tilt': -60, 'lean': -30, 'leg_l': 95, 'knee_l': 0, 'leg_r': 90, 'knee_r': 5, 'arm_l': -40, 'arm_r': -40, 'out_l': 60, 'out_r': 60}
+DROPKICK_B = {'tilt': -72, 'lean': -25, 'leg_l': 95, 'knee_l': 0, 'leg_r': 90, 'knee_r': 5, 'arm_l': -40, 'arm_r': -40, 'out_l': 60, 'out_r': 60}
 DAIR_A = {'lean': 25, 'leg_l': 80, 'knee_l': 120, 'leg_r': 80, 'knee_r': 120, 'arm_l': 60, 'arm_r': 60, 'out_l': 50, 'out_r': 50}
 DAIR_B = {'lean': -5, 'drop': -10, 'leg_l': -5, 'knee_l': 0, 'leg_r': -5, 'knee_r': 0, 'arm_l': -20, 'arm_r': -20, 'out_l': 70, 'out_r': 70}
 HIT_A = {'lean': -20, 'twist': -10, 'head': -15, 'arm_l': 40, 'arm_r': 30, 'out_l': 40, 'out_r': 40, 'elbow_l': 30, 'elbow_r': 30, 'drop': 6}
@@ -311,6 +311,57 @@ def move_keys(name, frames):
     return 'generic', [(0, IDLE), (frames, IDLE)]
 
 
+def move_poses(name):
+    """(kind, anticipation, action) of the first MOVES row whose pattern the name contains."""
+    low = name.lower()
+    for pattern, _startup, _active, a, b in MOVES:
+        if pattern in low:
+            return pattern or 'generic', a, b
+    return 'generic', GENERIC_A, GENERIC_B
+
+
+def segment_role(name, index, count):
+    """Role of one sequence of a multi-sequence move: by its name (Startup / Loop / Land), else by its place in the montage."""
+    low = name.lower()
+    for role in ('startup', 'loop', 'land'):
+        if role in low:
+            return role
+    if count > 1 and index == 0:
+        return 'startup'
+    if count > 1 and index == count - 1:
+        return 'land'
+    return 'loop' if count > 1 else 'whole'
+
+
+def role_keys(name, role, frames):
+    """Run 3 (dropkick stayed upright): a move split in sequences holds its action pose across the cut. Startup ends ON the action pose,
+    the loop holds it (it repeats in the air for as long as the fall lasts), the land leaves it for the rest pose."""
+    kind, a, b = move_poses(name)
+    if role == 'startup':
+        f1 = max(1, int(round(frames * 0.55)))
+        return kind, [(0, IDLE), (min(f1, frames - 1), a), (frames, b)]
+    if role == 'loop':
+        return kind, [(0, b), (frames // 2, b), (frames, b)]
+    if role == 'land':
+        f1 = max(1, int(round(frames * 0.35)))
+        return kind, [(0, b), (min(f1, frames - 1), b), (frames, IDLE)]
+    return move_keys(name, frames)
+
+
+def segment_sequences(montage):
+    """The sequences of the montage's first slot track, in order (duplicates once)."""
+    out = []
+    try:
+        track = montage.get_editor_property('slot_anim_tracks')[0].get_editor_property('anim_track')
+        for seg in track.get_editor_property('anim_segments'):
+            ref = seg.get_editor_property('anim_reference')
+            if ref and ref not in out:
+                out.append(ref)
+    except Exception as exc:
+        p('segments of', montage.get_name(), 'unreadable:', exc)
+    return out
+
+
 def find_montages():
     reg = unreal.AssetRegistryHelpers.get_asset_registry()
     out = []
@@ -419,11 +470,22 @@ def run():
         kind, keys = move_keys(montage.get_name(), frames)
         clip = write_clip(rig, 'AS_GSTN_Greybox_Move_' + montage.get_name(), frames, False, keys)
         overrides[montage] = clip
-        # The same clip for a dynamic montage that plays this montage's sequence
-        played = first_segment_sequence(montage)
-        if played and played not in sequence_overrides:
-            sequence_overrides[played] = clip
-            covered.add(played.get_path_name().split('.')[0])
+        sequences = segment_sequences(montage)
+        if len(sequences) > 1:
+            # Run 3: one clip per sequence, asked before the montage's clip (the capsule looks up the segment under the montage's time)
+            for index, sequence in enumerate(sequences):
+                seq_frames = max(2, int(round(sequence.get_play_length() * FPS)))
+                role = segment_role(sequence.get_name(), index, len(sequences))
+                seq_kind, seq_keys = role_keys(montage.get_name(), role, seq_frames)
+                sequence_overrides[sequence] = write_clip(rig, 'AS_GSTN_Greybox_Seq_' + sequence.get_name(), seq_frames, role == 'loop', seq_keys)
+                covered.add(sequence.get_path_name().split('.')[0])
+                p('  segment', sequence.get_name(), 'role', role, 'kind', seq_kind, 'frames', seq_frames)
+        else:
+            # The same clip for a dynamic montage that plays this montage's sequence
+            played = first_segment_sequence(montage)
+            if played and played not in sequence_overrides:
+                sequence_overrides[played] = clip
+                covered.add(played.get_path_name().split('.')[0])
         p('move', path, 'length %.3f s' % length, 'kind', kind, 'clip length %.3f s' % (frames / float(FPS)))
     for path in find_sequences(covered):
         sequence = unreal.EditorAssetLibrary.load_asset(path)
@@ -431,8 +493,9 @@ def run():
             fail('sequence %s not found' % path)
             continue
         frames = max(2, int(round(sequence.get_play_length() * FPS)))
-        kind, keys = move_keys(sequence.get_name(), frames)
-        clip = write_clip(rig, 'AS_GSTN_Greybox_Seq_' + sequence.get_name(), frames, False, keys)
+        role = segment_role(sequence.get_name(), 0, 1)
+        kind, keys = role_keys(sequence.get_name(), role, frames)
+        clip = write_clip(rig, 'AS_GSTN_Greybox_Seq_' + sequence.get_name(), frames, role == 'loop', keys)
         sequence_overrides[sequence] = clip
         p('sequence', path, 'length %.3f s' % sequence.get_play_length(), 'kind', kind)
     update_move_overrides(overrides, sequence_overrides)

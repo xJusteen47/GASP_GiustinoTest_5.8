@@ -9,9 +9,10 @@
 #include "GSTN_AnimNode_GreyboxShape.generated.h"
 
 /**
- * Scales and tilts the root bone of the incoming pose by the shape its anim instance gives (IGSTN_GreyboxShapeSource). The root sits at the
- * feet, so a squash keeps the capsule on the ground and a lean pivots on it, like a bean character. Everything above the root (the pose
- * copied from the invisible driver) follows. Presentation only: hitboxes read the driver, never this mesh.
+ * Tilts the root bone of the incoming pose and squashes the body by the shape its anim instance gives (IGSTN_GreyboxShapeSource). The root
+ * sits at the feet, so a lean pivots on it, like a bean character. The squash goes on the pelvis (along its own up axis, with its height
+ * above the feet scaled the same way), never as a non-uniform scale on the root: see Evaluate_AnyThread (run 3, the crouch went through the
+ * floor). Presentation only: hitboxes read the driver, never this mesh.
  */
 USTRUCT(BlueprintInternalUseOnly)
 struct GSTNANIMATIONCORE_API FGSTN_AnimNode_GreyboxShape : public FAnimNode_Base
@@ -39,8 +40,14 @@ struct GSTNANIMATIONCORE_API FGSTN_AnimNode_GreyboxShape : public FAnimNode_Base
 	virtual bool HasPreUpdate() const override { return true; }
 	virtual void PreUpdate(const UAnimInstance* InAnimInstance) override;
 
-	/** Pure: the root scale for a squash value (height Squash, width 1/sqrt(Squash)); Squash is clamped to 0.2..3 */
+	/** Pure: the volume-keeping scale for a squash value (height Squash, width 1/sqrt(Squash)); Squash is clamped to 0.2..3 */
 	static FVector SquashToScale(float Squash);
+
+	/** Pure: which local axis (0 X, 1 Y, 2 Z) of a bone with this component-space rotation points most up */
+	static int32 UpAxisOf(const FQuat& ComponentRotation);
+
+	/** Pure: the pelvis height above the feet after a squash about the ground (Squash clamped like SquashToScale) */
+	static float PelvisHeightAfterSquash(float Height, float Squash);
 
 	/** Pure: the local scale of a bone whose local axis UpAxis (0 X, 1 Y, 2 Z) is the body's up, squashed by Squash; Verticality 0..1 fades it
 	 *  out when that axis lies down (a body lying flat must not be squashed through its thickness) */

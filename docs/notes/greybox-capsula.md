@@ -150,3 +150,20 @@ What the frames show (r2_d, Base 2; r2_c Base 1 same behaviour):
   v126-150 (deformation artefact).
 - Playtest jab: plays NO montage on the driver (frames.jsonl `montage` null, timeline m6 v491-520) and no "no capsule override" log line:
   the jab is presented without a montage, so neither montage nor sequence overrides can catch it; the capsule stays rigid during it.
+
+## Round 3 (2026-11-24, thread "Test greybox capsule on desktop", from desktop run 2)
+- **Crouch through the floor (cause)**: the squash was a non-uniform scale on the root. FTransform has no shear, so a parent's scale
+  composes per local axis: the mannequin pelvis/spine bones have local X as the body's up, so (wide, wide, short) on the root became
+  (tall, wide, short) on them and the lower hemisphere went under the feet. The same cross-axis scale on the bent spine is the likely
+  cause of the lumpy dropkick body (air stretch). Fix in `FGSTN_AnimNode_GreyboxShape`: the root only tilts; the pelvis bone takes the
+  whole squash along its own up axis (`UpAxisOf`, `AxisSquashScale`) and its height above the root is scaled by it
+  (`PelvisHeightAfterSquash`), i.e. a squash about the ground. Test `GSTNAnimation.Core.Greybox.SquashScale` checks the bottom stays
+  above the ground for squash 0.35..1.3.
+- **Dropkick upright (cause)**: the move is a 3-sequence montage (Startup, Loop repeated until landing, Land); the loop/land sequence clips
+  used the generic keys (rest -> anticipation -> action -> rest), so the body was upright at every loop wrap. Fix: per-sequence clips
+  with roles (`segment_role`, `role_keys` in make_capsule_clips.py): startup ends on the action pose, loop holds it, land leaves it.
+  `UpdateMoveOverride` now looks up the segment under the montage's time (not only the first) and, for multi-sequence montages, asks
+  SequenceMoveOverrides before the montage's own clip; the time is scaled to the capsule clip's length. Dropkick action pose flatter
+  (tilt -72, lean -25).
+- **Run start sway** (owner 14:32): `FranticAmplitude` 1.4 -> 0.7. If ABP_GSTN_GreyboxCapsule saved its own value, set it there too.
+- **Playtest jab**: still to find what presents it without a montage (desktop, editor).

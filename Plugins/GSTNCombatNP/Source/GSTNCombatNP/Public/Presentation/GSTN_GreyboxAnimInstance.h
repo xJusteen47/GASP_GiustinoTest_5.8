@@ -12,6 +12,8 @@ class UAnimSequenceBase;
 class UMoverComponent;
 class USkeletalMesh;
 class UGSTN_RunPresentationComponent;
+struct FAnimMontageInstance;
+struct FAnimSegment;
 
 /** How the capsule squashes, stretches and leans (class defaults of ABP_GSTN_GreyboxCapsule; the owner tunes them there) */
 USTRUCT(BlueprintType)
@@ -147,7 +149,7 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 
 	/** Sway amplitude multiplier during the frantic start */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "0", ClampMax = "3"))
-	float FranticAmplitude = 1.4f;
+	float FranticAmplitude = 0.7f;
 
 	/** Fade from the frantic cadence to the speed's cadence after FranticSeconds */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "0.01", ClampMax = "1", ForceUnits = "s"))
@@ -190,9 +192,10 @@ public:
 	TMap<TSoftObjectPtr<UAnimMontage>, TSoftObjectPtr<UAnimSequenceBase>> MoveOverrides;
 
 	/**
-	 * Same, keyed by the clip the montage plays (its first slot segment), for montages that are not assets: a move that plays a sequence
-	 * as a dynamic montage (the Playtest jab, AnimMontage_0) has no montage to key. Asked when MoveOverrides has no entry; the time is
-	 * the segment's position in that clip.
+	 * Same, keyed by the sequence the montage plays at its current time (the segment under it, first slot), for montages that are not
+	 * assets (a sequence played as a dynamic montage has no montage to key) and for montages built from several sequences (run 3: the
+	 * dropkick's startup, air loop and land each get their own clip, asked before the montage's entry). The time is the segment's position
+	 * in that sequence, scaled to the capsule clip's length.
 	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Greybox|Moves")
 	TMap<TSoftObjectPtr<UAnimSequenceBase>, TSoftObjectPtr<UAnimSequenceBase>> SequenceMoveOverrides;
@@ -231,6 +234,12 @@ protected:
 private:
 	/** The move override of this frame from the driver's active montage */
 	void UpdateMoveOverride();
+
+	/** Shape's override from MoveOverrides (the montage's own clip at the montage's time); false without an entry */
+	bool ApplyMontageOverride(UAnimMontage& Montage, const FAnimMontageInstance& Instance, float Position);
+
+	/** Shape's override from SequenceMoveOverrides (the clip of the sequence Segment plays, at its time in it); false without an entry */
+	bool ApplySequenceOverride(const UAnimMontage& Montage, const FAnimMontageInstance& Instance, const FAnimSegment& Segment, float Position);
 
 
 	/** The driver's pelvis height above the component (its feet) now, and in its reference pose; false without a driver or a pelvis */

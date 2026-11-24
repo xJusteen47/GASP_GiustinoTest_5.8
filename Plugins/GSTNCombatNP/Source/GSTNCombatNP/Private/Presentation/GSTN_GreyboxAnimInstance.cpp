@@ -283,34 +283,59 @@ void UGSTN_GreyboxAnimInstance::UpdateMoveOverride()
 	}
 	const float Position = Instance->GetPosition();
 
-	// 1) By montage asset (resolved once per montage; a synchronous load of a small clip, presentation only)
-	if (Montage->IsAsset())
+	// The segment under the montage's time: a move built from several sequences (the dropkick: startup, loop repeated in the air until
+	// it lands, land) needs a capsule clip per sequence, because the loop's length in the montage is not the time it is really shown
+	const FAnimTrack* Track = Montage->SlotAnimTracks.IsEmpty() ? nullptr : &Montage->SlotAnimTracks[0].AnimTrack;
+	const int32 SegmentCount = Track ? Track->AnimSegments.Num() : 0;
+	const FAnimSegment* Segment = nullptr;
+	if (SegmentCount > 0)
 	{
-		TObjectPtr<UAnimSequenceBase>* Loaded = LoadedOverrides.Find(Montage);
-		if (!Loaded)
-		{
-			const TSoftObjectPtr<UAnimSequenceBase>* Soft = MoveOverrides.Find(TSoftObjectPtr<UAnimMontage>(Montage));
-			Loaded = &LoadedOverrides.Add(Montage, Soft ? Soft->LoadSynchronous() : nullptr);
-		}
-		if (*Loaded)
-		{
-			Shape.OverrideClip = *Loaded;
-			Shape.OverrideTime = Position;
-			Shape.OverrideWeight = FMath::Clamp(Instance->GetWeight(), 0.f, 1.f);
-			return;
-		}
+		const int32 Index = Track->GetSegmentIndexAtTime(Position);
+		Segment = &Track->AnimSegments[Index != INDEX_NONE ? Index : (Position <= 0.f ? 0 : SegmentCount - 1)];
 	}
 
-	// 2) By the clip the montage plays (dynamic montages, or a montage without its own entry): first segment of the first slot
-	if (Montage->SlotAnimTracks.IsEmpty() || Montage->SlotAnimTracks[0].AnimTrack.AnimSegments.IsEmpty())
+	// 1) By montage asset for a one-sequence montage (resolved once per montage; a synchronous load of a small clip, presentation only)
+	if (Montage->IsAsset() && SegmentCount <= 1 && ApplyMontageOverride(*Montage, *Instance, Position))
 	{
 		return;
 	}
-	const FAnimSegment& Segment = Montage->SlotAnimTracks[0].AnimTrack.AnimSegments[0];
+	// 2) By the sequence the montage plays at its time (dynamic montages, multi-sequence montages, a montage without its own entry)
+	if (Segment && ApplySequenceOverride(*Montage, *Instance, *Segment, Position))
+	{
+		return;
+	}
+	// 3) A multi-sequence montage without per-sequence clips falls back to its whole-montage clip
+	if (Montage->IsAsset() && SegmentCount > 1)
+	{
+		ApplyMontageOverride(*Montage, *Instance, Position);
+	}
+}
+
+bool UGSTN_GreyboxAnimInstance::ApplyMontageOverride(UAnimMontage& Montage, const FAnimMontageInstance& Instance, float Position)
+{
+	TObjectPtr<UAnimSequenceBase>* Loaded = LoadedOverrides.Find(&Montage);
+	if (!Loaded)
+	{
+		const TSoftObjectPtr<UAnimSequenceBase>* Soft = MoveOverrides.Find(TSoftObjectPtr<UAnimMontage>(&Montage));
+		Loaded = &LoadedOverrides.Add(&Montage, Soft ? Soft->LoadSynchronous() : nullptr);
+	}
+	if (!*Loaded)
+	{
+		return false;
+	}
+	Shape.OverrideClip = *Loaded;
+	Shape.OverrideTime = Position;
+	Shape.OverrideWeight = FMath::Clamp(Instance.GetWeight(), 0.f, 1.f);
+	return true;
+}
+
+bool UGSTN_GreyboxAnimInstance::ApplySequenceOverride(const UAnimMontage& Montage, const FAnimMontageInstance& Instance, const FAnimSegment& Segment,
+	float Position)
+{
 	UAnimSequenceBase* Played = Segment.GetAnimReference();
 	if (!Played)
 	{
-		return;
+		return false;
 	}
 	TObjectPtr<UAnimSequenceBase>* Loaded = LoadedSequenceOverrides.Find(Played);
 	if (!Loaded)
@@ -320,13 +345,18 @@ void UGSTN_GreyboxAnimInstance::UpdateMoveOverride()
 		if (!*Loaded)
 		{
 			// Once per clip: names what to add to SequenceMoveOverrides (make_capsule_clips.py reads this line from the log)
-			UE_LOG(LogAnimation, Log, TEXT("GSTN Greybox: no capsule override for montage %s playing %s"), *Montage->GetName(), *Played->GetPathName());
+			UE_LOG(LogAnimation, Log, TEXT("GSTN Greybox: no capsule override for montage %s playing %s"), *Montage.GetName(), *Played->GetPathName());
 		}
 	}
-	if (*Loaded)
+	if (!*Loaded)
 	{
-		Shape.OverrideClip = *Loaded;
-		Shape.OverrideTime = Segment.ConvertTrackPosToAnimPos(Position);
-		Shape.OverrideWeight = FMath::Clamp(Instance->GetWeight(), 0.f, 1.f);
+		return false;
 	}
+	Shape.OverrideClip = *Loaded;
+	// The time inside the played sequence (a looping segment wraps), mapped onto the capsule clip's length
+	const float SequenceTime = Segment.ConvertTrackPosToAnimPos(Position);
+	const float SequenceLength = Played->GetPlayLength();
+	Shape.OverrideTime = SequenceLength > KINDA_SMALL_NUMBER ? SequenceTime / SequenceLength * (*Loaded)->GetPlayLength() : SequenceTime;
+	Shape.OverrideWeight = FMath::Clamp(Instance.GetWeight(), 0.f, 1.f);
+	return true;
 }
