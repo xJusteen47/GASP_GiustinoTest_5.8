@@ -57,9 +57,12 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_Knockback : public FLayeredMoveBase
 	 * True when Moves holds a knockback that started after StartMs (a wall or floor rebound, a new hit on a flying victim). Such a move
 	 * supersedes this one: Mover's mixer breaks a tie between two velocity overrides of the same priority in favour of the OLDER move, so a
 	 * launch still in its balloon warp (66 frames at 100 %) kept overriding and the rebound's launch frame was lost (wall rebound at 100 %,
-	 * 2026-11-24: the victim stayed on the wall). The superseded move ends on that frame and gives nothing. Pure
+	 * 2026-11-24: the victim stayed on the wall). The superseded move ends on that frame and gives nothing.
+	 * Queued holds the moves of the substep's START state that Mover activates only while generating (the newer move's own first frame:
+	 * there it is still queued, with no start time): one of them is newer when this move started before NowMs. Pure
 	 */
-	static bool HasNewerKnockback(TConstArrayView<TSharedPtr<FLayeredMoveBase>> Moves, double StartMs);
+	static bool HasNewerKnockback(TConstArrayView<TSharedPtr<FLayeredMoveBase>> Moves, TConstArrayView<TSharedPtr<FLayeredMoveBase>> Queued,
+		double StartMs, double NowMs);
 
 	/** The speed the fade takes off on frame ElapsedFrames (>= 1) of a launch of LaunchSpeed: Deceleration x step until LaunchSpeed is used up. Pure */
 	static double FadeOnFrame(double LaunchSpeed, double Deceleration, double StepSeconds, int32 ElapsedFrames);

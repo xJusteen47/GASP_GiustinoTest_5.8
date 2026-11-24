@@ -36,7 +36,8 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 	}
 
 	// A newer knockback owns the flight from its first frame: this one ends now, so its override cannot win the mixer's tie (see the header)
-	if (HasNewerKnockback(StartState.SyncState.LayeredMoves.GetActiveMoves(), StartSimTimeMs))
+	if (HasNewerKnockback(StartState.SyncState.LayeredMoves.GetActiveMoves(), StartState.SyncState.LayeredMoves.GetQueuedMoves(), StartSimTimeMs,
+		TimeStep.BaseSimTimeMs))
 	{
 		DurationMs = static_cast<float>(FMath::Max(TimeStep.BaseSimTimeMs - StartSimTimeMs, 0.0));
 		return false;
@@ -148,13 +149,29 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 	return true;
 }
 
-bool FGSTN_LayeredMove_Knockback::HasNewerKnockback(TConstArrayView<TSharedPtr<FLayeredMoveBase>> Moves, double StartMs)
+bool FGSTN_LayeredMove_Knockback::HasNewerKnockback(TConstArrayView<TSharedPtr<FLayeredMoveBase>> Moves, TConstArrayView<TSharedPtr<FLayeredMoveBase>> Queued,
+	double StartMs, double NowMs)
 {
+	auto IsKnockback = [](const TSharedPtr<FLayeredMoveBase>& Move)
+	{
+		return Move.IsValid() && Move->GetScriptStruct()->IsChildOf(FGSTN_LayeredMove_Knockback::StaticStruct());
+	};
 	for (const TSharedPtr<FLayeredMoveBase>& Move : Moves)
 	{
-		if (Move.IsValid() && Move->GetScriptStruct()->IsChildOf(FGSTN_LayeredMove_Knockback::StaticStruct()) && Move->StartSimTimeMs > StartMs)
+		if (IsKnockback(Move) && Move->StartSimTimeMs > StartMs)
 		{
 			return true;
+		}
+	}
+	// A queued one starts on this frame: newer than a move that started before it (never than itself, or than one starting with it)
+	if (StartMs < NowMs)
+	{
+		for (const TSharedPtr<FLayeredMoveBase>& Move : Queued)
+		{
+			if (IsKnockback(Move))
+			{
+				return true;
+			}
 		}
 	}
 	return false;

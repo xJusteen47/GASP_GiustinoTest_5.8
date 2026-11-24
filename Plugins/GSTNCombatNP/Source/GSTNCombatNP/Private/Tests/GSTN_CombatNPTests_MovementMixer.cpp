@@ -69,26 +69,36 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_KnockbackYieldsToNewerTest, "GSTNCombat.N
 bool FGSTN_KnockbackYieldsToNewerTest::RunTest(const FString& Parameters)
 {
 	// Wall rebound at 100 % (2026-11-24): the launch, still in its balloon warp, and the rebound both override the velocity at priority 0;
-	// Mover's mixer keeps the older one, so the launch has to step aside on the rebound's first frame
+	// Mover's mixer keeps the older one, so the launch has to step aside on the rebound's first frame. On that frame the rebound is still in
+	// the start state's QUEUED list (Mover activates it while generating), with no start time
+	constexpr double LaunchStart = 28992.0;
+	constexpr double Now = 29072.0;
 	TSharedPtr<FGSTN_LayeredMove_Knockback> Launch = MakeShared<FGSTN_LayeredMove_Knockback>();
-	Launch->StartSimTimeMs = 29136.0;
-	TSharedPtr<FGSTN_LayeredMove_Knockback> Rebound = MakeShared<FGSTN_LayeredMove_Knockback>();
-	Rebound->StartSimTimeMs = 29216.0;
+	Launch->StartSimTimeMs = LaunchStart;
+	TSharedPtr<FGSTN_LayeredMove_Knockback> QueuedRebound = MakeShared<FGSTN_LayeredMove_Knockback>();
 	TSharedPtr<FGSTN_LayeredMove_Freeze> Freeze = MakeShared<FGSTN_LayeredMove_Freeze>();
-	Freeze->StartSimTimeMs = 40000.0;
 
-	TArray<TSharedPtr<FLayeredMoveBase>> Moves;
-	Moves.Add(Launch);
-	TestFalse(TEXT("alone: the launch flies"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Moves, Launch->StartSimTimeMs));
-	Moves.Add(Freeze);
-	TestFalse(TEXT("a newer move of another kind (the hitstop freeze) does not end it"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Moves, Launch->StartSimTimeMs));
-	Moves.Add(Rebound);
-	TestTrue(TEXT("a newer knockback supersedes the launch"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Moves, Launch->StartSimTimeMs));
-	TestFalse(TEXT("the rebound itself is not superseded"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Moves, Rebound->StartSimTimeMs));
+	TArray<TSharedPtr<FLayeredMoveBase>> Active;
+	TArray<TSharedPtr<FLayeredMoveBase>> Queued;
+	Active.Add(Launch);
+	TestFalse(TEXT("alone: the launch flies"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Active, Queued, LaunchStart, Now));
+	Queued.Add(Freeze);
+	TestFalse(TEXT("a newer move of another kind (the hitstop freeze) does not end it"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Active, Queued, LaunchStart, Now));
+	Queued.Add(QueuedRebound);
+	TestTrue(TEXT("the rebound's first frame (still queued) supersedes the launch"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Active, Queued, LaunchStart, Now));
+	TestFalse(TEXT("the rebound, starting now, is not superseded by itself"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Active, Queued, Now, Now));
+
+	// The next frames: the rebound is active with its start time
+	Queued.Reset();
+	TSharedPtr<FGSTN_LayeredMove_Knockback> Rebound = MakeShared<FGSTN_LayeredMove_Knockback>();
+	Rebound->StartSimTimeMs = Now;
+	Active.Add(Rebound);
+	TestTrue(TEXT("an active newer knockback supersedes the launch"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Active, Queued, LaunchStart, Now + 16.0));
+	TestFalse(TEXT("the rebound is not superseded"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Active, Queued, Now, Now + 16.0));
 	TSharedPtr<FGSTN_LayeredMove_Knockback> SameFrame = MakeShared<FGSTN_LayeredMove_Knockback>();
-	SameFrame->StartSimTimeMs = Rebound->StartSimTimeMs;
-	Moves.Add(SameFrame);
-	TestFalse(TEXT("two knockbacks of the same frame keep the mixer's own rule"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Moves, Rebound->StartSimTimeMs));
+	SameFrame->StartSimTimeMs = Now;
+	Active.Add(SameFrame);
+	TestFalse(TEXT("two knockbacks of the same frame keep the mixer's own rule"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Active, Queued, Now, Now + 16.0));
 	return true;
 }
 
