@@ -18,10 +18,10 @@ FATTO
   c2 passo-01 si calcola DOPO l'apertura del braccio. Prova di equivalenza non valida cosi'; va rifatta con lo src del
   codice w3 a 22a318f1. Dati: docs/notes/anim-layer/t3-ue-run-w3-compare.json, script gstn_anim_mcp/t3_layer_check.py.
 - anim-approvate.md: righe w3 (967de748), jab v12, ftilt v3.1 (owner nel thread 2026-11-24 00:43Z: "sono approvate").
-  jab v12 e ftilt v3.1: uasset NON in git (solo Content/AnimPipeline del fisso). K7 e' approvata ma e' anche un FAIL atteso.
+  jab v12 e ftilt v3.1: uasset NON in git (solo Content/AnimPipeline del fisso). K7: niente tag (owner: stop-and-go); la sua riga in anim-approvate.md e' di prima (ac8d6201), toglierla lo decide l'owner.
 PER L'OWNER
 - Tag (la guardia li blocca): `git tag approved/runstart-w3 967de748`, `git tag approved/jab-v12 <commit righe>`,
-  `git tag approved/ftilt-v31 <commit righe>`, `git tag approved/dropkick-k7 ac8d6201`, `git tag approved/dair-v9 916338ad`, poi `git push origin --tags`.
+  `git tag approved/ftilt-v31 <commit righe>`, `git tag approved/dair-v9 916338ad`, poi `git push origin --tags`.
 - dair: owner 01:26Z sceglie v9 (riga scritta, AM con la sua modifica locale = 916338ad). Migliorarla (silhouette,
   studio Doom) = variante nuova, thread separato. Taratura: dair_approved punta ancora a V4, va spostata su V9; le FAIL v9 (cp5, cp5b, blendout) erano lato gioco.
 - Antigravity: togliere la vecchia skill (bloccato dal classificatore): `cmd /c rmdir "%USERPROFILE%\.gemini\config\skills\gstn-anim-cycle-cheap"`
