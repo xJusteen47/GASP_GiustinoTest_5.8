@@ -489,6 +489,10 @@ else {
         if ($Script) { $pcArgs += @('--py', $(if ([IO.Path]::IsPathRooted($Script)) { $Script } else { Join-Path $Root $Script })) }
         foreach ($ra in @($RequireAsset)) { if ($ra) { $pcArgs += @('--asset', $ra) } }
         if ($Kind -eq 'Capture' -and -not $AllowLocalLlm) { $pcArgs += '--vram' }
+        # Windows PowerShell 5.1 passes embedded double quotes to a native exe unescaped: --cmdline '"x.uproject" -ExecCmds="py ..."'
+        # split into stray arguments and precheck.py refused every editor run started by `powershell -File` (round_runner,
+        # capture_move, session_capture), while pwsh 7 worked (C5 2026-11-24). Escape them by hand on 5.1 only.
+        if ($PSVersionTable.PSVersion.Major -lt 7) { $pcArgs = @($pcArgs | ForEach-Object { $_ -replace '"', '\"' }) }
         $dpOut = @(& python @pcArgs 2>&1)
         if ($LASTEXITCODE -ne 0) {
             $ld = Split-Path "$Log.esito" -Parent; if ($ld) { New-Item -ItemType Directory -Force $ld | Out-Null }

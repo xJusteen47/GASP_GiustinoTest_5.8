@@ -48,11 +48,13 @@ def boot_session(max_minutes, logf):
     os.makedirs(os.path.dirname(os.path.join(ROOT, logf)), exist_ok=True)
     args = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", os.path.join(ROOT, "Tools", "CI", "Run-Timed.ps1"),
             "-Preset", "Capture", "-Script", _boot_script(), "-Log", logf, "-MaxMinutes", str(max_minutes), "-SilentMinutes", "30"]
-    flags = (getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)) if os.name == "nt" else 0
+    # CREATE_NO_WINDOW, not DETACHED_PROCESS: a powershell started without a console does nothing and exits 0 (C5 2026-11-24, the
+    # session never booted and the runner waited its 15 min for ready.txt)
+    flags = (getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)) if os.name == "nt" else 0
     return subprocess.Popen(args, cwd=ROOT, creationflags=flags, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def ensure_session(max_minutes=60, logf=r"Saved\Logs\ci\animpipe_session_capture.log", ready_timeout_s=900):
+def ensure_session(max_minutes=60, logf=r"Saved\Logs\ci\animpipe_session_capture.log", ready_timeout_s=300):
     """{'state': 'reused'|'ready'|'failed', 'sec': seconds to a usable editor}."""
     t0 = time.time()
     if RR.session_alive():
