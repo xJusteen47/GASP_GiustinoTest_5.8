@@ -69,6 +69,12 @@ float UGSTN_GreyboxAnimInstance::SwayCadenceHz(const FGSTN_GreyboxShapeSettings&
 	return FMath::Lerp(BySpeed, FMath::Max(Settings.FranticCadenceHz, BySpeed), FMath::Clamp(Frantic, 0.f, 1.f));
 }
 
+float UGSTN_GreyboxAnimInstance::SwayAmplitudeTarget(const FGSTN_GreyboxShapeSettings& Settings, float Speed2D, float Frantic)
+{
+	const float BySpeed = FMath::Clamp(FMath::Max(Speed2D, 0.f) / FMath::Max(Settings.FullSwaySpeed, 1.f), 0.f, 1.f);
+	return FMath::Lerp(BySpeed, Settings.FranticAmplitude, FMath::Clamp(Frantic, 0.f, 1.f));
+}
+
 FVector UGSTN_GreyboxAnimInstance::RunSway(const FGSTN_GreyboxShapeSettings& Settings, float Phase, float Amplitude, float& OutPitch)
 {
 	// Footfalls at phase 0 and PI: the bob dips and the nod tips forward there (|sin| shapes a bounce, not a sine wobble); the rock and
@@ -203,8 +209,9 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		TimeSinceStart = -1.f;  // no frantic sway while sliding; it starts when the turn does
 	}
 	const float Frantic = FranticAlpha(ShapeSettings, TimeSinceStart);
-	const float AmplitudeGoal = bMoving ? FMath::Max(FMath::Clamp(Speed2D / FMath::Max(ShapeSettings.FullSwaySpeed, 1.f), 0.f, 1.f),
-		Frantic * ShapeSettings.FranticAmplitude) : 0.f;
+	// The frantic start replaces the speed's amplitude instead of raising it (run 3: with a max, the fast ramp reached full speed inside
+	// the frantic window, so lowering FranticAmplitude changed nothing and the start still rocked as wide as the run, at twice the cadence)
+	const float AmplitudeGoal = bMoving ? SwayAmplitudeTarget(ShapeSettings, Speed2D, Frantic) : 0.f;
 	SwayAmplitude = FMath::FInterpTo(SwayAmplitude, AmplitudeGoal, DeltaSeconds, 10.f);
 	SwayPhase = FMath::Fmod(SwayPhase + 2.f * PI * SwayCadenceHz(ShapeSettings, Speed2D, Frantic) * DeltaSeconds, 2.f * PI);
 	float SwayPitch = 0.f;

@@ -147,7 +147,7 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "0.5", ClampMax = "15", ForceUnits = "Hz"))
 	float FranticCadenceHz = 6.f;
 
-	/** Sway amplitude multiplier during the frantic start */
+	/** Sway amplitude during the frantic start (replaces the speed's amplitude, 1 = the full run's; owner 2026-11-24 14:32: smaller) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "0", ClampMax = "3"))
 	float FranticAmplitude = 0.7f;
 
@@ -216,6 +216,9 @@ public:
 
 	/** Pure: sway cycles per second for a ground speed and a frantic alpha */
 	static float SwayCadenceHz(const FGSTN_GreyboxShapeSettings& Settings, float Speed2D, float Frantic);
+
+	/** Pure: the sway amplitude goal for a ground speed and a frantic alpha (the frantic start blends to FranticAmplitude, not max) */
+	static float SwayAmplitudeTarget(const FGSTN_GreyboxShapeSettings& Settings, float Speed2D, float Frantic);
 
 	/** Pure: the sway at a cycle phase (radians) and amplitude: X squash delta, Y roll, Z twist yaw (degrees); OutPitch the nod */
 	static FVector RunSway(const FGSTN_GreyboxShapeSettings& Settings, float Phase, float Amplitude, float& OutPitch);

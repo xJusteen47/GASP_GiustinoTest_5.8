@@ -79,6 +79,11 @@ bool FGSTN_GreyboxShapeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("frantic over after its window"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::FranticAlpha(Settings,
 		Settings.FranticSeconds + Settings.FranticFadeSeconds + 0.01f)));
 	TestTrue(TEXT("not frantic at rest"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::FranticAlpha(Settings, -1.f)));
+	// Run 3 (owner: the run start rocks too wide): at full speed inside the frantic window the amplitude is FranticAmplitude, not the run's
+	TestTrue(TEXT("frantic amplitude replaces the speed's"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::SwayAmplitudeTarget(Settings,
+		Settings.FullSwaySpeed * 2.f, 1.f), Settings.FranticAmplitude));
+	TestTrue(TEXT("speed amplitude after the frantic start"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::SwayAmplitudeTarget(Settings,
+		Settings.FullSwaySpeed, 0.f), 1.f));
 	TestTrue(TEXT("run start cadence faster than the speed's"), UGSTN_GreyboxAnimInstance::SwayCadenceHz(Settings, 150.f, 1.f)
 		> 2.f * UGSTN_GreyboxAnimInstance::SwayCadenceHz(Settings, 150.f, 0.f));
 	TestTrue(TEXT("still = no cadence"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::SwayCadenceHz(Settings, 0.f, 0.f)));

@@ -93,7 +93,8 @@ JAB_B = {'lean': 14, 'twist': 25, 'arm_r': 85, 'elbow_r': 5, 'arm_l': 20, 'elbow
 KICK_A = {'lean': -10, 'leg_r': 60, 'knee_r': 100, 'arm_l': 30, 'arm_r': -20, 'out_l': 30, 'out_r': 30}
 KICK_B = {'lean': -35, 'leg_r': 95, 'knee_r': 5, 'leg_l': 10, 'arm_l': -30, 'arm_r': -30, 'out_l': 50, 'out_r': 50}
 DROPKICK_A = {'lean': -20, 'leg_l': 70, 'knee_l': 110, 'leg_r': 70, 'knee_r': 110, 'out_l': 40, 'out_r': 40}
-DROPKICK_B = {'tilt': -72, 'lean': -25, 'leg_l': 95, 'knee_l': 0, 'leg_r': 90, 'knee_r': 5, 'arm_l': -40, 'arm_r': -40, 'out_l': 60, 'out_r': 60}
+# Run 3: legs in line with the lying body (95 forward on a body tilted back ~97 left the feet 60 cm above it)
+DROPKICK_B = {'tilt': -72, 'lean': -25, 'leg_l': 12, 'knee_l': 0, 'leg_r': 8, 'knee_r': 5, 'arm_l': -40, 'arm_r': -40, 'out_l': 60, 'out_r': 60}
 DAIR_A = {'lean': 25, 'leg_l': 80, 'knee_l': 120, 'leg_r': 80, 'knee_r': 120, 'arm_l': 60, 'arm_r': 60, 'out_l': 50, 'out_r': 50}
 DAIR_B = {'lean': -5, 'drop': -10, 'leg_l': -5, 'knee_l': 0, 'leg_r': -5, 'knee_r': 0, 'arm_l': -20, 'arm_r': -20, 'out_l': 70, 'out_r': 70}
 HIT_A = {'lean': -20, 'twist': -10, 'head': -15, 'arm_l': 40, 'arm_r': 30, 'out_l': 40, 'out_r': 40, 'elbow_l': 30, 'elbow_r': 30, 'drop': 6}
