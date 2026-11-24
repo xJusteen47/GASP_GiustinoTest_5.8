@@ -29,9 +29,19 @@ opts = unreal.AssetRegistryDependencyOptions()
 lines, saved, failed = [], 0, 0
 for data in ar.get_assets_by_path('/Game', recursive=True):
     pkg = str(data.package_name)
-    if pkg.startswith('/Game/GASNPPTest/') or OWNER.search(pkg):
+    # AnimPipeline/ is never touched by 2b: its Published approved clips are locked (a string naming the old source is not an import).
+    if pkg.startswith(('/Game/GASNPPTest/', '/Game/AnimPipeline/')) or OWNER.search(pkg):
         continue
-    old = sorted(str(d) for d in (ar.get_dependencies(pkg, opts) or []) if str(d) in moved)
+    # The Asset Registry applies [CoreRedirects] to dependencies, so it reports the NEW paths: read the file's own import names too.
+    old = {str(d) for d in (ar.get_dependencies(pkg, opts) or []) if str(d) in moved}
+    rel = pkg[len('/Game/'):] if pkg.startswith('/Game/') else None
+    for ext in ('.uasset', '.umap'):
+        fpath = os.path.join(ROOT, 'Content', *(rel or '').split('/')) + ext
+        if rel and os.path.isfile(fpath):
+            with open(fpath, 'rb') as fb:
+                blob = fb.read()
+            old |= {m.decode('ascii') for m in re.findall(rb'/Game/GASNPPTest/[A-Za-z0-9_/]+', blob) if m.decode('ascii') in moved}
+    old = sorted(old)
     if not old:
         continue
     if DRY:

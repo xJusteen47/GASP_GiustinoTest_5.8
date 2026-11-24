@@ -27,7 +27,9 @@ if len({r['new'] for r in rows}) != len(rows):
 SKIP = ('docs/notes/', 'docs/architecture/plans/', 'handoffs/', 'Artifacts/', 'Tools/Reorg/', 'Tools/GAS/gstn_content.py',
         'Tools/CI/Test-GitGuard.ps1', 'Content/')
 out = subprocess.run(['git', 'grep', '-n', '-I', '/Game/GASNPPTest'], cwd=ROOT, capture_output=True, text=True).stdout.splitlines()
-problems += [f'TESTO {line[:160]}' for line in out if not line.startswith(SKIP)]
+# [CoreRedirects] PackageRedirects in DefaultEngine.ini name the old packages by design (old -> new, kept for pre-move branches).
+problems += [f'TESTO {line[:160]}' for line in out
+             if not line.startswith(SKIP) and not (line.startswith('Config/DefaultEngine.ini:') and ('+PackageRedirects=(OldName="/Game/GASNPPTest/' in line or line.split(':', 2)[2].lstrip().startswith(';')))]
 
 print('\n'.join(problems[:10]))
 print(f'CHECK 2b: {len(rows)} righe, {len(problems)} problemi')
