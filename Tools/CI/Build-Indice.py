@@ -3,7 +3,7 @@
 Nobody edits INDICE.md or costi.csv by hand any more: every branch used to touch both, so every merge made them diverge.
 The only input is one handover per thread in docs/notes/handovers/*.md, whose closing lines are:
 
-  ESITO: <OK|PARZIALE|FAIL|TIMEOUT> | <the goal in one sentence>
+  ESITO: <PASS|PARZIALE|FAIL> <the goal or result in one sentence>  (OK and TIMEOUT are also accepted)
   SUBAGENTI: <how many, for what work, which model each>
   COSTO: <usd estimated> | <minutes of desktop> | <review tokens>
 
@@ -25,7 +25,7 @@ import re
 import subprocess
 import sys
 
-ESITI = ("OK", "PARZIALE", "FAIL", "TIMEOUT")
+ESITI = ("PASS", "OK", "PARZIALE", "FAIL", "TIMEOUT")
 LINE = {k: re.compile(r"^[\s>*_`-]*%s\s*:\s*(.*?)\s*$" % k, re.M) for k in ("ESITO", "SUBAGENTI", "COSTO", "BRANCH", "OBIETTIVO")}
 NUM = re.compile(r"\d+(?:[.,]\d+)?")
 COLUMNS = ["data", "thread", "branch", "commit", "esito", "obiettivo", "subagenti", "usd", "minuti_desktop", "token_review", "schema"]
@@ -53,11 +53,13 @@ def parse_costo(s):
 
 
 def parse_esito(s):
+    """'ESITO: PASS una frase' or 'ESITO: OK | una frase' -> (word, goal, valid)."""
     if s is None:
         return None, None, False
-    head, _, goal = s.partition("|")
-    word = head.strip().upper()
-    return (word if word in ESITI else head.strip()), goal.strip(), word in ESITI
+    m = re.match(r"\s*([A-Za-z]+)\s*(?:\||:|-)?\s*(.*)$", s)
+    word = m.group(1).upper() if m else ""
+    goal = m.group(2).strip() if m else ""
+    return (word if word in ESITI else s.strip()), goal, word in ESITI
 
 
 def first_add_dates(handover_dir):
@@ -97,7 +99,7 @@ def parse_handover(path, dates, since):
     errors = []
     if date >= since:
         if not esito_ok:
-            errors.append("ESITO mancante o non nella forma 'ESITO: OK|PARZIALE|FAIL|TIMEOUT | obiettivo'")
+            errors.append("ESITO mancante o non nella forma 'ESITO: PASS|PARZIALE|FAIL frase'")
         if not sub_raw:
             errors.append("SUBAGENTI mancante")
         if not costo_ok:
