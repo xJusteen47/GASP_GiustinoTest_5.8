@@ -1,22 +1,24 @@
 # GASP GiustinoTest 5.8 — Regole Workspace (Antigravity)
 
-- **Lingua e stile:** rispondi a Giustino (`xJusteen47`) in **italiano**, sintetico, con passi manuali numerati quando serve azione owner.
+Rispondi a Giustino (`xJusteen47`) in **italiano**, sintetico, con passi manuali numerati quando serve azione owner.
+Questo file non copia le regole: dice cosa leggere, in quest'ordine, e solo ciò che serve al task.
 
-## Memoria indicizzata su git (leggi SOLO ciò che serve al task)
-1. `handoffs/INDICE.md` — indice thread, branch, commit, esiti, task attivi (incluso automaticamente sotto).
-2. Handover del task attivo in `docs/notes/handovers/` (max 30 righe).
-3. `docs/notes/memoria-progetto.md` — stato progetto, hardware, decisioni, coda aperta.
-4. `docs/notes/regole-progetto-2026-11-22.md` — regole attive (Regole 1–15 + routing M0–M3).
-5. `handoffs/queue.json` e `handoffs/costi.csv` — coda deterministica e registro costi.
-- Mai rileggere vecchie chat/log completi se non espressamente richiesto dal brief.
+1. `docs/notes/regole-progetto.md` — le 17 regole di lavoro e di spesa (fonte unica; se qui e altrove differiscono, vale questo file).
+2. `CLAUDE.md` — mappa del codice e convenzioni.
+3. `docs/INDICE-PROGETTO.md` — cosa esiste già e va riusato (prima di scrivere codice, regola 1).
+4. `Tools/AnimPipeline/registro-clip.csv` — stato di ogni clip (approvata, bloccata, in review). Mai scriverlo a mano: lo scrivono solo `animpipe publish` e `animpipe approve`.
+5. Il brief del tuo task (`handoffs/`) e, se ripari un lavoro, il suo handover in `docs/notes/handovers/`.
 
-@[INDICE](handoffs/INDICE.md)
+Mai rileggere vecchie chat o log interi se il brief non lo chiede.
 
 ## Guardrail rigidi
+- **Tronco = `main`.** Se il tuo branch non parte dall'integrazione del giorno (`claude/integ-<data>`) o da `main`, fermati e scrivilo nell'handover.
 - **MAI** modificare file sporchi dell'owner in `C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_ue59` (`DA_Locomotion_Default.uasset`, `CHT_*_PoseMatch.uasset`, `_ue59/IN-USO.txt`, `Mixamo/`, ecc.).
-- **MAI** push su `main` / `feature/*`, force-push o commit di segreti/chiavi.
-- **Confine EULA Epic:** `Plugins/EngineOverrides/`, `Plugins/GASNPP/`, `UE_5.9/` non vanno **MAI** a DeepSeek (usa worktree sparse con `Tools/CI/New-DeepSeekWorktree.ps1`).
-- **Disciplina modelli/quota:** coordina le chat su **`Hydrogen High`** (mai chat lunghe su `Neon XHigh`); usa `gemini-4-neon-high` (`M3`) solo per review animazioni passando **griglie `.jpg`** (niente `.mp4` in blocco: `read_file` li campiona a 1 fps).
+- **MAI** push su `main` / `feature/*`, force-push, cancellazione o spostamento di tag, commit di segreti/chiavi. Si pusha solo su `claude/*`; i tag `approved/*` li crea solo `animpipe approve`.
+- **Passi UE di animazione** (import, dump, cattura): solo su `_ue59` del fisso, tramite `Tools/CI/Run-Timed.ps1` (che fa il PreCheck e chiude l'editor su `ESITO:`). Mai da un worktree senza lo scheletro.
+- **Confine EULA Epic:** `Plugins/EngineOverrides/`, `Plugins/GASNPP/`, `UE_5.9/` non vanno mai a DeepSeek (usa worktree sparse con `Tools/CI/New-DeepSeekWorktree.ps1`). Credenziali e VRAM: sezione Sicurezza di `regole-progetto.md`.
+- **Skill:** vivono in `.claude/skills/` nel repo; la cartella `~/.gemini/config/skills/` contiene solo junction verso di lì (`Tools/CI/Sync-AgentSkills.ps1`). Non copiare skill altrove.
+- Review di animazioni: passa griglie `.jpg` al modello di review, non `.mp4` in blocco (`read_file` li campiona a 1 fps).
 
 ## Chiusura obbligatoria di fine task (prima di rispondere "fatto")
-Aggiorna `docs/notes/handovers/<task>.md` (<= 30 righe, riga finale `COSTO: ... | provider=... | quota_pro=...`), aggiungi 1 riga a `handoffs/INDICE.md`, registra le righe in `handoffs/costi.csv`, committa e pusha su `claude/*`.
+Scrivi `docs/notes/handovers/<task>.md` (<= 30 righe) con le righe finali `ESITO: <OK|PARZIALE|FAIL|TIMEOUT> | <obiettivo>`, `SUBAGENTI: <quanti, per cosa, modello>` e `COSTO: <$ stimati> | <minuti desktop> | <token review>`. **Non** toccare `handoffs/INDICE.md` né `handoffs/costi.csv`: li genera `Tools/CI/Build-Indice.py` dagli handover. Committa e pusha su `claude/*`.

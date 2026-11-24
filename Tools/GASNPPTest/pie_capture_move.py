@@ -1138,6 +1138,8 @@ def _tick(_dt):
                     f.write(f'ASSERT: FAIL assert step crashed: {e!r}\n')
             with open(os.path.join(OUT, 'done.txt'), 'w') as f:
                 f.write(st.get('status', '?') + '\n')
+            # Run-Timed closes the editor itself a few seconds after this line if QUIT_EDITOR does not take effect
+            unreal.log('ESITO: ' + ('OK' if st.get('status', '?') == 'ok' else 'FAIL'))
             unreal.SystemLibrary.execute_console_command(None, 'QUIT_EDITOR')
     except Exception:
         _log('ERROR ' + traceback.format_exc())
