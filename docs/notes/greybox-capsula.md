@@ -283,3 +283,38 @@ Evidence `docs/notes/reviews/greybox-capsula/round6/` (KIT_Test_Overlord: rs_sta
 ESITO: OK on the sword; wall judder/brake lean present, worth an owner look at real speed.
 SUBAGENTI: none.
 COSTO: not measured (one thread, ~10 min for run 6).
+
+## Desktop run 7 (2026-11-24, thread "Sistemare capsula a terra e rotolate", `_ue59` on 4317a34d)
+Evidence `docs/notes/reviews/greybox-capsula/round7/` (side | back | game, 1x / 0.25x; sheets). Captures `Saved/Greybox/r7_a` (799a6740),
+`r7_b` (4317a34d, stopped), `r7_c` (4317a34d, KIT_Test_Playtest, gstn.Greybox 1, gstn.Loco.Base 2, PIE_CAPTURE_AIR_GIVE_UP=200).
+Build OK, tests GSTNAnimation.Core.Greybox + GSTNCombat.NP.Greybox + GSTNDefence.NP.Landing 19/19.
+Data (Tools/GASNPPTest/dump_dropkick_bounce.py): the kit's dropkick is GA_Overlord_Dropkick -> TL_Overlord_Dropkick (91 frames): Self
+Landing Bounce Mode=Height, Height=25, BounceAbility GA_Overlord_DropkickTechBounceR3; KnockdownOnLanding window [0, 91); Hold Until
+Landed LandFrame 59, MaxAirFrames 125. DA_DefenceRules_Test GroundBounce: GroundBounceGravityScale 3, SelfKnockdownImpactSpeed 900,
+MaxDownedFrames 90 (AutoGetupFor Everyone), RollInput DodgeAndStick, RollPressBufferFrames 6.
+Why the hop did not show:
+1. On 799a6740 the move ended on the touchdown frame before the self knockdown hook (fixed by 4317a34d, LandedTimeline).
+2. Pressed rising on the playtest kit's ~9 m jump (as dropkick_whiff), the move stays airborne past MaxAirFrames 125 and ends by the air
+   timeout a few frames over the floor (r7_a, r7_b: exactly 125 sim frames; z 114 / 162 cm when it ends): "disarmed, window closed", no
+   knockdown. The gb_dk_* sequences now press falling at 400 cm (GB_DK_AIR).
+3. With the knockdown (r7_c, "frame 1514 landed inside the window"): the hop is ~9 cm for ~4 frames, not 25. Capsule bottom 2.2 (v157,
+   touchdown) -> 8.3 -> 11.4 -> 11.5 (v160, peak) -> 8.6 -> 2.7 (v162, down); the actor z jumps 37 -> 94 on v158 only because the
+   dropkick's body capsule (half height 35) grows back to 86. Deceleration ~3 cm/frame^2 = ~11800 cm/s^2 = 12 g: the knocked-flight
+   gravity of the combat rules (KnockbackGravityScale 4, owner 1A 2026-11-24; row gravity -3920 v159-162) times GroundBounceGravityScale 3,
+   while the bounce speed is sized for 980 x 3 (BounceSpeedForHeight uses the base gravity). 25 cm at 3 g gives ~6-9 cm at 12 g.
+   The driver's pelvis barely leaves the floor (12 -> 20 cm) through the bounce clip.
+What the frames show (r7_c):
+- Landing / downed (dk_ground side + back v150-185): flat dropkick in the air, touchdown v157; through the bounce clip (TechBounceR3,
+  v158-169) the capsule pops between lying and upright: flat v158, UPRIGHT v159, 45 deg v160, flat v161, upright-ish (sitting) v164-169;
+  AnimMontage_0 v170-172 tilted, then lying flat on the floor from v173 (bottom on the floor, no sinking, no squash). Neutral get-up
+  AM_React_GetUp from v244 (90 downed frames).
+- Roll forward (Dodge + stick forward v198, AM_React_Roll v200-223): tips a little, then sits up while sliding 80 cm and goes short and
+  wide (v214-220, squashed) before standing at v224: reads as "stand up while sliding", not as a roll over.
+- Roll back (AM_React_RollBack v200-223): pivots over the feet end, upside down near vertical (v206-208, collar at the bottom), lies
+  reversed (v212), stands v216-218: reads as a backward roll with a fast flip.
+- Victim (gb_dk_victim_near): the dummy at 180 % is downed (~v240, 21 m ahead) and gets up after its 90 downed frames (~v330) before
+  the walking host arrives (stops 1.7 m short at v440): never framed lying; videos not kept. Needs a camera on the dummy.
+ESITO: hop runs on 4317a34d but is ~9 cm / 4 frames (gravity stack); lying pose OK, bounce clip pops lying/upright; forward roll reads as
+a sit-up slide with a squash; no data changed.
+SUBAGENTI: none.
+COSTO: not measured (one thread, ~1 h 30 including the _ue59 collision and the pause).

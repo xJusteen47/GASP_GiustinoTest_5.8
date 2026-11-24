@@ -184,6 +184,7 @@ AIR_GIVE_UP = int(os.environ.get('PIE_CAPTURE_AIR_GIVE_UP', AIR_GIVE_UP))
 # from the game camera); 'jump' = (frame, frames held) through the combat Jump button; 'crouch_tap' = frame of a Crouch tap (fast fall);
 # 'follow' = the review cameras move with the pawn at the start yaw. Select with PIE_CAPTURE_SEQUENCES (the names below), and
 # PIE_CAPTURE_VIEWS=az90,az0,game keeps fewer views (one grid per view, project rule 4)
+GB_DK_AIR = {'trigger_h': float(os.environ.get('PIE_CAPTURE_GB_DK_H', 400.0)), 'stick': True}
 MOVE_SEQUENCES = [
     # Slopes (owner 2026-11-19): with PIE_CAPTURE_PARK=Z7:1 (foot of the 15 deg hill) or Z7_top:1 (its plateau). The pawn spawns facing +X;
     # the hills rise toward -X, so (0, -1) runs uphill from the foot and (0, 1) runs downhill from the plateau
@@ -321,22 +322,26 @@ MOVE_SEQUENCES = [
      'cmds': [(0, 'yaw 0'), (0, 'gstn.Wall.Teleport -3300 -1950 120 0'), (30, 'gstn.Wall.Teleport -3300 -1950 900 0'),
               (30, 'gstn.Wall.Launch 300 0 300'), (80, 'gstn.Wall.Launch 0 900 0 1')],
      'sticks': [(30, (0, 1, 0)), (75, (0.7, 0.7, 0)), (110, (-0.7, 0.7, 0)), (190, None)]},
+    # r7_b finding: pressed rising (as dropkick_whiff) on the playtest kit's ~9 m jump, the dropkick stays airborne past its Hold Until
+    # Landed MaxAirFrames (125 sim frames) and ends by the air timeout a few frames over the floor, so no landing is ever inside the move (no
+    # self knockdown, no hop). GB_DK_AIR presses on the way DOWN at PIE_CAPTURE_GB_DK_H cm (default 400): the move lands well inside its
+    # air time. Run with PIE_CAPTURE_AIR_GIVE_UP=200 (the jump's apex is ~86 frames after the press, past the default give-up of 100)
     # capsula-a-terra (2026-11-24): the dropkick's landing to its end on the capsule (KIT_Test_Playtest): landing, the move's hop, lying,
     # get-up. 'after_land' = [(frames after the landing, button name or None, stick or None, frames the stick is held)]: the landing is the
     # first frame after the attack press whose z stops falling within 30 cm of the standing height (logged); the downed roll needs Dodge
     # (Movement.Dodge) + stick, a press before the body is free is carried to its first free frame (GSTN_TumbleLanding AfterClocks).
     # Stick (0, 1) = away from the camera = the dropkick's facing (roll forward); (0, -1) against the facing = roll back
     {'name': 'gb_dk_ground', 'taps': [], 'frames': 300, 'dummy': None, 'shoot': True, 'follow': True,
-     'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5}},
+     'air': GB_DK_AIR},
     {'name': 'gb_dk_roll_fwd', 'taps': [], 'frames': 280, 'dummy': None, 'shoot': True, 'follow': True,
-     'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5},
+     'air': GB_DK_AIR,
      'after_land': [(int(os.environ.get('PIE_CAPTURE_ROLL_AT', 40)), 'Dodge', (0, 1, 0), 20)]},
     {'name': 'gb_dk_roll_back', 'taps': [], 'frames': 280, 'dummy': None, 'shoot': True, 'follow': True,
-     'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5},
+     'air': GB_DK_AIR,
      'after_land': [(int(os.environ.get('PIE_CAPTURE_ROLL_AT', 40)), 'Dodge', (0, -1, 0), 20)]},
     # a victim downed by a hard hit: the dropkick on a dummy at a high percent (server write, test only), the host walks after it
     {'name': 'gb_dk_victim', 'taps': [], 'frames': 300, 'dummy': float(os.environ.get('PIE_CAPTURE_DROPKICK_DIST', 275.0)), 'shoot': True,
-     'follow': True, 'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5},
+     'follow': True, 'air': GB_DK_AIR,
      'dummy_percent': float(os.environ.get('PIE_CAPTURE_DUMMY_PERCENT', 180.0))},
     # the same, then the host walks after the dummy (r7_a: it lands ~21 m ahead, 1.4 s after the hit, off the following cameras) and stops
     # short of it, so the side cameras frame the downed victim ('walk' from the attack press: start, frames held; PIE_CAPTURE_VICTIM_WALK)
