@@ -658,6 +658,20 @@ def _row(frame, tapped, extra=None):
         row['body']['face_hips'] = _face('thigh_l', 'thigh_r')
         row['body']['face_chest'] = _face('clavicle_l', 'clavicle_r')
         row['body']['root_yaw'] = round(mesh.get_socket_rotation('root').yaw, 1)
+        # turnaround-foot (P5, 2026-11-23): the pivot foot's spin as SHOWN (foot world yaw/roll, ball location) and the curves that
+        # decide who holds it: contact_l/_r pin the foot in CR_Biped_FootPlacement, GSTN_FootSlide* frees it from our pop guard
+        # (fl below: R phase 4 = pop guard Smoothing). Compare with the clip's own foot-pelvis gap (gates_joints_*.json).
+        for _b in ('foot_l', 'foot_r'):
+            _r = mesh.get_socket_rotation(_b)
+            row['body'][_b + '_rot'] = [round(_r.yaw, 1), round(_r.pitch, 1), round(_r.roll, 1)]
+        _v = mesh.get_socket_location('ball_r')
+        row['body']['ball_r'] = [round(_v.x - _al.x, 1), round(_v.y - _al.y, 1), round(_v.z - _al.z, 1)]
+        try:
+            _ai = mesh.get_anim_instance()
+            row['body']['curves'] = {_c: round(float(_ai.get_curve_value(_c)), 2) for _c in
+                                     ('contact_l', 'contact_r', 'GSTN_FootSlide', 'GSTN_FootSlide_r', 'enable_warping')}
+        except Exception as e:
+            row['body']['curves_err'] = repr(e)[:60]
         _fl_row(mesh, row['body'])
     except Exception as e:
         row['body_err'] = repr(e)[:80]
