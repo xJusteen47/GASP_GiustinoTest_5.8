@@ -308,6 +308,11 @@ MOVE_SEQUENCES = [
     # greybox run 4: sideways brakes (run right, let go; run right, reverse to left, let go)
     {'name': 'gb_side', 'taps': [], 'frames': 340, 'dummy': None, 'shoot': True, 'follow': True,
      'sticks': [(20, (1, 0, 0)), (120, None), (180, (1, 0, 0)), (270, (-1, 0, 0)), (300, None)]},
+    # greybox run-sway-1: straight run from rest held 5 s (reaches the third run stage, ~850 cm/s), then a wide turn at sprint speed (the
+    # stick sweeps from forward to right in 7.5 deg steps over 2 s, held right 1 s), then let go
+    {'name': 'gb_sprint', 'taps': [], 'frames': 560, 'dummy': None, 'shoot': True, 'follow': True,
+     'sticks': [(20, (0, 1, 0))] + [(320 + 10 * _i, (round(math.sin(math.radians(7.5 * _i)), 4), round(math.cos(math.radians(7.5 * _i)), 4), 0))
+                                     for _i in range(1, 13)] + [(500, None)]},
     # greybox run 4: wall slide on the flat wall of the test hub's Z5 (face at x -3000, lane y -2000..-1000, 12 m tall; build_test_hub_map
     # z5_traversal), as surface_scenarios.wall_phase: control yaw 0 (forward = into the wall), teleport 3 m off it, launch at it with the stick
     # held into it. gb_wall_down: slide down; gb_wall_side: stick into + right, slides along; gb_wall_brake: fast along the wall, then reverse
