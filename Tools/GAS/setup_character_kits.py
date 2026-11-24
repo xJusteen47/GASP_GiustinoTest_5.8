@@ -36,14 +36,17 @@ LABELS = {'BirdKnight': 'BIRDKNIGHT', 'FlameFury': 'FLAMEFURY', 'Voyager': 'VOYA
 # Per stage: field -> value; only the fields listed are written, the rest stays as copied from the Default.
 VOYAGER_STAGES = {
     0: {'max_speed': 500.0, 'acceleration': 2600.0, 'accel_ramp_frames': 10, 'ramp_start_fraction': 0.30, 'frames_to_next_stage': 32},
-    1: {'max_speed': 650.0, 'acceleration': 1700.0, 'accel_ramp_frames': 20, 'ramp_start_fraction': 0.30},
-    2: {'max_speed': 850.0, 'acceleration': 1400.0},
+    1: {'max_speed': 650.0, 'acceleration': 1700.0, 'accel_ramp_frames': 20, 'ramp_start_fraction': 0.30,
+        'entry_burst_frames': 3, 'entry_accel_multiplier': 6.0},
+    2: {'max_speed': 850.0, 'acceleration': 1400.0, 'entry_burst_frames': 2, 'entry_accel_multiplier': 8.0},
 }
+# entry_burst_*: the climb into stage 2 and 3 is almost a step, not a ramp (owner, readable stages S1; same values as
+# setup_run_stage_steps.py writes on the Default, seen with gstn.RunStage.Readable 1)
 # Run start stamp, option A of the advice thread (2026-11-24 22:45Z): short, from rest only (MaxStartSpeed), a little creep instead of
 # Toad's 21 f almost in place. Jump, dodge and attacks are not held by it (it only scales the walking acceleration); L3 skips it.
 VOYAGER_STAMP = {'frames': 10, 'accel_fraction': 0.15}
 STAGE_FIELDS = ('max_speed', 'acceleration', 'turning_strength', 'release_brake', 'frames_to_next_stage', 'next_stage_speed_fraction',
-                'accel_ramp_frames', 'ramp_start_fraction')
+                'accel_ramp_frames', 'ramp_start_fraction', 'entry_burst_frames', 'entry_accel_multiplier')
 L = unreal.GSTN_PropertyTextLibrary
 EAL = unreal.EditorAssetLibrary
 

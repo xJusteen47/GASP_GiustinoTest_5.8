@@ -12,6 +12,7 @@ character; set up the other proposed kits; start tuning the Voyager. Reused: KIT
 
 ## Voyager values (paper model, linear ramp, 62.5 Hz; Default = last dump 470/2000 r14/0.15, 610/1400 r30/0.25, 850/1200)
 stage 1 500 / 2600 ramp 10 f / 0.30, 32 f to stage 2; stage 2 650 / 1700 ramp 20 f / 0.30; stage 3 850 / 1400; stamp 10 f x0.15.
+Steps into stage 2/3: EntryBurstFrames 3 x6 / 2 x8 (as setup_run_stage_steps.py on the Default, thread u1p2ha).
 Model: 200 cm/s at 0.22 s (Default 0.21), 600 at 0.66 s (0.88), 800 at 1.26 s (1.44), 439 cm in 1 s (404). Stamp B (21 f x0.05):
 200 at 0.40 s; stamp C (none): 200 at 0.14 s. Jump untouched (Default designer). To be measured in game, not trusted.
 
