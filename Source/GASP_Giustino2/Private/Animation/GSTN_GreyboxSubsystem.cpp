@@ -2,7 +2,6 @@
 
 #include "Animation/AnimInstance.h"
 #include "Animation/GSTN_LocoBaseSubsystem.h"
-#include "AnimationRuntime.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/PlayerState.h"
@@ -265,10 +264,9 @@ UStaticMeshComponent* UGSTN_GreyboxSubsystem::AddAccessory(USkeletalMeshComponen
 	Accessory->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Accessory->SetGenerateOverlapEvents(false);
 	Accessory->SetHiddenInGame(true);
-	// Modelled in the capsule's component space: undo the pelvis's reference transform so it sits where it was modelled and then rides
-	// the pelvis (the capsule body is rigid on it)
+	// Stored in the pelvis's local space (setup_greybox_assets.py), so no offset: the pelvis squash scales them along the same axes as
+	// the body (an offset with a rotation would take the scale on the wrong axes and float them off the body; desktop run 4)
 	Accessory->SetupAttachment(&Capsule, GSTNGreybox::PelvisBone);
-	Accessory->SetRelativeTransform(FAnimationRuntime::GetComponentSpaceTransformRefPose(CapsuleAsset->GetRefSkeleton(), Pelvis).Inverse());
 	Accessory->RegisterComponent();
 	return Accessory;
 }

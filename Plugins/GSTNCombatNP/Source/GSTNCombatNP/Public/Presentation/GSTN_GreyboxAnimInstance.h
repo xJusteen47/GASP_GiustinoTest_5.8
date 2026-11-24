@@ -192,7 +192,7 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 
 	/** Sway amplitude during the frantic start (replaces the speed's amplitude, 1 = the full run's; owner 2026-11-24 14:32: smaller) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "0", ClampMax = "3"))
-	float FranticAmplitude = 0.7f;
+	float FranticAmplitude = 0.45f;
 
 	/** Fade from the frantic cadence to the speed's cadence after FranticSeconds */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "0.01", ClampMax = "1", ForceUnits = "s"))

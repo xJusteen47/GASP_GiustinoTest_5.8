@@ -223,6 +223,10 @@ montage it shows is still the timeline's Montage field; with none set, nothing i
   stand-in box colour) and `SM_GSTN_Greybox_Greatsword` (~126 cm, on the back) for kits whose name contains `gstn.Greybox.SwordKits`
   (default "Overlord": owner 14:45, the Overlord kit only). Built by setup_greybox_assets.py step `accessories`, attached to the capsule's pelvis.
 - Moves: Jab2 (other hand), DAir landings (crouched land), dropkick tech bounce (dropkick then a tucked bounce).
+- Run 4 desktop finding: collar and sword floated off the body in squashes and big tips. Cause: stored in component space and attached
+  through the pelvis's inverse reference, so the pelvis's squash scale composed on the pieces' own axes around their origin at the feet.
+  Fix: the script stores them in the pelvis's local space, the subsystem attaches them with no offset. FranticAmplitude 0.7 -> 0.45
+  (run start still not clearly smaller on video; make_capsule_clips replaces only the old defaults 1.4 / 0.7 on the ABP).
 
 ## Desktop run 4 (2026-11-24, `_ue59` merged up to 40ce6f19)
 Evidence `docs/notes/reviews/greybox-capsula/round4/` (side | back | game, 1x / 0.25x; `sheet_*.jpg`). Captures `Saved/Greybox/r4_a`
