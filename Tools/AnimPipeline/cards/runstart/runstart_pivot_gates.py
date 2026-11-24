@@ -25,6 +25,28 @@ SEG = [('thigh_MainPoint_%s', 'calf_MainPoint_%s'), ('calf_MainPoint_%s', 'foot_
 JIT = ['lowerarm_MainPoint_%s', 'hand_MainPoint_%s', 'calf_MainPoint_%s', 'foot_MainPoint_%s']
 
 HEAD_STEP_MAX = 12   # deg/frame: head pitch relative to the neck must not snap
+PHASE_MIN = 0.0      # arm-leg opposition: Pearson r of (hand R - hand L) vs (foot L - foot R) along the character's forward axis.
+                     # Walking/running opposition gives r > 0 (left leg forward with the right arm); r <= 0 = arms in phase with
+                     # the legs (the "march" look). MEASURE only (owner 2A 2026-11-24): it blocks after a calibration proof on
+                     # the approved run starts (w2, w3, v4r5) and one known in-phase clip, written in the handover.
+
+
+def arm_leg_phase(J, frames):
+    """-> (r, n): correlation of the contralateral arm/leg swing over `frames`, forward axis from the hips (sign-free: both
+    differences share it). None when the legs barely swing (< 6 cm of foot-difference range: a stand, a pivot on the spot)."""
+    names = ('hand_MainPoint_l', 'hand_MainPoint_r', 'foot_MainPoint_l', 'foot_MainPoint_r', 'thigh_MainPoint_l', 'thigh_MainPoint_r')
+    if not all(k in J for k in names):
+        return None, 0
+    a, l = [], []
+    for u in frames:
+        lat = J['thigh_MainPoint_l'][u] - J['thigh_MainPoint_r'][u]; lat = lat.copy(); lat[UP] = 0
+        fw = np.array([lat[2], 0.0, -lat[0]]) / max(np.linalg.norm(lat), 1e-9)
+        a.append(float(np.dot(J['hand_MainPoint_r'][u] - J['hand_MainPoint_l'][u], fw)))
+        l.append(float(np.dot(J['foot_MainPoint_l'][u] - J['foot_MainPoint_r'][u], fw)))
+    a, l = np.array(a), np.array(l)
+    if len(a) < 6 or np.ptp(l) < 6.0 or np.std(a) < 1e-6:
+        return None, len(a)
+    return float(np.corrcoef(a, l)[0, 1]), len(a)
 
 
 def ry(v, a):
@@ -169,6 +191,11 @@ def main():
             rep['roll_' + s] = [round(float(roll.max()), 1), int(roll.argmax()), ROLL_MAX]
             if roll.max() > ROLL_MAX:
                 fails.append('foot roll %s f%d %.0f>%.0f deg' % (s, int(roll.argmax()), roll.max(), ROLL_MAX))
+    # arm-leg phase (written in the skill since 2026-11-23, implemented 2026-11-24 in the unified skill): a measure, never in fails
+    ph, nph = arm_leg_phase(J, range(n))
+    rep['phase_arm_leg'] = {'r': None if ph is None else round(ph, 2), 'frames': nph, 'min': PHASE_MIN,
+                            'status': 'n/a (legs barely swing)' if ph is None else ('ok' if ph > PHASE_MIN else 'WOULD FAIL (arms in phase with legs)'),
+                            'blocking': False}
     rep['fails'] = fails
     json.dump(rep, open(os.path.join(RS, 'gates_%s.json' % tag), 'w'), indent=1)
     print('%s: gap min f0-%d %.1f cm (f%d), tail %s (loop %s); toe L %s R %s (loop %s)' % (
@@ -191,7 +218,9 @@ def main():
         rep['head_pitch_rel_neck'] = [round(float(np.abs(pit).min()), 1), round(float(np.abs(pit).max()), 1)]
         if len(step) and step.max() > HEAD_STEP_MAX:
             fails.append('head pitch step f%d %.0f>%d deg/frame' % (int(step.argmax()) + 1, step.max(), HEAD_STEP_MAX))
+    print('measure arm-leg phase r=%s (%s, not blocking until calibrated)' % (rep['phase_arm_leg']['r'], rep['phase_arm_leg']['status']))
     print('GATES: OK' if not fails else 'GATES: FAIL ' + '; '.join(fails[:4]))
 
 
-main()
+if __name__ == "__main__":
+    main()
