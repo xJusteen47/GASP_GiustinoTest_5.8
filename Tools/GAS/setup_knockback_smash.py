@@ -11,7 +11,7 @@
 #   --rules-only  write only the rules asset (model, curve, thresholds of knockback_smash_data): the moves are left as they are
 #   --no-overlord leave the Overlord moves alone (under the Smash model they then keep their 0 % knockback at every percent: flat)
 # Writes the rules asset, the ability Blueprints of the kits (inline timelines), the Overlord timelines when they are on an asset, and BP children
-# of the common throws when a kit plays a native throw (GA_Smash_<Kit>_Throw<Dir> under /Game/GASNPPTest/Combat/Playtest).
+# of the common throws when a kit plays a native throw (GA_Smash_<Kit>_Throw<Dir> under /Game/GSTN/Characters/Overlord/Moves/Playtest).
 # Moves that a kit binds and the table does not list are converted with the 'keep the 0 % knockback, KBG 70' rule (Strong commands: KO rule).
 # Rerunning setup_test_kit_archetypes.py / setup_playtest_launch_1117.py / setup_launch_impacts.py resets bases with growth 0: rerun this after.
 # Out: Saved/KnockbackSmash/setup.log (every move before -> after) and Saved/KnockbackSmash/before.json (the values --model weight restores).
@@ -23,13 +23,13 @@ import sys
 import unreal
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gstn_content as gc  # noqa: E402  (where each asset lives under /Game/GSTN)
 import knockback_smash_data as D  # noqa: E402
 
 RULES = '/GSTNCombat/Rules/GSTN_CombatRules_Standard'
-DIR = '/Game/GASNPPTest/Combat'
-CHILD_DIR = DIR + '/Playtest'
-KITS = {'Light': f'{DIR}/KIT_Test_Light', 'Medium': f'{DIR}/KIT_Test_Medium', 'Heavy': f'{DIR}/KIT_Test_Heavy', 'Playtest': f'{DIR}/KIT_Test_Playtest'}
-EXTRA_KITS = {'Examples': '/Game/GASNPPTest/Examples/KIT_Example_Impacts'}
+CHILD_DIR = gc.move_folder('Playtest')
+KITS = {k: gc.path(f'KIT_Test_{k}') for k in ('Light', 'Medium', 'Heavy', 'Playtest')}
+EXTRA_KITS = {'Examples': '/Game/GSTN/_Examples/KIT_Example_Impacts'}
 THROW_DIRS = ('Forward', 'Back', 'Up', 'Down')
 NATIVE_THROWS = {'Forward': 'GSTN_GA_LinkThrowForward', 'Back': 'GSTN_GA_LinkThrowBack', 'Up': 'GSTN_GA_LinkThrowUp', 'Down': 'GSTN_GA_LinkThrowDown'}
 SAVED = os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()), 'KnockbackSmash')

@@ -12,7 +12,7 @@ os.environ.update({"PIE_CAPTURE_AIR_GIVE_UP": "200", "PIE_CAPTURE_DROPKICK_LOW_D
                    "PIE_CAPTURE_DROPKICK_SWEET_H": "480"})
 SEQ = ["dropkick_sweet_whiff", "dropkick_sweet_hit"]
 ASSERT = lambda clip: {s: [{"clip": clip, "window": [143, 150], "min_weight": 0.8, "coverage": 0.9}] for s in SEQ}
-D = "/Game/GASNPPTest/Combat/Overlord"
+D = "/Game/GSTN/Characters/Overlord/Moves/Dropkick"
 runs = [
     {"name": "k7", "asset": f"{D}/AS_OverlordDropkick_StartupK7", "clips": [f"{D}/AS_OverlordDropkick_StartupK7"],
      "kit": "KIT_Test_PlaytestTBK7", "cvars": "gstn.Combat.Debug.Hitboxes 0", "assert": ASSERT("AM_OverlordDropkickK7")},

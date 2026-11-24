@@ -10,8 +10,8 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import setup_guard as G  # noqa: E402
 
-TL = '/Game/GASNPPTest/Combat/Overlord/TL_Overlord_Jab1'
-AS = '/Game/GASNPPTest/Combat/Overlord/AS_OverlordJab1V3'
+TL = '/Game/GSTN/Characters/Overlord/Moves/Jab/TL_Overlord_Jab1'
+AS = '/Game/GSTN/Characters/Overlord/Moves/Jab/AS_OverlordJab1V3'
 
 
 class Project:

@@ -1,6 +1,6 @@
 # M11 L10: the first aimed move and the first kit mod as hub content (no Blueprint wiring by hand).
 # Run headless (editor closed): UnrealEditor-Cmd <uproject> -run=pythonscript -script="<this file>"   or   import setup_m11_ranger_content as r; r.run()
-# Writes, under /Game/GASNPPTest/Combat (new assets only; KIT_Test_Medium and its weapon are never edited):
+# Writes, under /Game/GSTN/_Test/Combat (new assets only; KIT_Test_Medium and its weapon are never edited):
 #   KIT_Test_Ranger   a copy of KIT_Test_Medium (the K3 reference fighter) whose strong commands, with the reticle on, fire the starter aimed
 #                     shot UGSTN_GA_AimedHitscanShot (hitscan along the camera aim): one binding per strong command that requires
 #                     Input.Context.PrecisionAim on top of what the plain binding requires, so it wins only while the reticle shows and the
@@ -14,8 +14,8 @@ import os
 
 import unreal
 
-DIR = '/Game/GASNPPTest/Combat'
-MOD_DIR = DIR + '/Mods'
+DIR = '/Game/GSTN/_Test/Combat'
+MOD_DIR = DIR  # mods sit with the other test fixtures
 SOURCE_KIT = 'KIT_Test_Medium'
 KIT = 'KIT_Test_Ranger'
 MOD = 'MOD_Test_Power'

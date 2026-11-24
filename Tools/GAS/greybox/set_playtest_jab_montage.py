@@ -13,8 +13,8 @@ import shutil
 
 import unreal
 
-ABILITY = '/Game/GASNPPTest/Combat/Playtest/GA_Playtest_GroundHit'
-SOURCE_TIMELINE = '/Game/GASNPPTest/Combat/Overlord/TL_Overlord_Jab1'
+ABILITY = '/Game/GSTN/Characters/Overlord/Moves/Playtest/GA_Playtest_GroundHit'
+SOURCE_TIMELINE = '/Game/GSTN/Characters/Overlord/Moves/Jab/TL_Overlord_Jab1'
 SIM_HZ = 62.5
 SAVE = os.environ.get('GSTN_SAVE') == '1'
 OUT = unreal.Paths.project_saved_dir() + 'Greybox/set_playtest_jab_montage.txt'
@@ -38,7 +38,7 @@ def backup(asset_path):
 
 def run():
     p('set_playtest_jab_montage', 'SAVE' if SAVE else 'DRY RUN')
-    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(['/Game/GASNPPTest'], True)
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(['/Game/GSTN'], True)
     source = unreal.EditorAssetLibrary.load_asset(SOURCE_TIMELINE)
     if not source:
         errors.append('source timeline missing: ' + SOURCE_TIMELINE)

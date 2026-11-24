@@ -386,7 +386,7 @@ def segment_sequences(montage):
 def find_montages():
     reg = unreal.AssetRegistryHelpers.get_asset_registry()
     out = []
-    for root in ('/Game/GASNPPTest', '/Game/GAS', '/Game/GSTN', '/Game/Blueprints'):
+    for root in ('/Game/GSTN', '/Game/GAS', '/Game/Blueprints'):
         for data in reg.get_assets_by_path(root, recursive=True):
             name = str(data.asset_name)
             if str(data.asset_class_path.asset_name) != 'AnimMontage' or not any(f in name.lower() for f in MOVE_FILTER):
@@ -430,7 +430,7 @@ def find_sequences(covered):
     """AnimSequences under the move roots whose name matches SEQUENCE_FILTER, plus SEQUENCES, minus the ones a montage already covers."""
     reg = unreal.AssetRegistryHelpers.get_asset_registry()
     out = set(EXTRA_SEQUENCES)
-    for root in ('/Game/GASNPPTest', '/Game/GAS', '/Game/GSTN', '/Game/Blueprints'):
+    for root in ('/Game/GSTN', '/Game/GAS', '/Game/Blueprints'):
         for data in reg.get_assets_by_path(root, recursive=True):
             name = str(data.asset_name)
             if str(data.asset_class_path.asset_name) == 'AnimSequence' and any(f in name.lower() for f in SEQUENCE_FILTER) \

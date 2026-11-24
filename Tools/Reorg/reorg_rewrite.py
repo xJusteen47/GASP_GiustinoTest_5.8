@@ -11,10 +11,14 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MAP = os.path.join(ROOT, 'Tools', 'Reorg', 'content-map.csv')
-OUT = os.path.join(ROOT, 'Saved', 'Logs', 'ci', 'reorg_rewrite.txt')
+# --map <csv>: phase 2b passes Tools/Reorg/content-map-2b.csv (GASNPPTest -> GSTN); default is the phase 2a map.
+MAP = sys.argv[sys.argv.index('--map') + 1] if '--map' in sys.argv else os.path.join(ROOT, 'Tools', 'Reorg', 'content-map.csv')
+MAP = MAP if os.path.isabs(MAP) else os.path.join(ROOT, MAP)
+PHASE_2B = os.path.basename(MAP) == 'content-map-2b.csv'
+OUT = os.path.join(ROOT, 'Saved', 'Logs', 'ci', 'reorg_rewrite_2b.txt' if PHASE_2B else 'reorg_rewrite.txt')
 DRY = '--dry' in sys.argv
-SKIP_PREFIX = ('docs/', 'handoffs/', 'Artifacts/', 'Plugins/GASNPP/', 'Plugins/EngineOverrides/', 'Tools/Reorg/content-map.csv')
+SKIP_PREFIX = ('docs/', 'handoffs/', 'Artifacts/', 'Plugins/GASNPP/', 'Plugins/EngineOverrides/', 'Tools/Reorg/',
+               'Tools/GAS/gstn_content.py')
 EXT = ('.py', '.ps1', '.cpp', '.h', '.ini', '.cs', '.json', '.md', '.txt', '.bat', '.yml', '.yaml')
 
 pairs = []
@@ -22,13 +26,18 @@ with open(MAP, newline='', encoding='utf-8') as f:
     for r in csv.DictReader(f):
         pairs.append((r['old'].strip(), r['new'].strip()))
 # folders whose content moved as a whole (subpaths follow)
-pairs += [
+if PHASE_2B:
+    sys.path.insert(0, os.path.join(ROOT, 'Tools', 'GAS'))
+    import gstn_content  # noqa: E402  (pure python, same table the move used)
+    pairs += list(gstn_content.FOLDERS.items())
+else:
+    pairs += [
     ('/Game/Blueprints/Animation/Ported57', '/Game/GSTN/Animation/Ported57'),
     ('/Game/Blueprints/Animation/RunStop', '/Game/GSTN/Animation/RunStop'),
     ('/Game/Blueprints/DepthMarker', '/Game/GSTN/DepthMarker'),
-]
+    ]
 # bare folder variables in one-shot setup scripts (file -> (old, new))
-BARE = {
+BARE = {} if PHASE_2B else {
     'Tools/GAS/root_fix_skid_180.py': ("ANIM = '/Game/Blueprints/Animation'", "ANIM = '/Game/GSTN/Animation'"),
     'Tools/GAS/run_skid_root180.py': ("'/Game/Blueprints/Animation'", "'/Game/GSTN/Animation/Layers'"),
     'Tools/GAS/setup_wall_anim_layer.py': ("ANIM_DIR = '/Game/Blueprints/Animation'", "ANIM_DIR = '/Game/GSTN/Animation/Layers'"),

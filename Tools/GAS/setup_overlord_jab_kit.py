@@ -5,7 +5,7 @@
 #
 # Reads (never writes) the built animations of the anim pipeline, /Game/AnimPipeline/Rig/AS_OverlordJab{1,2}<ANIM_VERSION>_Build. Content/AnimPipeline is one
 # folder shared by every worktree through a junction and holds the owner's work in progress: this script only duplicates out of it.
-# Writes, under /Game/GASNPPTest/Combat/Overlord (new assets only; KIT_Test_Hits, WPN_Test_Hits and the test character are never edited):
+# Writes, under /Game/GSTN/Characters/Overlord/Moves/<Move> (kits in Characters/Overlord/Kits; new assets only; KIT_Test_Hits, WPN_Test_Hits and the test character are never edited):
 #   AS_OverlordJab{1,2}V3    copies of the built animations (versioned with the kit; rerun with refresh=True after a new `animpipe build`)
 #   AM_OverlordJab{1,2}V3    one montage each (default slot, no blend in, 4 frame blend out)
 #   TL_Overlord_Jab{1,2}     UGSTN_CombatTimeline: frames from the move cards, a PLACEHOLDER root hitbox, jab 1's cancel window into the
@@ -26,13 +26,13 @@ import unreal
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import setup_guard  # noqa: E402
+import gstn_content as gc  # noqa: E402  (where each asset lives under /Game/GSTN)
 
 # Version of the built animations. A new version makes new AS/AM copies next to the old ones (left on disk, unreferenced once the timelines,
 # which keep their names, are rewritten to point at the new montages)
 ANIM_VERSION = 'V3'
 SRC = '/Game/AnimPipeline/Rig/AS_OverlordJab{}' + ANIM_VERSION + '_Build'
-ROOT = '/Game/GASNPPTest/Combat'
-DIR = ROOT + '/Overlord'
+DIR = gc.move_folder('Jab')
 SOURCE_KIT, SOURCE_WEAPON = 'KIT_Test_Hits', 'WPN_Test_Hits'
 KIT, WEAPON = 'KIT_Test_Overlord', 'WPN_Test_Overlord'
 COMMAND = 'Command.Attack.Neutral'
@@ -233,9 +233,9 @@ def _with_chain(binding, cls, required):
 
 
 def _copy(source, name):
-    path = f'{ROOT}/{name}'
+    path = gc.path(name)
     if not unreal.EditorAssetLibrary.does_asset_exist(path):
-        if not unreal.EditorAssetLibrary.duplicate_asset(f'{ROOT}/{source}', path):
+        if not unreal.EditorAssetLibrary.duplicate_asset(gc.path(source), path):
             log(f'ERROR: could not copy {source} to {name}')
             return None
         log(f'created {path} (copy of {source})')

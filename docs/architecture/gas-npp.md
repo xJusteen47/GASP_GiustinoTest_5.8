@@ -46,7 +46,7 @@ Fixed tick: **ability system first, then Mover**.
 ## Where the Blueprints are
 
 - `SandboxCharacter_Mover` (`/Game/Blueprints/`) owns the `NpAbilitySystem` (DefaultAbilities: GA_Jump, GA_WallSlide) and the `GSTN_AbilityInputComponent`. The Falling mode's transition is `GSTN_AbilityWallEntryTransition`.
-- `BP_GASNPP_TestCharacter` (`/Game/GASNPPTest/`) inherits that setup and overrides the ability system with test content (Dash/Buff, `GSTN_TestAttributeSet`, `GSTN_GE_StaminaRegen`) plus `GSTN_GASNPPTestComponent`.
+- `BP_GASNPP_TestCharacter` (`/Game/GSTN/Core/`) inherits that setup and overrides the ability system with test content (Dash/Buff, `GSTN_TestAttributeSet`, `GSTN_GE_StaminaRegen`) plus `GSTN_GASNPPTestComponent`.
 - `/Game/GAS/Input/IMC_GAS_Abilities` lists the ability input actions (IA_Jump, keys copied from `IMC_Sandbox`).
 - `Tools/GAS/setup_gas_assets.py` can (re)create the asset setup idempotently; see its header for the current layout.
 

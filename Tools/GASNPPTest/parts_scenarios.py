@@ -34,7 +34,7 @@ def _tag_container(names):
 
 
 def _set_spike_hurtboxes():
-    hs = unreal.load_asset('/Game/GASNPPTest/Combat/HBS_Test_Pawn')
+    hs = unreal.load_asset('/Game/GSTN/_Test/Combat/HBS_Test_Pawn')
     _saved['boxes'] = list(hs.get_editor_property('hurtboxes'))
     template = _saved['boxes'][0]
     boxes = []
@@ -59,7 +59,7 @@ def _restore_hurtboxes():
     if _spike_parts['on']:
         parts_reset()
     if 'boxes' in _saved:
-        hs = unreal.load_asset('/Game/GASNPPTest/Combat/HBS_Test_Pawn')
+        hs = unreal.load_asset('/Game/GSTN/_Test/Combat/HBS_Test_Pawn')
         hs.set_editor_property('hurtboxes', _saved.pop('boxes'))
     return 'original hurtbox set restored'
 
@@ -223,7 +223,7 @@ import copy
 import json
 import time
 
-PARTS_DIR = '/Game/GASNPPTest/Combat/'
+PARTS_DIR = '/Game/GSTN/_Test/Combat/'
 PART_INDEX = {'Torso': 0, 'Head': 1, 'Legs': 2, 'ArmL': 3, 'ArmR': 4, 'Core': 5}
 AT_CAP = 255
 SUITE_PARTS = ['part_break', 'part_cap', 'part_hitgroups', 'part_rollback', 'part_host', 'part_restore', 'part_ricochet', 'part_stagger', 'part_weakpoint', 'part_break_launch']

@@ -12,7 +12,7 @@
 import unreal
 
 PLUGIN_FOLDERS = {'/GSTNDefence/Test': 'GSTN_DefenceRules', '/GSTNLink/Test': 'GSTN_LinkTypeDefinition'}
-PROJECT_FOLDER = '/Game/GASNPPTest/Combat'
+PROJECT_FOLDER = '/Game/GSTN/_Test/Combat'
 KITS = ['KIT_Test_Defence', 'KIT_Test_DefencePvE', 'KIT_Test_DefenceLanding', 'KIT_Test_DefenceTech', 'KIT_Test_Link', 'KIT_Test_DefenceLink']
 STANDARD_RULES = '/GSTNCombat/Rules/GSTN_CombatRules_Standard'
 EXPECTED = {

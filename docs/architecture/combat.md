@@ -880,7 +880,7 @@ What the code does, where it differs from the design text above is listed in `do
 - **Rules**: `UGSTN_CombatRules` (default `GSTN_CombatRules_Standard`, plugin content under `/GSTNCombat/Rules`, shipped with the plugin) holds the
   pipeline steps, knockback model, DI, impact response and rewind window (400 ms). `UGSTN_CombatRulesProvider` adds the rules component to the game
   state. Steps, knockback model, outcome appliers, attacker outcomes and relationship resolvers are all extension classes that a Blueprint can
-  derive from (`BP_*_Example` under `/Game/GASNPPTest/Combat/`; `BP_Step_Example` overrides `Resolve` and doubles the knockback scale).
+  derive from (`BP_*_Example` under `/Game/GSTN/_Examples/Combat/`; `BP_Step_Example` overrides `Resolve` and doubles the knockback scale).
 - **Sync state**: hit window, hitstun end, pending reaction and launch, recoil start frame, impact end frame and the request ring are in
   `FGSTN_CombatSyncCore`; nothing a hit does lives outside it.
 - **Dodges**: the ground and air dodge are kit data. The `Intangible` window addresses `Combat.Hurtbox.Feet` only (torso and head stay hittable) and is the

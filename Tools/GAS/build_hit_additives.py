@@ -13,7 +13,7 @@ import os
 import unreal
 
 OUT_DIR = "/Game/GSTN/Animation/Reaction/HitAdditive"
-SKEL_FROM = "/Game/GASNPPTest/Combat/Reaction/AS_React_HitStand"
+SKEL_FROM = "/Game/GSTN/Combat/Reactions/AS_React_HitStand"
 FPS = 60
 FRAMES = 41           # 40 intervals = 0.667 s (v3, Fable: room for the second wobble); even, so the 30 fps resample lands on whole frames
 PEAK = 3              # frame of the peak

@@ -27,11 +27,11 @@ namespace GSTNWallFilterTest
 	constexpr EAutomationTestFlags FilterTestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
 	/** A throwaway game world to own the test actors */
-	struct FRig
+	struct FWallFilterRig
 	{
 		UWorld* World = nullptr;
 
-		FRig()
+		FWallFilterRig()
 		{
 			World = UWorld::CreateWorld(EWorldType::Game, false, TEXT("GSTNWallFilterTestWorld"));
 			World->AddToRoot();
@@ -40,7 +40,7 @@ namespace GSTNWallFilterTest
 			World->InitializeActorsForPlay(FURL());
 		}
 
-		~FRig()
+		~FWallFilterRig()
 		{
 			GEngine->DestroyWorldContext(World);
 			World->DestroyWorld(false);
@@ -101,7 +101,7 @@ using namespace GSTNWallFilterTest;
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallFilterForbiddenSurfaceRejectedTest, "GSTNMovement.Wall.Filter.ForbiddenSurfaceRejected", FilterTestFlags)
 bool FGSTN_WallFilterForbiddenSurfaceRejectedTest::RunTest(const FString& Parameters)
 {
-	FRig Rig;
+	FWallFilterRig Rig;
 	// A marked surface that offers standing but not wall slide
 	const TArray<FGameplayTag> StandOnly = { GSTNSurfaceTags::Behaviour_Stand };
 	UBoxComponent* Forbidden = Rig.SpawnWall(FVector::ZeroVector, &StandOnly);
@@ -134,7 +134,7 @@ bool FGSTN_WallFilterForbiddenSurfaceRejectedTest::RunTest(const FString& Parame
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallFilterUnknownPassesTest, "GSTNMovement.Wall.Filter.UnknownPasses", FilterTestFlags)
 bool FGSTN_WallFilterUnknownPassesTest::RunTest(const FString& Parameters)
 {
-	FRig Rig;
+	FWallFilterRig Rig;
 	UBoxComponent* Unmarked = Rig.SpawnWall(FVector::ZeroVector, nullptr);
 	const FHitResult Hit = MakeFaceHit(Unmarked);
 
@@ -157,7 +157,7 @@ bool FGSTN_WallFilterUnknownPassesTest::RunTest(const FString& Parameters)
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallFilterClimbOnlyRejectsSlideTest, "GSTNMovement.Wall.Filter.ClimbOnlyRejectsSlide", FilterTestFlags)
 bool FGSTN_WallFilterClimbOnlyRejectsSlideTest::RunTest(const FString& Parameters)
 {
-	FRig Rig;
+	FWallFilterRig Rig;
 	const TArray<FGameplayTag> ClimbOnly = { GSTNSurfaceTags::Behaviour_WallClimb };
 	const TArray<FGameplayTag> SlideOnly = { GSTNSurfaceTags::Behaviour_WallSlide };
 	const FHitResult ClimbHit = MakeFaceHit(Rig.SpawnWall(FVector::ZeroVector, &ClimbOnly));
@@ -185,7 +185,7 @@ bool FGSTN_WallFilterClimbOnlyRejectsSlideTest::RunTest(const FString& Parameter
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_WallFilterCornerOntoForbiddenRejectedTest, "GSTNMovement.Wall.Filter.CornerOntoForbiddenRejected", FilterTestFlags)
 bool FGSTN_WallFilterCornerOntoForbiddenRejectedTest::RunTest(const FString& Parameters)
 {
-	FRig Rig;
+	FWallFilterRig Rig;
 	const TArray<FGameplayTag> SlideOk = { GSTNSurfaceTags::Behaviour_WallSlide };
 	const TArray<FGameplayTag> StandOnly = { GSTNSurfaceTags::Behaviour_Stand };
 	UBoxComponent* Allowed = Rig.SpawnWall(FVector(0.0, 500.0, 0.0), &SlideOk);

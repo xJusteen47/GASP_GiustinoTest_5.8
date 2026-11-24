@@ -11,9 +11,9 @@
 import unreal
 
 SANDBOX = '/Game/Input/IMC_Sandbox'
-LOCOMOTION_DIR, LOCOMOTION_NAME = '/Game/GASNPPTest/Input', 'IMC_GSTN_Locomotion'
+LOCOMOTION_DIR, LOCOMOTION_NAME = '/Game/GSTN/Input', 'IMC_GSTN_Locomotion'
 LOCOMOTION = f'{LOCOMOTION_DIR}/{LOCOMOTION_NAME}'
-CONFIGS = ['/Game/GASNPPTest/Input/IC_GASNPP_Test']
+CONFIGS = ['/Game/GSTN/Input/IC_GASNPP_Test']
 LOCOMOTION_PRIORITY = 0
 # (action asset name, key name): what IMC_GSTN_Locomotion keeps of IMC_Sandbox
 KEEP = {('IA_Move', 'W'), ('IA_Move', 'S'), ('IA_Move', 'A'), ('IA_Move', 'D'), ('IA_Move', 'Gamepad_Left2D'),
@@ -57,19 +57,19 @@ def _config(path, imc):
 # Owner's pad layout (2026-11-13, final): X light, Y special, RT strong, RB dodge, LT crouch, A jump, B grab/interact; the shield goes to the free LB.
 # Crouch gets its own action: the config's Crouch button used GASP's IA_Crouch, which the GASP character Blueprint also answers (its crouch and
 # slide on RB, owner playtest). key name -> action asset path, in IMC_GASNPP_Test; the key's other mappings in that context are removed first.
-COMBAT_CONTEXT = '/Game/GASNPPTest/Input/IMC_GASNPP_Test'
-CROUCH_ACTION = '/Game/GASNPPTest/Input/IA_GASNPP_Crouch'
-CROUCH_TEMPLATE = '/Game/GASNPPTest/Input/IA_GASNPP_Dodge'   # a plain consuming boolean action
+COMBAT_CONTEXT = '/Game/GSTN/Input/IMC_GASNPP_Test'
+CROUCH_ACTION = '/Game/GSTN/Input/IA_GASNPP_Crouch'
+CROUCH_TEMPLATE = '/Game/GSTN/Input/IA_GASNPP_Dodge'   # a plain consuming boolean action
 GASP_CROUCH = '/Game/Input/IA_Crouch'
 # Mario run P1 (owner 2026-11-16): L3 = run boost to the last stage. Own plain boolean action, bound to Input.Button.RunBoost by
 # setup_gas_assets.py (input config); the command Command.Movement.RunBoost is a press of it. Data only: no key in code.
-RUNBOOST_ACTION = '/Game/GASNPPTest/Input/IA_GASNPP_RunBoost'
+RUNBOOST_ACTION = '/Game/GSTN/Input/IA_GASNPP_RunBoost'
 PAD_LAYOUT = {
     'Gamepad_LeftThumbstick': RUNBOOST_ACTION,
     'Gamepad_LeftTrigger': CROUCH_ACTION,
     'C': CROUCH_ACTION,
-    'Gamepad_RightShoulder': '/Game/GASNPPTest/Input/IA_GASNPP_Dodge',
-    'Gamepad_LeftShoulder': '/Game/GASNPPTest/Input/IA_GASNPP_Shield',
+    'Gamepad_RightShoulder': '/Game/GSTN/Input/IA_GASNPP_Dodge',
+    'Gamepad_LeftShoulder': '/Game/GSTN/Input/IA_GASNPP_Shield',
 }
 
 

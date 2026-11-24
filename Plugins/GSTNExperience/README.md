@@ -18,7 +18,7 @@ GSTN plugin, so it works without the GAS-NPP fork (modularity 3.7). The NP adapt
   `ActionSets`, own `Actions`. Const, shared by all machines.
 - `UGSTN_PawnData` (`GSTN_PawnData`): `PawnClass`, `AbilitySets`, `InputConfig` as soft references (bundles `Client` / `Server`); typed assets belong to G2.
 - `UGSTN_ExperienceActionSet` (`GSTN_ExperienceActionSet`): a reusable list of `UGameFeatureAction`s plus the Game Features it needs.
-- The three types are scanned by the Asset Manager from `/Game/GASNPPTest` (`Config/DefaultGame.ini`, `PrimaryAssetTypesToScan`); add a directory there for a mode's content.
+- The three types are scanned by the Asset Manager from `/Game/GSTN` (`Config/DefaultGame.ini`, `PrimaryAssetTypesToScan`); add a directory there for a mode's content.
 
 ## Load order (host and client, same steps)
 `Unloaded -> Loading` (asset bundles) `-> LoadingGameFeatures` (Experience plugins, then each action set's, deduplicated) `-> ExecutingActions` (own actions,

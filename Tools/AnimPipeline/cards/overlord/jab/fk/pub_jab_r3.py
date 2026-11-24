@@ -33,7 +33,7 @@ def safe(f):
     except Exception as e: return "ERR " + str(e)[:120]
 try:
     for n, rm in ((1, False), (2, True)):
-        game = f"/Game/GASNPPTest/Combat/Overlord/AS_OverlordJab{n}V3"
+        game = f"/Game/GSTN/Characters/Overlord/Moves/Jab/AS_OverlordJab{n}V3"
         bk = f"/Game/AnimPipeline/Backup/AS_OverlordJab{n}V3_r3pre_2026-11-18"
         if not eal.does_asset_exist(bk):
             eal.duplicate_asset(game, bk); eal.save_asset(bk, only_if_is_dirty=False)
@@ -66,7 +66,7 @@ try:
                 row.append(f"{b} {tr.translation.x:.1f},{tr.translation.y:.1f},{tr.translation.z:.1f}")
             lines.append(f"  a{f}: " + " | ".join(row))
     for n in (1, 2):
-        am = eal.load_asset(f"/Game/GASNPPTest/Combat/Overlord/AM_OverlordJab{n}V3")
+        am = eal.load_asset(f"/Game/GSTN/Characters/Overlord/Moves/Jab/AM_OverlordJab{n}V3")
         bi = am.get_editor_property("blend_in"); bo = am.get_editor_property("blend_out")
         lines.append(f"AM jab{n}: len {am.get_play_length():.3f} blend_in {bi.get_editor_property('blend_time'):.3f} blend_out {bo.get_editor_property('blend_time'):.3f} bo_trigger {am.get_editor_property('blend_out_trigger_time'):.3f} rm {safe(lambda: am.has_root_motion())}")
         if n == 1 and abs(bi.get_editor_property("blend_time") - 0.05) > 0.001:

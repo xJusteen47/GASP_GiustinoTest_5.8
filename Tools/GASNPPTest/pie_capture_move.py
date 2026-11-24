@@ -1205,7 +1205,7 @@ def _tick(_dt):
                     g.combat_clear(0)
             if seq.get('boost') is not None and frame == PRE + seq['boost']:   # dash-ganon: the L3 run boost through its combat button
                 # the boost is an input-data key read by the locomotion profile (not a combat button: a combat tap did nothing, dash r3 cap1)
-                g.IA.setdefault('runboost', '/Game/GASNPPTest/Input/IA_GASNPP_RunBoost')
+                g.IA.setdefault('runboost', '/Game/GSTN/Input/IA_GASNPP_RunBoost')
                 g.press(0, 'runboost')
                 _log(f'{seq["name"]}: boost (IA_GASNPP_RunBoost press) on v{frame}')
             if seq.get('crouch_tap') is not None and frame == PRE + seq['crouch_tap']:

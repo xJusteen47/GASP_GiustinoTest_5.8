@@ -415,7 +415,7 @@ def _swinger_setup(client):
     """The swinging client's pawn gets the hit kit (a bare pawn's Attack has no hit move) and the test pawns an infinite stagger threshold:
     the bench attackers land several hits a second on both pawns (they start on one spot), and a pawn in hitstun cannot swing"""
     _setup()
-    _cmd('gstn.Minion.Bench.HurtboxSet /Game/GASNPPTest/Combat/HBS_Test_Pawn.HBS_Test_Pawn')   # bench grunts are unhittable without one
+    _cmd('gstn.Minion.Bench.HurtboxSet /Game/GSTN/_Test/Combat/HBS_Test_Pawn.HBS_Test_Pawn')   # bench grunts are unhittable without one
     g.set_hurtbox(infinite=True)
     g._apply_loadout(g.key_of_player(client), g.HIT_KIT)
     return 'rules + hit log + kit + no stagger'
@@ -1044,7 +1044,7 @@ def scenario_minion_horde(client=1):
 
     def setup():
         _setup()
-        _cmd('gstn.Minion.Bench.HurtboxSet /Game/GASNPPTest/Combat/HBS_Test_Pawn.HBS_Test_Pawn')
+        _cmd('gstn.Minion.Bench.HurtboxSet /Game/GSTN/_Test/Combat/HBS_Test_Pawn.HBS_Test_Pawn')
         g.set_hurtbox(infinite=True)
         for c in clients:
             g._apply_loadout(g.key_of_player(c), g.HIT_KIT)
@@ -1466,7 +1466,7 @@ def _minion_parts_run(name, client, with_parts):
 
     def setup():
         _setup()
-        _cmd('gstn.Minion.Bench.HurtboxSet /Game/GASNPPTest/Combat/HBS_Test_Pawn.HBS_Test_Pawn')   # bench grunts are unhittable without one
+        _cmd('gstn.Minion.Bench.HurtboxSet /Game/GSTN/_Test/Combat/HBS_Test_Pawn.HBS_Test_Pawn')   # bench grunts are unhittable without one
         g.set_hurtbox(infinite=True)
         for c in swingers:
             g._apply_loadout(g.key_of_player(c), g.HIT_KIT)

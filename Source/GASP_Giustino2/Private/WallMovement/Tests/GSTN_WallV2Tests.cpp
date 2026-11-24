@@ -33,7 +33,7 @@
 namespace GSTNWallV2Test
 {
 	constexpr EAutomationTestFlags TestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
-	constexpr float Dt = 1.f / 60.f;
+	constexpr float WallV2Dt = 1.f / 60.f;
 	constexpr float Radius = 34.f;
 	constexpr float HalfHeight = 88.f;
 
@@ -75,7 +75,7 @@ namespace GSTNWallV2Test
 			Context.SetCurrentWorld(World);
 			World->InitializeActorsForPlay(FURL());
 			Mode.Reset(NewObject<UGSTN_WallSlideV2MovementMode>(GetTransientPackage()));
-			MoveRecord.SetDeltaSeconds(Dt);
+			MoveRecord.SetDeltaSeconds(WallV2Dt);
 		}
 
 		~FWallV2Scene()
@@ -141,7 +141,7 @@ namespace GSTNWallV2Test
 		void Tick(const FVector& Velocity)
 		{
 			State.Velocity = Velocity;
-			FGSTN_WallTraverseTestAccess::Step(*Mode, FMovingComponentSet(Capsule), Dt, !Velocity.IsNearlyZero(), State, MoveRecord);
+			FGSTN_WallTraverseTestAccess::Step(*Mode, FMovingComponentSet(Capsule), WallV2Dt, !Velocity.IsNearlyZero(), State, MoveRecord);
 		}
 
 		/** Gap between the capsule surface and the wall plane through the origin along the wall normal (lower hemisphere) */
@@ -280,7 +280,7 @@ bool FGSTN_WallV2OneSweepTest::RunTest(const FString& Parameters)
 		for (int32 i = 0; i < NumTicks; ++i)
 		{
 			Scene.Tick(FVector(0, 120, -500));
-			GSTNWallDebug::FinishTick(ModeName, i * Dt, 500.f, 0.f);
+			GSTNWallDebug::FinishTick(ModeName, i * WallV2Dt, 500.f, 0.f);
 		}
 
 		int32 Ticks;
@@ -321,7 +321,7 @@ bool FGSTN_WallV2AdhesionTest::RunTest(const FString& Parameters)
 		const float WallGap = Scene.Mode->WallGap;
 		Scene.MakeCapsule(WallGap + 10.f, 300.f);
 
-		const double MaxStep = Scene.Mode->MaxAdhesionSpeed * Dt;
+		const double MaxStep = Scene.Mode->MaxAdhesionSpeed * WallV2Dt;
 		double Previous = Scene.Gap();
 		for (int32 i = 0; i < 4; ++i)
 		{
@@ -389,23 +389,23 @@ bool FGSTN_WallV2ProposedMoveTest::RunTest(const FString& Parameters)
 	// Arriving faster than terminal, running sideways, no input: momentum decays, it is not cut
 	const FVector Prior = H * 300.f - Up * 800.f;
 	const FMoverTickStartData StartState = MakeStartState(Prior);
-	const FVector Coast = FGSTN_WallTraverseTestAccess::ComputeWallVelocity(*Mode, StartState, Plane, FVector::ZeroVector, Dt);
+	const FVector Coast = FGSTN_WallTraverseTestAccess::ComputeWallVelocity(*Mode, StartState, Plane, FVector::ZeroVector, WallV2Dt);
 	const FVector2D CoastPlane = UGSTN_WallControlUtils::ToPlane(Coast, H, V);
-	V2NearlyEq(*this, TEXT("Horizontal momentum decays slowly"), CoastPlane.X, 300.0 * FMath::Exp(-Mode->Control.HorizontalDrag * Dt), 0.05);
-	V2NearlyEq(*this, TEXT("Entry fall decays by gravity, not clamped to terminal"), CoastPlane.Y, -(800.0 - Mode->Control.GravityAcceleration * Mode->Control.GravityScale * Dt), 0.05);
+	V2NearlyEq(*this, TEXT("Horizontal momentum decays slowly"), CoastPlane.X, 300.0 * FMath::Exp(-Mode->Control.HorizontalDrag * WallV2Dt), 0.05);
+	V2NearlyEq(*this, TEXT("Entry fall decays by gravity, not clamped to terminal"), CoastPlane.Y, -(800.0 - Mode->Control.GravityAcceleration * Mode->Control.GravityScale * WallV2Dt), 0.05);
 	V2NearlyEq(*this, TEXT("Nothing along the normal"), FVector::DotProduct(Coast, N), 0.0, 1e-3);
 
 	// It is the control model, step for step
-	const FVector2D Expected = UGSTN_WallControlUtils::StepSlideVelocity(Mode->Control, UGSTN_WallControlUtils::ToPlane(Prior, H, V), FVector2D::ZeroVector, false, Dt);
+	const FVector2D Expected = UGSTN_WallControlUtils::StepSlideVelocity(Mode->Control, UGSTN_WallControlUtils::ToPlane(Prior, H, V), FVector2D::ZeroVector, false, WallV2Dt);
 	V2NearlyEq(*this, TEXT("Same as StepSlideVelocity (H)"), CoastPlane.X, Expected.X, 1e-3);
 	V2NearlyEq(*this, TEXT("Same as StepSlideVelocity (V)"), CoastPlane.Y, Expected.Y, 1e-3);
 
 	// The stick up against the fall brakes hard; the stick along the run adds a little
-	const FVector Braked = FGSTN_WallTraverseTestAccess::ComputeWallVelocity(*Mode, StartState, Plane, Up, Dt);
-	V2NearlyEq(*this, TEXT("Braking strips VerticalBrakeDecel * dt"), UGSTN_WallControlUtils::ToPlane(Braked, H, V).Y, -(800.0 - Mode->Control.VerticalBrakeDecel * Dt), 0.05);
+	const FVector Braked = FGSTN_WallTraverseTestAccess::ComputeWallVelocity(*Mode, StartState, Plane, Up, WallV2Dt);
+	V2NearlyEq(*this, TEXT("Braking strips VerticalBrakeDecel * dt"), UGSTN_WallControlUtils::ToPlane(Braked, H, V).Y, -(800.0 - Mode->Control.VerticalBrakeDecel * WallV2Dt), 0.05);
 	TestTrue(TEXT("Braking is stronger than coasting"), UGSTN_WallControlUtils::ToPlane(Braked, H, V).Y > CoastPlane.Y);
-	const FVector Pushed = FGSTN_WallTraverseTestAccess::ComputeWallVelocity(*Mode, StartState, Plane, H, Dt);
-	V2NearlyEq(*this, TEXT("Control along the run is small"), UGSTN_WallControlUtils::ToPlane(Pushed, H, V).X - CoastPlane.X, Mode->Control.HorizontalControlAccel * Dt, 0.05);
+	const FVector Pushed = FGSTN_WallTraverseTestAccess::ComputeWallVelocity(*Mode, StartState, Plane, H, WallV2Dt);
+	V2NearlyEq(*this, TEXT("Control along the run is small"), UGSTN_WallControlUtils::ToPlane(Pushed, H, V).X - CoastPlane.X, Mode->Control.HorizontalControlAccel * WallV2Dt, 0.05);
 
 	// The proposed velocity is what the tick moves by (layered and queued moves would already be in it)
 	FWallV2Scene Scene;
@@ -414,7 +414,7 @@ bool FGSTN_WallV2ProposedMoveTest::RunTest(const FString& Parameters)
 	const FVector Before = Scene.Capsule->GetComponentLocation();
 	Scene.Tick(Coast);
 	const FVector Moved = Scene.Capsule->GetComponentLocation() - Before;
-	const FVector Wanted = Coast * Dt;
+	const FVector Wanted = Coast * WallV2Dt;
 	V2NearlyEq(*this, TEXT("Moved along the wall by velocity * dt (H)"), FVector::DotProduct(Moved, H), FVector::DotProduct(Wanted, H), 0.05);
 	V2NearlyEq(*this, TEXT("Moved along the wall by velocity * dt (V)"), FVector::DotProduct(Moved, V), FVector::DotProduct(Wanted, V), 0.05);
 	V2NearlyEq(*this, TEXT("Speed out equals speed in (transport is length preserving, no friction term)"), Scene.State.Velocity.Size(), Coast.Size(), 0.1);

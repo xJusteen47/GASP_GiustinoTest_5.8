@@ -5,7 +5,7 @@ import unreal
 OUT = os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()), 'Dash', 'inspect_slots.txt')
 lines = []
 reg = unreal.AssetRegistryHelpers.get_asset_registry()
-for path in ('/Game/GASNPPTest',):
+for path in ('/Game/GSTN',):
     for d in reg.get_assets_by_path(path, recursive=True):
         name = str(d.asset_name)
         if not (name.startswith('KIT_') or name.startswith('SS_') or name.startswith('BS_') or name.startswith('IC_')):

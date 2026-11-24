@@ -13,16 +13,16 @@
 # Run headless (editor closed): UnrealEditor-Cmd <uproject> -run=pythonscript -script="<this file>" -unattended -nullrhi
 # Editor:   import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import setup_double_shot_examples as s; s.run()   (s.run(force=True) rewrites)
 # Writes, new assets only unless force (a rerun leaves the designer's edits alone):
-#   /Game/GASNPPTest/Examples/DoubleShot/DA_Example_Shot                    the projectile (UGSTN_ProjectileDefinition)
-#   /Game/GASNPPTest/Examples/DoubleShot/TL_Example_DoubleShot_{A1,A2,B}    the timelines
-#   /Game/GASNPPTest/Examples/DoubleShot/GA_Example_DoubleShot_{A1,A2,B}    the abilities (Blueprint children of GSTN_GA_BaseCombat)
-#   /Game/GASNPPTest/Examples/KIT_Example_DoubleShotA, KIT_Example_DoubleShotB   copies of KIT_Example with the special rebound (hub pads)
+#   /Game/GSTN/_Examples/DoubleShot/DA_Example_Shot                    the projectile (UGSTN_ProjectileDefinition)
+#   /Game/GSTN/_Examples/DoubleShot/TL_Example_DoubleShot_{A1,A2,B}    the timelines
+#   /Game/GSTN/_Examples/DoubleShot/GA_Example_DoubleShot_{A1,A2,B}    the abilities (Blueprint children of GSTN_GA_BaseCombat)
+#   /Game/GSTN/_Examples/KIT_Example_DoubleShotA, KIT_Example_DoubleShotB   copies of KIT_Example with the special rebound (hub pads)
 # Output: Saved/Examples/setup_double_shot.log (+ the B graph in Saved/Examples/double_shot_graph.txt), at most 5 printed lines.
 import os
 
 import unreal
 
-EX = '/Game/GASNPPTest/Examples'
+EX = '/Game/GSTN/_Examples'
 DIR = EX + '/DoubleShot'
 SOURCE_KIT = EX + '/KIT_Example'
 KITS = {'A': ('KIT_Example_DoubleShotA', 'DOPPIO COLPO A (DATI)', 'Kit.Example.DoubleShotA'),

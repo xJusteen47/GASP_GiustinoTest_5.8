@@ -10,7 +10,7 @@
 # The label (V8, V7) is the 'V<n>' of the asset name and ends every asset name, so the kits never overwrite each other and a later run with the
 # other value adds its kit next to the first one. Content/AnimPipeline is shared by every worktree through a junction: this script only duplicates
 # out of it.
-# Writes, under /Game/GASNPPTest/Combat/Overlord (new assets only), for each label L:
+# Writes, under /Game/GSTN/Characters/Overlord/Moves/<Move> (kits in Characters/Overlord/Kits; new assets only), for each label L:
 #   AS_OverlordDAir<L>        copy of the built animation (rerun with refresh=True after a new `animpipe build`)
 #   AM_OverlordDAir<L>        its montage (default slot, 2 frame blend in, play rate MONTAGE_PLAY_RATE)
 #   TL_Overlord_DAir<L>       UGSTN_CombatTimeline: startup 0-14, hitbox active 15-17, FAF 42, 43 frames; the hitbox follows the left foot
@@ -34,11 +34,11 @@ import unreal
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import setup_guard  # noqa: E402
+import gstn_content as gc  # noqa: E402  (where each asset lives under /Game/GSTN)
 
 ANIM_V8 = '/Game/AnimPipeline/Rig/Overlord/DAir/AS_OverlordDAirV8_Build'
 ANIM_V7 = '/Game/AnimPipeline/Rig/Overlord/DAir/AS_OverlordDAirV7_Build'   # the base, for the comparison capture
-ROOT = '/Game/GASNPPTest/Combat'
-DIR = ROOT + '/Overlord'
+DIR = gc.move_folder('DAir')
 SOURCE_KIT, SOURCE_WEAPON = 'KIT_Test_Hits', 'WPN_Test_Hits'
 COMMAND = 'Command.Attack.CrouchNeutral'      # crouch (down) held + attack
 AIRBORNE_TAG = 'Input.Context.Airborne'
@@ -259,9 +259,9 @@ def _describe(bindings):
 
 
 def _copy(source, name):
-    path = f'{ROOT}/{name}'
+    path = gc.path(name)
     if not unreal.EditorAssetLibrary.does_asset_exist(path):
-        if not unreal.EditorAssetLibrary.duplicate_asset(f'{ROOT}/{source}', path):
+        if not unreal.EditorAssetLibrary.duplicate_asset(gc.path(source), path):
             log(f'ERROR: could not copy {source} to {name}')
             return None
         log(f'created {path} (copy of {source})')

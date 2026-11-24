@@ -23,7 +23,7 @@ import time
 import unreal
 import gasnpp_test as g
 
-KIT_PATH = '/Game/GASNPPTest/Combat/' + g.HIT_KIT
+KIT_PATH = '/Game/GSTN/_Test/Combat/' + g.HIT_KIT
 SUITE_SPIN = ['spin_ground_hits_ring', 'spin_air_hop_low_gravity', 'air_spin_once_per_airtime', 'spin_opposite_cancel', 'drill_ground_lag', 'drill_nondrillable_bounce']
 # Plan D9/D10 (SD-05): the latch on another player, from the dive's tip to the exit
 SUITE_DRILL = ['drill_latch_static_multi_hit', 'drill_release_early_pop', 'drill_launch_after_bore', 'drill_target_destroyed', 'drill_latch_moving_enemy',

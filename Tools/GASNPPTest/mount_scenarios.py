@@ -49,7 +49,7 @@ import link_scenarios as ls
 TEST_DIR = '/GSTNPiggyback/Test/'
 KIT_MOUNT = 'KIT_Test_Mount'
 KIT_HEAVY = 'KIT_Test_MountHeavy'
-SOURCE_KIT = '/Game/GASNPPTest/Combat/KIT_Test_Link'
+SOURCE_KIT = '/Game/GSTN/_Test/Combat/KIT_Test_Link'
 PLib = unreal.GSTN_PiggybackContentLibrary
 MOUNT_TARGET = 'Interact.Target.Mount'
 GRAB_TARGET = 'Interact.Target.Grab'

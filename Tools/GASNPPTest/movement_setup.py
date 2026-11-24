@@ -8,11 +8,11 @@ import traceback
 
 import unreal
 
-INPUT_DIR = '/Game/GASNPPTest/Input'
+INPUT_DIR = '/Game/GSTN/Input'
 TEST_IMC = INPUT_DIR + '/IMC_GASNPP_Test'
 ABILITY_IMC = '/Game/GAS/Input/IMC_GAS_Abilities'
 INPUT_CONFIG = INPUT_DIR + '/IC_GASNPP_Test'
-BOUNCE_PAD = '/Game/GASNPPTest/BP_Test_BouncePad'
+BOUNCE_PAD = '/Game/GSTN/Maps/Hub/BP_Test_BouncePad'
 
 # (action path, keyboard keys, pad keys). IMC_GASNPP_Test has priority 5 (UGSTN_AbilityInputComponent), above IMC_Sandbox, and its actions
 # consume the key: the GASP pad bindings on the same buttons (X ragdoll, Y interact, B crouch, RT takedown, LT aim, RB walk, LB crouch) stop firing

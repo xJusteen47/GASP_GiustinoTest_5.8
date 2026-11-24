@@ -1,4 +1,4 @@
-# Builds /Game/GASNPPTest/Combat/L_Test_Combat, the combat test map (TM2, first stations; M4 H13a). Idempotent: it recreates the map from the specs below.
+# Builds /Game/GSTN/_Test/Maps/L_Test_Combat, the combat test map (TM2, first stations; M4 H13a). Idempotent: it recreates the map from the specs below.
 #
 #   headless: UnrealEditor-Cmd.exe <project>.uproject -run=pythonscript -script="<project>/Tools/GAS/build_test_combat_map.py" -unattended -NullRHI
 #   editor:   import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import build_test_combat_map as m; m.run()
@@ -15,10 +15,10 @@
 # Never saves DefaultLevel_Harness or any other map: it builds a new blank world and saves only L_Test_Combat.
 import unreal
 
-MAP_PATH = '/Game/GASNPPTest/Combat/L_Test_Combat'
-COMBAT_DIR = '/Game/GASNPPTest/Combat'
+MAP_PATH = '/Game/GSTN/_Test/Maps/L_Test_Combat'
+COMBAT_DIR = '/Game/GSTN/_Test/Combat'
 CUBE = '/Engine/BasicShapes/Cube.Cube'
-GAME_MODE = '/Game/GASNPPTest/GM_GASNPPTest.GM_GASNPPTest_C'
+GAME_MODE = '/Game/GSTN/Core/GM_GASNPPTest.GM_GASNPPTest_C'
 
 
 def log(msg):

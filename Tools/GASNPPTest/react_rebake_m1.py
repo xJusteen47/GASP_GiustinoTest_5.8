@@ -20,7 +20,7 @@ try:
     names = ["AS_React_HitStand", "AS_React_Tumble", "AS_React_Splat", "AS_React_GroundHit", "AS_React_LieUp",
              "AS_React_GetUp", "AS_React_Roll", "AS_React_RollBack"]
     for n in names:
-        path = "/Game/GASNPPTest/Combat/Reaction/" + n
+        path = "/Game/GSTN/Combat/Reactions/" + n
         a = unreal.load_asset(path)
         before_len = a.get_editor_property("sequence_length")
         p0 = unreal.AnimationLibrary.get_bone_pose_for_frame(a, "pelvis", 0, False).translation

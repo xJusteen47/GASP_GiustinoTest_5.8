@@ -8,7 +8,7 @@
 # last line says "validation: N assets, E errors, W warnings" so a script can grep it.
 import unreal
 
-FOLDERS = ['/GSTNCombat/Rules', '/Game/GASNPPTest/Combat']
+FOLDERS = ['/GSTNCombat/Rules', '/Game/GSTN']
 CLASSES = ('GSTN_CombatRules', 'GSTN_HurtboxSetDefinition', 'GSTN_CombatTimeline', 'GSTN_PartSetDefinition', 'GSTN_PenetrationTable')
 
 

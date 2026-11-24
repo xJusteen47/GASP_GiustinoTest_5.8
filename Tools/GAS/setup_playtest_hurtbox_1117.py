@@ -9,7 +9,7 @@
 import os
 import unreal
 
-SET = '/Game/GASNPPTest/Combat/HBS_Test_Pawn'
+SET = '/Game/GSTN/_Test/Combat/HBS_Test_Pawn'
 # name -> (radius, half height incl. hemispheres, centre z, centre x)
 FIT = {'feet': (20.0, 22.0, -66.0, 4.0), 'torso': (22.0, 50.0, 0.0, 0.0), 'head': (12.0, 16.0, 66.0, 2.0)}
 _PROJ = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())

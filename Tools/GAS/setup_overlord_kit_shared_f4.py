@@ -18,8 +18,8 @@ import unreal
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import setup_qa_movement_1117 as qam  # noqa: E402
 
-SRC = '/Game/GASNPPTest/Combat/KIT_Test_Playtest'
-DST = '/Game/GASNPPTest/Combat/KIT_Test_Overlord'
+SRC = '/Game/GSTN/Characters/Overlord/Kits/KIT_Test_Playtest'
+DST = '/Game/GSTN/Characters/Overlord/Kits/KIT_Test_Overlord'
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'PlaytestFixes', 'setup_overlord_kit_shared_f4.txt')
 _lines = []
 

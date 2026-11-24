@@ -17,8 +17,8 @@ import os
 
 import unreal
 
-DIR = '/Game/GASNPPTest/Combat/Overlord'
-ROOT = '/Game/GASNPPTest/Combat'
+DIR = '/Game/GSTN/Characters/Overlord/Moves/Dropkick'
+ROOT = '/Game/GSTN/Characters/Overlord/Kits'  # playtest variant kits
 # Review rounds (DROPKICK_BOUNCE_ROUND=R2, ...): every asset of the chain gets the suffix, next to round 1, never over it
 R = os.environ.get('DROPKICK_BOUNCE_ROUND', '')
 SRC = '/Game/AnimPipeline/Rig/Overlord/Dropkick/AS_OverlordDropkickTechBounce' + R

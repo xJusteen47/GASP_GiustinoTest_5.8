@@ -1,6 +1,6 @@
 # M11 K3: the three test kit archetypes of the hub (light / medium / heavy), so a playtester feels three really different kits.
 # Run headless (editor closed): UnrealEditor-Cmd <uproject> -run=pythonscript -script="<this file>"   or   import setup_test_kit_archetypes as k; k.run()
-# Writes, under /Game/GASNPPTest/Combat (new assets only; KIT_Test_Hits, KIT_Test_Link and the test character are never edited):
+# Writes, under /Game/GSTN/_Test/Combat (new assets only; KIT_Test_Hits, KIT_Test_Link and the test character are never edited):
 #   Archetypes/GA_<Kit>_Jab, GA_<Kit>_Special   Blueprint children of UGSTN_GA_TestKitStrike (frame data by UGSTN_TestKitContentLibrary)
 #   Archetypes/GA_<Kit>_Throw{Forward,Back,Up,Down}   Blueprint children of the common throws UGSTN_GA_LinkThrow* (UGSTN_LinkContentLibrary)
 #   WPN_Test_<Kit>   a copy of WPN_Test_Hits whose neutral attack is the kit's jab
@@ -16,8 +16,8 @@ import os
 
 import unreal
 
-DIR = '/Game/GASNPPTest/Combat'
-ABILITY_DIR = DIR + '/Archetypes'
+DIR = '/Game/GSTN/_Test/Combat'
+ABILITY_DIR = '/Game/GSTN/Combat/Archetypes'
 SOURCE_KIT = 'KIT_Test_Link'
 SOURCE_WEAPON = 'WPN_Test_Hits'
 INIT_EFFECT = 'GSTN_GE_TestKitArchetypeInit'

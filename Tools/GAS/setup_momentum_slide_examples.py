@@ -11,7 +11,7 @@ import os
 
 import unreal
 
-DIR = '/Game/GASNPPTest/Examples'
+DIR = '/Game/GSTN/_Examples'
 
 # name -> (along fields, against fields); everything else keeps the struct defaults (MinSpeed 150, threshold -0.3, stop at ledge, root motion added)
 EXAMPLES = {

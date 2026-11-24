@@ -25,7 +25,7 @@
 #   GA_Grab_Test, GA_Pummel_Test, GA_Release_Test, GA_ThrowForward_Test, GA_ThrowBack_Test, GA_ThrowUp_Test, GA_ThrowDown_Test, GA_LatchAttack_Test
 #                            thin Blueprint children of the harness's native link moves (UGSTN_GA_LinkTest*), one per command
 # Project content (the owner approved these edits, plan section 6; new kits, so KIT_Test_Hits and the M1-M4b scenarios that use it are unchanged), under
-# /Game/GASNPPTest/Combat, each a copy of KIT_Test_Hits made once:
+# /Game/GSTN/_Test/Combat, each a copy of KIT_Test_Hits made once:
 #   KIT_Test_Defence         + defence extension: DA_DefenceRules_Test, GA_Shield_Test
 #   KIT_Test_DefencePvE      + defence extension: DA_DefenceRules_TestPvE, GA_Shield_Test; Command.Special.Neutral plays GA_CounterTest
 #   KIT_Test_DefenceLanding  + defence extension: PvP rules, the shield, the get-up set (ground bounce, roll, neutral get-up)
@@ -45,7 +45,7 @@ import unreal
 
 TEST_DIR = '/GSTNDefence/Test'
 LINK_DIR = '/GSTNLink/Test'
-PROJECT_DIR = '/Game/GASNPPTest/Combat'
+PROJECT_DIR = '/Game/GSTN/_Test/Combat'
 SOURCE_KIT = 'KIT_Test_Hits'
 STANDARD_RULES = '/GSTNCombat/Rules/GSTN_CombatRules_Standard'
 LINK_TYPE = 'DA_LinkType_Grab_Test'

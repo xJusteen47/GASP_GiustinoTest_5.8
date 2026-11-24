@@ -120,6 +120,20 @@ def resolve(row, files):
     return sorted(set(in_git)), sorted(set(loose))
 
 
+def _moved_at_tag(tag, path):
+    """[(path at the tag, blob)] of the files at the tag with the same file name as `path` (an asset moved since approval)."""
+    out, rc = git('ls-tree', '-r', tag)
+    if rc != 0 or not out:
+        return []
+    base = os.path.basename(path)
+    hits = []
+    for line in out.splitlines():
+        meta, _, p = line.partition('\t')
+        if os.path.basename(p) == base:
+            hits.append((p, meta.split()[2]))
+    return hits
+
+
 def locks():
     p = os.path.join(ROOT, LOCKS)
     if not os.path.exists(p):
@@ -150,6 +164,25 @@ def joints_delta(base_path, now_path):
             if d > worst:
                 worst, where = d, f'{j} f{f}'
     return worst, where
+
+
+MOVE_PROOFS = os.path.join(DUMPS, 'moves')
+
+
+def _move_proof(tag, path, at_tag, now):
+    """Relative path of the proof (prove_moved.py) that `path` at blob `now` is the approved blob `at_tag` moved, else None.
+    The proof must name both blobs exactly and stay within its tolerance (0.001 cm / 0.001 deg)."""
+    f = os.path.join(ROOT, MOVE_PROOFS, f"{tag.replace('/', '-')}__{os.path.basename(path)}.json")
+    if not os.path.exists(f):
+        return None
+    with open(f, encoding='utf-8') as fh:
+        d = json.load(fh)
+    tol = d.get('tolerance') or {}
+    ok = (d.get('tag') == tag and d.get('approved_blob') == at_tag and d.get('moved_blob') == now
+          and d.get('moved_path') == path.replace('\\', '/')
+          and d.get('max_cm') is not None and d['max_cm'] <= min(tol.get('cm', 0.001), 0.001)
+          and d.get('max_deg') is not None and d['max_deg'] <= min(tol.get('deg', 0.001), 0.001))
+    return os.path.relpath(f, ROOT).replace('\\', '/') if ok else None
 
 
 PUBLISHED = 'Content/AnimPipeline/Published/'
@@ -201,6 +234,25 @@ def check_row(row, files, lk, tol_cm=TOL_CM, allow_missing_tag=False):
                 res['checked'][p] = {'now': h, 'published': pub, 'same': h == pub}
                 if h != pub:
                     res['why'].append(f'{tag}: {p} CHANGED since publish (sha256 {pub[:10]} -> {h[:10]})')
+                continue
+            # A Content reorganisation moves the approved asset without touching it (phase 2b, 2026-11-24): the baseline is the
+            # file with the same name at the tag, and it must be the SAME blob. Several candidates or a different blob stay a FAIL.
+            moved = _moved_at_tag(tag, p)
+            if len(moved) == 1:
+                at_tag = moved[0][1]
+                res['checked'][p] = {'now': now, 'at_tag': at_tag, 'moved_from': moved[0][0], 'same': at_tag == now}
+                if at_tag != now:
+                    # The move itself rewrites the package name inside the .uasset. Accepted only with a recorded bone-by-bone
+                    # proof (prove_moved.py, owner choice B 2026-11-24) that names THIS approved blob and THIS moved blob:
+                    # any later edit of the file changes its blob and the gate FAILs again.
+                    proof = _move_proof(tag, p, at_tag, now)
+                    if proof:
+                        res['checked'][p]['proof'] = proof
+                        res['checked'][p]['same'] = True
+                    else:
+                        res['why'].append(f'{tag}: {p} (moved from {moved[0][0]}) CHANGED since the tag '
+                                          f'(approved blob {at_tag[:10]}, now {now[:10]}); if only moved, prove it on the '
+                                          f'desktop: python Tools/AnimPipeline/capdet/prove_moved.py --tag {tag}')
                 continue
             res['why'].append(f'{tag}: {p} does not exist at the tag (approved under another path?)')
             continue

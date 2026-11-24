@@ -10,7 +10,7 @@ import os
 
 import unreal
 
-FOLDER = '/Game/GASNPPTest/Combat'
+FOLDER = '/Game/GSTN/_Test/Combat'
 BASE_KIT = FOLDER + '/KIT_Test_Hits'
 KIT = FOLDER + '/KIT_Test_Modded'
 MOD = FOLDER + '/MOD_Test_LongBlade'

@@ -39,10 +39,10 @@
     "AS_GSTN_Crouch_Exit": {"folder": "/Game/GSTN/Animation/Crouch", "frames": 11, "pin_feet": true, "check_slide": false,
       "keys": [{"frame": 0, "pose": "crouch"}, {"frame": 4, "pose": "stand_over", "ease": "out"}, {"frame": 9, "pose": "stand", "ease": "inout"}],
       "lag": {"clavicle_l": 1, "clavicle_r": 1, "upperarm_l": 1, "upperarm_r": 1, "lowerarm_l": 2, "lowerarm_r": 2, "hand_l": 2, "hand_r": 2}},
-    "AS_AirCrouch_Enter": {"folder": "/Game/GASNPPTest/Combat/AirCrouch", "frames": 9,
+    "AS_AirCrouch_Enter": {"folder": "/Game/GSTN/Animation/AirCrouch", "frames": 9,
       "keys": [{"frame": 0, "pose": "fall"}, {"frame": 3, "pose": "air_over", "ease": "in"}, {"frame": 8, "pose": "air", "ease": "inout"}],
       "lag": {"upperarm_l": 1, "upperarm_r": 1, "lowerarm_l": 2, "lowerarm_r": 2, "foot_l": 2, "foot_r": 2}},
-    "AS_AirCrouch_Loop_PLACEHOLDER": {"folder": "/Game/GASNPPTest/Combat/AirCrouch", "frames": 61, "loop": true,
+    "AS_AirCrouch_Loop_PLACEHOLDER": {"folder": "/Game/GSTN/Animation/AirCrouch", "frames": 61, "loop": true,
       "keys": [{"frame": 0, "pose": "air"}, {"frame": 30, "pose": "air_bob"}, {"frame": 60, "pose": "air"}]}
   }
 }

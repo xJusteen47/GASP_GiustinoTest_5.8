@@ -7,7 +7,7 @@ import unreal
 
 OUT = os.path.join(unreal.Paths.project_saved_dir(), "Reversal", "reversal_dump.txt")
 WALK = os.environ.get("REV_WALK", "/Game/Blueprints/MovementModes/BP_MovementMode_Walking")
-PROFILE = os.environ.get("REV_PROFILE", "/Game/GASNPPTest/Combat/DA_Locomotion_Default")
+PROFILE = os.environ.get("REV_PROFILE", "/Game/GSTN/Data/Locomotion/DA_Locomotion_Default")
 NAMES = ["MaxSpeed", "Acceleration", "Deceleration", "DirectionalAccelerationFactor", "TurningStrength", "AccelerationSmoothingTime",
          "DecelerationSmoothingTime", "AccelerationSmoothingCompensation", "DecelerationSmoothingCompensation", "OutsideInfluenceSmoothingTime",
          "FacingSmoothingTime", "VelocityDeadzoneThreshold", "WalkSpeed", "RunSpeed", "SprintSpeed", "WalkAcceleration", "RunAcceleration",

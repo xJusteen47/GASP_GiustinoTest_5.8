@@ -9,7 +9,7 @@ import os
 
 import unreal
 
-REACT = '/Game/GASNPPTest/Combat/Reaction'
+REACT = '/Game/GSTN/Combat/Reactions'
 MONTAGES = ['AM_React_GetUp', 'AM_React_Roll', 'AM_React_RollBack']
 RATIO = 0.85
 FOOT_UP = 6.0

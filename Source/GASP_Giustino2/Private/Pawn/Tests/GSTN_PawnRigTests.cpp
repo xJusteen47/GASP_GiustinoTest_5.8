@@ -18,7 +18,7 @@
 namespace GSTNPawnRigTest
 {
 	constexpr EAutomationTestFlags TestFlags = EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
-	constexpr float Dt = 1.f / 60.f;
+	constexpr float PawnDt = 1.f / 60.f;
 
 	struct FRig
 	{
@@ -192,19 +192,19 @@ GSTN_RIG_TEST(CameraReadsTheSubjectThroughTheRigComponent)
 	UGSTN_CameraComponent* Camera = Component->GetCamera();
 	for (int32 Frame = 0; Frame < 60; ++Frame)
 	{
-		Camera->EvaluateCamera(Dt);
+		Camera->EvaluateCamera(PawnDt);
 	}
 	TestFalse(TEXT("no aim, no Shoulder"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Shoulder.GetTag()));
 	Component->SetAimRequested(true);
 	for (int32 Frame = 0; Frame < 90; ++Frame)
 	{
-		Camera->EvaluateCamera(Dt);
+		Camera->EvaluateCamera(PawnDt);
 	}
 	TestTrue(TEXT("the aim request reaches the rule table through the component"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Shoulder.GetTag()));
 	Component->SetAimRequested(false);
 	for (int32 Frame = 0; Frame < 180; ++Frame)
 	{
-		Camera->EvaluateCamera(Dt);
+		Camera->EvaluateCamera(PawnDt);
 	}
 	TestFalse(TEXT("release leaves Shoulder"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Shoulder.GetTag()));
 	return true;
@@ -235,10 +235,10 @@ GSTN_RIG_TEST(RollbackSnapOfTheRootNeverReachesTheView)
 		for (int32 Frame = 0; Frame < 60; ++Frame)
 		{
 			const FVector RawRoot(0, 0, Frame == 20 ? 140.0 : 100.0);
-			const FVector Presented = Damper.Step(RawRoot, FVector::UpVector, Dt, Settings, false);
+			const FVector Presented = Damper.Step(RawRoot, FVector::UpVector, PawnDt, Settings, false);
 			const FGSTN_CameraSubjectState Raw = MakeSubject(RawRoot);
 			Camera->SetSubjectOverride(UGSTN_PawnRigComponent::BuildPresentedSubject(Raw, bPresented, Presented, false));
-			Camera->EvaluateCamera(Dt);
+			Camera->EvaluateCamera(PawnDt);
 			const FVector Now = Camera->GetBlendedView().Pivot;
 			if (Frame > 0)
 			{
@@ -252,13 +252,13 @@ GSTN_RIG_TEST(RollbackSnapOfTheRootNeverReachesTheView)
 	for (int32 Frame = 0; Frame < 60; ++Frame)
 	{
 		Camera->SetSubjectOverride(MakeSubject(FVector(0, 0, 100)));
-		Camera->EvaluateCamera(Dt);
+		Camera->EvaluateCamera(PawnDt);
 	}
 	const float PresentedStep = MaxViewStep(true);
 	for (int32 Frame = 0; Frame < 60; ++Frame)
 	{
 		Camera->SetSubjectOverride(MakeSubject(FVector(0, 0, 100)));
-		Camera->EvaluateCamera(Dt);
+		Camera->EvaluateCamera(PawnDt);
 	}
 	const float RawStep = MaxViewStep(false);
 	TestTrue(FString::Printf(TEXT("presented: the view moves %.2f cm at most in a frame"), PresentedStep), PresentedStep < 5.f);

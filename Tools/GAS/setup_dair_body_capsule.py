@@ -1,6 +1,6 @@
 # CAPSULE-MOVES (2026-11-15): the Overlord down-air v9's movement capsule small and centred on the torso instead of the standing capsule (owner:
 # "dair v9: the attacker's body enters the victim on the landing hit"; same per-move Body Capsule mechanism as the dropkick,
-# setup_dropkick_body_capsule.py). Data only: Body Capsule tracks in /Game/GASNPPTest/Combat/Overlord/TL_Overlord_DAirV9. No pose, no key, no
+# setup_dropkick_body_capsule.py). Data only: Body Capsule tracks in /Game/GSTN/Characters/Overlord/Moves/DAir/TL_Overlord_DAirV9. No pose, no key, no
 # Blueprint graph, no input, no project setting. Run AFTER setup_overlord_dair_kit.py (the kit script rewrites the timeline).
 #
 # The clip is measured here (nothing hand typed): torso = midpoint of pelvis and spine_03 per animation frame (timeline frame N shows animation
@@ -18,7 +18,7 @@ import os
 
 import unreal
 
-DIR = '/Game/GASNPPTest/Combat/Overlord'
+DIR = '/Game/GSTN/Characters/Overlord/Moves/DAir'
 ANIM_FPS = 60.0
 CHAIN = ('pelvis', 'spine_01', 'spine_02', 'spine_03', 'neck_01', 'head')
 LEGS = {'foot_l': ('thigh_l', 'calf_l', 'foot_l'), 'foot_r': ('thigh_r', 'calf_r', 'foot_r')}

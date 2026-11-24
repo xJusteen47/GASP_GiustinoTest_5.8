@@ -1,7 +1,7 @@
 # Bakes sockets of an animation into FGSTN_CombatTimelineData.BakedSockets (M4 H13a). Editor Python only; M5's timeline editor replaces it.
 #
 #   import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import bake_sockets as b
-#   b.bake_into_timeline('/Game/GASNPPTest/Combat/TL_Test_HitBaked', '/Game/.../AM_Punch', ['hand_r'], mesh='/Game/.../SK_Mannequin')
+#   b.bake_into_timeline('/Game/GSTN/_Test/Combat/TL_Test_HitBaked', '/Game/.../AM_Punch', ['hand_r'], mesh='/Game/.../SK_Mannequin')
 #
 # The animation (a montage's first sequence, or a sequence) is sampled once per simulation tick (default 60 Hz, the Network Prediction tick of the
 # project), one transform per timeline frame, in the space a BakedSocket hitbox uses: relative to the root of the attacker. The sampling is the

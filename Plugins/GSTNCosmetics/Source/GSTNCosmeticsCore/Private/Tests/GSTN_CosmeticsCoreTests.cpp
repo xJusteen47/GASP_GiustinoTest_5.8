@@ -263,7 +263,9 @@ bool FGSTNCosmeticsValidateTest::RunTest(const FString& Parameters)
 	TStrongObjectPtr<UGSTN_CosmeticHostData> Sword = CPSword();
 	FGSTN_CosmeticPlanning::ValidateHost(*Sword, FGSTN_CosmeticLimits(), Errors, Warnings);
 	TestEqual(TEXT("The test sword is valid"), Errors.Num(), 0);
-	Sword->Slots.Add(Sword->Slots[0]);
+	// Copy first: adding an element of the array to itself asserts when the add reallocates.
+	const auto FirstSlot = Sword->Slots[0];
+	Sword->Slots.Add(FirstSlot);
 	Sword->Splines.SetNum(5);
 	FGSTN_CosmeticPlanning::ValidateHost(*Sword, FGSTN_CosmeticLimits(), Errors, Warnings);
 	TestTrue(TEXT("A socket used twice is an error"), Errors.ContainsByPredicate([](const FString& Line) { return Line.Contains(TEXT("two slots")); }));

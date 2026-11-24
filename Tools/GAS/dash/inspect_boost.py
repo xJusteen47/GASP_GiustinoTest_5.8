@@ -14,7 +14,7 @@ def grab(label, text, pat):
         lines.append(f'{label}: ...{text[s:m.end() + 220]}...')
 
 
-kit = unreal.load_asset('/Game/GASNPPTest/Combat/KIT_Test_Playtest')
+kit = unreal.load_asset('/Game/GSTN/Characters/Overlord/Kits/KIT_Test_Playtest')
 for prop in ('extensions', 'kit_extensions'):
     try:
         ext = kit.get_editor_property(prop)
@@ -23,7 +23,7 @@ for prop in ('extensions', 'kit_extensions'):
             lines.append('  ' + str(e)[:400])
     except Exception as ex:  # noqa: BLE001
         lines.append(f'kit.{prop}: {ex!r}')
-prof = unreal.load_asset('/Game/GASNPPTest/Combat/DA_Locomotion_Default')
+prof = unreal.load_asset('/Game/GSTN/Data/Locomotion/DA_Locomotion_Default')
 rs = prof.get_editor_property('run_stages')
 for name in ('boost_command', 'boost_mode', 'boost_window_frames', 'boost_target_stage', 'boost_dash', 'stick_deadzone', 'stages',
              'start_stamp'):
@@ -32,7 +32,7 @@ for name in ('boost_command', 'boost_mode', 'boost_window_frames', 'boost_target
         lines.append(f'run_stages.{name} = {str(v)[:300]}')
     except Exception as ex:  # noqa: BLE001
         lines.append(f'run_stages.{name}: {ex!r}')
-ic = unreal.load_asset('/Game/GASNPPTest/Input/IC_GASNPP_Test')
+ic = unreal.load_asset('/Game/GSTN/Input/IC_GASNPP_Test')
 txt = unreal.SystemLibrary.get_object_name(ic)
 for p in ('buttons', 'commands', 'command_set', 'presses'):
     try:

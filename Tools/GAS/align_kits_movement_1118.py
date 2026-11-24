@@ -11,8 +11,8 @@ L = unreal.GSTN_PropertyTextLibrary
 out = []
 restore = []
 COMMON = ['(Stat=(TagName="Combat.SetByCaller.Stat.WalkSpeed"),Value=600.000000)', '(Stat=(TagName="Combat.SetByCaller.Stat.JumpVelocity"),Value=1350.000000)']
-DEFAULT = '/Game/GASNPPTest/Combat/DA_Locomotion_Default'
-PLAYTEST = '/Game/GASNPPTest/Combat/DA_Locomotion_Playtest'
+DEFAULT = '/Game/GSTN/Data/Locomotion/DA_Locomotion_Default'
+PLAYTEST = '/Game/GSTN/Data/Locomotion/DA_Locomotion_Playtest'
 
 da = unreal.load_asset(DEFAULT)
 # The pink kit's designer jump is the one the owner played and tuned (2026-11-18 12:00): it becomes the common one; the Default's own values go to the report
@@ -26,7 +26,7 @@ else:
 out.append('default designer ' + L.get_property_text(da, 'JumpDesigner')[:120])
 out.append(f'save default {unreal.EditorAssetLibrary.save_loaded_asset(da, False)}')
 
-for path in unreal.EditorAssetLibrary.list_assets('/Game/GASNPPTest', recursive=True, include_folder=False):
+for path in unreal.EditorAssetLibrary.list_assets('/Game/GSTN', recursive=True, include_folder=False):
     name = path.split('/')[-1].split('.')[0]
     if not name.startswith('KIT_Test_'):
         continue

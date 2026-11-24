@@ -743,7 +743,7 @@ bool FGSTN_PipelineBlueprintStepTest::RunTest(const FString& Parameters)
 	// BP_Step_Example (test content, made by Tools/GAS/setup_gas_assets.py --h13-content) is a Blueprint class compiled in the project content whose parent
 	// is UGSTN_HitResolutionStep. It must load, pass the validator and run through the runner like a C++ step; the default of its Resolve event
 	// writes nothing and continues, so the standard knockback step after it still decides the hit. A project without the test content skips the test.
-	UClass* BlueprintStep = LoadClass<UGSTN_HitResolutionStep>(nullptr, TEXT("/Game/GASNPPTest/Combat/BP_Step_Example.BP_Step_Example_C"));
+	UClass* BlueprintStep = LoadClass<UGSTN_HitResolutionStep>(nullptr, TEXT("/Game/GSTN/_Examples/Combat/BP_Step_Example.BP_Step_Example_C"));
 	if (BlueprintStep == nullptr)
 	{
 		AddInfo(TEXT("BP_Step_Example is not in this project's content: the Blueprint step round trip is skipped"));

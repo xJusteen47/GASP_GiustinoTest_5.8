@@ -283,7 +283,7 @@ bool FGSTN_TestKitArchetypesContentTest::RunTest(const FString& Parameters)
 	TArray<const UGSTN_PrimaryKitDefinition*> Kits;
 	for (const TCHAR* Name : Names)
 	{
-		const FString Path = FString::Printf(TEXT("/Game/GASNPPTest/Combat/%s.%s"), Name, Name);
+		const FString Path = FString::Printf(TEXT("/Game/GSTN/_Test/Combat/%s.%s"), Name, Name);
 		const UGSTN_PrimaryKitDefinition* Kit = LoadObject<UGSTN_PrimaryKitDefinition>(nullptr, *Path);
 		if (!TestNotNull(*FString::Printf(TEXT("%s exists"), Name), Kit))
 		{

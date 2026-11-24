@@ -847,7 +847,7 @@ AActor* UGSTN_MinionBenchSubsystem::Promote(const FString& FighterClassPath, TOp
 		UE_LOG(LogGSTNMinion, Warning, TEXT("Bench: promote refused (no live bench minion)"));
 		return nullptr;
 	}
-	const FString Path = FighterClassPath.IsEmpty() ? FString(TEXT("/Game/GASNPPTest/BP_GASNPP_TestCharacter.BP_GASNPP_TestCharacter_C")) : FighterClassPath;
+	const FString Path = FighterClassPath.IsEmpty() ? FString(TEXT("/Game/GSTN/Core/BP_GASNPP_TestCharacter.BP_GASNPP_TestCharacter_C")) : FighterClassPath;
 	FGSTN_MinionPromotionParams Params;
 	Params.FighterClassOverride = TSoftClassPtr<AActor>(FSoftObjectPath(Path)).LoadSynchronous();
 	const FVector Feet(Store.Position[Best.Index]);

@@ -1,7 +1,7 @@
 # Designer examples (owner plan steps 3-4, 2026-11-13): a small example kit a designer can open, read, copy and retune, made only of data the way a
 # designer would make it (duplicate an existing move, change numbers, bind it to a command). Nothing here is test-only logic.
 # Run headless (editor closed): UnrealEditor-Cmd <uproject> -run=pythonscript -script="<this file>"   or   import setup_designer_examples as d; d.run()
-# Writes under /Game/GASNPPTest/Examples (the kit and weapon scan of the Asset Manager only covers /Game/GASNPPTest, DefaultGame.ini):
+# Writes under /Game/GSTN/_Examples (inside /Game/GSTN, the kit and weapon scan root of the Asset Manager, DefaultGame.ini):
 #   GA_Example_Light     X (Command.Attack.*)    a duplicate of GA_Medium_Jab with its own frame data (fast, small, short push)
 #   GA_Example_Strong    RT (Command.Strong.*)   a duplicate of GA_Heavy_Jab (slow startup, big hitbox, far knockback)
 #   GA_Example_Special   Y (Command.Special.*)   a duplicate of GA_Medium_Special (a launcher: steep angle, sends up)
@@ -14,9 +14,11 @@
 import os
 
 import unreal
+import sys  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gstn_content as gc  # noqa: E402  (where each asset lives under /Game/GSTN)
 
-SRC = '/Game/GASNPPTest/Combat'
-DIR = '/Game/GASNPPTest/Examples'
+DIR = '/Game/GSTN/_Examples'
 SHOVE = '/Game/Characters/UEFN_Mannequin/Animations/Interactions/Shoves/AM_M_relaxed_ragdoll_shove_stand_{}_A'
 TAKEDOWN = '/Game/Characters/UEFN_Mannequin/Animations/Interactions/Takedowns/AM_M_relaxed_takedown_stand_{}_A'
 
@@ -149,7 +151,7 @@ def run(force=False):
 
     classes = {}
     for name, (source, _commands, spec) in MOVES.items():
-        bp, created = _copy(f'{SRC}/{source}', name)
+        bp, created = _copy(gc.path(source.rsplit('/', 1)[-1]), name)
         if not bp:
             return _finish(saves)
         cls = unreal.EditorAssetLibrary.load_blueprint_class(f'{DIR}/{name}')
@@ -165,7 +167,7 @@ def run(force=False):
     if dome_new:
         saves.append(dome_bp)
 
-    weapon, w_new = _copy(f'{SRC}/WPN_Test_Medium', 'WPN_Example')
+    weapon, w_new = _copy(gc.path('WPN_Test_Medium'), 'WPN_Example')
     if weapon and (w_new or force):
         weapon.set_editor_property('display_name', 'WPN_Example')
         weapon.set_editor_property('weapon_tags', _tags(WEAPON_TAG, 'Test.Role.Primary'))
@@ -175,7 +177,7 @@ def run(force=False):
         weapon.set_editor_property('bindings', bindings)
         saves.append(weapon)
 
-    kit, k_new = _copy(f'{SRC}/KIT_Test_Medium', 'KIT_Example')
+    kit, k_new = _copy(gc.path('KIT_Test_Medium'), 'KIT_Example')
     if kit and weapon and (k_new or force):
         kit.set_editor_property('display_name', KIT_LABEL)
         kit.set_editor_property('kit_tags', _tags(KIT_TAG))

@@ -574,7 +574,7 @@ command line; they build no viewport, so `-nullrhi` works).
 | `Validate` | Every code of §9.2, one failing and one passing timeline built in code; a kit with a conflicting slot is flagged with both slot names. |
 | `Registry`/`Debug` | A registered test track editor is listed; an unknown track gets the generic row and `UnknownTrack`; input display layout of `0:face=90 0:4t 6:6t! 7:+A` (columns, gaps, greyed press); debugger `Collect` writes the expected fields (non-world part). |
 
-Test content under `/Game/GASNPPTest/Combat/Editor/` (a montage and skeleton shared with M3/M4 content, a Physics Asset,
+Test content under `/Game/GSTN/_Test/Combat/Editor/` (a montage and skeleton shared with M3/M4 content, a Physics Asset,
 `TL_Test_Jab3`); nothing here edits `BP_GASNPP_TestCharacter`. A helper `Tools/GASNPPTest/gstn_editor_check.py` (editor
 Python console) opens a timeline, bakes, validates and prints the report, for the manual smoke test. PIE harness: no new
 scenario (the harness gains a **listen-server configuration**, host + 2 clients, owner direction §6b; the checks of this

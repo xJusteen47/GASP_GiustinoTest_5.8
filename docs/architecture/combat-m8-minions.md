@@ -234,7 +234,7 @@ Rules:
   no fork is needed; harness scenarios live in `Tools/GASNPPTest/minion_scenarios.py` (imports `gasnpp_test`) and need the fork
   only for the networked ones. Build check per commit: compile with `GSTNMinion` disabled, then enabled; combat tests run in both.
 - Content: `Plugins/GSTNMinion/Content/` (default registry, test definitions) follows the combat plugin's `.gitignore`/LFS
-  rule (combat.md §3 note); test maps stay in the project's `Content/GASNPPTest`.
+  rule (combat.md §3 note); test maps stay in the project's `Content/GSTN/_Test`.
 - Documentation: combat.md §3 gets a row per module above; CLAUDE.md's table gets one line for the plugin.
 
 ## 4c. Gameplay tags
@@ -748,7 +748,7 @@ host replication CPU for the same 150 (≈ 6 µs per actor-connection update × 
 
 ## 12. Test content, tools and harness
 
-- Content: two test definitions in `Content/GASNPPTest`: `DA_Minion_Grunt` (walk, 1 swing with a root hitbox and a baked-socket
+- Content: two test definitions in `Content/GSTN/_Test`: `DA_Minion_Grunt` (walk, 1 swing with a root hitbox and a baked-socket
   hitbox, hitstun, launched, death, 40 HP, `KnockbackModel_HealthFraction`) and `DA_Minion_Heavy` (armor, slower, overhead). Maps:
   `L_MinionYard` (flat), `L_MinionCourse` (stairs, slope, thin wall, corner, ledge). Python helper
   `Tools/GAS/setup_minion_assets.py` (idempotent, backs up like `setup_gas_assets.py`) creates them. **Tell the user** before

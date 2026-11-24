@@ -2,7 +2,7 @@
 # Idempotent: an asset is saved only when something changed (an existing asset is backed up to Saved/Backups/GAS first), and an asset that had
 # unsaved in-memory changes when the run started is never saved (run it headless or in a fresh editor). Machine output: Saved/WP3/setup_strike_kinds.txt
 #
-# Writes, under /Game/GASNPPTest/Combat:
+# Writes, under /Game/GSTN/_Test/Combat:
 #   TL_Test_StrikeKinds    the timeline of UGSTN_GA_TestStrikeKinds: group 0 Swing (frames 8..14, sweeps in from the right), group 1 Stab (frames
 #                          22..26, straight ahead), no recoil of its own (UGSTN_TestStrikeKindsLibrary::FillStrikeKindsTimeline has the numbers)
 #   KIT_Test_StrikeKinds   a copy of KIT_Test_Hits made once: Command.Attack.Neutral plays UGSTN_GA_TestStrikeKinds, the kit's own recoil fallback off,
@@ -17,7 +17,7 @@ import shutil
 
 import unreal
 
-FOLDER = '/Game/GASNPPTest/Combat'
+FOLDER = '/Game/GSTN/_Test/Combat'
 TIMELINE = 'TL_Test_StrikeKinds'
 KIT = 'KIT_Test_StrikeKinds'
 SOURCE_KIT = 'KIT_Test_Hits'

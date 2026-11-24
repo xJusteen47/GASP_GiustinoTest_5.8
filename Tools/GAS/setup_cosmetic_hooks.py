@@ -5,7 +5,7 @@
 #
 # What it does:
 #  1. UGSTN_MoveCosmeticsComponent "GSTN_MoveCosmetics" on /Game/Blueprints/SandboxCharacter_Mover (BP_GASNPP_TestCharacter inherits it).
-#  2. Four hit cues in /Game/GASNPPTest/Examples/Cosmetics, Blueprint children of GSTN_GCN_CombatHit (a GCN Burst placed at the hit, played once):
+#  2. Four hit cues in /Game/GSTN/_Examples/Cosmetics, Blueprint children of GSTN_GCN_CombatHit (a GCN Burst placed at the hit, played once):
 #     GCN_Example_Hit_Light / _Medium / _Heavy / _Finisher for GameplayCue.Hit.Light/Medium/Heavy/Finisher (owner rule: size follows importance,
 #     four steps). Their Burst Effects stay EMPTY unless SPARK_SYSTEM below names a Niagara system: the project has no hit VFX yet (the log lists
 #     the Niagara systems it found, for the VFX kit thread). A designer fills Burst Effects (spark, sound, shake for heavy only, rumble) in the asset.
@@ -22,7 +22,7 @@ import unreal
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 SANDBOX_CHAR = '/Game/Blueprints/SandboxCharacter_Mover'
-EXAMPLES = '/Game/GASNPPTest/Examples'
+EXAMPLES = '/Game/GSTN/_Examples'
 COSMETICS = f'{EXAMPLES}/Cosmetics'
 # Niagara systems to use (asset paths); '' = none. Fill them once the VFX kit exists, then rerun with force=True
 SPARK_SYSTEM = ''

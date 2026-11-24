@@ -14,7 +14,7 @@ UGSTN_GA_TestStrikeKinds::UGSTN_GA_TestStrikeKinds(const FObjectInitializer& Obj
 	: Super(ObjectInitializer)
 {
 	// The asset the setup script writes; until it exists the inline data (empty) runs and the move does nothing
-	TimelineAsset = TSoftObjectPtr<UGSTN_CombatTimeline>(FSoftObjectPath(TEXT("/Game/GASNPPTest/Combat/TL_Test_StrikeKinds.TL_Test_StrikeKinds")));
+	TimelineAsset = TSoftObjectPtr<UGSTN_CombatTimeline>(FSoftObjectPath(TEXT("/Game/GSTN/_Test/Combat/TL_Test_StrikeKinds.TL_Test_StrikeKinds")));
 }
 
 namespace

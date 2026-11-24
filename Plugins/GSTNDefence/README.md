@@ -211,7 +211,7 @@ Content (F13), written by `Tools/GAS/setup_defence_link_content.py` (idempotent:
 | `GA_TechInPlace_Test`, `GA_TechRoll_Test`, `GA_TechWall_Test` | the tech set (children of `UGSTN_GA_Tech`; roll = left and right, wall = wall and wall jump) |
 | `GA_GroundBounce_Test`, `GA_GetupRoll_Test`, `GA_GetupNeutral_Test` | the get-up set |
 
-The project test kits that carry them (`/Game/GASNPPTest/Combat/KIT_Test_Defence`, `_DefencePvE` (+ the counter on `Command.Special.Neutral`),
+The project test kits that carry them (`/Game/GSTN/_Test/Combat/KIT_Test_Defence`, `_DefencePvE` (+ the counter on `Command.Special.Neutral`),
 `_DefenceLanding`, `_DefenceTech`, `_DefenceLink`; copies of `KIT_Test_Hits`) and the Parry and Shield steps in the standard rules are written by
 the same script (`UGSTN_DefenceContentLibrary::WriteKitDefenceExtension`, `WriteKitCommandAbility`: they mark the kit dirty only when it
 changes). The scenarios pick the kit; the shield button on the input config and shortened rule numbers stay in memory. The F7/F8 runtime path

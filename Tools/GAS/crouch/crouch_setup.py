@@ -9,8 +9,8 @@ import unreal
 FOLDER = "/Game/GSTN/Animation/Crouch"
 PROFILE = "BLP_GSTN_FollowThrough"
 SKEL_FROM = FOLDER + "/AS_GSTN_Crouch_Enter"
-AIR = "/Game/GASNPPTest/Combat/AirCrouch"
-REACTION_SET = "/Game/GASNPPTest/Combat/Reaction/DA_ReactionAnims"
+AIR = "/Game/GSTN/Animation/AirCrouch"
+REACTION_SET = "/Game/GSTN/Combat/Reactions/DA_ReactionAnims"
 # Handover crouch-veloce-1 starting values (Time Factor: < 1 arrives sooner, > 1 later)
 SCALES = {"pelvis": 0.5, "thigh_l": 0.5, "thigh_r": 0.5, "calf_l": 0.5, "calf_r": 0.5, "spine_01": 0.8,
           "clavicle_l": 1.2, "clavicle_r": 1.2, "upperarm_l": 1.2, "upperarm_r": 1.2,

@@ -20,7 +20,7 @@ try:
         L.append("REF %s t=(%.2f,%.2f,%.2f) s=(%.3f,%.3f,%.3f)" % (b, r.translation.x, r.translation.y, r.translation.z, r.scale3d.x, r.scale3d.y, r.scale3d.z))
     flush()
     for n in ["AS_React_Tumble"]:
-        a = unreal.load_asset("/Game/GASNPPTest/Combat/Reaction/" + n)
+        a = unreal.load_asset("/Game/GSTN/Combat/Reactions/" + n)
         for t in (0.0,):
             ap = unreal.AnimPoseExtensions.get_anim_pose_at_time(a, t, opts)
             out = []
