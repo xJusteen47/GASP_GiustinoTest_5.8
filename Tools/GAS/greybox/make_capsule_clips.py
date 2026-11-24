@@ -466,10 +466,11 @@ def update_move_overrides(overrides, sequence_overrides=None):
     shape = cdo.get_editor_property('shape_settings')
     frantic = shape.get_editor_property('frantic_amplitude')
     p('ShapeSettings.FranticAmplitude on the capsule ABP:', frantic)
-    if abs(frantic - 1.4) < 1e-3:
-        shape.set_editor_property('frantic_amplitude', 0.7)
+    # Run 4: still not clearly smaller on video: 0.45. Only the old defaults are replaced, never a value the owner tuned
+    if any(abs(frantic - old) < 1e-3 for old in (1.4, 0.7)):
+        shape.set_editor_property('frantic_amplitude', 0.45)
         cdo.set_editor_property('shape_settings', shape)
-        p('ShapeSettings.FranticAmplitude set to 0.7')
+        p('ShapeSettings.FranticAmplitude set to 0.45')
     unreal.BlueprintEditorLibrary.compile_blueprint(bp)
     p('move overrides on the capsule ABP:', len(current))
     if SAVE:

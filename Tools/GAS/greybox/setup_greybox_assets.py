@@ -349,8 +349,8 @@ def assign_materials(asset):
 
 
 # ------------------------------------------------------------------------------------------------------------- kit look (owner 14:43)
-# Static meshes modelled in the capsule's component space (mesh +Y forward, Z up, feet at 0); UGSTN_GreyboxSubsystem attaches them to the
-# capsule's pelvis with the inverse of its reference transform, so they sit here and tilt/squash with the rigid body.
+# Static meshes modelled in the capsule's component space (mesh +Y forward, Z up, feet at 0), then stored in the pelvis's local space;
+# UGSTN_GreyboxSubsystem attaches them to the capsule's pelvis with no offset, so they sit here and tilt/squash with the rigid body.
 # Collar: the kit's stand-in (its colour = ColourForKit, set at runtime): a half ring of boxes behind the upper back.
 COLLAR_Z = CAPSULE_BOTTOM + CAPSULE_HEIGHT - CAPSULE_RADIUS + 4.0
 COLLAR_RADIUS = CAPSULE_RADIUS + 3.0
@@ -397,13 +397,26 @@ def build_sword(mesh, opts):
     unreal.GeometryScript_MeshTransforms.transform_mesh(mesh, place)
 
 
+def pelvis_reference():
+    """The mannequin pelvis's reference transform in component space."""
+    mannequin = eal.load_asset(MANNEQUIN)
+    skeleton = mannequin.get_editor_property('skeleton')
+    pose = unreal.AnimPoseExtensions.get_reference_pose(skeleton)
+    return unreal.AnimPoseExtensions.get_bone_pose(pose, 'pelvis', unreal.AnimPoseSpaces.WORLD)
+
+
 def step_accessories():
     grey = make_material(MATERIALS[0][1], MATERIALS[0][2])
+    # Run 4 (desktop: the collar floated off the body in the squash and in big tips): the pieces are stored in the PELVIS's local space
+    # and attached with an identity offset. Stored in component space and attached through the pelvis's inverse, the pelvis squash
+    # (a scale along its own X-up axis) reached them per THEIR local axes (FTransform keeps no shear) and around their origin at the feet
+    to_pelvis = pelvis_reference().inverse()
     for name, kind in ACCESSORIES.items():
         path = '%s/%s' % (DIR, name)
         mesh = unreal.DynamicMesh()
         opts = unreal.GeometryScriptPrimitiveOptions()
         (build_collar if kind == 'collar' else build_sword)(mesh, opts)
+        unreal.GeometryScript_MeshTransforms.transform_mesh(mesh, to_pelvis)
         verts = unreal.GeometryScript_MeshQueries.get_vertex_count(mesh)
         if eal.does_asset_exist(path):
             asset = eal.load_asset(path)
