@@ -1,58 +1,90 @@
 <#
-Cleanup-Branches.ps1 - weekend cleanup of claude/* branches on origin (decision 3A, approved by the owner 2026-11-16).
-  - claude/* whose tip is already in feature/gas-npp-5.8 and untouched for >= 2 days      -> deleted on origin
-  - claude/* NOT in feature and untouched for > 14 days -> tag archivio/<name> pushed first, then branch deleted
-  - never touched: feature/*, main, claude/artifacts, branches with an open PR, anything newer than the thresholds
-Default is DRY RUN (lists, changes nothing). The owner runs -Apply by hand: Claude's rules forbid it branch deletion.
-  powershell -NoProfile -ExecutionPolicy Bypass -File Tools\CI\Cleanup-Branches.ps1            (prova)
-  powershell -NoProfile -ExecutionPolicy Bypass -File Tools\CI\Cleanup-Branches.ps1 -Apply     (esegue)
-Full list in Saved\Logs\ci\cleanup-<date>.tsv; console max 5 lines. A deleted branch can be restored from the tag
-(archivio/*) or, for merged ones, from the SHA in the tsv: git push origin <sha>:refs/heads/<name>.
+Cleanup-Branches.ps1 - prune the claude/* branches of origin (owner decision 1A, 2026-11-24: `main` is the only trunk).
+Replaces the old script that used feature/gas-npp-5.8 as reference and the second script Remove-MergedRemoteBranches.ps1.
+
+What it does (DRY RUN by default: it only rewrites the list, nothing on origin changes):
+  1. fetches origin (claude/*, main, tags);
+  2. runs Tools\CI\branch_elenco.py, which classifies every claude/* branch against origin/main (and the integration branches) and
+     writes docs\notes\pulizia-2026-11-24\branch-elenco.csv: A already in the trunk, B subset of another branch, C old history,
+     D docs only, E code not in the trunk yet, TIENI kept (artifacts, integration, approved-* without tag, open PRs, -Keep);
+  3. with -Apply: for each A/B/C/D branch it first creates and pushes the tag archivio/<name> (so every deleted branch can be
+     restored: git push origin archivio/<name>:refs/heads/claude/<name>), then deletes the branch on origin in blocks of 50.
+     E branches (code not merged) are NEVER deleted unless -IncludeCode is given. Also tags archivio/feature-gas-npp-5.8 (the old
+     trunk is archived, never deleted here).
+The pushes use --no-verify on purpose: the pre-push guard refuses deletions and non-approved tags to agents, and this script is run
+BY THE OWNER, by hand. An agent may run it only without -Apply.
+  powershell -NoProfile -ExecutionPolicy Bypass -File Tools\CI\Cleanup-Branches.ps1            (prova, riscrive il CSV)
+  powershell -NoProfile -ExecutionPolicy Bypass -File Tools\CI\Cleanup-Branches.ps1 -Apply     (tag + cancella A/B/C/D)
+Console: max 5 lines. Detail: the CSV and Saved\Logs\ci\cleanup-<date>.log.
 #>
-param([switch]$Apply, [int]$StaleDays = 14, [int]$MergedMinDays = 2, [string]$Feature = 'feature/gas-npp-5.8', [string]$Root)
+param(
+    [switch]$Apply,
+    [switch]$IncludeCode,                         # also delete E (code not in main): only after the code was merged or on purpose
+    [string]$Trunk = 'main',
+    [string[]]$Integration = @('claude/anim-skill-t3'),   # extra "already integrated" references (used when they exist on origin)
+    [string[]]$Keep = @(),                        # extra branches to keep (e.g. the branch of the running thread)
+    [string]$Csv = 'docs\notes\pulizia-2026-11-24\branch-elenco.csv',
+    [string]$Root
+)
 $ErrorActionPreference = 'Stop'
 $root = if ($Root) { $Root } else { (Resolve-Path "$PSScriptRoot\..\..").Path }
 Set-Location $root
-$out = "Saved\Logs\ci\cleanup-$(Get-Date -Format yyyyMMdd-HHmm).tsv"
-New-Item -ItemType Directory -Force (Split-Path $out) | Out-Null
+$csvPath = if ([IO.Path]::IsPathRooted($Csv)) { $Csv } else { Join-Path $root $Csv }
+$log = Join-Path $root "Saved\Logs\ci\cleanup-$(Get-Date -Format yyyyMMdd-HHmm).log"
+New-Item -ItemType Directory -Force (Split-Path $log) | Out-Null
+New-Item -ItemType Directory -Force (Split-Path $csvPath) | Out-Null
 
 $ErrorActionPreference = 'Continue'   # git writes progress on stderr
-git fetch --quiet --prune origin "+refs/heads/claude/*:refs/remotes/origin/claude/*" "+refs/heads/${Feature}:refs/remotes/origin/$Feature" 2>$null
-$open = @()
-if (Get-Command gh -ErrorAction SilentlyContinue) { $open = @(gh pr list --state open --limit 500 --json headRefName --jq '.[].headRefName' 2>$null) }
-$now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-$rows = @(); $del = @(); $arch = @()
-foreach ($line in (git for-each-ref --format='%(refname:strip=3)|%(objectname)|%(committerdate:unix)' 'refs/remotes/origin/claude/')) {
-    $b, $sha, $ts = $line -split '\|'          # $b = claude/<name>
-    $age = [int](($now - [long]$ts) / 86400)
-    git merge-base --is-ancestor $sha "origin/$Feature" 2>$null; $merged = ($LASTEXITCODE -eq 0)
-    $action = 'tieni'
-    if ($b -eq 'claude/artifacts') { $action = 'tieni (artifacts)' }
-    elseif ($open -contains $b) { $action = 'tieni (PR aperta)' }
-    elseif ($merged -and $age -ge $MergedMinDays) { $action = 'cancella (in feature)'; $del += $b }
-    elseif (-not $merged -and $age -gt $StaleDays) { $action = 'archivia+cancella'; $arch += [pscustomobject]@{ b = $b; sha = $sha } }
-    $rows += "$b`t$sha`t$age`t$merged`t$action"
-}
-@("branch`tsha`tgiorni`tin_feature`tazione") + $rows | Set-Content $out -Encoding UTF8
+git fetch --quiet --prune --tags origin "+refs/heads/claude/*:refs/remotes/origin/claude/*" "+refs/heads/${Trunk}:refs/remotes/origin/$Trunk" 2>>$log
+if ($LASTEXITCODE -ne 0) { Write-Output "ERRORE: fetch fallito (vedi $log)"; exit 1 }
+git fetch --quiet origin "+refs/heads/feature/gas-npp-5.8:refs/remotes/origin/feature/gas-npp-5.8" 2>>$log
 
-if ($Apply) {
+$open = @()
+if (Get-Command gh -ErrorAction SilentlyContinue) { $open = @(gh pr list --state open --limit 500 --json headRefName --jq '.[].headRefName' 2>$null | Where-Object { $_ -like 'claude/*' }) }
+$integ = @()
+foreach ($i in @($Integration | Where-Object { $_ })) {
+    git rev-parse --verify --quiet "origin/$i^{commit}" 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { $integ += "origin/$i" }
+}
+
+$pyArgs = @('-I', (Join-Path $PSScriptRoot 'branch_elenco.py'), '--out', $csvPath, '--trunk', "origin/$Trunk")
+if ($integ.Count) { $pyArgs += @('--integration') + $integ }
+if ($Keep.Count) { $pyArgs += @('--keep') + $Keep }
+if ($open.Count) { $pyArgs += @('--open-pr') + $open }
+$summary = & python @pyArgs 2>>$log
+if ($LASTEXITCODE -ne 0) { Write-Output "ERRORE: classificazione fallita (vedi $log)"; exit 1 }
+
+$rows = @(Import-Csv -LiteralPath $csvPath)
+$delCats = @('A_GIA_IN_INTEGRAZIONE', 'B_SOTTOINSIEME', 'C_STORIA_VECCHIA', 'D_SOLO_DOCS')
+if ($IncludeCode) { $delCats += 'E_CODICE' }
+$todo = @($rows | Where-Object { $delCats -contains $_.categoria })
+
+if ($Apply -and $todo.Count) {
     $tags = @()
-    foreach ($a in $arch) {
-        $tag = "archivio/$($a.b -replace '^claude/', '')"
-        git tag -f $tag $a.sha 2>$null | Out-Null
+    foreach ($r in $todo) {
+        $tag = "archivio/$($r.branch -replace '^claude/', '')"
+        git tag -f $tag $r.sha 2>>$log | Out-Null
         $tags += "refs/tags/$tag"
     }
-    if ($tags.Count) {
-        git push --quiet origin $tags 2>>"$out.err"
-        if ($LASTEXITCODE -ne 0) { Write-Output "ERRORE: push dei tag fallito, nessun branch cancellato (vedi $out.err)"; exit 1 }
+    $ft = git rev-parse --verify --quiet 'origin/feature/gas-npp-5.8'
+    if ($ft) {
+        $has = git tag --list 'archivio/feature-gas-npp-5.8'
+        if (-not $has) { git tag 'archivio/feature-gas-npp-5.8' $ft 2>>$log | Out-Null; $tags += 'refs/tags/archivio/feature-gas-npp-5.8' }
     }
-    $all = @($del) + @($arch | ForEach-Object { $_.b })
-    for ($i = 0; $i -lt $all.Count; $i += 50) {   # a blocchi di 50 branch per riga di comando
-        $chunk = $all[$i..([Math]::Min($i + 49, $all.Count - 1))]
-        git push --quiet origin --delete $chunk 2>>"$out.err"
+    for ($i = 0; $i -lt $tags.Count; $i += 50) {
+        $chunk = @($tags[$i..([Math]::Min($i + 49, $tags.Count - 1))])
+        git push --no-verify --quiet origin @chunk 2>>$log
+        if ($LASTEXITCODE -ne 0) { Write-Output "ERRORE: push dei tag fallito, nessun branch cancellato (vedi $log)"; exit 1 }
+    }
+    $names = @($todo | ForEach-Object { $_.branch })
+    for ($i = 0; $i -lt $names.Count; $i += 50) {
+        $chunk = @($names[$i..([Math]::Min($i + 49, $names.Count - 1))])
+        git push --no-verify --quiet origin --delete @chunk 2>>$log
+        if ($LASTEXITCODE -ne 0) { Write-Output "ERRORE: cancellazione parziale (vedi $log); i tag archivio/* esistono gia" ; exit 1 }
     }
 }
-$mode = if ($Apply) { 'ESEGUITO' } else { 'PROVA (niente cambiato; -Apply per eseguire)' }
+$mode = if ($Apply) { "ESEGUITO: $($todo.Count) branch cancellati dopo il tag archivio/<nome>" } else { 'PROVA (niente cambiato su origin; -Apply per eseguire)' }
 Write-Output "PULIZIA $mode"
-Write-Output "claude/* totali=$($rows.Count) cancella_fusi=$($del.Count) archivia+cancella=$($arch.Count) tenuti=$($rows.Count - $del.Count - $arch.Count)"
-Write-Output "elenco: $out"
+Write-Output $summary
+Write-Output "da cancellare=$($todo.Count) (E_CODICE tenuti: $(@($rows | Where-Object { $_.categoria -eq 'E_CODICE' }).Count) senza -IncludeCode)"
+Write-Output "elenco: $csvPath"

@@ -154,6 +154,15 @@ function Invoke-PushGuard {
         [bool]$OwnerUnlock
     )
     $violations = @()
+    # Tags (cleanup plan 2026-11-24, 3A): ONLY the creation of refs/tags/approved/* is allowed. A tag that already exists on the
+    # remote (RemoteSha set) can never be moved, deleted or force-pushed, not even with the owner unlock: an approved clip stays approved.
+    if ($Ref -like 'refs/tags/*') {
+        $tag = ($Ref -replace '^refs/tags/', '').Trim()
+        if ($Sha -match '^0+$') { $violations += "cancellazione tag bloccata: $Ref" }
+        elseif ($tag -notlike 'approved/?*') { $violations += "tag consentiti solo approved/* (trovato: $tag)" }
+        elseif ($RemoteSha -and ($RemoteSha -notmatch '^0+$')) { $violations += "tag gia esistente: spostamento o force bloccato ($tag)" }
+        return $violations
+    }
     $shortRef = ($Ref -replace '^refs/heads/', '').Trim()
     if ($Sha -match '^0+$' -or -not $shortRef) {
         $violations += "cancellazione branch remoto bloccata: $Ref"
@@ -260,6 +269,14 @@ if ($SelfTest) {
     $pOk    = Invoke-PushGuard -Root $tmp -Ref 'refs/heads/claude/harness-v2' -Sha $shaA -RemoteSha $initSha -Cfg $cfg -OwnerUnlock:$false
     $ok6 = ($pMain.Count -gt 0) -and ($pFeat.Count -gt 0) -and ($pDel.Count -gt 0) -and ($pForce.Count -gt 0) -and ($pOk.Count -eq 0)
     $results += "6 Push+Force: $(if ($ok6) {'PASS'} else {'FAIL'})"
+
+    # 7. Tags: creating approved/* passes; deleting, moving, or any other tag name is refused
+    $tNew  = Invoke-PushGuard -Root $tmp -Ref 'refs/tags/approved/dair-v9' -Sha $shaA -RemoteSha ('0' * 40) -Cfg $cfg -OwnerUnlock:$false
+    $tMove = Invoke-PushGuard -Root $tmp -Ref 'refs/tags/approved/dair-v9' -Sha $shaB -RemoteSha $shaA -Cfg $cfg -OwnerUnlock:$true
+    $tDel  = Invoke-PushGuard -Root $tmp -Ref 'refs/tags/approved/dair-v9' -Sha ('0' * 40) -RemoteSha $shaA -Cfg $cfg -OwnerUnlock:$true
+    $tOther = Invoke-PushGuard -Root $tmp -Ref 'refs/tags/release-1' -Sha $shaA -RemoteSha '' -Cfg $cfg -OwnerUnlock:$false
+    $ok7 = ($tNew.Count -eq 0) -and ($tMove.Count -gt 0) -and ($tDel.Count -gt 0) -and ($tOther.Count -gt 0)
+    $results += "7 Tag approved: $(if ($ok7) {'PASS'} else {'FAIL'})"
 
     Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     $summary = $results -join ' | '
