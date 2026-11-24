@@ -18,10 +18,8 @@ PROVA (python Tools/AnimPipeline/life_calibrate.py -> Saved/AnimPipeline/life_ca
   PASS stock 0,95/0,48/0,43/1,91, w2 w3 ftilt 0; FAIL jab v12 3,24, K7 4,0, jabfk3 6,49, K8 r2 8,0. Unico errore: dair v9
   (attesa PASS) 5,29/s con a4, a17, a25; a35 tolto (montage finisce ~a34). a17 e a25 sono fermate VERE per il critico cieco.
   Quindi NIENTE gate scritto: stop_sync resta misura. Non ho cambiato l'attesa della dair (decide l'owner, come jab v12).
-- a4: il critico la vede viva in gioco (capsula che sale), ma sul dump dell'asset il bacino fa 0,2 cm: dichiararla come tenuta
-  non basta (nucleo < 1 cm). Serve capire se la vita va misurata con il movimento della capsula (dump in gioco, C4/C5).
-Test: test_registry 6 e test_life 4 nuovi; fix card_path (approved/<mossa>.json) = 5 test verbi tornati verdi; suite 290 ok,
-  3 rossi + 1 errore gia' presenti (casc_scale, casc_roundtrip, ps1, skill_gaps).
+- a4: viva in gioco per il critico (capsula sale), ma sul dump dell'asset bacino 0,2 cm (nucleo < 1): serve un dump in gioco (C4/C5).
+Test: 10 nuovi; fix card_path (approved/<mossa>.json) = 5 test verbi verdi; suite 290 ok, 3 rossi + 1 errore gia' presenti.
 PER OWNER / COORDINATORE
 - Decisione: dair v9 nella taratura A) attesa FAIL come jab v12 (critico cieco: a17, a25 vere) -> stop_sync ottiene la prova e
   blocca; B) resta PASS -> stop_sync resta misura. Consigliata A (piu' severa, coerente con la regola 17).
