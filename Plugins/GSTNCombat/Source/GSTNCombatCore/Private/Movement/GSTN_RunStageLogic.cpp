@@ -239,7 +239,7 @@ static void StepRunStages(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunFr
 		State.CarrySource = EGSTN_RunCarrySource::Skid;
 		State.CarryWindow = Tuning.Skid.CarryFrames;
 		State.EntryFrames = -1;
-		if (Tuning.Skid.bResetsStage && !Tuning.Skid.bResumeStageAfterSkid)
+		if (!Tuning.Skid.bResumeStageAfterSkid)
 		{
 			ResetToFirstStage(State);
 		}

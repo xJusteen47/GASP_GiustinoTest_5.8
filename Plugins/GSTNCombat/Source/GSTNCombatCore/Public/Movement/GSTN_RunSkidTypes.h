@@ -59,9 +59,9 @@ enum class EGSTN_RunSkidMotion : uint8
 	Physics,
 	/** skid-fix-1 (2026-11-20): the capsule follows the skid clip's baked root (RootTrack + TurnCurve) for the whole clip, stick ignored.
 	 *  Falls back to BrakeExit when the clip root is not baked */
-	ClipRoot,
+	ClipRoot UMETA(DisplayName = "Clip Root (Legacy)"),
 	/** The first version (P2): constant Brake to rest, then a linear push to ExitSpeed over ExitFrames */
-	BrakeExit
+	BrakeExit UMETA(DisplayName = "Brake Exit (Legacy)")
 };
 
 /** The Physics motion of the run skid. Speeds and accelerations at the reference WalkSpeed, frames at the 62.5 Hz fixed tick */
@@ -72,30 +72,30 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidPhysicsTuning
 
 	/** Braking deceleration along the old running direction, cm/s^2 (times BrakeCurve, times the floor's FrictionScale). 3600 stops a
 	 *  472 cm/s run in ~0.15 s over ~35 cm */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "1", ForceUnits = "cm/s^2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Physics", meta = (ClampMin = "1", ForceUnits = "cm/s^2"))
 	float BrakeDecel = 3600.f;
 
 	/** Frames over which the brake grows from 0 to full: the run had no deceleration the frame before, a full brake at once reads as a hit
 	 *  wall. 0 = full brake from the first frame */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Physics", meta = (ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
 	int32 BrakeOnsetFrames = 3;
 
 	/** Shape of the brake: X = speed left / speed at the skid start (1 at the start, 0 at rest), Y = multiplier of BrakeDecel (values under
 	 *  0.05 count as 0.05 so the skid always comes to rest). No keys = 1 everywhere (constant deceleration, like kinetic friction) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Physics")
 	FRuntimeFloatCurve BrakeCurve;
 
 	/** Acceleration of the push-off toward the stick, cm/s^2 (times PushCurve, times the floor's FrictionScale) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "1", ForceUnits = "cm/s^2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Physics", meta = (ClampMin = "1", ForceUnits = "cm/s^2"))
 	float PushAccel = 3000.f;
 
 	/** Shape of the push: X = speed / PushSpeed (0 at rest, 1 at the hand-off), Y = multiplier of PushAccel (min 0.05). No keys = 1 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Physics")
 	FRuntimeFloatCurve PushCurve;
 
 	/** Speed of the push at which the skid ends and the walking mode (the run stages, the reversal boost) carries on from the same velocity.
 	 *  0 = no push: the skid ends at rest */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Physics", meta = (ClampMin = "0", ForceUnits = "cm/s"))
 	float PushSpeed = 420.f;
 
 	/**
@@ -103,23 +103,23 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidPhysicsTuning
 	 * runs (smoothstep) from TurnStartProgress to TurnEndProgress, so a longer slide turns later on its own. Defaults: the body turns while
 	 * it brakes and faces the new way when it comes to rest
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "0", ClampMax = "2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Physics", meta = (ClampMin = "0", ClampMax = "2"))
 	float TurnStartProgress = 0.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "0", ClampMax = "2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Physics", meta = (ClampMin = "0", ClampMax = "2"))
 	float TurnEndProgress = 1.f;
 
 	/** The stick back along the old direction during the brake (cosine at or over this) ends the skid: the walking mode runs on from the
 	 *  speed left. -1 = never */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "-1", ClampMax = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Physics", meta = (ClampMin = "-1", ClampMax = "1"))
 	float ForwardCancelCos = 0.5f;
 
 	/** Stick magnitude under which there is no push: a skid with the stick released ends at rest */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "0", ClampMax = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Physics", meta = (ClampMin = "0", ClampMax = "1"))
 	float PushStickMin = 0.2f;
 
 	/** Safety cap of each half (brake, push), frames */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ClampMin = "1", ClampMax = "240", ForceUnits = "Frames"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Physics", meta = (ClampMin = "1", ClampMax = "240", ForceUnits = "Frames"))
 	int32 MaxFrames = 90;
 };
 
@@ -135,55 +135,55 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid", meta = (DisplayName = "Skid Enabled"))
 	bool bEnabled = true;
 
 	/** Who moves the capsule in the skid (skid-physics-1). Console override: gstn.Skid.Motion */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid")
 	EGSTN_RunSkidMotion Motion = EGSTN_RunSkidMotion::Physics;
 
 	/** The Physics motion's values (Motion = Physics) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Physics", meta = (ShowOnlyInnerProperties))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Physics", meta = (ShowOnlyInnerProperties))
 	FGSTN_RunSkidPhysicsTuning Physics;
 
 	/** Lowest 0-based run stage that skids (1 = stage 2: at stage 1 a reversal is a quick pivot of the walking mode, the plan's rule) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid", meta = (ClampMin = "0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Start", meta = (ClampMin = "0"))
 	int32 MinStage = 1;
 
 	/** Ground speed (at the reference WalkSpeed) under which no skid starts */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Start", meta = (ClampMin = "0", ForceUnits = "cm/s"))
 	float MinSpeed = 350.f;
 
 	/** Cosine between stick and ground velocity at or under which the stick counts as reversed (-0.5 = more than 120 degrees apart) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid", meta = (ClampMin = "-1", ClampMax = "0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Start", meta = (ClampMin = "-1", ClampMax = "0"))
 	float ReverseStickCos = -0.5f;
 
 	/** Stick magnitude (0..1) needed to start a skid */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid", meta = (ClampMin = "0", ClampMax = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Start", meta = (ClampMin = "0", ClampMax = "1"))
 	float MinStickMagnitude = 0.5f;
 
 	/** The skid's deceleration, a constant (cm/s^2, not scaled by the stats: a heavy kit gets its own value). 2600 stops 650 cm/s in 0.25 s, about 81 cm */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid", meta = (ClampMin = "1", ForceUnits = "cm/s^2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Legacy|Skid", meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics", ClampMin = "1", ForceUnits = "cm/s^2"))
 	float Brake = 2600.f;
 
 	/** Frames of the Enter phase (they brake like Active, only the presentation differs) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Phases", meta = (ClampMin = "0", ForceUnits = "Frames"))
 	int32 EnterFrames = 4;
 
 	/** Frames of the Exit phase after the skid comes to rest: the character turns to the new direction and pushes off */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Phases", meta = (ClampMin = "0", ForceUnits = "Frames"))
 	int32 ExitFrames = 8;
 
 	/** Speed along the new direction at the end of the Exit phase; the walking mode takes over from it (0 = from rest) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Legacy|Skid", meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics", ClampMin = "0", ForceUnits = "cm/s"))
 	float ExitSpeed = 250.f;
 
 	/** Side of the exit turn for a near-reverse; must match the skid clip's turn (SS_180_Turn_Root180 turns +180 yaw = Right) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Turn")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Turn")
 	EGSTN_SkidTurnSide TurnSide = EGSTN_SkidTurnSide::Right;
 
 	/** A new direction within this many degrees of straight behind counts as a reverse and turns on TurnSide */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Turn", meta = (ClampMin = "0", ClampMax = "90", ForceUnits = "Degrees"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Turn", meta = (ClampMin = "0", ClampMax = "90", ForceUnits = "Degrees"))
 	float ReverseConeDeg = 45.f;
 
 	/**
@@ -193,10 +193,10 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 	 * along it; the exit finishes whatever is left by its last frame. Empty = the old rule: facing held in the brake, a linear turn in
 	 * the exit frames.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Turn")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Legacy|Skid", meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics"))
 	TArray<float> TurnCurve;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Turn", meta = (ClampMin = "1", ForceUnits = "Hz"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Legacy|Skid", meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics", ClampMin = "1", ForceUnits = "Hz"))
 	float TurnCurveRate = 30.f;
 
 	/** TurnCurve at Seconds after the skid start, linear between samples, 1 past the end; -1 when there is no curve */
@@ -222,7 +222,7 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 	 * skid lasts the clip: the capsule moves on this path and turns on TurnCurve from the first frame to the clip's end, with no brake
 	 * formula and no exit push toward the stick; the walking mode takes the stick back after it. Empty = the brake + exit rule above.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Turn")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Legacy|Skid", meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics"))
 	TArray<FVector2D> RootTrack;
 
 	/** True when the skid follows its clip's root (RootTrack and TurnCurve both baked) */
@@ -258,38 +258,34 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 	 * (a side somersault) can require it. Counted as the abilities see it: they read the state of the previous frame (CLAUDE.md rule 5),
 	 * the tag compensates that frame
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Jump Window", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Jump Window", meta = (ClampMin = "0", ForceUnits = "Frames"))
 	int32 JumpWindowStart = 2;
 
 	/** Last skid frame with the jump window tag; -1 = until the skid ends */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Jump Window", meta = (ClampMin = "-1", ForceUnits = "Frames"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Jump Window", meta = (ClampMin = "-1", ForceUnits = "Frames"))
 	int32 JumpWindowEnd = -1;
 
 	/** The kit's rule at a ledge; a surface with a SkidLedge other than Inherit wins */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid")
 	EGSTN_SkidLedge Ledge = EGSTN_SkidLedge::StopAtLedge;
-
-	/** A skid drops the run back to stage 1 (Mario); off = the stage is kept. Ignored while bResumeStageAfterSkid is on */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid")
-	bool bResetsStage = true;
 
 	/**
 	 * Owner 2026-11-17 (default ON, to be confirmed by the owner): after the skid's turn the run pushes off from the stage it had when
 	 * the skid started (no "cold start" from stage 1), so a skid back is not slower than releasing and pushing the stick again. The stage
-	 * is frozen for the whole skid. Off = the old rule (bResetsStage). Lives in the run state (Mover sync state): rollback safe
+	 * is frozen for the whole skid. Off = the skid drops the run back to stage 1 (Mario). Lives in the run state (Mover sync state): rollback safe
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Run Stage")
 	bool bResumeStageAfterSkid = true;
 
 	/** Frames after the skid started in which a neutral ground attack still carries the speed of before the skid (P3 momentum memory) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Run Stage", meta = (ClampMin = "0", ForceUnits = "Frames"))
 	int32 CarryFrames = 6;
 
 	/**
 	 * PLACEHOLDER presentation until the real skid clips arrive with the anim layer plan: the torso leans back against the slide by this
 	 * angle through the directional additive node (degrees, 0 = none)
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Skid|Presentation", meta = (ClampMin = "0", ClampMax = "60"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Presentation", meta = (ClampMin = "0", ClampMax = "60"))
 	float PlaceholderLeanDeg = 22.f;
 };
 
@@ -300,7 +296,7 @@ enum class EGSTN_AirControlModel : uint8
 	/** Default: the air top speed is the takeoff speed (with a floor), the steering is the takeoff stage's AirControlScale */
 	TakeoffCap,
 	/** The old behaviour: the walking top speed and Mover's fixed air control, scaled by the AirControl stat only */
-	Fixed
+	Fixed UMETA(DisplayName = "Fixed (Legacy)")
 };
 
 /** The air half of the run tuning */
@@ -309,22 +305,22 @@ struct GSTNCOMBATCORE_API FGSTN_RunAirTuning
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Air")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air|Control", meta = (DisplayName = "Air Control Model"))
 	EGSTN_AirControlModel Model = EGSTN_AirControlModel::TakeoffCap;
 
 	/** TakeoffCap: the air top speed never goes under this (at the reference WalkSpeed), so a standing jump can still drift */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Air", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air|Control", meta = (EditCondition = "Model == EGSTN_AirControlModel::TakeoffCap", ClampMin = "0", ForceUnits = "cm/s"))
 	float MinAirSpeed = 300.f;
 
 	/** The AirControl stat multiplies Mover's air control (the stat was declared but read by nothing before P2) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Air")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air|Control")
 	bool bUseAirControlStat = true;
 
 	/**
 	 * Air momentum (owner 2026-11-18): player drift and external pushes in two channels, the neutral stick style (Astro default, Mario
 	 * option) and stronger air steering. Style MoverLegacy = the falling mode as before
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Air", meta = (ShowOnlyInnerProperties))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air|Momentum", meta = (ShowOnlyInnerProperties))
 	FGSTN_AirMomentumTuning Momentum;
 };
 

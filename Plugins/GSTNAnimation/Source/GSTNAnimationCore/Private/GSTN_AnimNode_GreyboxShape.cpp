@@ -54,6 +54,13 @@ float FGSTN_AnimNode_GreyboxShape::PelvisHeightAfterSquash(float Height, float S
 	return Height * FMath::Clamp(Squash, 0.2f, 3.f);
 }
 
+float FGSTN_AnimNode_GreyboxShape::CapsuleLowestZ(const FVector& PelvisLocation, const FVector& Up, float BelowPelvis, float AbovePelvis, float Radius)
+{
+	const float LowerCentre = static_cast<float>(PelvisLocation.Z - Up.Z * BelowPelvis);
+	const float UpperCentre = static_cast<float>(PelvisLocation.Z + Up.Z * AbovePelvis);
+	return FMath::Min(LowerCentre, UpperCentre) - Radius;
+}
+
 void FGSTN_AnimNode_GreyboxShape::Initialize_AnyThread(const FAnimationInitializeContext& Context)
 {
 	FAnimNode_Base::Initialize_AnyThread(Context);
@@ -111,9 +118,13 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 	}
 	// Rigid body in locomotion: blend toward the reference pose, the root stays the copied one (Mover's placement and facing)
 	const float PoseWeight = FMath::Clamp(Shape.PoseWeight, 0.f, 1.f);
+	const float Lying = FMath::Clamp(Shape.LyingWeight, 0.f, 1.f);
+	const FCompactPoseBoneIndex Pelvis = PelvisBone.GetCompactPoseIndex(Output.Pose.GetBoneContainer());
 	if (PoseWeight < 0.999f)
 	{
 		const FTransform CopiedRoot = Output.Pose[Root];
+		const bool bHasPelvis = Output.Pose.IsValidIndex(Pelvis);
+		const FTransform CopiedPelvis = bHasPelvis ? Output.Pose[Pelvis] : FTransform::Identity;
 		FPoseContext Reference(Output);
 		Reference.ResetToRefPose();
 		if (PoseWeight <= 0.001f)
@@ -130,6 +141,14 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 			Output = Blended;
 		}
 		Output.Pose[Root] = CopiedRoot;
+		// A body lying down: the capsule takes the copied pelvis (rotation and height), the rest stays rigid on it, so it lies down whole
+		// (owner 2026-11-24: before this the rigid capsule stood upright, squashed to the lying pelvis's height)
+		if (bHasPelvis && Lying > 0.001f)
+		{
+			FTransform Blended = Output.Pose[Pelvis];
+			Blended.BlendWith(CopiedPelvis, Lying);
+			Output.Pose[Pelvis] = Blended;
+		}
 	}
 	// Squash of the whole body around the ground point (run 3). Never a non-uniform scale on the root: a bone's scale composes per local
 	// axis (FTransform keeps no shear), and the mannequin's pelvis and spine bones have their local X as the body's up, so a root scale
@@ -139,9 +158,10 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 	// capsule hanging from the pelvis ends at Squash times its height and never goes under the feet.
 	// A rigid body cannot lower its pelvis: its share of the ground squash goes to the height as well (PoseWeight 0); a posed body (an
 	// attack) already lowers it, so only the bone squashes for it.
-	const float HeightSquash = Shape.Squash * FMath::Lerp(Shape.PelvisSquash, 1.f, PoseWeight);
+	// A lying body counts as posed here: its pelvis is the copied one, so its height already is the pose's
+	const float BodyPose = FMath::Max(PoseWeight, Lying);
+	const float HeightSquash = Shape.Squash * FMath::Lerp(Shape.PelvisSquash, 1.f, BodyPose);
 	const float BodySquash = Shape.Squash * Shape.PelvisSquash;
-	const FCompactPoseBoneIndex Pelvis = PelvisBone.GetCompactPoseIndex(Output.Pose.GetBoneContainer());
 	if (Output.Pose.IsValidIndex(Pelvis))
 	{
 		if (!FMath::IsNearlyEqual(BodySquash, 1.f, 1.e-3f))
@@ -153,7 +173,7 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 			const FVector CurrentUp = UpAxis == 0 ? Current.GetAxisX() : (UpAxis == 1 ? Current.GetAxisY() : Current.GetAxisZ());
 			// Lying flat fades the squash out (a body lying down must not be squashed through its thickness); the rigid capsule is always
 			// upright enough, so it keeps all of it
-			const float Verticality = FMath::Lerp(1.f, FMath::Square(FMath::Abs(static_cast<float>(CurrentUp.Z))), PoseWeight);
+			const float Verticality = FMath::Lerp(1.f, FMath::Square(FMath::Abs(static_cast<float>(CurrentUp.Z))), BodyPose);
 			Output.Pose[Pelvis].SetScale3D(Output.Pose[Pelvis].GetScale3D() * AxisSquashScale(UpAxis, BodySquash, Verticality));
 		}
 		if (!FMath::IsNearlyEqual(HeightSquash, 1.f, 1.e-3f))
@@ -180,11 +200,44 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 	// The root's parent is the component, so its local transform is in component space: rotate it around the ground point
 	FTransform& RootTransform = Output.Pose[Root];
 	RootTransform.SetRotation(FQuat(Shape.Lean) * RootTransform.GetRotation());
+	// A roll: the whole body turns about the pivot (the capsule's middle), still in component space
+	if (!Shape.Spin.Equals(FQuat::Identity, 1.e-4f))
+	{
+		RootTransform.SetTranslation(Shape.SpinPivot + Shape.Spin.RotateVector(RootTransform.GetTranslation() - Shape.SpinPivot));
+		RootTransform.SetRotation(Shape.Spin * RootTransform.GetRotation());
+	}
+
+	// Floor lift: the posed capsule never goes under the feet (a lying capsule is thicker than a lying mannequin's pelvis is high). Measured
+	// on the final pose, after the squash and the lean
+	if (Shape.FloorRadius > 0.f && Output.Pose.IsValidIndex(Pelvis))
+	{
+		const FTransform RefPelvisCS = Output.Pose.GetRefPose(Pelvis) * Output.Pose.GetRefPose(Root);
+		const float RefHeight = static_cast<float>(RefPelvisCS.GetLocation().Z);
+		const FTransform PelvisCS = Output.Pose[Pelvis] * RootTransform;
+		// The body's up in the pelvis's own frame (reference pose), carried by its current rotation
+		const FVector LocalUp = RefPelvisCS.GetRotation().UnrotateVector(FVector::UpVector);
+		const FVector Up = PelvisCS.GetRotation().RotateVector(LocalUp).GetSafeNormal();
+		// The squash scales the body along its up axis and widens it: the same scale on the geometry
+		const FVector PelvisScale = Output.Pose[Pelvis].GetScale3D();
+		const int32 UpAxis = UpAxisOf(RefPelvisCS.GetRotation());
+		const float Along = static_cast<float>(PelvisScale[UpAxis]);
+		const float Width = static_cast<float>(PelvisScale[(UpAxis + 1) % 3]);
+		const float Radius = Shape.FloorRadius * Width;
+		const float Below = FMath::Max(RefHeight - Shape.FloorBottom - Shape.FloorRadius, 0.f) * Along;
+		const float Above = FMath::Max(Shape.FloorTop - Shape.FloorRadius - RefHeight, 0.f) * Along;
+		const float Lowest = CapsuleLowestZ(PelvisCS.GetLocation(), Up, Below, Above, Radius);
+		if (Lowest < 0.f)
+		{
+			// Up in component space, expressed in the root's frame (the pelvis's parent)
+			const FVector Lift = RootTransform.GetRotation().UnrotateVector(FVector(0.f, 0.f, -Lowest));
+			Output.Pose[Pelvis].AddToTranslation(Lift);
+		}
+	}
 }
 
 void FGSTN_AnimNode_GreyboxShape::GatherDebugData(FNodeDebugData& DebugData)
 {
-	DebugData.AddDebugItem(FString::Printf(TEXT("%s (squash %.2f, lean P %.1f R %.1f, move %s x%.2f)"), *DebugData.GetNodeName(this), Shape.Squash,
-		Shape.Lean.Pitch, Shape.Lean.Roll, *GetNameSafe(Shape.OverrideClip), Shape.OverrideWeight));
+	DebugData.AddDebugItem(FString::Printf(TEXT("%s (squash %.2f, lean P %.1f R %.1f, lying %.2f, move %s x%.2f)"), *DebugData.GetNodeName(this),
+		Shape.Squash, Shape.Lean.Pitch, Shape.Lean.Roll, Shape.LyingWeight, *GetNameSafe(Shape.OverrideClip), Shape.OverrideWeight));
 	Source.GatherDebugData(DebugData);
 }

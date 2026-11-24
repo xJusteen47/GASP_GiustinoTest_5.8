@@ -110,6 +110,15 @@ struct FGSTN_CombatTickContext
 	const FGSTN_CombatTimelineData* RunningTimeline = nullptr;
 
 	/**
+	 * The frame data of the timeline the clock step took a landing out of on this frame: it ran at the start of the frame, the ground fact of
+	 * the clock (Mover's ground, with the anticipated touchdown) says grounded, and the clock ended it, linked it into a follow-up or started its
+	 * landing lag. Null otherwise. An extension that waits for the move's own landing (the Defence self knockdown, a dropkick that downs its
+	 * user) needs it: on such a frame RunningTimeline is already gone or is the follow-up (owner 2026-11-24, the dropkick hop that never ran:
+	 * a Landing window autocancelled the move on the touchdown frame, before the extension saw the ground). Valid for this tick only
+	 */
+	const FGSTN_CombatTimelineData* LandedTimeline = nullptr;
+
+	/**
 	 * The entity's actor and ability system, for an extension that must reach content or the tags of the entity (it projects tags from its
 	 * fragment at BeforeTagProjection). Null in a test. Read-only use of content: an extension never reads simulation state from them
 	 */

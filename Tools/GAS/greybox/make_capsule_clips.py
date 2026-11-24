@@ -37,6 +37,14 @@ MOVE_FILTER = [s.strip().lower() for s in os.environ.get('MOVE_FILTER', 'Overlor
 # Run 2: clips played as dynamic montages (the Playtest jab) are keyed by the sequence. SEQUENCE_FILTER picks AnimSequences by name under
 # the move roots; SEQUENCES adds exact paths (the capsule logs 'GSTN Greybox: no capsule override for montage ... playing <path>').
 SEQUENCE_FILTER = [s.strip().lower() for s in os.environ.get('SEQUENCE_FILTER', 'Jab,Punch,Kick,Attack').split(',') if s.strip()]
+# Round 7 (owner 2026-11-24, capsule on the ground): names never given a capsule clip, montages and sequences alike. The dropkick's tech
+# bounce is not an attack: its placeholder clip flipped the capsule between lying and upright every few frames (capture r7 v158-172); without
+# it the capsule lies with the driver's pelvis (UGSTN_GreyboxAnimInstance lying). MOVE_EXCLUDE="" restores it
+MOVE_EXCLUDE = [s.strip().lower() for s in os.environ.get('MOVE_EXCLUDE', 'TechBounce').split(',') if s.strip()]
+
+
+def excluded(name):
+    return any(x in name.lower() for x in MOVE_EXCLUDE)
 EXTRA_SEQUENCES = [s.strip() for s in os.environ.get('SEQUENCES', '').split(',') if s.strip()]
 # Run 2: share of the 'lean' the pelvis takes (the capsule hangs from it: without it the lower body never tilts)
 PELVIS_LEAN_SHARE = float(os.environ.get('PELVIS_LEAN_SHARE', '1.0'))  # run 3: rigid body on the pelvis (setup_greybox_assets RIGID_BODY)
@@ -389,7 +397,7 @@ def find_montages():
     for root in ('/Game/GSTN', '/Game/GAS', '/Game/Blueprints'):
         for data in reg.get_assets_by_path(root, recursive=True):
             name = str(data.asset_name)
-            if str(data.asset_class_path.asset_name) != 'AnimMontage' or not any(f in name.lower() for f in MOVE_FILTER):
+            if str(data.asset_class_path.asset_name) != 'AnimMontage' or not any(f in name.lower() for f in MOVE_FILTER) or excluded(name):
                 continue
             out.append(str(data.package_name))
     return sorted(set(out))
@@ -433,7 +441,7 @@ def find_sequences(covered):
     for root in ('/Game/GSTN', '/Game/GAS', '/Game/Blueprints'):
         for data in reg.get_assets_by_path(root, recursive=True):
             name = str(data.asset_name)
-            if str(data.asset_class_path.asset_name) == 'AnimSequence' and any(f in name.lower() for f in SEQUENCE_FILTER) \
+            if str(data.asset_class_path.asset_name) == 'AnimSequence' and any(f in name.lower() for f in SEQUENCE_FILTER) and not excluded(name) \
                     and not name.startswith('AS_GSTN_Greybox'):
                 out.add(str(data.package_name))
     return sorted(path for path in out if path.split('.')[0] not in covered)

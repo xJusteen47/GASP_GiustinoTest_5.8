@@ -14,6 +14,8 @@
 #include "GSTN_DefenceTags.h"
 #include "GSTNDefenceCoreModule.h"
 #include "Hits/GSTN_ImpactTypes.h"
+#include "Hits/GSTN_KnockbackModel.h"
+#include "Rules/GSTN_CombatRules.h"
 #include "Input/GSTN_ButtonMap.h"
 #include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_InputHistory.h"
@@ -383,6 +385,12 @@ void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FG
 	// Mover. Near zero gravity the bounce is capped at 10 s rather than never ending
 	const UGSTN_CombatSimComponent* GravitySim = Context.Owner ? Context.Owner->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
 	const double Gravity = GravitySim ? GravitySim->GetBaseGravity().Size() : FGSTN_GravityFrame::NominalGravity;
+	// The bounce flies as a knocked flight (a knockback move), so the combat rules' knocked gravity (owner 2026-11-24, 1A, KnockbackGravityScale 4)
+	// is already the mode's gravity under it, and the move's own scale multiplies it: 4 x 3 = 12 g, and a 25 cm hop rose about 9 cm in 4 frames
+	// (dropkick, capture r7). The move's scale is divided by it, so the bounce keeps the pull it was tuned for (GroundBounceGravityScale)
+	const UGSTN_CombatRules* CombatRules = GravitySim ? GravitySim->GetCombatRules() : nullptr;
+	const float KnockedScale = CombatRules && CombatRules->KnockbackModel && CombatRules->KnockbackModel->Tuning.KnockbackGravityScale > 0.f
+		? CombatRules->KnockbackModel->Tuning.KnockbackGravityScale : 1.f;
 	// The mini bounce ("tech bounce"), steered by the frame's stick: a short launch, the knockback move's flight. Its height follows the impact
 	// speed (owner 2026-11-16: a soft landing barely bounces, a hard one bounces well); the hit may ask for none
 	const double BounceSpeed = bNoBounce ? 0.0
@@ -402,7 +410,7 @@ void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FG
 	const int32 FlightFrames = FMath::Clamp(FMath::CeilToInt32(FMath::Min(FlightSeconds, 10.0) / FrameSeconds), 1, MaxFlightFrames);
 	if (!Velocity.IsNearlyZero())
 	{
-		ApplyMoveEffect(Context.AbilitySystem, UGSTN_GE_Knockback::StaticClass(), Velocity, 0.f, GravityScale, FlightFrames);
+		ApplyMoveEffect(Context.AbilitySystem, UGSTN_GE_Knockback::StaticClass(), Velocity, 0.f, GravityScale / KnockedScale, FlightFrames);
 	}
 	if (Data.GroundBounce.IsValid())
 	{
@@ -414,11 +422,13 @@ void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FG
 
 const FGSTN_SelfLandingBounceTrack* FGSTN_TumbleLanding::FindSelfLandingBounce(const FGSTN_CombatTickContext& Context)
 {
-	if (!Context.RunningTimeline)
+	// The move the clock just landed out of first: on that frame RunningTimeline is gone, or is the move's follow-up
+	const FGSTN_CombatTimelineData* Move = Context.LandedTimeline ? Context.LandedTimeline : Context.RunningTimeline;
+	if (!Move)
 	{
 		return nullptr;
 	}
-	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instanced : Context.RunningTimeline->Tracks)
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instanced : Move->Tracks)
 	{
 		if (const FGSTN_SelfLandingBounceTrack* Track = Instanced.GetPtr<FGSTN_SelfLandingBounceTrack>())
 		{
@@ -456,7 +466,16 @@ bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const 
 	}
 	FGSTN_DefenceFragment* Existing = FGSTN_SyncFragmentList::Find<FGSTN_DefenceFragment>(Context.Out.Fragments);
 	const bool bArmed = Existing && (Existing->HitFlags & GSTNDefenceHitFlags::SelfKnockdownArmed) != 0;
-	if (!IsSelfKnockdownWindowOpen(Context))
+	// Armed (airborne inside the window on the previous frame) and the clock took the move's landing on this frame: the move's own Landing
+	// window, follow-up or landing lag ended it before this hook (owner 2026-11-24: the dropkick's hop never ran, its Landing window
+	// autocancelled the move on the touchdown frame and the next frame found no window). The landing is this one
+	const bool bLandedOutOfMove = bArmed && Context.LandedTimeline != nullptr;
+	if (bLandedOutOfMove)
+	{
+		UE_LOG(LogGSTNDefence, Log, TEXT("SelfKnockdown: frame %d the clock landed the armed move (state %d after it)"), Context.Frame,
+			static_cast<int32>(Context.Out.Core.ActionState));
+	}
+	else if (!IsSelfKnockdownWindowOpen(Context))
 	{
 		// Outside the window (or the move is over) nothing stays armed: a later landing is an ordinary one
 		if (bArmed)
@@ -467,7 +486,7 @@ bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const 
 		}
 		return false;
 	}
-	if (!Context.bGrounded)
+	if (!bLandedOutOfMove && !Context.bGrounded)
 	{
 		if (!bArmed)
 		{

@@ -23,70 +23,70 @@ struct GSTNCOMBATCORE_API FGSTN_JumpDesignerTuning
 	GENERATED_BODY()
 
 	/** On: the ground jump's speed, the rise / cut / fall gravity scales and the hold frames come from here instead of the jump stats */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump Designer")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (DisplayName = "Jump Designer Enabled"))
 	bool bEnabled = false;
 
 	/** Height of the full jump (button held through the hold window), from the take-off point */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump Designer", meta = (EditCondition = "bEnabled", ClampMin = "10", ForceUnits = "cm"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (EditCondition = "bEnabled", ClampMin = "10", ForceUnits = "cm"))
 	float FullJumpHeight = 350.f;
 
 	/** Time from the take-off to the apex of the full jump */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump Designer", meta = (EditCondition = "bEnabled", ClampMin = "0.1", ClampMax = "3", ForceUnits = "s"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (EditCondition = "bEnabled", ClampMin = "0.1", ClampMax = "3", ForceUnits = "s"))
 	float TimeToApex = 0.5f;
 
 	/** Frames the button can extend the jump (the hold window, MaxJumpHoldFrames) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump Designer", meta = (EditCondition = "bEnabled", ClampMin = "1", ClampMax = "120", ForceUnits = "Frames"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (EditCondition = "bEnabled", ClampMin = "1", ClampMax = "120", ForceUnits = "Frames"))
 	int32 MaxHoldFrames = 30;
 
 	/** Frames the jump is held at least, however short the press (MinJumpHoldFrames): sets the short hop */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump Designer", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "60", ForceUnits = "Frames"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "60", ForceUnits = "Frames"))
 	int32 MinHoldFrames = 0;
 
 	/** Held gravity over the fall gravity (the float of the hold). 2.6 / 9 = the qaz1xr default */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump Designer", meta = (EditCondition = "bEnabled", ClampMin = "0.05", ClampMax = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (EditCondition = "bEnabled", ClampMin = "0.05", ClampMax = "1"))
 	float HoldToFallGravityRatio = 0.29f;
 
 	/** Gravity after an early release over the fall gravity (1 = the qaz1xr default, cut = fall) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump Designer", meta = (EditCondition = "bEnabled", ClampMin = "0.2", ClampMax = "4"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (EditCondition = "bEnabled", ClampMin = "0.2", ClampMax = "4"))
 	float CutToFallGravityRatio = 1.f;
 
 	/** Frames the gravity takes to grow after the hold ends (replaces the jump ability's CutRampFrames while the designer is on) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump Designer", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "60", ForceUnits = "Frames"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "60", ForceUnits = "Frames"))
 	int32 CutRampFrames = 3;
 
 	/** What MaxHoldFrames ends (replaces the jump ability's GravityModel while the designer is on) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump Designer", meta = (EditCondition = "bEnabled"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (EditCondition = "bEnabled"))
 	EGSTN_JumpGravityModel GravityModel = EGSTN_JumpGravityModel::HoldWindow;
 
 	/** The world gravity the scales multiply (Mover's, UE default 980) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump Designer", meta = (EditCondition = "bEnabled", ClampMin = "1", ForceUnits = "cm/s^2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (EditCondition = "bEnabled", ClampMin = "1", ForceUnits = "cm/s^2"))
 	float WorldGravity = 980.f;
 
 	/** Derived, read only: the ground jump's take-off speed (replaces the JumpVelocity stat) */
-	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump Designer|Derived", meta = (ForceUnits = "cm/s"))
+	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump|Derived (read only)", meta = (ForceUnits = "cm/s"))
 	float DerivedJumpVelocity = 0.f;
 
-	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump Designer|Derived")
+	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump|Derived (read only)")
 	float DerivedRiseGravityScale = 0.f;
 
-	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump Designer|Derived")
+	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump|Derived (read only)")
 	float DerivedCutGravityScale = 0.f;
 
-	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump Designer|Derived")
+	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump|Derived (read only)")
 	float DerivedFallGravityScale = 0.f;
 
 	/** Measured at the sim rate (62.5 Hz) with the real state machine: full jump height and frames to its apex */
-	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump Designer|Derived", meta = (ForceUnits = "cm"))
+	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump|Derived (read only)", meta = (ForceUnits = "cm"))
 	float ResultFullHeight = 0.f;
 
-	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump Designer|Derived", meta = (ForceUnits = "Frames"))
+	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump|Derived (read only)", meta = (ForceUnits = "Frames"))
 	int32 ResultFullApexFrames = 0;
 
 	/** The short hop: released as early as MinHoldFrames allows */
-	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump Designer|Derived", meta = (ForceUnits = "cm"))
+	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump|Derived (read only)", meta = (ForceUnits = "cm"))
 	float ResultMinHeight = 0.f;
 
-	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump Designer|Derived", meta = (ForceUnits = "Frames"))
+	UPROPERTY(VisibleAnywhere, Transient, BlueprintReadOnly, Category = "Jump|Derived (read only)", meta = (ForceUnits = "Frames"))
 	int32 ResultMinApexFrames = 0;
 
 	/** True once the derived values match the inputs (Refresh ran) */
