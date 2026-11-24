@@ -1,0 +1,22 @@
+{
+ "tag": "approved/dair-v9",
+ "approved_path": "Content/GASNPPTest/Combat/Overlord/AS_OverlordDAirV9.uasset",
+ "approved_blob": "e84836a66095c3583b3c914773f2578ee464ac8d",
+ "moved_path": "Content/GSTN/Characters/Overlord/Moves/DAir/AS_OverlordDAirV9.uasset",
+ "moved_blob": "d184300bab646914f08d62ec61788c6d44e4e40f",
+ "max_cm": 0.0,
+ "max_deg": 3e-06,
+ "frames": 42,
+ "tracks": 93,
+ "tolerance": {
+  "cm": 0.001,
+  "deg": 0.001
+ },
+ "tool": "Tools/Reorg/compare_moved_anim.py",
+ "date": "2026-11-24T18:04Z",
+ "log": [
+  "frames 42 / 42, tracce 93 / 93, skeleton /Game/Characters/UEFN_Mannequin/Meshes/SK_UEFN_Mannequin.SK_UEFN_Mannequin / /Game/Characters/UEFN_Mannequin/Meshes/SK_UEFN_Mannequin.SK_UEFN_Mannequin",
+  "max delta 0.000000 cm, 0.000003 deg (thigh_l f1); curve 0 / 0; notify 0 / 0",
+  "CONFRONTO: OK /Game/GASNPPTest/Combat/Overlord/AS_OverlordDAirV9 vs /Game/GSTN/Characters/Overlord/Moves/DAir/AS_OverlordDAirV9"
+ ]
+}
