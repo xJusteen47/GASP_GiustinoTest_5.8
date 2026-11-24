@@ -95,6 +95,14 @@ bool FGSTN_GreyboxShapeTest::RunTest(const FString& Parameters)
 		Settings.SprintSwaySpeed * 1.5f, 0.f), Settings.SprintSwayScale));
 	TestTrue(TEXT("sprint leans forward"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RunForwardLeanDeg(Settings, Settings.SprintSwaySpeed),
 		Settings.SprintForwardLeanDeg) && FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::RunForwardLeanDeg(Settings, 0.f)));
+	// Run drive (owner 2026-11-24): frantic in the stamp, then as long as the speed climbs; the dash pose eases out
+	TestTrue(TEXT("stamp = full drive"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::DriveGoal(Settings, true, 0.f), 1.f));
+	TestTrue(TEXT("cruising = no effort"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::EffortAlpha(Settings, 100.f)));
+	TestTrue(TEXT("braking = no effort"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::EffortAlpha(Settings, -5000.f)));
+	TestTrue(TEXT("ramp = full effort"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::EffortAlpha(Settings, Settings.EffortFullAcceleration), 1.f));
+	TestTrue(TEXT("dash pose full at the boost"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::DashPoseAlpha(Settings, 0.f), 1.f));
+	TestTrue(TEXT("dash pose over after its time"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::DashPoseAlpha(Settings, Settings.DashPoseSeconds + 0.01f)));
+	TestTrue(TEXT("no boost = no dash pose"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::DashPoseAlpha(Settings, -1.f)));
 	{
 		// One frame spike of the raw acceleration (a frame with two sim steps) is cut, a held one is reached
 		const FVector Spike = UGSTN_GreyboxAnimInstance::FilterAcceleration(Settings, FVector::ZeroVector, FVector(6000.f, 0.f, 0.f), 1.f / 120.f);
