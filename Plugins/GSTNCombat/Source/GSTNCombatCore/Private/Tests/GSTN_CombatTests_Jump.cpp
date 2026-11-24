@@ -561,8 +561,8 @@ bool FGSTN_JumpKnockedFlightTest::RunTest(const FString& Parameters)
 	const FGSTN_JumpState Jumped = FGSTN_JumpLogic::ApplyTakeoff(Descending, 150, 5, EGSTN_JumpKind::Air);
 	TestFalse(TEXT("own jump ends it"), Jumped.bKnocked);
 	FGSTN_JumpMoverSample Ground;
-	const FGSTN_JumpState Landed = FGSTN_JumpLogic::Step(Descending, 160, Ground, false, Params, Rules);
-	TestFalse(TEXT("landing ends it"), Landed.bKnocked);
+	const FGSTN_JumpState AfterLanding = FGSTN_JumpLogic::Step(Descending, 160, Ground, false, Params, Rules);
+	TestFalse(TEXT("landing ends it"), AfterLanding.bKnocked);
 
 	// Hit in the hold phase of its own jump: the jump is over (no hold gravity, no glide button)
 	const FGSTN_JumpState Own = FGSTN_JumpLogic::ApplyTakeoff(FGSTN_JumpState(), 10, 5, EGSTN_JumpKind::Ground);
