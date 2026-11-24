@@ -138,17 +138,20 @@ def _lanci_wall(seq):
 
 
 def _lanci_wall_row(seq, frame):
-    w = st.get('lanci_wall')
+    # LANCI_ROWS=1: the same rows without a wall (wall_cm/vin None), for the floor bounce diagnosis
+    w = st.get('lanci_wall') or ({'origin': None} if os.environ.get('LANCI_ROWS') == '1' else None)
     if not w or not st.get('dummy_key'):
         return
     dv = g.snap(g.worlds()[0])[st['dummy_key']]
     loc, vel = dv['location'], dv.get('velocity', (0, 0, 0))
-    row = {'f': frame, 'wall_cm': round((w['origin'][0] - loc[0]) * w['fwd'][0] + (w['origin'][1] - loc[1]) * w['fwd'][1], 1),
-           'vin': round(vel[0] * w['fwd'][0] + vel[1] * w['fwd'][1]), 'vz': round(vel[2]), 'z': round(loc[2], 1), 'tags': dv.get('tags'),
-           'mode': dv.get('mode')}
+    o = w['origin']
+    row = {'f': frame, 'wall_cm': round((o[0] - loc[0]) * w['fwd'][0] + (o[1] - loc[1]) * w['fwd'][1], 1) if o else None,
+           'vin': round(vel[0] * w['fwd'][0] + vel[1] * w['fwd'][1]) if o else None, 'vel': [round(x) for x in vel], 'vz': round(vel[2]),
+           'z': round(loc[2], 1), 'tags': dv.get('tags'), 'mode': dv.get('mode'), 'sim_frame': (dv.get('combat') or {}).get('historyFrame')}
     try:
         cc = g._hit_comp(0, st['dummy_key'])
         row['impact'], row['counts'] = cc.get_impact_info(), cc.get_impact_counts()
+        row['dbg'], row['slaunch'] = cc.get_impact_debug(), cc.get_surface_launch_info()
     except Exception as e:  # noqa: BLE001
         row['impact'] = repr(e)[:40]
     with open(os.path.join(_seq_dir(seq), 'lanci_wall.jsonl'), 'a') as f:
