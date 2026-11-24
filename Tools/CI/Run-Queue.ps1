@@ -1,6 +1,6 @@
 <#
 Run-Queue.ps1 - deterministic queue dispatcher (Regola 15f, 0 LLM tokens for scheduling).
-Reads handoffs/queue.json, skips blocked/unmet items, requires explicit isolated -Cwd per item,
+Reads the queue file (-QueueFile or GSTN_QUEUE_FILE; project files handoffs/queue.json), skips blocked/unmet items, requires explicit isolated -Cwd per item,
 does NOT count exit 2 (RIFIUTATO) as a failed attempt, enforces R5-bis (needs_diagnosis after max_attempts),
 launches a fresh Invoke-Worker.ps1 per runnable item, and persists queue.json atomically.
 Prints at most 5 lines.
@@ -198,7 +198,10 @@ exit 0
     exit $(if ($allOk) { 0 } else { 1 })
 }
 
-if (-not $QueueFile) { $QueueFile = Join-Path $Root 'handoffs\queue.json' }
+# The queue is the coordinator's, not the repo's (cleanup plan 2026-11-24): the file lives in the project files handoffs/ folder.
+# Pass -QueueFile, or set GSTN_QUEUE_FILE; the old repo copy was removed.
+if (-not $QueueFile) { $QueueFile = $env:GSTN_QUEUE_FILE }
+if (-not $QueueFile) { Write-Output 'ESITO: RIFIUTATO - manca la coda: passa -QueueFile o imposta GSTN_QUEUE_FILE (handoffs/queue.json non e piu nel repo)'; exit 2 }
 $res = Invoke-QueuePass -Path $QueueFile -TargetMachine $Machine -Limit $MaxItems -IsDryRun ([bool]$DryRun) -WorkerPath $WorkerScript
 $res.Lines | Select-Object -First 5 | ForEach-Object { Write-Output $_ }
 exit $res.Exit
