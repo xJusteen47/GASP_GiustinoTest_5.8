@@ -27,6 +27,20 @@ Thread cloud, Opus, 2026-11-24. Branch `claude/project-thread-e7z54v` da `origin
 7. Un commit dei binari sullo stesso branch, PR verso main, `_ue59` riallineato dopo.
 - Branch vivi con binari nei vecchi percorsi (capsula, lanci): dopo il merge si allineano con `reorg_apply.py` + `REORG_MAP=content-map-2b.csv` e `reorg_rewrite.py --map ...`.
 
-ESITO: PARZIALE preparazione cloud fatta e controllata (check_2b 0 problemi), spostamento sul fisso non ancora fatto
+## Fatto sul fisso (2026-11-24 16:10-16:50Z, checkout principale, scelta owner A)
+- Stash `pre-reorg-2b WIP` (`_ue59/IN-USO.txt` "libero" + `Content/Blueprints/NewBlueprint{1,2}`), backup `Saved/Backups/Reorg-2b/` (DA_Locomotion_Default + zip GASNPPTest/Config), tag locale `pre-reorg-2b-2026-11-24`. Main era già dentro.
+- Inventario: 276 asset, 0 fuori da git, 0 senza regola. Apply: 275 spostati, 275 redirector tolti, 109 referencer risalvati, `DA_Locomotion_Default` ASPETTA OWNER (resta in `GASNPPTest/Combat/`, intatto: hash uguale). Nessun redirector rimasto (il DA non punta a nulla di spostato; i kit puntano al DA, che non si muove). `check_2b`: 0 problemi.
+- `reorg_apply.py`: il commandlet tiene aperto il pacchetto redirector, `os.remove` falliva (WinError 32) -> ora scrive `REDIRECTOR DA TOGLIERE <file>` e il chiamante lo cancella a editor chiuso (57 file); un redirector rimasto al vecchio percorso non conta più come asset (prima un secondo giro dava CONFLITTO). Terzo giro: 275 GIA FATTO + 1 ASPETTA OWNER.
+- GSTNDefence è spento di default: l'Asset Registry del commandlet non vedeva i suoi `GA_Getup{Neutral,Roll,RollBack}_Test`, rimasti sui vecchi `AM_React_*` (lo smoke li segnalava). Ripuntati con `Tools/Reorg/fix_getup_montages_2b.py` (solo il montage della timeline). Da ricordare per i branch vivi.
+- Gate pose approvate: `AS_OverlordDAirV9` (approved/dair-v9) spostato -> blob diverso (il nome del pacchetto è dentro il .uasset). `regress.py` ora cerca il file con lo stesso nome al tag e confronta il blob (resta FAIL, ma dice "moved from"). Prova: `Tools/Reorg/compare_moved_anim.py` (vecchio file rimesso al vecchio percorso dal backup, sha = tag): 42/42 frame, 93 tracce, delta max 0.000000 cm / 0.000003 gradi, 0 curve, 0 notify -> animazione identica. Build fatte con `-SkipRegress`. Anche `Published/dair/v9/AM_OverlordDAirV9` risalvato (riferimenti). **Decisione owner** (sotto).
+- Prove: Build OK (`Saved/Logs/ci/build-2b.log`); Test GSTN **1937 ok, 0 fail** (`test-2b.log.ue.log`; i 2 fail noti Loadout.Screen ora passano) dopo il fix di un crash in `GSTN_CosmeticsCoreTests.cpp:266` (`Slots.Add(Slots[0])` asseriva alla riallocazione, arrivato da main); smoke hub `SMOKE: OK` (`smoke-2b.log.ue.log`). Grep: nessun `/Game/GASNPPTest/` mancante; resta `DA_GSTN_SurfaceResponse_Default` non trovato, già noto prima (neck-hold-desync-2), non 2b.
+- Non fatto: cartelle vuote sotto `Content/GASNPPTest/` (Combat/*, Examples, Input, Stance, TestMaps) non cancellate (comando negato dal permesso); git non le vede, si tolgono a mano. Harness PIE e kit da `gstn.Debug.KitAtStart` non provati.
+
+## Decisione per l'owner (gate dair v9)
+A (consigliata) tag nuovo `approved/dair-v9-2b` sul commit dello spostamento + riga in `anim-approvate.md`: il vecchio tag resta, il gate torna verde senza ammorbidirlo; costo ~0.3 $.
+B `regress.py` accetta un file spostato solo con una prova ossa registrata (json in `approved-dumps/`): più generale, ~1 $.
+Finché non si sceglie, ogni `-Preset Build` su questo branch va con `-SkipRegress`.
+
+ESITO: PARZIALE spostamento 2b fatto e provato (build, 1937 test, smoke); manca la scelta owner sul gate dair v9 e DA_Locomotion_Default con l'owner
 SUBAGENTI: 0
-COSTO: ~4 $ | 0 minuti desktop | 0 token review
+COSTO: ~4 $ cloud + ~6 $ fisso | 40 minuti desktop | 0 token review

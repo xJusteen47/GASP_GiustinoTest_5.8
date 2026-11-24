@@ -120,6 +120,20 @@ def resolve(row, files):
     return sorted(set(in_git)), sorted(set(loose))
 
 
+def _moved_at_tag(tag, path):
+    """[(path at the tag, blob)] of the files at the tag with the same file name as `path` (an asset moved since approval)."""
+    out, rc = git('ls-tree', '-r', tag)
+    if rc != 0 or not out:
+        return []
+    base = os.path.basename(path)
+    hits = []
+    for line in out.splitlines():
+        meta, _, p = line.partition('\t')
+        if os.path.basename(p) == base:
+            hits.append((p, meta.split()[2]))
+    return hits
+
+
 def locks():
     p = os.path.join(ROOT, LOCKS)
     if not os.path.exists(p):
@@ -201,6 +215,16 @@ def check_row(row, files, lk, tol_cm=TOL_CM, allow_missing_tag=False):
                 res['checked'][p] = {'now': h, 'published': pub, 'same': h == pub}
                 if h != pub:
                     res['why'].append(f'{tag}: {p} CHANGED since publish (sha256 {pub[:10]} -> {h[:10]})')
+                continue
+            # A Content reorganisation moves the approved asset without touching it (phase 2b, 2026-11-24): the baseline is the
+            # file with the same name at the tag, and it must be the SAME blob. Several candidates or a different blob stay a FAIL.
+            moved = _moved_at_tag(tag, p)
+            if len(moved) == 1:
+                at_tag = moved[0][1]
+                res['checked'][p] = {'now': now, 'at_tag': at_tag, 'moved_from': moved[0][0], 'same': at_tag == now}
+                if at_tag != now:
+                    res['why'].append(f'{tag}: {p} (moved from {moved[0][0]}) CHANGED since the tag '
+                                      f'(approved blob {at_tag[:10]}, now {now[:10]})')
                 continue
             res['why'].append(f'{tag}: {p} does not exist at the tag (approved under another path?)')
             continue

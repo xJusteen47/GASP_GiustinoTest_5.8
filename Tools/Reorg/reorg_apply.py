@@ -31,7 +31,11 @@ ar = unreal.AssetRegistryHelpers.get_asset_registry()
 def exists(path):
     # A package copied on disk keeps its old asset name in the registry (DefaultLevel_Harness reports 'DefaultLevel'),
     # so does_asset_exist misses it: fall back to the package.
-    return eal.does_asset_exist(path) or bool(ar.get_assets_by_package_name(path))
+    # A redirector left at the old path of a done row is not the asset: without this a re-run reports CONFLITTO.
+    data = ar.get_assets_by_package_name(path)
+    if data and all(str(d.asset_class_path.asset_name) == 'ObjectRedirector' for d in data):
+        return False
+    return eal.does_asset_exist(path) or bool(data)
 
 
 def rename(old, new):
@@ -105,7 +109,13 @@ if not DRY:
         for ext in ('.uasset', '.umap'):
             f = os.path.join(ROOT, rel + ext)
             if os.path.exists(f):
-                os.remove(f)
+                try:
+                    os.remove(f)
+                except PermissionError:
+                    # The commandlet itself keeps the redirector package open once loaded: the caller deletes it on disk
+                    # after the editor exits (every file listed here was checked to have no referencer left).
+                    lines.append(f'REDIRECTOR DA TOGLIERE {f}')
+                    continue
                 fixed += 1
                 lines.append(f'REDIRECTOR TOLTO {pkg}')
     for d in sorted({r['new'].strip().rsplit('/', 1)[0] for r in rows}):
