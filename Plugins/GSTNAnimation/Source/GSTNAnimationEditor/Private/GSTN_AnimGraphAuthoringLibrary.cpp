@@ -1171,6 +1171,150 @@ bool UGSTN_AnimGraphAuthoringLibrary::SetPoseNodeProperty(UAnimBlueprint* AnimBl
 	return true;
 }
 
+bool UGSTN_AnimGraphAuthoringLibrary::SetNodeProperty(UEdGraphNode* Node, FName PropertyName, const FString& ValueText)
+{
+	UAnimGraphNode_Base* AnimNode = Cast<UAnimGraphNode_Base>(Node);
+	const FStructProperty* NodeProperty = AnimNode ? CastField<FStructProperty>(AnimNode->GetClass()->FindPropertyByName(TEXT("Node"))) : nullptr;
+	const FProperty* Inner = NodeProperty ? NodeProperty->Struct->FindPropertyByName(PropertyName) : nullptr;
+	if (!Inner)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("SetNodeProperty: %s has no runtime property %s"), *GetNameSafe(Node), *PropertyName.ToString());
+		return false;
+	}
+	AnimNode->Modify();
+	void* NodeData = NodeProperty->ContainerPtrToValuePtr<void>(AnimNode);
+	if (!Inner->ImportText_InContainer(*ValueText, NodeData, AnimNode, PPF_None))
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("SetNodeProperty: could not read '%s' as %s"), *ValueText, *PropertyName.ToString());
+		return false;
+	}
+	if (UBlueprint* Blueprint = GetBlueprint(AnimNode->GetGraph()))
+	{
+		FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
+	}
+	return true;
+}
+
+bool UGSTN_AnimGraphAuthoringLibrary::BindNodePinToProperty(UEdGraphNode* Node, FName PinName, const TArray<FString>& PropertyPath)
+{
+	UAnimGraphNode_Base* AnimNode = Cast<UAnimGraphNode_Base>(Node);
+	UEdGraph* Graph = AnimNode ? AnimNode->GetGraph() : nullptr;
+	UBlueprint* Blueprint = GetBlueprint(Graph);
+	UClass* PropertyAccessClass = FindObject<UClass>(nullptr, TEXT("/Script/PropertyAccessNode.K2Node_PropertyAccess"));
+	FArrayProperty* PathProperty = PropertyAccessClass ? FindFProperty<FArrayProperty>(PropertyAccessClass, TEXT("Path")) : nullptr;
+	if (!AnimNode || !Graph || !Blueprint || PropertyPath.IsEmpty() || !PathProperty)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("BindNodePinToProperty: needs an anim graph node, a property path and the PropertyAccessNode plugin"));
+		return false;
+	}
+
+	// Expose the pin (the node's optional pins are its runtime properties)
+	AnimNode->Modify();
+	bool bFoundOptional = false;
+	for (FOptionalPinFromProperty& Optional : AnimNode->ShowPinForProperties)
+	{
+		if (Optional.PropertyName == PinName)
+		{
+			Optional.bShowPin = true;
+			bFoundOptional = true;
+		}
+	}
+	if (bFoundOptional)
+	{
+		AnimNode->ReconstructNode();
+	}
+	UEdGraphPin* Pin = AnimNode->FindPin(PinName, EGPD_Input);
+	if (!Pin)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("BindNodePinToProperty: %s has no input pin %s"), *AnimNode->GetName(), *PinName.ToString());
+		return false;
+	}
+
+	// Rebuild: drop the property access node that fed the pin before, if any
+	if (UEdGraphPin* Old = LinkedPin(Pin))
+	{
+		UEdGraphNode* OldNode = Old->GetOwningNode();
+		Pin->BreakAllPinLinks();
+		if (OldNode && OldNode->GetClass() == PropertyAccessClass)
+		{
+			FBlueprintEditorUtils::RemoveNode(Blueprint, OldNode, /*bDontRecompile*/ true);
+		}
+	}
+
+	UK2Node* PropertyAccess = NewObject<UK2Node>(Graph, PropertyAccessClass, NAME_None, RF_Transactional);
+	Graph->AddNode(PropertyAccess, false, false);
+	PropertyAccess->CreateNewGuid();
+	*PathProperty->ContainerPtrToValuePtr<TArray<FString>>(PropertyAccess) = PropertyPath;
+	PropertyAccess->PostPlacedNewNode();
+	PropertyAccess->AllocateDefaultPins();
+	PropertyAccess->NodePosX = AnimNode->NodePosX - 360;
+	PropertyAccess->NodePosY = AnimNode->NodePosY + 40 * AnimNode->Pins.IndexOfByKey(Pin);
+	UEdGraphPin* Value = PropertyAccess->FindPin(TEXT("Value"), EGPD_Output);
+	if (!Value || !Connect(Value, Pin))
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("BindNodePinToProperty: %s does not resolve or does not fit pin %s"),
+			*FString::Join(PropertyPath, TEXT(".")), *PinName.ToString());
+		return false;
+	}
+	FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
+	return true;
+}
+
+bool UGSTN_AnimGraphAuthoringLibrary::CopyNodeSettingsFrom(UEdGraphNode* Target, UAnimBlueprint* SourceBlueprint)
+{
+	UAnimGraphNode_Base* TargetNode = Cast<UAnimGraphNode_Base>(Target);
+	if (!TargetNode || !SourceBlueprint)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("CopyNodeSettingsFrom: needs an anim graph node and a source anim Blueprint"));
+		return false;
+	}
+	TArray<UEdGraph*> Graphs;
+	SourceBlueprint->GetAllGraphs(Graphs);
+	const UAnimGraphNode_Base* SourceNode = nullptr;
+	for (const UEdGraph* Graph : Graphs)
+	{
+		for (const UEdGraphNode* Node : Graph ? Graph->Nodes : TArray<TObjectPtr<UEdGraphNode>>())
+		{
+			if (Node && Node->GetClass() == TargetNode->GetClass())
+			{
+				SourceNode = Cast<UAnimGraphNode_Base>(Node);
+				break;
+			}
+		}
+		if (SourceNode)
+		{
+			break;
+		}
+	}
+	const FStructProperty* NodeProperty = CastField<FStructProperty>(TargetNode->GetClass()->FindPropertyByName(TEXT("Node")));
+	if (!SourceNode || !NodeProperty)
+	{
+		UE_LOG(LogGSTNAnimGraphAuthoring, Error, TEXT("CopyNodeSettingsFrom: no %s in %s"), *TargetNode->GetClass()->GetName(), *SourceBlueprint->GetName());
+		return false;
+	}
+	TargetNode->Modify();
+	NodeProperty->Struct->CopyScriptStruct(NodeProperty->ContainerPtrToValuePtr<void>(TargetNode), NodeProperty->ContainerPtrToValuePtr<void>(SourceNode));
+	if (UBlueprint* Blueprint = GetBlueprint(TargetNode->GetGraph()))
+	{
+		FBlueprintEditorUtils::MarkBlueprintAsModified(Blueprint);
+	}
+	return true;
+}
+
+TArray<UEdGraphNode*> UGSTN_AnimGraphAuthoringLibrary::FindAnimGraphNodes(UAnimBlueprint* AnimBlueprint, UClass* NodeClass)
+{
+	TArray<UEdGraphNode*> Found;
+	UEdGraph* AnimGraph = FindGraph(AnimBlueprint, UEdGraphSchema_K2::GN_AnimGraph);
+	for (UEdGraphNode* Node : AnimGraph && NodeClass ? AnimGraph->Nodes : TArray<TObjectPtr<UEdGraphNode>>())
+	{
+		if (Node && Node->IsA(NodeClass))
+		{
+			Found.Add(Node);
+		}
+	}
+	return Found;
+}
+
 bool UGSTN_AnimGraphAuthoringLibrary::SetChildAssetOverride(UAnimBlueprint* ChildBlueprint, FName StateName, UAnimationAsset* Asset)
 {
 	UAnimBlueprint* Parent = ChildBlueprint ? UAnimBlueprint::GetParentAnimBlueprint(ChildBlueprint) : nullptr;

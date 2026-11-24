@@ -3,6 +3,8 @@
 //                      from the kit skin), both carrying our GSTN nodes and layers
 //   gstn.Loco.Base 1 = clean base: /Game/GSTN/Locomotion/StockBase/ABP_GSTN_StockMover (untouched GASP sample copy with its
 //                      own chooser copies)
+//   gstn.Loco.Base 2 = simple greybox base: /Game/GSTN/Greybox/ABP_GSTN_SimpleLoco (UGSTN_SimpleLocoAnimInstance: a state machine that
+//                      only feeds choosers, no motion matching; greybox-capsula, owner 2026-11-24 2A)
 // Only pawn meshes running one of the current base classes are swapped, so ragdolls, NPCs and other ABPs keep theirs.
 // The skin component sets its AnimClass after spawn (and again on kit/skin changes), so the swap is re-checked every frame
 // instead of once at spawn: a class change by anyone else is caught on the next tick. Setting 0 again restores the class each
@@ -25,7 +27,9 @@ class GASP_GIUSTINO2_API UGSTN_LocoBaseSubsystem : public UTickableWorldSubsyste
 public:
 	static constexpr const TCHAR* StockBaseClassPath = TEXT("/Game/GSTN/Locomotion/StockBase/ABP_GSTN_StockMover.ABP_GSTN_StockMover_C");
 
-	/** 0 = current base, 1 = clean stock base. */
+	static constexpr const TCHAR* SimpleBaseClassPath = TEXT("/Game/GSTN/Greybox/ABP_GSTN_SimpleLoco.ABP_GSTN_SimpleLoco_C");
+
+	/** 0 = current base, 1 = clean stock base, 2 = simple greybox base. */
 	static int32 GetSelectedBase();
 
 	/** True for the anim classes that count as "current base" (swapped out when the clean base is selected). */
@@ -41,6 +45,10 @@ private:
 	void HandleActorSpawned(AActor* Actor);
 	void ApplyToMesh(USkeletalMeshComponent* Mesh);
 	UClass* GetStockClass();
+	UClass* GetSimpleClass();
+
+	/** The class the selected base wants (null for 0 or when it fails to load) */
+	UClass* GetTargetClass();
 
 	FDelegateHandle SpawnHandle;
 
@@ -52,4 +60,6 @@ private:
 
 	TWeakObjectPtr<UClass> StockClass;
 	bool bStockLoadFailed = false;
+	TWeakObjectPtr<UClass> SimpleClass;
+	bool bSimpleLoadFailed = false;
 };

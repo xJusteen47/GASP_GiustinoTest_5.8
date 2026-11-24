@@ -3,6 +3,7 @@ using UnrealBuildTool;
 // Feature animation decoupled from the main graph (anim-layers.md). Allowed edges: engine modules only. Presentation code: the
 // project, the combat plugins and feature plugins may depend on it, but no simulation code may call it, and it must never depend on
 // GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, Mover or another GSTN plugin.
+// Engine plugin Chooser is allowed (chooser player node).
 public class GSTNAnimationCore : ModuleRules
 {
 	public GSTNAnimationCore(ReadOnlyTargetRules Target) : base(Target)
@@ -15,7 +16,8 @@ public class GSTNAnimationCore : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"GameplayTags",
-			"AnimationCore"   // two-bone IK solver of the blend-out foot lock node
+			"AnimationCore",  // two-bone IK solver of the blend-out foot lock node
+			"Chooser"         // chooser player node (greybox simple locomotion): its Chooser property is a UChooserTable
 		});
 
 		// Finds the plugin's own Config/Tags folder to register it with the tag manager

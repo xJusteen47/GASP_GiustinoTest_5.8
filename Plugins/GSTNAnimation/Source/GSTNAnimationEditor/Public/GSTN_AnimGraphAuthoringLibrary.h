@@ -164,6 +164,33 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
 	static bool SetPoseNodeProperty(UAnimBlueprint* AnimBlueprint, UClass* NodeClass, FName PropertyName, const FString& ValueText);
 
+	/**
+	 * Sets one property of the runtime node (the "Node" struct) of one given anim graph node, from text: the per-node form of
+	 * SetPoseNodeProperty, for nodes inside states (e.g. the chooser of a GSTN Chooser Player). True if set
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
+	static bool SetNodeProperty(UEdGraphNode* Node, FName PropertyName, const FString& ValueText);
+
+	/**
+	 * Shows the pin of the runtime node property PinName on an anim graph node (e.g. Alpha or LocomotionAngle of a warping node) and drives
+	 * it from a Property Access node reading PropertyPath on the anim instance (e.g. ["OrientationWarpAlpha"]). Rebuilt on every call, so a
+	 * second run does not stack nodes. True if linked
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
+	static bool BindNodePinToProperty(UEdGraphNode* Node, FName PinName, const TArray<FString>& PropertyPath);
+
+	/**
+	 * Copies the whole runtime node struct (bones, modes, values) of the first node of Target's class found in SourceBlueprint (any graph)
+	 * onto Target, e.g. the GASP stock ABP's configured Orientation / Stride Warping onto a new graph's warping nodes. Pin links and
+	 * bindings are not copied. True if copied
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
+	static bool CopyNodeSettingsFrom(UEdGraphNode* Target, UAnimBlueprint* SourceBlueprint);
+
+	/** Every node of NodeClass in AnimBlueprint's AnimGraph, in graph order (nodes nested in states are not included) */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Anim Graph Authoring")
+	static TArray<UEdGraphNode*> FindAnimGraphNodes(UAnimBlueprint* AnimBlueprint, UClass* NodeClass);
+
 	//~ Child anim Blueprints (skin variants, anim-layers.md part B)
 
 	/**

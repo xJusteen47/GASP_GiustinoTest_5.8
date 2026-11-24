@@ -14,7 +14,8 @@ namespace GSTNLocoBase
 	static TAutoConsoleVariable<int32> CVarLocoBase(
 		TEXT("gstn.Loco.Base"), 1,
 		TEXT("Main anim graph of the GASP Mover characters. 0 = current base (SandboxCharacter_Mover_ABP / ABP_GSTN_Locomotion ")
-		TEXT("with our nodes), 1 = clean GASP stock copy (ABP_GSTN_StockMover + CHT_GSTN_StockMover_PoseMatch). Live: applied on ")
+		TEXT("with our nodes), 1 = clean GASP stock copy (ABP_GSTN_StockMover + CHT_GSTN_StockMover_PoseMatch), 2 = simple greybox ")
+		TEXT("graph (ABP_GSTN_SimpleLoco: state machine + choosers, no motion matching). Live: applied on ")
 		TEXT("the next frame; restart Play for a fair comparison (pose history, montages)."),
 		ECVF_Default);
 
@@ -70,7 +71,8 @@ namespace GSTNLocoBase
 
 int32 UGSTN_LocoBaseSubsystem::GetSelectedBase()
 {
-	return GSTNLocoBase::CVarLocoBase.GetValueOnGameThread() == 1 ? 1 : 0;
+	const int32 Value = GSTNLocoBase::CVarLocoBase.GetValueOnGameThread();
+	return Value == 1 || Value == 2 ? Value : 0;
 }
 
 bool UGSTN_LocoBaseSubsystem::IsCurrentBaseClass(const UClass* AnimClass)
@@ -157,27 +159,56 @@ UClass* UGSTN_LocoBaseSubsystem::GetStockClass()
 	return StockClass.Get();
 }
 
+UClass* UGSTN_LocoBaseSubsystem::GetSimpleClass()
+{
+	if (!SimpleClass.IsValid() && !bSimpleLoadFailed)
+	{
+		SimpleClass = LoadClass<UAnimInstance>(nullptr, SimpleBaseClassPath);
+		bSimpleLoadFailed = !SimpleClass.IsValid();
+		if (bSimpleLoadFailed)
+		{
+			UE_LOG(LogGSTNLocoBase, Warning, TEXT("gstn.Loco.Base: cannot load %s, meshes keep their class"), SimpleBaseClassPath);
+		}
+	}
+	return SimpleClass.Get();
+}
+
+UClass* UGSTN_LocoBaseSubsystem::GetTargetClass()
+{
+	switch (GetSelectedBase())
+	{
+	case 1:
+		return GetStockClass();
+	case 2:
+		return GetSimpleClass();
+	default:
+		return nullptr;
+	}
+}
+
 void UGSTN_LocoBaseSubsystem::ApplyToMesh(USkeletalMeshComponent* Mesh)
 {
 	UClass* Current = Mesh->GetAnimClass();
-	if (GetSelectedBase() == 1)
+	// A base we put (stock or simple) can be swapped for the other one; the original class is the one before the first swap
+	const bool bOurs = Current && ((StockClass.IsValid() && Current == StockClass.Get()) || (SimpleClass.IsValid() && Current == SimpleClass.Get()));
+	if (GetSelectedBase() != 0)
 	{
-		if (!IsCurrentBaseClass(Current))
+		UClass* Target = GetTargetClass();
+		if (!Target || Current == Target || !(IsCurrentBaseClass(Current) || (bOurs && Originals.Contains(Mesh))))
 		{
 			return;
 		}
-		UClass* Stock = GetStockClass();
-		if (!Stock)
+		if (!Originals.Contains(Mesh))
 		{
-			return;
+			Originals.Add(Mesh, Current);
 		}
-		Originals.Add(Mesh, Current);
-		Mesh->SetAnimInstanceClass(Stock);
-		UE_LOG(LogGSTNLocoBase, Log, TEXT("gstn.Loco.Base=1: %s %s -> %s"), *GetNameSafe(Mesh->GetOwner()), *Current->GetName(), *Stock->GetName());
+		Mesh->SetAnimInstanceClass(Target);
+		UE_LOG(LogGSTNLocoBase, Log, TEXT("gstn.Loco.Base=%d: %s %s -> %s"), GetSelectedBase(), *GetNameSafe(Mesh->GetOwner()), *Current->GetName(),
+			*Target->GetName());
 		return;
 	}
 	TWeakObjectPtr<UClass> Original;
-	if (Originals.RemoveAndCopyValue(Mesh, Original) && Current == StockClass.Get() && Original.IsValid())
+	if (Originals.RemoveAndCopyValue(Mesh, Original) && bOurs && Original.IsValid())
 	{
 		Mesh->SetAnimInstanceClass(Original.Get());
 		UE_LOG(LogGSTNLocoBase, Log, TEXT("gstn.Loco.Base=0: %s back to %s"), *GetNameSafe(Mesh->GetOwner()), *Original->GetName());
