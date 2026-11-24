@@ -1,0 +1,66 @@
+{
+  "out": "docs/notes/reviews/dair-v9-stops",
+  "runs": {
+    "base": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2\\Saved\\DairV9Stops/cap",
+    "v9": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2\\Saved\\DairV9Stops/cap"
+  },
+  "sequences": [
+    "dair_whiff",
+    "dair_hit_rise"
+  ],
+  "window": [
+    28,
+    77
+  ],
+  "key_frames": [
+    30,
+    33,
+    38,
+    40,
+    43,
+    44,
+    45,
+    47,
+    49,
+    50,
+    53,
+    56,
+    63,
+    66,
+    71
+  ],
+  "anchor": 45,
+  "faf": 71,
+  "views": [
+    "az90",
+    "az180",
+    "game"
+  ],
+  "variant_clips": [
+    "AS_OverlordDAirV9"
+  ],
+  "base_clips": [
+    "AS_OverlordDAirV9"
+  ],
+  "identity": [
+    "knees tucked to the chest in a tight ball through the charge, both feet driven straight down at the stomp",
+    "M. Bison head-stomp upper body: arms cross above/in front of the head in the startup and fold on the chest at the stomp, staying folded",
+    "heavy, slow, villain move: charge held alive, stomp lands dry on anim 15, moving hold where the body sinks onto its feet"
+  ],
+  "videos": [
+    "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_az90_real.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_az90_slow4x.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_az180_real.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_az180_slow4x.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_game_real.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_game_slow4x.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_az90_real.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_az90_slow4x.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_az180_real.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_az180_slow4x.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_game_real.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_game_slow4x.mp4"
+  ],
+  "brief": "Overlord down-air v9 (approved): full-move review of life and stops",
+  "root": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2\\Saved\\DairV9Stops/root"
+}
