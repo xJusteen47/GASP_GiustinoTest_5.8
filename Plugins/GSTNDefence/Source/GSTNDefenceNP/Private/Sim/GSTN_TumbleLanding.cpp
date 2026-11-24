@@ -414,11 +414,13 @@ void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FG
 
 const FGSTN_SelfLandingBounceTrack* FGSTN_TumbleLanding::FindSelfLandingBounce(const FGSTN_CombatTickContext& Context)
 {
-	if (!Context.RunningTimeline)
+	// The move the clock just landed out of first: on that frame RunningTimeline is gone, or is the move's follow-up
+	const FGSTN_CombatTimelineData* Move = Context.LandedTimeline ? Context.LandedTimeline : Context.RunningTimeline;
+	if (!Move)
 	{
 		return nullptr;
 	}
-	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instanced : Context.RunningTimeline->Tracks)
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instanced : Move->Tracks)
 	{
 		if (const FGSTN_SelfLandingBounceTrack* Track = Instanced.GetPtr<FGSTN_SelfLandingBounceTrack>())
 		{
@@ -456,7 +458,16 @@ bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const 
 	}
 	FGSTN_DefenceFragment* Existing = FGSTN_SyncFragmentList::Find<FGSTN_DefenceFragment>(Context.Out.Fragments);
 	const bool bArmed = Existing && (Existing->HitFlags & GSTNDefenceHitFlags::SelfKnockdownArmed) != 0;
-	if (!IsSelfKnockdownWindowOpen(Context))
+	// Armed (airborne inside the window on the previous frame) and the clock took the move's landing on this frame: the move's own Landing
+	// window, follow-up or landing lag ended it before this hook (owner 2026-11-24: the dropkick's hop never ran, its Landing window
+	// autocancelled the move on the touchdown frame and the next frame found no window). The landing is this one
+	const bool bLandedOutOfMove = bArmed && Context.LandedTimeline != nullptr;
+	if (bLandedOutOfMove)
+	{
+		UE_LOG(LogGSTNDefence, Log, TEXT("SelfKnockdown: frame %d the clock landed the armed move (state %d after it)"), Context.Frame,
+			static_cast<int32>(Context.Out.Core.ActionState));
+	}
+	else if (!IsSelfKnockdownWindowOpen(Context))
 	{
 		// Outside the window (or the move is over) nothing stays armed: a later landing is an ordinary one
 		if (bArmed)
@@ -467,7 +478,7 @@ bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const 
 		}
 		return false;
 	}
-	if (!Context.bGrounded)
+	if (!bLandedOutOfMove && !Context.bGrounded)
 	{
 		if (!bArmed)
 		{

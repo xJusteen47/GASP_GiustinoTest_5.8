@@ -1599,6 +1599,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	// The attacker side of hits (M4 H8) is not run on a hitstop frame either: it reads the same bHitstopFrame
 
 	// Step 2, the timeline clock: the running timeline reaches its end, or its ability is gone, and the combatant is Actionable again
+	const FGSTN_CombatTimelineData* LandedTimeline = nullptr;
 	{
 		const int32 Running = OutSync.Core.ActiveTimeline;
 		bool bAbilityActive = true;
@@ -1615,6 +1616,14 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 		FGSTN_CombatTimelineLogic::AdvanceClock(OutSync.Core, Frame, RunningData,
 			FrameSet.TimelineDefaultOverride.IsValidIndex(Running) ? FrameSet.TimelineDefaultOverride[Running] : 0, bAbilityActive, TimelineOutput, bHitstopFrame,
 			FrameSet.GetRicochetFallback(OutSync.Core.ActiveWeaponIndex, StrikeKind), &HookEnvironment);
+		// The clock took the move's landing on this frame (ended it, or started its landing lag) on the clock's own ground fact
+		const bool bLandingLagNow = OutSync.Core.ActionState == EGSTN_ActionState::InTimeline && OutSync.Core.TimelineStartFrame == StartBefore
+			&& OutSync.Core.RecoilStartFrame == Frame;
+		if (bWasRunning && RunningData && HookEnvironment.Ground == EGSTN_TrackHookGround::OnGround
+			&& (OutSync.Core.ActionState != EGSTN_ActionState::InTimeline || bLandingLagNow))
+		{
+			LandedTimeline = RunningData;
+		}
 		if (bWasRunning && OutSync.Core.ActionState != EGSTN_ActionState::InTimeline)
 		{
 			UE_LOG(LogGSTNCombatSim, Verbose, TEXT("%s frame %d: timeline %d (start %d) ended: timeline frame %d of %d, finished %d, ability active %d"), *GetOwner()->GetName(), Frame, Running, StartBefore,
@@ -1678,6 +1687,7 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 	}
 	HookContext.Timeline = &TimelineOutput;
 	HookContext.RunningTimeline = OutSync.Core.ActionState == EGSTN_ActionState::InTimeline ? GetRegistryTimeline(FrameSet, OutSync.Core.ActiveTimeline) : nullptr;
+	HookContext.LandedTimeline = LandedTimeline;
 	HookContext.Snapshot = StepSnapshot;
 	// What an extension may ask the model to do in this tick (StartForcedTimeline): this frame's state, tables and hook environment
 	ServiceSync = &OutSync;
