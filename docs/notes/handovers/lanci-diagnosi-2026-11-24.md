@@ -47,3 +47,12 @@ del playtest ha gli attributi del salto (se non li ha vola sempre a x1: ancora p
 ESITO: diagnosi fatta, 6 cause nel codice con file e righe; nessun fix applicato (serve decisione owner).
 SUBAGENTI: nessuno.
 COSTO: ~3 $ | 0 min desktop | 0 token review
+
+## Addendum (desktop check, 2026-11-24 afternoon): cause 7, the launch threshold
+
+`GSTN_CombatRules_Standard` launches at **1080** (rules_check.log), but every Smash target (knockback_smash_data.py, knockback_table.csv,
+the owner's 2026-11-16 playtest decision "lanci dal ~20%") assumes **750**. So every hit between 750 and 1080 cm/s, which the table calls a
+launch, is played as a horizontal push back capped at 600 cm/s: one more reason why "a move did not launch". The dair hop (K0 950) is one of them.
+Fix: `setup_knockback_smash.py --rules-only` puts the thresholds of the data (540 / 750 / 1800) on the rules; setup_overlord_hop0.py now warns
+when the rules launch above the hop. Unrelated, found by the full suite: GSTNCombat.GAS.Loadout.Screen and .ScreenSupportAndSuper fail
+(GSTNCombatGAS, not touched here; likely already on main).

@@ -1,6 +1,6 @@
 # Overlord dropkick and dair: a small hop at 0 % (owner 2026-11-24, decision 2A). Data only, idempotent, saves .uasset only (never a map).
 #   Before: dropkick K0 475 and DAir V9 K0 450 sat under the push back threshold (540): at 0-20 % the victim only staggered in place.
-#   After: K0 = HOP_K0 (above the launch threshold 750) and the tumble percent of each hitbox kept where it was (KBG lowered to match),
+#   After: K0 = HOP_K0 (above the launch threshold 750 of knockback_smash_data; the rules must have it: setup_knockback_smash.py --rules-only) and the tumble percent of each hitbox kept where it was (KBG lowered to match),
 #   so only the low-percent end changes. With the 1A flight (knocked gravity x4, launch fade 2300) the hops are ~0.4 m (dropkick, 40 deg,
 #   ~1.6 m away) and ~0.7 m (dair, 75 deg). Hitboxes already stronger at 0 % and set knockback hitboxes are left alone.
 #   Needs the Smash model on the rules (setup_knockback_smash.py, F2/F4). Rerunning setup_knockback_smash.py undoes this: rerun this after it.
@@ -87,8 +87,18 @@ def _classes(kit):
                 yield cls
 
 
+def _rules_launch_threshold():
+    rules = unreal.load_asset('/GSTNCombat/Rules/GSTN_CombatRules_Standard')
+    model = rules.get_editor_property('knockback_model') if rules else None
+    return model.get_editor_property('tuning').get_editor_property('launch_threshold') if model else None
+
+
 def run(revert=False):
     del _lines[:]
+    launch = _rules_launch_threshold()
+    if launch is not None and launch > min(HOP_K0.values()):
+        print(f'WARNING: the rules launch at {launch:.0f}, above the hop K0 {min(HOP_K0.values()):.0f}: the hop is only a push back. '
+              f'Run setup_knockback_smash.py --rules-only first (launch {D.LAUNCH:.0f})')
     os.makedirs(SAVED, exist_ok=True)
     before_path = os.path.join(SAVED, 'before.json')
     before = json.load(open(before_path)) if os.path.exists(before_path) else {}
@@ -120,7 +130,7 @@ def run(revert=False):
                 written += 1
                 log(f'{kit.get_name()} {name} #{i}: b{bkb:.0f} g{kbg:.0f} (K0 {D.k_new(bkb, kbg, dmg, 0):.0f}, tumble '
                     f'{D.first_percent_reaching(TUMBLE, bkb, kbg, dmg)} %) -> b{result[0]} g{result[1]:.0f} (K0 {D.k_new(result[0], result[1], dmg, 0):.0f}, '
-                    f'launch {D.first_percent_reaching(750, result[0], result[1], dmg)} %, tumble {D.first_percent_reaching(TUMBLE, result[0], result[1], dmg)} %)')
+                    f'launch {D.first_percent_reaching(D.LAUNCH, result[0], result[1], dmg)} %, tumble {D.first_percent_reaching(TUMBLE, result[0], result[1], dmg)} %)')
             if changed:
                 asset = L.get_move_timeline_asset(cls)
                 saves.append(asset if asset else unreal.load_asset(cls.get_path_name().rsplit('.', 1)[0]))
