@@ -31,7 +31,7 @@ class BuildIndice(unittest.TestCase):
         rc, out = self.run_dir({"2026-11-26-uno.md": GOOD})
         self.assertEqual(rc, 0)
         csv_text = open(os.path.join(out, "costi.csv"), encoding="utf-8").read()
-        self.assertIn("claude/x,abc1234,OK,Fatto il giro uno,"1 (cattura, haiku)",1.5,30,0,ok", csv_text)
+        self.assertIn('claude/x,abc1234,OK,Fatto il giro uno,"1 (cattura, haiku)",1.5,30,0,ok', csv_text)
         self.assertIn("| 2026-W48 | 1 | 1.5 |", open(os.path.join(out, "INDICE.md"), encoding="utf-8").read())
 
     def test_new_handover_without_schema_fails(self):
