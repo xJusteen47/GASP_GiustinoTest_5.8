@@ -131,3 +131,22 @@ All reversible; class defaults, so the owner retunes them on ABP_GSTN_GreyboxCap
   frantic cadence. Leans and the plant read the acceleration in that held body frame. `bSkidHoldsFacing` turns it off.
 - **Owner note 2026-11-24 14:10**: grey capsule (`MI_GSTN_Greybox_Grey`), red nose (`MI_GSTN_Greybox_Red`), both instances of
   `/Engine/BasicShapes/BasicShapeMaterial` (tint `Color`); the nose is material id 1 and sits in the upper half (about 125 cm of 14..156).
+
+## Desktop run 2 (2026-11-24, round 2, merged up to 2e8e7ee + desktop fixes)
+Evidence: `docs/notes/reviews/greybox-capsula/round2/` (videos side | back | game at 1x and 0.25x; `sheet_*.jpg` frames of capture r2_d).
+- Build OK, no compile fixes. Tests GSTNAnimation.Core.Greybox + GSTNCombat.NP.Greybox + SpeedGraph: 6/6.
+- Asset script fixes: `GREYBOX_REBUILD_MESH=1` did not rebuild (delete_asset left the referenced mesh loaded): now rewrites in place with
+  `copy_mesh_to_skeletal_mesh`; `EnableMaterialIDs` is `enable_material_i_ds` in Python (the nose stayed id 0); `BasicShapeMaterial`
+  has no SkeletalMesh usage (checker material in game): own parent `M_GSTN_Greybox` (Color -> Base Color, used with skeletal mesh),
+  not compiled headless (compiled on load). The headless editor crashes on exit in `FGSTN_DepthAdapterRegistry::Unregister`
+  (GSTNDepthMarker module shutdown, after the saves; unrelated).
+- make_capsule_clips: PASS, 19 montage overrides + 2 sequence overrides (`AS_OverlordDropkick_Land`, `AS_OverlordDropkick_Loop`).
+What the frames show (r2_d, Base 2; r2_c Base 1 same behaviour):
+- Grey capsule, red nose cone in the upper half; floats (shadow gap) and tilts as a rigid block (run start v60-84, skid plant v315-320).
+- Skid: backward plant, keeps facing, then turns 180 on the spring (nose visible from behind from ~v340).
+- Landing squash: visible but mild (v450-462). Crouch: shorter and wider (v468-480), BUT the bottom is flat: the lower hemisphere goes
+  through the floor while crouched (bug, v468-480).
+- Dropkick: limb markers appear, the capsule does NOT lie near horizontal (stays upright, slight tilt); lumpy surface on the body
+  v126-150 (deformation artefact).
+- Playtest jab: plays NO montage on the driver (frames.jsonl `montage` null, timeline m6 v491-520) and no "no capsule override" log line:
+  the jab is presented without a montage, so neither montage nor sequence overrides can catch it; the capsule stays rigid during it.
