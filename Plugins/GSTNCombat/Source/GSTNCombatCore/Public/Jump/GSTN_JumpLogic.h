@@ -15,6 +15,9 @@ struct GSTNCOMBATCORE_API FGSTN_JumpMoverSample
 
 	/** The last step started a launch that was not the combatant's own jump */
 	bool bExternalLaunch = false;
+
+	/** The last step started a knockback flight (the knockback move of a hit, which is not a Mover launch): FGSTN_JumpState::bKnocked */
+	bool bKnockbackLaunch = false;
 };
 
 /** Which jump a request would be */

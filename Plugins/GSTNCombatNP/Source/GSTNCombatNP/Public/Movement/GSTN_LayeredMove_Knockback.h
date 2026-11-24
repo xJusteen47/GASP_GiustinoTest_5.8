@@ -45,6 +45,29 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_Knockback : public FLayeredMoveBase
 	float GravityScale = 1.f;
 
 	/**
+	 * The fade of the launch, cm/s per second (owner 2026-11-24, 1A; FGSTN_ReactionTuning::LaunchDeceleration). From the second frame, while the
+	 * victim is in ForceMovementMode (airborne), the move takes Deceleration x step off the velocity along the launch direction, until the
+	 * launch's own speed is used up (derived from ElapsedFrames, so a resimulation takes the same) and never more than the velocity still has
+	 * along it (a wall that stopped the victim is not pulled back from). The balloon warp's frames are not faded. 0 = none
+	 */
+	UPROPERTY()
+	float Deceleration = 0.f;
+
+	/**
+	 * True when Moves holds a knockback that started after StartMs (a wall or floor rebound, a new hit on a flying victim). Such a move
+	 * supersedes this one: Mover's mixer breaks a tie between two velocity overrides of the same priority in favour of the OLDER move, so a
+	 * launch still in its balloon warp (66 frames at 100 %) kept overriding and the rebound's launch frame was lost (wall rebound at 100 %,
+	 * 2026-11-24: the victim stayed on the wall). The superseded move ends on that frame and gives nothing.
+	 * Queued holds the moves of the substep's START state that Mover activates only while generating (the newer move's own first frame:
+	 * there it is still queued, with no start time): one of them is newer when this move started before NowMs. Pure
+	 */
+	static bool HasNewerKnockback(TConstArrayView<TSharedPtr<FLayeredMoveBase>> Moves, TConstArrayView<TSharedPtr<FLayeredMoveBase>> Queued,
+		double StartMs, double NowMs);
+
+	/** The speed the fade takes off on frame ElapsedFrames (>= 1) of a launch of LaunchSpeed: Deceleration x step until LaunchSpeed is used up. Pure */
+	static double FadeOnFrame(double LaunchSpeed, double Deceleration, double StepSeconds, int32 ElapsedFrames);
+
+	/**
 	 * Balloon knockback (FGSTN_BalloonKnockbackSettings, owner 2026-11-16): the flight frames the warp covers, 0 = the classic flight. While the
 	 * warp runs (FGSTN_BalloonMath: frame n flies M(n) flight frames) the move overrides the velocity with M(n) x the classic flight's velocity
 	 * at the warped time, so the path is the classic one, flown faster. From the first frame at M = 1 the falling mode takes over as usual

@@ -128,6 +128,9 @@ struct FGSTN_ReactionMove
 	float DecayPerFrame = 0.f;
 	float GravityScale = 1.f;
 
+	/** Launch only: the fade of the launch, cm/s per second (FGSTN_ReactionTuning::LaunchDeceleration) */
+	float Deceleration = 0.f;
+
 	/** The lifetime of the move: the frames left of the hitstun */
 	int32 Frames = 0;
 

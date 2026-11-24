@@ -182,6 +182,12 @@ struct GSTNCOMBATCORE_API FGSTN_JumpParams
 	float GlideMaxFallSpeed = 0.f;
 
 	bool CanGlide() const { return GlideGravityScale > 0.f; }
+
+	/**
+	 * The gravity scale of a knocked flight (FGSTN_JumpState::bKnocked), up and down alike; <= 0 = the phase gravities as before.
+	 * From the combat rules (FGSTN_ReactionTuning::KnockbackGravityScale), not from the kit: every victim flies a launch the same way
+	 */
+	float KnockbackGravityScale = 0.f;
 };
 
 /**
@@ -224,17 +230,24 @@ struct GSTNCOMBATCORE_API FGSTN_JumpState
 	/** HoldWindow model only: MaxHoldFrames passed while rising, the fall gravity applies until the landing. Written by Step */
 	bool bHoldWindowOver = false;
 
+	/**
+	 * Flying a knockback (a launch by a hit, not by a trampoline): the knocked gravity applies (FGSTN_JumpParams::KnockbackGravityScale) until
+	 * the landing or a jump of the combatant's own. Written by Step from FGSTN_JumpMoverSample::bKnockbackLaunch. A flag beside the phase, not a
+	 * phase: the phase still tells rising from falling (fast fall, the animation), and the wire keeps its 2 phase bits
+	 */
+	bool bKnocked = false;
+
 	bool IsDefault() const
 	{
 		return Phase == EGSTN_JumpPhase::None && StartFrame == INDEX_NONE && Button == INDEX_NONE && !bJumpCut && !bFastFalling && !bTakeoffWasAir
-			&& AirJumpsUsed == 0 && CoyoteFramesLeft == 0 && SquatFramesLeft == 0 && !bGliding && CutFrames == 0 && !bHoldWindowOver;
+			&& AirJumpsUsed == 0 && CoyoteFramesLeft == 0 && SquatFramesLeft == 0 && !bGliding && CutFrames == 0 && !bHoldWindowOver && !bKnocked;
 	}
 
 	bool operator==(const FGSTN_JumpState& Other) const
 	{
 		return Phase == Other.Phase && StartFrame == Other.StartFrame && Button == Other.Button && bJumpCut == Other.bJumpCut && bFastFalling == Other.bFastFalling
 			&& bTakeoffWasAir == Other.bTakeoffWasAir && AirJumpsUsed == Other.AirJumpsUsed && CoyoteFramesLeft == Other.CoyoteFramesLeft && SquatFramesLeft == Other.SquatFramesLeft
-			&& bGliding == Other.bGliding && CutFrames == Other.CutFrames && bHoldWindowOver == Other.bHoldWindowOver;
+			&& bGliding == Other.bGliding && CutFrames == Other.CutFrames && bHoldWindowOver == Other.bHoldWindowOver && bKnocked == Other.bKnocked;
 	}
 
 	/** One bit when default; same code for both directions */

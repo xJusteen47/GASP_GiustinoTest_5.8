@@ -248,6 +248,23 @@ struct GSTNCOMBATCORE_API FGSTN_ReactionTuning
 	float MinWeight = 1.f;
 
 	/**
+	 * The gravity of a launched victim's whole flight, up and down, as a multiple of the authored gravity (owner 2026-11-24, 1A). It replaces
+	 * the jump's phase gravities (rise x1 for a launch, then the kit's fall gravity, ~x9) from the launch to the landing or to a jump of the
+	 * victim's own, so a victim hit while it was already falling flies like one hit on the ground. A fast fall wins. ~4 is a Smash character's
+	 * gravity in our units (Mario 0.087 u/f^2 at 15 cm a unit). 0 = the old phase gravities
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reaction|Launch", meta = (ClampMin = "0.0"))
+	float KnockbackGravityScale = 4.f;
+
+	/**
+	 * How fast the launch itself fades, cm/s per second, along the launch direction (owner 2026-11-24, 1A; Smash's 0.051 units per frame per
+	 * frame, ~2300 cm/s^2 in our units). Gravity is separate, so the path bends down as the launch runs out instead of flying on at the launch
+	 * speed. Applied by the knockback move while the victim is airborne, never past the launch's own speed. 0 = no fade (the old flight)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Reaction|Launch", meta = (ClampMin = "0.0", ForceUnits = "cm/s^2"))
+	float LaunchDeceleration = 2300.f;
+
+	/**
 	 * Balloon knockback (owner 2026-11-16, Smash Ultimate style): strong launches fly the same path faster at the start, so the victim spends
 	 * less time in the air and in hitstun. Off by default. Applied by the victim side after the reaction is final (FGSTN_BalloonMath)
 	 */

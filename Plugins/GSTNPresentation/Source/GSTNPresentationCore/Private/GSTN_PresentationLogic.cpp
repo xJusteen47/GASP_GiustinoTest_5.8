@@ -377,6 +377,43 @@ void FGSTN_PresentationDeriver::Step(const FGSTN_PresentationSnapshot& C, const 
 		}
 	}
 
+	// A hit's launch: a hit reaction (hitstun or tumble) out of its freeze that reaches the launch speed within a few frames, i.e. not a push or
+	// a stagger in place (owner 2026-11-24, 3A): the puff at the take-off
+	{
+		static const FGameplayTag HitstunTag = FGameplayTag::RequestGameplayTag(TEXT("Combat.State.Hitstun"), false);
+		static const FGameplayTag TumbleTag = FGameplayTag::RequestGameplayTag(TEXT("Combat.State.Tumble"), false);
+		static const FGameplayTag HitstopTag = FGameplayTag::RequestGameplayTag(TEXT("Combat.State.Hitstop"), false);
+		auto Flying = [](const FGSTN_PresentationSnapshot& S)
+		{
+			const bool bReacting = (HitstunTag.IsValid() && S.StateTags.HasTag(HitstunTag)) || (TumbleTag.IsValid() && S.StateTags.HasTag(TumbleTag));
+			return bReacting && !(HitstopTag.IsValid() && S.StateTags.HasTag(HitstopTag));
+		};
+		const bool bFlyingNow = Flying(C);
+		if (bFlyingNow && !Flying(P))
+		{
+			FramesSinceFlyStart = 0;
+		}
+		else if (!bFlyingNow)
+		{
+			FramesSinceFlyStart = -1;
+		}
+		// The knockback move starts on the frame after the freeze (and Mover shows it a frame later still): a few frames to reach the speed
+		constexpr int32 LaunchWaitFrames = 4;
+		if (FramesSinceFlyStart >= 0)
+		{
+			const double Speed = C.Velocity.Size();
+			if (Speed >= Rules.LaunchMinSpeed)
+			{
+				Emit(Out, GSTNPresentationTags::Launch, F, static_cast<float>(Speed), C.Location, C.Velocity.GetSafeNormal());
+				FramesSinceFlyStart = -1;
+			}
+			else if (++FramesSinceFlyStart > LaunchWaitFrames)
+			{
+				FramesSinceFlyStart = -1;
+			}
+		}
+	}
+
 	// Tag rules: a state tag or a move tag appears or goes away. A move tag counts again when a new move starts (its start frame changes)
 	for (const FGSTN_PresentationTagRule& Rule : Rules.TagRules)
 	{

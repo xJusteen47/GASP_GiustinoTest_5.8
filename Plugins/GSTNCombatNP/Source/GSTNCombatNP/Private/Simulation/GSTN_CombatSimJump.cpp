@@ -10,7 +10,10 @@
 #include "Input/GSTN_CombatSettings.h"
 #include "Jump/GSTN_JumpDesigner.h"
 #include "Kits/GSTN_LocomotionProfile.h"
+#include "Hits/GSTN_KnockbackModel.h"
+#include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Movement/GSTN_LayeredMove_Launch.h"
+#include "Rules/GSTN_CombatRules.h"
 #include "Movement/GSTN_SurfaceLaunch.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverComponent.h"
@@ -67,6 +70,11 @@ bool UGSTN_CombatSimComponent::BuildJumpParams(FGSTN_JumpParams& OutParams) cons
 	{
 		FGSTN_JumpDesigner::ApplyToParams(Locomotion->JumpDesigner, OutParams);
 	}
+	// The knocked flight's gravity belongs to the combat rules, so every victim flies a launch the same way whatever its kit (owner 2026-11-24, 1A)
+	if (CombatRules && CombatRules->KnockbackModel)
+	{
+		OutParams.KnockbackGravityScale = CombatRules->KnockbackModel->Tuning.KnockbackGravityScale;
+	}
 	return true;
 }
 
@@ -85,6 +93,8 @@ void UGSTN_CombatSimComponent::StepJump(int32 Frame, uint32 HeldButtons, FGSTN_C
 	FrameJumpSample.bGrounded = Tracker->HasGameplayTag(Mover_IsOnGround, true);
 	FrameJumpSample.UpSpeed = Tracker->GetUpSpeed();
 	FrameJumpSample.bExternalLaunch = Tracker->WasExternallyLaunchedThisFrame();
+	// The knockback move is not a Mover launch (it overrides velocity on its own first frame), so the tracker is asked for it by name
+	FrameJumpSample.bKnockbackLaunch = Tracker->WasMoveStartedThisFrame(FGSTN_LayeredMove_Knockback::StaticStruct());
 	bFrameJumpValid = true;
 
 	// The hold is read from the command of this frame: the button that started the jump, still down or not
