@@ -114,7 +114,7 @@ class TestGstnAnimMcp(unittest.TestCase):
             names,
             ["anim_inspect", "anim_apply_intent", "anim_run_intent", "anim_gate_check", "anim_capture_ab",
              "anim_register_variant", "anim_unregister_variant", "anim_rollback", "anim_capture_move",
-             "anim_silhouette_check", "anim_motion_overlay", "anim_review_pack"],
+             "anim_silhouette_check", "anim_motion_overlay", "anim_review_pack", "anim_layer"],
         )
 
     def test_validate_intent_v1_and_v2_bounds(self) -> None:

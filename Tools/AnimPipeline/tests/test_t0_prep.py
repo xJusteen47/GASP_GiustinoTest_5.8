@@ -257,7 +257,7 @@ class TestCaptureMove(unittest.TestCase):
 
     def test_mcp_tool_listed_last_and_validates(self) -> None:
         names = [t["name"] for t in mcp_server._tool_defs()]
-        self.assertEqual(names[-4:], ["anim_capture_move", "anim_silhouette_check", "anim_motion_overlay", "anim_review_pack"])
+        self.assertEqual(names[-5:], ["anim_capture_move", "anim_silhouette_check", "anim_motion_overlay", "anim_review_pack", "anim_layer"])
         r = capture_move.anim_capture_move(variant_runs=[{"name": "base", "asset": BASE}], root="/nonexistent", **self.KW)
         self.assertFalse(r["ok"])
 
