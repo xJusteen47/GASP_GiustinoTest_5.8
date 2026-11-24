@@ -289,6 +289,19 @@ MOVE_SEQUENCES = [
 ]
 if os.environ.get('PIE_CAPTURE_VIEWS'):
     VIEWS = [v for v in VIEWS if v[0] in os.environ['PIE_CAPTURE_VIEWS'].split(',')]
+# capdet (owner 2026-11-23, deterministic captures): PIE_CAPTURE_VIEWSET=det = four fixed views in ONE Play session, the review set of
+# Tools/AnimPipeline/capdet/: behind, side, q34 (3/4 front left), close (feet and legs, tight). VIEW_GEOM = per view (distance, elevation deg,
+# aim height offset cm, fov); a view not in it uses the globals. The cameras are placed once from the start yaw (never follow the pawn
+# unless the sequence flies), the fill lights are fixed (FILL_LIGHTS): same picture on every run. PIE_CAPTURE_SEED: python's RNG
+# (the simulation has none, VFX are off in capdet); logged to the capture log.
+VIEW_GEOM = {}
+if os.environ.get('PIE_CAPTURE_VIEWSET') == 'det':
+    VIEWS = [('behind', 180.0), ('side', 90.0), ('q34', 315.0), ('close', 90.0)]
+    VIEW_GEOM = {'behind': (380.0, 10.0, 0.0, 45.0), 'side': (380.0, 10.0, 0.0, 45.0), 'q34': (380.0, 10.0, 0.0, 45.0),
+                 'close': (170.0, 8.0, -35.0, 40.0)}
+SEED = int(os.environ.get('PIE_CAPTURE_SEED', '1'))
+import random  # noqa: E402
+random.seed(SEED)
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
     SEQUENCES = [s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
 elif 'DoubleShot' in KIT:
@@ -382,12 +395,12 @@ def _make_cameras():
         _console('Summon SceneCapture2D')
         return False
     st['cams'] = found[:len(VIEWS)]
-    for cam in st['cams']:
+    for (vname, _az), cam in zip(VIEWS, st['cams']):
         comp = cam.capture_component2d
         rt = unreal.RenderingLibrary.create_render_target2d(_world(), SIZE, SIZE, unreal.TextureRenderTargetFormat.RTF_RGBA8)
         st['rts'].append(rt)
         for prop, value in (('capture_every_frame', False), ('capture_on_movement', False), ('always_persist_rendering_state', True),
-                            ('fov_angle', FOV), ('capture_source', unreal.SceneCaptureSource.SCS_FINAL_COLOR_LDR), ('texture_target', rt)):
+                            ('fov_angle', VIEW_GEOM.get(vname, (0, 0, 0, FOV))[3]), ('capture_source', unreal.SceneCaptureSource.SCS_FINAL_COLOR_LDR), ('texture_target', rt)):
             comp.set_editor_property(prop, value)
         if COLLISION:   # the movement capsule drawn in every view (ECB review): the scene captures have their own show flags
             comp.set_editor_property('show_flag_settings', [unreal.EngineShowFlagsSetting(show_flag_name='Collision', enabled=True)])
@@ -500,10 +513,11 @@ def _place_cameras(follow=False):
     for (name, az), cam in zip(VIEWS, st['cams']):
         if az is None:
             continue
-        a, e = math.radians(yaw + az), math.radians(ELEVATION)
-        pos = unreal.Vector(centre.x + DISTANCE * math.cos(e) * math.cos(a), centre.y + DISTANCE * math.cos(e) * math.sin(a),
-                            centre.z + DISTANCE * math.sin(e))
-        cam.set_actor_location_and_rotation(pos, unreal.MathLibrary.find_look_at_rotation(pos, centre), False, False)
+        dist, elev, dz, _fov = VIEW_GEOM.get(name, (DISTANCE, ELEVATION, 0.0, FOV))
+        a, e = math.radians(yaw + az), math.radians(elev)
+        aim = unreal.Vector(centre.x, centre.y, centre.z + dz)
+        pos = unreal.Vector(aim.x + dist * math.cos(e) * math.cos(a), aim.y + dist * math.cos(e) * math.sin(a), aim.z + dist * math.sin(e))
+        cam.set_actor_location_and_rotation(pos, unreal.MathLibrary.find_look_at_rotation(pos, aim), False, False)
     return (round(centre.x), round(centre.y), round(centre.z)), round(yaw)
 
 
@@ -835,6 +849,7 @@ def _tick(_dt):
             return _finish(f'timeout in phase {phase}')
         if phase == 'boot' and now - st['t'] > 8:
             # PIE_CAPTURE_CLIENTS (default 2 = 3 players): 0 for single-character captures (locomotion): 1 PIE world, ~3x faster (speed-up.md 4)
+            _log(f'capdet: seed {SEED}, views {[v[0] for v in VIEWS]}, size {SIZE}')
             _log(f'setup_editor: {g.setup_editor(True, "listen", int(os.environ.get("PIE_CAPTURE_CLIENTS", "2")))}')
             les.editor_request_begin_play()
             st.update(phase='wait_ready', t=now)
