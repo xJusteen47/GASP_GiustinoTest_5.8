@@ -196,6 +196,13 @@ bool FGSTN_MoveEventsEndReasonTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("no tail: early is interrupted"), FGSTN_MoveEventRules::ResolveEndReason(false, false, 24, 30, INDEX_NONE), EGSTN_MoveEndReason::Interrupted);
 	TestEqual(TEXT("a recoil wins"), FGSTN_MoveEventRules::ResolveEndReason(false, true, 29, 30, 22), EGSTN_MoveEndReason::AfterRecoil);
 	TestEqual(TEXT("ended before any frame"), FGSTN_MoveEventRules::ResolveEndReason(true, false, INDEX_NONE, 30, 22), EGSTN_MoveEndReason::Interrupted);
+	// getup-momentum-2: a cancel on the first tail frame, seen by the ability before its own tick moved the cursor there
+	TestEqual(TEXT("cancel on the tail's first frame: the clock's frame"), FGSTN_MoveEventRules::EndReasonFrame(true, 21, 22), 22);
+	TestEqual(TEXT("so it is a tail cut"), FGSTN_MoveEventRules::ResolveEndReason(true, false, FGSTN_MoveEventRules::EndReasonFrame(true, 21, 22), 30, 22),
+		EGSTN_MoveEndReason::TailCancelled);
+	TestEqual(TEXT("a cancel before the tail stays interrupted"), FGSTN_MoveEventRules::ResolveEndReason(true, false, FGSTN_MoveEventRules::EndReasonFrame(true, 20, 21), 30, 22),
+		EGSTN_MoveEndReason::Interrupted);
+	TestEqual(TEXT("a natural end keeps the cursor"), FGSTN_MoveEventRules::EndReasonFrame(false, 21, 22), 21);
 	return true;
 }
 

@@ -1,0 +1,8 @@
+﻿roll_a45_run FAF 21 FAF..+6 (132, -138) +6..+20 (386, -139) yaw@0 -172.5 yaw@FAF -138.8 mont@FAF+3 None
+roll_a45_warpoff_run FAF 21 FAF..+6 (94, -171) +6..+20 (294, -178) yaw@0 180.0 yaw@FAF 180.0 mont@FAF+3 None
+roll_a80_max90_run FAF 21 FAF..+6 (99, -101) +6..+20 (369, -102) yaw@0 -165.0 yaw@FAF -101.5 mont@FAF+3 None
+roll_idle FAF 21 FAF..+6 (0, 0) +6..+20 (0, 0) yaw@0 180.0 yaw@FAF 180.0 mont@FAF+3 None
+roll_run FAF 21 FAF..+6 (6, 180) +6..+20 (119, 180) yaw@0 180.0 yaw@FAF 180.0 mont@FAF+3 None
+rollback_a45_run FAF 21 FAF..+6 (100, 42) +6..+20 (368, 41) yaw@0 -171.0 yaw@FAF -138.8 mont@FAF+3 None
+rollback_run FAF 21 FAF..+6 (10, 0) +6..+20 (118, 0) yaw@0 180.0 yaw@FAF 180.0 mont@FAF+3 None
+stand_run FAF 21 FAF..+6 (96, 180) +6..+20 (160, 180) yaw@0 180.0 yaw@FAF 180.0 mont@FAF+3 None

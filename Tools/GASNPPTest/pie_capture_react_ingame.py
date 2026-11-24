@@ -40,6 +40,8 @@ SIZE = 480
 # react-hook-2: the victim faces the attacker (it was hit from behind in react-hook-1). az45 = in front of the victim, a quarter off the attacker's
 # line (the attacker is hidden in it), az90 = its right side with both pawns in profile
 VIEWS = [('az45', 45.0), ('az90', 90.0)]
+if os.environ.get('PIE_CAPTURE_VIEWS'):
+    VIEWS = [(v.split(':')[0], float(v.split(':')[1])) for v in os.environ['PIE_CAPTURE_VIEWS'].split(',')]
 HIDE_ATTACKER = {'az45'}
 ELEVATION, DISTANCE, FOV = 10.0, 320.0, 45.0
 DEADZONE = 40.0   # the pawn never leaves the middle of the frame (react-hook-1: cut at the edge)
@@ -64,6 +66,22 @@ SEQUENCES = [
 ]
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
     SEQUENCES = [s for s in SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
+# getup-momentum-1 (2026-11-21): get-up variants in ONE Play session. PIE_CAPTURE_GETUP_RUNS = a JSON file with a list of
+#   {"name": "roll_run_v220", "getup": "jump"|"facing"|"against", "follow": "idle"|"run"|"jab", "cvars": {"gstn.Getup.RollExitSpeed": 220}}
+#   getup-momentum-2: "angle": degrees the roll's stick is turned off the get-up axis (+ = to the right of it, seen from above: UE yaw), held 10 frames
+#   (the directional roll turns while it is held); 'run' then pushes along the NEW facing at FAF
+#   "hold": true keeps the roll's stick held from the roll input to the end (straight run-out, no re-press at FAF)
+# follow: idle = no input after the get-up starts (the tail plays out), run = stick toward the get-up's travel (the facing for the stand-up)
+# held from the get-up start (ignored until FAF, then it cuts the tail), jab = Attack tapped on the FAF frame. cvars are set when the
+# sequence starts and put back to -1 when it ends. Replaces SEQUENCES.
+GETUP_MONTAGE = {'jump': 'AM_React_GetUp', 'facing': 'AM_React_Roll', 'against': 'AM_React_RollBack'}
+GETUP_ABILITY = {'jump': 'GA_GetupNeutral_Test', 'facing': 'GA_GetupRoll_Test', 'against': 'GA_GetupRollBack_Test'}
+if os.environ.get('PIE_CAPTURE_GETUP_RUNS'):
+    with open(os.environ['PIE_CAPTURE_GETUP_RUNS']) as _fh:
+        SEQUENCES = [dict(launch=True, **r) for r in json.load(_fh)]
+# Views (getup-momentum-1: behind AND side): PIE_CAPTURE_VIEWS = 'az180:180,az90:90'; shoot only from the get-up input on with
+# PIE_CAPTURE_SHOOT_FROM_INPUT=1 (the launch and the flight are the same in every variant)
+SHOOT_FROM_INPUT = os.environ.get('PIE_CAPTURE_SHOOT_FROM_INPUT') == '1'
 ATTACKER = 1
 KIT = 'KIT_Test_DefenceLanding'
 ROLL_LIE = 4      # roll sequences: the stick is held from this many frames after the knockdown starts; the roll must wait for the landing
@@ -271,8 +289,10 @@ def _turn_to_attacker(behind=False, side=0):
     g.hold(0, 'move', g._steer_value(0, (alo[0], alo[1])))
 
 
-def _stick(direction):
-    loc, yaw = _pawn().get_actor_location(), math.radians(_pawn().get_actor_rotation().yaw + (0.0 if direction == 'facing' else 180.0))
+def _stick(direction, angle=0.0):
+    """Holds the stick along (facing) or against the facing, turned by angle degrees (getup-momentum-2: the directional roll)"""
+    loc = _pawn().get_actor_location()
+    yaw = math.radians(_pawn().get_actor_rotation().yaw + (0.0 if direction == 'facing' else 180.0) + angle)
     target = (loc.x + 300.0 * math.cos(yaw), loc.y + 300.0 * math.sin(yaw))
     g.hold(0, 'move', g._steer_value(0, target))
     return round(math.degrees(yaw))
@@ -303,15 +323,86 @@ def _step(seq, frame, states):
             g.combat_tap(0, g.button_mask('Jump'))
             tap = 'jump'
         else:
-            tap = f'stick {seq["getup"]} yaw {_stick(seq["getup"])}'
+            tap = f'stick {seq["getup"]} yaw {_stick(seq["getup"], seq.get("angle", 0.0))}'
     if 'input_at' in s and not down and 'up_at' not in s:
         s['up_at'] = frame
+    if seq.get('follow'):
+        # Since 2026-11-17 a kit may want a dodge press with the stick for the roll (FGSTN_TumbleLanding::WantsDownedRoll, DodgeAndStick):
+        # tap it every 6 frames while still down and the stick is held
+        if seq['getup'] != 'jump' and down and 'input_at' in s and (frame - s['input_at']) % 6 == 0:
+            g.combat_tap(0, g.button_mask('Dodge'))
+            tap = (tap + '; ' if tap else '') + 'dodge'
+        follow_tap, follow_done = _follow(seq, frame)
+        return follow_tap or tap, follow_done or frame >= MAX_FRAMES
     if 'up_at' in s and seq['getup'] != 'jump' and 'released' not in s and not states and frame >= s['up_at'] + 26:
         g.release(0, 'move')   # the stick held past the roll would walk the pawn: let go once the roll is over (24 frames)
         s['released'] = frame
         tap = 'stick released'
     done = ('up_at' in s and frame >= s['up_at'] + 26 + AFTER) or frame >= MAX_FRAMES
     return tap, done
+
+
+def _getup_faf_video(getup):
+    """The get-up ability's FAF in 60 fps video frames from its start (sim frames at 62.5 Hz), from the class default object"""
+    name = GETUP_ABILITY[getup]
+    cls = unreal.load_class(None, f'/GSTNDefence/Test/{name}.{name}_C')   # load_blueprint_class gave None for the plugin path in PIE
+    tl = unreal.get_default_object(cls).get_editor_property('timeline')
+    faf, total = int(tl.get_editor_property('first_actionable_frame')), int(tl.get_editor_property('total_frames'))
+    return math.ceil(faf * 60.0 / 62.5), math.ceil(total * 60.0 / 62.5), faf, total
+
+
+def _follow(seq, frame):
+    """getup-momentum-1 inputs after the get-up input: returns (tap text or None, done). The get-up start is the first frame its montage plays"""
+    s = st['run']
+    tap = None
+    m = _montage()
+    if 'input_at' in s and 'gu_at' not in s and m and m[0] == GETUP_MONTAGE[seq['getup']]:
+        s['gu_at'] = frame
+        s['faf_v'], s['total_v'], s['faf'], s['total'] = _getup_faf_video(seq['getup'])
+        tap = f'getup started (FAF sim {s["faf"]}/{s["total"]}, video +{s["faf_v"]})'
+        # The roll's stick is let go once the roll has started. A stick HELD through the get-up does not cut the tail (new3: the tail cancel
+        # wants a stick move), so 'run' pushes it again on the FAF frame, toward the get-up's travel. getup-momentum-2: with an 'angle' (the
+        # directional roll) the stick stays held until the turn is over (gstn.Getup.WarpFrames, about 6 frames), so it is let go later
+        # getup-momentum-2 "hold": the stick stays held through the get-up (a roll's tail is 3 frames, a press on the FAF frame comes too late)
+        if not seq.get('angle') and not seq.get('hold'):
+            g.release(0, 'move')
+    if 'gu_at' not in s:
+        return tap, False
+    at = frame - s['gu_at']
+    if seq.get('angle') and at == 10 and seq['follow'] != 'run':
+        g.release(0, 'move')
+        tap = 'stick released after the turn'
+    if seq['follow'] == 'run' and at == s['faf_v']:
+        tap = f'stick {"against" if seq["getup"] == "against" else "facing"} yaw {_stick("against" if seq["getup"] == "against" else "facing")} at getup+{at}'
+    if seq['follow'] == 'jab' and at in (s['faf_v'], s['faf_v'] + 2):
+        g.combat_tap(0, g.button_mask('Attack'))
+        tap = f'attack at getup+{at}'
+    if seq['follow'] == 'run' and at == s['faf_v'] + 45 and 'released' not in s:
+        g.release(0, 'move')
+        s['released'] = frame
+        tap = 'stick released'
+    return tap, at >= s['total_v'] + AFTER
+
+
+def _assert_lines():
+    """ASSERT (rule 10): in every get-up sequence the get-up montage plays with weight >= 0.8 from its start to its FAF"""
+    bad = []
+    for seq in SEQUENCES:
+        if not seq.get('follow'):
+            continue
+        path = os.path.join(OUT, seq['name'], 'frames.jsonl')
+        rows = [json.loads(line) for line in open(path)] if os.path.exists(path) else []
+        start = next((r['f'] for r in rows if r.get('montage') and r['montage'][0] == GETUP_MONTAGE[seq['getup']]), None)
+        faf_v = next((int(r['tap'].split('video +')[1].split(')')[0]) for r in rows if 'video +' in r.get('tap', '')), None)
+        if start is None or faf_v is None:
+            bad.append(f'{seq["name"]}: no get-up')
+            continue
+        window = [r for r in rows if start <= r['f'] < start + faf_v]
+        # weight = the anim instance's largest montage weight (foot lock debug); rows without it count on the montage name alone
+        good = [r for r in window if r.get('montage') and r['montage'][0] == GETUP_MONTAGE[seq['getup']] and (r['fl'][2] if 'fl' in r else 1.0) >= 0.8]
+        if len(good) < 0.9 * max(len(window), 1):
+            bad.append(f'{seq["name"]}: {len(good)}/{len(window)} frames')
+    return 'ASSERT: OK' if not bad else 'ASSERT: FAIL ' + '; '.join(bad)
 
 
 def _row(frame, states, tap):
@@ -450,12 +541,18 @@ def _tick(_dt):
                  f'yaw {a["yaw"]:.0f}, distance {dist:.0f} cm, facing error {facing_err:.0f} deg (0 = face to face), states {_states()}')
             os.makedirs(os.path.join(OUT, seq['name']), exist_ok=True)
             st['rows'] = open(os.path.join(OUT, seq['name'], 'frames.jsonl'), 'w')
+            for cv, value in seq.get('cvars', {}).items():
+                _console(f'{cv} {value}')
+                _log(f'{seq["name"]}: {cv} {value}')
             _console('t.OverrideFPS 60')
             st.update(phase='seq_run', frame=0)
         elif phase == 'seq_run':
             seq, frame = SEQUENCES[st['seq']], st['frame']
             states = _states()
-            _shoot(seq, frame)
+            if not SHOOT_FROM_INPUT or ('input_at' in st['run'] and frame >= st['run']['input_at'] - 10):
+                _shoot(seq, frame)
+            elif 'down_at' in st['run']:
+                _aim_cameras()   # the deadzone aim keeps following the flight, so the first shot frames the pawn
             tap, done = _step(seq, frame, states)
             _row(frame, states, tap)
             if tap:
@@ -463,6 +560,8 @@ def _tick(_dt):
             st['frame'] = frame + 1
             if done:
                 st['rows'].close()
+                for cv in seq.get('cvars', {}):
+                    _console(f'{cv} -1')
                 _console('t.OverrideFPS 0')
                 g.release(0, 'move')
                 _log(f'sequence {seq["name"]} done: {st["frame"]} frames, run {st["run"]}')
@@ -475,6 +574,9 @@ def _tick(_dt):
                 _log(f'setup_editor(False) failed: {e!r}')
             with open(os.path.join(OUT, 'done.txt'), 'w') as f:
                 f.write(st.get('status', '?') + '\n')
+            if any(s.get('follow') for s in SEQUENCES):
+                with open(os.path.join(OUT, 'assert.txt'), 'w') as f:
+                    f.write(_assert_lines() + '\n')
             unreal.SystemLibrary.execute_console_command(None, 'QUIT_EDITOR')
     except Exception:
         _log('ERROR ' + traceback.format_exc())
@@ -492,5 +594,13 @@ def _tick(_dt):
 for _cv in [c.strip() for c in os.environ.get('PIE_CAPTURE_CVARS', '').split(';') if c.strip()]:
     unreal.SystemLibrary.execute_console_command(None, _cv)
     _log(f'cvar: {_cv}')
+# getup-momentum-1: PIE_CAPTURE_GETUP_SETUP=1 writes the get-up FAF, tail and exit speeds of setup_reaction_anims.GETUPS into the ability
+# classes IN MEMORY before Play (nothing saved: the Blueprints change only once the owner OKs it)
+if os.environ.get('PIE_CAPTURE_GETUP_SETUP') == '1':
+    os.environ['REACTION_ONLY_GETUPS'], os.environ['REACTION_NO_SAVE'] = '1', '1'
+    sys.path.insert(0, os.path.join(_PROJ, 'Tools', 'GAS'))
+    import setup_reaction_anims as _sra   # noqa: E402
+    for _line in _sra.run():
+        _log(f'getup setup (memory): {_line}')
 _log(f'driver loaded: out {OUT}, sequences {[s["name"] for s in SEQUENCES]}')
 st['handle'] = unreal.register_slate_post_tick_callback(_tick)

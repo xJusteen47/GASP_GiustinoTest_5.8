@@ -1782,6 +1782,17 @@ void UGSTN_CombatSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, c
 			FGSTN_CombatTimelineLogic::EvaluateStart(OutSync.Core, Frame, *Data, FrameSet.TimelineDefaultOverride[Entry], TimelineOutput, &HookEnvironment);
 		}
 	}
+	// Step 8b (owner 2026-11-23): a tail the stick cuts (the get-ups) ends when the move stick leaves neutral and no command won this frame, so
+	// the walk starts on this frame from the momentum the move hands on (FGSTN_GetupExit). The zone is this frame's, after the input tick
+	else if (!Result.HasRequest() && OutSync.Core.ActionState == EGSTN_ActionState::InTimeline
+		&& FGSTN_CombatTimelineLogic::ShouldStickCutTail(OutSync.Core, GetRegistryTimeline(FrameSet, OutSync.Core.ActiveTimeline), TimelineOutput,
+			OutSync.Core.Input.History.GetCurrentStick().Zone != EGSTN_StickZone::Neutral))
+	{
+#if !UE_BUILD_SHIPPING
+		TraceCombatEvent(EGSTN_CombatTraceEventKind::Cancel, RegisteredEntityId, TimeStep, OutSync.Core.ActiveTimeline, 0);
+#endif
+		FGSTN_CombatTimelineLogic::CancelForOtherCommand(OutSync.Core, Frame);
+	}
 	// A timeline that reached its commit is a timeline that started: the event of the one that was replaced inside its startup
 	// override window never exists. Written on every machine and every re-simulation, published by the authority only
 	if (OutSync.Core.ActionState == EGSTN_ActionState::InTimeline && OutSync.Core.Requests.Find(EGSTN_RequestType::CommitTimeline, Frame, OutSync.Core.ActiveTimeline))

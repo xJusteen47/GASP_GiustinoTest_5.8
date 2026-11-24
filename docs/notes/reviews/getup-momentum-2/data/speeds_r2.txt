@@ -1,0 +1,4 @@
+﻿roll_a45_run FAF 21 FAF..+6 (152, -138) +6..+20 (424, -139) yaw@0 -172.5 yaw@FAF -138.8 mont@FAF+3 None
+roll_held_run FAF 21 FAF..+6 (153, 180) +6..+20 (392, 180) yaw@0 180.0 yaw@FAF 180.0 mont@FAF+3 None
+rollback_held_run FAF 21 FAF..+6 (152, -2) +6..+20 (425, -4) yaw@0 180.0 yaw@FAF 176.1 mont@FAF+3 None
+stand_run_warmup FAF 21 FAF..+6 (84, 180) +6..+20 (165, 180) yaw@0 180.0 yaw@FAF 180.0 mont@FAF+3 None

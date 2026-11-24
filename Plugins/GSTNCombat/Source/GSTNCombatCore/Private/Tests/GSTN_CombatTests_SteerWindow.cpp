@@ -176,4 +176,30 @@ bool FGSTN_GroundMoveNoWalkTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SteerWindowAwayFromStickTest, "GSTNCombat.Core.StartupSteer.Window.AwayFromStick", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_SteerWindowAwayFromStickTest::RunTest(const FString& Parameters)
+{
+	// The get-up roll toward the head (owner 2026-11-23): its back goes where the stick points, so the facing turns toward the opposite stick
+	FGSTN_CombatTimelineData Data;
+	Data.TotalFrames = 24;
+	Data.FirstActionableFrame = 21;
+	Data.MaxSteerDegrees = 45.f;
+	Data.Steer.Source = EGSTN_SteerSource::MoveStick;
+	Data.Steer.EndFrame = 4;
+	float Yaw = 0.f;
+	bool bActive = false;
+	const FVector2D BehindRight(0.7071, -0.7071);
+	TestTrue(TEXT("toward the stick: steering"), FGSTN_StartupSteer::ResolveFrame(Data, GSTNSteerWindowTest::Frame(1, 0.f, BehindRight), Yaw, bActive) == EGSTN_SteerPhase::Steering);
+	TestEqual(TEXT("toward the stick: behind right clamps to +45"), Yaw, 45.f, 0.01f);
+	Data.Steer.bAwayFromStick = true;
+	FGSTN_StartupSteer::ResolveFrame(Data, GSTNSteerWindowTest::Frame(1, 0.f, BehindRight), Yaw, bActive);
+	TestEqual(TEXT("away: behind right turns the face to -45, the back to 135"), Yaw, -45.f, 0.01f);
+	TestTrue(TEXT("away: the stick still counts as pushed"), bActive);
+	FGSTN_StartupSteer::ResolveFrame(Data, GSTNSteerWindowTest::Frame(1, 0.f, FVector2D(0.0, -1.0)), Yaw, bActive);
+	TestEqual(TEXT("away: straight behind keeps the axis"), Yaw, 0.f, 0.01f);
+	TestTrue(TEXT("away: after the window nothing steers"), FGSTN_StartupSteer::ResolveFrame(Data, GSTNSteerWindowTest::Frame(4, 0.f, BehindRight), Yaw, bActive) != EGSTN_SteerPhase::Steering);
+	TestFalse(TEXT("the flag is off by default"), FGSTN_SteerWindow().bAwayFromStick);
+	return true;
+}
+
 #endif

@@ -1,0 +1,94 @@
+    0.0s driver loaded: out C:/Users/jacop/Documents/Unreal Projects/GASP_Giustino2_n216qs/Saved/Getup/run4, sequences ['stand_run', 'stand_run_v0', 'stand_run_x15', 'roll_run', 'roll_run_v0', 'roll_run_x15', 'rollback_run', 'rollback_run_v0', 'rollback_run_x15']
+    8.0s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '3', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   25.0s review stage: parked [('Z1', (3800.0, 300.0))]; host P256, attacker P257
+   25.0s defence steps saved in the rules: True
+   25.0s kits KIT_Test_DefenceLanding: host OK, attacker OK
+   25.0s anim mesh SkeletalMesh, reaction components ['GSTN_ReactionAnimComponent']
+   33.8s sequence stand_run: host at (44, 150, 88) yaw -180, attacker at [-4, 150, 100] yaw 0, distance 48 cm, facing error 0 deg (0 = face to face), states []
+   34.7s stand_run: v10 attack c1 (states [])
+   42.4s stand_run: v121 jump (states ['Knockdown'])
+   42.7s stand_run: v122 getup started (FAF sim 21/27, video +21) (states [])
+   48.8s stand_run: v143 stick facing yaw 180 at getup+21 (states [])
+   62.1s stand_run: v188 stick released (states [])
+   71.2s sequence stand_run done: 219 frames, run {'seg': 'game', 'seg0': 148, 'down_at': 71, 'input_at': 121, 'up_at': 122, 'gu_at': 122, 'faf_v': 21, 'total_v': 26, 'faf': 21, 'total': 27, 'released': 188}
+   77.5s sequence stand_run_v0: host at (123, 150, 88) yaw 180, attacker at [-46, 150, 100] yaw 0, distance 168 cm, facing error 0 deg (0 = face to face), states []
+   77.5s stand_run_v0: gstn.Getup.StandExitSpeed 0
+   78.3s stand_run_v0: v10 attack c1 (states [])
+   85.5s stand_run_v0: v113 jump (states ['Knockdown'])
+   85.8s stand_run_v0: v114 getup started (FAF sim 21/27, video +21) (states [])
+   92.0s stand_run_v0: v135 stick facing yaw 180 at getup+21 (states [])
+  105.4s stand_run_v0: v180 stick released (states [])
+  114.2s sequence stand_run_v0 done: 211 frames, run {'seg': 'game', 'seg0': 140, 'down_at': 63, 'input_at': 113, 'up_at': 114, 'gu_at': 114, 'faf_v': 21, 'total_v': 26, 'faf': 21, 'total': 27, 'released': 180}
+  120.2s sequence stand_run_x15: host at (79, 150, 88) yaw 180, attacker at [-55, 150, 100] yaw 0, distance 134 cm, facing error 0 deg (0 = face to face), states []
+  120.2s stand_run_x15: gstn.Getup.StandExitSpeed 180
+  121.0s stand_run_x15: v10 attack c1 (states [])
+  129.0s stand_run_x15: v122 jump (states ['Knockdown'])
+  129.3s stand_run_x15: v123 getup started (FAF sim 21/27, video +21) (states [])
+  135.6s stand_run_x15: v144 stick facing yaw 180 at getup+21 (states [])
+  149.1s stand_run_x15: v189 stick released (states [])
+  158.2s sequence stand_run_x15 done: 220 frames, run {'seg': 'game', 'seg0': 149, 'down_at': 72, 'input_at': 122, 'up_at': 123, 'gu_at': 123, 'faf_v': 21, 'total_v': 26, 'faf': 21, 'total': 27, 'released': 189}
+  164.0s sequence roll_run: host at (54, 150, 88) yaw 180, attacker at [-80, 150, 100] yaw 0, distance 134 cm, facing error 0 deg (0 = face to face), states []
+  164.8s roll_run: v10 attack c1 (states [])
+  169.7s roll_run: v77 stick facing yaw 180; dodge (states ['Knockdown'])
+  171.5s roll_run: v83 dodge (states ['Knockdown'])
+  173.2s roll_run: v89 dodge (states ['Knockdown'])
+  175.0s roll_run: v95 dodge (states ['Knockdown'])
+  175.3s roll_run: v96 getup started (FAF sim 21/24, video +21) (states [])
+  181.7s roll_run: v117 stick facing yaw 180 at getup+21 (states [])
+  195.0s roll_run: v162 stick released (states [])
+  203.5s sequence roll_run done: 191 frames, run {'seg': 'game', 'seg0': 122, 'down_at': 73, 'input_at': 77, 'up_at': 96, 'gu_at': 96, 'faf_v': 21, 'total_v': 24, 'faf': 21, 'total': 24, 'released': 162}
+  209.4s sequence roll_run_v0: host at (36, 150, 88) yaw 180, attacker at [-122, 150, 100] yaw 0, distance 158 cm, facing error 0 deg (0 = face to face), states []
+  209.4s roll_run_v0: gstn.Getup.RollExitSpeed 0
+  210.2s roll_run_v0: v10 attack c1 (states [])
+  215.0s roll_run_v0: v77 stick facing yaw 180; dodge (states ['Knockdown'])
+  216.7s roll_run_v0: v83 dodge (states ['Knockdown'])
+  218.5s roll_run_v0: v89 dodge (states ['Knockdown'])
+  220.3s roll_run_v0: v95 dodge (states ['Knockdown'])
+  220.6s roll_run_v0: v96 getup started (FAF sim 21/24, video +21) (states [])
+  226.8s roll_run_v0: v117 stick facing yaw 180 at getup+21 (states [])
+  240.2s roll_run_v0: v162 stick released (states [])
+  248.6s sequence roll_run_v0 done: 191 frames, run {'seg': 'game', 'seg0': 122, 'down_at': 73, 'input_at': 77, 'up_at': 96, 'gu_at': 96, 'faf_v': 21, 'total_v': 24, 'faf': 21, 'total': 24, 'released': 162}
+  254.7s sequence roll_run_x15: host at (-1, 150, 88) yaw 180, attacker at [-159, 150, 100] yaw 0, distance 158 cm, facing error 0 deg (0 = face to face), states []
+  254.7s roll_run_x15: gstn.Getup.RollExitSpeed 330
+  255.5s roll_run_x15: v10 attack c1 (states [])
+  260.2s roll_run_x15: v76 stick facing yaw 180; dodge (states ['Knockdown'])
+  261.9s roll_run_x15: v82 dodge (states ['Knockdown'])
+  263.6s roll_run_x15: v88 dodge (states ['Knockdown'])
+  265.4s roll_run_x15: v94 dodge (states ['Knockdown'])
+  265.7s roll_run_x15: v95 getup started (FAF sim 21/24, video +21) (states [])
+  272.0s roll_run_x15: v116 stick facing yaw 180 at getup+21 (states [])
+  285.3s roll_run_x15: v161 stick released (states [])
+  294.1s sequence roll_run_x15 done: 190 frames, run {'seg': 'game', 'seg0': 121, 'down_at': 72, 'input_at': 76, 'up_at': 95, 'gu_at': 95, 'faf_v': 21, 'total_v': 24, 'faf': 21, 'total': 24, 'released': 161}
+  300.1s sequence rollback_run: host at (-20, 150, 88) yaw 180, attacker at [-198, 150, 100] yaw 0, distance 178 cm, facing error 0 deg (0 = face to face), states []
+  300.9s rollback_run: v10 attack c1 (states [])
+  305.0s rollback_run: v67 stick against yaw 360; dodge (states ['Knockdown'])
+  307.2s rollback_run: v73 dodge (states ['Knockdown'])
+  309.1s rollback_run: v79 dodge (states ['Knockdown'])
+  310.9s rollback_run: v85 dodge (states ['Knockdown'])
+  311.3s rollback_run: v86 getup started (FAF sim 21/24, video +21) (states [])
+  317.9s rollback_run: v107 stick against yaw 360 at getup+21 (states [])
+  331.8s rollback_run: v152 stick released (states [])
+  340.6s sequence rollback_run done: 181 frames, run {'seg': 'game', 'seg0': 112, 'down_at': 63, 'input_at': 67, 'up_at': 86, 'gu_at': 86, 'faf_v': 21, 'total_v': 24, 'faf': 21, 'total': 24, 'released': 152}
+  346.7s sequence rollback_run_v0: host at (-64, 150, 88) yaw 180, attacker at [-198, 150, 100] yaw 0, distance 134 cm, facing error 0 deg (0 = face to face), states []
+  346.7s rollback_run_v0: gstn.Getup.RollBackExitSpeed 0
+  347.5s rollback_run_v0: v10 attack c1 (states [])
+  352.5s rollback_run_v0: v77 stick against yaw 360; dodge (states ['Knockdown'])
+  354.3s rollback_run_v0: v83 dodge (states ['Knockdown'])
+  356.1s rollback_run_v0: v89 dodge (states ['Knockdown'])
+  358.0s rollback_run_v0: v95 dodge (states ['Knockdown'])
+  358.3s rollback_run_v0: v96 getup started (FAF sim 21/24, video +21) (states [])
+  365.5s rollback_run_v0: v117 stick against yaw 360 at getup+21 (states [])
+  380.5s rollback_run_v0: v162 stick released (states [])
+  389.6s sequence rollback_run_v0 done: 191 frames, run {'seg': 'game', 'seg0': 122, 'down_at': 73, 'input_at': 77, 'up_at': 96, 'gu_at': 96, 'faf_v': 21, 'total_v': 24, 'faf': 21, 'total': 24, 'released': 162}
+  395.9s sequence rollback_run_x15: host at (-30, 150, 88) yaw 180, attacker at [-198, 150, 100] yaw 0, distance 168 cm, facing error 0 deg (0 = face to face), states []
+  395.9s rollback_run_x15: gstn.Getup.RollBackExitSpeed 240
+  396.6s rollback_run_x15: v10 attack c1 (states [])
+  400.7s rollback_run_x15: v66 stick against yaw 360; dodge (states ['Knockdown'])
+  402.5s rollback_run_x15: v72 dodge (states ['Knockdown'])
+  404.7s rollback_run_x15: v78 dodge (states ['Knockdown'])
+  406.6s rollback_run_x15: v84 dodge (states ['Knockdown'])
+  406.9s rollback_run_x15: v85 getup started (FAF sim 21/24, video +21) (states [])
+  413.5s rollback_run_x15: v106 stick against yaw 360 at getup+21 (states [])
+  427.5s rollback_run_x15: v151 stick released (states [])
+  438.5s sequence rollback_run_x15 done: 180 frames, run {'seg': 'game', 'seg0': 111, 'down_at': 62, 'input_at': 66, 'up_at': 85, 'gu_at': 85, 'faf_v': 21, 'total_v': 24, 'faf': 21, 'total': 24, 'released': 151}
+  440.0s finish: ok
