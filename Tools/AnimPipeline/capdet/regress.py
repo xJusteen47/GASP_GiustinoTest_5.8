@@ -8,6 +8,8 @@ notice was the owner saying the video no longer looked right. So, for every row 
   asset in git      the approved .uasset (Content/, Git LFS) is compared with the SAME path AT THE TAG: `git rev-parse <tag>:<path>` vs
                     the blob of the file now. For an LFS file the blob is the pointer, which carries the content sha256, so the check
                     sees a changed animation even though git never stores it. No lock file needed: the tag IS the baseline.
+  asset after tag   an asset committed after its tag (run start v4r5) has no blob at the tag: its git blob is recorded once and
+                    deliberately with `--record <tag>` in the same locks file, and must stay exactly that blob.
   file not in git   the .casc of the row lives under `Saved/` (gitignored), so git cannot be the baseline. Its sha256 is recorded, once
                     and deliberately, with `--record <tag>`, in `docs/notes/anim-approvate-locks.json`. A row whose files are not in
                     git and have NO lock entry is a FAIL that says exactly which command records it: unverifiable is not "fine".
@@ -254,7 +256,17 @@ def check_row(row, files, lk, tol_cm=TOL_CM, allow_missing_tag=False):
                                           f'(approved blob {at_tag[:10]}, now {now[:10]}); if only moved, prove it on the '
                                           f'desktop: python Tools/AnimPipeline/capdet/prove_moved.py --tag {tag}')
                 continue
-            res['why'].append(f'{tag}: {p} does not exist at the tag (approved under another path?)')
+            # Committed AFTER the tag (run start v4r5: the tag af857cff only holds the registry row, the .uasset arrived 11 minutes
+            # later in 2e146cd7): the tag cannot be the baseline, so the git blob is recorded once and deliberately with
+            # `--record <tag>`, like a file outside git. Exact blob or FAIL: any later edit of the file changes its blob.
+            rec = (lk.get(tag) or {}).get('files', {}).get(p) or {}
+            if rec.get('blob'):
+                res['checked'][p] = {'now': now, 'locked_blob': rec['blob'], 'same': rec['blob'] == now}
+                if rec['blob'] != now:
+                    res['why'].append(f'{tag}: {p} CHANGED since its recorded baseline (blob {rec["blob"][:10]} -> {now[:10]})')
+                continue
+            res['why'].append(f'{tag}: {p} does not exist at the tag (approved under another path, or committed after the tag: '
+                              f'record its blob once with regress.py --record {tag})')
             continue
         res['checked'][p] = {'now': now, 'at_tag': at_tag, 'same': at_tag == now}
         if at_tag != now:
@@ -313,11 +325,23 @@ def record(tag, note=None, table=None):
     files = tracked()
     lk = locks()
     row = rs[0]
-    _, loose = resolve(row, files)
-    if not loose:
+    in_git, loose = resolve(row, files)
+    # Tracked files the tag does not hold (committed after it) and that no other rule covers (moved, published copy): their
+    # git blob becomes the baseline. The blob of an LFS file is its pointer, so it is the same on every machine.
+    late = []
+    for p in in_git:
+        if git('rev-parse', f'{tag}:{p}')[1] == 0 or _published_sha(p) is not None or len(_moved_at_tag(tag, p)) == 1:
+            continue
+        blob, rc = git('hash-object', '--', p)
+        if rc == 0 and blob:
+            first, _ = git('log', '--full-history', '--diff-filter=A', '--date-order', '--format=%h %cI', '--', p)
+            late.append((p, blob, (first or '').splitlines()[-1:] or ['']))
+    if not loose and not late:
         return False, [f'REGRESS: nothing to record for {tag}: every file of the row is in git (the tag is the baseline)']
     entry = dict(lk.get(tag) or {})
     entry.setdefault('files', {})
+    for p, blob, first in late:
+        entry['files'][p] = {'blob': blob, 'added_in': first[0]}
     missing = []
     for p in loose:
         h = cache.file_hash(p)
@@ -328,14 +352,17 @@ def record(tag, note=None, table=None):
     if note:
         entry['note'] = note
     entry['move'], entry['version'] = row['move'], row['version']
-    if missing:
+    if missing and not late:
         return False, [f'REGRESS: FAIL {tag}: {len(missing)} files not on this machine, first {missing[0]}',
                        'record on the machine that holds Saved/ (the desktop)']
     lk[tag] = entry
     os.makedirs(os.path.dirname(os.path.join(ROOT, LOCKS)), exist_ok=True)
     with open(os.path.join(ROOT, LOCKS), 'w', encoding='utf-8') as fh:
         json.dump(lk, fh, indent=1, sort_keys=True)
-    return True, [f'REGRESS: recorded {tag}: {len(entry["files"])} files', f'commit {LOCKS}']
+    out = [f'REGRESS: recorded {tag}: {len(entry["files"])} files ({len(late)} committed after the tag)', f'commit {LOCKS}']
+    if missing:
+        out.append(f'not recorded here (not on this machine, stays unchecked): {", ".join(missing[:2])}')
+    return True, out
 
 
 def lines(ok, results, extra):

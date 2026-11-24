@@ -1,0 +1,13 @@
+{
+ "approved/runstart-v4r5": {
+  "files": {
+   "Content/GSTN/Animation/RunStart/AS_GSTN_RunStart_v4r5.uasset": {
+    "added_in": "2e146cd7 2026-11-20T21:29:13+01:00",
+    "blob": "58b7f42123e90e0b7b4793b0a9a42412f29ffddb"
+   }
+  },
+  "move": "runstart",
+  "note": "AS_GSTN_RunStart_v4r5 was committed after the tag (tag af857cff holds only the registry row); blob unchanged since its first commit",
+  "version": "v4r5"
+ }
+}
