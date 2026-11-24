@@ -133,19 +133,19 @@ struct GSTNCOMBATCORE_API FGSTN_RunStartStampTuning
 	GENERATED_BODY()
 
 	/** Frames of the stamp. 0 = off (Toad: ~0.33 s = 21 frames) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Start Stamp", meta = (ClampMin = "0", ClampMax = "120"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Start Stamp", meta = (ClampMin = "0", ClampMax = "120"))
 	int32 Frames = 0;
 
 	/** Fraction of the stage acceleration during the stamp: small = almost in place */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Start Stamp", meta = (ClampMin = "0", ClampMax = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Start Stamp", meta = (ClampMin = "0", ClampMax = "1"))
 	float AccelFraction = 0.05f;
 
 	/** Stick magnitude (0..1) that starts the stamp: a light tilt walks without it (owner: walk = light tilt only) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Start Stamp", meta = (ClampMin = "0", ClampMax = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Start Stamp", meta = (ClampMin = "0", ClampMax = "1"))
 	float StickMin = 0.5f;
 
 	/** The stamp starts only under this ground speed (at the reference WalkSpeed): a re-push while running never stamps */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Start Stamp", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Start Stamp", meta = (ClampMin = "0", ForceUnits = "cm/s"))
 	float MaxStartSpeed = 60.f;
 };
 
@@ -160,11 +160,11 @@ struct GSTNCOMBATCORE_API FGSTN_RunBoostDashTuning
 	GENERATED_BODY()
 
 	/** Frames of the burst. 0 = off (the boost only changes the stage, as before) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Boost Dash", meta = (ClampMin = "0", ClampMax = "60"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Boost", meta = (DisplayName = "Dash Frames", ClampMin = "0", ClampMax = "60"))
 	int32 Frames = 0;
 
 	/** Multiplier of the stage acceleration during the burst (replaces the ramp) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Boost Dash", meta = (ClampMin = "1", ClampMax = "30"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Boost", meta = (DisplayName = "Dash Acceleration Multiplier", ClampMin = "1", ClampMax = "30"))
 	float AccelMultiplier = 8.f;
 };
 
@@ -182,38 +182,38 @@ struct GSTNCOMBATCORE_API FGSTN_RunReversalTuning
 	GENERATED_BODY()
 
 	/** Off = a reversal uses the stage values like any turn */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Reversal", meta = (DisplayName = "Reversal Enabled"))
 	bool bEnabled = false;
 
 	/** Cosine between stick and ground velocity under which the stick counts as reversed (-0.5 = more than 120 degrees off) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal", meta = (ClampMin = "-1", ClampMax = "0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Reversal", meta = (EditCondition = "bEnabled", ClampMin = "-1", ClampMax = "0"))
 	float StickCos = -0.5f;
 
 	/** Stick magnitude (0..1) needed: a light tilt back is a slow turn, not a reversal */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal", meta = (ClampMin = "0", ClampMax = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Reversal", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "1"))
 	float MinStickMagnitude = 0.5f;
 
 	/** Ground speed (at the reference WalkSpeed) from which a flip is a reversal: a walk turns as usual */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Reversal", meta = (EditCondition = "bEnabled", ClampMin = "0", ForceUnits = "cm/s"))
 	float MinSpeed = 250.f;
 
 	/**
 	 * The walking mode's TurningStrength during the reversal (the larger of this and the stage's). It sets how fast the old velocity dies:
 	 * higher = shorter slide. Mover reads 10 as strong, 100 as near instant
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal", meta = (ClampMin = "0", ClampMax = "200"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Reversal", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "200"))
 	float TurningStrength = 30.f;
 
 	/** Multiplier of the stage acceleration during the reversal (replaces the stage's acceleration ramp). It sets how fast the run comes back */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal", meta = (ClampMin = "1", ClampMax = "10"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Reversal", meta = (EditCondition = "bEnabled", ClampMin = "1", ClampMax = "10"))
 	float AccelerationMultiplier = 2.f;
 
 	/** The reversal ends when the speed along the stick reaches this fraction of the stage top speed */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal", meta = (ClampMin = "0.1", ClampMax = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Reversal", meta = (EditCondition = "bEnabled", ClampMin = "0.1", ClampMax = "1"))
 	float EndSpeedFraction = 0.9f;
 
 	/** The reversal never lasts more than this many frames (a wall, a slope) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Reversal", meta = (ClampMin = "1", ClampMax = "120"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Reversal", meta = (EditCondition = "bEnabled", ClampMin = "1", ClampMax = "120"))
 	int32 MaxFrames = 40;
 };
 
@@ -224,94 +224,94 @@ struct GSTNCOMBATCORE_API FGSTN_RunStagesTuning
 	GENERATED_BODY()
 
 	/** Stage 1, 2, 3... (the owner's design has 3). Empty = run stages off */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run", meta = (TitleProperty = "{MaxSpeed} cm/s, {FramesToNextStage} frames to the next stage"))
 	TArray<FGSTN_RunStage> Stages;
 
 	/** Stick magnitude (0..1) under which the stick counts as released */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Rules", meta = (ClampMin = "0", ClampMax = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Stage Rules", meta = (ClampMin = "0", ClampMax = "1"))
 	float StickDeadzone = 0.25f;
 
 	/**
 	 * Stick magnitude from which a push counts as a start for the acceleration ramp. Small on purpose: the player's dead zone has already
 	 * removed the noise, and a light tilt walking slowly must ramp too (StickDeadzone above is the run stages' "released")
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Rules", meta = (ClampMin = "0", ClampMax = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Stage Rules", meta = (ClampMin = "0", ClampMax = "1"))
 	float RampStickThreshold = 0.01f;
 
 	/** Cosine between stick and ground velocity from which the stick counts as "forward" (stage frames count only then) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Rules", meta = (ClampMin = "-1", ClampMax = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Stage Rules", meta = (ClampMin = "-1", ClampMax = "1"))
 	float ForwardStickCos = 0.7f;
 
 	/** Cosine between stick and ground velocity under which the turn is tight and the stage drops */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Rules", meta = (ClampMin = "-1", ClampMax = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Stage Rules", meta = (ClampMin = "-1", ClampMax = "1"))
 	float TightTurnCos = -0.2f;
 
 	/** Stages lost on a tight turn (P2 replaces this with the skid above stage 1) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Rules", meta = (ClampMin = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Stage Rules", meta = (ClampMin = "1"))
 	int32 TightTurnDropStages = 1;
 
 	/** Frames with the stick released after which the run falls back to stage 1 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Rules", meta = (ClampMin = "0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Stage Rules", meta = (ClampMin = "0"))
 	int32 ReleaseDropFrames = 8;
 
 	/** A bump: the ground speed falls under this fraction of the previous frame's in one frame. Then the run falls back to stage 1 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Rules", meta = (ClampMin = "0", ClampMax = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Stage Rules", meta = (ClampMin = "0", ClampMax = "1"))
 	float BumpSpeedKeptFraction = 0.5f;
 
 	/** Bumps are only checked above this ground speed (at the reference WalkSpeed), so stopping from a walk is no bump */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Rules", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Stage Rules", meta = (ClampMin = "0", ForceUnits = "cm/s"))
 	float BumpMinSpeed = 300.f;
 
 	/**
 	 * The command that jumps to BoostTargetStage (Command.Movement.RunBoost, an ini tag; Tools/GAS/setup_run_stages.py sets it). The key
 	 * (L3 by default) is in the kit's input data, never in code. Empty = no boost
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Boost", meta = (Categories = "Command"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Boost", meta = (Categories = "Command"))
 	FGameplayTag BoostCommand;
 
 	/** When the boost command works (owner decision 3C: default = initial window) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Boost")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Boost")
 	EGSTN_RunBoostMode BoostMode = EGSTN_RunBoostMode::InitialWindow;
 
 	/** InitialWindow: frames from the start of the run (stick pushed from rest) in which the boost works */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Boost", meta = (ClampMin = "0"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Boost", meta = (EditCondition = "BoostMode == EGSTN_RunBoostMode::InitialWindow", ClampMin = "0"))
 	int32 BoostWindowFrames = 12;
 
 	/**
 	 * The stage the boost jumps to, counted FROM 1 like the owner names them: 1 = run, 2 = sprint 1, 3 = sprint 2. Owner 2026-11-17:
 	 * L3 goes to the MIDDLE stage, not the last (was: always the last). Clamped into the table; a boost never lowers the stage
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Boost", meta = (ClampMin = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Boost", meta = (ClampMin = "1"))
 	int32 BoostTargetStage = 2;
 
 	/** BoostTargetStage as a 0-based index into Stages, clamped. The table must not be empty */
 	int32 GetBoostTargetIndex() const { return FMath::Clamp(BoostTargetStage - 1, 0, Stages.Num() - 1); }
 
 	/** The run start stamp (owner choice B, 2026-11-18) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Start Stamp")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Start Stamp", meta = (ShowOnlyInnerProperties))
 	FGSTN_RunStartStampTuning StartStamp;
 
 	/** The boost dash: L3 skips the stamp and launches at once (owner 2026-11-19) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Boost")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Boost", meta = (ShowOnlyInnerProperties))
 	FGSTN_RunBoostDashTuning BoostDash;
 
 	/** The run skid (P2) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Skid")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid", meta = (ShowOnlyInnerProperties))
 	FGSTN_RunSkidTuning Skid;
 
 	/** The run reversal: how fast a stick flipped against the run gives a run the other way (skid-reversal-1) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Reversal")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Reversal", meta = (ShowOnlyInnerProperties))
 	FGSTN_RunReversalTuning Reversal;
 
 	/**
 	 * P3, kit slipperiness (owner 10:12:59Z: "Luigi" slipperiness only as a kit setting, never the default): multiplies the braking of every
 	 * attack momentum slide of this kit. 1 = the moves' own data, 0.3 = very slippery
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Attack Momentum", meta = (ClampMin = "0", ClampMax = "4"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run|Attack Momentum", meta = (ClampMin = "0", ClampMax = "4"))
 	float AttackSlideFrictionScale = 1.f;
 
 	/** The air control (P2) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stages|Air")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air", meta = (ShowOnlyInnerProperties))
 	FGSTN_RunAirTuning Air;
 
 	bool IsEnabled() const { return Stages.Num() > 0; }

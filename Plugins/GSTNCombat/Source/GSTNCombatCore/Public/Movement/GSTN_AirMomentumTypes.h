@@ -35,42 +35,42 @@ struct GSTNCOMBATCORE_API FGSTN_AirMomentumTuning
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air|Momentum", meta = (DisplayName = "Inertia Style"))
 	EGSTN_AirInertiaStyle Style = EGSTN_AirInertiaStyle::HighFriction;
 
 	/** Player channel: acceleration toward the stick, up to the air top speed (x air control). Mover today gives ~0.85 x 1800 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum|Player", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air|Momentum", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
 	float AirAcceleration = 3200.f;
 
 	/**
 	 * Player channel: acceleration with the stick at 90 degrees to the drift (x air control). The rate follows the dot between the stick and
 	 * the drift continuously (owner 2026-11-18): dot 1 = AirAcceleration, dot 0 = this, dot -1 = AirBrake, linear in between
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum|Player", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air|Momentum", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
 	float AirAccelerationSide = 3200.f;
 
 	/** Player channel: deceleration when the stick points straight against the drift, dot -1 (x air control) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum|Player", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air|Momentum", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
 	float AirBrake = 4500.f;
 
 	/** HighFriction: neutral stick deceleration of the player channel. 4000 stops a 450 cm/s drift in ~7 frames */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum|Player", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air|Momentum", meta = (EditCondition = "Style == EGSTN_AirInertiaStyle::HighFriction", ClampMin = "0", ForceUnits = "cm/s^2"))
 	float HighFrictionNeutralDeceleration = 4000.f;
 
 	/** Carry: neutral stick deceleration of the player channel. ~550 = Mario's 0.12 u/frame2; Mover's old value was 200 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum|Player", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air|Momentum", meta = (EditCondition = "Style == EGSTN_AirInertiaStyle::Carry", ClampMin = "0", ForceUnits = "cm/s^2"))
 	float CarryNeutralDeceleration = 550.f;
 
 	/** External channel: decay whatever the stick does (springs and knockback keep their arc) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum|External", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air|External Push", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
 	float ExternalDeceleration = 300.f;
 
 	/** External channel: extra deceleration with the stick fully against it (scaled by how much it points against, x air control) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum|External", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air|External Push", meta = (ClampMin = "0", ForceUnits = "cm/s^2"))
 	float ExternalBrake = 1800.f;
 
 	/** Under this speed the external channel is dropped (it becomes the player's) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum|External", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air|External Push", meta = (ClampMin = "0", ForceUnits = "cm/s"))
 	float ExternalMinSpeed = 20.f;
 
 	/**
@@ -79,7 +79,7 @@ struct GSTNCOMBATCORE_API FGSTN_AirMomentumTuning
 	 * external channel is never braked by it, it only decays. The launch DI (FGSTN_DIParams, hit frame only) is separate and unchanged.
 	 * Default 1 = full air control, as Smash Ultimate is reported to allow during hitstun: UNVERIFIED. 0 = no drift (the old behaviour)
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air Momentum|Drift DI", meta = (ClampMin = "0", ClampMax = "2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Air|Drift DI", meta = (ClampMin = "0", ClampMax = "2"))
 	float DriftDIControlScale = 1.f;
 
 	bool IsEnabled() const { return Style != EGSTN_AirInertiaStyle::MoverLegacy; }

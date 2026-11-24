@@ -23,7 +23,14 @@ struct FGSTN_LoadoutExtensionContext;
  *
  * P2 adds the skid and the air control (RunStages.Skid / RunStages.Air), P3 the attack momentum (RunStages.AttackMomentum).
  */
-UCLASS(BlueprintType)
+/*
+ * Details panel layout (owner 2026-11-24, "duplicates and poor organisation"): the three tuning structs are pushed out
+ * (ShowOnlyInnerProperties), so every inner property shows in the category its own struct gives it. Those categories are the final layout:
+ * Run, Skid, Walk, Air, Jump, then Mode Bindings (the Blueprint variable names, advanced). The struct properties below carry the category
+ * of their first group only so nothing is left under an extra heading. Never rename a property to tidy the panel: categories and display
+ * names are free, a rename needs a CoreRedirect and breaks the setup scripts that set values by name.
+ */
+UCLASS(BlueprintType, meta = (PrioritizeCategories = "Run Skid Walk Air Jump"))
 class GSTNCOMBATGAS_API UGSTN_LocomotionProfile : public UPrimaryDataAsset
 {
 	GENERATED_BODY()
@@ -31,41 +38,41 @@ class GSTNCOMBATGAS_API UGSTN_LocomotionProfile : public UPrimaryDataAsset
 public:
 	UGSTN_LocomotionProfile();
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Run Stages", meta = (ShowOnlyInnerProperties))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run", meta = (ShowOnlyInnerProperties))
 	FGSTN_RunStagesTuning RunStages;
 
 	/**
 	 * Properties of the walking mode (Blueprint gait variables or Mover's own) that get the stage's MaxSpeed * stats factor. The
 	 * gait variables feed MaxSpeedOverride, so they are the values the mode really uses. A name the mode does not have is skipped
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Walking Mode Properties")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mode Bindings|Walking Mode", AdvancedDisplay)
 	TArray<FName> SpeedProperties;
 
 	/** Properties that get the stage's Acceleration * stats factor */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Walking Mode Properties")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mode Bindings|Walking Mode", AdvancedDisplay)
 	TArray<FName> AccelerationProperties;
 
 	/** Properties that get the stage's TurningStrength */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Walking Mode Properties")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mode Bindings|Walking Mode", AdvancedDisplay)
 	TArray<FName> TurningProperties;
 
 	/** Properties that get the stage's ReleaseBrake * stats factor */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Walking Mode Properties")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mode Bindings|Walking Mode", AdvancedDisplay)
 	TArray<FName> BrakeProperties;
 
 	/**
 	 * Air (P2, TakeoffCap model): properties of any mode that get the air top speed while airborne, besides Mover's shared MaxSpeed which
 	 * is always written. For a Blueprint air mode with its own speed variable. Empty by default
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Air Mode Properties")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mode Bindings|Air Mode", AdvancedDisplay)
 	TArray<FName> AirSpeedProperties;
 
 	/** Properties that get the air control (0..1) besides Mover's shared AirControlPercentage, which is always written. Empty by default */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Air Mode Properties")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mode Bindings|Air Mode", AdvancedDisplay)
 	TArray<FName> AirControlProperties;
 
 	/** Analog walk, walk start and air turn (owner playtest 2026-11-16). Works with the run stages on (it scales their stage 1) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Analog Walk", meta = (ShowOnlyInnerProperties))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Walk", meta = (ShowOnlyInnerProperties))
 	FGSTN_AnalogWalkTuning AnalogWalk;
 
 	/**
@@ -73,7 +80,7 @@ public:
 	 * (read-only fields below the inputs). Off = the kit's jump stats as before. The whole movement setup of a kit lives in this asset
 	 * (run stages, skid, air momentum, drift DI, jump), so several kits can share it
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Locomotion|Jump Designer", meta = (ShowOnlyInnerProperties))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Jump", meta = (ShowOnlyInnerProperties))
 	FGSTN_JumpDesignerTuning JumpDesigner;
 
 	virtual void PostLoad() override;
