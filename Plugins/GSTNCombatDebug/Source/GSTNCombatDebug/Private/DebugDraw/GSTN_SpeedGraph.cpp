@@ -17,12 +17,16 @@ namespace GSTNSpeedGraph
 		TEXT("Seconds of history shown by gstn.Debug.SpeedGraph."), ECVF_Default);
 
 	constexpr float RestSpeed = 10.f;
+	/** Speed is measured over at least this many seconds: the simulation ticks at 62.5 Hz, so a 60 fps frame now and then shows two
+	 *  ticks of movement and a per-frame delta reads a double-speed spike (capture 2026-11-24: peak 1152 at a 576 run, t50 = t90 = 0.75 s). */
+	constexpr double SpeedWindow = 0.1;
 
 	struct FState
 	{
 		TWeakObjectPtr<APawn> Pawn;
 		FVector LastLocation = FVector::ZeroVector;
 		double LastTime = -1.0;
+		TArray<TPair<double, FVector>> Trail; // (world time, location) of the last SpeedWindow seconds
 		TArray<FVector2D> History;      // (world time, speed)
 		TArray<FVector2D> StartSamples; // (seconds since the start, speed) of the start in progress
 		double StartTime = -1.0;
@@ -55,7 +59,13 @@ namespace GSTNSpeedGraph
 		{
 			return;
 		}
-		const float Speed = static_cast<float>(FVector::Dist2D(Location, State.LastLocation) / Dt);
+		State.Trail.Emplace(Now, Location);
+		while (State.Trail.Num() > 2 && State.Trail[1].Key <= Now - SpeedWindow)
+		{
+			State.Trail.RemoveAt(0, EAllowShrinking::No);
+		}
+		const double Span = Now - State.Trail[0].Key;
+		const float Speed = Span > KINDA_SMALL_NUMBER ? static_cast<float>(FVector::Dist2D(Location, State.Trail[0].Value) / Span) : 0.f;
 		State.LastLocation = Location;
 		State.LastTime = Now;
 
