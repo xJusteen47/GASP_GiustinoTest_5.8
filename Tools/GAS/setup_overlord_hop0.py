@@ -4,7 +4,7 @@
 #   so only the low-percent end changes. With the 1A flight (knocked gravity x4, launch fade 2300) the hops are ~0.4 m (dropkick, 40 deg,
 #   ~1.6 m away) and ~0.7 m (dair, 75 deg). Hitboxes already stronger at 0 % and set knockback hitboxes are left alone.
 #   Needs the Smash model on the rules (setup_knockback_smash.py, F2/F4). Rerunning setup_knockback_smash.py undoes this: rerun this after it.
-# Kits searched: every KIT_* under /Game/GASNPPTest/Combat (the playtest kit and the Overlord kits); moves whose class starts with OVERLORD_PREFIXES.
+# Kits searched: every KIT_* in the Overlord kits folder (gstn_content.OVERLORD_KITS: the playtest kit and the Overlord kits); moves whose class starts with OVERLORD_PREFIXES.
 # Headless (editor closed):
 #   UnrealEditor-Cmd.exe <uproject> -run=pythonscript -script="<proj>/Tools/GAS/setup_overlord_hop0.py [--revert]" -unattended -nullrhi
 # --revert writes back the values of Saved/OverlordHop0/before.json.
@@ -18,8 +18,9 @@ import unreal
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import knockback_smash_data as D  # noqa: E402
+import gstn_content as gc  # noqa: E402
 
-DIR = '/Game/GASNPPTest/Combat'
+DIR = gc.OVERLORD_KITS
 HOP_K0 = {'GA_Overlord_Dropkick': 1100.0, 'GA_Overlord_DAir': 950.0}
 OVERLORD_PREFIXES = tuple(HOP_K0)
 TUMBLE = 1800.0
