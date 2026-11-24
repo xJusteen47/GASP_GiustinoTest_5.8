@@ -18,18 +18,22 @@ planted pins, part delays) and then writes a key on every frame from one cubic p
 marked `hold: true` / `impact: true` (or listed in `holds`) are flat. `animpipe variant new` sets `"spline"` on new
 variants; approved cards keep their old build (rule 13b).
 
-`animpipe check` adds `stop_and_go` and the `life_*` blocks, **blocking on every card** (2026-11-24: K7 is a tangents card
-and has the defect). They come from `animpipe/life.py`, the OG skill's life metrics back as numbers (owner 2026-11-24:
-quality equal to the OG; a metric that errs is recalibrated with a proof, never softened):
+`animpipe check` adds `stop_and_go` and the `life_*` lines from `animpipe/life.py`, the one source of the stop and life
+metrics (the OG skill's life metrics back as numbers; `no_stop_gate.py` and the capture gate call it too). **Owner 2A
+2026-11-24:** a metric BLOCKS only once `python life_calibrate.py --write-gate` proved it on a complete run (every stock and
+approved clip passes it, at least one known-bad clip fails it) and listed it in `Tools/AnimPipeline/life_gate.json`; until
+then it is a measure printed as `WOULD FAIL ...` for the reviewer. `hold_reason` is a declaration rule and always blocks.
 - `stop_and_go` = life `stops` + `still_runs`. Startup: no GO-STOP-GO dip (a step < 3.5 cm with the whole body, under half
   the travel of the 3 steps before AND after, the motion continuing the same way: the flat-tangent key), at most 2 reversal
   beats (anticipation turns), no isolated pop (> 4x the median and the smaller neighbour; the 2 steps into contact are the
   wanted impact snap). Whole clip: no run of more than 3 DEAD steps (< 0.4 cm/frame: take-off, landing, settle, loop).
   The first version (every step >= 3.5 cm, max <= 4x median, still = 3.5 cm on the whole clip) failed a textbook OG strike
   and every stock GASP landing (tests/test_life.py): that is why it changed.
-- `life_holds`: a stop is a defect unless declared (card `life_holds` [{frames, why}] or a `hold`/`impact` pose with `why`).
-  A declaration without a reason, more than 2 holds, a hold longer than 6 frames (12 on a smash), a frozen hold on a smash
-  (< 1 cm of recoil) or a "hold" moving more than 6% of the reach per frame FAIL: declarations cannot cover a defect.
+- Holds (owner 1A 2026-11-24: a LIVE hold is a normal tool, the defects are dead holds and stop-and-go): declared in the card
+  (`life_holds` [{frames, why}], a `hold`/`impact` pose with `why` or `hold_reason`, card `holds` + `hold_reasons`).
+  `hold_reason` = every hold has its reason; `life_hold_alive` = no dead core (pelvis < 1 cm over the hold), no frozen
+  smash recoil (< 1 cm), no "hold" moving more than 6% of the reach per frame; `life_hold_guides` (measure only) = more
+  than 2 holds or longer than 6 frames (12 on a smash), numbers for the eye.
 - `life_stop_sync`: share of speed minima reached together by most parts <= 0.5 (stock mocap 0.05-0.18, flat-tangent jab 0.84).
 - `life_cascade` (pelvis > forearm > hand peaks, spread >= 1 frame, lags >= 0.5), `life_impact` (>= 40% of the effector
   path in the last 2 frames, peak on contact), `life_anticipation` (effector or pelvis first goes >= 2 cm against the attack).

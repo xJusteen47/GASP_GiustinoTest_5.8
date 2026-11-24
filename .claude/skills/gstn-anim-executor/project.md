@@ -21,10 +21,12 @@ variant that can reach the owner, on the pack of `anim_review_pack` (`final/revi
 - INV-10 a check that gives false alarms is FIXED (measure corrected, recalibrated on an approved version with proof), never
   softened or switched off; a block failing identically on the approved base still BLOCKS (only way out: the owner's exemption
   row in `docs/notes/anim-approvate.md`, section "Esenzioni dei controlli").
+  A NEW check starts as a measure and blocks only after its calibration proof (owner 2A 2026-11-24; life metrics:
+  `Tools/AnimPipeline/life_gate.json`, written by `life_calibrate.py --write-gate`; the others show as `WOULD FAIL`).
 - INV-11 OG life metrics (impact spacing, hold + recoil, cascade, arc jitter, stops) and pose checks are part of level 2.
-- INV-12 stops are defects by default: a hold is accepted only as intended motion, exceptional, declared WITH a written reason
-  (card `hold_reason` / `hold_reasons`, capture `no_stop.hold_reasons`); the declaration never skips the judgement: the review
-  judges every declared hold on the video.
+- INV-12 holds (owner 1A 2026-11-24): a LIVE hold (pelvis or head keep moving) is a normal tool, declared WITH a written reason
+  (card `life_holds` / `why` / `hold_reason` / `hold_reasons`, capture `no_stop.hold_reasons`) and judged on the video; the
+  defects are DEAD holds and stop-and-go; 2 holds / 6 frames are guides for the eye, not blocks.
 - INV-13 principles are CONSIDERED one by one, never applied like an automaton (owner 2026-11-24): every entry of
   `Tools/AnimPipeline/contract/principi-review.md` (body, fighting-game and Sakurai/OG principles, each with its document) is
   written in `final/principi.md` with the four steps of principi-animazione-corporea.md §13 (intent, prediction, observed frames
@@ -77,7 +79,7 @@ Antigravity cannot run git in its sandbox: the Claude session commits card and s
   and ships a before/after grid. Splice at most 0.1 s and at most 10 % of the clip.
 - Every capture ends with `capture_assert.py` (`ASSERT: OK`); without it, no review.
 - Any change that departs from stock GASP Mover: first a line in `docs/notes/gasp-divergenze.md` (rule 14).
-- **Deterministic zero-token steps:** run `runstart_pivot_gates.py` (incl. contralateral arm–leg phase check on start/additive clips), `clipcheck`, headless UE import (`Save-Assets`), `runstart_batch_captures.ps1` / `Run-Timed.ps1`, grid extraction and `capture_assert.py` as deterministic scripts before calling any reviewer model.
+- **Deterministic zero-token steps:** run `runstart_pivot_gates.py` (incl. the contralateral arm–leg phase MEASURE `phase_arm_leg`, not blocking until calibrated), `clipcheck`, headless UE import (`Save-Assets`), `runstart_batch_captures.ps1` / `Run-Timed.ps1`, grid extraction and `capture_assert.py` as deterministic scripts before calling any reviewer model.
 
 ## After K8 round 1 (2026-11-23; owner OK 22:28; scope: combat-move cards and `anim_capture_move` captures)
 1. **Pelvis tilt = re-key the legs.** Legs are authored in the PELVIS frame (`animpipe/author.py`): turning `pelvis.rot`

@@ -12,3 +12,5 @@ Never copy or edit the generic core for project needs: project specifics go in `
 
 **INVARIANTI (non toccare per costo):** `project.md` section `## INVARIANTI` and `Tools/AnimPipeline/contract/invarianti-review.md`
 (INV-01..INV-13). The final review (level 2) is never shortened to save cost.
+
+**Giro e profili:** `.claude/skills/gstn-anim-cycle/SKILL.md` (modi AUTORE e POLISH, metodo del w3, tre sguardi, chi esegue).

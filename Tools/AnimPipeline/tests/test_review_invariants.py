@@ -25,7 +25,7 @@ from test_t0_prep import BASE, VAR, FakeRunner, TestCaptureMove, _make_repo, _ru
 SKILLS = {
     "reviewer": REPO / ".claude/skills/gstn-anim-reviewer/project.md",
     "executor": REPO / ".claude/skills/gstn-anim-executor/project.md",
-    "cheap": REPO / ".claude/skills/gstn-anim-cycle-cheap/SKILL.md",
+    "cycle": REPO / ".claude/skills/gstn-anim-cycle/SKILL.md",
     "contract": AP / "contract/invarianti-review.md",
 }
 # every text a thread reads to run a review: none may cap the final review to a number of images
@@ -48,7 +48,7 @@ class TestSkillText(unittest.TestCase):
                 self.assertIn(k, sec, f"{name}: invariant {k} ({frp.INVARIANTS[k]}) missing from the INVARIANTI section")
 
     def test_invariants_section_comes_before_the_workflow(self):
-        for name in ("reviewer", "executor", "cheap"):
+        for name in ("reviewer", "executor", "cycle"):
             txt = SKILLS[name].read_text(encoding="utf-8")
             first_h2 = re.search(r"(?m)^## .*", txt).group(0)
             self.assertTrue(first_h2.startswith("## INVARIANTI"), f"{name}: INVARIANTI must be the first section, is {first_h2!r}")
@@ -71,7 +71,7 @@ class TestSkillText(unittest.TestCase):
         self.assertEqual(bad, [], "a skill caps the final review (INV-09); caps may only name level 1:\n" + "\n".join(bad))
 
     def test_inherited_blocks_are_not_described_as_non_blocking(self):
-        for name in ("reviewer", "executor", "cheap"):
+        for name in ("reviewer", "executor", "cycle"):
             txt = SKILLS[name].read_text(encoding="utf-8").lower()
             for bad in ("inherited, not blocking", "do not fail the variant for", "ereditati, non bloccanti", "non bloccano"):
                 self.assertFalse(bad in txt, f"{name}: '{bad}' contradicts INV-10")

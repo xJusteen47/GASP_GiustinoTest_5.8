@@ -109,7 +109,7 @@ class TestWiring(unittest.TestCase):
         self.assertIn("INV-13", frp.INVARIANTS)
         self.assertIn("INV-13", frp.PACK_INVARIANTS)
         for p in (".claude/skills/gstn-anim-reviewer/project.md", ".claude/skills/gstn-anim-executor/project.md",
-                  ".claude/skills/gstn-anim-cycle-cheap/SKILL.md", "Tools/AnimPipeline/contract/invarianti-review.md"):
+                  ".claude/skills/gstn-anim-cycle/SKILL.md", "Tools/AnimPipeline/contract/invarianti-review.md"):
             txt = (REPO / p).read_text(encoding="utf-8")
             self.assertIn("INV-13", txt, p)
             self.assertIn("principi", txt, p)

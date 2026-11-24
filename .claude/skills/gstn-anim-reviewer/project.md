@@ -21,10 +21,12 @@ variant that can reach the owner, on the pack of `anim_review_pack` (`final/revi
 - INV-10 a check that gives false alarms is FIXED (measure corrected, recalibrated on an approved version with proof), never
   softened or switched off; a block failing identically on the approved base still BLOCKS (only way out: the owner's exemption
   row in `docs/notes/anim-approvate.md`, section "Esenzioni dei controlli").
+  A NEW check starts as a measure and blocks only after its calibration proof (owner 2A 2026-11-24; life metrics:
+  `Tools/AnimPipeline/life_gate.json`, written by `life_calibrate.py --write-gate`; the others show as `WOULD FAIL`).
 - INV-11 OG life metrics (impact spacing, hold + recoil, cascade, arc jitter, stops) and pose checks are part of level 2.
-- INV-12 stops are defects by default: a hold is accepted only as intended motion, exceptional, declared WITH a written reason
-  (card `hold_reason` / `hold_reasons`, capture `no_stop.hold_reasons`); the declaration never skips the judgement: the review
-  judges every declared hold on the video.
+- INV-12 holds (owner 1A 2026-11-24): a LIVE hold (pelvis or head keep moving) is a normal tool, declared WITH a written reason
+  (card `life_holds` / `why` / `hold_reason` / `hold_reasons`, capture `no_stop.hold_reasons`) and judged on the video; the
+  defects are DEAD holds and stop-and-go; 2 holds / 6 frames are guides for the eye, not blocks.
 - INV-13 principles are CONSIDERED one by one, never applied like an automaton (owner 2026-11-24): every entry of
   `Tools/AnimPipeline/contract/principi-review.md` (body, fighting-game and Sakurai/OG principles, each with its document) is
   written in `final/principi.md` with the four steps of principi-animazione-corporea.md §13 (intent, prediction, observed frames
@@ -114,8 +116,10 @@ variant that can reach the owner, on the pack of `anim_review_pack` (`final/revi
   the **startup slowmo tile** `slowmo_<seq>_az90.png` (one tick per cell) as the frame-by-frame sequence; (2) the two
   **velocity sheets** `velocity_<variant>_az90/az180.png`: arrows per frame, red dots and red bands = whole body STOP, the
   speed strip (black = whole body, dashed = stop threshold) shows stops AND pops; (3) every grid; (4) real speed.
-- **Blocking** (rubric `statua`, `carica_viva`): the whole body still like a statue outside a hold the card declares, in
-  ANY clip (startup, loop, settle, landing), inherited clips included. A still frame in a grid is not a "good held pose"
+- **Blocking** (rubric `statua`, `carica_viva`): the whole body still like a statue (a DEAD hold, declared or not) or
+  stop-and-go, in ANY clip (startup, loop, settle, landing), inherited clips included. A live declared hold is normal
+  (owner 1A): judge on video that it reads as wanted. Life measures marked `WOULD FAIL` (no calibration proof yet) are
+  not blocks but you look at those frames and cite them. A still frame in a grid is not a "good held pose"
   until the speed strip says it moves. `no_stop` failing in `gate_report.json` means no capture happened: report it.
 - Inherited stops are judged again and FAIL the variant (label `posa`); the approved version stays locked, the fix goes in a
   variant. Do not file them as "ereditati dalla base approvata".
