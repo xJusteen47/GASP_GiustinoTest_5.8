@@ -7,13 +7,13 @@
 float FGSTN_AnalogWalkLogic::StickToIntent(const FGSTN_AnalogWalkTuning& Tuning, float StickSize)
 {
 	const float Size = FMath::Clamp(StickSize, 0.f, 1.f);
-	const float Dead = FMath::Clamp(Tuning.InnerDeadzone, 0.f, 0.9f);
-	if (Size <= Dead)
+	// No second dead zone (owner 2026-11-24, 1A): the player's dead zone (UGSTN_InputOptionsSubsystem) is the only one
+	if (Size <= 0.f)
 	{
 		return 0.f;
 	}
-	const float Full = FMath::Max(Tuning.FullTiltAt, Dead + KINDA_SMALL_NUMBER);
-	const float Tilt = FMath::Clamp((Size - Dead) / (Full - Dead), 0.f, 1.f);
+	const float Full = FMath::Max(Tuning.FullTiltAt, KINDA_SMALL_NUMBER);
+	const float Tilt = FMath::Clamp(Size / Full, 0.f, 1.f);
 	const float MinFraction = FMath::Clamp(Tuning.MinSpeedFraction, 0.f, 1.f);
 	return MinFraction + (1.f - MinFraction) * FMath::Pow(Tilt, FMath::Max(Tuning.ResponseExponent, 0.25f));
 }

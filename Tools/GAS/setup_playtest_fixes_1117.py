@@ -28,7 +28,8 @@ STAGES = [
     (610.0, 1400.0, 10.0, 1900.0, 94, 0.9, 0, 1.0),
     (850.0, 1200.0, 6.0, 1700.0, 1, 0.75, 0, 1.0),
 ]
-ANALOG = {'inner_deadzone': 0.0, 'min_speed_fraction': 0.0, 'start_acceleration_multiplier': 1.0,
+# inner_deadzone and start_acceleration_multiplier were removed from the profile (2026-11-24, 1A)
+ANALOG = {'min_speed_fraction': 0.0,
           'air_turn_rate_deg_per_sec': 3600.0, 'start_facing_time': 0.02, 'run_facing_time': 0.05}
 MIN_AIR_SPEED = 470.0
 SELF_BOUNCE_HEIGHT = 25.0

@@ -58,6 +58,15 @@ bool FGSTN_GreyboxSquashScaleTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("bottom scales about the ground at squash %.2f"), Squash),
 			FMath::IsNearlyEqual(Height - BottomBelowPelvis * Along, (PelvisHeight - BottomBelowPelvis) * Squash, 1.e-3f));
 	}
+
+	// Floor lift (owner 2026-11-24, the capsule on the ground): lowest point of a capsule hanging from the pelvis, 34 thick, hemisphere centres
+	// 47 below and 27 above a 95 cm pelvis (bottom 14, top 156)
+	TestTrue(TEXT("upright capsule bottom at 14"), FMath::IsNearlyEqual(FGSTN_AnimNode_GreyboxShape::CapsuleLowestZ(FVector(0, 0, 95), FVector::UpVector,
+		47.f, 27.f, 34.f), 14.f, 1.e-3f));
+	TestTrue(TEXT("lying capsule: pelvis height minus the radius"), FMath::IsNearlyEqual(FGSTN_AnimNode_GreyboxShape::CapsuleLowestZ(FVector(0, 0, 20),
+		FVector::ForwardVector, 47.f, 27.f, 34.f), -14.f, 1.e-3f));
+	TestTrue(TEXT("upside down: the top end is the lowest"), FMath::IsNearlyEqual(FGSTN_AnimNode_GreyboxShape::CapsuleLowestZ(FVector(0, 0, 70),
+		-FVector::UpVector, 47.f, 27.f, 34.f), 9.f, 1.e-3f));
 	return true;
 }
 

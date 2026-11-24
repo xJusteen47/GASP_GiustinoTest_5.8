@@ -125,7 +125,8 @@ int32 FGSTN_RunStageMover::ApplyStageValues(UMoverComponent& MoverComp, const FG
 	const bool bAnalog = Analog.bEnabled && GroundSpeed >= 0.f;
 	// Walk start: the boost fades out as the speed reaches LowSpeedFraction of the stage top speed (assigned every frame, never adjusted)
 	const float Blend = bAnalog ? FGSTN_AnalogWalkLogic::StartBlend(Analog, GroundSpeed, Values.MaxSpeed * Factor) : 0.f;
-	const float Acceleration = Values.Acceleration * Factor * AccelRamp * FMath::Lerp(1.f, Analog.StartAccelerationMultiplier, Blend);
+	// The start is shaped by the stage's acceleration ramp, not by a raised acceleration (the walk-start multiplier went, owner 2026-11-24 1A)
+	const float Acceleration = Values.Acceleration * Factor * AccelRamp;
 	const float Turning = FMath::Max(FMath::Lerp(Values.TurningStrength, FMath::Max(Values.TurningStrength, Analog.StartTurningStrength), Blend), MinTurning);
 	int32 Written = 0;
 	for (const TPair<FName, TObjectPtr<UBaseMovementMode>>& Entry : MoverComp.MovementModes)

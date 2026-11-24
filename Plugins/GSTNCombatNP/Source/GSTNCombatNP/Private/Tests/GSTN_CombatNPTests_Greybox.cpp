@@ -134,6 +134,41 @@ bool FGSTN_GreyboxShapeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("stick-slip catch is slower than the slip"), CatchRate > 0.f && SlipRate > 2.f * CatchRate);
 	TestTrue(TEXT("no motion = no kick"), UGSTN_GreyboxAnimInstance::PlantLean(FVector::ZeroVector, 20.f).IsNearlyZero());
 	TestTrue(TEXT("no pelvis squash in the air"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, false, 40.f, 95.f), 1.f));
+	// Owner 2026-11-24 (the capsule squashes on the ground instead of turning): a tipped pelvis lies the capsule down
+	TestTrue(TEXT("upright pelvis does not lie"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::LyingTarget(Settings, 1.f)));
+	TestTrue(TEXT("a crouch's small tilt does not lie"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::LyingTarget(Settings,
+		FMath::Cos(FMath::DegreesToRadians(Settings.LyingStartDeg - 5.f)))));
+	TestTrue(TEXT("flat pelvis lies fully"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::LyingTarget(Settings, 0.f), 1.f));
+	TestTrue(TEXT("upside down (a somersault) lies fully"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::LyingTarget(Settings, -0.8f), 1.f));
+	const float Halfway = FMath::Cos(FMath::DegreesToRadians(0.5f * (Settings.LyingStartDeg + Settings.LyingFullDeg)));
+	TestTrue(TEXT("lying blends in between"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::LyingTarget(Settings, Halfway), 0.5f, 1.e-3f));
+	FGSTN_GreyboxShapeSettings Off;
+	Off.bLyingFollowsPelvis = false;
+	TestTrue(TEXT("switch off = never lies"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::LyingTarget(Off, 0.f)));
+	// Rolls (owner 2026-11-24): a rigid somersault toward the travel, from how the capsule lay round to upright
+	TestTrue(TEXT("on its back, head behind the travel: -90"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollStartAngle(-FVector::ForwardVector,
+		FVector::ForwardVector), -90.f, 1.e-3f));
+	TestTrue(TEXT("head first: +90"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollStartAngle(FVector::ForwardVector, FVector::ForwardVector), 90.f, 1.e-3f));
+	TestTrue(TEXT("upright: 0"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::RollStartAngle(FVector::UpVector, FVector::RightVector)));
+	TestTrue(TEXT("roll starts where it lay"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollAngle(Settings, -90.f, 0.f), -90.f));
+	TestTrue(TEXT("roll ends upright after a full turn"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollAngle(Settings, -90.f,
+		Settings.RollTurnShare), 360.f));
+	TestTrue(TEXT("upright after the turn share"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollAngle(Settings, 90.f, 1.f), 360.f));
+	TestTrue(TEXT("roll turns forward"), UGSTN_GreyboxAnimInstance::RollAngle(Settings, 0.f, 0.3f) > 0.f);
+	// r8: the roll latches ~0.3 into the montage (RollMinSpeed); its first frame must be where it lay, then no frame steps far
+	TestTrue(TEXT("late latch starts where it lay"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollAngle(Settings, -90.f, 0.3f, 0.3f), -90.f));
+	TestTrue(TEXT("late latch still ends upright"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollAngle(Settings, -90.f,
+		Settings.RollTurnShare, 0.3f), 360.f));
+	float MaxStep = 0.f;
+	for (int32 i = 0; i < 22; ++i)   // a 22-frame roll montage, latched on frame 7
+	{
+		const float A = UGSTN_GreyboxAnimInstance::RollAngle(Settings, -90.f, FMath::Max(i, 7) / 22.f, 7.f / 22.f);
+		const float B = UGSTN_GreyboxAnimInstance::RollAngle(Settings, -90.f, FMath::Max(i + 1, 7) / 22.f, 7.f / 22.f);
+		MaxStep = FMath::Max(MaxStep, FMath::Abs(B - A));
+	}
+	TestTrue(FString::Printf(TEXT("late latch: no frame turns more than 75 deg (%.0f)"), MaxStep), MaxStep <= 75.f);
+	TestTrue(TEXT("first frame after a late latch turns little"), FMath::Abs(UGSTN_GreyboxAnimInstance::RollAngle(Settings, -90.f, 8.f / 22.f,
+		7.f / 22.f) + 90.f) < 20.f);
 	return true;
 }
 

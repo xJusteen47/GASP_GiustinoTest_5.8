@@ -47,6 +47,36 @@ float UGSTN_GreyboxAnimInstance::PelvisSquashTarget(const FGSTN_GreyboxShapeSett
 	return FMath::Clamp(PelvisHeight / ReferenceHeight, FMath::Min(Settings.MinPelvisSquash, 1.f), 1.f);
 }
 
+float UGSTN_GreyboxAnimInstance::LyingTarget(const FGSTN_GreyboxShapeSettings& Settings, float UpZ)
+{
+	if (!Settings.bLyingFollowsPelvis)
+	{
+		return 0.f;
+	}
+	// By the tilt angle from upright (an upside-down pelvis, mid somersault, is past 90: lying)
+	const float TiltDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(UpZ, -1.f, 1.f)));
+	const float Start = FMath::Min(Settings.LyingStartDeg, Settings.LyingFullDeg);
+	const float Full = FMath::Max(Settings.LyingFullDeg, Start + 1.f);
+	return FMath::Clamp((TiltDeg - Start) / (Full - Start), 0.f, 1.f);
+}
+
+float UGSTN_GreyboxAnimInstance::RollAngle(const FGSTN_GreyboxShapeSettings& Settings, float StartDeg, float MontageShare, float LatchShare)
+{
+	// The turn's own time: from the latch to the end of the turn share (a latch past it still gets a short turn, never a jump)
+	const float Begin = FMath::Clamp(LatchShare, 0.f, 0.99f);
+	const float End01 = FMath::Max(Settings.RollTurnShare, Begin + 0.05f);
+	const float T = FMath::Clamp((MontageShare - Begin) / (End01 - Begin), 0.f, 1.f);
+	// Always forward, toward the travel: from the start round to the next full turn (on the back = 450, head first = 270)
+	const float End = 360.f;
+	return FMath::Lerp(StartDeg, End, FMath::SmoothStep(0.f, 1.f, T));
+}
+
+float UGSTN_GreyboxAnimInstance::RollStartAngle(const FVector& BodyUp, const FVector& Travel)
+{
+	const FVector Horizontal = FVector(Travel.X, Travel.Y, 0.f).GetSafeNormal();
+	return FMath::RadiansToDegrees(FMath::Atan2(static_cast<float>(BodyUp | Horizontal), static_cast<float>(BodyUp.Z)));
+}
+
 float UGSTN_GreyboxAnimInstance::LimbScaleTarget(const FGSTN_GreyboxShapeSettings& Settings, float AttackWeight)
 {
 	const float Weight = FMath::Clamp(AttackWeight, 0.f, 1.f);
@@ -252,6 +282,21 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// The body's frame: the actor turned by the offset; leans and the stop plant read the acceleration in it
 	const FQuat BodyQuat = FQuat(FVector::UpVector, FMath::DegreesToRadians(TurnSpring.Value)) * Owner->GetActorQuat();
 
+	// The driver's pelvis: its height (the ground squash) and how upright it is (lying)
+	float PelvisHeight = 0.f;
+	float PelvisReference = 0.f;
+	float PelvisUpZ = 1.f;
+	const bool bHasPelvis = GetDriverPelvisHeight(PelvisHeight, PelvisReference, PelvisUpZ);
+	LyingAlpha = FMath::FInterpTo(LyingAlpha, bHasPelvis ? LyingTarget(ShapeSettings, PelvisUpZ) : 0.f, DeltaSeconds, ShapeSettings.LyingBlendSpeed);
+	// A lying body neither leans around its feet nor sways like a runner: a roll moves on the ground but is not a run
+	// A roll drives the whole capsule (UpdateRoll): no lying, no lean or sway under it
+	const bool bRolling = UpdateRoll(Velocity);
+	if (bRolling)
+	{
+		LyingAlpha = 0.f;
+	}
+	const float Upright = bRolling ? 0.f : 1.f - LyingAlpha;
+
 	const FVector Local = BodyQuat.UnrotateVector(Acceleration);
 	// On a wall the body is braced like on the ground (no air stretch from the slide's vertical speed), and leans its top off the wall
 	const bool bBraced = bOnGround || bOnWall;
@@ -364,7 +409,7 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	}
 	// The frantic start replaces the speed's amplitude instead of raising it (run 3: with a max, the fast ramp reached full speed inside
 	// the frantic window, so lowering FranticAmplitude changed nothing and the start still rocked as wide as the run, at twice the cadence)
-	const float AmplitudeGoal = bMoving ? SwayAmplitudeTarget(ShapeSettings, Speed2D, Frantic) : 0.f;
+	const float AmplitudeGoal = bMoving ? SwayAmplitudeTarget(ShapeSettings, Speed2D, Frantic) * Upright : 0.f;
 	SwayAmplitude = FMath::FInterpTo(SwayAmplitude, AmplitudeGoal, DeltaSeconds, 10.f);
 	SwayPhase = FMath::Fmod(SwayPhase + 2.f * PI * SwayCadenceHz(ShapeSettings, Speed2D, Frantic) * DeltaSeconds, 2.f * PI);
 	float SwayPitch = 0.f;
@@ -375,17 +420,16 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	const FQuat ActorToComponent = GetSkelMeshComponent() ? (GetSkelMeshComponent()->GetComponentQuat().Inverse() * BodyQuat) : FQuat::Identity;
 	// Rotation axis scaled by degrees, actor frame: tipping the top toward +X is a turn around +Y by the forward lean (-Pitch), toward +Y a
 	// turn around -X by the side lean (Roll)
-	const float Roll = RollSpring.Value + Sway.Y + JudderRoll;
-	const float Pitch = PitchSpring.Value + SwayPitch + JudderPitch;
+	const float Roll = (RollSpring.Value + Sway.Y + JudderRoll) * Upright;
+	const float Pitch = (PitchSpring.Value + SwayPitch + JudderPitch) * Upright;
 	const FVector Axis = ActorToComponent.RotateVector(FVector(-Roll, -Pitch, 0.f));
 	const FQuat Tip = Axis.IsNearlyZero() ? FQuat::Identity : FQuat(Axis.GetSafeNormal(), FMath::DegreesToRadians(Axis.Size()));
 	// Twist about the up axis (same in actor and component frames), under the tip
 	Shape.Lean = (Tip * FQuat(FVector::UpVector, FMath::DegreesToRadians(TurnSpring.Value + Sway.Z))).Rotator();
 
-	float PelvisHeight = 0.f;
-	float PelvisReference = 0.f;
-	const bool bHasPelvis = GetDriverPelvisHeight(PelvisHeight, PelvisReference);
-	const float PelvisGoal = bHasPelvis ? PelvisSquashTarget(ShapeSettings, bOnGround, PelvisHeight, PelvisReference) : 1.f;
+	// A lying body is not a crouch: its low pelvis lies the capsule down (LyingWeight) instead of squashing it
+	const float PelvisGoal = bRolling ? 1.f
+		: FMath::Lerp(bHasPelvis ? PelvisSquashTarget(ShapeSettings, bOnGround, PelvisHeight, PelvisReference) : 1.f, 1.f, LyingAlpha);
 	// Follows the pose directly (no spring: the clip already eases), blended only where it switches on or off
 	Shape.PelvisSquash = FMath::FInterpTo(Shape.PelvisSquash, PelvisGoal, DeltaSeconds, ShapeSettings.PelvisSquashBlendSpeed);
 
@@ -393,6 +437,12 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// Bones only where strictly needed, in attacks (owner 2026-11-24): the body follows the pose and the markers show only while an
 	// attack's capsule clip plays; everything else (locomotion, hit reactions, rolls) is the rigid capsule swaying
 	Shape.PoseWeight = Shape.OverrideWeight;
+	Shape.LyingWeight = LyingAlpha;
+	// The floor is the feet's height only on the ground
+	const bool bFloorLift = ShapeSettings.bKeepAboveFloor && bOnGround;
+	Shape.FloorRadius = bFloorLift ? ShapeSettings.CapsuleRadius : 0.f;
+	Shape.FloorBottom = ShapeSettings.CapsuleBottom;
+	Shape.FloorTop = ShapeSettings.CapsuleTop;
 	Shape.LimbScale = FMath::FInterpTo(Shape.LimbScale, LimbScaleTarget(ShapeSettings, Shape.OverrideWeight), DeltaSeconds,
 		ShapeSettings.LimbBlendSpeed);
 }
@@ -437,8 +487,66 @@ FVector UGSTN_GreyboxAnimInstance::FindWallNormal(const AActor& Owner, const FQu
 	return Best;
 }
 
-bool UGSTN_GreyboxAnimInstance::GetDriverPelvisHeight(float& OutHeight, float& OutReference)
+bool UGSTN_GreyboxAnimInstance::UpdateRoll(const FVector& Velocity)
 {
+	Shape.Spin = FQuat::Identity;
+	const USkeletalMeshComponent* Capsule = GetSkelMeshComponent();
+	const USkeletalMeshComponent* Driver = Capsule ? Cast<USkeletalMeshComponent>(Capsule->GetAttachParent()) : nullptr;
+	UAnimInstance* DriverAnim = Driver ? Driver->GetAnimInstance() : nullptr;
+	const UAnimMontage* Montage = DriverAnim ? DriverAnim->GetCurrentActiveMontage() : nullptr;
+	const FAnimMontageInstance* Instance = Montage ? DriverAnim->GetActiveInstanceForMontage(Montage) : nullptr;
+	bool bRollMontage = false;
+	if (ShapeSettings.bProceduralRoll && Instance && Montage->GetPlayLength() > KINDA_SMALL_NUMBER)
+	{
+		const FString Name = Montage->GetName();
+		for (const FString& Pattern : ShapeSettings.RollMontageNames)
+		{
+			bRollMontage |= !Pattern.IsEmpty() && Name.Contains(Pattern);
+		}
+	}
+	if (!bRollMontage)
+	{
+		RollMontage.Reset();
+		bRollLatched = false;
+		return false;
+	}
+	if (RollMontage.Get() != Montage)
+	{
+		RollMontage = Montage;
+		bRollLatched = false;
+	}
+	// The direction is the travel once the roll moves (a roll back travels against the facing); until then the driver's pose stays
+	const FVector Horizontal(Velocity.X, Velocity.Y, 0.f);
+	if (!bRollLatched)
+	{
+		if (Horizontal.Size() < ShapeSettings.RollMinSpeed || !Capsule)
+		{
+			return false;
+		}
+		RollTravel = Horizontal.GetSafeNormal();
+		// How the capsule lay as the roll got going: the driver pelvis's up (the capsule followed it), in world space
+		const FVector WorldUp = Driver->GetComponentQuat().RotateVector(PelvisUp);
+		RollStartDeg = FMath::Lerp(0.f, RollStartAngle(WorldUp, RollTravel), LyingAlpha);
+		RollLatchShare = Instance->GetPosition() / Montage->GetPlayLength();
+		bRollLatched = true;
+	}
+	const float Share = Instance->GetPosition() / Montage->GetPlayLength();
+	const float Angle = RollAngle(ShapeSettings, RollStartDeg, Share, RollLatchShare);
+	// Turning the top toward the travel is a turn about Up x Travel; in the capsule component's frame, about the capsule's middle
+	const FVector WorldAxis = FVector::CrossProduct(FVector::UpVector, RollTravel).GetSafeNormal();
+	const FVector Axis = Capsule->GetComponentQuat().UnrotateVector(WorldAxis);
+	if (Axis.IsNearlyZero())
+	{
+		return false;
+	}
+	Shape.Spin = FQuat(Axis, FMath::DegreesToRadians(Angle));
+	Shape.SpinPivot = FVector(0.f, 0.f, 0.5f * (ShapeSettings.CapsuleBottom + ShapeSettings.CapsuleTop));
+	return true;
+}
+
+bool UGSTN_GreyboxAnimInstance::GetDriverPelvisHeight(float& OutHeight, float& OutReference, float& OutUpZ)
+{
+	OutUpZ = 1.f;
 	static const FName PelvisName(TEXT("pelvis"));
 	const USkeletalMeshComponent* Capsule = GetSkelMeshComponent();
 	const USkeletalMeshComponent* Driver = Capsule ? Cast<USkeletalMeshComponent>(Capsule->GetAttachParent()) : nullptr;
@@ -453,14 +561,19 @@ bool UGSTN_GreyboxAnimInstance::GetDriverPelvisHeight(float& OutHeight, float& O
 		const FReferenceSkeleton& RefSkeleton = DriverMesh->GetRefSkeleton();
 		const int32 Index = RefSkeleton.FindBoneIndex(PelvisName);
 		PelvisReferenceMesh = DriverMesh;
-		PelvisReferenceHeight = Index != INDEX_NONE ? FAnimationRuntime::GetComponentSpaceTransformRefPose(RefSkeleton, Index).GetLocation().Z : 0.f;
+		const FTransform RefPelvis = Index != INDEX_NONE ? FAnimationRuntime::GetComponentSpaceTransformRefPose(RefSkeleton, Index) : FTransform::Identity;
+		PelvisReferenceHeight = Index != INDEX_NONE ? static_cast<float>(RefPelvis.GetLocation().Z) : 0.f;
+		PelvisLocalUp = RefPelvis.GetRotation().UnrotateVector(FVector::UpVector);
 	}
 	if (PelvisReferenceHeight <= KINDA_SMALL_NUMBER || Driver->GetBoneIndex(PelvisName) == INDEX_NONE)
 	{
 		return false;
 	}
-	OutHeight = Driver->GetSocketTransform(PelvisName, RTS_Component).GetLocation().Z;
+	const FTransform Pelvis = Driver->GetSocketTransform(PelvisName, RTS_Component);
+	OutHeight = static_cast<float>(Pelvis.GetLocation().Z);
 	OutReference = PelvisReferenceHeight;
+	PelvisUp = Pelvis.GetRotation().RotateVector(PelvisLocalUp);
+	OutUpZ = static_cast<float>(PelvisUp.Z);
 	return true;
 }
 

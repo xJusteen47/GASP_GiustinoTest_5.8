@@ -292,3 +292,67 @@ Evidence `docs/notes/reviews/greybox-capsula/run-sway-1/` (KIT_Test_Overlord: gb
   3 is the 1 s after the turn (v460-520), not before it.
 - Stage 3 (v466-512): small rocks of a few degrees around a held forward lean, no violent swing; to judge at 1x by the owner.
 ESITO: build/test OK, captures done; sway at stage 3 small in stills.
+
+## Desktop run 7 (2026-11-24, thread "Sistemare capsula a terra e rotolate", `_ue59` on 4317a34d)
+Evidence `docs/notes/reviews/greybox-capsula/round7/` (side | back | game, 1x / 0.25x; sheets). Captures `Saved/Greybox/r7_a` (799a6740),
+`r7_b` (4317a34d, stopped), `r7_c` (4317a34d, KIT_Test_Playtest, gstn.Greybox 1, gstn.Loco.Base 2, PIE_CAPTURE_AIR_GIVE_UP=200).
+Build OK, tests GSTNAnimation.Core.Greybox + GSTNCombat.NP.Greybox + GSTNDefence.NP.Landing 19/19.
+Data (Tools/GASNPPTest/dump_dropkick_bounce.py): the kit's dropkick is GA_Overlord_Dropkick -> TL_Overlord_Dropkick (91 frames): Self
+Landing Bounce Mode=Height, Height=25, BounceAbility GA_Overlord_DropkickTechBounceR3; KnockdownOnLanding window [0, 91); Hold Until
+Landed LandFrame 59, MaxAirFrames 125. DA_DefenceRules_Test GroundBounce: GroundBounceGravityScale 3, SelfKnockdownImpactSpeed 900,
+MaxDownedFrames 90 (AutoGetupFor Everyone), RollInput DodgeAndStick, RollPressBufferFrames 6.
+Why the hop did not show:
+1. On 799a6740 the move ended on the touchdown frame before the self knockdown hook (fixed by 4317a34d, LandedTimeline).
+2. Pressed rising on the playtest kit's ~9 m jump (as dropkick_whiff), the move stays airborne past MaxAirFrames 125 and ends by the air
+   timeout a few frames over the floor (r7_a, r7_b: exactly 125 sim frames; z 114 / 162 cm when it ends): "disarmed, window closed", no
+   knockdown. The gb_dk_* sequences now press falling at 400 cm (GB_DK_AIR).
+3. With the knockdown (r7_c, "frame 1514 landed inside the window"): the hop is ~9 cm for ~4 frames, not 25. Capsule bottom 2.2 (v157,
+   touchdown) -> 8.3 -> 11.4 -> 11.5 (v160, peak) -> 8.6 -> 2.7 (v162, down); the actor z jumps 37 -> 94 on v158 only because the
+   dropkick's body capsule (half height 35) grows back to 86. Deceleration ~3 cm/frame^2 = ~11800 cm/s^2 = 12 g: the knocked-flight
+   gravity of the combat rules (KnockbackGravityScale 4, owner 1A 2026-11-24; row gravity -3920 v159-162) times GroundBounceGravityScale 3,
+   while the bounce speed is sized for 980 x 3 (BounceSpeedForHeight uses the base gravity). 25 cm at 3 g gives ~6-9 cm at 12 g.
+   The driver's pelvis barely leaves the floor (12 -> 20 cm) through the bounce clip.
+What the frames show (r7_c):
+- Landing / downed (dk_ground side + back v150-185): flat dropkick in the air, touchdown v157; through the bounce clip (TechBounceR3,
+  v158-169) the capsule pops between lying and upright: flat v158, UPRIGHT v159, 45 deg v160, flat v161, upright-ish (sitting) v164-169;
+  AnimMontage_0 v170-172 tilted, then lying flat on the floor from v173 (bottom on the floor, no sinking, no squash). Neutral get-up
+  AM_React_GetUp from v244 (90 downed frames).
+- Roll forward (Dodge + stick forward v198, AM_React_Roll v200-223): tips a little, then sits up while sliding 80 cm and goes short and
+  wide (v214-220, squashed) before standing at v224: reads as "stand up while sliding", not as a roll over.
+- Roll back (AM_React_RollBack v200-223): pivots over the feet end, upside down near vertical (v206-208, collar at the bottom), lies
+  reversed (v212), stands v216-218: reads as a backward roll with a fast flip.
+- Victim (gb_dk_victim_near): the dummy at 180 % is downed (~v240, 21 m ahead) and gets up after its 90 downed frames (~v330) before
+  the walking host arrives (stops 1.7 m short at v440): never framed lying; videos not kept. Needs a camera on the dummy.
+ESITO: hop runs on 4317a34d but is ~9 cm / 4 frames (gravity stack); lying pose OK, bounce clip pops lying/upright; forward roll reads as
+a sit-up slide with a squash; no data changed.
+SUBAGENTI: none.
+COSTO: not measured (one thread, ~1 h 30 including the _ue59 collision and the pause).
+
+## Laptop run 8 (2026-11-24, thread "Sistemare capsula a terra e rotolate", worktree GASP_Giustino2_cp1verify on ba5fd254)
+The desktop is in use: laptop UE 5.9 CL 60738873, worktree cp1verify (junctions to the main folder's GASP content; the main folder holds
+another thread's uncommitted VFX work and was not touched). Captures `Saved/Greybox/r8_a` (ba5fd254, camera following the actor height),
+`r8_b` (camera height held), `r8_c` (roll fix below, camera height held; the round8 videos and sheets). KIT_Test_Playtest, gstn.Greybox 1,
+gstn.Loco.Base 2, PIE_CAPTURE_AIR_GIVE_UP=200, PIE_CAPTURE_CAM_LOCK_Z=88.
+- Build OK (`-SkipRegress`: approved/runstart-v4r5 lists AS_GSTN_RunStart_v4r5.uasset, which that tag does not contain, local tag = origin;
+  the other 7 locked versions pass; a registry error to fix, not this branch). Tests Core.Greybox + NP.Greybox + Defence.NP.Landing 19/19,
+  before and after the roll fix.
+- make_capsule_clips with saving (headless, same command as Save-Assets.ps1, which refuses outside `_ue59`): PASS. The capsule ABP has 21
+  montage + 25 sequence overrides and no tech bounce (checked by reading the CDO); the run also made clips for the versioned K5-K8 dropkick
+  and FThrowV1 montages (c22677fd). Hit reactions and rolls get no clip by design (MOVE_FILTER Overlord).
+- Self knockdown: "landed inside the window: the move's user is downed" in all three sequences, every capture.
+- Hop after the dropkick (frames.jsonl, capsule bottom): touchdown v157-158, airborne v158/159-v174 (16-17 frames), peak v166 at 28.2 cm,
+  floor again v174-175. Same in r8_a/b/c (round 7: ~9 cm / 4 frames). On video it reads only with the camera height held: the follow
+  cameras rose with the actor (PIE_CAPTURE_CAM_LOCK_Z, new, opt-in). Lying flat through the whole bounce, no lying/upright pop (the tech
+  bounce clip is gone). Open: at touchdown the mesh dips v157, rises ~20 cm v158 and settles v159-160 before the hop (the dropkick body
+  capsule regrows 35 -> 86, actor z 37 -> 94, and the mesh smoothing follows it): small, visible at 0.25x.
+- Rolls: montages AM_React_Roll (forward, 80 cm) and AM_React_RollBack (back, 65 cm), both contain "Roll". On ba5fd254 both did a full
+  somersault and stood up, but opened with a ~90 deg one-frame jump (r8_a forward v207-208, back v205-206): the turn was timed from the
+  montage start while the start angle latches when the roll moves (RollMinSpeed, ~0.3 into the montage). Fix: RollAngle runs the ease from
+  the latch share (RollLatchShare), tests added. r8_c: forward v206-v218 sits up then somersaults forward, continuous, fastest ~90 deg/frame
+  mid-turn (v212-213), upright v218; back v206-v218 feet over the head, at most ~45 deg/frame, upright v218. No jump at the start.
+  The forward turn is 450 deg in ~12 frames: if it reads too fast, RollTurnShare (0.75) on the ABP is the knob.
+Evidence `docs/notes/reviews/greybox-capsula/round8/` (side | back | game, 1x / 0.25x; sheets of the hop side/back and both rolls).
+ESITO: hop ~28 cm / 16-17 frames, lying without pops; both rolls full somersault back to standing, start jump fixed; open: touchdown dip
+v157-159.
+SUBAGENTI: none.
+COSTO: not measured (one thread, ~1 h 45 on the laptop, mostly build, slow fetch and three captures).
