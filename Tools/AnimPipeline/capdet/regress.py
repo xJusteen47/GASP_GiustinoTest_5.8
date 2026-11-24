@@ -152,6 +152,21 @@ def joints_delta(base_path, now_path):
     return worst, where
 
 
+PUBLISHED = 'Content/AnimPipeline/Published/'
+
+
+def _published_sha(path):
+    """sha256 recorded by publish.json for a file of a Published/<move>/<ver>/ folder, else None (not a published copy)."""
+    p = path.replace('\\', '/')
+    if not p.startswith(PUBLISHED):
+        return None
+    meta = os.path.join(ROOT, os.path.dirname(p), 'publish.json')
+    if not os.path.exists(meta):
+        return None
+    with open(meta, encoding='utf-8') as fh:
+        return (json.load(fh).get('files') or {}).get(os.path.basename(p))
+
+
 def check_row(row, files, lk, tol_cm=TOL_CM, allow_missing_tag=False):
     """One row -> {'ok', 'why': [...], and every file it looked at}."""
     res = {'tag': row['tag'], 'move': row['move'], 'version': row['version'], 'checked': {}, 'why': []}
@@ -177,6 +192,16 @@ def check_row(row, files, lk, tol_cm=TOL_CM, allow_missing_tag=False):
             res['checked'][p] = {'now': now, 'at_tag': None, 'same': None}
             continue
         if rc_t != 0 or at_tag is None:
+            # A copy made by `animpipe publish` (Content/AnimPipeline/Published/<move>/<ver>/) is newer than the tag by design:
+            # its baseline is the sha256 that publish.json recorded at publish time (C5, 2026-11-24: the gate refused every build
+            # after C4's publish). Same strictness as a lock: a different or missing record is a FAIL.
+            pub = _published_sha(p)
+            if pub is not None:
+                h = cache.file_hash(p)
+                res['checked'][p] = {'now': h, 'published': pub, 'same': h == pub}
+                if h != pub:
+                    res['why'].append(f'{tag}: {p} CHANGED since publish (sha256 {pub[:10]} -> {h[:10]})')
+                continue
             res['why'].append(f'{tag}: {p} does not exist at the tag (approved under another path?)')
             continue
         res['checked'][p] = {'now': now, 'at_tag': at_tag, 'same': at_tag == now}

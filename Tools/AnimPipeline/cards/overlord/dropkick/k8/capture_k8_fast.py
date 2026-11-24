@@ -39,10 +39,20 @@ def pwsh_runner(cmd, env, cwd):
 
 real = "--real" in sys.argv
 t0 = time.time()
+# --session (C5, cleanup fix 3): the capture runs in the live editor_session (one editor per round); --keep leaves it open for the next
+# step/round, otherwise it is closed at the end. Without --session: one fresh editor per capture through pie_capture_timed.ps1, as before.
+sess = None
+if real and "--session" in sys.argv:
+    sys.path.insert(0, os.path.join(REPO, "Tools", "AnimPipeline"))
+    import session_capture as SC  # noqa: E402
+    sess = SC.ensure_session(max_minutes=60)
+    if sess["state"] == "failed":
+        print("ESITO: FAIL no editor session (see", sess.get("log"), ")")
+        sys.exit(4)
 res = CM.anim_capture_move("KIT_Test_PlaytestTBK8", SEQ, runs, views="az90,az180,game",
                            out="docs/notes/reviews/dropkick-kick-k6/k8fast", move="dropkick-kick", round="k8fast",
                            objective="dropkick-k8-fast", edit_window=[0, 12], window=[130, 200], anchor=153, faf=None,
-                           dry_run=not real, root=REPO, runner=pwsh_runner if real else None,
+                           dry_run=not real, root=REPO, runner=(SC.session_runner(pwsh_runner) if sess else pwsh_runner) if real else None,
                            raw_dir="Saved/AnimPipeline/captures/dropkick-kick-k6/k8fast", fast=True, fast_window=[20, 90],
                            final_round="--final" in sys.argv, hitstop_pairs=[SEQ])
 out = os.path.join(REPO, "Saved", "AnimPipeline", "captures", "dropkick-kick-k6", "k8fast_result.json")
@@ -50,7 +60,10 @@ os.makedirs(os.path.dirname(out), exist_ok=True)
 json.dump(res, open(out, "w"), indent=1, default=str)
 print(("REAL" if real else "DRY"), "ok", res.get("ok"), res.get("verdict"), res.get("stage", ""), str(res.get("error", ""))[:160])
 print("captured:", (res.get("plan") or {}).get("capture_runs"), "reused:", sorted(((res.get("plan") or {}).get("reused") or {})))
-print(f"TEMPO giro: {time.time() - t0:.0f} s (capture {res.get('minutes', 0)} min)")
+print(f"TEMPO giro: {time.time() - t0:.0f} s (capture {res.get('minutes', 0)} min"
+      + (f", session {sess['state']} {sess['sec']} s" if sess else "") + ")")
+if sess and "--keep" not in sys.argv:
+    SC.quit_session()
 for w in (res.get("warnings") or [])[:1]:
     print("WARN", w)
 print(out)
