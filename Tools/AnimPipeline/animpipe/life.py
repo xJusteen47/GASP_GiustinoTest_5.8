@@ -16,6 +16,8 @@ pelvis itself absolute, as curves.body_steps does):
                a small motion (>= HOLD_ALIVE_CM over the hold) and stay under 6% of the reach per frame (OG r.403).
   stop_sync    share of speed minima that most parts reach together (kb_motion stop_sync_share, here on points instead of
                joint rotations): pose-interpolated clips stop everything on the key, mocap and good hand animation stagger.
+               A flat run of minima is one minimum; minima inside a live declared hold are skipped (2026-11-24).
+  holds core   every declared hold, any class: pelvis path >= life_hold_core_cm, else the hold is DEAD (2026-11-24).
   cascade      in the strike window the speed peaks travel pelvis -> forearm -> hand (OG r.208-209, r.405): spread >= 1
                frame, each lag >= 0.5 frame, never hand before pelvis.
   impact       share of the effector path covered in the last 2 frames before contact >= 0.4 (OG r.401, motion_check
@@ -30,7 +32,7 @@ names like hand_MainPoint_l), a capture frames.jsonl (one JSON per tick with bod
 body.actor) or the frames list animpipe check builds. Missing points (captures have no forearms) are simply not used.
 
 CLI: python -m animpipe life <dump> [--window=a-b] [--contact=c] [--effector=hand_l] [--holds=a-b:why,..] [--class=tilt]
-     [--card=<card.json>] [--json]. Prints one JSON object with --json (exit 0 whatever the verdict: the verdict is
+     [--card=<card.json>] [--json]. Repeated frames are dropped only on .jsonl captures (load_clip). Prints one JSON object with --json (exit 0 whatever the verdict: the verdict is
      inside, final_review_pack.py reads it), otherwise at most 5 lines; exit 1 on FAIL without --json.
 Thresholds: motion_thresholds.json keys life_* (calibration notes there and in life_calibration.json)."""
 import json
@@ -52,6 +54,9 @@ DEF = {
     "life_hold_max_frames": 6,           # UFD tilts: Terry ftilt 5 frozen, Ganondorf ftilt ~9 at 69% (a smash may hold 12)
     "life_hold_max_frames_smash": 12,    # Little Mac fsmash 12 frozen, Ryu fsmash ~13 with recoil
     "life_hold_alive_cm": 1.0,           # = recoil_min_cm: a strong hold keeps a few cm of recoil (OG r.206)
+    "life_hold_core_cm": 1.0,            # owner 2026-11-24 (pose holds): a hold is normal (Sakurai) but never a block of
+                                         # concrete: on EVERY class the pelvis travels >= this over the hold. Slowmo
+                                         # 11-24: ftilt v3.1 kick hold 10-15 pelvis 1.4 cm (alive), jab v12 5-9 0.4 (dead)
     "life_hold_speed_rel": 0.06,         # = hold_speed_max (OG r.403)
     "life_stop_sync_max": 0.5,           # kb_motion: mocap 0-0.25, pose-interpolated 0.88-0.96
     "life_stop_sync_min_cm": 0.5,        # a part slower than this all clip long has no minima worth counting
@@ -104,9 +109,23 @@ def load(path):
     return [{k: tuple(float(x) for x in J[k][f]) for k in J if k in POINTS or k == "pelvis"} for f in range(n)]
 
 
+def is_capture(path):
+    """Only game captures (frames.jsonl, one sample per tick) can repeat a tick; an asset dump has one sample per anim frame."""
+    return str(path).endswith(".jsonl")
+
+
+def load_clip(path):
+    """load() + dedupe() ONLY on captures. Bug fixed 2026-11-24 (slowmo jab/ftilt): life_calibrate deduped the asset dumps
+    too, so the 20 identical frames of the jab v12 dead tail (f18-37, after FAF 19) collapsed into one sample and
+    still_runs passed a clip the video shows frozen. On an asset, identical frames ARE the defect."""
+    F = load(path)
+    return dedupe(F) if is_capture(path) else F
+
+
 def dedupe(F):
     """Capture chain artefact: a tick rendered twice gives a step of exactly 0 between two moving steps (land/skid/jumpsquat
-    stock captures, 0.0 between 16 and 17 cm). Drop the repeated sample, so a duplicate tick never reads as a stop."""
+    stock captures, 0.0 between 16 and 17 cm). Drop the repeated sample, so a duplicate tick never reads as a stop.
+    Captures only (load_clip): never on an asset dump, where repeated frames are a real freeze."""
     out = [F[0]] if F else []
     for f in F[1:]:
         if any(CV._dist(f[k], out[-1][k]) > 1e-4 for k in f if k in out[-1]):
@@ -151,19 +170,33 @@ def parse_holds(spec):
     return out
 
 
-def judge_holds(F, holds, cls, eff, T):
-    """A declaration cannot cover a defect: reason required, count and length capped, and on a strong move the held
-    effector must stay alive (recoil) without drifting off the pose."""
+def hold_core_cm(F, a, b):
+    """Pelvis path over the hold steps a..b-1 (cm, absolute: the pelvis carries the weight of the whole body)."""
+    s = _speed(F, "pelvis") if "pelvis" in (F[0] if F else {}) else []
+    return sum(s[a:min(b, len(s))])
+
+
+def judge_holds(F, holds, cls, eff, T, per_hold=False):
+    """A declaration cannot cover a defect: reason required, count and length capped, on EVERY class the core stays alive
+    (pelvis path >= life_hold_core_cm: a live hold vs a dead one), and on a strong move the held effector must also keep
+    its recoil without drifting off the pose. per_hold=True -> (problems, [(a, b) of the holds with no problem of their
+    own]): only those may exempt speed minima from stop_sync (a dead or undeclared hold never does)."""
     probs = []
+    good = []
     if len(holds) > T["life_hold_max_count"]:
         probs.append(f"{len(holds)} holds declared (max {T['life_hold_max_count']})")
     cap = T["life_hold_max_frames_smash"] if cls in STRONG else T["life_hold_max_frames"]
     reach = max((CV._dist(_rel(F, eff, f), (0, 0, 0)) for f in range(len(F))), default=0.0) if eff in _pts(F) else 0.0
     for a, b, why in holds:
+        n0 = len(probs)
         if not why:
             probs.append(f"hold {a}-{b} has no reason")
         if b - a > cap:
             probs.append(f"hold {a}-{b} = {b - a} frames (max {cap} for class {cls or '-'})")
+        if b > a and F and "pelvis" in F[0]:
+            core = hold_core_cm(F, a, b)
+            if core < T["life_hold_core_cm"]:
+                probs.append(f"hold {a}-{b} dead: pelvis travels {core:.1f} cm (a live hold needs >= {T['life_hold_core_cm']} cm)")
         if eff in _pts(F) and b > a and b < len(F):
             v = _speed(F, eff)[a:b]
             amp = max(CV._dist(_rel(F, eff, f), _rel(F, eff, a)) for f in range(a, b + 1))
@@ -171,12 +204,31 @@ def judge_holds(F, holds, cls, eff, T):
                 probs.append(f"hold {a}-{b} frozen: {eff} moves {amp:.1f} cm (strong move needs >= {T['life_hold_alive_cm']} cm recoil)")
             if reach and max(v) > T["life_hold_speed_rel"] * reach:
                 probs.append(f"hold {a}-{b} is not a hold: {eff} {max(v):.1f} cm/frame > {T['life_hold_speed_rel']:.0%} of reach {reach:.0f}")
-    return probs
+        if len(probs) == n0:
+            good.append((a, b))
+    if len(holds) > T["life_hold_max_count"]:
+        good = []                              # too many declarations: none of them is trusted
+    return (probs, good) if per_hold else probs
 
 
 # ------------------------------------------------------------------ metrics
-def stop_sync(F, T):
-    """Share of the parts' speed minima that >= 60% of the other parts also reach within +-1 frame."""
+def stop_sync(F, T, live_holds=()):
+    """Share of the parts' speed minima that >= 60% of the other parts also reach within +-1 frame (kb_motion
+    stop_sync_share on points; the 0.5 threshold is calibrated on THIS per-part share, see below).
+    Fixed 2026-11-24 (slowmo jab/ftilt), more precise, threshold unchanged:
+      - a flat run of minima of one part is ONE minimum (its first frame): the jab v12 dead tail (20 identical frames)
+        counted ~17 minima per part, now one per part;
+      - minima inside a DECLARED hold that passes judge_holds (reason, caps, live core) are the hold, not a stop: skipped.
+        A dead, undeclared or over-cap hold is never skipped.
+    Also returns the stop EVENTS (minima of all parts chained within 1 frame; shared when, around one of its minima,
+    >= 1 + 60% of the other parts stop within +-1 frame, the same strictness as the per-part rule), so a stop of 8 parts
+    reads as one event in the report. The event share is a MEASURE, not the block: on the calibration set it lets jab
+    v12 through (0.5 of 4 events, the max) and drops the flat-tangent jabfk3 from 0.88 to 0.67, i.e. it would soften
+    the check (owner rule 17); per part, a lockstep stop weighs as many parts as it freezes, which is the defect.
+    -> (share, minima, events, shared_events)."""
+    skip = set()
+    for a, b in live_holds:
+        skip |= set(range(a - 1, b + 1))       # the minimum of the smoothed speed sits within +-1 of the held steps
     mins = []
     for p in ["pelvis"] + _pts(F):
         s = _speed(F, p)
@@ -184,16 +236,27 @@ def stop_sync(F, T):
             continue
         sm = [(s[max(0, i - 1)] + s[i] + s[min(len(s) - 1, i + 1)]) / 3 for i in range(len(s))]
         thr = 0.35 * sorted(sm)[int(0.9 * (len(sm) - 1))]
-        mins.append({k for k in range(1, len(sm) - 1) if sm[k] <= sm[k - 1] and sm[k] <= sm[k + 1] and sm[k] < thr})
+        ks = [k for k in range(1, len(sm) - 1) if sm[k] <= sm[k - 1] and sm[k] <= sm[k + 1] and sm[k] < thr]
+        ks = [k for i, k in enumerate(ks) if i == 0 or k != ks[i - 1] + 1]     # a flat run of minima = one minimum
+        mins.append([k for k in ks if k not in skip])
     if len(mins) < 3:
-        return None, 0
+        return None, 0, 0, 0
     shared = total = 0
     for i, ms in enumerate(mins):
         for k in ms:
             total += 1
             n = sum(1 for o, mo in enumerate(mins) if o != i and any(abs(k - x) <= 1 for x in mo))
             shared += n >= 0.6 * (len(mins) - 1)
-    return (round(shared / total, 2) if total else None), total
+    allk = sorted((k, i) for i, ms in enumerate(mins) for k in ms)
+    events = []
+    for k, i in allk:
+        if events and k <= events[-1][-1][0] + 1:
+            events[-1].append((k, i))
+        else:
+            events.append([(k, i)])
+    need = 1 + 0.6 * (len(mins) - 1)
+    ev_shared = sum(1 for e in events if any(len({i for k, i in e if abs(k - c) <= 1}) >= need for c, _ in e))
+    return (round(shared / total, 2) if total else 0.0), total, len(events), ev_shared
 
 
 def _peak(s, lo, hi):
@@ -316,7 +379,7 @@ def run(F, window=None, contact=None, effector=None, holds=(), cls="", T=None):
     for a, b, _ in H:
         held |= set(range(a, b))
     pts = _pts(F)
-    hp = judge_holds(F, H, cls, effector or "hand_l", T)
+    hp, live = judge_holds(F, H, cls, effector or "hand_l", T, per_hold=True)
     res["block"]["holds"] = [not hp, "; ".join(hp) or f"{len(H)} declared, all with reason, inside the caps"]
     # stops: the ACTION window (startup up to contact, or the card's window); a strike-less clip (locomotion, settle,
     # loop) has no startup and is judged by still_runs and stop_sync only
@@ -328,9 +391,10 @@ def run(F, window=None, contact=None, effector=None, holds=(), cls="", T=None):
         res["measure"]["stops"] = "n/a: no action window (give --window or a contact frame)"
     runs = CV.long_stills(F, held, T["life_dead_cm"], int(T["life_still_run"]), points=pts)
     res["block"]["still_runs"] = [not runs, f"runs > {T['life_still_run']} dead steps (< {T['life_dead_cm']} cm/frame): " + (", ".join(f"{a}-{b + 1}" for a, b in runs) or "none")]
-    ss, n = stop_sync(F, T)
+    ss, n, ne, nes = stop_sync(F, T, live)
     res["block"]["stop_sync"] = [ss is None or ss <= T["life_stop_sync_max"],
-                                 f"{ss} of {n} speed minima shared by most parts (max {T['life_stop_sync_max']})" if ss is not None else "n/a: fewer than 3 moving parts"]
+                                 f"{ss} of {n} speed minima shared by most parts (max {T['life_stop_sync_max']}); "
+                                 f"{nes} of {ne} stop events shared; live declared holds skipped: {live or 'none'}" if ss is not None else "n/a: fewer than 3 moving parts"]
     if contact is not None and effector in pts and contact >= 2:
         c = cascade(F, max(0, win[0]), contact + 1, effector)
         if c:
@@ -382,7 +446,7 @@ def main(argv):
     F = load(args[0])
     if "range" in opt:
         F = trim(F, [int(x) for x in opt["range"].split("-")])
-    if "dedupe" in opt or args[0].endswith(".jsonl"):
+    if is_capture(args[0]):                    # never on an asset dump: there repeated frames are the freeze to catch
         F = dedupe(F)
     if "holds" in opt:
         kw["holds"] = opt["holds"]

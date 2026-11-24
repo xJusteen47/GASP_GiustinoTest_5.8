@@ -117,8 +117,10 @@ def test_lockstep_peaks_fail_cascade():
 
 
 # ------------------------------------------------------------------ declared holds (owner 2026-11-24)
-def _held_clip():
-    pel = _cum([5, 5, 5, 5, 5, 0.1, 0.1, 0.1, 0.1, 0.1, 5, 5, 5])
+def _held_clip(core=0.3):
+    """A held pose 5-10: every point under life_dead_cm per step (still), the pelvis drifting `core` cm per step
+    (0.3 x 5 = 1.5 cm: a LIVE hold; 0.1 x 5 = 0.5 cm: a dead one)."""
+    pel = _cum([5, 5, 5, 5, 5] + [core] * 5 + [5, 5, 5])
     return [{"pelvis": (x, 0.0, 100.0), "hand_l": (x + 40, 0, 120), "head": (x, 0, 170), "foot_l": (x, 10, 0)} for x in pel]
 
 
@@ -145,6 +147,90 @@ def test_too_many_or_too_long_holds_fail():
 def test_frozen_hold_on_strong_move_fails():
     r = life.run(_held_clip(), holds=[(5, 10, "smash hold")], cls="smash", effector="hand_l")
     assert not r["block"]["holds"][0], r["block"]["holds"]
+
+
+def test_dead_hold_fails_on_every_class():
+    """Owner 2026-11-24 (pose holds): a hold is normal, never a block of concrete. Pelvis 0.5 cm over 5 frames = dead."""
+    for cls in ("tilt", "jab", ""):
+        r = life.run(_held_clip(core=0.1), holds=[(5, 10, "held pose")], cls=cls)
+        assert not r["block"]["holds"][0] and "dead" in r["block"]["holds"][1], (cls, r["block"]["holds"])
+
+
+# ------------------------------------------------------------------ slowmo review 2026-11-24: jab v12 FAIL, ftilt v3.1 PASS
+# Asset dumps committed by the life-calib run (1bc74996); verdicts from the frame-by-frame review (branch
+# claude/project-thread-mkedi4, docs/notes/handovers/slowmo-jab-ftilt.md).
+DUMPS = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+                     "docs", "notes", "life-calib-run", "dumps")
+JAB = os.path.join(DUMPS, "joints_AS_JabV12_Build.json")
+FTILT = os.path.join(DUMPS, "joints_AS_GanonFTiltV31_Build.json")
+KICK_HOLD = [(10, 15, "kick hold: leg extended after the kick")]
+
+
+def _ss(r):
+    return float(r["block"]["stop_sync"][1].split()[0])
+
+
+def test_fix1_stop_sync_skips_live_declared_hold_only():
+    ft = life.load_clip(FTILT)
+    assert _ss(life.run(ft, cls="tilt")) == 0.35                       # undeclared: the kick hold counts
+    r = life.run(ft, holds=KICK_HOLD, cls="tilt")
+    assert r["block"]["holds"][0] and _ss(r) == 0.0 and r["verdict"] == "PASS", r["block"]
+    jab = life.load_clip(JAB)
+    base = life.run(jab, cls="jab")
+    assert _ss(base) == 0.82 and not base["block"]["stop_sync"][0], base["block"]["stop_sync"]
+    # declaring the jab's dead core does not buy an exemption: the hold fails and its minima still count
+    r = life.run(jab, holds=[(5, 9, "chamber")], cls="jab")
+    assert not r["block"]["holds"][0] and _ss(r) == 0.82, r["block"]
+
+
+def test_fix1_flat_tail_is_one_minimum_per_part():
+    """The 20 identical frames of the jab tail were ~17 minima per part (0.98 of 145); now one per part."""
+    r = life.run(life.load_clip(JAB), cls="jab")
+    assert " of 17 speed minima" in r["block"]["stop_sync"][1], r["block"]["stop_sync"]
+    # events are reported, not blocking: 2 of 4 would read 0.5 = the max and let the jab through (rule 17)
+    assert "2 of 4 stop events shared" in r["block"]["stop_sync"][1], r["block"]["stop_sync"]
+
+
+def test_fix2_live_vs_dead_hold_on_real_clips():
+    jab, ft = life.load_clip(JAB), life.load_clip(FTILT)
+    assert life.hold_core_cm(jab, 5, 9) < 0.5                          # slowmo: pelvis 0.4 cm in 5 frames
+    assert 1.0 <= life.hold_core_cm(ft, 10, 15) < 2.0                  # slowmo: pelvis 1.5 cm
+    T = life.thresholds()
+    assert life.judge_holds(jab, [(5, 9, "chamber")], "jab", "hand_l", T)
+    assert not life.judge_holds(ft, KICK_HOLD, "tilt", "foot_l", T)
+
+
+def test_fix3_no_dedupe_on_asset_dumps():
+    """Identical frames in an asset ARE the freeze: the jab dead tail f18-37 must fail still_runs."""
+    jab = life.load_clip(JAB)
+    assert len(jab) == 38 and len(life.dedupe(jab)) == 19              # dedupe would hide 19 frames
+    r = life.run(jab, cls="jab")
+    assert not r["block"]["still_runs"][0] and "18-37" in r["block"]["still_runs"][1], r["block"]["still_runs"]
+    assert life.run(life.dedupe(jab), cls="jab")["block"]["still_runs"][0]   # the old false negative
+
+
+def test_fix3_captures_still_deduped(tmp_path=None):
+    import json, tempfile
+    d = tmp_path or tempfile.mkdtemp()
+    p = os.path.join(str(d), "frames.jsonl")
+    with open(p, "w") as f:
+        for x in (0, 10, 20, 20, 30, 40):
+            f.write(json.dumps({"body": {"pelvis": [x, 0, 100], "hand_l": [20, 0, 20], "actor": [0, 0, 0]}}) + "\n")
+    assert life.is_capture(p) and len(life.load_clip(p)) == 5
+    assert not life.is_capture(JAB)
+
+
+def test_fix4_audit_table_whole_clip_at_dead_cm():
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "gstn_anim_mcp"))
+    import audit_stop_table as A
+    ft = A.row(FTILT, {})
+    assert ft[2] == "OK" and ft[3] == "-", ft                          # was FAIL 10-14 at STOP_CM 3.5 (class D)
+    ft = A.row(FTILT, {"AS_GanonFTiltV31_Build": "10-15:kick hold"})
+    assert ft[2] == "OK" and ft[10].startswith("0.0 of"), ft
+    jab = A.row(JAB, {})
+    assert jab[2] == "FAIL" and jab[3] == "18-37" and "stop_sync" in jab[11], jab
+    jab = A.row(JAB, {"AS_JabV12_Build": "5-9:chamber"})
+    assert jab[2] == "FAIL" and "dead" in jab[11], jab
 
 
 if __name__ == "__main__":

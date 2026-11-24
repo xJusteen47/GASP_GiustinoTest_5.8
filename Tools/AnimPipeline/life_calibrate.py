@@ -20,7 +20,9 @@ def one(e):
     for k in ("window", "contact", "effector"):
         if k in e:
             kw[k] = e[k]
-    F = life.dedupe(life.load(path))
+    if "holds" in e:                           # holds declared by the slowmo review, not yet written in the (locked) card
+        kw["holds"] = list(kw.get("holds", [])) + life.parse_holds(e["holds"])
+    F = life.load_clip(path)     # dedupe only on .jsonl captures: on an asset dump repeated frames are a freeze
     r = life.run(F, **kw)
     return {"name": e["name"], "status": "MATCH" if r["verdict"] == e["expect"] else "MISMATCH", "expect": e["expect"],
             "got": r["verdict"], "failed": {k: v[1] for k, v in r["block"].items() if not v[0]}, "why": e.get("why", "")}
@@ -28,12 +30,17 @@ def one(e):
 
 def main():
     man = json.load(open(os.path.join(HERE, "life_calibration.json")))
-    rows = [one(e) for e in man["clips"]]
+    rows = []
+    for e in man["clips"]:
+        try:
+            rows.append(one(e))
+        except (ValueError, KeyError) as exc:  # a broken card or dump is reported, never counted as a match
+            rows.append({"name": e["name"], "status": "ERROR", "error": str(exc)[:300]})
     out = os.path.join(PROJ, "Saved", "AnimPipeline", "life_calibration_result.json")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     json.dump(rows, open(out, "w"), indent=1)
     miss = [r["name"] for r in rows if r["status"] == "MISSING"]
-    bad = [r["name"] for r in rows if r["status"] == "MISMATCH"]
+    bad = [r["name"] for r in rows if r["status"] in ("MISMATCH", "ERROR")]
     verdict = "FAIL" if bad else ("INCOMPLETE" if miss else "OK")
     print(f"CALIB: {verdict} {sum(r['status'] == 'MATCH' for r in rows)}/{len(rows)} match")
     if bad:
