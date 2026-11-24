@@ -20,6 +20,7 @@ Questa variante economica risparmia SOLO sull'authoring e sul livello 1; il live
 - INV-10 un falso allarme si corregge, non si ammorbidisce; i blocchi ereditati bloccano (esenzione solo dell'owner).
 - INV-11 metriche di vita e controlli di posa della OG nel livello 2.
 - INV-12 fermate = difetto per default; una tenuta vale solo dichiarata con motivo scritto, e la review la giudica comunque a video.
+- INV-13 i principi si CONSIDERANO uno per uno, non si applicano come un automa (owner 2026-11-24): ogni voce di `Tools/AnimPipeline/contract/principi-review.md` scritta in `final/principi.md` (intento, previsione, osservato con frame e vista, scostamento e se e' voluto, giudizio, o `non pertinente` col motivo); niente PASS senza `PRINCIPI: OK` di `principi_review.py check`, anche per il critico cieco.
 Materiale del livello 2: `anim_review_pack` (`final/review_pack.json`, `complete: true`, altrimenti niente review).
 
 ## 1. Ruoli e modelli

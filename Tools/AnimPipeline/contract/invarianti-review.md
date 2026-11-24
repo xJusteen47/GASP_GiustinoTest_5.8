@@ -53,6 +53,13 @@ Le cambia solo l'owner, con una decisione scritta. Chi snellisce la skill le las
   `"hold": true` o `hold_reasons {frame: motivo}` per `holds`; nella cattura `no_stop.hold_reasons {clip: motivo}`.
   Senza motivo la tenuta non vale (`animpipe check` blocco `hold_reason`, cancello `no_stop`). La dichiarazione NON
   salta il giudizio: la review guarda ogni tenuta dichiarata sul video e la boccia se non si legge come voluta.
+- **INV-13 I principi si considerano, uno per uno.** Ogni voce di `contract/principi-review.md` (principi del corpo,
+  dei picchiaduro e note di Sakurai della OG, con il documento accanto) e' scritta in `final/principi.md` col metodo
+  §13: intento, previsione, osservato (frame e vista), scostamento e se e' voluto, giudizio; oppure `non pertinente` col
+  motivo. Sono PRINCIPI, non regole (owner 2026-11-24): uno scostamento voluto e motivato resta accettato; il controllo
+  `principi_review.py check` verifica che il ragionamento ci sia, mai che un numero rientri. Senza `PRINCIPI: OK` niente
+  PASS, per il revisore e per il critico cieco. Perche': la skill citava i documenti "solo la sezione che stai per
+  citare" e le note di Sakurai non erano nominate da nessuna skill, quindi nessuno li controllava davvero.
 
 ## Esenzioni
 Solo l'owner. Formato della riga in `docs/notes/anim-approvate.md`, sezione `## Esenzioni dei controlli`:

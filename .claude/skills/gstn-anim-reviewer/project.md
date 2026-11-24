@@ -25,6 +25,11 @@ variant that can reach the owner, on the pack of `anim_review_pack` (`final/revi
 - INV-12 stops are defects by default: a hold is accepted only as intended motion, exceptional, declared WITH a written reason
   (card `hold_reason` / `hold_reasons`, capture `no_stop.hold_reasons`); the declaration never skips the judgement: the review
   judges every declared hold on the video.
+- INV-13 principles are CONSIDERED one by one, never applied like an automaton (owner 2026-11-24): every entry of
+  `Tools/AnimPipeline/contract/principi-review.md` (body, fighting-game and Sakurai/OG principles, each with its document) is
+  written in `final/principi.md` with the four steps of principi-animazione-corporea.md §13 (intent, prediction, observed frames
+  + view, deviation and whether it is intended) or closed as `non pertinente` with a reason; an intended, reasoned deviation
+  stays accepted. No PASS (reviewer or blind critic) without `PRINCIPI: OK` from `gstn_anim_mcp/principi_review.py check`.
 
 ## Roles, model, language
 - Model: Fable, high effort (project rule 3). One move per thread. Rule 10: nobody sends a move to the owner without
@@ -46,7 +51,10 @@ variant that can reach the owner, on the pack of `anim_review_pack` (`final/revi
 - Critic principle (Italian): `docs/notes/review/critico-estetico.md`. Dossier: `docs/notes/review/dossier-riferimento.md`,
   dossiers in `docs/notes/reference-dossiers/`, reference grids in project files `handoffs/<ref>/` (never the repo).
 - Theory: `docs/notes/anim-theory/` (`principi-animazione-corporea.md` §13 for the four-step method,
-  `animazione-picchiaduro-action.md` §10). References: `Tools/AnimPipeline/reflib/`.
+  `animazione-picchiaduro-action.md` §10). The level-2 principles to consider (INV-13), each with its document, are in
+  `Tools/AnimPipeline/contract/principi-review.md`: open the cited section of every principle you are considering, not
+  only the one you quote. Index of every research document (body, fighting games, Sakurai, feel, VFX, camera), with what
+  it holds and who uses it: `Tools/AnimPipeline/contract/indice-ricerca.md`. References: `Tools/AnimPipeline/reflib/`.
 - Frame tool: `skills-public/anim-reviewer/scripts/rv_frames.py` (current captures: 360 px squares per view).
 
 ## Clip in isolation (§2 gate; owner 11-19)

@@ -25,6 +25,11 @@ variant that can reach the owner, on the pack of `anim_review_pack` (`final/revi
 - INV-12 stops are defects by default: a hold is accepted only as intended motion, exceptional, declared WITH a written reason
   (card `hold_reason` / `hold_reasons`, capture `no_stop.hold_reasons`); the declaration never skips the judgement: the review
   judges every declared hold on the video.
+- INV-13 principles are CONSIDERED one by one, never applied like an automaton (owner 2026-11-24): every entry of
+  `Tools/AnimPipeline/contract/principi-review.md` (body, fighting-game and Sakurai/OG principles, each with its document) is
+  written in `final/principi.md` with the four steps of principi-animazione-corporea.md §13 (intent, prediction, observed frames
+  + view, deviation and whether it is intended) or closed as `non pertinente` with a reason; an intended, reasoned deviation
+  stays accepted. No PASS (reviewer or blind critic) without `PRINCIPI: OK` from `gstn_anim_mcp/principi_review.py check`.
 
 ## Who runs it
 Antigravity through the `agy-bridge` MCP (`delegate`, then `follow_up` in the same session), started by a Claude session

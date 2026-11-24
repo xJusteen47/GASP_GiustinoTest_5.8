@@ -26,6 +26,7 @@ _HERE = str(Path(__file__).resolve().parent)
 if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
+import principi_review  # noqa: E402
 import review_pack  # noqa: E402
 
 # Single source of the invariant ids (skill text, contract and this pack must all carry them; see the test)
@@ -42,11 +43,13 @@ INVARIANTS = {
     "INV-10": "a false alarm is fixed, never softened; inherited blocks block",
     "INV-11": "OG life metrics and pose checks are part of level 2",
     "INV-12": "stops are defects by default; a hold needs a written reason and is still judged on video",
+    "INV-13": "every principle of contract/principi-review.md considered and documented (principles, not automatic rules)",
 }
-PACK_INVARIANTS = ("INV-01", "INV-02", "INV-03", "INV-04", "INV-05", "INV-06", "INV-07", "INV-09", "INV-11", "INV-12")
+PACK_INVARIANTS = ("INV-01", "INV-02", "INV-03", "INV-04", "INV-05", "INV-06", "INV-07", "INV-09", "INV-11", "INV-12", "INV-13")
 REQUIRED_VIEWS = ("az90", "az180", "game")
 CRITERIA = ("docs/notes/review/critico-estetico.md", "Tools/AnimPipeline/contract/rubric.md",
-            "docs/notes/anim-theory/principi-animazione-corporea.md", "Tools/AnimPipeline/contract/invarianti-review.md")
+            "docs/notes/anim-theory/principi-animazione-corporea.md", "docs/notes/anim-theory/animazione-picchiaduro-action.md",
+            "Tools/AnimPipeline/contract/principi-review.md", "Tools/AnimPipeline/contract/invarianti-review.md")
 
 
 def _rel(repo: Path, p: Path | str) -> str:
@@ -169,6 +172,13 @@ def build_final_pack(out: str, runs: dict[str, str], sequences: list[str], windo
                                         + ([] if pair_ok else ["pair every variant clip with its base clip (inherited too)"])
                                         + [f"{s}: montage start unknown for {', '.join(u)}" for s, u in unal.items()]))
 
+    # INV-13 principles to consider: the file to fill, one entry per principle (filled by reviewer and critic, checked by
+    # principi_review.check: considered and documented, never "within a number")
+    prin = outd / "principi.md"
+    prin.write_text(principi_review.template("/".join(Path(out).parts[-2:])), encoding="utf-8")
+    inv["INV-13"].update(ok=True, files=[_rel(repo, prin)],
+                         note="fill it, then: python Tools/AnimPipeline/gstn_anim_mcp/principi_review.py check <file>")
+
     # INV-07 blind critic brief: pack + criteria + identity, never the reviewer's verdict, handovers, code or logs
     order = inv["INV-02"]["files"] + slow + vel + kp
     crit = outd / "critico_brief.md"
@@ -180,6 +190,9 @@ def build_final_pack(out: str, runs: dict[str, str], sequences: list[str], windo
         + ["", "## Tenute dichiarate (giudicale a video: la dichiarazione non salta il giudizio)"]
         + [f"- {t['clip']} {t['frames']}: {t['reason']}" for t in to_judge] + ([] if to_judge else ["- nessuna"])
         + ["", "## Materiale, in quest'ordine (video prima dei numeri)"] + [f"- {p}" for p in order]
+        + ["", "## Principi da considerare (INV-13: principi, non regole)",
+           f"Copia {_rel(repo, prin)} in un file tuo e riempi ogni voce (intento, previsione, osservato con frame e vista,",
+           "scostamento e se e' voluto, giudizio) dopo aver guardato i video. Nessun PASS se principi_review.py check non da' OK."]
         + ["", "Esito: PASS/FAIL, max 3 difetti con frame, vista ed etichetta posa / dati montage / gioco."]), encoding="utf-8")
     inv["INV-07"].update(ok=True, files=[_rel(repo, crit)])
 

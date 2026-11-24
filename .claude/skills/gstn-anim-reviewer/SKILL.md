@@ -11,4 +11,4 @@ Two layers, read both, in this order:
 Never copy or edit the generic core for project needs: project specifics go in `project.md` only.
 
 **INVARIANTI (non toccare per costo):** `project.md` section `## INVARIANTI` and `Tools/AnimPipeline/contract/invarianti-review.md`
-(INV-01..INV-12). The final review (level 2) is never shortened to save cost.
+(INV-01..INV-13). The final review (level 2) is never shortened to save cost.

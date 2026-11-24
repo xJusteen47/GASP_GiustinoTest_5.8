@@ -77,3 +77,4 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-23,Dropkick K8 Doom,dropkick-k8-1,portatile,claude,opus-medium,35,0,8,,K8 catturata ASSERT OK; build jcugce OK; hitbox in cattura rotte (fix non verificato)
 2026-11-23,Skill vita e velocita (opzione A),skill-vita-velocita-1,cloud,claude,opus-medium,0,0,3.5,,no_stop bloccante su ogni clip anche ereditata; schede velocita con STOP e striscia; slowmo startup nel pacchetto; statua bloccante
 2026-11-24,review-invarianti-1,Review invarianti (SC thread 1),cloud,claude,opus-medium,0,0,4.5,,INVARIANTI INV-01..12 nelle skill + test; ereditati di nuovo bloccanti; tenute con motivo; anim_review_pack livello 2
+2026-11-24,principi-review-1,Principi considerati nella review (INV-13),cloud,claude,opus-medium,0,0,3.5,,indice ricerca + 20 principi PR con documenti + principi_review.py + test
