@@ -83,3 +83,4 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-23,Dropkick K8 giro 2,dropkick-k8-2,portatile,claude,opus-medium,25,0,2.5,,giro 2 catturato ASSERT OK; hitbox in cattura verificate
 2026-11-24,Dropkick K8 diagnosi scatti,dropkick-k8-3-diagnosi,portatile,claude,opus-medium,0,0,0.8,,causa comune K7/K8: tangenti piatte su ogni chiave del build; cattura OK
 2026-11-24,Dropkick K8 piano giro 3,dropkick-k8-4-piano-r3,portatile,claude,opus-medium,0,0,1.2,,carte K8R3 + cancello anti-fermata (K7 e K8 r2 FAIL); in attesa editor e build a campionamento continuo
+2026-11-22,runstart-w3 + cheap skill,runstart-w3,desktop,agy_student,Hydrogen Medium + Pro,45,0,0,50,5/6 SI (arm_r fase v92 aperto) + skill cheap

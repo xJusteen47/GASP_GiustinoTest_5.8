@@ -7,3 +7,4 @@
 - 2026-11-23 | turnaround-180l-c1 (v28 w2t180Ls) | claude/deepseek-turn4 | GATES OK, ASSERT OK (27 vs 28), review finale griglie jpg PASS | 0.21 $ (deepseek) + 0 $ (agy_student)
 - 2026-11-23 | harness-deepseek-fix | claude/harness-deepseek-fix | agent-bridge stream-json/async/no-search + EULA negation + Run-SparseAnimStep + Invoke-RunStartPipeline + pre-push LFS | 0 $ (agy_student)
 - 2026-11-23 | turnaround-all-c2 (180R/090L/090R r2) | claude/deepseek-turn4 | jitter 2.7-5.6 OK, ASSERT OK (6/6), uscita v122-197 OK, Review Pro FAIL su pivot v88-112 (Regola 10 a owner con slow4x) | 0 $ (agy_student)
+- 2026-11-22 | runstart-w3 + gstn-anim-cycle-cheap | claude/runstart-generic-desktop | w3 (29) 5/6 SI (resta arm_r fase v92 + yaw reset v77), skill cheap + junction Antigravity | 0 $ (agy_student)
