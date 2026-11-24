@@ -11,7 +11,7 @@ import unreal
 AL, EAL = unreal.AnimationLibrary, unreal.EditorAssetLibrary
 PROJ = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
 SRC = "/Game/GSTN/Animation/RunStart/AS_GSTN_RunStart_Generic_w2"
-DST = "/Game/GSTN/Animation/RunStart/AS_GSTN_RunStart_Generic_w3"
+DST = os.environ.get("W3_DST", "/Game/GSTN/Animation/RunStart/AS_GSTN_RunStart_Generic_w3")  # T3: W3_DST builds a copy, never the approved w3
 SAVE = os.environ.get("GSTN_SAVE") == "1" or os.environ.get("CLIPFIX_WRITE") == "1"
 OUT = os.path.join(PROJ, "Saved", "AnimPipeline", "runstart", "AS_GSTN_RunStart_Generic_w3_build.json")
 

@@ -13,6 +13,6 @@
   {"name": "dair_approved", "asset": "AS_OverlordDAirV4_Build", "card": "cards/overlord/dair/overlord_dair_v4.json", "expect": "PASS", "why": "dair v4: CONFIRM the approved dair version with the coordinator (no dair row in anim-approvate.md)"},
   {"name": "dropkick_k7", "asset": "AS_OverlordDropkick_StartupK7", "window": [0, 15], "contact": 14, "effector": "foot_l", "expect": "FAIL", "why": "owner 11-24: K7 stop-and-go (dump already on the laptop, diagnosis dropkick-k8-3)"},
   {"name": "dropkick_k8r2", "asset": "AS_OverlordDropkick_StartupK8", "window": [0, 15], "contact": 14, "effector": "foot_l", "expect": "FAIL", "why": "owner 11-24: K8 r2 stop-and-go (dump already on the laptop)"},
-  {"name": "dropkick_k6_settle", "asset": "SET_ME: K6 settle AnimSequence", "expect": "FAIL", "why": "settle K6 still ~6 frames on the ground (v158-163), never re-judged"}
+  {"name": "dropkick_k6_settle", "asset": "AS_OverlordDropkick_SettleK6", "expect": "FAIL", "why": "settle K6 still ~6 frames on the ground (v158-163), never re-judged"}
  ]
 }
