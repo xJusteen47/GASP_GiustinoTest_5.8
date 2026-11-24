@@ -22,6 +22,10 @@ def RAW(*a, **k):
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "life")
 
 
+def _rate(r):
+    return float(r["block"]["stop_sync"][1].split("/s")[0])
+
+
 def _clip(name):
     return life.load(os.path.join(DATA, name + ".json"))
 
@@ -30,7 +34,7 @@ def test_stock_mocap_passes():
     for n in ("stock_land_idle", "stock_land_fwd", "stock_skid", "stock_jumpsquat"):
         r = RAW(_clip(n))
         assert r["verdict"] == "PASS", (n, r["block"])
-        assert float(r["block"]["stop_sync"][1].split()[0]) <= 0.26, (n, r["block"]["stop_sync"])
+        assert _rate(r) <= 1.91, (n, r["block"]["stop_sync"])                        # jump squat 5 lockstep stops in 158 frames
 
 
 def test_stock_landing_would_fail_at_action_threshold():
@@ -176,7 +180,8 @@ KICK_HOLD = [(10, 15, "kick hold: leg extended after the kick")]
 
 
 def _ss(r):
-    return float(r["block"]["stop_sync"][1].split()[0])
+    """The per-part share, kept in the stop_sync line as the reviewer's second number."""
+    return float(r["block"]["stop_sync"][1].split("per-part share ")[1].split()[0])
 
 
 def test_fix1_stop_sync_skips_live_declared_hold_only():
@@ -195,9 +200,10 @@ def test_fix1_stop_sync_skips_live_declared_hold_only():
 def test_fix1_flat_tail_is_one_minimum_per_part():
     """The 20 identical frames of the jab tail were ~17 minima per part (0.98 of 145); now one per part."""
     r = RAW(life.load_clip(JAB), cls="jab")
-    assert " of 17 speed minima" in r["block"]["stop_sync"][1], r["block"]["stop_sync"]
-    # events are reported, not blocking: 2 of 4 would read 0.5 = the max and let the jab through (rule 17)
-    assert "2 of 4 stop events shared" in r["block"]["stop_sync"][1], r["block"]["stop_sync"]
+    assert " of 17 minima" in r["block"]["stop_sync"][1], r["block"]["stop_sync"]
+    # events per second, not an event share: the share 2 of 4 read 0.5 = the max and let the jab through; the rate
+    # (2 lockstep stops, f6 and the tail f19, in 37 steps = 3.24/s) fails it like the per-part share did
+    assert "2 of 5 events" in r["block"]["stop_sync"][1] and _rate(r) == 3.24 and not r["block"]["stop_sync"][0], r["block"]["stop_sync"]
 
 
 def test_fix2_live_vs_dead_hold_on_real_clips():
@@ -235,11 +241,68 @@ def test_fix4_audit_table_whole_clip_at_dead_cm():
     ft = A.row(FTILT, {})
     assert ft[2] == "OK" and ft[3] == "-", ft                          # was FAIL 10-14 at STOP_CM 3.5 (class D)
     ft = A.row(FTILT, {"AS_GanonFTiltV31_Build": "10-15:kick hold"})
-    assert ft[2] == "OK" and ft[10].startswith("0.0 of"), ft
+    assert ft[2] == "OK" and ft[10].startswith("0.0/s"), ft
     jab = A.row(JAB, {})
     assert jab[2] == "FAIL" and jab[3] == "18-37" and "stop_sync" in jab[11], jab
     jab = A.row(JAB, {"AS_JabV12_Build": "5-9:chamber"})
     assert jab[2] == "FAIL" and "dead" in jab[11], jab
+
+
+# ------------------------------------------------------------------ stop_sync as events (review dair v9 stops, 2026-11-24)
+def _parts_stop(n_parts, stops, n=40):
+    """n_parts limbs moving on a sine around a moving pelvis, every part stopping (speed 0) on the frames in `stops`."""
+    import math as M
+    F = []
+    pos = {p: 0.0 for p in range(n_parts)}
+    for f in range(n):
+        fr = {"pelvis": (f * 2.0 if f not in stops else (f - 1) * 2.0, 0.0, 100.0)}
+        F.append(fr)
+    for f in range(n):
+        for p, name in enumerate(life.POINTS[:n_parts]):
+            if f not in stops:
+                pos[p] += 2.0 + M.sin(f * 0.7 + p * 1.3)
+            F[f][name] = (F[f]["pelvis"][0] + pos[p], 10.0 * p, 120.0)
+    return F
+
+
+def test_events_eight_parts_on_one_frame_is_one_event():
+    T = life.thresholds()
+    F = _parts_stop(len(life.POINTS), {20, 21})
+    sy = life.stop_sync(F, T)
+    assert len(sy["lockstep"]) == 1 and sy["minima"] >= len(life.POINTS), sy          # many minima, ONE event
+
+
+def test_events_split_stops_that_follow_each_other():
+    """Greedy, not a chain: two lockstep stops 3 frames apart are 2 events (K8 r2 f7-12 chained into one)."""
+    T = life.thresholds()
+    sy = life.stop_sync(_parts_stop(len(life.POINTS), {14, 15, 18, 19}), T)
+    assert len(sy["lockstep"]) == 2, sy
+    assert life.stop_events([[5], [6], [7], [9], [10]], 3) == [(6, 3), (9, 2)]       # a tie goes to the earlier frame
+
+
+def test_shown_window_drops_only_frames_never_on_screen():
+    T = life.thresholds()
+    F = _parts_stop(len(life.POINTS), {10, 11, 30, 31})
+    whole, shown = life.stop_sync(F, T), life.stop_sync(F, T, shown=(0, 25))
+    assert len(whole["lockstep"]) == 2 and len(shown["lockstep"]) == 1 and shown["outside"], (whole, shown)
+    for bad in ({"frames": [0, 25]}, "0-25:", {"frames": [25, 10], "why": "x"}):
+        try:
+            life.parse_shown(bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"shown without a source accepted: {bad}")
+    assert life.parse_shown("0-34:montage ends a34") == (0, 34)
+
+
+def test_dair_v9_real_stops_stay_after_the_window():
+    """Review dair-v9-stops (blind critic, 11-24): a35 never on screen (montage ends ~a34) -> dropped; a17 and a25 are
+    REAL stops on video -> still counted. So the approved dair v9 keeps failing the measure: the metric is right, the
+    calibration set's expect for dair is the owner's call (like jab v12), never a reason to soften."""
+    F = life.load_clip(os.path.join(DUMPS, "joints_AS_OverlordDAirV9.json"))
+    T = life.thresholds()
+    whole, shown = life.stop_sync(F, T), life.stop_sync(F, T, shown=(0, 34))
+    assert 35 in whole["lockstep"] and 35 not in shown["lockstep"], (whole, shown)
+    assert 17 in shown["lockstep"] and 25 in shown["lockstep"] and shown["rate"] > T["life_stop_events_per_s_max"], shown
 
 
 # ------------------------------------------------------------------ calibration gate (owner 2026-11-24 decision 2A)

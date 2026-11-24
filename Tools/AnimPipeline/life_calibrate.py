@@ -29,6 +29,8 @@ def one(e):
             kw[k] = e[k]
     if "holds" in e:                           # holds declared by the slowmo review, not yet written in the (locked) card
         kw["holds"] = list(kw.get("holds", [])) + life.parse_holds(e["holds"])
+    if "shown" in e:                           # montage window from a capture/review, with its source (life.parse_shown)
+        kw["shown"] = life.parse_shown({"frames": e["shown"], "why": e.get("shown_why", "")})
     F = life.load_clip(path)     # dedupe only on .jsonl captures: on an asset dump repeated frames are a freeze
     r = life.run(F, gate=False, **kw)
     return {"name": e["name"], "status": "MATCH" if r["verdict"] == e["expect"] else "MISMATCH", "expect": e["expect"],

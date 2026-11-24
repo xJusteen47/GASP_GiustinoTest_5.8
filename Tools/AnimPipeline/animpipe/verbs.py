@@ -10,6 +10,9 @@
     verdict  <move> [--round=N]             validate visual/<move>/r<N>/verdict.json written by the reviewer
     owner-ok <move> --quote="..." [--round=N]   record the owner's own words on a round (only the owner gives an ok)
     approve  <move> [--frames=] [--parts=] [--why=]   lock poses; refused without owner-ok on the current round
+    publish  <move> <ver> --from=<a.uasset,..> --review=<dir>   clip registry: store a level-2 PASS clip (animpipe/registry.py)
+    approve  <move> <ver> --owner="<words>"     clip registry: owner approval -> tag approved/<move>-<ver>, LFS lock, view
+    registro check|view                         validate Tools/AnimPipeline/registro-clip.csv | regenerate anim-approvate.md
     export   <move>                         card -> Cascadeur scene (needs the engine)
     variant  new|show|apply|discard <move> [--why=] [--quote=]   one variant per round, the original is never touched
                                             until the owner's "applica" (apply needs --quote)
@@ -32,7 +35,9 @@ from animpipe import snapshots as S
 
 OK, GATE, USAGE, OWNER, APP = 0, 1, 2, 3, 4
 VERBS = ("status", "import", "interp", "build", "check", "render", "verify", "verdict", "owner-ok", "approve", "export", "variant",
-         "snapshot", "restore", "revert")
+         "snapshot", "restore", "revert", "publish", "registro")
+REGISTRY_VERBS = ("publish", "registro")   # + `approve <move> <ver> --owner=...`: the clip registry (animpipe/registry.py), no card
+VALUE_OPTS = ("owner", "from", "review", "by", "quote", "why")   # `--owner "two words"` = `--owner="two words"`
 WRITERS = {"import", "interp", "build", "variant apply", "restore", "approve", "export"}     # take a snapshot first
 MAX_FIX = 2                     # failed checks in a row before the owner is asked (token rule: max 2 attempts)
 
@@ -48,6 +53,8 @@ def card_path(move):
     if move.endswith(".json") or os.sep in move or "/" in move:
         raise Stop(USAGE, f"give the move name, not a path: {move}")
     hits = list(dict.fromkeys(glob.glob(os.path.join(K.CARDS, "**", f"{move}.json"), recursive=True) + glob.glob(os.path.join(K.CARDS, f"{move}.json"))))
+    # approved/<move>.json (lock snapshot), manual/<move>.json (Manuale layer) and refs/ share the move's name: not cards
+    hits = [h for h in hits if not set(os.path.relpath(h, K.CARDS).replace(os.sep, "/").split("/")[:-1]) & {"approved", "manual", "refs"}]
     if len(hits) != 1:
         raise Stop(USAGE, f"move {move}: {len(hits)} cards found under {K.CARDS}")
     return os.path.abspath(hits[0])
@@ -593,8 +600,39 @@ TABLE = {"status": v_status, "snapshot": v_snapshot, "restore": v_restore, "reve
          "owner-ok": v_owner_ok, "approve": v_approve, "export": v_export, "variant": v_variant}
 
 
+def _norm(argv):
+    """`--owner "a b"` -> `--owner=a b` for the options that take free text (the plan's syntax)."""
+    out, i = [], 0
+    while i < len(argv):
+        x = argv[i]
+        if x.startswith("--") and "=" not in x and x[2:] in VALUE_OPTS and i + 1 < len(argv) and not argv[i + 1].startswith("--"):
+            out.append(f"{x}={argv[i + 1]}"); i += 2
+        else:
+            out.append(x); i += 1
+    return out
+
+
+def v_registry(verb, pos, o):
+    from animpipe import registry as R
+    try:
+        if verb == "registro":
+            probs, res = R.registro(pos[0] if pos else "")
+            if probs:
+                return GATE, dict(res, problems=probs), ""
+            return OK, res, ""
+        if len(pos) < 2:
+            raise Stop(USAGE, f"usage: animpipe {verb} <move> <ver> " + ('--owner="..."' if verb == "approve" else "--from=<a.uasset,..> --review=<dir>"))
+        if verb == "publish":
+            files = [f for f in o.get("from", "").split(",") if f]
+            return OK, R.publish(pos[0], pos[1], files, o.get("review"), o.get("by", "thread")), ""
+        return OK, R.approve(pos[0], pos[1], o.get("owner")), ""
+    except R.RegistryError as e:
+        raise Stop(OWNER if verb == "approve" and "owner" in str(e) and "quote" in str(e) else GATE, str(e))
+
+
 def run(argv):
     """argv = [verb, move, ...]. Returns the exit code after printing the one json line."""
+    argv = _norm(list(argv))
     verb = argv[0] if argv else ""
     pos = [x for x in argv[1:] if not x.startswith("--")]
     o = dict((x[2:].split("=", 1) + [""])[:2] for x in argv[1:] if x.startswith("--"))
@@ -602,6 +640,16 @@ def run(argv):
         pos = [pos[1]] + [pos[0]] + pos[2:] if len(pos) > 1 else pos[::-1]
     move = pos[0] if pos else ""
     code, result, log, nxt = USAGE, {}, "", None
+    if verb in REGISTRY_VERBS or (verb == "approve" and len(pos) >= 2):
+        try:
+            code, result, log = v_registry(verb, pos, o)
+        except Stop as e:
+            code, result = e.code, e.result
+        except Exception as e:
+            code, result = GATE, {"error": f"{type(e).__name__}: {str(e)[:300]}"}
+        print(json.dumps({"ok": code == OK, "verb": verb, "move": move, "exit": code, "result": result, "next": None},
+                         ensure_ascii=False, default=str))
+        return code
     try:
         if verb not in TABLE or not move:
             raise Stop(USAGE, f"usage: animpipe <{'|'.join(VERBS)}> <move> [--options]")
