@@ -1,0 +1,20 @@
+{
+ "_doc": "Calibration set of animpipe/life.py (owner 2026-11-24: approved moves pass WITHOUT exemptions, known defects fail; a wrong metric is fixed by recalibration with this proof, never softened). Run: python life_calibrate.py (writes Saved/AnimPipeline/life_calibration_result.json, prints <= 5 lines, CALIB: OK only if every clip is present and matches). Dumps: Tools/CI/Save-Assets.ps1 -Script Tools/AnimPipeline/gstn_anim_mcp/clip_joints_dump_ue.py with CJD_ASSETS=<the asset names below> (headless, saves nothing; mannequin/animpipe clips CJD_FACING=y) -> Saved/AnimPipeline/runstart/joints_<asset>.json. 'card' gives contact, effector, class and declared holds.",
+ "clips": [
+  {"name": "stock_land_idle", "dump": "tests/data/life/stock_land_idle.json", "expect": "PASS", "why": "GASP stock mocap (alive reference)"},
+  {"name": "stock_land_fwd", "dump": "tests/data/life/stock_land_fwd.json", "expect": "PASS", "why": "GASP stock mocap"},
+  {"name": "stock_skid", "dump": "tests/data/life/stock_skid.json", "expect": "PASS", "why": "GASP stock mocap"},
+  {"name": "stock_jumpsquat", "dump": "tests/data/life/stock_jumpsquat.json", "expect": "PASS", "why": "GASP stock mocap"},
+  {"name": "jabfk3_tangents", "dump": "tests/data/life/jabfk3_tangents.json", "expect": "FAIL", "why": "flat-tangent card build, lockstep stops (not an owner verdict: confirms the K7 cause on a second move)"},
+  {"name": "runstart_w3", "asset": "AS_GSTN_RunStart_Generic_w3", "expect": "PASS", "why": "approved 29w3, owner 2026-11-23 10:08Z"},
+  {"name": "runstart_w2", "asset": "AS_GSTN_RunStart_Generic_w2", "expect": "PASS", "why": "approved w2"},
+  {"name": "ftilt_v31", "asset": "AS_GanonFTiltV31_Build", "card": "cards/overlord/ftilt/overlord_ftilt_v31.json", "holds": [{"frames": [10, 15], "why": "kick hold: leg extended after the kick (slowmo 11-24: live, pelvis 1.5 cm, head 3.0 cm)"}], "expect": "PASS", "why": "approved F.L = ftilt v3.1; the kick hold 10-15 is declared here until the locked card gets life_holds (slowmo review 11-24, branch claude/project-thread-mkedi4)"},
+  {"name": "jab_v12", "asset": "AS_JabV12_Build", "card": "cards/pilot/jab_v12.json", "expect": "FAIL", "why": "slowmo review 11-24 (branch claude/project-thread-mkedi4): real defect, not a false positive: statue f3-9 (pelvis 0.4 cm in 5 frames, video still at f5 and f9) and dead tail f18-37 (20 identical frames). Was PASS only because life_calibrate deduped the asset dump. OWNER to decide on the approved jab v12"},
+  {"name": "dair_approved", "asset": "AS_OverlordDAirV9", "card": "cards/overlord/dair/overlord_dair_v9.json", "expect": "PASS", "why": "approved dair v9 (owner 2026-11-24 01:26Z, anim-approvate.md, montage AM_OverlordDAirV9 = 916338ad). Dump from the _ue59 project: in a worktree without the sample content the skeleton is not found and the dump is static (that was the T3 v4 dump error)"},
+  {"name": "dropkick_k7", "asset": "AS_OverlordDropkick_StartupK7", "window": [0, 15], "contact": 14, "effector": "foot_l", "expect": "FAIL", "why": "owner 11-24: K7 stop-and-go (dump already on the laptop, diagnosis dropkick-k8-3)"},
+  {"name": "dropkick_k8r2", "asset": "AS_OverlordDropkick_StartupK8", "window": [0, 15], "contact": 14, "effector": "foot_l", "expect": "FAIL", "why": "owner 11-24: K8 r2 stop-and-go (dump already on the laptop)"}
+ ],
+ "unjudged": [
+  {"name": "dropkick_k6_settle", "asset": "AS_OverlordDropkick_SettleK6", "why": "T4 2026-11-24: out of the expectations. Never judged on video, so NOT a known defect (rule 17): its PASS is a measure, not a proof. The defective cases are K7 and K8 r2 (owner: stop-and-go). Back with an expect only after a video verdict."}
+ ]
+}

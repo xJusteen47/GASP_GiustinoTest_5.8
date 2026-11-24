@@ -1,7 +1,7 @@
 """Approved poses: lock per frame and per part, approve, diff (plan 02/11 §4). Pure Python, no editor.
 
 A card's `approved` block lists poses the owner accepted:
-  approved  [{frames: [13, 14], parts: ["leg_l", "leg_r"], ref: "overlord/overlord_dair_v4.json" (path under cards/),
+  approved  [{frames: [13, 14], parts: ["leg_l", "leg_r"], ref: "overlord/dair/overlord_dair_v4.json" (path under cards/),
               by, date, why}]
 Guard 1 (card.load): the card's `author` poses at the locked frames, for the locked parts, must equal those of the `ref`
 card within LOCK_CM / LOCK_DEG; when `ref` is the card itself the snapshot cards/<kit>/approved/<move>.json written by

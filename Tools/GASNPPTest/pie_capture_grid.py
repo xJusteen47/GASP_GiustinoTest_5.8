@@ -4,6 +4,7 @@
     python pie_capture_grid.py state <capture_dir> <sequence>          (the combat state per frame, compressed to runs, at most 40 lines)
 video: every frame as one image, the seven views side by side (4 x 2, the last cell is the frame's state), at 60 fps = real time; --fps=15 is 0.25x.
 sheet: one view, consecutive frames left to right, top to bottom; every cell carries its label.
+--hitboxes=1: the logged hitboxes (runs with gstn.Combat.Debug.Hitboxes 1) are drawn into every view, the label ends hb<N>. Off by default.
 Labels: v<video frame>, m<timeline index>:<timeline frame>, a<animation frame the montage shows, 60 fps from 0>, H while the attacker is in
 hitstop, T on the frame a press was sent.
 Video frames are rendered frames at 60 fps; timeline frames are the simulation's (62.5 Hz), so now and then one video frame spans two of them."""
@@ -15,6 +16,12 @@ import tempfile
 
 from PIL import Image, ImageDraw
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import capture_overlay  # noqa: E402
+
+# --hitboxes=1 draws the logged hitboxes (rows with 'hb' + 'cams', runs with gstn.Combat.Debug.Hitboxes 1). Off by default: the
+# animation review videos stay clean (owner 2026-11-23: hitboxes are for the owner's own check, not for the animator)
+HITBOXES = False
 VIEWS = ['az0', 'az45', 'az90', 'game', 'az180', 'az270', 'az315']
 
 
@@ -55,15 +62,17 @@ def label(row):
 def cell(cap, seq, view, row, size, crop=None):
     """One frame of one view, labelled. crop (x0, y0, x1, y1) in source pixels keeps that part at its own resolution instead of resizing"""
     path = os.path.join(cap, seq, view, f"f{row['f']:03d}.png")
+    n_hb = 0
     if not os.path.exists(path):
         img = Image.new('RGB', (size, size), (60, 0, 0))
-    elif crop:
-        img = Image.open(path).convert('RGB').crop(crop)
     else:
-        img = Image.open(path).convert('RGB').resize((size, size), Image.LANCZOS)
+        img = Image.open(path).convert('RGB')
+        if HITBOXES:   # logged hitboxes drawn at the capture's own resolution, before crop/resize (capture_overlay.py)
+            n_hb = capture_overlay.draw(img, row, view)
+        img = img.crop(crop) if crop else img.resize((size, size), Image.LANCZOS)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, img.size[0], 13], fill=(0, 0, 0))
-    d.text((3, 1), f'{view} {label(row)}', fill=(255, 255, 0))
+    d.text((3, 1), f'{view} {label(row)}' + (f' hb{n_hb}' if n_hb else ''), fill=(255, 255, 0))
     return img
 
 
@@ -80,6 +89,8 @@ def opts():
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     o = opts()
+    global HITBOXES
+    HITBOXES = o.get('hitboxes', '0') == '1'
     mode, cap, seq = args[0], args[1], args[2]
     rows = rows_of(cap, seq)
     lo, hi = int(o.get('from', 0)), int(o.get('to', len(rows) - 1))
@@ -112,6 +123,11 @@ def main():
         views = views_of(cap, seq)
         cols = 4 if len(views) > 3 else 2          # the last cell is the frame's text
         cells = len(views) + 1
+        # fast capture (GSTNCapture): only the frames around the press have pictures. Leading and trailing rows with no picture in any
+        # view are left out (a gap inside the window stays, as a dark red cell); both sides of a whiff/hit pair then start at press - pre
+        shot = [any(os.path.exists(os.path.join(cap, seq, v, f"f{r['f']:03d}.png")) for v in views) for r in rows]
+        if any(shot):
+            rows = rows[shot.index(True):len(shot) - shot[::-1].index(True)]
         tmp = tempfile.mkdtemp(prefix='pie_capture_')
         for i, r in enumerate(rows):
             frame = Image.new('RGB', (cols * size, ((cells + cols - 1) // cols) * size), (20, 20, 20))

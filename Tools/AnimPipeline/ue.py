@@ -64,6 +64,27 @@ def backend():
     return "builtin" if ue_builtin.available() else "bridge"
 
 def call(method, params=None, timeout=300):
+    """Bridge call. With ANIMPIPE_SAMPLE_CACHE / ANIMPIPE_TIMING set (the round runner sets them), sample_pose and
+    read_anim_sequence go through animpipe/samplecache.py (same answers, asked once per saved clip) and every call is timed."""
+    if not (os.environ.get("ANIMPIPE_SAMPLE_CACHE") or os.environ.get("ANIMPIPE_TIMING")):
+        return _call(method, params, timeout)
+    import sys
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    from animpipe import samplecache
+    return samplecache.cached_call(_call, method, params, timeout, dirty=_dirty)
+
+
+def _dirty(asset):
+    r = _call("run_python_file", {"filePath": HERE + "/animpipe/samplecache_ue.py", "entryPoint": "dirty",
+                                  "kwargs": {"asset": asset}}, 60)
+    v = str(r.get("result"))
+    if v not in ("dirty", "clean"):
+        raise RuntimeError(v[:200])
+    return v == "dirty"
+
+
+def _call(method, params=None, timeout=300):
     global _sock, _id
     if backend() == "builtin":
         import ue_builtin

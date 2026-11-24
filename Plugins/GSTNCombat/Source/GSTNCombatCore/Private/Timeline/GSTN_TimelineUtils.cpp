@@ -67,6 +67,16 @@ FGSTN_CombatTimelineData UGSTN_TimelineUtils::AddBodyCapsuleTrack(const FGSTN_Co
 	return Result;
 }
 
+FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemoveAttackHitboxTracks(const FGSTN_CombatTimelineData& Data)
+{
+	FGSTN_CombatTimelineData Result = Data;
+	Result.Tracks.RemoveAll([](const TInstancedStruct<FGSTN_TimelineTrack>& Track)
+	{
+		return GSTNTimelineTracks::AsAttackHitbox(Track) != nullptr;
+	});
+	return Result;
+}
+
 FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemoveBodyCapsuleTracks(const FGSTN_CombatTimelineData& Data)
 {
 	FGSTN_CombatTimelineData Result = Data;

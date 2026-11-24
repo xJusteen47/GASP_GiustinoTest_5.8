@@ -10,5 +10,7 @@ const FSoftClassPath* FGSTN_LinkThrowSet::Find(const FGameplayTag& ThrowCommand)
 	return ThrowCommand == Command_Link_Throw_Forward ? &Forward
 		: ThrowCommand == Command_Link_Throw_Back ? &Back
 		: ThrowCommand == Command_Link_Throw_Up ? &Up
-		: ThrowCommand == Command_Link_Throw_Down ? &Down : nullptr;
+		: ThrowCommand == Command_Link_Throw_Down ? &Down
+		: ThrowCommand == Command_Link_Throw_Neutral ? &Neutral
+		: ThrowCommand == Command_Link_Throw_CrouchForward ? &CrouchForward : nullptr;
 }

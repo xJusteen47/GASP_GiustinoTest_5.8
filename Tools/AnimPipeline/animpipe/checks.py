@@ -4,7 +4,11 @@
            cameras), contact/FAF (the effector peaks inside the contact window, the clip reaches the FAF), planted feet,
            closed fists, hitstop_snap (default on every move: no bone travels more than HITSTOP_MAX cm from a
            hitbox-active frame to the next one, since a hit freezes the clip on that frame and the next frame would pop),
-           co_motion (no limb glued to the trunk through the startup while the body moves).
+           co_motion (no limb glued to the trunk through the startup while the body moves), hold_reason (every declared hold
+           has its written reason: a declaration rule, owner 1A 2026-11-24).
+  life     animpipe/life.py, the one source of the stop and life metrics (OG skill): stop_and_go (= life stops + still_runs),
+           life_hold_alive, life_stop_sync, life_cascade, life_impact, life_anticipation. Owner 2A 2026-11-24: each one BLOCKS
+           only once life_calibrate.py proved it (life_gate.json); until then it is a measure, shown as "WOULD FAIL ...".
   measure  reported, never block: motion_curves (+ motion_ref against the card's reference), twist_chain, motion_check
            (weight, overlap, balance, pose rules), spacing of the built curves, distance from the source poses.
   rules    (opt-in) the README's owner rules as blocking checks, declared in the card under `rules` with their thresholds;
@@ -166,6 +170,55 @@ def _co_motion(F, Q, w, skip_limbs=(), exempt=()):
     return False, "glued while the body moves: " + ", ".join(f"{k} {a}-{b}" for k, a, b in runs)
 
 
+def _stop_and_go(c, F, w, exempt=()):
+    """Gate against the stop-and-go build (diagnosis dropkick-k8-3), now computed by animpipe/life.py (OG life metrics,
+    calibrated 2026-11-24): the first version (every startup step >= 3.5 cm, largest <= 4x median, whole clip no run of
+    more than 3 steps under 3.5 cm) failed a textbook OG strike (ease-in + 1-2 frame snap) and every stock GASP landing
+    recovery, see tests/test_life.py. Window: the card's stop_and_go.window, default the startup."""
+    r = _life(c, F, w, exempt, window=c.get("stop_and_go", {}).get("window"), gate=False)   # the raw metric (tests, audits)
+    ok = r["block"]["stops"][0] and r["block"]["still_runs"][0]
+    return ok, r["block"]["stops"][1] + "; whole clip " + r["block"]["still_runs"][1]
+
+
+def _life(c, F, w, exempt=(), window=None, gate=True):
+    """animpipe/life.py on the built clip. Holds: the card's `life_holds` [{frames: [a, b], why}] plus every pose marked
+    hold/impact (its `why` field is the reason; none = FAIL, owner 2026-11-24: stops only when intended and declared)."""
+    from animpipe import life, curves as CV
+    from animpipe.card import key_frames
+    Fl = [{b: tuple(float(x) for x in v) for b, v in f.items()} for f in F]
+    holds = life.parse_holds(c.get("life_holds", []))
+    keys = key_frames(c)
+    for p in c["poses"]:
+        if p.get("hold") or p.get("impact"):
+            fr = sorted(CV.held_frames([int(p["frame"])], keys))
+            if fr:
+                why = str(p.get("why") or p.get("hold_reason") or "").strip()
+                holds.append((fr[0], fr[-1] + 1, why or ("impact pose" if p.get("impact") and not p.get("hold") else "")))
+    hr = {str(k): v for k, v in (c.get("hold_reasons") or {}).items()}
+    for f in c.get("holds", []):                       # card-level holds: their reason lives in hold_reasons {frame: why}
+        fr = sorted(CV.held_frames([int(f)], keys))
+        if fr:
+            holds.append((fr[0], fr[-1] + 1, str(hr.get(str(int(f)), "")).strip()))
+    holds += [(int(f), int(f) + 1, "card exemption") for f in sorted(exempt)]
+    eff = c.get("effector", "middle_01_l").replace("middle_01", "hand").replace("ball", "foot")
+    return life.run(Fl, window=window or [0, w["active"][0]], contact=w["active"][0], effector=eff, holds=holds, cls=c.get("class", ""),
+                    gate=gate)
+
+
+def _key_warnings(c, F, w):
+    """Measure (warnings, never block): near-identical consecutive keys (the body stays still between them even with
+    continuous tangents) and frames where arms, head and legs all arrive together (no overlap)."""
+    from animpipe import curves as CV
+    from animpipe.card import hold_keys, key_frames
+    Fl = [{b: tuple(float(x) for x in v) for b, v in f.items()} for f in F]
+    mn = float(c.get("stop_and_go", {}).get("min_cm", CV.STOP_CM))
+    ne = CV.near_equal_keys(Fl, key_frames(c), hold_keys(c), mn)
+    same = CV.same_frame_arrivals(Fl, tol=int(c.get("stop_and_go", {}).get("arrival_tol", 0)))
+    near = ("WARN near-equal keys " + ", ".join(f"{a}-{b} {d} cm" for a, b, d in ne)) if ne else f"no consecutive keys closer than {mn} cm"
+    arr = ("WARN arms, head and legs arrive together at " + ", ".join(map(str, same))) if same else "no frame where arms, head and legs all arrive together"
+    return near, arr
+
+
 def _clearance(path, rc, exemptions):
     """Block: no interpenetration (gap < 0 cm) between the clearance.py pairs. clearance.py prints no verdict, so until
     02/11 this check always read PASS. Gaps 0-2 cm are reported, not blocking. Owner-accepted contacts (crossed arms)
@@ -318,6 +371,22 @@ def run(path, src=False):
     # a planted foot is still on purpose: its leg is not judged
     co_skip = list(c.get("co_motion_skip", [])) + [f"leg_{s}" for s in sides]
     res["block"]["co_motion"] = _co_motion(F, Q, w, co_skip, exempt.get("co_motion", set()))
+    # Life (stops included) comes from animpipe/life.py only; each metric blocks only with its calibration proof (owner 2A
+    # 2026-11-24, life_gate.json), otherwise it is a measure the reviewer reads. A false alarm is fixed in life.py and
+    # recalibrated, never silenced here (rule 17)
+    lr = _life(c, F, w, exempt.get("life", set()) | exempt.get("stop_and_go", set()))
+    sg = [lr["block"].get(k) for k in ("stops", "still_runs")]
+    if all(sg):
+        res["block"]["stop_and_go"] = (sg[0][0] and sg[1][0], sg[0][1] + "; whole clip " + sg[1][1])
+    else:
+        res["measure"]["stop_and_go"] = (0, "; ".join(str(lr["measure"].get(k, "")) for k in ("stops", "still_runs") if k in lr["measure"]))
+    for k, (ok, line) in lr["block"].items():
+        if k not in ("stops", "still_runs"):
+            res["block"][k if k == "hold_reason" else "life_" + k] = (ok, line)
+    for k, line in lr["measure"].items():
+        if k not in ("stops", "still_runs"):
+            res["measure"]["life_" + k] = (0, str(line))
+    res["measure"]["near_equal_keys"], res["measure"]["same_frame_arrivals"] = [(0, x) for x in _key_warnings(c, F, w)]
 
     for name, args in (("motion_curves", ["motion_curves.py", take, f"--sheet={move}", "--quiet"]),
                        ("twist_chain", ["twist_chain.py", take, "--quiet"]),

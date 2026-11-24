@@ -3,6 +3,7 @@
 #include "Sim/GSTN_LinkMash.h"
 
 #include "Data/GSTN_GrabRules.h"
+#include "GSTN_LinkSettings.h"
 #include "Input/GSTN_ButtonMap.h"
 #include "Input/GSTN_InputHistory.h"
 #include "Sim/GSTN_LinkFragment.h"
@@ -10,7 +11,14 @@
 
 int32 FGSTN_LinkMash::InitialEndFrame(const FGSTN_MashRule& Rule, int32 LinkFrame, float DamagePercent, float Resistance)
 {
-	return LinkFrame + UGSTN_LinkMath::MashInitialFrames(Rule, DamagePercent, Resistance);
+	int32 Frames = UGSTN_LinkMath::MashInitialFrames(Rule, DamagePercent, Resistance);
+	// grab-link playtest (gstn.Grab.MaxHoldFrames, GSTN Debug): the longest hold before the grabbed frees itself without mashing, over the kit's rule
+	const int32 MaxHold = UGSTN_LinkSettings::GetMaxHoldFramesOverride();
+	if (MaxHold > 0)
+	{
+		Frames = FMath::Min(Frames, MaxHold);
+	}
+	return LinkFrame + Frames;
 }
 
 uint32 FGSTN_LinkMash::ButtonMaskOf(const FGSTN_MashRule& Rule, const FGSTN_ButtonMap* Buttons)

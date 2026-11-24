@@ -126,6 +126,12 @@ DROPKICK_SEQUENCES = [
      'air': {'trigger_h': float(os.environ.get('PIE_CAPTURE_DROPKICK_LOW_H', 90.0)), 'stick': True}},
     {'name': 'dropkick_low_hit', 'taps': [], 'frames': 150, 'dummy': float(os.environ.get('PIE_CAPTURE_DROPKICK_LOW_DIST', 150.0)), 'shoot': True,
      'air': {'trigger_h': float(os.environ.get('PIE_CAPTURE_DROPKICK_LOW_H', 90.0)), 'stick': True}},
+    # dropkick-k5: the SWEETSPOT case, the strike pose (startup f15) meets the dummy's chest: pressed falling at PIE_CAPTURE_DROPKICK_SWEET_H
+    # (default 380 cm: the move drops ~300 cm in its 15 startup frames, measured r4e v122-v137) with PIE_CAPTURE_AIR_GIVE_UP=200, frames 300
+    {'name': 'dropkick_sweet_hit', 'taps': [], 'frames': 300, 'dummy': float(os.environ.get('PIE_CAPTURE_DROPKICK_LOW_DIST', 150.0)), 'shoot': True,
+     'air': {'trigger_h': float(os.environ.get('PIE_CAPTURE_DROPKICK_SWEET_H', 380.0)), 'stick': True}},
+    {'name': 'dropkick_sweet_whiff', 'taps': [], 'frames': 300, 'dummy': None, 'shoot': True,
+     'air': {'trigger_h': float(os.environ.get('PIE_CAPTURE_DROPKICK_SWEET_H', 380.0)), 'stick': True}},
 ]
 # CP3 double-shot examples (PIE_CAPTURE_KIT=KIT_Example_DoubleShotA / B, PIE_CAPTURE_BUTTON=Special): one press, two presses 8 frames apart (a double
 # press), two presses 40 frames apart (two single shots)
@@ -158,6 +164,9 @@ BUG_SEQUENCES = [
     {'name': 'inside_escape', 'taps': [], 'frames': 160, 'dummy': 10.0, 'shoot': True, 'walk': (20, 120), 'walk_dir': (0, -1, 0)},
 ]
 AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after the attack press
+# dropkick-k5 (2026-11-21): the playtest kits jump ~9 m (apex ~86 frames after the press), so trigger_h was never reached inside 100
+# frames and every dropkick_low_* capture pressed at the give-up, 785 cm up: a 35-frame fall that never touched the dummy. Override it here.
+AIR_GIVE_UP = int(os.environ.get('PIE_CAPTURE_AIR_GIVE_UP', AIR_GIVE_UP))
 # Movement QA clips (qa-movement-1117): no attack. 'sticks' = [(frame from PRE, IA_Move value or None = release)], camera relative ((0, 1) = away
 # from the game camera); 'jump' = (frame, frames held) through the combat Jump button; 'crouch_tap' = frame of a Crouch tap (fast fall);
 # 'follow' = the review cameras move with the pawn at the start yaw. Select with PIE_CAPTURE_SEQUENCES (the names below), and
@@ -234,6 +243,17 @@ MOVE_SEQUENCES = [
     # machine re-picks a reface start (0.3 s of the clip seen).
     {'name': 'mv_pivot', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (180, None)],
      'expect': [{'clip': 'AS_GSTN_RunPivot_WalkTurn180*', 'window': [130, 134], 'min_weight': 0.8, 'coverage': 0.9}]},
+    # wc8ksn: Overlord run pivot (stock Turn_R_180 retimed to a 0.3 s core + baked mirror), PivotSet rows on. The reversal is ~0.3 s
+    # since skid-reversal-1, so the clip is expected right after the row enters (blend 0.1 s). A slight sideways stick picks the side
+    # (FutureFacingDelta sign); window = the retimed core seen in cap_ovl1 (row in f118, full weight f124).
+    {'name': 'mv_pivot_ovl', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (180, None)],
+     'expect': [{'clip': 'AS_GSTN_RunPivot_Overlord_L', 'window': [122, 130], 'min_weight': 0.8, 'coverage': 0.9}]},
+    {'name': 'mv_pivot_ovl_l', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (-0.25, -1, 0)), (180, None)],
+     'expect': [{'clip': 'AS_GSTN_RunPivot_Overlord_L', 'window': [122, 130], 'min_weight': 0.8, 'coverage': 0.9}]},
+    {'name': 'mv_pivot_ovl_r', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0.25, -1, 0)), (180, None)],
+     'expect': [{'clip': 'AS_GSTN_RunPivot_Overlord_R', 'window': [122, 130], 'min_weight': 0.8, 'coverage': 0.9}]},
+    {'name': 'mv_pivot_base_r', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0.25, -1, 0)), (180, None)],
+     'expect': [{'clip': 'M_Relaxed_Run_Turn_*180*', 'window': [130, 134], 'min_weight': 0.8, 'coverage': 0.9}]},
     {'name': 'mv_pivot_base', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (180, None)],
      'expect': [{'clip': 'M_Relaxed_Run_Turn_*180*', 'window': [130, 134], 'min_weight': 0.8, 'coverage': 0.9}]},
     {'name': 'mv_skid_base', 'taps': [], 'frames': 150, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (30, (0, -1, 0)), (110, None)]},
@@ -277,12 +297,17 @@ elif 'Dropkick' in KIT:
     SEQUENCES = DROPKICK_SEQUENCES
 elif 'DAir' in KIT:
     SEQUENCES = DAIR_SEQUENCES
+# PIE_CAPTURE_FRAMES=<n> (dropkick-tb-4): every selected sequence runs n frames after the press setup, e.g. to see a landing clip to its end
+# (the dropkick sequences stop 12 frames into the tech bounce)
+if os.environ.get('PIE_CAPTURE_FRAMES'):
+    SEQUENCES = [dict(s, frames=int(os.environ['PIE_CAPTURE_FRAMES'])) for s in SEQUENCES]
 # capture-speed (2026-11-21, owner "tutte le varianti in una sessione"): PIE_CAPTURE_RUNS=<runs.json> = several variants in ONE Play session
 # (editor boot + Play start + quit paid once, ~100 s of the ~139 s of a capture). runs.json: [{"name": "v25_h1", "cvars": "a 1;b 2",
 # "sequences": ["mv_run_start_v5"], "assert": {sequence: [expect, ...]}}, ...]. Each run writes to <out>/<name>/ as a one-run capture did
 # (frames, frames.jsonl, assert.txt); before each run its cvars are set (give every cvar a run changes in EVERY run: nothing is undone) and
 # the host goes back to its spawn spot (server_reset_to_spawn), so every run starts from the same place and yaw. <out>/assert.txt = OK only
-# if every run is OK. PIE_CAPTURE_SEQUENCES is ignored.
+# if every run is OK. PIE_CAPTURE_SEQUENCES is ignored. A run may carry "kit": the host gets that kit before the run (default: the
+# session's PIE_CAPTURE_KIT), so a combat move's base and variant kits are captured in ONE session (skill-gaps 2026-11-23).
 RUNS = json.load(open(os.environ['PIE_CAPTURE_RUNS'], encoding='utf-8')) if os.environ.get('PIE_CAPTURE_RUNS') else None
 if RUNS:
     _ALL = {s['name']: s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES
@@ -290,12 +315,35 @@ if RUNS:
     SEQUENCES = []
     for _r in RUNS:
         for _n in _r['sequences']:
-            SEQUENCES.append(dict(_ALL[_n], run=_r['name'], run_cvars=_r.get('cvars', ''), run_out=os.path.join(OUT, _r['name']),
+            SEQUENCES.append(dict(_ALL[_n], run=_r['name'], run_cvars=_r.get('cvars', ''), run_kit=_r.get('kit'), run_out=os.path.join(OUT, _r['name']),
                                   run_first=_n == _r['sequences'][0]))
+    # skill-k8 (owner 2026-11-23, K8 round 1): EVERY whiff (no dummy) of every run is captured before ANY hit, else the dummy placed by a
+    # hit run is still in front of the next run's whiff (K8 r1: seen under K8 in the whiff views). Stable sort, so each run keeps its own
+    # order; a run met again after the switch re-runs its setup (kit, cvars, spawn reset), so every block starts from a reset scene.
+    # PIE_CAPTURE_KEEP_ORDER=1 keeps the runs.json order.
+    if os.environ.get('PIE_CAPTURE_KEEP_ORDER') != '1':
+        SEQUENCES.sort(key=lambda s: s.get('dummy') is not None)
+        for _i, _s in enumerate(SEQUENCES):
+            _s['run_first'] = _i == 0 or SEQUENCES[_i - 1]['run'] != _s['run']
 SHOOT = [int(v) for v in os.environ['PIE_CAPTURE_SHOOT'].split(',')] if os.environ.get('PIE_CAPTURE_SHOOT') else None
 TIMEOUT = 900.0 if not RUNS else 900.0 + 60.0 * len(SEQUENCES)
 # PIE_CAPTURE_COLLISION=1: draw collision (the pawn's movement capsule) in every view and the game viewport (DROPKICK-CAPSULE, 2026-11-15)
 COLLISION = os.environ.get('PIE_CAPTURE_COLLISION', '') == '1'
+# FAST CAPTURE (owner 2026-11-24, 2A; plugin GSTNCapture): PIE_FASTCAP=1 shoots through UGSTN_FastCapture instead of _shoot(): all views
+# queued in one pass, GPU readback asynchronous, PNGs written on worker tasks (same <seq>/<view>/f<NNN>.png files, so asserts, grids and
+# review packs are unchanged). The simulation still steps 1/60 s per rendered frame. On top of it:
+#  - window: frames reach the disk only from PIE_FASTCAP_WINDOW's first value before the press to its second value after it (default
+#    '20,90'), plus the frames the attacker spent in hitstop since the press (hit runs show the whole freeze and the snap after it). Before
+#    the press the frames wait in a ring (an aerial's press frame is known only when it happens); a sequence without a press keeps all;
+#  - simple light on the review views (az*): no shadows, Lumen, AO, motion blur; the shadowless fill lights still shade the body (NOT
+#    unlit: elbows and arms keep their depth). PIE_FASTCAP_FULL_LIGHT=1 keeps the full light everywhere; the game view always has it;
+#  - early end: the sequence stops once the window is shot and every assert window of the sequence is in frames.jsonl
+#    (PIE_FASTCAP_EARLY_END=0 runs the sequence's full length);
+#  - no frame limit: t.MaxFPS 0 and the editor's background CPU throttle off, so a window on the second monitor runs at full speed.
+# An editor built without the plugin falls back to _shoot() and says so in capture.log ("FASTCAP: unavailable").
+FAST = os.environ.get('PIE_FASTCAP', '') == '1'
+FAST_PRE, FAST_POST = (int(v) for v in os.environ.get('PIE_FASTCAP_WINDOW', '20,90').split(','))
+FAST_EARLY_END = os.environ.get('PIE_FASTCAP_EARLY_END', '1') != '0'
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None, 'log': None, 'rows': None}
 
 
@@ -370,6 +418,26 @@ def _clear_stage():
     return f'parked {parked}, other pawns at {sorted(others)[:4]} cm'
 
 
+def _park_dummies():
+    """skill-k8 (owner 2026-11-23): before a whiff the level's dummies leave the stage (same server reset _clear_stage uses for the other
+    players), so no dummy stands in the behind (az180) or side view of a whiff. Returns the log text; a dummy still within 1500 cm of the
+    host is logged as DUMMY IN VIEW (the review pack must not be built on that capture)."""
+    spots = h.hub.PARK['Z1']
+    out = []
+    for n, key in enumerate(h.dummies()):
+        comp = g.comps(g.worlds()[0])[key]
+        x, y = spots[(n + 3) % len(spots)]
+        spawn = comp.get_spawn_location()
+        comp.server_reset_to_spawn(unreal.Vector(x - spawn.x, y - spawn.y, 0.0))
+        out.append(key)
+    return f'dummies parked {out}'
+
+
+def _dummies_in_view(limit=1500.0):
+    me = _pawn().get_actor_location()
+    return [k for k in h.dummies() if g.comps(g.worlds()[0])[k].get_owner().get_actor_location().distance(me) < limit]
+
+
 def _make_lights():
     """The hub's only light is a sun behind the player start and it has no sky: the front of the character is black (point lights do not help,
     the mannequin is metallic). Shadowless directional fill lights (summoned like the cameras, aimed with them) make every side readable;
@@ -391,6 +459,29 @@ def _make_lights():
     return True
 
 
+# Camera follow (coordinator 2026-11-24: in the K7/K8 slow motion the side and back cameras jumped at v156-v158 and it read as a snap of
+# the body). The old follow put the cameras on the ACTOR location every frame; the actor is not smoothed (a landing or correction snap
+# moves it in one frame) while the mesh is, so the picture jumped and the body seemed to. PIE_CAPTURE_CAM_FOLLOW=mesh (default with
+# PIE_FASTCAP=1) follows the skeletal mesh component's location, i.e. what the picture shows; =actor keeps the old behaviour (an older
+# capture compared to a new one must use the same follow: it is in the capture chain). The rows keep every camera ('cams');
+# capture_move.camera_jumps warns about a camera step that differs from the previous one by more than CAM_JUMP_CM after the capture.
+CAM_FOLLOW = os.environ.get('PIE_CAPTURE_CAM_FOLLOW', 'mesh' if FAST else 'actor')
+
+
+def _follow_point(pawn, reset=False):
+    """The follow centre: the mesh location plus the actor-mesh offset taken when the sequence's cameras were placed, so the framing
+    is the actor's (as before) and only the jumps are gone"""
+    mesh = pawn.get_component_by_class(unreal.SkeletalMeshComponent) if CAM_FOLLOW == 'mesh' else None
+    a = pawn.get_actor_location()
+    if not mesh:
+        return a
+    m = mesh.get_world_location()
+    if reset or st.get('cam_mesh_off') is None:
+        st['cam_mesh_off'] = (a.x - m.x, a.y - m.y, a.z - m.z)
+    o = st['cam_mesh_off']
+    return unreal.Vector(m.x + o[0], m.y + o[1], m.z + o[2])
+
+
 def _place_cameras(follow=False):
     """follow=True (aerial sequences, every frame): the cameras keep the yaw of the sequence start and move with the pawn, which stays in the
     centre of the picture (the jump is 233 cm high, a fixed camera at 380 cm loses it); the height is in the rows ('h'), not in these pictures"""
@@ -398,8 +489,10 @@ def _place_cameras(follow=False):
     centre, yaw = pawn.get_actor_location(), pawn.get_actor_rotation().yaw
     if follow:
         yaw = st.get('cam_yaw', yaw)
+        centre = _follow_point(pawn)
     else:
         st['cam_yaw'] = yaw
+        _follow_point(pawn, reset=True)
     if AHEAD:
         centre = unreal.Vector(centre.x + AHEAD * math.cos(math.radians(yaw)), centre.y + AHEAD * math.sin(math.radians(yaw)), centre.z)
     for (az, _intensity), light in zip(FILL_LIGHTS, st['lights']):
@@ -414,6 +507,20 @@ def _place_cameras(follow=False):
     return (round(centre.x), round(centre.y), round(centre.z)), round(yaw)
 
 
+def _game_camera():
+    """FAST path: the 'game' view takes the player's camera, and every view's camera is logged for the hitbox overlay (as _shoot does)"""
+    manager = g._local_pawn(0)[0].get_editor_property('player_camera_manager')
+    for (name, az), cam in zip(VIEWS, st['cams']):
+        comp = cam.capture_component2d
+        if az is None:
+            cam.set_actor_location_and_rotation(manager.get_camera_location(), manager.get_camera_rotation(), False, False)
+            comp.set_editor_property('fov_angle', manager.get_fov_angle())
+        _cl, _cr = cam.get_actor_location(), cam.get_actor_rotation()
+        st.setdefault('cam_rows', {})[name] = [[round(_cl.x, 2), round(_cl.y, 2), round(_cl.z, 2)],
+                                                [round(_cr.pitch, 3), round(_cr.yaw, 3), round(_cr.roll, 3)],
+                                                round(float(comp.get_editor_property('fov_angle')), 3), SIZE]
+
+
 def _shoot(seq, frame):
     manager = g._local_pawn(0)[0].get_editor_property('player_camera_manager')
     if seq.get('air') is not None or seq.get('follow'):
@@ -423,6 +530,12 @@ def _shoot(seq, frame):
         if az is None:
             cam.set_actor_location_and_rotation(manager.get_camera_location(), manager.get_camera_rotation(), False, False)
             comp.set_editor_property('fov_angle', manager.get_fov_angle())
+        # skill-gaps 2026-11-23: the camera of every view per frame, so pie_capture_grid.py can draw the logged hitboxes into the picture
+        # (scene captures do not render debug lines)
+        _cl, _cr = cam.get_actor_location(), cam.get_actor_rotation()
+        st.setdefault('cam_rows', {})[name] = [[round(_cl.x, 2), round(_cl.y, 2), round(_cl.z, 2)],
+                                                [round(_cr.pitch, 3), round(_cr.yaw, 3), round(_cr.roll, 3)],
+                                                round(float(comp.get_editor_property('fov_angle')), 3), SIZE]
         t0 = time.perf_counter()
         comp.capture_scene()
         folder = os.path.join(_seq_dir(seq), name)
@@ -470,6 +583,16 @@ def _fl_row(mesh, body):
 def _row(frame, tapped, extra=None):
     view = g._view(0, h._key(0)) or {}
     row = {'f': frame, 'tap': tapped, 'combat': view.get('combat'), 'tags': view.get('tags'), 'loc': view.get('location'), 'montage': _montage()}
+    if st.get('cam_rows'):
+        row['cams'] = st.pop('cam_rows')
+    try:   # skill-gaps 2026-11-23: the hitbox shapes gstn.Combat.Debug.Hitboxes draws (world, on the mesh), drawn later on the pictures
+        # k8 capture 2026-11-23: g.comps() holds the test component, not the combat one (AttributeError on every frame)
+        _cs = _pawn().get_component_by_class(unreal.GSTN_CombatSimComponent)
+        _hb = _cs.get_debug_hitbox_shapes() if _cs else ''
+        if _hb and _hb != '[]':
+            row['hb'] = json.loads(_hb)
+    except Exception as e:   # an editor built before GetDebugHitboxShapes: no shapes, the grid says so
+        row['hb_err'] = repr(e)[:80]
     try:   # skid "two poses for the same input": actor and mesh yaw (world), logged every frame
         _pw = _pawn()
         _mesh = _pw.get_component_by_class(unreal.SkeletalMeshComponent)
@@ -556,6 +679,7 @@ def _row(frame, tapped, extra=None):
     except Exception as e:
         row['proj_err'] = repr(e)[:80]
     st['rows'].write(json.dumps(row) + '\n')
+    return row
 
 
 def _presentation_off():
@@ -569,6 +693,72 @@ def _presentation_off():
                 c.play_effects = False   # plain set: set_editor_property sends PostEditChange (suspected: reruns the pawn's construction in PIE)
                 n += 1
     return n
+
+
+def _fast_init():
+    """Creates the C++ capture over the summoned scene captures (after _make_cameras). Returns a log line."""
+    cls = getattr(unreal, 'GSTN_FastCapture', None)
+    if cls is None:
+        return 'FASTCAP: unavailable (editor built without GSTNCapture), PNG export path used'
+    cfg = unreal.GSTN_FastCaptureSettings()
+    cfg.set_editor_property('size', SIZE)
+    cfg.set_editor_property('pre_roll_frames', FAST_PRE)
+    fc = cls.create_fast_capture(_world(), cfg)
+    if fc is None:
+        return 'FASTCAP: create failed, PNG export path used'
+    full = os.environ.get('PIE_FASTCAP_FULL_LIGHT') == '1'
+    for (name, az), cam in zip(VIEWS, st['cams']):
+        fc.add_view(name, cam.capture_component2d, az is not None and not full)
+    st['fc'] = fc
+    try:   # a capture window on the second monitor must not be throttled as a background app
+        unreal.get_default_object(unreal.EditorPerformanceSettings).set_editor_property('throttle_cpu_when_not_foreground', False)
+    except Exception as e:  # noqa: BLE001
+        _log(f'FASTCAP: background throttle not changed: {e!r}')
+    _console('t.MaxFPS 0')
+    return f'FASTCAP: on, {len(st["cams"])} views, window -{FAST_PRE}/+{FAST_POST} from the press, simple light {"off" if full else "on review views"}'
+
+
+def _assert_end(seq):
+    """Last capture frame any expectation of this sequence needs in frames.jsonl (None = unknown: no early end)"""
+    exp = list(seq['expect'] if isinstance(seq.get('expect'), list) else ([seq['expect']] if seq.get('expect') else []))
+    if RUNS:
+        r = next((x for x in RUNS if x['name'] == seq.get('run')), {})
+        e = (r.get('assert') or {}).get(seq['name'])
+        exp += e if isinstance(e, list) else ([e] if e else [])
+    if os.environ.get('PIE_CAPTURE_ASSERT'):
+        try:
+            e = json.load(open(os.environ['PIE_CAPTURE_ASSERT'], encoding='utf-8')).get(seq['name'])
+            exp += e if isinstance(e, list) else ([e] if e else [])
+        except Exception:  # noqa: BLE001
+            return None
+    ends = [int(x['window'][1]) for x in exp if x.get('window')]
+    return max(ends) if ends else None
+
+
+def _fast_step(seq, frame, tapped, row):
+    """FAST path, once per rendered frame after the row is logged: shoot, commit on the press, stop after the window. Returns True when
+    the sequence may end now (window shot and every assert window logged)."""
+    fc = st['fc']
+    has_press = bool(seq['taps']) or ('rise_h' in (seq.get('air') or {}) or 'trigger_h' in (seq.get('air') or {}))
+    if not seq['shoot']:
+        return False
+    if st['fc_press'] is None and tapped:
+        st['fc_press'] = frame
+        st['fc_paused0'] = ((row or {}).get('combat') or {}).get('timelinePaused', 0)
+        fc.commit(frame)
+    paused = ((row or {}).get('combat') or {}).get('timelinePaused', 0) - st.get('fc_paused0', 0) if st['fc_press'] is not None else 0
+    if not has_press and st['fc_press'] is None:
+        st['fc_press'] = frame                     # nothing will be pressed: keep the whole sequence, as the PNG path did
+        st['fc_paused0'] = 0
+        fc.commit(frame + FAST_PRE)
+    first = (PRE + seq['taps'][0] - FAST_PRE) if seq['taps'] else (PRE if has_press else 0)
+    last = None if st['fc_press'] is None else (st['fc_press'] + FAST_POST + max(0, paused) if has_press else None)
+    if frame >= first and (last is None or frame <= last):
+        fc.shoot(frame)
+        st['fc_last'] = frame
+    done = last is not None and frame > last
+    end = st.get('fc_assert_end')
+    return FAST_EARLY_END and done and (end is not None and frame >= end)
 
 
 def _run_asserts():
@@ -620,6 +810,12 @@ def _run_asserts():
 
 def _finish(status):
     _log(f'finish: {status}')
+    if st.get('fc'):
+        try:
+            st['fc'].release()
+        except Exception as e:  # noqa: BLE001
+            _log(f'fastcap release failed: {e!r}')
+        st['fc'] = None
     st['phase'] = 'ending'
     st['status'] = status
     try:
@@ -665,6 +861,8 @@ def _tick(_dt):
         elif phase == 'cameras':
             if _make_cameras() and _make_lights():
                 _log(f'{len(st["cams"])} cameras, {len(st["lights"])} fill lights')
+                if FAST:
+                    _log(_fast_init())
                 st.update(phase='seq_begin', t=now)
             elif now - st['t'] > 20:
                 _finish('could not summon the scene captures')
@@ -698,6 +896,11 @@ def _tick(_dt):
                     return None
                 if step == 2 and now - st['t'] < 1.5:
                     return None
+                # skill-gaps 2026-11-23: a run can name its own kit ("kit" in runs.json), so base and variant of a MOVE share one Play
+                # session (the kit is given after the reorient, before the spawn reset; kits are server state, the reset waits 3 s)
+                if seq.get('run_kit') and seq['run_kit'] != st.get('kit_now', KIT):
+                    _log(f'run {seq["run"]}: kit {seq["run_kit"]}: {h.kit(0, seq["run_kit"])}')
+                    st['kit_now'] = seq['run_kit']
                 for cv in [c.strip() for c in seq['run_cvars'].split(';') if c.strip()]:
                     _console(cv)
                 comp = g.comps(g.worlds()[0])[h._key(0)]
@@ -705,6 +908,17 @@ def _tick(_dt):
                 st.update(run_ready=st['seq'], t=now + 1.0, reorient=0)    # 3 s real time: the reset lands and the idle settles
                 _log(f'run {seq["run"]}: cvars [{seq["run_cvars"]}], facing off by {off:.1f} deg before the reset, host reset to spawn')
                 return None
+            if not seq['dummy'] and not st.get('dummy_placed'):   # skill-k8: whiff = empty stage, checked after the teleport settles
+                if not st.get('dummies_parked'):
+                    _log(_park_dummies())
+                    st.update(dummies_parked=True, t=now)
+                    return None
+                near = _dummies_in_view()
+                if near:
+                    _log(f'DUMMY IN VIEW before whiff {seq["name"]} ({seq.get("run", "")}): {near}')
+                    os.makedirs(_seq_dir(seq), exist_ok=True)   # read by capture_move: no review pack on a dirty whiff
+                    open(os.path.join(_seq_dir(seq), 'dummy_in_view.txt'), 'w', encoding='utf-8').write(' '.join(near) + '\n')
+                st.update(dummy_placed=True, dummy_key=None)
             if seq['dummy'] and not st.get('dummy_placed'):
                 keys = h.dummies()
                 _log(f'dummy {keys[:1]} ahead: {h._place_ahead(0, keys[0], seq["dummy"]) if keys else "NO DUMMY"}')
@@ -734,6 +948,9 @@ def _tick(_dt):
             os.makedirs(_seq_dir(seq), exist_ok=True)
             st['rows'] = open(os.path.join(_seq_dir(seq), 'frames.jsonl'), 'w')
             _console('t.OverrideFPS 60')
+            if st.get('fc'):
+                st['fc'].begin_sequence(_seq_dir(seq).replace('\\', '/'))
+                st.update(fc_press=None, fc_paused0=0, fc_last=None, fc_assert_end=_assert_end(seq))
             if os.environ.get('PIE_CAPTURE_PUSHLOG') == '1':
                 _console('gstn.Pushbox.Log 1')
             st.update(shots=0, host_proj=0)
@@ -744,7 +961,11 @@ def _tick(_dt):
             _tp = time.perf_counter()
             # capture-speed: PIE_CAPTURE_SHOOT='70,210' shoots only those frames (the PNG export is ~28 ms per view and frame, 85% of a
             # sequence's time); frames.jsonl still has every frame, so the ASSERT is unchanged
-            if seq['shoot'] and (not SHOOT or SHOOT[0] <= frame <= SHOOT[1]):
+            if st.get('fc'):
+                if seq.get('air') is not None or seq.get('follow'):
+                    _place_cameras(follow=True)
+                _game_camera()                              # the game view follows the player's camera; the shot itself is in _fast_step
+            elif seq['shoot'] and (not SHOOT or SHOOT[0] <= frame <= SHOOT[1]):
                 _shoot(seq, frame)
             # The scene captures do not show the debug draw (hitboxes, body): PIE_CAPTURE_HIRES='86,91' takes a real viewport shot on those
             # frames (Saved/Screenshots/WindowsEditor/HighresScreenshot*.png, in frame order)
@@ -779,7 +1000,8 @@ def _tick(_dt):
                     _log(f'{seq["name"]}: crouch on v{frame} (height {height:.0f} cm, {"rising" if rising else "falling"}), attack on v{frame + 1}')
                 tapped = st['fired'] is not None and frame == st['fired']
                 st['prev_z'] = z
-            _row(frame, tapped, extra)
+            _logged = _row(frame, tapped, extra)
+            _fast_done = _fast_step(seq, frame, tapped, _logged) if st.get('fc') else False
             if hold_crouch:
                 if air.get('stick'):
                     g.hold(0, 'move', (0, 1, 0))            # stick forward (relative to the camera, as in scenario_combat_main_inputs)
@@ -863,8 +1085,12 @@ def _tick(_dt):
                     g.release(0, 'move')
             st['frame'] = frame + 1
             st['t_drv'] = st.get('t_drv', 0.0) + time.perf_counter() - _tp
-            if st['frame'] >= PRE + seq['frames']:
+            if st['frame'] >= PRE + seq['frames'] or _fast_done:
                 st['rows'].close()
+                if st.get('fc'):
+                    _ok = st['fc'].end_sequence(30.0)
+                    _log(f'fastcap {seq["name"]}: {"ok" if _ok else "INCOMPLETE"} {st["fc"].get_stats()}'
+                         f'{" (early end on v%d)" % frame if _fast_done else ""}, press v{st.get("fc_press")}, last shot v{st.get("fc_last")}')
                 g.combat_clear(0)
                 if seq.get('sticks'):
                     g.release(0, 'move')
@@ -882,7 +1108,7 @@ def _tick(_dt):
                         _log(f'dummy diag failed: {e}')
                 if st.get('minions_spawned'):
                     _console('gstn.Minion.Bench.Clear')
-                st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False, minions_spawned=False)
+                st.update(phase='seq_begin', seq=st['seq'] + 1, t=now, dummy_placed=False, dummies_parked=False, minions_spawned=False)
         elif phase == 'ending' and not les.is_in_play_in_editor():
             unreal.unregister_slate_post_tick_callback(st['handle'])
             try:

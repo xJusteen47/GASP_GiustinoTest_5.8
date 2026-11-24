@@ -53,3 +53,36 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-22,Verify cheaper AI stack proposal,stack-economico,cloud,claude_max,Opus,0,0,2,,DONE verdict handoffs/stack-economico-verdetto-2026-11-22.md (1B 2B 3A + rule 3 rewrite)
 2026-11-22,calibrazione-2c-k6-r1,Calibrazione cieca 2C Neon su K6 r1,fisso,agy_student,gemini-4-neon-high,6.87,0,0,,CALIB-2C K6 r1: FAIL posa (match Fable 1/1; 0 falsi PASS)
 2026-11-22,integ-playtest-2026-11-22,disk-cleanup+integrazione-3a,fisso,agy_student,gemini-4-hydrogen-high,15,0,0,,1A+2A (~254 GB liberati) + merge M12p1/M10M11/S1/haptics/main su claude/integ-playtest-2026-11-22 (build UE pending)
+2026-11-23,integ-2026-11-23,compilare main + integrazione branch cloud,portatile,claude,opus,0,0,4,,main non compilava (C4172 GSTNMission) + 2 test loadout rotti: fissati; main 1877/1877; +grab-link 1880/1880; anim-mcp non fuso (clip non in review)
+2026-11-23,turnaround-180l-c1,Turnaround 180L v28 (w2t180Ls) gstn-anim-cycle-cheap,fisso,deepseek+agy_student,deepseek-v4-pro+hydrogen-medium,25,0,0.21,0,PASS (GATES OK + ASSERT OK + review jpg PASS)
+2026-11-23,harness-deepseek-fix,Fix agent-bridge stream-json/async + Run-SparseAnimStep + Invoke-RunStartPipeline + LFS pre-push,fisso,agy_student,gemini-4-hydrogen-medium,6,0,0,0,PASS (test_bridge.py + PS parse + hook LFS)
+2026-11-23,turnaround-all-c2,Turnaround 180R/090L/090R 2 round (turnall_c2+c3) + review Pro r1/r2,fisso,agy_student,gemini-4-hydrogen-medium+pro,8,0,0,0,FAIL pivot v88-112 (ASSERT OK + uscita OK; Regola 10 a owner con slow4x)
+2026-11-23,worker-M1_CODE,build-base27-ue,fisso,deepseek,deepseek-v4-pro,5,0,,,FAIL (exit=1)
+2026-11-23,worker-M1_CODE,refactor-turnall-ue,fisso,deepseek,deepseek-v4-pro,5,0,,,FAIL (exit=1)
+2026-11-23,worker-M1_CODE,refactor-turnall-ue,fisso,deepseek,deepseek-v4-pro,5.12,0,1.0198,,PASS
+2026-11-23,worker-M1_CODE,build-base27-ue,fisso,deepseek,deepseek-v4-pro,10.02,0,,,FAIL (exit=1)
+2026-11-23,worker-M1_CODE,build-base27-part1,fisso,deepseek,deepseek-v4-pro,6.02,0,,,FAIL (exit=1)
+2026-11-23,worker-M0,build-base27-ue-draft,fisso,deepseek,deepseek-flash,3,0,,,FAIL (exit=1)
+2026-11-23,anim-mcp-v2-verify-1,unit-test-only,fisso,claude,sonnet-5-5,0.5,5,,,PARZIALE (smoke/cost-test bloccati da lock _ue59)
+2026-11-23,anim-mcp-v2-verify-1,smoke+costtest-w3-chin,fisso,deepseek+claude,flash+sonnet-5-5,25,0,0.6,,PARZIALE (head non verificabile da dump)
+2026-11-23,anim-mcp-v2-verify-1,t2-head-dump+costtest-arm,fisso,deepseek+claude,flash+sonnet-5-5,55,0,2.0,,PARZIALE (no video in-game: variante non registrabile dal tool)
+2026-11-23,anim-mcp-v2-turn4,4fix+retest-arm_clr,fisso,claude,sonnet-5-5,50,0,2.2,,OK numerico (no cattura GPU: chooser dirty)
+2026-11-23,anim-mcp-cheap-1,compact+dryrun+run_intent+cachelog,cloud,claude,sonnet-5-5,0,0,1.5,,OK (pwsh test da rilanciare su desktop)
+2026-11-23,anim-mcp-cheap-1b,compact-opt-in,cloud,claude,sonnet-5-5,0,0,0.3,,OK
+2026-11-23,Add procedural follow-through tool to anim MCP,anim-mcp-followthrough,cloud,claude_pro,Sonnet medium,0,0,1.6,,PARTIAL (offline tests OK; UE run pending desktop)
+2026-11-23,Anim skill T0 prep + dropkick hitboxes,anim-skill-t0,cloud,Opus high,0,0,3.5,FATTO codice T0 (73 test offline) + hitbox script; UE non eseguito; brief fisso K7
+2026-11-23,camera-floor-anchor,camera dal pavimento non dalla capsula + P1a pivot stesso frame + opzione capsula dropkick,cloud,claude,opus-medium,5,0,60,,non compilato; da provare su fisso (build GSTN.Camera.* + A/B dropkick)
+2026-11-23,Dropkick K7 skill test,dropkick-k7-skill-test,portatile,claude,opus-medium,55,0,7,,K7 catturata ASSERT OK; skill parziale (cancello rifiuta pose da carta)
+2026-11-23,Anim skill gaps K7,anim-skill-gaps-k7,cloud,claude,opus-medium,0,0,3.5,,6 fix skill (card gate, kit per run, hitbox in cattura, allineamento, silhouette palla); C++ non compilato
+2026-11-23,Dropkick K8 Doom,dropkick-k8-1,portatile,claude,opus-medium,35,0,8,,K8 catturata ASSERT OK; build jcugce OK; hitbox in cattura rotte (fix non verificato)
+2026-11-23,Skill vita e velocita (opzione A),skill-vita-velocita-1,cloud,claude,opus-medium,0,0,3.5,,no_stop bloccante su ogni clip anche ereditata; schede velocita con STOP e striscia; slowmo startup nel pacchetto; statua bloccante
+2026-11-24,review-invarianti-1,Review invarianti (SC thread 1),cloud,claude,opus-medium,0,0,4.5,,INVARIANTI INV-01..12 nelle skill + test; ereditati di nuovo bloccanti; tenute con motivo; anim_review_pack livello 2
+2026-11-24,principi-review-1,Principi considerati nella review (INV-13),cloud,claude,opus-medium,0,0,3.5,,indice ricerca + 20 principi PR con documenti + principi_review.py + test
+2026-11-24,claude/project-thread-sgky92,4 correzioni controlli fermate (stop_sync tenute vive; nucleo vivo; dedupe solo catture; audit 0.4 cm),cloud,Opus medium,0,0,2.5,FATTO 16f0d916+; jab v12 FAIL reale; eventi solo misura (bloccarli ammorbidirebbe) docs/notes/handovers/fix-stop-checks.md
+2026-11-24,audit-stop-2026-11-24,Audit stop-and-go clip costruite,cloud,claude,opus-low,0,0,1.6,,parziale: nessun dump nel repo; rischio dalla carta (K7 settle/loop K6 ftilt v3.1 dair v4); dump+tabella pronti per il fisso
+2026-11-23,Dropkick K8 giro 2,dropkick-k8-2,portatile,claude,opus-medium,25,0,2.5,,giro 2 catturato ASSERT OK; hitbox in cattura verificate
+2026-11-24,Dropkick K8 diagnosi scatti,dropkick-k8-3-diagnosi,portatile,claude,opus-medium,0,0,0.8,,causa comune K7/K8: tangenti piatte su ogni chiave del build; cattura OK
+2026-11-24,Dropkick K8 piano giro 3,dropkick-k8-4-piano-r3,portatile,claude,opus-medium,0,0,1.2,,carte K8R3 + cancello anti-fermata (K7 e K8 r2 FAIL); in attesa editor e build a campionamento continuo
+2026-11-22,runstart-w3 + cheap skill,runstart-w3,desktop,agy_student,Hydrogen Medium + Pro,45,0,0,50,5/6 SI (arm_r fase v92 aperto) + skill cheap
+2026-11-24,Unify animation skill (T1),skill-anim-unica-t1,cloud,claude,opus-medium,0,0,5.5,,merge 5 branch + life gate 2A + tenute 1A + fase braccio-gamba (misura) + skill gstn-anim-cycle; 9 test preesistenti rossi
+2026-11-24,Unify animation skill (T3),skill-anim-unica-t3,desktop,claude,opus,40,0,6,,integrazione T1+T2 + build GSTNCapture OK + dump K7/K8/K6 + CALIB 11/13 (gate non scritto) + anim_layer in UE PASS ma confronto w3 non equivalente

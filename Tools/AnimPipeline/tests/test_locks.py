@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from animpipe import card as C, locks as L
 
 V4 = os.path.join(C.TOOLS, "tests", "fixtures", "overlord_dair_v4.json")
-V3 = os.path.join(C.TOOLS, "cards", "overlord", "overlord_dair_v3.json")
+V3 = os.path.join(C.TOOLS, "cards", "overlord", "dair", "overlord_dair_v3.json")
 
 
 def _bad_copy(dx=3.0):

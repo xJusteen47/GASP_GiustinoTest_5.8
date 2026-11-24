@@ -148,6 +148,24 @@ FGSTN_HitInboxEntry FGSTN_LinkThrow::MakeThrowEntry(const FGSTN_LinkOutcomeKey& 
 	return Entry;
 }
 
+FGSTN_HitInboxEntry FGSTN_LinkThrow::MakeEscapeEntry(const FGSTN_HitData& Hit, int32 Frame, int32 GrabbedId, const FTransform& GrabbedTransform,
+	const FVector& GrabberLocation)
+{
+	FGSTN_HitInboxEntry Entry;
+	Entry.Frame = Frame;
+	Entry.AttackerId = GrabbedId;
+	Entry.AttackerTeam = 255;
+	Entry.Hit = Hit;
+	Entry.HitLocation = GrabberLocation;
+	Entry.HitboxVelocity = FVector::ZeroVector;
+	Entry.AttackerYaw = static_cast<float>(GrabbedTransform.Rotator().Yaw);
+	Entry.Relationship = GSTNHitRelationship::ToIndex(GSTNCombatHitTags::Relationship_Enemy.GetTag());
+	Entry.HurtboxIndex = 0;
+	Entry.AttackerHitboxIndex = 0;
+	Entry.HurtState = 0;
+	return Entry;
+}
+
 bool FGSTN_LinkThrow::EndOwnLink(FGSTN_LinkFragment& Fragment, int32 Frame, const FGSTN_GrabRules* Rules)
 {
 	FGSTN_LinkState& Body = Fragment.Links.Body;

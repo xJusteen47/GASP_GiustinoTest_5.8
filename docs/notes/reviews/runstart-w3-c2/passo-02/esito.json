@@ -1,0 +1,39 @@
+{
+  "mossa": "runstart-w3",
+  "ciclo": 2,
+  "passo": 2,
+  "tentativo": 1,
+  "stato": "PASS",
+  "commit_source": "9dea41f9",
+  "mappa_frame": {
+    "v92": "f5",
+    "v107": "f13",
+    "v114": "f17",
+    "v122": "f21",
+    "v128": "f24"
+  },
+  "gate": {
+    "esito": "GATES: OK",
+    "gap_min_f0_21_cm": 10.6,
+    "bone_worst_pct": 0.5,
+    "jitter_max_cm": 9.0,
+    "roll_l_deg": 13.0,
+    "roll_r_deg": 13.7,
+    "file": "Saved/AnimPipeline/runstart/gates_joints_AS_GSTN_RunStart_Generic_w3.json"
+  },
+  "verifica": {
+    "ball_l_dz_cm": {
+      "f5": [-15.0, -14.6],
+      "f13": [-12.9, -12.9],
+      "f17": [-10.5, -14.4],
+      "f24": [-6.4, -7.2]
+    },
+    "ball_r_dz_cm": {
+      "f5": [-14.5, -14.0],
+      "f13": [-15.1, -15.0],
+      "f17": [-3.3, -3.3],
+      "f21": [-10.7, -10.7]
+    }
+  },
+  "before_after": "docs/notes/reviews/runstart-w3-c2/passo-02/before_after.png"
+}

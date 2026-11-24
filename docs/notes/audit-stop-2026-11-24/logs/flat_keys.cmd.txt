@@ -1,0 +1,1 @@
+python3 gstn_anim_mcp/flat_key_audit.py $(git ls-files 'cards/*.json' | grep -vE 'backup|plan\.json|timing|approved|manual|refs/|director|/k[578]/|fk/|owner_r3|runstop/|runstart/')

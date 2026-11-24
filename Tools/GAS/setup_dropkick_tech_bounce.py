@@ -59,10 +59,16 @@ def _clip():
         factory.set_editor_property('target_skeleton', anim.get_editor_property('skeleton'))
         montage = unreal.AssetToolsHelpers.get_asset_tools().create_asset('AM_OverlordDropkickTechBounce' + R, DIR, unreal.AnimMontage, factory)
         log(f'created {path}')
-    for prop, frames in (('blend_in', 1.0), ('blend_out', 3.0)):
+    # DROPKICK_BOUNCE_BLEND_OUT=<frames> (dropkick-tb-4): with the automatic blend-out trigger the montage gives way 3 frames before its end
+    # (r3 showed 11 of its 15 frames, r4 9 of 12) and GroundHit takes the pose early; a set value also sets the trigger to 0, so the clip
+    # plays to its last frame and GroundHit enters over that many frames (the dair landing clips do the same, handover dair-v10-dropkick-bounce-3)
+    out_frames = os.environ.get('DROPKICK_BOUNCE_BLEND_OUT')
+    for prop, frames in (('blend_in', 1.0), ('blend_out', float(out_frames) if out_frames else 3.0)):
         blend = montage.get_editor_property(prop)
         blend.set_editor_property('blend_time', frames / ANIM_FPS)
         montage.set_editor_property(prop, blend)
+    if out_frames:
+        montage.set_editor_property('blend_out_trigger_time', 0.0)
     log(f'clip {anim.get_play_length() * ANIM_FPS:.1f} frames, montage {montage.get_play_length():.3f} s')
     return anim, montage
 
@@ -150,7 +156,9 @@ def _kit(move_cls, bounce_cls):
             kit.set_editor_property('primary_weapon', wcopy)
             saves.append(wcopy)
     trig = list(kit.get_editor_property('triggered_abilities'))
-    if not any(str(t).find('GA_Overlord_DropkickTechBounce') >= 0 for t in trig):
+    # The exact class of this round: KIT_Test_Playtest already lists the owner's round (R3 since 11-17), and a match on the name prefix left a
+    # new round unregistered, so the model fell back to the generic GA_GroundBounce_Test (dropkick-tb-4, capture 1)
+    if not any(t and t.get_path_name() == bounce_cls.get_path_name() for t in trig):
         trig.append(bounce_cls)
         kit.set_editor_property('triggered_abilities', trig)
     rules = unreal.load_asset(RULES)

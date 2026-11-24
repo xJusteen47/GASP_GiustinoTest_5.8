@@ -1,0 +1,208 @@
+[
+ {
+  "name": "stock_land_idle",
+  "status": "MATCH",
+  "expect": "PASS",
+  "got": "PASS",
+  "failed": {},
+  "why": "GASP stock mocap (alive reference)",
+  "metrics": {
+   "hold_reason": true,
+   "hold_alive": true,
+   "still_runs": true,
+   "stop_sync": true
+  }
+ },
+ {
+  "name": "stock_land_fwd",
+  "status": "MATCH",
+  "expect": "PASS",
+  "got": "PASS",
+  "failed": {},
+  "why": "GASP stock mocap",
+  "metrics": {
+   "hold_reason": true,
+   "hold_alive": true,
+   "still_runs": true,
+   "stop_sync": true
+  }
+ },
+ {
+  "name": "stock_skid",
+  "status": "MATCH",
+  "expect": "PASS",
+  "got": "PASS",
+  "failed": {},
+  "why": "GASP stock mocap",
+  "metrics": {
+   "hold_reason": true,
+   "hold_alive": true,
+   "still_runs": true,
+   "stop_sync": true
+  }
+ },
+ {
+  "name": "stock_jumpsquat",
+  "status": "MATCH",
+  "expect": "PASS",
+  "got": "PASS",
+  "failed": {},
+  "why": "GASP stock mocap",
+  "metrics": {
+   "hold_reason": true,
+   "hold_alive": true,
+   "still_runs": true,
+   "stop_sync": true
+  }
+ },
+ {
+  "name": "jabfk3_tangents",
+  "status": "MATCH",
+  "expect": "FAIL",
+  "got": "FAIL",
+  "failed": {
+   "stop_sync": "0.88 of 24 speed minima shared by most parts (max 0.5); 4 of 6 stop events shared; live declared holds skipped: none"
+  },
+  "why": "flat-tangent card build, lockstep stops (not an owner verdict: confirms the K7 cause on a second move)",
+  "metrics": {
+   "hold_reason": true,
+   "hold_alive": true,
+   "still_runs": true,
+   "stop_sync": false
+  }
+ },
+ {
+  "name": "runstart_w3",
+  "status": "MATCH",
+  "expect": "PASS",
+  "got": "PASS",
+  "failed": {},
+  "why": "approved 29w3, owner 2026-11-23 10:08Z",
+  "metrics": {
+   "hold_reason": true,
+   "hold_alive": true,
+   "still_runs": true,
+   "stop_sync": true
+  }
+ },
+ {
+  "name": "runstart_w2",
+  "status": "MATCH",
+  "expect": "PASS",
+  "got": "PASS",
+  "failed": {},
+  "why": "approved w2",
+  "metrics": {
+   "hold_reason": true,
+   "hold_alive": true,
+   "still_runs": true,
+   "stop_sync": true
+  }
+ },
+ {
+  "name": "ftilt_v31",
+  "status": "MATCH",
+  "expect": "PASS",
+  "got": "PASS",
+  "failed": {},
+  "why": "approved F.L = ftilt v3.1; the kick hold 10-15 is declared here until the locked card gets life_holds (slowmo review 11-24, branch claude/project-thread-mkedi4)",
+  "metrics": {
+   "hold_reason": true,
+   "hold_alive": true,
+   "still_runs": true,
+   "stop_sync": true
+  }
+ },
+ {
+  "name": "jab_v12",
+  "status": "MATCH",
+  "expect": "FAIL",
+  "got": "FAIL",
+  "failed": {
+   "still_runs": "runs > 3 dead steps (< 0.4 cm/frame): 18-37",
+   "stop_sync": "0.82 of 17 speed minima shared by most parts (max 0.5); 2 of 4 stop events shared; live declared holds skipped: none"
+  },
+  "why": "slowmo review 11-24 (branch claude/project-thread-mkedi4): real defect, not a false positive: statue f3-9 (pelvis 0.4 cm in 5 frames, video still at f5 and f9) and dead tail f18-37 (20 identical frames). Was PASS only because life_calibrate deduped the asset dump. OWNER to decide on the approved jab v12",
+  "metrics": {
+   "hold_reason": true,
+   "hold_alive": true,
+   "still_runs": false,
+   "stop_sync": false
+  }
+ },
+ {
+  "name": "dair_approved",
+  "status": "MISMATCH",
+  "expect": "PASS",
+  "got": "FAIL",
+  "failed": {
+   "still_runs": "runs > 3 dead steps (< 0.4 cm/frame): 0-42"
+  },
+  "why": "dair v4: CONFIRM the approved dair version with the coordinator (no dair row in anim-approvate.md)",
+  "metrics": {
+   "hold_reason": true,
+   "hold_alive": true,
+   "still_runs": false,
+   "stop_sync": true
+  }
+ },
+ {
+  "name": "dropkick_k7",
+  "status": "MATCH",
+  "expect": "FAIL",
+  "got": "FAIL",
+  "failed": {
+   "stop_sync": "0.53 of 15 speed minima shared by most parts (max 0.5); 1 of 4 stop events shared; live declared holds skipped: none",
+   "cascade": "pelvis > lowerarm_l > foot_l peaks [14.5, 2.96, 13.64] spread 11.54 (>= 1.0) lags [-11.54, 10.68] (each >= 0.5)",
+   "anticipation": "against the attack: {'foot_l': -0.0, 'pelvis': -0.0} cm (one >= 2.0)"
+  },
+  "why": "owner 11-24: K7 stop-and-go (dump already on the laptop, diagnosis dropkick-k8-3)",
+  "metrics": {
+   "hold_reason": true,
+   "hold_alive": true,
+   "stops": true,
+   "still_runs": true,
+   "stop_sync": false,
+   "cascade": false,
+   "impact": true,
+   "anticipation": false
+  }
+ },
+ {
+  "name": "dropkick_k8r2",
+  "status": "MATCH",
+  "expect": "FAIL",
+  "got": "FAIL",
+  "failed": {
+   "stops": "steps 0-15 cm/frame 27 10 2 2 10 18 13 5 5 59 21 3 15 33 24; stop-and-go dips [2, 3, 11]; reversal beats 0 at - (max 2); pops [9] (> 4.0x median 13.0 and the smaller neighbour; impact snap [12, 13] excluded)",
+   "stop_sync": "0.53 of 19 speed minima shared by most parts (max 0.5); 2 of 2 stop events shared; live declared holds skipped: none",
+   "cascade": "pelvis > lowerarm_l > foot_l peaks [14.5, 9.62, 13.66] spread 4.88 (>= 1.0) lags [-4.88, 4.04] (each >= 0.5)",
+   "anticipation": "against the attack: {'foot_l': -0.0, 'pelvis': -0.0} cm (one >= 2.0)"
+  },
+  "why": "owner 11-24: K8 r2 stop-and-go (dump already on the laptop)",
+  "metrics": {
+   "hold_reason": true,
+   "hold_alive": true,
+   "stops": false,
+   "still_runs": true,
+   "stop_sync": false,
+   "cascade": false,
+   "impact": true,
+   "anticipation": false
+  }
+ },
+ {
+  "name": "dropkick_k6_settle",
+  "status": "MISMATCH",
+  "expect": "FAIL",
+  "got": "PASS",
+  "failed": {},
+  "why": "settle K6 still ~6 frames on the ground (v158-163), never re-judged",
+  "metrics": {
+   "hold_reason": true,
+   "hold_alive": true,
+   "still_runs": true,
+   "stop_sync": true
+  }
+ }
+]

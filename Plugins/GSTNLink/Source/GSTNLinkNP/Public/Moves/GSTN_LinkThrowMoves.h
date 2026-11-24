@@ -36,7 +36,12 @@ protected:
 	void BuildThrow(int32 TotalFrames, int32 FirstActionable, int32 ThrowFrame, float Damage, float BaseKnockback, float AngleDeg);
 };
 
-/** Forward: 30 frames, key on 8, damage 8, knockback 1600 at 40 degrees ahead (the F12 test throw) */
+/**
+ * Forward: 30 frames, key on 8, damage 8, knockback 1600 at 40 degrees ahead (the F12 test throw). grab-link: also the F. throw of the Notation mode,
+ * so its start aim is SnapIfAimOrTilt with MaxTurnDegrees 180 (the instant turn ergonomics: the grabber faces the stick on frame 0, whatever way it
+ * faced; the move start aim of GSTNCombat, no turning logic of its own). The owner's F. (Zetterburn's F throw in Rivals of Aether 2: both hands for a
+ * moment, then a headbutt) is a Blueprint child with its montage and frames, once the references and poses exist
+ */
 UCLASS()
 class GSTNLINKNP_API UGSTN_GA_LinkThrowForward : public UGSTN_GA_LinkThrow
 {
@@ -74,4 +79,30 @@ class GSTNLINKNP_API UGSTN_GA_LinkThrowDown : public UGSTN_GA_LinkThrow
 
 public:
 	UGSTN_GA_LinkThrowDown(const FObjectInitializer& ObjectInitializer);
+};
+
+/**
+ * grab-link: N. throw (Command.Link.Throw.Neutral, Notation mode). PLACEHOLDER: the up throw's values (32 frames, key on 10, damage 7, knockback 1700
+ * at 88 degrees), no montage. The real frames come with the poses, from the Smash Ultimate reference of the move
+ */
+UCLASS()
+class GSTNLINKNP_API UGSTN_GA_LinkThrowNeutral : public UGSTN_GA_LinkThrow
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_LinkThrowNeutral(const FObjectInitializer& ObjectInitializer);
+};
+
+/**
+ * grab-link: Cr.F. throw (Command.Link.Throw.CrouchForward, Notation mode). PLACEHOLDER: the down throw's values (34 frames, key on 14, damage 6,
+ * knockback 900 at 80 degrees), no montage. Turns to the stick at its start like F. (SnapIfAimOrTilt, 180 degrees)
+ */
+UCLASS()
+class GSTNLINKNP_API UGSTN_GA_LinkThrowCrouchForward : public UGSTN_GA_LinkThrow
+{
+	GENERATED_BODY()
+
+public:
+	UGSTN_GA_LinkThrowCrouchForward(const FObjectInitializer& ObjectInitializer);
 };

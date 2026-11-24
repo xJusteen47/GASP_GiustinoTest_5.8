@@ -579,6 +579,8 @@ bool FGSTN_LoadoutScreenTest::RunTest(const FString& Parameters)
 	Fixture.Weapon->AllowedAlternatives.Add(Special).Abilities = { AbilityB() };
 	UGSTN_TestLoadoutComponent& Component = *Fixture.Component;
 	Component.Assets.Add(KitId(TEXT("KitC")), nullptr);
+	// Kit B has no primary weapon, so with a support slot it would offer W1 as support: support rows are ScreenSupportAndSuper's job
+	Fixture.KitB->MaxAdditionalWeapons = 0;
 
 	TArray<FGSTN_LoadoutChoiceRow> Rows;
 	Component.GatherChoices(Fixture.RequestKit(TEXT("KitA")), Rows);
@@ -664,7 +666,9 @@ bool FGSTN_LoadoutScreenSupportSuperTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("picking S1 fills slot 0"), Rows[2].Options[1].Result.Supers.Num() == 1 && Rows[2].Options[1].Result.Supers[0] == SuperId(TEXT("S1")));
 
 	// With W2 picked, its option is the draft itself (selected) and "none" removes it
-	Component.GatherChoices(Rows[1].Options[1].Result, Rows, false);
+	// Copied first: GatherChoices empties Rows, so passing the option's Result by reference would read freed memory
+	const FGSTN_LoadoutData WithW2 = Rows[1].Options[1].Result;
+	Component.GatherChoices(WithW2, Rows, false);
 	TestTrue(TEXT("W2 selected"), Rows.Num() == 3 && Rows[1].Selected == 1);
 	TestTrue(TEXT("none removes it"), Rows.Num() == 3 && Rows[1].Options[0].Result.AdditionalWeapons.IsEmpty());
 	return true;

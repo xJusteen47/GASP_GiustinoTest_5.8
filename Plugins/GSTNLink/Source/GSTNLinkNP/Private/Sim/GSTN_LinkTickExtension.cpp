@@ -194,11 +194,17 @@ void FGSTN_LinkTickExtension::GatherProjectableTags(const UGSTN_LinkRegistry* Re
 namespace
 {
 	/** The kit link extension of an entity, from its snapshot entry's body index (content the attach table holds); null without one */
-	const FGSTN_LinkKitExtension* KitOf(const FGSTN_StepSnapshot* Snapshot, int32 EntityId)
+	/** The link content (baked sockets, kit) of an entity of the step snapshot, or null */
+	const FGSTN_LinkBodyData* BodyOf(const FGSTN_StepSnapshot* Snapshot, int32 EntityId)
 	{
 		const FGSTN_SnapshotEntry* Entry = Snapshot && EntityId != INDEX_NONE ? Snapshot->Find(EntityId) : nullptr;
 		const FGSTN_LinkSnapshotExt* Ext = Entry ? Entry->Extension.Get<FGSTN_LinkSnapshotExt>(GSTNFeatureIds::Link) : nullptr;
-		const FGSTN_LinkBodyData* Body = Ext && Ext->IsValid() ? FGSTN_LinkAttach::At(Ext->BodyIndex) : nullptr;
+		return Ext && Ext->IsValid() ? FGSTN_LinkAttach::At(Ext->BodyIndex) : nullptr;
+	}
+
+	const FGSTN_LinkKitExtension* KitOf(const FGSTN_StepSnapshot* Snapshot, int32 EntityId)
+	{
+		const FGSTN_LinkBodyData* Body = BodyOf(Snapshot, EntityId);
 		return Body ? Body->GetKitExtension() : nullptr;
 	}
 }
@@ -287,6 +293,37 @@ bool FGSTN_LinkTickExtension::StepMash(const FGSTN_CombatTickContext& Context, F
 		return false;
 	}
 	return FGSTN_LinkMash::Step(Fragment, Context.In.Core.Input.History, Rules->Mash, FGSTN_LinkMash::ButtonMaskOf(Rules->Mash, Context.Buttons), Context.Frame);
+}
+
+bool FGSTN_LinkTickExtension::StepNeckHold(FGSTN_LinkFragment& Fragment, const UGSTN_LinkRegistry* Registry, const FGSTN_LinkBodyData* SelfBody,
+	const FGSTN_LinkBodyData* PartnerBody)
+{
+	FGSTN_LinkState& Body = Fragment.Links.Body;
+	if (!Registry || !SelfBody || !Body.IsActive() || Body.HasFlag(GSTNLinkFlags::AnchorOverride))
+	{
+		return false;
+	}
+	const UGSTN_LinkTypeDefinition* Definition = Registry->GetDefinition(Body.LinkTypeIndex);
+	if (!Definition || Definition->GetParkedRoleIndex() != Body.Role)
+	{
+		return false;
+	}
+	const FGSTN_LinkRoleDef& Parked = Definition->GetRoleDef(Body.Role);
+	// Grab-like only: the parked side does not act (a rider or a latcher that acts keeps its own placement)
+	if (Parked.bActsWhileLinked)
+	{
+		return false;
+	}
+	const UGSTN_LinkSettings& Settings = UGSTN_LinkSettings::Get();
+	const FGSTN_GrabHoldPose Pose = Settings.GetEffectiveHoldPose(PartnerBody ? PartnerBody->GetKitExtension() : nullptr);
+	const FTransform* Neck = Settings.NeckSocketName.IsNone() ? nullptr : SelfBody->BakedSockets.Find(Settings.NeckSocketName);
+	if (!Pose.bHoldByNeck || !Neck)
+	{
+		return false;
+	}
+	const FTransform Socket = PartnerBody ? PartnerBody->GetSocket(Parked.SocketOnPartner) : FTransform::Identity;
+	Body.SetAnchorOverride(UGSTN_LinkMath::NeckHoldAnchor(Socket, Parked.SocketOffset, Neck->GetLocation(), Pose));
+	return true;
 }
 
 void FGSTN_LinkTickExtension::MakeOffersFor(const UGSTN_LinkRegistry& Registry, const FGSTN_LinkBodyData* Body, TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>>& OutOffers)
@@ -866,6 +903,13 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 			TArray<FThrowPost, TInlineAllocator<1>> Throws;
 			StepOutcomeKeys(Context, *Fragment, Throws);
 			StepMash(Context, *Fragment);
+			// grab-link: the grabbed's neck on the grabber's hold point, once per link (both bodies from the step snapshot's link content)
+			if (Fragment->Links.Body.IsActive() && !Fragment->Links.Body.HasFlag(GSTNLinkFlags::AnchorOverride) && Context.Snapshot && Context.EntityId != INDEX_NONE)
+			{
+				const FGSTN_LinkState& Body = Fragment->Links.Body;
+				const int32 PartnerId = Body.PartnerId.IsNull() ? INDEX_NONE : static_cast<int32>(Body.PartnerId.Id);
+				StepNeckHold(*Fragment, Registry, BodyOf(Context.Snapshot, Context.EntityId), BodyOf(Context.Snapshot, PartnerId));
+			}
 			if (!Throws.IsEmpty() && Context.Owner)
 			{
 				// The direct throw hit, posted like the attacker step posts its hits: stamped this frame, delivered at the partner's next. A partner that

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Data/GSTN_GrabHoldTypes.h"
 #include "Data/GSTN_GrabRules.h"
 #include "Data/GSTN_LinkTypeDefinition.h"
 #include "GameplayTagContainer.h"
@@ -152,6 +153,15 @@ public:
 
 	/** As above, with the partner's baked socket transform relative to its root (deterministic: never the live mesh) */
 	static FTransform ParkedTransformOnSocket(const FTransform& PartnerTransform, const FTransform& SocketRootRelative, const FGSTN_LinkRoleDef& ParkedRole);
+
+	/**
+	 * grab-link, hold by the neck: the per-link anchor (FGSTN_LinkState::SetAnchorOverride, cm in the grabber's socket space) that puts the grabbed
+	 * entity's neck on Pose.HoldPointCm of the grabber's root space, the grabbed root then moved by Pose.ExtraOffsetCm. SocketRootRelative is the
+	 * grabber's baked socket the grabbed role is parked on (identity for the root), DefinitionOffset the role's SocketOffset (its rotation stays: the
+	 * anchor replaces only the translation), NeckRootRelative the grabbed entity's baked neck in its own root space. Pure: data and reference poses
+	 */
+	static FVector NeckHoldAnchor(const FTransform& SocketRootRelative, const FTransform& DefinitionOffset, const FVector& NeckRootRelative,
+		const FGSTN_GrabHoldPose& Pose);
 
 	/**
 	 * The parked placement of the entity holding RoleIndex (1 or 2), or false when that role is not the definition's parked one. It is

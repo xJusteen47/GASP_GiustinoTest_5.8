@@ -23,6 +23,13 @@ Schema (cards/<kit>/<kit>_<move>_vN.json, see cards/README.md):
                falls back to cards/<kit>/<file> when the sequence and the Saved backup are gone
   rules        {frame_0|knees_front|feet_side_by_side|villain_hand: thresholds}: README rules as checks (checks.py)
   poses[].source / origin  owner pose provenance, checked by animpipe/fidelity.py (source_fidelity, blocking)
+  curve        "tangents" (default: sparse keys, flat weighted tangents per spacing profile; every bordering key stops) |
+               "spline" (a key on every frame from a curve THROUGH the keys, animpipe/curves.py; `spacing` profiles and
+               `ease_out` do not shape it). New variants get "spline" (verbs.v_variant). spline_mode: monotone | catmull_rom
+  poses[].hold / poses[].impact (true)  the only keys that stop (flat tangent) in a "spline" build; `holds` [frames] same
+  stop_and_go  {window: [a, b] anim frames (default the startup 0..first active), min_cm 3.5, max_ratio 4}: the gate of
+               checks.py (blocking on "spline" cards, measure on "tangents" ones); declared holds are skipped, plus any
+               `exemptions` frames of check "stop_and_go"
   hitstop_max_cm  per-bone limit of the hitstop_snap check (default 10 cm per anim frame); the check is on for every move
 """
 import csv, json, os
@@ -33,6 +40,7 @@ from animpipe import config as _cfg
 REFS = _cfg.DATA
 GAME_HZ = 62.5
 PROFILES = {"charge_long", "arrive_1_2", "hold_recoil", "limb_led_recovery", "ease_from", "ease_into"}
+CURVES = {"tangents", "spline"}
 REQUIRED = ("move", "class", "anim", "fps", "timing_csv", "poses")
 
 
@@ -60,6 +68,8 @@ def load(path, unlock=None):
     bad = {p: v for p, v in c.get("spacing", {}).items() if v not in PROFILES}
     if bad:
         raise ValueError(f"card {path}: unknown spacing profiles {bad}")
+    if c.get("curve", "tangents") not in CURVES:
+        raise ValueError(f"card {path}: curve must be one of {sorted(CURVES)}")
     frames = [p["frame"] for p in c["poses"]]
     if frames != sorted(set(frames)):
         raise ValueError(f"card {path}: pose frames must be unique and ascending: {frames}")
@@ -73,6 +83,21 @@ def load(path, unlock=None):
 
 def key_frames(c):
     return [p["frame"] for p in c["poses"]]
+
+
+def hold_keys(c):
+    """Key frames declared as held or impact poses (the only flat keys of a "spline" build)."""
+    return sorted({int(p["frame"]) for p in c["poses"] if p.get("hold") or p.get("impact")} | {int(f) for f in c.get("holds", [])})
+
+
+def holds_without_reason(c):
+    """Declared holds with no written reason (owner 2026-11-24: a stop is a defect by default, accepted only as intended motion,
+    exceptional and declared with its reason). Poses with "hold": true need "hold_reason"; card-level "holds" frames need an
+    entry in "hold_reasons" {frame: why}. Impact keys are contact keys (hitstop is the game's), not holds. Returns frames."""
+    hr = {str(k): v for k, v in (c.get("hold_reasons") or {}).items()}
+    bad = [int(p["frame"]) for p in c["poses"] if p.get("hold") and not str(p.get("hold_reason") or p.get("why") or "").strip()]
+    bad += [int(f) for f in c.get("holds", []) if not str(hr.get(str(int(f)), "")).strip()]
+    return sorted(set(bad))
 
 
 def g2k(c, g):

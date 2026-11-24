@@ -1,0 +1,3 @@
+ASSERT: OK
+ASSERT: OK dair_whiff AM_OverlordDAirV9|AS_OverlordDAirV9 f32-f62: weight >= 0.8 on 100% (min 1.00)
+ASSERT: OK dair_hit_rise AM_OverlordDAirV9|AS_OverlordDAirV9 f30-f58: weight >= 0.8 on 100% (min 1.00)

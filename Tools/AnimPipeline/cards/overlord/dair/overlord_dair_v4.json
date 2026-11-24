@@ -2090,7 +2090,7 @@
     "leg_l",
     "leg_r"
    ],
-   "ref": "overlord/overlord_dair_v4.json",
+   "ref": "overlord/dair/overlord_dair_v4.json",
    "by": "owner",
    "date": "2026-11-03",
    "why": "owner 03/11: rekeyed in Cascadeur (0 start, 3 charge, 8 charge peak, 14 release start, 15 release/hitbox, 17/31 stomp hold, 37/42 probable FAF); every owner key taken whole, feet included; old keys 2/5/12/13 dropped; fingers and wrist_out stay the kit's (fists on 0)"

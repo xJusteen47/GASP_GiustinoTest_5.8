@@ -36,6 +36,13 @@ public:
 	static FGSTN_CombatTimelineData AddHitboxTrack(const FGSTN_CombatTimelineData& Data, int32 StartFrame, int32 EndFrame, const FGSTN_PartSelector& Part, const TArray<FGSTN_HitboxSpec>& Hitboxes);
 
 	/**
+	 * Authoring helper: a copy of Data without its attack hitbox tracks (Hurtbox tracks, hitbox tracks by inheritance, stay). Lets a setup
+	 * script that rebuilds a move's hitboxes from its clips run again instead of stacking tracks
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
+	static FGSTN_CombatTimelineData RemoveAttackHitboxTracks(const FGSTN_CombatTimelineData& Data);
+
+	/**
 	 * Authoring helper (as AddHitboxTrack): a copy of Data whose Hold Until Landed track (FGSTN_TimelineTrack_HoldUntilLanded) is the one given,
 	 * held in the air on [StartFrame, EndFrame) and landing on LandFrame (-1 = EndFrame). A track of that type already there is replaced, so a
 	 * setup script can run again. Sections None = the timeline frames mapped onto the montage. MaxAirFrames: the air timeout (0 = none)

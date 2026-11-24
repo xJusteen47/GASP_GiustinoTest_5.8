@@ -1,0 +1,43 @@
+{
+  "mossa": "runstart-w3",
+  "ciclo": 1,
+  "passo": 2,
+  "tentativo": 1,
+  "stato": "PASS",
+  "commit_source": "22a318f1",
+  "mappa_frame": {
+    "v77": "f0",
+    "v92": "f5",
+    "v107": "f13",
+    "v122": "f21"
+  },
+  "gate": {
+    "esito": "GATES: OK",
+    "gap_min_f0_21_cm": 10.6,
+    "bone_worst_pct": 0.5,
+    "jitter_max_cm": 4.9,
+    "file": "Saved/AnimPipeline/runstart/gates_joints_AS_GSTN_RunStart_Generic_w3.json"
+  },
+  "verifica": {
+    "trunk_preserved_deg": {
+      "v77_f0": -1.7,
+      "v92_f5": 41.2,
+      "v107_f13": 43.3,
+      "v122_f21": 17.9
+    },
+    "sh_above_hip_f13_cm": 31.6,
+    "el_r_vs_sh_x_cm": {
+      "v77_f0": [-5.8, -5.8],
+      "v92_f5": [-4.3, -9.1],
+      "v107_f13": [-13.4, -17.6],
+      "v122_f21": [-6.5, -6.5]
+    },
+    "hand_r_vs_hip_x_cm": {
+      "v77_f0": [-19.8, -19.8],
+      "v92_f5": [-20.4, -29.9],
+      "v107_f13": [-22.4, -29.8],
+      "v122_f21": [-7.7, -7.7]
+    }
+  },
+  "before_after": "docs/notes/reviews/runstart-w3-c1/passo-02/before_after.png"
+}

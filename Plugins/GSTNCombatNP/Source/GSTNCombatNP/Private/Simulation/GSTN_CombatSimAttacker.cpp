@@ -7,6 +7,7 @@
 #include "Debug/GSTN_CombatDebugDraw.h"
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
+#include "Hits/GSTN_HitboxTypes.h"
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverComponent.h"
 #include "Movement/GSTN_BodyCapsuleModifier.h"
@@ -343,4 +344,46 @@ FString UGSTN_CombatSimComponent::GetHitboxTrace() const
 		Out += HitboxTraceByFrame[Frame];
 	}
 	return Out;
+}
+
+FString UGSTN_CombatSimComponent::GetDebugHitboxShapes() const
+{
+	if (!GSTNCombatDebug::IsHitboxDrawOn() || !GetWorld())
+	{
+		return TEXT("[]");
+	}
+	// Same choice as the draw in TickComponent: the open shapes, else the faded linger of the last ones
+	const bool bLinger = AttackerDebugShapes.Num() == 0;
+	if (bLinger && (LingerDebugShapesTime < 0.0 || GetWorld()->GetTimeSeconds() - LingerDebugShapesTime > GSTNCombatDebug::GetHitboxLingerSeconds()))
+	{
+		return TEXT("[]");
+	}
+	const TArray<FGSTN_AttackerDebugShape>& Shapes = bLinger ? LingerDebugShapes : AttackerDebugShapes;
+	const FVector Offset = GSTNCombatDebug::GetPresentationOffset(GetOwner());
+	TArray<FString> Items;
+	for (const FGSTN_AttackerDebugShape& Debug : Shapes)
+	{
+		FTransform Carrier = Debug.World;
+		if (Debug.Space == static_cast<uint8>(EGSTN_HitboxSpace::Root) || Debug.Space == static_cast<uint8>(EGSTN_HitboxSpace::BakedSocket))
+		{
+			Carrier.AddToTranslation(Offset);
+		}
+		const FTransform World = Debug.Shape.Local * Carrier;
+		const FVector C = World.GetLocation();
+		const FQuat Q = World.GetRotation();
+		const FVector Scale = World.GetScale3D().GetAbs();
+		// Scaled like GSTNCombatDebug::DrawShape: sphere radius by the largest axis, capsule radius by XY and half height by Z
+		FVector E = Debug.Shape.Extent * Scale;
+		if (Debug.Shape.Type == EGSTN_ShapeType::Sphere)
+		{
+			E = FVector(Debug.Shape.Extent.X * Scale.GetMax());
+		}
+		else if (Debug.Shape.Type == EGSTN_ShapeType::Capsule)
+		{
+			E = FVector(Debug.Shape.Extent.X * FMath::Max(Scale.X, Scale.Y), Debug.Shape.Extent.X * FMath::Max(Scale.X, Scale.Y), Debug.Shape.Extent.Z * Scale.Z);
+		}
+		Items.Add(FString::Printf(TEXT("{\"i\":%d,\"s\":%d,\"t\":%d,\"c\":[%.1f,%.1f,%.1f],\"q\":[%.4f,%.4f,%.4f,%.4f],\"e\":[%.1f,%.1f,%.1f],\"f\":%d}"),
+			Debug.HitboxIndex, Debug.Space, static_cast<int32>(Debug.Shape.Type), C.X, C.Y, C.Z, Q.X, Q.Y, Q.Z, Q.W, E.X, E.Y, E.Z, bLinger ? 1 : 0));
+	}
+	return TEXT("[") + FString::Join(Items, TEXT(",")) + TEXT("]");
 }
