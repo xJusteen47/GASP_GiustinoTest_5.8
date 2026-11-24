@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 """Audit of the stops on every built clip (2026-11-24): one TSV row per joints dump, measured by animpipe/life.py, the same
 metric `animpipe check` and life_calibrate.py use (one definition, no copy). No editor.
 
@@ -13,6 +14,12 @@ No dedupe: these are asset dumps, where identical frames are the freeze to catch
 Columns: clip, frames, verdict, dead runs > STILL_RUN (frame ranges), every dead step, median and max body step (cm/frame),
 max/median and its step, holds used, stop_sync, failed blocks.
 Holds: a JSON {clip_name: "a-b:why,c-d:why"} (--holds=file), the declarations of the cards; everything else counts.
+=======
+"""Audit stop-and-go 2026-11-24: one TSV row per joints dump, with no_stop_gate.check (one definition of the thresholds:
+animpipe/curves.py). No editor. Columns: clip, frames, verdict, still runs > STILL_RUN (frame ranges), every still step,
+median and max body step (cm/frame), max/median and its frame, declared holds used.
+Holds: a JSON {clip_name: "a-b,c-d"} (--holds=file) for the owner-declared frozen poses; everything else counts.
+>>>>>>> origin/claude/project-thread-3ufz10
   python audit_stop_table.py <dir with joints_*.json> <out.tsv> [--holds=holds.json] [--resolved=Saved/AnimPipeline/audit_stop/resolved.json]
 Prints <= 5 lines (count of FAIL / OK and the out path)."""
 import glob
@@ -21,6 +28,7 @@ import os
 import statistics
 import sys
 
+<<<<<<< HEAD
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from animpipe import curves as CV  # noqa: E402
 from animpipe import life  # noqa: E402
@@ -49,6 +57,24 @@ def row(path, holds, T=None):
             ";".join(f"{a}-{b + 1}" for a, b in runs) or "-", ",".join(map(str, dead)) or "-",
             f"{med:.2f}", f"{mx:.2f}", str(ratio), str(st.index(mx) if st else "-"), h or "-",
             r["block"]["stop_sync"][1].split(";")[0], ";".join(f"{k}: {r['block'][k][1][:120]}" for k in failed) or "-"]
+=======
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import no_stop_gate as G  # noqa: E402
+
+
+def row(path, holds):
+    name = os.path.basename(path)[len("joints_"):-len(".json")]
+    J = json.load(open(path, encoding="utf-8"))["joints"]
+    h = holds.get(name, "")
+    r = G.check(J, h)
+    st = r["steps"]
+    med = statistics.median(st) if st else 0.0
+    mx = max(st) if st else 0.0
+    ratio = round(mx / med, 1) if med > 0 else float("inf")
+    runs = ";".join(f"{a}-{b + 1}" for a, b in r["still_runs"]) or "-"
+    return [name, str(len(st) + 1), "OK" if r["ok"] else "FAIL", runs, ",".join(map(str, r["stills"])) or "-",
+            f"{med:.2f}", f"{mx:.2f}", str(ratio), str(st.index(mx) if st else "-"), h or "-"]
+>>>>>>> origin/claude/project-thread-3ufz10
 
 
 def main(argv):
@@ -60,6 +86,7 @@ def main(argv):
     if opt.get("--resolved"):   # only this run's clips: the folder also holds joints dumps of older runs
         want = {p.rsplit("/", 1)[-1] for v in json.load(open(opt["--resolved"])).values() for p in v}
         files = [f for f in files if os.path.basename(f)[len("joints_"):-len(".json")] in want]
+<<<<<<< HEAD
     T = life.thresholds()
     rows = []
     for p in files:
@@ -73,6 +100,16 @@ def main(argv):
             f.write("\t".join(r) + "\n")
     nf = sum(r[2] == "FAIL" for r in rows)
     print(f"AUDIT_STOP: {len(rows)} clips, {nf} FAIL, {len(rows) - nf} OK (whole clip at {T['life_dead_cm']} cm) -> {argv[1]}")
+=======
+    rows = [row(p, holds) for p in files]
+    head = ["clip", "frames", "verdict", "still_runs", "still_steps", "median_cm", "max_cm", "max_over_median", "max_step", "holds"]
+    with open(argv[1], "w", encoding="utf-8") as f:
+        f.write("\t".join(head) + "\n")
+        for r in rows:
+            f.write("\t".join(r) + "\n")
+    nf = sum(r[2] == "FAIL" for r in rows)
+    print(f"AUDIT_STOP: {len(rows)} clips, {nf} FAIL, {len(rows) - nf} OK -> {argv[1]}")
+>>>>>>> origin/claude/project-thread-3ufz10
     return 1 if nf else 0
 
 
