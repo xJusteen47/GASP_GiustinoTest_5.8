@@ -126,4 +126,28 @@ bool FGSTN_GreyboxSpringTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_GreyboxHitCalmTest, "GSTNCombat.NP.Greybox.HitCalm", GSTN_GREYBOX_TEST_FLAGS)
+bool FGSTN_GreyboxHitCalmTest::RunTest(const FString& Parameters)
+{
+	FGSTN_GreyboxShapeSettings Settings;
+	TestFalse(TEXT("free motion reads the springs"), UGSTN_GreyboxAnimInstance::IsCalmForHit(Settings, 0, false, false));
+	TestTrue(TEXT("hitstop is calm"), UGSTN_GreyboxAnimInstance::IsCalmForHit(Settings, 3, false, false));
+	TestTrue(TEXT("hitstun is calm"), UGSTN_GreyboxAnimInstance::IsCalmForHit(Settings, 0, true, false));
+	TestTrue(TEXT("tumble (a launch) is calm"), UGSTN_GreyboxAnimInstance::IsCalmForHit(Settings, 0, false, true));
+	Settings.bCalmInHitReactions = false;
+	TestFalse(TEXT("the switch turns it off"), UGSTN_GreyboxAnimInstance::IsCalmForHit(Settings, 3, true, true));
+
+	// What calm buys: a knockback-sized kick into the lean spring with critical damping settles without crossing back past rest
+	FGSTN_GreyboxSpring Lean;
+	Lean.Value = 18.f;
+	float Lowest = Lean.Value;
+	for (int32 Frame = 0; Frame < 120; ++Frame)
+	{
+		Lean.Step(0.f, 1.f / 120.f, Settings.SpringFrequency, Settings.HitReactionSpringDamping);
+		Lowest = FMath::Min(Lowest, Lean.Value);
+	}
+	TestTrue(TEXT("critically damped: no swing past rest"), Lowest > -0.5f);
+	return true;
+}
+
 #endif

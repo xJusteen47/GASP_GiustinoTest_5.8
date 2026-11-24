@@ -33,6 +33,15 @@ FTransform UGSTN_DepthSubjectAdapter_Mover::GetPresentedRoot(const UMoverCompone
 	{
 		return Simulated;
 	}
+	// The smoothed root Mover kept when it placed the visual (2026-11-24): read back from the visual it also carried every cosmetic offset
+	// added to the mesh after the smoothing (hitstop shake, reaction drop, the body capsule's mesh correction), so the marker shook with the
+	// hitstop and, in the dropkick, sat under the drawn body instead of under the movement capsule
+	if (Mover.HasSmoothedPresentation())
+	{
+		FTransform Smoothed = Mover.GetPresentedTransform();
+		Smoothed.SetScale3D(Simulated.GetScale3D());
+		return Smoothed;
+	}
 	FTransform Presented = PresentedRootFromVisual(Visual->GetComponentTransform(), Mover.GetBaseVisualComponentTransform());
 	Presented.SetScale3D(Simulated.GetScale3D());
 	return Presented;

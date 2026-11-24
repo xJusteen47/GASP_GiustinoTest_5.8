@@ -44,6 +44,11 @@ FVector GSTNCombatDebug::GetPresentationOffset(const AActor* Owner)
 	{
 		return FVector::ZeroVector;
 	}
+	// Mover's own smoothed root (2026-11-24): the shapes follow the smoothing, not the hitstop shake or the body capsule's mesh correction
+	if (Mover->HasSmoothedPresentation())
+	{
+		return Mover->GetPresentedTransform().GetLocation() - Root->GetComponentLocation();
+	}
 	// Mover writes Visual = Base * SmoothedRoot (FinalizeSmoothingFrame), so SmoothedRoot = Base^-1 * Visual
 	const FTransform Presented = Mover->GetBaseVisualComponentTransform().Inverse() * Visual->GetComponentTransform();
 	return Presented.GetLocation() - Root->GetComponentLocation();
