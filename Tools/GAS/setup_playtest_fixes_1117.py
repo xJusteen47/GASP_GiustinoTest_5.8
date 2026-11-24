@@ -1,5 +1,5 @@
 # Playtest fixes 2026-11-17 (branch claude/playtest-fixes-1117). Data only, idempotent, saves .uasset only (never a map).
-#   DA_Locomotion_Default  Mario 3D World preset (handoffs/preset-mario3dw.md): stage speeds / accelerations / turning / brakes / frames /
+#   DA_Locomotion_Default  Mario 3D World preset (handoffs/archivio/2026-11/preset-mario3dw.md): stage speeds / accelerations / turning / brakes / frames /
 #                          air control scale, Air MinAirSpeed 470; Analog Walk: no second dead zone, no minimum speed, no start boost
 #                          (InnerDeadzone 0, MinSpeedFraction 0, StartAccelerationMultiplier 1), air turn 3600 deg/s, facing 0.02/0.05 s;
 #                          run (stage 1) acceleration ramp 6 frames from 30 % (run-start-skid-import-piano R1b; sprints: no ramp).

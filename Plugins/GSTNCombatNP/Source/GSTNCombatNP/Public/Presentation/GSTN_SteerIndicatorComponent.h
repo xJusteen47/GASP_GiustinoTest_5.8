@@ -7,7 +7,7 @@
 #include "GSTN_SteerIndicatorComponent.generated.h"
 
 /**
- * v0 of the attack aiming indicators (handoffs/attack-aiming-research.md §3): on the ground at the feet of the locally controlled pawn,
+ * v0 of the attack aiming indicators (handoffs/archivio/2026-11/attack-aiming-research.md §3): on the ground at the feet of the locally controlled pawn,
  *  - arrow A, thin: where the move's stick points (FGSTN_SteerWindow::Source picks the stick),
  *  - arrow B, thick: where the move really goes (the facing, which the cap and the rate hold back),
  *  - the allowed arc: MaxSteerDegrees either side of the move origin, while the window is open.

@@ -2,7 +2,7 @@
 
 Previous review: docs/notes/reviews/locomotion-finish-3/review_fable_runstop_v4.md (FAIL: main item 1, R clip blended ALL channels to the
 idle by STOP+22 so the late trunk/head/arm keys never played, 20 still frames; item 2 push started at full speed; tail too long).
-Identity traits (brief handoffs/run-start-stop-skid-brief.md section 2): 1) front foot planted, facing forward, no turn; 2) the torso
+Identity traits (brief handoffs/archivio/2026-11/run-start-stop-skid-brief.md section 2): 1) front foot planted, facing forward, no turn; 2) the torso
 rises only AFTER the feet stop, arms open low for balance; 3) soft parts last: head and arms land 3-4+ frames after the torso.
 
 ## Changes V4 -> V5 (Tools/AnimPipeline/cards/runstop/run_stop_gen.py)

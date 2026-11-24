@@ -1,7 +1,7 @@
 # Crouch veloce, checkpoint 1 (cloud, Opus, 2026-11-18)
 Branch `claude/project-thread-ymsnu8` from `claude/desktop-jab-fk` da26dfb3. NOT compiled (cloud).
-Brief (identity traits, curve sheet, integration, desktop steps): `docs/notes/crouch-veloce-1-brief.md` = project files `handoffs/crouch-veloce-1.md`.
-Reference: project files `handoffs/crouch-ref/` (owner's Ganondorf photo + 3 videos + grids; `grid_9542_in_out_30fps_t1.75.jpg` = timing:
+Brief (identity traits, curve sheet, integration, desktop steps): `docs/notes/crouch-veloce-1-brief.md` = project files `handoffs/archivio/2026-11/crouch-veloce-1.md`.
+Reference: project files `handoffs/archivio/2026-11/crouch-ref/` (owner's Ganondorf photo + 3 videos + grids; `grid_9542_in_out_30fps_t1.75.jpg` = timing:
 down in 2 phone frames (~4 game frames), body+head overshoot then settle by 4 phone frames; up in 2-3, arms trailing, settled by 4).
 
 ## Code (this commit)

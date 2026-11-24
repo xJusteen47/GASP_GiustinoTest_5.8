@@ -1,5 +1,7 @@
 # REGOLE DI LAVORO E DI SPESA (2026-11-22)
 
+> **SUPERATO (2026-11-23):** vale [regole-progetto-2026-11-23.md](regole-progetto-2026-11-23.md). Il routing di questo file (Antigravity coordinatore, DeepSeek per build e codice, tier `M0`-`M3`) NON è più in vigore: oggi coordina Claude (Sonnet/Opus) e i crediti Antigravity sono finiti. Tenuto solo come storia.
+
 > Sostituisce `docs/notes/regole-progetto-2026-11-20.md`. Unifica le regole 1–15 (2026-11-15..2026-11-21), `docs/notes/audit_setup_agentico.md` e l'accordo multi-modello del 2026-11-22 (Claude Pro + Antigravity + DeepSeek V4 + Inkling locale). Ogni thread e ogni worker le seguono.
 
 ## 1. BRIEF

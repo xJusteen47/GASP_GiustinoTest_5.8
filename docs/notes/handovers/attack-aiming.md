@@ -1,6 +1,6 @@
 # Attack aiming in startup: per-move steering (laptop, UE 5.9, 2026-11-14)
 Branch `claude/project-thread-j5gq18` from `867f2b39` (comb59), laptop worktree `GASP_Giustino2_aim` (Content junctions to the main tree).
-Spec `handoffs/attack-aiming-research.md`. Owner: steering source per move; left stick by default, right stick (and gyro later) only for moves
+Spec `handoffs/archivio/2026-11/attack-aiming-research.md`. Owner: steering source per move; left stick by default, right stick (and gyro later) only for moves
 that need a reticle. Not answered, recommended applied: signature aerials may turn up to 180 deg in their first frames.
 **Done**:
 1. Data `FGSTN_CombatTimelineData::Steer` (`FGSTN_SteerWindow`): `Source` (`AimStickWithReticle` / `MoveStick` / `MoveOrAimStick`),

@@ -59,7 +59,7 @@ Headers carry long doc comments that explain intent and invariants: read the hea
 
 - Engine association `5.9` (`C:\Program Files\Epic Games\UE_5.9\Engine`); no Rider IDE/MCP in active use.
 - Project rules (the 17 working and spending rules, one file, not copied anywhere): [regole-progetto.md](docs/notes/regole-progetto.md); project memory: [memoria-progetto.md](docs/notes/memoria-progetto.md).
-- Before writing code, check what already exists in `docs/INDICE-PROGETTO.md` (it lands in `main` with `claude/docs-archivio-2026-11-23`; until then read it on that branch) and say what you reuse.
+- Before writing code, check what already exists in `docs/INDICE-PROGETTO.md` and say what you reuse.
 - C++ changes: Live Coding only for quick probes, real build via `Tools/CI/Run-Timed.ps1 -Preset Build` (with `-WaitMutex -NoHotReload`) before captures; test parsing via `Tools/CI/Check-TestLog.ps1`. `Run-Timed.ps1` runs `Tools/CI/precheck.py` first (script syntax, requested assets exist in the project it opens, no local LLM on the GPU for captures; `-NoPreCheck` to skip) and closes the editor when the driver logs `ESITO: OK`.
 - Animation steps that need Unreal (import, dump, capture) run only on `_ue59` of the desktop, never from a worktree without the skeleton.
 - Git safety: install hooks with `Tools/CI/Install-GitHooks.ps1` (`Tools/CI/Test-GitGuard.ps1` blocks owner-local files like `DA_Locomotion_Default`, locked `anim-approvate.md` assets, secrets, and pushes to `feature/*` / `main`; creating a tag `approved/*` is allowed, deleting or moving one never).

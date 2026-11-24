@@ -27,4 +27,4 @@ Branch claude/project-thread-rwaob2, based on claude/playtest-fixes-1117c (23fb9
 - Look: Tools/DepthMarker/setup_depth_marker_holo.py -> M_DM_Holo, M_DM_Holo_Decal; ini sets them as default segment/decal material;
   built-in style gains a ground Decal (blob shadow). Visual snapshot tests GSTN.Visual.DepthMarker may need a new baseline. New tests: Core.ProjectionDirection, Runtime.ProjectionPrecedence.
 - Desktop extra steps: run the holo script (editor closed) before PIE; capture a clip (ground, jump, wall volume sideways) for Fable's
-  look review (rule 10) before the owner sees it. Fable's style doc handoffs/stile-astrobot-nintendo.md may retune the parameters.
+  look review (rule 10) before the owner sees it. Fable's style doc handoffs/archivio/2026-11/stile-astrobot-nintendo.md may retune the parameters.

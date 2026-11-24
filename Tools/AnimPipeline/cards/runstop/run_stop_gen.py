@@ -1,5 +1,5 @@
 """Run stop v2 (owner 2026-11-19, answer "A": a pose-based clip like Ganondorf's run stop in Smash). Brief: project file
-handoffs/run-start-stop-skid-brief.md section 2. Identity traits: 1) front foot planted, facing forward, no turn; 2) the torso rises
+handoffs/archivio/2026-11/run-start-stop-skid-brief.md section 2. Identity traits: 1) front foot planted, facing forward, no turn; 2) the torso rises
 AFTER the feet stop, arms open low for balance; 3) soft parts last (no cape: head and arms land 3-4 frames after the torso).
 
 Cascadeur was not available (access declined 2026-11-19), so the poses are authored here as numbers and solved by the pipeline's

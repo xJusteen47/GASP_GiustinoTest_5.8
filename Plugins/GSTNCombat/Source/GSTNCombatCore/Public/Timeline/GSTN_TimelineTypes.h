@@ -716,7 +716,7 @@ enum class EGSTN_SteerSource : uint8
 };
 
 /**
- * When and how a move turns during its startup (research handoffs/attack-aiming-research.md Â§2, owner 2026-11-14). The cap and the rate stay
+ * When and how a move turns during its startup (research handoffs/archivio/2026-11/attack-aiming-research.md Â§2, owner 2026-11-14). The cap and the rate stay
  * MaxSteerDegrees and SteerRateDegPerSecond on the timeline; this says which stick, in which frames, and how the facing is held. Pure data:
  * FGSTN_StartupSteer::ResolveFrame turns it into a yaw per frame from the move origin, the frame's command and the facing of the previous frame.
  */
