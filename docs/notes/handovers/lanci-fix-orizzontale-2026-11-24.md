@@ -25,7 +25,12 @@ VeryVerbose only: `LogGSTNKnockbackMove` ([KnockbackGen], every generate with th
 move after the air hooks). Off by default.
 
 ## Open
-- Floor bounces come out with 0 horizontal (seen at 100 %, before and after these fixes): not diagnosed.
+- Floor bounces with 0 horizontal: NOT a bug (floor-bounce-diag-2026-11-24.md). The combat ground bounce (StepImpact, in hitstun and over
+  GroundImpact's 1200 cm/s threshold) keeps the tangent x restitution (first floor at 100 %: want (1682 0 933)). A slower contact (949) or one
+  after the hitstun is a landing: the Defence plugin's missed tech enters Downed and gives the knockdown hop
+  (FGSTN_TumbleLanding::EnterDowned -> UGSTN_DefenceMath::GroundBounceVelocityAtSpeed: vertical, horizontal only from the stick), Smash-like.
+  Change only if the owner wants the slide kept on a missed tech.
+- Side note: on a mode-change partial substep the knockback's ElapsedFrames reads odd values (fractional step): harmless today.
 - Distances (21 m at 100 %) come from the balloon rules: owner's call.
 - No VFX review (gstn-vfx-reviewer) of puff/arrow yet; the test wall is invisible, so the rebound video happens in mid-air.
 - Not merged into claude/integ-*/main: PR from this branch.
