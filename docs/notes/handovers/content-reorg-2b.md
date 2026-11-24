@@ -53,3 +53,8 @@ COSTO: ~4 $ cloud + ~6 $ fisso | 40 minuti desktop | 0 token review
 - Conflitto binario: `GA_Playtest_GroundHit` modificato in main (montage del jab, `set_playtest_jab_montage.py`) e spostato qui. Tenuto il nostro file al percorso nuovo; la modifica di main si rifà sul fisso rilanciando lo script (percorsi aggiornati, idempotente).
 - `ABP_GSTN_GreyboxCapsule` (da main) punta ai vecchi `AM_Overlord*`/`AM_React_*`: `Config/DefaultEngine.ini [CoreRedirects]` con 275 `PackageRedirects` (vecchio -> nuovo, generati dal CSV; DA_Locomotion_Default escluso) e `Tools/Reorg/resave_old_refs_2b.py` che risalva chi nomina ancora i vecchi pacchetti. I redirect restano finché i branch nati prima dello spostamento non sono uniti o chiusi: è anche la rete per capsula e lanci.
 - Script greybox aggiornati (`make_capsule_clips.py`, `set_playtest_jab_montage.py`); `check_2b`: 0 problemi.
+
+## Chiusura, 2026-11-24 19:00-19:20Z
+- `DA_Locomotion_Default` spostato in `GSTN/Data/Locomotion/` con l'owner (commit 301873ce, sblocco owner); la copia locale era uguale a git.
+- Build a 301873ce: FAIL nell'unity build, `FRig` ambiguo tra `GSTN_WallSurfaceFilterTests.cpp` e `GSTN_PawnRigTests.cpp` (stesso nome in due namespace con `using`). Rinominato in `FWallFilterRig` (2897148a). Smoke a 301873ce: OK.
+- Da fare: una build di prova a 2897148a (fisso o build di integrazione), poi l'owner unisce #43. Cartelle vuote `Content\GASNPPTest` da togliere a mano.
