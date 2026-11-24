@@ -755,7 +755,9 @@ def _tick(_dt):
             # The scene captures do not show the debug draw (hitboxes, body): PIE_CAPTURE_HIRES='86,91' takes a real viewport shot on those
             # frames (Saved/Screenshots/WindowsEditor/HighresScreenshot*.png, in frame order)
             if str(frame) in os.environ.get('PIE_CAPTURE_HIRES', '').split(','):
-                _console('HighResShot 1')
+                # PIE_CAPTURE_SHOT_UI=1: 'Shot showui' grabs the viewport with its canvas (debug draw service panels such as
+                # gstn.Debug.SpeedGraph), which HighResShot leaves out; files are Saved/Screenshots/WindowsEditor/ScreenShot*.png
+                _console('Shot showui' if os.environ.get('PIE_CAPTURE_SHOT_UI') == '1' else 'HighResShot 1')
                 _log(f'{seq["name"]}: HighResShot on v{frame}')
             tapped = (frame - PRE) in seq['taps']
             extra, hold_crouch = None, False
