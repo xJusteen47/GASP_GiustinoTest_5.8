@@ -334,9 +334,11 @@ public:
 
 	/**
 	 * Pure: the roll's turn angle (degrees, toward the travel) at a share of the roll montage, from StartDeg (how the capsule lay when the roll
-	 * started: 0 upright, -90 on its back with the head behind the travel, +90 head first) round to a full turn, eased in and out
+	 * started: 0 upright, -90 on its back with the head behind the travel, +90 head first) round to a full turn, eased in and out.
+	 * LatchShare: the montage share at which the roll latched (it waits for RollMinSpeed, ~0.3 into a get-up roll). The ease runs from there,
+	 * so the first rolled frame is StartDeg: timed from the montage start it opened with a one-frame jump of ~90 deg (capture r8, v207-208)
 	 */
-	static float RollAngle(const FGSTN_GreyboxShapeSettings& Settings, float StartDeg, float MontageShare);
+	static float RollAngle(const FGSTN_GreyboxShapeSettings& Settings, float StartDeg, float MontageShare, float LatchShare = 0.f);
 
 	/** Pure: the start angle of a roll for the capsule's up axis and the travel direction (both unit; the up's pitch toward the travel) */
 	static float RollStartAngle(const FVector& BodyUp, const FVector& Travel);
@@ -446,6 +448,7 @@ private:
 	TWeakObjectPtr<const UAnimMontage> RollMontage;
 	FVector RollTravel = FVector::ZeroVector;
 	float RollStartDeg = 0.f;
+	float RollLatchShare = 0.f;
 	bool bRollLatched = false;
 
 	/** The roll's turn of this frame into Shape (Spin, SpinPivot); true while a roll drives the capsule */

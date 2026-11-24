@@ -549,6 +549,11 @@ def _make_lights():
 # capture compared to a new one must use the same follow: it is in the capture chain). The rows keep every camera ('cams');
 # capture_move.camera_jumps warns about a camera step that differs from the previous one by more than CAM_JUMP_CM after the capture.
 CAM_FOLLOW = os.environ.get('PIE_CAPTURE_CAM_FOLLOW', 'mesh' if FAST else 'actor')
+# capsula-a-terra round 8: a follow camera that rises with the pawn hides a small hop (the floor moves, the body stays still in the
+# picture). PIE_CAPTURE_CAM_LOCK_Z=<z> (the standing actor z on the floor, 88 on the test map) holds the follow height at z while the
+# pawn is within PIE_CAPTURE_CAM_LOCK_BAND cm above it (default 60): a fall still follows, everything near the floor is seen against it
+CAM_LOCK_Z = float(os.environ['PIE_CAPTURE_CAM_LOCK_Z']) if os.environ.get('PIE_CAPTURE_CAM_LOCK_Z') else None
+CAM_LOCK_BAND = float(os.environ.get('PIE_CAPTURE_CAM_LOCK_BAND', 60.0))
 
 
 def _follow_point(pawn, reset=False):
@@ -573,6 +578,8 @@ def _place_cameras(follow=False):
     if follow:
         yaw = st.get('cam_yaw', yaw)
         centre = _follow_point(pawn)
+        if CAM_LOCK_Z is not None and centre.z < CAM_LOCK_Z + CAM_LOCK_BAND:
+            centre = unreal.Vector(centre.x, centre.y, CAM_LOCK_Z)
     else:
         st['cam_yaw'] = yaw
         _follow_point(pawn, reset=True)

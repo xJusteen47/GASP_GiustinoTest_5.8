@@ -60,9 +60,12 @@ float UGSTN_GreyboxAnimInstance::LyingTarget(const FGSTN_GreyboxShapeSettings& S
 	return FMath::Clamp((TiltDeg - Start) / (Full - Start), 0.f, 1.f);
 }
 
-float UGSTN_GreyboxAnimInstance::RollAngle(const FGSTN_GreyboxShapeSettings& Settings, float StartDeg, float MontageShare)
+float UGSTN_GreyboxAnimInstance::RollAngle(const FGSTN_GreyboxShapeSettings& Settings, float StartDeg, float MontageShare, float LatchShare)
 {
-	const float T = FMath::Clamp(MontageShare / FMath::Max(Settings.RollTurnShare, 0.01f), 0.f, 1.f);
+	// The turn's own time: from the latch to the end of the turn share (a latch past it still gets a short turn, never a jump)
+	const float Begin = FMath::Clamp(LatchShare, 0.f, 0.99f);
+	const float End01 = FMath::Max(Settings.RollTurnShare, Begin + 0.05f);
+	const float T = FMath::Clamp((MontageShare - Begin) / (End01 - Begin), 0.f, 1.f);
 	// Always forward, toward the travel: from the start round to the next full turn (on the back = 450, head first = 270)
 	const float End = 360.f;
 	return FMath::Lerp(StartDeg, End, FMath::SmoothStep(0.f, 1.f, T));
@@ -443,10 +446,11 @@ bool UGSTN_GreyboxAnimInstance::UpdateRoll(const FVector& Velocity)
 		// How the capsule lay as the roll got going: the driver pelvis's up (the capsule followed it), in world space
 		const FVector WorldUp = Driver->GetComponentQuat().RotateVector(PelvisUp);
 		RollStartDeg = FMath::Lerp(0.f, RollStartAngle(WorldUp, RollTravel), LyingAlpha);
+		RollLatchShare = Instance->GetPosition() / Montage->GetPlayLength();
 		bRollLatched = true;
 	}
 	const float Share = Instance->GetPosition() / Montage->GetPlayLength();
-	const float Angle = RollAngle(ShapeSettings, RollStartDeg, Share);
+	const float Angle = RollAngle(ShapeSettings, RollStartDeg, Share, RollLatchShare);
 	// Turning the top toward the travel is a turn about Up x Travel; in the capsule component's frame, about the capsule's middle
 	const FVector WorldAxis = FVector::CrossProduct(FVector::UpVector, RollTravel).GetSafeNormal();
 	const FVector Axis = Capsule->GetComponentQuat().UnrotateVector(WorldAxis);

@@ -125,6 +125,20 @@ bool FGSTN_GreyboxShapeTest::RunTest(const FString& Parameters)
 		Settings.RollTurnShare), 360.f));
 	TestTrue(TEXT("upright after the turn share"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollAngle(Settings, 90.f, 1.f), 360.f));
 	TestTrue(TEXT("roll turns forward"), UGSTN_GreyboxAnimInstance::RollAngle(Settings, 0.f, 0.3f) > 0.f);
+	// r8: the roll latches ~0.3 into the montage (RollMinSpeed); its first frame must be where it lay, then no frame steps far
+	TestTrue(TEXT("late latch starts where it lay"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollAngle(Settings, -90.f, 0.3f, 0.3f), -90.f));
+	TestTrue(TEXT("late latch still ends upright"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollAngle(Settings, -90.f,
+		Settings.RollTurnShare, 0.3f), 360.f));
+	float MaxStep = 0.f;
+	for (int32 i = 0; i < 22; ++i)   // a 22-frame roll montage, latched on frame 7
+	{
+		const float A = UGSTN_GreyboxAnimInstance::RollAngle(Settings, -90.f, FMath::Max(i, 7) / 22.f, 7.f / 22.f);
+		const float B = UGSTN_GreyboxAnimInstance::RollAngle(Settings, -90.f, FMath::Max(i + 1, 7) / 22.f, 7.f / 22.f);
+		MaxStep = FMath::Max(MaxStep, FMath::Abs(B - A));
+	}
+	TestTrue(FString::Printf(TEXT("late latch: no frame turns more than 75 deg (%.0f)"), MaxStep), MaxStep <= 75.f);
+	TestTrue(TEXT("first frame after a late latch turns little"), FMath::Abs(UGSTN_GreyboxAnimInstance::RollAngle(Settings, -90.f, 8.f / 22.f,
+		7.f / 22.f) + 90.f) < 20.f);
 	return true;
 }
 

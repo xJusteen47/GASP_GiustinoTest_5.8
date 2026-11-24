@@ -318,3 +318,32 @@ ESITO: hop runs on 4317a34d but is ~9 cm / 4 frames (gravity stack); lying pose 
 a sit-up slide with a squash; no data changed.
 SUBAGENTI: none.
 COSTO: not measured (one thread, ~1 h 30 including the _ue59 collision and the pause).
+
+## Laptop run 8 (2026-11-24, thread "Sistemare capsula a terra e rotolate", worktree GASP_Giustino2_cp1verify on ba5fd254)
+The desktop is in use: laptop UE 5.9 CL 60738873, worktree cp1verify (junctions to the main folder's GASP content; the main folder holds
+another thread's uncommitted VFX work and was not touched). Captures `Saved/Greybox/r8_a` (ba5fd254, camera following the actor height),
+`r8_b` (camera height held), `r8_c` (roll fix below, camera height held; the round8 videos and sheets). KIT_Test_Playtest, gstn.Greybox 1,
+gstn.Loco.Base 2, PIE_CAPTURE_AIR_GIVE_UP=200, PIE_CAPTURE_CAM_LOCK_Z=88.
+- Build OK (`-SkipRegress`: approved/runstart-v4r5 lists AS_GSTN_RunStart_v4r5.uasset, which that tag does not contain, local tag = origin;
+  the other 7 locked versions pass; a registry error to fix, not this branch). Tests Core.Greybox + NP.Greybox + Defence.NP.Landing 19/19,
+  before and after the roll fix.
+- make_capsule_clips with saving (headless, same command as Save-Assets.ps1, which refuses outside `_ue59`): PASS. The capsule ABP has 21
+  montage + 25 sequence overrides and no tech bounce (checked by reading the CDO); the run also made clips for the versioned K5-K8 dropkick
+  and FThrowV1 montages (c22677fd). Hit reactions and rolls get no clip by design (MOVE_FILTER Overlord).
+- Self knockdown: "landed inside the window: the move's user is downed" in all three sequences, every capture.
+- Hop after the dropkick (frames.jsonl, capsule bottom): touchdown v157-158, airborne v158/159-v174 (16-17 frames), peak v166 at 28.2 cm,
+  floor again v174-175. Same in r8_a/b/c (round 7: ~9 cm / 4 frames). On video it reads only with the camera height held: the follow
+  cameras rose with the actor (PIE_CAPTURE_CAM_LOCK_Z, new, opt-in). Lying flat through the whole bounce, no lying/upright pop (the tech
+  bounce clip is gone). Open: at touchdown the mesh dips v157, rises ~20 cm v158 and settles v159-160 before the hop (the dropkick body
+  capsule regrows 35 -> 86, actor z 37 -> 94, and the mesh smoothing follows it): small, visible at 0.25x.
+- Rolls: montages AM_React_Roll (forward, 80 cm) and AM_React_RollBack (back, 65 cm), both contain "Roll". On ba5fd254 both did a full
+  somersault and stood up, but opened with a ~90 deg one-frame jump (r8_a forward v207-208, back v205-206): the turn was timed from the
+  montage start while the start angle latches when the roll moves (RollMinSpeed, ~0.3 into the montage). Fix: RollAngle runs the ease from
+  the latch share (RollLatchShare), tests added. r8_c: forward v206-v218 sits up then somersaults forward, continuous, fastest ~90 deg/frame
+  mid-turn (v212-213), upright v218; back v206-v218 feet over the head, at most ~45 deg/frame, upright v218. No jump at the start.
+  The forward turn is 450 deg in ~12 frames: if it reads too fast, RollTurnShare (0.75) on the ABP is the knob.
+Evidence `docs/notes/reviews/greybox-capsula/round8/` (side | back | game, 1x / 0.25x; sheets of the hop side/back and both rolls).
+ESITO: hop ~28 cm / 16-17 frames, lying without pops; both rolls full somersault back to standing, start jump fixed; open: touchdown dip
+v157-159.
+SUBAGENTI: none.
+COSTO: not measured (one thread, ~1 h 45 on the laptop, mostly build, slow fetch and three captures).
