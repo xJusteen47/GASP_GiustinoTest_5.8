@@ -323,12 +323,20 @@ def update_chooser(made):
         set_chooser_row_result = staticmethod(lambda *a: cdo.call_method('SetChooserRowResult', a))
     info = tool.get_chooser_table(cht)
     state_col = 0
+    import re
+    matched = 0
     for row_index, row in enumerate(info.rows):
         cell = str(row.cells[state_col]) if row.cells else ''
-        for state, clip in made.items():
-            if 'Value=%s)' % state in cell or cell.endswith(state):
-                tool.set_chooser_row_result(cht, row_index, '', {'Asset': clip.get_path_name()})
-                p('chooser row', row_index, state, '->', clip.get_path_name())
+        p('chooser cell', row_index, repr(cell)[:200])
+        # Whole word: 'Run' must not match 'RunStart' / 'RunStop' (the cell text format differs between toolset versions)
+        hits = [s for s in made if re.search(r'(?<![A-Za-z0-9_])%s(?![A-Za-z0-9_])' % s, cell)]
+        if len(hits) == 1:
+            state, clip = hits[0], made[hits[0]]
+            tool.set_chooser_row_result(cht, row_index, '', {'Asset': clip.get_path_name()})
+            p('chooser row', row_index, state, '->', clip.get_path_name())
+            matched += 1
+    if matched < len(made):
+        fail('chooser: only %d of %d locomotion rows matched a LocoState cell (cells logged above)' % (matched, len(made)))
     if SAVE:
         unreal.EditorAssetLibrary.save_asset(CHOOSER, only_if_is_dirty=False)
 
@@ -359,6 +367,11 @@ def run():
     overrides = {}
     for path in find_montages():
         montage = unreal.EditorAssetLibrary.load_asset(path)
+        try:
+            slots = sorted({str(t.get_editor_property('slot_name')) for t in montage.get_editor_property('slot_anim_tracks')})
+        except Exception as exc:
+            slots = ['? %s' % exc]
+        p('slots', montage.get_name(), slots)
         length = montage.get_play_length()
         frames = max(2, int(round(length * FPS)))
         kind, keys = move_keys(montage.get_name(), frames)
