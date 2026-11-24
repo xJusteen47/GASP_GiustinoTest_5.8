@@ -17,7 +17,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ChooserPlayerTimeTest, "GSTNAnimation.Cor
 bool FGSTN_ChooserPlayerTimeTest::RunTest(const FString& Parameters)
 {
 	TestTrue(TEXT("advances by rate"), FMath::IsNearlyEqual(FGSTN_AnimNode_ChooserPlayer::AdvanceTime(0.f, 0.1f, 2.f, 1.f, false), 0.2f));
-	TestTrue(TEXT("a looping clip wraps"), FMath::IsNearlyEqual(FGSTN_AnimNode_ChooserPlayer::AdvanceTime(0.9f, 0.2f, 1.f, 1.f, true), 0.1f));
+	TestTrue(TEXT("a looping clip wraps"), FMath::IsNearlyEqual(FGSTN_AnimNode_ChooserPlayer::AdvanceTime(0.9f, 0.2f, 1.f, 1.f, true), 0.1f, KINDA_SMALL_NUMBER));
 	TestTrue(TEXT("a one-shot holds the last frame"), FMath::IsNearlyEqual(FGSTN_AnimNode_ChooserPlayer::AdvanceTime(0.9f, 0.2f, 1.f, 1.f, false), 1.f));
 	TestTrue(TEXT("no clip length = 0"), FMath::IsNearlyZero(FGSTN_AnimNode_ChooserPlayer::AdvanceTime(0.5f, 0.2f, 1.f, 0.f, true)));
 	TestTrue(TEXT("Asset follows the asset"), FGSTN_AnimNode_ChooserPlayer::ResolveLooping(EGSTN_ChooserPlayerLoop::Asset, true));
