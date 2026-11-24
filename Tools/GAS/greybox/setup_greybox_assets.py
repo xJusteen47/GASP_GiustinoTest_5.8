@@ -259,6 +259,7 @@ def step_mesh():
         if 'SUCCESS' not in str(outcome).upper():
             fail('copy_mesh_to_skeletal_mesh: %s' % (outcome,))
             return None
+        assign_materials(existing)
         save(path)
         return existing
     new_utils = unreal.GeometryScript_NewAssetUtils
