@@ -7,7 +7,7 @@ Ogni thread: legge solo questo brief, il piano e i file che tocca; dichiara cosa
 ## C1 — fisso, Sonnet medium (build/cattura a subagente Haiku), budget 2 $, ~30 min desktop
 Obiettivo: cattura video in tempo reale invece dei PNG per fotogramma (oggi 96 dei 99 s per sequenza).
 1. Segna `_ue59/IN-USO.txt`; porta `_ue59` su 49998c49 (o `main` dopo #38) senza toccare i file sporchi dell'owner.
-2. `Run-Timed.ps1 -Preset Build -WaitMutex -NoHotReload` con GSTNCapture (già abilitato nel .uproject).
+2. `Run-Timed.ps1 -Preset Build` con GSTNCapture (già abilitato nel .uproject).
 3. Una cattura della clip base dair v9 con GSTNCapture, 3 viste; deve stampare `ASSERT: OK`. Misura secondi per sequenza prima/dopo (log citati).
 4. Libera `IN-USO.txt`. Non toccare skill, registri, branch. Se la build fallisce 2 volte: fermati e scrivi cosa serve.
 

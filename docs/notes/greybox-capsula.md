@@ -43,7 +43,7 @@ must only not contradict it. Stop searching the run start feel inside the clip.
 | Tests | `GSTNAnimation.Core.Greybox.*`, `GSTNCombat.NP.Greybox.*`, `GSTNCombat.Debug.SpeedGraph.*` |
 
 ## Desktop steps (Remote Control, `_ue59` lock)
-1. Build (`Tools/CI/Run-Timed.ps1 -Preset Build -WaitMutex -NoHotReload`), tests `GSTNAnimation.Core.Greybox`, `GSTNCombat.NP.Greybox`,
+1. Build (`Tools/CI/Run-Timed.ps1 -Preset Build`), tests `GSTNAnimation.Core.Greybox`, `GSTNCombat.NP.Greybox`,
    `GSTNCombat.Debug.SpeedGraph` (+ the GSTN suite as usual).
 2. `Save-Assets.ps1 -Script Tools\GAS\greybox\setup_greybox_assets.py -Tag greybox` (editor closed). The mesh step needs the
    GeometryScripting plugin (editor only); the script reports the API it finds when a call is missing.
