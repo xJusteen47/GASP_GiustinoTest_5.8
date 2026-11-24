@@ -130,6 +130,105 @@ balloon override lasts; the newer rebound does not replace it. At 40 % the old m
 [MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1231 mode Falling mix 0 momentum 1 out (0 0 -45)
 ```
 
-ESITO: il rimbalzo genera con elapsed 0 ma il mix tiene la velocita del lancio originale (balloon ancora attivo); a 40 % funziona perché il lancio non sovrascrive più.
+---
+
+# Fix check, ~16:47-17:05 UTC
+
+## e8af926d (a knockback ends on the first frame a newer one is active): not enough
+Build OK, tests 268/268 PASS (with GSTNCombat.NP.Hits.Launch.KnockbackYieldsToNewer). Wall 700, player victim, 100 %: still stuck.
+On the rebound's elapsed-0 frame the old launch still generates and wins; from the next frame it is gone, but the rebound (elapsed 1)
+no longer overrides, so horizontal stays 0. The victim rose along the wall (z 548), stayed ~0.9 s, fell at the 1500 cap; no second
+wall bounce. 40 % unchanged (works). Raw (UE log `cap_fix2_wall.log.ue.log`):
+```
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1818 base 29072.0 start 28992.0 elapsed 5 mode Falling balloon 66 want (2868 0 1656) have (3661 0 2005)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1818 base 29072.0 start 29072.0 elapsed 0 mode Falling balloon 0 want (-5203 0 1203) have (3661 0 2005)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1818 mode Falling mix 1 momentum 0 out (7809 0 1289)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1819 base 29088.0 start 28992.0 elapsed 6 mode Falling balloon 66 want (2868 0 1656) have (0 0 1289)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1819 base 29088.0 start 29072.0 elapsed 1 mode Falling balloon 0 want (-5203 0 1203) have (0 0 1289)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1819 mode Falling mix 0 momentum 1 out (0 0 1227)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1820 base 29104.0 start 29072.0 elapsed 2 mode Falling balloon 0 want (-5203 0 1203) have (0 0 1227)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1820 mode Falling mix 0 momentum 1 out (0 0 1164)
+```
+
+## f2cad3d9 (also sees the newer knockback while it is still queued): works
+Build OK (105 s). Tests GSTNCombat.NP.Hits + Core.Reaction + Core.AirMomentum + NP.AirTurn + GSTNInput: **268/268 PASS**.
+Wall 700, player victim, VeryVerbose (UE log `cap_fix3_wall.log.ue.log`, captures `Saved/Lanci/fix3_wall`):
+
+- **100 %, rebound frame 1826:** `[MoveMix] mix 1 out (-5203 0 1203)`, next frame `have (-5203 0 1203)`: **the victim comes off the wall.**
+  The old launch's `[KnockbackGen]` line is still printed on frame 1826 (elapsed 5), but its velocity no longer reaches the mix, and it
+  is gone from 1827. The rebound flies back 19 m (wall distance 31 -> 1927 cm in 22 frames, -5203 decaying ~5 cm/s per frame,
+  peak z 520), behind the host's start and over the host's camera.
+- **Second rebound (frame 1850):** the victim hits a level surface ~12.5 m behind the host's start (impact bounce, type 4, 5098 cm/s):
+  `mix 1 out (3059 0 -144)`, next frame `have (3059 0 -144)`: **works too.** It flies forward again at ~3000 cm/s.
+- **Floor:** lands on frame 99 (z 88, falling at the 1500 cap) and bounces `vz +485`; the floor bounce keeps no horizontal speed
+  (2929 -> 0), as every floor bounce before these fixes (relaunch (0 0 438) in the earlier runs).
+- **40 %:** unchanged, rebound frame 1229 `mix 1 out (-880 0 -529)`, next have (-880 0 -529), lands 0.7 m off the wall.
+
+Raw, 100 % first wall rebound (frames 1824-1829):
+```
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1824 base 29168.0 start 29120.0 elapsed 3 mode Falling balloon 66 want (2868 0 1656) have (10696 0 4131)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1824 mode Falling mix 1 momentum 0 out (9631 0 2934)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1825 base 29184.0 start 29120.0 elapsed 4 mode Falling balloon 66 want (2868 0 1656) have (9631 0 2934)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1825 mode Falling mix 1 momentum 0 out (8672 0 2005)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1826 base 29200.0 start 29120.0 elapsed 5 mode Falling balloon 66 want (2868 0 1656) have (3661 0 2005)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1826 base 29200.0 start 29200.0 elapsed 0 mode Falling balloon 0 want (-5203 0 1203) have (3661 0 2005)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1826 mode Falling mix 1 momentum 0 out (-5203 0 1203)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1827 base 29216.0 start 29200.0 elapsed 1 mode Falling balloon 0 want (-5203 0 1203) have (-5203 0 1203)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1827 mode Falling mix 0 momentum 1 out (-5198 0 1140)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1828 base 29232.0 start 29200.0 elapsed 2 mode Falling balloon 0 want (-5203 0 1203) have (-5198 0 1140)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1828 mode Falling mix 0 momentum 1 out (-5194 0 1078)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1829 base 29248.0 start 29200.0 elapsed 3 mode Falling balloon 0 want (-5203 0 1203) have (-5194 0 1078)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1829 mode Falling mix 0 momentum 1 out (-5189 0 1015)
+```
+Raw, 100 % second rebound (frames 1848-1853):
+```
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1848 base 29552.0 start 29200.0 elapsed 22 mode Falling balloon 0 want (-5203 0 1203) have (-5102 0 -114)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1848 mode Falling mix 0 momentum 1 out (-5098 0 -177)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1849 base 29568.0 start 29200.0 elapsed 23 mode Falling balloon 0 want (-5203 0 1203) have (-5098 0 -177)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1849 mode Falling mix 0 momentum 1 out (-5093 0 -239)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1850 base 29584.0 start 29200.0 elapsed 24 mode Falling balloon 0 want (-5203 0 1203) have (-40 0 -239)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1850 base 29584.0 start 29584.0 elapsed 0 mode Falling balloon 0 want (3059 0 -144) have (-40 0 -239)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1850 mode Falling mix 1 momentum 0 out (3059 0 -144)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1851 base 29600.0 start 29584.0 elapsed 1 mode Falling balloon 0 want (3059 0 -144) have (3059 0 -144)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1851 mode Falling mix 0 momentum 1 out (3054 0 -206)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1852 base 29616.0 start 29584.0 elapsed 2 mode Falling balloon 0 want (3059 0 -144) have (3054 0 -206)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1852 mode Falling mix 0 momentum 1 out (3049 0 -269)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1853 base 29632.0 start 29584.0 elapsed 3 mode Falling balloon 0 want (3059 0 -144) have (3049 0 -269)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1853 mode Falling mix 0 momentum 1 out (3044 0 -332)
+```
+Raw, 40 % (frames 1227-1231):
+```
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1227 base 19616.0 start 19280.0 elapsed 21 mode Falling balloon 36 want (1560 0 900) have (1502 0 -719)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1227 mode Falling mix 0 momentum 1 out (1498 0 -800)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1228 base 19632.0 start 19280.0 elapsed 22 mode Falling balloon 36 want (1560 0 900) have (1498 0 -800)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1228 mode Falling mix 0 momentum 1 out (1493 0 -881)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1229 base 19648.0 start 19280.0 elapsed 23 mode Falling balloon 36 want (1560 0 900) have (923 0 -881)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1229 base 19648.0 start 19648.0 elapsed 0 mode Falling balloon 0 want (-880 0 -529) have (923 0 -881)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1229 mode Falling mix 1 momentum 0 out (-880 0 -529)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1230 base 19664.0 start 19648.0 elapsed 1 mode Falling balloon 0 want (-880 0 -529) have (-880 0 -529)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1230 mode Falling mix 0 momentum 1 out (-875 0 -591)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1231 base 19680.0 start 19648.0 elapsed 2 mode Falling balloon 0 want (-880 0 -529) have (-875 0 -591)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1231 mode Falling mix 0 momentum 1 out (-870 0 -654)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1231 base 19681.7 start 19648.0 elapsed 2 mode Walking balloon 0 want (-880 0 -529) have (-870 0 0)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1231 mode Walking mix 0 momentum 0 out (-860 0 0)
+```
+
+## No wall, 100 %, player victim (e8af926d build, `Saved/Lanci/fix2_arrow`)
+Rise 2.74 m, **20.6 m** at landing (unchanged), flight 0.58-0.62 s, floor impact -1518. Farthest point 28.6 m (26.9 m before) and 0 floor
+bounces (1 before), locked frames 115-117 (109 before): the floor contact now ends the launch move instead of overlapping it. 120 %
+unchanged at 27.75 m. Not re-run on f2cad3d9 (the change there only affects frames with a queued newer knockback).
+
+## Arrow
+- Straight-ahead launches never leave the host's frame, even with `gstn.Launch.Debug.Zoom 0` (100 % and 120 %: on screen 314/314).
+- The 100 % wall rebound flies back over the host's camera: off screen on frames 67-76 (`lanci_cam.jsonl`). UI shots (`shot showui`,
+  `Saved/Lanci/fix3_arrow`, montage `arrow_ui_v64-v84.jpg`: rows v64, v68, v70, v72, v80, v84): a red triangle marker sits at the top
+  edge of the screen at v68-v72 while the victim is off screen above; at v64 it is drawn on the victim (still in the frame, near the top);
+  gone at v80-v84 when the victim is back in view. Looks like the arrow working; the owner should judge it in the video/shots.
+
+## Videos
+`lanci_wall_rebound_p100.mp4` (frames 30-130, real time) and `lanci_wall_rebound_p100_slow.mp4` (frames 42-100, 0.25x). The test wall
+is an invisible collider: the rebound happens in empty air 7 m ahead of the host.
+
+ESITO: f2cad3d9 risolve il rimbalzo a muro al 100 % (esce a -5203 cm/s, anche il secondo rimbalzo funziona); 40 % e tabella senza muro invariati; la freccia compare quando la vittima esce dall'inquadratura.
 SUBAGENTI: nessuno.
-COSTO: ~10 min desktop (build 42 s, 1 cattura PIE).
+COSTO: ~35 min desktop (3 build, 2 run di test, 5 catture PIE), niente _ue59.
