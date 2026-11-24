@@ -47,6 +47,16 @@ struct GSTNPRESENTATIONCORE_API FGSTN_PresentationTableLayer
  */
 class UNiagaraComponent;
 
+/** Who a launch belongs to, for how loud its effects and camera are (UGSTN_PresentationComponent::LaunchEffectClass) */
+UENUM(BlueprintType)
+enum class EGSTN_LaunchEffectClass : uint8
+{
+	Auto,
+	Player,
+	Important,
+	Minor
+};
+
 UCLASS(ClassGroup = (GSTN), Config = Game, meta = (BlueprintSpawnableComponent))
 class GSTNPRESENTATIONCORE_API UGSTN_PresentationComponent : public UActorComponent, public IGSTN_AdditiveReactionSource
 {
@@ -61,6 +71,20 @@ public:
 	/** Off = events still fire, no effect plays */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation")
 	bool bPlayEffects = true;
+
+	/**
+	 * Launch effects (owner 2026-11-24, 3A): how loud this character's launch puff and tumble trail are. Auto = a player (a pawn with a player
+	 * state) gets both, anything else is a small enemy and gets the puff only. Important = both, under the shared cap of MaxEnemyLaunchTrails
+	 * (a big enemy, a boss). Minor and Player force the class. Many enemies flying at once must not fill the screen with trails
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Presentation|Launch")
+	EGSTN_LaunchEffectClass LaunchEffectClass = EGSTN_LaunchEffectClass::Auto;
+
+	/** The class Auto resolves to for Owner (a pawn with a player state is a player, anything else minor). Pure on the actor, for the camera too */
+	static EGSTN_LaunchEffectClass ResolveLaunchEffectClass(const AActor* Owner, EGSTN_LaunchEffectClass Requested);
+
+	/** Tumble trails of non player characters alive at once in a world; the oldest stops when a new one would pass it */
+	static constexpr int32 MaxEnemyLaunchTrails = 3;
 
 	/**
 	 * Forward every accepted event to the owner's UGSTN_SurfaceFeedbackComponent (added at BeginPlay): landings and hits rumble the pad and

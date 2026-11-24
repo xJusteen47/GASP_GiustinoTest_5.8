@@ -450,6 +450,46 @@ bool FGSTN_PresentationDeriveTagsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// Owner 2026-11-24, 3A: the launch puff. A hit reaction out of its freeze that reaches the launch speed within a few frames; not a push
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PresentationDeriveLaunchTest, "GSTNPresentation.Core.Derive.Launch", GSTNPresentationTest::Flags)
+bool FGSTN_PresentationDeriveLaunchTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNPresentationTest;
+	const FGameplayTag Hitstun = FGameplayTag::RequestGameplayTag(TEXT("Combat.State.Hitstun"), false);
+	const FGameplayTag Hitstop = FGameplayTag::RequestGameplayTag(TEXT("Combat.State.Hitstop"), false);
+	if (!Hitstun.IsValid() || !Hitstop.IsValid())
+	{
+		AddInfo(TEXT("Combat.State tags not registered (GSTNCombatGAS off): nothing to check"));
+		return true;
+	}
+	auto Frame = [&](int32 F, bool bStop, const FVector& V)
+	{
+		FGSTN_PresentationSnapshot S = Snap(F, false, V);
+		S.StateTags.AddTag(Hitstun);
+		if (bStop)
+		{
+			S.StateTags.AddTag(Hitstop);
+		}
+		return S;
+	};
+	// Frozen, then the launch speed arrives two frames after the freeze: one puff, with the speed as magnitude
+	TArray<FGSTN_PresentationEvent> Events = Run({Snap(1, true), Frame(2, true, FVector::ZeroVector), Frame(3, false, FVector::ZeroVector),
+		Frame(4, false, FVector(100, 0, 50)), Frame(5, false, FVector(800, 0, 600)), Frame(6, false, FVector(780, 0, 560))});
+	TestEqual(TEXT("one launch"), Count(Events, GSTNPresentationTags::Launch), 1);
+	const FGSTN_PresentationEvent* Launch = Events.FindByPredicate([](const FGSTN_PresentationEvent& E) { return E.EventTag == GSTNPresentationTags::Launch; });
+	TestTrue(TEXT("magnitude = speed"), Launch && FMath::IsNearlyEqual(Launch->Magnitude, 1000.f, 1.f));
+
+	// A push back (slow) is no launch
+	Events = Run({Snap(1, true), Frame(2, true, FVector::ZeroVector), Frame(3, false, FVector(400, 0, 0)), Frame(4, false, FVector(380, 0, 0))});
+	TestEqual(TEXT("push: no launch"), Count(Events, GSTNPresentationTags::Launch), 0);
+
+	// Speed that comes long after the freeze (the victim was knocked into a slope) is no launch either
+	Events = Run({Snap(1, true), Frame(2, true, FVector::ZeroVector), Frame(3, false, FVector::ZeroVector), Frame(4, false, FVector::ZeroVector),
+		Frame(5, false, FVector::ZeroVector), Frame(6, false, FVector::ZeroVector), Frame(7, false, FVector::ZeroVector), Frame(8, false, FVector(900, 0, 0))});
+	TestEqual(TEXT("late speed: no launch"), Count(Events, GSTNPresentationTags::Launch), 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_PresentationResimTest, "GSTNPresentation.Core.Resimulation", GSTNPresentationTest::Flags)
 bool FGSTN_PresentationResimTest::RunTest(const FString& Parameters)
 {
