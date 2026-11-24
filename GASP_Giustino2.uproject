@@ -215,6 +215,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNCapture",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNParts",
 			"Enabled": true
 		},

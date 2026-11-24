@@ -123,6 +123,11 @@ def main():
         views = views_of(cap, seq)
         cols = 4 if len(views) > 3 else 2          # the last cell is the frame's text
         cells = len(views) + 1
+        # fast capture (GSTNCapture): only the frames around the press have pictures. Leading and trailing rows with no picture in any
+        # view are left out (a gap inside the window stays, as a dark red cell); both sides of a whiff/hit pair then start at press - pre
+        shot = [any(os.path.exists(os.path.join(cap, seq, v, f"f{r['f']:03d}.png")) for v in views) for r in rows]
+        if any(shot):
+            rows = rows[shot.index(True):len(shot) - shot[::-1].index(True)]
         tmp = tempfile.mkdtemp(prefix='pie_capture_')
         for i, r in enumerate(rows):
             frame = Image.new('RGB', (cols * size, ((cells + cols - 1) // cols) * size), (20, 20, 20))
