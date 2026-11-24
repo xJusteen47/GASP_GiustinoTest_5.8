@@ -78,14 +78,18 @@ FVector UGSTN_GreyboxAnimInstance::RunSway(const FGSTN_GreyboxShapeSettings& Set
 		Settings.TwistYawDeg * FMath::Sin(Phase) * Amplitude);
 }
 
+bool UGSTN_GreyboxAnimInstance::StartsRunStop(const FGSTN_GreyboxShapeSettings& Settings, bool bOnGround, float Speed2D,
+	float ForwardAcceleration, bool bAlreadyKicked)
+{
+	return Settings.RunStopKickDeg > 0.f && bOnGround && !bAlreadyKicked && Speed2D >= Settings.RunStopMinSpeed
+		&& ForwardAcceleration <= -Settings.RunStopDecel;
+}
+
 FRotator UGSTN_GreyboxAnimInstance::LeanTarget(const FGSTN_GreyboxShapeSettings& Settings, const FVector& LocalAcceleration)
 {
-	FVector2D Lean(LocalAcceleration.X, LocalAcceleration.Y);
-	Lean *= Settings.LeanDegPer1000 / 1000.f;
-	if (Lean.Size() > Settings.MaxLeanDeg)
-	{
-		Lean = Lean.GetSafeNormal() * Settings.MaxLeanDeg;
-	}
+	// Forward (start / brake) and sideways (curves) separately: a curve leans harder than a start, with its own cap
+	const FVector2D Lean(FMath::Clamp(LocalAcceleration.X * Settings.LeanDegPer1000 / 1000.f, -Settings.MaxLeanDeg, Settings.MaxLeanDeg),
+		FMath::Clamp(LocalAcceleration.Y * Settings.TurnLeanDegPer1000 / 1000.f, -Settings.MaxTurnLeanDeg, Settings.MaxTurnLeanDeg));
 	// Pitch = minus the forward lean (Unreal pitch up = top back), roll = the lean to the right (+Y)
 	return FRotator(-Lean.X, 0.f, Lean.Y);
 }
@@ -143,6 +147,19 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	SquashSpring.Step(SquashTarget(ShapeSettings, bOnGround, Velocity.Z, Local.X), DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
 	PitchSpring.Step(LeanGoal.Pitch, DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
 	RollSpring.Step(LeanGoal.Roll, DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
+
+	// Run stop plant: one backward kick into the pitch spring (positive pitch = top back), re-armed once still or speeding up again
+	const float GroundSpeed = FVector(Velocity.X, Velocity.Y, 0.f).Size();
+	if (StartsRunStop(ShapeSettings, bOnGround, GroundSpeed, Local.X, bRunStopKicked))
+	{
+		// For this damping the spring's first peak is about 0.6 of Velocity / Omega
+		PitchSpring.Velocity += ShapeSettings.RunStopKickDeg * 2.f * PI * ShapeSettings.SpringFrequency / 0.6f;
+		bRunStopKicked = true;
+	}
+	else if (GroundSpeed < 10.f || Local.X > 200.f)
+	{
+		bRunStopKicked = false;
+	}
 
 	// Run sway: cadence from the speed, or the frantic cadence right after leaving rest; amplitude from the speed, eased
 	const float Speed2D = FVector(Velocity.X, Velocity.Y, 0.f).Size();

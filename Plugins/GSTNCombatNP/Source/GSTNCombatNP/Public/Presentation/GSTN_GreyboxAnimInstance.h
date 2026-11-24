@@ -43,6 +43,28 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Lean", meta = (ClampMin = "0", ClampMax = "45", ForceUnits = "deg"))
 	float MaxLeanDeg = 18.f;
 
+	/** Additive lean into curves (owner 2026-11-24): sideways lean per 1000 cm/s² of sideways (centripetal) acceleration, own cap */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Lean", meta = (ClampMin = "0", ClampMax = "30"))
+	float TurnLeanDegPer1000 = 8.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Lean", meta = (ClampMin = "0", ClampMax = "60", ForceUnits = "deg"))
+	float MaxTurnLeanDeg = 25.f;
+
+	/**
+	 * Run stop plant (owner 2026-11-24, Mario 3D World Toad): when a run starts braking hard, the body kicks backward for a moment, as if a
+	 * foot went forward, then the spring brings it back. Peak of the kick, degrees; 0 turns it off.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Stop", meta = (ClampMin = "0", ClampMax = "60", ForceUnits = "deg"))
+	float RunStopKickDeg = 22.f;
+
+	/** The braking that starts a run stop: forward deceleration at least this... */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Stop", meta = (ClampMin = "0", ForceUnits = "cm/s2"))
+	float RunStopDecel = 1200.f;
+
+	/** ...while moving at least this fast */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Stop", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float RunStopMinSpeed = 250.f;
+
 	/** Spring of squash and lean: frequency (Hz) and damping ratio (< 1 bounces, 1 settles without overshoot) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Spring", meta = (ClampMin = "0.5", ClampMax = "20", ForceUnits = "Hz"))
 	float SpringFrequency = 5.f;
@@ -180,7 +202,11 @@ public:
 	/** Pure: the sway at a cycle phase (radians) and amplitude: X squash delta, Y roll, Z twist yaw (degrees); OutPitch the nod */
 	static FVector RunSway(const FGSTN_GreyboxShapeSettings& Settings, float Phase, float Amplitude, float& OutPitch);
 
-	/** Pure: the lean target (pitch forward, roll right, degrees) for a horizontal acceleration in the actor's local frame */
+	/** Pure: does this frame start a run stop (braking hard from a run, not already kicked)? */
+	static bool StartsRunStop(const FGSTN_GreyboxShapeSettings& Settings, bool bOnGround, float Speed2D, float ForwardAcceleration, bool bAlreadyKicked);
+
+	/** Pure: the lean target (pitch forward, roll right, degrees) for a horizontal acceleration in the actor's local frame; forward and
+	 *  sideways (curves) have their own rates and caps */
 	static FRotator LeanTarget(const FGSTN_GreyboxShapeSettings& Settings, const FVector& LocalAcceleration);
 
 protected:
@@ -217,6 +243,8 @@ private:
 	float SwayAmplitude = 0.f;
 	/** Seconds since the body last left rest on the ground; < 0 while at rest or in the air */
 	float TimeSinceStart = -1.f;
+	/** The current run stop already kicked (re-armed once still or speeding up) */
+	bool bRunStopKicked = false;
 	/** Driver pelvis reference height, cached per driver mesh asset */
 	TWeakObjectPtr<const USkeletalMesh> PelvisReferenceMesh;
 	float PelvisReferenceHeight = 0.f;

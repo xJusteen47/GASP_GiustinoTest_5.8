@@ -122,3 +122,6 @@ All reversible; class defaults, so the owner retunes them on ABP_GSTN_GreyboxCap
   `FranticCadenceHz` (6) with `FranticAmplitude` (1.4), then fades to the speed's cadence. `make_capsule_clips.py` now keeps only attack
   overrides (`MOVE_FILTER` Overlord, sequences Jab/Punch/Kick/Attack) and replaces the old map, so hit reactions and rolls are the rigid
   capsule too.
+- **Owner note 2026-11-24 14:06**: additive lean in curves (`TurnLeanDegPer1000` 8, cap `MaxTurnLeanDeg` 25, separate from the forward lean)
+  and a run stop plant like Toad in Mario 3D World: braking hard (`RunStopDecel` 1200) from a run (`RunStopMinSpeed` 250) kicks the
+  pitch spring backward once (`RunStopKickDeg` 22), as if a foot went forward, and the spring brings it back.

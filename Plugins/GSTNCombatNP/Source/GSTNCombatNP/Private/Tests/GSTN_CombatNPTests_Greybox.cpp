@@ -61,7 +61,13 @@ bool FGSTN_GreyboxShapeTest::RunTest(const FString& Parameters)
 	const FRotator Right = UGSTN_GreyboxAnimInstance::LeanTarget(Settings, FVector(0.f, 2000.f, 0.f));
 	TestTrue(TEXT("accelerating right leans right"), Right.Roll > 1.f);
 	const FRotator Hard = UGSTN_GreyboxAnimInstance::LeanTarget(Settings, FVector(1.e6f, 1.e6f, 0.f));
-	TestTrue(TEXT("lean capped"), FVector2D(Hard.Pitch, Hard.Roll).Size() <= Settings.MaxLeanDeg + KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("forward lean capped"), FMath::Abs(Hard.Pitch) <= Settings.MaxLeanDeg + KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("curve lean capped"), FMath::Abs(Hard.Roll) <= Settings.MaxTurnLeanDeg + KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("a curve leans harder than a start"), Right.Roll > -Forward.Pitch);
+	TestTrue(TEXT("hard braking from a run starts a run stop"), UGSTN_GreyboxAnimInstance::StartsRunStop(Settings, true, 500.f, -3000.f, false));
+	TestFalse(TEXT("only once per stop"), UGSTN_GreyboxAnimInstance::StartsRunStop(Settings, true, 500.f, -3000.f, true));
+	TestFalse(TEXT("a walk does not kick"), UGSTN_GreyboxAnimInstance::StartsRunStop(Settings, true, 100.f, -3000.f, false));
+	TestFalse(TEXT("gentle slowing does not kick"), UGSTN_GreyboxAnimInstance::StartsRunStop(Settings, true, 500.f, -300.f, false));
 
 	TestTrue(TEXT("pelvis at reference = 1"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, true, 95.f, 95.f), 1.f));
 	TestTrue(TEXT("crouched pelvis squashes"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, true, 57.f, 95.f), 0.6f, 1.e-3f));
