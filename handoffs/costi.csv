@@ -85,3 +85,4 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-24,Dropkick K8 piano giro 3,dropkick-k8-4-piano-r3,portatile,claude,opus-medium,0,0,1.2,,carte K8R3 + cancello anti-fermata (K7 e K8 r2 FAIL); in attesa editor e build a campionamento continuo
 2026-11-22,runstart-w3 + cheap skill,runstart-w3,desktop,agy_student,Hydrogen Medium + Pro,45,0,0,50,5/6 SI (arm_r fase v92 aperto) + skill cheap
 2026-11-24,Unify animation skill (T1),skill-anim-unica-t1,cloud,claude,opus-medium,0,0,5.5,,merge 5 branch + life gate 2A + tenute 1A + fase braccio-gamba (misura) + skill gstn-anim-cycle; 9 test preesistenti rossi
+2026-11-24,Unify animation skill (T3),skill-anim-unica-t3,desktop,claude,opus,40,0,6,,integrazione T1+T2 + build GSTNCapture OK + dump K7/K8/K6 + CALIB 11/13 (gate non scritto) + anim_layer in UE PASS ma confronto w3 non equivalente
