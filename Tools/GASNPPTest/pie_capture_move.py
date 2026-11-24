@@ -266,6 +266,12 @@ MOVE_SEQUENCES = [
     {'name': 'ld_jump_idle', 'taps': [], 'frames': 380, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (20, 24)},
     {'name': 'ld_jump_fwd', 'taps': [], 'frames': 190, 'dummy': None, 'shoot': True, 'follow': True, 'jump': (20, 24),
      'sticks': [(80, (0, 1, 0))]},
+    # greybox-capsula (2026-11-24): one pass over the movement on the capsule (gstn.Greybox 1, gstn.Loco.Base 2, gstn.Debug.SpeedGraph 1):
+    # run start from rest, run, stop, second start, skid (stick reversed), stop, jump, crouch, then a jab (Attack tap). The speed graph is
+    # canvas: only the viewport shots of PIE_CAPTURE_HIRES show it (the scene captures do not)
+    {'name': 'gb_loco', 'taps': [470], 'frames': 540, 'dummy': None, 'shoot': True, 'follow': True,
+     'sticks': [(20, (0, 1, 0)), (140, None), (200, (0, 1, 0)), (290, (0, -1, 0)), (330, None)],
+     'jump': (370, 24), 'crouch_hold': (430, 25)},
 ]
 if os.environ.get('PIE_CAPTURE_VIEWS'):
     VIEWS = [v for v in VIEWS if v[0] in os.environ['PIE_CAPTURE_VIEWS'].split(',')]
