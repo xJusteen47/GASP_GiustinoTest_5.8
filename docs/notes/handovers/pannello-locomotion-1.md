@@ -21,11 +21,17 @@ della SUA struct, mentre la struct restava anche sotto `Locomotion|...`. Da qui 
   era salvata in DA_Locomotion_Default (nomi assenti dalla tabella nomi dell'asset, `strings` sul file). Senza Resume lo skid torna sempre allo stadio 1.
 - 2A: skid ClipRoot/BrakeExit e aria Fixed/MoverLegacy restano (cvar gstn.Skid.Motion) ma con DisplayName "(Legacy)" e i loro valori in `Skid|Legacy Models` avanzate.
 
-## Da fare
-Build e verifica sul fisso NON fatte: _ue59 occupato dal thread capsula-a-terra, poi l'owner stava giocando sul fisso. Al rilancio: dump dei valori di
-DA_Locomotion_Default prima/dopo (export_text delle struct), `Run-Timed.ps1 -Preset Build`, test `GSTNCombat.Core.AnalogWalk` e `GSTNCombat.Core.RunSkid`,
-screenshot del pannello.
+## Verifica (laptop, worktree GASP_Giustino2_cp1verify, desktop occupato)
+- Giro 1 (a0f3922c): build OK (con -SkipRegress: il gate rifiuta il tag approved/runstart-v4r5, asset assente al tag, non legato a questo branch);
+  test GSTNCombat.Core.AnalogWalk/RunSkid/RunStages 20/20 PASS (Check-TestLog); dump di DA_Locomotion_Default (export_text, Saved/LocoPanel/before.txt e
+  after.txt) identico salvo i tre campi tolti. Trovati due problemi: righe AdvancedDisplay invisibili anche con "mostra avanzati" (Mode Bindings sparito)
+  e la categoria "Run" tradotta "Esegui" dall'editor in italiano.
+- Giro 2 (43eb110b): niente AdvancedDisplay, categorie RunStages/ModeBindings in una parola (lista separata da spazi di PrioritizeCategories e
+  AutoCollapseCategories). Build OK, after2.txt identico ad after.txt. Pannello: Run Stages, Skid, Walk, Air, Jump, Legacy, Mode Bindings; righe attese tutte
+  presenti (screenshot Saved/LocoPanel/r2_*.png nella worktree). AutoCollapse chiude i sottogruppi, non i titoli.
+- Crash in chiusura (ACCESS_VIOLATION 0x58 in UnrealEd, stack Slate, senza frame nostri): 2/2 chiudendo l'editor con la scheda dell'asset aperta, 0/2
+  altrimenti. Senza PDB sul laptop non si vede la funzione; probabilmente engine. Da riguardare solo se ricapita sul fisso con i simboli.
 
-ESITO: PARZIALE codice pronto su due commit, non compilato né provato sul fisso (desktop occupato)
+ESITO: PASS pannello riordinato, 3 opzioni tolte (1A), legacy marcati (2A); build, 20 test e valori verificati sul laptop
 SUBAGENTI: 0
-COSTO: ~3 $ | 0 min desktop | 0
+COSTO: ~10 $ | 0 min desktop | ~30 min laptop | 0
