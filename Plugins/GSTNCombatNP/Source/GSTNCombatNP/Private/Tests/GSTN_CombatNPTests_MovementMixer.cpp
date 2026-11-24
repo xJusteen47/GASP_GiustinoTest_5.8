@@ -3,6 +3,8 @@
 
 #include "Misc/AutomationTest.h"
 #include "MoveLibrary/MovementUtilsTypes.h"
+#include "Movement/GSTN_LayeredMove_Freeze.h"
+#include "Movement/GSTN_LayeredMove_Knockback.h"
 #include "Movement/GSTN_MovementMixer.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -60,6 +62,33 @@ bool FGSTN_MixerKeepsVelocityOverrideTest::RunTest(const FString& Parameters)
 	Mixer->MixProposedMoves(Freeze, FVector::UpVector, Frozen);
 	TestEqual(TEXT("override all carried"), Frozen.MixMode, EMoveMixMode::OverrideAll);
 	TestTrue(TEXT("override all: no velocity"), Frozen.LinearVelocity.IsZero());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_KnockbackYieldsToNewerTest, "GSTNCombat.NP.Hits.Launch.KnockbackYieldsToNewer", GSTN_NP_TEST_FLAGS)
+bool FGSTN_KnockbackYieldsToNewerTest::RunTest(const FString& Parameters)
+{
+	// Wall rebound at 100 % (2026-11-24): the launch, still in its balloon warp, and the rebound both override the velocity at priority 0;
+	// Mover's mixer keeps the older one, so the launch has to step aside on the rebound's first frame
+	TSharedPtr<FGSTN_LayeredMove_Knockback> Launch = MakeShared<FGSTN_LayeredMove_Knockback>();
+	Launch->StartSimTimeMs = 29136.0;
+	TSharedPtr<FGSTN_LayeredMove_Knockback> Rebound = MakeShared<FGSTN_LayeredMove_Knockback>();
+	Rebound->StartSimTimeMs = 29216.0;
+	TSharedPtr<FGSTN_LayeredMove_Freeze> Freeze = MakeShared<FGSTN_LayeredMove_Freeze>();
+	Freeze->StartSimTimeMs = 40000.0;
+
+	TArray<TSharedPtr<FLayeredMoveBase>> Moves;
+	Moves.Add(Launch);
+	TestFalse(TEXT("alone: the launch flies"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Moves, Launch->StartSimTimeMs));
+	Moves.Add(Freeze);
+	TestFalse(TEXT("a newer move of another kind (the hitstop freeze) does not end it"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Moves, Launch->StartSimTimeMs));
+	Moves.Add(Rebound);
+	TestTrue(TEXT("a newer knockback supersedes the launch"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Moves, Launch->StartSimTimeMs));
+	TestFalse(TEXT("the rebound itself is not superseded"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Moves, Rebound->StartSimTimeMs));
+	TSharedPtr<FGSTN_LayeredMove_Knockback> SameFrame = MakeShared<FGSTN_LayeredMove_Knockback>();
+	SameFrame->StartSimTimeMs = Rebound->StartSimTimeMs;
+	Moves.Add(SameFrame);
+	TestFalse(TEXT("two knockbacks of the same frame keep the mixer's own rule"), FGSTN_LayeredMove_Knockback::HasNewerKnockback(Moves, Rebound->StartSimTimeMs));
 	return true;
 }
 

@@ -35,6 +35,13 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 			ElapsedFrames, *StartState.SyncState.MovementMode.ToString(), BalloonFrames, Velocity.X, Velocity.Y, Velocity.Z, Have.X, Have.Y, Have.Z);
 	}
 
+	// A newer knockback owns the flight from its first frame: this one ends now, so its override cannot win the mixer's tie (see the header)
+	if (HasNewerKnockback(StartState.SyncState.LayeredMoves.GetActiveMoves(), StartSimTimeMs))
+	{
+		DurationMs = static_cast<float>(FMath::Max(TimeStep.BaseSimTimeMs - StartSimTimeMs, 0.0));
+		return false;
+	}
+
 	// Balloon: the warped frames, and the first one back at M = 1 (which sets the classic velocity of the warped time for the mode to go on
 	// from). Only in the air after the first frame: a victim that landed or slid onto a floor is the falling mode's and the impact step's
 	if (BalloonFrames > 0 && BalloonM0 > 1.f && (ElapsedFrames == 0 || StartState.SyncState.MovementMode == ForceMovementMode))
@@ -139,6 +146,18 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 		DurationMs = static_cast<float>(TimeStep.BaseSimTimeMs + StepMs - StartSimTimeMs);
 	}
 	return true;
+}
+
+bool FGSTN_LayeredMove_Knockback::HasNewerKnockback(TConstArrayView<TSharedPtr<FLayeredMoveBase>> Moves, double StartMs)
+{
+	for (const TSharedPtr<FLayeredMoveBase>& Move : Moves)
+	{
+		if (Move.IsValid() && Move->GetScriptStruct()->IsChildOf(FGSTN_LayeredMove_Knockback::StaticStruct()) && Move->StartSimTimeMs > StartMs)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 double FGSTN_LayeredMove_Knockback::FadeOnFrame(double LaunchSpeed, double Deceleration, double StepSeconds, int32 ElapsedFrames)
