@@ -17,6 +17,10 @@ FVector FGSTN_AnimNode_GreyboxShape::SquashToScale(float Squash)
 FGSTN_AnimNode_GreyboxShape::FGSTN_AnimNode_GreyboxShape()
 {
 	PelvisBone.BoneName = TEXT("pelvis");
+	for (const TCHAR* Name : {TEXT("hand_l"), TEXT("hand_r"), TEXT("foot_l"), TEXT("foot_r")})
+	{
+		LimbBones.Add(FBoneReference(FName(Name)));
+	}
 }
 
 FVector FGSTN_AnimNode_GreyboxShape::AxisSquashScale(int32 UpAxis, float Squash, float Verticality)
@@ -38,6 +42,10 @@ void FGSTN_AnimNode_GreyboxShape::CacheBones_AnyThread(const FAnimationCacheBone
 {
 	Source.CacheBones(Context);
 	PelvisBone.Initialize(Context.AnimInstanceProxy->GetRequiredBones());
+	for (FBoneReference& Limb : LimbBones)
+	{
+		Limb.Initialize(Context.AnimInstanceProxy->GetRequiredBones());
+	}
 }
 
 void FGSTN_AnimNode_GreyboxShape::PreUpdate(const UAnimInstance* InAnimInstance)
@@ -99,6 +107,19 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 		const FVector CurrentUp = UpAxis == 0 ? Current.GetAxisX() : (UpAxis == 1 ? Current.GetAxisY() : Current.GetAxisZ());
 		const float Verticality = FMath::Square(FMath::Abs(static_cast<float>(CurrentUp.Z)));
 		Output.Pose[Pelvis].SetScale3D(Output.Pose[Pelvis].GetScale3D() * AxisSquashScale(UpAxis, Shape.PelvisSquash, Verticality));
+	}
+	// Limb markers: shrunk into the body when hidden (never exactly 0, a zero scale breaks the bone matrices' inverse)
+	if (Shape.LimbScale < 0.999f)
+	{
+		const float LimbScale = FMath::Clamp(Shape.LimbScale, 0.01f, 1.f);
+		for (const FBoneReference& Limb : LimbBones)
+		{
+			const FCompactPoseBoneIndex Index = Limb.GetCompactPoseIndex(Output.Pose.GetBoneContainer());
+			if (Output.Pose.IsValidIndex(Index))
+			{
+				Output.Pose[Index].SetScale3D(Output.Pose[Index].GetScale3D() * LimbScale);
+			}
+		}
 	}
 	// The root's parent is the component, so its local transform is in component space: rotate it around the ground point, scale it
 	FTransform& RootTransform = Output.Pose[Root];

@@ -111,3 +111,7 @@ All reversible; class defaults, so the owner retunes them on ABP_GSTN_GreyboxCap
 - **Dynamic montages**: `SequenceMoveOverrides` (sequence -> clip) is asked when a montage has no own entry, at the segment's time. The
   script fills it with every montage's sequence, the AnimSequences matching `SEQUENCE_FILTER` (Jab, Punch, Kick, Attack) and `SEQUENCES`;
   the capsule logs `GSTN Greybox: no capsule override for montage ... playing <path>` once per uncovered clip.
+- **Owner note 2026-11-24 14:02**: the capsule floats (bottom 14 cm above the feet), its top stays under the collision capsule's top (156 cm),
+  it is chubbier (radius 34); `GREYBOX_SHAPE="radius,bottom,top"` overrides. The hand and foot markers are hidden in locomotion and shown
+  while the driver plays a montage (`bShowLimbsInMoves` / `bShowLimbsInLocomotion`, `LimbBlendSpeed`; GSTN Greybox Shape scales the
+  `LimbBones` by `LimbScale`).

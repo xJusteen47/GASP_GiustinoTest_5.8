@@ -21,6 +21,9 @@ struct GSTNANIMATIONCORE_API FGSTN_GreyboxShape
 	 */
 	float PelvisSquash = 1.f;
 
+	/** Scale of the hand and foot markers, 0..1 (owner 2026-11-24: limbs hidden in locomotion and most of the time, shown in moves) */
+	float LimbScale = 1.f;
+
 	/** Tilt of the whole body around the ground point, component space, degrees (pitch forward, roll sideways) */
 	FRotator Lean = FRotator::ZeroRotator;
 

@@ -38,8 +38,12 @@ SAVE = os.environ.get('GSTN_SAVE') == '1'
 STEPS = [s.strip() for s in os.environ.get('GREYBOX_STEPS', 'mesh,capsule_abp,chooser,simple_abp,warping').split(',') if s.strip()]
 
 # Capsule shape (cm): the mannequin is ~180 cm; the capsule reads as the body volume, the nose as the facing (mesh +Y = forward)
-CAPSULE_RADIUS = 24.0
-CAPSULE_HEIGHT = 176.0
+# Owner 2026-11-24 (run 2 note): floating a little above the ground, its top below the top of the collision capsule, chubbier.
+# GREYBOX_SHAPE="radius,bottom,top" overrides (cm above the feet).
+_shape = [float(v) for v in os.environ.get('GREYBOX_SHAPE', '34,14,156').split(',')]
+CAPSULE_RADIUS = _shape[0]
+CAPSULE_BOTTOM = _shape[1]
+CAPSULE_HEIGHT = _shape[2] - _shape[1]
 NOSE_LENGTH = 16.0
 NOSE_RADIUS = 6.0
 MARKER_RADIUS = {'hand_l': 7.0, 'hand_r': 7.0, 'foot_l': 8.0, 'foot_r': 8.0}
@@ -180,15 +184,16 @@ def step_mesh():
         return unreal.GeometryScript_MeshQueries.get_vertex_count(mesh)
 
     start = vcount()
-    # Capsule standing on the ground: origin at its base
-    body_t = unreal.Transform(location=unreal.Vector(0, 0, 0))
+    # Capsule floating CAPSULE_BOTTOM above the ground: origin at its base
+    body_t = unreal.Transform(location=unreal.Vector(0, 0, CAPSULE_BOTTOM))
     prims.append_capsule(mesh, opts, body_t, CAPSULE_RADIUS, CAPSULE_HEIGHT - 2 * CAPSULE_RADIUS, 6, 16, 8,
                          unreal.GeometryScriptPrimitiveOriginMode.BASE)
     parts.append((start, vcount(), 'body'))
     # Nose: a cone on the face, pointing forward (+Y), at the head's height
     start = vcount()
-    head = pos['head']
-    nose_t = unreal.Transform(location=unreal.Vector(0, CAPSULE_RADIUS - 2.0, head.z + 4.0), rotation=unreal.Rotator(0, 0, -90))
+    # Under the dome (the capsule top is below the real head now), weighted to the head so it turns with it
+    nose_z = CAPSULE_BOTTOM + CAPSULE_HEIGHT - CAPSULE_RADIUS * 0.9
+    nose_t = unreal.Transform(location=unreal.Vector(0, CAPSULE_RADIUS - 2.0, nose_z), rotation=unreal.Rotator(0, 0, -90))
     prims.append_cone(mesh, opts, nose_t, NOSE_RADIUS, 1.0, NOSE_LENGTH, 12, 1, True, unreal.GeometryScriptPrimitiveOriginMode.BASE)
     parts.append((start, vcount(), 'head'))
     for bone, radius in MARKER_RADIUS.items():

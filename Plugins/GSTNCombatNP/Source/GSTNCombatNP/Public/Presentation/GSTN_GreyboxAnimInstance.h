@@ -60,6 +60,18 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	/** How fast the pelvis squash follows the pose when it switches on or off (take off, touchdown), 1/s */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Squash", meta = (ClampMin = "1"))
 	float PelvisSquashBlendSpeed = 20.f;
+
+	/** Hand and foot markers (owner 2026-11-24: hidden in locomotion and most of the time): shown while the driver plays a montage (a
+	 *  move, a hit reaction, a roll) and/or in locomotion */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Limbs")
+	bool bShowLimbsInMoves = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Limbs")
+	bool bShowLimbsInLocomotion = false;
+
+	/** How fast the markers grow / shrink, 1/s */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Limbs", meta = (ClampMin = "1"))
+	float LimbBlendSpeed = 15.f;
 };
 
 /** Pure: a damped spring step (semi-implicit Euler, sub-stepped for long frames); the tests call it */
@@ -113,6 +125,9 @@ public:
 	/** Pure: the pelvis squash (1 = standing) for a pelvis height over its reference height; 1 in the air */
 	static float PelvisSquashTarget(const FGSTN_GreyboxShapeSettings& Settings, bool bOnGround, float PelvisHeight, float ReferenceHeight);
 
+	/** Pure: the limb marker scale target for a montage weight on the driver (0 = locomotion only) */
+	static float LimbScaleTarget(const FGSTN_GreyboxShapeSettings& Settings, float MontageWeight);
+
 	/** Pure: the lean target (pitch forward, roll right, degrees) for a horizontal acceleration in the actor's local frame */
 	static FRotator LeanTarget(const FGSTN_GreyboxShapeSettings& Settings, const FVector& LocalAcceleration);
 
@@ -123,6 +138,9 @@ protected:
 private:
 	/** The move override of this frame from the driver's active montage */
 	void UpdateMoveOverride();
+
+	/** Weight of the driver's active montage this frame (UpdateMoveOverride writes it) */
+	float DriverMontageWeight = 0.f;
 
 	/** The driver's pelvis height above the component (its feet) now, and in its reference pose; false without a driver or a pelvis */
 	bool GetDriverPelvisHeight(float& OutHeight, float& OutReference);

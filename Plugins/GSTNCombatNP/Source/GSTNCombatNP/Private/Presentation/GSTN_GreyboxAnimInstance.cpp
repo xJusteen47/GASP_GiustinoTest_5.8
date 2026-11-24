@@ -45,6 +45,14 @@ float UGSTN_GreyboxAnimInstance::PelvisSquashTarget(const FGSTN_GreyboxShapeSett
 	return FMath::Clamp(PelvisHeight / ReferenceHeight, FMath::Min(Settings.MinPelvisSquash, 1.f), 1.f);
 }
 
+float UGSTN_GreyboxAnimInstance::LimbScaleTarget(const FGSTN_GreyboxShapeSettings& Settings, float MontageWeight)
+{
+	const float Weight = FMath::Clamp(MontageWeight, 0.f, 1.f);
+	const float Locomotion = Settings.bShowLimbsInLocomotion ? 1.f : 0.f;
+	const float Moves = Settings.bShowLimbsInMoves ? 1.f : 0.f;
+	return FMath::Lerp(Locomotion, Moves, Weight);
+}
+
 FRotator UGSTN_GreyboxAnimInstance::LeanTarget(const FGSTN_GreyboxShapeSettings& Settings, const FVector& LocalAcceleration)
 {
 	FVector2D Lean(LocalAcceleration.X, LocalAcceleration.Y);
@@ -65,6 +73,7 @@ void UGSTN_GreyboxAnimInstance::NativeInitializeAnimation()
 	SquashSpring.Value = 1.f;
 	SquashSpring.Velocity = 0.f;
 	bHasPrevious = false;
+	Shape.LimbScale = ShapeSettings.bShowLimbsInLocomotion ? 1.f : 0.f;
 }
 
 void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
@@ -130,6 +139,8 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	Shape.PelvisSquash = FMath::FInterpTo(Shape.PelvisSquash, PelvisGoal, DeltaSeconds, ShapeSettings.PelvisSquashBlendSpeed);
 
 	UpdateMoveOverride();
+	Shape.LimbScale = FMath::FInterpTo(Shape.LimbScale, LimbScaleTarget(ShapeSettings, DriverMontageWeight), DeltaSeconds,
+		ShapeSettings.LimbBlendSpeed);
 }
 
 bool UGSTN_GreyboxAnimInstance::GetDriverPelvisHeight(float& OutHeight, float& OutReference)
@@ -163,12 +174,18 @@ void UGSTN_GreyboxAnimInstance::UpdateMoveOverride()
 {
 	Shape.OverrideClip = nullptr;
 	Shape.OverrideWeight = 0.f;
+	DriverMontageWeight = 0.f;
 	const USkeletalMeshComponent* Capsule = GetSkelMeshComponent();
 	const USkeletalMeshComponent* Driver = Capsule ? Cast<USkeletalMeshComponent>(Capsule->GetAttachParent()) : nullptr;
 	UAnimInstance* DriverAnim = Driver ? Driver->GetAnimInstance() : nullptr;
 	UAnimMontage* Montage = DriverAnim ? DriverAnim->GetCurrentActiveMontage() : nullptr;
 	const FAnimMontageInstance* Instance = Montage ? DriverAnim->GetActiveInstanceForMontage(Montage) : nullptr;
-	if (!Instance || (MoveOverrides.IsEmpty() && SequenceMoveOverrides.IsEmpty()))
+	if (!Instance)
+	{
+		return;
+	}
+	DriverMontageWeight = Instance->GetWeight();
+	if (MoveOverrides.IsEmpty() && SequenceMoveOverrides.IsEmpty())
 	{
 		return;
 	}
