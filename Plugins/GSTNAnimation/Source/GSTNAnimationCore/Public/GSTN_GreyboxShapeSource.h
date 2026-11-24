@@ -48,6 +48,13 @@ struct GSTNANIMATIONCORE_API FGSTN_GreyboxShape
 	float FloorTop = 0.f;
 	float FloorRadius = 0.f;
 
+	/**
+	 * Roll (owner 2026-11-24, "fix the roll animations"): a rigid turn of the whole capsule about SpinPivot (component space), applied last, after
+	 * the lean, so a get-up or tech roll reads as the capsule rolling over itself whatever the driver's pose does. Identity = none
+	 */
+	FQuat Spin = FQuat::Identity;
+	FVector SpinPivot = FVector::ZeroVector;
+
 	/** Tilt of the whole body around the ground point, component space, degrees (pitch forward, roll sideways) */
 	FRotator Lean = FRotator::ZeroRotator;
 

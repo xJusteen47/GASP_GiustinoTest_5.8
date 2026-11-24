@@ -201,6 +201,26 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Lying", meta = (ClampMin = "1", ForceUnits = "cm"))
 	float CapsuleTop = 156.f;
 
+	/**
+	 * Rolls (owner 2026-11-24, "fix the roll animations"): while the driver plays a montage whose name contains one of RollMontageNames (get-up
+	 * rolls, tech rolls), the capsule ignores the driver's pose and rolls over itself toward its travel, a rigid somersault about its middle:
+	 * from the way it lay when the roll started (on its back, on its front, upright) round to upright, over RollTurnShare of the montage, eased.
+	 * The driver's roll poses read badly on a rigid capsule (a forward get-up roll sat up and squashed, capture r7)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Roll")
+	bool bProceduralRoll = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Roll")
+	TArray<FString> RollMontageNames = {TEXT("Roll")};
+
+	/** Share of the roll montage the turn takes (the rest is the capsule upright, recovering) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Roll", meta = (ClampMin = "0.1", ClampMax = "1"))
+	float RollTurnShare = 0.75f;
+
+	/** Travel speed from which the roll's direction is taken (before it, the capsule keeps the driver's pose) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Roll", meta = (ClampMin = "1", ForceUnits = "cm/s"))
+	float RollMinSpeed = 60.f;
+
 	/** Hand and foot markers (owner 2026-11-24: hidden in locomotion and most of the time): shown while an attack's capsule clip plays
 	 *  (MoveOverrides / SequenceMoveOverrides) and/or in locomotion */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Limbs")
@@ -312,6 +332,15 @@ public:
 	/** Pure: the lying target 0..1 for how upright the driver's pelvis is (UpZ = the Z of its body-up axis: 1 upright, 0 flat, < 0 upside down) */
 	static float LyingTarget(const FGSTN_GreyboxShapeSettings& Settings, float UpZ);
 
+	/**
+	 * Pure: the roll's turn angle (degrees, toward the travel) at a share of the roll montage, from StartDeg (how the capsule lay when the roll
+	 * started: 0 upright, -90 on its back with the head behind the travel, +90 head first) round to a full turn, eased in and out
+	 */
+	static float RollAngle(const FGSTN_GreyboxShapeSettings& Settings, float StartDeg, float MontageShare);
+
+	/** Pure: the start angle of a roll for the capsule's up axis and the travel direction (both unit; the up's pitch toward the travel) */
+	static float RollStartAngle(const FVector& BodyUp, const FVector& Travel);
+
 	/** Pure: the limb marker scale target for the weight of an attack's capsule clip (0 = locomotion only) */
 	static float LimbScaleTarget(const FGSTN_GreyboxShapeSettings& Settings, float AttackWeight);
 
@@ -411,4 +440,14 @@ private:
 	FVector PelvisLocalUp = FVector::UpVector;
 	/** 0..1 how much the capsule lies with the driver's pelvis (eased) */
 	float LyingAlpha = 0.f;
+	/** The driver pelvis's body-up now (component space of the driver), for a roll's start angle */
+	FVector PelvisUp = FVector::UpVector;
+	/** The roll under way: its montage, travel direction (world, horizontal), start angle; null montage = none */
+	TWeakObjectPtr<const UAnimMontage> RollMontage;
+	FVector RollTravel = FVector::ZeroVector;
+	float RollStartDeg = 0.f;
+	bool bRollLatched = false;
+
+	/** The roll's turn of this frame into Shape (Spin, SpinPivot); true while a roll drives the capsule */
+	bool UpdateRoll(const FVector& Velocity);
 };

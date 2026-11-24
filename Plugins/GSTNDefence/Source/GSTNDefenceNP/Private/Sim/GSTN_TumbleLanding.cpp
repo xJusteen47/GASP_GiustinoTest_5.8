@@ -14,6 +14,8 @@
 #include "GSTN_DefenceTags.h"
 #include "GSTNDefenceCoreModule.h"
 #include "Hits/GSTN_ImpactTypes.h"
+#include "Hits/GSTN_KnockbackModel.h"
+#include "Rules/GSTN_CombatRules.h"
 #include "Input/GSTN_ButtonMap.h"
 #include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_InputHistory.h"
@@ -383,6 +385,12 @@ void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FG
 	// Mover. Near zero gravity the bounce is capped at 10 s rather than never ending
 	const UGSTN_CombatSimComponent* GravitySim = Context.Owner ? Context.Owner->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
 	const double Gravity = GravitySim ? GravitySim->GetBaseGravity().Size() : FGSTN_GravityFrame::NominalGravity;
+	// The bounce flies as a knocked flight (a knockback move), so the combat rules' knocked gravity (owner 2026-11-24, 1A, KnockbackGravityScale 4)
+	// is already the mode's gravity under it, and the move's own scale multiplies it: 4 x 3 = 12 g, and a 25 cm hop rose about 9 cm in 4 frames
+	// (dropkick, capture r7). The move's scale is divided by it, so the bounce keeps the pull it was tuned for (GroundBounceGravityScale)
+	const UGSTN_CombatRules* CombatRules = GravitySim ? GravitySim->GetCombatRules() : nullptr;
+	const float KnockedScale = CombatRules && CombatRules->KnockbackModel && CombatRules->KnockbackModel->Tuning.KnockbackGravityScale > 0.f
+		? CombatRules->KnockbackModel->Tuning.KnockbackGravityScale : 1.f;
 	// The mini bounce ("tech bounce"), steered by the frame's stick: a short launch, the knockback move's flight. Its height follows the impact
 	// speed (owner 2026-11-16: a soft landing barely bounces, a hard one bounces well); the hit may ask for none
 	const double BounceSpeed = bNoBounce ? 0.0
@@ -402,7 +410,7 @@ void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FG
 	const int32 FlightFrames = FMath::Clamp(FMath::CeilToInt32(FMath::Min(FlightSeconds, 10.0) / FrameSeconds), 1, MaxFlightFrames);
 	if (!Velocity.IsNearlyZero())
 	{
-		ApplyMoveEffect(Context.AbilitySystem, UGSTN_GE_Knockback::StaticClass(), Velocity, 0.f, GravityScale, FlightFrames);
+		ApplyMoveEffect(Context.AbilitySystem, UGSTN_GE_Knockback::StaticClass(), Velocity, 0.f, GravityScale / KnockedScale, FlightFrames);
 	}
 	if (Data.GroundBounce.IsValid())
 	{

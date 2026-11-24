@@ -115,6 +115,16 @@ bool FGSTN_GreyboxShapeTest::RunTest(const FString& Parameters)
 	FGSTN_GreyboxShapeSettings Off;
 	Off.bLyingFollowsPelvis = false;
 	TestTrue(TEXT("switch off = never lies"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::LyingTarget(Off, 0.f)));
+	// Rolls (owner 2026-11-24): a rigid somersault toward the travel, from how the capsule lay round to upright
+	TestTrue(TEXT("on its back, head behind the travel: -90"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollStartAngle(-FVector::ForwardVector,
+		FVector::ForwardVector), -90.f, 1.e-3f));
+	TestTrue(TEXT("head first: +90"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollStartAngle(FVector::ForwardVector, FVector::ForwardVector), 90.f, 1.e-3f));
+	TestTrue(TEXT("upright: 0"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::RollStartAngle(FVector::UpVector, FVector::RightVector)));
+	TestTrue(TEXT("roll starts where it lay"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollAngle(Settings, -90.f, 0.f), -90.f));
+	TestTrue(TEXT("roll ends upright after a full turn"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollAngle(Settings, -90.f,
+		Settings.RollTurnShare), 360.f));
+	TestTrue(TEXT("upright after the turn share"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RollAngle(Settings, 90.f, 1.f), 360.f));
+	TestTrue(TEXT("roll turns forward"), UGSTN_GreyboxAnimInstance::RollAngle(Settings, 0.f, 0.3f) > 0.f);
 	return true;
 }
 

@@ -200,6 +200,12 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 	// The root's parent is the component, so its local transform is in component space: rotate it around the ground point
 	FTransform& RootTransform = Output.Pose[Root];
 	RootTransform.SetRotation(FQuat(Shape.Lean) * RootTransform.GetRotation());
+	// A roll: the whole body turns about the pivot (the capsule's middle), still in component space
+	if (!Shape.Spin.Equals(FQuat::Identity, 1.e-4f))
+	{
+		RootTransform.SetTranslation(Shape.SpinPivot + Shape.Spin.RotateVector(RootTransform.GetTranslation() - Shape.SpinPivot));
+		RootTransform.SetRotation(Shape.Spin * RootTransform.GetRotation());
+	}
 
 	// Floor lift: the posed capsule never goes under the feet (a lying capsule is thicker than a lying mannequin's pelvis is high). Measured
 	// on the final pose, after the squash and the lean
