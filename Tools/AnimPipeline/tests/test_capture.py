@@ -5,7 +5,7 @@ import contextlib, io, json, os, shutil, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from animpipe import card as C, locks as L
 
-V4 = os.path.join(C.TOOLS, "cards", "overlord", "overlord_dair_v4.json")
+V4 = os.path.join(C.TOOLS, "cards", "overlord", "dair", "overlord_dair_v4.json")
 
 
 def _setup():
