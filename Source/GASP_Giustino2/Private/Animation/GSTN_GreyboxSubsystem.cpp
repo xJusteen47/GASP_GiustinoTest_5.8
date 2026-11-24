@@ -71,7 +71,7 @@ void UGSTN_GreyboxSubsystem::HandleActorSpawned(AActor* Actor)
 bool UGSTN_GreyboxSubsystem::IsDriverMesh(const USkeletalMeshComponent* Mesh) const
 {
 	// The GASP character mesh runs one of the locomotion bases; ragdolls, NPC props and skin parts (leader pose followers) do not
-	const UClass* AnimClass = Mesh->GetAnimClass();
+	const UClass* AnimClass = Mesh->AnimClass.Get(); // GetAnimClass() is non-const in 5.9; the property is public
 	if (!AnimClass)
 	{
 		return false;
@@ -171,7 +171,7 @@ void UGSTN_GreyboxSubsystem::Enable(USkeletalMeshComponent* Driver)
 	{
 		if (Child && Child != Capsule && Cast<UPrimitiveComponent>(Child))
 		{
-			State.HiddenChildren.Emplace(Child, Child->bHiddenInGame);
+			State.HiddenChildren.Emplace(Child, Child->bHiddenInGame != 0); // bitfield: no reference binds to it
 			Child->SetHiddenInGame(true, true);
 		}
 	}
@@ -182,7 +182,7 @@ void UGSTN_GreyboxSubsystem::Enable(USkeletalMeshComponent* Driver)
 		if (Part && Part != Capsule && Part != Driver && Part->LeaderPoseComponent.Get() == Driver && !State.HiddenChildren.ContainsByPredicate(
 			[Part](const TPair<TWeakObjectPtr<USceneComponent>, bool>& Entry) { return Entry.Key.Get() == Part; }))
 		{
-			State.HiddenChildren.Emplace(Part, Part->bHiddenInGame);
+			State.HiddenChildren.Emplace(Part, Part->bHiddenInGame != 0);
 			Part->SetHiddenInGame(true, false);
 		}
 	}
