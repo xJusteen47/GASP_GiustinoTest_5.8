@@ -13,8 +13,8 @@
   dei branch E (piano §2), regole e skill in un posto solo, indice/costi generati dagli handover, registro-clip.csv scritto solo
   da `animpipe publish/approve`, asset approvati in LFS con lock, AGENTS.md che rimanda senza copiare.
 - Decisioni owner: 1A 2A 3A (owner 2026-11-24 01:48 UTC): tronco main, indice/costi generati, Published/ in LFS con lock.
-- Prossimo: P0 (t3 in integrazione + GSTNCapture in _ue59), poi P1-P6 e i fix del §8 (PreCheck di default in Run-Timed, cache capdet, sessione editor unica); ~21 $ + 140 min fisso + 15 min owner,
+- Esecuzione: PR #38 (dair-v9-stops-review -> main) aperta; checkpoint C1-C5 in docs/notes/pulizia-2026-11-24/brief-checkpoint.md,
 
-ESITO: piano consegnato, nessuna modifica eseguita
+ESITO: piano approvato, PR #38 aperta, brief C1-C5 consegnati al coordinatore
 SUBAGENTI: 0
 COSTO: 3 $ | 0 min desktop | 0 token review
