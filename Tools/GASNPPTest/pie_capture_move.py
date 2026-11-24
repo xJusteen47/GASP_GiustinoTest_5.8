@@ -272,6 +272,22 @@ MOVE_SEQUENCES = [
     {'name': 'gb_loco', 'taps': [470], 'frames': 540, 'dummy': None, 'shoot': True, 'follow': True,
      'sticks': [(20, (0, 1, 0)), (140, None), (200, (0, 1, 0)), (290, (0, -1, 0)), (330, None)],
      'jump': (370, 24), 'crouch_hold': (430, 25)},
+    # greybox run 4: sideways brakes (run right, let go; run right, reverse to left, let go)
+    {'name': 'gb_side', 'taps': [], 'frames': 340, 'dummy': None, 'shoot': True, 'follow': True,
+     'sticks': [(20, (1, 0, 0)), (120, None), (180, (1, 0, 0)), (270, (-1, 0, 0)), (300, None)]},
+    # greybox run 4: wall slide on the flat wall of the test hub's Z5 (face at x -3000, lane y -2000..-1000, 12 m tall; build_test_hub_map
+    # z5_traversal), as surface_scenarios.wall_phase: control yaw 0 (forward = into the wall), teleport 3 m off it, launch at it with the stick
+    # held into it. gb_wall_down: slide down; gb_wall_side: stick into + right, slides along; gb_wall_brake: fast along the wall, then reverse
+    {'name': 'gb_wall_down', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True,
+     'cmds': [(0, 'yaw 0'), (0, 'gstn.Wall.Teleport -3300 -1700 120 0'), (30, 'gstn.Wall.Teleport -3300 -1700 700 0'),
+              (30, 'gstn.Wall.Launch 300 0 400')], 'sticks': [(30, (0, 1, 0)), (190, None)]},
+    {'name': 'gb_wall_side', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True,
+     'cmds': [(0, 'yaw 0'), (0, 'gstn.Wall.Teleport -3300 -1900 120 0'), (30, 'gstn.Wall.Teleport -3300 -1900 700 0'),
+              (30, 'gstn.Wall.Launch 300 0 400')], 'sticks': [(30, (0, 1, 0)), (75, (0.7, 0.7, 0)), (190, None)]},
+    {'name': 'gb_wall_brake', 'taps': [], 'frames': 200, 'dummy': None, 'shoot': True, 'follow': True,
+     'cmds': [(0, 'yaw 0'), (0, 'gstn.Wall.Teleport -3300 -1950 120 0'), (30, 'gstn.Wall.Teleport -3300 -1950 900 0'),
+              (30, 'gstn.Wall.Launch 300 0 300'), (80, 'gstn.Wall.Launch 0 900 0 1')],
+     'sticks': [(30, (0, 1, 0)), (75, (0.7, 0.7, 0)), (110, (-0.7, 0.7, 0)), (190, None)]},
 ]
 if os.environ.get('PIE_CAPTURE_VIEWS'):
     VIEWS = [v for v in VIEWS if v[0] in os.environ['PIE_CAPTURE_VIEWS'].split(',')]
@@ -826,6 +842,15 @@ def _tick(_dt):
                     _log(f'{seq["name"]}: projection volume spawned at {loc}')
                 except Exception as e:  # noqa: BLE001
                     _log(f'{seq["name"]}: projection volume FAILED: {e!r}')
+            for at, cmd in seq.get('cmds', []):   # greybox run 4: console commands at a frame; 'yaw D' = control + review camera yaw D
+                if frame == PRE + at:
+                    if cmd.startswith('yaw '):
+                        pc = g._local_pawn(0)[0]
+                        pc.set_control_rotation(unreal.Rotator(roll=0.0, pitch=pc.get_control_rotation().pitch, yaw=float(cmd[4:])))
+                        st['cam_yaw'] = float(cmd[4:])
+                    else:
+                        _console(cmd)
+                    _log(f'{seq["name"]}: {cmd} on v{frame}')
             for at, value in seq.get('sticks', []):                 # movement QA clips
                 if frame == PRE + at:
                     if value is None:

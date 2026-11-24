@@ -223,3 +223,30 @@ montage it shows is still the timeline's Montage field; with none set, nothing i
   stand-in box colour) and `SM_GSTN_Greybox_Greatsword` (~126 cm, on the back) for kits whose name contains `gstn.Greybox.SwordKits`
   (default "Overlord": owner 14:45, the Overlord kit only). Built by setup_greybox_assets.py step `accessories`, attached to the capsule's pelvis.
 - Moves: Jab2 (other hand), DAir landings (crouched land), dropkick tech bounce (dropkick then a tucked bounce).
+
+## Desktop run 4 (2026-11-24, `_ue59` merged up to 40ce6f19)
+Evidence `docs/notes/reviews/greybox-capsula/round4/` (side | back | game, 1x / 0.25x; `sheet_*.jpg`). Captures `Saved/Greybox/r4_a`
+(Playtest: gb_loco, gb_side, wall x3), `r4_b` (KIT_Test_Overlord: jab1_jab2), `r4_c` (DAirV10: dair_whiff), `r4_d` (Playtest dropkick).
+- Build OK, no fixes. Greybox + SpeedGraph tests 6/6. setup_greybox_assets mesh,accessories PASS (SM_GSTN_Greybox_Collar 72 vertices,
+  SM_GSTN_Greybox_Greatsword 78, no API fixes); make_capsule_clips PASS with kinds jab2 (2), dairland (7), techbounce (3).
+- pie_capture_move.py: new sequences `gb_side` (run right, let go; run right, reverse) and `gb_wall_down/side/brake` (Z5 flat wall:
+  'cmds' = console commands at a frame, 'yaw D' sets control and review camera yaw; teleport 3 m off, gstn.Wall.Launch at the wall).
+  The dropkick run after the wall sequences shot inside the wall: dropkick recaptured alone (r4_d).
+What the frames show:
+- Run start sway: rigid rocking, by eye at most slightly smaller than run 3 in v42-58; not clearly different.
+- Dropkick: lies flat, feet markers at the end of the body, no floating dots, smooth surface: OK.
+- Jump squat: short capsule v392-394 before take-off, stretch after: OK. Landing squash v452-456: OK.
+- Brakes: forward stop and sideways stop tip the top against the motion (gb_side v150-158, reverse v294-300): OK.
+- Wall (flat Z5 wall, about 1 s per slide): top leans off the wall, bottom on it: OK; rattle not readable in stills; brake along the
+  wall (gb_wall_brake v138-147) tips the capsule: plant visible.
+- Collar: behind the upper back in the kit colour (Playtest magenta, Overlord orange, DAirV10 cyan): OK standing. NOT OK in squashes:
+  it stays at standing height and floats above the body in the jump squat, landing, crouch and Overlord jab 2 (v39-75); in big sideways
+  tips it sits off the body (gb_side v296). The sword does the same in jab 2. Likely cause: attached to the pelvis socket but the squash /
+  root tilt are not carried to it.
+- Greatsword: Overlord kits only (Playtest shows no sword): OK. On the back, about 0.8 of the body, diagonal from behind, near vertical
+  from the side; placement left as is.
+- Jab 1 + jab 2 (Overlord), dair: tilt and red hands as before; jab 2 squashes a lot (see collar).
+ESITO: build/test/assets OK, captures done; collar/sword do not follow the squash (code, not placement). Stopped here on the coordinator's
+STOP (owner playtest): committed locally, not pushed.
+SUBAGENTI: none.
+COSTO: not measured (one thread, ~25 min for run 4).
