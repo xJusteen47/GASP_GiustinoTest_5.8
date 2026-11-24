@@ -107,3 +107,5 @@ Fonti: handover dei branch recenti e dei project files (459 file), `handoffs/tem
 | 11 | Documenti di avvio pesanti o vecchi: CLAUDE.md manda a `takeover-state.md` (963 righe) e a `feature/gas-npp-5.8`; `INDICE-PROGETTO.md` non è in `main` | contesto sprecato in ogni thread | CLAUDE.md punta a `INDICE-PROGETTO.md` in `main`; `takeover-state.md` va in archivio | in P2 |
 
 I fix 4, 5, 6 e 8 sono un solo lavoro: PreCheck di default in `Run-Timed.ps1`, che si fa in P2 (aggiunge ~3 $ alla fase). Il fix 3 è il più grande e va dopo P0, quando si vede quanto resta della cattura con il video in tempo reale. Nuovo totale stimato: circa 21 $.
+
+**APPROVATO dall'owner il 2026-11-24 01:56 UTC ("Va benissimo")**: piano completo con i tre blocchi di fix (1 PreCheck di default + chiusura automatica dell'editor su `ESITO:`; 2 sessione editor unica via MCP + cache capdet; 3 GSTNCapture compilato in `_ue59`). Tag e "Allow" restano dell'owner, raccolti in un solo messaggio dal coordinatore. Via all'esecuzione: coordinatore, dopo la review cieca dair v9.
