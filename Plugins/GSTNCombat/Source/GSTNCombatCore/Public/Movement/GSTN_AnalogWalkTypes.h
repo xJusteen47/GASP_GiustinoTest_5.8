@@ -50,10 +50,10 @@ struct GSTNCOMBATCORE_API FGSTN_AnalogWalkTuning
 	 * Walking mode properties that also get the stage speed / acceleration, so GASP's walk gait (picked for a light tilt) does not cap
 	 * the speed at its own WalkSpeed: the tilt alone decides. Names the mode does not have are skipped
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mode Bindings|Walking Mode", AdvancedDisplay)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ModeBindings|Walking Mode")
 	TArray<FName> WalkSpeedProperties = { TEXT("WalkSpeed") };
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mode Bindings|Walking Mode", AdvancedDisplay)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ModeBindings|Walking Mode")
 	TArray<FName> WalkAccelerationProperties = { TEXT("WalkAcceleration") };
 
 	/**
@@ -68,7 +68,7 @@ struct GSTNCOMBATCORE_API FGSTN_AnalogWalkTuning
 	float RunFacingTime = 0.08f;
 
 	/** The walking mode's facing smoothing property (USmoothWalkingMode) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mode Bindings|Walking Mode", AdvancedDisplay)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ModeBindings|Walking Mode")
 	TArray<FName> FacingTimeProperties = { TEXT("FacingSmoothingTime") };
 
 	/**
@@ -78,7 +78,7 @@ struct GSTNCOMBATCORE_API FGSTN_AnalogWalkTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Walk|Walk Start", meta = (EditCondition = "bEnabled", ClampMin = "-1", ClampMax = "1", ForceUnits = "s"))
 	float AccelerationSmoothingTime = 0.03f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Mode Bindings|Walking Mode", AdvancedDisplay)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ModeBindings|Walking Mode")
 	TArray<FName> AccelerationSmoothingProperties = { TEXT("AccelerationSmoothingTime") };
 
 	/**

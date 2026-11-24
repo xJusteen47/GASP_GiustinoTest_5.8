@@ -163,7 +163,7 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 	float MinStickMagnitude = 0.5f;
 
 	/** The skid's deceleration, a constant (cm/s^2, not scaled by the stats: a heavy kit gets its own value). 2600 stops 650 cm/s in 0.25 s, about 81 cm */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Legacy Models", AdvancedDisplay, meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics", ClampMin = "1", ForceUnits = "cm/s^2"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Legacy|Skid", meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics", ClampMin = "1", ForceUnits = "cm/s^2"))
 	float Brake = 2600.f;
 
 	/** Frames of the Enter phase (they brake like Active, only the presentation differs) */
@@ -175,7 +175,7 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 	int32 ExitFrames = 8;
 
 	/** Speed along the new direction at the end of the Exit phase; the walking mode takes over from it (0 = from rest) */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Legacy Models", AdvancedDisplay, meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics", ClampMin = "0", ForceUnits = "cm/s"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Legacy|Skid", meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics", ClampMin = "0", ForceUnits = "cm/s"))
 	float ExitSpeed = 250.f;
 
 	/** Side of the exit turn for a near-reverse; must match the skid clip's turn (SS_180_Turn_Root180 turns +180 yaw = Right) */
@@ -193,10 +193,10 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 	 * along it; the exit finishes whatever is left by its last frame. Empty = the old rule: facing held in the brake, a linear turn in
 	 * the exit frames.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Legacy Models", AdvancedDisplay, meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Legacy|Skid", meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics"))
 	TArray<float> TurnCurve;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Legacy Models", AdvancedDisplay, meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics", ClampMin = "1", ForceUnits = "Hz"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Legacy|Skid", meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics", ClampMin = "1", ForceUnits = "Hz"))
 	float TurnCurveRate = 30.f;
 
 	/** TurnCurve at Seconds after the skid start, linear between samples, 1 past the end; -1 when there is no curve */
@@ -222,7 +222,7 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 	 * skid lasts the clip: the capsule moves on this path and turns on TurnCurve from the first frame to the clip's end, with no brake
 	 * formula and no exit push toward the stick; the walking mode takes the stick back after it. Empty = the brake + exit rule above.
 	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Legacy Models", AdvancedDisplay, meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics"))
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Legacy|Skid", meta = (EditCondition = "Motion != EGSTN_RunSkidMotion::Physics"))
 	TArray<FVector2D> RootTrack;
 
 	/** True when the skid follows its clip's root (RootTrack and TurnCurve both baked) */
