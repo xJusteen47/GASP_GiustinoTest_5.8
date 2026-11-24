@@ -1,0 +1,184 @@
+branch,ultimo_commit,commit_unici_vs_t3,categoria,azione
+claude/anim-inventario-2026-11-23,2026-11-23,11,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/anim-mcp-followthrough,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/anim-mcp-v2-turn4,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/anim-mcp-v2-turn4-capture,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/anim-skill-t3,2026-11-24,0,TIENI,tenere
+claude/anim-skill-unica,2026-11-24,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/approved-runstart-v29w3,2026-11-22,0,TIENI,tenere
+claude/approved-runstart-v4r5,2026-11-21,0,TIENI,tenere
+claude/artifacts,2026-11-23,944,TIENI,tenere
+claude/bugpass-integration,2026-11-18,42,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/camera-air-1,2026-11-18,41,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/ci-runner-fix,2026-11-16,1065,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/content-reorg-apply,2026-11-23,1,B_SOTTOINSIEME,eliminare (contenuto in claude/project-thread-5kb8vz)
+claude/content-riorganizzazione,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/deepseek-smoke-test,2026-11-22,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/deepseek-turn4,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/desktop-anim-jab-1,2026-11-11,874,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/desktop-anim-workflow,2026-11-11,873,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/desktop-g9b,2026-11-09,774,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/desktop-hover,2026-11-09,801,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/docs-archivio-2026-11-23,2026-11-23,4,E_CODICE,merge in ordine (piano §2) o parcheggio con tag
+claude/docs-bibliotecario-2026-11-23,2026-11-23,2,B_SOTTOINSIEME,eliminare (contenuto in claude/docs-archivio-2026-11-23)
+claude/entita-dinamiche-valutazione,2026-11-09,791,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/grab-link,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/harness-deepseek-fix,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/harness-v2,2026-11-22,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/hit-arms-1,2026-11-18,25,B_SOTTOINSIEME,eliminare (contenuto in claude/project-thread-9wkpe7)
+claude/indice-progetto,2026-11-23,1,B_SOTTOINSIEME,eliminare (contenuto in claude/docs-archivio-2026-11-23)
+claude/integ-2026-11-23,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/integ-playtest-2026-11-22,2026-11-22,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/laptop-m11-plan,2026-11-11,843,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/life-calib-run,2026-11-24,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/loco-runstop-diagnosis,2026-11-20,1114,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/m12-g0-g1,2026-11-22,3,B_SOTTOINSIEME,eliminare (contenuto in claude/m12-g2)
+claude/m12-g2,2026-11-22,4,B_SOTTOINSIEME,eliminare (contenuto in claude/m12-g5)
+claude/m12-g5,2026-11-22,5,B_SOTTOINSIEME,eliminare (contenuto in claude/m12-g6)
+claude/m12-g6,2026-11-23,6,B_SOTTOINSIEME,eliminare (contenuto in claude/m12-g7-g8)
+claude/m12-g7-g8,2026-11-23,7,E_CODICE,merge in ordine (piano §2) o parcheggio con tag
+claude/m12-p1-build-fix,2026-11-22,2,B_SOTTOINSIEME,eliminare (contenuto in claude/m12-g0-g1)
+claude/net-grab-test-2026-11-23,2026-11-23,1,B_SOTTOINSIEME,eliminare (contenuto in claude/project-thread-5kb8vz)
+claude/netcode-confronto,2026-11-09,788,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/parts-rest-laptop,2026-11-09,779,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-016vb8,2026-11-18,24,B_SOTTOINSIEME,eliminare (contenuto in claude/bugpass-integration)
+claude/project-thread-043pn0,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-0pafeo,2026-11-04,678,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-0pzf0o,2026-11-02,551,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-1akb6a,2026-11-21,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-1gktju,2026-11-15,938,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-1uvcac,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-295vou,2026-11-06,647,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-2aokbx,2026-11-16,1163,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-2d0gnu,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-2u7rwj,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-2vr5r6,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-39uwfb,2026-11-23,2,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-3f1vdx,2026-11-18,2,B_SOTTOINSIEME,eliminare (contenuto in claude/bugpass-integration)
+claude/project-thread-3lh042,2026-11-21,22,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-3u6rt4,2026-11-23,1,E_CODICE,merge in ordine (piano §2) o parcheggio con tag
+claude/project-thread-3ufz10,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-45g6rf,2026-11-15,1080,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-4pj7kf,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-5kb8vz,2026-11-23,11,E_CODICE,merge in ordine (piano §2) o parcheggio con tag
+claude/project-thread-5wrx4u,2026-11-19,35,B_SOTTOINSIEME,eliminare (contenuto in claude/project-thread-65g9ca)
+claude/project-thread-64vizj,2026-11-21,10,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-65g9ca,2026-11-19,49,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-66dv82,2026-11-03,644,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-690lv0,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-6blrlz,2026-11-24,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-6qxhcr,2026-11-01,482,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-72dtra,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-7hguwd,2026-11-02,538,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-7ogxes,2026-11-23,4,E_CODICE,merge in ordine (piano §2) o parcheggio con tag
+claude/project-thread-7q0nby,2026-11-21,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-7zhryd,2026-11-24,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-8esu46,2026-11-23,1,E_CODICE,merge in ordine (piano §2) o parcheggio con tag
+claude/project-thread-8oy91z,2026-11-18,24,B_SOTTOINSIEME,eliminare (contenuto in claude/project-thread-9wkpe7)
+claude/project-thread-98wtdn,2026-11-21,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-9f2yp4,2026-11-16,1063,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-9wkpe7,2026-11-18,28,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-a0j7ip,2026-11-16,1147,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-aaqr80,2026-11-02,494,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-aeh8di,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-b1vx24,2026-11-17,1068,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-bazqb1,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-bjvo40,2026-11-21,2,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-bo3bag,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-bt9fds,2026-11-24,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-btrk7b,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-coq8k5,2026-11-15,1063,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-cqad05,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-dgqsku,2026-11-03,659,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-di23qw,2026-11-21,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-f2j5fq,2026-11-14,996,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-f4ovn9,2026-11-18,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-f95wnc,2026-11-17,1066,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-fy7agl,2026-11-14,989,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-g63m8d,2026-11-16,1063,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-h5ke0e,2026-11-15,1077,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-hqbako,2026-11-12,872,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-i6rn5k,2026-11-13,947,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-i8mmmj,2026-11-18,25,B_SOTTOINSIEME,eliminare (contenuto in claude/bugpass-integration)
+claude/project-thread-ii4go3,2026-11-19,39,B_SOTTOINSIEME,eliminare (contenuto in claude/project-thread-65g9ca)
+claude/project-thread-inmtkm,2026-11-19,47,B_SOTTOINSIEME,eliminare (contenuto in claude/project-thread-65g9ca)
+claude/project-thread-j1twqo,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-jckw2a,2026-11-17,1065,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-jcugce,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-jlb6i3,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-jx1fv2,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-k9d2l7,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-k9sj5a,2026-11-18,23,B_SOTTOINSIEME,eliminare (contenuto in claude/bugpass-integration)
+claude/project-thread-l1dcng,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-l8warz,2026-11-21,23,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-le0tc7,2026-11-20,1066,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-lii6ck,2026-11-15,1061,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-lnbke8,2026-11-21,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-lzh2uh,2026-11-14,981,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-m6s9y2,2026-11-20,1081,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-mdss5a,2026-11-24,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-mkedi4,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-mkwsb0,2026-11-02,495,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-mu9mh4,2026-11-19,1070,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-na8pct,2026-11-15,1009,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-nfhw4i,2026-11-23,2,E_CODICE,merge in ordine (piano §2) o parcheggio con tag
+claude/project-thread-nfz4at,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-oclodp,2026-11-23,2,E_CODICE,merge in ordine (piano §2) o parcheggio con tag
+claude/project-thread-oqfyxp,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-orqz14,2026-11-21,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-p2kkgc,2026-11-15,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-qjfnc0,2026-11-23,12,E_CODICE,merge in ordine (piano §2) o parcheggio con tag
+claude/project-thread-qsgab4,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-r78ylj,2026-11-16,1066,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-r8xxb2,2026-11-15,1061,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-rafd93,2026-11-16,1170,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-rdcazm,2026-11-21,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-rf2b29,2026-11-21,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-rn81kh,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-rqxsn8,2026-11-23,4,B_SOTTOINSIEME,eliminare (contenuto in claude/project-thread-qjfnc0)
+claude/project-thread-rzynby,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-s125cq,2026-11-02,552,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-s4qjx0,2026-11-03,647,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-sgky92,2026-11-24,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-t1yn9x,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-t93zat,2026-11-17,1064,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-tvze3n,2026-11-15,1005,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-u2vd2x,2026-11-23,2,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-ujyw42,2026-11-12,871,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-umhnb6,2026-11-17,2,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-uvefj5,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-uvohng,2026-11-23,1,B_SOTTOINSIEME,eliminare (contenuto in claude/project-thread-nfhw4i)
+claude/project-thread-uvzm3k,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-v1falr,2026-11-14,983,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-v1s3l3,2026-11-03,644,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-v8m4bq,2026-11-14,979,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-vfuzsj,2026-11-01,522,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-vjbryc,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-vqce2q,2026-11-23,2,E_CODICE,merge in ordine (piano §2) o parcheggio con tag
+claude/project-thread-w299nb,2026-11-21,1067,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-wc8ksn,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-wwnerm,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-wzb12r,2026-11-01,509,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-xbjsuj,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-xcsfy8,2026-11-15,937,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-xgtufw,2026-11-20,9,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-y073op,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/project-thread-y270ci,2026-11-24,3,B_SOTTOINSIEME,eliminare (contenuto in claude/project-thread-7ogxes)
+claude/project-thread-ybl6a8,2026-11-15,1002,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-yepa62,2026-11-21,1064,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-yjhqtz,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/project-thread-ymsnu8,2026-11-19,42,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/project-thread-zkycen,2026-11-18,9,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/ref-astrobot-vfx,2026-11-19,947,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/ricerca-server-dedicato,2026-11-23,1,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/runstart-generic-desktop,2026-11-22,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+claude/runstart-lock-2026-11-23,2026-11-23,3,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/skid-57-reference,2026-11-18,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/skid-rootmotion-1,2026-11-18,43,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+claude/skill-anim-t0-inventory-2026-11-24,2026-11-24,3,E_CODICE,merge in ordine (piano §2) o parcheggio con tag
+claude/skin-cosmetici-ricerca,2026-11-23,4,D_SOLO_DOCS,raccogliere i doc nel commit docs-sweep poi eliminare
+claude/ue59-dump-scripts,2026-11-24,1,B_SOTTOINSIEME,eliminare (contenuto in claude/skill-anim-t0-inventory-2026-11-24)
+experiment/3d-silhouette-anim,2026-11-11,647,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare
+feature/gas-npp-5.8,2026-11-16,1063,TRONCO_VECCHIO,tag archivio/feature-gas-npp-5.8 poi eliminare (decisione B)
+feature/simple-wall-movement-mode,2026-10-15,0,A_GIA_IN_INTEGRAZIONE,eliminare dopo il merge di anim-skill-t3 in main
+main,2026-11-22,0,TIENI,tenere
