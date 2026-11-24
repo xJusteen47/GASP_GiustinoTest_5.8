@@ -3,6 +3,7 @@
 #include "Camera/GSTN_CameraAnchor.h"
 #include "GameFramework/Pawn.h"
 #include "GSTN_CameraComponent.h"
+#include "Camera/GSTN_LaunchReadability.h"
 #include "GSTN_CameraProfile.h"
 #include "GSTN_CameraRuntimeTypes.h"
 #include "MoverTypes.h"
@@ -313,6 +314,27 @@ bool UGSTN_PlaytestCameraModifier::ModifyCamera(float DeltaTime, FMinimalViewInf
 		Offset.Y = FMath::Clamp(Offset.Y, -1.5, 1.5);
 		using FOffset = decltype(InOutPOV.OffCenterProjectionOffset);
 		InOutPOV.OffCenterProjectionOffset = FOffset(InOutPOV.OffCenterProjectionOffset.X + Offset.X, InOutPOV.OffCenterProjectionOffset.Y + Offset.Y);
+	}
+	// Launch zoom (owner 2026-11-24, 3A): backs the finished view off along its forward to keep a launch this character caused in frame, then
+	// eases back. Last, so it widens whatever the framing above made; stopped short by a wall like the push back
+	if (UWorld* World = CameraOwner ? CameraOwner->GetWorld() : nullptr)
+	{
+		if (UGSTN_LaunchReadabilitySubsystem* Launch = World->GetSubsystem<UGSTN_LaunchReadabilitySubsystem>())
+		{
+			const float LaunchExtra = Launch->UpdateZoom(DeltaTime, InOutPOV, ViewTarget);
+			if (LaunchExtra > 0.f)
+			{
+				const FVector Start = InOutPOV.Location;
+				FVector End = PushBack(Start, InOutPOV.Rotation.Vector(), LaunchExtra, 0.f);
+				FCollisionQueryParams Query(SCENE_QUERY_STAT(GSTNLaunchZoom), false, ViewTarget);
+				FHitResult Hit;
+				if (World->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, ECC_Camera, FCollisionShape::MakeSphere(GSTNPlaytestCamera::ProbeRadius), Query))
+				{
+					End = Hit.Location;
+				}
+				InOutPOV.Location = End;
+			}
+		}
 	}
 	ApplyTiltShift(Tuning.TiltShift, InOutPOV, Focus);
 	if (GSTNPlaytestCamera::CVarTrace.GetValueOnGameThread() != 0)

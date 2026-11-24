@@ -391,6 +391,24 @@ struct GSTNDEFENCECORE_API FGSTN_GroundBounceRules
 	float GroundBounceSteerDeg = 30.f;
 
 	/**
+	 * Momentum of the knockdown bounce (owner 2026-11-24, A): the fraction of the landing's horizontal speed the bounce keeps, so a launch still
+	 * reads to the ground instead of stopping dead. 0 = the old vertical hop
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Momentum", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float GroundBounceMomentumKeep = 0.4f;
+
+	/**
+	 * Player control of the knockdown bounce (owner 2026-11-24, A): the horizontal speed the stick of the contact frame adds along its direction
+	 * (full tilt), on top of the kept momentum, so the victim can push on, hold back or slide sideways. 0 = only the angle steer above
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Momentum", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
+	float GroundBounceStickSpeed = 400.f;
+
+	/** Cap of the bounce's horizontal speed (momentum + stick); 0 = none */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Momentum", meta = (ClampMin = "0.0", ForceUnits = "cm/s"))
+	float GroundBounceMaxHorizontalSpeed = 0.f;
+
+	/**
 	 * Gravity on the mini bounce, times the world's: the bounce is small and quick (300 cm/s at 3 = about 15 cm and 13 frames in the air, the
 	 * length of the ground hit clip) instead of 46 cm and 38 frames at 1
 	 */

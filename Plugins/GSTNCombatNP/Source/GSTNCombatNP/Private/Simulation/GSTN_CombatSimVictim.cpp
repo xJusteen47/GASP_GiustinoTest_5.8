@@ -136,6 +136,10 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, co
 			ReadOwnPose(Pose, Up);
 		}
 		FillHookContext(VictimContext, Cmd, Up);
+		if (Self)
+		{
+			VictimContext.Velocity = Self->Velocity;
+		}
 	}
 
 	// The surface impact of a tumbling victim: the contact the knockback move's probe made on the frame before, from Mover's tracked state
@@ -763,6 +767,7 @@ void UGSTN_CombatSimComponent::ExecuteReactionMove(float StepMs)
 	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityZ, ReactionMove.Velocity.Z);
 	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveDecay, ReactionMove.DecayPerFrame);
 	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveGravityScale, ReactionMove.GravityScale);
+	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveDeceleration, bLaunch ? ReactionMove.Deceleration : 0.f);
 	Spec.Data->SetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveSeconds, ReactionMove.Frames * StepMs * 0.001f);
 	if (bLaunch && ReactionMove.BalloonFrames > 0)
 	{

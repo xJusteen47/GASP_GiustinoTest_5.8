@@ -388,3 +388,18 @@ FVector UGSTN_DefenceMath::GroundBounceVelocityAtSpeed(const FGSTN_GroundBounceR
 	const FVector Direction = OnPlane / OnPlane.Size();
 	return UpAxis * (Speed * FMath::Cos(Angle)) + Direction * (Speed * FMath::Sin(Angle));
 }
+
+FVector UGSTN_DefenceMath::GroundBounceMomentum(const FGSTN_GroundBounceRules& Rules, const FVector& Up, const FVector& StickOnPlane, const FVector& LandingVelocity)
+{
+	const FVector UpUnit = Up.GetSafeNormal();
+	const FVector UpAxis = UpUnit.IsNearlyZero() ? FVector::UpVector : UpUnit;
+	const FVector Landing = LandingVelocity - UpAxis * FVector::DotProduct(LandingVelocity, UpAxis);
+	const FVector Stick = (StickOnPlane - UpAxis * FVector::DotProduct(StickOnPlane, UpAxis)).GetClampedToMaxSize(1.0);
+	FVector Horizontal = Landing * FMath::Clamp(static_cast<double>(Rules.GroundBounceMomentumKeep), 0.0, 1.0)
+		+ Stick * FMath::Max(static_cast<double>(Rules.GroundBounceStickSpeed), 0.0);
+	if (Rules.GroundBounceMaxHorizontalSpeed > 0.f)
+	{
+		Horizontal = Horizontal.GetClampedToMaxSize(Rules.GroundBounceMaxHorizontalSpeed);
+	}
+	return Horizontal;
+}

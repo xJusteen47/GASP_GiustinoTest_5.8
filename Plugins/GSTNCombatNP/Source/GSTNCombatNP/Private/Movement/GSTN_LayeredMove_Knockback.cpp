@@ -24,6 +24,24 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 {
 	const double StepMs = FMath::Max<double>(TimeStep.StepMs, UE_SMALL_NUMBER);
 	ElapsedFrames = FMath::Max(FMath::RoundToInt((TimeStep.BaseSimTimeMs - StartSimTimeMs) / StepMs), 0);
+	if (UE_LOG_ACTIVE(LogGSTNKnockbackMove, VeryVerbose))
+	{
+		// Diagnosis of lost launch frames (wall rebound at 100 %, 2026-11-24): every generate, with the move's own clock, so a first generate
+		// that already reads elapsed >= 1 (the override frame never ran) shows up. Logging only
+		const FMoverDefaultSyncState* Diag = StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
+		const FVector Have = Diag ? Diag->GetVelocity_WorldSpace() : FVector::ZeroVector;
+		UE_LOG(LogGSTNKnockbackMove, VeryVerbose, TEXT("[KnockbackGen] %s frame %d base %.1f start %.1f elapsed %d mode %s balloon %d want (%.0f %.0f %.0f) have (%.0f %.0f %.0f)"),
+			MoverComp && MoverComp->GetOwner() ? *MoverComp->GetOwner()->GetName() : TEXT("?"), TimeStep.ServerFrame, TimeStep.BaseSimTimeMs, StartSimTimeMs,
+			ElapsedFrames, *StartState.SyncState.MovementMode.ToString(), BalloonFrames, Velocity.X, Velocity.Y, Velocity.Z, Have.X, Have.Y, Have.Z);
+	}
+
+	// A newer knockback owns the flight from its first frame: this one ends now, so its override cannot win the mixer's tie (see the header)
+	if (HasNewerKnockback(StartState.SyncState.LayeredMoves.GetActiveMoves(), StartState.SyncState.LayeredMoves.GetQueuedMoves(), StartSimTimeMs,
+		TimeStep.BaseSimTimeMs))
+	{
+		DurationMs = static_cast<float>(FMath::Max(TimeStep.BaseSimTimeMs - StartSimTimeMs, 0.0));
+		return false;
+	}
 
 	// Balloon: the warped frames, and the first one back at M = 1 (which sets the classic velocity of the warped time for the mode to go on
 	// from). Only in the air after the first frame: a victim that landed or slid onto a floor is the falling mode's and the impact step's
@@ -92,6 +110,20 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 	}
 	const FVector Horizontal = Current - Up * Current.Dot(Up);
 	FVector Extra = -Horizontal * FMath::Clamp<double>(DecayPerFrame, 0.0, 1.0);
+
+	// The fade of the launch (Smash's launch speed decay): only in the air, where the falling mode keeps the velocity it is given; on a floor
+	// the walking mode's friction already stops the victim and a pull along the launch would drag it back
+	if (Deceleration > 0.f && StartState.SyncState.MovementMode == ForceMovementMode)
+	{
+		const double Speed = Velocity.Size();
+		const double Fade = FadeOnFrame(Speed, Deceleration, Dt, ElapsedFrames);
+		if (Fade > 0.0)
+		{
+			const FVector Dir = Velocity / Speed;
+			const double Along = FMath::Max(Current.Dot(Dir), 0.0);
+			Extra -= Dir * FMath::Min(Fade, Along);
+		}
+	}
 	if (MoverComp && !FMath::IsNearlyEqual(GravityScale, 1.f))
 	{
 		Extra += MoverComp->GetGravityAcceleration() * (GravityScale - 1.0) * Dt;
@@ -115,6 +147,45 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 		DurationMs = static_cast<float>(TimeStep.BaseSimTimeMs + StepMs - StartSimTimeMs);
 	}
 	return true;
+}
+
+bool FGSTN_LayeredMove_Knockback::HasNewerKnockback(TConstArrayView<TSharedPtr<FLayeredMoveBase>> Moves, TConstArrayView<TSharedPtr<FLayeredMoveBase>> Queued,
+	double StartMs, double NowMs)
+{
+	auto IsKnockback = [](const TSharedPtr<FLayeredMoveBase>& Move)
+	{
+		return Move.IsValid() && Move->GetScriptStruct()->IsChildOf(FGSTN_LayeredMove_Knockback::StaticStruct());
+	};
+	for (const TSharedPtr<FLayeredMoveBase>& Move : Moves)
+	{
+		if (IsKnockback(Move) && Move->StartSimTimeMs > StartMs)
+		{
+			return true;
+		}
+	}
+	// A queued one starts on this frame: newer than a move that started before it (never than itself, or than one starting with it)
+	if (StartMs < NowMs)
+	{
+		for (const TSharedPtr<FLayeredMoveBase>& Move : Queued)
+		{
+			if (IsKnockback(Move))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+double FGSTN_LayeredMove_Knockback::FadeOnFrame(double LaunchSpeed, double Deceleration, double StepSeconds, int32 ElapsedFrames)
+{
+	if (LaunchSpeed <= 0.0 || Deceleration <= 0.0 || StepSeconds <= 0.0 || ElapsedFrames < 1)
+	{
+		return 0.0;
+	}
+	// Frame 1 takes the first step, frame n what is left after n - 1 steps, at most one step
+	const double Step = Deceleration * StepSeconds;
+	return FMath::Clamp(LaunchSpeed - Step * (ElapsedFrames - 1), 0.0, Step);
 }
 
 void FGSTN_LayeredMove_Knockback::ProbeContact(const FMoverTickStartData& StartState, const FMoverTimeStep& TimeStep, const UMoverComponent* MoverComp, const FVector& FrameVelocity)
@@ -184,6 +255,7 @@ void FGSTN_LayeredMove_Knockback::NetSerialize(FArchive& Ar)
 	SerializePackedVector<10, 16>(Velocity, Ar);
 	Ar << DecayPerFrame;
 	Ar << GravityScale;
+	Ar << Deceleration;
 	Ar << ElapsedFrames;
 	Ar << ForceMovementMode;
 	Ar << BalloonFrames;
@@ -217,6 +289,7 @@ FEffectMoveContainer UGSTN_KnockbackMoveCreator::MakeMove_Implementation(UMoverC
 			Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveVelocityZ, false, 0.f));
 		Move.DecayPerFrame = Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveDecay, false, 0.f);
 		Move.GravityScale = Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveGravityScale, false, 1.f);
+		Move.Deceleration = FMath::Max(Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveDeceleration, false, 0.f), 0.f);
 		Move.DurationMs = Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveSeconds, false, 0.f) * 1000.f;
 		Move.BalloonFrames = static_cast<uint8>(FMath::Clamp(FMath::RoundToInt(Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveBalloonFrames, false, 0.f)), 0, 255));
 		Move.BalloonM0 = Spec.GetSetByCallerMagnitude(GSTNCombatNPTags::SetByCaller_MoveBalloonM0, false, 1.f);

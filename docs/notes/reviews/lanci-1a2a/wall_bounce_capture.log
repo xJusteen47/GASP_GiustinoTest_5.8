@@ -1,0 +1,15 @@
+    0.0s driver loaded: out C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_lanci\Saved\Lanci\wall_1
+   12.0s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '3', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   26.4s host P256, attacker P257, parked [('Z1', (3800.0, 300.0))], kit OK
+   28.2s attacker clear spot (0.0, 0.0)
+   29.8s run weak: damage 0.0, attacker at [0, -450, 87] yaw 0, surface GSTN_TestSurface_0
+   43.7s summary {"run": "weak", "damage": 0.0, "contact_frame": null, "speed_into_wall_before": null, "impact_info_last": "-1,0,0,0,0", "counts_last": "0,0,0", "bump_frames": null, "max_wall_cm_after_contact": null, "montages_after_contact": [], "tags_at_contact": null}
+   46.7s run strong: damage 250.0, attacker at [0, -450, 87] yaw 0, surface GSTN_TestSurface_2
+   60.7s summary {"run": "strong", "damage": 250.0, "contact_frame": null, "speed_into_wall_before": null, "impact_info_last": "-1,0,0,0,0", "counts_last": "0,0,0", "bump_frames": null, "max_wall_cm_after_contact": null, "montages_after_contact": [], "tags_at_contact": null}
+   60.7s strong run at 250.0 % only 0 cm/s into the wall: again with more damage
+   63.7s run strong: damage 400.0, attacker at [0, -450, 87] yaw 0, surface GSTN_TestSurface_3
+   77.9s summary {"run": "strong", "damage": 400.0, "contact_frame": null, "speed_into_wall_before": null, "impact_info_last": "-1,0,0,0,0", "counts_last": "0,0,0", "bump_frames": null, "max_wall_cm_after_contact": null, "montages_after_contact": [], "tags_at_contact": null}
+   77.9s strong run at 400.0 % only 0 cm/s into the wall: again with more damage
+   80.9s run strong: damage 700.0, attacker at [0, -450, 87] yaw 0, surface GSTN_TestSurface_4
+   95.1s summary {"run": "strong", "damage": 700.0, "contact_frame": null, "speed_into_wall_before": null, "impact_info_last": "-1,0,0,0,0", "counts_last": "0,0,0", "bump_frames": null, "max_wall_cm_after_contact": null, "montages_after_contact": [], "tags_at_contact": null}
+   96.5s finish: ok

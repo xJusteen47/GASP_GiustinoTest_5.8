@@ -36,6 +36,7 @@
 #include "Movement/GSTN_SetFacingEffect.h"
 #include "Movement/GSTN_BodyCapsuleModifier.h"
 #include "Movement/GSTN_AirTurn.h"
+#include "Movement/GSTN_MovementMixer.h"
 #include "DefaultMovementSet/Modes/FallingMode.h"
 #include "Input/GSTN_InputTags.h"
 #include "Context/GSTN_InputContextProvider.h"
@@ -90,6 +91,8 @@
 #include "Timeline/GSTN_WeaponSwitchRules.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNCombatSim, Log, All);
+// Diagnosis of lost launch frames (2026-11-24): the combined move of every substep, before and after the air turn and air momentum
+DEFINE_LOG_CATEGORY_STATIC(LogGSTNMoveMix, Log, All);
 
 static TAutoConsoleVariable<bool> CVarMeshCapsuleShiftBeforeAnim(TEXT("gstn.Mesh.CapsuleShiftBeforeAnim"), true,
 	TEXT("Crouch / body capsule mesh pop fix (crouch-mesh-pop-1, 2026-11-21). On = the capsule shift's smoothing correction is applied to the mesh ")
@@ -220,6 +223,13 @@ void UGSTN_CombatSimComponent::BindAirTurn()
 	{
 		return;
 	}
+	// The hook below leaves a frame owned by a layered move alone by its mix mode, which the stock mixer loses for an override of the
+	// velocity (a knockback's launch frame): without this mixer every launch of a profiled pawn went straight up (UGSTN_MovementMixer)
+	if (!UGSTN_MovementMixer::Install(*Mover))
+	{
+		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: the Mover has its own mixer %s: the air turn and air momentum cannot see velocity overrides"),
+			*GetPathName(), *GetNameSafe(Mover->MovementMixer));
+	}
 	if (Mover->ProcessGeneratedMovement.IsBound() && Mover->ProcessGeneratedMovement.GetUObject() != this)
 	{
 		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: the Mover's ProcessGeneratedMovement is bound by %s: the air turn keeps the falling mode's own rate"),
@@ -249,6 +259,9 @@ void UGSTN_CombatSimComponent::HandleProcessGeneratedMovement(const FMoverTickSt
 	AirMomentumStepMs = FGSTN_RunStageMover::ApplyAirMomentum(*Mover, StartState, TimeStep, OutProposedMove, External, Proposed) ? TimeStep.BaseSimTimeMs : -1.0;
 	AirMomentumExternal = External;
 	AirMomentumProposed = Proposed;
+	UE_LOG(LogGSTNMoveMix, VeryVerbose, TEXT("[MoveMix] %s frame %d mode %s mix %d momentum %d out (%.0f %.0f %.0f)"), *GetNameSafe(GetOwner()), TimeStep.ServerFrame,
+		*StartState.SyncState.MovementMode.ToString(), static_cast<int32>(OutProposedMove.MixMode), AirMomentumStepMs >= 0.0 ? 1 : 0,
+		OutProposedMove.LinearVelocity.X, OutProposedMove.LinearVelocity.Y, OutProposedMove.LinearVelocity.Z);
 }
 
 bool UGSTN_CombatSimComponent::ConsumeAirMomentumExternal(double StepBaseTimeMs, FVector& OutExternal, FVector& OutProposedHorizontal)

@@ -177,4 +177,10 @@ public:
 
 	/** GroundBounceVelocity with Speed in place of the rules' GroundBounceSpeed (the steer is the same). Pure */
 	static FVector GroundBounceVelocityAtSpeed(const FGSTN_GroundBounceRules& Rules, const FVector& Up, const FVector& StickOnPlane, double Speed);
+
+	/**
+	 * The horizontal part the knockdown bounce adds (owner 2026-11-24, A): GroundBounceMomentumKeep x the landing velocity's part on the plane
+	 * normal to Up, plus GroundBounceStickSpeed along the stick (its magnitude scales it), capped by GroundBounceMaxHorizontalSpeed. Pure
+	 */
+	static FVector GroundBounceMomentum(const FGSTN_GroundBounceRules& Rules, const FVector& Up, const FVector& StickOnPlane, const FVector& LandingVelocity);
 };

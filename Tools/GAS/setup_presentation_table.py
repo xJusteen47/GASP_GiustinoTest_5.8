@@ -92,8 +92,12 @@ def rows():
         # The downed landing after a tumble: the landing ring at the feet, a little bigger (no magnitude: intensity 1 -> 1.2). It waits for
         # the drawn pelvis to reach the floor (review r2: the ring came 8-10 frames before the body touched down)
         _cue("Knockdown", "NS_GSTN_LandRing", scale=((0, 1), (1.2, 1.2)), offset=feet, grounded="pelvis"),
+        # Launch readability (owner 2026-11-24, 3A): the tumble trail, plus a small puff at the take-off of every launch fast enough. Both follow
+        # gstn.Launch.Debug.Effects, not GSTN.Presentation.Effects; small enemies get the puff only (UGSTN_PresentationComponent::LaunchEffectClass).
+        # No min_speed on the trail: SustainMinSpeed reads the horizontal speed, which is ~0 on the launch frame and on a steep launch
         _cue("Tumble.Start", "NS_GSTN_TumbleTrail", socket="pelvis", scale_size=False,
              stop_on=("Tumble.End", "Knockdown", "GetUp", "Splat", "Land"), max_duration=3.0),
+        _cue("Launch", "NS_GSTN_JumpPuff", min_mag=700, scale=((700, 2500), (0.6, 1.1)), orient=True),  # left where it was made, not on the body
     ]
 
 

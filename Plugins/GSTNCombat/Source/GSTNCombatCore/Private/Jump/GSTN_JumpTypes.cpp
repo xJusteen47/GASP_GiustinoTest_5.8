@@ -17,8 +17,8 @@ void FGSTN_JumpState::NetSerialize(FArchive& Ar)
 
 	uint8 PhaseBits = static_cast<uint8>(Phase);
 	Ar.SerializeBits(&PhaseBits, 2);
-	uint8 Flags = (bJumpCut ? 1 : 0) | (bFastFalling ? 2 : 0) | (bTakeoffWasAir ? 4 : 0) | (bGliding ? 8 : 0) | (bHoldWindowOver ? 16 : 0);
-	Ar.SerializeBits(&Flags, 5);
+	uint8 Flags = (bJumpCut ? 1 : 0) | (bFastFalling ? 2 : 0) | (bTakeoffWasAir ? 4 : 0) | (bGliding ? 8 : 0) | (bHoldWindowOver ? 16 : 0) | (bKnocked ? 32 : 0);
+	Ar.SerializeBits(&Flags, 6);
 	// +1 so that INDEX_NONE (-1) is 0 and the packed form stays small
 	uint32 StartPlusOne = static_cast<uint32>(FMath::Max(StartFrame + 1, 0));
 	Ar.SerializeIntPacked(StartPlusOne);
@@ -37,6 +37,7 @@ void FGSTN_JumpState::NetSerialize(FArchive& Ar)
 		bTakeoffWasAir = (Flags & 4) != 0;
 		bGliding = (Flags & 8) != 0;
 		bHoldWindowOver = (Flags & 16) != 0;
+		bKnocked = (Flags & 32) != 0;
 		StartFrame = static_cast<int32>(StartPlusOne) - 1;
 		Button = static_cast<int8>(static_cast<int32>(ButtonPlusOne) - 1);
 	}
@@ -44,5 +45,5 @@ void FGSTN_JumpState::NetSerialize(FArchive& Ar)
 
 void FGSTN_JumpState::ToString(FAnsiStringBuilderBase& Out) const
 {
-	Out.Appendf(" Jump: %d@%d btn %d cut %d fast %d air %d used %d coyote %d squat %d glide %d window %d", static_cast<int32>(Phase), StartFrame, static_cast<int32>(Button), bJumpCut, bFastFalling, bTakeoffWasAir, AirJumpsUsed, CoyoteFramesLeft, SquatFramesLeft, bGliding, bHoldWindowOver);
+	Out.Appendf(" Jump: %d@%d btn %d cut %d fast %d air %d used %d coyote %d squat %d glide %d window %d knocked %d", static_cast<int32>(Phase), StartFrame, static_cast<int32>(Button), bJumpCut, bFastFalling, bTakeoffWasAir, AirJumpsUsed, CoyoteFramesLeft, SquatFramesLeft, bGliding, bHoldWindowOver, bKnocked);
 }
