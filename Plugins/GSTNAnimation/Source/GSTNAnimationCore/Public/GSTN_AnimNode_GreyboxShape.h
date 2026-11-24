@@ -53,6 +53,12 @@ struct GSTNANIMATIONCORE_API FGSTN_AnimNode_GreyboxShape : public FAnimNode_Base
 	 *  out when that axis lies down (a body lying flat must not be squashed through its thickness) */
 	static FVector AxisSquashScale(int32 UpAxis, float Squash, float Verticality);
 
+	/**
+	 * Pure: the lowest height of a capsule hanging from a pelvis at PelvisLocation (component space), its axis along Up (unit), the centres of
+	 * its two hemispheres BelowPelvis and AbovePelvis cm from the pelvis along the axis, Radius thick. The floor lift keeps it >= 0
+	 */
+	static float CapsuleLowestZ(const FVector& PelvisLocation, const FVector& Up, float BelowPelvis, float AbovePelvis, float Radius);
+
 private:
 	FGSTN_GreyboxShape Shape;
 };

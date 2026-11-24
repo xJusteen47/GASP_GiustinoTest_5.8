@@ -763,4 +763,56 @@ bool FGSTN_DefenceLandingSelfBounceAbilityTest::RunTest(const FString& Parameter
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DefenceLandingSelfKnockdownClockLandedTest, "GSTNDefence.NP.Landing.SelfKnockdownWhenClockLanded", TestFlags)
+bool FGSTN_DefenceLandingSelfKnockdownClockLandedTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-24 (the dropkick hop never shows): the move's Landing window autocancels it on the touchdown frame, at the clock, before the
+	// hook. The hook gets the landed move (LandedTimeline) with no window open and no timeline running: the armed user is still downed, with the
+	// landed move's own hop and bounce ability
+	FGSTN_TimelineTrack_Tags Window;
+	Window.Tags.AddTag(GSTNDefenceTags::Move_KnockdownOnLanding);
+	FGSTN_TimelineOutput Open;
+	Open.TagWindows.Add(&Window);
+	FGSTN_SelfLandingBounceTrack Bounce;
+	Bounce.Height = 60.f;
+	Bounce.BounceAbility = UGSTN_GA_GetupRoll::StaticClass();
+	FGSTN_CombatTimelineData Move;
+	Move.TotalFrames = 60;
+	Move.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_SelfLandingBounceTrack>(Bounce));
+
+	FLandRig Land(false, 30);
+	Land.Out.Core.ActionState = EGSTN_ActionState::InTimeline;
+	Land.Out.Core.HitstopStartFrame = INDEX_NONE;
+	Land.Out.Core.HitstopEndFrame = INDEX_NONE;
+	FGSTN_CombatTickContext Air = Land.Make(101);
+	Air.Timeline = &Open;
+	Air.RunningTimeline = &Move;
+	Air.bGrounded = false;
+	FGSTN_TumbleLanding::AfterClocks(Air, Land.Data());
+	TestTrue(TEXT("armed in the air"), (Land.Fragment().HitFlags & GSTNDefenceHitFlags::SelfKnockdownArmed) != 0);
+
+	// The touchdown frame: the clock already ended the move (anticipated touchdown, so the previous frame's ground still says airborne)
+	Land.Out.Core.ActionState = EGSTN_ActionState::Actionable;
+	FGSTN_TimelineOutput Ended;
+	FGSTN_CombatTickContext Landed = Land.Make(120);
+	Landed.Timeline = &Ended;
+	Landed.RunningTimeline = nullptr;
+	Landed.LandedTimeline = &Move;
+	Landed.bGrounded = false;
+	FGSTN_TumbleLanding::AfterClocks(Landed, Land.Data());
+	const FGSTN_DefenceFragment Fragment = Land.Fragment();
+	TestEqual(TEXT("downed from the clock's landing"), Fragment.KnockdownEndFrame, 120 + 30);
+	TestEqual(TEXT("disarmed"), Fragment.HitFlags & GSTNDefenceHitFlags::SelfKnockdownArmed, 0);
+	TestTrue(TEXT("the landed move's own bounce ability started"), Land.Services.Started.Num() == 1 && Land.Services.Started[0] == UGSTN_GA_GetupRoll::StaticClass());
+
+	// Not armed (a move that never left the ground inside its window): the clock's landing alone downs nobody
+	FLandRig Ground(false, 30);
+	FGSTN_CombatTickContext NotArmed = Ground.Make(120);
+	NotArmed.Timeline = &Ended;
+	NotArmed.LandedTimeline = &Move;
+	NotArmed.bGrounded = true;
+	TestFalse(TEXT("not armed: no knockdown"), FGSTN_TumbleLanding::SelfKnockdown(NotArmed, Ground.Data()));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
