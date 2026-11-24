@@ -131,6 +131,9 @@ def _lanci_wall(seq):
     c = unreal.Vector(loc.x + fwd[0] * (face + 50.0), loc.y + fwd[1] * (face + 50.0), loc.z + 200.0)
     surf = lib.spawn_test_surface(ctx, c, unreal.Vector(50.0, 500.0, 500.0), yaw, 'Wall')
     st['lanci_wall'] = {'origin': (loc.x + fwd[0] * face, loc.y + fwd[1] * face), 'fwd': fwd}
+    if st.get('dummy_key'):   # the victim's actor name per world (UE log lines name the actor, not the world): [0] is the server's
+        _log(f'{seq["name"]}: victim actor per world ' + str([w_comps[st['dummy_key']].get_owner().get_name() if st['dummy_key'] in w_comps
+                                                             else None for w_comps in (g.comps(w) for w in g.worlds())]))
     _log(f'{seq["name"]}: wall {surf} face {face:.0f} cm ahead of the host at ({loc.x:.0f}, {loc.y:.0f}), yaw {yaw:.0f}')
 
 
