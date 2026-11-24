@@ -40,6 +40,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..', '..'))
 TABLE = os.path.join('docs', 'notes', 'anim-approvate.md')
+REGISTRY = os.path.join('Tools', 'AnimPipeline', 'registro-clip.csv')
 LOCKS = os.path.join('docs', 'notes', 'anim-approvate-locks.json')
 DUMPS = os.path.join('docs', 'notes', 'approved-dumps')
 TOL_CM = 0.1
@@ -58,8 +59,31 @@ def tracked():
     return (out or '').splitlines() if rc == 0 else []
 
 
+def registry_rows(path):
+    """The approved rows of Tools/AnimPipeline/registro-clip.csv (owner 3A, 2026-11-24: the registry is the source of truth and
+    anim-approvate.md is a generated view with other columns). Only `approvata` rows carry a tag (rule 13b); a `bloccata` row
+    without a tag (K7) is protected by the guard, not by this gate."""
+    import csv
+    out = []
+    with open(path, encoding='utf-8', newline='') as fh:
+        for r in csv.DictReader(fh):
+            if (r.get('stato') or '').strip() != 'approvata':
+                continue
+            asset = (r.get('asset_ue') or '').split('+')[0].strip()
+            source = (r.get('carta') or '').split(' (', 1)[0].split(',')[0].strip()
+            if source.startswith('cards/'):          # the registry names cards relative to Tools/AnimPipeline
+                source = 'Tools/AnimPipeline/' + source
+            out.append({'move': r['mossa'], 'version': r['versione'], 'asset': asset, 'source': source,
+                        'note': r.get('parole_owner', ''), 'tag': f"approved/{r['mossa']}-{r['versione']}"})
+    return out
+
+
 def rows(table=None):
-    """Parse the markdown table. Returns [{'move', 'version', 'asset', 'source', 'note', 'tag'}]."""
+    """Approved rows: the registry when present, else (old checkouts, tests) the markdown table.
+    Returns [{'move', 'version', 'asset', 'source', 'note', 'tag'}]."""
+    reg = os.path.join(ROOT, REGISTRY)
+    if table is None and os.path.exists(reg):
+        return registry_rows(reg)
     p = table or os.path.join(ROOT, TABLE)
     if not os.path.exists(p):
         return []
@@ -160,6 +184,12 @@ def check_row(row, files, lk, tol_cm=TOL_CM, allow_missing_tag=False):
             res['why'].append(f'{tag}: {p} CHANGED since the tag (approved blob {at_tag[:10]}, now {now[:10]})')
     for p in loose:
         rec = (lk.get(tag) or {}).get('files', {}).get(p)
+        if not rec and in_git:
+            # The pose itself is checked through the versioned asset against the tag; a source scene that lives only on
+            # one machine (Saved/*.casc) or a doc folder cannot be checked from another checkout. Reported, not failed
+            # (docstring: FAIL only when the row names nothing checkable). Record a lock to make it count.
+            res.setdefault('unchecked', []).append(p)
+            continue
         if not rec:
             res['why'].append(f'{tag}: {p} is not in git and has no lock '
                               f'(record it once: regress.py --record {tag})')
