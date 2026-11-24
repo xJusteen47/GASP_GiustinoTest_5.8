@@ -183,7 +183,7 @@ class Rig:
         self.hang = {}
         self.toward = {}
         for s in ('l', 'r'):
-            v = tuple(t('hand_' + s)[i] - t('upperarm_' + s)[i] for i in range(3)) if 'hand_' + s in self.names else (0, 0, -1)
+            v = tuple(getattr(t('hand_' + s), a) - getattr(t('upperarm_' + s), a) for a in 'xyz') if 'hand_' + s in self.names else (0, 0, -1)
             side_comp = sum(v[i] * self.right[i] for i in range(3))
             down_comp = -v[2]
             current = math.degrees(math.atan2(abs(side_comp), down_comp))  # 0 = straight down, 90 = T pose
