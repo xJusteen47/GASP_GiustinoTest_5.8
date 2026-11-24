@@ -101,6 +101,13 @@ FRotator UGSTN_GreyboxAnimInstance::PlantLean(const FVector& LocalMoveDirection,
 	return FRotator(Direction.X * KickDeg, 0.f, -Direction.Y * KickDeg);
 }
 
+float UGSTN_GreyboxAnimInstance::StickSlip(float CycleFraction)
+{
+	const float T = FMath::Frac(CycleFraction);
+	constexpr float Catch = 0.8f;  // share of the cycle spent catching
+	return (T < Catch ? T / Catch : (1.f - T) / (1.f - Catch)) - 0.5f;
+}
+
 FRotator UGSTN_GreyboxAnimInstance::LeanTarget(const FGSTN_GreyboxShapeSettings& Settings, const FVector& LocalAcceleration)
 {
 	// Forward (start / brake) and sideways (curves) separately: a curve leans harder than a start, with its own cap
@@ -197,11 +204,45 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	const bool bBraced = bOnGround || bOnWall;
 	FRotator LeanGoal = bBraced ? LeanTarget(ShapeSettings, Local) : FRotator::ZeroRotator;
 	WallNormal = bOnWall ? FindWallNormal(*Owner, BodyQuat) : FVector::ZeroVector;
+	const FVector LocalNormal = BodyQuat.UnrotateVector(WallNormal);
 	if (!WallNormal.IsNearlyZero())
 	{
-		const FVector LocalNormal = BodyQuat.UnrotateVector(WallNormal);
 		LeanGoal.Pitch -= LocalNormal.X * ShapeSettings.WallLeanDeg;
 		LeanGoal.Roll += LocalNormal.Y * ShapeSettings.WallLeanDeg;
+	}
+	// Wall friction (owner 15:26): a held lean against the slide while it brakes, and a stick-slip judder along the slide
+	float JudderPitch = 0.f;
+	float JudderRoll = 0.f;
+	float JudderSquash = 0.f;
+	if (bOnWall)
+	{
+		const float WallSpeed = Velocity.Size();
+		const FVector Direction = Velocity.GetSafeNormal();
+		const FVector Horizontal(Direction.X, Direction.Y, 0.f);
+		const float Brake = FMath::Max(-(Acceleration3D | Direction), 0.f);
+		const float BrakeLean = FMath::Min(Brake / 1000.f * ShapeSettings.WallBrakeLeanPer1000, ShapeSettings.WallBrakeMaxLeanDeg);
+		// Sideways part: against the motion like the ground plant; downward part: the top tips further off the wall (feet dig in)
+		const FRotator Sideways = PlantLean(BodyQuat.UnrotateVector(Horizontal), BrakeLean * Horizontal.Size());
+		LeanGoal.Pitch += Sideways.Pitch - LocalNormal.X * BrakeLean * FMath::Abs(Direction.Z);
+		LeanGoal.Roll += Sideways.Roll + LocalNormal.Y * BrakeLean * FMath::Abs(Direction.Z);
+
+		const float SpeedAlpha = FMath::Clamp(WallSpeed / FMath::Max(ShapeSettings.WallJudderSpeed, 1.f), 0.f, 1.f);
+		const float BrakeAlpha = FMath::Clamp(Brake / FMath::Max(ShapeSettings.WallBrakeFullDecel, 1.f), 0.f, 1.f);
+		const float Hz = FMath::Lerp(ShapeSettings.WallJudderMinHz, ShapeSettings.WallJudderMaxHz, SpeedAlpha);
+		const float Next = WallJudderCycle + Hz * DeltaSeconds;
+		if (Next >= 1.f)
+		{
+			// Each slip is a little different: a grip is never regular (presentation only, randomness is fine here)
+			WallJudderScale = FMath::FRandRange(0.6f, 1.2f);
+		}
+		WallJudderCycle = FMath::Frac(Next);
+		const float Judder = StickSlip(WallJudderCycle) * SpeedAlpha * (1.f + ShapeSettings.WallJudderBrakeBoost * BrakeAlpha) * WallJudderScale;
+		// Along the slide: the top is dragged with the motion while it catches and snaps back when it slips (a plant lean has the
+		// opposite sign, so the catch is minus it)
+		const FRotator Along = PlantLean(BodyQuat.UnrotateVector(Horizontal), -ShapeSettings.WallJudderDeg * Judder * Horizontal.Size());
+		JudderPitch = Along.Pitch - LocalNormal.X * ShapeSettings.WallJudderDeg * Judder * FMath::Abs(Direction.Z);
+		JudderRoll = Along.Roll + LocalNormal.Y * ShapeSettings.WallJudderDeg * Judder * FMath::Abs(Direction.Z);
+		JudderSquash = -ShapeSettings.WallJudderSquash * FMath::Abs(Judder) * 2.f;
 	}
 	SquashSpring.Step(SquashTarget(ShapeSettings, bBraced, Velocity.Z, Local.X), DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
 	// Jump squat: squash fast during the sim's squat frames; on take-off the spring is released from there into the air stretch
@@ -211,8 +252,10 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		SquashSpring.Value = FMath::FInterpTo(SquashSpring.Value, ShapeSettings.JumpSquatSquash, DeltaSeconds, ShapeSettings.JumpSquatBlendSpeed);
 		SquashSpring.Velocity = 0.f;
 	}
-	PitchSpring.Step(LeanGoal.Pitch, DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
-	RollSpring.Step(LeanGoal.Roll, DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
+	// On a wall the lean is held by the grip, not bounced: critically damped
+	const float LeanDamping = bOnWall ? ShapeSettings.WallSpringDamping : ShapeSettings.SpringDamping;
+	PitchSpring.Step(LeanGoal.Pitch, DeltaSeconds, ShapeSettings.SpringFrequency, LeanDamping);
+	RollSpring.Step(LeanGoal.Roll, DeltaSeconds, ShapeSettings.SpringFrequency, LeanDamping);
 
 	// Run stop plant: one kick against the motion (owner 14:35: the leg on the side of the motion goes in front), re-armed once still or
 	// speeding up again. Braking along the motion, whatever the facing: a sideways or backward brake plants too
@@ -229,35 +272,6 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	{
 		bRunStopKicked = false;
 	}
-	// Wall slide skid: the same plant on a hard brake along the wall; a brake of a downward slide tips the top off the wall
-	float WallRattle = 0.f;
-	if (bOnWall)
-	{
-		const float WallSpeed = Velocity.Size();
-		const FVector Direction = Velocity.GetSafeNormal();
-		const float WallBrake = Acceleration3D | Direction;
-		if (!bWallSkidKicked && ShapeSettings.RunStopKickDeg > 0.f && WallSpeed >= ShapeSettings.WallSkidMinSpeed && WallBrake <= -ShapeSettings.WallSkidDecel)
-		{
-			const FVector Horizontal(Direction.X, Direction.Y, 0.f);
-			KickPlant(BodyQuat, Horizontal, ShapeSettings.RunStopKickDeg * Horizontal.Size());
-			if (!WallNormal.IsNearlyZero())
-			{
-				KickPlant(BodyQuat, -WallNormal, ShapeSettings.RunStopKickDeg * FMath::Abs(Direction.Z));
-			}
-			bWallSkidKicked = true;
-		}
-		else if (WallSpeed < 50.f || WallBrake > 200.f)
-		{
-			bWallSkidKicked = false;
-		}
-		WallRattlePhase = FMath::Fmod(WallRattlePhase + 2.f * PI * ShapeSettings.WallRattleHz * DeltaSeconds, 2.f * PI);
-		WallRattle = FMath::Sin(WallRattlePhase) * ShapeSettings.WallRattleDeg * FMath::Clamp(WallSpeed / FMath::Max(ShapeSettings.WallRattleSpeed, 1.f), 0.f, 1.f);
-	}
-	else
-	{
-		bWallSkidKicked = false;
-	}
-
 	// Run sway: cadence from the speed, or the frantic cadence right after leaving rest; amplitude from the speed, eased
 	const float Speed2D = FVector(Velocity.X, Velocity.Y, 0.f).Size();
 	const bool bMoving = bOnGround && Speed2D > 10.f;
@@ -275,13 +289,13 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	float SwayPitch = 0.f;
 	const FVector Sway = RunSway(ShapeSettings, SwayPhase, SwayAmplitude, SwayPitch);
 
-	Shape.Squash = FMath::Clamp(SquashSpring.Value + Sway.X, ShapeSettings.MinSquash * 0.8f, ShapeSettings.MaxStretch * 1.1f);
+	Shape.Squash = FMath::Clamp(SquashSpring.Value + Sway.X + JudderSquash, ShapeSettings.MinSquash * 0.8f, ShapeSettings.MaxStretch * 1.1f);
 	// The lean is in the component's frame; the mesh is rotated -90 yaw from the actor in GASP pawns, so turn the actor-frame lean into it
 	const FQuat ActorToComponent = GetSkelMeshComponent() ? (GetSkelMeshComponent()->GetComponentQuat().Inverse() * BodyQuat) : FQuat::Identity;
 	// Rotation axis scaled by degrees, actor frame: tipping the top toward +X is a turn around +Y by the forward lean (-Pitch), toward +Y a
 	// turn around -X by the side lean (Roll)
-	const float Roll = RollSpring.Value + Sway.Y + WallRattle;
-	const float Pitch = PitchSpring.Value + SwayPitch;
+	const float Roll = RollSpring.Value + Sway.Y + JudderRoll;
+	const float Pitch = PitchSpring.Value + SwayPitch + JudderPitch;
 	const FVector Axis = ActorToComponent.RotateVector(FVector(-Roll, -Pitch, 0.f));
 	const FQuat Tip = Axis.IsNearlyZero() ? FQuat::Identity : FQuat(Axis.GetSafeNormal(), FMath::DegreesToRadians(Axis.Size()));
 	// Twist about the up axis (same in actor and component frames), under the tip

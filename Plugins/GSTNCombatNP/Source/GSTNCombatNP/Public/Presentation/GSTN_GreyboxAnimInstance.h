@@ -95,7 +95,8 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 
 	/**
 	 * Wall movement (owner 2026-11-24 14:35): Mover modes that are a wall slide or climb. On a wall the capsule leans its top away from the
-	 * wall (the bottom presses it), rattles with the slide speed, leans into a sideways push like on the ground, and plants on a hard brake
+	 * wall (the bottom presses it), judders with the slide's friction, leans into a sideways push like on the ground, and leans back
+	 * against the slide while it brakes (owner 15:26: "it should simulate the friction on the wall", not a sway)
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall")
 	TArray<FName> WallModeNames = {TEXT("WallSliding"), TEXT("WallSlidingV2"), TEXT("WallClimbingV2")};
@@ -104,22 +105,45 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "0", ClampMax = "45", ForceUnits = "deg"))
 	float WallLeanDeg = 10.f;
 
-	/** Friction rattle at WallRattleSpeed (roll, degrees) and its frequency */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "0", ClampMax = "15", ForceUnits = "deg"))
-	float WallRattleDeg = 2.5f;
+	/**
+	 * Friction judder (stick-slip): the body catches on the wall and slips, a sawtooth along the slide (slow build, quick release), small and
+	 * fast, never a side-to-side sway. Tip at WallJudderSpeed, in degrees, plus a squash pulse; the frequency rises with the speed
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "0", ClampMax = "10", ForceUnits = "deg"))
+	float WallJudderDeg = 1.2f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "0", ClampMax = "0.2"))
+	float WallJudderSquash = 0.025f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "1", ForceUnits = "cm/s"))
-	float WallRattleSpeed = 600.f;
+	float WallJudderSpeed = 600.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "1", ClampMax = "30", ForceUnits = "Hz"))
-	float WallRattleHz = 14.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "1", ClampMax = "40", ForceUnits = "Hz"))
+	float WallJudderMinHz = 9.f;
 
-	/** A hard brake on the wall (the wall slide skid): deceleration along the slide at least this, moving at least WallSkidMinSpeed */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "0", ForceUnits = "cm/s2"))
-	float WallSkidDecel = 1500.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "1", ClampMax = "40", ForceUnits = "Hz"))
+	float WallJudderMaxHz = 20.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "0", ForceUnits = "cm/s"))
-	float WallSkidMinSpeed = 300.f;
+	/** Braking on the wall grips harder: the judder grows by this share at full brake (WallBrakeFullDecel) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "0", ClampMax = "3"))
+	float WallJudderBrakeBoost = 1.f;
+
+	/**
+	 * Wall brake (the wall slide skid): a held lean back against the slide for as long as it decelerates, as if a foot dug in toward the
+	 * motion, degrees per 1000 cm/s² of deceleration up to WallBrakeMaxLeanDeg. Held, not kicked: the lean springs are damped to
+	 * WallSpringDamping on a wall so it does not bounce
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "0", ClampMax = "30"))
+	float WallBrakeLeanPer1000 = 6.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "0", ClampMax = "45", ForceUnits = "deg"))
+	float WallBrakeMaxLeanDeg = 18.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "1", ForceUnits = "cm/s2"))
+	float WallBrakeFullDecel = 3000.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "0.05", ClampMax = "2"))
+	float WallSpringDamping = 1.f;
 
 	/** How far the wall is looked for around the capsule (presentation traces, only while in a wall mode) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "10", ForceUnits = "cm"))
@@ -273,6 +297,9 @@ public:
 	 */
 	static FRotator PlantLean(const FVector& LocalMoveDirection, float KickDeg);
 
+	/** Pure: stick-slip sawtooth at a cycle fraction 0..1: rises slowly while the body catches, drops fast when it slips; -0.5..0.5 */
+	static float StickSlip(float CycleFraction);
+
 	/** Pure: does this frame start a run stop (braking hard from a run, not already kicked)? */
 	static bool StartsRunStop(const FGSTN_GreyboxShapeSettings& Settings, bool bOnGround, float Speed2D, float ForwardAcceleration, bool bAlreadyKicked);
 
@@ -321,10 +348,10 @@ private:
 	bool bHasPrevious = false;
 	bool bWasOnGround = true;
 	float LastAirVelocityZ = 0.f;
-	/** Wall: the outward normal found this frame (zero off a wall), the previous 3D velocity on it, the rattle phase, the skid kicked */
+	/** Wall: the outward normal found this frame (zero off a wall), the judder's cycle fraction and this cycle's random size */
 	FVector WallNormal = FVector::ZeroVector;
-	float WallRattlePhase = 0.f;
-	bool bWallSkidKicked = false;
+	float WallJudderCycle = 0.f;
+	float WallJudderScale = 1.f;
 	/** Run sway cycle phase (radians) and its smoothed amplitude */
 	float SwayPhase = 0.f;
 	float SwayAmplitude = 0.f;

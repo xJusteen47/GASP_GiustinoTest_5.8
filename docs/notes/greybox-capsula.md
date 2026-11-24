@@ -265,3 +265,10 @@ Evidence `docs/notes/reviews/greybox-capsula/round5/` (gb_loco, gb_side Playtest
 ESITO: OK, accessory bug fixed and sway calmer; no open item from this run.
 SUBAGENTI: none.
 COSTO: not measured (one thread, ~20 min for run 5).
+
+## Round 6 (2026-11-24, owner 15:26)
+- Wall brake read as a sway (spring kick + side-to-side sine rattle). Now friction: a held lean against the slide while it brakes
+  (`WallBrakeLeanPer1000`, cap `WallBrakeMaxLeanDeg`; a downward slide tips the top further off the wall), lean springs critically
+  damped on a wall (`WallSpringDamping` 1), and a stick-slip judder along the slide (`StickSlip`: slow catch, fast slip, 9..20 Hz with the
+  speed, random size per slip, stronger while braking, small squash pulse). Kick and rattle removed.
+- Greatsword: flat of the blade against the back (`make_rot_from_zx` keeps the width in the back's plane; it showed its edge before).

@@ -96,6 +96,12 @@ bool FGSTN_GreyboxShapeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("forward brake tips back"), FMath::IsNearlyEqual(BrakeForward.Pitch, 20.f) && FMath::IsNearlyZero(BrakeForward.Roll));
 	const FRotator BrakeRight = UGSTN_GreyboxAnimInstance::PlantLean(FVector(0.f, 1.f, 0.f), 20.f);
 	TestTrue(TEXT("brake of a motion to the right tips left"), FMath::IsNearlyEqual(BrakeRight.Roll, -20.f) && FMath::IsNearlyZero(BrakeRight.Pitch));
+	// Owner 15:26 (wall brake = friction, not a sway): the stick-slip builds slowly and snaps back fast
+	TestTrue(TEXT("stick-slip starts low"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::StickSlip(0.f), -0.5f));
+	TestTrue(TEXT("stick-slip peaks at the slip"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::StickSlip(0.8f), 0.5f));
+	const float CatchRate = UGSTN_GreyboxAnimInstance::StickSlip(0.1f) - UGSTN_GreyboxAnimInstance::StickSlip(0.f);
+	const float SlipRate = UGSTN_GreyboxAnimInstance::StickSlip(0.8f) - UGSTN_GreyboxAnimInstance::StickSlip(0.9f);
+	TestTrue(TEXT("stick-slip catch is slower than the slip"), CatchRate > 0.f && SlipRate > 2.f * CatchRate);
 	TestTrue(TEXT("no motion = no kick"), UGSTN_GreyboxAnimInstance::PlantLean(FVector::ZeroVector, 20.f).IsNearlyZero());
 	TestTrue(TEXT("no pelvis squash in the air"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, false, 40.f, 95.f), 1.f));
 	return true;

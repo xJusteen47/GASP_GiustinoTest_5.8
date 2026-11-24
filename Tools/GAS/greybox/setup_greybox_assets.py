@@ -393,7 +393,9 @@ def build_sword(mesh, opts):
     prims.append_cone(mesh, opts, unreal.Transform(location=unreal.Vector(0, 0, blade_z + s['blade']), scale=flat), s['blade_r'][1], 0.5,
                       s['tip'], 4, 1, True, unreal.GeometryScriptPrimitiveOriginMode.BASE)
     direction = unreal.Vector(*SWORD_DIRECTION).normal()
-    place = unreal.Transform(location=unreal.Vector(*SWORD_POMMEL), rotation=unreal.MathLibrary.make_rot_from_z(direction))
+    # Owner 15:26: flat of the blade against the back. make_rot_from_z left the width axis free (the blade showed its edge to the back):
+    # keep the blade's width (local X) in the back's plane (X, Z), so its thin axis (local Y) is the back's normal
+    place = unreal.Transform(location=unreal.Vector(*SWORD_POMMEL), rotation=unreal.MathLibrary.make_rot_from_zx(direction, unreal.Vector(1.0, 0.0, 0.0)))
     unreal.GeometryScript_MeshTransforms.transform_mesh(mesh, place)
 
 
