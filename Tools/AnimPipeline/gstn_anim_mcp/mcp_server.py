@@ -1,6 +1,6 @@
 """Stdio MCP JSON-RPC 2.0 server for gstn-anim-mcp (pure Python 3.14 stdlib).
 
-Exposes 12 semantic animation tools so flash models never have to write 300+ lines of
+Exposes 13 semantic animation tools so flash models never have to write 300+ lines of
 quaternions/2-bone IK Python:
   - anim_inspect(asset, frame_range)
   - anim_apply_intent(src, dst, intent_json)
@@ -11,6 +11,7 @@ quaternions/2-bone IK Python:
   - anim_rollback(asset)
   - anim_capture_move(...): gated combat-move capture; anim_silhouette_check / anim_motion_overlay: offline reviewer images
   - anim_review_pack(...): level-2 final review pack (whole-move slowmo 3 views, velocity sheets, key poses, critic brief)
+  - anim_layer(action, dst, src, layer): smooth pose layers over a dense clip (intent in, quaternions out), undoable stack
 
 Replies are the full JSON (no indentation) by default; compact mode (<= 5 lines, details in a file, see compact.py) is\nopt-in: env GSTN_MCP_COMPACT=1 or a `compact: true` argument on the call. The tool list is a FIXED-order, constant\ntext prefix so provider prompt caches (DeepSeek prefix cache) keep hitting; never put variable data in it.
 
@@ -327,6 +328,43 @@ def _tool_defs() -> list[dict[str, Any]]:
                 "required": ["out", "runs", "sequences", "window", "identity"],
             },
         },
+        {
+            "name": "anim_layer",
+            "description": (
+                "POLISH a dense clip with smooth pose LAYERS: you give the intent, the tool does quaternions, curves and limits. "
+                "Never adds card keys, never step keys, every layer undoable. dst = src + layers in order (stack file "
+                "Tools/AnimPipeline/cards/layers/<dst>.json). One layer = one part, one motion, degrees, timing: "
+                "{\"part\": \"elbow_r\", \"motion\": \"out\", \"deg\": 10, \"start\": 1, \"peak\": [5, 13], \"end\": 21} = "
+                "right elbow 10 deg further out, ramps in f1-f5, full f5-f13, ramps out f13-f21; f1 and f21 and every frame "
+                "outside stay EXACTLY as they are (use them as anchors). Frames are CLIP-LOCAL 0..n-1 (not capture v-frames). "
+                "peak = one frame or [first, last]; ramps >= 2 frames, except at the clip edges: start=0 with peak=[0, k] changes f0 "
+                "itself (likewise end = last frame). parts: spine, chest, torso, neck, head, neck_head, "
+                "shoulder_l/r, arm_l/r, elbow_l/r (moves the elbow = rotates the upper arm), forearm_l/r, wrist_l/r, hand_l/r, "
+                "or an upper-body bone; Italian words work too (gomito_r, testa, collo, spalla_l, avambraccio_l). Legs, pelvis, "
+                "root are refused (feet would slide: use anim_run_intent). motions: out, in (away from / toward the midline), "
+                "forward, back (swing; for spine/neck = lean), turn_out, turn_in (about the vertical axis), turn_left, turn_right, "
+                "tilt_left, tilt_right, chin_up, chin_down (head/neck), flex, extend (elbow bend). Negative deg = the opposite "
+                "motion. |deg| <= 45. Axes come from the character's body at each frame (frame: body = hip line, chest = "
+                "shoulder line, clip = asset X left Y fwd Z up). Expert form instead of motion: axis lat|fwd|up + toward "
+                "out|in|fwd|back|up|down|left|right (+ ref bone|face). One instruction step = usually 1-3 layers on ONE part. "
+                "actions: add (default; dry_run=true measures without adding), undo (last layer, or to=<id> keeps ids <= to), "
+                "list, dump (editor, once per src: afterwards add reports how many cm the moved joint goes out/fwd/up at the "
+                "peak, offline), build (editor: rebuild dst, conservation check, PASS/FAIL). Read in the reply: "
+                "layer.bones[].deg_at_peak, moved_joint_at_peak (cm), max_added_deg_per_frame (> 6 warns of a pop)."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["add", "undo", "list", "dump", "build"], "default": "add"},
+                    "dst": {"type": "string", "description": "Variant clip the stack builds (never an approved clip, never src)."},
+                    "src": {"type": "string", "description": "Dense base clip; required on the first add/dump/build of a dst."},
+                    "layer": {"type": "object", "description": "One layer (see description)."},
+                    "dry_run": {"type": "boolean", "default": False},
+                    "to": {"type": "integer", "description": "undo: keep layers with id <= to."},
+                },
+                "required": ["dst"],
+            },
+        },
     ]
 
 
@@ -415,6 +453,12 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
             window=args.get("window"), anchor=args.get("anchor"), faf=args.get("faf"),
             hitbox_required=bool(args.get("hitbox_required", True)), no_stop=args.get("no_stop"), motion=args.get("motion"),
             identity=args.get("identity"), key_frames=args.get("key_frames"),
+        )
+    if name == "anim_layer":
+        import anim_layer_ops
+        return anim_layer_ops.anim_layer(
+            action=args.get("action") or "add", dst=args["dst"], src=args.get("src") or "", layer=args.get("layer"),
+            dry_run=bool(args.get("dry_run", False)), to=args.get("to"),
         )
     if name == "anim_review_pack":
         import final_review_pack
