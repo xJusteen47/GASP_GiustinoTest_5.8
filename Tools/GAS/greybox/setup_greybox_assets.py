@@ -178,6 +178,21 @@ def step_mesh():
     prims = unreal.GeometryScript_Primitives
     opts = unreal.GeometryScriptPrimitiveOptions()
     mesh = unreal.DynamicMesh()
+    # Owner 2026-11-24: grey capsule, red nose. Material id 0 = body and markers, 1 = nose (slot names SLOT_NAMES)
+    mat_lib = None
+    for lib_name in ('GeometryScript_Materials', 'GeometryScript_MeshMaterialFunctions', 'GeometryScript_MeshMaterials'):
+        mat_lib = getattr(unreal, lib_name, None)
+        if mat_lib and hasattr(mat_lib, 'enable_material_ids'):
+            mat_lib.enable_material_ids(mesh)
+            break
+    else:
+        p('mesh: WARNING no enable_material_ids; material libs:', api_names(unreal, ['geometryscript_mat']))
+    nose_opts = unreal.GeometryScriptPrimitiveOptions()
+    try:
+        opts.set_editor_property('material_id', 0)
+        nose_opts.set_editor_property('material_id', 1)
+    except Exception as exc:
+        p('mesh: WARNING primitive options have no material_id:', exc)
     parts = []  # (first vertex id, vertex count after, kind)
 
     def vcount():
@@ -194,7 +209,7 @@ def step_mesh():
     # Under the dome (the capsule top is below the real head now), weighted to the head so it turns with it
     nose_z = CAPSULE_BOTTOM + CAPSULE_HEIGHT - CAPSULE_RADIUS * 0.9
     nose_t = unreal.Transform(location=unreal.Vector(0, CAPSULE_RADIUS - 2.0, nose_z), rotation=unreal.Rotator(0, 0, -90))
-    prims.append_cone(mesh, opts, nose_t, NOSE_RADIUS, 1.0, NOSE_LENGTH, 12, 1, True, unreal.GeometryScriptPrimitiveOriginMode.BASE)
+    prims.append_cone(mesh, nose_opts, nose_t, NOSE_RADIUS, 1.0, NOSE_LENGTH, 12, 1, True, unreal.GeometryScriptPrimitiveOriginMode.BASE)
     parts.append((start, vcount(), 'head'))
     for bone, radius in MARKER_RADIUS.items():
         start = vcount()
@@ -242,8 +257,42 @@ def step_mesh():
         fail('create_new_skeletal_mesh_asset_from_mesh returned nothing: %s' % (result,))
         return None
     p('mesh: created', path, 'vertices', vcount())
+    assign_materials(asset)
     save(path)
     return asset
+
+
+BASE_MATERIAL = '/Engine/BasicShapes/BasicShapeMaterial'
+MATERIALS = [('Body', 'MI_GSTN_Greybox_Grey', unreal.LinearColor(0.35, 0.35, 0.37, 1.0)),
+             ('Nose', 'MI_GSTN_Greybox_Red', unreal.LinearColor(0.8, 0.04, 0.03, 1.0))]
+
+
+def make_material(name, color):
+    path = '%s/%s' % (DIR, name)
+    mi = eal.load_asset(path) if eal.does_asset_exist(path) else None
+    if not mi:
+        mi = asset_tools.create_asset(name, DIR, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+        mi.set_editor_property('parent', eal.load_asset(BASE_MATERIAL))
+    # BasicShapeMaterial's tint parameter is 'Color'
+    unreal.MaterialEditingLibrary.set_material_instance_vector_parameter_value(mi, 'Color', color)
+    unreal.MaterialEditingLibrary.update_material_instance(mi)
+    save(path)
+    return mi
+
+
+def assign_materials(asset):
+    """Slot 0 grey (body, markers), slot 1 red (nose), in material id order."""
+    try:
+        slots = []
+        for slot_name, mi_name, color in MATERIALS:
+            sm = unreal.SkeletalMaterial()
+            sm.set_editor_property('material_interface', make_material(mi_name, color))
+            sm.set_editor_property('material_slot_name', slot_name)
+            slots.append(sm)
+        asset.set_editor_property('materials', slots)
+        p('mesh: materials', [s.get_editor_property('material_slot_name') for s in slots])
+    except Exception as exc:
+        fail('mesh: materials not assigned: %s' % exc)
 
 
 # --------------------------------------------------------------------------------------------------------------------- capsule ABP

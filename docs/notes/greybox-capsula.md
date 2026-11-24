@@ -129,3 +129,5 @@ All reversible; class defaults, so the owner retunes them on ABP_GSTN_GreyboxCap
   first frame), the capsule keeps the old run's facing while the run presentation's `IsSkidding()` lasts (yaw offset from the actor),
   then turns to the new facing on a spring (`SkidTurnFrequency` 4 Hz, `SkidTurnDamping` 0.6, a little overshoot) and starts with the
   frantic cadence. Leans and the plant read the acceleration in that held body frame. `bSkidHoldsFacing` turns it off.
+- **Owner note 2026-11-24 14:10**: grey capsule (`MI_GSTN_Greybox_Grey`), red nose (`MI_GSTN_Greybox_Red`), both instances of
+  `/Engine/BasicShapes/BasicShapeMaterial` (tint `Color`); the nose is material id 1 and sits in the upper half (about 125 cm of 14..156).
