@@ -30,6 +30,24 @@ struct GSTNANIMATIONCORE_API FGSTN_GreyboxShape
 	 */
 	float PoseWeight = 1.f;
 
+	/**
+	 * Lying (owner 2026-11-24, "the capsule should turn when it is on the ground, it squashes strangely now"): 0..1 how much the rigid capsule
+	 * takes the copied pelvis (rotation and height) instead of the reference one, so a body that lies down (knockdown, get-up, roll, tumble)
+	 * lies down as a whole capsule instead of standing squashed to its pelvis height. The rest of the body stays rigid on the pelvis. The squash
+	 * fades with it, like for a posed body.
+	 */
+	float LyingWeight = 0.f;
+
+	/**
+	 * Keep the capsule out of the floor (owner 2026-11-24, same note): the capsule's reference geometry in component space, cm above the feet
+	 * (bottom and top of the body, radius). When FloorRadius > 0 the node lifts the pelvis so the lowest point of the posed capsule stays at or
+	 * above the feet's height (a lying capsule is as thick as its radius, the copied pelvis of a lying body is lower than that). 0 = off (the
+	 * instance turns it off in the air, where the feet are not the floor).
+	 */
+	float FloorBottom = 0.f;
+	float FloorTop = 0.f;
+	float FloorRadius = 0.f;
+
 	/** Tilt of the whole body around the ground point, component space, degrees (pitch forward, roll sideways) */
 	FRotator Lean = FRotator::ZeroRotator;
 

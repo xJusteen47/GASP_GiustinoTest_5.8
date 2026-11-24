@@ -104,6 +104,17 @@ bool FGSTN_GreyboxShapeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("stick-slip catch is slower than the slip"), CatchRate > 0.f && SlipRate > 2.f * CatchRate);
 	TestTrue(TEXT("no motion = no kick"), UGSTN_GreyboxAnimInstance::PlantLean(FVector::ZeroVector, 20.f).IsNearlyZero());
 	TestTrue(TEXT("no pelvis squash in the air"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, false, 40.f, 95.f), 1.f));
+	// Owner 2026-11-24 (the capsule squashes on the ground instead of turning): a tipped pelvis lies the capsule down
+	TestTrue(TEXT("upright pelvis does not lie"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::LyingTarget(Settings, 1.f)));
+	TestTrue(TEXT("a crouch's small tilt does not lie"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::LyingTarget(Settings,
+		FMath::Cos(FMath::DegreesToRadians(Settings.LyingStartDeg - 5.f)))));
+	TestTrue(TEXT("flat pelvis lies fully"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::LyingTarget(Settings, 0.f), 1.f));
+	TestTrue(TEXT("upside down (a somersault) lies fully"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::LyingTarget(Settings, -0.8f), 1.f));
+	const float Halfway = FMath::Cos(FMath::DegreesToRadians(0.5f * (Settings.LyingStartDeg + Settings.LyingFullDeg)));
+	TestTrue(TEXT("lying blends in between"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::LyingTarget(Settings, Halfway), 0.5f, 1.e-3f));
+	FGSTN_GreyboxShapeSettings Off;
+	Off.bLyingFollowsPelvis = false;
+	TestTrue(TEXT("switch off = never lies"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::LyingTarget(Off, 0.f)));
 	return true;
 }
 

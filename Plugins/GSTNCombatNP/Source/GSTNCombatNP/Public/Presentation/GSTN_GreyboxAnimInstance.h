@@ -167,6 +167,40 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Squash", meta = (ClampMin = "1"))
 	float PelvisSquashBlendSpeed = 20.f;
 
+	/**
+	 * Lying (owner 2026-11-24: "the capsule should turn when it is on the ground, it squashes strangely now"). The rigid capsule takes the
+	 * driver's pelvis once that pelvis tips past LyingStartDeg from upright (knockdown, get-ups, rolls, a tumble), fully at LyingFullDeg, so it
+	 * lies down and rolls as a whole body instead of standing squashed to the lying pelvis's height. Off = the old upright capsule
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Lying")
+	bool bLyingFollowsPelvis = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Lying", meta = (ClampMin = "0", ClampMax = "90", ForceUnits = "deg"))
+	float LyingStartDeg = 40.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Lying", meta = (ClampMin = "0", ClampMax = "90", ForceUnits = "deg"))
+	float LyingFullDeg = 65.f;
+
+	/** How fast the capsule goes from upright to lying and back, 1/s (high: a roll must not lag behind the driver) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Lying", meta = (ClampMin = "1"))
+	float LyingBlendSpeed = 18.f;
+
+	/**
+	 * Keep the posed capsule out of the floor on the ground (a lying capsule is as thick as its radius, a lying mannequin's pelvis is lower).
+	 * The capsule's reference geometry, cm above the feet: the setup script's GREYBOX_SHAPE (radius, bottom, top)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Lying")
+	bool bKeepAboveFloor = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Lying", meta = (ClampMin = "1", ForceUnits = "cm"))
+	float CapsuleRadius = 34.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Lying", meta = (ClampMin = "0", ForceUnits = "cm"))
+	float CapsuleBottom = 14.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Lying", meta = (ClampMin = "1", ForceUnits = "cm"))
+	float CapsuleTop = 156.f;
+
 	/** Hand and foot markers (owner 2026-11-24: hidden in locomotion and most of the time): shown while an attack's capsule clip plays
 	 *  (MoveOverrides / SequenceMoveOverrides) and/or in locomotion */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Limbs")
@@ -275,6 +309,9 @@ public:
 	/** Pure: the pelvis squash (1 = standing) for a pelvis height over its reference height; 1 in the air */
 	static float PelvisSquashTarget(const FGSTN_GreyboxShapeSettings& Settings, bool bOnGround, float PelvisHeight, float ReferenceHeight);
 
+	/** Pure: the lying target 0..1 for how upright the driver's pelvis is (UpZ = the Z of its body-up axis: 1 upright, 0 flat, < 0 upside down) */
+	static float LyingTarget(const FGSTN_GreyboxShapeSettings& Settings, float UpZ);
+
 	/** Pure: the limb marker scale target for the weight of an attack's capsule clip (0 = locomotion only) */
 	static float LimbScaleTarget(const FGSTN_GreyboxShapeSettings& Settings, float AttackWeight);
 
@@ -328,8 +365,11 @@ private:
 	bool ApplySequenceOverride(const UAnimMontage& Montage, const FAnimMontageInstance& Instance, const FAnimSegment& Segment, float Position);
 
 
-	/** The driver's pelvis height above the component (its feet) now, and in its reference pose; false without a driver or a pelvis */
-	bool GetDriverPelvisHeight(float& OutHeight, float& OutReference);
+	/**
+	 * The driver's pelvis height above the component (its feet) now, and in its reference pose, and the Z of its body-up axis now (the axis
+	 * that is up in the reference pose, carried by the current rotation: 1 upright, 0 lying); false without a driver or a pelvis
+	 */
+	bool GetDriverPelvisHeight(float& OutHeight, float& OutReference, float& OutUpZ);
 
 	/** Loaded override clips, by reference montage asset (kept referenced: the anim node holds raw pointers) */
 	UPROPERTY(Transient)
@@ -367,4 +407,8 @@ private:
 	/** Driver pelvis reference height, cached per driver mesh asset */
 	TWeakObjectPtr<const USkeletalMesh> PelvisReferenceMesh;
 	float PelvisReferenceHeight = 0.f;
+	/** The body's up in the driver pelvis's own frame (reference pose), cached with the height */
+	FVector PelvisLocalUp = FVector::UpVector;
+	/** 0..1 how much the capsule lies with the driver's pelvis (eased) */
+	float LyingAlpha = 0.f;
 };
