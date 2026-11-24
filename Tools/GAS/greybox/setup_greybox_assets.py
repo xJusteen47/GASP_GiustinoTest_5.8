@@ -302,7 +302,10 @@ def make_parent():
         rough.set_editor_property('r', 0.6)
         mel.connect_material_property(rough, '', unreal.MaterialProperty.MP_ROUGHNESS)
     mat.set_editor_property('used_with_skeletal_mesh', True)
-    unreal.MaterialEditingLibrary.recompile_material(mat)
+    try:
+        unreal.MaterialEditingLibrary.recompile_material(mat)
+    except Exception as exc:  # headless -nullrhi: no compile here, the editor compiles the shaders when it loads the material
+        p('material: not compiled here (%s); compiled on load' % str(exc)[:80])
     save(path)
     return mat
 
@@ -315,7 +318,10 @@ def make_material(name, color):
     mi.set_editor_property('parent', make_parent())
     # BasicShapeMaterial's tint parameter is 'Color'
     unreal.MaterialEditingLibrary.set_material_instance_vector_parameter_value(mi, 'Color', color)
-    unreal.MaterialEditingLibrary.update_material_instance(mi)
+    try:
+        unreal.MaterialEditingLibrary.update_material_instance(mi)
+    except Exception as exc:
+        p('material instance: not updated here (%s)' % str(exc)[:80])
     save(path)
     return mi
 
