@@ -13,7 +13,7 @@
   dei branch E (piano §2), regole e skill in un posto solo, indice/costi generati dagli handover, registro-clip.csv scritto solo
   da `animpipe publish/approve`, asset approvati in LFS con lock, AGENTS.md che rimanda senza copiare.
 - Decisioni owner: 1A 2A 3A (owner 2026-11-24 01:48 UTC): tronco main, indice/costi generati, Published/ in LFS con lock.
-- Prossimo: fasi P1-P6 del piano, stima ~13 $ + 80 min fisso + 15 min owner, dopo la review cieca dair v9 e il PASS di T3 (via del coordinatore).
+- Prossimo: P0 (t3 in integrazione + compilare GSTNCapture in _ue59 per catture video in tempo reale), poi P1-P6; ~14 $ + 110 min fisso + 15 min owner,
 
 ESITO: piano consegnato, nessuna modifica eseguita
 SUBAGENTI: 0

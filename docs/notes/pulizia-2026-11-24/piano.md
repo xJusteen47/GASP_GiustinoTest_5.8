@@ -68,6 +68,7 @@ Categorie in `branch-elenco.csv`: A 37 già dentro `anim-skill-t3`; B 22 sottoin
 
 | Fase | Dove, modello | Cosa | Stima |
 |---|---|---|---|
+| P0 | fisso, Haiku low subagente | prima di tutto: `claude/anim-skill-t3` nella linea di integrazione (PR in `main`), poi aggiornare `_ue59` (segnare `IN-USO.txt`) e compilare con `Run-Timed.ps1 -Preset Build` il plugin `GSTNCapture` (già in t3 da bazqb1, abilitato nel .uproject). Prova: una cattura in video in tempo reale invece dell'export PNG per frame (oggi 96 dei 99 s per sequenza sono export PNG con GPU ferma), con `ASSERT: OK` | 1 $ + 30 min desktop |
 | P1 | owner | PR `anim-skill-t3` -> `main`, accende auto-delete branch | 5 min |
 | P2 | cloud, Sonnet medium | `regole-progetto.md` unico, CLAUDE.md/AGENTS.md, script indice da handover, docs-sweep (cat. D), `Cleanup-Branches.ps1` su `main` + CSV, guard per i tag `approved/*` | 4 $ |
 | P3 | fisso, Haiku low subagente | merge E nell'ordine §2 con build dopo ogni gruppo | 3 $ + 60 min desktop |
@@ -75,7 +76,7 @@ Categorie in `branch-elenco.csv`: A 37 già dentro `anim-skill-t3`; B 22 sottoin
 | P5 | fisso, Haiku | publish jab v12, ftilt v3.1, dair v9, tag; `Sync-AgentSkills.ps1` | 1 $ + 20 min |
 | P6 | owner | `Cleanup-Branches.ps1 -Apply`, chiude 5 PR, toglie skill di account | 10 min |
 
-Totale stimato circa 13 $, 80 minuti di fisso, 15 minuti dell'owner.
+Totale stimato circa 14 $, 110 minuti di fisso, 15 minuti dell'owner.
 
 ## 7. Decisioni per l'owner
 
