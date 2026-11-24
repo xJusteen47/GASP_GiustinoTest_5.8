@@ -12,7 +12,7 @@
  *
  *  - Analog: the Mover move intent's length follows the stick tilt through a curve, so the stage's top speed is reached only at full
  *    tilt and a light tilt walks slowly. The intent is written into the input command (predicted with it), never into the sim state.
- *  - Walk start: while the ground speed is low (under LowSpeedFraction of the stage top speed) the acceleration and the turning are
+ *  - Walk start: while the ground speed is low (under LowSpeedFraction of the stage top speed) the turning (and the facing) are
  *    raised, so the character answers the stick at once and turns on the spot, then settles to the stage values as it speeds up.
  *  - Air turn: the facing follows the stick in the air at AirTurnRateDegPerSec (Mover's falling mode keeps its own air control of the
  *    velocity; this is only where the character looks, which is where the next aerial points).
@@ -25,13 +25,6 @@ struct GSTNCOMBATCORE_API FGSTN_AnalogWalkTuning
 	/** Off = the move intent and the stage values are left exactly as before this feature */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Walk", meta = (DisplayName = "Analog Walk Enabled"))
 	bool bEnabled = true;
-
-	/**
-	 * A second dead zone on top of the player's (UGSTN_InputOptionsSubsystem, applied before this reads the stick). 0 by default since
-	 * 2026-11-17: two dead zones in series made a light tilt do nothing (owner playtest 2026-11-16)
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Walk|Stick", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "0.9"))
-	float InnerDeadzone = 0.f;
 
 	/** Fraction of the top speed asked for just past the dead zone (the slowest walk) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Walk|Stick", meta = (EditCondition = "bEnabled", ClampMin = "0", ClampMax = "1"))
@@ -48,13 +41,6 @@ struct GSTNCOMBATCORE_API FGSTN_AnalogWalkTuning
 	/** Below this fraction of the stage top speed the walk-start boosts apply (fading out linearly towards it) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Walk|Walk Start", meta = (EditCondition = "bEnabled", ClampMin = "0.01", ClampMax = "1"))
 	float LowSpeedFraction = 0.5f;
-
-	/**
-	 * Acceleration multiplier at rest (1 = the stage's own acceleration). 1 by default since 2026-11-17: the start is shaped by the run
-	 * stage's acceleration ramp (FGSTN_RunStage::AccelRampFrames), not by a jump in acceleration (owner: "no step")
-	 */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Walk|Walk Start", meta = (EditCondition = "bEnabled", ClampMin = "1", ClampMax = "10"))
-	float StartAccelerationMultiplier = 1.f;
 
 	/** Turning strength at rest (Mover's TurningStrength; the stage's own value takes over as the speed rises) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Walk|Walk Start", meta = (EditCondition = "bEnabled", ClampMin = "0"))

@@ -59,9 +59,9 @@ enum class EGSTN_RunSkidMotion : uint8
 	Physics,
 	/** skid-fix-1 (2026-11-20): the capsule follows the skid clip's baked root (RootTrack + TurnCurve) for the whole clip, stick ignored.
 	 *  Falls back to BrakeExit when the clip root is not baked */
-	ClipRoot,
+	ClipRoot UMETA(DisplayName = "Clip Root (Legacy)"),
 	/** The first version (P2): constant Brake to rest, then a linear push to ExitSpeed over ExitFrames */
-	BrakeExit
+	BrakeExit UMETA(DisplayName = "Brake Exit (Legacy)")
 };
 
 /** The Physics motion of the run skid. Speeds and accelerations at the reference WalkSpeed, frames at the 62.5 Hz fixed tick */
@@ -269,14 +269,10 @@ struct GSTNCOMBATCORE_API FGSTN_RunSkidTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid")
 	EGSTN_SkidLedge Ledge = EGSTN_SkidLedge::StopAtLedge;
 
-	/** A skid drops the run back to stage 1 (Mario); off = the stage is kept. Ignored while bResumeStageAfterSkid is on */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Run Stage", meta = (EditCondition = "!bResumeStageAfterSkid"))
-	bool bResetsStage = true;
-
 	/**
 	 * Owner 2026-11-17 (default ON, to be confirmed by the owner): after the skid's turn the run pushes off from the stage it had when
 	 * the skid started (no "cold start" from stage 1), so a skid back is not slower than releasing and pushing the stick again. The stage
-	 * is frozen for the whole skid. Off = the old rule (bResetsStage). Lives in the run state (Mover sync state): rollback safe
+	 * is frozen for the whole skid. Off = the skid drops the run back to stage 1 (Mario). Lives in the run state (Mover sync state): rollback safe
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid|Run Stage")
 	bool bResumeStageAfterSkid = true;
@@ -300,7 +296,7 @@ enum class EGSTN_AirControlModel : uint8
 	/** Default: the air top speed is the takeoff speed (with a floor), the steering is the takeoff stage's AirControlScale */
 	TakeoffCap,
 	/** The old behaviour: the walking top speed and Mover's fixed air control, scaled by the AirControl stat only */
-	Fixed
+	Fixed UMETA(DisplayName = "Fixed (Legacy)")
 };
 
 /** The air half of the run tuning */

@@ -21,7 +21,7 @@ enum class EGSTN_AirInertiaStyle : uint8
 	/** Mario-like: a released stick keeps most of the drift (the old feel, a little stronger braking than Mover's 200 cm/s2) */
 	Carry,
 	/** The model off: Mover's falling mode as before (one channel, FallingDeceleration, AirControlPercentage x ground acceleration) */
-	MoverLegacy
+	MoverLegacy UMETA(DisplayName = "Mover (Legacy)")
 };
 
 /**
