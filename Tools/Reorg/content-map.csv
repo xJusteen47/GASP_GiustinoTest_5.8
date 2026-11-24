@@ -1,0 +1,56 @@
+old,new,motivo
+/Game/Blueprints/Animation/ABP_GSTN_RunStartLayer,/Game/GSTN/Animation/Layers/ABP_GSTN_RunStartLayer,layer di animazione e DA_AnimSet nostri
+/Game/Blueprints/Animation/ABP_GSTN_SkidLayer,/Game/GSTN/Animation/Layers/ABP_GSTN_SkidLayer,layer di animazione e DA_AnimSet nostri
+/Game/Blueprints/Animation/ABP_GSTN_WallLayer,/Game/GSTN/Animation/Layers/ABP_GSTN_WallLayer,layer di animazione e DA_AnimSet nostri
+/Game/Blueprints/Animation/ABP_GSTN_WallLayer_Heavy,/Game/GSTN/Animation/Layers/ABP_GSTN_WallLayer_Heavy,layer di animazione e DA_AnimSet nostri
+/Game/Blueprints/Animation/ALI_GSTN_RunStart,/Game/GSTN/Animation/Layers/ALI_GSTN_RunStart,layer di animazione e DA_AnimSet nostri
+/Game/Blueprints/Animation/ALI_GSTN_Skid,/Game/GSTN/Animation/Layers/ALI_GSTN_Skid,layer di animazione e DA_AnimSet nostri
+/Game/Blueprints/Animation/ALI_GSTN_Wall,/Game/GSTN/Animation/Layers/ALI_GSTN_Wall,layer di animazione e DA_AnimSet nostri
+/Game/Blueprints/Animation/DA_AnimSetCollection_SandboxCharacter,/Game/GSTN/Animation/Layers/DA_AnimSetCollection_SandboxCharacter,layer di animazione e DA_AnimSet nostri
+/Game/Blueprints/Animation/DA_AnimSet_Locomotion_Default,/Game/GSTN/Animation/Layers/DA_AnimSet_Locomotion_Default,layer di animazione e DA_AnimSet nostri
+/Game/Blueprints/Animation/DA_AnimSet_RunStart,/Game/GSTN/Animation/Layers/DA_AnimSet_RunStart,layer di animazione e DA_AnimSet nostri
+/Game/Blueprints/Animation/DA_AnimSet_Skid,/Game/GSTN/Animation/Layers/DA_AnimSet_Skid,layer di animazione e DA_AnimSet nostri
+/Game/Blueprints/Animation/DA_AnimSet_Wall,/Game/GSTN/Animation/Layers/DA_AnimSet_Wall,layer di animazione e DA_AnimSet nostri
+/Game/Blueprints/Animation/DA_AnimSet_Wall_Heavy,/Game/GSTN/Animation/Layers/DA_AnimSet_Wall_Heavy,layer di animazione e DA_AnimSet nostri
+/Game/Blueprints/Animation/Ported57/Skid/Driving_Skid_Revised,/Game/GSTN/Animation/Ported57/Skid/Driving_Skid_Revised,skid e wall slide portati dalla 5.7
+/Game/Blueprints/Animation/Ported57/Skid/SS_180_Turn,/Game/GSTN/Animation/Ported57/Skid/SS_180_Turn,skid e wall slide portati dalla 5.7
+/Game/Blueprints/Animation/Ported57/Skid/SS_180_Turn1,/Game/GSTN/Animation/Ported57/Skid/SS_180_Turn1,skid e wall slide portati dalla 5.7
+/Game/Blueprints/Animation/Ported57/Skid/SS_180_Turn2,/Game/GSTN/Animation/Ported57/Skid/SS_180_Turn2,skid e wall slide portati dalla 5.7
+/Game/Blueprints/Animation/Ported57/Skid/Skid_Revised,/Game/GSTN/Animation/Ported57/Skid/Skid_Revised,skid e wall slide portati dalla 5.7
+/Game/Blueprints/Animation/Ported57/SkidOwner/RTG_RootCorrection,/Game/GSTN/Animation/Ported57/SkidOwner/RTG_RootCorrection,skid e wall slide portati dalla 5.7
+/Game/Blueprints/Animation/Ported57/SkidOwner/SS_180_Turn2,/Game/GSTN/Animation/Ported57/SkidOwner/SS_180_Turn2,skid e wall slide portati dalla 5.7
+/Game/Blueprints/Animation/Ported57/SkidOwner/SS_180_Turn2_Src,/Game/GSTN/Animation/Ported57/SkidOwner/SS_180_Turn2_Src,skid e wall slide portati dalla 5.7
+/Game/Blueprints/Animation/Ported57/SkidOwner/SS_180_Turn_Root180,/Game/GSTN/Animation/Ported57/SkidOwner/SS_180_Turn_Root180,skid e wall slide portati dalla 5.7
+/Game/Blueprints/Animation/Ported57/WallSlide/CR_WallIkControlRig,/Game/GSTN/Animation/Ported57/WallSlide/CR_WallIkControlRig,skid e wall slide portati dalla 5.7
+/Game/Blueprints/Animation/Ported57/WallSlide/Driving_WallSlideIdle,/Game/GSTN/Animation/Ported57/WallSlide/Driving_WallSlideIdle,skid e wall slide portati dalla 5.7
+/Game/Blueprints/Animation/Ported57/WallSlide/SK_UEFN_Mannequin_WallSlideLeftPose,/Game/GSTN/Animation/Ported57/WallSlide/SK_UEFN_Mannequin_WallSlideLeftPose,skid e wall slide portati dalla 5.7
+/Game/Blueprints/Animation/Ported57/WallSlide/SK_UEFN_Mannequin_WallSlideRightPose,/Game/GSTN/Animation/Ported57/WallSlide/SK_UEFN_Mannequin_WallSlideRightPose,skid e wall slide portati dalla 5.7
+/Game/Blueprints/Animation/Ported57/WallSlide/WallSlideIdle,/Game/GSTN/Animation/Ported57/WallSlide/WallSlideIdle,skid e wall slide portati dalla 5.7
+/Game/Blueprints/Animation/RunStop/AS_RunStop_Ganon_L_V1,/Game/GSTN/Animation/RunStop/AS_RunStop_Ganon_L_V1,run stop Ganon
+/Game/Blueprints/Animation/RunStop/AS_RunStop_Ganon_L_V2,/Game/GSTN/Animation/RunStop/AS_RunStop_Ganon_L_V2,run stop Ganon
+/Game/Blueprints/Animation/RunStop/AS_RunStop_Ganon_L_V3,/Game/GSTN/Animation/RunStop/AS_RunStop_Ganon_L_V3,run stop Ganon
+/Game/Blueprints/Animation/RunStop/AS_RunStop_Ganon_L_V4,/Game/GSTN/Animation/RunStop/AS_RunStop_Ganon_L_V4,run stop Ganon
+/Game/Blueprints/Animation/RunStop/AS_RunStop_Ganon_L_V5,/Game/GSTN/Animation/RunStop/AS_RunStop_Ganon_L_V5,run stop Ganon
+/Game/Blueprints/Animation/RunStop/AS_RunStop_Ganon_L_V6,/Game/GSTN/Animation/RunStop/AS_RunStop_Ganon_L_V6,run stop Ganon
+/Game/Blueprints/Animation/RunStop/AS_RunStop_Ganon_R_V1,/Game/GSTN/Animation/RunStop/AS_RunStop_Ganon_R_V1,run stop Ganon
+/Game/Blueprints/Animation/RunStop/AS_RunStop_Ganon_R_V2,/Game/GSTN/Animation/RunStop/AS_RunStop_Ganon_R_V2,run stop Ganon
+/Game/Blueprints/Animation/RunStop/AS_RunStop_Ganon_R_V3,/Game/GSTN/Animation/RunStop/AS_RunStop_Ganon_R_V3,run stop Ganon
+/Game/Blueprints/Animation/RunStop/AS_RunStop_Ganon_R_V4,/Game/GSTN/Animation/RunStop/AS_RunStop_Ganon_R_V4,run stop Ganon
+/Game/Blueprints/Animation/RunStop/AS_RunStop_Ganon_R_V5,/Game/GSTN/Animation/RunStop/AS_RunStop_Ganon_R_V5,run stop Ganon
+/Game/Blueprints/Animation/RunStop/AS_RunStop_Ganon_R_V6,/Game/GSTN/Animation/RunStop/AS_RunStop_Ganon_R_V6,run stop Ganon
+/Game/Blueprints/Data/DA_CameraAnchor_Default,/Game/GSTN/Data/Camera/DA_CameraAnchor_Default,DA globale camera
+/Game/Blueprints/Data/DA_GroundContact_Default,/Game/GSTN/Data/Movement/DA_GroundContact_Default,DA globale movimento
+/Game/Blueprints/DepthMarker/DMS_Toy,/Game/GSTN/DepthMarker/DMS_Toy,depth marker
+/Game/Blueprints/DepthMarker/DMS_Toy_Approach,/Game/GSTN/DepthMarker/DMS_Toy_Approach,depth marker
+/Game/Blueprints/DepthMarker/MF_DM_CrackGlow,/Game/GSTN/DepthMarker/MF_DM_CrackGlow,depth marker
+/Game/Blueprints/DepthMarker/M_DM_Beam,/Game/GSTN/DepthMarker/M_DM_Beam,depth marker
+/Game/Blueprints/DepthMarker/M_DM_CrackShell,/Game/GSTN/DepthMarker/M_DM_CrackShell,depth marker
+/Game/Blueprints/DepthMarker/M_DM_CrystalCharacter,/Game/GSTN/DepthMarker/M_DM_CrystalCharacter,depth marker
+/Game/Blueprints/DepthMarker/M_DM_FogPuff,/Game/GSTN/DepthMarker/M_DM_FogPuff,depth marker
+/Game/Blueprints/DepthMarker/M_DM_Holo,/Game/GSTN/DepthMarker/M_DM_Holo,depth marker
+/Game/Blueprints/DepthMarker/M_DM_Holo_Decal,/Game/GSTN/DepthMarker/M_DM_Holo_Decal,depth marker
+/Game/Blueprints/DepthMarker/M_DM_StainedGlass_Decal,/Game/GSTN/DepthMarker/M_DM_StainedGlass_Decal,depth marker
+/Game/Blueprints/Equipment/SM_Implant_Placeholder,/Game/GSTN/Equipment/Placeholders/SM_Implant_Placeholder,placeholder equipaggiamento
+/Game/Levels/DefaultLevel_Harness,/Game/GSTN/_Test/Maps/DefaultLevel_Harness,mappa di test
+/Game/Levels/L_WallSlideAB,/Game/GSTN/_Test/Maps/L_WallSlideAB,mappa di test
+/Game/Levels/Test/L_Test_Hub,/Game/GSTN/Maps/L_Test_Hub,mappa di avvio

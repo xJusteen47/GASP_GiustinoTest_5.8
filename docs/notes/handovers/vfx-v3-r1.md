@@ -1,5 +1,5 @@
 # Handover VFX v3 "Astro Bot semi-realistic" r1 (2026-11-18, desktop _ue59, Opus medium)
-Branch `claude/vfx-v3` from `claude/project-thread-98dml5` 5b22e56e (contains v2). Brief `handoffs/vfx-stile-v3-categorie.md`, owner refs
+Branch `claude/vfx-v3` from `claude/project-thread-98dml5` 5b22e56e (contains v2). Brief `handoffs/archivio/2026-11/vfx-stile-v3-categorie.md`, owner refs
 `docs/notes/reviews/ref-astrobot-vfx/` (astro_1-13 + NOTE.md, from claude/ref-astrobot-vfx 570d4ead). Design sheet and plan:
 `docs/notes/stile/vfx-stile-v3-design-sheet.md`. Budget 45 $ (up to 52), coordinator OK.
 **State: built, NOT yet seen in game.** Both captures crashed the editor (capture tooling bug, found and fixed, see below): rule 5,

@@ -387,6 +387,14 @@ void FGSTN_CombatTimelineLogic::CancelForOtherCommand(FGSTN_CombatSyncCore& Core
 	ClearTimeline(Core);
 }
 
+bool FGSTN_CombatTimelineLogic::ShouldStickCutTail(const FGSTN_CombatSyncCore& Core, const FGSTN_CombatTimelineData* Data, const FGSTN_TimelineOutput& Output,
+	bool bStickOutOfNeutral)
+{
+	// A recoil or a landing lag is not the move's tail (bTailCancel is false there anyway): only the tail the data names
+	return bStickOutOfNeutral && Data && Data->Tail.bHasTail && Data->Tail.bStickCuts && Core.ActionState == EGSTN_ActionState::InTimeline
+		&& Core.RecoilStartFrame == INDEX_NONE && Output.bTailCancel;
+}
+
 int32 FGSTN_CombatTimelineLogic::Adopt(FGSTN_CombatSyncCore& Core, int32 Frame, TConstArrayView<int32> Awaiting)
 {
 	if (Awaiting.IsEmpty())

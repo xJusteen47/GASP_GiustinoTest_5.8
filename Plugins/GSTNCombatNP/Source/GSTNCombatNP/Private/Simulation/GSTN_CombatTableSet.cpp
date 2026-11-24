@@ -15,6 +15,7 @@
 #include "Misc/Crc.h"
 #include "Serialization/MemoryWriter.h"
 #include "Timeline/GSTN_CombatTimeline.h"
+#include "Timeline/GSTN_HitBounce.h"
 #include "Timeline/GSTN_Landing.h"
 #include "Timeline/GSTN_Ledge.h"
 
@@ -273,6 +274,14 @@ namespace
 		}
 		return Class && Class->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()) ? Class : nullptr;
 	}
+
+	/** The Hit Bounce track's bounce move (the backflip clip), registered like a follow-up so the kit need not grant it. Loaded with the move's content */
+	UClass* ResolveHitBounceClass(const FGSTN_CombatTimelineData* Data, int32 TrackIndex)
+	{
+		const FGSTN_TimelineTrack_HitBounce* Bounce = Data && Data->Tracks.IsValidIndex(TrackIndex) ? Data->Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack_HitBounce>() : nullptr;
+		UClass* Class = Bounce && !Bounce->BounceMove.IsNull() ? Bounce->BounceMove.Get() : nullptr;
+		return Class && Class->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()) ? Class : nullptr;
+	}
 }
 
 void UGSTN_CombatTableSet::AppendFollowUps()
@@ -286,6 +295,7 @@ void UGSTN_CombatTableSet::AppendFollowUps()
 		for (int32 TrackIndex = 0; Data && TrackIndex < Data->Tracks.Num(); ++TrackIndex)
 		{
 			Chained.Add(ResolveLandingContinueClass(Data, TrackIndex));
+			Chained.Add(ResolveHitBounceClass(Data, TrackIndex));
 		}
 		for (UClass* FollowUp : Chained)
 		{

@@ -16,7 +16,7 @@ import zlib
 
 import unreal
 
-IMPLANT_PATH = '/Game/Blueprints/Equipment/SM_Implant_Placeholder'
+IMPLANT_PATH = '/Game/GSTN/Equipment/Placeholders/SM_Implant_Placeholder'
 CUBE = '/Engine/BasicShapes/Cube.Cube'
 SPHERE = '/Engine/BasicShapes/Sphere.Sphere'
 CONNECTOR = 'Connector_Backpack'

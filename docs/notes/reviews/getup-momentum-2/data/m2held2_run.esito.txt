@@ -1,0 +1,4 @@
+﻿ESITO: OK
+ASSERT: FAIL stand_run_warmup: no get-up; roll_held_run: no get-up; rollback_held_run: no get-up
+tipo=Capture durata=123s limite=900s exit=0 figli_rimasti_uccisi=2 | prestart: PackageRestoreData.json -> PackageRestoreData.json.20261123_221950.bak | poststop: PIE ini restored (PlayNetMode=PIE_ListenServer -> PlayNetMode=PIE_Standalone, PlayNumberOfClients=3 -> PlayNumberOfClients=1)
+log=C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_qjfnc0\Saved\Getup\m2held2\run.log

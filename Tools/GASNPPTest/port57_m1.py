@@ -1,4 +1,4 @@
-"""M1 step 1: move staged 5.7 assets (/Game/GiustinoMoves) into /Game/Blueprints/Animation/Ported57, root motion off.
+"""M1 step 1: move staged 5.7 assets (/Game/GiustinoMoves) into /Game/GSTN/Animation/Ported57, root motion off.
 Run inside the editor. Writes Saved/Logs/ci/port57_m1.txt. Never saves maps."""
 import unreal, os
 
@@ -9,7 +9,7 @@ def log(s):
     lines.append(str(s))
 
 SRC = "/Game/GiustinoMoves"
-DST = "/Game/Blueprints/Animation/Ported57"
+DST = "/Game/GSTN/Animation/Ported57"
 MOVES = {
     "Skid/Skid_Revised": "Skid/Skid_Revised",
     "Skid/Skid_Revised/Driving_Skid_Revised": "Skid/Driving_Skid_Revised",

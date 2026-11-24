@@ -5,7 +5,7 @@
 # IN PLACE, the pawn does not travel: the roll abilities' movement is NOT applied here, this only judges the pose animation and its blends.
 #
 # Launch (editor with a real renderer; the script path must have no space, so boot through a copy or a one-line exec):
-#   UnrealEditor.exe <uproject> /Game/Levels/Test/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
+#   UnrealEditor.exe <uproject> /Game/GSTN/Maps/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
 #   boot.py:  exec(open(r"<project>/Tools/GASNPPTest/pie_capture_react.py").read())
 # Environment (all optional): PIE_CAPTURE_OUT (default Saved/AnimReact/capture_<date>_<time>), PIE_CAPTURE_SEQUENCES (comma separated subset of
 # SEQUENCES: hitstand, tumble, splat, knockdown_getup, roll, rollback)

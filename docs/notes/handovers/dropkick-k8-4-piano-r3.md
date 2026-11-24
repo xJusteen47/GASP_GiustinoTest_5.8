@@ -1,4 +1,5 @@
 # dropkick-k8-4-piano-r3 (portatile, offline, 2026-11-24, Opus medium) - piano e carte del giro 3 di K8 (variante K8R3, K7 bloccata)
+STATO 2026-11-24 00:18Z: FERMO per decisione owner (prima la skill unica provata su una mossa). Niente build ne cattura; si riparte da qui in un thread nuovo.
 Fonti: dropkick-k8-3-diagnosi.md (stop su ogni chiave), dropkick-k7-k8-sguardo-slowmo.md (qsgab4). Nessun editor, nessuna cattura.
 ## Carte pronte
 - k8/make_k8r3_cards.py -> overlord_dropkick_startup_k8r3.json (asset AS_OverlordDropkick_StartupK8R3, take Pilot ...K8R3).

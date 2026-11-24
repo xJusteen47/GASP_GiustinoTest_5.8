@@ -1,7 +1,7 @@
 # Brief: crouch veloce con follow-through (terra + aria), tutti i kit
 
 Owner 2026-11-18 23:30Z/23:39Z: "La posa di crouch lo voglio bello veloce il passaggio. Da e fuori. In aria una posa misto tra air time e crouch,
-più ristretta/piegata". Riferimento: Ganondorf SSBU, `handoffs/crouch-ref/` (foto, 3 video, griglie). Ambito: crouch a terra + air crouch,
+più ristretta/piegata". Riferimento: Ganondorf SSBU, `handoffs/archivio/2026-11/crouch-ref/` (foto, 3 video, griglie). Ambito: crouch a terra + air crouch,
 TUTTI i kit (profilo condiviso, memoria ALL KITS SAME). Salto/atterraggio: solo riferimento, vedi Proposte.
 Macchina: FISSO (_ue59) quando libero; analisi e piano in cloud (questo thread). Modelli: Opus esegue, Fable 5.2 high giudica e decide le pose,
 catture/build a subagenti Haiku/Sonnet. Budget stimato: 45-70 $ per 3 giri (owner: budget aperto questa settimana). Aggiorna _ue59: sì (lock).

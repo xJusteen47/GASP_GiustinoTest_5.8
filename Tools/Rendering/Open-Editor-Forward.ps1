@@ -17,7 +17,7 @@ Doc: docs/notes/rendering-profiles.md
 param(
     [switch]$Msaa,
     [string]$Engine = 'C:\Program Files\Epic Games\UE_5.9\Engine\Binaries\Win64\UnrealEditor.exe',
-    [string]$Map = '/Game/Levels/Test/L_Test_Hub'
+    [string]$Map = '/Game/GSTN/Maps/L_Test_Hub'
 )
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')

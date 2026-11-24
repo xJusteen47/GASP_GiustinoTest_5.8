@@ -1,5 +1,5 @@
 #!/bin/sh
-# GSTN git guard (pre-push): allows pushes only to claude/*; blocks main, feature/*, deletes, and force-pushes.
+# GSTN git guard (pre-push): allows pushes only to claude/* and the CREATION of tags approved/*; blocks main, feature/*, deletes, and force-pushes.
 # Also forwards refspecs to git-lfs pre-push so .uasset LFS objects are uploaded automatically before push.
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 HOOK_DIR=$(cd "$(dirname "$0")" && (pwd -W 2>/dev/null || pwd))

@@ -1,5 +1,5 @@
 # Handover: timeline nodes, checkpoint 1 (1A Play Combat Timeline And Wait + 1B Start Combat Move)
-Thread cloud, Opus high, 2026-11-16. Base `claude/integ-cp3` 069287f7. Branch `claude/project-thread-wptsyy`. Plan: `handoffs/move-timeline-decoupling.md`.
+Thread cloud, Opus high, 2026-11-16. Base `claude/integ-cp3` 069287f7. Branch `claude/project-thread-wptsyy`. Plan: `handoffs/archivio/2026-11/move-timeline-decoupling.md`.
 **State: code + unit tests written, NOT compiled (no UE in the cloud). Desktop build + tests are the next step.**
 
 ## Done

@@ -3,6 +3,7 @@
 #include "GSTN_InteractPresenter.h"
 
 #include "DrawDebugHelpers.h"
+#include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "GSTN_InteractableComponent.h"
 #include "GSTN_InteractorComponent.h"
@@ -22,25 +23,111 @@ void UGSTN_InteractPresenter_Debug::OnFocusUpdated_Implementation(const FGSTN_In
 	const float Radius = FMath::Max(View.RadiusCm, 20.f);
 	DrawDebugCircle(World, View.Anchor, Radius, 24, Color, false, -1.f, SDPG_World, 2.f, FVector::ForwardVector, FVector::RightVector, false);
 
-	FString Text = View.Display.Name.ToString();
+	if (bDrawText)
+	{
+		const FString Text = UGSTN_InteractPresenter_Prompt::FormatPrompt(View).ToString();
+		DrawDebugString(World, View.Anchor + FVector(0.f, 0.f, Radius + 20.f), Text, nullptr, Color, 0.f, true);
+	}
+#endif
+}
+
+FString UGSTN_InteractPresenter_Prompt::MakeHoldBar(float Progress, int32 Cells)
+{
+	Cells = FMath::Max(Cells, 2);
+	const int32 Filled = FMath::Clamp(FMath::FloorToInt32(FMath::Clamp(Progress, 0.f, 1.f) * Cells + 1.0e-4f), 0, Cells);
+	return FString::Printf(TEXT("[%s%s]"), *FString::ChrN(Filled, TEXT('#')), *FString::ChrN(Cells - Filled, TEXT('.')));
+}
+
+FText UGSTN_InteractPresenter_Prompt::FormatPrompt(const FGSTN_InteractPresentationView& View, int32 HoldBarCells)
+{
+	FString Out = View.Display.Name.ToString();
 	if (!View.Display.TapVerb.IsEmpty())
 	{
-		Text += FString::Printf(TEXT("\n[Tap] %s"), *View.Display.TapVerb.ToString());
+		Out += FString::Printf(TEXT("\n[Tap] %s"), *View.Display.TapVerb.ToString());
 	}
 	if (!View.Display.HoldVerb.IsEmpty())
 	{
-		Text += FString::Printf(TEXT("\n[Hold] %s"), *View.Display.HoldVerb.ToString());
+		Out += FString::Printf(TEXT("\n[Hold] %s"), *View.Display.HoldVerb.ToString());
 		if (View.HoldProgress > 0.f)
 		{
-			Text += FString::Printf(TEXT(" %d%%"), FMath::RoundToInt32(View.HoldProgress * 100.f));
+			Out += FString::Printf(TEXT(" %s %d%%"), *MakeHoldBar(View.HoldProgress, HoldBarCells), FMath::RoundToInt32(FMath::Clamp(View.HoldProgress, 0.f, 1.f) * 100.f));
 		}
 	}
 	if (View.bUnactionable)
 	{
-		Text += TEXT("\n(unavailable)");
+		Out += TEXT("\n(unavailable)");
 	}
-	DrawDebugString(World, View.Anchor + FVector(0.f, 0.f, Radius + 20.f), Text, nullptr, Color, 0.f, true);
+	return FText::FromString(Out);
+}
+
+uint64 UGSTN_InteractPresenter_Prompt::GetMessageKey() const
+{
+	// One on-screen line per presenter instance (one per local interactor); the high bits keep clear of other users of the key space
+	return 0x4753544E00000000ull | static_cast<uint64>(GetUniqueID());
+}
+
+void UGSTN_InteractPresenter_Prompt::Show(const FGSTN_InteractPresentationView& View)
+{
+	const FText NewText = FormatPrompt(View, HoldBarCells);
+	const bool bChanged = !bVisible || !NewText.EqualTo(Text) || !FMath::IsNearlyEqual(Progress, View.HoldProgress, 1.0e-3f);
+	bVisible = true;
+	Text = NewText;
+	Progress = View.HoldProgress;
+#if !UE_BUILD_SHIPPING
+	if (bDrawOnScreen && GEngine)
+	{
+		// Refreshed every frame with a short life: a destroyed presenter or a lost interactor cannot leave the line behind
+		GEngine->AddOnScreenDebugMessage(GetMessageKey(), 0.25f, View.bUnactionable ? UnactionableTint : Tint, Text.ToString(), false, FVector2D(1.4, 1.4));
+	}
 #endif
+	if (bChanged)
+	{
+		OnPromptChanged.Broadcast(true, Text, Progress);
+	}
+}
+
+void UGSTN_InteractPresenter_Prompt::Hide()
+{
+	const bool bWasVisible = bVisible;
+	bVisible = false;
+	Text = FText::GetEmpty();
+	Progress = 0.f;
+#if !UE_BUILD_SHIPPING
+	if (GEngine)
+	{
+		GEngine->RemoveOnScreenDebugMessage(GetMessageKey());
+	}
+#endif
+	if (bWasVisible)
+	{
+		OnPromptChanged.Broadcast(false, Text, 0.f);
+	}
+}
+
+void UGSTN_InteractPresenter_Prompt::OnFocusEntered_Implementation(const FGSTN_InteractPresentationView& View)
+{
+	Show(View);
+}
+
+void UGSTN_InteractPresenter_Prompt::OnFocusUpdated_Implementation(const FGSTN_InteractPresentationView& View, float DeltaTime)
+{
+	Show(View);
+}
+
+void UGSTN_InteractPresenter_Prompt::OnFocusLeft_Implementation(const FGSTN_InteractPresentationView& View)
+{
+	Hide();
+}
+
+void UGSTN_InteractPresenter_Prompt::BeginDestroy()
+{
+#if !UE_BUILD_SHIPPING
+	if (bVisible && GEngine)
+	{
+		GEngine->RemoveOnScreenDebugMessage(GetMessageKey());
+	}
+#endif
+	Super::BeginDestroy();
 }
 
 bool UGSTN_InteractPresentationSubsystem::ShouldCreateSubsystem(UObject* Outer) const

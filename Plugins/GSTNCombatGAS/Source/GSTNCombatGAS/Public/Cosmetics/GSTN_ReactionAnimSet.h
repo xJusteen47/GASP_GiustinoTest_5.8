@@ -172,7 +172,7 @@ enum class EGSTN_HitSide : uint8
 };
 
 /**
- * The 4 directional hit additives of one base reaction (ground or air), owner option B 2026-11-16 (handoffs/reazioni-ricerca.md): an
+ * The 4 directional hit additives of one base reaction (ground or air), owner option B 2026-11-16 (handoffs/archivio/2026-11/reazioni-ricerca.md): an
  * additive clip on the torso per side, weighted by the hit's intensity, drawn on top of whatever the base shows by the anim node
  * FGSTN_AnimNode_DirectionalHitAdditive. A side with no clip draws a PLACEHOLDER spine bend (PlaceholderAngleDeg), so the system can be
  * tested before the poses exist; it is not a pose and never goes to the owner as one. Presentation only.

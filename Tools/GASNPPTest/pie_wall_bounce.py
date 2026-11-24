@@ -25,7 +25,7 @@ import defence_scenarios as ds   # noqa: E402
 
 OUT = os.environ.get('PIE_CAPTURE_OUT') or os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()), 'WallBounce',
                                                         time.strftime('%Y%m%d_%H%M%S'))
-MAP = '/Game/Levels/Test/L_Test_Hub'
+MAP = '/Game/GSTN/Maps/L_Test_Hub'
 SET = '/Game/GASNPPTest/Combat/Reaction/DA_ReactionAnims'
 SIZE = 480
 DISTANCE, ELEVATION, FOV = 520.0, 8.0, 50.0

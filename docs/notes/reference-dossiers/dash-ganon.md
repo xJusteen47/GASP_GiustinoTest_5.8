@@ -4,7 +4,7 @@ Method: docs/notes/review/dossier-riferimento.md (branch claude/project-thread-5
 (project files handoffs/dash-ganon-ref/NOTE.md) plus one look at grid A. Images of the game stay in project files, never in the repo.
 
 ## Source
-- Video: owner's phone filming the Switch, project files `handoffs/crouch-ref/ganon_9541.mov`. Phone 30 fps, game 60 fps -> 1 phone
+- Video: owner's phone filming the Switch, project files `handoffs/archivio/2026-11/crouch-ref/ganon_9541.mov`. Phone 30 fps, game 60 fps -> 1 phone
   frame = 2 game frames. Our sim 62.5 Hz, clips 60 fps: 1 game frame ~ 1 clip frame (difference ignored, under 1 frame over 25).
 - View: side, hand-held, the camera pans with the dash. No fixed scale (see "Not measurable").
 - Grids: `handoffs/dash-ganon-ref/dash_A_turn_right_9541_t7.50-8.04_30fps.jpg` (clean side view, every phone frame),

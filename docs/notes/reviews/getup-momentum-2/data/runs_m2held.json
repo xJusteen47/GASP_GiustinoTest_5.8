@@ -1,0 +1,4 @@
+[
+  {"name": "roll_held_run", "getup": "facing", "follow": "run", "angle": 0.01},
+  {"name": "rollback_held_run", "getup": "against", "follow": "run", "angle": 0.01}
+]

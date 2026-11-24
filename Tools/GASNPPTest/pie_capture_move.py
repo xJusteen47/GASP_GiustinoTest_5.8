@@ -6,7 +6,7 @@
 # frame: one image = one 60 fps frame of what a player sees. The simulation rate is not touched.
 #
 # Launch (editor with a real renderer; the script path must have no space, so boot through a copy or a one-line exec):
-#   UnrealEditor.exe <uproject> /Game/Levels/Test/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
+#   UnrealEditor.exe <uproject> /Game/GSTN/Maps/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
 #   boot.py:  exec(open(r"<project>/Tools/GASNPPTest/pie_capture_move.py").read())
 # Environment (all optional): PIE_CAPTURE_KIT (KIT_Test_Overlord), PIE_CAPTURE_OUT (default Saved/AnimJab3/capture_<date>_<time>),
 # PIE_CAPTURE_SEQUENCES (default: all of SEQUENCES, or all of DAIR_SEQUENCES when the kit's name contains DAir), PIE_CAPTURE_NOVFX=1 (no dust)
@@ -159,6 +159,19 @@ MINION_SEQUENCES = [
 # PUSHBOX-P5, owner PIE bug 2026-11-16 (run with PIE_CAPTURE_BUTTON=Strong): strong_walk hits a dummy 95 cm ahead with the strong attack, then
 # walks at it (the owner stopped ~2 m short for seconds); inside_escape puts the dummy 10 cm ahead (bodies overlapping) and walks away
 # ('walk_dir': the stick, default forward). Log the constraint with gstn.Pushbox.Log 1 (PIE_CAPTURE_PUSHLOG=1)
+# fthrow-overlord-1 (2026-11-23): grab throws. 'presses' = [(frame after PRE, button name in the input config, stick or None)]: the stick (camera
+# relative, as 'sticks') is held on that frame only and the button tapped, so Attack + stick forward = the F. throw of the Notation mode.
+# The dummy is grabbed with Interact on frame 0 (it must stand inside the grab reach: PIE_CAPTURE_GRAB_DIST, default 80 cm) and thrown on 45.
+GRAB_SEQUENCES = [
+    # fthrow-capture-fix (2026-11-24): the grab setup of the network link tests. The v1r2 run grabbed nothing (KIT_Test_Overlord has no link
+    # slots): run with PIE_CAPTURE_KIT=KIT_Test_Link and PIE_CAPTURE_PRE_PY=fthrow_capture_pre.py (link steps, the kit's forward throw), and the
+    # dummy gets the same kit as the link tests' pawns ('dummy_kit', PIE_CAPTURE_DUMMY_KIT, '' = keep its own). 'link_probe' logs the grab
+    # probe 2 frames before the Interact tap and the host's Body link 15 frames after it (formed = role 1, phase 2), so a run that grabs
+    # nothing says why in capture.log before anyone reads the assert
+    {'name': 'fthrow_hit', 'taps': [], 'frames': 140, 'dummy': float(os.environ.get('PIE_CAPTURE_GRAB_DIST', 80.0)), 'shoot': True,
+     'presses': [(0, 'Interact', None), (int(os.environ.get('PIE_CAPTURE_THROW_AT', 45)), 'Attack', (0, 1, 0))],
+     'dummy_kit': os.environ.get('PIE_CAPTURE_DUMMY_KIT', 'KIT_Test_Link'), 'link_probe': (-2, 15)},
+]
 BUG_SEQUENCES = [
     {'name': 'strong_walk', 'taps': [0], 'frames': 300, 'dummy': 95.0, 'shoot': True, 'walk': (40, 240)},
     {'name': 'inside_escape', 'taps': [], 'frames': 160, 'dummy': 10.0, 'shoot': True, 'walk': (20, 120), 'walk_dir': (0, -1, 0)},
@@ -289,8 +302,21 @@ MOVE_SEQUENCES = [
 ]
 if os.environ.get('PIE_CAPTURE_VIEWS'):
     VIEWS = [v for v in VIEWS if v[0] in os.environ['PIE_CAPTURE_VIEWS'].split(',')]
+# capdet (owner 2026-11-23, deterministic captures): PIE_CAPTURE_VIEWSET=det = four fixed views in ONE Play session, the review set of
+# Tools/AnimPipeline/capdet/: behind, side, q34 (3/4 front left), close (feet and legs, tight). VIEW_GEOM = per view (distance, elevation deg,
+# aim height offset cm, fov); a view not in it uses the globals. The cameras are placed once from the start yaw (never follow the pawn
+# unless the sequence flies), the fill lights are fixed (FILL_LIGHTS): same picture on every run. PIE_CAPTURE_SEED: python's RNG
+# (the simulation has none, VFX are off in capdet); logged to the capture log.
+VIEW_GEOM = {}
+if os.environ.get('PIE_CAPTURE_VIEWSET') == 'det':
+    VIEWS = [('behind', 180.0), ('side', 90.0), ('q34', 315.0), ('close', 90.0)]
+    VIEW_GEOM = {'behind': (380.0, 10.0, 0.0, 45.0), 'side': (380.0, 10.0, 0.0, 45.0), 'q34': (380.0, 10.0, 0.0, 45.0),
+                 'close': (170.0, 8.0, -35.0, 40.0)}
+SEED = int(os.environ.get('PIE_CAPTURE_SEED', '1'))
+import random  # noqa: E402
+random.seed(SEED)
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
-    SEQUENCES = [s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
+    SEQUENCES = [s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES + GRAB_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
 elif 'DoubleShot' in KIT:
     SEQUENCES = DOUBLE_SHOT_SEQUENCES
 elif 'Dropkick' in KIT:
@@ -311,7 +337,7 @@ if os.environ.get('PIE_CAPTURE_FRAMES'):
 RUNS = json.load(open(os.environ['PIE_CAPTURE_RUNS'], encoding='utf-8')) if os.environ.get('PIE_CAPTURE_RUNS') else None
 if RUNS:
     _ALL = {s['name']: s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES
-            + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES}
+            + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES + GRAB_SEQUENCES}
     SEQUENCES = []
     for _r in RUNS:
         for _n in _r['sequences']:
@@ -342,6 +368,13 @@ COLLISION = os.environ.get('PIE_CAPTURE_COLLISION', '') == '1'
 #  - no frame limit: t.MaxFPS 0 and the editor's background CPU throttle off, so a window on the second monitor runs at full speed.
 # An editor built without the plugin falls back to _shoot() and says so in capture.log ("FASTCAP: unavailable").
 FAST = os.environ.get('PIE_FASTCAP', '') == '1'
+# Determinism (C5 2026-11-24): the host spawns at whichever PlayerStart PIE gives it (y 150 / -450 / 450 seen in three captures of the
+# same run) and only a run's FIRST sequence was reset, so the hit of a whiff+hit run started where the whiff ended. Two fresh captures
+# of one run differed by ~34 cm in the move window. PIE_CAPTURE_HOST_SPOT="x,y" teleports the host to that world point (same facing
+# rule as before) and PIE_CAPTURE_RESET_EACH=1 does the run reset (reorient, kit, cvars, teleport) before EVERY sequence.
+HOST_SPOT = tuple(float(v) for v in os.environ['PIE_CAPTURE_HOST_SPOT'].split(',')) if os.environ.get('PIE_CAPTURE_HOST_SPOT') else None
+RESET_EACH = os.environ.get('PIE_CAPTURE_RESET_EACH', '') == '1'
+FRESH_HOLD, FRESH_STOP, FRESH_SETTLE, FRESH_ALIGN = 12, 60, 15, 5   # frames of the fresh-idle step (see 'fresh idle' in _tick)
 FAST_PRE, FAST_POST = (int(v) for v in os.environ.get('PIE_FASTCAP_WINDOW', '20,90').split(','))
 FAST_EARLY_END = os.environ.get('PIE_FASTCAP_EARLY_END', '1') != '0'
 st = {'phase': 'boot', 't': time.time(), 'start': time.time(), 'seq': 0, 'frame': 0, 'cams': [], 'rts': [], 'lights': [], 'handle': None, 'log': None, 'rows': None}
@@ -382,12 +415,12 @@ def _make_cameras():
         _console('Summon SceneCapture2D')
         return False
     st['cams'] = found[:len(VIEWS)]
-    for cam in st['cams']:
+    for (vname, _az), cam in zip(VIEWS, st['cams']):
         comp = cam.capture_component2d
         rt = unreal.RenderingLibrary.create_render_target2d(_world(), SIZE, SIZE, unreal.TextureRenderTargetFormat.RTF_RGBA8)
         st['rts'].append(rt)
         for prop, value in (('capture_every_frame', False), ('capture_on_movement', False), ('always_persist_rendering_state', True),
-                            ('fov_angle', FOV), ('capture_source', unreal.SceneCaptureSource.SCS_FINAL_COLOR_LDR), ('texture_target', rt)):
+                            ('fov_angle', VIEW_GEOM.get(vname, (0, 0, 0, FOV))[3]), ('capture_source', unreal.SceneCaptureSource.SCS_FINAL_COLOR_LDR), ('texture_target', rt)):
             comp.set_editor_property(prop, value)
         if COLLISION:   # the movement capsule drawn in every view (ECB review): the scene captures have their own show flags
             comp.set_editor_property('show_flag_settings', [unreal.EngineShowFlagsSetting(show_flag_name='Collision', enabled=True)])
@@ -500,10 +533,11 @@ def _place_cameras(follow=False):
     for (name, az), cam in zip(VIEWS, st['cams']):
         if az is None:
             continue
-        a, e = math.radians(yaw + az), math.radians(ELEVATION)
-        pos = unreal.Vector(centre.x + DISTANCE * math.cos(e) * math.cos(a), centre.y + DISTANCE * math.cos(e) * math.sin(a),
-                            centre.z + DISTANCE * math.sin(e))
-        cam.set_actor_location_and_rotation(pos, unreal.MathLibrary.find_look_at_rotation(pos, centre), False, False)
+        dist, elev, dz, _fov = VIEW_GEOM.get(name, (DISTANCE, ELEVATION, 0.0, FOV))
+        a, e = math.radians(yaw + az), math.radians(elev)
+        aim = unreal.Vector(centre.x, centre.y, centre.z + dz)
+        pos = unreal.Vector(aim.x + dist * math.cos(e) * math.cos(a), aim.y + dist * math.cos(e) * math.sin(a), aim.z + dist * math.sin(e))
+        cam.set_actor_location_and_rotation(pos, unreal.MathLibrary.find_look_at_rotation(pos, aim), False, False)
     return (round(centre.x), round(centre.y), round(centre.z)), round(yaw)
 
 
@@ -644,6 +678,20 @@ def _row(frame, tapped, extra=None):
         row['body']['face_hips'] = _face('thigh_l', 'thigh_r')
         row['body']['face_chest'] = _face('clavicle_l', 'clavicle_r')
         row['body']['root_yaw'] = round(mesh.get_socket_rotation('root').yaw, 1)
+        # turnaround-foot (P5, 2026-11-23): the pivot foot's spin as SHOWN (foot world yaw/roll, ball location) and the curves that
+        # decide who holds it: contact_l/_r pin the foot in CR_Biped_FootPlacement, GSTN_FootSlide* frees it from our pop guard
+        # (fl below: R phase 4 = pop guard Smoothing). Compare with the clip's own foot-pelvis gap (gates_joints_*.json).
+        for _b in ('foot_l', 'foot_r'):
+            _r = mesh.get_socket_rotation(_b)
+            row['body'][_b + '_rot'] = [round(_r.yaw, 1), round(_r.pitch, 1), round(_r.roll, 1)]
+        _v = mesh.get_socket_location('ball_r')
+        row['body']['ball_r'] = [round(_v.x - _al.x, 1), round(_v.y - _al.y, 1), round(_v.z - _al.z, 1)]
+        try:
+            _ai = mesh.get_anim_instance()
+            row['body']['curves'] = {_c: round(float(_ai.get_curve_value(_c)), 2) for _c in
+                                     ('contact_l', 'contact_r', 'GSTN_FootSlide', 'GSTN_FootSlide_r', 'enable_warping')}
+        except Exception as e:
+            row['body']['curves_err'] = repr(e)[:60]
         _fl_row(mesh, row['body'])
     except Exception as e:
         row['body_err'] = repr(e)[:80]
@@ -835,6 +883,7 @@ def _tick(_dt):
             return _finish(f'timeout in phase {phase}')
         if phase == 'boot' and now - st['t'] > 8:
             # PIE_CAPTURE_CLIENTS (default 2 = 3 players): 0 for single-character captures (locomotion): 1 PIE world, ~3x faster (speed-up.md 4)
+            _log(f'capdet: seed {SEED}, views {[v[0] for v in VIEWS]}, size {SIZE}')
             _log(f'setup_editor: {g.setup_editor(True, "listen", int(os.environ.get("PIE_CAPTURE_CLIENTS", "2")))}')
             les.editor_request_begin_play()
             st.update(phase='wait_ready', t=now)
@@ -870,7 +919,7 @@ def _tick(_dt):
             if st['seq'] >= len(SEQUENCES):
                 return _finish('ok')
             seq = SEQUENCES[st['seq']]
-            if seq.get('run_first') and st.get('run_ready') != st['seq']:   # PIE_CAPTURE_RUNS: next variant, same Play session
+            if (seq.get('run_first') or RESET_EACH) and st.get('run_ready') != st['seq']:   # PIE_CAPTURE_RUNS: next variant, same Play session
                 # The spawn reset moves the host but keeps its facing (a 180 run left it at -168 deg and the next run's stick, camera
                 # relative, made a forward start: ASSERT FAIL, turn2 t1). So: camera yaw back to the first run's, a short stick
                 # forward (the pawn turns to face it, orient to movement), release, settle, then the spawn reset.
@@ -901,12 +950,15 @@ def _tick(_dt):
                 if seq.get('run_kit') and seq['run_kit'] != st.get('kit_now', KIT):
                     _log(f'run {seq["run"]}: kit {seq["run_kit"]}: {h.kit(0, seq["run_kit"])}')
                     st['kit_now'] = seq['run_kit']
-                for cv in [c.strip() for c in seq['run_cvars'].split(';') if c.strip()]:
+                for cv in [c.strip() for c in seq.get('run_cvars', '').split(';') if c.strip()]:
                     _console(cv)
                 comp = g.comps(g.worlds()[0])[h._key(0)]
-                comp.server_reset_to_spawn(unreal.Vector(0.0, 0.0, 0.0))
+                spawn = comp.get_spawn_location()
+                comp.server_reset_to_spawn(unreal.Vector(HOST_SPOT[0] - spawn.x, HOST_SPOT[1] - spawn.y, 0.0) if HOST_SPOT
+                                           else unreal.Vector(0.0, 0.0, 0.0))
                 st.update(run_ready=st['seq'], t=now + 1.0, reorient=0)    # 3 s real time: the reset lands and the idle settles
-                _log(f'run {seq["run"]}: cvars [{seq["run_cvars"]}], facing off by {off:.1f} deg before the reset, host reset to spawn')
+                _log(f'run {seq.get("run", "-")}: cvars [{seq.get("run_cvars", "")}], facing off by {off:.1f} deg before the reset, '
+                     f'host reset to {"spot " + str(HOST_SPOT) if HOST_SPOT else "spawn"} (PlayerStart at {spawn.x:.0f},{spawn.y:.0f})')
                 return None
             if not seq['dummy'] and not st.get('dummy_placed'):   # skill-k8: whiff = empty stage, checked after the teleport settles
                 if not st.get('dummies_parked'):
@@ -925,6 +977,8 @@ def _tick(_dt):
                 if keys and seq.get('dummy_percent') is not None:   # test harness only (server write of the health set's DamagePercent)
                     ok = g.comps(g.worlds()[0])[keys[0]].server_set_damage_percent(seq['dummy_percent'])
                     _log(f'dummy {keys[0]} percent {seq["dummy_percent"]}: {ok}')
+                if keys and seq.get('dummy_kit'):   # fthrow-capture-fix: the grab target carries the link kit, as in link_scenarios
+                    _log(f'dummy {keys[0]} kit {seq["dummy_kit"]}: {g._apply_loadout(keys[0], seq["dummy_kit"])}')
                 st.update(dummy_placed=True, dummy_key=keys[0] if keys else None, t=now)         # one more wait for the teleport to settle
                 return None
             if seq.get('minions') and not st.get('minions_spawned'):
@@ -942,6 +996,43 @@ def _tick(_dt):
                 # Per sequence: the standing height is not the same before and after the first landing (100 then 88 cm on the first run)
                 st['ground_z'] = z
                 _log(f'{seq["name"]}: standing height z {z:.1f}')
+            if RESET_EACH and st.get('fresh_done') != st['seq']:
+                # C5 determinism: GASP's Idle Loop -> Idle Break after 3 s in state, and the break clip is RANDOM (chooser Randomize,
+                # 13 clips): two captures of one run showed v05 / v07 and 23 cm at the press frame. The real-time waits above let the
+                # break start before frame 0. So, frame-stepped from here (t.OverrideFPS 60, ticks counted, no wall clock): a short
+                # stick nudge along the start facing leaves Idle Loop, the walk stops, the host is teleported back to the spot and the
+                # sequence starts with a FRESH Idle Loop (state time << 3 s at the press). Same frames every time.
+                pc, pawn = g._local_pawn(0)
+                n = st.get('fresh_n', 0)
+                if n == 0:
+                    _console('t.OverrideFPS 60')
+                    if 'cyaw0' in st:
+                        pc.set_control_rotation(unreal.Rotator(roll=0.0, pitch=pc.get_control_rotation().pitch, yaw=st['cyaw0']))
+                    g.hold(0, 'move', (0, 1, 0))
+                elif n == FRESH_HOLD:
+                    g.release(0, 'move')
+                elif n == FRESH_HOLD + FRESH_STOP:
+                    comp = g.comps(g.worlds()[0])[h._key(0)]
+                    spawn = comp.get_spawn_location()
+                    tgt = HOST_SPOT or (spawn.x, spawn.y)
+                    comp.server_reset_to_spawn(unreal.Vector(tgt[0] - spawn.x, tgt[1] - spawn.y, 0.0))
+                elif n >= FRESH_HOLD + FRESH_STOP + FRESH_SETTLE:
+                    # Sim/render phase: the sim ticks at 62.5 Hz, the capture renders 60 fps, so every 24 frames one frame carries
+                    # TWO sim ticks. Its place decides which tick each frame shows (two captures were identical tick by tick but 22 cm
+                    # apart on the frame where one had the double tick). Start a fixed number of frames after an observed double tick.
+                    hf = ((g._view(0, h._key(0)) or {}).get('combat') or {}).get('historyFrame')
+                    prev = st.get('fresh_hf')
+                    st['fresh_hf'] = hf
+                    if st.get('fresh_go') is None and hf is not None and prev is not None and hf - prev >= 2:
+                        st['fresh_go'] = n + FRESH_ALIGN
+                    if st.get('fresh_go') is not None and n >= st['fresh_go'] or n > FRESH_HOLD + FRESH_STOP + FRESH_SETTLE + 60:
+                        aligned = st.get('fresh_go') is not None
+                        st.update(fresh_done=st['seq'], fresh_n=0, fresh_go=None, fresh_hf=None)
+                        _log(f'{seq["name"]}: fresh idle (nudge {FRESH_HOLD} + stop {FRESH_STOP} + settle {FRESH_SETTLE} frames, '
+                             f'frame-stepped), sim phase {"ALIGNED (start " + str(FRESH_ALIGN) + " frames after a double tick)" if aligned else "NOT ALIGNED (no double tick seen)"}')
+                        return None
+                st['fresh_n'] = n + 1
+                return None
             if os.environ.get('PIE_CAPTURE_NOVFX') == '1':   # land-v2-1: no presentation events (landing/jump dust, sparks) on any pawn
                 _log(f'{seq["name"]}: presentation events off on {_presentation_off()} components')
             _log(f'sequence {seq["name"]}: pawn at {_place_cameras()}')
@@ -1040,6 +1131,28 @@ def _tick(_dt):
                     _log(f'{seq["name"]}: projection volume spawned at {loc}')
                 except Exception as e:  # noqa: BLE001
                     _log(f'{seq["name"]}: projection volume FAILED: {e!r}')
+            if seq.get('link_probe'):                                   # fthrow-capture-fix: why a grab did (not) form
+                before, after = seq['link_probe']
+                if frame in (PRE + before, PRE + after):
+                    try:
+                        import link_scenarios as ls
+                        host = h._key(0)
+                        if frame == PRE + before:
+                            _log(f'{seq["name"]}: grab probe v{frame}: {ls.Lib.describe_grab_probe(ls.actor(0, host))}')
+                        else:
+                            b = ls.body(0, host)
+                            _log(f'{seq["name"]}: host Body link v{frame}: {b} ({"FORMED" if b and b[0] == 1 and b[1] == 2 else "NOT FORMED"})'
+                                 f' text {ls.link_text(0, host)}')
+                    except Exception as e:  # noqa: BLE001  a diagnostic must not stop the capture
+                        _log(f'{seq["name"]}: link probe failed: {e!r}')
+            for at, button, stick in seq.get('presses', []):          # grab throws (fthrow-overlord-1)
+                if frame == PRE + at:
+                    if stick is not None:
+                        g.hold(0, 'move', stick)
+                    g.combat_tap(0, g.button_mask(button))
+                    _log(f'{seq["name"]}: {button} tap{" + stick " + str(stick) if stick else ""} on v{frame}')
+                elif stick is not None and frame == PRE + at + 2:
+                    g.release(0, 'move')
             for at, value in seq.get('sticks', []):                 # movement QA clips
                 if frame == PRE + at:
                     if value is None:
@@ -1123,6 +1236,8 @@ def _tick(_dt):
                     f.write(f'ASSERT: FAIL assert step crashed: {e!r}\n')
             with open(os.path.join(OUT, 'done.txt'), 'w') as f:
                 f.write(st.get('status', '?') + '\n')
+            # Run-Timed closes the editor itself a few seconds after this line if QUIT_EDITOR does not take effect
+            unreal.log('ESITO: ' + ('OK' if st.get('status', '?') == 'ok' else 'FAIL'))
             unreal.SystemLibrary.execute_console_command(None, 'QUIT_EDITOR')
     except Exception:
         _log('ERROR ' + traceback.format_exc())
@@ -1140,5 +1255,17 @@ def _tick(_dt):
 for _cv in [c.strip() for c in os.environ.get('PIE_CAPTURE_CVARS', '').split(';') if c.strip()]:
     unreal.SystemLibrary.execute_console_command(None, _cv)
     _log(f'cvar: {_cv}')
+# fthrow-overlord-1: PIE_CAPTURE_PRE_PY=<file.py> is exec'd once before Play (in-memory data for the capture, e.g. fthrow_capture_pre.py)
+if os.environ.get('PIE_CAPTURE_PRE_PY'):
+    _pre = {}
+    try:
+        exec(open(os.environ['PIE_CAPTURE_PRE_PY'], encoding='utf-8').read(), _pre)
+        _log(_pre.get('_pre_msg', 'pre script run: ' + os.environ['PIE_CAPTURE_PRE_PY']))
+    except Exception:  # noqa: BLE001  a broken pre script must not leave the editor idle until the time limit
+        _log('ERROR pre script: ' + traceback.format_exc())
+        with open(os.path.join(OUT, 'done.txt'), 'w') as _f:
+            _f.write('error in the pre script (see capture.log)\n')
+        unreal.SystemLibrary.execute_console_command(None, 'QUIT_EDITOR')
+        raise
 _log(f'driver loaded: kit {KIT}, button {BUTTON}, out {OUT}')
 st['handle'] = unreal.register_slate_post_tick_callback(_tick)

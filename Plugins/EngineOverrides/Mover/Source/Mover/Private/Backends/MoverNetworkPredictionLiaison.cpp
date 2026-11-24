@@ -8,6 +8,9 @@
 #include "InputContainerStruct.h"
 #include "KinematicActorSimulation.h"
 #include "MoverComponent.h"
+#include "MoverDataModelTypes.h"
+#include "MoverLog.h"
+#include "HAL/IConsoleManager.h"
 
 #if WITH_EDITOR
 #include "Misc/DataValidation.h"
@@ -58,14 +61,93 @@ void UMoverNetworkPredictionLiaisonComponent::ProduceInput(const int32 DeltaTime
 	MoverComp->ProduceInput(DeltaTimeMS, Cmd);
 }
 
+#if !UE_BUILD_SHIPPING
+// GSTN (2026-11-23, neck hold desync diagnosis): name the part of the Mover state that asks for a rollback. Diagnostics only, off by default,
+// never changes the verdict.
+static TAutoConsoleVariable<int32> CVarGSTNLogMoverReconcile(TEXT("gstn.Mover.LogReconcile"), 0,
+	TEXT("1: log which Mover sync/aux field triggers a reconcile (mode, sync struct with location delta and base, modifiers)."));
+
+static void GSTN_LogMoverReconcile(const UMoverComponent* MoverComp, const FMoverSyncState& Predicted, const FMoverSyncState& Authority)
+{
+	const FString Owner = MoverComp && MoverComp->GetOwner() ? MoverComp->GetOwner()->GetName() : TEXT("?");
+	const int32 Role = MoverComp && MoverComp->GetOwner() ? (int32)MoverComp->GetOwner()->GetLocalRole() : -1;
+	if (Predicted.MovementMode != Authority.MovementMode)
+	{
+		UE_LOG(LogMover, Log, TEXT("GSTNMoverReconcile %s role=%d field=MovementMode local=%s auth=%s"), *Owner, Role,
+			*Predicted.MovementMode.ToString(), *Authority.MovementMode.ToString());
+	}
+	const FMoverDataCollection& Local = Predicted.SyncStateCollection;
+	const FMoverDataCollection& Auth = Authority.SyncStateCollection;
+	if (Local.GetDataArray().Num() != Auth.GetDataArray().Num())
+	{
+		UE_LOG(LogMover, Log, TEXT("GSTNMoverReconcile %s role=%d field=SyncCollectionCount local=%d auth=%d"), *Owner, Role, Local.GetDataArray().Num(), Auth.GetDataArray().Num());
+	}
+	for (const TSharedPtr<FMoverDataStructBase>& Element : Local.GetDataArray())
+	{
+		if (!Element.IsValid())
+		{
+			continue;
+		}
+		const FMoverDataStructBase* Other = Auth.FindDataByType(Element->GetDataScriptStruct());
+		if (!Other || !Element->ShouldReconcile(*Other))
+		{
+			if (!Other)
+			{
+				UE_LOG(LogMover, Log, TEXT("GSTNMoverReconcile %s role=%d field=%s missing on authority"), *Owner, Role, *Element->GetDataScriptStruct()->GetName());
+			}
+			continue;
+		}
+		if (Element->GetDataScriptStruct() == FMoverDefaultSyncState::StaticStruct())
+		{
+			const FMoverDefaultSyncState& L = static_cast<const FMoverDefaultSyncState&>(*Element);
+			const FMoverDefaultSyncState& A = static_cast<const FMoverDefaultSyncState&>(*Other);
+			const FVector LocalWorld = L.GetLocation_WorldSpace();
+			const FVector AuthWorld = A.GetLocation_WorldSpace();
+			UE_LOG(LogMover, Log, TEXT("GSTNMoverReconcile %s role=%d field=DefaultSyncState dist=%.2f delta=%s localBase=%s/%s authBase=%s/%s localVel=%s authVel=%s"),
+				*Owner, Role, FVector::Dist(LocalWorld, AuthWorld), *(LocalWorld - AuthWorld).ToCompactString(),
+				*GetNameSafe(L.GetMovementBase()), *L.GetMovementBaseBoneName().ToString(),
+				*GetNameSafe(A.GetMovementBase()), *A.GetMovementBaseBoneName().ToString(),
+				*L.GetVelocity_WorldSpace().ToCompactString(), *A.GetVelocity_WorldSpace().ToCompactString());
+		}
+		else
+		{
+			TAnsiStringBuilder<512> LocalText;
+			TAnsiStringBuilder<512> AuthText;
+			Element->ToString(LocalText);
+			Other->ToString(AuthText);
+			UE_LOG(LogMover, Log, TEXT("GSTNMoverReconcile %s role=%d field=%s local={%s} auth={%s}"), *Owner, Role, *Element->GetDataScriptStruct()->GetName(),
+				*FString(LocalText.ToString()).Replace(TEXT("\n"), TEXT(" ")), *FString(AuthText.ToString()).Replace(TEXT("\n"), TEXT(" ")));
+		}
+	}
+	if (Predicted.MovementModifiers.ShouldReconcile(Authority.MovementModifiers))
+	{
+		UE_LOG(LogMover, Log, TEXT("GSTNMoverReconcile %s role=%d field=MovementModifiers"), *Owner, Role);
+	}
+}
+#endif
+
 bool UMoverNetworkPredictionLiaisonComponent::ShouldReconcile(const FMoverSyncState* PredictedState, const FMoverSyncState* AuthorityState) const
 {
-	return PredictedState->ShouldReconcile(*AuthorityState);
+	const bool bReconcile = PredictedState->ShouldReconcile(*AuthorityState);
+#if !UE_BUILD_SHIPPING
+	if (bReconcile && CVarGSTNLogMoverReconcile.GetValueOnAnyThread() != 0)
+	{
+		GSTN_LogMoverReconcile(MoverComp, *PredictedState, *AuthorityState);
+	}
+#endif
+	return bReconcile;
 }
 
 bool UMoverNetworkPredictionLiaisonComponent::ShouldReconcile(const FMoverAuxStateContext* PredictedState, const FMoverAuxStateContext* AuthorityState) const
 {
-	return PredictedState->ShouldReconcile(*AuthorityState);
+	const bool bReconcile = PredictedState->ShouldReconcile(*AuthorityState);
+#if !UE_BUILD_SHIPPING
+	if (bReconcile && CVarGSTNLogMoverReconcile.GetValueOnAnyThread() != 0)
+	{
+		UE_LOG(LogMover, Log, TEXT("GSTNMoverReconcile %s field=AuxState"), MoverComp && MoverComp->GetOwner() ? *MoverComp->GetOwner()->GetName() : TEXT("?"));
+	}
+#endif
+	return bReconcile;
 }
 
 void UMoverNetworkPredictionLiaisonComponent::RestoreFrame(const FMoverSyncState* SyncState, const FMoverAuxStateContext* AuxState)

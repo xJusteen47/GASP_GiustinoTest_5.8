@@ -4,7 +4,7 @@ import os
 import unreal
 
 AL = unreal.AnimationLibrary
-CLIPS = ['/Game/Blueprints/Animation/Ported57/Skid/SS_180_Turn', '/Game/Blueprints/Animation/Ported57/SkidOwner/SS_180_Turn_Root180']
+CLIPS = ['/Game/GSTN/Animation/Ported57/Skid/SS_180_Turn', '/Game/GSTN/Animation/Ported57/SkidOwner/SS_180_Turn_Root180']
 CHAINS = {'head': ['root', 'pelvis', 'spine_01', 'spine_02', 'spine_03', 'spine_04', 'spine_05', 'neck_01', 'neck_02', 'head'],
           'foot_l': ['root', 'pelvis', 'thigh_l', 'calf_l', 'foot_l'], 'foot_r': ['root', 'pelvis', 'thigh_r', 'calf_r', 'foot_r'],
           'pelvis': ['root', 'pelvis']}

@@ -14,9 +14,9 @@ pelvis itself absolute, as curves.body_steps does):
                is a smash, where OG's reference holds go to 12 frames) is itself a FAIL, and the steps inside a declared
                hold are re-judged: on a strong move a perfectly frozen hold is a defect (OG r.207), the effector must keep
                a small motion (>= HOLD_ALIVE_CM over the hold) and stay under 6% of the reach per frame (OG r.403).
-  stop_sync    share of speed minima that most parts reach together (kb_motion stop_sync_share, here on points instead of
-               joint rotations): pose-interpolated clips stop everything on the key, mocap and good hand animation stagger.
-               A flat run of minima is one minimum; minima inside a live declared hold are skipped (2026-11-24).
+  stop_sync    lockstep stop EVENTS per second (most parts stop on the same frame = one event) over the frames the game
+               shows (card `shown`): pose-interpolated clips stop everything on the key, mocap and good hand animation
+               stagger. A flat run of minima is one minimum; minima inside a live declared hold are skipped (2026-11-24).
   holds core   every declared hold, any class: pelvis path >= life_hold_core_cm, else the hold is DEAD (2026-11-24).
   cascade      in the strike window the speed peaks travel pelvis -> forearm -> hand (OG r.208-209, r.405): spread >= 1
                frame, each lag >= 0.5 frame, never hand before pelvis.
@@ -32,7 +32,7 @@ names like hand_MainPoint_l), a capture frames.jsonl (one JSON per tick with bod
 body.actor) or the frames list animpipe check builds. Missing points (captures have no forearms) are simply not used.
 
 CLI: python -m animpipe life <dump> [--window=a-b] [--contact=c] [--effector=hand_l] [--holds=a-b:why,..] [--class=tilt]
-     [--card=<card.json>] [--json]. Repeated frames are dropped only on .jsonl captures (load_clip). Prints one JSON object with --json (exit 0 whatever the verdict: the verdict is
+     [--shown=a-b:why] [--card=<card.json>] [--json]. Repeated frames are dropped only on .jsonl captures (load_clip). Prints one JSON object with --json (exit 0 whatever the verdict: the verdict is
      inside, final_review_pack.py reads it), otherwise at most 5 lines; exit 1 on FAIL without --json.
 Thresholds: motion_thresholds.json keys life_* (calibration notes there and in life_calibration.json)."""
 import json
@@ -58,7 +58,10 @@ DEF = {
                                          # concrete: on EVERY class the pelvis travels >= this over the hold. Slowmo
                                          # 11-24: ftilt v3.1 kick hold 10-15 pelvis 1.4 cm (alive), jab v12 5-9 0.4 (dead)
     "life_hold_speed_rel": 0.06,         # = hold_speed_max (OG r.403)
-    "life_stop_sync_max": 0.5,           # kb_motion: mocap 0-0.25, pose-interpolated 0.88-0.96
+    "life_stop_events_per_s_max": 2.5,   # lockstep stop events per second of the shown clip (stop_sync, 2026-11-24).
+                                         # Calibration set 11-24: PASS clips <= 1.91 (stock jump squat; w2, w3, ftilt
+                                         # v3.1 0), known FAIL >= 3.24 (jab v12, K7 4.0, jabfk3 6.5, K8 r2 8.0): the
+                                         # midpoint. A MEASURE until life_calibrate --write-gate gives it a proof (2A)
     "life_stop_sync_min_cm": 0.5,        # a part slower than this all clip long has no minima worth counting
     "life_cascade_spread_min": 1.0,      # = overlap_min_spread_frames
     "life_cascade_lag_min": 0.5,         # = overlap_min_lag_frames
@@ -245,24 +248,43 @@ def apply_gate(res, blocking=None):
 
 
 # ------------------------------------------------------------------ metrics
-def stop_sync(F, T, live_holds=()):
-    """Share of the parts' speed minima that >= 60% of the other parts also reach within +-1 frame (kb_motion
-    stop_sync_share on points; the 0.5 threshold is calibrated on THIS per-part share, see below).
-    Fixed 2026-11-24 (slowmo jab/ftilt), more precise, threshold unchanged:
-      - a flat run of minima of one part is ONE minimum (its first frame): the jab v12 dead tail (20 identical frames)
-        counted ~17 minima per part, now one per part;
-      - minima inside a DECLARED hold that passes judge_holds (reason, caps, live core) are the hold, not a stop: skipped.
-        A dead, undeclared or over-cap hold is never skipped.
-    Also returns the stop EVENTS (minima of all parts chained within 1 frame; shared when, around one of its minima,
-    >= 1 + 60% of the other parts stop within +-1 frame, the same strictness as the per-part rule), so a stop of 8 parts
-    reads as one event in the report. The event share is a MEASURE, not the block: on the calibration set it lets jab
-    v12 through (0.5 of 4 events, the max) and drops the flat-tangent jabfk3 from 0.88 to 0.67, i.e. it would soften
-    the check (owner rule 17); per part, a lockstep stop weighs as many parts as it freezes, which is the defect.
-    -> (share, minima, events, shared_events)."""
+def stop_events(mins, need):
+    """Group the parts' minima into stop EVENTS, greedily: the frame where the most parts have a minimum within +-1 is one
+    event (8 parts on the same frame = 1, not 8), its minima (one per part, the nearest) leave the pool, repeat. Greedy and
+    not a chain of minima 1 frame apart, because a chain merges stops that follow each other (K8 r2 f7-12 was 1 chained
+    event, it is 2 lockstep stops). -> [(frame, parts)] in frame order; lockstep when parts >= need."""
+    pool = [(k, i) for i, ms in enumerate(mins) for k in ms]
+    out = []
+    while pool:
+        near = lambda c: {i for k, i in pool if abs(k - c) <= 1}
+        c = max(sorted({k for k, _ in pool}), key=lambda c: (len(near(c)), -c))
+        taken = {(min((k for k, j in pool if j == i and abs(k - c) <= 1), key=lambda k: abs(k - c)), i) for i in near(c)}
+        out.append((c, len(taken)))
+        pool = [x for x in pool if x not in taken]
+    return sorted(out)
+
+
+def stop_sync(F, T, live_holds=(), shown=None, fps=60.0):
+    """Lockstep stops of the body, counted as EVENTS per second of the clip the game shows (review dair v9 stops, 2026-11-24).
+    Why events: the old per-part share (kb_motion stop_sync_share on points) counted one stop of 8 parts 8 times, and a
+    stop of every part on one key is ONE defect the eye sees once. Why per second: stop-and-go is a stop on every key, i.e.
+    a RATE; a long live clip may stop once or twice (stock jump squat 5 lockstep stops in 158 frames, 1.9/s), a pose-built
+    clip stops on most keys (jab v12 3.2/s, K7 4.0/s, K8 r2 8.0/s, flat-tangent jabfk3 6.5/s).
+      - minima: smoothed speed of each part (pelvis absolute, limbs relative to it) below 35% of its 90th percentile; a flat
+        run of minima is ONE minimum (its first frame, jab v12 dead tail);
+      - minima inside a DECLARED hold that passes judge_holds (reason, caps, live core) are the hold, not a stop: skipped;
+        a dead, undeclared or over-cap hold is never skipped;
+      - shown = (first, last) anim frames the in-game montage shows (card or calibration entry, with its source): minima
+        on steps outside it are never on screen (dair v9 montage ends ~a34, the a35 stop was a false alarm) and the rate
+        is over the shown steps. Without `shown` the whole clip counts (never trimmed by guess);
+      - lockstep event: >= 1 + 60% of the other parts stop within +-1 frame (stop_events), the per-part rule's strictness.
+    The per-part share stays in the report as a second number for the reviewer.
+    -> dict(rate, lockstep [frames], events, share, minima, steps, outside) or None with fewer than 3 moving parts."""
     skip = set()
     for a, b in live_holds:
         skip |= set(range(a - 1, b + 1))       # the minimum of the smoothed speed sits within +-1 of the held steps
-    mins = []
+    lo, hi = (int(shown[0]), int(shown[1])) if shown else (0, len(F) - 1)
+    mins, outside = [], set()
     for p in ["pelvis"] + _pts(F):
         s = _speed(F, p)
         if max(s, default=0) < T["life_stop_sync_min_cm"]:
@@ -271,25 +293,22 @@ def stop_sync(F, T, live_holds=()):
         thr = 0.35 * sorted(sm)[int(0.9 * (len(sm) - 1))]
         ks = [k for k in range(1, len(sm) - 1) if sm[k] <= sm[k - 1] and sm[k] <= sm[k + 1] and sm[k] < thr]
         ks = [k for i, k in enumerate(ks) if i == 0 or k != ks[i - 1] + 1]     # a flat run of minima = one minimum
-        mins.append([k for k in ks if k not in skip])
+        outside |= {k for k in ks if not lo <= k < hi}
+        mins.append([k for k in ks if k not in skip and lo <= k < hi])
     if len(mins) < 3:
-        return None, 0, 0, 0
+        return None
     shared = total = 0
     for i, ms in enumerate(mins):
         for k in ms:
             total += 1
             n = sum(1 for o, mo in enumerate(mins) if o != i and any(abs(k - x) <= 1 for x in mo))
             shared += n >= 0.6 * (len(mins) - 1)
-    allk = sorted((k, i) for i, ms in enumerate(mins) for k in ms)
-    events = []
-    for k, i in allk:
-        if events and k <= events[-1][-1][0] + 1:
-            events[-1].append((k, i))
-        else:
-            events.append([(k, i)])
     need = 1 + 0.6 * (len(mins) - 1)
-    ev_shared = sum(1 for e in events if any(len({i for k, i in e if abs(k - c) <= 1}) >= need for c, _ in e))
-    return (round(shared / total, 2) if total else 0.0), total, len(events), ev_shared
+    ev = stop_events(mins, need)
+    lock = [c for c, n in ev if n >= need]
+    steps = max(1, hi - lo)
+    return {"rate": round(len(lock) / steps * fps, 2), "lockstep": lock, "events": len(ev), "share": round(shared / total, 2) if total else 0.0,
+            "minima": total, "steps": steps, "outside": sorted(outside), "need": round(need, 1)}
 
 
 def _peak(s, lo, hi):
@@ -403,7 +422,7 @@ def stop_go(F, win, held, contact, T, pts):
     return ok, line
 
 
-def run(F, window=None, contact=None, effector=None, holds=(), cls="", T=None, gate=True):
+def run(F, window=None, contact=None, effector=None, holds=(), cls="", T=None, gate=True, shown=None, fps=None):
     """-> {"verdict": PASS|FAIL, "block": {name: [ok, line]}, "measure": {...}}. gate=True (default) applies the calibration
     gate (apply_gate); life_calibrate.py runs gate=False to measure every metric raw."""
     T = T or thresholds()
@@ -427,10 +446,13 @@ def run(F, window=None, contact=None, effector=None, holds=(), cls="", T=None, g
         res["measure"]["stops"] = "n/a: no action window (give --window or a contact frame)"
     runs = CV.long_stills(F, held, T["life_dead_cm"], int(T["life_still_run"]), points=pts)
     res["block"]["still_runs"] = [not runs, f"runs > {T['life_still_run']} dead steps (< {T['life_dead_cm']} cm/frame): " + (", ".join(f"{a}-{b + 1}" for a, b in runs) or "none")]
-    ss, n, ne, nes = stop_sync(F, T, live)
-    res["block"]["stop_sync"] = [ss is None or ss <= T["life_stop_sync_max"],
-                                 f"{ss} of {n} speed minima shared by most parts (max {T['life_stop_sync_max']}); "
-                                 f"{nes} of {ne} stop events shared; live declared holds skipped: {live or 'none'}" if ss is not None else "n/a: fewer than 3 moving parts"]
+    sy = stop_sync(F, T, live, shown, fps or 60.0)
+    res["block"]["stop_sync"] = [True, "n/a: fewer than 3 moving parts"] if sy is None else [
+        sy["rate"] <= T["life_stop_events_per_s_max"],
+        f"{sy['rate']}/s lockstep stop events (max {T['life_stop_events_per_s_max']}/s): {len(sy['lockstep'])} of {sy['events']} "
+        f"events with >= {sy['need']} parts at {sy['lockstep'] or '-'} over {sy['steps']} "
+        + (f"shown steps {shown[0]}-{shown[1]} (minima never on screen at {sy['outside'] or '-'})" if shown else "steps (whole clip)")
+        + f"; per-part share {sy['share']} of {sy['minima']} minima; live declared holds skipped: {live or 'none'}"]
     if contact is not None and effector in pts and contact >= 2:
         c = cascade(F, max(0, win[0]), contact + 1, effector)
         if c:
@@ -466,7 +488,23 @@ def from_card(path):
             fr = sorted(CV.held_frames([int(p["frame"])], keys))
             if fr:
                 holds.append((fr[0], fr[-1] + 1, str(p.get("why", "")).strip() or ("impact pose" if p.get("impact") and not p.get("hold") else "")))
-    return {"contact": contact, "effector": eff, "cls": c.get("class", ""), "holds": holds}
+    kw = {"contact": contact, "effector": eff, "cls": c.get("class", ""), "holds": holds, "fps": float(c.get("fps", 60))}
+    if c.get("shown"):
+        kw["shown"] = parse_shown(c["shown"])
+    return kw
+
+
+def parse_shown(spec):
+    """{"frames": [a, b], "why": "<where the montage window comes from>"} or "a-b:why" -> (a, b). The frames the in-game
+    montage shows are a FACT about the game (capture or montage data), never a guess: without a why it is refused."""
+    if isinstance(spec, str):
+        rng, _, why = spec.partition(":")
+        a, b = (int(x) for x in rng.split("-"))
+    else:
+        (a, b), why = spec["frames"], spec.get("why", "")
+    if not str(why).strip() or not 0 <= a < b:
+        raise ValueError(f"shown {spec!r}: needs frames a<b and the source of the montage window (why)")
+    return (int(a), int(b))
 
 
 def main(argv):
@@ -486,6 +524,8 @@ def main(argv):
         F = dedupe(F)
     if "holds" in opt:
         kw["holds"] = opt["holds"]
+    if "shown" in opt:
+        kw["shown"] = parse_shown(opt["shown"])
     if "class" in opt:
         kw["cls"] = opt["class"]
     r = run(F, **kw)

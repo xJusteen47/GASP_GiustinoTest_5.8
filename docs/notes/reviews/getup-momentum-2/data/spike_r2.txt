@@ -1,0 +1,1 @@
+﻿m2r2 roll_a45_run +26..+28 = 183, 217, 246 cm/s (speed_trace_r2.txt, getup_speed_trace.py Saved\Getup\m2r2 roll_a45_run): the r1 one-frame 378 spike at +27 is NOT present; no positions to report.

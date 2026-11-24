@@ -48,4 +48,15 @@ struct GSTNCOMBATNP_API FGSTN_MoveEventRules
 	 * natural end); TailStartFrame is INDEX_NONE without a tail
 	 */
 	static EGSTN_MoveEndReason ResolveEndReason(bool bWasCancelled, bool bRecoilPlayed, int32 LastFrame, int32 TotalFrames, int32 TailStartFrame);
+
+	/**
+	 * The LastFrame ResolveEndReason gets (getup-momentum-2, 2026-11-23). A cancel arrives in the ability system's pre-tick of the frame the
+	 * combat tick cut the move, before the ability's own tick saw that frame: the cursor (EvaluatedFrame) is still one frame behind, so a cut ON
+	 * the first tail frame (a stick held through a get-up, cut on its FAF) read as Interrupted and lost its exit momentum. A cancel takes the
+	 * combat clock's frame (exact in that pre-tick) when it is further on; a natural end keeps the cursor
+	 */
+	static int32 EndReasonFrame(bool bWasCancelled, int32 EvaluatedFrame, int32 ClockFrame)
+	{
+		return bWasCancelled ? FMath::Max(EvaluatedFrame, ClockFrame) : EvaluatedFrame;
+	}
 };

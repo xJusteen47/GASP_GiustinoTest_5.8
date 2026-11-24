@@ -5,7 +5,7 @@
 > Questo documento **NON è più attivo** ed è sostituito da:
 > - [.claude/skills/gstn-anim-executor/project.md](../../.claude/skills/gstn-anim-executor/project.md) (executor applica solo una `istruzione.json` alla volta via `animpipe` / Cascadeur)
 > - [.claude/skills/gstn-anim-reviewer/project.md](../../.claude/skills/gstn-anim-reviewer/project.md) (reviewer indipendente su `.mp4` + griglie + `ASSERT: OK`)
-> - [regole-progetto-2026-11-22.md](regole-progetto-2026-11-22.md) (Regole 6, 10, 13, 15) e [memoria-progetto.md](memoria-progetto.md).
+> - [regole-progetto.md](regole-progetto.md) (Regole 6, 10, 13, 15) e [memoria-progetto.md](memoria-progetto.md).
 >
 > **Pipeline unica:** tutto il lavoro di animazione (locomotion compresa, salvo banalità come additivi) usa la pipeline completa Cascadeur (pose chiave + sheet delle curve; lo script importa soltanto). Eventuali generatori Python/Blender producono solo prototipi `PROTO` e **non vanno mai in review né all'owner**.
 

@@ -16,7 +16,7 @@ Supersedes: the procedural scramble (sped-up run loop, d5759018; off since 9f65c
 one arm locked; sword_and_shield_run_2 3.75 steps/s, arms almost still. None is a start, none has frantic arms AND legs, none
 reads heavy. -> hand-made clip (owner 23:43 "sennò serve farla a mano").
 
-## Timing from Toad (handoffs/ref-smash-run/toad_a_closeup.jpg, 30 fps phone video)
+## Timing from Toad (handoffs/archivio/2026-11/ref-smash-run/toad_a_closeup.jpg, 30 fps phone video)
 Still until video f24; legs blurred from f26; dust and blur until ~f44, then normal run. Frantic phase ~0.6 s = ~37 sim frames
 (by eye on the grid, +-0.1 s). toad_b_far starts agree (~0.5-0.6 s).
 

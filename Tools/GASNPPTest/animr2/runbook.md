@@ -6,7 +6,7 @@ Saved/ is not in the repo, so a new machine needs this copy first (and Saved/Ani
    C:/Users/jacop/AppData/Local/Temp/claude/8c81644554604783/a744393f-c912-4667-b073-01ffe1248c78/scratchpad/boot_vd2.py (recreate if gone):
    `import os,runpy; os.environ['VD_LOG']=r'<P>/Saved/AnimR2/logs/vd.log'; runpy.run_path(r'<P>/Tools/GASNPPTest/vd2_mover.py', run_name='vd2_mover')`
 2. Start the editor (L_Test_Hub, windows go to desktop 2 by themselves, hr=0; the PowerShell call blocks, so run it in background):
-   powershell -NoProfile -Command "Start-Process 'C:\Program Files\Epic Games\UE_5.9\Engine\Binaries\Win64\UnrealEditor.exe' -ArgumentList '\"<P windows path>\GASP_Giustino2.uproject\"','/Game/Levels/Test/L_Test_Hub','-ExecCmds=\"py <boot_vd2.py path>\"','-nosplash'"
+   powershell -NoProfile -Command "Start-Process 'C:\Program Files\Epic Games\UE_5.9\Engine\Binaries\Win64\UnrealEditor.exe' -ArgumentList '\"<P windows path>\GASP_Giustino2.uproject\"','/Game/GSTN/Maps/L_Test_Hub','-ExecCmds=\"py <boot_vd2.py path>\"','-nosplash'"
    Ready after ~60-90 s when `curl -s -m3 -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/mcp` answers 405 (built-in MCP, what animpipe uses).
 3. Python inside the editor (any file, stdout kept, <=3 lines printed):  python Saved/AnimR2/run_in_editor.py <script.py> <log.txt>
    e.g. python Saved/AnimR2/run_in_editor.py Tools/AnimPipeline/assemble_dropkick_montage.py Saved/AnimR2/logs/assemble.txt

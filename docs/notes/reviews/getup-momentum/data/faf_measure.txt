@@ -1,0 +1,3 @@
+AM_React_GetUp (AS_React_GetUp): clip 26 f @60, FAF clip f20 -> sim 21/27, tail cut sim [21,27)
+AM_React_Roll (AS_React_Roll): clip 24 f @60, FAF clip f20 -> sim 21/24, tail cut sim [21,24)
+AM_React_RollBack (AS_React_RollBack): clip 24 f @60, FAF clip f20 -> sim 21/24, tail cut sim [21,24)

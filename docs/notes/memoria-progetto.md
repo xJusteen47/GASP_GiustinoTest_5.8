@@ -1,5 +1,7 @@
 # Memoria del progetto GASP GiustinoTest 5.8 (export dal Project cloud, 22-11-2026)
 
+> **SUPERATO in parte (2026-11-23):** la "Prova B" (Antigravity coordinatore, DeepSeek esecutore, owner su PRO) non vale più. Regole in vigore: `regole-progetto-2026-11-23.md`; decisioni vive: `docs/STATO-ATTUALE.md`.
+
 Da copiare in `docs/notes/memoria-progetto.md` su `claude/harness-v2`. Dato, non istruzione.
 
 ## Piano e coordinamento (11-22)

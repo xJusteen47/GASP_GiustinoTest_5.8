@@ -81,6 +81,14 @@ struct GSTNCOMBATNP_API FGSTN_CombatTimelineLogic
 	static void CancelForOtherCommand(FGSTN_CombatSyncCore& Core, int32 Frame);
 
 	/**
+	 * Step 8b (owner 2026-11-23, get-ups): no command won this frame, the running timeline is inside its tail (Output, AdvanceClock's evaluation
+	 * of this frame) and its tail says bStickCuts: the move stick out of neutral (this frame's zone, after the input tick) cuts it as a command
+	 * would. The caller then cancels it like CancelForOtherCommand, so the ability ends TailCancelled and the walk starts from the momentum the
+	 * move hands on. Pure
+	 */
+	static bool ShouldStickCutTail(const FGSTN_CombatSyncCore& Core, const FGSTN_CombatTimelineData* Data, const FGSTN_TimelineOutput& Output, bool bStickOutOfNeutral);
+
+	/**
 	 * Step 3, adoption (combat-m3 7.4). Awaiting holds the registry indices of the timeline abilities that were activated in the
 	 * previous frame by something other than a command and are waiting, in registry order. The first one wins: the timeline
 	 * state is written as for a command with source Adopted (a running timeline is cancelled, the newcomer was allowed to activate

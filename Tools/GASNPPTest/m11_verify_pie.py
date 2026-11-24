@@ -187,7 +187,7 @@ def tick(dt):
         st['step'] = 999
 
 
-unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).load_level('/Game/Levels/Test/L_Test_Hub')
+unreal.get_editor_subsystem(unreal.LevelEditorSubsystem).load_level('/Game/GSTN/Maps/L_Test_Hub')
 st['h'] = unreal.register_slate_post_tick_callback(tick)
 log('driver armed')
 

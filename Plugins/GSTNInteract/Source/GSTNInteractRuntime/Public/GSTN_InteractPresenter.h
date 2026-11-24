@@ -54,7 +54,72 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interact")
 	FColor UnactionableTint = FColor(120, 120, 120);
 
+	/** Draw the name and verbs as world text too. Off by default: UGSTN_InteractPresenter_Prompt writes the same text on screen */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interact")
+	bool bDrawText = false;
+
 	virtual void OnFocusUpdated_Implementation(const FGSTN_InteractPresentationView& View, float DeltaTime) override;
+};
+
+/** The prompt changed: visible or not, its text, and the hold progress (0..1). For a placeholder UMG widget (Blueprint) to bind */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FGSTN_OnPromptChanged, bool, bVisible, const FText&, PromptText, float, HoldProgress);
+
+/**
+ * Placeholder prompt (G5): turns the presentation view (item name, tap and hold verbs, hold progress, unavailable) into one prompt text,
+ * writes it on screen in non-Shipping builds, and raises OnPromptChanged so a UMG widget can show it instead (no UMG dependency here).
+ * Never simulated, never replicated. The text is a pure function of the view (FormatPrompt), so it is testable without a world.
+ */
+UCLASS()
+class GSTNINTERACTRUNTIME_API UGSTN_InteractPresenter_Prompt : public UGSTN_InteractPresenter
+{
+	GENERATED_BODY()
+
+public:
+	/** Write the text on screen (not in Shipping). Turn off when a widget listens to OnPromptChanged */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interact")
+	bool bDrawOnScreen = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interact")
+	FColor Tint = FColor::White;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interact")
+	FColor UnactionableTint = FColor(140, 140, 140);
+
+	/** Width of the text progress bar of a hold, in cells */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Interact", meta = (ClampMin = "2", ClampMax = "40"))
+	int32 HoldBarCells = 10;
+
+	UPROPERTY(BlueprintAssignable, Category = "Interact")
+	FGSTN_OnPromptChanged OnPromptChanged;
+
+	/** "Name", then "[Tap] verb", then "[Hold] verb" with a bar and a percent while held, then "(unavailable)". Pure */
+	static FText FormatPrompt(const FGSTN_InteractPresentationView& View, int32 HoldBarCells = 10);
+
+	/** "[#####.....]" for a 0..1 progress. Pure */
+	static FString MakeHoldBar(float Progress, int32 Cells);
+
+	UFUNCTION(BlueprintPure, Category = "Interact")
+	bool IsPromptVisible() const { return bVisible; }
+
+	UFUNCTION(BlueprintPure, Category = "Interact")
+	FText GetPromptText() const { return Text; }
+
+	UFUNCTION(BlueprintPure, Category = "Interact")
+	float GetPromptHoldProgress() const { return Progress; }
+
+	virtual void OnFocusEntered_Implementation(const FGSTN_InteractPresentationView& View) override;
+	virtual void OnFocusUpdated_Implementation(const FGSTN_InteractPresentationView& View, float DeltaTime) override;
+	virtual void OnFocusLeft_Implementation(const FGSTN_InteractPresentationView& View) override;
+	virtual void BeginDestroy() override;
+
+private:
+	void Show(const FGSTN_InteractPresentationView& View);
+	void Hide();
+	uint64 GetMessageKey() const;
+
+	bool bVisible = false;
+	FText Text;
+	float Progress = 0.f;
 };
 
 /** Raised when the presented focus of a local interactor changes: the Message.Interact.FocusChanged event for audio and UI */

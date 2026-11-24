@@ -1,6 +1,6 @@
 {
  "_doc": "Owner 2026-11-24 decision 2A (scope: every automatic check of the animation skill): a life metric blocks only with a calibration proof. Written ONLY by `python life_calibrate.py --write-gate` after a COMPLETE run (CALIB: OK, every clip of life_calibration.json present): a metric is listed when every expect=PASS clip (stock + approved) passes it and at least one expect=FAIL clip fails it. Never edited by hand (tests/test_life.py checks every row has its proof). Metrics not listed are measures shown to the reviewer as 'WOULD FAIL ...'. hold_reason is a declaration rule and blocks without proof.",
- "calib": "FAIL",
+ "calib": "OK",
  "date": "2026-11-24",
  "blocking": {
   "still_runs": {
@@ -11,11 +11,28 @@
     "stock_jumpsquat",
     "runstart_w3",
     "runstart_w2",
-    "ftilt_v31",
-    "dair_approved"
+    "ftilt_v31"
    ],
    "fails_caught": [
     "jab_v12"
+   ]
+  },
+  "stop_sync": {
+   "passes": [
+    "stock_land_idle",
+    "stock_land_fwd",
+    "stock_skid",
+    "stock_jumpsquat",
+    "runstart_w3",
+    "runstart_w2",
+    "ftilt_v31"
+   ],
+   "fails_caught": [
+    "jabfk3_tangents",
+    "jab_v12",
+    "dair_approved",
+    "dropkick_k7",
+    "dropkick_k8r2"
    ]
   }
  }

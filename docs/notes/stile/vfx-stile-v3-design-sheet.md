@@ -1,5 +1,5 @@
 # VFX v3 "Astro Bot semi-realistico": design sheet e piano per categoria (2026-11-18)
-Fonti: brief `handoffs/vfx-stile-v3-categorie.md`, note owner `handoffs/ref-astrobot-vfx/NOTE.md` (astro_1-5), base v2 (branch `claude/project-thread-aait2t` 9bc3d6d3, handover `vfx-v2-r1.md`). Ambito: TUTTI i VFX di impatto e movimento, uno stile per tutti i kit. Target toaster.
+Fonti: brief `handoffs/archivio/2026-11/vfx-stile-v3-categorie.md`, note owner `handoffs/archivio/2026-11/ref-astrobot-vfx/NOTE.md` (astro_1-5), base v2 (branch `claude/project-thread-aait2t` 9bc3d6d3, handover `vfx-v2-r1.md`). Ambito: TUTTI i VFX di impatto e movimento, uno stile per tutti i kit. Target toaster.
 
 ## Diagnosi v2 (perché l'owner dice "non è Astro Bot")
 v2 ha reso tutto "giocattolo lucido": anello giallo, palline, gemme. Ma in Astro Bot solo i **detriti** sono giocattoli. L'energia è **luce** (stella bianca netta, linee), il fumo è **fumo vero** (morbido, traslucido, illuminato, del colore del materiale). L'anello giallo con le palline attorno al colpo è esattamente il "cartoon" da togliere. Lezione di processo: Fable ha passato v2 confrontando v2 con r4, non con Astro Bot. In v3 il paragone è sempre con le catture dell'owner.

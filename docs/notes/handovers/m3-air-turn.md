@@ -23,5 +23,5 @@ quantize), `GSTNCombat.NP.AirTurn.Apply` (rate, short way across 180, cap, left-
 2. Tests: `Tools/CI/Run-Timed.ps1 -Preset Test -Log Saved\Logs\ci\m3air-test1.log -Tests "GSTNCombat.Core.AnalogWalk+GSTNCombat.NP.AirTurn+GSTNCombat.NP.RunStages+GSTNCombat.NP.StartupSteer"`.
 3. In game: `Tools/GASNPPTest/run_movement_qa.ps1 -Names move_air_control`: bar = facing the new way within 8 frames (expected ~4), on
    authority AND owner. If it still reads ~300: check the log for the "ProcessGeneratedMovement is bound by" warning first.
-4. Then the QA jump/air pass (brief: project files handoffs/qa-jump-air-brief.md).
+4. Then the QA jump/air pass (brief: project files handoffs/archivio/2026-11/qa-jump-air-brief.md).
 Cost estimate ~6 $ (Opus medium, no builds).

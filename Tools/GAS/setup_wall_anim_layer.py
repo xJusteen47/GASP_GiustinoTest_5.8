@@ -37,7 +37,7 @@
 import os, shutil, sys, time
 import unreal
 
-ANIM_DIR = '/Game/Blueprints/Animation'
+ANIM_DIR = '/Game/GSTN/Animation/Layers'
 ALI_NAME = 'ALI_GSTN_Wall'
 LAYER_ABP_NAME = 'ABP_GSTN_WallLayer'
 SET_NAME = 'DA_AnimSet_Wall'

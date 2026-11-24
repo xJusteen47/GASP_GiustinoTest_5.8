@@ -1,0 +1,21 @@
+﻿ase_rolls base_roll_idle FAF v 24 speed cm/s FAF..+6 0 +6..+20 0 mont@FAF+3 None
+ase_rolls base_roll_run FAF v 24 speed cm/s FAF..+6 132 +6..+20 386 mont@FAF+3 None
+ase_rolls base_rollback_idle FAF v 24 speed cm/s FAF..+6 0 +6..+20 0 mont@FAF+3 None
+ase_rolls base_rollback_run FAF v 24 speed cm/s FAF..+6 132 +6..+20 387 mont@FAF+3 None
+ase_rolls base_stand_idle FAF v 26 speed cm/s FAF..+6 0 +6..+20 0 mont@FAF+3 None
+ase_rolls base_stand_run FAF v 26 speed cm/s FAF..+6 89 +6..+20 361 mont@FAF+3 None
+etup/new3 roll_idle FAF v 21 speed cm/s FAF..+6 0 +6..+20 0 mont@FAF+3 None
+etup/new3 roll_jab FAF v 21 speed cm/s FAF..+6 99 +6..+20 48 mont@FAF+3 None
+etup/new3 roll_run FAF v 21 speed cm/s FAF..+6 28 +6..+20 114 mont@FAF+3 None
+etup/new3 roll_run_v0 FAF v 21 speed cm/s FAF..+6 48 +6..+20 106 mont@FAF+3 None
+etup/new3 roll_run_x15 FAF v 21 speed cm/s FAF..+6 29 +6..+20 335 mont@FAF+3 None
+etup/new3 rollback_idle FAF v 21 speed cm/s FAF..+6 0 +6..+20 0 mont@FAF+3 None
+etup/new3 rollback_jab FAF v 21 speed cm/s FAF..+6 122 +6..+20 23 mont@FAF+3 None
+etup/new3 rollback_run FAF v 21 speed cm/s FAF..+6 28 +6..+20 335 mont@FAF+3 None
+etup/new3 rollback_run_v0 FAF v 21 speed cm/s FAF..+6 29 +6..+20 335 mont@FAF+3 None
+etup/new3 rollback_run_x15 FAF v 21 speed cm/s FAF..+6 28 +6..+20 335 mont@FAF+3 None
+etup/new3 stand_idle FAF v 21 speed cm/s FAF..+6 0 +6..+20 0 mont@FAF+3 ['AM_React_GetUp', 23.96]
+etup/new3 stand_jab FAF v 21 speed cm/s FAF..+6 100 +6..+20 20 mont@FAF+3 None
+etup/new3 stand_run FAF v 21 speed cm/s FAF..+6 1 +6..+20 212 mont@FAF+3 ['AM_React_GetUp', 23.24]
+etup/new3 stand_run_v0 FAF v 21 speed cm/s FAF..+6 1 +6..+20 212 mont@FAF+3 ['AM_React_GetUp', 23.16]
+etup/new3 stand_run_x15 FAF v 21 speed cm/s FAF..+6 1 +6..+20 212 mont@FAF+3 ['AM_React_GetUp', 23.2]
