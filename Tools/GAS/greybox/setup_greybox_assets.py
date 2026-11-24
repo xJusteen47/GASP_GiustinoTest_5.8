@@ -282,12 +282,37 @@ MATERIALS = [('Body', 'MI_GSTN_Greybox_Grey', unreal.LinearColor(0.35, 0.35, 0.3
              ('Nose', 'MI_GSTN_Greybox_Red', unreal.LinearColor(0.8, 0.04, 0.03, 1.0))]
 
 
+PARENT_NAME = 'M_GSTN_Greybox'
+
+
+def make_parent():
+    """Our own parent: BasicShapeMaterial lacks the SkeletalMesh usage flag, so in game the capsule fell back to the default checker
+    material (desktop run 2). A one-parameter material ('Color' -> Base Color) with bUsedWithSkeletalMesh."""
+    path = '%s/%s' % (DIR, PARENT_NAME)
+    if eal.does_asset_exist(path):
+        mat = eal.load_asset(path)
+    else:
+        mat = asset_tools.create_asset(PARENT_NAME, DIR, unreal.Material, unreal.MaterialFactoryNew())
+        mel = unreal.MaterialEditingLibrary
+        param = mel.create_material_expression(mat, unreal.MaterialExpressionVectorParameter, -300, 0)
+        param.set_editor_property('parameter_name', 'Color')
+        param.set_editor_property('default_value', unreal.LinearColor(0.35, 0.35, 0.37, 1.0))
+        mel.connect_material_property(param, '', unreal.MaterialProperty.MP_BASE_COLOR)
+        rough = mel.create_material_expression(mat, unreal.MaterialExpressionConstant, -300, 200)
+        rough.set_editor_property('r', 0.6)
+        mel.connect_material_property(rough, '', unreal.MaterialProperty.MP_ROUGHNESS)
+    mat.set_editor_property('used_with_skeletal_mesh', True)
+    unreal.MaterialEditingLibrary.recompile_material(mat)
+    save(path)
+    return mat
+
+
 def make_material(name, color):
     path = '%s/%s' % (DIR, name)
     mi = eal.load_asset(path) if eal.does_asset_exist(path) else None
     if not mi:
         mi = asset_tools.create_asset(name, DIR, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
-        mi.set_editor_property('parent', eal.load_asset(BASE_MATERIAL))
+    mi.set_editor_property('parent', make_parent())
     # BasicShapeMaterial's tint parameter is 'Color'
     unreal.MaterialEditingLibrary.set_material_instance_vector_parameter_value(mi, 'Color', color)
     unreal.MaterialEditingLibrary.update_material_instance(mi)
