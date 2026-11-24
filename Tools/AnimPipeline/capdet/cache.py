@@ -32,6 +32,7 @@ Prints at most 5 lines. Exit 0 OK / HIT, 1 MISS or nothing stored, 2 usage.
 import fnmatch
 import glob
 import hashlib
+import re
 import json
 import os
 import shutil
@@ -68,6 +69,13 @@ def file_hash(path):
         return 'missing'
     h = hashlib.sha256()
     with open(full, 'rb') as fh:
+        head = fh.read(200)
+        # A checkout without LFS content (cloud) holds the pointer, which names the content's own sha256: the same value a
+        # machine with the real file computes, so a gate run there does not report every LFS file as changed.
+        m = re.match(rb'version https://git-lfs\S*\noid sha256:([0-9a-f]{64})\nsize \d+\n?$', head)
+        if m and len(head) < 200:
+            return m.group(1).decode()
+        h.update(head)
         for b in iter(lambda: fh.read(1 << 20), b''):
             h.update(b)
     return h.hexdigest()
