@@ -27,7 +27,7 @@ namespace GSTNGreybox
 		ECVF_Default);
 
 	static TAutoConsoleVariable<FString> CVarSwordKits(
-		TEXT("gstn.Greybox.SwordKits"), TEXT("Overlord,Playtest"),
+		TEXT("gstn.Greybox.SwordKits"), TEXT("Overlord"),
 		TEXT("Kits whose asset name contains one of these comma-separated parts carry the greatsword on the greybox capsule's back."),
 		ECVF_Default);
 

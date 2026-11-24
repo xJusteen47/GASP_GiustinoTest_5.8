@@ -221,5 +221,5 @@ montage it shows is still the timeline's Montage field; with none set, nothing i
   `FindWallNormal`), friction rattle with the slide speed, wall skid = plant on a hard brake along the wall.
 - Kit look (`UGSTN_GreyboxSubsystem`): `SM_GSTN_Greybox_Collar` (half ring behind the upper back, colour `ColourForKit`, i.e. the kit's
   stand-in box colour) and `SM_GSTN_Greybox_Greatsword` (~126 cm, on the back) for kits whose name contains `gstn.Greybox.SwordKits`
-  (default "Overlord,Playtest"). Built by setup_greybox_assets.py step `accessories`, attached to the capsule's pelvis.
+  (default "Overlord": owner 14:45, the Overlord kit only). Built by setup_greybox_assets.py step `accessories`, attached to the capsule's pelvis.
 - Moves: Jab2 (other hand), DAir landings (crouched land), dropkick tech bounce (dropkick then a tucked bounce).

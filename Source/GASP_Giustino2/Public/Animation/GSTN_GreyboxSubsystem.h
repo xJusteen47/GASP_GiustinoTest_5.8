@@ -10,7 +10,7 @@
 //
 // Kit look on the capsule (owner 2026-11-24 14:43-14:45): the kit's stand-in (the coloured box of UGSTN_KitPlaceholderLookSubsystem, hidden
 // with the driver) becomes a half-circle collar behind the capsule's upper back, in the same colour (ColourForKit, so it changes with the
-// kit); a kit whose asset name contains one of gstn.Greybox.SwordKits (default "Overlord,Playtest") also carries the greatsword on the
+// kit); a kit whose asset name contains one of gstn.Greybox.SwordKits (default "Overlord": owner 14:45, the Overlord kit only) also carries the greatsword on the
 // back. Both are static meshes made by setup_greybox_assets.py (step accessories), modelled in the capsule's component space and riding
 // its pelvis, so they tilt and squash with the rigid body.
 
