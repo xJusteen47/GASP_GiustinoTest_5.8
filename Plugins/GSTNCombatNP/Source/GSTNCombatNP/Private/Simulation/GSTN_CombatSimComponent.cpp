@@ -36,6 +36,7 @@
 #include "Movement/GSTN_SetFacingEffect.h"
 #include "Movement/GSTN_BodyCapsuleModifier.h"
 #include "Movement/GSTN_AirTurn.h"
+#include "Movement/GSTN_MovementMixer.h"
 #include "DefaultMovementSet/Modes/FallingMode.h"
 #include "Input/GSTN_InputTags.h"
 #include "Context/GSTN_InputContextProvider.h"
@@ -219,6 +220,13 @@ void UGSTN_CombatSimComponent::BindAirTurn()
 	if (!Mover)
 	{
 		return;
+	}
+	// The hook below leaves a frame owned by a layered move alone by its mix mode, which the stock mixer loses for an override of the
+	// velocity (a knockback's launch frame): without this mixer every launch of a profiled pawn went straight up (UGSTN_MovementMixer)
+	if (!UGSTN_MovementMixer::Install(*Mover))
+	{
+		UE_LOG(LogGSTNCombatSim, Warning, TEXT("%s: the Mover has its own mixer %s: the air turn and air momentum cannot see velocity overrides"),
+			*GetPathName(), *GetNameSafe(Mover->MovementMixer));
 	}
 	if (Mover->ProcessGeneratedMovement.IsBound() && Mover->ProcessGeneratedMovement.GetUObject() != this)
 	{
