@@ -8,7 +8,7 @@
 #                    special and four throws in its link extension (the loadout extension GSTNLinkThrows binds them, M11 K2)
 # Jump / fall: owner's hold-gravity jump, early 2D Mario (2026-11-18, docs/notes/handovers/jump-hold-gravity.md), scaled per archetype
 # (impulse x1.14 / 1 / 0.87, release+fall gravity x0.88 / 1 / 1.29, same hold gravity 2.6): full jump ~440 / 344 / 259 cm, tap ~157 / 107 / 65 cm.
-# Air control: Mario 3D World preset (handoffs/preset-mario3dw.md, 2026-11-17).
+# Air control: Mario 3D World preset (handoffs/archivio/2026-11/preset-mario3dw.md, 2026-11-17).
 # Every number is a PLACEHOLDER for the playtest and every montage a GASP placeholder: retune the Blueprints' Class Defaults or the specs below
 # and rerun (a rerun rewrites the specs over hand edits). The hub places the kits through test_hub.spawn_kits (build_test_hub_map.KIT_PADS).
 # Output: Saved/Logs/k3/setup_archetypes.log, at most 5 printed lines.

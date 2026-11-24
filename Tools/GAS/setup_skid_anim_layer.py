@@ -6,7 +6,7 @@
 # Env: SKID_CLIP (default Ported57/SkidOwner/SS_180_Turn2), RUN_START_CLIP (default none: the run start layer stays off until the owner picks a clip).
 # Prints at most 5 lines; full log in the editor log ([setup_skid_anim_layer]).
 #
-# Steps (assets in /Game/Blueprints/Animation):
+# Steps (assets in /Game/GSTN/Animation/Layers):
 #  1. ALI_GSTN_Skid / ALI_GSTN_RunStart and the main ABP seam slots 2/3: setup_anim_layers.py (already run in M0; re-run here, no change if done).
 #  2. ABP_GSTN_SkidLayer: parent GSTN_SkidAnimInstance, implements ALI_GSTN_Skid; its SkidLayer graph = one GSTN Clip At Time node -> output.
 #     Class default SkidClip = SKID_CLIP. The timing (stretch to the rest frame, exit rate) is C++ + class defaults (StopFraction, ExitPlayRate).

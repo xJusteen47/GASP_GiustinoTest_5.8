@@ -12,7 +12,7 @@ import os
 import unreal
 
 PROFILE = 'DA_Locomotion_Default'
-ANIM_SET = '/Game/Blueprints/Animation/DA_AnimSet_Locomotion_Default'
+ANIM_SET = '/Game/GSTN/Animation/Layers/DA_AnimSet_Locomotion_Default'
 # stage index (0 = run) -> readable step fields. Frames at 62.5 Hz. Burst multipliers sized so ~90% -> 100% of the next top speed takes the
 # burst's frames with the default accelerations (stage 2: 405 -> 650 cm/s in 3 f needs ~5100 cm/s^2 = 1400 x ~4; x6 leaves margin, Mover stops at MaxSpeed)
 STEPS = {

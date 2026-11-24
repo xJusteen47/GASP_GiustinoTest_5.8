@@ -3,12 +3,43 @@
 #include "Sync/GSTN_SyncFragment.h"
 
 #include "Algo/Sort.h"
+#include "HAL/IConsoleManager.h"
 #include "Misc/Crc.h"
 #include "Misc/NetworkVersion.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNSyncFragment, Log, All);
+
+namespace
+{
+	// Dev diagnostic beside np.LogReconcileField: that one names only "Fragments:" for the whole list, this one names the fragment and prints both
+	// sides (net grab test 2026-11-23: an unexplained reconcile stream must name its field before a fix is guessed). Never on in a shipped build
+	TAutoConsoleVariable<int32> CVarLogFragmentReconcile(TEXT("gstn.Combat.LogFragmentReconcile"), 0,
+		TEXT("1 = log which sync fragment asked for a reconcile, with the local and the authority's state (editor and test builds)"));
+
+	void LogFragmentReconcile(const UScriptStruct* Struct, const FGSTN_SyncFragment* Local, const FGSTN_SyncFragment* Authority)
+	{
+#if !UE_BUILD_SHIPPING
+		if (CVarLogFragmentReconcile.GetValueOnAnyThread() == 0)
+		{
+			return;
+		}
+		TAnsiStringBuilder<512> Mine;
+		TAnsiStringBuilder<512> Theirs;
+		if (Local)
+		{
+			Local->ToString(Mine);
+		}
+		if (Authority)
+		{
+			Authority->ToString(Theirs);
+		}
+		UE_LOG(LogGSTNSyncFragment, Warning, TEXT("FragmentReconcile: %s local {%hs} authority {%hs}"), Struct ? *Struct->GetName() : TEXT("(list size)"),
+			Local ? Mine.ToString() : "none", Authority ? Theirs.ToString() : "none");
+#endif
+	}
+}
 
 namespace
 {
@@ -325,6 +356,7 @@ bool FGSTN_SyncFragmentList::ShouldReconcile(const FGSTN_SyncFragmentArray& Loca
 	CollectSendable(Authority, AuthorityEntries, false);
 	if (LocalEntries.Num() != AuthorityEntries.Num())
 	{
+		LogFragmentReconcile(nullptr, nullptr, nullptr);
 		return true;
 	}
 
@@ -333,6 +365,7 @@ bool FGSTN_SyncFragmentList::ShouldReconcile(const FGSTN_SyncFragmentArray& Loca
 		const FWriteEntry* Other = AuthorityEntries.FindByPredicate([&Entry](const FWriteEntry& Candidate) { return Candidate.Id == Entry.Id; });
 		if (!Other || Entry.Source->Get().ShouldReconcile(Other->Source->Get()))
 		{
+			LogFragmentReconcile(GetRegistryData().ById[Entry.Id], &Entry.Source->Get(), Other ? &Other->Source->Get() : nullptr);
 			return true;
 		}
 	}

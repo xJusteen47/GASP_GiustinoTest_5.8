@@ -1,0 +1,8 @@
+﻿ESITO: OK
+tipo=Test durata=150s limite=1800s exit=0 figli_rimasti_uccisi=4
+log=C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_qjfnc0\Saved\Logs\ci\test_m2.log
+ultima riga errore: [2026.11.23-20.57.46:386][611]LogAutomationCommandLine: Shutting down. ExitCode=0 GIsCriticalError=0
+ESITO: OK
+tipo=Build durata=1424s limite=2700s exit=0 figli_rimasti_uccisi=0
+log=C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_qjfnc0\Saved\Logs\ci\build_m2.log
+ultima riga errore: if (!Control->Settings.IsAnimatable()) return MCPError(FString::Printf(TEXT("Control is not animatable: %s"), *ControlString));

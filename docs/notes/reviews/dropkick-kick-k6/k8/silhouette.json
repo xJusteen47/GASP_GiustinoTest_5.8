@@ -1,0 +1,2220 @@
+{
+ "ok": true,
+ "asset": "AS_OverlordDropkick_StartupK8",
+ "base_asset": "AS_OverlordDropkick_StartupK7",
+ "frame_range": [
+  0,
+  15
+ ],
+ "views": {
+  "az180": {
+   "flagged_frames": [
+    15
+   ],
+   "finding": "az180: 1/16 frames read as a shapeless ball (f15-f15): no limb end sticks out of the torso by >= 12 cm and the outline is round (circularity >= 0.65); worst f15: max protrusion 10.14 cm (elbow_l), circularity 0.792",
+   "worst": [
+    {
+     "f": 15,
+     "max_protrusion_cm": 10.14,
+     "circularity": 0.792
+    },
+    {
+     "f": 14,
+     "max_protrusion_cm": 13.41,
+     "circularity": 0.854
+    },
+    {
+     "f": 11,
+     "max_protrusion_cm": 20.74,
+     "circularity": 0.664
+    },
+    {
+     "f": 10,
+     "max_protrusion_cm": 23.78,
+     "circularity": 0.82
+    },
+    {
+     "f": 13,
+     "max_protrusion_cm": 28.41,
+     "circularity": 0.645
+    }
+   ],
+   "hull_area_min": 660.6,
+   "hull_area_mean": 3195.9,
+   "frames": [
+    {
+     "f": 0,
+     "hull_area_cm2": 6374.0,
+     "circularity": 0.696,
+     "limb_dist_cm": {
+      "hand_l": 35.15,
+      "hand_r": 33.58,
+      "elbow_l": 32.52,
+      "elbow_r": 29.33,
+      "foot_l": 34.21,
+      "foot_r": 33.63,
+      "knee_l": 7.56,
+      "knee_r": 4.27,
+      "head": 2.33
+     },
+     "max_protrusion_cm": 35.15,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 1,
+     "hull_area_cm2": 5277.0,
+     "circularity": 0.727,
+     "limb_dist_cm": {
+      "hand_l": 36.44,
+      "hand_r": 33.45,
+      "elbow_l": 33.13,
+      "elbow_r": 28.83,
+      "foot_l": 14.43,
+      "foot_r": 13.48,
+      "knee_l": 2.14,
+      "knee_r": 0.67,
+      "head": 2.3
+     },
+     "max_protrusion_cm": 36.44,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 2,
+     "hull_area_cm2": 4712.6,
+     "circularity": 0.741,
+     "limb_dist_cm": {
+      "hand_l": 37.7,
+      "hand_r": 33.41,
+      "elbow_l": 33.52,
+      "elbow_r": 28.2,
+      "foot_l": 4.8,
+      "foot_r": 3.67,
+      "knee_l": 1.34,
+      "knee_r": -0.09,
+      "head": 2.28
+     },
+     "max_protrusion_cm": 37.7,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 3,
+     "hull_area_cm2": 4591.9,
+     "circularity": 0.742,
+     "limb_dist_cm": {
+      "hand_l": 38.58,
+      "hand_r": 33.49,
+      "elbow_l": 33.65,
+      "elbow_r": 27.74,
+      "foot_l": 3.11,
+      "foot_r": 1.95,
+      "knee_l": 1.21,
+      "knee_r": -0.08,
+      "head": 2.28
+     },
+     "max_protrusion_cm": 38.58,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 4,
+     "hull_area_cm2": 4457.9,
+     "circularity": 0.745,
+     "limb_dist_cm": {
+      "hand_l": 39.36,
+      "hand_r": 33.5,
+      "elbow_l": 33.73,
+      "elbow_r": 27.19,
+      "foot_l": 1.32,
+      "foot_r": 0.13,
+      "knee_l": 1.08,
+      "knee_r": -0.2,
+      "head": 2.27
+     },
+     "max_protrusion_cm": 39.36,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 5,
+     "hull_area_cm2": 4160.8,
+     "circularity": 0.75,
+     "limb_dist_cm": {
+      "hand_l": 40.5,
+      "hand_r": 32.47,
+      "elbow_l": 33.98,
+      "elbow_r": 26.39,
+      "foot_l": -1.38,
+      "foot_r": -2.87,
+      "knee_l": 1.09,
+      "knee_r": -0.55,
+      "head": 2.39
+     },
+     "max_protrusion_cm": 40.5,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 6,
+     "hull_area_cm2": 3652.7,
+     "circularity": 0.757,
+     "limb_dist_cm": {
+      "hand_l": 41.5,
+      "hand_r": 30.43,
+      "elbow_l": 34.2,
+      "elbow_r": 25.13,
+      "foot_l": -4.3,
+      "foot_r": -6.21,
+      "knee_l": 0.57,
+      "knee_r": -1.49,
+      "head": 2.62
+     },
+     "max_protrusion_cm": 41.5,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 7,
+     "hull_area_cm2": 3164.0,
+     "circularity": 0.75,
+     "limb_dist_cm": {
+      "hand_l": 42.04,
+      "hand_r": 28.73,
+      "elbow_l": 34.21,
+      "elbow_r": 23.5,
+      "foot_l": -5.96,
+      "foot_r": -7.75,
+      "knee_l": 1.02,
+      "knee_r": -2.5,
+      "head": 2.84
+     },
+     "max_protrusion_cm": 42.04,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 8,
+     "hull_area_cm2": 2848.8,
+     "circularity": 0.708,
+     "limb_dist_cm": {
+      "hand_l": 43.68,
+      "hand_r": 28.85,
+      "elbow_l": 34.16,
+      "elbow_r": 22.34,
+      "foot_l": -6.61,
+      "foot_r": -7.6,
+      "knee_l": 0.98,
+      "knee_r": -3.63,
+      "head": 2.92
+     },
+     "max_protrusion_cm": 43.68,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 9,
+     "hull_area_cm2": 2582.8,
+     "circularity": 0.653,
+     "limb_dist_cm": {
+      "hand_l": 45.92,
+      "hand_r": 29.89,
+      "elbow_l": 34.07,
+      "elbow_r": 21.39,
+      "foot_l": -7.09,
+      "foot_r": -7.43,
+      "knee_l": -0.96,
+      "knee_r": -5.52,
+      "head": 2.92
+     },
+     "max_protrusion_cm": 45.92,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 10,
+     "hull_area_cm2": 1883.0,
+     "circularity": 0.82,
+     "limb_dist_cm": {
+      "hand_l": 15.96,
+      "hand_r": 19.05,
+      "elbow_l": 22.93,
+      "elbow_r": 23.78,
+      "foot_l": -7.12,
+      "foot_r": -7.22,
+      "knee_l": -7.4,
+      "knee_r": -9.94,
+      "head": 2.71
+     },
+     "max_protrusion_cm": 23.78,
+     "max_protrusion_limb": "elbow_r",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 11,
+     "hull_area_cm2": 1334.7,
+     "circularity": 0.664,
+     "limb_dist_cm": {
+      "hand_l": 1.82,
+      "hand_r": 3.61,
+      "elbow_l": 14.51,
+      "elbow_r": 20.74,
+      "foot_l": -6.75,
+      "foot_r": -6.88,
+      "knee_l": 11.19,
+      "knee_r": 11.04,
+      "head": 2.18
+     },
+     "max_protrusion_cm": 20.74,
+     "max_protrusion_limb": "elbow_r",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 12,
+     "hull_area_cm2": 3070.5,
+     "circularity": 0.786,
+     "limb_dist_cm": {
+      "hand_l": 2.15,
+      "hand_r": 3.52,
+      "elbow_l": 14.13,
+      "elbow_r": 20.24,
+      "foot_l": -7.75,
+      "foot_r": -6.19,
+      "knee_l": 32.0,
+      "knee_r": 31.89,
+      "head": 2.16
+     },
+     "max_protrusion_cm": 32.0,
+     "max_protrusion_limb": "knee_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "knee_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 13,
+     "hull_area_cm2": 1429.5,
+     "circularity": 0.645,
+     "limb_dist_cm": {
+      "hand_l": 3.55,
+      "hand_r": 3.17,
+      "elbow_l": 12.41,
+      "elbow_r": 17.99,
+      "foot_l": -8.77,
+      "foot_r": -6.37,
+      "knee_l": 28.3,
+      "knee_r": 28.41,
+      "head": 2.06
+     },
+     "max_protrusion_cm": 28.41,
+     "max_protrusion_limb": "knee_r",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "knee_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 14,
+     "hull_area_cm2": 933.7,
+     "circularity": 0.854,
+     "limb_dist_cm": {
+      "hand_l": 5.97,
+      "hand_r": 2.37,
+      "elbow_l": 8.28,
+      "elbow_r": 12.58,
+      "foot_l": -10.28,
+      "foot_r": -5.79,
+      "knee_l": 13.41,
+      "knee_r": 9.78,
+      "head": 1.82
+     },
+     "max_protrusion_cm": 13.41,
+     "max_protrusion_limb": "knee_l",
+     "sticking_out": [
+      "elbow_r",
+      "knee_l"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "hand_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 15,
+     "hull_area_cm2": 660.6,
+     "circularity": 0.792,
+     "limb_dist_cm": {
+      "hand_l": 9.53,
+      "hand_r": 3.64,
+      "elbow_l": 10.14,
+      "elbow_r": 8.67,
+      "foot_l": -2.73,
+      "foot_r": 0.52,
+      "knee_l": -0.31,
+      "knee_r": -1.41,
+      "head": 1.37
+     },
+     "max_protrusion_cm": 10.14,
+     "max_protrusion_limb": "elbow_l",
+     "sticking_out": [],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": true,
+     "reason": "blob"
+    }
+   ],
+   "base": {
+    "flagged_frames": [
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     15
+    ],
+    "hull_area_mean": 2069.6
+   },
+   "delta_vs_base": {
+    "flagged": -7,
+    "hull_area_mean_pct": 54.4
+   },
+   "png": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2_cp1verify\\docs\\notes\\reviews\\dropkick-kick-k6\\k8\\silhouette_az180.png"
+  },
+  "az90": {
+   "flagged_frames": [],
+   "finding": null,
+   "worst": [
+    {
+     "f": 4,
+     "max_protrusion_cm": 19.61,
+     "circularity": 0.71
+    },
+    {
+     "f": 11,
+     "max_protrusion_cm": 19.71,
+     "circularity": 0.824
+    },
+    {
+     "f": 13,
+     "max_protrusion_cm": 20.81,
+     "circularity": 0.657
+    },
+    {
+     "f": 5,
+     "max_protrusion_cm": 20.82,
+     "circularity": 0.7
+    },
+    {
+     "f": 6,
+     "max_protrusion_cm": 22.03,
+     "circularity": 0.697
+    }
+   ],
+   "hull_area_min": 1846.4,
+   "hull_area_mean": 2893.2,
+   "frames": [
+    {
+     "f": 0,
+     "hull_area_cm2": 4085.2,
+     "circularity": 0.62,
+     "limb_dist_cm": {
+      "hand_l": 16.32,
+      "hand_r": 12.79,
+      "elbow_l": 5.7,
+      "elbow_r": 12.43,
+      "foot_l": 35.5,
+      "foot_r": 35.94,
+      "knee_l": 30.31,
+      "knee_r": 27.05,
+      "head": 2.92
+     },
+     "max_protrusion_cm": 35.94,
+     "max_protrusion_limb": "foot_r",
+     "sticking_out": [
+      "elbow_r",
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r",
+      "knee_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 1,
+     "hull_area_cm2": 3697.9,
+     "circularity": 0.694,
+     "limb_dist_cm": {
+      "hand_l": 16.58,
+      "hand_r": 14.86,
+      "elbow_l": 4.05,
+      "elbow_r": 13.97,
+      "foot_l": 17.7,
+      "foot_r": 18.13,
+      "knee_l": 30.51,
+      "knee_r": 25.42,
+      "head": 2.93
+     },
+     "max_protrusion_cm": 30.51,
+     "max_protrusion_limb": "knee_l",
+     "sticking_out": [
+      "elbow_r",
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r",
+      "knee_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 2,
+     "hull_area_cm2": 3330.7,
+     "circularity": 0.72,
+     "limb_dist_cm": {
+      "hand_l": 17.04,
+      "hand_r": 16.9,
+      "elbow_l": 2.58,
+      "elbow_r": 15.4,
+      "foot_l": 9.63,
+      "foot_r": 10.04,
+      "knee_l": 24.64,
+      "knee_r": 17.2,
+      "head": 2.93
+     },
+     "max_protrusion_cm": 24.64,
+     "max_protrusion_limb": "knee_l",
+     "sticking_out": [
+      "elbow_r",
+      "hand_l",
+      "hand_r",
+      "knee_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "elbow_l",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 3,
+     "hull_area_cm2": 3252.1,
+     "circularity": 0.717,
+     "limb_dist_cm": {
+      "hand_l": 17.49,
+      "hand_r": 18.29,
+      "elbow_l": 1.67,
+      "elbow_r": 16.28,
+      "foot_l": 8.33,
+      "foot_r": 8.73,
+      "knee_l": 22.31,
+      "knee_r": 14.55,
+      "head": 2.93
+     },
+     "max_protrusion_cm": 22.31,
+     "max_protrusion_limb": "knee_l",
+     "sticking_out": [
+      "elbow_r",
+      "hand_l",
+      "hand_r",
+      "knee_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "elbow_l",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 4,
+     "hull_area_cm2": 3136.9,
+     "circularity": 0.71,
+     "limb_dist_cm": {
+      "hand_l": 17.89,
+      "hand_r": 19.61,
+      "elbow_l": 0.79,
+      "elbow_r": 17.18,
+      "foot_l": 7.01,
+      "foot_r": 7.4,
+      "knee_l": 19.16,
+      "knee_r": 11.26,
+      "head": 2.93
+     },
+     "max_protrusion_cm": 19.61,
+     "max_protrusion_limb": "hand_r",
+     "sticking_out": [
+      "elbow_r",
+      "hand_l",
+      "hand_r",
+      "knee_l"
+     ],
+     "hidden": [
+      "elbow_l",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 5,
+     "hull_area_cm2": 3021.8,
+     "circularity": 0.7,
+     "limb_dist_cm": {
+      "hand_l": 18.14,
+      "hand_r": 20.82,
+      "elbow_l": -0.31,
+      "elbow_r": 17.98,
+      "foot_l": 5.1,
+      "foot_r": 5.51,
+      "knee_l": 16.47,
+      "knee_r": 8.1,
+      "head": 2.93
+     },
+     "max_protrusion_cm": 20.82,
+     "max_protrusion_limb": "hand_r",
+     "sticking_out": [
+      "elbow_r",
+      "hand_l",
+      "hand_r",
+      "knee_l"
+     ],
+     "hidden": [
+      "elbow_l",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 6,
+     "hull_area_cm2": 2991.1,
+     "circularity": 0.697,
+     "limb_dist_cm": {
+      "hand_l": 18.7,
+      "hand_r": 22.03,
+      "elbow_l": -1.01,
+      "elbow_r": 18.8,
+      "foot_l": 3.12,
+      "foot_r": 3.59,
+      "knee_l": 15.49,
+      "knee_r": 5.84,
+      "head": 2.91
+     },
+     "max_protrusion_cm": 22.03,
+     "max_protrusion_limb": "hand_r",
+     "sticking_out": [
+      "elbow_r",
+      "hand_l",
+      "hand_r",
+      "knee_l"
+     ],
+     "hidden": [
+      "elbow_l",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 7,
+     "hull_area_cm2": 3000.9,
+     "circularity": 0.699,
+     "limb_dist_cm": {
+      "hand_l": 19.32,
+      "hand_r": 23.38,
+      "elbow_l": -0.93,
+      "elbow_r": 19.78,
+      "foot_l": 1.36,
+      "foot_r": 1.88,
+      "knee_l": 15.14,
+      "knee_r": 3.84,
+      "head": 2.9
+     },
+     "max_protrusion_cm": 23.38,
+     "max_protrusion_limb": "hand_r",
+     "sticking_out": [
+      "elbow_r",
+      "hand_l",
+      "hand_r",
+      "knee_l"
+     ],
+     "hidden": [
+      "elbow_l",
+      "foot_l",
+      "foot_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 8,
+     "hull_area_cm2": 2926.3,
+     "circularity": 0.689,
+     "limb_dist_cm": {
+      "hand_l": 19.73,
+      "hand_r": 25.11,
+      "elbow_l": -0.8,
+      "elbow_r": 20.4,
+      "foot_l": -0.11,
+      "foot_r": 0.45,
+      "knee_l": 12.99,
+      "knee_r": 0.45,
+      "head": 2.9
+     },
+     "max_protrusion_cm": 25.11,
+     "max_protrusion_limb": "hand_r",
+     "sticking_out": [
+      "elbow_r",
+      "hand_l",
+      "hand_r",
+      "knee_l"
+     ],
+     "hidden": [
+      "elbow_l",
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 9,
+     "hull_area_cm2": 2772.3,
+     "circularity": 0.659,
+     "limb_dist_cm": {
+      "hand_l": 19.86,
+      "hand_r": 27.2,
+      "elbow_l": -0.59,
+      "elbow_r": 20.84,
+      "foot_l": -1.08,
+      "foot_r": -0.49,
+      "knee_l": 8.77,
+      "knee_r": -3.63,
+      "head": 2.9
+     },
+     "max_protrusion_cm": 27.2,
+     "max_protrusion_limb": "hand_r",
+     "sticking_out": [
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "elbow_l",
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 10,
+     "hull_area_cm2": 1846.4,
+     "circularity": 0.772,
+     "limb_dist_cm": {
+      "hand_l": 24.67,
+      "hand_r": 10.15,
+      "elbow_l": 21.63,
+      "elbow_r": -9.16,
+      "foot_l": -2.45,
+      "foot_r": -1.83,
+      "knee_l": -4.29,
+      "knee_r": -6.97,
+      "head": 2.9
+     },
+     "max_protrusion_cm": 24.67,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "hand_l"
+     ],
+     "hidden": [
+      "elbow_r",
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 11,
+     "hull_area_cm2": 1982.3,
+     "circularity": 0.824,
+     "limb_dist_cm": {
+      "hand_l": 8.89,
+      "hand_r": 3.84,
+      "elbow_l": 19.71,
+      "elbow_r": -5.81,
+      "foot_l": -3.42,
+      "foot_r": -2.85,
+      "knee_l": 14.09,
+      "knee_r": 10.27,
+      "head": 2.91
+     },
+     "max_protrusion_cm": 19.71,
+     "max_protrusion_limb": "elbow_l",
+     "sticking_out": [
+      "elbow_l",
+      "knee_l"
+     ],
+     "hidden": [
+      "elbow_r",
+      "foot_l",
+      "foot_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 12,
+     "hull_area_cm2": 2735.1,
+     "circularity": 0.728,
+     "limb_dist_cm": {
+      "hand_l": 9.07,
+      "hand_r": 4.28,
+      "elbow_l": 19.26,
+      "elbow_r": -5.78,
+      "foot_l": 0.02,
+      "foot_r": 0.56,
+      "knee_l": -8.23,
+      "knee_r": 30.46,
+      "head": 2.91
+     },
+     "max_protrusion_cm": 30.46,
+     "max_protrusion_limb": "knee_r",
+     "sticking_out": [
+      "elbow_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "elbow_r",
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 13,
+     "hull_area_cm2": 2064.9,
+     "circularity": 0.657,
+     "limb_dist_cm": {
+      "hand_l": 9.86,
+      "hand_r": 6.01,
+      "elbow_l": 17.07,
+      "elbow_r": -5.72,
+      "foot_l": 15.58,
+      "foot_r": 16.02,
+      "knee_l": 20.81,
+      "knee_r": 13.33,
+      "head": 2.91
+     },
+     "max_protrusion_cm": 20.81,
+     "max_protrusion_limb": "knee_l",
+     "sticking_out": [
+      "elbow_l",
+      "foot_l",
+      "foot_r",
+      "knee_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "elbow_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 14,
+     "hull_area_cm2": 2843.9,
+     "circularity": 0.478,
+     "limb_dist_cm": {
+      "hand_l": 11.23,
+      "hand_r": 7.99,
+      "elbow_l": 11.26,
+      "elbow_r": -6.04,
+      "foot_l": 50.26,
+      "foot_r": 50.73,
+      "knee_l": 31.41,
+      "knee_r": 28.38,
+      "head": 2.91
+     },
+     "max_protrusion_cm": 50.73,
+     "max_protrusion_limb": "foot_r",
+     "sticking_out": [
+      "foot_l",
+      "foot_r",
+      "knee_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "elbow_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 15,
+     "hull_area_cm2": 2602.9,
+     "circularity": 0.327,
+     "limb_dist_cm": {
+      "hand_l": 7.08,
+      "hand_r": 3.74,
+      "elbow_l": 11.74,
+      "elbow_r": -6.09,
+      "foot_l": 73.78,
+      "foot_r": 74.3,
+      "knee_l": 32.04,
+      "knee_r": 31.75,
+      "head": 2.8
+     },
+     "max_protrusion_cm": 74.3,
+     "max_protrusion_limb": "foot_r",
+     "sticking_out": [
+      "foot_l",
+      "foot_r",
+      "knee_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "elbow_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    }
+   ],
+   "base": {
+    "flagged_frames": [],
+    "hull_area_mean": 2216.3
+   },
+   "delta_vs_base": {
+    "flagged": 0,
+    "hull_area_mean_pct": 30.5
+   },
+   "png": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2_cp1verify\\docs\\notes\\reviews\\dropkick-kick-k6\\k8\\silhouette_az90.png"
+  },
+  "game": {
+   "flagged_frames": [
+    15
+   ],
+   "finding": "game: 1/16 frames read as a shapeless ball (f15-f15): no limb end sticks out of the torso by >= 12 cm and the outline is round (circularity >= 0.65); worst f15: max protrusion 9.11 cm (elbow_r), circularity 0.854",
+   "worst": [
+    {
+     "f": 15,
+     "max_protrusion_cm": 9.11,
+     "circularity": 0.854
+    },
+    {
+     "f": 14,
+     "max_protrusion_cm": 12.64,
+     "circularity": 0.859
+    },
+    {
+     "f": 11,
+     "max_protrusion_cm": 20.82,
+     "circularity": 0.756
+    },
+    {
+     "f": 10,
+     "max_protrusion_cm": 24.01,
+     "circularity": 0.819
+    },
+    {
+     "f": 13,
+     "max_protrusion_cm": 26.92,
+     "circularity": 0.711
+    }
+   ],
+   "hull_area_min": 765.2,
+   "hull_area_mean": 3416.7,
+   "frames": [
+    {
+     "f": 0,
+     "hull_area_cm2": 6468.2,
+     "circularity": 0.687,
+     "limb_dist_cm": {
+      "hand_l": 34.03,
+      "hand_r": 34.41,
+      "elbow_l": 32.23,
+      "elbow_r": 29.69,
+      "foot_l": 35.41,
+      "foot_r": 35.52,
+      "knee_l": 11.96,
+      "knee_r": 8.51,
+      "head": 1.59
+     },
+     "max_protrusion_cm": 35.52,
+     "max_protrusion_limb": "foot_r",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 1,
+     "hull_area_cm2": 5421.3,
+     "circularity": 0.715,
+     "limb_dist_cm": {
+      "hand_l": 35.32,
+      "hand_r": 34.46,
+      "elbow_l": 32.88,
+      "elbow_r": 29.22,
+      "foot_l": 16.27,
+      "foot_r": 15.98,
+      "knee_l": 1.29,
+      "knee_r": 0.01,
+      "head": 1.54
+     },
+     "max_protrusion_cm": 35.32,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 2,
+     "hull_area_cm2": 4888.5,
+     "circularity": 0.729,
+     "limb_dist_cm": {
+      "hand_l": 36.6,
+      "hand_r": 34.61,
+      "elbow_l": 33.29,
+      "elbow_r": 28.62,
+      "foot_l": 6.69,
+      "foot_r": 6.22,
+      "knee_l": 0.61,
+      "knee_r": -0.59,
+      "head": 1.52
+     },
+     "max_protrusion_cm": 36.6,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 3,
+     "hull_area_cm2": 4782.0,
+     "circularity": 0.728,
+     "limb_dist_cm": {
+      "hand_l": 37.5,
+      "hand_r": 34.84,
+      "elbow_l": 33.44,
+      "elbow_r": 28.18,
+      "foot_l": 5.0,
+      "foot_r": 4.49,
+      "knee_l": 0.53,
+      "knee_r": -0.54,
+      "head": 1.51
+     },
+     "max_protrusion_cm": 37.5,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 4,
+     "hull_area_cm2": 4637.3,
+     "circularity": 0.728,
+     "limb_dist_cm": {
+      "hand_l": 38.31,
+      "hand_r": 34.98,
+      "elbow_l": 33.52,
+      "elbow_r": 27.68,
+      "foot_l": 3.19,
+      "foot_r": 2.65,
+      "knee_l": 0.47,
+      "knee_r": -0.6,
+      "head": 1.51
+     },
+     "max_protrusion_cm": 38.31,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 5,
+     "hull_area_cm2": 4406.3,
+     "circularity": 0.734,
+     "limb_dist_cm": {
+      "hand_l": 39.69,
+      "hand_r": 34.07,
+      "elbow_l": 33.77,
+      "elbow_r": 26.86,
+      "foot_l": 0.44,
+      "foot_r": -0.45,
+      "knee_l": 0.52,
+      "knee_r": -0.89,
+      "head": 1.67
+     },
+     "max_protrusion_cm": 39.69,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 6,
+     "hull_area_cm2": 3999.1,
+     "circularity": 0.741,
+     "limb_dist_cm": {
+      "hand_l": 41.22,
+      "hand_r": 31.87,
+      "elbow_l": 34.08,
+      "elbow_r": 25.69,
+      "foot_l": -2.6,
+      "foot_r": -4.03,
+      "knee_l": -0.07,
+      "knee_r": -1.82,
+      "head": 2.04
+     },
+     "max_protrusion_cm": 41.22,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 7,
+     "hull_area_cm2": 3585.5,
+     "circularity": 0.751,
+     "limb_dist_cm": {
+      "hand_l": 42.28,
+      "hand_r": 30.1,
+      "elbow_l": 34.19,
+      "elbow_r": 24.25,
+      "foot_l": -4.5,
+      "foot_r": -6.36,
+      "knee_l": -0.71,
+      "knee_r": -2.99,
+      "head": 2.47
+     },
+     "max_protrusion_cm": 42.28,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 8,
+     "hull_area_cm2": 3330.1,
+     "circularity": 0.738,
+     "limb_dist_cm": {
+      "hand_l": 44.15,
+      "hand_r": 30.33,
+      "elbow_l": 34.21,
+      "elbow_r": 23.28,
+      "foot_l": -5.4,
+      "foot_r": -7.54,
+      "knee_l": -0.79,
+      "knee_r": -4.12,
+      "head": 2.71
+     },
+     "max_protrusion_cm": 44.15,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 9,
+     "hull_area_cm2": 3083.3,
+     "circularity": 0.696,
+     "limb_dist_cm": {
+      "hand_l": 46.53,
+      "hand_r": 31.09,
+      "elbow_l": 34.18,
+      "elbow_r": 22.5,
+      "foot_l": -6.05,
+      "foot_r": -7.71,
+      "knee_l": -2.57,
+      "knee_r": -5.77,
+      "head": 2.83
+     },
+     "max_protrusion_cm": 46.53,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 10,
+     "hull_area_cm2": 1951.4,
+     "circularity": 0.819,
+     "limb_dist_cm": {
+      "hand_l": 11.52,
+      "hand_r": 17.91,
+      "elbow_l": 20.3,
+      "elbow_r": 24.01,
+      "foot_l": -6.34,
+      "foot_r": -7.55,
+      "knee_l": -7.84,
+      "knee_r": -9.77,
+      "head": 2.92
+     },
+     "max_protrusion_cm": 24.01,
+     "max_protrusion_limb": "elbow_r",
+     "sticking_out": [
+      "elbow_l",
+      "elbow_r",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 11,
+     "hull_area_cm2": 1487.3,
+     "circularity": 0.756,
+     "limb_dist_cm": {
+      "hand_l": -1.17,
+      "hand_r": 2.5,
+      "elbow_l": 10.72,
+      "elbow_r": 20.82,
+      "foot_l": -6.16,
+      "foot_r": -7.26,
+      "knee_l": 6.65,
+      "knee_r": 7.52,
+      "head": 2.7
+     },
+     "max_protrusion_cm": 20.82,
+     "max_protrusion_limb": "elbow_r",
+     "sticking_out": [
+      "elbow_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 12,
+     "hull_area_cm2": 3277.7,
+     "circularity": 0.798,
+     "limb_dist_cm": {
+      "hand_l": -0.84,
+      "hand_r": 2.33,
+      "elbow_l": 10.38,
+      "elbow_r": 20.32,
+      "foot_l": -6.56,
+      "foot_r": -6.71,
+      "knee_l": 32.0,
+      "knee_r": 31.92,
+      "head": 2.69
+     },
+     "max_protrusion_cm": 32.0,
+     "max_protrusion_limb": "knee_l",
+     "sticking_out": [
+      "elbow_r",
+      "knee_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 13,
+     "hull_area_cm2": 1600.0,
+     "circularity": 0.711,
+     "limb_dist_cm": {
+      "hand_l": 0.51,
+      "hand_r": 1.63,
+      "elbow_l": 8.93,
+      "elbow_r": 18.06,
+      "foot_l": -4.96,
+      "foot_r": -7.56,
+      "knee_l": 25.89,
+      "knee_r": 26.92,
+      "head": 2.63
+     },
+     "max_protrusion_cm": 26.92,
+     "max_protrusion_limb": "knee_r",
+     "sticking_out": [
+      "elbow_r",
+      "knee_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 14,
+     "hull_area_cm2": 984.3,
+     "circularity": 0.859,
+     "limb_dist_cm": {
+      "hand_l": 2.65,
+      "hand_r": 0.19,
+      "elbow_l": 5.16,
+      "elbow_r": 12.64,
+      "foot_l": -1.29,
+      "foot_r": -3.53,
+      "knee_l": 6.52,
+      "knee_r": 4.12,
+      "head": 2.48
+     },
+     "max_protrusion_cm": 12.64,
+     "max_protrusion_limb": "elbow_r",
+     "sticking_out": [
+      "elbow_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 15,
+     "hull_area_cm2": 765.2,
+     "circularity": 0.854,
+     "limb_dist_cm": {
+      "hand_l": 6.69,
+      "hand_r": 0.57,
+      "elbow_l": 5.31,
+      "elbow_r": 9.11,
+      "foot_l": -4.37,
+      "foot_r": -6.63,
+      "knee_l": -6.47,
+      "knee_r": -5.5,
+      "head": 2.16
+     },
+     "max_protrusion_cm": 9.11,
+     "max_protrusion_limb": "elbow_r",
+     "sticking_out": [],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "hand_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": true,
+     "reason": "blob"
+    }
+   ],
+   "base": {
+    "flagged_frames": [
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     15
+    ],
+    "hull_area_mean": 2188.4
+   },
+   "delta_vs_base": {
+    "flagged": -6,
+    "hull_area_mean_pct": 56.1
+   },
+   "png": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2_cp1verify\\docs\\notes\\reviews\\dropkick-kick-k6\\k8\\silhouette_game.png"
+  },
+  "az315": {
+   "flagged_frames": [],
+   "finding": null,
+   "worst": [
+    {
+     "f": 11,
+     "max_protrusion_cm": 20.06,
+     "circularity": 0.806
+    },
+    {
+     "f": 10,
+     "max_protrusion_cm": 20.61,
+     "circularity": 0.815
+    },
+    {
+     "f": 2,
+     "max_protrusion_cm": 20.68,
+     "circularity": 0.67
+    },
+    {
+     "f": 3,
+     "max_protrusion_cm": 22.13,
+     "circularity": 0.67
+    },
+    {
+     "f": 4,
+     "max_protrusion_cm": 23.48,
+     "circularity": 0.666
+    }
+   ],
+   "hull_area_min": 1535.8,
+   "hull_area_mean": 2317.4,
+   "frames": [
+    {
+     "f": 0,
+     "hull_area_cm2": 4371.1,
+     "circularity": 0.645,
+     "limb_dist_cm": {
+      "hand_l": 15.97,
+      "hand_r": 13.0,
+      "elbow_l": 11.96,
+      "elbow_r": 4.66,
+      "foot_l": 33.19,
+      "foot_r": 35.15,
+      "knee_l": 5.51,
+      "knee_r": 26.8,
+      "head": 2.76
+     },
+     "max_protrusion_cm": 35.15,
+     "max_protrusion_limb": "foot_r",
+     "sticking_out": [
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r",
+      "knee_r"
+     ],
+     "hidden": [
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 1,
+     "hull_area_cm2": 3467.7,
+     "circularity": 0.671,
+     "limb_dist_cm": {
+      "hand_l": 18.43,
+      "hand_r": 12.55,
+      "elbow_l": 13.66,
+      "elbow_r": 2.97,
+      "foot_l": 13.06,
+      "foot_r": 16.65,
+      "knee_l": 7.18,
+      "knee_r": 23.5,
+      "head": 2.75
+     },
+     "max_protrusion_cm": 23.5,
+     "max_protrusion_limb": "knee_r",
+     "sticking_out": [
+      "elbow_l",
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "hand_r",
+      "knee_r"
+     ],
+     "hidden": [
+      "elbow_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 2,
+     "hull_area_cm2": 2912.9,
+     "circularity": 0.67,
+     "limb_dist_cm": {
+      "hand_l": 20.68,
+      "hand_r": 12.46,
+      "elbow_l": 15.27,
+      "elbow_r": 1.45,
+      "foot_l": 3.27,
+      "foot_r": 8.38,
+      "knee_l": 5.49,
+      "knee_r": 16.61,
+      "head": 2.75
+     },
+     "max_protrusion_cm": 20.68,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "hand_l",
+      "hand_r",
+      "knee_r"
+     ],
+     "hidden": [
+      "elbow_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 3,
+     "hull_area_cm2": 2830.8,
+     "circularity": 0.67,
+     "limb_dist_cm": {
+      "hand_l": 22.13,
+      "hand_r": 12.68,
+      "elbow_l": 16.24,
+      "elbow_r": 0.57,
+      "foot_l": 1.56,
+      "foot_r": 7.1,
+      "knee_l": 4.29,
+      "knee_r": 14.64,
+      "head": 2.74
+     },
+     "max_protrusion_cm": 22.13,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "hand_l",
+      "hand_r",
+      "knee_r"
+     ],
+     "hidden": [
+      "elbow_r",
+      "foot_l",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 4,
+     "hull_area_cm2": 2716.1,
+     "circularity": 0.666,
+     "limb_dist_cm": {
+      "hand_l": 23.48,
+      "hand_r": 12.82,
+      "elbow_l": 17.11,
+      "elbow_r": -0.37,
+      "foot_l": -0.27,
+      "foot_r": 5.8,
+      "knee_l": 2.54,
+      "knee_r": 12.14,
+      "head": 2.74
+     },
+     "max_protrusion_cm": 23.48,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "hand_l",
+      "hand_r",
+      "knee_r"
+     ],
+     "hidden": [
+      "elbow_r",
+      "foot_l",
+      "head",
+      "knee_l"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 5,
+     "hull_area_cm2": 2496.5,
+     "circularity": 0.643,
+     "limb_dist_cm": {
+      "hand_l": 26.74,
+      "hand_r": 10.31,
+      "elbow_l": 18.55,
+      "elbow_r": -1.82,
+      "foot_l": -3.27,
+      "foot_r": 3.69,
+      "knee_l": 1.51,
+      "knee_r": 9.53,
+      "head": 2.78
+     },
+     "max_protrusion_cm": 26.74,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "hand_l"
+     ],
+     "hidden": [
+      "elbow_r",
+      "foot_l",
+      "head",
+      "knee_l"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 6,
+     "hull_area_cm2": 2111.6,
+     "circularity": 0.573,
+     "limb_dist_cm": {
+      "hand_l": 31.4,
+      "hand_r": 4.44,
+      "elbow_l": 19.97,
+      "elbow_r": -4.86,
+      "foot_l": -6.66,
+      "foot_r": 1.59,
+      "knee_l": 3.07,
+      "knee_r": 7.22,
+      "head": 2.86
+     },
+     "max_protrusion_cm": 31.4,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "hand_l"
+     ],
+     "hidden": [
+      "elbow_r",
+      "foot_l",
+      "foot_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 7,
+     "hull_area_cm2": 1847.0,
+     "circularity": 0.515,
+     "limb_dist_cm": {
+      "hand_l": 34.82,
+      "hand_r": -1.14,
+      "elbow_l": 21.01,
+      "elbow_r": -8.76,
+      "foot_l": -6.99,
+      "foot_r": 0.22,
+      "knee_l": 5.4,
+      "knee_r": 5.04,
+      "head": 2.92
+     },
+     "max_protrusion_cm": 34.82,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "hand_l"
+     ],
+     "hidden": [
+      "elbow_r",
+      "foot_l",
+      "foot_r",
+      "hand_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 8,
+     "hull_area_cm2": 1737.2,
+     "circularity": 0.489,
+     "limb_dist_cm": {
+      "hand_l": 37.41,
+      "hand_r": -3.95,
+      "elbow_l": 21.68,
+      "elbow_r": -6.34,
+      "foot_l": -7.28,
+      "foot_r": -0.71,
+      "knee_l": 5.37,
+      "knee_r": 1.72,
+      "head": 2.92
+     },
+     "max_protrusion_cm": 37.41,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "hand_l"
+     ],
+     "hidden": [
+      "elbow_r",
+      "foot_l",
+      "foot_r",
+      "hand_r",
+      "head",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 9,
+     "hull_area_cm2": 1602.2,
+     "circularity": 0.453,
+     "limb_dist_cm": {
+      "hand_l": 39.91,
+      "hand_r": -6.77,
+      "elbow_l": 22.29,
+      "elbow_r": -4.44,
+      "foot_l": -7.28,
+      "foot_r": -1.17,
+      "knee_l": 3.79,
+      "knee_r": -2.47,
+      "head": 2.9
+     },
+     "max_protrusion_cm": 39.91,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "elbow_l",
+      "hand_l"
+     ],
+     "hidden": [
+      "elbow_r",
+      "foot_l",
+      "foot_r",
+      "hand_r",
+      "head",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 10,
+     "hull_area_cm2": 1535.8,
+     "circularity": 0.815,
+     "limb_dist_cm": {
+      "hand_l": 20.61,
+      "hand_r": 20.08,
+      "elbow_l": 11.42,
+      "elbow_r": 6.43,
+      "foot_l": -7.5,
+      "foot_r": -1.98,
+      "knee_l": -4.11,
+      "knee_r": -6.49,
+      "head": 2.72
+     },
+     "max_protrusion_cm": 20.61,
+     "max_protrusion_limb": "hand_l",
+     "sticking_out": [
+      "hand_l",
+      "hand_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head",
+      "knee_l",
+      "knee_r"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 11,
+     "hull_area_cm2": 1647.3,
+     "circularity": 0.806,
+     "limb_dist_cm": {
+      "hand_l": 10.0,
+      "hand_r": 7.93,
+      "elbow_l": 12.86,
+      "elbow_r": 6.36,
+      "foot_l": -7.62,
+      "foot_r": -2.86,
+      "knee_l": 20.06,
+      "knee_r": 16.68,
+      "head": 2.4
+     },
+     "max_protrusion_cm": 20.06,
+     "max_protrusion_limb": "knee_l",
+     "sticking_out": [
+      "elbow_l",
+      "knee_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 12,
+     "hull_area_cm2": 2286.9,
+     "circularity": 0.759,
+     "limb_dist_cm": {
+      "hand_l": 10.31,
+      "hand_r": 8.28,
+      "elbow_l": 12.58,
+      "elbow_r": 6.12,
+      "foot_l": -5.36,
+      "foot_r": -0.55,
+      "knee_l": 7.52,
+      "knee_r": 30.67,
+      "head": 2.39
+     },
+     "max_protrusion_cm": 30.67,
+     "max_protrusion_limb": "knee_r",
+     "sticking_out": [
+      "elbow_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "foot_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 13,
+     "hull_area_cm2": 1550.0,
+     "circularity": 0.737,
+     "limb_dist_cm": {
+      "hand_l": 11.63,
+      "hand_r": 9.67,
+      "elbow_l": 11.16,
+      "elbow_r": 5.02,
+      "foot_l": 2.39,
+      "foot_r": 9.58,
+      "knee_l": 7.58,
+      "knee_r": 26.55,
+      "head": 2.33
+     },
+     "max_protrusion_cm": 26.55,
+     "max_protrusion_limb": "knee_r",
+     "sticking_out": [
+      "knee_r"
+     ],
+     "hidden": [
+      "foot_l",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 14,
+     "hull_area_cm2": 2063.3,
+     "circularity": 0.61,
+     "limb_dist_cm": {
+      "hand_l": 13.86,
+      "hand_r": 11.32,
+      "elbow_l": 7.19,
+      "elbow_r": 2.26,
+      "foot_l": 27.11,
+      "foot_r": 33.76,
+      "knee_l": 23.52,
+      "knee_r": 29.97,
+      "head": 2.2
+     },
+     "max_protrusion_cm": 33.76,
+     "max_protrusion_limb": "foot_r",
+     "sticking_out": [
+      "foot_l",
+      "foot_r",
+      "hand_l",
+      "knee_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "elbow_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    },
+    {
+     "f": 15,
+     "hull_area_cm2": 1901.9,
+     "circularity": 0.424,
+     "limb_dist_cm": {
+      "hand_l": 9.54,
+      "hand_r": 6.52,
+      "elbow_l": 11.01,
+      "elbow_r": -6.76,
+      "foot_l": 44.81,
+      "foot_r": 51.47,
+      "knee_l": 14.04,
+      "knee_r": 21.89,
+      "head": 1.59
+     },
+     "max_protrusion_cm": 51.47,
+     "max_protrusion_limb": "foot_r",
+     "sticking_out": [
+      "foot_l",
+      "foot_r",
+      "knee_l",
+      "knee_r"
+     ],
+     "hidden": [
+      "elbow_r",
+      "head"
+     ],
+     "flag": false,
+     "reason": null
+    }
+   ],
+   "base": {
+    "flagged_frames": [],
+    "hull_area_mean": 2103.3
+   },
+   "delta_vs_base": {
+    "flagged": 0,
+    "hull_area_mean_pct": 10.2
+   },
+   "png": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2_cp1verify\\docs\\notes\\reviews\\dropkick-kick-k6\\k8\\silhouette_az315.png"
+  }
+ },
+ "thresholds": {
+  "blob_cm": 12.0,
+  "blob_circ": 0.65,
+  "near_cm": 3.0,
+  "torso_pad_cm": 7.0
+ },
+ "findings": [
+  "az180: 1/16 frames read as a shapeless ball (f15-f15): no limb end sticks out of the torso by >= 12 cm and the outline is round (circularity >= 0.65); worst f15: max protrusion 10.14 cm (elbow_l), circularity 0.792",
+  "game: 1/16 frames read as a shapeless ball (f15-f15): no limb end sticks out of the torso by >= 12 cm and the outline is round (circularity >= 0.65); worst f15: max protrusion 9.11 cm (elbow_r), circularity 0.854"
+ ]
+}

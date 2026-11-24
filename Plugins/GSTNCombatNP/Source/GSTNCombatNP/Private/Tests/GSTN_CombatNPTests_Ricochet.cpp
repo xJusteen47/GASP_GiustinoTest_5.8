@@ -254,4 +254,37 @@ bool FGSTN_NPRicochetFallbackTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_NPStickCutsTailTest, "GSTNCombat.NP.Timeline.StickCutsTail", GSTN_NP_TEST_FLAGS)
+bool FGSTN_NPStickCutsTailTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-23 (get-ups): a tail flagged bStickCuts ends on the stick alone, from its first frame; never before, never without the flag
+	FGSTN_CombatTimelineData Data;
+	Data.TotalFrames = 24;
+	Data.FirstActionableFrame = 21;
+	Data.Tail.bHasTail = true;
+	Data.Tail.bStickCuts = true;
+	FGSTN_CombatSyncCore Core = RcMakeRunning(100);
+	FGSTN_TimelineOutput Output;
+	Output.Reserve(Data);
+	FGSTN_CombatTimelineLogic::EvaluateStart(Core, 100, Data, 0, Output);
+	for (int32 Frame = 101; Frame < 121; ++Frame)
+	{
+		FGSTN_CombatTimelineLogic::AdvanceClock(Core, Frame, &Data, 0, true, Output);
+		TestFalse(*FString::Printf(TEXT("frame %d (timeline %d) is before the FAF: the stick does not cut"), Frame, Frame - 100),
+			FGSTN_CombatTimelineLogic::ShouldStickCutTail(Core, &Data, Output, true));
+	}
+	FGSTN_CombatTimelineLogic::AdvanceClock(Core, 121, &Data, 0, true, Output);
+	TestTrue(TEXT("the FAF frame, stick pushed: cut"), FGSTN_CombatTimelineLogic::ShouldStickCutTail(Core, &Data, Output, true));
+	TestFalse(TEXT("the FAF frame, stick at rest: the tail plays out"), FGSTN_CombatTimelineLogic::ShouldStickCutTail(Core, &Data, Output, false));
+	FGSTN_CombatTimelineData Attack = Data;
+	Attack.Tail.bStickCuts = false;
+	TestFalse(TEXT("a tail without the flag (the attacks): commands only, as before"), FGSTN_CombatTimelineLogic::ShouldStickCutTail(Core, &Attack, Output, true));
+	TestFalse(TEXT("no data: nothing"), FGSTN_CombatTimelineLogic::ShouldStickCutTail(Core, nullptr, Output, true));
+	FGSTN_CombatTimelineLogic::CancelForOtherCommand(Core, 121);
+	TestTrue(TEXT("the cut leaves the combatant actionable"), Core.ActionState == EGSTN_ActionState::Actionable);
+	TestFalse(TEXT("and an idle combatant has no tail to cut"), FGSTN_CombatTimelineLogic::ShouldStickCutTail(Core, &Data, Output, true));
+	TestFalse(TEXT("the flag is off by default"), FGSTN_TimelineTail().bStickCuts);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

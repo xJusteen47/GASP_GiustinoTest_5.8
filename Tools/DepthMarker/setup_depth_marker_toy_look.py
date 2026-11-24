@@ -1,4 +1,4 @@
-"""Builds the prototype toy look of the depth marker: three materials and two style assets in /Game/Blueprints/DepthMarker.
+"""Builds the prototype toy look of the depth marker: three materials and two style assets in /Game/GSTN/DepthMarker.
 
 Idempotent: existing assets are rebuilt in place (materials: expressions deleted and recreated; styles: presenters repopulated).
 Headless:  UnrealEditor-Cmd.exe <uproject> -run=pythonscript -script=<abs path of this file> -unattended -nullrhi -NoP4
@@ -10,7 +10,7 @@ The decal cannot read custom primitive data (a decal component is not a primitiv
 """
 import unreal
 
-FOLDER = "/Game/Blueprints/DepthMarker"
+FOLDER = "/Game/GSTN/DepthMarker"
 lib = unreal.MaterialEditingLibrary
 tools = unreal.AssetToolsHelpers.get_asset_tools()
 problems = []

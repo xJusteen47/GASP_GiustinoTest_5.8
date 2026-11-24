@@ -162,7 +162,43 @@ def compile_plan(plan):
     return poser, ts, out
 
 
+def draw_pil(poser, dense, cols, path, title):
+    """The same three views with Pillow, for a machine without matplotlib (the laptop's Python, dropkick-tb-4). 1 px = 1 cm."""
+    from PIL import Image, ImageDraw
+    chains = [(["pelvis", "spine_01", "spine_03", "spine_05", "neck_01", "head"], (0, 0, 0), 5),
+              (["clavicle_r", "upperarm_r", "lowerarm_r", "hand_r", "middle_01_r"], (214, 39, 40), 3), (["clavicle_l", "upperarm_l", "lowerarm_l", "hand_l", "middle_01_l"], (31, 119, 180), 3),
+              (["thigh_r", "calf_r", "foot_r", "ball_r"], (255, 127, 14), 4), (["thigh_l", "calf_l", "foot_l", "ball_l"], (0, 128, 128), 4),
+              (["upperarm_r", "upperarm_l"], (128, 128, 128), 2), (["thigh_r", "thigh_l"], (128, 128, 128), 2)]
+    views = [("side", lambda p: (p[1], p[2]), (-10, 200)), ("behind", lambda p: (-p[0], p[2]), (-10, 200)), ("top", lambda p: (-p[0], p[1]), (-130, 130))]
+    W, H, top = 260, 220, 24
+    img = Image.new("RGB", (W * len(cols), top + H * 3), "white")
+    d = ImageDraw.Draw(img)
+    d.text((6, 4), title, fill=(0, 0, 0))
+    for c, f in enumerate(cols):
+        P, _ = poser.solve(dense[str(f)])
+        hc = P["head"] + (P["head"] - P["neck_01"]) / np.linalg.norm(P["head"] - P["neck_01"]) * 9
+        for r, (name, pr, (y0, y1)) in enumerate(views):
+            ox, oy = c * W, top + r * H
+            def px(q):
+                x, y = pr(q)
+                return (ox + W / 2 + x, oy + H - 10 - (y - y0) * (H - 20) / (y1 - y0))
+            if r < 2:
+                d.line([px((0, -130, 0) if r == 0 else (130, 0, 0)), px((0, 130, 0) if r == 0 else (-130, 0, 0))], fill=(139, 69, 19), width=1)
+            for ch, col, lw in chains:
+                xy = [px(P[b]) for b in ch if b in P]
+                d.line(xy, fill=col, width=lw)
+            hx, hy = px(hc)
+            d.ellipse([hx - 9, hy - 9, hx + 9, hy + 9], outline=(0, 0, 0), width=2)
+            d.text((ox + 4, oy + 2), f"f{f} {name}" if r == 0 else name, fill=(0, 0, 0))
+            d.rectangle([ox, oy, ox + W - 1, oy + H - 1], outline=(200, 200, 200))
+    img.save(path)
+
+
 def draw(poser, dense, cols, path, title):
+    try:
+        import matplotlib
+    except ImportError:
+        return draw_pil(poser, dense, cols, path, title)
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt

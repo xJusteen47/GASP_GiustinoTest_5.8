@@ -1,8 +1,8 @@
 # A/B videos of two in-game captures, same frames side by side (runstart-v23-desktop, 2026-11-21).
 # usage: python runstart_ab_video.py <capA dir> <capB dir> <out dir> --a=22 --b=23 [--seq=mv_run_start_v5] [--from=77 --to=197]
-#        [--views=az180,az90,game] [--fps=60]
+#        [--views=az180,az90,game] [--fps=60] [--pivot-from=84 --pivot-to=116 --pivot-step=4]
 # Writes ab_<a>_vs_<b>_<view>_real.mp4 (60 fps) and _slow4x.mp4 (15 fps) per view, plus grid_ab_<view>.jpg (every 15th frame,
-# A over B). Prints <= 3 lines.
+# A over B) and grid_pivot_v<pf>_<pt>.jpg (dense pivot strip across views). Prints <= 3 lines.
 import os, subprocess, sys
 from PIL import Image, ImageDraw
 
@@ -11,11 +11,14 @@ opt = dict((x[2:].split('=', 1) + [''])[:2] for x in sys.argv[4:] if x.startswit
 la, lb = opt.get('a', 'A'), opt.get('b', 'B')
 seq = opt.get('seq', 'mv_run_start_v5')
 f0, f1 = int(opt.get('from', 77)), int(opt.get('to', 197))
+pf0, pf1 = int(opt.get('pivot-from', 84)), int(opt.get('pivot-to', 116))
+pstep = max(1, int(opt.get('pivot-step', 4)))
 views = opt.get('views', 'az180,az90,game').split(',')
 fps = int(opt.get('fps', 60))
 os.makedirs(out, exist_ok=True)
 tmp = os.path.join(out, '_ab_tmp'); os.makedirs(tmp, exist_ok=True)
 made = []
+pivot_rows = []
 for v in views:
     pa, pb = os.path.join(a_dir, seq, v), os.path.join(b_dir, seq, v)
     frames = []
@@ -46,6 +49,22 @@ for v in views:
         G.paste(A.resize((cw, ch)), (i * cw, 0)); G.paste(B.resize((cw, ch)), (i * cw, ch))
         d.text((i * cw + 4, 4), '%s v%d' % (la, f), fill=(255, 255, 0)); d.text((i * cw + 4, ch + 4), '%s v%d' % (lb, f), fill=(255, 255, 0))
     G.save(os.path.join(out, 'grid_ab_%s.jpg' % v), quality=85)
+    ppick = [(f, A, B) for f, A, B in frames if pf0 <= f <= pf1 and (f - pf0) % pstep == 0]
+    if ppick:
+        pivot_rows.append((v, ppick))
+if pivot_rows:
+    cw, ch = pivot_rows[0][1][0][1].width // 2, pivot_rows[0][1][0][1].height // 2
+    cols = max(len(pp) for _, pp in pivot_rows)
+    PG = Image.new('RGB', (cw * cols, ch * 2 * len(pivot_rows)))
+    pd = ImageDraw.Draw(PG)
+    for r_idx, (v, pp) in enumerate(pivot_rows):
+        y0 = r_idx * ch * 2
+        for i, (f, A, B) in enumerate(pp):
+            PG.paste(A.resize((cw, ch)), (i * cw, y0))
+            PG.paste(B.resize((cw, ch)), (i * cw, y0 + ch))
+            pd.text((i * cw + 4, y0 + 4), '%s v%d %s' % (la, f, v), fill=(255, 255, 0))
+            pd.text((i * cw + 4, y0 + ch + 4), '%s v%d %s' % (lb, f, v), fill=(255, 255, 0))
+    PG.save(os.path.join(out, 'grid_pivot_v%d_%d.jpg' % (pf0, pf1)), quality=85)
 for fn in os.listdir(tmp):
     os.remove(os.path.join(tmp, fn))
 os.rmdir(tmp)

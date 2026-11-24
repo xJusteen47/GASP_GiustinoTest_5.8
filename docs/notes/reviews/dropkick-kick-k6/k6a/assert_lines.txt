@@ -1,0 +1,6 @@
+k6 whiff (assert.txt): ASSERT: OK
+k6 whiff (assert.txt): ASSERT: OK dropkick_sweet_whiff AM_OverlordDropkickK6 f143-f150: weight >= 0.8 on 100% (min 1.00)
+k6 hit (assert.txt): ASSERT: OK
+k6 hit (assert.txt): ASSERT: OK dropkick_sweet_hit AM_OverlordDropkickK6 f143-f150: weight >= 0.8 on 100% (min 1.00)
+k6 high (assert.txt): ASSERT: OK
+k6 high (assert.txt): ASSERT: OK dropkick_sweet_whiff AM_OverlordDropkickK6 f133-f140: weight >= 0.8 on 100% (min 1.00)

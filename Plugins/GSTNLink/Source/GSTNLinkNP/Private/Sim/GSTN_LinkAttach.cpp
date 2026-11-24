@@ -11,6 +11,7 @@
 #include "GameFramework/Actor.h"
 #include "GSTN_LinkPresentationComponent.h"
 #include "GSTN_LinkRegistry.h"
+#include "GSTN_LinkSettings.h"
 #include "GSTN_LinkRequirementLibrary.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Loadout/GSTN_LoadoutAssembly.h"
@@ -50,9 +51,14 @@ namespace
 		return S.Table.Last()->Index;
 	}
 
-	/** Every socket a registered role parks its partner on: what the bake must cover */
+	/** Every socket a registered role parks its partner on, and the neck the grab-link hold places (UGSTN_LinkSettings::NeckSocketName): what the bake must cover */
 	void GatherRoleSockets(TArray<FName>& Out)
 	{
+		const FName Neck = UGSTN_LinkSettings::Get().NeckSocketName;
+		if (!Neck.IsNone())
+		{
+			Out.AddUnique(Neck);
+		}
 		const UGSTN_LinkRegistry* Registry = UGSTN_LinkRegistry::Get();
 		if (!Registry)
 		{

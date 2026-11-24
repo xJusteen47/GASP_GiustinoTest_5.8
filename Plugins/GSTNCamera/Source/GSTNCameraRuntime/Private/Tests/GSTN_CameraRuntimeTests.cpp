@@ -859,4 +859,109 @@ GSTN_CAM_RT_TEST(FreeDeadZoneKeepsTheCameraStillForSmallMoves)
 	return true;
 }
 
+// ---- M12 G5: section volume override, aim stage, no-snap on a presented subject ----
+
+GSTN_CAM_RT_TEST(SectionVolumeOverridesAngleDistanceAndLocksTheLook)
+{
+	FRig Rig;
+	AGSTN_CameraSection* Section = Rig.SpawnSection(FVector::ZeroVector, FVector(1000), 5);
+	Section->Spec.DesiredYawDeg = 40.f;
+	Section->Spec.DesiredPitchDeg = -30.f;
+	Section->Spec.DistanceCm = 1800.f;
+	Section->Spec.bAllowManualControl = false;
+	Section->Spec.bCutOnEnter = true;
+	Section->Spec.BlendInSeconds = 0.f;
+	Section->Spec.BlendOutSeconds = 0.5f;
+
+	UGSTN_CameraComponent* Camera = Rig.AddCamera(Rig.SpawnSubject(FVector(5000, 0, 100)));
+	Camera->SetSubjectOverride(MakeSubject(FVector(5000, 0, 100)));
+	Run(Camera, 1.0f);
+	TestTrue(TEXT("outside the volume there is no section"), Camera->GetActiveSection() == nullptr);
+	const float ArmOutside = Camera->GetBlendedView().ArmCm;
+	TestTrue(TEXT("the free view is far from the section distance"), FMath::Abs(ArmOutside - 1800.f) > 300.f);
+
+	Camera->SetSubjectOverride(MakeSubject(FVector(0, 0, 100)));
+	Run(Camera, 1.5f);
+	TestTrue(TEXT("inside, the section is active"), Camera->GetActiveSection() == Section);
+	TestTrue(TEXT("its angle is the designer's"), FMath::IsNearlyEqual(Camera->GetOrbit().YawDeg, 40.f, 1.0e-2f) && FMath::IsNearlyEqual(Camera->GetOrbit().PitchDeg, -30.f, 1.0e-2f));
+	TestTrue(TEXT("its distance is the designer's"), FMath::IsNearlyEqual(Camera->GetBlendedView().ArmCm, 1800.f, 180.f));
+
+	// The lock: look input is consumed, the view does not move
+	Camera->AddLookInput(FVector2D(400.0, 60.0));
+	Run(Camera, 0.3f);
+	TestTrue(TEXT("the look is locked"), FMath::IsNearlyEqual(Camera->GetOrbit().YawDeg, 40.f, 1.0e-2f));
+	TestTrue(TEXT("and so is the distance"), FMath::IsNearlyEqual(Camera->GetBlendedView().ArmCm, 1800.f, 180.f));
+
+	// Leaving gives the free camera back (the manual orbit is free again outside a section, D3)
+	Camera->SetSubjectOverride(MakeSubject(FVector(5000, 0, 100)));
+	Run(Camera, 3.0f);
+	TestTrue(TEXT("outside again, no section"), Camera->GetActiveSection() == nullptr);
+	TestTrue(TEXT("the distance leaves the section value"), Camera->GetBlendedView().ArmCm < 1400.f);
+	Camera->AddLookInput(FVector2D(60.0, 0.0));
+	const float YawBefore = Camera->GetOrbit().YawDeg;
+	Camera->EvaluateCamera(Dt);
+	TestTrue(TEXT("and the look turns the orbit again"), !FMath::IsNearlyEqual(Camera->GetOrbit().YawDeg, YawBefore, 0.5f));
+	return true;
+}
+
+GSTN_CAM_RT_TEST(AimStageIsShoulderOnRequestAndLeavesOnRelease)
+{
+	FRig Rig;
+	UGSTN_CameraComponent* Camera = Rig.AddCamera(Rig.SpawnSubject(FVector(0, 0, 100)));
+	Camera->SetSubjectOverride(MakeSubject(FVector(0, 0, 100)));
+	Run(Camera, 1.0f);
+	TestFalse(TEXT("no aim, no Shoulder"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Shoulder.GetTag()));
+	const float FreeArm = Camera->GetBlendedView().ArmCm;
+
+	Camera->SetRequestTags(AimTags());
+	Run(Camera, 1.5f);
+	TestTrue(TEXT("the aim request takes Shoulder"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Shoulder.GetTag()));
+	TestTrue(TEXT("the shoulder arm is much shorter than the far follow"), Camera->GetBlendedView().ArmCm < FreeArm * 0.6f);
+	TestTrue(TEXT("and sits to one side of the pivot"), FMath::Abs(Camera->GetBlendedView().SideOffsetCm) > 10.f);
+	TestTrue(TEXT("the aim direction is a unit vector"), FMath::IsNearlyEqual(static_cast<float>(Camera->GetAimDirection().Size()), 1.f, 1.0e-3f));
+
+	// Releasing the aim leaves Shoulder after the debounce, and the arm comes back
+	Camera->SetRequestTags(FGameplayTagContainer());
+	Run(Camera, 3.0f);
+	TestFalse(TEXT("release leaves Shoulder"), Camera->GetActiveModeTag().MatchesTagExact(GSTNCameraTags::Mode_Shoulder.GetTag()));
+	TestTrue(TEXT("the far follow arm is back"), Camera->GetBlendedView().ArmCm > FreeArm * 0.8f);
+	return true;
+}
+
+GSTN_CAM_RT_TEST(PresentedSubjectNeverSnapsTheViewWhereARawOneDoes)
+{
+	// C1: the camera reads a presented pivot that is smoothed across a rollback correction. A raw pivot that snaps 40 cm up for one frame
+	// (a resimulated step) and back is what the actor root does; the presented one is what the rig hands the camera.
+	FRig Rig;
+	UGSTN_CameraComponent* Camera = Rig.AddCamera(Rig.SpawnSubject(FVector(0, 0, 100)));
+	Camera->SetSubjectOverride(MakeSubject(FVector(0, 0, 100)));
+	Run(Camera, 1.0f);
+
+	auto MaxViewStep = [&](bool bPresented)
+	{
+		float Presented = 100.f;
+		FVector Last = Camera->GetBlendedView().Pivot;
+		float MaxStep = 0.f;
+		for (int32 Frame = 0; Frame < 40; ++Frame)
+		{
+			const float Raw = (Frame == 10) ? 140.f : 100.f;
+			// A short exponential smoothing stands for the anchor: it never jumps, it only eases towards what the body really did
+			Presented += (Raw - Presented) * 0.1f;
+			Camera->SetSubjectOverride(MakeSubject(FVector(0, 0, bPresented ? Presented : Raw)));
+			Camera->EvaluateCamera(Dt);
+			const FVector Now = Camera->GetBlendedView().Pivot;
+			MaxStep = FMath::Max(MaxStep, static_cast<float>(FVector::Dist(Now, Last)));
+			Last = Now;
+		}
+		return MaxStep;
+	};
+
+	const float PresentedStep = MaxViewStep(true);
+	Run(Camera, 1.0f);
+	const float RawStep = MaxViewStep(false);
+	TestTrue(TEXT("the presented subject moves the view by a few cm at most in a frame"), PresentedStep < 6.f);
+	TestTrue(TEXT("the raw snap moves it visibly more"), RawStep > PresentedStep);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

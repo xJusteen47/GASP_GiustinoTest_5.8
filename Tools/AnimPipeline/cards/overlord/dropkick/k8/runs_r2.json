@@ -1,0 +1,107 @@
+[
+ {
+  "name": "k7_whiff",
+  "kit": "KIT_Test_PlaytestTBK7",
+  "cvars": "gstn.Combat.Debug.Hitboxes 0",
+  "sequences": [
+   "dropkick_sweet_whiff"
+  ],
+  "assert": {
+   "dropkick_sweet_whiff": [
+    {
+     "clip": "AM_OverlordDropkickK7",
+     "window": [
+      143,
+      150
+     ],
+     "min_weight": 0.8,
+     "coverage": 0.9
+    }
+   ]
+  }
+ },
+ {
+  "name": "k8_whiff",
+  "kit": "KIT_Test_PlaytestTBK8",
+  "cvars": "gstn.Combat.Debug.Hitboxes 0",
+  "sequences": [
+   "dropkick_sweet_whiff"
+  ],
+  "assert": {
+   "dropkick_sweet_whiff": [
+    {
+     "clip": "AM_OverlordDropkickK8",
+     "window": [
+      143,
+      150
+     ],
+     "min_weight": 0.8,
+     "coverage": 0.9
+    }
+   ]
+  }
+ },
+ {
+  "name": "k7_hit",
+  "kit": "KIT_Test_PlaytestTBK7",
+  "cvars": "gstn.Combat.Debug.Hitboxes 0",
+  "sequences": [
+   "dropkick_sweet_hit"
+  ],
+  "assert": {
+   "dropkick_sweet_hit": [
+    {
+     "clip": "AM_OverlordDropkickK7",
+     "window": [
+      143,
+      150
+     ],
+     "min_weight": 0.8,
+     "coverage": 0.9
+    }
+   ]
+  }
+ },
+ {
+  "name": "k8_hit",
+  "kit": "KIT_Test_PlaytestTBK8",
+  "cvars": "gstn.Combat.Debug.Hitboxes 0",
+  "sequences": [
+   "dropkick_sweet_hit"
+  ],
+  "assert": {
+   "dropkick_sweet_hit": [
+    {
+     "clip": "AM_OverlordDropkickK8",
+     "window": [
+      143,
+      150
+     ],
+     "min_weight": 0.8,
+     "coverage": 0.9
+    }
+   ]
+  }
+ },
+ {
+  "name": "k8_hitbox",
+  "kit": "KIT_Test_PlaytestTBK8",
+  "cvars": "gstn.Combat.Debug.Hitboxes 1",
+  "sequences": [
+   "dropkick_sweet_hit"
+  ],
+  "assert": {
+   "dropkick_sweet_hit": [
+    {
+     "clip": "AM_OverlordDropkickK8",
+     "window": [
+      143,
+      150
+     ],
+     "min_weight": 0.8,
+     "coverage": 0.9
+    }
+   ]
+  }
+ }
+]

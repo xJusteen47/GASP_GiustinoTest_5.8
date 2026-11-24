@@ -2,6 +2,7 @@
 
 #include "Window/SGSTN_DebugOptionsPanel.h"
 #include "Kit/GSTN_DebugKitPicker.h"
+#include "Kit/GSTN_DebugSkinPicker.h"
 #include "Widgets/Input/SComboBox.h"
 
 #include "Engine/Engine.h"
@@ -88,6 +89,11 @@ namespace
 		{
 			return true;
 		}
+		// grab-link (2026-11-23): the grab hold's playtest switches (turn ergonomics, walk/jump scales, neck hold, max hold, escape hit), one control each
+		if (Name.StartsWith(TEXT("gstn.Grab."), ESearchCase::IgnoreCase))
+		{
+			return true;
+		}
 		// run-stages-leggibili S1 (2026-11-21): gstn.RunStage.Readable, the readable run stage steps on/off (one check box)
 		if (Name.StartsWith(TEXT("gstn.RunStage."), ESearchCase::IgnoreCase))
 		{
@@ -104,7 +110,9 @@ namespace
 			|| Name.Equals(TEXT("gstn.Greybox"), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Debug.SpeedGraph"), ESearchCase::IgnoreCase)
 			|| Name.StartsWith(TEXT("gstn.Loco.Stance"), ESearchCase::IgnoreCase) || Name.Equals(TEXT("gstn.Loco.TorsoLean"), ESearchCase::IgnoreCase)
 			// M12 part 1 (2026-11-21): lives/checkpoints and missions (plugins GSTNRespawn, GSTNMission; listed only when they are loaded)
-			|| Name.StartsWith(TEXT("gstn.Respawn."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Mission."), ESearchCase::IgnoreCase);
+			|| Name.StartsWith(TEXT("gstn.Respawn."), ESearchCase::IgnoreCase) || Name.StartsWith(TEXT("gstn.Mission."), ESearchCase::IgnoreCase)
+			// getup-momentum-1 (2026-11-21): the get-up exit speeds (GSTN_DefenceAbilities.cpp), one number each
+			|| Name.StartsWith(TEXT("gstn.Getup."), ESearchCase::IgnoreCase);
 	}
 
 	/** Readable name of a gstn.RunStart.Variant value (keep in step with that cvar's help text), shown next to the number */
@@ -213,6 +221,13 @@ void SGSTN_DebugOptionsPanel::Construct(const FArguments& InArgs)
 	{
 		SelectedKit = KitOptions[0];
 	}
+	// "base" first: the original look, the reference every skin is compared with
+	SkinOptions.Add(MakeShared<FString>(TEXT("base")));
+	for (const FString& Name : FGSTN_DebugSkinPicker::GetSkinNames())
+	{
+		SkinOptions.Add(MakeShared<FString>(Name));
+	}
+	SelectedSkin = SkinOptions[0];
 
 	ChildSlot
 	[
@@ -257,6 +272,68 @@ void SGSTN_DebugOptionsPanel::Construct(const FArguments& InArgs)
 			.Padding(6.f, 0.f, 0.f, 0.f)
 			[
 				SNew(STextBlock).Text_Lambda([this]() { return KitStatus; })
+			]
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(6.f, 6.f, 6.f, 0.f)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			[
+				SNew(STextBlock).Text(LOCTEXT("SkinLabel", "Skin"))
+			]
+			+ SHorizontalBox::Slot()
+			.FillWidth(1.f)
+			.Padding(6.f, 0.f, 0.f, 0.f)
+			[
+				SNew(SComboBox<TSharedPtr<FString>>)
+				.OptionsSource(&SkinOptions)
+				.InitiallySelectedItem(SelectedSkin)
+				.OnGenerateWidget_Lambda([](TSharedPtr<FString> Item) { return SNew(STextBlock).Text(FText::FromString(Item.IsValid() ? *Item : FString())); })
+				.OnSelectionChanged_Lambda([this](TSharedPtr<FString> Item, ESelectInfo::Type) { SelectedSkin = Item; })
+				[
+					SNew(STextBlock).Text_Lambda([this]() { return FText::FromString(SelectedSkin.IsValid() ? *SelectedSkin : FString(TEXT("(no skin)"))); })
+				]
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(6.f, 0.f, 0.f, 0.f)
+			[
+				SNew(SButton)
+				.Text(LOCTEXT("ForceSkin", "Force"))
+				.ToolTipText(LOCTEXT("ForceSkinTip", "Shows this skin on the first local player whatever the loadout says, on this machine only (gstn.Debug.Skin). base = the original look. Hitboxes and the game do not change."))
+				.IsEnabled(this, &SGSTN_DebugOptionsPanel::HasPlayWorld)
+				.OnClicked(this, &SGSTN_DebugOptionsPanel::OnForceSkin, false)
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(6.f, 0.f, 0.f, 0.f)
+			[
+				SNew(SButton)
+				.Text(LOCTEXT("ForceSkinAll", "Force on all"))
+				.ToolTipText(LOCTEXT("ForceSkinAllTip", "The same on every pawn of the play world (targets and dummies), to compare body sizes side by side."))
+				.IsEnabled(this, &SGSTN_DebugOptionsPanel::HasPlayWorld)
+				.OnClicked(this, &SGSTN_DebugOptionsPanel::OnForceSkin, true)
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(6.f, 0.f, 0.f, 0.f)
+			[
+				SNew(SButton)
+				.Text(LOCTEXT("ReleaseSkin", "Release"))
+				.ToolTipText(LOCTEXT("ReleaseSkinTip", "Every pawn goes back to its loadout's skin."))
+				.IsEnabled(this, &SGSTN_DebugOptionsPanel::HasPlayWorld)
+				.OnClicked(this, &SGSTN_DebugOptionsPanel::OnReleaseSkin)
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.VAlign(VAlign_Center)
+			.Padding(6.f, 0.f, 0.f, 0.f)
+			[
+				SNew(STextBlock).Text_Lambda([this]() { return SkinStatus; })
 			]
 		]
 		+ SVerticalBox::Slot()
@@ -556,6 +633,40 @@ FReply SGSTN_DebugOptionsPanel::OnApplyKit()
 	else
 	{
 		KitStatus = FText::FromString(Error);
+	}
+	return FReply::Handled();
+}
+
+FReply SGSTN_DebugOptionsPanel::OnForceSkin(bool bAllPawns)
+{
+	APlayerController* Controller = FindPlayController();
+	FString Error;
+	if (!SelectedSkin.IsValid() || !Controller)
+	{
+		SkinStatus = LOCTEXT("SkinNoPlay", "start Play first");
+	}
+	else if (FGSTN_DebugSkinPicker::ForceSkin(*Controller, *SelectedSkin, bAllPawns, Error))
+	{
+		SkinStatus = FText::Format(LOCTEXT("SkinForced", "forced {0}"), FText::FromString(*SelectedSkin));
+	}
+	else
+	{
+		SkinStatus = FText::FromString(Error);
+	}
+	return FReply::Handled();
+}
+
+FReply SGSTN_DebugOptionsPanel::OnReleaseSkin()
+{
+	APlayerController* Controller = FindPlayController();
+	FString Error;
+	if (Controller && FGSTN_DebugSkinPicker::ForceSkin(*Controller, TEXT("off"), true, Error))
+	{
+		SkinStatus = LOCTEXT("SkinReleased", "released");
+	}
+	else
+	{
+		SkinStatus = Controller ? FText::FromString(Error) : LOCTEXT("SkinNoPlay", "start Play first");
 	}
 	return FReply::Handled();
 }

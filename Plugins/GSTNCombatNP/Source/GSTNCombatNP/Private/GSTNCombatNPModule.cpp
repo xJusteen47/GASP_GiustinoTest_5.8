@@ -4,6 +4,7 @@
 #include "Modules/ModuleManager.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "Simulation/GSTN_FragmentNetworkVersion.h"
+#include "Simulation/GSTN_HitBounceSim.h"
 
 #define LOCTEXT_NAMESPACE "GSTNCombatNP"
 
@@ -22,6 +23,9 @@ public:
 	virtual void StartupModule() override
 	{
 		UGSTN_LoadoutRules::RegisterValidator(TableLimitsValidatorId, &FGSTNCombatNPModule::ValidateTableLimits);
+		// The hit bounce (owner 2026-11-23): a move with a Hit Bounce track bounces its user off what it hits. Inert for every move without one
+		FGSTN_HitBounceFragmentRegistration::Register();
+		FGSTN_CombatTickExtensionRegistry::Get().Register(&HitBounceExtension);
 		// A client whose combat sync fragments differ from the server's is refused at connect (FGSTN_FragmentNetworkVersion)
 		FGSTN_FragmentNetworkVersion::Install();
 	}
@@ -29,6 +33,8 @@ public:
 	virtual void ShutdownModule() override
 	{
 		UGSTN_LoadoutRules::UnregisterValidator(TableLimitsValidatorId);
+		FGSTN_CombatTickExtensionRegistry::Get().Unregister(&HitBounceExtension);
+		FGSTN_HitBounceFragmentRegistration::Unregister();
 		FGSTN_FragmentNetworkVersion::Uninstall();
 	}
 
@@ -47,6 +53,9 @@ public:
 		}
 		return Result;
 	}
+
+private:
+	FGSTN_HitBounceTickExtension HitBounceExtension;
 };
 
 IMPLEMENT_MODULE(FGSTNCombatNPModule, GSTNCombatNP)

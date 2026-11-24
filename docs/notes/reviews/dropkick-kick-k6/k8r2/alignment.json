@@ -1,0 +1,24 @@
+{
+ "dropkick_sweet_whiff": {
+  "starts": {
+   "k7_whiff": 138,
+   "k8_whiff": 138
+  },
+  "offsets": {
+   "k7_whiff": 0,
+   "k8_whiff": 0
+  },
+  "unknown": []
+ },
+ "dropkick_sweet_hit": {
+  "starts": {
+   "k7_hit": 138,
+   "k8_hit": 138
+  },
+  "offsets": {
+   "k7_hit": 0,
+   "k8_hit": 0
+  },
+  "unknown": []
+ }
+}

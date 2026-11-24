@@ -97,9 +97,10 @@ between consecutive frames, to find a dead frame or a first frame that does not 
 |---|---|---|---|
 | frame_0 | side grid f0 vs idle | f0 looks like the idle, or is already the charge | f0 indistinguishable from idle |
 | troppo_giusto | key poses, game camera | owner's extreme softened, pose timid compared to his ghost | the pose is visibly smaller than the owner ghost |
+| statua | velocity sheets + slowmo tile, every clip (startup, loop, settle, landing; inherited clips too) | the whole body stops (`no_stop` in `gate_report.json`, STOP band in the strip): stop-and-go | always; an inherited clip is judged again (the approved version stays locked, the fix goes in a variant) |
 | sinergia | side grid, startup | a limb stays glued while trunk/legs travel (arms parked on the chest) | a limb still for 3+ frames while the body moves |
 | ginocchia_avanti | side grid charge | knees swing back behind the pelvis during the charge | always |
-| carica_viva | side grid, charge hold | a long charge frozen like a statue | no: nota |
+| carica_viva | slowmo startup tile + velocity sheets (speed strip), side grid | a charge or any part of the move frozen like a statue: the whole body still (red STOP band in the speed strip, red dots on the trails) outside a hold the card declares | always (2026-11-23, skill audit option A: was a nota, the eye missed K7/K8 stops because a still frame reads as a held pose) |
 | rilascio | hitstop strip + trails | release not slow, or the largest step is not ON the first active frame | biggest step not on the first active frame |
 | niente_scatto | hitstop strip, trails after active | head or a limb pops after an active frame (gap in the dots) | a visible jump in a trail after an active frame |
 | tenuta | side grid, strike | strike pose not held long (stomp/hold poses) | held fewer frames than the card's active + hold |

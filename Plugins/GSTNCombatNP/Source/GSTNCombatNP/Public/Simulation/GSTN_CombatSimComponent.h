@@ -319,6 +319,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
 	FString GetHitboxTrace() const;
 
+	/**
+	 * JSON array of the hitbox shapes gstn.Combat.Debug.Hitboxes draws on this frame, in world space on the presented mesh (the same
+	 * offset as the draw): [{"i": hitbox, "s": space, "t": 0 sphere / 1 capsule / 2 box, "c": [x,y,z], "q": [x,y,z,w], "e": [radius or
+	 * half extents, scaled], "f": 1 when it is the faded linger of a closed window}]. The scene captures of the review harness do not render
+	 * debug lines, so the harness logs this every frame and draws the shapes into the captured pictures. "[]" while the switch is off.
+	 * Debug only: never read by the simulation
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Debug")
+	FString GetDebugHitboxShapes() const;
+
 	/** The receiver side's drain at the start of its combat tick of Frame: the entries of every kind stamped before it, in (SenderId, kind, the kind's key) order, appended to Out */
 	void DrainInbox(int32 Frame, TArray<FGSTN_InboxEntry>& Out) { Inbox.Drain(Frame, Out); }
 
@@ -1114,6 +1124,7 @@ private:
 	// IGSTN_CombatTickServices
 	virtual bool StartForcedTimeline(const UClass* AbilityClass) override;
 	virtual const FGSTN_StepSnapshot* GetViewSnapshot() override;
+	virtual bool CancelRunningTimeline() override;
 
 	/** ResolveAttackerSnapshot at most once per tick for the frame's step snapshot (the attacker step and the extensions share it) */
 	const FGSTN_StepSnapshot* ResolveViewOnce(const FNetSimTimeStep& TimeStep, const FGSTN_StepSnapshot* Shared);

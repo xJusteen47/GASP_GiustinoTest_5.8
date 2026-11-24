@@ -1,0 +1,54 @@
+{
+ "dst": "AS_GSTN_RunStart_Generic_w3_T3lay",
+ "src": "AS_GSTN_RunStart_Generic_w3_T3src",
+ "layers": [
+  {
+   "id": 1,
+   "layer": {
+    "part": "arm_r",
+    "motion": "turn_out",
+    "deg": 10,
+    "start": 1,
+    "peak": [
+     5,
+     13
+    ],
+    "end": 21
+   },
+   "hash": "eced2109ba"
+  },
+  {
+   "id": 2,
+   "layer": {
+    "part": "arm_r",
+    "motion": "out",
+    "deg": 10,
+    "start": 1,
+    "peak": [
+     5,
+     13
+    ],
+    "end": 21
+   },
+   "hash": "eecfdb5f45"
+  }
+ ],
+ "built_hash": "b26781ab352447f3",
+ "history": [
+  {
+   "at": "2026-11-24T01:19:47Z",
+   "do": "add",
+   "id": 1
+  },
+  {
+   "at": "2026-11-24T01:19:47Z",
+   "do": "add",
+   "id": 2
+  },
+  {
+   "at": "2026-11-24T01:20:10Z",
+   "do": "build",
+   "hash": "b26781ab352447f3"
+  }
+ ]
+}

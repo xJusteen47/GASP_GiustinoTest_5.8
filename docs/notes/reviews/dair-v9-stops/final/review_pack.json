@@ -1,0 +1,431 @@
+{
+ "version": 1,
+ "complete": true,
+ "missing": [],
+ "invariants": {
+  "INV-01": {
+   "ok": true,
+   "files": [],
+   "note": "",
+   "traits": [
+    "knees tucked to the chest in a tight ball through the charge, both feet driven straight down at the stomp",
+    "M. Bison head-stomp upper body: arms cross above/in front of the head in the startup and fold on the chest at the stomp, staying folded",
+    "heavy, slow, villain move: charge held alive, stomp lands dry on anim 15, moving hold where the body sinks onto its feet"
+   ]
+  },
+  "INV-02": {
+   "ok": true,
+   "files": [
+    "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_az90_real.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_az90_slow4x.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_az180_real.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_az180_slow4x.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_game_real.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_game_slow4x.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_az90_real.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_az90_slow4x.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_az180_real.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_az180_slow4x.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_game_real.mp4",
+    "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_game_slow4x.mp4"
+   ],
+   "note": ""
+  },
+  "INV-03": {
+   "ok": true,
+   "files": [
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_whiff_az90_p01.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_whiff_az90_p02.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_whiff_az180_p01.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_whiff_az180_p02.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_whiff_game_p01.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_whiff_game_p02.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_hit_rise_az90_p01.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_hit_rise_az90_p02.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_hit_rise_az180_p01.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_hit_rise_az180_p02.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_hit_rise_game_p01.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_hit_rise_game_p02.png"
+   ],
+   "note": "",
+   "frames": [
+    28,
+    77
+   ]
+  },
+  "INV-04": {
+   "ok": true,
+   "files": [
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\velocity_AS_OverlordDAirV9_az90.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\velocity_AS_OverlordDAirV9_az180.png"
+   ],
+   "note": ""
+  },
+  "INV-05": {
+   "ok": true,
+   "files": [
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f030.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f033.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f038.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f040.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f043.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f044.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f045.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f047.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f049.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f050.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f053.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f056.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f063.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f066.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f071.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f030.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f033.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f038.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f040.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f043.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f044.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f045.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f047.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f049.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f050.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f053.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f056.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f063.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f066.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f071.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f030.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f033.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f038.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f040.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f043.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f044.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f045.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f047.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f049.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f050.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f053.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f056.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f063.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f066.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f071.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f030.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f033.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f038.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f040.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f043.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f044.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f045.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f047.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f049.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f050.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f053.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f056.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f063.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f066.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f071.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f030.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f033.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f038.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f040.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f043.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f044.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f045.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f047.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f049.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f050.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f053.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f056.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f063.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f066.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f071.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f030.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f033.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f038.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f040.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f043.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f044.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f045.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f047.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f049.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f050.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f053.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f056.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f063.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f066.png",
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f071.png"
+   ],
+   "note": "",
+   "frames": [
+    30,
+    33,
+    38,
+    40,
+    43,
+    44,
+    45,
+    47,
+    49,
+    50,
+    53,
+    56,
+    63,
+    66,
+    71
+   ]
+  },
+  "INV-06": {
+   "ok": true,
+   "files": [],
+   "note": "",
+   "base": "base"
+  },
+  "INV-07": {
+   "ok": true,
+   "files": [
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\critico_brief.md"
+   ],
+   "note": ""
+  },
+  "INV-09": {
+   "ok": true,
+   "files": [],
+   "note": "104 images, no cap (the cap is: no frame uncovered)"
+  },
+  "INV-11": {
+   "ok": true,
+   "files": [],
+   "note": "stops measured; OG life metrics from animpipe life attached; pose checks by eye on the key poses",
+   "stops": {
+    "AS_OverlordDAirV9": {
+     "stops": [
+      3,
+      4,
+      5,
+      7,
+      10,
+      15,
+      16,
+      17,
+      20,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      36,
+      39,
+      40,
+      41
+     ],
+     "blocking_runs": []
+    }
+   },
+   "life": {
+    "AS_OverlordDAirV9": {
+     "frames": 43,
+     "points": [
+      "pelvis",
+      "hand_l",
+      "hand_r",
+      "lowerarm_l",
+      "lowerarm_r",
+      "head",
+      "foot_l",
+      "foot_r"
+     ],
+     "block": {
+      "hold_reason": [
+       true,
+       "0 declared, all with a reason"
+      ],
+      "hold_alive": [
+       true,
+       "every declared hold is live"
+      ],
+      "still_runs": [
+       true,
+       "runs > 3 dead steps (< 0.4 cm/frame): none"
+      ],
+      "stop_sync": [
+       false,
+       "0.76 of 34 speed minima shared by most parts (max 0.5); 4 of 7 stop events shared; live declared holds skipped: none"
+      ]
+     },
+     "measure": {
+      "hold_guides": "inside the guides (count, length)",
+      "stops": "n/a: no action window (give --window or a contact frame)",
+      "cascade": "n/a: no strike (contact frame and effector not given)",
+      "impact": "n/a: no strike (contact frame and effector not given)",
+      "anticipation": "n/a: no strike (contact frame and effector not given)"
+     },
+     "verdict": "FAIL",
+     "clip": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2\\Saved\\DairV9Stops\\root\\Saved\\AnimPipeline\\runstart\\joints_AS_OverlordDAirV9.json"
+    }
+   }
+  },
+  "INV-12": {
+   "ok": true,
+   "files": [],
+   "note": "no declared holds",
+   "judge_on_video": []
+  },
+  "INV-13": {
+   "ok": true,
+   "files": [
+    "docs\\notes\\reviews\\dair-v9-stops\\final\\principi.md"
+   ],
+   "note": "fill it, then: python Tools/AnimPipeline/gstn_anim_mcp/principi_review.py check <file>"
+  }
+ },
+ "order": [
+  "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_az90_real.mp4",
+  "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_az90_slow4x.mp4",
+  "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_az180_real.mp4",
+  "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_az180_slow4x.mp4",
+  "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_game_real.mp4",
+  "docs/notes/reviews/dair-v9-stops/v9_dair_whiff_game_slow4x.mp4",
+  "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_az90_real.mp4",
+  "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_az90_slow4x.mp4",
+  "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_az180_real.mp4",
+  "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_az180_slow4x.mp4",
+  "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_game_real.mp4",
+  "docs/notes/reviews/dair-v9-stops/v9_dair_hit_rise_game_slow4x.mp4",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_whiff_az90_p01.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_whiff_az90_p02.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_whiff_az180_p01.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_whiff_az180_p02.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_whiff_game_p01.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_whiff_game_p02.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_hit_rise_az90_p01.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_hit_rise_az90_p02.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_hit_rise_az180_p01.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_hit_rise_az180_p02.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_hit_rise_game_p01.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\slowmo_dair_hit_rise_game_p02.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\velocity_AS_OverlordDAirV9_az90.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\velocity_AS_OverlordDAirV9_az180.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f030.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f033.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f038.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f040.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f043.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f044.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f045.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f047.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f049.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f050.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f053.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f056.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f063.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f066.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az90_f071.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f030.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f033.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f038.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f040.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f043.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f044.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f045.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f047.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f049.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f050.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f053.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f056.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f063.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f066.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_az180_f071.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f030.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f033.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f038.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f040.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f043.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f044.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f045.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f047.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f049.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f050.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f053.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f056.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f063.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f066.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_whiff_game_f071.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f030.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f033.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f038.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f040.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f043.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f044.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f045.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f047.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f049.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f050.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f053.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f056.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f063.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f066.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az90_f071.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f030.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f033.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f038.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f040.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f043.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f044.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f045.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f047.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f049.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f050.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f053.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f056.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f063.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f066.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_az180_f071.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f030.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f033.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f038.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f040.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f043.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f044.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f045.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f047.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f049.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f050.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f053.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f056.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f063.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f066.png",
+  "docs\\notes\\reviews\\dair-v9-stops\\final\\keypose_dair_hit_rise_game_f071.png"
+ ],
+ "sequences": [
+  "dair_whiff",
+  "dair_hit_rise"
+ ],
+ "views": [
+  "az90",
+  "az180",
+  "game"
+ ],
+ "window": [
+  28,
+  77
+ ],
+ "runs": [
+  "base",
+  "v9"
+ ],
+ "uncovered": {},
+ "alignment": {
+  "dair_whiff": {
+   "base": 0,
+   "v9": 0
+  },
+  "dair_hit_rise": {
+   "base": 0,
+   "v9": 0
+  }
+ },
+ "errors": [],
+ "image_count": 104
+}

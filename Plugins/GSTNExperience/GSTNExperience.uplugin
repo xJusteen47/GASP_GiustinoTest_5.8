@@ -1,0 +1,35 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Experience",
+	"Description": "Experiences for the mode framework (M12 G0/G1, decision D5): UGSTN_ExperienceDefinition (Game Features to enable, default pawn data, action sets, mode tag), UGSTN_PawnData, UGSTN_ExperienceActionSet and the GameState component that loads them in a fixed order (Loading, LoadingGameFeatures, ExecutingActions, Loaded) on the host and on clients. Includes the guard that keeps Network Prediction pawns from simulating before the Experience is Loaded. Pure engine dependencies: no GAS, Network Prediction or Mover, so it works without the GAS-NPP fork.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNExperience",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GameFeatures",
+			"Enabled": true
+		},
+		{
+			"Name": "ModularGameplay",
+			"Enabled": true
+		}
+	]
+}

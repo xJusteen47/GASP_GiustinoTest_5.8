@@ -1,6 +1,6 @@
 # Hitbox editor H1: setup scripts never overwrite hand edits (cloud, 2026-11-15)
 
-Branch `claude/project-thread-ibkcds` from `claude/integ-cp3` 069287f7. Opus medium, cloud, no editor. Plan: project files `handoffs/hitbox-editor-ux-plan.md`.
+Branch `claude/project-thread-ibkcds` from `claude/integ-cp3` 069287f7. Opus medium, cloud, no editor. Plan: project files `handoffs/archivio/2026-11/hitbox-editor-ux-plan.md`.
 
 ## Done
 - `Tools/GAS/setup_guard.py`: ledger `Tools/GAS/setup_guard_ledger.json` = sha256 of each .uasset right after a setup script saved it (= its LFS oid).

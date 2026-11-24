@@ -11,7 +11,7 @@ import unreal
 
 OUT = unreal.Paths.project_saved_dir() + "Hub/gasp_look.txt"
 GASP = "/Game/Levels/DefaultLevel"
-HUB = "/Game/Levels/Test/L_Test_Hub"
+HUB = "/Game/GSTN/Maps/L_Test_Hub"
 VIS_CLASS = "/Game/Levels/LevelPrototyping/LevelVisuals.LevelVisuals_C"
 FLOOR_MAT = "/Game/Levels/LevelPrototyping/Materials/MI_Grid_WorldAligned"
 WALL_MAT = "/Game/Levels/LevelPrototyping/Materials/MI_Grid_Gray"

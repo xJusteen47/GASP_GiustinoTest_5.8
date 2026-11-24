@@ -5,7 +5,7 @@
 #   UnrealEditor-Cmd.exe <project>.uproject -run=pythonscript -script="<project>/Tools/GAS/setup_locomotion_profile.py" -unattended -nullrhi
 # Prints at most 5 lines; full log in the editor log ([setup_locomotion_profile]).
 #
-# Steps (assets in /Game/Blueprints/Animation):
+# Steps (assets in /Game/GSTN/Animation/Layers):
 #  1. DA_AnimSet_Locomotion_Default (GSTN_LocomotionAnimSet, SetTag Anim.Set.Locomotion, no layer class): the lean at its C++ defaults.
 #  2. One rule (always, priority 0) in DA_AnimSetCollection_SandboxCharacter.
 # Without this script the lean still runs, at the same built-in defaults; the asset is where the values get tuned.

@@ -653,6 +653,13 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineTail
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tail", meta = (EditCondition = "bHasTail", ClampMin = "0", ForceUnits = "Frames"))
 	int32 BlendOutFrames = 6;
 
+	/**
+	 * The move stick out of its dead zone cuts the tail on its own, with no command (owner 2026-11-23, get-ups: running away from a get-up
+	 * keeps its momentum). Off by default: the other moves' tails stay cut by commands only, as before (combat tick, step 8b)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Tail", meta = (EditCondition = "bHasTail"))
+	bool bStickCuts = false;
+
 	/** The tail start in [0, TotalFrames], INDEX_NONE if there is no tail */
 	int32 ResolveStartFrame(int32 TotalFrames, int32 FirstActionableFrame) const
 	{
@@ -716,7 +723,7 @@ enum class EGSTN_SteerSource : uint8
 };
 
 /**
- * When and how a move turns during its startup (research handoffs/attack-aiming-research.md Â§2, owner 2026-11-14). The cap and the rate stay
+ * When and how a move turns during its startup (research handoffs/archivio/2026-11/attack-aiming-research.md Â§2, owner 2026-11-14). The cap and the rate stay
  * MaxSteerDegrees and SteerRateDegPerSecond on the timeline; this says which stick, in which frames, and how the facing is held. Pure data:
  * FGSTN_StartupSteer::ResolveFrame turns it into a yaw per frame from the move origin, the frame's command and the facing of the previous frame.
  */
@@ -761,6 +768,13 @@ struct GSTNCOMBATCORE_API FGSTN_SteerWindow
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer")
 	bool bHoldFacing = true;
+
+	/**
+	 * The move faces AWAY from the stick (a backward travel: the get-up roll toward the head, owner 2026-11-23). The steer target is the
+	 * stick's opposite, so the cone and the rate work as for any move and the travel, along minus the facing, goes where the stick points
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer")
+	bool bAwayFromStick = false;
 
 	/** Shows the steering arrows and the allowed arc for this move (presentation; GSTN.Combat.SteerIndicator overrides it) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Steer")

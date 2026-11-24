@@ -53,7 +53,7 @@ def test_candidates_and_layers():
 
 def test_part_delays_refused(tmp_path):
     import json, shutil
-    src = os.path.join(TOOLS, "cards", "overlord", "overlord_dair_v4.json")
+    src = os.path.join(TOOLS, "cards", "overlord", "dair", "overlord_dair_v4.json")
     card = json.load(open(src, encoding="utf-8"))
     card["part_delays"] = {"head": 1}
     p = tmp_path / "card.json"

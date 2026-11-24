@@ -12,7 +12,7 @@ import math
 import os
 import unreal
 
-ANIM = '/Game/Blueprints/Animation'
+ANIM = '/Game/GSTN/Animation'
 SRC = os.environ.get('SRC', f'{ANIM}/Ported57/Skid/SS_180_Turn')
 DST = os.environ.get('DST', f'{ANIM}/Ported57/SkidOwner/SS_180_Turn_Root180')
 ROOT_CHILDREN = ['pelvis', 'ik_foot_root', 'ik_hand_root', 'interaction', 'center_of_mass']

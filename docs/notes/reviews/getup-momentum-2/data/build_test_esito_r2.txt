@@ -1,0 +1,9 @@
+﻿ESITO: OK
+tipo=Build durata=234s limite=2700s exit=0 figli_rimasti_uccisi=0
+log=C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_qjfnc0\Saved\Logs\ci\m2r2_build.log
+ultima riga errore: [Upgrade] Alternatively you can set this to 'EngineIncludeOrderVersion.Latest' to always use the latest include order. This will potentially cause compile error
+ESITO: OK
+tipo=Test durata=118s limite=1800s exit=0 figli_rimasti_uccisi=4 | prestart: PackageRestoreData.json -> PackageRestoreData.json.20261123_230547.bak
+log=C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_qjfnc0\Saved\Logs\ci\m2r2_test.log
+ultima riga errore: [2026.11.23-22.07.44:818][654]LogAutomationCommandLine: Shutting down. ExitCode=0 GIsCriticalError=0
+ESITO TEST: PASS  ok=799 fail=0 totale=799 (minimo 20)

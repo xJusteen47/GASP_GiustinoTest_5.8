@@ -1,4 +1,4 @@
-"""Adds the Z7 slope zone to /Game/Levels/Test/L_Test_Hub and SAVES the map (the only map threads may save, coordinator 2026-11-19).
+"""Adds the Z7 slope zone to /Game/GSTN/Maps/L_Test_Hub and SAVES the map (the only map threads may save, coordinator 2026-11-19).
 
 Headless, through the owner-allowed save route:
   & .\Tools\CI\Save-Assets.ps1 -Script Tools\GAS\hub_add_slopes.py -Tag hub_slopes

@@ -10,13 +10,16 @@ import unreal
 
 PROJ = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
 OUT = os.path.join(PROJ, "Saved", "AnimPipeline", "runstart")
+os.makedirs(OUT, exist_ok=True)
 MAP = {"root": "root"}
+for _b in ("pelvis", "spine_01", "spine_02", "spine_03", "spine_04", "spine_05", "neck_01", "head"):   # torso/head chain (anim-mcp v2: head/neck gates)
+    MAP[_b] = _b
 for s in "lr":
     for pt, bone in (("thigh_MainPoint_", "thigh_"), ("calf_MainPoint_", "calf_"), ("foot_MainPoint_", "foot_"), ("ball_MainPoint_", "ball_"),
                      ("upperarm_MainPoint_", "upperarm_"), ("lowerarm_MainPoint_", "lowerarm_"), ("hand_MainPoint_", "hand_")):
         MAP[pt + s] = bone + s
 AL = unreal.AnimationLibrary
-for name in [a for a in os.environ.get("RCJ_ASSETS", "").split(",") if a]:
+for name in [a.strip().rsplit("/", 1)[-1] for a in os.environ.get("RCJ_ASSETS", "").split(",") if a.strip()]:
     seq = unreal.load_asset("/Game/GSTN/Animation/RunStart/" + name)
     if not seq:
         print("RCJ %s: missing" % name); continue
@@ -32,5 +35,6 @@ for name in [a for a in os.environ.get("RCJ_ASSETS", "").split(",") if a]:
         for s in "lr":
             q = unreal.AnimPoseExtensions.get_bone_pose(pose, "foot_" + s, unreal.AnimPoseSpaces.WORLD).rotation
             AX["foot_axes_" + s].append([[a.x, a.z, a.y] for a in (q.get_axis_x(), q.get_axis_y(), q.get_axis_z())])
-    json.dump({"fps": 30, "joints": J, "axes": AX}, open(os.path.join(OUT, "joints_%s.json" % name), "w"))
+    with open(os.path.join(OUT, f"joints_{name}.json"), "w", encoding="utf-8") as fh:
+        json.dump({"fps": 30, "joints": J, "axes": AX}, fh)
     print("RCJ %s: %d frames" % (name, n))

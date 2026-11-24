@@ -17,6 +17,10 @@ Content/*
 !Content/Input/
 !Content/Levels/
 !Content/GSTN/
+# Approved clips stored by `animpipe publish` (Tools/AnimPipeline/registro-clip.csv); the rest of AnimPipeline stays local
+!Content/AnimPipeline/
+Content/AnimPipeline/*
+!Content/AnimPipeline/Published/
 Plugins/*/Content/
 
 # IDE / solution files (regenerated from the .uproject)

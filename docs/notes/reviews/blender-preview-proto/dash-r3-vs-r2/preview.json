@@ -1,0 +1,45 @@
+{
+ "proto": true,
+ "fbx": "docs/notes/reviews/dash-ganon/r3/AS_GSTN_Dash_Ganon_r3.fbx",
+ "base": "docs/notes/reviews/dash-ganon/r2/AS_GSTN_Dash_Ganon_r2.fbx",
+ "anim_frames": 25,
+ "cells": [
+  [
+   "a0",
+   0
+  ],
+  [
+   "a4",
+   4
+  ],
+  [
+   "a8",
+   8
+  ],
+  [
+   "a12",
+   12
+  ],
+  [
+   "a16",
+   16
+  ],
+  [
+   "a20",
+   20
+  ],
+  [
+   "a24",
+   24
+  ]
+ ],
+ "views": [
+  180.0,
+  90.0
+ ],
+ "outputs": [
+  "docs/notes/reviews/blender-preview-proto/dash-r3-vs-r2/grid_az180.png",
+  "docs/notes/reviews/blender-preview-proto/dash-r3-vs-r2/grid_az90.png"
+ ],
+ "seconds": 8.5
+}

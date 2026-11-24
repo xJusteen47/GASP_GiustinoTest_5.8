@@ -4,7 +4,7 @@
 # montage and its position, the combat state and tags; on chosen frames it runs `obj dump` on the main anim instance (the GASP graph's own
 # variables, which Python cannot list) between two log markers, so a later diff shows which graph variable changes with the squat or the legs.
 #
-# Launch: UnrealEditor.exe <uproject> /Game/Levels/Test/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
+# Launch: UnrealEditor.exe <uproject> /Game/GSTN/Maps/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
 #   boot.py: exec(open(r"<project>/Tools/GASNPPTest/pie_probe_pose.py").read())   (the boot path must have no space)
 # Environment: PIE_PROBE_OUT (default Saved/MontageExit/probe_<time>), PIE_PROBE_SEQUENCES (comma list of the names below).
 # Output: <out>/<sequence>.jsonl, <out>/probe.log, <out>/done.txt; the dumps are in the editor log between "[pose_probe] dump <seq> <frame>" lines.

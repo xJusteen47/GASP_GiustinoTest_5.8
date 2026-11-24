@@ -91,4 +91,8 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UGSTN_CameraAnchorSettingsAsset> AnchorSettings;
 	bool bAnchorSettingsLoaded = false;
+
+	/** The anchor whose OnAnchorUpdated hands the P1a camera its subject the same frame (bound once per anchor) */
+	TWeakObjectPtr<UGSTN_CameraAnchorComponent> SubjectAnchor;
+	void OnSubjectAnchorUpdated(const UGSTN_CameraAnchorComponent& Anchor);
 };

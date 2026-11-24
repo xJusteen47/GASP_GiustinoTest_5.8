@@ -1,0 +1,4 @@
+﻿[2026.11.23-20.57.13:415][874]LogAutomationController: Display: Test Completed. Result={Success} Name={AwayFromStick} Path={GSTNCombat.Core.StartupSteer.Window.AwayFromStick}
+[2026.11.23-20.57.41:314][311]LogAutomationController: Display: Test Completed. Result={Success} Name={StickCutsTail} Path={GSTNCombat.NP.Timeline.StickCutsTail}
+[2026.11.23-20.57.44:780][516]LogAutomationController: Display: Test Completed. Result={Success} Name={DirectionalWarp} Path={GSTNDefence.NP.Getup.DirectionalWarp}
+[2026.11.23-20.57.44:880][522]LogAutomationController: Display: Test Completed. Result={Success} Name={SharedExitSpeed} Path={GSTNDefence.NP.Getup.SharedExitSpeed}

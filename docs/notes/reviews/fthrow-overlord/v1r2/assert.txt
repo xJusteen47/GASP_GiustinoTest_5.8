@@ -1,0 +1,2 @@
+ASSERT: FAIL 1/1
+ASSERT: FAIL fthrow_hit AM_OverlordFThrowV1 f74-f104: weight >= 0.8 on 0% (< 90%), f74 weight 0.00, owned by AM_OverlordJab1V3 1.00

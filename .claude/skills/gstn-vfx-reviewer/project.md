@@ -15,7 +15,7 @@ Metodo generico: `skills-public/vfx-reviewer/SKILL.md` (i § qui sotto si riferi
 - Strato di progetto della teoria: `docs/notes/vfx-theory/principi-vfx.md` (lezioni dell'owner 2026-11-19 in testa:
   leggibile *e* credibile; gas che crescono sfumando ad alpha 0; stile solo nella palette; si giudica sempre sul video di
   riferimento). Teoria generale: `skills-public/vfx-reviewer/vfx-principles.md`, stessa numerazione dei §.
-- Riferimenti dell'owner: `handoffs/ref-astrobot-vfx/NOTE.md` (+ clip DK Bananza sul branch `claude/ref-astrobot-vfx`).
+- Riferimenti dell'owner: `handoffs/archivio/2026-11/ref-astrobot-vfx/NOTE.md` (+ clip DK Bananza sul branch `claude/ref-astrobot-vfx`).
 - Critico: `docs/notes/review/critico-estetico.md`. Dossier: `docs/notes/review/dossier-riferimento.md`, dossier in
   `docs/notes/reference-dossiers/`, griglie in project files `handoffs/<riferimento>/`.
 - Cartella della review: `docs/notes/reviews/<effetto>-r<N>/`. Frame: `skills-public/anim-reviewer/scripts/rv_frames.py`.

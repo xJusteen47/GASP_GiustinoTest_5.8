@@ -1,6 +1,6 @@
 """Builds the holographic look of the classic depth marker (owner 2026-11-17: "more holographic, less solid"; style ref Astro Bot / Nintendo).
 
-Two materials in /Game/Blueprints/DepthMarker, both driven by the presenters' MID parameters Color (player colour) and Opacity:
+Two materials in /Game/GSTN/DepthMarker, both driven by the presenters' MID parameters Color (player colour) and Opacity:
   M_DM_Holo        ring and dash segments (ISM cubes). Additive, unlit, no lighting cost: soft scanlines that drift along the marker's own
                    column, a brighter edge, a short rare flicker and a gentle breathe. ~25 instructions: toaster-safe.
   M_DM_Holo_Decal  a blob shadow for a Decal presenter: a dim translucent disc with a crisp ring and the same scanlines.
@@ -13,7 +13,7 @@ Only run it while the owner's editor is closed. Prints "GSTN_HOLO FINISHED OK" o
 """
 import unreal
 
-FOLDER = "/Game/Blueprints/DepthMarker"
+FOLDER = "/Game/GSTN/DepthMarker"
 lib = unreal.MaterialEditingLibrary
 tools = unreal.AssetToolsHelpers.get_asset_tools()
 problems = []

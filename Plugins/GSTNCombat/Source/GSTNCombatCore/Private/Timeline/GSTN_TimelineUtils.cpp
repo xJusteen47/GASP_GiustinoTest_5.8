@@ -1,4 +1,5 @@
 #include "Timeline/GSTN_TimelineUtils.h"
+#include "Timeline/GSTN_HitBounce.h"
 #include "Timeline/GSTN_HoldUntilLanded.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 
@@ -67,6 +68,16 @@ FGSTN_CombatTimelineData UGSTN_TimelineUtils::AddBodyCapsuleTrack(const FGSTN_Co
 	return Result;
 }
 
+FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemoveAttackHitboxTracks(const FGSTN_CombatTimelineData& Data)
+{
+	FGSTN_CombatTimelineData Result = Data;
+	Result.Tracks.RemoveAll([](const TInstancedStruct<FGSTN_TimelineTrack>& Track)
+	{
+		return GSTNTimelineTracks::AsAttackHitbox(Track) != nullptr;
+	});
+	return Result;
+}
+
 FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemoveBodyCapsuleTracks(const FGSTN_CombatTimelineData& Data)
 {
 	FGSTN_CombatTimelineData Result = Data;
@@ -123,6 +134,34 @@ FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemoveLandingTracks(const FGSTN_Co
 	Result.Tracks.RemoveAll([](const TInstancedStruct<FGSTN_TimelineTrack>& Track)
 	{
 		return Track.GetScriptStruct() == FGSTN_TimelineTrack_Landing::StaticStruct();
+	});
+	return Result;
+}
+
+FGSTN_CombatTimelineData UGSTN_TimelineUtils::SetHitBounceTrack(const FGSTN_CombatTimelineData& Data, int32 StartFrame, int32 EndFrame, int32 MaxConsecutiveBounces,
+	float ApexHeightCm, int32 RiseFrames, float BackDistanceCm, int32 ActionableFrames, bool bBounceOnBlock, TSoftClassPtr<UObject> BounceMove)
+{
+	FGSTN_CombatTimelineData Result = RemoveHitBounceTracks(Data);
+	FGSTN_TimelineTrack_HitBounce Track;
+	Track.StartFrame = StartFrame;
+	Track.EndFrame = EndFrame;
+	Track.MaxConsecutiveBounces = MaxConsecutiveBounces;
+	Track.ApexHeightCm = ApexHeightCm;
+	Track.RiseFrames = RiseFrames;
+	Track.BackDistanceCm = BackDistanceCm;
+	Track.ActionableFrames = ActionableFrames;
+	Track.bBounceOnBlock = bBounceOnBlock;
+	Track.BounceMove = BounceMove;
+	Result.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_HitBounce>(Track));
+	return Result;
+}
+
+FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemoveHitBounceTracks(const FGSTN_CombatTimelineData& Data)
+{
+	FGSTN_CombatTimelineData Result = Data;
+	Result.Tracks.RemoveAll([](const TInstancedStruct<FGSTN_TimelineTrack>& Track)
+	{
+		return Track.GetScriptStruct() == FGSTN_TimelineTrack_HitBounce::StaticStruct();
 	});
 	return Result;
 }

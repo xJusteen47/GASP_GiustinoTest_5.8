@@ -36,6 +36,13 @@ public:
 	static FGSTN_CombatTimelineData AddHitboxTrack(const FGSTN_CombatTimelineData& Data, int32 StartFrame, int32 EndFrame, const FGSTN_PartSelector& Part, const TArray<FGSTN_HitboxSpec>& Hitboxes);
 
 	/**
+	 * Authoring helper: a copy of Data without its attack hitbox tracks (Hurtbox tracks, hitbox tracks by inheritance, stay). Lets a setup
+	 * script that rebuilds a move's hitboxes from its clips run again instead of stacking tracks
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
+	static FGSTN_CombatTimelineData RemoveAttackHitboxTracks(const FGSTN_CombatTimelineData& Data);
+
+	/**
 	 * Authoring helper (as AddHitboxTrack): a copy of Data whose Hold Until Landed track (FGSTN_TimelineTrack_HoldUntilLanded) is the one given,
 	 * held in the air on [StartFrame, EndFrame) and landing on LandFrame (-1 = EndFrame). A track of that type already there is replaced, so a
 	 * setup script can run again. Sections None = the timeline frames mapped onto the montage. MaxAirFrames: the air timeout (0 = none)
@@ -84,4 +91,18 @@ public:
 	/** Authoring helper: a copy of Data without any Landing track */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
 	static FGSTN_CombatTimelineData RemoveLandingTracks(const FGSTN_CombatTimelineData& Data);
+
+	/**
+	 * Authoring helper: a copy of Data whose Hit Bounce track (FGSTN_TimelineTrack_HitBounce, owner 2026-11-23) is the one given: hits on
+	 * [StartFrame, EndFrame) bounce the user. A track of that type already there is replaced, so a setup script can run again. BounceMove may be
+	 * null (the move just ends on the bounce)
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
+	static FGSTN_CombatTimelineData SetHitBounceTrack(const FGSTN_CombatTimelineData& Data, int32 StartFrame, int32 EndFrame, int32 MaxConsecutiveBounces = 2,
+		float ApexHeightCm = 150.f, int32 RiseFrames = 18, float BackDistanceCm = 40.f, int32 ActionableFrames = 24, bool bBounceOnBlock = false,
+		TSoftClassPtr<UObject> BounceMove = nullptr);
+
+	/** Authoring helper: a copy of Data without its Hit Bounce track */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
+	static FGSTN_CombatTimelineData RemoveHitBounceTracks(const FGSTN_CombatTimelineData& Data);
 };

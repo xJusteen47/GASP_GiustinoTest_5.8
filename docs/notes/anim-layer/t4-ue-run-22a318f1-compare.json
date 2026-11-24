@@ -1,0 +1,82 @@
+{
+ "ok": true,
+ "layer_exit": 0,
+ "lay_vs_ref": {
+  "max_cm": 6.371,
+  "joint": "hand_MainPoint_r",
+  "frame": 16,
+  "per_joint": {
+   "root": 0.0,
+   "pelvis": 0.0,
+   "spine_01": 0.0,
+   "spine_02": 0.0,
+   "spine_03": 0.0,
+   "spine_04": 0.0,
+   "spine_05": 0.0,
+   "neck_01": 0.0,
+   "head": 0.0,
+   "clavicle_l": 0.0,
+   "thigh_MainPoint_l": 0.0,
+   "calf_MainPoint_l": 0.0,
+   "foot_MainPoint_l": 0.0,
+   "ball_MainPoint_l": 0.0,
+   "upperarm_MainPoint_l": 0.0,
+   "lowerarm_MainPoint_l": 0.0,
+   "hand_MainPoint_l": 0.0,
+   "clavicle_r": 0.0,
+   "thigh_MainPoint_r": 0.0,
+   "calf_MainPoint_r": 0.0,
+   "foot_MainPoint_r": 0.0,
+   "ball_MainPoint_r": 0.0,
+   "upperarm_MainPoint_r": 0.0,
+   "lowerarm_MainPoint_r": 0.943,
+   "hand_MainPoint_r": 6.371
+  }
+ },
+ "src_vs_ref": {
+  "max_cm": 11.203,
+  "joint": "hand_MainPoint_r",
+  "frame": 6,
+  "per_joint": {
+   "root": 0.0,
+   "pelvis": 0.0,
+   "spine_01": 0.0,
+   "spine_02": 0.0,
+   "spine_03": 0.0,
+   "spine_04": 0.0,
+   "spine_05": 0.0,
+   "neck_01": 0.0,
+   "head": 0.0,
+   "clavicle_l": 0.0,
+   "thigh_MainPoint_l": 0.0,
+   "calf_MainPoint_l": 0.0,
+   "foot_MainPoint_l": 0.0,
+   "ball_MainPoint_l": 0.0,
+   "upperarm_MainPoint_l": 0.0,
+   "lowerarm_MainPoint_l": 0.0,
+   "hand_MainPoint_l": 0.0,
+   "clavicle_r": 0.0,
+   "thigh_MainPoint_r": 0.0,
+   "calf_MainPoint_r": 0.0,
+   "foot_MainPoint_r": 0.0,
+   "ball_MainPoint_r": 0.0,
+   "upperarm_MainPoint_r": 0.0,
+   "lowerarm_MainPoint_r": 6.078,
+   "hand_MainPoint_r": 11.203
+  }
+ },
+ "deleted": [
+  [
+   "/Game/_T4tmp/AS_T4_w3lay",
+   true
+  ],
+  [
+   "/Game/_T4tmp/AS_T4_w3ref",
+   true
+  ],
+  [
+   "/Game/_T4tmp/AS_T4_w3src",
+   true
+  ]
+ ]
+}

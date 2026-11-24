@@ -1,6 +1,6 @@
 # STANCE-OFFSET handover: upper-body stance offset after moves, option A (desktop, 2026-11-16)
 Branch `claude/stance-offset` from `claude/night-knockdown` c64d0471. Folder `_ue59`, Opus. Editor built (Run-Timed Build OK), ABP saved
-(backup `Saved/Backups/GAS/stance/`). Evidence in `docs/notes/reviews/stance-offset/`. Brief: `handoffs/ritorno-idle-ricerca.md` option A.
+(backup `Saved/Backups/GAS/stance/`). Evidence in `docs/notes/reviews/stance-offset/`. Brief: `handoffs/archivio/2026-11/ritorno-idle-ricerca.md` option A.
 ## What was done (isolated, foot-lock untouched)
 - `UGSTN_StanceDefinition` (GSTNAnimationCore): StancePose minus ReferencePose (plain sequences, same skeleton, one sampled time each), per-bone
   weights + fade-time scale (default spine_01..05 0.3-0.5-0.7-0.85-1.0 at 1.3x, neck 1.0 at 1.2x, clavicles/arms 1.0 at 1.0x; pelvis, legs, root

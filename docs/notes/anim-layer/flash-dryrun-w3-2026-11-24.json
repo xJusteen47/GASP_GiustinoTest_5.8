@@ -1,0 +1,17 @@
+{
+  "c1_passo-02": [
+    {"part": "arm_r", "motion": "out", "deg": 8, "start": 1, "peak": [5, 13], "end": 21},
+    {"part": "elbow_r", "motion": "out", "deg": 6, "start": 1, "peak": [5, 13], "end": 21},
+    {"part": "arm_r", "motion": "back", "deg": 6, "start": 5, "peak": 13, "end": 21}
+  ],
+  "c1_passo-03": [
+    {"part": "arm_l", "motion": "out", "deg": 10, "start": 1, "peak": [5, 13], "end": 21},
+    {"part": "elbow_l", "motion": "out", "deg": 6, "start": 1, "peak": [5, 13], "end": 21},
+    {"part": "arm_l", "motion": "forward", "deg": 8, "start": 5, "peak": 13, "end": 21}
+  ],
+  "c2_passo-03": [
+    {"part": "head", "motion": "chin_up", "deg": 4, "start": 5, "peak": 13, "end": 21},
+    {"part": "neck", "motion": "chin_up", "deg": 2, "start": 5, "peak": 13, "end": 21}
+  ],
+  "notes": "c1_passo-02: arm_r opened out with shoulder and elbow ramping f5-f13, then a back-swing arc from f13 toward the f21 anchor; the f0 neutralisation cannot be done because f0 is outside the layer window and stays unchanged, so it needs a manual pose edit. c1_passo-03: arm_l out and elbow out (+X) in f5-f13 to clear the hip, plus a forward arc (+Y) peaking at f13 toward the lead swing at f21; f0 is kept neutral by the window start. c2_passo-03: head chin_up 4 deg plus neck chin_up 2 deg (6 deg total, inside the 5-8 deg brief), ramped f5-f13 and back to f21, so trunk and f0/f21 stay as they are."
+}

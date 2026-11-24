@@ -11,6 +11,7 @@
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "Timeline/GSTN_CombatTimeline.h"
+#include "Timeline/GSTN_HitBounce.h"
 #include "Timeline/GSTN_HoldUntilLanded.h"
 #include "Timeline/GSTN_Landing.h"
 #include "Timeline/GSTN_Ledge.h"
@@ -120,6 +121,14 @@ void UGSTN_GA_BaseCombat::LoadTimelineDataContent(const FGSTN_CombatTimelineData
 		if (Track && Track->bHasRicochetResponse && Track->RicochetResponse.IsAuthored())
 		{
 			LoadRecoilContent(Track->RicochetResponse, OutKeep);
+		}
+		// The Hit Bounce track's bounce move: the combat model starts it by class from a plain pointer (TSoftClassPtr::Get), so it is held here
+		if (const FGSTN_TimelineTrack_HitBounce* Bounce = Data.Tracks[TrackIndex].GetPtr<FGSTN_TimelineTrack_HitBounce>(); Bounce && !Bounce->BounceMove.IsNull())
+		{
+			if (UClass* BounceClass = Bounce->BounceMove.LoadSynchronous())
+			{
+				OutKeep.AddUnique(BounceClass);
+			}
 		}
 		// The Landing and Ledge Check tracks: their lag / recoil is played from a plain pointer like the move's (GetRicochetResponse of their index
 		// is their own response or null, never the move's), and their ContinueMove is registered by class (AppendFollowUps), which needs it loaded
@@ -796,7 +805,8 @@ bool UGSTN_GA_BaseCombat::FinishTimelinePlay(bool bWasCancelled, bool bAbilityEn
 		// Why it ends, read before the cleanup below resets the recoil and the entry
 		{
 			const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
-			EndReason = FGSTN_MoveEventRules::ResolveEndReason(bWasCancelled, bRecoilPlayed.Value, EvaluatedFrame.Value, Data.TotalFrames, Data.GetTailStartFrame());
+			EndReason = FGSTN_MoveEventRules::ResolveEndReason(bWasCancelled, bRecoilPlayed.Value,
+				FGSTN_MoveEventRules::EndReasonFrame(bWasCancelled, EvaluatedFrame.Value, GetEndRuleFrame(Data)), Data.TotalFrames, Data.GetTailStartFrame());
 			bRaiseEnded = CanRaiseMoveEvents() && IsActive();
 		}
 

@@ -231,7 +231,7 @@ struct GSTNCOMBATNP_API FGSTN_SkidSectionSettings
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid")
 	TSoftObjectPtr<UAnimSequenceBase> Clip =
-		TSoftObjectPtr<UAnimSequenceBase>(FSoftObjectPath(TEXT("/Game/Blueprints/Animation/Ported57/SkidOwner/SS_180_Turn_Root180.SS_180_Turn_Root180")));
+		TSoftObjectPtr<UAnimSequenceBase>(FSoftObjectPath(TEXT("/Game/GSTN/Animation/Ported57/SkidOwner/SS_180_Turn_Root180.SS_180_Turn_Root180")));
 
 	/** Where the hold starts and the push starts, as fractions of the clip */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Skid", meta = (ClampMin = "0.0", ClampMax = "1.0"))

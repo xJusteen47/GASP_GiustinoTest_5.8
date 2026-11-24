@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Data/GSTN_GrabHoldTypes.h"
 #include "Data/GSTN_GrabRules.h"
 #include "GameplayTagContainer.h"
 #include "Rules/GSTN_KitExtension.h"
@@ -51,6 +52,14 @@ struct GSTNLINKCORE_API FGSTN_LinkThrowSet
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Throws", meta = (MetaClass = "/Script/GameplayAbilities.GameplayAbility"))
 	FSoftClassPath Down;
 
+	/** Command.Link.Throw.Neutral: the N. throw of the Notation input mode (grab-link, owner 2026-11-23) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Throws", meta = (MetaClass = "/Script/GameplayAbilities.GameplayAbility"))
+	FSoftClassPath Neutral;
+
+	/** Command.Link.Throw.CrouchForward: the Cr.F. throw of the Notation input mode */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Throws", meta = (MetaClass = "/Script/GameplayAbilities.GameplayAbility"))
+	FSoftClassPath CrouchForward;
+
 	/** The entry of a throw command (Command.Link.Throw.*), null for any other tag */
 	const FSoftClassPath* Find(const FGameplayTag& ThrowCommand) const;
 };
@@ -82,4 +91,15 @@ struct GSTNLINKCORE_API FGSTN_LinkKitExtension : public FGSTN_KitExtension
 	/** The kit's own four throws (M11 K2); an empty entry takes the project's fallback set. A kit with this entry grabs only if it binds the grab */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Throws")
 	FGSTN_LinkThrowSet Throws;
+
+	/** grab-link: replace the project's hold pose (UGSTN_LinkSettings::HoldPose) with this kit's own when this kit grabs */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Hold")
+	bool bOverrideHoldPose = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Hold", meta = (EditCondition = "bOverrideHoldPose"))
+	FGSTN_GrabHoldPose HoldPose;
+
+	/** grab-link: what this kit's entity does to its grabber when it mashes free (off by default: players; a PVE enemy kit turns it on) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Escape")
+	FGSTN_GrabEscapeHit EscapeHit;
 };

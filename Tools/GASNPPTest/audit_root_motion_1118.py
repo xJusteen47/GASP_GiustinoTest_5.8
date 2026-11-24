@@ -5,8 +5,8 @@ and EnableRootMotion is on. Writes Saved/Diag1118/root_audit.tsv, prints one lin
 import os, math
 import unreal
 
-FOLDERS = ['/Game/Blueprints/Animation/Ported57/Skid', '/Game/Blueprints/Animation/Ported57/SkidOwner',
-           '/Game/Blueprints/Animation/Ported57/WallSlide', '/Game/GiustinoMoves']
+FOLDERS = ['/Game/GSTN/Animation/Ported57/Skid', '/Game/GSTN/Animation/Ported57/SkidOwner',
+           '/Game/GSTN/Animation/Ported57/WallSlide', '/Game/GiustinoMoves']
 OUT = os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir()), 'Saved', 'Diag1118')
 os.makedirs(OUT, exist_ok=True)
 AL = unreal.AnimationLibrary

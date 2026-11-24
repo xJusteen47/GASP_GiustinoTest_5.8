@@ -37,6 +37,9 @@ namespace GSTNFeatureIds
 	/** FGSTN_BackpackFragment (GSTNBackpackCore, run by GSTNBackpackNP, M11 L7b): a backpack's memory slots and dome */
 	constexpr uint8 Backpack = 21;
 
+	/** FGSTN_HitBounceFragment (GSTNCombatNP, owner 2026-11-23): the bounce off a target of a move with a Hit Bounce track, and its count */
+	constexpr uint8 HitBounce = 22;
+
 	constexpr uint8 FirstGame = 128;
 	constexpr uint8 FirstTest = 240;
 	constexpr uint8 TestA = 240;

@@ -102,7 +102,7 @@ def roundtrip(anim, name, opt):
 
 def build(path):
     from animpipe.card import load, key_frames, segments
-    from animpipe import locks
+    from animpipe import locks, card as C
     c = load(path)
     name = c["anim"].rsplit("/", 1)[1][3:]
     num, den = (125, 2) if str(c["fps"]) == "62.5" else (int(c["fps"]), 1)
@@ -112,6 +112,8 @@ def build(path):
             "planted": c.get("planted", []), "edits": c.get("edits", []), "drop": c.get("drop", []), "hitstop_blend": c.get("hitstop_blend", []),
             "ease_out": {str(q["frame"]): q["ease_out"] for q in c["poses"] if q.get("ease_out")},
             "lock_lengths": c.get("lock_lengths", True),
+            "curve": c.get("curve", "tangents"), "hold": C.hold_keys(c), "spline_mode": c.get("spline_mode", "monotone"),
+            "tools_dir": TOOLS.replace("\\", "/"),
             "manual_in": (locks.manual_path(c, path) or "").replace("\\", "/"), "manual_out": os.path.join(OUT, f"{c['move']}_manual_layer.json").replace("\\", "/"), "out": os.path.join(OUT, f"{c['move']}_build_ue.json").replace("\\", "/")}
     t0 = time.time()
     r = _ue_py("build", spec=spec)
@@ -169,6 +171,9 @@ def review(path, opt):
 def main():
     from animpipe import verbs
     cmd, args = (sys.argv[1] if len(sys.argv) > 1 else ""), [a for a in sys.argv[2:] if not a.startswith("--")]
+    if cmd == "life":                            # OG life metrics on a joints dump / capture (animpipe/life.py)
+        from animpipe import life
+        sys.exit(life.main(sys.argv[2:]))
     if cmd in verbs.VERBS and not (args and args[0].endswith(".json")) or cmd in ("", "help"):
         sys.exit(verbs.run(sys.argv[1:]))       # the public surface: animpipe <verb> <move>
     opt = dict((a[2:].split("=", 1) + [""])[:2] for a in sys.argv[2:] if a.startswith("--"))

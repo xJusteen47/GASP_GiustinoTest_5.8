@@ -30,11 +30,15 @@ Binding rules: [modularity-and-tags.md](../../docs/architecture/modularity-and-t
 
 1. Enable the plugin (`EnabledByDefault` is false).
 2. Add `UGSTN_CameraComponent` to the pawn the local player follows (pawn data, a Game Feature `AddComponents` action or Blueprint) and
-   make it the view target camera. It is not replicated and inert on a dedicated server. **Nothing in the project does this yet**:
-   no pawn or Blueprint was changed.
+   make it the view target camera. It is not replicated and inert on a dedicated server. No pawn Blueprint was changed: the project rig (below) does it in code.
 3. Make a `GSTN Camera Profile` Data Asset (one for every kit) and set it on the component's `Profile`; without one the code defaults of
    `UGSTN_CameraProfile` apply. There are no Project Settings any more (owner rule, P1a 2026-11-21). The plugin ships no content: set the look,
    recenter, distance and assist-move actions and the mapping context (soft references) in the profile, or call `AddLookInput` from your own input code.
+   **On a real pawn (M12 G5)** add the project's `UGSTN_PawnRigComponent` (or `gstn.G5.AutoRig 1` for a test map): it adds the camera and the
+   interactor, implements the two interfaces below on a component (the camera finds them on the actor **or one of its components**), hands the
+   camera the standing root of the drawn body instead of the actor root (spike C1), raises `Camera.Request.Aim` from `SetAimRequested`, and
+   switches off the pawn's other camera components. Where the sample's look code already turns the controller, give the profile
+   `LookInputSource = ControlRotation` (spike C4: one writer of the control rotation).
 4. Let the pawn tell the camera about itself (all optional): `IGSTN_CameraSubject` (presented pivot, Up, suppressed), `IGSTN_CameraTagSource`
    (the tags the rule table reads; implement it from the ability system), `IGSTN_CameraAimOrigin` (where shots leave from). Without them an
    adapter reads the actor (a character reads its movement component gravity) and the tag container is empty, which yields Follow.
@@ -118,6 +122,10 @@ P1a tests (2026-11-21, written in the cloud, **not run yet**): Core `PivotAsymme
 `AutoFollowTurnsBehindOnlyInASustainedRun`, `FramingVolumePullsSoftlyAndYieldsToTheStick`, `FramingVolumeZoomBlendsAndSectionWins`,
 `MoveReferenceIsTheCameraWithoutALatch`, `FreeDeadZoneKeepsTheCameraStillForSmallMoves`. Five older Runtime checks now expect Free instead of Follow as the default.
 
+G5 tests (2026-11-22, written, **not run yet**): Runtime `SectionVolumeOverridesAngleDistanceAndLocksTheLook`, `AimStageIsShoulderOnRequestAndLeavesOnRelease`,
+`PresentedSubjectNeverSnapsTheViewWhereARawOneDoes`; project module `GSTN.PawnRig.*` (press tracker, subject = raw state plus presented pivot, rig wiring on a
+bare `APawn`, camera reads the subject and the aim tag through the rig component, a 40 cm rollback snap of the root never reaches the view through the real anchor damper).
+
 ## Next steps (not built)
 
 The Editor module (section visualiser, validators), the scope zoom overlay (D7, spec §6.1), the crosshair presenter widget (the component only publishes
@@ -131,5 +139,6 @@ the test map `L_Camera_Min`, the harness scenarios, spikes C1-C6, split screen a
   by Delta Time modifier.
 - `FixedPoint` and `Rail` always look at the pawn; the yaw/pitch look-at limits of the spec are not built.
 - A section cannot change the occlusion policy yet.
-- Never run against a real pawn yet: only the headless tests exercised it. Spikes C1 (tick order against Network Prediction interpolation) and C4
-  (control rotation write-back against the sample look code) are open.
+- On a real pawn only through the project rig and the P1a wiring, both written without a PIE run: spikes C1 (tick order against Network
+  Prediction interpolation: the rig reads the anchor's standing root, the camera ticks after the anchor) and C4 (control rotation write-back against
+  the sample look code: `LookInputSource = ControlRotation`) have a first implementation, not a measurement.

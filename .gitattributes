@@ -3,3 +3,6 @@
 # read-only, which blocks saving from the editor.
 *.uasset filter=lfs diff=lfs merge=lfs -text
 *.umap filter=lfs diff=lfs merge=lfs -text
+# The one exception (owner 3A, 2026-11-24): owner-approved clips stored by `animpipe publish` are lockable on purpose.
+# Nobody, agent or person, saves over an approved version; the editor works on a new variant elsewhere.
+Content/AnimPipeline/Published/**/*.uasset filter=lfs diff=lfs merge=lfs -text lockable

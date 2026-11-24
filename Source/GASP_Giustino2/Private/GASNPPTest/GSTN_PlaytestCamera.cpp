@@ -46,7 +46,21 @@ namespace GSTNPlaytestCamera
 		TEXT("1 = GASP's look input (the control rotation change since the P1a camera's own write) steers its orbit, 0 = no look input (diagnostics)"));
 	static constexpr float ProbeRadius = 12.f;
 	/** Shared camera anchor tuning, optional (C++ defaults when missing). Created by Tools/GASNPPTest/camera_anchor_setup.py */
-	static const TCHAR* AnchorSettingsPath = TEXT("/Game/Blueprints/Data/DA_CameraAnchor_Default.DA_CameraAnchor_Default");
+	static const TCHAR* AnchorSettingsPath = TEXT("/Game/GSTN/Data/Camera/DA_CameraAnchor_Default.DA_CameraAnchor_Default");
+
+	/** The presented subject of a Mover pawn for the P1a camera: the anchor's capsule-free standing root (undamped: the camera damps), else the actor */
+	static FGSTN_CameraSubjectState MakeSubject(const APawn& Viewed, const UGSTN_CameraAnchorComponent* Anchor)
+	{
+		FGSTN_CameraSubjectState Subject;
+		Subject.bValid = true;
+		Subject.Pivot = Anchor && Anchor->IsActiveForOwner() ? Anchor->GetStandingRoot() : Viewed.GetActorLocation();
+		Subject.Velocity = Viewed.GetVelocity();
+		const FVector Flat(Subject.Velocity.X, Subject.Velocity.Y, 0.0);
+		Subject.Facing = Flat.SizeSquared() > 25.0 ? Flat.GetSafeNormal() : Viewed.GetActorForwardVector();
+		const UMoverComponent* Mover = Viewed.FindComponentByClass<UMoverComponent>();
+		Subject.bGrounded = Mover ? Mover->HasGameplayTag(Mover_IsOnGround, true) : FMath::Abs(Subject.Velocity.Z) < 30.0;
+		return Subject;
+	}
 }
 
 FVector UGSTN_PlaytestCameraModifier::PushBack(const FVector& ViewLocation, const FVector& ViewForward, float ExtraDistance, float ExtraHeight)
@@ -411,17 +425,27 @@ void UGSTN_PlaytestCameraSubsystem::Tick(float DeltaTime)
 				}
 				if (bWanted && Cam->IsActive())
 				{
-					// The Mover pawn has no adapter in the camera plugin: hand it the presented subject (anchor's capsule-free standing root)
-					FGSTN_CameraSubjectState Subject;
-					Subject.bValid = true;
-					const UGSTN_CameraAnchorComponent* SubjectAnchor = Viewed->FindComponentByClass<UGSTN_CameraAnchorComponent>();
-					Subject.Pivot = SubjectAnchor && SubjectAnchor->IsActiveForOwner() ? SubjectAnchor->GetStandingRoot() : Viewed->GetActorLocation();
-					Subject.Velocity = Viewed->GetVelocity();
-					const FVector Flat(Subject.Velocity.X, Subject.Velocity.Y, 0.0);
-					Subject.Facing = Flat.SizeSquared() > 25.0 ? Flat.GetSafeNormal() : Viewed->GetActorForwardVector();
-					const UMoverComponent* Mover = Viewed->FindComponentByClass<UMoverComponent>();
-					Subject.bGrounded = Mover ? Mover->HasGameplayTag(Mover_IsOnGround, true) : FMath::Abs(Subject.Velocity.Z) < 30.0;
-					Cam->SetSubjectOverride(Subject);
+					// The Mover pawn has no adapter in the camera plugin: hand it the presented subject (anchor's capsule-free standing root). Here only
+					// until the anchor runs (first frames, anchor off): the anchor's own update hands it over the same frame, before the camera evaluates
+					UGSTN_CameraAnchorComponent* Anchor = Viewed->FindComponentByClass<UGSTN_CameraAnchorComponent>();
+					if (Anchor && SubjectAnchor.Get() != Anchor)
+					{
+						if (UGSTN_CameraAnchorComponent* Old = SubjectAnchor.Get())
+						{
+							Old->OnAnchorUpdated.RemoveAll(this);
+						}
+						Anchor->OnAnchorUpdated.AddUObject(this, &UGSTN_PlaytestCameraSubsystem::OnSubjectAnchorUpdated);
+						SubjectAnchor = Anchor;
+					}
+					// The camera evaluates in its own tick: after the anchor (whatever order the components were made in), when the anchor ticks before the view
+					if (Anchor && Anchor->PrimaryComponentTick.TickGroup <= UGSTN_CameraAnchorComponent::EarlyTickGroup)
+					{
+						Cam->PrimaryComponentTick.AddPrerequisite(Anchor, Anchor->PrimaryComponentTick);
+					}
+					if (!Anchor || !Anchor->IsActiveForOwner())
+					{
+						Cam->SetSubjectOverride(GSTNPlaytestCamera::MakeSubject(*Viewed, nullptr));
+					}
 				}
 				// Look input (2026-11-21 fix of the pitch lock): the camera reads the control rotation change itself, BEFORE it writes the control
 				// rotation back. The first wiring measured it here, after the write back, so the camera's own motion came back as input every frame
@@ -438,6 +462,16 @@ void UGSTN_PlaytestCameraSubsystem::Tick(float DeltaTime)
 				}
 			}
 		}
+	}
+}
+
+void UGSTN_PlaytestCameraSubsystem::OnSubjectAnchorUpdated(const UGSTN_CameraAnchorComponent& Anchor)
+{
+	APawn* Viewed = Cast<APawn>(Anchor.GetOwner());
+	UGSTN_CameraComponent* Cam = Viewed ? Viewed->FindComponentByClass<UGSTN_CameraComponent>() : nullptr;
+	if (Cam && Cam->IsActive() && GSTNPlaytestCamera::CVarP1a.GetValueOnGameThread() != 0)
+	{
+		Cam->SetSubjectOverride(GSTNPlaytestCamera::MakeSubject(*Viewed, &Anchor));
 	}
 }
 

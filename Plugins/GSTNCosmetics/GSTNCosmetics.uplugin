@@ -1,0 +1,25 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Cosmetics",
+	"Description": "Modular cosmetic themes (skin-cosmetici-modulari.md): a theme is sold once and decorates any conforming item. Items declare where they can be decorated (slots with envelopes, decorative splines), themes declare how (pieces per slot class, spline modules, a layered material and style channels). Phase 1: data, the deterministic placement plan, validation and the cache key. Presentation only: nothing in the simulation reads it, pieces never collide.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNCosmeticsCore",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

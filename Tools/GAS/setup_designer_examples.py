@@ -35,7 +35,7 @@ MOVES = {
         damage=8.0, base_knockback=900.0, knockback_growth=0.0, angle_deg=80.0, hitstop_frames=8, attacker_hitstop_frames=6,
         montage=TAKEDOWN.format('L'), montage_play_rate=1.2)),
 }
-# Startup steering (owner 2026-11-14, handoffs/attack-aiming-research.md): which stick turns the move, how far (cap, deg), how fast (deg/s at
+# Startup steering (owner 2026-11-14, handoffs/archivio/2026-11/attack-aiming-research.md): which stick turns the move, how far (cap, deg), how fast (deg/s at
 # 62.5 Hz: 450 = 7.2 deg/frame) and until which frame (-1 = the first active frame). Written on every run: these are the test profiles.
 #   Strong   left stick (Monster Hunter style), up to 90 deg, slow: the heavy charge that corrects its aim
 #   Special  "signature" profile (Helm Breaker style): either stick, any direction (180) but only in its first 6 frames, fast
