@@ -185,8 +185,10 @@ def step_mesh():
     mat_lib = None
     for lib_name in ('GeometryScript_Materials', 'GeometryScript_MeshMaterialFunctions', 'GeometryScript_MeshMaterials'):
         mat_lib = getattr(unreal, lib_name, None)
-        if mat_lib and hasattr(mat_lib, 'enable_material_ids'):
-            mat_lib.enable_material_ids(mesh)
+        # UE's Python name of EnableMaterialIDs is enable_material_i_ds (the IDs split into I + Ds)
+        enable = mat_lib and (getattr(mat_lib, 'enable_material_ids', None) or getattr(mat_lib, 'enable_material_i_ds', None))
+        if enable:
+            enable(mesh)
             break
     else:
         p('mesh: WARNING no enable_material_ids; material libs:', api_names(unreal, ['geometryscript_mat']))
