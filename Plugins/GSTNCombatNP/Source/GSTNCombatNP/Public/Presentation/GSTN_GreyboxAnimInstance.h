@@ -54,6 +54,15 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	float MaxTurnLeanDeg = 25.f;
 
 	/**
+	 * Low-pass on the acceleration the lean and the start squash read, Hz; 0 = raw. The acceleration is the velocity's change between two
+	 * anim frames, and the simulation moves at its own fixed rate, so frame to frame it jumps (a frame without a sim step reads 0, the next
+	 * one double); at sprint speed a small stick wobble is also a big sideways acceleration (v²/r). Raw, both kicked the under-damped lean
+	 * spring into a shake (owner 2026-11-24: "oscilla violentemente" at the third run stage)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Lean", meta = (ClampMin = "0", ClampMax = "60", ForceUnits = "Hz"))
+	float AccelerationFilterHz = 6.f;
+
+	/**
 	 * Run stop plant (owner 2026-11-24, Mario 3D World Toad): when a run starts braking hard, the body kicks backward for a moment, as if a
 	 * foot went forward, then the spring brings it back. Peak of the kick, degrees; 0 turns it off.
 	 */
@@ -190,21 +199,43 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "1", ForceUnits = "cm/s"))
 	float FullSwaySpeed = 500.f;
 
+	/**
+	 * Highest sway cadence, cycles per second (two steps each); 0 = no cap. Faster than this the stride lengthens instead (owner
+	 * 2026-11-24: the run swayed violently at the third stage: speed / StrideLength gave 5 Hz at 850 cm/s, every rock and twist twice as
+	 * fast as the run's). A cartoon sprint reads by its lean and length of stride, not by a faster shake
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "0", ClampMax = "15", ForceUnits = "Hz"))
+	float MaxSwayCadenceHz = 3.2f;
+
+	/**
+	 * Sprint: past FullSwaySpeed the sway shrinks to SprintSwayScale of the run's at SprintSwaySpeed (the later run stages), so the faster
+	 * body is steadier, not wilder. SprintSwayScale 1 = the old behaviour (full sway at any speed)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "1", ForceUnits = "cm/s"))
+	float SprintSwaySpeed = 800.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "0", ClampMax = "1"))
+	float SprintSwayScale = 0.55f;
+
+	/** Forward lean held while running, reached at SprintSwaySpeed (degrees; scales with the speed from 0 at rest): a sprint tips forward */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "0", ClampMax = "30", ForceUnits = "deg"))
+	float SprintForwardLeanDeg = 6.f;
+
 	/** Bob: squash on each footfall, twice per cycle (fraction of the height) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "0", ClampMax = "0.5"))
-	float BobSquash = 0.07f;
+	float BobSquash = 0.05f;
 
 	/** Side rock toward the stepping foot, once per cycle */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "0", ClampMax = "45", ForceUnits = "deg"))
-	float RockRollDeg = 7.f;
+	float RockRollDeg = 4.5f;
 
 	/** Forward nod on each footfall, twice per cycle */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "0", ClampMax = "45", ForceUnits = "deg"))
-	float NodPitchDeg = 4.f;
+	float NodPitchDeg = 3.f;
 
 	/** Body twist with the stride (the nose wiggles), once per cycle */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "0", ClampMax = "45", ForceUnits = "deg"))
-	float TwistYawDeg = 8.f;
+	float TwistYawDeg = 5.f;
 
 	/** Frantic run start (run-start-frantic: Toad timing ~0.6 s): after leaving rest, the sway runs at this fixed cadence, not the speed's */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Sway", meta = (ClampMin = "0", ClampMax = "2", ForceUnits = "s"))
@@ -281,6 +312,12 @@ public:
 	/** Pure: 0..1 how frantic the run start still is, TimeSinceStart seconds after leaving rest (negative = not started) */
 	static float FranticAlpha(const FGSTN_GreyboxShapeSettings& Settings, float TimeSinceStart);
 
+	/** Pure: one step of the acceleration low-pass (AccelerationFilterHz; 0 returns Raw) */
+	static FVector FilterAcceleration(const FGSTN_GreyboxShapeSettings& Settings, const FVector& Filtered, const FVector& Raw, float DeltaSeconds);
+
+	/** Pure: the held forward lean of the run for a ground speed (degrees, positive = top forward) */
+	static float RunForwardLeanDeg(const FGSTN_GreyboxShapeSettings& Settings, float Speed2D);
+
 	/** Pure: sway cycles per second for a ground speed and a frantic alpha */
 	static float SwayCadenceHz(const FGSTN_GreyboxShapeSettings& Settings, float Speed2D, float Frantic);
 
@@ -345,6 +382,8 @@ private:
 	FGSTN_GreyboxSpring PitchSpring;
 	FGSTN_GreyboxSpring RollSpring;
 	FVector PreviousVelocity = FVector::ZeroVector;
+	/** The horizontal acceleration after the low-pass (AccelerationFilterHz) */
+	FVector FilteredAcceleration = FVector::ZeroVector;
 	bool bHasPrevious = false;
 	bool bWasOnGround = true;
 	float LastAirVelocityZ = 0.f;

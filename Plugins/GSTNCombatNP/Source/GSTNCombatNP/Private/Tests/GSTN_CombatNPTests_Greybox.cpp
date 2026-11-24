@@ -87,6 +87,28 @@ bool FGSTN_GreyboxShapeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("run start cadence faster than the speed's"), UGSTN_GreyboxAnimInstance::SwayCadenceHz(Settings, 150.f, 1.f)
 		> 2.f * UGSTN_GreyboxAnimInstance::SwayCadenceHz(Settings, 150.f, 0.f));
 	TestTrue(TEXT("still = no cadence"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::SwayCadenceHz(Settings, 0.f, 0.f)));
+	// Owner 2026-11-24 (violent sway at the third run stage): the cadence stops growing, the sprint sways less and leans forward
+	TestTrue(TEXT("sprint cadence capped"), UGSTN_GreyboxAnimInstance::SwayCadenceHz(Settings, 850.f, 0.f) <= Settings.MaxSwayCadenceHz + KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("sprint sways less than the run"), UGSTN_GreyboxAnimInstance::SwayAmplitudeTarget(Settings, Settings.SprintSwaySpeed, 0.f)
+		< UGSTN_GreyboxAnimInstance::SwayAmplitudeTarget(Settings, Settings.FullSwaySpeed, 0.f));
+	TestTrue(TEXT("sprint sway at its scale"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::SwayAmplitudeTarget(Settings,
+		Settings.SprintSwaySpeed * 1.5f, 0.f), Settings.SprintSwayScale));
+	TestTrue(TEXT("sprint leans forward"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::RunForwardLeanDeg(Settings, Settings.SprintSwaySpeed),
+		Settings.SprintForwardLeanDeg) && FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::RunForwardLeanDeg(Settings, 0.f)));
+	{
+		// One frame spike of the raw acceleration (a frame with two sim steps) is cut, a held one is reached
+		const FVector Spike = UGSTN_GreyboxAnimInstance::FilterAcceleration(Settings, FVector::ZeroVector, FVector(6000.f, 0.f, 0.f), 1.f / 120.f);
+		TestTrue(TEXT("one-frame spike damped"), Spike.X < 2000.f && Spike.X > 0.f);
+		FVector Held = FVector::ZeroVector;
+		for (int32 Frame = 0; Frame < 120; ++Frame)
+		{
+			Held = UGSTN_GreyboxAnimInstance::FilterAcceleration(Settings, Held, FVector(1000.f, 0.f, 0.f), 1.f / 120.f);
+		}
+		TestTrue(TEXT("held acceleration reached"), FMath::IsNearlyEqual(Held.X, 1000.f, 1.f));
+		FGSTN_GreyboxShapeSettings Raw = Settings;
+		Raw.AccelerationFilterHz = 0.f;
+		TestTrue(TEXT("filter off = raw"), UGSTN_GreyboxAnimInstance::FilterAcceleration(Raw, FVector::ZeroVector, FVector(6000.f, 0.f, 0.f), 0.01f).X == 6000.f);
+	}
 	float NodPitch = 0.f;
 	const FVector AtFootfall = UGSTN_GreyboxAnimInstance::RunSway(Settings, 0.f, 1.f, NodPitch);
 	TestTrue(TEXT("footfall bobs down and nods forward"), AtFootfall.X < 0.f && NodPitch < 0.f);

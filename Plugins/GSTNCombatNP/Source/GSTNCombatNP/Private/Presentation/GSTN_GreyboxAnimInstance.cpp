@@ -64,15 +64,43 @@ float UGSTN_GreyboxAnimInstance::FranticAlpha(const FGSTN_GreyboxShapeSettings& 
 	return 1.f - FMath::Clamp((TimeSinceStart - Settings.FranticSeconds) / FMath::Max(Settings.FranticFadeSeconds, 0.01f), 0.f, 1.f);
 }
 
+FVector UGSTN_GreyboxAnimInstance::FilterAcceleration(const FGSTN_GreyboxShapeSettings& Settings, const FVector& Filtered, const FVector& Raw,
+	float DeltaSeconds)
+{
+	if (Settings.AccelerationFilterHz <= 0.f)
+	{
+		return Raw;
+	}
+	// Exact first-order low-pass for this frame's length (frame-rate independent)
+	const float Alpha = 1.f - FMath::Exp(-2.f * PI * Settings.AccelerationFilterHz * FMath::Max(DeltaSeconds, 0.f));
+	return FMath::Lerp(Filtered, Raw, Alpha);
+}
+
+float UGSTN_GreyboxAnimInstance::RunForwardLeanDeg(const FGSTN_GreyboxShapeSettings& Settings, float Speed2D)
+{
+	return Settings.SprintForwardLeanDeg * FMath::Clamp(FMath::Max(Speed2D, 0.f) / FMath::Max(Settings.SprintSwaySpeed, 1.f), 0.f, 1.f);
+}
+
 float UGSTN_GreyboxAnimInstance::SwayCadenceHz(const FGSTN_GreyboxShapeSettings& Settings, float Speed2D, float Frantic)
 {
-	const float BySpeed = FMath::Max(Speed2D, 0.f) / FMath::Max(Settings.StrideLength, 1.f);
+	float BySpeed = FMath::Max(Speed2D, 0.f) / FMath::Max(Settings.StrideLength, 1.f);
+	if (Settings.MaxSwayCadenceHz > 0.f)
+	{
+		BySpeed = FMath::Min(BySpeed, Settings.MaxSwayCadenceHz);
+	}
 	return FMath::Lerp(BySpeed, FMath::Max(Settings.FranticCadenceHz, BySpeed), FMath::Clamp(Frantic, 0.f, 1.f));
 }
 
 float UGSTN_GreyboxAnimInstance::SwayAmplitudeTarget(const FGSTN_GreyboxShapeSettings& Settings, float Speed2D, float Frantic)
 {
-	const float BySpeed = FMath::Clamp(FMath::Max(Speed2D, 0.f) / FMath::Max(Settings.FullSwaySpeed, 1.f), 0.f, 1.f);
+	const float Speed = FMath::Max(Speed2D, 0.f);
+	float BySpeed = FMath::Clamp(Speed / FMath::Max(Settings.FullSwaySpeed, 1.f), 0.f, 1.f);
+	if (Settings.SprintSwaySpeed > Settings.FullSwaySpeed)
+	{
+		// Sprint: the sway shrinks from the run's to SprintSwayScale between FullSwaySpeed and SprintSwaySpeed
+		const float SprintAlpha = FMath::Clamp((Speed - Settings.FullSwaySpeed) / (Settings.SprintSwaySpeed - Settings.FullSwaySpeed), 0.f, 1.f);
+		BySpeed *= FMath::Lerp(1.f, Settings.SprintSwayScale, SprintAlpha);
+	}
 	return FMath::Lerp(BySpeed, Settings.FranticAmplitude, FMath::Clamp(Frantic, 0.f, 1.f));
 }
 
@@ -125,6 +153,7 @@ void UGSTN_GreyboxAnimInstance::NativeInitializeAnimation()
 	SquashSpring.Value = 1.f;
 	SquashSpring.Velocity = 0.f;
 	bHasPrevious = false;
+	FilteredAcceleration = FVector::ZeroVector;
 	Shape.LimbScale = ShapeSettings.bShowLimbsInLocomotion ? 1.f : 0.f;
 }
 
@@ -149,7 +178,9 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	if (bHasPrevious)
 	{
 		Acceleration3D = (Velocity - PreviousVelocity) / DeltaSeconds;
-		Acceleration = FVector(Acceleration3D.X, Acceleration3D.Y, 0.f);
+		// The lean, the start squash and the run stop read the filtered horizontal part; the wall brake keeps the raw 3D one
+		FilteredAcceleration = FilterAcceleration(ShapeSettings, FilteredAcceleration, FVector(Acceleration3D.X, Acceleration3D.Y, 0.f), DeltaSeconds);
+		Acceleration = FilteredAcceleration;
 	}
 	const bool bOnWall = MoverComponent && ShapeSettings.WallModeNames.Contains(MoverComponent->GetMovementModeName());
 	PreviousVelocity = Velocity;
@@ -203,6 +234,11 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// On a wall the body is braced like on the ground (no air stretch from the slide's vertical speed), and leans its top off the wall
 	const bool bBraced = bOnGround || bOnWall;
 	FRotator LeanGoal = bBraced ? LeanTarget(ShapeSettings, Local) : FRotator::ZeroRotator;
+	if (bOnGround)
+	{
+		// The run's held forward lean (pitch up = top back, so forward is minus)
+		LeanGoal.Pitch -= RunForwardLeanDeg(ShapeSettings, FVector(Velocity.X, Velocity.Y, 0.f).Size());
+	}
 	WallNormal = bOnWall ? FindWallNormal(*Owner, BodyQuat) : FVector::ZeroVector;
 	const FVector LocalNormal = BodyQuat.UnrotateVector(WallNormal);
 	if (!WallNormal.IsNearlyZero())
