@@ -299,4 +299,31 @@ bool FGSTN_DefenceTechBounceHeightTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DefenceGroundBounceMomentumTest, "GSTNDefence.Core.Landing.GroundBounceMomentum", GSTNDefenceTest::Flags)
+bool FGSTN_DefenceGroundBounceMomentumTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-24 (A): the missed-tech bounce keeps part of the landing's horizontal speed and the stick adds its own
+	FGSTN_GroundBounceRules Rules;
+	Rules.GroundBounceMomentumKeep = 0.4f;
+	Rules.GroundBounceStickSpeed = 400.f;
+	const FVector Up = FVector::UpVector;
+	const FVector Landing(2800.0, 0.0, -1500.0);
+
+	TestTrue(TEXT("neutral stick: 40 % of the horizontal, nothing of the vertical"), UGSTN_DefenceMath::GroundBounceMomentum(Rules, Up, FVector::ZeroVector, Landing).Equals(FVector(1120.0, 0.0, 0.0), 1e-6));
+	TestTrue(TEXT("stick along: adds its speed"), UGSTN_DefenceMath::GroundBounceMomentum(Rules, Up, FVector(1.0, 0.0, 0.0), Landing).Equals(FVector(1520.0, 0.0, 0.0), 1e-6));
+	TestTrue(TEXT("stick back: holds back"), UGSTN_DefenceMath::GroundBounceMomentum(Rules, Up, FVector(-1.0, 0.0, 0.0), Landing).Equals(FVector(720.0, 0.0, 0.0), 1e-6));
+	TestTrue(TEXT("stick sideways, half tilt"), UGSTN_DefenceMath::GroundBounceMomentum(Rules, Up, FVector(0.0, 0.5, 0.0), Landing).Equals(FVector(1120.0, 200.0, 0.0), 1e-6));
+	TestTrue(TEXT("a stick beyond 1 counts as full"), UGSTN_DefenceMath::GroundBounceMomentum(Rules, Up, FVector(3.0, 0.0, 0.0), Landing).Equals(FVector(1520.0, 0.0, 0.0), 1e-6));
+
+	Rules.GroundBounceMaxHorizontalSpeed = 1000.f;
+	TestTrue(TEXT("the cap"), FMath::IsNearlyEqual(UGSTN_DefenceMath::GroundBounceMomentum(Rules, Up, FVector(1.0, 0.0, 0.0), Landing).Size(), 1000.0, 1e-6));
+
+	Rules = FGSTN_GroundBounceRules();
+	Rules.GroundBounceMomentumKeep = 0.f;
+	Rules.GroundBounceStickSpeed = 0.f;
+	TestTrue(TEXT("both at 0: the old vertical hop"), UGSTN_DefenceMath::GroundBounceMomentum(Rules, Up, FVector(1.0, 0.0, 0.0), Landing).IsZero());
+	TestTrue(TEXT("tilted gravity: only the plane part"), UGSTN_DefenceMath::GroundBounceMomentum(FGSTN_GroundBounceRules(), FVector(1.0, 0.0, 0.0), FVector::ZeroVector, FVector(-900.0, 500.0, 0.0)).Equals(FVector(0.0, 200.0, 0.0), 1e-6));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

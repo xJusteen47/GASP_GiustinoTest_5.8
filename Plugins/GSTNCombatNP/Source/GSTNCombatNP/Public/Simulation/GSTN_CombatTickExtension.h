@@ -125,6 +125,12 @@ struct FGSTN_CombatTickContext
 	FVector StickOnPlane = FVector::ZeroVector;
 	FVector Up = FVector::UpVector;
 
+	/**
+	 * The entity's velocity at the end of the previous frame, world space, as the impact step reads it (the victim step only: the landing
+	 * bounce's momentum, owner 2026-11-24). Zero elsewhere and in a test that sets none
+	 */
+	FVector Velocity = FVector::ZeroVector;
+
 	/** The same stick as the command holds it: x right, y forward, -1..1, relative to the camera */
 	FVector2D Stick = FVector2D::ZeroVector;
 

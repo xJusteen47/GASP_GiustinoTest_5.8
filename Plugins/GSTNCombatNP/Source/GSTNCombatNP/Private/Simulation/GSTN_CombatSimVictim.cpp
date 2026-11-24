@@ -136,6 +136,10 @@ void UGSTN_CombatSimComponent::RunVictimStep(const FNetSimTimeStep& TimeStep, co
 			ReadOwnPose(Pose, Up);
 		}
 		FillHookContext(VictimContext, Cmd, Up);
+		if (Self)
+		{
+			VictimContext.Velocity = Self->Velocity;
+		}
 	}
 
 	// The surface impact of a tumbling victim: the contact the knockback move's probe made on the frame before, from Mover's tracked state

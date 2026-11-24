@@ -388,7 +388,12 @@ void FGSTN_TumbleLanding::EnterDowned(FGSTN_CombatTickContext& Context, const FG
 	const double BounceSpeed = bNoBounce ? 0.0
 		: FixedHeight >= 0.0 ? UGSTN_DefenceMath::BounceSpeedForHeight(Bounce, FixedHeight, Gravity)
 		: UGSTN_DefenceMath::TechBounceSpeed(Bounce, ImpactSpeed, Gravity);
-	const FVector Velocity = BounceSpeed > 0.0 ? UGSTN_DefenceMath::GroundBounceVelocityAtSpeed(Bounce, Context.Up, Context.StickOnPlane, BounceSpeed) : FVector::ZeroVector;
+	// Momentum and control (owner 2026-11-24, A): the bounce keeps part of the landing's horizontal speed and the stick adds its own, so a
+	// launch reads to the ground and the victim chooses where it falls. Both from the frame's inputs and the tracked velocity: deterministic
+	const FVector Velocity = BounceSpeed > 0.0
+		? UGSTN_DefenceMath::GroundBounceVelocityAtSpeed(Bounce, Context.Up, Context.StickOnPlane, BounceSpeed)
+			+ UGSTN_DefenceMath::GroundBounceMomentum(Bounce, Context.Up, Context.StickOnPlane, Context.Velocity)
+		: FVector::ZeroVector;
 	// Heavier gravity makes it small AND quick (react-hook-1 review: 300 cm/s under normal gravity rose 44 cm and floated about 34 frames)
 	const float GravityScale = FMath::Max(Bounce.GroundBounceGravityScale, 0.01f);
 	const double Rise = FMath::Max(Velocity.Dot(Context.Up), 0.0);
