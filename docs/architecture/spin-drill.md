@@ -414,6 +414,29 @@ They are **not** a drill-specific system: they are members of an activation zone
 - **Tests**: harness `screw_spin_steps`, `screw_drill_continuous`, `knob_clamps_no_detach` live with the activation plugin's tests and
   use the spin abilities of this plugin.
 
+### 13d. What was built first (owner 2026-11-24): the Spin Turnable interface and the floor screw
+
+The owner asked for "only an interface" because many level things will start from a spin. Built instead of the activation zones above
+(they stay a proposal):
+
+- `IGSTN_SpinTurnable` (`GSTNSpinDrillCore`, `World/GSTN_SpinTurnable.h`), Blueprint implementable: `OnSpinTurned(Turner, Sense, Source)`
+  and `CanBeSpinTurned(Turner)`. Sense +1 clockwise, -1 counter-clockwise; Source Spin or Drill.
+- `UGSTN_SpinTurnSubsystem` (`GSTNSpinDrillNP`) calls it **on the authority only**, from the authoritative events
+  `Combat.Event.Spin.Started` (new, published at the first frame of every spin, sense in the event tags) and `Combat.Event.Drill.GroundLag`
+  (sense of the spin the dive came from): spin = turnables overlapping 130 cm around the spinner; drill = turnables overlapping 60 cm at
+  the driller's feet. Level objects are ordinary replicated actors: never predicted, never rolled back. `TurnInReach` is public for scripts.
+- The drill does **not** latch on a turnable (a latch needs a combat target): one dive = one bite (`DrillSteps`). A screw bored in
+  continuously is the parts screw of combat-parts.md 3.4 on a combat target; possible later without changing the interface.
+- `AGSTN_SpinScrew` (bridge plugin `GSTNSpinScrew`, the only module that knows GSTNSpinDrill and GSTNHeld): greybox head + shaft + slot,
+  `StepsToRelease` 6 (owner 3A), `SpinSteps` 1, `DrillSteps` 3, `LoosenSense` -1, `bOppositeTightens`. Out: `OnReleased`, then
+  `Release` = `ToHandOrFloor` (default: a `AGSTN_SpinScrewPickup` held object, picked up by the turner when nothing occupies the hands,
+  else it rests on the floor) or `PopAndVanish`.
+
+**Future screw kinds (owner 2026-11-24, not built, note only):**
+1. **Rising platform screw**: unscrewing raises it as a platform; once fully out it locks at the top.
+2. **Spring-back screw**: unscrewed, it goes back to its place by itself after a set time (e.g. to close gates automatically again).
+Both are `AGSTN_SpinScrew` children or siblings implementing the same interface; no change to the spin side.
+
 ## 14. Domande per Giustino (italiano)
 
 Ognuna ha una mia proposta; se non rispondi, il piano usa la proposta (colonna "se non rispondi" nel piano).
