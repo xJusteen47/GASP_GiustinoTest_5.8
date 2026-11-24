@@ -11,6 +11,7 @@ sys.path.insert(0, str(HERE.parent / "gstn_anim_mcp"))
 sys.path.insert(0, str(HERE))
 
 import capture_move  # noqa: E402
+from animpipe import life  # noqa: E402  (capture_move puts Tools/AnimPipeline on the path)
 import motion_overlay  # noqa: E402
 import no_stop_gate  # noqa: E402
 import review_pack  # noqa: E402
@@ -28,7 +29,14 @@ def _body(pelvis_z):
     return j
 
 
+# These tests prove the metrics as gates: they run as if life_calibrate.py had written the proof for them (owner 2A
+# 2026-11-24). test_without_proof_the_stop_is_a_measure checks the real default (no proof = measure, never silent).
+PROVEN = {"still_runs", "stops", "hold_alive"}
+life.blocking_metrics = lambda: set(PROVEN)
+
 SETTLE_STOP = [5.0 * min(i, 6) + 5.0 * max(0, i - 12) for i in range(20)]   # still on steps 6..11 (6 frames), then moves again
+# the same settle with a LIVE hold (owner 1A 2026-11-24): the pelvis keeps drifting 0.3 cm/step through it (1.8 cm >= 1.0)
+SETTLE_LIVE = [z + 0.3 * min(max(0, i - 6), 6) for i, z in enumerate(SETTLE_STOP)]
 
 
 class TestNoStopGate(unittest.TestCase):
@@ -37,13 +45,28 @@ class TestNoStopGate(unittest.TestCase):
         self.assertFalse(r["ok"])
         self.assertEqual(r["still_runs"], [(6, 11)])
         self.assertEqual(r["stills"], list(range(6, 12)))
-        self.assertTrue(no_stop_gate.check(_body(SETTLE_STOP), holds="6-12")["ok"])
+        self.assertTrue(no_stop_gate.check(_body(SETTLE_LIVE), holds="6-12:settle hold")["ok"])
+        # owner 1A: declaring a DEAD hold buys nothing, a concrete block stays a defect
+        dead = no_stop_gate.check(_body(SETTLE_STOP), holds="6-12:settle hold")
+        self.assertFalse(dead["ok"])
+        self.assertIn("dead", dead["lines"][0])
         self.assertTrue(no_stop_gate.check(_body([5.0 * i for i in range(20)]))["ok"])
 
     def test_startup_window_blocks_a_single_still_step(self):
         z = [5.0 * i for i in range(8)] + [35.0] + [35.0 + 5.0 * i for i in range(1, 11)]   # one still step 7->8
         self.assertTrue(no_stop_gate.check(_body(z))["ok"])            # a single still step is not a run in a settle
         self.assertFalse(no_stop_gate.check(_body(z), startup="0-12")["ok"])   # but the startup allows none
+
+    def test_without_proof_the_stop_is_a_measure(self):
+        r = no_stop_gate.check(_body(SETTLE_STOP), blocking=set())
+        self.assertTrue(r["ok"])
+        self.assertTrue(r["measures"]["still_runs"].startswith("WOULD FAIL"))
+        self.assertIn("still_runs", r["lines"][-1])
+
+    def test_bare_hold_range_needs_a_reason(self):
+        r = no_stop_gate.check(_body(SETTLE_STOP), holds="6-12", blocking=set())
+        self.assertFalse(r["ok"])
+        self.assertIn("hold_reason", r["lines"][0])
 
     def test_no_pelvis_is_a_failure_not_a_pass(self):
         self.assertFalse(no_stop_gate.check({"head": [[0, 0, i] for i in range(5)]})["ok"])
@@ -53,7 +76,8 @@ class TestNoStopGate(unittest.TestCase):
             p = Path(t) / "j.json"
             p.write_text(json.dumps({"fps": 30, "joints": _body(SETTLE_STOP)}))
             self.assertEqual(no_stop_gate.main([str(p)]), 1)
-            self.assertEqual(no_stop_gate.main([str(p), "--holds=6-12"]), 0)
+            p.write_text(json.dumps({"fps": 30, "joints": _body(SETTLE_LIVE)}))
+            self.assertEqual(no_stop_gate.main([str(p), "--holds=6-12:settle hold"]), 0)
 
 
 class TestGateOnEveryClip(unittest.TestCase):
@@ -70,7 +94,8 @@ class TestGateOnEveryClip(unittest.TestCase):
             self.assertFalse(ns["ok"])
             self.assertEqual(ns["clips_failed"], ["AS_K6_SettleShared"])
             self.assertIn("ereditato", ns["msg"])
-            # the owner-declared hold is the only way through
+            # a declared LIVE hold is the only way through (owner 1A: a dead one stays a defect even when declared)
+            _write_joints(root, "AS_K6_SettleShared", _body(SETTLE_LIVE))
             g2 = capture_move.precapture_gate(root, VAR, BASE, h, [CLIP_VAR, shared], (0, 19), "settle", hitbox_required=False,
                                               base_clips=[CLIP_BASE, shared], no_stop={"holds": {"AS_K6_SettleShared": "6-12"},
                                                        "hold_reasons": {"AS_K6_SettleShared": "test: owner-wanted landing hold"}})

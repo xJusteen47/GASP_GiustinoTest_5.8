@@ -3,7 +3,8 @@
 Why: K7/K8 read stop-and-go and nobody saw it, because no gate measured stops (diagnosis dropkick-k8-3) and the inherited
 settle of K6 (still ~6 frames on the ground, v158-163) was never judged again. `animpipe check` measures the card it builds
 (stop_and_go in animpipe/checks.py); this tool measures any clip from its joints dump, cards or not, so the capture gate can
-check the clips a variant only INHERITS too. The thresholds and the math are animpipe/curves.py (one definition, no copy):
+check the clips a variant only INHERITS too. Since the unified skill (2026-11-24) the verdict is animpipe/life.py (one
+definition, no copy; each metric blocks only with its calibration proof, owner 2A). The STOP marks below stay for the sheets:
   still step: every tracked point (pelvis in component space; hands, forearms, head, feet relative to the pelvis) moves
               < stop_cm in one anim frame;
   whole clip: no run of more than still_run consecutive still steps outside the declared holds (settle, loop, landing);
@@ -26,6 +27,7 @@ if _TOOLS not in sys.path:
     sys.path.insert(0, _TOOLS)
 
 from animpipe import curves as CV  # noqa: E402
+from animpipe import life  # noqa: E402
 
 # joints-dump bone -> curves point name (curves.GATE_POINTS + pelvis)
 DUMP_POINTS = {"pelvis": "pelvis", "hand_MainPoint_l": "hand_l", "hand_MainPoint_r": "hand_r",
@@ -69,25 +71,49 @@ def still_steps(F: list[dict[str, tuple]], holds: set[int] = frozenset(), stop_c
     return [f for f, (d, _) in enumerate(CV.body_steps(F)) if f not in holds and d < stop_cm]
 
 
+def _holds(spec: Any) -> list[tuple[int, int, str]]:
+    """'a-b:why,c-d:why' / [{frames, why}] -> life holds. A bare range ('a-b', [a, b]) has no reason: hold_reason fails
+    (owner 1A 2026-11-24: a hold is declared WITH its reason, then judged on video)."""
+    if not spec:
+        return []
+    if (isinstance(spec, str) and ":" in spec) or (isinstance(spec, list) and spec and isinstance(spec[0], dict)):
+        return life.parse_holds(spec)
+    steps = sorted(parse_ranges(spec))
+    out: list[tuple[int, int, str]] = []
+    for f in steps:                                   # contiguous steps -> one hold
+        if out and out[-1][1] == f:
+            out[-1] = (out[-1][0], f + 1, "")
+        else:
+            out.append((f, f + 1, ""))
+    return out
+
+
 def check(joints: dict[str, list], holds: Any = None, startup: Any = None, stop_cm: float = CV.STOP_CM,
-          max_ratio: float = CV.JUMP_RATIO, still_run: int = CV.STILL_RUN) -> dict[str, Any]:
-    """Gate one clip. Returns {ok, lines (<= 4), still_runs [(a, b)], stills [steps], steps [cm per step]}."""
+          max_ratio: float = CV.JUMP_RATIO, still_run: int = CV.STILL_RUN, blocking: Any = None) -> dict[str, Any]:
+    """Gate one clip with animpipe/life.py (the one source of the stop metrics, unified skill 2026-11-24): whole clip
+    still_runs, startup stops when `startup` is given, declared holds (reason, live core). Each metric blocks only with its
+    calibration proof (owner 2A, life_gate.json; `blocking` overrides it in tests); the others come back in `measures`.
+    stop_cm / max_ratio / still_run are kept for the STOP marks of the velocity sheets (`stills`), not for the verdict.
+    Returns {ok, lines (<= 4), still_runs [(a, b)], stills [steps], steps [cm per step], measures {name: line}}."""
     try:
         F = frames_from_joints(joints)
     except ValueError as exc:
-        return {"ok": False, "lines": [str(exc)], "still_runs": [], "stills": [], "steps": []}
-    held = parse_ranges(holds)
-    runs = CV.long_stills(F, held, stop_cm, int(still_run))
-    ok = not runs
-    lines = [f"whole clip ({len(F)} frames): still runs > {still_run} steps (< {stop_cm} cm/frame) outside holds: "
-             + (", ".join(f"{a}-{b + 1}" for a, b in runs) if runs else "none")]
-    if startup:
-        a, b = (int(x) for x in (startup.split("-") if isinstance(startup, str) else startup))
-        s_ok, s_line, _ = CV.stop_and_go(F, [a, b], held, stop_cm, max_ratio)
-        ok = ok and s_ok
-        lines.append("startup " + s_line)
+        return {"ok": False, "lines": [str(exc)], "still_runs": [], "stills": [], "steps": [], "measures": {}}
+    H = _holds(holds)
+    win = [int(x) for x in (startup.split("-") if isinstance(startup, str) else startup)] if startup else None
+    r = life.run(F, window=win, holds=H, gate=False)
+    r = life.apply_gate(r, blocking)
+    held = set()
+    for a, b, _ in H:
+        held |= set(range(a, b))
+    runs = CV.long_stills(F, held, life.thresholds()["life_dead_cm"], int(life.thresholds()["life_still_run"]))
+    bad = [k for k, v in r["block"].items() if not v[0]]
+    lines = [f"{k}: {r['block'][k][1]}" for k in bad][:3]
+    lines.append("measures (no calibration proof yet): " + ", ".join(f"{k} {str(v)[:60]}" for k, v in r["measure"].items()
+                                                                 if str(v).startswith("WOULD FAIL")) or "none failing")
     steps = [round(d, 2) for d, _ in CV.body_steps(F)]
-    return {"ok": ok, "lines": lines, "still_runs": runs, "stills": still_steps(F, held, stop_cm), "steps": steps}
+    return {"ok": not bad, "lines": lines[:4], "still_runs": runs, "stills": still_steps(F, held, stop_cm), "steps": steps,
+            "measures": r["measure"], "blocks": {k: v for k, v in r["block"].items()}}
 
 
 def main(argv: list[str]) -> int:

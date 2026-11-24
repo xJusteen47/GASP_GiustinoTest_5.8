@@ -14,6 +14,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from animpipe import curves as CV
 from animpipe import life
 
+
+def RAW(*a, **k):
+    """The metrics raw: these tests measure them; the calibration gate (owner 2A) has its own tests at the end."""
+    return life.run(*a, **dict(k, gate=False))
+
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "life")
 
 
@@ -23,7 +28,7 @@ def _clip(name):
 
 def test_stock_mocap_passes():
     for n in ("stock_land_idle", "stock_land_fwd", "stock_skid", "stock_jumpsquat"):
-        r = life.run(_clip(n))
+        r = RAW(_clip(n))
         assert r["verdict"] == "PASS", (n, r["block"])
         assert float(r["block"]["stop_sync"][1].split()[0]) <= 0.26, (n, r["block"]["stop_sync"])
 
@@ -36,7 +41,7 @@ def test_stock_landing_would_fail_at_action_threshold():
 
 
 def test_tangent_built_jab_fails_lockstep():
-    r = life.run(_clip("jabfk3_tangents"))
+    r = RAW(_clip("jabfk3_tangents"))
     assert not r["block"]["stop_sync"][0], r["block"]["stop_sync"]
 
 
@@ -71,7 +76,7 @@ def test_k7_pelvis_series_fails_stops():
     """K7 startup, pelvis cm/frame from the diagnosis dump: 3 2 0 0 5 3 3 0 1 2 3 1 4 9 12, limbs carried along."""
     pel = _cum([3, 2, 0, 0, 5, 3, 3, 0, 1, 2, 3, 1, 4, 9, 12])
     F = [{"pelvis": (x, 0.0, 100.0), **{p: (x + 10.0, 0.0, 120.0) for p in CV.GATE_POINTS}} for x in pel]
-    r = life.run(F, window=[0, 15])
+    r = RAW(F, window=[0, 15])
     assert not r["block"]["stops"][0], r["block"]["stops"]
 
 
@@ -79,7 +84,7 @@ def test_frozen_settle_fails_still_runs():
     """K6 settle (diagnosis: still for ~6 frames on the ground): a moving clip that freezes for 6 frames."""
     pel = _cum([6, 5, 4, 3, 2, 1.5] + [0.05] * 6 + [1, 1.5, 2])
     F = [{"pelvis": (x, 0.0, 100.0), "hand_l": (x + 20, 0, 120), "head": (x, 0, 170), "foot_l": (x, 10, 0)} for x in pel]
-    r = life.run(F)
+    r = RAW(F)
     assert not r["block"]["still_runs"][0], r["block"]["still_runs"]
 
 
@@ -91,28 +96,28 @@ ARM = [0, -2, -4, -5, -5.5, -5, -4, -2, 2, 10, 24, 30, 30, 29, 28, 27.5]
 
 
 def test_good_strike_passes():
-    r = life.run(_body(PEL, HAND, arm=ARM), contact=11, effector="hand_l")
+    r = RAW(_body(PEL, HAND, arm=ARM), contact=11, effector="hand_l")
     bad = {k: v for k, v in r["block"].items() if not v[0]}
     assert not bad, bad
 
 
 def test_even_spacing_fails_impact():
     hand = [52.0 * f / 11 for f in range(12)] + [52, 51, 50, 49]
-    r = life.run(_body(PEL, hand, arm=[0.6 * h for h in hand]), contact=11, effector="hand_l")
+    r = RAW(_body(PEL, hand, arm=[0.6 * h for h in hand]), contact=11, effector="hand_l")
     assert not r["block"]["impact"][0], r["block"]["impact"]
 
 
 def test_no_anticipation_fails():
     hand = [max(0.0, h) for h in HAND]
     pel = [max(0.0, p) for p in PEL]
-    r = life.run(_body(pel, hand, arm=[max(0.0, a) for a in ARM]), contact=11, effector="hand_l")
+    r = RAW(_body(pel, hand, arm=[max(0.0, a) for a in ARM]), contact=11, effector="hand_l")
     assert not r["block"]["anticipation"][0], r["block"]["anticipation"]
 
 
 def test_lockstep_peaks_fail_cascade():
     """Pelvis, forearm and hand peak on the same frame: everything arrives together."""
     pel = [0, -1, -2, -2.5, -2, -1, 0, 1, 2, 3, 4, 14, 14.5, 14.8, 15, 15.1]
-    r = life.run(_body(pel, HAND, arm=[0.6 * h for h in HAND]), contact=11, effector="hand_l")
+    r = RAW(_body(pel, HAND, arm=[0.6 * h for h in HAND]), contact=11, effector="hand_l")
     assert not r["block"]["cascade"][0], r["block"]["cascade"]
 
 
@@ -125,35 +130,39 @@ def _held_clip(core=0.3):
 
 
 def test_declared_hold_with_reason_exempts():
-    r = life.run(_held_clip(), holds=[(5, 10, "Ryu-style held smash pose")], cls="tilt")
-    assert r["block"]["still_runs"][0] and r["block"]["holds"][0], r["block"]
+    r = RAW(_held_clip(), holds=[(5, 10, "Ryu-style held smash pose")], cls="tilt")
+    assert r["block"]["still_runs"][0] and r["block"]["hold_reason"][0] and r["block"]["hold_alive"][0], r["block"]
 
 
 def test_hold_without_reason_fails():
-    r = life.run(_held_clip(), holds=[(5, 10, "")])
-    assert not r["block"]["holds"][0]
+    r = RAW(_held_clip(), holds=[(5, 10, "")])
+    assert not r["block"]["hold_reason"][0]
+    assert not life.run(_held_clip(), holds=[(5, 10, "")])["block"]["hold_reason"][0]   # a declaration rule: blocks ungated too
 
 
 def test_undeclared_hold_fails():
-    assert not life.run(_held_clip())["block"]["still_runs"][0]
+    assert not RAW(_held_clip())["block"]["still_runs"][0]
 
 
-def test_too_many_or_too_long_holds_fail():
+def test_hold_count_and_length_are_guides_not_blocks():
+    """Owner 2026-11-24 decision 1A: a live hold is a normal tool; 2 holds / 6 frames are numbers for the eye, never a block."""
     F = _held_clip()
-    assert not life.run(F, holds=[(1, 2, "a"), (3, 4, "b"), (5, 10, "c")])["block"]["holds"][0]
-    assert not life.run(F, holds=[(0, 12, "long")], cls="tilt")["block"]["holds"][0]
+    r = RAW(F, holds=[(1, 2, "a"), (3, 4, "b"), (5, 10, "c")])
+    assert "hold_holds" not in r["block"] and "guide 2" in r["measure"]["hold_guides"], r["measure"]
+    r = RAW(F, holds=[(0, 12, "long")], cls="tilt")
+    assert "guide 6" in r["measure"]["hold_guides"], r["measure"]
 
 
 def test_frozen_hold_on_strong_move_fails():
-    r = life.run(_held_clip(), holds=[(5, 10, "smash hold")], cls="smash", effector="hand_l")
-    assert not r["block"]["holds"][0], r["block"]["holds"]
+    r = RAW(_held_clip(), holds=[(5, 10, "smash hold")], cls="smash", effector="hand_l")
+    assert not r["block"]["hold_alive"][0], r["block"]["hold_alive"]
 
 
 def test_dead_hold_fails_on_every_class():
     """Owner 2026-11-24 (pose holds): a hold is normal, never a block of concrete. Pelvis 0.5 cm over 5 frames = dead."""
     for cls in ("tilt", "jab", ""):
-        r = life.run(_held_clip(core=0.1), holds=[(5, 10, "held pose")], cls=cls)
-        assert not r["block"]["holds"][0] and "dead" in r["block"]["holds"][1], (cls, r["block"]["holds"])
+        r = RAW(_held_clip(core=0.1), holds=[(5, 10, "held pose")], cls=cls)
+        assert not r["block"]["hold_alive"][0] and "dead" in r["block"]["hold_alive"][1], (cls, r["block"]["hold_alive"])
 
 
 # ------------------------------------------------------------------ slowmo review 2026-11-24: jab v12 FAIL, ftilt v3.1 PASS
@@ -172,20 +181,20 @@ def _ss(r):
 
 def test_fix1_stop_sync_skips_live_declared_hold_only():
     ft = life.load_clip(FTILT)
-    assert _ss(life.run(ft, cls="tilt")) == 0.35                       # undeclared: the kick hold counts
-    r = life.run(ft, holds=KICK_HOLD, cls="tilt")
-    assert r["block"]["holds"][0] and _ss(r) == 0.0 and r["verdict"] == "PASS", r["block"]
+    assert _ss(RAW(ft, cls="tilt")) == 0.35                       # undeclared: the kick hold counts
+    r = RAW(ft, holds=KICK_HOLD, cls="tilt")
+    assert r["block"]["hold_alive"][0] and _ss(r) == 0.0 and r["verdict"] == "PASS", r["block"]
     jab = life.load_clip(JAB)
-    base = life.run(jab, cls="jab")
+    base = RAW(jab, cls="jab")
     assert _ss(base) == 0.82 and not base["block"]["stop_sync"][0], base["block"]["stop_sync"]
     # declaring the jab's dead core does not buy an exemption: the hold fails and its minima still count
-    r = life.run(jab, holds=[(5, 9, "chamber")], cls="jab")
-    assert not r["block"]["holds"][0] and _ss(r) == 0.82, r["block"]
+    r = RAW(jab, holds=[(5, 9, "chamber")], cls="jab")
+    assert not r["block"]["hold_alive"][0] and _ss(r) == 0.82, r["block"]
 
 
 def test_fix1_flat_tail_is_one_minimum_per_part():
     """The 20 identical frames of the jab tail were ~17 minima per part (0.98 of 145); now one per part."""
-    r = life.run(life.load_clip(JAB), cls="jab")
+    r = RAW(life.load_clip(JAB), cls="jab")
     assert " of 17 speed minima" in r["block"]["stop_sync"][1], r["block"]["stop_sync"]
     # events are reported, not blocking: 2 of 4 would read 0.5 = the max and let the jab through (rule 17)
     assert "2 of 4 stop events shared" in r["block"]["stop_sync"][1], r["block"]["stop_sync"]
@@ -204,9 +213,9 @@ def test_fix3_no_dedupe_on_asset_dumps():
     """Identical frames in an asset ARE the freeze: the jab dead tail f18-37 must fail still_runs."""
     jab = life.load_clip(JAB)
     assert len(jab) == 38 and len(life.dedupe(jab)) == 19              # dedupe would hide 19 frames
-    r = life.run(jab, cls="jab")
+    r = RAW(jab, cls="jab")
     assert not r["block"]["still_runs"][0] and "18-37" in r["block"]["still_runs"][1], r["block"]["still_runs"]
-    assert life.run(life.dedupe(jab), cls="jab")["block"]["still_runs"][0]   # the old false negative
+    assert RAW(life.dedupe(jab), cls="jab")["block"]["still_runs"][0]   # the old false negative
 
 
 def test_fix3_captures_still_deduped(tmp_path=None):
@@ -231,6 +240,35 @@ def test_fix4_audit_table_whole_clip_at_dead_cm():
     assert jab[2] == "FAIL" and jab[3] == "18-37" and "stop_sync" in jab[11], jab
     jab = A.row(JAB, {"AS_JabV12_Build": "5-9:chamber"})
     assert jab[2] == "FAIL" and "dead" in jab[11], jab
+
+
+# ------------------------------------------------------------------ calibration gate (owner 2026-11-24 decision 2A)
+def _k7():
+    pel = _cum([3, 2, 0, 0, 5, 3, 3, 0, 1, 2, 3, 1, 4, 9, 12])
+    return [{"pelvis": (x, 0.0, 100.0), **{p: (x + 10.0, 0.0, 120.0) for p in CV.GATE_POINTS}} for x in pel]
+
+
+def test_gate_uncalibrated_metric_is_a_measure():
+    """No proof in life_gate.json: the K7 stop still shows, as WOULD FAIL in measure, and does not block."""
+    F = _k7()
+    raw = RAW(F, window=[0, 15])
+    r = life.apply_gate(RAW(F, window=[0, 15]), blocking=set())
+    assert not raw["block"]["stops"][0] and "stops" not in r["block"], r["block"]
+    assert r["measure"]["stops"].startswith("WOULD FAIL") and "owner 2A" in r["measure"]["stops"], r["measure"]
+
+
+def test_gate_calibrated_metric_blocks():
+    F = _k7()
+    r = life.apply_gate(RAW(F, window=[0, 15]), blocking={"stops"})
+    assert not r["block"]["stops"][0] and r["verdict"] == "FAIL", r["block"]
+
+
+def test_gate_file_never_hand_made_without_proof():
+    """life_gate.json lists only metrics with a proof row (pass_ok, fails_caught) from a complete calibration run."""
+    import json as _j
+    g = _j.load(open(life.GATE_FILE))
+    for k, v in g.get("blocking", {}).items():
+        assert v.get("fails_caught") and v.get("passes") and g.get("calib") in ("OK", "FAIL"), (k, v)
 
 
 if __name__ == "__main__":

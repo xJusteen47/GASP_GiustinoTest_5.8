@@ -34,7 +34,7 @@ def row(path, holds, T=None):
     name = os.path.basename(path)[len("joints_"):-len(".json")]
     F = life.load_clip(path)
     h = holds.get(name, "")
-    r = life.run(F, holds=h, T=T)
+    r = life.run(F, holds=h, T=T, gate=False)   # an audit measures every metric raw (calibration gate: animpipe check)
     held = set()
     for a, b, _ in life.parse_holds(h):
         held |= set(range(a, b))

@@ -177,38 +177,71 @@ def hold_core_cm(F, a, b):
 
 
 def judge_holds(F, holds, cls, eff, T, per_hold=False):
-    """A declaration cannot cover a defect: reason required, count and length capped, on EVERY class the core stays alive
-    (pelvis path >= life_hold_core_cm: a live hold vs a dead one), and on a strong move the held effector must also keep
-    its recoil without drifting off the pose. per_hold=True -> (problems, [(a, b) of the holds with no problem of their
-    own]): only those may exempt speed minima from stop_sync (a dead or undeclared hold never does)."""
-    probs = []
+    """Owner 2026-11-24 decision 1A (scope: all animations): a LIVE hold (pelvis or head keep moving) is a normal tool, declared
+    with its reason and judged on video; the defects are DEAD holds and stop-and-go. So the checks split three ways:
+      reasons -> holds without a written reason (a declaration rule, always blocking: see hold_reason in run());
+      alive   -> dead core (pelvis path < life_hold_core_cm on EVERY class), frozen effector on a strong move, a "hold" that
+                 moves too fast to be one: a METRIC, blocking only once calibrated (2A, life_gate.json);
+      guides  -> count > life_hold_max_count, length > life_hold_max_frames(_smash): numbers for the eye, never a block
+                 (the owner never approved them as caps).
+    per_hold=True -> (dict above, [(a, b) of the holds with no alive/reason problem]): only those exempt speed minima
+    from stop_sync (a dead or undeclared hold never does)."""
+    out = {"reasons": [], "alive": [], "guides": []}
     good = []
     if len(holds) > T["life_hold_max_count"]:
-        probs.append(f"{len(holds)} holds declared (max {T['life_hold_max_count']})")
+        out["guides"].append(f"{len(holds)} holds declared (guide {T['life_hold_max_count']}: check each is wanted)")
     cap = T["life_hold_max_frames_smash"] if cls in STRONG else T["life_hold_max_frames"]
     reach = max((CV._dist(_rel(F, eff, f), (0, 0, 0)) for f in range(len(F))), default=0.0) if eff in _pts(F) else 0.0
     for a, b, why in holds:
-        n0 = len(probs)
+        bad = False
         if not why:
-            probs.append(f"hold {a}-{b} has no reason")
+            out["reasons"].append(f"hold {a}-{b} has no reason")
+            bad = True
         if b - a > cap:
-            probs.append(f"hold {a}-{b} = {b - a} frames (max {cap} for class {cls or '-'})")
+            out["guides"].append(f"hold {a}-{b} = {b - a} frames (guide {cap} for class {cls or '-'})")
         if b > a and F and "pelvis" in F[0]:
             core = hold_core_cm(F, a, b)
             if core < T["life_hold_core_cm"]:
-                probs.append(f"hold {a}-{b} dead: pelvis travels {core:.1f} cm (a live hold needs >= {T['life_hold_core_cm']} cm)")
+                out["alive"].append(f"hold {a}-{b} dead: pelvis travels {core:.1f} cm (a live hold needs >= {T['life_hold_core_cm']} cm)")
+                bad = True
         if eff in _pts(F) and b > a and b < len(F):
             v = _speed(F, eff)[a:b]
             amp = max(CV._dist(_rel(F, eff, f), _rel(F, eff, a)) for f in range(a, b + 1))
             if cls in STRONG and amp < T["life_hold_alive_cm"]:
-                probs.append(f"hold {a}-{b} frozen: {eff} moves {amp:.1f} cm (strong move needs >= {T['life_hold_alive_cm']} cm recoil)")
+                out["alive"].append(f"hold {a}-{b} frozen: {eff} moves {amp:.1f} cm (strong move needs >= {T['life_hold_alive_cm']} cm recoil)")
+                bad = True
             if reach and max(v) > T["life_hold_speed_rel"] * reach:
-                probs.append(f"hold {a}-{b} is not a hold: {eff} {max(v):.1f} cm/frame > {T['life_hold_speed_rel']:.0%} of reach {reach:.0f}")
-        if len(probs) == n0:
+                out["alive"].append(f"hold {a}-{b} is not a hold: {eff} {max(v):.1f} cm/frame > {T['life_hold_speed_rel']:.0%} of reach {reach:.0f}")
+                bad = True
+        if not bad:
             good.append((a, b))
-    if len(holds) > T["life_hold_max_count"]:
-        good = []                              # too many declarations: none of them is trusted
-    return (probs, good) if per_hold else probs
+    return (out, good) if per_hold else out["reasons"] + out["alive"]
+
+
+# ------------------------------------------------------------------ calibration gate (owner 2026-11-24 decision 2A)
+GATE_FILE = os.path.join(HERE, "life_gate.json")
+DECLARATION = {"hold_reason"}        # declaration rules, not measures of motion: they block from day one
+
+
+def blocking_metrics():
+    """Metrics with a calibration proof (life_calibrate.py writes life_gate.json only from a COMPLETE run: every approved and
+    stock clip passes the metric, at least one known-bad clip fails it). A metric not listed is a MEASURE shown to the
+    reviewer: owner 2A, a new check is born as a measure and blocks only after its proof. Never edited by hand."""
+    try:
+        return set(json.load(open(GATE_FILE)).get("blocking", {}))
+    except (OSError, ValueError):
+        return set()
+
+
+def apply_gate(res, blocking=None):
+    """Move every uncalibrated metric from block to measure ("MEASURE (no calibration proof)"), recompute the verdict."""
+    bl = blocking_metrics() if blocking is None else set(blocking)
+    for k in list(res["block"]):
+        if k not in bl and k not in DECLARATION:
+            ok, line = res["block"].pop(k)
+            res["measure"][k] = ("ok " if ok else "WOULD FAIL ") + line + " [measure: no calibration proof, owner 2A]"
+    res["verdict"] = "PASS" if all(v[0] for v in res["block"].values()) else "FAIL"
+    return res
 
 
 # ------------------------------------------------------------------ metrics
@@ -370,8 +403,9 @@ def stop_go(F, win, held, contact, T, pts):
     return ok, line
 
 
-def run(F, window=None, contact=None, effector=None, holds=(), cls="", T=None):
-    """-> {"verdict": PASS|FAIL, "block": {name: [ok, line]}, "measure": {...}}."""
+def run(F, window=None, contact=None, effector=None, holds=(), cls="", T=None, gate=True):
+    """-> {"verdict": PASS|FAIL, "block": {name: [ok, line]}, "measure": {...}}. gate=True (default) applies the calibration
+    gate (apply_gate); life_calibrate.py runs gate=False to measure every metric raw."""
     T = T or thresholds()
     res = {"frames": len(F), "points": ["pelvis"] + _pts(F), "block": {}, "measure": {}}
     H = parse_holds(holds) if isinstance(holds, str) else list(holds)
@@ -380,7 +414,9 @@ def run(F, window=None, contact=None, effector=None, holds=(), cls="", T=None):
         held |= set(range(a, b))
     pts = _pts(F)
     hp, live = judge_holds(F, H, cls, effector or "hand_l", T, per_hold=True)
-    res["block"]["holds"] = [not hp, "; ".join(hp) or f"{len(H)} declared, all with reason, inside the caps"]
+    res["block"]["hold_reason"] = [not hp["reasons"], "; ".join(hp["reasons"]) or f"{len(H)} declared, all with a reason"]
+    res["block"]["hold_alive"] = [not hp["alive"], "; ".join(hp["alive"]) or "every declared hold is live"]
+    res["measure"]["hold_guides"] = "; ".join(hp["guides"]) or "inside the guides (count, length)"
     # stops: the ACTION window (startup up to contact, or the card's window); a strike-less clip (locomotion, settle,
     # loop) has no startup and is judged by still_runs and stop_sync only
     win = window or ([0, contact] if contact is not None else None)

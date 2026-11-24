@@ -214,7 +214,11 @@ def precapture_gate(root: str | Path | None, asset: str, base_asset: str | None 
             bad.append(nm)
             lines.append(f"{nm}: hold {ns['holds'][nm]} declared without a reason: add no_stop.hold_reasons {{\"{nm}\": \"why\"}}")
             continue
-        r = no_stop_gate.check(j, (ns.get("holds") or {}).get(nm), (ns.get("startup") or {}).get(nm),
+        hs = (ns.get("holds") or {}).get(nm)
+        if hs and isinstance(hs, str) and ":" not in hs:   # life.py reads "a-b:why": attach the clip's written reason to each range
+            why = str((ns.get("hold_reasons") or {}).get(nm, "")).replace(",", ";").strip()
+            hs = ",".join(f"{x.strip()}:{why}" for x in hs.split(",") if x.strip())
+        r = no_stop_gate.check(j, hs, (ns.get("startup") or {}).get(nm),
                                float(ns.get("stop_cm", no_stop_gate.DEFAULTS["stop_cm"])),
                                float(ns.get("max_ratio", no_stop_gate.DEFAULTS["max_ratio"])),
                                int(ns.get("still_run", no_stop_gate.DEFAULTS["still_run"])))

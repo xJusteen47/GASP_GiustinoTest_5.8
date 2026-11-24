@@ -95,7 +95,7 @@ def holds_without_reason(c):
     exceptional and declared with its reason). Poses with "hold": true need "hold_reason"; card-level "holds" frames need an
     entry in "hold_reasons" {frame: why}. Impact keys are contact keys (hitstop is the game's), not holds. Returns frames."""
     hr = {str(k): v for k, v in (c.get("hold_reasons") or {}).items()}
-    bad = [int(p["frame"]) for p in c["poses"] if p.get("hold") and not str(p.get("hold_reason", "")).strip()]
+    bad = [int(p["frame"]) for p in c["poses"] if p.get("hold") and not str(p.get("hold_reason") or p.get("why") or "").strip()]
     bad += [int(f) for f in c.get("holds", []) if not str(hr.get(str(int(f)), "")).strip()]
     return sorted(set(bad))
 
