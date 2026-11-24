@@ -272,3 +272,14 @@ COSTO: not measured (one thread, ~20 min for run 5).
   damped on a wall (`WallSpringDamping` 1), and a stick-slip judder along the slide (`StickSlip`: slow catch, fast slip, 9..20 Hz with the
   speed, random size per slip, stronger while braking, small squash pulse). Kick and rattle removed.
 - Greatsword: flat of the blade against the back (`make_rot_from_zx` keeps the width in the back's plane; it showed its edge before).
+
+## Desktop run 6 (2026-11-24, merged 07bb82cd)
+Evidence `docs/notes/reviews/greybox-capsula/round6/` (KIT_Test_Overlord: rs_start, gb_wall_down/side/brake; side | back | game, 1x /
+0.25x; sheets). Build OK, tests Core.Greybox + NP.Greybox 5/5, setup_greybox_assets accessories PASS.
+- Greatsword: from behind the wide flat face lies diagonal across the back; from the side only the thin edge shows: flat against the
+  back, OK (standing and running).
+- Wall: the capsule shifts a little and irregularly frame to frame along the slide, no side-to-side sway (back view v96-130); in the
+  fast slide then brake it tips and holds the lean through the brake (v134-150) until the landing. Judder is small: judge it at 1x.
+ESITO: OK on the sword; wall judder/brake lean present, worth an owner look at real speed.
+SUBAGENTI: none.
+COSTO: not measured (one thread, ~10 min for run 6).
