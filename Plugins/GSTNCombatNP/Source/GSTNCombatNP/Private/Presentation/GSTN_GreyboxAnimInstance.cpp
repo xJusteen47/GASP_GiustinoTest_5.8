@@ -1,6 +1,9 @@
 #include "Presentation/GSTN_GreyboxAnimInstance.h"
 
 #include "Animation/AnimMontage.h"
+#include "AnimationRuntime.h"
+#include "Engine/SkeletalMesh.h"
+#include "EngineLogs.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "MoverComponent.h"
 #include "MoverTypes.h"
@@ -29,6 +32,17 @@ float UGSTN_GreyboxAnimInstance::SquashTarget(const FGSTN_GreyboxShapeSettings& 
 	}
 	// Only a speed gain squashes (the body gathers to push); braking reads through the lean
 	return FMath::Max(1.f - Settings.AccelSquashPer1000 * FMath::Max(ForwardAcceleration, 0.f) / 1000.f, Settings.MinSquash);
+}
+
+float UGSTN_GreyboxAnimInstance::PelvisSquashTarget(const FGSTN_GreyboxShapeSettings& Settings, bool bOnGround, float PelvisHeight,
+	float ReferenceHeight)
+{
+	if (!bOnGround || ReferenceHeight <= KINDA_SMALL_NUMBER)
+	{
+		return 1.f;
+	}
+	// Only lowering squashes: a pelvis above the reference (a hop inside a clip) keeps the capsule at rest height
+	return FMath::Clamp(PelvisHeight / ReferenceHeight, FMath::Min(Settings.MinPelvisSquash, 1.f), 1.f);
 }
 
 FRotator UGSTN_GreyboxAnimInstance::LeanTarget(const FGSTN_GreyboxShapeSettings& Settings, const FVector& LocalAcceleration)
@@ -107,7 +121,42 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	{
 		Shape.Lean = FRotator::ZeroRotator;
 	}
+
+	float PelvisHeight = 0.f;
+	float PelvisReference = 0.f;
+	const bool bHasPelvis = GetDriverPelvisHeight(PelvisHeight, PelvisReference);
+	const float PelvisGoal = bHasPelvis ? PelvisSquashTarget(ShapeSettings, bOnGround, PelvisHeight, PelvisReference) : 1.f;
+	// Follows the pose directly (no spring: the clip already eases), blended only where it switches on or off
+	Shape.PelvisSquash = FMath::FInterpTo(Shape.PelvisSquash, PelvisGoal, DeltaSeconds, ShapeSettings.PelvisSquashBlendSpeed);
+
 	UpdateMoveOverride();
+}
+
+bool UGSTN_GreyboxAnimInstance::GetDriverPelvisHeight(float& OutHeight, float& OutReference)
+{
+	static const FName PelvisName(TEXT("pelvis"));
+	const USkeletalMeshComponent* Capsule = GetSkelMeshComponent();
+	const USkeletalMeshComponent* Driver = Capsule ? Cast<USkeletalMeshComponent>(Capsule->GetAttachParent()) : nullptr;
+	const USkeletalMesh* DriverMesh = Driver ? Driver->GetSkeletalMeshAsset() : nullptr;
+	if (!DriverMesh)
+	{
+		return false;
+	}
+	if (PelvisReferenceMesh.Get() != DriverMesh)
+	{
+		// A skin swap changes the driver mesh: measure its reference pelvis again (component space = above the feet in GASP pawns)
+		const FReferenceSkeleton& RefSkeleton = DriverMesh->GetRefSkeleton();
+		const int32 Index = RefSkeleton.FindBoneIndex(PelvisName);
+		PelvisReferenceMesh = DriverMesh;
+		PelvisReferenceHeight = Index != INDEX_NONE ? FAnimationRuntime::GetComponentSpaceTransformRefPose(RefSkeleton, Index).GetLocation().Z : 0.f;
+	}
+	if (PelvisReferenceHeight <= KINDA_SMALL_NUMBER || Driver->GetBoneIndex(PelvisName) == INDEX_NONE)
+	{
+		return false;
+	}
+	OutHeight = Driver->GetSocketTransform(PelvisName, RTS_Component).GetLocation().Z;
+	OutReference = PelvisReferenceHeight;
+	return true;
 }
 
 void UGSTN_GreyboxAnimInstance::UpdateMoveOverride()
@@ -118,23 +167,57 @@ void UGSTN_GreyboxAnimInstance::UpdateMoveOverride()
 	const USkeletalMeshComponent* Driver = Capsule ? Cast<USkeletalMeshComponent>(Capsule->GetAttachParent()) : nullptr;
 	UAnimInstance* DriverAnim = Driver ? Driver->GetAnimInstance() : nullptr;
 	UAnimMontage* Montage = DriverAnim ? DriverAnim->GetCurrentActiveMontage() : nullptr;
-	if (!Montage || MoveOverrides.IsEmpty())
+	const FAnimMontageInstance* Instance = Montage ? DriverAnim->GetActiveInstanceForMontage(Montage) : nullptr;
+	if (!Instance || (MoveOverrides.IsEmpty() && SequenceMoveOverrides.IsEmpty()))
 	{
 		return;
 	}
-	TObjectPtr<UAnimSequenceBase>* Loaded = LoadedOverrides.Find(Montage);
+	const float Position = Instance->GetPosition();
+
+	// 1) By montage asset (resolved once per montage; a synchronous load of a small clip, presentation only)
+	if (Montage->IsAsset())
+	{
+		TObjectPtr<UAnimSequenceBase>* Loaded = LoadedOverrides.Find(Montage);
+		if (!Loaded)
+		{
+			const TSoftObjectPtr<UAnimSequenceBase>* Soft = MoveOverrides.Find(TSoftObjectPtr<UAnimMontage>(Montage));
+			Loaded = &LoadedOverrides.Add(Montage, Soft ? Soft->LoadSynchronous() : nullptr);
+		}
+		if (*Loaded)
+		{
+			Shape.OverrideClip = *Loaded;
+			Shape.OverrideTime = Position;
+			Shape.OverrideWeight = FMath::Clamp(Instance->GetWeight(), 0.f, 1.f);
+			return;
+		}
+	}
+
+	// 2) By the clip the montage plays (dynamic montages, or a montage without its own entry): first segment of the first slot
+	if (Montage->SlotAnimTracks.IsEmpty() || Montage->SlotAnimTracks[0].AnimTrack.AnimSegments.IsEmpty())
+	{
+		return;
+	}
+	const FAnimSegment& Segment = Montage->SlotAnimTracks[0].AnimTrack.AnimSegments[0];
+	UAnimSequenceBase* Played = Segment.GetAnimReference();
+	if (!Played)
+	{
+		return;
+	}
+	TObjectPtr<UAnimSequenceBase>* Loaded = LoadedSequenceOverrides.Find(Played);
 	if (!Loaded)
 	{
-		// First time this montage plays: resolve its override once (a synchronous load of a small clip, presentation only)
-		const TSoftObjectPtr<UAnimSequenceBase>* Soft = MoveOverrides.Find(TSoftObjectPtr<UAnimMontage>(Montage));
-		Loaded = &LoadedOverrides.Add(Montage, Soft ? Soft->LoadSynchronous() : nullptr);
+		const TSoftObjectPtr<UAnimSequenceBase>* Soft = SequenceMoveOverrides.Find(TSoftObjectPtr<UAnimSequenceBase>(Played));
+		Loaded = &LoadedSequenceOverrides.Add(Played, Soft ? Soft->LoadSynchronous() : nullptr);
+		if (!*Loaded)
+		{
+			// Once per clip: names what to add to SequenceMoveOverrides (make_capsule_clips.py reads this line from the log)
+			UE_LOG(LogAnimation, Log, TEXT("GSTN Greybox: no capsule override for montage %s playing %s"), *Montage->GetName(), *Played->GetPathName());
+		}
 	}
-	const FAnimMontageInstance* Instance = DriverAnim->GetActiveInstanceForMontage(Montage);
-	if (!*Loaded || !Instance)
+	if (*Loaded)
 	{
-		return;
+		Shape.OverrideClip = *Loaded;
+		Shape.OverrideTime = Segment.ConvertTrackPosToAnimPos(Position);
+		Shape.OverrideWeight = FMath::Clamp(Instance->GetWeight(), 0.f, 1.f);
 	}
-	Shape.OverrideClip = *Loaded;
-	Shape.OverrideTime = Instance->GetPosition();
-	Shape.OverrideWeight = FMath::Clamp(Instance->GetWeight(), 0.f, 1.f);
 }

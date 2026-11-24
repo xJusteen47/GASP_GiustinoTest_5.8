@@ -35,6 +35,13 @@ bool FGSTN_GreyboxSquashScaleTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("squash keeps the volume"), FMath::IsNearlyEqual(Squashed.X * Squashed.Y * Squashed.Z, 1.f, 1.e-4f));
 	TestTrue(TEXT("squash is lower and wider"), Squashed.Z < 1.f && Squashed.X > 1.f);
 	TestTrue(TEXT("clamped"), FGSTN_AnimNode_GreyboxShape::SquashToScale(0.f).Z >= 0.2f);
+
+	// Pelvis squash: the chosen local axis takes the squash, the others widen; lying flat fades it out
+	const FVector Upright = FGSTN_AnimNode_GreyboxShape::AxisSquashScale(0, 0.5f, 1.f);
+	TestTrue(TEXT("axis squash on X"), FMath::IsNearlyEqual(Upright.X, 0.5f) && Upright.Y > 1.f && FMath::IsNearlyEqual(Upright.Y, Upright.Z));
+	TestTrue(TEXT("axis squash keeps the volume"), FMath::IsNearlyEqual(Upright.X * Upright.Y * Upright.Z, 1.f, 1.e-4f));
+	TestTrue(TEXT("axis squash on Y"), FMath::IsNearlyEqual(FGSTN_AnimNode_GreyboxShape::AxisSquashScale(1, 0.5f, 1.f).Y, 0.5f));
+	TestTrue(TEXT("lying flat = no squash"), FGSTN_AnimNode_GreyboxShape::AxisSquashScale(2, 0.5f, 0.f).Equals(FVector::OneVector));
 	return true;
 }
 

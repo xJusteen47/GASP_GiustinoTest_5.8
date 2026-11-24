@@ -135,7 +135,11 @@ def bone_heights(skeleton):
 
 
 def body_weights(z, chain_z):
-    """Two-bone linear blend along the body chain by height (bottom on root = the ground, so a lower pelvis squashes the capsule)."""
+    """Two-bone linear blend along the body chain by height. Run 2 (2026-11-24): everything under the pelvis is rigid on the pelvis, not
+    blended to root: pinned to the ground the capsule bent like a banana and could never lie flat (dropkick) or sit low (crouch). The
+    ground squash is procedural now (GSTN Greybox Shape scales the pelvis by its height over the reference)."""
+    if z <= chain_z[1]:
+        return [('pelvis', 1.0)]
     for i in range(len(BODY_CHAIN) - 1):
         z0, z1 = chain_z[i], chain_z[i + 1]
         if z <= z1 or i == len(BODY_CHAIN) - 2:
@@ -148,6 +152,9 @@ def body_weights(z, chain_z):
 
 def step_mesh():
     path = '%s/%s' % (DIR, MESH_NAME)
+    if eal.does_asset_exist(path) and os.environ.get('GREYBOX_REBUILD_MESH') == '1':
+        # Recreate in place (same path, so the capsule ABP and the subsystem keep pointing at it)
+        p('mesh: rebuilding', path, 'deleted', eal.delete_asset(path))
     if eal.does_asset_exist(path):
         p('mesh: exists', path)
         return eal.load_asset(path)

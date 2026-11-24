@@ -16,6 +16,8 @@ Two kinds:
 
 Dry run unless GSTN_SAVE=1 (Tools/CI/Save-Assets.ps1). Existing clips are rebuilt (they are generated). Report:
 Saved/Greybox/make_capsule_clips.txt. MOVE_FILTER="Overlord,React,Roll,Dodge" (default) picks montages whose name contains one of them.
+Run 2: SequenceMoveOverrides (sequence -> clip) for moves played as dynamic montages: every montage's own sequence, the AnimSequences
+matching SEQUENCE_FILTER (AS_GSTN_Greybox_Seq_<name>) and the exact paths in SEQUENCES.
 """
 import math
 import os
@@ -31,6 +33,12 @@ FPS = 30
 OUT = unreal.Paths.project_saved_dir() + 'Greybox/make_capsule_clips.txt'
 SAVE = os.environ.get('GSTN_SAVE') == '1'
 MOVE_FILTER = [s.strip().lower() for s in os.environ.get('MOVE_FILTER', 'Overlord,React,Roll,Dodge').split(',') if s.strip()]
+# Run 2: clips played as dynamic montages (the Playtest jab) are keyed by the sequence. SEQUENCE_FILTER picks AnimSequences by name under
+# the move roots; SEQUENCES adds exact paths (the capsule logs 'GSTN Greybox: no capsule override for montage ... playing <path>').
+SEQUENCE_FILTER = [s.strip().lower() for s in os.environ.get('SEQUENCE_FILTER', 'Jab,Punch,Kick,Attack').split(',') if s.strip()]
+EXTRA_SEQUENCES = [s.strip() for s in os.environ.get('SEQUENCES', '').split(',') if s.strip()]
+# Run 2: share of the 'lean' the pelvis takes (the capsule hangs from it: without it the lower body never tilts)
+PELVIS_LEAN_SHARE = float(os.environ.get('PELVIS_LEAN_SHARE', '0.35'))
 
 lines = []
 errors = []
@@ -48,7 +56,8 @@ def fail(msg):
 # ------------------------------------------------------------------------------------------------------------------- pose language
 # A pose is a dict; missing keys are 0. Angles in degrees about the character's axes, cumulative where noted.
 #   drop      pelvis down (cm)          fwd     pelvis forward (cm)
-#   lean      torso forward (+) / back (-), spread over spine_01..05 (cumulative at spine_05)
+#   lean      torso forward (+) / back (-): PELVIS_LEAN_SHARE on the pelvis, the rest spread over spine_01..05 (cumulative at spine_05)
+#   tilt      whole body forward (+) / back (-) on the pelvis only (run 2: a dropkick lies flat, a roll tucks over)
 #   side      torso bend to its right (+)        twist   chest turns to its right (+)
 #   head      extra head pitch forward (+)       head_twist   extra head turn right (+)
 #   arm_l/r   upper arm swing forward (+, hand forward)       out_l/r  arm away from the body (+) from hanging
@@ -83,11 +92,11 @@ JAB_B = {'lean': 14, 'twist': 25, 'arm_r': 85, 'elbow_r': 5, 'arm_l': 20, 'elbow
 KICK_A = {'lean': -10, 'leg_r': 60, 'knee_r': 100, 'arm_l': 30, 'arm_r': -20, 'out_l': 30, 'out_r': 30}
 KICK_B = {'lean': -35, 'leg_r': 95, 'knee_r': 5, 'leg_l': 10, 'arm_l': -30, 'arm_r': -30, 'out_l': 50, 'out_r': 50}
 DROPKICK_A = {'lean': -20, 'leg_l': 70, 'knee_l': 110, 'leg_r': 70, 'knee_r': 110, 'out_l': 40, 'out_r': 40}
-DROPKICK_B = {'lean': -75, 'leg_l': 95, 'knee_l': 0, 'leg_r': 90, 'knee_r': 5, 'arm_l': -40, 'arm_r': -40, 'out_l': 60, 'out_r': 60}
+DROPKICK_B = {'tilt': -60, 'lean': -30, 'leg_l': 95, 'knee_l': 0, 'leg_r': 90, 'knee_r': 5, 'arm_l': -40, 'arm_r': -40, 'out_l': 60, 'out_r': 60}
 DAIR_A = {'lean': 25, 'leg_l': 80, 'knee_l': 120, 'leg_r': 80, 'knee_r': 120, 'arm_l': 60, 'arm_r': 60, 'out_l': 50, 'out_r': 50}
 DAIR_B = {'lean': -5, 'drop': -10, 'leg_l': -5, 'knee_l': 0, 'leg_r': -5, 'knee_r': 0, 'arm_l': -20, 'arm_r': -20, 'out_l': 70, 'out_r': 70}
 HIT_A = {'lean': -20, 'twist': -10, 'head': -15, 'arm_l': 40, 'arm_r': 30, 'out_l': 40, 'out_r': 40, 'elbow_l': 30, 'elbow_r': 30, 'drop': 6}
-ROLL_A = {'drop': 40, 'lean': 70, 'head': 30, 'leg_l': 100, 'knee_l': 130, 'leg_r': 100, 'knee_r': 130, 'arm_l': 60, 'arm_r': 60, 'elbow_l': 90, 'elbow_r': 90}
+ROLL_A = {'drop': 40, 'tilt': 50, 'lean': 40, 'head': 30, 'leg_l': 100, 'knee_l': 130, 'leg_r': 100, 'knee_r': 130, 'arm_l': 60, 'arm_r': 60, 'elbow_l': 90, 'elbow_r': 90}
 GENERIC_A = {'lean': -8, 'drop': 6, 'arm_l': -20, 'arm_r': -20}
 GENERIC_B = {'lean': 20, 'fwd': 5, 'arm_l': 60, 'arm_r': 60, 'elbow_l': 20, 'elbow_r': 20}
 MOVES = [
@@ -98,8 +107,8 @@ MOVES = [
     ('dair', 0.3, 0.2, DAIR_A, DAIR_B),
     ('react', 0.08, 0.3, HIT_A, dict(HIT_A, lean=-8, head=-5)),
     ('hit', 0.08, 0.3, HIT_A, dict(HIT_A, lean=-8, head=-5)),
-    ('roll', 0.15, 0.6, ROLL_A, dict(ROLL_A, lean=80)),
-    ('dodge', 0.15, 0.6, ROLL_A, dict(ROLL_A, lean=80)),
+    ('roll', 0.15, 0.6, ROLL_A, dict(ROLL_A, tilt=70)),
+    ('dodge', 0.15, 0.6, ROLL_A, dict(ROLL_A, tilt=70)),
     ('', 0.3, 0.2, GENERIC_A, GENERIC_B),
 ]
 
@@ -207,8 +216,11 @@ class Rig:
         g = lambda k: float(pose.get(k, 0.0))
         out = {}
         prev = (0.0, 0.0, 0.0)
+        hip = (g('tilt') + g('lean') * PELVIS_LEAN_SHARE, g('side') * PELVIS_LEAN_SHARE)
+        out['pelvis'] = qmul(quat_axis(self.fwd, self.s_side * hip[1]), quat_axis(self.right, self.s_lean * hip[0]))
+        rest = 1.0 - PELVIS_LEAN_SHARE
         for bone, share in SPINE:
-            cum = (g('lean') * share, g('side') * share, g('twist') * share)
+            cum = (g('lean') * rest * share, g('side') * rest * share, g('twist') * share)
             own = tuple(cum[i] - prev[i] for i in range(3))
             prev = cum
             out[bone] = qmul(quat_axis(self.up, self.s_twist * own[2]),
@@ -341,7 +353,29 @@ def update_chooser(made):
         unreal.EditorAssetLibrary.save_asset(CHOOSER, only_if_is_dirty=False)
 
 
-def update_move_overrides(overrides):
+def find_sequences(covered):
+    """AnimSequences under the move roots whose name matches SEQUENCE_FILTER, plus SEQUENCES, minus the ones a montage already covers."""
+    reg = unreal.AssetRegistryHelpers.get_asset_registry()
+    out = set(EXTRA_SEQUENCES)
+    for root in ('/Game/GASNPPTest', '/Game/GAS', '/Game/GSTN', '/Game/Blueprints'):
+        for data in reg.get_assets_by_path(root, recursive=True):
+            name = str(data.asset_name)
+            if str(data.asset_class_path.asset_name) == 'AnimSequence' and any(f in name.lower() for f in SEQUENCE_FILTER) \
+                    and not name.startswith('AS_GSTN_Greybox'):
+                out.add(str(data.package_name))
+    return sorted(path for path in out if path.split('.')[0] not in covered)
+
+
+def first_segment_sequence(montage):
+    try:
+        track = montage.get_editor_property('slot_anim_tracks')[0].get_editor_property('anim_track')
+        return track.get_editor_property('anim_segments')[0].get_editor_property('anim_reference')
+    except Exception as exc:
+        p('first segment of', montage.get_name(), 'unreadable:', exc)
+        return None
+
+
+def update_move_overrides(overrides, sequence_overrides=None):
     bp = unreal.EditorAssetLibrary.load_asset(CAPSULE_ABP)
     if not bp:
         fail('capsule ABP %s missing' % CAPSULE_ABP)
@@ -350,6 +384,11 @@ def update_move_overrides(overrides):
     current = dict(cdo.get_editor_property('move_overrides'))
     current.update(overrides)
     cdo.set_editor_property('move_overrides', current)
+    if sequence_overrides:
+        by_sequence = dict(cdo.get_editor_property('sequence_move_overrides'))
+        by_sequence.update(sequence_overrides)
+        cdo.set_editor_property('sequence_move_overrides', by_sequence)
+        p('sequence move overrides on the capsule ABP:', len(by_sequence))
     unreal.BlueprintEditorLibrary.compile_blueprint(bp)
     p('move overrides on the capsule ABP:', len(current))
     if SAVE:
@@ -365,6 +404,8 @@ def run():
         made[state] = write_clip(rig, 'AS_GSTN_Greybox_' + state, frames, loop, keys)
     update_chooser(made)
     overrides = {}
+    sequence_overrides = {}
+    covered = set()
     for path in find_montages():
         montage = unreal.EditorAssetLibrary.load_asset(path)
         try:
@@ -377,8 +418,23 @@ def run():
         kind, keys = move_keys(montage.get_name(), frames)
         clip = write_clip(rig, 'AS_GSTN_Greybox_Move_' + montage.get_name(), frames, False, keys)
         overrides[montage] = clip
+        # The same clip for a dynamic montage that plays this montage's sequence
+        played = first_segment_sequence(montage)
+        if played and played not in sequence_overrides:
+            sequence_overrides[played] = clip
+            covered.add(played.get_path_name().split('.')[0])
         p('move', path, 'length %.3f s' % length, 'kind', kind, 'clip length %.3f s' % (frames / float(FPS)))
-    update_move_overrides(overrides)
+    for path in find_sequences(covered):
+        sequence = unreal.EditorAssetLibrary.load_asset(path)
+        if not sequence:
+            fail('sequence %s not found' % path)
+            continue
+        frames = max(2, int(round(sequence.get_play_length() * FPS)))
+        kind, keys = move_keys(sequence.get_name(), frames)
+        clip = write_clip(rig, 'AS_GSTN_Greybox_Seq_' + sequence.get_name(), frames, False, keys)
+        sequence_overrides[sequence] = clip
+        p('sequence', path, 'length %.3f s' % sequence.get_play_length(), 'kind', kind)
+    update_move_overrides(overrides, sequence_overrides)
     p('RESULT:', 'PASS' if not errors else 'FAIL (%d errors)' % len(errors))
 
 

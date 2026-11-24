@@ -14,6 +14,13 @@ struct GSTNANIMATIONCORE_API FGSTN_GreyboxShape
 	/** Height scale of the whole body around the ground (< 1 squash, > 1 stretch); width gets 1/sqrt so the volume stays */
 	float Squash = 1.f;
 
+	/**
+	 * Ground squash from the pose (run 2): the copied pelvis height over its reference height while on the ground (1 = standing). The node
+	 * scales the pelvis along the body's up axis by it, so a crouch or a landing that lowers the pelvis makes a shorter capsule that still
+	 * stands on the ground, instead of sinking into it (the capsule hangs from the pelvis since run 2).
+	 */
+	float PelvisSquash = 1.f;
+
 	/** Tilt of the whole body around the ground point, component space, degrees (pitch forward, roll sideways) */
 	FRotator Lean = FRotator::ZeroRotator;
 

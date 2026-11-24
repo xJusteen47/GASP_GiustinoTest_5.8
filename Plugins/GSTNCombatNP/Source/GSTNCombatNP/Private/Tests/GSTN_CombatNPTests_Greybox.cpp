@@ -62,6 +62,12 @@ bool FGSTN_GreyboxShapeTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("accelerating right leans right"), Right.Roll > 1.f);
 	const FRotator Hard = UGSTN_GreyboxAnimInstance::LeanTarget(Settings, FVector(1.e6f, 1.e6f, 0.f));
 	TestTrue(TEXT("lean capped"), FVector2D(Hard.Pitch, Hard.Roll).Size() <= Settings.MaxLeanDeg + KINDA_SMALL_NUMBER);
+
+	TestTrue(TEXT("pelvis at reference = 1"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, true, 95.f, 95.f), 1.f));
+	TestTrue(TEXT("crouched pelvis squashes"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, true, 57.f, 95.f), 0.6f, 1.e-3f));
+	TestTrue(TEXT("pelvis squash floor"), UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, true, 0.f, 95.f) >= Settings.MinPelvisSquash);
+	TestTrue(TEXT("raised pelvis does not stretch"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, true, 120.f, 95.f), 1.f));
+	TestTrue(TEXT("no pelvis squash in the air"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, false, 40.f, 95.f), 1.f));
 	return true;
 }
 

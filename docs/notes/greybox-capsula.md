@@ -95,3 +95,19 @@ What the video shows (watched frame by frame):
 
 Left: Playtest jab override (dynamic montage: key the override by sequence too, or play the jab from an asset); stronger squash/tilt on
 the capsule if the owner wants the shape to read more; editor nodes to an UncookedOnly module before packaging; the 2 Loadout tests.
+
+## Round 2 (2026-11-24, from the desktop run findings)
+
+All reversible; class defaults, so the owner retunes them on ABP_GSTN_GreyboxCapsule.
+- **Capsule hangs from the pelvis** (`setup_greybox_assets.py`, `GREYBOX_REBUILD_MESH=1 GREYBOX_STEPS=mesh`): every vertex under the pelvis
+  is rigid on the pelvis, so the lower body tilts with it (no more banana, a dropkick can lie flat).
+- **Ground squash from the pose**: `UGSTN_GreyboxAnimInstance` reads the driver's pelvis height (component space, above the feet) over its
+  reference height on the ground (`PelvisSquash`, floor `MinPelvisSquash` 0.35, blend `PelvisSquashBlendSpeed` 20/s). GSTN Greybox Shape
+  scales the pelvis along its reference up axis by it, faded by how upright that axis is (lying flat = no squash), so a crouch or a landing
+  is a shorter capsule that still touches the ground.
+- **Stronger defaults**: AirStretch 0.2 (max 1.3), LandSquash 0.45, AccelSquash 0.06, MinSquash 0.6, Lean 5 deg per 1000 (max 18).
+- **Clips**: the pelvis takes `PELVIS_LEAN_SHARE` (0.35) of every lean, and a new `tilt` key tilts the whole body on the pelvis (dropkick
+  -60 + lean -30, roll 50..70).
+- **Dynamic montages**: `SequenceMoveOverrides` (sequence -> clip) is asked when a montage has no own entry, at the segment's time. The
+  script fills it with every montage's sequence, the AnimSequences matching `SEQUENCE_FILTER` (Jab, Punch, Kick, Attack) and `SEQUENCES`;
+  the capsule logs `GSTN Greybox: no capsule override for montage ... playing <path>` once per uncovered clip.
