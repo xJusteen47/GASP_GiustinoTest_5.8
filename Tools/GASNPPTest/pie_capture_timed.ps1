@@ -3,7 +3,16 @@
 # -Assert (project rule 10): {sequence: [{"clip", "window": [first, last]}]} checked at the end (Tools/AnimPipeline/capture_assert.py);
 # Run-Timed prints the ASSERT line and exits 3 when the capture ran but the expected clip did not own the window. Always on: the
 # sequences' own 'expect' entries; with neither, assert.txt says ASSERT: FAIL (no expectation = no review).
-param([string]$Kit, [string]$Out, [string[]]$Sequences = @(), [string]$Button = 'Attack', [double]$MaxMinutes = 15, [string]$Assert)
+param([string]$Kit, [string]$Out, [string[]]$Sequences = @(), [string]$Button = 'Attack', [double]$MaxMinutes = 15, [string]$Assert, [int]$Monitor = 0)
+# -Monitor N (capdet, owner 2026-11-23): the editor window opens on screen N (1 = primary) so the owner's first screen stays free; a missing
+# screen falls back to the primary. Best effort (-WinX/-WinY): the frames come from scene captures, not from this window.
+$extra = ''
+if ($Monitor -gt 0) {
+    Add-Type -AssemblyName System.Windows.Forms
+    $scr = [Windows.Forms.Screen]::AllScreens | Sort-Object { -[int]$_.Primary }, { $_.Bounds.X }
+    $b = $(if ($Monitor -le @($scr).Count) { @($scr)[$Monitor - 1] } else { @($scr)[0] }).Bounds
+    $extra = "-WinX=$($b.X) -WinY=$($b.Y) -ResX=$($b.Width) -ResY=$($b.Height)"
+}
 $proj = Split-Path (Split-Path $PSScriptRoot)
 $outAbs = if ([IO.Path]::IsPathRooted($Out)) { $Out } else { Join-Path $proj $Out }
 New-Item -ItemType Directory -Force $outAbs | Out-Null
@@ -17,7 +26,7 @@ if ($Sequences) { $env:PIE_CAPTURE_SEQUENCES = ($Sequences -join ',') } else { R
 $boot = Join-Path $env:TEMP 'gstn_pie_capture_boot.py'
 $real = (Join-Path $PSScriptRoot 'pie_capture_boot_vd2.py') -replace '\\', '/'
 [IO.File]::WriteAllText($boot, "__file__ = r'$real'`nexec(open(__file__).read())`n", (New-Object Text.UTF8Encoding $false))
-& (Join-Path $PSScriptRoot '..\CI\Run-Timed.ps1') -Preset Capture -Log (Join-Path $outAbs 'run.log') -Script $boot -MaxMinutes $MaxMinutes -AssertFile (Join-Path $outAbs 'assert.txt')
+& (Join-Path $PSScriptRoot '..\CI\Run-Timed.ps1') -Preset Capture -Log (Join-Path $outAbs 'run.log') -Script $boot -MaxMinutes $MaxMinutes -AssertFile (Join-Path $outAbs 'assert.txt') -ExtraArgs $extra
 $rc = $LASTEXITCODE
 $done = Join-Path $outAbs 'done.txt'
 if (Test-Path $done) { "done: " + (Get-Content $done -TotalCount 1) } else { 'done.txt missing' }

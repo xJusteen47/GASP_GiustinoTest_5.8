@@ -1,0 +1,183 @@
+branch,sha,ultimo_commit,commit_unici,categoria,azione,contenuto_in
+claude/anim-mcp-followthrough,caa82e5627b547c691030efef758fa5198607df7,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/anim-mcp-v2-turn4,1243e7ee4768406850ae848582c2a092b9f74caf,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/anim-skill-unica,1a194c6c0a169c97fcdf281a91881a3ab98196f4,2026-11-24,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/approved-runstart-v4r5,9fe083bdce1b100b8388dfd09ca1efd99331d5d8,2026-11-21,,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),tag approved/runstart-v4r5
+claude/deepseek-turn4,3402d00ffb8524ac675436e246411b4c52035da4,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/grab-link,d4714a4c92c50e060db650df39eabbb2953bb531,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/harness-deepseek-fix,f87c689e4e6d0be6674f3affd0a438a855ebf646,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/integ-2026-11-23,e0fcf520563097386e3feaef2b233c46d212ef0d,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/integ-playtest-2026-11-22,7d5e36dd433fdf5d66dce73b09136c37caa02be8,2026-11-22,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/life-calib-run,1bc749965d9f7bc4dd462add81124485d54ba5a4,2026-11-24,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-1uvcac,bb5291117408745db1ef2d1c9ce17bd35c6ac4dd,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-2d0gnu,bccbae9c42481bc03685e58f4c8503604a0198a7,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-3ufz10,2d8af5748e07eb7aa2a13133b294ce4ff2b438a7,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-72dtra,ac6daceeaea7d34b588e7a9e5248b8e925f4b92c,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-7zhryd,af9ccde22fafe6f78d9cfb20b41ea639b17ffdb3,2026-11-24,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-bazqb1,159949b61249b1bcb00b362a624341d66d8b5322,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-bo3bag,e332fb6431f85987e6bbefe70eecae13a9d16c35,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-bt9fds,82514b2c83d8c75323b47616d525ed2c7c474b42,2026-11-24,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-btrk7b,7af96c4a38736f09925d286ed145f7fd50c374aa,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-cqad05,82d09c6402406c9d4d57a365f85747d9396f5d73,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-j1twqo,ac8d6201878250f23d63341ce076bcce86427167,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-jcugce,c8b1b4bdf38e91b2ad4b0d3c61f8d149e5d61d79,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-jlb6i3,458b470f8172b4572912329642aa8f1942efcf72,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-jx1fv2,d3d47d18e158e3811ecee3b01c3c91d648378ee2,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-k9d2l7,1a941d65e295555355433e5f314fd188ca91b42c,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-l1dcng,84b7c3545fcfc1993ee5747e622544f0cd50b1f1,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-mkedi4,205e29a12068f617d36082cd4e586fb360825822,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-oqfyxp,f6adaef802f442d346b9d9bf344c85e8c0710f1b,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-sgky92,f506bd6bcf55d6885ed991988ed651c93728a75d,2026-11-24,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-t1yn9x,8b0d51cb4220873a3c0b7a27fd09bd898db79798,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-uvzm3k,79631bd6b7d277c15f153c80fe450eab6991ebee,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-vjbryc,276709b10b74bea58a00f5dc05f2962efa9dfb0f,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-wc8ksn,c1b49823d5ccad65a75d88906dc87e505c28457f,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-wwnerm,891c65dec25a5d8c62ab85f3106d4dda447541be,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-xbjsuj,18ad9e24552809a29dfe2a20da4378b32f32266c,2026-11-21,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/project-thread-y073op,c84edef4e159e27c27bb92e9425913f519a33895,2026-11-23,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/runstart-generic-desktop,230ad65a6cdc9f32f7c183c50093d1bbb031275f,2026-11-22,0,A_GIA_IN_INTEGRAZIONE,eliminare (gia nel tronco o nell'integrazione),
+claude/content-reorg-apply,50c8fc56b8506168312a7bbfcaf337695b6d0580,2026-11-23,1,B_SOTTOINSIEME,eliminare,claude/project-thread-5kb8vz
+claude/dair-v9-stops-review,49998c49aad384840e51cce029ea0c721d253002,2026-11-24,1,B_SOTTOINSIEME,eliminare,claude/c1-fastcapture-2026-11-24
+claude/desktop-anim-workflow,319abe689a6d45fa716c52e7aa9a542ee48c2d97,2026-11-11,873,B_SOTTOINSIEME,eliminare,claude/desktop-anim-jab-1
+claude/docs-bibliotecario-2026-11-23,a8ca04b62612e4420befad599734ef6137d3ff4b,2026-11-23,2,B_SOTTOINSIEME,eliminare,claude/docs-archivio-2026-11-23
+claude/hit-arms-1,933b42ec3ee4f1060a051dc75d781d8e01b6c44e,2026-11-18,25,B_SOTTOINSIEME,eliminare,claude/project-thread-9wkpe7
+claude/indice-progetto,4406d5612dc6059f89ae7a29f15ee5bb3ba169f9,2026-11-23,1,B_SOTTOINSIEME,eliminare,claude/docs-archivio-2026-11-23
+claude/m12-g0-g1,e6648eec44da5a778bff8b9a65160b5341a78d7e,2026-11-22,3,B_SOTTOINSIEME,eliminare,claude/m12-g2
+claude/m12-g2,3158a8a6264150a4f4038c4d840726804916730e,2026-11-22,4,B_SOTTOINSIEME,eliminare,claude/m12-g5
+claude/m12-g5,c82c2363465f3b03ac88b4d4d8d79b8db7332f06,2026-11-22,5,B_SOTTOINSIEME,eliminare,claude/m12-g6
+claude/m12-g6,b9dbfe7e7e27ae927ed3bd334330726b45e572c2,2026-11-23,6,B_SOTTOINSIEME,eliminare,claude/m12-g7-g8
+claude/m12-p1-build-fix,aa4a86b033118b582bd7d967e9e89163d3f196b6,2026-11-22,2,B_SOTTOINSIEME,eliminare,claude/m12-g7-g8
+claude/net-grab-test-2026-11-23,c9b28b9ac94c56f891dec014b0b0a4c4c982e5e0,2026-11-23,1,B_SOTTOINSIEME,eliminare,claude/project-thread-5kb8vz
+claude/project-thread-016vb8,305251a41be7d177feb8f360d7a9a33a514fd37a,2026-11-18,24,B_SOTTOINSIEME,eliminare,claude/bugpass-integration
+claude/project-thread-0pzf0o,8ea50e7603ab09dd9dd79bfc05836a9e7485ace2,2026-11-02,551,B_SOTTOINSIEME,eliminare,claude/project-thread-s125cq
+claude/project-thread-3f1vdx,11695c8dae7147a304ac9e8b6a255d86c5ce9cdf,2026-11-18,2,B_SOTTOINSIEME,eliminare,claude/bugpass-integration
+claude/project-thread-5wrx4u,f5f3d7a200ca0004e52464743736757b450a9a75,2026-11-19,35,B_SOTTOINSIEME,eliminare,claude/project-thread-65g9ca
+claude/project-thread-66dv82,8a83d483596290ebb22b489e85b1b8d13a3a2d90,2026-11-03,644,B_SOTTOINSIEME,eliminare,claude/project-thread-0pafeo
+claude/project-thread-6qxhcr,6533467462cd3da693f92edd13fd674bdf31c786,2026-11-01,482,B_SOTTOINSIEME,eliminare,claude/project-thread-aaqr80
+claude/project-thread-8oy91z,029fce7404e03b5fc89bccf4fc336143886bc204,2026-11-18,24,B_SOTTOINSIEME,eliminare,claude/project-thread-9wkpe7
+claude/project-thread-aaqr80,cd7ee9c28ac9b54063302946515a74d0fba80ead,2026-11-02,494,B_SOTTOINSIEME,eliminare,claude/project-thread-mkwsb0
+claude/project-thread-dgqsku,0614992436f0d2de550755b6b466091287eb88b0,2026-11-03,659,B_SOTTOINSIEME,eliminare,claude/project-thread-0pafeo
+claude/project-thread-i8mmmj,2031201b7204cfaad82cb4c9be25668e9df7708e,2026-11-18,25,B_SOTTOINSIEME,eliminare,claude/bugpass-integration
+claude/project-thread-ii4go3,bad249b44ff4904098805ff6a0db5b57e6d784d9,2026-11-19,39,B_SOTTOINSIEME,eliminare,claude/project-thread-65g9ca
+claude/project-thread-inmtkm,932a15ef11def920814909dd45ac9470dc26e144,2026-11-19,47,B_SOTTOINSIEME,eliminare,claude/project-thread-65g9ca
+claude/project-thread-jckw2a,31e93dd2be5f20ba01d5c4cc690f284756f720b9,2026-11-17,1065,B_SOTTOINSIEME,eliminare,claude/project-thread-f95wnc
+claude/project-thread-k9sj5a,ab2746ac942876140f6934355a928aecd1683c16,2026-11-18,23,B_SOTTOINSIEME,eliminare,claude/bugpass-integration
+claude/project-thread-mkwsb0,66f72d8156765c1999a268cfc0d1d77d5d409d51,2026-11-02,495,B_SOTTOINSIEME,eliminare,claude/project-thread-s125cq
+claude/project-thread-orqz14,daf9f606a6dec4288d21e67a81e39043039e9918,2026-11-21,1,B_SOTTOINSIEME,eliminare,claude/project-thread-bjvo40
+claude/project-thread-rqxsn8,5c3f34701332211080eb4b5076434779a4d1604d,2026-11-23,4,B_SOTTOINSIEME,eliminare,claude/project-thread-qjfnc0
+claude/project-thread-tvze3n,dc82069c7c207a3a18e4f402584f1a83094f0884,2026-11-15,1005,B_SOTTOINSIEME,eliminare,claude/project-thread-na8pct
+claude/project-thread-uvohng,93f823b2d519de0dac75f3682ced481531e17806,2026-11-23,1,B_SOTTOINSIEME,eliminare,claude/project-thread-nfhw4i
+claude/project-thread-y270ci,01262dc5c42170d8f7fa6ecc25b6faf9d3c04d35,2026-11-24,3,B_SOTTOINSIEME,eliminare,claude/project-thread-7ogxes
+claude/project-thread-ybl6a8,37b737a0c9827991b6a899e7b14e140b843ec97d,2026-11-15,1002,B_SOTTOINSIEME,eliminare,claude/project-thread-na8pct
+claude/ue59-dump-scripts,4686ea52b03e4ace420d6680bc7501974ad386cf,2026-11-24,1,B_SOTTOINSIEME,eliminare,claude/skill-anim-t0-inventory-2026-11-24
+claude/bugpass-integration,047b12f9ae8ddf67cd610740a0ab24d5300a374b,2026-11-18,42,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/camera-air-1,01c43978c5f9c3f6354ffab08ae99c351a22b9a0,2026-11-18,41,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/ci-runner-fix,809998d5baa8540808e6da5c4fc34256da80f2d6,2026-11-16,1065,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/desktop-anim-jab-1,74647bfbc58ab0d0793e23db7bfc6dcd9a29267e,2026-11-11,874,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/desktop-g9b,1b01b6dc60fe546d1c52f651dba97a26a71562b4,2026-11-09,774,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/desktop-hover,b051f0558b493a1d32773069d120cabff01a90b6,2026-11-09,801,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/entita-dinamiche-valutazione,4acb8b275d47acf19c86862e1d78928376904400,2026-11-09,791,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/laptop-m11-plan,4f192aa53a37d851abafc52f622ce4888633adab,2026-11-11,843,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/loco-runstop-diagnosis,f29bf321ae752f0e17861bdecd4065b9e1900446,2026-11-20,1114,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/netcode-confronto,e0f6506b0e76ef5fefa5862fba1cfcefaa0b5460,2026-11-09,788,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/parts-rest-laptop,62c813d5dbbe6ab862ea5f4f42d7f4cc7db09bbd,2026-11-09,779,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-0pafeo,66b31802a2e8ed632060968cdd9f0f605a7ab452,2026-11-04,678,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-1akb6a,2bd9b2eff72201ca8e55db7efccbdc4948ec923d,2026-11-21,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-1gktju,6c85f4ca82ad6519e24f2133359d2c6ee7541ec5,2026-11-15,938,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-295vou,35d07cfc91ee13aa5fed471f6281025b2f3c99f8,2026-11-06,647,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-2aokbx,f827f8fe09e5d5b273142e02fafc530107496d98,2026-11-16,1163,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-3lh042,66877cf667f5aa89b6e2671044f02ab078395879,2026-11-21,22,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-45g6rf,08d0b8dfbfe32c6b09e15a70829d78b365ce3f4b,2026-11-15,1080,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-64vizj,7dce681d376a0d5fb4690b7d58c251a16ca32da6,2026-11-21,10,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-65g9ca,10cbb3913e571a22f199930932b4b397889f70aa,2026-11-19,49,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-7hguwd,c71b672579ee0b57beb5a5e1b8514a06cd9d48af,2026-11-02,538,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-7q0nby,a42d8c8a87f4a348e17600125f2c562698f52bbc,2026-11-21,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-98wtdn,001a1a02f685841bb717a59816db1392cf64462b,2026-11-21,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-9f2yp4,22eb0367a9e8ada7e9cfbe528aa5dcaf11b321d3,2026-11-16,1063,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-9wkpe7,94d84d8dc0dfb28ffc3157647c457b605862d5b7,2026-11-18,28,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-a0j7ip,05785645592f9abaa3abe65016e9f626d8ab007e,2026-11-16,1147,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-b1vx24,c46b24773d389fc89b9ffd6174bb91387b2a33b7,2026-11-17,1068,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-bjvo40,52802e1e079d42bbcd842fb993ff3b8e3b62464f,2026-11-21,2,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-coq8k5,f6bfd6ad4ee91fe28aa37db7e940c00bfa45a96a,2026-11-15,1063,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-di23qw,7213d9c229e1589da61aeb6364fe1ad2fbc2ce1b,2026-11-21,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-f2j5fq,911bc80ddbd914ea4c4381a2a6c2c21ad8bb8785,2026-11-14,996,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-f4ovn9,b8dae40bdfce393e4a24c97fd8d14060a35cea57,2026-11-18,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-f95wnc,d1b28a94794b860fc093770eaa67dfbb82e23254,2026-11-17,1066,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-fy7agl,f4a9d09052d92d77577cb2d118dd23785bf9da35,2026-11-14,989,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-g63m8d,536d22025021e9d5e9bc463a6e5db8233362bb72,2026-11-16,1063,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-h5ke0e,0873cb98cd92aaf209eb6f9aa35b778fd5f9ee5b,2026-11-15,1077,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-hqbako,c7255de86f2cf6c5cbc0dd287fc759a37137411e,2026-11-12,872,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-i6rn5k,751a24b30f9f3cb7b75d8f01b316ea4533370ba5,2026-11-13,947,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-l8warz,6d25ec3c98e2dec30282d038b5d5a12388fa231c,2026-11-21,23,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-le0tc7,e98f123c334170b4d9f57fce8273b665b7708ee7,2026-11-20,1066,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-lii6ck,6d0bde695dfa4effe95e99e7be02d2cd87c35986,2026-11-15,1061,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-lnbke8,7f0002c56402ddef1b56cdbafeccb097cbc4dde8,2026-11-21,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-lzh2uh,9298f480be6437fce206fcd436ec3aba4c25d947,2026-11-14,981,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-m6s9y2,61795e180fd9d9732449ecd7f6d4e50d8cbaff4a,2026-11-20,1081,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-mu9mh4,b68972a01a0dff787baea561a99201e5bd9cb08f,2026-11-19,1070,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-na8pct,25d23c6f6c0f50dbf7661c941548858b44d418d1,2026-11-15,1009,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-p2kkgc,abdaab1527948a6b1af8432d7174dd8ef7cdac93,2026-11-15,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-r78ylj,8f9e22c2a436b4517da3d5ce02911eb6e8bef3be,2026-11-16,1066,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-r8xxb2,f33be23e235e8e67ad8c0ac11c0dc6fc9442908e,2026-11-15,1061,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-rafd93,08d12cd12d87ecc22cd6e04ff50db0d8cb58d94c,2026-11-16,1170,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-rdcazm,15cbd0c556528c5f5a2e898e4027e317ed5b325d,2026-11-21,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-rf2b29,6f42c1ee1053b5cbcaad3f35b06c2690693bebe1,2026-11-21,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-s125cq,3daad0b5f4bbdb6dfa741a34bfd93611c5196597,2026-11-02,552,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-s4qjx0,1d095223ec1480a9b4693fa674d82cc9667d2756,2026-11-03,647,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-t93zat,2018bbbb176a540265404a731ec2f7a553a1e74a,2026-11-17,1064,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-ujyw42,e7db7c0b16cef3e745219fb41482e9fde4b21987,2026-11-12,871,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-umhnb6,427f5ac5a4d04dae0aa0bf00e3567571fa8242aa,2026-11-17,2,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-v1falr,06277fc13c902ee49eb31081f917915f69f89204,2026-11-14,983,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-v1s3l3,1fc8da6ebaf18c1094da1e7658cad45806bb3d42,2026-11-03,644,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-v8m4bq,0a21a02dbcf931f796429745526ca17a8783049d,2026-11-14,979,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-vfuzsj,8f8ab0ef5810f779d333e7af94012c968a00191d,2026-11-01,522,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-w299nb,b613c49fc9e633fca4bc98976b7aa174a27b4743,2026-11-21,1067,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-wzb12r,fb4bd361d84284d9047cd8c8c47db9e3b256d0e3,2026-11-01,509,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-xcsfy8,824da814f6624244eb60072bb74e25c17aadcd10,2026-11-15,937,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-xgtufw,7ca40c8e9cde9e9042a9f37fa4b393c030dcccd5,2026-11-20,9,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-yepa62,f237af8f11c2ddf6ce4a030f1f716c4947cb4ac4,2026-11-21,1064,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-ymsnu8,d0372c1b6dfe9ac6af8f2a1d7a666f789551fa72,2026-11-19,42,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/project-thread-zkycen,4d585a1254baeb90817954f054080447ec477326,2026-11-18,9,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/ref-astrobot-vfx,e0bbd58267112f513de519dcd926ba11966ae57b,2026-11-19,947,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/skid-57-reference,cb531e85f13e4a99646f959064199b820dc2c212,2026-11-18,1,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/skid-rootmotion-1,2e6bda22c87f72eaa4cda3f9d77f8fb09af93eca,2026-11-18,43,C_STORIA_VECCHIA,tag archivio/<nome> poi eliminare,
+claude/anim-inventario-2026-11-23,b552c47fb6fec637333cc74262355ff7096757fd,2026-11-23,11,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/anim-mcp-v2-turn4-capture,b389f6b035a6978c90d4b6d55831c4e9e5d6a998,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/c1-fastcapture-2026-11-24,6b1d749f93106ae51b70976d4689472c8fa8f3c6,2026-11-24,2,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/content-riorganizzazione,d0b56728c54bc44487d852d8d77cd3461546a5f2,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/deepseek-smoke-test,d5ca459379211badf8a57e0b20e9ba7dbf385136,2026-11-22,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/harness-v2,7baac871342ddee21d28adf4a4e0ef675840bea5,2026-11-22,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-043pn0,d3de96aef55e50ebcf7ccab47e7d2447abd68fe4,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-2u7rwj,7f3f61d60caf487d1e7761eeb8b845becbc3edbc,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-2vr5r6,4225591a2e7a968b9e475ca0a45a7065ff947ea6,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-39uwfb,629afc7eec973d6ea863eff05c3591c23f76e48c,2026-11-23,2,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-4pj7kf,aee7530695df771791901cd89c11b712d1d64774,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-690lv0,e72ad57f7129e586ce9ec6710fd056e030f99998,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-6blrlz,c9aa720bd52f572e9e71a4c7349c434a2219b860,2026-11-24,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-aeh8di,78b6f2f528291b269b4f036e5078a687d73db7ce,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-mdss5a,9708e88d72a2eec6fbc4f72ac5222e91af03675c,2026-11-24,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-nfz4at,52f233a1a2bad290e9f28b47301ef8bf67e34f53,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-qsgab4,d7222a0a7e57304e100e40761eb23ffcf3ea3814,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-rn81kh,0a69c080bd5021acdfe6ea9be8e9711e5eff25db,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-rzynby,393587fd81f11b4b4341c1b3a9e3c286db3ceb94,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-u2vd2x,6233727f6e1dc505a25b55ca4b0c2b77bfbdfc84,2026-11-23,2,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-uvefj5,76d839a9bbeca24ae407b5e584f0b1a1abe31d89,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-yjhqtz,7c162d4abaa682783199a030d47362020f1422bb,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/project-thread-yt6kwu,08d50aa17bda1e280419b83c8f7c64729ae0f9d7,2026-11-24,6,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/ricerca-server-dedicato,1af6760633564a6ab3132fb36e7213c8b648c844,2026-11-23,1,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/runstart-lock-2026-11-23,150774ca77e0c22270602764cc230a830c5284ac,2026-11-23,3,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/skin-cosmetici-ricerca,18854c2a28ade6df06b55a8c58ed99c0d3ec5674,2026-11-23,4,D_SOLO_DOCS,tag archivio/<nome> poi eliminare (dopo il docs-sweep),
+claude/docs-archivio-2026-11-23,316d065cc548b53bf21ccfd68761153e58906fc2,2026-11-23,4,E_CODICE,tenere finche il codice non e nel tronco (merge dell'integrazione),
+claude/m12-g7-g8,c164fde08bbc7b5fe2fb728bff24957fc8bea9a7,2026-11-23,7,E_CODICE,tenere finche il codice non e nel tronco (merge dell'integrazione),
+claude/project-thread-3u6rt4,6017ee2e5cbae3c11a3c5a1aa4da380ca7116dea,2026-11-23,1,E_CODICE,tenere finche il codice non e nel tronco (merge dell'integrazione),
+claude/project-thread-5kb8vz,88d1ec35b77f4b42a502d6fad1ace8bb0db8c77c,2026-11-23,11,E_CODICE,tenere finche il codice non e nel tronco (merge dell'integrazione),
+claude/project-thread-7ogxes,5f13e8d95aa273a3636242defd8cd5da7dba10ea,2026-11-23,4,E_CODICE,tenere finche il codice non e nel tronco (merge dell'integrazione),
+claude/project-thread-8esu46,bd605e32158676bca6d3c8cdf85b4af637652fd2,2026-11-23,1,E_CODICE,tenere finche il codice non e nel tronco (merge dell'integrazione),
+claude/project-thread-nfhw4i,f36db6ac7a9930cddff85c1052f951ee819c165a,2026-11-23,2,E_CODICE,tenere finche il codice non e nel tronco (merge dell'integrazione),
+claude/project-thread-oclodp,96577130a7a60c195e368da5dc2fbb9891b7fe3d,2026-11-23,2,E_CODICE,tenere finche il codice non e nel tronco (merge dell'integrazione),
+claude/project-thread-qjfnc0,e16db0f4475e3432937201a03e9a8774e41efffd,2026-11-23,12,E_CODICE,tenere finche il codice non e nel tronco (merge dell'integrazione),
+claude/project-thread-vqce2q,4b688f0f1747adc9977f42daee09df8ce8c7b90d,2026-11-23,2,E_CODICE,tenere finche il codice non e nel tronco (merge dell'integrazione),
+claude/skill-anim-t0-inventory-2026-11-24,9e535e40e4d043d98fb31690cb1e00520e8a066c,2026-11-24,3,E_CODICE,tenere finche il codice non e nel tronco (merge dell'integrazione),
+claude/anim-skill-t3,d822ce90d8cce9b6bb01af14771783a6420eeb4b,2026-11-24,,TIENI,tenere,
+claude/approved-runstart-v29w3,967de7481c303ea8446e1254329721fd07f6018f,2026-11-22,,TIENI,tenere,
+claude/artifacts,1f30f96ee054d2b54a5677c6b38cfa63128ad5db,2026-11-23,,TIENI,tenere,

@@ -27,6 +27,17 @@ the background-throttle ini and EcoQoS as they are).
 Capture gate (project rule 10): -AssertFile <capture>\assert.txt (written by pie_capture_move.py) adds its first line
 ("ASSERT: OK" / "ASSERT: FAIL ...", or "ASSERT: MANCANTE") to the output; ESITO OK with an ASSERT not OK exits 3, so no review
 starts on a video that does not show the expected clip.
+Approved-pose gate (project rule 13b, "7 deterministic additions" no. 7): -Preset Build runs
+Tools\AnimPipeline\capdet\regress.py first and REFUSES to build when a locked version changed (exit 4, nothing is compiled), so a
+thread cannot build and hand over work that silently overwrote an approved pose. -SkipRegress bypasses it and the output says so.
+Default pre-run gate (cleanup plan 2026-11-24, fixes 5, 6, 8): Tools\CI\precheck.py runs before every command: the .py passed (-Script
+and any .py in the command line) must compile, the /Game/... assets named by -RequireAsset, by "# REQUIRES_ASSET: /Game/..." header
+lines of the driver or in the command line must exist under the Content of the project the command opens (a worktree without the
+skeleton is refused, not run), and a Capture is refused while a local LLM server holds the GPU (-AllowLocalLlm). Failure =
+"ESITO: PRECHECK_FAIL", exit 4, no editor. -NoPreCheck skips it and the output says so. The explicit -PreCheck gate still runs after.
+Editor close on ESITO (fix 4): a driver finishes with unreal.log("ESITO: OK") (or FAIL) before QUIT_EDITOR, or writes that line to
+-DoneFile. When the runner sees it, the editor has -DoneGraceSec (25) seconds to quit; then the whole job is closed and the verdict is
+the driver's. A TIMEOUT, BLOCCATO or crash after "ESITO: OK" is reported as OK (shutdown problem), so it does not count as an attempt.
 #>
 [CmdletBinding()]
 param(
@@ -53,7 +64,13 @@ param(
     [string]$LockOwner = '',    # optional owner tag allowed to proceed when present in LockFile
     [string]$PreCheck,          # optional .py or .ps1 gate executed BEFORE launching main command (exit 4 on failure)
     [string]$PreCheckArgs = '', # optional arguments for PreCheck script
-    [int]$PreCheckTimeoutSec = 120 # hard timeout for PreCheck (kills tree and exits 124 on timeout)
+    [int]$PreCheckTimeoutSec = 120, # hard timeout for PreCheck (kills tree and exits 124 on timeout)
+    [switch]$SkipRegress,       # Build: do not run the approved-pose regression first (stated in the output when used)
+    [switch]$NoPreCheck,        # skip the default pre-run gate (precheck.py); the output says so
+    [string[]]$RequireAsset,    # /Game/... assets that must exist under the Content of the project the command opens (default gate)
+    [switch]$AllowLocalLlm,     # Capture: do not refuse when a local LLM server holds the GPU
+    [string]$DoneFile,          # editor runs: extra file the driver writes "ESITO: OK|FAIL" to (the UE log is always read as well)
+    [int]$DoneGraceSec = 25     # editor runs: seconds the editor gets to quit by itself after the driver wrote ESITO, then the job is closed
 )
 
 $ErrorActionPreference = 'Stop'
@@ -134,9 +151,32 @@ public class GstnJob {
 
 $Root = (Resolve-Path "$PSScriptRoot\..\..").Path
 
+# Last "ESITO: OK|FAIL" a driver wrote in a file (plain line, or after "LogPython:" in the UE log); $null when none. Reads only the
+# tail and shares the file with the editor that is still writing it.
+function Read-DriverEsito {
+    param([string]$Path)
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return $null }
+    $txt = ''
+    try {
+        $fs = [IO.File]::Open($Path, 'Open', 'Read', 'ReadWrite')
+        try {
+            $len = $fs.Length; $take = [int][Math]::Min($len, 65536)
+            if ($take -le 0) { return $null }
+            $null = $fs.Seek($len - $take, 'Begin')
+            $buf = New-Object byte[] $take
+            $n = $fs.Read($buf, 0, $take)
+            $txt = [Text.Encoding]::UTF8.GetString($buf, 0, $n)
+        } finally { $fs.Dispose() }
+    } catch { return $null }
+    $ms = [regex]::Matches($txt, '(?m)^(?:.*LogPython:\s*)?ESITO:\s*(OK|FAIL)\b')
+    if ($ms.Count -eq 0) { return $null }
+    return $ms[$ms.Count - 1].Groups[1].Value
+}
+
 function Invoke-Timed {
     param([string]$Kind, [string]$Log, [string]$Exe, [string]$ArgLine, [string]$Watch,
-          [double]$MaxSec, [double]$SilentSec, [string]$Cwd, [switch]$Quiet)
+          [double]$MaxSec, [double]$SilentSec, [string]$Cwd, [switch]$Quiet,
+          [switch]$Done, [string]$DoneFile, [int]$GraceSec = 25)
     $logDir = Split-Path $Log -Parent
     if ($logDir) { New-Item -ItemType Directory -Force $logDir | Out-Null }
     if (Test-Path $Log) { Remove-Item $Log -Force }
@@ -146,7 +186,7 @@ function Invoke-Timed {
     $line = "cmd.exe /d /s /c `"`"$Exe`" $ArgLine > `"$Log`" 2>&1`""
     $j = New-Object GstnJob
     $t0 = Get-Date
-    $verdict = $null; $code = $null
+    $verdict = $null; $code = $null; $driver = $null; $driverAt = $null; $closed = $false
     try {
         $j.Start($line, $Cwd)
         $lastSize = -1; $lastChange = Get-Date
@@ -165,6 +205,17 @@ function Invoke-Timed {
                     }
                 }
             }
+            if ($Done) {
+                # the driver says it is finished ("ESITO: OK|FAIL" in its done file or in the UE log) but QUIT_EDITOR may never take effect:
+                # after a grace period the runner closes the job itself instead of waiting for the limit (cleanup plan, fix 4)
+                if (-not $driver) {
+                    $d = Read-DriverEsito $DoneFile
+                    if (-not $d) { $d = Read-DriverEsito $Watch }
+                    if ($d) { $driver = $d; $driverAt = $now }
+                } elseif (($now - $driverAt).TotalSeconds -ge $GraceSec) {
+                    $verdict = if ($driver -eq 'OK') { 'OK' } else { 'FAIL' }; $closed = $true; break
+                }
+            }
             if (($now - $t0).TotalSeconds -ge $MaxSec) { $verdict = 'TIMEOUT'; break }
             $size = -1
             if (Test-Path $Watch) { $fi = Get-Item $Watch; $size = $fi.Length + $fi.LastWriteTimeUtc.Ticks }
@@ -176,13 +227,16 @@ function Invoke-Timed {
     } finally { $j.Close() }
     $secs = [int]((Get-Date) - $t0).TotalSeconds
     if (-not $verdict) { $verdict = if ($code -eq 0) { 'OK' } else { 'FAIL' } }
+    # a TIMEOUT / BLOCCATO / crash AFTER the driver wrote ESITO: OK is a shutdown problem, not a failed attempt (rule 5)
+    if ($driver -eq 'OK' -and $verdict -ne 'OK') { $verdict = 'OK'; $closed = $true }
     $exit = switch ($verdict) { 'OK' { 0 } 'FAIL' { 1 } 'TIMEOUT' { 124 } 'BLOCCATO' { 125 } }
     $tail = ''
     if (Test-Path $Log) {
         $hit = Select-String -Path $Log -Pattern 'error|fail|fatal|crash' -SimpleMatch:$false | Select-Object -Last 1
         if ($hit) { $tail = $hit.Line.Trim(); if ($tail.Length -gt 160) { $tail = $tail.Substring(0, 160) } }
     }
-    $out = @("ESITO: $verdict", "tipo=$Kind durata=${secs}s limite=$([int]$MaxSec)s exit=$code figli_rimasti_uccisi=$left", "log=$Log")
+    $exitTxt = if ($closed) { 'chiuso_dal_runner' } else { "$code" }
+    $out = @("ESITO: $verdict", "tipo=$Kind durata=${secs}s limite=$([int]$MaxSec)s exit=$exitTxt figli_rimasti_uccisi=$left$(if ($driver) { " driver=$driver" })", "log=$Log")
     if ($tail) { $out += "ultima riga errore: $tail" }
     $out | Set-Content -Path $esito -Encoding UTF8
     if (-not $Quiet) { $out | Select-Object -First 5 | ForEach-Object { Write-Host $_ } }
@@ -365,6 +419,23 @@ $Log = if ([IO.Path]::IsPathRooted($Log)) { $Log } else { Join-Path $Root $Log }
 $NoThrottleIni = '-ini:EditorSettings:[/Script/UnrealEd.EditorPerformanceSettings]:bThrottleCPUWhenNotForeground=False'
 switch ($Preset) {
     'Build' {
+        # Rule 13b gate: an approved pose that changed must stop the build, not be discovered after the capture.
+        if (-not $SkipRegress) {
+            $rg = Join-Path $Root 'Tools\AnimPipeline\capdet\regress.py'
+            if (Test-Path -LiteralPath $rg) {
+                $rgOut = & python -I $rg --out "$Log.regress.json" 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    $txt = @("ESITO: FAIL (regressione pose approvate)") + (@($rgOut) | Select-Object -First 4)
+                    $txt | Set-Content -LiteralPath "$Log.esito" -Encoding UTF8
+                    $txt | Write-Output
+                    Write-Output 'BUILD: SALTATA (-SkipRegress per forzare)'
+                    exit 4
+                }
+                $script:RegressNote = @($rgOut) | Where-Object { $_ -match '^REGRESS:' } | Select-Object -First 1
+            }
+        } else {
+            $script:RegressNote = 'REGRESS: SALTATO (-SkipRegress)'
+        }
         $Exe = "$eng\Build\BatchFiles\Build.bat"
         $ArgLine = "$Target Win64 Development `"-Project=$uproject`" -WaitMutex -NoHotReload"
     }
@@ -407,7 +478,31 @@ if ($PreCheck) {
     }
 }
 $isEditor = (Split-Path $Exe -Leaf) -match '^UnrealEditor'
+# Default gate (cleanup plan 2026-11-24, fixes 5, 6, 8): scripts compile, requested assets exist in the project THIS command opens,
+# and a Capture is refused while a local LLM holds the GPU. Before the editor, so a mistake costs seconds, not an hour.
+$preNote = ''
+if ($NoPreCheck) { $preNote = 'precheck: SALTATO (-NoPreCheck)' }
+else {
+    $pcPy = Join-Path $PSScriptRoot 'precheck.py'
+    if (Test-Path -LiteralPath $pcPy) {
+        $pcArgs = @('-I', $pcPy, '--project', (Get-ProjectDir $ArgLine $Root), '--cmdline', "$ArgLine $ExtraArgs")
+        if ($Script) { $pcArgs += @('--py', $(if ([IO.Path]::IsPathRooted($Script)) { $Script } else { Join-Path $Root $Script })) }
+        foreach ($ra in @($RequireAsset)) { if ($ra) { $pcArgs += @('--asset', $ra) } }
+        if ($Kind -eq 'Capture' -and -not $AllowLocalLlm) { $pcArgs += '--vram' }
+        $dpOut = @(& python @pcArgs 2>&1)
+        if ($LASTEXITCODE -ne 0) {
+            $ld = Split-Path "$Log.esito" -Parent; if ($ld) { New-Item -ItemType Directory -Force $ld | Out-Null }
+            $dpTxt = @('ESITO: PRECHECK_FAIL') + @($dpOut | Where-Object { $_ -match '^FAIL' } | Select-Object -First 3) + @("log=$Log.esito")
+            $dpTxt | Set-Content -Path "$Log.esito" -Encoding UTF8
+            $dpTxt | Select-Object -First 5 | ForEach-Object { Write-Host $_ }
+            exit 4
+        }
+        $preNote = 'precheck: OK'
+    } else { $preNote = 'precheck: SALTATO (precheck.py mancante)' }
+}
 $notes = @()
+if ($preNote) { $notes += $preNote }
+if ($script:RegressNote) { $notes += $script:RegressNote }   # the Build preset's rule-13b gate ran before this point
 if ($isEditor) {
     if ($ArgLine -notmatch '(^|\s)-unattended(\s|$)') { $ArgLine = "$ArgLine -unattended" }
     if (-not $KeepRestoreData) { $n = Clear-RestoreData (Get-ProjectDir $ArgLine $Root); if ($n) { $notes += $n } }
@@ -417,7 +512,7 @@ if ($AssertFile) {
     $AssertFile = if ([IO.Path]::IsPathRooted($AssertFile)) { $AssertFile } else { Join-Path $Root $AssertFile }
     Remove-Item -LiteralPath $AssertFile -ErrorAction SilentlyContinue   # a stale OK from an earlier run must never pass this one
 }
-$code = Invoke-Timed $Kind $Log $Exe $ArgLine $WatchFile $maxSec $silentSec $Root -Quiet | Select-Object -Last 1
+$code = Invoke-Timed $Kind $Log $Exe $ArgLine $WatchFile $maxSec $silentSec $Root -Quiet -Done:$isEditor -DoneFile $DoneFile -GraceSec $DoneGraceSec | Select-Object -Last 1
 if ($isEditor) { $n = Restore-PieIni $pieSnap; if ($n) { $notes += $n } }
 $esito = "$Log.esito"
 $lines = @(Get-Content -LiteralPath $esito)

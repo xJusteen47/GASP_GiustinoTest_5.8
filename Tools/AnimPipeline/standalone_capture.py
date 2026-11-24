@@ -66,6 +66,7 @@ class _Run:
     def finish(self):
         unreal.unregister_slate_post_tick_callback(self.h)
         open(os.path.join(JOB["out_dir"], "standalone.done"), "w").write(self.err)
+        unreal.log("ESITO: " + ("FAIL" if self.err else "OK"))  # Run-Timed closes the editor if QUIT_EDITOR does not
         unreal.SystemLibrary.execute_console_command(None, "QUIT_EDITOR")
 
 
