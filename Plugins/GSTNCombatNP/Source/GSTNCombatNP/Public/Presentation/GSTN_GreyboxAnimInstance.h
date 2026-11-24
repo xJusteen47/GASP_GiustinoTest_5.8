@@ -11,6 +11,7 @@ class UAnimMontage;
 class UAnimSequenceBase;
 class UMoverComponent;
 class USkeletalMesh;
+class UGSTN_RunPresentationComponent;
 
 /** How the capsule squashes, stretches and leans (class defaults of ABP_GSTN_GreyboxCapsule; the owner tunes them there) */
 USTRUCT(BlueprintType)
@@ -64,6 +65,20 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	/** ...while moving at least this fast */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Run Stop", meta = (ClampMin = "0", ForceUnits = "cm/s"))
 	float RunStopMinSpeed = 250.f;
+
+	/**
+	 * Skid (owner 2026-11-24, Toad / Luigi reference): it starts as the run stop (the backward plant), the capsule keeps facing the old run
+	 * while the run presentation's skid lasts, then turns to the new facing on this spring and starts running (frantic start again).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Skid")
+	bool bSkidHoldsFacing = true;
+
+	/** Turn after the skid: spring frequency (Hz) and damping (< 1 overshoots a little, cartoon) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Skid", meta = (ClampMin = "0.5", ClampMax = "20", ForceUnits = "Hz"))
+	float SkidTurnFrequency = 4.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Skid", meta = (ClampMin = "0.05", ClampMax = "2"))
+	float SkidTurnDamping = 0.6f;
 
 	/** Spring of squash and lean: frequency (Hz) and damping ratio (< 1 bounces, 1 settles without overshoot) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Spring", meta = (ClampMin = "0.5", ClampMax = "20", ForceUnits = "Hz"))
@@ -245,6 +260,11 @@ private:
 	float TimeSinceStart = -1.f;
 	/** The current run stop already kicked (re-armed once still or speeding up) */
 	bool bRunStopKicked = false;
+	/** Skid: the run presentation (created at BeginPlay), the world yaw held during the skid, and the capsule's yaw offset from the actor */
+	TWeakObjectPtr<UGSTN_RunPresentationComponent> RunPresentation;
+	bool bWasSkidding = false;
+	float SkidHeldYaw = 0.f;
+	FGSTN_GreyboxSpring TurnSpring;
 	/** Driver pelvis reference height, cached per driver mesh asset */
 	TWeakObjectPtr<const USkeletalMesh> PelvisReferenceMesh;
 	float PelvisReferenceHeight = 0.f;

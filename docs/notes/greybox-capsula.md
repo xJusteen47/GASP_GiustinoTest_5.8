@@ -125,3 +125,7 @@ All reversible; class defaults, so the owner retunes them on ABP_GSTN_GreyboxCap
 - **Owner note 2026-11-24 14:06**: additive lean in curves (`TurnLeanDegPer1000` 8, cap `MaxTurnLeanDeg` 25, separate from the forward lean)
   and a run stop plant like Toad in Mario 3D World: braking hard (`RunStopDecel` 1200) from a run (`RunStopMinSpeed` 250) kicks the
   pitch spring backward once (`RunStopKickDeg` 22), as if a foot went forward, and the spring brings it back.
+- **Owner note 2026-11-24 14:07 (skid, Toad / Luigi reference)**: the skid starts as the run stop (the backward plant kick on the skid's
+  first frame), the capsule keeps the old run's facing while the run presentation's `IsSkidding()` lasts (yaw offset from the actor),
+  then turns to the new facing on a spring (`SkidTurnFrequency` 4 Hz, `SkidTurnDamping` 0.6, a little overshoot) and starts with the
+  frantic cadence. Leans and the plant read the acceleration in that held body frame. `bSkidHoldsFacing` turns it off.
