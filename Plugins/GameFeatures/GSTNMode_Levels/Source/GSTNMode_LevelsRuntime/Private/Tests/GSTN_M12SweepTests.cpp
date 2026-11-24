@@ -122,7 +122,7 @@ namespace
 	// ---------------------------------------------------------------------------------------------------------------------------------------------
 	// Scenarios 3 and 4
 
-	FGSTN_SimEvent MakeEvent(const FGameplayTag& Type, int32 Frame = INDEX_NONE, float Magnitude = 1.f)
+	FGSTN_SimEvent MakeSweepEvent(const FGameplayTag& Type, int32 Frame = INDEX_NONE, float Magnitude = 1.f)
 	{
 		FGSTN_SimEvent Event;
 		Event.EventType = Type;
@@ -343,7 +343,7 @@ bool FGSTN_M12SweepRespawnCheckpointTest::RunTest(const FString& Parameters)
 
 	// KO 1, before any checkpoint: the pool pays, the player comes back at the level start (nobody safe to join)
 	TestTrue(TEXT("KO 1 respawns"), Pool.Spend(Cost) == EGSTN_LifeSpendResult::Respawn);
-	Tally.AddEvent(Score, MakeEvent(GSTNRespawnTags::Message_Respawn_Down), 1);
+	Tally.AddEvent(Score, MakeSweepEvent(GSTNRespawnTags::Message_Respawn_Down), 1);
 	TestEqual(TEXT("3 lives left"), Pool.Lives, 3);
 	TestTrue(TEXT("no checkpoint yet: level start"), ChoosePlacement(*Rules, Progress.HasActive(), false, false) == EGSTN_RespawnPlacement::LevelStart);
 	TestEqual(TEXT("20 s later the pool refills one life"), Pool.Advance(Rules->LifeRegenSeconds), 1);
@@ -351,7 +351,7 @@ bool FGSTN_M12SweepRespawnCheckpointTest::RunTest(const FString& Parameters)
 
 	// The team touches checkpoint A, then B; a collectible is taken on the way
 	TestTrue(TEXT("A activates on first touch"), Progress.TryActivate(1, TEXT("Checkpoint_A"), *Rules));
-	Tally.AddEvent(Score, MakeEvent(GSTNMissionTags::Message_Mission_Collected), 1);
+	Tally.AddEvent(Score, MakeSweepEvent(GSTNMissionTags::Message_Mission_Collected), 1);
 	TestTrue(TEXT("B takes over"), Progress.TryActivate(2, TEXT("Checkpoint_B"), *Rules));
 	TestFalse(TEXT("walking back to A does not regress"), Progress.TryActivate(1, TEXT("Checkpoint_A"), *Rules));
 	TestEqual(TEXT("B is the respawn point"), Progress.ActiveId, FName(TEXT("Checkpoint_B")));
@@ -360,7 +360,7 @@ bool FGSTN_M12SweepRespawnCheckpointTest::RunTest(const FString& Parameters)
 	for (int32 KO = 0; KO < 2; ++KO)
 	{
 		TestTrue(TEXT("respawn"), Pool.Spend(Cost) == EGSTN_LifeSpendResult::Respawn);
-		Tally.AddEvent(Score, MakeEvent(GSTNRespawnTags::Message_Respawn_Down), 1);
+		Tally.AddEvent(Score, MakeSweepEvent(GSTNRespawnTags::Message_Respawn_Down), 1);
 		TestTrue(TEXT("placed at the active checkpoint"), ChoosePlacement(*Rules, Progress.HasActive(), true, false) == EGSTN_RespawnPlacement::Checkpoint);
 	}
 	TestEqual(TEXT("2 lives left"), Pool.Lives, 2);
@@ -372,9 +372,9 @@ bool FGSTN_M12SweepRespawnCheckpointTest::RunTest(const FString& Parameters)
 
 	// KO 4 leaves one life and KO 5 empties the pool: it restarts the team from the checkpoint (everyone comes back, nobody joins a teammate)
 	TestTrue(TEXT("KO 4 respawns"), Pool.Spend(Cost) == EGSTN_LifeSpendResult::Respawn);
-	Tally.AddEvent(Score, MakeEvent(GSTNRespawnTags::Message_Respawn_Down), 1);
+	Tally.AddEvent(Score, MakeSweepEvent(GSTNRespawnTags::Message_Respawn_Down), 1);
 	const EGSTN_LifeSpendResult Last = Pool.Spend(Cost);
-	Tally.AddEvent(Score, MakeEvent(GSTNRespawnTags::Message_Respawn_Down), 1);
+	Tally.AddEvent(Score, MakeSweepEvent(GSTNRespawnTags::Message_Respawn_Down), 1);
 	TestTrue(TEXT("the KO that empties the pool restarts the team"), Last == EGSTN_LifeSpendResult::TeamRestart);
 	TestEqual(TEXT("empty"), Pool.Lives, 0);
 	TestTrue(TEXT("a team restart uses the checkpoint, not a teammate"), ChoosePlacement(*Rules, Progress.HasActive(), true, true) == EGSTN_RespawnPlacement::Checkpoint);
@@ -441,12 +441,12 @@ bool FGSTN_M12SweepMissionReplicateTest::RunTest(const FString& Parameters)
 	FGSTN_SimEventOutbox Client;
 	for (int32 Pass = 0; Pass < 3; ++Pass)
 	{
-		Client.Add(MakeEvent(GSTNMissionTags::Message_Mission_Collected, 100));
+		Client.Add(MakeSweepEvent(GSTNMissionTags::Message_Mission_Collected, 100));
 	}
 	TestEqual(TEXT("the client publishes nothing"), Client.Flush(false, [](FGSTN_SimEvent&) {}), 0);
 
 	FGSTN_SimEventOutbox Host;
-	Host.Add(MakeEvent(GSTNMissionTags::Message_Mission_Collected, 100));
+	Host.Add(MakeSweepEvent(GSTNMissionTags::Message_Mission_Collected, 100));
 	TestEqual(TEXT("the host published one event"), Host.Flush(true, HostEvent), 1);
 	TestTrue(TEXT("and its outbox is empty"), Host.IsEmpty());
 	TestEqual(TEXT("one collectible counted"), Tracker.GetObjectives()[0].Progress, 1);
@@ -456,7 +456,7 @@ bool FGSTN_M12SweepMissionReplicateTest::RunTest(const FString& Parameters)
 
 	// Collectible 2
 	FGSTN_SimEventOutbox Host2;
-	Host2.Add(MakeEvent(GSTNMissionTags::Message_Mission_Collected, 160));
+	Host2.Add(MakeSweepEvent(GSTNMissionTags::Message_Mission_Collected, 160));
 	Host2.Flush(true, HostEvent);
 	TestTrue(TEXT("the mission completed"), Tracker.GetState() == EGSTN_MissionState::Completed);
 	TestTrue(TEXT("the objective completed"), Tracker.GetObjectives()[0].State == EGSTN_ObjectiveState::Completed);
