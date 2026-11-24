@@ -1,1 +1,2 @@
 - 2026-11-22 | runstart-w3 + gstn-anim-cycle-cheap | claude/runstart-generic-desktop | w3 (29) 5/6 SI (resta arm_r fase v92 + yaw reset v77), skill cheap + junction Antigravity | 0 $ (agy_student)
+- 2026-11-24 | T0 inventario clip approvate | claude/skill-anim-t0-inventory-2026-11-24 | 4 lock verificati (w1, w2, v4r5, v4r7); w3, jab v12, ftilt v3.1, dair da confermare; handover docs/notes/handovers/t0-inventario-approvate-2026-11-24.md | 0.30 $ (haiku, 0 subagenti)
