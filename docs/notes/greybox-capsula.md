@@ -167,3 +167,6 @@ What the frames show (r2_d, Base 2; r2_c Base 1 same behaviour):
   (tilt -72, lean -25).
 - **Run start sway** (owner 14:32): `FranticAmplitude` 1.4 -> 0.7. If ABP_GSTN_GreyboxCapsule saved its own value, set it there too.
 - **Playtest jab**: still to find what presents it without a montage (desktop, editor).
+- **Owner 14:38**: "skirts / rolls of flesh" at the end of the dropkick instead of a plain squash: body and nose now rigid on the pelvis
+  (`RIGID_BODY`, `GREYBOX_RIGID_BODY=0` restores the spine blend) and the clips put the whole lean on the pelvis (`PELVIS_LEAN_SHARE` 1).
+  Hand markers radius 7 -> 10 and red (material id 1). Needs `GREYBOX_REBUILD_MESH=1 GREYBOX_STEPS=mesh` before make_capsule_clips.py.
