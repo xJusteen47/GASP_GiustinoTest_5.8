@@ -39,7 +39,7 @@ MOVE_FILTER = [s.strip().lower() for s in os.environ.get('MOVE_FILTER', 'Overlor
 SEQUENCE_FILTER = [s.strip().lower() for s in os.environ.get('SEQUENCE_FILTER', 'Jab,Punch,Kick,Attack').split(',') if s.strip()]
 EXTRA_SEQUENCES = [s.strip() for s in os.environ.get('SEQUENCES', '').split(',') if s.strip()]
 # Run 2: share of the 'lean' the pelvis takes (the capsule hangs from it: without it the lower body never tilts)
-PELVIS_LEAN_SHARE = float(os.environ.get('PELVIS_LEAN_SHARE', '0.35'))
+PELVIS_LEAN_SHARE = float(os.environ.get('PELVIS_LEAN_SHARE', '1.0'))  # run 3: rigid body on the pelvis (setup_greybox_assets RIGID_BODY)
 
 lines = []
 errors = []

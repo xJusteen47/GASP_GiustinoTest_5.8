@@ -46,7 +46,13 @@ CAPSULE_BOTTOM = _shape[1]
 CAPSULE_HEIGHT = _shape[2] - _shape[1]
 NOSE_LENGTH = 16.0
 NOSE_RADIUS = 6.0
-MARKER_RADIUS = {'hand_l': 7.0, 'hand_r': 7.0, 'foot_l': 8.0, 'foot_r': 8.0}
+MARKER_RADIUS = {'hand_l': 10.0, 'hand_r': 10.0, 'foot_l': 8.0, 'foot_r': 8.0}
+# Owner 2026-11-24 14:38: hand markers a bit bigger and red (material id 1, the nose's red)
+RED_MARKERS = {'hand_l', 'hand_r'}
+# Run 3 (owner 2026-11-24 14:38: "skirts or rolls of flesh" at the end of the dropkick instead of just compressing): the whole body and
+# the nose are rigid on the pelvis, so the capsule only tilts and squashes as a block; the clips put the whole lean on the pelvis
+# (make_capsule_clips.py PELVIS_LEAN_SHARE 1). GREYBOX_RIGID_BODY=0 brings back the blend along the spine chain.
+RIGID_BODY = os.environ.get('GREYBOX_RIGID_BODY', '1') != '0'
 BODY_CHAIN = ['root', 'pelvis', 'spine_01', 'spine_03', 'spine_05', 'neck_01', 'head']
 
 STATES = ['Idle', 'RunStart', 'Run', 'RunStop', 'Skid', 'Air', 'Crouch']
@@ -142,7 +148,7 @@ def body_weights(z, chain_z):
     """Two-bone linear blend along the body chain by height. Run 2 (2026-11-24): everything under the pelvis is rigid on the pelvis, not
     blended to root: pinned to the ground the capsule bent like a banana and could never lie flat (dropkick) or sit low (crouch). The
     ground squash is procedural now (GSTN Greybox Shape scales the pelvis by its height over the reference)."""
-    if z <= chain_z[1]:
+    if RIGID_BODY or z <= chain_z[1]:
         return [('pelvis', 1.0)]
     for i in range(len(BODY_CHAIN) - 1):
         z0, z1 = chain_z[i], chain_z[i + 1]
@@ -215,10 +221,10 @@ def step_mesh():
     nose_z = CAPSULE_BOTTOM + CAPSULE_HEIGHT - CAPSULE_RADIUS * 0.9
     nose_t = unreal.Transform(location=unreal.Vector(0, CAPSULE_RADIUS - 2.0, nose_z), rotation=unreal.Rotator(0, 0, -90))
     prims.append_cone(mesh, nose_opts, nose_t, NOSE_RADIUS, 1.0, NOSE_LENGTH, 12, 1, True, unreal.GeometryScriptPrimitiveOriginMode.BASE)
-    parts.append((start, vcount(), 'head'))
+    parts.append((start, vcount(), 'pelvis' if RIGID_BODY else 'head'))
     for bone, radius in MARKER_RADIUS.items():
         start = vcount()
-        prims.append_sphere_lat_long(mesh, opts, unreal.Transform(location=pos[bone]), radius, 8, 12,
+        prims.append_sphere_lat_long(mesh, nose_opts if bone in RED_MARKERS else opts, unreal.Transform(location=pos[bone]), radius, 8, 12,
                                      unreal.GeometryScriptPrimitiveOriginMode.CENTER)
         parts.append((start, vcount(), bone))
 
