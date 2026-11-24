@@ -91,6 +91,12 @@ bool FGSTN_GreyboxShapeTest::RunTest(const FString& Parameters)
 	const FVector AtFootfall = UGSTN_GreyboxAnimInstance::RunSway(Settings, 0.f, 1.f, NodPitch);
 	TestTrue(TEXT("footfall bobs down and nods forward"), AtFootfall.X < 0.f && NodPitch < 0.f);
 	TestTrue(TEXT("no amplitude = no sway"), UGSTN_GreyboxAnimInstance::RunSway(Settings, 1.f, 0.f, NodPitch).IsNearlyZero());
+	// Owner 14:35: a hard brake tips the top against the motion (the leg on the motion's side goes in front)
+	const FRotator BrakeForward = UGSTN_GreyboxAnimInstance::PlantLean(FVector(1.f, 0.f, 0.f), 20.f);
+	TestTrue(TEXT("forward brake tips back"), FMath::IsNearlyEqual(BrakeForward.Pitch, 20.f) && FMath::IsNearlyZero(BrakeForward.Roll));
+	const FRotator BrakeRight = UGSTN_GreyboxAnimInstance::PlantLean(FVector(0.f, 1.f, 0.f), 20.f);
+	TestTrue(TEXT("brake of a motion to the right tips left"), FMath::IsNearlyEqual(BrakeRight.Roll, -20.f) && FMath::IsNearlyZero(BrakeRight.Pitch));
+	TestTrue(TEXT("no motion = no kick"), UGSTN_GreyboxAnimInstance::PlantLean(FVector::ZeroVector, 20.f).IsNearlyZero());
 	TestTrue(TEXT("no pelvis squash in the air"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, false, 40.f, 95.f), 1.f));
 	return true;
 }

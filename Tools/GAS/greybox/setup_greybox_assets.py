@@ -20,6 +20,7 @@ Idempotent: an existing asset is reused and only its missing parts are added; th
 Editor APIs that vary between engine versions (Geometry Script, chooser parameters) are probed; a missing one is reported with the names
 that exist, so the next run can be fixed without guessing.
 """
+import math
 import os
 import time
 
@@ -35,7 +36,7 @@ STOCK_ABP = '/Game/GSTN/Locomotion/StockBase/ABP_GSTN_StockMover'
 ANIMS = '/Game/Characters/UEFN_Mannequin/Animations'
 OUT = unreal.Paths.project_saved_dir() + 'Greybox/setup_greybox_assets.txt'
 SAVE = os.environ.get('GSTN_SAVE') == '1'
-STEPS = [s.strip() for s in os.environ.get('GREYBOX_STEPS', 'mesh,capsule_abp,chooser,simple_abp,warping').split(',') if s.strip()]
+STEPS = [s.strip() for s in os.environ.get('GREYBOX_STEPS', 'mesh,accessories,capsule_abp,chooser,simple_abp,warping').split(',') if s.strip()]
 
 # Capsule shape (cm): the mannequin is ~180 cm; the capsule reads as the body volume, the nose as the facing (mesh +Y = forward)
 # Owner 2026-11-24 (run 2 note): floating a little above the ground, its top below the top of the collision capsule, chubbier.
@@ -347,6 +348,86 @@ def assign_materials(asset):
         fail('mesh: materials not assigned: %s' % exc)
 
 
+# ------------------------------------------------------------------------------------------------------------- kit look (owner 14:43)
+# Static meshes modelled in the capsule's component space (mesh +Y forward, Z up, feet at 0); UGSTN_GreyboxSubsystem attaches them to the
+# capsule's pelvis with the inverse of its reference transform, so they sit here and tilt/squash with the rigid body.
+# Collar: the kit's stand-in (its colour = ColourForKit, set at runtime): a half ring of boxes behind the upper back.
+COLLAR_Z = CAPSULE_BOTTOM + CAPSULE_HEIGHT - CAPSULE_RADIUS + 4.0
+COLLAR_RADIUS = CAPSULE_RADIUS + 3.0
+COLLAR_SEGMENTS = 9
+COLLAR_SIZE = (5.0, 16.0)  # thickness, height
+# Greatsword (Overlord kit): Ganondorf : his sword = Overlord : his sword, about 0.7 of the body height (~180 cm) -> ~126 cm overall.
+# Built along +Z from the pommel: pommel, grip, guard, blade widening toward the tip (flat rhombus section), short tip.
+SWORD = {'pommel_r': 3.0, 'grip': 22.0, 'guard': (26.0, 6.0, 5.0), 'blade': 88.0, 'blade_r': (5.5, 9.0), 'tip': 10.0, 'flat': 0.22}
+# On the back: pommel over one shoulder, blade diagonal across the back (owner 14:45: on the back by default)
+SWORD_POMMEL = (14.0, -(CAPSULE_RADIUS + 9.0), CAPSULE_BOTTOM + CAPSULE_HEIGHT + 6.0)
+SWORD_DIRECTION = (-0.45, 0.0, -0.89)
+ACCESSORIES = {'SM_GSTN_Greybox_Collar': 'collar', 'SM_GSTN_Greybox_Greatsword': 'sword'}
+
+
+def build_collar(mesh, opts):
+    prims = unreal.GeometryScript_Primitives
+    arc = math.pi / COLLAR_SEGMENTS
+    for i in range(COLLAR_SEGMENTS):
+        a = (i + 0.5) * arc  # 0 = +X side, pi/2 = straight behind (-Y), pi = -X side
+        loc = unreal.Vector(COLLAR_RADIUS * math.cos(a), -COLLAR_RADIUS * math.sin(a), COLLAR_Z)
+        yaw = math.degrees(math.atan2(-math.cos(a), -math.sin(a)))  # box X along the ring's tangent
+        prims.append_box(mesh, opts, unreal.Transform(location=loc, rotation=unreal.Rotator(roll=0.0, pitch=0.0, yaw=yaw)),
+                         COLLAR_RADIUS * arc * 1.15, COLLAR_SIZE[0], COLLAR_SIZE[1], 0, 0, 0, unreal.GeometryScriptPrimitiveOriginMode.CENTER)
+
+
+def build_sword(mesh, opts):
+    prims = unreal.GeometryScript_Primitives
+    s = SWORD
+    flat = unreal.Vector(1.0, s['flat'], 1.0)
+    prims.append_sphere_lat_long(mesh, opts, unreal.Transform(), s['pommel_r'], 6, 8, unreal.GeometryScriptPrimitiveOriginMode.CENTER)
+    prims.append_box(mesh, opts, unreal.Transform(location=unreal.Vector(0, 0, s['grip'] * 0.5 + 1.0)), 4.0, 4.0, s['grip'], 0, 0, 0,
+                     unreal.GeometryScriptPrimitiveOriginMode.CENTER)
+    guard_z = s['grip'] + 1.0 + s['guard'][2] * 0.5
+    prims.append_box(mesh, opts, unreal.Transform(location=unreal.Vector(0, 0, guard_z)), s['guard'][0], s['guard'][1], s['guard'][2], 0, 0, 0,
+                     unreal.GeometryScriptPrimitiveOriginMode.CENTER)
+    blade_z = guard_z + s['guard'][2] * 0.5
+    # 4 radial steps = a rhombus section (points on +-X, +-Y); flattening Y makes the edges
+    prims.append_cone(mesh, opts, unreal.Transform(location=unreal.Vector(0, 0, blade_z), scale=flat), s['blade_r'][0], s['blade_r'][1],
+                      s['blade'], 4, 1, True, unreal.GeometryScriptPrimitiveOriginMode.BASE)
+    prims.append_cone(mesh, opts, unreal.Transform(location=unreal.Vector(0, 0, blade_z + s['blade']), scale=flat), s['blade_r'][1], 0.5,
+                      s['tip'], 4, 1, True, unreal.GeometryScriptPrimitiveOriginMode.BASE)
+    direction = unreal.Vector(*SWORD_DIRECTION).normal()
+    place = unreal.Transform(location=unreal.Vector(*SWORD_POMMEL), rotation=unreal.MathLibrary.make_rot_from_z(direction))
+    unreal.GeometryScript_MeshTransforms.transform_mesh(mesh, place)
+
+
+def step_accessories():
+    grey = make_material(MATERIALS[0][1], MATERIALS[0][2])
+    for name, kind in ACCESSORIES.items():
+        path = '%s/%s' % (DIR, name)
+        mesh = unreal.DynamicMesh()
+        opts = unreal.GeometryScriptPrimitiveOptions()
+        (build_collar if kind == 'collar' else build_sword)(mesh, opts)
+        verts = unreal.GeometryScript_MeshQueries.get_vertex_count(mesh)
+        if eal.does_asset_exist(path):
+            asset = eal.load_asset(path)
+            outcome = unreal.GeometryScript_AssetUtils.copy_mesh_to_static_mesh(
+                mesh, asset, unreal.GeometryScriptCopyMeshToAssetOptions(), unreal.GeometryScriptMeshWriteLOD())
+            p('accessory: rewritten', path, 'vertices', verts, 'outcome', outcome)
+        else:
+            result = unreal.GeometryScript_NewAssetUtils.create_new_static_mesh_asset_from_mesh(
+                mesh, path, unreal.GeometryScriptCreateNewStaticMeshAssetOptions())
+            asset = result[0] if isinstance(result, tuple) else result
+            p('accessory: created', path, 'vertices', verts)
+        if not asset:
+            fail('accessory %s not written' % path)
+            continue
+        try:
+            slot = unreal.StaticMaterial()
+            slot.set_editor_property('material_interface', grey)
+            slot.set_editor_property('material_slot_name', 'Body')
+            asset.set_editor_property('static_materials', [slot])
+        except Exception as exc:
+            fail('accessory %s: material not assigned: %s' % (name, exc))
+        save(path)
+
+
 # --------------------------------------------------------------------------------------------------------------------- capsule ABP
 
 def make_abp(name, parent_class, skeleton):
@@ -519,6 +600,8 @@ def step_warping(bp):
 def run():
     p('setup_greybox_assets', time.strftime('%Y-%m-%d %H:%M:%S'), 'SAVE' if SAVE else 'DRY RUN', 'steps', STEPS)
     mesh = step_mesh() if 'mesh' in STEPS else (eal.load_asset('%s/%s' % (DIR, MESH_NAME)) if eal.does_asset_exist('%s/%s' % (DIR, MESH_NAME)) else None)
+    if 'accessories' in STEPS:
+        step_accessories()
     if 'capsule_abp' in STEPS:
         step_capsule_abp(mesh)
     cht = step_chooser() if 'chooser' in STEPS else (eal.load_asset('%s/%s' % (DIR, CHOOSER_NAME)) if eal.does_asset_exist('%s/%s' % (DIR, CHOOSER_NAME)) else None)

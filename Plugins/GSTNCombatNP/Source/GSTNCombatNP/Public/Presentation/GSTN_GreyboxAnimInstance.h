@@ -30,7 +30,7 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 
 	/** Landing squash per 1000 cm/s of fall speed at touchdown (a kick into the spring, it bounces back) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Squash", meta = (ClampMin = "0", ClampMax = "1"))
-	float LandSquashPer1000 = 0.45f;
+	float LandSquashPer1000 = 0.6f;
 
 	/** Squash when the ground speed jumps (a run start, a burst): per 1000 cm/s² of forward acceleration */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Squash", meta = (ClampMin = "0", ClampMax = "1"))
@@ -81,6 +81,49 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Skid", meta = (ClampMin = "0.05", ClampMax = "2"))
 	float SkidTurnDamping = 0.6f;
+
+	/**
+	 * Jump squat (owner 2026-11-24 14:35; the sim's 3 squat frames before the take-off, FGSTN_JumpState::SquatFramesLeft): the capsule
+	 * squashes to this fast, then the take-off releases the spring into the air stretch
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Jump Squat", meta = (ClampMin = "0.3", ClampMax = "1"))
+	float JumpSquatSquash = 0.72f;
+
+	/** How fast the squat squash is reached, 1/s (the squat lasts ~50 ms) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Jump Squat", meta = (ClampMin = "1"))
+	float JumpSquatBlendSpeed = 45.f;
+
+	/**
+	 * Wall movement (owner 2026-11-24 14:35): Mover modes that are a wall slide or climb. On a wall the capsule leans its top away from the
+	 * wall (the bottom presses it), rattles with the slide speed, leans into a sideways push like on the ground, and plants on a hard brake
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall")
+	TArray<FName> WallModeNames = {TEXT("WallSliding"), TEXT("WallSlidingV2"), TEXT("WallClimbingV2")};
+
+	/** Lean of the top away from the wall while on it */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "0", ClampMax = "45", ForceUnits = "deg"))
+	float WallLeanDeg = 10.f;
+
+	/** Friction rattle at WallRattleSpeed (roll, degrees) and its frequency */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "0", ClampMax = "15", ForceUnits = "deg"))
+	float WallRattleDeg = 2.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "1", ForceUnits = "cm/s"))
+	float WallRattleSpeed = 600.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "1", ClampMax = "30", ForceUnits = "Hz"))
+	float WallRattleHz = 14.f;
+
+	/** A hard brake on the wall (the wall slide skid): deceleration along the slide at least this, moving at least WallSkidMinSpeed */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "0", ForceUnits = "cm/s2"))
+	float WallSkidDecel = 1500.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "0", ForceUnits = "cm/s"))
+	float WallSkidMinSpeed = 300.f;
+
+	/** How far the wall is looked for around the capsule (presentation traces, only while in a wall mode) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Wall", meta = (ClampMin = "10", ForceUnits = "cm"))
+	float WallProbeDistance = 90.f;
 
 	/** Spring of squash and lean: frequency (Hz) and damping ratio (< 1 bounces, 1 settles without overshoot) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Spring", meta = (ClampMin = "0.5", ClampMax = "20", ForceUnits = "Hz"))
@@ -223,6 +266,13 @@ public:
 	/** Pure: the sway at a cycle phase (radians) and amplitude: X squash delta, Y roll, Z twist yaw (degrees); OutPitch the nod */
 	static FVector RunSway(const FGSTN_GreyboxShapeSettings& Settings, float Phase, float Amplitude, float& OutPitch);
 
+	/**
+	 * Pure: the plant kick of a hard brake as a lean (pitch, roll, degrees in the body frame), from the braking motion's direction in that
+	 * frame (owner 2026-11-24 14:35: the body tips back against the motion as if the leg on the side it moves toward went in front of it to
+	 * stop faster): braking a forward run tips the top back, braking a run to the right tips it left
+	 */
+	static FRotator PlantLean(const FVector& LocalMoveDirection, float KickDeg);
+
 	/** Pure: does this frame start a run stop (braking hard from a run, not already kicked)? */
 	static bool StartsRunStop(const FGSTN_GreyboxShapeSettings& Settings, bool bOnGround, float Speed2D, float ForwardAcceleration, bool bAlreadyKicked);
 
@@ -235,6 +285,12 @@ protected:
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
 
 private:
+	/** Adds a plant kick (PlantLean of the world move direction in the body frame) to the lean springs */
+	void KickPlant(const FQuat& BodyQuat, const FVector& WorldMoveDirection, float KickDeg);
+
+	/** On a wall mode: finds the wall's outward normal around the owner (presentation traces); zero when none */
+	FVector FindWallNormal(const AActor& Owner, const FQuat& BodyQuat) const;
+
 	/** The move override of this frame from the driver's active montage */
 	void UpdateMoveOverride();
 
@@ -265,6 +321,10 @@ private:
 	bool bHasPrevious = false;
 	bool bWasOnGround = true;
 	float LastAirVelocityZ = 0.f;
+	/** Wall: the outward normal found this frame (zero off a wall), the previous 3D velocity on it, the rattle phase, the skid kicked */
+	FVector WallNormal = FVector::ZeroVector;
+	float WallRattlePhase = 0.f;
+	bool bWallSkidKicked = false;
 	/** Run sway cycle phase (radians) and its smoothed amplitude */
 	float SwayPhase = 0.f;
 	float SwayAmplitude = 0.f;

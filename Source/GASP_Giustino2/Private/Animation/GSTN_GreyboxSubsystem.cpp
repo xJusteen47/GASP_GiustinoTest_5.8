@@ -2,6 +2,13 @@
 
 #include "Animation/AnimInstance.h"
 #include "Animation/GSTN_LocoBaseSubsystem.h"
+#include "AnimationRuntime.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
+#include "GameFramework/PlayerState.h"
+#include "Loadout/GSTN_LoadoutComponent.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Pickups/GSTN_KitPlaceholderLook.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
@@ -19,12 +26,33 @@ namespace GSTNGreybox
 		TEXT("with a nose that copies the hidden driver's pose and squashes / leans. Hitboxes unchanged. Pair with gstn.Loco.Base 2."),
 		ECVF_Default);
 
+	static TAutoConsoleVariable<FString> CVarSwordKits(
+		TEXT("gstn.Greybox.SwordKits"), TEXT("Overlord,Playtest"),
+		TEXT("Kits whose asset name contains one of these comma-separated parts carry the greatsword on the greybox capsule's back."),
+		ECVF_Default);
+
 	static const FName CapsuleComponentName(TEXT("GSTN_GreyboxCapsule"));
+	static const FName PelvisBone(TEXT("pelvis"));
 }
 
 bool UGSTN_GreyboxSubsystem::IsEnabled()
 {
 	return GSTNGreybox::CVarGreybox.GetValueOnGameThread() != 0;
+}
+
+bool UGSTN_GreyboxSubsystem::KitCarriesSword(const FString& KitName, const FString& SwordKits)
+{
+	TArray<FString> Parts;
+	SwordKits.ParseIntoArray(Parts, TEXT(","), true);
+	for (FString& Part : Parts)
+	{
+		Part.TrimStartAndEndInline();
+		if (!Part.IsEmpty() && KitName.Contains(Part, ESearchCase::IgnoreCase))
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 bool UGSTN_GreyboxSubsystem::ShouldCreateSubsystem(UObject* Outer) const
@@ -91,6 +119,9 @@ bool UGSTN_GreyboxSubsystem::LoadAssets()
 		CapsuleMesh = LoadObject<USkeletalMesh>(nullptr, CapsuleMeshPath);
 		CapsuleAnimClass = LoadClass<UAnimInstance>(nullptr, CapsuleAnimClassPath);
 		bLoadFailed = !CapsuleMesh.IsValid() || !CapsuleAnimClass.IsValid();
+		// Optional: without them the capsule simply shows no kit look (older asset sets)
+		CollarMesh = LoadObject<UStaticMesh>(nullptr, CollarMeshPath, nullptr, LOAD_Quiet | LOAD_NoWarn);
+		SwordMesh = LoadObject<UStaticMesh>(nullptr, SwordMeshPath, nullptr, LOAD_Quiet | LOAD_NoWarn);
 		if (bLoadFailed)
 		{
 			UE_LOG(LogGSTNGreybox, Warning, TEXT("gstn.Greybox: cannot load %s or %s (run Tools/GAS/greybox/setup_greybox_assets.py)"),
@@ -129,6 +160,7 @@ void UGSTN_GreyboxSubsystem::Tick(float DeltaTime)
 		}
 		else if (bEnabled && State)
 		{
+			UpdateKitLook(*Mesh, *State);
 			// Something else (a skin swap, a loadout) may show the driver or attach new visuals again: keep them hidden
 			if (Mesh->bHiddenInGame == false)
 			{
@@ -165,6 +197,8 @@ void UGSTN_GreyboxSubsystem::Enable(USkeletalMeshComponent* Driver)
 
 	FDriverState State;
 	State.Capsule = Capsule;
+	State.Collar = AddAccessory(*Capsule, CollarMesh.Get(), TEXT("GSTN_GreyboxCollar"));
+	State.Sword = AddAccessory(*Capsule, SwordMesh.Get(), TEXT("GSTN_GreyboxSword"));
 	State.TickOption = static_cast<uint8>(Driver->VisibilityBasedAnimTickOption);
 	State.bDriverWasHidden = Driver->bHiddenInGame;
 	for (USceneComponent* Child : Driver->GetAttachChildren())
@@ -195,6 +229,13 @@ void UGSTN_GreyboxSubsystem::Enable(USkeletalMeshComponent* Driver)
 
 void UGSTN_GreyboxSubsystem::Disable(USkeletalMeshComponent* Driver, FDriverState& State)
 {
+	for (UStaticMeshComponent* Accessory : {State.Collar.Get(), State.Sword.Get()})
+	{
+		if (Accessory)
+		{
+			Accessory->DestroyComponent();
+		}
+	}
 	if (USkeletalMeshComponent* Capsule = State.Capsule.Get())
 	{
 		Capsule->DestroyComponent();
@@ -209,6 +250,63 @@ void UGSTN_GreyboxSubsystem::Disable(USkeletalMeshComponent* Driver, FDriverStat
 	Driver->VisibilityBasedAnimTickOption = static_cast<EVisibilityBasedAnimTickOption>(State.TickOption);
 	Driver->SetHiddenInGame(State.bDriverWasHidden, false);
 	UE_LOG(LogGSTNGreybox, Log, TEXT("gstn.Greybox=0: %s restored"), *GetNameSafe(Driver->GetOwner()));
+}
+
+UStaticMeshComponent* UGSTN_GreyboxSubsystem::AddAccessory(USkeletalMeshComponent& Capsule, UStaticMesh* Mesh, FName Name)
+{
+	const USkeletalMesh* CapsuleAsset = Capsule.GetSkeletalMeshAsset();
+	const int32 Pelvis = CapsuleAsset ? CapsuleAsset->GetRefSkeleton().FindBoneIndex(GSTNGreybox::PelvisBone) : INDEX_NONE;
+	if (!Mesh || Pelvis == INDEX_NONE)
+	{
+		return nullptr;
+	}
+	UStaticMeshComponent* Accessory = NewObject<UStaticMeshComponent>(Capsule.GetOwner(), Name, RF_Transient);
+	Accessory->SetStaticMesh(Mesh);
+	Accessory->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	Accessory->SetGenerateOverlapEvents(false);
+	Accessory->SetHiddenInGame(true);
+	// Modelled in the capsule's component space: undo the pelvis's reference transform so it sits where it was modelled and then rides
+	// the pelvis (the capsule body is rigid on it)
+	Accessory->SetupAttachment(&Capsule, GSTNGreybox::PelvisBone);
+	Accessory->SetRelativeTransform(FAnimationRuntime::GetComponentSpaceTransformRefPose(CapsuleAsset->GetRefSkeleton(), Pelvis).Inverse());
+	Accessory->RegisterComponent();
+	return Accessory;
+}
+
+void UGSTN_GreyboxSubsystem::UpdateKitLook(USkeletalMeshComponent& Driver, FDriverState& State)
+{
+	const APawn* Pawn = Cast<APawn>(Driver.GetOwner());
+	const APlayerState* PlayerState = Pawn ? Pawn->GetPlayerState() : nullptr;
+	const UGSTN_LoadoutComponent* Loadout = PlayerState ? PlayerState->FindComponentByClass<UGSTN_LoadoutComponent>() : nullptr;
+	if (!Loadout && Pawn)
+	{
+		Loadout = Pawn->FindComponentByClass<UGSTN_LoadoutComponent>();
+	}
+	const FPrimaryAssetId Kit = Loadout && Loadout->HasLoadout() ? Loadout->GetApplied().PrimaryKit : FPrimaryAssetId();
+	const bool bHasKit = Kit.IsValid();
+	if (State.ShownKit == Kit && State.bKitShown == bHasKit)
+	{
+		return;
+	}
+	State.ShownKit = Kit;
+	State.bKitShown = bHasKit;
+	if (UStaticMeshComponent* Collar = State.Collar.Get())
+	{
+		Collar->SetHiddenInGame(!bHasKit);
+		if (bHasKit)
+		{
+			// Same colour as the kit's box on the ground and on a back: the collar is that box's greybox look
+			if (UMaterialInstanceDynamic* Material = Collar->CreateAndSetMaterialInstanceDynamic(0))
+			{
+				Material->SetVectorParameterValue(TEXT("Color"), UGSTN_KitPlaceholderLookSubsystem::ColourForKit(Kit));
+			}
+		}
+	}
+	if (UStaticMeshComponent* Sword = State.Sword.Get())
+	{
+		Sword->SetHiddenInGame(!bHasKit || !KitCarriesSword(Kit.PrimaryAssetName.ToString(), GSTNGreybox::CVarSwordKits.GetValueOnGameThread()));
+	}
+	UE_LOG(LogGSTNGreybox, Log, TEXT("gstn.Greybox: %s kit look %s"), *GetNameSafe(Pawn), *Kit.ToString());
 }
 
 TStatId UGSTN_GreyboxSubsystem::GetStatId() const

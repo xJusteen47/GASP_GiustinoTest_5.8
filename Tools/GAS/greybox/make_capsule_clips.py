@@ -101,8 +101,21 @@ HIT_A = {'lean': -20, 'twist': -10, 'head': -15, 'arm_l': 40, 'arm_r': 30, 'out_
 ROLL_A = {'drop': 40, 'tilt': 50, 'lean': 40, 'head': 30, 'leg_l': 100, 'knee_l': 130, 'leg_r': 100, 'knee_r': 130, 'arm_l': 60, 'arm_r': 60, 'elbow_l': 90, 'elbow_r': 90}
 GENERIC_A = {'lean': -8, 'drop': 6, 'arm_l': -20, 'arm_r': -20}
 GENERIC_B = {'lean': 20, 'fwd': 5, 'arm_l': 60, 'arm_r': 60, 'elbow_l': 20, 'elbow_r': 20}
+# Owner 2026-11-24 14:43 (the rest of the Overlord moves on the capsule): second jab with the other hand, the dair landings, the dropkick's
+# tech bounce. More specific patterns first (the first row whose pattern the name contains wins)
+JAB2_A = {'lean': -4, 'twist': 15, 'arm_l': -10, 'elbow_l': 110, 'arm_r': 40, 'elbow_r': 90, 'drop': 4, 'leg_r': 20, 'knee_r': 15}
+JAB2_B = {'lean': 16, 'twist': -28, 'arm_l': 88, 'elbow_l': 5, 'arm_r': 15, 'elbow_r': 100, 'drop': 7, 'fwd': 8, 'leg_r': 30, 'knee_r': 20, 'leg_l': -15}
+DAIR_LAND_A = {'drop': 26, 'lean': 28, 'head': -10, 'arm_l': 30, 'arm_r': 30, 'out_l': 50, 'out_r': 50, 'elbow_l': 40, 'elbow_r': 40,
+               'leg_l': 60, 'knee_l': 100, 'leg_r': 60, 'knee_r': 100}
+DAIR_LAND_B = dict(DAIR_LAND_A, drop=14, lean=12)
+TECH_A = dict(DROPKICK_B, tilt=-80, lean=-15)
+TECH_B = {'drop': 30, 'tilt': 40, 'lean': 35, 'head': 25, 'leg_l': 100, 'knee_l': 130, 'leg_r': 100, 'knee_r': 130, 'arm_l': 50,
+          'arm_r': 50, 'elbow_l': 90, 'elbow_r': 90}
 MOVES = [
     # (name contains, startup share, active share, anticipation, action)
+    ('jab2', 0.25, 0.2, JAB2_A, JAB2_B),
+    ('dairland', 0.05, 0.35, DAIR_LAND_A, DAIR_LAND_B),
+    ('techbounce', 0.1, 0.45, TECH_A, TECH_B),
     ('jab', 0.25, 0.2, JAB_A, JAB_B),
     ('ftilt', 0.3, 0.2, KICK_A, KICK_B),
     ('dropkick', 0.25, 0.3, DROPKICK_A, DROPKICK_B),
@@ -338,6 +351,13 @@ def role_keys(name, role, frames):
     """Run 3 (dropkick stayed upright): a move split in sequences holds its action pose across the cut. Startup ends ON the action pose,
     the loop holds it (it repeats in the air for as long as the fall lasts), the land leaves it for the rest pose."""
     kind, a, b = move_poses(name)
+    if kind == 'techbounce':
+        # The tech bounce is the dropkick until it lands, then the bounce: its startup and loop are the dropkick's
+        if role in ('startup', 'loop'):
+            a, b = DROPKICK_A, DROPKICK_B
+        elif role == 'land':
+            f1 = max(1, int(round(frames * 0.4)))
+            return kind, [(0, TECH_A), (min(f1, frames - 1), TECH_B), (frames, IDLE)]
     if role == 'startup':
         f1 = max(1, int(round(frames * 0.55)))
         return kind, [(0, IDLE), (min(f1, frames - 1), a), (frames, b)]

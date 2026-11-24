@@ -208,3 +208,18 @@ then forward and the red hand marker grows and swings forward (v24-46), then fad
 The hitbox debug draw does not show in the scene captures, so "hitboxes unchanged" rests on the untouched timeline data, not on the video.
 Note "play timeline": Play Combat Timeline And Wait / `PlayableTimelines` (move-timeline-decoupling 1A) plays a timeline asset, and the
 montage it shows is still the timeline's Montage field; with none set, nothing is presented, so it did not cover the jab by itself.
+
+## Round 4 (2026-11-24, owner notes 14:32 to 14:45)
+- Run start: the frantic start sets the sway amplitude (`SwayAmplitudeTarget`, lerp) instead of a max with the speed's; with the fast
+  ramp the speed reached full inside the frantic window, so FranticAmplitude had no effect (run 3 video).
+- Dropkick action pose: legs in line with the lying body (leg 12/8, was 95/90: feet floated ~60 cm above it).
+- Jump squat: squash to `JumpSquatSquash` (0.72) during the sim's squat frames (`IsAnimOwnerJumpSquatting`), released into the air
+  stretch on take-off. Landing kick `LandSquashPer1000` 0.45 -> 0.6.
+- Brakes plant against the motion (`PlantLean`, `KickPlant`): any hard brake along the ground velocity (forward, sideways, backward)
+  tips the top against the motion, "as if the leg on the side of the motion went in front".
+- Wall: modes `WallModeNames`; braced like on the ground, top leans `WallLeanDeg` off the wall (normal from 4 presentation traces,
+  `FindWallNormal`), friction rattle with the slide speed, wall skid = plant on a hard brake along the wall.
+- Kit look (`UGSTN_GreyboxSubsystem`): `SM_GSTN_Greybox_Collar` (half ring behind the upper back, colour `ColourForKit`, i.e. the kit's
+  stand-in box colour) and `SM_GSTN_Greybox_Greatsword` (~126 cm, on the back) for kits whose name contains `gstn.Greybox.SwordKits`
+  (default "Overlord,Playtest"). Built by setup_greybox_assets.py step `accessories`, attached to the capsule's pelvis.
+- Moves: Jab2 (other hand), DAir landings (crouched land), dropkick tech bounce (dropkick then a tucked bounce).

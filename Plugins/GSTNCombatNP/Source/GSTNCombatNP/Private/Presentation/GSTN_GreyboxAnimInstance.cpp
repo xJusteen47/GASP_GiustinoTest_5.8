@@ -3,6 +3,7 @@
 #include "Animation/AnimMontage.h"
 #include "AnimationRuntime.h"
 #include "Engine/SkeletalMesh.h"
+#include "Engine/World.h"
 #include "EngineLogs.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "MoverComponent.h"
@@ -92,6 +93,14 @@ bool UGSTN_GreyboxAnimInstance::StartsRunStop(const FGSTN_GreyboxShapeSettings& 
 		&& ForwardAcceleration <= -Settings.RunStopDecel;
 }
 
+FRotator UGSTN_GreyboxAnimInstance::PlantLean(const FVector& LocalMoveDirection, float KickDeg)
+{
+	const FVector2D Direction = FVector2D(LocalMoveDirection.X, LocalMoveDirection.Y).GetSafeNormal();
+	// The top tips against the motion. Pitch up = top back, so a forward motion (+X) gives +pitch; roll = lean right, so a motion to the
+	// right (+Y) gives -roll
+	return FRotator(Direction.X * KickDeg, 0.f, -Direction.Y * KickDeg);
+}
+
 FRotator UGSTN_GreyboxAnimInstance::LeanTarget(const FGSTN_GreyboxShapeSettings& Settings, const FVector& LocalAcceleration)
 {
 	// Forward (start / brake) and sideways (curves) separately: a curve leans harder than a start, with its own cap
@@ -129,11 +138,13 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	const bool bOnGround = MoverComponent ? MoverComponent->HasGameplayTag(Mover_IsOnGround, true) : true;
 
 	FVector Acceleration = FVector::ZeroVector;
+	FVector Acceleration3D = FVector::ZeroVector;
 	if (bHasPrevious)
 	{
-		Acceleration = (Velocity - PreviousVelocity) / DeltaSeconds;
-		Acceleration.Z = 0.f;
+		Acceleration3D = (Velocity - PreviousVelocity) / DeltaSeconds;
+		Acceleration = FVector(Acceleration3D.X, Acceleration3D.Y, 0.f);
 	}
+	const bool bOnWall = MoverComponent && ShapeSettings.WallModeNames.Contains(MoverComponent->GetMovementModeName());
 	PreviousVelocity = Velocity;
 	bHasPrevious = true;
 
@@ -182,22 +193,69 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	const FQuat BodyQuat = FQuat(FVector::UpVector, FMath::DegreesToRadians(TurnSpring.Value)) * Owner->GetActorQuat();
 
 	const FVector Local = BodyQuat.UnrotateVector(Acceleration);
-	const FRotator LeanGoal = bOnGround ? LeanTarget(ShapeSettings, Local) : FRotator::ZeroRotator;
-	SquashSpring.Step(SquashTarget(ShapeSettings, bOnGround, Velocity.Z, Local.X), DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
+	// On a wall the body is braced like on the ground (no air stretch from the slide's vertical speed), and leans its top off the wall
+	const bool bBraced = bOnGround || bOnWall;
+	FRotator LeanGoal = bBraced ? LeanTarget(ShapeSettings, Local) : FRotator::ZeroRotator;
+	WallNormal = bOnWall ? FindWallNormal(*Owner, BodyQuat) : FVector::ZeroVector;
+	if (!WallNormal.IsNearlyZero())
+	{
+		const FVector LocalNormal = BodyQuat.UnrotateVector(WallNormal);
+		LeanGoal.Pitch -= LocalNormal.X * ShapeSettings.WallLeanDeg;
+		LeanGoal.Roll += LocalNormal.Y * ShapeSettings.WallLeanDeg;
+	}
+	SquashSpring.Step(SquashTarget(ShapeSettings, bBraced, Velocity.Z, Local.X), DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
+	// Jump squat: squash fast during the sim's squat frames; on take-off the spring is released from there into the air stretch
+	const bool bJumpSquatting = UGSTN_RunPresentationComponent::IsAnimOwnerJumpSquatting(this);
+	if (bJumpSquatting)
+	{
+		SquashSpring.Value = FMath::FInterpTo(SquashSpring.Value, ShapeSettings.JumpSquatSquash, DeltaSeconds, ShapeSettings.JumpSquatBlendSpeed);
+		SquashSpring.Velocity = 0.f;
+	}
 	PitchSpring.Step(LeanGoal.Pitch, DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
 	RollSpring.Step(LeanGoal.Roll, DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
 
-	// Run stop plant: one backward kick into the pitch spring (positive pitch = top back), re-armed once still or speeding up again
-	const float GroundSpeed = FVector(Velocity.X, Velocity.Y, 0.f).Size();
-	if ((bSkidStarted && !bRunStopKicked && ShapeSettings.RunStopKickDeg > 0.f) || StartsRunStop(ShapeSettings, bOnGround, GroundSpeed, Local.X, bRunStopKicked))
+	// Run stop plant: one kick against the motion (owner 14:35: the leg on the side of the motion goes in front), re-armed once still or
+	// speeding up again. Braking along the motion, whatever the facing: a sideways or backward brake plants too
+	const FVector GroundVelocity(Velocity.X, Velocity.Y, 0.f);
+	const float GroundSpeed = GroundVelocity.Size();
+	const FVector GroundDirection = GroundVelocity.GetSafeNormal();
+	const float BrakeAlong = Acceleration | GroundDirection;
+	if ((bSkidStarted && !bRunStopKicked && ShapeSettings.RunStopKickDeg > 0.f) || StartsRunStop(ShapeSettings, bOnGround, GroundSpeed, BrakeAlong, bRunStopKicked))
 	{
-		// For this damping the spring's first peak is about 0.6 of Velocity / Omega
-		PitchSpring.Velocity += ShapeSettings.RunStopKickDeg * 2.f * PI * ShapeSettings.SpringFrequency / 0.6f;
+		KickPlant(BodyQuat, GroundDirection, ShapeSettings.RunStopKickDeg);
 		bRunStopKicked = true;
 	}
-	else if (GroundSpeed < 10.f || Local.X > 200.f)
+	else if (GroundSpeed < 10.f || BrakeAlong > 200.f)
 	{
 		bRunStopKicked = false;
+	}
+	// Wall slide skid: the same plant on a hard brake along the wall; a brake of a downward slide tips the top off the wall
+	float WallRattle = 0.f;
+	if (bOnWall)
+	{
+		const float WallSpeed = Velocity.Size();
+		const FVector Direction = Velocity.GetSafeNormal();
+		const float WallBrake = Acceleration3D | Direction;
+		if (!bWallSkidKicked && ShapeSettings.RunStopKickDeg > 0.f && WallSpeed >= ShapeSettings.WallSkidMinSpeed && WallBrake <= -ShapeSettings.WallSkidDecel)
+		{
+			const FVector Horizontal(Direction.X, Direction.Y, 0.f);
+			KickPlant(BodyQuat, Horizontal, ShapeSettings.RunStopKickDeg * Horizontal.Size());
+			if (!WallNormal.IsNearlyZero())
+			{
+				KickPlant(BodyQuat, -WallNormal, ShapeSettings.RunStopKickDeg * FMath::Abs(Direction.Z));
+			}
+			bWallSkidKicked = true;
+		}
+		else if (WallSpeed < 50.f || WallBrake > 200.f)
+		{
+			bWallSkidKicked = false;
+		}
+		WallRattlePhase = FMath::Fmod(WallRattlePhase + 2.f * PI * ShapeSettings.WallRattleHz * DeltaSeconds, 2.f * PI);
+		WallRattle = FMath::Sin(WallRattlePhase) * ShapeSettings.WallRattleDeg * FMath::Clamp(WallSpeed / FMath::Max(ShapeSettings.WallRattleSpeed, 1.f), 0.f, 1.f);
+	}
+	else
+	{
+		bWallSkidKicked = false;
 	}
 
 	// Run sway: cadence from the speed, or the frantic cadence right after leaving rest; amplitude from the speed, eased
@@ -222,7 +280,7 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	const FQuat ActorToComponent = GetSkelMeshComponent() ? (GetSkelMeshComponent()->GetComponentQuat().Inverse() * BodyQuat) : FQuat::Identity;
 	// Rotation axis scaled by degrees, actor frame: tipping the top toward +X is a turn around +Y by the forward lean (-Pitch), toward +Y a
 	// turn around -X by the side lean (Roll)
-	const float Roll = RollSpring.Value + Sway.Y;
+	const float Roll = RollSpring.Value + Sway.Y + WallRattle;
 	const float Pitch = PitchSpring.Value + SwayPitch;
 	const FVector Axis = ActorToComponent.RotateVector(FVector(-Roll, -Pitch, 0.f));
 	const FQuat Tip = Axis.IsNearlyZero() ? FQuat::Identity : FQuat(Axis.GetSafeNormal(), FMath::DegreesToRadians(Axis.Size()));
@@ -242,6 +300,46 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	Shape.PoseWeight = Shape.OverrideWeight;
 	Shape.LimbScale = FMath::FInterpTo(Shape.LimbScale, LimbScaleTarget(ShapeSettings, Shape.OverrideWeight), DeltaSeconds,
 		ShapeSettings.LimbBlendSpeed);
+}
+
+void UGSTN_GreyboxAnimInstance::KickPlant(const FQuat& BodyQuat, const FVector& WorldMoveDirection, float KickDeg)
+{
+	if (KickDeg <= KINDA_SMALL_NUMBER || WorldMoveDirection.IsNearlyZero())
+	{
+		return;
+	}
+	const FRotator Kick = PlantLean(BodyQuat.UnrotateVector(WorldMoveDirection), KickDeg);
+	// For this damping the spring's first peak is about 0.6 of Velocity / Omega
+	const float Gain = 2.f * PI * ShapeSettings.SpringFrequency / 0.6f;
+	PitchSpring.Velocity += Kick.Pitch * Gain;
+	RollSpring.Velocity += Kick.Roll * Gain;
+}
+
+FVector UGSTN_GreyboxAnimInstance::FindWallNormal(const AActor& Owner, const FQuat& BodyQuat) const
+{
+	const UWorld* World = Owner.GetWorld();
+	if (!World)
+	{
+		return FVector::ZeroVector;
+	}
+	// Presentation only: four short traces around the body, nearest wall-like hit wins (the wall mode's own normal lives in the game
+	// module's sync state, which this plugin must not read)
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNGreyboxWall), false, &Owner);
+	const FVector Start = Owner.GetActorLocation();
+	const float Reach = Owner.GetSimpleCollisionRadius() + ShapeSettings.WallProbeDistance;
+	FVector Best = FVector::ZeroVector;
+	float BestDistance = TNumericLimits<float>::Max();
+	for (const FVector& Axis : {FVector::ForwardVector, -FVector::ForwardVector, FVector::RightVector, -FVector::RightVector})
+	{
+		FHitResult Hit;
+		if (World->LineTraceSingleByChannel(Hit, Start, Start + BodyQuat.RotateVector(Axis) * Reach, ECC_Visibility, Params)
+			&& FMath::Abs(Hit.ImpactNormal.Z) < 0.7f && Hit.Distance < BestDistance)
+		{
+			BestDistance = Hit.Distance;
+			Best = FVector(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.f).GetSafeNormal();
+		}
+	}
+	return Best;
 }
 
 bool UGSTN_GreyboxAnimInstance::GetDriverPelvisHeight(float& OutHeight, float& OutReference)
