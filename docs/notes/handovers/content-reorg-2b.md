@@ -48,3 +48,8 @@ Finché non si sceglie, ogni `-Preset Build` su questo branch va con `-SkipRegre
 ESITO: PARZIALE spostamento 2b fatto e provato (build, 1937 test, smoke); manca la scelta owner sul gate dair v9 e DA_Locomotion_Default con l'owner
 SUBAGENTI: 0
 COSTO: ~4 $ cloud + ~6 $ fisso | 40 minuti desktop | 0 token review
+
+## Merge di main dopo PR #41 (capsula greybox), 2026-11-24 18:20Z
+- Conflitto binario: `GA_Playtest_GroundHit` modificato in main (montage del jab, `set_playtest_jab_montage.py`) e spostato qui. Tenuto il nostro file al percorso nuovo; la modifica di main si rifà sul fisso rilanciando lo script (percorsi aggiornati, idempotente).
+- `ABP_GSTN_GreyboxCapsule` (da main) punta ai vecchi `AM_Overlord*`/`AM_React_*`: `Config/DefaultEngine.ini [CoreRedirects]` con 275 `PackageRedirects` (vecchio -> nuovo, generati dal CSV; DA_Locomotion_Default escluso) e `Tools/Reorg/resave_old_refs_2b.py` che risalva chi nomina ancora i vecchi pacchetti. I redirect restano finché i branch nati prima dello spostamento non sono uniti o chiusi: è anche la rete per capsula e lanci.
+- Script greybox aggiornati (`make_capsule_clips.py`, `set_playtest_jab_montage.py`); `check_2b`: 0 problemi.

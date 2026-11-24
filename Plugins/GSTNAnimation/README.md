@@ -26,6 +26,8 @@ First user: the wall layer of the project ([wall-anim.md](../../docs/architectur
 | `UGSTN_AnimSetUtils` | function library | `ResolveWinners`, `ResolveLayerClasses`, `ValidateMontageOverride`. Pure and deterministic. |
 | `FGSTN_AnimNode_BlendOutFootLock` (+ editor node `UGSTN_AnimGraphNode_BlendOutFootLock`) | anim node | Main graph, right after the `Procedural_Feet` layer: keeps the feet planted while a montage blends back to the game pose (capsule still), then steps each foot to the game pose. Request from `UGSTN_CharacterAnimInstance` (`bFootLockRequest`); passes the pose through otherwise. `a.GSTN.BlendOutFootLock 0` turns it off. Inserted by `UGSTN_AnimGraphAuthoringLibrary::InsertPoseNodeAfter`. |
 | `FGSTN_AnimNode_GroundContactFix` (+ editor node `UGSTN_AnimGraphNode_GroundContactFix`), `UGSTN_GroundContactSettings`, `FGSTN_GroundContactSolver` | anim node + data + pure math | Main graph, right before the Output Pose: in the states of its settings (owner tags such as `Combat.State.Knockdown`, playing montages, or the anim curve `GSTN_GroundContact`) keeps body, hands and feet above the floor. Only removes penetration (pelvis lift by the deepest body sphere, two-bone IK on hands and feet that touched or still sink); a pose that does not sink passes through. One line trace a frame only while on; LOD threshold. `a.GSTN.GroundContactFix 0` off, `.Debug 1` draws. Set up by `Tools/GASNPPTest/ground_contact_setup.py` (`InsertPoseNodeBeforeOutput`, `SetPoseNodeProperty`). |
+| `FGSTN_AnimNode_ChooserPlayer` (+ editor node `UGSTN_AnimGraphNode_ChooserPlayer`), `FGSTN_ChooserPlayerOutput` | anim node | Leaf: each time it becomes relevant (a state entered) asks its Chooser Table (parameter 0 = the anim instance, 1 = the output struct) for a clip, then plays it with the row's start time, rate, loop and inertial blend; optional reselect while active. No root motion. Used by the simple greybox graph (`docs/notes/greybox-capsula.md`). |
+| `FGSTN_AnimNode_GreyboxShape` (+ editor node), `IGSTN_GreyboxShapeSource` | anim node | Scales (squash/stretch, volume kept) and tilts the root of the incoming pose by the instance's shape: the greybox capsule deforms around the ground point. |
 | `UGSTN_AnimSetComponent` | actor component | Holds the sources and cosmetic tags of one character, loads asynchronously, links the winning layers on the mesh, answers `ResolveVisualMontage`. |
 
 ## How it resolves
@@ -48,7 +50,7 @@ Default source priorities (`GSTNAnimSet`): character 0, kit 100, weapon 200, ski
 
 ## Dependencies
 
-- Plugins: none.
+- Plugins: Chooser (engine; the chooser player node).
 - `GSTNAnimationCore` (`Build.cs`): public Core, CoreUObject, Engine, GameplayTags; private Projects (finds the plugin's `Config/Tags`).
 - `GSTNAnimationEditor` (`Build.cs`): public Core, CoreUObject, Engine; private UnrealEd, BlueprintGraph, AnimGraph, AnimGraphRuntime, KismetCompiler.
   The Property Access node of a rule (plugin PropertyAccessNode, class private to its module) is created by class name with its `Path` set by reflection.
