@@ -254,3 +254,14 @@ ESITO: build/test/assets OK, captures done; collar/sword do not follow the squas
 STOP (owner playtest): committed locally, not pushed.
 SUBAGENTI: none.
 COSTO: not measured (one thread, ~25 min for run 4).
+
+## Desktop run 5 (2026-11-24, merged 4ebfc0cb onto run 4; pushed 9db91828 first)
+Evidence `docs/notes/reviews/greybox-capsula/round5/` (gb_loco, gb_side Playtest; jab1_jab2 KIT_Test_Overlord; 1x / 0.25x; sheets).
+- Build OK, tests 6/6. setup_greybox_assets accessories (collar and sword rewritten in pelvis space) and make_capsule_clips PASS;
+  ABP ShapeSettings.FranticAmplitude now 0.45.
+- Collar and sword stay on the body: jump squat v392-394, landing and crouch v454-476, big sideways tips (gb_side v296-312, v334-336),
+  Overlord jab 2 v39-75: OK (run 4 bug fixed).
+- Run start sway (v40-94): visibly smaller than run 4, near upright with small rocks: OK.
+ESITO: OK, accessory bug fixed and sway calmer; no open item from this run.
+SUBAGENTI: none.
+COSTO: not measured (one thread, ~20 min for run 5).
