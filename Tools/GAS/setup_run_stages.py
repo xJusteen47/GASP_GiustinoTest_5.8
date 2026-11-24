@@ -1,6 +1,6 @@
 # Mario-style run P1 (docs/notes/corsa-mario-piano.md): data only.
 #   DA_Locomotion_Default  a UGSTN_LocomotionProfile with the default 3 stages (tune it in the editor: speeds, frames, L3 window/mode)
-#   every kit (GSTN_PrimaryKitDefinition) under /Game/GASNPPTest/Combat gets a FGSTN_LocomotionKitExtension naming it, unless it has one
+#   every kit (GSTN_PrimaryKitDefinition) under /Game/GSTN gets a FGSTN_LocomotionKitExtension naming it, unless it has one
 # Run AFTER setup_player_input_contexts.py (makes IA_GASNPP_RunBoost on pad L3) and setup_gas_assets.py (input config button + press slot).
 # Idempotent: the profile is created once (later runs keep the owner's tuning), a kit with an entry is left alone. Saves .uasset only.
 # Headless (editor closed):
@@ -9,9 +9,12 @@
 import os
 
 import unreal
+import sys  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gstn_content as gc  # noqa: E402  (where each asset lives under /Game/GSTN)
 
-FOLDER = '/Game/GASNPPTest/Combat'
-PROFILE = FOLDER + '/DA_Locomotion_Default'
+FOLDER = gc.KIT_ROOT
+PROFILE = gc.path('DA_Locomotion_Default')
 
 
 def _instanced(struct_value):

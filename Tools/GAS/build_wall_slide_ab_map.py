@@ -19,7 +19,7 @@ import json, hashlib, math
 import unreal
 
 MAP = '/Game/GSTN/_Test/Maps/L_WallSlideAB'
-GAME_MODE = '/Game/GASNPPTest/GM_GASNPPTest'
+GAME_MODE = '/Game/GSTN/Core/GM_GASNPPTest'
 SPEC_VERSION = 1
 
 LANE_PITCH = 1200.0

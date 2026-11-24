@@ -3,7 +3,7 @@ OUT = os.path.join(unreal.Paths.project_saved_dir(), "Logs", "ci", "react_inspec
 L = []
 try:
     for n in ["AS_React_HitStand","AS_React_Tumble","AS_React_Splat","AS_React_GetUp","AS_React_Roll","AS_React_GroundHit","AS_React_LieUp","AS_React_RollBack"]:
-        a = unreal.load_asset("/Game/GASNPPTest/Combat/Reaction/" + n)
+        a = unreal.load_asset("/Game/GSTN/Combat/Reactions/" + n)
         info = [n, a.get_class().get_name()]
         for p in ("skeleton","retarget_source","additive_anim_type","enable_root_motion","sequence_length"):
             try: info.append(f"{p}={a.get_editor_property(p)}")

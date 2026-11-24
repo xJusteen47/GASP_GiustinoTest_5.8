@@ -9,7 +9,7 @@
 #   ds.defence_batch(ds.SUITE_DEFENCE, loss=2, report='f7-sweep/defence-listen-2pct.log')   # restarts PIE before each, poll ds.defence_batch_report()
 #
 # F13: the scenarios run from the saved content of Tools/GAS/setup_defence_link_content.py: the plugin's /GSTNDefence/Test (DA_DefenceRules_Test,
-# _TestPvE, GA_Shield_Test, GA_CounterTest, the tech and get-up Blueprints), the project kits /Game/GASNPPTest/Combat/KIT_Test_Defence (PvP, shield),
+# _TestPvE, GA_Shield_Test, GA_CounterTest, the tech and get-up Blueprints), the project kits /Game/GSTN/_Test/Combat/KIT_Test_Defence (PvP, shield),
 # KIT_Test_DefencePvE (PvE, shield, GA_CounterTest on Command.Special.Neutral), KIT_Test_DefenceLanding (+ get-up set), KIT_Test_DefenceTech (+ tech set)
 # and the Parry and Shield steps saved in the standard rules. defence_setup() picks the kit; the loadout contribution then grants the shield binding and
 # the attribute set, and the attach runs on every machine. What stays IN MEMORY (never saved, put back by defence_reset()):
@@ -31,7 +31,7 @@ import gasnpp_test as g
 DEF_DIR = '/GSTNDefence/Test/'
 RULES_PVP = DEF_DIR + 'DA_DefenceRules_Test'
 RULES_PVE = DEF_DIR + 'DA_DefenceRules_TestPvE'
-KIT_DIR = '/Game/GASNPPTest/Combat/'
+KIT_DIR = '/Game/GSTN/_Test/Combat/'
 KIT_PATH = KIT_DIR + g.HIT_KIT
 USE_CONTENT = True   # the saved content kits (F13); False = the F7/F8 runtime path on KIT_Test_Hits
 SHIELD_BUTTON = 'Input.Button.Shield'

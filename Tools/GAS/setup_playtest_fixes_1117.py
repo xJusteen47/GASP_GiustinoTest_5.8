@@ -17,9 +17,9 @@ import unreal
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import setup_guard  # noqa: E402
 
-PROFILE = '/Game/GASNPPTest/Combat/DA_Locomotion_Default'
-DROPKICK = '/Game/GASNPPTest/Combat/Overlord/TL_Overlord_Dropkick'
-PLAYTEST_KIT = '/Game/GASNPPTest/Combat/KIT_Test_Playtest'
+PROFILE = '/Game/GSTN/Data/Locomotion/DA_Locomotion_Default'
+DROPKICK = '/Game/GSTN/Characters/Overlord/Moves/Dropkick/TL_Overlord_Dropkick'
+PLAYTEST_KIT = '/Game/GSTN/Characters/Overlord/Kits/KIT_Test_Playtest'
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'PlaytestFixes', 'setup_playtest_fixes_1117.txt')
 
 # (max_speed, acceleration, turning_strength, release_brake, frames_to_next_stage, air_control_scale, accel_ramp_frames, ramp_start_fraction)
@@ -95,9 +95,9 @@ def _dropkick():
     log(f'TL_Overlord_Dropkick: Self Landing Bounce {SELF_BOUNCE_HEIGHT:.0f} cm, {len(data.get_editor_property("tracks"))} tracks; saved')
 
 
-OVERLORD_WEAPON = '/Game/GASNPPTest/Combat/WPN_Test_Overlord'
+OVERLORD_WEAPON = '/Game/GSTN/Characters/Overlord/Kits/WPN_Test_Overlord'
 # Weapons whose Overlord move binding (ability GA_Overlord_*) the main Overlord kit lacks (owner 2026-11-17: "no down air, no dropkick")
-OVERLORD_MOVE_SOURCES = ['/Game/GASNPPTest/Combat/WPN_Test_OverlordDAirV9', '/Game/GASNPPTest/Combat/WPN_Test_OverlordDropkick']
+OVERLORD_MOVE_SOURCES = ['/Game/GSTN/Characters/Overlord/Kits/WPN_Test_OverlordDAirV9', '/Game/GSTN/Characters/Overlord/Kits/WPN_Test_OverlordDropkick']
 
 
 def _describe(b):

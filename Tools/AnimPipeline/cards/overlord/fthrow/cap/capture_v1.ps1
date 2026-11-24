@@ -14,7 +14,7 @@ Remove-Item Env:PIE_CAPTURE_RUNS -ErrorAction SilentlyContinue
 $env:PIE_CAPTURE_PRE_PY = "$P\Tools\AnimPipeline\cards\overlord\fthrow\cap\fthrow_capture_pre.py"
 $H = if ($env:FTHROW_HOLD_POINT) { $env:FTHROW_HOLD_POINT -split ',' } else { @('38', '-5', '36') }
 $ini = "$P\Saved\Config\WindowsEditor\GSTNLink.ini"
-$fb = 'FallbackThrows=(Forward="/Game/GASNPPTest/Combat/Overlord/GA_Overlord_FThrowV1.GA_Overlord_FThrowV1_C",Back="/Script/GSTNLinkNP.GSTN_GA_LinkThrowBack",Up="/Script/GSTNLinkNP.GSTN_GA_LinkThrowUp",Down="/Script/GSTNLinkNP.GSTN_GA_LinkThrowDown",Neutral="/Script/GSTNLinkNP.GSTN_GA_LinkThrowNeutral",CrouchForward="/Script/GSTNLinkNP.GSTN_GA_LinkThrowCrouchForward")'
+$fb = 'FallbackThrows=(Forward="/Game/GSTN/Characters/Overlord/Moves/FThrow/GA_Overlord_FThrowV1.GA_Overlord_FThrowV1_C",Back="/Script/GSTNLinkNP.GSTN_GA_LinkThrowBack",Up="/Script/GSTNLinkNP.GSTN_GA_LinkThrowUp",Down="/Script/GSTNLinkNP.GSTN_GA_LinkThrowDown",Neutral="/Script/GSTNLinkNP.GSTN_GA_LinkThrowNeutral",CrouchForward="/Script/GSTNLinkNP.GSTN_GA_LinkThrowCrouchForward")'
 $hp = "HoldPose=(bHoldByNeck=True,HoldPointCm=(X=$($H[0]),Y=$($H[1]),Z=$($H[2])),ExtraOffsetCm=(X=0.0,Y=0.0,Z=0.0))"
 [IO.File]::WriteAllText($ini, "[/Script/GSTNLinkCore.GSTN_LinkSettings]`r`n$fb`r`n$hp`r`n")
 $env:PIE_CAPTURE_DIST = '350'; $env:PIE_CAPTURE_VIEWS = 'az90,az180,game'; $env:PIE_CAPTURE_NOVFX = '1'

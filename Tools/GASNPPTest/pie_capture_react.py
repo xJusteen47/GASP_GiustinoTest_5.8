@@ -10,7 +10,7 @@
 # Environment (all optional): PIE_CAPTURE_OUT (default Saved/AnimReact/capture_<date>_<time>), PIE_CAPTURE_SEQUENCES (comma separated subset of
 # SEQUENCES: hitstand, tumble, splat, knockdown_getup, roll, rollback)
 # Sequences: PRE idle frames, then the segments of the sequence (see SEQUENCES). 'loop' = a still clip looping as a dynamic montage; 'mont' =
-# a moving clip (the montage asset from /Game/GASNPPTest/Combat/Reaction, preloaded before Play starts, or a dynamic montage of the clip when
+# a moving clip (the montage asset from /Game/GSTN/Combat/Reactions, preloaded before Play starts, or a dynamic montage of the clip when
 # the asset is missing, the log says so); 'stop' = the current montage stops with a blend out and the sequence goes on for n frames. A moving clip starts on the frame after
 # the previous segment ends; a still that follows a moving clip starts on the moving clip's LAST frame (the moving montage is cut with blend 0, and only then),
 # so the pose never falls back to idle. The frames shot after a moving clip ends just keep shooting: the montage's own blend out (8/60 s from
@@ -44,7 +44,7 @@ FILL_LIGHTS = [(35.0, 5.0), (325.0, 5.0), (95.0, 3.0)]   # (azimuth the light co
 PRE = 10
 FPS = 60.0
 SLOT = 'DefaultSlot'
-REACT = '/Game/GASNPPTest/Combat/Reaction/'
+REACT = '/Game/GSTN/Combat/Reactions/'
 STILL_IN = 3 / FPS
 # The moving montages blend out AFTER their last frame: blend_out 8/60 s, blend_out_trigger_time 0.0 (0 = the blend starts at the sequence end;
 # -1 would start it blend_out BEFORE the end and the game's motion matching would replace the clip's last frames). Assets and fallback agree.

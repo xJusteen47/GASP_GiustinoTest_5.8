@@ -442,7 +442,7 @@ The same table feeds the resolver (entries filtered by source per frame), adopti
 
 ## 11. Test content and harness
 
-Test assets under `/Game/GASNPPTest/Combat/` (tell the user before touching `BP_GASNPP_TestCharacter`): kit
+Test assets under `/Game/GSTN/_Test/Combat/` (tell the user before touching `BP_GASNPP_TestCharacter`): kit
 `KIT_Test` (stats differing from the default; command set = default set minus one command plus one added command),
 primary weapon `WPN_Test_Primary` (jab with a cancel window into a second jab, a dash-like ability with a movement
 track; one jab with an inline timeline, one with a shared timeline asset), support weapon `WPN_Test_Support` (+40 % walk

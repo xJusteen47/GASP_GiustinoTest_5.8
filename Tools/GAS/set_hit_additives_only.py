@@ -1,5 +1,5 @@
 """Variant reaction set with the new directional hit additives, WITHOUT touching DA_ReactionAnims (the owner edits that one).
-Copies /Game/GASNPPTest/Combat/Reaction/DA_ReactionAnims to /Game/GSTN/Animation/Reaction/DA_ReactionAnims_HitAdd (once; later runs
+Copies /Game/GSTN/Combat/Reactions/DA_ReactionAnims to /Game/GSTN/Animation/Reaction/DA_ReactionAnims_HitAdd (once; later runs
 only rewrite the 8 directional slots) and points its DirectionalHits at the clips of Tools/GAS/build_hit_additives.py.
 The game keeps using DA_ReactionAnims until the owner approves; to try the variant, point the character's GSTN_ReactionAnim
 component at the copy in memory (capture) or swap it by hand. Headless:
@@ -9,7 +9,7 @@ import os
 
 import unreal
 
-SRC = '/Game/GASNPPTest/Combat/Reaction/DA_ReactionAnims'
+SRC = '/Game/GSTN/Combat/Reactions/DA_ReactionAnims'
 DST = '/Game/GSTN/Animation/Reaction/DA_ReactionAnims_HitAdd'
 HITADD = '/Game/GSTN/Animation/Reaction/HitAdditive/AS_GSTN_HitAdd'
 SIDES = ('Front', 'Back', 'Left', 'Right')

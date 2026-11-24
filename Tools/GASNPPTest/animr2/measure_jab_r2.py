@@ -1,5 +1,5 @@
 import unreal, json, math
-D = '/Game/GASNPPTest/Combat/Overlord/'
+D = '/Game/GSTN/Characters/Overlord/Moves/Jab/'
 def pose(anim, f, bone):
     p = unreal.AnimPoseExtensions.get_anim_pose_at_time(anim, f / 60.0, unreal.AnimPoseEvaluationOptions())
     t = unreal.AnimPoseExtensions.get_bone_pose(p, bone, unreal.AnimPoseSpaces.WORLD).translation

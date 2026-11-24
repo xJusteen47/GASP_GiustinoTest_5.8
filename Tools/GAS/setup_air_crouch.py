@@ -6,12 +6,12 @@
 # It prints at most 5 lines; the full log is Saved/AirCrouch/setup_air_crouch.log.
 #
 # What it does:
-#  1. PLACEHOLDER clip /Game/GASNPPTest/Combat/AirCrouch/AS_AirCrouch_Loop_PLACEHOLDER: a copy of the sample's crouch idle (found by name in
+#  1. PLACEHOLDER clip /Game/GSTN/Animation/AirCrouch/AS_AirCrouch_Loop_PLACEHOLDER: a copy of the sample's crouch idle (found by name in
 #     the asset registry, SOURCE_HINTS). Only made when missing: replace it by a real pose from the animation pipeline (rules 10 and 13),
 #     never by editing this script. An enter clip (AS_AirCrouch_Enter) is optional: when it exists it plays first, then the loop.
 #  2. The AirCrouch rule in DA_ReactionAnims (UGSTN_ReactionAnimSet): while Combat.State.AirCrouch, the enter clip (if any) then the loop,
 #     below every hit reaction. setup_reaction_anims.py keeps it when it rewrites its own rules.
-#  3. Every KIT_* under /Game/GASNPPTest gets an Air Crouch kit extension with its defaults (one already there is left as tuned).
+#  3. Every KIT_* under /Game/GSTN gets an Air Crouch kit extension with its defaults (one already there is left as tuned).
 import os
 import sys
 
@@ -20,11 +20,11 @@ import unreal
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import setup_defence_link_content as dl  # noqa: E402  (the shared asset helpers: _data_asset, _tag)
 
-FOLDER = '/Game/GASNPPTest/Combat/AirCrouch'
+FOLDER = '/Game/GSTN/Animation/AirCrouch'
 LOOP = 'AS_AirCrouch_Loop_PLACEHOLDER'
 ENTER = 'AS_AirCrouch_Enter'
-REACTION_SET = '/Game/GASNPPTest/Combat/Reaction/DA_ReactionAnims'
-KIT_ROOT = '/Game/GASNPPTest'
+REACTION_SET = '/Game/GSTN/Combat/Reactions/DA_ReactionAnims'
+KIT_ROOT = '/Game/GSTN'
 # The placeholder's source: the first sequence whose name has all the words of a hint, in hint order (GASP sample names)
 SOURCE_HINTS = [('crouch', 'idle', 'loop'), ('crouch', 'idle'), ('crouch',)]
 

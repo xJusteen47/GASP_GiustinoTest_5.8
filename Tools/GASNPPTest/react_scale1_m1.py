@@ -6,7 +6,7 @@ L = []
 def flush():
     open(OUT, "w").write("\n".join(L) + "\nDONE_MARK")
 try:
-    SRC = "/Game/GASNPPTest/Combat/Reaction/AS_React_GroundHit"
+    SRC = "/Game/GSTN/Combat/Reactions/AS_React_GroundHit"
     DST = "/Game/AnimPipeline/Diag/AS_React_GroundHit_scale1"
     if unreal.EditorAssetLibrary.does_asset_exist(DST):
         unreal.EditorAssetLibrary.delete_asset(DST)

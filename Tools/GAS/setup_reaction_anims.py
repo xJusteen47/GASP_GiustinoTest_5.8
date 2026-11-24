@@ -1,4 +1,4 @@
-# Wires the victim reaction animations (react-v3 clips in /Game/GASNPPTest/Combat/Reaction) into the game, by data only. Idempotent.
+# Wires the victim reaction animations (react-v3 clips in /Game/GSTN/Combat/Reactions) into the game, by data only. Idempotent.
 # Owner 2026-11-14: "state -> animation via data, not hardcoded"; no manual Blueprint wiring.
 #
 # Run with the editor CLOSED (headless), after a build that contains UGSTN_ReactionAnimComponent and UGSTN_GA_GetupRoll travel:
@@ -16,7 +16,7 @@
 #     new GA_GetupRollBack_Test AM_React_RollBack (65 cm toward the head); timelines as long as the clips; on the end the last pose is HELD
 #     while it blends out over HOLD_BLEND_FRAMES (the hunched crouch after a get-up: the game pose under it has that long to settle).
 #     GA_GroundBounce_Test plays nothing (the Knockdown rule does the ground hit).
-#  4. Every KIT_* under /Game/GASNPPTest that has a get-up roll gets GA_GetupRollBack_Test as its roll back.
+#  4. Every KIT_* under /Game/GSTN that has a get-up roll gets GA_GetupRollBack_Test as its roll back.
 import math
 import os
 import sys
@@ -26,11 +26,11 @@ import unreal
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import setup_defence_link_content as dl  # noqa: E402  (the shared asset helpers: _Asset, _ability, _tag)
 
-REACT = '/Game/GASNPPTest/Combat/Reaction'
+REACT = '/Game/GSTN/Combat/Reactions'
 SET_NAME = 'DA_ReactionAnims'
 SANDBOX_CHAR = '/Game/Blueprints/SandboxCharacter_Mover'
 DEFENCE_TEST = '/GSTNDefence/Test'
-KIT_ROOT = '/Game/GASNPPTest'
+KIT_ROOT = '/Game/GSTN'
 SIM_HZ = 62.5
 HOLD_BLEND_FRAMES = 20      # simulation frames the held last pose of a get-up blends out over (crouch mitigation; 0-30 to tune)
 TAIL_BLEND_FRAMES = 6       # getup-momentum-1: frames the get-up blends out over when the player cuts its tail (the next move takes over)

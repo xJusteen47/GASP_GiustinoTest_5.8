@@ -5,7 +5,7 @@
 # Saved/Backups/SetupGuard. It only creates NEW assets (KIT_Test_Hits and WPN_Test_Hits are only read).
 #
 # Reads the three built clips of the anim pipeline (Content/AnimPipeline is a junction shared by every worktree) and copies them. Writes, under
-# /Game/GASNPPTest/Combat/Overlord (new assets only):
+# /Game/GSTN/Characters/Overlord/Moves/Dropkick (kits in Characters/Overlord/Kits; new assets only):
 #   AS_OverlordDropkick_Startup / _Loop / _Land   copies of /Game/AnimPipeline/Rig/Overlord/Dropkick/{Startup,Loop,Land}/AS_OverlordDropkick_*
 #   AM_OverlordDropkick       montage of the three (startup 16 frames, loop x LOOP_REPS (4 by default, Tools/AnimPipeline/dropkick_loop_reps.py), land 32 frames), 2 frame blend in, 4 frame blend out
 #                             (the loop plays 3 times: a hold until landing needs a looping section or the gameplay ability, game side)
@@ -28,13 +28,13 @@ import unreal
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import setup_guard  # noqa: E402
+import gstn_content as gc  # noqa: E402  (where each asset lives under /Game/GSTN)
 
 SRC = '/Game/AnimPipeline/Rig/Overlord/Dropkick'
 CLIPS = [('Startup', f'{SRC}/Startup/AS_OverlordDropkick_Startup'), ('Loop', f'{SRC}/Loop/AS_OverlordDropkick_Loop'),
          ('Land', f'{SRC}/Land/AS_OverlordDropkick_Land')]
 LOOP_REPS = runpy.run_path(os.path.join(unreal.Paths.project_dir(), 'Tools/AnimPipeline/dropkick_loop_reps.py'))['LOOP_REPS']   # shared with assemble_dropkick_montage.py
-ROOT = '/Game/GASNPPTest/Combat'
-DIR = ROOT + '/Overlord'
+DIR = gc.move_folder('Dropkick')
 SOURCE_KIT, SOURCE_WEAPON = 'KIT_Test_Hits', 'WPN_Test_Hits'
 COMMAND = 'Command.Attack.Directional'        # attack + stick forward
 AIRBORNE_TAG = 'Input.Context.Airborne'
@@ -234,9 +234,9 @@ def _describe(bindings):
 
 
 def _copy(source, name):
-    path = f'{ROOT}/{name}'
+    path = gc.path(name)
     if not unreal.EditorAssetLibrary.does_asset_exist(path):
-        if not unreal.EditorAssetLibrary.duplicate_asset(f'{ROOT}/{source}', path):
+        if not unreal.EditorAssetLibrary.duplicate_asset(gc.path(source), path):
             log(f'ERROR: could not copy {source} to {name}')
             return None
         log(f'created {path} (copy of {source})')

@@ -8,8 +8,8 @@
 import unreal
 import link_scenarios as ls
 
-FTHROW = '/Game/GASNPPTest/Combat/Overlord/GA_Overlord_FThrowV1.GA_Overlord_FThrowV1_C'
-KIT = '/Game/GASNPPTest/Combat/' + ls.CONTENT_KIT
+FTHROW = '/Game/GSTN/Characters/Overlord/Moves/FThrow/GA_Overlord_FThrowV1.GA_Overlord_FThrowV1_C'
+KIT = '/Game/GSTN/_Test/Combat/' + ls.CONTENT_KIT
 
 _msgs = [f'prepare_editor {ls.prepare_editor()}', f'link_setup {ls.link_setup()}']
 _kit = unreal.load_asset(KIT)

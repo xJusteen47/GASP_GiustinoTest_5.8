@@ -9,9 +9,12 @@
 import os
 
 import unreal
+import sys  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gstn_content as gc  # noqa: E402  (where each asset lives under /Game/GSTN)
 
-FOLDER = '/Game/GASNPPTest/Combat'
-KIT = FOLDER + '/KIT_Test_Playtest'
+FOLDER = gc.KIT_ROOT
+KIT = gc.path('KIT_Test_Playtest')
 FAST_FALL = 'Command.Movement.FastFall'
 # The ini defaults (Plugins/GSTNCombatGAS/Config/DefaultGSTNCombatGAS.ini): owner's hold-gravity jump, early 2D Mario (2026-11-18).
 # The Mario 3D World values before: JumpVelocity 1240, Rise 0, Cut 4.1, Fall 4.1, FastFall 6.0, MinHold 2, MaxHold 11 (+ GravityModel CutUntilApex)
@@ -60,7 +63,7 @@ def run():
     cmds = _bindings(kit)
     if FAST_FALL not in cmds:
         src = None
-        for path in unreal.EditorAssetLibrary.list_assets(FOLDER, recursive=False):
+        for path in unreal.EditorAssetLibrary.list_assets(FOLDER, recursive=True):
             other = unreal.load_asset(path) if '/KIT_' in path else None
             if other and other != kit and FAST_FALL in _bindings(other):
                 src = (path, [b for b in other.get_editor_property('kit_bindings') if FAST_FALL in str(b.get_editor_property('command').get_editor_property('tag_name'))])

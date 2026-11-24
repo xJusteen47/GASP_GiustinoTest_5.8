@@ -10,9 +10,11 @@
 import os
 import re
 import unreal
+import sys  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gstn_content as gc  # noqa: E402  (where each asset lives under /Game/GSTN)
 
-DIR = '/Game/GASNPPTest/Combat'
-ABILITY_DIR = DIR + '/Playtest'
+ABILITY_DIR = gc.move_folder('Playtest')
 BASE = 780.0
 ANGLE = 30.0
 KEEP_ANGLE = -999.0
@@ -74,7 +76,7 @@ def run():
     del lines[:]
     saves = []
     # 1) KIT_Test_Playtest: X on the ground (native GSTN_GA_TestHitMove) and the special (native GSTN_GA_TestSpecial)
-    kit = unreal.load_asset(f'{DIR}/KIT_Test_Playtest')
+    kit = unreal.load_asset(gc.path('KIT_Test_Playtest'))
     weapon = kit.get_editor_property('primary_weapon')
     for prop_owner, prop, command, require, name, angle in (
             # (the special, GSTN_GA_TestSpecial, is not a timeline move: no hitbox data to tune, left as it is)
@@ -96,7 +98,7 @@ def run():
     strong_cls = None
     for key in ('Light', 'Medium', 'Heavy'):
         for move, angle in (('Tilt', ANGLE), ('Special', KEEP_ANGLE)):
-            path = f'{DIR}/Archetypes/GA_{key}_{move}'
+            path = gc.path(f'GA_{key}_{move}')
             cls = unreal.EditorAssetLibrary.load_blueprint_class(path)
             if not cls:
                 log(f'WARNING: {path} missing')
@@ -108,7 +110,7 @@ def run():
             base = max([BASE] + bases) if move == 'Special' else max(BASE, min(bases) if bases else BASE)
             _tune(cls, base, angle, key.lower())
             saves.append(unreal.load_asset(path))
-        akit = unreal.load_asset(f'{DIR}/KIT_Test_{key}')
+        akit = unreal.load_asset(gc.path(f'KIT_Test_{key}'))
         if not akit:
             continue
         current = _bound(akit, 'kit_bindings', 'Command.Strong.Neutral')

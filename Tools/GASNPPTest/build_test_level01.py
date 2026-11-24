@@ -4,7 +4,7 @@
 #   ... "py Tools/GASNPPTest/build_test_level01.py --save"                                                                      (owner, once)
 #
 # Dry run (default): builds the level and the test data in memory, reports what it placed, saves NOTHING, so a headless run never dirties Content/.
-# --save: writes the map to /Game/Levels/Test/ and the data assets (level set, experience, mission, game rules) to /Game/GASNPPTest/TestMaps/Level01/
+# --save: writes the map to /Game/Levels/Test/ and the data assets (level set, experience, mission, game rules) to /Game/GSTN/_Test/Maps/Level01/
 # (test-maps.md rule 1; both folders are Git LFS, no locks). It refuses to overwrite an existing map unless --overwrite is given.
 #
 # Layout, along +X (1 unit = 1 cm, every platform 20 x 10 m, 5 m gaps a jump clears, a red KO zone 10 m below):
@@ -22,7 +22,7 @@ import unreal
 LOG = '[build_test_level01]'
 MAP_DIR = '/Game/Levels/Test'
 MAP_NAME = 'L_Test_Level01'
-DATA_DIR = '/Game/GASNPPTest/TestMaps/Level01'
+DATA_DIR = '/Game/GSTN/_Test/Maps/Level01'
 
 CUBE = '/Engine/BasicShapes/Cube.Cube'
 FLOOR_SIZE = unreal.Vector(20.0, 10.0, 1.0)   # cube scale: 20 m x 10 m x 1 m

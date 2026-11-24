@@ -1,7 +1,7 @@
 """Owner decisions 2026-11-18 (2A, 3A). Headless, idempotent:
   UnrealEditor-Cmd.exe <uproject> -run=pythonscript -script="<project>/Tools/GAS/hitstand_armlow_and_swap.py" -unattended -nullrhi
 3A: variant of the hitstun pose with the arm that points at the attacker lowered (default 25 deg, env HITSTAND_ARM_DEG):
-    /Game/GSTN/Animation/Reaction/AS_GSTN_React_HitStand_ArmLow, a copy of /Game/GASNPPTest/Combat/Reaction/AS_React_HitStand (the original
+    /Game/GSTN/Animation/Reaction/AS_GSTN_React_HitStand_ArmLow, a copy of /Game/GSTN/Combat/Reactions/AS_React_HitStand (the original
     is not touched). Only the upper arm track changes: a rotation about the shoulder, about the horizontal axis across the arm, every frame.
 2A: DA_ReactionAnims_HitAdd (the variant set) gets the ArmLow clip on its HitStand rule and keeps only the 4 reviewed directional clips
     (ground front/left/right, air front; the other 4 go back to the placeholder bend); the character Blueprint SandboxCharacter_Mover then
@@ -15,7 +15,7 @@ import unreal
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-SRC = '/Game/GASNPPTest/Combat/Reaction/AS_React_HitStand'
+SRC = '/Game/GSTN/Combat/Reactions/AS_React_HitStand'
 DST = '/Game/GSTN/Animation/Reaction/AS_GSTN_React_HitStand_ArmLow'
 VSET = '/Game/GSTN/Animation/Reaction/DA_ReactionAnims_HitAdd'
 DEG = float(os.environ.get('HITSTAND_ARM_DEG') or 25.0)

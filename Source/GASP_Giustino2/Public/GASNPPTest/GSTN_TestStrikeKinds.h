@@ -14,7 +14,7 @@ class UGSTN_PrimaryKitDefinition;
 
 /**
  * TEST MOVE, no design value: shows the recoil placeholders of the strike kinds (UGSTN_CombatSettings::SwingRicochetDefault / StabRicochetDefault,
- * the sample shove montages B_A / B_V) on a hard target. Its frame data is the asset /Game/GASNPPTest/Combat/TL_Test_StrikeKinds, which
+ * the sample shove montages B_A / B_V) on a hard target. Its frame data is the asset /Game/GSTN/_Test/Combat/TL_Test_StrikeKinds, which
  * Tools/GAS/setup_strike_kinds_test.py writes with UGSTN_TestStrikeKindsLibrary::FillStrikeKindsTimeline. No recoil of its own anywhere
  * (group, move), so a ricochet falls through the chain to the kind default. Kit: KIT_Test_StrikeKinds (Command.Attack.Neutral).
  */

@@ -325,7 +325,7 @@ shielding target), content from `Tools/GAS/setup_defence_link_content.py` (F13; 
 `Tools/GAS/validate_defence_content.py`): `/GSTNLink/Test/DA_LinkType_Grab_Test` (grab rule at its defaults: the fallback of a kit without a link extension),
 `DA_LinkType_Latch_Test` (the grab's alternative), the move Blueprints `GA_Grab_Test`, `GA_Pummel_Test`, `GA_Release_Test`,
 `GA_Throw{Forward,Back,Up,Down}_Test`, `GA_LatchAttack_Test` (thin children of the native `UGSTN_GA_LinkTest*`), and the project kit
-`/Game/GASNPPTest/Combat/KIT_Test_Link` (slots, moves and a link extension with the spec 11 test mash, base 90 frames, written by `UGSTN_LinkContentLibrary::WriteKitLinkContent`,
+`/Game/GSTN/_Test/Combat/KIT_Test_Link` (slots, moves and a link extension with the spec 11 test mash, base 90 frames, written by `UGSTN_LinkContentLibrary::WriteKitLinkContent`,
 dirty only on a change) plus the link steps in the standard rules. The scenarios play `KIT_Test_Link`; `link_rollback` / `grab_immunity` still
 turn the test weapon's attack into a grab in memory, and leash, immunity and weights are scenario numbers. The F10-F12 runtime path
 (`AddLinkTestBindings` on `KIT_Test_Hits`) works with `link_scenarios.USE_CONTENT = False`. Debug: `gstn.Combat.Debug.Links 1` (console only)

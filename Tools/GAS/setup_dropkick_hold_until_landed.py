@@ -5,7 +5,7 @@
 # Never over hand edits: a timeline saved by anything but the setup scripts is KEPT (Tools/GAS/setup_guard.py); run(force=True) adds the
 # track anyway (backup in Saved/Backups/SetupGuard). The ledger shares the timeline with the kit script: after this script it stays script-owned.
 #
-# What it writes into /Game/GASNPPTest/Combat/Overlord/TL_Overlord_Dropkick (nothing else):
+# What it writes into /Game/GSTN/Characters/Overlord/Moves/Dropkick/TL_Overlord_Dropkick (nothing else):
 #   Hold Until Landed track [startup + 6, startup + one loop) frames (decision 2A: loop f0-f5 play once as follow-through, only the loop's
 #   second half repeats; env DROPKICK_HOLD_FOLLOW_THROUGH, 0 = the old whole-loop hold), land frame = first frame of the land clip in the montage (after LOOP_REPS loops).
 #   In the air the timeline stands on the loop's last frame (the hitbox, open to the land frame, stays open) and the montage repeats its FIRST
@@ -26,7 +26,7 @@ import unreal
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import setup_guard  # noqa: E402
 
-DIR = '/Game/GASNPPTest/Combat/Overlord'
+DIR = '/Game/GSTN/Characters/Overlord/Moves/Dropkick'
 TIMELINE = f'{DIR}/TL_Overlord_Dropkick'
 CLIPS = {name: f'{DIR}/AS_OverlordDropkick_{name}' for name in ('Startup', 'Loop', 'Land')}
 ANIM_FPS = 60.0

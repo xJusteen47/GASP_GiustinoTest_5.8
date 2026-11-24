@@ -26,7 +26,7 @@ OUT = os.environ.get('PIE_PROBE_OUT') or os.path.join(unreal.Paths.convert_relat
                                                       time.strftime('probe_%Y%m%d_%H%M%S'))
 PRE = 20
 BONES = ('pelvis', 'head', 'foot_l', 'foot_r')
-JAB1 = '/Game/GASNPPTest/Combat/Overlord/AM_OverlordJab1V3'
+JAB1 = '/Game/GSTN/Characters/Overlord/Moves/Jab/AM_OverlordJab1V3'
 # kit: the kit for the sequence (changed only when it differs from the last one). blend_in: seconds put on `montage` for this sequence only.
 # taps: frames after PRE the Attack button is pressed. air: jump on PRE, crouch + Attack once rising past rise_h (pie_capture_move's dair_whiff).
 # dumps: frames after the press (taps[0] or the air press) that get an `obj dump`

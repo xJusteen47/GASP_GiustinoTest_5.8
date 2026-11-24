@@ -38,7 +38,7 @@ LOOKS = {
         (CUBE, (-8.0, -40.0, 0.0), (0.40, 0.16, 0.34), BLUE),
         (SPHERE, (14.0, -40.0, 0.0), (0.26, 0.26, 0.26), CYAN),
     ],
-    '/Game/GASNPPTest/Examples/DA_Example_Backpack_Dome': [
+    '/Game/GSTN/_Examples/DA_Example_Backpack_Dome': [
         (CUBE, (-6.0, -40.0, 0.0), (0.30, 0.18, 0.40), PURPLE),
         (SPHERE, (-6.0, -50.0, 0.0), (0.24, 0.08, 0.24), YELLOW),
     ],

@@ -174,7 +174,7 @@ BACKPACK_PADS = [
     ('/Game/GAS/Backpacks/DA_Backpack_JetPack.DA_Backpack_JetPack', (800.0, -1050.0)),
     ('/Game/GAS/Backpacks/DA_Backpack_ShieldDome.DA_Backpack_ShieldDome', (800.0, 1050.0)),
     # Designer example (Tools/GAS/setup_designer_examples.py): the dome backpack with its move in a Blueprint of its own
-    ('/Game/GASNPPTest/Examples/DA_Example_Backpack_Dome.DA_Example_Backpack_Dome', (800.0, 1400.0)),
+    ('/Game/GSTN/_Examples/DA_Example_Backpack_Dome.DA_Example_Backpack_Dome', (800.0, 1400.0)),
 ]
 
 
@@ -206,7 +206,7 @@ def spawn_backpacks():
 
 # Placeholder bounce pads (movement thread): BP_Test_BouncePad (a GSTN_Trampoline child, tuned in its Class Defaults) in the piazza. Trampolines are
 # static level data, not replicated: the same pad is spawned in every world of the process, as a level would carry it. (x, y, yaw)
-BOUNCE_PAD_CLASS = '/Game/GASNPPTest/BP_Test_BouncePad'
+BOUNCE_PAD_CLASS = '/Game/GSTN/Maps/Hub/BP_Test_BouncePad'
 BOUNCE_PADS = [(-700.0, 0.0, 0.0)]
 
 

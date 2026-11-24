@@ -7,7 +7,7 @@ import gasnpp_test as g
 
 SUITE_KIT = ['designer_examples']
 KIT = 'KIT_Example'
-BACKPACK = '/Game/GASNPPTest/Examples/DA_Example_Backpack_Dome.DA_Example_Backpack_Dome'
+BACKPACK = '/Game/GSTN/_Examples/DA_Example_Backpack_Dome.DA_Example_Backpack_Dome'
 # (logical button, damage written in the move's Blueprint, where the victim stands in the attacker's frame: x ahead, y left)
 MOVES = [('Attack', 4.0, (110.0, 0.0)), ('Strong', 14.0, (130.0, 0.0)), ('Special', 8.0, (90.0, 0.0))]
 

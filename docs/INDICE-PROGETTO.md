@@ -143,7 +143,7 @@ In gioco: chi colpisce chi, quanto danno, che reazione, che knockback.
 In gioco: cosa sa fare un personaggio. Un kit lega comandi ad abilità; ogni abilità suona una timeline con il suo montage.
 - Kit: `GAS/Kits/GSTN_PrimaryKitDefinition.h`; arma `GSTN_WeaponDefinition.h`; super `GSTN_SuperDefinition.h`; legame comando→abilità `GSTN_AbilityBinding.h`.
 - Mossa: abilità figlia di `NP/Abilities/GSTN_GA_BaseCombat.h` + timeline `Core/Timeline/GSTN_CombatTimeline.h` (montage e sezione dentro `FGSTN_CombatTimelineData`).
-- Asset: i kit veri stanno in `Content/GASNPPTest/Combat/` (`KIT_Test_Overlord`...), cercati via `Config/DefaultGame.ini` righe 10-16. Il nome "Test" inganna: è il contenuto del gioco (vedi audit A1).
+- Asset: i kit veri stanno in `Content/GSTN/Characters/<Personaggio>/Kits/` e le mosse in `Characters/<Personaggio>/Moves/<Mossa>/` (`KIT_Test_Overlord`...), i kit dei test automatici in `GSTN/_Test/Combat/`; l'Asset Manager li cerca sotto `/Game/GSTN` (`Config/DefaultGame.ini` righe 10-19). Cartella di un asset dal nome: `Tools/GAS/gstn_content.py`. Il nome "Test" inganna: è il contenuto del gioco (vedi audit A1).
 - Creazione: script `Tools/GAS/setup_overlord_*_kit.py` (usano le classi di `Prj/GASNPPTest/GSTN_TestKitArchetypes.h`). Editor timeline: plugin GSTNCombatEditor (doc `combat-m5-editor.md`). Notazione mosse (F.L, N.S, Cr.F.Sp...): `docs/notes/notazione-mosse.md` (branch `claude/anim-inventario-2026-11-23`).
 - Mod dei kit: GSTNKitMods (SPENTO di default, attivo nel progetto). Raccolta e scambio kit: GSTNPickups. Zaini: GSTNBackpack. Schermata del carico: GSTNLoadoutMenu.
 
@@ -169,7 +169,7 @@ In gioco: afferrare un nemico, colpirlo (pummel), lanciarlo; caricare un alleato
 ### 5.10 Input · OK
 In gioco: tasti e stick diventano comandi, con buffer, priorità e blocchi.
 - `Plugins/GSTNInput` (122 test, `GSTNInput.Core.*`), `Plugins/GSTNInputNP` (simulazione, tabella comando→abilità `GSTN_CommandBindingSet.h`). Impostazioni `UGSTN_InputSettings`; tag dei designer in `Config/Tags/GSTNCommands.ini`.
-- Mapping dei tasti: `Content/GASNPPTest/Input/`, contesti elencati in `Config/DefaultGame.ini` (`AbilitySystemMappingContexts`). Doc `input.md`. Schema tasti in memoria progetto (X leggero, A salto, Y special, B presa...).
+- Mapping dei tasti: `Content/GSTN/Input/`, contesti elencati in `Config/DefaultGame.ini` (`AbilitySystemMappingContexts`). Doc `input.md`. Schema tasti in memoria progetto (X leggero, A salto, Y special, B presa...).
 
 ### 5.11 GAS e tag · OK
 - Abilità del progetto: derivare sempre da `Prj/GAS/GSTN_GameplayAbility.h`. Tag nativi del progetto: `Prj/GAS/GSTN_AbilityTags.h`; tag dei plugin: tabella in `Plugins/README.md`. Fork: `Plugins/GASNPP/` (`PATCHES.md`). Doc `gas-npp.md`, `modularity-and-tags.md`. Skill `add-gstn-ability`.

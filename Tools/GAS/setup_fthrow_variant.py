@@ -14,7 +14,7 @@ import unreal
 
 V = os.environ.get('FTHROW_VERSION', 'V1')
 SRC = f'/Game/AnimPipeline/Rig/Overlord/FThrow/AS_OverlordFThrow{V}_Build'
-DIR = '/Game/GASNPPTest/Combat/Overlord'
+DIR = '/Game/GSTN/Characters/Overlord/Moves/FThrow'
 IMPACT_G, FAF_G, HITSTOP = 20, 46, 8
 GAME_HZ, ANIM_FPS = 62.5, 60.0
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'FThrow', 'setup_fthrow_variant.txt')

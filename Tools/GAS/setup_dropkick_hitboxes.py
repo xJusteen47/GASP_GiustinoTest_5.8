@@ -31,7 +31,7 @@ import unreal
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import setup_guard  # noqa: E402
 
-DIR = '/Game/GASNPPTest/Combat/Overlord'
+DIR = '/Game/GSTN/Characters/Overlord/Moves/Dropkick'
 TL_NAME = os.environ.get('DROPKICK_TL', 'TL_Overlord_DropkickTBK6')
 DRY = os.environ.get('DROPKICK_HITBOX_DRY') == '1'
 ANIM_FPS = 60.0

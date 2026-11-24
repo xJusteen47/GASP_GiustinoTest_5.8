@@ -1,6 +1,6 @@
 # Fills the OPEN level with the playable test hub /Game/GSTN/Maps/L_Test_Hub (TH-1, docs/notes/handovers/test-level-brief.md). It never saves
 # the map: the owner makes the empty level (File > New Level > Empty Level) and saves it with Ctrl+S. It only saves the hub's colour material
-# instances under /Game/GASNPPTest/TestMaps/Hub (test-maps.md section 0.1).
+# instances under /Game/GSTN/Maps/Hub (test-maps.md section 0.1).
 #
 #   editor:  import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import build_test_hub_map as m; m.run()
 #
@@ -26,11 +26,11 @@ import build_wall_slide_ab_map as wallab  # noqa: E402
 
 TAG = 'TestHub'
 MAP_PATH = '/Game/GSTN/Maps/L_Test_Hub'
-GAME_MODE = '/Game/GASNPPTest/GM_GASNPPTest.GM_GASNPPTest_C'
+GAME_MODE = '/Game/GSTN/Core/GM_GASNPPTest.GM_GASNPPTest_C'
 CUBE = '/Engine/BasicShapes/Cube.Cube'
 CYLINDER = '/Engine/BasicShapes/Cylinder.Cylinder'
 MAT_PARENT = '/Engine/BasicShapes/BasicShapeMaterial'
-MAT_DIR = '/Game/GASNPPTest/TestMaps/Hub'
+MAT_DIR = '/Game/GSTN/Maps/Hub'
 MANNEQUIN = '/Game/Characters/UEFN_Mannequin/Meshes/SKM_UEFN_Mannequin'
 COLOURS = {
     'Blue': (0.10, 0.25, 0.80), 'DarkBlue': (0.05, 0.10, 0.40), 'Orange': (1.0, 0.35, 0.02), 'Red': (0.9, 0.03, 0.03),
@@ -94,13 +94,13 @@ KIT_PADS = [
 # M11 L10: kits on the ground that carry mods (asset paths; the mods travel with the kit to whoever takes it, KitSwapMods = GroundKit).
 # (kit, support weapon, mods, label, (x, y)); test_hub.spawn_kits adds them to the KIT_PADS pickups
 MOD_PADS = [
-    ('KIT_Test_Ranger', '', ['/Game/GASNPPTest/Combat/Mods/MOD_Test_Power.MOD_Test_Power'], 'TIRATORE + MOD POTENZA', (800.0, 700.0)),
+    ('KIT_Test_Ranger', '', ['/Game/GSTN/_Test/Combat/MOD_Test_Power.MOD_Test_Power'], 'TIRATORE + MOD POTENZA', (800.0, 700.0)),
 ]
 PAD_RADIUS = 120.0
 # One debug pad by the spawn (owner 2026-11-16, like GASP's level button): stepping on it opens the GSTN Debug Options editor window
 # (gstn.Debug.OpenWindow, every gstn.*Debug* switch). It replaced the red hitbox/hurtbox toggle pad; Tools/GAS/hub_debug_pad.py places it in the map
 DEBUG_PAD = ('OPZIONI DEBUG', (300.0, -800.0))
-DUMMY_CLASS = '/Game/GASNPPTest/BP_GASNPP_TestCharacter'
+DUMMY_CLASS = '/Game/GSTN/Core/BP_GASNPP_TestCharacter'
 # Dummies: the test character spawned on the server at Play by test_hub, possessed by an AI controller (stands still, takes hits). (zone, (x, y), yaw)
 DUMMIES = [
     ('Z1', (3500.0, 300.0), 180.0), ('Z1', (3500.0, -400.0), 180.0), ('Z1', (2700.0, -1700.0), 180.0),

@@ -1,6 +1,6 @@
 # DROPKICK-CAPSULE (2026-11-15): the Overlord dropkick's movement capsule on the torso instead of the standing capsule (owner: "the capsule should
 # be at the centre of the torso, from the video it looks like it is on the head"). Writes two Body Capsule tracks (FGSTN_TimelineTrack_BodyCapsule,
-# C++ on claude/project-thread-0pka8k) into /Game/GASNPPTest/Combat/Overlord/TL_Overlord_Dropkick. Data only: no Blueprint graph, no input,
+# C++ on claude/project-thread-0pka8k) into /Game/GSTN/Characters/Overlord/Moves/Dropkick/TL_Overlord_Dropkick. Data only: no Blueprint graph, no input,
 # no project setting. Run AFTER setup_overlord_dropkick_kit.py and setup_dropkick_hold_until_landed.py (the kit script rewrites the timeline).
 #
 #   air  [startup - AIR_LEAD, land): small capsule (DROPKICK_CAPSULE_HH, default 35 cm) centred on the torso of the LOOP clip's frame 0,
@@ -28,7 +28,7 @@ import runpy
 
 import unreal
 
-DIR = '/Game/GASNPPTest/Combat/Overlord'
+DIR = '/Game/GSTN/Characters/Overlord/Moves/Dropkick'
 # DROPKICK_TIMELINE: another dropkick timeline with the same clips (e.g. TL_Overlord_DropkickTBK6 on the K6 branch); default the original
 TIMELINE = os.environ.get('DROPKICK_TIMELINE', f'{DIR}/TL_Overlord_Dropkick')
 CLIPS = {name: f'{DIR}/AS_OverlordDropkick_{name}' for name in ('Startup', 'Loop', 'Land')}

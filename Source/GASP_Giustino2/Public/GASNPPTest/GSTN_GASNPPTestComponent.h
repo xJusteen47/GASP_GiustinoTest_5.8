@@ -271,7 +271,7 @@ public:
 	bool ServerEquipPrimaryWeapon(bool bEquip);
 
 	/**
-	 * Server only: applies the loadout of the C15 test content (/Game/GASNPPTest/Combat) to this pawn through the combat component's
+	 * Server only: applies the loadout of the C15 test content (/Game/GSTN/_Test/Combat) to this pawn through the combat component's
 	 * ServerApplyLoadoutChange: the kit named KitName and, when SupportWeaponName is not empty, that weapon as the additional weapon.
 	 * The loadout component is added to the PlayerState at runtime on the first call (the shared PlayerState Blueprint is not edited).
 	 * Returns "OK", or the findings of the loadout rules joined with " | ".

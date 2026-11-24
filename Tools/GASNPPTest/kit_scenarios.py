@@ -177,7 +177,7 @@ def scenario_kit_swap_support(client=1, support='WPN_Test_Support'):
     run.run(steps)
 
 
-def scenario_kit_mod_swap(client=1, kit='KIT_Test_Ranger', mod='/Game/GASNPPTest/Combat/Mods/MOD_Test_Power.MOD_Test_Power'):
+def scenario_kit_mod_swap(client=1, kit='KIT_Test_Ranger', mod='/Game/GSTN/_Test/Combat/MOD_Test_Power.MOD_Test_Power'):
     """M11 L10, the first kit mod in a match: the client plays the plain KIT_Test_Ranger (no derived timeline); the same kit lies on the
     ground carrying MOD_Test_Power. After the swap (KitSwapMods = GroundKit) authority and owner compile the mod: the same number of derived
     timelines (> 0) on both and the same table checksum; the pickup holds the plain kit with no mod. Needs the content of

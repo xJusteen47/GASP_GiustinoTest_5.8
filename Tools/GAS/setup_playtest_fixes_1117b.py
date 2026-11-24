@@ -16,13 +16,13 @@ import unreal
 
 PROJ = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
 OUT = os.path.join(PROJ, 'Saved', 'PlaytestFixes', 'fixes_1117b.txt')
-WEAPONS = ['/Game/GASNPPTest/Combat/WPN_Test_Overlord', '/Game/GASNPPTest/Combat/WPN_Test_OverlordDropkick']   # the 2nd is KIT_Test_Playtest's
+WEAPONS = ['/Game/GSTN/Characters/Overlord/Kits/WPN_Test_Overlord', '/Game/GSTN/Characters/Overlord/Kits/WPN_Test_OverlordDropkick']   # the 2nd is KIT_Test_Playtest's
 PROBE = 'GSTN_GA_TestFeetProbe'
-DROPKICK_TL = '/Game/GASNPPTest/Combat/Overlord/TL_Overlord_Dropkick'
-CAM_DIR = '/Game/GASNPPTest/Camera'
+DROPKICK_TL = '/Game/GSTN/Characters/Overlord/Moves/Dropkick/TL_Overlord_Dropkick'
+CAM_DIR = '/Game/GSTN/Data/Camera'
 CAM_DEF = CAM_DIR + '/CMD_Playtest_Follow'
 CAM_RULES = CAM_DIR + '/CRS_Playtest'
-CHARACTER = '/Game/GASNPPTest/BP_GASNPP_TestCharacter'
+CHARACTER = '/Game/GSTN/Core/BP_GASNPP_TestCharacter'
 FOLLOW_DISTANCE = 1100.0   # was 650 (plugin default)
 FOLLOW_PITCH = -22.0
 FOLLOW_FOV = 60.0

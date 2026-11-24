@@ -1,5 +1,5 @@
 # CP5 of the Blueprint seams: checks the Combat Move factory through the same calls a script or an editor agent uses, WITHOUT saving anything.
-# Makes three moves in /Game/GASNPPTest/Examples/FactoryCheck (strike inline, action with a TL_ asset and the move events, empty), binds the
+# Makes three moves in /Game/GSTN/_Examples/FactoryCheck (strike inline, action with a TL_ asset and the move events, empty), binds the
 # action one to an in-memory copy of KIT_Example's command, reads everything back, then drops the packages (nothing is written to disk).
 #
 # Run headless (editor closed): UnrealEditor-Cmd <uproject> -run=pythonscript -script="<this file>" -unattended -nullrhi
@@ -8,8 +8,8 @@ import os
 
 import unreal
 
-DIR = '/Game/GASNPPTest/Examples/FactoryCheck'
-KIT = '/Game/GASNPPTest/Examples/KIT_Example'
+DIR = '/Game/GSTN/_Examples/FactoryCheck'
+KIT = '/Game/GSTN/_Examples/KIT_Example'
 OUT_DIR = os.path.join(unreal.Paths.project_saved_dir(), 'Examples')
 _lines = []
 

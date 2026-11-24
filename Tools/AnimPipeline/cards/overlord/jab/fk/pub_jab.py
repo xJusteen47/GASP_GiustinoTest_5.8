@@ -6,7 +6,7 @@ eal = unreal.EditorAssetLibrary
 lines = []
 try:
     for n, rm in ((1, False), (2, True)):
-        game = f"/Game/GASNPPTest/Combat/Overlord/AS_OverlordJab{n}V3"
+        game = f"/Game/GSTN/Characters/Overlord/Moves/Jab/AS_OverlordJab{n}V3"
         bk = f"/Game/AnimPipeline/Backup/AS_OverlordJab{n}V3_r1_2026-11-18"
         if not eal.does_asset_exist(bk):
             eal.duplicate_asset(game, bk); eal.save_asset(bk, only_if_is_dirty=False)

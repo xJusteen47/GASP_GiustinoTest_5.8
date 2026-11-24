@@ -4,7 +4,7 @@
 #      same value for the built-in copy) and a surface impact table, GSTN_SurfaceImpacts_Standard, with one row for Surface.Type.Wall (the
 #      surface type of every collider without one, floors included): no default outcome, everything allowed. Nothing changes for an ordinary
 #      hit; a hit whose Impact profile forces Splat or Bounce now gets it (before, no table = no impact at all).
-#   2. Two clone moves of GA_Example_Strong's source in /Game/GASNPPTest/Examples: GA_Example_GroundBounce (a spike, angle -45, Impact Force
+#   2. Two clone moves of GA_Example_Strong's source in /Game/GSTN/_Examples: GA_Example_GroundBounce (a spike, angle -45, Impact Force
 #      Bounce: bounces once off the floor) and GA_Example_WallSplat (low and fast, Impact Force Splat), on WPN_Example_Impacts (light X = ground
 #      bounce, strong RT = wall splat) and KIT_Example_Impacts (label IMPATTI), a copy of KIT_Example.
 #   3. The landing of a tumble (mini bounce, downed, get-up roll from the stick, neutral get-up on jump, no get-up attack, no shield tech: the
@@ -16,8 +16,8 @@ import unreal
 
 RULES = '/GSTNCombat/Rules/GSTN_CombatRules_Standard'
 TABLE_DIR, TABLE = '/GSTNCombat/Rules', 'GSTN_SurfaceImpacts_Standard'
-DIR = '/Game/GASNPPTest/Examples'
-SRC = '/Game/GASNPPTest/Combat/Archetypes/GA_Heavy_Jab'
+DIR = '/Game/GSTN/_Examples'
+SRC = '/Game/GSTN/Combat/Archetypes/GA_Heavy_Jab'
 DEF_TEST = '/GSTNDefence/Test'
 TAKEDOWN = '/Game/Characters/UEFN_Mannequin/Animations/Interactions/Takedowns/AM_M_relaxed_takedown_stand_{}_A'
 STRIKE = dict(total_frames=42, first_actionable_frame=36, active_start=14, active_end=18, radius=70.0, reach_from=90.0, reach_to=210.0,
@@ -26,9 +26,9 @@ MOVES = {
     'GA_Example_GroundBounce': (['Command.Attack.Neutral', 'Command.Attack.Directional'], 'BOUNCE', dict(base_knockback=1900.0, angle_deg=-45.0)),
     'GA_Example_WallSplat': (['Command.Strong.Neutral', 'Command.Strong.Directional'], 'SPLAT', dict(base_knockback=2000.0, angle_deg=15.0)),
 }
-LANDING_KITS = ['/Game/GASNPPTest/Combat/KIT_Test_Hits', '/Game/GASNPPTest/Combat/KIT_Test_Light',
-                '/Game/GASNPPTest/Combat/KIT_Test_Medium', '/Game/GASNPPTest/Combat/KIT_Test_Heavy',
-                '/Game/GASNPPTest/Combat/KIT_Test_Ranger', f'{DIR}/KIT_Example', f'{DIR}/KIT_Example_Impacts']
+LANDING_KITS = ['/Game/GSTN/_Test/Combat/KIT_Test_Hits', '/Game/GSTN/_Test/Combat/KIT_Test_Light',
+                '/Game/GSTN/_Test/Combat/KIT_Test_Medium', '/Game/GSTN/_Test/Combat/KIT_Test_Heavy',
+                '/Game/GSTN/_Test/Combat/KIT_Test_Ranger', f'{DIR}/KIT_Example', f'{DIR}/KIT_Example_Impacts']
 
 _lines = []
 
@@ -55,12 +55,12 @@ def _copy(source, path):
 
 
 def _find_asset(path):
-    """The asset at path, else the first asset of that name anywhere under /Game/GASNPPTest (archetype kits may live in another folder)"""
+    """The asset at path, else the first asset of that name anywhere under /Game/GSTN (archetype kits may live in another folder)"""
     asset = unreal.load_asset(path)
     if asset:
         return asset
     name = path.rsplit('/', 1)[-1]
-    for found in unreal.EditorAssetLibrary.list_assets('/Game/GASNPPTest', True, False):
+    for found in unreal.EditorAssetLibrary.list_assets('/Game/GSTN', True, False):
         if found.split('.')[0].rsplit('/', 1)[-1] == name:
             return unreal.load_asset(found.split('.')[0])
     return None

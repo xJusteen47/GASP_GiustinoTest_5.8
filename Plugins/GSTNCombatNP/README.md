@@ -240,7 +240,7 @@ of the rolled-back state (`FGSTN_CombatSyncCore::TableRevision`), never "the cur
   `MinFramesBetweenLoadoutChanges` of the previous one. `GSTN.NP.TableLimits` (a loadout validator registered at module startup) refuses a loadout over 255 bindings or 32767 timelines.
 - Tests: `GSTNCombat.NP.Table.*` (conversion, checksum, extensions, limits, weapon stats), `GSTNCombat.NP.Swap.*` (the step), `GSTNCombat.NP.State.TableRevision*`; the network behaviour
   is `scenario_loadout_change` (checks 16 to 20: table revision follows, equal checksum, the dash command exists only in Beta, the gate stays open on the authority).
-- Table swap scenarios (session 2, `docs/notes/m3-doc-deltas.md` C18), all on the kit tables of `/Game/GASNPPTest/Combat`: `scenario_command_set` (a removed command and an added one on its button),
+- Table swap scenarios (session 2, `docs/notes/m3-doc-deltas.md` C18), all on the kit tables of `/Game/GSTN/_Test/Combat`: `scenario_command_set` (a removed command and an added one on its button),
   `scenario_ex_meter` (the EX slot falls through to the plain special without meter), `scenario_super_code` (supers entered as a code, meter gate, a reconcile mid-code),
   `scenario_wait_frames` (a kit-bound timeline that waits combat frames, delayed exactly by a hitstop). A command's tier is the tier of its tag root (`Command.Special.*` = 300): an EX or
   alternative command of a tiered family has to live under the same root, or the plain command outranks it whatever the pattern.
@@ -386,7 +386,7 @@ world time, traces), `Ability.SimRandom`. An action that cannot run (no definiti
 
 ## Example moves made with the seams (Blueprint seams CP3)
 
-`Tools/GAS/setup_double_shot_examples.py` builds the owner's double-press special twice in `/Game/GASNPPTest/Examples/DoubleShot`: **A, data only**
+`Tools/GAS/setup_double_shot_examples.py` builds the owner's double-press special twice in `/Game/GSTN/_Examples/DoubleShot`: **A, data only**
 (`GA_Example_DoubleShot_A1`/`_A2`: an Event key with a Fire Projectile action each; A1's Tags window `Example.State.DoubleShotChain` + cancel window
 into the special, the kit binds the special to A2 while the tag is up, like jab 1 -> jab 2) and **B, one ability with a graph**
 (`GA_Example_DoubleShot_B`: On Move Key "Fire" shoots and arms the `FollowUpState` sync integer; On Move Frame asks `WasCommandEnteredWithin`; the

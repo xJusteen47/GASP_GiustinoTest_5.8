@@ -13,15 +13,15 @@ import re
 
 import unreal
 
-KIT = '/Game/GASNPPTest/Combat/KIT_Test_Playtest'
-TIMELINE = '/Game/GASNPPTest/Combat/Overlord/TL_Overlord_Dropkick'
+KIT = '/Game/GSTN/Characters/Overlord/Kits/KIT_Test_Playtest'
+TIMELINE = '/Game/GSTN/Characters/Overlord/Moves/Dropkick/TL_Overlord_Dropkick'
 RULES = '/GSTNDefence/Test/DA_DefenceRules_Test'
 WINDOW_TAG = 'Combat.Move.KnockdownOnLanding'
 # After the bounce clip's review PASS (Fable r3, 2026-11-17): PLAYTEST_DROPKICK_OWN_BOUNCE=R3 sets the dropkick's own bounce ability on
 # TL_Overlord_Dropkick's Self Landing Bounce and registers it in KIT_Test_Playtest's TriggeredAbilities (the model starts only registered classes).
 # Empty = the kit's generic GroundBounce (option A as first applied)
 OWN_BOUNCE = os.environ.get('PLAYTEST_DROPKICK_OWN_BOUNCE', '')
-OWN_BOUNCE_GA = '/Game/GASNPPTest/Combat/Overlord/GA_Overlord_DropkickTechBounce' + OWN_BOUNCE
+OWN_BOUNCE_GA = '/Game/GSTN/Characters/Overlord/Moves/Dropkick/GA_Overlord_DropkickTechBounce' + OWN_BOUNCE
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'PlaytestFixes', 'setup_playtest_dropkick_knockdown.txt')
 _lines = []
 

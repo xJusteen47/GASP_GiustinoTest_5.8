@@ -7,7 +7,7 @@ Writes Saved/Reversal/reversal_setup.txt, prints max 5 lines.
 import os
 import unreal
 
-PROFILE = os.environ.get("REV_PROFILE", "/Game/GASNPPTest/Combat/DA_Locomotion_Default")
+PROFILE = os.environ.get("REV_PROFILE", "/Game/GSTN/Data/Locomotion/DA_Locomotion_Default")
 OUT = os.path.join(unreal.Paths.project_saved_dir(), "Reversal", "reversal_setup.txt")
 VALUES = {
     "enabled": os.environ.get("REV_ENABLED", "1") == "1",

@@ -10,7 +10,7 @@ so the skid capsule follows the clip root to the clip's end instead of the stick
 import math, os, unreal
 
 CLIP = os.environ.get("SKID_CLIP", "/Game/GSTN/Animation/Ported57/SkidOwner/SS_180_Turn_Root180")
-PROFILE = os.environ.get("PROFILE", "/Game/GASNPPTest/Combat/DA_Locomotion_Default")
+PROFILE = os.environ.get("PROFILE", "/Game/GSTN/Data/Locomotion/DA_Locomotion_Default")
 RATE = float(os.environ.get("RATE", "30"))
 OUT = unreal.Paths.project_saved_dir() + "AnimSetup2/skid_turn_curve.txt"
 

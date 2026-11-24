@@ -438,7 +438,7 @@
    }
   },
   "AS_AirCrouch_Enter": {
-   "folder": "/Game/GASNPPTest/Combat/AirCrouch",
+   "folder": "/Game/GSTN/Animation/AirCrouch",
    "frames": 9,
    "keys": [
     {
@@ -466,7 +466,7 @@
    }
   },
   "AS_AirCrouch_Loop_PLACEHOLDER": {
-   "folder": "/Game/GASNPPTest/Combat/AirCrouch",
+   "folder": "/Game/GSTN/Animation/AirCrouch",
    "frames": 61,
    "loop": true,
    "keys": [

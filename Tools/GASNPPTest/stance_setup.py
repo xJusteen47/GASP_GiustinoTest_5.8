@@ -15,7 +15,7 @@ OUT = os.environ.get('STANCE_OUT') or os.path.join(_PROJ, 'Saved', 'Stance', 'se
 os.makedirs(OUT, exist_ok=True)
 ABP = '/Game/Blueprints/SandboxCharacter_Mover_ABP'
 UPSTREAM = 'GSTN Blend-Out Foot Lock'
-STANCE_DIR, STANCE_NAME = '/Game/GASNPPTest/Stance', 'DA_Stance_TestRelaxed'
+STANCE_DIR, STANCE_NAME = '/Game/GSTN/_Test/Stances', 'DA_Stance_TestRelaxed'
 STANCE_POSE = '/Game/Characters/UEFN_Mannequin/Animations/Idle/M_Relaxed_Stand_Idle_Loop'
 REFERENCE_POSE = '/Game/Characters/UEFN_Mannequin/Animations/Idle/M_Neutral_Stand_Idle_Loop'
 

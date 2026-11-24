@@ -28,7 +28,7 @@ $env:GSTN_SA_NOLINK = if ($NoLink) { '1' } else { '' }
 $extra = @(); if ($NullRhi) { $extra = @('-nullrhi') }
 $common = @('-game', '-windowed', '-ResX=640', '-ResY=360', '-WinY=40', '-nosplash', '-nosound', '-notimeouts') + $extra
 $hostLog = "$dir\$Tag-host.log"
-$map = '/Game/GSTN/_Test/Maps/DefaultLevel_Harness?listen?game=/Game/GASNPPTest/GM_GASNPPTest.GM_GASNPPTest_C'
+$map = '/Game/GSTN/_Test/Maps/DefaultLevel_Harness?listen?game=/Game/GSTN/Core/GM_GASNPPTest.GM_GASNPPTest_C'
 function WaitFor($file, $pattern, $secs) { for ($i = 0; $i -lt $secs; $i++) { if ((Test-Path $file) -and (Select-String -Path $file -Pattern $pattern -Quiet)) { return $true }; [System.Threading.Thread]::Sleep(1000) }; return $false }
 $t0 = Get-Date
 $h = Start-Process -FilePath $Engine -PassThru -ArgumentList (@("`"$uproject`"", $map, '-WinX=0', "-abslog=`"$hostLog`"", "-ExecCmds=`"py $($py -replace '\\', '/')`"") + $common)

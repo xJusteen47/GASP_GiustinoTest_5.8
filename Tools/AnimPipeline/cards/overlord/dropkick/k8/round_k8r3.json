@@ -190,7 +190,7 @@
     "script": "Tools/AnimPipeline/cards/overlord/dropkick/k8/ue_step.py",
     "entry": "delete",
     "kwargs": {
-     "path": "/Game/GASNPPTest/Combat/Overlord/AS_OverlordDropkick_StartupK8R3"
+     "path": "/Game/GSTN/Characters/Overlord/Moves/Dropkick/AS_OverlordDropkick_StartupK8R3"
     }
    },
    "inputs": [

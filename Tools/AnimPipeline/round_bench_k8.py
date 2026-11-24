@@ -28,7 +28,7 @@ import manifest  # noqa: E402
 from pathlib import Path  # noqa: E402
 
 OUT = os.path.join(ROOT, "Saved", "C5Bench")
-D = "/Game/GASNPPTest/Combat/Overlord"
+D = "/Game/GSTN/Characters/Overlord/Moves/Dropkick"
 SEQ = ["dropkick_sweet_whiff", "dropkick_sweet_hit"]
 VIEWS = "az90,az180,game"
 WIN = CM.FAST_WINDOW

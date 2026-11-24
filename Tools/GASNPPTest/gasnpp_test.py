@@ -13,11 +13,11 @@
 # through the same Enhanced Input injection as the clients.
 import unreal, json
 
-CHAR = '/Game/GASNPPTest/BP_GASNPP_TestCharacter'
+CHAR = '/Game/GSTN/Core/BP_GASNPP_TestCharacter'
 IA = {
     'move': '/Game/Input/IA_Move',
-    'dash': '/Game/GASNPPTest/Input/IA_GASNPP_Dash',
-    'buff': '/Game/GASNPPTest/Input/IA_GASNPP_Buff',
+    'dash': '/Game/GSTN/Input/IA_GASNPP_Dash',
+    'buff': '/Game/GSTN/Input/IA_GASNPP_Buff',
     'jump': '/Game/Input/IA_Jump',
 }
 
@@ -389,7 +389,7 @@ def set_pawn_override(pawn=None):
     """Swaps the default pawn class of GM_GASNPPTest in memory (never saved) for the Blueprint called `pawn` (e.g. 'SandboxCharacter_Mover'),
     resolved by soft path: no Blueprint is edited. None restores the class that was replaced. The scenarios that sample the test component
     (_Run) need the harness pawn: use this for log based scenarios such as slide_jump(bare=True)."""
-    gm_class = unreal.load_asset('/Game/GASNPPTest/GM_GASNPPTest').generated_class()
+    gm_class = unreal.load_asset('/Game/GSTN/Core/GM_GASNPPTest').generated_class()
     cdo = unreal.get_default_object(gm_class)
     if pawn is None:
         if _pawn_override['prev'] is not None:
@@ -409,7 +409,7 @@ def setup_editor(enable=True, mode='listen', clients=2, pawn=None):
     """Temporary editor-only setup (never saved): test GameMode override on the open level, PIE settings for `mode` ('listen' =
     primary, host + `clients` clients; 'dedicated' = secondary check), no background CPU throttling. enable=False restores all."""
     w = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
-    gm = '/Game/GASNPPTest/GM_GASNPPTest' if enable else '/Game/Blueprints/GM_Sandbox'
+    gm = '/Game/GSTN/Core/GM_GASNPPTest' if enable else '/Game/Blueprints/GM_Sandbox'
     w.get_world_settings().set_editor_property('default_game_mode', unreal.load_asset(gm).generated_class())
     perf = unreal.get_default_object(unreal.load_class(None, '/Script/UnrealEd.EditorPerformanceSettings'))
     perf.set_editor_property('bThrottleCPUWhenNotForeground', not enable)
@@ -854,7 +854,7 @@ def combat_tap(client_index, mask):
 
 
 # ---- test content names: buttons are resolved from the InputConfig asset, never hard-coded as indices
-INPUT_CONFIG = '/Game/GASNPPTest/Input/IC_GASNPP_Test'
+INPUT_CONFIG = '/Game/GSTN/Input/IC_GASNPP_Test'
 TAG_DASHING, TAG_ATTACKING, TAG_STANCE, TAG_BUFFED = 'Test.State.Dashing', 'Test.State.Attacking', 'Test.State.Stance', 'Test.State.Buffed'
 
 
@@ -2600,7 +2600,7 @@ def scenario_external_launch_jump(client=1, launch_speed=900.0):
 
 
 IA.setdefault('sprint', '/Game/Input/IA_Sprint')
-IA.setdefault('crouch', '/Game/GASNPPTest/Input/IA_GASNPP_Crouch')  # own action since 2026-11-13 (GASP's IA_Crouch fired its slide)
+IA.setdefault('crouch', '/Game/GSTN/Input/IA_GASNPP_Crouch')  # own action since 2026-11-13 (GASP's IA_Crouch fired its slide)
 
 
 def _bare_input(client, action, value=(1.0, 0.0, 0.0), start=True, pulse=False):
@@ -2945,7 +2945,7 @@ def scenario_interact_tap_hold(client=1):
     run.run(steps)
 
 
-# ---- C15 loadout and hitstop scenarios. The test kits / weapons are /Game/GASNPPTest/Combat/{KIT_Test_Alpha, KIT_Test_Beta, WPN_Test_*}
+# ---- C15 loadout and hitstop scenarios. The test kits / weapons are /Game/GSTN/_Test/Combat/{KIT_Test_Alpha, KIT_Test_Beta, WPN_Test_*}
 # (Tools/GAS/setup_gas_assets.py --combat-content). The loadout component is put on the PlayerState at run time by the test component
 # (ServerApplyTestLoadout), so no shared Blueprint is edited. A loadout stays applied until the PIE session ends: run loadout_change LAST in a
 # session (the kit stats override WalkSpeed / JumpVelocity of every scenario after it).
@@ -3159,7 +3159,7 @@ def scenario_hitstop(client=1):
     run.run(steps)
 
 
-# ---- C18 table swap scenarios (loadout-table-swap-design.md, session 2). The kits are /Game/GASNPPTest/Combat/KIT_Test_{Gamma, Delta, Sigma, Omega}
+# ---- C18 table swap scenarios (loadout-table-swap-design.md, session 2). The kits are /Game/GSTN/_Test/Combat/KIT_Test_{Gamma, Delta, Sigma, Omega}
 # (Tools/GAS/setup_gas_assets.py --combat-content); each scenario applies its own kit first. A loadout stays applied after the scenario: they run
 # before loadout_change, after hitstop (every kit binds the blade's attack and the platform jump, so the earlier press-driven scenarios still work).
 
@@ -4159,7 +4159,7 @@ def set_tuning(**values):
 
 def set_hurtbox(stagger=None, infinite=None, max_reaction=None):
     """The hurtbox set of the test pawns (HBS_Test_Pawn): the stagger threshold and the cap of the reaction tier. In memory only, never saved"""
-    hs = unreal.load_asset('/Game/GASNPPTest/Combat/HBS_Test_Pawn')
+    hs = unreal.load_asset('/Game/GSTN/_Test/Combat/HBS_Test_Pawn')
     if stagger is not None or infinite is not None:
         th = hs.get_editor_property('stagger_threshold')
         if stagger is not None:

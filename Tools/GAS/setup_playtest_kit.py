@@ -12,11 +12,13 @@
 import os
 
 import unreal
+import sys  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gstn_content as gc  # noqa: E402  (where each asset lives under /Game/GSTN)
 
-FOLDER = '/Game/GASNPPTest/Combat'
-KIT = FOLDER + '/KIT_Test_Playtest'
-SOURCES = [FOLDER + '/KIT_Test_OverlordDropkick', FOLDER + '/KIT_Test_Hits']
-EXTRA_FROM = [FOLDER + '/KIT_Test_Hits', FOLDER + '/KIT_Test_Light']   # Light carries the air crouch entry
+KIT = gc.path('KIT_Test_Playtest')
+SOURCES = [gc.path('KIT_Test_OverlordDropkick'), gc.path('KIT_Test_Hits')]
+EXTRA_FROM = [gc.path('KIT_Test_Hits'), gc.path('KIT_Test_Light')]   # Light carries the air crouch entry
 RULES = '/GSTNCombat/Rules/GSTN_CombatRules_Standard'
 LAUNCH_THRESHOLD = 750.0
 PERCENT_GROWTH = 1.8

@@ -12,15 +12,15 @@
 #     GSTN_AbilityInputComponent (binds the ability input actions for the local player).
 #  3. (opt-in) SandboxCharacter_Mover: the Falling mode's GSTN_WallEntryTransition becomes a GSTN_AbilityWallEntryTransition with
 #     the same settings. Pawns without an ability system behave as before (bAllowWithoutAbilitySystem).
-#  4. (opt-in, --combat-input) Combat M2 test content in /Game/GASNPPTest/Input (specs in combat_test_specs()):
+#  4. (opt-in, --combat-input) Combat M2 test content in /Game/GSTN/Input (specs in combat_test_specs()):
 #     IA_GASNPP_Attack/Special (+ keys in IMC_GASNPP_Test), IC_GASNPP_Test (UGSTN_InputConfig), SS_GASNPP_Standard (slot
 #     set, filled by UGSTN_StandardSlots.FillSlotSet), BS_GASNPP_Test (UGSTN_CommandBindingSet: Dash/Buff, Attack.* -> test
 #     attack, Special.* -> test stance, the C14 movement kit). It does NOT edit BP_GASNPP_TestCharacter: it warns when the
 #     Blueprint's GSTN_CombatSimComponent does not point to these assets, and the harness grants the abilities at run time.
-#  5. (opt-in, --combat-content) C15 loadout test content in /Game/GASNPPTest/Combat (specs in combat_content_specs()): the kits
+#  5. (opt-in, --combat-content) C15 loadout test content in /Game/GSTN/_Test/Combat (specs in combat_content_specs()): the kits
 #     KIT_Test_Alpha / KIT_Test_Beta and the weapons WPN_Test_Blade / Spear / Support. New assets only. Needs the tags of
 #     Config/Tags/GSTNCombatTest.ini and step 4's slot set.
-#  6. (opt-in, --hits-content) M4 H8 hit test content in /Game/GASNPPTest/Combat (specs in hits_content_specs()): the hurtbox set
+#  6. (opt-in, --hits-content) M4 H8 hit test content in /Game/GSTN/_Test/Combat (specs in hits_content_specs()): the hurtbox set
 #     HBS_Test_Pawn (torso / head / feet capsules, tag leaves of Config/Tags/GSTNCombat.ini), the weapon WPN_Test_Hits and the kit KIT_Test_Hits
 #     (Command.Attack.Neutral -> GSTN_GA_TestHitMove, whose frame data is in C++: a hitbox of each space), and BP_GASNPP_TestCharacter's
 #     combat component HurtboxSet -> HBS_Test_Pawn (the one shared Blueprint this step edits; backed up first).
@@ -29,7 +29,7 @@
 #     carrying the FGSTN_PartsKitExtension). P8 adds the reaction data of the armoured ArmR plate and the weak-point Head and a break Launch on the Legs. New assets only; KIT_Test_Hits, the standard rules, HBS_Test_Pawn and BP_GASNPP_TestCharacter are not touched.
 #  7. (opt-in, --h13-content) M4 H13a content (specs in h13_specs()): /GSTNCombat/Rules/GSTN_CombatRules_Standard (plugin content, the rules the match plays
 #     by default), the weight hurtbox sets HBS_Test_Light / Medium / Heavy, the baked-socket timeline TL_Test_HitBaked (the product of Tools/GAS/bake_sockets.py; the root / world / ally variants were removed in H13b: UGSTN_GA_TestHitMove covers the four hitbox spaces in the harness), the extension
-#     example Blueprints BP_*_Example and the physical materials, in /Game/GASNPPTest/Combat. Edits no shared Blueprint. The map L_Test_Combat is built by
+#     example Blueprints BP_*_Example and the physical materials, in /Game/GSTN/_Test/Combat. Edits no shared Blueprint. The map L_Test_Combat is built by
 #     build_test_combat_map.py (needs the editor with a world); hurtbox sets from a Physics Asset by make_hurtbox_set.py; baked sockets by bake_sockets.py.
 # The Blueprints are copied to Saved/Backups/GAS before being changed (Content is not under version control).
 #
@@ -43,7 +43,7 @@ import unreal
 IMC_PATH = '/Game/GAS/Input/IMC_GAS_Abilities'
 SANDBOX_IMC = '/Game/Input/IMC_Sandbox'
 IA_JUMP = '/Game/Input/IA_Jump'
-TEST_CHAR = '/Game/GASNPPTest/BP_GASNPP_TestCharacter'
+TEST_CHAR = '/Game/GSTN/Core/BP_GASNPP_TestCharacter'
 SANDBOX_CHAR = '/Game/Blueprints/SandboxCharacter_Mover'
 FALLING_MODE = 'Falling'
 IA_MOVE = '/Game/Input/IA_Move'
@@ -202,7 +202,7 @@ def setup_wall_transition():
 # combat_test_specs() only; the setup_combat_* functions apply them, skip (and log) whatever cannot be built yet and
 # change nothing when the assets already match.
 
-TEST_INPUT_DIR = '/Game/GASNPPTest/Input'
+TEST_INPUT_DIR = '/Game/GSTN/Input'
 TEST_IMC = TEST_INPUT_DIR + '/IMC_GASNPP_Test'
 SHAPES = ('Neutral', 'Directional', 'CrouchNeutral', 'CrouchDirectional')
 CONTEXTS = ('Input.Context.Grounded', 'Input.Context.Airborne')
@@ -506,7 +506,7 @@ def setup_combat_input():
     return changed
 
 
-TEST_COMBAT_DIR = '/Game/GASNPPTest/Combat'
+TEST_COMBAT_DIR = '/Game/GSTN/_Test/Combat'
 
 
 def combat_content_specs():
@@ -559,7 +559,7 @@ def _binding(command, require, ignore, ability_name):
 
 
 def setup_combat_content():
-    """Creates/updates /Game/GASNPPTest/Combat from combat_content_specs(). New assets only: no Blueprint is edited. Every property is
+    """Creates/updates /Game/GSTN/_Test/Combat from combat_content_specs(). New assets only: no Blueprint is edited. Every property is
     rewritten from the specs on each run (so a rerun converges to the specs) and the assets are saved. Returns True when something was saved."""
     specs = combat_content_specs()
     changed = False
@@ -633,7 +633,7 @@ def c18_content_specs():
 
 
 def setup_combat_content_c18():
-    """The C18 assets under /Game/GASNPPTest/Combat: a PerSuperCode scheme, two supers and four kits. New assets only; rerun converges."""
+    """The C18 assets under /Game/GSTN/_Test/Combat: a PerSuperCode scheme, two supers and four kits. New assets only; rerun converges."""
     specs = c18_content_specs()
     base = combat_content_specs()
     utils = unreal.GSTN_TestSlotUtils

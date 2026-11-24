@@ -1,7 +1,7 @@
 # Physics Asset bodies -> UGSTN_HurtboxSetDefinition (M4 H13a). Editor Python only.
 #
 #   import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import make_hurtbox_set as m
-#   m.from_physics_asset('/Game/.../PHYS_Mannequin', '/Game/GASNPPTest/Combat/HBS_FromPhysics',
+#   m.from_physics_asset('/Game/.../PHYS_Mannequin', '/Game/GSTN/Combat/Hurtboxes/HBS_FromPhysics',
 #                        tag_map={'head': 'Combat.Hurtbox.Head', 'foot': 'Combat.Hurtbox.Feet'}, default_tag='Combat.Hurtbox.Torso')
 # or headless:  UnrealEditor-Cmd.exe <project>.uproject -run=pythonscript -script="<project>/Tools/GAS/make_hurtbox_set.py <physics asset> <out asset>"
 #

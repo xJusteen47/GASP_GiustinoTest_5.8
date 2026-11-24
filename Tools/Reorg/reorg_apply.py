@@ -2,11 +2,13 @@
 
 Run headless (no map loaded, so maps can move too):
   UnrealEditor-Cmd.exe GASP_Giustino2.uproject -run=pythonscript -script="<abs path>/Tools/Reorg/reorg_apply.py"
-Optional env: REORG_MAP (csv path), REORG_DRY=1 (only report).
+Optional env: REORG_MAP (csv path), REORG_DRY=1 (only report), REORG_OWNER=1 (also the rows marked quando=owner: the owner's
+local files, moved only with the owner present, decision 3A).
 Writes Saved/Logs/ci/reorg_apply.txt and prints at most 5 lines.
 """
 import csv
 import os
+import re
 
 import unreal
 
@@ -14,6 +16,7 @@ ROOT = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_dir())
 MAP = os.environ.get('REORG_MAP', os.path.join(ROOT, 'Tools', 'Reorg', 'content-map.csv'))
 DRY = os.environ.get('REORG_DRY') == '1'
 OUT = os.path.join(ROOT, 'Saved', 'Logs', 'ci', 'reorg_apply.txt')
+OWNER = os.environ.get('REORG_OWNER') == '1'
 
 eal = unreal.EditorAssetLibrary
 lines = []
@@ -43,6 +46,10 @@ def rename(old, new):
 
 for r in rows:
     old, new = r['old'].strip(), r['new'].strip()
+    if (r.get('quando') or '').strip() == 'owner' and not OWNER:
+        skipped += 1
+        lines.append(f'ASPETTA OWNER {old}')
+        continue
     old_exists, new_exists = exists(old), exists(new)
     if new_exists and not old_exists:
         skipped += 1
@@ -81,6 +88,9 @@ if not DRY:
             continue
         for ref in [str(x) for x in (ar.get_referencers(pkg, opts) or [])]:
             if ref in resaved or ref in olds or not ref.startswith('/'):
+                continue
+            if re.search(r'/(DA_Locomotion_Default|CHT_\w*_PoseMatch)$', ref):
+                lines.append(f'FILE LOCALE OWNER, NON RISALVATO {ref}')  # protected-paths.json: only with the owner present
                 continue
             if eal.save_asset(ref, only_if_is_dirty=False):
                 resaved.add(ref)

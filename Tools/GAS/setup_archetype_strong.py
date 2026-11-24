@@ -5,8 +5,8 @@
 # Idempotent: a kit that already binds Command.Strong.* is left alone. Saves the three kits only. Output: at most 5 printed lines.
 import unreal
 
-SOURCE_WEAPON = '/Game/GASNPPTest/Examples/WPN_Example'
-KITS = ['/Game/GASNPPTest/Combat/KIT_Test_Light', '/Game/GASNPPTest/Combat/KIT_Test_Medium', '/Game/GASNPPTest/Combat/KIT_Test_Heavy']
+SOURCE_WEAPON = '/Game/GSTN/_Examples/WPN_Example'
+KITS = ['/Game/GSTN/_Test/Combat/KIT_Test_Light', '/Game/GSTN/_Test/Combat/KIT_Test_Medium', '/Game/GSTN/_Test/Combat/KIT_Test_Heavy']
 
 
 def _command(binding):

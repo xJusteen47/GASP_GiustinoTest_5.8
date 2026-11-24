@@ -1,5 +1,5 @@
 # WALL-BOUNCE-1: the default wall bounce / bump (CombatRules WallImpact, 2026-11-17) checked in Play, plus the bump reaction rules in the reaction set.
-# 1) Edits /Game/GASNPPTest/Combat/Reaction/DA_ReactionAnims (adds or updates BumpWall / BumpCeiling: RequiredTags Combat.State.Bump.Wall / .Ceiling,
+# 1) Edits /Game/GSTN/Combat/Reactions/DA_ReactionAnims (adds or updates BumpWall / BumpCeiling: RequiredTags Combat.State.Bump.Wall / .Ceiling,
 #    Priority = highest Tumble rule + 1, EndBehaviour BlendOut, BlendIn 2, BlendOut 6, Animation = the clip of a Hitstun rule as a placeholder) and
 #    saves ONLY that asset.
 # 2) Play in L_Test_Hub, listen host + 2 clients, t.OverrideFPS 60 (one tick = one frame). The host pawn is the victim, client 1 the attacker; a test
@@ -26,7 +26,7 @@ import defence_scenarios as ds   # noqa: E402
 OUT = os.environ.get('PIE_CAPTURE_OUT') or os.path.join(unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir()), 'WallBounce',
                                                         time.strftime('%Y%m%d_%H%M%S'))
 MAP = '/Game/GSTN/Maps/L_Test_Hub'
-SET = '/Game/GASNPPTest/Combat/Reaction/DA_ReactionAnims'
+SET = '/Game/GSTN/Combat/Reactions/DA_ReactionAnims'
 SIZE = 480
 DISTANCE, ELEVATION, FOV = 520.0, 8.0, 50.0
 ATTACKER = 1
@@ -288,7 +288,7 @@ def _diag_hook():
             _log(f'diag: cannot bind {name}: {e!r}')
     try:
         st['slot'] = str(unreal.load_asset(SET).get_editor_property('slot_name'))
-        clip = unreal.load_asset('/Game/GASNPPTest/Combat/Reaction/AS_React_HitStand')
+        clip = unreal.load_asset('/Game/GSTN/Combat/Reactions/AS_React_HitStand')
         _log(f'diag: slot {st["slot"]}, AS_React_HitStand length {clip.get_play_length():.3f} s = {clip.get_play_length() * 60:.1f} frames')
     except Exception as e:  # noqa: BLE001
         _log(f'diag: set/clip read failed {e!r}')

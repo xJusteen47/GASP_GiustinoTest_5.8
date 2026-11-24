@@ -7,7 +7,7 @@
 import unreal
 
 OUT = unreal.Paths.project_saved_dir() + 'M11Verify/'
-F = '/Game/GASNPPTest/Combat/'
+F = '/Game/GSTN/_Test/Combat/'
 log_lines = []
 st = {'t': 0.0, 'step': 0}
 
@@ -72,7 +72,7 @@ def step_kit(w):
 def button_mask(name):
     """Bit of logical button Input.Button.<name> in the test input config (data, as the harness resolves it)"""
     names = []
-    for b in unreal.load_asset('/Game/GASNPPTest/Input/IC_GASNPP_Test').get_editor_property('buttons'):
+    for b in unreal.load_asset('/Game/GSTN/Input/IC_GASNPP_Test').get_editor_property('buttons'):
         names.append(str(b.get_editor_property('tag').get_editor_property('tag_name')))
     return 1 << names.index('Input.Button.' + name)
 
