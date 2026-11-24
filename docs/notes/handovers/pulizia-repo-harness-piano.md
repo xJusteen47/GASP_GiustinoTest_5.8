@@ -12,8 +12,8 @@
 - Proposta: tronco main, un'integrazione al giorno (oggi anim-skill-t3, non toccarla prima del PASS di T3), ordine di merge
   dei branch E (piano §2), regole e skill in un posto solo, indice/costi generati dagli handover, registro-clip.csv scritto solo
   da `animpipe publish/approve`, asset approvati in LFS con lock, AGENTS.md che rimanda senza copiare.
-- Decisioni owner aperte: 1 tronco (A main), 2 indice/costi (A generati), 3 asset approvati (A Published/ in LFS con lock).
-- Prossimo: fasi P1-P6 del piano, stima ~13 $ + 80 min fisso + 15 min owner, solo dopo il PASS di T3.
+- Decisioni owner: 1A 2A 3A (owner 2026-11-24 01:48 UTC): tronco main, indice/costi generati, Published/ in LFS con lock.
+- Prossimo: fasi P1-P6 del piano, stima ~13 $ + 80 min fisso + 15 min owner, dopo la review cieca dair v9 e il PASS di T3 (via del coordinatore).
 
 ESITO: piano consegnato, nessuna modifica eseguita
 SUBAGENTI: 0

@@ -77,10 +77,12 @@ Categorie in `branch-elenco.csv`: A 37 già dentro `anim-skill-t3`; B 22 sottoin
 
 Totale stimato circa 13 $, 80 minuti di fisso, 15 minuti dell'owner.
 
-## 7. Decisioni per l'owner (risposta tipo "1A 2A 3A")
+## 7. Decisioni per l'owner
+
+**DECISO dall'owner il 2026-11-24 01:48 UTC: "1A,2A,3A"** (ambito: repo, harness e asset approvati). Esecuzione P1-P6 dopo la review cieca dair v9 sul fisso e il PASS di T3; il via lo dà il coordinatore.
 
 1. Tronco. **A (consigliata)** `main` unico, `feature/gas-npp-5.8` archiviato con tag. B tenere `feature` come tronco (bisogna riportarci 241 commit di `main`).
 2. Indice e costi. **A (consigliata)** generati dagli handover, nessuno li scrive a mano. B restano scritti a mano ma solo nei project files (il repo non li ha più).
 3. Asset approvati. **A (consigliata)** cartella `Published/` in LFS con lock, publish obbligatorio. B solo registro e tag, asset sul fisso come oggi (resta il rischio di perdere jab v12 e ftilt v3.1).
 
-Fermo finché non rispondi: P2-P6. Non fermo: la calibrazione T3 sul fisso.
+In attesa: via del coordinatore dopo la review cieca dair v9 sul fisso.
