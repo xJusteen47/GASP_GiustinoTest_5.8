@@ -1,0 +1,63 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Mode: Levels",
+	"Description": "Levels mode (M12 G6, a Game Feature of the mode framework): ordered level set (UGSTN_LevelSetDefinition), data-driven score rules (UGSTN_ScoreRules), goal zone (one alive player starts a grace timer, the level finishes when it ends), team collectible counting, friendly fire on by default, a placeholder results screen and seamless travel to the next level. Ties GSTNRespawn (shared lives and checkpoints) and GSTNMission together as sibling pieces of one GameRules asset; it never depends on another mode.",
+	"Category": "Game Features",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNMode_LevelsRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GameFeatures",
+			"Enabled": true
+		},
+		{
+			"Name": "ModularGameplay",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCore",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNInput",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNCombat",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNRespawn",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNExperience",
+				"Enabled": true
+			},
+			{
+				"Name": "GSTNModeVerbs",
+				"Enabled": true
+			},
+			{
+				"Name": "GSTNMission",
+			"Enabled": true
+		}
+	]
+}

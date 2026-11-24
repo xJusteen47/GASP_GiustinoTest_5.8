@@ -283,11 +283,31 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GameFeatures",
+			"Enabled": true
+		},
+		{
+			"Name": "ModularGameplay",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNExperience",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNRespawn",
 			"Enabled": true
 		},
 		{
 			"Name": "GSTNMission",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNMode_Levels",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNModeVerbs",
 			"Enabled": true
 		}
 	],

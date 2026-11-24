@@ -44,10 +44,12 @@ bool FGSTN_CameraAdapterRegistry::Read(const AActor* Actor, FGSTN_CameraSubjectS
 	{
 		return false;
 	}
-	if (Actor->Implements<UGSTN_CameraSubject>())
+	// The actor first, then one of its components (the header promises "the pawn or one of its components")
+	const UObject* SubjectObject = Actor->Implements<UGSTN_CameraSubject>() ? static_cast<const UObject*>(Actor) : Actor->FindComponentByInterface(UGSTN_CameraSubject::StaticClass());
+	if (SubjectObject)
 	{
 		FGSTN_CameraSubjectState State;
-		if (IGSTN_CameraSubject::Execute_GetCameraSubjectState(Actor, State))
+		if (IGSTN_CameraSubject::Execute_GetCameraSubjectState(SubjectObject, State))
 		{
 			OutState = State;
 			OutState.bValid = true;

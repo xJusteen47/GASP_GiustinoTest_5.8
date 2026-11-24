@@ -59,8 +59,11 @@ game state's server world time times `FrameRateHz` (62.5).
 ## Presentation (minimal)
 
 `UGSTN_InteractPresentationSubsystem` is not created on a dedicated server and draws only locally controlled interactors. Each gets
-one instance of every class in `PresenterClasses` (default `UGSTN_InteractPresenter_Debug`: a ring at the anchor and the name, verbs
-and hold progress as text, through the debug draw helpers, so nothing shows in Shipping). A ghost or an id that resolves to no actor
+one instance of every class in `PresenterClasses`. Default: `UGSTN_InteractPresenter_Debug` (a ring at the anchor through the debug
+draw helpers; `bDrawText` adds world text, off by default) and `UGSTN_InteractPresenter_Prompt` (G5, the placeholder prompt: the
+name, `[Tap]`/`[Hold]` verbs, a text hold bar and percent, `(unavailable)`, written on screen in non-Shipping builds; its text is the
+pure `FormatPrompt(View)`; `OnPromptChanged` (visible, text, hold progress) lets a placeholder UMG widget in Blueprint show it
+instead, with `bDrawOnScreen` off; no UMG dependency in the plugin). A ghost or an id that resolves to no actor
 draws nothing. Subclass `UGSTN_InteractPresenter` in C++ or Blueprint (`OnFocusEntered/Updated/Left`) for a real look, and listen to
 `OnPresentedFocusChanged` (tag `Message.Interact.FocusChanged`) for audio. Outline, overlay, ring decal, nearby markers and the style
 asset of spec section 5 are not built; no visual polish is planned until the owner asks.
@@ -95,9 +98,13 @@ presentation event). No tag ini ships with this plugin, so nothing registers a t
 
 ## Tests
 
-`GSTNInteract.Runtime.*` (6 tests, headless world): the replicated stamp and its record, no presentation on a dedicated server, only
+`GSTNInteract.Runtime.*` (8 tests, headless world): the replicated stamp and its record, no presentation on a dedicated server, only
 local players presented, the game thread focus equal to the core's, line of sight blocked by WorldStatic only (pawns and WorldDynamic
-never), settings.
+never), settings; G5 (written, not run yet): `PromptTextIsAPureFunctionOfTheView`, `PawnFocusFeedsThePrompt` (a real `APawn`'s
+interactor focuses the item ahead, the view carries name and hold progress, the prompt shows, updates and hides).
+
+On a real pawn: the project module's `UGSTN_PawnRigComponent` (`Source/GASP_Giustino2/Public/Pawn/`) adds the interactor, turns the Interact
+button into tap or hold (`InteractPressed/Released`) and is covered by `GSTN.PawnRig.*`.
 
 `GSTNInteract.Core.*` (25 tests, no world): pointing, arc, near radius, height band, priority, ties, order independence of the cap,
 quantisation, sticky focus, dwell and margin, hold lock, gone incumbent, ghost, stamps, tombstones, duplicates, no flicker among fifty

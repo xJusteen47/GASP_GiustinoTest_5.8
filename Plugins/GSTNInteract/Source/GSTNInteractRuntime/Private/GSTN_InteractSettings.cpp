@@ -9,6 +9,7 @@ UGSTN_InteractSettings::UGSTN_InteractSettings()
 {
 	CategoryName = TEXT("Plugins");
 	PresenterClasses.Add(UGSTN_InteractPresenter_Debug::StaticClass());
+	PresenterClasses.Add(UGSTN_InteractPresenter_Prompt::StaticClass());
 }
 
 FGSTN_InteractRules UGSTN_InteractSettings::GetSanitisedDefaultRules() const
