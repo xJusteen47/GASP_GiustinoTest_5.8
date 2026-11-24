@@ -48,6 +48,13 @@ class PreCheck(unittest.TestCase):
         out, bad = precheck.check_vram(["99, UnrealEditor.exe, 3000 MiB"])
         self.assertEqual(bad, 0)
 
+    def test_path_with_spaces_is_one_token(self):
+        good = os.path.join(self.d, "Unreal Projects", "drv.py")
+        fwd = good.replace("\\", "/")
+        cmd = '"%s/P.uproject" -windowed -ExecCmds="py %s" -abslog="%s.log"' % (self.d, fwd, fwd)
+        res = precheck.collect_py(cmd, [good])
+        self.assertEqual(len(res), 1, res)
+
     def test_main_exit_code_and_failures_first(self):
         p = self.write("bad.py", "def f(:\n")
         rc = precheck.main(["--project", self.d, "--py", p, "--asset", "/Game/Anim/AS_Skel"])

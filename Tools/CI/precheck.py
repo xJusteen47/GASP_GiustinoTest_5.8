@@ -24,6 +24,8 @@ LLM_PROCESS = re.compile(r"ollama|llama[-_.]?(server|cpp|cli)?|lm[ -_]?studio|ko
 GAME_TOKEN = re.compile(r"/Game/[A-Za-z0-9_/\-]+(?:\.[A-Za-z0-9_]+)?")
 REQUIRES = re.compile(r"^\s*#\s*REQUIRES_ASSET:\s*(/Game/\S+)", re.M)
 PY_TOKEN = re.compile(r"""[^\s"'=]+\.py\b""")
+QUOTED = re.compile(r'"([^"]*)"')
+QUOTED_PY = re.compile(r"^\s*(?:py\s+)?(.+?\.py)\s*$")
 
 
 def check_syntax(py_files):
@@ -90,7 +92,13 @@ def check_vram(apps=None):
 
 def collect_py(cmdline, py_files):
     found = list(py_files or [])
-    for tok in PY_TOKEN.findall(cmdline or ""):
+    cmdline = cmdline or ""
+    # Quoted segments first: a path with spaces ("...\Unreal Projects\x.py", or -ExecCmds="py <path>") is one token.
+    for seg in QUOTED.findall(cmdline):
+        m = QUOTED_PY.match(seg)
+        if m:
+            found.append(m.group(1))
+    for tok in PY_TOKEN.findall(QUOTED.sub(" ", cmdline)):
         found.append(tok)
     seen, res = set(), []
     for p in found:
