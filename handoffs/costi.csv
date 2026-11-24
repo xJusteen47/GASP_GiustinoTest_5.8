@@ -80,3 +80,6 @@ data,thread,obiettivo,macchina,provider,modello,minuti_desktop,token_review,usd_
 2026-11-24,principi-review-1,Principi considerati nella review (INV-13),cloud,claude,opus-medium,0,0,3.5,,indice ricerca + 20 principi PR con documenti + principi_review.py + test
 2026-11-24,claude/project-thread-sgky92,4 correzioni controlli fermate (stop_sync tenute vive; nucleo vivo; dedupe solo catture; audit 0.4 cm),cloud,Opus medium,0,0,2.5,FATTO 16f0d916+; jab v12 FAIL reale; eventi solo misura (bloccarli ammorbidirebbe) docs/notes/handovers/fix-stop-checks.md
 2026-11-24,audit-stop-2026-11-24,Audit stop-and-go clip costruite,cloud,claude,opus-low,0,0,1.6,,parziale: nessun dump nel repo; rischio dalla carta (K7 settle/loop K6 ftilt v3.1 dair v4); dump+tabella pronti per il fisso
+2026-11-23,Dropkick K8 giro 2,dropkick-k8-2,portatile,claude,opus-medium,25,0,2.5,,giro 2 catturato ASSERT OK; hitbox in cattura verificate
+2026-11-24,Dropkick K8 diagnosi scatti,dropkick-k8-3-diagnosi,portatile,claude,opus-medium,0,0,0.8,,causa comune K7/K8: tangenti piatte su ogni chiave del build; cattura OK
+2026-11-24,Dropkick K8 piano giro 3,dropkick-k8-4-piano-r3,portatile,claude,opus-medium,0,0,1.2,,carte K8R3 + cancello anti-fermata (K7 e K8 r2 FAIL); in attesa editor e build a campionamento continuo
