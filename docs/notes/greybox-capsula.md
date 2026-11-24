@@ -197,3 +197,14 @@ ESITO: build/test/asset OK; crouch and dropkick pose fixed; jab not hookable (no
 foot markers left.
 SUBAGENTI: none.
 COSTO: not measured (one thread, ~45 min, captures 144 s + 90 s).
+
+### Playtest jab, owner 2A (same day)
+`Tools/GAS/greybox/set_playtest_jab_montage.py` (Save-Assets, backup in Saved/Backups/GAS) copies TL_Overlord_Jab1's montage into
+GA_Playtest_GroundHit's timeline: `AM_OverlordJab1V3`, no section, rate 1.0417 (62.5/60). Montage 0.467 s = 0.448 s at that rate =
+28.0 sim frames against the ability's TotalFrames 32 (0.512 s): the montage ends 4 frames before the move. Hitboxes, frames and cancel
+window unchanged. The capsule override for AM_OverlordJab1V3 already existed (no make_capsule_clips rerun).
+Capture `Saved/Greybox/r3_jab` (jab1_long, Base 2): the driver plays AM_OverlordJab1V3 from v22 (frames.jsonl), the capsule tilts back
+then forward and the red hand marker grows and swings forward (v24-46), then fades. Evidence `round3/jab_*.mp4`, `sheet_jab_2A_side.jpg`.
+The hitbox debug draw does not show in the scene captures, so "hitboxes unchanged" rests on the untouched timeline data, not on the video.
+Note "play timeline": Play Combat Timeline And Wait / `PlayableTimelines` (move-timeline-decoupling 1A) plays a timeline asset, and the
+montage it shows is still the timeline's Montage field; with none set, nothing is presented, so it did not cover the jab by itself.
