@@ -1,0 +1,20 @@
+rules: /GSTNCombat/Rules/GSTN_CombatRules_Standard.GSTN_CombatRules_Standard
+knockback model: GSTN_KnockbackModel_PercentScaling
+  tuning.balloon = <Struct 'GSTN_BalloonKnockbackSettings' (0x000001BC1B52D894) {enabled: False, min_hitstun_frames: 30, full_hitstun_frames: 80, max_speed_multiplier: 6.000000, end_fraction: 0.300000, tumble_only: True, apply_to_fixed_knockback: False}>
+  tuning.hitstop_base = 3.0
+  tuning.hitstop_per_damage = 0.30000001192092896
+  tuning.hitstop_per_knockback = 0.0
+  tuning.hitstun_factor = 0.019999999552965164
+  tuning.knockback_gravity_scale = 4.0
+  tuning.launch_deceleration = 2300.0
+  tuning.launch_threshold = 750.0
+  tuning.max_hitstop = 20
+  tuning.max_push_back_speed = 600.0
+  tuning.min_hitstun_frames = 31
+  tuning.min_weight = 1.0
+  tuning.push_back_speed_scale = 1.0
+  tuning.push_back_threshold = 540.0
+  tuning.stagger_per_damage = 1.0
+  tuning.stagger_per_knockback = 0.0
+  tuning.tumble_threshold = 1800.0
+  tuning.weight_reference = 100.0

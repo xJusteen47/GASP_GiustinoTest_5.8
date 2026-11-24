@@ -1,0 +1,16 @@
+# setup_knockback_smash.py --rules-only (Saved/KnockbackSmash/setup.log), 2026-11-24 15:05 UTC
+rules: launch_threshold 1080 -> 750
+rules: GSTN_KnockbackModel_PercentScaling -> GSTN_KnockbackModel_PercentScaling (push 540, launch 750, tumble 1800, curve at 1 = 1.00)
+
+# setup_overlord_hop0.py rerun (Saved/OverlordHop0/setup.log): no threshold WARNING (rules launch 750 < hop K0 950)
+KIT_Test_Overlord GA_Overlord_DAirV9_C #0: K0 950 already at or above the hop: kept
+KIT_Test_Overlord GA_Overlord_Dropkick_C #0: K0 1100 already at or above the hop: kept
+KIT_Test_OverlordDAirV10 GA_Overlord_DAirV10_C #0: K0 950 already at or above the hop: kept
+KIT_Test_OverlordDAirV10R2 GA_Overlord_DAirV10R2_C #0: K0 950 already at or above the hop: kept
+KIT_Test_OverlordDAirV10R3 GA_Overlord_DAirV10R3_C #0: K0 950 already at or above the hop: kept
+KIT_Test_OverlordDAirV10R4 GA_Overlord_DAirV10R4_C #0: K0 950 already at or above the hop: kept
+KIT_Test_OverlordDAirV7 GA_Overlord_DAirV7_C #0: K0 950 already at or above the hop: kept
+KIT_Test_OverlordDAirV8 GA_Overlord_DAirV8_C #0: K0 950 already at or above the hop: kept
+KIT_Test_PlaytestTB GA_Overlord_DropkickTB_C #0: K0 1100 already at or above the hop: kept
+KIT_Test_PlaytestTBR2 GA_Overlord_DropkickTBR2_C #0: K0 1100 already at or above the hop: kept
+KIT_Test_PlaytestTBR3 GA_Overlord_DropkickTBR3_C #0: K0 1100 already at or above the hop: kept
