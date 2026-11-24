@@ -1045,7 +1045,7 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 	}
 	// Air turn (owner 2026-11-16: "in the air you can turn"): GASP orients to the velocity, which air control barely bends, so the facing
 	// follows the stick at the profile's rate instead. A move in progress keeps its facing unless the profile lets it turn
-	if (Analog && Analog->AirTurnRateDegPerSec > 0.f && MoveStick.SizeSquared() > FMath::Square(FMath::Max(Analog->InnerDeadzone, 0.05f))
+	if (Analog && Analog->AirTurnRateDegPerSec > 0.f && MoveStick.SizeSquared() > FMath::Square(0.05f)
 		&& (!bInTimeline || Analog->bAirTurnDuringMoves))
 	{
 		const UMoverComponent* Mover = GetOwner()->FindComponentByClass<UMoverComponent>();

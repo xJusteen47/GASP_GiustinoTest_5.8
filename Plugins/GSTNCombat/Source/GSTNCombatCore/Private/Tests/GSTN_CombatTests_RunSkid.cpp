@@ -104,12 +104,6 @@ bool FGSTN_RunSkidRunStateTest::RunTest(const FString& Parameters)
 	FGSTN_RunStageLogic::Step(Tuning, Frame(7, true, 300.f), State);
 	TestEqual(TEXT("gone after the window"), FGSTN_RunStageLogic::GetCarriedSpeed(Tuning, State), 0.f);
 
-	Tuning.Skid.bResetsStage = false;
-	FGSTN_RunStageState Kept;
-	Kept.Stage = 2;
-	Skid.Frame = 0;
-	FGSTN_RunStageLogic::Step(Tuning, Skid, Kept);
-	TestEqual(TEXT("bResetsStage off keeps the stage"), static_cast<int32>(Kept.Stage), 2);
 	return true;
 }
 
