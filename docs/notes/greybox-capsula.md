@@ -283,3 +283,12 @@ Evidence `docs/notes/reviews/greybox-capsula/round6/` (KIT_Test_Overlord: rs_sta
 ESITO: OK on the sword; wall judder/brake lean present, worth an owner look at real speed.
 SUBAGENTI: none.
 COSTO: not measured (one thread, ~10 min for run 6).
+
+## Desktop run sway-1 (2026-11-24, 79d3e82e + 6e5a02ac merged onto `claude/project-thread-e8g12i` 799a6740 in a local branch)
+Evidence `docs/notes/reviews/greybox-capsula/run-sway-1/` (KIT_Test_Overlord: gb_loco, gb_side, new gb_sprint; side | back | game, 1x /
+0.25x). Capture `Saved/Greybox/sway1/cap` on `_ue59`. Build OK (376 s, no fix), tests Core.Greybox + NP.Greybox 5/5.
+- Speed (frames.jsonl, loc delta x 60): stick v40; stage 1 plateau 451 cm/s, t10/t50/t90 0.15 / 0.32 / 0.47 s; stage 2 from v240 at
+  586 cm/s; stage 3 from v341 at ~817 cm/s (held to the release at v520). gb_sprint's turn starts at v350, so the straight part of stage
+  3 is the 1 s after the turn (v460-520), not before it.
+- Stage 3 (v466-512): small rocks of a few degrees around a held forward lean, no violent swing; to judge at 1x by the owner.
+ESITO: build/test OK, captures done; sway at stage 3 small in stills.
