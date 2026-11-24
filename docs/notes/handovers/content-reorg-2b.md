@@ -45,9 +45,9 @@ A (consigliata) tag nuovo `approved/dair-v9-2b` sul commit dello spostamento + r
 B `regress.py` accetta un file spostato solo con una prova ossa registrata (json in `approved-dumps/`): più generale, ~1 $.
 Finché non si sceglie, ogni `-Preset Build` su questo branch va con `-SkipRegress`.
 
-ESITO: PARZIALE spostamento 2b fatto e provato (build, 1937 test, smoke); manca la scelta owner sul gate dair v9 e DA_Locomotion_Default con l'owner
+ESITO: OK spostamento 2b fatto e provato (build, 1937 test, smoke), gate dair v9 con prova ossa (B), DA_Locomotion_Default spostato con l'owner; PR #43 unita
 SUBAGENTI: 0
-COSTO: ~4 $ cloud + ~6 $ fisso | 40 minuti desktop | 0 token review
+COSTO: ~5 $ cloud + ~7 $ fisso | 60 minuti desktop | 0 token review
 
 ## Merge di main dopo PR #41 (capsula greybox), 2026-11-24 18:20Z
 - Conflitto binario: `GA_Playtest_GroundHit` modificato in main (montage del jab, `set_playtest_jab_montage.py`) e spostato qui. Tenuto il nostro file al percorso nuovo; la modifica di main si rifà sul fisso rilanciando lo script (percorsi aggiornati, idempotente).
@@ -58,3 +58,8 @@ COSTO: ~4 $ cloud + ~6 $ fisso | 40 minuti desktop | 0 token review
 - `DA_Locomotion_Default` spostato in `GSTN/Data/Locomotion/` con l'owner (commit 301873ce, sblocco owner); la copia locale era uguale a git.
 - Build a 301873ce: FAIL nell'unity build, `FRig` ambiguo tra `GSTN_WallSurfaceFilterTests.cpp` e `GSTN_PawnRigTests.cpp` (stesso nome in due namespace con `using`). Rinominato in `FWallFilterRig` (2897148a). Smoke a 301873ce: OK.
 - Da fare: una build di prova a 2897148a (fisso o build di integrazione), poi l'owner unisce #43. Cartelle vuote `Content\GASNPPTest` da togliere a mano.
+
+## Chiusura dopo #42, 2026-11-24 19:10-19:30Z
+- Merge di main con #42: le 11 timeline del salto allo 0 % cambiate ai vecchi percorsi; tenuti i file spostati, salto rifatto sul fisso (a56bb73e, build OK, REGRESS OK). `setup_overlord_hop0.py` ora scansiona `gstn_content.OVERLORD_KITS` (8e96e303).
+- Scelta owner: salto anche alle varianti TBK5/6/7/8 e TBR4, che la vecchia scansione non vedeva (dd6cc527).
+- PR #43 unita 19:26Z. Restano: cartelle vuote `Content\GASNPPTest` sul fisso; `[CoreRedirects]` fino all'unione dei branch nati prima dello spostamento; `_ue59` da riallineare.

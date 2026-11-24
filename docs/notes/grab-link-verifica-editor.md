@@ -3,7 +3,7 @@
 Branch `claude/grab-link`, NON compilato (cloud). Da integrare nel branch di integrazione e compilare sul PC (regola 15h).
 
 ## Build e test (subagente Haiku, script a tempo)
-1. `Tools/CI/Run-Timed.ps1 -Preset Build -WaitMutex -NoHotReload` (45 min max).
+1. `Tools/CI/Run-Timed.ps1 -Preset Build` (45 min max).
 2. Test: `GSTNLink.Core.KitThrows`, `GSTNLink.Core.GrabHold`, `GSTNLink.Core.Tags`, `GSTNLink.NP`, `GSTNExtTest.Link`, `GSTNHeld.Core.KitThrowBlockers`; parsing con `Tools/CI/Check-TestLog.ps1`.
 3. Contenuto: `Tools/GAS/setup_defence_link_content.py` (idempotente) mette `UGSTN_GE_GrabHold` come LinkEffect del ruolo Grabber di `/GSTNLink/Test/DA_LinkType_Grab_Test`; poi `Tools/GAS/validate_defence_content.py`. Editor chiuso dopo se non l'ha aperto l'owner.
 4. Harness: `SUITE_LINK` e `kit_scenarios`. ATTENZIONE: `scenario_kit_throw_stick_*` presuppongono `ThrowInputMode=Stick`; con il nuovo default `Notation` vanno lanciati con Stick in memoria o aggiornati (voce di coda codice, non un fallimento della presa).
