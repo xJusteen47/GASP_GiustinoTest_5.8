@@ -7,6 +7,7 @@
 #   UnrealEditor-Cmd.exe <uproject> -run=pythonscript -script="<proj>/Tools/GAS/setup_knockback_smash.py [--model smash|weight] [--tilts hop0|smash] [--no-overlord]"
 # In the editor: import setup_knockback_smash as s; s.run(model='smash', tilts='hop0', overlord=True)
 #   --tilts hop0  (default) archetype tilts launch at 0 % as a low 30 deg hop, as in the 2026-11-17 playtest; smash = launch from ~19 / 11 / 4 %
+#   --balloon on|off  switch the rules' balloon knockback (Ultimate constants, the struct defaults); absent = left as it is
 #   --rules-only  write only the rules asset (model, curve, thresholds of knockback_smash_data): the moves are left as they are
 #   --no-overlord leave the Overlord moves alone (under the Smash model they then keep their 0 % knockback at every percent: flat)
 # Writes the rules asset, the ability Blueprints of the kits (inline timelines), the Overlord timelines when they are on an asset, and BP children
@@ -37,6 +38,7 @@ HIT_RE = re.compile(r'\[([\d.]+)% b([\d.]+) g([\d.]+) f(-?[\d.]+) a(-?[\d.]+)\]'
 L = unreal.GSTN_TestKitContentLibrary
 LINK = getattr(unreal, 'GSTN_LinkContentLibrary', None)
 _lines = []
+BALLOON = None   # --balloon on|off: switch the balloon knockback of the rules; absent = leave it as it is
 
 
 def log(msg):
@@ -79,6 +81,13 @@ def set_rules(model):
             if abs(tuning.get_editor_property(prop) - value) > 0.5:
                 log(f'rules: {prop} {tuning.get_editor_property(prop):.0f} -> {value:.0f}')
                 tuning.set_editor_property(prop, value)
+        if BALLOON is not None:
+            # Balloon knockback (owner 2026-11-24, decision A: "Ultimate + balloon"): Ultimate's constants are the struct defaults
+            balloon = tuning.get_editor_property('balloon')
+            if balloon.get_editor_property('enabled') != BALLOON:
+                log(f'rules: balloon {balloon.get_editor_property("enabled")} -> {BALLOON}')
+                balloon.set_editor_property('enabled', BALLOON)
+                tuning.set_editor_property('balloon', balloon)
         current.set_editor_property('tuning', tuning)
     else:
         if not isinstance(current, unreal.GSTN_KnockbackModel_WeightDriven):
@@ -267,5 +276,7 @@ def _arg(flag, default):
 
 
 if __name__ == '__main__':
+    if '--balloon' in sys.argv[:-1]:
+        BALLOON = _arg('--balloon', 'on') == 'on'
     run(model=_arg('--model', 'smash'), tilts=_arg('--tilts', 'hop0'), overlord='--no-overlord' not in sys.argv,
         rules_only='--rules-only' in sys.argv)
