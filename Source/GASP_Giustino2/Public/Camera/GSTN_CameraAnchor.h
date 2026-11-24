@@ -319,7 +319,7 @@ struct GASP_GIUSTINO2_API FGSTN_CameraAnchorSettings
 	FGSTN_CameraShiftSettings Shift;
 };
 
-/** Shared default tuning. The camera anchor subsystem loads /Game/Blueprints/Data/DA_CameraAnchor_Default when it exists, else C++ defaults */
+/** Shared default tuning. The camera anchor subsystem loads /Game/GSTN/Data/Camera/DA_CameraAnchor_Default when it exists, else C++ defaults */
 UCLASS(BlueprintType)
 class GASP_GIUSTINO2_API UGSTN_CameraAnchorSettingsAsset : public UDataAsset
 {

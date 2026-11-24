@@ -46,7 +46,7 @@ namespace GSTNPlaytestCamera
 		TEXT("1 = GASP's look input (the control rotation change since the P1a camera's own write) steers its orbit, 0 = no look input (diagnostics)"));
 	static constexpr float ProbeRadius = 12.f;
 	/** Shared camera anchor tuning, optional (C++ defaults when missing). Created by Tools/GASNPPTest/camera_anchor_setup.py */
-	static const TCHAR* AnchorSettingsPath = TEXT("/Game/Blueprints/Data/DA_CameraAnchor_Default.DA_CameraAnchor_Default");
+	static const TCHAR* AnchorSettingsPath = TEXT("/Game/GSTN/Data/Camera/DA_CameraAnchor_Default.DA_CameraAnchor_Default");
 
 	/** The presented subject of a Mover pawn for the P1a camera: the anchor's capsule-free standing root (undamped: the camera damps), else the actor */
 	static FGSTN_CameraSubjectState MakeSubject(const APawn& Viewed, const UGSTN_CameraAnchorComponent* Anchor)

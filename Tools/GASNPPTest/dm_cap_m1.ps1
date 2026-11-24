@@ -7,5 +7,5 @@ $env:PIE_CAPTURE_SEQUENCES = $Seqs
 $env:PIE_CAPTURE_VIEWS = $Views
 $boot = (Join-Path $PSScriptRoot "dm_cap_boot_m1.py").Replace([string][char]92, '/')
 $exe = "C:\Program Files\Epic Games\UE_5.9\Engine\Binaries\Win64\UnrealEditor.exe"
-$al = "`"$proj\GASP_Giustino2.uproject`" /Game/Levels/Test/L_Test_Hub -windowed -nosplash -nosound -unattended -ExecCmds=`"py $boot`" -abslog=`"$Out\editor.log`""
+$al = "`"$proj\GASP_Giustino2.uproject`" /Game/GSTN/Maps/L_Test_Hub -windowed -nosplash -nosound -unattended -ExecCmds=`"py $boot`" -abslog=`"$Out\editor.log`""
 & (Join-Path $PSScriptRoot "..\CI\Run-Timed.ps1") -Kind Capture -Log (Join-Path $Out "run.log") -Exe $exe -ArgLine $al -WatchFile "$Out\editor.log" -MaxMinutes 15

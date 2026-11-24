@@ -90,7 +90,7 @@ def rule(*groups):
 
 
 try:
-    da = unreal.load_asset("/Game/Blueprints/Animation/DA_AnimSet_Locomotion_Default")
+    da = unreal.load_asset("/Game/GSTN/Animation/Layers/DA_AnimSet_Locomotion_Default")
     clip = da.get_editor_property("skid").get_editor_property("clip")
     if not isinstance(clip, unreal.AnimSequence):
         s = str(clip.get_path_name()) if hasattr(clip, "get_path_name") else str(clip)

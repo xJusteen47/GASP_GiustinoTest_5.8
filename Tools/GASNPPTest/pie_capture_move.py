@@ -6,7 +6,7 @@
 # frame: one image = one 60 fps frame of what a player sees. The simulation rate is not touched.
 #
 # Launch (editor with a real renderer; the script path must have no space, so boot through a copy or a one-line exec):
-#   UnrealEditor.exe <uproject> /Game/Levels/Test/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
+#   UnrealEditor.exe <uproject> /Game/GSTN/Maps/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
 #   boot.py:  exec(open(r"<project>/Tools/GASNPPTest/pie_capture_move.py").read())
 # Environment (all optional): PIE_CAPTURE_KIT (KIT_Test_Overlord), PIE_CAPTURE_OUT (default Saved/AnimJab3/capture_<date>_<time>),
 # PIE_CAPTURE_SEQUENCES (default: all of SEQUENCES, or all of DAIR_SEQUENCES when the kit's name contains DAir), PIE_CAPTURE_NOVFX=1 (no dust)

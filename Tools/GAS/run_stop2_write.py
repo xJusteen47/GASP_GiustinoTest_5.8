@@ -1,7 +1,7 @@
 """Run stop v2: write the pose-based stop clips into Unreal and point the locomotion profile at them (headless editor).
 Input: Tools/AnimPipeline/sheets/raw/AS_RunStop_Ganon_<L|R>_V1_tracks.json (cards/runstop: run_stop_gen.py -> ue_write_take.py --no-write
 -> run_stop_root.py). Steps: ue_take_writer.write into /Game/AnimPipeline/Pilot/ (a copy of the pilot template), then a copy in the
-versioned folder /Game/Blueprints/Animation/RunStop/ with the GASP stop clips' root motion settings (root motion on, root locked to the
+versioned folder /Game/GSTN/Animation/RunStop/ with the GASP stop clips' root motion settings (root motion on, root locked to the
 ref pose); then DA_AnimSet_Locomotion_Default.RunStop: ClipLeftFoot/RightFoot = the copies, SettleRate 1 (the settle is authored at
 real time), SettleClipSeconds = the clip after its stop. Mode is NOT changed (stays Off until a review PASS; captures use the cvar).
 Report: Saved/RunStop2/write.txt. Env RUNSTOP_VERSION (default V1)."""
@@ -14,8 +14,8 @@ sys.path.insert(0, TOOLS)
 OUT = os.path.join(PROJ, "Saved", "RunStop2", "write.txt")
 VER = os.environ.get("RUNSTOP_VERSION", "V1")
 TEMPLATE = "/Game/AnimPipeline/Pilot/AS_Pilot_GanonFTilt_V2"
-FINAL = "/Game/Blueprints/Animation/RunStop/"
-DA = "/Game/Blueprints/Animation/DA_AnimSet_Locomotion_Default"
+FINAL = "/Game/GSTN/Animation/RunStop/"
+DA = "/Game/GSTN/Animation/Layers/DA_AnimSet_Locomotion_Default"
 log = []
 
 

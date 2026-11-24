@@ -1,10 +1,10 @@
 # Camera anchor setup (owner 2026-11-17: the camera shakes up and down on the dair stomp and on knockdown). Optional: without the asset the
-# camera anchor uses its C++ defaults (GSTN_CameraAnchor.h). Creates /Game/Blueprints/Data/DA_CameraAnchor_Default with those defaults so the
+# camera anchor uses its C++ defaults (GSTN_CameraAnchor.h). Creates /Game/GSTN/Data/Camera/DA_CameraAnchor_Default with those defaults so the
 # vertical damping can be tuned as data. Idempotent: an existing asset is left as it is (its values are the designer's).
 #   UnrealEditor-Cmd.exe <project>.uproject -run=pythonscript -script="<project>/Tools/GASNPPTest/camera_anchor_setup.py" -unattended -nullrhi
 import unreal
 
-DA_DIR = '/Game/Blueprints/Data'
+DA_DIR = '/Game/GSTN/Data/Camera'
 DA_NAME = 'DA_CameraAnchor_Default'
 path = f'{DA_DIR}/{DA_NAME}'
 
