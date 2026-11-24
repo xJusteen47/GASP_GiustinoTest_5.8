@@ -1,0 +1,18 @@
+overlord_fthrow_v1: FAIL
+block legibility: FAIL | VERDICT: FAIL (fist not distinct at contact: 4, rear arm hides the fist: 13, rear elbow away from the body (side view): 2, attacking arm hidden from the game ca
+block bone_lengths: PASS | PASS bone lengths: 64 bones within 0.1 cm of the reference on every frame
+block clearance: FAIL | penetration hand_r|head -4.85 cm @f20, hand_l|head -0.42 cm @f20; 0 pair-frames under 2 cm
+block contact_faf: PASS | reach peak at frame 20 (window 19-20), clip 51 frames, FAF 44
+block planted_feet: PASS | max drift 0.07 cm (tol 2.0)
+block fists: FAIL | openness (ratio, frame) l 0.8@0, r 0.8@0 (max 0.7)
+block source_fidelity: PASS | 0 owner poses match (0.5 cm / 1 deg)
+block hitstop_snap: PASS | active->next max 19->20 2.6 cm (lowerarm_l), 20->21 7.6 cm (middle_03_r) (max 10.0)
+block co_motion: PASS | no limb glued >= 3 frames in the startup 0-19 (limbs arm_l, arm_r, leg_l)
+measure motion_curves: curves OverlordFThrowV1_Build: ok -> C:\Users\jacop\Documents\Unreal Projects\GASP_Giustino2_n216qs\Tools\AnimPipeline\sheets\OverlordFThrowV1_Build_curves.png/
+measure twist_chain: n/a: reads the Cascadeur rig points (<take>_targets_raw.json); no such file for a rig build
+measure motion_check: VERDICT: FAIL (weight not moving into the strike: 1, stiff chain (joints peak together): 2, no overlap: 4, unnatural joint (elbow_l): 1, unnatural joint (elbow_
+measure spacing: 0-4 arrive 0.83; 4-8 ease_f 0.11; 8-12 charge 0.17; 14-17 charge 0.07; 20-23 limb_l 0.30; 23-28 limb_l 0.34; 28-34 limb_l 0.48; 34-39 ease_i 0.75; 39-44 ease_i 0.83
+measure vs_source: worst 76.43 cm (foot_r), at poses max 1.86 cm
+eye: arcs and silhouette on the review grid
+eye: weight and snap at 1x and 0.25x
+eye: face/head follow-through

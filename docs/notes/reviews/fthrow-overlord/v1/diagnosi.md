@@ -1,0 +1,3 @@
+v1 build 1 (check FAIL): 1) no overlap pelvis>chest>head e catena rigida a16; clearance hand_r in spine a31-32 e in testa a20; picco reach testa a23; ginocchio dx fuori dalle punte; pugni aperti a24; gamba sx ferma a1-14.
+2) cause: chiavi del corpo tutte sugli stessi frame; mani del recupero in coordinate mondo (attraversano il busto che si muove); overshoot e rilascio con testa troppo avanti/giu' sopra le mani; polo del ginocchio dritto in avanti, non sulla punta.
+3) modifica unica (tentativo 2 di 2): chiavi a17/a18 con bacino che guida e testa in ritardo, mani del recupero nel frame del petto, overshoot solo verso il basso, polo ginocchio sulla punta, presa piu' larga e bassa; esenzioni dichiarate per mano da cattivo (pugni) e piede piantato (co_motion).

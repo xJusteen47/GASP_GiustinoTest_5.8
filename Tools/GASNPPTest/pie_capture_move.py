@@ -159,6 +159,19 @@ MINION_SEQUENCES = [
 # PUSHBOX-P5, owner PIE bug 2026-11-16 (run with PIE_CAPTURE_BUTTON=Strong): strong_walk hits a dummy 95 cm ahead with the strong attack, then
 # walks at it (the owner stopped ~2 m short for seconds); inside_escape puts the dummy 10 cm ahead (bodies overlapping) and walks away
 # ('walk_dir': the stick, default forward). Log the constraint with gstn.Pushbox.Log 1 (PIE_CAPTURE_PUSHLOG=1)
+# fthrow-overlord-1 (2026-11-23): grab throws. 'presses' = [(frame after PRE, button name in the input config, stick or None)]: the stick (camera
+# relative, as 'sticks') is held on that frame only and the button tapped, so Attack + stick forward = the F. throw of the Notation mode.
+# The dummy is grabbed with Interact on frame 0 (it must stand inside the grab reach: PIE_CAPTURE_GRAB_DIST, default 80 cm) and thrown on 45.
+GRAB_SEQUENCES = [
+    # fthrow-capture-fix (2026-11-24): the grab setup of the network link tests. The v1r2 run grabbed nothing (KIT_Test_Overlord has no link
+    # slots): run with PIE_CAPTURE_KIT=KIT_Test_Link and PIE_CAPTURE_PRE_PY=fthrow_capture_pre.py (link steps, the kit's forward throw), and the
+    # dummy gets the same kit as the link tests' pawns ('dummy_kit', PIE_CAPTURE_DUMMY_KIT, '' = keep its own). 'link_probe' logs the grab
+    # probe 2 frames before the Interact tap and the host's Body link 15 frames after it (formed = role 1, phase 2), so a run that grabs
+    # nothing says why in capture.log before anyone reads the assert
+    {'name': 'fthrow_hit', 'taps': [], 'frames': 140, 'dummy': float(os.environ.get('PIE_CAPTURE_GRAB_DIST', 80.0)), 'shoot': True,
+     'presses': [(0, 'Interact', None), (int(os.environ.get('PIE_CAPTURE_THROW_AT', 45)), 'Attack', (0, 1, 0))],
+     'dummy_kit': os.environ.get('PIE_CAPTURE_DUMMY_KIT', 'KIT_Test_Link'), 'link_probe': (-2, 15)},
+]
 BUG_SEQUENCES = [
     {'name': 'strong_walk', 'taps': [0], 'frames': 300, 'dummy': 95.0, 'shoot': True, 'walk': (40, 240)},
     {'name': 'inside_escape', 'taps': [], 'frames': 160, 'dummy': 10.0, 'shoot': True, 'walk': (20, 120), 'walk_dir': (0, -1, 0)},
@@ -303,7 +316,7 @@ SEED = int(os.environ.get('PIE_CAPTURE_SEED', '1'))
 import random  # noqa: E402
 random.seed(SEED)
 if os.environ.get('PIE_CAPTURE_SEQUENCES'):
-    SEQUENCES = [s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
+    SEQUENCES = [s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES + GRAB_SEQUENCES if s['name'] in os.environ['PIE_CAPTURE_SEQUENCES'].split(',')]
 elif 'DoubleShot' in KIT:
     SEQUENCES = DOUBLE_SHOT_SEQUENCES
 elif 'Dropkick' in KIT:
@@ -324,7 +337,7 @@ if os.environ.get('PIE_CAPTURE_FRAMES'):
 RUNS = json.load(open(os.environ['PIE_CAPTURE_RUNS'], encoding='utf-8')) if os.environ.get('PIE_CAPTURE_RUNS') else None
 if RUNS:
     _ALL = {s['name']: s for s in SEQUENCES + MOVE_SEQUENCES + DAIR_SEQUENCES + DROPKICK_SEQUENCES + DOUBLE_SHOT_SEQUENCES + CUE_SEQUENCES
-            + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES}
+            + PUSHBOX_SEQUENCES + MINION_SEQUENCES + BUG_SEQUENCES + GRAB_SEQUENCES}
     SEQUENCES = []
     for _r in RUNS:
         for _n in _r['sequences']:
@@ -954,6 +967,8 @@ def _tick(_dt):
                 if keys and seq.get('dummy_percent') is not None:   # test harness only (server write of the health set's DamagePercent)
                     ok = g.comps(g.worlds()[0])[keys[0]].server_set_damage_percent(seq['dummy_percent'])
                     _log(f'dummy {keys[0]} percent {seq["dummy_percent"]}: {ok}')
+                if keys and seq.get('dummy_kit'):   # fthrow-capture-fix: the grab target carries the link kit, as in link_scenarios
+                    _log(f'dummy {keys[0]} kit {seq["dummy_kit"]}: {g._apply_loadout(keys[0], seq["dummy_kit"])}')
                 st.update(dummy_placed=True, dummy_key=keys[0] if keys else None, t=now)         # one more wait for the teleport to settle
                 return None
             if seq.get('minions') and not st.get('minions_spawned'):
@@ -1069,6 +1084,28 @@ def _tick(_dt):
                     _log(f'{seq["name"]}: projection volume spawned at {loc}')
                 except Exception as e:  # noqa: BLE001
                     _log(f'{seq["name"]}: projection volume FAILED: {e!r}')
+            if seq.get('link_probe'):                                   # fthrow-capture-fix: why a grab did (not) form
+                before, after = seq['link_probe']
+                if frame in (PRE + before, PRE + after):
+                    try:
+                        import link_scenarios as ls
+                        host = h._key(0)
+                        if frame == PRE + before:
+                            _log(f'{seq["name"]}: grab probe v{frame}: {ls.Lib.describe_grab_probe(ls.actor(0, host))}')
+                        else:
+                            b = ls.body(0, host)
+                            _log(f'{seq["name"]}: host Body link v{frame}: {b} ({"FORMED" if b and b[0] == 1 and b[1] == 2 else "NOT FORMED"})'
+                                 f' text {ls.link_text(0, host)}')
+                    except Exception as e:  # noqa: BLE001  a diagnostic must not stop the capture
+                        _log(f'{seq["name"]}: link probe failed: {e!r}')
+            for at, button, stick in seq.get('presses', []):          # grab throws (fthrow-overlord-1)
+                if frame == PRE + at:
+                    if stick is not None:
+                        g.hold(0, 'move', stick)
+                    g.combat_tap(0, g.button_mask(button))
+                    _log(f'{seq["name"]}: {button} tap{" + stick " + str(stick) if stick else ""} on v{frame}')
+                elif stick is not None and frame == PRE + at + 2:
+                    g.release(0, 'move')
             for at, value in seq.get('sticks', []):                 # movement QA clips
                 if frame == PRE + at:
                     if value is None:
@@ -1171,5 +1208,17 @@ def _tick(_dt):
 for _cv in [c.strip() for c in os.environ.get('PIE_CAPTURE_CVARS', '').split(';') if c.strip()]:
     unreal.SystemLibrary.execute_console_command(None, _cv)
     _log(f'cvar: {_cv}')
+# fthrow-overlord-1: PIE_CAPTURE_PRE_PY=<file.py> is exec'd once before Play (in-memory data for the capture, e.g. fthrow_capture_pre.py)
+if os.environ.get('PIE_CAPTURE_PRE_PY'):
+    _pre = {}
+    try:
+        exec(open(os.environ['PIE_CAPTURE_PRE_PY'], encoding='utf-8').read(), _pre)
+        _log(_pre.get('_pre_msg', 'pre script run: ' + os.environ['PIE_CAPTURE_PRE_PY']))
+    except Exception:  # noqa: BLE001  a broken pre script must not leave the editor idle until the time limit
+        _log('ERROR pre script: ' + traceback.format_exc())
+        with open(os.path.join(OUT, 'done.txt'), 'w') as _f:
+            _f.write('error in the pre script (see capture.log)\n')
+        unreal.SystemLibrary.execute_console_command(None, 'QUIT_EDITOR')
+        raise
 _log(f'driver loaded: kit {KIT}, button {BUTTON}, out {OUT}')
 st['handle'] = unreal.register_slate_post_tick_callback(_tick)

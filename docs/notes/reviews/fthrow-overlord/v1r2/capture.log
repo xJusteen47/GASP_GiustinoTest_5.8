@@ -1,0 +1,21 @@
+    0.0s ERROR pre script: Traceback (most recent call last):
+  File "<string>", line 980, in <module>
+  File "<string>", line 14, in <module>
+Exception: DeveloperSettings: Failed to find property 'fallback_throws' for attribute 'fallback_throws' on 'GSTN_LinkSettings'
+
+    0.0s driver loaded: kit KIT_Test_Overlord, button Attack, out C:/Users/jacop/Documents/Unreal Projects/GASP_Giustino2_n216qs/Saved/AnimPipeline/captures/fthrow-overlord/v1
+    8.0s setup_editor: ('GM_GASNPPTest_C', False, {'play_net_mode': '<PlayNetMode.PIE_LISTEN_SERVER: 1>', 'play_number_of_clients': '3', 'play_net_dedicated': "FAILED LevelEditorPlaySettings: Failed to find property 'play_net_dedicated' for attribute 'play_net_dedicated' on 'LevelEditorPlaySettings'", 'run_under_one_process': 'True'})
+   26.9s kit KIT_Test_Overlord: OK
+   29.9s loadout: {"revision": 2, "kit": "KIT_Test_Overlord", "additionalWeapons": [], "kitResolved": true, "tableEntries": 34, "grantedAbilities": 24, "derivedTimelines": 0, "tableCrc": "459cb9d8"}
+   29.9s review stage: parked [('Z1', (3500.0, 300.0)), ('Z1', (3800.0, 300.0))], other pawns at [600, 900, 2975, 3264] cm
+   32.8s 3 cameras, 3 fill lights
+   34.9s dummy ['BP_GASNPP_TestCharacter_C_3'] ahead: (80, -450)
+   37.0s fthrow_hit: presentation events off on 39 components
+   37.0s sequence fthrow_hit: pawn at ((0, -450, 100), 0)
+   42.3s fthrow_hit: Interact tap on v20
+   53.5s fthrow_hit: Attack tap + stick (0, 1, 0) on v65
+   78.8s timing fthrow_hit: wall 41.6 s, capture_scene 0.4 s, export png 29.1 s, driver 30.2 s
+   78.8s sequence fthrow_hit done: 160 frames, pawn z 100.0, host shots 0
+   81.0s finish: ok
+   81.9s ASSERT: FAIL 1/1
+   81.9s ASSERT: FAIL fthrow_hit AM_OverlordFThrowV1 f74-f104: weight >= 0.8 on 0% (< 90%), f74 weight 0.00, owned by AM_OverlordJab1V3 1.00

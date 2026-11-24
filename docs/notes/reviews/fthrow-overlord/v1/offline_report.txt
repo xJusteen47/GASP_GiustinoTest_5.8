@@ -1,0 +1,15 @@
+a00 forehead [5.2, 17.3, 156.0] to_face  12.7 | reach l 28.0 r 32.7 /49.0 | grip_err l 0.0 r 0.0 | foot_l [20.0, 12.5, 9.5] foot_r [-14.5, -20.4, 9.1] | pelvis_z 88.6
+a04 forehead [3.5, 6.4, 156.5] to_face  23.3 | reach l 28.3 r 33.6 /49.0 | grip_err l 4.3 r 4.3 | foot_l [20.0, 12.5, 9.5] foot_r [-14.5, -20.4, 9.1] | pelvis_z 85.6
+a08 forehead [3.1, -3.8, 161.6] to_face  34.6 | reach l 38.5 r 43.2 /49.0 | grip_err l 0.0 r 0.0 | foot_l [20.0, 12.5, 9.5] foot_r [-14.5, -20.4, 9.1] | pelvis_z 89.1
+a12 forehead [1.8, -9.8, 163.1] to_face  40.8 | reach l 41.1 r 46.0 /49.0 | grip_err l 0.0 r 0.0 | foot_l [20.0, 12.5, 9.6] foot_r [-14.5, -20.4, 9.1] | pelvis_z 90.1
+a14 forehead [1.6, -11.6, 163.2] to_face  42.5 | reach l 41.6 r 46.4 /49.0 | grip_err l 0.0 r 0.0 | foot_l [20.0, 12.5, 9.6] foot_r [-14.5, -20.4, 9.1] | pelvis_z 90.1
+a17 forehead [4.9, 9.0, 158.4] to_face  21.3 | reach l 26.8 r 31.7 /49.0 | grip_err l 0.0 r 0.0 | foot_l [20.0, 29.5, 16.5] foot_r [-14.5, -20.4, 9.1] | pelvis_z 86.1
+a18 forehead [5.5, 21.6, 154.6] to_face   8.2 | reach l 19.9 r 24.9 /49.0 | grip_err l 0.0 r 0.0 | foot_l [20.0, 42.5, 11.0] foot_r [-14.5, -20.4, 9.1] | pelvis_z 85.1
+a19 forehead [5.8, 30.4, 148.9] to_face   2.6 | reach l 17.1 r 22.0 /49.0 | grip_err l 0.0 r 0.0 | foot_l [19.9, 42.3, 10.0] foot_r [-14.5, -20.4, 9.1] | pelvis_z 85.1
+a20 forehead [6.0, 32.7, 146.5] to_face   5.9 | reach l 16.3 r 21.0 /49.0 | grip_err l 0.0 r 0.0 | foot_l [20.0, 42.5, 9.5] foot_r [-14.5, -20.4, 9.1] | pelvis_z 84.1
+a23 forehead [5.9, 31.4, 145.6] to_face   6.0 | reach l 23.6 r 27.4 /49.0 | grip_err l 11.7 r 11.7 | foot_l [20.0, 42.5, 9.5] foot_r [-14.5, -20.4, 9.1] | pelvis_z 83.6
+a28 forehead [4.4, 25.1, 148.8] to_face   4.5 | reach l 39.6 r 32.7 /49.0 | grip_err l 41.6 r 43.9 | foot_l [20.0, 42.3, 9.9] foot_r [-14.5, -20.4, 9.1] | pelvis_z 83.6
+a34 forehead [2.1, 15.9, 156.0] to_face  14.4 | reach l 43.0 r 40.2 /49.0 | grip_err l 44.0 r 56.9 | foot_l [20.0, 26.5, 13.5] foot_r [-14.5, -20.4, 9.1] | pelvis_z 87.6
+a39 forehead [0.8, 8.2, 159.0] to_face  22.7 | reach l 46.2 r 45.3 /49.0 | grip_err l 46.9 r 65.9 | foot_l [20.0, 12.5, 9.5] foot_r [-14.5, -20.4, 9.1] | pelvis_z 89.1
+a44 forehead [0.8, 12.4, 159.5] to_face  19.2 | reach l 47.7 r 47.4 /49.0 | grip_err l 48.8 r 67.1 | foot_l [20.0, 12.5, 9.5] foot_r [-14.5, -20.4, 9.1] | pelvis_z 90.6
+a50 forehead [0.8, 12.4, 159.5] to_face  19.2 | reach l 47.7 r 47.4 /49.0 | grip_err l 48.8 r 67.1 | foot_l [20.0, 12.5, 9.5] foot_r [-14.5, -20.4, 9.1] | pelvis_z 90.6
