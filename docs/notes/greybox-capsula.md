@@ -111,3 +111,23 @@ All reversible; class defaults, so the owner retunes them on ABP_GSTN_GreyboxCap
 - **Dynamic montages**: `SequenceMoveOverrides` (sequence -> clip) is asked when a montage has no own entry, at the segment's time. The
   script fills it with every montage's sequence, the AnimSequences matching `SEQUENCE_FILTER` (Jab, Punch, Kick, Attack) and `SEQUENCES`;
   the capsule logs `GSTN Greybox: no capsule override for montage ... playing <path>` once per uncovered clip.
+- **Owner note 2026-11-24 14:02**: the capsule floats (bottom 14 cm above the feet), its top stays under the collision capsule's top (156 cm),
+  it is chubbier (radius 34); `GREYBOX_SHAPE="radius,bottom,top"` overrides. The hand and foot markers are hidden in locomotion and shown
+  while the driver plays a montage (`bShowLimbsInMoves` / `bShowLimbsInLocomotion`, `LimbBlendSpeed`; GSTN Greybox Shape scales the
+  `LimbBones` by `LimbScale`).
+- **Owner note 2026-11-24 14:05 (bones only in attacks)**: outside attacks the capsule body is rigid (`PoseWeight` = the attack clip's weight;
+  GSTN Greybox Shape blends to the reference pose and moves the crouch squash to the root). The run is read only by a procedural sway
+  on the root: footfall bob and nod twice per stride, side rock and nose twist once per stride, cadence = speed / `StrideLength`, amplitude
+  by speed. Run start = frantic: for `FranticSeconds` (0.6 s, Toad timing of run-start-frantic) after leaving rest the sway runs at
+  `FranticCadenceHz` (6) with `FranticAmplitude` (1.4), then fades to the speed's cadence. `make_capsule_clips.py` now keeps only attack
+  overrides (`MOVE_FILTER` Overlord, sequences Jab/Punch/Kick/Attack) and replaces the old map, so hit reactions and rolls are the rigid
+  capsule too.
+- **Owner note 2026-11-24 14:06**: additive lean in curves (`TurnLeanDegPer1000` 8, cap `MaxTurnLeanDeg` 25, separate from the forward lean)
+  and a run stop plant like Toad in Mario 3D World: braking hard (`RunStopDecel` 1200) from a run (`RunStopMinSpeed` 250) kicks the
+  pitch spring backward once (`RunStopKickDeg` 22), as if a foot went forward, and the spring brings it back.
+- **Owner note 2026-11-24 14:07 (skid, Toad / Luigi reference)**: the skid starts as the run stop (the backward plant kick on the skid's
+  first frame), the capsule keeps the old run's facing while the run presentation's `IsSkidding()` lasts (yaw offset from the actor),
+  then turns to the new facing on a spring (`SkidTurnFrequency` 4 Hz, `SkidTurnDamping` 0.6, a little overshoot) and starts with the
+  frantic cadence. Leans and the plant read the acceleration in that held body frame. `bSkidHoldsFacing` turns it off.
+- **Owner note 2026-11-24 14:10**: grey capsule (`MI_GSTN_Greybox_Grey`), red nose (`MI_GSTN_Greybox_Red`), both instances of
+  `/Engine/BasicShapes/BasicShapeMaterial` (tint `Color`); the nose is material id 1 and sits in the upper half (about 125 cm of 14..156).

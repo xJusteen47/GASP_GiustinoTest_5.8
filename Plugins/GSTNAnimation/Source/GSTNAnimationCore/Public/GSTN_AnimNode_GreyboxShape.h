@@ -25,6 +25,10 @@ struct GSTNANIMATIONCORE_API FGSTN_AnimNode_GreyboxShape : public FAnimNode_Base
 	UPROPERTY(EditAnywhere, Category = "Settings")
 	FBoneReference PelvisBone;
 
+	/** Bones that carry the limb markers (scaled by the shape's LimbScale; children follow) */
+	UPROPERTY(EditAnywhere, Category = "Settings")
+	TArray<FBoneReference> LimbBones;
+
 	FGSTN_AnimNode_GreyboxShape();
 
 	virtual void Initialize_AnyThread(const FAnimationInitializeContext& Context) override;

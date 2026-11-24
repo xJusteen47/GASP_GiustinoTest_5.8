@@ -17,6 +17,10 @@ FVector FGSTN_AnimNode_GreyboxShape::SquashToScale(float Squash)
 FGSTN_AnimNode_GreyboxShape::FGSTN_AnimNode_GreyboxShape()
 {
 	PelvisBone.BoneName = TEXT("pelvis");
+	for (const TCHAR* Name : {TEXT("hand_l"), TEXT("hand_r"), TEXT("foot_l"), TEXT("foot_r")})
+	{
+		LimbBones.Add(FBoneReference(FName(Name)));
+	}
 }
 
 FVector FGSTN_AnimNode_GreyboxShape::AxisSquashScale(int32 UpAxis, float Squash, float Verticality)
@@ -38,6 +42,10 @@ void FGSTN_AnimNode_GreyboxShape::CacheBones_AnyThread(const FAnimationCacheBone
 {
 	Source.CacheBones(Context);
 	PelvisBone.Initialize(Context.AnimInstanceProxy->GetRequiredBones());
+	for (FBoneReference& Limb : LimbBones)
+	{
+		Limb.Initialize(Context.AnimInstanceProxy->GetRequiredBones());
+	}
 }
 
 void FGSTN_AnimNode_GreyboxShape::PreUpdate(const UAnimInstance* InAnimInstance)
@@ -79,9 +87,34 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 			Output = Blended;
 		}
 	}
+	// Rigid body in locomotion: blend toward the reference pose, the root stays the copied one (Mover's placement and facing)
+	const float PoseWeight = FMath::Clamp(Shape.PoseWeight, 0.f, 1.f);
+	if (PoseWeight < 0.999f)
+	{
+		const FTransform CopiedRoot = Output.Pose[Root];
+		FPoseContext Reference(Output);
+		Reference.ResetToRefPose();
+		if (PoseWeight <= 0.001f)
+		{
+			Output.Pose.CopyBonesFrom(Reference.Pose);
+		}
+		else
+		{
+			FPoseContext Blended(Output);
+			FAnimationPoseData SourceData(Output);
+			FAnimationPoseData ReferenceData(Reference);
+			FAnimationPoseData BlendedData(Blended);
+			FAnimationRuntime::BlendTwoPosesTogether(SourceData, ReferenceData, PoseWeight, BlendedData);
+			Output = Blended;
+		}
+		Output.Pose[Root] = CopiedRoot;
+	}
+	// A rigid body cannot lower its pelvis: its share of the ground squash goes to the root instead (around the feet)
+	const float RootPelvisSquash = FMath::Lerp(Shape.PelvisSquash, 1.f, PoseWeight);
+	const float BonePelvisSquash = FMath::Lerp(1.f, Shape.PelvisSquash, PoseWeight);
 	// Ground squash on the pelvis, along the local axis that is the body's up in the reference pose (measured in component space)
 	const FCompactPoseBoneIndex Pelvis = PelvisBone.GetCompactPoseIndex(Output.Pose.GetBoneContainer());
-	if (Output.Pose.IsValidIndex(Pelvis) && Shape.PelvisSquash < 0.999f)
+	if (Output.Pose.IsValidIndex(Pelvis) && BonePelvisSquash < 0.999f)
 	{
 		const FQuat RefPelvis = Output.Pose.GetRefPose(Root).GetRotation() * Output.Pose.GetRefPose(Pelvis).GetRotation();
 		int32 UpAxis = 0;
@@ -98,12 +131,25 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 		const FQuat Current = Output.Pose[Root].GetRotation() * Output.Pose[Pelvis].GetRotation();
 		const FVector CurrentUp = UpAxis == 0 ? Current.GetAxisX() : (UpAxis == 1 ? Current.GetAxisY() : Current.GetAxisZ());
 		const float Verticality = FMath::Square(FMath::Abs(static_cast<float>(CurrentUp.Z)));
-		Output.Pose[Pelvis].SetScale3D(Output.Pose[Pelvis].GetScale3D() * AxisSquashScale(UpAxis, Shape.PelvisSquash, Verticality));
+		Output.Pose[Pelvis].SetScale3D(Output.Pose[Pelvis].GetScale3D() * AxisSquashScale(UpAxis, BonePelvisSquash, Verticality));
+	}
+	// Limb markers: shrunk into the body when hidden (never exactly 0, a zero scale breaks the bone matrices' inverse)
+	if (Shape.LimbScale < 0.999f)
+	{
+		const float LimbScale = FMath::Clamp(Shape.LimbScale, 0.01f, 1.f);
+		for (const FBoneReference& Limb : LimbBones)
+		{
+			const FCompactPoseBoneIndex Index = Limb.GetCompactPoseIndex(Output.Pose.GetBoneContainer());
+			if (Output.Pose.IsValidIndex(Index))
+			{
+				Output.Pose[Index].SetScale3D(Output.Pose[Index].GetScale3D() * LimbScale);
+			}
+		}
 	}
 	// The root's parent is the component, so its local transform is in component space: rotate it around the ground point, scale it
 	FTransform& RootTransform = Output.Pose[Root];
 	RootTransform.SetRotation(FQuat(Shape.Lean) * RootTransform.GetRotation());
-	RootTransform.SetScale3D(RootTransform.GetScale3D() * SquashToScale(Shape.Squash));
+	RootTransform.SetScale3D(RootTransform.GetScale3D() * SquashToScale(Shape.Squash * RootPelvisSquash));
 }
 
 void FGSTN_AnimNode_GreyboxShape::GatherDebugData(FNodeDebugData& DebugData)

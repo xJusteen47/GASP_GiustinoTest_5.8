@@ -7,6 +7,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "MoverComponent.h"
 #include "MoverTypes.h"
+#include "Presentation/GSTN_RunPresentationComponent.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_GreyboxAnimInstance)
 
@@ -45,14 +46,51 @@ float UGSTN_GreyboxAnimInstance::PelvisSquashTarget(const FGSTN_GreyboxShapeSett
 	return FMath::Clamp(PelvisHeight / ReferenceHeight, FMath::Min(Settings.MinPelvisSquash, 1.f), 1.f);
 }
 
+float UGSTN_GreyboxAnimInstance::LimbScaleTarget(const FGSTN_GreyboxShapeSettings& Settings, float AttackWeight)
+{
+	const float Weight = FMath::Clamp(AttackWeight, 0.f, 1.f);
+	const float Locomotion = Settings.bShowLimbsInLocomotion ? 1.f : 0.f;
+	const float Moves = Settings.bShowLimbsInMoves ? 1.f : 0.f;
+	return FMath::Lerp(Locomotion, Moves, Weight);
+}
+
+float UGSTN_GreyboxAnimInstance::FranticAlpha(const FGSTN_GreyboxShapeSettings& Settings, float TimeSinceStart)
+{
+	if (TimeSinceStart < 0.f)
+	{
+		return 0.f;
+	}
+	return 1.f - FMath::Clamp((TimeSinceStart - Settings.FranticSeconds) / FMath::Max(Settings.FranticFadeSeconds, 0.01f), 0.f, 1.f);
+}
+
+float UGSTN_GreyboxAnimInstance::SwayCadenceHz(const FGSTN_GreyboxShapeSettings& Settings, float Speed2D, float Frantic)
+{
+	const float BySpeed = FMath::Max(Speed2D, 0.f) / FMath::Max(Settings.StrideLength, 1.f);
+	return FMath::Lerp(BySpeed, FMath::Max(Settings.FranticCadenceHz, BySpeed), FMath::Clamp(Frantic, 0.f, 1.f));
+}
+
+FVector UGSTN_GreyboxAnimInstance::RunSway(const FGSTN_GreyboxShapeSettings& Settings, float Phase, float Amplitude, float& OutPitch)
+{
+	// Footfalls at phase 0 and PI: the bob dips and the nod tips forward there (|sin| shapes a bounce, not a sine wobble); the rock and
+	// the twist swing once per cycle, toward the stepping side
+	const float Footfall = 1.f - FMath::Abs(FMath::Sin(Phase));
+	OutPitch = -Settings.NodPitchDeg * Footfall * Amplitude;
+	return FVector(-Settings.BobSquash * Footfall * Amplitude, Settings.RockRollDeg * FMath::Cos(Phase) * Amplitude,
+		Settings.TwistYawDeg * FMath::Sin(Phase) * Amplitude);
+}
+
+bool UGSTN_GreyboxAnimInstance::StartsRunStop(const FGSTN_GreyboxShapeSettings& Settings, bool bOnGround, float Speed2D,
+	float ForwardAcceleration, bool bAlreadyKicked)
+{
+	return Settings.RunStopKickDeg > 0.f && bOnGround && !bAlreadyKicked && Speed2D >= Settings.RunStopMinSpeed
+		&& ForwardAcceleration <= -Settings.RunStopDecel;
+}
+
 FRotator UGSTN_GreyboxAnimInstance::LeanTarget(const FGSTN_GreyboxShapeSettings& Settings, const FVector& LocalAcceleration)
 {
-	FVector2D Lean(LocalAcceleration.X, LocalAcceleration.Y);
-	Lean *= Settings.LeanDegPer1000 / 1000.f;
-	if (Lean.Size() > Settings.MaxLeanDeg)
-	{
-		Lean = Lean.GetSafeNormal() * Settings.MaxLeanDeg;
-	}
+	// Forward (start / brake) and sideways (curves) separately: a curve leans harder than a start, with its own cap
+	const FVector2D Lean(FMath::Clamp(LocalAcceleration.X * Settings.LeanDegPer1000 / 1000.f, -Settings.MaxLeanDeg, Settings.MaxLeanDeg),
+		FMath::Clamp(LocalAcceleration.Y * Settings.TurnLeanDegPer1000 / 1000.f, -Settings.MaxTurnLeanDeg, Settings.MaxTurnLeanDeg));
 	// Pitch = minus the forward lean (Unreal pitch up = top back), roll = the lean to the right (+Y)
 	return FRotator(-Lean.X, 0.f, Lean.Y);
 }
@@ -65,6 +103,7 @@ void UGSTN_GreyboxAnimInstance::NativeInitializeAnimation()
 	SquashSpring.Value = 1.f;
 	SquashSpring.Velocity = 0.f;
 	bHasPrevious = false;
+	Shape.LimbScale = ShapeSettings.bShowLimbsInLocomotion ? 1.f : 0.f;
 }
 
 void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
@@ -104,23 +143,84 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	}
 	bWasOnGround = bOnGround;
 
-	const FVector Local = Owner->GetActorTransform().InverseTransformVectorNoScale(Acceleration);
+	// Skid: hold the old facing while the run presentation skids, then turn on a spring (the capsule's yaw offset from the actor)
+	if (!RunPresentation.IsValid())
+	{
+		RunPresentation = Owner->FindComponentByClass<UGSTN_RunPresentationComponent>();
+	}
+	const bool bSkidding = ShapeSettings.bSkidHoldsFacing && RunPresentation.IsValid() && RunPresentation->IsSkidding();
+	const float ActorYaw = Owner->GetActorRotation().Yaw;
+	bool bSkidStarted = false;
+	if (bSkidding && !bWasSkidding)
+	{
+		// The velocity still points along the old run on the skid's first frame (the actor may already face the new way)
+		const FVector Horizontal(Velocity.X, Velocity.Y, 0.f);
+		SkidHeldYaw = Horizontal.SizeSquared() > 100.f ? Horizontal.Rotation().Yaw : ActorYaw + TurnSpring.Value;
+		bSkidStarted = true;
+	}
+	if (bSkidding)
+	{
+		TurnSpring.Value = FMath::FindDeltaAngleDegrees(ActorYaw, SkidHeldYaw);
+		TurnSpring.Velocity = 0.f;
+	}
+	else
+	{
+		if (bWasSkidding)
+		{
+			TimeSinceStart = 0.f;  // the turn ends in a fresh (frantic) start
+		}
+		TurnSpring.Step(0.f, DeltaSeconds, ShapeSettings.SkidTurnFrequency, ShapeSettings.SkidTurnDamping);
+	}
+	bWasSkidding = bSkidding;
+	// The body's frame: the actor turned by the offset; leans and the stop plant read the acceleration in it
+	const FQuat BodyQuat = FQuat(FVector::UpVector, FMath::DegreesToRadians(TurnSpring.Value)) * Owner->GetActorQuat();
+
+	const FVector Local = BodyQuat.UnrotateVector(Acceleration);
 	const FRotator LeanGoal = bOnGround ? LeanTarget(ShapeSettings, Local) : FRotator::ZeroRotator;
 	SquashSpring.Step(SquashTarget(ShapeSettings, bOnGround, Velocity.Z, Local.X), DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
 	PitchSpring.Step(LeanGoal.Pitch, DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
 	RollSpring.Step(LeanGoal.Roll, DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
 
-	Shape.Squash = FMath::Clamp(SquashSpring.Value, ShapeSettings.MinSquash * 0.8f, ShapeSettings.MaxStretch * 1.1f);
+	// Run stop plant: one backward kick into the pitch spring (positive pitch = top back), re-armed once still or speeding up again
+	const float GroundSpeed = FVector(Velocity.X, Velocity.Y, 0.f).Size();
+	if ((bSkidStarted && !bRunStopKicked && ShapeSettings.RunStopKickDeg > 0.f) || StartsRunStop(ShapeSettings, bOnGround, GroundSpeed, Local.X, bRunStopKicked))
+	{
+		// For this damping the spring's first peak is about 0.6 of Velocity / Omega
+		PitchSpring.Velocity += ShapeSettings.RunStopKickDeg * 2.f * PI * ShapeSettings.SpringFrequency / 0.6f;
+		bRunStopKicked = true;
+	}
+	else if (GroundSpeed < 10.f || Local.X > 200.f)
+	{
+		bRunStopKicked = false;
+	}
+
+	// Run sway: cadence from the speed, or the frantic cadence right after leaving rest; amplitude from the speed, eased
+	const float Speed2D = FVector(Velocity.X, Velocity.Y, 0.f).Size();
+	const bool bMoving = bOnGround && Speed2D > 10.f;
+	TimeSinceStart = bMoving ? (TimeSinceStart < 0.f ? 0.f : TimeSinceStart + DeltaSeconds) : -1.f;
+	if (bSkidding)
+	{
+		TimeSinceStart = -1.f;  // no frantic sway while sliding; it starts when the turn does
+	}
+	const float Frantic = FranticAlpha(ShapeSettings, TimeSinceStart);
+	const float AmplitudeGoal = bMoving ? FMath::Max(FMath::Clamp(Speed2D / FMath::Max(ShapeSettings.FullSwaySpeed, 1.f), 0.f, 1.f),
+		Frantic * ShapeSettings.FranticAmplitude) : 0.f;
+	SwayAmplitude = FMath::FInterpTo(SwayAmplitude, AmplitudeGoal, DeltaSeconds, 10.f);
+	SwayPhase = FMath::Fmod(SwayPhase + 2.f * PI * SwayCadenceHz(ShapeSettings, Speed2D, Frantic) * DeltaSeconds, 2.f * PI);
+	float SwayPitch = 0.f;
+	const FVector Sway = RunSway(ShapeSettings, SwayPhase, SwayAmplitude, SwayPitch);
+
+	Shape.Squash = FMath::Clamp(SquashSpring.Value + Sway.X, ShapeSettings.MinSquash * 0.8f, ShapeSettings.MaxStretch * 1.1f);
 	// The lean is in the component's frame; the mesh is rotated -90 yaw from the actor in GASP pawns, so turn the actor-frame lean into it
-	const FQuat ActorToComponent = GetSkelMeshComponent() ? (GetSkelMeshComponent()->GetComponentQuat().Inverse() * Owner->GetActorQuat()) : FQuat::Identity;
+	const FQuat ActorToComponent = GetSkelMeshComponent() ? (GetSkelMeshComponent()->GetComponentQuat().Inverse() * BodyQuat) : FQuat::Identity;
 	// Rotation axis scaled by degrees, actor frame: tipping the top toward +X is a turn around +Y by the forward lean (-Pitch), toward +Y a
 	// turn around -X by the side lean (Roll)
-	const FVector Axis = ActorToComponent.RotateVector(FVector(-RollSpring.Value, -PitchSpring.Value, 0.f));
-	Shape.Lean = FQuat(Axis.GetSafeNormal(), FMath::DegreesToRadians(Axis.Size())).Rotator();
-	if (Axis.IsNearlyZero())
-	{
-		Shape.Lean = FRotator::ZeroRotator;
-	}
+	const float Roll = RollSpring.Value + Sway.Y;
+	const float Pitch = PitchSpring.Value + SwayPitch;
+	const FVector Axis = ActorToComponent.RotateVector(FVector(-Roll, -Pitch, 0.f));
+	const FQuat Tip = Axis.IsNearlyZero() ? FQuat::Identity : FQuat(Axis.GetSafeNormal(), FMath::DegreesToRadians(Axis.Size()));
+	// Twist about the up axis (same in actor and component frames), under the tip
+	Shape.Lean = (Tip * FQuat(FVector::UpVector, FMath::DegreesToRadians(TurnSpring.Value + Sway.Z))).Rotator();
 
 	float PelvisHeight = 0.f;
 	float PelvisReference = 0.f;
@@ -130,6 +230,11 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	Shape.PelvisSquash = FMath::FInterpTo(Shape.PelvisSquash, PelvisGoal, DeltaSeconds, ShapeSettings.PelvisSquashBlendSpeed);
 
 	UpdateMoveOverride();
+	// Bones only where strictly needed, in attacks (owner 2026-11-24): the body follows the pose and the markers show only while an
+	// attack's capsule clip plays; everything else (locomotion, hit reactions, rolls) is the rigid capsule swaying
+	Shape.PoseWeight = Shape.OverrideWeight;
+	Shape.LimbScale = FMath::FInterpTo(Shape.LimbScale, LimbScaleTarget(ShapeSettings, Shape.OverrideWeight), DeltaSeconds,
+		ShapeSettings.LimbBlendSpeed);
 }
 
 bool UGSTN_GreyboxAnimInstance::GetDriverPelvisHeight(float& OutHeight, float& OutReference)
@@ -168,7 +273,11 @@ void UGSTN_GreyboxAnimInstance::UpdateMoveOverride()
 	UAnimInstance* DriverAnim = Driver ? Driver->GetAnimInstance() : nullptr;
 	UAnimMontage* Montage = DriverAnim ? DriverAnim->GetCurrentActiveMontage() : nullptr;
 	const FAnimMontageInstance* Instance = Montage ? DriverAnim->GetActiveInstanceForMontage(Montage) : nullptr;
-	if (!Instance || (MoveOverrides.IsEmpty() && SequenceMoveOverrides.IsEmpty()))
+	if (!Instance)
+	{
+		return;
+	}
+	if (MoveOverrides.IsEmpty() && SequenceMoveOverrides.IsEmpty())
 	{
 		return;
 	}

@@ -61,12 +61,31 @@ bool FGSTN_GreyboxShapeTest::RunTest(const FString& Parameters)
 	const FRotator Right = UGSTN_GreyboxAnimInstance::LeanTarget(Settings, FVector(0.f, 2000.f, 0.f));
 	TestTrue(TEXT("accelerating right leans right"), Right.Roll > 1.f);
 	const FRotator Hard = UGSTN_GreyboxAnimInstance::LeanTarget(Settings, FVector(1.e6f, 1.e6f, 0.f));
-	TestTrue(TEXT("lean capped"), FVector2D(Hard.Pitch, Hard.Roll).Size() <= Settings.MaxLeanDeg + KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("forward lean capped"), FMath::Abs(Hard.Pitch) <= Settings.MaxLeanDeg + KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("curve lean capped"), FMath::Abs(Hard.Roll) <= Settings.MaxTurnLeanDeg + KINDA_SMALL_NUMBER);
+	TestTrue(TEXT("a curve leans harder than a start"), Right.Roll > -Forward.Pitch);
+	TestTrue(TEXT("hard braking from a run starts a run stop"), UGSTN_GreyboxAnimInstance::StartsRunStop(Settings, true, 500.f, -3000.f, false));
+	TestFalse(TEXT("only once per stop"), UGSTN_GreyboxAnimInstance::StartsRunStop(Settings, true, 500.f, -3000.f, true));
+	TestFalse(TEXT("a walk does not kick"), UGSTN_GreyboxAnimInstance::StartsRunStop(Settings, true, 100.f, -3000.f, false));
+	TestFalse(TEXT("gentle slowing does not kick"), UGSTN_GreyboxAnimInstance::StartsRunStop(Settings, true, 500.f, -300.f, false));
 
 	TestTrue(TEXT("pelvis at reference = 1"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, true, 95.f, 95.f), 1.f));
 	TestTrue(TEXT("crouched pelvis squashes"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, true, 57.f, 95.f), 0.6f, 1.e-3f));
 	TestTrue(TEXT("pelvis squash floor"), UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, true, 0.f, 95.f) >= Settings.MinPelvisSquash);
 	TestTrue(TEXT("raised pelvis does not stretch"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, true, 120.f, 95.f), 1.f));
+	TestTrue(TEXT("limbs hidden in locomotion"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::LimbScaleTarget(Settings, 0.f)));
+	TestTrue(TEXT("limbs shown in a move"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::LimbScaleTarget(Settings, 1.f), 1.f));
+	TestTrue(TEXT("frantic right after leaving rest"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::FranticAlpha(Settings, 0.1f), 1.f));
+	TestTrue(TEXT("frantic over after its window"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::FranticAlpha(Settings,
+		Settings.FranticSeconds + Settings.FranticFadeSeconds + 0.01f)));
+	TestTrue(TEXT("not frantic at rest"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::FranticAlpha(Settings, -1.f)));
+	TestTrue(TEXT("run start cadence faster than the speed's"), UGSTN_GreyboxAnimInstance::SwayCadenceHz(Settings, 150.f, 1.f)
+		> 2.f * UGSTN_GreyboxAnimInstance::SwayCadenceHz(Settings, 150.f, 0.f));
+	TestTrue(TEXT("still = no cadence"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::SwayCadenceHz(Settings, 0.f, 0.f)));
+	float NodPitch = 0.f;
+	const FVector AtFootfall = UGSTN_GreyboxAnimInstance::RunSway(Settings, 0.f, 1.f, NodPitch);
+	TestTrue(TEXT("footfall bobs down and nods forward"), AtFootfall.X < 0.f && NodPitch < 0.f);
+	TestTrue(TEXT("no amplitude = no sway"), UGSTN_GreyboxAnimInstance::RunSway(Settings, 1.f, 0.f, NodPitch).IsNearlyZero());
 	TestTrue(TEXT("no pelvis squash in the air"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::PelvisSquashTarget(Settings, false, 40.f, 95.f), 1.f));
 	return true;
 }

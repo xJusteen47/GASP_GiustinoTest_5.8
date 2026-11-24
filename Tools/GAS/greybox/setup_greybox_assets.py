@@ -38,8 +38,12 @@ SAVE = os.environ.get('GSTN_SAVE') == '1'
 STEPS = [s.strip() for s in os.environ.get('GREYBOX_STEPS', 'mesh,capsule_abp,chooser,simple_abp,warping').split(',') if s.strip()]
 
 # Capsule shape (cm): the mannequin is ~180 cm; the capsule reads as the body volume, the nose as the facing (mesh +Y = forward)
-CAPSULE_RADIUS = 24.0
-CAPSULE_HEIGHT = 176.0
+# Owner 2026-11-24 (run 2 note): floating a little above the ground, its top below the top of the collision capsule, chubbier.
+# GREYBOX_SHAPE="radius,bottom,top" overrides (cm above the feet).
+_shape = [float(v) for v in os.environ.get('GREYBOX_SHAPE', '34,14,156').split(',')]
+CAPSULE_RADIUS = _shape[0]
+CAPSULE_BOTTOM = _shape[1]
+CAPSULE_HEIGHT = _shape[2] - _shape[1]
 NOSE_LENGTH = 16.0
 NOSE_RADIUS = 6.0
 MARKER_RADIUS = {'hand_l': 7.0, 'hand_r': 7.0, 'foot_l': 8.0, 'foot_r': 8.0}
@@ -177,22 +181,38 @@ def step_mesh():
     prims = unreal.GeometryScript_Primitives
     opts = unreal.GeometryScriptPrimitiveOptions()
     mesh = unreal.DynamicMesh()
+    # Owner 2026-11-24: grey capsule, red nose. Material id 0 = body and markers, 1 = nose (slot names SLOT_NAMES)
+    mat_lib = None
+    for lib_name in ('GeometryScript_Materials', 'GeometryScript_MeshMaterialFunctions', 'GeometryScript_MeshMaterials'):
+        mat_lib = getattr(unreal, lib_name, None)
+        if mat_lib and hasattr(mat_lib, 'enable_material_ids'):
+            mat_lib.enable_material_ids(mesh)
+            break
+    else:
+        p('mesh: WARNING no enable_material_ids; material libs:', api_names(unreal, ['geometryscript_mat']))
+    nose_opts = unreal.GeometryScriptPrimitiveOptions()
+    try:
+        opts.set_editor_property('material_id', 0)
+        nose_opts.set_editor_property('material_id', 1)
+    except Exception as exc:
+        p('mesh: WARNING primitive options have no material_id:', exc)
     parts = []  # (first vertex id, vertex count after, kind)
 
     def vcount():
         return unreal.GeometryScript_MeshQueries.get_vertex_count(mesh)
 
     start = vcount()
-    # Capsule standing on the ground: origin at its base
-    body_t = unreal.Transform(location=unreal.Vector(0, 0, 0))
+    # Capsule floating CAPSULE_BOTTOM above the ground: origin at its base
+    body_t = unreal.Transform(location=unreal.Vector(0, 0, CAPSULE_BOTTOM))
     prims.append_capsule(mesh, opts, body_t, CAPSULE_RADIUS, CAPSULE_HEIGHT - 2 * CAPSULE_RADIUS, 6, 16, 8,
                          unreal.GeometryScriptPrimitiveOriginMode.BASE)
     parts.append((start, vcount(), 'body'))
     # Nose: a cone on the face, pointing forward (+Y), at the head's height
     start = vcount()
-    head = pos['head']
-    nose_t = unreal.Transform(location=unreal.Vector(0, CAPSULE_RADIUS - 2.0, head.z + 4.0), rotation=unreal.Rotator(0, 0, -90))
-    prims.append_cone(mesh, opts, nose_t, NOSE_RADIUS, 1.0, NOSE_LENGTH, 12, 1, True, unreal.GeometryScriptPrimitiveOriginMode.BASE)
+    # Under the dome (the capsule top is below the real head now), weighted to the head so it turns with it
+    nose_z = CAPSULE_BOTTOM + CAPSULE_HEIGHT - CAPSULE_RADIUS * 0.9
+    nose_t = unreal.Transform(location=unreal.Vector(0, CAPSULE_RADIUS - 2.0, nose_z), rotation=unreal.Rotator(0, 0, -90))
+    prims.append_cone(mesh, nose_opts, nose_t, NOSE_RADIUS, 1.0, NOSE_LENGTH, 12, 1, True, unreal.GeometryScriptPrimitiveOriginMode.BASE)
     parts.append((start, vcount(), 'head'))
     for bone, radius in MARKER_RADIUS.items():
         start = vcount()
@@ -249,8 +269,42 @@ def step_mesh():
         fail('create_new_skeletal_mesh_asset_from_mesh returned nothing: %s' % (result,))
         return None
     p('mesh: created', path, 'vertices', vcount())
+    assign_materials(asset)
     save(path)
     return asset
+
+
+BASE_MATERIAL = '/Engine/BasicShapes/BasicShapeMaterial'
+MATERIALS = [('Body', 'MI_GSTN_Greybox_Grey', unreal.LinearColor(0.35, 0.35, 0.37, 1.0)),
+             ('Nose', 'MI_GSTN_Greybox_Red', unreal.LinearColor(0.8, 0.04, 0.03, 1.0))]
+
+
+def make_material(name, color):
+    path = '%s/%s' % (DIR, name)
+    mi = eal.load_asset(path) if eal.does_asset_exist(path) else None
+    if not mi:
+        mi = asset_tools.create_asset(name, DIR, unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew())
+        mi.set_editor_property('parent', eal.load_asset(BASE_MATERIAL))
+    # BasicShapeMaterial's tint parameter is 'Color'
+    unreal.MaterialEditingLibrary.set_material_instance_vector_parameter_value(mi, 'Color', color)
+    unreal.MaterialEditingLibrary.update_material_instance(mi)
+    save(path)
+    return mi
+
+
+def assign_materials(asset):
+    """Slot 0 grey (body, markers), slot 1 red (nose), in material id order."""
+    try:
+        slots = []
+        for slot_name, mi_name, color in MATERIALS:
+            sm = unreal.SkeletalMaterial()
+            sm.set_editor_property('material_interface', make_material(mi_name, color))
+            sm.set_editor_property('material_slot_name', slot_name)
+            slots.append(sm)
+        asset.set_editor_property('materials', slots)
+        p('mesh: materials', [s.get_editor_property('material_slot_name') for s in slots])
+    except Exception as exc:
+        fail('mesh: materials not assigned: %s' % exc)
 
 
 # --------------------------------------------------------------------------------------------------------------------- capsule ABP

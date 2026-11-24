@@ -15,7 +15,8 @@ Two kinds:
 4A: these are placeholders, exempt from the level-2 animation review; the owner looks at them in game.
 
 Dry run unless GSTN_SAVE=1 (Tools/CI/Save-Assets.ps1). Existing clips are rebuilt (they are generated). Report:
-Saved/Greybox/make_capsule_clips.txt. MOVE_FILTER="Overlord,React,Roll,Dodge" (default) picks montages whose name contains one of them.
+Saved/Greybox/make_capsule_clips.txt. MOVE_FILTER="Overlord" (default; owner 2026-11-24: bones only in attacks, hit reactions and rolls are
+the rigid capsule swaying) picks montages whose name contains one of them.
 Run 2: SequenceMoveOverrides (sequence -> clip) for moves played as dynamic montages: every montage's own sequence, the AnimSequences
 matching SEQUENCE_FILTER (AS_GSTN_Greybox_Seq_<name>) and the exact paths in SEQUENCES.
 """
@@ -32,7 +33,7 @@ MANNEQUIN = '/Game/Characters/UEFN_Mannequin/Meshes/SKM_UEFN_Mannequin'
 FPS = 30
 OUT = unreal.Paths.project_saved_dir() + 'Greybox/make_capsule_clips.txt'
 SAVE = os.environ.get('GSTN_SAVE') == '1'
-MOVE_FILTER = [s.strip().lower() for s in os.environ.get('MOVE_FILTER', 'Overlord,React,Roll,Dodge').split(',') if s.strip()]
+MOVE_FILTER = [s.strip().lower() for s in os.environ.get('MOVE_FILTER', 'Overlord').split(',') if s.strip()]
 # Run 2: clips played as dynamic montages (the Playtest jab) are keyed by the sequence. SEQUENCE_FILTER picks AnimSequences by name under
 # the move roots; SEQUENCES adds exact paths (the capsule logs 'GSTN Greybox: no capsule override for montage ... playing <path>').
 SEQUENCE_FILTER = [s.strip().lower() for s in os.environ.get('SEQUENCE_FILTER', 'Jab,Punch,Kick,Attack').split(',') if s.strip()]
@@ -381,12 +382,12 @@ def update_move_overrides(overrides, sequence_overrides=None):
         fail('capsule ABP %s missing' % CAPSULE_ABP)
         return
     cdo = unreal.get_default_object(unreal.BlueprintEditorLibrary.generated_class(bp))
-    current = dict(cdo.get_editor_property('move_overrides'))
-    current.update(overrides)
+    # Replaced, not merged: owner 2026-11-24 bones only in attacks, so the run 1 entries for hit reactions and rolls must go (those are
+    # the rigid capsule swaying now)
+    current = dict(overrides)
     cdo.set_editor_property('move_overrides', current)
-    if sequence_overrides:
-        by_sequence = dict(cdo.get_editor_property('sequence_move_overrides'))
-        by_sequence.update(sequence_overrides)
+    if sequence_overrides is not None:
+        by_sequence = dict(sequence_overrides)
         cdo.set_editor_property('sequence_move_overrides', by_sequence)
         p('sequence move overrides on the capsule ABP:', len(by_sequence))
     unreal.BlueprintEditorLibrary.compile_blueprint(bp)
