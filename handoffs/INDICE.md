@@ -6,7 +6,7 @@
 
 | Settimana | Thread con costo | USD |
 |---|---|---|
-| 2026-W48 | 43 | 121.0 |
+| 2026-W48 | 64 | 172.2 |
 | 2026-W47 | 64 | 665.0 |
 
 ## Thread (dal più recente)
@@ -17,7 +17,10 @@
 | 2026-11-24 | skill-anim-unica-t4 |  | d822ce90 | ? | T4 taratura vita (fisso, 2026-11-24, Opus; nota coordinatore, budget ~3 $) - branch claude/anim-skill-t3 | 3 | 5 | legacy |
 | 2026-11-24 | skill-anim-unica-t3 |  | 5477d63a | ? | T3 skill animazione unica - integrazione (fisso, 2026-11-24, Opus; brief handoffs/skill-anim-unica-brief-2026-11-24.md) | 6 | 40 | legacy |
 | 2026-11-24 | skill-anim-unica-t1 |  | 1a194c6c | ? | Handover T1 skill di animazione unica (2026-11-24, cloud, Opus medium; brief handoffs/skill-anim-unica-brief-2026-11-24.md) | 5.5 | 0 | legacy |
+| 2026-11-24 | skill-anim-unica-brief |  | ada7ae12 | ? | conversazione diretta con l'owner su principi e skill; brief della skill di animazione unica (opzione A). | 10 | 0 | legacy |
 | 2026-11-24 | review-invarianti-1 |  | 7cc5d7f4 | ? | review-invarianti-1 (cloud, 2026-11-24, Opus medium, budget 6 $): INVARIANTI, test, pacchetto livello 2, ereditati bloccanti | 4.5 | 0 | legacy |
+| 2026-11-24 | pulizia-repo-harness-piano |  | ada7ae12 | piano approvato, PR #38 aperta, brief C1-C5 consegnati al coordinatore | Handover: piano di pulizia repo e harness (2026-11-24) | 3 | 0 | legacy |
+| 2026-11-24 | pulizia-c2 | claude/project-thread-09d2lx |  | PARZIALE | Item 1-8 fatti e provati offline in Python; gli script PowerShell non sono stati eseguiti (nessun pwsh) | 3.5 | 0 | ok |
 | 2026-11-24 | principi-review-1 |  | af9ccde2 | ? | principi di animazione, note picchiaduro e di Sakurai della OG controllati DAVVERO nella review finale. | 3.5 | 0 | legacy |
 | 2026-11-24 | pipeline-spline-1 |  | 276709b1 | ? | pipeline-spline-1 (cloud, 2026-11-24, Opus medium) - build senza stop-and-go per tutte le mosse da carta | 2.5 | 0 | legacy |
 | 2026-11-24 | life-metrics-og |  | 1018a4fb | ? | life-metrics-og (cloud, 2026-11-24, Opus medium) - metriche di vita della OG di nuovo in animpipe check | 4 | 0 | legacy |
@@ -27,28 +30,45 @@
 | 2026-11-24 | fast-capture-1 |  | 159949b6 | ? | giro di cattura da ~9 min a ~1 min (~30 s a editor aperto), sempre in-game (regola 10). Codice NON compilato (fisso e portatile occupati). | 7 | 0 | legacy |
 | 2026-11-24 | dropkick-k8-4-piano-r3 |  | 3f950a23 | ? | dropkick-k8-4-piano-r3 (portatile, offline, 2026-11-24, Opus medium) - piano e carte del giro 3 di K8 (variante K8R3, K7 bloccata) | 1.2 | 0 | legacy |
 | 2026-11-24 | dropkick-k8-3-diagnosi |  | 50f3a529 | ? | dropkick-k8-3-diagnosi (portatile, offline, 2026-11-24, Opus medium) - perche' K7 e K8 sono "scattosi e per niente naturali" | 0.8 | 0 | legacy |
+| 2026-11-24 | deepseek-smoke-test |  | ada7ae12 | ? | Handover: deepseek-smoke-test (M0 + M1_CODE + EULA guard) | 0.6 | 3 | legacy |
 | 2026-11-24 | dair-v9-stops-review |  | 49998c49 | ? | dair-v9-stops-review (fisso, 2026-11-24, Opus; nota coordinatore, owner scelta B, budget ~4 $) - branch claude/dair-v9-stops-review | 4.5 | 8 | legacy |
+| 2026-11-24 | consulto-review-finale |  | ada7ae12 | ? | consulto-review-finale (cloud, sola lettura, 2026-11-24, Opus high, budget 4 $) - perché gli snellimenti tolgono la review finale | 2.5 | 0 | legacy |
+| 2026-11-24 | c1-fastcapture |  | ada7ae12 | OK (build al 1o tentativo, cattura al 1o tentativo, ASSERT: OK) | C1 cattura rapida GSTNCapture (fisso, 2026-11-24, brief handoffs/pulizia-2026-11-24/brief-checkpoint.md §C1) - branch claude/c1-fastcapture-2026-11-24 | 1.5 | 7 | legacy |
 | 2026-11-24 | audit-stop-2026-11-24 |  | 2d8af574 | ? | audit-stop-2026-11-24 (cloud, sola lettura, 2026-11-24) - audit stop-and-go di tutte le clip | 1.6 | 0 | legacy |
 | 2026-11-24 | anim-layer-t2 |  | 5fbdfba0 | ? | l'agente scrive l'intento ("gomito destro 10 gradi piu' fuori a f13, morbido su f1-f21"), lo strumento fa | 4.5 | 0 | legacy |
+| 2026-11-23 | turnaround-w3-diagnosi |  | ada7ae12 | ? | Diagnosi di sistema: turnaround del run start sul w3 (cloud, Opus high, sola lettura, 2026-11-23) | 2 | 0 | legacy |
 | 2026-11-23 | turnaround-all-c2 |  | 5cf1604e | ? | turnaround-all-c2 (2026-11-23): 180R, 090L, 090R (2 round, ASSERT OK, Review Pro r2 FAIL) | 0 |  | legacy |
 | 2026-11-23 | turnaround-all-c1 |  | 03d32bab | ? | turnaround-all-c1 (2026-11-23): 180R, 090L, 090R (GATES OK, ASSERT OK, Neon High FAIL r1) | 0 |  | legacy |
 | 2026-11-23 | turnaround-180l-c3 |  | 24d2dcfa | ? | turnaround-180l-c3 (2026-11-23): Turnaround 180L agile platform / Link-OoT + 29 w3 -> PASS | 0 |  | legacy |
 | 2026-11-23 | turnaround-180l-c2 |  | 902430ea | ? | turnaround-180l-c2 (2026-11-23): Turnaround 180L da base 27 (w2t180Lp) + fisica 29 w3 (3 round, Regola 10) | 0 |  | legacy |
 | 2026-11-23 | turnaround-180l-c1 |  | fbb5754b | ? | turnaround-180l-c1 (2026-11-23): Turnaround 180L (variante 28, AS_GSTN_RunStart_Generic_w2t180Ls) | 0.21 |  | legacy |
+| 2026-11-23 | tempi-import-cattura-1 |  | ada7ae12 | ? | tempi-import-cattura-1 (cloud, 2026-11-23, Opus medium, sola lettura) | 1 | 0 | legacy |
+| 2026-11-23 | skin-lyra-confronto |  | ada7ae12 | ? | Handover: Lyra vs skin (2026-11-23) | 1.5 | 0 | legacy |
+| 2026-11-23 | skin-cosmetici-ricerca |  | ada7ae12 | ? | Handover skin-cosmetici-ricerca: temi 3D modulari per armi e oggetti (2026-11-23) | 3.5 | 0 | legacy |
 | 2026-11-23 | skill-vita-velocita-1 |  | 891c65de | ? | Skill animazione: misura della vita e della velocita' (opzione A, 2026-11-23, cloud, Sonnet->Opus 5.5, budget 4 $) | 3.5 | 0 | legacy |
+| 2026-11-23 | skill-og-vs-oggi |  | ada7ae12 | ? | skill-og-vs-oggi (cloud, sola lettura, 2026-11-23, Opus high, budget 3 $) - buchi della skill animazione rispetto alla OG | 2 | 0 | legacy |
 | 2026-11-23 | skill-k8-fix-1 |  | 7af96c4a | ? | skill-k8-fix-1 (cloud, 2026-11-23, Opus medium, budget 2 $) - skill di animazione: 5 miglioramenti dal giro 1 di K8 | 1.8 | 0 | legacy |
+| 2026-11-23 | runstart-lock-2026-11-23 |  | ada7ae12 | ? | Handover: blocco run start 29w3 e v4r5 (2026-11-23) | 0.05 | 0 | legacy |
+| 2026-11-23 | ricerca-server-dedicato |  | ada7ae12 | docs/notes/server-dedicato-ricerca.md` (riassunto 10 righe, §1 prove con file e righe, §6 tre decisioni). | ricerca su server dedicato per il 1v1 classificato e ritardo con cui si vede l'avversario. A metà lavoro l'owner | 2.5 | 0 | legacy |
 | 2026-11-23 | integ-2026-11-23 |  | 1de1e3e7 | ? | Integrazione 2026-11-23 (portatile, UE 5.9, branch claude/integ-2026-11-23) | 4 | 0 | legacy |
+| 2026-11-23 | input-azioni-mappa |  | ada7ae12 | fatto. Documento `docs/notes/input-azioni-mappa.md` (riassunto 10 righe, tabella, letture dirette, analisi, piano P0-P5, 3 decisioni). | mappa di cosa è legato ad azioni/comandi, tasti, IMC; verifica indipendente dell'ipotesi dell'owner. | 3 | 0 | legacy |
 | 2026-11-23 | harness-deepseek-fix |  | 22cfb953 | ? | Handover — harness-deepseek-fix (2026-11-23) | 0 |  | legacy |
 | 2026-11-23 | harness-anim-mcp-v2 |  | 3402d00f | ? | Handoff harness-anim-mcp-v2 (2026-11-23): upgrade da turnaround-all-c2 | 0 |  | legacy |
 | 2026-11-23 | harness-anim-mcp-2026-11-23 |  | 03d32bab | ? | Handoff Harness, Skill & Anim-MCP (2026-11-23) | 0 |  | legacy |
 | 2026-11-23 | grab-link |  | b26ef5ed | ? | presa al collo con camminata/salto e lanci N./F./Cr./Cr.F. per l'Overlord su manichino, solo codice, dati e hook. | 7 | 0 | legacy |
+| 2026-11-23 | dropkick-k8-review-2 |  | ada7ae12 | ? | dropkick-k8-review-2 (cloud, 2026-11-23, Opus high) - review regola 10 giro 2 di 3 di K8 | 2 | 0 | legacy |
+| 2026-11-23 | dropkick-k8-review-1 |  | ada7ae12 | ? | dropkick-k8-review-1 (cloud, 2026-11-23, Opus high) - review regola 10 di K8 su claude/project-thread-6blrlz d36f3a7b | 2.5 | 0 | legacy |
 | 2026-11-23 | dropkick-k8-2 |  | 44a40810 | ? | dropkick-k8-2 (portatile, 2026-11-23, Opus medium) - giro 2 di K8 dopo la review cloud 1 (FAIL posa) | 2.5 | 25 | legacy |
 | 2026-11-23 | dropkick-k8-1 |  | d36f3a7b | ? | dropkick-k8-1 (portatile, 2026-11-23, Opus medium) - K8 = K7 + tutte le proposte Doom; K7 approvata e bloccata | 8 | 35 | legacy |
 | 2026-11-23 | dropkick-k7-skill-test |  | 3f9e271a | ? | dropkick-k7-skill-test (portatile, 2026-11-23, Opus medium) - giro 3 di K6 come test della skill | 7 | 55 | legacy |
+| 2026-11-23 | dropkick-k7-k8-sguardo-slowmo |  | ada7ae12 | ? | dropkick-k7-k8-sguardo-slowmo (cloud, sola lettura, 2026-11-23, Opus high) - cosa si VEDE nello slowmo di K7 e K8 | 1.5 | 0 | legacy |
 | 2026-11-23 | dropkick-k6-critica-opus |  | bccbae9c | ? | dropkick-k6-critica-opus (cloud, 2026-11-23, Opus high, sola lettura) | 2 | 0 | legacy |
+| 2026-11-23 | content-riorganizzazione |  | ada7ae12 | ? | Handover: riorganizzazione Content/, fase 1 (solo lettura) | 1.5 | 0 | legacy |
+| 2026-11-23 | cattura-rapida-2026-11-23 |  | ada7ae12 | ? | Cattura rapida: valutazione (2026-11-23, cloud, sola lettura, Opus medium) | 1.5 | 0 | legacy |
 | 2026-11-23 | capdet-2 |  | f36db6ac | ? | capdet-2: montaggio A/B, cache a hash, regressione pose approvate (punti 5-7 delle "7 aggiunte") | 2 | 0 | legacy |
 | 2026-11-23 | capdet-1 |  | 93f823b2 | ? | capdet-1: cattura deterministica, parte 1 (punti 1-4 delle "7 aggiunte") | 1.5 | 0 | legacy |
 | 2026-11-23 | camera-floor-anchor |  | ae1a1a66 | ? | Camera: altezza dal pavimento, mai dalla capsula (2026-11-23, cloud, Opus medium) | 5 | 0 | legacy |
+| 2026-11-23 | audit-hit-generici |  | ada7ae12 | ? | Handover AUDIT-HIT-GENERICI (cloud, sola lettura, 2026-11-23, Opus medium) | 2 | 0 | legacy |
 | 2026-11-23 | anim-skill-t0 |  | 1a941d65 | ? | Handover anim-skill-t0 (2026-11-23, cloud, Opus high + 1 subagente Sonnet). Branch claude/project-thread-k9d2l7 | 6 | 0 | legacy |
 | 2026-11-23 | anim-skill-gaps-k7 |  | acd08238 | ? | anim-skill-gaps-k7 (cloud, 2026-11-23, Opus medium) - i 6 buchi della skill trovati dalla review K7 (owner 2A) | 3.5 | 0 | legacy |
 | 2026-11-23 | anim-skill-audit-1 |  | dfa58311 | ? | Handover anim-skill-audit-1 (2026-11-23, cloud, Opus high, sola lettura). Branch claude/project-thread-k9d2l7 | 2.5 | 0 | legacy |
@@ -56,6 +76,7 @@
 | 2026-11-23 | anim-mcp-v2-turn4 |  | 4842bacf | ? | Handover anim-mcp-v2-turn4 (2026-11-23, desktop, Sonnet medium). Branch claude/anim-mcp-v2-turn4 | 2.2 | 50 | legacy |
 | 2026-11-23 | anim-mcp-follow-through-1 |  | caa82e56 | ? | Handover anim-mcp-follow-through-1 (2026-11-23, cloud, Sonnet medium). Branch claude/anim-mcp-followthrough (base claude/anim-mcp-v2-turn4 1243e7ee) | 1.6 | 0 | legacy |
 | 2026-11-23 | anim-mcp-cheap-1 |  | 25594ac7 | ? | anim-mcp cheap actions 1 (cloud, Sonnet medium) — branch claude/anim-mcp-v2-turn4 | 1.8 | 0 | legacy |
+| 2026-11-23 | anim-inventario |  | ada7ae12 | ? | Handover: inventario animazioni (cloud, Sonnet medium, 2026-11-23) | 3.5 | 0 | legacy |
 | 2026-11-22 | turnarounds-4-style-desktop |  | fa443341 | ? | turnarounds-4 style (desktop, 2026-11-22): 180 L style pass in Cascadeur = variant 28; gates OK after round A, captured, ASSERT OK | 18 | 30 | legacy |
 | 2026-11-22 | runstart-w3-cheap-skill |  | 230ad65a | ? | runstart-w3 + gstn-anim-cycle-cheap (desktop, 2026-11-22): w3 5/6 SI + skill cheap | 0 | 45 | legacy |
 | 2026-11-22 | integ-playtest-2026-11-22 |  | 7d5e36dd | ? | Handover: integ-playtest-2026-11-22 (pulizia disco 1A+2A + merge integrazione 3A) | 0 | 15 | legacy |
