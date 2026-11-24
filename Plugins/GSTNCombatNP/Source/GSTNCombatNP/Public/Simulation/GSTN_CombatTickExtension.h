@@ -45,6 +45,13 @@ public:
 	 * the tick; null outside a combat tick and in a test, where the caller uses Context.Snapshot. Read-only
 	 */
 	virtual const FGSTN_StepSnapshot* GetViewSnapshot() { return nullptr; }
+
+	/**
+	 * Ends the running timeline on this frame the way a plain command that wins out of a cancel window does (CancelForOtherCommand: a
+	 * CancelTimeline request, the combatant Actionable again, no follow-up). The hit bounce ends its move with it. False when no timeline runs
+	 * or outside a combat tick; the default (a test) does nothing
+	 */
+	virtual bool CancelRunningTimeline() { return false; }
 };
 
 /**

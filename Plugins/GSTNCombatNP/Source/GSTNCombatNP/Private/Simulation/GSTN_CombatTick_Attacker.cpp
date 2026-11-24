@@ -527,6 +527,9 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 		Hit.HitGroup = Group;
 		Hit.TargetKey = Candidate.TargetKey;
 		Hit.bHasKnockback = Context.Outcome.bHasKnockback;
+		Hit.bBlocked = Context.Outcome.bBlocked;
+		Hit.bParried = Context.Outcome.bParried;
+		Hit.bClank = Context.Outcome.bClank;
 		Hit.Knockback = Context.Outcome.Knockback;
 		Hit.CueTag = Candidate.Hit.CueTag;
 		Hit.HitLocation = Candidate.HitLocation;
