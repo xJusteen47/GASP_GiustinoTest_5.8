@@ -34,6 +34,11 @@ class BuildIndice(unittest.TestCase):
         self.assertIn('claude/x,abc1234,OK,Fatto il giro uno,"1 (cattura, haiku)",1.5,30,0,ok', csv_text)
         self.assertIn("| 2026-W48 | 1 | 1.5 |", open(os.path.join(out, "INDICE.md"), encoding="utf-8").read())
 
+    def test_pass_with_space_separator(self):
+        rc, out = self.run_dir({"2026-11-26-tre.md": GOOD.replace("ESITO: OK | Fatto", "ESITO: PASS Fatto")})
+        self.assertEqual(rc, 0)
+        self.assertIn(",PASS,Fatto il giro uno,", open(os.path.join(out, "costi.csv"), encoding="utf-8").read())
+
     def test_new_handover_without_schema_fails(self):
         rc, _ = self.run_dir({"2026-11-26-due.md": "# Due\nCOSTO: circa tre dollari\n"})
         self.assertEqual(rc, 1)
