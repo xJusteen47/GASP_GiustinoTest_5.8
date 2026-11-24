@@ -34,6 +34,20 @@ if os.environ.get('LANCI_NOBALLOON') == '1':   # A/B of the balloon, in memory o
     _model.set_editor_property('tuning', _tun)
     unreal.log('[lanci] A/B: balloon off in memory')
 
+if os.environ.get('LANCI_VICTIM') == 'player':
+    # Fix check 2026-11-24 (mixer): the victim is another PLAYER's pawn (a client's, with its locomotion profile), not the level's AI dummy.
+    # test_hub.dummies() is swapped for the first player key that is not the host's; the parking still runs first, the placing moves it back.
+    import sys as _sys
+    _sys.path.insert(0, os.path.join(_PROJ, 'Tools', 'GASNPPTest'))
+    import gasnpp_test as _g   # noqa: E402
+    import test_hub as _h      # noqa: E402
+
+    def _player_victims(_hm=_h, _gm=_g):   # bound here: the exec'd pie_capture_move.py reuses the names _h/_g for other things
+        host = _hm._key(0)
+        return sorted(k for k in _gm.comps(_gm.worlds()[0]) if k.startswith('P') and k != host)
+    _h.dummies = _player_victims
+    unreal.log('[lanci] victim = a client player pawn')
+
 _DK = {'rise_h': 150.0, 'stick': True, 'press_delay': 5}
 _DA = {'rise_h': float(os.environ.get('PIE_CAPTURE_DAIR_HIT_RISE', 100.0))}
 LANCI_SEQUENCES = [
@@ -100,7 +114,47 @@ def _lanci_cam(seq, frame):
         _log(f'UISHOT {key} v{frame}')
 
 
+def _lanci_wall(seq):
+    """LANCI_WALL=<cm>: a test wall (AGSTN_TestSurface, leaf Wall, 1 x 10 x 10 m) with its face that many cm in front of the host, across the
+    launch line, spawned on frame 0 of every sequence. The combat rules stay the standard ones (pie_wall_bounce.py sets test rules whose
+    launch does not grow with the percent, so it cannot reach a wall). Every frame logs the victim's distance to the face in lanci_wall.jsonl."""
+    face = float(os.environ.get('LANCI_WALL') or 0.0)
+    if face <= 0.0:
+        return
+    import math as _m
+    ctx = g.comps(g.worlds()[0])[h._key(0)]
+    lib = unreal.GSTN_ImpactTestLibrary
+    lib.clear_test_surfaces(ctx)
+    p = _pawn()
+    loc, yaw = p.get_actor_location(), p.get_actor_rotation().yaw
+    fwd = (_m.cos(_m.radians(yaw)), _m.sin(_m.radians(yaw)))
+    c = unreal.Vector(loc.x + fwd[0] * (face + 50.0), loc.y + fwd[1] * (face + 50.0), loc.z + 200.0)
+    surf = lib.spawn_test_surface(ctx, c, unreal.Vector(50.0, 500.0, 500.0), yaw, 'Wall')
+    st['lanci_wall'] = {'origin': (loc.x + fwd[0] * face, loc.y + fwd[1] * face), 'fwd': fwd}
+    _log(f'{seq["name"]}: wall {surf} face {face:.0f} cm ahead of the host at ({loc.x:.0f}, {loc.y:.0f}), yaw {yaw:.0f}')
+
+
+def _lanci_wall_row(seq, frame):
+    w = st.get('lanci_wall')
+    if not w or not st.get('dummy_key'):
+        return
+    dv = g.snap(g.worlds()[0])[st['dummy_key']]
+    loc, vel = dv['location'], dv.get('velocity', (0, 0, 0))
+    row = {'f': frame, 'wall_cm': round((w['origin'][0] - loc[0]) * w['fwd'][0] + (w['origin'][1] - loc[1]) * w['fwd'][1], 1),
+           'vin': round(vel[0] * w['fwd'][0] + vel[1] * w['fwd'][1]), 'vz': round(vel[2]), 'z': round(loc[2], 1), 'tags': dv.get('tags'),
+           'mode': dv.get('mode')}
+    try:
+        cc = g._hit_comp(0, st['dummy_key'])
+        row['impact'], row['counts'] = cc.get_impact_info(), cc.get_impact_counts()
+    except Exception as e:  # noqa: BLE001
+        row['impact'] = repr(e)[:40]
+    with open(os.path.join(_seq_dir(seq), 'lanci_wall.jsonl'), 'a') as f:
+        f.write(json.dumps(row) + '\n')
+
+
 def _lanci_hook(seq, frame):
+    if frame > 0:
+        _lanci_wall_row(seq, frame)
     """'lift': (frame after PRE, cm ahead of the host, cm above the floor): server teleport of the dummy there on that frame"""
     _lanci_cam(seq, frame)
     # 'pin_rel': (from, to frames after the air attack press, cm ahead, cm above the host's centre): the dummy is held there every frame
@@ -119,6 +173,7 @@ def _lanci_hook(seq, frame):
             comp.server_teleport_exact(unreal.Vector(loc.x + pin[2] * _m.cos(yaw), loc.y + pin[2] * _m.sin(yaw), loc.z + pin[3]))
     if frame == 0:
         st['pin_done'] = None
+        _lanci_wall(seq)
     rel = seq.get('lift_rel')   # (frames after the air attack press, cm ahead of the host, cm above the host's centre): air-hit version
     if rel and st.get('dummy_key') and st.get('fired') is not None and frame == st['fired'] + rel[0]:
         import math as _m
