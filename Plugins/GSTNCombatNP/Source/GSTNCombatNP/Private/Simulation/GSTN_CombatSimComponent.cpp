@@ -91,6 +91,8 @@
 #include "Timeline/GSTN_WeaponSwitchRules.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNCombatSim, Log, All);
+// Diagnosis of lost launch frames (2026-11-24): the combined move of every substep, before and after the air turn and air momentum
+DEFINE_LOG_CATEGORY_STATIC(LogGSTNMoveMix, Log, All);
 
 static TAutoConsoleVariable<bool> CVarMeshCapsuleShiftBeforeAnim(TEXT("gstn.Mesh.CapsuleShiftBeforeAnim"), true,
 	TEXT("Crouch / body capsule mesh pop fix (crouch-mesh-pop-1, 2026-11-21). On = the capsule shift's smoothing correction is applied to the mesh ")
@@ -257,6 +259,9 @@ void UGSTN_CombatSimComponent::HandleProcessGeneratedMovement(const FMoverTickSt
 	AirMomentumStepMs = FGSTN_RunStageMover::ApplyAirMomentum(*Mover, StartState, TimeStep, OutProposedMove, External, Proposed) ? TimeStep.BaseSimTimeMs : -1.0;
 	AirMomentumExternal = External;
 	AirMomentumProposed = Proposed;
+	UE_LOG(LogGSTNMoveMix, VeryVerbose, TEXT("[MoveMix] %s frame %d mode %s mix %d momentum %d out (%.0f %.0f %.0f)"), *GetNameSafe(GetOwner()), TimeStep.ServerFrame,
+		*StartState.SyncState.MovementMode.ToString(), static_cast<int32>(OutProposedMove.MixMode), AirMomentumStepMs >= 0.0 ? 1 : 0,
+		OutProposedMove.LinearVelocity.X, OutProposedMove.LinearVelocity.Y, OutProposedMove.LinearVelocity.Z);
 }
 
 bool UGSTN_CombatSimComponent::ConsumeAirMomentumExternal(double StepBaseTimeMs, FVector& OutExternal, FVector& OutProposedHorizontal)

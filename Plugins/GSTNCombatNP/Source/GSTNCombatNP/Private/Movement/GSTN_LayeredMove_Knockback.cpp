@@ -24,6 +24,16 @@ bool FGSTN_LayeredMove_Knockback::GenerateMove(const FMoverTickStartData& StartS
 {
 	const double StepMs = FMath::Max<double>(TimeStep.StepMs, UE_SMALL_NUMBER);
 	ElapsedFrames = FMath::Max(FMath::RoundToInt((TimeStep.BaseSimTimeMs - StartSimTimeMs) / StepMs), 0);
+	if (UE_LOG_ACTIVE(LogGSTNKnockbackMove, VeryVerbose))
+	{
+		// Diagnosis of lost launch frames (wall rebound at 100 %, 2026-11-24): every generate, with the move's own clock, so a first generate
+		// that already reads elapsed >= 1 (the override frame never ran) shows up. Logging only
+		const FMoverDefaultSyncState* Diag = StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
+		const FVector Have = Diag ? Diag->GetVelocity_WorldSpace() : FVector::ZeroVector;
+		UE_LOG(LogGSTNKnockbackMove, VeryVerbose, TEXT("[KnockbackGen] %s frame %d base %.1f start %.1f elapsed %d mode %s balloon %d want (%.0f %.0f %.0f) have (%.0f %.0f %.0f)"),
+			MoverComp && MoverComp->GetOwner() ? *MoverComp->GetOwner()->GetName() : TEXT("?"), TimeStep.ServerFrame, TimeStep.BaseSimTimeMs, StartSimTimeMs,
+			ElapsedFrames, *StartState.SyncState.MovementMode.ToString(), BalloonFrames, Velocity.X, Velocity.Y, Velocity.Z, Have.X, Have.Y, Have.Z);
+	}
 
 	// Balloon: the warped frames, and the first one back at M = 1 (which sets the classic velocity of the warped time for the mode to go on
 	// from). Only in the air after the first frame: a victim that landed or slid onto a floor is the falling mode's and the impact step's
