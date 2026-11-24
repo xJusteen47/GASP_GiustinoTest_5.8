@@ -161,6 +161,16 @@ def _lanci_wall_row(seq, frame):
 def _lanci_hook(seq, frame):
     if frame > 0:
         _lanci_wall_row(seq, frame)
+    # LANCI_STICK='x,y,from,to': the victim's own client (world 1, LANCI_VICTIM=player) holds its move stick (camera relative, as the
+    # harness's g.hold) from rendered frame `from` to `to`: the bounce stick check, without touching the launch's DI
+    spec = os.environ.get('LANCI_STICK')
+    if spec:
+        sx, sy, a, b = [float(v) for v in spec.split(',')]
+        if frame == int(a):
+            _log(f'{seq["name"]}: victim stick ({sx}, {sy}) held on v{frame}: {g.hold(1, "move", (sx, sy, 0.0))}')
+        elif frame == int(b):
+            g.release(1, 'move')
+            _log(f'{seq["name"]}: victim stick released on v{frame}')
     """'lift': (frame after PRE, cm ahead of the host, cm above the floor): server teleport of the dummy there on that frame"""
     _lanci_cam(seq, frame)
     # 'pin_rel': (from, to frames after the air attack press, cm ahead, cm above the host's centre): the dummy is held there every frame

@@ -177,6 +177,54 @@ frame 1265 mode Falling vel [0, 0, -456] z 89.5 impact 1230,2,4,5107,0
 frame 1266 mode Walking vel [0, 0, -95] z 88.1 impact 1230,2,4,5107,0
 ```
 
-ESITO: il rimbalzo a terra senza orizzontale nasce già nel want della mossa di rimbalzo (0 0 435/485), non nel mix; succede ai rimbalzi a terra che non passano da GetImpactInfo (mossa attiva = un rilancio da superficie), il primo rimbalzo dopo il lancio tiene 0.6x.
+---
+
+# Check of 077b9c83 (missed-tech bounce keeps GroundBounceMomentumKeep 0.4 + GroundBounceStickSpeed 400), ~18:05-18:25 UTC
+
+**Build** OK (189 s). **Tests** GSTNDefence + GSTNCombat.NP.Hits + Core.Reaction: first run 203/204, the new
+`GSTNDefence.Core.Landing.GroundBounceMomentum` failed 6 of its 8 checks: `0.4f` is 0.4000000059..., so 2800 x keep = 1120.0000167, outside
+the test's `Equals(..., 1e-6)`. Fixed in the test only (tolerance 1e-3, e578f9e5, no behaviour change): **204/204 PASS**
+(GSTNDefence 84, NP.Hits 89, Core.Reaction 31).
+
+**PIE, no wall, player victim, strong at 100 %** (`Saved/Lanci/floor_mom`, `floor_stick_fwd`, `floor_stick_back`; new `LANCI_STICK=x,y,from,to`:
+the victim's own client holds its move stick, camera relative, from rendered frame 88 = after the first floor bounce, to 200):
+
+| run | 1st floor bounce want | have before the 2nd floor bounce | **2nd floor bounce want** | slide after the 2nd bounce |
+|---|---|---|---|---|
+| neutral stick | (1682 0 933) | (1538 0 0) | **(615 0 435)** = 0.4 x 1538, vz unchanged | 1.05 m (x 3008 -> 3113), then still |
+| stick (0, 1) = toward the launch | (1682 0 933) | (1886 0 0) | **(1372 0 377)** | 2.51 m |
+| stick (0, -1) = against it | (1682 0 933) | (994 0 0) | **(-220 0 377)** | 0.32 m back |
+
+- Neutral: exactly what was asked (was (0 0 435)).
+- The stick already acts before the second landing: held from the first bounce's flight it changes the landing speed (1886 / 994 against
+  1538: the air steer of the falling mode). So the back run lands with less to keep, the forward one with more.
+- With the stick the numbers do not match keep x have + 400 along the stick (forward: 0.4 x 1886 + 400 = 1154, measured 1372; back:
+  0.4 x 994 - 400 = -2, measured -220), and the vertical is 377 instead of 435 in both. Not looked into (out of time): possibly the
+  landing velocity the step reads is not the logged `have`, or the stick's existing angle steer (GroundBounceSteerDeg) also tilts it.
+  Direction and sign are right: forward pushes on (2.5 m), back holds back and even reverses (-220).
+
+Raw, neutral, 2nd floor bounce:
+```
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1264 base 20208.0 start 19744.0 elapsed 29 mode Falling balloon 0 want (1682 0 933) have (1548 0 -823)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1264 mode Falling mix 0 momentum 1 out (1543 0 -886)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1265 base 20224.0 start 19744.0 elapsed 30 mode Falling balloon 0 want (1682 0 933) have (1543 0 -886)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1265 mode Falling mix 0 momentum 1 out (1538 0 -949)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1265 base 20237.6 start 19744.0 elapsed 207 mode Walking balloon 0 want (1682 0 933) have (1538 0 0)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1265 mode Walking mix 0 momentum 0 out (1538 0 0)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1266 base 20240.0 start 19744.0 elapsed 31 mode Walking balloon 0 want (1682 0 933) have (1538 0 0)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1266 base 20240.0 start 20240.0 elapsed 0 mode Walking balloon 0 want (615 0 435) have (1538 0 0)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1266 mode Walking mix 1 momentum 0 out (615 0 435)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1267 base 20256.0 start 20240.0 elapsed 1 mode Falling balloon 0 want (615 0 435) have (615 0 435)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1267 mode Falling mix 0 momentum 1 out (610 0 247)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1268 base 20272.0 start 20240.0 elapsed 2 mode Falling balloon 0 want (615 0 435) have (610 0 247)
+[MoveMix] BP_GASNPP_TestCharacter_C_1 frame 1268 mode Falling mix 0 momentum 1 out (606 0 59)
+```
+Raw, stick forward and back, the bounce frames:
+```
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1278 base 20432.0 start 20432.0 elapsed 0 mode Walking balloon 0 want (1372 0 377) have (1886 0 0)
+[KnockbackGen] BP_GASNPP_TestCharacter_C_1 frame 1276 base 20400.0 start 20400.0 elapsed 0 mode Walking balloon 0 want (-220 0 377) have (994 0 0)
+```
+
+ESITO: dal 2° rimbalzo a terra (0 0 435) si passa a (615 0 435) = 0.4 x 1538, scivola 1 m; lo stick avanti spinge (1372, 2.5 m), indietro trattiene (-220); i valori con lo stick non tornano con la formula semplice (da guardare). Test: corretta la tolleranza di GroundBounceMomentum, 204/204.
 SUBAGENTI: nessuno.
-COSTO: ~15 min desktop (2 catture PIE), niente _ue59.
+COSTO: ~50 min desktop in tutto per le due diagnosi a terra (4 catture PIE, 2 build, 2 run di test), niente _ue59.
