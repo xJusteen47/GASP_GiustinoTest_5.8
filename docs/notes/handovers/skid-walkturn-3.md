@@ -20,7 +20,7 @@ Branch claude/project-thread-ucs9jl (da claude/skid-walkturn-2 1681355e), checko
 5. Review Fable r1 (docs/notes/reviews/pivot-walkturn-v1/): FAIL. Posa: si raddrizza a piedi uniti f120-124, anche alte, pausa in
    piedi f124-138; dati: pop in entrata e al passaggio f138-142; gira solo a destra (manca mirror). Gioco: base e variante ~0,55 s
    dall'inversione alla corsa contro ~0,3 s di Toad: lo decide il freno/riaccelerazione della capsula Mover stock, non la clip.
-6. Toad (riferimenti/mario3dw-toad-start-skid-owner-1117-small.mp4): skid ~0,3 s a occhio (polvere 8-12 frame a 30 fps, +-0,1 s).
+6. Toad (riferimenti/corsa-partenza-skid/mario3dw-toad-start-skid-owner-1117-small.mp4): skid ~0,3 s a occhio (polvere 8-12 frame a 30 fps, +-0,1 s).
 
 ## Prossimo (in ordine, dalla review)
 1. Thread di CODICE (voce "gioco"): tempo di inversione della capsula Mover a 0,3 s (freno + riaccelerazione in inversione), misurato
