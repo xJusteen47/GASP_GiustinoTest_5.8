@@ -6,6 +6,8 @@
 #include "UObject/Interface.h"
 #include "GSTN_GreyboxShapeSource.generated.h"
 
+class UAnimSequenceBase;
+
 /** The procedural shape of the greybox capsule this frame (greybox-capsula, owner 2026-11-24 2A) */
 struct GSTNANIMATIONCORE_API FGSTN_GreyboxShape
 {
@@ -14,6 +16,15 @@ struct GSTNANIMATIONCORE_API FGSTN_GreyboxShape
 
 	/** Tilt of the whole body around the ground point, component space, degrees (pitch forward, roll sideways) */
 	FRotator Lean = FRotator::ZeroRotator;
+
+	/**
+	 * Move override (3A, owner 2026-11-24): the capsule version of the montage the driver plays (an attack, a hit, a roll), shown at the
+	 * montage's time instead of the copied pose, blended by the montage's weight. The driver keeps playing the reference montage, so
+	 * hitboxes and hurtboxes do not change. Null = no override. The clip must stay referenced by the source (it is not a UPROPERTY here).
+	 */
+	const UAnimSequenceBase* OverrideClip = nullptr;
+	float OverrideTime = 0.f;
+	float OverrideWeight = 0.f;
 };
 
 UINTERFACE(MinimalAPI, meta = (CannotImplementInterfaceInBlueprint))

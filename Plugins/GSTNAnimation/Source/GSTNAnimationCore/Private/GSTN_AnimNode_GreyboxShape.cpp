@@ -1,6 +1,9 @@
 #include "GSTN_AnimNode_GreyboxShape.h"
 
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimSequenceBase.h"
+#include "Animation/AnimationPoseData.h"
+#include "AnimationRuntime.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_AnimNode_GreyboxShape)
 
@@ -41,6 +44,26 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 	{
 		return;
 	}
+	if (Shape.OverrideClip && Shape.OverrideWeight > 0.f)
+	{
+		// The capsule version of the move at the montage's time; the root stays the copied one (Mover places the character)
+		FPoseContext OverridePose(Output);
+		FAnimationPoseData OverrideData(OverridePose);
+		Shape.OverrideClip->GetAnimationPose(OverrideData, FAnimExtractContext(static_cast<double>(Shape.OverrideTime), false));
+		OverridePose.Pose[Root] = Output.Pose[Root];
+		if (Shape.OverrideWeight >= 1.f)
+		{
+			Output = OverridePose;
+		}
+		else
+		{
+			FPoseContext Blended(Output);
+			FAnimationPoseData SourceData(Output);
+			FAnimationPoseData BlendedData(Blended);
+			FAnimationRuntime::BlendTwoPosesTogether(SourceData, OverrideData, 1.f - Shape.OverrideWeight, BlendedData);
+			Output = Blended;
+		}
+	}
 	// The root's parent is the component, so its local transform is in component space: rotate it around the ground point, scale it
 	FTransform& RootTransform = Output.Pose[Root];
 	RootTransform.SetRotation(FQuat(Shape.Lean) * RootTransform.GetRotation());
@@ -49,7 +72,7 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 
 void FGSTN_AnimNode_GreyboxShape::GatherDebugData(FNodeDebugData& DebugData)
 {
-	DebugData.AddDebugItem(FString::Printf(TEXT("%s (squash %.2f, lean P %.1f R %.1f)"), *DebugData.GetNodeName(this), Shape.Squash,
-		Shape.Lean.Pitch, Shape.Lean.Roll));
+	DebugData.AddDebugItem(FString::Printf(TEXT("%s (squash %.2f, lean P %.1f R %.1f, move %s x%.2f)"), *DebugData.GetNodeName(this), Shape.Squash,
+		Shape.Lean.Pitch, Shape.Lean.Roll, *GetNameSafe(Shape.OverrideClip), Shape.OverrideWeight));
 	Source.GatherDebugData(DebugData);
 }

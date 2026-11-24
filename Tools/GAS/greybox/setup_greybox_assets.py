@@ -120,7 +120,7 @@ def bone_heights(skeleton):
     pose = unreal.AnimPoseExtensions.get_reference_pose(skeleton)
     out = {}
     for bone in BODY_CHAIN + list(MARKER_RADIUS):
-        t = unreal.AnimPoseExtensions.get_ref_bone_pose(pose, bone, unreal.AnimPoseSpaces.WORLD)
+        t = unreal.AnimPoseExtensions.get_bone_pose(pose, bone, unreal.AnimPoseSpaces.WORLD)
         out[bone] = t.translation
     return out
 

@@ -49,3 +49,14 @@ must only not contradict it. Stop searching the run start feel inside the clip.
    GeometryScripting plugin (editor only); the script reports the API it finds when a call is missing.
 3. PIE: `gstn.Greybox 1`, `gstn.Loco.Base 2`, `gstn.Debug.SpeedGraph 1`; capture run start, stop, skid, jump, crouch, one attack.
 4. Then 3A: capsule clips (next section of this note, to write when 1-3 pass).
+
+## 3A: capsule clips (`Tools/GAS/greybox/make_capsule_clips.py`, after setup_greybox_assets.py)
+- Locomotion `AS_GSTN_Greybox_<State>` (Idle, RunStart, Run, RunStop, Skid, Air, Crouch): blocking from numbers (2-4 key poses, smoothstep),
+  body chain + light arms/legs so the markers read; written into the matching rows of `CHT_GSTN_SimpleLoco`.
+- Moves `AS_GSTN_Greybox_Move_<montage>`: one per reference montage whose name contains Overlord / React / Roll / Dodge (MOVE_FILTER), same
+  length; timing from length shares per move kind (jab, ftilt, dropkick, dair, hit, roll, generic). Listed in
+  `ABP_GSTN_GreyboxCapsule` > `MoveOverrides`: the capsule shows the clip at the driver montage's time and weight
+  (`UGSTN_GreyboxAnimInstance::UpdateMoveOverride`, blend in `GSTN Greybox Shape`); the driver keeps the reference montage, so hitboxes
+  and bone-following hurtboxes do not change.
+- 4A: placeholders, no level-2 review; the owner looks at them in game. Retouch: edit the key poses at the top of the script and rerun, or
+  edit the clips by hand (a rerun overwrites them: rename a clip you hand-edit).

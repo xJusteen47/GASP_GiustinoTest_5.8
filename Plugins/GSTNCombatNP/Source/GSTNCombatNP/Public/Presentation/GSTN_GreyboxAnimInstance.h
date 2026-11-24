@@ -7,6 +7,8 @@
 #include "GSTN_GreyboxShapeSource.h"
 #include "GSTN_GreyboxAnimInstance.generated.h"
 
+class UAnimMontage;
+class UAnimSequenceBase;
 class UMoverComponent;
 
 /** How the capsule squashes, stretches and leans (class defaults of ABP_GSTN_GreyboxCapsule; the owner tunes them there) */
@@ -72,6 +74,14 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Greybox")
 	FGSTN_GreyboxShapeSettings ShapeSettings;
 
+	/**
+	 * Capsule versions of moves (3A): reference montage the driver plays (attack, hit reaction, roll) -> capsule clip shown at the montage's
+	 * time, blended by its weight. The clip should last as long as the montage (the setup script checks it). Hitboxes keep reading the
+	 * reference montage on the driver.
+	 */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Greybox|Moves")
+	TMap<TSoftObjectPtr<UAnimMontage>, TSoftObjectPtr<UAnimSequenceBase>> MoveOverrides;
+
 	virtual FGSTN_GreyboxShape GetGreyboxShape() const override { return Shape; }
 
 	/** Pure: the squash target (1 = rest) for a vertical speed in the air and a forward acceleration on the ground */
@@ -85,6 +95,13 @@ protected:
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
 
 private:
+	/** The move override of this frame from the driver's active montage */
+	void UpdateMoveOverride();
+
+	/** Loaded override clips, by reference montage (kept referenced: the anim node holds raw pointers) */
+	UPROPERTY(Transient)
+	TMap<TObjectPtr<UAnimMontage>, TObjectPtr<UAnimSequenceBase>> LoadedOverrides;
+
 	TWeakObjectPtr<UMoverComponent> Mover;
 	FGSTN_GreyboxShape Shape;
 	FGSTN_GreyboxSpring SquashSpring;

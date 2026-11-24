@@ -1,5 +1,6 @@
 #include "Presentation/GSTN_GreyboxAnimInstance.h"
 
+#include "Animation/AnimMontage.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "MoverComponent.h"
 #include "MoverTypes.h"
@@ -106,4 +107,34 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	{
 		Shape.Lean = FRotator::ZeroRotator;
 	}
+	UpdateMoveOverride();
+}
+
+void UGSTN_GreyboxAnimInstance::UpdateMoveOverride()
+{
+	Shape.OverrideClip = nullptr;
+	Shape.OverrideWeight = 0.f;
+	const USkeletalMeshComponent* Capsule = GetSkelMeshComponent();
+	const USkeletalMeshComponent* Driver = Capsule ? Cast<USkeletalMeshComponent>(Capsule->GetAttachParent()) : nullptr;
+	UAnimInstance* DriverAnim = Driver ? Driver->GetAnimInstance() : nullptr;
+	UAnimMontage* Montage = DriverAnim ? DriverAnim->GetCurrentActiveMontage() : nullptr;
+	if (!Montage || MoveOverrides.IsEmpty())
+	{
+		return;
+	}
+	TObjectPtr<UAnimSequenceBase>* Loaded = LoadedOverrides.Find(Montage);
+	if (!Loaded)
+	{
+		// First time this montage plays: resolve its override once (a synchronous load of a small clip, presentation only)
+		const TSoftObjectPtr<UAnimSequenceBase>* Soft = MoveOverrides.Find(TSoftObjectPtr<UAnimMontage>(Montage));
+		Loaded = &LoadedOverrides.Add(Montage, Soft ? Soft->LoadSynchronous() : nullptr);
+	}
+	const FAnimMontageInstance* Instance = DriverAnim->GetActiveInstanceForMontage(Montage);
+	if (!*Loaded || !Instance)
+	{
+		return;
+	}
+	Shape.OverrideClip = *Loaded;
+	Shape.OverrideTime = Instance->GetPosition();
+	Shape.OverrideWeight = FMath::Clamp(Instance->GetWeight(), 0.f, 1.f);
 }
