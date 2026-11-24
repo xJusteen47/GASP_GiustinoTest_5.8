@@ -930,6 +930,7 @@ FGSTN_ReactionMove FGSTN_CombatVictim::StepReaction(const FGSTN_ReactionStepInpu
 			}
 			Move.Velocity = Influenced * Pass;
 			Move.GravityScale = 1.f;
+			Move.Deceleration = In.Rules && In.Rules->KnockbackModel ? FMath::Max(In.Rules->KnockbackModel->Tuning.LaunchDeceleration, 0.f) : 0.f;
 			if (const uint8 Flight = Core.Hit.PendingBalloonFrames)
 			{
 				const UGSTN_KnockbackModel* Model = In.Rules ? In.Rules->KnockbackModel.Get() : nullptr;

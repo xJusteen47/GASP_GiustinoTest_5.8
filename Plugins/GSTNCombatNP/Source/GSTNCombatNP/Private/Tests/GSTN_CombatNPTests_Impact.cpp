@@ -150,6 +150,36 @@ bool FGSTN_ImpactContactRecordWrittenTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// Owner 2026-11-24, 1A: the launch fades like Smash's launch speed, a fixed amount per frame until the launch's own speed is used up
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_KnockbackLaunchFadeTest, "GSTNCombat.NP.Hits.Knockback.LaunchFade", GSTN_NP_TEST_FLAGS)
+bool FGSTN_KnockbackLaunchFadeTest::RunTest(const FString& Parameters)
+{
+	const double Step = 0.016;
+	const double Decel = 2300.0;
+	const double PerFrame = Decel * Step;
+	TestEqual(TEXT("frame 0 (the launch frame) takes nothing"), FGSTN_LayeredMove_Knockback::FadeOnFrame(1000.0, Decel, Step, 0), 0.0);
+	TestEqual(TEXT("frame 1 takes one step"), FGSTN_LayeredMove_Knockback::FadeOnFrame(1000.0, Decel, Step, 1), PerFrame, 1e-9);
+	double Total = 0.0;
+	for (int32 Frame = 1; Frame < 200; ++Frame)
+	{
+		Total += FGSTN_LayeredMove_Knockback::FadeOnFrame(1000.0, Decel, Step, Frame);
+	}
+	TestEqual(TEXT("the fade never takes more than the launch"), Total, 1000.0, 1e-6);
+	TestEqual(TEXT("off"), FGSTN_LayeredMove_Knockback::FadeOnFrame(1000.0, 0.0, Step, 3), 0.0);
+
+	// The deceleration rides the wire with the move
+	FGSTN_LayeredMove_Knockback Move;
+	Move.Deceleration = 2300.f;
+	FBitWriter Writer(1024, true);
+	Move.NetSerialize(Writer);
+	FGSTN_LayeredMove_Knockback Loaded;
+	FBitReader Reader(Writer.GetData(), Writer.GetNumBits());
+	Loaded.NetSerialize(Reader);
+	TestFalse(TEXT("the wire read cleanly"), Reader.IsError());
+	TestEqual(TEXT("deceleration survives the wire"), Loaded.Deceleration, 2300.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_ImpactResolvedOneFrameAfterTest, "GSTNCombat.NP.Hits.Impact.ResolvedOneFrameAfterContact", GSTN_NP_TEST_FLAGS)
 bool FGSTN_ImpactResolvedOneFrameAfterTest::RunTest(const FString& Parameters)
 {

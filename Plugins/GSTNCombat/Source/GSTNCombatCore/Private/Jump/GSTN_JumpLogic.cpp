@@ -41,6 +41,21 @@ FGSTN_JumpState FGSTN_JumpLogic::Step(const FGSTN_JumpState& In, int32 Frame, co
 
 	const bool bRising = Sample.UpSpeed > 0.0;
 
+	// A hit's launch (owner 2026-11-24, 1A): whatever the combatant was doing in the air is over, its own jump included (no hold phase, no glide,
+	// no fast fall), and the knocked gravity flies it until the landing or its next jump. The air jumps are left as they are
+	if (Sample.bKnockbackLaunch)
+	{
+		Out.bKnocked = true;
+		Out.bFastFalling = false;
+		Out.Phase = bRising ? EGSTN_JumpPhase::Launched : EGSTN_JumpPhase::Falling;
+		Out.StartFrame = INDEX_NONE;
+		Out.Button = INDEX_NONE;
+		Out.bJumpCut = false;
+		Out.CutFrames = 0;
+		Out.bHoldWindowOver = false;
+		return Out;
+	}
+
 	if (Sample.bExternalLaunch)
 	{
 		switch (Rules.AirJumpsOnExternalLaunch)
@@ -158,6 +173,7 @@ FGSTN_JumpState FGSTN_JumpLogic::ApplyTakeoff(const FGSTN_JumpState& In, int32 F
 	Out.bTakeoffWasAir = Kind == EGSTN_JumpKind::Air;
 	Out.bGliding = false;
 	Out.bHoldWindowOver = false;
+	Out.bKnocked = false;
 	if (Kind == EGSTN_JumpKind::Air && Out.AirJumpsUsed < 255)
 	{
 		++Out.AirJumpsUsed;
@@ -189,6 +205,12 @@ float FGSTN_JumpLogic::GravityScale(const FGSTN_JumpState& State, const FGSTN_Ju
 	if (State.bFastFalling)
 	{
 		return Params.FastFallGravityScale;
+	}
+	// One gravity for the whole knocked flight, up and down: the phase gravities of the combatant's own jump (x1 up for a launch, the kit's
+	// heavy fall gravity down) made launches float up slowly, drop like a stone, and barely rise when the victim was hit while falling
+	if (State.bKnocked && Params.KnockbackGravityScale > 0.f)
+	{
+		return Params.KnockbackGravityScale;
 	}
 	switch (State.Phase)
 	{

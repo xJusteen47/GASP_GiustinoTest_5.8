@@ -77,6 +77,13 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mover|Sim State")
 	bool WasExternallyLaunchedThisFrame() const { return bExternallyLaunched; }
 
+	/**
+	 * True when the last simulated frame started a layered move of exactly this struct (not a child). For the moves that throw the character but
+	 * are not Mover launches (the combat knockback, owner 2026-11-24): the caller names its own struct, so this module needs no dependency on
+	 * it. Same source and the same rollback guarantees as WasExternallyLaunchedThisFrame
+	 */
+	bool WasMoveStartedThisFrame(const UScriptStruct* MoveStruct) const;
+
 private:
 	void Bind(UMoverComponent* MoverComponent);
 
@@ -95,4 +102,7 @@ private:
 	FMoverSyncState SyncState;
 	FVector UpDirection = FVector::UpVector;
 	bool bExternallyLaunched = false;
+
+	/** Base time of the step that produced SyncState: a move that started at or after it started in that step */
+	double LastStepBaseTimeMs = 0.0;
 };

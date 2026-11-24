@@ -57,6 +57,8 @@ void UGSTN_MoverSimStateTracker::Bind(UMoverComponent* MoverComponent)
 	SyncState = Mover->GetSyncState();
 	UpDirection = QuantizeDirection(Mover->GetUpDirection());
 	bExternallyLaunched = false;
+	// No step seen yet: no move counts as started by one
+	LastStepBaseTimeMs = TNumericLimits<double>::Max();
 	Mover->OnPostMovement.AddDynamic(this, &UGSTN_MoverSimStateTracker::HandlePostMovement);
 	Mover->OnPostSimulationRollback.AddDynamic(this, &UGSTN_MoverSimStateTracker::HandlePostSimulationRollback);
 }
@@ -86,6 +88,7 @@ FVector UGSTN_MoverSimStateTracker::GetVelocity() const
 void UGSTN_MoverSimStateTracker::CaptureFrameFacts(const FMoverSyncState& InSyncState, double StepBaseTimeMs)
 {
 	UpDirection = QuantizeDirection(Mover->GetUpDirection());
+	LastStepBaseTimeMs = StepBaseTimeMs;
 
 	// A finished one-tick move stays in the active list until the next step flushes it, so a launch that started in the step
 	// that produced this state (and not one that started earlier and is still running) is still there to see
@@ -98,6 +101,22 @@ void UGSTN_MoverSimStateTracker::CaptureFrameFacts(const FMoverSyncState& InSync
 			return;
 		}
 	}
+}
+
+bool UGSTN_MoverSimStateTracker::WasMoveStartedThisFrame(const UScriptStruct* MoveStruct) const
+{
+	if (!MoveStruct)
+	{
+		return false;
+	}
+	for (const TSharedPtr<FLayeredMoveBase>& Move : SyncState.LayeredMoves.GetActiveMoves())
+	{
+		if (Move.IsValid() && Move->StartSimTimeMs >= LastStepBaseTimeMs && Move->GetScriptStruct() == MoveStruct)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 void UGSTN_MoverSimStateTracker::HandlePostMovement(const FMoverTimeStep& TimeStep, FMoverSyncState& InSyncState, FMoverAuxStateContext& InAuxState)

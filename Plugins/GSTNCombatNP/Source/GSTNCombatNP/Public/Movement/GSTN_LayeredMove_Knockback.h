@@ -45,6 +45,18 @@ struct GSTNCOMBATNP_API FGSTN_LayeredMove_Knockback : public FLayeredMoveBase
 	float GravityScale = 1.f;
 
 	/**
+	 * The fade of the launch, cm/s per second (owner 2026-11-24, 1A; FGSTN_ReactionTuning::LaunchDeceleration). From the second frame, while the
+	 * victim is in ForceMovementMode (airborne), the move takes Deceleration x step off the velocity along the launch direction, until the
+	 * launch's own speed is used up (derived from ElapsedFrames, so a resimulation takes the same) and never more than the velocity still has
+	 * along it (a wall that stopped the victim is not pulled back from). The balloon warp's frames are not faded. 0 = none
+	 */
+	UPROPERTY()
+	float Deceleration = 0.f;
+
+	/** The speed the fade takes off on frame ElapsedFrames (>= 1) of a launch of LaunchSpeed: Deceleration x step until LaunchSpeed is used up. Pure */
+	static double FadeOnFrame(double LaunchSpeed, double Deceleration, double StepSeconds, int32 ElapsedFrames);
+
+	/**
 	 * Balloon knockback (FGSTN_BalloonKnockbackSettings, owner 2026-11-16): the flight frames the warp covers, 0 = the classic flight. While the
 	 * warp runs (FGSTN_BalloonMath: frame n flies M(n) flight frames) the move overrides the velocity with M(n) x the classic flight's velocity
 	 * at the warped time, so the path is the classic one, flown faster. From the first frame at M = 1 the falling mode takes over as usual

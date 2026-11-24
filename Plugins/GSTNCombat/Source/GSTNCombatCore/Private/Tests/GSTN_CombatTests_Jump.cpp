@@ -518,4 +518,78 @@ bool FGSTN_JumpRunBoostTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+
+// Owner 2026-11-24, 1A: a hit's launch flies on one gravity, up and down, whatever the victim was doing; a victim hit while falling used to keep
+// the kit's fall gravity on the way up and barely rose
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_JumpKnockedFlightTest, "GSTNCombat.Core.Jump.KnockedFlight", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_JumpKnockedFlightTest::RunTest(const FString& Parameters)
+{
+	FGSTN_JumpParams Params;
+	Params.RiseGravityScale = 2.6f;
+	Params.CutGravityScale = 9.f;
+	Params.FallGravityScale = 9.f;
+	Params.FastFallGravityScale = 12.f;
+	Params.KnockbackGravityScale = 4.f;
+	const FGSTN_JumpResetRules Rules;
+
+	FGSTN_JumpMoverSample Hit;
+	Hit.bGrounded = false;
+	Hit.UpSpeed = 900.0;
+	Hit.bKnockbackLaunch = true;
+
+	// Hit while falling: the falling victim is launched up on the knocked gravity, not the fall gravity
+	FGSTN_JumpState Falling;
+	Falling.Phase = EGSTN_JumpPhase::Falling;
+	Falling.AirJumpsUsed = 1;
+	const FGSTN_JumpState Knocked = FGSTN_JumpLogic::Step(Falling, 100, Hit, false, Params, Rules);
+	TestTrue(TEXT("knocked"), Knocked.bKnocked);
+	TestTrue(TEXT("rising -> Launched"), Knocked.Phase == EGSTN_JumpPhase::Launched);
+	TestEqual(TEXT("knocked gravity on the way up"), FGSTN_JumpLogic::GravityScale(Knocked, Params), 4.f);
+	TestEqual(TEXT("air jumps kept"), static_cast<int32>(Knocked.AirJumpsUsed), 1);
+
+	// Past the apex: still the knocked gravity (it was the fall gravity before)
+	FGSTN_JumpMoverSample Down;
+	Down.bGrounded = false;
+	Down.UpSpeed = -200.0;
+	const FGSTN_JumpState Descending = FGSTN_JumpLogic::Step(Knocked, 140, Down, false, Params, Rules);
+	TestTrue(TEXT("descending -> Falling"), Descending.Phase == EGSTN_JumpPhase::Falling);
+	TestEqual(TEXT("knocked gravity on the way down"), FGSTN_JumpLogic::GravityScale(Descending, Params), 4.f);
+
+	// A fast fall wins; a jump of its own ends the knocked flight; the landing clears it
+	FGSTN_JumpState Fast = FGSTN_JumpLogic::ApplyFastFall(Descending);
+	TestEqual(TEXT("fast fall wins"), FGSTN_JumpLogic::GravityScale(Fast, Params), 12.f);
+	const FGSTN_JumpState Jumped = FGSTN_JumpLogic::ApplyTakeoff(Descending, 150, 5, EGSTN_JumpKind::Air);
+	TestFalse(TEXT("own jump ends it"), Jumped.bKnocked);
+	FGSTN_JumpMoverSample Ground;
+	const FGSTN_JumpState Landed = FGSTN_JumpLogic::Step(Descending, 160, Ground, false, Params, Rules);
+	TestFalse(TEXT("landing ends it"), Landed.bKnocked);
+
+	// Hit in the hold phase of its own jump: the jump is over (no hold gravity, no glide button)
+	const FGSTN_JumpState Own = FGSTN_JumpLogic::ApplyTakeoff(FGSTN_JumpState(), 10, 5, EGSTN_JumpKind::Ground);
+	const FGSTN_JumpState OwnHit = FGSTN_JumpLogic::Step(Own, 12, Hit, true, Params, Rules);
+	TestTrue(TEXT("own jump hit: knocked"), OwnHit.bKnocked);
+	TestEqual(TEXT("own jump hit: button released"), static_cast<int32>(OwnHit.Button), static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("own jump hit: knocked gravity"), FGSTN_JumpLogic::GravityScale(OwnHit, Params), 4.f);
+
+	// Off (0): the old phase gravities
+	FGSTN_JumpParams Old = Params;
+	Old.KnockbackGravityScale = 0.f;
+	TestEqual(TEXT("off: launch rise x1"), FGSTN_JumpLogic::GravityScale(Knocked, Old), 1.f);
+	TestEqual(TEXT("off: fall gravity"), FGSTN_JumpLogic::GravityScale(Descending, Old), 9.f);
+
+	// The flag survives the wire and counts against the default
+	TArray<uint8> Bytes;
+	FMemoryWriter Writer(Bytes);
+	FGSTN_JumpState Sent = Descending;
+	Sent.NetSerialize(Writer);
+	FMemoryReader Reader(Bytes);
+	FGSTN_JumpState Received;
+	Received.NetSerialize(Reader);
+	TestTrue(TEXT("round trip"), Received == Sent);
+	FGSTN_JumpState OnlyKnocked;
+	OnlyKnocked.bKnocked = true;
+	TestFalse(TEXT("not default"), OnlyKnocked.IsDefault());
+	return true;
+}
+
 #endif
