@@ -12,10 +12,12 @@ DEFINE_LOG_CATEGORY_STATIC(LogGSTNLocoBase, Log, All);
 namespace GSTNLocoBase
 {
 	static TAutoConsoleVariable<int32> CVarLocoBase(
-		TEXT("gstn.Loco.Base"), 1,
+		// Default 2 since 2026-11-25 (owner: the simple greybox graph is the playtest base, with gstn.Greybox 1). Was 1 (clean stock copy).
+		// The harness pins 1 for its runs (Tools/CI/Run-Timed.ps1) so the stock-base captures and baselines do not change. Divergence row 26.
+		TEXT("gstn.Loco.Base"), 2,
 		TEXT("Main anim graph of the GASP Mover characters. 0 = current base (SandboxCharacter_Mover_ABP / ABP_GSTN_Locomotion ")
 		TEXT("with our nodes), 1 = clean GASP stock copy (ABP_GSTN_StockMover + CHT_GSTN_StockMover_PoseMatch), 2 = simple greybox ")
-		TEXT("graph (ABP_GSTN_SimpleLoco: state machine + choosers, no motion matching). Live: applied on ")
+		TEXT("graph (ABP_GSTN_SimpleLoco: state machine + choosers, no motion matching; default). Live: applied on ")
 		TEXT("the next frame; restart Play for a fair comparison (pose history, montages)."),
 		ECVF_Default);
 
