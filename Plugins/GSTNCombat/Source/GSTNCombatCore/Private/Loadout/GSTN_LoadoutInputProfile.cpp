@@ -20,7 +20,7 @@ namespace
 	}
 
 	/** A count read from a stream, refused above Max so a hostile stream fails instead of allocating */
-	bool SerializeCount(FArchive& Ar, int32& Count, int32 Max)
+	bool SerializeProfileCount(FArchive& Ar, int32& Count, int32 Max)
 	{
 		Ar << Count;
 		if (Ar.IsLoading() && (Count < 0 || Count > Max))
@@ -48,7 +48,7 @@ bool FGSTN_LoadoutInputProfileExt::SerializePayload(FArchive& Ar)
 	Profile.Device = Device == static_cast<uint8>(EGSTN_InputDevice::MouseKeyboard) ? EGSTN_InputDevice::MouseKeyboard : EGSTN_InputDevice::Gamepad;
 
 	int32 OverrideCount = Profile.ButtonOverrides.Num();
-	if (!SerializeCount(Ar, OverrideCount, FGSTN_InputProfile::MaxEntries))
+	if (!SerializeProfileCount(Ar, OverrideCount, FGSTN_InputProfile::MaxEntries))
 	{
 		return true;
 	}
@@ -63,7 +63,7 @@ bool FGSTN_LoadoutInputProfileExt::SerializePayload(FArchive& Ar)
 	}
 
 	int32 PickCount = Profile.CommandPicks.Num();
-	if (!SerializeCount(Ar, PickCount, FGSTN_InputProfile::MaxEntries))
+	if (!SerializeProfileCount(Ar, PickCount, FGSTN_InputProfile::MaxEntries))
 	{
 		return true;
 	}
