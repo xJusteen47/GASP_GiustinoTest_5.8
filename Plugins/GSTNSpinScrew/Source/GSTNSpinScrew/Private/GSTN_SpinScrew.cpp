@@ -110,7 +110,7 @@ void AGSTN_SpinScrew::TurnBy(AActor* Turner, int32 Sense, int32 Steps)
 	{
 		bReleased = true;
 		ForceNetUpdate();
-		OnReleased.Broadcast(this, Turner);
+		OnScrewReleased.Broadcast(this, Turner);
 		BP_OnReleased(Turner);
 		ReleaseScrew(Turner);
 	}
@@ -150,7 +150,7 @@ void AGSTN_SpinScrew::OnRep_Released()
 	{
 		if (!HasAuthority())
 		{
-			OnReleased.Broadcast(this, nullptr);
+			OnScrewReleased.Broadcast(this, nullptr);
 		}
 		HideScrew();
 	}

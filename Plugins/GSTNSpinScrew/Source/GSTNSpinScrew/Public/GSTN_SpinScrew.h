@@ -27,11 +27,11 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FGSTN_OnScrewReleased, AGSTN_SpinSc
 /**
  * A greybox screw: a hex-ish head flush with the floor, a shaft below it and a slot on top that shows the turn. Every spin near it (GSTN Spin
  * Turn Subsystem) turns it SpinSteps, every drill dive that lands on it DrillSteps; the sense equal to LoosenSense unscrews (the head rises and
- * turns), the other one screws it back when bOppositeTightens. At StepsToRelease it is out: OnReleased fires (wire doors and platforms to it in
+ * turns), the other one screws it back when bOppositeTightens. At StepsToRelease it is out: OnScrewReleased fires (wire doors and platforms to it in
  * the level Blueprint or a child class) and Release decides where it goes.
  *
  * Authority only: OnSpinTurned comes from authoritative events; Progress and bReleased replicate and every machine draws them. The look turns
- * smoothly toward the replicated angle (presentation only). Extend by a Blueprint child: mesh, numbers, OnTurned / OnReleased events.
+ * smoothly toward the replicated angle (presentation only). Extend by a Blueprint child: mesh, numbers, OnTurned / OnScrewReleased events.
  */
 UCLASS(Blueprintable, meta = (DisplayName = "GSTN Spin Screw"))
 class GSTNSPINSCREW_API AGSTN_SpinScrew : public AActor, public IGSTN_SpinTurnable
@@ -105,7 +105,7 @@ public:
 
 	/** Fully out (authority, and on clients when bReleased arrives) */
 	UPROPERTY(BlueprintAssignable, Category = "SpinScrew")
-	FGSTN_OnScrewReleased OnReleased;
+	FGSTN_OnScrewReleased OnScrewReleased;
 
 protected:
 	/** Blueprint hook on every progress change */

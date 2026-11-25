@@ -49,4 +49,8 @@ public:
 	/** False = ignore turns for now (already unscrewed, disabled by a level script...). Default true */
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "SpinDrill|Turnable")
 	bool CanBeSpinTurned(AActor* Turner) const;
+
+	// Declared here so UHT does not generate its own defaults (which return false): the bodies in the .cpp are the real ones
+	virtual void OnSpinTurned_Implementation(AActor* Turner, int32 Sense, EGSTN_SpinTurnSource Source);
+	virtual bool CanBeSpinTurned_Implementation(AActor* Turner) const;
 };

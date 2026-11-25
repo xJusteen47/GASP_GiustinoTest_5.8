@@ -17,7 +17,7 @@ module, GSTNCombat* directly or Network Prediction: the screw is ordinary replic
   that blocks like the floor, a shaft under it, a dark slot on top to read the turn. Implements `IGSTN_SpinTurnable`: every spin within
   reach turns it `SpinSteps`, every drill dive landing on it `DrillSteps`. The `LoosenSense` (-1 = counter-clockwise) unscrews: the head
   turns `DegreesPerStep` and rises `RisePerStepCm` per step; the other sense screws it back (`bOppositeTightens`). At `StepsToRelease`
-  (6) it fires `OnReleased` / `On Screw Released` and `ReleaseScrew`:
+  (6) it fires `OnScrewReleased` / `On Screw Released` and `ReleaseScrew`:
   - `ToHandOrFloor` (default): spawns `PickupClass` (`AGSTN_SpinScrewPickup`) where the head was; when the turner holds nothing and lifts
     no enemy, the host asks the ordinary pickup for it, so it ends in the hand; otherwise it stays on the floor to pick up later.
   - `PopAndVanish`: it just goes.

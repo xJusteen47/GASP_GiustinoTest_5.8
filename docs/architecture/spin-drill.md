@@ -428,7 +428,7 @@ The owner asked for "only an interface" because many level things will start fro
 - The drill does **not** latch on a turnable (a latch needs a combat target): one dive = one bite (`DrillSteps`). A screw bored in
   continuously is the parts screw of combat-parts.md 3.4 on a combat target; possible later without changing the interface.
 - `AGSTN_SpinScrew` (bridge plugin `GSTNSpinScrew`, the only module that knows GSTNSpinDrill and GSTNHeld): greybox head + shaft + slot,
-  `StepsToRelease` 6 (owner 3A), `SpinSteps` 1, `DrillSteps` 3, `LoosenSense` -1, `bOppositeTightens`. Out: `OnReleased`, then
+  `StepsToRelease` 6 (owner 3A), `SpinSteps` 1, `DrillSteps` 3, `LoosenSense` -1, `bOppositeTightens`. Out: `OnScrewReleased`, then
   `Release` = `ToHandOrFloor` (default: a `AGSTN_SpinScrewPickup` held object, picked up by the turner when nothing occupies the hands,
   else it rests on the floor) or `PopAndVanish`.
 
