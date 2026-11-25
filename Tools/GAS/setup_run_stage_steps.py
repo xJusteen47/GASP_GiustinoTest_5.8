@@ -93,7 +93,8 @@ def run():
     dump_only = os.environ.get('STEPS_MODE', '') == 'dump'
     lines = []
     profiles = _profile(lines, dump_only)
-    sets = _anim_set(lines, dump_only)
+    # STEPS_ANIM_SET=0 leaves the mannequin anim set alone (the capsule phase only needs the profiles' steps)
+    sets = _anim_set(lines, dump_only) if os.environ.get('STEPS_ANIM_SET', '1') != '0' else 0
     out_dir = os.path.join(unreal.Paths.project_saved_dir(), 'RunStages')
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, 'setup_run_stage_steps.txt'), 'w') as f:

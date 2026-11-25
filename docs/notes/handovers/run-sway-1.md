@@ -27,3 +27,20 @@ given back on claude/project-thread-e8g12i @799a6740, that thread must rebuild. 
 ESITO: PARTIAL code built, tested and captured on the desktop; owner verdict on the sway pending
 SUBAGENTI: none (one Remote Control session on the desktop, same model)
 COSTO: not measured | ~20 min desktop (build 376 s + captures) | 0 review tokens (capsule placeholder, no level-2 review)
+
+## Round 2: run start driven by the sim + stage steps (2026-11-24/25) — RESUME POINT
+
+Owner 2026-11-24 23:05 Rome: implement the consulting idea on the capsule (cadence from the stamp and the effort = forward acceleration,
+effort lean), save the idea (docs/notes/run-start-drive-capsula.md), "almost a step" between run stages, capsule pose for the L3 dash.
+Code: aeca46e8 (drive, effort/tell lean, dash pose, tests), a8651e58 + 7312c4a7 (setup_run_stage_steps.py also covers the per-kit
+profiles BirdKnight/FlameFury/Voyager; STEPS_ANIM_SET=0 skips the mannequin anim set), main merged twice (b98d01e7: bCalm hit
+reactions from #46/#49 also mute the drive, effort and dash pose). NOT compiled when the network went down (owner hotspot off ~00:30Z).
+
+Next, in order:
+1. Laptop, worktree GASP_Giustino2_cp1verify only (main copy holds another thread's VFX work): build, tests NP.Greybox + Core.Greybox,
+   read the capsule ABP CDO ShapeSettings (overrides?), STEPS_MODE=dump, captures (cam follow mesh) gb_sprint / gb_loco / gb_dash (add
+   gb_dash to pie_capture_move.py if missing) into docs/notes/reviews/greybox-capsula/run-drive-1/. Check docs/notes/greybox-capsula.md
+   for a "Laptop run drive-1: stopped at step N" line first.
+2. Desktop (`_ue59`, IN-USO.txt): the Voyager thread was asked to run setup_run_stage_steps.py (dump, then STEPS_ANIM_SET=0) before its
+   setup_character_kits.py; check its output, then capture gb_sprint there to see the steps (the laptop has no owner Default data).
+3. Owner verdict on video; then close PR #45.

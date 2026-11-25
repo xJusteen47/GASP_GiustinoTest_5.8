@@ -67,8 +67,13 @@ namespace GSTNDrillTick
 	}
 
 	/** The event the phase change of an AfterExecute raises, empty for none (outbox: published on the authority only, once per frame) */
-	FGameplayTag EventForChange(EGSTN_DrillPhase Before, bool bWasLatched, const FGSTN_DrillFragment& After)
+	FGameplayTag EventForChange(EGSTN_DrillPhase Before, bool bWasLatched, const FGSTN_DrillFragment& After, int32 Frame)
 	{
+		// A spin that starts this frame (also one chained onto the last): what the world's turnables listen to (spin-drill.md 13c)
+		if (After.Phase == EGSTN_DrillPhase::Spinning && After.PhaseStartFrame == Frame)
+		{
+			return GSTNSpinDrillTags::Event_Spin_Started;
+		}
 		if (!bWasLatched && After.IsLatched())
 		{
 			return GSTNSpinDrillTags::Event_Drill_Latched;
@@ -186,11 +191,14 @@ void FGSTN_DrillTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_C
 					WriteLatchAnchor(LinkFragment->Links.Body, GetDrillTypeIndex(), Self->Transform, Partner->Transform);
 				}
 			}
-			const FGameplayTag Event = GSTNDrillTick::EventForChange(Before, bWasLatched, *Fragment);
+			const FGameplayTag Event = GSTNDrillTick::EventForChange(Before, bWasLatched, *Fragment, Context.Frame);
 			if (Event.IsValid() && Context.Outbox)
 			{
 				FGSTN_SimEvent SimEvent;
 				SimEvent.EventType = Event;
+				// The sense of the spin (or of the spin the dive came from): a turnable screws or unscrews by it
+				SimEvent.Tags.AddTag(Fragment->IsClockwise() ? GSTNSpinDrillTags::State_Spinning_Clockwise.GetTag()
+					: GSTNSpinDrillTags::State_Spinning_CounterClockwise.GetTag());
 				SimEvent.Frame = Context.Frame;
 				SimEvent.Instigator = Context.Owner;
 				SimEvent.Magnitude = static_cast<float>(Fragment->HitsLanded);

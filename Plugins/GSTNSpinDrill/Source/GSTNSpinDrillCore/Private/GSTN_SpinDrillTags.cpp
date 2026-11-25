@@ -28,6 +28,7 @@ namespace GSTNSpinDrillTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Drill_Detached, "Combat.Event.Drill.Detached", "The drill detached from its target: release, maximum time, stagger or target gone. Published once on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Drill_Launched, "Combat.Event.Drill.Launched", "The drill ended in the high jump out of the target. Published once on the authority");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Drill_GroundLag, "Combat.Event.Drill.GroundLag", "The dive reached the ground and the ground lag started. Published once on the authority");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Spin_Started, "Combat.Event.Spin.Started", "A spin started (ground, air or chained). Published once on the authority; Tags carry the sense");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Movement_Spin, "Ability.Movement.Spin", "Identity of the spin ability, on the ground and in the air");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Movement_SpinCancel, "Ability.Movement.SpinCancel", "Identity of the opposite-spin cancel ability, which stops an active spin early");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Ability_Combat_Drill_Dive, "Ability.Combat.Drill.Dive", "Identity of the drill dive ability, the plunge along gravity");
@@ -42,7 +43,7 @@ namespace GSTNSpinDrillTags
 			State_Spinning, State_Spinning_Clockwise, State_Spinning_CounterClockwise, State_AirSpinSpent, State_Drilling, State_DrillLatched,
 			State_SpinLowGravity, State_DiveGravity, SetByCaller_SpinDrill_GravityScale, SetByCaller_SpinDrill_FallSpeedScale,
 			HitType_Drill, Link_Type_Drill, Link_Role_Driller, Link_Role_Drilled, Immunity_Drill,
-			Event_Drill_Latched, Event_Drill_Detached, Event_Drill_Launched, Event_Drill_GroundLag,
+			Event_Drill_Latched, Event_Drill_Detached, Event_Drill_Launched, Event_Drill_GroundLag, Event_Spin_Started,
 			Ability_Movement_Spin, Ability_Movement_SpinCancel, Ability_Combat_Drill_Dive, Ability_Combat_Drill_Bore, Ability_Combat_Drill_Launch });
 	}
 }

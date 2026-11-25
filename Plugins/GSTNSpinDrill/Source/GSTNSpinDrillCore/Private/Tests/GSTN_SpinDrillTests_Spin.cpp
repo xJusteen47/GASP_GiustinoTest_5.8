@@ -7,6 +7,7 @@
 #include "Jump/GSTN_JumpTypes.h"
 #include "Math/GSTN_DrillMath.h"
 #include "Misc/AutomationTest.h"
+#include "Timeline/GSTN_TimelineTypes.h"
 #include "Timeline/GSTN_TimelineValidation.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -84,6 +85,17 @@ bool FGSTN_SpinDrillSpinTimelinesTest::RunTest(const FString& Parameters)
 			TestTrue(*FString::Printf(TEXT("%s: the cancel window into the opposite spin from frame %d"), *Label, Params.CancelFromFrame), bOppositeWindow);
 			TestFalse(*FString::Printf(TEXT("%s: no window into the same sense"), *Label), bSameSenseWindow);
 			TestTrue(*FString::Printf(TEXT("%s: the cancel window into the drill from frame %d"), *Label, Params.DiveFromFrame), bDiveWindow);
+
+			// Owner 2026-11-24: full air control during the air spin, the kit's own on the ground
+			float AirControl = -1.f;
+			for (const TInstancedStruct<FGSTN_TimelineTrack>& Track : Data.Tracks)
+			{
+				if (const FGSTN_TimelineTrack_Movement* Move = Track.GetPtr<FGSTN_TimelineTrack_Movement>())
+				{
+					AirControl = Move->AirControlOverride;
+				}
+			}
+			TestEqual(*FString::Printf(TEXT("%s: the air control"), *Label), AirControl, bAir ? 1.f : -1.f);
 
 			FString First;
 			const int32 Errors = CountErrors(Data, First);
