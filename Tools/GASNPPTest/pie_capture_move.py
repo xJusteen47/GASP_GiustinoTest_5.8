@@ -175,6 +175,10 @@ GRAB_SEQUENCES = [
 BUG_SEQUENCES = [
     {'name': 'strong_walk', 'taps': [0], 'frames': 300, 'dummy': 95.0, 'shoot': True, 'walk': (40, 240)},
     {'name': 'inside_escape', 'taps': [], 'frames': 160, 'dummy': 10.0, 'shoot': True, 'walk': (20, 120), 'walk_dir': (0, -1, 0)},
+    # marker-smooth-1 (2026-11-24, greybox capsule in hit and launch): one ground attack (PIE_CAPTURE_BUTTON, Strong for a launch) on a dummy
+    # 95 cm ahead at PIE_CAPTURE_DUMMY_PERCENT (default 150): hitstop, hitstun, the launch and its landing, no walking after
+    {'name': 'hit_launch', 'taps': [0], 'frames': 240, 'dummy': 95.0, 'shoot': True,
+     'dummy_percent': float(os.environ.get('PIE_CAPTURE_DUMMY_PERCENT', 150.0))},
 ]
 AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after the attack press
 # dropkick-k5 (2026-11-21): the playtest kits jump ~9 m (apex ~86 frames after the press), so trigger_h was never reached inside 100

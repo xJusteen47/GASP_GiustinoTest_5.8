@@ -421,9 +421,34 @@ void UMoverComponent::FinalizeSmoothingFrame(const FMoverSyncState* SyncState, c
 			{
 				FTransform ActorTransform = FTransform(MoverState->GetOrientation_WorldSpace(), MoverState->GetLocation_WorldSpace(), FVector::OneVector);
 				PrimaryVisualComponent->SetWorldTransform(BaseVisualComponentTransform * ActorTransform);	// smoothed location with base offset applied
+				// GAS-NPP fork (presented state): kept before anything adds cosmetic offsets to the visual (GetPresentedTransform)
+				PresentedTransform = ActorTransform;
+				PresentedVelocity = MoverState->GetVelocity_WorldSpace();
+				PresentedFrameCounter = GFrameCounter;
+				bHasPresentedState = true;
 			}
 		}
 	}
+}
+
+bool UMoverComponent::HasSmoothedPresentation() const
+{
+	// Written in OnWorldPreActorTick of this frame; one frame of slack for readers that run before it (an early tick group of the next frame)
+	return bHasPresentedState && GFrameCounter - PresentedFrameCounter <= 1;
+}
+
+FTransform UMoverComponent::GetPresentedTransform() const
+{
+	if (HasSmoothedPresentation())
+	{
+		return PresentedTransform;
+	}
+	return UpdatedComponent ? FTransform(UpdatedComponent->GetComponentQuat(), UpdatedComponent->GetComponentLocation(), FVector::OneVector) : FTransform::Identity;
+}
+
+FVector UMoverComponent::GetPresentedVelocity() const
+{
+	return HasSmoothedPresentation() ? PresentedVelocity : GetVelocity();
 }
 
 void UMoverComponent::TickInterpolatedSimProxy(const FMoverTimeStep& TimeStep, const FMoverInputCmdContext& InputCmd, UMoverComponent* MoverComp, const FMoverSyncState& CachedSyncState, const FMoverSyncState& SyncState, const FMoverAuxStateContext& AuxState)

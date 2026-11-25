@@ -12,6 +12,7 @@
 #include "GSTN_InteractorComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/IConsoleManager.h"
+#include "MoverComponent.h"
 
 namespace GSTNPawnRig
 {
@@ -62,6 +63,12 @@ bool UGSTN_PawnRigComponent::GetCameraSubjectState_Implementation(FGSTN_CameraSu
 		Raw.Pivot = Owner->GetActorLocation();
 		Raw.Velocity = Owner->GetVelocity();
 		Raw.Facing = Owner->GetActorForwardVector();
+	}
+	// The smoothed velocity (2026-11-24, presented state): the simulated one changes in 16 ms steps, and the look-ahead, the pivot catch-up and
+	// the fall pitch read it every rendered frame
+	if (const UMoverComponent* Mover = Owner->FindComponentByClass<UMoverComponent>())
+	{
+		Raw.Velocity = Mover->GetPresentedVelocity();
 	}
 
 	// C1: the standing root of the drawn, Mover smoothed body, free of capsule resizes and of the 62.5 Hz steps of the actor root, never the actor

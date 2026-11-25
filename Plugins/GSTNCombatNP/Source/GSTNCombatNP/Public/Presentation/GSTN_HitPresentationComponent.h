@@ -181,6 +181,8 @@ private:
 		FVector ReactionVelocity = FVector::ZeroVector;
 		double ReactionStart = 0.0;
 		FVector AppliedOffset = FVector::ZeroVector;
+		/** Where the offset left the mesh: a mesh found elsewhere was placed again since (Mover re-places it every frame), so it holds none of the offset */
+		FVector WrittenLocation = FVector::ZeroVector;
 		bool bReacting = false;
 		/** What the Blueprint events say about it */
 		FGSTN_PredictedHitEvent Event;

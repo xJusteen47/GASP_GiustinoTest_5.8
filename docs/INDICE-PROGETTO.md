@@ -176,6 +176,7 @@ In gioco: tasti e stick diventano comandi, con buffer, priorità e blocchi.
 
 ### 5.12 Presentazione: VFX, suoni, vibrazione · OK (superfici/vibrazione SCRITTO)
 - `Plugins/GSTNPresentation`: evento (`Presentation.Event.*`) → Niagara/suono/scossa camera, tabella `UGSTN_PresentationTable`. Hitstop e colpi visivi: `NP/Presentation/GSTN_HitPresentation*.h`.
+- **Posizione presentata (punto unico, 2026-11-24, SCRITTO):** tutto ciò che è estetico e deve seguire il personaggio disegnato legge `UMoverComponent::GetPresentedTransform()` / `GetPresentedVelocity()` (radice e velocità interpolate dallo smoothing di Mover, senza scosse di hitstop o offset cosmetici della mesh; BlueprintPure). Lo usano il marker di profondità (`GSTNDepthMarkerMover`), le forme di debug (`gstn.Combat.Debug.FollowMesh`) e la capsula greybox. Mai dalla simulazione.
 - Passi per superficie e vibrazione pad (`GSTN_SurfaceFeedbackComponent.h`, `gstn.Audio.*`, `gstn.Haptics.*`): SCRITTO (`docs/notes/handovers/surface-feedback-1.md`). Rendering: `gstn.Render.Profile 0-4` (`Private/Rendering/GSTN_RenderProfile.cpp`).
 
 ### 5.13 Cosmetica e skin · OK la base, il resto è ricerca
