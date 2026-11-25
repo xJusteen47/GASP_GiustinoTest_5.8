@@ -1,6 +1,7 @@
 // Combat simulation (GAS-NPP fork): the part of the combat component that runs the attacker side of the tick (combat-m4-hits 6).
 
 #include "Simulation/GSTN_CombatSimComponent.h"
+#include "Sim/GSTN_SimQuery.h"
 
 #include "Components/CapsuleComponent.h"
 
@@ -85,7 +86,7 @@ bool UGSTN_CombatSimComponent::ProbeFloorAhead(float AheadCm, float DepthCm)
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNLedgeProbe), false, GetOwner());
 	FCollisionResponseParams Responses;
 	Body->InitSweepCollisionParams(Params, Responses);
-	return Body->GetWorld()->LineTraceTestByChannel(Start, End, Body->GetCollisionObjectType(), Params, Responses);
+	return FGSTN_SimQuery::LineTraceTestByChannel(Body->GetWorld(), Start, End, Body->GetCollisionObjectType(), Params, Responses);
 }
 
 bool UGSTN_CombatSimComponent::ProbeTouchdownThisFrame(int32 Frame, float StepSeconds)
@@ -133,7 +134,7 @@ bool UGSTN_CombatSimComponent::ProbeTouchdownThisFrame(int32 Frame, float StepSe
 	FCollisionResponseParams Responses;
 	Body->InitSweepCollisionParams(Params, Responses);
 	FHitResult Hit;
-	const bool bHit = Body->GetWorld()->SweepSingleByChannel(Hit, Start, End, Upright, Body->GetCollisionObjectType(),
+	const bool bHit = FGSTN_SimQuery::SweepSingleByChannel(Body->GetWorld(), Hit, Start, End, Upright, Body->GetCollisionObjectType(),
 		FCollisionShape::MakeCapsule(Shape.Radius, FMath::Max(Shape.HalfHeight, Shape.Radius)), Params, Responses);
 	// Walkable: Mover's default slope limit (about 45 degrees); a face we start inside is Mover's to resolve, not a landing
 	constexpr double WalkableCos = 0.71;

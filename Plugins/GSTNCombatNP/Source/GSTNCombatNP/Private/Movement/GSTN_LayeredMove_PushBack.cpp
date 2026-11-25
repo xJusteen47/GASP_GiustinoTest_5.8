@@ -1,4 +1,5 @@
 #include "Movement/GSTN_LayeredMove_PushBack.h"
+#include "Sim/GSTN_SimQuery.h"
 
 #include "AbilitySystemComponent.h"
 #include "Components/PrimitiveComponent.h"
@@ -40,7 +41,7 @@ bool FGSTN_LayeredMove_PushBack::GenerateMove(const FMoverTickStartData& StartSt
 		const FVector End = Next - Up * (HalfHeight + LedgeProbeDepth);
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNPushBackLedge), false, Primitive->GetOwner());
 		const ECollisionChannel Channel = ECC_Visibility;
-		if (!Primitive->GetWorld()->LineTraceTestByChannel(Start, End, Channel, Params))
+		if (!FGSTN_SimQuery::LineTraceTestByChannel(Primitive->GetWorld(), Start, End, Channel, Params))
 		{
 			Proposed = FVector::ZeroVector;
 		}

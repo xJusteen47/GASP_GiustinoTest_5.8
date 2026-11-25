@@ -24,6 +24,10 @@
 	],
 	"Plugins": [
 		{
+			"Name": "GSTNCore",
+			"Enabled": true
+		},
+		{
 			"Name": "NetworkPrediction",
 			"Enabled": true
 		}

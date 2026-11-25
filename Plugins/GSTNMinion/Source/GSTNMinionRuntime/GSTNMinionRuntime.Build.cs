@@ -14,6 +14,7 @@ public class GSTNMinionRuntime : ModuleRules
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
 			"Core",
+			"GSTNCore",
 			"CoreUObject",
 			"Engine",
 			"GameplayTags",

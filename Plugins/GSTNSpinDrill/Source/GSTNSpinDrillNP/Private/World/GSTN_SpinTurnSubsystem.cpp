@@ -1,6 +1,7 @@
 // Turns the world's IGSTN_SpinTurnable actors from the authoritative spin and drill events.
 
 #include "World/GSTN_SpinTurnSubsystem.h"
+#include "Sim/GSTN_SimQuery.h"
 
 #include "CollisionQueryParams.h"
 #include "Engine/OverlapResult.h"
@@ -87,7 +88,7 @@ int32 UGSTN_SpinTurnSubsystem::TurnInReach(AActor* Turner, int32 Sense, EGSTN_Sp
 
 	TArray<FOverlapResult> Overlaps;
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTN_SpinTurn), false, Turner);
-	World->OverlapMultiByObjectType(Overlaps, Centre, FQuat::Identity, FCollisionObjectQueryParams(FCollisionObjectQueryParams::AllObjects),
+	FGSTN_SimQuery::OverlapMultiByObjectType(World, Overlaps, Centre, FQuat::Identity, FCollisionObjectQueryParams(FCollisionObjectQueryParams::AllObjects),
 		FCollisionShape::MakeSphere(Reach), Params);
 
 	TSet<AActor*> Seen;

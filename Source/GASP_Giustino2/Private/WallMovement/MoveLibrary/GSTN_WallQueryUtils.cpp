@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "WallMovement/MoveLibrary/GSTN_WallQueryUtils.h"
+#include "Sim/GSTN_SimQuery.h"
 
 #include "Components/PrimitiveComponent.h"
 #include "DrawDebugHelpers.h"
@@ -94,7 +95,7 @@ namespace GSTNWallQuery
 			const FVector End = Start - WallNormal * ProbeReach;
 
 			FHitResult Hit;
-			const bool bProbeHit = Ctx.World->SweepSingleByChannel(Hit, Start, End, FQuat::Identity, Ctx.Channel, ProbeShape, Ctx.QueryParams, Ctx.ResponseParams);
+			const bool bProbeHit = FGSTN_SimQuery::SweepSingleByChannel(Ctx.World, Hit, Start, End, FQuat::Identity, Ctx.Channel, ProbeShape, Ctx.QueryParams, Ctx.ResponseParams);
 			[[maybe_unused]] const int32 ProbeIdx = UE_PTRDIFF_TO_INT32(&Origin - Origins);
 			GSTN_WALL_LOG(2, TEXT("   probe%d hit=%d pen=%d N=%s IN=%s P=%s t=%.2f actor=%s"),
 				ProbeIdx, bProbeHit ? 1 : 0, Hit.bStartPenetrating ? 1 : 0, *GSTNWallDebug::Vec(Hit.Normal), *GSTNWallDebug::Vec(Hit.ImpactNormal), *GSTNWallDebug::Vec(Hit.ImpactPoint),
@@ -160,7 +161,7 @@ namespace GSTNWallQuery
 		const FVector End = Center + MoveDir * (ContactDistance + LookaheadDistance);
 
 		FHitResult Hit;
-		if (Ctx.World->SweepSingleByChannel(Hit, Center, End, FQuat::Identity, Ctx.Channel, ProbeShape, Ctx.QueryParams, Ctx.ResponseParams)
+		if (FGSTN_SimQuery::SweepSingleByChannel(Ctx.World, Hit, Center, End, FQuat::Identity, Ctx.Channel, ProbeShape, Ctx.QueryParams, Ctx.ResponseParams)
 			&& !Hit.bStartPenetrating
 			&& FVector::DotProduct(Hit.Normal, MoveDir) < -0.1f
 			&& FVector::DotProduct(Hit.Normal, WallNormal) >= CosMaxConcave
@@ -265,7 +266,7 @@ bool UGSTN_WallQueryUtils::IsHitOnValidWall(const UWorld* World, const FHitResul
 	const FVector Target = Hit.ImpactPoint - Hit.ImpactNormal * StepPastEdge;
 
 	FHitResult FaceHit;
-	if (World->LineTraceSingleByChannel(FaceHit, Target + Hit.Normal * TraceHalfLength, Target - Hit.Normal * TraceHalfLength,
+	if (FGSTN_SimQuery::LineTraceSingleByChannel(World, FaceHit, Target + Hit.Normal * TraceHalfLength, Target - Hit.Normal * TraceHalfLength,
 		Channel, QueryParams, ResponseParams) && !FaceHit.bStartPenetrating)
 	{
 		return IsValidWallNormal(FaceHit.ImpactNormal, GravityUp, Settings.MinSurfaceAngle, Settings.MaxSurfaceAngle);
@@ -419,7 +420,7 @@ bool UGSTN_WallQueryUtils::FindWallAroundConvexEdge(const FMovingComponentSet& M
 	// Past where the old surface was: from the center, the seated distance to the plane (the capsule's extent along the normal) plus a radius
 	const FVector DiveEnd = Center - WallNormal * ((WallSupport >= 0.f ? WallSupport : Radius) + Settings.WallGap + Radius);
 	FHitResult Hit;
-	if (Ctx.World->SweepSingleByChannel(Hit, Center, DiveEnd, FQuat::Identity, Ctx.Channel, ProbeShape, Ctx.QueryParams, Ctx.ResponseParams))
+	if (FGSTN_SimQuery::SweepSingleByChannel(Ctx.World, Hit, Center, DiveEnd, FQuat::Identity, Ctx.Channel, ProbeShape, Ctx.QueryParams, Ctx.ResponseParams))
 	{
 		return Accept(Hit);
 	}
@@ -427,7 +428,7 @@ bool UGSTN_WallQueryUtils::FindWallAroundConvexEdge(const FMovingComponentSet& M
 	// Leg 2: sweep back against the movement direction to find the face around the edge.
 	// The rounded sphere normal at the edge lets the orientation roll over it continuously.
 	const FVector BackEnd = DiveEnd - MoveDir * (MoveDelta.Size() + 2.f * Radius);
-	if (Ctx.World->SweepSingleByChannel(Hit, DiveEnd, BackEnd, FQuat::Identity, Ctx.Channel, ProbeShape, Ctx.QueryParams, Ctx.ResponseParams))
+	if (FGSTN_SimQuery::SweepSingleByChannel(Ctx.World, Hit, DiveEnd, BackEnd, FQuat::Identity, Ctx.Channel, ProbeShape, Ctx.QueryParams, Ctx.ResponseParams))
 	{
 #if ENABLE_DRAW_DEBUG
 		if (Settings.bDrawDebug && IsInGameThread())

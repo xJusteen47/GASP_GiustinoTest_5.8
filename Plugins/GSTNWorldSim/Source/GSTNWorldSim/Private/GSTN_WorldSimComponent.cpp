@@ -13,6 +13,7 @@
 #include "NetworkPredictionProxyInit.h"
 #include "NetworkPredictionProxyWrite.h"
 #include "ProfilingDebugging/CpuProfilerTrace.h"
+#include "Sim/GSTN_SimQuery.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNWorldSim, Log, All);
 
@@ -116,6 +117,10 @@ void UGSTN_WorldSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, co
 	TRACE_CPUPROFILER_EVENT_SCOPE(GSTN_WorldSim_SimulationTick);
 	const double StartSeconds = FPlatformTime::Seconds();
 
+	// The world sim ticks first in every frame (lowest sort priority), so it opens the frame of the query hash (gstn.SimQuery.Hash):
+	// every simulation query of this frame, pawns included, folds into it. A re-simulated frame starts its hash again
+	FGSTN_SimQuery::BeginFrame(GetWorld(), TimeStep.Frame);
+
 	const FGSTN_WorldSimSync& InSync = *Input.Sync;
 	FGSTN_WorldSimSync& OutSync = *Output.Sync;
 	OutSync = InSync;
@@ -152,7 +157,7 @@ void UGSTN_WorldSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, co
 		const FCollisionQueryParams Params(TraceTag, false);
 		const double X = ((Index * 7919 + Frame * 13) % 4000) - 2000.0;
 		const double Y = ((Index * 104729) % 4000) - 2000.0;
-		const bool bHit = World && World->LineTraceTestByChannel(FVector(X, Y, 2000.0), FVector(X, Y, -2000.0), ECC_WorldStatic, Params);
+		const bool bHit = FGSTN_SimQuery::LineTraceTestByChannel(World, FVector(X, Y, 2000.0), FVector(X, Y, -2000.0), ECC_WorldStatic, Params);
 		EntityResults[EntityCount + Index] = bHit ? (uint32)Index : 0u;
 	};
 

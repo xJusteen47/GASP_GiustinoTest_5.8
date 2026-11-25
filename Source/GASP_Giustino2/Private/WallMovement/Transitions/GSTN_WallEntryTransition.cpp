@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "WallMovement/Transitions/GSTN_WallEntryTransition.h"
+#include "Sim/GSTN_SimQuery.h"
 
 #include "Engine/World.h"
 #include "GameFramework/Actor.h"
@@ -115,7 +116,7 @@ bool UGSTN_WallEntryTransition::SweepForWall(const FSimulationTickParams& Params
 
 	const FVector Start = UpdatedComponent->GetComponentLocation();
 	const FVector End = Start + Direction * ProbeDistance;
-	if (!World->SweepSingleByChannel(OutHit, Start, End, UpdatedComponent->GetComponentQuat(), UpdatedPrimitive->GetCollisionObjectType(),
+	if (!FGSTN_SimQuery::SweepSingleByChannel(World, OutHit, Start, End, UpdatedComponent->GetComponentQuat(), UpdatedPrimitive->GetCollisionObjectType(),
 		UpdatedPrimitive->GetCollisionShape(), QueryParams, ResponseParams) || OutHit.bStartPenetrating)
 	{
 		return false;
@@ -153,7 +154,7 @@ bool UGSTN_WallEntryTransition::SweepForWall(const FSimulationTickParams& Params
 		* FMath::Abs(FVector::DotProduct(FaceNormal, UpdatedComponent->GetComponentQuat().GetUpVector())) + CapsuleRadius;
 	FHitResult CenterHit;
 	const FVector CenterEnd = Start - FaceNormal * (SupportOnNormal + ProbeDistance + 5.f);
-	if (!World->LineTraceSingleByChannel(CenterHit, Start, CenterEnd, UpdatedPrimitive->GetCollisionObjectType(), QueryParams, ResponseParams)
+	if (!FGSTN_SimQuery::LineTraceSingleByChannel(World, CenterHit, Start, CenterEnd, UpdatedPrimitive->GetCollisionObjectType(), QueryParams, ResponseParams)
 		|| FVector::DotProduct(CenterHit.ImpactNormal, FaceNormal) < 0.5f)
 	{
 		GSTN_WALL_LOG(2, TEXT("ENTRY rejected: no wall at capsule center height"));

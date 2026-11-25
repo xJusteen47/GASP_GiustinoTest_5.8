@@ -1,6 +1,7 @@
 // Links, Network Prediction half.
 
 #include "GSTN_LinkWatchdog.h"
+#include "Sim/GSTN_SimQuery.h"
 
 #include "AbilitySystemComponent.h"
 #include "Algo/BinarySearch.h"
@@ -346,7 +347,7 @@ bool FGSTN_WorldExitCollisionQuery::IsCapsuleFree(const FVector& Location, const
 	{
 		Params.AddIgnoredActor(Actor);
 	}
-	return !World->OverlapBlockingTestByChannel(Location, Rotation, ECC_Pawn, FCollisionShape::MakeCapsule(Radius, HalfHeight), Params);
+	return !FGSTN_SimQuery::OverlapBlockingTestByChannel(World, Location, Rotation, ECC_Pawn, FCollisionShape::MakeCapsule(Radius, HalfHeight), Params);
 }
 
 // ---- Subsystem

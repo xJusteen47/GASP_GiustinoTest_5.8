@@ -1,4 +1,5 @@
 #include "Movement/GSTN_SurfaceLaunch.h"
+#include "Sim/GSTN_SimQuery.h"
 
 #include "Components/PrimitiveComponent.h"
 #include "Engine/World.h"
@@ -53,7 +54,7 @@ bool FGSTN_SurfaceLaunch::Probe(const FMoverSyncState& SyncState, const UMoverCo
 	FCollisionResponseParams Response;
 	Primitive->InitSweepCollisionParams(Query, Response);
 	FHitResult Hit;
-	if (!World->SweepSingleByChannel(Hit, Start, End, Sync->GetOrientation_WorldSpace().Quaternion(), Primitive->GetCollisionObjectType(), Primitive->GetCollisionShape(), Query, Response)
+	if (!FGSTN_SimQuery::SweepSingleByChannel(World, Hit, Start, End, Sync->GetOrientation_WorldSpace().Quaternion(), Primitive->GetCollisionObjectType(), Primitive->GetCollisionShape(), Query, Response)
 		|| !Hit.bBlockingHit || Hit.bStartPenetrating)
 	{
 		return false;
