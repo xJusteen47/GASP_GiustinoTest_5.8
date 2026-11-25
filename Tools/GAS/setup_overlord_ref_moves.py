@@ -1,5 +1,5 @@
-# Owner playtest 2026-11-25: the Overlord gets four reference moves with Smash Ultimate's numbers, and the hub gets fixed targets of different
-# hardness to hit them with. Numbers, sources and conversions: Tools/GAS/overlord_ref_moves_data.py (pure Python) and
+# Owner playtest 2026-11-25: the Overlord gets four reference moves with Smash Ultimate's numbers (the fixed targets of different hardness to
+# hit them with are another thread's: gstn.TestCubes.Spawn, branch claude/project-thread-k3aapg). Numbers, sources and conversions: Tools/GAS/overlord_ref_moves_data.py (pure Python) and
 # docs/notes/overlord-ref-moves.md. Greybox phase: every pose is a capsule placeholder made from numbers, no final animation is touched.
 #
 #   F.S        Command.Strong.Directional, grounded  -> GA_Overlord_RefFSGanon     (Ganondorf forward smash)
@@ -13,17 +13,14 @@
 #   Characters/Overlord/Moves/Ref/TL_Overlord_Ref<Move>    UGSTN_CombatTimeline: frames, hitbox paths, hits (Smash numbers), penetration,
 #                                                          ground rule, aerial landing windows (autocancel / landing lag)
 #   Characters/Overlord/Moves/Ref/GA_Overlord_Ref<Move>    thin Blueprint child of UGSTN_GA_TestKitStrike whose TimelineAsset is the timeline
-#   _Test/Combat/PS_Test_TargetH<h>                        part sets of the hub targets: one unbreakable part on every hurtbox of HBS_Test_Pawn,
-#                                                          hardness h, never moved by a hit (stagger in place, knockback x0)
 # Changes (backed up to Saved/Backups/GAS/<time>/ first):
-#   KIT_Test_Playtest (and REF_MOVES_KITS)  kit bindings: an existing kit binding of the same command and context (grounded = does not require
+#   KIT_Test_Overlord (or REF_MOVES_KITS)   kit bindings: an existing kit binding of the same command and context (grounded = does not require
 #                                           Input.Context.Airborne, airborne = requires it; never one keyed on a link tag) gets the new ability in
 #                                           place; with none, a new binding goes FIRST (the kit's bindings come before its weapons'). New bindings
 #                                           ignore Combat.Link.Linked, so a grab's own bindings (pummel, throws) keep winning while linked.
 #   ABP_GSTN_GreyboxCapsule                 MoveOverrides: montage -> its own clip, merged (REF_MOVES_CAPSULE=0 skips this shared Blueprint).
 #                                           Tools/GAS/greybox/make_capsule_clips.py keeps these entries on its own runs (montages that already
 #                                           play a greybox clip map to that clip).
-# The hub targets are spawned at Play by Tools/GASNPPTest/test_hub.py (spawn_targets), which attaches these part sets.
 #
 # Headless (editor closed):  .\Tools\CI\Save-Assets.ps1 -Script Tools\GAS\setup_overlord_ref_moves.py
 # Editor:                    import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import setup_overlord_ref_moves as s; s.run()
@@ -46,12 +43,10 @@ import make_capsule_clips as mcc  # noqa: E402  (the capsule pose language and t
 
 DIR = gc.move_folder('Ref')
 CLIP_DIR = mcc.DIR
-KITS = [k.strip() for k in os.environ.get('REF_MOVES_KITS', 'KIT_Test_Playtest').split(',') if k.strip()]
+KITS = [k.strip() for k in os.environ.get('REF_MOVES_KITS', 'KIT_Test_Overlord').split(',') if k.strip()]
 CAPSULE = os.environ.get('REF_MOVES_CAPSULE', '1') != '0'
 AIRBORNE, LINKED = 'Input.Context.Airborne', 'Combat.Link.Linked'
 BLEND_OUT_SECONDS = 4.0 / 60.0
-HURTBOX_SET = '/Game/GSTN/_Test/Combat/HBS_Test_Pawn'
-TARGET_HARDNESS = (0, 2, 4, 6, 8, 12)
 SAKURAI_ANGLE_DEG = 40.0   # the angle Sakurai3D starts from in the air (Ultimate's aerial Sakurai angle is about 40)
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'OverlordRefMoves', 'setup_overlord_ref_moves.txt')
 BACKUP = os.path.join(unreal.Paths.project_saved_dir(), 'Backups', 'GAS', datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
@@ -357,42 +352,6 @@ def _bind(kit_name, classes):
     return kit
 
 
-# ---- targets
-def _target_sets():
-    """PS_Test_TargetH<h>: one part named Cube on every hurtbox of the pawns' set, hardness h, unbreakable, never moved by a hit"""
-    if not hasattr(unreal, 'GSTN_PartSetDefinition'):
-        log('WARNING: GSTNParts is off: no target part sets')
-        return []
-    hbs = unreal.load_asset(HURTBOX_SET)
-    names = [str(b.get_editor_property('name')) for b in hbs.get_editor_property('hurtboxes')] if hbs else []
-    if not names:
-        log(f'WARNING: no hurtbox names in {HURTBOX_SET}: the targets will take full damage (the body), test_hub adds the names at Play')
-    out = []
-    for h in TARGET_HARDNESS:
-        name = f'PS_Test_TargetH{h}'
-        path = gc.path(name)
-        folder = path.rsplit('/', 1)[0]
-        ps = unreal.load_asset(path) if unreal.EditorAssetLibrary.does_asset_exist(path) else None
-        if not ps:
-            ps = _tools().create_asset(name, folder, unreal.GSTN_PartSetDefinition, unreal.DataAssetFactory())
-            log(f'created {path}')
-        part = unreal.GSTN_PartDefinition()
-        part.set_editor_property('name', 'Cube')
-        part.set_editor_property('hurtboxes', names)
-        part.set_editor_property('hardness', h)
-        part.set_editor_property('part_cap', 0.0)          # 0 or less = unbreakable
-        part.set_editor_property('main_transfer', 1.0)
-        reaction = part.get_editor_property('reaction')
-        reaction.set_editor_property('max_reaction', unreal.GSTN_PartReactionTier.STAGGER_IN_PLACE)
-        reaction.set_editor_property('knockback_scale', 0.0)
-        part.set_editor_property('reaction', reaction)
-        ps.set_editor_property('parts', [part])
-        ps.set_editor_property('body_reaction', reaction)
-        out.append(ps)
-    log(f'targets: hardness {TARGET_HARDNESS}, part on hurtboxes {names}')
-    return out
-
-
 def _capsule_overrides(pairs):
     bp = unreal.load_asset(mcc.CAPSULE_ABP)
     if not bp:
@@ -427,10 +386,9 @@ def run(force=False):
             overrides[montage] = clip
             saves += [clip, montage, timeline, bp]
         kits = [k for k in (_bind(name, classes) for name in KITS) if k]
-        targets = _target_sets()
         capsule = _capsule_overrides(overrides) if CAPSULE else None
-        _guard.save_and_record(saves + kits + targets + ([capsule] if capsule else []), unreal.EditorAssetLibrary.save_loaded_asset)
-        log(f'saved {len(saves)} move assets, kits {[k.get_name() for k in kits]}, {len(targets)} target sets'
+        _guard.save_and_record(saves + kits + ([capsule] if capsule else []), unreal.EditorAssetLibrary.save_loaded_asset)
+        log(f'saved {len(saves)} move assets, kits {[k.get_name() for k in kits]}'
             f"{', capsule ABP' if capsule else ''}; {_guard.summary()}; backups in {BACKUP}")
         ok = True
     except Exception as e:

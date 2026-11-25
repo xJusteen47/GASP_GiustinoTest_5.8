@@ -1,4 +1,4 @@
-# Mosse di riferimento dell'Overlord (Ganon e Ike) e bersagli fissi
+# Mosse di riferimento dell'Overlord (Ganon e Ike)
 
 Richiesta owner 2026-11-25: "Forward Strong metti all'overlord il forward smash di Ganon. Strong neutrale l'ftilt di Ike. Neutral light
 Aerial il nair di Ganon. Neutral strong aerial il nair di Ike. Che mi servono per fare playtest. Programma qualche superficie tipo cubi a
@@ -12,14 +12,13 @@ Fase greybox: pose da capsula fatte con numeri, nessuna animazione definitiva to
 |---|---|
 | Numeri, fonti, conversioni, percorsi delle hitbox (Python puro) | `Tools/GAS/overlord_ref_moves_data.py` (`python3` lo stampa) |
 | Script editor: clip capsula, montage, timeline, abilità, binding sul kit, set di parti dei bersagli | `Tools/GAS/setup_overlord_ref_moves.py` |
-| Cubi e cartelli nell'hub | `Tools/GAS/build_test_hub_map.py` (`TARGETS`, `penetration_targets`) |
-| Bersagli in Play (pawn dentro i cubi, parti, regole) | `Tools/GASNPPTest/test_hub.py` (`spawn_targets`, `_targets_tick`) |
+| Bersagli fissi a durezza diversa | NON qui: thread `claude/project-thread-k3aapg`, comando `gstn.TestCubes.Spawn` |
 
 Riuso: abilità `UGSTN_GA_TestKitStrike` + timeline asset come jab e dropkick; hitbox con `AddHitboxTrack`; finestre di atterraggio
 `FGSTN_TimelineTrack_Landing`; knockback con la formula Smash già nelle regole standard (`knockback_smash_data.py`); linguaggio delle pose e
-rig della capsula di `greybox/make_capsule_clips.py`; parti, durezza e tabella di penetrazione di GSTNParts; manichini dell'hub.
+rig della capsula di `greybox/make_capsule_clips.py`; penetrazione dei colpi come dato di GSTNParts (`FGSTN_PartHitData`).
 
-## Comandi (kit `KIT_Test_Playtest`, quello dato al Play)
+## Comandi (kit `KIT_Test_Overlord`, pedana "OVERLORD JAB" nell'hub; il kit Playtest non è toccato)
 
 | Notazione | Comando | Contesto | Mossa |
 |---|---|---|---|
@@ -62,17 +61,13 @@ simmetriche (F.S a due mani) o passano dalla direzione di sguardo a metà dei fr
 Proposte per il playtest (decide l'owner): F.S 6 ("penetrazione media"), N.S 4, N.L Aerial 2, N.S Aerial 4. Le mosse vecchie non hanno dati
 di parte: penetrazione 0.
 
-Bersagli in piazza (riga a y = 15 m davanti alle partenze): durezza 0, 2, 4, 6, 8, 12 (cubo bianco, verde, giallo, arancio, rosso, grigio).
-Ognuno è un manichino dentro il cubo con una sola parte indistruttibile su tutte le sue hurtbox: con la tabella di default penetrazione >
-durezza = danno pieno, = 65 %, < rimbalzo. Non si muovono mai (stagger sul posto, knockback x0; se un corpo li spinge il server li rimette nel
-cubo). A schermo: "COLPITO bersaglio durezza N: +x%" o "RIMBALZO".
+I bersagli per provarle sono i cubi di `gstn.TestCubes.Spawn` (altro thread, stessa regola penetrazione/durezza).
 
 ## Sul fisso
 
 1. Editor chiuso: `.\Tools\CI\Save-Assets.ps1 -Script Tools\GAS\setup_overlord_ref_moves.py` (ESITO e report in
    `Saved/OverlordRefMoves/setup_overlord_ref_moves.txt`). Modifica il Blueprint condiviso `ABP_GSTN_GreyboxCapsule` (solo MoveOverrides,
-   unite) e `KIT_Test_Playtest`: `REF_MOVES_CAPSULE=0` salta l'ABP.
-2. Rigenera la mappa dell'hub con `build_test_hub_map.py` per vedere i cubi (senza, i bersagli ci sono lo stesso ma invisibili tranne il manichino).
-3. Play in `L_Test_Hub`. Nessuna build C++ serve: solo dati e Python.
+   unite) e `KIT_Test_Overlord`: `REF_MOVES_CAPSULE=0` salta l'ABP, `REF_MOVES_KITS=KIT_A,KIT_B` cambia i kit.
+2. Play in `L_Test_Hub`, prendi il kit dalla pedana OVERLORD JAB, `gstn.TestCubes.Spawn` per i cubi. Nessuna build C++: solo dati e Python.
 
 Non provato: niente di questo è stato eseguito nell'editor (macchine spente il 25-11).
