@@ -68,12 +68,6 @@ namespace GSTNWallDebug
 	/** Compact vector formatting for log lines */
 	FString Vec(const FVector& V);
 
-	/** True once after gstn.Wall.Jump */
-	bool ConsumeJumpRequest();
-
-	/** True while gstn.Wall.Detach 1 */
-	bool IsDetachHeld();
-
 	/** Adds one query to the current tick count (no-op unless gstn.Wall.CountQueries 1) */
 	void CountQuery();
 

@@ -375,6 +375,13 @@ public:
 	void TapScriptedButtons(int32 Mask);
 
 	/**
+	 * Debug (gstn.Wall.Jump / gstn.Wall.Detach): adds FGSTN_MoverButtonInputs flags to the Mover command this machine produces. Pressed flags
+	 * go into the next command only, held flags stay until changed. They travel in the command, so the server and the replays see them:
+	 * never a global read inside the simulation
+	 */
+	void AddDebugMoverButtons(uint8 PressedFlags, uint8 HeldFlags);
+
+	/**
 	 * The combat clock of the frame being simulated: the Network Prediction frame minus every hitstop frame so far
 	 * (Core.PausedFramesTotal), so it stands still while the combatant is in hitstop and a wait counted on it does not elapse then.
 	 * Same contract as GetActivationContext: call it from inside the simulation (an ability's activation or tick), where it is
@@ -1377,6 +1384,11 @@ private:
 	int8 LastAimStickY = 0;
 	int8 LastMoveStickX = 0;
 	int8 LastMoveStickY = 0;
+	/** FGSTN_MoverButtonInputs flags of the last command, copied into the Mover command (wall jump and detach read them there) */
+	uint8 LastMoverButtonFlags = 0;
+	/** Debug requests (gstn.Wall.Jump / Detach) put into the next produced command, so they are predicted and replayed like a real press */
+	uint8 DebugMoverPress = 0;
+	uint8 DebugMoverHeld = 0;
 
 	/**
 	 * Input side only (shapes the produced command, never read by the sim): a reaction or a get-up held the facing, and the stick has not
