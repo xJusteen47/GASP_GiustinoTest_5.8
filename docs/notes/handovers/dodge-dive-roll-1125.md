@@ -24,7 +24,20 @@ controllo in aria pieno, 8 f di lag con scivolata di pancia (4000 cm/s²), lock 
 6. 3B: `GroundDodgeMove` 1000 avanti / 250 su (prima 800/300), corsa portata x1.3 (prima x1), tetto 1800 (prima 1400). Nominale: 0,51 s, 32 cm di
    altezza, 510 cm da fermo, ~560 da corsa 850, ~730 da 1100. Tarabile sul GE del dodge (`UGSTN_MoveImpulseCreator::Move`).
 
+## Input (owner 10:47Z/10:48Z: "avanti + salto da abbassato per la schivata"; "L per abbassarsi, ZL per lo scudo; nelle opzioni solo il metodo nuovo, solo quello di prima o entrambi")
+7. `UGSTN_CombatSettings::DodgeInput` (Button / CrouchJump / Both, default Both), progetto, Combat|Dodge. Applicato alla compilazione della tabella
+   (`ApplyDodgeInputMethod` in GSTN_CompiledBindingTable.cpp): ogni riga `Command.Defence.Dodge` ha una gemella `Command.Defence.Dodge.CrouchJump`
+   (stessa ability, contesto, timeline) con lo slot `UGSTN_MovementSlots::MakeDodgeCrouchJumpSlot` = Press(Jump) + Hold(Crouch, anche dallo stesso
+   frame) + stick inclinato in qualsiasi direzione; CrouchJump toglie le righe del tasto. Tag figlio: lock, tumble, cancel lo trovano per gerarchia.
+   Funzione di layout nuova `Movement.Jump` (DefaultGSTNInput.ini). Crouch + salto con stick a riposo resta un salto (spazio per un backflip).
+   In aria (air crouch + stick + salto) vale l'air dodge, non il doppio salto. Restano sul tasto schivata: rotolata da a terra (dodge+stick),
+   posa della presa, zaino: con "solo CrouchJump" quei tre vanno rimappati (decisione aperta).
+8. Pad: LB/L = abbassarsi, LT/ZL = scudo (prima il contrario). Solo negli script `Tools/GAS/setup_player_input_contexts.py` e
+   `Tools/GASNPPTest/movement_setup.py`: vanno rilanciati sul fisso (IMC binari).
+9. L'opzione per giocatore (menu) dovrà viaggiare col loadout: la tabella si compila uguale su ogni macchina, quindi oggi è un'impostazione di progetto.
+
 ## Test (NON compilati qui)
+Nuovo `GSTNCombat.Core.Table.DodgeInputMethod`; `Table.ButtonLayout` fissa il metodo Button.
 Nuovo `GSTNCombat.Core.DodgeLanding.BellyUntilStopped`; RollOut e Defaults aggiornati al salto-rollout di default; `Dodge.LongJumpCarriesRunSpeed` x1.3.
 Nuovo `GSTNCombat.NP.Greybox.Dive`. Aggiornati `GSTNCombat.Core.DodgeLanding.EndLagBlocksActions` (lag 18, override 24/14/0/10) e
 `GSTNCombat.Core.MoveTimelines` (air dodge bloccante fino a 120 + 8 + 10).
@@ -36,4 +49,4 @@ pavimento (floor lift), il giro non salta.
 
 ESITO: PARZIALE codice scritto, non compilato né provato (fisso offline)
 SUBAGENTI: 1, lettura pagine web riferimenti SM64/SMO, Opus
-COSTO: ~6 $ | 0 minuti desktop | 0 token review
+COSTO: ~9 $ | 0 minuti desktop | 0 token review

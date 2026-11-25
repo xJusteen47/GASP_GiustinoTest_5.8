@@ -37,6 +37,29 @@ namespace
 	}
 }
 
+FGSTN_InputSlotSpec UGSTN_MovementSlots::MakeDodgeCrouchJumpSlot()
+{
+	const FGameplayTag Jump = GSTNCombatButtonTags::Button_Jump.GetTag();
+	const FGameplayTag Crouch = GSTNCombatButtonTags::Button_Crouch.GetTag();
+	FGSTN_InputSlotSpec Spec = MakeMovementSlot(GSTNCommandTags::Defence_Dodge_CrouchJump.GetTag(), MakeMovementPress(Jump));
+
+	FGSTN_InputCondition_Hold Held;
+	Held.Button = Crouch;
+	Held.MinFrames = 0;
+	Spec.Pattern.Steps[0].AllOf.Add(FMovementCondition::Make<FGSTN_InputCondition_Hold>(Held));
+
+	FGSTN_InputCondition_Direction Stick;
+	Stick.Space = EGSTN_DirectionSpace::Facing;
+	Stick.Directions = GSTN_DirectionMasks::AnyTilted;
+	Stick.MinZone = EGSTN_StickZone::Tilt;
+	Stick.MaxZone = EGSTN_StickZone::Tilt;
+	Spec.Pattern.Steps[0].AllOf.Add(FMovementCondition::Make<FGSTN_InputCondition_Direction>(Stick));
+
+	Spec.AddLayoutButton(TEXT("Movement.Jump"), Jump);
+	Spec.AddLayoutButton(TEXT("Combat.Crouch"), Crouch);
+	return Spec;
+}
+
 TArray<FGSTN_InputSlotSpec> UGSTN_MovementSlots::Build(bool bSwapTapHold, int32 HoldFrames)
 {
 	const int32 Hold = FMath::Max(HoldFrames >= 0 ? HoldFrames : UGSTN_CombatSettings::Get().InteractHoldFrames, 1);
