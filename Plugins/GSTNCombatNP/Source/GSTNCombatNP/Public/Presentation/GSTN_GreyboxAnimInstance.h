@@ -350,6 +350,19 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	/** Squash at the start of the dash (1 = none): the body goes low as it launches */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Boost Dash", meta = (ClampMin = "0.5", ClampMax = "1"))
 	float DashSquash = 0.82f;
+
+	//~ Hit reactions (owner 2026-11-24: "in hit and launch animations the capsules oscillate strangely, more than the planned hitstop shake").
+	//~ A hit freezes the velocity and then sets the knockback in one tick: read as locomotion, that is a huge acceleration (lean to the cap,
+	//~ a run stop kick on the knockback's slide, the air stretch springing on the launch) on an underdamped spring. In a reaction the reaction
+	//~ clip and the hitstop shake carry the read; these springs only settle.
+
+	/** While in hitstop, hitstun or tumble: no lean, run stop, run sway, start squash or air stretch from the motion; the springs go back to rest */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Hit Reactions")
+	bool bCalmInHitReactions = true;
+
+	/** Damping of the squash and lean springs while calm (1 = back to rest without overshoot) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Hit Reactions", meta = (ClampMin = "0.05", ClampMax = "2"))
+	float HitReactionSpringDamping = 1.f;
 };
 
 /** Pure: a damped spring step (semi-implicit Euler, sub-stepped for long frames); the tests call it */
@@ -460,6 +473,9 @@ public:
 
 	/** Pure: does this frame start a run stop (braking hard from a run, not already kicked)? */
 	static bool StartsRunStop(const FGSTN_GreyboxShapeSettings& Settings, bool bOnGround, float Speed2D, float ForwardAcceleration, bool bAlreadyKicked);
+
+	/** Pure: is the owner in a hit reaction the motion springs must not read (hitstop, hitstun, tumble), per bCalmInHitReactions */
+	static bool IsCalmForHit(const FGSTN_GreyboxShapeSettings& Settings, int32 HitstopFramesLeft, bool bInHitstun, bool bInTumble);
 
 	/** Pure: the lean target (pitch forward, roll right, degrees) for a horizontal acceleration in the actor's local frame; forward and
 	 *  sideways (curves) have their own rates and caps */

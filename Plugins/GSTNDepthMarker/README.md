@@ -62,7 +62,9 @@ Mover pawns (2026-11-17): the generic adapters guess the visual mesh ("first mes
 which the per-move capsule changes at run time; SandboxCharacter_Mover is a Pawn, so it fell to the Actor adapter (feet = capsule centre).
 The separate plugin `GSTNDepthMarkerMover` registers `UGSTN_DepthSubjectAdapter_Mover` (priority 200): presented root =
 `BaseVisualComponentTransform^-1 * PrimaryVisualComponent` (exactly what Mover's smoothing wrote), feet at the capsule bottom along
-`GetUpDirection()`, airborne/ground from `UCharacterMoverComponent`, base from `GetMovementBase()`. Tests `GSTNDepthMarker.Mover.*`.
+`GetUpDirection()`, airborne/ground from `UCharacterMoverComponent`, base from `GetMovementBase()`. Tests `GSTNDepthMarker.Mover.*`. Since 2026-11-24 it reads Mover's own smoothed root (`UMoverComponent::GetPresentedTransform()`) instead of reading
+it back from the visual: the visual also carries cosmetic offsets added after the smoothing (hitstop shake, reaction drop, the per-move capsule's
+mesh correction), so the marker shook in hitstop and sat under the drawn body, not the movement capsule, in the dropkick.
 
 ## Projection direction (where the marker and its shadow are cast)
 

@@ -470,6 +470,27 @@ public:
 	UFUNCTION(BlueprintCallable, Category = Mover)
 	MOVER_API FTransform GetBaseVisualComponentTransform() const;
 
+	/**
+	 * GAS-NPP fork (presented state, 2026-11-24): the root transform the player sees this frame, i.e. the smoothed simulation state that
+	 * FinalizeSmoothingFrame placed the primary visual from (location, orientation; scale 1), WITHOUT the base visual offset and without
+	 * any cosmetic offset other code adds to the mesh afterwards (hitstop shake, reaction drop, predicted knockback, body capsule mesh
+	 * correction). The single source for presentation that must follow the drawn character but not its cosmetics: the depth marker, debug
+	 * shapes, VFX anchors, greybox shape drivers. Falls back to the updated component (the simulated or interpolated root) when no
+	 * smoothed state was written in the last frame (smoothing off, mode not VisualComponentOffset, interpolated simulated proxies).
+	 * Presentation only: never read it from simulation code (it is not rollback state and differs per machine).
+	 */
+	UFUNCTION(BlueprintPure, Category = "Mover|Presentation")
+	MOVER_API FTransform GetPresentedTransform() const;
+
+	/** GAS-NPP fork (presented state): the velocity of the smoothed state, interpolated between the two simulated frames like the location,
+	 *  so it changes every rendered frame instead of in 16 ms steps (derive presentation accelerations from it). Fallback as GetPresentedTransform */
+	UFUNCTION(BlueprintPure, Category = "Mover|Presentation")
+	MOVER_API FVector GetPresentedVelocity() const;
+
+	/** GAS-NPP fork (presented state): true when GetPresentedTransform is a smoothed state written in the last rendered frame, false on the fallback */
+	UFUNCTION(BlueprintPure, Category = "Mover|Presentation")
+	MOVER_API bool HasSmoothedPresentation() const;
+
 	/** Sets whether this mover component can use grouped movement updates, which improve performance but can cause attachments to update later than expected */
 	UFUNCTION(BlueprintCallable, Category = Mover)
 	MOVER_API void SetUseDeferredGroupMovement(bool bEnable);
@@ -836,6 +857,12 @@ protected:
 
 	/** Cached original offset from the visual component, used for cases where we want to move the visual component away from the root component (for smoothing, corrections, etc.) */
 	FTransform BaseVisualComponentTransform = FTransform::Identity;
+
+	/** GAS-NPP fork (presented state): the last smoothed root FinalizeSmoothingFrame wrote, its velocity and the engine frame it was written on */
+	FTransform PresentedTransform = FTransform::Identity;
+	FVector PresentedVelocity = FVector::ZeroVector;
+	uint64 PresentedFrameCounter = 0;
+	bool bHasPresentedState = false;
 
 	// TODO: Look at possibility of replacing this with a FGameplayTagCountContainer that could possibly represent both internal and external tags
 	/** Gameplay tags currently active on the simulation. */

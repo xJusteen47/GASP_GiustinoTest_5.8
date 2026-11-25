@@ -9,6 +9,8 @@
 #include "GSTN_DepthSubjectAdapter_Mover.h"
 #include "Misc/AutomationTest.h"
 #include "MoverComponent.h"
+#include "MoverDataModelTypes.h"
+#include "MoverSimulationTypes.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -59,6 +61,16 @@ namespace GSTNDepthMarkerMoverTest
 		void PresentAt(const FVector& SmoothedRoot) const
 		{
 			Visual->SetWorldTransform(Mover->GetBaseVisualComponentTransform() * FTransform(Capsule->GetComponentQuat(), SmoothedRoot));
+		}
+
+		/** Mover's own smoothing call, which also keeps the presented state */
+		void Smooth(const FVector& SmoothedRoot, const FVector& Velocity) const
+		{
+			FMoverSyncState Sync;
+			FMoverDefaultSyncState& Default = Sync.SyncStateCollection.FindOrAddMutableDataByType<FMoverDefaultSyncState>();
+			Default.SetTransforms_WorldSpace(SmoothedRoot, Capsule->GetComponentRotation(), Velocity, FVector::ZeroVector);
+			FMoverAuxStateContext Aux;
+			Mover->FinalizeSmoothingFrame(&Sync, &Aux);
 		}
 	};
 }
@@ -145,6 +157,33 @@ GSTN_DMM_TEST(FeetFollowSmoothedMesh)
 	Rig.Mover->SmoothingMode = EMoverSmoothingMode::None;
 	Adapter->ReadState(Rig.Actor, RawState);
 	TestTrue(TEXT("no visual smoothing: the root"), RawState.Feet.Equals(FVector(500, 0, 0), 0.01));
+	return true;
+}
+
+GSTN_DMM_TEST(IgnoresCosmeticMeshOffsets)
+{
+	FRig Rig;
+	const UGSTN_DepthSubjectAdapter_Mover* Adapter = GetDefault<UGSTN_DepthSubjectAdapter_Mover>();
+	Rig.Capsule->SetWorldLocation(FVector(500, 0, 90));
+	Rig.Smooth(FVector(490, 0, 90), FVector(600, 0, 0));
+	TestTrue(TEXT("Mover kept a smoothed state"), Rig.Mover->HasSmoothedPresentation());
+	TestTrue(TEXT("presented velocity is the smoothed state's"), Rig.Mover->GetPresentedVelocity().Equals(FVector(600, 0, 0), 0.01));
+	// After the smoothing: a hitstop shake / reaction drop moves the mesh (UGSTN_ReactionAnimComponent), the body capsule corrects it
+	Rig.Visual->AddWorldOffset(FVector(0, 6, -25));
+	FGSTN_DepthSubjectState State;
+	if (!TestTrue(TEXT("reads"), Adapter->ReadState(Rig.Actor, State)))
+	{
+		return false;
+	}
+	TestTrue(TEXT("the feet stay under the smoothed capsule, not under the offset mesh"), State.Feet.Equals(FVector(490, 0, 0), 0.01));
+	// A per-move capsule (dropkick): the base moves the mesh far from the capsule; the marker stays under the capsule
+	FTransform Base = Rig.Mover->GetBaseVisualComponentTransform();
+	Base.SetLocation(FVector(-30, 0, -137));
+	Rig.Mover->SetBaseVisualComponentTransform(Base);
+	Rig.Capsule->SetCapsuleSize(34.f, 35.f);
+	Rig.Smooth(FVector(490, 0, 200), FVector::ZeroVector);
+	Adapter->ReadState(Rig.Actor, State);
+	TestTrue(TEXT("dropkick: feet at the movement capsule's bottom"), State.Feet.Equals(FVector(490, 0, 165), 0.01));
 	return true;
 }
 

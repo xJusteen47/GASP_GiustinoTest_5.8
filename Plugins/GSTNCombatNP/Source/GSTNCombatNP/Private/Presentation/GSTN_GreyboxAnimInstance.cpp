@@ -8,6 +8,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "MoverComponent.h"
 #include "MoverTypes.h"
+#include "Presentation/GSTN_CombatStateLibrary.h"
 #include "Presentation/GSTN_RunPresentationComponent.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_GreyboxAnimInstance)
@@ -188,6 +189,11 @@ float UGSTN_GreyboxAnimInstance::StickSlip(float CycleFraction)
 	return (T < Catch ? T / Catch : (1.f - T) / (1.f - Catch)) - 0.5f;
 }
 
+bool UGSTN_GreyboxAnimInstance::IsCalmForHit(const FGSTN_GreyboxShapeSettings& Settings, int32 HitstopFramesLeft, bool bInHitstun, bool bInTumble)
+{
+	return Settings.bCalmInHitReactions && (HitstopFramesLeft > 0 || bInHitstun || bInTumble);
+}
+
 FRotator UGSTN_GreyboxAnimInstance::LeanTarget(const FGSTN_GreyboxShapeSettings& Settings, const FVector& LocalAcceleration)
 {
 	// Forward (start / brake) and sideways (curves) separately: a curve leans harder than a start, with its own cap
@@ -222,7 +228,11 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		Mover = Owner->FindComponentByClass<UMoverComponent>();
 	}
 	const UMoverComponent* MoverComponent = Mover.Get();
-	const FVector Velocity = MoverComponent ? MoverComponent->GetVelocity() : Owner->GetVelocity();
+	// The smoothed velocity (2026-11-24): the simulated one changes in 16 ms steps, so a per-frame difference of it is zero on most rendered
+	// frames and a spike on the others; the smoothed state's velocity is interpolated like the drawn location and changes every frame
+	const FVector Velocity = MoverComponent ? MoverComponent->GetPresentedVelocity() : Owner->GetVelocity();
+	const FGSTN_CombatStateView Combat = UGSTN_CombatStateLibrary::GetCombatState(Owner);
+	const bool bCalm = IsCalmForHit(ShapeSettings, Combat.HitstopFramesLeft, Combat.bInHitstun, Combat.bInTumble);
 	const bool bOnGround = MoverComponent ? MoverComponent->HasGameplayTag(Mover_IsOnGround, true) : true;
 
 	FVector Acceleration = FVector::ZeroVector;
@@ -238,8 +248,8 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	PreviousVelocity = Velocity;
 	bHasPrevious = true;
 
-	// Touchdown: kick the squash spring by the fall speed, so it squashes and bounces back
-	if (bOnGround && !bWasOnGround && LastAirVelocityZ < 0.f)
+	// Touchdown: kick the squash spring by the fall speed, so it squashes and bounces back (not in a hit reaction: a knockdown has its own clip)
+	if (bOnGround && !bWasOnGround && LastAirVelocityZ < 0.f && !bCalm)
 	{
 		const float Omega = 2.f * PI * ShapeSettings.SpringFrequency;
 		SquashSpring.Velocity -= ShapeSettings.LandSquashPer1000 * (-LastAirVelocityZ / 1000.f) * Omega;
@@ -300,8 +310,8 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	const FVector Local = BodyQuat.UnrotateVector(Acceleration);
 	// On a wall the body is braced like on the ground (no air stretch from the slide's vertical speed), and leans its top off the wall
 	const bool bBraced = bOnGround || bOnWall;
-	FRotator LeanGoal = bBraced ? LeanTarget(ShapeSettings, Local) : FRotator::ZeroRotator;
-	if (bOnGround)
+	FRotator LeanGoal = bBraced && !bCalm ? LeanTarget(ShapeSettings, Local) : FRotator::ZeroRotator;
+	if (bOnGround && !bCalm)
 	{
 		// The run's held forward lean (pitch up = top back, so forward is minus)
 		LeanGoal.Pitch -= RunForwardLeanDeg(ShapeSettings, FVector(Velocity.X, Velocity.Y, 0.f).Size());
@@ -347,11 +357,12 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		JudderRoll = Along.Roll + LocalNormal.Y * ShapeSettings.WallJudderDeg * Judder * FMath::Abs(Direction.Z);
 		JudderSquash = -ShapeSettings.WallJudderSquash * FMath::Abs(Judder) * 2.f;
 	}
-	// Run drive: the effort (forward acceleration) and the sim's stamp, tell and boost dash, read from the run presentation
-	const bool bStampLive = RunPresentation.IsValid() && RunPresentation->IsRunStartStamp();
-	const float Effort = bOnGround ? EffortAlpha(ShapeSettings, Local.X) : 0.f;
-	const float DashAlpha = bOnGround && RunPresentation.IsValid() ? DashPoseAlpha(ShapeSettings, RunPresentation->GetBoostDashTime()) : 0.f;
-	if (ShapeSettings.bDriveFromRunState && bOnGround)
+	// Run drive: the effort (forward acceleration) and the sim's stamp, tell and boost dash, read from the run presentation. A hit reaction
+	// (bCalm) reads none of them: its velocity jumps are not effort
+	const bool bStampLive = !bCalm && RunPresentation.IsValid() && RunPresentation->IsRunStartStamp();
+	const float Effort = bOnGround && !bCalm ? EffortAlpha(ShapeSettings, Local.X) : 0.f;
+	const float DashAlpha = bOnGround && !bCalm && RunPresentation.IsValid() ? DashPoseAlpha(ShapeSettings, RunPresentation->GetBoostDashTime()) : 0.f;
+	if (ShapeSettings.bDriveFromRunState && bOnGround && !bCalm)
 	{
 		LeanGoal.Pitch -= ShapeSettings.EffortLeanDeg * Effort;
 		if (RunPresentation.IsValid() && RunPresentation->IsRunStageTell())
@@ -361,8 +372,10 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	}
 	// The dash pose is the boost's own read, not a drive option: forward and low at the launch, eased out
 	LeanGoal.Pitch -= ShapeSettings.DashLeanDeg * DashAlpha;
-	const float SquashGoal = SquashTarget(ShapeSettings, bBraced, Velocity.Z, Local.X) * FMath::Lerp(1.f, ShapeSettings.DashSquash, DashAlpha);
-	SquashSpring.Step(SquashGoal, DeltaSeconds, ShapeSettings.SpringFrequency, ShapeSettings.SpringDamping);
+	const float SpringDamping = bCalm ? FMath::Max(ShapeSettings.SpringDamping, ShapeSettings.HitReactionSpringDamping) : ShapeSettings.SpringDamping;
+	const float SquashGoal = bCalm ? 1.f
+		: SquashTarget(ShapeSettings, bBraced, Velocity.Z, Local.X) * FMath::Lerp(1.f, ShapeSettings.DashSquash, DashAlpha);
+	SquashSpring.Step(SquashGoal, DeltaSeconds, ShapeSettings.SpringFrequency, SpringDamping);
 	// Jump squat: squash fast during the sim's squat frames; on take-off the spring is released from there into the air stretch
 	const bool bJumpSquatting = UGSTN_RunPresentationComponent::IsAnimOwnerJumpSquatting(this);
 	if (bJumpSquatting)
@@ -371,7 +384,7 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		SquashSpring.Velocity = 0.f;
 	}
 	// On a wall the lean is held by the grip, not bounced: critically damped
-	const float LeanDamping = bOnWall ? ShapeSettings.WallSpringDamping : ShapeSettings.SpringDamping;
+	const float LeanDamping = bOnWall ? ShapeSettings.WallSpringDamping : SpringDamping;
 	PitchSpring.Step(LeanGoal.Pitch, DeltaSeconds, ShapeSettings.SpringFrequency, LeanDamping);
 	RollSpring.Step(LeanGoal.Roll, DeltaSeconds, ShapeSettings.SpringFrequency, LeanDamping);
 
@@ -381,7 +394,11 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	const float GroundSpeed = GroundVelocity.Size();
 	const FVector GroundDirection = GroundVelocity.GetSafeNormal();
 	const float BrakeAlong = Acceleration | GroundDirection;
-	if ((bSkidStarted && !bRunStopKicked && ShapeSettings.RunStopKickDeg > 0.f) || StartsRunStop(ShapeSettings, bOnGround, GroundSpeed, BrakeAlong, bRunStopKicked))
+	if (bCalm)
+	{
+		bRunStopKicked = true;  // a knockback's slide is not a run stop; re-armed once still or speeding up after the reaction
+	}
+	else if ((bSkidStarted && !bRunStopKicked && ShapeSettings.RunStopKickDeg > 0.f) || StartsRunStop(ShapeSettings, bOnGround, GroundSpeed, BrakeAlong, bRunStopKicked))
 	{
 		KickPlant(BodyQuat, GroundDirection, ShapeSettings.RunStopKickDeg);
 		bRunStopKicked = true;
@@ -392,7 +409,7 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	}
 	// Run sway: cadence from the speed, or the frantic cadence right after leaving rest; amplitude from the speed, eased
 	const float Speed2D = FVector(Velocity.X, Velocity.Y, 0.f).Size();
-	const bool bMoving = bOnGround && Speed2D > 10.f;
+	const bool bMoving = bOnGround && Speed2D > 10.f && !bCalm;
 	TimeSinceStart = bMoving ? (TimeSinceStart < 0.f ? 0.f : TimeSinceStart + DeltaSeconds) : -1.f;
 	if (bSkidding)
 	{
