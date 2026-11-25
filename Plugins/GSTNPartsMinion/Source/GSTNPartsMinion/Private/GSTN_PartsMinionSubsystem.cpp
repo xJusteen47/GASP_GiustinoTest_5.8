@@ -468,6 +468,7 @@ bool UGSTN_PartsMinionSubsystem::ApplyOutcome(const FGSTN_MinionHandle& Handle, 
 	Stats.LethalKills += bLethal ? 1 : 0;
 	Stats.OutcomeCycles += FPlatformTime::Cycles64() - Start;
 	++Stats.Outcomes;
+	OnPartOutcomeApplied.Broadcast(Handle, *Outcome, Frame);
 	return bLethal;
 }
 
