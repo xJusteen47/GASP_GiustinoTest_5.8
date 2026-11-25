@@ -318,6 +318,10 @@ MOVE_SEQUENCES = [
     {'name': 'gb_sprint', 'taps': [], 'frames': 560, 'dummy': None, 'shoot': True, 'follow': True,
      'sticks': [(20, (0, 1, 0))] + [(320 + 10 * _i, (round(math.sin(math.radians(7.5 * _i)), 4), round(math.cos(math.radians(7.5 * _i)), 4), 0))
                                      for _i in range(1, 13)] + [(500, None)]},
+    # greybox run-drive-1: boost dash (L3) on the capsule: stick forward from rest, RunBoost 3 frames later (inside the dash window, see
+    # mv_dash for why not on the same frame), run held 2 s, then let go
+    {'name': 'gb_dash', 'taps': [], 'frames': 180, 'dummy': None, 'shoot': True, 'follow': True, 'boost': 23,
+     'sticks': [(20, (0, 1, 0)), (140, None)]},
     # greybox run 4: wall slide on the flat wall of the test hub's Z5 (face at x -3000, lane y -2000..-1000, 12 m tall; build_test_hub_map
     # z5_traversal), as surface_scenarios.wall_phase: control yaw 0 (forward = into the wall), teleport 3 m off it, launch at it with the stick
     # held into it. gb_wall_down: slide down; gb_wall_side: stick into + right, slides along; gb_wall_brake: fast along the wall, then reverse
