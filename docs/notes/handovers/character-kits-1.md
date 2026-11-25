@@ -23,6 +23,13 @@ DA_Locomotion_Default). Optional: setup_kit_visuals.py does NOT recolour them (V
 
 Owner 2026-11-24 23:00Z: 1A (stamp 10 f x0.15) 2A (values above) confirmed.
 
+## Resume point (2026-11-25 00:31Z, owner's hotspot off for the night)
+Owner OK for the desktop (00:22Z, "ti lascio entrambi per la notte"). The RC session found the owner's tuned DA_Locomotion_Default in the
+MAIN checkout GASP_Giustino2 (not _ue59): run there, after a backup of the Default, _ue59/IN-USO.txt as machine lock, no git
+checkout/stash there (owner's VFX work). Order: setup_run_stage_steps.py from claude/project-thread-u1p2ha (STEPS_MODE=dump, then
+STEPS_ANIM_SET=0), then setup_character_kits.py, then PIE side videos of the 3 kits + Playtest, then commit the 6 .uasset from a
+separate worktree of this branch. Stopped by the network before or during the scripts: see the RC report in the thread.
+
 ESITO: PARZIALE script pronto, non eseguito sul fisso (coda del fisso)
 SUBAGENTI: 0
 COSTO: ~3 $ | 0 min desktop | 0
