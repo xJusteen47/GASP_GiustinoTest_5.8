@@ -689,7 +689,7 @@ GSTN_CAM_RT_TEST(ZoomInputMovesTheDistanceDirectlyWithinItsRange)
 	const float Arm = Camera->GetBlendedView().ArmCm;
 	TestTrue(TEXT("base distance is the PSO2-like 580 cm"), FMath::IsNearlyEqual(UGSTN_CameraProfile::GetDefaultProfile().FreeView.DistanceCm, 580.f, 0.5f));
 
-	// One wheel notch closer (the setup script maps a notch to -0.12): the same frame, no ease
+	// A small zoom-in step (one wheel notch would be about -0.12): the same frame, no ease
 	Camera->AddZoomInput(-0.12f);
 	Camera->EvaluateCamera(1.f / 60.f);
 	TestTrue(TEXT("a notch moves at once by e^-0.12"), FMath::IsNearlyEqual(Camera->GetDistanceScale(), FMath::Exp(-0.12f), 1.0e-3f));

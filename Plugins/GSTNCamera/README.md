@@ -86,8 +86,8 @@ than `MaxEngageAngleDeg` from the current heading. Overlaps: higher `Priority` f
 `FGSTN_CameraUserOptions` on `UGSTN_CameraLocalPlayerSubsystem::Options` (component: `GetUserOptions`/`SetUserOptions`), saved per local player with
 `SaveUserOptions` (slot `GSTNCamera_Options_<controller id>`, loaded at start): invert X/Y, sensitivity, distance preset (Near 0.8 / Medium 1 / Far 1.25 /
 Custom 0.6-1.6; `CycleDistancePreset`, eased in 0.45 s, limited by a section's `DistanceScaleLimit`), free zoom (2026-11-25: profile `ZoomAction`, a per-frame
-1D axis like a mouse delta, or `AddZoomInput`; it moves the Custom scale by e^(input x `ZoomLogPerUnit`) with no ease; cvar `gstn.Camera.Zoom` sets it
-for a playtest; base distance 580 cm = PSO2 default zoom), auto follow on/off (**off by default** since 2026-11-25, owner: it ruins aiming
+1D axis like a mouse delta, or `AddZoomInput`; it moves the Custom scale by e^(input x `ZoomLogPerUnit`) with no ease; the project binds no key, the zoom is the debug
+panel cvar `gstn.Camera.Zoom`, 1 = base distance 580 cm = PSO2 default zoom), auto follow on/off (**off by default** since 2026-11-25, owner: it ruins aiming
 precision; `gstn.Camera.AutoFollow 1` turns it on), Camera Assist (hold recenter:
 the move stick turns the camera; `IsCameraAssistActive` tells the move code to stand still). Stick latching: the project's move code reads
 `ResolveMoveReferenceRotation(MoveStick)` instead of the control rotation; after a camera-made turn it keeps the old reference until the stick is released.

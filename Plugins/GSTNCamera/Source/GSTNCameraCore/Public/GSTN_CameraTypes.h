@@ -779,7 +779,8 @@ struct GSTNCAMERACORE_API FGSTN_CameraDistancePresets
 	/**
 	 * Free zoom: one unit of zoom input multiplies the distance by e^ZoomLogPerUnit (multiplicative, so a notch feels the same near and far).
 	 * The input is per frame, like a mouse delta: the mouse wheel gives one value per notch, a held button needs a Scale by Delta Time modifier
-	 * on its mapping (Tools/GASNPPTest/camera_zoom_setup.py sets both). Positive = farther
+	 * on its mapping. Positive = farther. The project binds no key to it (owner 2026-11-25: the zoom is a debug panel setting,
+	 * gstn.Camera.Zoom; the d-pad is kept for gameplay)
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Distance", meta = (ClampMin = "0"))
 	float ZoomLogPerUnit = 1.f;

@@ -27,7 +27,7 @@ namespace GSTNCameraComponentPrivate
 	static TAutoConsoleVariable<int32> CVarAutoFollow(TEXT("gstn.Camera.AutoFollow"), 0, TEXT("1 turns the gentle auto follow (camera turns behind the runner) on, 0 off. Default off (owner 2026-11-25: it ruins aiming precision)."));
 	static TAutoConsoleVariable<int32> CVarAssist(TEXT("gstn.Camera.Assist"), 0, TEXT("1 turns Camera Assist on: hold recenter and the move stick turns the camera."));
 	static TAutoConsoleVariable<int32> CVarDistance(TEXT("gstn.Camera.Distance"), 1, TEXT("Camera distance preset: 0 = near, 1 = medium, 2 = far."));
-	static TAutoConsoleVariable<float> CVarZoom(TEXT("gstn.Camera.Zoom"), -1.f, TEXT("Camera zoom as a scale of the base distance (580 cm, PSO2 default): sets the player's Custom distance when changed, e.g. 0.8 closer, 1.3 farther (range 0.6-1.6). -1 = leave the player's choice."));
+	static TAutoConsoleVariable<float> CVarZoom(TEXT("gstn.Camera.Zoom"), 1.f, TEXT("Camera zoom (debug panel), a scale of the base distance: 1 = 580 cm, the PSO2 default; 0.8 closer, 1.3 farther (range 0.6-1.6). Sets the player's Custom distance when changed."));
 	static TAutoConsoleVariable<int32> CVarLookLog(TEXT("gstn.Camera.LookLog"), 0, TEXT("1 = one CSV row per camera frame in Saved/Logs/gstn_camera_look_<pawn>.csv: control rotation before the camera, look delta, orbit pitch and its clamp, view pitch, written control rotation. Diagnostics for the P1a pitch lock (2026-11-21)."));
 	static TAutoConsoleVariable<int32> CVarOcclusion(TEXT("gstn.Camera.Occlusion"), 1, TEXT("0 turns the occlusion probe (fade and pull-in) off."));
 
@@ -494,7 +494,7 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 	FGSTN_CameraUserOptions& UserOptions = Options();
 	// A cvar acts when it CHANGES (the player's own menu choice is not overwritten every frame)
 	static int32 LastAutoFollow = 0, LastAssist = 0, LastDistance = 1;
-	static float LastZoom = -1.f;
+	static float LastZoom = 1.f;
 	const int32 NowAutoFollow = CVarAutoFollow.GetValueOnGameThread(), NowAssist = CVarAssist.GetValueOnGameThread(), NowDistance = FMath::Clamp(CVarDistance.GetValueOnGameThread(), 0, 2);
 	const float NowZoom = CVarZoom.GetValueOnGameThread();
 	if (NowAutoFollow != LastAutoFollow) { LastAutoFollow = NowAutoFollow; UserOptions.bAutoFollow = NowAutoFollow != 0; }

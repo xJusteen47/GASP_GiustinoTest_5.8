@@ -17,10 +17,7 @@
 #include "Misc/FileHelper.h"
 #include "Components/CapsuleComponent.h"
 #include "GameplayTagContainer.h"
-#include "InputAction.h"
-#include "InputMappingContext.h"
 #include "MoverComponent.h"
-#include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "GameFramework/Actor.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -49,19 +46,6 @@ namespace GSTNPlaytestCamera
 	static TAutoConsoleVariable<int32> CVarP1aLookFeed(TEXT("gstn.Camera.P1a.LookFeed"), 1,
 		TEXT("1 = GASP's look input (the control rotation change since the P1a camera's own write) steers its orbit, 0 = no look input (diagnostics)"));
 	static constexpr float ProbeRadius = 12.f;
-	/** Camera zoom input (owner 2026-11-25): a 1D action and the context that binds it (mouse wheel, d-pad up/down), made by
-	 *  Tools/GASNPPTest/camera_zoom_setup.py. Missing assets = no zoom input, the camera still works (gstn.Camera.Zoom still sets the zoom) */
-	static const TCHAR* ZoomActionPath = TEXT("/Game/GSTN/Input/IA_GSTN_CameraZoom.IA_GSTN_CameraZoom");
-	static const TCHAR* CameraContextPath = TEXT("/Game/GSTN/Input/IMC_GSTN_Camera.IMC_GSTN_Camera");
-
-	/** The zoom assets exist (checked once per run): the camera polls its actions every frame, and a missing soft path would retry the load and
-	 *  warn every frame */
-	static bool HasZoomInputAssets()
-	{
-		static const bool bHas = FPackageName::DoesPackageExist(FSoftObjectPath(ZoomActionPath).GetLongPackageName())
-			&& FPackageName::DoesPackageExist(FSoftObjectPath(CameraContextPath).GetLongPackageName());
-		return bHas;
-	}
 	/** Shared camera anchor tuning, optional (C++ defaults when missing). Created by Tools/GASNPPTest/camera_anchor_setup.py */
 	static const TCHAR* AnchorSettingsPath = TEXT("/Game/GSTN/Data/Camera/DA_CameraAnchor_Default.DA_CameraAnchor_Default");
 
@@ -495,15 +479,6 @@ void UGSTN_PlaytestCameraSubsystem::Tick(float DeltaTime)
 				}
 				if (Cam->Profile && Cam->Profile->GetOuter() == Cam)
 				{
-					// Zoom input from our own action and context (data, never a key in code); a Blueprint profile that names its own keeps it
-					if (Cam->Profile->ZoomAction.IsNull() && GSTNPlaytestCamera::HasZoomInputAssets())
-					{
-						Cam->Profile->ZoomAction = TSoftObjectPtr<UInputAction>(FSoftObjectPath(GSTNPlaytestCamera::ZoomActionPath));
-					}
-					if (Cam->Profile->LookMappingContext.IsNull() && GSTNPlaytestCamera::HasZoomInputAssets())
-					{
-						Cam->Profile->LookMappingContext = TSoftObjectPtr<UInputMappingContext>(FSoftObjectPath(GSTNPlaytestCamera::CameraContextPath));
-					}
 					Cam->Profile->LookInputSource = GSTNPlaytestCamera::CVarP1aLookFeed.GetValueOnGameThread() != 0
 						? EGSTN_CameraLookInputSource::ControlRotation : EGSTN_CameraLookInputSource::Plugin;
 				}

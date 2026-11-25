@@ -94,7 +94,8 @@ public:
 	/**
 	 * A 1D axis: free zoom (owner 2026-11-25), positive = farther. Per frame like a mouse delta (wheel as is, held buttons with Scale by Delta
 	 * Time): it moves the Custom distance by DistancePresets.ZoomLogPerUnit per unit, with no ease (the input itself is the motion).
-	 * Polled whatever the LookInputSource. Empty = no zoom input (presets, menu and gstn.Camera.Zoom still work)
+	 * Polled whatever the LookInputSource. Empty = no zoom input (presets, menu and gstn.Camera.Zoom still work).
+	 * The project leaves it empty (owner 2026-11-25: zoom only in the debug panel)
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	TSoftObjectPtr<UInputAction> ZoomAction;
