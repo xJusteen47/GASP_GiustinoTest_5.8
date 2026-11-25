@@ -173,6 +173,7 @@ In gioco: tasti e stick diventano comandi, con buffer, priorità e blocchi.
 
 ### 5.11 GAS e tag · OK
 - Abilità del progetto: derivare sempre da `Prj/GAS/GSTN_GameplayAbility.h`. Tag nativi del progetto: `Prj/GAS/GSTN_AbilityTags.h`; tag dei plugin: tabella in `Plugins/README.md`. Fork: `Plugins/GASNPP/` (`PATCHES.md`). Doc `gas-npp.md`, `modularity-and-tags.md`. Skill `add-gstn-ability`.
+- Mappa unica in italiano di tag, verbi, cosa è dentro/fuori dalla simulazione e cosa torna indietro al rollback, con il file di ogni voce: `docs/architecture/tag-verbi-simulazione-rollback.md` (25/11).
 
 ### 5.12 Presentazione: VFX, suoni, vibrazione · OK (superfici/vibrazione SCRITTO)
 - `Plugins/GSTNPresentation`: evento (`Presentation.Event.*`) → Niagara/suono/scossa camera, tabella `UGSTN_PresentationTable`. Hitstop e colpi visivi: `NP/Presentation/GSTN_HitPresentation*.h`.

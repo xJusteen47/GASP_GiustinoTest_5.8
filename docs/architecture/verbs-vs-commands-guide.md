@@ -2,6 +2,8 @@
 
 Questa guida spiega la differenza tra i tre concetti e mostra un esempio concreto di implementazione di un **Verbo di Modalità** (`UGSTN_GA_ModeVerb`).
 
+Per la mappa completa (tutti i tag, tutti i verbi del giocatore, dentro/fuori simulazione, rollback sì/no) vedi [tag-verbi-simulazione-rollback.md](tag-verbi-simulazione-rollback.md).
+
 ---
 
 ## 1. Distinzione rapida
