@@ -82,11 +82,11 @@ struct GSTNSPINDRILLCORE_API FGSTN_AirSpinTuning
 
 	/** Gravity multiplier during the air spin */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SpinDrill|AirSpin", meta = (ClampMin = "0", ClampMax = "2"))
-	float SpinGravityScale = 0.35f;
+	float SpinGravityScale = 0.25f;
 
 	/** Fall speed cap multiplier during the air spin */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SpinDrill|AirSpin", meta = (ClampMin = "0", ClampMax = "2"))
-	float SpinMaxFallSpeedScale = 0.5f;
+	float SpinMaxFallSpeedScale = 0.4f;
 
 	/** Frames the low gravity outlives the spin timeline; 0 = only during the spin (14 SD.3) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SpinDrill|AirSpin", meta = (ClampMin = "0"))

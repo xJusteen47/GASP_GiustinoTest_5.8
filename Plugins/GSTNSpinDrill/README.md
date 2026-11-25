@@ -128,9 +128,20 @@ BeforeCandidates yet; the request of the frame and the bore end rules (`UGSTN_Dr
 - Limits: wall contact does not refresh the air spin yet (no wall fact in the combat state); a pawn without the combat stats never
   spends its air spin; deviations in [spin-drill-doc-deltas.md](../../docs/notes/spin-drill-doc-deltas.md) "D4".
 
+## Every kit and the world's turnables (owner 2026-11-24)
+
+- **Every kit spins**: `UGSTN_SpinDrillSettings` (Project Settings > Plugins > GSTN Spin and Drill) `bAddSpinToEveryKit` (default on):
+  the loadout extension appends `MakeDefaultSpinBindings` and the bore to every kit **asset** that has neither its own spin bindings nor a
+  `FGSTN_SpinDrillKitExtension`, with `DefaultTuning` (empty = struct defaults). Kits built in memory by tests are untouched.
+- **Air spin feel**: defaults a bit floatier (`SpinGravityScale` 0.25, `SpinMaxFallSpeedScale` 0.4) and full air control while the air spin
+  runs (`FGSTN_SpinTimelineParams::AirControl` = 1: a movement track with no curve, read only for its `AirControlOverride`). All tunable.
+- **Turnables**: `IGSTN_SpinTurnable` (Core, Blueprint implementable) + `UGSTN_SpinTurnSubsystem` (NP module, authority only) from the new
+  event `Combat.Event.Spin.Started` and from `Combat.Event.Drill.GroundLag`; both carry the sense tag. Spec 13d. First user: the floor screw
+  in the bridge plugin [GSTNSpinScrew](../GSTNSpinScrew/README.md).
+
 ## Tags
 
-Native, declared in `GSTN_SpinDrillTags.h` (`GSTNSpinDrillTags`), listed by `GetDeclaredTags` (25 tags):
+Native, declared in `GSTN_SpinDrillTags.h` (`GSTNSpinDrillTags`), listed by `GetDeclaredTags` (30 tags):
 
 | Tags | Kind |
 |---|---|
@@ -140,7 +151,7 @@ Native, declared in `GSTN_SpinDrillTags.h` (`GSTNSpinDrillTags`), listed by `Get
 | `Combat.State.SpinLowGravity`, `Combat.State.DiveGravity` | granted only by the low gravity and dive gravity effects (the exceptions to "projected") |
 | `Combat.SetByCaller.SpinDrill.GravityScale`, `.FallSpeedScale` | magnitudes of the low gravity effect |
 | `Combat.HitType.Drill` | hit type leaf |
-| `Combat.Event.Drill.Latched`, `.Detached`, `.Launched`, `.GroundLag` | events, published once on the authority |
+| `Combat.Event.Drill.Latched`, `.Detached`, `.Launched`, `.GroundLag`, `Combat.Event.Spin.Started` | events, published once on the authority |
 | `Ability.Movement.Spin`, `.SpinCancel`, `Ability.Combat.Drill.Dive`, `.Bore`, `.Launch` | ability identity |
 
 Not declared yet: the `Anim.Set.*` leaves (presentation checkpoint, GSTNAnimation's rules), `Combat.Link.Type.Drill` and its roles

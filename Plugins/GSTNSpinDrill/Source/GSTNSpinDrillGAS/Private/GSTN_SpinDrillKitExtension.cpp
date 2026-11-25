@@ -6,6 +6,9 @@
 
 #include "Components/ActorComponent.h"
 #include "GameFramework/Actor.h"
+#include "GSTN_SpinDrillLibrary.h"
+#include "GSTN_SpinDrillSettings.h"
+#include "GSTN_SpinDrillTags.h"
 #include "GSTN_SpinDrillTuning.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Loadout/GSTN_LoadoutAssembly.h"
@@ -22,6 +25,15 @@ const FGSTN_SpinDrillKitExtension* FGSTN_SpinDrillLoadout::FindKitExtension(cons
 	return Kit ? Kit->Extensions.Find<FGSTN_SpinDrillKitExtension>() : nullptr;
 }
 
+namespace GSTNSpinDrillLoadout
+{
+	bool IsSpinOrDrillCommand(const FGameplayTag& Command)
+	{
+		return Command == GSTNSpinDrillTags::Command_Movement_Spin_Clockwise.GetTag() || Command == GSTNSpinDrillTags::Command_Movement_Spin_CounterClockwise.GetTag()
+			|| Command == GSTNSpinDrillTags::Command_Movement_Spin_Button.GetTag() || Command == GSTNSpinDrillTags::Command_Movement_Drill.GetTag();
+	}
+}
+
 void FGSTN_SpinDrillLoadout::AttachFromLoadout(const FGSTN_LoadoutExtensionContext& Context, FGSTN_CompileInput& Input)
 {
 	const UActorComponent* Component = Cast<UActorComponent>(Context.WorldContext);
@@ -31,18 +43,37 @@ void FGSTN_SpinDrillLoadout::AttachFromLoadout(const FGSTN_LoadoutExtensionConte
 		// A tool or a test compiles without a pawn: nothing to attach to
 		return;
 	}
-	const FGSTN_SpinDrillKitExtension* Extension = FindKitExtension(Context.Resolved ? Context.Resolved->Kit : nullptr);
-	if (!Extension)
+	const UGSTN_PrimaryKitDefinition* Kit = Context.Resolved ? Context.Resolved->Kit : nullptr;
+	const FGSTN_SpinDrillKitExtension* Extension = FindKitExtension(Kit);
+	const UGSTN_SpinDrillSettings& Settings = UGSTN_SpinDrillSettings::Get();
+	const bool bKitBindsSpin = Input.Kit.Bindings.ContainsByPredicate([](const FGSTN_BindingInput& Binding)
 	{
+		return GSTNSpinDrillLoadout::IsSpinOrDrillCommand(Binding.Command);
+	});
+	// Owner rule (2026-11-24): the spin is a shared system, every kit asset has it unless the kit says otherwise. Only assets: a kit built in
+	// memory by code is a test's, whose table is counted
+	const bool bFromSettings = !Extension && !bKitBindsSpin && Settings.bAddSpinToEveryKit && Kit && Kit->IsAsset();
+	if (!Extension && !bFromSettings)
+	{
+		// A kit that binds the spin by hand without the entry plays with the defaults the simulation falls back on (D4 behaviour)
 		FGSTN_SpinDrillAttach::Clear(Owner);
 		return;
 	}
-	if (!Extension->BoreAbility.IsNull())
+	if (bFromSettings)
 	{
-		Input.Kit.TriggeredAbilities.AddUnique(Extension->BoreAbility.ToSoftObjectPath());
+		for (const FGSTN_AbilityBinding& Binding : UGSTN_SpinDrillLibrary::MakeDefaultSpinBindings(Settings.bKeyboardShortcut))
+		{
+			Input.Kit.Bindings.Add(FGSTN_LoadoutAssembly::MakeBindingInput(Binding));
+		}
+	}
+	const FSoftObjectPath Bore = Extension ? Extension->BoreAbility.ToSoftObjectPath() : FSoftObjectPath(UGSTN_GA_DrillBore::StaticClass());
+	if (!Bore.IsNull())
+	{
+		Input.Kit.TriggeredAbilities.AddUnique(Bore);
 	}
 	// Loaded here, where the loadout is compiled, never in a tick; the values are copied, so nothing has to keep the asset alive
-	const UGSTN_SpinDrillTuning* Tuning = Extension->Tuning.IsNull() ? nullptr : Extension->Tuning.LoadSynchronous();
+	const TSoftObjectPtr<UGSTN_SpinDrillTuning> TuningRef = Extension ? Extension->Tuning : Settings.DefaultTuning;
+	const UGSTN_SpinDrillTuning* Tuning = TuningRef.IsNull() ? nullptr : TuningRef.LoadSynchronous();
 	FGSTN_SpinDrillAttach::Apply(Owner, Tuning
 		? FGSTN_DrillSimTuning::FromTuning(Tuning->AirSpin, Tuning->Cancel, Tuning->Dive, Tuning->Bore, Tuning->Launch)
 		: FGSTN_DrillSimTuning::MakeDefault());

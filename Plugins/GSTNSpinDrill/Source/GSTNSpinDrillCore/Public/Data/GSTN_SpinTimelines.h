@@ -39,6 +39,13 @@ struct FGSTN_SpinTimelineParams
 
 	/** First frame of the cancel window into the drill command (D8, spec 2: "entry from spin frame 3"). Negative = no window */
 	int32 DiveFromFrame = 3;
+
+	/**
+	 * Air control (0..1) while the spin runs in the air, in place of the kit's (owner 2026-11-24: the air spin gives more control). Carried by a
+	 * movement track with no curve: the spin is no move timeline ability, so the track never moves the body, the run stages only read its
+	 * AirControlOverride. Below 0 = no track, the kit's air control
+	 */
+	float AirControl = -1.f;
 };
 
 /** What the default drill dive timeline is made of (D8) */
