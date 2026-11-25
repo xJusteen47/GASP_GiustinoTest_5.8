@@ -427,6 +427,8 @@ void FGSTN_CombatAttacker::Tick(const FGSTN_AttackerTickInput& In, FGSTN_CombatS
 			Candidate.HitboxIndex = HitboxIndex;
 			Candidate.Spec = &Spec;
 			Candidate.Hit = VariantHit;
+			// A charged move (Charge Hold): Smash's charge scales the damage only; the knockback grows with it through the formula
+			Candidate.Hit.Damage *= In.DamageScale;
 			Candidate.Relationship = Relationship;
 			Candidate.bRelationshipForced = Variant && Variant->bForceHittable;
 			Candidate.HurtboxIndex = Picked;

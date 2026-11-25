@@ -223,6 +223,7 @@ I branch S1 (`project-thread-njoso3`), haptics (`c2dfra`), M12 p1 (`0f3p4m`), M1
 | Strumenti di moto per Sequencer | `project-thread-t93zat` | codice vecchio (base feature) |
 | Promozione minion G9b, ferite parti | `desktop-g9b`, `parts-rest-laptop` | codice vecchio, da verificare se superato |
 | Riorganizzazione Content | `content-riorganizzazione` (d0b56728) | piano `docs/notes/content-riorganizzazione.md` (decisioni 1A 2A 3A), fase 2 sul fisso non fatta |
+| Carica degli aerial (Charge Hold: posa tenuta, direzione bloccata, bonus danno per mossa), owner 25-11 1C 2A 3A | `project-thread-uyhp3p` | codice + script `Tools/GAS/setup_aerial_charge_hold.py`, non compilato; handover `docs/notes/handovers/aerial-charge-1.md` |
 | Ricerche skin, mesh, inventario animazioni, mappa cartelle | `skin-cosmetici-ricerca`, `project-thread-4pj7kf`, `project-thread-nfz4at`, `anim-inventario-2026-11-23`, `project-thread-f4ovn9` | solo documenti |
 `feature/gas-npp-5.8` non è un antenato di main ed è indietro: non partire da lì.
 

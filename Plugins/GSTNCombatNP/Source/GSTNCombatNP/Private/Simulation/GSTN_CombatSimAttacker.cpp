@@ -11,6 +11,7 @@
 #include "Mover/GSTN_MoverSimStateTracker.h"
 #include "MoverComponent.h"
 #include "Movement/GSTN_BodyCapsuleModifier.h"
+#include "Timeline/GSTN_ChargeHold.h"
 #include "Timeline/GSTN_Landing.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
@@ -196,6 +197,10 @@ void UGSTN_CombatSimComponent::RunAttackerStep(const FNetSimTimeStep& TimeStep, 
 	{
 		In.Timeline = GetRegistryTimeline(Tables(), Core.ActiveTimeline);
 		In.TimelineFrame = FMath::Max(Frame - Core.TimelineStartFrame - Core.TimelinePausedFrames, 0);
+		if (In.Timeline)
+		{
+			In.DamageScale = FGSTN_ChargeHold::GetDamageScale(*In.Timeline, Core.ChargeFrames);
+		}
 	}
 	if (!In.Timeline || !ReadOwnPose(In.Root, In.Up))
 	{

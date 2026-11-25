@@ -1,4 +1,5 @@
 #include "Timeline/GSTN_TimelineUtils.h"
+#include "Timeline/GSTN_ChargeHold.h"
 #include "Timeline/GSTN_HitBounce.h"
 #include "Timeline/GSTN_HoldUntilLanded.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
@@ -48,6 +49,33 @@ FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemoveHoldUntilLandedTrack(const F
 	Result.Tracks.RemoveAll([](const TInstancedStruct<FGSTN_TimelineTrack>& Track)
 	{
 		return Track.GetScriptStruct() == FGSTN_TimelineTrack_HoldUntilLanded::StaticStruct();
+	});
+	return Result;
+}
+
+FGSTN_CombatTimelineData UGSTN_TimelineUtils::SetChargeHoldTrack(const FGSTN_CombatTimelineData& Data, int32 HoldFrame, FGameplayTag HoldButton, FName LayoutFunction,
+	int32 MaxHoldFrames, float FullChargeDamageScale, bool bLockDirection, FName LoopSection)
+{
+	FGSTN_CombatTimelineData Result = RemoveChargeHoldTrack(Data);
+	FGSTN_TimelineTrack_ChargeHold Track;
+	Track.StartFrame = FMath::Max(HoldFrame, 0);
+	Track.EndFrame = Track.StartFrame + 1;
+	Track.HoldButton = HoldButton;
+	Track.LayoutFunction = LayoutFunction;
+	Track.MaxHoldFrames = FMath::Max(MaxHoldFrames, 0);
+	Track.FullChargeDamageScale = FMath::Clamp(FullChargeDamageScale, 1.f, 3.f);
+	Track.bLockDirection = bLockDirection;
+	Track.LoopSection = LoopSection;
+	Result.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_ChargeHold>(Track));
+	return Result;
+}
+
+FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemoveChargeHoldTrack(const FGSTN_CombatTimelineData& Data)
+{
+	FGSTN_CombatTimelineData Result = Data;
+	Result.Tracks.RemoveAll([](const TInstancedStruct<FGSTN_TimelineTrack>& Track)
+	{
+		return Track.GetScriptStruct() == FGSTN_TimelineTrack_ChargeHold::StaticStruct();
 	});
 	return Result;
 }

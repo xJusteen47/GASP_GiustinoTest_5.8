@@ -1,6 +1,8 @@
 // Combat simulation (GAS-NPP fork).
 
 #include "Simulation/GSTN_CombatSimComponent.h"
+
+#include "Timeline/GSTN_ChargeHold.h"
 #include "Loadout/GSTN_LoadoutInputFeel.h"
 
 #include "Hits/GSTN_HurtboxPose.h"
@@ -1459,6 +1461,12 @@ int32 UGSTN_CombatSimComponent::GetEvaluatedTimelineFrame() const
 	return Sync->Core.Input.History.GetLatestFrame() - Sync->Core.TimelineStartFrame - Sync->Core.TimelinePausedFrames;
 }
 
+int32 UGSTN_CombatSimComponent::GetChargeFrames() const
+{
+	const FGSTN_CombatSyncState* Sync = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
+	return Sync && Sync->Core.ActionState == EGSTN_ActionState::InTimeline ? static_cast<int32>(Sync->Core.ChargeFrames) : 0;
+}
+
 const FGSTN_CombatTimelineData* UGSTN_CombatSimComponent::ReadEvaluatedTimeline(int32& OutFrame) const
 {
 	OutFrame = GetEvaluatedTimelineFrame();
@@ -2708,13 +2716,23 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 	// The fork's legacy start tick (the montage one step ahead) is only aligned again after a hit when the pause starts on the hit frame:
 	// that pairing is kept as it was. The pause flag only exists with a montage: it is not replicated otherwise
 	const bool bPauseFromHitFrame = AbilitySystem->bAdvanceSyncedMontageOnStartTick;
-	const bool bMontageStill = bPauseFromHitFrame ? Sync->Core.IsInHitstop(Frame) : FrameClockStill == Frame;
+	// A Charge Hold (owner 2026-11-25) stands the timeline on its hold frame: the pose holds the same way, and plays on on the tick after the hold
+	// frame. Both flags are this frame's clock step on the sync state, so a resimulated frame pauses and resumes alike
+	bool bChargeStill = false;
+	if (TimelineOutput.bChargeHoldStall && Sync->Core.ActionState == EGSTN_ActionState::InTimeline)
+	{
+		// A hold with a charge loop section (FGSTN_TimelineTrack_ChargeHold::LoopSection) plays that loop instead: the timeline ability drives it
+		const FGSTN_CombatTimelineData* Running = GetRegistryTimeline(Tables(), Sync->Core.ActiveTimeline);
+		const FGSTN_TimelineTrack_ChargeHold* Charge = Running ? FGSTN_ChargeHold::FindTrack(*Running) : nullptr;
+		bChargeStill = Charge && Charge->LoopSection.IsNone();
+	}
+	const bool bMontageStill = (bPauseFromHitFrame ? Sync->Core.IsInHitstop(Frame) : FrameClockStill == Frame) || bChargeStill;
 	float MontageTime = 0.f;
 	if (bMontageStill && AbilitySystem->GetPlayingSyncedMontage(MontageTime))
 	{
 		AbilitySystem->PauseCurrentSyncedMontage();
 	}
-	else if (Frame == Sync->Core.HitstopEndFrame)
+	else if (Frame == Sync->Core.HitstopEndFrame || (TimelineOutput.bChargeHoldRelease && !Sync->Core.IsInHitstop(Frame)))
 	{
 		AbilitySystem->ResumeCurrentSyncedMontage();
 	}

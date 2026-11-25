@@ -648,6 +648,13 @@ FGSTN_LoadoutData (what a player owns and saves)
   jump-cancel), `Movement` (velocity curves, gravity, facing lock → one queued layered move via GE), `Tags`, `Event`
   (gameplay event / projectile / cue at frame N), `Charge` (loop while held), `LandingLag`/auto-cancel for aerials,
   buffer overrides.
+- **Charge Hold** (owner 2026-11-25, decisions 1C 2A 3A, `FGSTN_TimelineTrack_ChargeHold`, `Timeline/GSTN_ChargeHold.h`): the move's button held
+  without a break since the start stands the timeline on the track's `StartFrame` (a third into the startup, Smash Ultimate's smash charge applied
+  to aerials) up to `MaxHoldFrames` (60); the release plays the rest of the startup. The synced montage is paused on the pose (or loops
+  `LoopSection`); `bLockDirection` ends the reverse window at the hold frame and holds the steering yaw during the hold, the steering cone after
+  the release is the angle tolerance at the confirm. `FullChargeDamageScale` (1 = off) scales the hits' damage by the charge
+  (`FGSTN_CombatSyncCore::ChargeFrames`). Combat clock step in `GSTN_CombatTimelineLogic.cpp`, montage pause in the combat model's
+  ability pre-tick. Content: `Tools/GAS/setup_aerial_charge_hold.py` (every airborne attack/strong binding of every kit).
 - **Momentum slide** (owner 2026-11-13, `FGSTN_MomentumSlide`, timeline field `MomentumSlide`, off by default): a ground move started
   while running keeps sliding on its feet along the running direction (never along the facing), with the montage's root motion added,
   slowed by a Fixed deceleration or by the character's own braking (`Character`, scaled). The facing of the move's first frame against the
