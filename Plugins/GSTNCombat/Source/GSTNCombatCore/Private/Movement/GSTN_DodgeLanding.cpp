@@ -71,7 +71,8 @@ void FGSTN_DodgeLandingState::NetSerialize(FArchive& Ar)
 
 int32 FGSTN_DodgeLandingLogic::ResolveEndLag(const FGSTN_DodgeLandingKitExtension& Kit, int32 MoveLandingLagFrames)
 {
-	return FMath::Clamp(Kit.EndLagFrames >= 0 ? Kit.EndLagFrames : MoveLandingLagFrames, 0, 255);
+	const int32 Belly = FMath::Max(Kit.EndLagFrames >= 0 ? Kit.EndLagFrames : MoveLandingLagFrames, 0);
+	return FMath::Clamp(Belly + FMath::Max(Kit.GetUpRollFrames, 0), 0, 255);
 }
 
 bool FGSTN_DodgeLandingLogic::IsLockedCommand(const FGSTN_DodgeLandingKitExtension& Kit, const FGameplayTag& Command)

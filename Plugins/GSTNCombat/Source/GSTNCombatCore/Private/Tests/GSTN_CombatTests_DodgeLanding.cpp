@@ -35,7 +35,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DodgeLandingEndLagTest, "GSTNCombat.Core.
 bool FGSTN_DodgeLandingEndLagTest::RunTest(const FString& Parameters)
 {
 	const FGSTN_DodgeLandingKitExtension Kit;
-	TestEqual(TEXT("default lag = the move's"), FGSTN_DodgeLandingLogic::ResolveEndLag(Kit, FGSTN_MoveTimelines::DefaultDodgeEndLagFrames), 8);
+	// Owner 2026-11-25: the belly part (the move's 8) plus the get-up roll to stand (10)
+	TestEqual(TEXT("default get-up roll 10"), Kit.GetUpRollFrames, 10);
+	TestEqual(TEXT("default lag = the move's plus the get-up roll"), FGSTN_DodgeLandingLogic::ResolveEndLag(Kit, FGSTN_MoveTimelines::DefaultDodgeEndLagFrames), 18);
 	const FGSTN_DodgeLandingState State = FGSTN_DodgeLandingState::Open(Landed, 8, Kit.RedodgeLockFrames);
 
 	// Frames 1..8 of the lag (the landing frame is 1): nothing acts, not even a jump or an attack
@@ -54,9 +56,13 @@ bool FGSTN_DodgeLandingEndLagTest::RunTest(const FString& Parameters)
 	// A kit's own lag wins over the move's
 	FGSTN_DodgeLandingKitExtension Slow;
 	Slow.EndLagFrames = 14;
-	TestEqual(TEXT("kit override"), FGSTN_DodgeLandingLogic::ResolveEndLag(Slow, 8), 14);
+	TestEqual(TEXT("kit override plus the get-up roll"), FGSTN_DodgeLandingLogic::ResolveEndLag(Slow, 8), 24);
+	Slow.GetUpRollFrames = 0;
+	TestEqual(TEXT("kit override, no get-up roll"), FGSTN_DodgeLandingLogic::ResolveEndLag(Slow, 8), 14);
 	Slow.EndLagFrames = 0;
-	TestEqual(TEXT("kit 0 = no lag"), FGSTN_DodgeLandingLogic::ResolveEndLag(Slow, 8), 0);
+	TestEqual(TEXT("kit 0 and no get-up roll = no lag"), FGSTN_DodgeLandingLogic::ResolveEndLag(Slow, 8), 0);
+	Slow.GetUpRollFrames = 10;
+	TestEqual(TEXT("no belly lag: only the get-up roll"), FGSTN_DodgeLandingLogic::ResolveEndLag(Slow, 8), 10);
 	return true;
 }
 

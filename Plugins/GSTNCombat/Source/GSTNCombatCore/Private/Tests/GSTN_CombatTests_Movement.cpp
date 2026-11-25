@@ -220,7 +220,8 @@ bool FGSTN_MoveTimelinesTest::RunTest(const FString& Parameters)
 	// The air dodge for now is the ground one, blocking up to the air limit
 	const FGSTN_MoveTimelineParams AirFromGround = FGSTN_MoveTimelines::AirDodgeFromGroundParams(GroundMove, TickRate);
 	TestTrue(TEXT("air dodge from the ground one: ends on landing, the same lag"), AirFromGround.bCancelOnLand && AirFromGround.LandingLagFrames == Ground.LandingLagFrames);
-	TestEqual(TEXT("blocking for the air limit and the lag"), AirFromGround.FirstActionableFrame, FGSTN_MoveTimelines::AirDodgeMaxAirFrames + Ground.LandingLagFrames);
+	TestEqual(TEXT("blocking for the air limit, the lag and the get-up roll"), AirFromGround.FirstActionableFrame,
+		FGSTN_MoveTimelines::AirDodgeMaxAirFrames + Ground.LandingLagFrames + FGSTN_MoveTimelines::DefaultDodgeGetUpRollFrames);
 	TestEqual(TEXT("the same feet window as the ground dodge"), AirFromGround.HurtboxFrames, Ground.HurtboxFrames);
 	TestTrue(TEXT("the timeline has room for a heavier gravity"), GroundData.TotalFrames > Arc.AirFrames);
 

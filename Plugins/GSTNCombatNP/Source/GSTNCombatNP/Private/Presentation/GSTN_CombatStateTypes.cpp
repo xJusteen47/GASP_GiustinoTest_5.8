@@ -53,6 +53,9 @@ FGSTN_CombatStateView FGSTN_CombatStateView::FromCore(const FGSTN_CombatSyncCore
 		View.bInRecoil = Core.RecoilStartFrame != INDEX_NONE;
 	}
 
+	View.DodgeEndLagFrame = Core.DodgeLanding.EndLagFrameNumber(Frame);
+	View.DodgeEndLagFrames = View.DodgeEndLagFrame > 0 ? static_cast<int32>(Core.DodgeLanding.EndLagFrames) : 0;
+
 	const FGSTN_JumpState& Jump = Core.Jump;
 	switch (Jump.Phase)
 	{

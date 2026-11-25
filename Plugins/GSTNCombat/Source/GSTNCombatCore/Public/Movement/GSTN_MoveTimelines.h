@@ -71,6 +71,12 @@ struct GSTNCOMBATCORE_API FGSTN_MoveTimelines
 	/** Ending lag of the default ground and air dodge (owner 2026-11-17 20:13Z), the movement track's LandingLagFrames: a starting value, kit data overrides it */
 	static constexpr int32 DefaultDodgeEndLagFrames = 8;
 
+	/**
+	 * Room the dodge timelines keep after the ending lag for the default get-up roll (FGSTN_DodgeLandingKitExtension::GetUpRollFrames, owner
+	 * 2026-11-25), so the timeline does not run out before the lag the ability holds. The lag itself is the kit's, from the combat state
+	 */
+	static constexpr int32 DefaultDodgeGetUpRollFrames = 10;
+
 	/** Longest an air dodge made from the ground one stays blocking in the air (2 s at 60 Hz, like the dropkick's air limit) */
 	static constexpr int32 AirDodgeMaxAirFrames = 120;
 

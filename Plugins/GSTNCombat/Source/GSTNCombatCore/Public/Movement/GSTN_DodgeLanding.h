@@ -42,6 +42,15 @@ struct GSTNCOMBATCORE_API FGSTN_DodgeLandingKitExtension : public FGSTN_KitExten
 	int32 EndLagFrames = -1;
 
 	/**
+	 * Get-up roll (owner 2026-11-25: "the Mario 64 dive and the roll to get back up"): frames added at the end of the ending lag in which
+	 * the character rolls forward from the belly back onto its feet. Same rules as the rest of the lag (no action, vulnerable, the belly slide's
+	 * speed carries into it); the presentation turns the body over in these last frames (the greybox capsule: DiveGetUpRollFrames, keep them
+	 * equal). The total lag is EndLagFrames (or the move's) plus this. 0 = no roll, the body is up when the lag ends (before 2026-11-25)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dodge Landing|Get-Up Roll", meta = (ClampMin = "0", ClampMax = "120", ForceUnits = "Frames"))
+	int32 GetUpRollFrames = 10;
+
+	/**
 	 * Frames from the landing, counted from 1, in which LockedCommands are refused (owner 1A: no dodging again straight after landing). It runs
 	 * alongside the ending lag, so only the frames past the lag add anything. The input buffer is the usual one: a dodge pressed in the lock starts
 	 * on the first free frame only if the buffer still holds it. 0 = no lock (the behaviour before 2026-11-17)
@@ -134,7 +143,7 @@ enum class EGSTN_DodgeLandingGate : uint8
 /** The rules of the dodge landing, pure functions of the kit data, the state and the frame */
 struct GSTNCOMBATCORE_API FGSTN_DodgeLandingLogic
 {
-	/** The ending lag the kit gives a move whose movement track has MoveLandingLagFrames */
+	/** The ending lag the kit gives a move whose movement track has MoveLandingLagFrames: the belly part (the kit's or the move's) plus the get-up roll */
 	static int32 ResolveEndLag(const FGSTN_DodgeLandingKitExtension& Kit, int32 MoveLandingLagFrames);
 
 	/** Command is one the re-dodge lock refuses */

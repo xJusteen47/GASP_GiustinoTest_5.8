@@ -94,7 +94,7 @@ FGSTN_MoveTimelineParams FGSTN_MoveTimelines::GroundDodgeParams(const FGSTN_Dash
 	// so it lasts even if a late landing outruns the timeline
 	Params.LandingLagFrames = DefaultDodgeEndLagFrames;
 	// Room for a heavier gravity than nominal and for the lag: the ability ends the timeline after the lag anyway
-	Params.TotalFrames = Arc.AirFrames + 12 + Params.LandingLagFrames;
+	Params.TotalFrames = Arc.AirFrames + 12 + Params.LandingLagFrames + DefaultDodgeGetUpRollFrames;
 	Params.FirstActionableFrame = Params.TotalFrames;
 	Params.bCancelOnLand = true;
 	Params.HurtboxFrames = InvincibleFramesFor(Arc.AirFrames, DefaultInvincibleFraction);
@@ -108,7 +108,7 @@ FGSTN_MoveTimelineParams FGSTN_MoveTimelines::GroundDodgeParams(const FGSTN_Dash
 FGSTN_MoveTimelineParams FGSTN_MoveTimelines::AirDodgeFromGroundParams(const FGSTN_DashMoveData& Move, float TickRate)
 {
 	FGSTN_MoveTimelineParams Params = GroundDodgeParams(Move, TickRate);
-	Params.TotalFrames = FMath::Max(Params.TotalFrames, AirDodgeMaxAirFrames + Params.LandingLagFrames);
+	Params.TotalFrames = FMath::Max(Params.TotalFrames, AirDodgeMaxAirFrames + Params.LandingLagFrames + DefaultDodgeGetUpRollFrames);
 	Params.FirstActionableFrame = Params.TotalFrames;
 	return Params;
 }
