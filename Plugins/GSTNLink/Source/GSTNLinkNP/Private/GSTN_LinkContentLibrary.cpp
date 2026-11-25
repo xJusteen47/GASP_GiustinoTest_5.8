@@ -14,6 +14,8 @@
 #include "GSTN_LinkTags.h"
 #include "Harness/GSTN_LinkTestAbilities.h"
 #include "Moves/GSTN_LinkThrowMoves.h"
+#include "Moves/GSTN_LinkGrabSpinMoves.h"
+#include "Hits/GSTN_CombatHitTags.h"
 #include "Animation/AnimMontage.h"
 #include "Input/GSTN_LinkSlots.h"
 #include "Data/GSTN_LinkKitExtension.h"
@@ -771,6 +773,128 @@ bool UGSTN_LinkContentLibrary::SetKitGrabMashFrames(UGSTN_PrimaryKitDefinition* 
 		}
 	}
 	return false;
+}
+
+bool UGSTN_LinkContentLibrary::SetKitThrow(UGSTN_PrimaryKitDefinition* Kit, FGameplayTag ThrowCommand, TSubclassOf<UGameplayAbility> Ability)
+{
+	if (!Kit)
+	{
+		return false;
+	}
+	for (FInstancedStruct& Entry : Kit->Extensions.ExtensionData)
+	{
+		if (FGSTN_LinkKitExtension* Extension = Entry.GetMutablePtr<FGSTN_LinkKitExtension>())
+		{
+			const FSoftClassPath* Found = Extension->Throws.Find(ThrowCommand);
+			if (!Found)
+			{
+				return false;
+			}
+			FSoftClassPath& Slot = *const_cast<FSoftClassPath*>(Found);
+			const FSoftClassPath New(Ability.Get());
+			if (Slot == New)
+			{
+				return false;
+			}
+			Slot = New;
+			Kit->MarkPackageDirty();
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UGSTN_LinkContentLibrary::SetKitGrabMashRule(UGSTN_PrimaryKitDefinition* Kit, int32 BaseFrames, float FramesPerDamagePercent, int32 MinFrames, int32 MaxFrames,
+	int32 ReducePerPress)
+{
+	if (!Kit)
+	{
+		return false;
+	}
+	for (FInstancedStruct& Entry : Kit->Extensions.ExtensionData)
+	{
+		if (FGSTN_LinkKitExtension* Extension = Entry.GetMutablePtr<FGSTN_LinkKitExtension>())
+		{
+			FGSTN_MashRule Rule = Extension->GrabRules.Mash;
+			Rule.BaseFrames = BaseFrames >= 0 ? BaseFrames : Rule.BaseFrames;
+			Rule.FramesPerDamagePercent = FramesPerDamagePercent >= 0.f ? FramesPerDamagePercent : Rule.FramesPerDamagePercent;
+			Rule.MinFrames = MinFrames >= 0 ? FMath::Max(MinFrames, 1) : Rule.MinFrames;
+			Rule.MaxFrames = MaxFrames >= 0 ? FMath::Max(MaxFrames, 1) : Rule.MaxFrames;
+			Rule.ReducePerPress = ReducePerPress >= 0 ? ReducePerPress : Rule.ReducePerPress;
+			if (FGSTN_MashRule::StaticStruct()->CompareScriptStruct(&Rule, &Extension->GrabRules.Mash, PPF_None))
+			{
+				return false;
+			}
+			Extension->GrabRules.Mash = Rule;
+			Kit->MarkPackageDirty();
+			return true;
+		}
+	}
+	return false;
+}
+
+bool UGSTN_LinkContentLibrary::WriteGrabMove(TSubclassOf<UGameplayAbility> GrabClass, int32 TotalFrames, int32 FirstActionableFrame, int32 ActiveStart, int32 ActiveEnd)
+{
+	if (!GrabClass || !GrabClass->IsChildOf(UGSTN_GA_BaseCombat::StaticClass()) || GrabClass->HasAnyClassFlags(CLASS_Native) || ActiveEnd <= ActiveStart)
+	{
+		return false;
+	}
+	UGSTN_GA_BaseCombat* Defaults = GetMutableDefault<UGSTN_GA_BaseCombat>(GrabClass.Get());
+	FGSTN_CombatTimelineData Data = Defaults->Timeline;
+	Data.TotalFrames = FMath::Max(TotalFrames, ActiveEnd);
+	Data.FirstActionableFrame = FMath::Clamp(FirstActionableFrame, 0, Data.TotalFrames);
+	int32 GrabTracks = 0;
+	for (TInstancedStruct<FGSTN_TimelineTrack>& Instanced : Data.Tracks)
+	{
+		if (FGSTN_TimelineTrack_Hitbox* Hitbox = Instanced.GetMutablePtr<FGSTN_TimelineTrack_Hitbox>())
+		{
+			const bool bGrab = Hitbox->Hitboxes.ContainsByPredicate([](const FGSTN_HitboxSpec& Spec)
+			{
+				return Spec.Data.HitType.IsValid() && Spec.Data.HitType.MatchesTag(GSTNCombatHitTags::HitType_Grab);
+			});
+			if (bGrab)
+			{
+				Hitbox->StartFrame = ActiveStart;
+				Hitbox->EndFrame = ActiveEnd;
+				++GrabTracks;
+			}
+		}
+		else if (FGSTN_TimelineTrack_CancelWindow* Window = Instanced.GetMutablePtr<FGSTN_TimelineTrack_CancelWindow>())
+		{
+			if (Window->Condition == EGSTN_CancelCondition::OnHit)
+			{
+				Window->StartFrame = ActiveStart;
+				Window->EndFrame = Data.TotalFrames;
+			}
+		}
+	}
+	if (GrabTracks == 0 || FGSTN_CombatTimelineData::StaticStruct()->CompareScriptStruct(&Data, &Defaults->Timeline, PPF_None))
+	{
+		return false;
+	}
+	Defaults->Timeline = MoveTemp(Data);
+	Defaults->MarkPackageDirty();
+	return true;
+}
+
+bool UGSTN_LinkContentLibrary::WriteGrabSpinMove(TSubclassOf<UGameplayAbility> SpinClass, const FGSTN_GrabSpinMoveSpec& Spec, UAnimMontage* Montage, float MontagePlayRate)
+{
+	if (!SpinClass || !SpinClass->IsChildOf(UGSTN_GA_LinkGrabSpin::StaticClass()) || SpinClass->HasAnyClassFlags(CLASS_Native))
+	{
+		return false;
+	}
+	UGSTN_GA_LinkGrabSpin* Defaults = GetMutableDefault<UGSTN_GA_LinkGrabSpin>(SpinClass.Get());
+	FGSTN_CombatTimelineData Data = Defaults->Timeline;
+	UGSTN_GA_LinkGrabSpin::FillGrabSpinTimeline(Data, Spec, Defaults->GetSense());
+	Data.Montage = Montage;
+	Data.MontagePlayRate = FMath::Max(MontagePlayRate, 0.01f);
+	if (FGSTN_CombatTimelineData::StaticStruct()->CompareScriptStruct(&Data, &Defaults->Timeline, PPF_None))
+	{
+		return false;
+	}
+	Defaults->Timeline = MoveTemp(Data);
+	Defaults->MarkPackageDirty();
+	return true;
 }
 
 bool UGSTN_LinkContentLibrary::WriteThrowMove(TSubclassOf<UGameplayAbility> ThrowClass, int32 TotalFrames, int32 FirstActionableFrame, int32 ThrowFrame,

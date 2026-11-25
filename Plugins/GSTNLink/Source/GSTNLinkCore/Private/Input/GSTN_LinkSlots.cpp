@@ -300,6 +300,15 @@ FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildSpecialCrouchGrabSlot()
 		{ { TEXT("Link.SpecialGrab"), &GSTNCombatButtonTags::Button_Special }, { TEXT("Link.Crouch"), &GSTNCombatButtonTags::Button_Crouch } });
 }
 
+FGSTN_InputSlotSpec UGSTN_LinkSlots::BuildGrabSpinSlot(const FGameplayTag& SpinCommand)
+{
+	FGSTN_InputCondition_Spin Spin;
+	Spin.Space = EGSTN_DirectionSpace::Stick;
+	Spin.MinDegrees = 360.f;
+	Spin.Rotation = SpinCommand == GSTNLinkTags::Command_Link_Spin_CounterClockwise ? EGSTN_SpinRotation::CounterClockwise : EGSTN_SpinRotation::Clockwise;
+	return MakeSlot(SpinCommand, { FCondition::Make<FGSTN_InputCondition_Spin>(Spin) }, GrabSpinPriorityOffset);
+}
+
 bool UGSTN_LinkSlots::IsStickOnlyThrow(const FGameplayTag& ThrowCommand, EGSTN_LinkThrowInputMode Mode)
 {
 	return Mode == EGSTN_LinkThrowInputMode::Stick
@@ -428,6 +437,33 @@ int32 UGSTN_LinkSlots::ApplyKitThrows(const FGSTN_KitThrowFill& Fill, TArray<FGS
 			Added.Command = PutDown;
 			Added.bHasSlotOverride = true;
 			Added.SlotOverride = SlotOrOverride(Fill.SlotOverrides, PutDown, []() { return BuildPutDownSlot(); });
+		}
+	}
+
+	// Grab spin (owner 2026-11-25): one row per sense, the kit set's ability else the common one, for the grabber role. A kit's own row stays as it is
+	if (Fill.bGrabSpin)
+	{
+		for (const FGameplayTag& Spin : { Command_Link_Spin_Clockwise.GetTag(), Command_Link_Spin_CounterClockwise.GetTag() })
+		{
+			if (Bindings.ContainsByPredicate([&Spin](const FGSTN_BindingInput& Binding) { return Binding.Command == Spin; }))
+			{
+				continue;
+			}
+			const FSoftClassPath* KitEntry = Fill.KitThrows ? Fill.KitThrows->Find(Spin) : nullptr;
+			const FSoftClassPath* FallbackEntry = Fill.Fallback ? Fill.Fallback->Find(Spin) : nullptr;
+			const FSoftClassPath* Entry = KitEntry && KitEntry->IsValid() ? KitEntry : (FallbackEntry && FallbackEntry->IsValid() ? FallbackEntry : nullptr);
+			if (!Entry)
+			{
+				continue;
+			}
+			FGSTN_BindingInput& Added = Bindings.AddDefaulted_GetRef();
+			Added.Command = Spin;
+			Added.Requirements.RequireTags.AddTag(Role_Grabber);
+			// A lifted object or enemy of another plugin is not a grab partner to swing (the same blockers as the throws)
+			Added.Requirements.IgnoreTags.AppendTags(Fill.BlockAll);
+			Added.Ability = *Entry;
+			Added.bHasSlotOverride = true;
+			Added.SlotOverride = SlotOrOverride(Fill.SlotOverrides, Spin, [&Spin]() { return BuildGrabSpinSlot(Spin); });
 		}
 	}
 

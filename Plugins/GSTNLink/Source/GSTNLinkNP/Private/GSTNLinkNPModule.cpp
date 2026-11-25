@@ -49,6 +49,7 @@ public:
 		FGSTN_OutcomeApplierRegistry::Get().Register(&Applier);
 		FGSTN_OutcomeApplierRegistry::Get().Register(&BreakApplier);
 		FGSTN_OutcomeApplierRegistry::Get().Register(&ThrowApplier);
+		FGSTN_OutcomeApplierRegistry::Get().Register(&GrabTimeApplier);
 		FGSTN_LinkInboxHandlers::Register();
 
 		FGSTN_LoadoutExtension Loadout;
@@ -73,6 +74,7 @@ public:
 			// grab-link: the turn ergonomics (cvar gstn.Grab.TurnMode over the setting) and the dodge put-down
 			Fill.Ergonomics = Settings.GetEffectiveGrabTurn();
 			Fill.bPutDownWithDodge = Settings.bPutDownWithDodge;
+			Fill.bGrabSpin = Settings.GetEffectiveGrabSpin();
 			Fill.KitThrows = KitExtension ? &KitExtension->Throws : nullptr;
 			Fill.Fallback = &Settings.FallbackThrows;
 			Fill.SlotOverrides = &Settings.ThrowSlotOverrides;
@@ -94,6 +96,7 @@ public:
 		FGSTN_LoadoutExtensionRegistry::Unregister(KitThrowsExtensionId);
 		FGSTN_LoadoutExtensionRegistry::Unregister(FGSTN_LinkAttach::GetLoadoutExtensionId());
 		FGSTN_LinkInboxHandlers::Unregister();
+		FGSTN_OutcomeApplierRegistry::Get().Unregister(&GrabTimeApplier);
 		FGSTN_OutcomeApplierRegistry::Get().Unregister(&ThrowApplier);
 		FGSTN_OutcomeApplierRegistry::Get().Unregister(&BreakApplier);
 		FGSTN_OutcomeApplierRegistry::Get().Unregister(&Applier);
@@ -116,6 +119,7 @@ private:
 	FGSTN_LinkOutcomeApplier Applier;
 	FGSTN_LinkBreakOutcomeApplier BreakApplier;
 	FGSTN_LinkThrowOutcomeApplier ThrowApplier;
+	FGSTN_LinkGrabTimeOutcomeApplier GrabTimeApplier;
 	FDelegateHandle WorldInitHandle;
 };
 

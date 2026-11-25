@@ -36,6 +36,19 @@ attachment every tick. Corrections to the M7 spec are in [m7-doc-deltas.md](../.
 
 M7 G2 (generic, no type of another plugin named): **partner moves** (a link type's action provider, `IGSTN_LinkActionProvider`, registered per type in the registry, resolves an `int16` id to the partner's ability, requirements, start offset, outcome frame and kind, exit and `MaxDurationFrames`; a `PartnerMove` link outcome key on the initiator's move records it and posts the `PartnerMove` inbox kind to the partner, whose link tick starts its part as a Forced timeline on the target frame; the outcome breaks through the watchdog with the action's exit; failure paths abort with `Combat.Event.Link.PartnerMoveAborted`) and **parked facing** (`FGSTN_LinkRoleDef::YawLimitDeg`; a parked role that acts turns, `LocalYawQ`, from the stick at the start of its moves and while idle; the snapshot substitution and the presentation compose the turn).
 
+grab-ganon (owner 2026-11-25): the **grab spin**. Holding a partner, a 360 stick rotation (`Command.Link.Spin.Clockwise` / `.CounterClockwise`, the
+GSTNInput Spin condition, `UGSTN_LinkSlots::BuildGrabSpinSlot`, offset `GrabSpinPriorityOffset` above every throw shape) plays one turn of
+`UGSTN_GA_LinkGrabSpin` (`Moves/GSTN_LinkGrabSpinMoves.h`, spec `FGSTN_GrabSpinMoveSpec`): its `FGSTN_GrabSpinTrack` (Core) turns the grabber through
+the combat core's `SetFacing` request, written by `FGSTN_LinkTickExtension::StepGrabSpin` at AfterExecute from the move origin's yaw and the timeline
+frame (pure, no accumulation), so the partner parked in the grabber's root space swings round; a Root-space sphere where the partner hangs hits the
+fighters around (`Combat.HitType.GrabSpin`, `ExcludeLinkedPartner`); the partner takes a pummel that costs grab time (`FGSTN_LinkHitData::GrabTimeCostFrames`
+-> `FGSTN_LinkGrabTimeOutcome`, applied to its mash `EndFrame` by `FGSTN_LinkGrabTimeOutcomeApplier`); from `ChainFromFrame` the next rotation chains
+another turn and the throws, the release and the put-down cancel it. Rows added by the kit throw fill (`FGSTN_KitThrowFill::bGrabSpin`, setting
+`bGrabSpin`, cvar `gstn.Grab.Spin`) from the kit set's `SpinClockwise` / `SpinCounterClockwise`, else `FallbackThrows`. Content helpers
+`UGSTN_LinkContentLibrary::{SetKitThrow, SetKitGrabMashRule, WriteGrabMove, WriteGrabSpinMove}`; Ganondorf's numbers on KIT_Test_Playtest:
+`Tools/GAS/setup_grab_ganon_playtest.py`, sources [grab-ganon-dati.md](../../docs/notes/grab-ganon-dati.md). Tests `GSTNLink.Core.GrabSpin.*`,
+`GSTNLink.NP.Grab.SpinTurnCostsGrabTime`.
+
 ## Modules
 
 | Module | State | What it is |
@@ -111,10 +124,10 @@ Designer vocabulary (the `GameplayCue.Combat.Link.*`, `.Pummel` and `.Throw` cue
 | `Combat.Link.Type.Grab`, `Combat.Link.Type.Latch` | Definition assets, hits and events |
 | `Combat.Link.BreakReason.*` (`ShakeOff`, `Timeout`, `Distance`, `OwnDeath`, `PartnerDeath`, `Hit`, `PartnerState`, `Escape`, `Release`, `Throw`, `Forced`) | The emitter of the break, carried by `LinkBroken` |
 | `Combat.Immunity.Grab`, `Combat.Immunity.Latch`, `Combat.Lock.Link` | Kits, abilities, effects (ordinary counts) |
-| `Combat.HitType.Throw`, `Combat.HitType.Pummel` | The hit data |
+| `Combat.HitType.Throw`, `Combat.HitType.Pummel`, `Combat.HitType.GrabSpin` (the grab spin's ring) | The hit data |
 | `Combat.Mover.Linked` | The linked modifier |
 | `Interact.Target.Grab` | The link tick extension, from the interact probe |
-| `Command.Link.Grab`, `.Grab.Special` (M11 K2: special + crouch), `.Pummel`, `.Release`, `.Throw.Forward`, `.Back`, `.Up`, `.Down`, `.Latch.Attack` (F12), `Input.Lock.Command.Link` | The standard command set, abilities and effects |
+| `Command.Link.Grab`, `.Grab.Special` (M11 K2: special + crouch), `.Pummel`, `.Release`, `.Throw.Forward`, `.Back`, `.Up`, `.Down`, `.Latch.Attack` (F12), `.Spin.Clockwise`, `.Spin.CounterClockwise` (grab spin), `Input.Lock.Command.Link` | The standard command set, abilities and effects |
 | `Combat.Event.LinkFormed`, `.LinkBroken`, `.Throw`, `.GrabEscaped` | The watchdog and the combat outbox on the authority |
 | `Combat.Event.Link.PartnerMoveAborted` | G2: the link tick's combat outbox on the authority (Magnitude = the action id) |
 

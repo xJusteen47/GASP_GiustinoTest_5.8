@@ -1,5 +1,6 @@
 // Links, pure core tests of M11 K2 (GSTNLink.Core.KitThrows.*): the Smash-style throw slots, the kit throw fill and the project settings.
 
+#include "Data/GSTN_GrabSpinTrack.h"
 #include "Data/GSTN_LinkKitExtension.h"
 #include "GSTN_LinkSettings.h"
 #include "GSTN_LinkTags.h"
@@ -344,6 +345,115 @@ bool FGSTN_LinkKitThrowsSettingsTest::RunTest(const FString& Parameters)
 	const FVector Launch = UGSTN_HitMathUtils::LaunchDirection(EGSTN_YawSource::AttackerFacing, 140.f, EGSTN_SpecialAngle::None, FVector::UpVector, FVector::ForwardVector,
 		FVector::ForwardVector, FVector::ZeroVector, true, 1800.f, FGSTN_SakuraiParams());
 	TestTrue(TEXT("140 degrees: backwards and up"), Launch.X < -0.7 && Launch.Z > 0.6);
+	return true;
+}
+
+
+// ---- Grab spin (owner 2026-11-25): a 360 stick rotation while holding swings the partner round
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LinkGrabSpinTrackTest, "GSTNLink.Core.GrabSpin.TrackYaw", GSTNLinkTest::Flags)
+
+bool FGSTN_LinkGrabSpinTrackTest::RunTest(const FString& Parameters)
+{
+	FGSTN_GrabSpinTrack Track;
+	Track.StartFrame = 0;
+	Track.EndFrame = 24;
+	Track.Turns = 1.f;
+	float Yaw = 0.f;
+	TestTrue(TEXT("frame 0 is the origin"), Track.YawAt(30.f, 0, Yaw) && FMath::IsNearlyEqual(Yaw, 30.f, 0.01f));
+	TestTrue(TEXT("a quarter: +90 clockwise"), Track.YawAt(30.f, 6, Yaw) && FMath::IsNearlyEqual(Yaw, 120.f, 0.01f));
+	TestTrue(TEXT("half: wraps to -150"), Track.YawAt(30.f, 12, Yaw) && FMath::IsNearlyEqual(Yaw, -150.f, 0.01f));
+	TestTrue(TEXT("the end closes the turn on the origin"), Track.YawAt(30.f, 24, Yaw) && FMath::IsNearlyEqual(Yaw, 30.f, 0.01f));
+	TestFalse(TEXT("after the track: nothing to write"), Track.YawAt(30.f, 25, Yaw));
+	Track.Sense = EGSTN_GrabSpinSense::CounterClockwise;
+	TestTrue(TEXT("counterclockwise: a quarter is -90"), Track.YawAt(30.f, 6, Yaw) && FMath::IsNearlyEqual(Yaw, -60.f, 0.01f));
+	// The same frame always gives the same yaw (no accumulation): what a re-simulation relies on
+	float Again = 0.f;
+	TestTrue(TEXT("pure"), Track.YawAt(30.f, 6, Again) && Again == Yaw);
+	TArray<FString> Errors;
+	Track.Validate(TEXT("ok"), Errors);
+	TestEqual(TEXT("valid"), Errors.Num(), 0);
+	Track.Turns = 0.f;
+	Track.Validate(TEXT("no turn"), Errors);
+	TestEqual(TEXT("no turn refused"), Errors.Num(), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LinkGrabSpinFillTest, "GSTNLink.Core.GrabSpin.FillAndSlots", GSTNLinkTest::Flags)
+
+bool FGSTN_LinkGrabSpinFillTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNLinkTags;
+	FGSTN_LinkThrowSet Fallback;
+	Fallback.Neutral = FSoftClassPath(TEXT("/Script/GSTNLinkTest.N"));
+	Fallback.SpinClockwise = FSoftClassPath(TEXT("/Script/GSTNLinkTest.SpinCW"));
+	Fallback.SpinCounterClockwise = FSoftClassPath(TEXT("/Script/GSTNLinkTest.SpinCCW"));
+	FGSTN_LinkThrowSet Kit;
+	Kit.SpinClockwise = FSoftClassPath(TEXT("/Script/GSTNLinkTest.KitSpinCW"));
+	const FGameplayTag Blocker = Role_Latcher;
+
+	FGSTN_KitThrowFill Fill(EGSTN_LinkThrowInputMode::Notation);
+	Fill.Fallback = &Fallback;
+	Fill.KitThrows = &Kit;
+	Fill.BlockAll.AddTag(Blocker);
+	auto MakeGrabOnly = []()
+	{
+		TArray<FGSTN_BindingInput> Rows;
+		FGSTN_BindingInput& Grab = Rows.AddDefaulted_GetRef();
+		Grab.Command = Command_Link_Grab;
+		Grab.Ability = FSoftObjectPath(TEXT("/Script/GSTNLinkTest.Grab"));
+		return Rows;
+	};
+
+	TArray<FGSTN_BindingInput> Off = MakeGrabOnly();
+	UGSTN_LinkSlots::ApplyKitThrows(Fill, Off);
+	TestNull(TEXT("off: no spin row"), FindRow(Off, Command_Link_Spin_Clockwise, true));
+
+	Fill.bGrabSpin = true;
+	TArray<FGSTN_BindingInput> On = MakeGrabOnly();
+	UGSTN_LinkSlots::ApplyKitThrows(Fill, On);
+	const int32 Rows = On.Num();
+	const FGSTN_BindingInput* Clockwise = FindRow(On, Command_Link_Spin_Clockwise, true);
+	const FGSTN_BindingInput* Counter = FindRow(On, Command_Link_Spin_CounterClockwise, true);
+	if (!TestNotNull(TEXT("clockwise row"), Clockwise) || !TestNotNull(TEXT("counterclockwise row"), Counter))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the kit's own spin wins"), Clockwise->Ability, FSoftObjectPath(Kit.SpinClockwise));
+	TestEqual(TEXT("else the common one"), Counter->Ability, FSoftObjectPath(Fallback.SpinCounterClockwise));
+	TestTrue(TEXT("grabber only"), Clockwise->Requirements.RequireTags.HasTagExact(Role_Grabber));
+	TestTrue(TEXT("the throw blockers too"), Clockwise->Requirements.IgnoreTags.HasTagExact(Blocker));
+	TestEqual(TEXT("above every throw shape"), Clockwise->SlotOverride.PriorityOffset, UGSTN_LinkSlots::GrabSpinPriorityOffset);
+	TestTrue(TEXT("falls through without a partner"), Clockwise->SlotOverride.bFallThroughWhenUnavailable);
+	UGSTN_LinkSlots::ApplyKitThrows(Fill, On);
+	TestEqual(TEXT("a second compile adds nothing"), On.Num(), Rows);
+
+	// The stick's full turn fires the spin of its sense and nothing else; the notation throws still fire on their presses
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = MakeInputSettings();
+	TArray<FGSTN_InputSlotSpec> Slots = NotationSlots(EGSTN_GrabTurnErgonomics::Instant);
+	Slots.Add(UGSTN_LinkSlots::BuildGrabSpinSlot(Command_Link_Spin_Clockwise));
+	Slots.Add(UGSTN_LinkSlots::BuildGrabSpinSlot(Command_Link_Spin_CounterClockwise));
+	auto Turn = [](bool bPositive)
+	{
+		FString Script;
+		for (int32 Step = 0; Step <= 8; ++Step)
+		{
+			const int32 Angle = (((bPositive ? Step : -Step) * 45) % 360 + 360) % 360;
+			Script += FString::Printf(TEXT("%d:@%d "), Step * 2, Angle);
+		}
+		return Script.TrimEnd();
+	};
+	const FString Positive = CommandFor(*this, Slots, *Turn(true), *Settings);
+	const FString Negative = CommandFor(*this, Slots, *Turn(false), *Settings);
+	const FString Spins[] = { Name(Command_Link_Spin_Clockwise), Name(Command_Link_Spin_CounterClockwise) };
+	TestTrue(*FString::Printf(TEXT("one turn is a grab spin (%s)"), *Positive), Positive == Spins[0] || Positive == Spins[1]);
+	TestTrue(*FString::Printf(TEXT("the other turn is the other sense (%s)"), *Negative), (Negative == Spins[0] || Negative == Spins[1]) && Negative != Positive);
+	TestEqual(TEXT("attack, neutral is still N."), CommandFor(*this, Slots, TEXT("5:+A"), *Settings), Name(Command_Link_Throw_Neutral));
+
+	// The project: grab spins on, both senses in the common set
+	const UGSTN_LinkSettings& Project = UGSTN_LinkSettings::Get();
+	TestTrue(TEXT("project: grab spin on"), Project.bGrabSpin);
+	TestTrue(TEXT("project: both spins in the common set"), Project.FallbackThrows.SpinClockwise.IsValid() && Project.FallbackThrows.SpinCounterClockwise.IsValid());
 	return true;
 }
 

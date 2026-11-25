@@ -9,6 +9,9 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Data/GSTN_GrabRules.h"
+#include "Data/GSTN_GrabSpinTrack.h"
+#include "Data/GSTN_LinkHitData.h"
+#include "Moves/GSTN_LinkGrabSpinMoves.h"
 #include "GSTN_LinkTags.h"
 #include "GSTN_LinkWatchdog.h"
 #include "Hits/GSTN_CombatHitTags.h"
@@ -24,6 +27,7 @@
 #include "Sim/GSTN_LinkMash.h"
 #include "Sim/GSTN_LinkThrow.h"
 #include "Sim/GSTN_LinkTickExtension.h"
+#include "Timeline/GSTN_TimelineTypes.h"
 #include "State/GSTN_LinkMath.h"
 
 // One namespace per test file: the unity build merges the files of this module, so their helpers must not share a scope
@@ -104,10 +108,11 @@ namespace
 		FGSTN_LinkOutcomeApplier Formation;
 		FGSTN_LinkThrowOutcomeApplier Throw;
 		FGSTN_LinkBreakOutcomeApplier Break;
+		FGSTN_LinkGrabTimeOutcomeApplier GrabTime;
 		for (const FInstancedStruct& Extension : Out.OutcomeExtensions)
 		{
 			for (const IGSTN_OutcomeExtensionApplier* Applier : { static_cast<const IGSTN_OutcomeExtensionApplier*>(&Formation), static_cast<const IGSTN_OutcomeExtensionApplier*>(&Throw),
-				static_cast<const IGSTN_OutcomeExtensionApplier*>(&Break) })
+				static_cast<const IGSTN_OutcomeExtensionApplier*>(&Break), static_cast<const IGSTN_OutcomeExtensionApplier*>(&GrabTime) })
 			{
 				if (Extension.GetScriptStruct() == Applier->GetExtensionStruct())
 				{
@@ -572,6 +577,69 @@ bool FGSTN_LinkNPGrabLockedWithoutPartsTest::RunTest(const FString& Parameters)
 	const bool bInTable = FGSTN_LinkRequestTags::Get().ContainsByPredicate([](const FGameplayTag& Tag) { return Tag.GetTagName() == TEXT("Combat.Part.GrabLocked"); });
 	TestFalse(TEXT("no GrabLocked in the request tag table"), bInTable);
 	TestTrue(TEXT("the rule skips the name it cannot resolve: the weight decides alone"), GrabsTargetWith(FGameplayTagContainer()));
+	return true;
+}
+
+
+// Grab spin (owner 2026-11-25): each turn's hit on the held partner is a pummel that costs grab time; the ring spares the partner
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LinkNPGrabSpinCostTest, "GSTNLink.NP.Grab.SpinTurnCostsGrabTime", Flags)
+bool FGSTN_LinkNPGrabSpinCostTest::RunTest(const FString& Parameters)
+{
+	TestEqual(TEXT("cost: 20 frames earlier"), FGSTN_LinkGrabTimeOutcomeApplier::ApplyCost(400, 20, 150), 380);
+	TestEqual(TEXT("never before the frame it lands"), FGSTN_LinkGrabTimeOutcomeApplier::ApplyCost(160, 20, 150), 150);
+	TestEqual(TEXT("a past end stays"), FGSTN_LinkGrabTimeOutcomeApplier::ApplyCost(140, 20, 150), 140);
+	TestEqual(TEXT("no mash, no change"), FGSTN_LinkGrabTimeOutcomeApplier::ApplyCost(0, 20, 150), 0);
+
+	FScopedLinkTypes Types;
+	FScopedGrabRule Grab(Types.Grab);
+	Grab.Rule->Rules.PummelFreeFrames = 15;
+	const FGSTN_LinkFragment Grabber = MakeLinked(Types.GrabIndex, 1, GrabTestGrabbedId, GrabTestSerial, GrabTestLinkFrame + 1);
+	FGSTN_LinkFragment Grabbed = MakeLinked(Types.GrabIndex, 2, GrabTestGrabberId, GrabTestSerial, GrabTestLinkFrame);
+	Grabbed.Links.Body.EndFrame = GrabTestLinkFrame + 300;
+
+	// The held hit as the spin move authors it
+	const UGSTN_GA_LinkGrabSpin* Spin = GetDefault<UGSTN_GA_LinkGrabSpinClockwise>();
+	const FGSTN_HitData* Held = nullptr;
+	const FGSTN_HitData* Ring = nullptr;
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instanced : Spin->Timeline.Tracks)
+	{
+		if (const FGSTN_TimelineTrack_Hitbox* Track = Instanced.GetPtr<FGSTN_TimelineTrack_Hitbox>(); Track && !Track->Hitboxes.IsEmpty())
+		{
+			const FGSTN_HitData& Data = Track->Hitboxes[0].Data;
+			(Data.LinkFilter == EGSTN_LinkFilter::LinkedPartnerOnly ? Held : Ring) = &Data;
+		}
+	}
+	const FGSTN_GrabSpinTrack* Track = FGSTN_GrabSpinTrack::Find(Spin->Timeline);
+	TestTrue(TEXT("the move turns clockwise"), Track && Track->Sense == EGSTN_GrabSpinSense::Clockwise && Track->Turns > 0.f);
+	TestTrue(TEXT("the counterclockwise move the other way"), FGSTN_GrabSpinTrack::Find(GetDefault<UGSTN_GA_LinkGrabSpinCounterClockwise>()->Timeline)
+		&& FGSTN_GrabSpinTrack::Find(GetDefault<UGSTN_GA_LinkGrabSpinCounterClockwise>()->Timeline)->Sense == EGSTN_GrabSpinSense::CounterClockwise);
+	if (!TestNotNull(TEXT("a held hit"), Held) || !TestNotNull(TEXT("a ring hit"), Ring))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the ring spares the partner"), Ring->LinkFilter, EGSTN_LinkFilter::ExcludeLinkedPartner);
+
+	FHitRig Rig(GrabTestGrabberId, Grabber, GrabTestGrabbedId, Grabbed, GrabTestLinkFrame + 40);
+	Rig.View.Incoming.Hit = *Held;
+	FGSTN_StepResult Out;
+	TestEqual(TEXT("the held hit continues"), Rig.Run(GetDefault<UGSTN_HitStep_LinkRequest>(), Out), EGSTN_StepResult::Continue);
+	TestTrue(TEXT("it lands with no reaction"), Out.bHit && Out.KnockbackScale == 0.f && Out.HitstunScale == 0.f);
+	FGSTN_SyncFragmentArray Fragments = ListOf(Grabbed);
+	ApplyAll(Out, Rig.View, Fragments);
+	const FGSTN_LinkFragment* After = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Fragments);
+	TestTrue(TEXT("the escape is the spec's cost closer"), After && After->Links.Body.EndFrame == GrabTestLinkFrame + 300 - FGSTN_GrabSpinMoveSpec().GrabTimeCostFrames);
+	TestTrue(TEXT("and the link holds"), After && After->Links.Body.IsActive());
+
+	// A pummel without the cost leaves the escape alone (Smash: pummels never shorten the grab)
+	FHitRig Plain(GrabTestGrabberId, Grabber, GrabTestGrabbedId, Grabbed, GrabTestLinkFrame + 40);
+	Plain.View.Incoming.Hit.HitType = GSTNLinkTags::HitType_Pummel;
+	Plain.View.Incoming.Hit.LinkFilter = EGSTN_LinkFilter::LinkedPartnerOnly;
+	FGSTN_StepResult PlainOut;
+	Plain.Run(GetDefault<UGSTN_HitStep_LinkRequest>(), PlainOut);
+	FGSTN_SyncFragmentArray PlainFragments = ListOf(Grabbed);
+	ApplyAll(PlainOut, Plain.View, PlainFragments);
+	const FGSTN_LinkFragment* PlainAfter = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(PlainFragments);
+	TestTrue(TEXT("a plain pummel costs nothing"), PlainAfter && PlainAfter->Links.Body.EndFrame == GrabTestLinkFrame + 300);
 	return true;
 }
 

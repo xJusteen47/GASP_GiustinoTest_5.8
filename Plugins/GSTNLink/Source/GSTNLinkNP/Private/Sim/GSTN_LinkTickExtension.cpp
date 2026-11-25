@@ -7,6 +7,7 @@
 #include "Components/CapsuleComponent.h"
 #include "GSTN_LinkWatchdog.h"
 #include "Events/GSTN_SimEvent.h"
+#include "Data/GSTN_GrabSpinTrack.h"
 #include "Data/GSTN_LinkKitExtension.h"
 #include "Data/GSTN_LinkTypeDefinition.h"
 #include "GSTN_InteractMath.h"
@@ -35,6 +36,7 @@
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 #include "State/GSTN_LinkMath.h"
+#include "Timeline/GSTN_StartupSteer.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 #include "World/GSTN_StepSnapshot.h"
 
@@ -324,6 +326,36 @@ bool FGSTN_LinkTickExtension::StepNeckHold(FGSTN_LinkFragment& Fragment, const U
 	const FTransform Socket = PartnerBody ? PartnerBody->GetSocket(Parked.SocketOnPartner) : FTransform::Identity;
 	Body.SetAnchorOverride(UGSTN_LinkMath::NeckHoldAnchor(Socket, Parked.SocketOffset, Neck->GetLocation(), Pose));
 	return true;
+}
+
+bool FGSTN_LinkTickExtension::StepGrabSpin(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Running, const FGSTN_LinkState& Body,
+	const UGSTN_LinkRegistry* Registry)
+{
+	if (Core.ActionState != EGSTN_ActionState::InTimeline || Core.TimelineStartFrame == INDEX_NONE || Core.RecoilStartFrame != INDEX_NONE
+		|| !Core.Hit.MoveOrigin.bSet || !Body.IsActive())
+	{
+		return false;
+	}
+	const FGSTN_GrabSpinTrack* Track = FGSTN_GrabSpinTrack::Find(Running);
+	const UGSTN_LinkTypeDefinition* Definition = Track && Registry ? Registry->GetDefinition(Body.LinkTypeIndex) : nullptr;
+	// Only the side that holds: a parked role never turns its partner
+	if (!Definition || Definition->GetParkedRoleIndex() == Body.Role)
+	{
+		return false;
+	}
+	const int32 TimelineFrame = Frame - Core.TimelineStartFrame - Core.TimelinePausedFrames;
+	if (TimelineFrame < 1)
+	{
+		return false;
+	}
+	// The move origin keeps the yaw at 65536 steps per turn in a uint16: the same bits as the request's int16 (as the start aim reads it)
+	const float OriginYaw = FGSTN_StartupSteer::DequantizeYaw(static_cast<int16>(Core.Hit.MoveOrigin.RotationQ[1]));
+	float Yaw = 0.f;
+	if (!Track->YawAt(OriginYaw, TimelineFrame, Yaw))
+	{
+		return false;
+	}
+	return Core.Requests.Add(EGSTN_RequestType::SetFacing, Frame, FGSTN_StartupSteer::QuantizeYaw(Yaw));
 }
 
 void FGSTN_LinkTickExtension::MakeOffersFor(const UGSTN_LinkRegistry& Registry, const FGSTN_LinkBodyData* Body, TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>>& OutOffers)
@@ -1038,6 +1070,12 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 					|| In.ActiveTimeline != Out.ActiveTimeline || In.TimelineStartFrame != Out.TimelineStartFrame);
 				StepFacing(*Fragment, UGSTN_LinkRegistry::Get(), Anchor, Context.StickOnPlane, bIdle, bMoveStarted);
 			}
+		}
+		// Grab spin: the grabber turns with its spin move, the held partner (parked in its root space) swings round with it
+		if (const FGSTN_LinkFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments);
+			Fragment && Fragment->Links.Body.IsActive() && Context.RunningTimeline)
+		{
+			StepGrabSpin(Context.Out.Core, Context.Frame, *Context.RunningTimeline, Fragment->Links.Body, UGSTN_LinkRegistry::Get());
 		}
 		break;
 	case EGSTN_CombatHookPoint::BeforeTagProjection:

@@ -22,4 +22,13 @@ struct GSTNLINKCORE_API FGSTN_LinkHitData : public FGSTN_HitExtension
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Link")
 	bool bNoReaction = false;
+
+	/**
+	 * A hit on the held partner that also wears the grab down (grab spin, owner 2026-11-25: the held enemy frees itself after a while): the partner's
+	 * escape frame moves this many frames closer, never before the frame the hit lands (UGSTN_LinkMath::MashProgress's floor). Only on the live Body
+	 * partner of the same link; 0 = no effect. Smash keeps the grab time apart from pummels; a spin is a different deal: each turn costs grab time, so
+	 * the partner cannot be swung for ever
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Link", meta = (ClampMin = "0", ForceUnits = "Frames"))
+	int32 GrabTimeCostFrames = 0;
 };

@@ -150,7 +150,7 @@ In gioco: cosa sa fare un personaggio. Un kit lega comandi ad abilità; ogni abi
 ### 5.6 Presa, lanci, cavalcata, oggetti tenuti · OK (la presa "al collo" è BRANCH)
 In gioco: afferrare un nemico, colpirlo (pummel), lanciarlo; caricare un alleato in spalla; portare oggetti.
 - GSTNLink (125 test, `GSTNLink.*`): tipi di link `GSTNLinkCore/Public/GSTN_LinkTypeDefinition.h`, regole presa `GSTN_GrabRules.h`, lanci `GSTNLinkNP/Public/Moves/GSTN_LinkThrowMoves.h` + `Sim/GSTN_LinkThrow.h`, mash `Sim/GSTN_LinkMash.h`, chi è preso resta fermo `Movement/GSTN_LinkedMovementMode.h`, lanci dal kit `Input/GSTN_LinkSlots.h` (`ApplyKitThrows`).
-- Oggi i lanci sono Su/Avanti/Indietro/Giù da stick, non N/F/Cr/Cr.F: la nuova presa va costruita **sopra** questi pezzi.
+- Presa al collo e lanci N./F./Cr./Cr.F. (modalità Notation) sono in main (grab-link). Spin con il nemico in mano (`Moves/GSTN_LinkGrabSpinMoves.h`, `Data/GSTN_GrabSpinTrack.h`) e numeri di Ganondorf sul kit di playtest (`Tools/GAS/setup_grab_ganon_playtest.py`, fonti `docs/notes/grab-ganon-dati.md`): BRANCH grab-ganon, da compilare.
 - Cavalcata: GSTNPiggyback. Oggetti tenuti e lanciati: GSTNHeld (+ GSTNProjectile). Trivella e spin: GSTNSpinDrill (interfaccia `GSTN Spin Turnable` per gli oggetti di livello girati dallo spin); vite a terra: GSTNSpinScrew. Doc `combat-m6-defence-links.md`, `combat-m7-piggyback.md`, `combat-m10-held-objects.md`.
 
 ### 5.7 Difesa e parti distruttibili · OK (SPENTI di default)
