@@ -1,6 +1,9 @@
 #include "Presentation/GSTN_GreyboxAnimInstance.h"
 
+#include "AbilitySystemComponent.h"
+#include "AbilitySystemGlobals.h"
 #include "Abilities/GSTN_GA_Dash.h"
+#include "Rules/GSTN_AirCrouch.h"
 #include "Animation/AnimMontage.h"
 #include "AnimationRuntime.h"
 #include "Engine/SkeletalMesh.h"
@@ -341,7 +344,11 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		JudderSquash = -ShapeSettings.WallJudderSquash * FMath::Abs(Judder) * 2.f;
 	}
 	const float SpringDamping = bCalm ? FMath::Max(ShapeSettings.SpringDamping, ShapeSettings.HitReactionSpringDamping) : ShapeSettings.SpringDamping;
-	SquashSpring.Step(bCalm ? 1.f : SquashTarget(ShapeSettings, bBraced, Velocity.Z, Local.X), DeltaSeconds, ShapeSettings.SpringFrequency, SpringDamping);
+	// Air crouch: the body tucks to a fixed squash instead of stretching with the vertical speed (not in a dive, which owns the body)
+	const UAbilitySystemComponent* OwnerASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Owner);
+	const bool bAirCrouch = !bOnGround && !bCalm && DiveLastAngle <= 0.f && OwnerASC && OwnerASC->HasMatchingGameplayTag(GSTNCombatTags::State_AirCrouch);
+	const float SquashGoal = bCalm ? 1.f : (bAirCrouch ? ShapeSettings.AirCrouchSquash : SquashTarget(ShapeSettings, bBraced, Velocity.Z, Local.X));
+	SquashSpring.Step(SquashGoal, DeltaSeconds, ShapeSettings.SpringFrequency, SpringDamping);
 	// Jump squat: squash fast during the sim's squat frames; on take-off the spring is released from there into the air stretch
 	const bool bJumpSquatting = UGSTN_RunPresentationComponent::IsAnimOwnerJumpSquatting(this);
 	if (bJumpSquatting)

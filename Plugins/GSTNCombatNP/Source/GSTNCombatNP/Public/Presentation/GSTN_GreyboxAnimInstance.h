@@ -90,6 +90,14 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Jump Squat", meta = (ClampMin = "0.3", ClampMax = "1"))
 	float JumpSquatSquash = 0.72f;
 
+	/**
+	 * Air crouch (owner 2026-11-25: "the air crouch on the capsule, less squashed than the crouch on the ground"): while the owner has
+	 * Combat.State.AirCrouch the capsule's squash goes to this (1 = rest) on the squash spring instead of the air stretch. The ground crouch
+	 * squashes to the driver's crouched pelvis (MinPelvisSquash at most), so keep this above it. 1 turns it off
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Air Crouch", meta = (ClampMin = "0.3", ClampMax = "1"))
+	float AirCrouchSquash = 0.78f;
+
 	/** How fast the squat squash is reached, 1/s (the squat lasts ~50 ms) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Jump Squat", meta = (ClampMin = "1"))
 	float JumpSquatBlendSpeed = 45.f;

@@ -171,6 +171,9 @@ bool FGSTN_GreyboxDiveTest::RunTest(const FString& Parameters)
 		MaxStep = FMath::Max(MaxStep, B - A);
 	}
 	TestTrue(FString::Printf(TEXT("no rendered frame turns more than 60 deg (%.0f)"), MaxStep), MaxStep <= 60.f);
+	// Owner 2026-11-25: the air crouch tucks the capsule, less than the ground crouch can squash it
+	TestTrue(TEXT("air crouch squashes"), Settings.AirCrouchSquash < 1.f);
+	TestTrue(TEXT("air crouch is less squashed than the ground crouch's floor"), Settings.AirCrouchSquash > Settings.MinPelvisSquash);
 	// A lag shorter than the roll is all roll
 	TestTrue(TEXT("short lag: rolls at once"), UGSTN_GreyboxAnimInstance::DiveAngle(Settings, 0.f, 2.f / Rate, 4.f / Rate, Land) > Settings.DiveBellyDeg);
 	return true;

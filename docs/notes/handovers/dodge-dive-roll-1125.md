@@ -36,6 +36,10 @@ controllo in aria pieno, 8 f di lag con scivolata di pancia (4000 cm/s²), lock 
    `Tools/GASNPPTest/movement_setup.py`: vanno rilanciati sul fisso (IMC binari).
 9. L'opzione per giocatore (menu) dovrà viaggiare col loadout: la tabella si compila uguale su ogni macchina, quindi oggi è un'impostazione di progetto.
 
+Owner 10:55Z: 1A 2A 3A (stick in ogni direzione, il resto resta su RB, in aria air dodge). In più:
+10. Air crouch sulla capsula: con `Combat.State.AirCrouch` lo squash va a `AirCrouchSquash` 0,78 (molla, al posto dello stretch in aria), meno del crouch
+    a terra (pelvis fino a 0,35). Non durante il tuffo.
+
 ## Test (NON compilati qui)
 Nuovo `GSTNCombat.Core.Table.DodgeInputMethod`; `Table.ButtonLayout` fissa il metodo Button.
 Nuovo `GSTNCombat.Core.DodgeLanding.BellyUntilStopped`; RollOut e Defaults aggiornati al salto-rollout di default; `Dodge.LongJumpCarriesRunSpeed` x1.3.
