@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/SaveGame.h"
+#include "Input/GSTN_InputProfile.h"
 #include "Input/GSTN_StickThresholds.h"
 #include "Subsystems/LocalPlayerSubsystem.h"
 #include "GSTN_InputOptionsSubsystem.generated.h"
@@ -26,6 +27,21 @@ struct GSTNINPUTCORE_API FGSTN_InputOptions
 	/** The attack zones and flick window: read by the simulation, so they go to the server in the loadout (FGSTN_LoadoutInputFeelExt) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input|Stick")
 	FGSTN_StickThresholds StickThresholds;
+
+	/**
+	 * Which device the simulation interprets this player's input for (FGSTN_InputProfile::Device). Auto follows the last device that pressed
+	 * something; a change is a new loadout revision (a handshake with the host), never a per-frame bit
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input|Profile")
+	EGSTN_InputDeviceChoice DeviceChoice = EGSTN_InputDeviceChoice::Auto;
+
+	/** Layout functions moved to another logical button; only the layout's remappable functions are honoured (the host sanitizes) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input|Profile", meta = (TitleProperty = "Function"))
+	TArray<FGSTN_ButtonOverride> ButtonOverrides;
+
+	/** Commands picked for virtual commands among the layout's alternatives (Helldivers-style: hold, double tap...) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input|Profile", meta = (TitleProperty = "VirtualCommand"))
+	TArray<FGSTN_CommandPick> CommandPicks;
 };
 
 /** Save slot of one player's options */
@@ -69,8 +85,32 @@ public:
 	/** The options of a local player (defaults when there is no subsystem, e.g. a server's remote player) */
 	static FGSTN_InputOptions GetFor(const class ULocalPlayer* LocalPlayer);
 
+	/** The input profile these options ask for, with the device resolved (not sanitized: the receiver does it against its layout) */
+	FGSTN_InputProfile MakeProfile() const;
+
+	/** The device Auto currently resolves to: the last one that pressed a button or tilted a stick past half */
+	EGSTN_InputDevice GetDetectedDevice() const { return DetectedDevice; }
+
+	/**
+	 * Called by the input preprocessor of this local player when another device is used. With DeviceChoice Auto the profile changes, so
+	 * OnChanged fires (the loadout sends the new profile to the host). Ignored for MinSwitchSeconds after a switch, so two devices used at
+	 * once cannot flood the host with revisions
+	 */
+	void NotifyDeviceUsed(EGSTN_InputDevice Device);
+
+	/** Shortest time between two automatic device switches */
+	static constexpr double MinSwitchSeconds = 1.0;
+
+	virtual void Deinitialize() override;
+
 private:
 	FString GetSlotName() const;
 
 	FGSTN_InputOptions Options;
+
+	EGSTN_InputDevice DetectedDevice = EGSTN_InputDevice::Gamepad;
+	double LastSwitchSeconds = -1.0e9;
+
+	/** Slate input preprocessor that reports the device this local player uses (local only, it never touches the simulation) */
+	TSharedPtr<class FGSTN_InputDeviceWatcher> DeviceWatcher;
 };

@@ -22,5 +22,8 @@ public class GSTNInputCore : ModuleRules
 
 		// Only for UInputAction references in the input config; the Core never reads input itself.
 		PrivateDependencyModuleNames.Add("EnhancedInput");
+
+		// The options subsystem's device watcher (an input preprocessor that only tells which device a local player uses)
+		PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore", "ApplicationCore" });
 	}
 }

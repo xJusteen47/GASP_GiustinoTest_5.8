@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Input/GSTN_InputProfile.h"
 #include "GameplayTagContainer.h"
 #include "Input/GSTN_CommandBindings.h"
 #include "Input/GSTN_InputPattern.h"
@@ -106,6 +107,13 @@ struct GSTNCOMBATCORE_API FGSTN_CompileInput
 
 	/** The player's ability swaps, applied to the weapon entries */
 	TArray<FGSTN_SlotCustomisation> Customisations;
+
+	/**
+	 * The player's input profile (FGSTN_LoadoutInputProfileExt, sanitized): every slot the table keeps goes through
+	 * FGSTN_InputSlotSpec::ApplyPlayerInput with it, so the player's device, remapped functions and picked commands are part of the table
+	 * every machine compiles. Default = a gamepad with the layout's defaults
+	 */
+	FGSTN_InputProfile InputProfile;
 
 	/** Stamped on the table; the loadout component increments it per applied loadout */
 	int32 Revision = 0;

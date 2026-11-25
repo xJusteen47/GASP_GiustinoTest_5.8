@@ -104,6 +104,11 @@ FGameplayTag FGSTN_InputSlotSpec::AddLayoutButton(FName Function, const FGamepla
 
 void FGSTN_InputSlotSpec::ApplyButtonLayout(const UGSTN_ButtonLayout& Layout)
 {
+	RemapLayoutButtons([&Layout](FName Function) { return Layout.FindButton(Function); });
+}
+
+void FGSTN_InputSlotSpec::RemapLayoutButtons(TFunctionRef<FGameplayTag(FName Function)> ButtonOfFunction)
+{
 	if (LayoutButtons.IsEmpty())
 	{
 		return;
@@ -111,7 +116,7 @@ void FGSTN_InputSlotSpec::ApplyButtonLayout(const UGSTN_ButtonLayout& Layout)
 	TMap<FGameplayTag, FGameplayTag> Map;
 	for (const FGSTN_SlotLayoutButton& Entry : LayoutButtons)
 	{
-		const FGameplayTag Button = Layout.FindButton(Entry.Function);
+		const FGameplayTag Button = ButtonOfFunction(Entry.Function);
 		if (Button.IsValid() && Button != Entry.Button && !Map.Contains(Entry.Button))
 		{
 			Map.Add(Entry.Button, Button);
@@ -131,6 +136,25 @@ void FGSTN_InputSlotSpec::ApplyButtonLayout(const UGSTN_ButtonLayout& Layout)
 		}
 	}
 	LayoutButtons.Reset();
+}
+
+void FGSTN_InputSlotSpec::ApplyPlayerInput(const UGSTN_ButtonLayout& Layout, const FGSTN_InputProfile& Profile)
+{
+	if (const FGSTN_CommandChoiceSet* Choices = Layout.FindChoices(Command))
+	{
+		const FGSTN_CommandChoice* Choice = Choices->Resolve(Profile);
+		if (Choice && Choice->Pattern.IsStructurallyValid())
+		{
+			Pattern = Choice->Pattern;
+			LayoutButtons = Choice->LayoutButtons;
+		}
+	}
+	RemapLayoutButtons([&Layout, &Profile](FName Function) { return Layout.FindButton(Function, Profile); });
+}
+
+void FGSTN_InputSlotSpec::ApplyActivePlayerInput(const FGSTN_InputProfile& Profile)
+{
+	ApplyPlayerInput(UGSTN_ButtonLayout::Get(), Profile);
 }
 
 void FGSTN_InputSlotSpec::ApplyActiveButtonLayout()

@@ -2,6 +2,8 @@
 
 #include "Loadout/GSTN_LoadoutComponent.h"
 #include "Loadout/GSTN_LoadoutInputFeel.h"
+#include "Loadout/GSTN_LoadoutInputProfile.h"
+#include "Layout/GSTN_ButtonLayout.h"
 #include "Input/GSTN_InputOptionsSubsystem.h"
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/PlayerController.h"
@@ -236,20 +238,36 @@ void UGSTN_LoadoutComponent::ServerRequestLoadout_Implementation(const FGSTN_Loa
 
 bool UGSTN_LoadoutComponent::ApplyRequested(const FGSTN_LoadoutData& Requested, TArray<FString>& OutErrors)
 {
-	// The player's input feel is not a loadout screen's business: a request that lacks it keeps the applied one
-	if (!GSTNLoadoutExtension::Find<FGSTN_LoadoutInputFeelExt>(Requested.Extensions))
+	const FGSTN_LoadoutData Full = WithPlayerEntries(Requested);
+	return ServerLoadoutApplier ? ServerLoadoutApplier(Full, OutErrors) : AcceptLoadout(Full, OutErrors);
+}
+
+FGSTN_LoadoutData UGSTN_LoadoutComponent::WithPlayerEntries(const FGSTN_LoadoutData& Requested) const
+{
+	// The player's input feel and input profile are not a loadout screen's business: a request that lacks them keeps the applied ones
+	// (or the ones the client sent before its first loadout)
+	FGSTN_LoadoutData Out = Requested;
+	if (!GSTNLoadoutExtension::Find<FGSTN_LoadoutInputFeelExt>(Out.Extensions))
 	{
 		const FGSTN_LoadoutInputFeelExt* AppliedFeel = GSTNLoadoutExtension::Find<FGSTN_LoadoutInputFeelExt>(Applied.Extensions);
 		if (AppliedFeel || bHasPendingInputFeel)
 		{
 			FGSTN_LoadoutInputFeelExt Feel;
 			Feel.StickThresholds = bHasPendingInputFeel ? PendingInputFeel : AppliedFeel->StickThresholds;
-			FGSTN_LoadoutData WithFeel = Requested;
-			GSTNLoadoutExtension::Set(WithFeel.Extensions, Feel);
-			return ServerLoadoutApplier ? ServerLoadoutApplier(WithFeel, OutErrors) : AcceptLoadout(WithFeel, OutErrors);
+			GSTNLoadoutExtension::Set(Out.Extensions, Feel);
 		}
 	}
-	return ServerLoadoutApplier ? ServerLoadoutApplier(Requested, OutErrors) : AcceptLoadout(Requested, OutErrors);
+	if (!GSTNLoadoutExtension::Find<FGSTN_LoadoutInputProfileExt>(Out.Extensions))
+	{
+		const FGSTN_LoadoutInputProfileExt* AppliedProfile = GSTNLoadoutExtension::Find<FGSTN_LoadoutInputProfileExt>(Applied.Extensions);
+		if (AppliedProfile || bHasPendingInputProfile)
+		{
+			FGSTN_LoadoutInputProfileExt Entry;
+			Entry.Profile = bHasPendingInputProfile ? PendingInputProfile : AppliedProfile->Profile;
+			GSTNLoadoutExtension::Set(Out.Extensions, Entry);
+		}
+	}
+	return Out;
 }
 
 void UGSTN_LoadoutComponent::ServerSetInputFeel_Implementation(const FGSTN_StickThresholds& Thresholds)
@@ -271,6 +289,32 @@ void UGSTN_LoadoutComponent::ServerSetInputFeel_Implementation(const FGSTN_Stick
 	FGSTN_LoadoutInputFeelExt Feel;
 	Feel.StickThresholds = Clean;
 	GSTNLoadoutExtension::Set(Next.Extensions, Feel);
+	TArray<FString> Errors;
+	if (!ApplyRequested(Next, Errors))
+	{
+		ClientLoadoutRejected(Errors);
+	}
+}
+
+void UGSTN_LoadoutComponent::ServerSetInputProfile_Implementation(const FGSTN_InputProfile& Profile)
+{
+	// Sanitized here, on the host, against the match's layout: a client can only pick what the designer offers
+	const FGSTN_InputProfile Clean = Profile.Sanitized(UGSTN_ButtonLayout::Get());
+	if (FGSTN_LoadoutInputProfileExt::Resolve(Applied.Extensions) == Clean
+		&& (GSTNLoadoutExtension::Find<FGSTN_LoadoutInputProfileExt>(Applied.Extensions) || Clean == FGSTN_InputProfile()))
+	{
+		return;
+	}
+	PendingInputProfile = Clean;
+	bHasPendingInputProfile = true;
+	if (!HasLoadout())
+	{
+		return;
+	}
+	FGSTN_LoadoutData Next = Applied;
+	FGSTN_LoadoutInputProfileExt Entry;
+	Entry.Profile = Clean;
+	GSTNLoadoutExtension::Set(Next.Extensions, Entry);
 	TArray<FString> Errors;
 	if (!ApplyRequested(Next, Errors))
 	{
@@ -551,6 +595,11 @@ void UGSTN_LoadoutComponent::SyncLocalInputFeel()
 	if (HasLoadout() && FGSTN_LoadoutInputFeelExt::Resolve(Applied.Extensions) != Wanted)
 	{
 		ServerSetInputFeel(Wanted);
+	}
+	const FGSTN_InputProfile WantedProfile = Options->MakeProfile().Sanitized(UGSTN_ButtonLayout::Get());
+	if (HasLoadout() && FGSTN_LoadoutInputProfileExt::Resolve(Applied.Extensions) != WantedProfile)
+	{
+		ServerSetInputProfile(WantedProfile);
 	}
 }
 

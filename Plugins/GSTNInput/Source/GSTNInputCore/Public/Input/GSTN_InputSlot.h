@@ -13,6 +13,7 @@
 
 class UGSTN_InputSettings;
 class UGSTN_ButtonLayout;
+struct FGSTN_InputProfile;
 
 /**
  * The rank of a command when several match at once (input.md section 4.1): the score of each criterion of
@@ -133,6 +134,17 @@ struct GSTNINPUTCORE_API FGSTN_InputSlotSpec
 	/** ApplyButtonLayout with the active layout (the GameRules piece, else the shipped defaults) */
 	void ApplyActiveButtonLayout();
 
+	/**
+	 * A player's input profile on top of Layout (input profile handshake, F1 of the rollback plan): when Layout offers alternatives for
+	 * this slot's virtual command, the profile's pick (else its device's default) replaces Pattern and LayoutButtons; then the buttons
+	 * follow Layout with the profile's overrides of remappable functions. Like ApplyButtonLayout it empties LayoutButtons, so a second
+	 * call changes nothing. Pure: the same layout and profile give the same slot on every machine. Profile is expected sanitized
+	 */
+	void ApplyPlayerInput(const UGSTN_ButtonLayout& Layout, const FGSTN_InputProfile& Profile);
+
+	/** ApplyPlayerInput with the active layout */
+	void ApplyActivePlayerInput(const FGSTN_InputProfile& Profile);
+
 	/** Rank of the slot with the settings' tiers */
 	FGSTN_CommandPriority GetPriority(const UGSTN_InputSettings& Settings) const;
 
@@ -141,6 +153,10 @@ struct GSTNINPUTCORE_API FGSTN_InputSlotSpec
 
 	/** Matcher params of this slot at frame Now: the settings' buffer defaults with the slot's overrides applied */
 	FGSTN_MatchParams MakeMatchParams(const UGSTN_InputSettings& Settings, const FGSTN_ButtonMap& Buttons, int32 Now) const;
+
+private:
+	/** Remaps the layout buttons through ButtonOfFunction (an empty answer keeps the default) and empties LayoutButtons */
+	void RemapLayoutButtons(TFunctionRef<FGameplayTag(FName Function)> ButtonOfFunction);
 };
 
 /** A slot shared as an asset (Asset Manager type GSTN_InputSlot). */

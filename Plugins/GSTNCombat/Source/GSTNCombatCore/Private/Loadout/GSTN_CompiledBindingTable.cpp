@@ -509,8 +509,9 @@ FGSTN_CompiledBindingTable FGSTN_BindingTableCompiler::Compile(const FGSTN_Compi
 	for (FPendingEntry& Pending : All)
 	{
 		// IO-2c: slots store the defaults of their layout functions; the buttons come from the active button layout (the match's
-		// GameRules piece, the same on every machine), so the set and kit assets follow the rules and never bake a layout in
-		Pending.Slot.ApplyActiveButtonLayout();
+		// GameRules piece, the same on every machine), so the set and kit assets follow the rules and never bake a layout in. The
+		// player's input profile goes on top (F1 handshake): it travels in the loadout, so every machine applies the same one
+		Pending.Slot.ApplyActivePlayerInput(Input.InputProfile);
 		const FString Key = SlotKey(Pending.Slot);
 		int32* Existing = SlotIndexByKey.Find(Key);
 		if (!Existing)
@@ -550,7 +551,7 @@ FGSTN_CompiledBindingTable FGSTN_BindingTableCompiler::Compile(const FGSTN_Compi
 				continue;
 			}
 			FGSTN_InputSlotSpec Slot = **Found;
-			Slot.ApplyActiveButtonLayout();
+			Slot.ApplyActivePlayerInput(Input.InputProfile);
 			const FString Key = SlotKey(Slot);
 			int32* Existing = SlotIndexByKey.Find(Key);
 			if (!Existing)

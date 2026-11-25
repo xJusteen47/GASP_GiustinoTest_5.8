@@ -10,6 +10,7 @@
 #include "Kits/GSTN_SuperInputScheme.h"
 #include "Kits/GSTN_WeaponDefinition.h"
 #include "Loadout/GSTN_LoadoutExtensions.h"
+#include "Loadout/GSTN_LoadoutInputProfile.h"
 
 namespace
 {
@@ -55,6 +56,7 @@ void FGSTN_LoadoutAssembly::BuildCompileInput(const FGSTN_ResolvedLoadout& Resol
 	OutInput = FGSTN_CompileInput();
 	OutInput.Revision = Revision;
 	OutInput.Customisations = Resolved.Loadout.SlotCustomisations;
+	OutInput.InputProfile = FGSTN_LoadoutInputProfileExt::Resolve(Resolved.Loadout.Extensions);
 	OutInput.SuperScheme = Resolved.SuperScheme;
 	OutInput.IsTimelineAbility = &FGSTN_LoadoutAssembly::IsTimelineAbilityClass;
 
