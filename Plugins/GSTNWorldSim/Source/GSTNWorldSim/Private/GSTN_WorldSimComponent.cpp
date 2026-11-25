@@ -5,6 +5,7 @@
 #include "CollisionQueryParams.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
+#include "Async/ParallelFor.h"
 #include "HAL/PlatformTime.h"
 #include "NetworkPredictionDriver.h"
 #include "NetworkPredictionModelDef.h"
@@ -24,6 +25,10 @@ namespace GSTNWorldSim
 	static int32 SyntheticTraces = 0;
 	static FAutoConsoleVariableRef CVarSyntheticTraces(TEXT("gstn.WorldSim.Traces"), SyntheticTraces,
 		TEXT("Line traces against static geometry the world sim runs per tick. Read on the authority and sent in the input."));
+
+	static bool bParallel = false;
+	static FAutoConsoleVariableRef CVarParallel(TEXT("gstn.WorldSim.Parallel"), bParallel,
+		TEXT("Run the synthetic entities and traces with ParallelFor. The result (the accumulator) must not change: if a client reconciles every frame with it on, the parallel step is not deterministic."));
 
 	static float LogEverySeconds = 0.f;
 	static FAutoConsoleVariableRef CVarLogEverySeconds(TEXT("gstn.WorldSim.LogEverySeconds"), LogEverySeconds,
@@ -119,35 +124,57 @@ void UGSTN_WorldSimComponent::SimulationTick(const FNetSimTimeStep& TimeStep, co
 	uint32 Accumulator = GSTNWorldSim::Fold(InSync.Accumulator, (uint32)TimeStep.Frame);
 	const FGSTN_WorldSimInput& Cmd = *Input.Cmd;
 
-	// CPU part of a minion: integrate a position and steer it, from a seed the frame and the index give (no state to keep for a spike)
+	// The work of each fake entity reads only the frame and its index and writes only its own result, so it can run on any core in any
+	// order; the results are folded in index order afterwards, so the accumulator is the same with or without threads. This is the shape
+	// the engaged minions of F9 would take: parallel per-entity step, serial pass for what depends on order (hits, contests)
 	const float Dt = TimeStep.StepMS * 0.001f;
-	for (int32 Index = 0; Index < Cmd.SyntheticEntities; ++Index)
+	const int32 Frame = TimeStep.Frame;
+	const int32 EntityCount = Cmd.SyntheticEntities;
+	const int32 TraceCount = Cmd.SyntheticTraces;
+	const UWorld* World = GetWorld();
+	EntityResults.SetNumUninitialized(EntityCount + TraceCount, EAllowShrinking::No);
+
+	auto StepEntity = [this, Dt, Frame](int32 Index)
 	{
-		const float Phase = (float)((TimeStep.Frame * 31 + Index * 17) % 1024) * (UE_TWO_PI / 1024.f);
+		// CPU part of a minion: integrate a position and steer it, from a seed the frame and the index give (no state to keep for a spike)
+		const float Phase = (float)((Frame * 31 + Index * 17) % 1024) * (UE_TWO_PI / 1024.f);
 		FVector Position(Index * 50.0, FMath::Sin(Phase) * 300.0, 0.0);
 		FVector Velocity(FMath::Cos(Phase) * 400.0, FMath::Sin(Phase * 2.f) * 400.0, 0.0);
-		const FVector Target(0.0, 0.0, 0.0);
-		const FVector Desired = (Target - Position).GetSafeNormal() * 600.0;
+		const FVector Desired = (FVector::ZeroVector - Position).GetSafeNormal() * 600.0;
 		Velocity += (Desired - Velocity).GetClampedToMaxSize(2000.0 * Dt);
 		Position += Velocity * Dt;
-		Accumulator = GSTNWorldSim::Fold(Accumulator, (uint32)FMath::FloorToInt32(Position.X) ^ ((uint32)FMath::FloorToInt32(Position.Y) << 1));
-	}
-
-	// Level-query part of a minion: a ground probe each, on static geometry only so every machine finds the same hits
-	if (Cmd.SyntheticTraces > 0)
+		EntityResults[Index] = (uint32)FMath::FloorToInt32(Position.X) ^ ((uint32)FMath::FloorToInt32(Position.Y) << 1);
+	};
+	auto StepTrace = [this, World, Frame, EntityCount](int32 Index)
 	{
-		if (const UWorld* World = GetWorld())
+		// Level-query part of a minion: a ground probe each, on static geometry only so every machine finds the same hits
+		static const FName TraceTag(TEXT("GSTN_WorldSim"));
+		const FCollisionQueryParams Params(TraceTag, false);
+		const double X = ((Index * 7919 + Frame * 13) % 4000) - 2000.0;
+		const double Y = ((Index * 104729) % 4000) - 2000.0;
+		const bool bHit = World && World->LineTraceTestByChannel(FVector(X, Y, 2000.0), FVector(X, Y, -2000.0), ECC_WorldStatic, Params);
+		EntityResults[EntityCount + Index] = bHit ? (uint32)Index : 0u;
+	};
+
+	if (GSTNWorldSim::bParallel)
+	{
+		ParallelFor(EntityCount, StepEntity);
+		ParallelFor(TraceCount, StepTrace);
+	}
+	else
+	{
+		for (int32 Index = 0; Index < EntityCount; ++Index)
 		{
-			static const FName TraceTag(TEXT("GSTN_WorldSim"));
-			FCollisionQueryParams Params(TraceTag, false);
-			for (int32 Index = 0; Index < Cmd.SyntheticTraces; ++Index)
-			{
-				const double X = ((Index * 7919 + TimeStep.Frame * 13) % 4000) - 2000.0;
-				const double Y = ((Index * 104729) % 4000) - 2000.0;
-				const bool bHit = World->LineTraceTestByChannel(FVector(X, Y, 2000.0), FVector(X, Y, -2000.0), ECC_WorldStatic, Params);
-				Accumulator = GSTNWorldSim::Fold(Accumulator, bHit ? (uint32)Index : 0u);
-			}
+			StepEntity(Index);
 		}
+		for (int32 Index = 0; Index < TraceCount; ++Index)
+		{
+			StepTrace(Index);
+		}
+	}
+	for (const uint32 Result : EntityResults)
+	{
+		Accumulator = GSTNWorldSim::Fold(Accumulator, Result);
 	}
 	OutSync.Accumulator = Accumulator;
 
@@ -209,8 +236,8 @@ FString UGSTN_WorldSimComponent::DescribeStats() const
 	const FGSTN_WorldSimSync* Sync = GetSyncState();
 	const int64 FirstTicks = Stats.Ticks - Stats.ResimTicks;
 	const double FirstSeconds = Stats.TickSeconds - Stats.ResimTickSeconds;
-	return FString::Printf(TEXT("WorldSim [%s %s] frame %d acc %08x | ticks %lld (resim %lld) | avg tick %.3f ms, avg resim tick %.3f ms | game frames %lld (with resim %lld) | worst game frame %.3f ms over %d ticks"),
-		Role, *GetNameSafe(World), Sync ? Sync->Frame : -1, Sync ? Sync->Accumulator : 0u,
+	return FString::Printf(TEXT("WorldSim [%s %s%s] frame %d acc %08x | ticks %lld (resim %lld) | avg tick %.3f ms, avg resim tick %.3f ms | game frames %lld (with resim %lld) | worst game frame %.3f ms over %d ticks"),
+		Role, *GetNameSafe(World), GSTNWorldSim::bParallel ? TEXT(" parallel") : TEXT(""), Sync ? Sync->Frame : -1, Sync ? Sync->Accumulator : 0u,
 		Stats.Ticks, Stats.ResimTicks,
 		FirstTicks > 0 ? FirstSeconds * 1000.0 / FirstTicks : 0.0,
 		Stats.ResimTicks > 0 ? Stats.ResimTickSeconds * 1000.0 / Stats.ResimTicks : 0.0,

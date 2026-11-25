@@ -13,6 +13,7 @@ The spike measures what a re-simulation of world state costs per frame. The tick
 | `gstn.WorldSim.Entities N` | fake entities updated per tick, vector math only (CPU part of a minion) |
 | `gstn.WorldSim.Traces N` | line traces per tick on static geometry (level-query part of a minion) |
 | `gstn.WorldSim.Report` | log ticks, re-simulated ticks, average cost of each, worst game frame, for every world sim of the process |
+| `gstn.WorldSim.Parallel 1` | run the synthetic entities and traces with `ParallelFor` (results folded in index order: the accumulator must not change) |
 | `gstn.WorldSim.ResetStats` | start a new measurement |
 | `gstn.WorldSim.LogEverySeconds S` | log the report every S seconds (for the harness) |
 

@@ -129,6 +129,9 @@ protected:
 	virtual void InitializeNetworkPredictionProxy() override;
 
 private:
+	// Scratch of one tick (one result per fake entity and trace), filled and folded inside SimulationTick: never carries state across ticks
+	TArray<uint32> EntityResults;
+
 	// Measurement only, outside the sync state: never read by SimulationTick
 	FGSTN_WorldSimStats Stats;
 	int32 HighestSimulatedFrame = INDEX_NONE;
