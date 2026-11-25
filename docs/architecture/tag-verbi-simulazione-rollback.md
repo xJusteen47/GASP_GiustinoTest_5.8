@@ -322,3 +322,14 @@ Nessuna riga sotto è compilata o provata sul fisso, salvo dove scritto. "Branch
 Chi aggiunge un tag radice, un frammento, un campo di sync, un'abilità nuova o sposta qualcosa fuori dalla simulazione aggiorna la
 riga qui nello stesso commit (come per `docs/INDICE-PROGETTO.md`). Per rifare i conteggi dei tag:
 `grep -rhoE 'UE_DEFINE_GAMEPLAY_TAG[A-Z_]*\([^,]+, *"[^"]+"' Plugins Source --include=*.cpp`.
+
+## 10. Decisioni dell'owner del 25/11 (dopo la prima stesura)
+
+Questo file descrive il codice com'è oggi. Le decisioni sotto lo cambieranno; il lavoro è nel thread "Portare tutto il gameplay nel rollback".
+
+| Decisione | Cosa cambia |
+|---|---|
+| **B: niente misto.** Tutto il gameplay va nella simulazione con rollback | Oggetti tenuti (presa, contesa, volo), spawn dei proiettili, cambio loadout/kit, vite condivise, respawn come reset dello stesso pawn, missioni co-op passano dalla zona C alla zona A. Fuori restano solo gli effetti esterni irreversibili (salvataggi, statistiche, achievement, risultati verso servizi, telemetria) |
+| **Handshake delle impostazioni** | Profilo del giocatore (dispositivo, zone morte, sensibilità, sequenze personalizzate) concordato con l'host insieme al loadout e applicato da un frame preciso; mai bit per frame. Cambio dispositivo a metà partita = nuovo handshake |
+| **Nomi** | "Input virtuale" = tasto logico (`Input.Button.*`); "comando" = la sequenza di input virtuali (oggi "slot"), rimappabile dal giocatore solo dove permesso; "comando virtuale" = il nome che il designer mette negli slot mossa dei kit (oggi i tag `Command.*`). Rinomina completa nel codice dentro il lavoro B, con redirect dei tag per gli asset |
+| **Fisica deterministica** | Valutare Jolt (determinismo tra piattaforme, snapshot e ripristino dello stato) per le collisioni della simulazione e per pochi oggetti fisici di gioco; ragdoll solo estetici sopra la capsula simulata |
