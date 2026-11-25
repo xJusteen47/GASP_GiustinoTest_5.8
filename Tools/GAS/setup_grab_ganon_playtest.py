@@ -6,9 +6,9 @@
 # In the editor: import setup_grab_ganon_playtest as g; g.run()
 #
 # Writes (new Blueprint children under /Game/GSTN/Characters/Overlord/Moves/Playtest, like setup_knockback_smash.py's GA_Smash_*):
-#   GA_Ganon_Playtest_Throw{Forward,Back,Up,Down,Neutral,CrouchForward}   children of the common throws (UGSTN_GA_LinkThrow*), frames + knockback
+#   GA_Ganon_Playtest_Throw{Forward,Up,Down,Neutral,CrouchForward}   children of the common throws (UGSTN_GA_LinkThrow*), frames, knockback, turn to stick
 #   GA_Ganon_Playtest_Grab   child of the kit's grab ability (when that is a native class): Ganondorf's standing grab frames
-# and on KIT_Test_Playtest's link extension: the throw set (every entry above) and the mash rule (Smash: 90 + 1.7 x %, 8 frames per input, min 19).
+# and on KIT_Test_Playtest's link extension: the throw set (every entry above, no back throw) and the hold rule (Smash: 90 + 1.7 x %, min 19, no mash).
 # The grab spin needs no asset: its rows come from DefaultGSTNLink.ini (FallbackThrows.Spin*), on every grabbing kit (shared system).
 # setup_knockback_smash.py leaves GA_Ganon_* alone; setup_test_kit_archetypes.py does not touch this kit. No montage (capsule phase).
 # Out: Saved/Logs/grab-ganon/setup.log
@@ -27,25 +27,39 @@ UNIT_SCALE = 22.5  # Smash knockback units -> cm/s (feel-f2, UGSTN_KnockbackMode
 
 # Ganondorf, Smash Ultimate. Frames from Ultimate Frame Data (ultimateframedata.com/ganondorf): (release frame, total frames, damage = hit + throw);
 # BKB / KBG / angle of the throw hitbox from SmashWiki (ssbwiki.com/Ganondorf_(SSBU)/<Throw>). Frames 1:1 (Smash 60 Hz, our fixed tick 62.5 Hz).
-# Angle: our elevation from the thrower's facing; above 90 = behind (the back throw's 43 degrees backwards = 137).
-#              parent                              total release damage  BKB  KBG  angle   Smash source
+# Angle: our elevation from the thrower's facing.
+#                total release damage  BKB  KBG  angle   Smash source
+GANON = {
+    'F': (39, 13, 13.0, 68,  70,  43.0),  # F throw: 5 % punch + 8 % throw, release 13
+    'U': (43, 13, 13.0, 70, 105,  90.0),  # U throw: 10 + 3 %
+    'D': (39, 23,  7.0, 70,  50,  65.0),  # D throw: 7 %, release 23
+    # B throw (5 + 5 %, release 14, total 49, BKB 30 KBG 130) not used: owner 2026-11-25 "il back non metterlo"
+}
+
+# Owner 2026-11-25, answer 1 (Notation mode): F. light = Ganon's forward throw, Cr. light = his UP throw, Cr.F. light = his DOWN throw, no back throw.
+# N. was not named: it keeps the up throw of the first proposal (1A). The Cr. slot is Command.Link.Throw.Down, so the classic modes' down throw is the
+# up throw too (the playtest kit runs Notation). Each entry: our throw slot -> (parent common throw, Ganon throw)
 THROWS = {
-    'Forward':       ('GSTN_GA_LinkThrowForward',       39, 13, 13.0, 68,  70,  43.0),  # F throw: 5 % punch + 8 % throw, release 13
-    'Back':          ('GSTN_GA_LinkThrowBack',          49, 14, 10.0, 30, 130, 137.0),  # B throw: 5 + 5 %, the kill throw
-    'Up':            ('GSTN_GA_LinkThrowUp',            43, 13, 13.0, 70, 105,  90.0),  # U throw: 10 + 3 %
-    'Down':          ('GSTN_GA_LinkThrowDown',          39, 23,  7.0, 70,  50,  65.0),  # D throw: 7 %, release 23
-    # Notation mode (N., Cr.F.), owner option 1A (recommended, to confirm): N. = Up throw, Cr.F. = the back throw sent FORWARD (the kill throw on F.)
-    'Neutral':       ('GSTN_GA_LinkThrowNeutral',       43, 13, 13.0, 70, 105,  90.0),
-    'CrouchForward': ('GSTN_GA_LinkThrowCrouchForward', 49, 14, 10.0, 30, 130,  43.0),
+    'Forward':       ('GSTN_GA_LinkThrowForward',       'F'),
+    'Up':            ('GSTN_GA_LinkThrowUp',            'U'),
+    'Down':          ('GSTN_GA_LinkThrowDown',          'U'),  # Cr.
+    'Neutral':       ('GSTN_GA_LinkThrowNeutral',       'U'),  # N.
+    'CrouchForward': ('GSTN_GA_LinkThrowCrouchForward', 'D'),  # Cr.F.
 }
 COMMANDS = {'Neutral': 'Command.Link.Throw.Neutral', 'CrouchForward': 'Command.Link.Throw.CrouchForward'}
+
+# Owner 2026-11-25, answer 6: every throw turns toward the stick before the release, not with the instant snap: 180 degrees in TURN_FRAMES
+# (Ganon's earliest release is 13, so the turn is over before it). Neutral stick: the facing stays, i.e. the held enemy's direction (the
+# recommended option of the open point; the other was "the last stick movement")
+TURN_FRAMES = 8
+TURN_DEG_PER_S = 180.0 / (TURN_FRAMES / 62.5)
 
 # Standing grab: startup 8, active 8-10, total 38 (UFD). Dash grab 11-13 / 46 and pivot grab 12-14 / 41 have no move of their own here yet
 GRAB = {'total': 38, 'first_actionable': 38, 'active_start': 8, 'active_end': 11}
 
-# Grab hold (SmashWiki "Grab", Grab time, Brawl onward): 90 + floor(1.7 x victim %) frames, each input 8 frames (stick; buttons 14.4 in Ultimate),
-# never under 19. Option 2A (recommended, to confirm). MaxFrames 600 (Smash has no cap; 300 % = 600 frames)
-MASH = {'base': 90, 'per_percent': 1.7, 'min': 19, 'max': 600, 'reduce_per_press': 8}
+# Grab hold (SmashWiki "Grab", Grab time, Brawl onward): 90 + floor(1.7 x victim %) frames, never under 19. Owner 2026-11-25, answer 2: NO mash
+# ("niente mash, lo scaling con percentuale ha senso"), so an input takes nothing off. MaxFrames 600 (Smash has no cap; 300 % = 600 frames)
+MASH = {'base': 90, 'per_percent': 1.7, 'min': 19, 'max': 600, 'reduce_per_press': 0}
 
 _lines = []
 
@@ -79,16 +93,19 @@ def _tag(name):
 
 def write_throws(kit, saves):
     classes = {}
-    for key, (parent, total, release, damage, bkb, kbg, angle) in THROWS.items():
+    for key, (parent, ganon) in THROWS.items():
+        total, release, damage, bkb, kbg, angle = GANON[ganon]
         bp, cls = _child(f'GA_Ganon_Playtest_Throw{key}', getattr(unreal, parent).static_class())
         changed = LINK.write_throw_move(cls, total, total, release, damage, bkb * UNIT_SCALE, angle, None, 1.0)
         changed |= LINK.write_throw_knockback(cls, bkb * UNIT_SCALE, kbg)
-        log(f'{key}: total {total}, release {release}, {damage} %, BKB {bkb} ({bkb * UNIT_SCALE:.0f} cm/s), KBG {kbg}, {angle} deg -> '
-            f'{LINK.describe_throw_knockback(cls)} changed={changed}')
+        changed |= LINK.write_throw_stick_turn(cls, TURN_DEG_PER_S, release)
+        log(f'{key} = Ganon {ganon}: total {total}, release {release}, {damage} %, BKB {bkb} ({bkb * UNIT_SCALE:.0f} cm/s), KBG {kbg}, {angle} deg, '
+            f'turn to stick {TURN_DEG_PER_S:.0f} deg/s -> {LINK.describe_throw_knockback(cls)} changed={changed}')
         if changed:
             saves.append(bp)
         classes[key] = cls
-    changed = LINK.set_kit_throws(kit, classes['Forward'], classes['Back'], classes['Up'], classes['Down'])
+    # No back throw (owner 2026-11-25): the slot stays empty, so only the BackThrow ergonomics would bind the common one
+    changed = LINK.set_kit_throws(kit, classes['Forward'], None, classes['Up'], classes['Down'])
     for key, command in COMMANDS.items():
         changed |= LINK.set_kit_throw(kit, _tag(command), classes[key])
     log(f'kit throw set changed={changed}')

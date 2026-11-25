@@ -373,6 +373,26 @@ bool FGSTN_LinkGrabSpinTrackTest::RunTest(const FString& Parameters)
 	TArray<FString> Errors;
 	Track.Validate(TEXT("ok"), Errors);
 	TestEqual(TEXT("valid"), Errors.Num(), 0);
+
+	// Owner 2026-11-25: two turns per move, then a settle that overshoots and comes back to the last turn
+	FGSTN_GrabSpinTrack Two;
+	Two.StartFrame = 0;
+	Two.EndFrame = 60;
+	Two.TurnEndFrame = 48;
+	Two.Turns = 2.f;
+	Two.SettleOvershootDeg = 15.f;
+	TestTrue(TEXT("one turn at the half of the turns"), Two.YawAt(30.f, 24, Yaw) && FMath::IsNearlyEqual(Yaw, 30.f, 0.01f));
+	TestTrue(TEXT("a quarter of a turn every 6 frames"), Two.YawAt(30.f, 6, Yaw) && FMath::IsNearlyEqual(Yaw, 75.f, 0.01f));
+	TestTrue(TEXT("the turns close on the origin"), Two.YawAt(30.f, 48, Yaw) && FMath::IsNearlyEqual(Yaw, 30.f, 0.01f));
+	TestTrue(TEXT("mid settle: the whole overshoot, in the spin's sense"), Two.YawAt(30.f, 54, Yaw) && FMath::IsNearlyEqual(Yaw, 45.f, 0.01f));
+	TestTrue(TEXT("the settle ends where the turns did"), Two.YawAt(30.f, 60, Yaw) && FMath::IsNearlyEqual(Yaw, 30.f, 0.01f));
+	TestFalse(TEXT("no wall slam without a group"), Two.IsWallProbeFrame(10));
+	Two.WallHitGroup = 2;
+	TestTrue(TEXT("the wall probe runs in the turns"), Two.IsWallProbeFrame(10) && Two.IsWallProbeFrame(48));
+	TestFalse(TEXT("never in the settle"), Two.IsWallProbeFrame(50));
+	Two.WallHitGroup = 9;
+	Two.Validate(TEXT("bad group"), Errors);
+	TestEqual(TEXT("a wall group past 8 is refused"), Errors.Num(), 1);
 	Track.Turns = 0.f;
 	Track.Validate(TEXT("no turn"), Errors);
 	TestEqual(TEXT("no turn refused"), Errors.Num(), 1);

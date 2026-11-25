@@ -10,7 +10,7 @@
 
 namespace
 {
-	FGSTN_TimelineTrack_Hitbox MakeSphereTrack(int32 Start, int32 End, double Radius, const FVector& Offset, const FGSTN_HitData& Data)
+	FGSTN_TimelineTrack_Hitbox MakeSphereTrack(int32 Start, int32 End, double Radius, const FVector& Offset, const FGSTN_HitData& Data, uint8 HitGroup)
 	{
 		FGSTN_HitboxSpec Spec;
 		Spec.Shape.Type = EGSTN_ShapeType::Sphere;
@@ -22,6 +22,7 @@ namespace
 		Key.Offset = Offset;
 		Spec.Keys = { Key };
 		Spec.Data = Data;
+		Spec.HitGroup = HitGroup;
 
 		FGSTN_TimelineTrack_Hitbox Track;
 		Track.StartFrame = Start;
@@ -38,33 +39,55 @@ UGSTN_GA_LinkGrabSpin::UGSTN_GA_LinkGrabSpin(const FObjectInitializer& ObjectIni
 {
 }
 
-FGameplayTagContainer UGSTN_GA_LinkGrabSpin::ChainCommands()
+FGameplayTagContainer UGSTN_GA_LinkGrabSpin::ThrowCommands()
 {
 	using namespace GSTNLinkTags;
 	// The native tags, not a request by name: a class default is built when the module loads, possibly before the tag manager has its tree
 	FGameplayTagContainer Into;
-	for (const FNativeGameplayTag* Tag : { &Command_Link_Spin_Clockwise, &Command_Link_Spin_CounterClockwise, &Command_Link_Release, &Command_Link_Release_PutDown,
-		&Command_Link_Throw_Forward, &Command_Link_Throw_Back, &Command_Link_Throw_Up, &Command_Link_Throw_Down, &Command_Link_Throw_Neutral,
-		&Command_Link_Throw_CrouchForward })
+	for (const FNativeGameplayTag* Tag : { &Command_Link_Release, &Command_Link_Release_PutDown, &Command_Link_Throw_Forward, &Command_Link_Throw_Back,
+		&Command_Link_Throw_Up, &Command_Link_Throw_Down, &Command_Link_Throw_Neutral, &Command_Link_Throw_CrouchForward })
 	{
 		Into.AddTag(Tag->GetTag());
 	}
 	return Into;
 }
 
+FGameplayTagContainer UGSTN_GA_LinkGrabSpin::ChainCommands()
+{
+	FGameplayTagContainer Into;
+	Into.AddTag(GSTNLinkTags::Command_Link_Spin_Clockwise.GetTag());
+	Into.AddTag(GSTNLinkTags::Command_Link_Spin_CounterClockwise.GetTag());
+	return Into;
+}
+
 void UGSTN_GA_LinkGrabSpin::FillGrabSpinTimeline(FGSTN_CombatTimelineData& OutTimeline, const FGSTN_GrabSpinMoveSpec& Spec, EGSTN_GrabSpinSense Sense)
 {
-	const int32 Total = FMath::Max(Spec.TotalFrames, 4);
+	const int32 Turns = FMath::Max(Spec.TurnFrames, 4);
+	const int32 Total = Turns + FMath::Max(Spec.SettleFrames, 0);
 	OutTimeline.Tracks.Reset();
 	OutTimeline.TotalFrames = Total;
-	OutTimeline.FirstActionableFrame = Total;
+	OutTimeline.FirstActionableFrame = Turns;
 	OutTimeline.OverrideFrames = 0;
+	// The settle (owner 2026-11-25, "solo estetico"): the frames after the turns are a tail that anything ends, the stick included
+	OutTimeline.Tail.bHasTail = Total > Turns;
+	OutTimeline.Tail.StartFrame = INDEX_NONE;
+	OutTimeline.Tail.BlendOutFrames = 6;
+	// The spin keeps the facing it starts with: the stick is mid-rotation when the move comes out, so the default start aim (snap to the stick) and
+	// a reverse would jerk the held partner to wherever the thumb happens to be; the turn is the track's alone
+	OutTimeline.AimPolicy = EGSTN_AimPolicy::KeepFacing;
+	OutTimeline.MaxSteerDegrees = 0.f;
+	OutTimeline.Reverse.Frames = 0;
 
 	FGSTN_GrabSpinTrack Spin;
 	Spin.StartFrame = 0;
 	Spin.EndFrame = Total;
+	Spin.TurnEndFrame = Turns;
 	Spin.Sense = Sense;
 	Spin.Turns = Spec.Turns;
+	Spin.SettleOvershootDeg = Spec.SettleOvershootDeg;
+	Spin.WallHitGroup = Spec.WallDamage > 0.f ? GSTNGrabSpinGroups::Wall : 255;
+	Spin.WallProbeReach = Spec.WallProbeReach;
+	Spin.WallProbeRadius = Spec.WallProbeRadius;
 	OutTimeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_GrabSpinTrack>(Spin));
 
 	// The held partner as a weapon: the fighters around, never the partner itself (it takes its own hit below)
@@ -80,9 +103,9 @@ void UGSTN_GA_LinkGrabSpin::FillGrabSpinTimeline(FGSTN_CombatTimelineData& OutTi
 	// No hitstop on the spinning grabber: a pause would stop the turn mid-swing (the yaw is a function of the timeline frame, so it would resume cleanly)
 	Ring.AttackerHitstopFramesOverride = 0;
 	OutTimeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(
-		MakeSphereTrack(Spec.RingStartFrame, FMath::Min(Spec.RingEndFrame, Total), Spec.RingRadius, FVector(Spec.RingReach, 0.0, 0.0), Ring)));
+		MakeSphereTrack(Spec.RingStartFrame, FMath::Min(Spec.RingEndFrame, Turns), Spec.RingRadius, FVector(Spec.RingReach, 0.0, 0.0), Ring, GSTNGrabSpinGroups::Ring)));
 
-	// The partner takes a pummel each turn: damage, no reaction (it stays held), and the turn costs grab time
+	// The partner takes a pummel each move: damage, no reaction (it stays held), and the move costs grab time
 	FGSTN_HitData Held;
 	Held.HitType = GSTNLinkTags::HitType_Pummel;
 	Held.LinkFilter = EGSTN_LinkFilter::LinkedPartnerOnly;
@@ -94,17 +117,43 @@ void UGSTN_GA_LinkGrabSpin::FillGrabSpinTimeline(FGSTN_CombatTimelineData& OutTi
 	Link.bNoReaction = true;
 	Link.GrabTimeCostFrames = Spec.GrabTimeCostFrames;
 	Held.ExtensionData.Add(FInstancedStruct::Make(Link));
-	const int32 HeldFrame = FMath::Clamp(Spec.HeldHitFrame, 0, Total - 1);
+	const int32 HeldFrame = FMath::Clamp(Spec.HeldHitFrame, 0, Turns - 1);
 	// A sphere round the grabber's body that surely holds the parked partner; the filter keeps it on the partner alone
 	OutTimeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(
-		MakeSphereTrack(HeldFrame, HeldFrame + 2, 130.0, FVector(40.0, 0.0, 0.0), Held)));
+		MakeSphereTrack(HeldFrame, HeldFrame + 2, 130.0, FVector(40.0, 0.0, 0.0), Held, GSTNGrabSpinGroups::Held)));
 
-	FGSTN_TimelineTrack_CancelWindow Window;
-	Window.StartFrame = FMath::Clamp(Spec.ChainFromFrame, 1, Total - 1);
-	Window.EndFrame = Total;
-	Window.Condition = EGSTN_CancelCondition::Always;
-	Window.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(ChainCommands());
-	OutTimeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(Window));
+	// The wall slam (owner 2026-11-25: "sbattere al muro dovrebbe far danno al nemico da lanciare con un po' di hitstop"): live over the turns, masked
+	// by the link tick on every frame the wall probe is clear, so it lands on the first frame the partner meets a wall, once per move
+	if (Spec.WallDamage > 0.f)
+	{
+		FGSTN_HitData Wall;
+		Wall.HitType = GSTNLinkTags::HitType_GrabSpinWall;
+		Wall.LinkFilter = EGSTN_LinkFilter::LinkedPartnerOnly;
+		Wall.Damage = Spec.WallDamage;
+		Wall.bParryable = false;
+		Wall.HitstopMode = EGSTN_HitstopMode::Override;
+		Wall.HitstopFramesOverride = FMath::Max(Spec.WallHitstopFrames, 0);
+		Wall.AttackerHitstopFramesOverride = FMath::Max(Spec.WallAttackerHitstopFrames, 0);
+		FGSTN_LinkHitData WallLink;
+		WallLink.bNoReaction = true;
+		Wall.ExtensionData.Add(FInstancedStruct::Make(WallLink));
+		OutTimeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Hitbox>(
+			MakeSphereTrack(1, Turns, 130.0, FVector(40.0, 0.0, 0.0), Wall, GSTNGrabSpinGroups::Wall)));
+	}
+
+	FGSTN_TimelineTrack_CancelWindow Throws;
+	Throws.StartFrame = FMath::Clamp(Spec.ThrowFromFrame, 1, Turns - 1);
+	Throws.EndFrame = Turns;
+	Throws.Condition = EGSTN_CancelCondition::Always;
+	Throws.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(ThrowCommands());
+	OutTimeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(Throws));
+
+	FGSTN_TimelineTrack_CancelWindow Chain;
+	Chain.StartFrame = FMath::Clamp(Spec.ChainFromFrame, 1, Turns - 1);
+	Chain.EndFrame = Turns;
+	Chain.Condition = EGSTN_CancelCondition::Always;
+	Chain.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(ChainCommands());
+	OutTimeline.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(Chain));
 }
 
 UGSTN_GA_LinkGrabSpinClockwise::UGSTN_GA_LinkGrabSpinClockwise(const FObjectInitializer& ObjectInitializer)

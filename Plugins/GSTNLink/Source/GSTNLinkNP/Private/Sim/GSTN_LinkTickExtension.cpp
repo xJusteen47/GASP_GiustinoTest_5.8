@@ -4,7 +4,9 @@
 
 #include "AbilitySystemComponent.h"
 #include "Actions/GSTN_LinkActionProvider.h"
+#include "CollisionQueryParams.h"
 #include "Components/CapsuleComponent.h"
+#include "Engine/World.h"
 #include "GSTN_LinkWatchdog.h"
 #include "Events/GSTN_SimEvent.h"
 #include "Data/GSTN_GrabSpinTrack.h"
@@ -356,6 +358,38 @@ bool FGSTN_LinkTickExtension::StepGrabSpin(FGSTN_CombatSyncCore& Core, int32 Fra
 		return false;
 	}
 	return Core.Requests.Add(EGSTN_RequestType::SetFacing, Frame, FGSTN_StartupSteer::QuantizeYaw(Yaw));
+}
+
+bool FGSTN_LinkTickExtension::GetGrabSpinWallMask(const FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Running,
+	TFunctionRef<bool(const FVector& Start, const FVector& End, float Radius)> Probe, uint8& OutGroup, bool& bOutMask)
+{
+	const FGSTN_GrabSpinTrack* Track = FGSTN_GrabSpinTrack::Find(Running);
+	if (!Track || Track->WallHitGroup >= 8)
+	{
+		return false;
+	}
+	OutGroup = Track->WallHitGroup;
+	bOutMask = true;
+	if (Core.ActionState != EGSTN_ActionState::InTimeline || Core.TimelineStartFrame == INDEX_NONE || Core.RecoilStartFrame != INDEX_NONE
+		|| !Core.Hit.MoveOrigin.bSet)
+	{
+		return true;
+	}
+	const int32 TimelineFrame = Frame - Core.TimelineStartFrame - Core.TimelinePausedFrames;
+	// The move origin read field by field, as StepGrabSpin does (FGSTN_MoveOrigin's functions are not exported from the combat module)
+	const FGSTN_MoveOrigin& Origin = Core.Hit.MoveOrigin;
+	const float OriginYaw = FGSTN_StartupSteer::DequantizeYaw(static_cast<int16>(Origin.RotationQ[1]));
+	float Yaw = 0.f;
+	if (!Track->IsWallProbeFrame(TimelineFrame) || !Track->YawAt(OriginYaw, TimelineFrame, Yaw))
+	{
+		return true;
+	}
+	// The hold point at this frame's yaw: the same yaw StepGrabSpin writes, from sync state only
+	const FVector Start(Origin.PositionQ[0] / FGSTN_MoveOrigin::PositionUnitsPerCm, Origin.PositionQ[1] / FGSTN_MoveOrigin::PositionUnitsPerCm,
+		Origin.PositionQ[2] / FGSTN_MoveOrigin::PositionUnitsPerCm);
+	const FVector End = Start + FRotator(0.0, Yaw, 0.0).Vector() * static_cast<double>(Track->WallProbeReach);
+	bOutMask = !Probe(Start, End, Track->WallProbeRadius);
+	return true;
 }
 
 void FGSTN_LinkTickExtension::MakeOffersFor(const UGSTN_LinkRegistry& Registry, const FGSTN_LinkBodyData* Body, TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>>& OutOffers)
@@ -1022,6 +1056,31 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 					Self.CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
 				}
 				StepInitiatorExit(*Fragment, Context.Frame, Registry, Partner, Self);
+			}
+		}
+		break;
+	case EGSTN_CombatHookPoint::BeforeCandidates:
+		// Grab spin wall slam: its hitbox only hits on the frames the held partner meets a wall
+		if (Context.Out.Core.ActionState == EGSTN_ActionState::InTimeline && Context.RunningTimeline)
+		{
+			const UWorld* World = Context.Owner ? Context.Owner->GetWorld() : nullptr;
+			const AActor* Owner = Context.Owner;
+			uint8 Group = 0;
+			bool bMask = true;
+			if (GetGrabSpinWallMask(Context.Out.Core, Context.Frame, *Context.RunningTimeline,
+				[World, Owner](const FVector& Start, const FVector& End, float Radius)
+				{
+					if (!World)
+					{
+						return false;
+					}
+					// Static world geometry only: every machine has the same, so the hit is predicted and re-simulated alike (pawns move, they never count)
+					FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNGrabSpinWall), false, Owner);
+					return World->SweepTestByObjectType(Start, End, FQuat::Identity, FCollisionObjectQueryParams(ECC_WorldStatic),
+						FCollisionShape::MakeSphere(Radius), Params);
+				}, Group, bMask) && bMask)
+			{
+				Context.HitGroupMask.Set(Group);
 			}
 		}
 		break;

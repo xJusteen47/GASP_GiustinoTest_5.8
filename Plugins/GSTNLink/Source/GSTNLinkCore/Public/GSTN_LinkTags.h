@@ -110,6 +110,8 @@ namespace GSTNLinkTags
 
 	/** The ring hit of the grab spin on the fighters around the grabber (the held partner is the weapon; it takes its own pummel-like hit) */
 	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(HitType_GrabSpin);
+	/** The grab spin slamming the held partner into a wall (owner 2026-11-25): damage and hitstop on the partner, no reaction */
+	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(HitType_GrabSpinWall);
 
 	// ---- Mover, interact ----
 

@@ -753,6 +753,24 @@ bool UGSTN_LinkContentLibrary::WriteThrowKnockback(TSubclassOf<UGameplayAbility>
 	return true;
 }
 
+bool UGSTN_LinkContentLibrary::WriteThrowStickTurn(TSubclassOf<UGameplayAbility> ThrowClass, float TurnDegPerSecond, int32 ReleaseFrame)
+{
+	if (!ThrowClass || !ThrowClass->IsChildOf(UGSTN_GA_LinkThrow::StaticClass()) || ThrowClass->HasAnyClassFlags(CLASS_Native))
+	{
+		return false;
+	}
+	UGSTN_GA_LinkThrow* Defaults = GetMutableDefault<UGSTN_GA_LinkThrow>(ThrowClass.Get());
+	FGSTN_CombatTimelineData Data = Defaults->Timeline;
+	UGSTN_GA_LinkThrow::ApplyStickTurn(Data, TurnDegPerSecond, ReleaseFrame);
+	if (FGSTN_CombatTimelineData::StaticStruct()->CompareScriptStruct(&Data, &Defaults->Timeline, PPF_None))
+	{
+		return false;
+	}
+	Defaults->Timeline = MoveTemp(Data);
+	Defaults->MarkPackageDirty();
+	return true;
+}
+
 bool UGSTN_LinkContentLibrary::SetKitGrabMashFrames(UGSTN_PrimaryKitDefinition* Kit, int32 MashBaseFrames)
 {
 	if (!Kit)

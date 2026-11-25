@@ -12,6 +12,7 @@
 #include "Data/GSTN_GrabSpinTrack.h"
 #include "Data/GSTN_LinkHitData.h"
 #include "Moves/GSTN_LinkGrabSpinMoves.h"
+#include "Moves/GSTN_LinkThrowMoves.h"
 #include "GSTN_LinkTags.h"
 #include "GSTN_LinkWatchdog.h"
 #include "Hits/GSTN_CombatHitTags.h"
@@ -27,6 +28,7 @@
 #include "Sim/GSTN_LinkMash.h"
 #include "Sim/GSTN_LinkThrow.h"
 #include "Sim/GSTN_LinkTickExtension.h"
+#include "Timeline/GSTN_StartupSteer.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "State/GSTN_LinkMath.h"
 
@@ -601,14 +603,29 @@ bool FGSTN_LinkNPGrabSpinCostTest::RunTest(const FString& Parameters)
 	const UGSTN_GA_LinkGrabSpin* Spin = GetDefault<UGSTN_GA_LinkGrabSpinClockwise>();
 	const FGSTN_HitData* Held = nullptr;
 	const FGSTN_HitData* Ring = nullptr;
+	const FGSTN_HitboxSpec* WallBox = nullptr;
 	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instanced : Spin->Timeline.Tracks)
 	{
 		if (const FGSTN_TimelineTrack_Hitbox* Track = Instanced.GetPtr<FGSTN_TimelineTrack_Hitbox>(); Track && !Track->Hitboxes.IsEmpty())
 		{
 			const FGSTN_HitData& Data = Track->Hitboxes[0].Data;
-			(Data.LinkFilter == EGSTN_LinkFilter::LinkedPartnerOnly ? Held : Ring) = &Data;
+			if (Data.HitType == GSTNLinkTags::HitType_GrabSpinWall)
+			{
+				WallBox = &Track->Hitboxes[0];
+			}
+			else
+			{
+				(Data.LinkFilter == EGSTN_LinkFilter::LinkedPartnerOnly ? Held : Ring) = &Data;
+			}
 		}
 	}
+	// Owner answers 2026-11-25: two turns per move, a cancellable settle after them, 8 % / 3 %, a wall slam on its own hit group
+	const FGSTN_GrabSpinMoveSpec Defaults;
+	TestEqual(TEXT("two turns per move"), Defaults.Turns, 2.f);
+	TestEqual(TEXT("actionable when the turns end"), Spin->Timeline.FirstActionableFrame, Defaults.TurnFrames);
+	TestTrue(TEXT("the settle is a cancellable tail"), Spin->Timeline.Tail.bHasTail && Spin->Timeline.TotalFrames == Defaults.TurnFrames + Defaults.SettleFrames);
+	TestTrue(TEXT("a wall slam hitbox on the partner, in the track's group"), WallBox && WallBox->Data.LinkFilter == EGSTN_LinkFilter::LinkedPartnerOnly
+		&& FGSTN_GrabSpinTrack::Find(Spin->Timeline) && WallBox->HitGroup == FGSTN_GrabSpinTrack::Find(Spin->Timeline)->WallHitGroup);
 	const FGSTN_GrabSpinTrack* Track = FGSTN_GrabSpinTrack::Find(Spin->Timeline);
 	TestTrue(TEXT("the move turns clockwise"), Track && Track->Sense == EGSTN_GrabSpinSense::Clockwise && Track->Turns > 0.f);
 	TestTrue(TEXT("the counterclockwise move the other way"), FGSTN_GrabSpinTrack::Find(GetDefault<UGSTN_GA_LinkGrabSpinCounterClockwise>()->Timeline)
@@ -618,6 +635,30 @@ bool FGSTN_LinkNPGrabSpinCostTest::RunTest(const FString& Parameters)
 		return false;
 	}
 	TestEqual(TEXT("the ring spares the partner"), Ring->LinkFilter, EGSTN_LinkFilter::ExcludeLinkedPartner);
+	TestTrue(TEXT("8 % around, 3 % held"), Ring->Damage == 8.f && Held->Damage == 3.f);
+
+	// The wall mask: masked while the probe is clear, open on the frame it touches, closed in the settle
+	{
+		FGSTN_CombatSyncCore Core;
+		Core.ActionState = EGSTN_ActionState::InTimeline;
+		Core.TimelineStartFrame = 100;
+		// Facing +X at the world origin (quantised zeros; FGSTN_MoveOrigin::Make is not exported from the combat module)
+		Core.Hit.MoveOrigin.bSet = true;
+		uint8 Group = 255;
+		bool bMask = false;
+		auto Clear = [](const FVector&, const FVector&, float) { return false; };
+		auto WallAhead = [](const FVector&, const FVector& End, float) { return End.X > 50.0; };
+		TestTrue(TEXT("the move has a wall slam"), FGSTN_LinkTickExtension::GetGrabSpinWallMask(Core, 110, Spin->Timeline, Clear, Group, bMask));
+		TestTrue(TEXT("clear probe: masked"), bMask && Group == 2);
+		// Frame 0 of the turns faces +X, where the wall is
+		FGSTN_LinkTickExtension::GetGrabSpinWallMask(Core, 100, Spin->Timeline, WallAhead, Group, bMask);
+		TestFalse(TEXT("probe in the wall: the slam can land"), bMask);
+		// A quarter turn later the hold point is at +Y, away from the wall
+		FGSTN_LinkTickExtension::GetGrabSpinWallMask(Core, 106, Spin->Timeline, WallAhead, Group, bMask);
+		TestTrue(TEXT("turned away: masked again"), bMask);
+		FGSTN_LinkTickExtension::GetGrabSpinWallMask(Core, 100 + Defaults.TurnFrames + 6, Spin->Timeline, WallAhead, Group, bMask);
+		TestTrue(TEXT("never in the settle"), bMask);
+	}
 
 	FHitRig Rig(GrabTestGrabberId, Grabber, GrabTestGrabbedId, Grabbed, GrabTestLinkFrame + 40);
 	Rig.View.Incoming.Hit = *Held;
@@ -640,6 +681,44 @@ bool FGSTN_LinkNPGrabSpinCostTest::RunTest(const FString& Parameters)
 	ApplyAll(PlainOut, Plain.View, PlainFragments);
 	const FGSTN_LinkFragment* PlainAfter = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(PlainFragments);
 	TestTrue(TEXT("a plain pummel costs nothing"), PlainAfter && PlainAfter->Links.Body.EndFrame == GrabTestLinkFrame + 300);
+	return true;
+}
+
+// Owner 2026-11-25, answer 6: the throw turns toward the stick before the release; a neutral stick keeps the facing (the held partner's direction)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_LinkNPThrowStickTurnTest, "GSTNLink.NP.Grab.ThrowStickTurn", Flags)
+
+bool FGSTN_LinkNPThrowStickTurnTest::RunTest(const FString& Parameters)
+{
+	FGSTN_CombatTimelineData Data = GetDefault<UGSTN_GA_LinkThrowForward>()->Timeline;
+	// 180 degrees in 8 frames of 16 ms
+	UGSTN_GA_LinkThrow::ApplyStickTurn(Data, 1406.25f, 13);
+	TestEqual(TEXT("no start snap"), Data.AimPolicy, EGSTN_AimPolicy::KeepFacing);
+	TestTrue(TEXT("the move stick steers the whole circle until the release"), Data.Steer.Source == EGSTN_SteerSource::MoveStick && Data.MaxSteerDegrees == 180.f
+		&& Data.Steer.EndFrame == 13);
+
+	FGSTN_SteerFrameInput In;
+	In.TimelineFrame = 2;
+	In.StartYawDeg = 0.f;
+	In.CurrentYawDeg = 0.f;
+	In.Stick = FVector2D(0.0, -1.0);
+	In.bSourceActive = true;
+	In.StepSeconds = 0.016f;
+	float Yaw = 0.f;
+	bool bActive = false;
+	TestEqual(TEXT("a tilt steers"), FGSTN_StartupSteer::ResolveFrame(Data, In, Yaw, bActive), EGSTN_SteerPhase::Steering);
+	TestTrue(TEXT("one rate step, not a snap"), bActive && FMath::IsNearlyEqual(FMath::Abs(Yaw), 22.5f, 0.1f));
+
+	In.Stick = FVector2D::ZeroVector;
+	In.CurrentYawDeg = 37.f;
+	FGSTN_StartupSteer::ResolveFrame(Data, In, Yaw, bActive);
+	TestTrue(TEXT("neutral stick: the facing stays (where the partner is)"), !bActive && FMath::IsNearlyEqual(Yaw, 37.f, 0.01f));
+
+	In.Stick = FVector2D(0.0, -1.0);
+	In.TimelineFrame = 13;
+	TestTrue(TEXT("locked from the release on"), FGSTN_StartupSteer::ResolveFrame(Data, In, Yaw, bActive) != EGSTN_SteerPhase::Steering);
+
+	UGSTN_GA_LinkThrow::ApplyStickTurn(Data, 0.f, 13);
+	TestEqual(TEXT("rate 0: the instant snap of the common throws"), Data.AimPolicy, EGSTN_AimPolicy::SnapIfAimOrTilt);
 	return true;
 }
 

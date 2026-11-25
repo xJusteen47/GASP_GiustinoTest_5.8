@@ -163,6 +163,13 @@ public:
 	static bool WriteThrowKnockback(TSubclassOf<UGameplayAbility> ThrowClass, float BaseKnockback, float KnockbackGrowth);
 
 	/**
+	 * grab-ganon (owner 2026-11-25, answer 6): the throw turns toward the move stick at TurnDegPerSecond until ReleaseFrame
+	 * (UGSTN_GA_LinkThrow::ApplyStickTurn) on a Blueprint child of a common throw. Native classes are refused. True when something changed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool WriteThrowStickTurn(TSubclassOf<UGameplayAbility> ThrowClass, float TurnDegPerSecond, int32 ReleaseFrame);
+
+	/**
 	 * grab-ganon (2026-11-25): one entry of a kit's throw set by command (Command.Link.Throw.* or Command.Link.Spin.*), the others untouched (SetKitThrows
 	 * rewrites the four classic ones and clears the rest). Null clears the entry. Returns whether the kit changed; false without a link extension
 	 */
@@ -186,7 +193,7 @@ public:
 	static bool WriteGrabMove(TSubclassOf<UGameplayAbility> GrabClass, int32 TotalFrames, int32 FirstActionableFrame, int32 ActiveStart, int32 ActiveEnd);
 
 	/**
-	 * grab-ganon: one turn of the grab spin on a Blueprint child of UGSTN_GA_LinkGrabSpin (UGSTN_GA_LinkGrabSpin::FillGrabSpinTimeline in the child's
+	 * grab-ganon: one grab spin move (its turns and settle) on a Blueprint child of UGSTN_GA_LinkGrabSpin (UGSTN_GA_LinkGrabSpin::FillGrabSpinTimeline in the child's
 	 * sense) and its montage. Native classes are refused. Returns whether the defaults changed
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
