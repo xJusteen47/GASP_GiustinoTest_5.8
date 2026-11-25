@@ -356,3 +356,7 @@ ESITO: hop ~28 cm / 16-17 frames, lying without pops; both rolls full somersault
 v157-159.
 SUBAGENTI: none.
 COSTO: not measured (one thread, ~1 h 45 on the laptop, mostly build, slow fetch and three captures).
+
+## Laptop run drive-1: in pausa 12:01 UTC 2026-11-25 al passo 7 (coordinatore, rete instabile)
+Worktree cp1verify su 795a7235 (c2de6729 + gb_dash in pie_capture_move.py, bc3ac164). Fatto: build OK (-SkipRegress, regress noto approved/runstart-v4r5), test GSTNCombat.NP.Greybox + GSTNAnimation.Core.Greybox 6/6; CDO ABP_GSTN_GreyboxCapsule ShapeSettings = default C++ (0 diff su 75 campi: RockRollDeg 4.5, TwistYawDeg 5, BobSquash 0.05, MaxSwayCadenceHz 3.2, bDriveFromRunState true, DashPoseSeconds 0.25, DashLeanDeg 22, DashSquash 0.82); stadi laptop (dump, DA_Locomotion_Default, unico profilo trovato): S1 470 cm/s acc 2000 ramp 30 next 180, S2 610 acc 1400 ramp 30 next 94, S3 850 acc 1200, entry_burst 0 e tell 0 ovunque (gli step non sono sul laptop), lean anim set vuoto. Cattura Saved/Greybox/rd1b (gb_sprint, gb_loco, gb_dash; az90/az180/game; cam follow mesh; KIT_Test_Overlord, gstn.Greybox 1, gstn.Loco.Base 2) ESITO OK, assert vuoto (sequenze senza expect). Problema: gb_dash gira dopo gb_sprint e il pawn resta fermo dove gb_sprint finisce (x 3953, y 1520): sim in stage 1 + dash da v44 ma 0 cm/s, probabilmente contro un ostacolo; va ricatturata da sola (PIE_CAPTURE_SEQUENCES=gb_dash o PIE_CAPTURE_RESET_EACH). Manca: ricattura gb_dash, tabelle velocita', video 1x/0.25x in reviews/greybox-capsula/run-drive-1/, report.
+
