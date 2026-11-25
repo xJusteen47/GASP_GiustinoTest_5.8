@@ -24,9 +24,15 @@ Ogni cosa del gioco sta in una di queste cinque zone. È la domanda da farsi pri
 |---|---|---|---|
 | **A. Stato simulato** | Dati salvati frame per frame nello stato di Network Prediction (NP). Ogni macchina lo calcola uguale; quando il server corregge, si torna indietro e si ricalcola. | **Sì**, ripristinato | posizione e velocità (Mover), azione in corso e timeline, hitstun, salto, tag ed effetti GAS, frammenti (scudo, link, parti) |
 | **B. Derivato dalla simulazione** | Non è salvato: si ricalcola ogni frame da dati della zona A. Dopo un rollback esce uguale da solo. | **Sì, gratis** (non costa byte) | i tag `Combat.State.*` proiettati, l'air crouch, il crouch, la vista di lag compensation, la "inbox" dei colpi |
-| **C. Fuori simulazione, solo server** | Decisioni prese una volta sola dall'host, fuori dal tick fisso, su frame già confermati. I client le vedono in ritardo (replica). | **No, mai** (non si può contare due volte) | missioni, respawn e vite, effetto di un verbo di modalità, raccolta oggetti, cambio loadout, spawn dei proiettili, eventi autoritativi |
+| **C. Fuori simulazione, solo server** | Decisioni prese una volta sola dall'host, fuori dal tick fisso, su frame già confermati. I client le vedono in ritardo (replica). | **No**, per scelta di oggi (vedi nota sotto) | missioni, respawn e vite, effetto di un verbo di modalità, raccolta oggetti, cambio loadout, spawn dei proiettili, eventi autoritativi |
 | **D. Presentazione locale** | Solo aspetto, su ogni macchina per conto suo. Legge lo stato "presentato" (smussato), mai il contrario. | **No**: si ricostruisce dallo stato; i doppioni da rollback si filtrano | animazione, capsula greybox, VFX, suoni, camera e zoom, marker di profondità, cosmetici, prompt |
 | **E. Dati statici e configurazione** | Asset e impostazioni uguali su ogni macchina: kit, timeline, tabella comandi compilata, impostazioni di progetto. Non cambiano durante la partita (o cambiano con una revisione). | **Non serve** | `KIT_*`, `WPN_*`, timeline delle mosse, `UGSTN_CombatSettings`, CVar lette "alla compilazione del kit" |
+
+> **Nota sulla zona C (owner, 25/11).** Stare fuori dal rollback non è un obbligo tecnico: nei picchiaduro con rollback (Rivals 2,
+> Smash online, GGPO) KO, stock e percentuali sono stato di gioco e tornano indietro come il resto. Quello che non deve mai ripetersi
+> sono solo gli **effetti irreversibili verso l'esterno** (salvataggi, statistiche, achievement, risultato della partita mandato a un
+> servizio, telemetria): si fanno una volta, sul frame confermato. Che vite, respawn, oggetti e loadout stiano oggi in zona C è una scelta
+> di progetto (M10, M12, pensati per co-op con server), non un vincolo; l'owner preferisce non mischiare e la decisione è aperta.
 
 Due regole d'oro che tengono in piedi tutto (dettagli in [gas-npp.md](gas-npp.md), CLAUDE.md regole 1-5):
 
