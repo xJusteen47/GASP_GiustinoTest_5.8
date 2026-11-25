@@ -30,6 +30,10 @@ lo si usa come arma (danno ai vicini e a lui) e poi lo si lancia; il nemico si l
    scritto dallo script con `WriteThrowStickTurn`. Stick fermo (punto aperto, scelta mia consigliata, reversibile): resta la direzione attuale = dove
    sta il nemico.
 
+## Stato fisso (2026-11-25 12:00Z, pausa dell'owner fino a stasera)
+Worktree `GASP_Giustino2_grabganon` su e1366071 (hook installati, Content in junction verso _ue59). Build interrotta a 246/537 con 0 errori di
+compilazione (ESITO FAIL solo per l'interruzione): stasera riparte incrementale da li'. Test, script e rete non ancora fatti. Nessun commit dal fisso.
+
 ## Prossimo (fisso, editor chiuso)
 1. `.\Tools\CI\Run-Timed.ps1 -Preset Build -Log Saved\Logs\ci\build.log`.
 2. Test: `GSTNLink` (nuovo `GSTNLink.NP.Grab.ThrowStickTurn`, conteggio tag 48), `GSTNSpinDrill`, `GSTNInput` (Check-TestLog.ps1). Se `FillAndSlots` sbaglia il verso dello script `@angolo`, va corretto il test, non lo slot.
