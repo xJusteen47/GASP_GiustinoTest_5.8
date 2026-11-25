@@ -116,7 +116,7 @@ bool FGSTN_InputProfileApplyTest::RunTest(const FString& Parameters)
 	{
 		FGSTN_InputSlotSpec Spec = MakeSpecialSlot();
 		Spec.ApplyPlayerInput(*Layout, FGSTN_InputProfile());
-		TestEqual(TEXT("pad default: a press"), FirstConditionType(Spec), FGSTN_InputCondition_Press::StaticStruct());
+		TestTrue(TEXT("pad default: a press"), FirstConditionType(Spec) == FGSTN_InputCondition_Press::StaticStruct());
 		TestTrue(TEXT("pad default: on Special"), Buttons(Spec).HasTagExact(Special()));
 		TestTrue(TEXT("layout buttons consumed"), Spec.LayoutButtons.IsEmpty());
 	}
@@ -127,7 +127,7 @@ bool FGSTN_InputProfileApplyTest::RunTest(const FString& Parameters)
 		Profile.Device = EGSTN_InputDevice::MouseKeyboard;
 		FGSTN_InputSlotSpec Spec = MakeSpecialSlot();
 		Spec.ApplyPlayerInput(*Layout, Profile.Sanitized(*Layout));
-		TestEqual(TEXT("keyboard default: a double tap"), FirstConditionType(Spec), FGSTN_InputCondition_Mash::StaticStruct());
+		TestTrue(TEXT("keyboard default: a double tap"), FirstConditionType(Spec) == FGSTN_InputCondition_Mash::StaticStruct());
 	}
 
 	// Mouse and keyboard with a pick: the pick wins over the device default
@@ -137,7 +137,7 @@ bool FGSTN_InputProfileApplyTest::RunTest(const FString& Parameters)
 		Profile.CommandPicks.Add({ GSTNTestTags::Special_Neutral, TEXT("Tap") });
 		FGSTN_InputSlotSpec Spec = MakeSpecialSlot();
 		Spec.ApplyPlayerInput(*Layout, Profile.Sanitized(*Layout));
-		TestEqual(TEXT("pick: a press"), FirstConditionType(Spec), FGSTN_InputCondition_Press::StaticStruct());
+		TestTrue(TEXT("pick: a press"), FirstConditionType(Spec) == FGSTN_InputCondition_Press::StaticStruct());
 	}
 
 	// The override of a remappable function moves the button, also inside a picked command
@@ -147,7 +147,7 @@ bool FGSTN_InputProfileApplyTest::RunTest(const FString& Parameters)
 		Profile.CommandPicks.Add({ GSTNTestTags::Special_Neutral, TEXT("DoubleTap") });
 		FGSTN_InputSlotSpec Spec = MakeSpecialSlot();
 		Spec.ApplyPlayerInput(*Layout, Profile.Sanitized(*Layout));
-		TestEqual(TEXT("override: a double tap"), FirstConditionType(Spec), FGSTN_InputCondition_Mash::StaticStruct());
+		TestTrue(TEXT("override: a double tap"), FirstConditionType(Spec) == FGSTN_InputCondition_Mash::StaticStruct());
 		TestTrue(TEXT("override: on Strong"), Buttons(Spec).HasTagExact(Strong()));
 		TestFalse(TEXT("override: not on Special any more"), Buttons(Spec).HasTagExact(Special()));
 	}
