@@ -1,0 +1,31 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN World Sim",
+	"Description": "Rollback plan F0 spike: a world entity (no pawn, no owning connection) simulated by Network Prediction with forward prediction on every client, while pawns stay as they are. Measures what a re-simulation of world state costs per frame. Inert unless gstn.WorldSim.Spawn is 1.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNWorldSim",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "NetworkPrediction",
+			"Enabled": true
+		}
+	]
+}
