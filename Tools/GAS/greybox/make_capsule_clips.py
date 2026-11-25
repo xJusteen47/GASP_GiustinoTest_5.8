@@ -503,6 +503,14 @@ def run():
         except Exception as exc:
             slots = ['? %s' % exc]
         p('slots', montage.get_name(), slots)
+        played = first_segment_sequence(montage)
+        if played and played.get_name().startswith('AS_GSTN_Greybox_'):
+            # A montage that already plays a capsule clip (Tools/GAS/setup_overlord_ref_moves.py): the clip is its own override, never a
+            # generic one made from its length
+            overrides[montage] = played
+            covered.add(played.get_path_name().split('.')[0])
+            p('move', path, 'plays the capsule clip', played.get_name(), '(kept)')
+            continue
         length = montage.get_play_length()
         frames = max(2, int(round(length * FPS)))
         kind, keys = move_keys(montage.get_name(), frames)
@@ -540,13 +548,19 @@ def run():
     p('RESULT:', 'PASS' if not errors else 'FAIL (%d errors)' % len(errors))
 
 
-try:
-    run()
-except Exception as exc:
-    import traceback
-    fail('exception: %s' % exc)
-    p(traceback.format_exc())
-os.makedirs(os.path.dirname(OUT), exist_ok=True)
-with open(OUT, 'w', encoding='utf-8') as f:
-    f.write('\n'.join(lines) + '\n')
-print('[make_capsule_clips] %s, report %s' % ('PASS' if not errors else 'FAIL %d: %s' % (len(errors), errors[0][:160]), OUT))
+def main():
+    try:
+        run()
+    except Exception as exc:
+        import traceback
+        fail('exception: %s' % exc)
+        p(traceback.format_exc())
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    with open(OUT, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines) + '\n')
+    print('[make_capsule_clips] %s, report %s' % ('PASS' if not errors else 'FAIL %d: %s' % (len(errors), errors[0][:160]), OUT))
+
+
+# Run as a script (Save-Assets.ps1, -ExecCmds); imported by name (setup_overlord_ref_moves.py uses the rig and the pose language) it runs nothing
+if __name__ != 'make_capsule_clips':
+    main()

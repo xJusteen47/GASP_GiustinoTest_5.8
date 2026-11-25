@@ -108,6 +108,12 @@ DUMMIES = [
     ('Z3', (300.0, 2800.0), 270.0),
     ('Z4', (0.0, 6000.0), 270.0), ('Z4', (200.0, 6200.0), 270.0), ('Z4', (-200.0, 6200.0), 270.0), ('Z4', (0.0, 6400.0), 270.0),
 ]
+# Penetration targets (owner 2026-11-25: "cubi a penetrazione diverse, fissi che posso attaccare"): (hardness, (x, y)), a row in the plaza
+# facing the player starts. The cube is the look; the target is a dummy pawn standing inside it (test_hub.spawn_targets) with a one-part set of
+# that hardness (PS_Test_TargetH<h>, Tools/GAS/setup_overlord_ref_moves.py) that never moves on a hit. Colour = hardness, from soft to hard
+TARGETS = [(0, (-800.0, 1500.0)), (2, (-480.0, 1500.0)), (4, (-160.0, 1500.0)), (6, (160.0, 1500.0)), (8, (480.0, 1500.0)), (12, (800.0, 1500.0))]
+TARGET_SIZE = (140.0, 140.0, 200.0)
+TARGET_COLOURS = {0: 'White', 2: 'Green', 4: 'Yellow', 6: 'Orange', 8: 'Red', 12: 'Grey'}
 WALL_LANES = ['a_flat', 'b_convex90']
 WALL_PLANE_X = -3000.0
 WALL_LANE_Y = [-2000.0, -800.0]
@@ -398,6 +404,15 @@ def kit_pads_and_dummies():
         sign(f'Dummy_{zone}_{i}_Text', 'manichino', (x, y), face_to=(0.0, 0.0), size=20.0, height=230.0, colour=(1.0, 0.85, 0.1))
 
 
+def penetration_targets():
+    """The cubes and their signs; no collision: the pawn inside is what gets hit (its hurtboxes), the cube only shows where it is"""
+    for h, (x, y) in TARGETS:
+        box(f'Z0_Target_H{h}', (x, y, TARGET_SIZE[2] / 2.0), TARGET_SIZE, TARGET_COLOURS.get(h, 'Grey'), collision=False)
+        sign(f'Z0_Target_H{h}_Text', f'DUREZZA {h}', (x, y), face_to=(x, 0.0), size=28.0, height=TARGET_SIZE[2] + 40.0)
+    sign('Z0_Targets_Title', 'BERSAGLI FISSI: penetrazione > durezza: pieno, = durezza: 65 %, < durezza: rimbalzo', (0.0, 1750.0), face_to=(0.0, 0.0),
+         size=26.0, height=330.0)
+
+
 def lights():
     _spawn(unreal.DirectionalLight, (0.0, 0.0, 1000.0), (-50.0, 30.0, 0.0), 'Sun')
     _spawn(unreal.SkyLight, (0.0, 0.0, 1200.0), label='Sky')
@@ -443,7 +458,7 @@ def run():
     if not (path.startswith('/Temp/') or path in ('/Game/NewWorld', MAP_PATH)):
         raise RuntimeError(f'the open level is {path}: open an empty level (File > New Level > Empty Level) or {MAP_PATH}')
     log(f'cleared {clear()} hub actors in {path}')
-    for step in (z0_plaza, z1_hits, z2_duel, z3_piggyback, z4_spin, z5_traversal, z6_animations, z7_slopes, kit_pads_and_dummies, lights):
+    for step in (z0_plaza, z1_hits, z2_duel, z3_piggyback, z4_spin, z5_traversal, z6_animations, z7_slopes, kit_pads_and_dummies, penetration_targets, lights):
         try:
             step()
         except Exception as e:   # one broken zone must not hide the others

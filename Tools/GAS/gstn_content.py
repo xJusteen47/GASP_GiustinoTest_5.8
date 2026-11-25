@@ -48,6 +48,9 @@ RULES = [
     (r'^(GA|TL)_Overlord_Jab', move_folder('Jab')),
     (r'^(AM|AS)_OverlordFThrow', move_folder('FThrow')),
     (r'^(GA|TL)_Overlord_FThrow', move_folder('FThrow')),
+    # Reference moves with Smash numbers for the playtest (setup_overlord_ref_moves.py, owner 2026-11-25)
+    (r'^(AM|AS)_OverlordRef_', move_folder('Ref')),
+    (r'^(GA|TL)_Overlord_Ref', move_folder('Ref')),
     (r'^GA_Playtest_', move_folder('Playtest')),
     # Overlord kits: the main one, its move variants and the playtest kits (they carry the Overlord dropkick).
     (r'^(KIT|WPN)_Test_(Overlord|Playtest)', OVERLORD_KITS),

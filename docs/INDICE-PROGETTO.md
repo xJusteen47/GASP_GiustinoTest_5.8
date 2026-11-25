@@ -145,6 +145,7 @@ In gioco: cosa sa fare un personaggio. Un kit lega comandi ad abilità; ogni abi
 - Mossa: abilità figlia di `NP/Abilities/GSTN_GA_BaseCombat.h` + timeline `Core/Timeline/GSTN_CombatTimeline.h` (montage e sezione dentro `FGSTN_CombatTimelineData`).
 - Asset: i kit veri stanno in `Content/GSTN/Characters/<Personaggio>/Kits/` e le mosse in `Characters/<Personaggio>/Moves/<Mossa>/` (`KIT_Test_Overlord`...), i kit dei test automatici in `GSTN/_Test/Combat/`; l'Asset Manager li cerca sotto `/Game/GSTN` (`Config/DefaultGame.ini` righe 10-19). Cartella di un asset dal nome: `Tools/GAS/gstn_content.py`. Il nome "Test" inganna: è il contenuto del gioco (vedi audit A1).
 - Creazione: script `Tools/GAS/setup_overlord_*_kit.py` (usano le classi di `Prj/GASNPPTest/GSTN_TestKitArchetypes.h`). Editor timeline: plugin GSTNCombatEditor (doc `combat-m5-editor.md`). Notazione mosse (F.L, N.S, Cr.F.Sp...): `docs/notes/notazione-mosse.md` (branch `claude/anim-inventario-2026-11-23`).
+- Mosse di riferimento con numeri Smash (F.S fsmash Ganon, N.S ftilt Ike, N.L Aerial nair Ganon, N.S Aerial nair Ike) e bersagli fissi a durezza diversa nell'hub: `Tools/GAS/setup_overlord_ref_moves.py` + `overlord_ref_moves_data.py`, `test_hub.spawn_targets`; doc `docs/notes/overlord-ref-moves.md`.
 - Mod dei kit: GSTNKitMods (SPENTO di default, attivo nel progetto). Raccolta e scambio kit: GSTNPickups. Zaini: GSTNBackpack. Schermata del carico: GSTNLoadoutMenu.
 
 ### 5.6 Presa, lanci, cavalcata, oggetti tenuti · OK (la presa "al collo" è BRANCH)

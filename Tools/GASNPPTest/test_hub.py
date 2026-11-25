@@ -91,8 +91,9 @@ def _players():
 
 
 def dummies():
-    """Keys of the level's dummies (test characters with no player state)"""
-    return [k for k in g.comps(g.worlds()[0]) if not k.startswith('P')]
+    """Keys of the level's dummies (test characters with no player state), the penetration targets left out (they stay in their cubes)"""
+    targets = _targets['keys']
+    return [k for k in g.comps(g.worlds()[0]) if not k.startswith('P') and k not in targets]
 
 
 def _place_ahead(i, key, ahead):
@@ -141,6 +142,120 @@ def spawn_dummies():
         pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent).server_teleport_exact(unreal.Vector(x, y, 100.0))
         made += 1
     return made
+
+
+# ---- penetration targets (owner 2026-11-25: "cubi a penetrazione diverse, fissi che posso attaccare") ------------------------------------------
+# A dummy pawn inside each cube of build_test_hub_map.TARGETS, with the one-part set PS_Test_TargetH<h> (Tools/GAS/setup_overlord_ref_moves.py):
+# hardness h, unbreakable, stagger in place with knockback x0, so a hit never moves it. The hit rules get the part step for the Play (PartResolve
+# in place of HealthWeight + ApplyDamage: for a pawn without a part set it writes what ApplyDamage writes, GSTNParts README); the change
+# stays in memory for the editor session (never saved by this file; ResolveHitPipeline is not callable from Python, so a restore would leave the
+# resolved list behind). The part set is attached by hand on every world (like parts_scenarios), the pawn Blueprint is shared and keeps no attach
+# component.
+TARGET_SET = '/Game/GSTN/_Test/Combat/PS_Test_TargetH{}'
+_targets = {'keys': {}, 'attached': set(), 'converted': None, 'log': 0}
+
+
+def _target_actors(world):
+    """{hardness: pawn} of one world, by the spot (actor names differ between the server and the clients)"""
+    cls = unreal.load_asset(hub.DUMMY_CLASS).generated_class()
+    out = {}
+    for a in unreal.GameplayStatics.get_all_actors_of_class(world, cls):
+        if a.get_editor_property('player_state'):
+            continue
+        p = a.get_actor_location()
+        for h, (x, y) in getattr(hub, 'TARGETS', []):
+            if math.hypot(p.x - x, p.y - y) < 120.0:
+                out[h] = a
+    return out
+
+
+def spawn_targets():
+    """The targets on the server (summoned like the dummies), the part step in the hit rules. Skips spots that have one"""
+    if not hasattr(unreal, 'GSTN_PartsKitLibrary') or not getattr(hub, 'TARGETS', None):
+        return 'GSTNParts off or no targets in the hub table'
+    missing = [h for h, _xy in hub.TARGETS if not unreal.EditorAssetLibrary.does_asset_exist(TARGET_SET.format(h))]
+    if missing:
+        return f'no part sets for hardness {missing}: run Tools/GAS/setup_overlord_ref_moves.py'
+    world = g.worlds()[0]
+    cls = unreal.load_asset(hub.DUMMY_CLASS).generated_class()
+    have = _target_actors(world)
+    todo = [(h, xy) for h, xy in hub.TARGETS if h not in have]
+    before = set(a.get_name() for a in unreal.GameplayStatics.get_all_actors_of_class(world, cls))
+    pc = unreal.GameplayStatics.get_player_controller(world, 0)
+    for _ in todo:
+        unreal.SystemLibrary.execute_console_command(world, f'summon {hub.DUMMY_CLASS}.{hub.DUMMY_CLASS.rsplit("/", 1)[1]}_C', pc)
+    new = [a for a in unreal.GameplayStatics.get_all_actors_of_class(world, cls) if a.get_name() not in before]
+    for pawn, (h, (x, y)) in zip(new, todo):
+        if pawn.get_controller() is None:
+            pawn.spawn_default_controller()
+        pawn.set_actor_rotation(unreal.Rotator(0.0, 0.0, 270.0), True)   # facing the player starts
+        pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent).server_teleport_exact(unreal.Vector(x, y, 100.0))
+    _targets['keys'] = {a.get_name(): h for h, a in _target_actors(world).items()} | {p.get_name(): h for p, (h, _xy) in zip(new, todo)}
+    rules = g.hit_rules()
+    if _targets['converted'] is not rules:
+        unreal.GSTN_PartsContentLibrary.convert_rules_to_parts(rules)   # idempotent on rules that already have the step
+        _targets['converted'] = rules
+    try:
+        unreal.GSTN_PartsKitLibrary.start_part_event_log(next(iter(_target_actors(world).values())))
+    except Exception:
+        pass
+    return f'{len(todo)} spawned, {len(have)} already there; rules with PartResolve'
+
+
+def _target_hurtboxes(pawn, part_set):
+    """Hurtbox names of the pawn's own set that the target part does not name yet are added to it IN MEMORY (a hurtbox no part names is the
+    body, which takes full damage and would make the hardness meaningless)"""
+    comp = pawn.get_component_by_class(unreal.GSTN_CombatSimComponent)
+    try:
+        hbs = comp.get_editor_property('hurtbox_set').load_synchronous() if comp else None
+    except Exception:
+        hbs = None
+    if not hbs:
+        return 0
+    parts = list(part_set.get_editor_property('parts'))
+    have = [str(n) for n in parts[0].get_editor_property('hurtboxes')]
+    add = [str(b.get_editor_property('name')) for b in hbs.get_editor_property('hurtboxes') if str(b.get_editor_property('name')) not in have]
+    if add:
+        parts[0].set_editor_property('hurtboxes', have + add)
+        part_set.set_editor_property('parts', parts)
+    return len(add)
+
+
+def _targets_tick():
+    """Every 0.2 s while Play runs: attach the part sets on every world as the pawns replicate, put a target that was pushed back in its cube,
+    write ricochets on screen (the damage line of _hit_feedback shows the hits that went through)"""
+    if not _targets['keys']:
+        return
+    worlds = g.worlds()
+    for wi, world in enumerate(worlds):
+        for h, pawn in _target_actors(world).items():
+            if (wi, h) in _targets['attached']:
+                continue
+            part_set = unreal.load_asset(TARGET_SET.format(h))
+            added = _target_hurtboxes(pawn, part_set)
+            if unreal.GSTN_PartsKitLibrary.attach_part_set_to_actor(pawn, part_set):
+                _targets['attached'].add((wi, h))
+                if added:
+                    unreal.log(f'[test_hub] target H{h}: {added} hurtbox names added to the part in memory')
+    # Pushboxes can shove a target: the server puts it back on its spot (test tooling, the client follows by replication)
+    for h, pawn in _target_actors(worlds[0]).items():
+        x, y = dict(hub.TARGETS)[h]
+        p = pawn.get_actor_location()
+        if math.hypot(p.x - x, p.y - y) > 30.0:
+            pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent).server_teleport_exact(unreal.Vector(x, y, p.z))
+    try:
+        events = [e for e in unreal.GSTN_PartsKitLibrary.get_part_event_log(next(iter(_target_actors(worlds[0]).values()))).split(';') if e]
+    except Exception:
+        return
+    for line in events[_targets['log']:]:
+        if line.startswith('Ricochet'):
+            unreal.SystemLibrary.print_string(worlds[0], 'RIMBALZO: penetrazione sotto la durezza', True, True, unreal.LinearColor(0.6, 0.8, 1, 1), 1.5)
+    _targets['log'] = len(events)
+
+
+def _targets_stop():
+    """Play stopped: the target state is cleared (the rules keep the part step, see above)"""
+    _targets.update(keys={}, attached=set(), log=0)
 
 
 def spawn_kits():
@@ -229,7 +344,7 @@ def play_setup():
     """Run once per Play (the watcher does it 4 s after Play starts): the dummies, hit rules in memory (damage on, as the hit scenarios), the
     link steps, the default kit on every player"""
     import link_scenarios as ls
-    out = [('dummies', spawn_dummies()), ('kits', spawn_kits()), ('backpacks', spawn_backpacks()), ('bounce pads', spawn_bounce_pads()), g.hit_rules_setup(), ls.link_setup()]
+    out = [('dummies', spawn_dummies()), ('targets', spawn_targets()), ('kits', spawn_kits()), ('backpacks', spawn_backpacks()), ('bounce pads', spawn_bounce_pads()), g.hit_rules_setup(), ls.link_setup()]
     # Players only: a loadout change on a dummy summoned in the same tick crashed the editor in the link snapshot contributor (2026-11-06,
     # FGSTN_SyncFragmentList::Find from UGSTN_CombatSimComponent::SimulationTick). The dummies keep their default kit: being hit needs none
     # The start kit of the debug picker (gstn.Debug.KitAtStart, DefaultEngine.ini) wins over DEFAULT_KIT: the picker gives it at Play and this
@@ -301,7 +416,7 @@ def _hit_feedback():
         seen[key] = dmg
         if before is None or dmg <= before + 0.01:
             continue
-        who = 'manichino' if not key.startswith('P') else key
+        who = (f"bersaglio durezza {_targets['keys'][key]}" if key in _targets['keys'] else 'manichino') if not key.startswith('P') else key
         # On-screen messages are shared by every PIE window: one print reaches all players
         unreal.SystemLibrary.print_string(worlds[0], f'COLPITO {who}: +{dmg - before:.0f}%  (totale {dmg:.0f}%)', True, True,
                                           unreal.LinearColor(1, 0.5, 0.1, 1), 2.0)
@@ -317,6 +432,8 @@ def _watch_tick(_dt):
     except Exception:
         running = False
     if not running:
+        if _targets['keys']:
+            _targets_stop()
         _watch.update(pie=False, ready=False, dummies=False, on_pad={}, damage={})
         if _watch['auto']:
             _auto_content()
@@ -337,6 +454,7 @@ def _watch_tick(_dt):
         if _watch['ready']:
             _pad_check()
             _hit_feedback()
+            _targets_tick()
     except Exception as e:
         unreal.log_warning(f'[test_hub] watcher: {e!r}')
 
