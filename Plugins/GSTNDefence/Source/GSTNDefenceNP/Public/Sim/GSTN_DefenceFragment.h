@@ -22,6 +22,20 @@ namespace GSTNDefenceHitFlags
 	 * next airborne frame arms again
 	 */
 	constexpr uint8 SelfKnockdownArmed = 1 << 2;
+
+	/**
+	 * Bits 3..7: the airborne frames counted inside the window so far, up to 31 (UGSTN_DefenceRules GroundBounce.SelfKnockdownMinAirFrames arms it).
+	 * Same byte as above for the same reason: no new field on the wire, a hit rewrites it, a grounded frame before arming clears it
+	 */
+	constexpr uint8 SelfKnockdownAirShift = 3;
+	constexpr uint8 SelfKnockdownAirMask = 0xF8;
+	constexpr int32 SelfKnockdownAirMax = 31;
+
+	inline int32 GetSelfKnockdownAirFrames(uint8 Flags) { return (Flags & SelfKnockdownAirMask) >> SelfKnockdownAirShift; }
+	inline uint8 WithSelfKnockdownAirFrames(uint8 Flags, int32 Frames)
+	{
+		return static_cast<uint8>((Flags & ~SelfKnockdownAirMask) | ((FMath::Clamp(Frames, 0, SelfKnockdownAirMax) << SelfKnockdownAirShift) & SelfKnockdownAirMask));
+	}
 }
 
 /** What the tick extension starts at AfterClocks for a decision of the victim step of the same frame (FGSTN_DefenceFragment::PendingStartKind) */

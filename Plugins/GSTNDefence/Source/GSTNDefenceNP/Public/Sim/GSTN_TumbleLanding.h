@@ -118,7 +118,8 @@ struct GSTNDEFENCENP_API FGSTN_TumbleLanding
 
 	/**
 	 * A move's own user landing inside its Combat.Move.KnockdownOnLanding window (owner, 2026-11-13: the dropkick, like a j.HK that downs its user
-	 * when it is not recovered before the ground). An airborne frame inside the window arms (GSTNDefenceHitFlags::SelfKnockdownArmed); the next
+	 * when it is not recovered before the ground). The rules' SelfKnockdownMinAirFrames airborne frames inside the window arm it
+	 * (GSTNDefenceHitFlags::SelfKnockdownArmed; a grounded frame before that is an ordinary landing and the count starts again); the next
 	 * grounded frame inside it cancels the move and calls EnterDowned. Leaving the window disarms. Grounded at the end of the previous frame, as
 	 * every reader of the frame sees it. True when it downed the entity this frame. OutBounceAbility (optional) receives the move's own bounce
 	 * ability (FGSTN_SelfLandingBounceTrack::BounceAbility, loaded) when it downed the entity, else null: read from the move's data each frame, so

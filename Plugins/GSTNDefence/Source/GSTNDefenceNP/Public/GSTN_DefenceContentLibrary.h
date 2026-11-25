@@ -38,6 +38,15 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Content")
 	static FGSTN_CombatTimelineData SetSelfLandingBounceAbility(const FGSTN_CombatTimelineData& Data, TSubclassOf<UObject> BounceAbility);
+
+	/**
+	 * The timeline with every Tags window holding Combat.Move.KnockdownOnLanding opened at the first frame of its first attack hitbox (owner
+	 * 2026-11-25, dropkick "goes into the tech bounce too early": the window covered the startup, so a landing before the kick came out downed the
+	 * user too). The window's end is kept. OutStartFrame: the new start, INDEX_NONE when nothing changed (no such window, no attack hitbox, or
+	 * already there). Python cannot edit instanced tracks: Tools/GAS/setup_dropkick_bounce_window.py
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Defence|Content")
+	static FGSTN_CombatTimelineData OpenSelfKnockdownWindowAtFirstHitbox(const FGSTN_CombatTimelineData& Data, int32& OutStartFrame);
 	/**
 	 * Sets (adds or replaces) the kit's FGSTN_DefenceKitExtension: its rules and its shield ability class (null = the kit has no shield).
 	 * Tech and get-up sets are left as they are (empty on a new entry). False for a null kit

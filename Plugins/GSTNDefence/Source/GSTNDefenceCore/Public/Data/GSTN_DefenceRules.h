@@ -382,6 +382,15 @@ struct GSTNDEFENCECORE_API FGSTN_GroundBounceRules
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bScaleWithImpactSpeed"))
 	float SelfKnockdownImpactSpeed = 900.f;
 
+	/**
+	 * Airborne frames inside a move's Combat.Move.KnockdownOnLanding window before a landing downs its user (owner 2026-11-25, dropkick "goes into
+	 * the tech bounce too early"). One airborne frame used to arm it: a takeoff that flickers airborne for a frame, or a hop of a few centimetres,
+	 * then counted as a landing. A landing before this many frames is an ordinary landing (the move's Landing track, if any, decides). Counted in
+	 * the defence fragment's hit flags byte (FGSTN_TumbleLanding::SelfKnockdown), so at most 31
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce", meta = (ClampMin = "1", ClampMax = "31"))
+	int32 SelfKnockdownMinAirFrames = 6;
+
 	/** Speed of the mini bounce along the entity's local up, when bScaleWithImpactSpeed is off */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "!bScaleWithImpactSpeed"))
 	float GroundBounceSpeed = 300.f;

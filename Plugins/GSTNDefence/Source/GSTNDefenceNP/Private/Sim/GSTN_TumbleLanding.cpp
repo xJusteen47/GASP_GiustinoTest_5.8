@@ -482,7 +482,10 @@ bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const 
 		{
 			UE_LOG(LogGSTNDefence, Log, TEXT("SelfKnockdown: frame %d disarmed, window closed (state %d, timeline output %s, tag windows %d)"), Context.Frame,
 				static_cast<int32>(Context.Out.Core.ActionState), Context.Timeline ? TEXT("yes") : TEXT("no"), Context.Timeline ? Context.Timeline->TagWindows.Num() : -1);
-			Existing->HitFlags &= ~GSTNDefenceHitFlags::SelfKnockdownArmed;
+		}
+		if (Existing)
+		{
+			Existing->HitFlags = GSTNDefenceHitFlags::WithSelfKnockdownAirFrames(Existing->HitFlags & ~GSTNDefenceHitFlags::SelfKnockdownArmed, 0);
 		}
 		return false;
 	}
@@ -490,20 +493,35 @@ bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const 
 	{
 		if (!bArmed)
 		{
-			UE_LOG(LogGSTNDefence, Log, TEXT("SelfKnockdown: frame %d armed (airborne inside the window)"), Context.Frame);
-			FGSTN_SyncFragmentList::FindOrAdd<FGSTN_DefenceFragment>(Context.Out.Fragments).HitFlags |= GSTNDefenceHitFlags::SelfKnockdownArmed;
+			// Arms after the rules' airborne frames inside the window (owner 2026-11-25: one airborne frame was enough, so a takeoff that flickered
+			// airborne or a hop of a few centimetres downed the dropkick's user at once). The count rides in the hit flags byte
+			FGSTN_DefenceFragment& Fragment = FGSTN_SyncFragmentList::FindOrAdd<FGSTN_DefenceFragment>(Context.Out.Fragments);
+			const int32 AirFrames = GSTNDefenceHitFlags::GetSelfKnockdownAirFrames(Fragment.HitFlags) + 1;
+			Fragment.HitFlags = GSTNDefenceHitFlags::WithSelfKnockdownAirFrames(Fragment.HitFlags, AirFrames);
+			if (AirFrames >= FMath::Clamp(Data.Rules->GroundBounce.SelfKnockdownMinAirFrames, 1, GSTNDefenceHitFlags::SelfKnockdownAirMax))
+			{
+				UE_LOG(LogGSTNDefence, Log, TEXT("SelfKnockdown: frame %d armed (airborne inside the window for %d frames)"), Context.Frame, AirFrames);
+				Fragment.HitFlags |= GSTNDefenceHitFlags::SelfKnockdownArmed;
+			}
 		}
 		return false;
 	}
 	if (!bArmed)
 	{
-		// Grounded without having left the ground inside the window (the window opened on the takeoff frame): not a landing yet
+		// Grounded without having left the ground inside the window (the window opened on the takeoff frame), or back on the ground before the
+		// rules' airborne frames: not a self knockdown, the count starts again
+		if (Existing && GSTNDefenceHitFlags::GetSelfKnockdownAirFrames(Existing->HitFlags) > 0)
+		{
+			UE_LOG(LogGSTNDefence, Log, TEXT("SelfKnockdown: frame %d grounded after %d airborne frames: not armed, ordinary landing"), Context.Frame,
+				GSTNDefenceHitFlags::GetSelfKnockdownAirFrames(Existing->HitFlags));
+			Existing->HitFlags = GSTNDefenceHitFlags::WithSelfKnockdownAirFrames(Existing->HitFlags, 0);
+		}
 		return false;
 	}
 
 	// Landed inside the window: the move ends here and its user is downed as a tumble landing downs a victim. No tech evaluation (no contact, no
 	// reaction to tech out of): the way out is the owner's one, the get-up roll from the stick or the neutral get-up
-	Existing->HitFlags &= ~GSTNDefenceHitFlags::SelfKnockdownArmed;
+	Existing->HitFlags = GSTNDefenceHitFlags::WithSelfKnockdownAirFrames(Existing->HitFlags & ~GSTNDefenceHitFlags::SelfKnockdownArmed, 0);
 	UE_LOG(LogGSTNDefence, Log, TEXT("SelfKnockdown: frame %d landed inside the window: the move's user is downed"), Context.Frame);
 	// The move's own hop (owner 2026-11-16, the dropkick like Big Band's), read before the move is cancelled; else the rules' at their speed
 	const FGSTN_SelfLandingBounceTrack* Own = FindSelfLandingBounce(Context);
