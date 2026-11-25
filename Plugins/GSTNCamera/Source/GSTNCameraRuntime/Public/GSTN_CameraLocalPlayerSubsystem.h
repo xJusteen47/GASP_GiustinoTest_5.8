@@ -32,13 +32,14 @@ struct GSTNCAMERARUNTIME_API FGSTN_CameraUserOptions
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Options")
 	EGSTN_CameraDistancePreset DistancePreset = EGSTN_CameraDistancePreset::Medium;
 
-	/** Used when DistancePreset is Custom; clamped to the profile slider range */
+	/** Used when DistancePreset is Custom (the free zoom writes it); clamped to the profile slider range */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Options", meta = (ClampMin = "0.1"))
 	float CustomDistanceScale = 1.f;
 
-	/** The gentle follow behind in a sustained run (decision 2A: on, the player can turn it off) */
+	/** The gentle follow behind in a sustained run. OFF by default (owner 2026-11-25, replaces decision 2A "on": the camera turning behind by
+	 *  itself ruins aiming precision); the player can turn it on, gstn.Camera.AutoFollow 1 does it for a playtest */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Options")
-	bool bAutoFollow = true;
+	bool bAutoFollow = false;
 
 	/** Accessibility: hold recenter and the move stick turns the camera (Astro Bot) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Options")

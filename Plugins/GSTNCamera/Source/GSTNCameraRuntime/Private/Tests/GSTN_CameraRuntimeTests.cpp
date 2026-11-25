@@ -679,6 +679,41 @@ GSTN_CAM_RT_TEST(DistancePresetEasesAndSectionLimits)
 	return true;
 }
 
+GSTN_CAM_RT_TEST(ZoomInputMovesTheDistanceDirectlyWithinItsRange)
+{
+	FRig Rig;
+	AActor* Subject = Rig.SpawnSubject(FVector(0, 0, 100));
+	UGSTN_CameraComponent* Camera = Rig.AddCamera(Subject);
+	Camera->SetSubjectOverride(MakeSubject(FVector(0, 0, 100)));
+	Run(Camera, 0.5f);
+	const float Arm = Camera->GetBlendedView().ArmCm;
+	TestTrue(TEXT("base distance is the PSO2-like 580 cm"), FMath::IsNearlyEqual(UGSTN_CameraProfile::GetDefaultProfile().FreeView.DistanceCm, 580.f, 0.5f));
+
+	// One wheel notch closer (the setup script maps a notch to -0.12): the same frame, no ease
+	Camera->AddZoomInput(-0.12f);
+	Camera->EvaluateCamera(1.f / 60.f);
+	TestTrue(TEXT("a notch moves at once by e^-0.12"), FMath::IsNearlyEqual(Camera->GetDistanceScale(), FMath::Exp(-0.12f), 1.0e-3f));
+	TestTrue(TEXT("the player option is now Custom"), Camera->GetUserOptions().DistancePreset == EGSTN_CameraDistancePreset::Custom);
+	TestTrue(TEXT("the arm shrank with it"), Camera->GetBlendedView().ArmCm < Arm - 10.f);
+
+	// Held zoom out for a long time: stops at the range end
+	for (int32 Frame = 0; Frame < 300; ++Frame)
+	{
+		Camera->AddZoomInput(0.05f);
+		Camera->EvaluateCamera(1.f / 60.f);
+	}
+	const FGSTN_CameraDistancePresets& Presets = UGSTN_CameraProfile::GetDefaultProfile().DistancePresets;
+	TestTrue(TEXT("clamped at the far end"), FMath::IsNearlyEqual(Camera->GetDistanceScale(), Presets.CustomMaxScale, 1.0e-3f));
+
+	// A preset after a zoom eases back as before
+	Camera->SetDistancePreset(EGSTN_CameraDistancePreset::Medium);
+	Run(Camera, 0.1f);
+	TestTrue(TEXT("a preset still eases"), Camera->GetDistanceScale() > 1.01f && Camera->GetDistanceScale() < Presets.CustomMaxScale - 0.01f);
+	Run(Camera, 1.f);
+	TestTrue(TEXT("and reaches it"), FMath::IsNearlyEqual(Camera->GetDistanceScale(), 1.f, 1.0e-3f));
+	return true;
+}
+
 GSTN_CAM_RT_TEST(AutoFollowTurnsBehindOnlyInASustainedRun)
 {
 	FRig Rig;
@@ -688,6 +723,25 @@ GSTN_CAM_RT_TEST(AutoFollowTurnsBehindOnlyInASustainedRun)
 	Running.Velocity = FVector(0, 600, 0);
 	Camera->SetSubjectOverride(Running);
 	Run(Camera, 0.1f);
+
+	// Off by default (owner 2026-11-25: it ruins aiming precision): a long sustained run never turns the camera
+	TestFalse(TEXT("the player option is off by default"), Camera->GetUserOptions().bAutoFollow);
+	const float Untouched = Camera->GetOrbit().YawDeg;
+	Run(Camera, 3.f);
+	TestTrue(TEXT("default: never turns behind"), FMath::IsNearlyEqual(Camera->GetOrbit().YawDeg, Untouched, 1.0e-3f));
+
+	// The player turns it on: the gentle follow below
+	{
+		FGSTN_CameraUserOptions On = Camera->GetUserOptions();
+		On.bAutoFollow = true;
+		Camera->SetUserOptions(On);
+		Running.Velocity = FVector::ZeroVector;
+		Camera->SetSubjectOverride(Running);
+		Run(Camera, 0.1f);	// the run timer restarts
+		Running.Velocity = FVector(0, 600, 0);
+		Camera->SetSubjectOverride(Running);
+		Run(Camera, 0.1f);
+	}
 	const float Start = Camera->GetOrbit().YawDeg;
 	const float RunHeading = HeadingOf(Camera, FVector(0, 1, 0));
 	Run(Camera, 0.8f);

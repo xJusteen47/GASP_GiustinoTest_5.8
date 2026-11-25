@@ -765,6 +765,15 @@ float FGSTN_CameraMath::DistancePresetScale(const FGSTN_CameraDistancePresets& P
 	}
 }
 
+float FGSTN_CameraMath::StepZoomScale(const FGSTN_CameraDistancePresets& Presets, float CurrentScale, float ZoomInput)
+{
+	const float Min = FMath::Max(Tiny, FMath::Min(Presets.CustomMinScale, Presets.CustomMaxScale));
+	const float Max = FMath::Max(Presets.CustomMinScale, Presets.CustomMaxScale);
+	// The exponent is clamped so a burst of input (a fast wheel spin in one frame) cannot overflow; the range clamp does the rest
+	const float Exponent = FMath::Clamp(ZoomInput * FMath::Max(0.f, Presets.ZoomLogPerUnit), -10.f, 10.f);
+	return FMath::Clamp(FMath::Max(CurrentScale, Tiny) * FMath::Exp(Exponent), Min, Max);
+}
+
 EGSTN_CameraDistancePreset FGSTN_CameraMath::CycleDistancePreset(EGSTN_CameraDistancePreset Current, int32 Direction)
 {
 	int32 Index = Current == EGSTN_CameraDistancePreset::Near ? 0 : (Current == EGSTN_CameraDistancePreset::Far ? 2 : 1);

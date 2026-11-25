@@ -87,9 +87,17 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	TSoftObjectPtr<UInputAction> SwapShoulderAction;
 
-	/** A 1D axis: +1 farther preset, -1 nearer (design.md §3.3 proposes d-pad up/down; never hard-wired). Empty = menu only */
+	/** A 1D axis: +1 farther preset, -1 nearer (design.md §3.3; never hard-wired). Empty = menu only. The free ZoomAction below is finer */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	TSoftObjectPtr<UInputAction> DistanceAction;
+
+	/**
+	 * A 1D axis: free zoom (owner 2026-11-25), positive = farther. Per frame like a mouse delta (wheel as is, held buttons with Scale by Delta
+	 * Time): it moves the Custom distance by DistancePresets.ZoomLogPerUnit per unit, with no ease (the input itself is the motion).
+	 * Polled whatever the LookInputSource. Empty = no zoom input (presets, menu and gstn.Camera.Zoom still work)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	TSoftObjectPtr<UInputAction> ZoomAction;
 
 	/** The 2D move action, read only for Camera Assist. Empty = no Camera Assist from the plugin */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")

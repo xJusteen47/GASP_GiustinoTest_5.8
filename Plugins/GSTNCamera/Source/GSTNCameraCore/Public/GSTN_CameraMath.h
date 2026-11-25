@@ -178,6 +178,12 @@ struct GSTNCAMERACORE_API FGSTN_CameraMath
 	 */
 	static FVector2D ControlRotationLookDelta(const FRotator& Now, const FRotator& LeftLastFrame, bool bContinuous, float DegreesPerUnit);
 
+	/**
+	 * One step of the free zoom (2026-11-25): Current * e^(ZoomInput * Presets.ZoomLogPerUnit), clamped to the Custom range. Zero input returns
+	 * Current clamped. Multiplicative so a step is the same share of the distance near and far
+	 */
+	static float StepZoomScale(const FGSTN_CameraDistancePresets& Presets, float CurrentScale, float ZoomInput);
+
 	/** Next preset in Near, Medium, Far order (Direction > 0 farther, < 0 nearer), clamped at the ends; Custom steps from Medium */
 	static EGSTN_CameraDistancePreset CycleDistancePreset(EGSTN_CameraDistancePreset Current, int32 Direction);
 

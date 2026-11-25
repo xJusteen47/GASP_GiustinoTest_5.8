@@ -78,6 +78,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Camera|Options")
 	void SetUserOptions(const FGSTN_CameraUserOptions& NewOptions);
 
+	/**
+	 * Free zoom input (positive = farther), per frame like a mouse delta: consumed by the next evaluation, which multiplies the player distance by
+	 * e^(Input * DistancePresets.ZoomLogPerUnit) within the Custom range and switches the player option to Custom. The ZoomAction feeds it too
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Camera")
+	void AddZoomInput(float Input);
+
 	/** Distance from the character; the change eases in DistancePresets.ChangeSeconds */
 	UFUNCTION(BlueprintCallable, Category = "Camera|Options")
 	void SetDistancePreset(EGSTN_CameraDistancePreset Preset);
@@ -275,6 +282,8 @@ private:
 	bool bHasSubjectOverride = false;
 
 	FVector2D PendingLook = FVector2D::ZeroVector;
+	/** Zoom input gathered since the last evaluation (AddZoomInput and the profile's ZoomAction) */
+	float PendingZoom = 0.f;
 	/** LookInputSource ControlRotation: the control rotation this camera left at the end of its last frame (after its write back) and that frame.
 	 *  This frame's look input is the change since then, read before the new write back (FGSTN_CameraMath::ControlRotationLookDelta) */
 	FRotator LeftControlRotation = FRotator::ZeroRotator;

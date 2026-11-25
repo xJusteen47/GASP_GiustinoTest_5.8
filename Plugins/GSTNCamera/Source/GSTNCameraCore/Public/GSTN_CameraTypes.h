@@ -694,7 +694,8 @@ struct GSTNCAMERACORE_API FGSTN_CameraAutoFollowTuning
 {
 	GENERATED_BODY()
 
-	/** Designer switch (the player switch is in the user options; both must be on) */
+	/** Designer switch (the player switch is in the user options; both must be on). The player switch is OFF by default since 2026-11-25
+	 *  (owner: the camera turning behind by itself ruins aiming precision), so this alone does not turn the camera */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|AutoFollow")
 	bool bEnabled = true;
 
@@ -767,12 +768,21 @@ struct GSTNCAMERACORE_API FGSTN_CameraDistancePresets
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Distance", meta = (ClampMin = "0.1"))
 	float FarScale = 1.25f;
 
-	/** Range of the Custom slider */
+	/** Range of the Custom slider and of the free zoom (ZoomAction), as scales of the base distance. 2026-11-25: widened from 0.8-1.25 so the
+	 *  zoom reaches a close look (0.6 = 348 cm with the 580 cm base) and a wide overview (1.6 = 928 cm) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Distance", meta = (ClampMin = "0.1"))
-	float CustomMinScale = 0.8f;
+	float CustomMinScale = 0.6f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Distance", meta = (ClampMin = "0.1"))
-	float CustomMaxScale = 1.25f;
+	float CustomMaxScale = 1.6f;
+
+	/**
+	 * Free zoom: one unit of zoom input multiplies the distance by e^ZoomLogPerUnit (multiplicative, so a notch feels the same near and far).
+	 * The input is per frame, like a mouse delta: the mouse wheel gives one value per notch, a held button needs a Scale by Delta Time modifier
+	 * on its mapping (Tools/GASNPPTest/camera_zoom_setup.py sets both). Positive = farther
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Distance", meta = (ClampMin = "0"))
+	float ZoomLogPerUnit = 1.f;
 
 	/** Ease-in-out time of a distance change (preset, section limit, entering or leaving one) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera|Distance", meta = (ClampMin = "0", ForceUnits = "s"))

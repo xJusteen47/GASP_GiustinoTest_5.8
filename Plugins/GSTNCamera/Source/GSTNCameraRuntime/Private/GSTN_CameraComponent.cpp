@@ -24,9 +24,10 @@ namespace GSTNCameraComponentPrivate
 	static TAutoConsoleVariable<int32> CVarEnable(TEXT("gstn.Camera.Enable"), 1, TEXT("0 turns the GSTN camera off on this machine (the camera component keeps its own default view)."));
 	static TAutoConsoleVariable<int32> CVarDebug(TEXT("gstn.Camera.Debug"), 0, TEXT("1 draws the pivot and prints the active mode, section and stack of every GSTN camera."));
 	// Playtest switches (listed in the GSTN Debug Options window). They set the player option when the value changes (a debug aid).
-	static TAutoConsoleVariable<int32> CVarAutoFollow(TEXT("gstn.Camera.AutoFollow"), 1, TEXT("0 turns the gentle auto follow (camera turns behind the runner) off, 1 on."));
+	static TAutoConsoleVariable<int32> CVarAutoFollow(TEXT("gstn.Camera.AutoFollow"), 0, TEXT("1 turns the gentle auto follow (camera turns behind the runner) on, 0 off. Default off (owner 2026-11-25: it ruins aiming precision)."));
 	static TAutoConsoleVariable<int32> CVarAssist(TEXT("gstn.Camera.Assist"), 0, TEXT("1 turns Camera Assist on: hold recenter and the move stick turns the camera."));
-	static TAutoConsoleVariable<int32> CVarDistance(TEXT("gstn.Camera.Distance"), 1, TEXT("Camera distance: 0 = near, 1 = medium, 2 = far."));
+	static TAutoConsoleVariable<int32> CVarDistance(TEXT("gstn.Camera.Distance"), 1, TEXT("Camera distance preset: 0 = near, 1 = medium, 2 = far."));
+	static TAutoConsoleVariable<float> CVarZoom(TEXT("gstn.Camera.Zoom"), -1.f, TEXT("Camera zoom as a scale of the base distance (580 cm, PSO2 default): sets the player's Custom distance when changed, e.g. 0.8 closer, 1.3 farther (range 0.6-1.6). -1 = leave the player's choice."));
 	static TAutoConsoleVariable<int32> CVarLookLog(TEXT("gstn.Camera.LookLog"), 0, TEXT("1 = one CSV row per camera frame in Saved/Logs/gstn_camera_look_<pawn>.csv: control rotation before the camera, look delta, orbit pitch and its clamp, view pitch, written control rotation. Diagnostics for the P1a pitch lock (2026-11-21)."));
 	static TAutoConsoleVariable<int32> CVarOcclusion(TEXT("gstn.Camera.Occlusion"), 1, TEXT("0 turns the occlusion probe (fade and pull-in) off."));
 
@@ -492,11 +493,22 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 	APlayerController* Controller = Pawn ? Cast<APlayerController>(Pawn->GetController()) : nullptr;
 	FGSTN_CameraUserOptions& UserOptions = Options();
 	// A cvar acts when it CHANGES (the player's own menu choice is not overwritten every frame)
-	static int32 LastAutoFollow = 1, LastAssist = 0, LastDistance = 1;
+	static int32 LastAutoFollow = 0, LastAssist = 0, LastDistance = 1;
+	static float LastZoom = -1.f;
 	const int32 NowAutoFollow = CVarAutoFollow.GetValueOnGameThread(), NowAssist = CVarAssist.GetValueOnGameThread(), NowDistance = FMath::Clamp(CVarDistance.GetValueOnGameThread(), 0, 2);
+	const float NowZoom = CVarZoom.GetValueOnGameThread();
 	if (NowAutoFollow != LastAutoFollow) { LastAutoFollow = NowAutoFollow; UserOptions.bAutoFollow = NowAutoFollow != 0; }
 	if (NowAssist != LastAssist) { LastAssist = NowAssist; UserOptions.bCameraAssist = NowAssist != 0; }
 	if (NowDistance != LastDistance) { LastDistance = NowDistance; UserOptions.DistancePreset = static_cast<EGSTN_CameraDistancePreset>(NowDistance); }
+	if (NowZoom != LastZoom)
+	{
+		LastZoom = NowZoom;
+		if (NowZoom > 0.f)
+		{
+			UserOptions.DistancePreset = EGSTN_CameraDistancePreset::Custom;
+			UserOptions.CustomDistanceScale = FGSTN_CameraMath::StepZoomScale(Settings.DistancePresets, NowZoom, 0.f);
+		}
+	}
 
 	UGSTN_CameraLocalPlayerSubsystem* Subsystem = UGSTN_CameraLocalPlayerSubsystem::Get(Controller);
 	if (Subsystem)
@@ -507,11 +519,14 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 	// The Enhanced Input actions are polled, so the plugin needs no input component of its own
 	bool bRecenterDown = false;
 	FVector2D AssistMove = FVector2D::ZeroVector;
-	if (Settings.LookInputSource == EGSTN_CameraLookInputSource::Plugin && Controller && Controller->IsLocalController())
+	// Only the look action depends on the look source: with ControlRotation (the playtest pawn, GASP's look turns the controller) the buttons
+	// below (recenter, distance, zoom...) are still the plugin's own. Before 2026-11-25 they were polled only with the Plugin source, so on the
+	// playtest pawn no distance input ever reached the camera
+	if (Controller && Controller->IsLocalController())
 	{
 		if (const UEnhancedPlayerInput* Input = Cast<UEnhancedPlayerInput>(Controller->PlayerInput))
 		{
-			if (!Settings.LookAction.IsNull())
+			if (Settings.LookInputSource == EGSTN_CameraLookInputSource::Plugin && !Settings.LookAction.IsNull())
 			{
 				if (const UInputAction* Look = Settings.LookAction.LoadSynchronous())
 				{
@@ -548,6 +563,13 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 						CycleDistancePreset(Direction);
 					}
 					LastDistanceDirection = Direction;
+				}
+			}
+			if (!Settings.ZoomAction.IsNull())
+			{
+				if (const UInputAction* Zoom = Settings.ZoomAction.LoadSynchronous())
+				{
+					PendingZoom += Input->GetActionValue(Zoom).Get<float>();
 				}
 			}
 			if (!Settings.AssistMoveAction.IsNull())
@@ -679,7 +701,19 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 	LookRow.OrbitPitchDeg = Orbit.PitchDeg;
 	LookRow.OrbitYawDeg = Orbit.YawDeg;
 
-	// The player distance: the preset of the options, limited by the section, always eased (never a snap)
+	// Free zoom (2026-11-25): the input moves the Custom distance from wherever the player is now (a preset included). Not while aiming: the
+	// shoulder camera keeps its own arm and the input is dropped
+	const float ZoomInput = PendingZoom;
+	PendingZoom = 0.f;
+	const bool bZooming = !FMath::IsNearlyZero(ZoomInput) && !bAim;
+	if (bZooming)
+	{
+		const float From = FGSTN_CameraMath::DistancePresetScale(Settings.DistancePresets, UserOptions.DistancePreset, UserOptions.CustomDistanceScale);
+		UserOptions.CustomDistanceScale = FGSTN_CameraMath::StepZoomScale(Settings.DistancePresets, From, ZoomInput);
+		UserOptions.DistancePreset = EGSTN_CameraDistancePreset::Custom;
+	}
+
+	// The player distance: the preset of the options, limited by the section, eased (never a snap) unless the zoom input moved it this frame
 	float DistanceTarget = FGSTN_CameraMath::DistancePresetScale(Settings.DistancePresets, UserOptions.DistancePreset, UserOptions.CustomDistanceScale);
 
 	if (Section)
@@ -724,6 +758,13 @@ void UGSTN_CameraComponent::ApplyLook(const FGSTN_CameraSubjectState& Subject, F
 	{
 		// The shoulder camera has its own arm: keep the player distance where it is
 		DistanceTarget = Player.Distance.bInit ? Player.Distance.To : DistanceTarget;
+	}
+	if (bZooming && Player.Distance.bInit)
+	{
+		// The zoom input is already a smooth motion (a wheel notch is a small multiplicative step): follow it directly. Restarting the
+		// ease-in-out every frame of a held zoom would keep it at the slow start of the curve and the zoom would barely move
+		Player.Distance.Value = Player.Distance.From = Player.Distance.To = DistanceTarget;
+		Player.Distance.Elapsed = 0.f;
 	}
 	Orbit.DistanceScale = FGSTN_CameraMath::StepEasedFloat(Player.Distance, DistanceTarget, Settings.DistancePresets.ChangeSeconds, DeltaSeconds);
 }
@@ -1359,6 +1400,11 @@ void UGSTN_CameraComponent::SetUserOptions(const FGSTN_CameraUserOptions& NewOpt
 void UGSTN_CameraComponent::SetDistancePreset(EGSTN_CameraDistancePreset Preset)
 {
 	Options().DistancePreset = Preset;
+}
+
+void UGSTN_CameraComponent::AddZoomInput(float Input)
+{
+	PendingZoom += Input;
 }
 
 EGSTN_CameraDistancePreset UGSTN_CameraComponent::CycleDistancePreset(int32 Direction)

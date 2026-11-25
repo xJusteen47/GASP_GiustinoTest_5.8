@@ -1002,11 +1002,27 @@ GSTN_CAM_TEST(DistancePresetsCycleAndClamp)
 	TestEqual(TEXT("near"), FGSTN_CameraMath::DistancePresetScale(Presets, P::Near, 1.f), 0.8f);
 	TestEqual(TEXT("medium"), FGSTN_CameraMath::DistancePresetScale(Presets, P::Medium, 1.f), 1.f);
 	TestEqual(TEXT("far"), FGSTN_CameraMath::DistancePresetScale(Presets, P::Far, 1.f), 1.25f);
-	TestEqual(TEXT("custom clamped to the slider"), FGSTN_CameraMath::DistancePresetScale(Presets, P::Custom, 3.f), 1.25f);
+	TestEqual(TEXT("custom clamped to the slider"), FGSTN_CameraMath::DistancePresetScale(Presets, P::Custom, 3.f), Presets.CustomMaxScale);
 	TestTrue(TEXT("medium +1 = far"), FGSTN_CameraMath::CycleDistancePreset(P::Medium, 1) == P::Far);
 	TestTrue(TEXT("far +1 stays far"), FGSTN_CameraMath::CycleDistancePreset(P::Far, 1) == P::Far);
 	TestTrue(TEXT("medium -1 = near"), FGSTN_CameraMath::CycleDistancePreset(P::Medium, -1) == P::Near);
 	TestTrue(TEXT("custom steps from medium"), FGSTN_CameraMath::CycleDistancePreset(P::Custom, -1) == P::Near);
+	return true;
+}
+
+GSTN_CAM_TEST(ZoomStepIsMultiplicativeAndClamped)
+{
+	FGSTN_CameraDistancePresets Presets;
+	Presets.ZoomLogPerUnit = 1.f;
+	TestTrue(TEXT("the range reaches closer and farther than the presets"), Presets.CustomMinScale < Presets.NearScale && Presets.CustomMaxScale > Presets.FarScale);
+	TestTrue(TEXT("no input: unchanged"), FMath::IsNearlyEqual(FGSTN_CameraMath::StepZoomScale(Presets, 1.f, 0.f), 1.f, 1.0e-5f));
+	const float Out = FGSTN_CameraMath::StepZoomScale(Presets, 1.f, 0.1f);
+	TestTrue(TEXT("positive = farther, by e^0.1"), FMath::IsNearlyEqual(Out, FMath::Exp(0.1f), 1.0e-4f));
+	TestTrue(TEXT("the same input is the same share near and far"),
+		FMath::IsNearlyEqual(FGSTN_CameraMath::StepZoomScale(Presets, 0.7f, 0.1f) / 0.7f, FGSTN_CameraMath::StepZoomScale(Presets, 1.4f, 0.1f) / 1.4f, 1.0e-4f));
+	TestTrue(TEXT("in then out returns"), FMath::IsNearlyEqual(FGSTN_CameraMath::StepZoomScale(Presets, Out, -0.1f), 1.f, 1.0e-4f));
+	TestEqual(TEXT("clamped far"), FGSTN_CameraMath::StepZoomScale(Presets, 1.f, 100.f), Presets.CustomMaxScale);
+	TestEqual(TEXT("clamped near"), FGSTN_CameraMath::StepZoomScale(Presets, 1.f, -100.f), Presets.CustomMinScale);
 	return true;
 }
 
