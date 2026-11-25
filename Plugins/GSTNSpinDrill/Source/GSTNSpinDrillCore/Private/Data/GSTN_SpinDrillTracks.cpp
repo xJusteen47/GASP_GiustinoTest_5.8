@@ -9,6 +9,7 @@
 #include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_CombatCommandTags.h"
 #include "Layout/GSTN_ButtonLayout.h"
+#include "Timeline/GSTN_TimelineTypes.h"
 
 FGameplayTag FGSTN_BoreTrack::ResolveHoldButton() const
 {
@@ -121,6 +122,17 @@ FGSTN_CombatTimelineData FGSTN_SpinTimelines::Make(const FGSTN_SpinTimelineParam
 		IntoOpposite.Condition = EGSTN_CancelCondition::Always;
 		IntoOpposite.IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(FGameplayTagContainer(SpinCommand(Opposite(Sense))));
 		Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_CancelWindow>(IntoOpposite));
+	}
+	if (Params.AirControl >= 0.f)
+	{
+		FGSTN_TimelineTrack_Movement Control;
+		Control.StartFrame = 0;
+		Control.EndFrame = Data.TotalFrames;
+		Control.MixMode = EGSTN_MoveMixMode::Additive;
+		Control.MomentumMode = EGSTN_MomentumMode::Preserve;
+		Control.bLockFacing = false;
+		Control.AirControlOverride = FMath::Clamp(Params.AirControl, 0.f, 1.f);
+		Data.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_Movement>(Control));
 	}
 	// D8: crouch pressed during the spin, from DiveFromFrame on, starts the dive (its binding requires Combat.State.Spinning)
 	if (Params.DiveFromFrame >= 0 && Params.DiveFromFrame < Data.TotalFrames)
@@ -258,5 +270,6 @@ FGSTN_SpinTimelineParams FGSTN_SpinTimelines::AirParams()
 	Params.TotalFrames = 36;
 	Params.FirstActionableFrame = 20;
 	Params.RingEndFrame = 20;
+	Params.AirControl = 1.f;
 	return Params;
 }

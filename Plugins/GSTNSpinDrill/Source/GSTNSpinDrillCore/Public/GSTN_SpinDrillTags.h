@@ -110,6 +110,12 @@ namespace GSTNSpinDrillTags
 	/** The dive reached the ground and the ground lag started */
 	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Drill_GroundLag);
 
+	/**
+	 * A spin started (ground, air or a chained spin; not the cancel). Published once on the authority, Instigator = the spinner, Tags hold
+	 * Combat.State.Spinning.Clockwise or .CounterClockwise. Turnables in the world (IGSTN_SpinTurnable) are turned from it, never from a prediction
+	 */
+	GSTNSPINDRILLCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Event_Spin_Started);
+
 	// ---- Ability identity ----
 
 	/** The spin ability, ground and air */
