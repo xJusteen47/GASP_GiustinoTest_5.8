@@ -34,10 +34,11 @@ namespace
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DodgeLandingEndLagTest, "GSTNCombat.Core.DodgeLanding.EndLagBlocksActions", GSTN_CORE_TEST_FLAGS)
 bool FGSTN_DodgeLandingEndLagTest::RunTest(const FString& Parameters)
 {
-	const FGSTN_DodgeLandingKitExtension Kit;
-	// Owner 2026-11-25: the belly part (the move's 8) plus the get-up roll to stand (10)
+	// Owner 2026-11-25: the belly part (the move's 8) plus the get-up roll to stand (10); the jump roll-out is checked in RollOut, off here
+	FGSTN_DodgeLandingKitExtension Kit;
 	TestEqual(TEXT("default get-up roll 10"), Kit.GetUpRollFrames, 10);
 	TestEqual(TEXT("default lag = the move's plus the get-up roll"), FGSTN_DodgeLandingLogic::ResolveEndLag(Kit, FGSTN_MoveTimelines::DefaultDodgeEndLagFrames), 18);
+	Kit.bJumpRollsOut = false;
 	const FGSTN_DodgeLandingState State = FGSTN_DodgeLandingState::Open(Landed, 8, Kit.RedodgeLockFrames);
 
 	// Frames 1..8 of the lag (the landing frame is 1): nothing acts, not even a jump or an attack
@@ -114,7 +115,12 @@ bool FGSTN_DodgeLandingRecoveryTest::RunTest(const FString& Parameters)
 {
 	FGSTN_DodgeLandingKitExtension Kit;
 	FGSTN_DodgeLandingState State = FGSTN_DodgeLandingState::Open(Landed, 8, 10);
-	TestEqual(TEXT("off by default"), FGSTN_DodgeLandingLogic::Gate(State, Kit, Landed + 5, Jump()), EGSTN_DodgeLandingGate::Refused);
+	// Owner 2026-11-25 (1B): jump on the belly rolls out, from the landing frame
+	TestEqual(TEXT("jump rolls out by default, on the landing frame"), FGSTN_DodgeLandingLogic::Gate(State, Kit, Landed, Jump()), EGSTN_DodgeLandingGate::Recovery);
+	TestEqual(TEXT("an attack is no roll-out by default"), FGSTN_DodgeLandingLogic::Gate(State, Kit, Landed + 5, Attack()), EGSTN_DodgeLandingGate::Refused);
+	FGSTN_DodgeLandingKitExtension Off;
+	Off.bJumpRollsOut = false;
+	TestEqual(TEXT("a kit turns it off"), FGSTN_DodgeLandingLogic::Gate(State, Off, Landed + 5, Jump()), EGSTN_DodgeLandingGate::Refused);
 
 	Kit.RecoveryCommands.AddTag(Jump());
 	Kit.RecoveryCommands.AddTag(Dodge());
@@ -187,7 +193,9 @@ bool FGSTN_DodgeLandingDefaultsTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("belly slide on by default"), Kit.LandingSlide.bEnabled);
 	TestEqual(TEXT("it slides along the landing velocity whatever the facing"), Kit.LandingSlide.OppositeDotThreshold, -1.f);
 	TestFalse(TEXT("no run carry"), Kit.LandingSlide.bUseCarriedSpeed);
-	TestTrue(TEXT("roll-out off by default"), Kit.RecoveryCommands.IsEmpty());
+	TestTrue(TEXT("jump roll-out on by default (owner 2026-11-25, 1B)"), Kit.bJumpRollsOut);
+	TestTrue(TEXT("no other roll-out command by default"), Kit.RecoveryCommands.IsEmpty());
+	TestEqual(TEXT("belly until the slide stops by default (1B)"), Kit.BellyMode, EGSTN_DodgeBellyMode::UntilStopped);
 
 	// The ground and air dodge carry the 8-frame lag as the move's data, with room for it in the timeline
 	const FGSTN_DashMoveData Move = FGSTN_MoveTimelines::GroundDodgeMove();
@@ -200,3 +208,32 @@ bool FGSTN_DodgeLandingDefaultsTest::RunTest(const FString& Parameters)
 }
 
 #endif
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DodgeLandingBellyTest, "GSTNCombat.Core.DodgeLanding.BellyUntilStopped", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_DodgeLandingBellyTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-25 1B: the belly slides until the slide's friction stops it, then the get-up roll; 1A (Fixed) keeps the fixed belly
+	FGSTN_DodgeLandingKitExtension Kit;
+	const float Rate = 62.5f;
+	const int32 Roll = Kit.GetUpRollFrames;
+	const float Decel = Kit.LandingSlide.Along.Deceleration;
+	TestEqual(TEXT("1400 cm/s: as long as the slide brakes it"), FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 8, 1400.f, Rate),
+		FMath::CeilToInt32(1400.f / Decel * Rate) + Roll);
+	TestEqual(TEXT("a slow landing keeps the fixed belly"), FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 8, 300.f, Rate), 8 + Roll);
+	TestEqual(TEXT("under the slide's MinSpeed: the fixed belly"), FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 8, 100.f, Rate), 8 + Roll);
+	TestTrue(TEXT("faster lands longer"), FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 8, 1400.f, Rate) > FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 8, 900.f, Rate));
+	TestEqual(TEXT("capped by MaxBellyFrames"), FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 8, 100000.f, Rate), Kit.MaxBellyFrames + Roll);
+
+	FGSTN_DodgeLandingKitExtension Low = Kit;
+	Low.LandingSlide.Along.Deceleration = Decel * 0.5f;
+	TestTrue(TEXT("less friction slides longer"), FGSTN_DodgeLandingLogic::ResolveLandingLag(Low, 8, 1400.f, Rate) > FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 8, 1400.f, Rate));
+
+	FGSTN_DodgeLandingKitExtension Fixed = Kit;
+	Fixed.BellyMode = EGSTN_DodgeBellyMode::Fixed;
+	TestEqual(TEXT("1A: the fixed lag at any speed"), FGSTN_DodgeLandingLogic::ResolveLandingLag(Fixed, 8, 1400.f, Rate), FGSTN_DodgeLandingLogic::ResolveEndLag(Fixed, 8));
+	FGSTN_DodgeLandingKitExtension NoSlide = Kit;
+	NoSlide.LandingSlide.bEnabled = false;
+	TestEqual(TEXT("no belly slide: the fixed belly"), FGSTN_DodgeLandingLogic::ResolveLandingLag(NoSlide, 8, 1400.f, Rate), 8 + Roll);
+	TestTrue(TEXT("the whole lag fits the state's byte"), FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 255, 100000.f, Rate) <= 255);
+	return true;
+}

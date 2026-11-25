@@ -56,14 +56,15 @@ FGSTN_DashMoveData FGSTN_MoveTimelines::DashMove()
 
 FGSTN_DashMoveData FGSTN_MoveTimelines::GroundDodgeMove()
 {
-	// A low long-jump arc: about 0.61 s in the air, 46 cm high, 490 cm long under the nominal gravity. Mario long jump (owner 2026-11-17): a run
-	// keeps its speed into the jump (never slower than 800), up to 1400
+	// Mario Odyssey long jump (owner 2026-11-25, 3B, to tune in game): flatter and longer than the 2026-11-17 arc (800/300, 46 cm high). Under the
+	// nominal gravity about 0.51 s in the air and 32 cm high; from standing 510 cm long (was 490). Like Odyssey the jump is faster than the run:
+	// 1.3 times the run's speed (never slower than 1000), up to 1800, so an 850 run flies ~560 cm (was ~520) and a 1100 sprint ~730 (was ~670)
 	FGSTN_DashMoveData Move;
-	Move.ForwardSpeed = 800.f;
-	Move.UpSpeed = 300.f;
+	Move.ForwardSpeed = 1000.f;
+	Move.UpSpeed = 250.f;
 	Move.ModeChange = EGSTN_DashModeChange::AirMode;
-	Move.CarriedSpeedScale = 1.f;
-	Move.MaxForwardSpeed = 1400.f;
+	Move.CarriedSpeedScale = 1.3f;
+	Move.MaxForwardSpeed = 1800.f;
 	return Move;
 }
 

@@ -6,6 +6,7 @@
 #include "AbilitySystemComponent.h"
 #include "Abilities/NpAbilitySystemComponent.h"
 #include "Movement/GSTN_LayeredMove_MomentumSlide.h"
+#include "Mover/GSTN_MoverSimStateTracker.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGSTNDodgeLanding, Log, All);
@@ -28,7 +29,17 @@ void UGSTN_CombatSimComponent::ExecuteMomentumSlide()
 int32 UGSTN_CombatSimComponent::OpenDodgeLanding(int32 LandedFrame, int32 MoveLandingLagFrames)
 {
 	const FGSTN_DodgeLandingKitExtension& Kit = Tables().KitDodgeLanding;
-	const int32 EndLag = FGSTN_DodgeLandingLogic::ResolveEndLag(Kit, MoveLandingLagFrames);
+	// The landing speed along the ground from the tracked sim state (the belly lasts until the slide stops it, owner 2026-11-25 1B): the same
+	// bits on every machine and in every re-simulation, never a Mover component query
+	float LandingSpeed = 0.f;
+	if (const UGSTN_MoverSimStateTracker* Tracker = GetMoverTracker())
+	{
+		const FVector Velocity = Tracker->GetVelocity();
+		LandingSpeed = static_cast<float>(FVector::VectorPlaneProject(Velocity, Tracker->GetUpDirection()).Size());
+	}
+	// The simulation step (62.5 Hz, untouchable), the same constant on every machine
+	constexpr float SimTickRate = 62.5f;
+	const int32 EndLag = FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, MoveLandingLagFrames, LandingSpeed, SimTickRate);
 	const FGSTN_CombatSyncState* Pending = NetworkPredictionProxy.ReadSyncState<FGSTN_CombatSyncState>(ENetworkPredictionStateRead::Simulation);
 	if (!AbilitySystem || !Pending || !AbilitySystem->IsInSimulationTick() || AbilitySystem->GetIsRestoringFrame())
 	{

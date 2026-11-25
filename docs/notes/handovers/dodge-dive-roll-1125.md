@@ -15,7 +15,17 @@ controllo in aria pieno, 8 f di lag con scivolata di pancia (4000 cm/s²), lock 
    fino in piedi (giro intero). Lag tagliata (roll-out a comando, hit) = finisce il giro a 1080°/s o si ferma (hit). Niente squash d'atterraggio durante il tuffo.
    Impostazioni in `ShapeSettings` categoria Greybox|Dive.
 
+## Scelte owner 09:46Z: "1A come opzione, ma B è si può continuare a scivolare di pancia finché l'attrito non lo ferma; 2A regolabile; 3B tarabile"
+4. 1B default: `BellyMode` UntilStopped (pancia finché la scivolata si ferma: frame calcolati una volta all'atterraggio da velocità e
+   `LandingSlide.Along.Deceleration`, min 8, max `MaxBellyFrames` 60, poi la rotolata 10), `bJumpRollsOut` (salto = rollout da frame 1; flag e non tag
+   di default perché i tag nativi non sono pronti quando si costruiscono i default delle struct). 1A = `BellyMode` Fixed.
+   Velocità d'atterraggio dal tracker (sim state, piano perpendicolare all'up). Lag 1400 cm/s = 22 + 10 f; 1800 = 29 + 10 f.
+5. 2A: invariato. Regolabile nella traccia Hurtbox della timeline del dodge (EndFrame, Kind, tag) in un figlio BP di GA_GroundDodge/AirDodge.
+6. 3B: `GroundDodgeMove` 1000 avanti / 250 su (prima 800/300), corsa portata x1.3 (prima x1), tetto 1800 (prima 1400). Nominale: 0,51 s, 32 cm di
+   altezza, 510 cm da fermo, ~560 da corsa 850, ~730 da 1100. Tarabile sul GE del dodge (`UGSTN_MoveImpulseCreator::Move`).
+
 ## Test (NON compilati qui)
+Nuovo `GSTNCombat.Core.DodgeLanding.BellyUntilStopped`; RollOut e Defaults aggiornati al salto-rollout di default; `Dodge.LongJumpCarriesRunSpeed` x1.3.
 Nuovo `GSTNCombat.NP.Greybox.Dive`. Aggiornati `GSTNCombat.Core.DodgeLanding.EndLagBlocksActions` (lag 18, override 24/14/0/10) e
 `GSTNCombat.Core.MoveTimelines` (air dodge bloccante fino a 120 + 8 + 10).
 
@@ -23,9 +33,7 @@ Nuovo `GSTNCombat.NP.Greybox.Dive`. Aggiornati `GSTNCombat.Core.DodgeLanding.End
 Build, `-Tests GSTNCombat`, cattura capsula di un dodge da corsa e da fermo (pie_capture_move). Guardare: il tuffo legge da dive, la rotolata non sprofonda nel
 pavimento (floor lift), il giro non salta.
 
-## Scelte aperte (owner)
-Rotolata automatica vs a comando, invulnerabilità, traiettoria/controllo: vedi il thread "Rifare la schivata come dive e roll".
 
 ESITO: PARZIALE codice scritto, non compilato né provato (fisso offline)
 SUBAGENTI: 1, lettura pagine web riferimenti SM64/SMO, Opus
-COSTO: ~4 $ | 0 minuti desktop | 0 token review
+COSTO: ~6 $ | 0 minuti desktop | 0 token review
