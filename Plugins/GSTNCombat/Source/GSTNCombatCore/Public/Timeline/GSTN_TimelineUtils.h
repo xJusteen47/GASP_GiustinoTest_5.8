@@ -64,6 +64,10 @@ public:
 	static FGSTN_CombatTimelineData SetChargeHoldTrack(const FGSTN_CombatTimelineData& Data, int32 HoldFrame, FGameplayTag HoldButton, FName LayoutFunction,
 		int32 MaxHoldFrames = 60, float FullChargeDamageScale = 1.f, bool bLockDirection = true, FName LoopSection = NAME_None);
 
+	/** The first active frame of Data (the first attack hitbox that counts as active), 0 without one. What a setup script places a Charge Hold against */
+	UFUNCTION(BlueprintPure, Category = "Combat|Timeline")
+	static int32 GetFirstActiveFrame(const FGSTN_CombatTimelineData& Data);
+
 	/** Authoring helper: a copy of Data without its Charge Hold track */
 	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
 	static FGSTN_CombatTimelineData RemoveChargeHoldTrack(const FGSTN_CombatTimelineData& Data);

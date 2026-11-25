@@ -93,17 +93,9 @@ def _aerial_bindings():
 
 
 def _first_active(data):
-    first = None
-    for track in data.get_editor_property('tracks'):
-        exported = track.export_text() if hasattr(track, 'export_text') else str(track)
-        if 'GSTN_TimelineTrack_Hitbox' not in exported:
-            continue
-        try:
-            start = int(exported.split('StartFrame=')[1].split(',')[0].split(')')[0])
-        except (IndexError, ValueError):
-            continue
-        first = start if first is None else min(first, start)
-    return first
+    """The first active frame (C++ FGSTN_StartupSteer::GetSteerEndFrame), None for a move without an attack hitbox"""
+    first = unreal.GSTN_TimelineUtils.get_first_active_frame(data)
+    return first if first > 0 else None
 
 
 def _hold_frame(first_active):
@@ -140,10 +132,12 @@ def run(apply=False, force=False):
         log(f'{len(bindings)} airborne attack/strong bindings: ' + '; '.join(f'{o} {c}' for o, c, _, _ in bindings))
         done = set()
         written = 0
+        planned = 0
         for owner, command, family, cls in bindings:
             cdo = unreal.get_default_object(cls)
-            soft = cdo.get_editor_property('timeline_asset')
-            asset = soft.load_synchronous() if soft and hasattr(soft, 'load_synchronous') else (unreal.load_asset(str(soft)) if soft else None)
+            # The move's TimelineAsset when it has one (the kit scripts put the frame data there; the inline timeline is then empty), as
+            # setup_knockback_smash.py and setup_overlord_hop0.py resolve it
+            asset = unreal.GSTN_TestKitContentLibrary.get_move_timeline_asset(cls)
             key = asset.get_path_name() if asset else cls.get_path_name()
             if key in done:
                 continue
@@ -155,6 +149,7 @@ def run(apply=False, force=False):
                 log(f'SKIP {where} ({owner} {command}): {note}')
                 continue
             log(f'{"WRITE" if apply else "would write"} {where} ({owner} {command}): {note}')
+            planned += 1
             if not apply:
                 continue
             if asset:
@@ -172,7 +167,7 @@ def run(apply=False, force=False):
                 bp_path = cls.get_path_name().split('.')[0]
                 unreal.EditorAssetLibrary.save_asset(bp_path, False)
             written += 1
-        log(f'{"wrote" if apply else "dry run, would write"} {written if apply else len(done)} timeline(s)')
+        log(f'{"wrote" if apply else "dry run, would write"} {written if apply else planned} of {len(done)} timeline(s)')
         ok = True
     except Exception as e:
         log(f'ERROR: {e!r}')

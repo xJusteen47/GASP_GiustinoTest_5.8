@@ -2,6 +2,7 @@
 #include "Timeline/GSTN_ChargeHold.h"
 #include "Timeline/GSTN_HitBounce.h"
 #include "Timeline/GSTN_HoldUntilLanded.h"
+#include "Timeline/GSTN_StartupSteer.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
 
 bool UGSTN_TimelineUtils::IsInTail(const FGSTN_CombatTimelineData& Data, int32 Frame)
@@ -68,6 +69,11 @@ FGSTN_CombatTimelineData UGSTN_TimelineUtils::SetChargeHoldTrack(const FGSTN_Com
 	Track.LoopSection = LoopSection;
 	Result.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_TimelineTrack_ChargeHold>(Track));
 	return Result;
+}
+
+int32 UGSTN_TimelineUtils::GetFirstActiveFrame(const FGSTN_CombatTimelineData& Data)
+{
+	return FGSTN_StartupSteer::GetSteerEndFrame(Data);
 }
 
 FGSTN_CombatTimelineData UGSTN_TimelineUtils::RemoveChargeHoldTrack(const FGSTN_CombatTimelineData& Data)
