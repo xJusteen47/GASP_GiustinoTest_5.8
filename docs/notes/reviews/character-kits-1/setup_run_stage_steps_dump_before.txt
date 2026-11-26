@@ -1,0 +1,5 @@
+/Game/GSTN/Data/Locomotion/DA_Locomotion_Default
+  before stage 1 max_speed=600.0 acceleration=2000.0 frames_to_next_stage=180 accel_ramp_frames=30 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  before stage 2 max_speed=610.0 acceleration=1400.0 frames_to_next_stage=94 accel_ramp_frames=30 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  before stage 3 max_speed=850.0 acceleration=1200.0 frames_to_next_stage=1 accel_ramp_frames=0 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+/Game/GSTN/Animation/Layers/DA_AnimSet_Locomotion_Default lean before stage_forward=[] tell=0.0
