@@ -1,4 +1,4 @@
-// Combat simulation (GAS-NPP fork): Mover's falling mode without the start-of-fall floor snap while an attack hitbox is active.
+// Combat simulation (GAS-NPP fork): Mover's falling mode whose start-of-fall floor snap runs only on the frame the pawn leaves the ground.
 
 #include "Movement/GSTN_FallingMode.h"
 
@@ -6,6 +6,7 @@
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
+#include "MoverTypes.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 
@@ -28,6 +29,19 @@ bool UGSTN_FallingMode::IsAttackHitboxActive(const FGSTN_CombatTimelineData* Dat
 	return false;
 }
 
+bool UGSTN_FallingMode::ShouldBlockSnap(EGSTN_FallStartSnap Policy, bool bPreviousFrameGrounded, bool bHitboxActive)
+{
+	switch (Policy)
+	{
+	case EGSTN_FallStartSnap::NotWhileHitboxActive:
+		return bHitboxActive;
+	case EGSTN_FallStartSnap::FirstAirFrameOnly:
+		return !bPreviousFrameGrounded;
+	default:
+		return false;
+	}
+}
+
 FVector UGSTN_FallingMode::NudgeStartVelocity(const FVector& Velocity, const FVector& Up, float NudgeSpeed)
 {
 	const double Along = Velocity.Dot(Up);
@@ -42,12 +56,23 @@ FVector UGSTN_FallingMode::NudgeStartVelocity(const FVector& Velocity, const FVe
 void UGSTN_FallingMode::SimulationTick_Implementation(const FSimulationTickParams& Params, FMoverTickEndData& OutputState)
 {
 	const UMoverComponent* Mover = GetMoverComponent();
-	const AActor* Owner = Mover ? Mover->GetOwner() : nullptr;
-	const UGSTN_CombatSimComponent* Combat = (bNoFloorSnapWhileHitboxActive && Owner) ? Owner->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
-	int32 TimelineFrame = INDEX_NONE;
-	const FGSTN_CombatTimelineData* Data = Combat ? Combat->ReadEvaluatedTimeline(TimelineFrame) : nullptr;
 	const FMoverDefaultSyncState* Start = Params.StartState.SyncState.SyncStateCollection.FindDataByType<FMoverDefaultSyncState>();
-	if (!Start || !IsAttackHitboxActive(Data, TimelineFrame))
+	if (!Mover || !Start || FallStartSnap == EGSTN_FallStartSnap::Stock)
+	{
+		Super::SimulationTick_Implementation(Params, OutputState);
+		return;
+	}
+	// The last finished frame's ground, as every reader of the frame sees it (the body capsule modifier reads it the same way)
+	const bool bPreviousFrameGrounded = Mover->HasGameplayTag(Mover_IsOnGround, true);
+	bool bHitboxActive = false;
+	if (FallStartSnap == EGSTN_FallStartSnap::NotWhileHitboxActive)
+	{
+		const AActor* Owner = Mover->GetOwner();
+		const UGSTN_CombatSimComponent* Combat = Owner ? Owner->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
+		int32 TimelineFrame = INDEX_NONE;
+		bHitboxActive = IsAttackHitboxActive(Combat ? Combat->ReadEvaluatedTimeline(TimelineFrame) : nullptr, TimelineFrame);
+	}
+	if (!ShouldBlockSnap(FallStartSnap, bPreviousFrameGrounded, bHitboxActive))
 	{
 		Super::SimulationTick_Implementation(Params, OutputState);
 		return;

@@ -42,6 +42,12 @@ Riuso: Body Capsule track e modificatore, `ReadEvaluatedTimeline`, `FGSTN_Tumble
 - PIE NON fatto (lancio di pie_capture_move.py negato dai permessi della sessione): restano dropkick colpito vicino al suolo, a vuoto,
   dal suolo, discesa da un gradino, log "SelfKnockdown:".
 
-ESITO: PARZIALE build OK, 23/23 test, dati applicati (354c556c); prova in gioco non fatta
+## Owner 2026-11-26: aggancio mai in aria tranne il primo frame
+- "Con super armor e hitstop, o vento dal basso, snappiamo comunque?" Sì: lo snap scatta a ogni velocità verticale esattamente zero in
+  aria. Scelta A: `UGSTN_FallingMode::FallStartSnap = FirstAirFrameOnly` (default): snap solo se il frame prima finiva a terra
+  (`Mover.IsOnGround`, come lo legge il modificatore della capsula). Restano `NotWhileHitboxActive` e `Stock` come opzioni. Test
+  `GSTNCombat.NP.FallingMode.SnapPolicy`. Da ricompilare e riprovare sul fisso (il BP Falling non va rilanciato: il default sta nella classe).
+
+ESITO: PARZIALE build e 23/23 test OK su 354c556c; regola dello snap generalizzata il 26/11 non compilata; prova in gioco non fatta
 SUBAGENTI: 0
 COSTO: ~6 $ | 25 min desktop | 0 token review

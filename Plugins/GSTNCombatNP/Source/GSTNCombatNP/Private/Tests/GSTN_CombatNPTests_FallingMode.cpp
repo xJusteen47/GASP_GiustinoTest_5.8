@@ -1,4 +1,4 @@
-// UGSTN_FallingMode (owner 2026-11-25, dropkick bounce too early): while an attack hitbox is active, an exact zero vertical start speed (after a
+// UGSTN_FallingMode (owner 2026-11-25, dropkick bounce too early; 2026-11-26 every air frame but the first): when the snap is blocked, an exact zero vertical start speed (after a
 // hitstop freeze, at a held apex) is handed to Mover's falling mode as a tiny downward speed, so its start-of-fall floor snap (up to 40 cm, a
 // landing with no contact) does not run. The pure rules here; the in-game check is a capture on the desktop (handover dropkick-bounce-window).
 
@@ -50,6 +50,21 @@ bool FGSTN_FallingModeNudgeTest::RunTest(const FString& Parameters)
 	const FVector SideUp(1.0, 0.0, 0.0);
 	const FVector Side = UGSTN_FallingMode::NudgeStartVelocity(FVector(0.0, 0.0, 200.0), SideUp, 0.01f);
 	TestTrue(TEXT("nudged along the local up"), Side.X < 0.0 && FMath::IsNearlyEqual(Side.Z, 200.0));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_FallingModePolicyTest, "GSTNCombat.NP.FallingMode.SnapPolicy",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FGSTN_FallingModePolicyTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-26: armor hitstop, a victim's hitstop, a grab release or a wind must not snap either. Default: only the step (first air frame)
+	TestTrue(TEXT("default is the first air frame only"), GetDefault<UGSTN_FallingMode>()->FallStartSnap == EGSTN_FallStartSnap::FirstAirFrameOnly);
+	TestFalse(TEXT("first air frame: the step snap runs"), UGSTN_FallingMode::ShouldBlockSnap(EGSTN_FallStartSnap::FirstAirFrameOnly, true, false));
+	TestTrue(TEXT("later air frame, no hitbox (armor, victim, grab, wind): blocked"), UGSTN_FallingMode::ShouldBlockSnap(EGSTN_FallStartSnap::FirstAirFrameOnly, false, false));
+	TestTrue(TEXT("later air frame with a hitbox: blocked"), UGSTN_FallingMode::ShouldBlockSnap(EGSTN_FallStartSnap::FirstAirFrameOnly, false, true));
+	TestTrue(TEXT("hitbox rule: blocked with a hitbox"), UGSTN_FallingMode::ShouldBlockSnap(EGSTN_FallStartSnap::NotWhileHitboxActive, false, true));
+	TestFalse(TEXT("hitbox rule: not without one"), UGSTN_FallingMode::ShouldBlockSnap(EGSTN_FallStartSnap::NotWhileHitboxActive, false, false));
+	TestFalse(TEXT("stock: never blocked"), UGSTN_FallingMode::ShouldBlockSnap(EGSTN_FallStartSnap::Stock, false, true));
 	return true;
 }
 
