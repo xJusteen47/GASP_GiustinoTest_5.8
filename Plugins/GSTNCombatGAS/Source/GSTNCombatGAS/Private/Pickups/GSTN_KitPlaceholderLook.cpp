@@ -93,8 +93,16 @@ namespace GSTNKitPlaceholderLook
 
 FLinearColor UGSTN_KitPlaceholderLookSubsystem::ColourForKit(const FPrimaryAssetId& Kit)
 {
+	const FString Name = Kit.PrimaryAssetName.ToString();
+	for (const FGSTN_KitColourRule& Rule : GetDefault<UGSTN_KitPlaceholderLookSubsystem>()->KitColours)
+	{
+		if (!Rule.NamePart.IsEmpty() && Name.Contains(Rule.NamePart, ESearchCase::IgnoreCase))
+		{
+			return FLinearColor(Rule.Colour);
+		}
+	}
 	// FCrc on the plain string, not GetTypeHash(FName): an FName's hash depends on the name table of the process
-	const uint32 Hash = FCrc::StrCrc32(*Kit.PrimaryAssetName.ToString().ToLower());
+	const uint32 Hash = FCrc::StrCrc32(*Name.ToLower());
 	// Golden-ratio spread so kits with close names still get far apart hues
 	const float Hue = FMath::Fractional(static_cast<float>(Hash % 1024u) * 0.618034f);
 	return FLinearColor::MakeFromHSV8(static_cast<uint8>(Hue * 255.f), 210, 255);
