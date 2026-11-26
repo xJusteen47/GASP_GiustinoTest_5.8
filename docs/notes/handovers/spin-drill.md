@@ -411,3 +411,20 @@ after one checkpoint.
 
 - Headless on (Input+Combat+SpinDrill+Piggyback+Defence+Link+Parts): 980 success, 0 fail, 0 ensure. Plugin-off build (SpinDrill+Piggyback off): Succeeded;
   off suites 933/0/0. Rebuild with plugins on: Succeeded. Logs Saved/SD17 (gate.txt, headless-on.log, headless-off.log). SD-17 not needed for the gate.
+
+## SD-17 (cloud + laptop RC, 2026-11-24/25): spin turnable interface, floor screw, spin on every kit
+
+- Owner asked (thread "Aggiungere spin e drill sulla vite"): spin + drill unscrew a floor screw; answers 1 = an interface, 2 = to hand if
+  free else floor + toggle pop-and-vanish (future kinds noted in spin-drill.md 13d), 3A (6 steps), 4A (stick + A-S-D), 5 = floatier start.
+- Built (branch claude/project-thread-8k0siq): `IGSTN_SpinTurnable` + `UGSTN_SpinTurnSubsystem` (authority, from new `Combat.Event.Spin.Started`
+  and `Drill.GroundLag`, sense tag on both); `UGSTN_SpinDrillSettings::bAddSpinToEveryKit` (every kit asset gets spin + drill + bore); air spin
+  gravity 0.25, fall cap 0.4, air control 1 during the air spin; bridge plugin `GSTNSpinScrew` (`AGSTN_SpinScrew`, `AGSTN_SpinScrewPickup`,
+  `gstn.SpinScrew.Spawn [Dist] [Vanish]`, `gstn.SpinScrew.Report`).
+- Limit by design: the drill does not latch on a turnable (one dive = `DrillSteps` 3). Continuous bore = parts screw on a combat target, later.
+- Gates (laptop, worktree GASP_Giustino2_cp1verify, head 02d1ca3a after 2 compile fixes: OnReleased shadowed AActor -> OnScrewReleased;
+  interface _Implementation declarations): build OK; headless GSTNSpinDrill+GSTNHeld+GSTNCombat+GSTNInput 929/929; smoke on L_Test_Hub
+  (-game -nullrhi): Spawn ok, Report `progress=0/6 released=0`. Console: separate -ExecCmds with commas, not "; ".
+- Not done: in-game playtest (owner), PIE harness scenario for turnables, plugin-off build.
+ESITO: PARZIALE codice compilato e testato (929/929), manca il playtest dell'owner
+SUBAGENTI: 0
+COSTO: ~6 $ | 0 min desktop, ~45 min laptop | 0

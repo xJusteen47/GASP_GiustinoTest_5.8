@@ -175,6 +175,10 @@ GRAB_SEQUENCES = [
 BUG_SEQUENCES = [
     {'name': 'strong_walk', 'taps': [0], 'frames': 300, 'dummy': 95.0, 'shoot': True, 'walk': (40, 240)},
     {'name': 'inside_escape', 'taps': [], 'frames': 160, 'dummy': 10.0, 'shoot': True, 'walk': (20, 120), 'walk_dir': (0, -1, 0)},
+    # marker-smooth-1 (2026-11-24, greybox capsule in hit and launch): one ground attack (PIE_CAPTURE_BUTTON, Strong for a launch) on a dummy
+    # 95 cm ahead at PIE_CAPTURE_DUMMY_PERCENT (default 150): hitstop, hitstun, the launch and its landing, no walking after
+    {'name': 'hit_launch', 'taps': [0], 'frames': 240, 'dummy': 95.0, 'shoot': True,
+     'dummy_percent': float(os.environ.get('PIE_CAPTURE_DUMMY_PERCENT', 150.0))},
 ]
 AIR_GIVE_UP, AIR_CROUCH_RELEASE = 100, 4   # frames after the jump press / after the attack press
 # dropkick-k5 (2026-11-21): the playtest kits jump ~9 m (apex ~86 frames after the press), so trigger_h was never reached inside 100
@@ -184,6 +188,7 @@ AIR_GIVE_UP = int(os.environ.get('PIE_CAPTURE_AIR_GIVE_UP', AIR_GIVE_UP))
 # from the game camera); 'jump' = (frame, frames held) through the combat Jump button; 'crouch_tap' = frame of a Crouch tap (fast fall);
 # 'follow' = the review cameras move with the pawn at the start yaw. Select with PIE_CAPTURE_SEQUENCES (the names below), and
 # PIE_CAPTURE_VIEWS=az90,az0,game keeps fewer views (one grid per view, project rule 4)
+GB_DK_AIR = {'trigger_h': float(os.environ.get('PIE_CAPTURE_GB_DK_H', 400.0)), 'stick': True}
 MOVE_SEQUENCES = [
     # Slopes (owner 2026-11-19): with PIE_CAPTURE_PARK=Z7:1 (foot of the 15 deg hill) or Z7_top:1 (its plateau). The pawn spawns facing +X;
     # the hills rise toward -X, so (0, -1) runs uphill from the foot and (0, 1) runs downhill from the plateau
@@ -321,6 +326,33 @@ MOVE_SEQUENCES = [
      'cmds': [(0, 'yaw 0'), (0, 'gstn.Wall.Teleport -3300 -1950 120 0'), (30, 'gstn.Wall.Teleport -3300 -1950 900 0'),
               (30, 'gstn.Wall.Launch 300 0 300'), (80, 'gstn.Wall.Launch 0 900 0 1')],
      'sticks': [(30, (0, 1, 0)), (75, (0.7, 0.7, 0)), (110, (-0.7, 0.7, 0)), (190, None)]},
+    # r7_b finding: pressed rising (as dropkick_whiff) on the playtest kit's ~9 m jump, the dropkick stays airborne past its Hold Until
+    # Landed MaxAirFrames (125 sim frames) and ends by the air timeout a few frames over the floor, so no landing is ever inside the move (no
+    # self knockdown, no hop). GB_DK_AIR presses on the way DOWN at PIE_CAPTURE_GB_DK_H cm (default 400): the move lands well inside its
+    # air time. Run with PIE_CAPTURE_AIR_GIVE_UP=200 (the jump's apex is ~86 frames after the press, past the default give-up of 100)
+    # capsula-a-terra (2026-11-24): the dropkick's landing to its end on the capsule (KIT_Test_Playtest): landing, the move's hop, lying,
+    # get-up. 'after_land' = [(frames after the landing, button name or None, stick or None, frames the stick is held)]: the landing is the
+    # first frame after the attack press whose z stops falling within 30 cm of the standing height (logged); the downed roll needs Dodge
+    # (Movement.Dodge) + stick, a press before the body is free is carried to its first free frame (GSTN_TumbleLanding AfterClocks).
+    # Stick (0, 1) = away from the camera = the dropkick's facing (roll forward); (0, -1) against the facing = roll back
+    {'name': 'gb_dk_ground', 'taps': [], 'frames': 300, 'dummy': None, 'shoot': True, 'follow': True,
+     'air': GB_DK_AIR},
+    {'name': 'gb_dk_roll_fwd', 'taps': [], 'frames': 280, 'dummy': None, 'shoot': True, 'follow': True,
+     'air': GB_DK_AIR,
+     'after_land': [(int(os.environ.get('PIE_CAPTURE_ROLL_AT', 40)), 'Dodge', (0, 1, 0), 20)]},
+    {'name': 'gb_dk_roll_back', 'taps': [], 'frames': 280, 'dummy': None, 'shoot': True, 'follow': True,
+     'air': GB_DK_AIR,
+     'after_land': [(int(os.environ.get('PIE_CAPTURE_ROLL_AT', 40)), 'Dodge', (0, -1, 0), 20)]},
+    # a victim downed by a hard hit: the dropkick on a dummy at a high percent (server write, test only), the host walks after it
+    {'name': 'gb_dk_victim', 'taps': [], 'frames': 300, 'dummy': float(os.environ.get('PIE_CAPTURE_DROPKICK_DIST', 275.0)), 'shoot': True,
+     'follow': True, 'air': GB_DK_AIR,
+     'dummy_percent': float(os.environ.get('PIE_CAPTURE_DUMMY_PERCENT', 180.0))},
+    # the same, then the host walks after the dummy (r7_a: it lands ~21 m ahead, 1.4 s after the hit, off the following cameras) and stops
+    # short of it, so the side cameras frame the downed victim ('walk' from the attack press: start, frames held; PIE_CAPTURE_VICTIM_WALK)
+    {'name': 'gb_dk_victim_near', 'taps': [], 'frames': 560, 'dummy': float(os.environ.get('PIE_CAPTURE_DROPKICK_DIST', 275.0)), 'shoot': True,
+     'follow': True, 'air': {'rise_h': 150.0, 'stick': True, 'press_delay': 5},
+     'dummy_percent': float(os.environ.get('PIE_CAPTURE_DUMMY_PERCENT', 180.0)),
+     'walk': tuple(int(v) for v in os.environ.get('PIE_CAPTURE_VICTIM_WALK', '140,240').split(','))},
 ]
 if os.environ.get('PIE_CAPTURE_VIEWS'):
     VIEWS = [v for v in VIEWS if v[0] in os.environ['PIE_CAPTURE_VIEWS'].split(',')]
@@ -521,6 +553,11 @@ def _make_lights():
 # capture compared to a new one must use the same follow: it is in the capture chain). The rows keep every camera ('cams');
 # capture_move.camera_jumps warns about a camera step that differs from the previous one by more than CAM_JUMP_CM after the capture.
 CAM_FOLLOW = os.environ.get('PIE_CAPTURE_CAM_FOLLOW', 'mesh' if FAST else 'actor')
+# capsula-a-terra round 8: a follow camera that rises with the pawn hides a small hop (the floor moves, the body stays still in the
+# picture). PIE_CAPTURE_CAM_LOCK_Z=<z> (the standing actor z on the floor, 88 on the test map) holds the follow height at z while the
+# pawn is within PIE_CAPTURE_CAM_LOCK_BAND cm above it (default 60): a fall still follows, everything near the floor is seen against it
+CAM_LOCK_Z = float(os.environ['PIE_CAPTURE_CAM_LOCK_Z']) if os.environ.get('PIE_CAPTURE_CAM_LOCK_Z') else None
+CAM_LOCK_BAND = float(os.environ.get('PIE_CAPTURE_CAM_LOCK_BAND', 60.0))
 
 
 def _follow_point(pawn, reset=False):
@@ -545,6 +582,8 @@ def _place_cameras(follow=False):
     if follow:
         yaw = st.get('cam_yaw', yaw)
         centre = _follow_point(pawn)
+        if CAM_LOCK_Z is not None and centre.z < CAM_LOCK_Z + CAM_LOCK_BAND:
+            centre = unreal.Vector(centre.x, centre.y, CAM_LOCK_Z)
     else:
         st['cam_yaw'] = yaw
         _follow_point(pawn, reset=True)
@@ -1068,7 +1107,7 @@ def _tick(_dt):
                 _console('gstn.Pushbox.Log 1')
             st.update(shots=0, host_proj=0)
             st.update(seq_t0=now)
-            st.update(phase='seq_run', frame=0, mask=g.button_mask(BUTTON), crouch=g.button_mask('Crouch'), jumped=None, fired=None, prev_z=None)
+            st.update(phase='seq_run', frame=0, mask=g.button_mask(BUTTON), crouch=g.button_mask('Crouch'), jumped=None, fired=None, prev_z=None, landed=None, land_prev_z=None)
         elif phase == 'seq_run':
             seq, frame = SEQUENCES[st['seq']], st['frame']
             _tp = time.perf_counter()
@@ -1186,6 +1225,23 @@ def _tick(_dt):
                     _log(f'{seq["name"]}: {button} tap{" + stick " + str(stick) if stick else ""} on v{frame}')
                 elif stick is not None and frame == PRE + at + 2:
                     g.release(0, 'move')
+            if seq.get('after_land') and air is not None and st['fired'] is not None:   # capsula-a-terra: presses timed from the landing
+                z = _pawn().get_actor_location().z
+                if st.get('landed') is None and frame > st['fired'] + 5 and st.get('land_prev_z') is not None                         and z >= st['land_prev_z'] - 0.5 and z - st.get('ground_z', z) < 30.0:
+                    st['landed'] = frame
+                    _log(f'{seq["name"]}: landed on v{frame} (z {z:.1f})')
+                st['land_prev_z'] = z
+                for at, button, stick, held in seq['after_land']:
+                    if st.get('landed') is None:
+                        break
+                    if frame == st['landed'] + at:
+                        if stick is not None:
+                            g.hold(0, 'move', stick)
+                        if button:
+                            g.combat_tap(0, g.button_mask(button))
+                        _log(f'{seq["name"]}: {button} tap + stick {stick} on v{frame} (landing + {at})')
+                    elif stick is not None and frame == st['landed'] + at + held:
+                        g.release(0, 'move')
             for at, value in seq.get('sticks', []):                 # movement QA clips
                 if frame == PRE + at:
                     if value is None:

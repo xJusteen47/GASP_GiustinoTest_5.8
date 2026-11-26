@@ -34,8 +34,10 @@ public:
 	virtual bool ReadState(const AActor* Actor, FGSTN_DepthSubjectState& OutState) const override;
 
 	/**
-	 * The root transform the player sees: the visual's world transform with Mover's base visual transform taken off. Falls back to the
-	 * simulated root when there is no separate visual, smoothing is not VisualComponentOffset or bFollowPresentedMesh is off.
+	 * The root transform the player sees: Mover's own smoothed root (UMoverComponent::GetPresentedTransform, free of the cosmetic offsets other
+	 * code adds to the mesh after the smoothing); without one written this frame, the visual's world transform with Mover's base visual
+	 * transform taken off. Falls back to the simulated root when there is no separate visual, smoothing is not VisualComponentOffset or
+	 * bFollowPresentedMesh is off.
 	 */
 	FTransform GetPresentedRoot(const UMoverComponent& Mover) const;
 

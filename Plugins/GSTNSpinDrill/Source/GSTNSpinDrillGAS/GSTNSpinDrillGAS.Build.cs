@@ -16,6 +16,7 @@ public class GSTNSpinDrillGAS : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
+			"DeveloperSettings",
 			"GameplayTags",
 			"GameplayAbilities",
 			"AbilitySystemSimulation",

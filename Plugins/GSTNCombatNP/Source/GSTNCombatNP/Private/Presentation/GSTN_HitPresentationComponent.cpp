@@ -294,7 +294,10 @@ void UGSTN_HitPresentationComponent::EndEffect(FEffect& Effect)
 	}
 	if (USkeletalMeshComponent* Mesh = Effect.VictimMesh.Get(); Mesh && !Effect.AppliedOffset.IsZero())
 	{
-		Mesh->AddWorldOffset(-Effect.AppliedOffset);
+		if (Mesh->GetComponentLocation().Equals(Effect.WrittenLocation, 0.01))
+		{
+			Mesh->AddWorldOffset(-Effect.AppliedOffset);
+		}
 		Effect.AppliedOffset = FVector::ZeroVector;
 	}
 }
@@ -375,7 +378,7 @@ void UGSTN_HitPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 			const double T = Now - Effect.ReactionStart;
 			if (!Mesh || T >= ReactionSeconds)
 			{
-				if (Mesh && !Effect.AppliedOffset.IsZero())
+				if (Mesh && !Effect.AppliedOffset.IsZero() && Mesh->GetComponentLocation().Equals(Effect.WrittenLocation, 0.01))
 				{
 					Mesh->AddWorldOffset(-Effect.AppliedOffset);
 				}
@@ -388,7 +391,9 @@ void UGSTN_HitPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 				if (T > 0.0)
 				{
 					// The velocity decays linearly over the window, and the whole offset fades out over its second half: the authoritative motion
-					// takes the mesh over. It moves by deltas so it composes with whatever else positions the mesh
+					// takes the mesh over. It moves by deltas so it composes with whatever else positions the mesh, but only while nothing placed the
+					// mesh again: Mover re-places it every frame (smoothing, interpolated proxy finalize), and adding only the delta to a re-placed
+					// mesh left the per-frame step of the offset instead of the offset, a jitter that reversed in the fade (2026-11-24)
 					const double Duration = FMath::Max<double>(ReactionSeconds, UE_SMALL_NUMBER);
 					const double Travel = T - T * T / (2.0 * Duration);
 					const double Fade = T < Duration * 0.5 ? 1.0 : 1.0 - (T - Duration * 0.5) / (Duration * 0.5);
@@ -397,8 +402,10 @@ void UGSTN_HitPresentationComponent::TickComponent(float DeltaTime, ELevelTick T
 					{
 						Offset = Offset.GetSafeNormal() * MaxReactionOffset;
 					}
-					Mesh->AddWorldOffset(Offset - Effect.AppliedOffset);
+					const bool bStillOurs = !Effect.AppliedOffset.IsZero() && Mesh->GetComponentLocation().Equals(Effect.WrittenLocation, 0.01);
+					Mesh->AddWorldOffset(bStillOurs ? Offset - Effect.AppliedOffset : Offset);
 					Effect.AppliedOffset = Offset;
+					Effect.WrittenLocation = Mesh->GetComponentLocation();
 				}
 			}
 		}

@@ -151,7 +151,7 @@ In gioco: cosa sa fare un personaggio. Un kit lega comandi ad abilità; ogni abi
 In gioco: afferrare un nemico, colpirlo (pummel), lanciarlo; caricare un alleato in spalla; portare oggetti.
 - GSTNLink (125 test, `GSTNLink.*`): tipi di link `GSTNLinkCore/Public/GSTN_LinkTypeDefinition.h`, regole presa `GSTN_GrabRules.h`, lanci `GSTNLinkNP/Public/Moves/GSTN_LinkThrowMoves.h` + `Sim/GSTN_LinkThrow.h`, mash `Sim/GSTN_LinkMash.h`, chi è preso resta fermo `Movement/GSTN_LinkedMovementMode.h`, lanci dal kit `Input/GSTN_LinkSlots.h` (`ApplyKitThrows`).
 - Oggi i lanci sono Su/Avanti/Indietro/Giù da stick, non N/F/Cr/Cr.F: la nuova presa va costruita **sopra** questi pezzi.
-- Cavalcata: GSTNPiggyback. Oggetti tenuti e lanciati: GSTNHeld (+ GSTNProjectile). Trivella: GSTNSpinDrill. Doc `combat-m6-defence-links.md`, `combat-m7-piggyback.md`, `combat-m10-held-objects.md`.
+- Cavalcata: GSTNPiggyback. Oggetti tenuti e lanciati: GSTNHeld (+ GSTNProjectile). Trivella e spin: GSTNSpinDrill (interfaccia `GSTN Spin Turnable` per gli oggetti di livello girati dallo spin); vite a terra: GSTNSpinScrew. Doc `combat-m6-defence-links.md`, `combat-m7-piggyback.md`, `combat-m10-held-objects.md`.
 
 ### 5.7 Difesa e parti distruttibili · OK (SPENTI di default)
 - GSTNDefence: scudo, parry, tech, DI/SDI (83 test). README e `combat-m6-defence-links.md`.
@@ -176,6 +176,7 @@ In gioco: tasti e stick diventano comandi, con buffer, priorità e blocchi.
 
 ### 5.12 Presentazione: VFX, suoni, vibrazione · OK (superfici/vibrazione SCRITTO)
 - `Plugins/GSTNPresentation`: evento (`Presentation.Event.*`) → Niagara/suono/scossa camera, tabella `UGSTN_PresentationTable`. Hitstop e colpi visivi: `NP/Presentation/GSTN_HitPresentation*.h`.
+- **Posizione presentata (punto unico, 2026-11-24, SCRITTO):** tutto ciò che è estetico e deve seguire il personaggio disegnato legge `UMoverComponent::GetPresentedTransform()` / `GetPresentedVelocity()` (radice e velocità interpolate dallo smoothing di Mover, senza scosse di hitstop o offset cosmetici della mesh; BlueprintPure). Lo usano il marker di profondità (`GSTNDepthMarkerMover`), le forme di debug (`gstn.Combat.Debug.FollowMesh`) e la capsula greybox. Mai dalla simulazione.
 - Passi per superficie e vibrazione pad (`GSTN_SurfaceFeedbackComponent.h`, `gstn.Audio.*`, `gstn.Haptics.*`): SCRITTO (`docs/notes/handovers/surface-feedback-1.md`). Rendering: `gstn.Render.Profile 0-4` (`Private/Rendering/GSTN_RenderProfile.cpp`).
 
 ### 5.13 Cosmetica e skin · OK la base, il resto è ricerca

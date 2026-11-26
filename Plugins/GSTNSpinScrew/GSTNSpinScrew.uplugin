@@ -1,0 +1,35 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1",
+	"FriendlyName": "GSTN Spin Screw",
+	"Description": "A screw on the floor that the spin and the drill dive unscrew (a GSTN Spin Turnable). Unscrewed, it goes into the turner's hand as a held object when the hands are free, else it rests on the floor; or it pops out and vanishes. Bridge between GSTNSpinDrill and GSTNHeld: neither names the other.",
+	"Category": "Gameplay",
+	"CreatedBy": "xJusteen47",
+	"CreatedByURL": "",
+	"DocsURL": "README.md",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EnabledByDefault": false,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GSTNSpinScrew",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "GSTNSpinDrill",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNHeld",
+			"Enabled": true
+		}
+	]
+}
