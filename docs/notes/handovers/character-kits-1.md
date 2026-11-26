@@ -30,6 +30,13 @@ checkout/stash there (owner's VFX work). Order: setup_run_stage_steps.py from cl
 STEPS_ANIM_SET=0), then setup_character_kits.py, then PIE side videos of the 3 kits + Playtest, then commit the 6 .uasset from a
 separate worktree of this branch. Stopped by the network before or during the scripts: see the RC report in the thread.
 
-ESITO: PARZIALE script pronto, non eseguito sul fisso (coda del fisso)
+## Desktop run (2026-11-25/26, commit 1899bbb2)
+Kits and profiles made in GASP_Giustino2 from the owner's Default (real values: stage 1 600/2000 180 f, stage 2 610/1400 94 f, stage 3
+850/1200, stamp 16 f x0.10). Owner kept Voyager stage 1 at 500 (card B). PIE: Voyager 600 cm/s at 0.62 s vs 0.74-0.78 s, stage 3 at 2.4 s
+vs 5.1 s (docs/notes/reviews/character-kits-1/README.md). Voyager collar pink close to Playtest's.
+NOT done: setup_run_stage_steps.py on the Default/BirdKnight/FlameFury: the desktop agent's permission check blocks it even with the owner's
+typed OK; command for the owner is in the thread. Backup: GASP_Giustino2/Saved/Backup/DA_Locomotion_Default_owner_2026-11-25.uasset.
+
+ESITO: OK kit e profili creati, provati in PIE e committati; scalini sul Default rimandati all'owner
 SUBAGENTI: 0
-COSTO: ~3 $ | 0 min desktop | 0
+COSTO: ~8 $ | ~45 min desktop | 0
