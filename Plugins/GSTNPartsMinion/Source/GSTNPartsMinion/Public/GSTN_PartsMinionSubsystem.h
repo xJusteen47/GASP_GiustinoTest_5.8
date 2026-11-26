@@ -19,6 +19,13 @@ class UGSTN_MinionDefinition;
 class UGSTN_PartSetDefinition;
 struct FGSTN_HitResolutionContext;
 struct FGSTN_HitVictimView;
+struct FGSTN_PartHitOutcome;
+
+/**
+ * Raised on the authority after a part outcome was written to a minion's row, ricochets included (the pipeline stops there with the hit
+ * still landed). An observer only: test tooling (the test cubes) and debug readouts listen; nothing in the hit flow depends on it
+ */
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FGSTN_OnMinionPartOutcome, const FGSTN_MinionHandle& /*Handle*/, const FGSTN_PartHitOutcome& /*Outcome*/, int32 /*Frame*/);
 
 /**
  * The part state of one part-bearing minion (combat-parts.md §5.5): the store row the bridge keeps per slot, 9 bytes. The same bytes
@@ -146,6 +153,9 @@ public:
 
 	/** True once the bridge is bound to the world's minion subsystem */
 	bool IsBound() const { return BoundMinions.IsValid(); }
+
+	/** Every part outcome written to a row, after the write (see FGSTN_OnMinionPartOutcome) */
+	FGSTN_OnMinionPartOutcome OnPartOutcomeApplied;
 
 private:
 	struct FResolvedType

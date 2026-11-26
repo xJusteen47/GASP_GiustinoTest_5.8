@@ -156,7 +156,7 @@ In gioco: afferrare un nemico, colpirlo (pummel), lanciarlo; caricare un alleato
 
 ### 5.7 Difesa e parti distruttibili · OK (SPENTI di default)
 - GSTNDefence: scudo, parry, tech, DI/SDI (83 test). README e `combat-m6-defence-links.md`.
-- GSTNParts (+ GSTNPartsMinion): parti del corpo che si rompono, tabella di penetrazione (165 test). `combat-parts.md`.
+- GSTNParts (+ GSTNPartsMinion): parti del corpo che si rompono, tabella di penetrazione (165 test). `combat-parts.md`. Cubi di prova fissi per durezza: `gstn.TestCubes.Spawn` (GSTNPartsMinion, `Debug/GSTN_TestCubes`).
 
 ### 5.8 Nemici, minion, piattaforme, superfici · OK
 - GSTNMinion: 40+ nemici simulati come dati (103 test, molte cvar `gstn.Minion.Bench.*`). `combat-m8-minions.md`.

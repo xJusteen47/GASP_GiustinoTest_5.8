@@ -63,6 +63,24 @@ plugin; the project enables it, so `GSTNParts.Minion.*` and the harness scenario
   `foot_r`, the bones of the bench part set); `GSTN_PARTS_PUPPET_MESH` overrides it (empty = old behaviour, the visual is then not judged) and the
   scenario checks `missingBones 0` with at least one hidden part.
 
+## Test cubes (playtest, owner 2026-11-25)
+
+Fixed cubes to attack, one per hardness, to feel the penetration rule (combat-parts.md 3.4) in a playtest. Code: `Debug/GSTN_TestCubes.{h,cpp}`
+(`UGSTN_TestCubesSubsystem`, `AGSTN_TestCubePuppet`).
+
+- `gstn.TestCubes.Spawn [Hardness=0,1,3,6,10,15] [Distance=350] [Spacing=200]` (authority: standalone, listen host, PIE server): a row of 1 m
+  cubes in front of the player, coloured green (soft) to red (hard), labelled with the hardness and the last hit (band, damage, hit and
+  ricochet counts). Replaces the cubes already there. `gstn.TestCubes.Clear`, `gstn.TestCubes.Report` (one `TestCubes hardness=..` line each).
+  Every hit also logs `TestCubes hit frame=.. hardness=.. band=.. ricochet=.. damage=..`.
+- A cube is a minion of a transient type with one unbreakable part (`Cube`, hardness N, `MainTransfer` 1) on one box hurtbox. It stays put through
+  data only: speeds 0, no brain or moves, body collision `None` (fighters walk through it, it is never pushed), part and body reaction
+  `StaggerInPlace` with `KnockbackScale` 0, health 1 000 000. The table is the parts settings' default table, else the built-in three bands,
+  copied onto the cube's set so the label names the band.
+- The hit reaches the cube through the normal minion hit flow; the label reads the new bridge observer `OnPartOutcomeApplied` (raised after
+  each part outcome, ricochets included). Nothing in the hit flow depends on it.
+- Limits: a remote client does not draw the cubes (their types are transient objects of the host). A move with penetration 0 (the default of
+  `FGSTN_PartHitData`) does 65 % on hardness 0 and ricochets on every harder cube: set the hitbox's Part Hit penetration in the timeline to see the full band.
+
 ## PERF-DEBT
 
 At 160 minions, all of a part-bearing type (sub-gate B):
