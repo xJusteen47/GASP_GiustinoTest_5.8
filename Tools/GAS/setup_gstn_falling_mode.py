@@ -1,8 +1,9 @@
 # GSTN-FALLING-MODE (owner 2026-11-25, dropkick bounce too early; owner: "extend the class", not the Mover fork): GASP's
 # /Game/Blueprints/MovementModes/BP_MovementMode_Falling (a child of Mover's UFallingMode, overrides GenerateMove for the turn) is reparented
 # onto UGSTN_FallingMode (GSTNCombatNP), which lets Mover's start-of-fall floor snap (a landing up to 40 cm above the floor, with no contact) run
-# only on the first airborne frame (walking off a step), never later (owner 2026-11-26). Its own graph and every value set on it stay. One Blueprint, shared: backup first (Saved/Backups/GAS),
-# rerun-safe (already reparented = nothing). Listed in docs/notes/gasp-divergenze.md (row 7). Back to stock: GSTN_FALLING_UNDO=1.
+# only on the first airborne frame (walking off a step), never later (owner 2026-11-26). Its own graph and every value set on it stay.
+# One Blueprint, shared: backup first (Saved/Backups/GAS), rerun-safe (already reparented = nothing). Listed in docs/notes/gasp-divergenze.md
+# (row 28). Back to stock: GSTN_FALLING_UNDO=1.
 # Editor:  import sys; sys.path.insert(0, r"<project>/Tools/GAS"); import setup_gstn_falling_mode as s; s.run()
 # Output:  Saved/DropkickBounce/setup_gstn_falling_mode.txt, at most 5 printed lines.
 import os
