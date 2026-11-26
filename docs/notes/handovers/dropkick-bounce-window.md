@@ -31,6 +31,16 @@ Riuso: Body Capsule track e modificatore, `ReadEvaluatedTimeline`, `FGSTN_Tumble
    N frame, landed) e `show collision`. Atteso: niente bounce alla fine dell'hitstop finché non c'è contatto vero, niente bounce nello startup.
 4. Giro rapido delle altre aerial (dair, fair) e del walk-off da un gradino (deve restare a terra come prima: senza hitbox è lo stock).
 
-ESITO: PARZIALE codice e script scritti, non compilato e non provato (macchine offline)
+## Fisso, 2026-11-26 00:11-00:27 UTC (_ue59)
+- Build OK (624 s), test 23/23 PASS (FallingMode, Landing, BodyCapsule). Nessuna correzione al codice.
+- Script: finestra KnockdownOnLanding aperta al frame 15 su 9 timeline (Dropkick, TB, TBK5-K8, TBR2-R4); BP_MovementMode_Falling
+  reparentato su GSTN_FallingMode (backup Saved/Backups/GAS). Commit 354c556c (BP + 9 timeline).
+- Backup asset residui di _ue59: claude/backup-ue59-2026-11-26 (4b97e9fa, i due greybox). CHT_GSTN_StockMover_PoseMatch bloccato dalla
+  guardia come file locale dell'owner: lasciato modificato su _ue59. I binari di _ue59 ora sono di questo branch: il prossimo thread ricompila.
+- Saved/AnimR2/setup_dropkick_body_capsule.txt assente ovunque: AIR_PIN dell'asset da verificare.
+- PIE NON fatto (lancio di pie_capture_move.py negato dai permessi della sessione): restano dropkick colpito vicino al suolo, a vuoto,
+  dal suolo, discesa da un gradino, log "SelfKnockdown:".
+
+ESITO: PARZIALE build OK, 23/23 test, dati applicati (354c556c); prova in gioco non fatta
 SUBAGENTI: 0
-COSTO: ~4 $ | 0 min desktop | 0 token review
+COSTO: ~6 $ | 25 min desktop | 0 token review
