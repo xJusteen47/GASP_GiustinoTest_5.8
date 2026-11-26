@@ -150,7 +150,7 @@ class Driver:
             yield 3.0
         t.net(o['lag'], o['var'], o['loss'])
         self.cmd('np.PrintReconciles 1')
-        self.cmd('gstn.Platform.Draw 1')
+        self.cmd('gstn.Platform.Debug.Draw 1')
         if o.get('log', 0):
             self.cmd(f"gstn.Wall.Log {o['log']}")
         _log(f'entry transitions pointed at WallSlidingV2: {self.set_entry_mode("WallSlidingV2")}')
