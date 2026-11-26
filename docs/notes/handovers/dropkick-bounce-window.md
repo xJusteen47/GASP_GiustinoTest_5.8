@@ -36,7 +36,8 @@ Riuso: Body Capsule track e modificatore, `ReadEvaluatedTimeline`, `FGSTN_Tumble
 - Script: finestra KnockdownOnLanding aperta al frame 15 su 9 timeline (Dropkick, TB, TBK5-K8, TBR2-R4); BP_MovementMode_Falling
   reparentato su GSTN_FallingMode (backup Saved/Backups/GAS). Commit 354c556c (BP + 9 timeline).
 - Backup asset residui di _ue59: claude/backup-ue59-2026-11-26 (4b97e9fa, i due greybox). CHT_GSTN_StockMover_PoseMatch bloccato dalla
-  guardia come file locale dell'owner: lasciato modificato su _ue59. I binari di _ue59 ora sono di questo branch: il prossimo thread ricompila.
+  guardia come file locale dell'owner: lasciato modificato su _ue59. L'owner (25/11 11:40) dice che non è suo: al prossimo turno su _ue59
+  salvarlo su claude/backup-ue59-2026-11-26 (la guardia va capita, non aggirata), non scartarlo. I binari di _ue59 ora sono di questo branch: il prossimo thread ricompila.
 - Saved/AnimR2/setup_dropkick_body_capsule.txt assente ovunque: AIR_PIN dell'asset da verificare.
 - PIE NON fatto (lancio di pie_capture_move.py negato dai permessi della sessione): restano dropkick colpito vicino al suolo, a vuoto,
   dal suolo, discesa da un gradino, log "SelfKnockdown:".
