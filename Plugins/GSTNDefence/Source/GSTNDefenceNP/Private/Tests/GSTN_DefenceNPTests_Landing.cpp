@@ -900,4 +900,52 @@ bool FGSTN_DefenceLandingWindowAtHitboxTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DefenceLandingSelfFallSpeedTest, "GSTNDefence.NP.Landing.SelfKnockdownRecordsFallSpeed", TestFlags)
+bool FGSTN_DefenceLandingSelfFallSpeedTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-26: the dropkick's bounce from the real fall. Every airborne frame in the window records the downward speed of the end of the
+	// previous frame (the landing frame's own has lost it to Mover); the landing and a closed window clear it
+	TestEqual(TEXT("falling 1234.4 cm/s"), static_cast<int32>(FGSTN_TumbleLanding::QuantizeFallSpeed(FVector(300.0, 0.0, -1234.4), FVector::UpVector)), 1234);
+	TestEqual(TEXT("rising: zero"), static_cast<int32>(FGSTN_TumbleLanding::QuantizeFallSpeed(FVector(0.0, 0.0, 500.0), FVector::UpVector)), 0);
+	TestEqual(TEXT("along another up"), static_cast<int32>(FGSTN_TumbleLanding::QuantizeFallSpeed(FVector(-700.0, 0.0, 0.0), FVector(1.0, 0.0, 0.0))), 700);
+	TestEqual(TEXT("saturates"), static_cast<int32>(FGSTN_TumbleLanding::QuantizeFallSpeed(FVector(0.0, 0.0, -1.0e6), FVector::UpVector)), 65535);
+
+	FGSTN_TimelineTrack_Tags Window;
+	Window.Tags.AddTag(GSTNDefenceTags::Move_KnockdownOnLanding);
+	FGSTN_TimelineOutput Timeline;
+	Timeline.TagWindows.Add(&Window);
+	auto Step = [&Timeline](FLandRig& Land, int32 Frame, bool bGrounded, double VerticalSpeed, const FGSTN_TimelineOutput* Output = nullptr)
+	{
+		FGSTN_CombatTickContext Context = Land.Make(Frame);
+		Context.Timeline = Output ? Output : &Timeline;
+		Context.bGrounded = bGrounded;
+		Context.Velocity = FVector(0.0, 0.0, VerticalSpeed);
+		return FGSTN_TumbleLanding::SelfKnockdown(Context, Land.Data());
+	};
+
+	FLandRig Land(false, 30);
+	Land.Out.Core.ActionState = EGSTN_ActionState::InTimeline;
+	Land.Out.Core.HitstopStartFrame = INDEX_NONE;
+	Land.Out.Core.HitstopEndFrame = INDEX_NONE;
+	Step(Land, 100, false, 400.0);
+	TestEqual(TEXT("rising: no fall recorded"), static_cast<int32>(Land.Fragment().SelfFallSpeedQ), 0);
+	Step(Land, 101, false, 0.0);
+	Step(Land, 102, false, -650.0);
+	TestEqual(TEXT("falling: recorded"), static_cast<int32>(Land.Fragment().SelfFallSpeedQ), 650);
+	Step(Land, 103, false, -820.0);
+	TestEqual(TEXT("the last airborne frame's speed"), static_cast<int32>(Land.Fragment().SelfFallSpeedQ), 820);
+	TestTrue(TEXT("landing in the window downs"), Step(Land, 104, true, 0.0));
+	TestEqual(TEXT("cleared by the landing"), static_cast<int32>(Land.Fragment().SelfFallSpeedQ), 0);
+
+	FLandRig Late(false, 30);
+	Late.Out.Core.ActionState = EGSTN_ActionState::InTimeline;
+	Step(Late, 100, false, -500.0);
+	TestEqual(TEXT("recorded"), static_cast<int32>(Late.Fragment().SelfFallSpeedQ), 500);
+	const FGSTN_TimelineOutput Closed;
+	Step(Late, 101, false, -600.0, &Closed);
+	TestEqual(TEXT("cleared when the window closes"), static_cast<int32>(Late.Fragment().SelfFallSpeedQ), 0);
+	TestTrue(TEXT("rules default: the bounce reads the real fall"), FGSTN_GroundBounceRules().bSelfKnockdownUseFallSpeed);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

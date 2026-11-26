@@ -376,8 +376,16 @@ struct GSTNDEFENCECORE_API FGSTN_GroundBounceRules
 	float HeightExponent = 1.f;
 
 	/**
-	 * The impact speed a move's own user lands with when its Combat.Move.KnockdownOnLanding window downs it (the dropkick): that landing has no
-	 * contact record, so its bounce is judged at this speed
+	 * The bounce of a move's own user downed by its Combat.Move.KnockdownOnLanding window (the dropkick) is judged at the real downward speed of
+	 * its fall on the last airborne frame (owner 2026-11-26): a short drop bounces low, a long one high, as a victim's tumble landing does. Off:
+	 * always at SelfKnockdownImpactSpeed
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce", meta = (EditCondition = "bScaleWithImpactSpeed"))
+	bool bSelfKnockdownUseFallSpeed = true;
+
+	/**
+	 * The impact speed a move's own user lands with when its Combat.Move.KnockdownOnLanding window downs it (the dropkick), when
+	 * bSelfKnockdownUseFallSpeed is off or no fall was recorded (a landing with no contact record and no downward speed)
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bScaleWithImpactSpeed"))
 	float SelfKnockdownImpactSpeed = 900.f;

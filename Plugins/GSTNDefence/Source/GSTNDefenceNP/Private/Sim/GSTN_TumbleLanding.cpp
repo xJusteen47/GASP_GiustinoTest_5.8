@@ -35,6 +35,7 @@
 #include "Simulation/GSTN_CombatTickExtension.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 #include "Timeline/GSTN_TimelinePlayer.h"
+#include "World/GSTN_StepSnapshot.h"
 #include "Simulation/GSTN_CombatVictim.h"
 
 FVector FGSTN_TumbleLanding::ReadFacing(const AActor* Owner)
@@ -438,6 +439,19 @@ const FGSTN_SelfLandingBounceTrack* FGSTN_TumbleLanding::FindSelfLandingBounce(c
 	return nullptr;
 }
 
+uint16 FGSTN_TumbleLanding::QuantizeFallSpeed(const FVector& Velocity, const FVector& Up)
+{
+	const FVector UpUnit = Up.GetSafeNormal();
+	const double Down = -Velocity.Dot(UpUnit.IsNearlyZero() ? FVector::UpVector : UpUnit);
+	return static_cast<uint16>(FMath::Clamp(FMath::FloorToInt64(Down + 0.5), int64(0), int64(MAX_uint16)));
+}
+
+FVector FGSTN_TumbleLanding::ReadOwnVelocity(const FGSTN_CombatTickContext& Context)
+{
+	const FGSTN_SnapshotEntry* Self = Context.Snapshot && Context.EntityId != INDEX_NONE ? Context.Snapshot->Find(Context.EntityId) : nullptr;
+	return Self ? Self->Velocity : Context.Velocity;
+}
+
 bool FGSTN_TumbleLanding::IsSelfKnockdownWindowOpen(const FGSTN_CombatTickContext& Context)
 {
 	if (Context.Out.Core.ActionState != EGSTN_ActionState::InTimeline || !Context.Timeline || Context.Timeline->bRecoil)
@@ -486,16 +500,20 @@ bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const 
 		if (Existing)
 		{
 			Existing->HitFlags = GSTNDefenceHitFlags::WithSelfKnockdownAirFrames(Existing->HitFlags & ~GSTNDefenceHitFlags::SelfKnockdownArmed, 0);
+			Existing->SelfFallSpeedQ = 0;
 		}
 		return false;
 	}
 	if (!bLandedOutOfMove && !Context.bGrounded)
 	{
+		FGSTN_DefenceFragment& Fragment = FGSTN_SyncFragmentList::FindOrAdd<FGSTN_DefenceFragment>(Context.Out.Fragments);
+		// The fall as it is now (end of the previous frame): the landing frame's own velocity has lost its vertical part to Mover's landing, so the
+		// bounce reads the last airborne one (owner 2026-11-26)
+		Fragment.SelfFallSpeedQ = QuantizeFallSpeed(ReadOwnVelocity(Context), Context.Up);
 		if (!bArmed)
 		{
 			// Arms after the rules' airborne frames inside the window (owner 2026-11-25: one airborne frame was enough, so a takeoff that flickered
 			// airborne or a hop of a few centimetres downed the dropkick's user at once). The count rides in the hit flags byte
-			FGSTN_DefenceFragment& Fragment = FGSTN_SyncFragmentList::FindOrAdd<FGSTN_DefenceFragment>(Context.Out.Fragments);
 			const int32 AirFrames = GSTNDefenceHitFlags::GetSelfKnockdownAirFrames(Fragment.HitFlags) + 1;
 			Fragment.HitFlags = GSTNDefenceHitFlags::WithSelfKnockdownAirFrames(Fragment.HitFlags, AirFrames);
 			if (AirFrames >= FMath::Clamp(Data.Rules->GroundBounce.SelfKnockdownMinAirFrames, 1, GSTNDefenceHitFlags::SelfKnockdownAirMax))
@@ -516,13 +534,25 @@ bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const 
 				GSTNDefenceHitFlags::GetSelfKnockdownAirFrames(Existing->HitFlags));
 			Existing->HitFlags = GSTNDefenceHitFlags::WithSelfKnockdownAirFrames(Existing->HitFlags, 0);
 		}
+		if (Existing)
+		{
+			Existing->SelfFallSpeedQ = 0;
+		}
 		return false;
 	}
 
 	// Landed inside the window: the move ends here and its user is downed as a tumble landing downs a victim. No tech evaluation (no contact, no
 	// reaction to tech out of): the way out is the owner's one, the get-up roll from the stick or the neutral get-up
 	Existing->HitFlags = GSTNDefenceHitFlags::WithSelfKnockdownAirFrames(Existing->HitFlags & ~GSTNDefenceHitFlags::SelfKnockdownArmed, 0);
-	UE_LOG(LogGSTNDefence, Log, TEXT("SelfKnockdown: frame %d landed inside the window: the move's user is downed"), Context.Frame);
+	// The bounce from the real fall (owner 2026-11-26). A landing the clock anticipated (bLandedOutOfMove) still reads a falling velocity now,
+	// so the larger of the two counts; no recorded fall (a test, a landing while rising) falls back to the rules' fixed speed
+	const FGSTN_GroundBounceRules& BounceRules = Data.Rules->GroundBounce;
+	const uint16 FallQ = FMath::Max(Existing->SelfFallSpeedQ, QuantizeFallSpeed(ReadOwnVelocity(Context), Context.Up));
+	Existing->SelfFallSpeedQ = 0;
+	const double ImpactSpeed = BounceRules.bSelfKnockdownUseFallSpeed && FallQ > 0 ? static_cast<double>(FallQ)
+		: static_cast<double>(BounceRules.SelfKnockdownImpactSpeed);
+	UE_LOG(LogGSTNDefence, Log, TEXT("SelfKnockdown: frame %d landed inside the window: the move's user is downed (fall %d cm/s, bounce judged at %.0f)"),
+		Context.Frame, static_cast<int32>(FallQ), ImpactSpeed);
 	// The move's own hop (owner 2026-11-16, the dropkick like Big Band's), read before the move is cancelled; else the rules' at their speed
 	const FGSTN_SelfLandingBounceTrack* Own = FindSelfLandingBounce(Context);
 	const bool bFlat = Own && Own->Mode == EGSTN_SelfLandingBounce::None;
@@ -530,7 +560,7 @@ bool FGSTN_TumbleLanding::SelfKnockdown(FGSTN_CombatTickContext& Context, const 
 	// The move's own bounce clip (its ability), resolved now: the move is cancelled below, so AfterClocks can no longer read its tracks
 	const UClass* OwnBounce = Own && !Own->BounceAbility.IsNull() ? Own->BounceAbility.Get() : nullptr;
 	FGSTN_CombatTimelineLogic::CancelForOtherCommand(Context.Out.Core, Context.Frame);
-	EnterDowned(Context, Data, Context.Frame, false, static_cast<double>(Data.Rules->GroundBounce.SelfKnockdownImpactSpeed), bFlat, Height);
+	EnterDowned(Context, Data, Context.Frame, false, ImpactSpeed, bFlat, Height);
 	if (OwnBounce)
 	{
 		// Pending even for a kit without a GroundBounce of its own: the move names the ability to start

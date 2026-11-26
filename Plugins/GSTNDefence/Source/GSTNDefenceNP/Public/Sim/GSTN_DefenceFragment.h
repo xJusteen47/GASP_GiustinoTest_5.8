@@ -77,7 +77,8 @@ namespace GSTNShieldFlags
  * the groups that are present, each as plain integers: shield (value 2, stamp 4, flags 1, press 4, release 4), move parry window (start 4,
  * end 4, profile 1, hurtbox mask 2), last parry 4, stuns (shield stun 4, parry recovery 4, break 4), punish (end 4, kind 1), tech (lockout 4,
  * last press 4, end 4, type 1), knockdown 4, grab immunity 4, pushback (start 4, velocity 6, frames 1), mirror (value 2, frame 4), hit flags 1 (F8),
- * pending start (frame 4, kind 1; F8, empty at the end of every tick). A shield that is only raised costs 2 + 15 bytes; everything live at once 2 + 91.
+ * pending start (frame 4, kind 1; F8, empty at the end of every tick), self fall speed 2 (only inside a Combat.Move.KnockdownOnLanding window).
+ * A shield that is only raised costs 2 + 15 bytes.
  */
 USTRUCT()
 struct GSTNDEFENCENP_API FGSTN_DefenceFragment : public FGSTN_SyncFragment
@@ -148,6 +149,13 @@ struct GSTNDEFENCENP_API FGSTN_DefenceFragment : public FGSTN_SyncFragment
 	/** The frame a decision of the victim step asks the tick extension to start something (always this frame; cleared when consumed) */
 	int32 PendingStartFrame = INDEX_NONE;
 	uint8 PendingStartKind = 0;
+
+	/**
+	 * The downward speed, whole cm/s, of the entity's own fall on its last airborne frame inside a Combat.Move.KnockdownOnLanding window (owner
+	 * 2026-11-26: the dropkick's bounce from the real fall, not a fixed speed). Written by FGSTN_TumbleLanding::SelfKnockdown on every such frame,
+	 * read on the landing (the landing frame's own velocity has its vertical part cancelled by Mover already), cleared with the air count
+	 */
+	uint16 SelfFallSpeedQ = 0;
 
 	// ---- The pushback of a blocked hit: queued by the applier at the hit's frame plus one, consumed by the tick extension on its frame
 
