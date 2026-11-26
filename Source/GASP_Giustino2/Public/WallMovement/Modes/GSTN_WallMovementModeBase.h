@@ -254,9 +254,12 @@ public:
 
 	// ---------------------------------------------------------------- Debug
 
-	/** Draws the capsule (green = on wall, red = no wall), filtered normal (cyan), capsule up (blue), velocity (yellow), probes */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wall|Debug")
-	bool bDrawDebug = false;
+	/**
+	 * Replaced by the console variable gstn.Wall.Debug.Draw (GSTN Debug Options window, off by default): a flag saved on in a Blueprint
+	 * drew the shapes in every session with no switch to turn them off (owner, 2026-11-26). Kept only so old assets load without warnings
+	 */
+	UPROPERTY(meta = (DeprecatedProperty, DeprecationMessage = "Use the console variable gstn.Wall.Debug.Draw (GSTN Debug Options window)"))
+	bool bDrawDebug_DEPRECATED = false;
 
 protected:
 	// ---------------------------------------------------------------- GenerateMove (override points)
