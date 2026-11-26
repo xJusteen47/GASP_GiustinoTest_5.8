@@ -48,6 +48,18 @@ Riuso: Body Capsule track e modificatore, `ReadEvaluatedTimeline`, `FGSTN_Tumble
   (`Mover.IsOnGround`, come lo legge il modificatore della capsula). Restano `NotWhileHitboxActive` e `Stock` come opzioni. Test
   `GSTNCombat.NP.FallingMode.SnapPolicy`. Da ricompilare e riprovare sul fisso (il BP Falling non va rilanciato: il default sta nella classe).
 
-ESITO: PARZIALE build e 23/23 test OK su 354c556c; regola dello snap generalizzata il 26/11 non compilata; prova in gioco non fatta
+## Owner 2026-11-26: "A, B"
+- A (codice, non compilato): il rimbalzo del self knockdown (dropkick) ha l'altezza dalla velocità di caduta reale invece di
+  `SelfKnockdownImpactSpeed` fisso (900). Ogni frame in aria nella finestra scrive in `FGSTN_DefenceFragment::SelfFallSpeedQ` (gruppo nuovo
+  del fragment, bit 12 della maschera, 2 byte) la velocità verso il basso di fine frame precedente (voce dello step snapshot); all'atterraggio
+  si usa quella (il frame d'atterraggio ha già la verticale azzerata da Mover). Regola `GroundBounce.bSelfKnockdownUseFallSpeed` (default on);
+  spenta o senza caduta registrata = 900 come prima. Il momento orizzontale resta zero (nessun cambio di feel non chiesto). Log
+  `SelfKnockdown: ... (fall N cm/s, bounce judged at M)`. Test `GSTNDefence.NP.Landing.SelfKnockdownRecordsFallSpeed`, Fragment 2 + 95 byte.
+- B (dati, da lanciare in editor): `Tools/GAS/setup_aerial_body_capsules.py` generalizza `setup_dair_body_capsule.py` a tutte le aerial
+  (timeline con Hold Until Landed o Landing, con montage, senza Body Capsule: dropkick e dair v9 restano i loro). Fit puro in
+  `Tools/GAS/body_capsule_fit.py` (test `python Tools/GAS/tests/test_body_capsule_fit.py`, verde qui). Rispetta setup_guard.
+  Sul fisso: prima `AERIAL_CAPSULE_DRY=1`, guardare `Saved/AnimR2/setup_aerial_body_capsules.txt`, poi `run()`; commit TL + ledger.
+
+ESITO: PARZIALE build e 23/23 test OK su 354c556c; regola dello snap (26/11), rimbalzo dalla caduta (A) e script capsule aerial (B) non compilati né lanciati; prova in gioco non fatta
 SUBAGENTI: 0
-COSTO: ~6 $ | 25 min desktop | 0 token review
+COSTO: ~8 $ | 25 min desktop | 0 token review
