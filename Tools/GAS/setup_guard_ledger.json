@@ -12,9 +12,57 @@
    "script": "seed integ-cp3 069287f7",
    "sha256": "b149891f1e38658dbde3d718a05d5731236fb9dbf9a4fa388eadc8e9b2d8bc1b"
   },
+  "/Game/GSTN/Characters/Overlord/Moves/DAir/AS_OverlordDAirV7": {
+   "script": "seed integ-cp3 069287f7",
+   "sha256": "13c45166fa81ca0f0f6ca6da8a51ac0c9ffea6aed518e43ac0de2b1fc472e125"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/DAir/AS_OverlordDAirV8": {
+   "script": "seed integ-cp3 069287f7",
+   "sha256": "ea7fc2ec306f7c1f4663ab4cd8d25839203ddc0ad60fe91c64bc92373ddd72f4"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/DAir/AS_OverlordDAirV9": {
+   "script": "seed integ-cp3 069287f7",
+   "sha256": "b3ad84b2b061de7a1ea91e8ccc92bb2c309809cf4dbb20fda55cb7b7f8d2ece5"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/DAir/TL_Overlord_DAirV7": {
+   "script": "seed integ-cp3 069287f7",
+   "sha256": "d299db211c58fb17cf918c4876a91f977e6bf032191790f3a809aa2af0e6e8d2"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/DAir/TL_Overlord_DAirV8": {
+   "script": "seed integ-cp3 069287f7",
+   "sha256": "f34908f8dea01385302a96a3d4fb461695c5b2cb1e5c2365bfa8b106a18a5723"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/DAir/TL_Overlord_DAirV9": {
+   "script": "seed integ-cp3 069287f7",
+   "sha256": "c861c1c008b37260d4e217134e839de65dda6513840ba43b2edbd37759678a78"
+  },
   "/Game/GSTN/Characters/Overlord/Moves/Dropkick/AM_OverlordDropkick": {
    "script": "seed integ-cp3 069287f7",
    "sha256": "8d7d98f45b2a7a3eceec418621422c0758b68c275ef01ea6bd3a3e02906bf296"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/Dropkick/AS_OverlordDropkick_Land": {
+   "script": "seed integ-cp3 069287f7",
+   "sha256": "c27d3e44d6d7c40b309a0807dc9400fc8841ab06f4c977826c83ec6fc3fe88d2"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/Dropkick/AS_OverlordDropkick_Loop": {
+   "script": "seed integ-cp3 069287f7",
+   "sha256": "8c063a3c328d256274c1a13321ff99c798fc6d05744dd38edf500113911b91f1"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/Dropkick/AS_OverlordDropkick_Startup": {
+   "script": "seed integ-cp3 069287f7",
+   "sha256": "6fbee0d0b091f19082cc89ffff3c6f0109a85d8d57d7cd4b61d58c78ee0f1f4c"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/Dropkick/TL_Overlord_Dropkick": {
+   "script": "setup_playtest_fixes_1117",
+   "sha256": "bed6aec346cdc6beec0b184583234df0ee69a088fbfe66478e4f65c92a1eee70"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/Dropkick/TL_Overlord_DropkickTBK7": {
+   "script": "setup_dropkick_hitboxes",
+   "sha256": "e947938555e72e56e00ac4712535f86d07e9d4383b0e48197a3ad2331c650e47"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/Dropkick/TL_Overlord_DropkickTBK8": {
+   "script": "setup_dropkick_hitboxes",
+   "sha256": "09010b68e1ad6ce86253ce77a661868b5806fc73556071afbf348224a7a5e354"
   },
   "/Game/GSTN/Characters/Overlord/Moves/Jab/AM_OverlordJab1V2": {
    "script": "seed integ-cp3 069287f7",
@@ -32,30 +80,6 @@
    "script": "seed integ-cp3 069287f7",
    "sha256": "29bf54265f65b91870312ca41badfe3eeae3df2a3b411767da70133d85638ec0"
   },
-  "/Game/GSTN/Characters/Overlord/Moves/DAir/AS_OverlordDAirV7": {
-   "script": "seed integ-cp3 069287f7",
-   "sha256": "13c45166fa81ca0f0f6ca6da8a51ac0c9ffea6aed518e43ac0de2b1fc472e125"
-  },
-  "/Game/GSTN/Characters/Overlord/Moves/DAir/AS_OverlordDAirV8": {
-   "script": "seed integ-cp3 069287f7",
-   "sha256": "ea7fc2ec306f7c1f4663ab4cd8d25839203ddc0ad60fe91c64bc92373ddd72f4"
-  },
-  "/Game/GSTN/Characters/Overlord/Moves/DAir/AS_OverlordDAirV9": {
-   "script": "seed integ-cp3 069287f7",
-   "sha256": "b3ad84b2b061de7a1ea91e8ccc92bb2c309809cf4dbb20fda55cb7b7f8d2ece5"
-  },
-  "/Game/GSTN/Characters/Overlord/Moves/Dropkick/AS_OverlordDropkick_Land": {
-   "script": "seed integ-cp3 069287f7",
-   "sha256": "c27d3e44d6d7c40b309a0807dc9400fc8841ab06f4c977826c83ec6fc3fe88d2"
-  },
-  "/Game/GSTN/Characters/Overlord/Moves/Dropkick/AS_OverlordDropkick_Loop": {
-   "script": "seed integ-cp3 069287f7",
-   "sha256": "8c063a3c328d256274c1a13321ff99c798fc6d05744dd38edf500113911b91f1"
-  },
-  "/Game/GSTN/Characters/Overlord/Moves/Dropkick/AS_OverlordDropkick_Startup": {
-   "script": "seed integ-cp3 069287f7",
-   "sha256": "6fbee0d0b091f19082cc89ffff3c6f0109a85d8d57d7cd4b61d58c78ee0f1f4c"
-  },
   "/Game/GSTN/Characters/Overlord/Moves/Jab/AS_OverlordJab1V2": {
    "script": "seed integ-cp3 069287f7",
    "sha256": "6d91f9007109f1828cf9bf268ce2bf85644fd63346de2f17696c9aac08ccd7ce"
@@ -72,30 +96,6 @@
    "script": "seed integ-cp3 069287f7",
    "sha256": "42875fb196ed2d747136acd1406576a991462da5804a94e95d7a9dc3c6f49258"
   },
-  "/Game/GSTN/Characters/Overlord/Moves/DAir/TL_Overlord_DAirV7": {
-   "script": "seed integ-cp3 069287f7",
-   "sha256": "d299db211c58fb17cf918c4876a91f977e6bf032191790f3a809aa2af0e6e8d2"
-  },
-  "/Game/GSTN/Characters/Overlord/Moves/DAir/TL_Overlord_DAirV8": {
-   "script": "seed integ-cp3 069287f7",
-   "sha256": "f34908f8dea01385302a96a3d4fb461695c5b2cb1e5c2365bfa8b106a18a5723"
-  },
-  "/Game/GSTN/Characters/Overlord/Moves/DAir/TL_Overlord_DAirV9": {
-   "script": "seed integ-cp3 069287f7",
-   "sha256": "c861c1c008b37260d4e217134e839de65dda6513840ba43b2edbd37759678a78"
-  },
-  "/Game/GSTN/Characters/Overlord/Moves/Dropkick/TL_Overlord_Dropkick": {
-   "script": "setup_playtest_fixes_1117",
-   "sha256": "bed6aec346cdc6beec0b184583234df0ee69a088fbfe66478e4f65c92a1eee70"
-  },
-  "/Game/GSTN/Characters/Overlord/Moves/Dropkick/TL_Overlord_DropkickTBK7": {
-   "script": "setup_dropkick_hitboxes",
-   "sha256": "e947938555e72e56e00ac4712535f86d07e9d4383b0e48197a3ad2331c650e47"
-  },
-  "/Game/GSTN/Characters/Overlord/Moves/Dropkick/TL_Overlord_DropkickTBK8": {
-   "script": "setup_dropkick_hitboxes",
-   "sha256": "09010b68e1ad6ce86253ce77a661868b5806fc73556071afbf348224a7a5e354"
-  },
   "/Game/GSTN/Characters/Overlord/Moves/Jab/TL_Overlord_Jab1": {
    "script": "seed integ-cp3 069287f7",
    "sha256": "3767824ab7ad97ff1279caefe68fb70b92e68228feefa05322690f168c0f7f95"
@@ -103,6 +103,22 @@
   "/Game/GSTN/Characters/Overlord/Moves/Jab/TL_Overlord_Jab2": {
    "script": "seed integ-cp3 069287f7",
    "sha256": "a757f1f99b5f099e218a15755c5f3f3a6c8ae579c12b18372cdbc5f59f4cf9cb"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/Ref/TL_Overlord_RefFSGanon": {
+   "script": "setup_overlord_ref_moves",
+   "sha256": "1d80be8fcf8b24c8a130f15f75226fad25b632ed08a4acea65975a99f5f3ae8e"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/Ref/TL_Overlord_RefNLAirGanon": {
+   "script": "setup_overlord_ref_moves",
+   "sha256": "3fef9c0b52acf2672c0c2eec04ea4576ebbbcf2b6d5924423c72459e0e745caa"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/Ref/TL_Overlord_RefNSAirIke": {
+   "script": "setup_overlord_ref_moves",
+   "sha256": "96707f69e6c412f1ed6c09dfe5bb3118e5564f63981f08cdce3efec5b09fa947"
+  },
+  "/Game/GSTN/Characters/Overlord/Moves/Ref/TL_Overlord_RefNSIke": {
+   "script": "setup_overlord_ref_moves",
+   "sha256": "ba7902e18ed56b63968fd53a9672862117c82bddf295bf39809d76802e1ee626"
   }
  },
  "version": 1
