@@ -382,7 +382,7 @@ bool FGSTN_LinkGrabSpinTrackTest::RunTest(const FString& Parameters)
 	Two.Turns = 2.f;
 	Two.SettleOvershootDeg = 15.f;
 	TestTrue(TEXT("one turn at the half of the turns"), Two.YawAt(30.f, 24, Yaw) && FMath::IsNearlyEqual(Yaw, 30.f, 0.01f));
-	TestTrue(TEXT("a quarter of a turn every 6 frames"), Two.YawAt(30.f, 6, Yaw) && FMath::IsNearlyEqual(Yaw, 75.f, 0.01f));
+	TestTrue(TEXT("a quarter of a turn every 6 frames"), Two.YawAt(30.f, 6, Yaw) && FMath::IsNearlyEqual(Yaw, 120.f, 0.01f));
 	TestTrue(TEXT("the turns close on the origin"), Two.YawAt(30.f, 48, Yaw) && FMath::IsNearlyEqual(Yaw, 30.f, 0.01f));
 	TestTrue(TEXT("mid settle: the whole overshoot, in the spin's sense"), Two.YawAt(30.f, 54, Yaw) && FMath::IsNearlyEqual(Yaw, 45.f, 0.01f));
 	TestTrue(TEXT("the settle ends where the turns did"), Two.YawAt(30.f, 60, Yaw) && FMath::IsNearlyEqual(Yaw, 30.f, 0.01f));
@@ -393,6 +393,7 @@ bool FGSTN_LinkGrabSpinTrackTest::RunTest(const FString& Parameters)
 	Two.WallHitGroup = 9;
 	Two.Validate(TEXT("bad group"), Errors);
 	TestEqual(TEXT("a wall group past 8 is refused"), Errors.Num(), 1);
+	Errors.Reset();
 	Track.Turns = 0.f;
 	Track.Validate(TEXT("no turn"), Errors);
 	TestEqual(TEXT("no turn refused"), Errors.Num(), 1);

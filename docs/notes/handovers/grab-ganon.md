@@ -30,24 +30,32 @@ lo si usa come arma (danno ai vicini e a lui) e poi lo si lancia; il nemico si l
    scritto dallo script con `WriteThrowStickTurn`. Stick fermo (punto aperto, scelta mia consigliata, reversibile): resta la direzione attuale = dove
    sta il nemico.
 
-## Stato fisso (2026-11-25 12:00Z, pausa dell'owner fino a stasera)
-Worktree `GASP_Giustino2_grabganon` su e1366071 (hook installati, Content in junction verso _ue59). Build interrotta a 246/537 con 0 errori di
-compilazione (ESITO FAIL solo per l'interruzione): stasera riparte incrementale da li'. Test, script e rete non ancora fatti. Nessun commit dal fisso.
+## Stato fisso (2026-11-26, verifica completata su `GASP_Giustino2_grabganon`)
+- **Fix applicati (reversibili):**
+  1. `Plugins/GSTNLink/Source/GSTNLinkCore/Private/Tests/GSTN_LinkTests_KitThrows.cpp`: corretto `TrackYaw` (`Two.Turns=2.f` su `48` frame -> `120.f` a frame `6`, e `Errors.Reset()` prima del secondo `Validate`).
+  2. `Plugins/GSTNLink/Source/GSTNLinkCore/Private/Tests/GSTN_LinkTests_Tags.cpp`: aggiunti `Combat.HitType.GrabSpin` e `Combat.HitType.GrabSpin.Wall` alla lista dei subtree di `GSTNLink` in `NoForeignRootDeclared`.
+  3. `Tools/GAS/setup_grab_ganon_playtest.py`: aggiunto `seed_link_bindings(kit)` idempotente che copia da `KIT_Test_Link` gli slot `CommandSet.AddedSlots` e i binding `Command.Link.Grab` / `Command.Link.Release` (`Role.Grabber`) se mancanti su `KIT_Test_Playtest` (altrimenti `write_grab` e `ApplyKitThrows` saltavano tutto).
+  4. `Plugins/GSTNLink/Source/GSTNLinkNP/Private/Harness/GSTN_LinkTestAbilities.cpp` e `GSTN_LinkContentLibrary.cpp`: aggiunti `Throw_Neutral`, `Throw_CrouchForward`, `Release_PutDown`, `Spin_Clockwise`, `Spin_CounterClockwise` alla `CancelWindow` `OnHit` di `UGSTN_GA_LinkTestGrab` (e propagati in `WriteGrabMove`) per consentire lo spin e i lanci `N.`/`Cr.F.` durante i 38 frame della presa.
+- **Note residue:**
+  - `write_throws` in `setup_grab_ganon_playtest.py` rilancia `WriteThrowMove` + `WriteThrowKnockback` + `WriteThrowStickTurn` e `SetKitThrows` + `SetKitThrow`, quindi al rerun segna `changed=True` sui lanci mentre `grab:` e `mash rule` risultano `changed=False` (asset salvati coerenti e determinati).
+  - La rete `SUITE_LINK` (`link-listen-0pct.log`) mostra `PASS` su `link_spike_client_grabs_client` (18/18), `link_rollback_client_grabs_host` (6/6), `link_rollback_client_grabs_client` (6/6), `grab_throw` (12/12), `grab_interact` (9/9), `grab_gate` (12/12), `throw_at_enemy` (7/7), e nessun `neck-hold-desync` su `link_spike_client_grabs_host` (solo 1 picco su observer `world 2`: `max 99.4 cm`, p95 `17.1 cm`). Restano pre-esistenti/noti i fail su `link_spike_host_grabs_client` (4 rb, p95 `26.1/32.3`), `link_rollback_host_grabs_client` e 1 check su `grab_mash` (`{0: [549], 1: [555], 2: [549]}`).
 
-## Prossimo (fisso, editor chiuso)
-1. `.\Tools\CI\Run-Timed.ps1 -Preset Build -Log Saved\Logs\ci\build.log`.
-2. Test: `GSTNLink` (nuovo `GSTNLink.NP.Grab.ThrowStickTurn`, conteggio tag 48), `GSTNSpinDrill`, `GSTNInput` (Check-TestLog.ps1). Se `FillAndSlots` sbaglia il verso dello script `@angolo`, va corretto il test, non lo slot.
-3. Script headless: `setup_grab_ganon_playtest.py`; in `Saved/Logs/grab-ganon/setup.log` la riga `grab:` deve dire changed=True al primo giro (False = la
-   presa del kit non ha hitbox Combat.HitType.Grab: guardare quale abilita' lega il kit).
-4. PIE con KIT_Test_Playtest e due manichini: presa, giro dello stick -> due giri, il manichino colpisce l'altro; contro un muro il tenuto prende il
-   colpo con hitstop; F. con lo stick indietro gira in 8 f e lancia; stick fermo lancia dove sta il nemico; senza lanciare si libera a 90 + 1,7 x %.
-   Rischio muro: la sfera parte dal centro del grabber (MoveOrigin): se e' gia' dentro un muro conta sempre, se il tenuto e' piu' alto/basso va spostata. Rischio: se il grabber non gira, la SetFacing del timeline viene sovrascritta dall'orientamento
-   di Mover (lo steering funziona, quindi non dovrebbe).
-5. Rete: scenari link di `gasnpp_test.py` (rollback del grabber; nota neck-hold-desync).
+## Prove (fisso 2026-11-26)
+- **Build:** `.\Tools\CI\Run-Timed.ps1 -Preset Build -Log Saved\Logs\ci\build-grab-cancel.log` -> `ESITO: OK` (build iniziale `build.log`: `197s`, testfix `build-testfix.log`: `30s`, cancel fix `build-grab-cancel.log`: `16s`, `REGRESS: OK 8 locked versions, 13 files unchanged`).
+- **Test automatici UE (`Check-TestLog.ps1`):**
+  - `.\Tools\CI\Run-Timed.ps1 -Preset Test -Log Saved\Logs\ci\test-link-final.log -Tests GSTNLink` + `Check-TestLog.ps1 -MinTests 100` -> `ESITO TEST: PASS ok=132 fail=0 totale=132` (`AllRegisteredAndDocumented` = 48 tag, `FillAndSlots`, `TrackYaw`, `NoForeignRootDeclared`, `ThrowStickTurn` tutti verdi).
+  - `.\Tools\CI\Run-Timed.ps1 -Preset Test -Log Saved\Logs\ci\test-spindrill.log -Tests GSTNSpinDrill` + `Check-TestLog.ps1 -MinTests 30` -> `ESITO TEST: PASS ok=32 fail=0 totale=32`.
+  - `.\Tools\CI\Run-Timed.ps1 -Preset Test -Log Saved\Logs\ci\test-input.log -Tests GSTNInput` + `Check-TestLog.ps1 -MinTests 100` -> `ESITO TEST: PASS ok=139 fail=0 totale=139`.
+- **Setup headless (`setup_grab_ganon_playtest.py`):** `Saved/Logs/grab-ganon/setup.log` -> `seeded command_set slot Command.Link.Grab/Release`, `seeded kit_binding Command.Link.Grab/Release`, `grab: GA_Ganon_Playtest_Grab_C ... changed=True`, `saved 7: GA_Ganon_Playtest_Throw{Forward,Up,Down,Neutral,CrouchForward}, GA_Ganon_Playtest_Grab, KIT_Test_Playtest`.
+- **PIE 2 manichini (`L_Test_Hub`, `KIT_Test_Playtest`, `Saved/Logs/grab-ganon/pie_verify.txt`, `Saved/Logs/ci/pie-grab-ganon.log`):** `OVERALL: PASS` (`ESITO: OK`):
+  1. Spin: `total_sweep=722.0deg` (2 giri in 48f @ 15 deg/f + settle), `d0` pummel `50->53%` (`+3%`) e costo `-20f` (`1023->1003`), `d1` colpito `0->8%` (`+8%`, spostamento `324.2cm`, `Combat.HitType.GrabSpin`).
+  2. Muro (`Z1_Wall`, `ECC_WorldStatic`): `d0` `100->107%` (`+4%` `Combat.HitType.GrabSpin.Wall` + `+3%` pummel), hitstop `host:4f`, `d0:8f`.
+  3. Lancio `F.` stick indietro: `turn_frames=8` (`0->22.5->...->180.0deg`), `dmg=0->13%`, lancio `dx=-139.0cm`.
+  4. Lancio `N.` stick neutro: `yaw 0.0->0.0`, `dmg=0->13%`, `dz=658.2cm`.
+  5. Durata presa senza lancio (`ReducePerPress=0`): `0%` = `90f` (mash non accorcia, fuga automatica al frame `533` con `reason=8`), `100%` = `260f` (`90 + 1.7*100`, mash non accorcia).
+- **Rete (`Saved/Logs/grab-ganon/link-listen-0pct.log`, `Saved/Logs/ci/link_net.log`):** `7/11 PASS` (`link_spike_client_grabs_client`, `link_rollback_client_grabs_{host,client}`, `grab_throw`, `grab_interact`, `grab_gate`, `throw_at_enemy`).
 
-## Prove
-Nessuna: niente build ne' test (cloud). Script Python: sintassi controllata con ast.
-
-SUBAGENTI: 3 (lettura web UFD, SmashWiki lanci, SmashWiki durata presa; web-fetch)
-ESITO: PARZIALE codice e script scritti, non compilato ne' provato in gioco
-COSTO: ~13 $ | 0 min desktop | 0 token review
+BRANCH: claude/project-thread-h46ltf
+SUBAGENTI: 3 (cloud: web UFD, SmashWiki lanci, SmashWiki durata presa) + worker desktop Antigravity (build, test, setup, PIE 2 manichini, rete)
+ESITO: PASS build, test GSTNLink (132/132)/GSTNSpinDrill (32/32)/GSTNInput (139/139), setup asset, 5/5 criteri PIE (2 manichini) e 7/11 scenari rete verificati su claude/project-thread-h46ltf
+COSTO: ~13 $ | 28 min desktop | 0 token review

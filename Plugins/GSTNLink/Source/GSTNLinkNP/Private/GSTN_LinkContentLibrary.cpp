@@ -883,6 +883,10 @@ bool UGSTN_LinkContentLibrary::WriteGrabMove(TSubclassOf<UGameplayAbility> GrabC
 			{
 				Window->StartFrame = ActiveStart;
 				Window->EndFrame = Data.TotalFrames;
+				FGameplayTagContainer Into = UGSTN_GA_LinkGrabSpin::ThrowCommands();
+				Into.AppendTags(UGSTN_GA_LinkGrabSpin::ChainCommands());
+				Into.AddTag(GSTNLinkTags::Command_Link_Pummel.GetTag());
+				Window->IntoCommands = FGameplayTagQuery::MakeQuery_MatchAnyTags(Into);
 			}
 		}
 	}

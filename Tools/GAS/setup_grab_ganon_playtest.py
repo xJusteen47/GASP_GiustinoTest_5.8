@@ -138,6 +138,62 @@ def write_grab(kit, saves):
     return changed
 
 
+def seed_link_bindings(kit):
+    """Seed missing Command.Link.Grab / Release bindings and input slots from KIT_Test_Link (idempotent)."""
+    link_kit = unreal.load_asset(gc.path('KIT_Test_Link'))
+    if not link_kit:
+        log('WARNING: KIT_Test_Link not found; cannot seed missing link bindings')
+        return False
+    changed = False
+
+    cs = kit.get_editor_property('command_set')
+    added_slots = list(cs.get_editor_property('added_slots'))
+    have_slots = {str(s.get_editor_property('inline').get_editor_property('command').get_editor_property('tag_name')) for s in added_slots}
+    src_slots = list(link_kit.get_editor_property('command_set').get_editor_property('added_slots'))
+    for cmd in ('Command.Link.Grab', 'Command.Link.Release'):
+        if cmd not in have_slots:
+            match = next((s for s in src_slots if str(s.get_editor_property('inline').get_editor_property('command').get_editor_property('tag_name')) == cmd), None)
+            if match is not None:
+                added_slots.append(match)
+                have_slots.add(cmd)
+                changed = True
+                log(f'seeded command_set slot {cmd} from KIT_Test_Link')
+    if changed:
+        cs.set_editor_property('added_slots', added_slots)
+        kit.set_editor_property('command_set', cs)
+
+    bindings = list(kit.get_editor_property('kit_bindings'))
+    src_bindings = list(link_kit.get_editor_property('kit_bindings'))
+    has_grab = any(str(b.get_editor_property('command').get_editor_property('tag_name')) == 'Command.Link.Grab' for b in bindings)
+    has_release_grabber = any(
+        str(b.get_editor_property('command').get_editor_property('tag_name')) == 'Command.Link.Release'
+        and 'Combat.Link.Role.Grabber' in b.get_editor_property('requirements').export_text()
+        for b in bindings
+    )
+    bindings_changed = False
+    if not has_grab:
+        match = next((b for b in src_bindings if str(b.get_editor_property('command').get_editor_property('tag_name')) == 'Command.Link.Grab'), None)
+        if match is not None:
+            bindings.append(match)
+            bindings_changed = True
+            log('seeded kit_binding Command.Link.Grab from KIT_Test_Link')
+    if not has_release_grabber:
+        match = next(
+            (b for b in src_bindings
+             if str(b.get_editor_property('command').get_editor_property('tag_name')) == 'Command.Link.Release'
+             and 'Combat.Link.Role.Grabber' in b.get_editor_property('requirements').export_text()),
+            None,
+        )
+        if match is not None:
+            bindings.append(match)
+            bindings_changed = True
+            log('seeded kit_binding Command.Link.Release (Role.Grabber) from KIT_Test_Link')
+    if bindings_changed:
+        kit.set_editor_property('kit_bindings', bindings)
+        changed = True
+    return changed
+
+
 def run():
     del _lines[:]
     kit = unreal.load_asset(KIT)
@@ -145,7 +201,8 @@ def run():
         log(f'ERROR: no {KIT}')
         return []
     saves = []
-    kit_changed = write_throws(kit, saves)
+    kit_changed = seed_link_bindings(kit)
+    kit_changed |= write_throws(kit, saves)
     kit_changed |= write_grab(kit, saves)
     mash = LINK.set_kit_grab_mash_rule(kit, MASH['base'], MASH['per_percent'], MASH['min'], MASH['max'], MASH['reduce_per_press'])
     log(f'mash rule {MASH} changed={mash}')
