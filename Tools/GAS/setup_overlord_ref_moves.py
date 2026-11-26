@@ -122,7 +122,15 @@ def _clip(rig, key):
     if not seq:
         factory = unreal.AnimSequenceFactory()
         factory.set_editor_property('target_skeleton', rig.skeleton)
-        seq = _tools().create_asset(name, CLIP_DIR, unreal.AnimSequence, factory)
+        # AnimSequenceFactory calls NotifyPopulated(), which locks PlatformTargetFrameRate to AnimationSettings.DefaultFrameRate (30 fps).
+        # Set it to ANIM_FPS (60) around creation so odd 60 fps lengths (e.g. N.L Aerial = 55 frames) do not resample to 30 fps with a 0.5 sub-frame.
+        anim_settings = unreal.get_default_object(unreal.AnimationSettings)
+        prev_fps = anim_settings.get_editor_property('default_frame_rate')
+        anim_settings.set_editor_property('default_frame_rate', unreal.FrameRate(int(D.ANIM_FPS), 1))
+        try:
+            seq = _tools().create_asset(name, CLIP_DIR, unreal.AnimSequence, factory)
+        finally:
+            anim_settings.set_editor_property('default_frame_rate', prev_fps)
         log(f'created {path}')
     ctrl = seq.get_editor_property('controller')
     ctrl.open_bracket(unreal.Text('greybox ref move clip'), False)
