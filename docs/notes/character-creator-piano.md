@@ -27,6 +27,9 @@ La simulazione non legge mai una mesh (hitbox cotte, hurtbox del kit) [letto]: *
 quindi non entra nello stato di rollback.
 
 ## 3. Come funziona (proposta)
+> **Owner 2026-11-27, decisione 1B**: tutta la faccia in **pezzi 3D saldati** con anelli di giunzione, poi morph. Le
+> sezioni 3.1-3.2 sotto restano come confronto; vale il paragrafo 3.2b.
+
 ### 3.1 Tre livelli, come un Mii
 1. **Forma della testa**: una testa base per personaggio (o per famiglia di corpi) con **morph target** continui
    (larghezza cranio, mascella, guance, mento).
@@ -45,6 +48,17 @@ Due modi, scelti per pezzo:
 - **Pezzo con anello di giunzione** (solo dove serve davvero, es. mento/mascella): il bordo del pezzo ha un anello di
   vertici standard (stesse posizioni, normali, UV) uguale su tutte le varianti, e i morph della testa muovono l'anello
   allo stesso modo. È il punto più costoso per l'arte: limitarlo a 1-2 zone.
+
+### 3.2b Scelta dell'owner: tutto saldato (1B)
+- La testa base è divisa in **zone fisse** (es. fronte/sopracciglia, occhi, naso, bocca, mento/mascella, orecchie, nuca);
+  ogni zona ha un **anello di giunzione standard**: stesso numero di vertici, stesse posizioni, normali e UV sul bordo, per
+  ogni variante di quella zona e per ogni personaggio che la usa.
+- I morph della testa che toccano un bordo muovono l'anello **in modo identico** su tutte le varianti (stesso delta per
+  vertice del bordo), altrimenti si apre la cucitura: il contratto F0 lo fissa e il validatore F2 lo controlla.
+- Assemblaggio: le zone si saldano in una sola mesh (vertici del bordo fusi, normali ricalcolate solo sull'anello), poi si
+  applicano i morph. Occhi e bocca sono anch'essi pezzi 3D (bulbi, palpebre, labbra) animati dalle ossa facciali (3.3).
+- Conseguenze: più lavoro d'arte (ogni variante rispetta gli anelli), F0 più grande, F1 deve provare proprio la saldatura
+  e la luce sulle cuciture, il validatore degli anelli diventa obbligatorio.
 
 ### 3.3 Rig e animazione della faccia
 La testa è un **componente skeletal mesh separato con un piccolo scheletro facciale** (mascella, palpebre, sopracciglia,
@@ -82,29 +96,29 @@ Consiglio: **una prova breve dei due candidati sulla stessa testa greybox** prim
 ## 5. Fasi, costi, rischi
 | Fase | Cosa | Dove / modello | Stima |
 |---|---|---|---|
-| **F0** | Contratto per l'arte, da scrivere insieme alle specifiche di Antigravity quando sono pronte: elenco slot, quali pezzi sono appoggiati e quali con anello, budget poligoni e texture, nomi dei morph, ossa facciali, atlante dei tratti, cosa si vede dalla camera di gioco | cloud, Opus | 2-4 $ |
-| **F1** | Prova (spike) su una testa greybox: 3 nasi, 2 orecchie, 3 occhi disegnati, 3 morph; Mutable contro assemblatore nostro. Misure: morph conservati, cuciture, tempo di assemblaggio, memoria, tempo di compilazione | fisso RC, Opus + Sonnet | 6-10 $ |
-| **F2** | Dati (pezzi, descrittore, preset) e strumento editor per i personaggi base (pannello con slider, casuale, salva preset, cuoci in mesh) | cloud + build fisso | 10-16 $ |
+| **F0** | Contratto per l'arte, da scrivere insieme alle specifiche di Antigravity quando sono pronte: zone e anelli di giunzione (vertici, normali, UV, delta dei morph sul bordo), budget poligoni e texture, nomi dei morph, ossa facciali, atlante dei tratti, cosa si vede dalla camera di gioco | cloud, Opus | 4-6 $ |
+| **F1** | Prova (spike) su una testa greybox: 3 nasi, 2 orecchie, 2 bocche saldati con anelli, 3 morph sul bordo; Mutable contro assemblatore nostro. Misure: morph conservati, cuciture chiuse e luce continua sul bordo, tempo di assemblaggio, memoria, tempo di compilazione | fisso RC, Opus + Sonnet | 6-10 $ |
+| **F2** | Dati (pezzi, descrittore, preset) e strumento editor per i personaggi base (pannello con slider, casuale, salva preset, cuoci in mesh) | cloud + build fisso, include il validatore degli anelli | 12-19 $ |
 | **F3** | Runtime e rete: descrittore nel loadout, validazione dell'host, assemblaggio asincrono con placeholder e cache, test GSTN | cloud + build + harness | 6-10 $ |
 | **F4** | Schermata giocatore per la faccia del Voyager (camera ravvicinata, slot, slider, colori, casuale, annulla) | cloud + fisso | 8-14 $ |
 | **F5** | Espressioni facciali (layer d'animazione della testa, texture degli occhi/bocca), solo nella fase estetica | fisso | 5-8 $ |
 
-Totale **~37-62 $** senza il costo dell'arte. F0 si fa appena l'artstyle è pronto; F1-F4 aspettano il via dell'owner;
+Totale **~41-67 $** (con la scelta 1B) senza il costo dell'arte. F0 si fa appena l'artstyle è pronto; F1-F4 aspettano il via dell'owner;
 F5 resta ferma fino alla fase estetica (regola 6).
 
 **Rischi**
 1. **Quanto si vede**: con la camera lontana stile Mario 3D World la faccia in gioco occupa pochi pixel. Il creator conta
    in menu, primi piani, vittoria e camera di spalla: il contratto F0 deve dire a che distanza va letta la faccia.
-2. **Costo dell'arte**: ogni pezzo moltiplica morph, LOD e espressioni. Partire con pochi pezzi per slot (3-5) e
-   preferire i tratti disegnati, che costano una texture.
-3. **Cuciture e luce** sui pezzi con anello: limitarli a 1-2 zone, provarli in F1.
+2. **Costo dell'arte**: con 1B ogni variante rispetta gli anelli e moltiplica morph, LOD e espressioni. Partire con pochi
+   pezzi per zona (3-5) e un modello/template di zona da cui l'arte parte sempre.
+3. **Cuciture e luce** su ogni bordo (rischio principale con 1B): anelli rigidi nel contratto, validatore, prova in F1.
 4. **Morph dopo il merge** e tempi di Mutable: il motivo dello spike F1.
 5. **Capelli/cappelli e skin**: compenetrazioni tra pezzi della faccia e cosmetici della testa; serve una regola di
    priorità per slot (un cappello nasconde il ciuffo).
 6. **Combinazioni brutte o offensive** nella schermata giocatore: limiti stretti e palette chiuse.
 7. **Salvataggi**: il descrittore va versionato da subito, come il loadout.
 
-## 6. Decisioni per l'owner (consigliate 1A 2A 3A)
+## 6. Decisioni per l'owner (consigliate 1A 2A 3A; **1B scelta dall'owner il 2026-11-27**)
 1. **Come si costruisce la faccia**: A tre livelli (testa con morph + pezzi 3D appoggiati + tratti disegnati); B tutto in
    pezzi 3D saldati con anelli + morph.
 2. **Tecnologia**: A spike F1 di Mutable contro assemblatore nostro, poi si sceglie (+6-10 $ subito, evita di rifare
