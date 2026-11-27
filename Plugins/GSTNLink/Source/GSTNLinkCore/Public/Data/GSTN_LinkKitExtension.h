@@ -60,7 +60,15 @@ struct GSTNLINKCORE_API FGSTN_LinkThrowSet
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Throws", meta = (MetaClass = "/Script/GameplayAbilities.GameplayAbility"))
 	FSoftClassPath CrouchForward;
 
-	/** The entry of a throw command (Command.Link.Throw.*), null for any other tag */
+	/** Command.Link.Spin.Clockwise: one turn of the grab spin (owner 2026-11-25), bound with the stick rotation when grab spins are on */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Throws", meta = (MetaClass = "/Script/GameplayAbilities.GameplayAbility"))
+	FSoftClassPath SpinClockwise;
+
+	/** Command.Link.Spin.CounterClockwise: the other sense */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Link|Throws", meta = (MetaClass = "/Script/GameplayAbilities.GameplayAbility"))
+	FSoftClassPath SpinCounterClockwise;
+
+	/** The entry of a throw command (Command.Link.Throw.*) or a grab spin (Command.Link.Spin.*), null for any other tag */
 	const FSoftClassPath* Find(const FGameplayTag& ThrowCommand) const;
 };
 

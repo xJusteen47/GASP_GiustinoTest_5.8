@@ -24,6 +24,8 @@ struct GSTNLINKCORE_API FGSTN_KitThrowFill
 	bool bPutDownWithDodge = false;
 	/** Add a second grab row: special + crouch held */
 	bool bSpecialCrouchGrab = false;
+	/** Grab spin (owner 2026-11-25): add the two Command.Link.Spin.* rows (a 360 stick rotation while grabbing) from the kit's set, else the fallback */
+	bool bGrabSpin = false;
 	/** The kit's own set (its link extension), or null */
 	const FGSTN_LinkThrowSet* KitThrows = nullptr;
 	/** The project's common set, or null */
@@ -111,6 +113,16 @@ public:
 
 	/** grab-link: the put-down slot (a dodge press). Notation mode has no pummel (owner 2026-11-23): its rows are hidden by ApplyKitThrows */
 	static FGSTN_InputSlotSpec BuildPutDownSlot();
+
+	/** Above the special grab: while holding, a stick rotation is a grab spin, never a stick throw that the rotation crosses */
+	static constexpr int32 GrabSpinPriorityOffset = RoleSlotPriorityOffset + 3;
+
+	/**
+	 * The grab spin slot of one sense (Command.Link.Spin.Clockwise / .CounterClockwise): the GSTNInput Spin condition, 360 degrees of the physical stick
+	 * within 30 frames, as GSTNSpinDrill's spin (no keyboard roll: a held partner is a pad feature for now). Falls through when unavailable, so
+	 * without a held partner the same rotation stays the ordinary spin
+	 */
+	static FGSTN_InputSlotSpec BuildGrabSpinSlot(const FGameplayTag& SpinCommand);
 
 	/** The second grab slot (owner decision 2): special pressed with crouch held, falling through without a grab target */
 	static FGSTN_InputSlotSpec BuildSpecialCrouchGrabSlot();

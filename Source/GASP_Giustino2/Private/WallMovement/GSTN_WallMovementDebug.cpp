@@ -414,6 +414,15 @@ namespace GSTNWallDebug
 			}
 		}));
 
+	static TAutoConsoleVariable<int32> CVarDraw(TEXT("gstn.Wall.Debug.Draw"), 0,
+		TEXT("Wall movement debug shapes: capsule (green = on wall, red = no wall), filtered normal, capsule up, velocity, probes. 0 = off (default), 1 = on"),
+		ECVF_Default);
+
+	bool IsDrawOn()
+	{
+		return CVarDraw.GetValueOnAnyThread() != 0;
+	}
+
 	static TAutoConsoleVariable<int32> CVarLog(TEXT("gstn.Wall.Log"), 0,
 		TEXT("Wall movement logging. 1 = one line per substep, 2 = also every probe sweep and pivot rotation"), ECVF_Cheat);
 

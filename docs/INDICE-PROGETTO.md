@@ -122,7 +122,7 @@ In gioco: corsa a stadi stile Mario, frenata (skid), salto regolabile, controllo
 - Attenzione: `Prj/GAS/GSTN_GA_Jump.h` è il **vecchio** salto ("TO BE REPLACED", riga 43); quello vero è `GSTN_GA_PlatformJump`.
 
 ### 5.3 Locomotion e animazione (ABP) · OK
-In gioco: come si muove a schermo il personaggio. Base = GASP stock (`gstn.Loco.Base 1`), poi nostri layer.
+In gioco: come si muove a schermo il personaggio. Default dal 2026-11-25: capsula greybox (`gstn.Greybox 1`) sul grafo semplice (`gstn.Loco.Base 2`); base GASP stock = `gstn.Loco.Base 1` (quella che i run del harness fissano, `Run-Timed.ps1`), poi nostri layer.
 Quattro case, ognuna con un compito:
 | Casa | Cosa contiene |
 |---|---|
@@ -150,7 +150,7 @@ In gioco: cosa sa fare un personaggio. Un kit lega comandi ad abilità; ogni abi
 ### 5.6 Presa, lanci, cavalcata, oggetti tenuti · OK (la presa "al collo" è BRANCH)
 In gioco: afferrare un nemico, colpirlo (pummel), lanciarlo; caricare un alleato in spalla; portare oggetti.
 - GSTNLink (125 test, `GSTNLink.*`): tipi di link `GSTNLinkCore/Public/GSTN_LinkTypeDefinition.h`, regole presa `GSTN_GrabRules.h`, lanci `GSTNLinkNP/Public/Moves/GSTN_LinkThrowMoves.h` + `Sim/GSTN_LinkThrow.h`, mash `Sim/GSTN_LinkMash.h`, chi è preso resta fermo `Movement/GSTN_LinkedMovementMode.h`, lanci dal kit `Input/GSTN_LinkSlots.h` (`ApplyKitThrows`).
-- Oggi i lanci sono Su/Avanti/Indietro/Giù da stick, non N/F/Cr/Cr.F: la nuova presa va costruita **sopra** questi pezzi.
+- Presa al collo e lanci N./F./Cr./Cr.F. (modalità Notation) sono in main (grab-link). Spin con il nemico in mano (`Moves/GSTN_LinkGrabSpinMoves.h`, `Data/GSTN_GrabSpinTrack.h`) e numeri di Ganondorf sul kit di playtest (`Tools/GAS/setup_grab_ganon_playtest.py`, fonti `docs/notes/grab-ganon-dati.md`): BRANCH grab-ganon, da compilare.
 - Cavalcata: GSTNPiggyback. Oggetti tenuti e lanciati: GSTNHeld (+ GSTNProjectile). Trivella e spin: GSTNSpinDrill (interfaccia `GSTN Spin Turnable` per gli oggetti di livello girati dallo spin); vite a terra: GSTNSpinScrew. Doc `combat-m6-defence-links.md`, `combat-m7-piggyback.md`, `combat-m10-held-objects.md`.
 
 ### 5.7 Difesa e parti distruttibili · OK (SPENTI di default)
@@ -173,6 +173,7 @@ In gioco: tasti e stick diventano comandi, con buffer, priorità e blocchi.
 
 ### 5.11 GAS e tag · OK
 - Abilità del progetto: derivare sempre da `Prj/GAS/GSTN_GameplayAbility.h`. Tag nativi del progetto: `Prj/GAS/GSTN_AbilityTags.h`; tag dei plugin: tabella in `Plugins/README.md`. Fork: `Plugins/GASNPP/` (`PATCHES.md`). Doc `gas-npp.md`, `modularity-and-tags.md`. Skill `add-gstn-ability`.
+- Mappa unica in italiano di tag, verbi, cosa è dentro/fuori dalla simulazione e cosa torna indietro al rollback, con il file di ogni voce: `docs/architecture/tag-verbi-simulazione-rollback.md` (25/11).
 
 ### 5.12 Presentazione: VFX, suoni, vibrazione · OK (superfici/vibrazione SCRITTO)
 - `Plugins/GSTNPresentation`: evento (`Presentation.Event.*`) → Niagara/suono/scossa camera, tabella `UGSTN_PresentationTable`. Hitstop e colpi visivi: `NP/Presentation/GSTN_HitPresentation*.h`.
@@ -188,7 +189,7 @@ In gioco: tasti e stick diventano comandi, con buffer, priorità e blocchi.
 
 ### 5.15 cvar e menu GSTN Debug · OK
 - 171 cvar `gstn.*` (conteggio `grep TAutoConsoleVariable`). Finestra: `Plugins/GSTNCombatDebug/.../Private/Window/SGSTN_DebugOptionsPanel.cpp`; mostra **da sola** ogni cvar che si chiama `gstn.<Gruppo>.Debug...`; le altre (es. `gstn.Loco.Base`) vanno scritte in console.
-- Overlay hitbox, BakeCheck, scelta del kit (`gstn.Debug.Kit`): stesso plugin, mai in Shipping.
+- Overlay hitbox, BakeCheck, scelta del kit (`gstn.Debug.Kit`): stesso plugin, mai in Shipping. La riga kit della finestra nasconde i kit dei soli test (cartelle `_Test`/`Test`; `gstn.Debug.ShowTestKits 1` li mostra).
 
 ### 5.16 Strumenti: build, test, catture, MCP
 | Cosa | Dove | Doc |

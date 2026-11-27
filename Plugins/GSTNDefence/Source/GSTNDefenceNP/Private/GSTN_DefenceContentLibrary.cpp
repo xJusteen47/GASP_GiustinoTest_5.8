@@ -393,3 +393,31 @@ FGSTN_CombatTimelineData UGSTN_DefenceContentLibrary::SetSelfLandingBounceAbilit
 	Result.Tracks.Add(TInstancedStruct<FGSTN_TimelineTrack>::Make<FGSTN_SelfLandingBounceTrack>(Track));
 	return Result;
 }
+
+FGSTN_CombatTimelineData UGSTN_DefenceContentLibrary::OpenSelfKnockdownWindowAtFirstHitbox(const FGSTN_CombatTimelineData& Data, int32& OutStartFrame)
+{
+	OutStartFrame = INDEX_NONE;
+	int32 FirstHitbox = MAX_int32;
+	for (const TInstancedStruct<FGSTN_TimelineTrack>& Instanced : Data.Tracks)
+	{
+		if (const FGSTN_TimelineTrack_Hitbox* Hitbox = GSTNTimelineTracks::AsAttackHitbox(Instanced))
+		{
+			FirstHitbox = FMath::Min(FirstHitbox, Hitbox->StartFrame);
+		}
+	}
+	FGSTN_CombatTimelineData Result = Data;
+	if (FirstHitbox == MAX_int32)
+	{
+		return Result;
+	}
+	for (TInstancedStruct<FGSTN_TimelineTrack>& Instanced : Result.Tracks)
+	{
+		FGSTN_TimelineTrack_Tags* Window = Instanced.GetMutablePtr<FGSTN_TimelineTrack_Tags>();
+		if (Window && Window->Tags.HasTagExact(GSTNDefenceTags::Move_KnockdownOnLanding) && Window->StartFrame != FirstHitbox && FirstHitbox < Window->EndFrame)
+		{
+			Window->StartFrame = FirstHitbox;
+			OutStartFrame = FirstHitbox;
+		}
+	}
+	return Result;
+}

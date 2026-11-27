@@ -268,6 +268,25 @@ public:
 	 */
 	static bool StepFacing(FGSTN_LinkFragment& Fragment, const UGSTN_LinkRegistry* Registry, const FTransform& Anchor, const FVector& StickOnPlane, bool bIdle, bool bMoveStarted);
 
+	/**
+	 * Grab spin (owner 2026-11-25): while the non-parked side of an Active Body link (the grabber) runs a move with a FGSTN_GrabSpinTrack, writes the
+	 * frame's facing as the combat core's SetFacing request (the same request the startup steering writes, executed by the ability system's pre-tick):
+	 * the move origin's yaw plus the track's turn at this timeline frame. The partner hangs in the grabber's root space, so it swings round. Skips the
+	 * timeline's first frame (the origin is stamped on it), a recoil and a parked side. Reads only sync state and content, so every machine and every
+	 * re-simulation writes the same yaw. True when a request was added
+	 */
+	static bool StepGrabSpin(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Running, const FGSTN_LinkState& Body,
+		const UGSTN_LinkRegistry* Registry);
+
+	/**
+	 * Grab spin wall slam (owner 2026-11-25): the hit group of the running move's wall slam hitbox (FGSTN_GrabSpinTrack::WallHitGroup) and whether
+	 * it must be masked this frame. Unmasked only on the turns' frames where Probe (a sphere swept from the move origin to WallProbeReach along the
+	 * frame's spin yaw, WallProbeRadius) touches; masked otherwise, so the hitbox lands on the partner the first frame it meets a wall and, one
+	 * group per move, once. Probe reads static world geometry only (the same on every machine), never a pawn. False when the move has no wall slam
+	 */
+	static bool GetGrabSpinWallMask(const FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Running,
+		TFunctionRef<bool(const FVector& Start, const FVector& End, float Radius)> Probe, uint8& OutGroup, bool& bOutMask);
+
 	/** The interact offers of an entity from its body content (FGSTN_LinkInteractProvider::MakeOffers with its kit); none without body data */
 	static void MakeOffersFor(const UGSTN_LinkRegistry& Registry, const FGSTN_LinkBodyData* Body, TArray<FGSTN_LinkInteractOffer, TInlineAllocator<4>>& OutOffers);
 

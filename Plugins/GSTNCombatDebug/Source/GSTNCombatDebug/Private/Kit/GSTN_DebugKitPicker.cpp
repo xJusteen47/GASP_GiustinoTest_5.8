@@ -44,6 +44,15 @@ namespace
 			}
 		}));
 
+	TAutoConsoleVariable<int32> CVarShowTestKits(TEXT("gstn.Debug.ShowTestKits"), 0,
+		TEXT("0 = the kit row of the GSTN Debug Options window hides the kits only the automated tests use (folders _Test / Test), 1 = lists them too. Reopen the window to refresh."), ECVF_Default);
+
+	/** Kits that only the automated tests use: under a "_Test" or "Test" folder (/Game/GSTN/_Test/Combat, plugin Content/Test) */
+	bool IsTestOnlyKitPath(const FString& PackagePath)
+	{
+		return PackagePath.Contains(TEXT("/_Test/"), ESearchCase::IgnoreCase) || PackagePath.Contains(TEXT("/Test/"), ESearchCase::IgnoreCase);
+	}
+
 	FTSTicker::FDelegateHandle TickHandle;
 	/** Controllers that already got the start kit (weak keys: a new play session has new controllers) */
 	TSet<FObjectKey> Served;
@@ -121,6 +130,29 @@ TArray<FString> FGSTN_DebugKitPicker::GetKitNames()
 		for (const FPrimaryAssetId& Id : Ids)
 		{
 			Names.Add(Id.PrimaryAssetName.ToString());
+		}
+	}
+	Names.Sort();
+	return Names;
+}
+
+TArray<FString> FGSTN_DebugKitPicker::GetMenuKitNames()
+{
+	if (CVarShowTestKits.GetValueOnGameThread() != 0)
+	{
+		return GetKitNames();
+	}
+	TArray<FString> Names;
+	if (UAssetManager* Manager = UAssetManager::GetIfInitialized())
+	{
+		TArray<FPrimaryAssetId> Ids;
+		Manager->GetPrimaryAssetIdList(GSTNCombatAssetTypes::PrimaryKit(), Ids);
+		for (const FPrimaryAssetId& Id : Ids)
+		{
+			if (!IsTestOnlyKitPath(Manager->GetPrimaryAssetPath(Id).GetLongPackageName()))
+			{
+				Names.Add(Id.PrimaryAssetName.ToString());
+			}
 		}
 	}
 	Names.Sort();

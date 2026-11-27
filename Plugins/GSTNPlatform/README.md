@@ -132,8 +132,8 @@ Every machine of a match must run the same values.
 
 - `gstn.Platform.SpawnTestFighter X Y Z [Yaw]`: spawns `AGSTN_PlatformTestFighter` on the server of the world (it replicates):
   WallSlide flank (shape 0, -X face 175 cm from its origin, 800 cm wide, z 50..550), Stand top (shape 1, z 580), on rails along its
-  local Y, ±300 cm at 300 cm/s. No mesh: use `gstn.Platform.Draw 1`.
-- `gstn.Platform.Draw 1`: draws every platform shape (green Active, orange Breaking, grey Inactive).
+  local Y, ±300 cm at 300 cm/s. No mesh: use `gstn.Platform.Debug.Draw 1`.
+- `gstn.Platform.Debug.Draw 1`: draws every platform shape (green Active, orange Breaking, grey Inactive).
 - `gstn.Platform.SetMask Mask [Inactive]`: shape mask input on every platform of every game world.
 
 ## Gameplay tags

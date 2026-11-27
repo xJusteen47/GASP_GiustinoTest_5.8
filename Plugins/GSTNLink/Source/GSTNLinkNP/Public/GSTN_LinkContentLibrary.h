@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
+#include "Moves/GSTN_LinkGrabSpinMoves.h"
 #include "GSTN_LinkContentLibrary.generated.h"
 
 class AActor;
@@ -160,6 +161,43 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
 	static bool WriteThrowKnockback(TSubclassOf<UGameplayAbility> ThrowClass, float BaseKnockback, float KnockbackGrowth);
+
+	/**
+	 * grab-ganon (owner 2026-11-25, answer 6): the throw turns toward the move stick at TurnDegPerSecond until ReleaseFrame
+	 * (UGSTN_GA_LinkThrow::ApplyStickTurn) on a Blueprint child of a common throw. Native classes are refused. True when something changed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool WriteThrowStickTurn(TSubclassOf<UGameplayAbility> ThrowClass, float TurnDegPerSecond, int32 ReleaseFrame);
+
+	/**
+	 * grab-ganon (2026-11-25): one entry of a kit's throw set by command (Command.Link.Throw.* or Command.Link.Spin.*), the others untouched (SetKitThrows
+	 * rewrites the four classic ones and clears the rest). Null clears the entry. Returns whether the kit changed; false without a link extension
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool SetKitThrow(UGSTN_PrimaryKitDefinition* Kit, FGameplayTag ThrowCommand, TSubclassOf<UGameplayAbility> Ability);
+
+	/**
+	 * grab-ganon: the kit link extension's whole mash rule but its buttons (how long a grab holds and how fast mashing frees: Smash's 90 + 1.7 x %,
+	 * 8 frames per input, never under 19). A negative value keeps that field. Returns whether it changed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool SetKitGrabMashRule(UGSTN_PrimaryKitDefinition* Kit, int32 BaseFrames, float FramesPerDamagePercent, int32 MinFrames, int32 MaxFrames,
+		int32 ReducePerPress);
+
+	/**
+	 * grab-ganon: the frame data of a grab move on a Blueprint child of a combat move (the class default object, saved with the Blueprint): TotalFrames,
+	 * FirstActionableFrame, every hitbox track whose hitboxes are grab hits (Combat.HitType.Grab) on [ActiveStart, ActiveEnd) and every OnHit cancel
+	 * window from ActiveStart to the end. Native classes are refused. Returns whether the defaults changed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool WriteGrabMove(TSubclassOf<UGameplayAbility> GrabClass, int32 TotalFrames, int32 FirstActionableFrame, int32 ActiveStart, int32 ActiveEnd);
+
+	/**
+	 * grab-ganon: one grab spin move (its turns and settle) on a Blueprint child of UGSTN_GA_LinkGrabSpin (UGSTN_GA_LinkGrabSpin::FillGrabSpinTimeline in the child's
+	 * sense) and its montage. Native classes are refused. Returns whether the defaults changed
+	 */
+	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")
+	static bool WriteGrabSpinMove(TSubclassOf<UGameplayAbility> SpinClass, const FGSTN_GrabSpinMoveSpec& Spec, UAnimMontage* Montage, float MontagePlayRate = 1.f);
 
 	/** M11 K3 content: the kit link extension's grab mash base frames (how long the grabbed side is held without mashing). Returns whether it changed */
 	UFUNCTION(BlueprintCallable, Category = "GSTN|Link|Content")

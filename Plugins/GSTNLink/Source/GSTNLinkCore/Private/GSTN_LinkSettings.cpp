@@ -42,6 +42,9 @@ namespace
 	TAutoConsoleVariable<int32> CVarGrabTurnMode(TEXT("gstn.Grab.TurnMode"), 0,
 		TEXT("Grab turn ergonomics in the Notation throw mode: 0 = project setting, 1 = instant (F. throw in every direction), 2 = with a B. throw. ")
 		TEXT("Read when a kit is compiled: takes effect at the next kit swap or Play"));
+	TAutoConsoleVariable<int32> CVarGrabSpin(TEXT("gstn.Grab.Spin"), 0,
+		TEXT("Grab spin (a 360 stick rotation while holding an enemy swings it round): 0 = project setting, 1 = on, 2 = off. ")
+		TEXT("Read when a kit is compiled: takes effect at the next kit swap or Play"));
 	TAutoConsoleVariable<float> CVarGrabWalkScale(TEXT("gstn.Grab.WalkScale"), -1.f,
 		TEXT("Walk speed multiplier while holding a grabbed enemy; < 0 = project setting (HoldWalkScale). Read when the hold starts"));
 	TAutoConsoleVariable<float> CVarGrabJumpScale(TEXT("gstn.Grab.JumpScale"), -1.f,
@@ -52,6 +55,12 @@ namespace
 		TEXT("Longest hold before the grabbed enemy frees itself, in 62.5 Hz frames (e.g. 300 = 4.8 s); 0 = the kit's mash rule. Read when the grab forms"));
 	TAutoConsoleVariable<int32> CVarGrabEscapeHitForAll(TEXT("gstn.Grab.EscapeHitForAll"), 0,
 		TEXT("1 = every grabbed entity hits its grabber when it frees itself (test on mannequins); 0 = only kits whose EscapeHit is on (PVE enemies)"));
+}
+
+bool UGSTN_LinkSettings::GetEffectiveGrabSpin() const
+{
+	const int32 Value = CVarGrabSpin.GetValueOnAnyThread();
+	return Value == 1 ? true : Value == 2 ? false : bGrabSpin;
 }
 
 EGSTN_GrabTurnErgonomics UGSTN_LinkSettings::GetEffectiveGrabTurn() const

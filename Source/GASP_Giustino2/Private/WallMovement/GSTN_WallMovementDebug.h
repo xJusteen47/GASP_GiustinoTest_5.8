@@ -56,6 +56,12 @@ namespace GSTNWallDebug
 	/** Current gstn.Wall.Log level */
 	int32 GetLogLevel();
 
+	/**
+	 * gstn.Wall.Debug.Draw: the wall modes' debug shapes (capsule, normal, up, velocity, probes). Off by default and listed in the
+	 * GSTN Debug Options window; it replaced the per-mode bDrawDebug flag, which a Blueprint could leave on for every session
+	 */
+	bool IsDrawOn();
+
 	/** Parses gstn.Wall.DebugInput */
 	EInputOverride GetInputOverride(FVector& OutValue);
 

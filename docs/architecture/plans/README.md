@@ -20,6 +20,7 @@ Blueprint/shared-asset edits that need the owner's OK, risks and parallelisation
 | [m14-pvp.md](m14-pvp.md) (2026-11-06) | M14 Versus | G0..G5 | `../game-modes.md` |
 | [m8-minion.md](m8-minion.md) (added 2026-11-03, draft) | M8 minions, 40+ enemies (`GSTNMinion`, inert seams for `GSTNPlatformMinion`/`GSTNPartsMinion`) | G0..G12 | `../combat-m8-minions.md`, `../many-enemies-replication.md` |
 | [precisione-weakpoint-2026-11-09.md](precisione-weakpoint-2026-11-09.md) (2026-11-09) | Weakpoint precision: sweep deflection, hard-surface behaviour, stab-only hurtboxes, reticle, startup steering | items 1..7 | `../combat-m4-hits.md`, `../combat-parts.md` |
+| [mmo-scalabilita.md](mmo-scalabilita.md) (2026-11-25, italiano) | Sezione MMO: CPU del server, rete, test di carico con 20-50 client finti; parte solo quando la sezione esisterà | S0..S7 | `../tag-verbi-simulazione-rollback.md`, `../combat-m8-minions.md` |
 
 Order and cumulative cost of every plan: [sequenza-2026-11-06.md](sequenza-2026-11-06.md). M10 and M7 plans are in PRs #27, #21.
 

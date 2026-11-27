@@ -12,7 +12,7 @@ bool FGSTN_LinkTagsDocumentedTest::RunTest(const FString& Parameters)
 {
 	TArray<FGameplayTag> Tags;
 	GSTNLinkTags::GetDeclaredTags(Tags);
-	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 44);
+	TestEqual(TEXT("Every native tag is listed"), Tags.Num(), 48);
 
 	const UGameplayTagsManager& Manager = UGameplayTagsManager::Get();
 	TSet<FGameplayTag> Seen;
@@ -75,6 +75,7 @@ bool FGSTN_LinkTagsNoForeignRootTest::RunTest(const FString& Parameters)
 		const bool bOwned = Name.StartsWith(TEXT("Combat.Link."))
 			|| Name == TEXT("Combat.Immunity.Grab") || Name == TEXT("Combat.Immunity.Latch") || Name == TEXT("Combat.Lock.Link")
 			|| Name == TEXT("Combat.HitType.Throw") || Name == TEXT("Combat.HitType.Pummel")
+			|| Name == TEXT("Combat.HitType.GrabSpin") || Name == TEXT("Combat.HitType.GrabSpin.Wall")
 			|| Name == TEXT("Combat.Mover.Linked") || Name == TEXT("Interact.Target.Grab")
 			|| Name.StartsWith(TEXT("Command.Link.")) || Name == TEXT("Input.Lock.Command.Link")
 			|| Name == TEXT("Combat.Event.LinkFormed") || Name == TEXT("Combat.Event.LinkBroken")

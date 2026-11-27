@@ -16,6 +16,30 @@ void UGSTN_GA_LinkThrow::BuildThrow(int32 TotalFrames, int32 FirstActionable, in
 	FillThrowTimeline(Timeline, TotalFrames, FirstActionable, ThrowFrame, Damage, BaseKnockback, AngleDeg);
 }
 
+void UGSTN_GA_LinkThrow::ApplyStickTurn(FGSTN_CombatTimelineData& InOutTimeline, float TurnDegPerSecond, int32 ReleaseFrame)
+{
+	InOutTimeline.Reverse.Frames = 0;
+	if (TurnDegPerSecond <= 0.f)
+	{
+		InOutTimeline.AimPolicy = EGSTN_AimPolicy::SnapIfAimOrTilt;
+		InOutTimeline.MaxTurnDegrees = 180.f;
+		InOutTimeline.MaxSteerDegrees = 0.f;
+		InOutTimeline.SteerRateDegPerSecond = 0.f;
+		return;
+	}
+	// The start keeps the facing (the partner's direction); the steer window turns it, rate limited, until the release
+	InOutTimeline.AimPolicy = EGSTN_AimPolicy::KeepFacing;
+	InOutTimeline.MaxSteerDegrees = 180.f;
+	InOutTimeline.SteerRateDegPerSecond = TurnDegPerSecond;
+	InOutTimeline.Steer.Source = EGSTN_SteerSource::MoveStick;
+	InOutTimeline.Steer.StartFrame = 0;
+	// A throw has no hitbox, so the default lock (the first active frame) would be 0: the release frame says it
+	InOutTimeline.Steer.EndFrame = FMath::Max(ReleaseFrame, 1);
+	InOutTimeline.Steer.bHoldFacing = true;
+	InOutTimeline.Steer.bAwayFromStick = false;
+	InOutTimeline.Steer.bShowIndicator = false;
+}
+
 void UGSTN_GA_LinkThrow::FillThrowTimeline(FGSTN_CombatTimelineData& OutTimeline, int32 TotalFrames, int32 FirstActionable, int32 ThrowFrame, float Damage,
 	float BaseKnockback, float AngleDeg)
 {

@@ -4,9 +4,12 @@
 
 #include "AbilitySystemComponent.h"
 #include "Actions/GSTN_LinkActionProvider.h"
+#include "CollisionQueryParams.h"
 #include "Components/CapsuleComponent.h"
+#include "Engine/World.h"
 #include "GSTN_LinkWatchdog.h"
 #include "Events/GSTN_SimEvent.h"
+#include "Data/GSTN_GrabSpinTrack.h"
 #include "Data/GSTN_LinkKitExtension.h"
 #include "Data/GSTN_LinkTypeDefinition.h"
 #include "GSTN_InteractMath.h"
@@ -35,6 +38,7 @@
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 #include "State/GSTN_LinkMath.h"
+#include "Timeline/GSTN_StartupSteer.h"
 #include "World/GSTN_CombatWorldSubsystem.h"
 #include "World/GSTN_StepSnapshot.h"
 
@@ -323,6 +327,68 @@ bool FGSTN_LinkTickExtension::StepNeckHold(FGSTN_LinkFragment& Fragment, const U
 	}
 	const FTransform Socket = PartnerBody ? PartnerBody->GetSocket(Parked.SocketOnPartner) : FTransform::Identity;
 	Body.SetAnchorOverride(UGSTN_LinkMath::NeckHoldAnchor(Socket, Parked.SocketOffset, Neck->GetLocation(), Pose));
+	return true;
+}
+
+bool FGSTN_LinkTickExtension::StepGrabSpin(FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Running, const FGSTN_LinkState& Body,
+	const UGSTN_LinkRegistry* Registry)
+{
+	if (Core.ActionState != EGSTN_ActionState::InTimeline || Core.TimelineStartFrame == INDEX_NONE || Core.RecoilStartFrame != INDEX_NONE
+		|| !Core.Hit.MoveOrigin.bSet || !Body.IsActive())
+	{
+		return false;
+	}
+	const FGSTN_GrabSpinTrack* Track = FGSTN_GrabSpinTrack::Find(Running);
+	const UGSTN_LinkTypeDefinition* Definition = Track && Registry ? Registry->GetDefinition(Body.LinkTypeIndex) : nullptr;
+	// Only the side that holds: a parked role never turns its partner
+	if (!Definition || Definition->GetParkedRoleIndex() == Body.Role)
+	{
+		return false;
+	}
+	const int32 TimelineFrame = Frame - Core.TimelineStartFrame - Core.TimelinePausedFrames;
+	if (TimelineFrame < 1)
+	{
+		return false;
+	}
+	// The move origin keeps the yaw at 65536 steps per turn in a uint16: the same bits as the request's int16 (as the start aim reads it)
+	const float OriginYaw = FGSTN_StartupSteer::DequantizeYaw(static_cast<int16>(Core.Hit.MoveOrigin.RotationQ[1]));
+	float Yaw = 0.f;
+	if (!Track->YawAt(OriginYaw, TimelineFrame, Yaw))
+	{
+		return false;
+	}
+	return Core.Requests.Add(EGSTN_RequestType::SetFacing, Frame, FGSTN_StartupSteer::QuantizeYaw(Yaw));
+}
+
+bool FGSTN_LinkTickExtension::GetGrabSpinWallMask(const FGSTN_CombatSyncCore& Core, int32 Frame, const FGSTN_CombatTimelineData& Running,
+	TFunctionRef<bool(const FVector& Start, const FVector& End, float Radius)> Probe, uint8& OutGroup, bool& bOutMask)
+{
+	const FGSTN_GrabSpinTrack* Track = FGSTN_GrabSpinTrack::Find(Running);
+	if (!Track || Track->WallHitGroup >= 8)
+	{
+		return false;
+	}
+	OutGroup = Track->WallHitGroup;
+	bOutMask = true;
+	if (Core.ActionState != EGSTN_ActionState::InTimeline || Core.TimelineStartFrame == INDEX_NONE || Core.RecoilStartFrame != INDEX_NONE
+		|| !Core.Hit.MoveOrigin.bSet)
+	{
+		return true;
+	}
+	const int32 TimelineFrame = Frame - Core.TimelineStartFrame - Core.TimelinePausedFrames;
+	// The move origin read field by field, as StepGrabSpin does (FGSTN_MoveOrigin's functions are not exported from the combat module)
+	const FGSTN_MoveOrigin& Origin = Core.Hit.MoveOrigin;
+	const float OriginYaw = FGSTN_StartupSteer::DequantizeYaw(static_cast<int16>(Origin.RotationQ[1]));
+	float Yaw = 0.f;
+	if (!Track->IsWallProbeFrame(TimelineFrame) || !Track->YawAt(OriginYaw, TimelineFrame, Yaw))
+	{
+		return true;
+	}
+	// The hold point at this frame's yaw: the same yaw StepGrabSpin writes, from sync state only
+	const FVector Start(Origin.PositionQ[0] / FGSTN_MoveOrigin::PositionUnitsPerCm, Origin.PositionQ[1] / FGSTN_MoveOrigin::PositionUnitsPerCm,
+		Origin.PositionQ[2] / FGSTN_MoveOrigin::PositionUnitsPerCm);
+	const FVector End = Start + FRotator(0.0, Yaw, 0.0).Vector() * static_cast<double>(Track->WallProbeReach);
+	bOutMask = !Probe(Start, End, Track->WallProbeRadius);
 	return true;
 }
 
@@ -993,6 +1059,31 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 			}
 		}
 		break;
+	case EGSTN_CombatHookPoint::BeforeCandidates:
+		// Grab spin wall slam: its hitbox only hits on the frames the held partner meets a wall
+		if (Context.Out.Core.ActionState == EGSTN_ActionState::InTimeline && Context.RunningTimeline)
+		{
+			const UWorld* World = Context.Owner ? Context.Owner->GetWorld() : nullptr;
+			const AActor* Owner = Context.Owner;
+			uint8 Group = 0;
+			bool bMask = true;
+			if (GetGrabSpinWallMask(Context.Out.Core, Context.Frame, *Context.RunningTimeline,
+				[World, Owner](const FVector& Start, const FVector& End, float Radius)
+				{
+					if (!World)
+					{
+						return false;
+					}
+					// Static world geometry only: every machine has the same, so the hit is predicted and re-simulated alike (pawns move, they never count)
+					FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNGrabSpinWall), false, Owner);
+					return World->SweepTestByObjectType(Start, End, FQuat::Identity, FCollisionObjectQueryParams(ECC_WorldStatic),
+						FCollisionShape::MakeSphere(Radius), Params);
+				}, Group, bMask) && bMask)
+			{
+				Context.HitGroupMask.Set(Group);
+			}
+		}
+		break;
 	case EGSTN_CombatHookPoint::AfterExecute:
 		if (!Context.AttackerHits.IsEmpty())
 		{
@@ -1038,6 +1129,12 @@ void FGSTN_LinkTickExtension::OnCombatHook(EGSTN_CombatHookPoint Point, FGSTN_Co
 					|| In.ActiveTimeline != Out.ActiveTimeline || In.TimelineStartFrame != Out.TimelineStartFrame);
 				StepFacing(*Fragment, UGSTN_LinkRegistry::Get(), Anchor, Context.StickOnPlane, bIdle, bMoveStarted);
 			}
+		}
+		// Grab spin: the grabber turns with its spin move, the held partner (parked in its root space) swings round with it
+		if (const FGSTN_LinkFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(Context.Out.Fragments);
+			Fragment && Fragment->Links.Body.IsActive() && Context.RunningTimeline)
+		{
+			StepGrabSpin(Context.Out.Core, Context.Frame, *Context.RunningTimeline, Fragment->Links.Body, UGSTN_LinkRegistry::Get());
 		}
 		break;
 	case EGSTN_CombatHookPoint::BeforeTagProjection:
