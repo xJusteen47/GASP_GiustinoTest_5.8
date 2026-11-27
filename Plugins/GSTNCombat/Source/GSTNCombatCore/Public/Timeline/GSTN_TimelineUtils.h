@@ -56,6 +56,23 @@ public:
 	static FGSTN_CombatTimelineData RemoveHoldUntilLandedTrack(const FGSTN_CombatTimelineData& Data);
 
 	/**
+	 * Authoring helper (as SetHoldUntilLandedTrack): a copy of Data whose Charge Hold track (FGSTN_TimelineTrack_ChargeHold) stands on HoldFrame while
+	 * HoldButton (or LayoutFunction's button) is held, at most MaxHoldFrames, scaling the damage up to FullChargeDamageScale. A track of that type
+	 * already there is replaced, so a setup script can run again. LoopSection None = the pose is paused on the hold frame
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
+	static FGSTN_CombatTimelineData SetChargeHoldTrack(const FGSTN_CombatTimelineData& Data, int32 HoldFrame, FGameplayTag HoldButton, FName LayoutFunction,
+		int32 MaxHoldFrames = 60, float FullChargeDamageScale = 1.f, bool bLockDirection = true, FName LoopSection = NAME_None);
+
+	/** The first active frame of Data (the first attack hitbox that counts as active), 0 without one. What a setup script places a Charge Hold against */
+	UFUNCTION(BlueprintPure, Category = "Combat|Timeline")
+	static int32 GetFirstActiveFrame(const FGSTN_CombatTimelineData& Data);
+
+	/** Authoring helper: a copy of Data without its Charge Hold track */
+	UFUNCTION(BlueprintCallable, Category = "Combat|Timeline|Authoring")
+	static FGSTN_CombatTimelineData RemoveChargeHoldTrack(const FGSTN_CombatTimelineData& Data);
+
+	/**
 	 * Authoring helper: a copy of Data with one more Body Capsule track (FGSTN_TimelineTrack_BodyCapsule) on [StartFrame, EndFrame). Setup scripts
 	 * call RemoveBodyCapsuleTracks first, so they can run again. Offset: the capsule centre from the mesh root, X forward, Y right, Z up
 	 */

@@ -24,6 +24,9 @@ is UnrealEditor*), <project>\Saved\Autosaves\PackageRestoreData.json is renamed 
 "restore packages?" dialog waits forever on a headless run); -KeepRestoreData skips it. <project> = the folder of the first
 .uproject in the command line, else this repo. Every editor run gets -unattended (also with -KeepThrottle, which now only keeps
 the background-throttle ini and EcoQoS as they are).
+Presentation pin (owner 2026-11-25): the game defaults are now gstn.Greybox 1 and gstn.Loco.Base 2; every editor run gets
+-ini:Engine:[ConsoleVariables] gstn.Greybox=0, gstn.Loco.Base=1 so harness captures and baselines keep the character mesh on the clean
+stock base. A driver that sets either cvar from the console still wins; -PlaytestLook (or either name in -ArgLine) skips the pin.
 Capture gate (project rule 10): -AssertFile <capture>\assert.txt (written by pie_capture_move.py) adds its first line
 ("ASSERT: OK" / "ASSERT: FAIL ...", or "ASSERT: MANCANTE") to the output; ESITO OK with an ASSERT not OK exits 3, so no review
 starts on a video that does not show the expected clip.
@@ -57,6 +60,7 @@ param(
     [string]$Engine,
     [switch]$SelfTest,
     [switch]$KeepThrottle,      # Capture: keep the editor's background throttle ini and EcoQoS (default: off, see docs/notes/speed-up.md)
+    [switch]$PlaytestLook,      # editor runs: keep the game's presentation defaults (gstn.Greybox 1, gstn.Loco.Base 2) instead of pinning the old ones
     [string]$ExtraArgs = '',    # appended to the preset's command line
     [switch]$KeepRestoreData,   # do not move Saved\Autosaves\PackageRestoreData.json aside before an editor run
     [string]$AssertFile,        # capture gate: the assert.txt to read after the run (exit 3 when ESITO OK but ASSERT not OK)
@@ -510,6 +514,16 @@ if ($preNote) { $notes += $preNote }
 if ($script:RegressNote) { $notes += $script:RegressNote }   # the Build preset's rule-13b gate ran before this point
 if ($isEditor) {
     if ($ArgLine -notmatch '(^|\s)-unattended(\s|$)') { $ArgLine = "$ArgLine -unattended" }
+    # Presentation defaults (owner 2026-11-25): the game now starts with the greybox capsule and the simple loco graph (gstn.Greybox 1,
+    # gstn.Loco.Base 2). Harness runs keep the old ones (character mesh, clean stock base) so captures, pose regressions and baselines do
+    # not change under them: ini priority, so a driver that sets either cvar from the console (PIE_CAPTURE_CVARS...) still wins.
+    if (-not $PlaytestLook -and $ArgLine -notmatch 'gstn\.Greybox|gstn\.Loco\.Base') {
+        # The engine reads one -ini:Engine: argument (the first): join an existing one instead of adding a second
+        $pin = '[ConsoleVariables]:gstn.Greybox=0,[ConsoleVariables]:gstn.Loco.Base=1'
+        if ($ArgLine -match '-ini:Engine:\S') { $ArgLine = $ArgLine -replace '(-ini:Engine:\S+)', "`$1,$pin" }
+        else { $ArgLine = "$ArgLine -ini:Engine:$pin" }
+        $notes += 'presentazione: vecchi default (gstn.Greybox 0, gstn.Loco.Base 1; -PlaytestLook per quelli nuovi)'
+    }
     if (-not $KeepRestoreData) { $n = Clear-RestoreData (Get-ProjectDir $ArgLine $Root); if ($n) { $notes += $n } }
     $pieSnap = Get-PieIni (Get-ProjectDir $ArgLine $Root)
 }

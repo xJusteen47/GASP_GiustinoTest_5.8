@@ -15,7 +15,7 @@ FText UGSTN_AnimGraphNode_GroundContactFix::GetTooltipText() const
 {
 	return LOCTEXT("Tooltip", "Post-process on the final pose: in the states of its settings asset (tags, montages, curve) keeps body, hands and "
 		"feet above the floor by lifting the pelvis and two-bone IK on the limbs, only by the depth they sink. Passes the pose through otherwise. "
-		"a.GSTN.GroundContactFix 0 turns it off, a.GSTN.GroundContactFix.Debug 1 draws it.");
+		"a.GSTN.GroundContactFix 0 turns it off, gstn.Anim.Debug.GroundContactFix 1 draws it.");
 }
 
 FString UGSTN_AnimGraphNode_GroundContactFix::GetNodeCategory() const

@@ -120,7 +120,7 @@ public:
 	virtual uint8 GetContextFingerprint() const override;
 	virtual void AppendFrameEvents(uint8 PreviousFingerprint, uint8 CurrentFingerprint, FGSTN_BufferFrameEvents& Events) const override;
 
-	/** Mover modes on the ground. Default: Walking */
+	/** Mover modes on the ground. Default: Walking and the Game Animation Sample's Sliding */
 	UPROPERTY(EditAnywhere, Category = "Context|Modes")
 	TArray<FName> GroundedModes;
 

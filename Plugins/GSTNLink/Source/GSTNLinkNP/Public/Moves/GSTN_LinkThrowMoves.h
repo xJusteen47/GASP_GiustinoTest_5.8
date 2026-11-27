@@ -28,6 +28,15 @@ public:
 	static void FillThrowTimeline(FGSTN_CombatTimelineData& OutTimeline, int32 TotalFrames, int32 FirstActionable, int32 ThrowFrame, float Damage,
 		float BaseKnockback, float AngleDeg);
 
+	/**
+	 * grab-ganon (owner 2026-11-25, answer 6: "verso lo stick, con una opportuna animazione prima"): the throw turns toward the move stick at
+	 * TurnDegPerSecond from its first frame up to ReleaseFrame (exclusive), instead of the instant start snap. The steering of the combat core
+	 * (FGSTN_SteerWindow, MoveStick source, 180 degree cone) does it, so there is no second turning logic. A neutral stick keeps the current facing,
+	 * i.e. the held partner's direction (the partner hangs in front of the grabber): the throw goes where the enemy is, also at the end of a spin.
+	 * TurnDegPerSecond 0 = back to the instant snap of the common throws
+	 */
+	static void ApplyStickTurn(FGSTN_CombatTimelineData& InOutTimeline, float TurnDegPerSecond, int32 ReleaseFrame);
+
 protected:
 	/**
 	 * Builds the move: TotalFrames long, actionable from FirstActionable, the throw key on ThrowFrame. AngleDeg is the launch's elevation

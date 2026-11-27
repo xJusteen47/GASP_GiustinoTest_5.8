@@ -150,7 +150,8 @@ public:
  * The default ground dodge (Mario long jump / Helldivers dive arc): the character is thrown into a low arc and lands standing, no prone
  * state. The feet are invincible from take-off for 40 % of the airborne frames (a hurtbox modifier track, data). Owner 2026-11-17: no startup,
  * no montage, blocking (not cancellable) until the end of the landing lag, the run's speed carried in, full air control while it flies; on landing
- * the kit's dodge landing (8 f ending lag with a belly slide, then a 10 f re-dodge lock from the landing; FGSTN_DodgeLandingKitExtension). Bind to
+ * the kit's dodge landing (FGSTN_DodgeLandingKitExtension). Owner 2026-11-25: Mario 64 dive + Odyssey long jump, a flatter faster arc (1.3x the
+ * run), the belly slides until its friction stops it, jump rolls out, else a get-up roll ends the lag; 10 f re-dodge lock from the landing. Bind to
  * Command.Defence.Dodge with a grounded requirement. Blocked in hitstun and hitstop by default.
  */
 UCLASS(Blueprintable)

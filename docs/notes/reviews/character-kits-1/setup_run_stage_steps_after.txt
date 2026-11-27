@@ -1,0 +1,28 @@
+/Game/GSTN/Data/Locomotion/DA_Locomotion_BirdKnight
+  before stage 1 max_speed=600.0 acceleration=2000.0 frames_to_next_stage=180 accel_ramp_frames=30 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  before stage 2 max_speed=610.0 acceleration=1400.0 frames_to_next_stage=94 accel_ramp_frames=30 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  before stage 3 max_speed=850.0 acceleration=1200.0 frames_to_next_stage=1 accel_ramp_frames=0 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  after stage 1 max_speed=600.0 acceleration=2000.0 frames_to_next_stage=180 accel_ramp_frames=30 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  after stage 2 max_speed=610.0 acceleration=1400.0 frames_to_next_stage=94 accel_ramp_frames=30 entry_burst_frames=3 entry_accel_multiplier=6.0 tell_frames=20 charge_frames=6
+  after stage 3 max_speed=850.0 acceleration=1200.0 frames_to_next_stage=1 accel_ramp_frames=0 entry_burst_frames=2 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+/Game/GSTN/Data/Locomotion/DA_Locomotion_Default
+  before stage 1 max_speed=600.0 acceleration=2000.0 frames_to_next_stage=180 accel_ramp_frames=30 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  before stage 2 max_speed=610.0 acceleration=1400.0 frames_to_next_stage=94 accel_ramp_frames=30 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  before stage 3 max_speed=850.0 acceleration=1200.0 frames_to_next_stage=1 accel_ramp_frames=0 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  after stage 1 max_speed=600.0 acceleration=2000.0 frames_to_next_stage=180 accel_ramp_frames=30 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  after stage 2 max_speed=610.0 acceleration=1400.0 frames_to_next_stage=94 accel_ramp_frames=30 entry_burst_frames=3 entry_accel_multiplier=6.0 tell_frames=20 charge_frames=6
+  after stage 3 max_speed=850.0 acceleration=1200.0 frames_to_next_stage=1 accel_ramp_frames=0 entry_burst_frames=2 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+/Game/GSTN/Data/Locomotion/DA_Locomotion_FlameFury
+  before stage 1 max_speed=600.0 acceleration=2000.0 frames_to_next_stage=180 accel_ramp_frames=30 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  before stage 2 max_speed=610.0 acceleration=1400.0 frames_to_next_stage=94 accel_ramp_frames=30 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  before stage 3 max_speed=850.0 acceleration=1200.0 frames_to_next_stage=1 accel_ramp_frames=0 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  after stage 1 max_speed=600.0 acceleration=2000.0 frames_to_next_stage=180 accel_ramp_frames=30 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  after stage 2 max_speed=610.0 acceleration=1400.0 frames_to_next_stage=94 accel_ramp_frames=30 entry_burst_frames=3 entry_accel_multiplier=6.0 tell_frames=20 charge_frames=6
+  after stage 3 max_speed=850.0 acceleration=1200.0 frames_to_next_stage=1 accel_ramp_frames=0 entry_burst_frames=2 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+/Game/GSTN/Data/Locomotion/DA_Locomotion_Voyager
+  before stage 1 max_speed=500.0 acceleration=2600.0 frames_to_next_stage=32 accel_ramp_frames=10 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  before stage 2 max_speed=650.0 acceleration=1700.0 frames_to_next_stage=94 accel_ramp_frames=20 entry_burst_frames=3 entry_accel_multiplier=6.0 tell_frames=0 charge_frames=0
+  before stage 3 max_speed=850.0 acceleration=1400.0 frames_to_next_stage=1 accel_ramp_frames=0 entry_burst_frames=2 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  after stage 1 max_speed=500.0 acceleration=2600.0 frames_to_next_stage=32 accel_ramp_frames=10 entry_burst_frames=0 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0
+  after stage 2 max_speed=650.0 acceleration=1700.0 frames_to_next_stage=94 accel_ramp_frames=20 entry_burst_frames=3 entry_accel_multiplier=6.0 tell_frames=20 charge_frames=6
+  after stage 3 max_speed=850.0 acceleration=1400.0 frames_to_next_stage=1 accel_ramp_frames=0 entry_burst_frames=2 entry_accel_multiplier=8.0 tell_frames=0 charge_frames=0

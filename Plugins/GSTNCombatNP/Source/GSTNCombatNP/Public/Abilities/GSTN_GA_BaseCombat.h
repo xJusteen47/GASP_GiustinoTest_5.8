@@ -323,6 +323,13 @@ private:
 	 */
 	void UpdateHoldUntilLandedMontage();
 
+	/**
+	 * Charge Hold with a loop section (FGSTN_TimelineTrack_ChargeHold::LoopSection): while the combat tick stands the timeline on the hold frame the
+	 * montage plays the section in a loop; on the tick after the hold frame it goes back to the hold frame's time, so the startup plays on from the
+	 * pose it stopped in. Before the montage ticks. Without a loop section the combat model pauses the montage instead and this does nothing
+	 */
+	void UpdateChargeHoldMontage();
+
 	/** Move events are simulation events: none while the ability system restores a frame */
 	bool CanRaiseMoveEvents() const;
 

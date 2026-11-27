@@ -2,7 +2,7 @@
   "ue59_lock_path": "C:\\Users\\jacop\\Documents\\Unreal Projects\\GASP_Giustino2_ue59\\_ue59\\IN-USO.txt",
   "owner_local_patterns": [
     "(^|/)DA_Locomotion_Default\\.uasset$",
-    "(^|/)CHT_[^/]*_PoseMatch\\.uasset$",
+    "(^|/)CHT_(?!GSTN_StockMover_PoseMatch\\.uasset$)[^/]*_PoseMatch\\.uasset$",
     "^Saved/Config/WindowsEditor/EditorPerProjectUserSettings\\.ini$",
     "^Mixamo(/|$)"
   ],

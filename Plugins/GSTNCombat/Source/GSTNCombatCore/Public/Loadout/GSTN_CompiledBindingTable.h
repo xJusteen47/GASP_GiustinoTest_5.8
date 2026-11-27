@@ -7,6 +7,7 @@
 #include "Input/GSTN_CommandBindings.h"
 #include "Input/GSTN_InputPattern.h"
 #include "Input/GSTN_InputSlot.h"
+#include "Input/GSTN_MovementSlots.h"
 #include "Kits/GSTN_CommandSet.h"
 #include "Loadout/GSTN_LoadoutData.h"
 #include "UObject/SoftObjectPath.h"
@@ -109,6 +110,9 @@ struct GSTNCOMBATCORE_API FGSTN_CompileInput
 
 	/** Stamped on the table; the loadout component increments it per applied loadout */
 	int32 Revision = 0;
+
+	/** How the dodge is entered (owner 2026-11-25). Unset = UGSTN_CombatSettings::DodgeInput, the same config on every machine; tests set it */
+	TOptional<EGSTN_DodgeInputMethod> DodgeInputOverride;
 
 	/**
 	 * Whether the ability class is a timeline ability (it then enters the timeline registry). The answer needs the class, which

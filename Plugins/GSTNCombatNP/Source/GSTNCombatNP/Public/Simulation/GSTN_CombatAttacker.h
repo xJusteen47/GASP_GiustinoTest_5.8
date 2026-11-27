@@ -67,6 +67,9 @@ struct FGSTN_AttackerTickInput
 	/** The groups the "before candidates" extension point masks this frame */
 	FGSTN_HitGroupMask GroupMask;
 
+	/** Multiplies the damage of every hit of this tick: the charge of a Charge Hold (FGSTN_ChargeHold::GetDamageScale), 1 for every other move */
+	float DamageScale = 1.f;
+
 	/** The length of a simulation step, for the velocity of the hitbox */
 	float StepSeconds = 1.f / 60.f;
 

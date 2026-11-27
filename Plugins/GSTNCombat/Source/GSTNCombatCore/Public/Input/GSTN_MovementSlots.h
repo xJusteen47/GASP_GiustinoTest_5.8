@@ -7,6 +7,20 @@
 #include "Input/GSTN_InputSlot.h"
 #include "GSTN_MovementSlots.generated.h"
 
+/** How the dodge is entered (owner 2026-11-25: "in the options, only the new method, only the old one, or both") */
+UENUM(BlueprintType)
+enum class EGSTN_DodgeInputMethod : uint8
+{
+	/** The dodge button (layout function Movement.Dodge), the method before 2026-11-25 */
+	Button,
+
+	/** Crouch held + stick tilted + jump (Mario Odyssey long jump): frees the dodge button for other things */
+	CrouchJump,
+
+	/** Either */
+	Both
+};
+
 /**
  * The movement, defence and interaction commands of the default kit as slot specs (combat-m3 section 3). Kept apart from the standard
  * attack set (UGSTN_StandardSlots) because they are kit content: a kit that has no dodge lists Command.Defence.Dodge in
@@ -36,6 +50,15 @@ public:
 	 * bSwapTapHold gives the tap the pick-up command and the hold the grab command.
 	 */
 	static TArray<FGSTN_InputSlotSpec> Build(bool bSwapTapHold = false, int32 HoldFrames = -1);
+
+	/**
+	 * The crouch-jump dodge slot (owner 2026-11-25): a press of Input.Button.Jump while Input.Button.Crouch is held and the stick is tilted in any
+	 * direction (the dodge faces the stick like the attacks). The press is the anchor and the hold may start in the same frame, so crouch and jump
+	 * pressed together work and a run keeps its speed into the long jump. It is more specific than the plain jump press, which it beats; crouch +
+	 * jump with the stick at rest stays a jump. Command Command.Defence.Dodge.CrouchJump. The buttons follow the button layout's
+	 * Combat.Crouch and Movement.Jump functions
+	 */
+	static FGSTN_InputSlotSpec MakeDodgeCrouchJumpSlot();
 
 #if WITH_EDITOR
 	/**

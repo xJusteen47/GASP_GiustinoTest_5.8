@@ -1,0 +1,29 @@
+/Game/GSTN/Data/Locomotion/DA_Locomotion_BirdKnight: copied from DA_Locomotion_Default
+  now stamp frames=16 accel_fraction=0.100 max_start_speed=60
+  now stage 1 max_speed=600.0 acceleration=2000.0 turning_strength=16.0 release_brake=3200.0 frames_to_next_stage=180 next_stage_speed_fraction=0.9 accel_ramp_frames=30 ramp_start_fraction=0.15 entry_burst_frames=0 entry_accel_multiplier=8.0
+  now stage 2 max_speed=610.0 acceleration=1400.0 turning_strength=10.0 release_brake=1900.0 frames_to_next_stage=94 next_stage_speed_fraction=0.9 accel_ramp_frames=30 ramp_start_fraction=0.25 entry_burst_frames=0 entry_accel_multiplier=8.0
+  now stage 3 max_speed=850.0 acceleration=1200.0 turning_strength=6.0 release_brake=1700.0 frames_to_next_stage=1 next_stage_speed_fraction=0.9 accel_ramp_frames=0 ramp_start_fraction=1.0 entry_burst_frames=0 entry_accel_multiplier=8.0
+  now jump (bEnabled=True,FullJumpHeight=300.000000,TimeToApex=0.500000,MaxHoldFrames=20,MinHoldFrames=3,HoldToFallGravityRatio=0.530664,CutToFallGravityRatio=1.000000,Cut
+/Game/GSTN/Characters/BirdKnight/Kits/KIT_Test_BirdKnight: copied from KIT_Test_Playtest
+  locomotion -> DA_Locomotion_BirdKnight
+/Game/GSTN/Data/Locomotion/DA_Locomotion_FlameFury: copied from DA_Locomotion_Default
+  now stamp frames=16 accel_fraction=0.100 max_start_speed=60
+  now stage 1 max_speed=600.0 acceleration=2000.0 turning_strength=16.0 release_brake=3200.0 frames_to_next_stage=180 next_stage_speed_fraction=0.9 accel_ramp_frames=30 ramp_start_fraction=0.15 entry_burst_frames=0 entry_accel_multiplier=8.0
+  now stage 2 max_speed=610.0 acceleration=1400.0 turning_strength=10.0 release_brake=1900.0 frames_to_next_stage=94 next_stage_speed_fraction=0.9 accel_ramp_frames=30 ramp_start_fraction=0.25 entry_burst_frames=0 entry_accel_multiplier=8.0
+  now stage 3 max_speed=850.0 acceleration=1200.0 turning_strength=6.0 release_brake=1700.0 frames_to_next_stage=1 next_stage_speed_fraction=0.9 accel_ramp_frames=0 ramp_start_fraction=1.0 entry_burst_frames=0 entry_accel_multiplier=8.0
+  now jump (bEnabled=True,FullJumpHeight=300.000000,TimeToApex=0.500000,MaxHoldFrames=20,MinHoldFrames=3,HoldToFallGravityRatio=0.530664,CutToFallGravityRatio=1.000000,Cut
+/Game/GSTN/Characters/FlameFury/Kits/KIT_Test_FlameFury: copied from KIT_Test_Playtest
+  locomotion -> DA_Locomotion_FlameFury
+/Game/GSTN/Data/Locomotion/DA_Locomotion_Voyager: copied from DA_Locomotion_Default
+  before stamp frames=16 accel_fraction=0.100 max_start_speed=60
+  before stage 1 max_speed=600.0 acceleration=2000.0 turning_strength=16.0 release_brake=3200.0 frames_to_next_stage=180 next_stage_speed_fraction=0.9 accel_ramp_frames=30 ramp_start_fraction=0.15 entry_burst_frames=0 entry_accel_multiplier=8.0
+  before stage 2 max_speed=610.0 acceleration=1400.0 turning_strength=10.0 release_brake=1900.0 frames_to_next_stage=94 next_stage_speed_fraction=0.9 accel_ramp_frames=30 ramp_start_fraction=0.25 entry_burst_frames=0 entry_accel_multiplier=8.0
+  before stage 3 max_speed=850.0 acceleration=1200.0 turning_strength=6.0 release_brake=1700.0 frames_to_next_stage=1 next_stage_speed_fraction=0.9 accel_ramp_frames=0 ramp_start_fraction=1.0 entry_burst_frames=0 entry_accel_multiplier=8.0
+  before jump (bEnabled=True,FullJumpHeight=300.000000,TimeToApex=0.500000,MaxHoldFrames=20,MinHoldFrames=3,HoldToFallGravityRatio=0.530664,CutToFallGravityRatio=1.000000,Cut
+  after stamp frames=10 accel_fraction=0.150 max_start_speed=60
+  after stage 1 max_speed=500.0 acceleration=2600.0 turning_strength=16.0 release_brake=3200.0 frames_to_next_stage=32 next_stage_speed_fraction=0.9 accel_ramp_frames=10 ramp_start_fraction=0.3 entry_burst_frames=0 entry_accel_multiplier=8.0
+  after stage 2 max_speed=650.0 acceleration=1700.0 turning_strength=10.0 release_brake=1900.0 frames_to_next_stage=94 next_stage_speed_fraction=0.9 accel_ramp_frames=20 ramp_start_fraction=0.3 entry_burst_frames=3 entry_accel_multiplier=6.0
+  after stage 3 max_speed=850.0 acceleration=1400.0 turning_strength=6.0 release_brake=1700.0 frames_to_next_stage=1 next_stage_speed_fraction=0.9 accel_ramp_frames=0 ramp_start_fraction=1.0 entry_burst_frames=2 entry_accel_multiplier=8.0
+  after jump (bEnabled=True,FullJumpHeight=300.000000,TimeToApex=0.500000,MaxHoldFrames=20,MinHoldFrames=3,HoldToFallGravityRatio=0.530664,CutToFallGravityRatio=1.000000,Cut
+/Game/GSTN/Characters/Voyager/Kits/KIT_Test_Voyager: copied from KIT_Test_Playtest
+  locomotion -> DA_Locomotion_Voyager

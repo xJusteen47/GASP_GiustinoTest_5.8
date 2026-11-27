@@ -143,6 +143,34 @@ namespace
 		return false;
 	}
 
+	int32 GrabTimeCostOf(const FGSTN_HitData& Hit)
+	{
+		for (const FInstancedStruct& Extension : Hit.ExtensionData)
+		{
+			if (const FGSTN_LinkHitData* Data = Extension.GetPtr<FGSTN_LinkHitData>())
+			{
+				return FMath::Max(Data->GrabTimeCostFrames, 0);
+			}
+		}
+		return 0;
+	}
+
+	/** Grab spin: a partner hit that wears the grab down hands its cost to the victim's link fragment */
+	void AddGrabTimeCost(const FGSTN_HitContextView& View, FGSTN_StepResult& Out)
+	{
+		const int32 Cost = GrabTimeCostOf(View.Incoming.Hit);
+		const FGSTN_LinkSnapshotExt* TargetExt = Cost > 0 ? FGSTN_LinkSnapshotExt::FromVictim(View.Victim) : nullptr;
+		if (!TargetExt)
+		{
+			return;
+		}
+		FGSTN_LinkGrabTimeOutcome Outcome;
+		Outcome.Serial = TargetExt->BodySerial;
+		Outcome.CostFrames = Cost;
+		Outcome.ApplyFrame = View.Incoming.Frame != INDEX_NONE ? View.Incoming.Frame + 1 : 0;
+		Out.OutcomeExtensions.Add(FInstancedStruct::Make(Outcome));
+	}
+
 	/** The grab rules of the hit's attacker side: its kit's link extension, else the link type's own grab rule */
 	const FGSTN_GrabRules* AttackerGrabRules(const FGSTN_HitContextView& View, const UGSTN_LinkTypeDefinition* Definition)
 	{
@@ -222,6 +250,7 @@ EGSTN_StepResult UGSTN_HitStep_LinkRequest::Resolve_Implementation(const FGSTN_H
 		{
 			FGSTN_LinkStepUtils::SuppressReaction(Out);
 		}
+		AddGrabTimeCost(View, Out);
 		if (Hit.HitType.MatchesTag(GSTNLinkTags::HitType_Throw))
 		{
 			// The thrown side leaves its link on its next frame, at the thrower's socket where its parked placement is (the snapshot position),
@@ -240,6 +269,10 @@ EGSTN_StepResult UGSTN_HitStep_LinkRequest::Resolve_Implementation(const FGSTN_H
 	{
 		// A hit on the partner that opts out of the reaction (a latch attack must not knock the ridden enemy off the latcher)
 		FGSTN_LinkStepUtils::SuppressReaction(Out);
+	}
+	if (bPartners)
+	{
+		AddGrabTimeCost(View, Out);
 	}
 
 	const uint8 TypeIndex = Registry && Hit.LinkType.IsValid() ? Registry->GetTypeIndex(Hit.LinkType) : 0;
@@ -378,6 +411,40 @@ void FGSTN_LinkBreakOutcomeApplier::Apply(const FInstancedStruct& Extension, con
 	if (State.IsActive() && State.Serial == Outcome->Serial && Outcome->Channel == EGSTN_LinkChannel::Body)
 	{
 		FGSTN_LinkTickExtension::MarkPendingBreak(*Fragment, Outcome->Reason);
+	}
+}
+
+// ---- Grab time (grab spin)
+
+const UScriptStruct* FGSTN_LinkGrabTimeOutcomeApplier::GetExtensionStruct() const
+{
+	return FGSTN_LinkGrabTimeOutcome::StaticStruct();
+}
+
+int32 FGSTN_LinkGrabTimeOutcomeApplier::ApplyCost(int32 EndFrame, int32 CostFrames, int32 ApplyFrame)
+{
+	if (EndFrame <= 0)
+	{
+		return EndFrame;
+	}
+	const int64 Reduced = static_cast<int64>(EndFrame) - static_cast<int64>(FMath::Max(CostFrames, 0));
+	// Same floor as the mash (UGSTN_LinkMath::MashProgress): never before the frame the cost lands, and a past end stays where it is
+	const int64 Floor = FMath::Min(EndFrame, ApplyFrame);
+	return static_cast<int32>(FMath::Max(Reduced, Floor));
+}
+
+void FGSTN_LinkGrabTimeOutcomeApplier::Apply(const FInstancedStruct& Extension, const FGSTN_HitContextView& View, FGSTN_OutcomeApplyContext& Context) const
+{
+	const FGSTN_LinkGrabTimeOutcome* Outcome = Extension.GetPtr<FGSTN_LinkGrabTimeOutcome>();
+	FGSTN_LinkFragment* Fragment = Outcome && Context.VictimFragments ? FGSTN_SyncFragmentList::Find<FGSTN_LinkFragment>(*Context.VictimFragments) : nullptr;
+	if (!Fragment)
+	{
+		return;
+	}
+	FGSTN_LinkState& Body = Fragment->Links.Body;
+	if (Body.IsActive() && Body.Serial == Outcome->Serial)
+	{
+		Body.EndFrame = ApplyCost(Body.EndFrame, Outcome->CostFrames, Outcome->ApplyFrame);
 	}
 }
 

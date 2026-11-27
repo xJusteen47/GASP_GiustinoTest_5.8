@@ -1,5 +1,6 @@
 #include "Timeline/GSTN_StartupSteer.h"
 
+#include "Timeline/GSTN_ChargeHold.h"
 #include "Timeline/GSTN_TimelinePhases.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 #include "Curves/RichCurve.h"
@@ -135,6 +136,13 @@ EGSTN_SteerPhase FGSTN_StartupSteer::ResolveFrame(const FGSTN_CombatTimelineData
 		OutYawDeg = Current;
 		return bBefore ? EGSTN_SteerPhase::Before : EGSTN_SteerPhase::Locked;
 	}
+	// A Charge Hold that locks the direction (owner 2026-11-25, 2A): while the move stands on its hold frame the stick only drifts the character, the
+	// yaw holds. The window goes on after the release, so the small steering cone of the move is the angle tolerance "at the confirm"
+	if (In.TimelineFrame == FGSTN_ChargeHold::GetDirectionLockFrame(Data))
+	{
+		OutYawDeg = Current;
+		return EGSTN_SteerPhase::Before;
+	}
 	if (!In.bSourceActive)
 	{
 		// The reticle source with the reticle off: nothing steers, nothing holds (the left stick turns the character as before)
@@ -204,7 +212,8 @@ int32 FGSTN_StartupSteer::GetReverseEndFrame(const FGSTN_CombatTimelineData& Dat
 	{
 		return 0;
 	}
-	return FMath::Min(Data.Reverse.Frames + 1, FirstActive);
+	// Cut at a direction-locking Charge Hold too: a flick back during the hold never reverses the move
+	return FMath::Min3(Data.Reverse.Frames + 1, FirstActive, FGSTN_ChargeHold::GetDirectionLockFrame(Data));
 }
 
 float FGSTN_StartupSteer::StickYaw(const FVector2D& Stick, float CameraYawDeg)

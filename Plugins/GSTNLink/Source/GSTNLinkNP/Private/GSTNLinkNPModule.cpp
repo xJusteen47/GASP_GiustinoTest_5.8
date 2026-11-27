@@ -17,6 +17,7 @@
 #include "Data/GSTN_LinkKitExtension.h"
 #include "GSTN_LinkRequirementLibrary.h"
 #include "GSTN_LinkSettings.h"
+#include "GSTN_LinkTags.h"
 #include "Input/GSTN_LinkSlots.h"
 #include "Kits/GSTN_PrimaryKitDefinition.h"
 #include "Loadout/GSTN_CompiledBindingTable.h"
@@ -27,6 +28,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogGSTNLinkKitThrows, Log, All);
 namespace
 {
 	const FName KitThrowsExtensionId(TEXT("GSTNLinkThrows"));
+	const FName SpinSuppressionExtensionId(TEXT("GSTNLinkSpinSuppression"));
 }
 
 /**
@@ -49,6 +51,7 @@ public:
 		FGSTN_OutcomeApplierRegistry::Get().Register(&Applier);
 		FGSTN_OutcomeApplierRegistry::Get().Register(&BreakApplier);
 		FGSTN_OutcomeApplierRegistry::Get().Register(&ThrowApplier);
+		FGSTN_OutcomeApplierRegistry::Get().Register(&GrabTimeApplier);
 		FGSTN_LinkInboxHandlers::Register();
 
 		FGSTN_LoadoutExtension Loadout;
@@ -73,6 +76,7 @@ public:
 			// grab-link: the turn ergonomics (cvar gstn.Grab.TurnMode over the setting) and the dodge put-down
 			Fill.Ergonomics = Settings.GetEffectiveGrabTurn();
 			Fill.bPutDownWithDodge = Settings.bPutDownWithDodge;
+			Fill.bGrabSpin = Settings.GetEffectiveGrabSpin();
 			Fill.KitThrows = KitExtension ? &KitExtension->Throws : nullptr;
 			Fill.Fallback = &Settings.FallbackThrows;
 			Fill.SlotOverrides = &Settings.ThrowSlotOverrides;
@@ -85,15 +89,48 @@ public:
 		};
 		FGSTN_LoadoutExtensionRegistry::Register(KitThrowsExtensionId, MoveTemp(Throws));
 
+		// Runs strictly after GSTNSpinDrill (Priority = 0) so even hand-authored Command.Movement.Spin.* rows in kit/weapon assets ignore Role_Grabber,
+		// mirroring UGSTN_HeldSlots::ApplySizeBans with zero C++ coupling on GSTNSpinDrill.
+		FGSTN_LoadoutExtension SpinSuppression;
+		SpinSuppression.Priority = 100;
+		SpinSuppression.ContributeCompileInput = [](const FGSTN_LoadoutExtensionContext&, FGSTN_CompileInput& Input)
+		{
+			const FGameplayTag MovementSpinRoot = FGameplayTag::RequestGameplayTag(TEXT("Command.Movement.Spin"), false);
+			if (!MovementSpinRoot.IsValid())
+			{
+				return;
+			}
+			const FGameplayTag RoleGrabber = GSTNLinkTags::Role_Grabber.GetTag();
+			auto SuppressSpinIn = [&MovementSpinRoot, &RoleGrabber](TArray<FGSTN_BindingInput>& Bindings)
+			{
+				for (FGSTN_BindingInput& Binding : Bindings)
+				{
+					if (Binding.Command.IsValid() && Binding.Command.MatchesTag(MovementSpinRoot)
+						&& !Binding.Requirements.RequireTags.HasTagExact(RoleGrabber))
+					{
+						Binding.Requirements.IgnoreTags.AddTag(RoleGrabber);
+					}
+				}
+			};
+			SuppressSpinIn(Input.Kit.Bindings);
+			for (FGSTN_WeaponCompileInput& Weapon : Input.Weapons)
+			{
+				SuppressSpinIn(Weapon.Bindings);
+			}
+		};
+		FGSTN_LoadoutExtensionRegistry::Register(SpinSuppressionExtensionId, MoveTemp(SpinSuppression));
+
 		WorldInitHandle = FWorldDelegates::OnPostWorldInitialization.AddRaw(this, &FGSTNLinkNPModule::OnWorldInitialized);
 	}
 
 	virtual void ShutdownModule() override
 	{
 		FWorldDelegates::OnPostWorldInitialization.Remove(WorldInitHandle);
+		FGSTN_LoadoutExtensionRegistry::Unregister(SpinSuppressionExtensionId);
 		FGSTN_LoadoutExtensionRegistry::Unregister(KitThrowsExtensionId);
 		FGSTN_LoadoutExtensionRegistry::Unregister(FGSTN_LinkAttach::GetLoadoutExtensionId());
 		FGSTN_LinkInboxHandlers::Unregister();
+		FGSTN_OutcomeApplierRegistry::Get().Unregister(&GrabTimeApplier);
 		FGSTN_OutcomeApplierRegistry::Get().Unregister(&ThrowApplier);
 		FGSTN_OutcomeApplierRegistry::Get().Unregister(&BreakApplier);
 		FGSTN_OutcomeApplierRegistry::Get().Unregister(&Applier);
@@ -116,6 +153,7 @@ private:
 	FGSTN_LinkOutcomeApplier Applier;
 	FGSTN_LinkBreakOutcomeApplier BreakApplier;
 	FGSTN_LinkThrowOutcomeApplier ThrowApplier;
+	FGSTN_LinkGrabTimeOutcomeApplier GrabTimeApplier;
 	FDelegateHandle WorldInitHandle;
 };
 

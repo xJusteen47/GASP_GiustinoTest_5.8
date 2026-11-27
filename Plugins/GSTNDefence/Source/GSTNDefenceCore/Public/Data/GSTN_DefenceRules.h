@@ -376,11 +376,28 @@ struct GSTNDEFENCECORE_API FGSTN_GroundBounceRules
 	float HeightExponent = 1.f;
 
 	/**
-	 * The impact speed a move's own user lands with when its Combat.Move.KnockdownOnLanding window downs it (the dropkick): that landing has no
-	 * contact record, so its bounce is judged at this speed
+	 * The bounce of a move's own user downed by its Combat.Move.KnockdownOnLanding window (the dropkick) is judged at the real downward speed of
+	 * its fall on the last airborne frame (owner 2026-11-26): a short drop bounces low, a long one high, as a victim's tumble landing does. Off:
+	 * always at SelfKnockdownImpactSpeed
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce", meta = (EditCondition = "bScaleWithImpactSpeed"))
+	bool bSelfKnockdownUseFallSpeed = true;
+
+	/**
+	 * The impact speed a move's own user lands with when its Combat.Move.KnockdownOnLanding window downs it (the dropkick), when
+	 * bSelfKnockdownUseFallSpeed is off or no fall was recorded (a landing with no contact record and no downward speed)
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "bScaleWithImpactSpeed"))
 	float SelfKnockdownImpactSpeed = 900.f;
+
+	/**
+	 * Airborne frames inside a move's Combat.Move.KnockdownOnLanding window before a landing downs its user (owner 2026-11-25, dropkick "goes into
+	 * the tech bounce too early"). One airborne frame used to arm it: a takeoff that flickers airborne for a frame, or a hop of a few centimetres,
+	 * then counted as a landing. A landing before this many frames is an ordinary landing (the move's Landing track, if any, decides). Counted in
+	 * the defence fragment's hit flags byte (FGSTN_TumbleLanding::SelfKnockdown), so at most 31
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing|Tech Bounce", meta = (ClampMin = "1", ClampMax = "31"))
+	int32 SelfKnockdownMinAirFrames = 6;
 
 	/** Speed of the mini bounce along the entity's local up, when bScaleWithImpactSpeed is off */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Landing", meta = (ClampMin = "0.0", ForceUnits = "cm/s", EditCondition = "!bScaleWithImpactSpeed"))

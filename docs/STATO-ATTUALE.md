@@ -10,6 +10,24 @@ contraddizione va segnalata nel rapporto del bibliotecario.
 Pagine sorelle: `docs/INDICE-PROGETTO.md` (cosa esiste nel codice), `docs/BRIEFING-ANTIGRAVITY.md` (per agenti esterni),
 `docs/notes/archivio-proposta.md` (ultimo rapporto del bibliotecario).
 
+## Righe smentite dal repo (giro del bibliotecario, 2026-11-27): da confermare
+Nessuna decisione è stata cambiata. Le righe sotto dicono cosa il repo (`main` ca2a8952, tag sul remoto) mostra di diverso.
+- **§1 Regole**: le regole 1-16 sono state sostituite il 24-11 dalle **8 regole** di `docs/notes/regole-progetto.md` (+ `regole-processo.md`,
+  `regole-animazione.md`); `regole-progetto-2026-11-20/22/23.md` e `regole-17-2026-11-24.md` sono in `docs/notes/archivio/`. Da riscrivere la §1.
+- **§3 Versioni approvate**: il tag del run start 29w3 c'è con il nome `approved/runstart-w3` (967de748), non `runstart-v29w3`. Esistono anche
+  `approved/jab-v12`, `approved/ftilt-v31` (c699d46a) e `approved/dair-v9` (916338ad), e i tre asset sono pubblicati in
+  `Content/AnimPipeline/Published/` (fb40c55e, 24-11). `docs/notes/anim-approvate.md` righe 14-18 è già allineato; questa tabella no.
+- **§3 dair v9**: `Published/dair/v9/AM_OverlordDAirV9.uasset` è cambiato dopo la pubblicazione (98dab88a, riordino 2b: riferimenti);
+  il suo sha256 non è più quello di `publish.json` e `regress.py` non lo controlla. Lo spostamento dell'AS è coperto dalla prova ossa (scelta B, e87ae944).
+- **§2 Rete**: "si predice anche l'avversario (rollback misto)" va riletta con la decisione del 25-11 **"niente misto"**: tutto il gameplay
+  nel rollback (`docs/architecture/tag-verbi-simulazione-rollback.md` §10).
+- **§2 Presa** "codice non compilato" e **§5** "main non compilato dal 22-11", "MCP animazione su branch", "riordino Content fase 2 non fatto":
+  superate. Presa al collo e spin Ganon in main e compilate (PR #53, `grab-ganon.md`); C4 ha compilato main il 24-11; MCP e capdet in main;
+  riordino 2b fatto (PR #43). Le §4-§6 sono ferme al 23-11.
+- **Due copie divergenti**: `bibliotecario/STATO-ATTUALE.md` nei project files (26-11) ha la §0 "stato del giorno" e la coda del fisso, ma
+  ancora le decisioni vecchie del 23-11 mattina (N.S, RB, verdetti 23-26, rete); questa copia ha le decisioni del 23-11 sera ma non la §0.
+- **Git**: `CLAUDE.md:71` dice che `feature/gas-npp-5.8` è archiviato con il tag `archivio/feature-gas-npp-5.8`: il tag non c'è e il branch esiste ancora.
+
 ## 1. Regole di lavoro in vigore (sintesi; testo pieno = `docs/notes/regole-progetto.md`)
 Fonte: istruzioni di progetto del coordinatore (regole 1-16, 15-11 → 20-11 → 23-11), copiate parola per parola in
 `docs/notes/regole-progetto.md` (23-11, decisione 3A dell'owner). Sono segnati **SUPERATI** (riga in cima, 23-11):

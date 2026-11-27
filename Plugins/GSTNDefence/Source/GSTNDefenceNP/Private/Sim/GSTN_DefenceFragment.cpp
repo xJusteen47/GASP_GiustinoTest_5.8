@@ -19,7 +19,8 @@ namespace
 		constexpr uint16 Mirror = 1 << 9;
 		constexpr uint16 HitFlags = 1 << 10;
 		constexpr uint16 PendingStart = 1 << 11;
-		constexpr uint16 All = (1 << 12) - 1;
+		constexpr uint16 SelfFall = 1 << 12;
+		constexpr uint16 All = (1 << 13) - 1;
 	}
 
 	bool SamePushback(const FGSTN_DefenceFragment& A, const FGSTN_DefenceFragment& B)
@@ -104,7 +105,8 @@ bool FGSTN_DefenceFragment::operator==(const FGSTN_DefenceFragment& Other) const
 		&& GrabImmunityEndFrame == Other.GrabImmunityEndFrame
 		&& SamePushback(*this, Other)
 		&& MirrorValueQ == Other.MirrorValueQ && MirrorFrame == Other.MirrorFrame
-		&& HitFlags == Other.HitFlags && PendingStartFrame == Other.PendingStartFrame && PendingStartKind == Other.PendingStartKind;
+		&& HitFlags == Other.HitFlags && PendingStartFrame == Other.PendingStartFrame && PendingStartKind == Other.PendingStartKind
+		&& SelfFallSpeedQ == Other.SelfFallSpeedQ;
 }
 
 void FGSTN_DefenceFragment::NetSerialize(FArchive& Ar)
@@ -129,6 +131,7 @@ void FGSTN_DefenceFragment::NetSerialize(FArchive& Ar)
 		Mask |= (MirrorValueQ != 0 || MirrorFrame != INDEX_NONE) ? Presence::Mirror : 0;
 		Mask |= HitFlags != 0 ? Presence::HitFlags : 0;
 		Mask |= (PendingStartFrame != INDEX_NONE || PendingStartKind != 0) ? Presence::PendingStart : 0;
+		Mask |= SelfFallSpeedQ != 0 ? Presence::SelfFall : 0;
 		Ar << Mask;
 		if (Mask & Presence::Shield)
 		{
@@ -177,6 +180,10 @@ void FGSTN_DefenceFragment::NetSerialize(FArchive& Ar)
 		if (Mask & Presence::PendingStart)
 		{
 			Ar << PendingStartFrame << PendingStartKind;
+		}
+		if (Mask & Presence::SelfFall)
+		{
+			Ar << SelfFallSpeedQ;
 		}
 		return;
 	}
@@ -244,6 +251,10 @@ void FGSTN_DefenceFragment::NetSerialize(FArchive& Ar)
 	{
 		Ar << PendingStartFrame << PendingStartKind;
 	}
+	if (Mask & Presence::SelfFall)
+	{
+		Ar << SelfFallSpeedQ;
+	}
 	if (Ar.IsError())
 	{
 		*this = FGSTN_DefenceFragment();
@@ -305,5 +316,9 @@ void FGSTN_DefenceFragment::ToString(FAnsiStringBuilderBase& Out) const
 	if (PendingStartFrame != INDEX_NONE)
 	{
 		Out.Appendf(" start %d@%d", static_cast<int32>(PendingStartKind), PendingStartFrame);
+	}
+	if (SelfFallSpeedQ != 0)
+	{
+		Out.Appendf(" selffall %d", static_cast<int32>(SelfFallSpeedQ));
 	}
 }

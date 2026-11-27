@@ -583,6 +583,17 @@ public:
 	const FGSTN_CombatTimelineData* ReadEvaluatedTimeline(int32& OutFrame) const;
 
 	/**
+	 * This frame's Charge Hold (FGSTN_TimelineTrack_ChargeHold, owner 2026-11-25) as the combat tick decided it: the timeline stands on its hold frame,
+	 * or this is the tick after the hold frame. Read by the timeline ability (its charge loop) and the presentation, after the combat tick of the frame
+	 */
+	bool IsChargeHoldStalled() const { return TimelineOutput.bChargeHoldStall; }
+	bool IsChargeHoldReleased() const { return TimelineOutput.bChargeHoldRelease; }
+
+	/** The ticks the running move stood on its Charge Hold frame so far (the charge), 0 outside a move or without one */
+	UFUNCTION(BlueprintPure, Category = "Combat|Timeline")
+	int32 GetChargeFrames() const;
+
+	/**
 	 * This frame's pushbox move (FGSTN_Pushbox): the world-space horizontal shift the fighter's pushbox overlaps ask for, computed by this frame's
 	 * combat tick from the step snapshot. Zero when the combat tick of the frame being simulated did not compute one. Read by the body capsule
 	 * modifier from Mover's tick (the combat model ticked before it), like ReadEvaluatedTimeline

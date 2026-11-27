@@ -143,6 +143,13 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Link|Throws")
 	bool bPutDownWithDodge = true;
 
+	/**
+	 * Grab spin (owner 2026-11-25): while grabbing, a 360 stick rotation swings the partner round as a weapon (Command.Link.Spin.*, the abilities of the
+	 * kit's throw set or FallbackThrows). Read when a kit is compiled; cvar gstn.Grab.Spin (GSTN Debug) overrides it
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Link|Throws")
+	bool bGrabSpin = true;
+
 	/** grab-link: how every kit holds its grabbed partner (by the neck by default); a kit's link extension can replace it (bOverrideHoldPose) */
 	UPROPERTY(Config, EditAnywhere, Category = "Link|Hold")
 	FGSTN_GrabHoldPose HoldPose;
@@ -168,6 +175,8 @@ public:
 	 * machine. 0 (a negative scale) means "the data's own"
 	 */
 	EGSTN_GrabTurnErgonomics GetEffectiveGrabTurn() const;
+	/** bGrabSpin with the cvar gstn.Grab.Spin applied (0 = the setting, 1 = on, 2 = off) */
+	bool GetEffectiveGrabSpin() const;
 	float GetEffectiveHoldWalkScale() const;
 	float GetEffectiveHoldJumpScale() const;
 	/** The hold pose a grabber with this kit extension (may be null) uses, with the cvar gstn.Grab.HoldByNeck applied */

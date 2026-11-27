@@ -71,7 +71,24 @@ void FGSTN_DodgeLandingState::NetSerialize(FArchive& Ar)
 
 int32 FGSTN_DodgeLandingLogic::ResolveEndLag(const FGSTN_DodgeLandingKitExtension& Kit, int32 MoveLandingLagFrames)
 {
-	return FMath::Clamp(Kit.EndLagFrames >= 0 ? Kit.EndLagFrames : MoveLandingLagFrames, 0, 255);
+	const int32 Belly = FMath::Max(Kit.EndLagFrames >= 0 ? Kit.EndLagFrames : MoveLandingLagFrames, 0);
+	return FMath::Clamp(Belly + FMath::Max(Kit.GetUpRollFrames, 0), 0, 255);
+}
+
+int32 FGSTN_DodgeLandingLogic::ResolveLandingLag(const FGSTN_DodgeLandingKitExtension& Kit, int32 MoveLandingLagFrames, float LandingSpeed, float TickRate)
+{
+	const int32 FixedBelly = FMath::Max(Kit.EndLagFrames >= 0 ? Kit.EndLagFrames : MoveLandingLagFrames, 0);
+	int32 Belly = FixedBelly;
+	const FGSTN_MomentumSlideResponse& Along = Kit.LandingSlide.Along;
+	if (Kit.BellyMode == EGSTN_DodgeBellyMode::UntilStopped && Kit.LandingSlide.bEnabled && Along.Friction == EGSTN_MomentumSlideFriction::Fixed
+		&& Along.Deceleration > KINDA_SMALL_NUMBER && TickRate > KINDA_SMALL_NUMBER)
+	{
+		// The slide starts at MinSpeed or faster and loses Deceleration * dt each frame down to rest
+		const float ToBrake = LandingSpeed >= Kit.LandingSlide.MinSpeed ? LandingSpeed : 0.f;
+		const int32 SlideFrames = FMath::CeilToInt32(ToBrake / Along.Deceleration * TickRate);
+		Belly = FMath::Clamp(SlideFrames, FixedBelly, FMath::Max(Kit.MaxBellyFrames, FixedBelly));
+	}
+	return FMath::Clamp(Belly + FMath::Max(Kit.GetUpRollFrames, 0), 0, 255);
 }
 
 bool FGSTN_DodgeLandingLogic::IsLockedCommand(const FGSTN_DodgeLandingKitExtension& Kit, const FGameplayTag& Command)
@@ -97,8 +114,10 @@ EGSTN_DodgeLandingGate FGSTN_DodgeLandingLogic::Gate(const FGSTN_DodgeLandingSta
 	const bool bLocked = State.IsLocked(Frame) && IsLockedCommand(Kit, Command);
 	if (State.IsEndLag(Frame))
 	{
-		const bool bRecovery = !bLocked && Command.IsValid() && !Kit.RecoveryCommands.IsEmpty() && Command.MatchesAny(Kit.RecoveryCommands)
-			&& State.EndLagFrameNumber(Frame) >= FMath::Max(Kit.RecoveryFromFrame, 1);
+		// The jump roll-out is a flag, not a default tag in RecoveryCommands: native tags are not ready when struct defaults are built
+		const bool bListed = Command.IsValid() && ((Kit.bJumpRollsOut && Command.MatchesTag(GSTNCommandTags::Movement_Jump))
+			|| (!Kit.RecoveryCommands.IsEmpty() && Command.MatchesAny(Kit.RecoveryCommands)));
+		const bool bRecovery = !bLocked && bListed && State.EndLagFrameNumber(Frame) >= FMath::Max(Kit.RecoveryFromFrame, 1);
 		return bRecovery ? EGSTN_DodgeLandingGate::Recovery : EGSTN_DodgeLandingGate::Refused;
 	}
 	return bLocked ? EGSTN_DodgeLandingGate::Refused : EGSTN_DodgeLandingGate::Free;

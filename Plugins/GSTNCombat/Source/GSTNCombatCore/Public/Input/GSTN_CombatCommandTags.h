@@ -101,6 +101,13 @@ namespace GSTNCommandTags
 	/** Dodge: bound twice by context, a ground dodge (long jump arc) when grounded and an air dodge (dive roll) when airborne */
 	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Defence_Dodge);
 
+	/**
+	 * The dodge entered as crouch held + stick + jump (owner 2026-11-25, Odyssey long jump). Never bound by hand: the binding compiler mirrors
+	 * every Command.Defence.Dodge row under it with the crouch-jump slot when UGSTN_CombatSettings::DodgeInput allows it. A child of the dodge, so
+	 * what matches the dodge by tag (the re-dodge lock) matches it too
+	 */
+	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Defence_Dodge_CrouchJump);
+
 	/** Interact, short press: grab in the default movement set */
 	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Interact_Grab);
 

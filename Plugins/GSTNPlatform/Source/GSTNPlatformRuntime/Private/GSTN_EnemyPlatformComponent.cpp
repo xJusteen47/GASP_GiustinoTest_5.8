@@ -26,7 +26,7 @@
 
 namespace GSTNEnemyPlatformPrivate
 {
-	static TAutoConsoleVariable<int32> CVarDraw(TEXT("gstn.Platform.Draw"), 0,
+	static TAutoConsoleVariable<int32> CVarDraw(TEXT("gstn.Platform.Debug.Draw"), 0,
 		TEXT("Draws the platform shapes of every enemy platform: green Active, orange Breaking, grey Inactive (presentation only)"));
 }
 

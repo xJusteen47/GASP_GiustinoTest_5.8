@@ -1,5 +1,9 @@
 #include "Presentation/GSTN_GreyboxAnimInstance.h"
 
+#include "AbilitySystemComponent.h"
+#include "AbilitySystemGlobals.h"
+#include "Abilities/GSTN_GA_Dash.h"
+#include "Rules/GSTN_AirCrouch.h"
 #include "Animation/AnimMontage.h"
 #include "AnimationRuntime.h"
 #include "Engine/SkeletalMesh.h"
@@ -12,6 +16,12 @@
 #include "Presentation/GSTN_RunPresentationComponent.h"
 
 #include UE_INLINE_GENERATED_CPP_BY_NAME(GSTN_GreyboxAnimInstance)
+
+namespace GSTNGreyboxDive
+{
+	/** The simulation's fixed tick: the dive's frame settings and the combat view's frames are simulation frames */
+	constexpr float SimRate = 62.5f;
+}
 
 void FGSTN_GreyboxSpring::Step(float Target, float DeltaSeconds, float FrequencyHz, float Damping)
 {
@@ -70,6 +80,29 @@ float UGSTN_GreyboxAnimInstance::RollAngle(const FGSTN_GreyboxShapeSettings& Set
 	// Always forward, toward the travel: from the start round to the next full turn (on the back = 450, head first = 270)
 	const float End = 360.f;
 	return FMath::Lerp(StartDeg, End, FMath::SmoothStep(0.f, 1.f, T));
+}
+
+float UGSTN_GreyboxAnimInstance::DiveAngle(const FGSTN_GreyboxShapeSettings& Settings, float AirSeconds, float LagSeconds, float LagTotalSeconds,
+	float LandAngleDeg)
+{
+	using namespace GSTNGreyboxDive;
+	if (LagSeconds < 0.f)
+	{
+		const float Tilt = FMath::Max(Settings.DiveTiltFrames, 1.f) / SimRate;
+		return Settings.DiveAngleDeg * FMath::SmoothStep(0.f, 1.f, FMath::Clamp(AirSeconds / Tilt, 0.f, 1.f));
+	}
+	// The get-up roll owns the last frames of the lag (all of it when the lag is shorter); the belly part is what comes before
+	const float RollSeconds = FMath::Clamp(Settings.DiveGetUpRollFrames / SimRate, 0.f, FMath::Max(LagTotalSeconds, 0.f));
+	const float RollStart = FMath::Max(LagTotalSeconds - RollSeconds, 0.f);
+	const float Slap = FMath::Max(Settings.DiveSlapFrames, 1.f) / SimRate;
+	const float Belly = FMath::Lerp(LandAngleDeg, Settings.DiveBellyDeg, FMath::SmoothStep(0.f, 1.f, FMath::Clamp(LagSeconds / Slap, 0.f, 1.f)));
+	if (RollSeconds <= KINDA_SMALL_NUMBER || LagSeconds < RollStart)
+	{
+		return Belly;
+	}
+	// Forward over itself, from where the belly part left it round to upright (a full turn)
+	const float T = FMath::Clamp((LagSeconds - RollStart) / RollSeconds, 0.f, 1.f);
+	return FMath::Lerp(Belly, 360.f, FMath::SmoothStep(0.f, 1.f, T));
 }
 
 float UGSTN_GreyboxAnimInstance::RollStartAngle(const FVector& BodyUp, const FVector& Travel)
@@ -248,8 +281,9 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	PreviousVelocity = Velocity;
 	bHasPrevious = true;
 
-	// Touchdown: kick the squash spring by the fall speed, so it squashes and bounces back (not in a hit reaction: a knockdown has its own clip)
-	if (bOnGround && !bWasOnGround && LastAirVelocityZ < 0.f && !bCalm)
+	// Touchdown: kick the squash spring by the fall speed, so it squashes and bounces back (not in a hit reaction: a knockdown has its own clip;
+	// not in a dive: the body lands on its belly, a squash along the lying capsule would shorten it)
+	if (bOnGround && !bWasOnGround && LastAirVelocityZ < 0.f && !bCalm && DiveLastAngle <= 0.f)
 	{
 		const float Omega = 2.f * PI * ShapeSettings.SpringFrequency;
 		SquashSpring.Velocity -= ShapeSettings.LandSquashPer1000 * (-LastAirVelocityZ / 1000.f) * Omega;
@@ -300,7 +334,17 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	LyingAlpha = FMath::FInterpTo(LyingAlpha, bHasPelvis ? LyingTarget(ShapeSettings, PelvisUpZ) : 0.f, DeltaSeconds, ShapeSettings.LyingBlendSpeed);
 	// A lying body neither leans around its feet nor sways like a runner: a roll moves on the ground but is not a run
 	// A roll drives the whole capsule (UpdateRoll): no lying, no lean or sway under it
-	const bool bRolling = UpdateRoll(Velocity);
+	bool bRolling = UpdateRoll(Velocity);
+	// The dodge dive drives the capsule the same way when no roll montage does (a dodge plays none)
+	if (bRolling)
+	{
+		DiveLastAngle = 0.f;
+		DiveLagSeconds = -1.f;
+	}
+	else
+	{
+		bRolling = UpdateDive(Velocity, Combat, bOnGround, bCalm, DeltaSeconds);
+	}
 	if (bRolling)
 	{
 		LyingAlpha = 0.f;
@@ -373,8 +417,12 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// The dash pose is the boost's own read, not a drive option: forward and low at the launch, eased out
 	LeanGoal.Pitch -= ShapeSettings.DashLeanDeg * DashAlpha;
 	const float SpringDamping = bCalm ? FMath::Max(ShapeSettings.SpringDamping, ShapeSettings.HitReactionSpringDamping) : ShapeSettings.SpringDamping;
+	// Air crouch: the body tucks to a fixed squash instead of stretching with the vertical speed (not in a dive, which owns the body)
+	const UAbilitySystemComponent* OwnerASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Owner);
+	const bool bAirCrouch = !bOnGround && !bCalm && DiveLastAngle <= 0.f && OwnerASC && OwnerASC->HasMatchingGameplayTag(GSTNCombatTags::State_AirCrouch);
 	const float SquashGoal = bCalm ? 1.f
-		: SquashTarget(ShapeSettings, bBraced, Velocity.Z, Local.X) * FMath::Lerp(1.f, ShapeSettings.DashSquash, DashAlpha);
+		: (bAirCrouch ? ShapeSettings.AirCrouchSquash
+			: SquashTarget(ShapeSettings, bBraced, Velocity.Z, Local.X) * FMath::Lerp(1.f, ShapeSettings.DashSquash, DashAlpha));
 	SquashSpring.Step(SquashGoal, DeltaSeconds, ShapeSettings.SpringFrequency, SpringDamping);
 	// Jump squat: squash fast during the sim's squat frames; on take-off the spring is released from there into the air stretch
 	const bool bJumpSquatting = UGSTN_RunPresentationComponent::IsAnimOwnerJumpSquatting(this);
@@ -551,6 +599,96 @@ bool UGSTN_GreyboxAnimInstance::UpdateRoll(const FVector& Velocity)
 	const float Angle = RollAngle(ShapeSettings, RollStartDeg, Share, RollLatchShare);
 	// Turning the top toward the travel is a turn about Up x Travel; in the capsule component's frame, about the capsule's middle
 	const FVector WorldAxis = FVector::CrossProduct(FVector::UpVector, RollTravel).GetSafeNormal();
+	const FVector Axis = Capsule->GetComponentQuat().UnrotateVector(WorldAxis);
+	if (Axis.IsNearlyZero())
+	{
+		return false;
+	}
+	Shape.Spin = FQuat(Axis, FMath::DegreesToRadians(Angle));
+	Shape.SpinPivot = FVector(0.f, 0.f, 0.5f * (ShapeSettings.CapsuleBottom + ShapeSettings.CapsuleTop));
+	return true;
+}
+
+bool UGSTN_GreyboxAnimInstance::UpdateDive(const FVector& Velocity, const FGSTN_CombatStateView& Combat, bool bOnGround, bool bCalm, float DeltaSeconds)
+{
+	using namespace GSTNGreyboxDive;
+	const USkeletalMeshComponent* Capsule = GetSkelMeshComponent();
+	const AActor* Owner = GetOwningActor();
+	auto Stop = [this]()
+	{
+		DiveLastAngle = 0.f;
+		DiveLagSeconds = -1.f;
+		DiveMoveStartFrame = INDEX_NONE;
+		return false;
+	};
+	// A hit ends the dive at once: the reaction has its own read
+	if (!ShapeSettings.bProceduralDive || bCalm || !Capsule || !Owner)
+	{
+		return Stop();
+	}
+	// A dodge is the ability that opens a dodge landing (the ground and the air dodge, and any kit child of them)
+	const UGSTN_GA_MoveTimeline* MoveCDO = Combat.bInMove && Combat.MoveAbility ? Cast<UGSTN_GA_MoveTimeline>(Combat.MoveAbility->GetDefaultObject()) : nullptr;
+	const bool bDodgeInAir = MoveCDO && MoveCDO->bDodgeLanding && !bOnGround;
+	const bool bInLag = Combat.DodgeEndLagFrame > 0 && Combat.DodgeEndLagFrames > 0;
+
+	// The travel the body tips toward: the horizontal velocity, eased (air control can curve it), the facing before it moves
+	const FVector Horizontal(Velocity.X, Velocity.Y, 0.f);
+	if (DiveLastAngle <= 0.f || DiveTravel.IsNearlyZero())
+	{
+		DiveTravel = Horizontal.Size() >= ShapeSettings.RollMinSpeed ? Horizontal.GetSafeNormal() : FVector(Owner->GetActorForwardVector().X, Owner->GetActorForwardVector().Y, 0.f).GetSafeNormal();
+	}
+	else if (Horizontal.Size() >= ShapeSettings.RollMinSpeed)
+	{
+		DiveTravel = (DiveTravel + (Horizontal.GetSafeNormal() - DiveTravel) * FMath::Min(12.f * DeltaSeconds, 1.f)).GetSafeNormal();
+	}
+
+	float Angle = 0.f;
+	if (bInLag)
+	{
+		if (DiveLagSeconds < 0.f)
+		{
+			DiveLagSeconds = 0.f;
+			DiveLandAngle = DiveLastAngle > 0.f ? DiveLastAngle : ShapeSettings.DiveAngleDeg;
+		}
+		else
+		{
+			DiveLagSeconds += DeltaSeconds;
+		}
+		// Rendered time, kept within the simulation frame the view is on (smooth between frames, never drifting from the sim)
+		const float SimSeconds = (Combat.DodgeEndLagFrame - 1) / SimRate;
+		DiveLagSeconds = FMath::Clamp(DiveLagSeconds, SimSeconds, SimSeconds + 1.f / SimRate);
+		Angle = DiveAngle(ShapeSettings, 0.f, DiveLagSeconds, Combat.DodgeEndLagFrames / SimRate, DiveLandAngle);
+	}
+	else if (bDodgeInAir)
+	{
+		if (Combat.MoveStartFrame != DiveMoveStartFrame)
+		{
+			DiveMoveStartFrame = Combat.MoveStartFrame;
+			DiveAirSeconds = 0.f;
+		}
+		DiveAirSeconds += DeltaSeconds;
+		DiveLagSeconds = -1.f;
+		Angle = DiveAngle(ShapeSettings, DiveAirSeconds, -1.f, 0.f, 0.f);
+	}
+	else if (DiveLastAngle > 0.f && DiveLastAngle < 360.f)
+	{
+		// Cut short (a roll-out command, the move ended before the lag, a landing not seen yet): finish the turn quickly, forward when it was
+		// already lying or past it, back to upright when it had barely tipped
+		const float Step = ShapeSettings.DiveRecoverDegPerSecond * DeltaSeconds;
+		Angle = DiveLastAngle < 45.f ? FMath::Max(DiveLastAngle - Step, 0.f) : FMath::Min(DiveLastAngle + Step, 360.f);
+		if (Angle <= 0.f || Angle >= 360.f)
+		{
+			return Stop();
+		}
+	}
+	else
+	{
+		return Stop();
+	}
+	DiveLastAngle = Angle;
+
+	// Same turn as the roll: the top toward the travel, about Up x Travel, around the capsule's middle (the floor lift keeps it out of the floor)
+	const FVector WorldAxis = FVector::CrossProduct(FVector::UpVector, DiveTravel).GetSafeNormal();
 	const FVector Axis = Capsule->GetComponentQuat().UnrotateVector(WorldAxis);
 	if (Axis.IsNearlyZero())
 	{

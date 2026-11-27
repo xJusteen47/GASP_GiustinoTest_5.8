@@ -33,7 +33,7 @@ struct FGSTN_GroundContactRuntimeBone
  * Floor: one line trace a frame on the game thread (PreUpdate), only while the correction is on; the plane under the trace start bone is
  * used for every bone (uneven floors under one body: later, per-bone traces). Presentation only: the simulation, timelines and hurtboxes
  * never read the mesh pose, nothing is replicated. Costs nothing outside the listed states (no trace, pose untouched).
- * Console: a.GSTN.GroundContactFix 0 = pass through; a.GSTN.GroundContactFix.Debug 1 = draw the floor, the spheres and the lift.
+ * Console: a.GSTN.GroundContactFix 0 = pass through; gstn.Anim.Debug.GroundContactFix 1 = draw the floor, the spheres and the lift.
  */
 USTRUCT(BlueprintInternalUseOnly)
 struct GSTNANIMATIONCORE_API FGSTN_AnimNode_GroundContactFix : public FAnimNode_Base

@@ -108,6 +108,11 @@ namespace GSTNLinkTags
 	/** A pummel hit: lands only on the linked partner, no knockback, never breaks the link. On FGSTN_HitData */
 	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(HitType_Pummel);
 
+	/** The ring hit of the grab spin on the fighters around the grabber (the held partner is the weapon; it takes its own pummel-like hit) */
+	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(HitType_GrabSpin);
+	/** The grab spin slamming the held partner into a wall (owner 2026-11-25): damage and hitstop on the partner, no reaction */
+	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(HitType_GrabSpinWall);
+
 	// ---- Mover, interact ----
 
 	/** Mover tag carried by the linked modifier while a parked role is linked. Added and removed with the modifier */
@@ -150,6 +155,15 @@ namespace GSTNLinkTags
 
 	/** Put-down of the grabber role (grab-link): the dodge press bound to the kit's Release ability, so the partner is set down without a throw */
 	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Link_Release_PutDown);
+
+	/**
+	 * Grab spin of the grabber role, clockwise (grab-link spin, owner 2026-11-25): a 360 rotation of the stick while holding the partner swings it
+	 * round as a weapon. Its own command per sense, like the spin of GSTNSpinDrill, because the sense is decided by the slot, before the ability runs
+	 */
+	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Link_Spin_Clockwise);
+
+	/** Grab spin of the grabber role, counterclockwise (see Command_Link_Spin_Clockwise) */
+	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Link_Spin_CounterClockwise);
 
 	/** Attack command of the latcher role (a move whose hitbox lands only on the partner it rides). Part of the standard command set (F12b) */
 	GSTNLINKCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(Command_Link_Latch_Attack);

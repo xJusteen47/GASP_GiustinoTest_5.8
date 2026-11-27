@@ -29,6 +29,7 @@ namespace GSTNCommandTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Movement_FastFall, "Command.Movement.FastFall", "Fast fall while descending");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Movement_Dash, "Command.Movement.Dash", "Dash: a burst of speed along the facing, perpendicular to the local gravity");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Defence_Dodge, "Command.Defence.Dodge", "Dodge: a ground dodge when grounded, an air dodge when airborne (two bindings by context)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Defence_Dodge_CrouchJump, "Command.Defence.Dodge.CrouchJump", "The dodge entered as crouch held + stick + jump (mirrored from the dodge rows by the binding compiler)");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Interact_Grab, "Command.Interact.Grab", "Interact, short press: grab in the default movement set");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Interact_PickUp, "Command.Interact.PickUp", "Interact, long press: pick up in the default movement set");
 }

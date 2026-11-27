@@ -32,6 +32,13 @@ namespace GSTNSpinDrillLibrary
 		{
 			Binding.Requirements.IgnoreTags.AddTag(Mover_IsInAir);
 		}
+		// While grabbing a partner, stick rotations drive Command.Link.Spin.* (360 deg), never Command.Movement.Spin.* (whose MakeKeys 270 deg shortcut would otherwise steal it).
+		// Resolved by name so GSTNSpinDrillGAS adds no C++ header dependency on GSTNLinkCore.
+		const FGameplayTag RoleGrabber = FGameplayTag::RequestGameplayTag(TEXT("Combat.Link.Role.Grabber"), false);
+		if (RoleGrabber.IsValid())
+		{
+			Binding.Requirements.IgnoreTags.AddTag(RoleGrabber);
+		}
 		return Binding;
 	}
 

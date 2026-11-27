@@ -28,6 +28,8 @@ namespace GSTNLinkTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(BreakReason_Forced, "Combat.Link.BreakReason.Forced", "Game code, a cutscene or a granted immunity forced the break. Carried by the LinkBroken event");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(HitType_Throw, "Combat.HitType.Throw", "A throw hit, delivered straight to the partner's inbox without a hitbox overlap; skips parry and shield. Set on the hit data");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(HitType_Pummel, "Combat.HitType.Pummel", "A pummel hit that lands only on the linked partner, with no knockback, and never breaks the link. Set on the hit data");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(HitType_GrabSpin, "Combat.HitType.GrabSpin", "The ring hit of the grab spin on the fighters around the grabber; the held partner takes its own pummel hit");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(HitType_GrabSpinWall, "Combat.HitType.GrabSpin.Wall", "The grab spin slamming the held partner into a wall: damage and hitstop, the partner stays held");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Mover_Linked, "Combat.Mover.Linked", "Mover tag carried by the linked modifier while a parked role is linked; triggers the linked mode transition. Added and removed with the modifier");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Interact_Target_Grab, "Interact.Target.Grab", "A grabbable entity is the nearest interactable in reach. Projected by the link tick extension; the grab binding requires it");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Grab, "Command.Link.Grab", "Grab command, a tap of the interact button, requiring Interact.Target.Grab. Part of the standard command set");
@@ -41,6 +43,8 @@ namespace GSTNLinkTags
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Throw_Neutral, "Command.Link.Throw.Neutral", "Neutral throw (N.) of the grabber role: attack with a neutral stick in the Notation throw input mode");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Throw_CrouchForward, "Command.Link.Throw.CrouchForward", "Crouch forward throw (Cr.F.) of the grabber role: attack with crouch held and the stick tilted, Notation throw input mode");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Release_PutDown, "Command.Link.Release.PutDown", "Put-down of the grabber role: the dodge press bound to the kit's Release ability (the partner is set down, not thrown)");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Spin_Clockwise, "Command.Link.Spin.Clockwise", "Grab spin of the grabber role, clockwise: a 360 stick rotation while holding the partner swings it round as a weapon");
+	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Spin_CounterClockwise, "Command.Link.Spin.CounterClockwise", "Grab spin of the grabber role, counterclockwise: a 360 stick rotation while holding the partner swings it round as a weapon");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Command_Link_Latch_Attack, "Command.Link.Latch.Attack", "Attack command of the latcher role, an attack press, its hitbox landing only on the ridden partner. Part of the standard command set");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Input_Lock_Command_Link, "Input.Lock.Command.Link", "Locks the link command family. An ordinary count granted by abilities and gameplay effects");
 	UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_LinkFormed, "Combat.Event.LinkFormed", "A link formed. Authoritative event published once per key by the watchdog or the pipeline when the response is sent");
@@ -58,11 +62,12 @@ UE_DEFINE_GAMEPLAY_TAG_COMMENT(Event_Link_PartnerMoveAborted, "Combat.Event.Link
 			Immunity_Grab, Immunity_Latch, Lock_Link,
 			BreakReason_ShakeOff, BreakReason_Timeout, BreakReason_Distance, BreakReason_OwnDeath, BreakReason_PartnerDeath,
 			BreakReason_Hit, BreakReason_PartnerState, BreakReason_Escape, BreakReason_Release, BreakReason_Throw, BreakReason_Forced,
-			HitType_Throw, HitType_Pummel,
+			HitType_Throw, HitType_Pummel, HitType_GrabSpin, HitType_GrabSpinWall,
 			Mover_Linked, Interact_Target_Grab,
 			Command_Link_Grab, Command_Link_Grab_Special, Command_Link_Pummel, Command_Link_Release,
 			Command_Link_Throw_Forward, Command_Link_Throw_Back, Command_Link_Throw_Up, Command_Link_Throw_Down,
 			Command_Link_Throw_Neutral, Command_Link_Throw_CrouchForward, Command_Link_Release_PutDown,
+			Command_Link_Spin_Clockwise, Command_Link_Spin_CounterClockwise,
 			Command_Link_Latch_Attack, Input_Lock_Command_Link,
 			Event_LinkFormed, Event_LinkBroken, Event_Throw, Event_GrabEscaped, Event_Link_PartnerMoveAborted });
 	}

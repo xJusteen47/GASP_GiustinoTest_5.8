@@ -139,6 +139,19 @@ struct GSTNCOMBATNP_API FGSTN_CombatStateView
 	UPROPERTY(BlueprintReadOnly, Category = "Combat State|Move")
 	int32 MoveStartFrame = INDEX_NONE;
 
+	// ---- Dodge landing
+
+	/**
+	 * Frame of a dodge landing's ending lag, counted from 1 (the landing frame is 1), 0 outside it (FGSTN_DodgeLandingState). The lag is the belly
+	 * part and then the kit's get-up roll (owner 2026-11-25): a landing clip, or the greybox capsule, reads where it is from this and DodgeEndLagFrames
+	 */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat State|Dodge")
+	int32 DodgeEndLagFrame = 0;
+
+	/** Length of that ending lag in frames (a roll-out command cuts it short: it is then the frames it lasted), 0 outside it */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat State|Dodge")
+	int32 DodgeEndLagFrames = 0;
+
 	// ---- Air and ground
 
 	UPROPERTY(BlueprintReadOnly, Category = "Combat State|Air")

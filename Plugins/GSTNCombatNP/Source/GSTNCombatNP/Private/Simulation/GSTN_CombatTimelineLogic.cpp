@@ -2,7 +2,9 @@
 
 #include "Simulation/GSTN_CombatTimelineLogic.h"
 
+#include "Input/GSTN_ButtonMap.h"
 #include "Simulation/GSTN_TimelineTrackHook.h"
+#include "Timeline/GSTN_ChargeHold.h"
 #include "Timeline/GSTN_HoldUntilLanded.h"
 #include "Timeline/GSTN_Landing.h"
 #include "Timeline/GSTN_Ledge.h"
@@ -39,6 +41,7 @@ namespace
 		Core.ActiveSource = Source;
 		Core.TimelineStartFrame = Frame;
 		Core.TimelinePausedFrames = 0;
+		Core.ChargeFrames = 0;
 		Core.RecoilStartFrame = INDEX_NONE;
 		Core.HardContact = FGSTN_HardContactState();
 	Core.StrikeTrack = INDEX_NONE;
@@ -86,6 +89,7 @@ void FGSTN_CombatTimelineLogic::ClearTimeline(FGSTN_CombatSyncCore& Core)
 	Core.ActiveSource = EGSTN_ActivationSource::Command;
 	Core.TimelineStartFrame = INDEX_NONE;
 	Core.TimelinePausedFrames = 0;
+	Core.ChargeFrames = 0;
 	Core.RecoilStartFrame = INDEX_NONE;
 	Core.HardContact = FGSTN_HardContactState();
 	Core.StrikeTrack = INDEX_NONE;
@@ -296,6 +300,27 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 		}
 	}
 
+	// Charge Hold (owner 2026-11-25, FGSTN_TimelineTrack_ChargeHold): the move's button held without a break since the start stands the timeline on the
+	// hold frame, up to the track's cap; ChargeFrames counts it for the damage bonus. The button is read from the input of the end of the previous frame,
+	// as the shield's hold reads it. Not on a hitstop frame (the timeline stands already) and never on a frame a Hold Until Landed jumped
+	bool bChargeStall = false;
+	bool bChargeRelease = false;
+	int32 ChargeTrackIndex = INDEX_NONE;
+	const FGSTN_TimelineTrack_ChargeHold* ChargeTrack = FGSTN_ChargeHold::FindTrack(*Data, &ChargeTrackIndex);
+	if (ChargeTrack && !bHitstopFrame && ClockPrevious == Previous && Previous >= 0)
+	{
+		const int32 Button = HookEnvironment && HookEnvironment->Buttons ? HookEnvironment->Buttons->GetIndex(ChargeTrack->ResolveHoldButton()) : INDEX_NONE;
+		const bool bHeld = FGSTN_ChargeHold::IsHeldSinceStart(Core.Input.History, Button, Core.TimelineStartFrame);
+		bChargeStall = FGSTN_ChargeHold::ShouldStall(*ChargeTrack, Previous, Frame - Core.TimelineStartFrame, bHeld);
+		// The tick after the hold frame: the montage the stall paused plays on (a tap passes here too: resuming a montage that is not paused is nothing)
+		bChargeRelease = !bChargeStall && Previous == ChargeTrack->StartFrame;
+		if (bChargeStall)
+		{
+			bStall = true;
+			Core.ChargeFrames = static_cast<uint8>(FMath::Min<int32>(Core.ChargeFrames + 1, MAX_uint8));
+		}
+	}
+
 	// The track hooks of the plugins (a hold stalls the timeline, a parry track stamps a window): asked before the pause is counted, with the frame the timeline is on.
 	// A stall is a pause like the hitstop's, but it does not touch PausedFramesTotal, so the combat clock and the buffers keep running
 	FGSTN_StampedWindowList Stamped;
@@ -310,6 +335,8 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 	}
 	EvaluateInto(Core, Frame, ClockPrevious >= 0 ? ClockPrevious : INDEX_NONE, *Data, DefaultOverrideFrames, Output);
 	Output.StampedWindows = MoveTemp(Stamped);
+	Output.bChargeHoldStall = bChargeStall;
+	Output.bChargeHoldRelease = bChargeRelease;
 
 	if (Output.bFinished || (Frame > Core.TimelineStartFrame && !bAbilityActive))
 	{

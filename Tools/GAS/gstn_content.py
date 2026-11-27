@@ -15,6 +15,10 @@ GSTN = '/Game/GSTN'
 OVERLORD = GSTN + '/Characters/Overlord'
 OVERLORD_KITS = OVERLORD + '/Kits'
 OVERLORD_MOVES = OVERLORD + '/Moves'
+CHARACTERS = GSTN + '/Characters'
+# The other three characters of the roster (owner 2026-11-24): one Kits folder each, like Overlord. Their kits borrow the shared
+# playtest moves until they get their own (Tools/GAS/setup_character_kits.py).
+ROSTER = ('BirdKnight', 'FlameFury', 'Voyager')
 TEST_COMBAT = GSTN + '/_Test/Combat'
 TEST_MAPS = GSTN + '/_Test/Maps'
 EXAMPLES = GSTN + '/_Examples'
@@ -51,6 +55,7 @@ RULES = [
     (r'^GA_Playtest_', move_folder('Playtest')),
     # Overlord kits: the main one, its move variants and the playtest kits (they carry the Overlord dropkick).
     (r'^(KIT|WPN)_Test_(Overlord|Playtest)', OVERLORD_KITS),
+    *[(rf'^(KIT|WPN)_Test_{c}', f'{CHARACTERS}/{c}/Kits') for c in ROSTER],
     # Shared combat content used by game kits.
     (r'^(AM|AS)_React_|^DA_ReactionAnims$', REACTIONS),
     (r'^GA_(Light|Medium|Heavy)_', ARCHETYPES),

@@ -1,0 +1,98 @@
+{
+  "now": {
+    "asset": "Content/AnimPipeline/Published/dair/v9/AM_OverlordDAirV9.uasset",
+    "sha256": "6d4fe627",
+    "from_commit": "98dab88a"
+  },
+  "published": {
+    "sha256": "dc945baf",
+    "commit": "fb40c55e"
+  },
+  "compared": [
+    "length",
+    "rate_scale",
+    "blend_in",
+    "blend_out",
+    "blend_out_trigger",
+    "sections",
+    "slots",
+    "notifies",
+    "curves",
+    "skeleton",
+    "sections_api",
+    "notifies_api",
+    "notify_tracks",
+    "props_seen"
+  ],
+  "content_differences": {},
+  "path_refs_now": {
+    "anims": [
+      "/Game/GSTN/Characters/Overlord/Moves/DAir/AS_OverlordDAirV9.AS_OverlordDAirV9"
+    ],
+    "skeleton": "/Game/Characters/UEFN_Mannequin/Meshes/SK_UEFN_Mannequin.SK_UEFN_Mannequin"
+  },
+  "path_refs_published": {
+    "anims": [
+      "/Game/GSTN/Characters/Overlord/Moves/DAir/AS_OverlordDAirV9.AS_OverlordDAirV9"
+    ],
+    "skeleton": "/Game/Characters/UEFN_Mannequin/Meshes/SK_UEFN_Mannequin.SK_UEFN_Mannequin"
+  },
+  "verdict": "PASS",
+  "detail_now": {
+    "path_refs": {
+      "anims": [
+        "/Game/GSTN/Characters/Overlord/Moves/DAir/AS_OverlordDAirV9.AS_OverlordDAirV9"
+      ],
+      "skeleton": "/Game/Characters/UEFN_Mannequin/Meshes/SK_UEFN_Mannequin.SK_UEFN_Mannequin"
+    },
+    "length": 0.7,
+    "rate_scale": 1.0,
+    "blend_in": 0.0333,
+    "blend_out": 0.1333,
+    "blend_out_trigger": -1.0,
+    "sections": [],
+    "slots": [
+      {
+        "slot": "DefaultSlot",
+        "segments": [
+          {
+            "anim": "AS_OverlordDAirV9",
+            "start_pos": 0.0,
+            "anim_start": 0.0,
+            "anim_end": 0.7,
+            "rate": 1.0,
+            "loops": 1
+          }
+        ]
+      }
+    ],
+    "notifies": [],
+    "curves": [],
+    "skeleton": "SK_UEFN_Mannequin",
+    "sections_api": [
+      "Default"
+    ],
+    "notifies_api": [],
+    "notify_tracks": [
+      "1"
+    ],
+    "props_seen": {
+      "composite_sections": false,
+      "notifies": false,
+      "slot_anim_tracks": true
+    }
+  },
+  "string_diff": {
+    "only_in_published": [
+      "/Game/GASNPPTest/Combat/Overlord/AM_OverlordDAirV9 (package path, x2)",
+      "/Game/GASNPPTest/Combat/Overlord/AS_OverlordDAirV9 (referenced anim path)",
+      "1 binary save hash"
+    ],
+    "only_in_now": [
+      "/Game/AnimPipeline/Published/dair/v9/AM_OverlordDAirV9 (package path, x2)",
+      "/Game/GSTN/Characters/Overlord/Moves/DAir/AS_OverlordDAirV9 (referenced anim path)",
+      "1 binary save hash"
+    ]
+  },
+  "method": "2026-11-27 thread M5-M9, _ue59 at origin/main: published blob extracted from fb40c55e (git show | git lfs smudge, sha256 dc945baf), loaded as /Game/_TmpCmp/dair/v9 next to the current file in one UnrealEditor-Cmd -run=pythonscript; compared length, rate, blends, sections (GetNumSections/GetSectionName), slot tracks and segments, notifies (AnimationLibrary), notify tracks, float curves, skeleton; then the printable strings of both .uasset files"
+}
