@@ -79,8 +79,10 @@ UGSTN_GA_LinkTestGrab::UGSTN_GA_LinkTestGrab(const FObjectInitializer& ObjectIni
 	Window.Condition = EGSTN_CancelCondition::OnHit;
 	// The native tags, not a request by name: a class default is built when the module loads, possibly before the tag manager has its tree
 	FGameplayTagContainer Into;
-	for (const FNativeGameplayTag* Tag : { &GSTNLinkTags::Command_Link_Pummel, &GSTNLinkTags::Command_Link_Release, &GSTNLinkTags::Command_Link_Throw_Forward,
-		&GSTNLinkTags::Command_Link_Throw_Back, &GSTNLinkTags::Command_Link_Throw_Up, &GSTNLinkTags::Command_Link_Throw_Down })
+	for (const FNativeGameplayTag* Tag : { &GSTNLinkTags::Command_Link_Pummel, &GSTNLinkTags::Command_Link_Release, &GSTNLinkTags::Command_Link_Release_PutDown,
+		&GSTNLinkTags::Command_Link_Throw_Forward, &GSTNLinkTags::Command_Link_Throw_Back, &GSTNLinkTags::Command_Link_Throw_Up,
+		&GSTNLinkTags::Command_Link_Throw_Down, &GSTNLinkTags::Command_Link_Throw_Neutral, &GSTNLinkTags::Command_Link_Throw_CrouchForward,
+		&GSTNLinkTags::Command_Link_Spin_Clockwise, &GSTNLinkTags::Command_Link_Spin_CounterClockwise })
 	{
 		Into.AddTag(Tag->GetTag());
 	}

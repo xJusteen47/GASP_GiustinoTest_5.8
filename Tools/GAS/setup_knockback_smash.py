@@ -193,6 +193,10 @@ def convert_throws(kit, kit_asset, model, before, after, done):
         name = cls.get_name()
         if name in done:
             continue
+        if name.startswith('GA_Ganon_'):
+            # setup_grab_ganon_playtest.py writes these from Smash Ultimate itself (BKB x 22.5, KBG as is): never reconverted
+            log(f'{kit} {name} (throw {direction}): Ganondorf numbers, left alone')
+            continue
         done.add(name)
         desc = LINK.describe_throw_knockback(cls)
         hits = _hits(desc)

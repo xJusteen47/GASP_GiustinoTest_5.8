@@ -76,6 +76,39 @@ struct GSTNLINKNP_API FGSTN_LinkBreakOutcome : public FGSTN_HitExtension
 	uint8 Reason = 0;
 };
 
+/**
+ * What the LinkRequest step decided about a partner hit that wears the grab down (FGSTN_LinkHitData::GrabTimeCostFrames, the grab spin): the
+ * victim's live Body link of this serial gets its escape frame (EndFrame) moved CostFrames earlier, floored at the frame the hit lands. Handed to
+ * FGSTN_LinkGrabTimeOutcomeApplier. Integers only.
+ */
+USTRUCT()
+struct GSTNLINKNP_API FGSTN_LinkGrabTimeOutcome : public FGSTN_HitExtension
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	uint8 Serial = 0;
+
+	UPROPERTY()
+	int32 CostFrames = 0;
+
+	/** The frame the victim applies the hit (the hit's stamped frame plus one): the escape is never pulled before it */
+	UPROPERTY()
+	int32 ApplyFrame = 0;
+};
+
+/** Applies FGSTN_LinkGrabTimeOutcome to the victim's link fragment (the mash end frame of its Body link of the outcome's serial) */
+class GSTNLINKNP_API FGSTN_LinkGrabTimeOutcomeApplier : public IGSTN_OutcomeExtensionApplier
+{
+public:
+	virtual const UScriptStruct* GetExtensionStruct() const override;
+	virtual void Apply(const FInstancedStruct& Extension, const FGSTN_HitContextView& View, FGSTN_OutcomeApplyContext& Context) const override;
+	virtual void AppendEvents(const FInstancedStruct& Extension, const FGSTN_SimEvent& Envelope, FGSTN_SimEventOutbox& Outbox) const override {}
+
+	/** The new escape frame: EndFrame - Cost, never before min(EndFrame, ApplyFrame); an EndFrame of 0 (no mash) stays 0. Pure, for tests */
+	static int32 ApplyCost(int32 EndFrame, int32 CostFrames, int32 ApplyFrame);
+};
+
 /** Applies FGSTN_LinkBreakOutcome: PendingBreak with its reason on the victim's live link of the outcome's serial */
 class GSTNLINKNP_API FGSTN_LinkBreakOutcomeApplier : public IGSTN_OutcomeExtensionApplier
 {

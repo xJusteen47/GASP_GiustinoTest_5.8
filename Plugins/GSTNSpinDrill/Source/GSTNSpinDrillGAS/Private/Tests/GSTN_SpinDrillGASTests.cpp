@@ -7,10 +7,18 @@
 #include "GSTN_CombatTags.h"
 #include "GSTN_DrillLinkType.h"
 #include "GSTN_LinkRegistry.h"
+#include "GSTN_LinkTags.h"
 #include "Rules/GSTN_LinkRule_Drill.h"
 #include "State/GSTN_LinkState.h"
+#include "Input/GSTN_ButtonMap.h"
+#include "Input/GSTN_CombatButtonTags.h"
 #include "Input/GSTN_CommandBindings.h"
 #include "Input/GSTN_InputConditions.h"
+#include "Input/GSTN_InputHistory.h"
+#include "Input/GSTN_InputScript.h"
+#include "Input/GSTN_InputSettings.h"
+#include "Input/GSTN_LinkSlots.h"
+#include "Input/GSTN_SlotResolver.h"
 #include "GSTN_SpinDrillLibrary.h"
 #include "GSTN_SpinDrillTags.h"
 #include "GSTN_SpinDrillTuning.h"
@@ -19,6 +27,8 @@
 #include "MoverTypes.h"
 #include "Sim/GSTN_DrillFragment.h"
 #include "Sim/GSTN_DrillTickExtension.h"
+#include "UObject/Package.h"
+#include "UObject/StrongObjectPtr.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -95,6 +105,8 @@ bool FGSTN_SpinDrillGASBindingsTest::RunTest(const FString& Parameters)
 	{
 		AddError(Conflict.Message);
 	}
+	const FGameplayTag RoleGrabber = FGameplayTag::RequestGameplayTag(TEXT("Combat.Link.Role.Grabber"), false);
+	TestTrue(TEXT("Combat.Link.Role.Grabber is registered"), RoleGrabber.IsValid());
 	for (int32 Index = 0; Index < Bindings.Num(); ++Index)
 	{
 		const FGSTN_AbilityBinding& Binding = Bindings[Index];
@@ -109,6 +121,11 @@ bool FGSTN_SpinDrillGASBindingsTest::RunTest(const FString& Parameters)
 			TestTrue(TEXT("the drill: Command.Movement.Drill while spinning, last"), Binding.Command.MatchesTagExact(GSTNSpinDrillTags::Command_Movement_Drill)
 				&& Binding.Requirements.RequireTags.HasTagExact(GSTNSpinDrillTags::State_Spinning) && Index == Bindings.Num() - 1);
 			continue;
+		}
+		if (RoleGrabber.IsValid())
+		{
+			TestTrue(*FString::Printf(TEXT("%s (%s): ignores Combat.Link.Role.Grabber"), *Command, *GetNameSafe(Class)),
+				Binding.Requirements.IgnoreTags.HasTagExact(RoleGrabber));
 		}
 		if (const UGSTN_GA_SpinCancel* Cancel = Class ? Cast<UGSTN_GA_SpinCancel>(Class->GetDefaultObject()) : nullptr)
 		{
@@ -244,6 +261,174 @@ bool FGSTN_SpinDrillGASLinkTypeTest::RunTest(const FString& Parameters)
 	Busy.Target.Links.Body.Phase = EGSTN_LinkPhase::Active;
 	Busy.Target.Links.Body.LinkTypeIndex = 1;
 	TestFalse(TEXT("one driller per target: a busy Body channel refuses"), Rule->Evaluate_Implementation(Busy).bAccepted);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_SpinDrillGASGrabSpinCompetitionTest, "GSTNSpinDrill.GAS.Spin.GrabberBlocksMovementSpin", GSTNSpinDrillGASTest::Flags)
+bool FGSTN_SpinDrillGASGrabSpinCompetitionTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNLinkTags;
+	using namespace GSTNSpinDrillTags;
+
+	TStrongObjectPtr<UGSTN_InputSettings> Settings(NewObject<UGSTN_InputSettings>(GetTransientPackage()));
+	Settings->DefaultBufferFrames = 8;
+	Settings->bHoldBufferByDefault = true;
+	Settings->MaxHoldBufferFrames = 0;
+	Settings->DefaultSimultaneityFrames = 3;
+	Settings->SimultaneousFrames = 2;
+	Settings->BufferConflictPolicy = EGSTN_BufferConflictPolicy::MostRecent;
+	Settings->bChordGraceByDefault = false;
+	Settings->ChordGraceFrames = 3;
+	Settings->DiagonalHalfAngle = 22.5f;
+	Settings->WorldReferenceYaw = 0.f;
+	Settings->CommandTiers.Empty();
+	Settings->CommandTiers.Add(FGameplayTag::RequestGameplayTag(TEXT("Command.Link")), 360);
+
+	const TArray<FGameplayTag> Buttons = { GSTNCombatButtonTags::Button_Attack.GetTag(), GSTNCombatButtonTags::Button_Crouch.GetTag() };
+	const FGSTN_ButtonMap ButtonMap(Buttons);
+
+	// Competing slots: movement spin with keyboard shortcut (270 deg MakeKeys) + grab spin (360 deg only)
+	TArray<FGSTN_InputSlotSpec> Slots = FGSTN_SpinSlots::Build(true);
+	Slots.Add(UGSTN_LinkSlots::BuildGrabSpinSlot(Command_Link_Spin_Clockwise));
+	Slots.Add(UGSTN_LinkSlots::BuildGrabSpinSlot(Command_Link_Spin_CounterClockwise));
+	TArray<const FGSTN_InputSlotSpec*> SlotPtrs;
+	for (const FGSTN_InputSlotSpec& Spec : Slots)
+	{
+		SlotPtrs.Add(&Spec);
+	}
+
+	// Competing bindings: MakeDefaultSpinBindings + grab spin bindings requiring Role_Grabber
+	TArray<FGSTN_AbilityBinding> Bindings = UGSTN_SpinDrillLibrary::MakeDefaultSpinBindings(true);
+	for (const FGameplayTag& LinkSpinCmd : { Command_Link_Spin_Clockwise.GetTag(), Command_Link_Spin_CounterClockwise.GetTag() })
+	{
+		FGSTN_AbilityBinding GrabSpin;
+		GrabSpin.Command = LinkSpinCmd;
+		GrabSpin.Requirements.RequireTags.AddTag(Role_Grabber);
+		Bindings.Add(MoveTemp(GrabSpin));
+	}
+
+	auto CanExecuteSlot = [&Slots, &Bindings](int32 SlotIndex, const FGameplayTagContainer& OwnerTags) -> bool
+	{
+		const FGameplayTag& Command = Slots[SlotIndex].Command;
+		TArray<const FGSTN_TagRequirements*, TInlineAllocator<8>> Candidates;
+		for (const FGSTN_AbilityBinding& Binding : Bindings)
+		{
+			if (Binding.Command == Command)
+			{
+				Candidates.Add(&Binding.Requirements);
+			}
+		}
+		return UGSTN_CommandBindingUtils::SelectBinding(Candidates, OwnerTags) != INDEX_NONE;
+	};
+
+	auto StepCCW = [&Settings, &Buttons](FGSTN_InputScript& Script, FGSTN_InputHistory& History, int32 Step)
+	{
+		const int32 Angle = ((-Step * 45) % 360 + 360) % 360;
+		FString Error;
+		const FString Token = FString::Printf(TEXT("%d:@%d"), Step * 2, Angle);
+		if (!Script.Parse(Token, Error) || !Script.Advance(History, *Settings, Step * 2, &Error))
+		{
+			return false;
+		}
+		return true;
+	};
+
+	// 1. With Combat.Link.Role.Grabber in OwnerTags: at k=6 (270 deg) Movement.Spin.CCW is NOT selected and does NOT consume stick history;
+	//    at k=8 (360 deg) Command.Link.Spin.CounterClockwise wins.
+	{
+		FGameplayTagContainer GrabberTags;
+		GrabberTags.AddTag(Role_Grabber);
+
+		FGSTN_InputScript Script(Buttons);
+		FGSTN_InputHistory History;
+		FGameplayTag WonAtStep6;
+		FGameplayTag WonAtStep8;
+		int32 ConsumedBeforeStep8 = FGSTN_InputHistory::AncientFrame;
+
+		for (int32 Step = 0; Step <= 8; ++Step)
+		{
+			if (!TestTrue(*FString::Printf(TEXT("grabber CCW step %d advances"), Step), StepCCW(Script, History, Step)))
+			{
+				return false;
+			}
+			FGSTN_ResolveParams Params;
+			Params.Buttons = &ButtonMap;
+			Params.Now = History.GetLatestFrame();
+			const FGSTN_SlotResolution Res = FGSTN_SlotResolver::Resolve(SlotPtrs, History, Params, *Settings,
+				[&](int32 SlotIdx) { return CanExecuteSlot(SlotIdx, GrabberTags); });
+
+			if (Step < 8)
+			{
+				TestEqual(*FString::Printf(TEXT("grabber step %d: nothing fires before 360 deg"), Step), Res.SlotIndex, static_cast<int32>(INDEX_NONE));
+				if (Step == 6)
+				{
+					WonAtStep6 = Res.SlotIndex != INDEX_NONE ? Slots[Res.SlotIndex].Command : FGameplayTag();
+					ConsumedBeforeStep8 = History.GetLastConsumedStickFrame();
+				}
+			}
+			else
+			{
+				if (TestNotEqual(TEXT("grabber step 8: grab spin fires at 360 deg"), Res.SlotIndex, static_cast<int32>(INDEX_NONE)))
+				{
+					WonAtStep8 = Slots[Res.SlotIndex].Command;
+					Res.ConsumeFrom(History);
+				}
+			}
+		}
+		TestFalse(TEXT("grabber step 6 (270 deg): Movement.Spin.CCW did not steal input"), WonAtStep6.IsValid());
+		TestEqual(TEXT("grabber step 6: stick history was not consumed"), ConsumedBeforeStep8, FGSTN_InputHistory::AncientFrame);
+		TestEqual(TEXT("grabber step 8 (360 deg): Link.Spin.CounterClockwise selected"), WonAtStep8, Command_Link_Spin_CounterClockwise.GetTag());
+		TestNotEqual(TEXT("grabber step 8: stick anchor consumed after Link.Spin"), History.GetLastConsumedStickFrame(), FGSTN_InputHistory::AncientFrame);
+	}
+
+	// 2. Without Role_Grabber: regular movement spin still wins (stick sweep at k=6 and A-S-D / D-S-A keyboard shortcuts)
+	{
+		const FGameplayTagContainer GroundedTags;
+		FGSTN_InputScript Script(Buttons);
+		FGSTN_InputHistory History;
+		FGameplayTag WonAtStep6;
+		for (int32 Step = 0; Step <= 6; ++Step)
+		{
+			if (!TestTrue(*FString::Printf(TEXT("non-grabber CCW step %d advances"), Step), StepCCW(Script, History, Step)))
+			{
+				return false;
+			}
+			FGSTN_ResolveParams Params;
+			Params.Buttons = &ButtonMap;
+			Params.Now = History.GetLatestFrame();
+			const FGSTN_SlotResolution Res = FGSTN_SlotResolver::Resolve(SlotPtrs, History, Params, *Settings,
+				[&](int32 SlotIdx) { return CanExecuteSlot(SlotIdx, GroundedTags); });
+			if (Step == 6 && Res.SlotIndex != INDEX_NONE)
+			{
+				WonAtStep6 = Slots[Res.SlotIndex].Command;
+			}
+		}
+		TestEqual(TEXT("without Role_Grabber: Movement.Spin.CounterClockwise wins at step 6"), WonAtStep6, Command_Movement_Spin_CounterClockwise.GetTag());
+
+		// Keyboard A-S-D (Left -> Down -> Right) and D-S-A (Right -> Down -> Left) regression check
+		auto ResolveKeyMotion = [&](const TCHAR* Notation) -> FGameplayTag
+		{
+			FGSTN_InputScript KeyScript(Buttons);
+			FGSTN_InputHistory KeyHistory;
+			FString Error;
+			if (!KeyScript.Parse(Notation, Error) || !KeyScript.Advance(KeyHistory, *Settings, KeyScript.GetLastFrame(), &Error))
+			{
+				AddError(Error);
+				return FGameplayTag();
+			}
+			FGSTN_ResolveParams Params;
+			Params.Buttons = &ButtonMap;
+			Params.Now = KeyHistory.GetLatestFrame();
+			const FGSTN_SlotResolution Res = FGSTN_SlotResolver::Resolve(SlotPtrs, KeyHistory, Params, *Settings,
+				[&](int32 SlotIdx) { return CanExecuteSlot(SlotIdx, GroundedTags); });
+			return Res.SlotIndex != INDEX_NONE ? Slots[Res.SlotIndex].Command : FGameplayTag();
+		};
+		TestEqual(TEXT("A-S-D without Role_Grabber selects Movement.Spin.CounterClockwise"),
+			ResolveKeyMotion(TEXT("0:4t 2:2t 4:6t")), Command_Movement_Spin_CounterClockwise.GetTag());
+		TestEqual(TEXT("D-S-A without Role_Grabber selects Movement.Spin.Clockwise"),
+			ResolveKeyMotion(TEXT("0:6t 2:2t 4:4t")), Command_Movement_Spin_Clockwise.GetTag());
+	}
+
 	return true;
 }
 
