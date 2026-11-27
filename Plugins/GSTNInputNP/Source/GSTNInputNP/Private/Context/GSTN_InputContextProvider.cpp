@@ -42,7 +42,9 @@ void UGSTN_BlueprintInputContextProvider::AppendFrameEvents(uint8 PreviousFinger
 
 UGSTN_MoverInputContextProvider::UGSTN_MoverInputContextProvider()
 {
-	GroundedModes = { DefaultModeNames::Walking };
+	// "Sliding" is the Game Animation Sample's slide mode (crouch at run speed enters it). It is on the ground: without it the context was neither
+	// grounded nor airborne during the slide, so no ground binding matched and run + crouch + jump (the crouch-jump dodge, a Mario long jump) did nothing
+	GroundedModes = { DefaultModeNames::Walking, FName(TEXT("Sliding")) };
 	AirborneModes = { DefaultModeNames::Falling, DefaultModeNames::Flying };
 
 	MoverTags.AddTag(Mover_IsOnGround);

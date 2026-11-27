@@ -6,6 +6,7 @@
 #include "Engine/DeveloperSettings.h"
 #include "GameplayTagContainer.h"
 #include "Input/GSTN_InputSlot.h"
+#include "Input/GSTN_MovementSlots.h"
 #include "Jump/GSTN_JumpTypes.h"
 #include "Timeline/GSTN_TimelineTypes.h"
 class UGSTN_CombatRules;
@@ -158,6 +159,14 @@ public:
 	/** Frames of press that turn an interact tap (grab) into a hold (pick up) in the default movement slots (UGSTN_MovementSlots) */
 	UPROPERTY(Config, EditAnywhere, Category = "Combat|Interact", meta = (ClampMin = "1", ClampMax = "120", ForceUnits = "Frames"))
 	int32 InteractHoldFrames = 12;
+
+	/**
+	 * How the dodge is entered (owner 2026-11-25): the dodge button, crouch + stick + jump (Odyssey long jump), or both. Applied when a loadout's
+	 * binding table is compiled (FGSTN_BindingTableCompiler mirrors or drops the dodge rows), so it changes nothing mid-match and every machine
+	 * compiles the same table from the same config. A player option later reads and writes this value
+	 */
+	UPROPERTY(Config, EditAnywhere, Category = "Combat|Dodge")
+	EGSTN_DodgeInputMethod DodgeInput = EGSTN_DodgeInputMethod::Both;
 
 	/**
 	 * Last fallback of the ricochet recoil of a Swing hitbox group (plan precisione-weakpoint, owner 2026-11-09): used when neither the group, the

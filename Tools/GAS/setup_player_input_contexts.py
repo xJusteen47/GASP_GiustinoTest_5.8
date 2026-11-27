@@ -54,7 +54,8 @@ def _config(path, imc):
     return f'{path.rsplit("/", 1)[-1]}: contexts {len(contexts) + 1}, replaced {len(replaced) + 1}'
 
 
-# Owner's pad layout (2026-11-13, final): X light, Y special, RT strong, RB dodge, LT crouch, A jump, B grab/interact; the shield goes to the free LB.
+# Owner's pad layout (2026-11-13; 2026-11-25: crouch on L/LB, shield on ZL/LT when enabled): X light, Y special, RT strong, RB dodge, LB crouch,
+# LT shield, A jump, B grab/interact. The dodge is also crouch + stick + jump (UGSTN_CombatSettings::DodgeInput).
 # Crouch gets its own action: the config's Crouch button used GASP's IA_Crouch, which the GASP character Blueprint also answers (its crouch and
 # slide on RB, owner playtest). key name -> action asset path, in IMC_GASNPP_Test; the key's other mappings in that context are removed first.
 COMBAT_CONTEXT = '/Game/GSTN/Input/IMC_GASNPP_Test'
@@ -66,10 +67,10 @@ GASP_CROUCH = '/Game/Input/IA_Crouch'
 RUNBOOST_ACTION = '/Game/GSTN/Input/IA_GASNPP_RunBoost'
 PAD_LAYOUT = {
     'Gamepad_LeftThumbstick': RUNBOOST_ACTION,
-    'Gamepad_LeftTrigger': CROUCH_ACTION,
+    'Gamepad_LeftShoulder': CROUCH_ACTION,
     'C': CROUCH_ACTION,
     'Gamepad_RightShoulder': '/Game/GSTN/Input/IA_GASNPP_Dodge',
-    'Gamepad_LeftShoulder': '/Game/GSTN/Input/IA_GASNPP_Shield',
+    'Gamepad_LeftTrigger': '/Game/GSTN/Input/IA_GASNPP_Shield',
 }
 
 

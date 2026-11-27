@@ -310,6 +310,16 @@ MOVE_SEQUENCES = [
     {'name': 'gb_loco', 'taps': [470], 'frames': 540, 'dummy': None, 'shoot': True, 'follow': True,
      'sticks': [(20, (0, 1, 0)), (140, None), (200, (0, 1, 0)), (290, (0, -1, 0)), (330, None)],
      'jump': (370, 24), 'crouch_hold': (430, 25)},
+    # dodge dive + roll (owner 2026-11-25, thread dodge-dive-roll): on the capsule. 'presses' frames are from PRE. Run then dodge button; dodge from
+    # still; run then crouch held + jump (the crouch-jump dodge, UGSTN_CombatSettings::DodgeInput Both); run, dodge, jump on the belly (roll-out)
+    {'name': 'gb_dodge_run', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True,
+     'sticks': [(20, (0, 1, 0)), (200, None)], 'presses': [(110, 'Dodge', None)]},
+    {'name': 'gb_dodge_still', 'taps': [], 'frames': 160, 'dummy': None, 'shoot': True, 'follow': True, 'presses': [(20, 'Dodge', None)]},
+    {'name': 'gb_dodge_crouchjump', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True,
+     'sticks': [(20, (0, 1, 0)), (200, None)], 'crouch_hold': (108, 12), 'presses': [(110, 'Jump', None)]},
+    {'name': 'gb_dodge_rollout', 'taps': [], 'frames': 260, 'dummy': None, 'shoot': True, 'follow': True,
+     'sticks': [(20, (0, 1, 0)), (200, None)],
+     'presses': [(110, 'Dodge', None), (int(os.environ.get('PIE_CAPTURE_ROLLOUT_AT', 150)), 'Jump', None)]},
     # greybox run 4: sideways brakes (run right, let go; run right, reverse to left, let go)
     {'name': 'gb_side', 'taps': [], 'frames': 340, 'dummy': None, 'shoot': True, 'follow': True,
      'sticks': [(20, (1, 0, 0)), (120, None), (180, (1, 0, 0)), (270, (-1, 0, 0)), (300, None)]},

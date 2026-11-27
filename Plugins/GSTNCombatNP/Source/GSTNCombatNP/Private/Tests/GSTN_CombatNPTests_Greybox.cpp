@@ -142,6 +142,43 @@ bool FGSTN_GreyboxShapeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_GreyboxDiveTest, "GSTNCombat.NP.Greybox.Dive", GSTN_GREYBOX_TEST_FLAGS)
+bool FGSTN_GreyboxDiveTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-25: Mario 64 dive on the capsule. Air tilt, belly on landing, get-up roll round to upright in the last frames of the lag
+	const FGSTN_GreyboxShapeSettings Settings;
+	constexpr float Rate = 62.5f;
+	TestTrue(TEXT("take-off: still upright"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::DiveAngle(Settings, 0.f, -1.f, 0.f, 0.f)));
+	TestTrue(TEXT("air: full tilt after the tilt frames"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::DiveAngle(Settings,
+		Settings.DiveTiltFrames / Rate, -1.f, 0.f, 0.f), Settings.DiveAngleDeg));
+	TestTrue(TEXT("air: tips toward the travel"), UGSTN_GreyboxAnimInstance::DiveAngle(Settings, 2.f / Rate, -1.f, 0.f, 0.f) > 0.f);
+
+	const float Lag = 18.f / Rate;  // 8 belly + 10 roll, the kit defaults
+	const float Land = Settings.DiveAngleDeg;
+	TestTrue(TEXT("touchdown: where it landed"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::DiveAngle(Settings, 0.f, 0.f, Lag, Land), Land));
+	TestTrue(TEXT("belly slide: flat on the belly"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::DiveAngle(Settings, 0.f, 6.f / Rate, Lag, Land),
+		Settings.DiveBellyDeg));
+	TestTrue(TEXT("lag end: upright after a full turn"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::DiveAngle(Settings, 0.f, Lag, Lag, Land), 360.f));
+	TestTrue(TEXT("mid roll: past lying, before upright"), FMath::IsWithin(UGSTN_GreyboxAnimInstance::DiveAngle(Settings, 0.f, 13.f / Rate, Lag, Land),
+		Settings.DiveBellyDeg + 1.f, 359.f));
+	// Rendered at 60 Hz, no frame of the whole lag turns the capsule more than 60 degrees (a 10-frame 270-degree roll, eased)
+	float MaxStep = 0.f;
+	for (int32 i = 0; i < 18; ++i)
+	{
+		const float A = UGSTN_GreyboxAnimInstance::DiveAngle(Settings, 0.f, i / 60.f, Lag, Land);
+		const float B = UGSTN_GreyboxAnimInstance::DiveAngle(Settings, 0.f, (i + 1) / 60.f, Lag, Land);
+		TestTrue(*FString::Printf(TEXT("the roll only goes forward (frame %d)"), i), B >= A - 1.e-3f);
+		MaxStep = FMath::Max(MaxStep, B - A);
+	}
+	TestTrue(FString::Printf(TEXT("no rendered frame turns more than 60 deg (%.0f)"), MaxStep), MaxStep <= 60.f);
+	// Owner 2026-11-25: the air crouch tucks the capsule, less than the ground crouch can squash it
+	TestTrue(TEXT("air crouch squashes"), Settings.AirCrouchSquash < 1.f);
+	TestTrue(TEXT("air crouch is less squashed than the ground crouch's floor"), Settings.AirCrouchSquash > Settings.MinPelvisSquash);
+	// A lag shorter than the roll is all roll
+	TestTrue(TEXT("short lag: rolls at once"), UGSTN_GreyboxAnimInstance::DiveAngle(Settings, 0.f, 2.f / Rate, 4.f / Rate, Land) > Settings.DiveBellyDeg);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_GreyboxSpringTest, "GSTNCombat.NP.Greybox.Spring", GSTN_GREYBOX_TEST_FLAGS)
 bool FGSTN_GreyboxSpringTest::RunTest(const FString& Parameters)
 {

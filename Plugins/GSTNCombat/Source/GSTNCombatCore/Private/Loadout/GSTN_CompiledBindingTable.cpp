@@ -1,7 +1,10 @@
 // Pure combat logic (no GAS, no Network Prediction).
 
 #include "Loadout/GSTN_CompiledBindingTable.h"
+#include "Input/GSTN_CombatCommandTags.h"
+#include "Input/GSTN_CombatSettings.h"
 #include "Input/GSTN_InputSettings.h"
+#include "Input/GSTN_MovementSlots.h"
 #include "Input/GSTN_InputSlotValidation.h"
 #include "Kits/GSTN_SuperInputScheme.h"
 #include "NativeGameplayTags.h"
@@ -50,6 +53,37 @@ namespace
 		FGSTN_InputSlotSpec Slot;
 		FSoftObjectPath TimelineOverride;
 	};
+
+	/**
+	 * Dodge input method (owner 2026-11-25) for the rows of one source: CrouchJump and Both add, for every Command.Defence.Dodge row, a twin under
+	 * Command.Defence.Dodge.CrouchJump with the crouch-jump slot (same ability, requirements, priority, buffer and timeline); Button and Both keep
+	 * the button rows, CrouchJump drops them. A source that binds the crouch-jump command itself keeps its own rows and gets no twin. Pure
+	 */
+	void ApplyDodgeInputMethod(TArray<FPendingEntry>& Own, EGSTN_DodgeInputMethod Method)
+	{
+		const FGameplayTag Dodge = GSTNCommandTags::Defence_Dodge.GetTag();
+		const FGameplayTag CrouchJump = GSTNCommandTags::Defence_Dodge_CrouchJump.GetTag();
+		const bool bHasOwnCrouchJump = Own.ContainsByPredicate([&CrouchJump](const FPendingEntry& Pending) { return Pending.Entry.Command == CrouchJump; });
+		TArray<FPendingEntry> Twins;
+		if (Method != EGSTN_DodgeInputMethod::Button && !bHasOwnCrouchJump)
+		{
+			const FGSTN_InputSlotSpec Slot = UGSTN_MovementSlots::MakeDodgeCrouchJumpSlot();
+			for (const FPendingEntry& Pending : Own)
+			{
+				if (Pending.Entry.Command == Dodge)
+				{
+					FPendingEntry& Twin = Twins.Add_GetRef(Pending);
+					Twin.Entry.Command = CrouchJump;
+					Twin.Slot = Slot;
+				}
+			}
+		}
+		if (Method == EGSTN_DodgeInputMethod::CrouchJump)
+		{
+			Own.RemoveAll([&Dodge](const FPendingEntry& Pending) { return Pending.Entry.Command == Dodge; });
+		}
+		Own.Append(MoveTemp(Twins));
+	}
 
 	/** Whenever Narrow is satisfied, Broad is too: Broad requires a subset and ignores a subset */
 	bool Covers(const FGSTN_TagRequirements& Broad, const FGSTN_TagRequirements& Narrow)
@@ -357,6 +391,17 @@ FGSTN_CompiledBindingTable FGSTN_BindingTableCompiler::Compile(const FGSTN_Compi
 		if (Replaced == 0)
 		{
 			Report.AddWarning(FString::Printf(TEXT("Customisation %d swaps %s on weapon %d, which binds nothing to it, and is ignored."), Index, *Customisation.Command.ToString(), Customisation.WeaponIndex));
+		}
+	}
+
+	// Dodge input method (owner 2026-11-25): every dodge row gets a twin entered as crouch + stick + jump (Command.Defence.Dodge.CrouchJump, same
+	// ability, requirements and timeline), and/or loses its button row. Before the fallbacks, so a borrowed move never takes the dodge's place
+	{
+		const EGSTN_DodgeInputMethod Method = Input.DodgeInputOverride.IsSet() ? Input.DodgeInputOverride.GetValue() : UGSTN_CombatSettings::Get().DodgeInput;
+		ApplyDodgeInputMethod(KitEntries, Method);
+		for (TArray<FPendingEntry>& Weapon : WeaponEntries)
+		{
+			ApplyDodgeInputMethod(Weapon, Method);
 		}
 	}
 

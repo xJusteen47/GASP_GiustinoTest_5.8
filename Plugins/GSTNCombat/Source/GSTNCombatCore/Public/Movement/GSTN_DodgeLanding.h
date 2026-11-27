@@ -18,6 +18,21 @@ namespace GSTNCombatTags
 	GSTNCOMBATCORE_API UE_DECLARE_GAMEPLAY_TAG_EXTERN(State_Dodge_EndLag);
 }
 
+/** How long the belly part of a dodge landing lasts (owner 2026-11-25, 1A as an option, 1B the default) */
+UENUM(BlueprintType)
+enum class EGSTN_DodgeBellyMode : uint8
+{
+	/** A fixed number of frames (EndLagFrames, or the move's), then the get-up roll: the lag is the same at any landing speed */
+	Fixed,
+
+	/**
+	 * Mario 64 dive slide: the body slides on its belly until the slide's friction stops it (LandingSlide), then the get-up roll. The frames are
+	 * worked out once on the landing frame from the landing speed and the slide's deceleration (never fewer than the fixed ones, at most
+	 * MaxBellyFrames), so the lag is a number in the sync state like any other. A Jump in RecoveryCommands is the roll-out that cuts it
+	 */
+	UntilStopped
+};
+
 /**
  * A kit's dodge landing (owner 2026-11-17, scope: the ground long-jump dodge and the air dodge that reuses it). A kit without this extension
  * gets these defaults, so every kit has the lag and the re-dodge lock; the extension is only added to tune them. Data per kit, nothing in the
@@ -41,6 +56,24 @@ struct GSTNCOMBATCORE_API FGSTN_DodgeLandingKitExtension : public FGSTN_KitExten
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dodge Landing", meta = (ClampMin = "-1", ClampMax = "255", ForceUnits = "Frames"))
 	int32 EndLagFrames = -1;
 
+	/** Belly part of the lag: fixed (1A) or until the slide stops (1B, default; owner 2026-11-25) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dodge Landing")
+	EGSTN_DodgeBellyMode BellyMode = EGSTN_DodgeBellyMode::UntilStopped;
+
+	/** UntilStopped: the longest the belly slide may hold the character, frames (the whole lag stays within 255 with the get-up roll) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dodge Landing", meta = (ClampMin = "1", ClampMax = "200", ForceUnits = "Frames",
+		EditCondition = "BellyMode == EGSTN_DodgeBellyMode::UntilStopped"))
+	int32 MaxBellyFrames = 60;
+
+	/**
+	 * Get-up roll (owner 2026-11-25: "the Mario 64 dive and the roll to get back up"): frames added at the end of the ending lag in which
+	 * the character rolls forward from the belly back onto its feet. Same rules as the rest of the lag (no action, vulnerable, the belly slide's
+	 * speed carries into it); the presentation turns the body over in these last frames (the greybox capsule: DiveGetUpRollFrames, keep them
+	 * equal). The total lag is EndLagFrames (or the move's) plus this. 0 = no roll, the body is up when the lag ends (before 2026-11-25)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dodge Landing|Get-Up Roll", meta = (ClampMin = "0", ClampMax = "120", ForceUnits = "Frames"))
+	int32 GetUpRollFrames = 10;
+
 	/**
 	 * Frames from the landing, counted from 1, in which LockedCommands are refused (owner 1A: no dodging again straight after landing). It runs
 	 * alongside the ending lag, so only the frames past the lag add anything. The input buffer is the usual one: a dodge pressed in the lock starts
@@ -54,11 +87,16 @@ struct GSTNCOMBATCORE_API FGSTN_DodgeLandingKitExtension : public FGSTN_KitExten
 	FGameplayTagContainer LockedCommands;
 
 	/**
-	 * Roll-out (Mario 64 dive recovery): commands that may start inside the ending lag from RecoveryFromFrame on, ending the lag there. Empty = off
-	 * (default): the lag runs to its end. A locked command stays refused even when listed here
+	 * Roll-out (Mario 64 dive recovery): commands that may start inside the ending lag from RecoveryFromFrame on, ending the lag there, on top of
+	 * the jump when bJumpRollsOut. Empty and bJumpRollsOut off = no roll-out, the lag runs to its end. A locked command stays refused even when
+	 * listed here
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dodge Landing|Recovery", meta = (Categories = "Command"))
 	FGameplayTagContainer RecoveryCommands;
+
+	/** Owner 2026-11-25 (1B): Command.Movement.Jump on the belly (or in the get-up roll) is a roll-out, as if listed in RecoveryCommands */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dodge Landing|Recovery")
+	bool bJumpRollsOut = true;
 
 	/** The first frame of the ending lag (counted from 1, the landing frame is 1) a recovery command may start on */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dodge Landing|Recovery", meta = (ClampMin = "1", ForceUnits = "Frames"))
@@ -134,8 +172,15 @@ enum class EGSTN_DodgeLandingGate : uint8
 /** The rules of the dodge landing, pure functions of the kit data, the state and the frame */
 struct GSTNCOMBATCORE_API FGSTN_DodgeLandingLogic
 {
-	/** The ending lag the kit gives a move whose movement track has MoveLandingLagFrames */
+	/** The ending lag the kit gives a move whose movement track has MoveLandingLagFrames: the belly part (the kit's or the move's) plus the get-up roll */
 	static int32 ResolveEndLag(const FGSTN_DodgeLandingKitExtension& Kit, int32 MoveLandingLagFrames);
+
+	/**
+	 * The ending lag of a landing at LandingSpeed (cm/s along the ground) under a TickRate Hz tick: in UntilStopped mode the belly lasts as long as
+	 * the belly slide needs to brake LandingSpeed to rest with its Fixed deceleration (no slide below its MinSpeed) (at least the fixed belly, at most
+	 * MaxBellyFrames; a slide that is off or not Fixed keeps the fixed belly), then the get-up roll. Fixed mode = ResolveEndLag
+	 */
+	static int32 ResolveLandingLag(const FGSTN_DodgeLandingKitExtension& Kit, int32 MoveLandingLagFrames, float LandingSpeed, float TickRate);
 
 	/** Command is one the re-dodge lock refuses */
 	static bool IsLockedCommand(const FGSTN_DodgeLandingKitExtension& Kit, const FGameplayTag& Command);

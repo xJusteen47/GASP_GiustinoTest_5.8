@@ -664,6 +664,7 @@ bool FGSTN_TableButtonLayoutTest::RunTest(const FString& Parameters)
 	FGSTN_CompileInput Input = TblMakeInput(Base.Get());
 	Input.Kit.Bindings = { TblBind(Attack_Neutral, TblAbilityA()), TblBind(Special_Neutral, TblAbilityB()), TblBind(Attack_CrouchNeutral, TblAbilityC()),
 		TblBind(Combo_AttackSpecial_Neutral, TblAbilityD()), TblBind(Movement_Dash, TblAbilityA()), TblBind(Defence_Dodge, TblAbilityB()) };
+	Input.DodgeInputOverride = EGSTN_DodgeInputMethod::Button;  // the crouch-jump twin has its own test (DodgeInputMethod)
 
 	const UGSTN_GameRules* Previous = FGSTN_ActiveGameRules::Get();
 	FGSTN_ActiveGameRules::Set(nullptr);
@@ -833,3 +834,76 @@ bool FGSTN_TableMissingMoveFallbackTest::RunTest(const FString& Parameters)
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS
+
+// Owner 2026-11-25: the dodge is entered with its button, with crouch + stick + jump (Odyssey long jump), or both, as an option. The compiler
+// mirrors every dodge row under Command.Defence.Dodge.CrouchJump with the crouch-jump slot and drops the button rows when only the new method is on
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_TableDodgeInputMethodTest, "GSTNCombat.Core.Table.DodgeInputMethod", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_TableDodgeInputMethodTest::RunTest(const FString& Parameters)
+{
+	using namespace GSTNCommandTags;
+	const FGameplayTag BtnCrouch = GSTNCombatButtonTags::Button_Crouch.GetTag();
+	const FGameplayTag BtnJump = GSTNCombatButtonTags::Button_Jump.GetTag();
+	const FGameplayTag BtnDodge = GSTNCombatButtonTags::Button_Dodge.GetTag();
+	const FGameplayTag Grounded = GSTNInputTags::Context_Grounded.GetTag();
+	const FGameplayTag Airborne = GSTNInputTags::Context_Airborne.GetTag();
+
+	const TStrongObjectPtr<UGSTN_InputSettings> Settings = GSTNCombatTest::MakeSettings();
+	const TStrongObjectPtr<UGSTN_InputSlotSet> Base = TblMakeStandardSet();
+	for (const FGSTN_InputSlotSpec& Spec : UGSTN_MovementSlots::Build(false))
+	{
+		Base->Slots.AddDefaulted_GetRef().Inline = Spec;
+	}
+	FGSTN_CompileInput Input = TblMakeInput(Base.Get());
+	Input.Kit.Bindings = { TblBind(Attack_Neutral, TblAbilityA()), TblBind(Defence_Dodge, TblAbilityB(), Grounded), TblBind(Defence_Dodge, TblAbilityC(), Airborne) };
+
+	const UGSTN_GameRules* Previous = FGSTN_ActiveGameRules::Get();
+	FGSTN_ActiveGameRules::Set(nullptr);
+	const auto Count = [](const FGSTN_CompiledBindingTable& Table, const FGameplayTag& Command)
+	{
+		return Table.Entries.FilterByPredicate([&Command](const FGSTN_CompiledEntry& Entry) { return Entry.Command == Command; }).Num();
+	};
+
+	Input.DodgeInputOverride = EGSTN_DodgeInputMethod::Button;
+	const FGSTN_CompiledBindingTable Button = FGSTN_BindingTableCompiler::Compile(Input, *Settings);
+	TestEqual(TEXT("button: both dodge rows"), Count(Button, Defence_Dodge), 2);
+	TestEqual(TEXT("button: no crouch-jump rows"), Count(Button, Defence_Dodge_CrouchJump), 0);
+
+	Input.DodgeInputOverride = EGSTN_DodgeInputMethod::Both;
+	const FGSTN_CompiledBindingTable Both = FGSTN_BindingTableCompiler::Compile(Input, *Settings);
+	TestEqual(TEXT("both: the button rows stay"), Count(Both, Defence_Dodge), 2);
+	TestEqual(TEXT("both: one crouch-jump twin per dodge row"), Count(Both, Defence_Dodge_CrouchJump), 2);
+	TestTrue(TEXT("both: the twin is crouch + jump"), TblSlotButtons(Both, Defence_Dodge_CrouchJump) == TblTags({ BtnJump, BtnCrouch }));
+	TestTrue(TEXT("both: the button row is the dodge button"), TblSlotButtons(Both, Defence_Dodge) == TblTags({ BtnDodge }));
+	bool bSameAbilities = true;
+	for (const FGSTN_CompiledEntry& Entry : Both.Entries)
+	{
+		if (Entry.Command == Defence_Dodge_CrouchJump)
+		{
+			bSameAbilities &= Both.Entries.ContainsByPredicate([&Entry](const FGSTN_CompiledEntry& Other)
+			{
+				return Other.Command == GSTNCommandTags::Defence_Dodge.GetTag() && Other.Ability == Entry.Ability && Other.Requirements.RequireTags == Entry.Requirements.RequireTags;
+			});
+		}
+	}
+	TestTrue(TEXT("both: each twin has its dodge row's ability and context"), bSameAbilities);
+	TestTrue(TEXT("the twin is a child of the dodge (the re-dodge lock matches it)"), Defence_Dodge_CrouchJump.GetTag().MatchesTag(Defence_Dodge.GetTag()));
+
+	Input.DodgeInputOverride = EGSTN_DodgeInputMethod::CrouchJump;
+	const FGSTN_CompiledBindingTable New = FGSTN_BindingTableCompiler::Compile(Input, *Settings);
+	TestEqual(TEXT("crouch-jump only: no button rows"), Count(New, Defence_Dodge), 0);
+	TestEqual(TEXT("crouch-jump only: the twins"), Count(New, Defence_Dodge_CrouchJump), 2);
+	TestEqual(TEXT("crouch-jump only: the rest is untouched"), Count(New, Attack_Neutral), 1);
+
+	// A kit that binds the crouch-jump command itself keeps its own row and gets no twin
+	FGSTN_InputSlotSpec Own = UGSTN_MovementSlots::MakeDodgeCrouchJumpSlot();
+	FGSTN_BindingInput OwnBinding = TblBind(Defence_Dodge_CrouchJump, TblAbilityD());
+	OwnBinding.bHasSlotOverride = true;
+	OwnBinding.SlotOverride = Own;
+	Input.Kit.Bindings.Add(OwnBinding);
+	Input.DodgeInputOverride = EGSTN_DodgeInputMethod::Both;
+	const FGSTN_CompiledBindingTable Custom = FGSTN_BindingTableCompiler::Compile(Input, *Settings);
+	TestEqual(TEXT("own crouch-jump binding: only it"), Count(Custom, Defence_Dodge_CrouchJump), 1);
+
+	FGSTN_ActiveGameRules::Set(Previous);
+	return true;
+}

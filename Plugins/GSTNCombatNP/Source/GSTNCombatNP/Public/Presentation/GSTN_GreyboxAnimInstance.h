@@ -14,6 +14,7 @@ class USkeletalMesh;
 class UGSTN_RunPresentationComponent;
 struct FAnimMontageInstance;
 struct FAnimSegment;
+struct FGSTN_CombatStateView;
 
 /** How the capsule squashes, stretches and leans (class defaults of ABP_GSTN_GreyboxCapsule; the owner tunes them there) */
 USTRUCT(BlueprintType)
@@ -88,6 +89,14 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Jump Squat", meta = (ClampMin = "0.3", ClampMax = "1"))
 	float JumpSquatSquash = 0.72f;
+
+	/**
+	 * Air crouch (owner 2026-11-25: "the air crouch on the capsule, less squashed than the crouch on the ground"): while the owner has
+	 * Combat.State.AirCrouch the capsule's squash goes to this (1 = rest) on the squash spring instead of the air stretch. The ground crouch
+	 * squashes to the driver's crouched pelvis (MinPelvisSquash at most), so keep this above it. 1 turns it off
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Air Crouch", meta = (ClampMin = "0.3", ClampMax = "1"))
+	float AirCrouchSquash = 0.78f;
 
 	/** How fast the squat squash is reached, 1/s (the squat lasts ~50 ms) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Jump Squat", meta = (ClampMin = "1"))
@@ -221,6 +230,40 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Roll", meta = (ClampMin = "1", ForceUnits = "cm/s"))
 	float RollMinSpeed = 60.f;
 
+	/**
+	 * Dodge dive (owner 2026-11-25: "the Mario 64 dive and the roll to get back up, on the capsule"). While a dodge (an ability with
+	 * bDodgeLanding) is in the air the capsule tips head first toward its travel to DiveAngleDeg over DiveTiltFrames; on the landing it lies on
+	 * its belly (DiveBellyDeg) for the belly part of the ending lag, then rolls forward over itself back onto its feet in the last
+	 * DiveGetUpRollFrames of the lag (keep them equal to the kit's FGSTN_DodgeLandingKitExtension::GetUpRollFrames). A rigid turn about the
+	 * capsule's middle like the roll above; the driver's pose is ignored meanwhile. Presentation only: it reads the combat state view
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive")
+	bool bProceduralDive = true;
+
+	/** Tilt toward the travel in the air (90 = flat, head first) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive", meta = (ClampMin = "0", ClampMax = "120", ForceUnits = "deg"))
+	float DiveAngleDeg = 75.f;
+
+	/** Simulation frames (62.5 Hz) from the take-off to the full air tilt (Mario 64's dive is in the pose almost at once) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive", meta = (ClampMin = "1", ClampMax = "60", ForceUnits = "Frames"))
+	float DiveTiltFrames = 6.f;
+
+	/** Tilt on the ground during the belly slide (90 = lying flat) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive", meta = (ClampMin = "0", ClampMax = "120", ForceUnits = "deg"))
+	float DiveBellyDeg = 90.f;
+
+	/** Simulation frames from the touchdown to the belly tilt (the body slaps down) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive", meta = (ClampMin = "1", ClampMax = "30", ForceUnits = "Frames"))
+	float DiveSlapFrames = 3.f;
+
+	/** The last frames of the ending lag in which the capsule rolls from the belly round to standing (the kit's GetUpRollFrames) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive", meta = (ClampMin = "0", ClampMax = "120", ForceUnits = "Frames"))
+	float DiveGetUpRollFrames = 10.f;
+
+	/** When the lag is cut short (a roll-out command, a timeline that ended first) the capsule finishes its turn at this speed, never a snap */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive", meta = (ClampMin = "90", ForceUnits = "deg/s"))
+	float DiveRecoverDegPerSecond = 1080.f;
+
 	/** Hand and foot markers (owner 2026-11-24: hidden in locomotion and most of the time): shown while an attack's capsule clip plays
 	 *  (MoveOverrides / SequenceMoveOverrides) and/or in locomotion */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Limbs")
@@ -353,6 +396,13 @@ public:
 	 */
 	static float RollAngle(const FGSTN_GreyboxShapeSettings& Settings, float StartDeg, float MontageShare, float LatchShare = 0.f);
 
+	/**
+	 * Pure: the dive's tilt toward the travel (degrees, 0 upright, 90 lying head first, 360 upright again after the get-up roll).
+	 * In the air (LagSeconds < 0): DiveAngleDeg eased in over DiveTiltFrames from the take-off. In the ending lag: from LandAngleDeg (the tilt at
+	 * the touchdown) to DiveBellyDeg over DiveSlapFrames, then over the last DiveGetUpRollFrames of LagTotalSeconds round to 360, eased
+	 */
+	static float DiveAngle(const FGSTN_GreyboxShapeSettings& Settings, float AirSeconds, float LagSeconds, float LagTotalSeconds, float LandAngleDeg);
+
 	/** Pure: the start angle of a roll for the capsule's up axis and the travel direction (both unit; the up's pitch toward the travel) */
 	static float RollStartAngle(const FVector& BodyUp, const FVector& Travel);
 
@@ -469,4 +519,16 @@ private:
 
 	/** The roll's turn of this frame into Shape (Spin, SpinPivot); true while a roll drives the capsule */
 	bool UpdateRoll(const FVector& Velocity);
+
+	/** The dodge dive's turn of this frame into Shape (Spin, SpinPivot); true while the dive drives the capsule */
+	bool UpdateDive(const FVector& Velocity, const FGSTN_CombatStateView& Combat, bool bOnGround, bool bCalm, float DeltaSeconds);
+
+	/** The dive under way: seconds in the air since the take-off, seconds into the ending lag (< 0 outside it), the tilt at the touchdown, the
+	 *  tilt of the last frame (0 = no dive), the travel it tips toward (world, horizontal), the move it belongs to */
+	float DiveAirSeconds = 0.f;
+	float DiveLagSeconds = -1.f;
+	float DiveLandAngle = 0.f;
+	float DiveLastAngle = 0.f;
+	FVector DiveTravel = FVector::ZeroVector;
+	int32 DiveMoveStartFrame = INDEX_NONE;
 };

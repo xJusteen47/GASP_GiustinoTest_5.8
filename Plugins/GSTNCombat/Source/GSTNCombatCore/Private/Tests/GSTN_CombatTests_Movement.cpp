@@ -145,7 +145,8 @@ bool FGSTN_DodgeCarriedSpeedTest::RunTest(const FString& Parameters)
 	const FVector Forward = FVector::ForwardVector;
 	TestEqual(TEXT("standing: the base speed"), FGSTN_DashMath::EffectiveForwardSpeed(Move, FVector::ZeroVector, Forward), Move.ForwardSpeed);
 	TestEqual(TEXT("walking slower than the base: the base speed"), FGSTN_DashMath::EffectiveForwardSpeed(Move, Forward * 300.0, Forward), Move.ForwardSpeed);
-	TestEqual(TEXT("running faster: the run's speed"), FGSTN_DashMath::EffectiveForwardSpeed(Move, Forward * 1100.0, Forward), 1100.f);
+	TestEqual(TEXT("running faster: the run's speed, scaled (owner 2026-11-25: faster than the run, Odyssey)"),
+		FGSTN_DashMath::EffectiveForwardSpeed(Move, Forward * 1100.0, Forward), 1100.f * Move.CarriedSpeedScale);
 	TestEqual(TEXT("sprinting: capped"), FGSTN_DashMath::EffectiveForwardSpeed(Move, Forward * 2000.0, Forward), Move.MaxForwardSpeed);
 	TestEqual(TEXT("running away from the jump: the base speed"), FGSTN_DashMath::EffectiveForwardSpeed(Move, Forward * -1100.0, Forward), Move.ForwardSpeed);
 	TestEqual(TEXT("vertical speed does not count"), FGSTN_DashMath::EffectiveForwardSpeed(Move, FVector::UpVector * 1500.0, Forward), Move.ForwardSpeed);
@@ -220,7 +221,8 @@ bool FGSTN_MoveTimelinesTest::RunTest(const FString& Parameters)
 	// The air dodge for now is the ground one, blocking up to the air limit
 	const FGSTN_MoveTimelineParams AirFromGround = FGSTN_MoveTimelines::AirDodgeFromGroundParams(GroundMove, TickRate);
 	TestTrue(TEXT("air dodge from the ground one: ends on landing, the same lag"), AirFromGround.bCancelOnLand && AirFromGround.LandingLagFrames == Ground.LandingLagFrames);
-	TestEqual(TEXT("blocking for the air limit and the lag"), AirFromGround.FirstActionableFrame, FGSTN_MoveTimelines::AirDodgeMaxAirFrames + Ground.LandingLagFrames);
+	TestEqual(TEXT("blocking for the air limit, the lag and the get-up roll"), AirFromGround.FirstActionableFrame,
+		FGSTN_MoveTimelines::AirDodgeMaxAirFrames + Ground.LandingLagFrames + FGSTN_MoveTimelines::DefaultDodgeGetUpRollFrames);
 	TestEqual(TEXT("the same feet window as the ground dodge"), AirFromGround.HurtboxFrames, Ground.HurtboxFrames);
 	TestTrue(TEXT("the timeline has room for a heavier gravity"), GroundData.TotalFrames > Arc.AirFrames);
 
