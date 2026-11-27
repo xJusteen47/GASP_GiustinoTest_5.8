@@ -72,3 +72,5 @@ COSTO: ~9 $ | 0 minuti desktop | 0 token review
 ESITO: PARZIALE build e 738 test OK; tuffo, pancia e roll-out OK in PIE; schivata crouch+salto solo con i tasti insieme (da accovacciato non parte); IMC non rilanciati
 SUBAGENTI: 0
 COSTO: ~5 $ | ~15 min desktop | 0
+
+Aggiornamento 2026-11-27 16:18 UTC: IMC rilanciato in _ue59 con Save-Assets (setup_player_input_contexts.py; movement_setup.py non serve, stessi tasti): crouch Gamepad_LeftShoulder, scudo Gamepad_LeftTrigger, schivata RB, riletto dopo il salvataggio. Commit 9d5bfc3e.
