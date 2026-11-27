@@ -26,7 +26,8 @@ def parse(path):
             continue
         r = REPORT.search(ln)
         if r and 'LogGSTNWorldSimSpawn' in ln:
-            cur['reports'].append(dict(role=r.group(1), world=r.group(2), parallel=bool(r.group(3)), frame=int(r.group(4)), acc=r.group(5),
+            tag = re.match(r'\[[^\]]*\]\[\s*(\d+)\]', ln)
+            cur['reports'].append(dict(tag=tag.group(1) if tag else '?', role=r.group(1), world=r.group(2), parallel=bool(r.group(3)), frame=int(r.group(4)), acc=r.group(5),
                                        ticks=int(r.group(6)), resim=int(r.group(7)), avg=float(r.group(8)), avg_resim=float(r.group(9)),
                                        frames=int(r.group(10)), frames_resim=int(r.group(11)), worst=float(r.group(12)), worst_ticks=int(r.group(13))))
         elif 'Reconcile activated due to ForceReconcile' in ln:
@@ -54,18 +55,24 @@ DUMP = re.compile(r'SimQuery \[(\w+) (\S+?)\] frame (\d+) hash ([0-9a-f]+) queri
 
 def parse_dumps(path):
     """{label: {(role, world): {frame: (hash, queries)}}} from the lines between WSF0 DUMP BEGIN/END"""
-    dumps, cur = {}, None
+    # Every PIE world has the map's name, so a world's block is the run of consecutive lines with rising frames: a new block starts when
+    # the role changes or the frame does not rise; blocks are numbered in order (#0, #1, ...)
+    dumps, cur, prev = {}, None, None
     for ln in open(path, encoding='utf-8', errors='replace'):
         m = re.search(r'WSF0 DUMP BEGIN (\S+)', ln)
         if m:
-            cur = dumps.setdefault(m.group(1), {})
+            cur, prev = dumps.setdefault(m.group(1), {}), None
             continue
         if 'WSF0 DUMP END' in ln:
             cur = None
             continue
         d = DUMP.search(ln) if cur is not None else None
         if d:
-            cur.setdefault((d.group(1), d.group(2)), {})[int(d.group(3))] = (d.group(4), int(d.group(5)))
+            role, frame = d.group(1), int(d.group(3))
+            if prev is None or prev[0] != role or frame <= prev[1]:
+                key = (role, f'#{len(cur)}')
+            prev = (role, frame)
+            cur.setdefault(key, {})[frame] = (d.group(4), int(d.group(5)))
     return dumps
 
 
@@ -96,12 +103,11 @@ def main():
     for p in phases:
         out.append(f"== {p['label']} {p['phase']}: forced reconciles {p['forced']}, world sim mismatches {p['ws_mismatch']} "
                    f"(fields {p['ws_fields']}), other model mismatches {p['other_mismatch']}, offset resyncs {p['offset_resync']}")
-        # Only the closing report of the phase (the last line per world); periodic LogEverySeconds lines are not in this category
-        last = {}
-        for r in p['reports']:
-            last[r['world']] = r
-        for r in last.values():
-            out.append(f"   {r['role']:6} {r['world']:28} frame {r['frame']:6} acc {r['acc']} ticks {r['ticks']:5} resim {r['resim']:5} "
+        # The closing gstn.WorldSim.Report logs one line per world sim in one engine frame: take that block. Every PIE world carries the map
+        # name, so the lines are told apart by order (numbered as they come: host first, then the clients)
+        closing = [r for r in p['reports'] if r['tag'] == p['reports'][-1]['tag']] if p['reports'] else []
+        for n, r in enumerate(closing):
+            out.append(f"   {r['role']:6} #{n} {r['world']:12} frame {r['frame']:6} acc {r['acc']} ticks {r['ticks']:5} resim {r['resim']:5} "
                        f"avg {r['avg']:.3f} ms resim avg {r['avg_resim']:.3f} ms worst frame {r['worst']:.3f} ms ({r['worst_ticks']} ticks) "
                        f"game frames {r['frames']} with resim {r['frames_resim']}")
         for ex in p['ws_examples']:
