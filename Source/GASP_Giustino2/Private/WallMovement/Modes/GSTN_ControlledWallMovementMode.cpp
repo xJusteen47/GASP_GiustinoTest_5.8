@@ -83,17 +83,17 @@ void UGSTN_ControlledWallMovementMode::CheckForWallExit(const FSimulationTickPar
 
 bool UGSTN_ControlledWallMovementMode::TryWallJump(const FMoverTickStartData& StartState, float DeltaSeconds, FGSTN_WallTickState& InOutState) const
 {
-	// The jump press comes from the command: the combat model's logical Jump button (FGSTN_MoverButtonInputs, the layout function
-	// "Wall.Jump"), so it has a key in every layout and is predicted and replayed. GASP's own jump intent stays as a fallback for a pawn
-	// without the combat model. gstn.Wall.Jump goes through the same entry (UGSTN_CombatSimComponent::AddDebugMoverButtons)
+	// Two carriers of the jump press, both in the predicted, replayed Mover command: the combat model's logical Jump button
+	// (FGSTN_MoverButtonInputs, layout function "Wall.Jump", also gstn.Wall.Jump) and GASP's own jump intent. Either one jumps: reading
+	// only the first lost the wall jump of pawns whose combat input config does not bind GASP's jump action (desktop check 2026-11-27)
 	bool bJumpPressed = false;
 	if (const FGSTN_MoverButtonInputs* Buttons = StartState.InputCmd.InputCollection.FindDataByType<FGSTN_MoverButtonInputs>())
 	{
 		bJumpPressed = Buttons->Has(FGSTN_MoverButtonInputs::JumpPressed);
 	}
-	else if (const FCharacterDefaultInputs* Inputs = StartState.InputCmd.InputCollection.FindDataByType<FCharacterDefaultInputs>())
+	if (const FCharacterDefaultInputs* Inputs = StartState.InputCmd.InputCollection.FindDataByType<FCharacterDefaultInputs>())
 	{
-		bJumpPressed = Inputs->bIsJumpJustPressed;
+		bJumpPressed |= Inputs->bIsJumpJustPressed;
 	}
 	if (!WallJump.bEnableWallJump || WallJump.JumpModeName.IsNone() || !bJumpPressed)
 	{
@@ -148,9 +148,15 @@ bool UGSTN_ControlledWallMovementMode::IsDetachButtonPressed(const FMoverTickSta
 	// The crouch as detach button, read from the command (FGSTN_MoverButtonInputs, layout function "Wall.Detach"). The CharacterMover crouch
 	// intent read from the component was not part of the predicted input (a replay or the server could disagree): kept only for a pawn
 	// without the combat model, which has no command entry to read
+	const FGSTN_MoverButtonInputs* Buttons = StartState.InputCmd.InputCollection.FindDataByType<FGSTN_MoverButtonInputs>();
+	if (Buttons && Buttons->Has(FGSTN_MoverButtonInputs::DetachForced))
+	{
+		// gstn.Wall.Detach: detaches regardless of the crouch setting, as the old debug global did
+		return true;
+	}
 	if (Detach.bUseCrouchAsDetachButton)
 	{
-		if (const FGSTN_MoverButtonInputs* Buttons = StartState.InputCmd.InputCollection.FindDataByType<FGSTN_MoverButtonInputs>())
+		if (Buttons)
 		{
 			return Buttons->Has(FGSTN_MoverButtonInputs::DetachHeld);
 		}

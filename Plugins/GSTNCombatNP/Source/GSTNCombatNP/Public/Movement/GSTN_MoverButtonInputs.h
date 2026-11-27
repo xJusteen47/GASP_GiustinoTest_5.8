@@ -25,6 +25,8 @@ struct GSTNCOMBATNP_API FGSTN_MoverButtonInputs : public FMoverDataStructBase
 		JumpPressed = 1 << 0,
 		JumpHeld = 1 << 1,
 		DetachHeld = 1 << 2,
+		/** gstn.Wall.Detach (debug only): detaches whatever the mode's crouch-as-detach setting, as the old debug global did */
+		DetachForced = 1 << 3,
 	};
 
 	/** EFlags of this frame */

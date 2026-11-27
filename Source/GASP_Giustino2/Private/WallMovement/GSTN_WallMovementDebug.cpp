@@ -31,7 +31,7 @@ namespace GSTNWallDebug
 	 */
 	static void SendDebugButtons(uint8 PressedFlags)
 	{
-		const uint8 Held = bDetachHeld ? FGSTN_MoverButtonInputs::DetachHeld : 0;
+		const uint8 Held = bDetachHeld ? FGSTN_MoverButtonInputs::DetachForced : 0;
 		ForEachPlayerMover([PressedFlags, Held](UMoverComponent& Mover)
 		{
 			if (UGSTN_CombatSimComponent* Combat = Mover.GetOwner() ? Mover.GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr)
