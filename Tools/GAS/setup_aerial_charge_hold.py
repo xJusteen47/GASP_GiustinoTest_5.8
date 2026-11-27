@@ -42,6 +42,8 @@ FULL_CHARGE_SCALE = float(os.environ.get('CHARGE_FULL_SCALE', '1.0'))
 STEER_DEGREES = float(os.environ.get('CHARGE_STEER_DEGREES', '15'))
 MIN_AFTER_RELEASE = int(os.environ.get('CHARGE_MIN_AFTER_RELEASE', '3'))
 OUT = os.path.join(unreal.Paths.project_saved_dir(), 'AerialCharge', 'setup_aerial_charge_hold.txt')
+# Timelines never written: the approved, locked dair v9 (anim-approvate.md; coordinator 2026-11-27: no variant for now). CHARGE_SKIP replaces the list
+SKIP = {n.strip() for n in os.environ.get('CHARGE_SKIP', 'TL_Overlord_DAirV9').split(',') if n.strip()}
 _lines = []
 
 
@@ -131,6 +133,8 @@ def run(apply=False, force=False):
     ok = False
     try:
         guard = setup_guard.Guard.for_unreal('setup_aerial_charge_hold', force=force, log=log)
+        # Headless (-run=pythonscript, Save-Assets.ps1) the registry is not scanned yet and finds no kit: wait for the scan (instant in an editor)
+        unreal.AssetRegistryHelpers.get_asset_registry().search_all_assets(True)
         bindings = _aerial_bindings()
         log(f'{len(bindings)} airborne attack/strong bindings: ' + '; '.join(f'{o} {c}' for o, c, _, _ in bindings))
         done = set()
@@ -145,7 +149,10 @@ def run(apply=False, force=False):
             if key in done:
                 continue
             done.add(key)
-            data = asset.get_editor_property('data') if asset else cdo.get_editor_property('timeline')
+            if key.rsplit('/', 1)[-1].split('.')[0] in SKIP:
+                log(f'SKIP {key.rsplit("/", 1)[-1]} ({owner} {command}): locked, in CHARGE_SKIP')
+                continue
+            data =asset.get_editor_property('data') if asset else cdo.get_editor_property('timeline')
             new, note = _apply(data, family)
             where = key.rsplit('/', 1)[-1]
             if new is None:
@@ -183,4 +190,5 @@ def run(apply=False, force=False):
 
 
 if __name__ == '__main__':
-    run(apply=os.environ.get('CHARGE_APPLY', '') == '1')
+    # GSTN_SAVE=1 is what Tools/CI/Save-Assets.ps1 sets (the agents' only save route)
+    run(apply=os.environ.get('CHARGE_APPLY', '') == '1' or os.environ.get('GSTN_SAVE', '') == '1')
