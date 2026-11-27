@@ -2732,7 +2732,7 @@ void UGSTN_CombatSimComponent::HandleAbilitySimulationPreTick(const FAbilitySyst
 	{
 		AbilitySystem->PauseCurrentSyncedMontage();
 	}
-	else if (Frame == Sync->Core.HitstopEndFrame || (TimelineOutput.bChargeHoldRelease && !Sync->Core.IsInHitstop(Frame)))
+	else if (Frame == Sync->Core.HitstopEndFrame || (TimelineOutput.bChargeHoldResume && !Sync->Core.IsInHitstop(Frame)))
 	{
 		AbilitySystem->ResumeCurrentSyncedMontage();
 	}
