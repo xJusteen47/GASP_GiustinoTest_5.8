@@ -118,7 +118,7 @@ F5 resta ferma fino alla fase estetica (regola 6).
 6. **Combinazioni brutte o offensive** nella schermata giocatore: limiti stretti e palette chiuse.
 7. **Salvataggi**: il descrittore va versionato da subito, come il loadout.
 
-## 6. Decisioni per l'owner (consigliate 1A 2A 3A; **owner 2026-11-27: 1B, 2A**)
+## 6. Decisioni per l'owner (consigliate 1A 2A 3A; **owner 2026-11-27: 1B, 2A, 3A**)
 1. **Come si costruisce la faccia**: A tre livelli (testa con morph + pezzi 3D appoggiati + tratti disegnati); B tutto in
    pezzi 3D saldati con anelli + morph.
 2. **Tecnologia**: A spike F1 di Mutable contro assemblatore nostro, poi si sceglie (+6-10 $ subito, evita di rifare
