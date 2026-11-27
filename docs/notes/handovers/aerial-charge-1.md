@@ -54,3 +54,16 @@ SUBAGENTI: 0
 COSTO: ~5 $ | ~15 min desktop | 0
 
 Aggiornamento 2026-11-27 16:16 UTC (dopo il merge della #57, coordinatore): branch allineato a main, script con CHARGE_SKIP (default TL_Overlord_DAirV9) e scansione del registry; Save-Assets in _ue59 ha scritto 15 timeline, V9 intatta. Riletto: carica presente, finestra KnockdownOnLanding della #57 conservata sul dropkick. Commit 38be3b21.
+
+## Aggiornamento 2026-11-27 sera: rete e atterraggio in carica
+- Rete (harness, server dedicato + 2 client, 60 ms): dropkick caricato 30 frame, 0 reconcile su ChargeFrames/TimelinePausedFrames, ChargeFrames 25 su
+  server, owner e osservatore, montage in pausa sul frame 5 anche sul client remoto. Log sul fisso: Saved/Logs/ci/aerial_charge_net.log,
+  Saved/AerialChargeNet/{charge,land}.jsonl, summary.json.
+- Atterraggio in carica: gioco corretto, ma il montage restava in pausa per tutto l'atterraggio (il resume scattava solo al rilascio). Fix:
+  `FGSTN_TimelineOutput::bChargeHoldResume` (fine della carica per rilascio o per il salto di Hold Until Landed), usato dal combat model per il
+  resume; `bChargeHoldRelease` resta solo per la posa di loop. Test `GSTNCombat.NP.ChargeHold.Release` e `.LandDuringHold`. Non compilato.
+- Da ricontrollare dopo il fix: l'atterraggio in carica durava 29-30 frame contro 27-28 dopo un rilascio.
+
+ESITO: PARZIALE carica in main e provata in rete, fix del montage all'atterraggio in carica scritto ma non compilato
+SUBAGENTI: 0
+COSTO: ~4 $ | ~25 min desktop | 0

@@ -90,19 +90,19 @@ bool FGSTN_ChargeClockReleaseTest::RunTest(const FString& Parameters)
 	FRun Run(Data, Buttons, 100);
 	for (int32 Tick = 1; Tick <= HoldFrame; ++Tick)
 	{
-		Run.Tick(Data, EGSTN_TrackHookGround::InAir, true);
+		Run.Tick(Data, EGSTN_TrackHookGround::Airborne, true);
 	}
 	TestEqual(TEXT("on the hold frame"), Run.Output.Frame, HoldFrame);
 	for (int32 Tick = 0; Tick < 10; ++Tick)
 	{
-		TestEqual(TEXT("stands on the hold frame while held"), Run.Tick(Data, EGSTN_TrackHookGround::InAir, Tick < 9, Tick == 9), HoldFrame);
+		TestEqual(TEXT("stands on the hold frame while held"), Run.Tick(Data, EGSTN_TrackHookGround::Airborne, Tick < 9, Tick == 9), HoldFrame);
 		TestTrue(TEXT("stalled"), Run.Output.bChargeHoldStall);
 	}
 	TestEqual(TEXT("ten charge ticks"), static_cast<int32>(Run.Core.ChargeFrames), 10);
-	TestEqual(TEXT("released: the startup plays on"), Run.Tick(Data, EGSTN_TrackHookGround::InAir, false), HoldFrame + 1);
+	TestEqual(TEXT("released: the startup plays on"), Run.Tick(Data, EGSTN_TrackHookGround::Airborne, false), HoldFrame + 1);
 	TestTrue(TEXT("release"), Run.Output.bChargeHoldRelease);
 	TestTrue(TEXT("resume"), Run.Output.bChargeHoldResume);
-	Run.Tick(Data, EGSTN_TrackHookGround::InAir, false);
+	Run.Tick(Data, EGSTN_TrackHookGround::Airborne, false);
 	TestFalse(TEXT("one tick only"), Run.Output.bChargeHoldResume);
 	return true;
 }
@@ -122,7 +122,7 @@ bool FGSTN_ChargeClockLandTest::RunTest(const FString& Parameters)
 	FRun Run(Data, Buttons, 100);
 	for (int32 Tick = 1; Tick <= HoldFrame + 5; ++Tick)
 	{
-		Run.Tick(Data, EGSTN_TrackHookGround::InAir, true);
+		Run.Tick(Data, EGSTN_TrackHookGround::Airborne, true);
 	}
 	TestTrue(TEXT("charging in the air"), Run.Output.bChargeHoldStall);
 	// Touchdown with the button still held: Hold Until Landed jumps to the land part, the hold is over
