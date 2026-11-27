@@ -1,12 +1,22 @@
 {
- "move": "dair",
- "version": "v9",
- "files": {
-  "AS_OverlordDAirV9.uasset": "b3ad84b2b061de7a1ea91e8ccc92bb2c309809cf4dbb20fda55cb7b7f8d2ece5",
-  "AM_OverlordDAirV9.uasset": "dc945baf6102200cef04870efb77db1ebf227dfaa77d08176157d0fb98a7a357"
- },
- "review": "",
- "legacy_owner_approval": true,
- "by": "thread",
- "date": "2026-11-24"
+  "move": "dair",
+  "version": "v9",
+  "files": {
+    "AS_OverlordDAirV9.uasset": "b3ad84b2b061de7a1ea91e8ccc92bb2c309809cf4dbb20fda55cb7b7f8d2ece5",
+    "AM_OverlordDAirV9.uasset": "6d4fe627fcfd837d3c339aa67c1f728aec667756080551dd98186526a2c0b67f"
+  },
+  "review": "",
+  "legacy_owner_approval": true,
+  "by": "thread",
+  "date": "2026-11-24",
+  "reprints": [
+    {
+      "file": "AM_OverlordDAirV9.uasset",
+      "why": "content move 98dab88a rewrote only the package and referenced-anim paths; montage data equal (docs/notes/approved-dumps/dair-v9-AM-published-pathonly-2026-11-27.json)",
+      "owner": "2026-11-27 20:29Z, choice A in the thread (record the new print after the proof)",
+      "date": "2026-11-27",
+      "to": "6d4fe627fcfd837d3c339aa67c1f728aec667756080551dd98186526a2c0b67f",
+      "from": "dc945baf6102200cef04870efb77db1ebf227dfaa77d08176157d0fb98a7a357"
+    }
+  ]
 }

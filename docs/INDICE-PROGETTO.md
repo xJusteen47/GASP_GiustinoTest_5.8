@@ -1,7 +1,7 @@
 # Indice del progetto GASP_Giustino2
 
 Pagina di benvenuto per chi arriva sul progetto (persona o agente): cosa esiste già, dove sta, se funziona.
-Si legge in 5 minuti. Fotografia del 2026-11-23 su `main` (a5b20950); ricontrollata dal bibliotecario il 2026-11-23 alle 18:30 (main invariato). Se un percorso qui non esiste più, l'indice è
+Si legge in 5 minuti. Fotografia del 2026-11-23 su `main` (a5b20950); ricontrollata dal bibliotecario il 2026-11-27 su `main` ca2a8952 (PR #38-#59 entrate dal 24 al 27-11: sezioni 4, 5.6, 5.14, 5.16, 6 e Artefatti aggiornate; il resto della sezione 5 non è stato riletto riga per riga). Se un percorso qui non esiste più, l'indice è
 vecchio: aggiornalo nello stesso commit che sposta il codice.
 
 **Regola per ogni brief e ogni thread:** _prima di scrivere codice consulta `docs/INDICE-PROGETTO.md` e dichiara cosa
@@ -15,20 +15,30 @@ Pagine sorelle: [DOVE-METTO-MANO.md](DOVE-METTO-MANO.md) (15 casi "voglio cambia
 `handoffs/INDICE.md` nei project files (un rigo per thread, con costi: è un registro dei lavori, non questa mappa).
 
 ## Artefatti
-Guide pubblicate su claude.ai (11). Stato dal giro del bibliotecario del 2026-11-23 (`docs/notes/archivio-proposta.md` §E). ARCHIVIO = superato, resta online solo come storia.
-| Titolo | Link | Data | Stato |
+Elenco con lo strumento Artifact il 2026-11-27: **23 artefatti** dell'owner (prima ne erano indicizzati 11). ARCHIVIO = superato, resta online solo come storia;
+il segno ARCHIVIO è stato messo sugli artefatti il 23-11. Proposte di stato per i nuovi in `docs/notes/archivio-proposta.md` §E (non applicate).
+| Titolo | Link | Aggiornato | Stato |
 |---|---|---|---|
-| Mosse di esempio GSTN (guida designer) | https://claude.ai/artifact/DyiBrsycoRfXNSMoZUBxun | 16-11 | DA AGGIORNARE (stato rami/test del 16-11; copia repo del 14-11) |
-| Architettura plugin combattimento | https://claude.ai/artifact/CLq2srEECQnd6bKDbBmm72 | 15-11 | DA AGGIORNARE (rami vecchi, sezione rete) |
-| Guida mosse Blueprint GSTN | https://claude.ai/artifact/La2oqPzCkPdcqL2kERy9D6 | 15-11 | DA FONDERE in Mosse di esempio |
-| Analisi regole di lavoro | https://claude.ai/artifact/1LEUDPK4VjC1bRgKj8qYqP | 15-11 | ARCHIVIO (regole riscritte 20-11 e 23-11) |
+| Piano: tutto il gameplay nel rollback (Doc) | https://claude.ai/artifact/SfrTpktgxySeSCUc2gWkPp | 25-11 | NUOVO, vivo (decisione "niente misto" del 25-11) |
+| Mosse di esempio GSTN (guida designer) | https://claude.ai/artifact/DyiBrsycoRfXNSMoZUBxun | 23-11 | VIVO (aggiornato il 23-11 con la Combat Move) |
+| Architettura plugin combattimento | https://claude.ai/artifact/CLq2srEECQnd6bKDbBmm72 | 23-11 | VIVO; la parte rete va riletta dopo il 25-11 ("niente misto") |
+| Networking di GASP Giustino | https://claude.ai/artifact/J6v4JZMLmDAMuemuXYxJhn | 23-11 | VIVO; da rileggere dopo il 25-11 |
 | Silhouette multi-angolo e VFX | https://claude.ai/artifact/MySdFXExJmvrDviYWkatdb | 15-11 | VALIDO (VFX in pausa) |
-| Cose da fare a mano | https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk | 13-11 | ARCHIVIO (push su feature non più permessi) |
-| Networking di GASP Giustino | https://claude.ai/artifact/J6v4JZMLmDAMuemuXYxJhn | 08-11 | DA AGGIORNARE (dice 5.8; manca la ricerca 1v1 del 23-11) |
-| Strumenti AI per animare le mosse | https://claude.ai/artifact/LsLBLG476QD5dZ8pcvsFtd | 31-10 | ARCHIVIO |
-| Cascadeur per animare le mosse | https://claude.ai/artifact/E7KV71LLBD47zLF4HBAXzc | 30-10 | ARCHIVIO (vale `docs/architecture/anim-pipeline.md`) |
-| Pipeline agentica per animare le mosse | https://claude.ai/artifact/V3EDNzjL6oQ56Y8Tos4nii | 29-10 | ARCHIVIO |
-| Depth marker diegetico: opzioni | https://claude.ai/artifact/SXR2GcJHbrVTnR7p9SvE3d | 24-10 | ARCHIVIO (vale `docs/architecture/depth-marker.md`) |
+| Guida mosse Blueprint GSTN | https://claude.ai/artifact/La2oqPzCkPdcqL2kERy9D6 | 23-11 | ARCHIVIO (fusa in Mosse di esempio) |
+| Analisi regole di lavoro | https://claude.ai/artifact/1LEUDPK4VjC1bRgKj8qYqP | 23-11 | ARCHIVIO (regole sostituite il 24-11) |
+| Cose da fare a mano | https://claude.ai/artifact/XjMiMf16f85qP5TvqPCaSk | 23-11 | ARCHIVIO |
+| Cascadeur per animare le mosse (Doc) | https://claude.ai/artifact/E7KV71LLBD47zLF4HBAXzc | 30-10 | ARCHIVIO (vale `docs/architecture/anim-pipeline.md`) |
+| Piano CI GSTN | https://claude.ai/artifact/BCMqSA2e4gGgoqKyMHSXFu | 15-11 | MAI INDICIZZATO, proposta ARCHIVIO (vale `Tools/CI/Run-Timed.ps1`) |
+| Skill e riferimenti animazione | https://claude.ai/artifact/TXAt4tWjuWW5CfnjXH6o63 | 15-11 | MAI INDICIZZATO, proposta ARCHIVIO (vale la skill `gstn-anim-cycle`) |
+| Guida editor hitbox GSTN | https://claude.ai/artifact/8wHRKYEfidKpd7YkjPVK68 | 13-11 | MAI INDICIZZATO, da verificare |
+| Roadmap milestones GASP | https://claude.ai/artifact/71C1XSzSZJvc193LTshYgU | 23-10 | MAI INDICIZZATO, proposta ARCHIVIO |
+| Ganondorf Jab v12, FTilt v3.1, FTilt v3, Forward Tilt v2, Forward Tilt | QXjKkSERuq92vyhoZ7FHJ1, 74Z5ofar8jg72Gu2zWqeKY, SU8aaTYWJpg2b8hdbazBCp, JunSeGT1dG2gGXG8a2LUDy, 2hGLPcS97LPXD9ghToLYGN | 31-10 / 02-11 | MAI INDICIZZATI: storia delle pose (jab v12 e ftilt v3.1 sono le versioni approvate) |
+| Jab Legibility Review | https://claude.ai/artifact/JA3WXMcQjPKfUjQ2FXYA6x | 31-10 | MAI INDICIZZATO, storia |
+| Moveset stile Smash – Manichino (Doc) | https://claude.ai/artifact/6VgJiADCtxkD7dtJSwDbyS | 26-10 | MAI INDICIZZATO, superato da `docs/notes/notazione-mosse.md` (da confermare) |
+| Mappa classi GSTNCombat | https://claude.ai/artifact/7sbZxxkLphi7evsgRMTzDb | 19-10 | MAI INDICIZZATO, vecchio (vale questa pagina §3) |
+| Guida Unreal: cristallo colorato, god rays e ombra sulla nebbia (Doc) | https://claude.ai/artifact/KvF8y4oiqJhRSaDYwQP5HX | 24-10 | MAI INDICIZZATO, ricerca di stile |
+| Wall Movement Mode — logica e impostazioni (Doc) | https://claude.ai/artifact/3KmdvUsgpFajZYZQJaeM1T | 14-10 | MAI INDICIZZATO, da confrontare con `docs/architecture/wall-movement.md` |
+Non più nell'elenco il 27-11 (cancellati o non raggiungibili): "Strumenti AI per animare le mosse" (LsLBLG476QD5dZ8pcvsFtd), "Pipeline agentica per animare le mosse" (V3EDNzjL6oQ56Y8Tos4nii), "Depth marker diegetico: opzioni" (SXR2GcJHbrVTnR7p9SvE3d). Erano già ARCHIVIO.
 
 ## Contenuti
 1. [Il gioco in un minuto](#1-il-gioco-in-un-minuto)
@@ -94,8 +104,10 @@ tutti i plugin, nessun plugin usa lui.
 ## 4. Legenda dello stato
 - **OK** = compilato e testato su UE 5.9. Ultima prova completa: `Automation RunTests GSTN` **1614/0** il 2026-11-21
   (`docs/notes/handovers/anim-round-2-postmerge.md` riga 6) + harness rete 50/50 (`docs/architecture/testing.md`).
-- **SCRITTO** = in main ma mai compilato. ATTENZIONE: il merge del 2026-11-22 (PR #37, `docs/notes/handovers/integ-playtest-2026-11-22.md`)
-  ha portato in main quattro lavori cloud mai compilati; **main nel suo insieme non è stato ricompilato da allora**.
+- **SCRITTO** = in main ma mai compilato. Il buco del merge del 22-11 (PR #37) è chiuso: l'integrazione C4 del 24-11 ha compilato
+  i gruppi 0-6 (`docs/notes/handovers/c4-integrazione.md` riga 5) e il riordino 2b ha fatto build + **1937 test** + smoke
+  (`docs/notes/handovers/content-reorg-2b.md` riga 48). Le PR del 25-27/11 sono state compilate ognuna sul suo branch;
+  una build di `main` intero dopo il 27-11 non risulta da nessun handover (**da confermare**).
 - **SPENTO** = plugin presente ma spento a runtime finché un asset o una cvar non lo accende.
 - **BRANCH** = esiste solo su un branch (sezione 6).
 - Test: numero di macro di test nel plugin (`grep -c IMPLEMENT_SIMPLE_AUTOMATION_TEST`), prefisso per lanciarli.
@@ -150,7 +162,7 @@ In gioco: cosa sa fare un personaggio. Un kit lega comandi ad abilità; ogni abi
 ### 5.6 Presa, lanci, cavalcata, oggetti tenuti · OK (la presa "al collo" è BRANCH)
 In gioco: afferrare un nemico, colpirlo (pummel), lanciarlo; caricare un alleato in spalla; portare oggetti.
 - GSTNLink (125 test, `GSTNLink.*`): tipi di link `GSTNLinkCore/Public/GSTN_LinkTypeDefinition.h`, regole presa `GSTN_GrabRules.h`, lanci `GSTNLinkNP/Public/Moves/GSTN_LinkThrowMoves.h` + `Sim/GSTN_LinkThrow.h`, mash `Sim/GSTN_LinkMash.h`, chi è preso resta fermo `Movement/GSTN_LinkedMovementMode.h`, lanci dal kit `Input/GSTN_LinkSlots.h` (`ApplyKitThrows`).
-- Presa al collo e lanci N./F./Cr./Cr.F. (modalità Notation) sono in main (grab-link). Spin con il nemico in mano (`Moves/GSTN_LinkGrabSpinMoves.h`, `Data/GSTN_GrabSpinTrack.h`) e numeri di Ganondorf sul kit di playtest (`Tools/GAS/setup_grab_ganon_playtest.py`, fonti `docs/notes/grab-ganon-dati.md`): BRANCH grab-ganon, da compilare.
+- Presa al collo e lanci N./F./Cr./Cr.F. (modalità Notation) sono in main (grab-link). Spin con il nemico in mano (`Moves/GSTN_LinkGrabSpinMoves.h`, `Data/GSTN_GrabSpinTrack.h`) e numeri di Ganondorf sul kit di playtest (`Tools/GAS/setup_grab_ganon_playtest.py`, fonti `docs/notes/grab-ganon-dati.md`): in main dal 27-11 (PR #53), compilato, test GSTNLink 133/133 (`docs/notes/handovers/grab-ganon.md`).
 - Cavalcata: GSTNPiggyback. Oggetti tenuti e lanciati: GSTNHeld (+ GSTNProjectile). Trivella e spin: GSTNSpinDrill (interfaccia `GSTN Spin Turnable` per gli oggetti di livello girati dallo spin); vite a terra: GSTNSpinScrew. Doc `combat-m6-defence-links.md`, `combat-m7-piggyback.md`, `combat-m10-held-objects.md`.
 
 ### 5.7 Difesa e parti distruttibili · OK (SPENTI di default)
@@ -184,8 +196,10 @@ In gioco: tasti e stick diventano comandi, con buffer, priorità e blocchi.
 - Skin: `Core/Kits/GSTN_SkinDefinition.h`, campo `Skin` del loadout, applicata da `GAS/Cosmetics/GSTN_SkinComponent.h`; varianti d'animazione per `Anim.Trait.*` (GSTNAnimation). La schermata del carico non ha la riga skin.
 - Decisioni e piani (non codice): `docs/notes/skin-cosmetici-modulari.md` (branch `claude/skin-cosmetici-ricerca`), `skin-proporzioni-analisi.md` (branch `claude/project-thread-4pj7kf`).
 
-### 5.14 Modalità, missioni, respawn · SCRITTO
-- `Plugins/GSTNRespawn` (vite condivise, checkpoint) e `Plugins/GSTNMission` (obiettivi): SPENTI finché un asset GameRules non li accende. Codice M12 parte 1, "NON compilato" (`docs/notes/handovers/m12-parte1-cloud.md`). Il resto di M12 è BRANCH.
+### 5.14 Modalità, missioni, respawn · OK (SPENTI di default)
+- `Plugins/GSTNRespawn` (vite condivise, checkpoint) e `Plugins/GSTNMission` (obiettivi): SPENTI finché un asset GameRules non li accende (M12 parte 1).
+- M12 G0-G8 ora in main: `Plugins/GSTNExperience` (Experiences/Game Features, test `GSTNExperience` 7/0), `Plugins/GSTNModeVerbs` (verbi di modalità, 3/0), `Plugins/GameFeatures/GSTNMode_Levels` (6/0), G5 prompt e G7-G8 livello di test. Esiti in `docs/notes/handovers/m12-g*.md`; G5 e G7-G8 senza riga ESITO (**da confermare**).
+- Decisione dell'owner del 25-11 "niente misto": vite condivise, respawn e missioni co-op andranno dentro il rollback (`docs/architecture/tag-verbi-simulazione-rollback.md` §10). Il codice di oggi non lo fa ancora.
 
 ### 5.15 cvar e menu GSTN Debug · OK
 - 171 cvar `gstn.*` (conteggio `grep TAutoConsoleVariable`). Finestra: `Plugins/GSTNCombatDebug/.../Private/Window/SGSTN_DebugOptionsPanel.cpp`; mostra **da sola** ogni cvar che si chiama `gstn.<Gruppo>.Debug...`; le altre (es. `gstn.Loco.Base`) vanno scritte in console.
@@ -201,31 +215,39 @@ In gioco: tasti e stick diventano comandi, con buffer, priorità e blocchi.
 | Domande sull'engine | `Tools/UE59/ask_unreal_assistant.py` | docstring |
 | Indipendenza dei plugin | `Tools/Canary/make_canary.py`, `Tools/Modules/check_modules.py` | `Plugins/README.md` |
 | MCP dell'editor | `unreal-mcp` (`.mcp.json`), toolset `Plugins/GSTNAnimToolsets` | skill `unreal-mcp` |
-| MCP animazione, cattura deterministica | BRANCH (sezione 6) | |
+| MCP animazione, cattura deterministica | `Tools/AnimPipeline/gstn_anim_mcp/`, `Tools/AnimPipeline/capdet/` (in main dal 24-11) | `docs/notes/handovers/c5-sessione.md` |
+| Indice dei thread e costi (GENERATI, mai a mano) | `Tools/CI/Build-Indice.py` → `handoffs/INDICE.md`, `handoffs/costi.csv` (nel repo) | testa dello script |
 
 ### 5.17 Test · OK fino al 21-11
 - ~1600 test automatici (`Automation RunTests GSTN`), quasi tutti nelle cartelle `Private/Tests` dei plugin, sempre dietro `WITH_DEV_AUTOMATION_TESTS`. Come lanciarli: `docs/architecture/testing.md` (attenzione: cita ancora UE 5.8 e "94 test").
 
 ## 6. Non ancora in main
-I branch S1 (`project-thread-njoso3`), haptics (`c2dfra`), M12 p1 (`0f3p4m`), M10/M11 (`476gv2`) e mira (`3j0pgk`) **sono già in main** (PR #37 e prima). Elenco ottenuto con `git for-each-ref --no-merged origin/main` + `git diff --stat` (126 branch non uniti, 50 solo documenti).
+Rifatto il 2026-11-27. Dal 23-11 sono **entrati in main** (PR #38-#59): M12 G0-G8, presa al collo (`grab-link`) e spin/numeri
+Ganondorf (`grab-ganon`), MCP animazione e cattura deterministica, riordino Content fase 2b, versioni approvate pubblicate in
+`Content/AnimPipeline/Published/`, capsula greybox, lanci orizzontali, kit dei personaggi, pannello locomotion, documento tag/verbi/rollback.
+Branch remoti: 201, di cui 64 uniti e 137 no; 36 non uniti hanno commit dal 23-11. Metodo: `git ls-remote` + SHA presente nella
+storia di `origin/main`; `git diff --stat origin/main...<branch> -- docs`.
 | Cosa | Branch (`origin/claude/...`) | Stato |
 |---|---|---|
-| M12 G0+G1 Experiences/Game Features | `m12-g0-g1` | codice, da compilare |
-| M12 G2 verbi di modalità | `m12-g2` | codice |
-| M12 G5 prompt interazione + camera sul pawn | `m12-g5` | codice ("108/108" nel messaggio di commit, da verificare) |
-| M12 G6 plugin livelli | `m12-g6` | codice ("6/6", da verificare) |
-| M12 G7+G8 livello di test | `m12-g7-g8` | codice + script |
-| Presa al collo, lanci N/F/Cr/Cr.F | `grab-link` (d4714a4c) | codice "non compilato" (`handoffs/costi.csv`, 23-11); verifica in editor `docs/notes/grab-link-verifica-editor.md`; input come azioni logiche in `Plugins/GSTNLink/README.md` |
-| Mappa input e piano "un solo canale" P0-P5 | `project-thread-uvefj5` (76d839a9) | documento `docs/notes/input-azioni-mappa.md`; decisioni owner aperte |
-| Ricerca 1v1 in rete senza server dedicato | `ricerca-server-dedicato` (1af67606) | documento `docs/notes/server-dedicato-ricerca.md`; un thread sulla latenza del ranked è ancora aperto |
-| Bibliotecario: rapporto, STATO-ATTUALE, briefing agenti esterni | `docs-bibliotecario-2026-11-23` | documenti |
-| MCP animazione `gstn-anim-mcp` | `anim-mcp-followthrough` (contiene `anim-mcp-v2-turn4`) | strumento, "mai eseguito in UE" |
-| Cattura deterministica `capdet` | `project-thread-uvohng`, `project-thread-nfhw4i` | strumento |
-| Strumenti di moto per Sequencer | `project-thread-t93zat` | codice vecchio (base feature) |
-| Promozione minion G9b, ferite parti | `desktop-g9b`, `parts-rest-laptop` | codice vecchio, da verificare se superato |
-| Riorganizzazione Content | `content-riorganizzazione` (d0b56728) | piano `docs/notes/content-riorganizzazione.md` (decisioni 1A 2A 3A), fase 2 sul fisso non fatta |
-| Ricerche skin, mesh, inventario animazioni, mappa cartelle | `skin-cosmetici-ricerca`, `project-thread-4pj7kf`, `project-thread-nfz4at`, `anim-inventario-2026-11-23`, `project-thread-f4ovn9` | solo documenti |
-`feature/gas-npp-5.8` non è un antenato di main ed è indietro: non partire da lì.
+| Schivata dive+roll | `project-thread-g997re` (27-11) | codice, handover `dodge-dive-roll-1125.md` |
+| Carica degli aerial | `project-thread-uyhp3p` (27-11) | codice, handover `aerial-charge-1.md` (PR #54 secondo la coda del fisso) |
+| Mosse di riferimento Overlord (Ganon/Ike) e cubi di test | `project-thread-sznhpw` (27-11), `project-thread-k3aapg` (26-11) | codice + `docs/notes/overlord-ref-moves.md` |
+| Rollback: misura F0 del mondo | `project-thread-n7diie` (26-11) | strumento, handover `rollback-f1-f0-1.md` |
+| Valutazione skill "Sakurai" | `project-thread-jnj2tt` (26-11) | solo handover |
+| Oscillazione della corsa (capsula) e run start di prova | `project-thread-u1p2ha` (25-11) | fermo al passo 7, `docs/notes/run-start-drive-capsula.md` |
+| Zoom camera PSO2 solo nel pannello | `project-thread-dome4c` (25-11) | codice, handover `camera-zoom-pso2.md` |
+| Nausea in PIE | `project-thread-0gtkfd` (24-11) | solo handover |
+| Piano pulizia repo C1-C5, brief skill unica, consulti review | `project-thread-yt6kwu`, `project-thread-mdss5a`, `project-thread-39uwfb`, `project-thread-aeh8di` | documenti, i file risultano già in main per altra via |
+| Dropkick K7/K8 (review e piano r3, fermo per decisione dell'owner) | `project-thread-6blrlz`, `project-thread-qsgab4`, `project-thread-2u7rwj`, `project-thread-690lv0` | documenti e immagini |
+| Copia di sicurezza materiali greybox di `_ue59` | `backup-ue59-2026-11-26` | solo asset, non unire senza guardare |
+| Mappa input e piano P0-P5 | `project-thread-uvefj5` | il documento è già in main (`docs/notes/input-azioni-mappa.md`); il branch ha solo l'handover |
+| Ricerca 1v1 senza server dedicato | `ricerca-server-dedicato` | documento già in main (`docs/notes/server-dedicato-ricerca.md`) |
+| Ricerche skin, mesh, inventario animazioni, mappa cartelle | `skin-cosmetici-ricerca`, `project-thread-4pj7kf`, `project-thread-nfz4at`, `anim-inventario-2026-11-23`, `project-thread-f4ovn9` | documenti già in main tranne `docs/notes/mappa-cartelle.md` (solo `project-thread-f4ovn9`) |
+| Riordino Content fase 1 | `content-riorganizzazione` | superato: la fase 2b è in main (PR #43) |
+| Strumenti di moto per Sequencer, minion G9b, ferite parti | `project-thread-t93zat`, `desktop-g9b`, `parts-rest-laptop` | codice vecchio, da verificare se superato |
+| Turni DeepSeek e harness | `deepseek-turn4`, `harness-deepseek-fix` | storia (Antigravity/DeepSeek non coordinano più) |
+| Copie degli artefatti | `artifacts` | 3787 file di differenza: è una copia larga, non unire così |
+`feature/gas-npp-5.8` esiste ancora sul remoto (e79e401a) e **il tag `archivio/feature-gas-npp-5.8` citato da `CLAUDE.md` non c'è** (`git ls-remote --tags`, 27-11): non partire da lì.
 
 ## 7. Dove sono i documenti
 - `CLAUDE.md`: regole e tabella "Where things are". `Plugins/README.md`: indice dei plugin (in parte vecchio, vedi audit).
