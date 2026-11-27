@@ -284,6 +284,15 @@ ESITO: OK on the sword; wall judder/brake lean present, worth an owner look at r
 SUBAGENTI: none.
 COSTO: not measured (one thread, ~10 min for run 6).
 
+## Desktop run sway-1 (2026-11-24, 79d3e82e + 6e5a02ac merged onto `claude/project-thread-e8g12i` 799a6740 in a local branch)
+Evidence `docs/notes/reviews/greybox-capsula/run-sway-1/` (KIT_Test_Overlord: gb_loco, gb_side, new gb_sprint; side | back | game, 1x /
+0.25x). Capture `Saved/Greybox/sway1/cap` on `_ue59`. Build OK (376 s, no fix), tests Core.Greybox + NP.Greybox 5/5.
+- Speed (frames.jsonl, loc delta x 60): stick v40; stage 1 plateau 451 cm/s, t10/t50/t90 0.15 / 0.32 / 0.47 s; stage 2 from v240 at
+  586 cm/s; stage 3 from v341 at ~817 cm/s (held to the release at v520). gb_sprint's turn starts at v350, so the straight part of stage
+  3 is the 1 s after the turn (v460-520), not before it.
+- Stage 3 (v466-512): small rocks of a few degrees around a held forward lean, no violent swing; to judge at 1x by the owner.
+ESITO: build/test OK, captures done; sway at stage 3 small in stills.
+
 ## Desktop run 7 (2026-11-24, thread "Sistemare capsula a terra e rotolate", `_ue59` on 4317a34d)
 Evidence `docs/notes/reviews/greybox-capsula/round7/` (side | back | game, 1x / 0.25x; sheets). Captures `Saved/Greybox/r7_a` (799a6740),
 `r7_b` (4317a34d, stopped), `r7_c` (4317a34d, KIT_Test_Playtest, gstn.Greybox 1, gstn.Loco.Base 2, PIE_CAPTURE_AIR_GIVE_UP=200).
@@ -347,3 +356,7 @@ ESITO: hop ~28 cm / 16-17 frames, lying without pops; both rolls full somersault
 v157-159.
 SUBAGENTI: none.
 COSTO: not measured (one thread, ~1 h 45 on the laptop, mostly build, slow fetch and three captures).
+
+## Laptop run drive-1: in pausa 12:01 UTC 2026-11-25 al passo 7 (coordinatore, rete instabile)
+Worktree cp1verify su 795a7235 (c2de6729 + gb_dash in pie_capture_move.py, bc3ac164). Fatto: build OK (-SkipRegress, regress noto approved/runstart-v4r5), test GSTNCombat.NP.Greybox + GSTNAnimation.Core.Greybox 6/6; CDO ABP_GSTN_GreyboxCapsule ShapeSettings = default C++ (0 diff su 75 campi: RockRollDeg 4.5, TwistYawDeg 5, BobSquash 0.05, MaxSwayCadenceHz 3.2, bDriveFromRunState true, DashPoseSeconds 0.25, DashLeanDeg 22, DashSquash 0.82); stadi laptop (dump, DA_Locomotion_Default, unico profilo trovato): S1 470 cm/s acc 2000 ramp 30 next 180, S2 610 acc 1400 ramp 30 next 94, S3 850 acc 1200, entry_burst 0 e tell 0 ovunque (gli step non sono sul laptop), lean anim set vuoto. Cattura Saved/Greybox/rd1b (gb_sprint, gb_loco, gb_dash; az90/az180/game; cam follow mesh; KIT_Test_Overlord, gstn.Greybox 1, gstn.Loco.Base 2) ESITO OK, assert vuoto (sequenze senza expect). Problema: gb_dash gira dopo gb_sprint e il pawn resta fermo dove gb_sprint finisce (x 3953, y 1520): sim in stage 1 + dash da v44 ma 0 cm/s, probabilmente contro un ostacolo; va ricatturata da sola (PIE_CAPTURE_SEQUENCES=gb_dash o PIE_CAPTURE_RESET_EACH). Manca: ricattura gb_dash, tabelle velocita', video 1x/0.25x in reviews/greybox-capsula/run-drive-1/, report.
+

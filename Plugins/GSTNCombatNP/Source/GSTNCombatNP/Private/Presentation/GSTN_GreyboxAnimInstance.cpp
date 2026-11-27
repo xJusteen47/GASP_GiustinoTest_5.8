@@ -128,15 +128,65 @@ float UGSTN_GreyboxAnimInstance::FranticAlpha(const FGSTN_GreyboxShapeSettings& 
 	return 1.f - FMath::Clamp((TimeSinceStart - Settings.FranticSeconds) / FMath::Max(Settings.FranticFadeSeconds, 0.01f), 0.f, 1.f);
 }
 
+FVector UGSTN_GreyboxAnimInstance::FilterAcceleration(const FGSTN_GreyboxShapeSettings& Settings, const FVector& Filtered, const FVector& Raw,
+	float DeltaSeconds)
+{
+	if (Settings.AccelerationFilterHz <= 0.f)
+	{
+		return Raw;
+	}
+	// Exact first-order low-pass for this frame's length (frame-rate independent)
+	const float Alpha = 1.f - FMath::Exp(-2.f * PI * Settings.AccelerationFilterHz * FMath::Max(DeltaSeconds, 0.f));
+	return FMath::Lerp(Filtered, Raw, Alpha);
+}
+
+float UGSTN_GreyboxAnimInstance::RunForwardLeanDeg(const FGSTN_GreyboxShapeSettings& Settings, float Speed2D)
+{
+	return Settings.SprintForwardLeanDeg * FMath::Clamp(FMath::Max(Speed2D, 0.f) / FMath::Max(Settings.SprintSwaySpeed, 1.f), 0.f, 1.f);
+}
+
+float UGSTN_GreyboxAnimInstance::EffortAlpha(const FGSTN_GreyboxShapeSettings& Settings, float ForwardAcceleration)
+{
+	const float Raw = FMath::Clamp(ForwardAcceleration / FMath::Max(Settings.EffortFullAcceleration, 1.f), 0.f, 1.f);
+	const float DeadZone = FMath::Clamp(Settings.EffortDeadZone, 0.f, 0.9f);
+	return FMath::Clamp((Raw - DeadZone) / (1.f - DeadZone), 0.f, 1.f);
+}
+
+float UGSTN_GreyboxAnimInstance::DriveGoal(const FGSTN_GreyboxShapeSettings& Settings, bool bStampLive, float Effort)
+{
+	return bStampLive ? 1.f : FMath::Clamp(Effort, 0.f, 1.f);
+}
+
+float UGSTN_GreyboxAnimInstance::DashPoseAlpha(const FGSTN_GreyboxShapeSettings& Settings, float DashTime)
+{
+	if (DashTime < 0.f || Settings.DashPoseSeconds <= 0.f)
+	{
+		return 0.f;
+	}
+	const float T = FMath::Clamp(DashTime / Settings.DashPoseSeconds, 0.f, 1.f);
+	return 1.f - T * T * (3.f - 2.f * T);  // smoothstep out: holds the launch, then rises into the run
+}
+
 float UGSTN_GreyboxAnimInstance::SwayCadenceHz(const FGSTN_GreyboxShapeSettings& Settings, float Speed2D, float Frantic)
 {
-	const float BySpeed = FMath::Max(Speed2D, 0.f) / FMath::Max(Settings.StrideLength, 1.f);
+	float BySpeed = FMath::Max(Speed2D, 0.f) / FMath::Max(Settings.StrideLength, 1.f);
+	if (Settings.MaxSwayCadenceHz > 0.f)
+	{
+		BySpeed = FMath::Min(BySpeed, Settings.MaxSwayCadenceHz);
+	}
 	return FMath::Lerp(BySpeed, FMath::Max(Settings.FranticCadenceHz, BySpeed), FMath::Clamp(Frantic, 0.f, 1.f));
 }
 
 float UGSTN_GreyboxAnimInstance::SwayAmplitudeTarget(const FGSTN_GreyboxShapeSettings& Settings, float Speed2D, float Frantic)
 {
-	const float BySpeed = FMath::Clamp(FMath::Max(Speed2D, 0.f) / FMath::Max(Settings.FullSwaySpeed, 1.f), 0.f, 1.f);
+	const float Speed = FMath::Max(Speed2D, 0.f);
+	float BySpeed = FMath::Clamp(Speed / FMath::Max(Settings.FullSwaySpeed, 1.f), 0.f, 1.f);
+	if (Settings.SprintSwaySpeed > Settings.FullSwaySpeed)
+	{
+		// Sprint: the sway shrinks from the run's to SprintSwayScale between FullSwaySpeed and SprintSwaySpeed
+		const float SprintAlpha = FMath::Clamp((Speed - Settings.FullSwaySpeed) / (Settings.SprintSwaySpeed - Settings.FullSwaySpeed), 0.f, 1.f);
+		BySpeed *= FMath::Lerp(1.f, Settings.SprintSwayScale, SprintAlpha);
+	}
 	return FMath::Lerp(BySpeed, Settings.FranticAmplitude, FMath::Clamp(Frantic, 0.f, 1.f));
 }
 
@@ -194,6 +244,7 @@ void UGSTN_GreyboxAnimInstance::NativeInitializeAnimation()
 	SquashSpring.Value = 1.f;
 	SquashSpring.Velocity = 0.f;
 	bHasPrevious = false;
+	FilteredAcceleration = FVector::ZeroVector;
 	Shape.LimbScale = ShapeSettings.bShowLimbsInLocomotion ? 1.f : 0.f;
 }
 
@@ -222,7 +273,9 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	if (bHasPrevious)
 	{
 		Acceleration3D = (Velocity - PreviousVelocity) / DeltaSeconds;
-		Acceleration = FVector(Acceleration3D.X, Acceleration3D.Y, 0.f);
+		// The lean, the start squash and the run stop read the filtered horizontal part; the wall brake keeps the raw 3D one
+		FilteredAcceleration = FilterAcceleration(ShapeSettings, FilteredAcceleration, FVector(Acceleration3D.X, Acceleration3D.Y, 0.f), DeltaSeconds);
+		Acceleration = FilteredAcceleration;
 	}
 	const bool bOnWall = MoverComponent && ShapeSettings.WallModeNames.Contains(MoverComponent->GetMovementModeName());
 	PreviousVelocity = Velocity;
@@ -302,6 +355,11 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// On a wall the body is braced like on the ground (no air stretch from the slide's vertical speed), and leans its top off the wall
 	const bool bBraced = bOnGround || bOnWall;
 	FRotator LeanGoal = bBraced && !bCalm ? LeanTarget(ShapeSettings, Local) : FRotator::ZeroRotator;
+	if (bOnGround && !bCalm)
+	{
+		// The run's held forward lean (pitch up = top back, so forward is minus)
+		LeanGoal.Pitch -= RunForwardLeanDeg(ShapeSettings, FVector(Velocity.X, Velocity.Y, 0.f).Size());
+	}
 	WallNormal = bOnWall ? FindWallNormal(*Owner, BodyQuat) : FVector::ZeroVector;
 	const FVector LocalNormal = BodyQuat.UnrotateVector(WallNormal);
 	if (!WallNormal.IsNearlyZero())
@@ -343,11 +401,28 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		JudderRoll = Along.Roll + LocalNormal.Y * ShapeSettings.WallJudderDeg * Judder * FMath::Abs(Direction.Z);
 		JudderSquash = -ShapeSettings.WallJudderSquash * FMath::Abs(Judder) * 2.f;
 	}
+	// Run drive: the effort (forward acceleration) and the sim's stamp, tell and boost dash, read from the run presentation. A hit reaction
+	// (bCalm) reads none of them: its velocity jumps are not effort
+	const bool bStampLive = !bCalm && RunPresentation.IsValid() && RunPresentation->IsRunStartStamp();
+	const float Effort = bOnGround && !bCalm ? EffortAlpha(ShapeSettings, Local.X) : 0.f;
+	const float DashAlpha = bOnGround && !bCalm && RunPresentation.IsValid() ? DashPoseAlpha(ShapeSettings, RunPresentation->GetBoostDashTime()) : 0.f;
+	if (ShapeSettings.bDriveFromRunState && bOnGround && !bCalm)
+	{
+		LeanGoal.Pitch -= ShapeSettings.EffortLeanDeg * Effort;
+		if (RunPresentation.IsValid() && RunPresentation->IsRunStageTell())
+		{
+			LeanGoal.Pitch -= ShapeSettings.StageTellLeanDeg * RunPresentation->GetRunStageTellAlpha();
+		}
+	}
+	// The dash pose is the boost's own read, not a drive option: forward and low at the launch, eased out
+	LeanGoal.Pitch -= ShapeSettings.DashLeanDeg * DashAlpha;
 	const float SpringDamping = bCalm ? FMath::Max(ShapeSettings.SpringDamping, ShapeSettings.HitReactionSpringDamping) : ShapeSettings.SpringDamping;
 	// Air crouch: the body tucks to a fixed squash instead of stretching with the vertical speed (not in a dive, which owns the body)
 	const UAbilitySystemComponent* OwnerASC = UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Owner);
 	const bool bAirCrouch = !bOnGround && !bCalm && DiveLastAngle <= 0.f && OwnerASC && OwnerASC->HasMatchingGameplayTag(GSTNCombatTags::State_AirCrouch);
-	const float SquashGoal = bCalm ? 1.f : (bAirCrouch ? ShapeSettings.AirCrouchSquash : SquashTarget(ShapeSettings, bBraced, Velocity.Z, Local.X));
+	const float SquashGoal = bCalm ? 1.f
+		: (bAirCrouch ? ShapeSettings.AirCrouchSquash
+			: SquashTarget(ShapeSettings, bBraced, Velocity.Z, Local.X) * FMath::Lerp(1.f, ShapeSettings.DashSquash, DashAlpha));
 	SquashSpring.Step(SquashGoal, DeltaSeconds, ShapeSettings.SpringFrequency, SpringDamping);
 	// Jump squat: squash fast during the sim's squat frames; on take-off the spring is released from there into the air stretch
 	const bool bJumpSquatting = UGSTN_RunPresentationComponent::IsAnimOwnerJumpSquatting(this);
@@ -388,7 +463,15 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	{
 		TimeSinceStart = -1.f;  // no frantic sway while sliding; it starts when the turn does
 	}
-	const float Frantic = FranticAlpha(ShapeSettings, TimeSinceStart);
+	// Frantic share of the cadence and amplitude: driven by the sim (stamp, then the effort of the speed still climbing; a stage step or a
+	// dash climbs too) or, off, the fixed window after leaving rest. The drive rises at once and eases back, so the cadence never jumps
+	float Frantic = FranticAlpha(ShapeSettings, TimeSinceStart);
+	if (ShapeSettings.bDriveFromRunState)
+	{
+		const float Goal = bMoving ? FMath::Max(DriveGoal(ShapeSettings, bStampLive, Effort), DashAlpha) : 0.f;
+		RunDrive = Goal >= RunDrive ? Goal : FMath::FInterpTo(RunDrive, Goal, DeltaSeconds, ShapeSettings.DriveReleaseSpeed);
+		Frantic = RunDrive;
+	}
 	// The frantic start replaces the speed's amplitude instead of raising it (run 3: with a max, the fast ramp reached full speed inside
 	// the frantic window, so lowering FranticAmplitude changed nothing and the start still rocked as wide as the run, at twice the cadence)
 	const float AmplitudeGoal = bMoving ? SwayAmplitudeTarget(ShapeSettings, Speed2D, Frantic) * Upright : 0.f;

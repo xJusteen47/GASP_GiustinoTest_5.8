@@ -11,7 +11,10 @@ import os
 
 import unreal
 
-PROFILE = 'DA_Locomotion_Default'
+# Owner 2026-11-24: "almost a step" between stages on every kit. The per-kit profiles copied from the Default (setup_character_kits.py)
+# get the same steps; a name not in the project is skipped. STEPS_PROFILES (comma-separated) overrides the list.
+PROFILES = set(n.strip() for n in os.environ.get('STEPS_PROFILES', 'DA_Locomotion_Default,DA_Locomotion_BirdKnight,DA_Locomotion_FlameFury,'
+                                                 'DA_Locomotion_Voyager').split(',') if n.strip())
 ANIM_SET = '/Game/GSTN/Animation/Layers/DA_AnimSet_Locomotion_Default'
 # stage index (0 = run) -> readable step fields. Frames at 62.5 Hz. Burst multipliers sized so ~90% -> 100% of the next top speed takes the
 # burst's frames with the default accelerations (stage 2: 405 -> 650 cm/s in 3 f needs ~5100 cm/s^2 = 1400 x ~4; x6 leaves margin, Mover stops at MaxSpeed)
@@ -34,7 +37,7 @@ def _profile(lines, dump_only):
     done = 0
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
     for data in registry.get_assets_by_path('/Game', recursive=True):
-        if str(data.asset_name) != PROFILE:
+        if str(data.asset_name) not in PROFILES:
             continue
         asset = data.get_asset()
         if not isinstance(asset, unreal.GSTN_LocomotionProfile):
@@ -90,7 +93,8 @@ def run():
     dump_only = os.environ.get('STEPS_MODE', '') == 'dump'
     lines = []
     profiles = _profile(lines, dump_only)
-    sets = _anim_set(lines, dump_only)
+    # STEPS_ANIM_SET=0 leaves the mannequin anim set alone (the capsule phase only needs the profiles' steps)
+    sets = _anim_set(lines, dump_only) if os.environ.get('STEPS_ANIM_SET', '1') != '0' else 0
     out_dir = os.path.join(unreal.Paths.project_saved_dir(), 'RunStages')
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, 'setup_run_stage_steps.txt'), 'w') as f:
