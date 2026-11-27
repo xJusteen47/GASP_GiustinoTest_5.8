@@ -145,6 +145,12 @@ struct FGSTN_CombatSyncCore
 	int32 TimelineStartFrame = INDEX_NONE;
 	int32 TimelinePausedFrames = 0;
 
+	/**
+	 * Ticks the running timeline stood on its Charge Hold frame (FGSTN_TimelineTrack_ChargeHold, owner 2026-11-25), capped at 255: the charge its hits
+	 * scale their damage by. Part of TimelinePausedFrames too; kept apart because a hitstop after the first hit adds to that one and not to this
+	 */
+	uint8 ChargeFrames = 0;
+
 	/** Every hitstop frame of the combatant so far: combat clock = F - PausedFramesTotal. Constant outside hitstop */
 	int32 PausedFramesTotal = 0;
 
@@ -223,7 +229,7 @@ struct FGSTN_CombatSyncCore
 	bool IsActionPartDefault() const
 	{
 		return ActionState == EGSTN_ActionState::Actionable && ActiveTimeline == INDEX_NONE && ActiveSource == EGSTN_ActivationSource::Command
-			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && PausedFramesTotal == 0 && RecoilStartFrame == INDEX_NONE && !HardContact.IsSet() && StrikeTrack == INDEX_NONE && !bAirborneOk && !bLedgeStop && !bTumbleActionable && ActiveWeaponIndex == 0
+			&& TimelineStartFrame == INDEX_NONE && TimelinePausedFrames == 0 && ChargeFrames == 0 && PausedFramesTotal == 0 && RecoilStartFrame == INDEX_NONE && !HardContact.IsSet() && StrikeTrack == INDEX_NONE && !bAirborneOk && !bLedgeStop && !bTumbleActionable && ActiveWeaponIndex == 0
 			&& LoadoutRevision == 0 && TableRevision == 0 && Requests.IsEmpty() && Hit.IsDefault(GetHitContext());
 	}
 
@@ -265,6 +271,17 @@ struct FGSTN_CombatSyncCore
 		// Zigzag: a Hold Until Landed jump skips frames, which makes the count negative when the move lands before it ever stood still
 		uint32 Paused = (static_cast<uint32>(TimelinePausedFrames) << 1) ^ static_cast<uint32>(TimelinePausedFrames >> 31);
 		Ar.SerializeIntPacked(Paused);
+		// One bit for every move that never charged
+		uint8 bCharged = ChargeFrames != 0 ? 1 : 0;
+		Ar.SerializeBits(&bCharged, 1);
+		if (bCharged)
+		{
+			Ar << ChargeFrames;
+		}
+		else if (Ar.IsLoading())
+		{
+			ChargeFrames = 0;
+		}
 		uint32 PausedTotal = static_cast<uint32>(FMath::Max(PausedFramesTotal, 0));
 		Ar.SerializeIntPacked(PausedTotal);
 		uint32 RecoilPlusOne = static_cast<uint32>(FMath::Max(RecoilStartFrame + 1, 0));
@@ -325,6 +342,7 @@ struct FGSTN_CombatSyncCore
 		ActiveSource = EGSTN_ActivationSource::Command;
 		TimelineStartFrame = INDEX_NONE;
 		TimelinePausedFrames = 0;
+		ChargeFrames = 0;
 		PausedFramesTotal = 0;
 		RecoilStartFrame = INDEX_NONE;
 		HardContact = FGSTN_HardContactState();
@@ -355,6 +373,7 @@ struct FGSTN_CombatSyncCore
 		UE_NP_TRACE_RECONCILE(ActiveSource != AuthorityState.ActiveSource, "ActiveSource:");
 		UE_NP_TRACE_RECONCILE(TimelineStartFrame != AuthorityState.TimelineStartFrame, "TimelineStartFrame:");
 		UE_NP_TRACE_RECONCILE(TimelinePausedFrames != AuthorityState.TimelinePausedFrames, "TimelinePausedFrames:");
+		UE_NP_TRACE_RECONCILE(ChargeFrames != AuthorityState.ChargeFrames, "ChargeFrames:");
 		UE_NP_TRACE_RECONCILE(PausedFramesTotal != AuthorityState.PausedFramesTotal, "PausedFramesTotal:");
 		UE_NP_TRACE_RECONCILE(RecoilStartFrame != AuthorityState.RecoilStartFrame, "RecoilStartFrame:");
 		UE_NP_TRACE_RECONCILE(!(HardContact == AuthorityState.HardContact), "HardContact:");

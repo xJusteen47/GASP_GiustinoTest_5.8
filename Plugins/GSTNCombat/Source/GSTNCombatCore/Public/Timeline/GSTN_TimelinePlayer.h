@@ -75,6 +75,13 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineOutput
 	 */
 	int32 LandingContinueTrack = INDEX_NONE;
 
+	/**
+	 * Written by the combat clock, never by the player: the timeline stands on its Charge Hold frame this tick (the combat model pauses the synced
+	 * montage on it, like a hitstop), and the tick after the hold frame (the montage plays on). FGSTN_TimelineTrack_ChargeHold
+	 */
+	bool bChargeHoldStall = false;
+	bool bChargeHoldRelease = false;
+
 	/** Cancel windows open at Frame */
 	TArray<const FGSTN_TimelineTrack_CancelWindow*> CancelWindows;
 

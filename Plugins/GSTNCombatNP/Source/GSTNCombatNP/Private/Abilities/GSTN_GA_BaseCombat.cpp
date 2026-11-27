@@ -11,6 +11,7 @@
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatTableSet.h"
 #include "Timeline/GSTN_CombatTimeline.h"
+#include "Timeline/GSTN_ChargeHold.h"
 #include "Timeline/GSTN_HitBounce.h"
 #include "Timeline/GSTN_HoldUntilLanded.h"
 #include "Timeline/GSTN_Landing.h"
@@ -608,6 +609,74 @@ void UGSTN_GA_BaseCombat::UpdateHoldUntilLandedMontage()
 	}
 }
 
+void UGSTN_GA_BaseCombat::UpdateChargeHoldMontage()
+{
+	const FGSTN_CombatTimelineData& Data = GetRunningTimelineData();
+	const FGSTN_TimelineTrack_ChargeHold* Track = FGSTN_ChargeHold::FindTrack(Data);
+	if (!Track || Track->LoopSection.IsNone() || bRecoilPlayed.Value)
+	{
+		return;
+	}
+	UNpAbilitySystemComponent* AbilitySystem = GetNpAbilitySystemComponent();
+	const UGSTN_CombatSimComponent* Combat = GetCombatComponent();
+	UAnimMontage* Montage = TimelineMontagePlayed ? TimelineMontagePlayed.Get() : Data.Montage.Get();
+	float MontageTime = 0.f;
+	if (!AbilitySystem || !Combat || !Montage || AbilitySystem->GetPlayingSyncedMontage(MontageTime) != Montage)
+	{
+		return;
+	}
+	const bool bStalled = Combat->IsChargeHoldStalled();
+	const bool bReleased = Combat->IsChargeHoldReleased();
+	if (!bStalled && !bReleased)
+	{
+		return;
+	}
+	const float StepSeconds = AbilitySystem->GetFixedStepMs() / 1000.f;
+	const float SecondsPerFrame = StepSeconds * Data.MontagePlayRate * AbilitySystem->GetMontagePlayRateMultiplier();
+	if (bReleased)
+	{
+		// Back on the hold frame's pose (the mapping of UpdateHoldUntilLandedMontage: after the tick of frame f the montage is at f steps); this
+		// tick's advance takes it to the frame after, the one the timeline evaluates now. A tap passes here with the montage already there
+		float BaseTime = 0.f;
+		if (!Data.MontageSection.IsNone())
+		{
+			const int32 Section = Montage->GetSectionIndex(Data.MontageSection);
+			float SectionEnd = 0.f;
+			if (Section != INDEX_NONE)
+			{
+				Montage->GetSectionStartAndEndTime(Section, BaseTime, SectionEnd);
+			}
+		}
+		const float HoldTime = BaseTime + static_cast<float>(Track->StartFrame) * SecondsPerFrame;
+		if (!FMath::IsNearlyEqual(MontageTime, HoldTime, 1.e-4f))
+		{
+			AbilitySystem->SetSyncedMontageTime(Montage, HoldTime, false);
+		}
+		return;
+	}
+	const int32 Loop = Montage->GetSectionIndex(Track->LoopSection);
+	if (Loop == INDEX_NONE)
+	{
+		return;
+	}
+	float LoopStart = 0.f;
+	float LoopEnd = 0.f;
+	Montage->GetSectionStartAndEndTime(Loop, LoopStart, LoopEnd);
+	if (LoopEnd <= LoopStart)
+	{
+		return;
+	}
+	// Into the loop on the first stalled tick, then wrapped one tick before its end, so this tick's advance stays inside it
+	if (MontageTime < LoopStart - 1.e-4f || MontageTime >= LoopEnd)
+	{
+		AbilitySystem->SetSyncedMontageTime(Montage, LoopStart, false);
+	}
+	else if (MontageTime + SecondsPerFrame >= LoopEnd - 1.e-4f)
+	{
+		AbilitySystem->SetSyncedMontageTime(Montage, MontageTime - (LoopEnd - LoopStart), false);
+	}
+}
+
 void UGSTN_GA_BaseCombat::OnMoveKey(const FGSTN_TimelineTrack_Event& Key, int32 TrackIndex, int32 TimelineFrame)
 {
 	K2_OnMoveKey(Key.KeyTag, Key, TimelineFrame);
@@ -753,6 +822,7 @@ void UGSTN_GA_BaseCombat::OnSimulationTick(const FAbilitySystemTimeStep& TimeSte
 			CloseTagWindows(false);
 		}
 		UpdateHoldUntilLandedMontage();
+		UpdateChargeHoldMontage();
 		RaiseMoveEvents();
 		return;
 	}
@@ -992,7 +1062,8 @@ int32 UGSTN_GA_BaseCombat::GetEndRuleFrame(const FGSTN_CombatTimelineData& Data)
 {
 	// A Hold Until Landed move stands on a frame for the whole fall and skips frames on the touchdown: the combat clock (which runs through a
 	// stall) says nothing about where its timeline is. The frame the clock last evaluated does. Every other move keeps the combat clock
-	if (EvaluatedFrame.Value != INDEX_NONE && FGSTN_HoldUntilLanded::FindTrack(Data))
+	// A Charge Hold stands on its hold frame as long as the button is held: the same
+	if (EvaluatedFrame.Value != INDEX_NONE && (FGSTN_HoldUntilLanded::FindTrack(Data) || FGSTN_ChargeHold::FindTrack(Data)))
 	{
 		return EvaluatedFrame.Value;
 	}
