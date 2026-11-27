@@ -17,7 +17,7 @@ namespace GSTNGroundContact
 {
 	static TAutoConsoleVariable<int32> CVarEnable(TEXT("a.GSTN.GroundContactFix"), 1,
 		TEXT("1: keep body, hands and feet above the floor in the states of the ground contact settings (default). 0: pass the pose through."));
-	static TAutoConsoleVariable<int32> CVarDebug(TEXT("a.GSTN.GroundContactFix.Debug"), 0,
+	static TAutoConsoleVariable<int32> CVarDebug(TEXT("gstn.Anim.Debug.GroundContactFix"), 0,
 		TEXT("1: draw the floor plane, the contact spheres (red = sinking in the input pose) and the lift."));
 
 	static bool OwnerHasAnyTag(const TArray<TWeakObjectPtr<const UObject>>& Sources, const FGameplayTagContainer& Tags)

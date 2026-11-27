@@ -642,7 +642,7 @@ FGSTN_WallCheckSettings UGSTN_WallMovementModeBase::GetWallCheckSettings() const
 	Settings.LookaheadTime = LookaheadTime;
 	Settings.MinLookaheadDistance = MinLookaheadDistance;
 	Settings.SurfaceFilter = SurfaceFilter;
-	Settings.bDrawDebug = bDrawDebug;
+	Settings.bDrawDebug = GSTNWallDebug::IsDrawOn();
 	return Settings;
 }
 
@@ -655,7 +655,7 @@ FVector UGSTN_WallMovementModeBase::GetWallNormal(const FGSTN_WallMovementSyncSt
 void UGSTN_WallMovementModeBase::DrawWallDebug(const FMovingComponentSet& MovingComps, const FGSTN_WallTickState& State) const
 {
 	const USceneComponent* UpdatedComponent = MovingComps.UpdatedComponent.Get();
-	if (!bDrawDebug || !IsInGameThread() || !UpdatedComponent)
+	if (!GSTNWallDebug::IsDrawOn() || !IsInGameThread() || !UpdatedComponent)
 	{
 		return;
 	}

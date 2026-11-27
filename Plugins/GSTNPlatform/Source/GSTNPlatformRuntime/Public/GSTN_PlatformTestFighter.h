@@ -12,7 +12,7 @@ class UGSTN_ScriptedPlatformComponent;
 /**
  * The scripted test fighter of the traversal scenarios (plan T3, scenario_surface_wallslide_enemy): an enemy on rails with a
  * wall-slideable flank and a top to stand on, moving back and forth at 300 cm/s. Test content: it has no mesh (no content
- * reference from C++); turn on gstn.Platform.Draw 1 to see its shapes. Spawn it in a running game with
+ * reference from C++); turn on gstn.Platform.Debug.Draw 1 to see its shapes. Spawn it in a running game with
  * gstn.Platform.SpawnTestFighter X Y Z [Yaw] (on the server; it replicates).
  *
  * Shapes, in its frame (the actor's location is on the floor, centre of the body):
