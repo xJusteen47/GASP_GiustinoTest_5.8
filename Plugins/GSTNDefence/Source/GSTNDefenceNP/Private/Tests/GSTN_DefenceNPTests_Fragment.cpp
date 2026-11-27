@@ -84,6 +84,7 @@ namespace
 		F.SetPushback(146, FVector(-300.0, 40.0, 0.0), 8);
 		F.MirrorValueQ = F.ShieldValueQ;
 		F.MirrorFrame = 144;
+		F.SelfFallSpeedQ = 1234;
 		return F;
 	}
 
@@ -143,11 +144,11 @@ bool FGSTN_DefenceFragmentBytesTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("a raised shield is the mask and the shield group"), RaisedBytes, 2 + 15);
 
 	// Everything live: 2 + 85 bytes, under the spec's ~100 B total for the defence rows (shield 15, stuns 17, tech + knockdown 17, move parry 13,
-	// grab immunity 4, punish 5) plus this build's pushback (11) and mirror (6) groups
+	// grab immunity 4, punish 5) plus this build's pushback (11), mirror (6) and self fall speed (2, owner 2026-11-26) groups
 	const FGSTN_DefenceFragment Everything = DefMakeEverything();
 	const int32 AllBytes = DefPayloadBytes(Everything);
 	UE_LOG(LogGSTNDefenceNPTest, Display, TEXT("Fragment bytes: every group live %d B payload"), AllBytes);
-	TestEqual(TEXT("every group live"), AllBytes, 2 + 93);
+	TestEqual(TEXT("every group live"), AllBytes, 2 + 95);
 	TestTrue(TEXT("within the fragment list's payload limit"), AllBytes <= FGSTN_SyncFragmentList::MaxFragmentBytes);
 
 	// Round trip of the worst case through the list framing: every field survives and nothing is left in the reader
@@ -203,7 +204,8 @@ bool FGSTN_DefenceFragmentBytesTest::RunTest(const FString& Parameters)
 	Differs(TEXT("pushback frames"), [](FGSTN_DefenceFragment& F) { F.PushbackFrames += 1; });
 	Differs(TEXT("mirror value"), [](FGSTN_DefenceFragment& F) { F.MirrorValueQ += 1; });
 	Differs(TEXT("mirror frame"), [](FGSTN_DefenceFragment& F) { F.MirrorFrame += 1; });
-	TestEqual(TEXT("28 single-field differences checked"), Checked, 28);
+	Differs(TEXT("self fall speed"), [](FGSTN_DefenceFragment& F) { F.SelfFallSpeedQ += 1; });
+	TestEqual(TEXT("29 single-field differences checked"), Checked, 29);
 
 	// Quantisation: quarter points, round half up, so two machines agree on the bit
 	TestEqual(TEXT("37.25 is 149 quarters"), static_cast<int32>(FGSTN_DefenceFragment::QuantizeValue(37.25)), 149);
