@@ -74,3 +74,10 @@ SUBAGENTI: 0
 COSTO: ~5 $ | ~15 min desktop | 0
 
 Aggiornamento 2026-11-27 16:18 UTC: IMC rilanciato in _ue59 con Save-Assets (setup_player_input_contexts.py; movement_setup.py non serve, stessi tasti): crouch Gamepad_LeftShoulder, scudo Gamepad_LeftTrigger, schivata RB, riletto dopo il salvataggio. Commit 9d5bfc3e.
+
+## Schivata da accovacciato (2026-11-27, stesso thread)
+Causa: accovacciarsi in corsa avvia lo slide stock di GASP (modo Mover `Sliding`); `UGSTN_MoverInputContextProvider::GroundedModes` conteneva solo `Walking`, quindi nello slide il contesto non era né Grounded né Airborne e nessuna riga da terra combaciava (né schivata, né salto, né tasto schivata). Da fermo (crouch walk, modo Walking) funzionava già. Correzione: `Sliding` tra i GroundedModes di default (GSTNInputNP). Effetto collaterale voluto: anche gli altri comandi da terra partono dallo slide. Build OK, `GSTNInput+GSTNCombat` 877/877, PIE: crouch+salto da corsa (crouch 2 o 21 frame prima) e tasto schivata da accovacciato in corsa = schivata, 511 cm (Saved/M9/fix). Stick a mezza corsa (zona Aim) + crouch + salto resta un salto, come da specifica (serve una direzione vera).
+
+ESITO: PASS schivata dive/pancia/roll-out OK, crouch+salto anche da accovacciato in corsa, IMC salvati
+SUBAGENTI: 0
+COSTO: ~9 $ | ~30 min desktop | 0
