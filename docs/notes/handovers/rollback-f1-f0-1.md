@@ -29,3 +29,13 @@ Minions C + B (F9); per-match switch Rollback completo / Scalato; physics 1A (fa
 ESITO: PARZIALE (F1, F0, F0b written; first build fixed; tests and F0 measures not run yet)
 SUBAGENTI: 0
 COSTO: ~20 $ (estimate, cloud thread + RC build)
+
+## Update 2026-11-27 (desktop, worktree n7diie)
+- Merged main (33fe0118). Build OK, 880/880 tests (GSTNInput 141, GSTNCombat 739). F0/F0b measured: world sim ForwardPredict on clients,
+  40/40 load 0.03-0.04 ms per tick, worst client frame 1.9 ms over 70 resim ticks, accumulator never differs; ParallelFor slower at this size.
+- For F2: a sync counter that rises every tick reconciles through the fork's "late correction" path (state older than history compared with
+  the newest frame); keep world state free of such counters. SimQuery dump in a live match is not comparable (local frame numbers, clients
+  do not simulate other pawns): the cross-machine check is F8.
+- Wall regression of F1 found and fixed (779b4786): the harness pawn's combat config binds IA_GASNPP_Jump/Crouch, not GASP's IA_Jump; the
+  wall jump now takes either carrier and works on all three paths. Detach by button does not fire on WallSlidingV2: by design
+  (`bDetachByButton = false` on the v2 slide, wall-slide-v2.md item 16), not a regression. Low wall jump height (UpSpeed 300) unchanged by F1.
