@@ -305,6 +305,7 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 	// as the shield's hold reads it. Not on a hitstop frame (the timeline stands already) and never on a frame a Hold Until Landed jumped
 	bool bChargeStall = false;
 	bool bChargeRelease = false;
+	bool bChargeResume = false;
 	int32 ChargeTrackIndex = INDEX_NONE;
 	const FGSTN_TimelineTrack_ChargeHold* ChargeTrack = FGSTN_ChargeHold::FindTrack(*Data, &ChargeTrackIndex);
 	if (ChargeTrack && !bHitstopFrame && ClockPrevious == Previous && Previous >= 0)
@@ -320,6 +321,10 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 			Core.ChargeFrames = static_cast<uint8>(FMath::Min<int32>(Core.ChargeFrames + 1, MAX_uint8));
 		}
 	}
+	// Whatever ended the hold, the montage the stall paused must play on: a release (above), and also a landing during the hold, where Hold Until
+	// Landed jumps the timeline to its land part (ClockPrevious != Previous) and the land montage would otherwise stay paused for the whole landing
+	// (desktop network test 2026-11-27). Only the release puts a loop-section montage back on the hold pose (the ability reads bChargeHoldRelease)
+	bChargeResume = ChargeTrack && !bHitstopFrame && !bChargeStall && Previous >= 0 && Previous == ChargeTrack->StartFrame;
 
 	// The track hooks of the plugins (a hold stalls the timeline, a parry track stamps a window): asked before the pause is counted, with the frame the timeline is on.
 	// A stall is a pause like the hitstop's, but it does not touch PausedFramesTotal, so the combat clock and the buffers keep running
@@ -337,6 +342,7 @@ bool FGSTN_CombatTimelineLogic::AdvanceClock(FGSTN_CombatSyncCore& Core, int32 F
 	Output.StampedWindows = MoveTemp(Stamped);
 	Output.bChargeHoldStall = bChargeStall;
 	Output.bChargeHoldRelease = bChargeRelease;
+	Output.bChargeHoldResume = bChargeResume;
 
 	if (Output.bFinished || (Frame > Core.TimelineStartFrame && !bAbilityActive))
 	{

@@ -82,6 +82,9 @@ struct GSTNCOMBATCORE_API FGSTN_TimelineOutput
 	bool bChargeHoldStall = false;
 	bool bChargeHoldRelease = false;
 
+	/** Written by the combat clock: the hold ended this tick, by a release or by a landing that jumped the timeline (the paused montage plays on) */
+	bool bChargeHoldResume = false;
+
 	/** Cancel windows open at Frame */
 	TArray<const FGSTN_TimelineTrack_CancelWindow*> CancelWindows;
 
