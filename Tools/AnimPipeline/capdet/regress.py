@@ -71,7 +71,8 @@ def registry_rows(path):
         for r in csv.DictReader(fh):
             if (r.get('stato') or '').strip() != 'approvata':
                 continue
-            asset = (r.get('asset_ue') or '').split('+')[0].strip()
+            # "AS_X + AM_X": every asset of the row is kept; resolve() splits them (D1 2026-11-27: the AM was never checked)
+            asset = (r.get('asset_ue') or '').strip()
             source = (r.get('carta') or '').split(' (', 1)[0].split(',')[0].strip()
             if source.startswith('cards/'):          # the registry names cards relative to Tools/AnimPipeline
                 source = 'Tools/AnimPipeline/' + source
@@ -109,12 +110,12 @@ def rows(table=None):
 
 
 def resolve(row, files):
-    """The files of a row: (in_git, not_in_git). Looks the asset name up among the tracked files."""
+    """The files of a row: (in_git, not_in_git). Looks each asset name up among the tracked files; a row may name several assets
+    joined by "+" ("AS_OverlordDAirV9 + AM_OverlordDAirV9"), each one is checked."""
     in_git, loose = [], []
-    name = row['asset']
-    if name:
-        hits = [f for f in files if os.path.basename(f) == name + '.uasset' or os.path.basename(f) == name]
-        in_git += sorted(hits)
+    for name in (n.strip() for n in (row['asset'] or '').split('+')):
+        if name:
+            in_git += sorted(f for f in files if os.path.basename(f) == name + '.uasset' or os.path.basename(f) == name)
     src = row.get('source')
     if src and not src.lower().startswith(('row', 'rig')):
         src = src.replace('\\', '/')
