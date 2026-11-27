@@ -63,3 +63,25 @@ Riuso: Body Capsule track e modificatore, `ReadEvaluatedTimeline`, `FGSTN_Tumble
 ESITO: PARZIALE build e 23/23 test OK su 354c556c; regola dello snap (26/11), rimbalzo dalla caduta (A) e script capsule aerial (B) non compilati né lanciati; prova in gioco non fatta
 SUBAGENTI: 0
 COSTO: ~8 $ | 25 min desktop | 0 token review
+
+## Fisso, 2026-11-27 (thread M7, worktree GASP_Giustino2_3dyy2t, detached su e1c7b284)
+- Build OK (23 azioni: Defence Core/GAS/NP, CombatNP, CombatGAS). Test 24/24 PASS (`GSTNCombat.NP.FallingMode`, `GSTNDefence.NP.Landing`,
+  `GSTNDefence.NP.Fragment`), tra cui `SnapPolicy`, `SelfKnockdownRecordsFallSpeed`, `RoundTripIdleOneBit` (Saved/Logs/ci/test.log.ue.log).
+- B (capsule aerial): a secco con ROOT `/Game` e `/`: 0 timeline da fare. Le aerial con atterraggio di questo branch (Dropkick, TB*, DAirV10*)
+  hanno già la loro Body Capsule. Le aerial nuove dell'Overlord (M1, branch sznhpw) andranno coperte dopo il loro merge.
+  In commandlet (-run=pythonscript) lo script trova le timeline solo dopo `search_all_assets(True)`; in editor aperto non serve.
+- PIE (`pie_capture_move.py`, KIT_Test_OverlordDropkick, L_Test_Hub, host + 2 client; log `SelfKnockdown:` del ue.log):
+  - press a 79 cm in caduta (low_hit / low_whiff) e a 367 cm (sweet_hit / sweet_whiff): "grounded after 1-2 airborne frames: not armed,
+    ordinary landing". Nessun rimbalzo con meno di 6 frame in aria (regola F).
+  - press a 520 e 650 cm: "armed (6 frames)" poi "landed inside the window: downed (fall 1500 cm/s, bounce judged at 1500)". Il rimbalzo
+    usa la caduta vera (A).
+  - press in salita a ~250 cm (whiff / hit, apice ~10 m): armato, poi "disarmed, window closed" prima di toccare terra: atterraggio normale.
+  - colpo vicino al suolo con hitstop NON riprodotto: il kit salta ~9 m e cade a ~24 cm/frame; con il manichino a 150-327 cm nessuna
+    delle 6 prove l'ha colpito (2 tentativi di taratura, poi fermato). Serve un caso dedicato (manichino sotto la traiettoria).
+  - discesa laterale dal gradino di 45 cm (Z5, sequenza solo nel boot, non nel repo): ~10 frame di caduta e atterraggio normale, nessuno
+    snap a mezz'aria. Il gradino di 30 cm si sale e basta: in avanti i gradini dell'hub sono attaccati.
+- Dati: Saved/M7/ (frames.jsonl e png per sequenza) nel worktree 3dyy2t.
+
+ESITO: PARZIALE build, 24/24 test e PIE OK per regola F, rimbalzo A e gradino; colpo vicino al suolo con hitstop non riprodotto; B niente da fare
+SUBAGENTI: 0
+COSTO: ~6 $ | ~20 min desktop | 0
