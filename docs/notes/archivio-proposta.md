@@ -6,7 +6,7 @@ Toccati solo: `docs/INDICE-PROGETTO.md`, `docs/STATO-ATTUALE.md` (blocco "righe 
 generati `handoffs/INDICE.md` / `handoffs/costi.csv` (rifatti con `Tools/CI/Build-Indice.py`, mai a mano).
 
 ## Rapporto in 10 righe
-1. GRAVE: la versione approvata dair v9 pubblicata in `Content/AnimPipeline/Published/dair/v9/AM_OverlordDAirV9.uasset` è cambiata dopo la pubblicazione (98dab88a, riordino del 24-11). La posa è stata provata uguale (prova ossa) e il tag `approved/dair-v9` è intatto, ma il tag nuovo proposto (`approved/dair-v9-2b`) non esiste, quindi il controllo delle pose approvate resta FAIL. Decisione 1.
+1. GRAVE (corretto il 27-11 sera): la copia pubblicata `Content/AnimPipeline/Published/dair/v9/AM_OverlordDAirV9.uasset` è cambiata dopo la pubblicazione (98dab88a, riordino del 24-11: risalvata per i riferimenti). Lo sha256 di oggi (6d4fe627, dal puntatore LFS) non è quello di `publish.json` (dc945baf), e il controllo `regress.py` non se ne accorge perché la riga del registro (`AS_OverlordDAirV9 + AM_OverlordDAirV9`) non viene risolta in file. Lo spostamento dell'AS invece è già coperto dalla prova ossa (scelta B del 24-11, `docs/notes/approved-dumps/moves/`, commit e87ae944): il gate non è in FAIL, come avevo scritto per errore nella prima versione. Decisione 1.
 2. Dal 23-11 sono entrate in main 20 PR (#38-#59): M12 completo, presa al collo e spin di Ganondorf, MCP animazione, riordino Content 2b, capsula greybox, lanci, kit dei personaggi. Main è stato compilato il 24-11 (1937 test); dopo il 27-11 nessun handover dice di una build di main intero.
 3. I tag approvati sul remoto sono 9 e coincidono con `docs/notes/anim-approvate.md`. Il 29w3 c'è come `approved/runstart-w3`; `STATO-ATTUALE` §3 era rimasto indietro (segnato).
 4. `STATO-ATTUALE` ha due copie che dicono cose diverse: quella nei project files (26-11) ha lo stato del giorno ma le decisioni vecchie; quella nel repo ha le decisioni giuste ma niente stato del giorno. Decisione 2.
@@ -18,7 +18,7 @@ generati `handoffs/INDICE.md` / `handoffs/costi.csv` (rifatti con `Tools/CI/Buil
 10. `handoffs/INDICE.md` e `costi.csv` si generano dagli handover (decisione 2A del 24-11): li ho rifatti con lo script e non ho toccato a mano la vecchia copia nei project files, ferma al 24-11.
 
 ## Decisioni per l'owner (max 3)
-1. **dair v9 dopo lo spostamento.** A (consigliata, come proponeva `docs/notes/handovers/content-reorg-2b.md:43-44`): un thread crea il tag nuovo `approved/dair-v9-2b` sul commit dello spostamento e aggiunge la riga in `anim-approvate.md`; il tag vecchio resta e il controllo torna verde senza essere ammorbidito (~0,3 $). B: si riporta il file pubblicato com'era al tag e si sistema il riferimento in un'altra copia (~1 $, serve il fisso). C: lasciare il controllo in FAIL con la nota "moved from" (0 $, ma un FAIL fisso abitua a ignorarlo). Intanto non resta fermo niente.
+1. **dair v9 dopo lo spostamento.** L'owner ha scelto A (tag nuovo `approved/dair-v9-2b`) il 27-11 su una premessa sbagliata (gate in FAIL): il tag non chiude il buco vero, che è il controllo della copia pubblicata. Riproposta con le opzioni corrette nel thread; nessun tag creato finché non risponde.
 2. **Una sola copia di STATO-ATTUALE.** A (consigliata): il repo tiene le decisioni e i project files tengono solo lo stato del giorno (§0 e coda del fisso), con una riga in cima a ciascuna che rimanda all'altra; le decisioni vecchie nella copia dei project files vengono tolte (~0,5 $, coordinatore). B: tutto nei project files e il repo rimanda lì (0,3 $). C: lasciare due copie (0 $, ma un thread legge la versione sbagliata).
 3. **`feature/gas-npp-5.8`.** A (consigliata): da un PC si crea il tag `archivio/feature-gas-npp-5.8` su e79e401a, come dice `CLAUDE.md`; il branch resta finché non decidi tu di cancellarlo (~0,1 $). B: si corregge solo `CLAUDE.md` scrivendo "esiste ancora, non usarlo" (~0,1 $). Cancellare il branch non si può annullare: non lo propongo.
 
@@ -58,7 +58,7 @@ destinazione `handoffs/archivio/2026-11/` (come il 23-11, reversibile): `camera-
 ## D. Contraddizioni
 | # | Cosa | Dove (file:riga) | Contro | Proposta |
 |---|---|---|---|---|
-| D1 | Versione approvata cambiata | `Content/AnimPipeline/Published/dair/v9/AM_OverlordDAirV9.uasset` (98dab88a) | regola 5 (approvate bloccate), `anim-approvate.md:18` | decisione 1 |
+| D1 | Copia pubblicata cambiata e controllo cieco | `Content/AnimPipeline/Published/dair/v9/AM_OverlordDAirV9.uasset` (98dab88a; sha 6d4fe627 contro `publish.json` dc945baf) | regola 5 (approvate bloccate); `Tools/AnimPipeline/capdet/regress.py:111-122` non risolve l'asset `AS_... + AM_...` del registro | decisione 1 |
 | D2 | Regole in vigore | `docs/STATO-ATTUALE.md` §1 (regole 1-16) | `docs/notes/regole-progetto.md:1` (8 regole del 24-11) | riscrivere §1 (coordinatore, ~0,3 $) |
 | D3 | Tag 29w3 e approvate nuove | `docs/STATO-ATTUALE.md` §3 ("29w3 NON sul remoto") | `git ls-remote --tags`: `approved/runstart-w3`, `jab-v12`, `ftilt-v31`, `dair-v9` | allineare §3 a `anim-approvate.md` |
 | D4 | Due STATO-ATTUALE | repo `docs/STATO-ATTUALE.md` | project files `bibliotecario/STATO-ATTUALE.md` (N.S, RB, verdetti 23-26, rete diversi) | decisione 2 |

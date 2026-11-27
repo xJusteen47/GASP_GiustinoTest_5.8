@@ -17,8 +17,8 @@ Nessuna decisione è stata cambiata. Le righe sotto dicono cosa il repo (`main` 
 - **§3 Versioni approvate**: il tag del run start 29w3 c'è con il nome `approved/runstart-w3` (967de748), non `runstart-v29w3`. Esistono anche
   `approved/jab-v12`, `approved/ftilt-v31` (c699d46a) e `approved/dair-v9` (916338ad), e i tre asset sono pubblicati in
   `Content/AnimPipeline/Published/` (fb40c55e, 24-11). `docs/notes/anim-approvate.md` righe 14-18 è già allineato; questa tabella no.
-- **§3 dair v9**: `Published/dair/v9/AM_OverlordDAirV9.uasset` è cambiato dopo la pubblicazione (98dab88a, riordino 2b: percorso del pacchetto).
-  La decisione "tag nuovo `approved/dair-v9-2b`" di `docs/notes/handovers/content-reorg-2b.md:43-44` non risulta presa (nessun tag).
+- **§3 dair v9**: `Published/dair/v9/AM_OverlordDAirV9.uasset` è cambiato dopo la pubblicazione (98dab88a, riordino 2b: riferimenti);
+  il suo sha256 non è più quello di `publish.json` e `regress.py` non lo controlla. Lo spostamento dell'AS è coperto dalla prova ossa (scelta B, e87ae944).
 - **§2 Rete**: "si predice anche l'avversario (rollback misto)" va riletta con la decisione del 25-11 **"niente misto"**: tutto il gameplay
   nel rollback (`docs/architecture/tag-verbi-simulazione-rollback.md` §10).
 - **§2 Presa** "codice non compilato" e **§5** "main non compilato dal 22-11", "MCP animazione su branch", "riordino Content fase 2 non fatto":
