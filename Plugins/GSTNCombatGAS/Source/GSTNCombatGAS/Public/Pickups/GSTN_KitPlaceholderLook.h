@@ -14,6 +14,24 @@ class USkeletalMeshComponent;
 class UStaticMeshComponent;
 
 /**
+ * A fixed colour for the kits whose name contains NamePart (case-insensitive), so the owner tells the characters apart at a glance
+ * (owner 2026-11-26: Overlord copper, BirdKnight turquoise, Voyager black, FlameFury red). Set in Config/DefaultGame.ini; first match
+ * wins, a kit no rule names keeps the hue from its name. Name only, so every machine still picks the same colour
+ */
+USTRUCT()
+struct GSTNCOMBATGAS_API FGSTN_KitColourRule
+{
+	GENERATED_BODY()
+
+	UPROPERTY(Config, EditAnywhere, Category = "Kit Look")
+	FString NamePart;
+
+	/** sRGB, as a colour picker shows it */
+	UPROPERTY(Config, EditAnywhere, Category = "Kit Look")
+	FColor Colour = FColor::White;
+};
+
+/**
  * Stand-in look of a kit until skins are applied (owner, 2026-11-06: "a cube behind the back is fine for now"). Every player
  * whose applied loadout has a kit and no skin carries a coloured box on the back (on the back bone of the mesh that draws the body, so
  * it follows the animation, GASP's visual override included); a kit pickup with no mesh of its own shows the
@@ -28,14 +46,18 @@ class UStaticMeshComponent;
  * attachment providers' pieces show: a worn backpack's Visual on the back, removed when it is dropped or swapped. Not turned off by
  * the cvar: it is the equipment's look, not the stand-in.
  */
-UCLASS()
+UCLASS(Config = Game)
 class GSTNCOMBATGAS_API UGSTN_KitPlaceholderLookSubsystem : public UWorldSubsystem
 {
 	GENERATED_BODY()
 
 public:
-	/** Bright colour of a kit, from its name (stable across machines and runs) */
+	/** Colour of a kit: the first KitColours rule its name matches, else a bright hue from its name (stable across machines and runs) */
 	static FLinearColor ColourForKit(const FPrimaryAssetId& Kit);
+
+	/** Per-character colours, checked in order (Config/DefaultGame.ini) */
+	UPROPERTY(Config)
+	TArray<FGSTN_KitColourRule> KitColours;
 
 	/** Puts the engine cube with the kit's colour on Mesh (its own dynamic material). An invalid kit hides it */
 	static void ApplyPlaceholder(UStaticMeshComponent* Mesh, const FPrimaryAssetId& Kit);
