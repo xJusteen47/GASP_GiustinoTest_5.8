@@ -25,6 +25,14 @@ Old handovers keep the old names (history). `a.GSTN.GroundContactFix` (the node 
 3. PIE on a wall: no shapes. Tools > Debug > GSTN Debug Options, Wall group, tick `gstn.Wall.Debug.Draw`: shapes appear; untick: gone.
 4. If a Blueprint graph set "Draw Debug" on a wall mode, it fails to compile: delete that node (none found in Python tooling).
 
-ESITO: PARZIALE codice pronto, non compilato e non provato (fisso spento)
+## Desktop check (2026-11-27, thread M5)
+- Working copy clean, the two commits above were all there was (the interrupted run left nothing). Build OK (editor target, 30 s after the test edit).
+- `GSTNCombat.Debug.OptionsWindow.ListsDebugVariables` now also asserts the three switches are listed and 0 by default: PASS.
+- PIE on `L_WallSlideAB`, lane `a_flat`, mode `WallSlidingV2`, the same run 3 times with the switch 0 / 1 / 0: no shapes / green capsule + velocity
+  arrow / no shapes. No Blueprint load or compile error in the log (the deprecated flag loads silently).
+- Gotcha: `HighResShot` re-renders a frame and misses the one-frame debug lines; use `Shot` (back buffer, Saved/Screenshots/WindowsEditor).
+  `HighResShot filename=` with a space in the path writes to the part before the space.
+
+ESITO: OK compilato, test PASS, provato in PIE sul muro (spento / acceso / spento)
 SUBAGENTI: 0
-COSTO: ~2 $ | 0 | 0
+COSTO: ~2 $ | 0 | 0 (cloud) + ~3 $ (prova sul fisso)

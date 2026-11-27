@@ -31,6 +31,15 @@ bool FGSTN_DebugOptionsWindowTest::RunTest(const FString& Parameters)
 	{
 		TestTrue(FString::Printf(TEXT("the surface feedback switch %s is listed"), Surface), Names.Contains(Surface));
 	}
+	// debug-wall-switch-1: the wall slide draw, the ground contact draw and the platform draw are reachable from the window and off by default
+	for (const TCHAR* Draw : {TEXT("gstn.Wall.Debug.Draw"), TEXT("gstn.Anim.Debug.GroundContactFix"), TEXT("gstn.Platform.Debug.Draw")})
+	{
+		TestTrue(FString::Printf(TEXT("the debug draw switch %s is listed"), Draw), Names.Contains(Draw));
+		if (const IConsoleVariable* Var = IConsoleManager::Get().FindConsoleVariable(Draw))
+		{
+			TestEqual(FString::Printf(TEXT("%s is off by default"), Draw), Var->GetInt(), 0);
+		}
+	}
 	TestEqual(TEXT("the group is the second part of the name"), SGSTN_DebugOptionsPanel::GroupOf(TEXT("gstn.Minion.Debug.LOD")), FString(TEXT("Minion")));
 	TestEqual(TEXT("a short name falls in Other"), SGSTN_DebugOptionsPanel::GroupOf(TEXT("gstn.Debug")), FString(TEXT("Other")));
 
