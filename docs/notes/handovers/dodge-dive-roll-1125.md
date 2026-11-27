@@ -54,3 +54,21 @@ pavimento (floor lift), il giro non salta.
 ESITO: PARZIALE codice scritto, non compilato né provato (fisso offline)
 SUBAGENTI: 1, lettura pagine web riferimenti SM64/SMO, Opus
 COSTO: ~9 $ | 0 minuti desktop | 0 token review
+
+## Fisso, 2026-11-27 (thread M9, worktree GASP_Giustino2_3dyy2t, detached su 6d2bb550)
+- Build OK al primo colpo. `-Tests GSTNCombat` 738/738 PASS, tra cui `Table.DodgeInputMethod`, `DodgeLanding.BellyUntilStopped`,
+  `DodgeLanding.EndLagBlocksActions`, `Dodge.LongJumpCarriesRunSpeed`, `NP.Greybox.Dive`.
+- PIE capsula (`gstn.Greybox 1`, KIT_Test_Playtest, hub, host + 2 client; Saved/M9/dodge):
+  - gb_dodge_run: tuffo f131, apice +30 cm, atterraggio f156, scivolata di pancia ~90 cm, fermo f168, 511 cm in tutto.
+  - gb_dodge_still: 419 cm (atteso nominale 510).
+  - gb_dodge_rollout: salto sulla pancia = roll-out (sale a 298 cm).
+  - gb_dodge_crouchjump: NIENTE. Crouch tenuto da v128, salto v130: nessun comando, nemmeno il salto. Prova mirata (Saved/M9/cj):
+    crouch e salto nello STESSO frame = schivata OK; crouch già attivo (salto 10 o 20 frame dopo) = niente; anche il TASTO schivata
+    da accovacciato non parte. Quindi lo stato accovacciato blocca la schivata (e il salto): la "schivata da abbassato" dell'owner
+    oggi funziona solo premendo i due tasti insieme. Causa non trovata (non è lo slot: con i tasti insieme funziona).
+- NON fatto: rilancio di `setup_player_input_contexts.py` e `movement_setup.py` (IMC binari: L abbassarsi, ZL scudo), serve `_ue59`
+  su questo branch; video della capsula non montati (png per frame in Saved/M9).
+
+ESITO: PARZIALE build e 738 test OK; tuffo, pancia e roll-out OK in PIE; schivata crouch+salto solo con i tasti insieme (da accovacciato non parte); IMC non rilanciati
+SUBAGENTI: 0
+COSTO: ~5 $ | ~15 min desktop | 0
