@@ -35,3 +35,20 @@ Massimo 2 tentativi di fix per lo stesso errore (regola 2).
 ESITO: PARZIALE codice, test e script scritti nel cloud, non compilato né provato sul fisso
 SUBAGENTI: 0
 COSTO: ~9 $ | 0 min desktop | 0
+
+## Fisso, 2026-11-27 (thread M8, worktree GASP_Giustino2_3dyy2t, detached su 0c5cadfe)
+- Build OK; `-Tests GSTNCombat` 740/740 PASS (Saved/Logs/ci/test.log.ue.log).
+- Script: `_tag` falliva in 5.9 (`GameplayTag` non ha `request_gameplay_tag` né la keyword `tag_name`): ora `import_text`, come gli altri
+  script. In commandlet serve `search_all_assets(True)` prima di `run()` (in editor no). A secco: 18 binding, 16 timeline asset, nessuna
+  inline su Blueprint; tutte "hold frame 5 of startup 15, max 60, damage x1"; nessun cono aggiunto (le timeline sterzano già).
+- PIE (KIT_Test_OverlordDropkick, hub, host + 2 client; traccia applicata SOLO in memoria, nulla salvato; `pie_capture_move.py` con
+  Attack tenuto 40 frame su dropkick_whiff via boot, tap su dropkick_hit): tenuto = montage fermo al frame 5 da v44 a v76, il personaggio
+  continua a salire/cadere e deriva con lo stick (x +220 cm), al rilascio il resto dello startup; tap = startup normale. Dati Saved/M8/charge.
+- NON fatto: salvataggio delle 16 timeline (vedi sotto), harness di rete per il rollback della carica, landing in carica.
+- Da decidere prima di `run(apply=True)`: 9 timeline (Dropkick, TB, TBK5-K8, TBR2-R4) sono anche nel commit 354c556c della PR #57
+  (binari, conflitto sicuro se si salvano qui); `TL_Overlord_DAirV9` è della dair v9 approvata (bloccata). Proposta: unire prima #57,
+  poi rilanciare lo script su main via `Save-Assets.ps1` in `_ue59`, escludendo la V9 o su una sua variante.
+
+ESITO: PARZIALE build, 740 test e PIE della carica OK (in memoria); timeline non salvate per conflitto con PR #57 e dair V9 bloccata
+SUBAGENTI: 0
+COSTO: ~5 $ | ~15 min desktop | 0

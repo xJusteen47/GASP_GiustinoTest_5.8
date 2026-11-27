@@ -51,7 +51,10 @@ def log(msg):
 
 
 def _tag(name):
-    return unreal.GameplayTag.request_gameplay_tag(name) if hasattr(unreal.GameplayTag, 'request_gameplay_tag') else unreal.GameplayTag(tag_name=name)
+    # 5.9 Python: GameplayTag has neither request_gameplay_tag nor a tag_name keyword; import_text is what the other Tools scripts use
+    tag = unreal.GameplayTag()
+    tag.import_text(f'(TagName="{name}")')
+    return tag
 
 
 def _tag_names(container):
