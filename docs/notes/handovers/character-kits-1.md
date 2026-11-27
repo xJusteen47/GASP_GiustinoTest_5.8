@@ -40,3 +40,10 @@ typed OK; command for the owner is in the thread. Backup: GASP_Giustino2/Saved/B
 ESITO: OK kit e profili creati, provati in PIE e committati; scalini sul Default rimandati all'owner
 SUBAGENTI: 0
 COSTO: ~8 $ | ~45 min desktop | 0
+
+## Kit colours, desktop check (M6, 2026-11-27)
+Branch at 70192666 (colour rules 979636c6), built in the 3dyy2t worktree: build OK (24 s). PIE `L_Test_Hub`, listen host + 2 clients, the host gets`n`KIT_Test_Playtest / Overlord / BirdKnight / Voyager / FlameFury` in turn (test_hub.kit), back-buffer `Shot` per kit. Collar (`gstn.Greybox 1`)`nand back box (mannequin): copper, copper, turquoise, black, red, as asked. Proof: `docs/notes/reviews/character-kits-1/collars_m6_greybox.png`,`n`collars_m6_mannequin.png`.
+
+ESITO: PASS colori dei collari giusti su capsula greybox e manichino
+SUBAGENTI: 0
+COSTO: ~2 $ | ~10 min desktop | 0
