@@ -22,7 +22,13 @@ LAG = int(os.environ.get('WALL_LAG', '60'))
 WALL_X, WALL_Y = 1010.0, -880.0
 # jump = a real IA_Jump press (Enhanced Input -> combat command -> FGSTN_MoverButtonInputs), jumpdbg = gstn.Wall.Jump (the same command entry,
 # without the button layout), detach = gstn.Wall.Detach 1
-CASES = [(0, 'jump'), (1, 'jump'), (0, 'jumpdbg'), (1, 'jumpdbg'), (0, 'detach'), (1, 'detach')]
+# crouch = a real IA_Crouch hold (GASP's crouch action); jumpcfg / crouchcfg = the actions the combat InputConfig binds to Input.Button.Jump /
+# Input.Button.Crouch, added only when they differ from IA_Jump / IA_Crouch. Each kind for the host and client 1, WALL_ROUNDS rounds; a case
+# whose setup misses the wall is retried once
+ROUNDS = int(os.environ.get('WALL_ROUNDS', '3'))
+KINDS = ['jump', 'jumpdbg', 'detach', 'crouch']
+CASES = []
+ACTIONS = {'jump': m.IA['jump'], 'crouch': '/Game/Input/IA_Crouch'}
 
 
 def log(msg):
@@ -80,6 +86,59 @@ def tick(_dt):
         finish('FAIL')
 
 
+def _path(obj):
+    try:
+        return obj.get_path_name() if obj else 'None'
+    except Exception:
+        return str(obj)
+
+
+def log_button_map(pawn):
+    """Logs the harness pawn's combat InputConfig: the asset, every button (tag -> input action) and the mapping contexts; adds the
+    jumpcfg / crouchcfg cases when the config's Jump / Crouch actions are not GASP's IA_Jump / IA_Crouch"""
+    cls = getattr(unreal, 'GSTN_CombatSimComponent', None)
+    comp = pawn.get_component_by_class(cls) if cls else None
+    log(f'BUTTONMAP pawn {pawn.get_class().get_name()} combat component {_path(comp)}')
+    if comp is None:
+        return
+    cfg = None
+    for prop in ('active_input_config', 'input_config'):
+        try:
+            v = comp.get_editor_property(prop)
+            if hasattr(v, 'load_synchronous'):
+                v = v.load_synchronous()
+            elif hasattr(v, 'get_asset'):
+                v = v.get_asset()
+            log(f'BUTTONMAP {prop} = {_path(v)}')
+            cfg = cfg or v
+        except Exception as e:
+            log(f'BUTTONMAP {prop} not readable: {e}')
+    if cfg is None:
+        return
+    found = {}
+    try:
+        for b in cfg.get_editor_property('buttons'):
+            tag = str(b.get_editor_property('tag').get_editor_property('tag_name'))
+            act = b.get_editor_property('action')
+            act = act.load_synchronous() if hasattr(act, 'load_synchronous') else act
+            log(f'BUTTONMAP button {tag} -> {_path(act)}')
+            found[tag] = act
+    except Exception as e:
+        log(f'BUTTONMAP buttons not readable: {e}')
+    try:
+        for c in cfg.get_editor_property('mapping_contexts'):
+            ctx = c.get_editor_property('context')
+            log(f'BUTTONMAP context {_path(ctx.load_synchronous() if hasattr(ctx, "load_synchronous") else ctx)}')
+    except Exception as e:
+        log(f'BUTTONMAP contexts not readable: {e}')
+    for tag, kind, gasp in (('Input.Button.Jump', 'jumpcfg', ACTIONS['jump']), ('Input.Button.Crouch', 'crouchcfg', ACTIONS['crouch'])):
+        act = found.get(tag)
+        log(f'BUTTONMAP {tag}: {"MISSING" if act is None else _path(act)} (GASP action {gasp})')
+        if act is not None and not _path(act).startswith(gasp):
+            ACTIONS[kind] = _path(act)
+            KINDS.append(kind)
+
+
 def _tick():
     ph = st['phase']
     if ph == 'boot' and time.time() - st['t0'] > 8:
@@ -92,7 +151,12 @@ def _tick():
             m.net(LAG, 0, 0)
             log(f'worlds {len(ws)}, topology {m.check_topology()}, wall mode {m.wall_mode()}, net {LAG} ms')
             p, _ = copies(1)
-            log(f'pawn {p.get_class().get_name()} combat sim component: {p.get_component_by_class(getattr(unreal, "GSTN_CombatSimComponent")) is not None if hasattr(unreal, "GSTN_CombatSimComponent") else "class not exposed"}')
+            log_button_map(p)
+            for r in range(ROUNDS):
+                for kind in KINDS:
+                    for idx in (0, 1):
+                        CASES.append((idx, kind))
+            log(f'cases {len(CASES)}: {KINDS} x host, client1 x {ROUNDS} rounds')
             enter('warm')
         elif el() > 60:
             log(f'PIE not ready: {len(ws)} worlds')
@@ -130,10 +194,13 @@ def _tick():
         comp = pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent)
         comp.stop_holding_input(ia_move)
         st['before'] = {'own': (mode_of(pawn), pawn.get_actor_location()), 'auth': (mode_of(auth), auth.get_actor_location())}
-        st['seen'] = {'own': set(), 'auth': set()}
+        st['seen'] = {'own': [mode_of(pawn)], 'auth': [mode_of(auth)]}
+        st['x0'] = {'own': pawn.get_actor_location().x, 'auth': auth.get_actor_location().x}
         st['maxdz'] = {'own': -1e9, 'auth': -1e9}
-        if kind == 'jump':
-            m.press(idx, 'jump')
+        if kind in ('jump', 'jumpcfg'):
+            comp.press_input(unreal.load_asset(ACTIONS[kind]))
+        elif kind in ('crouch', 'crouchcfg'):
+            comp.start_holding_input(unreal.load_asset(ACTIONS[kind]), unreal.Vector(1.0, 0.0, 0.0))
         elif kind == 'jumpdbg':
             unreal.SystemLibrary.execute_console_command(None, 'gstn.Wall.Jump')
         else:
@@ -143,21 +210,30 @@ def _tick():
         idx, kind = CASES[st['case']]
         pawn, auth = copies(idx)
         for k, a in (('own', pawn), ('auth', auth)):
-            st['seen'][k].add(mode_of(a))
+            if st['seen'][k][-1] != mode_of(a):
+                st['seen'][k].append(mode_of(a))
             st['maxdz'][k] = max(st['maxdz'][k], a.get_actor_location().z - st['before'][k][1].z)
         if el() > 0.8:
             if kind == 'detach':
                 unreal.SystemLibrary.execute_console_command(None, 'gstn.Wall.Detach 0')
+            if kind in ('crouch', 'crouchcfg'):
+                pawn.get_component_by_class(unreal.GSTN_GASNPPTestComponent).stop_holding_input(unreal.load_asset(ACTIONS[kind]))
             out = {}
             for k, a in (('own', pawn), ('auth', auth)):
                 m0, l0 = st['before'][k]
                 l1 = a.get_actor_location()
-                out[k] = f'{k}: before {m0} -> seen {sorted(st["seen"][k])} now {mode_of(a)} maxdz {st["maxdz"][k]:+.0f} dz {l1.z - l0.z:+.0f} dx {l1.x - l0.x:+.0f}'
+                out[k] = f'{k}: {" > ".join(st["seen"][k])} maxdz {st["maxdz"][k]:+.0f} dz {l1.z - l0.z:+.0f} dx {l1.x - l0.x:+.0f}'
             record(idx, kind, None, out)
 
 
 def record(idx, kind, error, out):
     who = 'host' if idx == 0 else f'client{idx}'
+    if error and not st.get('retried'):
+        log(f'retry {kind} {who}: {error}')
+        st['retried'] = True
+        start_case(advance=False)
+        return
+    st['retried'] = False
     if error:
         line = f'{kind} {who}: SETUP FAIL {error}'
     else:
@@ -165,7 +241,7 @@ def record(idx, kind, error, out):
         ok_both = True
         for k in ('own', 'auth'):
             m0, l0 = st['before'][k]
-        if kind in ('jump', 'jumpdbg'):
+        if kind in ('jump', 'jumpdbg', 'jumpcfg'):
             # a wall jump: the pawn leaves the wall into the air (Falling) and rises above the press height, on both copies
             ok_both = all('Falling' in st['seen'][k] and st['maxdz'][k] > 20 for k in ('own', 'auth'))
         else:
@@ -187,7 +263,7 @@ def record(idx, kind, error, out):
         finish('OK')
 
 
-def start_case():
+def start_case(advance=True):
     idx, kind = CASES[st['case']]
     st['wm'] = m.wall_mode()
     key = m.key_of_player(idx)
