@@ -20,9 +20,11 @@ DEFINE_LOG_CATEGORY_STATIC(LogGSTNGreybox, Log, All);
 namespace GSTNGreybox
 {
 	static TAutoConsoleVariable<int32> CVarGreybox(
-		TEXT("gstn.Greybox"), 0,
+		// Default 1 since 2026-11-25 (owner: the capsule is the playtest look, no more typing it every Play). The harness pins 0 for its runs
+		// (Tools/CI/Run-Timed.ps1, -ini [ConsoleVariables]) so captures and baselines keep the character mesh unless a driver sets 1 itself.
+		TEXT("gstn.Greybox"), 1,
 		TEXT("Greybox capsule in place of the character mesh (judge the movement feel without final animations). 0 = off, 1 = capsule ")
-		TEXT("with a nose that copies the hidden driver's pose and squashes / leans. Hitboxes unchanged. Pair with gstn.Loco.Base 2."),
+		TEXT("with a nose that copies the hidden driver's pose and squashes / leans (default). Hitboxes unchanged. Pair with gstn.Loco.Base 2."),
 		ECVF_Default);
 
 	static TAutoConsoleVariable<FString> CVarSwordKits(

@@ -209,7 +209,7 @@ FString SGSTN_DebugOptionsPanel::GroupOf(const FString& VariableName)
 
 void SGSTN_DebugOptionsPanel::Construct(const FArguments& InArgs)
 {
-	for (const FString& Name : FGSTN_DebugKitPicker::GetKitNames())
+	for (const FString& Name : FGSTN_DebugKitPicker::GetMenuKitNames())
 	{
 		KitOptions.Add(MakeShared<FString>(Name));
 		if (Name == TEXT("KIT_Test_Playtest"))

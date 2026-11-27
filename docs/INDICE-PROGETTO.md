@@ -122,7 +122,7 @@ In gioco: corsa a stadi stile Mario, frenata (skid), salto regolabile, controllo
 - Attenzione: `Prj/GAS/GSTN_GA_Jump.h` è il **vecchio** salto ("TO BE REPLACED", riga 43); quello vero è `GSTN_GA_PlatformJump`.
 
 ### 5.3 Locomotion e animazione (ABP) · OK
-In gioco: come si muove a schermo il personaggio. Base = GASP stock (`gstn.Loco.Base 1`), poi nostri layer.
+In gioco: come si muove a schermo il personaggio. Default dal 2026-11-25: capsula greybox (`gstn.Greybox 1`) sul grafo semplice (`gstn.Loco.Base 2`); base GASP stock = `gstn.Loco.Base 1` (quella che i run del harness fissano, `Run-Timed.ps1`), poi nostri layer.
 Quattro case, ognuna con un compito:
 | Casa | Cosa contiene |
 |---|---|
@@ -188,7 +188,7 @@ In gioco: tasti e stick diventano comandi, con buffer, priorità e blocchi.
 
 ### 5.15 cvar e menu GSTN Debug · OK
 - 171 cvar `gstn.*` (conteggio `grep TAutoConsoleVariable`). Finestra: `Plugins/GSTNCombatDebug/.../Private/Window/SGSTN_DebugOptionsPanel.cpp`; mostra **da sola** ogni cvar che si chiama `gstn.<Gruppo>.Debug...`; le altre (es. `gstn.Loco.Base`) vanno scritte in console.
-- Overlay hitbox, BakeCheck, scelta del kit (`gstn.Debug.Kit`): stesso plugin, mai in Shipping.
+- Overlay hitbox, BakeCheck, scelta del kit (`gstn.Debug.Kit`): stesso plugin, mai in Shipping. La riga kit della finestra nasconde i kit dei soli test (cartelle `_Test`/`Test`; `gstn.Debug.ShowTestKits 1` li mostra).
 
 ### 5.16 Strumenti: build, test, catture, MCP
 | Cosa | Dove | Doc |

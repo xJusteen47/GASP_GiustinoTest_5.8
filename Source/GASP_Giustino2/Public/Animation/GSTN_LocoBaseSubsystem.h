@@ -4,7 +4,8 @@
 //   gstn.Loco.Base 1 = clean base: /Game/GSTN/Locomotion/StockBase/ABP_GSTN_StockMover (untouched GASP sample copy with its
 //                      own chooser copies)
 //   gstn.Loco.Base 2 = simple greybox base: /Game/GSTN/Greybox/ABP_GSTN_SimpleLoco (UGSTN_SimpleLocoAnimInstance: a state machine that
-//                      only feeds choosers, no motion matching; greybox-capsula, owner 2026-11-24 2A)
+//                      only feeds choosers, no motion matching; greybox-capsula, owner 2026-11-24 2A). DEFAULT since 2026-11-25 (owner:
+//                      no more typing it every Play); harness runs pin 1 through Tools/CI/Run-Timed.ps1 so their baselines keep the stock base
 // Only pawn meshes running one of the current base classes are swapped, so ragdolls, NPCs and other ABPs keep theirs.
 // The skin component sets its AnimClass after spawn (and again on kit/skin changes), so the swap is re-checked every frame
 // instead of once at spawn: a class change by anyone else is caught on the next tick. Setting 0 again restores the class each

@@ -6,7 +6,8 @@
 //                    copies its pose by bone names and adds squash, stretch and lean (UGSTN_GreyboxAnimInstance)
 // The driver stays the invisible mannequin, so hitboxes, hurtboxes, sockets and the simulation do not change (skin decision 1A,
 // 2026-11-23: one fixed invisible driver). Skin parts and weapons attached to the driver are hidden with it. Combine with gstn.Loco.Base 2
-// for the simple chooser graph. Per process, like gstn.Loco.Base; presentation only.
+// for the simple chooser graph. Per process, like gstn.Loco.Base; presentation only. Default 1 since 2026-11-25 (owner: the capsule is the
+// playtest look); harness runs pin 0 through Tools/CI/Run-Timed.ps1, so a capture shows the character unless its driver sets 1.
 //
 // Kit look on the capsule (owner 2026-11-24 14:43-14:45): the kit's stand-in (the coloured box of UGSTN_KitPlaceholderLookSubsystem, hidden
 // with the driver) becomes a half-circle collar behind the capsule's upper back, in the same colour (ColourForKit, so it changes with the
