@@ -8,7 +8,7 @@ character; set up the other proposed kits; start tuning the Voyager. Reused: KIT
 - `Tools/GAS/setup_character_kits.py`: KIT_Test_<Name> = copy of KIT_Test_Playtest (display name in caps), DA_Locomotion_<Name> = copy of
   the LOCAL DA_Locomotion_Default, kit extension relinked to its own profile. Existing assets kept; Voyager values only on creation
   (CHARKITS_VOYAGER=1 rewrites, CHARKITS_MODE=dump reports). Prefix KIT_Test_ kept so the shared-system scripts reach them.
-- `docs/notes/gasp-divergenze.md` row 28.
+- `docs/notes/gasp-divergenze.md` row 29 (28 went to the falling mode in #57).
 
 ## Voyager values (paper model, linear ramp, 62.5 Hz; Default = last dump 470/2000 r14/0.15, 610/1400 r30/0.25, 850/1200)
 stage 1 500 / 2600 ramp 10 f / 0.30, 32 f to stage 2; stage 2 650 / 1700 ramp 20 f / 0.30; stage 3 850 / 1400; stamp 10 f x0.15.
