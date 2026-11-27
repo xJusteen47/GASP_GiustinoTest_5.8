@@ -221,8 +221,8 @@ if ($SelfTest) {
     & git -C $tmp reset --hard HEAD 2>&1 | Out-Null
     $results += "1 DA+Mv: $(if ($v1a.Count -gt 0 -and $v1mv.Count -gt 0) {'PASS'} else {'FAIL'})"
 
-    # 2. CHT_*_PoseMatch.uasset + non-ASCII unquoted path
-    $v2 = Invoke-CommitGuard -Root $tmp -Branch 'claude/test' -Files @('Content/GSTN/Locomotion/StockBase/CHT_GSTN_StockMover_PoseMatch.uasset') -DiffText '' -Cfg $cfg -OwnerUnlock:$false
+    # 2. CHT_*_PoseMatch.uasset + non-ASCII unquoted path (CHT_GSTN_StockMover_PoseMatch is exempt: versioned, owner 2026-11-27)
+    $v2 = Invoke-CommitGuard -Root $tmp -Branch 'claude/test' -Files @('Content/GSTN/Locomotion/StockBase/CHT_GSTN_Other_PoseMatch.uasset') -DiffText '' -Cfg $cfg -OwnerUnlock:$false
     $nonAsciiRel = 'Tools/nota_perch' + [char]0x00E8 + '.txt'
     [IO.File]::WriteAllText((Join-Path $tmp ($nonAsciiRel -replace '/', '\')), 'ciao', [Text.Encoding]::UTF8)
     & git -C $tmp add -- $nonAsciiRel
