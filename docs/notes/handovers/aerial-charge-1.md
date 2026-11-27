@@ -52,3 +52,5 @@ COSTO: ~9 $ | 0 min desktop | 0
 ESITO: PARZIALE build, 740 test e PIE della carica OK (in memoria); timeline non salvate per conflitto con PR #57 e dair V9 bloccata
 SUBAGENTI: 0
 COSTO: ~5 $ | ~15 min desktop | 0
+
+Aggiornamento 2026-11-27 16:16 UTC (dopo il merge della #57, coordinatore): branch allineato a main, script con CHARGE_SKIP (default TL_Overlord_DAirV9) e scansione del registry; Save-Assets in _ue59 ha scritto 15 timeline, V9 intatta. Riletto: carica presente, finestra KnockdownOnLanding della #57 conservata sul dropkick. Commit 38be3b21.
