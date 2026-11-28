@@ -282,13 +282,13 @@ public:
 
 	/**
 	 * The low gravity window of the air spin holds at Frame: what UGSTN_GE_AirSpinLowGravity::Sync is asked to match. A spin jump's window
-	 * floats only once the jump stops rising (bJumpRising: the combat state's jump phase is Rising), unless the tuning floats the rise too
+	 * floats only once the jump stops rising (bJumpRising: the combat state's jump phase is Rising or Launched), unless the tuning floats the rise too
 	 */
 	static bool WantsLowGravity(const FGSTN_DrillFragment* Fragment, int32 Frame, bool bJumpRising = false, const FGSTN_DrillSimTuning* Tuning = nullptr);
 
 	/**
-	 * A ground jump began on this frame: its squat started (the jump state counts it down on the ground) or it took off without a squat or a
-	 * coyote jump. In is the jump state of the end of the previous frame, Out the one after this frame's jump step and request. An air jump
+	 * A ground jump began on this frame: its squat started (the jump state counts it down on the ground), it took off without a squat or a
+	 * coyote jump, or the jump ability's own take-off left the ground (the jump logic reads it as None -> Launched, not a knockback). In is the jump state of the end of the previous frame, Out the one after this frame's jump step and request. An air jump
 	 * is not one: an air spin covers it
 	 */
 	static bool ReadGroundJumpStart(const struct FGSTN_JumpState& In, const struct FGSTN_JumpState& Out, int32 Frame);

@@ -231,7 +231,8 @@ void UGSTN_DrillPresentationComponent::TickComponent(float DeltaTime, ELevelTick
 	if (Fragment && Fragment->IsSpinning())
 	{
 		const FGSTN_DrillSimTuning Tuning = FGSTN_SpinDrillAttach::FindOrDefault(Owner);
-		const bool bFloaty = FGSTN_DrillTickExtension::WantsLowGravity(Fragment, Frame, Sync->Core.Jump.Phase == EGSTN_JumpPhase::Rising, &Tuning);
+		const bool bFloaty = FGSTN_DrillTickExtension::WantsLowGravity(Fragment, Frame, Sync->Core.Jump.Phase == EGSTN_JumpPhase::Rising
+			|| Sync->Core.Jump.Phase == EGSTN_JumpPhase::Launched, &Tuning);
 		UpdateCue(ComputeCue(Fragment, Frame, bFloaty, CuePopFrames, CuePopScale), Pose.SpinYawDegrees);
 	}
 	else

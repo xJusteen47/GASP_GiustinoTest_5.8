@@ -941,6 +941,14 @@ bool FGSTN_DrillNPSpinJumpTest::RunTest(const FString& Parameters)
 	FGSTN_JumpState AirJump = Takeoff;
 	AirJump.bTakeoffWasAir = true;
 	TestFalse(TEXT("an air jump is not"), FGSTN_DrillTickExtension::ReadGroundJumpStart(Grounded, AirJump, 13));
+	// In game the jump ability sets the take-off speed and the jump logic reads it as a launch from the ground (desktop 2026-11-28)
+	FGSTN_JumpState AbilityTakeoff;
+	AbilityTakeoff.Phase = EGSTN_JumpPhase::Launched;
+	TestTrue(TEXT("the jump ability's take-off is one"), FGSTN_DrillTickExtension::ReadGroundJumpStart(Grounded, AbilityTakeoff, 28));
+	TestFalse(TEXT("still launched the frame after is not"), FGSTN_DrillTickExtension::ReadGroundJumpStart(AbilityTakeoff, AbilityTakeoff, 29));
+	FGSTN_JumpState Knocked = AbilityTakeoff;
+	Knocked.bKnocked = true;
+	TestFalse(TEXT("a hit's launch is not"), FGSTN_DrillTickExtension::ReadGroundJumpStart(Grounded, Knocked, 28));
 
 	// A ground spin from frame 100; the jump at 105 cancels its timeline and starts the squat
 	FGSTN_DrillFragment F = GroundSpin();

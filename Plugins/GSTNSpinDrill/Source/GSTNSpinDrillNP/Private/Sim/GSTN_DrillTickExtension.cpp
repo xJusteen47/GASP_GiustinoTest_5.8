@@ -689,7 +689,10 @@ bool FGSTN_DrillTickExtension::ReadGroundJumpStart(const FGSTN_JumpState& In, co
 {
 	const bool bSquatStarted = Out.SquatFramesLeft > 0 && In.SquatFramesLeft == 0;
 	const bool bTookOff = Out.Phase == EGSTN_JumpPhase::Rising && Out.StartFrame == Frame && In.StartFrame != Frame && !Out.bTakeoffWasAir;
-	return bSquatStarted || bTookOff;
+	// The kit's jump ability (GSTN_GA_PlatformJump) sets the take-off speed itself, and the jump logic files that as a launch from the ground
+	// one frame later (desktop playtest 2026-11-28: None -> Launched, no start frame). A hit's launch is not a jump
+	const bool bLeftGroundRising = In.Phase == EGSTN_JumpPhase::None && In.SquatFramesLeft == 0 && Out.Phase == EGSTN_JumpPhase::Launched && !Out.bKnocked;
+	return bSquatStarted || bTookOff || bLeftGroundRising;
 }
 
 bool FGSTN_DrillTickExtension::HasSpinJumpEnded(const FGSTN_DrillFragment& Fragment, int32 Frame, const FGSTN_CombatSyncCore& Core)
@@ -812,7 +815,8 @@ void FGSTN_DrillTickExtension::ProjectTags(FGSTN_CombatTickContext& Context, con
 	const FGameplayTagContainer& Projectable = GetProjectableTags();
 	const FGSTN_DrillFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(Context.Out.Fragments);
 	// The low gravity follows the window on every frame, before the early out: a rollback to before the fragment must remove it too
-	UGSTN_GE_AirSpinLowGravity::Sync(*ASC, WantsLowGravity(Fragment, Context.Frame, Context.Out.Core.Jump.Phase == EGSTN_JumpPhase::Rising, &Tuning), Tuning);
+	UGSTN_GE_AirSpinLowGravity::Sync(*ASC, WantsLowGravity(Fragment, Context.Frame, Context.Out.Core.Jump.Phase == EGSTN_JumpPhase::Rising
+		|| Context.Out.Core.Jump.Phase == EGSTN_JumpPhase::Launched, &Tuning), Tuning);
 	UGSTN_GE_DrillDiveGravity::Sync(*ASC, WantsDiveGravity(Fragment));
 	// No fragment (never spun, or a rollback to before the first spin): clear only what a predicted future may have left
 	if (!Fragment && !ASC->HasAnyMatchingGameplayTags(Projectable))
