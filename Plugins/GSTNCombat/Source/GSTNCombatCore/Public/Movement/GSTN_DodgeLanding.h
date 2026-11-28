@@ -106,8 +106,9 @@ struct GSTNCOMBATCORE_API FGSTN_DodgeLandingKitExtension : public FGSTN_KitExten
 	 * Belly slide on landing (owner 2026-11-17 20:21Z: "something physical, it may slide on landing with momentum"): the momentum slide of the ground
 	 * moves (FGSTN_MomentumSlide, same data and friction models) started on the landing frame from the landing velocity, for at most the ending lag
 	 * (it stops when the lag ends, is cut by a recovery, or a hit lands; then the walking mode takes over with the speed left). Its friction is
-	 * Along/Against, its length the lag, MaxFrames or the speed running out. Defaults: on, a Fixed 4000 cm/s^2 slide along the landing velocity
-	 * (1200 cm/s keeps about 690 cm/s after 8 frames at 62.5 Hz); never Against, no run carry, no root motion. bEnabled off = the lag brakes with
+	 * Along/Against, its length the lag, MaxFrames or the speed running out. Defaults: on, a Fixed 1500 cm/s^2 slide along the landing velocity
+	 * (owner 2026-11-28, was 4000: a 1000 cm/s landing slides ~42 frames and ~330 cm on the belly); never Against, no run carry, no root
+	 * motion. bEnabled off = the lag brakes with
 	 * the walking mode's own friction
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dodge Landing|Slide")

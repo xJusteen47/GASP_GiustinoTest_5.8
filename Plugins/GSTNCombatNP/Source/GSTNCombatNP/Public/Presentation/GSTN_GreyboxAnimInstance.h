@@ -240,6 +240,14 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive")
 	bool bProceduralDive = true;
 
+	/**
+	 * A move's capsule clip (MoveOverrides / SequenceMoveOverrides) stands where the real body is (owner 2026-11-28, playtest forward air: the
+	 * capsule was drawn behind the depth marker and jumped forward on the landing): across the up its pelvis goes over the driver's, the clip
+	 * keeps the height and the turn. Off = the clip's own pelvis place, near the root (before 2026-11-28)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Moves")
+	bool bMoveClipFollowsDriverPelvis = true;
+
 	/** Tilt toward the travel in the air (90 = flat, head first) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive", meta = (ClampMin = "0", ClampMax = "120", ForceUnits = "deg"))
 	float DiveAngleDeg = 75.f;
@@ -402,6 +410,9 @@ public:
 	 * the touchdown) to DiveBellyDeg over DiveSlapFrames, then over the last DiveGetUpRollFrames of LagTotalSeconds round to 360, eased
 	 */
 	static float DiveAngle(const FGSTN_GreyboxShapeSettings& Settings, float AirSeconds, float LagSeconds, float LagTotalSeconds, float LandAngleDeg);
+
+	/** Pure: how much the dive's capsule rests on the floor at a turn angle (0 upright, 1 lying flat on the belly or the back) */
+	static float DiveFloorRest(float AngleDeg);
 
 	/** Pure: the start angle of a roll for the capsule's up axis and the travel direction (both unit; the up's pitch toward the travel) */
 	static float RollStartAngle(const FVector& BodyUp, const FVector& Travel);

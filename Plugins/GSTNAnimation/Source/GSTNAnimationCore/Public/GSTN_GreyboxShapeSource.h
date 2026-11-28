@@ -49,6 +49,13 @@ struct GSTNANIMATIONCORE_API FGSTN_GreyboxShape
 	float FloorRadius = 0.f;
 
 	/**
+	 * Rest on the floor, 0..1 (2026-11-28, owner on the dodge dive: "the capsule stays lying in mid-air"): with FloorRadius > 0 the node also
+	 * lowers the posed capsule by this share of its gap over the feet's height, so a body turned about its middle (the dive on its belly, its
+	 * get-up roll) lies on the floor instead of 50 cm over it. 0 = only the lift above (a gap stays)
+	 */
+	float FloorRest = 0.f;
+
+	/**
 	 * Roll (owner 2026-11-24, "fix the roll animations"): a rigid turn of the whole capsule about SpinPivot (component space), applied last, after
 	 * the lean, so a get-up or tech roll reads as the capsule rolling over itself whatever the driver's pose does. Identity = none
 	 */
@@ -66,6 +73,15 @@ struct GSTNANIMATIONCORE_API FGSTN_GreyboxShape
 	const UAnimSequenceBase* OverrideClip = nullptr;
 	float OverrideTime = 0.f;
 	float OverrideWeight = 0.f;
+
+	/**
+	 * 0..1 how much the move override's pelvis is put over the driver's pelvis across the up (component X and Y; the height and every rotation
+	 * stay the capsule clip's). 2026-11-28, owner on the playtest forward air: the capsule clips are key poses with the pelvis near the root, the
+	 * real dropkick's body (and the movement capsule fitted to it, and the depth marker under that) is ~65 cm ahead; the capsule was drawn
+	 * behind the marker and jumped forward on the landing, when the mesh root came under the movement capsule. The clip says how the body is
+	 * turned, the driver where it is
+	 */
+	float OverridePelvisFollow = 0.f;
 };
 
 UINTERFACE(MinimalAPI, meta = (CannotImplementInterfaceInBlueprint))

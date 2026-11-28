@@ -82,6 +82,11 @@ float UGSTN_GreyboxAnimInstance::RollAngle(const FGSTN_GreyboxShapeSettings& Set
 	return FMath::Lerp(StartDeg, End, FMath::SmoothStep(0.f, 1.f, T));
 }
 
+float UGSTN_GreyboxAnimInstance::DiveFloorRest(float AngleDeg)
+{
+	return FMath::Abs(FMath::Sin(FMath::DegreesToRadians(AngleDeg)));
+}
+
 float UGSTN_GreyboxAnimInstance::DiveAngle(const FGSTN_GreyboxShapeSettings& Settings, float AirSeconds, float LagSeconds, float LagTotalSeconds,
 	float LandAngleDeg)
 {
@@ -472,6 +477,7 @@ FVector UGSTN_GreyboxAnimInstance::FindWallNormal(const AActor& Owner, const FQu
 bool UGSTN_GreyboxAnimInstance::UpdateRoll(const FVector& Velocity)
 {
 	Shape.Spin = FQuat::Identity;
+	Shape.FloorRest = 0.f;
 	const USkeletalMeshComponent* Capsule = GetSkelMeshComponent();
 	const USkeletalMeshComponent* Driver = Capsule ? Cast<USkeletalMeshComponent>(Capsule->GetAttachParent()) : nullptr;
 	UAnimInstance* DriverAnim = Driver ? Driver->GetAnimInstance() : nullptr;
@@ -613,6 +619,9 @@ bool UGSTN_GreyboxAnimInstance::UpdateDive(const FVector& Velocity, const FGSTN_
 	}
 	Shape.Spin = FQuat(Axis, FMath::DegreesToRadians(Angle));
 	Shape.SpinPivot = FVector(0.f, 0.f, 0.5f * (ShapeSettings.CapsuleBottom + ShapeSettings.CapsuleTop));
+	// On the ground the turned capsule lies on the floor (owner 2026-11-28: "the capsule stays lying in mid-air"): turned about its middle it
+	// hangs half its length minus its radius over the feet. As much as it lies: none upright, all of it on the belly
+	Shape.FloorRest = bOnGround ? DiveFloorRest(Angle) : 0.f;
 	return true;
 }
 
@@ -653,6 +662,7 @@ void UGSTN_GreyboxAnimInstance::UpdateMoveOverride()
 {
 	Shape.OverrideClip = nullptr;
 	Shape.OverrideWeight = 0.f;
+	Shape.OverridePelvisFollow = ShapeSettings.bMoveClipFollowsDriverPelvis ? 1.f : 0.f;
 	const USkeletalMeshComponent* Capsule = GetSkelMeshComponent();
 	const USkeletalMeshComponent* Driver = Capsule ? Cast<USkeletalMeshComponent>(Capsule->GetAttachParent()) : nullptr;
 	UAnimInstance* DriverAnim = Driver ? Driver->GetAnimInstance() : nullptr;

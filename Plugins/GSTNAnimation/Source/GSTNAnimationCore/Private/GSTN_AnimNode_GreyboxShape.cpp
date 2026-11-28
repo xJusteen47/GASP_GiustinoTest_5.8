@@ -96,6 +96,11 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 	{
 		return;
 	}
+	const FCompactPoseBoneIndex SourcePelvis = PelvisBone.GetCompactPoseIndex(Output.Pose.GetBoneContainer());
+	// The driver's pelvis in component space, before any override (the copied pose)
+	const bool bFollowPelvis = Shape.OverrideClip && Shape.OverrideWeight > 0.f && Shape.OverridePelvisFollow > 0.f
+		&& Output.Pose.IsValidIndex(SourcePelvis);
+	const FVector DriverPelvisCS = bFollowPelvis ? (Output.Pose[SourcePelvis] * Output.Pose[Root]).GetLocation() : FVector::ZeroVector;
 	if (Shape.OverrideClip && Shape.OverrideWeight > 0.f)
 	{
 		// The capsule version of the move at the montage's time; the root stays the copied one (Mover places the character)
@@ -114,6 +119,15 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 			FAnimationPoseData BlendedData(Blended);
 			FAnimationRuntime::BlendTwoPosesTogether(SourceData, OverrideData, 1.f - Shape.OverrideWeight, BlendedData);
 			Output = Blended;
+		}
+		if (bFollowPelvis)
+		{
+			// Across the up the capsule clip's pelvis goes over the driver's (the real body); its height and turn stay the clip's
+			const FTransform& RootCS = Output.Pose[Root];
+			const FVector ClipPelvisCS = (Output.Pose[SourcePelvis] * RootCS).GetLocation();
+			const double Follow = FMath::Clamp(Shape.OverridePelvisFollow, 0.f, 1.f);
+			const FVector Wanted(FMath::Lerp(ClipPelvisCS.X, DriverPelvisCS.X, Follow), FMath::Lerp(ClipPelvisCS.Y, DriverPelvisCS.Y, Follow), ClipPelvisCS.Z);
+			Output.Pose[SourcePelvis].SetTranslation(RootCS.InverseTransformPosition(Wanted));
 		}
 	}
 	// Rigid body in locomotion: blend toward the reference pose, the root stays the copied one (Mover's placement and facing)
@@ -207,8 +221,8 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 		RootTransform.SetRotation(Shape.Spin * RootTransform.GetRotation());
 	}
 
-	// Floor lift: the posed capsule never goes under the feet (a lying capsule is thicker than a lying mannequin's pelvis is high). Measured
-	// on the final pose, after the squash and the lean
+	// Floor lift: the posed capsule never goes under the feet (a lying capsule is thicker than a lying mannequin's pelvis is high), and with
+	// FloorRest it comes down onto them. Measured on the final pose, after the squash and the lean
 	if (Shape.FloorRadius > 0.f && Output.Pose.IsValidIndex(Pelvis))
 	{
 		const FTransform RefPelvisCS = Output.Pose.GetRefPose(Pelvis) * Output.Pose.GetRefPose(Root);
@@ -225,8 +239,17 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 		const float Radius = Shape.FloorRadius * Width;
 		const float Below = FMath::Max(RefHeight - Shape.FloorBottom - Shape.FloorRadius, 0.f) * Along;
 		const float Above = FMath::Max(Shape.FloorTop - Shape.FloorRadius - RefHeight, 0.f) * Along;
-		const float Lowest = CapsuleLowestZ(PelvisCS.GetLocation(), Up, Below, Above, Radius);
-		if (Lowest < 0.f)
+		float Lowest = CapsuleLowestZ(PelvisCS.GetLocation(), Up, Below, Above, Radius);
+		// Resting: the gap over the floor goes too, by FloorRest (a body lying on the floor, not hanging over it)
+		if (Lowest > 0.f && Shape.FloorRest > 0.f)
+		{
+			Lowest *= FMath::Clamp(Shape.FloorRest, 0.f, 1.f);
+		}
+		else if (Lowest > 0.f)
+		{
+			Lowest = 0.f;
+		}
+		if (!FMath::IsNearlyZero(Lowest))
 		{
 			// Up in component space, expressed in the root's frame (the pelvis's parent)
 			const FVector Lift = RootTransform.GetRotation().UnrotateVector(FVector(0.f, 0.f, -Lowest));
