@@ -262,7 +262,11 @@ static void StepRunStages(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunFr
 
 	const float Factor = FMath::Max(Input.SpeedFactor, 0.f);
 	const float StickSize = static_cast<float>(Input.StickWorld.Size());
-	const bool bStickActive = StickSize >= Tuning.StickDeadzone;
+	// PerStage (owner 2026-11-28, 1A): a dash from a slow walk counts too, with the stick under the stages' "released" (a press with the stick
+	// barely pushed is still a dash, not a release)
+	const bool bPerStage = Tuning.BoostMode == EGSTN_RunBoostMode::PerStage;
+	const bool bStickActive = StickSize >= Tuning.StickDeadzone
+		|| (bPerStage && Input.bBoostCommand && StickSize >= FMath::Max(Tuning.RampStickThreshold, KINDA_SMALL_NUMBER));
 	const int32 LastStage = Tuning.Stages.Num() - 1;
 
 	if (bStickActive)
@@ -297,7 +301,6 @@ static void StepRunStages(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunFr
 	// Boost: straight to BoostTargetStage (owner decision 3C; owner 2026-11-17: the middle stage by default). It never lowers the stage
 	// PerStage (owner 2026-11-28): every stage whose bAllowBoost is set, also at or over the target, where the stage is kept and the burst restarts
 	const int32 BoostTarget = Tuning.GetBoostTargetIndex();
-	const bool bPerStage = Tuning.BoostMode == EGSTN_RunBoostMode::PerStage;
 	if (Input.bBoostCommand && (State.Stage < BoostTarget || bPerStage))
 	{
 		// The initial window also covers the whole start stamp: L3 is how the owner skips it (2026-11-19)
@@ -316,13 +319,19 @@ static void StepRunStages(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunFr
 			State.StampFrames = -1;
 			State.DashFrames = Tuning.BoostDash.Frames > 0 ? 0 : -1;
 			State.EntryFrames = -1;	// the dash is the boost's burst; the readable step's is for a climb only
-			// Momentum: the burst may go over the stage's cruise speed, from the speed of the press (a dash from a sprint is faster)
+			// The burst's top speed: the stage's cruise at least, over it with the momentum (a dash from a sprint is faster). The NP adapter
+			// divides it by the stick tilt of each frame so a dash from a light tilt reaches it too (owner 2026-11-28 1A)
 			const FGSTN_RunBoostDashTuning& Dash = Tuning.BoostDash;
 			State.DashTopSpeed = 0.f;
-			if (State.DashFrames >= 0 && Dash.SpeedMode == EGSTN_DashSpeedMode::Momentum)
+			if (State.DashFrames >= 0)
 			{
-				const float Scaled = Speed * FMath::Max(Dash.MomentumSpeedScale, 1.f);
-				State.DashTopSpeed = Dash.MaxMomentumSpeed > 0.f ? FMath::Min(Scaled, Dash.MaxMomentumSpeed * Factor) : Scaled;
+				float Top = Tuning.GetStage(State.Stage).MaxSpeed * Factor;
+				if (Dash.SpeedMode == EGSTN_DashSpeedMode::Momentum)
+				{
+					const float Scaled = Speed * FMath::Max(Dash.MomentumSpeedScale, 1.f);
+					Top = FMath::Max(Top, Dash.MaxMomentumSpeed > 0.f ? FMath::Min(Scaled, Dash.MaxMomentumSpeed * Factor) : Scaled);
+				}
+				State.DashTopSpeed = Top;
 			}
 			return;
 		}
@@ -422,7 +431,7 @@ bool FGSTN_RunStageLogic::IsBoostDash(const FGSTN_RunStagesTuning& Tuning, const
 
 float FGSTN_RunStageLogic::GetDashTopSpeed(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State)
 {
-	return IsBoostDash(Tuning, State) && Tuning.BoostDash.SpeedMode == EGSTN_DashSpeedMode::Momentum ? State.DashTopSpeed : 0.f;
+	return IsBoostDash(Tuning, State) ? State.DashTopSpeed : 0.f;
 }
 
 bool FGSTN_RunStageLogic::IsStageEntryBurst(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State, bool bReadableSteps)

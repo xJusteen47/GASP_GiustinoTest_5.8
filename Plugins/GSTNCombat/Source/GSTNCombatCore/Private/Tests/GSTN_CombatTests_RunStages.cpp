@@ -442,7 +442,20 @@ bool FGSTN_RunStagesDashPerStageTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("walking dash: the target stage"), (int32)State.Stage, Tuning.GetBoostTargetIndex());
 		TestTrue(TEXT("walking dash: burst live"), FGSTN_RunStageLogic::IsBoostDash(Tuning, State));
 		TestEqual(TEXT("walking dash: 150 x 1.2 is under the stage's cruise, which stays the top"),
-			FMath::Max(FGSTN_RunStageLogic::GetDashTopSpeed(Tuning, State), Tuning.GetStage(State.Stage).MaxSpeed), Tuning.GetStage(State.Stage).MaxSpeed);
+			FGSTN_RunStageLogic::GetDashTopSpeed(Tuning, State), Tuning.GetStage(State.Stage).MaxSpeed, 0.01f);
+	}
+	{
+		// 1A: a light tilt, under the stages' dead zone, still dashes to the stage's cruise (the NP adapter divides it by the tilt)
+		FGSTN_RunStageState State;
+		const FVector Light(0.2, 0.0, 0.0);
+		for (int32 Frame = 0; Frame < 30; ++Frame)
+		{
+			FGSTN_RunStageLogic::Step(Tuning, Run(Frame, 60.f, Light), State);
+		}
+		FGSTN_RunStageLogic::Step(Tuning, Run(30, 60.f, Light, true), State);
+		TestTrue(TEXT("light tilt dash: burst live"), FGSTN_RunStageLogic::IsBoostDash(Tuning, State));
+		TestEqual(TEXT("light tilt dash: the target stage"), (int32)State.Stage, Tuning.GetBoostTargetIndex());
+		TestEqual(TEXT("light tilt dash: the cruise"), FGSTN_RunStageLogic::GetDashTopSpeed(Tuning, State), Tuning.GetStage(State.Stage).MaxSpeed, 0.1f);
 	}
 	{
 		// On the last stage: the stage is kept and the burst restarts over the cruise speed, capped
@@ -469,7 +482,7 @@ bool FGSTN_RunStagesDashPerStageTest::RunTest(const FString& Parameters)
 		RunAtStageSpeed(Cruise, State, 0, 20);
 		FGSTN_RunStageLogic::Step(Cruise, Run(20, 850.f, FVector(1.0, 0.0, 0.0), true), State);
 		TestTrue(TEXT("cruise dash: burst live"), FGSTN_RunStageLogic::IsBoostDash(Cruise, State));
-		TestEqual(TEXT("cruise dash: no speed over the cruise"), FGSTN_RunStageLogic::GetDashTopSpeed(Cruise, State), 0.f);
+		TestEqual(TEXT("cruise dash: no speed over the cruise"), FGSTN_RunStageLogic::GetDashTopSpeed(Cruise, State), Cruise.GetStage(State.Stage).MaxSpeed, 0.01f);
 	}
 	{
 		// A stage that does not allow it: ignored

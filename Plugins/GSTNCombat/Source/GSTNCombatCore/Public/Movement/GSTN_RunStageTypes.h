@@ -18,7 +18,8 @@ enum class EGSTN_RunBoostMode : uint8
 	/** The command is ignored */
 	Disabled,
 	/**
-	 * Whenever the stick is pushed on the ground and the current stage allows it (FGSTN_RunStage::bAllowBoost). Owner 2026-11-28: the dash
+	 * Whenever the stick is pushed on the ground (even under StickDeadzone: a light tilt dashes too) and the current stage allows it
+	 * (FGSTN_RunStage::bAllowBoost). Owner 2026-11-28: the dash
 	 * works while walking and running too, not only at the start. On a stage at or above BoostTargetStage the stage is kept and the dash
 	 * burst starts again; its top speed follows BoostDash.SpeedMode
 	 */
@@ -445,7 +446,11 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageState
 	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
 	int32 DashFrames = -1;
 
-	/** Top ground speed of the live dash burst latched at the press (BoostDash.SpeedMode Momentum), cm/s with the stats in; 0 = the stage's */
+	/**
+	 * The ground top speed of the live dash burst, latched at the press, cm/s with the stats in: the stage's cruise, or the momentum speed
+	 * when higher (Momentum). The NP adapter divides it by the frame's stick tilt, so a dash from a light tilt reaches it too (owner
+	 * 2026-11-28 1A). 0 = none
+	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
 	float DashTopSpeed = 0.f;
 
@@ -524,7 +529,7 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageLogic
 	/** The boost dash burst is live in State */
 	static bool IsBoostDash(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
 
-	/** The ground top speed the live dash burst asks for over its stage's (Momentum), cm/s with the stats in; 0 = none (no burst, Cruise) */
+	/** The ground top speed the live dash burst asks for (State.DashTopSpeed), cm/s with the stats in; 0 = no burst */
 	static float GetDashTopSpeed(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
 
 	/** A run reversal is live in State: its acceleration multiplier and turning strength apply on the next frame */

@@ -125,7 +125,7 @@ int32 FGSTN_RunStageMover::ApplyStageValues(UMoverComponent& MoverComp, const FG
 	const bool bAnalog = Analog.bEnabled && GroundSpeed >= 0.f;
 	// Walk start: the boost fades out as the speed reaches LowSpeedFraction of the stage top speed (assigned every frame, never adjusted)
 	const float Blend = bAnalog ? FGSTN_AnalogWalkLogic::StartBlend(Analog, GroundSpeed, Values.MaxSpeed * Factor) : 0.f;
-	// The momentum dash (owner 2026-11-28) lifts the top speed for its burst only; next frame the stage's cruise is assigned again
+	// The dash burst (owner 2026-11-28) lifts the top speed for its frames only (momentum, light tilt); then the stage's cruise is assigned again
 	const float TopSpeed = FMath::Max(Values.MaxSpeed * Factor, MinTopSpeed);
 	if (MinTopSpeed > 0.f)
 	{
@@ -186,10 +186,20 @@ void FGSTN_RunStageMover::PreMovement(UMoverComponent& MoverComp, float Factor)
 		const FVector Velocity = Default->GetVelocity_WorldSpace();
 		GroundSpeed = static_cast<float>((Velocity - Up * Velocity.Dot(Up)).Size());
 	}
+	// The dash burst's top speed (owner 2026-11-28): the analog walk caps the ground speed at the top speed times the stick length, so a dash
+	// from a light tilt divides it by this frame's tilt to still reach it (the same stick the run logic steps with, from the combat model)
+	float DashTop = State ? FGSTN_RunStageLogic::GetDashTopSpeed(Tuning->RunStages, *State) : 0.f;
+	if (DashTop > 0.f && Tuning->AnalogWalk.bEnabled)
+	{
+		FVector2D Stick;
+		float CameraYaw = 0.f;
+		Combat->GetFrameStick(Stick, CameraYaw);
+		DashTop /= FMath::Clamp(static_cast<float>(Stick.Size()), 0.1f, 1.f);
+	}
 	ApplyStageValues(MoverComp, *Tuning, State ? State->Stage : 0, Factor, GroundSpeed,
 		State ? FGSTN_RunStageLogic::GetAccelerationRamp(Tuning->RunStages, *State, IsReadableSteps()) : 1.f,
 		State && FGSTN_RunStageLogic::IsReversing(Tuning->RunStages, *State) ? Tuning->RunStages.Reversal.TurningStrength : -1.f,
-		State ? FGSTN_RunStageLogic::GetDashTopSpeed(Tuning->RunStages, *State) : -1.f);
+		DashTop > 0.f ? DashTop : -1.f);
 	ApplyAirValues(MoverComp, *Tuning, State, Factor);
 }
 
