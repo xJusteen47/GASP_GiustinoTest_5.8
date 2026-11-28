@@ -84,7 +84,26 @@ float UGSTN_GreyboxAnimInstance::RollAngle(const FGSTN_GreyboxShapeSettings& Set
 
 float UGSTN_GreyboxAnimInstance::DiveFloorRest(float AngleDeg)
 {
-	return FMath::Abs(FMath::Sin(FMath::DegreesToRadians(AngleDeg)));
+	// Tipping over (air, slap): as much as it lies. Through the get-up roll it rolls ON the floor (a long capsule turned about its middle in
+	// the air rose to ~75 cm head down and fell back to 35 on its back: owner 2026-11-28, "the small bounce in the get-up roll"); the last
+	// quarter, coming upright, hands back to the standing height
+	if (AngleDeg <= 90.f)
+	{
+		return FMath::Abs(FMath::Sin(FMath::DegreesToRadians(AngleDeg)));
+	}
+	return AngleDeg < 270.f ? 1.f : 1.f - FMath::SmoothStep(270.f, 360.f, AngleDeg);
+}
+
+float UGSTN_GreyboxAnimInstance::DiveTuckSquash(const FGSTN_GreyboxShapeSettings& Settings, float AngleDeg)
+{
+	// Curled into a ball over the get-up roll (from the belly round to upright), most at its middle
+	const float From = FMath::Clamp(Settings.DiveBellyDeg, 0.f, 359.f);
+	if (AngleDeg <= From || AngleDeg >= 360.f)
+	{
+		return 1.f;
+	}
+	const float T = (AngleDeg - From) / (360.f - From);
+	return FMath::Lerp(1.f, FMath::Clamp(Settings.DiveRollTuckSquash, 0.2f, 1.f), FMath::Sin(PI * T));
 }
 
 float UGSTN_GreyboxAnimInstance::DiveAngle(const FGSTN_GreyboxShapeSettings& Settings, float AirSeconds, float LagSeconds, float LagTotalSeconds,
@@ -293,6 +312,7 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	{
 		DiveLastAngle = 0.f;
 		DiveLagSeconds = -1.f;
+		DiveSquash = 1.f;
 	}
 	else
 	{
@@ -403,7 +423,8 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	float SwayPitch = 0.f;
 	const FVector Sway = RunSway(ShapeSettings, SwayPhase, SwayAmplitude, SwayPitch);
 
-	Shape.Squash = FMath::Clamp(SquashSpring.Value + Sway.X + JudderSquash, ShapeSettings.MinSquash * 0.8f, ShapeSettings.MaxStretch * 1.1f);
+	Shape.Squash = FMath::Clamp(SquashSpring.Value + Sway.X + JudderSquash, ShapeSettings.MinSquash * 0.8f, ShapeSettings.MaxStretch * 1.1f)
+		* (bRolling ? DiveSquash : 1.f);
 	// The lean is in the component's frame; the mesh is rotated -90 yaw from the actor in GASP pawns, so turn the actor-frame lean into it
 	const FQuat ActorToComponent = GetSkelMeshComponent() ? (GetSkelMeshComponent()->GetComponentQuat().Inverse() * BodyQuat) : FQuat::Identity;
 	// Rotation axis scaled by degrees, actor frame: tipping the top toward +X is a turn around +Y by the forward lean (-Pitch), toward +Y a
@@ -574,6 +595,7 @@ bool UGSTN_GreyboxAnimInstance::UpdateDive(const FVector& Velocity, const FGSTN_
 		DiveLastAngle = 0.f;
 		DiveLagSeconds = -1.f;
 		DiveMoveStartFrame = INDEX_NONE;
+		DiveSquash = 1.f;
 		return false;
 	};
 	// A hit ends the dive at once: the reaction has its own read
@@ -654,6 +676,7 @@ bool UGSTN_GreyboxAnimInstance::UpdateDive(const FVector& Velocity, const FGSTN_
 	// On the ground the turned capsule lies on the floor (owner 2026-11-28: "the capsule stays lying in mid-air"): turned about its middle it
 	// hangs half its length minus its radius over the feet. As much as it lies: none upright, all of it on the belly
 	Shape.FloorRest = bOnGround ? DiveFloorRest(Angle) : 0.f;
+	DiveSquash = bInLag ? DiveTuckSquash(ShapeSettings, Angle) : 1.f;
 	return true;
 }
 

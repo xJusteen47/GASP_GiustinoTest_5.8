@@ -279,6 +279,10 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive", meta = (ClampMin = "90", ForceUnits = "deg/s"))
 	float DiveRecoverDegPerSecond = 1080.f;
 
+	/** Get-up roll (owner 2026-11-28): how short the capsule curls at the roll's middle (1 = stays long; the width grows to keep its volume) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive", meta = (ClampMin = "0.2", ClampMax = "1"))
+	float DiveRollTuckSquash = 0.6f;
+
 	/** Hand and foot markers (owner 2026-11-24: hidden in locomotion and most of the time): shown while an attack's capsule clip plays
 	 *  (MoveOverrides / SequenceMoveOverrides) and/or in locomotion */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Limbs")
@@ -418,8 +422,12 @@ public:
 	 */
 	static float DiveAngle(const FGSTN_GreyboxShapeSettings& Settings, float AirSeconds, float LagSeconds, float LagTotalSeconds, float LandAngleDeg);
 
-	/** Pure: how much the dive's capsule rests on the floor at a turn angle (0 upright, 1 lying flat on the belly or the back) */
+	/** Pure: how much the dive's capsule rests on the floor at a turn angle (tipping: as much as it lies; the get-up roll: on the floor, handing
+	 *  back to the standing height over its last quarter; 0 upright) */
 	static float DiveFloorRest(float AngleDeg);
+
+	/** Pure: the squash of the dive's capsule at a turn angle: curled toward DiveRollTuckSquash over the get-up roll, 1 elsewhere */
+	static float DiveTuckSquash(const FGSTN_GreyboxShapeSettings& Settings, float AngleDeg);
 
 	/** Pure: the start angle of a roll for the capsule's up axis and the travel direction (both unit; the up's pitch toward the travel) */
 	static float RollStartAngle(const FVector& BodyUp, const FVector& Travel);
@@ -561,4 +569,5 @@ private:
 	float DiveLastAngle = 0.f;
 	FVector DiveTravel = FVector::ZeroVector;
 	int32 DiveMoveStartFrame = INDEX_NONE;
+	float DiveSquash = 1.f;
 };

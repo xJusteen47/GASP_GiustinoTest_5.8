@@ -180,6 +180,14 @@ bool FGSTN_GreyboxDiveTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("belly: rests on the floor"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::DiveFloorRest(Settings.DiveBellyDeg), 1.f, 1.e-3f));
 	TestTrue(TEXT("upright after the roll: no rest"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::DiveFloorRest(360.f), 1.e-3f));
 	TestTrue(TEXT("upright before the dive: no rest"), FMath::IsNearlyZero(UGSTN_GreyboxAnimInstance::DiveFloorRest(0.f), 1.e-3f));
+	// Owner 2026-11-28 ("the small bounce in the get-up roll"): the roll stays on the floor, head down included, curled at its middle
+	TestTrue(TEXT("roll, head down: on the floor"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::DiveFloorRest(180.f), 1.f, 1.e-3f));
+	TestTrue(TEXT("roll, on the back: on the floor"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::DiveFloorRest(270.f), 1.f, 1.e-3f));
+	TestTrue(TEXT("roll, coming up: handing back"), FMath::IsWithin(UGSTN_GreyboxAnimInstance::DiveFloorRest(315.f), 0.1f, 0.9f));
+	TestTrue(TEXT("belly: not curled"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::DiveTuckSquash(Settings, Settings.DiveBellyDeg), 1.f, 1.e-3f));
+	TestTrue(TEXT("roll middle: curled"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::DiveTuckSquash(Settings,
+		0.5f * (Settings.DiveBellyDeg + 360.f)), Settings.DiveRollTuckSquash, 1.e-3f));
+	TestTrue(TEXT("upright: not curled"), FMath::IsNearlyEqual(UGSTN_GreyboxAnimInstance::DiveTuckSquash(Settings, 360.f), 1.f, 1.e-3f));
 	return true;
 }
 
