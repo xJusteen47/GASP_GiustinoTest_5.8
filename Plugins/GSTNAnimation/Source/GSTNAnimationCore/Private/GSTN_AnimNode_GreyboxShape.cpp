@@ -54,6 +54,12 @@ float FGSTN_AnimNode_GreyboxShape::PelvisHeightAfterSquash(float Height, float S
 	return Height * FMath::Clamp(Squash, 0.2f, 3.f);
 }
 
+float FGSTN_AnimNode_GreyboxShape::TiltFloorRest(float UpZ)
+{
+	const float TiltDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FMath::Abs(UpZ), 0.f, 1.f)));
+	return FMath::SmoothStep(30.f, 70.f, TiltDeg);
+}
+
 float FGSTN_AnimNode_GreyboxShape::CapsuleLowestZ(const FVector& PelvisLocation, const FVector& Up, float BelowPelvis, float AbovePelvis, float Radius)
 {
 	const float LowerCentre = static_cast<float>(PelvisLocation.Z - Up.Z * BelowPelvis);
@@ -96,6 +102,11 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 	{
 		return;
 	}
+	const FCompactPoseBoneIndex SourcePelvis = PelvisBone.GetCompactPoseIndex(Output.Pose.GetBoneContainer());
+	// The driver's pelvis in component space, before any override (the copied pose)
+	const bool bFollowPelvis = Shape.OverrideClip && Shape.OverrideWeight > 0.f && Shape.OverridePelvisFollow > 0.f
+		&& Output.Pose.IsValidIndex(SourcePelvis);
+	const FVector DriverPelvisCS = bFollowPelvis ? (Output.Pose[SourcePelvis] * Output.Pose[Root]).GetLocation() : FVector::ZeroVector;
 	if (Shape.OverrideClip && Shape.OverrideWeight > 0.f)
 	{
 		// The capsule version of the move at the montage's time; the root stays the copied one (Mover places the character)
@@ -114,6 +125,15 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 			FAnimationPoseData BlendedData(Blended);
 			FAnimationRuntime::BlendTwoPosesTogether(SourceData, OverrideData, 1.f - Shape.OverrideWeight, BlendedData);
 			Output = Blended;
+		}
+		if (bFollowPelvis)
+		{
+			// The capsule clip's pelvis goes onto the driver's (the real body), its turn stays the clip's. The floor lift below keeps an upright
+			// clip over a lower driver pelvis out of the floor
+			const FTransform& RootCS = Output.Pose[Root];
+			const FVector ClipPelvisCS = (Output.Pose[SourcePelvis] * RootCS).GetLocation();
+			const FVector Wanted = FMath::Lerp(ClipPelvisCS, DriverPelvisCS, static_cast<double>(FMath::Clamp(Shape.OverridePelvisFollow, 0.f, 1.f)));
+			Output.Pose[SourcePelvis].SetTranslation(RootCS.InverseTransformPosition(Wanted));
 		}
 	}
 	// Rigid body in locomotion: blend toward the reference pose, the root stays the copied one (Mover's placement and facing)
@@ -207,8 +227,8 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 		RootTransform.SetRotation(Shape.Spin * RootTransform.GetRotation());
 	}
 
-	// Floor lift: the posed capsule never goes under the feet (a lying capsule is thicker than a lying mannequin's pelvis is high). Measured
-	// on the final pose, after the squash and the lean
+	// Floor lift: the posed capsule never goes under the feet (a lying capsule is thicker than a lying mannequin's pelvis is high), and with
+	// FloorRest it comes down onto them. Measured on the final pose, after the squash and the lean
 	if (Shape.FloorRadius > 0.f && Output.Pose.IsValidIndex(Pelvis))
 	{
 		const FTransform RefPelvisCS = Output.Pose.GetRefPose(Pelvis) * Output.Pose.GetRefPose(Root);
@@ -225,8 +245,19 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 		const float Radius = Shape.FloorRadius * Width;
 		const float Below = FMath::Max(RefHeight - Shape.FloorBottom - Shape.FloorRadius, 0.f) * Along;
 		const float Above = FMath::Max(Shape.FloorTop - Shape.FloorRadius - RefHeight, 0.f) * Along;
-		const float Lowest = CapsuleLowestZ(PelvisCS.GetLocation(), Up, Below, Above, Radius);
-		if (Lowest < 0.f)
+		// Over the floor, not over the mesh root (FloorHeight)
+		float Lowest = CapsuleLowestZ(PelvisCS.GetLocation(), Up, Below, Above, Radius) - Shape.FloorHeight;
+		// Resting: the gap over the floor goes too, by FloorRest (a body lying on the floor, not hanging over it)
+		const float Rest = FMath::Max(FMath::Clamp(Shape.FloorRest, 0.f, 1.f), Shape.bFloorRestByTilt ? TiltFloorRest(static_cast<float>(Up.Z)) : 0.f);
+		if (Lowest > 0.f && Rest > 0.f)
+		{
+			Lowest *= Rest;
+		}
+		else if (Lowest > 0.f)
+		{
+			Lowest = 0.f;
+		}
+		if (!FMath::IsNearlyZero(Lowest))
 		{
 			// Up in component space, expressed in the root's frame (the pelvis's parent)
 			const FVector Lift = RootTransform.GetRotation().UnrotateVector(FVector(0.f, 0.f, -Lowest));

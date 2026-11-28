@@ -17,7 +17,8 @@ FGSTN_DodgeLandingKitExtension::FGSTN_DodgeLandingKitExtension()
 	LandingSlide.OppositeDotThreshold = -1.f;
 	LandingSlide.Along.Mode = EGSTN_MomentumSlideMode::Slide;
 	LandingSlide.Along.Friction = EGSTN_MomentumSlideFriction::Fixed;
-	LandingSlide.Along.Deceleration = 4000.f;
+	// Owner 2026-11-28: "the dive does not keep its momentum sliding" (4000 braked a 991 cm/s landing in 16 frames, 131 cm). 1500: ~42 frames, ~330 cm
+	LandingSlide.Along.Deceleration = 1500.f;
 	LandingSlide.Against = LandingSlide.Along;
 	LandingSlide.bStopAtLedge = true;
 	LandingSlide.bAddRootMotion = false;

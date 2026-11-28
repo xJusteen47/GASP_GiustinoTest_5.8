@@ -219,7 +219,7 @@ bool FGSTN_DodgeLandingBellyTest::RunTest(const FString& Parameters)
 	const float Decel = Kit.LandingSlide.Along.Deceleration;
 	TestEqual(TEXT("1400 cm/s: as long as the slide brakes it"), FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 8, 1400.f, Rate),
 		FMath::CeilToInt32(1400.f / Decel * Rate) + Roll);
-	TestEqual(TEXT("a slow landing keeps the fixed belly"), FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 8, 300.f, Rate), 8 + Roll);
+	TestEqual(TEXT("a slow landing keeps the fixed belly"), FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 8, 150.f, Rate), 8 + Roll);
 	TestEqual(TEXT("under the slide's MinSpeed: the fixed belly"), FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 8, 100.f, Rate), 8 + Roll);
 	TestTrue(TEXT("faster lands longer"), FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 8, 1400.f, Rate) > FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 8, 900.f, Rate));
 	TestEqual(TEXT("capped by MaxBellyFrames"), FGSTN_DodgeLandingLogic::ResolveLandingLag(Kit, 8, 100000.f, Rate), Kit.MaxBellyFrames + Roll);

@@ -240,6 +240,21 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive")
 	bool bProceduralDive = true;
 
+	/**
+	 * A move's capsule clip (MoveOverrides / SequenceMoveOverrides) stands where the real body is (owner 2026-11-28, playtest forward air: the
+	 * capsule was drawn behind the depth marker, jumped forward on the landing and popped up and down): its pelvis goes onto the driver's, the
+	 * clip keeps the turn. Off = the clip's own pelvis place, near the root at its key pose height (before 2026-11-28)
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Moves")
+	bool bMoveClipFollowsDriverPelvis = true;
+
+	/**
+	 * When a move's montage ends, its capsule clip fades out from its last pose over these frames (60 fps) instead of leaving in one frame
+	 * (2026-11-28, the dropkick's get-up: the clip stood a few frames before the driver and dropped back onto it for a frame). 0 = at once
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Moves", meta = (ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
+	float MoveClipFadeOutFrames = 6.f;
+
 	/** Tilt toward the travel in the air (90 = flat, head first) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive", meta = (ClampMin = "0", ClampMax = "120", ForceUnits = "deg"))
 	float DiveAngleDeg = 75.f;
@@ -263,6 +278,10 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	/** When the lag is cut short (a roll-out command, a timeline that ended first) the capsule finishes its turn at this speed, never a snap */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive", meta = (ClampMin = "90", ForceUnits = "deg/s"))
 	float DiveRecoverDegPerSecond = 1080.f;
+
+	/** Get-up roll (owner 2026-11-28): how short the capsule curls at the roll's middle (1 = stays long; the width grows to keep its volume) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive", meta = (ClampMin = "0.2", ClampMax = "1"))
+	float DiveRollTuckSquash = 0.6f;
 
 	/** Hand and foot markers (owner 2026-11-24: hidden in locomotion and most of the time): shown while an attack's capsule clip plays
 	 *  (MoveOverrides / SequenceMoveOverrides) and/or in locomotion */
@@ -403,6 +422,13 @@ public:
 	 */
 	static float DiveAngle(const FGSTN_GreyboxShapeSettings& Settings, float AirSeconds, float LagSeconds, float LagTotalSeconds, float LandAngleDeg);
 
+	/** Pure: how much the dive's capsule rests on the floor at a turn angle (tipping: as much as it lies; the get-up roll: on the floor, handing
+	 *  back to the standing height over its last quarter; 0 upright) */
+	static float DiveFloorRest(float AngleDeg);
+
+	/** Pure: the squash of the dive's capsule at a turn angle: curled toward DiveRollTuckSquash over the get-up roll, 1 elsewhere */
+	static float DiveTuckSquash(const FGSTN_GreyboxShapeSettings& Settings, float AngleDeg);
+
 	/** Pure: the start angle of a roll for the capsule's up axis and the travel direction (both unit; the up's pitch toward the travel) */
 	static float RollStartAngle(const FVector& BodyUp, const FVector& Travel);
 
@@ -451,6 +477,18 @@ private:
 
 	/** On a wall mode: finds the wall's outward normal around the owner (presentation traces); zero when none */
 	FVector FindWallNormal(const AActor& Owner, const FQuat& BodyQuat) const;
+
+	/** The floor under the movement capsule (at most a few cm under its bottom), by a short trace: its height in component space */
+	bool FindFloorHeight(const AActor& Owner, float& OutHeight) const;
+
+	/** Shape's override of this frame from the montage the driver plays (none, a montage clip or a sequence clip) */
+	void FindMoveOverride();
+
+	/** The last move clip shown, faded out over MoveClipFadeOutFrames once its montage ends */
+	TWeakObjectPtr<const UAnimSequenceBase> LastOverrideClip;
+	float LastOverrideTime = 0.f;
+	float LastOverrideWeight = 0.f;
+	float LastDeltaSeconds = 0.f;
 
 	/** The move override of this frame from the driver's active montage */
 	void UpdateMoveOverride();
@@ -531,4 +569,5 @@ private:
 	float DiveLastAngle = 0.f;
 	FVector DiveTravel = FVector::ZeroVector;
 	int32 DiveMoveStartFrame = INDEX_NONE;
+	float DiveSquash = 1.f;
 };

@@ -82,6 +82,30 @@ float UGSTN_GreyboxAnimInstance::RollAngle(const FGSTN_GreyboxShapeSettings& Set
 	return FMath::Lerp(StartDeg, End, FMath::SmoothStep(0.f, 1.f, T));
 }
 
+float UGSTN_GreyboxAnimInstance::DiveFloorRest(float AngleDeg)
+{
+	// Tipping over (air, slap): as much as it lies. Through the get-up roll it rolls ON the floor (a long capsule turned about its middle in
+	// the air rose to ~75 cm head down and fell back to 35 on its back: owner 2026-11-28, "the small bounce in the get-up roll"); the last
+	// quarter, coming upright, hands back to the standing height
+	if (AngleDeg <= 90.f)
+	{
+		return FMath::Abs(FMath::Sin(FMath::DegreesToRadians(AngleDeg)));
+	}
+	return AngleDeg < 270.f ? 1.f : 1.f - FMath::SmoothStep(270.f, 360.f, AngleDeg);
+}
+
+float UGSTN_GreyboxAnimInstance::DiveTuckSquash(const FGSTN_GreyboxShapeSettings& Settings, float AngleDeg)
+{
+	// Curled into a ball over the get-up roll (from the belly round to upright), most at its middle
+	const float From = FMath::Clamp(Settings.DiveBellyDeg, 0.f, 359.f);
+	if (AngleDeg <= From || AngleDeg >= 360.f)
+	{
+		return 1.f;
+	}
+	const float T = (AngleDeg - From) / (360.f - From);
+	return FMath::Lerp(1.f, FMath::Clamp(Settings.DiveRollTuckSquash, 0.2f, 1.f), FMath::Sin(PI * T));
+}
+
 float UGSTN_GreyboxAnimInstance::DiveAngle(const FGSTN_GreyboxShapeSettings& Settings, float AirSeconds, float LagSeconds, float LagTotalSeconds,
 	float LandAngleDeg)
 {
@@ -200,6 +224,7 @@ void UGSTN_GreyboxAnimInstance::NativeInitializeAnimation()
 void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
 	Super::NativeUpdateAnimation(DeltaSeconds);
+	LastDeltaSeconds = DeltaSeconds;
 	const AActor* Owner = GetOwningActor();
 	if (!Owner || DeltaSeconds <= KINDA_SMALL_NUMBER)
 	{
@@ -287,6 +312,7 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	{
 		DiveLastAngle = 0.f;
 		DiveLagSeconds = -1.f;
+		DiveSquash = 1.f;
 	}
 	else
 	{
@@ -397,7 +423,8 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	float SwayPitch = 0.f;
 	const FVector Sway = RunSway(ShapeSettings, SwayPhase, SwayAmplitude, SwayPitch);
 
-	Shape.Squash = FMath::Clamp(SquashSpring.Value + Sway.X + JudderSquash, ShapeSettings.MinSquash * 0.8f, ShapeSettings.MaxStretch * 1.1f);
+	Shape.Squash = FMath::Clamp(SquashSpring.Value + Sway.X + JudderSquash, ShapeSettings.MinSquash * 0.8f, ShapeSettings.MaxStretch * 1.1f)
+		* (bRolling ? DiveSquash : 1.f);
 	// The lean is in the component's frame; the mesh is rotated -90 yaw from the actor in GASP pawns, so turn the actor-frame lean into it
 	const FQuat ActorToComponent = GetSkelMeshComponent() ? (GetSkelMeshComponent()->GetComponentQuat().Inverse() * BodyQuat) : FQuat::Identity;
 	// Rotation axis scaled by degrees, actor frame: tipping the top toward +X is a turn around +Y by the forward lean (-Pitch), toward +Y a
@@ -419,10 +446,17 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// Bones only where strictly needed, in attacks (owner 2026-11-24): the body follows the pose and the markers show only while an
 	// attack's capsule clip plays; everything else (locomotion, hit reactions, rolls) is the rigid capsule swaying
 	Shape.PoseWeight = Shape.OverrideWeight;
+	// A move's capsule clip that lies down (the dropkick's landing) lies on the floor, not at its key pose's height
+	Shape.bFloorRestByTilt = Shape.OverrideClip && Shape.OverrideWeight > 0.f;
 	Shape.LyingWeight = LyingAlpha;
-	// The floor is the feet's height only on the ground
-	const bool bFloorLift = ShapeSettings.bKeepAboveFloor && bOnGround;
+	// The floor only on the ground, or just under a falling pawn (the frame a move lands, the drawn pose can be the landing's while the ground
+	// tag is read a frame late: 2026-11-28, the dropkick's land pose drawn one frame at its key height, 87 cm over the floor). Its height is
+	// measured, not taken as the mesh root's: a per-move capsule can hold the root under the floor
+	float FloorHeight = 0.f;
+	const bool bFloorFound = ShapeSettings.bKeepAboveFloor && FindFloorHeight(*Owner, FloorHeight);
+	const bool bFloorLift = bFloorFound && (bOnGround || Velocity.Z <= 0.f);
 	Shape.FloorRadius = bFloorLift ? ShapeSettings.CapsuleRadius : 0.f;
+	Shape.FloorHeight = bFloorLift ? FloorHeight : 0.f;
 	Shape.FloorBottom = ShapeSettings.CapsuleBottom;
 	Shape.FloorTop = ShapeSettings.CapsuleTop;
 	Shape.LimbScale = FMath::FInterpTo(Shape.LimbScale, LimbScaleTarget(ShapeSettings, Shape.OverrideWeight), DeltaSeconds,
@@ -440,6 +474,30 @@ void UGSTN_GreyboxAnimInstance::KickPlant(const FQuat& BodyQuat, const FVector& 
 	const float Gain = 2.f * PI * ShapeSettings.SpringFrequency / 0.6f;
 	PitchSpring.Velocity += Kick.Pitch * Gain;
 	RollSpring.Velocity += Kick.Roll * Gain;
+}
+
+bool UGSTN_GreyboxAnimInstance::FindFloorHeight(const AActor& Owner, float& OutHeight) const
+{
+	const USkeletalMeshComponent* Capsule = GetSkelMeshComponent();
+	const UWorld* World = Owner.GetWorld();
+	if (!Capsule || !World)
+	{
+		return false;
+	}
+	// Presentation only: one trace down the movement capsule's axis, a floor at most FloorProbe under its bottom (the capsule stands on it
+	// when grounded; falling, it is about to)
+	constexpr float FloorProbe = 15.f;
+	const FVector Start = Owner.GetActorLocation();
+	const FVector End = Start - FVector(0.f, 0.f, Owner.GetSimpleCollisionHalfHeight() + FloorProbe);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNGreyboxFloor), false, &Owner);
+	FHitResult Hit;
+	if (!World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params) || Hit.ImpactNormal.Z <= 0.7f)
+	{
+		return false;
+	}
+	// Component space height (the mesh only turns about the up)
+	OutHeight = static_cast<float>(Hit.ImpactPoint.Z - Capsule->GetComponentLocation().Z);
+	return true;
 }
 
 FVector UGSTN_GreyboxAnimInstance::FindWallNormal(const AActor& Owner, const FQuat& BodyQuat) const
@@ -472,6 +530,7 @@ FVector UGSTN_GreyboxAnimInstance::FindWallNormal(const AActor& Owner, const FQu
 bool UGSTN_GreyboxAnimInstance::UpdateRoll(const FVector& Velocity)
 {
 	Shape.Spin = FQuat::Identity;
+	Shape.FloorRest = 0.f;
 	const USkeletalMeshComponent* Capsule = GetSkelMeshComponent();
 	const USkeletalMeshComponent* Driver = Capsule ? Cast<USkeletalMeshComponent>(Capsule->GetAttachParent()) : nullptr;
 	UAnimInstance* DriverAnim = Driver ? Driver->GetAnimInstance() : nullptr;
@@ -536,6 +595,7 @@ bool UGSTN_GreyboxAnimInstance::UpdateDive(const FVector& Velocity, const FGSTN_
 		DiveLastAngle = 0.f;
 		DiveLagSeconds = -1.f;
 		DiveMoveStartFrame = INDEX_NONE;
+		DiveSquash = 1.f;
 		return false;
 	};
 	// A hit ends the dive at once: the reaction has its own read
@@ -613,6 +673,10 @@ bool UGSTN_GreyboxAnimInstance::UpdateDive(const FVector& Velocity, const FGSTN_
 	}
 	Shape.Spin = FQuat(Axis, FMath::DegreesToRadians(Angle));
 	Shape.SpinPivot = FVector(0.f, 0.f, 0.5f * (ShapeSettings.CapsuleBottom + ShapeSettings.CapsuleTop));
+	// On the ground the turned capsule lies on the floor (owner 2026-11-28: "the capsule stays lying in mid-air"): turned about its middle it
+	// hangs half its length minus its radius over the feet. As much as it lies: none upright, all of it on the belly
+	Shape.FloorRest = bOnGround ? DiveFloorRest(Angle) : 0.f;
+	DiveSquash = bInLag ? DiveTuckSquash(ShapeSettings, Angle) : 1.f;
 	return true;
 }
 
@@ -650,6 +714,33 @@ bool UGSTN_GreyboxAnimInstance::GetDriverPelvisHeight(float& OutHeight, float& O
 }
 
 void UGSTN_GreyboxAnimInstance::UpdateMoveOverride()
+{
+	Shape.OverridePelvisFollow = ShapeSettings.bMoveClipFollowsDriverPelvis ? 1.f : 0.f;
+	FindMoveOverride();
+	// When the montage ends the clip fades out from its last pose instead of leaving in one frame (2026-11-28, the dropkick's get-up: the
+	// capsule clip stood a few frames before the driver, and dropped back onto the rising driver for one frame when the montage ended)
+	const float FadeSeconds = ShapeSettings.MoveClipFadeOutFrames / 60.f;
+	if (Shape.OverrideClip && Shape.OverrideWeight > 0.f)
+	{
+		LastOverrideClip = Shape.OverrideClip;
+		LastOverrideTime = Shape.OverrideTime;
+		LastOverrideWeight = Shape.OverrideWeight;
+	}
+	else if (LastOverrideClip.IsValid() && LastOverrideWeight > 0.f && FadeSeconds > 0.f)
+	{
+		LastOverrideWeight = FMath::Max(LastOverrideWeight - LastDeltaSeconds / FadeSeconds, 0.f);
+		Shape.OverrideClip = LastOverrideWeight > 0.f ? LastOverrideClip.Get() : nullptr;
+		Shape.OverrideTime = LastOverrideTime;
+		Shape.OverrideWeight = LastOverrideWeight;
+	}
+	else
+	{
+		LastOverrideClip = nullptr;
+		LastOverrideWeight = 0.f;
+	}
+}
+
+void UGSTN_GreyboxAnimInstance::FindMoveOverride()
 {
 	Shape.OverrideClip = nullptr;
 	Shape.OverrideWeight = 0.f;
