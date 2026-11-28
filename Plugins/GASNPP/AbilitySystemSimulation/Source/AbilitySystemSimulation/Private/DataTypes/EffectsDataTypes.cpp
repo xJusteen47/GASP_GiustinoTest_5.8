@@ -7,6 +7,7 @@
 #include "NetworkPredictionReplicationProxy.h"
 #include "NetworkPredictionTrace.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/ScopeLock.h"
 
 #pragma region Synced data for captured attributes
 bool FCapturedAttributesSyncData::NetSerialize(FArchive& Ar, UPackageMap* Map, bool& bOutSuccess)
@@ -826,6 +827,33 @@ void FAttributeSyncData::Interpolate(const FAttributeSyncData& From, const FAttr
 	CurrentValue = FMath::Lerp(From.CurrentValue,To.CurrentValue,Pct);
 }
 
+// GAS-NPP fork (2026-11-28, lag thread): the attribute list of a set class, walked by reflection by every attribute set of every pawn on
+// every fixed step (FillSyncState) and in every serialize. It depends only on the class: computed once per class. The weak key drops an
+// entry whose class was unloaded or recompiled, so a new class at the same address never reads a stale list. The list is shared and
+// immutable and the map is locked, so a serialize on another thread is safe too
+static TSharedRef<const TArray<FGameplayAttribute>> GetAttributesFromSetClassCached(const TSubclassOf<UAttributeSet>& AttributeSetClass)
+{
+	static FCriticalSection Lock;
+	static TMap<TWeakObjectPtr<UClass>, TSharedRef<const TArray<FGameplayAttribute>>> Cache;
+	UClass* Class = AttributeSetClass.Get();
+	FScopeLock ScopeLock(&Lock);
+	if (const TSharedRef<const TArray<FGameplayAttribute>>* Found = Cache.Find(Class))
+	{
+		return *Found;
+	}
+	for (auto It = Cache.CreateIterator(); It; ++It)
+	{
+		if (!It.Key().IsValid())
+		{
+			It.RemoveCurrent();
+		}
+	}
+	TSharedRef<TArray<FGameplayAttribute>> Attributes = MakeShared<TArray<FGameplayAttribute>>();
+	UAttributeSet::GetAttributesFromSetClass(AttributeSetClass, *Attributes);
+	Cache.Add(Class, Attributes);
+	return Attributes;
+}
+
 FAttributeSetSyncData::FAttributeSetSyncData()
 {
 	AttributeSetClass = nullptr;
@@ -834,8 +862,8 @@ FAttributeSetSyncData::FAttributeSetSyncData()
 FAttributeSetSyncData::FAttributeSetSyncData(UAttributeSet* AttributeSet)
 {
 	AttributeSetClass = AttributeSet->GetClass();
-	TArray<FGameplayAttribute> Attributes;
-	UAttributeSet::GetAttributesFromSetClass(AttributeSetClass, Attributes);
+	const TSharedRef<const TArray<FGameplayAttribute>> AttributesRef = GetAttributesFromSetClassCached(AttributeSetClass);
+	const TArray<FGameplayAttribute>& Attributes = *AttributesRef;
 	AttributeValues.SetNum(Attributes.Num());
 	for (int32 i = 0; i < Attributes.Num(); ++i)
 	{
@@ -861,8 +889,8 @@ bool FAttributeSetSyncData::NetSerialize(const FNetSerializeParams& P)
 	bool bOutSuccess = true;
 	if (AttributeSetClass)
 	{
-		TArray<FGameplayAttribute> Attributes;
-		UAttributeSet::GetAttributesFromSetClass(AttributeSetClass, Attributes);
+		const TSharedRef<const TArray<FGameplayAttribute>> AttributesRef = GetAttributesFromSetClassCached(AttributeSetClass);
+		const TArray<FGameplayAttribute>& Attributes = *AttributesRef;
 		if (P.Ar.IsSaving())
 		{
 			check(AttributeValues.Num() == Attributes.Num());
@@ -889,8 +917,8 @@ bool FAttributeSetSyncData::NetDeltaSerialize(const FNetSerializeParams& P)
 	AttributeSetClass = BaseDeltaState->AttributeSetClass;
 	if (AttributeSetClass)
 	{
-		TArray<FGameplayAttribute> Attributes;
-		UAttributeSet::GetAttributesFromSetClass(AttributeSetClass, Attributes);
+		const TSharedRef<const TArray<FGameplayAttribute>> AttributesRef = GetAttributesFromSetClassCached(AttributeSetClass);
+		const TArray<FGameplayAttribute>& Attributes = *AttributesRef;
 		FNetSerializeParams DeltaParams = P;
 		bool AttributesValuesAreSame = P.Ar.IsSaving() ? !ShouldReconcile(*BaseDeltaState) : false;
 		P.Ar.SerializeBits(&AttributesValuesAreSame,1);
@@ -924,8 +952,8 @@ void FAttributeSetSyncData::ToString(FAnsiStringBuilderBase& Out) const
 	if (AttributeSetClass)
 	{
 		Out.Appendf("Attribute Set: %s\n",TCHAR_TO_ANSI(*GetNameSafe(AttributeSetClass)));
-		TArray<FGameplayAttribute> Attributes;
-		UAttributeSet::GetAttributesFromSetClass(AttributeSetClass, Attributes);
+		const TSharedRef<const TArray<FGameplayAttribute>> AttributesRef = GetAttributesFromSetClassCached(AttributeSetClass);
+		const TArray<FGameplayAttribute>& Attributes = *AttributesRef;
 		for (int32 i = 0; i < Attributes.Num(); ++i)
 		{
 			Out.Appendf("%s : Base %f,Current %f\n",TCHAR_TO_ANSI(*Attributes[i].AttributeName),AttributeValues[i].GetBaseValue() , AttributeValues[i].GetCurrentValue());
@@ -1103,8 +1131,8 @@ FSyncedModifiedAttribute::FSyncedModifiedAttribute(const FGameplayEffectModified
 	AttributeSetClass = ModifiedAttribute.Attribute.GetAttributeSetClass();
 	if (AttributeSetClass)
 	{
-		TArray<FGameplayAttribute> Attributes;
-		UAttributeSet::GetAttributesFromSetClass(AttributeSetClass,Attributes);
+		const TSharedRef<const TArray<FGameplayAttribute>> AttributesRef = GetAttributesFromSetClassCached(AttributeSetClass);
+		const TArray<FGameplayAttribute>& Attributes = *AttributesRef;
 		const int32 FoundIndex = Attributes.Find(ModifiedAttribute.Attribute);
 		check(FoundIndex >= 0 && FoundIndex < UINT8_MAX);
 		AttributeIndex = (uint8)FoundIndex;
@@ -1119,8 +1147,8 @@ void FSyncedModifiedAttribute::MakeModifiedAttribute(const FSyncedModifiedAttrib
 	{
 		return;
 	}
-	TArray<FGameplayAttribute> Attributes;
-	UAttributeSet::GetAttributesFromSetClass(SyncedAttribute.AttributeSetClass,Attributes);
+	const TSharedRef<const TArray<FGameplayAttribute>> AttributesRef = GetAttributesFromSetClassCached(SyncedAttribute.AttributeSetClass);
+	const TArray<FGameplayAttribute>& Attributes = *AttributesRef;
 	OutModifiedAttribute.Attribute = Attributes[SyncedAttribute.AttributeIndex];
 	OutModifiedAttribute.TotalMagnitude = SyncedAttribute.TotalMagnitude;
 }
