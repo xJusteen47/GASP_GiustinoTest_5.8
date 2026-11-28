@@ -248,6 +248,13 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Moves")
 	bool bMoveClipFollowsDriverPelvis = true;
 
+	/**
+	 * When a move's montage ends, its capsule clip fades out from its last pose over these frames (60 fps) instead of leaving in one frame
+	 * (2026-11-28, the dropkick's get-up: the clip stood a few frames before the driver and dropped back onto it for a frame). 0 = at once
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Moves", meta = (ClampMin = "0", ClampMax = "30", ForceUnits = "Frames"))
+	float MoveClipFadeOutFrames = 6.f;
+
 	/** Tilt toward the travel in the air (90 = flat, head first) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Dive", meta = (ClampMin = "0", ClampMax = "120", ForceUnits = "deg"))
 	float DiveAngleDeg = 75.f;
@@ -463,8 +470,17 @@ private:
 	/** On a wall mode: finds the wall's outward normal around the owner (presentation traces); zero when none */
 	FVector FindWallNormal(const AActor& Owner, const FQuat& BodyQuat) const;
 
-	/** The mesh root (the feet of the clip) is on a floor, by a short trace: the floor lift's ground when Mover's ground tag is a frame late */
-	bool IsMeshRootOnFloor(const AActor& Owner) const;
+	/** The floor under the movement capsule (at most a few cm under its bottom), by a short trace: its height in component space */
+	bool FindFloorHeight(const AActor& Owner, float& OutHeight) const;
+
+	/** Shape's override of this frame from the montage the driver plays (none, a montage clip or a sequence clip) */
+	void FindMoveOverride();
+
+	/** The last move clip shown, faded out over MoveClipFadeOutFrames once its montage ends */
+	TWeakObjectPtr<const UAnimSequenceBase> LastOverrideClip;
+	float LastOverrideTime = 0.f;
+	float LastOverrideWeight = 0.f;
+	float LastDeltaSeconds = 0.f;
 
 	/** The move override of this frame from the driver's active montage */
 	void UpdateMoveOverride();

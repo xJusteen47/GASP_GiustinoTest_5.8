@@ -49,6 +49,13 @@ struct GSTNANIMATIONCORE_API FGSTN_GreyboxShape
 	float FloorRadius = 0.f;
 
 	/**
+	 * The floor's height in component space (0 = the mesh root, the usual standing case). 2026-11-28: a per-move movement capsule offsets the
+	 * mesh root from the body, so on a landing frame the root can be under the floor (the dropkick: ~40 cm), and lifting or resting the posed
+	 * capsule onto the root plane drew it inside the floor
+	 */
+	float FloorHeight = 0.f;
+
+	/**
 	 * Rest on the floor, 0..1 (2026-11-28, owner on the dodge dive: "the capsule stays lying in mid-air"): with FloorRadius > 0 the node also
 	 * lowers the posed capsule by this share of its gap over the feet's height, so a body turned about its middle (the dive on its belly, its
 	 * get-up roll) lies on the floor instead of 50 cm over it. 0 = only the lift above (a gap stays)

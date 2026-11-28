@@ -245,7 +245,8 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 		const float Radius = Shape.FloorRadius * Width;
 		const float Below = FMath::Max(RefHeight - Shape.FloorBottom - Shape.FloorRadius, 0.f) * Along;
 		const float Above = FMath::Max(Shape.FloorTop - Shape.FloorRadius - RefHeight, 0.f) * Along;
-		float Lowest = CapsuleLowestZ(PelvisCS.GetLocation(), Up, Below, Above, Radius);
+		// Over the floor, not over the mesh root (FloorHeight)
+		float Lowest = CapsuleLowestZ(PelvisCS.GetLocation(), Up, Below, Above, Radius) - Shape.FloorHeight;
 		// Resting: the gap over the floor goes too, by FloorRest (a body lying on the floor, not hanging over it)
 		const float Rest = FMath::Max(FMath::Clamp(Shape.FloorRest, 0.f, 1.f), Shape.bFloorRestByTilt ? TiltFloorRest(static_cast<float>(Up.Z)) : 0.f);
 		if (Lowest > 0.f && Rest > 0.f)

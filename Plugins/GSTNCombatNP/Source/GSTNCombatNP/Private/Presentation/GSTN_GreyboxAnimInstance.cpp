@@ -205,6 +205,7 @@ void UGSTN_GreyboxAnimInstance::NativeInitializeAnimation()
 void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
 	Super::NativeUpdateAnimation(DeltaSeconds);
+	LastDeltaSeconds = DeltaSeconds;
 	const AActor* Owner = GetOwningActor();
 	if (!Owner || DeltaSeconds <= KINDA_SMALL_NUMBER)
 	{
@@ -427,10 +428,14 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// A move's capsule clip that lies down (the dropkick's landing) lies on the floor, not at its key pose's height
 	Shape.bFloorRestByTilt = Shape.OverrideClip && Shape.OverrideWeight > 0.f;
 	Shape.LyingWeight = LyingAlpha;
-	// The floor is the feet's height only on the ground, or where the mesh root already stands on the floor: the frame a move lands, the drawn pose can be the landing's while the ground tag is
-	// read a frame late (2026-11-28, the dropkick's land pose drawn one frame at its key height, 87 cm over the floor)
-	const bool bFloorLift = ShapeSettings.bKeepAboveFloor && (bOnGround || (Velocity.Z <= 0.f && IsMeshRootOnFloor(*Owner)));
+	// The floor only on the ground, or just under a falling pawn (the frame a move lands, the drawn pose can be the landing's while the ground
+	// tag is read a frame late: 2026-11-28, the dropkick's land pose drawn one frame at its key height, 87 cm over the floor). Its height is
+	// measured, not taken as the mesh root's: a per-move capsule can hold the root under the floor
+	float FloorHeight = 0.f;
+	const bool bFloorFound = ShapeSettings.bKeepAboveFloor && FindFloorHeight(*Owner, FloorHeight);
+	const bool bFloorLift = bFloorFound && (bOnGround || Velocity.Z <= 0.f);
 	Shape.FloorRadius = bFloorLift ? ShapeSettings.CapsuleRadius : 0.f;
+	Shape.FloorHeight = bFloorLift ? FloorHeight : 0.f;
 	Shape.FloorBottom = ShapeSettings.CapsuleBottom;
 	Shape.FloorTop = ShapeSettings.CapsuleTop;
 	Shape.LimbScale = FMath::FInterpTo(Shape.LimbScale, LimbScaleTarget(ShapeSettings, Shape.OverrideWeight), DeltaSeconds,
@@ -450,7 +455,7 @@ void UGSTN_GreyboxAnimInstance::KickPlant(const FQuat& BodyQuat, const FVector& 
 	RollSpring.Velocity += Kick.Roll * Gain;
 }
 
-bool UGSTN_GreyboxAnimInstance::IsMeshRootOnFloor(const AActor& Owner) const
+bool UGSTN_GreyboxAnimInstance::FindFloorHeight(const AActor& Owner, float& OutHeight) const
 {
 	const USkeletalMeshComponent* Capsule = GetSkelMeshComponent();
 	const UWorld* World = Owner.GetWorld();
@@ -458,13 +463,20 @@ bool UGSTN_GreyboxAnimInstance::IsMeshRootOnFloor(const AActor& Owner) const
 	{
 		return false;
 	}
-	// Presentation only: one short trace through the mesh root (the feet of the clip), the floor within a few centimetres of it
-	constexpr float Tolerance = 8.f;
-	const FVector Root = Capsule->GetComponentLocation();
+	// Presentation only: one trace down the movement capsule's axis, a floor at most FloorProbe under its bottom (the capsule stands on it
+	// when grounded; falling, it is about to)
+	constexpr float FloorProbe = 15.f;
+	const FVector Start = Owner.GetActorLocation();
+	const FVector End = Start - FVector(0.f, 0.f, Owner.GetSimpleCollisionHalfHeight() + FloorProbe);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNGreyboxFloor), false, &Owner);
 	FHitResult Hit;
-	return World->LineTraceSingleByChannel(Hit, Root + FVector(0.f, 0.f, Tolerance), Root - FVector(0.f, 0.f, Tolerance), ECC_Visibility, Params)
-		&& Hit.ImpactNormal.Z > 0.7f;
+	if (!World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params) || Hit.ImpactNormal.Z <= 0.7f)
+	{
+		return false;
+	}
+	// Component space height (the mesh only turns about the up)
+	OutHeight = static_cast<float>(Hit.ImpactPoint.Z - Capsule->GetComponentLocation().Z);
+	return true;
 }
 
 FVector UGSTN_GreyboxAnimInstance::FindWallNormal(const AActor& Owner, const FQuat& BodyQuat) const
@@ -680,9 +692,35 @@ bool UGSTN_GreyboxAnimInstance::GetDriverPelvisHeight(float& OutHeight, float& O
 
 void UGSTN_GreyboxAnimInstance::UpdateMoveOverride()
 {
+	Shape.OverridePelvisFollow = ShapeSettings.bMoveClipFollowsDriverPelvis ? 1.f : 0.f;
+	FindMoveOverride();
+	// When the montage ends the clip fades out from its last pose instead of leaving in one frame (2026-11-28, the dropkick's get-up: the
+	// capsule clip stood a few frames before the driver, and dropped back onto the rising driver for one frame when the montage ended)
+	const float FadeSeconds = ShapeSettings.MoveClipFadeOutFrames / 60.f;
+	if (Shape.OverrideClip && Shape.OverrideWeight > 0.f)
+	{
+		LastOverrideClip = Shape.OverrideClip;
+		LastOverrideTime = Shape.OverrideTime;
+		LastOverrideWeight = Shape.OverrideWeight;
+	}
+	else if (LastOverrideClip.IsValid() && LastOverrideWeight > 0.f && FadeSeconds > 0.f)
+	{
+		LastOverrideWeight = FMath::Max(LastOverrideWeight - LastDeltaSeconds / FadeSeconds, 0.f);
+		Shape.OverrideClip = LastOverrideWeight > 0.f ? LastOverrideClip.Get() : nullptr;
+		Shape.OverrideTime = LastOverrideTime;
+		Shape.OverrideWeight = LastOverrideWeight;
+	}
+	else
+	{
+		LastOverrideClip = nullptr;
+		LastOverrideWeight = 0.f;
+	}
+}
+
+void UGSTN_GreyboxAnimInstance::FindMoveOverride()
+{
 	Shape.OverrideClip = nullptr;
 	Shape.OverrideWeight = 0.f;
-	Shape.OverridePelvisFollow = ShapeSettings.bMoveClipFollowsDriverPelvis ? 1.f : 0.f;
 	const USkeletalMeshComponent* Capsule = GetSkelMeshComponent();
 	const USkeletalMeshComponent* Driver = Capsule ? Cast<USkeletalMeshComponent>(Capsule->GetAttachParent()) : nullptr;
 	UAnimInstance* DriverAnim = Driver ? Driver->GetAnimInstance() : nullptr;
