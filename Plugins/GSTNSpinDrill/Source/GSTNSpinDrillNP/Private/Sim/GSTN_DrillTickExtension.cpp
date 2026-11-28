@@ -346,11 +346,18 @@ void FGSTN_DrillTickExtension::StepAfterExecute(FGSTN_DrillFragment& Fragment, i
 	{
 		const bool bFirst = (Fragment.Flags & GSTNDrillFlags::SpinJump) == 0;
 		Fragment.Flags |= GSTNDrillFlags::SpinJump;
-		Fragment.LowGravityUntilFrame = Frame + FMath::Max(1, Tuning.SpinJumpFrames);
+		// Floating while rising: the window runs from the take-off. Otherwise it opens at the apex (below); until then the rise holds the spin
+		Fragment.LowGravityUntilFrame = Tuning.bSpinJumpFloatsWhileRising ? Frame + FMath::Max(1, Tuning.SpinJumpFrames) : INDEX_NONE;
 		if (bFirst && Tuning.bSpinJumpSpendsAirSpin)
 		{
 			Fragment.AirSpinsUsed = static_cast<uint8>(FMath::Min(Fragment.AirSpinsUsed + 1, 255));
 		}
+	}
+	// The float window counts from the apex, so it holds for any jump height (desktop check 2026-11-28: the kit's jump rises ~81 frames,
+	// longer than a window counted from the take-off)
+	else if (Inputs.bJumpApex && Fragment.IsSpinning() && (Fragment.Flags & GSTNDrillFlags::SpinJump) != 0 && !Tuning.bSpinJumpFloatsWhileRising)
+	{
+		Fragment.LowGravityUntilFrame = Frame + FMath::Max(1, Tuning.SpinJumpFrames);
 	}
 
 	if (!Fragment.IsLatched() || Frame < Fragment.LatchFrame)
@@ -702,7 +709,9 @@ bool FGSTN_DrillTickExtension::HasSpinJumpEnded(const FGSTN_DrillFragment& Fragm
 		return false;
 	}
 	const bool bLanded = Core.Jump.Phase == EGSTN_JumpPhase::None && Core.Jump.SquatFramesLeft == 0;
-	const bool bWindowOver = !Fragment.IsLowGravity(Frame);
+	// While rising the window has not opened yet (it opens at the apex)
+	const bool bRising = Core.Jump.Phase == EGSTN_JumpPhase::Rising || Core.Jump.Phase == EGSTN_JumpPhase::Launched;
+	const bool bWindowOver = !bRising && !Fragment.IsLowGravity(Frame);
 	// Hit, tumble, KO or any timeline but the cancelled spin's own
 	const bool bOtherMove = Core.ActionState != EGSTN_ActionState::Actionable
 		&& (Core.ActionState != EGSTN_ActionState::InTimeline || Core.TimelineStartFrame != Fragment.PhaseStartFrame);
@@ -730,6 +739,8 @@ FGSTN_DrillFrameInputs FGSTN_DrillTickExtension::GatherInputs(EGSTN_CombatHookPo
 		// The jump step of this frame already ran: In holds the end of the previous frame, Out this one
 		Inputs.RefreshEvents = UGSTN_DrillMath::RefreshEventsFromJumpPhase(static_cast<uint8>(Context.In.Core.Jump.Phase), static_cast<uint8>(Context.Out.Core.Jump.Phase));
 		Inputs.bGroundJumpStarted = ReadGroundJumpStart(Context.In.Core.Jump, Context.Out.Core.Jump, Context.Frame);
+		Inputs.bJumpApex = (Context.In.Core.Jump.Phase == EGSTN_JumpPhase::Rising || Context.In.Core.Jump.Phase == EGSTN_JumpPhase::Launched)
+			&& Context.Out.Core.Jump.Phase == EGSTN_JumpPhase::Falling;
 		if (const FGSTN_CombatTimelineData* Started = ResolveStartedTimeline(Context))
 		{
 			if (const FGSTN_SpinTrack* Spin = FGSTN_SpinTrack::Find(*Started))

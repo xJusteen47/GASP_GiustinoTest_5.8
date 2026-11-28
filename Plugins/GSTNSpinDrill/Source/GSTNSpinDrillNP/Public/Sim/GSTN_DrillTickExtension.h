@@ -102,6 +102,9 @@ struct FGSTN_DrillFrameInputs
 	/** A ground jump began this frame (its squat or its take-off, FGSTN_DrillTickExtension::ReadGroundJumpStart): a running ground spin becomes a spin jump */
 	bool bGroundJumpStarted = false;
 
+	/** The jump reached its apex this frame (Rising or Launched before, Falling now): a spin jump's float window opens here */
+	bool bJumpApex = false;
+
 	// ---- End conditions of a latched driller (UGSTN_DrillMath::ResolveEnd)
 
 	bool bCrouchHeld = true;
@@ -294,8 +297,8 @@ public:
 	static bool ReadGroundJumpStart(const struct FGSTN_JumpState& In, const struct FGSTN_JumpState& Out, int32 Frame);
 
 	/**
-	 * A spin jump is over at Frame: the combatant is back on the ground (no jump phase and no squat), its window has passed, or another
-	 * timeline runs (the spin's own one was cancelled by the jump, so any running timeline is a new move). False for anything else
+	 * A spin jump is over at Frame: the combatant is back on the ground (no jump phase and no squat), its float window has passed (only
+	 * counted once the jump stops rising: the window opens at the apex), or another timeline runs (the spin's own one was cancelled by the jump, so any running timeline is a new move). False for anything else
 	 */
 	static bool HasSpinJumpEnded(const FGSTN_DrillFragment& Fragment, int32 Frame, const FGSTN_CombatSyncCore& Core);
 

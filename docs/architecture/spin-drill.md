@@ -440,8 +440,8 @@ Both are `AGSTN_SpinScrew` children or siblings implementing the same interface;
 ### 13e. Spin jump and spin cue (owner playtest 2026-11-28)
 
 - **Spin jump.** A ground jump while a ground spin runs sets
-  `GSTNDrillFlags::SpinJump` (bit 7) and opens a low gravity window of `FGSTN_AirSpinTuning::SpinJumpFrames` (75) from the squat, stamped
-  again at the take-off. The fragment stays `Spinning` (tags, turn, dive from it) without a timeline; `HasSpinJumpEnded` ends it on the
+  `GSTNDrillFlags::SpinJump` (bit 7) and, at the jump's apex, opens a low gravity window of `FGSTN_AirSpinTuning::SpinJumpFrames` (75) (the kit's
+  jump rises ~81 frames, so a window counted from the take-off closed before the apex). The fragment stays `Spinning` (tags, turn, dive from it) without a timeline; `HasSpinJumpEnded` ends it on the
   landing, at the end of the window, or when anything else runs (another timeline, a hit). The low gravity is the air spin's
   (`SpinGravityScale`, `SpinMaxFallSpeedScale`) and applies only once the jump stops rising (`bSpinJumpFloatsWhileRising` false), so the jump
   keeps its height and the descent floats. In game the jump ability sets the take-off speed and the jump logic reads it as

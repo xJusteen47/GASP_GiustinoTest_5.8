@@ -957,13 +957,19 @@ bool FGSTN_DrillNPSpinJumpTest::RunTest(const FString& Parameters)
 	StepFrame(F, 105, Jump, Tuning);
 	TestTrue(TEXT("the ground spin becomes a spin jump"), F.IsSpinning() && (F.Flags & GSTNDrillFlags::SpinJump) != 0);
 	TestEqual(TEXT("the phase is still the ground spin's"), F.PhaseStartFrame, 100);
-	TestEqual(TEXT("its window counts from the jump"), F.LowGravityUntilFrame, 105 + Tuning.SpinJumpFrames);
+	TestEqual(TEXT("no float window while it rises"), F.LowGravityUntilFrame, static_cast<int32>(INDEX_NONE));
 	TestEqual(TEXT("no air spin spent by default"), static_cast<int32>(F.AirSpinsUsed), 0);
 	StepFrame(F, 108, Jump, Tuning);
-	TestEqual(TEXT("the take-off stamps the window again"), F.LowGravityUntilFrame, 108 + Tuning.SpinJumpFrames);
+	TestTrue(TEXT("the take-off keeps it a spin jump"), (F.Flags & GSTNDrillFlags::SpinJump) != 0);
 
-	// The timeline is gone, but a spin jump does not follow it: the air ends it
+	// The timeline is gone, but a spin jump does not follow it: the air ends it. A long rise holds it with no window yet
 	FGSTN_CombatSyncCore Core;
+	Core.Jump.Phase = EGSTN_JumpPhase::Launched;
+	TestFalse(TEXT("rising long after the take-off: still a spin jump"), FGSTN_DrillTickExtension::HasSpinJumpEnded(F, 190, Core));
+	FGSTN_DrillFrameInputs Apex;
+	Apex.bJumpApex = true;
+	StepFrame(F, 109, Apex, Tuning);
+	TestEqual(TEXT("the apex opens the float window"), F.LowGravityUntilFrame, 109 + Tuning.SpinJumpFrames);
 	Core.Jump.Phase = EGSTN_JumpPhase::Rising;
 	TestFalse(TEXT("rising with no timeline: still a spin jump"), FGSTN_DrillTickExtension::HasSpinJumpEnded(F, 110, Core));
 	TestFalse(TEXT("no float while rising"), FGSTN_DrillTickExtension::WantsLowGravity(&F, 110, true, &Tuning));
@@ -971,6 +977,7 @@ bool FGSTN_DrillNPSpinJumpTest::RunTest(const FString& Parameters)
 	FGSTN_DrillSimTuning RiseToo = Tuning;
 	RiseToo.bSpinJumpFloatsWhileRising = true;
 	TestTrue(TEXT("or while rising, when the tuning says so"), FGSTN_DrillTickExtension::WantsLowGravity(&F, 110, true, &RiseToo));
+	Core.Jump.Phase = EGSTN_JumpPhase::Falling;
 	TestTrue(TEXT("past its window it ends"), FGSTN_DrillTickExtension::HasSpinJumpEnded(F, F.LowGravityUntilFrame, Core));
 	Core.ActionState = EGSTN_ActionState::InTimeline;
 	Core.TimelineStartFrame = 120;
@@ -991,7 +998,9 @@ bool FGSTN_DrillNPSpinJumpTest::RunTest(const FString& Parameters)
 	Off.bSpinJump = false;
 	FGSTN_DrillFragment Plain = GroundSpin();
 	StepFrame(Plain, 105, Jump, Off);
-	TestTrue(TEXT("spin jump off: no flag, no window"), (Plain.Flags & GSTNDrillFlags::SpinJump) == 0 && Plain.LowGravityUntilFrame == INDEX_NONE);
+	TestTrue(TEXT("spin jump off: no flag"), (Plain.Flags & GSTNDrillFlags::SpinJump) == 0);
+	StepFrame(Plain, 120, Apex, Off);
+	TestTrue(TEXT("and no window at the apex"), Plain.LowGravityUntilFrame == INDEX_NONE);
 
 	// Spending the air spin, when the kit asks for it: once per spin jump
 	FGSTN_DrillSimTuning Spends = Tuning;

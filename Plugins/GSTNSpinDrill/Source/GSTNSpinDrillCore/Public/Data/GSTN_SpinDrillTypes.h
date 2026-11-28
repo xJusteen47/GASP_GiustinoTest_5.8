@@ -103,12 +103,12 @@ struct GSTNSPINDRILLCORE_API FGSTN_AirSpinTuning
 	/**
 	 * Spin jump (3D World / Galaxy, owner 2026-11-28): a ground jump taken while a ground spin runs keeps the spin going in the air and gives
 	 * it the air spin's low gravity (SpinGravityScale, SpinMaxFallSpeedScale) once the jump stops rising, so the descent floats. Ends on the
-	 * landing, when SpinJumpFloatFrames have passed since the take-off, or when another move starts
+	 * landing, when SpinJumpFrames of float have passed since the apex, or when another move starts
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SpinDrill|SpinJump")
 	bool bSpinJump = true;
 
-	/** Frames from the take-off for which the spin jump lasts (rise included: the float only starts once the jump stops rising) */
+	/** Frames of float from the jump's apex (from the take-off when bSpinJumpFloatsWhileRising); the rise itself does not count */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SpinDrill|SpinJump", meta = (EditCondition = "bSpinJump", ClampMin = "1", ClampMax = "600"))
 	int32 SpinJumpFrames = 75;
 
