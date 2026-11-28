@@ -16,7 +16,29 @@ enum class EGSTN_RunBoostMode : uint8
 	/** Whenever the stick is pushed on the ground */
 	Anytime,
 	/** The command is ignored */
-	Disabled
+	Disabled,
+	/**
+	 * Whenever the stick is pushed on the ground and the current stage allows it (FGSTN_RunStage::bAllowBoost). Owner 2026-11-28: the dash
+	 * works while walking and running too, not only at the start. On a stage at or above BoostTargetStage the stage is kept and the dash
+	 * burst starts again; its top speed follows BoostDash.SpeedMode
+	 */
+	PerStage
+};
+
+/** Top speed of a boost dash (owner 2026-11-28: "scale with the momentum, plus an option that keeps the cruise speed") */
+UENUM(BlueprintType)
+enum class EGSTN_DashSpeedMode : uint8
+{
+	/**
+	 * The dash goes over the speed it starts from: for the burst the top speed is the ground speed at the press times MomentumSpeedScale
+	 * (capped by MaxMomentumSpeed) when that is above the stage's own. A dash from a sprint is faster than a dash from a walk
+	 */
+	Momentum,
+	/**
+	 * The dash never goes over the cruise speed of its stage (FGSTN_RunStage::MaxSpeed): from a sprint it only gives the burst and the clip,
+	 * so pressing it again and again gains nothing over holding the stick
+	 */
+	Cruise
 };
 
 /** Where the carried speed came from (owner decision 2A; the skid source is filled by phase P2) */
@@ -119,6 +141,10 @@ struct GSTNCOMBATCORE_API FGSTN_RunStage
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stage|Readable Step", meta = (ClampMin = "0", ClampMax = "60"))
 	int32 ChargeFrames = 0;
+
+	/** The boost dash works on this stage (only read with BoostMode PerStage). Owner 2026-11-28: on every stage by default */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Run Stage|Boost", meta = (DisplayName = "Allow Dash"))
+	bool bAllowBoost = true;
 };
 
 /**
@@ -166,6 +192,20 @@ struct GSTNCOMBATCORE_API FGSTN_RunBoostDashTuning
 	/** Multiplier of the stage acceleration during the burst (replaces the ramp) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "RunStages|Boost", meta = (DisplayName = "Dash Acceleration Multiplier", ClampMin = "1", ClampMax = "30"))
 	float AccelMultiplier = 8.f;
+
+	/** Whether the dash may go over the stage's cruise speed (Momentum) or never does (Cruise, no reward for pressing it again and again) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "RunStages|Boost", meta = (DisplayName = "Dash Speed Mode"))
+	EGSTN_DashSpeedMode SpeedMode = EGSTN_DashSpeedMode::Momentum;
+
+	/** Momentum: the burst's top speed is the ground speed at the press times this, when it is over the stage's MaxSpeed */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "RunStages|Boost", meta = (DisplayName = "Dash Momentum Speed Scale",
+		EditCondition = "SpeedMode == EGSTN_DashSpeedMode::Momentum", ClampMin = "1", ClampMax = "2"))
+	float MomentumSpeedScale = 1.2f;
+
+	/** Momentum: cap of that top speed, at the reference WalkSpeed (scaled by the stats like the stages). 0 = no cap */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "RunStages|Boost", meta = (DisplayName = "Dash Max Momentum Speed",
+		EditCondition = "SpeedMode == EGSTN_DashSpeedMode::Momentum", ClampMin = "0", ForceUnits = "cm/s"))
+	float MaxMomentumSpeed = 1000.f;
 };
 
 /**
@@ -269,9 +309,12 @@ struct GSTNCOMBATCORE_API FGSTN_RunStagesTuning
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "RunStages|Boost", meta = (Categories = "Command"))
 	FGameplayTag BoostCommand;
 
-	/** When the boost command works (owner decision 3C: default = initial window) */
+	/**
+	 * When the boost command works. Owner decision 3C was the initial window; owner 2026-11-28 replaced it: the dash works on every stage
+	 * (PerStage, each stage's bAllowBoost)
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "RunStages|Boost")
-	EGSTN_RunBoostMode BoostMode = EGSTN_RunBoostMode::InitialWindow;
+	EGSTN_RunBoostMode BoostMode = EGSTN_RunBoostMode::PerStage;
 
 	/** InitialWindow: frames from the start of the run (stick pushed from rest) in which the boost works */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "RunStages|Boost", meta = (EditCondition = "BoostMode == EGSTN_RunBoostMode::InitialWindow", ClampMin = "0"))
@@ -402,6 +445,10 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageState
 	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
 	int32 DashFrames = -1;
 
+	/** Top ground speed of the live dash burst latched at the press (BoostDash.SpeedMode Momentum), cm/s with the stats in; 0 = the stage's */
+	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
+	float DashTopSpeed = 0.f;
+
 	/** Run reversal: -1 = none, else frames since the stick went against the run (live until the run the other way is back, Reversal) */
 	UPROPERTY(BlueprintReadOnly, Category = "Run Stages")
 	int32 ReverseFrames = -1;
@@ -476,6 +523,9 @@ struct GSTNCOMBATCORE_API FGSTN_RunStageLogic
 
 	/** The boost dash burst is live in State */
 	static bool IsBoostDash(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
+
+	/** The ground top speed the live dash burst asks for over its stage's (Momentum), cm/s with the stats in; 0 = none (no burst, Cruise) */
+	static float GetDashTopSpeed(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);
 
 	/** A run reversal is live in State: its acceleration multiplier and turning strength apply on the next frame */
 	static bool IsReversing(const FGSTN_RunStagesTuning& Tuning, const FGSTN_RunStageState& State);

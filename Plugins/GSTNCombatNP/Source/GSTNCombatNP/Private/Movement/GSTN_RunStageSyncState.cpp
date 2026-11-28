@@ -51,9 +51,9 @@ bool FGSTN_RunStageSyncState::NetSerialize(FArchive& Ar, UPackageMap* Map, bool&
 void FGSTN_RunStageSyncState::ToString(FAnsiStringBuilderBase& Out) const
 {
 	Super::ToString(Out);
-	Out.Appendf("RunStage: %d  InStage: %d  SinceStart: %d  SinceRelease: %d  Carried: %.1f (%d/%d frames, source %d)  Air: %d takeoff %.1f stage %d  Stamp: %d  Dash: %d  Reverse: %d  Entry: %d (stage from frame %d)\n", Run.Stage + 1, Run.FramesInStage,
+	Out.Appendf("RunStage: %d  InStage: %d  SinceStart: %d  SinceRelease: %d  Carried: %.1f (%d/%d frames, source %d)  Air: %d takeoff %.1f stage %d  Stamp: %d  Dash: %d (top %.1f)  Reverse: %d  Entry: %d (stage from frame %d)\n", Run.Stage + 1, Run.FramesInStage,
 		Run.FramesSinceMoveStart, Run.FramesSinceStickRelease, Run.CarriedSpeed, Run.FramesSinceCarry, Run.CarryWindow, static_cast<int32>(Run.CarrySource),
-		Run.bAirborne ? 1 : 0, Run.TakeoffSpeed, Run.TakeoffStage + 1, Run.StampFrames, Run.DashFrames, Run.ReverseFrames, Run.EntryFrames, Run.StageEnteredFrame);
+		Run.bAirborne ? 1 : 0, Run.TakeoffSpeed, Run.TakeoffStage + 1, Run.StampFrames, Run.DashFrames, Run.DashTopSpeed, Run.ReverseFrames, Run.EntryFrames, Run.StageEnteredFrame);
 }
 
 bool FGSTN_RunStageSyncState::ShouldReconcile(const FMoverDataStructBase& AuthorityState) const
@@ -65,7 +65,7 @@ bool FGSTN_RunStageSyncState::ShouldReconcile(const FMoverDataStructBase& Author
 		|| Run.CarrySource != Authority.CarrySource || !FMath::IsNearlyEqual(Run.CarriedSpeed, Authority.CarriedSpeed, 0.5f)
 		|| Run.CarryWindow != Authority.CarryWindow || Run.bAirborne != Authority.bAirborne || Run.TakeoffStage != Authority.TakeoffStage
 		|| !FMath::IsNearlyEqual(Run.TakeoffSpeed, Authority.TakeoffSpeed, 0.5f)
-		|| Run.StampFrames != Authority.StampFrames || Run.DashFrames != Authority.DashFrames || Run.ReverseFrames != Authority.ReverseFrames || Run.EntryFrames != Authority.EntryFrames || !Run.ExternalVelocity.Equals(Authority.ExternalVelocity, 0.5);
+		|| Run.StampFrames != Authority.StampFrames || Run.DashFrames != Authority.DashFrames || !FMath::IsNearlyEqual(Run.DashTopSpeed, Authority.DashTopSpeed, 0.5f) || Run.ReverseFrames != Authority.ReverseFrames || Run.EntryFrames != Authority.EntryFrames || !Run.ExternalVelocity.Equals(Authority.ExternalVelocity, 0.5);
 }
 
 void FGSTN_RunStageSyncState::Interpolate(const FMoverDataStructBase& From, const FMoverDataStructBase& To, float Pct)
@@ -114,7 +114,7 @@ namespace
 }
 
 int32 FGSTN_RunStageMover::ApplyStageValues(UMoverComponent& MoverComp, const FGSTN_LocomotionSimTuning& Tuning, int32 Stage, float Factor, float GroundSpeed,
-	float AccelRamp, float MinTurning)
+	float AccelRamp, float MinTurning, float MinTopSpeed)
 {
 	if (!Tuning.RunStages.IsEnabled())
 	{
@@ -125,6 +125,16 @@ int32 FGSTN_RunStageMover::ApplyStageValues(UMoverComponent& MoverComp, const FG
 	const bool bAnalog = Analog.bEnabled && GroundSpeed >= 0.f;
 	// Walk start: the boost fades out as the speed reaches LowSpeedFraction of the stage top speed (assigned every frame, never adjusted)
 	const float Blend = bAnalog ? FGSTN_AnalogWalkLogic::StartBlend(Analog, GroundSpeed, Values.MaxSpeed * Factor) : 0.f;
+	// The momentum dash (owner 2026-11-28) lifts the top speed for its burst only; next frame the stage's cruise is assigned again
+	const float TopSpeed = FMath::Max(Values.MaxSpeed * Factor, MinTopSpeed);
+	if (MinTopSpeed > 0.f)
+	{
+		// The shared MaxSpeed was assigned by the stats just before (base * factor): it must not cap the burst either
+		if (UCommonLegacyMovementSettings* Shared = MoverComp.FindSharedSettings_Mutable<UCommonLegacyMovementSettings>(); Shared && Shared->MaxSpeed < TopSpeed)
+		{
+			Shared->MaxSpeed = TopSpeed;
+		}
+	}
 	// The start is shaped by the stage's acceleration ramp, not by a raised acceleration (the walk-start multiplier went, owner 2026-11-24 1A)
 	const float Acceleration = Values.Acceleration * Factor * AccelRamp;
 	const float Turning = FMath::Max(FMath::Lerp(Values.TurningStrength, FMath::Max(Values.TurningStrength, Analog.StartTurningStrength), Blend), MinTurning);
@@ -133,13 +143,13 @@ int32 FGSTN_RunStageMover::ApplyStageValues(UMoverComponent& MoverComp, const FG
 	{
 		if (UObject* Mode = Entry.Value)
 		{
-			Written += WriteFloats(*Mode, Tuning.SpeedProperties, Values.MaxSpeed * Factor);
+			Written += WriteFloats(*Mode, Tuning.SpeedProperties, TopSpeed);
 			Written += WriteFloats(*Mode, Tuning.AccelerationProperties, Acceleration);
 			Written += WriteFloats(*Mode, Tuning.TurningProperties, Turning);
 			if (bAnalog)
 			{
 				// GASP picks its walk gait for a light tilt: the gait must not cap the speed, the tilt (the intent length) does
-				Written += WriteFloats(*Mode, Analog.WalkSpeedProperties, Values.MaxSpeed * Factor);
+				Written += WriteFloats(*Mode, Analog.WalkSpeedProperties, TopSpeed);
 				Written += WriteFloats(*Mode, Analog.WalkAccelerationProperties, Acceleration);
 				if (Analog.StartFacingTime >= 0.f && Analog.RunFacingTime >= 0.f)
 				{
@@ -178,7 +188,8 @@ void FGSTN_RunStageMover::PreMovement(UMoverComponent& MoverComp, float Factor)
 	}
 	ApplyStageValues(MoverComp, *Tuning, State ? State->Stage : 0, Factor, GroundSpeed,
 		State ? FGSTN_RunStageLogic::GetAccelerationRamp(Tuning->RunStages, *State, IsReadableSteps()) : 1.f,
-		State && FGSTN_RunStageLogic::IsReversing(Tuning->RunStages, *State) ? Tuning->RunStages.Reversal.TurningStrength : -1.f);
+		State && FGSTN_RunStageLogic::IsReversing(Tuning->RunStages, *State) ? Tuning->RunStages.Reversal.TurningStrength : -1.f,
+		State ? FGSTN_RunStageLogic::GetDashTopSpeed(Tuning->RunStages, *State) : -1.f);
 	ApplyAirValues(MoverComp, *Tuning, State, Factor);
 }
 
