@@ -3,11 +3,17 @@
 #include "GSTN_DrillPresentationComponent.h"
 
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Curves/CurveFloat.h"
+#include "Engine/StaticMesh.h"
 #include "GameFramework/Actor.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "Math/GSTN_DrillMath.h"
 #include "MoverComponent.h"
 #include "Sim/GSTN_DrillFragment.h"
+#include "Sim/GSTN_DrillTickExtension.h"
+#include "Sim/GSTN_SpinDrillAttach.h"
 #include "Simulation/GSTN_CombatSimComponent.h"
 #include "Simulation/GSTN_CombatSimTypes.h"
 
@@ -78,6 +84,25 @@ FGSTN_DrillPresentationPose UGSTN_DrillPresentationComponent::ComputePose(const 
 	return Pose;
 }
 
+FGSTN_SpinCuePose UGSTN_DrillPresentationComponent::ComputeCue(const FGSTN_DrillFragment* Fragment, int32 Frame, bool bFloaty, int32 PopFrames, float PopScale)
+{
+	FGSTN_SpinCuePose Cue;
+	if (!Fragment || Frame == INDEX_NONE || !Fragment->IsSpinning())
+	{
+		return Cue;
+	}
+	Cue.bVisible = true;
+	Cue.bFloaty = bFloaty;
+	const int32 Since = Fragment->FramesInPhase(Frame);
+	if (PopFrames > 0 && Since >= 0 && Since < PopFrames)
+	{
+		// Ease out: fast at the start, settled on the ring by the end of the pop
+		const float Alpha = static_cast<float>(Since) / static_cast<float>(PopFrames);
+		Cue.Scale = FMath::Lerp(PopScale, 1.f, 1.f - FMath::Square(1.f - Alpha));
+	}
+	return Cue;
+}
+
 FQuat UGSTN_DrillPresentationComponent::PoseRotation(const FGSTN_DrillPresentationPose& Pose)
 {
 	if (!Pose.bActive)
@@ -121,6 +146,78 @@ FQuat UGSTN_DrillPresentationComponent::BaseRotation(const USceneComponent& Mesh
 	return bCapturedBase ? CapturedBase : Mesh.GetRelativeRotation().Quaternion();
 }
 
+void UGSTN_DrillPresentationComponent::UpdateCue(const FGSTN_SpinCuePose& Cue, float SpinYawDegrees)
+{
+	const bool bShow = bShowSpinCue && Cue.bVisible;
+	if (!bShow && !bCueShown)
+	{
+		return;
+	}
+	AActor* Owner = GetOwner();
+	if (bShow && CueMeshes.Num() != FMath::Clamp(CueOrbs, 2, 16) && Owner && Owner->GetRootComponent())
+	{
+		for (UStaticMeshComponent* Old : CueMeshes)
+		{
+			if (Old)
+			{
+				Old->DestroyComponent();
+			}
+		}
+		CueMeshes.Reset();
+		// Engine content, always cooked: the cue needs no asset of the project
+		UStaticMesh* Sphere = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+		UMaterialInterface* Base = LoadObject<UMaterialInterface>(nullptr, TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+		CueMaterial = Base ? UMaterialInstanceDynamic::Create(Base, this) : nullptr;
+		for (int32 Index = 0; Index < FMath::Clamp(CueOrbs, 2, 16); ++Index)
+		{
+			UStaticMeshComponent* Orb = NewObject<UStaticMeshComponent>(Owner, NAME_None, RF_Transient);
+			Orb->SetStaticMesh(Sphere);
+			Orb->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Orb->SetCastShadow(false);
+			Orb->SetGenerateOverlapEvents(false);
+			Orb->SetCanEverAffectNavigation(false);
+			Orb->SetUsingAbsoluteRotation(true);
+			Orb->SetupAttachment(Owner->GetRootComponent());
+			if (CueMaterial)
+			{
+				Orb->SetMaterial(0, CueMaterial);
+			}
+			Orb->RegisterComponent();
+			CueMeshes.Add(Orb);
+		}
+		bCueFloatyShown = !Cue.bFloaty;
+	}
+	if (bShow && CueMaterial && bCueFloatyShown != Cue.bFloaty)
+	{
+		CueMaterial->SetVectorParameterValue(TEXT("Color"), Cue.bFloaty ? CueFloatColor : CueSpinColor);
+		bCueFloatyShown = Cue.bFloaty;
+	}
+	const FRotator Facing = Owner ? Owner->GetActorRotation() : FRotator::ZeroRotator;
+	const float OrbScale = CueOrbSizeCm / 100.f;
+	for (int32 Index = 0; Index < CueMeshes.Num(); ++Index)
+	{
+		UStaticMeshComponent* Orb = CueMeshes[Index];
+		if (!Orb)
+		{
+			continue;
+		}
+		Orb->SetVisibility(bShow);
+		if (!bShow)
+		{
+			continue;
+		}
+		// The ring turns with the spin (the same angle as the mesh), so its sense reads too
+		const float Angle = FMath::DegreesToRadians(Facing.Yaw + SpinYawDegrees + 360.f * Index / CueMeshes.Num());
+		const float Radius = CueRadiusCm * Cue.Scale;
+		const FVector Offset(Radius * FMath::Cos(Angle), Radius * FMath::Sin(Angle), CueHeightCm);
+		// The root may be rotated (the capsule turns with the actor): the offset is taken in world axes, then brought back to the root
+		const USceneComponent* Root = Owner->GetRootComponent();
+		Orb->SetRelativeLocation(Root ? Root->GetComponentTransform().InverseTransformVectorNoScale(Offset) : Offset);
+		Orb->SetWorldScale3D(FVector(OrbScale));
+	}
+	bCueShown = bShow;
+}
+
 void UGSTN_DrillPresentationComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
@@ -129,7 +226,18 @@ void UGSTN_DrillPresentationComponent::TickComponent(float DeltaTime, ELevelTick
 	const UGSTN_CombatSimComponent* Combat = Owner ? Owner->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr;
 	const FGSTN_CombatSyncState* Sync = Combat ? Combat->GetSyncState() : nullptr;
 	const FGSTN_DrillFragment* Fragment = Sync ? FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(Sync->Fragments) : nullptr;
-	const FGSTN_DrillPresentationPose Pose = ComputePose(Fragment, Combat ? Combat->GetSimulationFrame() : INDEX_NONE, SpinRps, Drill, FixedTickHz, WobbleSamples);
+	const int32 Frame = Combat ? Combat->GetSimulationFrame() : INDEX_NONE;
+	const FGSTN_DrillPresentationPose Pose = ComputePose(Fragment, Frame, SpinRps, Drill, FixedTickHz, WobbleSamples);
+	if (Fragment && Fragment->IsSpinning())
+	{
+		const FGSTN_DrillSimTuning Tuning = FGSTN_SpinDrillAttach::FindOrDefault(Owner);
+		const bool bFloaty = FGSTN_DrillTickExtension::WantsLowGravity(Fragment, Frame, Sync->Core.Jump.Phase == EGSTN_JumpPhase::Rising, &Tuning);
+		UpdateCue(ComputeCue(Fragment, Frame, bFloaty, CuePopFrames, CuePopScale), Pose.SpinYawDegrees);
+	}
+	else
+	{
+		UpdateCue(FGSTN_SpinCuePose(), 0.f);
+	}
 	if (!Pose.bActive && !bPoseApplied)
 	{
 		// The idle cost: one fragment lookup

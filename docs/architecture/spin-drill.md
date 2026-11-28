@@ -437,6 +437,19 @@ The owner asked for "only an interface" because many level things will start fro
 2. **Spring-back screw**: unscrewed, it goes back to its place by itself after a set time (e.g. to close gates automatically again).
 Both are `AGSTN_SpinScrew` children or siblings implementing the same interface; no change to the spin side.
 
+### 13e. Spin jump and spin cue (owner playtest 2026-11-28)
+
+- **Spin jump.** A ground jump while a ground spin runs (the spin timeline's jump cancel window cancels the timeline) sets
+  `GSTNDrillFlags::SpinJump` (bit 7) and opens a low gravity window of `FGSTN_AirSpinTuning::SpinJumpFrames` (75) from the squat, stamped
+  again at the take-off. The fragment stays `Spinning` (tags, turn, dive from it) without a timeline; `HasSpinJumpEnded` ends it on the
+  landing, at the end of the window, or when anything else runs (another timeline, a hit). The low gravity is the air spin's
+  (`SpinGravityScale`, `SpinMaxFallSpeedScale`) and applies only once the jump stops rising (`bSpinJumpFloatsWhileRising` false), so the jump
+  keeps its height and the descent floats. `bSpinJumpSpendsAirSpin` false: an air spin hop is still possible after it. No hitbox during the
+  spin jump (the ring belonged to the cancelled timeline).
+- **Spin cue.** `UGSTN_DrillPresentationComponent` shows a ring of small orbs (engine sphere, no asset) at the waist while the fragment spins,
+  turning with the spin. Orange while it only turns, cyan while the low gravity acts; it pops out from 1.6x over 6 frames when a spin
+  starts. `bShowSpinCue` turns it off. Placeholder until the spin VFX.
+
 ## 14. Domande per Giustino (italiano)
 
 Ognuna ha una mia proposta; se non rispondi, il piano usa la proposta (colonna "se non rispondi" nel piano).

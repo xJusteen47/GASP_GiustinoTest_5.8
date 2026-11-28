@@ -112,6 +112,10 @@ FGSTN_DrillSimTuning FGSTN_DrillSimTuning::FromTuning(const FGSTN_AirSpinTuning&
 	Tuning.bHopCancelsFall = AirSpin.bHopCancelsFall;
 	Tuning.SpinGravityScale = AirSpin.SpinGravityScale;
 	Tuning.SpinMaxFallSpeedScale = AirSpin.SpinMaxFallSpeedScale;
+	Tuning.bSpinJump = AirSpin.bSpinJump;
+	Tuning.SpinJumpFrames = AirSpin.SpinJumpFrames;
+	Tuning.bSpinJumpFloatsWhileRising = AirSpin.bSpinJumpFloatsWhileRising;
+	Tuning.bSpinJumpSpendsAirSpin = AirSpin.bSpinJumpSpendsAirSpin;
 	Tuning.PlungeSpeed = Dive.PlungeSpeed;
 	Tuning.GroundLagFrames = Dive.GroundLagFrames;
 	Tuning.BounceSpeed = Dive.BounceSpeed;
@@ -333,6 +337,20 @@ void FGSTN_DrillTickExtension::StepAfterExecute(FGSTN_DrillFragment& Fragment, i
 	case EGSTN_DrillRequest::None:
 	default:
 		break;
+	}
+
+	// The spin jump: a ground jump out of a ground spin (its timeline has a jump cancel window over its whole length, so the jump just
+	// cancelled it) keeps the spin and opens the float window from this frame. A jump that squats first comes here twice, at the squat and at
+	// the take-off: the second stamp counts the window from the take-off. The phase start frame stays the ground spin's (its sense, its cancel)
+	if (Inputs.bGroundJumpStarted && Tuning.bSpinJump && Fragment.IsSpinning() && (Fragment.Flags & GSTNDrillFlags::AirSpin) == 0)
+	{
+		const bool bFirst = (Fragment.Flags & GSTNDrillFlags::SpinJump) == 0;
+		Fragment.Flags |= GSTNDrillFlags::SpinJump;
+		Fragment.LowGravityUntilFrame = Frame + FMath::Max(1, Tuning.SpinJumpFrames);
+		if (bFirst && Tuning.bSpinJumpSpendsAirSpin)
+		{
+			Fragment.AirSpinsUsed = static_cast<uint8>(FMath::Min(Fragment.AirSpinsUsed + 1, 255));
+		}
 	}
 
 	if (!Fragment.IsLatched() || Frame < Fragment.LatchFrame)
@@ -656,9 +674,36 @@ bool FGSTN_DrillTickExtension::WantsDiveGravity(const FGSTN_DrillFragment* Fragm
 	return Fragment && Fragment->Phase == EGSTN_DrillPhase::Diving;
 }
 
-bool FGSTN_DrillTickExtension::WantsLowGravity(const FGSTN_DrillFragment* Fragment, int32 Frame)
+bool FGSTN_DrillTickExtension::WantsLowGravity(const FGSTN_DrillFragment* Fragment, int32 Frame, bool bJumpRising, const FGSTN_DrillSimTuning* Tuning)
 {
-	return Fragment && Fragment->IsLowGravity(Frame);
+	if (!Fragment || !Fragment->IsLowGravity(Frame))
+	{
+		return false;
+	}
+	// A spin jump keeps the jump's own height: its float starts at the apex
+	const bool bSpinJump = Fragment->IsSpinning() && (Fragment->Flags & GSTNDrillFlags::SpinJump) != 0;
+	return !(bSpinJump && bJumpRising && !(Tuning && Tuning->bSpinJumpFloatsWhileRising));
+}
+
+bool FGSTN_DrillTickExtension::ReadGroundJumpStart(const FGSTN_JumpState& In, const FGSTN_JumpState& Out, int32 Frame)
+{
+	const bool bSquatStarted = Out.SquatFramesLeft > 0 && In.SquatFramesLeft == 0;
+	const bool bTookOff = Out.Phase == EGSTN_JumpPhase::Rising && Out.StartFrame == Frame && In.StartFrame != Frame && !Out.bTakeoffWasAir;
+	return bSquatStarted || bTookOff;
+}
+
+bool FGSTN_DrillTickExtension::HasSpinJumpEnded(const FGSTN_DrillFragment& Fragment, int32 Frame, const FGSTN_CombatSyncCore& Core)
+{
+	if (!Fragment.IsSpinning() || (Fragment.Flags & GSTNDrillFlags::SpinJump) == 0)
+	{
+		return false;
+	}
+	const bool bLanded = Core.Jump.Phase == EGSTN_JumpPhase::None && Core.Jump.SquatFramesLeft == 0;
+	const bool bWindowOver = !Fragment.IsLowGravity(Frame);
+	// Hit, tumble, KO or any timeline but the cancelled spin's own
+	const bool bOtherMove = Core.ActionState != EGSTN_ActionState::Actionable
+		&& (Core.ActionState != EGSTN_ActionState::InTimeline || Core.TimelineStartFrame != Fragment.PhaseStartFrame);
+	return bLanded || bWindowOver || bOtherMove;
 }
 
 FGSTN_DrillFrameInputs FGSTN_DrillTickExtension::GatherInputs(EGSTN_CombatHookPoint Point, const FGSTN_CombatTickContext& Context) const
@@ -672,12 +717,16 @@ FGSTN_DrillFrameInputs FGSTN_DrillTickExtension::GatherInputs(EGSTN_CombatHookPo
 			// A timeline that started on this very frame (an adoption, step 3) is left to AfterExecute, which reads what it is (a dive, a
 			// cancel...); a plain one ends the phase on the next frame
 			const bool bStartedNow = Context.Out.Core.ActionState == EGSTN_ActionState::InTimeline && Context.Out.Core.TimelineStartFrame == Context.Frame;
-			Inputs.bPhaseTimelineEnded = !bStartedNow && HasPhaseTimelineEnded(*Fragment, Context.Out.Core);
+			// A spin jump outlives the timeline the jump cancelled: the landing, its window and the next move end it instead
+			const bool bSpinJump = Fragment->IsSpinning() && (Fragment->Flags & GSTNDrillFlags::SpinJump) != 0;
+			Inputs.bPhaseTimelineEnded = !bStartedNow && (bSpinJump ? HasSpinJumpEnded(*Fragment, Context.Frame, Context.Out.Core)
+				: HasPhaseTimelineEnded(*Fragment, Context.Out.Core));
 		}
 		break;
 	case EGSTN_CombatHookPoint::AfterExecute:
 		// The jump step of this frame already ran: In holds the end of the previous frame, Out this one
 		Inputs.RefreshEvents = UGSTN_DrillMath::RefreshEventsFromJumpPhase(static_cast<uint8>(Context.In.Core.Jump.Phase), static_cast<uint8>(Context.Out.Core.Jump.Phase));
+		Inputs.bGroundJumpStarted = ReadGroundJumpStart(Context.In.Core.Jump, Context.Out.Core.Jump, Context.Frame);
 		if (const FGSTN_CombatTimelineData* Started = ResolveStartedTimeline(Context))
 		{
 			if (const FGSTN_SpinTrack* Spin = FGSTN_SpinTrack::Find(*Started))
@@ -763,7 +812,7 @@ void FGSTN_DrillTickExtension::ProjectTags(FGSTN_CombatTickContext& Context, con
 	const FGameplayTagContainer& Projectable = GetProjectableTags();
 	const FGSTN_DrillFragment* Fragment = FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(Context.Out.Fragments);
 	// The low gravity follows the window on every frame, before the early out: a rollback to before the fragment must remove it too
-	UGSTN_GE_AirSpinLowGravity::Sync(*ASC, WantsLowGravity(Fragment, Context.Frame), Tuning);
+	UGSTN_GE_AirSpinLowGravity::Sync(*ASC, WantsLowGravity(Fragment, Context.Frame, Context.Out.Core.Jump.Phase == EGSTN_JumpPhase::Rising, &Tuning), Tuning);
 	UGSTN_GE_DrillDiveGravity::Sync(*ASC, WantsDiveGravity(Fragment));
 	// No fragment (never spun, or a rollback to before the first spin): clear only what a predicted future may have left
 	if (!Fragment && !ASC->HasAnyMatchingGameplayTags(Projectable))

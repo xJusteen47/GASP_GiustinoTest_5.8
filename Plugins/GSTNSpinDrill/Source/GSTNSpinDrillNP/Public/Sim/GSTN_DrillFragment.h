@@ -57,7 +57,14 @@ namespace GSTNDrillFlags
 	constexpr uint8 LaunchExit = 1 << 6;
 	constexpr uint8 ExitImpulse = PopExit | LaunchExit;
 
-	constexpr uint8 All = CounterClockwise | AirSpin | Bounced | AwaitingLatch | Popped | PopExit | LaunchExit;
+	/**
+	 * The current spin is a spin jump (owner 2026-11-28): a ground spin whose timeline the jump cancelled, kept spinning in the air. It no longer
+	 * follows a timeline: it ends on the landing, at the end of its low gravity window or when another timeline starts
+	 * (FGSTN_DrillTickExtension::HasSpinJumpEnded)
+	 */
+	constexpr uint8 SpinJump = 1 << 7;
+
+	constexpr uint8 All = CounterClockwise | AirSpin | Bounced | AwaitingLatch | Popped | PopExit | LaunchExit | SpinJump;
 }
 
 /**
