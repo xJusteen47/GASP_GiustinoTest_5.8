@@ -346,6 +346,8 @@ public:
 protected:
 	
 	void InternalSimulationTick(const FAbilitySystemTimeStep& TimeStep,const FAbilitySystemTickStartData& TickStartData,OUT FAbilitySystemTickEndData& TickEndData);
+	/** The step on NP's own buffers: reads InSync, writes every field of OutSync (no copies of the whole state) */
+	void InternalSimulationTick(const FAbilitySystemTimeStep& TimeStep, const FAbilitySimInputCmd& InputCmd, const FAbilitySimSyncState& InSync, FAbilitySimSyncState& OutSync);
 	
 	// Classes must initialize the NetworkPredictionProxy (register with the NetworkPredictionSystem) here. EndPlay will unregister.
 	void InitializeNetworkPredictionProxy();

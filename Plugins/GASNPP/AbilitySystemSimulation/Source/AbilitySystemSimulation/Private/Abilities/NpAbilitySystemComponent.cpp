@@ -910,24 +910,13 @@ bool UNpAbilitySystemComponent::CheckOwnerRoleChange()
 void UNpAbilitySystemComponent::SimulationTick(const FNetSimTimeStep& TimeStep,
                                                const TNetSimInput<AbilitySystemStateTypes>& SimInput, const TNetSimOutput<AbilitySystemStateTypes>& SimOutput)
 {
-	// GAS-NPP fork (2026-11-28, lag thread): Insights scopes for each part of the step; the whole model was one unnamed block of ~0.4 ms per pawn
-	FAbilitySystemTickStartData StartData;
-	FAbilitySystemTickEndData EndData;
-
-	{
-		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_CopyIn);
-		StartData.InputCmd  = *SimInput.Cmd;
-		StartData.SyncState = *SimInput.Sync;
-		StartData.AuxState  = *SimInput.Aux;
-	}
-
-	InternalSimulationTick(FAbilitySystemTimeStep(TimeStep), StartData, OUT EndData);
-
-	{
-		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_CopyOut);
-		*SimOutput.Sync = EndData.SyncState;
-		*SimOutput.Aux.Get() = EndData.AuxState;
-	}
+	// GAS-NPP fork (2026-11-28, lag thread): the step reads the input state and writes NP's output buffer in place. It used to copy the whole
+	// input sync state (abilities, effects, tags, attributes, cues) into a local, rebuild a second one and copy that into the output: two
+	// full copies per pawn per step that nothing read. Every field of the output is still written by this tick (FillSyncState and the two
+	// simulators), so the output frame is the same as before
+	TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_SimulationTick);
+	InternalSimulationTick(FAbilitySystemTimeStep(TimeStep), *SimInput.Cmd, *SimInput.Sync, *SimOutput.Sync);
+	*SimOutput.Aux.Get() = FAbilitySimAuxState();
 }
 
 void UNpAbilitySystemComponent::CallServerRPC()
@@ -996,6 +985,12 @@ float UNpAbilitySystemComponent::GetCurrentSimulationTimeMS() const
 void UNpAbilitySystemComponent::InternalSimulationTick(const FAbilitySystemTimeStep& TimeStep,const FAbilitySystemTickStartData& TickStartData
                                                        , FAbilitySystemTickEndData& TickEndData)
 {
+	InternalSimulationTick(TimeStep, TickStartData.InputCmd, TickStartData.SyncState, TickEndData.SyncState);
+}
+
+void UNpAbilitySystemComponent::InternalSimulationTick(const FAbilitySystemTimeStep& TimeStep, const FAbilitySimInputCmd& InputCmd,
+	const FAbilitySimSyncState& InSync, FAbilitySimSyncState& OutSync)
+{
 	// Spike S-FP: scoped so the flag is restored on every exit path, a stale true would let non-simulation code activate abilities on a proxy.
 	TGuardValue<bool> InSimulationTickGuard(bInSimulationTick, true);
 
@@ -1013,7 +1008,7 @@ void UNpAbilitySystemComponent::InternalSimulationTick(const FAbilitySystemTimeS
 	//Send Input Events
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_InputEvents);
-		HandleSimTickInputActionsEvents(TickStartData.InputCmd);
+		HandleSimTickInputActionsEvents(InputCmd);
 	}
 
 	// Simulation Tick For Abilities Which Will tick Tasks
@@ -1033,15 +1028,15 @@ void UNpAbilitySystemComponent::InternalSimulationTick(const FAbilitySystemTimeS
 	//Tick Montage PLayer
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_Montage);
-		MontagePlayer->SimulationTick(TimeStep,TickStartData.SyncState.MontageSimulatorData,TickEndData.SyncState.MontageSimulatorData);
+		MontagePlayer->SimulationTick(TimeStep,InSync.MontageSimulatorData,OutSync.MontageSimulatorData);
 	}
 	{
 		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_Projectiles);
-		ProjectilesSimulator->SimulationTick(TimeStep,TickStartData.SyncState.ProjectilesCollection,TickEndData.SyncState.ProjectilesCollection);
+		ProjectilesSimulator->SimulationTick(TimeStep,InSync.ProjectilesCollection,OutSync.ProjectilesCollection);
 	}
 
 	// In The End Fill The Sync State From The Current Ability System Variables.
-	FillSyncState(TickEndData.SyncState);
+	FillSyncState(OutSync);
 }
 
 void UNpAbilitySystemComponent::FillSyncState(FAbilitySimSyncState& SyncState)
