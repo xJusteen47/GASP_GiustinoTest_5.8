@@ -105,9 +105,9 @@ public:
 			
 			if (NetworkPredictionCVars::DisableSmoothing() != 0 || !Instance.bHasTwoFrames)
 			{
-				OutputFrameData.SyncState.CopyTo(Instance.SyncState);
+				CopySmoothedSync(OutputFrameData.SyncState, Instance.SyncState);
 				OutputFrameData.AuxState.CopyTo(Instance.AuxState);
-				OutputFrameData.SyncState.CopyTo(Instance.LastSyncState);
+				CopySmoothedSync(OutputFrameData.SyncState, Instance.LastSyncState);
 				OutputFrameData.AuxState.CopyTo(Instance.LastAuxState);
 				Instance.bHasTwoFrames = true;
 				continue;
@@ -115,7 +115,7 @@ public:
 
 			// TODO: could improve this with a double-buffer that alternates, eliminating one copy
 			// Set Last Presentation States To Current
-			Instance.SyncState.CopyTo(Instance.LastSyncState);
+			CopySmoothedSync(Instance.SyncState, Instance.LastSyncState);
 			Instance.AuxState.CopyTo(Instance.LastAuxState);
 
 			// Edited By kai : Add correction Smoothing
@@ -127,7 +127,7 @@ public:
 			FNetworkPredictionDriver<ModelDef>::GetSmoothingStateScaled(InstanceData.Info.Driver,DeltaSynState, DeltaAuxState,Scale, DeltaSynState, DeltaAuxState);
 
 			// Set Sync State To The Pending State
-			OutputFrameData.SyncState.CopyTo(Instance.SyncState);
+			CopySmoothedSync(OutputFrameData.SyncState, Instance.SyncState);
 			OutputFrameData.AuxState.CopyTo(Instance.AuxState);
 
 			FNetworkPredictionDriver<ModelDef>::GetSmoothingStateUnion(InstanceData.Info.Driver,OutputFrameData.SyncState, OutputFrameData.AuxState, DeltaSynState, DeltaAuxState, 
@@ -179,6 +179,22 @@ public:
 	}
 
 private:
+	// GAS-NPP fork (2026-11-28, lag thread): a model whose driver presents only part of its sync state (the ability system: the montage)
+	// declares ModelDef::CopySmoothedSync(From, To) and the smoothing copies that part. The full copy, four times per instance per step,
+	// cost the ability system ~0.2 ms per pawn per step for a state nobody presented. Models without it keep the full copy
+	template<typename T>
+	static void CopySmoothedSync(const TConditionalState<T>& From, TConditionalState<T>& To)
+	{
+		if constexpr (requires(const T& A, T& B) { ModelDef::CopySmoothedSync(A, B); })
+		{
+			ModelDef::CopySmoothedSync(*From.Get(), *To.Get());
+		}
+		else
+		{
+			From.CopyTo(To);
+		}
+	}
+
 	void UpdateAllInstancePresentationViews()
 	{
 		for (auto& It : Instances)

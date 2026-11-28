@@ -59,6 +59,17 @@ void UNpGameplayAbility::GetSyncedVars(TArray<FSyncVarDef>& OutSyncedVars) const
 	}
 }
 
+const TArray<FSyncVarDef>& UNpGameplayAbility::GetSyncedVarsCached() const
+{
+	if (CachedSyncVarsClass != GetClass())
+	{
+		CachedSyncVars.Reset();
+		GetSyncedVars(CachedSyncVars);
+		CachedSyncVarsClass = GetClass();
+	}
+	return CachedSyncVars;
+}
+
 bool UNpGameplayAbility::ValidatePreRollbackFunction(UFunction* Function, FStructProperty* SyncProperty) const
 {
 	if (!Function || !SyncProperty)

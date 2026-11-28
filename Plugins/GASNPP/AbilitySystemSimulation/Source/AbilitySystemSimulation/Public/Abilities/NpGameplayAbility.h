@@ -73,6 +73,11 @@ public:
 
 	void GetSyncedVars(TArray<FSyncVarDef>& OutSyncedVars) const;
 
+	/** GAS-NPP fork (2026-11-28, lag thread): GetSyncedVars walked every property of the class and looked up a PreRollback<Name> function by
+	 * name, for every ability, every step (FillSyncState). The list depends only on the class: computed once per instance and reused.
+	 * A recompiled Blueprint class gets new instances (reinstancing), so the cache never outlives its class */
+	const TArray<FSyncVarDef>& GetSyncedVarsCached() const;
+
 	UPROPERTY()
 	TArray<FName> InitializationFunctionNames;
 protected:
@@ -146,6 +151,9 @@ protected:
 	FGuid AddNativePredictionTask(const TSubclassOf<UBasePredictionTask> TaskClass,const FObjectInitializer& ObjectInitializer);
 
 private:
+	mutable TArray<FSyncVarDef> CachedSyncVars;
+	mutable const UClass* CachedSyncVarsClass = nullptr;
+
 
 	void InstantiateNetPredictionTasks();
 	

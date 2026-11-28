@@ -58,6 +58,10 @@ public:
 	using Driver = UNpAbilitySystemComponent;
 
 	static const TCHAR* GetName() { return TEXT("AbilitySystemSimulation"); }
+
+	// GAS-NPP fork (2026-11-28, lag thread): FinalizeSmoothingFrame presents only the montage, so the smoothing service copies only that
+	// (TFixedSmoothingService::CopySmoothedSync). The rest of the smoothed state stays default and is never read
+	static void CopySmoothedSync(const FAbilitySimSyncState& From, FAbilitySimSyncState& To) { To.MontageSimulatorData = From.MontageSimulatorData; }
 	static constexpr int32 GetSortPriority() { return (int32)ENetworkPredictionSortPriority::PreKinematicMovers - 2; }
 };
 

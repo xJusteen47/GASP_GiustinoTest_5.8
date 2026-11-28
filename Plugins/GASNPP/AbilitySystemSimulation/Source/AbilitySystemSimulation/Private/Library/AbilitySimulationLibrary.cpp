@@ -58,7 +58,7 @@ void UAbilitySimulationLibrary::FillAbilityInstanceDataFromInstance(UNpGameplayA
 	OutData.bHasEventData = AbilityInstance->bHasEventData;
 	OutData.CurrentEventData = AbilityInstance->CurrentEventData;
 	TArray<FAbilityTaskDataContainer>& TasksData = OutData.TaskDataCollection.AbilityTasksData;
-	TasksData.Empty(AbilityInstance->PredictionTasksInstances.Num());
+	TasksData.Reset(AbilityInstance->PredictionTasksInstances.Num());
 	for (int32 k = 0 ; k < AbilityInstance->PredictionTasksInstances.Num() ; ++k)
 	{
 		UBasePredictionTask* Task = AbilityInstance->PredictionTasksInstances[k];
@@ -83,7 +83,7 @@ void UAbilitySimulationLibrary::FillAbilitiesCollectionDataFromSpecContainer(
 	FActivatableAbilitiesCollection& Collection, FGameplayAbilitySpecContainer& SpecContainer)
 {
 	TArray<FActivatableAbilitySyncState>& ActivatableAbilities = Collection.GetCollectionData_Mutable();
-	ActivatableAbilities.Empty(SpecContainer.Items.Num());
+	ActivatableAbilities.Reset(SpecContainer.Items.Num());
 	
 	for (int32 i = 0 ; i < SpecContainer.Items.Num() ; ++i)
 	{
@@ -101,7 +101,7 @@ void UAbilitySimulationLibrary::FillAbilitiesCollectionDataFromSpecContainer(
 		AbilitySyncState.ActiveCount = Spec.ActiveCount;
 		AbilitySyncState.RemoveAfterActivation = Spec.RemoveAfterActivation;
 		// Active Instances
-		AbilitySyncState.ActiveInstances.ActiveAbilityInstances.Empty(Spec.ReplicatedInstances.Num());
+		AbilitySyncState.ActiveInstances.ActiveAbilityInstances.Reset(Spec.ReplicatedInstances.Num());
 		for (int32 j = 0 ; j < Spec.ReplicatedInstances.Num() ; ++j)
 		{
 			UNpGameplayAbility* Ability = Cast<UNpGameplayAbility>(Spec.ReplicatedInstances[j]);
@@ -127,9 +127,8 @@ void UAbilitySimulationLibrary::FillAbilitiesCollectionDataFromSpecContainer(
 void UAbilitySimulationLibrary::GetAbilitySyncedVariables(FSyncVarCollection& OutCollection,
 	const UNpGameplayAbility* AbilityInstance)
 {
-	TArray<FSyncVarDef> AbilitySyncVars;
-	AbilityInstance->GetSyncedVars(AbilitySyncVars);
-	OutCollection.SyncedVars.Empty(AbilitySyncVars.Num());
+	const TArray<FSyncVarDef>& AbilitySyncVars = AbilityInstance->GetSyncedVarsCached();
+	OutCollection.SyncedVars.Reset(AbilitySyncVars.Num());
 	
 	for (int32 i = 0 ; i < AbilitySyncVars.Num() ; ++i)
 	{
