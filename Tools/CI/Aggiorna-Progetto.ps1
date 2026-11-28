@@ -49,9 +49,9 @@ function Stop-With([int]$code, [string]$msg, [string[]]$hint) {
 }
 # git writes progress on stderr: under 'Stop' Windows PowerShell 5.1 would turn that into an exception, so run it under 'Continue'
 # and judge by the exit code only.
-function Git {
+function Invoke-Git {
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-    try { $out = & git -C $Progetto @args 2>&1 | ForEach-Object { "$_" } } finally { $ErrorActionPreference = $old }
+    try { $out = & git.exe -C $Progetto @args 2>&1 | ForEach-Object { "$_" } } finally { $ErrorActionPreference = $old }
     return [pscustomobject]@{ Code = $LASTEXITCODE; Out = @($out) }
 }
 
@@ -81,15 +81,15 @@ if ((Split-Path $Progetto -Leaf) -match '_ue59$') {
 
 if (-not $SoloBuild) {
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Stop-With 1 'git non trovato nel PATH' }
-    $r = Git lfs version
+    $r = Invoke-Git lfs version
     if ($r.Code -ne 0) { Stop-With 1 'git lfs non installato' @('Installa Git LFS (git lfs install), poi rilancia.') }
-    $r = Git rev-parse --abbrev-ref HEAD
+    $r = Invoke-Git rev-parse --abbrev-ref HEAD
     $branch = $r.Out[-1]
-    $before = (Git rev-parse --short HEAD).Out[-1]
+    $before = (Invoke-Git rev-parse --short HEAD).Out[-1]
     Say "OK branch $branch @ $before"
 
     # --- 2. put local changes aside --------------------------------------------------------------------------------------------
-    $r = Git status --porcelain=v1 --untracked-files=all
+    $r = Invoke-Git status --porcelain=v1 --untracked-files=all
     if ($r.Code -ne 0) { Stop-With 1 'git status fallito' $r.Out }
     $changed = @($r.Out | Where-Object { $_.Length -gt 3 } | ForEach-Object { $_.Substring(3).Trim('"') -replace '^.* -> ', '' })
     $ownerFiles = @()
@@ -110,28 +110,29 @@ if (-not $SoloBuild) {
         Say "ATTENZIONE: $($changed.Count) file modificati o nuovi, li metto da parte (stash '$stashName'):" Yellow
         $changed | Select-Object -First 15 | ForEach-Object { Say "  $_" Yellow }
         if ($changed.Count -gt 15) { Say "  ... e altri $($changed.Count - 15)" Yellow }
-        $r = Git stash push -u -m $stashName
+        $r = Invoke-Git stash push -u -m $stashName
         if ($r.Code -ne 0) { Stop-With 1 'git stash fallito, nulla e'' stato cambiato' $r.Out }
         Say "OK stash '$stashName' (git stash list per vederlo; git stash apply per riprenderlo)"
     } else { Say 'OK nessuna modifica locale' }
 
     # --- 3. latest main + LFS --------------------------------------------------------------------------------------------------
-    $r = Git fetch origin main
+    $r = Invoke-Git fetch origin main
     if ($r.Code -ne 0) { Stop-With 1 'git fetch fallito (rete?)' (@($r.Out | Select-Object -Last 3) + "Le modifiche locali sono nello stash '$stashName'.") }
     if ($branch -ne 'main') {
-        $r = Git switch main
+        $r = Invoke-Git switch main
         if ($r.Code -ne 0) { Stop-With 1 "non riesco a passare a main da $branch" @($r.Out | Select-Object -Last 3) }
         Say "OK passato da $branch a main" Yellow
+        $before = (Invoke-Git rev-parse --short HEAD).Out[-1]
     }
-    $r = Git merge --ff-only origin/main
+    $r = Invoke-Git merge --ff-only origin/main
     if ($r.Code -ne 0) {
         Stop-With 1 'main locale ha commit suoi, non lo riscrivo' (@($r.Out | Select-Object -Last 2) +
             'Chiedi a un thread di controllare (git log origin/main..main).')
     }
-    $r = Git lfs pull
+    $r = Invoke-Git lfs pull
     if ($r.Code -ne 0) { Stop-With 1 'git lfs pull fallito' @($r.Out | Select-Object -Last 3) }
-    $after = (Git rev-parse --short HEAD).Out[-1]
-    $subject = (Git log -1 --format=%s).Out[-1]
+    $after = (Invoke-Git rev-parse --short HEAD).Out[-1]
+    $subject = (Invoke-Git log -1 --format=%s).Out[-1]
     if ($before -eq $after) { Say "OK gia' aggiornato: main @ $after" } else { Say "OK main $before -> $after ($subject)" Green }
 
     foreach ($f in $ownerFiles) {
