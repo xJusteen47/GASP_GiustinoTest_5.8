@@ -242,8 +242,8 @@ struct GSTNCOMBATNP_API FGSTN_GreyboxShapeSettings
 
 	/**
 	 * A move's capsule clip (MoveOverrides / SequenceMoveOverrides) stands where the real body is (owner 2026-11-28, playtest forward air: the
-	 * capsule was drawn behind the depth marker and jumped forward on the landing): across the up its pelvis goes over the driver's, the clip
-	 * keeps the height and the turn. Off = the clip's own pelvis place, near the root (before 2026-11-28)
+	 * capsule was drawn behind the depth marker, jumped forward on the landing and popped up and down): its pelvis goes onto the driver's, the
+	 * clip keeps the turn. Off = the clip's own pelvis place, near the root at its key pose height (before 2026-11-28)
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Greybox|Moves")
 	bool bMoveClipFollowsDriverPelvis = true;
@@ -462,6 +462,9 @@ private:
 
 	/** On a wall mode: finds the wall's outward normal around the owner (presentation traces); zero when none */
 	FVector FindWallNormal(const AActor& Owner, const FQuat& BodyQuat) const;
+
+	/** The mesh root (the feet of the clip) is on a floor, by a short trace: the floor lift's ground when Mover's ground tag is a frame late */
+	bool IsMeshRootOnFloor(const AActor& Owner) const;
 
 	/** The move override of this frame from the driver's active montage */
 	void UpdateMoveOverride();

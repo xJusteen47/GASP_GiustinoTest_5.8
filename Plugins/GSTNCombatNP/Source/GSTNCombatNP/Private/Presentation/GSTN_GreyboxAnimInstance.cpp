@@ -427,8 +427,9 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// A move's capsule clip that lies down (the dropkick's landing) lies on the floor, not at its key pose's height
 	Shape.bFloorRestByTilt = Shape.OverrideClip && Shape.OverrideWeight > 0.f;
 	Shape.LyingWeight = LyingAlpha;
-	// The floor is the feet's height only on the ground
-	const bool bFloorLift = ShapeSettings.bKeepAboveFloor && bOnGround;
+	// The floor is the feet's height only on the ground, or where the mesh root already stands on the floor: the frame a move lands, the drawn pose can be the landing's while the ground tag is
+	// read a frame late (2026-11-28, the dropkick's land pose drawn one frame at its key height, 87 cm over the floor)
+	const bool bFloorLift = ShapeSettings.bKeepAboveFloor && (bOnGround || (Velocity.Z <= 0.f && IsMeshRootOnFloor(*Owner)));
 	Shape.FloorRadius = bFloorLift ? ShapeSettings.CapsuleRadius : 0.f;
 	Shape.FloorBottom = ShapeSettings.CapsuleBottom;
 	Shape.FloorTop = ShapeSettings.CapsuleTop;
@@ -447,6 +448,23 @@ void UGSTN_GreyboxAnimInstance::KickPlant(const FQuat& BodyQuat, const FVector& 
 	const float Gain = 2.f * PI * ShapeSettings.SpringFrequency / 0.6f;
 	PitchSpring.Velocity += Kick.Pitch * Gain;
 	RollSpring.Velocity += Kick.Roll * Gain;
+}
+
+bool UGSTN_GreyboxAnimInstance::IsMeshRootOnFloor(const AActor& Owner) const
+{
+	const USkeletalMeshComponent* Capsule = GetSkelMeshComponent();
+	const UWorld* World = Owner.GetWorld();
+	if (!Capsule || !World)
+	{
+		return false;
+	}
+	// Presentation only: one short trace through the mesh root (the feet of the clip), the floor within a few centimetres of it
+	constexpr float Tolerance = 8.f;
+	const FVector Root = Capsule->GetComponentLocation();
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNGreyboxFloor), false, &Owner);
+	FHitResult Hit;
+	return World->LineTraceSingleByChannel(Hit, Root + FVector(0.f, 0.f, Tolerance), Root - FVector(0.f, 0.f, Tolerance), ECC_Visibility, Params)
+		&& Hit.ImpactNormal.Z > 0.7f;
 }
 
 FVector UGSTN_GreyboxAnimInstance::FindWallNormal(const AActor& Owner, const FQuat& BodyQuat) const

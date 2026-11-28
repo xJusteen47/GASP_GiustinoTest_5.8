@@ -82,11 +82,12 @@ struct GSTNANIMATIONCORE_API FGSTN_GreyboxShape
 	float OverrideWeight = 0.f;
 
 	/**
-	 * 0..1 how much the move override's pelvis is put over the driver's pelvis across the up (component X and Y; the height and every rotation
-	 * stay the capsule clip's). 2026-11-28, owner on the playtest forward air: the capsule clips are key poses with the pelvis near the root, the
-	 * real dropkick's body (and the movement capsule fitted to it, and the depth marker under that) is ~65 cm ahead; the capsule was drawn
-	 * behind the marker and jumped forward on the landing, when the mesh root came under the movement capsule. The clip says how the body is
-	 * turned, the driver where it is
+	 * 0..1 how much the move override's pelvis is put on the driver's pelvis (component space; every rotation stays the capsule clip's).
+	 * 2026-11-28, owner on the playtest forward air: the capsule clips are key poses with the pelvis near the root at a standing height, the real
+	 * dropkick's body (and the movement capsule fitted to it, and the depth marker under that) is ~65 cm ahead and lower; the capsule was drawn
+	 * behind the marker, jumped forward on the landing and popped up and down there and at the get-up (the clip stands up ~10 frames before the
+	 * driver). First only across the up, then the height too (same day, the vertical pops). The clip says how the body is turned, the driver
+	 * where it is
 	 */
 	float OverridePelvisFollow = 0.f;
 };

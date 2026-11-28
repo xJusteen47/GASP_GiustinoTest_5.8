@@ -128,11 +128,11 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 		}
 		if (bFollowPelvis)
 		{
-			// Across the up the capsule clip's pelvis goes over the driver's (the real body); its height and turn stay the clip's
+			// The capsule clip's pelvis goes onto the driver's (the real body), its turn stays the clip's. The floor lift below keeps an upright
+			// clip over a lower driver pelvis out of the floor
 			const FTransform& RootCS = Output.Pose[Root];
 			const FVector ClipPelvisCS = (Output.Pose[SourcePelvis] * RootCS).GetLocation();
-			const double Follow = FMath::Clamp(Shape.OverridePelvisFollow, 0.f, 1.f);
-			const FVector Wanted(FMath::Lerp(ClipPelvisCS.X, DriverPelvisCS.X, Follow), FMath::Lerp(ClipPelvisCS.Y, DriverPelvisCS.Y, Follow), ClipPelvisCS.Z);
+			const FVector Wanted = FMath::Lerp(ClipPelvisCS, DriverPelvisCS, static_cast<double>(FMath::Clamp(Shape.OverridePelvisFollow, 0.f, 1.f)));
 			Output.Pose[SourcePelvis].SetTranslation(RootCS.InverseTransformPosition(Wanted));
 		}
 	}
