@@ -42,3 +42,17 @@ COSTO: ~12 $ | ~60 min desktop | 0
 ESITO: PASS scatti del dropkick tolti, jab e tuffo invariati
 SUBAGENTI: 0
 COSTO: ~6 $ | ~25 min desktop | 0
+
+## Rimbalzo della rotolata di rialzata del tuffo (owner "si, sistemiamolo per ora"), stesso thread
+- 61af3d50: durante la rotolata la capsula resta appoggiata a terra (`DiveFloorRest` 1 fino a 270°, poi sfuma a 0 verso 360°) e si raccoglie
+  (`DiveTuckSquash` 0.6 a metà rotolata), così il bacino non scende sotto e non rimbalza.
+- Fisso (_ue59, 61af3d50): build OK, GSTNCombat+GSTNAnimation 760/760. Tuffo: scivolata invariata (42 frame, 328 cm, pancia z 32-35).
+  Rotolata f197-206: bacino 37 -> 61 -> 43 -> 93; i salti >15 cm passano da 5 (fino a +31/-26) a 2 (+21, +16), che sono la salita finale in piedi
+  in 4 frame (43 -> 64 -> 81 -> 91), non più un rimbalzo; nessun osso sotto il pavimento. Dropkick e jab invariati rispetto a fix4.
+  Video in _scratch/faerial5 sul fisso, foglio dei frame Saved/FAerialFix5/video/dodge_getup_sheet.png.
+- Restano (non chiesti): la pancia arriva a terra in un frame (f155, -59 cm); piccoli scatti orizzontali del bacino (tuffo f201 +19 cm,
+  dropkick f188 ~10 cm in X/Y alla fine della rialzata).
+
+ESITO: PASS rotolata di rialzata del tuffo senza rimbalzo, dropkick e jab invariati
+SUBAGENTI: 0
+COSTO: ~4 $ | ~20 min desktop | 0
