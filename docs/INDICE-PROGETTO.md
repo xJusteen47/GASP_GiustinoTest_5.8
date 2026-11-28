@@ -208,6 +208,7 @@ In gioco: tasti e stick diventano comandi, con buffer, priorità e blocchi.
 ### 5.16 Strumenti: build, test, catture, MCP
 | Cosa | Dove | Doc |
 |---|---|---|
+| Aggiornare il progetto a main + build (owner, doppio clic) | `Aggiorna e compila.bat` → `Tools/CI/Aggiorna-Progetto.ps1` | testa dello script |
 | Build/test/cattura a tempo | `Tools/CI/Run-Timed.ps1 -Preset Build/Test/Capture`, esito con `Check-TestLog.ps1` | testa dello script |
 | Guardia git (file dell'owner, segreti) | `Tools/CI/Test-GitGuard.ps1`, `Install-GitHooks.ps1` | CLAUDE.md |
 | Prova di rete (50 scenari) | `Tools/GASNPPTest/gasnpp_test.py`, `m3_suite_driver.py` | `docs/architecture/testing.md` |
