@@ -428,3 +428,20 @@ after one checkpoint.
 ESITO: PARZIALE codice compilato e testato (929/929), manca il playtest dell'owner
 SUBAGENTI: 0
 COSTO: ~6 $ | 0 min desktop, ~45 min laptop | 0
+
+## SD-18 (cloud + laptop RC, 2026-11-28): spin jump and spin cue
+
+- Owner playtest: the spin starts with the stick, but spin on the ground + jump gave no spin jump, and there was no quick sign of when the
+  spin is on. Cause: the ground spin's jump cancel window cancelled its timeline, so the next AfterClocks ended the spin.
+- Built (branch claude/project-thread-8k0siq, PR #64, 7559c4df): `GSTNDrillFlags::SpinJump` (bit 7), set on a ground jump start (squat or
+  take-off) during a ground spin; window `SpinJumpFrames` 75 from the take-off; ends on landing, at the end of the window or on another move
+  (`HasSpinJumpEnded`); low gravity only after the apex (`bSpinJumpFloatsWhileRising` false). Spin cue: an orb ring in
+  `UGSTN_DrillPresentationComponent`, orange while turning and cyan while floating, pop at the start. spin-drill.md 13e.
+- Gates (laptop, worktree GASP_Giustino2_cp1verify): build OK (Run-Timed Build, REGRESS OK); headless
+  GSTNSpinDrill+GSTNSpinScrew+GSTNHeld+GSTNCombat+GSTNInput 946/946, SpinJump and SpinCue included. Use the `RunTests X; Quit` form (the
+  comma form quit too early and waited out the 30 min timeout).
+- Desktop `_ue59` was locked (grab-B fix, then a queue: dash-corsa, F.Aerial): not touched. Not done: the owner's playtest and a PIE
+  harness scenario for the spin jump. Known limit: no spin hitbox during the spin jump.
+ESITO: PARZIALE codice compilato e testato (946/946), manca il playtest dell'owner
+SUBAGENTI: 0
+COSTO: ~4 $ | 0 min desktop, ~45 min laptop | 0
