@@ -428,3 +428,23 @@ after one checkpoint.
 ESITO: PARZIALE codice compilato e testato (929/929), manca il playtest dell'owner
 SUBAGENTI: 0
 COSTO: ~6 $ | 0 min desktop, ~45 min laptop | 0
+
+## SD-18 (cloud + laptop/desktop RC, 2026-11-28): spin jump and spin cue
+
+- Owner playtest: the spin starts with the stick, but spin on the ground + jump gave no spin jump, and there was no quick sign of when the
+  spin is on.
+- Built (branch claude/project-thread-8k0siq, PR #64, head c06577e4): `GSTNDrillFlags::SpinJump` (bit 7), set on a ground jump start
+  during a ground spin; the rise holds it, the apex opens `SpinJumpFrames` (75) of the air spin's low gravity; it ends on landing, at the
+  end of that window or on another move (`HasSpinJumpEnded`). Spin cue: an orb ring in `UGSTN_DrillPresentationComponent`, orange while
+  turning, cyan while floating, pop at the start. spin-drill.md 13e.
+- Two in-game findings the unit tests missed (desktop driver, per frame): (1) the kit's jump ability takes off by itself and the jump logic
+  files it as None -> Launched, never Rising, so the take-off is that edge (not a knockback); the jump does not cancel the spin timeline
+  either. (2) That jump rises ~81 frames, so a window counted from the take-off closed before the apex: it now opens at the apex.
+- Gates: laptop build OK + headless 946/946 (7559c4df); desktop `_ue59` c06577e4 build OK, GSTNSpinDrill 35/35, in game on L_Test_Hub:
+  spin jump Spinning through the rise, low gravity 72-75 frames from the apex, orbs cyan then, airtime 169 vs 135 frames at the same peak
+  1007 cm. Captures `_catture/spin-jump-2026-11-28/v3_*`; driver `spin_jump_capture.py` there (not committed). Use the `RunTests X; Quit`
+  form (the comma form quit too early).
+- Left: the owner's feel playtest. Known limit: no spin hitbox once the spin's own timeline ended.
+ESITO: OK spin jump e anello verificati in gioco sul fisso, manca il parere dell'owner sul feel
+SUBAGENTI: 0
+COSTO: ~6 $ | ~45 min desktop, ~45 min laptop | 0

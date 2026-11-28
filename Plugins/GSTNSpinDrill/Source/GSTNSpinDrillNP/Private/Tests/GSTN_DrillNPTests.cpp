@@ -921,4 +921,102 @@ bool FGSTN_DrillNPLatchEndTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DrillNPSpinJumpTest, "GSTNSpinDrill.NP.Spin.SpinJump", GSTNDrillNPTest::Flags)
+bool FGSTN_DrillNPSpinJumpTest::RunTest(const FString& Parameters)
+{
+	const FGSTN_DrillSimTuning Tuning = FGSTN_DrillSimTuning::MakeDefault();
+
+	// The jump state's edges: a squat start and a take-off are a ground jump, an air jump is not
+	FGSTN_JumpState Grounded;
+	FGSTN_JumpState Squat = Grounded;
+	Squat.SquatFramesLeft = 3;
+	TestTrue(TEXT("a squat that starts is a ground jump"), FGSTN_DrillTickExtension::ReadGroundJumpStart(Grounded, Squat, 10));
+	FGSTN_JumpState Takeoff;
+	Takeoff.Phase = EGSTN_JumpPhase::Rising;
+	Takeoff.StartFrame = 13;
+	FGSTN_JumpState LastSquat = Squat;
+	LastSquat.SquatFramesLeft = 1;
+	TestTrue(TEXT("the take-off after the squat is one too"), FGSTN_DrillTickExtension::ReadGroundJumpStart(LastSquat, Takeoff, 13));
+	TestFalse(TEXT("a squat that goes on is not"), FGSTN_DrillTickExtension::ReadGroundJumpStart(Squat, LastSquat, 11));
+	FGSTN_JumpState AirJump = Takeoff;
+	AirJump.bTakeoffWasAir = true;
+	TestFalse(TEXT("an air jump is not"), FGSTN_DrillTickExtension::ReadGroundJumpStart(Grounded, AirJump, 13));
+	// In game the jump ability sets the take-off speed and the jump logic reads it as a launch from the ground (desktop 2026-11-28)
+	FGSTN_JumpState AbilityTakeoff;
+	AbilityTakeoff.Phase = EGSTN_JumpPhase::Launched;
+	TestTrue(TEXT("the jump ability's take-off is one"), FGSTN_DrillTickExtension::ReadGroundJumpStart(Grounded, AbilityTakeoff, 28));
+	TestFalse(TEXT("still launched the frame after is not"), FGSTN_DrillTickExtension::ReadGroundJumpStart(AbilityTakeoff, AbilityTakeoff, 29));
+	FGSTN_JumpState Knocked = AbilityTakeoff;
+	Knocked.bKnocked = true;
+	TestFalse(TEXT("a hit's launch is not"), FGSTN_DrillTickExtension::ReadGroundJumpStart(Grounded, Knocked, 28));
+
+	// A ground spin from frame 100; the jump at 105 cancels its timeline and starts the squat
+	FGSTN_DrillFragment F = GroundSpin();
+	FGSTN_DrillFrameInputs Jump;
+	Jump.bGroundJumpStarted = true;
+	StepFrame(F, 105, Jump, Tuning);
+	TestTrue(TEXT("the ground spin becomes a spin jump"), F.IsSpinning() && (F.Flags & GSTNDrillFlags::SpinJump) != 0);
+	TestEqual(TEXT("the phase is still the ground spin's"), F.PhaseStartFrame, 100);
+	TestEqual(TEXT("no float window while it rises"), F.LowGravityUntilFrame, static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("no air spin spent by default"), static_cast<int32>(F.AirSpinsUsed), 0);
+	StepFrame(F, 108, Jump, Tuning);
+	TestTrue(TEXT("the take-off keeps it a spin jump"), (F.Flags & GSTNDrillFlags::SpinJump) != 0);
+
+	// The timeline is gone, but a spin jump does not follow it: the air ends it. A long rise holds it with no window yet
+	FGSTN_CombatSyncCore Core;
+	Core.Jump.Phase = EGSTN_JumpPhase::Launched;
+	TestFalse(TEXT("rising long after the take-off: still a spin jump"), FGSTN_DrillTickExtension::HasSpinJumpEnded(F, 190, Core));
+	FGSTN_DrillFrameInputs Apex;
+	Apex.bJumpApex = true;
+	StepFrame(F, 109, Apex, Tuning);
+	TestEqual(TEXT("the apex opens the float window"), F.LowGravityUntilFrame, 109 + Tuning.SpinJumpFrames);
+	Core.Jump.Phase = EGSTN_JumpPhase::Rising;
+	TestFalse(TEXT("rising with no timeline: still a spin jump"), FGSTN_DrillTickExtension::HasSpinJumpEnded(F, 110, Core));
+	TestFalse(TEXT("no float while rising"), FGSTN_DrillTickExtension::WantsLowGravity(&F, 110, true, &Tuning));
+	TestTrue(TEXT("the float once it falls"), FGSTN_DrillTickExtension::WantsLowGravity(&F, 130, false, &Tuning));
+	FGSTN_DrillSimTuning RiseToo = Tuning;
+	RiseToo.bSpinJumpFloatsWhileRising = true;
+	TestTrue(TEXT("or while rising, when the tuning says so"), FGSTN_DrillTickExtension::WantsLowGravity(&F, 110, true, &RiseToo));
+	Core.Jump.Phase = EGSTN_JumpPhase::Falling;
+	TestTrue(TEXT("past its window it ends"), FGSTN_DrillTickExtension::HasSpinJumpEnded(F, F.LowGravityUntilFrame, Core));
+	Core.ActionState = EGSTN_ActionState::InTimeline;
+	Core.TimelineStartFrame = 120;
+	TestTrue(TEXT("another move ends it"), FGSTN_DrillTickExtension::HasSpinJumpEnded(F, 121, Core));
+	Core.ActionState = EGSTN_ActionState::Actionable;
+	Core.Jump.Phase = EGSTN_JumpPhase::None;
+	TestTrue(TEXT("the landing ends it"), FGSTN_DrillTickExtension::HasSpinJumpEnded(F, 140, Core));
+	FGSTN_DrillFrameInputs Landed;
+	Landed.bPhaseTimelineEnded = true;
+	StepFrame(F, 140, Landed, Tuning);
+	TestTrue(TEXT("and the fragment goes back to no phase"), F.Phase == EGSTN_DrillPhase::None && F.Flags == 0);
+
+	// An air spin is not turned into a spin jump, nor is a ground spin when the kit turns it off
+	FGSTN_DrillFragment Air = AirSpinCcw();
+	StepFrame(Air, 105, Jump, Tuning);
+	TestEqual(TEXT("an air spin keeps its own window"), Air.LowGravityUntilFrame, 130);
+	FGSTN_DrillSimTuning Off = Tuning;
+	Off.bSpinJump = false;
+	FGSTN_DrillFragment Plain = GroundSpin();
+	StepFrame(Plain, 105, Jump, Off);
+	TestTrue(TEXT("spin jump off: no flag"), (Plain.Flags & GSTNDrillFlags::SpinJump) == 0);
+	StepFrame(Plain, 120, Apex, Off);
+	TestTrue(TEXT("and no window at the apex"), Plain.LowGravityUntilFrame == INDEX_NONE);
+
+	// Spending the air spin, when the kit asks for it: once per spin jump
+	FGSTN_DrillSimTuning Spends = Tuning;
+	Spends.bSpinJumpSpendsAirSpin = true;
+	FGSTN_DrillFragment Spent = GroundSpin();
+	StepFrame(Spent, 105, Jump, Spends);
+	StepFrame(Spent, 108, Jump, Spends);
+	TestEqual(TEXT("one air spin spent"), static_cast<int32>(Spent.AirSpinsUsed), 1);
+
+	// The flag survives the wire
+	FGSTN_SyncFragmentArray List = ListOf(F.IsSpinning() ? F : Spent);
+	bool bError = false;
+	const FGSTN_SyncFragmentArray Loaded = ReadBack(List, bError);
+	const FGSTN_DrillFragment* Back = FGSTN_SyncFragmentList::Find<FGSTN_DrillFragment>(Loaded);
+	TestTrue(TEXT("a spin jump reads back"), !bError && Back && (Back->Flags & GSTNDrillFlags::SpinJump) != 0);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

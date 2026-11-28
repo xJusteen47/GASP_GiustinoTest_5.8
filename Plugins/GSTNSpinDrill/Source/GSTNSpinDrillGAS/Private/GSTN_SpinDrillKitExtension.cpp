@@ -25,6 +25,8 @@ const FGSTN_SpinDrillKitExtension* FGSTN_SpinDrillLoadout::FindKitExtension(cons
 	return Kit ? Kit->Extensions.Find<FGSTN_SpinDrillKitExtension>() : nullptr;
 }
 
+DEFINE_LOG_CATEGORY_STATIC(LogGSTNSpinDrillLoadout, Log, All);
+
 namespace GSTNSpinDrillLoadout
 {
 	bool IsSpinOrDrillCommand(const FGameplayTag& Command)
@@ -59,6 +61,8 @@ void FGSTN_SpinDrillLoadout::AttachFromLoadout(const FGSTN_LoadoutExtensionConte
 		FGSTN_SpinDrillAttach::Clear(Owner);
 		return;
 	}
+	UE_LOG(LogGSTNSpinDrillLoadout, Log, TEXT("SpinDrill loadout: owner=%s kit=%s extension=%d kitBindsSpin=%d fromSettings=%d"), *Owner->GetName(),
+		Kit ? *Kit->GetName() : TEXT("none"), Extension ? 1 : 0, bKitBindsSpin ? 1 : 0, bFromSettings ? 1 : 0);
 	if (bFromSettings)
 	{
 		for (const FGSTN_AbilityBinding& Binding : UGSTN_SpinDrillLibrary::MakeDefaultSpinBindings(Settings.bKeyboardShortcut))

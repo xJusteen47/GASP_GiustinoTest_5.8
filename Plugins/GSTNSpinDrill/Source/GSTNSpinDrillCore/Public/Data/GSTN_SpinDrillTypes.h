@@ -99,6 +99,26 @@ struct GSTNSPINDRILLCORE_API FGSTN_AirSpinTuning
 	/** Events that give the air spins back (EGSTN_AirSpinRefresh flags) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SpinDrill|AirSpin", meta = (Bitmask, BitmaskEnum = "/Script/GSTNSpinDrillCore.EGSTN_AirSpinRefresh"))
 	int32 RefreshOn = static_cast<int32>(EGSTN_AirSpinRefresh::Land | EGSTN_AirSpinRefresh::Wall | EGSTN_AirSpinRefresh::Trampoline | EGSTN_AirSpinRefresh::Launch);
+
+	/**
+	 * Spin jump (3D World / Galaxy, owner 2026-11-28): a ground jump taken while a ground spin runs keeps the spin going in the air and gives
+	 * it the air spin's low gravity (SpinGravityScale, SpinMaxFallSpeedScale) once the jump stops rising, so the descent floats. Ends on the
+	 * landing, when SpinJumpFrames of float have passed since the apex, or when another move starts
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SpinDrill|SpinJump")
+	bool bSpinJump = true;
+
+	/** Frames of float from the jump's apex (from the take-off when bSpinJumpFloatsWhileRising); the rise itself does not count */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SpinDrill|SpinJump", meta = (EditCondition = "bSpinJump", ClampMin = "1", ClampMax = "600"))
+	int32 SpinJumpFrames = 75;
+
+	/** The low gravity also applies while the spin jump rises (a much higher jump); off = the jump keeps its own height and only the descent floats */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SpinDrill|SpinJump", meta = (EditCondition = "bSpinJump"))
+	bool bSpinJumpFloatsWhileRising = false;
+
+	/** The spin jump counts as the air spin of the airtime (no air spin hop after it until the air spins come back) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SpinDrill|SpinJump", meta = (EditCondition = "bSpinJump"))
+	bool bSpinJumpSpendsAirSpin = false;
 };
 
 /** Opposite-spin cancel (spin-drill.md 7.3) */

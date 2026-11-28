@@ -40,4 +40,21 @@ bool FGSTN_DrillPresentationPoseTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_DrillPresentationCueTest, "GSTNSpinDrill.Presentation.SpinCue",
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
+bool FGSTN_DrillPresentationCueTest::RunTest(const FString& Parameters)
+{
+	TestFalse(TEXT("no fragment: no cue"), UGSTN_DrillPresentationComponent::ComputeCue(nullptr, 10, false, 6, 1.6f).bVisible);
+	FGSTN_DrillFragment Fragment;
+	Fragment.Phase = EGSTN_DrillPhase::Spinning;
+	Fragment.PhaseStartFrame = 100;
+	const FGSTN_SpinCuePose Start = UGSTN_DrillPresentationComponent::ComputeCue(&Fragment, 100, false, 6, 1.6f);
+	TestTrue(TEXT("a spin's first frame pops out"), Start.bVisible && FMath::IsNearlyEqual(Start.Scale, 1.6f));
+	const FGSTN_SpinCuePose Settled = UGSTN_DrillPresentationComponent::ComputeCue(&Fragment, 106, true, 6, 1.6f);
+	TestTrue(TEXT("then sits on the ring, with the float colour when asked"), FMath::IsNearlyEqual(Settled.Scale, 1.f) && Settled.bFloaty);
+	Fragment.Phase = EGSTN_DrillPhase::Diving;
+	TestFalse(TEXT("the dive has its own look: no cue"), UGSTN_DrillPresentationComponent::ComputeCue(&Fragment, 106, false, 6, 1.6f).bVisible);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

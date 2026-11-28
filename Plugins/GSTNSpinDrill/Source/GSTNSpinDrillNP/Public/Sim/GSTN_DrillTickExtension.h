@@ -79,7 +79,7 @@ struct FGSTN_DrillFrameInputs
 	/** EGSTN_AirSpinRefresh events of the frame (landing, wall, trampoline, launch, hit) */
 	int32 RefreshEvents = 0;
 
-	/** The timeline that drives the current phase ended this frame (spin, launch, lag) */
+	/** The timeline that drives the current phase ended this frame (spin, launch, lag); for a spin jump, HasSpinJumpEnded */
 	bool bPhaseTimelineEnded = false;
 
 	// ---- AfterExecute
@@ -98,6 +98,12 @@ struct FGSTN_DrillFrameInputs
 
 	/** A drill hit landed on the latched target this frame */
 	bool bHitLanded = false;
+
+	/** A ground jump began this frame (its squat or its take-off, FGSTN_DrillTickExtension::ReadGroundJumpStart): a running ground spin becomes a spin jump */
+	bool bGroundJumpStarted = false;
+
+	/** The jump reached its apex this frame (Rising or Launched before, Falling now): a spin jump's float window opens here */
+	bool bJumpApex = false;
 
 	// ---- End conditions of a latched driller (UGSTN_DrillMath::ResolveEnd)
 
@@ -127,8 +133,14 @@ struct GSTNSPINDRILLNP_API FGSTN_DrillSimTuning
 	// The air spin's movement (D4): read by the hop creator and the low gravity effect, never by the phase machine
 	float HopSpeed = 450.f;
 	bool bHopCancelsFall = true;
-	float SpinGravityScale = 0.35f;
-	float SpinMaxFallSpeedScale = 0.5f;
+	float SpinGravityScale = 0.25f;
+	float SpinMaxFallSpeedScale = 0.4f;
+
+	// The spin jump (owner 2026-11-28): read by the phase machine and the low gravity sync
+	bool bSpinJump = true;
+	int32 SpinJumpFrames = 75;
+	bool bSpinJumpFloatsWhileRising = false;
+	bool bSpinJumpSpendsAirSpin = false;
 
 	// The dive's movement (D8): read by the dive and bounce effects and the dive ability
 	float PlungeSpeed = 1800.f;
@@ -271,8 +283,24 @@ public:
 	/** The dive's gravity (none) holds: what UGSTN_GE_DrillDiveGravity::Sync is asked to match */
 	static bool WantsDiveGravity(const FGSTN_DrillFragment* Fragment);
 
-	/** The low gravity window of the air spin holds at Frame: what UGSTN_GE_AirSpinLowGravity::Sync is asked to match */
-	static bool WantsLowGravity(const FGSTN_DrillFragment* Fragment, int32 Frame);
+	/**
+	 * The low gravity window of the air spin holds at Frame: what UGSTN_GE_AirSpinLowGravity::Sync is asked to match. A spin jump's window
+	 * floats only once the jump stops rising (bJumpRising: the combat state's jump phase is Rising or Launched), unless the tuning floats the rise too
+	 */
+	static bool WantsLowGravity(const FGSTN_DrillFragment* Fragment, int32 Frame, bool bJumpRising = false, const FGSTN_DrillSimTuning* Tuning = nullptr);
+
+	/**
+	 * A ground jump began on this frame: its squat started (the jump state counts it down on the ground), it took off without a squat or a
+	 * coyote jump, or the jump ability's own take-off left the ground (the jump logic reads it as None -> Launched, not a knockback). In is the jump state of the end of the previous frame, Out the one after this frame's jump step and request. An air jump
+	 * is not one: an air spin covers it
+	 */
+	static bool ReadGroundJumpStart(const struct FGSTN_JumpState& In, const struct FGSTN_JumpState& Out, int32 Frame);
+
+	/**
+	 * A spin jump is over at Frame: the combatant is back on the ground (no jump phase and no squat), its float window has passed (only
+	 * counted once the jump stops rising: the window opens at the apex), or another timeline runs (the spin's own one was cancelled by the jump, so any running timeline is a new move). False for anything else
+	 */
+	static bool HasSpinJumpEnded(const FGSTN_DrillFragment& Fragment, int32 Frame, const FGSTN_CombatSyncCore& Core);
 
 protected:
 	/**
