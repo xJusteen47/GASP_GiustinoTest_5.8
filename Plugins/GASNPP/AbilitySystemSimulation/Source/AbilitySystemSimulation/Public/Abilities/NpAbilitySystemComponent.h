@@ -340,6 +340,9 @@ public:
 	UFUNCTION(BlueprintPure,Category=NetworkPrediction)
 	float GetSyncedInterpolationTimeMS() const ;
 
+	/** GAS-NPP fork (2026-11-28, lag thread): one log line with the sizes FillSyncState copies every step (np.ASC.Stats) */
+	FString GetSimStateStats() const;
+
 protected:
 	
 	void InternalSimulationTick(const FAbilitySystemTimeStep& TimeStep,const FAbilitySystemTickStartData& TickStartData,OUT FAbilitySystemTickEndData& TickEndData);

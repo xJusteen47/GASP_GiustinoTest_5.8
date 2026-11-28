@@ -25,6 +25,7 @@
 #include "Net/UnrealNetwork.h"
 #include "ProjectilesSimulator/SyncedProjectileBase.h"
 #include "HAL/IConsoleManager.h"
+#include "UObject/UObjectIterator.h"
 
 // Spike S-FP: lets a forward-predicted simulated proxy start abilities / apply effects from inside its own simulation tick.
 // Read through UNpAbilitySystemComponent::CanPredictAsSimulatedProxy (also from NpGameplayAbility.cpp).
@@ -909,17 +910,24 @@ bool UNpAbilitySystemComponent::CheckOwnerRoleChange()
 void UNpAbilitySystemComponent::SimulationTick(const FNetSimTimeStep& TimeStep,
                                                const TNetSimInput<AbilitySystemStateTypes>& SimInput, const TNetSimOutput<AbilitySystemStateTypes>& SimOutput)
 {
+	// GAS-NPP fork (2026-11-28, lag thread): Insights scopes for each part of the step; the whole model was one unnamed block of ~0.4 ms per pawn
 	FAbilitySystemTickStartData StartData;
 	FAbilitySystemTickEndData EndData;
 
-	StartData.InputCmd  = *SimInput.Cmd;
-	StartData.SyncState = *SimInput.Sync;
-	StartData.AuxState  = *SimInput.Aux;
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_CopyIn);
+		StartData.InputCmd  = *SimInput.Cmd;
+		StartData.SyncState = *SimInput.Sync;
+		StartData.AuxState  = *SimInput.Aux;
+	}
 
 	InternalSimulationTick(FAbilitySystemTimeStep(TimeStep), StartData, OUT EndData);
 
-	*SimOutput.Sync = EndData.SyncState;
-	*SimOutput.Aux.Get() = EndData.AuxState;
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_CopyOut);
+		*SimOutput.Sync = EndData.SyncState;
+		*SimOutput.Aux.Get() = EndData.AuxState;
+	}
 }
 
 void UNpAbilitySystemComponent::CallServerRPC()
@@ -997,22 +1005,40 @@ void UNpAbilitySystemComponent::InternalSimulationTick(const FAbilitySystemTimeS
 		LatestCachedTimeStep = TimeStep;
 	}
 
-	OnSimulationPreTick.Broadcast(TimeStep);
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_PreTickBroadcast);
+		OnSimulationPreTick.Broadcast(TimeStep);
+	}
 
 	//Send Input Events
-	HandleSimTickInputActionsEvents(TickStartData.InputCmd);
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_InputEvents);
+		HandleSimTickInputActionsEvents(TickStartData.InputCmd);
+	}
 
 	// Simulation Tick For Abilities Which Will tick Tasks
-	TickAbilities(TimeStep);
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_TickAbilities);
+		TickAbilities(TimeStep);
+	}
 	//ToDo @Kai : Add stat counter for this.
 	//Tick Active Gameplay Effects.
 	const uint32 BaseSimTimeMS = FMath::FloorToInt32(TimeStep.BaseSimTimeMs);
 	const uint32 StepMs = FMath::FloorToInt32(TimeStep.StepMs);
-	ActiveGameplayEffects.TickActiveEffects(BaseSimTimeMS,StepMs);
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_TickEffects);
+		ActiveGameplayEffects.TickActiveEffects(BaseSimTimeMS,StepMs);
+	}
 	//ToDo @Kai : Need to tick attribute sets that want to
 	//Tick Montage PLayer
-	MontagePlayer->SimulationTick(TimeStep,TickStartData.SyncState.MontageSimulatorData,TickEndData.SyncState.MontageSimulatorData);
-	ProjectilesSimulator->SimulationTick(TimeStep,TickStartData.SyncState.ProjectilesCollection,TickEndData.SyncState.ProjectilesCollection);
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_Montage);
+		MontagePlayer->SimulationTick(TimeStep,TickStartData.SyncState.MontageSimulatorData,TickEndData.SyncState.MontageSimulatorData);
+	}
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_Projectiles);
+		ProjectilesSimulator->SimulationTick(TimeStep,TickStartData.SyncState.ProjectilesCollection,TickEndData.SyncState.ProjectilesCollection);
+	}
 
 	// In The End Fill The Sync State From The Current Ability System Variables.
 	FillSyncState(TickEndData.SyncState);
@@ -1020,17 +1046,33 @@ void UNpAbilitySystemComponent::InternalSimulationTick(const FAbilitySystemTimeS
 
 void UNpAbilitySystemComponent::FillSyncState(FAbilitySimSyncState& SyncState)
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_FillSyncState);
 	SyncState.SyncedTarget = SyncedTarget;
 	SyncState.bSuppressGrantAbility = bSuppressGrantAbility;
 	SyncState.UserAbilityActivationInhibited = UserAbilityActivationInhibited;
-	SyncState.BlockedAbilityTags.FillFromGameplayTagCountContainer(BlockedAbilityTags);
-	SyncState.GameplayTagCountContainer.FillFromGameplayTagCountContainer(GameplayTagCountContainer);
-	SyncState.GameplayTagCountContainer.RemoveTags(NonReplicatedTags);
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_FillTags);
+		SyncState.BlockedAbilityTags.FillFromGameplayTagCountContainer(BlockedAbilityTags);
+		SyncState.GameplayTagCountContainer.FillFromGameplayTagCountContainer(GameplayTagCountContainer);
+		SyncState.GameplayTagCountContainer.RemoveTags(NonReplicatedTags);
+	}
 	SyncState.ActivatableAbilitiesHandleCount = SyncedAbilitiesHandlesCount;
-	SyncState.Abilities.FillFromActivatableAbilities(ActivatableAbilities);
-	SyncState.ActiveGameplayEffects = FActiveEffectSyncDataContainer(ActiveGameplayEffects);
-	SyncState.AttributeSets = FAttributeSetSyncDataCollection(SpawnedAttributes);
-	SyncState.SyncedCues = FActiveCueSyncDataContainer(ActiveGameplayCues);
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_FillAbilities);
+		SyncState.Abilities.FillFromActivatableAbilities(ActivatableAbilities);
+	}
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_FillEffects);
+		SyncState.ActiveGameplayEffects = FActiveEffectSyncDataContainer(ActiveGameplayEffects);
+	}
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_FillAttributes);
+		SyncState.AttributeSets = FAttributeSetSyncDataCollection(SpawnedAttributes);
+	}
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(NpASC_FillCues);
+		SyncState.SyncedCues = FActiveCueSyncDataContainer(ActiveGameplayCues);
+	}
 }
 
 void UNpAbilitySystemComponent::FinalizeSimulatedTags(const FSyncedGameplayTagCount& InBlockedAbilityTags,const FSyncedGameplayTagCount& InGameplayTags)
@@ -3588,5 +3630,33 @@ AController* UNpAbilitySystemComponent::TryGetOwningController()
 	}
 	return nullptr;
 }
+
+FString UNpAbilitySystemComponent::GetSimStateStats() const
+{
+	int32 Instances = 0;
+	for (const FGameplayAbilitySpec& Spec : ActivatableAbilities.Items)
+	{
+		Instances += Spec.ReplicatedInstances.Num() + Spec.NonReplicatedInstances.Num();
+	}
+	return FString::Printf(TEXT("%s: specs %d, ability instances %d, active effects %d, tags %d, blocked tags %d, cues %d, attribute sets %d, frame %d"),
+		*GetNameSafe(GetOwner()), ActivatableAbilities.Items.Num(), Instances, ActiveGameplayEffects.GetNumGameplayEffects(),
+		GameplayTagCountContainer.GetExplicitGameplayTags().Num(), BlockedAbilityTags.GetExplicitGameplayTags().Num(),
+		ActiveGameplayCues.GameplayCues.Num(), GetSpawnedAttributes().Num(), NetworkPredictionProxy.GetPendingFrame());
+}
+
+// Lists every simulated ability system of the world: what the step copies grows with these counts
+static FAutoConsoleCommandWithWorldAndArgs CmdNpASCStats(
+	TEXT("np.ASC.Stats"),
+	TEXT("Logs, for each NP ability system component of this world, the counts its sync state copies every fixed step (specs, instances, effects, tags, cues)"),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>&, UWorld* World)
+	{
+		for (TObjectIterator<UNpAbilitySystemComponent> It; It; ++It)
+		{
+			if (World && It->GetWorld() == World)
+			{
+				UE_LOG(LogAbilitySystem, Display, TEXT("np.ASC.Stats %s"), *It->GetSimStateStats());
+			}
+		}
+	}));
 
 #undef LOCTEXT_NAMESPACE

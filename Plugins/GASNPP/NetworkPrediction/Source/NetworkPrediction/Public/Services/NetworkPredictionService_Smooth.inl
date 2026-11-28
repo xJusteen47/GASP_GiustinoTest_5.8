@@ -91,6 +91,8 @@ public:
 	{
 		const int32 OutputFrame = ServiceStep.LocalOutputFrame;
 		const int32 InputFrame = ServiceStep.LocalInputFrame;
+		// GAS-NPP fork (2026-11-28, lag thread): smoothing cost by model in Insights
+		TRACE_CPUPROFILER_EVENT_SCOPE_TEXT(ModelDef::GetName());
 		for (auto& It : Instances)
 		{
 			FInstance& Instance = It;
@@ -155,6 +157,7 @@ public:
 		}
 
 		
+		TRACE_CPUPROFILER_EVENT_SCOPE_TEXT(ModelDef::GetName());
 		for (auto& It : Instances)
 		{
 			const FInstance& Instance = It;
