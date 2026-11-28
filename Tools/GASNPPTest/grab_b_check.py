@@ -116,7 +116,7 @@ def kit_steps(kit):
     s += [(6.75, lambda: g.combat_tap(0, g.button_mask('Attack'))),
           (8.2, lambda: check(f'{kit} B2 stick turn spins the held dummy', len(events(host(), 'Command.Link.Spin')) > ctx['d2host_spin0'],
                               f'spin hits by the host {len(events(host(), "Command.Link.Spin")) - ctx["d2host_spin0"]}, on the held dummy {new("d2", "Command.Link.Spin")}')),
-          (8.2, lambda: log(f'note | B3 throw out of the spin (not judged): throw hits {new("d2", "Combat.HitType.Throw")}. At 0 % Ganondorf's hold is 90 '
+          (8.2, lambda: log(f'note | B3 throw out of the spin (not judged): throw hits {new("d2", "Combat.HitType.Throw")}. At 0 % the Ganondorf hold is 90 '
                             f'frames and each spin takes 20 off it, so a scripted press lands either before the spin (it throws instead) or after the '
                             f'hold ran out'))]
     return s, 8.6
