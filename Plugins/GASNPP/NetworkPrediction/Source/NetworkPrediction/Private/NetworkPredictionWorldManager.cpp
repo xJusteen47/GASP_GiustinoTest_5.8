@@ -28,6 +28,11 @@ namespace NetworkPredictionCVars
 	NETSIM_DEVCVAR_SHIPCONST_INT(FixedTickInterpolationBufferedMSOverride, -1, "np.FixedTickInterpolationBufferedMSOverride", "Test knob (FP G0). >= 0: worlds initialized after this is set use this FixedTickInterpolationBufferedMS instead of the project setting. -1: off.");
 	// FP G0c test knob, same reason: the server's input buffer depth per run. -1 = off (project setting used)
 	NETSIM_DEVCVAR_SHIPCONST_INT(FixedTickDesiredBufferedInputCountOverride, -1, "np.FixedTickDesiredBufferedInputCountOverride", "Test knob (FP G0c). >= 0: worlds initialized after this is set use this FixedTickDesiredBufferedInputCount instead of the project setting. -1: off.");
+	// GAS-NPP fork (2026-11-28, flicker/lag thread): a slow engine frame made the next one run 2-3 fixed steps, each as costly as a normal frame,
+	// so the delay fed itself (PIE with 11 pawns fell to ~22 irregular fps). Past the cap the remaining wall time is dropped: the simulation
+	// runs slower than real time while the machine is overloaded instead of spiralling. Every step still advances by the fixed step, so
+	// determinism and rollback are untouched; only how much wall time becomes simulation time changes. 0 = no cap (the stock behaviour)
+	NETSIM_DEVCVAR_SHIPCONST_INT(MaxFixedStepsPerFrame, 3, "np.MaxFixedStepsPerFrame", "Most fixed ticks run in one engine frame. The wall time left over past the cap is dropped (the game slows down instead of spiralling when frames are slow). 0: no cap.");
 	NETSIM_DEVCVAR_SHIPCONST_INT(SpikeLogInputSend, 0, "np.Spike.LogInputSend", "Diagnostics of the fixed tick input stream. 1: a client logs every engine frame whose input send is not the steady one (3+ fixed ticks in the frame, a backlog sent without redundant copies, frames held back by a connection that is not net ready); the server logs every fixed tick it is starved of a client's input. 0: off.");
 }
 
@@ -451,10 +456,21 @@ void UNetworkPredictionWorldManager::BeginNewSimulationFrame_Internal(float Delt
 		FixedTickState.UnspentTimeMS += fEngineFrameDeltaTimeMS;
 		const int32 FirstFrameThisUpdate = FixedTickState.PendingFrame;
 
+		const int32 MaxSteps = NetworkPredictionCVars::MaxFixedStepsPerFrame();
+		int32 StepsThisFrame = 0;
 		while ((FixedTickState.UnspentTimeMS + KINDA_SMALL_NUMBER) >= FixedTickState.TimeDilationState.FixedStepDilatedTimeMS)
 		{
-			//ToDo : Add SubStep Count here and get out if reaches max. don't allow 1 bad frame to freeze game
-			
+			// Don't let one bad frame freeze the game: past the cap, keep less than one step of the backlog and drop the rest
+			if (MaxSteps > 0 && StepsThisFrame >= MaxSteps)
+			{
+				const float DroppedMS = FixedTickState.UnspentTimeMS;
+				FixedTickState.UnspentTimeMS = FMath::Fmod(FixedTickState.UnspentTimeMS, FixedTickState.TimeDilationState.FixedStepDilatedTimeMS);
+				UE_LOG(LogNetworkPrediction, Verbose, TEXT("Fixed tick capped at %d steps: %.1f ms of wall time dropped (engine frame %.1f ms)"),
+					MaxSteps, DroppedMS - FixedTickState.UnspentTimeMS, fEngineFrameDeltaTimeMS);
+				break;
+			}
+			++StepsThisFrame;
+
 			FixedTickState.UnspentTimeMS -= FixedTickState.TimeDilationState.FixedStepDilatedTimeMS;
 			if (FMath::IsNearlyZero(FixedTickState.UnspentTimeMS))
 			{
