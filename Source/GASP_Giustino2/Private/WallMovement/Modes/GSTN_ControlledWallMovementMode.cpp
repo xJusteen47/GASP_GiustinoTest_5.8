@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "WallMovement/Modes/GSTN_ControlledWallMovementMode.h"
+#include "Movement/GSTN_MoverButtonInputs.h"
 
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "MoverDataModelTypes.h"
@@ -66,7 +67,7 @@ void UGSTN_ControlledWallMovementMode::CheckForWallExit(const FSimulationTickPar
 	const FCharacterDefaultInputs* Inputs = Params.StartState.InputCmd.InputCollection.FindDataByType<FCharacterDefaultInputs>();
 	const float DeltaSeconds = Params.TimeStep.StepMs * 0.001f;
 
-	if (TryWallJump(Inputs, DeltaSeconds, InOutState) || TryDetachByButton(Params.StartState, DeltaSeconds, InOutState))
+	if (TryWallJump(Params.StartState, DeltaSeconds, InOutState) || TryDetachByButton(Params.StartState, DeltaSeconds, InOutState))
 	{
 		return;
 	}
@@ -80,12 +81,20 @@ void UGSTN_ControlledWallMovementMode::CheckForWallExit(const FSimulationTickPar
 	InOutState.PullAwayTime = 0.f;
 }
 
-bool UGSTN_ControlledWallMovementMode::TryWallJump(const FCharacterDefaultInputs* Inputs, float DeltaSeconds, FGSTN_WallTickState& InOutState) const
+bool UGSTN_ControlledWallMovementMode::TryWallJump(const FMoverTickStartData& StartState, float DeltaSeconds, FGSTN_WallTickState& InOutState) const
 {
-	bool bJumpPressed = Inputs && Inputs->bIsJumpJustPressed;
-#if GSTN_WALL_DEBUG
-	bJumpPressed |= GSTNWallDebug::ConsumeJumpRequest();
-#endif
+	// Two carriers of the jump press, both in the predicted, replayed Mover command: the combat model's logical Jump button
+	// (FGSTN_MoverButtonInputs, layout function "Wall.Jump", also gstn.Wall.Jump) and GASP's own jump intent. Either one jumps: reading
+	// only the first lost the wall jump of pawns whose combat input config does not bind GASP's jump action (desktop check 2026-11-27)
+	bool bJumpPressed = false;
+	if (const FGSTN_MoverButtonInputs* Buttons = StartState.InputCmd.InputCollection.FindDataByType<FGSTN_MoverButtonInputs>())
+	{
+		bJumpPressed = Buttons->Has(FGSTN_MoverButtonInputs::JumpPressed);
+	}
+	if (const FCharacterDefaultInputs* Inputs = StartState.InputCmd.InputCollection.FindDataByType<FCharacterDefaultInputs>())
+	{
+		bJumpPressed |= Inputs->bIsJumpJustPressed;
+	}
 	if (!WallJump.bEnableWallJump || WallJump.JumpModeName.IsNone() || !bJumpPressed)
 	{
 		return false;
@@ -131,20 +140,26 @@ bool UGSTN_ControlledWallMovementMode::TryDetachByPullingAway(const FCharacterDe
 
 bool UGSTN_ControlledWallMovementMode::IsDetachButtonPressed(const FMoverTickStartData& StartState) const
 {
-#if GSTN_WALL_DEBUG
-	if (GSTNWallDebug::IsDetachHeld())
+	if (const FGSTN_WallInputs* WallInputs = StartState.InputCmd.InputCollection.FindDataByType<FGSTN_WallInputs>(); WallInputs && WallInputs->bWantsToDetach)
 	{
 		return true;
 	}
-#endif
-	if (const FGSTN_WallInputs* WallInputs = StartState.InputCmd.InputCollection.FindDataByType<FGSTN_WallInputs>())
-	{
-		return WallInputs->bWantsToDetach;
-	}
 
-	// Fallback: the CharacterMover crouch intent. Read from the component, so it is not part of the predicted input
+	// The crouch as detach button, read from the command (FGSTN_MoverButtonInputs, layout function "Wall.Detach"). The CharacterMover crouch
+	// intent read from the component was not part of the predicted input (a replay or the server could disagree): kept only for a pawn
+	// without the combat model, which has no command entry to read
+	const FGSTN_MoverButtonInputs* Buttons = StartState.InputCmd.InputCollection.FindDataByType<FGSTN_MoverButtonInputs>();
+	if (Buttons && Buttons->Has(FGSTN_MoverButtonInputs::DetachForced))
+	{
+		// gstn.Wall.Detach: detaches regardless of the crouch setting, as the old debug global did
+		return true;
+	}
 	if (Detach.bUseCrouchAsDetachButton)
 	{
+		if (Buttons)
+		{
+			return Buttons->Has(FGSTN_MoverButtonInputs::DetachHeld);
+		}
 		if (const UCharacterMoverComponent* CharacterMover = Cast<UCharacterMoverComponent>(GetMoverComponent()))
 		{
 			return CharacterMover->GetCrouchIntent();

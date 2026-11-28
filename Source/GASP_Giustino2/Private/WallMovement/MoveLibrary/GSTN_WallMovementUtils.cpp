@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "WallMovement/MoveLibrary/GSTN_WallMovementUtils.h"
+#include "Sim/GSTN_SimQuery.h"
 
 #include "Components/PrimitiveComponent.h"
 #include "Engine/World.h"
@@ -370,7 +371,7 @@ void UGSTN_WallMovementUtils::TryMoveToAdhereToWall(const FMovingComponentSet& M
 	const FVector End = Start - WallNormal * (WallGap + WallProbeDistance);
 
 	FHitResult Hit;
-	if (!World->SweepSingleByChannel(Hit, Start, End, Orientation, UpdatedPrimitive->GetCollisionObjectType(), UpdatedPrimitive->GetCollisionShape(), QueryParams, ResponseParams))
+	if (!FGSTN_SimQuery::SweepSingleByChannel(World, Hit, Start, End, Orientation, UpdatedPrimitive->GetCollisionObjectType(), UpdatedPrimitive->GetCollisionShape(), QueryParams, ResponseParams))
 	{
 		return;
 	}
@@ -424,7 +425,7 @@ bool UGSTN_WallMovementUtils::AdhereAndSense(const FMovingComponentSet& MovingCo
 	FHitResult Hit;
 	{
 		GSTN_WALL_QUERY_SCOPE();
-		if (!World->SweepSingleByChannel(Hit, Start, End, Orientation, UpdatedPrimitive->GetCollisionObjectType(), UpdatedPrimitive->GetCollisionShape(), QueryParams, ResponseParams))
+		if (!FGSTN_SimQuery::SweepSingleByChannel(World, Hit, Start, End, Orientation, UpdatedPrimitive->GetCollisionObjectType(), UpdatedPrimitive->GetCollisionShape(), QueryParams, ResponseParams))
 		{
 			return false;
 		}

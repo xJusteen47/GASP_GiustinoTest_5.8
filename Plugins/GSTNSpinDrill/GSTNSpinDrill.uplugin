@@ -47,6 +47,10 @@
 	],
 	"Plugins": [
 		{
+			"Name": "GSTNCore",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNInput",
 			"Enabled": true
 		},

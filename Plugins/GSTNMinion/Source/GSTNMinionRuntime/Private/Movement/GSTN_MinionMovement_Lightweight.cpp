@@ -1,6 +1,7 @@
 // Minion runtime: movement backends (authority batch stage 4, M8 G4).
 
 #include "Movement/GSTN_MinionMovement_Lightweight.h"
+#include "Sim/GSTN_SimQuery.h"
 
 #include "Algo/BinarySearch.h"
 #include "Components/PrimitiveComponent.h"
@@ -597,7 +598,7 @@ bool FGSTN_MinionMovement_Lightweight::Sweep(const FGSTN_MinionMoveContext& Ctx,
 {
 	OutHit = FHitResult();
 	const float Radius = RadiusOverride > 0.f ? RadiusOverride : State.Radius;
-	return Ctx.World->SweepSingleByObjectType(OutHit, From, To, State.CapsuleRotation, Ctx.ObjectQuery,
+	return FGSTN_SimQuery::SweepSingleByObjectType(Ctx.World, OutHit, From, To, State.CapsuleRotation, Ctx.ObjectQuery,
 		FCollisionShape::MakeCapsule(Radius, State.HalfHeight), Ctx.QueryParams);
 }
 
@@ -609,7 +610,7 @@ bool FGSTN_MinionMovement_Lightweight::Depenetrate(const FGSTN_MinionMoveContext
 	for (int32 Pass = 0; Pass < MaxDepenetrationPasses; ++Pass)
 	{
 		Overlaps.Reset();
-		if (!Ctx.World->OverlapMultiByObjectType(Overlaps, State.Centre, State.CapsuleRotation, Ctx.ObjectQuery, Shape, Ctx.QueryParams))
+		if (!FGSTN_SimQuery::OverlapMultiByObjectType(Ctx.World, Overlaps, State.Centre, State.CapsuleRotation, Ctx.ObjectQuery, Shape, Ctx.QueryParams))
 		{
 			break;
 		}

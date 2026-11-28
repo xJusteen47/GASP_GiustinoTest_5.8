@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "WallMovement/MoveLibrary/GSTN_WallEdgeUtils.h"
+#include "Sim/GSTN_SimQuery.h"
 
 #include "Components/PrimitiveComponent.h"
 #include "Engine/World.h"
@@ -67,7 +68,7 @@ namespace GSTNWallEdge
 		bool Trace(FHitResult& OutHit, const FVector& Start, const FVector& End) const
 		{
 			GSTN_WALL_QUERY_SCOPE();
-			return World->LineTraceSingleByChannel(OutHit, Start, End, Channel, QueryParams, ResponseParams);
+			return FGSTN_SimQuery::LineTraceSingleByChannel(World, OutHit, Start, End, Channel, QueryParams, ResponseParams);
 		}
 
 		bool IsValidWall(const FHitResult& Hit, const FVector& GravityUp, const FGSTN_WallCheckSettings& Check) const

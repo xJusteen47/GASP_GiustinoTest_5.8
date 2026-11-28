@@ -250,6 +250,14 @@
 			"Enabled": true
 		},
 		{
+			"Name": "GSTNCore",
+			"Enabled": true
+		},
+		{
+			"Name": "GSTNWorldSim",
+			"Enabled": true
+		},
+		{
 			"Name": "GSTNPiggyback",
 			"Enabled": true
 		},

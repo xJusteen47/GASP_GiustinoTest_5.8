@@ -6,6 +6,7 @@
 #include "Kits/GSTN_DesignerIdentity.h"
 #include "Loadout/GSTN_LoadoutData.h"
 #include "Loadout/GSTN_LoadoutExtensionData.h"
+#include "Loadout/GSTN_LoadoutInputProfile.h"
 #include "Tests/GSTN_LoadoutExtensionTestTypes.h"
 #include "Serialization/BitReader.h"
 #include "Serialization/BitWriter.h"
@@ -583,6 +584,37 @@ bool FGSTN_CoreDataTypedExtensionsTest::RunTest(const FString& Parameters)
 	Original.GetExtensionBlockBytes(BlockA);
 	Other.GetExtensionBlockBytes(BlockB);
 	TestTrue(TEXT("block bytes differ with the extensions"), BlockA.Num() > 0 && BlockA != BlockB);
+	return true;
+}
+
+// F1 handshake: the input profile travels in the loadout under its own wire id and versioned payload, and comes back equal
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_CoreDataInputProfileNetTest, "GSTNCombat.Core.Data.InputProfileNetSerialize", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_CoreDataInputProfileNetTest::RunTest(const FString& Parameters)
+{
+	const FGameplayTag Button = FGameplayTag::RequestGameplayTag(TEXT("Input.Button.Special"), false);
+	FGSTN_LoadoutData Original = MakeLoadout();
+	FGSTN_LoadoutInputProfileExt Entry;
+	Entry.Profile.Device = EGSTN_InputDevice::MouseKeyboard;
+	Entry.Profile.ButtonOverrides.Add({ FName(TEXT("Movement.Dodge")), Button });
+	Entry.Profile.CommandPicks.Add({ GSTNCommandTags::Special_Neutral.GetTag(), FName(TEXT("DoubleTap")) });
+	GSTNLoadoutExtension::Set(Original.Extensions, Entry);
+
+	int64 Bits = 0;
+	const TArray<uint8> Bytes = WriteNet(Original, Bits);
+	FGSTN_LoadoutData Copy;
+	{
+		FBitReader Reader(Bytes.GetData(), Bits);
+		bool bSuccess = false;
+		Copy.NetSerialize(Reader, nullptr, bSuccess);
+		TestTrue(TEXT("the loadout with a profile reads back"), bSuccess && !Reader.IsError());
+	}
+	const FGSTN_LoadoutInputProfileExt* Read = GSTNLoadoutExtension::Find<FGSTN_LoadoutInputProfileExt>(Copy.Extensions);
+	TestNotNull(TEXT("the profile entry survives"), Read);
+	if (Read)
+	{
+		TestTrue(TEXT("the profile is equal"), Read->Profile == Entry.Profile);
+	}
+	TestTrue(TEXT("the loadout is equal"), Copy == Original);
 	return true;
 }
 

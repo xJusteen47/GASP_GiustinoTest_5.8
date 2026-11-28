@@ -1,6 +1,7 @@
 // Combat simulation (GAS-NPP fork).
 
 #include "Movement/GSTN_GroundProbe.h"
+#include "Sim/GSTN_SimQuery.h"
 
 #include "Components/PrimitiveComponent.h"
 #include "Engine/World.h"
@@ -25,7 +26,7 @@ bool FGSTN_GroundProbe::HasFloorAhead(const FMoverTickStartData& StartState, con
 	const FVector Start = Next - Up * (HalfHeight - 10.0);
 	const FVector End = Next - Up * (HalfHeight + LedgeProbeDepth);
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(GSTNGroundProbeLedge), false, Primitive->GetOwner());
-	return Primitive->GetWorld()->LineTraceTestByChannel(Start, End, ECC_Visibility, Params);
+	return FGSTN_SimQuery::LineTraceTestByChannel(Primitive->GetWorld(), Start, End, ECC_Visibility, Params);
 }
 
 bool FGSTN_GroundProbe::ResolveFloorSurface(const FMoverTickStartData& StartState, FGSTN_SurfaceView& OutView)

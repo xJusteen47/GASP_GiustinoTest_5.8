@@ -9,6 +9,7 @@
 #include "Loadout/GSTN_LoadoutAssembly.h"
 #include "Loadout/GSTN_LoadoutChoices.h"
 #include "Loadout/GSTN_LoadoutData.h"
+#include "Input/GSTN_InputProfile.h"
 #include "Input/GSTN_StickThresholds.h"
 #include "UObject/PrimaryAssetId.h"
 #include "UObject/StrongObjectPtr.h"
@@ -81,6 +82,15 @@ public:
 	 */
 	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Combat|Loadout")
 	void ServerSetInputFeel(const FGSTN_StickThresholds& Thresholds);
+
+	/**
+	 * The owning client's input profile (device, remapped functions, picked commands: FGSTN_LoadoutInputProfileExt) changed, or the pawn just
+	 * started. The handshake of the rollback plan's F1: the host sanitizes it against the match's button layout and puts it into the applied
+	 * loadout as a new revision, so every machine compiles the player's command table with it and adopts it on the same frame. Never per
+	 * frame; unchanged = nothing happens
+	 */
+	UFUNCTION(Server, Reliable, BlueprintCallable, Category = "Combat|Loadout")
+	void ServerSetInputProfile(const FGSTN_InputProfile& Profile);
 
 	/** Sent by the server to the requesting client when the rules refused its loadout; raises OnLoadoutRejected there */
 	UFUNCTION(Client, Reliable)
@@ -229,7 +239,17 @@ private:
 	FGSTN_StickThresholds PendingInputFeel;
 	bool bHasPendingInputFeel = false;
 
-	/** Owning machine: sends the player's stick thresholds (UGSTN_InputOptionsSubsystem) when the applied loadout carries others */
+	/** Server: the input profile the owning client last sent, same use as PendingInputFeel */
+	FGSTN_InputProfile PendingInputProfile;
+	bool bHasPendingInputProfile = false;
+
+	/** The request with the player's own entries (input feel, input profile) added when it lacks them: a loadout screen never knows them */
+	FGSTN_LoadoutData WithPlayerEntries(const FGSTN_LoadoutData& Requested) const;
+
+	/**
+	 * Owning machine: sends the player's stick thresholds and input profile (UGSTN_InputOptionsSubsystem) when the applied loadout carries
+	 * others
+	 */
 	void SyncLocalInputFeel();
 	FDelegateHandle InputOptionsHandle;
 

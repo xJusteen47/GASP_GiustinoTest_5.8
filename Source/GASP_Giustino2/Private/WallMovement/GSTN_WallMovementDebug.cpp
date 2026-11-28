@@ -13,6 +13,8 @@
 #include "WallMovement/MoveLibrary/GSTN_WallMovementLibrary.h"
 #include "HAL/IConsoleManager.h"
 #include "MoverComponent.h"
+#include "Movement/GSTN_MoverButtonInputs.h"
+#include "Simulation/GSTN_CombatSimComponent.h"
 
 #include <atomic>
 
@@ -20,11 +22,27 @@ DEFINE_LOG_CATEGORY(LogGSTNWall);
 
 namespace GSTNWallDebug
 {
-	static std::atomic<bool> bJumpRequested = false;
 	static std::atomic<bool> bDetachHeld = false;
+	static void ForEachPlayerMover(TFunctionRef<void(UMoverComponent&)> Fn, int32 PlayerId = -1);
+
+	/**
+	 * Debug presses go into the command the pawn produces (UGSTN_CombatSimComponent::AddDebugMoverButtons), so they are predicted, sent and
+	 * replayed like a real press. Reading a global inside the simulation made client and server disagree (rollback plan F1)
+	 */
+	static void SendDebugButtons(uint8 PressedFlags)
+	{
+		const uint8 Held = bDetachHeld ? FGSTN_MoverButtonInputs::DetachForced : 0;
+		ForEachPlayerMover([PressedFlags, Held](UMoverComponent& Mover)
+		{
+			if (UGSTN_CombatSimComponent* Combat = Mover.GetOwner() ? Mover.GetOwner()->FindComponentByClass<UGSTN_CombatSimComponent>() : nullptr)
+			{
+				Combat->AddDebugMoverButtons(PressedFlags, Held);
+			}
+		}, -1);
+	}
 
 	/** Calls Fn on the Mover component of every player pawn in PIE/game worlds (PlayerId >= 0: only the pawn of the player with that PlayerState id) */
-	static void ForEachPlayerMover(TFunctionRef<void(UMoverComponent&)> Fn, int32 PlayerId = -1)
+	static void ForEachPlayerMover(TFunctionRef<void(UMoverComponent&)> Fn, int32 PlayerId)
 	{
 		for (const FWorldContext& Ctx : GEngine->GetWorldContexts())
 		{
@@ -99,7 +117,7 @@ namespace GSTNWallDebug
 		TEXT("Simulates one jump press for wall modes (wall jump)"),
 		FConsoleCommandDelegate::CreateLambda([]()
 		{
-			bJumpRequested = true;
+			SendDebugButtons(FGSTN_MoverButtonInputs::JumpPressed);
 			UE_LOG(LogGSTNWall, Log, TEXT("Jump requested"));
 		}));
 
@@ -108,6 +126,7 @@ namespace GSTNWallDebug
 		FConsoleCommandWithArgsDelegate::CreateLambda([](const TArray<FString>& Args)
 		{
 			bDetachHeld = Args.Num() == 0 || FCString::Atoi(*Args[0]) != 0;
+			SendDebugButtons(0);
 			UE_LOG(LogGSTNWall, Log, TEXT("Detach button %d"), bDetachHeld ? 1 : 0);
 		}));
 
@@ -117,16 +136,6 @@ namespace GSTNWallDebug
 		{
 			ForEachPlayerMover([](UMoverComponent& Mover) { UGSTN_WallMovementLibrary::ResetWallMemory(&Mover); });
 		}));
-
-	bool ConsumeJumpRequest()
-	{
-		return bJumpRequested.exchange(false);
-	}
-
-	bool IsDetachHeld()
-	{
-		return bDetachHeld;
-	}
 
 	static TAutoConsoleVariable<int32> CVarCountQueries(TEXT("gstn.Wall.CountQueries"), 0,
 		TEXT("1 = count the wall queries of each tick (scoped counter); see gstn.Wall.QueryStats"), ECVF_Cheat);

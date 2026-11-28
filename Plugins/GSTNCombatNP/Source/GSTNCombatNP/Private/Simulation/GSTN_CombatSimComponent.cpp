@@ -4,6 +4,8 @@
 
 #include "Timeline/GSTN_ChargeHold.h"
 #include "Loadout/GSTN_LoadoutInputFeel.h"
+#include "Layout/GSTN_ButtonLayout.h"
+#include "Input/GSTN_CombatButtonTags.h"
 
 #include "Hits/GSTN_HurtboxPose.h"
 #include "Movement/GSTN_GravityFrame.h"
@@ -38,6 +40,7 @@
 #include "Movement/GSTN_SetFacingEffect.h"
 #include "Movement/GSTN_BodyCapsuleModifier.h"
 #include "Movement/GSTN_AirTurn.h"
+#include "Movement/GSTN_MoverButtonInputs.h"
 #include "Movement/GSTN_MovementMixer.h"
 #include "DefaultMovementSet/Modes/FallingMode.h"
 #include "Input/GSTN_InputTags.h"
@@ -933,6 +936,25 @@ void UGSTN_CombatSimComponent::ProduceInput(const int32 DeltaTimeMS, FGSTN_Input
 	LastMoveStickX = Cmd->StickX;
 	LastMoveStickY = Cmd->StickY;
 	LastCameraYaw = Cmd->CameraYaw;
+
+	// Logical buttons Mover modes read (wall jump, wall detach): from this command, so Mover sees what the combat model sees
+	{
+		const int32 JumpIndex = ButtonMap.GetIndex(UGSTN_ButtonLayout::GetButton(TEXT("Wall.Jump"), GSTNCombatButtonTags::Button_Jump.GetTag()));
+		const int32 DetachIndex = ButtonMap.GetIndex(UGSTN_ButtonLayout::GetButton(TEXT("Wall.Detach"), GSTNCombatButtonTags::Button_Crouch.GetTag()));
+		auto Bit = [](uint32 Mask, int32 Index) { return Index != INDEX_NONE && Index < 32 && (Mask & (1u << Index)) != 0; };
+		uint8 Flags = 0;
+		Flags |= Bit(Cmd->PressedButtons, JumpIndex) ? FGSTN_MoverButtonInputs::JumpPressed : 0;
+		Flags |= Bit(Cmd->HeldButtons, JumpIndex) ? FGSTN_MoverButtonInputs::JumpHeld : 0;
+		Flags |= Bit(Cmd->HeldButtons, DetachIndex) ? FGSTN_MoverButtonInputs::DetachHeld : 0;
+		LastMoverButtonFlags = Flags | DebugMoverPress | DebugMoverHeld;
+		DebugMoverPress = 0;
+	}
+}
+
+void UGSTN_CombatSimComponent::AddDebugMoverButtons(const uint8 PressedFlags, const uint8 HeldFlags)
+{
+	DebugMoverPress |= PressedFlags;
+	DebugMoverHeld = HeldFlags;
 }
 
 void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMoverInputCmdContext& InputCmdResult)
@@ -942,6 +964,8 @@ void UGSTN_CombatSimComponent::ProduceInput_Implementation(int32 SimTimeMs, FMov
 	{
 		return;
 	}
+	// Written every frame (also zero): an entry left from an earlier frame must never repeat a press
+	InputCmdResult.InputCollection.FindOrAddMutableDataByType<FGSTN_MoverButtonInputs>().Flags = LastMoverButtonFlags;
 	// The frame this input is for is the one after the latest simulated frame. Per-move steering (owner 2026-11-14): the reticle source holds
 	// only with the reticle on (slice 3b, unchanged); the move stick sources hold from the first frame to the end of the last active one, so
 	// the movement mode never turns the move further than its cap, nor after the lock. The rate (M11 L9) is the sim's, so they agree

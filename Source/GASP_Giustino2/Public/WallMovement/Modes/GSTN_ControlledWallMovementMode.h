@@ -40,7 +40,7 @@ protected:
 	virtual void CheckForWallExit(const FSimulationTickParams& Params, FGSTN_WallTickState& InOutState) const override;
 
 	/** Jump pressed: launch away from the wall into WallJump.JumpModeName */
-	bool TryWallJump(const FCharacterDefaultInputs* Inputs, float DeltaSeconds, FGSTN_WallTickState& InOutState) const;
+	bool TryWallJump(const FMoverTickStartData& StartState, float DeltaSeconds, FGSTN_WallTickState& InOutState) const;
 
 	/** Detach button held: let go into Detach.DetachModeName */
 	bool TryDetachByButton(const FMoverTickStartData& StartState, float DeltaSeconds, FGSTN_WallTickState& InOutState) const;

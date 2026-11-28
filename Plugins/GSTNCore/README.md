@@ -13,6 +13,14 @@ Status: **experimental (0.1)**, `EnabledByDefault: true` (a plugin that needs it
 |---|---|---|
 | `GSTNCore` | exists (Runtime, Default) | `Net/GSTN_PoseHistory.h`: `FGSTN_PoseSample`, `FGSTN_PoseHistory` (ring of the last 24 end-of-frame poses by simulation frame, re-simulation overwrites, velocity at a point from two consecutive frames). Covered by `GSTNCore.Net.*`. `GameRules/GSTN_GameRules.h` (GR-1): `UGSTN_GameRules` (data asset, one per mode or level, a piece per plugin), `UGSTN_GameRulesPiece` (base of a plugin's piece; its class defaults are that plugin's rules when no asset is active), `FGSTN_ActiveGameRules::GetPiece<T>()`, `UGSTN_GameRulesSubsystem` (server picks: URL `GameRules=<path>`, else an asset listing the level, else one listing the game mode, else defaults) and `AGSTN_GameRulesInfo` (replicates the choice, always relevant). First piece: `UGSTN_HeldRules` (GSTNHeld). |
 
+`Sim/GSTN_SimQuery.h` (rollback plan, physics research 1A): `FGSTN_SimQuery`, the single entry point of the collision queries a
+simulation tick makes (line traces, sweeps, overlaps; UWorld's signatures with the world first). Today it forwards to Chaos unchanged; it
+is where a deterministic backend would answer if Chaos queries diverge between machines. `gstn.SimQuery.Hash 1` folds every query (inputs
+and answer, bit for bit, summed so order does not matter) into a per-frame hash opened by `BeginFrame` (the world sim of `GSTNWorldSim`
+calls it, first in each frame); `gstn.SimQuery.Dump [N]` logs the last N frames per world, to compare two machines. Simulation code calls
+it; presentation, camera, animation, debug and editor code keep calling UWorld. Mover's own sweeps (`Plugins/EngineOverrides/Mover`, an
+engine plugin that cannot list GSTNCore) do not go through it yet.
+
 Planned in `Net/` (M8 G2 and later, only when a second user exists): the quantizer and net item codec helpers, frame-stamp
 reconstruction, the tier rate scheduler (many-enemies-replication.md §3.5).
 
@@ -21,7 +29,7 @@ reconstruction, the tier rate scheduler (many-enemies-replication.md §3.5).
 - Plugins: none.
 - `GSTNCore` (`Build.cs`): Core, CoreUObject, Engine, AssetRegistry (GR-1, for the game rules). `Tools/Modules/check_modules.py` fails if it lists a GSTN module, the project module,
   GameplayAbilities, AbilitySystemSimulation, NetworkPrediction, Mover or UnrealEd.
-- Used by: `GSTNPlatform` (`GSTNPlatformCore`, which keeps a redirect header `GSTN_PoseHistory.h`), `GSTNMinion` (from M8 G2), `GSTNHeld` (game rules piece, GR-1).
+- Used by: `GSTNPlatform` (`GSTNPlatformCore`, which keeps a redirect header `GSTN_PoseHistory.h`), `GSTNMinion` (from M8 G2), `GSTNHeld` (game rules piece, GR-1); `FGSTN_SimQuery` by `GSTNCombatNP`, `GSTNLinkNP`, `GSTNMinionRuntime`, `GSTNSpinDrillNP`, `GSTNWorldSim` and the project module.
 
 ## Gameplay tags
 

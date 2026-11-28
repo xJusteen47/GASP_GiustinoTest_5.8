@@ -1,4 +1,5 @@
 #include "Movement/GSTN_LayeredMove_Knockback.h"
+#include "Sim/GSTN_SimQuery.h"
 
 #include "AbilitySystemComponent.h"
 #include "GSTN_CombatNPTags.h"
@@ -210,7 +211,7 @@ void FGSTN_LayeredMove_Knockback::ProbeContact(const FMoverTickStartData& StartS
 	FCollisionResponseParams Response;
 	Primitive->InitSweepCollisionParams(Query, Response);
 	FHitResult Hit;
-	if (!World->SweepSingleByChannel(Hit, Start, End, Sync->GetOrientation_WorldSpace().Quaternion(), Primitive->GetCollisionObjectType(), Primitive->GetCollisionShape(), Query, Response)
+	if (!FGSTN_SimQuery::SweepSingleByChannel(World, Hit, Start, End, Sync->GetOrientation_WorldSpace().Quaternion(), Primitive->GetCollisionObjectType(), Primitive->GetCollisionShape(), Query, Response)
 		|| !Hit.bBlockingHit)
 	{
 		++ProbeStats.NoHit;
