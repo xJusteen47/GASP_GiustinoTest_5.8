@@ -424,6 +424,8 @@ void UGSTN_GreyboxAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// Bones only where strictly needed, in attacks (owner 2026-11-24): the body follows the pose and the markers show only while an
 	// attack's capsule clip plays; everything else (locomotion, hit reactions, rolls) is the rigid capsule swaying
 	Shape.PoseWeight = Shape.OverrideWeight;
+	// A move's capsule clip that lies down (the dropkick's landing) lies on the floor, not at its key pose's height
+	Shape.bFloorRestByTilt = Shape.OverrideClip && Shape.OverrideWeight > 0.f;
 	Shape.LyingWeight = LyingAlpha;
 	// The floor is the feet's height only on the ground
 	const bool bFloorLift = ShapeSettings.bKeepAboveFloor && bOnGround;

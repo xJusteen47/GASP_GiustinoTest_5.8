@@ -57,6 +57,9 @@ struct GSTNANIMATIONCORE_API FGSTN_AnimNode_GreyboxShape : public FAnimNode_Base
 	 * Pure: the lowest height of a capsule hanging from a pelvis at PelvisLocation (component space), its axis along Up (unit), the centres of
 	 * its two hemispheres BelowPelvis and AbovePelvis cm from the pelvis along the axis, Radius thick. The floor lift keeps it >= 0
 	 */
+	/** Pure: the floor rest of a posed body whose up has this Z (FGSTN_GreyboxShape::bFloorRestByTilt): 0 up to 30 deg of tilt, 1 from 70 */
+	static float TiltFloorRest(float UpZ);
+
 	static float CapsuleLowestZ(const FVector& PelvisLocation, const FVector& Up, float BelowPelvis, float AbovePelvis, float Radius);
 
 private:

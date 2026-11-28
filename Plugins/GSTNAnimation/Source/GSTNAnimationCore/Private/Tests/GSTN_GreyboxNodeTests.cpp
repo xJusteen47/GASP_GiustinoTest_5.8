@@ -67,6 +67,11 @@ bool FGSTN_GreyboxSquashScaleTest::RunTest(const FString& Parameters)
 		FVector::ForwardVector, 47.f, 27.f, 34.f), -14.f, 1.e-3f));
 	TestTrue(TEXT("upside down: the top end is the lowest"), FMath::IsNearlyEqual(FGSTN_AnimNode_GreyboxShape::CapsuleLowestZ(FVector(0, 0, 70),
 		-FVector::UpVector, 47.f, 27.f, 34.f), 9.f, 1.e-3f));
+	// Floor rest by tilt (2026-11-28, the dropkick's land clip lying ~90 cm over the floor): upright or leaning keeps its gap, lying rests
+	TestTrue(TEXT("upright: no rest"), FMath::IsNearlyZero(FGSTN_AnimNode_GreyboxShape::TiltFloorRest(1.f)));
+	TestTrue(TEXT("a 20 deg lean: no rest"), FMath::IsNearlyZero(FGSTN_AnimNode_GreyboxShape::TiltFloorRest(FMath::Cos(FMath::DegreesToRadians(20.f)))));
+	TestTrue(TEXT("lying flat: full rest"), FMath::IsNearlyEqual(FGSTN_AnimNode_GreyboxShape::TiltFloorRest(0.f), 1.f, 1.e-4f));
+	TestTrue(TEXT("upside down counts as upright"), FMath::IsNearlyZero(FGSTN_AnimNode_GreyboxShape::TiltFloorRest(-1.f)));
 	return true;
 }
 

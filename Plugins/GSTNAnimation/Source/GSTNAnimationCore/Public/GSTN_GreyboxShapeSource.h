@@ -56,6 +56,13 @@ struct GSTNANIMATIONCORE_API FGSTN_GreyboxShape
 	float FloorRest = 0.f;
 
 	/**
+	 * With FloorRadius > 0, rest on the floor by how much the posed body lies (on top of FloorRest): none up to 30 degrees from upright, all
+	 * of it from 70 (2026-11-28, playtest forward air: the dropkick's land capsule clip lay flat ~90 cm over the floor while the driver's pelvis
+	 * was at 12). Set while a move's capsule clip plays
+	 */
+	bool bFloorRestByTilt = false;
+
+	/**
 	 * Roll (owner 2026-11-24, "fix the roll animations"): a rigid turn of the whole capsule about SpinPivot (component space), applied last, after
 	 * the lean, so a get-up or tech roll reads as the capsule rolling over itself whatever the driver's pose does. Identity = none
 	 */

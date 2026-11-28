@@ -54,6 +54,12 @@ float FGSTN_AnimNode_GreyboxShape::PelvisHeightAfterSquash(float Height, float S
 	return Height * FMath::Clamp(Squash, 0.2f, 3.f);
 }
 
+float FGSTN_AnimNode_GreyboxShape::TiltFloorRest(float UpZ)
+{
+	const float TiltDeg = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FMath::Abs(UpZ), 0.f, 1.f)));
+	return FMath::SmoothStep(30.f, 70.f, TiltDeg);
+}
+
 float FGSTN_AnimNode_GreyboxShape::CapsuleLowestZ(const FVector& PelvisLocation, const FVector& Up, float BelowPelvis, float AbovePelvis, float Radius)
 {
 	const float LowerCentre = static_cast<float>(PelvisLocation.Z - Up.Z * BelowPelvis);
@@ -241,9 +247,10 @@ void FGSTN_AnimNode_GreyboxShape::Evaluate_AnyThread(FPoseContext& Output)
 		const float Above = FMath::Max(Shape.FloorTop - Shape.FloorRadius - RefHeight, 0.f) * Along;
 		float Lowest = CapsuleLowestZ(PelvisCS.GetLocation(), Up, Below, Above, Radius);
 		// Resting: the gap over the floor goes too, by FloorRest (a body lying on the floor, not hanging over it)
-		if (Lowest > 0.f && Shape.FloorRest > 0.f)
+		const float Rest = FMath::Max(FMath::Clamp(Shape.FloorRest, 0.f, 1.f), Shape.bFloorRestByTilt ? TiltFloorRest(static_cast<float>(Up.Z)) : 0.f);
+		if (Lowest > 0.f && Rest > 0.f)
 		{
-			Lowest *= FMath::Clamp(Shape.FloorRest, 0.f, 1.f);
+			Lowest *= Rest;
 		}
 		else if (Lowest > 0.f)
 		{
