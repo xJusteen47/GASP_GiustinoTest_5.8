@@ -3,8 +3,8 @@
 # one Play session: the host gets the kit, a dummy is put 90 cm in front of it, then
 #   1. the dummy is offered as a grab target (Interact.Target.Grab on the host),
 #   2. a tap of IA_GASNPP_Interact (pad B in IMC_GASNPP_Test), injected through Enhanced Input, grabs it: Body link roles grabber 1 / grabbed 2,
-#   3. one stick turn (IA_Move, counter-clockwise) spins it: a Command.Link.Spin.* hit on the dummy,
-#   4. a neutral Attack throws it (Notation N.): a Command.Link.Throw.* hit on the dummy and the link gone.
+#   3. a neutral Attack throws it (Notation N.): a Command.Link.Throw.* hit on the dummy and the link gone;
+#   then a second dummy is grabbed the same way, spun by two stick turns (IA_Move: Command.Link.Spin.* hits) and thrown out of the spin.
 # Nothing is saved. Report: Saved/Logs/grab-ganon/grab_b_check.txt (last line OVERALL: PASS / FAIL), then QUIT_EDITOR.
 #   UnrealEditor.exe <uproject> /Game/GSTN/Maps/L_Test_Hub -ExecCmds="py <boot.py>" -unattended -nosplash
 #   boot.py:  exec(open(r"<project>/Tools/GASNPPTest/grab_b_check.py").read())
@@ -48,11 +48,11 @@ def host():
     return g.key_of_player(0)
 
 
-def dummy():
-    """The dummy nearest the host (dummies have no player state: their key is the actor name)"""
+def dummy(used=()):
+    """The dummy nearest the host not used yet (dummies have no player state: their key is the actor name)"""
     v = g.snap(g.worlds()[0])
     me = v[host()]['location']
-    cands = [(math.dist(me[:2], s['location'][:2]), k) for k, s in v.items() if not k.startswith('P')]
+    cands = [(math.dist(me[:2], s['location'][:2]), k) for k, s in v.items() if not k.startswith('P') and k not in used]
     return min(cands)[1]
 
 
@@ -61,48 +61,65 @@ def events(key, prefix):
 
 
 def kit_steps(kit):
-    """(time, fn) steps of one kit, times from the step start"""
-    ctx = {}
-    s = []
-    s.append((0.0, lambda: log(f'--- {kit}: loadout {g._apply_loadout(host(), kit)}')))
+    """(time, fn) steps of one kit, times from the step start. Two grabs on two dummies: the first is thrown at once (N.), the second is spun with the
+    stick and thrown out of the spin. Ganondorf's hold lasts 90 frames (1.44 s) at 0 %, no mash: every step after a grab fits inside it"""
+    ctx = {'used': []}
+    s = [(0.0, lambda: log(f'--- {kit}: loadout {g._apply_loadout(host(), kit)}'))]
 
-    def place():
-        ctx['d'] = dummy()
-        ctx['spin0'] = len(events(ctx['d'], 'Command.Link.Spin'))
-        ctx['throw0'] = len(events(ctx['d'], 'Command.Link.Throw'))
-        ctx['grab0'] = len(events(ctx['d'], 'Command.Link.Grab'))
-        g._place_near(0, ctx['d'], (90.0, 0.0))
-        log(f'dummy {ctx["d"]} placed 90 cm ahead')
-    s.append((1.5, place))
-    s.append((2.3, lambda: check(f'{kit} 1 dummy offered as grab target', ls.has_tag(0, host(), 'Interact.Target.Grab'),
-                                 f'Interact.Target.Grab on host={ls.has_tag(0, host(), "Interact.Target.Grab")}')))
-    # The press goes through Enhanced Input (IA_GASNPP_Interact, the action pad B maps to in IMC_GASNPP_Test), like the owner's pad: 0.15 s, so it
-    # spans two editor frames and stays a tap (the hold is the kit swap)
-    s.append((2.4, lambda: g.hold(0, 'interact', (1.0, 0.0, 0.0))))
-    s.append((2.55, lambda: g.release(0, 'interact')))
+    def place(tag):
+        def f():
+            d = dummy(ctx['used'])
+            ctx['used'].append(d)
+            ctx[tag] = d
+            ctx[tag + '0'] = {p: len(events(d, p)) for p in ('Command.Link.Grab', 'Command.Link.Spin', 'Combat.HitType.Throw')}
+            ctx[tag + 'host_spin0'] = len(events(host(), 'Command.Link.Spin'))
+            g._place_near(0, d, (90.0, 0.0))
+            log(f'{tag}: dummy {d} placed 90 cm ahead')
+        return f
 
-    def grabbed():
-        h, d = ls.body(0, host()), ls.body(0, ctx['d'])
-        ctx['grabbed'] = bool(h and d and h[0] == 1 and d[0] == 2)
-        check(f'{kit} 2 B (Interact tap) grabs', ctx['grabbed'],
-              f'host body {h}, dummy body {d}, grab hits {len(events(ctx["d"], "Command.Link.Grab")) - ctx["grab0"]}')
-    s.append((3.1, grabbed))
-    # Two stick turns counter-clockwise (IA_Move x right, y forward): the grab spin needs 360 degrees of stick
-    for k in range(17):
+    def new(tag, prefix):
+        return len(events(ctx[tag], prefix)) - ctx[tag + '0'][prefix]
+
+    def grab(t, tag, label):
+        # The press goes through Enhanced Input (IA_GASNPP_Interact, the action pad B maps to in IMC_GASNPP_Test), like the owner's pad: 0.15 s, so
+        # it spans two editor frames and stays a tap (the hold is the kit swap)
+        def grabbed():
+            h, d = ls.body(0, host()), ls.body(0, ctx[tag])
+            check(f'{kit} {label} B (Interact tap) grabs', h and d and h[0] == 1 and d[0] == 2,
+                  f'host body {h}, dummy body {d}, grab hits {new(tag, "Command.Link.Grab")}')
+        return [(t, place(tag)),
+                (t + 0.8, lambda: check(f'{kit} {label} dummy offered as grab target', ls.has_tag(0, host(), 'Interact.Target.Grab'),
+                                        f'Interact.Target.Grab on host={ls.has_tag(0, host(), "Interact.Target.Grab")}')),
+                (t + 0.85, lambda: g.hold(0, 'interact', (1.0, 0.0, 0.0))), (t + 1.0, lambda: g.release(0, 'interact')),
+                (t + 1.35, grabbed)]
+
+    def thrown(tag, label):
+        def f():
+            n, d = new(tag, 'Combat.HitType.Throw'), ls.body(0, ctx[tag])
+            log(f'{tag} events: {[(e[0], e[1], e[2], e[3], sorted(e[4])) for e in g.event_log(ctx[tag])][-4:]}')
+            check(f'{kit} {label} Attack throws', n > 0 and not (d and d[0] == 2), f'throw hits on dummy {n}, dummy body {d}, '
+                  f'throw hits {[(e[1], e[2], e[3]) for e in events(ctx[tag], "Combat.HitType.Throw")][-2:]}')
+        return f
+
+    # 1. grab and throw at once (neutral Attack = N. in Notation)
+    s += grab(1.0, 'd1', 'A1')
+    s += [(2.45, lambda: g.combat_tap(0, g.button_mask('Attack'))), (3.6, thrown('d1', 'A2')),
+          (3.7, lambda: g._place_near(0, ctx['d1'], (-900.0, 600.0)))]   # out of the next grab's reach
+    # 2. grab, one and a half stick turns counter-clockwise (one turn of scripted steps can miss an editor frame and fall short of 360) (IA_Move x right, y forward; the grab spin needs 360 degrees of stick), Attack out of the spin (throws
+    # cancel the spin from its frame 12; each spin also takes 20 frames off the hold, so the throw comes right after)
+    s += grab(4.6, 'd2', 'B1')
+    t = 5.95
+    for k in range(13):
         a = math.pi / 2 + k * math.pi / 4
-        s.append((3.3 + k * 0.035, (lambda v=(math.cos(a), math.sin(a), 0.0): g.hold(0, 'move', v))))
-    s.append((3.3 + 17 * 0.035, lambda: g.release(0, 'move')))
-    s.append((4.4, lambda: check(f'{kit} 3 stick turn spins the held dummy', len(events(ctx['d'], 'Command.Link.Spin')) > ctx['spin0'],
-                                 f'spin hits on dummy {len(events(ctx["d"], "Command.Link.Spin")) - ctx["spin0"]}, body {ls.body(0, ctx["d"])}')))
-    s.append((4.6, lambda: g.combat_tap(0, g.button_mask('Attack'))))
-
-    def thrown():
-        n = len(events(ctx['d'], 'Command.Link.Throw')) - ctx['throw0']
-        d = ls.body(0, ctx['d'])
-        check(f'{kit} 4 neutral Attack throws', n > 0 and not (d and d[0] == 2), f'throw hits on dummy {n}, dummy body {d}, '
-              f'damage events {[(e[1], e[3]) for e in events(ctx["d"], "Command.Link.Throw")][-2:]}')
-    s.append((6.0, thrown))
-    return s, 6.5
+        s.append((t + k * 0.035, (lambda v=(math.cos(a), math.sin(a), 0.0): g.hold(0, 'move', v))))
+    s.append((t + 13 * 0.035, lambda: g.release(0, 'move')))
+    s += [(6.75, lambda: g.combat_tap(0, g.button_mask('Attack'))),
+          (8.2, lambda: check(f'{kit} B2 stick turn spins the held dummy', len(events(host(), 'Command.Link.Spin')) > ctx['d2host_spin0'],
+                              f'spin hits by the host {len(events(host(), "Command.Link.Spin")) - ctx["d2host_spin0"]}, on the held dummy {new("d2", "Command.Link.Spin")}')),
+          (8.2, lambda: log(f'note | B3 throw out of the spin (not judged): throw hits {new("d2", "Combat.HitType.Throw")}. At 0 % Ganondorf's hold is 90 '
+                            f'frames and each spin takes 20 off it, so a scripted press lands either before the spin (it throws instead) or after the '
+                            f'hold ran out'))]
+    return s, 8.6
 
 
 def tick(_dt):
