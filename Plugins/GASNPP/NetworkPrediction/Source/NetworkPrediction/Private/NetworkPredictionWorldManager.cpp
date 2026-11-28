@@ -28,11 +28,11 @@ namespace NetworkPredictionCVars
 	NETSIM_DEVCVAR_SHIPCONST_INT(FixedTickInterpolationBufferedMSOverride, -1, "np.FixedTickInterpolationBufferedMSOverride", "Test knob (FP G0). >= 0: worlds initialized after this is set use this FixedTickInterpolationBufferedMS instead of the project setting. -1: off.");
 	// FP G0c test knob, same reason: the server's input buffer depth per run. -1 = off (project setting used)
 	NETSIM_DEVCVAR_SHIPCONST_INT(FixedTickDesiredBufferedInputCountOverride, -1, "np.FixedTickDesiredBufferedInputCountOverride", "Test knob (FP G0c). >= 0: worlds initialized after this is set use this FixedTickDesiredBufferedInputCount instead of the project setting. -1: off.");
-	// GAS-NPP fork (2026-11-28, flicker/lag thread): a slow engine frame made the next one run 2-3 fixed steps, each as costly as a normal frame,
-	// so the delay fed itself (PIE with 11 pawns fell to ~22 irregular fps). Past the cap the remaining wall time is dropped: the simulation
-	// runs slower than real time while the machine is overloaded instead of spiralling. Every step still advances by the fixed step, so
-	// determinism and rollback are untouched; only how much wall time becomes simulation time changes. 0 = no cap (the stock behaviour)
-	NETSIM_DEVCVAR_SHIPCONST_INT(MaxFixedStepsPerFrame, 3, "np.MaxFixedStepsPerFrame", "Most fixed ticks run in one engine frame. The wall time left over past the cap is dropped (the game slows down instead of spiralling when frames are slow). 0: no cap.");
+	// GAS-NPP fork (2026-11-28, flicker/lag thread): a slow engine frame makes the next one run 2-3 fixed steps, each as costly as a normal
+	// frame, so on an overloaded machine the delay feeds itself. Owner rule: rendering may drop, simulation ticks stay unchanged, so the cap is
+	// OFF by default and is only a last-resort guard (min-spec experiments): past it the wall time left over is dropped and the game runs slower
+	// than real time. Every step still advances by the fixed step, so determinism and rollback are untouched either way
+	NETSIM_DEVCVAR_SHIPCONST_INT(MaxFixedStepsPerFrame, 0, "np.MaxFixedStepsPerFrame", "Most fixed ticks run in one engine frame. The wall time left over past the cap is dropped (the game slows down instead of spiralling when frames are slow). 0: no cap (default: simulation time never drops).");
 	NETSIM_DEVCVAR_SHIPCONST_INT(SpikeLogInputSend, 0, "np.Spike.LogInputSend", "Diagnostics of the fixed tick input stream. 1: a client logs every engine frame whose input send is not the steady one (3+ fixed ticks in the frame, a backlog sent without redundant copies, frames held back by a connection that is not net ready); the server logs every fixed tick it is starved of a client's input. 0: off.");
 }
 
