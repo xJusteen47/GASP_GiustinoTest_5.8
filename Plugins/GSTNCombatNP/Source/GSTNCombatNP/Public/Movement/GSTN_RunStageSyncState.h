@@ -73,10 +73,11 @@ struct GSTNCOMBATNP_API FGSTN_RunStageMover
 	 * Writes the stage's values (Factor = stats factor) into every mode of MoverComp. Returns the number of values written.
 	 * GroundSpeed >= 0 (the speed at the start of the frame, from the rollback-following tracker) adds the analog walk start: more
 	 * acceleration and turning at low speed, and the stage speed on the walk gait too (FGSTN_AnalogWalkTuning). < 0 = stage values only.
-	 * MinTurning >= 0 raises the turning strength to at least that (the run reversal, FGSTN_RunReversalTuning)
+	 * MinTurning >= 0 raises the turning strength to at least that (the run reversal, FGSTN_RunReversalTuning).
+	 * MinTopSpeed > 0 raises the top speed to at least that, stats already in (the dash burst, FGSTN_RunStageLogic::GetDashTopSpeed)
 	 */
 	static int32 ApplyStageValues(UMoverComponent& MoverComp, const FGSTN_LocomotionSimTuning& Tuning, int32 Stage, float Factor, float GroundSpeed = -1.f,
-		float AccelRamp = 1.f, float MinTurning = -1.f);
+		float AccelRamp = 1.f, float MinTurning = -1.f, float MinTopSpeed = -1.f);
 
 	/**
 	 * The air control and air top speed (P2, decision 1C) into Mover's shared settings and the profile's named air properties: the AirControl

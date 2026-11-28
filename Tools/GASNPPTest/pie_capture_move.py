@@ -253,7 +253,26 @@ MOVE_SEQUENCES = [
     # the boost goes 3 frames after the stick: the injected stick reaches the sim one frame after a press (dash cap1/cap2 history
     # "+J" one frame before "8"), and a boost seen with the stick at rest is dropped by the stick-release branch of the run stages
     {'name': 'mv_dash', 'taps': [], 'frames': 120, 'dummy': None, 'shoot': True, 'follow': True, 'boost': 23, 'sticks': [(20, (0, 1, 0)), (80, None)]},
-    {'name': 'mv_dash_base', 'taps': [], 'frames': 120, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(20, (0, 1, 0)), (80, None)]},
+    # dash per stage (owner 2026-11-28, BoostMode PerStage): a late press. mv_dash_walk = slow walk (stick 0.3) for 1.5 s, then L3;
+    # mv_dash_sprint = full stick until the top stage (stage 3), then L3 (the stage is kept, the momentum burst goes over its cruise).
+    # 'boost' may be a list of frames; 'boost_stage' = (0-based run stage, delay): one press that many frames after the host first
+    # reaches that stage. The rows carry combat.run.dash / dashTop and 'vel' (the host pawn's velocity). A 0.3 tilt is under the run
+    # stages' StickDeadzone (counted as released: no dash), hence 0.45 and 0.6
+    {'name': 'mv_dash_walk', 'taps': [], 'frames': 210, 'dummy': None, 'shoot': True, 'follow': True, 'boost': 113,
+     'sticks': [(20, (0, 0.3, 0)), (180, None)]},
+    {'name': 'mv_dash_walk45', 'taps': [], 'frames': 210, 'dummy': None, 'shoot': True, 'follow': True, 'boost': 113,
+     'sticks': [(20, (0, 0.45, 0)), (180, None)]},
+    {'name': 'mv_dash_walk60', 'taps': [], 'frames': 210, 'dummy': None, 'shoot': True, 'follow': True, 'boost': 113,
+     'sticks': [(20, (0, 0.6, 0)), (180, None)]},
+    # 1A overshoot check: the burst's top speed is divided by the stick tilt, so the stick pushed full 2 frames into the burst must not
+    # carry the divided top speed (the speed stays near the cruise)
+    {'name': 'mv_dash_walk_push', 'taps': [], 'frames': 210, 'dummy': None, 'shoot': True, 'follow': True, 'boost': 113,
+     'sticks': [(20, (0, 0.3, 0)), (115, (0, 1, 0)), (180, None)]},
+    {'name': 'mv_dash_sprint', 'taps': [], 'frames': 300, 'dummy': None, 'shoot': True, 'follow': True, 'boost': 223,
+     'sticks': [(20, (0, 1, 0)), (270, None)]},
+    {'name': 'mv_dash_top', 'taps': [], 'frames': 900, 'dummy': None, 'shoot': True, 'follow': True, 'boost_stage': (2, 30),
+     'sticks': [(20, (0, 1, 0)), (860, None)]},
+    {'name': 'mv_dash_base','taps': [], 'frames': 120, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(20, (0, 1, 0)), (80, None)]},
     {'name': 'mv_skid_release', 'taps': [], 'frames': 190, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (125, None)]},
     {'name': 'mv_skid_hold', 'taps': [], 'frames': 280, 'dummy': None, 'shoot': True, 'follow': True, 'sticks': [(0, (0, 1, 0)), (95, (0, -1, 0)), (245, None)]},
     # skid-walkturn-3: run pivot through the stock chooser (gstn.Loco.Base 1, gstn.Skid.Sim 0). Stick reverse f95 -> row f115 (PRE 20); the
@@ -702,6 +721,8 @@ def _row(frame, tapped, extra=None):
         _pw = _pawn()
         _mesh = _pw.get_component_by_class(unreal.SkeletalMeshComponent)
         row['yaw'] = [round(_pw.get_actor_rotation().yaw, 2), round(_mesh.get_world_rotation().yaw, 2) if _mesh else None]
+        _vel = _pw.get_velocity()   # dash per stage: the presented velocity (ground speed = hypot of x, y)
+        row['vel'] = [round(_vel.x, 1), round(_vel.y, 1), round(_vel.z, 1)]
     except Exception as e:  # noqa: BLE001
         row['yaw_err'] = repr(e)[:80]
     row.update(extra or {})
@@ -1117,7 +1138,7 @@ def _tick(_dt):
                 _console('gstn.Pushbox.Log 1')
             st.update(shots=0, host_proj=0)
             st.update(seq_t0=now)
-            st.update(phase='seq_run', frame=0, mask=g.button_mask(BUTTON), crouch=g.button_mask('Crouch'), jumped=None, fired=None, prev_z=None, landed=None, land_prev_z=None)
+            st.update(phase='seq_run', frame=0, mask=g.button_mask(BUTTON), crouch=g.button_mask('Crouch'), jumped=None, fired=None, prev_z=None, landed=None, land_prev_z=None, boost_stage_at=None)
         elif phase == 'seq_run':
             seq, frame = SEQUENCES[st['seq']], st['frame']
             _tp = time.perf_counter()
@@ -1269,7 +1290,22 @@ def _tick(_dt):
                     _log(f'{seq["name"]}: jump on v{frame}, held {held} frames')
                 elif held > 0 and frame == PRE + at + held:
                     g.combat_clear(0)
-            if seq.get('boost') is not None and frame == PRE + seq['boost']:   # dash-ganon: the L3 run boost through its combat button
+            _boosts = seq.get('boost')
+            _boosts = [] if _boosts is None else ([_boosts] if isinstance(_boosts, int) else list(_boosts))   # dash per stage: several presses
+            if seq.get('boost_stage') is not None and st.get('boost_stage_at') is None:
+                # dash per stage: press 'delay' frames after the host's run stage (0-based) first reaches 'stage' (the kit's stage timing
+                # is the owner's tuning, not the C++ default, so a fixed frame may never reach the top stage)
+                _want, _delay = seq['boost_stage']
+                try:
+                    _run = ((g._view(0, h._key(0)) or {}).get('combat') or {}).get('run') or {}
+                    if frame > PRE and _run.get('stage', -1) >= _want:
+                        st['boost_stage_at'] = frame + _delay
+                        _log(f'{seq["name"]}: run stage {_run.get("stage")} on v{frame}, boost on v{frame + _delay}')
+                except Exception as e:  # noqa: BLE001
+                    _log(f'{seq["name"]}: boost_stage read failed: {e!r}')
+            if st.get('boost_stage_at') is not None and frame == st['boost_stage_at']:
+                _boosts = _boosts + [frame - PRE]
+            if frame in [PRE + b for b in _boosts]:   # dash-ganon: the L3 run boost through its combat button
                 # the boost is an input-data key read by the locomotion profile (not a combat button: a combat tap did nothing, dash r3 cap1)
                 g.IA.setdefault('runboost', '/Game/GSTN/Input/IA_GASNPP_RunBoost')
                 g.press(0, 'runboost')

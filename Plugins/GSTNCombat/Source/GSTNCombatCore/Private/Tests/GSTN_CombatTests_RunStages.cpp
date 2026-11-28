@@ -419,6 +419,96 @@ bool FGSTN_RunStagesBoostDashTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunStagesDashPerStageTest, "GSTNCombat.Core.RunStages.DashPerStage", GSTN_CORE_TEST_FLAGS)
+bool FGSTN_RunStagesDashPerStageTest::RunTest(const FString& Parameters)
+{
+	// Owner 2026-11-28: the dash works while walking and running, on every stage by default; it scales with the momentum, or keeps the cruise
+	TestEqual(TEXT("PerStage is the default mode"), (int32)FGSTN_RunStagesTuning().BoostMode, (int32)EGSTN_RunBoostMode::PerStage);
+	TestTrue(TEXT("every default stage allows the dash"), FGSTN_RunStagesTuning::MakeDefault().Stages.ContainsByPredicate([](const FGSTN_RunStage& S) { return !S.bAllowBoost; }) == false);
+
+	FGSTN_RunStagesTuning Tuning = TestTuning(EGSTN_RunBoostMode::PerStage);
+	Tuning.BoostDash.Frames = 3;
+	Tuning.BoostDash.SpeedMode = EGSTN_DashSpeedMode::Momentum;
+	Tuning.BoostDash.MomentumSpeedScale = 1.2f;
+	Tuning.BoostDash.MaxMomentumSpeed = 1000.f;
+	{
+		// A walk long past the old initial window: the dash still goes to the target stage
+		FGSTN_RunStageState State;
+		for (int32 Frame = 0; Frame < 30; ++Frame)
+		{
+			FGSTN_RunStageLogic::Step(Tuning, Run(Frame, 150.f), State);
+		}
+		FGSTN_RunStageLogic::Step(Tuning, Run(30, 150.f, FVector(1.0, 0.0, 0.0), true), State);
+		TestEqual(TEXT("walking dash: the target stage"), (int32)State.Stage, Tuning.GetBoostTargetIndex());
+		TestTrue(TEXT("walking dash: burst live"), FGSTN_RunStageLogic::IsBoostDash(Tuning, State));
+		TestEqual(TEXT("walking dash: 150 x 1.2 is under the stage's cruise, which stays the top"),
+			FGSTN_RunStageLogic::GetDashTopSpeed(Tuning, State), Tuning.GetStage(State.Stage).MaxSpeed, 0.01f);
+	}
+	{
+		// 1A: a light tilt, under the stages' dead zone, still dashes to the stage's cruise (the NP adapter divides it by the tilt)
+		FGSTN_RunStageState State;
+		const FVector Light(0.2, 0.0, 0.0);
+		for (int32 Frame = 0; Frame < 30; ++Frame)
+		{
+			FGSTN_RunStageLogic::Step(Tuning, Run(Frame, 60.f, Light), State);
+		}
+		FGSTN_RunStageLogic::Step(Tuning, Run(30, 60.f, Light, true), State);
+		TestTrue(TEXT("light tilt dash: burst live"), FGSTN_RunStageLogic::IsBoostDash(Tuning, State));
+		TestEqual(TEXT("light tilt dash: the target stage"), (int32)State.Stage, Tuning.GetBoostTargetIndex());
+		TestEqual(TEXT("light tilt dash: the cruise"), FGSTN_RunStageLogic::GetDashTopSpeed(Tuning, State), Tuning.GetStage(State.Stage).MaxSpeed, 0.1f);
+	}
+	{
+		// On the last stage: the stage is kept and the burst restarts over the cruise speed, capped
+		FGSTN_RunStageState State;
+		RunAtStageSpeed(Tuning, State, 0, 20);
+		TestEqual(TEXT("running at the top stage"), (int32)State.Stage, 2);
+		FGSTN_RunStageLogic::Step(Tuning, Run(20, 850.f, FVector(1.0, 0.0, 0.0), true), State);
+		TestEqual(TEXT("sprint dash: the stage is kept"), (int32)State.Stage, 2);
+		TestTrue(TEXT("sprint dash: burst live"), FGSTN_RunStageLogic::IsBoostDash(Tuning, State));
+		TestEqual(TEXT("sprint dash: 850 x 1.2 capped at 1000"), FGSTN_RunStageLogic::GetDashTopSpeed(Tuning, State), 1000.f, 0.01f);
+		for (int32 Frame = 21; Frame < 24; ++Frame)
+		{
+			FGSTN_RunStageLogic::Step(Tuning, Run(Frame, 950.f), State);
+		}
+		TestFalse(TEXT("burst over"), FGSTN_RunStageLogic::IsBoostDash(Tuning, State));
+		TestEqual(TEXT("no top speed after the burst"), FGSTN_RunStageLogic::GetDashTopSpeed(Tuning, State), 0.f);
+		TestEqual(TEXT("latched speed cleared"), State.DashTopSpeed, 0.f);
+	}
+	{
+		// Cruise: a dash from the top stage gives the burst only, never a speed over the stage's
+		FGSTN_RunStagesTuning Cruise = Tuning;
+		Cruise.BoostDash.SpeedMode = EGSTN_DashSpeedMode::Cruise;
+		FGSTN_RunStageState State;
+		RunAtStageSpeed(Cruise, State, 0, 20);
+		FGSTN_RunStageLogic::Step(Cruise, Run(20, 850.f, FVector(1.0, 0.0, 0.0), true), State);
+		TestTrue(TEXT("cruise dash: burst live"), FGSTN_RunStageLogic::IsBoostDash(Cruise, State));
+		TestEqual(TEXT("cruise dash: no speed over the cruise"), FGSTN_RunStageLogic::GetDashTopSpeed(Cruise, State), Cruise.GetStage(State.Stage).MaxSpeed, 0.01f);
+	}
+	{
+		// A stage that does not allow it: ignored
+		FGSTN_RunStagesTuning Off = Tuning;
+		Off.Stages[2].bAllowBoost = false;
+		FGSTN_RunStageState State;
+		RunAtStageSpeed(Off, State, 0, 20);
+		FGSTN_RunStageLogic::Step(Off, Run(20, 850.f, FVector(1.0, 0.0, 0.0), true), State);
+		TestFalse(TEXT("stage 3 without the dash: no burst"), FGSTN_RunStageLogic::IsBoostDash(Off, State));
+	}
+	{
+		// The latched top speed survives the network form (rollback contract)
+		FGSTN_RunStageState State;
+		RunAtStageSpeed(Tuning, State, 0, 20);
+		FGSTN_RunStageLogic::Step(Tuning, Run(20, 850.f, FVector(1.0, 0.0, 0.0), true), State);
+		TArray<uint8> Bytes;
+		FMemoryWriter Writer(Bytes);
+		State.SerializeCompact(Writer);
+		FGSTN_RunStageState Read;
+		FMemoryReader Reader(Bytes);
+		Read.SerializeCompact(Reader);
+		TestEqual(TEXT("dash top speed survives the network form"), Read.DashTopSpeed, State.DashTopSpeed, 0.1f);
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGSTN_RunStagesReversalTest, "GSTNCombat.Core.RunStages.Reversal", GSTN_CORE_TEST_FLAGS)
 bool FGSTN_RunStagesReversalTest::RunTest(const FString& Parameters)
 {

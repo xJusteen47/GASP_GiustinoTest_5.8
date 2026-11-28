@@ -1620,6 +1620,7 @@ FString UGSTN_GASNPPTestComponent::GetStateSnapshot() const
 					RunJson->SetNumberField(TEXT("sinceRelease"), Run->FramesSinceStickRelease);
 					RunJson->SetNumberField(TEXT("stamp"), Run->StampFrames);
 					RunJson->SetNumberField(TEXT("dash"), Run->DashFrames);
+					RunJson->SetNumberField(TEXT("dashTop"), Run->DashTopSpeed);   // momentum dash (2026-11-28): the burst's latched top speed
 					// Readable run stages S1: the step's burst counter, the frame the stage began and the frames counted towards the next
 					RunJson->SetNumberField(TEXT("entry"), Run->EntryFrames);
 					RunJson->SetNumberField(TEXT("stageFrom"), Run->StageEnteredFrame);
