@@ -42,6 +42,11 @@ void UAbilitySimulationLibrary::RemoveMappingContext(UEnhancedInputLocalPlayerSu
 	}
 }
 
+// GAS-NPP fork (2026-11-28, lag thread): FillSyncState rebuilt every ability of every pawn on every fixed step, allocating each element,
+// each synced variable and each task's data anew (~0.12 ms per pawn per step for ~30 abilities, and slower as the heap fragmented).
+// The output frame is NP's ring slot, written the last time ~one buffer ago: its elements are now overwritten in place, and a synced
+// variable or task data block is reused when this slot is its only owner (IsUnique) and has the right type, so a state another frame
+// or a smoothing/interpolation copy still shares is never touched. The values written are the same as before.
 void UAbilitySimulationLibrary::FillAbilityInstanceDataFromInstance(UNpGameplayAbility* AbilityInstance,
                                                                     FActiveAbilityInstanceData& OutData)
 {
@@ -58,14 +63,15 @@ void UAbilitySimulationLibrary::FillAbilityInstanceDataFromInstance(UNpGameplayA
 	OutData.bHasEventData = AbilityInstance->bHasEventData;
 	OutData.CurrentEventData = AbilityInstance->CurrentEventData;
 	TArray<FAbilityTaskDataContainer>& TasksData = OutData.TaskDataCollection.AbilityTasksData;
-	TasksData.Reset(AbilityInstance->PredictionTasksInstances.Num());
+	TasksData.SetNum(AbilityInstance->PredictionTasksInstances.Num());
 	for (int32 k = 0 ; k < AbilityInstance->PredictionTasksInstances.Num() ; ++k)
 	{
 		UBasePredictionTask* Task = AbilityInstance->PredictionTasksInstances[k];
-		FAbilityTaskDataContainer TaskData;
+		FAbilityTaskDataContainer& TaskData = TasksData[k];
 		TaskData.IsActive = Task->IsActive();
 		if (TaskData.IsActive && Task->DataType != nullptr)
 		{
+			// A task writes its data into a fresh block (WriteToSyncedData may rely on the defaults), so task data is not reused
 			TaskData.TaskDataPointer = FAbilityTaskDataArray::CreateDataByType(Task->DataType);
 			Task->WriteToSyncedData(TaskData.TaskDataPointer);
 		}
@@ -73,7 +79,6 @@ void UAbilitySimulationLibrary::FillAbilityInstanceDataFromInstance(UNpGameplayA
 		{
 			TaskData.TaskDataPointer.Reset();
 		}
-		TasksData.Add(TaskData);
 	}
 }
 
@@ -83,12 +88,25 @@ void UAbilitySimulationLibrary::FillAbilitiesCollectionDataFromSpecContainer(
 	FActivatableAbilitiesCollection& Collection, FGameplayAbilitySpecContainer& SpecContainer)
 {
 	TArray<FActivatableAbilitySyncState>& ActivatableAbilities = Collection.GetCollectionData_Mutable();
-	ActivatableAbilities.Reset(SpecContainer.Items.Num());
-	
+
+	// Written in handle order, which is the order the collection must have (FActivatableAbilitiesCollection::ShouldReconcile compares index
+	// by index), so element i of this slot usually held the same ability last time and its synced variables are reused
+	TArray<int32, TInlineAllocator<64>> Order;
+	Order.Reserve(SpecContainer.Items.Num());
 	for (int32 i = 0 ; i < SpecContainer.Items.Num() ; ++i)
 	{
-		FActivatableAbilitySyncState& AbilitySyncState = ActivatableAbilities.AddDefaulted_GetRef();
-		FGameplayAbilitySpec& Spec = SpecContainer.Items[i];
+		Order.Add(i);
+	}
+	Order.Sort([&SpecContainer](const int32 A, const int32 B)
+	{
+		return SpecContainer.Items[A].Handle.GetHandle() < SpecContainer.Items[B].Handle.GetHandle();
+	});
+
+	ActivatableAbilities.SetNum(Order.Num());
+	for (int32 i = 0 ; i < Order.Num() ; ++i)
+	{
+		FActivatableAbilitySyncState& AbilitySyncState = ActivatableAbilities[i];
+		FGameplayAbilitySpec& Spec = SpecContainer.Items[Order[i]];
 		
 		AbilitySyncState.Level = Spec.Level;
 		AbilitySyncState.AbilityClass = Spec.Ability.GetClass();
@@ -101,26 +119,22 @@ void UAbilitySimulationLibrary::FillAbilitiesCollectionDataFromSpecContainer(
 		AbilitySyncState.ActiveCount = Spec.ActiveCount;
 		AbilitySyncState.RemoveAfterActivation = Spec.RemoveAfterActivation;
 		// Active Instances
-		AbilitySyncState.ActiveInstances.ActiveAbilityInstances.Reset(Spec.ReplicatedInstances.Num());
+		TArray<FActiveAbilityInstanceData>& Instances = AbilitySyncState.ActiveInstances.ActiveAbilityInstances;
+		int32 NumInstances = 0;
 		for (int32 j = 0 ; j < Spec.ReplicatedInstances.Num() ; ++j)
 		{
 			UNpGameplayAbility* Ability = Cast<UNpGameplayAbility>(Spec.ReplicatedInstances[j]);
 			if(IsValid(Ability))
 			{
-				FActiveAbilityInstanceData InstanceData;
-				FillAbilityInstanceDataFromInstance(Ability,InstanceData);
-				AbilitySyncState.ActiveInstances.ActiveAbilityInstances.Add(InstanceData);
+				if (NumInstances == Instances.Num())
+				{
+					Instances.AddDefaulted();
+				}
+				FillAbilityInstanceDataFromInstance(Ability, Instances[NumInstances]);
+				++NumInstances;
 			}
 		}
-	}
-	// sort the collection at the end to ensure FActivatableAbilitiesCollection should reconcile doesn't get false positive
-	// if abilities array order changes
-	if (ActivatableAbilities.Num() > 0)
-	{
-		ActivatableAbilities.Sort([](const FActivatableAbilitySyncState& A, const FActivatableAbilitySyncState& B)
-		{
-			return A.ActivatableAbilityHandle < B.ActivatableAbilityHandle;
-		});
+		Instances.SetNum(NumInstances);
 	}
 }
 
@@ -128,11 +142,12 @@ void UAbilitySimulationLibrary::GetAbilitySyncedVariables(FSyncVarCollection& Ou
 	const UNpGameplayAbility* AbilityInstance)
 {
 	const TArray<FSyncVarDef>& AbilitySyncVars = AbilityInstance->GetSyncedVarsCached();
-	OutCollection.SyncedVars.Reset(AbilitySyncVars.Num());
+	OutCollection.SyncedVars.SetNum(AbilitySyncVars.Num());
 	
 	for (int32 i = 0 ; i < AbilitySyncVars.Num() ; ++i)
 	{
 		const FProperty* Property = AbilitySyncVars[i].MemberSyncVariable;
+		TSharedPtr<FBaseSyncVar>& Out = OutCollection.SyncedVars[i];
 		// for debugging 
 		check(Property);
 		if (Property)
@@ -145,16 +160,18 @@ void UAbilitySimulationLibrary::GetAbilitySyncedVariables(FSyncVarCollection& Ou
 			// for debugging 
 			check(SyncedVar);
 
-			// Clone it and add to output array
+			// Copy the value: into the block this slot owns alone when it has the same type, else into a new one
 			if (SyncedVar)
 			{
-				TSharedPtr<FBaseSyncVar> NewVar = FSyncVarCollection::CreateDataByType(SyncedVar->GetScriptStruct());
-				NewVar->SetValue(SyncedVar);
-				OutCollection.SyncedVars.Add(NewVar);
+				if (!Out.IsValid() || !Out.IsUnique() || Out->GetScriptStruct() != SyncedVar->GetScriptStruct())
+				{
+					Out = FSyncVarCollection::CreateDataByType(SyncedVar->GetScriptStruct());
+				}
+				Out->SetValue(SyncedVar);
 				continue;
 			}
 		}
-		OutCollection.SyncedVars.Add(nullptr);
+		Out.Reset();
 	}
 }
 
