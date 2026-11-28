@@ -26,3 +26,16 @@ for seq in sorted(d for d in os.listdir(root) if os.path.isdir(os.path.join(root
     post = [o for o in out if press <= o[0] <= press + 60]
     pk = max(post, key=lambda o: o[5])
     print(f'  peak {pk[5]} at f{pk[0]} (stage {pk[1]}); f+45..60: {[o[5] for o in out if press + 45 <= o[0] <= press + 60]}')
+    # Summary: speed on the press frame, peak and frames from the press to it, then frames from the peak until the speed is back within
+    # 2 % of where it settles (median of press+45..60) and stays there
+    before = next(o[5] for o in out if o[0] == press)
+    settle = sorted(o[5] for o in out if press + 45 <= o[0] <= press + 60)
+    settle = settle[len(settle) // 2] if settle else None
+    back = None
+    if settle:
+        after = [o for o in out if pk[0] <= o[0] <= press + 60]
+        for i, o in enumerate(after):
+            if all(abs(x[5] - settle) <= 0.02 * settle for x in after[i:]):
+                back = o[0] - pk[0]
+                break
+    print(f'  SUMMARY {seq}: before {before}, peak {pk[5]} (+{pk[0] - press} f), settles at {settle} {back} f after the peak')

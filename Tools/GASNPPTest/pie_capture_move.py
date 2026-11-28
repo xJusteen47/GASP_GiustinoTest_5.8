@@ -264,6 +264,10 @@ MOVE_SEQUENCES = [
      'sticks': [(20, (0, 0.45, 0)), (180, None)]},
     {'name': 'mv_dash_walk60', 'taps': [], 'frames': 210, 'dummy': None, 'shoot': True, 'follow': True, 'boost': 113,
      'sticks': [(20, (0, 0.6, 0)), (180, None)]},
+    # 1A overshoot check: the burst's top speed is divided by the stick tilt, so the stick pushed full 2 frames into the burst must not
+    # carry the divided top speed (the speed stays near the cruise)
+    {'name': 'mv_dash_walk_push', 'taps': [], 'frames': 210, 'dummy': None, 'shoot': True, 'follow': True, 'boost': 113,
+     'sticks': [(20, (0, 0.3, 0)), (115, (0, 1, 0)), (180, None)]},
     {'name': 'mv_dash_sprint', 'taps': [], 'frames': 300, 'dummy': None, 'shoot': True, 'follow': True, 'boost': 223,
      'sticks': [(20, (0, 1, 0)), (270, None)]},
     {'name': 'mv_dash_top', 'taps': [], 'frames': 900, 'dummy': None, 'shoot': True, 'follow': True, 'boost_stage': (2, 30),
