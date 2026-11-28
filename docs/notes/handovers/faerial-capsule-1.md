@@ -29,3 +29,16 @@ Build OK, GSTNCombat+GSTNAnimation 760/760. Catture Saved/FAerialFix2 (video in 
 ESITO: PASS indicatore/capsula allineati, nessun salto all'atterraggio, disteso e tuffo appoggiati a terra, scivolata 335 cm; 2 scatti verticali di un frame aperti
 SUBAGENTI: 0
 COSTO: ~12 $ | ~60 min desktop | 0
+
+## Scatti verticali del dropkick (owner 01:29Z "si li leverei"), stesso thread
+- 9c62d19b: la clip capsula segue il bacino della guida anche in altezza (prima la clip si rialzava ~10 frame prima del corpo vero e la posa
+  d'atterraggio era disegnata a 121 cm). Verifica: jab invariato e pulito; restavano -95 cm per un frame all'atterraggio e -13 alla rialzata.
+- db3d29db: il pavimento della floor lift è misurato con una traccia sotto la capsula di movimento (`FloorHeight`): la traccia Body Capsule tiene
+  la radice della mesh ~40 cm sotto il pavimento negli ultimi frame in aria. La clip capsula sfuma in `MoveClipFadeOutFrames` (6) a fine montage.
+- Fisso (_ue59, db3d29db): build OK, GSTNCombat+GSTNAnimation 760/760. Dropkick: atterraggio -6 e -35 cm in due frame (il seguito della caduta
+  a ~26 cm/frame, poi fermo a terra), rialzata liscia (-1, +4, +10). Tuffo: pancia piatta a z 34-35, 42 frame, 328 cm. Jab invariato.
+  Video in _scratch/faerial4 sul fisso. Resta (non chiesto): il rimbalzo della rotolata di rialzata del tuffo (f199-204, ±25-31 cm).
+
+ESITO: PASS scatti del dropkick tolti, jab e tuffo invariati
+SUBAGENTI: 0
+COSTO: ~6 $ | ~25 min desktop | 0
