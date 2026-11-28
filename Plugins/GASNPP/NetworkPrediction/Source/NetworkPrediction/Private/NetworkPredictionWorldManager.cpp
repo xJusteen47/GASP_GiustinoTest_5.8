@@ -522,9 +522,12 @@ void UNetworkPredictionWorldManager::BeginNewSimulationFrame_Internal(float Delt
 			// So we want their seed state/cached pending frame to be set to the next pending frame, not this one.
 			FixedTickState.PendingFrame++;
 
-			for (TUniquePtr<ILocalTickService>& Ptr : Services.FixedTick.Array)
 			{
-				Ptr->Tick(Step, ServiceStep);
+				TRACE_CPUPROFILER_EVENT_SCOPE(NetworkPrediction::FixedTickServices);
+				for (TUniquePtr<ILocalTickService>& Ptr : Services.FixedTick.Array)
+				{
+					Ptr->Tick(Step, ServiceStep);
+				}
 			}
 			
 			if (Settings.bEnableFixedTickSmoothing)
@@ -536,16 +539,22 @@ void UNetworkPredictionWorldManager::BeginNewSimulationFrame_Internal(float Delt
 				}
 			}
 
-			for (UNetworkPredictionLagCompensation* RegisteredComp : RegisteredLagCompComponents)
 			{
-				if (RegisteredComp->HasSimulation())
+				TRACE_CPUPROFILER_EVENT_SCOPE(NetworkPrediction::LagCompCapture);
+				for (UNetworkPredictionLagCompensation* RegisteredComp : RegisteredLagCompComponents)
 				{
-					RegisteredComp->CaptureStateAndAddToHistory(ServiceStep.EndTotalSimulationTime);
+					if (RegisteredComp->HasSimulation())
+					{
+						RegisteredComp->CaptureStateAndAddToHistory(ServiceStep.EndTotalSimulationTime);
+					}
 				}
 			}
 
 			// GAS-NPP fork (M8 G1): every model ticked this frame and the lag-comp history holds it
-			OnPostFixedTick.Broadcast(Step.Frame, ServiceStep.EndTotalSimulationTime, false);
+			{
+				TRACE_CPUPROFILER_EVENT_SCOPE(NetworkPrediction::PostFixedTickBroadcast);
+				OnPostFixedTick.Broadcast(Step.Frame, ServiceStep.EndTotalSimulationTime, false);
+			}
 		}
 
 		// Once per engine frame, after all the fixed ticks it ran

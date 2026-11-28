@@ -134,6 +134,8 @@ protected:
 		const int32 StartTime = Step.TotalSimulationTime;
 		const int32 EndTime = ServiceStep.EndTotalSimulationTime;
 
+		// GAS-NPP fork (2026-11-28, lag thread): one Insights scope per model, so a model whose step cost grows over a session shows by name
+		TRACE_CPUPROFILER_EVENT_SCOPE_TEXT(ModelDef::GetName());
 		for (auto It : InstancesToTick)
 		{
 			TInstanceData<ModelDef>& Instance = DataStore->Instances.GetByIndexChecked(It.Value.InstanceIdx);
