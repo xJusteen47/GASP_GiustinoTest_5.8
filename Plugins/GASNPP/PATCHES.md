@@ -73,6 +73,22 @@ touch, is in [Mover's README](../EngineOverrides/Mover/README.md).
 | NP send byte counter (netcode lever 1, 2026-11-09) | To see which model and part fill the players' traffic. `np.Debug.NetBytes 1` counts every server AP/SP send per Model\|Target\|Part (input, sync, aux, cues, total); `np.Debug.NetBytes.Dump <label>` appends the window to `Saved/Logs/NPNetBytes.txt`. Off by default, wire unchanged. | `NetworkPredictionNetBytes.h/.cpp`, `TCommonReplicator_AP/SP::NetSend` and the fixed AP/SP `NetSend` in `NetworkPredictionSerialization.h` |
 | Proxy send dividers (netcode step 3, 2026-11-09) | Cut the host upload without touching the 62.5 Hz simulation or the client input rate. `gstn.Net.SimProxySendEveryNTicks N` (console/ini, default 1) makes the host resend NP state to SIMULATED proxies only once the pending frame advanced N ticks; `gstn.Net.AutoProxySendEveryNTicks` is the same for the owning client (experiment, default 1). Listen+2 per client: SP N=2 idle 25.1->18.7 KB/s, moving 34.7->28.9; AP N=2 idle ->21.4, moving ->32.5. N=2 never looked at in a rendered client (proxy pop unverified). | `FReplicationProxy::OnPreReplication` in `NetworkPredictionReplicationProxy.cpp` (holds `CachedPendingFrame`, so `Identical()` skips the send) |
 
+## 6. Step cost (flicker/lag thread, 2026-11-28)
+
+PIE on the test hub (11 pawns) ran at ~22 irregular fps on a Ryzen 9 + RTX 4080 and the step cost grew for ~90 s: nearly all of it was
+the ability system model copying state nobody read. Measured with the Insights scopes below (52 -> 99 fps, step 8.1 -> 3.1 ms).
+Owner rule: rendering may drop, simulation ticks never change, so no patch here drops or slows simulation time by default.
+
+| Patch | Why | Where |
+|---|---|---|
+| Insights scopes on the fixed step | One scope per model in the tick and smoothing services, plus `FixedTickServices`, `LagCompCapture`, `PostFixedTickBroadcast`, and `NpASC_*` inside the ability system step and `FillSyncState`. Without them ~6 ms per step was one unnamed block. | `NP/Private/NetworkPredictionWorldManager.cpp`, `NP/Public/Services/NetworkPredictionService_Ticking.inl`, `..._Smooth.inl`, `ASC/Private/Abilities/NpAbilitySystemComponent.cpp` |
+| `np.MaxFixedStepsPerFrame` (default 0 = off) | The fixed loop had no cap (upstream `ToDo`): an overloaded machine spirals. Past the cap the leftover wall time is dropped. Off by default (owner rule above); a last-resort guard for min-spec experiments. | `NP/Private/NetworkPredictionWorldManager.cpp` |
+| Ability system step on NP's buffers | `SimulationTick` copied the whole input sync state into a local and copied the rebuilt state into the output: two full copies per pawn per step. It now reads the input and writes the output slot in place; every output field is still written. | `ASC/Private/Abilities/NpAbilitySystemComponent.cpp` (`InternalSimulationTick` overload) |
+| Smoothing copies only what the driver presents | `TFixedSmoothingService` copied the full sync state four times per instance per step. A model may declare `ModelDef::CopySmoothedSync(From, To)`; the ability system copies only `MontageSimulatorData`, the one field `FinalizeSmoothingFrame` reads. | `NP/Public/Services/NetworkPredictionService_Smooth.inl`, `FAbilitySystemModelDef` |
+| Synced variable list cached per ability instance | `GetSyncedVars` walked every property of the class and looked up `PreRollback<Name>` by string, for every ability, every step. `GetSyncedVarsCached` computes it once per instance (a recompiled class gets new instances). | `ASC/Public/Abilities/NpGameplayAbility.h`, `ASC/Private/Abilities/NpGameplayAbility.cpp` |
+| Ability sync state written in place | `FillAbilitiesCollectionDataFromSpecContainer` rebuilt every ability element, synced variable and task block each step (and grew slower as the heap fragmented). Elements are overwritten in handle order (no sort) and a synced variable block is reused when the slot owns it alone (`IsUnique`) and the type matches. | `ASC/Private/Library/AbilitySimulationLibrary.cpp` |
+| `np.ASC.Stats` | Logs per ability system the counts its sync state scales with (specs, instances, effects, tags, cues, attribute sets). | `ASC/Private/Abilities/NpAbilitySystemComponent.cpp` |
+
 ## Verifying a change to the fork
 
 Run the PIE harness (`Tools/GASNPPTest/gasnpp_test.py`, dedicated server + 2 clients, `m.net(60, 15, 2)`) with scenarios
